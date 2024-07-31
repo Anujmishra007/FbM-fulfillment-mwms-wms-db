@@ -173,7 +173,7 @@ BEGIN
                JOIN LOC loc (NOLOCK) ON loc.loc = lli.loc
                WHERE lli.SKU = @c_Sku
                AND lli.StorerKey = @c_StorerKey
-               AND loc.LocationType = 'DYNPICKP'
+               AND loc.LocationType = 'DYNAMICPK'
                AND loc.Facility = @c_Facility
                AND  loc.MaxCarton > 0
                GROUP BY loc.Loc, loc.MaxCarton, loc.LogicalLocation
@@ -187,7 +187,7 @@ BEGIN
                FROM LOC loc (NOLOCK)
                LEFT OUTER JOIN LOTxLOCxID lli (NOLOCK)  ON  loc.loc = lli.loc
                                                          AND lli.StorerKey = @c_StorerKey
-               WHERE loc.LocationType = 'DYNPICKP'
+               WHERE loc.LocationType = 'DYNAMICPK'
                AND  loc.Facility = @c_Facility
                AND  loc.MaxCarton > 0
                GROUP BY loc.Loc, loc.LogicalLocation
@@ -219,10 +219,12 @@ BEGIN
             ,@c_errmsg      = @c_errmsg           OUTPUT
 
             INSERT INTO Replenishment
-            (ReplenishmentKey, ReplenishmentGroup, StorerKey, Sku, Lot, FromLoc, toloc, Id, Qty, UOM, PackKey, DropId, Wavekey, MoveRefkey, QtyReplen, pendingmovein)
+            (ReplenishmentKey, ReplenishmentGroup, StorerKey, Sku, Lot, FromLoc, toloc, Id, Qty, UOM,
+            PackKey, DropId, Wavekey, MoveRefkey, QtyReplen, pendingmovein, RefNo, Confirmed)
             VALUES
-            (@c_ReplenishmentKey, @c_PutawayZone, @c_StorerKey, @c_Sku, @c_Lot, @c_FromLoc, @c_Toloc, @c_Id, @n_ReplenQty, @c_UOM, @c_PackKey, @c_DropId, @c_Wavekey, @c_MoveRefkey,@n_ReplenQty,@n_ReplenQty);
-
+            (@c_ReplenishmentKey, @c_PutawayZone, @c_StorerKey, @c_Sku, @c_Lot, @c_FromLoc, @c_Toloc,
+            @c_Id, @n_ReplenQty, @c_UOM, @c_PackKey, @c_DropId, @c_Wavekey, @c_MoveRefkey,@n_ReplenQty
+            ,@n_ReplenQty, @c_DropId, 'N');
             IF @@ERROR <> 0
             BEGIN
                SET @n_continue  = 3
@@ -317,9 +319,9 @@ BEGIN
                     ,@c_errmsg      = @c_errmsg           OUTPUT
 
                     INSERT INTO Replenishment
-                    (ReplenishmentKey, ReplenishmentGroup, StorerKey, Sku, Lot, Id, Qty, UOM, DropId, Wavekey, MoveRefkey, RefNo)
+                    (ReplenishmentKey, ReplenishmentGroup, StorerKey, Sku, Lot, Id, Qty, UOM, DropId, Wavekey, MoveRefkey, RefNo, Confirmed)
                     VALUES
-                    (@c_ReplenishmentKey, @c_PutawayZone, @c_StorerKey, @c_Sku, @c_Lot, @c_Id, @n_ReplenQty, @c_UOM, @c_DropId, @c_Wavekey, @c_MoveRefkey, @c_UCCNo);
+                    (@c_ReplenishmentKey, @c_PutawayZone, @c_StorerKey, @c_Sku, @c_Lot, @c_Id, @n_ReplenQty, @c_UOM, @c_DropId, @c_Wavekey, @c_MoveRefkey, @c_DropId, 'N');
 
                     IF @@ERROR <> 0
                     BEGIN
