@@ -190,6 +190,7 @@ BEGIN
          AND loc.Facility = @cFacility
          AND loc.LocationType IN ( 'PND', 'PNDIN', 'PNDOUT' )
          AND ISNULL(loc.Status, '') = 'OK'
+         AND loc.LocationFlag <> 'DAMAGE'
          AND ISNULL(loc.LocAisle, '') <> ''
       GROUP BY loc.LocAisle, loc.Loc, IIF(loc.MaxPallet = 0, 9999, MaxPallet)
       HAVING IIF(loc.MaxPallet = 0, 9999, loc.MaxPallet) - COUNT(DISTINCT LLI.ID) > 0
@@ -227,6 +228,7 @@ BEGIN
          AND loc.Facility = @cFacility
          AND loc.LocationType = 'CASE'
          AND ISNULL(loc.Status, '') = 'OK'
+         AND loc.LocationFlag <> 'DAMAGE'
          AND ISNULL(loc.LocAisle, '') <> ''
          AND EXISTS (SELECT 1 FROM @tPNDAisle AS al WHERE loc.LocAisle = al.Aisle)
       GROUP BY loc.LocAisle, loc.Loc, IIF(loc.MaxCarton = 0, 9999, MaxCarton)
