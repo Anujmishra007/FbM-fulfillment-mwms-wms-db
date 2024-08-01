@@ -92,8 +92,16 @@ BEGIN
 	
 	SET @c_VICS_CBOL = TRIM(@c_SUSR1) + '000'  + RIGHT('000000' + CAST(@n_CBOLKey AS VARCHAR(10)), 6) 
 	
-	SELECT @c_VICBillNumber_Aut = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'VicBillNumber')
+	--SELECT @c_VICBillNumber_Aut = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'VicBillNumber')
 
+   IF ISNULL(@c_VICBillNumber_Aut, '') = ''
+   BEGIN
+      EXEC dbo.nspGetRight @c_Facility = @c_Facility
+                         , @c_StorerKey = @c_Storerkey
+                         , @c_sku = N''
+                         , @c_ConfigKey = N'VicBillNumber'
+                         , @c_authority = @c_VICBillNumber_Aut OUTPUT
+   END
 	
 	IF ISNULL(@c_VICBillNumber_Aut, '') <> ''  
    BEGIN
