@@ -21,6 +21,7 @@ CREATE OR ALTER PROC [RDT].[rdt_ActionByReason] (
    @cLot             NVARCHAR(10),
    @cID              NVARCHAR(20),
    @cReasonCode      NVARCHAR(20),
+   @cPickSlipNo      NVARCHAR(10),
    @nErrNo           INT            OUTPUT, 
    @cErrMsg          NVARCHAR(20)   OUTPUT
 )
@@ -44,6 +45,11 @@ BEGIN
          @cCCKey            NVARCHAR(10),
          @cCCTaskType       NVARCHAR(60),
          @cHoldCheckFlg     NVARCHAR(60),
+         @cHoldType         NVARCHAR(60),
+         @cPickDetailKey    NVARCHAR(50) = '',
+         @cOrderKey         NVARCHAR(10) = '',
+         @cLoadKey          NVARCHAR(10) = '',
+         @cZone             NVARCHAR(18) = ''          
          @cHoldType         NVARCHAR(60)
          
       SELECT 
@@ -58,7 +64,7 @@ BEGIN
       -- Generate CC task
       IF ISNULL(@cCCTaskType,'') <> ''
       BEGIN
-         IF (ISNULL(RTRIM(@cCCTaskType),'') IN ( 'CC' , 'CCSV', 'CCSUP'))
+         IF (ISNULL(RTRIM(@cCCTaskType),'')  IN ( 'CC' , 'CCSV', 'CCSUP'))
          BEGIN
             INSERT INTO TRACEINFO (Tracename , TimeIn, Step1 , Col1 )
             Values ( 'TMRSN', GETDATE(), 'TsKTYPE' , @cCCTaskType )
@@ -93,7 +99,7 @@ BEGIN
                SELECT @n_err = 219553
                SELECT @c_errmsg= CONVERT(NVARCHAR(5),@n_err)+ ' GetKeyFailed(rdt_ActionByReason)'
             END
-
+            
             INSERT INTO dbo.TaskDetail
             (TaskDetailKey,TaskType,Storerkey,Sku,Lot,UOM,UOMQty,Qty,FromLoc,LogicalFromLoc,FromID,ToLoc,LogicalToLoc
             ,ToID,Caseid,PickMethod,Status,StatusMsg,Priority,SourcePriority,Holdkey,UserKey,UserPosition,UserKeyOverRide
@@ -119,52 +125,159 @@ BEGIN
       -- Hold Type(LOC/ID/LOT)
       IF ISNULL(@cHoldType,'') IN ('LOC','LOT','ID')
       BEGIN
-         IF @cHoldType = 'LOC'
-         BEGIN
-            SET @cLot = ''
-            SET @cID = ''
-         END
-         ELSE IF @cHoldType = 'ID'
-         BEGIN
-            SET @cLoc = ''
-            SET @cLot = ''
-         END
-         ELSE IF @cHoldType = 'LOT'
-         BEGIN
-            SET @cLoc = ''
-            SET @cID = ''
-         END
+         -- Get PickHeader info
+         SELECT TOP 1
+               @cOrderKey = OrderKey,
+               @cLoadKey = ExternOrderKey,
+               @cZone = Zone
+         FROM dbo.PickHeader WITH (NOLOCK)
+         WHERE PickHeaderKey = @cPickSlipNo
 
-         EXEC dbo.nspInventoryHoldWrapper    
-                @c_lot = @cLot   
-               ,@c_Loc = @cLoc
-               ,@c_ID  = @cID     
-               ,@c_StorerKey    = @cStorerKey    
-               ,@c_SKU          = ''    
-               ,@c_Lottable01   = ''    
-               ,@c_Lottable02   = ''    
-               ,@c_Lottable03   = ''    
-               ,@dt_Lottable04  = NULL    
-               ,@dt_Lottable05  = NULL    
-               ,@c_Lottable06   = ''    
-               ,@c_Lottable07   = ''    
-               ,@c_Lottable08   = ''    
-               ,@c_Lottable09   = ''    
-               ,@c_Lottable10   = ''    
-               ,@c_Lottable11   = ''    
-               ,@c_Lottable12   = ''    
-               ,@dt_Lottable13  = NULL    
-               ,@dt_Lottable14  = NULL    
-               ,@dt_Lottable15  = NULL    
-               ,@c_Status = 'SHORT'    
-               ,@c_Hold = @cHoldCheckFlg   
-               ,@b_success = @b_Success OUTPUT    
-               ,@n_Err = @n_Err OUTPUT    
-               ,@c_Errmsg = @c_ErrMsg OUTPUT    
-               ,@c_Remark  = ''
-      END
+         WHILE (1=1)
+         BEGIN
+            -- Cross dock PickSlip
+            IF @cZone IN ('XD', 'LB', 'LP')
+            BEGIN
+               SELECT TOP 1
+                  @cPickDetailKey = PD.PickDetailKey,
+                  @cLot = Lot,
+                  @cID = ID
+               FROM dbo.RefKeyLookup RKL WITH (NOLOCK)
+                  JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
+               WHERE RKL.PickSlipNo = @cPickSlipNo
+                  AND PD.LOC = @cLOC
+                  AND PD.SKU = @cSKU
+                  AND (ISNULL(@cID,'') = '' OR ID = @cID)
+                  AND PD.QTY > 0
+                  AND (
+                        (@nFunc = 839  AND PD.status = '4')
+                        OR 
+                        (@nFunc = 957 AND PD.Status <> '4' AND PD.Status < '5')
+                        )
+                  AND PD.PickDetailKey > @cPickDetailKey
+               ORDER BY PD.PickDetailKey
+            END
+            ELSE IF @cOrderKey <> ''
+            BEGIN
+               SELECT TOP 1
+                  @cPickDetailKey = PD.PickDetailKey,
+                  @cLot = Lot,
+                  @cID = ID
+               FROM dbo.PickDetail PD WITH (NOLOCK)
+                  JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+               WHERE PD.OrderKey = @cOrderKey
+                  AND PD.LOC = @cLOC
+                  AND PD.SKU = @cSKU
+                  AND (ISNULL(@cID,'') = '' OR ID = @cID)
+                  AND PD.QTY > 0
+                  AND (
+                        (@nFunc = 839  AND PD.status = '4')
+                        OR 
+                        (@nFunc = 957 AND PD.Status <> '4' AND PD.Status < '5')
+                        )
+                  AND PD.PickDetailKey > @cPickDetailKey
+               ORDER BY PD.PickDetailKey
+            END
+            ELSE IF @cLoadKey <> ''
+            BEGIN
+               
+               SELECT TOP 1
+                     @cPickDetailKey = PD.PickDetailKey,
+                     @cLot = Lot,
+                     @cID = ID
+               FROM dbo.LoadPlanDetail LPD WITH (NOLOCK)
+                  JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)
+                  JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+               WHERE LPD.LoadKey = @cLoadKey
+                  AND PD.LOC = @cLOC
+                  AND PD.SKU = @cSKU
+                  AND (ISNULL(@cID,'') = '' OR ID = @cID)
+                  AND PD.QTY > 0
+                  AND (
+                     (@nFunc = 839  AND PD.status = '4')
+                     OR 
+                     (@nFunc = 957 AND PD.Status <> '4' AND PD.Status < '5')
+                     )
+                  AND PD.PickDetailKey > @cPickDetailKey
+               ORDER BY PD.PickDetailKey
+            END
+            ELSE
+            BEGIN
+               SELECT TOP 1
+                     @cPickDetailKey = PD.PickDetailKey,
+                     @cLot = Lot,
+                     @cID = ID
+               FROM dbo.PickDetail PD WITH (NOLOCK)
+               JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+               WHERE PD.PickSlipNo = @cPickSlipNo
+               AND PD.LOC = @cLOC
+               AND PD.SKU = @cSKU
+               AND (ISNULL(@cID,'') = '' OR ID = @cID)
+                  AND PD.QTY > 0
+                  AND (
+                     (@nFunc = 839  AND PD.status = '4')
+                     OR 
+                     (@nFunc = 957 AND PD.Status <> '4' AND PD.Status < '5')
+                     )
+                  AND PD.PickDetailKey > @cPickDetailKey
+               ORDER BY PD.PickDetailKey
+            END
 
-      
+
+            IF @@ROWCOUNT = 0
+            BEGIN
+               BREAK
+            END
+
+            IF @cHoldType = 'LOC'
+            BEGIN
+               SET @cLot = ''
+               SET @cID = ''
+            END
+            ELSE IF @cHoldType = 'ID'
+            BEGIN
+               SET @cLoc = ''
+               SET @cLot = ''
+            END
+            ELSE IF @cHoldType = 'LOT'
+            BEGIN
+               SET @cLoc = ''
+               SET @cID = ''
+            END
+
+         
+
+            EXEC dbo.nspInventoryHoldWrapper    
+                  @c_lot = @cLot   
+                  ,@c_Loc = @cLoc
+                  ,@c_ID  = @cID     
+                  ,@c_StorerKey    = @cStorerKey    
+                  ,@c_SKU          = ''    
+                  ,@c_Lottable01   = ''    
+                  ,@c_Lottable02   = ''    
+                  ,@c_Lottable03   = ''    
+                  ,@dt_Lottable04  = NULL    
+                  ,@dt_Lottable05  = NULL    
+                  ,@c_Lottable06   = ''    
+                  ,@c_Lottable07   = ''    
+                  ,@c_Lottable08   = ''    
+                  ,@c_Lottable09   = ''    
+                  ,@c_Lottable10   = ''    
+                  ,@c_Lottable11   = ''    
+                  ,@c_Lottable12   = ''    
+                  ,@dt_Lottable13  = NULL    
+                  ,@dt_Lottable14  = NULL    
+                  ,@dt_Lottable15  = NULL    
+                  ,@c_Status = 'SHORT'    
+                  ,@c_Hold = @cHoldCheckFlg   
+                  ,@b_success = @b_Success OUTPUT    
+                  ,@n_Err = @n_Err OUTPUT    
+                  ,@c_Errmsg = @c_ErrMsg OUTPUT    
+                  ,@c_Remark  = ''
+
+         END
+      END      
+
    END
 
 Quit:

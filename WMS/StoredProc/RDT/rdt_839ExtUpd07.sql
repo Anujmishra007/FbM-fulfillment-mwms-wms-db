@@ -63,12 +63,10 @@ BEGIN
    DECLARE @bSuccess INT   
    DECLARE @nExists  INT
    DECLARE @cShort   NVARCHAR(20)
-
-         
+      
    SET @nErrNo          = 0
    SET @cErrMSG         = ''
-   
-   
+  
    IF @nFunc = 839
    BEGIN
       IF @nStep = 5
@@ -89,8 +87,6 @@ BEGIN
                @n_err             INT,
                @c_errmsg          NVARCHAR(250)
 
-            
-
             -- Short
             IF @cOption = '1'
             BEGIN
@@ -106,14 +102,13 @@ BEGIN
                SET @cStoredProcedure = rdt.rdtGetConfig( @nFunc, 'ActRDTreason', @cStorerKey)
                IF @cStoredProcedure = '0'
                   SET @cStoredProcedure = ''
-                     
                IF @cStoredProcedure <> ''
                BEGIN
                   IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cStoredProcedure AND type = 'P')
                   BEGIN
                      SET @cSQL = 'EXEC rdt.' + RTRIM( @cStoredProcedure) +
                            ' @nMobile, @nFunc, @cStorerKey, ' +
-                           ' @cSKU, @cLOC, @cLot, @cID, @cReasonCode, ' +                      
+                           ' @cSKU, @cLOC, @cLot, @cID, @cReasonCode,@cPickSlipNo, ' +                      
                            ' @nErrNo OUTPUT, @cErrMsg OUTPUT '
                      SET @cSQLParam =
                            ' @nMobile         INT                      ' +
@@ -123,13 +118,14 @@ BEGIN
                            ',@cLOC            NVARCHAR( 10)            ' +
                            ',@cLot            NVARCHAR( 10)            ' +
                            ',@cID             NVARCHAR( 20)            ' +
-                           ',@cReasonCode     NVARCHAR( 20)            ' +                        
+                           ',@cReasonCode     NVARCHAR( 20)            ' +   
+                           ',@cPickSlipNo     NVARCHAR( 10)            ' +   
                            ',@nErrNo          INT           OUTPUT     ' +
                            ',@cErrMsg         NVARCHAR(250) OUTPUT  '
 
                      EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
                            @nMobile, @nFunc, @cStorerKey,
-                           @cSKU, @cLOC, @cLot, @cID, @cReasonCode,
+                           @cSKU, @cLOC, @cLot, @cID, @cReasonCode,@cPickSlipNo,
                            @nErrNo OUTPUT, @cErrMsg OUTPUT
 
                      IF @nErrNo <> 0

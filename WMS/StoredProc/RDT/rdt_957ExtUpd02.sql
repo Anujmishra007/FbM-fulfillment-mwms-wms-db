@@ -92,7 +92,7 @@ BEGIN
             IF @cOption = '1'
             BEGIN
                SELECT 
-                  @cReasonCode = Code,
+                  @cReasonCode = Code2,
                   @cCCTaskType = UDF01,-- CC task type
                   @cHoldType = UDF02 -- Hold type
                FROM codelkup 
@@ -110,7 +110,7 @@ BEGIN
                   BEGIN
                      SET @cSQL = 'EXEC rdt.' + RTRIM( @cStoredProcedure) +
                            ' @nMobile, @nFunc, @cStorerKey, ' +
-                           ' @cSKU, @cLOC, @cLot, @cID, @cReasonCode, ' +                      
+                           ' @cSKU, @cLOC, @cLot, @cID, @cReasonCode,@cPickSlipNo, ' +                      
                            ' @nErrNo OUTPUT, @cErrMsg OUTPUT '
                      SET @cSQLParam =
                            ' @nMobile         INT                      ' +
@@ -120,13 +120,14 @@ BEGIN
                            ',@cLOC            NVARCHAR( 10)            ' +
                            ',@cLot            NVARCHAR( 10)            ' +
                            ',@cID             NVARCHAR( 20)            ' +
-                           ',@cReasonCode     NVARCHAR( 20)            ' +                        
+                           ',@cReasonCode     NVARCHAR( 20)            ' + 
+                           ',@cPickSlipNo     NVARCHAR( 10)            ' +                          
                            ',@nErrNo          INT           OUTPUT     ' +
                            ',@cErrMsg         NVARCHAR(250) OUTPUT  '
 
                      EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
                            @nMobile, @nFunc, @cStorerKey,
-                           @cSuggSKU, @cSuggLOC, @cLot, @cSuggID, @cReasonCode,
+                           @cSuggSKU, @cSuggLOC, @cLot, @cSuggID, @cReasonCode,@cPickSlipNo,
                            @nErrNo OUTPUT, @cErrMsg OUTPUT
 
                      IF @nErrNo <> 0
