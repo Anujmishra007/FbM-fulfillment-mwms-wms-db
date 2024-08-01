@@ -232,14 +232,19 @@ BEGIN
 
                   --1. Print price labels and catelogy labels
                   --Price Labels
-                  INSERT INTO @tLabels(WorkOrderKey, WorkOrderLineNumber, LabelListName, VASCode, LabelName, Qty, PrintSequence)
-                  SELECT DISTINCT wod.WorkOrderKey, wod.WorkOrderLineNumber, IIF(lk1.LISTNAME IS NULL, lk.LISTNAME, lk1.LISTNAME), wod.Type, IIF(lk1.LISTNAME IS NULL, lk.UDF01, lk1.UDF01), pkd.Qty, '00001'
-                  FROM dbo.WorkOrderDetail wod WITH(NOLOCK)
+                  INSERT INTO @tLabels(LabelListName, VASCode, LabelName, Qty, PrintSequence)
+                  SELECT DISTINCT IIF(wodEX.LISTNAME IS NULL, lk.LISTNAME, wodEX.LISTNAME), wod.type, IIF(wodEX.UDF01 IS NULL, lk.UDF01, wodEX.UDF01), pkd.Qty, '00001'
+                  FROM dbo.WorkOrderDetail wod  WITH(NOLOCK)
                   INNER JOIN dbo.WorkOrder wo WITH(NOLOCK) ON wo.WorkOrderKey = wod.WorkOrderKey
                   INNER JOIN dbo.CODELKUP lk WITH(NOLOCK) ON wo.StorerKey = lk.StorerKey AND wod.Type = lk.Code AND lk.LISTNAME = 'WKORDTYPE' AND lk.UDF04 = 'LVSPRICELB'
                   INNER JOIN dbo.PickDetail pkd WITH(NOLOCK) ON wo.StorerKey = pkd.StorerKey AND ISNULL(wod.ExternWorkOrderKey, '') = pkd.OrderKey AND pkd.OrderLinenumber = wod.ExternLineNo
-                  LEFT JOIN dbo.WorkOrderDetail wod1 WITH(NOLOCK) ON ISNULL(wod.ExternWorkOrderKey, '') = ISNULL(wod1.ExternWorkOrderKey, '') AND ISNULL(wod1.ExternLineNo, '') = ''
-                  LEFT JOIN dbo.CODELKUP lk1 WITH(NOLOCK) ON lk.StorerKey = lk1.StorerKey AND lk1.Code2 = wod1.Type AND lk.UDF04 = lk1.LISTNAME 
+                  LEFT JOIN (SELECT DISTINCT lk1.LISTNAME, wod1.StorerKey, lk1.Code, Lk1.code2, lk1.UDF01 FROM dbo.WorkOrderDetail wod1 WITH(NOLOCK) 
+                           INNER JOIN dbo.PickDetail pkd1 WITH(NOLOCK) ON wod1.StorerKey = pkd1.StorerKey AND ISNULL(wod1.ExternWorkOrderKey, '') = pkd1.OrderKey
+                           INNER JOIN dbo.CODELKUP lk1 WITH(NOLOCK) ON wod1.StorerKey = lk1.StorerKey AND lk1.LISTNAME = 'LVSPRICELB' AND wod1.Type = lk1.code2
+                           WHERE wod1.StorerKey = @cStorerKey
+                              AND wod1.ExternLineNo = ''
+                              AND ISNULL(pkd1.CaseID, '') = @cDropID) AS wodEX
+                     ON wod.StorerKey = wodEX.StorerKey AND lk.Code = wodEX.Code
                   WHERE wo.StorerKey = @cStorerKey
                      AND pkd.Sku = @cSKU
                      AND ISNULL(pkd.CaseID, '') = @cDropID
