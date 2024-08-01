@@ -53,11 +53,11 @@ BEGIN
            @n_Even INT, 
            @n_CheckDigit INT
 
-      DECLARE @c_KeyString NVARCHAR(25),
-              @b_Success INT,
-              @n_err INT,
-              @c_errmsg NVARCHAR(250),
-              @n_RunNoLen INT = 0
+   DECLARE @c_KeyString NVARCHAR(25),
+           @b_Success INT,
+           @n_err INT,
+           @c_errmsg NVARCHAR(250),
+           @n_RunNoLen INT = 0
               
    SELECT 
       @c_SUSR1 = MAX(Storer.SUSR1)
@@ -83,7 +83,6 @@ BEGIN
          SET @n_Index = @n_Index + 1
       END
    END 
-
 
    IF Try_Convert(INT, @c_SUSR1) IS NOT NULL
    BEGIN
