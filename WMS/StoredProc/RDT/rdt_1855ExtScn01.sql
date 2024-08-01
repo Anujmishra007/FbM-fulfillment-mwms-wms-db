@@ -107,17 +107,32 @@ BEGIN
       @nNextPage                       INT,
       @cSKU                            NVARCHAR( 20),               
       @cFromLoc                        NVARCHAR( 10),
-      @nQTY                            INT,
+      @nQTY                            INT=0,
       @cTaskDetailKey                  NVARCHAR( 10),
       @cOption                         NVARCHAR( 1),
       @cToLOC                          NVARCHAR( 10),
       @tExtValidate                    VariableTable,
 
+      -- 1855 old Step 2 variables
+      @nCartonScanned      INT = 0,
+      @nCartonCnt          INT = 0,
+      @cSuggFromLOC        NVARCHAR( 10),
+      @cSuggCartonID       NVARCHAR( 20),
+      @cSuggToteId         NVARCHAR( 20),
+      @cSuggSKU            NVARCHAR( 20),
+      @nSuggQTY            INT = 0,
+      @tGetTask            VariableTable,
+      @cPickConfirmStatus  NVARCHAR( 1),
+      @cCartonType         NVARCHAR( 10),
+      @cPickMethod         NVARCHAR( 10),
+      @cLockCaseID         NVARCHAR( 20),
+
+
       -- 1855 new step1 variables
-      @cLoadKey      NVARCHAR( 10) = '',
       @cOrderKey     NVARCHAR( 10) = '',
-      @cZone         NVARCHAR( 18) = '',
       @cPickSlipNo   NVARCHAR( 18)
+
+
      
    
    -- Set Constant value
@@ -141,6 +156,26 @@ BEGIN
          @nMOBRECScn                   = Scn,
          @nMenu                        = Menu,
          @cUserName                    = UserName,
+         @cSKU                         = V_SKU,
+         @cFromLoc                     = V_Loc,
+         @cCartonID                    = V_CaseID,
+         @cTaskDetailKey               = V_TaskDetailKey,
+         @cWaveKey                     = V_WaveKey,
+         @nSuggQty                    = V_Integer1, 
+         @cCartID                      = V_String8,
+         @cSuggFromLOC                 = V_String9,
+         @cSuggCartonID                = V_String10,
+         @cSuggSKU                     = V_String11,
+         @cGroupKey                    = V_String12,
+         @cPickConfirmStatus           = V_String17,
+         @cPickZone                    = V_String24,
+         @cResult01                    = V_String26,
+         @cResult02                    = V_String27,
+         @cResult03                    = V_String28,
+         @cResult04                    = V_String29,
+         @cResult05                    = V_String30,
+         @cSuggToteId                  = V_String31,
+         @cCartPickMethod              = V_String41,
          @cContinuePickOnAssignedCart  = V_String42,
          @cPickNoMixWave               = V_String43,
          @cExtendedScnSP               = V_String44
@@ -155,6 +190,7 @@ BEGIN
    IF @nFunc = 1855
    BEGIN
       --Generic ESC handling
+
       -- redirect to 1st new screen
       IF @nScn = 5920 AND @nStep = 1 AND @nAction = 0
       BEGIN
@@ -165,7 +201,40 @@ BEGIN
          SET @nAfterScn = 6414
          SET @nAfterStep = 99 
          GOTO Quit
-      END-- generic esc handling
+      END-- generic back to 1st screen
+      ELSE IF @nScn=5921 AND @nStep = 2 AND @nAction = 0
+      BEGIN
+         SELECT @nCartonScanned = COUNT( DISTINCT DropID)      
+         FROM dbo.TaskDetail WITH (NOLOCK)      
+         WHERE Storerkey = @cStorerKey      
+            AND   TaskType = 'ASTCPK'      
+            AND   [Status] = '3'      
+            AND   Groupkey = @cGroupKey      
+            AND   UserKey = @cUserName      
+            AND   DeviceID = @cCartID
+            AND   DropID <> ''      
+                  
+         -- Prepare next screen var        
+         SET @cOutField01 = @cCartPickMethod        
+         SET @cOutField02 = @cCartID        
+         SET @cOutField03 = @cResult01        
+         SET @cOutField04 = @cResult02        
+         SET @cOutField05 = @cResult03        
+         SET @cOutField06 = @cResult04        
+         SET @cOutField07 = @cResult05        
+         SET @cOutField08 = ''        
+         SET @cOutField09 = @nCartonScanned        
+         
+         EXEC rdt.rdtSetFocusField @nMobile, 8      
+         
+         -- Go to next screen        
+         SET @nAfterScn = 6416 -- New Screen 2     
+         SET @nAfterStep = 99
+
+      END -- back to 2nd screen
+      -- generic esc handling end
+
+      --Screnn logic
       IF @nMOBRECStep = 0
       BEGIN
          IF @nAction = 0 -- new screen
@@ -207,7 +276,7 @@ BEGIN
       END -- step 0
       ELSE IF @nMOBRECStep = 99
       BEGIN
-         IF @nMOBRECScn = 6414 -- 1st step in 1855 for LVSUSA
+         IF @nMOBRECScn = 6414 -- 1st Screen in 1855 for LVSUSA
          /************************************************************************************        
             Scn = 6414. Scan Cart Id w. PickSlipNo     
             PickZone    (field01, input)        
@@ -239,7 +308,7 @@ BEGIN
                SET @cOutField03 = ''
                SET @cOutField04 = ''
 
-            END -- inputkey =0
+            END -- SCN6414 New screen 1 esc
             ELSE IF @nInputKey = 1 -- 
             BEGIN
                -- Screen mapping          
@@ -282,13 +351,16 @@ BEGIN
                   GOTO Quit          
                END 
 
+               SET @cWaveKey = ''
                SELECT TOP 1 @cWaveKey = PKD.WaveKey FROM PICKHEADER PKH WITH (NOLOCK)
                   INNER JOIN PICKDETAIL PKD WITH (NOLOCK)
                      ON PKH.StorerKey = PKD.Storerkey AND PKH.OrderKey = PKD.OrderKey
                WHERE PKH.StorerKey = @cStorerKey
                   AND PKH.PickHeaderKey = @cPickSlipNo
 
-               IF ISNULL(@cWaveKey, '') = ''
+               SET @cWaveKey = ISNULL(@cWaveKey, '')
+
+               IF @cWaveKey = ''
                BEGIN
                   SET @nErrNo = 220752          
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid PSNO          
@@ -804,9 +876,9 @@ BEGIN
                SET @cSKU = ''        
                SET @nQTY = 0        
                      
-               -- Go to next screen        
-               SET @nAfterScn = 5921        
-               SET @nAfterStep = 2
+               -- Go to new screen 2        
+               SET @nAfterScn = 6416        
+               SET @nAfterStep = 99
 
                -- FCR-652 Return the values need to be saved to rdtmobrec
                SET @cUDF01 = @cSKU
@@ -824,21 +896,360 @@ BEGIN
                SET @cUDF13 = @cResult04
                SET @cUDF14 = @cResult05
    
-            END -- Inputkey 1
+            END -- SCN 6414 Screen 1 Inputkey 1
 
             GOTO Quit
-         END -- SCN 6414
+         END -- SCN 6414 new screen1
+         ELSE IF @nMOBRECScn = 6416 -- 2nd screen in 1855 for LVSUSA
+         /************************************************************************************        
+            Scn = 6416. Cart ID/Matrix screen        
+               Cart ID   (field01)        
+               Result01  (field01)            
+               Result02  (field02)            
+               Result03  (field03)            
+               Result04  (field04)            
+               Result05  (field05)            
+               Result06  (field06)            
+               Result07  (field07)            
+               Result08  (field08)         
+         ************************************************************************************/  
+         BEGIN
+            IF @nInputKey = 0
+            BEGIN
+               -- Prepare next screen var        
+               SET @cOutField01 = ''        
+               SET @cOutField02 = ''         
+               SET @cOutField03 = ''         
+               SET @cOutField04 = ''         
+               SET @cOutField05 = ''         
+               SET @cOutField06 = ''         
+               SET @cOutField07 = ''         
+               SET @cOutField08 = ''         
+               SET @cOutField09 = ''         
+               SET @cOutField10 = ''         
+               SET @cOutField11 = ''         
+               SET @cOutField12 = ''         
+               SET @cOutField13 = ''        
+                     
+               EXEC rdt.rdtSetFocusField @nMobile, 1      
+                     
+               -- Go to next screen        
+               SET @nAfterScn = 5927 -- Unassign Cart screen        
+               SET @nAfterStep = 8 
+
+            END -- SCN 6416 new step 2 Esc
+            ELSE IF @nInputKey = 1
+            BEGIN
+               -- Screen mapping        
+               SET @cCartonId = @cInField08        
+               
+               -- Validate blank        
+               IF ISNULL( @cCartonId, '') = ''        
+               BEGIN        
+                  SELECT @nCartonScanned = COUNT( DISTINCT DropID)      
+                  FROM dbo.TaskDetail WITH (NOLOCK)      
+                  WHERE Storerkey = @cStorerKey      
+                  AND   TaskType = 'ASTCPK'      
+                  AND   [Status] = '3'      
+                  AND   Groupkey = @cGroupKey      
+                  AND   UserKey = @cUserName      
+                  AND   DeviceID = @cCartID      
+                  AND   DropID <> ''      
+               
+                  IF @nCartonScanned = 0      
+                  BEGIN      
+                     SET @nErrNo = 171810     
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Need Tote Id        
+                     GOTO Step_Matrix_Fail      
+                  END      
+               
+                  SELECT @nCartLimit = Short      
+                  FROM dbo.CODELKUP WITH (NOLOCK)      
+                  WHERE LISTNAME = 'TMPICKMTD'      
+                  AND   Code = @cMethod      
+                  AND   Storerkey = @cStorerKey      
+                        
+                  SELECT @nCartonCnt = COUNT( DISTINCT DropID)      
+                  FROM dbo.TaskDetail WITH (NOLOCK)      
+                  WHERE Storerkey = @cStorerKey      
+                     AND   TaskType = 'ASTCPK'      
+                     AND   [Status] IN ( '3', '5')      
+                     AND   Groupkey = @cGroupkey      
+                     AND   UserKey = @cUserName      
+                     AND   DeviceID = @cCartID      
+                     AND   DropID <> ''      
+               
+                  IF @nCartonCnt < @nCartLimit AND                   
+                  EXISTS ( SELECT 1 FROM dbo.TaskDetail WITH (NOLOCK)      
+                              WHERE Storerkey = @cStorerKey      
+                              AND   TaskType = 'ASTCPK'      
+                              AND   [Status] IN ( '3', '5')      
+                              AND   Groupkey = @cGroupkey      
+                              AND   UserKey = @cUserName      
+                              AND   DeviceID = @cCartID      
+                              AND   DropID = '')      
+                  BEGIN      
+                     SET @nErrNo = 171837                  
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --MoreCtnToScan                  
+                     GOTO Step_Matrix_Fail      
+                  END                  
+                  ELSE  --Something scanned      
+                  BEGIN      
+                     --Get task for next loc        
+                     SET @nErrNo = 0        
+                     SET @cSuggFromLOC = ''        
+                     EXEC [RDT].[rdt_TM_Assist_ClusterPick_GetTask]         
+                        @nMobile          = @nMobile,        
+                        @nFunc            = @nFunc,        
+                        @cLangCode        = @cLangCode,        
+                        @nStep            = @nStep,        
+                        @nInputKey        = @nInputKey,        
+                        @cFacility        = @cFacility,        
+                        @cStorerKey       = @cStorerKey,        
+                        @cGroupKey        = @cGroupKey,        
+                        @cCartId          = @cCartId,        
+                        @cType            = 'NEXTLOC',        
+                        @cTaskDetailKey   = @cTaskDetailKey OUTPUT,        
+                        @cFromLoc         = @cSuggFromLOC   OUTPUT,        
+                        @cCartonId        = @cSuggCartonID  OUTPUT,        
+                        @cToteId          = @cSuggToteId    OUTPUT,      
+                        @cSKU             = @cSuggSKU       OUTPUT,        
+                        @nQty             = @nSuggQty       OUTPUT,        
+                        @tGetTask         = @tGetTask,         
+                        @nErrNo           = @nErrNo         OUTPUT,        
+                        @cErrMsg          = @cErrMsg        OUTPUT        
+               
+                     IF @nErrNo <> 0        
+                        GOTO Quit        
+               
+                     -- Prepare next screen var        
+                     SET @cOutField01 = @cCartPickMethod      
+                     SET @cOutField02 = @cSuggFromLOC         
+                     SET @cOutField03 = ''      
+               
+                     -- Go to next screen        
+                     SET @nAfterScn = 5922 -- From Loc screen        
+                     SET @nAfterStep = 3        
+                           
+                     GOTO Quit      
+                  END      
+               END        
+               
+               IF EXISTS ( SELECT 1       
+                           FROM dbo.TaskDetail WITH (NOLOCK)      
+                           WHERE Storerkey = @cStorerKey      
+                           AND   TaskType = 'ASTCPK'      
+                           AND   [Status] = '3'      
+                           AND   Groupkey = @cGroupKey      
+                           AND   UserKey = @cUserName      
+                           AND   DeviceID = @cCartID      
+                           AND   DropID = @cCartonId)      
+               BEGIN        
+                  SET @nErrNo = 171811        
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Tote Assigned        
+                  GOTO Step_Matrix_Fail        
+               END        
+               
+               -- Check if all carton assigned      
+               IF NOT EXISTS ( SELECT 1      
+                              FROM dbo.TaskDetail WITH (NOLOCK)      
+                              WHERE Storerkey = @cStorerKey      
+                              AND   TaskType = 'ASTCPK'      
+                              AND   [Status] = '3'      
+                              AND   Groupkey = @cGroupKey      
+                              AND   UserKey = @cUserName      
+                              AND   DeviceID = @cCartID      
+                              AND   DropID = '')      
+               BEGIN      
+                  SET @nErrNo = 171812        
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --All Assigned        
+                  GOTO Step_Matrix_Fail      
+               END      
+                     
+               IF EXISTS ( SELECT 1 FROM dbo.PICKDETAIL WITH (NOLOCK)      
+                           WHERE Storerkey = @cStorerKey      
+                           AND   DropID = @cCartonID      
+                           AND  ([Status] = '4' OR       
+                                 [Status] < @cPickConfirmStatus OR       
+                                 ([Status] = '3' AND CaseID <> 'SORTED') OR      
+                                 ([Status] = '3' AND CaseID <> '')))       
+               BEGIN      
+                  SET @nErrNo = 171832        
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Tote In Use        
+                  GOTO Step_Matrix_Fail      
+               END      
+                     
+               IF EXISTS ( SELECT 1 FROM dbo.TaskDetail WITH (NOLOCK)      
+                           WHERE Storerkey = @cStorerKey      
+                           AND   TaskType = 'ASTCPK'      
+                           AND   [Status] < '9'      
+                           AND   DropID = @cCartonID)      
+               BEGIN      
+                  SET @nErrNo = 171833        
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Tote In Use        
+                  GOTO Step_Matrix_Fail      
+               END      
+               
+               -- Extended validate        
+               IF @cExtendedValidateSP <> ''        
+               BEGIN        
+                  IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedValidateSP AND type = 'P')        
+                  BEGIN        
+                     SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +        
+                        ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, ' +         
+                        ' @cGroupKey, @cTaskDetailKey, @cPickZone, @cCartId, @cMethod, @cFromLoc, @cCartonId, ' +        
+                        ' @cSKU, @nQty, @cOption, @cToLOC, @tExtValidate, @nErrNo OUTPUT, @cErrMsg OUTPUT '        
+               
+                     SET @cSQLParam =        
+                        ' @nMobile        INT,           ' +        
+                        ' @nFunc          INT,           ' +        
+                        ' @cLangCode      NVARCHAR( 3),  ' +        
+                        ' @nStep          INT,           ' +        
+                        ' @nInputKey      INT,           ' +        
+                        ' @cFacility      NVARCHAR( 5),  ' +        
+                        ' @cStorerKey     NVARCHAR( 15), ' +      
+                        ' @cGroupKey      NVARCHAR( 10), ' +        
+                        ' @cTaskDetailKey NVARCHAR( 10), ' +      
+                        ' @cPickZone      NVARCHAR( 10), ' +        
+                        ' @cCartId        NVARCHAR( 10), ' +      
+                        ' @cMethod        NVARCHAR( 1),  ' +        
+                        ' @cFromLoc       NVARCHAR( 10), ' +        
+                        ' @cCartonId      NVARCHAR( 20), ' +        
+                        ' @cSKU           NVARCHAR( 20), ' +        
+                        ' @nQty           INT,           ' +        
+                        ' @cOption        NVARCHAR( 1), ' +        
+                        ' @cToLOC         NVARCHAR( 10), ' +      
+                        ' @tExtValidate   VariableTable READONLY, ' +         
+                        ' @nErrNo         INT           OUTPUT, ' +        
+                        ' @cErrMsg        NVARCHAR( 20) OUTPUT  '        
+                     EXEC sp_ExecuteSQL @cSQL, @cSQLParam,        
+                        @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,         
+                        @cGroupKey, @cTaskDetailKey, @cPickZone, @cCartId, @cMethod, @cFromLoc, @cCartonId,       
+                        @cSKU, @nQty, @cOption, @cToLoc, @tExtValidate, @nErrNo OUTPUT, @cErrMsg OUTPUT        
+               
+                     IF @nErrNo <> 0         
+                        GOTO Step_Matrix_Fail        
+                  END        
+               END        
+               
+               SELECT @nCartonScanned = COUNT( DISTINCT DropID)      
+               FROM dbo.TaskDetail WITH (NOLOCK)      
+               WHERE Storerkey = @cStorerKey      
+                  AND   TaskType = 'ASTCPK'      
+                  AND   [Status] = '3'      
+                  AND   Groupkey = @cGroupKey      
+                  AND   UserKey = @cUserName      
+                  AND   DeviceID = @cCartID      
+                  AND   DropID <> ''      
+                  
+               SELECT @cCartonType = UDF01      
+               FROM dbo.CODELKUP WITH (NOLOCK)      
+               WHERE LISTNAME = 'TMPICKMTD'      
+                  AND   Code = @cMethod      
+                  AND   Storerkey = @cStorerKey      
+                  
+               SET @cPickMethod = ''      
+               SELECT @cPickMethod = Long       
+               FROM dbo.CODELKUP WITH (NOLOCK)      
+               WHERE LISTNAME = 'TMPICKMTD'      
+                  AND   Storerkey = @cStorerKey      
+                  AND   UDF01 = SUBSTRING( @cCartonId, 1, 1)      
+                  
+               SELECT TOP 1 @cLockCaseID = Caseid--@cLockTaskKey = TaskDetailKey      
+               FROM dbo.TaskDetail WITH (NOLOCK)      
+               WHERE Storerkey = @cStorerKey      
+                  AND   TaskType = 'ASTCPK'      
+                  AND   [Status] = '3'      
+                  AND   Groupkey = @cGroupKey      
+                  AND   UserKey = @cUserName      
+                  AND   DeviceID = @cCartID      
+                  AND   DropID = ''      
+                  AND   PickMethod = @cPickMethod      
+               ORDER BY 1      
+                     
+               DECLARE @curLockCase CURSOR      
+               SET @curLockCase = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR      
+               SELECT TaskDetailKey      
+               FROM dbo.TaskDetail WITH (NOLOCK)      
+               WHERE Storerkey = @cStorerKey      
+                  AND   TaskType = 'ASTCPK'      
+                  AND   [Status] = '3'      
+                  AND   Groupkey = @cGroupKey      
+                  AND   UserKey = @cUserName      
+                  AND   DeviceID = @cCartID      
+                  AND   Caseid = @cLockCaseID      
+                  AND   DropID = ''      
+               ORDER BY 1    
+               OPEN @curLockCase      
+               FETCH NEXT FROM @curLockCase INTO @cLockTaskKey      
+               WHILE @@FETCH_STATUS = 0      
+               BEGIN      
+                  UPDATE dbo.TaskDetail SET       
+                     DropID = @cCartonID,       
+                     StatusMsg =  CAST( @nCartonScanned + 1 AS NVARCHAR( 1)) + '-' + @cCartonType,      
+                     EditWho = @cUserName,       
+                     EditDate = GETDATE()      
+                  WHERE TaskDetailKey = @cLockTaskKey      
+                     
+                  IF @@ERROR <> 0      
+                  BEGIN      
+                     SET @nErrNo = 171812        
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Assign Fail        
+                  GOTO Step_Matrix_Fail      
+                  END      
+                     
+                  FETCH NEXT FROM @curLockCase INTO @cLockTaskKey      
+               END      
+                     
+               -- Prepare next screen var        
+               SET @cOutField01 = @cCartPickMethod        
+               SET @cOutField02 = @cCartID        
+               SET @cOutField03 = @cResult01        
+               SET @cOutField04 = @cResult02        
+               SET @cOutField05 = @cResult03        
+               SET @cOutField06 = @cResult04        
+               SET @cOutField07 = @cResult05        
+               SET @cOutField08 = ''        
+               SET @cOutField09 = @nCartonScanned + 1      
+               
+               EXEC rdt.rdtSetFocusField @nMobile, 8
+
+               Step_Matrix_Fail:                  
+               BEGIN                  
+                  -- Reset this screen var                  
+                  SET @cCartonID = ''      
+                  
+                  SET @cOutField08 = ''                  
+               END
+
+               -- back to new 2 scn
+               --SET @nAfterScn = 6416 -- new screen2
+               --SET @nAfterStep = 99
+
+               SET @cUDF01 = @cCartonID
+               SET @cUDF02 = @cSuggFromLOC
+               SET @cUDF03 = @cSuggCartonID
+               SET @cUDF04 = @cSuggToteId
+               SET @cUDF05 = @cSuggSKU
+               SET @cUDF06 = CAST(@nSuggQty AS NVARCHAR(10))
+
+               GOTO Quit 
+            END -- SCN 6416 net step 2 enter
+         END -- SCN 6416
+         
+
+         GOTO Quit
+
       END -- STEP 99
    END -- 1855
-
-   IF @bDebugFlag = 1
-   BEGIN
-      SELECT 'After Main Logic', @nMOBRECScn AS MobScn, @nMOBRECStep AS MobStep, @nMenu AS Menu, @cUserName AS UserName
-   END 
 
    GOTO Quit
 
 Quit:
+   IF @bDebugFlag = 1
+   BEGIN
+      SELECT 'After Main Logic', @nMOBRECScn AS MobScn, @nMOBRECStep AS MobStep, @nMenu AS Menu, @cUserName AS UserName
+   END
    
 END
 GO

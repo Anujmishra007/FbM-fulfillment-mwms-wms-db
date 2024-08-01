@@ -12,3 +12,22 @@ EXECUTE rdt.rdtAddScn 6414, 'ENG'
    ,@cLine14 = '%e'
    ,@nFunc = 1855
  
+
+ -- 6416 = New CART MATRIX screen
+DELETE rdt.RDTScn WHERE Scn = 6416 AND Lang_Code = 'ENG'
+EXECUTE rdt.rdtAddScn 6416, 'ENG'
+   ,@cLine01 = 'TM Assist CPK'
+   ,@cLine02 = '%20d01'
+   ,@cLine03 = 'CART ID: %10d02'
+   ,@cLine04 = ''
+   ,@cLine05 = '%20d03'
+   ,@cLine06 = '%20d04'
+   ,@cLine07 = '%20d05'
+   ,@cLine08 = '%20d06'
+   ,@cLine09 = '%20d07'
+   ,@cLine10 = 'TOTE ID:'
+   ,@cLine11 = '%20i08'
+   ,@cLine12 = 'ASSIGNED: %03d09'
+   ,@cLine13 = ''
+   ,@cLine14 = '%e'
+   ,@nFunc = 1855
