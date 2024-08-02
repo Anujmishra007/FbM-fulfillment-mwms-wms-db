@@ -16,6 +16,7 @@ GO
 /* 2018-01-03 1.0  ChewKP     WMS-3487 Created                                */
 /* 2019-01-22 1.1  ChewKP     Tuning                                          */
 /* 2022-03-22 1.2  yeekung    WMS-18729 add params (Yeekung01)                */
+/* 2024-07-30 1.3  yeekung    UWP-22410 Add new Column(yeekung05)             */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [PTL].[isp_PTL_TerminateModuleSingle]
@@ -48,7 +49,8 @@ BEGIN
            @n_PTLKey          BIGINT,
            @c_PTLType         NVARCHAR(10),
            --@c_LightAddress    NVARCHAR(MAX),
-           @n_LightLinkLogKey INT
+           @n_LightLinkLogKey INT,
+           @cFacility         NVARCHAR(20)
 
 
 
@@ -67,11 +69,14 @@ BEGIN
       SET @c_DeviceIP = ''
       SELECT @c_DeviceIP = ISNULL(ll.IPAddress,'')
             ,@c_DeviceType = ll.DeviceType
+            ,@cFacility  = Facility
       FROM DeviceProfile ll WITH (NOLOCK)
       WHERE ll.DeviceID = @c_DeviceID
 
       SET @c_PTLType = @c_DeviceType
    END
+
+   SET @cFacility = CASE WHEN ISNULL(@cFacility,'') = '' THEN '' ELSE @cFacility END
 
    IF ISNULL(RTRIM(@c_DeviceIP), '') = ''
    BEGIN
@@ -102,11 +107,11 @@ BEGIN
       INSERT INTO PTL.LFLightLinkLOG(
             Application, LocalEndPoint,   RemoteEndPoint,
             SourceKey,      MessageType,     Data,
-            Status,      AddDate,         DeviceIPAddress)
+            Status,      AddDate,         DeviceIPAddress,Facility)
       VALUES(
             'LFLigthLink', '' , '',
             '0', 'COMMAND', @c_LightCommand + @cDevicePositionLight,
-            '0', GetDate(),  @c_DeviceIP )
+            '0', GetDate(),  @c_DeviceIP, @cFacility )
 
       SET @n_LightLinkLogKey = @@identity
 
@@ -165,20 +170,21 @@ BEGIN
       -- Updating PTL.LightStatus and PTL Tran
       IF NOT EXISTS (SELECT 1 FROM PTL.LightStatus AS ls WITH (NOLOCK)
                      WHERE ls.IPAddress = @c_DeviceIP
-                     AND   ls.DevicePosition = @c_DevicePosition)
+                     AND   ls.DevicePosition = @c_DevicePosition
+                     AND   ls.Facility = @cFacility)
       BEGIN
          INSERT INTO PTL.LightStatus
          (  IPAddress,        DevicePosition,   DeviceID,
             [Status],         PTLKey,           PTLType,
             StorerKey,        UserName,         DisplayValue,
             ReceiveValue,     ReceiveTime,      Remarks,  Func ,
-            ErrorMessage,     SourceKey,        DeviceProfileLogKey, LightCmd )
+            ErrorMessage,     SourceKey,        DeviceProfileLogKey, LightCmd,Facility )
          VALUES
          (  @c_DeviceIP,      @c_DevicePosition, @c_DeviceID,
             '0',              0,                 @c_PTLType,
             @c_StorerKey,     SUSER_SNAME(),     '',
             '',               NULL,              '',  @n_Func ,
-            '',               '',        '', @c_LightCommand)
+            '',               '',        '', @c_LightCommand, @cFacility)
       END
       ELSE
       BEGIN
@@ -198,6 +204,7 @@ BEGIN
                 Func = @n_Func
          WHERE IPAddress = @c_DeviceIP
          AND   DevicePosition = @c_DevicePosition
+         AND   Facility = @cFacility
       END
 
       -- Turn off light up flag

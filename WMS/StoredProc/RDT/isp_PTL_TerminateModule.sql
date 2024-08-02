@@ -20,6 +20,7 @@ GO
 /*                            Add back update PTLTran.LightUP = 0             */
 /* 2022-03-22 1.5  yeekung    WMS-18729 add params (Yeekung01)                */
 /* 2023-11-29 1.6  Yeekung    WMS-23803 add TMS (yeeKung02)                   */
+/* 2024-07-30 1.7  yeekung    UWP-22410 Add new Column(yeekung05)             */
 /******************************************************************************/
 
 CREATE OR ALTER  PROC [PTL].[isp_PTL_TerminateModule]
@@ -50,7 +51,8 @@ BEGIN
            @c_PTLType         NVARCHAR(10),
            @c_LightAddress    NVARCHAR(1024),
            @n_LightLinkLogKey INT,
-           @cLightCmd         NVARCHAR(2000)
+           @cLightCmd         NVARCHAR(2000),
+           @cFacility         NVARCHAR(20)
 
    SET @c_PutawayZone = ''
 
@@ -59,16 +61,17 @@ BEGIN
       SET @c_DeviceIP = ''
       SELECT TOP 1 @c_DeviceIP = ISNULL(ll.IPAddress,'')
             ,@c_DeviceType = ll.DeviceType
+            ,@cFacility = Facility
       FROM DeviceProfile ll WITH (NOLOCK)
       WHERE ll.DeviceID = @c_DeviceID
       ORDER BY EDITDATE DESC
-
-      PRINT @c_DeviceIP
 
       SELECT @c_PutawayZone = PutawayZone
       FROM dbo.Loc  WITH (NOLOCK)
       WHERE Loc = @c_DeviceID
    END
+
+   SET @cFacility = CASE WHEN ISNULL(@cFacility,'') = '' THEN '' ELSE @cFacility END
 
    IF  @c_DeviceModel NOT IN ('TMS')  --(yeekung02)
    BEGIN
@@ -166,11 +169,11 @@ BEGIN
             INSERT INTO PTL.LFLightLinkLOG(
                   Application, LocalEndPoint,   RemoteEndPoint,
                   SourceKey,      MessageType,     Data,
-                  Status,      AddDate,         DeviceIPAddress)
+                  Status,      AddDate,         DeviceIPAddress,Facility)
             VALUES(
                   'LFLigthLink', '' , '',
                   '0', 'COMMAND', @c_LightCommand ,
-                  '0', GetDate(),  @c_DeviceIP )
+                  '0', GetDate(),  @c_DeviceIP, @cFacility)
 
             SET @cLightCmd = @c_LightCommand
 
@@ -183,11 +186,11 @@ BEGIN
             INSERT INTO PTL.LFLightLinkLOG(
                   Application, LocalEndPoint,   RemoteEndPoint,
                   SourceKey,      MessageType,     Data,
-                  Status,      AddDate,         DeviceIPAddress)
+                  Status,      AddDate,         DeviceIPAddress,Facility)
             VALUES(
                   'LFLigthLink', '' , '',
                   '0', 'COMMAND', @c_LightCommand + @c_LightAddress,
-                  '0', GetDate(),  @c_DeviceIP )
+                  '0', GetDate(),  @c_DeviceIP, @cFacility )
 
          END
         
@@ -217,20 +220,21 @@ BEGIN
 
       IF NOT EXISTS (SELECT 1 FROM PTL.LightStatus AS ls WITH (NOLOCK)
                      WHERE ls.IPAddress = @c_DeviceIP
-                     AND   ls.DevicePosition = @c_DevicePosition)
+                     AND   ls.DevicePosition = @c_DevicePosition
+                     AND   ls.Facility = @cFacility )
       BEGIN
          INSERT INTO PTL.LightStatus
-  (  IPAddress,        DevicePosition,   DeviceID,
+        (  IPAddress,        DevicePosition,   DeviceID,
             [Status],         PTLKey,           PTLType,
             StorerKey,        UserName,         DisplayValue,
             ReceiveValue,     ReceiveTime,      Remarks,  Func ,
-            ErrorMessage,     SourceKey,        DeviceProfileLogKey, LightCmd )
+            ErrorMessage,     SourceKey,        DeviceProfileLogKey, LightCmd,Facility )
          VALUES
          (  @c_DeviceIP,      @c_DevicePosition, @c_DeviceID,
             '0',              0,                 @c_PTLType,
             @c_StorerKey,     SUSER_SNAME(),     '',
             '',               NULL,              '',  @n_Func ,
-            '',               '',        '', @c_LightCommand)
+            '',               '',        '', @c_LightCommand,@cFacility)
       END
       ELSE
       BEGIN
@@ -250,6 +254,7 @@ BEGIN
                 Func = @n_Func
          WHERE IPAddress = @c_DeviceIP
          AND   DevicePosition = @c_DevicePosition
+         AND   Facility = @cFacility
       END
 
       -- Turn off light up flag

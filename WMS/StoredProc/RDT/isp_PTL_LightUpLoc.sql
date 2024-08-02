@@ -22,6 +22,7 @@ GO
 /* 2020-11-01 1.6  YeeKung    WMS-16066 Add loc pickzone(yeekung02)           */   
 /* 2022-03-22 1.7  yeekung    WMS-18729 add params (Yeekung04)                */
 /* 2023-04-06 1.8  yeekung    WMS-22163 Merge all lightup                     */ 
+/* 2024-07-30 1.9  yeekung    UWP-22410 Add new Column(yeekung05)             */
 /******************************************************************************/    
 CREATE OR ALTER PROC [PTL].[isp_PTL_LightUpLoc]    
 (    
@@ -70,6 +71,7 @@ BEGIN
           ,@dAddDate         DATETIME    
           ,@cLoc             NVARCHAR(20)
           ,@cLightcmd       NVARCHAR(MAX)
+          ,@cFacility        NVARCHAR(20)
     
    SET @n_StartTCnt = @@TRANCOUNT    
    SET @n_Continue = 1    
@@ -83,6 +85,14 @@ BEGIN
 --      SET @n_Continue=3    
 --      GOTO EXIT_SP    
 --   END    
+
+
+   SELECT   @cFacility = Facility
+   FROM DeviceProfile ll WITH (NOLOCK)    
+   WHERE ll.DeviceID = @c_DeviceID   
+      AND ll.DevicePosition=@c_DevicePos 
+      AND ll.IPAddress=@c_DeviceIP
+
    IF  @c_DeviceModel NOT IN ('TMS')
    BEGIN
       IF (@c_DeviceID = '' AND  @c_DevicePos = '' AND  @c_DeviceIP = '' )       
@@ -277,17 +287,18 @@ BEGIN
       SET @cLightcmd = @c_LightCommand
    END
   
+     SET @cFacility = CASE WHEN ISNULL(@cFacility,'') ='' THEN '' ELSE @cFacility END
 
    SET @dAddDate = Getdate()    
     
    INSERT INTO PTL.LFLightLinkLOG(    
           Application, LocalEndPoint,   RemoteEndPoint,    
           SourceKey,      MessageType,     Data,    
-          Status,      AddDate,         DeviceIPAddress )    
+          Status,      AddDate,         DeviceIPAddress,Facility )    
    VALUES(    
           'LFLigthLink', '' , '',    
           @n_PTLKey, 'COMMAND', @c_LightCommand,    
-          '0', @dAddDate, @c_DeviceIP  )    
+          '0', @dAddDate, @c_DeviceIP,@cFacility  )    
 
     
    SET @n_LightLinkLogKey = @@identity    
@@ -318,26 +329,27 @@ BEGIN
       BEGIN TRAN  -- Begin our own transaction    
       SAVE TRAN isp_PTL_LightUpLoc -- For rollback or commit only our own transaction       
     
-      INSERT INTO PTL.LightInput ( IPAddress, DevicePosition, OutputData, Status, AddDate )    
-      VALUES ( @c_DeviceIP, @c_DevicePos, @c_DisplayValue, '9' , @dAddDate )    
+      INSERT INTO PTL.LightInput ( IPAddress, DevicePosition, OutputData, Status, AddDate,Facility )    
+      VALUES ( @c_DeviceIP, @c_DevicePos, @c_DisplayValue, '9' , @dAddDate,@cFacility )    
     
     
       IF NOT EXISTS (SELECT 1 FROM PTL.LightStatus AS ls WITH (NOLOCK)    
                   WHERE ls.IPAddress = @c_DeviceIP    
-                  AND   ls.DevicePosition = @c_DevicePos)    
+                  AND   ls.DevicePosition = @c_DevicePos
+                  AND   ls.Facility = @cFacility)    
       BEGIN    
          INSERT INTO PTL.LightStatus          
          (  IPAddress,        DevicePosition,   DeviceID,          
             [Status],       PTLKey,           PTLType,          
             StorerKey,        UserName,         DisplayValue,          
             ReceiveValue,     ReceiveTime,      Remarks, Func,          
-            ErrorMessage,     SourceKey,        DeviceProfileLogKey, LightCmd, EditWho, EditDate )          
+            ErrorMessage,     SourceKey,        DeviceProfileLogKey, LightCmd, EditWho, EditDate,Facility )          
          VALUES          
          (  @c_DeviceIP,      @c_DevicePos,     @c_DeviceID,          
             '0',              @n_PTLKey,        '',          
             @c_StorerKey,     SUSER_SNAME(),    @c_DisplayValue,          
             '',               NULL,             '',    @n_Func,          
-    '',               '',               @c_DeviceProLogKey, @c_LightCommand, SUSER_SNAME(), GetDate() )    
+    '',               '',               @c_DeviceProLogKey, @c_LightCommand, SUSER_SNAME(), GetDate(),@cFacility )    
       END    
       ELSE    
       BEGIN    
@@ -357,9 +369,10 @@ BEGIN
                 LightCmd = @c_LightCommand,    
                 Func = @n_Func,
                 EditWho = SUSER_SNAME(),          
-                EditDate = GetDATE()        
+                EditDate = GetDATE()
          WHERE IPAddress = @c_DeviceIP    
-         AND   DevicePosition = @c_DevicePos    
+         AND   DevicePosition = @c_DevicePos  
+         AND   Facility = @cFacility 
       END    
     
       UPDATE PTL.PTLTRAN WITH (ROWLOCK) SET    
