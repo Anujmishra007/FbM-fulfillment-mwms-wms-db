@@ -210,6 +210,7 @@ DECLARE
    @cOption                 NVARCHAR( 1),
    @cQTY                    NVARCHAR( 10),
    @cBarcode                NVARCHAR( MAX),
+   @cMax                    NVARCHAR( MAX),
    @cSerialNo               NVARCHAR( 30),
    @nSerialQTY              INT,
    @nMoreSNO                INT,
@@ -385,7 +386,7 @@ SELECT
 
    @nFromScn    = V_FromScn,
    @cBarcode    = V_Barcode,
-   
+   @cMax        = V_Max,
    @nUOM_Div           = V_Integer1,
    @nToIDQTY           = V_Integer2,
    @nBeforeReceivedQty = V_Integer3,
@@ -1405,6 +1406,7 @@ BEGIN
                SET @cUOM = ''
                IF @cSkipLottable = '1' AND @nStep = 4
                   GOTO Step_4
+
                -- Skip lottable
                IF @cSkipLottable01 = '1' SELECT @cFieldAttr01 = 'O', @cInField01 = '', @cLottable01 = ''
                IF @cSkipLottable02 = '1' SELECT @cFieldAttr02 = 'O', @cInField02 = '', @cLottable02 = ''
@@ -4662,7 +4664,7 @@ BEGIN
          BEGIN
             SET @nScn = 6413
             SET @nStep = 98
-            SET @cOutField01 = @cInField04
+            SET @cOutField01 = @cMax
             SET @cOutField02 = ''
             GOTO Step_9_fail
          END
@@ -5472,6 +5474,7 @@ BEGIN
                SET @nBeforeReceivedQty = @cUDF04
                SET @nQtyExpected = @cUDF05
                SET @nToIDQTY = @cUDF06
+               SET @cMax = @cUDF07
             END
          END
          
@@ -5683,7 +5686,7 @@ BEGIN
 
       V_FromScn    = @nFromScn,
       V_Barcode    = @cBarcode,
-      
+      V_Max        = @cMax,
       V_Integer1   = @nUOM_Div,
       V_Integer2   = @nToIDQTY,
       V_Integer3   = @nBeforeReceivedQty,
