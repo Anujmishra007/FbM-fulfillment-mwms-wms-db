@@ -141,6 +141,8 @@ GO
 /* 07-Dec-2022 5.5  James    WMS-21288 Extend SKU length, add output    */
 /*                           Qty for decodesp (james31)                 */
 /* 05-Sep-2023 5.6  James    WMS-23451 Add standard UCC decode (james32)*/
+/* 01-Aug-2024 5.7  NLT013   UWP-22515 Fix the issue:Keep Lottables     */
+/*                           does not work                              */
 /************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdtfnc_CycleCount] (
    @nMobile    INT,
@@ -11331,9 +11333,9 @@ BEGIN
       BEGIN
          SET @nErrNo = 66833
          SET @cErrMsg = rdt.rdtgetmessage( 66833, @cLangCode, 'DSP') -- 'Invalid Option'
-     EXEC rdt.rdtSetFocusField @nMobile, 1
+         EXEC rdt.rdtSetFocusField @nMobile, 1
          GOTO SINGLE_SKU_Option_Fail
- END
+   END
 
       -- Short - 'PRE'
       -- Verify Labels for Lotables
@@ -11374,14 +11376,14 @@ BEGIN
          @cLottable03_Code OUTPUT,
          @cLottable04_Code OUTPUT,
          @cLottable05_Code OUTPUT,
-     @cLottable01      OUTPUT,
+         @cLottable01      OUTPUT,
          @cLottable02      OUTPUT,
          @cLottable03      OUTPUT,
          @dLottable04      OUTPUT,
          @dLottable05      OUTPUT,
          @cHasLottable     OUTPUT,
- @nSetFocusField   OUTPUT,
-         @nErrNo       OUTPUT,
+         @nSetFocusField   OUTPUT,
+         @nErrNo           OUTPUT,
          @cErrMsg          OUTPUT
 
       IF ISNULL(@cErrMsg, '') <> ''
@@ -11444,7 +11446,7 @@ BEGIN
             END
 
             IF @cLotLabel03 = '' OR @cLotLabel03 IS NULL
-      BEGIN
+            BEGIN
                 SET @cFieldAttr06 = 'O'
             END
             ELSE
@@ -11466,7 +11468,7 @@ BEGIN
             EXEC rdt.rdtSetFocusField @nMobile, 1  -- Lottable01 value
 
             -- Go to next screen
-        SET @nScn  = @nScn_SINGLE_SKU_Add_Lottables  -- screen 16
+            SET @nScn  = @nScn_SINGLE_SKU_Add_Lottables  -- screen 16
             SET @nStep = @nStep_SINGLE_SKU_Add_Lottables
 
             GOTO Quit
@@ -11484,6 +11486,16 @@ BEGIN
          WHERE SKU.StorerKey = @cStorer
          AND   SKU.SKU = @cNewSKU
 */
+         --UWP-22515 Keep Lottables
+         SELECT 
+            @cLottable01       = V_Lottable01,
+            @cLottable02       = V_Lottable02,
+            @cLottable03       = V_Lottable03,
+            @dLottable04       = V_Lottable04,
+            @dLottable05       = V_Lottable05
+         FROM RDT.RDTMOBREC WITH(NOLOCK)
+         WHERE Mobile = @nMobile
+
          SELECT TOP 1
             @cNewSKUDescr = SKU.DESCR,
             @cNewEachUOM  = PAC.PACKUOM3
@@ -11638,7 +11650,7 @@ BEGIN
                WHERE CCKey = @cCCRefNo
                AND   CCSheetNo = CASE WHEN ISNULL(@cCCSheetNo, '') = '' THEN CCSheetNo ELSE @cCCSheetNo END
                AND   LOC = @cLOC
-       AND   ID = CASE WHEN ISNULL(@cID, '') = '' THEN ID ELSE @cID END
+               AND   ID = CASE WHEN ISNULL(@cID, '') = '' THEN ID ELSE @cID END
                AND   SKU = @cNewSKU
 
                --Total Qty of the specified LOC + ID
@@ -11657,7 +11669,7 @@ BEGIN
                WHERE CCKey = @cCCRefNo
                AND   CCSheetNo = CASE WHEN ISNULL(@cCCSheetNo, '') = '' THEN CCSheetNo ELSE @cCCSheetNo END
                AND   LOC = @cLOC
-        AND   ID = CASE WHEN ISNULL(@cID, '') = '' THEN ID ELSE @cID END
+               AND   ID = CASE WHEN ISNULL(@cID, '') = '' THEN ID ELSE @cID END
                AND   SKU = @cNewSKU
 
                --Total Qty of the specified LOC + ID
@@ -12061,6 +12073,16 @@ BEGIN
          WHERE SKU.StorerKey = @cStorer
          AND   SKU.SKU = @cNewSKU
 */
+         --UWP-22515 Keep Lottables
+         SELECT 
+            @cLottable01       = V_Lottable01,
+            @cLottable02       = V_Lottable02,
+            @cLottable03       = V_Lottable03,
+            @dLottable04       = V_Lottable04,
+            @dLottable05       = V_Lottable05
+         FROM RDT.RDTMOBREC WITH(NOLOCK)
+         WHERE Mobile = @nMobile
+         
          SELECT TOP 1
             @cNewSKUDescr = SKU.DESCR,
             @cNewEachUOM  = PAC.PACKUOM3
@@ -12232,6 +12254,15 @@ BEGIN
 
       IF @cOptAction = '3'
       BEGIN
+         SELECT 
+            @cLottable01       = V_Lottable01,
+            @cLottable02       = V_Lottable02,
+            @cLottable03       = V_Lottable03,
+            @dLottable04       = V_Lottable04,
+            @dLottable05       = V_Lottable05
+         FROM RDT.RDTMOBREC WITH(NOLOCK)
+         WHERE Mobile = @nMobile
+         
          -- If no lottables setup then confirm the previous scanned sku first
          IF @cHasLottable <> '1'
          BEGIN
