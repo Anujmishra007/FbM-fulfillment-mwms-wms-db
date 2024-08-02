@@ -55,7 +55,7 @@ BEGIN
     SET CONCAT_NULL_YIELDS_NULL OFF
 
     DECLARE
-    @c_StorerKey        NVARCHAR(10),
+    @c_StorerKey     NVARCHAR(10),
     @c_Facility          NVARCHAR(20),
     @c_LocationType      NVARCHAR(10),
     @c_PickMethod        NVARCHAR(10),
@@ -96,9 +96,8 @@ BEGIN
     -- Begin Transaction
   SET @n_continue = 1;
 	SET @c_successFlag = 'N';
-
+  SELECT @n_StartTranCnt = @@TRANCOUNT;
 	BEGIN TRAN;
-	SELECT @n_StartTranCnt = @@TRANCOUNT;
     SELECT TOP 1 @c_StorerKey = o.StorerKey, @c_Facility = o.Facility FROM ORDERS o (NOLOCK) WHERE o.OrderKey IN (
     select wd.OrderKey from WAVEdetail wd (nolock) where wavekey in (@c_WaveKey))
 
