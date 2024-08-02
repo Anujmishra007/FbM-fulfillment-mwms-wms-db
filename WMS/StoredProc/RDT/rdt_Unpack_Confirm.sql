@@ -9,11 +9,12 @@ GO
 
 /************************************************************************/
 /* Store procedure: rdt_Unpack_Confirm                                  */
-/* Copyright      : LF Logistics                                        */
+/* Copyright      : Maersk                                              */
 /*                                                                      */
 /* Date       Rev  Author      Purposes                                 */
 /* 30-05-2017 1.0  Ung         WMS-1919 Created                         */
 /* 2020-04-23 1.1  James       WMS-13005 Add update pickdetail (james01)*/
+/* 2024-08-02 1.2  Dennis      UWP-22648 Bug Fix(de01)                  */
 /************************************************************************/
 
 CREATE PROC rdt.rdt_Unpack_Confirm (
@@ -183,7 +184,7 @@ BEGIN
          ' AND ( PD.Status = @cPickConfirmStatus OR PD.Status = ''5'') ' 
       END
       -- Conso PickSlip
-      ELSE
+      ELSE IF ISNULL(@cLoadKey, '') <> '' --(de01)  
       BEGIN
          SET @cSQL =
          ' SELECT PD.PickDetailKey, PD.OrderKey, PD.OrderLineNumber ' +
@@ -196,7 +197,7 @@ BEGIN
          ' AND   PD.StorerKey = @cStorerKey ' +
          ' AND ( PD.Status = @cPickConfirmStatus OR PD.Status = ''5'') ' 
       END
-      -- Other Pickslip
+      ELSE -- Other Pickslip (de01)  
       BEGIN
          SET @cSQL =
          ' SELECT PD.PickDetailKey, PD.OrderKey, PD.OrderLineNumber ' +
