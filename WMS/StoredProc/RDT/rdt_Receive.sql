@@ -71,8 +71,8 @@ GO
 /*                             20->100		(yeekung01)									*/
 /* 2021-12-06 4.4  YeeKung     WMS-18390 Fixed POKEY (yeekung01)              */
 /* 2024-07-01 4.5  CYU027      Fix blank lottable issue                       */
-/* 2024-07-24 4.6  JHU151      FCR-549 if lottable01skip enabled, still update 
-                                        lottable01                            */
+/* 2024-07-24 4.6  JHU151      FCR-549 if lottable01skip enabled, still update*/ 
+/*                               lottable01                                   */                                 
 /******************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_Receive] (
