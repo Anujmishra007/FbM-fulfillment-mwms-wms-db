@@ -1405,51 +1405,7 @@ BEGIN
                SET @cUOM = ''
                IF @cSkipLottable = '1' AND @nStep = 4
                   GOTO Step_4
-               GOTO Quit
-            END
-         
-         END
-      END
-      SET @cExtendedScreenSP =  ISNULL(rdt.RDTGetConfig( @nFunc, '1580ExtendedScreenSP', @cStorer), '')
-      SET @nAction = 3
-      IF @cExtendedScreenSP <> ''
-      BEGIN
-         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
-         BEGIN
-            EXECUTE [RDT].[rdt_1580ExtScnEntry] 
-               @cExtendedScreenSP,
-               @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorer, @cSuggestedLoc OUTPUT ,@cLOC OUTPUT, @cTOID OUTPUT, @cSKU OUTPUT,
-               @cReceiptKey,@cPoKey,'',@cReceiptLineNumber,@cPalletType,
-               @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01  OUTPUT,  
-               @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02  OUTPUT,  
-               @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03  OUTPUT,  
-               @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04  OUTPUT,  
-               @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  
-               @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  
-               @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  
-               @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  
-               @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  
-               @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  
-               @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  
-               @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT, 
-               @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  
-               @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT, 
-               @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT, 
-               @nAction, 
-               @nAfterScn OUTPUT,  @nAfterStep OUTPUT,
-               @nErrNo   OUTPUT, 
-               @cErrMsg  OUTPUT
-            
-            IF @nErrNo <> 0
-               GOTO Step_2_Fail
-            IF @nAfterStep <> 0
-            BEGIN
-               SET @nScn = @nAfterScn
-               SET @nStep = @nAfterStep
-               SET @cSKU = ''
-               SET @cUOM = ''
-               IF @cSkipLottable = '1' AND @nStep = 4
-                  GOTO Step_4
+
                -- Skip lottable
                IF @cSkipLottable01 = '1' SELECT @cFieldAttr01 = 'O', @cInField01 = '', @cLottable01 = ''
                IF @cSkipLottable02 = '1' SELECT @cFieldAttr02 = 'O', @cInField02 = '', @cLottable02 = ''

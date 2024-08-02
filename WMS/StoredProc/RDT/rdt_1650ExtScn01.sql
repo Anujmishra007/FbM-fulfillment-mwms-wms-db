@@ -224,6 +224,11 @@ BEGIN
                   SET @cOutField06 = 'Pallet Scanned: ' + TRY_CAST(ISNULL(@nScannedPalletQty, 0) AS NVARCHAR(5)) + '/' + TRY_CAST(@nTotalPalletQty AS NVARCHAR(5)) 
                END
             END
+            ELSE IF @nInputKey = 1
+            BEGIN
+               SET @cOutField01 = ''
+               SET @cOutField06 = ''
+            END
          END
       END
    END 

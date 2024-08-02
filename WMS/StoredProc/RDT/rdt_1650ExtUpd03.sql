@@ -51,6 +51,7 @@ BEGIN
    DECLARE @tPalletID TABLE
    (
       id INT IDENTITY(1,1),
+      MBOLKey           NVARCHAR(10),
       PalletID          NVARCHAR(20)
    )
 
@@ -83,8 +84,8 @@ BEGIN
 
             IF @nCBOLKey IS NOT NULL AND @nCBOLKey > 0
             BEGIN
-               INSERT INTO @tPalletID (PalletID)
-               SELECT DISTINCT PD.ID
+               INSERT INTO @tPalletID (MBOLKey, PalletID)
+               SELECT DISTINCT M.MBOLKey, PD.ID
                FROM dbo.MBOL M WITH (NOLOCK)
                INNER JOIN dbo.MBOLDETAIL MD WITH (NOLOCK) ON M.MBOLKey = MD.MBOLKey
                INNER JOIN dbo.PickDetail PD WITH (NOLOCK) ON PD.OrderKey = MD.OrderKey
@@ -98,8 +99,8 @@ BEGIN
             BEGIN
                IF @cMBOLKey IS NOT NULL AND @cMBOLKey <> ''
                BEGIN
-                  INSERT INTO @tPalletID (PalletID)
-                  SELECT DISTINCT PD.ID
+                  INSERT INTO @tPalletID (MBOLKey, PalletID)
+                  SELECT DISTINCT M.MBOLKey, PD.ID
                   FROM dbo.MBOL M WITH (NOLOCK)
                   INNER JOIN dbo.MBOLDETAIL MD WITH (NOLOCK) ON M.MBOLKey = MD.MBOLKey
                   INNER JOIN dbo.PickDetail PD WITH (NOLOCK) ON PD.OrderKey = MD.OrderKey
@@ -126,6 +127,7 @@ BEGIN
                BEGIN
                   SELECT TOP 1 
                      @cLoopPalletID = PalletID,
+                     @cMBOLKey = MBOLKey,
                      @nLoopIndex = id
                   FROM @tPalletID
                   WHERE id > @nLoopIndex
