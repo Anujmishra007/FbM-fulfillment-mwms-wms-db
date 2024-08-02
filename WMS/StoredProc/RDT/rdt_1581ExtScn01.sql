@@ -426,8 +426,8 @@ Quit:
    IF @nStep = 98
    BEGIN
       IF @nScn = 6413
-      BEGIN
-         IF @nInputKey = 1
+      BEGIN               
+         IF @nInputKey = 1 AND @cOption IN (1,9)
          BEGIN
             SET @cUDF01 = @cBarcode
             SET @cUDF02 = @cPrevBarcode
@@ -435,14 +435,9 @@ Quit:
             SET @cUDF04 = @nBeforeReceivedQty
             SET @cUDF05 = @nQtyExpected
             SET @cUDF06 = @nToIDQTY
+            SET @cUDF07 = '' -- V_MAX         
          END
       END 
-   END
-   IF @nAfterScn <> 6413
-   BEGIN
-      UPDATE rdt.RDTMOBREC WITH (ROWLOCK)
-      SET V_MAX = ''
-      WHERE  Mobile = @nMobile
    END
 END
 
