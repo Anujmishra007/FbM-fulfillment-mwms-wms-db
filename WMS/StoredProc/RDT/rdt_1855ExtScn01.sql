@@ -169,6 +169,7 @@ BEGIN
          @cGroupKey                    = V_String12,
          @cPickConfirmStatus           = V_String17,
          @cPickZone                    = V_String24,
+         @cMethod                      = V_String25,
          @cResult01                    = V_String26,
          @cResult02                    = V_String27,
          @cResult03                    = V_String28,
@@ -323,7 +324,7 @@ BEGIN
                SET @cOutField03 = @cInField03
                SET @cOutField04 = @cInField04          
                
-               IF @cContinuePickOnAssignedCart = '1' AND @cCartID <> ''      
+               /*IF @cContinuePickOnAssignedCart = '1' AND @cCartID <> ''      
                BEGIN      
                   IF EXISTS ( SELECT 1 FROM dbo.TaskDetail WITH (NOLOCK)      
                               WHERE Storerkey = @cStorerKey      
@@ -340,7 +341,7 @@ BEGIN
                         
                      GOTO Quit      
                   END      
-               END      
+               END  */ -- Comment out Continue Pick Logic for further investigation    
 
                --FCR-652 Validate PSNO
                IF @cPickSlipNo = ''
@@ -895,6 +896,7 @@ BEGIN
                SET @cUDF12 = @cResult03
                SET @cUDF13 = @cResult04
                SET @cUDF14 = @cResult05
+               SET @cUDF15 = @cMethod
    
             END -- SCN 6414 Screen 1 Inputkey 1
 
