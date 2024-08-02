@@ -917,6 +917,7 @@ BEGIN
                Result08  (field08)         
          ************************************************************************************/  
          BEGIN
+            SCN6416_Start:
             IF @nInputKey = 0
             BEGIN
                -- Prepare next screen var        
@@ -1290,7 +1291,17 @@ BEGIN
                SET @cOutField06 = @cResult04        
                SET @cOutField07 = @cResult05        
                SET @cOutField08 = ''        
-               SET @cOutField09 = @nCartonScanned + 1      
+               SET @cOutField09 = @nCartonScanned + 1
+
+               --FCR-652 Start to pick when total scanned cases reach the cart limit
+               SET @nCartonScanned = @cOutField09
+               IF @nCartonScanned = @nCartLimit
+               BEGIN
+                  SET @cInField08 = ''
+                  SET @nInputKey = 1
+                  GOTO SCN6416_Start
+               END
+               --FCR-652 Start to pick when total scanned cases reach the cart limit end      
                
                EXEC rdt.rdtSetFocusField @nMobile, 8
 
