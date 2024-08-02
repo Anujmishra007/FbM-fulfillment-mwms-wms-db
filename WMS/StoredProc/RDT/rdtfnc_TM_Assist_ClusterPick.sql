@@ -2850,7 +2850,8 @@ BEGIN
          END        
       END                
                
-      COMMIT TRAN Step_ConfirmToLoc -- Only commit change made here                        WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started                  
+      COMMIT TRAN Step_ConfirmToLoc -- Only commit change made here                        
+      WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started                  
          COMMIT TRAN               
       
       -- Prepare next screen var          
@@ -3249,7 +3250,14 @@ BEGIN
       -- Go to next screen        
       SET @nScn = @nScn_CartID        
       SET @nStep = @nStep_CartID        
-   END          
+   END
+
+   IF @cExtendedScnSP <> ''
+   BEGIN
+      SET @nAction = 0
+      GOTO Step_99
+   END
+
    GOTO Quit          
            
    Step_NextTask_Fail:        
@@ -3616,6 +3624,7 @@ BEGIN
                SET @cSuggToteId     = ISNULL(@cExtScnUDF04,'')
                SET @cSuggSKU        = ISNULL(@cExtScnUDF05,'')
                SET @nSuggQty        = CAST(@cExtScnUDF06 AS INT)
+               SET @cTaskDetailKey  = ISNULL(@cExtScnUDF07,'')
             END -- SCN 6416 new scn 2 enter
          END -- rdt_1855ExtScn01
 

@@ -612,9 +612,10 @@ BEGIN
                   BEGIN      
                      SET @cCurCaseID = @cNewCaseID      
                      SET @nCtnCount = @nCtnCount + 1      
-               
-                     IF @nCtnCount > @nCartLimit      
-                        BREAK      
+
+                     -- FCR-652 Lock all tasks in the wave
+                     /*IF @nCtnCount > @nCartLimit      
+                        BREAK */     
                   END      
                         
                   IF @cGroupKey = ''      
@@ -943,7 +944,15 @@ BEGIN
             ELSE IF @nInputKey = 1
             BEGIN
                -- Screen mapping        
-               SET @cCartonId = @cInField08        
+               SET @cCartonId = @cInField08
+
+               -- FCR-652 Move to top for the validation change
+               SELECT @nCartLimit = Short      
+               FROM dbo.CODELKUP WITH (NOLOCK)      
+               WHERE LISTNAME = 'TMPICKMTD'      
+                  AND   Code = @cMethod      
+                  AND   Storerkey = @cStorerKey
+               -- FCR-652 Move to top for the validation change  end       
                
                -- Validate blank        
                IF ISNULL( @cCartonId, '') = ''        
@@ -964,12 +973,14 @@ BEGIN
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Need Tote Id        
                      GOTO Step_Matrix_Fail      
                   END      
-               
+
+                  --FCR-652 Move to the top of inputkey = 1
+                  /*
                   SELECT @nCartLimit = Short      
                   FROM dbo.CODELKUP WITH (NOLOCK)      
                   WHERE LISTNAME = 'TMPICKMTD'      
                   AND   Code = @cMethod      
-                  AND   Storerkey = @cStorerKey      
+                  AND   Storerkey = @cStorerKey*/      
                         
                   SELECT @nCartonCnt = COUNT( DISTINCT DropID)      
                   FROM dbo.TaskDetail WITH (NOLOCK)      
@@ -980,8 +991,9 @@ BEGIN
                      AND   UserKey = @cUserName      
                      AND   DeviceID = @cCartID      
                      AND   DropID <> ''      
-               
-                  IF @nCartonCnt < @nCartLimit AND                   
+                  
+                  --FCR-652 Do not check cnt< cartLimit
+                  /*IF @nCartonCnt < @nCartLimit AND                   
                   EXISTS ( SELECT 1 FROM dbo.TaskDetail WITH (NOLOCK)      
                               WHERE Storerkey = @cStorerKey      
                               AND   TaskType = 'ASTCPK'      
@@ -994,9 +1006,36 @@ BEGIN
                      SET @nErrNo = 171837                  
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --MoreCtnToScan                  
                      GOTO Step_Matrix_Fail      
-                  END                  
+                  END */
+                  --FCR-652 Do not check cnt< cartLimit
+                  IF @nCartonCnt > @nCartLimit
+                  BEGIN
+                     SET @nErrNo = 220754                  
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --reach cart limit                  
+                     GOTO Step_Matrix_Fail
+                  END                
                   ELSE  --Something scanned      
-                  BEGIN      
+                  BEGIN
+                     --FCR-652 release tasks which not scanned
+                     UPDATE dbo.TaskDetail WITH (ROWLOCK) SET       
+                        STATUS = '0',      
+                        UserKey = '',      
+                        Groupkey = '',       
+                        DeviceID = '',      
+                        DropID = '',      
+                        StatusMsg = '',      
+                        EditWho = @cUserName,       
+                        EditDate = GETDATE()
+                     WHERE Storerkey = @cStorerKey      
+                        AND   TaskType = 'ASTCPK'      
+                        AND   [Status] = '3'      
+                        AND   Groupkey = @cGroupKey      
+                        AND   UserKey = @cUserName      
+                        AND   DeviceID = @cCartID
+                        AND   DropID = ''
+
+                     --FCR-652 release tasks which not scanned end
+
                      --Get task for next loc        
                      SET @nErrNo = 0        
                      SET @cSuggFromLOC = ''        
@@ -1032,8 +1071,9 @@ BEGIN
                      -- Go to next screen        
                      SET @nAfterScn = 5922 -- From Loc screen        
                      SET @nAfterStep = 3        
-                           
-                     GOTO Quit      
+
+                     GOTO SCN6416_Return_Value    
+                     --GOTO Quit      
                   END      
                END        
                
@@ -1090,7 +1130,44 @@ BEGIN
                   SET @nErrNo = 171833        
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Tote In Use        
                   GOTO Step_Matrix_Fail      
-               END      
+               END
+
+               -- FCR-652 Jack check cannot exceed the cart limit
+               SELECT @nCartonScanned = COUNT( DISTINCT DropID)      
+               FROM dbo.TaskDetail WITH (NOLOCK)      
+               WHERE Storerkey = @cStorerKey      
+                  AND   TaskType = 'ASTCPK'      
+                  AND   [Status] = '3'      
+                  AND   Groupkey = @cGroupKey      
+                  AND   UserKey = @cUserName      
+                  AND   DeviceID = @cCartID      
+                  AND   DropID <> ''
+
+               IF @nCartonScanned = @nCartLimit
+               BEGIN
+                  SET @nErrNo = 220754        
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Reach Cart Limit        
+                  GOTO Step_Matrix_Fail
+               END
+               ---- FCR-652 Jack check cannot exceed the cart limit END
+
+               -- FCR-652 by Jack Scanned carton must be in the locked task
+               IF NOT EXISTS (SELECT 1      
+                              FROM dbo.TaskDetail WITH (NOLOCK)      
+                              WHERE Storerkey = @cStorerKey      
+                                 AND   TaskType = 'ASTCPK'      
+                                 AND   [Status] = '3'      
+                                 AND   Groupkey = @cGroupKey      
+                                 AND   UserKey = @cUserName      
+                                 AND   DeviceID = @cCartID      
+                                 AND   Caseid = @cCartonID)
+               BEGIN
+                  SET @nErrNo = 220755        
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InvalidCarton        
+                  GOTO Step_Matrix_Fail
+               END
+
+               -- FCR-652 by Jack Scanned carton must be in the locked task      
                
                -- Extended validate        
                IF @cExtendedValidateSP <> ''        
@@ -1134,7 +1211,7 @@ BEGIN
                   END        
                END        
                
-               SELECT @nCartonScanned = COUNT( DISTINCT DropID)      
+               /*SELECT @nCartonScanned = COUNT( DISTINCT DropID)      
                FROM dbo.TaskDetail WITH (NOLOCK)      
                WHERE Storerkey = @cStorerKey      
                   AND   TaskType = 'ASTCPK'      
@@ -1142,7 +1219,7 @@ BEGIN
                   AND   Groupkey = @cGroupKey      
                   AND   UserKey = @cUserName      
                   AND   DeviceID = @cCartID      
-                  AND   DropID <> ''      
+                  AND   DropID <> ''  */ -- FCR-652 move forward to validation part    
                   
                SELECT @cCartonType = UDF01      
                FROM dbo.CODELKUP WITH (NOLOCK)      
@@ -1166,7 +1243,8 @@ BEGIN
                   AND   UserKey = @cUserName      
                   AND   DeviceID = @cCartID      
                   AND   DropID = ''      
-                  AND   PickMethod = @cPickMethod      
+                  AND   PickMethod = @cPickMethod 
+                  AND   Caseid = @cCartonID -- FCR-652 update task caseid = scanned tote id     
                ORDER BY 1      
                      
                DECLARE @curLockCase CURSOR      
@@ -1227,13 +1305,14 @@ BEGIN
                -- back to new 2 scn
                --SET @nAfterScn = 6416 -- new screen2
                --SET @nAfterStep = 99
-
-               SET @cUDF01 = @cCartonID
-               SET @cUDF02 = @cSuggFromLOC
-               SET @cUDF03 = @cSuggCartonID
-               SET @cUDF04 = @cSuggToteId
-               SET @cUDF05 = @cSuggSKU
-               SET @cUDF06 = CAST(@nSuggQty AS NVARCHAR(10))
+               SCN6416_Return_Value:
+                  SET @cUDF01 = @cCartonID
+                  SET @cUDF02 = @cSuggFromLOC
+                  SET @cUDF03 = @cSuggCartonID
+                  SET @cUDF04 = @cSuggToteId
+                  SET @cUDF05 = @cSuggSKU
+                  SET @cUDF06 = CAST(@nSuggQty AS NVARCHAR(10))
+                  SET @cUDF07 = @cTaskDetailKey
 
                GOTO Quit 
             END -- SCN 6416 net step 2 enter
