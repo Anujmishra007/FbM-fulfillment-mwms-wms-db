@@ -423,7 +423,7 @@ BEGIN
 
 
 Quit:
-   IF @nStep = 99
+   IF @nStep = 98
    BEGIN
       IF @nScn = 6413
       BEGIN
@@ -438,7 +438,7 @@ Quit:
          END
       END 
    END
-   IF @nAfterScn = 4831
+   IF @nAfterScn <> 6413
    BEGIN
       UPDATE rdt.RDTMOBREC WITH (ROWLOCK)
       SET V_MAX = ''
