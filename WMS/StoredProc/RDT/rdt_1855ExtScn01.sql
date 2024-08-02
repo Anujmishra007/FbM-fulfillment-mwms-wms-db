@@ -186,7 +186,12 @@ BEGIN
    IF @bDebugFlag = 1
    BEGIN
       SELECT 'Before Main Logic', @nMOBRECScn AS MobScn, @nMOBRECStep AS MobStep, @nMenu AS Menu, @cUserName AS UserName
+      SELECT * FROM @tExtScnData
    END
+
+   -- Get data from the table
+   SELECT @cOption = Value FROM @tExtScnData WHERE Variable = '@cOption'
+   
 
    IF @nFunc = 1855
    BEGIN
@@ -324,7 +329,7 @@ BEGIN
                SET @cOutField03 = @cInField03
                SET @cOutField04 = @cInField04          
                
-               /*IF @cContinuePickOnAssignedCart = '1' AND @cCartID <> ''      
+               IF @cContinuePickOnAssignedCart = '1' AND @cCartID <> ''      
                BEGIN      
                   IF EXISTS ( SELECT 1 FROM dbo.TaskDetail WITH (NOLOCK)      
                               WHERE Storerkey = @cStorerKey      
@@ -332,16 +337,17 @@ BEGIN
                               AND   [Status] = '3'      
                               AND   Groupkey <> ''      
                               AND   UserKey = @cUserName      
-                              AND   DeviceID = @cCartID)      
+                              AND   DeviceID = @cCartID
+                              AND   DropID <> '')      
                   BEGIN      
                      SET @cOutField01 = ''      
                         
                      SET @nAfterScn = @nScn_ContTask      
                      SET @nAfterStep = @nStep_ContTask      
                         
-                     GOTO Quit      
+                     GOTO SCN6414_Return_Value      
                   END      
-               END  */ -- Comment out Continue Pick Logic for further investigation    
+               END   -- Comment out Continue Pick Logic for further investigation    
 
                --FCR-652 Validate PSNO
                IF @cPickSlipNo = ''
@@ -883,21 +889,22 @@ BEGIN
                SET @nAfterStep = 99
 
                -- FCR-652 Return the values need to be saved to rdtmobrec
-               SET @cUDF01 = @cSKU
-               SET @cUDF02 = CAST(@nQTY AS NVARCHAR(10))
-               SET @cUDF03 = @cFromLoc
-               SET @cUDF04 = @cCartonID
-               SET @cUDF05 = @cTaskDetailKey
-               SET @cUDF06 = @cWaveKey
-               SET @cUDF07 = @cCartID
-               SET @cUDF08 = @cGroupKey
-               SET @cUDF09 = @cPickZone
-               SET @cUDF10 = @cResult01
-               SET @cUDF11 = @cResult02
-               SET @cUDF12 = @cResult03
-               SET @cUDF13 = @cResult04
-               SET @cUDF14 = @cResult05
-               SET @cUDF15 = @cMethod
+               SCN6414_Return_Value:
+                  SET @cUDF01 = @cSKU
+                  SET @cUDF02 = CAST(@nQTY AS NVARCHAR(10))
+                  SET @cUDF03 = @cFromLoc
+                  SET @cUDF04 = @cCartonID
+                  SET @cUDF05 = @cTaskDetailKey
+                  SET @cUDF06 = @cWaveKey
+                  SET @cUDF07 = @cCartID
+                  SET @cUDF08 = @cGroupKey
+                  SET @cUDF09 = @cPickZone
+                  SET @cUDF10 = @cResult01
+                  SET @cUDF11 = @cResult02
+                  SET @cUDF12 = @cResult03
+                  SET @cUDF13 = @cResult04
+                  SET @cUDF14 = @cResult05
+                  SET @cUDF15 = @cMethod
    
             END -- SCN 6414 Screen 1 Inputkey 1
 
@@ -1329,10 +1336,20 @@ BEGIN
             END -- SCN 6416 net step 2 enter
          END -- SCN 6416
          
-
          GOTO Quit
 
       END -- STEP 99
+      ELSE IF @nMOBRECStep = 10
+      BEGIN
+         IF @nMOBRECScn = 5929
+         BEGIN
+            IF @cOption = '1'
+            BEGIN
+               GOTO SCN6416_Start
+            END -- option 1
+
+         END -- step 10
+      END -- scn 5929
    END -- 1855
 
    GOTO Quit
