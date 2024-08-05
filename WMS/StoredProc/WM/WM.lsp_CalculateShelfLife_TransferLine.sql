@@ -5,7 +5,7 @@ GO
 /*************************************************************************/
 /* Stored Procedure: lsp_CalculateShelfLife_TransferLine                                 */
 /* Creation Date: 2022-09-27                                             */
-/* Copyright: LFL                                                        */
+/* Copyright: Maersk                                                        */
 /* Written by: SBA757                                                    */
 /*                                                                       */
 /* Purpose: UWP-22021 - Calculate shelf life for transfer line           */

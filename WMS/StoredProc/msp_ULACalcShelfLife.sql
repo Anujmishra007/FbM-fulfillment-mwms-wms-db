@@ -58,6 +58,7 @@ BEGIN
         , @d_Lottable04             DATETIME
         , @d_Lottable05             DATETIME
         , @c_Lottable06             NVARCHAR(30) = ''
+        , @c_ToLottable06           NVARCHAR(30) = ''
         , @c_Lottable07             NVARCHAR(30) = ''
         , @c_Lottable08             NVARCHAR(30) = ''
         , @c_Lottable09             NVARCHAR(30) = ''
@@ -144,7 +145,7 @@ BEGIN
                              JOIN dbo.SKU SKU WITH (NOLOCK) ON SKU.StorerKey = LOT.StorerKey AND SKU.SKU = LOT.Sku
                     WHERE LOT.StorerKey = @c_StorerKey
                       AND (LOT.Qty - LOT.QtyAllocated - LOT.QtyPicked) > 0
-                      AND LA.Lottable06 = '0'
+                      AND LA.Lottable06 in ( '0' , '')
                       AND SKU.SKUGROUP IN ('FG', 'RM', 'PC');
                 OPEN CUR_TRANSFER;
                 FETCH NEXT FROM CUR_TRANSFER INTO @c_Facility, @c_SKU, @d_Lottable04, @c_Lottable07;
@@ -242,6 +243,7 @@ BEGIN
                                 SET @c_Lottable02          = '';
                                 SET @d_Lottable05          = '';
                                 SET @c_Lottable06          = '';
+                                SET @c_ToLottable06        = '';  
                                 SET @c_Lottable08          = '';
                                 SET @c_Lottable09          = '';
                                 SET @c_Lottable10          = '';
@@ -263,6 +265,7 @@ BEGIN
                                         PACK.PackUOM3,
                                         LA.Lottable01,
                                         LA.Lottable02,
+                                        LA.Lottable03,
                                         LA.Lottable04,
                                         LA.Lottable05,
                                         LA.Lottable06,
@@ -291,8 +294,8 @@ BEGIN
                                 OPEN CUR_TRANSFERDETAIL;
 
                                 FETCH NEXT FROM CUR_TRANSFERDETAIL INTO  
-                                    @c_SKU,        @c_Loc,        @c_Lot,        @c_ID,         @n_Qty,      @c_PACKKey,
-                                    @c_UOM,        @c_Lottable01, @c_Lottable02, @d_Lottable04, @d_Lottable05,
+                                    @c_SKU,        @c_Loc,        @c_Lot,        @c_ID,         @n_Qty,        @c_PACKKey,
+                                    @c_UOM,        @c_Lottable01, @c_Lottable02, @c_Lottable03, @d_Lottable04, @d_Lottable05,
                                     @c_Lottable06, @c_Lottable07, @c_Lottable08, @c_Lottable09, @c_Lottable10,
                                     @c_Lottable11, @c_Lottable12, @d_Lottable13, @d_Lottable14, @d_Lottable15;
                                 WHILE @@FETCH_STATUS <> -1
@@ -302,6 +305,11 @@ BEGIN
                                         WHERE TransferKey = @c_TransferKey;
 
                                         SET @c_TransferLineNumber = RIGHT('0000' + RTRIM(CAST(CAST(ISNULL(@c_TransferLineNumber,0) AS int) + 1 AS NVARCHAR(5))),5);
+
+                                        IF @c_ShelfLife = 'ML51' or @c_ShelfLife = 'ML49'
+                                            SET @c_ToLottable06 = '1'
+                                        ELSE
+                                            SET @c_ToLottable06 = @c_Lottable06
 
                                         BEGIN TRAN;
                                             INSERT INTO TransferDetail (
@@ -395,7 +403,7 @@ BEGIN
                                                 ISNULL(RTRIM(@c_Lottable03), ''),
                                                 ISNULL(RTRIM(@d_Lottable04), ''),
                                                 ISNULL(RTRIM(@d_Lottable05), ''),
-                                                ISNULL(RTRIM(@c_Lottable06), ''),
+                                                ISNULL(RTRIM(@c_ToLottable06), ''),
                                                 ISNULL(RTRIM(@c_ShelfLife), ''),
                                                 ISNULL(RTRIM(@c_Lottable08), ''),
                                                 ISNULL(RTRIM(@c_Lottable09), ''),
@@ -428,8 +436,8 @@ BEGIN
                                         SET @n_TotalLines = @n_TotalLines + 1;
 
                                         FETCH NEXT FROM CUR_TRANSFERDETAIL INTO  
-                                            @c_SKU,        @c_Loc,        @c_Lot,        @c_ID,         @n_Qty,      @c_PACKKey,
-                                            @c_UOM,        @c_Lottable01, @c_Lottable02, @d_Lottable04, @d_Lottable05,
+                                            @c_SKU,        @c_Loc,        @c_Lot,        @c_ID,         @n_Qty,        @c_PACKKey,
+                                            @c_UOM,        @c_Lottable01, @c_Lottable02, @c_Lottable03, @d_Lottable04, @d_Lottable05, 
                                             @c_Lottable06, @c_Lottable07, @c_Lottable08, @c_Lottable09, @c_Lottable10,
                                             @c_Lottable11, @c_Lottable12, @d_Lottable13, @d_Lottable14, @d_Lottable15;
                                     END; -- WHILE @@FETCH_STATUS <> -1
@@ -442,7 +450,7 @@ BEGIN
 
 
                         NextRecord:
-							FETCH NEXT FROM CUR_TRANSFER INTO @c_Facility, @c_SKU, @d_Lottable04, @c_Lottable07;
+                            FETCH NEXT FROM CUR_TRANSFER INTO @c_Facility, @c_SKU, @d_Lottable04, @c_Lottable07;
                     END; -- WHILE @@FETCH_STATUS <> -1
                 CLOSE CUR_Transfer;
                 DEALLOCATE CUR_TRANSFER;
@@ -458,7 +466,7 @@ BEGIN
 /*******************************************************/
 /* Finalized Transfer Records - (Start)                */
 /*******************************************************/
-	IF @n_continue = 1 OR @n_Continue = 2
+    IF @n_continue = 1 OR @n_Continue = 2
         BEGIN
             /* declare variables */
             DECLARE CUR_FinalizeTrf CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
