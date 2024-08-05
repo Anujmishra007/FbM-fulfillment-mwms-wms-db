@@ -41,6 +41,9 @@ BEGIN
    SET CONCAT_NULL_YIELDS_NULL OFF
 
    DECLARE @cSKU                    NVARCHAR( 20)
+   DECLARE @nQtyPicked              INT
+   DECLARE @cFromLoc                NVARCHAR( 20)
+   DECLARE @cPDID                   NVARCHAR( 20)
    DECLARE @cPDLabelNo              NVARCHAR( 20)
    DECLARE @cPalletLineNumber          NVARCHAR( 5)
    DECLARE @nPDQty                  INT
@@ -49,10 +52,10 @@ BEGIN
    DECLARE @curDel                  CURSOR
 
 
-
    SELECT
       @cSuggestLoc            = V_String29,
-      @cOverrideLoc           = V_String30
+      @cOverrideLoc           = V_String30,
+      @cFacility              = Facility
    FROM rdt.RDTMOBREC (NOLOCK)
    WHERE Mobile = @nMobile
 
@@ -132,6 +135,35 @@ BEGIN
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INS PLDtl Err
          GOTO Quit
       END
+
+      SELECT TOP 1
+         @cFromLoc   = PD.Loc,
+         @nQtyPicked = PD.Qty,
+         @cPDID      = PD.ID
+      FROM PICKDETAIL PD WITH (NOLOCK)
+              INNER JOIN LOTxLOCxID LLI WITH (NOLOCK)
+                         ON (LLI.Loc = PD.Loc AND LLI.LOT = PD.LOT AND LLI.Id=PD.ID)
+      WHERE ISNULL(PD.CaseID , '') <> '' AND
+         (PD.CaseID = @cTrackNo OR PD.CASEID =@cLabelNo)
+
+      --    Create LOTxLOCxID record
+      EXECUTE rdt.rdt_Move
+              @nMobile     = @nMobile,
+              @cLangCode   = @cLangCode,
+              @nErrNo      = @nErrNo  OUTPUT,
+              @cErrMsg     = @cErrMsg OUTPUT, -- screen limitation, 20 char max
+              @cSourceType = 'rdt_1653CreateMbol04',
+              @cStorerKey  = @cStorerKey,
+              @cFacility   = @cFacility,
+              @cFromLOC    = @cFromLoc,
+              @cFromID     = @cPDID,
+              @cToLOC      = @cLane,
+              @cToID       = @cPalletKey,
+              @cSKU        = @cSKU,
+              @nQTY        = @nPDQty,
+              @nQTYPick    = @nPDQty,
+              @nFunc       = @nFunc
+
    END
 
 Quit:

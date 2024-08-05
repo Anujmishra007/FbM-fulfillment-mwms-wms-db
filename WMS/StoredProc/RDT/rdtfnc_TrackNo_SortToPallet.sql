@@ -450,9 +450,9 @@ BEGIN
                SELECT TOP 1 @cOrderKey = PH.OrderKey
                FROM dbo.PackDetail PD WITH (NOLOCK)  
                JOIN dbo.PackHeader PH WITH (NOLOCK) ON ( PD.PickSlipNo = PH.PickSlipNo)  
-               WHERE PD.StorerKey = @cStorerKey  
-               AND   ( PD.LabelNo = @cLabelNo OR PD.LabelNo = @cBarcode)
-               ORDER BY 1  
+               WHERE PD.StorerKey = @cStorerKey
+                 AND   PD.LabelNo = @cLabelNo
+               ORDER BY 1
   
                SET @cTrackNo = @cInTrackNo  
             END  
@@ -486,9 +486,9 @@ BEGIN
                      WHERE StorerKey = @cStorerKey  
                      AND   UserDefine02 = @cTrackNo)  
          BEGIN  
-            SET @nErrNo = 189817  
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --TrackNo In Use  
-            GOTO Step_TrackNo_Fail  
+            SET @nErrNo = 189817
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --TrackNo In Use
+            GOTO Step_TrackNo_Fail
          END  
   
          -- Extended validate  
@@ -707,6 +707,11 @@ BEGIN
    --FCR-539 extend screen
    IF @cExtendedScreenSP <> ''
    BEGIN
+      IF @nInputKey = 1 AND @cOption = ''--YES
+      BEGIN
+         SET @nStep = 1
+      END
+
       GOTO Step_ExtScn
    END
   
@@ -2695,6 +2700,11 @@ BEGIN
    BEGIN
       IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
       BEGIN
+
+         DELETE FROM @tExtScnData
+         INSERT INTO @tExtScnData (Variable, Value) VALUES
+             ('@cPalletKey',@cPalletKey),
+             ('@cLane', @cLane)
 
          EXECUTE [RDT].[rdt_ExtScnEntry]
                  @cExtendedScreenSP,
