@@ -1,6 +1,6 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
 GO
         
 /******************************************************************************************/
@@ -12,9 +12,11 @@ GO
 /* 2024-06-03   1.0  NLT013   FCR-267. Created. Putaway a pallet with                     */
 /*                            multiple UCC, need book the final locations for each UCC    */
 /*                            and the PND location                                        */
+/* 2024-08-03   1.1  CLVN01   FCR-267 Error 216551 validation to exclude empty LLI and    */
+/*                            consider only LLI with Qty > 0 when determining Putawayzone */
 /******************************************************************************************/
         
-CREATE  OR ALTER PROC [rdt].[rdt_1819ExtPASP52] (
+CREATE  OR ALTER PROC [RDT].[rdt_1819ExtPASP52] (
    @nMobile          INT,
    @nFunc            INT,
    @cLangCode        NVARCHAR( 3),
@@ -112,6 +114,7 @@ BEGIN
    INNER JOIN LOTXLOCXID sto WITH(NOLOCK) ON sku.Sku = sto.Sku AND sku.StorerKey = sto.StorerKey
    WHERE sto.StorerKey = @cStorerKey
       AND sto.Id = @cID
+	  AND sto.Qty > 0 --(CLVN01)
 
    IF @nRowCount > 1
    BEGIN
@@ -133,6 +136,7 @@ BEGIN
    INNER JOIN LOTXLOCXID sto WITH(NOLOCK) ON sku.Sku = sto.Sku AND sku.StorerKey = sto.StorerKey
    WHERE sto.StorerKey = @cStorerKey
       AND sto.Id = @cID
+	  AND sto.Qty > 0 --(CLVN01)
 
    SELECT @nRowCount = @@ROWCOUNT
    IF @nRowCount = 0 OR ISNULL(@cPutawayZone, '') = ''
