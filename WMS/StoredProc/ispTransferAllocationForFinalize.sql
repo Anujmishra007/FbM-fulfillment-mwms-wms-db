@@ -46,6 +46,7 @@ BEGIN
 		, @dt_Lottable04        DATETIME
 		, @dt_Lottable05        DATETIME
 		, @c_Lottable06         NVARCHAR(30) = ''
+		, @c_ToLottable06       NVARCHAR(30) = ''
 		, @c_Lottable07         NVARCHAR(30) = ''
 		, @c_ToLottable07       NVARCHAR(30) = ''
 		, @c_Lottable08         NVARCHAR(30) = ''
@@ -181,7 +182,8 @@ BEGIN
 					  AND LOC.Status = 'OK'
 					  AND LOC.LocationFlag NOT IN ( 'HOLD', 'DAMAGE' )
 					  AND ID.Status  = 'OK'
-					  AND DATEDIFF(DAY, GETDATE(), LA.Lottable04) > 0
+					  AND DATEDIFF(DAY, GETDATE(), LA.Lottable04) >= 0
+					  AND LA.Lottable07 NOT IN ('ML53', 'ML54')
 					ORDER BY
 						(LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked)
 
@@ -217,6 +219,10 @@ BEGIN
 								SELECT @c_ToLottable07 =  dbo.fnc_CalcShelfLife01(@c_ToStorerkey, @c_ToSku, @dt_Lottable04)
 							ELSE
 								SET @c_ToLottable07 = @c_Lottable07
+							IF @c_ToLottable07 = 'ML51'
+								SET @c_ToLottable06 = '1'
+							ELSE
+								SET @c_ToLottable06 = '0'
 							IF(@n_IsFirstRecord = 1)
 							BEGIN TRY
 								BEGIN
@@ -247,7 +253,7 @@ BEGIN
 									  ,ToLottable03 = @c_Lottable03
 									  ,ToLottable04 = @dt_Lottable04
 									  ,ToLottable05 = @dt_Lottable05
-									  ,ToLottable06 = '0' --inventory release
+									  ,ToLottable06 = @c_ToLottable06
 									  ,ToLottable07 = @c_ToLottable07
 									  ,ToLottable08 = @c_Lottable08
 									  ,ToLottable09 = @c_Lottable09
@@ -396,7 +402,7 @@ BEGIN
 											, @c_Lottable03
 											, @dt_Lottable04
 											, @dt_Lottable05
-											, '0'
+											, @c_ToLottable06
 											, @c_ToLottable07
 											, @c_Lottable08
 											, @c_Lottable09
