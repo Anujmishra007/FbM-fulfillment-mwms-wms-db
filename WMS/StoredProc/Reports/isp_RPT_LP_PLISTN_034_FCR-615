@@ -1,5 +1,3 @@
-USE [GLOWMS]
-GO
 /****** Object:  StoredProcedure [dbo].[RPT_LP_PLISTN_034_FCR-615]    Script Date: 7/30/2024 2:44:28 PM ******/
 SET ANSI_NULLS OFF
 GO
@@ -7,14 +5,14 @@ SET QUOTED_IDENTIFIER OFF
 GO
 
 /***************************************************************************/      
-/* Stored Procedure: RPT_LP_PLISTN_034_FCR-615                                 */      
-/* Creation Date: 14-APRIL-2022                                            */    
-/* Copyright: LF Logistics                                                 */    
-/* Written by: WZPang                                                      */    
+/* Stored Procedure: RPT_LP_PLISTN_034_FCR-615                             */      
+/* Creation Date: 30-July-2024                                             */    
+/* Copyright: LF Logistics, update by LAM CE                               */    
+/* Written by: WZPang, update by ADURAN					   */    
 /*                                                                         */    
-/* Purpose: WMS-21913 - [ID] Diversey û LoadSheet                          */         
+/* Purpose: WMS-21913 - [ID] Diversey û LoadSheet, update by FCR-615       */
 /*                                                                         */      
-/* Called By: RPT_LP_PLISTN_034_FCR-615                                           */      
+/* Called By: RPT_LP_PLISTN_034_FCR-615                                    */      
 /*                                                                         */      
 /* GitLab Version: 1.0                                                     */      
 /*                                                                         */      
@@ -26,7 +24,7 @@ GO
 /* Date         Author   Ver  Purposes                                     */
 /* 30-Jul-2024  ADURAN   1.0  DevOps Combine Script                        */
 /***************************************************************************/  
-ALTER   PROC [dbo].[isp_RPT_LP_PLISTN_034_FCR-615] (
+CREATE	PROC [dbo].[isp_RPT_LP_PLISTN_034_FCR-615] (
       @c_Loadkey           NVARCHAR(10)
     , @c_PreGenRptData     NVARCHAR(10) = ''
 )     
