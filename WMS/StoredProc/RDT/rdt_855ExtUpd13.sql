@@ -13,6 +13,7 @@ GO
 /* Modifications log:                                                         */
 /* Date       Rev  Author   Purposes                                          */
 /* 2024-06-18 1.0  NLT013   FCR-386. Created                                  */
+/* 2024-08-06 1.1  Dennis   FCR-386. Remove order group condition             */
 /******************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_855ExtUpd13 (
@@ -505,7 +506,8 @@ BEGIN
                   @cDefaultLblPrintSequence  NVARCHAR(10),
                   @cCustLabelName            NVARCHAR(30),
                   @cDefaultLabelName         NVARCHAR(30),
-                  @cCustLabelDataDesc        NVARCHAR(30)
+                  @cCustLabelDataDesc        NVARCHAR(30),
+                  @cCustomCode               NVARCHAR(30)
                   
 
                SELECT @cPickSlipNo = PickSlipNo
@@ -562,7 +564,7 @@ BEGIN
                         AND lk1.code2 = @cBillToKey)
                BEGIN
                   DECLARE CUR_CARTONLABEL CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-                     SELECT CustLabelData.Description, CustLabels.UDF01 AS CustLabelType, ISNULL(CustLabels.Short, '99999') AS CustSequence
+                     SELECT CustLabelData.Description, CustLabels.UDF01 AS CustLabelType, ISNULL(CustLabels.Short, '99999') AS CustSequence, CustLabelData.Long
                      FROM (SELECT StorerKey, Description, ISNULL(Long, '') AS Long FROM dbo.CODELKUP WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND LISTNAME = 'LVSCUSPREF'  AND code2 = @cConsigneeKey) AS CustLabelData
                      LEFT JOIN (SELECT StorerKey, code2, Code, UDF01, Short FROM dbo.CODELKUP WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND LISTNAME = 'LVSCARTLBL'  AND ISNULL(Long, '') <> 'A') AS CustLabels 
                         ON CustLabelData.StorerKey = CustLabels.StorerKey AND CustLabelData.Description = CustLabels.code2 AND CustLabelData.Long = CustLabels.Code
@@ -570,14 +572,14 @@ BEGIN
                END
                ELSE 
                   DECLARE CUR_CARTONLABEL CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-                     SELECT CustLabelData.Description, CustLabels.UDF01 AS CustLabelType, ISNULL(CustLabels.Short, '99999') AS CustSequence
+                     SELECT CustLabelData.Description, CustLabels.UDF01 AS CustLabelType, ISNULL(CustLabels.Short, '99999') AS CustSequence, CustLabelData.Long
                      FROM (SELECT StorerKey, Description, ISNULL(Long, '') AS Long FROM dbo.CODELKUP WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND LISTNAME = 'LVSCUSPREF'  AND (code2 = @cConsigneeKey OR code2 = @cBillToKey)) AS CustLabelData
                      LEFT JOIN (SELECT StorerKey, code2, Code, UDF01, Short FROM dbo.CODELKUP WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND LISTNAME = 'LVSCARTLBL'  AND ISNULL(Long, '') <> 'A') AS CustLabels 
                         ON CustLabelData.StorerKey = CustLabels.StorerKey AND CustLabelData.Description = CustLabels.code2 AND CustLabelData.Long = CustLabels.Code
                      ORDER BY ISNULL(CustLabels.Short, '99999')
 
                OPEN CUR_CARTONLABEL 
-               FETCH NEXT FROM CUR_CARTONLABEL INTO @cCustLabelDataDesc, @cCustLabelName, @cCustLblPrintSequence
+               FETCH NEXT FROM CUR_CARTONLABEL INTO @cCustLabelDataDesc, @cCustLabelName, @cCustLblPrintSequence,@cCustomCode
 
                WHILE @@FETCH_STATUS = 0 
                BEGIN
@@ -601,14 +603,19 @@ BEGIN
                         GOTO Quit
                      END
                   END
-                  FETCH NEXT FROM CUR_CARTONLABEL INTO @cCustLabelDataDesc, @cCustLabelName, @cCustLblPrintSequence
+                  ELSE IF @cCustomCode = 'UNO'
+                  BEGIN
+                     DELETE FROM @tDefaultLabels WHERE code2 = @cCustLabelDataDesc
+                  END
+                  FETCH NEXT FROM CUR_CARTONLABEL INTO @cCustLabelDataDesc, @cCustLabelName, @cCustLblPrintSequence,@cCustomCode
                END
                CLOSE CUR_CARTONLABEL 
                DEALLOCATE CUR_CARTONLABEL 
 
                --Print Default Labels
                SET @nLoopIndex = -1
-               WHILE 1 = 1 AND @cOrderGroup = '10'
+               WHILE 1 = 1
+               --AND @cOrderGroup = '10'
                BEGIN
                   SELECT TOP 1 
                      @cLabelName = UDF01,
