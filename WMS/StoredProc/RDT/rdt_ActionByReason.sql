@@ -55,6 +55,12 @@ BEGIN
    AND code2 = @cReasonCode
    AND storerkey = @cStorerKey
 
+   IF @@ROWCOUNT = 0
+   BEGIN
+      SET @nErrNo = 219554
+      SET @cErrMsg = CONVERT(NVARCHAR(6),@nErrNo)+ ' InvReasonCode' -- InvReasonCode
+   END
+
    -- Generate CC task
    IF ISNULL(@cCCTaskType,'') <> ''
    BEGIN
@@ -76,7 +82,7 @@ BEGIN
          BEGIN
             SELECT @n_continue = 3
             SELECT @nErrNo = 219552
-            SELECT @cErrMsg= CONVERT(NVARCHAR(5),@nErrNo)+ ' GetKeyFailed(rdt_ActionByReason)'
+            SELECT @cErrMsg= CONVERT(NVARCHAR(6),@nErrNo)+ ' GetKeyFailed(rdt_ActionByReason)'
          END
 
          EXECUTE nspg_getkey
@@ -91,7 +97,7 @@ BEGIN
          BEGIN
             SELECT @n_continue = 3
             SELECT @nErrNo = 219553
-            SELECT @cErrMsg= CONVERT(NVARCHAR(5),@nErrNo)+ ' GetKeyFailed(rdt_ActionByReason)'
+            SELECT @cErrMsg= CONVERT(NVARCHAR(6),@nErrNo)+ ' GetKeyFailed(rdt_ActionByReason)'
          END
 
          INSERT INTO dbo.TaskDetail
@@ -110,7 +116,7 @@ BEGIN
          BEGIN
             SELECT @n_continue = 3
             SELECT @nErrNo = 219551   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
-            SELECT @cErrMsg= CONVERT(NVARCHAR(5),@nErrNo)+ 'InsTaskFailed'
+            SELECT @cErrMsg= CONVERT(NVARCHAR(6),@nErrNo)+ 'InsTaskFailed'
          END
                
       END
