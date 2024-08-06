@@ -271,7 +271,7 @@ IF NOT EXISTS (SELECT *
 
          EXEC sp_addextendedproperty N'MS_Description', 'OrderDetail Userdefine10', 'SCHEMA', N'dbo', 'TABLE', N'ORDERDETAIL', 'COLUMN', N'UserDefine10'
 
-         EXEC sp_addextendedproperty N'MS_Description', 'The Reason Why an order is cancelled ', 'SCHEMA', N'dbo', 'TABLE', N'ORDERDETAIL', 'COLUMN', N'CancelReasonCode'
+         EXEC sp_addextendedproperty N'MS_Description', 'The reason why an order detail is cancelled', 'SCHEMA', N'dbo', 'TABLE', N'ORDERDETAIL', 'COLUMN', N'CancelReasonCode'
     END
 ELSE
    BEGIN
@@ -282,7 +282,7 @@ ELSE
             BEGIN
                 ALTER TABLE ORDERDETAIL
                 ADD CancelReasonCode nvarchar(60) NULL
-                EXEC sp_addextendedproperty N'MS_Description', 'The Reason Why an order is cancelled ', 'SCHEMA', N'dbo', 'TABLE', N'ORDERDETAIL', 'COLUMN', N'CancelReasonCode'
+                EXEC sp_addextendedproperty N'MS_Description', 'The reason why an order detail is cancelled ', 'SCHEMA', N'dbo', 'TABLE', N'ORDERDETAIL', 'COLUMN', N'CancelReasonCode'
             END
 
    END

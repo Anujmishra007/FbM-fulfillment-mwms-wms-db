@@ -449,7 +449,7 @@ IF NOT EXISTS (SELECT *
 
          EXEC sp_addextendedproperty N'MS_Description', 'Crossdock PO key', 'SCHEMA', N'dbo', 'TABLE', N'ORDERS', 'COLUMN', N'xdockpokey'
 
-         EXEC sp_addextendedproperty N'MS_Description', 'The Reason Why an order is cancelled ', 'SCHEMA', N'dbo', 'TABLE', N'ORDERS', 'COLUMN', N'CancelReasonCode'
+         EXEC sp_addextendedproperty N'MS_Description', 'The reason why an order is cancelled', 'SCHEMA', N'dbo', 'TABLE', N'ORDERS', 'COLUMN', N'CancelReasonCode'
 
     END
 ELSE
@@ -461,7 +461,7 @@ ELSE
             BEGIN
                 ALTER TABLE ORDERS
                 ADD CancelReasonCode nvarchar(60) NULL
-                EXEC sp_addextendedproperty N'MS_Description', 'The Reason Why an order is cancelled ', 'SCHEMA', N'dbo', 'TABLE', N'ORDERS', 'COLUMN', N'CancelReasonCode'
+                EXEC sp_addextendedproperty N'MS_Description', 'The reason why an order is cancelled', 'SCHEMA', N'dbo', 'TABLE', N'ORDERS', 'COLUMN', N'CancelReasonCode'
             END
 
     END
