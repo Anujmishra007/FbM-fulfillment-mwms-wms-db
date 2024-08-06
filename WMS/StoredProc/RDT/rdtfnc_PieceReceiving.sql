@@ -3296,6 +3296,7 @@ BEGIN
 
             IF @nMoreSNO = 1
             BEGIN
+               SET @cMax = ''
                -- Go to Serial No screen
                SET @nFromScn = @nScn
                SET @nScn = 4831
@@ -3489,6 +3490,7 @@ BEGIN
 
          IF @nMoreSNO = 1
          BEGIN
+            SET @cMax = ''
             -- Go to Serial No screen
             SET @nFromScn = @nScn
             SET @nScn = 4831
