@@ -29,11 +29,11 @@ BEGIN
       
    SELECT @cShelfLife = 
       CASE
-         WHEN SKU.SKUGROUP = 'FG' AND DATEDIFF (dd, GETDATE(),@dLottable04) > 180 THEN 'MK47'
-         WHEN SKU.SKUGROUP = 'FG' AND DATEDIFF (dd, GETDATE(),@dLottable04)  <= 180 AND DATEDIFF (dd, GETDATE(), @dLottable04) > 0 THEN 'MK48'
-         WHEN SKU.SKUGROUP = 'FG' AND DATEDIFF(dd, GETDATE(),@dLottable04)  <= 0 THEN 'MK49'
-         WHEN SKU.SKUGROUP IN ('RM', 'PC') AND DATEDIFF(dd, GETDATE(),@dLottable04) > 0 THEN 'MK50'      
-         WHEN SKU.SKUGROUP IN ('RM', 'PC') AND DATEDIFF(dd, GETDATE(),@dLottable04) <= 0 THEN 'MK51'
+         WHEN SKU.SKUGROUP = 'FG' AND DATEDIFF (dd, GETDATE(),@dLottable04) > 180 THEN 'ML47'
+         WHEN SKU.SKUGROUP = 'FG' AND DATEDIFF (dd, GETDATE(),@dLottable04)  <= 180 AND DATEDIFF (dd, GETDATE(), @dLottable04) > 0 THEN 'ML48'
+         WHEN SKU.SKUGROUP = 'FG' AND DATEDIFF(dd, GETDATE(),@dLottable04)  <= 0 THEN 'ML49'
+         WHEN SKU.SKUGROUP IN ('RM', 'PC') AND DATEDIFF(dd, GETDATE(),@dLottable04) > 0 THEN 'ML50'      
+         WHEN SKU.SKUGROUP IN ('RM', 'PC') AND DATEDIFF(dd, GETDATE(),@dLottable04) <= 0 THEN 'ML51'
          ELSE ''
       END 
    FROM dbo.SKU SKU WITH (NOLOCK) 
