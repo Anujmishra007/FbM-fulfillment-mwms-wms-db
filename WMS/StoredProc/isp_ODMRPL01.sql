@@ -26,8 +26,10 @@ GO
 /* 27-Mar-2024  Wan01   1.1   Change Task Priority                         */
 /* 18-Apr-2024  Wan02   1.2   Fix 1)Repl for 1st setup empty loc           */
 /*                            2)Exclude Repl from STAGING                  */
-/* 13-May-2024  PPA371	1.3   UWP-19048: Added condition to Exclude        */
+/* 13-May-2024  PPA371  1.3   UWP-19048: Added condition to Exclude        */
 /*                            lottable06=1 from the inventory              */
+/* 02-AUG-2024  Wan03   1.4   UWP-21574 -MPL Disallow Different Lottables  */
+/*                            to same PickFace                             */
 /***************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_ODMRPL01]
     @c_Facility   NVARCHAR(5)    = '',
@@ -74,8 +76,61 @@ BEGIN
          , @n_QtyAllocated          INT            = 0
          , @n_QtyPicked             INT            = 0
          , @n_RemainingQty          INT            = 0
-
-         , @c_NoMixLottable02       NVARCHAR(10)   = '0'
+         , @n_PendingMoveIn         INT            = 0                              --(Wan03)
+         , @c_NoMixLottable01       NVARCHAR(1)    = '0'                            --(Wan03)
+         , @c_NoMixLottable02       NVARCHAR(1)    = '0'                            --(Wan03) 
+         , @c_NoMixLottable03       NVARCHAR(1)    = '0'                            --(Wan03)
+         , @c_NoMixLottable04       NVARCHAR(1)    = '0'                            --(Wan03)
+         , @c_NoMixLottable05       NVARCHAR(1)    = '0'                            --(Wan03)
+         , @c_NoMixLottable06       NVARCHAR(1)    = '0'                            --(Wan03)
+         , @c_NoMixLottable07       NVARCHAR(1)    = '0'                            --(Wan03)
+         , @c_NoMixLottable08       NVARCHAR(1)    = '0'                            --(Wan03)
+         , @c_NoMixLottable09       NVARCHAR(1)    = '0'                            --(Wan03)
+         , @c_NoMixLottable10       NVARCHAR(1)    = '0'                            --(Wan03)
+         , @c_NoMixLottable11       NVARCHAR(1)    = '0'                            --(Wan03)
+         , @c_NoMixLottable12       NVARCHAR(1)    = '0'                            --(Wan03)
+         , @c_NoMixLottable13       NVARCHAR(1)    = '0'                            --(Wan03)
+         , @c_NoMixLottable14       NVARCHAR(1)    = '0'                            --(Wan03)
+         , @c_NoMixLottable15       NVARCHAR(1)    = '0'                            --(Wan03)
+         , @c_CommingleLot          NVARCHAR(1)    = '0'                            --(Wan03)
+         , @n_LotCnt                INT            = 0                              --(Wan03)
+         , @n_Lot01Cnt              INT            = 0                              --(Wan03)
+         , @n_Lot02Cnt              INT            = 0                              --(Wan03)
+         , @n_Lot03Cnt              INT            = 0                              --(Wan03)
+         , @n_Lot04Cnt              INT            = 0                              --(Wan03)
+         , @n_Lot05Cnt              INT            = 0                              --(Wan03)
+         , @n_Lot06Cnt              INT            = 0                              --(Wan03)
+         , @n_Lot07Cnt              INT            = 0                              --(Wan03)
+         , @n_Lot08Cnt              INT            = 0                              --(Wan03)
+         , @n_Lot09Cnt              INT            = 0                              --(Wan03)
+         , @n_Lot10Cnt              INT            = 0                              --(Wan03)
+         , @n_Lot11Cnt              INT            = 0                              --(Wan03)
+         , @n_Lot12Cnt              INT            = 0                              --(Wan03)
+         , @n_Lot13Cnt              INT            = 0                              --(Wan03)
+         , @n_Lot14Cnt              INT            = 0                              --(Wan03)
+         , @n_Lot15Cnt              INT            = 0                              --(Wan03)
+         , @c_Lot_SL                NVARCHAR(10)   = ''                             --(Wan03) 
+         , @c_Lottable01            NVARCHAR(18)   = ''                             --(Wan03)   
+         , @c_Lottable02            NVARCHAR(18)   = ''                             --(Wan03)
+         , @c_Lottable03            NVARCHAR(18)   = ''                             --(Wan03)
+         , @dt_Lottable04           DATETIME                                        --(Wan03)
+         , @dt_Lottable05           DATETIME                                        --(Wan03)
+         , @c_Lottable06            NVARCHAR(30)   = ''                                       --(Wan03)
+         , @c_Lottable07            NVARCHAR(30)   = ''                             --(Wan03)
+         , @c_Lottable08            NVARCHAR(30)   = ''                             --(Wan03)
+         , @c_Lottable09            NVARCHAR(30)   = ''                             --(Wan03)
+         , @c_Lottable10            NVARCHAR(30)   = ''                             --(Wan03)
+         , @c_Lottable11            NVARCHAR(30)   = ''                             --(Wan03)
+         , @c_Lottable12            NVARCHAR(30)   = ''                             --(Wan03)
+         , @dt_Lottable13           DATETIME                                        --(Wan03) 
+         , @dt_Lottable14           DATETIME                                        --(Wan03)
+         , @dt_Lottable15           DATETIME                                        --(Wan03)
+         , @dt_Lottable04_2         DATETIME                                        --(Wan03)
+         , @dt_Lottable05_2         DATETIME                                        --(Wan03)
+         , @dt_Lottable13_2         DATETIME                                        --(Wan03) 
+         , @dt_Lottable14_2         DATETIME                                        --(Wan03)
+         , @dt_Lottable15_2         DATETIME                                        --(Wan03)
+         , @c_SQLAddCond            NVARCHAR(MAX)                                   --(Wan03)
          , @c_ReplLottable02        NVARCHAR(18)   = ''
 
          , @c_ReplValidationRules   NVARCHAR(10)   = ''
@@ -191,8 +246,23 @@ BEGIN
             ReplenishmentPriority NVARCHAR(5) NOT NULL DEFAULT(''),
             ReplenishmentSeverity INT NOT NULL DEFAULT(0),
             ReplenishmentCasecnt INT NOT NULL DEFAULT(0),
-            LocationType NVARCHAR(10) NOT NULL DEFAULT(''),
-            NoMixLottable02 NVARCHAR(1) NOT NULL DEFAULT(''),
+            LocationType NVARCHAR(10) NOT NULL DEFAULT(''),                          
+            NoMixLottable01 NVARCHAR(1) NOT NULL DEFAULT('')                        --(Wan03)
+         ,  NoMixLottable02 NVARCHAR(1) NOT NULL DEFAULT('')                        
+         ,  NoMixLottable03 NVARCHAR(1) NOT NULL DEFAULT('')                        --(Wan03)
+         ,  NoMixLottable04 NVARCHAR(1) NOT NULL DEFAULT('')                        --(Wan03)
+         ,  NoMixLottable05 NVARCHAR(1) NOT NULL DEFAULT('')                        --(Wan03)
+         ,  NoMixLottable06 NVARCHAR(1) NOT NULL DEFAULT('')                        --(Wan03)
+         ,  NoMixLottable07 NVARCHAR(1) NOT NULL DEFAULT('')                        --(Wan03)
+         ,  NoMixLottable08 NVARCHAR(1) NOT NULL DEFAULT('')                        --(Wan03)
+         ,  NoMixLottable09 NVARCHAR(1) NOT NULL DEFAULT('')                        --(Wan03)
+         ,  NoMixLottable10 NVARCHAR(1) NOT NULL DEFAULT('')                        --(Wan03)
+         ,  NoMixLottable11 NVARCHAR(1) NOT NULL DEFAULT('')                        --(Wan03)
+         ,  NoMixLottable12 NVARCHAR(1) NOT NULL DEFAULT('')                        --(Wan03)
+         ,  NoMixLottable13 NVARCHAR(1) NOT NULL DEFAULT('')                        --(Wan03)
+         ,  NoMixLottable14 NVARCHAR(1) NOT NULL DEFAULT('')                        --(Wan03)
+         ,  NoMixLottable15 NVARCHAR(1) NOT NULL DEFAULT('')                        --(Wan03)
+         ,  CommingleLot    NVARCHAR(1) NOT NULL DEFAULT(''),                       --(Wan03)
             Packkey NVARCHAR(10) NOT NULL DEFAULT(''),
             LOT NVARCHAR(10) NOT NULL DEFAULT(''),
             Selected BIT NOT NULL DEFAULT(0),
@@ -261,7 +331,14 @@ BEGIN
             PRINT '>>>>>> No Replenishment required, Do nothing'
             GOTO QUIT_SP
         END
-
+        
+        SET @n_PendingMoveIn = 0                                                    --(Wan03) - START
+        SELECT @n_PendingMoveIn = ISNULL(SUM(l1.PendingMoveIn),0)
+        FROM LOTxLOCxID l1 WITH (NOLOCK)
+        WHERE l1.Storerkey = @c_Storerkey
+        AND   l1.Sku  = @c_SKU
+        AND   l1.Loc  = @c_Loc                                                      --(Wan03) - END
+        
         INSERT INTO #TempSKUxLOC
             ( StorerKey
             , SKU
@@ -270,7 +347,22 @@ BEGIN
             , ReplenishmentSeverity
             , ReplenishmentCasecnt
             , LocationType
-            , NoMixLottable02
+            , NoMixLottable01                                                       --(Wan03)
+            , NoMixLottable02                                                       
+            , NoMixLottable03                                                       --(Wan03)
+            , NoMixLottable04                                                       --(Wan03)
+            , NoMixLottable05                                                       --(Wan03)
+            , NoMixLottable06                                                       --(Wan03)
+            , NoMixLottable07                                                       --(Wan03)
+            , NoMixLottable08                                                       --(Wan03)
+            , NoMixLottable09                                                       --(Wan03)
+            , NoMixLottable10                                                       --(Wan03)
+            , NoMixLottable11                                                       --(Wan03)
+            , NoMixLottable12                                                       --(Wan03)
+            , NoMixLottable13                                                       --(Wan03)
+            , NoMixLottable14                                                       --(Wan03)
+            , NoMixLottable15                                                       --(Wan03)
+            , CommingleLot                                                          --(Wan03)
             , Packkey
             , LOT
             , Selected
@@ -281,16 +373,32 @@ BEGIN
          , SKUxLOC.LOC
          , SKUxLOC.ReplenishmentPriority
          , ReplenishmentSeverity = SKUxLOC.QtyLocationLimit - ((SKUxLOC.Qty - SKUxLOC.QtyPicked))
+                                 + @n_PendingMoveIn                                 --(Wan03)
          , SKUxLOC.QtyLocationLimit
          , LOC.Locationtype
+         , LOC.NoMixLottable01                                                      --(Wan03)
          , NoMixLottable02 = ISNULL(RTRIM(NoMixLottable02),'0')
+         , LOC.NoMixLottable03                                                      --(Wan03)
+         , LOC.NoMixLottable04                                                      --(Wan03)
+         , LOC.NoMixLottable05                                                      --(Wan03)
+         , LOC.NoMixLottable06                                                      --(Wan03)
+         , LOC.NoMixLottable07                                                      --(Wan03)
+         , LOC.NoMixLottable08                                                      --(Wan03)
+         , LOC.NoMixLottable09                                                      --(Wan03)
+         , LOC.NoMixLottable10                                                      --(Wan03)
+         , LOC.NoMixLottable11                                                      --(Wan03)
+         , LOC.NoMixLottable12                                                      --(Wan03)
+         , LOC.NoMixLottable13                                                      --(Wan03)
+         , LOC.NoMixLottable14                                                      --(Wan03)
+         , LOC.NoMixLottable15                                                      --(Wan03)
+         , LOC.CommingleLot                                                         --(Wan03)
          , SKU.Packkey
          , LOT=''
          , Selected=0
          , QtyReplen=0
         FROM SKUxLOC  WITH (NOLOCK)
-            JOIN LOC  WITH (NOLOCK) ON (SKUxLOC.Loc = LOC.Loc)
-            JOIN SKU  WITH (NOLOCK) ON (SKUxLOC.Storerkey = SKU.Storerkey AND SKUxLOC.Sku = SKU.Sku)
+        JOIN LOC  WITH (NOLOCK) ON (SKUxLOC.Loc = LOC.Loc)
+        JOIN SKU  WITH (NOLOCK) ON (SKUxLOC.Storerkey = SKU.Storerkey AND SKUxLOC.Sku = SKU.Sku)
         WHERE SKUxLOC.StorerKey = @c_Storerkey
             AND LOC.FACILITY = @c_Facility
             AND SKUxLOC.Sku = @c_SKU   
@@ -298,7 +406,7 @@ BEGIN
             AND LOC.LocationFlag NOT IN ('HOLD', 'DAMAGE')
             AND LOC.Status <> 'HOLD'            
             AND SKUxLOC.LOCationtype IN ( 'CASE','PALLET','PICK')
-            AND ((SKUxLOC.Qty - SKUxLOC.QtyPicked)) <= SKUxLOC.QtyLocationMinimum
+            AND ((SKUxLOC.Qty - SKUxLOC.QtyPicked) + @n_PendingMoveIn) <= SKUxLOC.QtyLocationMinimum  --(Wan03)
         ORDER BY SKUxLOC.StorerKey
             ,  SKUxLOC.SKU
             ,  SKUxLOC.LOC
@@ -337,7 +445,22 @@ BEGIN
             , ReplenishmentPriority  = ReplenishmentPriority
             , ToLocationType         = LocationType
             , Packkey          = Packkey
-            , NoMixLottable02  = NoMixLottable02
+            , NoMixLottable01                                                       --(Wan03)
+            , NoMixLottable02                                                         
+            , NoMixLottable03                                                       --(Wan03)
+            , NoMixLottable04                                                       --(Wan03)
+            , NoMixLottable05                                                       --(Wan03)
+            , NoMixLottable06                                                       --(Wan03)
+            , NoMixLottable07                                                       --(Wan03)
+            , NoMixLottable08                                                       --(Wan03)
+            , NoMixLottable09                                                       --(Wan03)
+            , NoMixLottable10                                                       --(Wan03)
+            , NoMixLottable11                                                       --(Wan03)
+            , NoMixLottable12                                                       --(Wan03)
+            , NoMixLottable13                                                       --(Wan03)
+            , NoMixLottable14                                                       --(Wan03)
+            , NoMixLottable15                                                       --(Wan03)
+            , CommingleLot                                                          --(Wan03)
         FROM #TempSKUxLOC
         GROUP BY StorerKey
             ,  SKU
@@ -345,7 +468,22 @@ BEGIN
             ,  ReplenishmentPriority
             ,  LocationType
             ,  Packkey
-            ,  NoMixLottable02
+            ,  NoMixLottable01                                                       --(Wan03)
+            ,  NoMixLottable02                                                         
+            ,  NoMixLottable03                                                       --(Wan03)
+            ,  NoMixLottable04                                                       --(Wan03)
+            ,  NoMixLottable05                                                       --(Wan03)
+            ,  NoMixLottable06                                                       --(Wan03)
+            ,  NoMixLottable07                                                       --(Wan03)
+            ,  NoMixLottable08                                                       --(Wan03)
+            ,  NoMixLottable09                                                       --(Wan03)
+            ,  NoMixLottable10                                                       --(Wan03)
+            ,  NoMixLottable11                                                       --(Wan03)
+            ,  NoMixLottable12                                                       --(Wan03)
+            ,  NoMixLottable13                                                       --(Wan03)
+            ,  NoMixLottable14                                                       --(Wan03)
+            ,  NoMixLottable15                                                       --(Wan03)
+            ,  CommingleLot                                                          --(Wan03)
         ORDER BY StorerKey
               ,Sku
               ,ReplenishmentPriority
@@ -360,7 +498,22 @@ BEGIN
                                     ,  @c_CurrentPriority
                                     ,  @c_ToLocationType
                                     ,  @c_Packkey
-                                    ,  @c_NoMixLottable02
+                                    ,  @c_NoMixLottable01                           --(Wan03)
+                                    ,  @c_NoMixLottable02                             
+                                    ,  @c_NoMixLottable03                           --(Wan03)
+                                    ,  @c_NoMixLottable04                           --(Wan03)
+                                    ,  @c_NoMixLottable05                           --(Wan03)
+                                    ,  @c_NoMixLottable06                           --(Wan03)
+                                    ,  @c_NoMixLottable07                           --(Wan03)
+                                    ,  @c_NoMixLottable08                           --(Wan03)
+                                    ,  @c_NoMixLottable09                           --(Wan03)
+                                    ,  @c_NoMixLottable10                           --(Wan03)
+                                    ,  @c_NoMixLottable11                           --(Wan03)
+                                    ,  @c_NoMixLottable12                           --(Wan03)
+                                    ,  @c_NoMixLottable13                           --(Wan03)
+                                    ,  @c_NoMixLottable14                           --(Wan03)
+                                    ,  @c_NoMixLottable15                           --(Wan03)
+                                    ,  @c_CommingleLot                              --(Wan03)
         WHILE @@Fetch_Status <> -1
         BEGIN
             IF EXISTS(SELECT 1
@@ -369,6 +522,247 @@ BEGIN
             BEGIN
                 GOTO NEXT_SKUxLOC
             END
+
+            SET @n_LotCnt     = 0
+            SET @n_Lot01Cnt   = 0
+            SET @n_Lot02Cnt   = 0
+            SET @n_Lot03Cnt   = 0
+            SET @n_Lot04Cnt   = 0
+            SET @n_Lot05Cnt   = 0
+            SET @n_Lot06Cnt   = 0
+            SET @n_Lot07Cnt   = 0
+            SET @n_Lot08Cnt   = 0
+            SET @n_Lot09Cnt   = 0
+            SET @n_Lot10Cnt   = 0
+            SET @n_Lot11Cnt   = 0
+            SET @n_Lot12Cnt   = 0
+            SET @n_Lot13Cnt   = 0
+            SET @n_Lot14Cnt   = 0
+            SET @n_Lot15Cnt   = 0
+            SET @c_Lot_SL     = ''
+            SET @c_Lottable01 = ''
+            SET @c_Lottable02 = ''
+            SET @c_Lottable03 = ''
+            SET @dt_Lottable04= NULL
+            SET @dt_Lottable05= NULL
+            SET @c_Lottable06 = ''
+            SET @c_Lottable07 = ''
+            SET @c_Lottable08 = ''
+            SET @c_Lottable09 = ''
+            SET @c_Lottable10 = ''
+            SET @c_Lottable11 = ''
+            SET @c_Lottable12 = ''
+            SET @dt_Lottable13= NULL
+            SET @dt_Lottable14= NULL
+            SET @dt_Lottable15= NULL
+
+            SELECT @n_LotCnt     = COUNT(DISTINCT l1.Lot)
+                 , @n_Lot01Cnt   = COUNT(DISTINCT ISNULL(la.Lottable01,''))
+                 , @n_Lot02Cnt   = COUNT(DISTINCT ISNULL(la.Lottable02,''))
+                 , @n_Lot03Cnt   = COUNT(DISTINCT ISNULL(la.Lottable03,''))
+                 , @n_Lot04Cnt   = COUNT(DISTINCT ISNULL(la.Lottable04,'1900-01-01'))
+                 , @n_Lot05Cnt   = COUNT(DISTINCT ISNULL(la.Lottable05,'1900-01-01'))
+                 , @n_Lot06Cnt   = COUNT(DISTINCT ISNULL(la.Lottable06,''))
+                 , @n_Lot07Cnt   = COUNT(DISTINCT ISNULL(la.Lottable07,''))
+                 , @n_Lot08Cnt   = COUNT(DISTINCT ISNULL(la.Lottable08,''))
+                 , @n_Lot09Cnt   = COUNT(DISTINCT ISNULL(la.Lottable09,''))
+                 , @n_Lot10Cnt   = COUNT(DISTINCT ISNULL(la.Lottable10,''))
+                 , @n_Lot11Cnt   = COUNT(DISTINCT ISNULL(la.Lottable11,''))
+                 , @n_Lot12Cnt   = COUNT(DISTINCT ISNULL(la.Lottable12,''))
+                 , @n_Lot13Cnt   = COUNT(DISTINCT ISNULL(la.Lottable13,'1900-01-01'))
+                 , @n_Lot14Cnt   = COUNT(DISTINCT ISNULL(la.Lottable14,'1900-01-01'))
+                 , @n_Lot15Cnt   = COUNT(DISTINCT ISNULL(la.Lottable15,'1900-01-01'))
+                 , @c_Lot_SL     = ISNULL(MIN(l1.Lot),'')
+                 , @c_Lottable01 = MIN(ISNULL(la.Lottable01,''))
+                 , @c_Lottable02 = MIN(ISNULL(la.Lottable02,''))
+                 , @c_Lottable03 = MIN(ISNULL(la.Lottable03,''))
+                 , @dt_Lottable04= MIN(la.Lottable04)
+                 , @dt_Lottable05= MIN(la.Lottable05)
+                 , @c_Lottable06 = MIN(ISNULL(la.Lottable06,''))
+                 , @c_Lottable07 = MIN(ISNULL(la.Lottable07,''))
+                 , @c_Lottable08 = MIN(ISNULL(la.Lottable08,''))
+                 , @c_Lottable09 = MIN(ISNULL(la.Lottable09,''))
+                 , @c_Lottable10 = MIN(ISNULL(la.Lottable10,''))
+                 , @c_Lottable11 = MIN(ISNULL(la.Lottable11,''))
+                 , @c_Lottable12 = MIN(ISNULL(la.Lottable12,''))
+                 , @dt_Lottable13= MIN(la.Lottable13)
+                 , @dt_Lottable14= MIN(la.Lottable14)
+                 , @dt_Lottable15= MIN(la.Lottable15)
+            FROM LOTxLOCxID l1   (NOLOCK)
+            JOIN LOTATTRIBUTE la (NOLOCK) ON la.Lot = L1.Lot
+            WHERE l1.Storerkey = @c_Storerkey
+            AND l1.Sku  = @c_Sku
+            AND l1.Loc  = @c_Loc
+            AND l1.Qty - l1.QtyPicked + l1.PendingMoveIn > 0
+            GROUP BY l1.Storerkey, l1.Sku, l1.Loc
+
+            SET @c_SQLAddCond = ''
+            IF @c_Lot_SL <> ''
+            BEGIN
+               IF @c_CommingleLot = '0'  
+               BEGIN
+                  IF @n_LotCnt > 1 
+                  BEGIN
+                     PRINT '>>>>>> Multiple Lot on No ConmingleLot Loc, Do nothing'
+                     GOTO NEXT_SKUxLOC
+                  END
+                  SET @c_SQLAddCond = @c_SQLAddCond + ' AND LOTxLOCxID.Lot = @c_Lot_SL' 
+               END
+               ELSE
+               BEGIN
+                  IF @c_NoMixLottable01 = '1' 
+                  BEGIN
+                     IF @n_Lot01Cnt > 1
+                     BEGIN
+                        PRINT '>>>>>> Multiple Lottable01 on NoMixLottable01 Loc, Do nothing'
+                        GOTO NEXT_SKUxLOC
+                     END
+                     SET @c_SQLAddCond = @c_SQLAddCond + ' AND LOTATTRIBUTE.Lottable01 = @c_Lottable01' 
+                  END
+                  IF @c_NoMixLottable02 = '1' 
+                  BEGIN
+                     IF @n_Lot02Cnt > 1
+                     BEGIN
+                        PRINT '>>>>>> Multiple Lottable02 on NoMixLottable02 Loc, Do nothing'
+                        GOTO NEXT_SKUxLOC
+                     END
+                     SET @c_SQLAddCond = @c_SQLAddCond + ' AND LOTATTRIBUTE.Lottable02 = @c_Lottable02' 
+                  END
+                  IF @c_NoMixLottable03 = '1' 
+                  BEGIN
+                     IF @n_Lot03Cnt > 1
+                     BEGIN
+                        PRINT '>>>>>> Multiple Lottable03 on NoMixLottable03 Loc, Do nothing'
+                        GOTO NEXT_SKUxLOC
+                     END
+                     SET @c_SQLAddCond = @c_SQLAddCond + ' AND LOTATTRIBUTE.Lottable03 = @c_Lottable03' 
+                  END
+                  IF @c_NoMixLottable04 = '1' 
+                  BEGIN
+                     IF @n_Lot04Cnt > 1
+                     BEGIN
+                        PRINT '>>>>>> Multiple Lottable04 on NoMixLottable04 Loc, Do nothing'
+                        GOTO NEXT_SKUxLOC
+                     END
+                     SET @dt_Lottable04_2 = @dt_Lottable14
+                     IF @dt_Lottable04 IS NULL SET @dt_Lottable04_2 = '1900-01-01'   
+                     SET @c_SQLAddCond = @c_SQLAddCond 
+                                       + ' AND LOTATTRIBUTE.Lottable04 IN (@dt_Lottable04_2, @dt_Lottable04)' 
+                  END
+                  IF @c_NoMixLottable05 = '1' 
+                  BEGIN
+                     IF @n_Lot05Cnt > 1
+                     BEGIN
+                        PRINT '>>>>>> Multiple Lottable05 on NoMixLottable05 Loc, Do nothing'
+                        GOTO NEXT_SKUxLOC
+                     END
+                     SET @dt_Lottable05_2 = NULL
+                     IF @dt_Lottable05 IS NULL SET @dt_Lottable05_2 = '1900-01-01' 
+                     SET @c_SQLAddCond = @c_SQLAddCond 
+                                       + ' AND LOTATTRIBUTE.Lottable05 IN (@dt_Lottable05_2, @dt_Lottable05)' 
+                  END
+                  IF @c_NoMixLottable06 = '1' 
+                  BEGIN
+                     IF @n_Lot06Cnt > 1
+                     BEGIN
+                        PRINT '>>>>>> Multiple Lottable06 on NoMixLottable06 Loc, Do nothing'
+                        GOTO NEXT_SKUxLOC
+                     END
+                     SET @c_SQLAddCond = @c_SQLAddCond + ' AND LOTATTRIBUTE.Lottable06 = @c_Lottable06' 
+                  END
+                  IF @c_NoMixLottable07 = '1' 
+                  BEGIN
+                     IF @n_Lot07Cnt > 1
+                     BEGIN
+                        PRINT '>>>>>> Multiple Lottable07 on NoMixLottable07 Loc, Do nothing'
+                        GOTO NEXT_SKUxLOC
+                     END
+                     SET @c_SQLAddCond = @c_SQLAddCond + ' AND LOTATTRIBUTE.Lottable07 = @c_Lottable07' 
+                  END
+                  IF @c_NoMixLottable08 = '1' 
+                  BEGIN
+                     IF @n_Lot08Cnt > 1
+                     BEGIN
+                        PRINT '>>>>>> Multiple Lottable08 on NoMixLottable08 Loc, Do nothing'
+                        GOTO NEXT_SKUxLOC
+                     END
+                     SET @c_SQLAddCond = @c_SQLAddCond + ' AND LOTATTRIBUTE.Lottable08 = @c_Lottable08' 
+                  END
+                  IF @c_NoMixLottable09 = '1' 
+                  BEGIN
+                     IF @n_Lot09Cnt > 1
+                     BEGIN
+                        PRINT '>>>>>> Multiple Lottable09 on NoMixLottable09 Loc, Do nothing'
+                        GOTO NEXT_SKUxLOC
+                     END
+                     SET @c_SQLAddCond = @c_SQLAddCond + ' AND LOTATTRIBUTE.Lottable09 = @c_Lottable09' 
+                  END
+                  IF @c_NoMixLottable10 = '1' 
+                  BEGIN
+                     IF @n_Lot10Cnt > 1
+                     BEGIN
+                        PRINT '>>>>>> Multiple Lottable10 on NoMixLottable10 Loc, Do nothing'
+                        GOTO NEXT_SKUxLOC
+                     END
+                     SET @c_SQLAddCond = @c_SQLAddCond + ' AND LOTATTRIBUTE.Lottable10 = @c_Lottable10' 
+                  END
+                  IF @c_NoMixLottable11 = '1' 
+                  BEGIN
+                     IF @n_Lot11Cnt > 1
+                     BEGIN
+                        PRINT '>>>>>> Multiple Lottable11 on NoMixLottable11 Loc, Do nothing'
+                        GOTO NEXT_SKUxLOC
+                     END
+                     SET @c_SQLAddCond = @c_SQLAddCond + ' AND LOTATTRIBUTE.Lottable11 = @c_Lottable11' 
+                  END
+                  IF @c_NoMixLottable12 = '1' 
+                  BEGIN
+                     IF @n_Lot12Cnt > 1
+                     BEGIN
+                        PRINT '>>>>>> Multiple Lottable12 on NoMixLottable12 Loc, Do nothing'
+                        GOTO NEXT_SKUxLOC
+                     END
+                     SET @c_SQLAddCond = @c_SQLAddCond + ' AND LOTATTRIBUTE.Lottable12 = @c_Lottable12' 
+                  END
+                  IF @c_NoMixLottable13 = '1' 
+                  BEGIN
+                     IF @n_Lot13Cnt > 1
+                     BEGIN
+                        PRINT '>>>>>> Multiple Lottable13 on NoMixLottable13 Loc, Do nothing'
+                        GOTO NEXT_SKUxLOC
+                     END
+                     SET @dt_Lottable13_2 = @dt_Lottable13
+                     IF @dt_Lottable13 IS NULL SET @dt_Lottable13_2 = '1900-01-01'                     
+                     SET @c_SQLAddCond = @c_SQLAddCond 
+                                       + ' AND LOTATTRIBUTE.Lottable13 IN (@dt_Lottable13_2, @dt_Lottable13)' 
+                  END
+                  IF @c_NoMixLottable14 = '1' 
+                  BEGIN
+                     IF @n_Lot14Cnt > 1
+                     BEGIN
+                        PRINT '>>>>>> Multiple Lottable14 on NoMixLottable14 Loc, Do nothing'
+                        GOTO NEXT_SKUxLOC
+                     END
+                     SET @dt_Lottable14_2 = @dt_Lottable14
+                     IF @dt_Lottable14 IS NULL SET @dt_Lottable14_2 = '1900-01-01'                     
+                     SET @c_SQLAddCond = @c_SQLAddCond 
+                                       + ' AND LOTATTRIBUTE.Lottable14 IN (@dt_Lottable14_2, @dt_Lottable14)' 
+                  END
+                  IF @c_NoMixLottable15 = '1' 
+                  BEGIN
+                     IF @n_Lot15Cnt > 1
+                     BEGIN
+                        PRINT '>>>>>> Multiple Lottable15 on NoMixLottable15 Loc, Do nothing'
+                        GOTO NEXT_SKUxLOC
+                     END
+                     SET @dt_Lottable15_2 = @dt_Lottable15
+                     IF @dt_Lottable15 IS NULL SET @dt_Lottable15_2 = '1900-01-01'
+                     SET @c_SQLAddCond = @c_SQLAddCond 
+                                       + ' AND LOTATTRIBUTE.Lottable15 IN (@dt_Lottable15_2, @dt_Lottable15)' 
+                  END
+               END
+            END
+          
             /* We now have a pickLOCation that needs to be replenished! */
             /* Figure out which LOCations in the warehouse to pull this product from */
             /* End figure out which LOCations in the warehouse to pull this product from */
@@ -433,7 +827,7 @@ BEGIN
                PRINT '>>> CaseToPick: ' + @c_CaseToPick + ' ToLocationType: ' + @c_ToLocationType
             END
 
-            IF @c_condition=''                                                                     		--(ppa371)--start
+            IF @c_condition=''                                                                           --(ppa371)--start
             BEGIN
               Select @c_condition = Codelkup.Notes from CODELKUP (NOLOCK) where Codelkup.Code = 'CONDITION' and Codelkup.Code2 = 'isp_ODMRPL01' and Codelkup.ListName = 'REPLENCFG'
             END
@@ -463,8 +857,9 @@ BEGIN
                + ' AND LOC.LocationType NOT IN (''CASE'',''PICK'',''PALLET'',''STAGING'')    '
                + ' AND LOC.Facility= @c_Facility'
                + ' AND LOC.Status  = ''OK'' AND LOT.Status  = ''OK'' '
-               + @c_condition +'
-                ORDER BY
+               + @c_condition  
+               + @c_SQLAddCond
+               + ' ORDER BY
                LOTATTRIBUTE.Lottable04,
                LOTATTRIBUTE.Lottable05,
                CASE WHEN (LOTxLOCxID.Qty - LOTxLOCxID.QtyAllocated - LOTxLOCxID.QtyPicked - LOTxLOCxID.QtyReplen) < @n_Pallet
@@ -474,7 +869,50 @@ BEGIN
                ,  (LOTxLOCxID.Qty - LOTxLOCxID.QtyAllocated - LOTxLOCxID.QtyPicked)
                ,  LOTATTRIBUTE.Lottable02'
                set @SQL_Parms = N'@c_CurrentLoc NVARCHAR(10), @c_CurrentStorer NVARCHAR(15), @c_CurrentSku NVARCHAR(20) , @c_Facility NVARCHAR(5), @n_Pallet FLOAT'
-               Execute SP_ExecuteSQL @SQL_QUERY, @SQL_Parms, @c_CurrentLoc , @c_CurrentStorer, @c_CurrentSku , @c_Facility, @n_Pallet   		--(ppa371)--end
+                              + ', @c_Lot_SL          NVARCHAR(10)'
+                              + ', @c_Lottable01      NVARCHAR(18)'                             --(Wan03)   
+                              + ', @c_Lottable02      NVARCHAR(18)'                             --(Wan03)
+                              + ', @c_Lottable03      NVARCHAR(18)'                             --(Wan03)
+                              + ', @dt_Lottable04     DATETIME'                                 --(Wan03)
+                              + ', @dt_Lottable04_2   DATETIME'                                 --(Wan03) 
+                              + ', @dt_Lottable05     DATETIME'                                 --(Wan03)
+                              + ', @dt_Lottable05_2   DATETIME'                                 --(Wan03) 
+                              + ', @c_Lottable06      NVARCHAR(30)'                                       --(Wan03)
+                              + ', @c_Lottable07      NVARCHAR(30)'                             --(Wan03)
+                              + ', @c_Lottable08      NVARCHAR(30)'                             --(Wan03)
+                              + ', @c_Lottable09      NVARCHAR(30)'                             --(Wan03)
+                              + ', @c_Lottable10      NVARCHAR(30)'                             --(Wan03)
+                              + ', @c_Lottable11      NVARCHAR(30)'                             --(Wan03)
+                              + ', @c_Lottable12      NVARCHAR(30)'                             --(Wan03)
+                              + ', @dt_Lottable13     DATETIME'                                 --(Wan03) 
+                              + ', @dt_Lottable13_2   DATETIME'                                 --(Wan03) 
+                              + ', @dt_Lottable14     DATETIME'                                 --(Wan03)
+                              + ', @dt_Lottable14_2   DATETIME'                                 --(Wan03) 
+                              + ', @dt_Lottable15     DATETIME'                                 --(Wan03)
+                              + ', @dt_Lottable15_2   DATETIME'                                 --(Wan03) 
+
+               Execute SP_ExecuteSQL @SQL_QUERY, @SQL_Parms, @c_CurrentLoc , @c_CurrentStorer, @c_CurrentSku , @c_Facility, @n_Pallet        --(ppa371)--end
+                                    ,@c_Lot_SL                                                  --(Wan03)
+                                    ,@c_Lottable01                                              --(Wan03)
+                                    ,@c_Lottable02                                              --(Wan03)
+                                    ,@c_Lottable03                                              --(Wan03)
+                                    ,@dt_Lottable04                                             --(Wan03)
+                                    ,@dt_Lottable04_2                                           --(Wan03)
+                                    ,@dt_Lottable05                                             --(Wan03)
+                                    ,@dt_Lottable05_2                                           --(Wan03)
+                                    ,@c_Lottable06                                              --(Wan03)
+                                    ,@c_Lottable07                                              --(Wan03)
+                                    ,@c_Lottable08                                              --(Wan03)
+                                    ,@c_Lottable09                                              --(Wan03)
+                                    ,@c_Lottable10                                              --(Wan03)
+                                    ,@c_Lottable11                                              --(Wan03)
+                                    ,@c_Lottable12                                              --(Wan03)
+                                    ,@dt_Lottable13                                             --(Wan03)
+                                    ,@dt_Lottable13_2                                           --(Wan03)
+                                    ,@dt_Lottable14                                             --(Wan03)
+                                    ,@dt_Lottable14_2                                           --(Wan03)
+                                    ,@dt_Lottable15                                             --(Wan03)
+                                    ,@dt_Lottable15_2                                           --(Wan03)
 
          OPEN CUR_REPL
 
@@ -818,7 +1256,22 @@ BEGIN
                                        ,  @c_CurrentPriority
                                        ,  @c_ToLocationtype
                                        ,  @c_Packkey
-                                       ,  @c_NoMixLottable02
+                                       ,  @c_NoMixLottable01                        --(Wan03)
+                                       ,  @c_NoMixLottable02                          
+                                       ,  @c_NoMixLottable03                        --(Wan03)
+                                       ,  @c_NoMixLottable04                        --(Wan03)
+                                       ,  @c_NoMixLottable05                        --(Wan03)
+                                       ,  @c_NoMixLottable06                        --(Wan03)
+                                       ,  @c_NoMixLottable07                        --(Wan03)
+                                       ,  @c_NoMixLottable08                        --(Wan03)
+                                       ,  @c_NoMixLottable09                        --(Wan03)
+                                       ,  @c_NoMixLottable10                        --(Wan03)
+                                       ,  @c_NoMixLottable11                        --(Wan03)
+                                       ,  @c_NoMixLottable12                        --(Wan03)
+                                       ,  @c_NoMixLottable13                        --(Wan03)
+                                       ,  @c_NoMixLottable14                        --(Wan03)
+                                       ,  @c_NoMixLottable15                        --(Wan03)
+                                       ,  @c_CommingleLot                           --(Wan03)
     END
     -- -- FOR SKUxLOC
     CLOSE CUR_SKUxLOC
