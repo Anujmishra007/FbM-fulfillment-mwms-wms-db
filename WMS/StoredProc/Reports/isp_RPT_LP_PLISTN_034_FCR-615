@@ -24,7 +24,7 @@ GO
 /* Date         Author   Ver  Purposes                                     */
 /* 30-Jul-2024  ADURAN   1.0  DevOps Combine Script                        */
 /***************************************************************************/  
-CREATE	PROC [dbo].[isp_RPT_LP_PLISTN_034_FCR-615] (
+CREATE OR ALTER	PROC [dbo].[isp_RPT_LP_PLISTN_034_FCR-615] (
       @c_Loadkey           NVARCHAR(10)
     , @c_PreGenRptData     NVARCHAR(10) = ''
 )     
