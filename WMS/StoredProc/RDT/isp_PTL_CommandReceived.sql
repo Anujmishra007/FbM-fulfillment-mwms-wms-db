@@ -15,7 +15,7 @@ GO
 /* 2013-03-02 1.0  Shong      Created                                         */
 /* 2019-01-22 1.1  ChewKP     Performance Tuning                              */
 /* 2020-04-21 1.2  Ung        INC1120103 Remove transaction                   */
-/* 2024-07-30 1.3  yeekung    UWP-22410 Add new Column(yeekung05)             */
+/* 2024-07-30 1.3  yeekung    UWP-22410 Add new Column(yeekung05)					*/
 /******************************************************************************/
 CREATE OR ALTER PROC [PTL].[isp_PTL_CommandReceived]
 (  @c_DeviceIPAddress NVARCHAR(30)
@@ -26,7 +26,7 @@ CREATE OR ALTER PROC [PTL].[isp_PTL_CommandReceived]
   ,@b_Success         INT OUTPUT
   ,@n_ErrNo           INT OUTPUT
   ,@c_ErrMsg          NVARCHAR(215) OUTPUT
-  ,@c_Facility          NVARCHAR(20)
+  ,@c_Facility			 NVARCHAR(20)
 )
 AS
 BEGIN
@@ -71,7 +71,7 @@ BEGIN
       WHERE li.IPAddress = @c_DeviceIPAddress
       AND   li.DevicePosition = @c_DevicePosition
       AND   li.[Status] = '0'
-      AND   li.Facility = @c_Facility
+		AND   li.Facility = @c_Facility
       ORDER BY li.SerialNo
 
       IF ISNULL(@n_LghIn_SerialNo, 0) <> 0
@@ -84,7 +84,7 @@ BEGIN
          AND   IPAddress = @c_DeviceIPAddress
          AND   DevicePosition = @c_DevicePosition
          AND   [Status] = '0'
-         AND   Facility = @c_Facility
+			AND   Facility = = @c_Facility
       END
 
       SELECT @n_Step = ls.Step,
@@ -96,7 +96,7 @@ BEGIN
       FROM PTL.LightStatus AS ls WITH (NOLOCK)
       WHERE ls.IPAddress = @c_DeviceIPAddress
       AND   ls.DevicePosition = @c_DevicePosition
-      AND   ls.Facility = @c_Facility
+		AND	ls.Facility = = @c_Facility
 
       SET @n_ErrNo = 0
       SET @c_StoredProcName = ''
@@ -147,7 +147,7 @@ BEGIN
                WHERE IPAddress = @c_DeviceIPAddress
                AND   DevicePosition = @c_DevicePosition
                AND   [Status] = '1'
-               AND   Facility = @c_Facility
+					AND   Facility = = @c_Facility
             END
             ELSE
             BEGIN

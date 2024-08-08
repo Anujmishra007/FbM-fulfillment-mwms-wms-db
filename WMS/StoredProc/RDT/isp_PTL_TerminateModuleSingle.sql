@@ -16,7 +16,7 @@ GO
 /* 2018-01-03 1.0  ChewKP     WMS-3487 Created                                */
 /* 2019-01-22 1.1  ChewKP     Tuning                                          */
 /* 2022-03-22 1.2  yeekung    WMS-18729 add params (Yeekung01)                */
-/* 2024-07-30 1.3  yeekung    UWP-22410 Add new Column(yeekung05)             */
+/* 2024-07-30 1.3  yeekung    UWP-22410 Add new Column(yeekung05)					*/
 /******************************************************************************/
 
 CREATE OR ALTER PROC [PTL].[isp_PTL_TerminateModuleSingle]
@@ -50,7 +50,7 @@ BEGIN
            @c_PTLType         NVARCHAR(10),
            --@c_LightAddress    NVARCHAR(MAX),
            @n_LightLinkLogKey INT,
-           @cFacility         NVARCHAR(20)
+			  @cFacility			NVARCHAR(20)
 
 
 
@@ -69,14 +69,14 @@ BEGIN
       SET @c_DeviceIP = ''
       SELECT @c_DeviceIP = ISNULL(ll.IPAddress,'')
             ,@c_DeviceType = ll.DeviceType
-            ,@cFacility  = Facility
+				,@cFacility  = Facility
       FROM DeviceProfile ll WITH (NOLOCK)
       WHERE ll.DeviceID = @c_DeviceID
 
       SET @c_PTLType = @c_DeviceType
    END
 
-   SET @cFacility = CASE WHEN ISNULL(@cFacility,'') = '' THEN '' ELSE @cFacility END
+	SET @cFacility = CASE WHEN ISNULL(@cFacility,'') = '' THEN '' ELSE @cFacility END
 
    IF ISNULL(RTRIM(@c_DeviceIP), '') = ''
    BEGIN
@@ -122,19 +122,30 @@ BEGIN
       --SET @n_LightLinkLogKey = RIGHT((REPLICATE(' ', 7) + CAST(@n_LightLinkLogKey AS VARCHAR(8))), 8)
       SET @c_TCPMessage = @n_LightLinkLogKey
 
-      EXEC PTL.isp_PTL_SendMsg
-         @c_StorerKey,
-         @c_TCPMessage,
-         @b_success  OUTPUT,
-         @n_Err      OUTPUT,
-         @c_ErrMsg   OUTPUT,
-         @c_DeviceType,
-         @c_DeviceID
+		IF EXISTS (	SELECT 1
+						FROM DeviceProfile (NOLOCK)
+						WHERE DeviceID = @c_DeviceID
+							AND ISNULL(Facility,'') ='')
+		BEGIN
+    
+			--(yeekung01)       
+			EXEC PTL.isp_PTL_SendMsg 
+				@c_StorerKey = @c_StorerKey, 
+				@c_Message  = @c_TCPMessage, 
+				@b_success = @b_success OUTPUT, 
+				@n_Err     = @n_Err OUTPUT, 
+				@c_ErrMsg  = @c_ErrMsg OUTPUT, 
+				@c_DeviceType = @c_DeviceType,
+				@c_DeviceID = @c_DeviceID,
+				@n_Func = @n_Func,
+				@cPTSZone = @cPTSZone,
+				@cLightcmd = @cLightcmd
 
-      IF @n_Err <> 0
-      BEGIN
-         GOTO RollBackTran
-      END
+			IF @n_Err <> 0
+			BEGIN
+				GOTO RollBackTran
+			END
+		END
       --SET @c_LightAddress = ''
    END
 
@@ -171,7 +182,7 @@ BEGIN
       IF NOT EXISTS (SELECT 1 FROM PTL.LightStatus AS ls WITH (NOLOCK)
                      WHERE ls.IPAddress = @c_DeviceIP
                      AND   ls.DevicePosition = @c_DevicePosition
-                     AND   ls.Facility = @cFacility)
+							AND   ls.Facility = @cFacility)
       BEGIN
          INSERT INTO PTL.LightStatus
          (  IPAddress,        DevicePosition,   DeviceID,
@@ -204,7 +215,7 @@ BEGIN
                 Func = @n_Func
          WHERE IPAddress = @c_DeviceIP
          AND   DevicePosition = @c_DevicePosition
-         AND   Facility = @cFacility
+			AND   Facility = @cFacility
       END
 
       -- Turn off light up flag

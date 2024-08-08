@@ -22,7 +22,7 @@ GO
 /* 2020-11-01 1.6  YeeKung    WMS-16066 Add loc pickzone(yeekung02)           */   
 /* 2022-03-22 1.7  yeekung    WMS-18729 add params (Yeekung04)                */
 /* 2023-04-06 1.8  yeekung    WMS-22163 Merge all lightup                     */ 
-/* 2024-07-30 1.9  yeekung    UWP-22410 Add new Column(yeekung05)             */
+/* 2024-07-30 1.9  yeekung    UWP-22410 Add new Column(yeekung05)					*/
 /******************************************************************************/    
 CREATE OR ALTER PROC [PTL].[isp_PTL_LightUpLoc]    
 (    
@@ -71,7 +71,7 @@ BEGIN
           ,@dAddDate         DATETIME    
           ,@cLoc             NVARCHAR(20)
           ,@cLightcmd       NVARCHAR(MAX)
-          ,@cFacility        NVARCHAR(20)
+			 ,@cFacility		  NVARCHAR(20)
     
    SET @n_StartTCnt = @@TRANCOUNT    
    SET @n_Continue = 1    
@@ -87,11 +87,11 @@ BEGIN
 --   END    
 
 
-   SELECT   @cFacility = Facility
-   FROM DeviceProfile ll WITH (NOLOCK)    
-   WHERE ll.DeviceID = @c_DeviceID   
-      AND ll.DevicePosition=@c_DevicePos 
-      AND ll.IPAddress=@c_DeviceIP
+	SELECT   @cFacility = Facility
+	FROM DeviceProfile ll WITH (NOLOCK)    
+	WHERE ll.DeviceID = @c_DeviceID   
+		AND ll.DevicePosition=@c_DevicePos 
+		AND ll.IPAddress=@c_DeviceIP
 
    IF  @c_DeviceModel NOT IN ('TMS')
    BEGIN
@@ -287,7 +287,7 @@ BEGIN
       SET @cLightcmd = @c_LightCommand
    END
   
-     SET @cFacility = CASE WHEN ISNULL(@cFacility,'') ='' THEN '' ELSE @cFacility END
+  	SET @cFacility = CASE WHEN ISNULL(@cFacility,'') ='' THEN '' ELSE @cFacility END
 
    SET @dAddDate = Getdate()    
     
@@ -303,19 +303,26 @@ BEGIN
     
    SET @n_LightLinkLogKey = @@identity    
    SET @c_TCPMessage = @n_LightLinkLogKey    
+
+	IF EXISTS (	SELECT 1
+					FROM DeviceProfile (NOLOCK)
+					WHERE DeviceID = @c_DeviceID
+						AND ISNULL(Facility,'') ='')
+	BEGIN
     
-   --(yeekung01)       
-   EXEC PTL.isp_PTL_SendMsg 
-      @c_StorerKey = @c_StorerKey, 
-      @c_Message  = @c_TCPMessage, 
-      @b_success = @b_success OUTPUT, 
-      @n_Err     = @n_Err OUTPUT, 
-      @c_ErrMsg  = @c_ErrMsg OUTPUT, 
-      @c_DeviceType = @c_DeviceType,
-      @c_DeviceID = @c_DeviceID,
-      @n_Func = @n_Func,
-      @cPTSZone = @cPTSZone,
-      @cLightcmd = @cLightcmd
+		--(yeekung01)       
+		EXEC PTL.isp_PTL_SendMsg 
+			@c_StorerKey = @c_StorerKey, 
+			@c_Message  = @c_TCPMessage, 
+			@b_success = @b_success OUTPUT, 
+			@n_Err     = @n_Err OUTPUT, 
+			@c_ErrMsg  = @c_ErrMsg OUTPUT, 
+			@c_DeviceType = @c_DeviceType,
+			@c_DeviceID = @c_DeviceID,
+			@n_Func = @n_Func,
+			@cPTSZone = @cPTSZone,
+			@cLightcmd = @cLightcmd
+	END
     
    IF @n_Err <> 0    
    BEGIN    
@@ -336,7 +343,7 @@ BEGIN
       IF NOT EXISTS (SELECT 1 FROM PTL.LightStatus AS ls WITH (NOLOCK)    
                   WHERE ls.IPAddress = @c_DeviceIP    
                   AND   ls.DevicePosition = @c_DevicePos
-                  AND   ls.Facility = @cFacility)    
+						AND	ls.Facility = @cFacility)    
       BEGIN    
          INSERT INTO PTL.LightStatus          
          (  IPAddress,        DevicePosition,   DeviceID,          
@@ -372,7 +379,7 @@ BEGIN
                 EditDate = GetDATE()
          WHERE IPAddress = @c_DeviceIP    
          AND   DevicePosition = @c_DevicePos  
-         AND   Facility = @cFacility 
+			AND	Facility = @cFacility 
       END    
     
       UPDATE PTL.PTLTRAN WITH (ROWLOCK) SET    
