@@ -401,6 +401,11 @@ BEGIN
                   --3. Insert transmitlog2
                   IF @nTotalPQty = @nTotalCQty
                   BEGIN
+                     SELECT @cPickSlipNo = PickSlipNo
+                     FROM dbo.PackDetail WITH(NOLOCK)
+                     WHERE StorerKey = @cStorerKey
+                       AND labelno = @cDropID
+
                      --Mark PackInfo as PACKED
                      UPDATE dbo.PackInfo WITH(ROWLOCK)
                      SET CartonStatus = 'PACKED'
