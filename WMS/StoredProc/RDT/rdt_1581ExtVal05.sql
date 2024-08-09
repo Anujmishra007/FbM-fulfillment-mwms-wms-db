@@ -123,6 +123,38 @@ BEGIN
          END
       END   
    END
+   ELSE IF @nFunc = 1580
+   BEGIN
+      DECLARE  @cAddRCPTValidtn     NVARCHAR(10)
+      SET @cAddRCPTValidtn = rdt.RDTGetConfig( @nFunc, 'AddRCPTValidtn', @cStorerKey)
+      /********************************************************************************
+      Step 1. Screen = 1750. ASN, PO screen
+      ASN    (field01, input)
+      PO     (field02, input)
+      EXTASN (field03, input)
+      ********************************************************************************/
+      IF @nStep = 1
+      BEGIN
+         IF @nInputKey = 1 -- ENTER
+         BEGIN
+            IF @cAddRCPTValidtn = '1'
+            BEGIN
+               IF NOT EXISTS(
+                           SELECT 1
+                              FROM dbo.Receipt WITH (NOLOCK)
+                              WHERE Receiptkey = @cReceiptkey
+                              AND Storerkey = @cStorerKey
+                              AND RecType = 'Factory'
+               )
+               BEGIN
+                  SET @nErrNo = 219701
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid ASN Type
+                  GOTO Quit
+               END
+            END
+         END
+      END
+   End
 Quit:
 END
 GO
