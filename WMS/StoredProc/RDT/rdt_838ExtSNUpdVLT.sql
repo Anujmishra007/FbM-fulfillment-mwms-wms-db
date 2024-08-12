@@ -8,21 +8,21 @@
 /******************************************************************************/  
   
 CREATE OR ALTER PROCEDURE [RDT].[rdt_838ExtSNUpdVLT]  
-@nMobile      INT,
-@nFunc        INT,
-@cLangCode    NVARCHAR( 3),
-@nStep        INT,
-@nInputKey    INT,
-@cFacility    NVARCHAR( 3),
-@cStorerKey   NVARCHAR( 15),
-@cSKU         NVARCHAR( 20),
-@nQTY         INT,
-@cSerialNo    NVARCHAR( 30),
-@cType        NVARCHAR( 15), --CHECK/INSERT
-@cDocType     NVARCHAR( 10),
-@cDocNo       NVARCHAR( 20),
-@nErrNo       INT           OUTPUT,
-@cErrMsg      NVARCHAR( 20) OUTPUT
+   @nMobile      INT,
+   @nFunc        INT,
+   @cLangCode    NVARCHAR( 3),
+   @nStep        INT,
+   @nInputKey    INT,
+   @cFacility    NVARCHAR( 3),
+   @cStorerKey   NVARCHAR( 15),
+   @cSKU         NVARCHAR( 20),
+   @nQTY         INT,
+   @cSerialNo    NVARCHAR( 30),
+   @cType        NVARCHAR( 15), --CHECK/INSERT
+   @cDocType     NVARCHAR( 10),
+   @cDocNo       NVARCHAR( 20),
+   @nErrNo       INT           OUTPUT,
+   @cErrMsg      NVARCHAR( 20) OUTPUT
 AS  
 BEGIN  
    SET NOCOUNT ON  
@@ -36,8 +36,15 @@ BEGIN
   
    IF @nFunc = 838 and @nStep = 9 and @nInputKey = 1 --Pack, Serial number screen
    BEGIN  
+      IF exists (select 1 from SerialNo (NOLOCK) where StorerKey = @cStorerKey and SerialNo = @cSerialNo)
+      BEGIN
+         SET @nErrNo = 218757
+         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo ,@cLangCode ,'DSP') -- 'SN is already used' 
+         GOTO quit
+      END
+      
       DECLARE 
-	  @cSerialNoKey NVARCHAR(20),
+      @cSerialNoKey NVARCHAR(20),
       @cOrderLineNumber NVARCHAR(5),
       @bsuccess INT =0,
       @cOrderkey NVARCHAR(20)
@@ -71,23 +78,23 @@ BEGIN
             GOTO Quit
          END  
 
-		 select top 1 @cOrderkey = PD.Orderkey 
-		 FROM dbo.PickDetail PD WITH (NOLOCK)  
+      select top 1 @cOrderkey = PD.Orderkey 
+      FROM dbo.PickDetail PD WITH (NOLOCK)  
          JOIN PICKHEADER PH (NOLOCK)
-		 ON PH.OrderKey = PD.OrderKey
+      ON PH.OrderKey = PD.OrderKey
          WHERE PD.StorerKey = @cStorerKey  
          AND PH.PickHeaderKey = @cDocNo  
          AND PD.SKU = @cSKU  
 
-		 select top 1 @cOrderLineNumber = OrderLineNumber
-		 from PICKDETAIL PD (NOLOCK)
-		 where orderkey = @cOrderkey
-		 and storerkey = @cStorerKey
-		 and sku = @cSKU
-		 and (select sum(qty) from PICKDETAIL (NOLOCK) where orderkey = @cOrderkey and storerkey = @cStorerKey and sku = @cSKU) 
-		 - (select isnull(sum(qty),0) from SerialNo SN (NOLOCK) where SN.OrderKey = PD.OrderKey and SN.OrderLineNumber = PD.OrderLineNumber and Storerkey = @cStorerKey) > 0
-		 order by OrderLineNumber
-		 		 
+      select top 1 @cOrderLineNumber = OrderLineNumber
+      from PICKDETAIL PD (NOLOCK)
+      where orderkey = @cOrderkey
+      and storerkey = @cStorerKey
+      and sku = @cSKU
+      and (select sum(qty) from PICKDETAIL (NOLOCK) where orderkey = @cOrderkey and storerkey = @cStorerKey and sku = @cSKU) 
+      - (select isnull(sum(qty),0) from SerialNo SN (NOLOCK) where SN.OrderKey = PD.OrderKey and SN.OrderLineNumber = PD.OrderLineNumber and Storerkey = @cStorerKey) > 0
+      order by OrderLineNumber
+            
          INSERT INTO SerialNo (SerialNoKey, OrderKey, OrderLineNumber, StorerKey, SKU, SerialNo, Qty)   
          VALUES (@cSerialNoKey, @cOrderkey,@cOrderLineNumber, @cStorerKey, @cSKU , @cSerialNo , 1)
               

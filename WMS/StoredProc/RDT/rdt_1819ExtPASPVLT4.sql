@@ -10,20 +10,20 @@
 /************************************************************************/
 
 CREATE OR ALTER   PROC [RDT].[rdt_1819ExtPASPVLT4] (
-@nMobile          INT,
-@nFunc            INT,
-@cLangCode        NVARCHAR( 3),
-@cUserName        NVARCHAR( 18),
-@cStorerKey       NVARCHAR( 15), 
-@cFacility        NVARCHAR( 5), 
-@cFromLOC         NVARCHAR( 10),
-@cID              NVARCHAR( 18),
-@cSuggLOC         NVARCHAR( 10)  OUTPUT,
-@cPickAndDropLOC  NVARCHAR( 10)  OUTPUT,
-@cFitCasesInAisle NVARCHAR( 1)   OUTPUT,
-@nPABookingKey    INT            OUTPUT, 
-@nErrNo           INT            OUTPUT,
-@cErrMsg          NVARCHAR( 20)  OUTPUT
+   @nMobile          INT,
+   @nFunc            INT,
+   @cLangCode        NVARCHAR( 3),
+   @cUserName        NVARCHAR( 18),
+   @cStorerKey       NVARCHAR( 15), 
+   @cFacility        NVARCHAR( 5), 
+   @cFromLOC         NVARCHAR( 10),
+   @cID              NVARCHAR( 18),
+   @cSuggLOC         NVARCHAR( 10)  OUTPUT,
+   @cPickAndDropLOC  NVARCHAR( 10)  OUTPUT,
+   @cFitCasesInAisle NVARCHAR( 1)   OUTPUT,
+   @nPABookingKey    INT            OUTPUT, 
+   @nErrNo           INT            OUTPUT,
+   @cErrMsg          NVARCHAR( 20)  OUTPUT
 ) AS
 
 BEGIN
@@ -130,7 +130,7 @@ BEGIN
 
    --Creating list of available PnDs
    DECLARE @AvailablePnDAisle as TABLE (AvailablePnDAisle NVARCHAR(20))
-	
+   
    insert into @AvailablePnDAisle
    select LocAisle from
    (select MaxPallet, 
@@ -224,7 +224,7 @@ BEGIN
    and not exists (select 1 from INVENTORYHOLD (NOLOCK) where Hold = 1 and isnull(loc,'') <> '' and loc = l.loc and Storerkey = @cStorerKey))T3
 
    where MaxPallet - SpaceTaken > 0 and Cube - TotalCube - IDCube > 0 and WeightCapacity - TotalWeight - IDWeight > 0
-	
+   
    --Filter by product type
    and ((@Flymo = 1 and LocLevel in (select Long from CODELKUP (NOLOCK) where listname = 'HUSQLPNTYP' and udf01 = 'Flymo' and short = 'VNA' and Storerkey = @cStorerKey))or @Flymo <> 1)
    and ((LocLevel in (select Long from CODELKUP (NOLOCK) where listname = 'HUSQLPNTYP' and udf01 = @LPNPAType and short = 'VNA' and Storerkey = @cStorerKey)))
@@ -291,31 +291,31 @@ BEGIN
    insert into @AvailableLoc
    select top 1 AvailableWALoc, PALogicalLoc, 'WA' from
    (select AvailableWALoc, PALogicalLoc,
-	abs(convert(float,(convert(nvarchar(3),ASCII(substring(AvailableWALoc,1,1)))+
-	convert(nvarchar(3),ASCII(substring(AvailableWALoc,2,1)))+
-	convert(nvarchar(3),ASCII(substring(AvailableWALoc,3,1)))+
-	convert(nvarchar(3),ASCII(substring(AvailableWALoc,4,1)))+
-	convert(nvarchar(3),ASCII(substring(AvailableWALoc,5,1)))+
-	convert(nvarchar(3),ASCII(substring(AvailableWALoc,6,1)))+
-	convert(nvarchar(3),ASCII(substring(AvailableWALoc,7,1)))))
-	- Coordinates2)Proximity
-	from @AvailableWALoc
-	cross join
-	(select 
-	convert(nvarchar(3),ASCII(substring(Loc,1,1)))+
-	convert(nvarchar(3),ASCII(substring(Loc,2,1)))+
-	convert(nvarchar(3),ASCII(substring(Loc,3,1)))+
-	convert(nvarchar(3),ASCII(substring(Loc,4,1)))+
-	convert(nvarchar(3),ASCII(substring(Loc,5,1)))+
-	convert(nvarchar(3),ASCII(substring(Loc,6,1)))+
-	convert(nvarchar(3),ASCII(substring(Loc,7,1)))Coordinates2
-	from SKUxLOC (NOLOCK) --Retrieving pick SKUs 
-	where StorerKey = @cStorerKey 
-	and sku = (select top 1 sku from LOTxLOCxID (NOLOCK) where qty > 0 and id = @cID and loc = @cFromLOC and storerkey = @cStorerKey)
-	and QtyLocationLimit > 0)T1)T2
-	order by Proximity, PALogicalLoc
+   abs(convert(float,(convert(nvarchar(3),ASCII(substring(AvailableWALoc,1,1)))+
+   convert(nvarchar(3),ASCII(substring(AvailableWALoc,2,1)))+
+   convert(nvarchar(3),ASCII(substring(AvailableWALoc,3,1)))+
+   convert(nvarchar(3),ASCII(substring(AvailableWALoc,4,1)))+
+   convert(nvarchar(3),ASCII(substring(AvailableWALoc,5,1)))+
+   convert(nvarchar(3),ASCII(substring(AvailableWALoc,6,1)))+
+   convert(nvarchar(3),ASCII(substring(AvailableWALoc,7,1)))))
+   - Coordinates2)Proximity
+   from @AvailableWALoc
+   cross join
+   (select 
+   convert(nvarchar(3),ASCII(substring(Loc,1,1)))+
+   convert(nvarchar(3),ASCII(substring(Loc,2,1)))+
+   convert(nvarchar(3),ASCII(substring(Loc,3,1)))+
+   convert(nvarchar(3),ASCII(substring(Loc,4,1)))+
+   convert(nvarchar(3),ASCII(substring(Loc,5,1)))+
+   convert(nvarchar(3),ASCII(substring(Loc,6,1)))+
+   convert(nvarchar(3),ASCII(substring(Loc,7,1)))Coordinates2
+   from SKUxLOC (NOLOCK) --Retrieving pick SKUs 
+   where StorerKey = @cStorerKey 
+   and sku = (select top 1 sku from LOTxLOCxID (NOLOCK) where qty > 0 and id = @cID and loc = @cFromLOC and storerkey = @cStorerKey)
+   and QtyLocationLimit > 0)T1)T2
+   order by Proximity, PALogicalLoc
 
-	------custom code before global putaway SP end
+   ------custom code before global putaway SP end
    SkipWA:
 
    DECLARE @LocAisle NVARCHAR(10),
@@ -387,8 +387,8 @@ BEGIN
    IF @PnDRequired = 1 and not exists (select 1 from @AvailablePnDAisle)
    BEGIN
       SET @nErrNo = 217990
-	  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --No PnD loc available
-	  GOTO Quit
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --No PnD loc available
+      GOTO Quit
    END
 
    -- Check suggest loc
@@ -409,9 +409,15 @@ BEGIN
       @cPAPNDReq  NVARCHAR(10)
    
       -- Handling transaction
+      RollBackTran:
       SET @nTranCount = @@TRANCOUNT
       BEGIN TRAN  -- Begin our own transaction
       SAVE TRAN rdt_1819ExtPASPVLT4 -- For rollback or commit only our own transaction
+      
+      IF @nErrNo<>0
+      BEGIN
+         GOTO RollbackTran2
+      END
 
       SET @nPABookingKey = 0
       IF @cFitCasesInAisle <> 'Y'
@@ -426,7 +432,7 @@ BEGIN
          ,@nPABookingKey = @nPABookingKey OUTPUT
 
          IF @nErrNo <> 0
-            GOTO RollBackTran
+            GOTO RollBackTran2
       END
 
       -- Lock PND location
@@ -442,7 +448,7 @@ BEGIN
          ,@nPABookingKey = @nPABookingKey OUTPUT
 
          IF @nErrNo <> 0
-            GOTO RollBackTran
+            GOTO RollBackTran2
       END
 
    update LOTxLOCxID
@@ -457,7 +463,7 @@ BEGIN
 
    GOTO Quit
 
-   RollBackTran:
+   RollBackTran2:
    ROLLBACK TRAN rdt_1819ExtPASPVLT4 -- Only rollback change made here
 
    Quit:
