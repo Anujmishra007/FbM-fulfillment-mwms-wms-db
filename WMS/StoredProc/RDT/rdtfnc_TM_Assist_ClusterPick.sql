@@ -3482,7 +3482,7 @@ BEGIN
          SET @nPreInputKey = @nInputKey
          
          EXECUTE [RDT].[rdt_ExtScnEntry] 
-            @cExtendedScnSP,  --855ExtScn01
+            @cExtendedScnSP,  --1855ExtScn01
             @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorerKey, @tExtScnData,
             @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT, @cLottable01 OUTPUT,
             @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT, @cLottable02 OUTPUT,
