@@ -124,6 +124,11 @@ BEGIN
                AND DropID = @cDropID
                AND Sku = @cSKU
 
+            SELECT @cPickSlipNo = PickSlipNo
+            FROM dbo.PackDetail WITH(NOLOCK) 
+            WHERE StorerKey = @cStorerKey 
+            AND labelno = @cDropID
+
             --Audit finished
             --1. Display all VAS code and print labels
             --2. Mark PPA as 5 (Audit finished)
@@ -141,7 +146,7 @@ BEGIN
                WHERE pkd.StorerKey = @cStorerKey
                   AND ISNULL(pkd.CaseID, '') = @cDropID
                   AND (pd.SKU = ISNULL(wod.WkOrdUdef1, '') OR ISNULL(wod.WkOrdUdef1, '') = '')
-
+               
                --1. VAS is needed, display VAS code and Print VAS label
                IF @nRowCount > 0
                BEGIN
@@ -265,11 +270,6 @@ BEGIN
                      AND ISNULL(pkd.CaseID, '') = @cDropID
                      AND wod.ExternLineNo <> ''
                   ORDER BY lk.Code ASC
-
-                  SELECT @cPickSlipNo = PickSlipNo
-                  FROM dbo.PackDetail WITH(NOLOCK) 
-                  WHERE StorerKey = @cStorerKey 
-                     AND labelno = @cDropID
 
                   DECLARE @tPriceLabelList   VariableTable
                   DECLARE @tcatelogLabelList   VariableTable
@@ -401,11 +401,6 @@ BEGIN
                   --3. Insert transmitlog2
                   IF @nTotalPQty = @nTotalCQty
                   BEGIN
-                     SELECT @cPickSlipNo = PickSlipNo
-                     FROM dbo.PackDetail WITH(NOLOCK)
-                     WHERE StorerKey = @cStorerKey
-                       AND labelno = @cDropID
-
                      --Mark PackInfo as PACKED
                      UPDATE dbo.PackInfo WITH(ROWLOCK)
                      SET CartonStatus = 'PACKED'
