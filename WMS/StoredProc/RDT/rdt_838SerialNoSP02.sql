@@ -10,7 +10,7 @@ GO
 /* Purpose: Custom SerialNo SP for In Forever                           */
 /*                                                                      */
 /* Date        Rev  Author       Purposes                               */
-/* 2024-06-14  1.0  JHU151       FCR-352 Created						*/
+/* 2024-06-14  1.0  JHU151       FCR-352 Created                        */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_838SerialNoSP02]
@@ -101,8 +101,8 @@ BEGIN
       IF @cSerialNoCapture NOT IN ('1', '2', '3')
          GOTO Quit
 
-		-- Prepare next screen var
-		SET @cOutField01 = @cSKU
+      -- Prepare next screen var
+      SET @cOutField01 = @cSKU
       SET @cOutField02 = rdt.rdtFormatString( @cSKUDesc, 1, 20)  -- SKU desc 1
       SET @cOutField03 = rdt.rdtFormatString( @cSKUDesc, 21, 20) -- SKU desc 2
       SET @cOutField04 = '' -- SerialNo
@@ -448,8 +448,8 @@ BEGIN
       -- Check need serial no
       IF @nScan <> @nTotal AND @nTotal <> 0
       BEGIN
-   		-- Prepare next screen var
-   		SET @cOutField01 = @cSKU
+         -- Prepare next screen var
+         SET @cOutField01 = @cSKU
          SET @cOutField02 = rdt.rdtFormatString( @cSKUDesc, 1, 20)  -- SKU desc 1
          SET @cOutField03 = rdt.rdtFormatString( @cSKUDesc, 21, 20) -- SKU desc 2
          SET @cOutField04 = '' -- SerialNo
