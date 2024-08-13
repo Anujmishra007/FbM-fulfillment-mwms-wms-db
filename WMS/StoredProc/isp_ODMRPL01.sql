@@ -115,7 +115,7 @@ BEGIN
          , @c_Lottable03            NVARCHAR(18)   = ''                             --(Wan03)
          , @dt_Lottable04           DATETIME                                        --(Wan03)
          , @dt_Lottable05           DATETIME                                        --(Wan03)
-         , @c_Lottable06            NVARCHAR(30)   = ''                                       --(Wan03)
+         , @c_Lottable06            NVARCHAR(30)   = ''                             --(Wan03)
          , @c_Lottable07            NVARCHAR(30)   = ''                             --(Wan03)
          , @c_Lottable08            NVARCHAR(30)   = ''                             --(Wan03)
          , @c_Lottable09            NVARCHAR(30)   = ''                             --(Wan03)
@@ -131,7 +131,21 @@ BEGIN
          , @dt_Lottable14_2         DATETIME                                        --(Wan03)
          , @dt_Lottable15_2         DATETIME                                        --(Wan03)
          , @c_SQLAddCond            NVARCHAR(MAX)                                   --(Wan03)
+         , @c_ReplLottable01        NVARCHAR(18)   = ''                             --(Wan03)
          , @c_ReplLottable02        NVARCHAR(18)   = ''
+         , @c_ReplLottable03        NVARCHAR(18)   = ''                             --(Wan03)
+         , @dt_ReplLottable04       DATETIME                                        --(Wan03)
+         , @dt_ReplLottable05       DATETIME                                        --(Wan03)
+         , @c_ReplLottable06        NVARCHAR(30)   = ''                             --(Wan03)
+         , @c_ReplLottable07        NVARCHAR(30)   = ''                             --(Wan03)
+         , @c_ReplLottable08        NVARCHAR(30)   = ''                             --(Wan03)
+         , @c_ReplLottable09        NVARCHAR(30)   = ''                             --(Wan03)
+         , @c_ReplLottable10        NVARCHAR(30)   = ''                             --(Wan03)
+         , @c_ReplLottable11        NVARCHAR(30)   = ''                             --(Wan03)
+         , @c_ReplLottable12        NVARCHAR(30)   = ''                             --(Wan03)
+         , @dt_ReplLottable13       DATETIME                                        --(Wan03)
+         , @dt_ReplLottable14       DATETIME                                        --(Wan03)
+         , @dt_ReplLottable15       DATETIME                                        --(Wan03)
 
          , @c_ReplValidationRules   NVARCHAR(10)   = ''
 
@@ -229,7 +243,21 @@ BEGIN
             [Priority] NVARCHAR(10) NOT NULL DEFAULT(''),
             UOM NVARCHAR(10) NOT NULL DEFAULT(''),
             Packkey NVARCHAR(10) NOT NULL DEFAULT(''),
-            ReplLottable02 NVARCHAR(18) NOT NULL DEFAULT('')
+            ReplLottable01 NVARCHAR(18) NOT NULL DEFAULT('')                        --(Wan03)
+        ,   ReplLottable02 NVARCHAR(18) NOT NULL DEFAULT('')                         
+        ,   ReplLottable03 NVARCHAR(18) NOT NULL DEFAULT('')                        --(Wan03)
+        ,   ReplLottable04 DATETIME NULL                                            --(Wan03)
+        ,   ReplLottable05 DATETIME NULL                                            --(Wan03)
+        ,   ReplLottable06 NVARCHAR(30) NOT NULL DEFAULT('')                        --(Wan03)
+        ,   ReplLottable07 NVARCHAR(30) NOT NULL DEFAULT('')                        --(Wan03)
+        ,   ReplLottable08 NVARCHAR(30) NOT NULL DEFAULT('')                        --(Wan03)
+        ,   ReplLottable09 NVARCHAR(30) NOT NULL DEFAULT('')                        --(Wan03)
+        ,   ReplLottable10 NVARCHAR(30) NOT NULL DEFAULT('')                        --(Wan03)
+        ,   ReplLottable11 NVARCHAR(30) NOT NULL DEFAULT('')                        --(Wan03)
+        ,   ReplLottable12 NVARCHAR(30) NOT NULL DEFAULT('')                        --(Wan03)
+        ,   ReplLottable13 DATETIME NULL                                            --(Wan03)
+        ,   ReplLottable14 DATETIME NULL                                            --(Wan03)
+        ,   ReplLottable15 DATETIME NULL                                            --(Wan03)
         )
 
         IF OBJECT_ID('tempdb..#TempSKUxLOC','u') IS NOT NULL
@@ -829,7 +857,9 @@ BEGIN
 
             IF @c_condition=''                                                                           --(ppa371)--start
             BEGIN
-              Select @c_condition = Codelkup.Notes from CODELKUP (NOLOCK) where Codelkup.Code = 'CONDITION' and Codelkup.Code2 = 'isp_ODMRPL01' and Codelkup.ListName = 'REPLENCFG'
+              Select @c_condition = Codelkup.Notes from CODELKUP (NOLOCK) 
+              where Codelkup.Code = 'CONDITION' 
+              and Codelkup.Code2 = 'isp_ODMRPL01' and Codelkup.ListName = 'REPLENCFG'
             END
             IF @c_condition <> '' AND CHARINDEX('AND',upper(@c_condition)) = 0
             BEGIN
@@ -843,7 +873,21 @@ BEGIN
                + ' , LOTxLOCxID.Qty - LOTxLOCxID.QtyPicked - LOTxLOCxID.QtyAllocated - LOTxLOCxID.QtyReplen'
                + ' , LOTxLOCxID.QtyAllocated'
                + ' , LOTxLOCxID.QtyPicked'
-               + ' , LOTATTRIBUTE.Lottable02'
+               + ' , LOTATTRIBUTE.Lottable01'                                       --(Wan03)
+               + ' , LOTATTRIBUTE.Lottable02'                                       
+               + ' , LOTATTRIBUTE.Lottable03'                                       --(Wan03)
+               + ' , ISNULL(LOTATTRIBUTE.Lottable04,''1900-01-01'')'                --(Wan03)
+               + ' , ISNULL(LOTATTRIBUTE.Lottable05,''1900-01-01'')'                --(Wan03)
+               + ' , LOTATTRIBUTE.Lottable06'                                       --(Wan03)
+               + ' , LOTATTRIBUTE.Lottable07'                                       --(Wan03)
+               + ' , LOTATTRIBUTE.Lottable08'                                       --(Wan03)
+               + ' , LOTATTRIBUTE.Lottable09'                                       --(Wan03)
+               + ' , LOTATTRIBUTE.Lottable10'                                       --(Wan03)
+               + ' , LOTATTRIBUTE.Lottable11'                                       --(Wan03)
+               + ' , LOTATTRIBUTE.Lottable12'                                       --(Wan03)
+               + ' , ISNULL(LOTATTRIBUTE.Lottable13,''1900-01-01'')'                --(Wan03)
+               + ' , ISNULL(LOTATTRIBUTE.Lottable14,''1900-01-01'')'                --(Wan03)
+               + ' , ISNULL(LOTATTRIBUTE.Lottable15,''1900-01-01'')'                --(Wan03)
                + ' FROM LOT          WITH (NOLOCK) '
                + ' JOIN LOTATTRIBUTE WITH (NOLOCK) ON (LOT.Lot        = LOTATTRIBUTE.LOT)'
                + ' JOIN LOTxLOCxID   WITH (NOLOCK) ON (LOT.Lot        = LOTxLOCxID.Lot)'
@@ -877,7 +921,7 @@ BEGIN
                               + ', @dt_Lottable04_2   DATETIME'                                 --(Wan03) 
                               + ', @dt_Lottable05     DATETIME'                                 --(Wan03)
                               + ', @dt_Lottable05_2   DATETIME'                                 --(Wan03) 
-                              + ', @c_Lottable06      NVARCHAR(30)'                                       --(Wan03)
+                              + ', @c_Lottable06      NVARCHAR(30)'                             --(Wan03)
                               + ', @c_Lottable07      NVARCHAR(30)'                             --(Wan03)
                               + ', @c_Lottable08      NVARCHAR(30)'                             --(Wan03)
                               + ', @c_Lottable09      NVARCHAR(30)'                             --(Wan03)
@@ -928,175 +972,250 @@ BEGIN
                                     ,  @n_FromQty
                                     ,  @n_QtyAllocated
                                     ,  @n_QtyPicked
+                                    ,  @c_ReplLottable01                            --(Wan03)
                                     ,  @c_ReplLottable02
+                                    ,  @c_ReplLottable03                            --(Wan03)
+                                    ,  @dt_ReplLottable04                           --(Wan03)
+                                    ,  @dt_ReplLottable05                           --(Wan03)
+                                    ,  @c_ReplLottable06                            --(Wan03)
+                                    ,  @c_ReplLottable07                            --(Wan03)
+                                    ,  @c_ReplLottable08                            --(Wan03)
+                                    ,  @c_ReplLottable09                            --(Wan03)
+                                    ,  @c_ReplLottable10                            --(Wan03)
+                                    ,  @c_ReplLottable11                            --(Wan03)
+                                    ,  @c_ReplLottable12                            --(Wan03)
+                                    ,  @dt_ReplLottable13                           --(Wan03)
+                                    ,  @dt_ReplLottable14                           --(Wan03)
+                                    ,  @dt_ReplLottable15                           --(Wan03)
+
 
          WHILE @@Fetch_Status <> -1 AND @n_RemainingQty > 0
          BEGIN
-               IF EXISTS( SELECT 1
-               FROM #Replenishment AS r WITH(NOLOCK)
-               WHERE r.Lot = @c_Fromlot
-                  AND r.FromLOC = @c_FromLOC
-                  AND r.ID = @c_FromID)
-                  BEGIN
+            IF EXISTS( SELECT 1
+            FROM #Replenishment AS r WITH(NOLOCK)
+            WHERE r.Lot = @c_Fromlot
+               AND r.FromLOC = @c_FromLOC
+               AND r.ID = @c_FromID)
+               BEGIN
+               GOTO NEXT_CANDIDATE
+            END
+
+            SET @n_LotCnt     = 0                                                   --(Wan03) - START
+            SET @n_Lot01Cnt   = 0
+            SET @n_Lot02Cnt   = 0
+            SET @n_Lot03Cnt   = 0
+            SET @n_Lot04Cnt   = 0
+            SET @n_Lot05Cnt   = 0
+            SET @n_Lot06Cnt   = 0
+            SET @n_Lot07Cnt   = 0
+            SET @n_Lot08Cnt   = 0
+            SET @n_Lot09Cnt   = 0
+            SET @n_Lot10Cnt   = 0
+            SET @n_Lot11Cnt   = 0
+            SET @n_Lot12Cnt   = 0
+            SET @n_Lot13Cnt   = 0
+            SET @n_Lot14Cnt   = 0
+            SET @n_Lot15Cnt   = 0
+
+           SELECT @n_LotCnt   = ISNULL(MAX(CASE WHEN @c_CommingleLot = '0' AND Lot <> @c_FromLot THEN 1 ELSE 0 END),0)
+                  ,@n_Lot01Cnt = ISNULL(MAX(CASE WHEN @c_NoMixLottable01 = '1' AND ReplLottable01 <> @c_ReplLottable01  
+                                          THEN 1 ELSE 0 END),0) 
+                  ,@n_Lot02Cnt = ISNULL(MAX(CASE WHEN @c_NoMixLottable02 = '1' AND ReplLottable02 <> @c_ReplLottable02  
+                                          THEN 1 ELSE 0 END),0) 
+                  ,@n_Lot03Cnt = ISNULL(MAX(CASE WHEN @c_NoMixLottable03 = '1' AND ReplLottable03 <> @c_ReplLottable03  
+                                          THEN 1 ELSE 0 END),0) 
+                  ,@n_Lot04Cnt = ISNULL(MAX(CASE WHEN @c_NoMixLottable04 = '1' AND ReplLottable04 <> @dt_ReplLottable04 
+                                          THEN 1 ELSE 0 END),0) 
+                  ,@n_Lot05Cnt = ISNULL(MAX(CASE WHEN @c_NoMixLottable05 = '1' AND ReplLottable05 <> @dt_ReplLottable05 
+                                          THEN 1 ELSE 0 END),0) 
+                  ,@n_Lot06Cnt = ISNULL(MAX(CASE WHEN @c_NoMixLottable06 = '1' AND ReplLottable06 <> @c_ReplLottable06  
+                                          THEN 1 ELSE 0 END),0)
+                  ,@n_Lot07Cnt = ISNULL(MAX(CASE WHEN @c_NoMixLottable07 = '1' AND ReplLottable07 <> @c_ReplLottable07  
+                                          THEN 1 ELSE 0 END),0) 
+                  ,@n_Lot08Cnt = ISNULL(MAX(CASE WHEN @c_NoMixLottable08 = '1' AND ReplLottable08 <> @c_ReplLottable08  
+                                          THEN 1 ELSE 0 END),0) 
+                  ,@n_Lot09Cnt = ISNULL(MAX(CASE WHEN @c_NoMixLottable09 = '1' AND ReplLottable09 <> @c_ReplLottable09  
+                                          THEN 1 ELSE 0 END),0) 
+                  ,@n_Lot10Cnt = ISNULL(MAX(CASE WHEN @c_NoMixLottable10 = '1' AND ReplLottable10 <> @c_ReplLottable10  
+                                          THEN 1 ELSE 0 END),0) 
+                  ,@n_Lot11Cnt = ISNULL(MAX(CASE WHEN @c_NoMixLottable11 = '1' AND ReplLottable11 <> @c_ReplLottable11  
+                                          THEN 1 ELSE 0 END),0) 
+                  ,@n_Lot12Cnt = ISNULL(MAX(CASE WHEN @c_NoMixLottable12 = '1' AND ReplLottable12 <> @c_ReplLottable12  
+                                          THEN 1 ELSE 0 END),0) 
+                  ,@n_Lot13Cnt = ISNULL(MAX(CASE WHEN @c_NoMixLottable13 = '1' AND ReplLottable13 <> @dt_ReplLottable13 
+                                          THEN 1 ELSE 0 END),0) 
+                  ,@n_Lot14Cnt = ISNULL(MAX(CASE WHEN @c_NoMixLottable14 = '1' AND ReplLottable14 <> @dt_ReplLottable14 
+                                          THEN 1 ELSE 0 END),0) 
+                  ,@n_Lot15Cnt = ISNULL(MAX(CASE WHEN @c_NoMixLottable15 = '1' AND ReplLottable15 <> @dt_ReplLottable15 
+                                          THEN 1 ELSE 0 END),0) 
+            FROM #Replenishment
+            WHERE Storerkey = @c_CurrentStorer AND Sku = @c_CurrentSku AND ToLOC = @c_CurrentLoc
+            GROUP BY Storerkey, Sku, ToLoc
+
+            IF @n_LotCnt = 1 OR 
+               @n_Lot01Cnt = 1 OR @n_Lot02Cnt = 1 OR @n_Lot03Cnt = 1 OR @n_Lot04Cnt = 1 OR @n_Lot05Cnt = 1 OR
+               @n_Lot06Cnt = 1 OR @n_Lot07Cnt = 1 OR @n_Lot08Cnt = 1 OR @n_Lot09Cnt = 1 OR @n_Lot10Cnt = 1 OR
+               @n_Lot11Cnt = 1 OR @n_Lot12Cnt = 1 OR @n_Lot13Cnt = 1 OR @n_Lot14Cnt = 1 OR @n_Lot15Cnt = 1 
+            BEGIN
+               GOTO NEXT_CANDIDATE
+            END                                                                     --(Wan03) - END
+            
+            IF @c_NoMixLottable02 = '1' AND @n_InvCnt = 0
+            BEGIN
+               IF EXISTS ( SELECT 1
+               FROM #Replenishment
+               WHERE Storerkey = @c_CurrentStorer AND Sku = @c_CurrentSku AND ToLOC = @c_CurrentLoc
+                  AND ReplLottable02 <> @c_ReplLottable02
+               GROUP BY Storerkey, Sku, ToLoc
+               HAVING COUNT(1) > 0)
+               BEGIN
+                  GOTO NEXT_CANDIDATE
+               END
+            END
+
+            IF EXISTS(SELECT 1
+                     FROM ID (NOLOCK)
+                     WHERE ID = @c_FromID AND STATUS = 'HOLD')
+            BEGIN
+               GOTO NEXT_CANDIDATE
+            END
+
+            SELECT @c_ReplValidationRules = SC.sValue
+            FROM STORERCONFIG SC (NOLOCK)
+               JOIN CODELKUP CL (NOLOCK) ON SC.sValue = CL.Listname
+            WHERE SC.StorerKey = @c_StorerKey
+               AND SC.Configkey = 'ReplenValidation'
+
+            IF ISNULL(@c_ReplValidationRules,'') <> ''
+            BEGIN
+               EXEC isp_REPL_ExtendedValidation @c_fromlot = @c_fromlot
+                                          ,  @c_FromLOC = @c_FromLOC
+                                          ,  @c_FromID  = @c_FromID
+                                          ,  @c_ReplValidationRules=@c_ReplValidationRules
+                                          ,  @b_Success = @b_Success OUTPUT
+                                          ,  @c_ErrMsg  = @c_ErrMsg OUTPUT
+               IF @b_Success = 0
+               BEGIN
+                  GOTO NEXT_CANDIDATE
+               END
+            END
+
+            IF @c_ToLocationType = 'PALLET'
+            BEGIN
+               IF @b_debug = 1
+               BEGIN
+                  PRINT '>>> ToLocationType = PALLET'
+               END
+
+               IF @n_FromQty < @n_Pallet
+               BEGIN
                   GOTO NEXT_CANDIDATE
                END
 
-               IF @c_NoMixLottable02 = '1' AND @n_InvCnt = 0
+               IF @n_FromQty > @n_RemainingQty
                BEGIN
-                  IF EXISTS ( SELECT 1
-                  FROM #Replenishment
-                  WHERE Storerkey = @c_CurrentStorer AND Sku = @c_CurrentSku AND ToLOC = @c_CurrentLoc
-                     AND ReplLottable02 <> @c_ReplLottable02
-                  GROUP BY Storerkey, Sku, ToLoc
-                  HAVING COUNT(1) > 0)
+                  SET @n_FromQty = FLOOR(@n_RemainingQty/@n_Pallet) * @n_Pallet
+               END
+               ELSE
+               BEGIN
+                  SET @n_FromQty = FLOOR(@n_FromQty/@n_Pallet) * @n_Pallet
+               END
+            END
+            ELSE IF @c_ToLocationType = 'CASE'
+            BEGIN
+               IF @b_debug = 1
+               BEGIN
+                  PRINT '>>> ToLocationType = CASE'
+               END
+               IF @c_ReplAllPalletQty = 'N'
+               BEGIN
+                  IF @n_FromQty < @n_CaseCnt
                   BEGIN
                      GOTO NEXT_CANDIDATE
                   END
                END
 
-               IF EXISTS(SELECT 1
-                        FROM ID (NOLOCK)
-                        WHERE ID = @c_FromID AND STATUS = 'HOLD')
+               SELECT @c_LottableName = ''
+               SELECT TOP 1
+                  @c_LottableName = Code
+               FROM CODELKUP (NOLOCK)
+               WHERE Listname = 'REPLENLOT'
+                  AND Storerkey = @c_StorerKey
+               ORDER BY Code
+
+               SET @c_LottableValue = ''
+               IF ISNULL(@c_LottableName,'') <> ''
+               BEGIN
+                  SET @c_SQL = N'SELECT TOP 1 @c_LottableValue = LA.' + RTRIM(LTRIM(@c_LottableName))  +
+                              N' FROM LOTATTRIBUTE LA (NOLOCK) ' + 
+                              N' WHERE LA.StorerKey = @c_Storerkey ' + 
+                              N' AND LA.lot = @c_FromLot  '
+
+                  EXEC sp_executesql @c_SQL,
+                  N'@c_LottableValue NVARCHAR(30) OUTPUT, @c_Storerkey NVARCHAR(15), @c_FromLot NVARCHAR(20)',
+                  @c_LottableValue OUTPUT,
+                  @c_Storerkey,
+                  @c_FromLot
+               END
+
+               IF @b_debug = 1
+               BEGIN
+                  PRINT '>>> SQL: ' + @c_SQL
+               END 
+
+               IF ISNULL(@c_LottableValue,'') <> ''
                BEGIN
                   GOTO NEXT_CANDIDATE
                END
 
-               SELECT @c_ReplValidationRules = SC.sValue
-               FROM STORERCONFIG SC (NOLOCK)
-                  JOIN CODELKUP CL (NOLOCK) ON SC.sValue = CL.Listname
-               WHERE SC.StorerKey = @c_StorerKey
-                  AND SC.Configkey = 'ReplenValidation'
+               --CS01 END
 
-               IF ISNULL(@c_ReplValidationRules,'') <> ''
+               IF @n_FromQty > @n_RemainingQty
                BEGIN
-                  EXEC isp_REPL_ExtendedValidation @c_fromlot = @c_fromlot
-                                             ,  @c_FromLOC = @c_FromLOC
-                                             ,  @c_FromID  = @c_FromID
-                                             ,  @c_ReplValidationRules=@c_ReplValidationRules
-                                             ,  @b_Success = @b_Success OUTPUT
-                                             ,  @c_ErrMsg  = @c_ErrMsg OUTPUT
-                  IF @b_Success = 0
+                  IF @c_CaseToPick = 'Y'
                   BEGIN
-                     GOTO NEXT_CANDIDATE
-                  END
-               END
-
-               IF @c_ToLocationType = 'PALLET'
-               BEGIN
-                  IF @b_debug = 1
-                  BEGIN
-                     PRINT '>>> ToLocationType = PALLET'
-                  END
-
-                  IF @n_FromQty < @n_Pallet
-                  BEGIN
-                     GOTO NEXT_CANDIDATE
-                  END
-
-                  IF @n_FromQty > @n_RemainingQty
-                  BEGIN
-                     SET @n_FromQty = FLOOR(@n_RemainingQty/@n_Pallet) * @n_Pallet
+                     IF CEILING(@n_RemainingQty/@n_CaseCnt) * @n_CaseCnt > @n_FromQty
+                        SET @n_FromQty = FLOOR(@n_RemainingQty/@n_CaseCnt) * @n_CaseCnt
+                     ELSE
+                        SET @n_FromQty = CEILING(@n_RemainingQty/@n_CaseCnt) * @n_CaseCnt
                   END
                   ELSE
                   BEGIN
-                     SET @n_FromQty = FLOOR(@n_FromQty/@n_Pallet) * @n_Pallet
-                  END
-               END
-               ELSE IF @c_ToLocationType = 'CASE'
-               BEGIN
-                  IF @b_debug = 1
-                  BEGIN
-                     PRINT '>>> ToLocationType = CASE'
-                  END
-                  IF @c_ReplAllPalletQty = 'N'
-                  BEGIN
-                     IF @n_FromQty < @n_CaseCnt
+                     IF @c_ReplFullPallet = 'Y'
                      BEGIN
-                        GOTO NEXT_CANDIDATE
-                     END
-                  END
-
-                  SELECT @c_LottableName = ''
-                  SELECT TOP 1
-                     @c_LottableName = Code
-                  FROM CODELKUP (NOLOCK)
-                  WHERE Listname = 'REPLENLOT'
-                     AND Storerkey = @c_StorerKey
-                  ORDER BY Code
-
-                  SET @c_LottableValue = ''
-                  IF ISNULL(@c_LottableName,'') <> ''
-                  BEGIN
-                     SET @c_SQL = N'SELECT TOP 1 @c_LottableValue = LA.' + RTRIM(LTRIM(@c_LottableName))  +
-                                 N' FROM LOTATTRIBUTE LA (NOLOCK) ' + 
-                                 N' WHERE LA.StorerKey = @c_Storerkey ' + 
-                                 N' AND LA.lot = @c_FromLot  '
-
-                     EXEC sp_executesql @c_SQL,
-                     N'@c_LottableValue NVARCHAR(30) OUTPUT, @c_Storerkey NVARCHAR(15), @c_FromLot NVARCHAR(20)',
-                     @c_LottableValue OUTPUT,
-                     @c_Storerkey,
-                     @c_FromLot
-                  END
-
-                  IF @b_debug = 1
-                  BEGIN
-                     PRINT '>>> SQL: ' + @c_SQL
-                  END 
-
-                  IF ISNULL(@c_LottableValue,'') <> ''
-                  BEGIN
-                     GOTO NEXT_CANDIDATE
-                  END
-
-                  --CS01 END
-
-                  IF @n_FromQty > @n_RemainingQty
-                  BEGIN
-                     IF @c_CaseToPick = 'Y'
-                     BEGIN
-                        IF CEILING(@n_RemainingQty/@n_CaseCnt) * @n_CaseCnt > @n_FromQty
-                           SET @n_FromQty = FLOOR(@n_RemainingQty/@n_CaseCnt) * @n_CaseCnt
+                        IF @n_RemainingQty >= @n_Pallet
+                        BEGIN
+                           SET @n_FromQty = FLOOR(@n_RemainingQty/@n_Pallet) * @n_Pallet
+                        END
                         ELSE
-                           SET @n_FromQty = CEILING(@n_RemainingQty/@n_CaseCnt) * @n_CaseCnt
+                        BEGIN
+                           SET @n_FromQty = 0
+                        END
                      END
                      ELSE
                      BEGIN
-                        IF @c_ReplFullPallet = 'Y'
+                        IF @c_ReplAllPalletQty = 'N'
                         BEGIN
-                           IF @n_RemainingQty >= @n_Pallet
-                           BEGIN
-                              SET @n_FromQty = FLOOR(@n_RemainingQty/@n_Pallet) * @n_Pallet
-                           END
-                           ELSE
-                           BEGIN
-                              SET @n_FromQty = 0
-                           END
-                        END
-                        ELSE
-                        BEGIN
-                           IF @c_ReplAllPalletQty = 'N'
-                           BEGIN
-                              SET @n_FromQty = 0
-                           END
-                        END
-                     END
-                  END
-                  ELSE
-                  BEGIN
-                     IF @c_ReplAllPalletQty = 'N'
-                     BEGIN
-                        IF @n_FromQty < @n_Pallet
-                        BEGIN
-                           SET @n_FromQty = FLOOR(@n_FromQty/@n_CaseCnt) * @n_CaseCnt
-                        END
-                        ELSE
-                        BEGIN
-                           SET @n_FromQty = FLOOR(@n_FromQty/@n_Pallet) * @n_Pallet
+                           SET @n_FromQty = 0
                         END
                      END
                   END
                END
+               ELSE
+               BEGIN
+                  IF @c_ReplAllPalletQty = 'N'
+                  BEGIN
+                     IF @n_FromQty < @n_Pallet
+                     BEGIN
+                        SET @n_FromQty = FLOOR(@n_FromQty/@n_CaseCnt) * @n_CaseCnt
+                     END
+                     ELSE
+                     BEGIN
+                        SET @n_FromQty = FLOOR(@n_FromQty/@n_Pallet) * @n_Pallet
+                     END
+                  END
+               END
+            END
             ELSE IF @c_ToLocationType = 'PICK' AND @c_CaseToPick = 'Y'
             BEGIN
                IF @b_debug = 1
@@ -1185,7 +1304,21 @@ BEGIN
                      , Priority
                      , QtyMoved
                      , QtyInPickLOC
+                     , ReplLottable01                                               --(Wan03)
                      , ReplLottable02
+                     , ReplLottable03                                               --(Wan03)
+                     , ReplLottable04                                               --(Wan03)
+                     , ReplLottable05                                               --(Wan03)
+                     , ReplLottable06                                               --(Wan03)
+                     , ReplLottable07                                               --(Wan03)
+                     , ReplLottable08                                               --(Wan03)
+                     , ReplLottable09                                               --(Wan03)
+                     , ReplLottable10                                               --(Wan03)
+                     , ReplLottable11                                               --(Wan03)
+                     , ReplLottable12                                               --(Wan03)
+                     , ReplLottable13                                               --(Wan03)
+                     , ReplLottable14                                               --(Wan03)
+                     , ReplLottable15                                               --(Wan03)
                      )
                   VALUES
                      (
@@ -1201,7 +1334,21 @@ BEGIN
                      , @c_CurrentPriority
                      , @n_QtyAllocated
                      , @n_QtyPicked
+                     , @c_ReplLottable01                                            --(Wan03)
                      , @c_ReplLottable02
+                     , @c_ReplLottable03                                            --(Wan03)
+                     , @dt_ReplLottable04                                           --(Wan03)
+                     , @dt_ReplLottable05                                           --(Wan03)
+                     , @c_ReplLottable06                                            --(Wan03)
+                     , @c_ReplLottable07                                            --(Wan03)
+                     , @c_ReplLottable08                                            --(Wan03)
+                     , @c_ReplLottable09                                            --(Wan03)
+                     , @c_ReplLottable10                                            --(Wan03)
+                     , @c_ReplLottable11                                            --(Wan03)
+                     , @c_ReplLottable12                                            --(Wan03)
+                     , @dt_ReplLottable13                                           --(Wan03)
+                     , @dt_ReplLottable14                                           --(Wan03)
+                     , @dt_ReplLottable15                                           --(Wan03)
                      )
                   IF @b_debug = 1
                   BEGIN
@@ -1231,7 +1378,21 @@ BEGIN
                                        ,  @n_FromQty
                                        ,  @n_QtyAllocated
                                        ,  @n_QtyPicked
+                                       ,  @c_ReplLottable01                         --(Wan03)
                                        ,  @c_ReplLottable02
+                                       ,  @c_ReplLottable03                         --(Wan03)
+                                       ,  @dt_ReplLottable04                        --(Wan03)
+                                       ,  @dt_ReplLottable05                        --(Wan03)
+                                       ,  @c_ReplLottable06                         --(Wan03)
+                                       ,  @c_ReplLottable07                         --(Wan03)
+                                       ,  @c_ReplLottable08                         --(Wan03)
+                                       ,  @c_ReplLottable09                         --(Wan03)
+                                       ,  @c_ReplLottable10                         --(Wan03)
+                                       ,  @c_ReplLottable11                         --(Wan03)
+                                       ,  @c_ReplLottable12                         --(Wan03)
+                                       ,  @dt_ReplLottable13                        --(Wan03)
+                                       ,  @dt_ReplLottable14                        --(Wan03)
+                                       ,  @dt_ReplLottable15                        --(Wan03)
          END
          -- LOT
          CLOSE CUR_REPL
