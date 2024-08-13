@@ -38,7 +38,7 @@ BEGIN
    BEGIN  
       IF exists (select 1 from SerialNo (NOLOCK) where StorerKey = @cStorerKey and SerialNo = @cSerialNo)
       BEGIN
-         SET @nErrNo = 218757
+         SET @nErrNo = 218003
          SET @cErrMsg = rdt.rdtgetmessage(@nErrNo ,@cLangCode ,'DSP') -- 'SN is already used' 
          GOTO quit
       END
