@@ -136,37 +136,54 @@ BEGIN
          GOTO Quit
       END
 
-      SELECT TOP 1
-         @cFromLoc   = PD.Loc,
-         @nQtyPicked = PD.Qty,
-         @cPDID      = PD.ID
+
+      DECLARE CURSOR_PICKDETAIL_MOVE CURSOR FAST_FORWARD READ_ONLY FOR
+      SELECT PD.Loc, PD.Qty, PD.ID
       FROM PICKDETAIL PD WITH (NOLOCK)
               INNER JOIN LOTxLOCxID LLI WITH (NOLOCK)
                          ON (LLI.Loc = PD.Loc AND LLI.LOT = PD.LOT AND LLI.Id=PD.ID)
       WHERE ISNULL(PD.CaseID , '') <> '' AND
          (PD.CaseID = @cTrackNo OR PD.CASEID =@cLabelNo)
 
-      --    Create LOTxLOCxID record
-      EXECUTE rdt.rdt_Move
-              @nMobile     = @nMobile,
-              @cLangCode   = @cLangCode,
-              @nErrNo      = @nErrNo  OUTPUT,
-              @cErrMsg     = @cErrMsg OUTPUT, -- screen limitation, 20 char max
-              @cSourceType = 'rdt_1653CreateMbol04',
-              @cStorerKey  = @cStorerKey,
-              @cFacility   = @cFacility,
-              @cFromLOC    = @cFromLoc,
-              @cFromID     = @cPDID,
-              @cToLOC      = @cLane,
-              @cToID       = @cPalletKey,
-              @cSKU        = @cSKU,
-              @nQTY        = @nPDQty,
-              @nQTYPick    = @nPDQty,
-              @nFunc       = @nFunc
+      OPEN CURSOR_PICKDETAIL_MOVE
+      FETCH NEXT FROM CURSOR_PICKDETAIL_MOVE INTO @cFromLoc, @nQtyPicked, @cPDID
+      WHILE (@@FETCH_STATUS <> -1)
+      BEGIN
 
+         --    Create LOTxLOCxID record
+         EXECUTE rdt.rdt_Move
+                 @nMobile     = @nMobile,
+                 @cLangCode   = @cLangCode,
+                 @nErrNo      = @nErrNo  OUTPUT,
+                 @cErrMsg     = @cErrMsg OUTPUT, -- screen limitation, 20 char max
+                 @cSourceType = 'rdt_1653CreateMbol04',
+                 @cStorerKey  = @cStorerKey,
+                 @cFacility   = @cFacility,
+                 @cFromLOC    = @cFromLoc,
+                 @cFromID     = @cPDID,
+                 @cToLOC      = @cLane,
+                 @cToID       = @cPalletKey,
+                 @cSKU        = @cSKU,
+                 @nQTY        = @nQtyPicked,
+                 @nQTYPick    = @nQtyPicked,
+                 @nFunc       = @nFunc
+         IF @nErrNo > 0
+            GOTO Quit
+
+
+         FETCH NEXT FROM CURSOR_PICKDETAIL_MOVE INTO @cFromLoc, @nQtyPicked, @cPDID
+      END
+
+      CLOSE CURSOR_PICKDETAIL_MOVE
+      DEALLOCATE CURSOR_PICKDETAIL_MOVE
    END
 
 Quit:
+   IF (SELECT CURSOR_STATUS('LOCAL','CURSOR_PICKDETAIL_MOVE')) >=0
+   BEGIN
+      CLOSE CURSOR_PICKDETAIL_MOVE
+      DEALLOCATE CURSOR_PICKDETAIL_MOVE
+   END
 
 END
 GO
