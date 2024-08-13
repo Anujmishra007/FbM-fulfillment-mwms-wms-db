@@ -383,7 +383,7 @@ BEGIN
                   GROUP BY PSN.PickDetailKey) pack
                   ON PD.PickDetailKey = pack.PickDetailKey
                   WHERE PH.PickHeaderKey = @cPickSlipNo    
-                  AND	  PD.Status = N'5'
+                  AND	PD.Status = N'5'
                   AND   PD.StorerKey  = @cStorerKey
                   AND   PD.Qty > ISNULL(SNCnt,0)
                   AND   PD.SKU = @cSKU
@@ -411,6 +411,13 @@ BEGIN
                END
             END
             
+            IF ISNULL(@cPickDetailKey,'') = ''
+            BEGIN
+               SET @nErrNo = 219669
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --pickdetail not found
+               GOTO RollBackTran
+            END
+
             -- Insert PackSerialNo 
             INSERT INTO PackSerialNo (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, SerialNo, QTY, PickDetailKey)
             VALUES (@cPickSlipNo, @nCartonNo, @cLabelNo, @cLabelLine, @cStorerKey, @cSKU, @cSerialNo, @nSerialQTY, @cPickDetailKey)
@@ -532,7 +539,13 @@ BEGIN
             END
          END
 
-         
+         IF ISNULL(@cPickDetailKey,'') = ''
+         BEGIN
+            SET @nErrNo = 219670
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --pickdetail not found
+            GOTO RollBackTran
+         END
+
          -- Insert PackSerialNo 
          INSERT INTO PackSerialNo (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, SerialNo, QTY, PickDetailKey)
          VALUES (@cPickSlipNo, @nCartonNo, @cLabelNo, @cLabelLine, @cStorerKey, @cSKU, @cSerialNo, @nSerialQTY, @cPickDetailKey)
