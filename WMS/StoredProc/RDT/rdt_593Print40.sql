@@ -26,11 +26,11 @@ CREATE OR ALTER PROC [RDT].[rdt_593Print40] (
    @cLangCode  NVARCHAR( 3),
    @cStorerKey NVARCHAR( 15),
    @cOption    NVARCHAR( 1),
-   @cParam1    NVARCHAR(20),  -- ExternalOrderKey
-   @cParam2    NVARCHAR(20),
-   @cParam3    NVARCHAR(20),
-   @cParam4    NVARCHAR(20),
-   @cParam5    NVARCHAR(20),
+   @cParam1    NVARCHAR(60),  -- ExternalOrderKey
+   @cParam2    NVARCHAR(60),
+   @cParam3    NVARCHAR(60),
+   @cParam4    NVARCHAR(60),
+   @cParam5    NVARCHAR(60),
    @nErrNo     INT OUTPUT,
    @cErrMsg    NVARCHAR( 20) OUTPUT
 )
