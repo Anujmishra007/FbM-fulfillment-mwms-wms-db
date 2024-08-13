@@ -16,6 +16,7 @@ GO
 /*                                                                            */
 /* Date       Rev  Author     Purposes                                        */
 /* 2024-06-20 1.0  JACKC      FCR-348 Created                                 */
+/* 2024-08-13 1.1  JACKC      FCR-716 Retrieve print data by OrderKey         */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_593Print40] (
@@ -252,7 +253,7 @@ BEGIN
             SELECT @cPrintData = [data]
             FROM DocInfo WITH (NOLOCK)
             WHERE TableName = 'EXTORDDOC'
-               AND Key1 = @cExternOrderKey
+               AND Key1 = @cOrderKey --V1.1 FCR-716 by Jackc
                AND Key2 = @cReportType
                AND Key3 = (CASE WHEN @cRptPaperType = 'LABEL' THEN 'LABEL' ELSE 'PAPER' END) 
                AND StorerKey = @cStorerKey
