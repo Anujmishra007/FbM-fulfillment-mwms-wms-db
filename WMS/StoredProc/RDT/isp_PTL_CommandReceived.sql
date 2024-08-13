@@ -60,7 +60,8 @@ BEGIN
          SELECT @c_InputValue = DisplayValue
          FROM PTL.LightStatus WITH (NOLOCK)
          WHERE IPAddress = @c_DeviceIPAddress
-         AND DevicePosition = @c_DevicePosition
+				AND DevicePosition = @c_DevicePosition
+				AND   li.Facility = @c_Facility
       END
 
       SET @n_LghIn_SerialNo = 0
