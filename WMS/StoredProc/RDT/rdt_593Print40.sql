@@ -188,6 +188,8 @@ BEGIN
          WHILE @nCounter <= @nMaxRow
          BEGIN
             -- Get Report Type
+            SET @cPrintData = '' --V1.1 clear PrintData value by Jackc
+
             SELECT @cReportType = ReportType
             FROM @tReport
             WHERE RowRef = @nCounter
