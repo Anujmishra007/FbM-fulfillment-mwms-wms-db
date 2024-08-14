@@ -25,18 +25,20 @@ CREATE OR ALTER PROC [RDT].[rdt_513ExtUpdVLT] (
 @nErrNo     INT OUTPUT,
 @cErrMsg    NVARCHAR( 20) OUTPUT
 ) AS
-
-SET NOCOUNT ON
-SET QUOTED_IDENTIFIER OFF
-SET ANSI_NULLS OFF
-
-IF @nStep = 6 -- To Loc
--- Clearing outstanding pending moves, as since ID is moved, it is not required anymore.
 BEGIN
-   update LOTxLOCxID
-   set PendingMoveIN = 0
-   where id = @cFromID and StorerKey = @cStorerKey and Sku = @cSKU
-   and loc not in (select loc from loc (NOLOCK) where LocationType in ('PICK','CASE') and Facility = @cFacility)
-END
+   SET NOCOUNT ON
+   SET QUOTED_IDENTIFIER OFF
+   SET ANSI_NULLS OFF
 
+   IF @nStep = 6 -- To Loc
+   -- Clearing outstanding pending moves, as since ID is moved, it is not required anymore.
+   BEGIN
+      update LOTxLOCxID
+      set PendingMoveIN = 0
+      where id = @cFromID and StorerKey = @cStorerKey and Sku = @cSKU
+      and loc not in (select loc from loc (NOLOCK) where LocationType in ('PICK','CASE') and Facility = @cFacility)
+   END
+END
+GO
 GRANT EXECUTE ON [RDT].[rdt_513ExtUpdVLT] TO [NSQL]
+GO

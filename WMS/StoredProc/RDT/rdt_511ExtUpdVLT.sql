@@ -22,18 +22,19 @@ CREATE OR ALTER PROC [RDT].[rdt_511ExtUpdVLT] (
 @nErrNo     INT           OUTPUT,
 @cErrMsg    NVARCHAR( 20) OUTPUT
 ) AS
+BEGIN
+   SET NOCOUNT ON
+   SET QUOTED_IDENTIFIER OFF
+   SET ANSI_NULLS OFF
 
-SET NOCOUNT ON
-SET QUOTED_IDENTIFIER OFF
-SET ANSI_NULLS OFF
-
-IF @nStep = 3 -- To Loc
-   -- Clearing outstanding pending moves, as since ID is moved, it is not required anymore.
-   BEGIN
-      update LOTxLOCxID
-	  set PendingMoveIN = 0
-	  where id = @cFromID and PendingMoveIN > 0 and StorerKey = @cStorerKey and ID <> ''
-   END
-
+   IF @nStep = 3 -- To Loc
+      -- Clearing outstanding pending moves, as since ID is moved, it is not required anymore.
+      BEGIN
+         update LOTxLOCxID
+         set PendingMoveIN = 0
+         where id = @cFromID and PendingMoveIN > 0 and StorerKey = @cStorerKey and ID <> ''
+      END
+END
+GO
 GRANT EXECUTE ON [RDT].[rdt_511ExtUpdVLT] TO [NSQL]
-
+GO

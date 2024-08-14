@@ -36,9 +36,10 @@ CREATE OR ALTER     PROC [RDT].[rdt_727InquiryVLT1] (
    @cErrMsg      NVARCHAR(20) OUTPUT  
 )
 AS
-
-IF @nFunc = 727 and @nStep = 2
 BEGIN
+
+   IF @nFunc = 727 and @nStep = 2
+   BEGIN
    SET NOCOUNT ON
    SET ANSI_NULLS OFF
    SET QUOTED_IDENTIFIER OFF
@@ -85,15 +86,16 @@ BEGIN
 
          --IF @cSKU = @cPreviousSKU
          --BEGIN
-          --  SET @nNextPage = 1
+            --  SET @nNextPage = 1
          --END
          --ELSE
          --BEGIN
-          --  SET @nNextPage = -1  
+            --  SET @nNextPage = -1  
          --END
       
       END
-Quit:
-END
-
+   Quit:
+   END
+END -- SP
+GO
 GRANT EXECUTE ON [RDT].[rdt_727InquiryVLT1] TO [NSQL]

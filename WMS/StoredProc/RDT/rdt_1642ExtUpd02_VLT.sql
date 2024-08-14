@@ -128,7 +128,7 @@ BEGIN
    WHILE @@TRANCOUNT > @nStartTCnt -- Commit until the level we started    
       COMMIT TRAN rdt_1642ExtUpd02_VLT
 END -- sp
-
+GO
 GRANT EXECUTE ON [RDT].[rdt_1642ExtUpd02_VLT] TO [NSQL]
 GO
 

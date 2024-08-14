@@ -75,5 +75,5 @@ BEGIN
       END
    END
 END
-
+GO
 GRANT EXECUTE ON [RDT].[rdt_600ExtValVLT] TO [NSQL]

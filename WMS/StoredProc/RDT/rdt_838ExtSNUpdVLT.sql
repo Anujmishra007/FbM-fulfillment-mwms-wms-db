@@ -110,5 +110,5 @@ BEGIN
 Quit:  
   
 END  
-
+GO
 GRANT EXECUTE ON [RDT].[rdt_838ExtSNUpdVLT] TO [NSQL]

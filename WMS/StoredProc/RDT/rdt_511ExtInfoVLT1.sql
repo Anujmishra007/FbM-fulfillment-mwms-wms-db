@@ -22,28 +22,30 @@ CREATE OR ALTER PROCEDURE [RDT].[rdt_511ExtInfoVLT1] (
 @cSKU            NVARCHAR( 20),
 @cExtendedInfo   NVARCHAR( 20)  OUTPUT
 ) AS
-
+BEGIN
    SET NOCOUNT ON
    SET QUOTED_IDENTIFIER OFF
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
-IF @nFunc = 511 and @nStep = 2 and @nInputKey = 1
-BEGIN
-   DECLARE 
-   @PNDPICKChk int,
-   @Facility NVARCHAR(20)
-
-   select top 1 @Facility = FACILITY from rdt.RDTMOBREC (NOLOCK) where Mobile = @nMobile
-   set @PNDPICKChk = case when (select top 1 LocationType from loc WITH (NOLOCK) where loc = @cFromLoc and Facility = @Facility and loc like 'B_999%') = 'PND' and exists(select 1 from pickdetail (NOLOCK) where id = @cFromID and sku = @cSKU and status = 5 and dropid <> '' and Storerkey = @cStorerKey) then 1 else 0 end
-
-   IF @PNDPICKChk = 1
+   IF @nFunc = 511 and @nStep = 2 and @nInputKey = 1
    BEGIN
-      SET @cExtendedInfo = 'Move to '+
-      (select top 1 reverse(substring(reverse(OtherReference),4,10)) from mbol (NOLOCK) where facility = @Facility 
-	  and mbolkey = (select top 1 mbolkey from orders (NOLOCK) where StorerKey = @cStorerKey and orderkey = 
-      (select top 1 OrderKey from pickdetail (NOLOCK) where Storerkey = @cStorerKey and id = @cFromID)))
+      DECLARE 
+      @PNDPICKChk int,
+      @Facility NVARCHAR(20)
+
+      select top 1 @Facility = FACILITY from rdt.RDTMOBREC (NOLOCK) where Mobile = @nMobile
+      set @PNDPICKChk = case when (select top 1 LocationType from loc WITH (NOLOCK) where loc = @cFromLoc and Facility = @Facility and loc like 'B_999%') = 'PND' and exists(select 1 from pickdetail (NOLOCK) where id = @cFromID and sku = @cSKU and status = 5 and dropid <> '' and Storerkey = @cStorerKey) then 1 else 0 end
+
+      IF @PNDPICKChk = 1
+      BEGIN
+         SET @cExtendedInfo = 'Move to '+
+         (select top 1 reverse(substring(reverse(OtherReference),4,10)) from mbol (NOLOCK) where facility = @Facility 
+      and mbolkey = (select top 1 mbolkey from orders (NOLOCK) where StorerKey = @cStorerKey and orderkey = 
+         (select top 1 OrderKey from pickdetail (NOLOCK) where Storerkey = @cStorerKey and id = @cFromID)))
+      END
    END
 END
-
+GO
 GRANT EXECUTE ON [RDT].[rdt_511ExtInfoVLT1] TO [NSQL]
+GO

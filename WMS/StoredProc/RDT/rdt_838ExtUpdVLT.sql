@@ -91,6 +91,6 @@ BEGIN
          VALUES(@cPackDtlDropID,'','',0,'N',0,5,GETDATE(),SUSER_NAME(),GETDATE(),SUSER_NAME(),null,null,@LOADKEY,@PICKSLIP,'','','','','')
       END
    END
-END
-
+END-- end sp
+GO
 GRANT EXECUTE ON [RDT].[rdt_838ExtUpdVLT] TO [NSQL]
