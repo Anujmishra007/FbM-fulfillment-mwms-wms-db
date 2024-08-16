@@ -2618,7 +2618,7 @@ BEGIN
             ('@cTempLottable02',     @cTempLottable02)
 
             SET @nAction = 3
-         END
+         END        
          
          EXECUTE [RDT].[rdt_ExtScnEntry] 
             @cExtScnSP, 
@@ -3869,13 +3869,6 @@ BEGIN
 
    Step_5_Fail_SKU:
    BEGIN
-      SET @cSKU = ''
-      SET @cPrevBarcode = ''
-      SET @cOutField02 = '' -- SKU
-      SET @cBarcode = ''
-      
-      EXEC rdt.rdtSetFocusField @nMobile, V_Barcode -- SKU
-
       IF @nErrno = -1
       BEGIN
          IF @cExtScnSP <> ''
@@ -3885,6 +3878,11 @@ BEGIN
                IF @cExtScnSP = 'rdt_1580ExtScn02'
                BEGIN
                   SET @nAction = 2
+                  DELETE FROM @tExtScnData
+                  INSERT INTO @tExtScnData (Variable, Value) VALUES                 
+                  ('@cSKU',            @cSKU),
+                  ('@nQTY',            CAST( @nQTY AS NVARCHAR( 10))),
+                  ('@cBarcode',        @cBarcode)
                END
 
                EXECUTE [RDT].[rdt_ExtScnEntry]
@@ -3921,7 +3919,15 @@ BEGIN
                   @cUDF28 OUTPUT, @cUDF29 OUTPUT, @cUDF30 OUTPUT
 
                IF @nErrNo <> 0
+               BEGIN
+                  SET @cSKU = ''
+                  SET @cPrevBarcode = ''
+                  SET @cOutField02 = '' -- SKU
+                  SET @cBarcode = ''
+                  
+                  EXEC rdt.rdtSetFocusField @nMobile, V_Barcode -- SKU
                   GOTO Quit
+               END
 
                IF @cExtScnSP = 'rdt_1580ExtScn02'
                BEGIN
@@ -3931,10 +3937,20 @@ BEGIN
                   SET @nBeforeReceivedQty = @cUDF04
                   SET @nQtyExpected = @cUDF05
                   SET @nToIDQTY = @cUDF06
+                  SET @cVerifySKUInfo = @cUDF07
                END
             END
          End
       END
+
+      SET @cSKU = ''
+      SET @cPrevBarcode = ''
+      SET @cOutField02 = '' -- SKU
+      SET @cBarcode = ''
+      
+      EXEC rdt.rdtSetFocusField @nMobile, V_Barcode -- SKU
+
+      
       GOTO Quit
    END
 

@@ -71,7 +71,9 @@ BEGIN
          @cPOKey              NVARCHAR(10),
          @cBUSR1              NVARCHAR(30),
          @cUserName           NVARCHAR(18),
+         @cVerifySKUInfo      NVARCHAR(20),
          @cSKULabel           NVARCHAR(1),
+         @cAfterReceiveGoBackToId NVARCHAR(1),
          @cPrinter            NVARCHAR(10),
          @cReceiptLineNumber      NVARCHAR( 5),
          @cDefaultPieceRecvQTY    NVARCHAR(5),
@@ -105,6 +107,11 @@ BEGIN
                DECLARE @cSerialNo           NVARCHAR(50),
                        @cAddRCPTValidtn     NVARCHAR(10)
                SET @cAddRCPTValidtn = rdt.RDTGetConfig( @nFunc, 'AddRCPTValidtn', @cStorerKey)
+
+               SELECT @cSku = Value FROM @tExtScnData WHERE Variable = '@cSku'
+               SELECT @nQTY = Value FROM @tExtScnData WHERE Variable = '@nQTY'
+               SELECT @cBarcode = Value FROM @tExtScnData WHERE Variable = '@cBarcode'
+               
                -- Getting Mobile information
                SELECT
                   @cFacility   = Facility,
@@ -114,11 +121,8 @@ BEGIN
                   @cPOKey      = V_POKey,
                   @cLOC        = V_LOC,
                   @cTOID       = V_ID,
-                  @cSKU        = V_SKU,
                   @cSKUDesc    = V_SKUDescr,
-                  @nQTY        = V_QTY,
                   @nFromScn    = V_FromScn,
-                  @cBarcode    = V_Barcode,
                   @nToIDQTY           = V_Integer2,
                   @nBeforeReceivedQty = V_Integer3,
                   @nQtyExpected       = V_Integer4,
@@ -126,13 +130,19 @@ BEGIN
                   @cPrevBarcode            = V_String6,
                   @cDefaultPieceRecvQTY    = V_String8,
                   @cUOM                    = V_String9,	  
-                  @cSKULabel               = V_String31,		   
+                  @cSKULabel               = V_String31,
+                  @cAfterReceiveGoBackToId = V_String18,
+                  @cVerifySKUInfo          = V_string33,
                   @cSKUValidated           = V_String37
                FROM rdt.rdtMobRec (NOLOCK)
                WHERE  Mobile = @nMobile
                
                IF @cAddRCPTValidtn = '1'
                BEGIN
+                  UPDATE rdt.rdtMobRec
+                  SET V_Max = @cBarcode
+                  WHERE Mobile = @nMobile
+                  
                   -- Update SKU setting
                   EXEC rdt.rdt_SerialNo @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cSKU, @cSKUDesc, @nQTY, 'UPDATE', 'ASN', @cReceiptKey,
                      @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,
@@ -155,7 +165,7 @@ BEGIN
                      @nBulkSNO   OUTPUT,  @nBulkSNOQTY OUTPUT,  @cSerialCaptureType = '2'
                   
 
-                  IF @nErrNo <> 0 -- (james31)
+                  IF @nErrNo <> 0 AND @nErrno <> -1 -- (james31)
                      GOTO Quit
 
                   DECLARE @nRDQTY INT
@@ -274,11 +284,39 @@ BEGIN
                      @nErrNo  OUTPUT,
                      @cErrMsg OUTPUT
 
+                  -- (james27)
+                  IF @cAfterReceiveGoBackToId = '1'
+                  BEGIN
+                     -- Prepare next screen variable
+                     SET @cOutField01 = @cReceiptkey
+                     SET @cOutField02 = @cPOKey
+                     SET @cOutField03 = @cLOC
+                     SET @cOutField04 = ''
+
+                     -- Go to next screen
+                     SET @nAfterScn = @nAfterScn - 2
+                     SET @nAfterStep = @nAfterStep - 2
+            
+                     GOTO Quit
+                  END
+            
+                  -- Prep QTY fields
+                  SET @cOutField02 = '' -- SKU
+                  SET @cOutField05 = @cDefaultPieceRecvQTY
+                  SET @cOutField06 = CAST( @nBeforeReceivedQty AS NVARCHAR( 7)) + '/' + CAST( @nQtyExpected AS NVARCHAR( 7))
+                  SET @cOutField10 = CAST( @nToIDQTY AS NVARCHAR( 10))
+
+                  SET @cBarcode = ''
+            
+                  EXEC rdt.rdtSetFocusField @nMobile, V_Barcode -- SKU
+                  SET @cVerifySKUInfo = ''
+
+
                   GOTO QUIT
                END
             END
-         END
-      END
+         END         
+      END      
    END
 
 
@@ -291,7 +329,7 @@ Quit:
    SET @cUDF06 = @nToIDQTY
 END
 
-
+GO
 GRANT EXECUTE ON rdt.rdt_1580ExtScn02 TO NSQL
 GO
 
