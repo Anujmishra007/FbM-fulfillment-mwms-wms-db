@@ -280,6 +280,16 @@ BEGIN
             SET @cOVASFlag = 1
          END
 
+         -- RDT StorerConfig 'ACTVASWO'  
+         SET @cACTVASWO = rdt.RDTGetConfig (@nCurrentFuncID, 'ACTVASWO', @cStorerKey )  
+         
+         IF ISNULL(RTRIM(@cACTVASWO),'') = '0'  
+         BEGIN  
+            SET @nErrNo = 211715
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP' ) --RDT Storer Config ACTVASWO not configured
+            GOTO Step_VASCode_Fail
+         END
+
          -- Prepare next screen var
          SET @cOutField01 = ''
          SET @cOutField02 = ''
