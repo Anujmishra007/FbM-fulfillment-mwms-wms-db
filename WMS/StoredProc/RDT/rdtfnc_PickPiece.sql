@@ -356,7 +356,8 @@ DECLARE
    @nStep_VerifyID         INT,  @nScn_VerifyID       INT,
    @nStep_MultiSKU         INT,  @nScn_MultiSKU       INT,
    @nStep_DataCapture      INT,  @nScn_DataCapture    INT,
-   @nStep_SerialNo         INT,  @nScn_SerialNo       INT
+   @nStep_SerialNo         INT,  @nScn_SerialNo       INT,
+   @nStep99                INT
    
 SELECT
    @nStep_PickSlipNo       = 1,  @nScn_PickSlipNo     = 4640,
@@ -370,7 +371,8 @@ SELECT
    @nStep_VerifyID         = 9,  @nScn_VerifyID       = 4648,
    @nStep_MultiSKU         = 10, @nScn_MultiSKU       = 3570,
    @nStep_DataCapture      = 11, @nScn_DataCapture    = 4649,
-   @nStep_SerialNo         = 12, @nScn_SerialNo       = 4830
+   @nStep_SerialNo         = 12, @nScn_SerialNo       = 4830,
+   @nStep99                = 99
 
 IF @nFunc = 839 -- Pick piece
 BEGIN
@@ -2886,10 +2888,13 @@ BEGIN
       END
    END
    --Extended Screen
-   IF @cExtScnSP <> ''
+   IF @cExtScnSP <> '' 
    BEGIN
       IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
       BEGIN
+         IF @cExtScnSP = 'rdt_839ExtScn02' AND @nPre_Step <> @nStep99
+            GOTO Quit
+
          DELETE FROM @tExtScnData
 
          IF @cExtScnSP = 'rdt_839ExtScn02'
@@ -2973,6 +2978,9 @@ BEGIN
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Option
          GOTO Step_5_Fail
       END
+
+      SET @nOri_Step = @nStep
+      SET @nOri_Scn  = @nScn
 
       IF @cExtendedValidateSP <> ''
       BEGIN
@@ -6235,10 +6243,10 @@ BEGIN
       IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
       BEGIN
          SET @nAction = 1
+         DELETE FROM @tExtScnData
          IF @cExtScnSP = 'rdt_839ExtScn02'
          BEGIN
-            INSERT INTO @tExtScnData (Variable, Value) VALUES 	
-            ('@cPickSlipNo',     @cPickSlipNo),
+            INSERT INTO @tExtScnData (Variable, Value) VALUES
             ('@nPre_Step',     @nPre_Step)
          END
          EXECUTE [RDT].[rdt_ExtScnEntry] 
@@ -6279,253 +6287,29 @@ BEGIN
 
          IF @cExtScnSP = 'rdt_839ExtScn02'
          BEGIN
-            SELECT @cLottable01 = '', @cLottable02 = '', @cLottable03 = '',    @dLottable04 = NULL,  @dLottable05 = NULL,
-                  @cLottable06 = '', @cLottable07 = '', @cLottable08 = '',    @cLottable09 = '',    @cLottable10 = '',
-                  @cLottable11 = '', @cLottable12 = '', @dLottable13 = NULL,  @dLottable14 = NULL,  @dLottable15 = NULL
-            -- Get task in next loc
-            SET @cSKUValidated = '0'
-            SET @nActQTY = 0
-            EXEC rdt.rdt_PickPiece_GetTask @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 'NEXTLOC'
-               ,@cPickSlipNo
-               ,@cPickZone
-               ,4
-               ,@nTtlBalQty       OUTPUT
-               ,@nBalQty          OUTPUT
-               ,@cSuggLOC         OUTPUT
-               ,@cSuggSKU         OUTPUT
-               ,@cSKUDescr        OUTPUT
-               ,@nSuggQTY         OUTPUT
-               ,@cDisableQTYField OUTPUT
-               ,@cLottableCode    OUTPUT
-               ,@cLottable01      OUTPUT, @cLottable02  OUTPUT, @cLottable03  OUTPUT, @dLottable04  OUTPUT, @dLottable05  OUTPUT
-               ,@cLottable06      OUTPUT, @cLottable07  OUTPUT, @cLottable08  OUTPUT, @cLottable09  OUTPUT, @cLottable10  OUTPUT
-               ,@cLottable11      OUTPUT, @cLottable12  OUTPUT, @dLottable13  OUTPUT, @dLottable14  OUTPUT, @dLottable15  OUTPUT
-               ,@nErrNo           OUTPUT
-               ,@cErrMsg          OUTPUT
-               ,@cSuggID          OUTPUT  --(yeekung02)
-               ,@cSKUSerialNoCapture OUTPUT
-            IF @nErrNo = 0
+            IF @nPre_Step = @nStep_ShortPick
             BEGIN
-               IF @cConfirmLOC = '1'
-               BEGIN
-                  -- Prepare next screen var
-                  SET @cOutField01 = @cSuggLOC
-                  SET @cOutField02 = '' -- LOC
-
-                  -- Go to confirm LOC screen
-                  SET @nScn = @nScn_ConfirmLOC
-                  SET @nStep = @nStep_ConfirmLOC
-               END
-               ELSE IF @cScanCIDSCN='1'
-               BEGIN
-                  -- Prepare next screen var
-                  SET @cOutField01 = @cSuggLOC
-                  SET @cOutField04 = @cSuggID --(yeekung02)
-                  SET @cOutField05 = ''
-
-                  -- Go to verify ID screen
-                  SET @nScn = @nScn_VerifyID
-                  SET @nStep = @nStep_VerifyID
-               END
-               ELSE
-               BEGIN
-                  -- (james03)
-                  -- Dynamic lottable
-                  EXEC rdt.rdt_Lottable @nMobile, @nFunc, @cLangCode, @nScn, @nInputKey, @cStorerKey, @cSuggSKU, @cLottableCode, 'DISPLAY', 'POPULATE', 4, 8,
-                     @cInField01  OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01 OUTPUT,
-                     @cInField02  OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02 OUTPUT,
-                     @cInField03  OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03 OUTPUT,
-                     @cInField04  OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04 OUTPUT,
-                     @cInField05  OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  @dLottable05 OUTPUT,
-                     @cInField06  OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  @cLottable06 OUTPUT,
-                     @cInField07  OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  @cLottable07 OUTPUT,
-                     @cInField08  OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  @cLottable08 OUTPUT,
-                     @cInField09  OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  @cLottable09 OUTPUT,
-                     @cInField10  OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  @cLottable10 OUTPUT,
-                     @cInField11  OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  @cLottable11 OUTPUT,
-                     @cInField12  OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT,  @cLottable12 OUTPUT,
-                     @cInField13  OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  @dLottable13 OUTPUT,
-                     @cInField14  OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT,  @dLottable14 OUTPUT,
-                     @cInField15  OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT,  @dLottable15 OUTPUT,
-                     @nMorePage   OUTPUT,
-                     @nErrNo      OUTPUT,
-                     @cErrMsg     OUTPUT,
-                     '',      -- SourceKey
-                     @nFunc   -- SourceType
-
-                  -- (james08)
-                  IF @cExtSkuInfoSP <> ''
-                  BEGIN
-                     IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtSkuInfoSP AND type = 'P')
-                     BEGIN
-                        SET @cExtDescr1 = ''
-                        SET @cExtDescr2 = ''
-
-                        SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtSkuInfoSP) +
-                           ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cType, ' +
-                           ' @cPickSlipNo, @cPickZone, @cDropID, @cLOC, @cSKU, @nQTY, ' +
-                           ' @cExtDescr1 OUTPUT, @cExtDescr2 OUTPUT '
-                        SET @cSQLParam =
-                           ' @nMobile      INT,           ' +
-                           ' @nFunc        INT,           ' +
-                           ' @cLangCode    NVARCHAR( 3),  ' +
-                           ' @nStep        INT,           ' +
-                           ' @nInputKey    INT,           ' +
-                           ' @cFacility    NVARCHAR( 5) , ' +
-                           ' @cStorerKey   NVARCHAR( 15), ' +
-                           ' @cType        NVARCHAR( 10), ' +
-                           ' @cPickSlipNo  NVARCHAR( 10), ' +
-                           ' @cPickZone    NVARCHAR( 10), ' +
-                           ' @cDropID      NVARCHAR( 20), ' +
-                           ' @cLOC         NVARCHAR( 10), ' +
-                           ' @cSKU         NVARCHAR( 20), ' +
-                           ' @nQTY         INT,           ' +
-                           ' @cExtDescr1   NVARCHAR( 20) OUTPUT, ' +
-                           ' @cExtDescr2   NVARCHAR( 20) OUTPUT  '
-
-                        EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-                           @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cType,
-                           @cPickSlipNo, @cPickZone, @cDropID, @cSuggLOC, @cSKU, @nQTY,
-                           @cExtDescr1 OUTPUT, @cExtDescr2 OUTPUT
-                     END
-                  END
-
-                  -- Prepare SKU QTY screen var
-                  SET @cOutField01 = @cSuggLOC
-                  SET @cOutField02 = @cSuggSKU
-                  SET @cOutField03 = CASE WHEN @cExtDescr1 <> '' THEN @cExtDescr1 ELSE rdt.rdtFormatString( @cSKUDescr, 1, 20) END
-                  SET @cOutField04 = CASE WHEN @cExtDescr2 <> '' THEN @cExtDescr2 ELSE rdt.rdtFormatString( @cSKUDescr, 21, 20) END
-                  SET @cOutField05 = '' -- SKU/UPC
-                  SET @cOutField06 = CAST( @nSuggQTY AS NVARCHAR(6))
-                  SET @cOutField07 = CASE WHEN @cDefaultQTY = '1' THEN CAST( @nSuggQTY AS NVARCHAR(6))
-                                          WHEN @cDefaultPickQTY <> '0' THEN @cDefaultPickQTY
-                                          ELSE '' END -- QTY
-                  SET @cOutField13 =LTRIM(CAST(@nBalQty AS NVARCHAR(6))) + '/' + CAST(@nTtlBalQty AS NVARCHAR(6))
-
-                  EXEC rdt.rdtSetFocusField @nMobile, 5 -- SKU
-
-                  -- Disable QTY field
-                  SET @cFieldAttr07 = CASE WHEN @cDisableQTYField = '1' THEN 'O' ELSE '' END
-
-                  IF @cFieldAttr07='O'
-                     SET @cOutField07= CASE WHEN @cDefaultQTY = '1' THEN CAST( @nSuggQTY AS NVARCHAR(6))
-                                             WHEN @cDefaultPickQTY <> '0' THEN @cDefaultPickQTY
-                                             ELSE @nActQTY END -- QTY
-                  ELSE
-                     SET @cOutField07= CASE WHEN @cDefaultQTY = '1' THEN @nSuggQTY ELSE '' END
-                  
-                  SET @cBarcode = ''
-
-                  -- Go to SKU QTY screen
-                  SET @nScn = @nScn_SKUQTY
-                  SET @nStep = @nStep_SKUQTY
-               END
-            END
-            ELSE
-            BEGIN
-               -- Get task  -- (ChewKP04)
+                -- Get task in current LOC
                SET @cSKUValidated = '0'
                SET @nActQTY = 0
-               EXEC rdt.rdt_PickPiece_GetTask @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 'NEXTZONE'
-                  ,@cPickSlipNo
-                  ,@cPickZone
-                  ,4
-                  ,@nTtlBalQty       OUTPUT
-                  ,@nBalQty          OUTPUT
-                  ,@cSuggLOC         OUTPUT
-                  ,@cSuggSKU         OUTPUT
-                  ,@cSKUDescr        OUTPUT
-                  ,@nSuggQTY         OUTPUT
-                  ,@cDisableQTYField OUTPUT
-                  ,@cLottableCode    OUTPUT
-                  ,@cLottable01      OUTPUT, @cLottable02  OUTPUT, @cLottable03  OUTPUT, @dLottable04  OUTPUT, @dLottable05  OUTPUT
-                  ,@cLottable06      OUTPUT, @cLottable07  OUTPUT, @cLottable08  OUTPUT, @cLottable09  OUTPUT, @cLottable10  OUTPUT
-                  ,@cLottable11      OUTPUT, @cLottable12  OUTPUT, @dLottable13  OUTPUT, @dLottable14  OUTPUT, @dLottable15  OUTPUT
-                  ,@nErrNo   OUTPUT
-                  ,@cErrMsg          OUTPUT
-                  ,@cSuggID          OUTPUT  --(yeekung02)
-                  ,@cSKUSerialNoCapture OUTPUT
-               IF @nErrNo =  0
-               BEGIN
+               SET @cCurrLOC = @cSuggLOC
+               SET @cCurrSKU = @cSuggSKU
 
-                  -- Prepare next screen var
-                  SET @cOutField01 = @cPickSlipNo --'' -- PickSlipNo
-                  SET @cOutField02 = CASE WHEN @cDefaultPickZone = '1' THEN @cPickZone ELSE '' END
-                  SET @cOutField03 = ''
+               -- Goto PickZone Screen
+               SET @cOutField01 = @cPickSlipNo
+               SET @cOutField02 = CASE WHEN @cDefaultPickZone = '1' THEN @cPickZone ELSE '' END
+               SET @cOutField03 = ''
 
-                  -- Go to PickSlipNo screen
-                  SET @nScn = @nScn_PickZone
-                  SET @nStep = @nStep_PickZone
+               SET @nScn = @nScn_PickZone
+               SET @nStep = @nStep_PickZone
 
-               END
-               ELSE
-               BEGIN
-                  -- Scan out
-                  SET @nErrNo = 0
-                  EXEC rdt.rdt_PickPiece_ScanOut @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey
-                     ,@cPickSlipNo
-                     ,@nErrNo       OUTPUT
-                     ,@cErrMsg      OUTPUT
-                  IF @nErrNo <> 0
-                     GOTO Quit
-
-                  -- Prepare next screen var
-                  SET @cOutField01 = '' -- PickSlipNo
-
-                  -- Go to PickSlipNo screen
-                  SET @nScn = @nScn_PickSlipNo
-                  SET @nStep = @nStep_PickSlipNo
-               END
+               EXEC rdt.rdtSetFocusField @nMobile, 3 -- DropID
+               GOTO Quit
             END
-
-            -- (ChewKP04)
-            IF @cExtendedInfoSP <> ''
+            ELSE IF @nPre_Step = @nStep_NoMoreTask
             BEGIN
-               IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')
-               BEGIN
-                  SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
-                     ' @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cFacility, @cStorerKey, @cType, ' +
-                     ' @cPickSlipNo, @cPickZone, @cDropID, @cLOC, @cSKU, @nQTY,  @nActQty, @nSuggQTY,'+
-                     ' @cPackData1 , @cPackData2,@cPackData3, ' +
-                     ' @cExtendedInfo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT     '
-                  SET @cSQLParam =
-                     ' @nMobile      INT,           ' +
-                     ' @nFunc        INT,           ' +
-                     ' @cLangCode    NVARCHAR( 3),  ' +
-                     ' @nStep        INT,           ' +
-                     ' @nAfterStep   INT,           ' +
-                     ' @nInputKey    INT,           ' +
-                     ' @cFacility    NVARCHAR( 5) , ' +
-                     ' @cStorerKey   NVARCHAR( 15), ' +
-                     ' @cType        NVARCHAR( 10), ' +
-                     ' @cPickSlipNo  NVARCHAR( 10), ' +
-                     ' @cPickZone    NVARCHAR( 10), ' +
-                     ' @cDropID      NVARCHAR( 20), ' +
-                     ' @cLOC         NVARCHAR( 10), ' +
-                     ' @cSKU         NVARCHAR( 20), ' +
-                     ' @nQTY         INT,           ' +
-                     ' @nActQty      INT,           ' +
-                     ' @nSuggQTY     INT,           ' +
-                     ' @cPackData1      NVARCHAR( 30), ' +
-                     ' @cPackData2      NVARCHAR( 30), ' +
-                     ' @cPackData3      NVARCHAR( 30), ' +
-                     ' @cExtendedInfo NVARCHAR(20) OUTPUT,  ' +
-                     ' @nErrNo       INT           OUTPUT, ' +
-                     ' @cErrMsg      NVARCHAR(250) OUTPUT  '
-
-                  EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-                     @nMobile, @nFunc, @cLangCode, 4, @nStep, @nInputKey, @cFacility, @cStorerKey, @cType,
-                     @cPickSlipNo, @cPickZone, @cDropID, @cSuggLOC, @cSuggSKU, @nQTY, @nActQty, @nSuggQTY,
-                     @cPackData1 , @cPackData2,@cPackData3,
-                     @cExtendedInfo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
-
-               IF @nErrNo <> 0
-                  GOTO Quit
-
-               IF @nStep IN (3,9)
-                  SET @cOutField12 = @cExtendedInfo
-               END
-               
+               SET @nPre_Step = @nStep99
+               GOTO Step_4
             END
          END
          

@@ -117,53 +117,104 @@ BEGIN
          @nToIDQTY            INT,
          @cPickSlipNo         NVARCHAR( 10),
          @cOption             NVARCHAR( 10),
-         @nPre_Step           INT
+         @nPre_Step           INT,
+         @cToLOC              NVARCHAR(50),
+         @cTOLOCConfig        NVARCHAR(10),
+         @cMoveQTYPick        NVARCHAR( 1),
+         @cPickConfirmStatus  NVARCHAR( 1),
+         @cDropID             NVARCHAR( 20),
+         @cSourceLoc          NVARCHAR( 10),
+         @cSourceID           NVARCHAR( 18),
+         @cPickedQty          INT,
+         @nTranCount          INT
 
-   SELECT @cPickSlipNo = Value FROM @tExtScnData WHERE Variable = '@cPickSlipNo'
    SELECT @cOption = Value FROM @tExtScnData WHERE Variable = '@cOption'
    SELECT @nPre_Step = Value FROM @tExtScnData WHERE Variable = '@nPre_Step'
 
+   SET @cMoveQTYPick = rdt.rdtGetConfig( @nFunc, 'MoveQTYPick', @cStorerKey)
+   SET @cPickConfirmStatus = rdt.RDTGetConfig( @nFunc, 'PickConfirmStatus', @cStorerKey)
+   IF @cPickConfirmStatus = '0'
+      SET @cPickConfirmStatus = '5'
+   IF @cPickConfirmStatus NOT IN ( '3', '5')
+      SET @cPickConfirmStatus = '5'
+
+   -- Check move picked, but not pick confirm
+   IF @cMoveQTYPick = '1' AND @cPickConfirmStatus < '5'
+   BEGIN
+      SET @nErrNo = 201802
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --IncorrectSetup
+      GOTO Quit
+   END
+
+   SELECT @nStep = Step,
+         @nScn = Scn,
+         @cDropID = V_String4,
+         @cPickSlipNo = V_PickSlipNo
+   FROM RDT.RDTMOBREC WITH(NOLOCK)
+   WHERE Mobile = @nMobile
+
    IF @nFunc = 839
    BEGIN
+      SET @cTOLOCConfig = rdt.RDTGetConfig( @nFunc, 'TOLOC', @cStorerKey)
+
       IF @nAction = 0
       BEGIN
-         IF @nStep = 4
+         IF @nStep = 4 
          BEGIN
-            DECLARE 
-               @cToLOC           NVARCHAR(50),
-               @cTOLOCConfig NVARCHAR(10)
-
-            SET @cTOLOCConfig = rdt.RDTGetConfig( @nFunc, 'TOLOC', @cStorerKey)
-            IF @cTOLOCConfig = '1'
+            IF @nInputKey = 1
             BEGIN
-               SELECT @cToLOC = OI.OrderInfo10
-               FROM OrderInfo OI WITH (NOLOCK)
-               INNER JOIN PICKHEADER P WITH (NOLOCK) ON P.OrderKey= OI.OrderKey
-               WHERE P.PickHeaderKey = @cPickSlipNo AND P.StorerKey = @cStorerKey
+               IF @cTOLOCConfig = '1'
+               BEGIN
+                  SELECT TOP 1 @cToLOC = ISNULL(OI.OrderInfo10, '')
+                  FROM OrderInfo OI WITH (NOLOCK)
+                  INNER JOIN PICKHEADER P WITH (NOLOCK) ON P.OrderKey= OI.OrderKey
+                  WHERE P.PickHeaderKey = @cPickSlipNo AND P.StorerKey = @cStorerKey
 
-               SET @cOutField01 = @cToLOC
+                  IF EXISTS ( SELECT 1 FROM dbo.LOC WITH (NOLOCK) 
+                            WHERE Facility = @cFacility
+                             AND Loc = @cToLOC )
+                     SET @cOutField01 = @cToLOC
+                  ELSE
+                     SET @cOutField01 = ''
+                  SET @cOutField02 = ''
+               END
+               ELSE 
+               BEGIN
+                  SET @cOutField01 = ''
+                  SET @cOutField02 = ''
+               END
 
                SET @nAfterScn = 6417
                SET @nAfterStep = 99
                GOTO Quit
             END
          END
-         IF @nStep = 5 AND @cOption = '3' AND @nInputKey = 1
+         IF @nStep = 5
          BEGIN
-
-            SET @cTOLOCConfig = rdt.RDTGetConfig( @nFunc, 'TOLOC', @cStorerKey)
-            IF @cTOLOCConfig = '1'
+            IF @nInputKey = 1
             BEGIN
-               SELECT @cToLOC = OI.OrderInfo10
-               FROM OrderInfo OI WITH (NOLOCK)
-               INNER JOIN PICKHEADER P WITH (NOLOCK) ON P.OrderKey= OI.OrderKey
-               WHERE P.PickHeaderKey = @cPickSlipNo AND P.StorerKey = @cStorerKey
+               IF @cOption = '3'
+               BEGIN
+                  IF @cTOLOCConfig = '1'
+                  BEGIN
+                     SELECT @cToLOC = ISNULL(OI.OrderInfo10, '')
+                     FROM OrderInfo OI WITH (NOLOCK)
+                     INNER JOIN PICKHEADER P WITH (NOLOCK) ON P.OrderKey= OI.OrderKey
+                     WHERE P.PickHeaderKey = @cPickSlipNo AND P.StorerKey = @cStorerKey
 
-               SET @cOutField01 = @cToLOC
-
-               SET @nAfterScn = 6417
-               SET @nAfterStep = 99
-               GOTO Quit
+                     SET @cOutField01 = @cToLOC
+                     SET @cOutField02 = ''
+                  END
+                  ELSE 
+                  BEGIN
+                     SET @cOutField01 = ''
+                     SET @cOutField02 = ''
+                  END
+                  
+                  SET @nAfterScn = 6417
+                  SET @nAfterStep = 99
+                  GOTO Quit
+               END
             END
          END
       END
@@ -171,53 +222,150 @@ BEGIN
       BEGIN
          IF @nStep = 99
          BEGIN
-            IF @nInputKey = 1
+            IF @nScn = 6417
             BEGIN
-               DECLARE
-                  @cMODIFYTOLOC     NVARCHAR(10),
-                  @cOrderKey        NVARCHAR(10)
-
-               SET @cTOLOCConfig = rdt.RDTGetConfig( @nFunc, 'TOLOC', @cStorerKey)
-               SET @cMODIFYTOLOC = rdt.RDTGetConfig( @nFunc, 'MODIFYTOLOC', @cStorerKey)
-
-               IF @cTOLOCConfig = '1'
+               IF @nInputKey = 1
                BEGIN
                   SET @cToLOC = @cInField02
-                  IF ISNULL(@cOutField01,'') <> '' AND @cToLOC <> @cOutField01 AND @cMODIFYTOLOC <> '1'
+
+                  DECLARE
+                     @cMODIFYTOLOC     NVARCHAR(10),
+                     @cOrderKey        NVARCHAR(10)
+
+                  IF @cToLOC IS NULL OR TRIM(@cToLOC) = ''
                   BEGIN
-                     SET @nErrNo = 100090
-                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Diff TO LOC
+                     SET @nErrNo = 221306
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- ToLocNeeded
+                     GOTO Quit
                   END
-                  SELECT @cOrderKey = OrderKey
-                  FROM PICKHEADER P WITH (NOLOCK)
-                  WHERE P.PickHeaderKey = @cPickSlipNo AND P.StorerKey = @cStorerKey
-                  
-                  IF ISNULL(@cOrderKey,'') <> ''  
+
+                  IF NOT EXISTS ( SELECT 1 FROM dbo.LOC WITH (NOLOCK) 
+                            WHERE Facility = @cFacility
+                             AND Loc = @cToLOC )
                   BEGIN
-                     UPDATE OrderInfo
-                     SET OrderInfo10 = @cToLOC
-                     WHERE OrderKey = @cOrderKey
+                     SET @nErrNo = 221307
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Invalid ToLoc
+                     GOTO Quit
                   END
+
+                  SET @cMODIFYTOLOC = rdt.RDTGetConfig( @nFunc, 'MODIFYTOLOC', @cStorerKey)
+
+                  IF @cTOLOCConfig = '1'
+                  BEGIN
+                     IF ISNULL(@cOutField01,'') <> '' AND @cToLOC <> @cOutField01 AND @cMODIFYTOLOC <> '1'
+                     BEGIN
+                        SET @nErrNo = 221301
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Diff TO LOC
+                        GOTO Quit
+                     END
+                  END
+
+                  DECLARE @curPKD CURSOR
+                  SET @curPKD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+                     SELECT 
+                        Loc, ID, Qty, Sku
+                     FROM PICKDETAIL PKD WITH(NOLOCK)
+                     WHERE StorerKey = @cStorerKey
+                        AND DropID = @cDropID
+                        AND Status = @cPickConfirmStatus
+
+                  SET @nTranCount = @@TRANCOUNT
+                  IF @nTranCount = 0 
+                     BEGIN TRANSACTION
+                  ELSE
+                     SAVE TRANSACTION rdt_839ExtScn02_01
+
+                  BEGIN TRY
+                     IF ISNULL(@cOutField01,'') <> '' AND @cToLOC <> @cOutField01
+                     BEGIN
+                        UPDATE OI
+                        SET OrderInfo10 = @cToLOC
+                        FROM OrderInfo OI WITH(ROWLOCK)
+                        INNER JOIN PICKHEADER PKH WITH (NOLOCK) ON OI.OrderKey = PKH.OrderKey
+                        WHERE PKH.PickHeaderKey = @cPickSlipNo 
+                           AND PKH.StorerKey = @cStorerKey
+                     END
+
+                     OPEN @curPKD
+                     FETCH NEXT FROM @curPKD INTO @cSourceLoc, @cSourceID, @cPickedQty, @cSku
+                     WHILE @@FETCH_STATUS = 0
+                     BEGIN
+
+                        -- Move by SKU
+                        EXECUTE rdt.rdt_Move
+                           @nMobile        = @nMobile,
+                           @cLangCode      = @cLangCode,
+                           @nErrNo         = @nErrNo  OUTPUT,
+                           @cErrMsg        = @cErrMsg OUTPUT,
+                           @cSourceType    = 'rdt_839ExtScn02',
+                           @cStorerKey     = @cStorerKey,
+                           @cFacility      = @cFacility,
+                           @cFromLOC       = @cSourceLoc,
+                           @cToLOC         = @cToLOC,
+                           @cFromID        = @cSourceID,
+                           @cSKU           = @cSku,
+                           @cToID          = @cDropID,
+                           @nQTY           = @cPickedQty,
+                           @nQTYPick       = @cPickedQty,
+                           @nFunc          = @nFunc
+                        
+                        IF @nErrNo <> 0
+                        BEGIN
+                           IF @nTranCount = 0
+                           BEGIN
+                              ROLLBACK TRANSACTION
+                           END
+                           ELSE
+                           BEGIN
+                              IF XACT_STATE() <> -1
+                              BEGIN
+                                 ROLLBACK TRANSACTION rdt_839ExtScn02_01
+                              END
+                           END
+                           
+                           SET @nErrNo = 221304
+                           SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- MoveItemFail
+                           GOTO Quit
+                        END
+
+                     FETCH NEXT FROM @curPKD INTO @cSourceLoc, @cSourceID, @cPickedQty, @cSku
+                     END
+                     CLOSE @curPKD
+                     DEALLOCATE @curPKD
+
+                     WHILE @@TRANCOUNT > @nTranCount 
+                        COMMIT TRANSACTION
+                  END TRY
+                  BEGIN CATCH
+                     IF CURSOR_STATUS('LOCAL','@curPKD') IN (0 , 1)
+                     BEGIN
+                        CLOSE @curPKD
+                        DEALLOCATE @curPKD
+                     END
+
+                     IF @nTranCount = 0
+                     BEGIN
+                        ROLLBACK TRANSACTION
+                     END
+                     ELSE
+                     BEGIN
+                        IF XACT_STATE() <> -1
+                        BEGIN
+                           ROLLBACK TRANSACTION rdt_839ExtScn02_01
+                        END
+                     END
+
+                     SET @nErrNo = 221304
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- MoveItemFail
+                     GOTO Quit
+                  END CATCH
                   GOTO Quit
                END
-            END
-            ELSE IF @nInputKey = 0
-            BEGIN
-               IF @nPre_Step = 4
+               ELSE IF @nInputKey = 0
                BEGIN
-                  SET @nAfterScn = @nStep_NoMoreTask
-                  SET @nAfterStep = @nScn_NoMoreTask
-               END
-               ELSE IF @nPre_Step = 5
-               BEGIN
-                  -- Prepare next screen var
-                  SET @cOutField01 = '' -- Option
-
-                  -- Enable field
-                  SET @cFieldAttr07 = '' -- QTY
-
-                  SET @nAfterScn = @nScn_ShortPick
-                  SET @nAfterStep = @nStep_ShortPick
+                  SET @nErrNo = 221302
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- CannotReturn
+                  GOTO Quit
                END
             END
          END

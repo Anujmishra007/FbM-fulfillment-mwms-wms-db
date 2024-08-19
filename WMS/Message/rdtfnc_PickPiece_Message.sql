@@ -40,4 +40,3 @@ execute rdt.rdtAddMsg 100086, 10, '100086Need PickZone  ', 'us_english', 839
 execute rdt.rdtAddMsg 100087, 10, '100087Need CartonID  ', 'us_english', 839
 execute rdt.rdtAddMsg 100088, 10, '100088InvalidCartonID', 'us_english', 839
 execute rdt.rdtAddMsg 100089, 10, '100089InvalidCartonID', 'us_english', 839
-execute rdt.rdtAddMsg 100090, 10, '100090Diff TO LOC', 'us_english', 839
