@@ -157,32 +157,27 @@ BEGIN
    BEGIN
       SET @cTOLOCConfig = rdt.RDTGetConfig( @nFunc, 'TOLOC', @cStorerKey)
 
+      IF ISNULL(@cTOLOCConfig, '') <> '1'
+         GOTO Quit
+
       IF @nAction = 0
       BEGIN
          IF @nStep = 4 
          BEGIN
             IF @nInputKey = 1
             BEGIN
-               IF @cTOLOCConfig = '1'
-               BEGIN
-                  SELECT TOP 1 @cToLOC = ISNULL(OI.OrderInfo10, '')
-                  FROM OrderInfo OI WITH (NOLOCK)
-                  INNER JOIN PICKHEADER P WITH (NOLOCK) ON P.OrderKey= OI.OrderKey
-                  WHERE P.PickHeaderKey = @cPickSlipNo AND P.StorerKey = @cStorerKey
+               SELECT TOP 1 @cToLOC = ISNULL(OI.OrderInfo10, '')
+               FROM OrderInfo OI WITH (NOLOCK)
+               INNER JOIN PICKHEADER P WITH (NOLOCK) ON P.OrderKey= OI.OrderKey
+               WHERE P.PickHeaderKey = @cPickSlipNo AND P.StorerKey = @cStorerKey
 
-                  IF EXISTS ( SELECT 1 FROM dbo.LOC WITH (NOLOCK) 
-                            WHERE Facility = @cFacility
-                             AND Loc = @cToLOC )
-                     SET @cOutField01 = @cToLOC
-                  ELSE
-                     SET @cOutField01 = ''
-                  SET @cOutField02 = ''
-               END
-               ELSE 
-               BEGIN
+               IF EXISTS ( SELECT 1 FROM dbo.LOC WITH (NOLOCK) 
+                           WHERE Facility = @cFacility
+                           AND Loc = @cToLOC )
+                  SET @cOutField01 = @cToLOC
+               ELSE
                   SET @cOutField01 = ''
-                  SET @cOutField02 = ''
-               END
+               SET @cOutField02 = ''
 
                SET @nAfterScn = 6417
                SET @nAfterStep = 99
@@ -195,21 +190,18 @@ BEGIN
             BEGIN
                IF @cOption = '3'
                BEGIN
-                  IF @cTOLOCConfig = '1'
-                  BEGIN
-                     SELECT @cToLOC = ISNULL(OI.OrderInfo10, '')
-                     FROM OrderInfo OI WITH (NOLOCK)
-                     INNER JOIN PICKHEADER P WITH (NOLOCK) ON P.OrderKey= OI.OrderKey
-                     WHERE P.PickHeaderKey = @cPickSlipNo AND P.StorerKey = @cStorerKey
+                  SELECT @cToLOC = ISNULL(OI.OrderInfo10, '')
+                  FROM OrderInfo OI WITH (NOLOCK)
+                  INNER JOIN PICKHEADER P WITH (NOLOCK) ON P.OrderKey= OI.OrderKey
+                  WHERE P.PickHeaderKey = @cPickSlipNo AND P.StorerKey = @cStorerKey
 
+                  IF EXISTS ( SELECT 1 FROM dbo.LOC WITH (NOLOCK) 
+                              WHERE Facility = @cFacility
+                              AND Loc = @cToLOC )
                      SET @cOutField01 = @cToLOC
-                     SET @cOutField02 = ''
-                  END
-                  ELSE 
-                  BEGIN
+                  ELSE
                      SET @cOutField01 = ''
-                     SET @cOutField02 = ''
-                  END
+                  SET @cOutField02 = ''
                   
                   SET @nAfterScn = 6417
                   SET @nAfterStep = 99
