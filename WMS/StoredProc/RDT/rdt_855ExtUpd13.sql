@@ -79,7 +79,8 @@ BEGIN
       @xState                    INT,
       @cLabelName                NVARCHAR(30),
       @nWorkOrderDetailQty       INT,
-      @cLabelListName            NVARCHAR(10)
+      @cLabelListName            NVARCHAR(10),
+      @cShipperKey               NVARCHAR(15)
 
    DECLARE @tLabels TABLE
    (
@@ -374,7 +375,8 @@ BEGIN
 
                DECLARE @cOrderGroup NVARCHAR(20) = ''
 
-               SELECT TOP 1 @cOrderGroup = orm.OrderGroup
+               SELECT TOP 1 @cOrderGroup = orm.OrderGroup,
+                  @cShipperKey = ISNULL(ShipperKey, '')
                FROM dbo.PICKDETAIL pkd WITH(NOLOCK)
                INNER JOIN dbo.ORDERS orm WITH(NOLOCK) ON pkd.StorerKey = orm.StorerKey AND pkd.OrderKey = orm.OrderKey
                WHERE pkd.StorerKey = @cStorerKey
@@ -418,6 +420,8 @@ BEGIN
                      END
 
                      IF ISNULL(@cOrderGroup, '') = '30'
+                        AND TRIM(@cShipperKey) <> ''
+                        AND EXISTS(SELECT 1 FROM CODELKUP WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND LISTNAME = 'WSCourier' AND @cShipperKey = ISNULL(notes,'-1'))
                      BEGIN
                         -- Insert transmitlog2 here
                         EXECUTE ispGenTransmitLog2
