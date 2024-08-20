@@ -47,6 +47,7 @@ BEGIN
          , @n_LogErrNo                 INT            = ''                   
          , @c_LogErrMsg                NVARCHAR(255)  = ''            
          , @CUR_ERRLIST                CURSOR           
+         , @CUR_MER                    CURSOR           
          , @c_MbolKey                  NVARCHAR(10)   = ''
          , @b_MBOLValidFlag            INT = 0
 	 
@@ -105,48 +106,98 @@ BEGIN
          , @c_SCAC                     NVARCHAR(10)=''
          , @c_ActionErrNo              INT=0
          , @c_ActionErrMsg             NVARCHAR(250)=''
+         , @c_LineText                 NVARCHAR(MAX)=''
 
    /* declare variables */
-   DECLARE CUR_MBOL CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
-   SELECT MBOLKey 
-   FROM dbo.MBOL WITH (NOLOCK) 
-   WHERE CBOLKey = @n_Cbolkey
-   ORDER BY MbolKey
-
-   OPEN CUR_MBOL
-   
-   FETCH NEXT FROM CUR_MBOL INTO @c_MBOLKey
-   
-   WHILE @@FETCH_STATUS = 0
+   IF @c_ProceedWithWarning = 'N' AND @n_WarningNo < 1
    BEGIN
-       EXEC dbo.isp_ValidateMBOL @c_MBOLKey = @c_MbolKey,              -- nvarchar(10)
-                                 @b_ReturnCode = @b_MBOLValidFlag OUTPUT, -- int
-                                 @n_err = @n_err OUTPUT,               -- int
-                                 @c_errmsg = @c_errmsg OUTPUT,         -- nvarchar(255)
-                                 @n_CBOLKey = @n_Cbolkey,              -- bigint
-                                 @c_CallFrom = N''                     -- nvarchar(30)
-       
-       IF @b_MBOLValidFlag <> 0 -- -1 = Error, 1=Warning
-       BEGIN
+      DECLARE CUR_MBOL CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
+      SELECT MBOLKey 
+      FROM dbo.MBOL WITH (NOLOCK) 
+      WHERE CBOLKey = @n_Cbolkey
+      ORDER BY MbolKey
+      
+      OPEN CUR_MBOL
+      
+      FETCH NEXT FROM CUR_MBOL INTO @c_MBOLKey
+      
+      WHILE @@FETCH_STATUS = 0
+      BEGIN
+         EXEC dbo.isp_ValidateMBOL @c_MBOLKey = @c_MbolKey,              -- nvarchar(10)
+                                   @b_ReturnCode = @b_MBOLValidFlag OUTPUT, -- int
+                                   @n_err = @n_err OUTPUT,               -- int
+                                   @c_errmsg = @c_errmsg OUTPUT,         -- nvarchar(255)
+                                   @n_CBOLKey = @n_Cbolkey,              -- bigint
+                                   @c_CallFrom = N''                     -- nvarchar(30)
+          
+         IF @b_MBOLValidFlag <> 0 -- -1 = Error, 1=Warning
+         BEGIN
+            INSERT INTO @t_MBOLError (MBOLKEY, ValidFlag )
+            VALUES (@c_MbolKey, @b_MBOLValidFlag)
+         END
+      
+         FETCH NEXT FROM CUR_MBOL INTO @c_MBOLKey
+      END
+      CLOSE CUR_MBOL
+      DEALLOCATE CUR_MBOL
+      
+      IF EXISTS(SELECT 1 FROM @t_MBOLError WHERE ValidFlag = -1) 
+      BEGIN
+         SET @n_WarningNo = 0
+         SET @n_Continue = 3
+         SET @n_err = 562451
+         SET @c_ErrMsg  = 'NSQL' + CONVERT(CHAR(6), @n_err)
+                        + 'MBOL Validation Failed! (lsp_CBOLMarkShip)'  
+                        
+         INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
+         VALUES (@c_TableName, @c_SourceType, @c_MbolKey, CAST(@n_Cbolkey AS VARCHAR(10)), '', 'ERROR', 0, @n_err, @c_errmsg) 
+
+         GOTO EXIT_SP
+      END
+
+      --Warning
+      IF EXISTS(SELECT 1 FROM @t_MBOLError WHERE ValidFlag = 1) 
+      BEGIN
+         SET @n_WarningNo = 1
+         SET @c_ErrMsg = ''
+         SET @n_Err = 0
+
+         SET @CUR_MER = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+         SELECT MER.MBOLKey, MER.LineText
+         FROM dbo.MBOLErrorReport MER WITH (NOLOCK)  
+	      JOIN dbo.MBOL WITH (NOLOCK) ON (MER.MBOLKey = MBOL.MBOLKey)
+         JOIN dbo.CBOL WITH (NOLOCK) ON (MBOL.CBOLKey = CBOL.CBOLKey)
+         WHERE dbo.CBOL.CbolKey = @n_Cbolkey  
+         AND MER.[Type] in ('WarningMsg')
+         ORDER BY MER.SeqNo
          
-           INSERT INTO @t_MBOLError (MBOLKEY, ValidFlag )
-           VALUES (@c_MbolKey, @b_MBOLValidFlag)
-       END
+         OPEN @CUR_MER
+         
+         FETCH NEXT FROM @CUR_MER INTO @c_MbolKey, @c_LineText                                                                                
+                           
+         WHILE @@FETCH_STATUS <> -1
+         BEGIN
+            IF ISNULL(@c_ErrMsg, '') = ''
+               SET @c_ErrMsg = 'MBOL#: ' + TRIM(@c_MbolKey) + ' - ' + @c_LineText
+            ELSE
+               SET @c_ErrMsg = TRIM(@c_ErrMsg) + CHAR(13) + 'MBOL#: ' + TRIM(@c_MbolKey) + ' - ' + @c_LineText
 
-       FETCH NEXT FROM CUR_MBOL INTO @c_MBOLKey
+            FETCH NEXT FROM @CUR_MER INTO @c_MbolKey, @c_LineText           
+         END
+         CLOSE @CUR_MER
+         DEALLOCATE @CUR_MER
+
+         SET @c_ErrMsg = TRIM(@c_ErrMsg) + '. Are you sure want to continue?'
+
+         INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
+         VALUES (@c_TableName, @c_SourceType, @c_MbolKey, CAST(@n_Cbolkey AS VARCHAR(10)), '', 'WARNING', @n_WarningNo, 0, @c_errmsg)
+      END
+
+      IF @n_WarningNo = 1
+      BEGIN
+         GOTO EXIT_SP
+      END
    END
-   
-   CLOSE CUR_MBOL
-   DEALLOCATE CUR_MBOL
-
-   IF EXISTS(SELECT 1 FROM @t_MBOLError WHERE ValidFlag = -1) 
-   BEGIN
-      SET @n_Continue = 3
-      SET @n_err = 562451
-      SET @c_ErrMsg  = 'NSQL' + CONVERT(CHAR(6), @n_err)
-                     + 'MBOL Validation Failed! (lsp_CBOLMarkShip)'       
-   END
-
 
    IF @n_Continue IN (1,2)
    BEGIN      
@@ -155,7 +206,6 @@ BEGIN
          SELECT MBOLKey 
          FROM dbo.MBOL WITH (NOLOCK) 
          WHERE CBOLKey = @n_Cbolkey 
-         AND Status = '9'
          ORDER BY CBOLLineNumber
    
          OPEN CUR_MBOL
@@ -164,22 +214,22 @@ BEGIN
    
          WHILE @@FETCH_STATUS = 0
          BEGIN
-             UPDATE dbo.MBOL WITH (ROWLOCK)
-               SET Status='9'
-             WHERE MbolKey = @c_MbolKey
+            UPDATE dbo.MBOL WITH (ROWLOCK)
+            SET [Status] = '9'
+            WHERE MbolKey = @c_MbolKey
 
-             SET @c_ActionErrNo = 562452
-             SET @c_ActionErrMsg = 'Updating MBOL No:' + @c_MbolKey + ' Fail'
+            SET @c_ActionErrNo = 562452
+            SET @c_ActionErrMsg = 'Updating MBOL No:' + @c_MbolKey + ' Fail'
 
-             FETCH NEXT FROM CUR_MBOL INTO @c_MBOLKey
+            FETCH NEXT FROM CUR_MBOL INTO @c_MBOLKey
          END
-   
          CLOSE CUR_MBOL
          DEALLOCATE CUR_MBOL      
 
          UPDATE dbo.CBOL 
-            SET Status='9'
-         WHERE CBOLKey = @n_Cbolkey 	
+         SET [Status] = '9'
+         WHERE CBOLKey = @n_Cbolkey 
+         
          SET @c_ActionErrNo = 562452
          SET @c_ActionErrMsg = 'Updating CBOL No:' + CAST(@n_Cbolkey AS VARCHAR(10)) + ' Fail'
 
@@ -212,13 +262,11 @@ BEGIN
       END
    END
 
-
    IF @n_Continue = 3
    BEGIN
       GOTO EXIT_SP
    END
 
- 
    EXIT_SP:
    
    IF (XACT_STATE()) = -1               
@@ -253,7 +301,6 @@ BEGIN
          COMMIT TRAN
       END
    END
-   
 
    SET @CUR_ERRLIST = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
    SELECT   twl.TableName         
