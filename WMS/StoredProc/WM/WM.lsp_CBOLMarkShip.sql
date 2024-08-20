@@ -187,7 +187,7 @@ BEGIN
          CLOSE @CUR_MER
          DEALLOCATE @CUR_MER
 
-         SET @c_ErrMsg = TRIM(@c_ErrMsg) + '. Are you sure want to continue?'
+         SET @c_ErrMsg = TRIM(@c_ErrMsg) + CHAR(13) + 'Are you sure want to continue?'
 
          INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
          VALUES (@c_TableName, @c_SourceType, @c_MbolKey, CAST(@n_Cbolkey AS VARCHAR(10)), '', 'WARNING', @n_WarningNo, 0, @c_errmsg)
