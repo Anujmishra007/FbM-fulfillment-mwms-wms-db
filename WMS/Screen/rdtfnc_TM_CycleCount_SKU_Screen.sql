@@ -24,6 +24,7 @@ EXECUTE rdt.rdtAddScn 2940, 'ENG',
    ,@cLine14 = '%e'
  
 -- 2941 = ?? screen
+-- Removed lottable01~04 display to cater for dynamic lottable (WMS-23133)
 DELETE rdt.RDTScn WHERE Scn = 2941 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 2941, 'ENG',
     @cLine01 = 'LOC: %10d14  %19d13'   -- WMS-16634
@@ -34,10 +35,6 @@ EXECUTE rdt.rdtAddScn 2941, 'ENG',
    ,@cLine06 = '%20d03'
    ,@cLine07 = 'UOM: %05d04 %05d05'
    ,@cLine08 = 'QTY: %05i06 %05i07'
-   ,@cLine09 = '1 %18i08'
-   ,@cLine10 = '2 %18i09'
-   ,@cLine11 = '3 %18i10'
-   ,@cLine12 = '4 %16i11'
    ,@cLine13 = '%20d15'
    ,@cLine14 = '%e'
  

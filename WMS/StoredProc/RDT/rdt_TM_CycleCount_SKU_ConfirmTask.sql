@@ -2,9 +2,10 @@ SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
+
 /************************************************************************/
 /* Store procedure: rdt_TM_CycleCount_SKU_ConfirmTask                   */
-/* Copyright      : IDS                                                 */
+/* Copyright      : MAERSK                                              */
 /*                                                                      */
 /* Purpose: Comfirm Pick                                                */
 /*                                                                      */
@@ -25,6 +26,7 @@ GO
 /* 06-10-2017 1.3  JihHaur  IN00484539 CCDetail add additional line(JH01)*/
 /* 25-09-2023 1.4  James    WMS-23249 Add config allow Lottable05       */
 /*                          null value when adding new line (james03)   */
+/* 2023-10-12 1.5  James    WMS-23113 Add Lottable06 ~ 15 (james04)     */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_TM_CycleCount_SKU_ConfirmTask] (
@@ -44,6 +46,16 @@ CREATE OR ALTER PROC [RDT].[rdt_TM_CycleCount_SKU_ConfirmTask] (
     ,@cLottable03      NVARCHAR( 18)
     ,@dLottable04      DATETIME
     ,@dLottable05      DATETIME
+    ,@cLottable06      NVARCHAR( 30)
+    ,@cLottable07      NVARCHAR( 30)
+    ,@cLottable08      NVARCHAR( 30)
+    ,@cLottable09      NVARCHAR( 30)
+    ,@cLottable10      NVARCHAR( 30)
+    ,@cLottable11      NVARCHAR( 30)
+    ,@cLottable12      NVARCHAR( 30)
+    ,@dLottable13      DATETIME
+    ,@dLottable14      DATETIME
+    ,@dLottable15      DATETIME
     ,@cUCC             NVARCHAR( 20)
     ,@cTaskDetailKey   NVARCHAR( 10)
     ,@cPickMethod      NVARCHAR( 10)
@@ -78,6 +90,7 @@ BEGIN
          , @cDefaultQty           NVARCHAR( 5)  -- (james01)
          , @nDefaultQty           INT           -- (james01)
          , @cDefaultNullLottable05  NVARCHAR( 1)
+         , @cSerialNoCapture      NVARCHAR( 1)
 
    SET @cCCGroupExLottable05 = ''
    SET @cCCGroupExLottable05 = rdt.RDTGetConfig( @nFunc, 'CCGroupExLottable05', @cStorerkey)
@@ -89,6 +102,8 @@ BEGIN
       SET @nDefaultQty = 0
 
    SET @cDefaultNullLottable05 = rdt.RDTGetConfig( @nFunc, 'DefaultNullLottable05', @cStorerkey)
+   
+   SET @cSerialNoCapture = rdt.RDTGetConfig( @nFunc, 'SerialNoCapture', @cStorerKey)
 
    SET @nTotalRecord = 0
    SET @bDebug = 0
@@ -112,7 +127,7 @@ BEGIN
       ,@dLottable05       '@dLottable05'
       ,@cUCC              '@cUCC'
    END
-
+   --INSERT INTO TRACEINFO(TraceName, TimeIn, Col1, Col2, Col3, Col4) VALUES ('1768S', GETDATE(), @cLottable01, @cLottable02, @cLottable03, @cLottable06)
    SET @nTranCount = @@TRANCOUNT
 
    IF @dLottable04 = 0     SET @dLottable04 = NULL
@@ -125,13 +140,13 @@ BEGIN
       SET @dLottable05 = CONVERT( DATETIME, CONVERT( NVARCHAR( 10), @dLottable05, 120), 120)
 
 --GOH01 Start
---  SET @dNewLottable05 = CAST( CONVERT(VARCHAR(10), GETDATE(), 120) AS DATETIME )
+--	 SET @dNewLottable05 = CAST( CONVERT(VARCHAR(10), GETDATE(), 120) AS DATETIME )
    SET @dNewLottable05 = CONVERT( DATETIME, CONVERT( NVARCHAR( 10), GETDATE(), 120), 120)
 --GOH01 End
 
    IF @cDefaultNullLottable05 = '1'
       SET @dNewLottable05 = NULL
-
+      
    BEGIN TRAN
    SAVE TRAN TM_CC_SKU_ConfirmTask
 
@@ -197,7 +212,7 @@ BEGIN
                   --AND IsNULL( Lottable04, 0) = IsNULL( @dLottable04, 0)
                   --AND IsNULL( Lottable05, 0) = IsNULL( @dLottable05, 0)
                   AND IsNULL( CONVERT( DATETIME, CONVERT( NVARCHAR( 10), Lottable04, 120), 120), 0) = IsNULL( @dLottable04, 0)  --(JH01)
-                  AND IsNULL( CONVERT( DATETIME, CONVERT( NVARCHAR( 10), Lottable05, 120), 120), 0) = IsNULL( @dLottable05, 0)  --(JH01)
+				      AND IsNULL( CONVERT( DATETIME, CONVERT( NVARCHAR( 10), Lottable05, 120), 120), 0) = IsNULL( @dLottable05, 0)  --(JH01)
                   AND CCSheetNo  = @cTaskDetailKey  )
       BEGIN
          SELECT @nTotalRecord = COUNT(1) FROM dbo.CCDetail WITH (NOLOCK)
@@ -212,7 +227,7 @@ BEGIN
          --AND IsNULL( Lottable04, 0) = IsNULL( @dLottable04, 0)
          --AND IsNULL( Lottable05, 0) = IsNULL( @dLottable05, 0)
          AND IsNULL( CONVERT( DATETIME, CONVERT( NVARCHAR( 10), Lottable04, 120), 120), 0) = IsNULL( @dLottable04, 0)  --(JH01)
-         AND IsNULL( CONVERT( DATETIME, CONVERT( NVARCHAR( 10), Lottable05, 120), 120), 0) = IsNULL( @dLottable05, 0)  --(JH01)
+		   AND IsNULL( CONVERT( DATETIME, CONVERT( NVARCHAR( 10), Lottable05, 120), 120), 0) = IsNULL( @dLottable05, 0)  --(JH01)
          AND CCSheetNo  = @cTaskDetailKey
 
          DECLARE CursorConfirmCC CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
@@ -230,7 +245,7 @@ BEGIN
          --AND IsNULL( Lottable04, 0) = IsNULL( @dLottable04, 0)
          --AND IsNULL( Lottable05, 0) = IsNULL( @dLottable05, 0)
          AND IsNULL( CONVERT( DATETIME, CONVERT( NVARCHAR( 10), Lottable04, 120), 120), 0) = IsNULL( @dLottable04, 0)  --(JH01)
-         AND IsNULL( CONVERT( DATETIME, CONVERT( NVARCHAR( 10), Lottable05, 120), 120), 0) = IsNULL( @dLottable05, 0)  --(JH01)
+		   AND IsNULL( CONVERT( DATETIME, CONVERT( NVARCHAR( 10), Lottable05, 120), 120), 0) = IsNULL( @dLottable05, 0)  --(JH01)
          AND CCSheetNo    = @cTaskDetailKey
          ORDER BY CCDetailKey
       END
@@ -326,7 +341,9 @@ BEGIN
          BEGIN
             -- (james01)
             UPDATE dbo.CCDetail WITH (ROWLOCK) SET
-               Qty           = CASE WHEN @nDefaultQty > 0 THEN Qty + @nQty ELSE @nQty END
+               Qty           = CASE WHEN @nDefaultQty > 0 THEN Qty + @nQty 
+                                    WHEN @cSerialNoCapture IN ('1', '2') THEN Qty + @nQty
+                               ELSE @nQty END
               ,Status        = CASE WHEN Status = '4' THEN Status ELSE '2' END
             WHERE CCKey       = @cCCKey
             AND CCSheetNo     = @cTaskDetailKey
@@ -368,7 +385,9 @@ BEGIN
       BEGIN
          -- (james01)
          UPDATE dbo.CCDetail WITH (ROWLOCK) SET
-            Qty           = CASE WHEN @nDefaultQty > 0 THEN Qty + @nQty ELSE @nQty END
+            Qty           = CASE WHEN @nDefaultQty > 0 THEN Qty + @nQty 
+                                 WHEN @cSerialNoCapture IN ('1', '2') THEN Qty + @nQty
+                            ELSE @nQty END
            ,Status        = CASE WHEN Status = '4' THEN Status ELSE '2' END
          WHERE CCKey       = @cCCKey
          AND CCSheetNo     = @cTaskDetailKey
@@ -413,18 +432,24 @@ BEGIN
    IF @nQty > 0
    BEGIN
       EXECUTE nspg_getkey
-            'CCDetailKey'
-            , 10
-            , @cNewCCDetailKey OUTPUT
-            , @b_success OUTPUT
-            , @nErrNo OUTPUT
-            , @cErrMsg OUTPUT
+   	      'CCDetailKey'
+   	      , 10
+   	      , @cNewCCDetailKey OUTPUT
+   	      , @b_success OUTPUT
+   	      , @nErrNo OUTPUT
+   	      , @cErrMsg OUTPUT
 
       INSERT INTO dbo.CCDetail (
-               cckey, ccdetailkey, StorerKey, sku, lot, loc, id, qty, ccsheetno, Lottable01,
-               Lottable02, Lottable03, Lottable04, Lottable05, SystemQty, RefNo, Status        )
-      VALUES ( @cCCKey, @cNewCCDetailKey, @cStorerKey, @cSKU, '', @cLoc, @cID, @nQty, @cTaskDetailKey, @cLottable01,
-             @cLottable02, @cLottable03, @dLottable04, @dNewLottable05, 0, '', '4' )
+               cckey, ccdetailkey, StorerKey, sku, lot, loc, id, qty, ccsheetno, 
+               Lottable01, Lottable02, Lottable03, Lottable04, Lottable05, 
+               Lottable06, Lottable07, Lottable08, Lottable09, Lottable10, 
+               Lottable11, Lottable12, Lottable13, Lottable14, Lottable15,
+               SystemQty, RefNo, Status)
+      VALUES ( @cCCKey, @cNewCCDetailKey, @cStorerKey, @cSKU, '', @cLoc, @cID, @nQty, @cTaskDetailKey, 
+               @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dNewLottable05, 
+               @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10, 
+               @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, 
+               0, '', '4' )
 
       IF @@ERROR <> 0
       BEGIN
