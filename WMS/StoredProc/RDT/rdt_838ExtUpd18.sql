@@ -9,10 +9,12 @@ GO
 /* Store procedure: rdt_838ExtUpd18                                     */
 /* Copyright      : Maersk                                              */
 /*                                                                      */
-/* Purpose: Trigger IML after print label                               */
+/* Purpose: Trigger IML after print label fro Levis US                  */
 /*                                                                      */
 /* Date       Rev  Author      Purposes                                 */
-/* 2024-07-05 1.0  Jackc       FCR-392 Created                        */
+/* 2024-07-05 1.0  Jackc       FCR-392 Created                          */
+/* 2024-08-20 1.1  Jackc       FCR-392 Send IML based on conditions     */
+/*                              (FBR v1.5)                              */
 /************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_838ExtUpd18 (
@@ -54,6 +56,8 @@ BEGIN
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
+   DECLARE @bDebugFlag  BINARY = 0
+
    IF @nFunc = 838 -- Pack
    BEGIN
       IF @nStep = 5 -- Print label
@@ -64,48 +68,70 @@ BEGIN
             BEGIN
                DECLARE @bSuccess             INT
                DECLARE @cTransmitLogKey      NVARCHAR( 10)
-               DECLARE @c_QCmdClass          NVARCHAR(10)   = ''   
+               DECLARE @c_QCmdClass          NVARCHAR( 10)   = '' 
+               DECLARE @cShipperKey          NVARCHAR( 15)  
                DECLARE @b_Debug              INT = 0
                DECLARE @nTranCount           INT
 
-               SET @nTranCount = @@TRANCOUNT  
-  
-               BEGIN TRAN  
-               SAVE TRAN rdt_838ExtUpd18  
+               SELECT @cShipperKey = ORD.ShipperKey
+               FROM ORDERS ORD WITH (NOLOCK) 
+               INNER JOIN PICKHEADER PKH WITH (NOLOCK)
+                  ON ORD.OrderKey = PKH.OrderKey
+               WHERE PKH.PickHeaderKey = @cPickSlipNo
 
-               EXECUTE ispGenTransmitLog2 
-               @c_TableName      = 'WSSOECL', 
-               @c_Key1           = @cLabelNo, 
-               @c_Key2           = @cLabelNo, 
-               @c_Key3           = @cStorerkey, 
-               @c_TransmitBatch  = '', 
-               @b_Success        = @bSuccess   OUTPUT,    
-               @n_err            = @nErrNo     OUTPUT,    
-               @c_errmsg         = @cErrMsg    OUTPUT
+               IF @bDebugFlag = 1
+                  SELECT 'ShipperKey', @cShipperKey
 
-               IF @nErrNo <> 0 OR @bSuccess <> 1
-                     GOTO RollBackTran
+               IF EXISTS (SELECT 1 FROM CODELKUP WITH (NOLOCK)
+                           WHERE LISTNAME = 'WSCourier'
+                              AND Notes = @cShipperKey)
+               BEGIN
 
-               SELECT @cTransmitLogKey = transmitlogkey
-               FROM dbo.TRANSMITLOG2 WITH (NOLOCK)
-               WHERE tablename = 'WSSOECL'
-                  AND   key1 = @cLabelNo
-                  AND   key2 = @cLabelNo
-                  AND   key3 = @cStorerkey
+                  SET @nTranCount = @@TRANCOUNT  
 
-               EXEC dbo.isp_QCmd_WSTransmitLogInsertAlert 
-               @c_QCmdClass         = @c_QCmdClass, 
-               @c_FrmTransmitlogKey = @cTransmitLogKey, 
-               @c_ToTransmitlogKey  = @cTransmitLogKey, 
-               @b_Debug             = @b_Debug, 
-               @b_Success           = @bSuccess    OUTPUT, 
-               @n_Err               = @nErrNo      OUTPUT, 
-               @c_ErrMsg            = @cErrMsg     OUTPUT
+                  BEGIN TRAN  
+                  SAVE TRAN rdt_838ExtUpd18  
 
-               IF @nErrNo <> 0 OR @bSuccess <> 1
-                  GOTO RollbackTran
+                  EXECUTE ispGenTransmitLog2 
+                  @c_TableName      = 'WSSOECL', 
+                  @c_Key1           = @cLabelNo, 
+                  @c_Key2           = @cLabelNo, 
+                  @c_Key3           = @cStorerkey, 
+                  @c_TransmitBatch  = '', 
+                  @b_Success        = @bSuccess   OUTPUT,    
+                  @n_err            = @nErrNo     OUTPUT,    
+                  @c_errmsg         = @cErrMsg    OUTPUT
 
-               COMMIT TRAN rdt_838ExtUpd18
+                  IF @nErrNo <> 0 OR @bSuccess <> 1
+                        GOTO RollBackTran
+
+                  SELECT @cTransmitLogKey = transmitlogkey
+                  FROM dbo.TRANSMITLOG2 WITH (NOLOCK)
+                  WHERE tablename = 'WSSOECL'
+                     AND   key1 = @cLabelNo
+                     AND   key2 = @cLabelNo
+                     AND   key3 = @cStorerkey
+
+                  EXEC dbo.isp_QCmd_WSTransmitLogInsertAlert 
+                  @c_QCmdClass         = @c_QCmdClass, 
+                  @c_FrmTransmitlogKey = @cTransmitLogKey, 
+                  @c_ToTransmitlogKey  = @cTransmitLogKey, 
+                  @b_Debug             = @b_Debug, 
+                  @b_Success           = @bSuccess    OUTPUT, 
+                  @n_Err               = @nErrNo      OUTPUT, 
+                  @c_ErrMsg            = @cErrMsg     OUTPUT
+
+                  IF @nErrNo <> 0 OR @bSuccess <> 1
+                     GOTO RollbackTran
+
+                  COMMIT TRAN rdt_838ExtUpd18
+
+                  IF @bDebugFlag = 1
+                  BEGIN
+                     SELECT 'Trasmitlog2 record'
+                     SELECT * FROM dbo.TRANSMITLOG2 WITH (NOLOCK) WHERE transmitlogkey = @cTransmitLogKey
+                  END
+               END -- send iml end
 
                GOTO Quit
 
