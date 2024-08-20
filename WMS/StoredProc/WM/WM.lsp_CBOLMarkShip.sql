@@ -20,7 +20,7 @@ GO
 /* Date        Author   Ver   Purposes                                     */
 /***************************************************************************/
 CREATE OR ALTER PROCEDURE [WM].[lsp_CBOLMarkShip] 
-	   @n_Cbolkey                 BIGINT = 0
+      @n_Cbolkey                 BIGINT = 0
     , @b_Success                 INT            = 1  OUTPUT
     , @n_Err                     INT            = 0  OUTPUT
     , @c_ErrMsg                  NVARCHAR(250)  = '' OUTPUT
@@ -50,7 +50,7 @@ BEGIN
          , @CUR_MER                    CURSOR           
          , @c_MbolKey                  NVARCHAR(10)   = ''
          , @b_MBOLValidFlag            INT = 0
-	 
+    
    DECLARE @t_MBOLError TABLE
       ( RowID             INT            IDENTITY(1,1) 
       , MBOLKEY           NVARCHAR(10)   NOT NULL DEFAULT('')
@@ -165,7 +165,7 @@ BEGIN
          SET @CUR_MER = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
          SELECT MER.MBOLKey, MER.LineText
          FROM dbo.MBOLErrorReport MER WITH (NOLOCK)  
-	      JOIN dbo.MBOL WITH (NOLOCK) ON (MER.MBOLKey = MBOL.MBOLKey)
+         JOIN dbo.MBOL WITH (NOLOCK) ON (MER.MBOLKey = MBOL.MBOLKey)
          JOIN dbo.CBOL WITH (NOLOCK) ON (MBOL.CBOLKey = CBOL.CBOLKey)
          WHERE dbo.CBOL.CbolKey = @n_Cbolkey  
          AND MER.[Type] in ('WarningMsg')
