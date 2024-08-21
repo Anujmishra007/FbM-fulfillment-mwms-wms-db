@@ -86,6 +86,8 @@ BEGIN
                            WHERE LISTNAME = 'WSCourier'
                               AND Notes = @cShipperKey)
                BEGIN
+                  IF @bDebugFlag = 1
+                     SELECT 'Generate Transmit Log2', @cLabelNo as LabelNo
 
                   SET @nTranCount = @@TRANCOUNT  
 
@@ -125,12 +127,6 @@ BEGIN
                      GOTO RollbackTran
 
                   COMMIT TRAN rdt_838ExtUpd18
-
-                  IF @bDebugFlag = 1
-                  BEGIN
-                     SELECT 'Trasmitlog2 record'
-                     SELECT * FROM dbo.TRANSMITLOG2 WITH (NOLOCK) WHERE transmitlogkey = @cTransmitLogKey
-                  END
                END -- send iml end
 
                GOTO Quit
