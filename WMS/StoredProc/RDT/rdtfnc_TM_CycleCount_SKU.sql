@@ -1213,7 +1213,9 @@ BEGIN
                   @nMorePage   OUTPUT,
                   @nErrNo      OUTPUT,
                   @cErrMsg     OUTPUT,
-                  @cCCKey,
+                  --V3.8 by jackc
+                  --@cCCKey,
+                  @cTaskDetailKey, --V3.8 by jackc END,
                   @nFunc
 
                IF @nErrNo <> 0
@@ -3711,7 +3713,9 @@ BEGIN
                @nMorePage   OUTPUT,
                @nErrNo      OUTPUT,
                @cErrMsg     OUTPUT,
-               @cCCKey,
+               --V3.8 by jackc
+               --@cCCKey,
+               @cTaskDetailKey, --V3.8 by jackc END
                @nFunc
 
             IF @nErrNo <> 0
@@ -5090,7 +5094,9 @@ BEGIN
          @nMorePage   OUTPUT,
          @nErrNo      OUTPUT,
          @cErrMsg     OUTPUT,
-         @cCCKey,
+         --V3.8 by jackc
+         --@cCCKey,
+         @cTaskDetailKey, --V3.8 by jackc END
          @nFunc
       
       IF @nErrNo <> 0
@@ -5480,7 +5486,9 @@ BEGIN
          @nMorePage   OUTPUT,
          @nErrNo      OUTPUT,
          @cErrMsg     OUTPUT,
-         @cCCKey,
+         --V3.8 by jackc
+         --@cCCKey,
+         @cTaskDetailKey, --V3.8 by jackc END
          @nFunc
 
       IF @nMorePage = 1 -- Yes
@@ -5850,7 +5858,7 @@ BEGIN
   
             -- GOTO Next Screen  
             SET @nScn = @nFromScn + 1
-            SET @nStep = @nStep - 4
+            SET @nStep = @nStep - 5
   
             GOTO QUIT  
          END  
