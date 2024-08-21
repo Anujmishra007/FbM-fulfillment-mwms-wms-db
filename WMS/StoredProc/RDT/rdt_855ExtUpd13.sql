@@ -408,7 +408,7 @@ BEGIN
                      UPDATE dbo.PackInfo WITH(ROWLOCK)
                      SET CartonStatus = 'PACKED'
                      WHERE PickSlipNo = @cPickSlipNo
-                        AND (ISNULL(UccNo, '') = @cDropID OR ISNULL(RefNo, '') = @cDropID)
+                        AND ISNULL(RefNo, '') = @cDropID
 
                      --If all Packedinfo are marked as PACKED, mark PackHeader as 9
                      IF (SELECT COUNT(1) FROM dbo.PackInfo WITH(NOLOCK) WHERE PickSlipNo = @cPickSlipNo)
