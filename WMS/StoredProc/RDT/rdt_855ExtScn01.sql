@@ -7,6 +7,7 @@ GO
 /* Store procedure: rdt_855ExtScn01                                     */  
 /*                                                                      */  
 /* Modifications log:                                                   */  
+/* Customer: Granite                                                    */
 /*                                                                      */  
 /* Date       Rev  Author     Purposes                                  */  
 /* 2024-06-13 1.0  NLT013     FCR-386. Created                          */  

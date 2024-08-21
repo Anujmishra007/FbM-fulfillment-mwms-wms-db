@@ -10,6 +10,7 @@ GO
 /************************************************************************/
 /* Store procedure: rdt_855ExtValid07                                   */
 /* Copyright      : Maersk                                              */
+/* Customer: Granite                                                    */
 /*                                                                      */
 /* Purpose: Check if VAS is needed or not                               */
 /*                                                                      */
