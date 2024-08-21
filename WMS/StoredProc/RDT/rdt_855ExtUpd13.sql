@@ -384,11 +384,6 @@ BEGIN
                   AND ISNULL(pkd.CaseID, '') = @cDropID
                ORDER BY orm.OrderKey
 
-               SELECT @cPickSlipNo = PickSlipNo
-               FROM dbo.PackDetail WITH(NOLOCK) 
-               WHERE StorerKey = @cStorerKey 
-               AND labelno = @cDropID
-
                SET @nTranCount = @@TRANCOUNT  
                IF @nTranCount = 0
                   BEGIN TRANSACTION
@@ -413,7 +408,7 @@ BEGIN
                      UPDATE dbo.PackInfo WITH(ROWLOCK)
                      SET CartonStatus = 'PACKED'
                      WHERE PickSlipNo = @cPickSlipNo
-                        AND ISNULL(UccNo, '') = @cDropID
+                        AND (ISNULL(UccNo, '') = @cDropID OR ISNULL(RefNo, '') = @cDropID)
 
                      --If all Packedinfo are marked as PACKED, mark PackHeader as 9
                      IF (SELECT COUNT(1) FROM dbo.PackInfo WITH(NOLOCK) WHERE PickSlipNo = @cPickSlipNo)
