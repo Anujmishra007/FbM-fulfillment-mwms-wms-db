@@ -384,6 +384,11 @@ BEGIN
                   AND ISNULL(pkd.CaseID, '') = @cDropID
                ORDER BY orm.OrderKey
 
+               SELECT @cPickSlipNo = PickSlipNo
+               FROM dbo.PackDetail WITH(NOLOCK) 
+               WHERE StorerKey = @cStorerKey 
+               AND labelno = @cDropID
+
                SET @nTranCount = @@TRANCOUNT  
                IF @nTranCount = 0
                   BEGIN TRANSACTION
