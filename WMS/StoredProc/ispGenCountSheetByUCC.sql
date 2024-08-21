@@ -92,6 +92,8 @@ BEGIN
         , @b_Debug                    int            -- (james01)
         , @c_ExcludeQtyPicked         NVARCHAR(1)    -- (james01)
         , @c_GenCCdetailbyExcludePKDStatus3 NVARCHAR(1)
+        , @c_PickDetailJoinQuery NVARCHAR(255) = ''
+        , @c_PickDetailQtySubtractQuery NVARCHAR(255) = ''
         , @c_authority NVARCHAR(1)
         , @c_GenUCCCountSheetStatus2  NVARCHAR(10)   --NJOW03
         , @c_Status                   NVARCHAR(10)   --NJOW03
@@ -265,8 +267,12 @@ BEGIN
             RAISERROR('Error Executing nspGetRight', 16, 1)
             RETURN
         END
-    IF @c_GenCCdetailbyExcludePKDStatus3='1'
-        SET @c_GenCCdetailbyExcludePKDStatus3 = 'Y'
+    IF @c_GenCCdetailbyExcludePKDStatus3 = '1'
+        BEGIN
+            SET @c_GenCCdetailbyExcludePKDStatus3 = 'Y'
+            SET  @c_PickDetailJoinQuery = 'LEFT JOIN PICKDETAIL WITH (NOLOCK) ON PICKDETAIL.Lot = LOTxLOCxID.Lot and PICKDETAIL.Loc = LOTxLOCxID.Loc and PICKDETAIL.ID = LOTxLOCxID.Id '
+            SET @c_PickDetailQtySubtractQuery = ' - CASE WHEN PICKDETAIL.Status=''3'' THEN PICKDETAIL.Qty ELSE 0 END '
+        END
     ELSE
         SET @c_GenCCdetailbyExcludePKDStatus3 = 'N'
 
@@ -534,13 +540,9 @@ BEGIN
                                 --(Wan03) - START
                                 --+ 'Qty = CASE WHEN LOC.LOSEUCC = "0" THEN ISNULL(MIN(UCC.Qty),0) ELSE SUM(LOTxLOCxID.Qty-LOTxLOCxID.QtyAllocated) END, '
                                 + 'Qty = CASE WHEN LOC.LOSEUCC = ''0'' THEN ISNULL(MIN(UCC.Qty),0) ELSE '
-                                + CASE WHEN @c_ExcludeQtyAllocated = 'Y' AND @c_ExcludeQtyPicked = 'Y' THEN 'SUM(LOTxLOCxID.Qty-LOTxLOCxID.QtyAllocated-LOTxLOCxID.QtyPicked'+
-                                            CASE WHEN @c_GenCCdetailbyExcludePKDStatus3 = 'Y' THEN '- CASE WHEN PICKDETAIL.Status=''3'' THEN PICKDETAIL.Qty ELSE 0 END' ELSE '' END +
-                                        ' ) '
+                                + CASE WHEN @c_ExcludeQtyAllocated = 'Y' AND @c_ExcludeQtyPicked = 'Y' THEN 'SUM(LOTxLOCxID.Qty-LOTxLOCxID.QtyAllocated-LOTxLOCxID.QtyPicked'+ @c_PickDetailQtySubtractQuery + ' ) '
                                        WHEN @c_ExcludeQtyAllocated = 'Y' THEN 'SUM(LOTxLOCxID.Qty-LOTxLOCxID.QtyAllocated) '
-                                       WHEN @c_ExcludeQtyPicked    = 'Y' THEN 'SUM(LOTxLOCxID.Qty-LOTxLOCxID.QtyPicked'+
-                                            CASE WHEN @c_GenCCdetailbyExcludePKDStatus3 = 'Y' THEN '- CASE WHEN PICKDETAIL.Status=''3'' THEN PICKDETAIL.Qty ELSE 0 END' ELSE '' END +
-                                        ' ) '
+                                       WHEN @c_ExcludeQtyPicked    = 'Y' THEN 'SUM(LOTxLOCxID.Qty-LOTxLOCxID.QtyPicked'+ @c_PickDetailQtySubtractQuery + ' ) '
                                                  END
                                 + ' END, '
                                 --(Wan03) - END
@@ -553,7 +555,7 @@ BEGIN
                                 + 'JOIN SKUxLOC (NOLOCK) ON LOTxLOCxID.Loc = SKUxLOC.Loc '
                                 + 'AND LOTxLOCxID.StorerKey = SKUxLOC.StorerKey AND LOTxLOCxID.SKU = SKUxLOC.SKU '
                                 + 'JOIN LOC (NOLOCK) ON LOTxLOCxID.Loc = LOC.Loc  '
-                                + 'JOIN PICKDETAIL (NOLOCK) ON PICKDETAIL.Lot = LOTxLOCxID.Lot and PICKDETAIL.Loc = LOTxLOCxID.Loc and PICKDETAIL.ID = LOTxLOCxID.Id '
+                                + @c_PickDetailJoinQuery
                                 + 'LEFT OUTER JOIN UCC (NOLOCK) ON LOTxLOCxID.StorerKey = UCC.StorerKey '
                                 + 'AND LOTxLOCxID.Sku = UCC.Sku '
                                 + 'AND LOTxLOCxID.Lot = UCC.Lot '
@@ -570,12 +572,10 @@ BEGIN
                                 --(Wan03) - START
                                 --+ 'WHERE LOTxLOCxID.Qty > 0 '
                                 + 'WHERE CASE WHEN LOC.LOSEUCC = ''0'' THEN LOTxLOCxID.Qty ELSE '
-                                + CASE WHEN @c_ExcludeQtyAllocated = 'Y' AND @c_ExcludeQtyPicked = 'Y' THEN 'LOTxLOCxID.Qty-LOTxLOCxID.QtyAllocated-LOTxLOCxID.QtyPicked '+
-                                            CASE WHEN @c_GenCCdetailbyExcludePKDStatus3 = 'Y' THEN '- CASE WHEN PICKDETAIL.Status=''3'' THEN PICKDETAIL.Qty ELSE 0 END' ELSE '' END
+                                + CASE WHEN @c_ExcludeQtyAllocated = 'Y' AND @c_ExcludeQtyPicked = 'Y' THEN 'LOTxLOCxID.Qty-LOTxLOCxID.QtyAllocated-LOTxLOCxID.QtyPicked '+ @c_PickDetailQtySubtractQuery
                                        WHEN @c_ExcludeQtyAllocated = 'Y' THEN 'LOTxLOCxID.Qty-LOTxLOCxID.QtyAllocated '
-                                       WHEN @c_ExcludeQtyPicked    = 'Y' THEN 'LOTxLOCxID.Qty-LOTxLOCxID.QtyPicked '+
-                                            CASE WHEN @c_GenCCdetailbyExcludePKDStatus3 = 'Y' THEN '- CASE WHEN PICKDETAIL.Status=''3'' THEN PICKDETAIL.Qty ELSE 0 END' ELSE '' END 
-                                                 END
+                                       WHEN @c_ExcludeQtyPicked    = 'Y' THEN 'LOTxLOCxID.Qty-LOTxLOCxID.QtyPicked '+ @c_PickDetailQtySubtractQuery 
+                                    END
                                 + ' END > 0 '
                                 --(Wan03) - END
                                 + 'AND   LOC.Facility = N''' + ISNULL(RTRIM(@c_Facility), '') + ''' '
@@ -612,13 +612,9 @@ BEGIN
                                 --(Wan03) - START
                                 --+ 'Qty = CASE WHEN LOC.LOSEUCC = "0" THEN ISNULL(MIN(UCC.Qty),0) ELSE SUM(LOTxLOCxID.Qty-LOTxLOCxID.QtyAllocated) END, '
                                 + 'Qty = CASE WHEN LOC.LOSEUCC = ''0'' THEN ISNULL(MIN(UCC.Qty),0) ELSE '
-                                + CASE WHEN @c_ExcludeQtyAllocated = 'Y' AND @c_ExcludeQtyPicked = 'Y' THEN 'SUM(LOTxLOCxID.Qty-LOTxLOCxID.QtyAllocated-LOTxLOCxID.QtyPicked'+
-                                            CASE WHEN @c_GenCCdetailbyExcludePKDStatus3 = 'Y' THEN '- CASE WHEN PICKDETAIL.Status=''3'' THEN PICKDETAIL.Qty ELSE 0 END' ELSE '' END +
-                                        ' ) '
+                                + CASE WHEN @c_ExcludeQtyAllocated = 'Y' AND @c_ExcludeQtyPicked = 'Y' THEN 'SUM(LOTxLOCxID.Qty-LOTxLOCxID.QtyAllocated-LOTxLOCxID.QtyPicked'+ @c_PickDetailQtySubtractQuery + ' ) '
                                        WHEN @c_ExcludeQtyAllocated = 'Y' THEN 'SUM(LOTxLOCxID.Qty-LOTxLOCxID.QtyAllocated) '
-                                       WHEN @c_ExcludeQtyPicked    = 'Y' THEN 'SUM(LOTxLOCxID.Qty-LOTxLOCxID.QtyPicked'+
-                                            CASE WHEN @c_GenCCdetailbyExcludePKDStatus3 = 'Y' THEN '- CASE WHEN PICKDETAIL.Status=''3'' THEN PICKDETAIL.Qty ELSE 0 END' ELSE '' END +
-                                        ' ) '
+                                       WHEN @c_ExcludeQtyPicked    = 'Y' THEN 'SUM(LOTxLOCxID.Qty-LOTxLOCxID.QtyPicked'+ @c_PickDetailQtySubtractQuery + ' ) '
                                                 END
                                 + ' END, '
                                 --(Wan03) - END
@@ -631,7 +627,7 @@ BEGIN
                                 + 'JOIN SKUxLOC (NOLOCK) ON LOTxLOCxID.Loc = SKUxLOC.Loc '
                                 + 'AND LOTxLOCxID.StorerKey = SKUxLOC.StorerKey AND LOTxLOCxID.SKU = SKUxLOC.SKU '
                                 + 'JOIN LOC (NOLOCK) ON LOTxLOCxID.Loc = LOC.Loc  '
-                                + 'JOIN PICKDETAIL (NOLOCK) ON PICKDETAIL.Lot = LOTxLOCxID.Lot and PICKDETAIL.Loc = LOTxLOCxID.Loc and PICKDETAIL.ID = LOTxLOCxID.Id '
+                                + @c_PickDetailJoinQuery
                                 + 'LEFT OUTER JOIN UCC (NOLOCK) ON LOTxLOCxID.StorerKey = UCC.StorerKey '
                                 + '         AND LOTxLOCxID.Sku = UCC.Sku '
                                 + '         AND LOTxLOCxID.Lot = UCC.Lot '
@@ -770,11 +766,9 @@ BEGIN
                                 --(Wan03) - START
                                 --+ 'WHERE LOTxLOCxID.Qty > 0 '
                                 + 'WHERE CASE WHEN LOC.LOSEUCC = ''0'' THEN LOTxLOCxID.Qty ELSE '
-                                + CASE WHEN @c_ExcludeQtyAllocated = 'Y' AND @c_ExcludeQtyPicked = 'Y' THEN 'LOTxLOCxID.Qty-LOTxLOCxID.QtyAllocated-LOTxLOCxID.QtyPicked '+
-                                            CASE WHEN @c_GenCCdetailbyExcludePKDStatus3 = 'Y' THEN '- CASE WHEN PICKDETAIL.Status=''3'' THEN PICKDETAIL.Qty ELSE 0 END' ELSE '' END
+                                + CASE WHEN @c_ExcludeQtyAllocated = 'Y' AND @c_ExcludeQtyPicked = 'Y' THEN 'LOTxLOCxID.Qty-LOTxLOCxID.QtyAllocated-LOTxLOCxID.QtyPicked '+ @c_PickDetailQtySubtractQuery
                                        WHEN @c_ExcludeQtyAllocated = 'Y' THEN 'LOTxLOCxID.Qty-LOTxLOCxID.QtyAllocated '
-                                       WHEN @c_ExcludeQtyPicked    = 'Y' THEN 'LOTxLOCxID.Qty-LOTxLOCxID.QtyPicked '+
-                                            CASE WHEN @c_GenCCdetailbyExcludePKDStatus3 = 'Y' THEN '- CASE WHEN PICKDETAIL.Status=''3'' THEN PICKDETAIL.Qty ELSE 0 END' ELSE '' END
+                                       WHEN @c_ExcludeQtyPicked    = 'Y' THEN 'LOTxLOCxID.Qty-LOTxLOCxID.QtyPicked '+ @c_PickDetailQtySubtractQuery
                                                      END
                                 + ' END > 0 '
                                 --(Wan03) - END
@@ -807,14 +801,10 @@ BEGIN
                                 --(Wan03) - START
                                 --+ 'Qty = CASE WHEN LOC.LOSEUCC = "0" THEN ISNULL(MIN(UCC.Qty),0) ELSE SUM(LOTxLOCxID.Qty-LOTxLOCxID.QtyAllocated) END, '
                                 + 'Qty = CASE WHEN LOC.LOSEUCC = ''0'' THEN ISNULL(MIN(UCC.Qty),0) ELSE '
-                                + CASE WHEN @c_ExcludeQtyAllocated = 'Y' AND @c_ExcludeQtyPicked = 'Y' THEN 'SUM(LOTxLOCxID.Qty-LOTxLOCxID.QtyAllocated-LOTxLOCxID.QtyPicked'+
-                                            CASE WHEN @c_GenCCdetailbyExcludePKDStatus3 = 'Y' THEN '- CASE WHEN PICKDETAIL.Status=''3'' THEN PICKDETAIL.Qty ELSE 0 END' ELSE '' END +
-                                        ' ) '
+                                + CASE WHEN @c_ExcludeQtyAllocated = 'Y' AND @c_ExcludeQtyPicked = 'Y' THEN 'SUM(LOTxLOCxID.Qty-LOTxLOCxID.QtyAllocated-LOTxLOCxID.QtyPicked'+ @c_PickDetailQtySubtractQuery + ' ) '
                                        WHEN @c_ExcludeQtyAllocated = 'Y' THEN 'SUM(LOTxLOCxID.Qty-LOTxLOCxID.QtyAllocated) '
-                                       WHEN @c_ExcludeQtyPicked    = 'Y' THEN 'SUM(LOTxLOCxID.Qty-LOTxLOCxID.QtyPicked'+
-                                            CASE WHEN @c_GenCCdetailbyExcludePKDStatus3 = 'Y' THEN '- CASE WHEN PICKDETAIL.Status=''3'' THEN PICKDETAIL.Qty ELSE 0 END' ELSE '' END +
-                                        ' ) '
-                                                END
+                                       WHEN @c_ExcludeQtyPicked    = 'Y' THEN 'SUM(LOTxLOCxID.Qty-LOTxLOCxID.QtyPicked'+ @c_PickDetailQtySubtractQuery + ' ) '
+                                    END
                                 + ' END, '
                                 --(Wan03) - END
                                 + 'LOC.PutawayZone,LOC.LocLevel,Aisle = LOC.locAisle,LOC.Facility, '
@@ -826,7 +816,7 @@ BEGIN
                                 + 'JOIN SKUxLOC (NOLOCK) ON LOTxLOCxID.Loc = SKUxLOC.Loc '
                                 + 'AND LOTxLOCxID.StorerKey = SKUxLOC.StorerKey AND LOTxLOCxID.SKU = SKUxLOC.SKU '
                                 + 'JOIN LOC (NOLOCK) ON LOTxLOCxID.Loc = LOC.Loc  '
-                                + 'JOIN PICKDETAIL (NOLOCK) ON PICKDETAIL.Lot = LOTxLOCxID.Lot and PICKDETAIL.Loc = LOTxLOCxID.Loc and PICKDETAIL.ID = LOTxLOCxID.Id '
+                                + @c_PickDetailJoinQuery
                                 + 'LEFT OUTER JOIN UCC (NOLOCK) ON LOTxLOCxID.StorerKey = UCC.StorerKey '
                                 + 'AND LOTxLOCxID.Sku = UCC.Sku '
                                 + 'AND LOTxLOCxID.Lot = UCC.Lot '
@@ -843,11 +833,9 @@ BEGIN
                                 --(Wan03) - START
                                 --+ 'WHERE LOTxLOCxID.Qty > 0 '
                                 + 'WHERE CASE WHEN LOC.LOSEUCC = ''0'' THEN LOTxLOCxID.Qty ELSE '
-                                + CASE WHEN @c_ExcludeQtyAllocated = 'Y' AND @c_ExcludeQtyPicked = 'Y' THEN 'LOTxLOCxID.Qty-LOTxLOCxID.QtyAllocated-LOTxLOCxID.QtyPicked '+
-                                            CASE WHEN @c_GenCCdetailbyExcludePKDStatus3 = 'Y' THEN '- CASE WHEN PICKDETAIL.Status=''3'' THEN PICKDETAIL.Qty ELSE 0 END' ELSE '' END
+                                + CASE WHEN @c_ExcludeQtyAllocated = 'Y' AND @c_ExcludeQtyPicked = 'Y' THEN 'LOTxLOCxID.Qty-LOTxLOCxID.QtyAllocated-LOTxLOCxID.QtyPicked '+ @c_PickDetailQtySubtractQuery
                                        WHEN @c_ExcludeQtyAllocated = 'Y' THEN 'LOTxLOCxID.Qty-LOTxLOCxID.QtyAllocated '
-                                       WHEN @c_ExcludeQtyPicked    = 'Y' THEN 'LOTxLOCxID.Qty-LOTxLOCxID.QtyPicked '+
-                                            CASE WHEN @c_GenCCdetailbyExcludePKDStatus3 = 'Y' THEN '- CASE WHEN PICKDETAIL.Status=''3'' THEN PICKDETAIL.Qty ELSE 0 END' ELSE '' END
+                                       WHEN @c_ExcludeQtyPicked    = 'Y' THEN 'LOTxLOCxID.Qty-LOTxLOCxID.QtyPicked '+ @c_PickDetailQtySubtractQuery
                                                 END
                                 + ' END > 0 '
                                 --(Wan03) - END
@@ -886,12 +874,9 @@ BEGIN
                                 --(Wan03) - START
                                 --+ 'Qty = CASE WHEN LOC.LOSEUCC = "0" THEN ISNULL(MIN(UCC.Qty),0) ELSE SUM(LOTxLOCxID.Qty-LOTxLOCxID.QtyAllocated) END, '
                                 + 'Qty = CASE WHEN LOC.LOSEUCC = ''0'' THEN ISNULL(MIN(UCC.Qty),0) ELSE '
-                                + CASE WHEN @c_ExcludeQtyAllocated = 'Y' AND @c_ExcludeQtyPicked = 'Y' THEN 'SUM(LOTxLOCxID.Qty-LOTxLOCxID.QtyAllocated-LOTxLOCxID.QtyPicked'+
-                                            CASE WHEN @c_GenCCdetailbyExcludePKDStatus3 = 'Y' THEN '- CASE WHEN PICKDETAIL.Status=''3'' THEN PICKDETAIL.Qty ELSE 0 END' ELSE '' END +
-                                        ' ) '
+                                + CASE WHEN @c_ExcludeQtyAllocated = 'Y' AND @c_ExcludeQtyPicked = 'Y' THEN 'SUM(LOTxLOCxID.Qty-LOTxLOCxID.QtyAllocated-LOTxLOCxID.QtyPicked'+ @c_PickDetailQtySubtractQuery + ' ) '
                                        WHEN @c_ExcludeQtyAllocated = 'Y' THEN 'SUM(LOTxLOCxID.Qty-LOTxLOCxID.QtyAllocated) '
-                                       WHEN @c_ExcludeQtyPicked    = 'Y' THEN 'SUM(LOTxLOCxID.Qty-LOTxLOCxID.QtyPicked'+
-                                            CASE WHEN @c_GenCCdetailbyExcludePKDStatus3 = 'Y' THEN '- CASE WHEN PICKDETAIL.Status=''3'' THEN PICKDETAIL.Qty ELSE 0 END' ELSE '' END +
+                                       WHEN @c_ExcludeQtyPicked    = 'Y' THEN 'SUM(LOTxLOCxID.Qty-LOTxLOCxID.QtyPicked'+ @c_PickDetailQtySubtractQuery +
                                         ' ) '
                                                 END
                                 + ' END, '
@@ -904,7 +889,7 @@ BEGIN
                                 + 'FROM LOTxLOCxID (NOLOCK) '
                                 + 'JOIN SKUxLOC (NOLOCK) ON LOTxLOCxID.Loc = SKUxLOC.Loc AND LOTxLOCxID.StorerKey = SKUxLOC.StorerKey AND LOTxLOCxID.SKU = SKUxLOC.SKU '
                                 + 'JOIN LOC (NOLOCK) ON LOTxLOCxID.Loc = LOC.Loc  '
-                                + 'JOIN PICKDETAIL (NOLOCK) ON PICKDETAIL.Lot = LOTxLOCxID.Lot and PICKDETAIL.Loc = LOTxLOCxID.Loc and PICKDETAIL.ID = LOTxLOCxID.Id '
+                                + @c_PickDetailJoinQuery
                                 + 'LEFT OUTER JOIN UCC (NOLOCK) ON LOTxLOCxID.StorerKey = UCC.StorerKey '
                                 + '            AND LOTxLOCxID.Sku = UCC.Sku '
                                 + '            AND LOTxLOCxID.Lot = UCC.Lot '
@@ -1043,11 +1028,9 @@ BEGIN
                                 --(Wan03) - START
                                 --+ 'WHERE LOTxLOCxID.Qty > 0 '
                                 + 'WHERE CASE WHEN LOC.LOSEUCC = ''0'' THEN LOTxLOCxID.Qty ELSE '
-                                + CASE WHEN @c_ExcludeQtyAllocated = 'Y' AND @c_ExcludeQtyPicked = 'Y' THEN 'LOTxLOCxID.Qty-LOTxLOCxID.QtyAllocated-LOTxLOCxID.QtyPicked '+
-                                            CASE WHEN @c_GenCCdetailbyExcludePKDStatus3 = 'Y' THEN '- CASE WHEN PICKDETAIL.Status=''3'' THEN PICKDETAIL.Qty ELSE 0 END' ELSE '' END
+                                + CASE WHEN @c_ExcludeQtyAllocated = 'Y' AND @c_ExcludeQtyPicked = 'Y' THEN 'LOTxLOCxID.Qty-LOTxLOCxID.QtyAllocated-LOTxLOCxID.QtyPicked '+ @c_PickDetailQtySubtractQuery
                                        WHEN @c_ExcludeQtyAllocated = 'Y' THEN 'LOTxLOCxID.Qty-LOTxLOCxID.QtyAllocated '
-                                       WHEN @c_ExcludeQtyPicked    = 'Y' THEN 'LOTxLOCxID.Qty-LOTxLOCxID.QtyPicked '+
-                                            CASE WHEN @c_GenCCdetailbyExcludePKDStatus3 = 'Y' THEN '- CASE WHEN PICKDETAIL.Status=''3'' THEN PICKDETAIL.Qty ELSE 0 END' ELSE '' END
+                                       WHEN @c_ExcludeQtyPicked    = 'Y' THEN 'LOTxLOCxID.Qty-LOTxLOCxID.QtyPicked '+ @c_PickDetailQtySubtractQuery
                                                      END
                                 + ' END > 0 '
                                 --(Wan03) - END
@@ -1080,11 +1063,9 @@ BEGIN
                                 --(Wan03) - START
                                 --+ 'Qty = CASE WHEN LOC.LOSEUCC = "0" THEN ISNULL(UCC.Qty,0) ELSE LOTxLOCxID.Qty-LOTxLOCxID.QtyAllocated END, '
                                 + 'Qty = CASE WHEN LOC.LOSEUCC = ''0'' THEN ISNULL(UCC.Qty,0) ELSE '
-                                + CASE WHEN @c_ExcludeQtyAllocated = 'Y' AND @c_ExcludeQtyPicked = 'Y' THEN 'LOTxLOCxID.Qty-LOTxLOCxID.QtyAllocated-LOTxLOCxID.QtyPicked '+
-                                            CASE WHEN @c_GenCCdetailbyExcludePKDStatus3 = 'Y' THEN '- CASE WHEN PICKDETAIL.Status=''3'' THEN PICKDETAIL.Qty ELSE 0 END' ELSE '' END
+                                + CASE WHEN @c_ExcludeQtyAllocated = 'Y' AND @c_ExcludeQtyPicked = 'Y' THEN 'LOTxLOCxID.Qty-LOTxLOCxID.QtyAllocated-LOTxLOCxID.QtyPicked '+ @c_PickDetailQtySubtractQuery
                                        WHEN @c_ExcludeQtyAllocated = 'Y' THEN 'LOTxLOCxID.Qty-LOTxLOCxID.QtyAllocated '
-                                       WHEN @c_ExcludeQtyPicked    = 'Y' THEN 'LOTxLOCxID.Qty-LOTxLOCxID.QtyPicked '+
-                                            CASE WHEN @c_GenCCdetailbyExcludePKDStatus3 = 'Y' THEN '- CASE WHEN PICKDETAIL.Status=''3'' THEN PICKDETAIL.Qty ELSE 0 END' ELSE '' END
+                                       WHEN @c_ExcludeQtyPicked    = 'Y' THEN 'LOTxLOCxID.Qty-LOTxLOCxID.QtyPicked '+ @c_PickDetailQtySubtractQuery
                                                  END
                                 + ' END, '
                                 --(Wan03) - END
@@ -1097,7 +1078,7 @@ BEGIN
                                 + 'JOIN SKUxLOC (NOLOCK) ON LOTxLOCxID.Loc = SKUxLOC.Loc '
                                 + 'AND LOTxLOCxID.StorerKey = SKUxLOC.StorerKey AND LOTxLOCxID.SKU = SKUxLOC.SKU '
                                 + 'JOIN LOC (NOLOCK) ON LOTxLOCxID.Loc = LOC.Loc  '
-                                + 'JOIN PICKDETAIL (NOLOCK) ON PICKDETAIL.Lot = LOTxLOCxID.Lot and PICKDETAIL.Loc = LOTxLOCxID.Loc and PICKDETAIL.ID = LOTxLOCxID.Id '
+                                + @c_PickDetailJoinQuery
                                 + 'LEFT OUTER JOIN UCC (NOLOCK) ON LOTxLOCxID.StorerKey = UCC.StorerKey '
                                 + 'AND LOTxLOCxID.Sku = UCC.Sku '
                                 + 'AND LOTxLOCxID.Lot = UCC.Lot '
@@ -1114,11 +1095,9 @@ BEGIN
                                 --(Wan03) - START
                                 --+ 'WHERE LOTxLOCxID.Qty > 0 '
                                 + 'WHERE CASE WHEN LOC.LOSEUCC = ''0'' THEN LOTxLOCxID.Qty ELSE '
-                                + CASE WHEN @c_ExcludeQtyAllocated = 'Y' AND @c_ExcludeQtyPicked = 'Y' THEN 'LOTxLOCxID.Qty-LOTxLOCxID.QtyAllocated-LOTxLOCxID.QtyPicked '+
-                                            CASE WHEN @c_GenCCdetailbyExcludePKDStatus3 = 'Y' THEN '- CASE WHEN PICKDETAIL.Status=''3'' THEN PICKDETAIL.Qty ELSE 0 END' ELSE '' END
+                                + CASE WHEN @c_ExcludeQtyAllocated = 'Y' AND @c_ExcludeQtyPicked = 'Y' THEN 'LOTxLOCxID.Qty-LOTxLOCxID.QtyAllocated-LOTxLOCxID.QtyPicked '+ @c_PickDetailQtySubtractQuery
                                        WHEN @c_ExcludeQtyAllocated = 'Y' THEN 'LOTxLOCxID.Qty-LOTxLOCxID.QtyAllocated '
-                                       WHEN @c_ExcludeQtyPicked    = 'Y' THEN 'LOTxLOCxID.Qty-LOTxLOCxID.QtyPicked '+
-                                            CASE WHEN @c_GenCCdetailbyExcludePKDStatus3 = 'Y' THEN '- CASE WHEN PICKDETAIL.Status=''3'' THEN PICKDETAIL.Qty ELSE 0 END' ELSE '' END
+                                       WHEN @c_ExcludeQtyPicked    = 'Y' THEN 'LOTxLOCxID.Qty-LOTxLOCxID.QtyPicked '+ @c_PickDetailQtySubtractQuery
                                                  END
                                 + ' END > 0 '
                                 --(Wan03) - END
@@ -1148,11 +1127,9 @@ BEGIN
                                 --(Wan03) - START
                                 --+ 'Qty = CASE WHEN LOC.LOSEUCC = "0" THEN ISNULL(UCC.Qty,0) ELSE LOTxLOCxID.Qty-LOTxLOCxID.QtyAllocated END, '
                                 + 'Qty = CASE WHEN LOC.LOSEUCC = ''0'' THEN ISNULL(UCC.Qty,0) ELSE '
-                                + CASE WHEN @c_ExcludeQtyAllocated = 'Y' AND @c_ExcludeQtyPicked = 'Y' THEN 'LOTxLOCxID.Qty-LOTxLOCxID.QtyAllocated-LOTxLOCxID.QtyPicked '+
-                                            CASE WHEN @c_GenCCdetailbyExcludePKDStatus3 = 'Y' THEN '- CASE WHEN PICKDETAIL.Status=''3'' THEN PICKDETAIL.Qty ELSE 0 END' ELSE '' END
+                                + CASE WHEN @c_ExcludeQtyAllocated = 'Y' AND @c_ExcludeQtyPicked = 'Y' THEN 'LOTxLOCxID.Qty-LOTxLOCxID.QtyAllocated-LOTxLOCxID.QtyPicked '+ @c_PickDetailQtySubtractQuery
                                        WHEN @c_ExcludeQtyAllocated = 'Y' THEN 'LOTxLOCxID.Qty-LOTxLOCxID.QtyAllocated '
-                                       WHEN @c_ExcludeQtyPicked    = 'Y' THEN 'LOTxLOCxID.Qty-LOTxLOCxID.QtyPicked '+
-                                            CASE WHEN @c_GenCCdetailbyExcludePKDStatus3 = 'Y' THEN '- CASE WHEN PICKDETAIL.Status=''3'' THEN PICKDETAIL.Qty ELSE 0 END' ELSE '' END
+                                       WHEN @c_ExcludeQtyPicked    = 'Y' THEN 'LOTxLOCxID.Qty-LOTxLOCxID.QtyPicked '+ @c_PickDetailQtySubtractQuery
                                                 END
                                 + ' END, '
                                 --(Wan03) - END
@@ -1164,7 +1141,7 @@ BEGIN
                                 + 'FROM LOTxLOCxID (NOLOCK) '
                                 + 'JOIN SKUxLOC (NOLOCK) ON LOTxLOCxID.Loc = SKUxLOC.Loc AND LOTxLOCxID.StorerKey = SKUxLOC.StorerKey AND LOTxLOCxID.SKU = SKUxLOC.SKU '
                                 + 'JOIN LOC (NOLOCK) ON LOTxLOCxID.Loc = LOC.Loc  '
-                                + 'JOIN PICKDETAIL (NOLOCK) ON PICKDETAIL.Lot = LOTxLOCxID.Lot and PICKDETAIL.Loc = LOTxLOCxID.Loc and PICKDETAIL.ID = LOTxLOCxID.Id '
+                                + @c_PickDetailJoinQuery
                                 + 'LEFT OUTER JOIN UCC (NOLOCK) ON LOTxLOCxID.StorerKey = UCC.StorerKey '
                                 + '            AND LOTxLOCxID.Sku = UCC.Sku '
                                 + '            AND LOTxLOCxID.Lot = UCC.Lot '
@@ -1302,11 +1279,9 @@ BEGIN
                                 --(Wan03) - START
                                 --+ 'WHERE LOTxLOCxID.Qty > 0 '
                                 + 'WHERE CASE WHEN LOC.LOSEUCC = ''0'' THEN LOTxLOCxID.Qty ELSE '
-                                + CASE WHEN @c_ExcludeQtyAllocated = 'Y' AND @c_ExcludeQtyPicked = 'Y' THEN 'LOTxLOCxID.Qty-LOTxLOCxID.QtyAllocated-LOTxLOCxID.QtyPicked '+
-                                            CASE WHEN @c_GenCCdetailbyExcludePKDStatus3 = 'Y' THEN '- CASE WHEN PICKDETAIL.Status=''3'' THEN PICKDETAIL.Qty ELSE 0 END' ELSE '' END
+                                + CASE WHEN @c_ExcludeQtyAllocated = 'Y' AND @c_ExcludeQtyPicked = 'Y' THEN 'LOTxLOCxID.Qty-LOTxLOCxID.QtyAllocated-LOTxLOCxID.QtyPicked '+ @c_PickDetailQtySubtractQuery
                                        WHEN @c_ExcludeQtyAllocated = 'Y' THEN 'LOTxLOCxID.Qty-LOTxLOCxID.QtyAllocated '
-                                       WHEN @c_ExcludeQtyPicked    = 'Y' THEN 'LOTxLOCxID.Qty-LOTxLOCxID.QtyPicked '+
-                                            CASE WHEN @c_GenCCdetailbyExcludePKDStatus3 = 'Y' THEN '- CASE WHEN PICKDETAIL.Status=''3'' THEN PICKDETAIL.Qty ELSE 0 END' ELSE '' END
+                                       WHEN @c_ExcludeQtyPicked    = 'Y' THEN 'LOTxLOCxID.Qty-LOTxLOCxID.QtyPicked '+ @c_PickDetailQtySubtractQuery
                                                      END
                                 + ' END > 0 '
                                 --(Wan03) - END
