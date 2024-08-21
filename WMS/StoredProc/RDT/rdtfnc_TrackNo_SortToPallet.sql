@@ -1631,7 +1631,7 @@ BEGIN
          SET @nErrNo = 0  
   
          UPDATE dbo.PalletDetail SET  
-            [Status] = '9',  
+            [Status] = @cPltDetailCloseStatus,
             EditDate = GETDATE(),  
             EditWho = SUSER_SNAME()  
        WHERE PalletKey = @cPalletKey  
@@ -1697,7 +1697,7 @@ BEGIN
          GOTO Quit_UpdatePltDim  
   
          RollBackTran_UpdatePltDim:  
-            ROLLBACK TRAN rdt_UpdateMbol -- Only rollback change made here  
+            ROLLBACK TRAN rdt_UpdatePltDim -- Only rollback change made here
          Quit_UpdatePltDim:  
             WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started  
                COMMIT TRAN  
