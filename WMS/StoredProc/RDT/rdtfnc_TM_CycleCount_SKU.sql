@@ -46,6 +46,7 @@ GO
 /* 2024-05-28 3.6  Dennis     FCR-235 Lottable Capture                        */
 /* 2023-10-12 3.7  James      WMS-23113 Add Serial No (james17)               */
 /*                            Add lottable06 ~ 15 parameters whenever required*/
+/* 2024-05-28 3.8  JACKC      FCR-395 Merge WMS-23113 to V2                   */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_CycleCount_SKU] (
@@ -1552,7 +1553,9 @@ BEGIN
                @nMorePage   OUTPUT,
                @nErrNo      OUTPUT,
                @cErrMsg     OUTPUT,
-               @cCCKey,
+               --V3.8 by jackc
+               --@cCCKey,
+               @cTaskDetailKey, --V3.8 by jackc END
                @nFunc
 
             IF @nErrNo <> 0
@@ -6204,7 +6207,7 @@ Quit:
 
 BEGIN
  UPDATE RDTMOBREC WITH (ROWLOCK) SET
-    EditDate = GETDATE(),
+      EditDate = GETDATE(),
       ErrMsg = @cErrMsg,
       Func   = @nFunc,
       Step   = @nStep,
@@ -6242,8 +6245,10 @@ BEGIN
       V_LottableLabel04 = @cLotLabel04,
       V_LottableLabel05 = @cLotLabel05,
 
-      V_FromStep  = @nPrevStep,
-      V_FromScn   = @nPrevScreen,
+      V_Barcode    = @cBarcode,
+  
+      V_FromStep  = @nFromStep,  
+      V_FromScn   = @nFromScn,  
       V_Qty       = @nActQTY,
       V_Integer1  = @nUCCQty,
       V_Integer2  = @nDefaultQty,
@@ -6251,6 +6256,9 @@ BEGIN
       V_Integer4  = @nRowID,
       V_Integer5  = @nLottableCountTotal,
       V_Integer6  = @nMaxQtyValue,
+      V_Integer7  = @nReCountLoc,
+      V_Integer8  = @nPrevScreen,
+      V_Integer9  = @nPrevStep,
 
       V_String1        = @cCCKey,
       V_String2        = @cSuggID,
@@ -6278,17 +6286,21 @@ BEGIN
       V_String24       = @cExtendedInfo,
       V_String26       = @cExtCfmSP,
       V_String27       = @cExtendedUpdateSP,
+      V_String28       = @cTMCCVarianceCountSP,
       V_String29       = @cExtendedDisplayQtySP,
-      V_String30       = @nFromScn,
-      V_String31       = @nFromStep,
-      V_String32       = @cAreakey,
-      V_String33       = @cTTMStrategykey,
-      V_String34       = @cTTMTasktype,
-      V_String35       = @cRefKey01,
-      V_String36       = @cRefKey02,
-      V_String37       = @cRefKey03,
-      V_String38       = @cRefKey04,
-      V_String39       = @cRefKey05,
+      V_String30       = @cDiffQTYScanSNO, 
+
+      V_String32       = @cAreakey,  
+      V_String33       = @cTTMStrategykey,  
+      V_String34       = @cTTMTasktype,  
+      V_String35       = @cRefKey01,  
+      V_String36       = @cRefKey02,  
+      V_String37       = @cRefKey03,  
+      V_String38       = @cRefKey04,  
+      V_String39       = @cRefKey05,  
+      V_String40       = @cTMCCAllowPostAdj,
+      V_String41       = @cSerialNoCapture,
+      V_String42       = @cLottableCode,  
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,
