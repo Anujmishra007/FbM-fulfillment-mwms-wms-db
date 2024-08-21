@@ -125,3 +125,17 @@ EXECUTE rdt.rdtAddScn 4649, 'ENG'
    ,@cLine14 = '%e'
    ,@cWebGroup = '{"1":["1","2"],"2":["3","4"],"3":["5","6"]}'
    ,@nFunc = 839
+
+-- 6417 = TO LOC screen
+--FCR-540
+DELETE rdt.RDTScn WHERE Scn = 6417 AND Lang_Code = 'ENG'
+EXECUTE rdt.rdtAddScn 6417, 'ENG'
+   ,@cLine01 = 'TO LOC: '
+   ,@cLine02 = '%20d01'
+   ,@cLine03 = ''
+   ,@cLine04 = 'TO LOC:'
+   ,@cLine05 = '%20i02'
+   ,@cLine06 = ''
+   ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2"],"2":["4","5"]}'
+   ,@nFunc = 839
