@@ -7,6 +7,7 @@ GO
 /******************************************************************************/
 /* Store procedure: rdt_855ExtUpd13                                           */
 /* Copyright      : Maersk                                                    */
+/* Customer: Granite                                                          */
 /*                                                                            */
 /* Purpose: Print the VAS label                                               */
 /*                                                                            */
@@ -419,14 +420,14 @@ BEGIN
                         WHERE PickSlipNo = @cPickSlipNo
                      END
 
-                     IF ISNULL(@cOrderGroup, '') = '30'
-                        AND TRIM(@cShipperKey) <> ''
+                     IF TRIM(@cShipperKey) <> ''
                         AND EXISTS(SELECT 1 FROM CODELKUP WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND LISTNAME = 'WSCourier' AND @cShipperKey = ISNULL(notes,'-1'))
                      BEGIN
+                        DECLARE @cTrauncatedDropID    NVARCHAR(10) = @cDropID
                         -- Insert transmitlog2 here
                         EXECUTE ispGenTransmitLog2
                            @c_TableName      = 'WSSOECL',
-                           @c_Key1           = @cDropID,
+                           @c_Key1           = @cTrauncatedDropID,
                            @c_Key2           = @cDropID,
                            @c_Key3           = @cStorerkey,
                            @c_TransmitBatch  = '',
@@ -444,7 +445,7 @@ BEGIN
                         SELECT @cTransmitLogKey = transmitlogkey
                         FROM dbo.TRANSMITLOG2 WITH (NOLOCK)
                         WHERE tablename = 'WSSOECL'
-                        AND   key1 = @cDropID
+                        AND   key1 = @cTrauncatedDropID
                         AND   key2 = @cDropID
                         AND   key3 = @cStorerkey
                         

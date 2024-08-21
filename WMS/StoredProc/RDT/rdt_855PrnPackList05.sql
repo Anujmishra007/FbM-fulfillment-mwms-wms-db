@@ -7,6 +7,7 @@ GO
 /************************************************************************/
 /* Store procedure: rdt_855PrnPackList05                                */
 /* Copyright: Maersk WMS                                                */
+/* Customer: Granite                                                    */
 /*                                                                      */
 /* Purpose: Print dispatch label criteria                               */
 /*                                                                      */
