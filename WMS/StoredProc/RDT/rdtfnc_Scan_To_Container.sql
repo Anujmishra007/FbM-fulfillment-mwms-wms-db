@@ -51,6 +51,7 @@ GO
 /* 2020-07-08 3.7  YeeKung  WMS-13899 Add PalletLbl print (yeekung05)        */   
 /* 2022-11-29 3.8  YeeKung  JSM-103586 Fix Count @cTotalCTNCnt by labelno    */
 /*                          Instead by CartonNo (yeekung06)                  */
+/* 2024-08-15 3.9 NLT013    FCR-673 Add Extended Screen                      */
 /*****************************************************************************/  
   
 CREATE OR ALTER PROC [RDT].[rdtfnc_Scan_To_Container](  
@@ -121,6 +122,7 @@ DECLARE
   
    @cExtendedUpdateSP   NVARCHAR( 20),       -- (james05)  
    @cExtendedValidateSP NVARCHAR( 20),       -- (james05)  
+   @cExtendedScnSP      NVARCHAR( 20),
    @cSQL                NVARCHAR(1000),      -- (james05)  
    @cSQLParam           NVARCHAR(1000),      -- (james05)  
   
@@ -151,6 +153,8 @@ DECLARE
    @cContainerNoIsOptional       NVARCHAR( 1),     --(james12) 
    @tCaptureVar         VARIABLETABLE,
    @cPalletLabel        NVARCHAR( 10),      --(yeekung05)  
+   @tExtScnData         VariableTable,
+   @nExtScnAction       INT,
    
    @cParam1    NVARCHAR( 20),   @cParamLabel1 NVARCHAR( 20),  
    @cParam2    NVARCHAR( 20),   @cParamLabel2 NVARCHAR( 20),  
@@ -181,7 +185,34 @@ DECLARE
    @cFieldAttr09 NVARCHAR( 1), @cFieldAttr10 NVARCHAR( 1),  
    @cFieldAttr11 NVARCHAR( 1), @cFieldAttr12 NVARCHAR( 1),  
    @cFieldAttr13 NVARCHAR( 1), @cFieldAttr14 NVARCHAR( 1),  
-   @cFieldAttr15 NVARCHAR( 1)  
+   @cFieldAttr15 NVARCHAR( 1),
+
+   @cLottable01     NVARCHAR( 18),
+   @cLottable02     NVARCHAR( 18),
+   @cLottable03     NVARCHAR( 18),
+   @dLottable04     DATETIME,
+   @dLottable05     DATETIME,
+   @cLottable06     NVARCHAR( 30),
+   @cLottable07     NVARCHAR( 30),
+   @cLottable08     NVARCHAR( 30),
+   @cLottable09     NVARCHAR( 30),
+   @cLottable10     NVARCHAR( 30),
+   @cLottable11     NVARCHAR( 30),
+   @cLottable12     NVARCHAR( 30),
+   @dLottable13     DATETIME,
+   @dLottable14     DATETIME,
+   @dLottable15     DATETIME,
+
+   @cUDF01  NVARCHAR( 250), @cUDF02 NVARCHAR( 250), @cUDF03 NVARCHAR( 250),
+   @cUDF04  NVARCHAR( 250), @cUDF05 NVARCHAR( 250), @cUDF06 NVARCHAR( 250),
+   @cUDF07  NVARCHAR( 250), @cUDF08 NVARCHAR( 250), @cUDF09 NVARCHAR( 250),
+   @cUDF10  NVARCHAR( 250), @cUDF11 NVARCHAR( 250), @cUDF12 NVARCHAR( 250),
+   @cUDF13  NVARCHAR( 250), @cUDF14 NVARCHAR( 250), @cUDF15 NVARCHAR( 250),
+   @cUDF16  NVARCHAR( 250), @cUDF17 NVARCHAR( 250), @cUDF18 NVARCHAR( 250),
+   @cUDF19  NVARCHAR( 250), @cUDF20 NVARCHAR( 250), @cUDF21 NVARCHAR( 250),
+   @cUDF22  NVARCHAR( 250), @cUDF23 NVARCHAR( 250), @cUDF24 NVARCHAR( 250),
+   @cUDF25  NVARCHAR( 250), @cUDF26 NVARCHAR( 250), @cUDF27 NVARCHAR( 250),
+   @cUDF28  NVARCHAR( 250), @cUDF29 NVARCHAR( 250), @cUDF30 NVARCHAR( 250)
   
 -- Getting Mobile information  
 SELECT  
@@ -281,6 +312,7 @@ BEGIN
    IF @nStep = 7 GOTO Step_7   -- Scn = 2196   PRINT MANIFEST?  
    IF @nStep = 8 GOTO Step_8   -- Scn = 2197   Userdefine fields  -- (james09)  
    IF @nStep = 9 GOTO Step_9   -- Scn = 2198   Userdefine fields  -- (james12)  
+   IF @nStep = 99 GOTO Step_99   -- Extended Screen
 END  
   
 RETURN -- Do nothing if incorrect step  
@@ -350,7 +382,6 @@ BEGIN
 
    SET @cContainerNoIsOptional = rdt.RDTGetConfig( @nFunc, 'ContainerNoIsOptional', @cStorerKey)
       
-      
     --event log   -(cc01)  
     EXEC RDT.rdt_STD_EventLog
       @cActionType     = '1', -- Sign-in
@@ -365,6 +396,19 @@ BEGIN
    SET @cOutField02 = ''  
    SET @cOutField03 = ''  
    SET @cOutField04 = ''  
+
+   SET @cExtendedScnSP = rdt.RDTGetConfig( @nFunc, 'ExtScnSP', @cStorerKey)
+   IF @cExtendedScnSP = '0'
+      SET @cExtendedScnSP = ''
+
+   IF @cExtendedScnSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScnSP AND type = 'P')
+      BEGIN
+         SET @nExtScnAction = 0
+         GOTO Step_99
+      END
+   END
 END  
 GOTO Quit  
   
@@ -1271,6 +1315,23 @@ BEGIN
       SET @nScn = @nScn - 1  
       SET @nStep = @nStep - 1  
    END  
+
+   Step_2_ExtScn:
+   BEGIN
+      SET @cExtendedScnSP = rdt.RDTGetConfig( @nFunc, 'ExtScnSP', @cStorerKey)
+      IF @cExtendedScnSP = '0'
+         SET @cExtendedScnSP = ''
+
+      IF @cExtendedScnSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScnSP AND type = 'P')
+         BEGIN
+            SET @nExtScnAction = 0
+            GOTO Step_99
+         END
+      END
+   END
+
    GOTO Quit  
   
    Step_2_Fail:  
@@ -1728,6 +1789,23 @@ BEGIN
       SET @nScn = @nScn - 2  
       SET @nStep = @nStep - 2  
    END  
+
+   Step_3_ExtScn:
+   BEGIN
+      SET @cExtendedScnSP = rdt.RDTGetConfig( @nFunc, 'ExtScnSP', @cStorerKey)
+      IF @cExtendedScnSP = '0'
+         SET @cExtendedScnSP = ''
+
+      IF @cExtendedScnSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScnSP AND type = 'P')
+         BEGIN
+            SET @nExtScnAction = 0
+            GOTO Step_99
+         END
+      END
+   END
+
    GOTO Quit  
   
    Step_3_Fail:  
@@ -1980,18 +2058,33 @@ BEGIN
          SET @nScn = @nScn - 4  
          SET @nStep = @nStep - 4  
   
-         GOTO Quit  
+         GOTO Step_5_ExtScn
       END  
       ELSE  
       BEGIN  
          SET @cOutField01 = ''  
   
          SET @nScn = @nScn - 4  
-         SET @nStep = @nStep - 4  
-  
-         GOTO Quit  
+         SET @nStep = @nStep - 4
       END  
    END  
+
+   Step_5_ExtScn:
+   BEGIN
+      SET @cExtendedScnSP = rdt.RDTGetConfig( @nFunc, 'ExtScnSP', @cStorerKey)
+      IF @cExtendedScnSP = '0'
+         SET @cExtendedScnSP = ''
+
+      IF @cExtendedScnSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScnSP AND type = 'P')
+         BEGIN
+            SET @nExtScnAction = 0
+            GOTO Step_99
+         END
+      END
+   END
+   GOTO Quit  
   
    Step_5_Fail:  
    BEGIN  
@@ -2210,9 +2303,24 @@ BEGIN
       -- Prep next screen var  
       SET @cOutField01 = ''  
       SET @cOutField02 = ''  
-  
-      GOTO Quit  
    END  
+
+   Step_6_ExtScn:
+   BEGIN
+      SET @cExtendedScnSP = rdt.RDTGetConfig( @nFunc, 'ExtScnSP', @cStorerKey)
+      IF @cExtendedScnSP = '0'
+         SET @cExtendedScnSP = ''
+
+      IF @cExtendedScnSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScnSP AND type = 'P')
+         BEGIN
+            SET @nExtScnAction = 0
+            GOTO Step_99
+         END
+      END
+   END
+   GOTO Quit  
   
    Step_6_Fail:  
    BEGIN  
@@ -2285,9 +2393,24 @@ BEGIN
       -- Prep next screen var  
       SET @cOutField01 = ''  
       SET @cOutField02 = ''  
-  
-      GOTO Quit  
    END  
+
+   Step_7_ExtScn:
+   BEGIN
+      SET @cExtendedScnSP = rdt.RDTGetConfig( @nFunc, 'ExtScnSP', @cStorerKey)
+      IF @cExtendedScnSP = '0'
+         SET @cExtendedScnSP = ''
+
+      IF @cExtendedScnSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScnSP AND type = 'P')
+         BEGIN
+            SET @nExtScnAction = 0
+            GOTO Step_99
+         END
+      END
+   END
+   GOTO Quit  
   
    Step_7_Fail:  
    BEGIN  
@@ -2634,7 +2757,7 @@ BEGIN
                SET @nScn = @nPrevScn + 3  
                SET @nStep = @nPrevStep + 3  
   
-               GOTO Quit  
+               GOTO Step_8_ExtScn  
             END  
   
             --prepare prev screen variable  
@@ -2656,6 +2779,22 @@ BEGIN
          END  
       END  
    END  
+
+   Step_8_ExtScn:
+   BEGIN
+      SET @cExtendedScnSP = rdt.RDTGetConfig( @nFunc, 'ExtScnSP', @cStorerKey)
+      IF @cExtendedScnSP = '0'
+         SET @cExtendedScnSP = ''
+
+      IF @cExtendedScnSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScnSP AND type = 'P')
+         BEGIN
+            SET @nExtScnAction = 0
+            GOTO Step_99
+         END
+      END
+   END
    GOTO Quit  
   
    Step_8_Fail:  
@@ -2851,8 +2990,102 @@ BEGIN
       SET @nScn = @nScn - 8  
       SET @nStep = @nStep - 8  
    END
+
+   Step_9_ExtScn:
+   BEGIN
+      SET @cExtendedScnSP = rdt.RDTGetConfig( @nFunc, 'ExtScnSP', @cStorerKey)
+      IF @cExtendedScnSP = '0'
+         SET @cExtendedScnSP = ''
+
+      IF @cExtendedScnSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScnSP AND type = 'P')
+         BEGIN
+            SET @nExtScnAction = 0
+            GOTO Step_99
+         END
+      END
+   END
+   GOTO Quit
 END
 GOTO Quit
+
+Step_99:
+BEGIN
+   SET @cExtendedScnSP = rdt.RDTGetConfig( @nFunc, 'ExtScnSP', @cStorerKey)
+   IF @cExtendedScnSP = '0'
+      SET @cExtendedScnSP = ''
+
+   IF @cExtendedScnSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScnSP AND type = 'P')
+      BEGIN
+         DELETE FROM @tExtScnData
+         
+         EXECUTE [RDT].[rdt_ExtScnEntry] 
+            @cExtendedScnSP,  --1637ExtScn01
+            @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorerKey, @tExtScnData,
+            @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT, @cLottable01 OUTPUT,
+            @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT, @cLottable02 OUTPUT,
+            @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT, @cLottable03 OUTPUT,
+            @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT, @dLottable04 OUTPUT,
+            @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT, @dLottable05 OUTPUT,
+            @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT, @cLottable06 OUTPUT,
+            @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT, @cLottable07 OUTPUT,
+            @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT, @cLottable08 OUTPUT,
+            @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT, @cLottable09 OUTPUT,
+            @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT, @cLottable10 OUTPUT,
+            @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT, @cLottable11 OUTPUT,
+            @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT, @cLottable12 OUTPUT,
+            @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT, @dLottable13 OUTPUT,
+            @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT, @dLottable14 OUTPUT,
+            @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT, @dLottable15 OUTPUT,
+            @nExtScnAction, 
+            @nScn OUTPUT,  @nStep OUTPUT,
+            @nErrNo   OUTPUT, 
+            @cErrMsg  OUTPUT,
+            @cUDF01 OUTPUT, @cUDF02 OUTPUT, @cUDF03 OUTPUT,
+            @cUDF04 OUTPUT, @cUDF05 OUTPUT, @cUDF06 OUTPUT,
+            @cUDF07 OUTPUT, @cUDF08 OUTPUT, @cUDF09 OUTPUT,
+            @cUDF10 OUTPUT, @cUDF11 OUTPUT, @cUDF12 OUTPUT,
+            @cUDF13 OUTPUT, @cUDF14 OUTPUT, @cUDF15 OUTPUT,
+            @cUDF16 OUTPUT, @cUDF17 OUTPUT, @cUDF18 OUTPUT,
+            @cUDF19 OUTPUT, @cUDF20 OUTPUT, @cUDF21 OUTPUT,
+            @cUDF22 OUTPUT, @cUDF23 OUTPUT, @cUDF24 OUTPUT,
+            @cUDF25 OUTPUT, @cUDF26 OUTPUT, @cUDF27 OUTPUT,
+            @cUDF28 OUTPUT, @cUDF29 OUTPUT, @cUDF30 OUTPUT
+
+         IF @nErrNo <> 0
+            GOTO Step_99_Fail
+
+         IF @cExtendedScnSP = 'rdt_1637ExtScn01' 
+         BEGIN
+            IF @cUDF30 = 'UPDATE'
+            BEGIN
+               SET @cContainerKey = @cUDF01
+               SET @cMBOLKEY = @cUDF02
+               SET @cContainerNo = @cUDF03
+               SET @cScanCnt = @cUDF04
+               SET @cScanCTNCnt = @cUDF05
+
+               --Back to main menu
+               IF @cUDF06 = 'BACKTOMENU'
+               BEGIN
+                  -- Back to menu  
+                  SET @nFunc = @nMenu  
+                  SET @nScn  = @nMenu  
+                  SET @nStep = 0  
+               END
+            END
+         END
+
+         GOTO Quit
+      END
+   END
+
+   Step_99_Fail:
+      GOTO Quit
+END
 
 /********************************************************************************  
 Quit. Update back to I/O table, ready to be pick up by JBOSS  
