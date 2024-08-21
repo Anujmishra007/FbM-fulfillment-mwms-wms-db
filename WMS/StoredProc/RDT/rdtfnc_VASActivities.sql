@@ -77,6 +77,7 @@ DECLARE
    @cOrderKey           NVARCHAR( 18),                -- Pick Order Key
    @cOrderLineNumber    NVARCHAR( 5),                 -- Pick Order Line Number
    @cPickSKU            NVARCHAR( 20),                -- Pick SKU
+   @cStorerOfOrder      NVARCHAR( 15),                   -- Storer Key queried from pick detail
 
    @cACTVASWO           NVARCHAR( 30),
 
@@ -254,15 +255,35 @@ BEGIN
       FROM dbo.PICKDETAIL WITH(NOLOCK)
       WHERE (DropID = @cID OR ID = @cID)
 
+
+
       IF @nRowCount > 0
+
+      -- add validation of storer key and it's error message
+      -- cause combined message is too long to display on RDT
       BEGIN
+         SELECT 
+            @nRowCount = COUNT(1)
+         FROM dbo.PICKDETAIL WITH(NOLOCK)
+         WHERE (DropID = @cID OR (DropId IS NULL AND ID = @cID))
+         AND Storerkey <> @cStorerKey
+         AND Status = 5
+
+         IF @nRowCount > 0
+         BEGIN 
+            SET @nErrNo = 211721
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Invalid Storer Key
+            GOTO Step_ID_Fail
+         END
+
          SELECT 
             @cOrderKey = OrderKey,
             @cOrderLineNumber = OrderLineNumber,
             @cPickSKU = SKU
+
          FROM dbo.PICKDETAIL WITH(NOLOCK)
          WHERE (DropID = @cID OR (DropId IS NULL AND ID = @cID))
-         AND StorerKey = @cStorerKey
+         AND Storerkey = @cStorerKey
          AND Status = 5
 
          -- Add err message on checking if the ID exists in pickdetail

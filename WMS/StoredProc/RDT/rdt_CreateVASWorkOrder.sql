@@ -241,11 +241,24 @@ DECLARE
       END
       ELSE 
       BEGIN
-         SELECT @cKeyString = WorkOrderKey
-         FROM dbo.WorkOrderDetail WITH(NOLOCK)
-         WHERE ExternWorkOrderKey = @cReceiptKey
-            AND ExternLineNo      = @cExternLineNo
-            AND WkOrdUdef1        = @cPalletID
+         -- two situations of work detail validation
+         IF @nActionType = 1
+         BEGIN
+            SELECT @cKeyString = WorkOrderKey
+            FROM dbo.WorkOrderDetail WITH(NOLOCK)
+            WHERE ExternWorkOrderKey = @cReceiptKey
+               AND ExternLineNo      = @cExternLineNo
+               AND WkOrdUdef1        = @cPalletID
+         END
+
+         IF @nActionType = 2
+         BEGIN
+            SELECT @cKeyString = WorkOrderKey
+            FROM dbo.WorkOrderDetail WITH(NOLOCK)
+            WHERE ExternWorkOrderKey = @cOrderKey
+               AND ExternLineNo      = @cOrderLineNo
+               AND WkOrdUdef1        = @cPalletID
+         END
       END
 
       IF @cKeyString IS NULL OR @cKeyString = ''
