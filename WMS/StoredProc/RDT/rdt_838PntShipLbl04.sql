@@ -12,6 +12,7 @@ GO
 /* 2024-07-05 1.0  JACKC      FCR-392 Print Carton labels                     */
 /* 2024-07-22 1.1  JACKC      FCR-392 Change printing logic per v1.4 FBR      */
 /* 2024-07-25 1.2  JACKC      FCR-392 Fix the issue found in FCR-386          */
+/* 2024-07-25 1.3  JACKC      FCR-392 Change prnt logic                       */
 /******************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_838PntShipLbl04 (
@@ -68,13 +69,16 @@ BEGIN
                @cCustLblPrintSequence     NVARCHAR( 10),
                @cDefaultLblPrintSequence  NVARCHAR( 10),
                @cCustLabelName            NVARCHAR( 30),
-               @cDefaultLabelName         NVARCHAR( 30)
+               @cDefaultLabelName         NVARCHAR( 30),
+               @cCustLabelDataDesc        NVARCHAR( 30),
+               @cOrderGroup               NVARCHAR( 20),
+               @nLoopIndex                INT
 
             DECLARE @cLabelPrinter     NVARCHAR( 10)
             DECLARE @cPaperPrinter     NVARCHAR( 10)
             DECLARE @cPrinterGroup     NVARCHAR( 10)
             DECLARE @bDebugFlag        BINARY = 0
-            DECLARE @tMultiLbl AS VariableTable
+            DECLARE @tCartonLabelList AS VariableTable
 
             -- Get session info
             SELECT 
@@ -90,7 +94,7 @@ BEGIN
             WHERE pkd.Storerkey = @cStorerKey AND pkd.CaseID = @cLabelNo
 
             -- Common params
-            INSERT INTO @tMultiLbl (Variable, Value) VALUES
+            INSERT INTO @tCartonLabelList (Variable, Value) VALUES
             ( '@cStorerKey',     @cStorerKey),
             ( '@cPickSlipNo',    @cPickSlipNo),
             ( '@cOrderKey',      @cOrderKey),
@@ -100,11 +104,35 @@ BEGIN
             BEGIN
                SELECT 'PrtinerGroup', @cPrinterGroup
                SELECT 'Params Table'
-               SELECT * FROM @tMultiLbl
+               SELECT * FROM @tCartonLabelList
+            END
+
+            --Prepare default labels
+            DECLARE @tDefaultLabels TABLE
+            (
+               id             INT IDENTITY(1,1),
+               code2          NVARCHAR(30),
+               UDF01          NVARCHAR(30),
+               Short          NVARCHAR(10)
+            )
+
+            INSERT INTO @tDefaultLabels (code2, UDF01, Short)
+               SELECT code2, UDF01, Short
+               FROM dbo.CODELKUP WITH(NOLOCK) 
+               WHERE StorerKey = @cStorerKey
+                  AND LISTNAME = 'LVSCARTLBL'
+                  AND ISNULL(Long, '') = 'A'
+               ORDER BY ISNULL(Short, '99999')
+
+            IF @bDebugFlag = 1
+            BEGIN
+               SELECT 'Default label list'
+               SELECT * FROM @tDefaultLabels
             END
 
             SELECT TOP 1 @cConsigneeKey = orm.ConsigneeKey,
-                  @cBillToKey = orm.BillToKey
+                  @cBillToKey = orm.BillToKey,
+                  @cOrderGroup = orm.OrderGroup 
             FROM dbo.PickDetail pkd WITH(NOLOCK)
                INNER JOIN dbo.ORDERS orm WITH(NOLOCK) ON pkd.StorerKey = orm.StorerKey AND pkd.OrderKey = orm.OrderKey
             WHERE pkd.StorerKey = @cStorerKey
@@ -117,56 +145,108 @@ BEGIN
 
             --IF code2 equals to ConsigneeKey and BillToKey, only fetch data which code2 = @cConsigneeKey
             IF EXISTS (SELECT 1
-                     FROM dbo.CODELKUP lk WITH(NOLOCK) 
-                     INNER JOIN dbo.CODELKUP lk1 WITH(NOLOCK) ON lk.StorerKey = lk1.StorerKey AND lk.Code2 = ISNULL(lk1.Description, '') AND lk.Code = ISNULL(lk1.Long, '') 
-                     WHERE lk.StorerKey = @cStorerKey
-                        AND lk.LISTNAME = 'LVSCARTLBL' 
-                        AND ISNULL(lk.Long, '') = ''
-                        AND lk1.LISTNAME = 'LVSCUSPREF'
-                        AND lk1.code2 = @cConsigneeKey)
-                  AND EXISTS (SELECT 1
-                     FROM dbo.CODELKUP lk WITH(NOLOCK) 
-                     INNER JOIN dbo.CODELKUP lk1 WITH(NOLOCK) ON lk.StorerKey = lk1.StorerKey AND lk.Code2 = ISNULL(lk1.Description, '') AND lk.Code = ISNULL(lk1.Long, '') 
-                     WHERE lk.StorerKey = @cStorerKey
-                        AND lk.LISTNAME = 'LVSCARTLBL' 
-                        AND ISNULL(lk.Long, '') = ''
-                        AND lk1.LISTNAME = 'LVSCUSPREF'
-                        AND lk1.code2 = @cBillToKey)
+                  FROM dbo.CODELKUP lk WITH(NOLOCK) 
+                  INNER JOIN dbo.CODELKUP lk1 WITH(NOLOCK) ON lk.StorerKey = lk1.StorerKey AND lk.Code2 = ISNULL(lk1.Description, '') AND lk.Code = ISNULL(lk1.Long, '') 
+                  WHERE lk.StorerKey = @cStorerKey
+                     AND lk.LISTNAME = 'LVSCARTLBL' 
+                     AND ISNULL(lk.Long, '') = ''
+                     AND lk1.LISTNAME = 'LVSCUSPREF'
+                     AND lk1.code2 = @cConsigneeKey)
+               AND EXISTS (SELECT 1
+                  FROM dbo.CODELKUP lk WITH(NOLOCK) 
+                  INNER JOIN dbo.CODELKUP lk1 WITH(NOLOCK) ON lk.StorerKey = lk1.StorerKey AND lk.Code2 = ISNULL(lk1.Description, '') AND lk.Code = ISNULL(lk1.Long, '') 
+                  WHERE lk.StorerKey = @cStorerKey
+                     AND lk.LISTNAME = 'LVSCARTLBL' 
+                     AND ISNULL(lk.Long, '') = ''
+                     AND lk1.LISTNAME = 'LVSCUSPREF'
+                     AND lk1.code2 = @cBillToKey)
             BEGIN
                DECLARE CUR_CARTONLABEL CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-                  SELECT CustLabels.UDF01 AS CustLabelType, DefaultLabels.UDF01 AS DefaultLabelType, ISNULL(CustLabels.Short, '99999') AS CustSequence, ISNULL(DefaultLabels.Short, '99999') AS DefaultSequence FROM
-                     (SELECT StorerKey, Description, ISNULL(Long, '') AS Long FROM dbo.CODELKUP WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND LISTNAME = 'LVSCUSPREF'  AND code2 = @cConsigneeKey) AS CustLabelData
+                  SELECT CustLabelData.Description, CustLabels.UDF01 AS CustLabelType, ISNULL(CustLabels.Short, '99999') AS CustSequence
+                  FROM (SELECT StorerKey, Description, ISNULL(Long, '') AS Long FROM dbo.CODELKUP WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND LISTNAME = 'LVSCUSPREF'  AND code2 = @cConsigneeKey) AS CustLabelData
                   LEFT JOIN (SELECT StorerKey, code2, Code, UDF01, Short FROM dbo.CODELKUP WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND LISTNAME = 'LVSCARTLBL'  AND ISNULL(Long, '') <> 'A') AS CustLabels 
                      ON CustLabelData.StorerKey = CustLabels.StorerKey AND CustLabelData.Description = CustLabels.code2 AND CustLabelData.Long = CustLabels.Code
-                  LEFT JOIN (SELECT StorerKey, code2, Code, UDF01, Short FROM dbo.CODELKUP WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND LISTNAME = 'LVSCARTLBL'  AND ISNULL(Long, '') = 'A') AS DefaultLabels 
-                     ON CustLabelData.StorerKey = DefaultLabels.StorerKey AND CustLabelData.Description = DefaultLabels.Code2
-                  ORDER BY ISNULL(CustLabels.Short, '99999'), ISNULL(DefaultLabels.Short, '99999')
+                  ORDER BY ISNULL(CustLabels.Short, '99999')
             END
             ELSE 
                DECLARE CUR_CARTONLABEL CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-                  SELECT CustLabels.UDF01 AS CustLabelType, DefaultLabels.UDF01 AS DefaultLabelType, ISNULL(CustLabels.Short, '99999') AS CustSequence, ISNULL(DefaultLabels.Short, '99999') AS DefaultSequence FROM
-                     (SELECT StorerKey, Description, ISNULL(Long, '') AS Long FROM dbo.CODELKUP WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND LISTNAME = 'LVSCUSPREF' AND (code2 = @cConsigneeKey OR code2 = @cBillToKey) ) AS CustLabelData
-                  LEFT JOIN (SELECT StorerKey, code2, Code, UDF01, Short FROM dbo.CODELKUP WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND LISTNAME = 'LVSCARTLBL' AND ISNULL(Long, '') <> 'A') AS CustLabels 
+                  SELECT CustLabelData.Description, CustLabels.UDF01 AS CustLabelType, ISNULL(CustLabels.Short, '99999') AS CustSequence
+                  FROM (SELECT StorerKey, Description, ISNULL(Long, '') AS Long FROM dbo.CODELKUP WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND LISTNAME = 'LVSCUSPREF'  AND (code2 = @cConsigneeKey OR code2 = @cBillToKey)) AS CustLabelData
+                  LEFT JOIN (SELECT StorerKey, code2, Code, UDF01, Short FROM dbo.CODELKUP WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND LISTNAME = 'LVSCARTLBL'  AND ISNULL(Long, '') <> 'A') AS CustLabels 
                      ON CustLabelData.StorerKey = CustLabels.StorerKey AND CustLabelData.Description = CustLabels.code2 AND CustLabelData.Long = CustLabels.Code
-                  LEFT JOIN (SELECT StorerKey, code2, Code, UDF01, Short FROM dbo.CODELKUP WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND LISTNAME = 'LVSCARTLBL' AND ISNULL(Long, '') = 'A') AS DefaultLabels 
-                     ON CustLabelData.StorerKey = DefaultLabels.StorerKey AND CustLabelData.Description = DefaultLabels.Code2
-                  ORDER BY ISNULL(CustLabels.Short, '99999'), ISNULL(DefaultLabels.Short, '99999')
+                  ORDER BY ISNULL(CustLabels.Short, '99999')
             
             --Print Customized Labels
             OPEN CUR_CARTONLABEL 
-            FETCH NEXT FROM CUR_CARTONLABEL INTO  @cCustLabelName, @cDefaultLabelName, @cCustLblPrintSequence, @cDefaultLblPrintSequence
+            FETCH NEXT FROM CUR_CARTONLABEL INTO  @cCustLabelDataDesc, @cCustLabelName, @cCustLblPrintSequence
 
             WHILE @@FETCH_STATUS = 0
             BEGIN
                IF @bDebugFlag = 1
-                  SELECT 'Label cursor record', @cCustLabelName AS CustomizedLabelName, @cDefaultLabelName AS DefaultLabelName, 
-                     @cCustLblPrintSequence AS CustomPrintSequence, @cDefaultLblPrintSequence AS DefaultPrintSequence
+                  SELECT 'Label cursor record', @cCustLabelName AS CustomizedLabelName, @cCustLabelDataDesc AS LabelDesc, 
+                     @cCustLblPrintSequence AS CustomPrintSequence
 
-               SET @cLabelName = IIF( @cCustLabelName IS NULL OR TRIM(@cCustLabelName) = '', @cDefaultLabelName, @cCustLabelName)
-               SET @cPrintSequence = IIF( @cCustLblPrintSequence IS NULL OR TRIM(@cCustLblPrintSequence) = '', @cDefaultLblPrintSequence, @cCustLblPrintSequence)
+               IF @cCustLabelName IS NOT NULL AND TRIM(@cCustLabelName) <> ''
+               BEGIN
+                  -- If customized lable found, delete default label from the list
+                  DELETE FROM @tDefaultLabels WHERE code2 = @cCustLabelDataDesc
+                  SET @cLabelName = @cCustLabelName
+
+                  IF @bDebugFlag = 1
+                     SELECT 'Print Label', @cLabelName, @cCustLblPrintSequence
+
+                  -- Print label
+                  EXEC RDT.rdt_Print 
+                     @nMobile, 
+                     @nFunc, 
+                     @cLangCode, 
+                     @nStep, 
+                     @nInputKey, 
+                     @cFacility, 
+                     @cStorerKey, 
+                     @cLabelPrinter, 
+                     @cPaperPrinter,
+                     @cLabelName, -- Report type
+                     @tCartonLabelList, -- Report params
+                     'rdt_838PntShipLbl04',
+                     @nErrNo  OUTPUT,
+                     @cErrMsg OUTPUT
+
+                  IF @nErrNo <> 0
+                  BEGIN
+                     CLOSE CUR_CARTONLABEL 
+                     DEALLOCATE CUR_CARTONLABEL
+                     GOTO Quit
+                  END
+               END -- CustLabelName not null
+
+               FETCH NEXT FROM CUR_CARTONLABEL INTO @cCustLabelDataDesc, @cCustLabelName, @cCustLblPrintSequence
+            END -- End Cursor
+            CLOSE CUR_CARTONLABEL 
+            DEALLOCATE CUR_CARTONLABEL
+
+            --Print default lables
+            IF @bDebugFlag = 1
+            BEGIN
+               SELECT 'Default Label list to Print'
+               SELECT * FROM @tDefaultLabels
+            END
+
+            SET @nLoopIndex = -1
+            WHILE 1 = 1 AND @cOrderGroup = '10' 
+            BEGIN
+               SELECT TOP 1 
+                  @cLabelName = UDF01,
+                  @nLoopIndex = id
+               FROM @tDefaultLabels
+                  WHERE id > @nLoopIndex
+               ORDER BY id
+
+               IF @@ROWCOUNT = 0
+                  BREAK
 
                IF @bDebugFlag = 1
-                  SELECT 'Print Label:', @cLabelName, @cPrintSequence
+                  SELECT 'Print default label', @cLabelName, @nLoopIndex
 
                -- Print label
                EXEC RDT.rdt_Print 
@@ -180,26 +260,19 @@ BEGIN
                   @cLabelPrinter, 
                   @cPaperPrinter,
                   @cLabelName, -- Report type
-                  @tMultiLbl, -- Report params
+                  @tCartonLabelList, -- Report params
                   'rdt_838PntShipLbl04',
                   @nErrNo  OUTPUT,
                   @cErrMsg OUTPUT
 
                IF @nErrNo <> 0
                BEGIN
-                  CLOSE CUR_CARTONLABEL 
-                  DEALLOCATE CUR_CARTONLABEL
                   GOTO Quit
                END
-
-               FETCH NEXT FROM CUR_CARTONLABEL INTO @cCustLabelName, @cDefaultLabelName, @cCustLblPrintSequence, @cDefaultLblPrintSequence
-            END -- End Cursor
-            CLOSE CUR_CARTONLABEL 
-            DEALLOCATE CUR_CARTONLABEL
-
+            END -- default while
          END -- option 1
       END -- input key 1
-   END
+   END --step5
 
    GOTO Quit 
  
