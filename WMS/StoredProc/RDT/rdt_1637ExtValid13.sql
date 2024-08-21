@@ -7,6 +7,7 @@ GO
 /******************************************************************************/
 /* Store procedure: rdt_1637ExtValid13                                        */
 /* Copyright      : Maersk                                                    */
+/* Customer       : Inditex                                                   */
 /*                                                                            */
 /* Date       Rev  Author     Purposes                                        */
 /* 2024-08-15 1.0  NLT013     FCR-673 Created                                 */
@@ -39,6 +40,7 @@ AS
       @nRowCount           INT,
       @cStatus             NVARCHAR( 10),
       @cOrderKey           NVARCHAR( 10),
+      @cCurrentContainerNo   NVARCHAR(20),
       @cPickConfirmStatus  NVARCHAR( 1),
       @cMBOLKeyScanned     NVARCHAR( 10)
 
@@ -73,7 +75,6 @@ AS
          FROM dbo.ContainerDetail WITH (NOLOCK)
          WHERE ContainerKey = @cContainerKey
             AND PalletKey = @cPalletKey
-            AND Status = '5'
 
          IF @nRowCount > 0
          BEGIN
@@ -89,7 +90,19 @@ AS
          IF @cMBOLKey <> @cMBOLKeyScanned
          BEGIN
             SET @nErrNo = 221208
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Pallet ID
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --DiffMBolKey
+            GOTO Quit
+         END
+
+         SELECT @cCurrentContainerNo = ISNULL(BuyerPO, '')
+         FROM dbo.ORDERS WITH(NOLOCK)
+         WHERE StorerKey = @cStorerkey
+            AND OrderKey = @cOrderKey
+
+         IF @cCurrentContainerNo <> @cContainerNo
+         BEGIN
+            SET @nErrNo = 221209
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Different Container#
             GOTO Quit
          END
       END

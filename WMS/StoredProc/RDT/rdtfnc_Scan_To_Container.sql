@@ -3058,13 +3058,25 @@ BEGIN
          IF @nErrNo <> 0
             GOTO Step_99_Fail
 
-         IF @cExtendedScnSP = 'rdt_1637ExtScn01'
+         IF @cExtendedScnSP = 'rdt_1637ExtScn01' 
          BEGIN
-            SET @cContainerKey = @cUDF01
-            SET @cMBOLKEY = @cUDF02
-            SET @cContainerNo = @cUDF03
-            SET @cScanCnt = @cUDF04
-            SET @cScanCTNCnt = @cUDF05
+            IF @cUDF30 = 'UPDATE'
+            BEGIN
+               SET @cContainerKey = @cUDF01
+               SET @cMBOLKEY = @cUDF02
+               SET @cContainerNo = @cUDF03
+               SET @cScanCnt = @cUDF04
+               SET @cScanCTNCnt = @cUDF05
+
+               --Back to main menu
+               IF @cUDF06 = 'BACKTOMENU'
+               BEGIN
+                  -- Back to menu  
+                  SET @nFunc = @nMenu  
+                  SET @nScn  = @nMenu  
+                  SET @nStep = 0  
+               END
+            END
          END
 
          GOTO Quit

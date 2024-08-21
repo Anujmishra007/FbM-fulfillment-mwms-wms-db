@@ -1,13 +1,13 @@
 -- rdt_1637ExtUpd11
 --FCR-673
-execute rdt.rdtdropmsg 221251, 221300
+execute rdt.rdtdropmsg 221351, 221400
 
-execute rdt.rdtAddMsg 221251, 10, '221251 ContainerNoIsNeeded',      'us_english', 1637, 0, '221251 Container No Is Needed'
-execute rdt.rdtAddMsg 221252, 10, '221252 InvalidContainerNo',       'us_english', 1637, 0, '221252 Invalid Container No'
-execute rdt.rdtAddMsg 221253, 10, '221253 NoMBolKey',                'us_english', 1637, 0, '221253 No MBolKey'
-execute rdt.rdtAddMsg 221254, 10, '221254 ContainerClosed',          'us_english', 1637, 0, '221254 Container is Closed'
-execute rdt.rdtAddMsg 221255, 10, '221255 GetKeyFail',               'us_english', 1637, 0, '221255 Generate Key Failed'
-execute rdt.rdtAddMsg 221256, 10, '221256 InsCntFail',               'us_english', 1637, 0, '221256 Insert Container Failed'
-execute rdt.rdtAddMsg 221257, 10, '221257 InsCntFail',               'us_english', 1637, 0, '221257 Exception Happens'
+execute rdt.rdtAddMsg 221351, 10, '221351 ContainerNoIsNeeded',      'us_english', 1637, 0, '221351 Container No Is Needed'
+execute rdt.rdtAddMsg 221352, 10, '221352 InvalidContainerNo',       'us_english', 1637, 0, '221352 Invalid Container No'
+execute rdt.rdtAddMsg 221353, 10, '221353 NoMBolKey',                'us_english', 1637, 0, '221353 No MBolKey'
+execute rdt.rdtAddMsg 221354, 10, '221354 ContainerClosed',          'us_english', 1637, 0, '221354 Container is Closed'
+execute rdt.rdtAddMsg 221355, 10, '221355 GetKeyFail',               'us_english', 1637, 0, '221355 Generate Key Failed'
+execute rdt.rdtAddMsg 221356, 10, '221356 InsCntFail',               'us_english', 1637, 0, '221356 Insert Container Failed'
+execute rdt.rdtAddMsg 221357, 10, '221357 ExcepHappens',               'us_english', 1637, 0, '221357 Exception Happens'
 
-SELECT * FROM RDT.RDTMsg WITH(NOLOCK) WHERE Message_ID BETWEEN 221251 AND 221300
+SELECT * FROM RDT.RDTMsg WITH(NOLOCK) WHERE Message_ID BETWEEN 221351 AND 221400

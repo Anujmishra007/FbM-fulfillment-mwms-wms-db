@@ -8,7 +8,8 @@ execute rdt.rdtAddMsg 221203, 10, '221203 ContainerClosed',       'us_english', 
 execute rdt.rdtAddMsg 221204, 10, '221204 NoMbolKey',             'us_english', 1637, 0, '221204 No MBOL Key'
 execute rdt.rdtAddMsg 221205, 10, '221205 InvalidContainer',      'us_english', 1637, 0, '221205 Invalid Container#'
 execute rdt.rdtAddMsg 221206, 10, '221206 InvalidPallet',         'us_english', 1637, 0, '221206 Invalid Pallet ID'
-execute rdt.rdtAddMsg 221207, 10, '221207 InvalidPallet',         'us_english', 1637, 0, '221207 Pallet ID Already Scanned'
-execute rdt.rdtAddMsg 221208, 10, '221208 InvalidPallet',         'us_english', 1637, 0, '221208 Invalid Pallet ID'
+execute rdt.rdtAddMsg 221207, 10, '221207 PalletScanned',         'us_english', 1637, 0, '221207 Pallet ID Already Scanned'
+execute rdt.rdtAddMsg 221208, 10, '221208 DiffMBolKey',           'us_english', 1637
+execute rdt.rdtAddMsg 221209, 10, '221209 DiffCntNo',             'us_english', 1637, 0, '221209 Different Container#'
 
 SELECT * FROM RDT.RDTMsg WITH(NOLOCK) WHERE Message_ID BETWEEN 221201 AND 221250

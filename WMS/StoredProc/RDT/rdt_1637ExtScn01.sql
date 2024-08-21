@@ -4,8 +4,9 @@ SET ANSI_NULLS OFF
 GO 
 
 /************************************************************************/  
-/* Store procedure: rdt_1637ExtScn01                                     */  
+/* Store procedure: rdt_1637ExtScn01                                    */  
 /*                                                                      */  
+/* Customer: Inditex                                                    */
 /* Modifications log:                                                   */  
 /*                                                                      */  
 /* Date       Rev  Author     Purposes                                  */  
@@ -113,11 +114,13 @@ BEGIN
             SET @cUDF03 = '' -- @cContainerNo
             SET @cUDF04 = '' -- @cScanCnt
             SET @cUDF05 = '' -- @cTotalCTNCnt
+            SET @cUDF06 = '' -- Func
+            SET @cUDF30 = 'UPDATE' -- UPDATE Flag
 
             SET @cOutField01 = ''  
             SET @cOutField02 = ''  
 
-            EXEC rdt.rdtSetFocusField @nMobile, 1
+            EXEC rdt.rdtSetFocusField @nMobile, 2
          END 
 
          GOTO Quit
@@ -135,7 +138,7 @@ BEGIN
 
                IF @cContainerNo IS NULL OR TRIM(@cContainerNo) = ''
                BEGIN
-                  SET @nErrNo = 221251  
+                  SET @nErrNo = 221351  
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --ContainerNoIsNeeded
                   GOTO Fail
                END
@@ -149,7 +152,7 @@ BEGIN
 
                IF @nRowCount = 0
                BEGIN
-                  SET @nErrNo = 221252
+                  SET @nErrNo = 221352
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InvalidContainerNo
                   GOTO Fail
                END
@@ -164,7 +167,7 @@ BEGIN
 
                IF @nRowCount = 0 OR @cMBOLKEY IS NULL OR TRIM(@cMBOLKEY) = ''
                BEGIN  
-                  SET @nErrNo = 221253
+                  SET @nErrNo = 221353
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --NoMBolKey
                   GOTO Fail
                END
@@ -188,7 +191,7 @@ BEGIN
                BEGIN
                   IF EXISTS (SELECT 1 FROM dbo.CONTAINER WITH (NOLOCK) WHERE ContainerKey = @cContainerKey AND Status > 0)
                   BEGIN
-                     SET @nErrNo = 221254
+                     SET @nErrNo = 221354
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Container is Closed
                      GOTO Fail
                   END
@@ -204,13 +207,14 @@ BEGIN
                      SET @cOutField03 = @cContainerNo
                      SET @cOutField04 = ''  
                      SET @cOutField05 = @cScanCnt
-                     SET @cOutField06 = @cTotalCnt
+                     SET @cOutField06 = 'Total:' + ISNULL(TRY_CAST(@cTotalCnt AS NVARCHAR(5)), '0')
             
                      SET @cUDF01 = @cContainerKey
                      SET @cUDF02 = @cMBOLKEY
                      SET @cUDF03 = @cContainerNo
                      SET @cUDF04 = @cScanCnt
                      SET @cUDF05 = @cTotalCnt
+                     SET @cUDF30 = 'UPDATE' -- UPDATE Flag
 
                      SET @nAfterScn = 2192
                      SET @nAfterStep = 3
@@ -246,7 +250,7 @@ BEGIN
                      ELSE
                         ROLLBACK TRANSACTION
 
-                     SET @nErrNo = 221255
+                     SET @nErrNo = 221355
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Generate Key Failed
                      GOTO Quit
                   END
@@ -255,9 +259,9 @@ BEGIN
 
                   -- Insert new container
                   INSERT INTO dbo.Container
-                     (ContainerKey, Status, ContainerType, BookingReference) 
+                     (ContainerKey, Status, ContainerType, BookingReference, MBolKey) 
                   VALUES 
-                     (@cNewKey, '0', @cDefaultContainerType, @cContainerNo)  
+                     (@cNewKey, '0', @cDefaultContainerType, @cContainerNo, @cMBOLKEY)  
 
                   IF @@ERROR <> 0  
                   BEGIN
@@ -266,21 +270,28 @@ BEGIN
                      ELSE
                         ROLLBACK TRANSACTION
 
-                     SET @nErrNo = 221256
+                     SET @nErrNo = 221356
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Insert Container Failed
                      GOTO Quit
                   END
 
-                  IF @@TRANCOUNT > 0
+                  IF @@TRANCOUNT > @nTranCount
                      COMMIT TRANSACTION
                END TRY
                BEGIN CATCH
-                  IF @@TRANCOUNT > @nTranCount AND @@TRANCOUNT > 0
-                     ROLLBACK TRANSACTION rdt_1637ExtUpd11_Step1
-                  ELSE
+                  IF @nTranCount = 0
+                  BEGIN
                      ROLLBACK TRANSACTION
+                  END
+                  ELSE
+                  BEGIN
+                     IF XACT_STATE() <> -1
+                     BEGIN
+                        ROLLBACK TRANSACTION rdt_1637ExtScn01_6418
+                     END
+                  END
 
-                  SET @nErrNo = 221257
+                  SET @nErrNo = 221357
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Exception Happens
                   GOTO Quit
                END CATCH
@@ -293,13 +304,14 @@ BEGIN
                SET @cOutField03 = @cContainerNo
                SET @cOutField04 = ''  
                SET @cOutField05 = @cScanCnt
-               SET @cOutField06 = @cTotalCnt
+               SET @cOutField06 = 'Total:' + ISNULL(TRY_CAST(@cTotalCnt AS NVARCHAR(5)), '0')
       
                SET @cUDF01 = @cContainerKey
                SET @cUDF02 = @cMBOLKEY
                SET @cUDF03 = @cContainerNo
                SET @cUDF04 = @cScanCnt
                SET @cUDF05 = @cTotalCnt
+               SET @cUDF30 = 'UPDATE' -- UPDATE Flag
 
                SET @nAfterScn = 2192
                SET @nAfterStep = 3
@@ -316,11 +328,6 @@ BEGIN
                   @nFunctionID = @nFunc,
                   @cFacility   = @cFacility,
                   @cStorerKey  = @cStorerkey
-                  
-               -- Back to menu  
-               SET @nFunc = @nMenu  
-               SET @nScn  = @nMenu  
-               SET @nStep = 0  
          
                SET @cOutField01 = ''  
                SET @cOutField02 = ''  
@@ -333,6 +340,8 @@ BEGIN
                SET @cUDF04 = '' -- @cScanCnt
                SET @cUDF04 = '' -- @cTotalCTNCnt
                SET @cUDF05 = '' -- @cContaincTotalCnterNo
+               SET @cUDF06 = 'BACKTOMENU'    --Back to Menu
+               SET @cUDF30 = 'UPDATE' -- UPDATE Flag
             END  
             GOTO Quit
          END
@@ -347,11 +356,12 @@ Fail:
    SET @cUDF04 = '' -- @cScanCnt
    SET @cUDF04 = '' -- @cTotalCTNCnt
    SET @cUDF05 = '' -- @cContaincTotalCnterNo
+   SET @cUDF30 = 'UPDATE' -- UPDATE Flag
 
    SET @cOutField01 = ''  
    SET @cOutField02 = ''  
 
-   EXEC rdt.rdtSetFocusField @nMobile, 1
+   EXEC rdt.rdtSetFocusField @nMobile, 2
 Quit:
 END
 GO

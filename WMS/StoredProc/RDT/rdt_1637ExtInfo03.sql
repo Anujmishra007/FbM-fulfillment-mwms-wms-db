@@ -12,6 +12,7 @@ GO
 /* Copyright      : Maersk WMS                                          */    
 /*                                                                      */    
 /* Purpose: Display Total pallet qty                                    */    
+/* Customer: Inditex                                                    */
 /*                                                                      */    
 /* Called from:                                                         */    
 /*                                                                      */    
@@ -49,13 +50,20 @@ BEGIN
    DECLARE 
       @nTotalCnt              INT
 
-   SELECT @nTotalCnt = COUNT(DISTINCT pkd.ID) 
-   FROM dbo.MBOLDETAIL MBOLD WITH (NOLOCK)
-   INNER JOIN dbo.PICKDETAIL pkd WITH(NOLOCK) ON MBOLD.OrderKey = pkd.OrderKey
-   WHERE MBOLD.MBolKey = @cMBOLKEY
-      AND pkd.StorerKey = @cStorerKey
+   IF @nFunc = 1637
+   BEGIN
+      IF @nStep = 3
+      BEGIN
+         SELECT @nTotalCnt = COUNT(DISTINCT pkd.ID) 
+         FROM dbo.MBOLDETAIL MBOLD WITH (NOLOCK)
+         INNER JOIN dbo.PICKDETAIL pkd WITH(NOLOCK) ON MBOLD.OrderKey = pkd.OrderKey
+         WHERE MBOLD.MBolKey = @cMBOLKEY
+            AND pkd.StorerKey = @cStorerKey
 
-   SET @cExtendedInfo1 = 'Total:' + ISNULL(TRY_CAST(@nTotalCnt AS NVARCHAR(5)), '0')
+         SET @cExtendedInfo1 = 'Total:' + ISNULL(TRY_CAST(@nTotalCnt AS NVARCHAR(5)), '0')
+      END
+   END
+   
    
 QUIT:    
 END -- End Procedure  
