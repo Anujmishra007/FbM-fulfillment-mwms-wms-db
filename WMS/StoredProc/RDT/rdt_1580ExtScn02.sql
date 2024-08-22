@@ -77,6 +77,7 @@ BEGIN
          @cPrinter            NVARCHAR(10),
          @cReceiptLineNumber      NVARCHAR( 5),
          @cDefaultPieceRecvQTY    NVARCHAR(5),
+         @cQTY                    NVARCHAR( 10),
          @nSerialQTY          INT,
          @nMoreSNO            INT,
          @nBulkSNO            INT,
@@ -112,6 +113,7 @@ BEGIN
                SELECT @nQTY = Value FROM @tExtScnData WHERE Variable = '@nQTY'
                SELECT @cBarcode = Value FROM @tExtScnData WHERE Variable = '@cBarcode'
                
+
                -- Getting Mobile information
                SELECT
                   @cFacility   = Facility,
@@ -133,7 +135,11 @@ BEGIN
                   @cSKULabel               = V_String31,
                   @cAfterReceiveGoBackToId = V_String18,
                   @cVerifySKUInfo          = V_string33,
-                  @cSKUValidated           = V_String37
+                  @cSKUValidated           = V_String37,
+                  @cLottable01             = V_String1,
+                  @cLottable02             = V_String2,
+                  @cLottable03             = V_String3,
+                  @dLottable04             = V_String4
                FROM rdt.rdtMobRec (NOLOCK)
                WHERE  Mobile = @nMobile
                
@@ -143,6 +149,42 @@ BEGIN
                   SET V_Max = @cBarcode
                   WHERE Mobile = @nMobile
                   
+                     
+                  -- Get SKU info
+                  DECLARE @cPackKey NVARCHAR(10)
+                  SELECT                  
+                     @cPackkey = PackKey
+                  FROM dbo.SKU WITH (NOLOCK)
+                  WHERE StorerKey = @cStorerKey
+                     AND SKU = @cSKU
+
+                  -- Get UOM
+                  SELECT @cUOM = PACKUOM3
+                  FROM dbo.Pack WITH (NOLOCK)
+                  WHERE Packkey = @cPackkey
+
+                  -- Get SKU default UOM
+                  DECLARE @cSKUDefaultUOM NVARCHAR( 10)
+                  SET @cSKUDefaultUOM = dbo.fnc_GetSKUConfig( @cSKU, 'RDTDefaultUOM', @cStorerKey)
+                  IF @cSKUDefaultUOM = '0'
+                     SET @cSKUDefaultUOM = ''
+
+                  -- Check SKU default UOM in pack key
+                  IF @cSKUDefaultUOM <> ''
+                  BEGIN
+                     IF NOT EXISTS (SELECT 1
+                        FROM dbo.Pack P WITH (NOLOCK)
+                        WHERE PackKey = @cPackKey
+                           AND @cSKUDefaultUOM IN (P.PackUOM1, P.PackUOM2, P.PackUOM3, P.PackUOM4, P.PackUOM5, P.PackUOM6, P.PackUOM7, P.PackUOM8, P.PackUOM9))
+                     BEGIN
+                        SET @nErrNo = 64284
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+                        GOTO Quit
+                     END
+                     SET @cUOM = @cSKUDefaultUOM                     
+                  END
+                  
+                     
                   -- Update SKU setting
                   EXEC rdt.rdt_SerialNo @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cSKU, @cSKUDesc, @nQTY, 'UPDATE', 'ASN', @cReceiptKey,
                      @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,
@@ -175,6 +217,11 @@ BEGIN
                      SET @nRDQTY = @nSerialQTY
                   ELSE
                      SET @nRDQTY = @nQTY
+
+
+                  UPDATE rdt.rdtMobRec
+                  SET V_Max = @cSerialNo
+                  WHERE Mobile = @nMobile
 
                   -- Receive
                   EXEC rdt.rdt_PieceReceiving_Confirm
@@ -244,6 +291,10 @@ BEGIN
                      @cSerialNo     = @cSerialNo,
                      @cRefNo3       = @cBUSR1,
                      @cRefNo2       = @cReceiptLineNumber
+
+                  UPDATE rdt.rdtMobRec
+                  SET V_Max = ''
+                  WHERE Mobile = @nMobile
 
                   IF @nMoreSNO = 1
                      GOTO Quit
