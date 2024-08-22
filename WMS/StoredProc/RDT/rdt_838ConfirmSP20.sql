@@ -8,10 +8,11 @@ GO
 /* Store procedure: rdt_838ConfirmSP20                                  */
 /* Copyright      : Maersk                                              */
 /*                                                                      */
-/* Purpose: split pickdetail for           */
+/* Purpose: split pickdetail for Granite                                */
 /*                                                                      */
 /* Date       Rev  Author      Purposes                                 */
 /* 07-01-2023 1.0  JACKC       FCR-392 Created                          */
+/* 08-22-2023 1.1  JACKC       FCR-392 Support cutomized repack         */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_838ConfirmSP20] (
@@ -263,7 +264,7 @@ BEGIN
          AND CartonNo = @nCartonNo
          AND LabelNo = @cLabelNo
          AND LabelLine = @cLabelLine
-         AND SKU = @cSKU
+         --AND SKU = @cSKU -- V1.1 remove SKU to support repack scenario by jackc
       IF @@ERROR <> 0
       BEGIN
          SET @nErrNo = 100405
@@ -579,7 +580,8 @@ BEGIN
                INSERT INTO @tPKD (PickDetailKey, CaseID, PickHeaderKey, OrderKey, OrderLineNumber, SKU, Qty, AdjustQty,Lot, UOM,
                      UOMQty, DropID, Loc, ID, PackKey, CartonGroup, PickMethod, WaveKey, StorerKey, New)
                   SELECT	@cNewPickDetailKey, '', PickHeaderKey, OrderKey, OrderLineNumber, SKU, ABS(@nBalQty), 0, Lot, '6',
-                        1, DropID, Loc, ID, PackKey, CartonGroup, PickMethod, WaveKey,StorerKey,'Y'
+                        1, '',/*DropID,  v1.1 drop id must be same as case id by Jackc*/ 
+                        Loc, ID, PackKey, CartonGroup, PickMethod, WaveKey,StorerKey,'Y'
                   FROM @tPKD
                   WHERE PickDetailKey = @cPickDetailKey
 
@@ -665,7 +667,9 @@ BEGIN
                   SELECT 'Remove case id from pkd'
 
                -- Set case id to empty
-               UPDATE @tPKD SET  CaseID = ''  WHERE PickDetailKey = @cPickDetailKey
+               UPDATE @tPKD SET  CaseID = '', 
+                                 DropID='' -- V1.1 the drop id must be same as case id   
+               WHERE PickDetailKey = @cPickDetailKey
             END
          END
 
@@ -864,7 +868,8 @@ BEGIN
                INSERT INTO @tPKD (PickDetailKey, CaseID, PickHeaderKey, OrderKey, OrderLineNumber, SKU, Qty, AdjustQty,Lot, UOM,
                      UOMQty, DropID, Loc, ID, PackKey, CartonGroup, PickMethod, WaveKey, StorerKey, New)
                   SELECT	@cNewPickDetailKey, @cLabelNo, PickHeaderKey, OrderKey, OrderLineNumber, SKU, ABS(@nBalQty), 0, Lot, '6',
-                        1, DropID, Loc, ID, PackKey, CartonGroup, PickMethod, WaveKey,StorerKey,'Y'
+                        1, @cLabelNo, --DropID, V1.1 dropid must be same as label no by jackc
+                        Loc, ID, PackKey, CartonGroup, PickMethod, WaveKey,StorerKey,'Y'
                   FROM @tPKD
                   WHERE PickDetailKey = @cPickDetailKey
 
@@ -948,7 +953,9 @@ BEGIN
                   SELECT 'Upd pkd caseid to the scanned label no'
 
                -- Set case id to empty
-               UPDATE @tPKD SET  CaseID = @cLabelNo  WHERE PickDetailKey = @cPickDetailKey
+               UPDATE @tPKD SET  CaseID = @cLabelNo,
+                                 DropID = @cLabelNo -- V1.1 drop id must be same as case id
+               WHERE PickDetailKey = @cPickDetailKey
             END
 
          END -- @nBalQty >= @nPkdQty
@@ -993,7 +1000,8 @@ BEGIN
       pkd.CaseID  = t.CaseID,
       pkd.Qty     = t.Qty + t.AdjustQty,
       pkd.UOM     = '6',
-      pkd.UOMQty  = 1
+      pkd.UOMQty  = 1,
+      pkd.DropID  = t.CaseID 
    FROM pickdetail pkd INNER JOIN @tPKD t
       ON pkd.pickdetailkey = t.pickdetailkey AND t.New <> 'D'
    

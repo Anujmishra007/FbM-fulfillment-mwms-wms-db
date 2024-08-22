@@ -85,6 +85,7 @@ GO
 /* 2024-06-24   6.1 JHU151      Fixed Rest @cEnter Flag issue                                   */
 /* 2024-07-08   6.2 Jackc       FCR-392 Add ext scn entry and codes                             */
 /* 2024-07-08   6.3 JHU151      FCR-330 SSCC code generator                                     */
+/* 2024-08-22   6.4 JCH507      FCR-392 Add errno handling to step3>ESC>ExtUpd                  */
 /************************************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_Pack] (
@@ -2138,8 +2139,8 @@ BEGIN
       END
 
       
---JHU151
-Step_3_ExtScn:
+      --JHU151
+      Step_3_ExtScn:
       BEGIN
          SET @nAction = 3 --Prepare output fields
          SET @cExtendedScreenSP = rdt.RDTGetConfig( @nFunc, 'ExtScnSP', @cStorerKey)
@@ -2734,6 +2735,10 @@ Step_3_ExtScn:
                @cPackDtlRefNo, @cPackDtlRefNo2, @cPackDtlUPC, @cPackDtlDropID, @cPackData1, @cPackData2, @cPackData3,
                @nErrNo OUTPUT, @cErrMsg OUTPUT
 
+            IF @nErrNo <> 0 -- V6.4 By JCH507
+            BEGIN
+               GOTO  Quit
+            END
          END
       END
 

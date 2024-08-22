@@ -5,17 +5,18 @@ GO
 SET ANSI_NULLS OFF
 GO
 
-/************************************************************************/
-/* Store procedure: rdt_838ExtUpd18                                     */
-/* Copyright      : Maersk                                              */
-/*                                                                      */
-/* Purpose: Trigger IML after print label fro Levis US                  */
-/*                                                                      */
-/* Date       Rev  Author      Purposes                                 */
-/* 2024-07-05 1.0  Jackc       FCR-392 Created                          */
-/* 2024-08-20 1.1  Jackc       FCR-392 Send IML based on conditions     */
-/*                              (FBR v1.5)                              */
-/************************************************************************/
+/*********************************************************************************/
+/* Store procedure: rdt_838ExtUpd18                                              */
+/* Copyright      : Maersk                                                       */
+/*                                                                               */
+/* Purpose: Extended Upd for Granite - Levis US                                  */
+/*                                                                               */
+/* Date       Rev  Author      Purposes                                          */
+/* 2024-07-05 1.0  Jackc       FCR-392 Created                                   */
+/* 2024-08-20 1.1  Jackc       FCR-392 Send IML based on conditions (FBR v1.5)   */
+/* 2024-08-22 1.2  Jackc       FCR-392 Not allow to esc on step3 if repack       */
+/*                             and update packinfo weight before send IML        */
+/*********************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_838ExtUpd18 (
    @nMobile          INT,
@@ -56,7 +57,9 @@ BEGIN
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
-   DECLARE @bDebugFlag  BINARY = 0
+   DECLARE  @bDebugFlag             BINARY = 0,
+            @nCartonQTY             INT,
+            @cNotAllowEscOnSKUQty   NVARCHAR(10)
 
    IF @nFunc = 838 -- Pack
    BEGIN
@@ -134,6 +137,33 @@ BEGIN
             END -- option=1
          END -- key=1
       END -- step5
+      IF @nStep = 3 -- SKU Qty 
+      BEGIN
+         IF @nInputKey = 0
+         BEGIN
+            SET @cNotAllowEscOnSKUQty = rdt.rdtGetConfig( @nFunc, 'NotAllowEscOnSKUQty', @cStorerKey)
+            IF @cNotAllowEscOnSKUQty = '0'
+               SET @cNotAllowEscOnSKUQty = ''
+
+            IF @nCartonNo > 0 AND @cNotAllowEscOnSKUQty = 1
+            BEGIN
+               SELECT
+                  @nCartonQTY = ISNULL( SUM( PD.QTY), 0)
+               FROM dbo.PackDetail PD WITH (NOLOCK)
+               WHERE PD.PickSlipNo = @cPickSlipNo
+                  AND CartonNo = @nCartonNo
+                  AND LabelNo = @cLabelNo
+
+               --Not allow to esc if carton is empty after repack
+               IF @nCartonQTY = 0
+               BEGIN
+                  SET @nErrNo = 221601
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --NotAllowEscInRepack
+                  GOTO Quit
+               END 
+            END -- cartonNo >0
+         END -- key=0
+      END--step3
    END -- 838
 
    GOTO Quit
@@ -143,6 +173,7 @@ BEGIN
    Quit:  
       WHILE @@TRANCOUNT > @nTranCount  
          COMMIT TRAN 
+
 
 END--sp
 GO
