@@ -81,7 +81,11 @@ BEGIN
       @cLabelName                NVARCHAR(30),
       @nWorkOrderDetailQty       INT,
       @cLabelListName            NVARCHAR(10),
-      @cShipperKey               NVARCHAR(15)
+      @cShipperKey               NVARCHAR(15),
+      @cOrderInfo03              NVARCHAR(20),
+      @cPickConfirmStatus        NVARCHAR( 1),
+      @fCartonWeight             FLOAT,
+      @fSKUWeight                FLOAT
 
    DECLARE @tLabels TABLE
    (
@@ -97,6 +101,12 @@ BEGIN
 
    SET @nErrNo = 0
    SET @cErrMsg = ''
+
+   SET @cPickConfirmStatus = rdt.RDTGetConfig( @nFunc, 'PickConfirmStatus', @cStorerKey)
+   IF @cPickConfirmStatus = '0'
+      SET @cPickConfirmStatus = '5'
+   IF @cPickConfirmStatus NOT IN ( '3', '5')
+      SET @cPickConfirmStatus = '5'
 
    SELECT @nScn = Scn,
       @cLabelPrinterGroup = Printer,
@@ -138,6 +148,14 @@ BEGIN
             --4. Insert transmitlog2
             IF @nTotalPQty = @nTotalCQty -- Audit finished
             BEGIN
+               SELECT TOP 1 @cOrderInfo03 = ISNULL(OI.OrderInfo03, '') + '-' + ISNULL(CLK.Description, '')
+               FROM dbo.OrderInfo OI WITH(NOLOCK)
+               INNER JOIN dbo.PickDetail PKD WITH(NOLOCK) ON OI.OrderKey = PKD.OrderKey
+               INNER JOIN dbo.CODELKUP CLK WITH(NOLOCK) ON PKD.StorerKey = CLK.StorerKey AND CLK.LISTNAME = 'VASORD' AND ISNULL(OI.OrderInfo03, '') = CLK.Code
+               WHERE PKD.StorerKey = @cStorerKey
+                  AND ISNULL(PKD.CaseID, '') = @cDropID
+                  AND PKD.Sku = @cSKU
+
                SELECT @nRowCount = COUNT(1) 
                FROM dbo.WorkOrder wo WITH(NOLOCK)
                INNER JOIN dbo.WorkOrderDetail wod WITH(NOLOCK) ON wo.WorkOrderKey = wod.WorkOrderKey
@@ -174,17 +192,17 @@ BEGIN
 
                   WHILE @@FETCH_STATUS = 0 
                   BEGIN
-                     IF @nLoopIndex % 8 = 1 SET @cMsg01 = @cVASCode + '-' + @cVASCodeDesc
-                     ELSE IF @nLoopIndex % 8  = 2 SET @cMsg02 = @cVASCode + '-' + @cVASCodeDesc
-                     ELSE IF @nLoopIndex % 8  = 3 SET @cMsg03 = @cVASCode + '-' + @cVASCodeDesc
-                     ELSE IF @nLoopIndex % 8  = 4 SET @cMsg04 = @cVASCode + '-' + @cVASCodeDesc
-                     ELSE IF @nLoopIndex % 8  = 5 SET @cMsg05 = @cVASCode + '-' + @cVASCodeDesc
-                     ELSE IF @nLoopIndex % 8  = 6 SET @cMsg06 = @cVASCode + '-' + @cVASCodeDesc
-                     ELSE IF @nLoopIndex % 8  = 7 SET @cMsg07 = @cVASCode + '-' + @cVASCodeDesc
-                     ELSE IF @nLoopIndex % 8  = 0 SET @cMsg08 = @cVASCode + '-' + @cVASCodeDesc
+                     IF @nLoopIndex % 7 = 1 SET @cMsg02 = @cVASCode + '-' + @cVASCodeDesc
+                     ELSE IF @nLoopIndex % 7  = 2 SET @cMsg03 = @cVASCode + '-' + @cVASCodeDesc
+                     ELSE IF @nLoopIndex % 7  = 3 SET @cMsg04 = @cVASCode + '-' + @cVASCodeDesc
+                     ELSE IF @nLoopIndex % 7  = 4 SET @cMsg05 = @cVASCode + '-' + @cVASCodeDesc
+                     ELSE IF @nLoopIndex % 7  = 5 SET @cMsg06 = @cVASCode + '-' + @cVASCodeDesc
+                     ELSE IF @nLoopIndex % 7  = 6 SET @cMsg07 = @cVASCode + '-' + @cVASCodeDesc
+                     ELSE IF @nLoopIndex % 7  = 0 SET @cMsg08 = @cVASCode + '-' + @cVASCodeDesc
 
-                     IF @cMsg01 IS NOT NULL AND TRIM(@cMsg01) <> '' AND @nLoopIndex % 8 = 0
+                     IF @cMsg02 IS NOT NULL AND TRIM(@cMsg02) <> '' AND @nLoopIndex % 7 = 0
                      BEGIN
+                        SET @cMsg01 = @cOrderInfo03
                         EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo, @cErrMsg, 
                               @cMsg01, 
                               @cMsg02, 
@@ -213,8 +231,9 @@ BEGIN
                   CLOSE CUR_PPA 
                   DEALLOCATE CUR_PPA 
 
-                  IF @cMsg01 IS NOT NULL AND TRIM(@cMsg01) <> ''
+                  IF @cMsg02 IS NOT NULL AND TRIM(@cMsg02) <> ''
                   BEGIN
+                     SET @cMsg01 = @cOrderInfo03
                      SET @cMsg10 = 'Press ESC Continue'
                      EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo, @cErrMsg, 
                            @cMsg01, 
@@ -384,11 +403,6 @@ BEGIN
                   AND ISNULL(pkd.CaseID, '') = @cDropID
                ORDER BY orm.OrderKey
 
-               SELECT @cPickSlipNo = PickSlipNo
-               FROM dbo.PackDetail WITH(NOLOCK) 
-               WHERE StorerKey = @cStorerKey 
-               AND labelno = @cDropID
-
                SET @nTranCount = @@TRANCOUNT  
                IF @nTranCount = 0
                   BEGIN TRANSACTION
@@ -405,15 +419,33 @@ BEGIN
 
                   --Carton audit finished
                   --1. Mark PackInfo as PACKED
-                  --2. If all Packedinfo are marked as PACKED, mark PackHeader as 9
-                  --3. Insert transmitlog2
+                  --2. Calculate carton weight
+                  --3. If all Packedinfo are marked as PACKED, mark PackHeader as 9
+                  --4. Insert transmitlog2
                   IF @nTotalPQty = @nTotalCQty
                   BEGIN
                      --Mark PackInfo as PACKED
                      UPDATE dbo.PackInfo WITH(ROWLOCK)
                      SET CartonStatus = 'PACKED'
                      WHERE PickSlipNo = @cPickSlipNo
-                        AND ISNULL(UccNo, '') = @cDropID
+                        AND ISNULL(RefNo, '') = @cDropID
+
+                     --Calculate carton weight
+                     SELECT @fCartonWeight = InvWeight + CartonWeight
+                     FROM
+                        (SELECT CART.CartonWeight, SUM(PKD.qty * SKU.StdGrossWgt) AS InvWeight
+                        FROM dbo.CARTONIZATION CART WITH(NOLOCK)
+                        INNER JOIN dbo.PackInfo PKI WITH(NOLOCK) ON CART.CartonType = ISNULL(PKI.CartonType, '')
+                        INNER JOIN dbo.PickDetail PKD WITH(NOLOCK) ON ISNULL(PKI.RefNo, '') = ISNULL(PKD.CaseID, '-1') 
+                        INNER JOIN dbo.SKU SKU WITH(NOLOCK) ON PKD.StorerKey = SKU.StorerKey AND PKD.Sku = SKU.Sku
+                        WHERE PKI.PickSlipNo = @cPickSlipNo
+                           AND PKD.StorerKey = @cStorerKey
+                           AND PKD.Status = @cPickConfirmStatus
+                        GROUP BY CART.CartonWeight) AS t
+
+                     UPDATE dbo.PackInfo WITH(ROWLOCK) 
+                     SET Weight = @fCartonWeight
+                     WHERE PickSlipNo = @cPickSlipNo
 
                      --If all Packedinfo are marked as PACKED, mark PackHeader as 9
                      IF (SELECT COUNT(1) FROM dbo.PackInfo WITH(NOLOCK) WHERE PickSlipNo = @cPickSlipNo)
