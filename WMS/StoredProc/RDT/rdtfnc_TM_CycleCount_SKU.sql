@@ -358,12 +358,11 @@ SELECT
    @cExtCfmSP           = V_String26,
    @cExtendedUpdateSP   = V_String27,
    @cTMCCVarianceCountSP= V_String28,
-   @cTMCCAllowPostAdj   = V_String40,
    
    -- Start of Common Variable use by UCC, SKU, SingleScan CC
    @cExtendedDisplayQtySP  = V_String29,
    @cDiffQTYScanSNO        = V_String30,
-   
+
    @cAreakey               = V_String32,
    @cTTMStrategykey        = V_String33,
    @cTTMTasktype           = V_String34,
@@ -471,6 +470,8 @@ BEGIN
 
    SET @cDiffQTYScanSNO = rdt.RDTGetConfig( @nFunc, 'DiffQTYScanSNO', @cStorerKey)
 
+   SET @cCCGroupExLottable05 = rdt.RDTGetConfig( @nFunc, 'CCGroupExLottable05', @cStorerkey)
+
    --IF @nStep = 0 GOTO Step_0   -- TM CC- SKU
    IF @nStep = 1 GOTO Step_1   -- Scn = 2940. SKU
    IF @nStep = 2 GOTO Step_2   -- Scn = 2941. Qty -- Lottables
@@ -504,7 +505,6 @@ BEGIN
       SET @cCCOption = ''
       SET @cNewSKUorLottable = ''
       SET @cHasLottable = ''
-      SET @cCCGroupExLottable05 = ''
       SET @nLottableCount = ''
       SET @nLottableCountTotal = ''
       SET @cSKUDescr1 = ''
@@ -816,7 +816,7 @@ BEGIN
       SET @nQtyAval = 0
       SET @nQty = 0
       SET @nPUOM_Div = 0
-    SET @nMQTY = 0
+      SET @nMQTY = 0
       SET @nPQTY = 0
 
       SET @cLottable01 = ''
@@ -852,9 +852,6 @@ BEGIN
         AND SKU.StorerKey = @cStorerKey
 
       SET @cCCDetailKey = ''
-
-      SET @cCCGroupExLottable05 = ''
-      SET @cCCGroupExLottable05 = rdt.RDTGetConfig( @nFunc, 'CCGroupExLottable05', @cStorerkey)
 
       IF @cCCGroupExLottable05 = '1'
       BEGIN
@@ -1700,7 +1697,6 @@ BEGIN
          SET @cCCOption           = ''
          SET @cNewSKUorLottable   = ''
          SET @cHasLottable        = ''
-         SET @cCCGroupExLottable05  = ''
 
          -- EventLog - Sign In Function
          EXEC RDT.rdt_STD_EventLog
@@ -3120,7 +3116,6 @@ BEGIN
          SET @cCCOption           = ''
          SET @cNewSKUorLottable   = ''
          SET @cHasLottable        = ''
-         SET @cCCGroupExLottable05  = ''
 
          -- Prepare Next Screen Variable
          SET @cOutField01 = @cLoc
@@ -3330,12 +3325,10 @@ BEGIN
                END
                ELSE
                BEGIN
-
                   -- GOTO Main Module Get Next Task Screen Screen
                   SET @cCCOption           = ''
                   SET @cNewSKUorLottable   = ''
                   SET @cHasLottable        = ''
-                  SET @cCCGroupExLottable05  = ''
 
                   SET @nFunc = 1766
                   SET @nScn = 2875
@@ -3344,12 +3337,10 @@ BEGIN
             END
             ELSE
             BEGIN
-
                -- GOTO Main Module Get Next Task Screen Screen
                SET @cCCOption           = ''
                SET @cNewSKUorLottable   = ''
                SET @cHasLottable        = ''
-               SET @cCCGroupExLottable05  = ''
 
                SET @nFunc = 1766
                SET @nScn = 2875
@@ -3408,7 +3399,6 @@ BEGIN
          SET @cCCOption           = ''
          SET @cNewSKUorLottable   = ''
          SET @cHasLottable        = ''
-         SET @cCCGroupExLottable05  = ''
 
          SET @cOutField10 = @cSuggFromLoc
          SET @cOutField02 = ''
@@ -3619,7 +3609,6 @@ BEGIN
             SET @cCCOption           = ''
             SET @cNewSKUorLottable   = ''
             SET @cHasLottable        = ''
-            SET @cCCGroupExLottable05  = ''
 
             --go to previous screen
             SET @nScn  = @nScn - 2
@@ -4181,8 +4170,6 @@ BEGIN
       SET @cCCOption           = ''
       SET @cNewSKUorLottable   = ''
       SET @cHasLottable        = ''
-      SET @cCCGroupExLottable05  = ''
-
 
       -- GOTO Main Module Get Next Task Screen Screen
       SET @nFunc = 1766
@@ -4344,9 +4331,6 @@ BEGIN
            AND SKU.StorerKey = @cStorerKey  
   
          SET @cCCDetailKey = ''  
-  
-         SET @cCCGroupExLottable05 = ''  
-         SET @cCCGroupExLottable05 = rdt.RDTGetConfig( @nFunc, 'CCGroupExLottable05', @cStorerkey)  
   
          IF @cCCGroupExLottable05 = '1'  
          BEGIN  
@@ -5577,7 +5561,6 @@ BEGIN
       SET @cCCOption           = ''    
       SET @cNewSKUorLottable   = ''    
       SET @cHasLottable        = ''    
-      SET @cCCGroupExLottable05  = ''    
     
       --go to previous screen    
       SET @nScn  = 2940    
@@ -6076,6 +6059,140 @@ BEGIN
 
    IF @nInputKey = 0 -- ESC
    BEGIN
+      SET @cSKUDescr = ''
+      SET @cMUOM_Desc = ''
+      SET @cPUOM_Desc = ''
+
+      SET @nQtyAval = 0
+      SET @nQty = 0
+      SET @nPUOM_Div = 0
+      SET @nMQTY = 0
+      SET @nPQTY = 0
+
+      SET @cLottable01 = ''
+      SET @cLottable02 = ''
+      SET @cLottable03 = ''
+      SET @dLottable04 = NULL
+      SET @dLottable05 = NULL
+
+      SELECT
+           @cSKUDescr = SKU.DESCR
+         , @cMUOM_Desc  = Pack.PackUOM3
+         , @cPUOM_Desc  =
+         CASE @cPUOM
+            WHEN '2' THEN Pack.PackUOM1 -- Case
+            WHEN '3' THEN Pack.PackUOM2 -- Inner pack
+            WHEN '6' THEN Pack.PackUOM3 -- Master unit
+            WHEN '1' THEN Pack.PackUOM4 -- Pallet
+            WHEN '4' THEN Pack.PackUOM8 -- Other unit 1
+            WHEN '5' THEN Pack.PackUOM9 -- Other unit 2
+         END
+         ,  @nPUOM_Div  = CAST( IsNULL(
+         CASE @cPUOM
+            WHEN '2' THEN Pack.CaseCNT
+            WHEN '3' THEN Pack.InnerPack
+            WHEN '6' THEN Pack.QTY
+            WHEN '1' THEN Pack.Pallet
+            WHEN '4' THEN Pack.OtherUnit1
+            WHEN '5' THEN Pack.OtherUnit2
+         END, 1) AS INT)
+      FROM dbo.SKU SKU WITH (NOLOCK)
+      INNER JOIN dbo.Pack Pack WITH (NOLOCK) ON (SKU.PackKey = Pack.PackKey)
+      WHERE SKU.SKU = @cSKU
+        AND SKU.StorerKey = @cStorerKey
+
+      IF @cCCGroupExLottable05 = '1'
+      BEGIN
+         SELECT TOP 1
+                  @cLottable01 = CC.Lottable01
+                , @cLottable02 = CC.Lottable02
+                , @cLottable03 = CC.Lottable03
+                , @dLottable04 = CC.Lottable04  --yeekung01
+                , @nQtyAval    =  SUM(CC.SystemQty)
+                , @cCCDetailKey = MIN(CC.CCDetailKey)
+                , @nQty        = SUM(CC.Qty)
+         FROM dbo.CCDetail CC WITH (NOLOCK)
+         WHERE CC.SKU = @cSKU
+         AND CC.CCKey = @cCCKey
+         AND CC.Loc   = @cLoc
+         AND CC.ID    = @cID
+         AND Status < '9'
+         AND CC.CCSheetNo = @cTaskDetailKey
+         GROUP BY CC.Lottable01, CC.Lottable02, CC.Lottable03, CC.Lottable04
+         ORDER BY MIN(CC.CCDetailKey)
+
+         SET @nLottableCountTotal = 0
+         SELECT @nLottableCountTotal =  COUNT(1)
+         FROM dbo.CCDetail CC WITH (NOLOCK)
+         WHERE CC.SKU = @cSKU
+         AND CC.CCKey = @cCCKey
+         AND CC.Loc   = @cLoc
+         AND CC.ID    = @cID
+         AND Status < '9'
+         AND CC.CCSheetNo = @cTaskDetailKey
+         GROUP BY CC.Lottable01, CC.Lottable02, CC.Lottable03, CC.Lottable04
+      END
+      ELSE
+      BEGIN
+         SELECT TOP 1
+                  @cLottable01 = CC.Lottable01
+                , @cLottable02 = CC.Lottable02
+                , @cLottable03 = CC.Lottable03
+                , @dLottable04 = CC.Lottable04  --yeekung01
+                , @dLottable05 = CC.Lottable05  --yeekung01
+                , @nQtyAval    =  CC.SystemQty
+                , @cCCDetailKey = CC.CCDetailKey
+                , @nQty        = CC.Qty
+         FROM dbo.CCDetail CC WITH (NOLOCK)
+         WHERE CC.SKU = @cSKU
+         AND CC.CCKey = @cCCKey
+         AND CC.Loc   = @cLoc
+         AND CC.ID    = @cID
+         AND Status < '9'
+         AND CC.CCSheetNo = @cTaskDetailKey
+         ORDER BY CCDetailKey
+
+         SET @nLottableCountTotal = 0
+         SELECT @nLottableCountTotal = COUNT(1)
+         FROM dbo.CCDetail CC WITH (NOLOCK)
+         WHERE CC.SKU = @cSKU
+         AND CC.CCKey = @cCCKey
+         AND CC.Loc   = @cLoc
+         AND CC.ID    = @cID
+         AND Status < '9'
+       AND CC.CCSheetNo = @cTaskDetailKey
+      END
+
+      SET @cCounted = ''
+
+      IF EXISTS ( SELECT 1 FROM dbo.CCDetail WITH (NOLOCK)
+                  WHERE CCKey = @cCCKey
+                  AND SKU = @cSKU
+                  AND Loc = @cLoc
+                  AND ID  = @cID
+                  AND Status < '9'
+                  AND Qty > 0
+                  AND CCSheetNo = @cTaskDetailKey
+                  AND CCdetailKey = @cCCDetailKey)
+      BEGIN
+         SET @nQtyAval = @nQty
+         SET @cCounted = '1'
+      END
+
+      -- Convert to prefer UOM QTY
+      IF @cPUOM = '6' OR -- When preferred UOM = master unit
+         @nPUOM_Div = 0  -- UOM not setup
+      BEGIN
+         SET @cPUOM_Desc = ''
+         SET @nPQTY = 0
+         SET @nMQTY = @nQtyAval
+      END
+      ELSE
+      BEGIN
+         SET @nPQTY = @nQtyAval / @nPUOM_Div  -- Calc QTY in preferred UOM
+         SET @nMQTY = @nQtyAval % @nPUOM_Div  -- Calc the remaining in master unit
+      END
+
       -- Prepare Next Screen Variable  
       SET @cSKUDescr1 = SUBSTRING( @cSKUDescr, 1, 20)  -- SKU desc 1  
       SET @cSKUDescr2 = SUBSTRING( @cSKUDescr, 21, 20)  -- SKU desc 1  
@@ -6098,7 +6215,7 @@ BEGIN
       END  
       ELSE  
       BEGIN  
-         SET @cOutField04 = @cPUOM_Desc  
+         SET @cOutField04 = @cPUOM_Desc
          IF @cCounted = '1'  
          BEGIN  
             SET @cOutField06 = CAST( @nPQTY AS NVARCHAR( 5))  
@@ -6111,8 +6228,6 @@ BEGIN
   
       IF @nPQTY <= 0  
       BEGIN  
-         --SET @cOutField04 = ''  
-         SET @cOutField06 = ''  
          SET @cOutField06 = ''  
          SET @cFieldAttr06 = 'O'  
       END  
@@ -6155,7 +6270,6 @@ BEGIN
          SET @cOutField11 = rdt.rdtFormatDate( @dLottable04)    
       END    
   
-      SET @cFieldAttr06 = ''  
       SET @cFieldAttr07 = ''  
       SET @cFieldAttr12 = ''  
   
@@ -6192,6 +6306,7 @@ BEGIN
       END  
       ELSE  
       BEGIN  
+
          SET @cFieldAttr12 = 'O'  
          SET @cOutField12 = ''  
       END  
@@ -6200,7 +6315,8 @@ BEGIN
       SET @nScn = @nFromScn
       SET @nStep = @nStep - 6      
    END
-   
+   GOTO Quit
+
    STEP_8_FAIL:  
    BEGIN  
       SET @cOutField01 = ''  
