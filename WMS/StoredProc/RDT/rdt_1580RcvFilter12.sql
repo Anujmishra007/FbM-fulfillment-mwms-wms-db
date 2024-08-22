@@ -45,14 +45,23 @@ BEGIN
    SET CONCAT_NULL_YIELDS_NULL OFF
    
    DECLARE @cSerialNo NVARCHAR(40)
+   DECLARE @cASNSNRCPTValidtn     NVARCHAR(10),
+           @cStorerKey          NVARCHAR(20)
    
-   
-   SELECT @cSerialNo = V_Max
-   FROM rdt.rdtMobRec WITH (NOLOCK)
-   WHERE Mobile = @nMobile
+   SELECT @cSerialNo = V_Max,
+          @cStorerKey = StorerKey
+      FROM rdt.rdtMobRec WITH (NOLOCK)
+      WHERE Mobile = @nMobile
 
-   SET @cCustomSQL = @cCustomSQL + 
-      '     AND UserDefine01 = ''' + @cSerialNo + ''''    
+   SET @cASNSNRCPTValidtn = rdt.RDTGetConfig( @nFunc, 'ASNSNRCPTValidtn', @cStorerKey)
+   
+   IF @cASNSNRCPTValidtn = '1'
+   BEGIN
+      
+
+      SET @cCustomSQL = @cCustomSQL + 
+         '     AND UserDefine01 = ''' + @cSerialNo + ''''
+   END  
 
 QUIT:
 END -- End Procedure

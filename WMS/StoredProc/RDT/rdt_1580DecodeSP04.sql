@@ -104,6 +104,20 @@ BEGIN
                END
             END
             
+            IF (@cSkipCheckingSKUNotInASN = '0')
+            BEGIN 
+               IF NOT EXISTS ( SELECT 1 
+                              FROM dbo.RECEIPTDETAIL WITH (NOLOCK)
+                              WHERE ReceiptKey = @cReceiptKey
+                              AND   SKU = @cSKU
+                              AND   FinalizeFlag <> 'Y')
+               BEGIN
+                  SET @nErrNo = 220702  
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SKU Not In ASN  
+                  GOTO Quit
+               END
+            END
+            
             IF (@cDisAllowRDTOverReceipt = '1')
             BEGIN
                SELECT 
@@ -122,19 +136,7 @@ BEGIN
                END
             END
 
-            IF (@cSkipCheckingSKUNotInASN = '0')
-            BEGIN 
-               IF NOT EXISTS ( SELECT 1 
-                              FROM dbo.RECEIPTDETAIL WITH (NOLOCK)
-                              WHERE ReceiptKey = @cReceiptKey
-                              AND   SKU = @cSKU
-                              AND   FinalizeFlag <> 'Y')
-               BEGIN
-                  SET @nErrNo = 220702  
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SKU Not In ASN  
-                  GOTO Quit
-               END
-            END
+            
 
             IF (@cASNSNRCPTValidtn = '1')
             BEGIN               
