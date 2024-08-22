@@ -6,7 +6,7 @@ IF NOT EXISTS (SELECT *
 
       CREATE TABLE [dbo].[ORDERDETAIL_CANCLOG]
          (
-			[LogKey] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
+			   [LogId] [int] IDENTITY(1,1) NOT NULL,
          [OrderKey] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
          [OrderLineNumber] [nvarchar] (5) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
          [OrderDetailSysId] [int] NULL CONSTRAINT [DF_ORDERDETAIL_CANCLOG_OrderDetailSysId] DEFAULT (rand()*(2147483647)),
@@ -91,7 +91,7 @@ IF NOT EXISTS (SELECT *
          [CancelReasonCode] [nvarchar](60) NULL
          ) ON [PRIMARY]
 
-         ALTER TABLE [dbo].[ORDERDETAIL_CANCLOG] ADD CONSTRAINT [PKORDERDETAIL_CANCLOG] PRIMARY KEY CLUSTERED ([LogKey]) WITH (FILLFACTOR=90) ON [PRIMARY]
+         ALTER TABLE [dbo].[ORDERDETAIL_CANCLOG] ADD CONSTRAINT [PKORDERDETAIL_CANCLOG] PRIMARY KEY CLUSTERED ([LogId]) WITH (FILLFACTOR=90) ON [PRIMARY]
 
          CREATE NONCLUSTERED INDEX [IX_ORDERDETAIL_CANCLOG_ConsoOrderKey] ON [dbo].[ORDERDETAIL_CANCLOG] ([ConsoOrderKey], [ConsoOrderLineNo]) WITH (FILLFACTOR=90) ON [PRIMARY]
 
@@ -263,7 +263,7 @@ IF NOT EXISTS (SELECT *
 
          EXEC sp_addextendedproperty N'MS_Description', 'The reason why an order detail is cancelled', 'SCHEMA', N'dbo', 'TABLE', N'ORDERDETAIL_CANCLOG', 'COLUMN', N'CancelReasonCode'
 
-			EXEC sp_addextendedproperty N'MS_Description', 'Unique code identifying Logs.', 'SCHEMA', N'dbo', 'TABLE', N'ORDERDETAIL_CANCLOG', 'COLUMN', N'LogKey'
+			EXEC sp_addextendedproperty N'MS_Description', 'Unique integer identifying Logs.', 'SCHEMA', N'dbo', 'TABLE', N'ORDERDETAIL_CANCLOG', 'COLUMN', N'LogID'
 
 END
    GRANT SELECT ON  [dbo].[ORDERDETAIL_CANCLOG] TO [JReportRole]
