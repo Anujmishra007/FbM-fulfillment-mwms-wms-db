@@ -21,4 +21,5 @@ execute rdt.rdtAddMsg 211717, 10, 'Create Success',                             
 execute rdt.rdtAddMsg 211718, 10, '211718 Pallet Not Picked',                             'us_english', 1157
 execute rdt.rdtAddMsg 211719, 10, '211719 Invalid Code',                                  'us_english', 1157, 0, '211719 Invalid Outbound VAS code'
 execute rdt.rdtAddMsg 211720, 10, '211720 Need Order Key',                                'us_english', 1157
-execute rdt.rdtAddMsg 211721, 10, '211721 Invalid Pallet Storer',                         'us_english', 1157               
+execute rdt.rdtAddMsg 211721, 10, '211721 Invalid Pallet Storer',                         'us_english', 1157
+execute rdt.rdtAddMsg 211722, 10, '211722 Please Scan DROP ID',                           'us_english', 1157

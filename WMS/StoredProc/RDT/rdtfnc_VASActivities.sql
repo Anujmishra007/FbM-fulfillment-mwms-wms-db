@@ -276,6 +276,20 @@ BEGIN
             GOTO Step_ID_Fail
          END
 
+         SELECT
+            @nRowCount = COUNT(1)
+         FROM dbo.PICKDETAIL WITH(NOLOCK)
+         WHERE DropID IS NOT NULL
+         AND DropID <> @cID
+         AND ID = @cID
+
+         IF @nRowCount > 0
+         BEGIN
+            SET @nErrNo = 211722
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Please Use Drop ID Instead
+            GOTO Step_ID_Fail
+         END
+
          SELECT 
             @cOrderKey = OrderKey,
             @cOrderLineNumber = OrderLineNumber,
