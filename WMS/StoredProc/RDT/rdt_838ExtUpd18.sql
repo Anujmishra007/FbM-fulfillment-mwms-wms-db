@@ -73,7 +73,7 @@ BEGIN
                DECLARE @cTransmitLogKey      NVARCHAR( 10)
                DECLARE @c_QCmdClass          NVARCHAR( 10)   = '' 
                DECLARE @cShipperKey          NVARCHAR( 15)
-               DECLARE @nCartonWgt           INT = 0  
+               DECLARE @nCartonWgt           FLOAT = 0  
                DECLARE @b_Debug              INT = 0
                DECLARE @nTranCount           INT
 
