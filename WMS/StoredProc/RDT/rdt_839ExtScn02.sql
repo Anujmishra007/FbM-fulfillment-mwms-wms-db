@@ -155,11 +155,6 @@ BEGIN
 
    IF @nFunc = 839
    BEGIN
-      SET @cTOLOCConfig = rdt.RDTGetConfig( @nFunc, 'TOLOC', @cStorerKey)
-
-      IF ISNULL(@cTOLOCConfig, '') <> '1'
-         GOTO Quit
-
       IF @nAction = 0
       BEGIN
          IF @nStep = 4 
