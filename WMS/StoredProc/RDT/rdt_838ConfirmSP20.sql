@@ -298,15 +298,37 @@ BEGIN
 
       IF NOT EXISTS (SELECT 1 FROM dbo.PackInfo WITH (NOLOCK) WHERE PickSlipNo = @cPickSlipNo AND CartonNo = @nCartonNo)
       BEGIN
-         INSERT INTO dbo.PackInfo (PickslipNo, CartonNo, UCCNo, QTY)
-         VALUES (@cPickSlipNo, @nCartonNo, '', @nQTY)
-         IF @@ERROR <> 0
+         IF NOT EXISTS (SELECT 1 FROM PackInfo WITH (NOLOCK) WHERE PickSlipNo = @cPickSlipNo AND ISNULL(CartonType,'') <> '' )
          BEGIN
-            SET @nErrNo = 100406
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INSPackInfFail
+            SET @nErrNo = '218415'
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --NoCartonTypeInPackInfo
             GOTO RollBackTran
          END
-      END
+         ELSE
+         BEGIN
+            INSERT INTO dbo.PackInfo (PickslipNo, CartonNo, QTY, CartonType, RefNo, Length, Width, Height, UCCNo, TrackingNo)
+               SELECT TOP 1 
+                  @cPickSlipNo,
+                  @nCartonNo,
+                  @nQTY,
+                  CartonType,
+                  @cLabelNo,
+                  Length,
+                  Width,
+                  Height,
+                  '', --UCC
+                  '' --TrackingNo
+               FROM PackInfo  WITH (NOLOCK)
+               WHERE PickSlipNo = @cPickSlipNo
+                  AND ISNULL(CartonType,'') <> ''
+            IF @@ERROR <> 0
+            BEGIN
+               SET @nErrNo = 100406
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INSPackInfFail
+               GOTO RollBackTran
+            END
+         END 
+      END -- Gen new pack info
       ELSE
       BEGIN
          SET @nErrNo = '218405'
@@ -580,8 +602,7 @@ BEGIN
                INSERT INTO @tPKD (PickDetailKey, CaseID, PickHeaderKey, OrderKey, OrderLineNumber, SKU, Qty, AdjustQty,Lot, UOM,
                      UOMQty, DropID, Loc, ID, PackKey, CartonGroup, PickMethod, WaveKey, StorerKey, New)
                   SELECT	@cNewPickDetailKey, '', PickHeaderKey, OrderKey, OrderLineNumber, SKU, ABS(@nBalQty), 0, Lot, '6',
-                        1, '',/*DropID,  v1.1 drop id must be same as case id by Jackc*/ 
-                        Loc, ID, PackKey, CartonGroup, PickMethod, WaveKey,StorerKey,'Y'
+                        1, DropID, Loc, ID, PackKey, CartonGroup, PickMethod, WaveKey,StorerKey,'Y'
                   FROM @tPKD
                   WHERE PickDetailKey = @cPickDetailKey
 
@@ -667,9 +688,7 @@ BEGIN
                   SELECT 'Remove case id from pkd'
 
                -- Set case id to empty
-               UPDATE @tPKD SET  CaseID = '', 
-                                 DropID='' -- V1.1 the drop id must be same as case id   
-               WHERE PickDetailKey = @cPickDetailKey
+               UPDATE @tPKD SET  CaseID = ''  WHERE PickDetailKey = @cPickDetailKey
             END
          END
 
@@ -868,8 +887,7 @@ BEGIN
                INSERT INTO @tPKD (PickDetailKey, CaseID, PickHeaderKey, OrderKey, OrderLineNumber, SKU, Qty, AdjustQty,Lot, UOM,
                      UOMQty, DropID, Loc, ID, PackKey, CartonGroup, PickMethod, WaveKey, StorerKey, New)
                   SELECT	@cNewPickDetailKey, @cLabelNo, PickHeaderKey, OrderKey, OrderLineNumber, SKU, ABS(@nBalQty), 0, Lot, '6',
-                        1, @cLabelNo, --DropID, V1.1 dropid must be same as label no by jackc
-                        Loc, ID, PackKey, CartonGroup, PickMethod, WaveKey,StorerKey,'Y'
+                        1, DropID, Loc, ID, PackKey, CartonGroup, PickMethod, WaveKey,StorerKey,'Y'
                   FROM @tPKD
                   WHERE PickDetailKey = @cPickDetailKey
 
@@ -953,9 +971,7 @@ BEGIN
                   SELECT 'Upd pkd caseid to the scanned label no'
 
                -- Set case id to empty
-               UPDATE @tPKD SET  CaseID = @cLabelNo,
-                                 DropID = @cLabelNo -- V1.1 drop id must be same as case id
-               WHERE PickDetailKey = @cPickDetailKey
+               UPDATE @tPKD SET  CaseID = @cLabelNo  WHERE PickDetailKey = @cPickDetailKey
             END
 
          END -- @nBalQty >= @nPkdQty
@@ -1000,8 +1016,7 @@ BEGIN
       pkd.CaseID  = t.CaseID,
       pkd.Qty     = t.Qty + t.AdjustQty,
       pkd.UOM     = '6',
-      pkd.UOMQty  = 1,
-      pkd.DropID  = t.CaseID 
+      pkd.UOMQty  = 1
    FROM pickdetail pkd INNER JOIN @tPKD t
       ON pkd.pickdetailkey = t.pickdetailkey AND t.New <> 'D'
    

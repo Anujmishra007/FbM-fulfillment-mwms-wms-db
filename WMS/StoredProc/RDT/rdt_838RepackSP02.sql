@@ -106,8 +106,8 @@ BEGIN
                SKU = '', 
                QTY = 0, 
                EditDate = GETDATE(), 
-               EditWho = SUSER_SNAME() 
-               --ArchiveCop = NULL
+               EditWho = SUSER_SNAME(), 
+               ArchiveCop = NULL
             WHERE PickSlipNo = @cPickSlipNo
                AND CartonNo = @nCartonNo
                AND LabelNo = @cLabelNo
