@@ -18,6 +18,7 @@ GO
 /* Date       Rev  Author      Purposes                                       */
 /* 2024-02-28 1.0  NLT013       Created First Version (UWP-15257)             */
 /* 2024-02-28 1.1  Dennis       VAS Modification (UWP-18854)                  */
+/* 2024-08-15 1.2  LJQ006       Outbound VAS (FCR-657)                        */
 /******************************************************************************/
 
 CREATE PROCEDURE [rdt].[rdt_CreateVASWorkOrder] (
@@ -137,6 +138,21 @@ DECLARE
       SET @cExternLineNo = @cReceiptLineNo
    END
 
+   -- Outbound workorder situation
+   IF @nActionType = 2
+   BEGIN
+      -- Validate OrderKey
+      IF @cOrderKey = ''
+      BEGIN
+         SET @nErrNo = 211720
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- 'Need Order Key'
+         GOTO Quit
+      END
+
+      SET @cExternWorkOrderKey = @cOrderKey
+      SET @cExternLineNo = @cOrderLineNo
+   END
+
    --Check if the VAS work order already exists or not
    SELECT @nRowCount = COUNT(1)
    FROM dbo.WorkOrder wo WITH(NOLOCK)
@@ -225,11 +241,24 @@ DECLARE
       END
       ELSE 
       BEGIN
-         SELECT @cKeyString = WorkOrderKey
-         FROM dbo.WorkOrderDetail WITH(NOLOCK)
-         WHERE ExternWorkOrderKey = @cReceiptKey
-            AND ExternLineNo      = @cExternLineNo
-            AND WkOrdUdef1        = @cPalletID
+         -- two situations of work detail validation
+         IF @nActionType = 1
+         BEGIN
+            SELECT @cKeyString = WorkOrderKey
+            FROM dbo.WorkOrderDetail WITH(NOLOCK)
+            WHERE ExternWorkOrderKey = @cReceiptKey
+               AND ExternLineNo      = @cExternLineNo
+               AND WkOrdUdef1        = @cPalletID
+         END
+
+         IF @nActionType = 2
+         BEGIN
+            SELECT @cKeyString = WorkOrderKey
+            FROM dbo.WorkOrderDetail WITH(NOLOCK)
+            WHERE ExternWorkOrderKey = @cOrderKey
+               AND ExternLineNo      = @cOrderLineNo
+               AND WkOrdUdef1        = @cPalletID
+         END
       END
 
       IF @cKeyString IS NULL OR @cKeyString = ''
