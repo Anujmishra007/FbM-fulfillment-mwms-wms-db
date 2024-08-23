@@ -1,4 +1,4 @@
--- rdt_593Print36_message
+-- rdt_593Print40_message
 execute rdt.rdtDropMsg 217101 , 217150			
 
 execute rdt.rdtAddMsg 217101, 10, '217101MissExtOrd', 'us_english', 593
