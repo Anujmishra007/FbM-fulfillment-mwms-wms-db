@@ -149,7 +149,20 @@ BEGIN
                   SET V_Max = @cBarcode
                   WHERE Mobile = @nMobile
                   
-                     
+                  SELECT @cLottable01 = ISNULL(UDF01,'')
+                  FROM CodeLkUp WITH(NOLOCK)
+                  WHERE Code = @nFunc 
+                  AND storerkey = @cStorerKey 
+                  AND ListName = 'LOT1_2LINK' 
+                  AND UDF02 = @cLottable02
+                  
+                  IF @@ROWCOUNT = 0
+                  BEGIN
+                     SET @nErrNo = 220706
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+                     GOTO Quit
+                  END
+                  
                   -- Get SKU info
                   DECLARE @cPackKey NVARCHAR(10)
                   SELECT                  
