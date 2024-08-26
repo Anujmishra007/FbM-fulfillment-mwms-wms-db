@@ -87,3 +87,6 @@ BEGIN
       END
    END
 END
+
+GRANT EXECUTE ON  [RDT].[rdt_600ExtInfo07_HRP] TO [NSQL]
+GO
