@@ -256,6 +256,7 @@ BEGIN
                      GOTO Quit
                   END
 
+
                   -- Get LLI info
                   SELECT TOP 1
                      @cSKU     = LLI.SKU,
