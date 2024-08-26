@@ -17,6 +17,7 @@ GO
 /* Date       Rev  Author     Purposes                                        */
 /* 2024-06-20 1.0  JACKC      FCR-348 Created                                 */
 /* 2024-08-13 1.1  JACKC      FCR-716 Retrieve print data by OrderKey         */
+/* 2024-08-26 1.2  JACKC      FCR-716 Add orderkey to printjob param1         */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_593Print40] (
@@ -302,10 +303,10 @@ BEGIN
                         @cIsCollate AS IsCollate, @cPaperSize AS PaperSize, @cCloudClientPrinterID AS CloudClientID
 
             INSERT INTO rdt.rdtPrintJob (
-               JobName, ReportID, JobStatus, Datawindow, Printer, NoOfCopy, Mobile, TargetDB, PrintData, JobType, StorerKey,
+               JobName, ReportID, JobStatus, Datawindow, Parm1, Printer, NoOfCopy, Mobile, TargetDB, PrintData, JobType, StorerKey,
                Function_ID, PaperSizeWxH, DCropWidth, DCropHeight, IsLandScape, IsColor, IsDuplex, IsCollate)
             VALUES(
-               'rdt_593Print40', @cReportType, @cJobStatus, @cDataWindow, @cPrinter, @nRptNoOfCopy, @nMobile, DB_NAME(), @cPrintData, 'LogiReport', @cStorerKey,
+               'rdt_593Print40', @cReportType, @cJobStatus, @cDataWindow, @cOrderKey, @cPrinter, @nRptNoOfCopy, @nMobile, DB_NAME(), @cPrintData, 'LogiReport', @cStorerKey,
                @nFunc, @cPaperSize, @cDCropWidth, @cDCropHeight, @cIsLandScape, @cIsColor, @cIsDuplex, @cIsCollate)
 
             SELECT @nJobID = SCOPE_IDENTITY(), @nErrNo = @@ERROR
