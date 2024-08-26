@@ -4815,6 +4815,8 @@ BEGIN
          @cRefNo3       = @cBUSR1,
          @cRefNo2       = @cReceiptLineNumber
 
+      SET @cMax = ''
+
       IF @nMoreSNO = 1
          GOTO Quit
 
