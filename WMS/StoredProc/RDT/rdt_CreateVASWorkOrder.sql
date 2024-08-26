@@ -11,7 +11,7 @@ GO
 /*                                                                            */
 /* Purpose: Create work order                                                 */
 /*                                                                            */
-/* Version: 1.0                                                               */
+/* Version: 1.2                                                               */
 /*                                                                            */
 /* Modifications log:                                                         */
 /*                                                                            */
@@ -103,25 +103,56 @@ DECLARE
       GOTO Quit
    END
 
-   --Get reason and unit 
-   SELECT 
-      @cUnit           = UDF02,
-      @cReason         = UDF03,
-      @cWKOrderUdef02  = code2
-   FROM dbo.CODELKUP WITH(NOLOCK)
-   WHERE Storerkey     = @cStorerKey
-      AND LISTNAME     = @cACTVASWO
-      AND Code         = @cServiceType
-      AND UDF01        = @cFacility
-      
-   SELECT @nRowCount = @@ROWCOUNT
 
-   IF @nRowCount = 0
+   IF @nActionType = 1
    BEGIN
-      SET @nErrNo = 211706
-      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'VAS Code not Exist'
-      GOTO Quit
+      --Get reason and unit 
+      SELECT 
+         @cUnit           = UDF02,
+         @cReason         = UDF03,
+         @cWKOrderUdef02  = code2
+      FROM dbo.CODELKUP WITH(NOLOCK)
+      WHERE Storerkey     = @cStorerKey
+         AND LISTNAME     = @cACTVASWO
+         AND Code         = @cServiceType
+         AND UDF01        = @cFacility
+         AND code2        = 'IVAS'
+
+      SELECT @nRowCount = @@ROWCOUNT
+
+      IF @nRowCount = 0
+      BEGIN
+         SET @nErrNo = 211706
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'VAS Code not Exist'
+         GOTO Quit
+      END
    END
+
+   IF @nActionType = 2
+   BEGIN
+      SELECT 
+         @cUnit           = UDF02,
+         @cReason         = UDF03,
+         @cWKOrderUdef02  = code2
+      FROM dbo.CODELKUP WITH(NOLOCK)
+      WHERE Storerkey     = @cStorerKey
+         AND LISTNAME     = @cACTVASWO
+         AND Code         = @cServiceType
+         AND UDF01        = @cFacility
+         AND code2        = 'OVAS'
+
+      SELECT @nRowCount = @@ROWCOUNT
+
+      IF @nRowCount = 0
+         BEGIN
+         SET @nErrNo = 211706
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'VAS Code not Exist'
+         GOTO Quit
+      END
+   END
+   
+      
+   
 
    --Create Inbound workorder
    IF @nActionType = 1
