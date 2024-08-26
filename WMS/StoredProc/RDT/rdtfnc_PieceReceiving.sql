@@ -212,6 +212,7 @@ DECLARE
    @cOption                 NVARCHAR( 1),
    @cQTY                    NVARCHAR( 10),
    @cBarcode                NVARCHAR( MAX),
+   @cMax                    NVARCHAR( MAX),
    @cSerialNo               NVARCHAR( 30),
    @nSerialQTY              INT,
    @nMoreSNO                INT,
@@ -4945,6 +4946,8 @@ BEGIN
          @cRefNo3       = @cBUSR1,
          @cRefNo2       = @cReceiptLineNumber
 
+      SET @cMax = ''
+
       IF @nMoreSNO = 1
          GOTO Quit
 
@@ -7204,7 +7207,7 @@ BEGIN
 
       V_FromScn    = @nFromScn,
       V_Barcode    = @cBarcode,
-      V_Max        = @cMax ,
+      V_Max        = @cMax,
       V_Integer1   = @nUOM_Div,
       V_Integer2   = @nToIDQTY,
       V_Integer3   = @nBeforeReceivedQty,
