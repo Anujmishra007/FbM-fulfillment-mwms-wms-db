@@ -2,7 +2,7 @@
 DELETE rdt.RDTScn WHERE Scn = 6385 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 6385, 'ENG'
    ,@cLine01 = 'Carton No:'
-   ,@cLine02 = '%20i02'
+   ,@cLine02 = '%20i01'
    ,@cLine03 = ''
    ,@cLine04 = ''
    ,@cLine05 = ''

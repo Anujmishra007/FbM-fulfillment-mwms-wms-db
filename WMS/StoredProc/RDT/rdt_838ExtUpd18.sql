@@ -73,10 +73,37 @@ BEGIN
                DECLARE @cTransmitLogKey      NVARCHAR( 10)
                DECLARE @c_QCmdClass          NVARCHAR( 10)   = '' 
                DECLARE @cShipperKey          NVARCHAR( 15)
-               DECLARE @nCartonWgt           FLOAT = 0  
+               DECLARE @fCartonWgt           FLOAT = 0  
                DECLARE @b_Debug              INT = 0
                DECLARE @nTranCount           INT
 
+               
+               IF @bDebugFlag = 1
+                     SELECT 'Generate Transmit Log2', @cPickSlipNo AS PSNO, @cLabelNo AS LabelNo, @nCartonNo AS CartNo
+
+               --V1.2 Get upd carton weight to packinfo by JCH507
+               SELECT @fCartonWgt = SUM(a.WGT) + MAX(CartonWeight)
+               FROM
+                  (SELECT PD.SKU AS SKU, SUM(PD.qty)* MAX(SKU.STDGROSSWGT) AS WGT,  MAX(CAT.CartonWeight) AS CartonWeight
+                  FROM PackDetail PD WITH (NOLOCK)
+                  INNER JOIN SKU WITH (NOLOCK)
+                     ON PD.StorerKey = SKU.StorerKey
+                     AND PD.SKU = SKU.Sku
+                  INNER JOIN Storer WITH (NOLOCK)
+                     ON PD.StorerKey = STORER.StorerKey
+                  INNER JOIN PackInfo PI WITH (NOLOCK)
+                     ON PD.PickSlipNo = PI.PickSlipNo
+                     AND PD.CartonNo = PI.CartonNo
+                  INNER JOIN CARTONIZATION CAT WITH (NOLOCK)
+                     ON Storer.CartonGroup = CAT.CartonizationGroup AND PI.CartonType = CAT.CartonType
+                  WHERE PD.PickSlipNo = @cPickSlipNo
+                     AND PD.CartonNo = @nCartonNo
+                     AND PD.LabelNo = @cLabelNo
+                  GROUP BY PD.PickSlipNo, PD.LabelNo, PD.CartonNo, PD.SKU) a
+               --V1.2 Get upd carton weight to packinfo by JCH507  end
+               IF @bDebugFlag = 1
+                  SELECT 'Get CartonWeight', @fCartonWgt AS CartonWeight
+               
                SELECT @cShipperKey = ORD.ShipperKey
                FROM ORDERS ORD WITH (NOLOCK) 
                INNER JOIN PICKHEADER PKH WITH (NOLOCK)
@@ -85,6 +112,30 @@ BEGIN
 
                IF @bDebugFlag = 1
                   SELECT 'ShipperKey', @cShipperKey
+               
+               SET @nTranCount = @@TRANCOUNT  
+
+               BEGIN TRAN  
+               SAVE TRAN rdt_838ExtUpd18
+
+               IF @bDebugFlag = 1
+                  SELECT 'Update CartonInfo', @fCartonWgt AS CartonWeight
+
+               --V1.2 Get upd carton weight to packinfo by JCH507
+               UPDATE PackInfo 
+               SET 
+                  Weight = @fCartonWgt,
+                  CartonStatus = 'PACKED'
+               WHERE PickSlipNo = @cPickSlipNo
+                  AND CartonNo = @nCartonNo
+               --V1.2 Get upd carton weight to packinfo by JCH507  end
+
+               IF @@ERROR <> 0
+               BEGIN
+                  SET @nErrNo = 221602
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Upd Packinfo failure
+                  GOTO RollBackTran
+               END
 
                IF EXISTS (SELECT 1 FROM CODELKUP WITH (NOLOCK)
                            WHERE LISTNAME = 'WSCourier'
@@ -92,38 +143,6 @@ BEGIN
                BEGIN
                   IF @bDebugFlag = 1
                      SELECT 'Generate Transmit Log2', @cPickSlipNo AS PSNO, @cLabelNo AS LabelNo, @nCartonNo AS CartNo
-
-                  --V1.2 Get upd carton weight to packinfo by JCH507
-                  SELECT @nCartonWgt = SUM(a.WGT) + MAX(CartonWeight)
-                  FROM
-                     (SELECT PD.SKU AS SKU, SUM(PD.qty)* MAX(SKU.STDGROSSWGT) AS WGT,  MAX(CAT.CartonWeight) AS CartonWeight
-                     FROM PackDetail PD WITH (NOLOCK)
-                     INNER JOIN SKU WITH (NOLOCK)
-                        ON PD.StorerKey = SKU.StorerKey
-                        AND PD.SKU = SKU.Sku
-                     INNER JOIN Storer WITH (NOLOCK)
-                        ON PD.StorerKey = STORER.StorerKey
-                     INNER JOIN PackInfo PI WITH (NOLOCK)
-                        ON PD.PickSlipNo = PI.PickSlipNo
-                        AND PD.CartonNo = PI.CartonNo
-                     INNER JOIN CARTONIZATION CAT WITH (NOLOCK)
-                        ON Storer.CartonGroup = CAT.CartonizationGroup AND PI.CartonType = CAT.CartonType
-                     WHERE PD.PickSlipNo = @cPickSlipNo
-                        AND PD.CartonNo = @nCartonNo
-                        AND PD.LabelNo = @cLabelNo
-                     GROUP BY PD.PickSlipNo, PD.LabelNo, PD.CartonNo, PD.SKU) a
-                  --V1.2 Get upd carton weight to packinfo by JCH507  end
-
-                  SET @nTranCount = @@TRANCOUNT  
-
-                  BEGIN TRAN  
-                  SAVE TRAN rdt_838ExtUpd18
-                  
-                  --V1.2 Get upd carton weight to packinfo by JCH507
-                  UPDATE PackInfo SET Weight = @nCartonWgt
-                  WHERE PickSlipNo = @cPickSlipNo
-                     AND CartonNo = @nCartonNo
-                  --V1.2 Get upd carton weight to packinfo by JCH507  end
 
                   EXECUTE ispGenTransmitLog2 
                   @c_TableName      = 'WSSOECL', 
