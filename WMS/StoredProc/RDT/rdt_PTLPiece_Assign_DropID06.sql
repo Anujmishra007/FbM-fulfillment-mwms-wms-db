@@ -1,16 +1,16 @@
-GO
-/****** Object:  StoredProcedure [RDT].[rdt_PTLPiece_Assign_DropID06]    Script Date: 2/9/2024 4:50:29 PM ******/
-SET ANSI_NULLS OFF
-GO
 SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS OFF
 GO
 
 /******************************************************************************/      
 /* Store procedure: rdt_PTLPiece_Assign_DropID06                              */      
-/* Copyright      : LFLogistics                                               */      
+/* Copyright      : MAERSK                                                    */      
 /*                                                                            */      
 /* Date       Rev  Author   Purposes                                          */      
 /* 2023-02-10 1.0  James    Addhoc. Created                                   */      
+/* 2023-07-02 1.1  JHU151   FCR-477                                           */
+/* 2024-08-01 1.2  James    Perf tuning (james01)                             */
 /******************************************************************************/      
       
 CREATE OR ALTER PROC [RDT].[rdt_PTLPiece_Assign_DropID06] (      
@@ -90,7 +90,25 @@ BEGIN
   -- Go to station screen      
    END      
 */      
-         
+   IF @cType = N'POPULATE-OUT'
+   BEGIN
+      DECLARE @cUnAssign      NVARCHAR( 1)
+      SET @cUnAssign = rdt.rdtGetConfig( @nFunc, 'UNASSIGNPTLDROPID', @cStorerKey)    
+      IF @cUnAssign = '1'    
+      BEGIN
+         IF @nStep = 4
+         BEGIN
+            IF @nInputKey = 1
+            BEGIN
+               UPDATE dbo.PICKDETAIL WITH(ROWLOCK)
+               SET DropID = ''
+               WHERE Storerkey = @cStorerKey
+               AND DropID LIKE RTRIM(@cStation) + '%' 
+               AND ISNULL(RTRIM(@cStation),'') <> ''
+            END         
+         END
+      END
+   END 
    /***********************************************************************************************      
                                                  CHECK      
    ***********************************************************************************************/      
@@ -137,25 +155,40 @@ BEGIN
          SET @cOutField01 = ''      
          GOTO RollBackTran      
       END      
-    
+
+      DECLARE @tDP TABLE ( DP  NVARCHAR(30))
+      DECLARE @tWaveKey TABLE ( WaveKey  NVARCHAR(10))
+
+      INSERT INTO @tDP ( DP)
+      SELECT DeviceID + DevicePosition 
+      FROM dbo.DeviceProfile WITH (NOLOCK)    
+      WHERE StorerKey = @cStorerKey 
+      AND   DeviceType = 'STATION'
+
+      INSERT INTO @tWaveKey ( WaveKey)
+      SELECT DISTINCT WaveKey 
+      FROM dbo.PickDetail WITH (NOLOCK)    
+      WHERE Storerkey = @cStorerKey
+      AND   DropID = @cDropID
+      AND   [Status] < '9'
+
       IF EXISTS ( -- means there is sortation done already    
-         SELECT 1 FROM dbo.PickDetail WITH (NOLOCK)    
-         WHERE WaveKey IN (    
-         SELECT WaveKey FROM dbo.PickDetail WITH (NOLOCK)    
-         WHERE DropID = @cDropID) AND DropID IN (    
-         SELECT DeviceID + DevicePosition FROM dbo.DeviceProfile WITH (NOLOCK)    
-         WHERE StorerKey = @cStorerKey AND devicetype='STATION'))    
+         SELECT 1 FROM dbo.PickDetail PD WITH (NOLOCK)    
+         JOIN @tWaveKey WaveKey ON ( PD.WaveKey = WaveKey.WaveKey)
+         JOIN @tDP DP ON ( PD.DropID = DP.DP)
+         WHERE PD.Storerkey = @cStorerKey
+         AND   PD.Status < '9')
       BEGIN    
          SET @cChkStation = LEFT( @cStation, 5) + '%'    
              
          --if records > 0 == means if sorting to same cart    
          IF EXISTS (    
-            SELECT 1 FROM dbo.PickDetail WITH (NOLOCK)    
-            WHERE WaveKey IN (    
-            SELECT WaveKey FROM dbo.PickDetail WITH (NOLOCK)    
-            WHERE DropID = @cDropID) AND DropID IN (    
-            SELECT DeviceID + DevicePosition FROM dbo.DeviceProfile WITH (NOLOCK)    
-            WHERE StorerKey = @cStorerKey AND DeviceType = 'STATION') AND DropID NOT LIKE @cChkStation)    
+            SELECT 1 FROM dbo.PickDetail PD WITH (NOLOCK)    
+            JOIN @tWaveKey WaveKey ON ( PD.WaveKey = WaveKey.WaveKey)
+            JOIN @tDP DP ON ( PD.DropID = DP.DP)
+            WHERE Storerkey = @cStorerKey
+            AND   PD.DropID NOT LIKE @cChkStation
+            AND   PD.Status < '9')
          BEGIN      
             SET @nErrNo = 158556      
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Wrong Cart      
@@ -378,3 +411,10 @@ Quit:
       COMMIT TRAN    
       
 END 
+GO
+
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS ON
+GO
+GRANT EXECUTE ON [rdt].[rdt_PTLPiece_Assign_DropID06] TO NSQL

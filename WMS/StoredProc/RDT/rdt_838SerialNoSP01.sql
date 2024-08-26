@@ -307,6 +307,8 @@ BEGIN
             GOTO Quit
          END
 
+         
+
          -- Extended update
          IF @cExtSNOUpdSP <> ''
          BEGIN

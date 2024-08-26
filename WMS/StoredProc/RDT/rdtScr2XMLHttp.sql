@@ -11,6 +11,7 @@ GO
 /*                                                                         */
 /* Date         Ver. Author    Purposes                                    */
 /* 26-Sep-2023  1.0  YZH230    Created base on rdtScr2XMLHttp 2019-06-03   */
+/* 17-07-2024   1.1  JACKC     UWP-21829 Error msg not visible             */
 /***************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtScr2XMLHttp] (
@@ -156,14 +157,20 @@ BEGIN
    IF @cColText <> ''
    BEGIN
       SET @cColText = rdt.rdtReplaceSpecialCharInXMLData( @cColText)
-	  IF @cFieldNo = '' 
+
+      --1.1 Jackc
+      IF @cMsgLong IS NOT NULL AND @cMsgLong <> ''
+         SET @cMsgLong = rdt.rdtReplaceSpecialCharInXMLData( @cMsgLong)
+      --1.1 Jackc end
+
+      IF @cFieldNo = '' 
          SET @cXML = @cXML + '<field typ="output" x="' + @cX + '" y="' + @cY +   
             '" value="' + CASE WHEN @cMsgLong IS NULL OR @cMsgLong = '' THEN @cColText ELSE @cMsgLong END +   
             '" color="' + @cTxtColor +   
-			'" label="true' +
+            '" label="true' +
             '" webgroup="' + @cWebGroup + '"/>'  
-	  ELSE
-	     SET @cXML = @cXML + '<field typ="output" x="' + @cX + '" y="' + @cY +   
+      ELSE
+         SET @cXML = @cXML + '<field typ="output" x="' + @cX + '" y="' + @cY +   
             '" value="' + CASE WHEN @cMsgLong IS NULL OR @cMsgLong = '' THEN @cColText ELSE @cMsgLong END +   
             '" color="' + @cTxtColor +   
             '" webgroup="' + @cWebGroup + '"/>'  
@@ -229,7 +236,7 @@ ELSE IF @cColType = 'ddlb'
 BEGIN
    DECLARE @tDropDown TABLE 
    (
-	   RowRef INT IDENTITY(1,1),
+      RowRef INT IDENTITY(1,1),
       ColText   NVARCHAR (125) NULL, 
       ColValue  NVARCHAR (125) NULL
    )

@@ -14,9 +14,10 @@ GO
 /* Date        Rev  Author       Purposes                                  */
 /* 2024-05-27  1.0  Cuize        FCR-242 Created                           */
 /* 2024-06-13  1.2  NLT013       FCR-242 Correct the commented message     */
+/* 2024-07-23  1.3  CLVN01       FCR-628 Stamp TL2 Datetime to RecUdf06    */
 /***************************************************************************/
 
-CREATE OR ALTER PROCEDURE rdt.rdt_652ExtUpd01(
+CREATE OR ALTER PROCEDURE [RDT].[rdt_652ExtUpd01](
    @nMobile             INT,
    @nFunc               INT,
    @cLangCode           NVARCHAR( 3),
@@ -51,8 +52,8 @@ BEGIN
             DECLARE @b_success               INT
             DECLARE @n_err                   INT
             DECLARE @c_errmsg                NVARCHAR(250)
-            DECLARE @cPOKey                  NVARCHAR( 10)
-            DECLARE @cUSContainerValidation  NVARCHAR( 20)
+            DECLARE @cKeyValue               NVARCHAR( 10)  --POKey / Receiptkey
+            DECLARE @cUSContainerValidation  NVARCHAR( 30)
             DECLARE @cTableName              NVARCHAR( 20)
             DECLARE @cColumnName             NVARCHAR( 20)
             DECLARE @cSQLCustom              NVARCHAR( MAX)
@@ -64,35 +65,49 @@ BEGIN
                   ,Value  NVARCHAR(255)  NOT NULL DEFAULT('')
                )
 
-            SET @cUSContainerValidation = rdt.RDTGetConfig( @nFunc, 'USContainerValidation', @cStorerKey)
+            SELECT
+               @cUSContainerValidation = SValue
+            FROM rdt.StorerConfig (NOLOCK)
+            WHERE Function_ID = @nFunc
+              AND StorerKey = @cStorerKey
+              AND ConfigKey = 'USContainerValidation'
+
+            --Example: PO.userdefine05
             IF @cUSContainerValidation = ''
-            BEGIN
                GOTO Quit
-            END
 
             INSERT INTO @t_SplitValue (Value)
             SELECT SplitValues = s.[Value]
             FROM STRING_SPLIT(@cUSContainerValidation, '.') AS s
 
 
-            SELECT @cTableName = ISNULL(Value,'') FROM @t_SplitValue WHERE RowID = 1
-            SELECT @cColumnName = ISNULL(Value,'') FROM @t_SplitValue WHERE RowID = 2
+            SELECT @cTableName = UPPER(ISNULL(Value,'')) FROM @t_SplitValue WHERE RowID = 1
+            SELECT @cColumnName = UPPER(ISNULL(Value,'')) FROM @t_SplitValue WHERE RowID = 2
 
-            SET @cSQLCustom = ' SELECT TOP 1 @cPOKey = POKey ' +
+            --PO.userdefine05
+            --Receipt.CarrierReference
+            IF @cTableName = 'PO'
+               SET @cSQLCustom = ' SELECT TOP 1 @cKeyValue = POKey ';
+            ELSE IF @cTableName = 'RECEIPT'
+               SET @cSQLCustom = ' SELECT TOP 1 @cKeyValue = Receiptkey ';
+            ELSE
+               GOTO Quit
+
+            SET @cSQLCustom = @cSQLCustom +
                               ' FROM '+ @cTableName + ' WITH (NOLOCK) ' +
                               ' WHERE ' + @cColumnName +' = @cContainerNo ' +
                               ' AND StorerKey = @cStorerKey '
 
             SET @cSQLCustomParam = ' @cContainerNo    NVARCHAR( 20) ' +
                                    ',@cStorerKey      NVARCHAR( 15) ' +
-                                   ',@cPOKey          NVARCHAR( 10) OUTPUT '
+                                   ',@cKeyValue       NVARCHAR( 10) OUTPUT '
 
             EXEC sp_executeSQL @cSQLCustom, @cSQLCustomParam
                ,@cContainerNo = @cContainerNo
                ,@cStorerKey   = @cStorerKey
-               ,@cPOKey       = @cPOKey OUTPUT
+               ,@cKeyValue       = @cKeyValue OUTPUT
 
-            IF ISNULL(@cPOKey, '') = ''
+            IF ISNULL(@cKeyValue, '') = ''
             BEGIN
                SET @nErrNo = 215501
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --GetPOKEYFail
@@ -100,7 +115,7 @@ BEGIN
             END
 
 
-            EXEC dbo.ispGenTransmitLog2 'WSONLOTLOG', @cPOKey, @cContainerNo, @cStorerKey, ''
+            EXEC dbo.ispGenTransmitLog2 'WSONLOTLOG', @cKeyValue, @cContainerNo, @cStorerKey, ''
                , @b_success OUTPUT
                , @n_err OUTPUT
                , @c_errmsg OUTPUT
@@ -111,6 +126,22 @@ BEGIN
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INSTransLogFail
                GOTO Quit
             END
+
+			--(CLVN01) START--
+			IF EXISTS (SELECT 1 FROM RECEIPT RH WITH (NOLOCK)
+			           JOIN TRANSMITLOG2 TL2 WITH (NOLOCK) ON (RH.RECEIPTKEY = TL2.KEY1 AND TL2.TABLENAME = 'WSONLOTLOG')
+			           WHERE RH.RECEIPTKEY = @cKeyValue)
+			BEGIN
+				UPDATE RECEIPT SET USERDEFINE06 = GETDATE() WHERE RECEIPTKEY = @cKeyValue
+			END
+
+			IF @@ROWCOUNT = 0
+            BEGIN
+               SET @nErrNo = 215502
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INSTransLogFail
+               GOTO Quit
+            END
+			--(CLVN01) END--
 
             SELECT @cUserName = UserName
             FROM rdt.rdtMobRec WITH (NOLOCK)

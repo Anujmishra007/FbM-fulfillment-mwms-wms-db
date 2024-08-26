@@ -13,7 +13,8 @@ GO
 /* Modifications log:                                                         */
 /*                                                                            */
 /* Date        Rev  Author   Purposes                                         */
-/* 2024-06-07  1.0  JACKC    FCR-264 Created                                */
+/* 2024-06-07  1.0  JACKC    FCR-264 Created                                  */
+/* 2024-07-03  1.1  JACKC    Correct the wrong tran savepoint name            */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_521ConfirmSP02] (
@@ -110,7 +111,7 @@ BEGIN
 
    -- Handling transaction
    BEGIN TRAN  -- Begin our own transaction
-   SAVE TRAN rdtfnc_UCCPutaway -- For rollback or commit only our own transaction
+   SAVE TRAN rdt_UCCPutaway_Confirm02 -- For rollback or commit only our own transaction
 
    IF ISNULL(@cSuggestedLOC,'') <> @cToLOC
    BEGIN
@@ -508,11 +509,11 @@ BEGIN
       SET @nPABookingKey = 0
    END
 
-   COMMIT TRAN rdt_UCCPutaway_Confirm
+   COMMIT TRAN rdt_UCCPutaway_Confirm02
    GOTO Quit
 
 RollBackTran:
-   ROLLBACK TRAN rdt_UCCPutaway_Confirm -- Only rollback change made here
+   ROLLBACK TRAN rdt_UCCPutaway_Confirm02 -- Only rollback change made here
 Quit:
    WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
       COMMIT TRAN

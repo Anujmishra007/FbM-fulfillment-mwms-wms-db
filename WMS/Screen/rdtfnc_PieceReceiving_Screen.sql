@@ -134,3 +134,20 @@ EXECUTE rdt.rdtAddScn 6382, 'ENG',
    ,@cWebGroup = '{"1":["1","2"]}'
    ,@nFunc = 1580
 
+-- 6415 = SKU, QTY screen
+DELETE rdt.RDTScn WHERE Scn = 6415 AND Lang_Code = 'ENG'
+EXECUTE rdt.rdtAddScn 6415, 'ENG',
+    @cLine01 = 'TO ID:'
+   ,@cLine02 = '%20d01'
+   ,@cLine03 = 'SKU/UPC:'
+   ,@cLine04 = '%120d02' -- WMS-16653/WMS-21975
+   ,@cLine05 = '%20d03'
+   ,@cLine06 = '%20d04'
+   ,@cLine08 = ''
+   ,@cLine10 = 'REC: %15d06' 
+   ,@cLine11 = 'QTY: %10i05^DT:INT %05d12'
+   ,@cLine12 = 'TOID QTY: %10d10'
+   ,@cLine13 = '%20d15'
+   ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2"],"2":["3","4","5","6"],"3":["10"],"4":["11"],"5":["12","13"]}'
+   ,@nFunc = 1580

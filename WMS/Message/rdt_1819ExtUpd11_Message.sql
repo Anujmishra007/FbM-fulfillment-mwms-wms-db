@@ -1,0 +1,6 @@
+--rdt_1819ExtUpd11
+rdt.rdtDropMsg 216751, 216800
+
+execute rdt.rdtAddMsg 216751, 10, '216751^UnlockLocFail',   'us_english', 1819
+
+SELECT * FROM RDT.RDTMSG (NOLOCK) WHERE MESSAGE_ID BETWEEN 216751 AND 216800

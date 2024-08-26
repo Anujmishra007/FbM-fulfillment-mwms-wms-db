@@ -65,7 +65,7 @@ AS
    WHERE Mobile = @nMobile
 
    -- Check Receipt Key
-   SELECT @cDoor = R.WAREHOUSEREFERENCE,@cTrailerID = R.UserDefine05
+   SELECT @cDoor = R.WAREHOUSEREFERENCE,@cTrailerID = R.ContainerKey
    FROM dbo.Receipt R WITH (NOLOCK)
    INNER JOIN dbo.ReceiptDetail RD WITH (NOLOCK) ON R.ReceiptKey  = RD.ReceiptKey
    WHERE RD.ReceiptKey = @cReceiptKey AND R.Facility = @cFacility AND R.StorerKey = @cStorerKey
@@ -105,24 +105,23 @@ AS
    IF @nQTY > @nMaxCount
    BEGIN
       SET @nErrNo = 216404
-      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') --216404Qty More Than Max Allowed
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') --216404Qty Entered More Than Max Allowed
+      GOTO Quit
+   END
+   IF LEN(@cPrefix) > 5
+   BEGIN
+      SET @nErrNo = 216406
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') --216406 Prefix Too Long
       GOTO Quit
    END
    IF NOT EXISTS 
    (SELECT 1 FROM dbo.CodeLKUP WITH (NOLOCK)
    WHERE ListName = @cPrefixCode
    AND Storerkey = @cStorerkey
-   AND Short = @cPrefix)
+   AND Code = @cPrefix)
    BEGIN
       SET @nErrNo = 216405
-      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') --216405Prefix Not Configured
-      GOTO Quit
-   END
-
-   IF(LEN(@cPrefix)>3)
-   BEGIN
-      SET @nErrNo = 216406
-      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') --216406 Prefix Too Long
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') --216405Prefix Not Match
       GOTO Quit
    END
 

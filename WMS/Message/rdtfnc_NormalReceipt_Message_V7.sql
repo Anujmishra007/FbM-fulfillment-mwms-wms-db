@@ -45,3 +45,5 @@ execute rdt.rdtAddMsg 59440, 10, '59440 Invalid RefNo ', 'us_english', 600
 execute rdt.rdtAddMsg 59441, 10, '59441 Need Option   ', 'us_english', 600
 execute rdt.rdtAddMsg 59442, 10, '59442 Invalid Option', 'us_english', 600
 execute rdt.rdtAddMsg 59443, 10, '59443 Not an option ', 'us_english', 600
+execute rdt.rdtAddMsg 59444, 10, '59444 Decimal Error ', 'us_english', 600
+execute rdt.rdtAddMsg 59445, 10, '59445 ConvDecimalErr', 'us_english', 600

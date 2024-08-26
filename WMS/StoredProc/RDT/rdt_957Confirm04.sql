@@ -20,6 +20,7 @@ GO
 /* 07-12-2023 1.0  Ung        WMS-24353 base on rdt_957Confirm02, 03                               */
 /* 04-29-2024 1.1  CYU027     UWP-18306 Short Pick                                                 */
 /* 06-05-2024 1.2  Dennis     FCR-133   Trigger only uom =7                                        */
+/* 08-05-2024 1.3  JHU151     FCR-330   No Pack Confirm                                            */
 /***************************************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_957Confirm04] (
@@ -1366,81 +1367,88 @@ BEGIN
       /*--------------------------------------------------------------------------------------------------
                                                Auto pack confirm
       --------------------------------------------------------------------------------------------------*/
-      DECLARE @nPickQTY INT
-      DECLARE @nPackQTY INT
-      DECLARE @cPackConfirm NVARCHAR( 1) = ''
+      DECLARE @cNoPackConfirm    NVARCHAR(1)
+      SET @cNoPackConfirm = rdt.rdtGetConfig( @nFunc, 'NoPackConfirm', @cStorerKey)
 
-      -- Get pack QTY
-      SELECT @nPackQTY = ISNULL( SUM( QTY), 0)
-      FROM dbo.PackDetail WITH (NOLOCK)
-      WHERE PickSlipNo = @cPackPickSlipNo
-
-      -- Discrete PickSlip
-      IF @cPackHeaderTypeSP IN ('', 'ORDER')
+      IF @cNoPackConfirm <> '1'
       BEGIN
-         -- Check outstanding PickDetail
-         IF EXISTS( SELECT TOP 1 1
-            FROM dbo.PickDetail PD WITH (NOLOCK)
-            WHERE PD.OrderKey = @cPackOrderKey
-               AND (PD.Status = '4' OR PD.Status < '5') -- Short pick or not yet pick
-               AND PD.QTY > 0)
-            SET @cPackConfirm = 'N'
-         ELSE
-            SET @cPackConfirm = 'Y'
 
-         -- Check fully packed
-         IF @cPackConfirm = 'Y'
-         BEGIN
-            SELECT @nPickQTY = SUM( PD.QTY)
-            FROM dbo.PickDetail PD WITH (NOLOCK)
-            WHERE PD.OrderKey = @cPackOrderKey
+         DECLARE @nPickQTY INT
+         DECLARE @nPackQTY INT
+         DECLARE @cPackConfirm NVARCHAR( 1) = ''
 
-            IF @nPickQTY <> @nPackQTY
-               SET @cPackConfirm = 'N'
-         END
-      END
-
-      -- Conso PickSlip
-      ELSE IF @cPackHeaderTypeSP = 'LOAD'
-      BEGIN
-         -- Check outstanding PickDetail
-         IF EXISTS( SELECT TOP 1 1
-            FROM dbo.LoadPlanDetail LPD WITH (NOLOCK)
-               JOIN dbo.PickDetail PD WITH (NOLOCK) ON (LPD.OrderKey = PD.OrderKey)
-            WHERE LPD.LoadKey = @cLoadKey
-               AND (PD.Status = '4' OR PD.Status < '5') -- Short pick or not yet pick
-               AND PD.QTY > 0)
-            SET @cPackConfirm = 'N'
-         ELSE
-            SET @cPackConfirm = 'Y'
-
-         -- Check fully packed
-         IF @cPackConfirm = 'Y'
-         BEGIN
-            SELECT @nPickQTY = SUM( PD.QTY)
-            FROM dbo.LoadPlanDetail LPD WITH (NOLOCK)
-               JOIN dbo.PickDetail PD WITH (NOLOCK) ON (LPD.OrderKey = PD.OrderKey)
-            WHERE LPD.LoadKey = @cLoadKey
-
-            IF @nPickQTY <> @nPackQTY
-               SET @cPackConfirm = 'N'
-         END
-      END
-
-      -- Pack confirm
-      IF @cPackConfirm = 'Y'
-      BEGIN
-         -- Pack confirm
-         UPDATE PackHeader SET
-            Status = '9'
+         -- Get pack QTY
+         SELECT @nPackQTY = ISNULL( SUM( QTY), 0)
+         FROM dbo.PackDetail WITH (NOLOCK)
          WHERE PickSlipNo = @cPackPickSlipNo
-            AND Status <> '9'
-         SET @nErrNo = @@ERROR
-         IF @nErrNo <> 0
+
+         -- Discrete PickSlip
+         IF @cPackHeaderTypeSP IN ('', 'ORDER')
          BEGIN
-            -- SET @nErrNo = 209783
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- PackCfm Fail
-            GOTO RollBackTran
+            -- Check outstanding PickDetail
+            IF EXISTS( SELECT TOP 1 1
+               FROM dbo.PickDetail PD WITH (NOLOCK)
+               WHERE PD.OrderKey = @cPackOrderKey
+                  AND (PD.Status = '4' OR PD.Status < '5') -- Short pick or not yet pick
+                  AND PD.QTY > 0)
+               SET @cPackConfirm = 'N'
+            ELSE
+               SET @cPackConfirm = 'Y'
+
+            -- Check fully packed
+            IF @cPackConfirm = 'Y'
+            BEGIN
+               SELECT @nPickQTY = SUM( PD.QTY)
+               FROM dbo.PickDetail PD WITH (NOLOCK)
+               WHERE PD.OrderKey = @cPackOrderKey
+
+               IF @nPickQTY <> @nPackQTY
+                  SET @cPackConfirm = 'N'
+            END
+         END
+
+         -- Conso PickSlip
+         ELSE IF @cPackHeaderTypeSP = 'LOAD'
+         BEGIN
+            -- Check outstanding PickDetail
+            IF EXISTS( SELECT TOP 1 1
+               FROM dbo.LoadPlanDetail LPD WITH (NOLOCK)
+                  JOIN dbo.PickDetail PD WITH (NOLOCK) ON (LPD.OrderKey = PD.OrderKey)
+               WHERE LPD.LoadKey = @cLoadKey
+                  AND (PD.Status = '4' OR PD.Status < '5') -- Short pick or not yet pick
+                  AND PD.QTY > 0)
+               SET @cPackConfirm = 'N'
+            ELSE
+               SET @cPackConfirm = 'Y'
+
+            -- Check fully packed
+            IF @cPackConfirm = 'Y'
+            BEGIN
+               SELECT @nPickQTY = SUM( PD.QTY)
+               FROM dbo.LoadPlanDetail LPD WITH (NOLOCK)
+                  JOIN dbo.PickDetail PD WITH (NOLOCK) ON (LPD.OrderKey = PD.OrderKey)
+               WHERE LPD.LoadKey = @cLoadKey
+
+               IF @nPickQTY <> @nPackQTY
+                  SET @cPackConfirm = 'N'
+            END
+         END
+         
+         -- Pack confirm
+         IF @cPackConfirm = 'Y'
+         BEGIN
+            -- Pack confirm
+            UPDATE PackHeader SET
+               Status = '9'
+            WHERE PickSlipNo = @cPackPickSlipNo
+               AND Status <> '9'
+            SET @nErrNo = @@ERROR
+            IF @nErrNo <> 0
+            BEGIN
+               -- SET @nErrNo = 209783
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- PackCfm Fail
+               GOTO RollBackTran
+            END
          END
       END
    END

@@ -14,7 +14,7 @@ GO
 /*                                                                       */    
 /* Called By: Wave Release                                               */    
 /*                                                                       */    
-/* PVCS Version: 1.2                                                     */    
+/* PVCS Version: 1.4                                                     */    
 /*                                                                       */    
 /* Version: 7.0                                                          */    
 /*                                                                       */    
@@ -30,6 +30,11 @@ GO
 /*                            strategy to find DPP & Pick face Location  */
 /*                            UWP-18535-Fix FCP not hold                 */ 
 /* 2024-05-28  Wan04    1.3   UWP-18535-Hold FCP when FromLoc has RPF task*/ 
+/* 2024-07-09  Wan05    1.4   UWP-19537-Mattel Overallocation           */
+/*                            -EmptyLoc= Qty-QtyPicked. New Formula for */
+/*                            qtyexpected                               */
+/* 2024-07-18  Wan06    1.5   UWP-22202-Mattel DPP with commingleSku    */
+/*                            Prompt Error if DPP different Sku         */
 /*************************************************************************/     
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV01]        
   @c_wavekey      NVARCHAR(10)    
@@ -229,7 +234,7 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV01]
    BEGIN  
       SET @cur_WaveReplto = CURSOR FAST_FORWARD READ_ONLY FOR 
       SELECT PD.Storerkey, PD.Sku, PD.Loc, PD.Lot                                   --(Wan03)
-         , QtyNeed = SUM(lli.QtyExpected - lli.PendingMoveIn)                     
+         , QtyNeed = lli.QtyAllocated+(lli.QtyPicked-lli.Qty)-lli.PendingMoveIn     --(Wan05)                  
       FROM #PICKDETAIL_WIP PD (NOLOCK)
       JOIN LOTATTRIBUTE la  (NOLOCK) ON pd.Lot = la.Lot
       JOIN LOTxLOCxID   lli (NOLOCK) ON pd.Lot = lli.Lot 
@@ -245,8 +250,9 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV01]
       WHERE PD.UOM IN ('2','6')
       AND PD.[Status] = '0'
       AND td.Taskdetailkey IS NULL
+      AND (lli.Qty-lli.QtyAllocated-lli.QtyPicked)+lli.PendingMoveIn < 0            --(Wan05)
       GROUP BY PD.Storerkey, PD.Sku, PD.Loc, PD.Lot                                 --(Wan03) 
-      HAVING SUM(lli.QtyExpected - lli.PendingMoveIn) > 0 
+            ,  lli.Qty,lli.QtyAllocated,lli.QtyPicked,lli.PendingMoveIn             --(Wan05)
       ORDER BY PD.Loc, PD.Lot                                                       --(Wan03) 
  
       OPEN @cur_WaveReplto    
@@ -256,6 +262,23 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV01]
          
       WHILE @@FETCH_STATUS = 0 AND @n_continue IN (1,2)  
       BEGIN
+         IF EXISTS (SELECT 1                                                        --(Wan06)-START
+                    FROM dbo.LOTxLOCxID l1 (NOLOCK) 
+                    WHERE l1.Storerkey = @c_Storerkey
+                    AND   l1.loc = @c_ToLoc
+                    AND   l1.Sku <> @c_Sku
+                    AND   (l1.QtyAllocated + (l1.QtyPicked-l1.Qty) > 0 
+                    OR     l1.PendingMoveIn > 0
+                          )
+                    )
+         BEGIN
+            SET @n_Continue = 3
+            SET @n_Err = 83040
+            SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)
+                         +': Different Sku found in DPP location: ' + @c_ToLoc
+                         +'. (mspRLWAV01)' 
+            GOTO RETURN_SP
+         END                                                                        --(Wan06)-END
          --SET @cur_WaveReplLot = CURSOR FAST_FORWARD READ_ONLY FOR                 --(Wan03) - START
          --SELECT PD.Lot
          --      ,QtyNeed = SUM(lli.QtyExpected - lli.PendingMoveIn)                  

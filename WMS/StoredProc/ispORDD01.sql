@@ -23,6 +23,7 @@ GO
 /* Updates:                                                             */  
 /* Date        Author   Ver   Purposes                                  */  
 /* 2024-06-04  Wan01    1.1   UWP-18393-Unallocation for Mixed Sku Pallet*/
+/* 2024-06-24  Wan02    1.1   UWP-18393-Fix                             */
 /************************************************************************/
 CREATE OR ALTER PROC ispORDD01   
    @c_Action        NVARCHAR(10),
@@ -42,7 +43,8 @@ BEGIN
            @c_OrderKey        NVARCHAR(10), 
            @c_OrderLineNumber NVARCHAR(5), 
            @n_OpenQty         INT
-         , @c_OrdLineNo_Orig     NVARCHAR(5) = ''                                   --(Wan05)
+         , @n_QtyAlloc        INT = 0                                               --(Wan02)
+         , @c_OrdLineNo_Orig  NVARCHAR(5) = ''                                      --(Wan01)
                                                        
    SELECT @n_Continue = 1, @n_StartTCnt = @@TRANCOUNT, @n_Err = 0, @c_ErrMsg = '', @b_Success = 1
 
@@ -61,39 +63,40 @@ BEGIN
                   JOIN #DELETED D ON I.Orderkey = D.Orderkey AND I.OrderLineNumber = D.OrderLineNumber
                   LEFT JOIN PICKDETAIL PD (NOLOCK) ON I.Orderkey = PD.Orderkey AND I.OrderLineNumber = PD.OrderLineNumber
                   WHERE I.Storerkey = @c_Storerkey
-                  AND I.QtyAllocated + I.QtyPicked = 0
-                  AND D.QtyAllocated + D.QtyPicked > 0
+                  --AND I.QtyAllocated + I.QtyPicked = 0                            --(Wan02)
+                  AND D.QtyAllocated + D.QtyPicked > I.QtyAllocated + I.QtyPicked   --(Wan02)
                   AND ISNUMERIC(I.Userdefine01) = 1
                   AND I.Status <> '9'
                   AND I.ShippedQty = 0
                   --AND I.OpenQty <> CAST(I.Userdefine01 AS INT)
-                  AND PD.Orderkey IS NULL)                  
+                  )--AND PD.Orderkey IS NULL)                                       --(Wan02)              
       BEGIN
          DECLARE CUR_ORDLINE CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
          SELECT DISTINCT I.Orderkey, I.OrderLineNumber, CAST(I.Userdefine01 AS INT)
                ,OrdLineNo_Orig = CASE WHEN I.UserDefine02 = D.UserDefine02
                                       THEN I.UserDefine02 
                                       ELSE '' END
+               ,QtyAlloc = I.QtyAllocated + I.QtyPicked                             --(Wan02)
          FROM #INSERTED I
          JOIN #DELETED D ON I.Orderkey = D.Orderkey AND I.OrderLineNumber = D.OrderLineNumber
          LEFT JOIN PICKDETAIL PD (NOLOCK) ON I.Orderkey = PD.Orderkey AND I.OrderLineNumber = PD.OrderLineNumber
          WHERE I.Storerkey = @c_Storerkey
-         AND I.QtyAllocated + I.QtyPicked = 0
-         AND D.QtyAllocated + D.QtyPicked > 0
+         --AND  I.QtyAllocated + I.QtyPicked = 0                                    --(Wan02)
+         AND D.QtyAllocated + D.QtyPicked > I.QtyAllocated + I.QtyPicked            --(Wan02)
          AND ISNUMERIC(I.Userdefine01) = 1
          AND I.ShippedQty = 0
          AND I.Status <> '9'
          --AND I.OpenQty <> CAST(I.Userdefine01 AS INT)
-         AND PD.Orderkey IS NULL
+         --AND PD.Orderkey IS NULL                                                  --(Wan02)
             
          OPEN CUR_ORDLINE
       
          FETCH FROM CUR_ORDLINE INTO @c_OrderKey, @c_OrderLineNumber, @n_OpenQty
-                                    ,@c_OrdLineNo_Orig                              --(Wan01)
+                                    ,@c_OrdLineNo_Orig, @n_QtyAlloc                 --(Wan01)
          
          WHILE @@FETCH_STATUS = 0 AND @n_Continue IN(1,2)
          BEGIN  
-            IF @n_OpenQty = 0 AND LEN(@c_OrdLineNo_Orig) = 5                        --(Wan01) - START   
+            IF @n_OpenQty = 0 AND @n_QtyAlloc = 0 AND LEN(@c_OrdLineNo_Orig) = 5    --(Wan01) - START   
             BEGIN
                DELETE ORDERDETAIL WITH (ROWLOCK)
                WHERE Orderkey = @c_Orderkey
@@ -113,8 +116,8 @@ BEGIN
             ELSE
             BEGIN                                                                   --(WAN01) - END
                UPDATE ORDERDETAIL WITH (ROWLOCK)
-               SET OpenQty = CASE WHEN OpenQty <> @n_OpenQty THEN @n_OpenQty ELSE OpenQty END,
-                  Userdefine01 = ''
+               SET OpenQty = CASE WHEN @n_QtyAlloc < @n_OpenQty THEN @n_OpenQty ELSE @n_QtyAlloc END, --(Wan02)
+                   Userdefine01 = CASE WHEN @n_QtyAlloc = 0 THEN '' ELSE Userdefine01  END            --(Wan02)
                WHERE Orderkey = @c_Orderkey
                AND OrderLineNumber = @c_OrderLineNumber
               
@@ -150,7 +153,7 @@ BEGIN
             END                                                                     --(Wan01)
             
             FETCH FROM CUR_ORDLINE INTO @c_OrderKey, @c_OrderLineNumber, @n_OpenQty
-                                       ,@c_OrdLineNo_Orig                           --(Wan01)
+                                       ,@c_OrdLineNo_Orig, @n_QtyAlloc              --(Wan02)                           --(Wan01)
          END
          CLOSE CUR_ORDLINE
          DEALLOCATE CUR_ORDLINE                 

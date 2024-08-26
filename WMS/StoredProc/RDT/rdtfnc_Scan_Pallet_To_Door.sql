@@ -23,6 +23,8 @@ GO
 /* 2018-10-25 1.3  TungGH   Performance                                      */
 /* 2024-05-21 1.4  Dennis   FCR-336 Check Digit                              */
 /* 2024-05-31 1.5  Cuize    UWP-20116 Add storerKey in WHERE condition       */
+/* 2024-07-17 1.6  NLT013   FCR-574 Add Extended Screen SP                   */
+/* 2024-08-22 1.7  JHU151   UWP-23409 incorrect mapping of LPN to MBOL       */
 /*****************************************************************************/
 
 CREATE PROC [RDT].[rdtfnc_Scan_Pallet_To_Door](
@@ -68,6 +70,10 @@ DECLARE
    @nStorer_Cnt            INT,
    @cLOCCheckDigitSP       NVARCHAR( 20),
 
+   @cExtScnSP              NVARCHAR( 20),
+   @tExtScnData            VariableTable,
+   @nAction                INT,
+
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),
    @cInField03 NVARCHAR( 60),   @cOutField03 NVARCHAR( 60),
@@ -91,7 +97,34 @@ DECLARE
    @cFieldAttr09 NVARCHAR( 1), @cFieldAttr10 NVARCHAR( 1),
    @cFieldAttr11 NVARCHAR( 1), @cFieldAttr12 NVARCHAR( 1),
    @cFieldAttr13 NVARCHAR( 1), @cFieldAttr14 NVARCHAR( 1),
-   @cFieldAttr15 NVARCHAR( 1)
+   @cFieldAttr15 NVARCHAR( 1),
+
+   @cLottable01  NVARCHAR( 18),
+   @cLottable02  NVARCHAR( 18),
+   @cLottable03  NVARCHAR( 18),
+   @dLottable04  DATETIME,
+   @dLottable05  DATETIME,
+   @cLottable06  NVARCHAR( 30),
+   @cLottable07  NVARCHAR( 30),
+   @cLottable08  NVARCHAR( 30),
+   @cLottable09  NVARCHAR( 30),
+   @cLottable10  NVARCHAR( 30),
+   @cLottable11  NVARCHAR( 30),
+   @cLottable12  NVARCHAR( 30),
+   @dLottable13  DATETIME,
+   @dLottable14  DATETIME,
+   @dLottable15  DATETIME,
+
+   @cUDF01  NVARCHAR( 250) ,    @cUDF02 NVARCHAR( 250) ,       @cUDF03 NVARCHAR( 250) ,
+   @cUDF04  NVARCHAR( 250) ,    @cUDF05 NVARCHAR( 250) ,       @cUDF06 NVARCHAR( 250) ,
+   @cUDF07  NVARCHAR( 250) ,    @cUDF08 NVARCHAR( 250) ,       @cUDF09 NVARCHAR( 250) ,
+   @cUDF10  NVARCHAR( 250) ,    @cUDF11 NVARCHAR( 250) ,       @cUDF12 NVARCHAR( 250) ,
+   @cUDF13  NVARCHAR( 250) ,    @cUDF14 NVARCHAR( 250) ,       @cUDF15 NVARCHAR( 250) ,
+   @cUDF16  NVARCHAR( 250) ,    @cUDF17 NVARCHAR( 250) ,       @cUDF18 NVARCHAR( 250) ,
+   @cUDF19  NVARCHAR( 250) ,    @cUDF20 NVARCHAR( 250) ,       @cUDF21 NVARCHAR( 250) ,
+   @cUDF22  NVARCHAR( 250) ,    @cUDF23 NVARCHAR( 250) ,       @cUDF24 NVARCHAR( 250) ,
+   @cUDF25  NVARCHAR( 250) ,    @cUDF26 NVARCHAR( 250) ,       @cUDF27 NVARCHAR( 250) ,
+   @cUDF28  NVARCHAR( 250) ,    @cUDF29 NVARCHAR( 250) ,       @cUDF30 NVARCHAR( 250)
 
 -- Getting Mobile information
 SELECT
@@ -113,6 +146,7 @@ SELECT
 
    @cDoor            = V_String1,
    @cMBOLkey         = V_String2,
+   @cExtScnSP        = V_String3,
    
    @nCBOLKey         = V_Integer1,
    @cLOCCheckDigitSP = C_String1,
@@ -165,6 +199,10 @@ BEGIN
    SET @nScn  = 4200
    SET @nStep = 1
    SET @cLOCCheckDigitSP = rdt.rdtGetConfig(@nFunc, 'LOCCheckDigitSP', @cStorerKey)
+
+   SET @cExtScnSP = rdt.rdtGetConfig( @nFunc, 'ExtScnSP', @cStorerKey)
+   IF @cExtScnSP = '0'
+      SET @cExtScnSP = ''
 
    -- EventLog - Sign In Function
    EXEC RDT.rdt_STD_EventLog
@@ -292,6 +330,7 @@ BEGIN
 
       SET @cLoadkey = ''
       SET @cOrderkey = ''
+      SET @cMBOLKey = ''
 
       SELECT TOP 1 @cLoadkey = OD.LoadKey, @cOrderkey = OD.OrderKey
       FROM dbo.PickDetail PD WITH (NOLOCK)
@@ -423,6 +462,59 @@ BEGIN
       SET @nStep = 0
 
       SET @cOutField01 = ''
+   END
+
+   Step_1_Jump:
+   BEGIN
+      IF @cExtScnSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
+         BEGIN
+            SET @nAction = 0
+            DELETE FROM @tExtScnData
+
+            INSERT INTO @tExtScnData (Variable, Value) VALUES
+               ('@cPalletID',             @cPalletID),
+               ('@nCBOLKey',              TRY_CAST(@nCBOLKey AS NVARCHAR(20))),
+               ('@cMBOLKey',              @cMBOLKey)
+
+            EXECUTE [RDT].[rdt_ExtScnEntry] 
+            @cExtScnSP, 
+            @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorerKey, @tExtScnData ,
+            @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01 OUTPUT,  
+            @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02 OUTPUT,  
+            @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03 OUTPUT,  
+            @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04 OUTPUT,  
+            @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  @dLottable05 OUTPUT,  
+            @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  @cLottable06 OUTPUT, 
+            @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  @cLottable07 OUTPUT, 
+            @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  @cLottable08 OUTPUT, 
+            @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  @cLottable09 OUTPUT, 
+            @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  @cLottable10 OUTPUT, 
+            @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  @cLottable11 OUTPUT,
+            @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT,  @cLottable12 OUTPUT,
+            @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  @dLottable13 OUTPUT,
+            @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT,  @dLottable14 OUTPUT,
+            @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT,  @dLottable15 OUTPUT,
+            @nAction, 
+            @nScn     OUTPUT,  @nStep OUTPUT,
+            @nErrNo   OUTPUT, 
+            @cErrMsg  OUTPUT,
+            @cUDF01   OUTPUT, @cUDF02 OUTPUT, @cUDF03 OUTPUT,
+            @cUDF04   OUTPUT, @cUDF05 OUTPUT, @cUDF06 OUTPUT,
+            @cUDF07   OUTPUT, @cUDF08 OUTPUT, @cUDF09 OUTPUT,
+            @cUDF10   OUTPUT, @cUDF11 OUTPUT, @cUDF12 OUTPUT,
+            @cUDF13   OUTPUT, @cUDF14 OUTPUT, @cUDF15 OUTPUT,
+            @cUDF16   OUTPUT, @cUDF17 OUTPUT, @cUDF18 OUTPUT,
+            @cUDF19   OUTPUT, @cUDF20 OUTPUT, @cUDF21 OUTPUT,
+            @cUDF22   OUTPUT, @cUDF23 OUTPUT, @cUDF24 OUTPUT,
+            @cUDF25   OUTPUT, @cUDF26 OUTPUT, @cUDF27 OUTPUT,
+            @cUDF28   OUTPUT, @cUDF29 OUTPUT, @cUDF30 OUTPUT
+
+            IF @nErrNo <> 0
+               GOTO Step_1_Fail
+         END
+      END
    END
    GOTO Quit
 
@@ -561,7 +653,7 @@ BEGIN
       --prepare next screen variable
       SET @cPalletID = ''
       SET @cOutField01 = ''
-
+      
       -- Go back prev screen to scan next Pallet ID
       SET @nScn = @nScn - 1
       SET @nStep = @nStep - 1
@@ -569,12 +661,99 @@ BEGIN
 
    IF @nInputKey = 0 -- ESC
    BEGIN
+      SET @cExtendedValidateSP = rdt.rdtGetConfig( @nFunc, 'ExtendedValidateSP', @cStorerKey)
+      IF @cExtendedValidateSP = '0'
+         SET @cExtendedValidateSP = ''
+
+      IF @cExtendedValidateSP <> '' 
+      BEGIN
+
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedValidateSP AND type = 'P')
+         BEGIN
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cPalletID, @cMbolKey, @cDoor, @cOption, @nAfterStep, ' + 
+               ' @nErrNo OUTPUT, @cErrMsg OUTPUT'
+            SET @cSQLParam =
+               '@nMobile         INT,       '     +
+               '@nFunc           INT,       '     +
+               '@cLangCode       NVARCHAR( 3),  ' +
+               '@nStep           INT,       '     + 
+               '@nInputKey       INT,       '     +
+               '@cStorerKey      NVARCHAR( 15), ' +
+               '@cPalletID       NVARCHAR( 20), ' +
+               '@cMbolKey        NVARCHAR( 10), ' +
+               '@cDoor           NVARCHAR( 20), ' +
+               '@cOption         NVARCHAR( 1), '  +
+               '@nAfterStep      INT,           ' + 
+               '@nErrNo          INT OUTPUT,    ' +
+               '@cErrMsg         NVARCHAR( 20) OUTPUT'  
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cPalletID, @cMbolKey, @cDoor, @cOption, @nStep, 
+               @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+            IF @nErrNo <> 0
+               GOTO Step_2_Fail
+         END
+      END
+
       --prepare prev screen variable
       SET @cPalletID = ''
       SET @cOutField01 = ''
 
       SET @nScn = @nScn - 1
       SET @nStep = @nStep - 1
+   END
+   Step_2_Jump:
+   BEGIN
+      IF @cExtScnSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
+         BEGIN
+            SET @nAction = 0
+            DELETE FROM @tExtScnData
+
+            INSERT INTO @tExtScnData (Variable, Value) VALUES
+               ('@nCBOLKey',              TRY_CAST(@nCBOLKey AS NVARCHAR(20))),
+               ('@cMBOLKey',              @cMBOLKey)
+
+            EXECUTE [RDT].[rdt_ExtScnEntry] 
+            @cExtScnSP, 
+            @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorerKey, @tExtScnData ,
+            @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01 OUTPUT,  
+            @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02 OUTPUT,  
+            @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03 OUTPUT,  
+            @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04 OUTPUT,  
+            @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  @dLottable05 OUTPUT,  
+            @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  @cLottable06 OUTPUT, 
+            @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  @cLottable07 OUTPUT, 
+            @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  @cLottable08 OUTPUT, 
+            @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  @cLottable09 OUTPUT, 
+            @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  @cLottable10 OUTPUT, 
+            @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  @cLottable11 OUTPUT,
+            @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT,  @cLottable12 OUTPUT,
+            @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  @dLottable13 OUTPUT,
+            @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT,  @dLottable14 OUTPUT,
+            @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT,  @dLottable15 OUTPUT,
+            @nAction, 
+            @nScn     OUTPUT,  @nStep OUTPUT,
+            @nErrNo   OUTPUT, 
+            @cErrMsg  OUTPUT,
+            @cUDF01   OUTPUT, @cUDF02 OUTPUT, @cUDF03 OUTPUT,
+            @cUDF04   OUTPUT, @cUDF05 OUTPUT, @cUDF06 OUTPUT,
+            @cUDF07   OUTPUT, @cUDF08 OUTPUT, @cUDF09 OUTPUT,
+            @cUDF10   OUTPUT, @cUDF11 OUTPUT, @cUDF12 OUTPUT,
+            @cUDF13   OUTPUT, @cUDF14 OUTPUT, @cUDF15 OUTPUT,
+            @cUDF16   OUTPUT, @cUDF17 OUTPUT, @cUDF18 OUTPUT,
+            @cUDF19   OUTPUT, @cUDF20 OUTPUT, @cUDF21 OUTPUT,
+            @cUDF22   OUTPUT, @cUDF23 OUTPUT, @cUDF24 OUTPUT,
+            @cUDF25   OUTPUT, @cUDF26 OUTPUT, @cUDF27 OUTPUT,
+            @cUDF28   OUTPUT, @cUDF29 OUTPUT, @cUDF30 OUTPUT
+
+            IF @nErrNo <> 0
+               GOTO Step_1_Fail
+         END
+      END
    END
    GOTO Quit
 
@@ -622,79 +801,76 @@ BEGIN
          GOTO Step_3_Fail
       END
 
-      IF @cOption = '1' -- YES
+      -- (james03)
+      -- Extended validate
+      SET @cExtendedValidateSP = rdt.rdtGetConfig( @nFunc, 'ExtendedValidateSP', @cStorerKey)
+      IF @cExtendedValidateSP = '0'
+         SET @cExtendedValidateSP = ''
+
+      IF @cExtendedValidateSP <> '' 
       BEGIN
-         -- (james03)
-         -- Extended validate
-         SET @cExtendedValidateSP = rdt.rdtGetConfig( @nFunc, 'ExtendedValidateSP', @cStorerKey)
-         IF @cExtendedValidateSP = '0'
-            SET @cExtendedValidateSP = ''
-   
-         IF @cExtendedValidateSP <> '' 
+
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedValidateSP AND type = 'P')
          BEGIN
-   
-            IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedValidateSP AND type = 'P')
-            BEGIN
-               SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +
-                  ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cPalletID, @cMbolKey, @cDoor, @cOption, @nAfterStep, ' + 
-                  ' @nErrNo OUTPUT, @cErrMsg OUTPUT'
-               SET @cSQLParam =
-                  '@nMobile         INT,       '     +
-                  '@nFunc           INT,       '     +
-                  '@cLangCode       NVARCHAR( 3),  ' +
-                  '@nStep           INT,       '     + 
-                  '@nInputKey       INT,       '     +
-                  '@cStorerKey      NVARCHAR( 15), ' +
-                  '@cPalletID       NVARCHAR( 20), ' +
-                  '@cMbolKey        NVARCHAR( 10), ' +
-                  '@cDoor           NVARCHAR( 20), ' +
-                  '@cOption         NVARCHAR( 1), '  +
-                  '@nAfterStep      INT,           ' + 
-                  '@nErrNo          INT OUTPUT,    ' +
-                  '@cErrMsg         NVARCHAR( 20) OUTPUT'  
-   
-               EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-                  @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cPalletID, @cMbolKey, @cDoor, @cOption, @nStep, 
-                  @nErrNo OUTPUT, @cErrMsg OUTPUT
-   
-               IF @nErrNo <> 0
-                  GOTO Step_3_Fail
-            END
-         END
-   
-         SET @cExtendedUpdateSP = rdt.RDTGetConfig( @nFunc, 'ExtendedUpdateSP', @cStorerKey)
-         IF @cExtendedUpdateSP = '0'
-            SET @cExtendedUpdateSP = ''
-   
-         IF ISNULL( @cExtendedUpdateSP, '') <> ''
-         BEGIN
-            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +
-               ' @nMobile, @nFunc, @nStep, @cLangCode, @nInputKey, @cStorerKey, @cPalletID, @cMbolKey, @cDoor, @cOption, @nAfterStep, ' +
-               ' @nErrNo OUTPUT, @cErrMsg OUTPUT '
-   
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cPalletID, @cMbolKey, @cDoor, @cOption, @nAfterStep, ' + 
+               ' @nErrNo OUTPUT, @cErrMsg OUTPUT'
             SET @cSQLParam =
-               '@nMobile         INT,           ' +
-               '@nFunc           INT,           ' +
-               '@nStep           INT,           ' +
+               '@nMobile         INT,       '     +
+               '@nFunc           INT,       '     +
                '@cLangCode       NVARCHAR( 3),  ' +
-               '@nInputKey       INT,           ' + 
+               '@nStep           INT,       '     + 
+               '@nInputKey       INT,       '     +
                '@cStorerKey      NVARCHAR( 15), ' +
                '@cPalletID       NVARCHAR( 20), ' +
                '@cMbolKey        NVARCHAR( 10), ' +
                '@cDoor           NVARCHAR( 20), ' +
-               '@cOption         NVARCHAR( 1),  ' +
+               '@cOption         NVARCHAR( 1), '  +
                '@nAfterStep      INT,           ' + 
-               '@nErrNo          INT           OUTPUT, ' + 
-               '@cErrMsg         NVARCHAR( 20) OUTPUT  '
-   
+               '@nErrNo          INT OUTPUT,    ' +
+               '@cErrMsg         NVARCHAR( 20) OUTPUT'  
+
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-                 @nMobile, @nFunc, @nStep, @cLangCode, @nInputKey, @cStorerKey, @cPalletID, @cMbolKey, @cDoor, @cOption, @nStep,
-                 @nErrNo OUTPUT, @cErrMsg OUTPUT
-   
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cPalletID, @cMbolKey, @cDoor, @cOption, @nStep, 
+               @nErrNo OUTPUT, @cErrMsg OUTPUT
+
             IF @nErrNo <> 0
                GOTO Step_3_Fail
-   
          END
+      END
+
+      SET @cExtendedUpdateSP = rdt.RDTGetConfig( @nFunc, 'ExtendedUpdateSP', @cStorerKey)
+      IF @cExtendedUpdateSP = '0'
+         SET @cExtendedUpdateSP = ''
+
+      IF ISNULL( @cExtendedUpdateSP, '') <> ''
+      BEGIN
+         SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +
+            ' @nMobile, @nFunc, @nStep, @cLangCode, @nInputKey, @cStorerKey, @cPalletID, @cMbolKey, @cDoor, @cOption, @nAfterStep, ' +
+            ' @nErrNo OUTPUT, @cErrMsg OUTPUT '
+
+         SET @cSQLParam =
+            '@nMobile         INT,           ' +
+            '@nFunc           INT,           ' +
+            '@nStep           INT,           ' +
+            '@cLangCode       NVARCHAR( 3),  ' +
+            '@nInputKey       INT,           ' + 
+            '@cStorerKey      NVARCHAR( 15), ' +
+            '@cPalletID       NVARCHAR( 20), ' +
+            '@cMbolKey        NVARCHAR( 10), ' +
+            '@cDoor           NVARCHAR( 20), ' +
+            '@cOption         NVARCHAR( 1),  ' +
+            '@nAfterStep      INT,           ' + 
+            '@nErrNo          INT           OUTPUT, ' + 
+            '@cErrMsg         NVARCHAR( 20) OUTPUT  '
+
+         EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @nStep, @cLangCode, @nInputKey, @cStorerKey, @cPalletID, @cMbolKey, @cDoor, @cOption, @nStep,
+               @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+         IF @nErrNo <> 0
+            GOTO Step_3_Fail
+   
       END
 
       -- Back to menu
@@ -712,6 +888,39 @@ BEGIN
 
       SET @nScn = @nScn - 2
       SET @nStep = @nStep - 2
+
+      SET @cExtendedUpdateSP = rdt.RDTGetConfig( @nFunc, 'ExtendedUpdateSP', @cStorerKey)
+      IF @cExtendedUpdateSP = '0'
+         SET @cExtendedUpdateSP = ''
+
+      IF ISNULL( @cExtendedUpdateSP, '') <> ''
+      BEGIN
+         SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +
+            ' @nMobile, @nFunc, @nStep, @cLangCode, @nInputKey, @cStorerKey, @cPalletID, @cMbolKey, @cDoor, @cOption, @nAfterStep, ' +
+            ' @nErrNo OUTPUT, @cErrMsg OUTPUT '
+
+         SET @cSQLParam =
+            '@nMobile         INT,           ' +
+            '@nFunc           INT,           ' +
+            '@nStep           INT,           ' +
+            '@cLangCode       NVARCHAR( 3),  ' +
+            '@nInputKey       INT,           ' + 
+            '@cStorerKey      NVARCHAR( 15), ' +
+            '@cPalletID       NVARCHAR( 20), ' +
+            '@cMbolKey        NVARCHAR( 10), ' +
+            '@cDoor           NVARCHAR( 20), ' +
+            '@cOption         NVARCHAR( 1),  ' +
+            '@nAfterStep      INT,           ' + 
+            '@nErrNo          INT           OUTPUT, ' + 
+            '@cErrMsg         NVARCHAR( 20) OUTPUT  '
+
+         EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @nStep, @cLangCode, @nInputKey, @cStorerKey, @cPalletID, @cMbolKey, @cDoor, @cOption, @nStep,
+               @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+         IF @nErrNo <> 0
+            GOTO Step_3_Fail
+      END
    END
    GOTO Quit
 
@@ -752,6 +961,7 @@ BEGIN
 
        V_String1     = @cDoor,
        V_String2     = @cMBOLKey,
+       V_String3     = @cExtScnSP,
        
        V_Integer1    = @nCBOLKey,
        C_String1     = @cLOCCheckDigitSP,

@@ -14,9 +14,9 @@ GO
 /*                                                                         */
 /* Called By: nspOrderProcessing                                           */
 /*                                                                         */
-/* PVCS Version: 1.1                                                       */
+/* PVCS Version: 1.4                                                       */
 /*                                                                         */
-/* Version: 8.0                                                            */
+/* Version: V2                                                             */
 /*                                                                         */
 /* Data Modifications:                                                     */
 /*                                                                         */
@@ -25,6 +25,9 @@ GO
 /* 2024-04-24  Wan01    1.1  UWP-15060 Fixed Get Multiple lot not filter by*/
 /*                           Qty                                           */
 /* 2024-04-24 SSA91301  1.2  UWP-18454 allow skip lottable filtering       */
+/* 2024-06-25  Wan02    1.3  UWP-21046 shelf-life by % for consignee       */  
+/* 2024-07-09  Wan03    1.4  UWP-21046 shelf-life by % for consignee       */ 
+/*                           % need to be as float for calculation         */
 /***************************************************************************/
 CREATE OR ALTER PROC [dbo].[mspALMLP02]
    @c_DocumentNo        NVARCHAR(10)
@@ -85,6 +88,9 @@ BEGIN
          , @c_CLKConditionFlag NCHAR(1)          --SSA91301
          , @c_AllocateStrategyKey NVARCHAR(10)   --SSA91301
          , @n_Cnt                  INT   --SSA91301
+         , @c_ConsigneeSkuGroupPCTG          NVARCHAR(10)   = ''                    --(Wan02)
+         , @c_ShelfLifeSQL                   NVARCHAR(100)  = ''                    --(Wan02)
+         , @c_ShelfLifeStrategyCode          NVARCHAR(20)   = ''                    --(Wan02)
            
    SET @c_Condition = ''
    SET @n_SkuOutGoingMinShelfLife = 0
@@ -188,6 +194,15 @@ BEGIN
    AND CODELKUP.Storerkey = CASE WHEN CODELKUP.Short = @c_AllocateStrategykey AND CODELKUP.Storerkey = '' THEN CODELKUP.Storerkey ELSE @c_Storerkey END --if setup short and no setup storer ignore storer otherwise by storer.
    AND CODELKUP.Short IN ( CASE WHEN CODELKUP.Short NOT IN (NULL,'') THEN @c_AllocateStrategykey ELSE CODELKUP.Short END ) --if short setup must match Allocate strategykey
    AND Code2 IN (@c_UOM,'')
+
+   --Get Shelflife
+   SELECT TOP 1 @c_ShelfLifeFlag   = UDF01                                          --(Wan02) - START                                            --(Wan02)-START
+         ,@c_ShelfLifeStrategyCode = UDF02  
+   FROM @TMP_CODELKUP
+   WHERE Code = 'SHELFLIFE'  
+   AND Code2 IN (@c_UOM,'')   
+   ORDER BY CASE WHEN Code2 = @c_UOM THEN 0 ELSE 1 END --consider matched uom first --(Wan02)-END
+           ,CASE WHEN UDF02 = '' THEN 9 ELSE 1 END
 
    --Retrieve codelkup condition
    SELECT TOP 1 @c_CLKCondition = Notes
@@ -294,9 +309,11 @@ BEGIN
    END
 
    ----------SkipLottablefilter logic end(SSA91301)-------------
+   IF  @c_ShelfLifeFlag IN ('E','M') SET @c_ContinueChkShelfLife = 'Y'              --(Wan02)
 
    ------Order shelflife (orderdetail.Minshelflife)
    IF ISNULL(@n_OrderMinShelfLife,0) > 0 AND ISNULL(@c_OrderKey,'') <> '' AND @c_ContinueChkShelfLife = 'Y'
+      AND @c_ShelfLifeStrategyCode IN ('', 'ORDERS')                                --(Wan02)
    BEGIN
         IF @c_ShelfLifeFlag = 'E'
         BEGIN
@@ -314,48 +331,39 @@ BEGIN
 
    IF ISNULL(@c_OrderKey,'') <> '' AND @c_ContinueChkShelfLife = 'Y'
    BEGIN
-      ------Consignee shelflife (Storer.MinShelfLife)
-      /*
-      SELECT @n_ConsigneeMinShelfLife = ISNULL(STORER.MinShelfLife,0)
-      FROM ORDERS (NOLOCK)
-      JOIN STORER (NOLOCK) ON (ORDERS.ConsigneeKey = STORER.StorerKey)
-      WHERE ORDERS.OrderKey = @c_OrderKey
-
-      IF ISNULL(@n_ConsigneeMinShelfLife,0) > 0
-      BEGIN
-         SELECT @c_Condition = ISNULL(RTRIM(@c_Condition),'') + ' AND ( DATEDIFF(day, GETDATE(), LOTTABLE04) >= '
-         + CAST(@n_ConsigneeMinShelfLife AS NVARCHAR(10)) + ' OR Lottable04 IS NULL OR CONVERT(char(10), Lottable04, 103) = ''01/01/1900'')'
-      END
-      */
       ------Consignee+Sku shelflife (Storer.MinShelflife * Sku.Shelflife)
-      SELECT @n_ConsigneeSkuMinShelfLife = (Sku.Shelflife * Storer.MinShelflife/100)
-      FROM ORDERS O (NOLOCK)
-      JOIN ORDERDETAIL OD (NOLOCK) ON O.Orderkey = OD.Orderkey
-      JOIN SKU (NOLOCK) ON OD.Storerkey = SKU.Storerkey AND OD.Sku = SKU.Sku
-      JOIN STORER (NOLOCK) ON O.Consigneekey = STORER.Storerkey
-      WHERE O.Orderkey = @c_Orderkey
-      AND OD.OrderLineNumber = @c_OrderLineNumber
+      IF @c_ShelfLifeStrategyCode IN ('', 'ConsigneeSku')                           --(Wan02)
+      BEGIN                                                                         --(Wan02)
+         SELECT @n_ConsigneeSkuMinShelfLife = (Sku.Shelflife * Storer.MinShelflife/100)
+         FROM ORDERS O (NOLOCK)
+         JOIN ORDERDETAIL OD (NOLOCK) ON O.Orderkey = OD.Orderkey
+         JOIN SKU (NOLOCK) ON OD.Storerkey = SKU.Storerkey AND OD.Sku = SKU.Sku
+         JOIN STORER (NOLOCK) ON O.Consigneekey = STORER.Storerkey
+         WHERE O.Orderkey = @c_Orderkey
+         AND OD.OrderLineNumber = @c_OrderLineNumber
 
-      IF ISNULL(@n_ConsigneeSkuMinShelfLife,0) > 0
-      BEGIN
-          IF @c_ShelfLifeFlag = 'E'
+         IF ISNULL(@n_ConsigneeSkuMinShelfLife,0) > 0
          BEGIN
-            SET @c_Condition = ISNULL(RTRIM(@c_Condition),'') + ' AND ( DATEDIFF(day, GETDATE(), LOTTABLE04) >= @n_ConsigneeSkuMinShelfLife'
-                             + ' OR Lottable04 IS NULL OR CONVERT(CHAR(10), LOTTABLE04, 103) = ''01/01/1900'')'
-         END
-         ELSE IF @c_ShelfLifeFlag = 'M'
-         BEGIN
-            SET @c_Condition = ISNULL(RTRIM(@c_Condition),'') + ' AND ( DATEDIFF(day, LOTTABLE04, GETDATE()) <= @n_ConsigneeSkuMinShelfLife'
-                             + ' OR Lottable04 IS NULL OR CONVERT(CHAR(10), LOTTABLE04, 103) = ''01/01/1900'')'
-         END
+             IF @c_ShelfLifeFlag = 'E'
+            BEGIN
+               SET @c_Condition = ISNULL(RTRIM(@c_Condition),'') + ' AND ( DATEDIFF(day, GETDATE(), LOTTABLE04) >= @n_ConsigneeSkuMinShelfLife'
+                                + ' OR Lottable04 IS NULL OR CONVERT(CHAR(10), LOTTABLE04, 103) = ''01/01/1900'')'
+            END
+            ELSE IF @c_ShelfLifeFlag = 'M'
+            BEGIN
+               SET @c_Condition = ISNULL(RTRIM(@c_Condition),'') + ' AND ( DATEDIFF(day, LOTTABLE04, GETDATE()) <= @n_ConsigneeSkuMinShelfLife'
+                                + ' OR Lottable04 IS NULL OR CONVERT(CHAR(10), LOTTABLE04, 103) = ''01/01/1900'')'
+            END
 
-         SET @c_ContinueChkShelfLife = 'N'
-      END
-
+            SET @c_ContinueChkShelfLife = 'N'
+         END
+      END                                                                           --(Wan02)
       ------Consigneegroup + skugroup shelflife (Doclkup.consigneegroup + Doclkup.skugroup)
       IF @c_ContinueChkShelfLife = 'Y'
+         AND @c_ShelfLifeStrategyCode IN ('', 'ConsigneeSkuGroup')                  --(Wan02)
       BEGIN
          SELECT @n_ConsigneeSkuGroupMinShelfLife = DOCLKUP.Shelflife
+               ,@c_ConsigneeSkuGroupPCTG         = ISNULL(DOCLKUP.UserDefine01,'')  --(Wan02)    
          FROM ORDERS O (NOLOCK)
          JOIN ORDERDETAIL OD (NOLOCK) ON O.Orderkey = OD.Orderkey
          JOIN SKU (NOLOCK) ON OD.Storerkey = SKU.Storerkey AND OD.Sku = SKU.Sku
@@ -366,16 +374,24 @@ BEGIN
 
          IF ISNULL(@n_ConsigneeSkuGroupMinShelfLife,0) > 0
          BEGIN
+            SET @c_ShelfLifeSQL = '@n_ConsigneeSkuGroupMinShelfLife'                --(Wan02) - START 
+            IF @c_ConsigneeSkuGroupPCTG = 'PERCENTAGE'
+            BEGIN
+               SET @c_ShelfLifeSQL = 'DATEDIFF(Day, Lottable13, Lottable04)*(@n_ConsigneeSkuGroupMinShelfLife/100.00)'--(Wan03) 
+            END
+
             IF @c_ShelfLifeFlag = 'E'
             BEGIN
-               SET @c_Condition = ISNULL(RTRIM(@c_Condition),'') + ' AND ( DATEDIFF(day, GETDATE(), LOTTABLE04) >= @n_ConsigneeSkuGroupMinShelfLife'
+               SET @c_Condition = ISNULL(RTRIM(@c_Condition),'') + ' AND ( DATEDIFF(day, GETDATE(), LOTTABLE04) >= ' --@n_ConsigneeSkuGroupMinShelfLife'
+                                + @c_ShelfLifeSQL                                                                    --(Wan02)    
                                 + ' OR Lottable04 IS NULL OR CONVERT(CHAR(10), LOTTABLE04, 103) = ''01/01/1900'')'                                        
             END
             ELSE IF @c_ShelfLifeFlag = 'M'
             BEGIN
-               SET @c_Condition = ISNULL(RTRIM(@c_Condition),'') + ' AND ( DATEDIFF(day, LOTTABLE04, GETDATE()) <= @n_ConsigneeSkuGroupMinShelfLife'  
+               SET @c_Condition = ISNULL(RTRIM(@c_Condition),'') + ' AND ( DATEDIFF(day, LOTTABLE04, GETDATE()) <= ' --@n_ConsigneeSkuGroupMinShelfLife'  
+                                + @c_ShelfLifeSQL                                                                    --(Wan02)    
                                 + ' OR Lottable04 IS NULL OR CONVERT(CHAR(10), LOTTABLE04, 103) = ''01/01/1900'')'                                        
-            END
+            END                                                                     --(Wan02) - END 
 
             SET @c_ContinueChkShelfLife = 'N'
          END
@@ -384,6 +400,7 @@ BEGIN
 
    ------Sku outgoing shelflife (Sku.SUSR2)
    IF @c_ContinueChkShelfLife = 'Y'
+      AND @c_ShelfLifeStrategyCode IN ('', 'SkuOutGo')                              --(Wan02)
    BEGIN
       SELECT @n_SkuOutGoingMinShelfLife = CASE WHEN ISNUMERIC(SUSR2) = 1 THEN CAST(SUSR2 AS INT)
                                           ELSE 0 END
@@ -401,7 +418,7 @@ BEGIN
          ELSE IF @c_ShelfLifeFlag = 'M'
          BEGIN
              SET @c_Condition = ISNULL(RTRIM(@c_Condition),'') + ' AND ( DATEDIFF(day, LOTTABLE04, GETDATE()) <= @n_SkuOutGoingMinShelfLife'  
-                                 + ' OR Lottable04 IS NULL OR CONVERT(char(10), Lottable04, 103) = ''01/01/1900'')'                                
+                              + ' OR Lottable04 IS NULL OR CONVERT(char(10), Lottable04, 103) = ''01/01/1900'')'                                
          END
 
          SET @c_ContinueChkShelfLife = 'N'
@@ -410,6 +427,7 @@ BEGIN
 
    ------Storer+Sku shelflife (Storer.MinShelflife * Sku.Shelflife)
    IF @c_ContinueChkShelfLife = 'Y'
+         AND @c_ShelfLifeStrategyCode IN ('', 'StorerSku')                          --(Wan02)
    BEGIN
       SELECT @n_StorerSkuMinShelfLife = (Sku.Shelflife * Storer.MinShelflife/100)
       FROM Sku (nolock)

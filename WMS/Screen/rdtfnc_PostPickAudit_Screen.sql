@@ -114,3 +114,18 @@ EXECUTE rdt.rdtAddScn 5980, 'ENG'
    ,@cWebGroup = '{"1":["1"],"2":["2"],"3":["3"]}'
    ,@nFunc = 850
    
+-- FCR-386
+-- 5980 Short Confirm
+DELETE rdt.RDTScn WHERE Scn = 6384 AND Lang_Code = 'ENG'
+EXECUTE rdt.rdtAddScn 6384, 'ENG'
+   ,@cLine01 = ''
+   ,@cLine02 = 'CONFIRM SHORT'
+   ,@cLine03 = ''
+   ,@cLine04 = '1 = YES'
+   ,@cLine05 = '9 = NO'
+   ,@cLine06 = ''
+   ,@cLine07 = 'OPTION: %01i01'
+   ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1"],"2":["2","3"],"3":["4","5","6"],"4":["7"]}'
+   ,@nFunc = 850
+   

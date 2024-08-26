@@ -5,7 +5,7 @@
 /* Purpose: UWP-18603                                           */
 /* Written by: Ansuman                                          */
 /* Purpose: Transfer Allocation with Auto Finalize              */
-/* Called By: Java Scheduler                                    */
+/* Called By: DB Scheduler                                    */
 /***************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[ispTransferAllocationForFinalize](
@@ -46,7 +46,9 @@ BEGIN
 		, @dt_Lottable04        DATETIME
 		, @dt_Lottable05        DATETIME
 		, @c_Lottable06         NVARCHAR(30) = ''
+		, @c_ToLottable06       NVARCHAR(30) = ''
 		, @c_Lottable07         NVARCHAR(30) = ''
+		, @c_ToLottable07       NVARCHAR(30) = ''
 		, @c_Lottable08         NVARCHAR(30) = ''
 		, @c_Lottable09         NVARCHAR(30) = ''
 		, @c_Lottable10         NVARCHAR(30) = ''
@@ -65,6 +67,8 @@ BEGIN
 		, @c_UserDefined02      NVARCHAR(20) = ''
 		, @canBeAllocated       INT =1
 		, @b_SuccessLog         INT= 1
+		, @c_UpdateSLOnLottable06Change  NVARCHAR(1) = 'N'
+		, @n_ErrNo              INT = 0
 
 	------- Retrieve records from TRANSFER UserDefine02='AUTOREL'
 	BEGIN
@@ -78,12 +82,15 @@ BEGIN
 			 , Facility = TF.Facility
 			 , FromLottable02 = ISNULL(RTRIM(TD.Lottable02),'')
 			 , ToLottable02 = ISNULL(RTRIM(TD.ToLottable02),'')
+			 , ToLottable04 = ISNULL(RTRIM(TD.ToLottable04),'')
+			 , SValue = ISNULL(RTRIM(SC.SValue),'0')
 		FROM TRANSFERDETAIL TD WITH (NOLOCK)
 			     JOIN TRANSFER TF  WITH (NOLOCK) ON (TD.TransferKey = TF.TransferKey)
+			     LEFT JOIN (SELECT SValue, StorerKey, Facility from StorerConfig where ConfigKey = 'UpdateSLOnLottable06Change') SC on (TF.Facility=SC.Facility and TD.ToStorerKey = SC.StorerKey)
 		  WHERE TF.Status = '0'
 		  AND TF.UserDefine02 = 'AUTOREL'
           AND TF.FromStorerKey = @c_FromStorerkey
-		  AND TD.FromLot = ''
+		 -- AND TD.FromLot = ''
 		ORDER BY TD.TransferKey, TD.TransferLineNumber
 
 	OPEN CUR_ANFTRAN
@@ -96,9 +103,15 @@ BEGIN
 		,  @c_FromFacility
 		,  @c_FromLottable02
 		,  @c_ToLottable02
+		,  @dt_Lottable04
+		,  @c_UpdateSLOnLottable06Change
 	WHILE @@FETCH_STATUS <> -1
 		BEGIN
-
+			IF @c_UpdateSLOnLottable06Change = '1'
+				SET @c_UpdateSLOnLottable06Change = 'Y'
+			ELSE
+				SET @c_UpdateSLOnLottable06Change = 'N'
+			
 			SELECT @c_FromPackkey = PACK.Packkey
 				 , @c_FromUOM     = PACK.PackUOM3
 			FROM SKU  WITH (NOLOCK)
@@ -169,7 +182,8 @@ BEGIN
 					  AND LOC.Status = 'OK'
 					  AND LOC.LocationFlag NOT IN ( 'HOLD', 'DAMAGE' )
 					  AND ID.Status  = 'OK'
-					  AND DATEDIFF(DAY, GETDATE(), LA.Lottable04) > 0
+					  AND DATEDIFF(DAY, GETDATE(), LA.Lottable04) >= 0
+					  AND LA.Lottable07 NOT IN ('ML53', 'ML54')
 					ORDER BY
 						(LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked)
 
@@ -201,6 +215,14 @@ BEGIN
 							--- Update/Insert into TRANSFERDETAIL -- Split New Transfer Line--
 							SET @c_TransferStatus = '0'
 							SET @c_UserDefined02 = 'ALLOCATION_DONE'
+							IF @c_UpdateSLOnLottable06Change='Y'
+								SELECT @c_ToLottable07 =  dbo.fnc_CalcShelfLife01(@c_ToStorerkey, @c_ToSku, @dt_Lottable04)
+							ELSE
+								SET @c_ToLottable07 = @c_Lottable07
+							IF @c_ToLottable07 = 'ML51'
+								SET @c_ToLottable06 = '1'
+							ELSE
+								SET @c_ToLottable06 = '0'
 							IF(@n_IsFirstRecord = 1)
 							BEGIN TRY
 								BEGIN
@@ -231,8 +253,8 @@ BEGIN
 									  ,ToLottable03 = @c_Lottable03
 									  ,ToLottable04 = @dt_Lottable04
 									  ,ToLottable05 = @dt_Lottable05
-									  ,ToLottable06 = '0' --inventory release
-									  ,ToLottable07 = @c_Lottable07
+									  ,ToLottable06 = @c_ToLottable06
+									  ,ToLottable07 = @c_ToLottable07
 									  ,ToLottable08 = @c_Lottable08
 									  ,ToLottable09 = @c_Lottable09
 									  ,ToLottable10 = @c_Lottable10
@@ -380,8 +402,8 @@ BEGIN
 											, @c_Lottable03
 											, @dt_Lottable04
 											, @dt_Lottable05
-											, '0'
-											, @c_Lottable07
+											, @c_ToLottable06
+											, @c_ToLottable07
 											, @c_Lottable08
 											, @c_Lottable09
 											, @c_Lottable10
@@ -445,6 +467,7 @@ BEGIN
 												COMMIT TRAN
 											END
 								END
+						SET @n_continue = 1 --resetting error flag
 						FETCH NEXT FROM CUR_RELINV INTO
 							   @c_FromLot
 							,  @c_FromLoc
@@ -488,6 +511,8 @@ BEGIN
 				,  @c_FromFacility
 				,  @c_FromLottable02
 				,  @c_ToLottable02
+				,  @dt_Lottable04
+				,  @c_UpdateSLOnLottable06Change
 		SET @canBeAllocated = 1 --setting to default value
 		END
 	 CLOSE CUR_ANFTRAN
@@ -499,7 +524,8 @@ BEGIN
 	  DECLARE CUR_FINTRAN CURSOR LOCAL FORWARD_ONLY STATIC FOR
 		  SELECT  T.TransferKey
 		  FROM TRANSFER T WITH (NOLOCK)
-		  WHERE T.UserDefine02 = 'ALLOCATION_DONE'
+		  WHERE T.UserDefine02 IN ('ALLOCATION_DONE', 'AUTOREL')
+          AND T.FromStorerKey = @c_FromStorerkey
 		  AND T.Status <> '9'
 		  AND NOT EXISTS(SELECT 1
 			               FROM TRANSFERDETAIL TD WITH (NOLOCK)
@@ -565,10 +591,10 @@ BEGIN
 				 BEGIN
 					 SET @c_UserDefined02 = 'DONE'
 					 UPDATE TRANSFER WITH (ROWLOCK)
-					 SET UserDefine02 = @c_UserDefined02
+					 SET UserDefine02 = @c_UserDefined02, TrafficCop=NULL
 					 WHERE Transferkey = @c_TransferKeyForFinalization
 				 END
-
+         SET @n_continue = 1 --resetting error flag
 	     FETCH NEXT FROM CUR_FINTRAN INTO @c_TransferKeyForFinalization
 		END
 		CLOSE CUR_FINTRAN
