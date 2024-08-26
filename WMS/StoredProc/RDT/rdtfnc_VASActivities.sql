@@ -19,7 +19,7 @@ GO
 /*                                                                               */
 /* Date       Rev  Author      Purposes                                          */
 /* 2024-02-27 1.0  NLT013      Create   first version (UWP-15257)                */
-/* 2024-08-14 1.1  LJQ006      Update   Outbound VAS (FCR-657)                   */                                                                                                                  */
+/* 2024-08-14 1.1  LJQ006      Update   Outbound VAS (FCR-657)                   */
 /*********************************************************************************/
 
 CREATE PROCEDURE [rdt].[rdtfnc_VASActivities] (
