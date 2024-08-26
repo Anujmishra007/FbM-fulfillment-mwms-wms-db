@@ -5,7 +5,7 @@ SET QUOTED_IDENTIFIER OFF
 GO
 
 /************************************************************************/
-/* Function: fnc_GetVICS_CBOL                                           */
+/* Stored Procedure: isp_GetVICS_CBOL                                   */
 /* Creation Date: 28-May-2024                                           */
 /* Copyright: Maersk Logistics                                          */
 /* Written by: Shong                                                    */
@@ -22,13 +22,13 @@ GO
 /* Date        Author   Ver   Purposes                                  */
 /* 28-May-2024 Shong    1.1   Create                                    */
 /************************************************************************/
-CREATE OR ALTER FUNCTION [dbo].[fnc_GetVICS_CBOL]
+CREATE OR ALTER PROCEDURE [dbo].[isp_GetVICS_CBOL]
 (
     @n_CBOLKey BIGINT, 
     @c_Facility NVARCHAR(5), 
-    @c_StorerKey NVARCHAR(15)
+    @c_StorerKey NVARCHAR(15),
+    @c_VICS_CBOL NVARCHAR(30) OUTPUT
 )
-RETURNS NVARCHAR(30) 
 AS
 BEGIN
 	DECLARE @n_MPOCFlag   INT = 0, 
@@ -41,7 +41,6 @@ BEGIN
 
    DECLARE @n_Length INT = 0,
            @n_Index INT,
-           @c_VICS_CBOL NVARCHAR(30),
            @c_VICBillNumber_Aut NVARCHAR(30), 
            @c_SUSR1 NVARCHAR(30),
            @c_KeyName NVARCHAR(30), 
@@ -93,7 +92,6 @@ BEGIN
 	SET @c_VICS_CBOL = TRIM(@c_SUSR1) + '000'  + RIGHT('000000' + CAST(@n_CBOLKey AS VARCHAR(10)), 6) 
 	
 	SELECT @c_VICBillNumber_Aut = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'VicBillNumber')
-
 	
 	IF ISNULL(@c_VICBillNumber_Aut, '') <> ''  
    BEGIN
@@ -156,6 +154,7 @@ BEGIN
    
 
    QUIT_FNC:
-   RETURN @c_VICS_CBOL
-END;
+END
+GO
+GRANT EXECUTE ON [dbo].[isp_GetVICS_CBOL] TO [nSQL]
 GO

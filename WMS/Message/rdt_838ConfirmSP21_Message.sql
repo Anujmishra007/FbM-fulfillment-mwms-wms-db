@@ -19,3 +19,5 @@ execute rdt.rdtAddMsg 219665, 10, '219665^INS RDSNo Fail', 'us_english', 838
 execute rdt.rdtAddMsg 219666, 10, '219666^SNO ady scan', 'us_english', 838
 execute rdt.rdtAddMsg 219667, 10, '219667^INS PDInfoFail', 'us_english', 838
 execute rdt.rdtAddMsg 219668, 10, '219668^UPD PDInfoFail', 'us_english', 838
+execute rdt.rdtAddMsg 219669, 10, '219669^PkDtl NotFound', 'us_english', 838
+execute rdt.rdtAddMsg 219670, 10, '219670^PkDtl NotFound', 'us_english', 838

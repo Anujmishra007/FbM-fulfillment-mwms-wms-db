@@ -7,12 +7,14 @@ GO
 /******************************************************************************/
 /* Store procedure: rdt_855ExtUpd13                                           */
 /* Copyright      : Maersk                                                    */
+/* Customer: Granite                                                          */
 /*                                                                            */
 /* Purpose: Print the VAS label                                               */
 /*                                                                            */
 /* Modifications log:                                                         */
 /* Date       Rev  Author   Purposes                                          */
 /* 2024-06-18 1.0  NLT013   FCR-386. Created                                  */
+/* 2024-08-06 1.1  Dennis   FCR-386. Remove order group condition             */
 /******************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_855ExtUpd13 (
@@ -78,7 +80,12 @@ BEGIN
       @xState                    INT,
       @cLabelName                NVARCHAR(30),
       @nWorkOrderDetailQty       INT,
-      @cLabelListName            NVARCHAR(10)
+      @cLabelListName            NVARCHAR(10),
+      @cShipperKey               NVARCHAR(15),
+      @cOrderInfo03              NVARCHAR(20),
+      @cPickConfirmStatus        NVARCHAR( 1),
+      @fCartonWeight             FLOAT,
+      @fSKUWeight                FLOAT
 
    DECLARE @tLabels TABLE
    (
@@ -94,6 +101,12 @@ BEGIN
 
    SET @nErrNo = 0
    SET @cErrMsg = ''
+
+   SET @cPickConfirmStatus = rdt.RDTGetConfig( @nFunc, 'PickConfirmStatus', @cStorerKey)
+   IF @cPickConfirmStatus = '0'
+      SET @cPickConfirmStatus = '5'
+   IF @cPickConfirmStatus NOT IN ( '3', '5')
+      SET @cPickConfirmStatus = '5'
 
    SELECT @nScn = Scn,
       @cLabelPrinterGroup = Printer,
@@ -123,6 +136,11 @@ BEGIN
                AND DropID = @cDropID
                AND Sku = @cSKU
 
+            SELECT @cPickSlipNo = PickSlipNo
+            FROM dbo.PackDetail WITH(NOLOCK) 
+            WHERE StorerKey = @cStorerKey 
+            AND labelno = @cDropID
+
             --Audit finished
             --1. Display all VAS code and print labels
             --2. Mark PPA as 5 (Audit finished)
@@ -130,6 +148,14 @@ BEGIN
             --4. Insert transmitlog2
             IF @nTotalPQty = @nTotalCQty -- Audit finished
             BEGIN
+               SELECT TOP 1 @cOrderInfo03 = ISNULL(OI.OrderInfo03, '') + '-' + ISNULL(CLK.Description, '')
+               FROM dbo.OrderInfo OI WITH(NOLOCK)
+               INNER JOIN dbo.PickDetail PKD WITH(NOLOCK) ON OI.OrderKey = PKD.OrderKey
+               INNER JOIN dbo.CODELKUP CLK WITH(NOLOCK) ON PKD.StorerKey = CLK.StorerKey AND CLK.LISTNAME = 'VASORD' AND ISNULL(OI.OrderInfo03, '') = CLK.Code
+               WHERE PKD.StorerKey = @cStorerKey
+                  AND ISNULL(PKD.CaseID, '') = @cDropID
+                  AND PKD.Sku = @cSKU
+
                SELECT @nRowCount = COUNT(1) 
                FROM dbo.WorkOrder wo WITH(NOLOCK)
                INNER JOIN dbo.WorkOrderDetail wod WITH(NOLOCK) ON wo.WorkOrderKey = wod.WorkOrderKey
@@ -140,7 +166,7 @@ BEGIN
                WHERE pkd.StorerKey = @cStorerKey
                   AND ISNULL(pkd.CaseID, '') = @cDropID
                   AND (pd.SKU = ISNULL(wod.WkOrdUdef1, '') OR ISNULL(wod.WkOrdUdef1, '') = '')
-
+               
                --1. VAS is needed, display VAS code and Print VAS label
                IF @nRowCount > 0
                BEGIN
@@ -166,17 +192,17 @@ BEGIN
 
                   WHILE @@FETCH_STATUS = 0 
                   BEGIN
-                     IF @nLoopIndex % 8 = 1 SET @cMsg01 = @cVASCode + '-' + @cVASCodeDesc
-                     ELSE IF @nLoopIndex % 8  = 2 SET @cMsg02 = @cVASCode + '-' + @cVASCodeDesc
-                     ELSE IF @nLoopIndex % 8  = 3 SET @cMsg03 = @cVASCode + '-' + @cVASCodeDesc
-                     ELSE IF @nLoopIndex % 8  = 4 SET @cMsg04 = @cVASCode + '-' + @cVASCodeDesc
-                     ELSE IF @nLoopIndex % 8  = 5 SET @cMsg05 = @cVASCode + '-' + @cVASCodeDesc
-                     ELSE IF @nLoopIndex % 8  = 6 SET @cMsg06 = @cVASCode + '-' + @cVASCodeDesc
-                     ELSE IF @nLoopIndex % 8  = 7 SET @cMsg07 = @cVASCode + '-' + @cVASCodeDesc
-                     ELSE IF @nLoopIndex % 8  = 0 SET @cMsg08 = @cVASCode + '-' + @cVASCodeDesc
+                     IF @nLoopIndex % 7 = 1 SET @cMsg02 = @cVASCode + '-' + @cVASCodeDesc
+                     ELSE IF @nLoopIndex % 7  = 2 SET @cMsg03 = @cVASCode + '-' + @cVASCodeDesc
+                     ELSE IF @nLoopIndex % 7  = 3 SET @cMsg04 = @cVASCode + '-' + @cVASCodeDesc
+                     ELSE IF @nLoopIndex % 7  = 4 SET @cMsg05 = @cVASCode + '-' + @cVASCodeDesc
+                     ELSE IF @nLoopIndex % 7  = 5 SET @cMsg06 = @cVASCode + '-' + @cVASCodeDesc
+                     ELSE IF @nLoopIndex % 7  = 6 SET @cMsg07 = @cVASCode + '-' + @cVASCodeDesc
+                     ELSE IF @nLoopIndex % 7  = 0 SET @cMsg08 = @cVASCode + '-' + @cVASCodeDesc
 
-                     IF @cMsg01 IS NOT NULL AND TRIM(@cMsg01) <> '' AND @nLoopIndex % 8 = 0
+                     IF @cMsg02 IS NOT NULL AND TRIM(@cMsg02) <> '' AND @nLoopIndex % 7 = 0
                      BEGIN
+                        SET @cMsg01 = @cOrderInfo03
                         EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo, @cErrMsg, 
                               @cMsg01, 
                               @cMsg02, 
@@ -205,8 +231,9 @@ BEGIN
                   CLOSE CUR_PPA 
                   DEALLOCATE CUR_PPA 
 
-                  IF @cMsg01 IS NOT NULL AND TRIM(@cMsg01) <> ''
+                  IF @cMsg02 IS NOT NULL AND TRIM(@cMsg02) <> ''
                   BEGIN
+                     SET @cMsg01 = @cOrderInfo03
                      SET @cMsg10 = 'Press ESC Continue'
                      EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo, @cErrMsg, 
                            @cMsg01, 
@@ -232,14 +259,19 @@ BEGIN
 
                   --1. Print price labels and catelogy labels
                   --Price Labels
-                  INSERT INTO @tLabels(WorkOrderKey, WorkOrderLineNumber, LabelListName, VASCode, LabelName, Qty, PrintSequence)
-                  SELECT DISTINCT wod.WorkOrderKey, wod.WorkOrderLineNumber, IIF(lk1.LISTNAME IS NULL, lk.LISTNAME, lk1.LISTNAME), wod.Type, IIF(lk1.LISTNAME IS NULL, lk.UDF01, lk1.UDF01), pkd.Qty, '00001'
-                  FROM dbo.WorkOrderDetail wod WITH(NOLOCK)
+                  INSERT INTO @tLabels(LabelListName, VASCode, LabelName, Qty, PrintSequence)
+                  SELECT DISTINCT IIF(wodEX.LISTNAME IS NULL, lk.LISTNAME, wodEX.LISTNAME), wod.type, IIF(wodEX.UDF01 IS NULL, lk.UDF01, wodEX.UDF01), pkd.Qty, '00001'
+                  FROM dbo.WorkOrderDetail wod  WITH(NOLOCK)
                   INNER JOIN dbo.WorkOrder wo WITH(NOLOCK) ON wo.WorkOrderKey = wod.WorkOrderKey
                   INNER JOIN dbo.CODELKUP lk WITH(NOLOCK) ON wo.StorerKey = lk.StorerKey AND wod.Type = lk.Code AND lk.LISTNAME = 'WKORDTYPE' AND lk.UDF04 = 'LVSPRICELB'
                   INNER JOIN dbo.PickDetail pkd WITH(NOLOCK) ON wo.StorerKey = pkd.StorerKey AND ISNULL(wod.ExternWorkOrderKey, '') = pkd.OrderKey AND pkd.OrderLinenumber = wod.ExternLineNo
-                  LEFT JOIN dbo.WorkOrderDetail wod1 WITH(NOLOCK) ON ISNULL(wod.ExternWorkOrderKey, '') = ISNULL(wod1.ExternWorkOrderKey, '') AND ISNULL(wod1.ExternLineNo, '') = ''
-                  LEFT JOIN dbo.CODELKUP lk1 WITH(NOLOCK) ON lk.StorerKey = lk1.StorerKey AND lk1.Code2 = wod1.Type AND lk.UDF04 = lk1.LISTNAME 
+                  LEFT JOIN (SELECT DISTINCT lk1.LISTNAME, wod1.StorerKey, lk1.Code, Lk1.code2, lk1.UDF01 FROM dbo.WorkOrderDetail wod1 WITH(NOLOCK) 
+                           INNER JOIN dbo.PickDetail pkd1 WITH(NOLOCK) ON wod1.StorerKey = pkd1.StorerKey AND ISNULL(wod1.ExternWorkOrderKey, '') = pkd1.OrderKey
+                           INNER JOIN dbo.CODELKUP lk1 WITH(NOLOCK) ON wod1.StorerKey = lk1.StorerKey AND lk1.LISTNAME = 'LVSPRICELB' AND wod1.Type = lk1.code2
+                           WHERE wod1.StorerKey = @cStorerKey
+                              AND wod1.ExternLineNo = ''
+                              AND ISNULL(pkd1.CaseID, '') = @cDropID) AS wodEX
+                     ON wod.StorerKey = wodEX.StorerKey AND lk.Code = wodEX.Code
                   WHERE wo.StorerKey = @cStorerKey
                      AND pkd.Sku = @cSKU
                      AND ISNULL(pkd.CaseID, '') = @cDropID
@@ -259,11 +291,6 @@ BEGIN
                      AND ISNULL(pkd.CaseID, '') = @cDropID
                      AND wod.ExternLineNo <> ''
                   ORDER BY lk.Code ASC
-
-                  SELECT @cPickSlipNo = PickSlipNo
-                  FROM dbo.PackDetail WITH(NOLOCK) 
-                  WHERE StorerKey = @cStorerKey 
-                     AND labelno = @cDropID
 
                   DECLARE @tPriceLabelList   VariableTable
                   DECLARE @tcatelogLabelList   VariableTable
@@ -366,6 +393,16 @@ BEGIN
                WHERE StorerKey = @cStorerKey
                   AND DropID = @cDropID
 
+               DECLARE @cOrderGroup NVARCHAR(20) = ''
+
+               SELECT TOP 1 @cOrderGroup = orm.OrderGroup,
+                  @cShipperKey = ISNULL(ShipperKey, '')
+               FROM dbo.PICKDETAIL pkd WITH(NOLOCK)
+               INNER JOIN dbo.ORDERS orm WITH(NOLOCK) ON pkd.StorerKey = orm.StorerKey AND pkd.OrderKey = orm.OrderKey
+               WHERE pkd.StorerKey = @cStorerKey
+                  AND ISNULL(pkd.CaseID, '') = @cDropID
+               ORDER BY orm.OrderKey
+
                SET @nTranCount = @@TRANCOUNT  
                IF @nTranCount = 0
                   BEGIN TRANSACTION
@@ -382,15 +419,33 @@ BEGIN
 
                   --Carton audit finished
                   --1. Mark PackInfo as PACKED
-                  --2. If all Packedinfo are marked as PACKED, mark PackHeader as 9
-                  --3. Insert transmitlog2
+                  --2. Calculate carton weight
+                  --3. If all Packedinfo are marked as PACKED, mark PackHeader as 9
+                  --4. Insert transmitlog2
                   IF @nTotalPQty = @nTotalCQty
                   BEGIN
                      --Mark PackInfo as PACKED
                      UPDATE dbo.PackInfo WITH(ROWLOCK)
                      SET CartonStatus = 'PACKED'
                      WHERE PickSlipNo = @cPickSlipNo
-                        AND ISNULL(UccNo, '') = @cDropID
+                        AND ISNULL(RefNo, '') = @cDropID
+
+                     --Calculate carton weight
+                     SELECT @fCartonWeight = InvWeight + CartonWeight
+                     FROM
+                        (SELECT CART.CartonWeight, SUM(PKD.qty * SKU.StdGrossWgt) AS InvWeight
+                        FROM dbo.CARTONIZATION CART WITH(NOLOCK)
+                        INNER JOIN dbo.PackInfo PKI WITH(NOLOCK) ON CART.CartonType = ISNULL(PKI.CartonType, '')
+                        INNER JOIN dbo.PickDetail PKD WITH(NOLOCK) ON ISNULL(PKI.RefNo, '') = ISNULL(PKD.CaseID, '-1') 
+                        INNER JOIN dbo.SKU SKU WITH(NOLOCK) ON PKD.StorerKey = SKU.StorerKey AND PKD.Sku = SKU.Sku
+                        WHERE PKI.PickSlipNo = @cPickSlipNo
+                           AND PKD.StorerKey = @cStorerKey
+                           AND PKD.Status = @cPickConfirmStatus
+                        GROUP BY CART.CartonWeight) AS t
+
+                     UPDATE dbo.PackInfo WITH(ROWLOCK) 
+                     SET Weight = @fCartonWeight
+                     WHERE PickSlipNo = @cPickSlipNo
 
                      --If all Packedinfo are marked as PACKED, mark PackHeader as 9
                      IF (SELECT COUNT(1) FROM dbo.PackInfo WITH(NOLOCK) WHERE PickSlipNo = @cPickSlipNo)
@@ -402,45 +457,50 @@ BEGIN
                         WHERE PickSlipNo = @cPickSlipNo
                      END
 
-                     -- Insert transmitlog2 here
-                     EXECUTE ispGenTransmitLog2
-                        @c_TableName      = 'WSSOECL',
-                        @c_Key1           = @cDropID,
-                        @c_Key2           = @cDropID,
-                        @c_Key3           = @cStorerkey,
-                        @c_TransmitBatch  = '',
-                        @b_Success        = @bSuccess   OUTPUT,
-                        @n_err            = @nErrNo     OUTPUT,
-                        @c_errmsg         = @cErrMsg    OUTPUT
-
-                     IF @bSuccess <> 1
+                     IF TRIM(@cShipperKey) <> ''
+                        AND EXISTS(SELECT 1 FROM CODELKUP WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND LISTNAME = 'WSCourier' AND @cShipperKey = ISNULL(notes,'-1'))
                      BEGIN
-                        SET @nErrNo = 217801
-                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --GenTranLogFail
-                        ;THROW @nErrNo, @cErrMsg, 1
-                     END
+                        DECLARE @cTrauncatedDropID    NVARCHAR(10) = @cDropID
+                        -- Insert transmitlog2 here
+                        EXECUTE ispGenTransmitLog2
+                           @c_TableName      = 'WSSOECL',
+                           @c_Key1           = @cTrauncatedDropID,
+                           @c_Key2           = @cDropID,
+                           @c_Key3           = @cStorerkey,
+                           @c_TransmitBatch  = '',
+                           @b_Success        = @bSuccess   OUTPUT,
+                           @n_err            = @nErrNo     OUTPUT,
+                           @c_errmsg         = @cErrMsg    OUTPUT
 
-                     SELECT @cTransmitLogKey = transmitlogkey
-                     FROM dbo.TRANSMITLOG2 WITH (NOLOCK)
-                     WHERE tablename = 'WSSOECL'
-                     AND   key1 = @cDropID
-                     AND   key2 = @cDropID
-                     AND   key3 = @cStorerkey
-                     
-                     EXEC dbo.isp_QCmd_WSTransmitLogInsertAlert 
-                        @c_QCmdClass         = @c_QCmdClass, 
-                        @c_FrmTransmitlogKey = @cTransmitLogKey, 
-                        @c_ToTransmitlogKey  = @cTransmitLogKey, 
-                        @b_Debug             = @b_Debug, 
-                        @b_Success           = @bSuccess    OUTPUT, 
-                        @n_Err               = @nErrNo      OUTPUT, 
-                        @c_ErrMsg            = @cErrMsg     OUTPUT 
+                        IF @bSuccess <> 1
+                        BEGIN
+                           SET @nErrNo = 217801
+                           SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --GenTranLogFail
+                           ;THROW @nErrNo, @cErrMsg, 1
+                        END
 
-                     IF @bSuccess <> 1
-                     BEGIN
-                        SET @nErrNo = 217802
-                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --QCmdFail
-                        ;THROW @nErrNo, @cErrMsg, 1
+                        SELECT @cTransmitLogKey = transmitlogkey
+                        FROM dbo.TRANSMITLOG2 WITH (NOLOCK)
+                        WHERE tablename = 'WSSOECL'
+                        AND   key1 = @cTrauncatedDropID
+                        AND   key2 = @cDropID
+                        AND   key3 = @cStorerkey
+                        
+                        EXEC dbo.isp_QCmd_WSTransmitLogInsertAlert 
+                           @c_QCmdClass         = @c_QCmdClass, 
+                           @c_FrmTransmitlogKey = @cTransmitLogKey, 
+                           @c_ToTransmitlogKey  = @cTransmitLogKey, 
+                           @b_Debug             = @b_Debug, 
+                           @b_Success           = @bSuccess    OUTPUT, 
+                           @n_Err               = @nErrNo      OUTPUT, 
+                           @c_ErrMsg            = @cErrMsg     OUTPUT 
+
+                        IF @bSuccess <> 1
+                        BEGIN
+                           SET @nErrNo = 217802
+                           SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --QCmdFail
+                           ;THROW @nErrNo, @cErrMsg, 1
+                        END
                      END
                   END
 
@@ -487,7 +547,9 @@ BEGIN
                   @cCustLblPrintSequence     NVARCHAR(10),
                   @cDefaultLblPrintSequence  NVARCHAR(10),
                   @cCustLabelName            NVARCHAR(30),
-                  @cDefaultLabelName         NVARCHAR(30)
+                  @cDefaultLabelName         NVARCHAR(30),
+                  @cCustLabelDataDesc        NVARCHAR(30),
+                  @cCustomCode               NVARCHAR(30)
                   
 
                SELECT @cPickSlipNo = PickSlipNo
@@ -501,8 +563,25 @@ BEGIN
                      ( '@cPickSlipNo', @cPickSlipNo),
                      ( '@cLabelNo', @cDropID)
 
+               DECLARE @tDefaultLabels TABLE
+               (
+                  id             INT IDENTITY(1,1),
+                  code2          NVARCHAR(30),
+                  UDF01          NVARCHAR(30),
+                  Short          NVARCHAR(10)
+               )
+
+               INSERT INTO @tDefaultLabels (code2, UDF01, Short)
+               SELECT code2, UDF01, Short
+               FROM dbo.CODELKUP WITH(NOLOCK) 
+               WHERE StorerKey = @cStorerKey
+                  AND LISTNAME = 'LVSCARTLBL'
+                  AND ISNULL(Long, '') = 'A'
+               ORDER BY ISNULL(Short, '99999')
+
                SELECT TOP 1 @cConsigneeKey = orm.ConsigneeKey,
-                  @cBillToKey = orm.BillToKey
+                  @cBillToKey = orm.BillToKey,
+                  @cOrderGroup = orm.OrderGroup
                FROM dbo.PickDetail pkd WITH(NOLOCK)
                INNER JOIN dbo.ORDERS orm WITH(NOLOCK) ON pkd.StorerKey = orm.StorerKey AND pkd.OrderKey = orm.OrderKey
                WHERE pkd.StorerKey = @cStorerKey
@@ -527,33 +606,29 @@ BEGIN
                         AND lk1.code2 = @cBillToKey)
                BEGIN
                   DECLARE CUR_CARTONLABEL CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-                     SELECT CustLabels.UDF01 AS CustLabelType, DefaultLabels.UDF01 AS DefaultLabelType, ISNULL(CustLabels.Short, '99999') AS CustSequence, ISNULL(DefaultLabels.Short, '99999') AS DefaultSequence FROM
-                        (SELECT StorerKey, Description, ISNULL(Long, '') AS Long FROM dbo.CODELKUP WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND LISTNAME = 'LVSCUSPREF'  AND code2 = @cConsigneeKey) AS CustLabelData
+                     SELECT CustLabelData.Description, CustLabels.UDF01 AS CustLabelType, ISNULL(CustLabels.Short, '99999') AS CustSequence, CustLabelData.Long
+                     FROM (SELECT StorerKey, Description, ISNULL(Long, '') AS Long FROM dbo.CODELKUP WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND LISTNAME = 'LVSCUSPREF'  AND code2 = @cConsigneeKey) AS CustLabelData
                      LEFT JOIN (SELECT StorerKey, code2, Code, UDF01, Short FROM dbo.CODELKUP WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND LISTNAME = 'LVSCARTLBL'  AND ISNULL(Long, '') <> 'A') AS CustLabels 
                         ON CustLabelData.StorerKey = CustLabels.StorerKey AND CustLabelData.Description = CustLabels.code2 AND CustLabelData.Long = CustLabels.Code
-                     LEFT JOIN (SELECT StorerKey, code2, Code, UDF01, Short FROM dbo.CODELKUP WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND LISTNAME = 'LVSCARTLBL'  AND ISNULL(Long, '') = 'A') AS DefaultLabels 
-                        ON CustLabelData.StorerKey = DefaultLabels.StorerKey AND CustLabelData.Description = DefaultLabels.Code2
-                     ORDER BY ISNULL(CustLabels.Short, '99999'), ISNULL(DefaultLabels.Short, '99999')
+                     ORDER BY ISNULL(CustLabels.Short, '99999')
                END
                ELSE 
                   DECLARE CUR_CARTONLABEL CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-                     SELECT CustLabels.UDF01 AS CustLabelType, DefaultLabels.UDF01 AS DefaultLabelType, ISNULL(CustLabels.Short, '99999') AS CustSequence, ISNULL(DefaultLabels.Short, '99999') AS DefaultSequence FROM
-                        (SELECT StorerKey, Description, ISNULL(Long, '') AS Long FROM dbo.CODELKUP WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND LISTNAME = 'LVSCUSPREF' AND (code2 = @cConsigneeKey OR code2 = @cBillToKey) ) AS CustLabelData
-                     LEFT JOIN (SELECT StorerKey, code2, Code, UDF01, Short FROM dbo.CODELKUP WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND LISTNAME = 'LVSCARTLBL' AND ISNULL(Long, '') <> 'A') AS CustLabels 
+                     SELECT CustLabelData.Description, CustLabels.UDF01 AS CustLabelType, ISNULL(CustLabels.Short, '99999') AS CustSequence, CustLabelData.Long
+                     FROM (SELECT StorerKey, Description, ISNULL(Long, '') AS Long FROM dbo.CODELKUP WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND LISTNAME = 'LVSCUSPREF'  AND (code2 = @cConsigneeKey OR code2 = @cBillToKey)) AS CustLabelData
+                     LEFT JOIN (SELECT StorerKey, code2, Code, UDF01, Short FROM dbo.CODELKUP WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND LISTNAME = 'LVSCARTLBL'  AND ISNULL(Long, '') <> 'A') AS CustLabels 
                         ON CustLabelData.StorerKey = CustLabels.StorerKey AND CustLabelData.Description = CustLabels.code2 AND CustLabelData.Long = CustLabels.Code
-                     LEFT JOIN (SELECT StorerKey, code2, Code, UDF01, Short FROM dbo.CODELKUP WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND LISTNAME = 'LVSCARTLBL' AND ISNULL(Long, '') = 'A') AS DefaultLabels 
-                        ON CustLabelData.StorerKey = DefaultLabels.StorerKey AND CustLabelData.Description = DefaultLabels.Code2
-                     ORDER BY ISNULL(CustLabels.Short, '99999'), ISNULL(DefaultLabels.Short, '99999')
+                     ORDER BY ISNULL(CustLabels.Short, '99999')
 
                OPEN CUR_CARTONLABEL 
-               FETCH NEXT FROM CUR_CARTONLABEL INTO @cCustLabelName, @cDefaultLabelName, @cCustLblPrintSequence, @cDefaultLblPrintSequence
+               FETCH NEXT FROM CUR_CARTONLABEL INTO @cCustLabelDataDesc, @cCustLabelName, @cCustLblPrintSequence,@cCustomCode
 
                WHILE @@FETCH_STATUS = 0 
                BEGIN
-                  SET @cLabelName = IIF( @cCustLabelName IS NULL OR TRIM(@cCustLabelName) = '', @cDefaultLabelName, @cCustLabelName)
-
-                  IF @cLabelName IS NOT NULL AND TRIM(@cLabelName) <> ''
+                  IF @cCustLabelName IS NOT NULL AND TRIM(@cCustLabelName) <> ''
                   BEGIN
+                     DELETE FROM @tDefaultLabels WHERE code2 = @cCustLabelDataDesc
+                     SET @cLabelName = @cCustLabelName
                      -- Print label
                      EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cLabelPrinterGroup, @cPaperPrinter,
                         @cLabelName, -- Report type
@@ -570,10 +645,43 @@ BEGIN
                         GOTO Quit
                      END
                   END
-                  FETCH NEXT FROM CUR_CARTONLABEL INTO @cCustLabelName, @cDefaultLabelName, @cCustLblPrintSequence, @cDefaultLblPrintSequence
+                  ELSE IF @cCustomCode = 'UNO'
+                  BEGIN
+                     DELETE FROM @tDefaultLabels WHERE code2 = @cCustLabelDataDesc
+                  END
+                  FETCH NEXT FROM CUR_CARTONLABEL INTO @cCustLabelDataDesc, @cCustLabelName, @cCustLblPrintSequence,@cCustomCode
                END
                CLOSE CUR_CARTONLABEL 
                DEALLOCATE CUR_CARTONLABEL 
+
+               --Print Default Labels
+               SET @nLoopIndex = -1
+               WHILE 1 = 1
+               --AND @cOrderGroup = '10'
+               BEGIN
+                  SELECT TOP 1 
+                     @cLabelName = UDF01,
+                     @nLoopIndex = id
+                  FROM @tDefaultLabels
+                     WHERE id > @nLoopIndex
+                  ORDER BY id
+
+                  IF @@ROWCOUNT = 0
+                     BREAK
+
+                  -- Print label
+                  EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cLabelPrinterGroup, @cPaperPrinter,
+                     @cLabelName, -- Report type
+                     @tCartonLabelList, -- Report params
+                     'rdt_855ExtUpd13',
+                     @nErrNo  OUTPUT,
+                     @cErrMsg OUTPUT
+                     
+                  IF @nErrNo <> 0
+                  BEGIN
+                     GOTO Quit
+                  END
+               END
             END
          END
       END

@@ -89,19 +89,22 @@ BEGIN
 
    SET @cOption = @cInField02
 
+   SELECT @cPalletKey = Value FROM @tExtScnData WHERE Variable = '@cPalletKey'
+   SELECT @cLane = Value FROM @tExtScnData WHERE Variable = '@cLane'
+
    IF @nFunc = 1653
    BEGIN
       IF @nStep = 1
       BEGIN
-         IF @cOption <> '1' AND @nInputKey = 1
+         IF ISNULL(@cOption,'') <> '1' AND @nInputKey = 1
          BEGIN
 
             SET @cFieldAttr05 = ''
             --FCR-539 Pallet Found, loc uneditable
-            IF @cPalletKey <> 'NEW PALLET' AND @cPalletKey <> ''
-               BEGIN
-                  SET @cFieldAttr05 = 'O'
-               END
+            IF @cPalletKey <> 'NEW PALLET' AND ISNULL(@cPalletKey,'') <> ''
+            BEGIN
+               SET @cFieldAttr05 = 'O'
+            END
             ELSE
                --FCR-539 Pallet not Found, loc found, uneditable
                BEGIN
@@ -115,8 +118,8 @@ BEGIN
 
             SET @cInField05 = @cLane
             SET @cOutField05 = @cLane
-            SET @nStep = 99
-            SET @nScn = 5807
+            SET @nAfterStep = 99
+            SET @nAfterScn = 5807
             GOTO Quit
          END
       END

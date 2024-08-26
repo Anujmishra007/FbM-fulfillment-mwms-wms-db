@@ -24,6 +24,7 @@ GO
 /* 2024-05-21 1.4  Dennis   FCR-336 Check Digit                              */
 /* 2024-05-31 1.5  Cuize    UWP-20116 Add storerKey in WHERE condition       */
 /* 2024-07-17 1.6  NLT013   FCR-574 Add Extended Screen SP                   */
+/* 2024-08-22 1.7  JHU151   UWP-23409 incorrect mapping of LPN to MBOL       */
 /*****************************************************************************/
 
 CREATE PROC [RDT].[rdtfnc_Scan_Pallet_To_Door](
@@ -329,6 +330,7 @@ BEGIN
 
       SET @cLoadkey = ''
       SET @cOrderkey = ''
+      SET @cMBOLKey = ''
 
       SELECT TOP 1 @cLoadkey = OD.LoadKey, @cOrderkey = OD.OrderKey
       FROM dbo.PickDetail PD WITH (NOLOCK)

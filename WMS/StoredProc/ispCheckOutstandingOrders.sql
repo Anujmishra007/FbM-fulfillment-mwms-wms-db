@@ -75,6 +75,8 @@ DECLARE @c_facility        NVARCHAR(5),
 @c_SkuGroupParm    NVARCHAR(125),
 @c_ExcludeQtyPicked NVARCHAR(1)  --NJOW02
 , @c_GenCCdetailbyExcludePKDStatus3 NVARCHAR(1)
+, @c_PickDetailJoinQuery NVARCHAR(255) = ''
+, @c_PickDetailQtyAddQuery NVARCHAR(255) = ''
 --(Wan01) - START
 , @c_Extendedparm1Field      NVARCHAR(50)
 , @c_ExtendedParm1DataType   NVARCHAR(20)
@@ -221,8 +223,12 @@ SELECT @n_continue = 1, @b_debug = 0
             RAISERROR('Error Executing nspGetRight', 16, 1)
             RETURN
         END
-    IF @c_GenCCdetailbyExcludePKDStatus3='1'
-        SET @c_GenCCdetailbyExcludePKDStatus3 = 'Y'
+    IF @c_GenCCdetailbyExcludePKDStatus3 = '1'
+        BEGIN
+            SET @c_GenCCdetailbyExcludePKDStatus3 = 'Y'
+            SET @c_PickDetailJoinQuery = 'LEFT JOIN PICKDETAIL WITH (NOLOCK) ON PICKDETAIL.Lot = LOTxLOCxID.Lot and PICKDETAIL.Loc = LOTxLOCxID.Loc and PICKDETAIL.ID = LOTxLOCxID.Id '
+            SET @c_PickDetailQtyAddQuery = ' + CASE WHEN PICKDETAIL.Status=''3'' THEN PICKDETAIL.Qty ELSE 0 END '
+        END
     ELSE
         SET @c_GenCCdetailbyExcludePKDStatus3 = 'N'
 
@@ -408,13 +414,9 @@ SELECT @n_continue = 1, @b_debug = 0
                     --(Wan02) - START
                     --SELECT @c_ExcludePickedSQL = CASE WHEN @c_ExcludeQtyPicked = 'Y' THEN 'AND LOTxLOCxID.QtyAllocated > 0 ' ELSE 'AND LOTxLOCxID.QtyAllocated + QtyPicked > 0 ' END  --NJOW02
 
-                    SET @c_ExcludePickedSQL = CASE WHEN @c_ExcludeQtyAllocated = 'N' AND @c_ExcludeQtyPicked = 'N' THEN 'AND LOTxLOCxID.Qtyallocated + LOTxLOCxID.Qtypicked ' +
-                                                                                                                        CASE WHEN @c_GenCCdetailbyExcludePKDStatus3 = 'Y' THEN ' + CASE WHEN PICKDETAIL.Status=''3'' THEN PICKDETAIL.Qty ELSE 0 END' ELSE '' END +
-                                                                                                                        ' > 0 '
+                    SET @c_ExcludePickedSQL = CASE WHEN @c_ExcludeQtyAllocated = 'N' AND @c_ExcludeQtyPicked = 'N' THEN 'AND LOTxLOCxID.Qtyallocated + LOTxLOCxID.Qtypicked ' + @c_PickDetailQtyAddQuery + ' > 0 '
                                                    WHEN @c_ExcludeQtyAllocated = 'N' AND @c_ExcludeQtyPicked = 'Y' THEN 'AND LOTxLOCxID.Qtyallocated > 0 '
-                                                   WHEN @c_ExcludeQtyAllocated = 'Y' AND @c_ExcludeQtyPicked = 'N' THEN 'AND LOTxLOCxID.QtyPicked ' +
-                                                                                                                        CASE WHEN @c_GenCCdetailbyExcludePKDStatus3 = 'Y' THEN ' + CASE WHEN PICKDETAIL.Status=''3'' THEN PICKDETAIL.Qty ELSE 0 END' ELSE '' END +
-                                                                                                                        ' > 0 '
+                                                   WHEN @c_ExcludeQtyAllocated = 'Y' AND @c_ExcludeQtyPicked = 'N' THEN 'AND LOTxLOCxID.QtyPicked ' + @c_PickDetailQtyAddQuery + ' > 0 '
                                                    WHEN @c_ExcludeQtyAllocated = 'Y' AND @c_ExcludeQtyPicked = 'Y' THEN 'AND 1 = 2 '                    -- (Wan03) - 18-JUL-2016 Fixed
                         END
                     --(Wan02) - END
@@ -422,12 +424,11 @@ SELECT @n_continue = 1, @b_debug = 0
                         BEGIN
                             --NJOW03
                             EXEC ( 'SELECT Count(*) '
-                                + 'FROM LOC (NOLOCK), LOTxLOCxID (NOLOCK), SKU (NOLOCK), LOTATTRIBUTE (NOLOCK), PICKDETAIL (NOLOCK) '   --(Wan01)
-                                + 'WHERE LOC.LOC = LOTxLOCxID.LOC '
-                                + 'AND LOTxLOCxID.StorerKey = SKU.StorerKey '
-                                + 'AND LOTxLOCxID.SKU = SKU.SKU '
-                                + 'AND LOTxLOCxID.Lot = LOTATTRIBUTE.Lot '                                         --(Wan01)
-                                + 'AND PICKDETAIL.Lot = LOTxLOCxID.Lot and PICKDETAIL.Loc = LOTxLOCxID.Loc and PICKDETAIL.ID = LOTxLOCxID.Id '
+                                + 'FROM LOC WITH (NOLOCK) '
+                                + 'JOIN LOTxLOCxID WITH (NOLOCK) ON LOTxLOCxID.LOC = LOC.LOC '
+                                + 'JOIN SKU WITH (NOLOCK) ON SKU.Storerkey = LOTxLOCxID.Storerkey AND SKU.SKU = LOTxLOCxID.SKU '
+                                + 'JOIN LOTATTRIBUTE WITH (NOLOCK) ON LOTATTRIBUTE.Lot = LOTxLOCxID.Lot '             --(Wan01)
+                                +  @c_PickDetailJoinQuery
                                 +  @c_StorerSQL + ' ' + @c_StorerSQL2 + ' '
                                 --+ 'AND LOTxLOCxID.QtyAllocated + QtyPicked > 0 '
                                 + @c_ExcludePickedSQL + ' '
@@ -448,12 +449,11 @@ SELECT @n_continue = 1, @b_debug = 0
                     ELSE
                         BEGIN
                             EXEC ( 'SELECT Count(*) '
-                                + 'FROM LOC (NOLOCK), LOTxLOCxID (NOLOCK), SKU (NOLOCK), LOTATTRIBUTE (NOLOCK), PICKDETAIL(NOLOCK) '   --(Wan01)
-                                + 'WHERE LOC.LOC = LOTxLOCxID.LOC '
-                                + 'AND LOTxLOCxID.StorerKey = SKU.StorerKey '
-                                + 'AND LOTxLOCxID.SKU = SKU.SKU '
-                                + 'AND LOTxLOCxID.Lot = LOTATTRIBUTE.Lot '                                         --(Wan01)
-                                + 'AND PICKDETAIL.Lot = LOTxLOCxID.Lot and PICKDETAIL.Loc = LOTxLOCxID.Loc and PICKDETAIL.ID = LOTxLOCxID.Id '                                        --(Wan01)
+                                + 'FROM LOC WITH (NOLOCK) '
+                                + 'JOIN LOTxLOCxID WITH (NOLOCK) ON LOTxLOCxID.LOC = LOC.LOC '
+                                + 'JOIN SKU WITH (NOLOCK) ON SKU.Storerkey = LOTxLOCxID.Storerkey AND SKU.SKU = LOTxLOCxID.SKU '
+                                + 'JOIN LOTATTRIBUTE WITH (NOLOCK) ON LOTATTRIBUTE.Lot = LOTxLOCxID.Lot '             --(Wan01)
+                                +  @c_PickDetailJoinQuery                                      --(Wan01)
                                 +  @c_StorerSQL + ' ' + @c_StorerSQL2 + ' '
                                 --+ 'AND LOTxLOCxID.QtyAllocated + QtyPicked > 0 '
                                 + @c_ExcludePickedSQL + ' '
@@ -488,7 +488,7 @@ SELECT @n_continue = 1, @b_debug = 0
                         + 'JOIN LOTxLOCxID WITH (NOLOCK) ON LOTxLOCxID.LOC = LOC.LOC '
                         + 'JOIN SKU WITH (NOLOCK) ON SKU.Storerkey = LOTxLOCxID.Storerkey AND SKU.SKU = LOTxLOCxID.SKU '
                         + 'JOIN LOTATTRIBUTE WITH (NOLOCK) ON LOTATTRIBUTE.Lot = LOTxLOCxID.Lot '             --(Wan01)
-                        + 'JOIN PICKDETAIL WITH (NOLOCK) ON PICKDETAIL.Lot = LOTxLOCxID.Lot and PICKDETAIL.Loc = LOTxLOCxID.Loc and PICKDETAIL.ID = LOTxLOCxID.Id '             --(Wan01)
+                        +  @c_PickDetailJoinQuery
 
                     --(Wan05) - START
                     SET @c_sql = @c_sql + @c_StocktakeParm2SQL
@@ -618,13 +618,9 @@ SELECT @n_continue = 1, @b_debug = 0
 
                     --SELECT @c_ExcludePickedSQL = CASE WHEN @c_ExcludeQtyPicked = 'Y' THEN 'AND LOTxLOCxID.QtyAllocated > 0 ' ELSE 'AND LOTxLOCxID.QtyAllocated + QtyPicked > 0 ' END  --NJOW02
                     --(Wan02) - START
-                    SET @c_ExcludePickedSQL = CASE WHEN @c_ExcludeQtyAllocated = 'N' AND @c_ExcludeQtyPicked = 'N' THEN 'AND LOTxLOCxID.Qtyallocated + LOTxLOCxID.Qtypicked ' +
-                                                                                                                        CASE WHEN @c_GenCCdetailbyExcludePKDStatus3 = 'Y' THEN ' + CASE WHEN PICKDETAIL.Status=''3'' THEN PICKDETAIL.Qty ELSE 0 END' ELSE '' END +
-                                                                                                                        ' > 0 '
+                    SET @c_ExcludePickedSQL = CASE WHEN @c_ExcludeQtyAllocated = 'N' AND @c_ExcludeQtyPicked = 'N' THEN 'AND LOTxLOCxID.Qtyallocated + LOTxLOCxID.Qtypicked ' + @c_PickDetailQtyAddQuery + ' > 0 '
                                                    WHEN @c_ExcludeQtyAllocated = 'N' AND @c_ExcludeQtyPicked = 'Y' THEN 'AND LOTxLOCxID.Qtyallocated > 0 '
-                                                   WHEN @c_ExcludeQtyAllocated = 'Y' AND @c_ExcludeQtyPicked = 'N' THEN 'AND LOTxLOCxID.QtyPicked ' +
-                                                                                                                        CASE WHEN @c_GenCCdetailbyExcludePKDStatus3 = 'Y' THEN ' + CASE WHEN PICKDETAIL.Status=''3'' THEN PICKDETAIL.Qty ELSE 0 END' ELSE '' END +
-                                                                                                                        ' > 0 '
+                                                   WHEN @c_ExcludeQtyAllocated = 'Y' AND @c_ExcludeQtyPicked = 'N' THEN 'AND LOTxLOCxID.QtyPicked ' + @c_PickDetailQtyAddQuery + ' > 0 '
                                                    WHEN @c_ExcludeQtyAllocated = 'Y' AND @c_ExcludeQtyPicked = 'Y' THEN 'AND 1 = 2 '                    -- (Wan03) - 18-JUL-2016 Fixed
                         END
                     --(Wan02) - END

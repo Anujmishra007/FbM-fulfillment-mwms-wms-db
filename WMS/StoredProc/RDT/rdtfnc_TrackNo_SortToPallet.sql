@@ -97,8 +97,9 @@ DECLARE
    @cSuggPalletKey      NVARCHAR( 20),  
    @cMBOLKey            NVARCHAR( 10),  
    @cLoadKey            NVARCHAR( 10),  
-   @cPalletCloseStatus  NVARCHAR( 10),  
-   @cOrderInfo04        NVARCHAR( 30),  
+   @cPalletCloseStatus  NVARCHAR( 10),
+   @cPltDetailCloseStatus  NVARCHAR( 10),
+   @cOrderInfo04        NVARCHAR( 30),
    @cOption             NVARCHAR( 1),  
    @cPalletLineNumber   NVARCHAR( 5),  
    @nQty_Picked         INT,  
@@ -209,7 +210,8 @@ SELECT
    @cAllowScanToDiffPallet = V_String6,  
    @cCapturePackInfoSP     = V_String7,  
    @cChkPalletOrdStatus    = V_String8,
-  
+   @cPltDetailCloseStatus    = V_String9,
+
    @cDecodeSP              =  V_String20,  
    @cExtendedInfoSP        =  V_String21,  
    @cExtendedValidateSP    =  V_String22,  
@@ -299,12 +301,16 @@ BEGIN
   
    SET @cDecodeSP = rdt.RDTGetConfig( @nFunc, 'DecodeSP', @cStorerkey)  
    IF @cDecodeSP IN ('0', '')  
-      SET @cDecodeSP = ''  
-  
-   SET @cPalletCloseStatus = rdt.RDTGetConfig( @nFunc, 'PalletCloseStatus', @cStorerkey)  
-   IF @cPalletCloseStatus = '0'  
-      SET @cPalletCloseStatus = '9'  
-  
+      SET @cDecodeSP = ''
+
+   SET @cPalletCloseStatus = rdt.RDTGetConfig( @nFunc, 'PalletCloseStatus', @cStorerkey)
+   IF @cPalletCloseStatus = '0'
+      SET @cPalletCloseStatus = '9'
+
+   SET @cPltDetailCloseStatus = rdt.RDTGetConfig( @nFunc, 'PltDetailCloseStatus', @cStorerkey)
+   IF @cPltDetailCloseStatus = '0'
+      SET @cPltDetailCloseStatus = '9'
+
    SET @cPalletNotAllowMixShipperKey = rdt.RDTGetConfig( @nFunc, 'PalletNotAllowMixShipperKey', @cStorerkey)  
   
    SET @cAllowScanToDiffPallet = rdt.RDTGetConfig( @nFunc, 'AllowScanToDiffPallet', @cStorerkey)  
@@ -450,9 +456,9 @@ BEGIN
                SELECT TOP 1 @cOrderKey = PH.OrderKey
                FROM dbo.PackDetail PD WITH (NOLOCK)  
                JOIN dbo.PackHeader PH WITH (NOLOCK) ON ( PD.PickSlipNo = PH.PickSlipNo)  
-               WHERE PD.StorerKey = @cStorerKey  
-               AND   ( PD.LabelNo = @cLabelNo OR PD.LabelNo = @cBarcode)
-               ORDER BY 1  
+               WHERE PD.StorerKey = @cStorerKey
+                 AND   PD.LabelNo = @cLabelNo
+               ORDER BY 1
   
                SET @cTrackNo = @cInTrackNo  
             END  
@@ -486,9 +492,9 @@ BEGIN
                      WHERE StorerKey = @cStorerKey  
                      AND   UserDefine02 = @cTrackNo)  
          BEGIN  
-            SET @nErrNo = 189817  
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --TrackNo In Use  
-            GOTO Step_TrackNo_Fail  
+            SET @nErrNo = 189817
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --TrackNo In Use
+            GOTO Step_TrackNo_Fail
          END  
   
          -- Extended validate  
@@ -707,6 +713,11 @@ BEGIN
    --FCR-539 extend screen
    IF @cExtendedScreenSP <> ''
    BEGIN
+      IF @nInputKey = 1 AND @cOption = ''--YES
+      BEGIN
+         SET @nStep = 1
+      END
+
       GOTO Step_ExtScn
    END
   
@@ -1620,7 +1631,7 @@ BEGIN
          SET @nErrNo = 0  
   
          UPDATE dbo.PalletDetail SET  
-            [Status] = '9',  
+            [Status] = @cPltDetailCloseStatus,
             EditDate = GETDATE(),  
             EditWho = SUSER_SNAME()  
        WHERE PalletKey = @cPalletKey  
@@ -1686,7 +1697,7 @@ BEGIN
          GOTO Quit_UpdatePltDim  
   
          RollBackTran_UpdatePltDim:  
-            ROLLBACK TRAN rdt_UpdateMbol -- Only rollback change made here  
+            ROLLBACK TRAN rdt_UpdatePltDim -- Only rollback change made here
          Quit_UpdatePltDim:  
             WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started  
                COMMIT TRAN  
@@ -2318,7 +2329,7 @@ BEGIN
       SET @nErrNo = 0  
   
       UPDATE dbo.PalletDetail SET  
-         [Status] = '9',  
+         [Status] = @cPltDetailCloseStatus,
          EditDate = GETDATE(),  
          EditWho = SUSER_SNAME()  
       WHERE PalletKey = @cPalletKey  
@@ -2696,6 +2707,11 @@ BEGIN
       IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
       BEGIN
 
+         DELETE FROM @tExtScnData
+         INSERT INTO @tExtScnData (Variable, Value) VALUES
+             ('@cPalletKey',@cPalletKey),
+             ('@cLane', @cLane)
+
          EXECUTE [RDT].[rdt_ExtScnEntry]
                  @cExtendedScreenSP,
                  @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorerKey, @tExtScnData ,
@@ -2771,7 +2787,8 @@ BEGIN
       V_String6   = @cAllowScanToDiffPallet,  
       V_String7   = @cCapturePackInfoSP,  
       V_String8   = @cChkPalletOrdStatus,  
-  
+      V_String9   = @cPltDetailCloseStatus,
+
       V_String20 = @cDecodeSP,  
       V_String21 = @cExtendedInfoSP,  
       V_String22 = @cExtendedValidateSP,  

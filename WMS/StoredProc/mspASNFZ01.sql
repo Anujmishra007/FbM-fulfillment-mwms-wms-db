@@ -31,9 +31,16 @@ GO
 /* 2024-07-15  SSA      1.0   Created.                                     */
 /* 2024-07-17  SSA01    1.1   Added OB staging location filtering while    */
 /*                            creating XDOCKSO and ADDED facility filtering*/
-/*                            while fetching details from SDOXK ASN.       */
+/*                            while fetching details from XDOCX ASN.       */
 /* 2024-07-17  SSA02    1.2   Updated @n_Batch with default value(1) while */
 /*                                                  creating orderkey      */
+/* 2024-07-17  SSA03    1.3   Updated size for the  @c_ExternReceiptkey    */
+/*                            ,added lottable03 mapping and added step for */
+/*                            XDOCK ASN allocation                         */
+/* 2024-07-17  SSA04    1.4   Added @c_ExternPOKey in orders , orderdetail */
+/*                            for ASN auto allocation,substring            */
+/*                            sellerrefernce value to pass 15 characters   */
+/*                            to storre into BillToKey                     */
 /***************************************************************************/
 CREATE OR ALTER   PROC [dbo].[mspASNFZ01]
 (     @c_Receiptkey  NVARCHAR(10)
@@ -72,13 +79,14 @@ BEGIN
          , @c_Lottable08         NVARCHAR(30)   = ''
          , @c_Lottable11         NVARCHAR(30)   = ''
          , @c_TariffKey          NVARCHAR(10)   = ''
-         , @n_UnitPrice          FLOAT          = 0.00
+         , @c_Lottable03         NVARCHAR(18)   = ''
          , @c_POKey              NVARCHAR(10)   = ''
          , @c_POLineNumber       NVARCHAR(10)   = ''
-         , @c_ExternReceiptkey   NVARCHAR(10)   = ''
-         , @c_Consigneekey       NVARCHAR(10)  = ''
+         , @c_ExternReceiptkey   NVARCHAR(50)   = ''           --(SSA03)
+         , @c_Consigneekey       NVARCHAR(15)  = ''            --(SSA03)
          , @c_DeliveryDate       DATETIME
          , @c_Door               NVARCHAR(10)  = ''
+         , @c_ExternPOKey        NVARCHAR(20)  = ''            --(SSA04)
          , @CUR_RECDET           CURSOR
 
    SET @b_Success= 1
@@ -233,9 +241,10 @@ BEGIN
       ,  Lottable05        DATETIME       NULL
       ,  Lottable08        NVARCHAR(30)   NULL
       ,  Lottable11        NVARCHAR(30)   NULL
-      ,  Userdefine02      NVARCHAR(10)   NULL  DEFAULT('')
+      ,  Userdefine02      NVARCHAR(18)   NULL  DEFAULT('')    --(SSA03)
       ,  UserDefine06      DATETIME       NULL
       ,  PutawayLoc        NVARCHAR(10)   NULL  DEFAULT('')
+      ,  ExternPOKey       NVARCHAR(20)   NULL  DEFAULT('')
       )
 
    SET @n_Cnt = 0
@@ -286,13 +295,14 @@ BEGIN
             ,  RD.UOM
             ,  RD.QtyReceived
             ,  RD.QtyReceived
-            ,  POD.UnitPrice
+            ,  RD.Lottable03                                   -- (SSA03)
             ,  RD.Lottable02
             ,  RD.Lottable08
             ,  RD.Lottable11
             ,  Consigneekey = ISNULL(RD.Userdefine02,'')
             ,  DeliveryDate = ISNULL(RD.UserDefine06,'1900-01-01')
             ,  Door         = ISNULL(RD.PutawayLoc  ,'')
+            ,  RD.ExternPOKey                                  --(SSA04)
          FROM  RECEIPT RH WITH (NOLOCK)
          JOIN  RECEIPTDETAIL RD WITH (NOLOCK) ON (RH.ReceiptKey = RD.ReceiptKey)
          JOIN  PODETAIL POD WITH (NOLOCK) ON (RD.Pokey = POD.Pokey)
@@ -308,8 +318,8 @@ BEGIN
          OPEN CUR_RECDET
 
          FETCH NEXT FROM CUR_RECDET INTO @c_Receiptkey, @c_POKey, @c_POLineNumber, @c_ExternReceiptkey,@c_ExternLineNo,@c_Storerkey,
-         @c_Sku, @c_Packkey, @c_UOM, @n_OriginalQty,@n_OpenQty,@n_UnitPrice,@c_Lottable02, @c_Lottable08, @c_Lottable11, @c_Consigneekey,
-         @c_DeliveryDate,@c_Door
+         @c_Sku, @c_Packkey, @c_UOM, @n_OriginalQty,@n_OpenQty,@c_Lottable03,@c_Lottable02, @c_Lottable08, @c_Lottable11, @c_Consigneekey,    -- (SSA03)
+         @c_DeliveryDate,@c_Door,@c_ExternPOKey                                                                                                --(SSA04)
 
          WHILE @@FETCH_STATUS <> -1 AND @n_continue IN(1,2)
          BEGIN
@@ -376,6 +386,7 @@ BEGIN
                ,  UserDefine02
                ,  Userdefine06
                ,  Userdefine07
+               ,  ExternPOKey
                )
                SELECT
                   @c_Orderkey
@@ -403,7 +414,7 @@ BEGIN
                ,  C_Fax2         = ''
                ,  C_Vat          = ''
                ,  Facility       = @c_Facility
-               ,  Billtokey      = PO.SellersReference
+               ,  Billtokey      = SubString(PO.SellersReference,0,15)                               --(SSA04)
                ,  B_Contact1     = PO.OtherReference
                ,  B_Company      = PO.SellerName
                ,  B_Address1     = PO.SellerAddress1
@@ -411,6 +422,7 @@ BEGIN
                ,  UserDefine02   = PO.POType
                ,  UserDefine06   = PO.PODate
                ,  Userdefine07   = PO.LoadingDate
+               ,  ExternPOKey    = @c_ExternPOKey                                                    --(SSA04)
                FROM  PO  (NOLOCK)
                WHERE PO.Pokey = @c_POKey
            END
@@ -427,20 +439,21 @@ BEGIN
             ,  UOM
             ,  OriginalQty
             ,  OpenQty
-            ,  UnitPrice
+            ,  Lottable03
             ,  Lottable02
             ,  Lottable08
             ,  Lottable11
             ,  Userdefine02
             ,  UserDefine06
             ,  PutawayLoc
+            ,  ExternPOKey                                                                                                                        -- (SSA04)
             ) values (@c_Orderkey,@c_Receiptkey, @c_POKey, @c_POLineNumber, @c_ExternReceiptkey,@c_ExternLineNo,@c_Storerkey,
-            @c_Sku, @c_Packkey, @c_UOM, @n_OriginalQty,@n_OpenQty,@n_UnitPrice,@c_Lottable02, @c_Lottable08, @c_Lottable11,
-            @c_Consigneekey,@c_DeliveryDate,@c_Door)
+            @c_Sku, @c_Packkey, @c_UOM, @n_OriginalQty,@n_OpenQty,@c_Lottable03,@c_Lottable02, @c_Lottable08, @c_Lottable11,                      -- (SSA03)
+            @c_Consigneekey,@c_DeliveryDate,@c_Door,@c_ExternPOKey)                                                                               -- (SSA04)
 
             FETCH NEXT FROM CUR_RECDET INTO @c_Receiptkey, @c_POKey, @c_POLineNumber, @c_ExternReceiptkey,@c_ExternLineNo,@c_Storerkey,
-            @c_Sku, @c_Packkey, @c_UOM, @n_OriginalQty,@n_OpenQty,@n_UnitPrice,@c_Lottable02, @c_Lottable08, @c_Lottable11, @c_Consigneekey,
-            @c_DeliveryDate,@c_Door
+            @c_Sku, @c_Packkey, @c_UOM, @n_OriginalQty,@n_OpenQty,@c_Lottable03,@c_Lottable02, @c_Lottable08, @c_Lottable11, @c_Consigneekey,     -- (SSA03)
+            @c_DeliveryDate,@c_Door,@c_ExternPOKey                                                                                                -- (SSA04)
          -- (SSA01) end ---
          END
          CLOSE CUR_RECDET
@@ -729,7 +742,8 @@ BEGIN
             ,  Lottable08
             ,  Lottable11
             ,  Tariffkey
-            ,  UnitPrice
+            ,  Lottable03                                                           -- (SSA03)
+            ,  ExternPOKey                                                          -- (SSA04)
             )
       SELECT td.Orderkey                                                            -- (SSA01)
             ,OrderLineNumber =  RIGHT('00000' + CONVERT(NVARCHAR(5),
@@ -750,11 +764,12 @@ BEGIN
             ,Tariffkey =  CASE WHEN tf.Tariffkey NOT IN ('',NULL)
                           THEN tf.Tariffkey ELSE ISNULL(s.Tariffkey,'')
                           END
-            ,td.UnitPrice
+            ,td.Lottable03                                                           -- (SSA03)
+            ,td.ExternPOKey                                                          -- (SSA04)
       FROM #TMP_ORDDTL td
       JOIN dbo.SKU s (NOLOCK) ON  td.Storerkey = s.Storerkey
                               AND td.Sku = s.Sku
-      LEFT OUTER JOIN TARIFFxFACILITY tf (NOLOCK) ON  tf.Facility = @c_Facility       -- (SSA01)
+      LEFT OUTER JOIN TARIFFxFACILITY tf (NOLOCK) ON  tf.Facility = @c_Facility       -- (SSA03)
                                                   AND td.Storerkey = tf.Storerkey
                                                   AND td.Sku = tf.Sku
       ORDER BY td.ExternLineNo
@@ -765,6 +780,22 @@ BEGIN
          SET @n_Err = 68020
          SET @c_ErrMsg = 'NSQL' + CONVERT(NCHAR(5),@n_Err)
                        + ': INSERT INTO ORDERDETAIL Table Failed. (mspASNFZ01)'
+         GOTO QUIT_SP
+      END
+      -- Adding for XDOCK ASN allocation     (SSA03)
+       EXEC [WM].[lsp_XDockAllocation_Wrapper]
+       @c_ReceiptKey = @c_ReceiptKey,
+       @b_Success    = @b_Success   OUTPUT,
+       @n_Err        = @n_err       OUTPUT,
+       @c_ErrMsg     = @c_errmsg  OUTPUT,
+       @c_UserName   = ''
+
+      IF @@ERROR <> 0
+      BEGIN
+         SET @n_Continue = 3
+         SET @n_Err = 68021
+         SET @c_ErrMsg = 'NSQL' + CONVERT(NCHAR(5),@n_Err)
+                       + ': XDOCK ASN Allocation Failed. (mspASNFZ01)'
          GOTO QUIT_SP
       END
    END

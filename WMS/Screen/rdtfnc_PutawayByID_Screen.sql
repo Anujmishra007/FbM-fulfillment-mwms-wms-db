@@ -69,3 +69,16 @@ EXECUTE rdt.rdtAddScn 4114, 'ENG',
    @cLine08 = 'OPTION: %01i01',
    @cLine14 = '%e',     
    @nFunc   = 1819
+
+
+--FCR-122  Reason code
+DELETE rdt.RDTScn WHERE Scn = 4115 AND Lang_Code = 'ENG'
+EXECUTE rdt.rdtAddScn 4115, 'ENG'
+   ,@cLine01 = ''
+   ,@cLine02 = 'REASON CODE:'
+   ,@cLine03 = '%10i01'
+   ,@cLine04 = ''
+   ,@cLine05 = ''
+   ,@cLine06 = ''
+   ,@cLine14 = '%e'
+   ,@nFunc = 1819

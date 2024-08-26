@@ -16,6 +16,7 @@ GO
 /*                                                                            */
 /* Date       Rev  Author     Purposes                                        */
 /* 2024-06-20 1.0  JACKC      FCR-348 Created                                 */
+/* 2024-08-13 1.1  JACKC      FCR-716 Retrieve print data by OrderKey         */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_593Print40] (
@@ -25,11 +26,11 @@ CREATE OR ALTER PROC [RDT].[rdt_593Print40] (
    @cLangCode  NVARCHAR( 3),
    @cStorerKey NVARCHAR( 15),
    @cOption    NVARCHAR( 1),
-   @cParam1    NVARCHAR(20),  -- ExternalOrderKey
-   @cParam2    NVARCHAR(20),
-   @cParam3    NVARCHAR(20),
-   @cParam4    NVARCHAR(20),
-   @cParam5    NVARCHAR(20),
+   @cParam1    NVARCHAR(60),  -- ExternalOrderKey
+   @cParam2    NVARCHAR(60),
+   @cParam3    NVARCHAR(60),
+   @cParam4    NVARCHAR(60),
+   @cParam5    NVARCHAR(60),
    @nErrNo     INT OUTPUT,
    @cErrMsg    NVARCHAR( 20) OUTPUT
 )
@@ -187,6 +188,8 @@ BEGIN
          WHILE @nCounter <= @nMaxRow
          BEGIN
             -- Get Report Type
+            SET @cPrintData = '' --V1.1 clear PrintData value by Jackc
+
             SELECT @cReportType = ReportType
             FROM @tReport
             WHERE RowRef = @nCounter
@@ -252,7 +255,7 @@ BEGIN
             SELECT @cPrintData = [data]
             FROM DocInfo WITH (NOLOCK)
             WHERE TableName = 'EXTORDDOC'
-               AND Key1 = @cExternOrderKey
+               AND Key1 = @cOrderKey --V1.1 FCR-716 by Jackc
                AND Key2 = @cReportType
                AND Key3 = (CASE WHEN @cRptPaperType = 'LABEL' THEN 'LABEL' ELSE 'PAPER' END) 
                AND StorerKey = @cStorerKey

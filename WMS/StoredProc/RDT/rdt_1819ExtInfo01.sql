@@ -1,7 +1,3 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[rdt].[rdt_1819ExtInfo01]') and objectproperty(id, N'IsProcedure') = 1)
-   DROP PROC [rdt].[rdt_1819ExtInfo01]
-GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -15,9 +11,10 @@ GO
 /*                                                                      */
 /* Date       Rev  Author   Purposes                                    */
 /* 2015-07-13 1.0  Ung      SOS346283 Created                           */
+/* 2024-08-05 1.1  Dennis   Extend info Length                          */
 /************************************************************************/
 
-CREATE PROCEDURE [RDT].[rdt_1819ExtInfo01] (
+CREATE OR ALTER PROCEDURE [RDT].[rdt_1819ExtInfo01] (
    @nMobile         INT,          
    @nFunc           INT,          
    @cLangCode       NVARCHAR( 3), 
@@ -28,7 +25,7 @@ CREATE PROCEDURE [RDT].[rdt_1819ExtInfo01] (
    @cSuggLOC        NVARCHAR( 10),
    @cPickAndDropLOC NVARCHAR( 10),
    @cToLOC          NVARCHAR( 10),
-   @cExtendedInfo   NVARCHAR( 20) OUTPUT,
+   @cExtendedInfo   NVARCHAR( 25) OUTPUT,
    @nErrNo          INT           OUTPUT,
    @cErrMsg         NVARCHAR( 20) OUTPUT
 ) AS
@@ -43,7 +40,7 @@ CREATE PROCEDURE [RDT].[rdt_1819ExtInfo01] (
       IF @nInputKey = 1 -- ENTER
       BEGIN
          IF @cPickAndDropLOC <> ''
-            SET @cExtendedInfo = 'FINALLOC: ' + @cSuggLOC
+            SET @cExtendedInfo = 'FINAL LOC:' + @cSuggLOC
       END
    END
 GO

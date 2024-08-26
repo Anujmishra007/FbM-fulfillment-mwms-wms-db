@@ -171,7 +171,10 @@ BEGIN
          SELECT @c_GenCBOLRef = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'GENCBOLREF')
          IF @c_GenCBOLRef ='1'
          BEGIN
-            SELECT @c_CBOLReference = dbo.fnc_GetVICS_CBOL(@n_CBOLKey, @c_Facility, @c_StorerKey)
+            EXEC isp_GetVICS_CBOL @n_CBOLKey   = @n_CBOLKey
+                                , @c_Facility  = @c_Facility
+                                , @c_StorerKey = @c_StorerKey
+                                , @c_VICS_CBOL = @c_CBOLReference OUTPUT
          END       
       END
 

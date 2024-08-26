@@ -27,6 +27,7 @@ GO
 /* 2012-12-07 1.0  James    SOS257520 - Created                         */
 /* 2016-09-30 1.1  Ung      Performance tuning                          */
 /* 2018-10-11 1.2  TungGH   Performance                                 */
+/* 2024-07-16 1.3  CYU027   FCR-575                                     */
 /************************************************************************/
 
 CREATE PROCEDURE [RDT].[rdtfnc_Pallet_Move] (
@@ -63,12 +64,12 @@ DECLARE
    @cToLOC           NVARCHAR( 10),
    @cDropLoc         NVARCHAR( 10),
    @cLOC             NVARCHAR( 10),
-   @cStatus          NVARCHAR( 10), 
-   @cDropID_Status   NVARCHAR( 10), 
+   @cStatus          NVARCHAR( 10),
+   @cDropID_Status   NVARCHAR( 10),
    
-   @cLocationCategory    NVARCHAR( 10), 
-   
-   @nTranCount       INT,          
+   @cLocationCategory    NVARCHAR( 10),
+
+   @nTranCount       INT,
    
    @cInField01 NVARCHAR( 60),  @cOutField01 NVARCHAR( 60),
    @cInField02 NVARCHAR( 60),  @cOutField02 NVARCHAR( 60),
@@ -113,7 +114,7 @@ SELECT
    @cID        = V_ID,
 
    @cToLOC     = V_String1,
-   
+
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,
    @cInField03 = I_Field03,   @cOutField03 = O_Field03,
@@ -203,37 +204,21 @@ BEGIN
       -- Screen mapping
       SET @cID = @cInField01
 
-      -- Check blank ID
-      IF @cID = ''
-      BEGIN
-         SET @nErrNo = 78401
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Need ID
-         GOTO Step_1_Fail
-      END
+      SET @nErrNo = 0
+      EXEC [RDT].[rdtfnc_Pallet_Move_check_ID]
+           @nMobile       = @nMobile,
+           @nFunc         = @nFunc,
+           @cLangCode     = @cLangCode,
+           @nStep         = @nStep,
+           @nInputKey     = @nInputKey,
+           @cFacility     = @cFacility,
+           @cStorerKey    = @cStorer,
+           @cID           = @cID,
+           @nErrNo        = @nErrNo      OUTPUT,
+           @cErrMsg       = @cErrMsg     OUTPUT
 
-      -- Get ID info
-      SET @cStatus = ''
-      SET @cLOC = ''
-      SELECT @cLOC = DropLOC, 
-             @cStatus = Status
-      FROM dbo.DropID WITH (NOLOCK)
-      WHERE DropID = @cID
-
-      -- Check valid ID
-      IF @@ROWCOUNT = 0
-      BEGIN
-      SET @nErrNo = 78402
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Invalid ID
+      IF @nErrNo <> 0
          GOTO Step_1_Fail
-      END
-
-      -- Check if ID shipped
-      IF @cStatus = '9'
-      BEGIN
-         SET @nErrNo = 78403
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- ID had shipped
-         GOTO Step_1_Fail
-      END
 
          -- Prepare next screen var
       SET @cOutField01 = @cID
@@ -315,41 +300,23 @@ IF @nInputKey = 1 -- ENTER
          GOTO Step_2_Fail
       END
 
-      -- Get DropID status from Codelkup table because 
-      -- user can move pallet anywhere. Location type determine
-      -- DropID status
-      SELECT @cDropID_Status = ISNULL(Short, '')
-      FROM dbo.CodeLkUp WITH (NOLOCK)
-      WHERE ListName = 'DROPIDSTAT'
-      AND   CODE = @cLocationCategory
-      
-      SET @nTranCount = @@TRANCOUNT  
-     
-      BEGIN TRAN  
-      SAVE TRAN UPD_DROPID 
+      SET @nErrNo = 0
+      EXEC [RDT].[rdtfnc_Pallet_Move_update_ID]
+           @nMobile           = @nMobile,
+           @nFunc             = @nFunc,
+           @cLangCode         = @cLangCode,
+           @nStep             = @nStep,
+           @nInputKey         = @nInputKey,
+           @cFacility         = @cFacility,
+           @cStorerKey        = @cStorer,
+           @cID               = @cID,
+           @cToLOC            =@cToLOC,
+           @cLocationCategory = @cLocationCategory,
+           @nErrNo            = @nErrNo      OUTPUT,
+           @cErrMsg           = @cErrMsg     OUTPUT
 
-      -- Update DropID
-      -- If Codelkup is not setup then use existing DropID status 
-      UPDATE DropID WITH (ROWLOCK) SET
-         [Status] = CASE WHEN ISNULL(@cDropID_Status, '') = '' THEN [Status] ELSE @cDropID_Status END, 
-         DropLOC = @cToLOC,
-         EditWho = 'rdt.' + sUser_sName(),
-         EditDate = GETDATE()
-      WHERE DropID = @cID
-
-      IF @@ERROR <> 0
-      BEGIN
-         ROLLBACK TRAN UPD_DROPID
-         WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
-            COMMIT TRAN UPD_DROPID
-
-         SET @nErrNo = 78407
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Upd toloc fail
+      IF @nErrNo <> 0
          GOTO Step_2_Fail
-      END
-
-      WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
-         COMMIT TRAN UPD_DROPID
 
       EXEC RDT.rdt_STD_EventLog  
         @cActionType   = '4', -- Move  
@@ -359,7 +326,7 @@ IF @nInputKey = 1 -- ENTER
         @cFacility     = @cFacility,  
         @cStorerKey    = @cStorer,  
         @cID           = @cID,  
-        @cToID         = @cID,   
+        @cToID         = @cID,
         @cLocation     = @cLOC,    
         @cToLocation   = @cToLOC,
         @nStep         = @nStep   

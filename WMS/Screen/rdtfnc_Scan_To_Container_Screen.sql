@@ -120,3 +120,13 @@ EXECUTE rdt.rdtAddScn 2198, 'ENG'
    ,@cWebGroup = '{"1":["1","2"],"2":["3","4"],"3":["5","6"],"4":["7","8"],"5":["9","10"]}'
    ,@nFunc = 1637
    
+--FCR-673
+DELETE rdt.RDTScn WHERE Scn = 6418 AND Lang_Code = 'ENG'
+EXECUTE rdt.rdtAddScn 6418, 'ENG',
+    @cLine01 = 'CONTAINERKEY:'
+   ,@cLine02 = '%10i01'
+   ,@cLine03 = 'CONTAINER NO:'
+   ,@cLine04 = '%20i02'
+   ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2"],"2":["3","4"]}'
+   ,@nFunc = 1637
