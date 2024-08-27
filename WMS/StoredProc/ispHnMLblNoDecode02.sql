@@ -1,11 +1,6 @@
 IF EXISTS (SELECT name FROM sysobjects WHERE name = 'ispHnMLblNoDecode02' AND type = 'P')
    DROP PROC ispHnMLblNoDecode02
 GO
-
-SET QUOTED_IDENTIFIER OFF 
-GO
-SET ANSI_NULLS OFF 
-GO
 /************************************************************************/
 /* Store procedure: ispHnMLblNoDecode02                                 */
 /* Copyright      : IDS                                                 */
@@ -21,9 +16,11 @@ GO
 /* Date        Rev  Author      Purposes                                */
 /* 27-02-2014  1.0  James       SOS304353 Created                       */
 /* 22-06-2015  1.1  Ung         SOS332714 Add smart cart module         */
+/* 02-01-2018  1.2  James       WMS3666 - Add config to control the     */
+/*                              decoding method (james01)               */
 /************************************************************************/
 
-CREATE PROCEDURE ispHnMLblNoDecode02
+CREATE PROCEDURE [dbo].[ispHnMLblNoDecode02]
    @c_LabelNo          NVARCHAR(40),
    @c_Storerkey        NVARCHAR(15),
    @c_ReceiptKey       NVARCHAR(10),
@@ -50,13 +47,19 @@ BEGIN
    SET CONCAT_NULL_YIELDS_NULL OFF
 
    DECLARE @n_LblLength           INT, 
-           @n_Func                INT 
+           @n_Func                INT,
+           @cDecodeUCCNo          NVARCHAR( 1)
 
    SET @n_Func = 0
    SELECT @n_Func = Func FROM rdt.rdtMobRec WITH (NOLOCK) WHERE UserName = sUser_sName()
 
    SET @n_ErrNo = 0
-   
+
+   SET @cDecodeUCCNo = rdt.RDTGetConfig( @n_Func, 'DecodeUCCNo', @c_Storerkey)
+
+   IF @cDecodeUCCNo = '1'
+      SET @c_LabelNo = RIGHT( @c_LabelNo, LEN(@c_LabelNo) - 2)
+         
    SET @n_LblLength = 0
    SET @n_LblLength = LEN(ISNULL(RTRIM(@c_LabelNo),''))
 
@@ -84,11 +87,5 @@ QUIT:
 END -- End Procedure
 
 GO
-
 GRANT EXECUTE ON  ispHnMLblNoDecode02 TO NSQL 
-GO   
-
-SET QUOTED_IDENTIFIER OFF 
-GO
-SET ANSI_NULLS ON 
 GO

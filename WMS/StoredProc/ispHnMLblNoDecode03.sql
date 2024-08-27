@@ -22,6 +22,8 @@ GO
 /* 27-02-2014  1.0  James       SOS300492 Created                       */
 /* 06-08-2015  1.1  James       SOS347381 - Display error msg in        */
 /*                              another scn if config turn on (james01) */
+/* 02-01-2018  1.2  James       WMS3666 - Add config to control the     */
+/*                              decoding method (james01)               */
 /************************************************************************/
 
 CREATE PROCEDURE [dbo].[ispHnMLblNoDecode03]
@@ -59,7 +61,8 @@ BEGIN
            @d_Lottable04            DATETIME, 
            @c_ShowErrMsgInNewScn    NVARCHAR( 1), 
            @n_Func                  INT, 
-           @n_Mobile                INT 
+           @n_Mobile                INT,
+           @c_DecodeUCCNo      NVARCHAR( 1)
 
    DECLARE @cErrMsg1    NVARCHAR( 20), @cErrMsg2    NVARCHAR( 20),
            @cErrMsg3    NVARCHAR( 20), @cErrMsg4    NVARCHAR( 20),
@@ -71,6 +74,11 @@ BEGIN
            @cErrMsg15   NVARCHAR( 20) 
 
    SELECT @n_Func = Func, @n_Mobile = Mobile FROM RDT.RDTMOBREC WITH (NOLOCK) WHERE UserName = sUSER_SNAME()
+
+   SET @c_DecodeUCCNo = rdt.RDTGetConfig( @n_Func, 'DecodeUCCNo', @c_Storerkey)
+
+   IF @c_DecodeUCCNo = '1'
+      SET @c_LabelNo = RIGHT( @c_LabelNo, LEN(@c_LabelNo) - 2)
 
    SET @c_ShowErrMsgInNewScn = rdt.RDTGetConfig( @n_Func, 'ShowErrMsgInNewScn', @c_Storerkey)
    IF @c_ShowErrMsgInNewScn = '0'
@@ -161,7 +169,6 @@ BEGIN
 END -- End Procedure
 
 GO
-
 GRANT EXECUTE ON  ispHnMLblNoDecode03 TO NSQL 
 GO   
 

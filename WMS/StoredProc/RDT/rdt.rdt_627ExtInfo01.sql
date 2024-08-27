@@ -18,9 +18,10 @@ GO
 /* 2020-01-09 1.2  KuanYee    INC1001390  Show LOC having Qty (KY01)    */  
 /* 2020-03-20 1.3  James      WMS-12577 Show newest serialno record     */
 /*                            (max serialnokey) (james01)               */
+/* 2023-12-06 1.4  James      WMS24256 Fix Loc not display full(james02)*/
 /************************************************************************/
 
-CREATE PROC [RDT].[rdt_627ExtInfo01] (
+CREATE   PROC [RDT].[rdt_627ExtInfo01] (
    @nMobile       INT,
    @nFunc         INT, 
    @cLangCode     NVARCHAR( 3), 
@@ -105,9 +106,10 @@ AS
 
          IF @cLoc <> ''
             IF @cStatus IN ('1', 'H')
-               SET @cExtendedInfo3 = RTRIM( @cExtendedInfo3) + ' ' +  @cLoc
+               SET @cExtendedInfo3 = RTRIM( @cExtendedInfo3) +  @cLoc
       END
    END
+
 
 
 GO
