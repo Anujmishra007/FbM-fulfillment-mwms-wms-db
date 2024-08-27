@@ -16,7 +16,8 @@ GO
 /* Updates:                                                             */  
 /* Date        Author  Ver     Purposes                                 */  
 /* 2009-09-01  Vicky   1.0     Created                                  */  
-/* 2010-10-24  TLTING  1.2     Performance Tune                         */
+/* 2010-10-24  TLTING  1.2     Performance Tune                         */ 
+/* 2019-04-12  TLTING01 1.3    default date filter - event date         */
 /************************************************************************/  
   
 CREATE PROC [RDT].[ispArchiveRDTStdEventLog]  
@@ -61,7 +62,8 @@ SET CONCAT_NULL_YIELDS_NULL OFF
       SET @c_ErrMsg = 'ArchiveKey does not exist (ispArchiveRDTStdEventLog)'  
       GOTO Fail  
    END  
-  
+   SET @cDateType = 3 -- this only event date
+
    -- Calculate archive date  
    SET @dArchiveDate = DATEADD( DAY, -@nRetainDays, CONVERT( NVARCHAR( 10), GETDATE(), 120))  
   
@@ -245,3 +247,4 @@ Fail:
   
    RAISERROR (@c_errmsg, 16, 1) WITH SETERROR    -- SQL2012  
   
+
