@@ -19,9 +19,10 @@ GO
 /*                            only (james03)                               */
 /* 2022-12-22   1.4  yeekung  JSM-118875 blank mbolkey (yeekung01)         */
 /* 2023-03-27   1.5  James    WMS-22063 Add ExtUpdSP to step 4 (james04)   */
+/* 2024-01-22   1.5  James    WMS-24624 Bug fix (james05)                  */
 /***************************************************************************/      
       
-CREATE OR ALTER PROC [RDT].[rdtfnc_MbolCreation](      
+CREATE or alter  PROC [RDT].[rdtfnc_MbolCreation](      
    @nMobile    int,      
    @nErrNo     int  OUTPUT,      
    @cErrMsg    NVARCHAR(1024) OUTPUT -- screen limitation, 20 char max      
@@ -578,7 +579,7 @@ BEGIN
             GOTO Step_Scan_Fail      
          END      
              
-         IF @cOrderKey = '' AND @cLoadKey = ''   
+         IF @cOrderKey = '' AND @cLoadKey = '' AND @cRefNo1 = '' AND  @cRefNo2  = '' AND   @cRefNo3  = '' -- (james05)     
          BEGIN      
             SET @nErrNo = 172116      
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --OrdOrLoad Req     
@@ -1328,7 +1329,7 @@ BEGIN
       I_Field15 = @cInField15,  O_Field15 = @cOutField15,   FieldAttr15  = @cFieldAttr15      
    WHERE Mobile = @nMobile      
 END 
-GO
+Go
 
 SET QUOTED_IDENTIFIER OFF 
 GO
