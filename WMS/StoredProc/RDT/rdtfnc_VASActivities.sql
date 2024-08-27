@@ -15,7 +15,7 @@ GO
 /*                                                                               */
 /* Purpose: Execute VAS Operation                                                */
 /*                                                                               */
-/* Version: 1.0                                                                  */
+/* Version: 1.1                                                                  */
 /*                                                                               */
 /* Date       Rev  Author      Purposes                                          */
 /* 2024-02-27 1.0  NLT013      Create   first version (UWP-15257)                */
@@ -282,7 +282,7 @@ BEGIN
          WHERE DropID IS NOT NULL
          AND DropID <> @cID
          AND ID = @cID
-         AND StorerKey <> @cStorerKey
+         AND StorerKey = @cStorerKey
          AND Status = 5
 
          IF @nRowCount > 0
