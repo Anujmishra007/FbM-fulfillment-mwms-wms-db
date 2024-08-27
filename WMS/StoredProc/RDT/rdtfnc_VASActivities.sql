@@ -282,26 +282,52 @@ BEGIN
          WHERE DropID IS NOT NULL
          AND DropID <> @cID
          AND ID = @cID
+         AND StorerKey <> @cStorerKey
+         AND Status = 5
 
          IF @nRowCount > 0
          BEGIN
-            SET @nErrNo = 211722
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Please Use Drop ID Instead
-            GOTO Step_ID_Fail
+            -- consolidation validating (pallet move)
+            SELECT
+               @nRowCount = COUNT(1)
+            FROM rdt.rdtSTDEventlog rse WITH(NOLOCK)
+            INNER JOIN dbo.PICKDETAIL pd WITH(NOLOCK) ON rse.Orderkey = pd.OrderKey
+            WHERE FunctionID = '1813'
+            AND ToID = @cID
+
+            IF @nRowCount = 0
+            BEGIN
+               SET @nErrNo = 211722
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Please Use Drop ID Instead
+               GOTO Step_ID_Fail
+            END
+
+            -- for drop id moves to ToID 
+            SELECT 
+               @cOrderKey = OrderKey,
+               @cOrderLineNumber = OrderLineNumber,
+               @cPickSKU = SKU
+            FROM dbo.PICKDETAIL WITH(NOLOCK)
+            WHERE DropID <> @cID 
+            AND ID = @cID
+            AND Storerkey = @cStorerKey
+            AND Status = 5
+            SET @nRowCount = @@ROWCOUNT
+         END
+         ELSE
+         BEGIN
+            SELECT 
+               @cOrderKey = OrderKey,
+               @cOrderLineNumber = OrderLineNumber,
+               @cPickSKU = SKU
+            FROM dbo.PICKDETAIL WITH(NOLOCK)
+            WHERE (DropID = @cID OR (DropId IS NULL AND ID = @cID))
+            AND Storerkey = @cStorerKey
+            AND Status = 5
+            SET @nRowCount = @@ROWCOUNT
          END
 
-         SELECT 
-            @cOrderKey = OrderKey,
-            @cOrderLineNumber = OrderLineNumber,
-            @cPickSKU = SKU
-
-         FROM dbo.PICKDETAIL WITH(NOLOCK)
-         WHERE (DropID = @cID OR (DropId IS NULL AND ID = @cID))
-         AND Storerkey = @cStorerKey
-         AND Status = 5
-
          -- Add err message on checking if the ID exists in pickdetail
-         SET @nRowCount = @@ROWCOUNT
          IF @nRowCount = 0
          BEGIN
             SET @nErrNo = 211718
