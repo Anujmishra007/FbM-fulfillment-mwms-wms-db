@@ -8,10 +8,11 @@ GO
 /* Store procedure: rdt_838ConfirmSP20                                  */
 /* Copyright      : Maersk                                              */
 /*                                                                      */
-/* Purpose: split pickdetail for           */
+/* Purpose: split pickdetail for Granite                                */
 /*                                                                      */
 /* Date       Rev  Author      Purposes                                 */
 /* 07-01-2023 1.0  JACKC       FCR-392 Created                          */
+/* 08-22-2023 1.1  JACKC       FCR-392 Support cutomized repack         */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_838ConfirmSP20] (
@@ -263,7 +264,7 @@ BEGIN
          AND CartonNo = @nCartonNo
          AND LabelNo = @cLabelNo
          AND LabelLine = @cLabelLine
-         AND SKU = @cSKU
+         --AND SKU = @cSKU -- V1.1 remove SKU to support repack scenario by jackc
       IF @@ERROR <> 0
       BEGIN
          SET @nErrNo = 100405
@@ -297,15 +298,37 @@ BEGIN
 
       IF NOT EXISTS (SELECT 1 FROM dbo.PackInfo WITH (NOLOCK) WHERE PickSlipNo = @cPickSlipNo AND CartonNo = @nCartonNo)
       BEGIN
-         INSERT INTO dbo.PackInfo (PickslipNo, CartonNo, UCCNo, QTY)
-         VALUES (@cPickSlipNo, @nCartonNo, '', @nQTY)
-         IF @@ERROR <> 0
+         IF NOT EXISTS (SELECT 1 FROM PackInfo WITH (NOLOCK) WHERE PickSlipNo = @cPickSlipNo AND ISNULL(CartonType,'') <> '' )
          BEGIN
-            SET @nErrNo = 100406
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INSPackInfFail
+            SET @nErrNo = '218415'
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --NoCartonTypeInPackInfo
             GOTO RollBackTran
          END
-      END
+         ELSE
+         BEGIN
+            INSERT INTO dbo.PackInfo (PickslipNo, CartonNo, QTY, CartonType, RefNo, Length, Width, Height, UCCNo, TrackingNo)
+               SELECT TOP 1 
+                  @cPickSlipNo,
+                  @nCartonNo,
+                  @nQTY,
+                  CartonType,
+                  @cLabelNo,
+                  Length,
+                  Width,
+                  Height,
+                  '', --UCC
+                  '' --TrackingNo
+               FROM PackInfo  WITH (NOLOCK)
+               WHERE PickSlipNo = @cPickSlipNo
+                  AND ISNULL(CartonType,'') <> ''
+            IF @@ERROR <> 0
+            BEGIN
+               SET @nErrNo = 100406
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INSPackInfFail
+               GOTO RollBackTran
+            END
+         END 
+      END -- Gen new pack info
       ELSE
       BEGIN
          SET @nErrNo = '218405'

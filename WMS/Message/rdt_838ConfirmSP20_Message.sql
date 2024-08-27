@@ -16,5 +16,6 @@ execute rdt.rdtAddMsg 218411, 10, '218411UpdtPKDFail', 'us_english', 838
 execute rdt.rdtAddMsg 218412, 10, '218412DeltPKDFail', 'us_english', 838
 execute rdt.rdtAddMsg 218413, 10, '218413NothingToPack', 'us_english', 838
 execute rdt.rdtAddMsg 218414, 10, '218414ExceedUnpackQty', 'us_english', 838
+execute rdt.rdtAddMsg 218415, 10, '218415NoCartType', 'us_english', 838, 0, '218415 No CartonType In PSNO'
 
 select * from rdt.rdtmsg (nolock) where message_id between 218401 AND 218450
