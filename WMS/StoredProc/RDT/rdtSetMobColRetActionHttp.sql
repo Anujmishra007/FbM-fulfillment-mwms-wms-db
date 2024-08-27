@@ -181,6 +181,27 @@ BEGIN
    FROM rdt.rdtMobRec WITH (NOLOCK)
    WHERE Mobile = @nMobile
 
+   SET ANSI_NULLS ON
+   SET ANSI_PADDING ON
+   SET ANSI_WARNINGS ON
+   SET CONCAT_NULL_YIELDS_NULL ON
+   SET QUOTED_IDENTIFIER ON
+  
+   IF @Func = 1
+   UPDATE rdt.rdtMobRec WITH (ROWLOCK) SET
+      I_Field01 = '',   
+      I_Field02 = '',
+	  I_Field03 = '',
+	  I_Field04 = '',
+	  I_Field05 = ''
+   FROM rdt.rdtMobRec
+   WHERE Mobile = @nMobile
+  
+   SET ANSI_NULLS OFF
+   SET ANSI_PADDING OFF
+   SET ANSI_WARNINGS OFF
+   SET CONCAT_NULL_YIELDS_NULL OFF
+   SET QUOTED_IDENTIFIER OFF
    IF NOT EXISTS( SELECT 1 FROM rdt.rdtScnDetail WITH (NOLOCK) WHERE Scn = @nScn AND Lang_Code = @cLangCode)
       SET @cLangCode = 'ENG'
 
