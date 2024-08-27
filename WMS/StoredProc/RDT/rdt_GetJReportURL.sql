@@ -151,7 +151,7 @@ BEGIN
              , @c_JReportFlag      = JReportFlag
       FROM rdt.RDTreportdetail (NOLOCK)
       WHERE ReportType = @c_ReportType
-      AND StorerKey = @c_Storerkey
+         AND StorerKey = @c_Storerkey
 
       IF ISNULL(@c_JReportCatalog,'') = ''
       BEGIN
@@ -176,9 +176,9 @@ BEGIN
            , @c_Param08Label = ReportParmName8
            , @c_Param09Label = ReportParmName9
            , @c_Param10Label = ReportParmName10
-      FROM rdt.RDTreportdetail
+      FROM rdt.RDTreportdetail (NOLOCK)
       WHERE ReportType = @c_ReportType
-      AND StorerKey = @c_Storerkey
+         AND StorerKey = @c_Storerkey
 
    END   --WL02 - START
 
@@ -355,3 +355,6 @@ QUIT_SP:
       BEGIN TRAN;
 
 END -- procedure
+GO
+GRANT EXECUTE ON  [RDT].[rdt_GetJReportURL] TO [NSQL]
+GO

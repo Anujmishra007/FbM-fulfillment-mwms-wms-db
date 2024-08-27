@@ -98,3 +98,8 @@ AS
    END         -- Normal receiving
 
    Quit:
+
+GO
+
+GRANT EXECUTE ON [RDT].[rdt_600ExtVal18_HRP] TO NSQL 
+GO

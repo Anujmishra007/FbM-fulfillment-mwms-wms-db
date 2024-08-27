@@ -285,3 +285,8 @@ Quit:
    WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started  
       COMMIT TRAN  
 END  
+
+GO
+
+GRANT EXECUTE ON [RDT].[rdt_PTLPiece_Confirm_Load06] TO NSQL
+GO

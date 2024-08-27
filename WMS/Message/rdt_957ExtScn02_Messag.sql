@@ -1,4 +1,4 @@
---rdt_957Confirm04
+--rdt_957ExtScn02
 --FCR-454
 execute rdt.rdtdropmsg 218901, 218950
 
