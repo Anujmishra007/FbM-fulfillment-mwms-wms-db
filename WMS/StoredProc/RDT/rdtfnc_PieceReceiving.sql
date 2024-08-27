@@ -212,7 +212,7 @@ DECLARE
    @cOption                 NVARCHAR( 1),
    @cQTY                    NVARCHAR( 10),
    @cBarcode                NVARCHAR( MAX),
-   @cMax                    NVARCHAR( MAX),
+   --@cMax                    NVARCHAR( MAX),
    @cSerialNo               NVARCHAR( 30),
    @nSerialQTY              INT,
    @nMoreSNO                INT,
