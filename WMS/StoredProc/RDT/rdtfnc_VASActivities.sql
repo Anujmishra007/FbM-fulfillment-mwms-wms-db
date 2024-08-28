@@ -258,7 +258,6 @@ BEGIN
 
 
       IF @nRowCount > 0
-
       -- add validation of storer key and it's error message
       -- cause combined message is too long to display on RDT
       BEGIN
@@ -303,7 +302,7 @@ BEGIN
             END
 
             -- for drop id moves to ToID 
-            SELECT 
+            SELECT TOP 1
                @cOrderKey = OrderKey,
                @cOrderLineNumber = OrderLineNumber,
                @cPickSKU = SKU
@@ -316,7 +315,7 @@ BEGIN
          END
          ELSE
          BEGIN
-            SELECT 
+            SELECT TOP 1
                @cOrderKey = OrderKey,
                @cOrderLineNumber = OrderLineNumber,
                @cPickSKU = SKU
@@ -558,7 +557,15 @@ BEGIN
             SET @nScn  = @nScn_ID
             SET @nStep = @nStep_ID
             GOTO Quit
-         END    
+         END
+         -- Prepare next screen var
+         SET @cOutField01 = ''
+         SET @cOutField02 = ''
+
+         -- Go to next screen
+         SET @nScn  = @nScn_VASCode
+         SET @nStep = @nStep_VASCode  
+         GOTO Quit  
       END
       
       --Check VAS Code

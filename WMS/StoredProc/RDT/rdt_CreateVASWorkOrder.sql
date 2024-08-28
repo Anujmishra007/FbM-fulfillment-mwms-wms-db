@@ -144,7 +144,7 @@ DECLARE
       SELECT @nRowCount = @@ROWCOUNT
 
       IF @nRowCount = 0
-         BEGIN
+      BEGIN
          SET @nErrNo = 211706
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'VAS Code not Exist'
          GOTO Quit
