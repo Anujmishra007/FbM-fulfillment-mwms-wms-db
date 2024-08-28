@@ -5758,7 +5758,8 @@ BEGIN
                      @cLottable01 = CC.Lottable01  
                    , @cLottable02 = CC.Lottable02  
                    , @cLottable03 = CC.Lottable03  
-                   , @dLottable04 = rdt.rdtFormatDate( CC.Lottable04)  
+                   --V3.8 , @dLottable04 = rdt.rdtFormatDate( CC.Lottable04) 
+                   , @dLottable04 = CC.Lottable04 -- V3.8 Fix data type convertion issue
                    , @nQtyAval    =  SUM(CC.SystemQty)  
                    , @cCCDetailKey = MIN(CC.CCDetailKey)  
                    , @nQty        = SUM(CC.Qty)  
@@ -5779,8 +5780,10 @@ BEGIN
                      @cLottable01 = CC.Lottable01  
                    , @cLottable02 = CC.Lottable02  
                    , @cLottable03 = CC.Lottable03  
-                   , @dLottable04 = rdt.rdtFormatDate( CC.Lottable04)  
-                   , @dLottable05 = rdt.rdtFormatDate( CC.Lottable05)  
+                   --V3.8 , @dLottable04 = rdt.rdtFormatDate( CC.Lottable04)  
+                   --, @dLottable05 = rdt.rdtFormatDate( CC.Lottable05)
+                   , @dLottable04 =  CC.Lottable04 
+                   , @dLottable05 =  CC.Lottable05 -- V3.8 Fix data type convertion issue 
                    , @nQtyAval    =  CC.SystemQty  
                    , @cCCDetailKey = CC.CCDetailKey  
                    , @nQty        = CC.Qty  
