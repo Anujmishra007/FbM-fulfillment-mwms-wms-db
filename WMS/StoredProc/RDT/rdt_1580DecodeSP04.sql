@@ -54,12 +54,15 @@ BEGIN
             DECLARE @cAddRCPTValidtn    NVARCHAR(30),
                     @cASNSNRCPTValidtn  NVARCHAR(30),
                     @cSNStatusValidtn   NVARCHAR(30),
+                    @cSkipCheckingSKUNotInASN   NVARCHAR(30),
+                    @cDisAllowRDTOverReceipt    NVARCHAR(30),
                     @cSNStatus          NVARCHAR(2)
                     
             SET @cAddRCPTValidtn = rdt.RDTGetConfig( @nFunc, 'AddRCPTValidtn', @cStorerKey)
             SET @cASNSNRCPTValidtn = rdt.RDTGetConfig( @nFunc, 'ASNSNRCPTValidtn', @cStorerKey)
             SET @cSNStatusValidtn = rdt.RDTGetConfig( @nFunc, 'SNStatusValidtn', @cStorerKey)
-
+            SET @cSkipCheckingSKUNotInASN = rdt.RDTGetConfig( @nFunc, 'SkipCheckingSKUNotInASN', @cStorerKey)
+            SET @cDisAllowRDTOverReceipt = rdt.RDTGetConfig( @nFunc, 'DisAllowRDTOverReceipt', @cStorerKey)
 
             
             
@@ -77,35 +80,8 @@ BEGIN
                   SET @nErrNo = 220701  
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid SKU  
                   GOTO Quit
-               END
-
+               END                                             
                
-               IF NOT EXISTS ( SELECT 1 
-                              FROM dbo.RECEIPTDETAIL WITH (NOLOCK)
-                              WHERE ReceiptKey = @cReceiptKey
-                              AND   SKU = @cSKU
-                              AND   FinalizeFlag <> 'Y')
-               BEGIN
-                  SET @nErrNo = 220702  
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SKU Not In ASN  
-                  GOTO Quit
-               END
-               
-
-               SELECT 
-                  @nRcvQty = ISNULL( SUM( BeforeReceivedQty), 0), 
-                  @nExpQty = ISNULL( SUM( QtyExpected), 0)
-               FROM dbo.RECEIPTDETAIL WITH (NOLOCK)
-               WHERE ReceiptKey = @cReceiptKey
-               AND   SKU = @cSKU
-               AND   FinalizeFlag <> 'Y'
-               
-               IF ( @nRcvQty + 1) > @nExpQty
-               BEGIN
-                  SET @nErrNo = 220703  
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SKU Over Rcv  
-                  GOTO Quit
-               END
                SET @nQTY = 1
                SET @nErrNo = -1     
             END
@@ -127,9 +103,44 @@ BEGIN
                   END
                END
             END
+            
+            IF (@cSkipCheckingSKUNotInASN = '0')
+            BEGIN 
+               IF NOT EXISTS ( SELECT 1 
+                              FROM dbo.RECEIPTDETAIL WITH (NOLOCK)
+                              WHERE ReceiptKey = @cReceiptKey
+                              AND   SKU = @cSKU
+                              AND   FinalizeFlag <> 'Y')
+               BEGIN
+                  SET @nErrNo = 220702  
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SKU Not In ASN  
+                  GOTO Quit
+               END
+            END
+            
+            IF (@cDisAllowRDTOverReceipt = '1')
+            BEGIN
+               SELECT 
+                  @nRcvQty = ISNULL( SUM( BeforeReceivedQty), 0), 
+                  @nExpQty = ISNULL( SUM( QtyExpected), 0)
+               FROM dbo.RECEIPTDETAIL WITH (NOLOCK)
+               WHERE ReceiptKey = @cReceiptKey
+               AND   SKU = @cSKU
+               AND   FinalizeFlag <> 'Y'
+               
+               IF ( @nRcvQty + 1) > @nExpQty
+               BEGIN
+                  SET @nErrNo = 220703  
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SKU Over Rcv  
+                  GOTO Quit
+               END
+            END
+
+            
 
             IF (@cASNSNRCPTValidtn = '1')
-            BEGIN
+            BEGIN               
+               
                IF NOT EXISTS ( SELECT 1 
                                  FROM dbo.RECEIPTDETAIL WITH (NOLOCK)
                                  WHERE ReceiptKey = @cReceiptKey

@@ -41,10 +41,11 @@ BEGIN
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
+   DECLARE  @cAddRCPTValidtn     NVARCHAR(10)
 
    IF @nFunc = 1581
    BEGIN
-      DECLARE  @cAddRCPTValidtn     NVARCHAR(10)
+      
       SET @cAddRCPTValidtn = rdt.RDTGetConfig( @nFunc, 'AddRCPTValidtn', @cStorerKey)
       /********************************************************************************
       Step 1. Screen = 1750. ASN, PO screen
@@ -125,7 +126,6 @@ BEGIN
    END
    ELSE IF @nFunc = 1580
    BEGIN
-      DECLARE  @cAddRCPTValidtn     NVARCHAR(10)
       SET @cAddRCPTValidtn = rdt.RDTGetConfig( @nFunc, 'AddRCPTValidtn', @cStorerKey)
       /********************************************************************************
       Step 1. Screen = 1750. ASN, PO screen
