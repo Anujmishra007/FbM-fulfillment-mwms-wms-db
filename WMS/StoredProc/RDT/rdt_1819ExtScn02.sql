@@ -11,6 +11,7 @@ GO
 /*                                                                      */
 /* Date       Rev  Author   Purposes                                    */
 /* 2024-07-08 1.0  CYU027   CREATE                                      */
+/* 2024-08-16 1.1  JCH507   Add Extended Upd SP                         */
 /*                                                                      */
 /************************************************************************/
 
@@ -70,18 +71,34 @@ BEGIN
       @cSuggLOC               NVARCHAR( 10),
       @cPickAndDropLOC        NVARCHAR( 10),
       @cToLOC                 NVARCHAR( 20),
-      @cShowPASuccessScn      NVARCHAR( 1)
-
-   -- Handling transaction
-   SET @nTranCount = @@TRANCOUNT
-   BEGIN TRAN  -- Begin our own transaction
-   SAVE TRAN rdt_1819ExtScn02 -- For rollback or commit only our own transaction
-
+      @cShowPASuccessScn      NVARCHAR( 1),
+      @cSQL                   NVARCHAR( MAX), --v1.1 JCH507
+      @cSQLParam              NVARCHAR( MAX), --v1.1 JCH507
+      @cExtendedUpdateSP      NVARCHAR( 20) --v1.1 JCH507
 
    SET @cShowPASuccessScn = rdt.RDTGetConfig( @nFunc, 'ShowPASuccessScn', @cStorerKey)
    IF @cShowPASuccessScn = '0'
       SET @cShowPASuccessScn = ''
 
+   --V1.1 JCH507
+   SET @cExtendedUpdateSP = rdt.rdtGetConfig( @nFunc, 'ExtendedUpdateSP', @cStorerKey)
+   IF @cExtendedUpdateSP = '0'
+      SET @cExtendedUpdateSP = ''
+
+   SELECT @cFromID         = V_ID,
+         @cFromLOC         = V_LOC,
+         @cSuggLOC         = V_String1,
+         @cPickAndDropLOC  = V_String2,
+         @cToLOC           = V_String3
+   FROM RDTMOBREC (NOLOCK)
+   WHERE Mobile = @nMobile
+
+   --V1.1 JCH507 END
+
+   -- Handling transaction
+   SET @nTranCount = @@TRANCOUNT
+   BEGIN TRAN  -- Begin our own transaction
+   SAVE TRAN rdt_1819ExtScn02 -- For rollback or commit only our own transaction
 
    IF @nFunc = 1819
    BEGIN
@@ -94,9 +111,7 @@ BEGIN
             SET @nAfterStep= 99
             GOTO Quit
          END
-      END
-
-
+      END -- step5 end
       IF @nStep = 99
       BEGIN
          IF @nInputKey = 1 -- Yes or Send
@@ -142,11 +157,44 @@ BEGIN
             IF @nErrNo <> 0
                GOTO TRANS_FAIL
 
+            --V1.1 JCH507
+            -- Extended update
+            IF @cExtendedUpdateSP <> ''
+            BEGIN
+               IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')
+               BEGIN
+                  SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +
+                     ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFromID, @cSuggLOC, @cPickAndDropLOC, @cToLOC, @nErrNo OUTPUT, @cErrMsg OUTPUT'
+                  SET @cSQLParam =
+                     '@nMobile         INT,           ' +
+                     '@nFunc           INT,           ' +
+                     '@cLangCode       NVARCHAR( 3),  ' +
+                     '@nStep           INT,           ' +
+                     '@nInputKey       INT,           ' +
+                     '@cFromID         NVARCHAR( 18), ' +
+                     '@cSuggLOC        NVARCHAR( 10), ' +
+                     '@cPickAndDropLOC NVARCHAR( 10), ' +
+                     '@cToLOC          NVARCHAR( 10), ' +
+                     '@nErrNo          INT           OUTPUT, ' +
+                     '@cErrMsg         NVARCHAR( 20) OUTPUT  '
+
+                  EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                     @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFromID, @cSuggLOC, @cPickAndDropLOC, @cToLOC, @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+                  IF @nErrNo <> 0
+                  BEGIN
+                     SET @cOutField01 = ''
+                     GOTO TRANS_FAIL
+                  END
+               END
+            END -- END ExtUpd
+            --V1.1 JCH507 END
+
             -- Prep next screen var
             IF @cShowPASuccessScn = '1'
             BEGIN
                -- Go to next screen
-               SET @nAfterScn  = 4111
+               SET @nAfterScn  = 4112
                SET @nAfterStep = 3
             END
             ELSE
@@ -170,11 +218,8 @@ BEGIN
 
             GOTO Quit
          END
-
-      END
-
-
-   END
+      END -- step 99 end
+   END --1819 end
 
 TRANS_FAIL:
    ROLLBACK TRAN rdt_1819ExtScn02 -- Only rollback change made here

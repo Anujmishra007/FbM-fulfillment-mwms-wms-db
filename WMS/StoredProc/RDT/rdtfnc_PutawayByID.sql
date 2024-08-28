@@ -1338,6 +1338,7 @@ BEGIN
          END
       END
    END
+   GOTO Quit
 END
 
 /********************************************************************************
@@ -1400,6 +1401,16 @@ BEGIN
    END
 
    GOTO Quit
+
+   Step_99_Fail:
+   BEGIN
+      GOTO Quit
+   END
+END
+
+
+GOTO Quit
+
 
    Step_99_Fail:
    BEGIN
