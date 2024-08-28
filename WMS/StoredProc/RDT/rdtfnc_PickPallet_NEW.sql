@@ -957,8 +957,7 @@ BEGIN
             SET @nStep = @nStep_SkipTask
 
             GOTO Quit
-         END
-         
+         END     
       END 
  
       DECLARE @cUPC      NVARCHAR( 30),
@@ -1777,6 +1776,32 @@ BEGIN
       IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
       BEGIN
 
+         SET @cUDF01 = @cOption         
+         SET @cUDF02 = @cDecodeSP       
+         SET @cUDF03 = @cID             
+         -- SET @cUDF04 = @cUPC            
+         SET @cUDF05 = @cBarcode        
+         SET @cUDF06 = @cPickSlipNo     
+         SET @cUDF07 = @cLOC            
+         SET @cUDF08 = @nTaskQTY        
+         SET @cUDF09 = @cSKU            
+         SET @cUDF10 = @cSuggToLOC      
+         SET @cUDF11 = @cSuggestToLOCSP 
+         SET @cUDF12 = @cPickZone       
+         SET @cUDF13 = @cPUOM           
+         SET @cUDF14 = @nPTaskQTY       
+         SET @cUDF15 = @nMTaskQTY       
+         SET @cUDF16 = @cLottableCode   
+         SET @cUDF17 = @cSuggID         
+         SET @cUDF18 = @cSKUDescr       
+         SET @cUDF19 = @cMUOM_Desc      
+         SET @cUDF20 = @cPUOM_Desc      
+         SET @cUDF21 = @nPUOM_Div       
+         SET @cUDF22 = @cExtendedInfoSP 
+         SET @cUDF23 = @cSuggLOC        
+         SET @cUDF24 = @cToLOC          
+         SET @cUDF25 = @cExtendedInfo   
+
          EXECUTE [RDT].[rdt_ExtScnEntry]
                  @cExtScnSP,
                  @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorerKey, @tExtScnData ,
@@ -1811,8 +1836,35 @@ BEGIN
                  @cUDF28   OUTPUT, @cUDF29 OUTPUT, @cUDF30 OUTPUT
 
          IF @nErrNo <> 0
+         BEGIN
             GOTO Step_99_Fail
-
+         END
+         -- refresh variables
+         SET @cOption         = @cUDF01
+         SET @cDecodeSP       = @cUDF02
+         SET @cID             = @cUDF03
+         -- SET @cUPC            = @cUDF04
+         SET @cBarcode        = @cUDF05
+         SET @cPickSlipNo     = @cUDF06
+         SET @cLOC            = @cUDF07
+         SET @nTaskQTY        = @cUDF08
+         SET @cSKU            = @cUDF09
+         SET @cSuggToLOC      = @cUDF10
+         SET @cSuggestToLOCSP = @cUDF11
+         SET @cPickZone       = @cUDF12
+         SET @cPUOM           = @cUDF13
+         SET @nPTaskQTY       = @cUDF14
+         SET @nMTaskQTY       = @cUDF15
+         SET @cLottableCode   = @cUDF16
+         SET @cSuggID         = @cUDF17
+         SET @cSKUDescr       = @cUDF18
+         SET @cMUOM_Desc      = @cUDF19
+         SET @cPUOM_Desc      = @cUDF20
+         SET @nPUOM_Div       = @cUDF21
+         SET @cExtendedInfoSP = @cUDF22
+         SET @cSuggLOC        = @cUDF23
+         SET @cToLOC          = @cUDF24
+         SET @cExtendedInfo   = @cUDF25 
       END
    END
 

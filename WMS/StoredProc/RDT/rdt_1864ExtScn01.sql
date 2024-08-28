@@ -61,152 +61,72 @@ BEGIN
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
-   -- variables
    DECLARE
       @cOption        NVARCHAR( 1),
       @cSQL           NVARCHAR( MAX),
       @cSQLParam      NVARCHAR( MAX),
       @cBarcode       NVARCHAR( 60),
-      @nMorePage      INT,
-      @cPickSlipNo   NVARCHAR( 10),
-      @cOrderKey     NVARCHAR( 10),
-      @cLoadKey      NVARCHAR( 10),
-      @cPickZone     NVARCHAR( 10),
-      @cLOC          NVARCHAR( 10),
-      @cID           NVARCHAR( 18),
-      @cSKU          NVARCHAR( 20),
-      @cSKUDescr     NVARCHAR( 60),
-      @cPUOM         NVARCHAR( 1),
-      @nPUOM_Div     INT,
-      @nTaskQTY      INT,
-      @nPTaskQTY     INT,
-      @nMTaskQTY     INT,
-      @cSuggLOC      NVARCHAR( 10),  
-      @cSuggID       NVARCHAR( 18),  
+      @nMorePage      INT
+
+   DECLARE 
+      @cDecodeSP    NVARCHAR( 20),
+      @cID          NVARCHAR( 18),
+      @cPickSlipNo  NVARCHAR( 10),
+      @cLOC         NVARCHAR( 10),
+      @nTaskQTY     INT,
+      @cSKU         NVARCHAR( 20),
+      @cSuggToLOC   NVARCHAR( 10),
+      @cSuggestToLOCSP NVARCHAR( 20),  
+      @cPickZone    NVARCHAR( 10), 
+      @cPUOM        NVARCHAR( 1),
+      @nPTaskQTY    INT,
+      @nMTaskQTY    INT,
       @cLottableCode NVARCHAR( 20),
-      @cPUOM_Desc    NVARCHAR( 5),
+      @cSuggID       NVARCHAR( 18),
+      @cSKUDescr     NVARCHAR( 60),
       @cMUOM_Desc    NVARCHAR( 5),
-      @cToLOC        NVARCHAR( 10),
-      @cZone         NVARCHAR( 18),
-      @cSuggToLOC    NVARCHAR( 10), 
-      @cCheckDigitLOC NVARCHAR( 20),
+      @cPUOM_Desc    NVARCHAR( 5),
+      @nPUOM_Div     INT,  
+      @cExtendedInfoSP NVARCHAR( 20),
+      @cSuggLOC        NVARCHAR( 10),
+      @cToLOC          NVARCHAR( 10),
+      @cExtendedInfo   NVARCHAR( 20)   
 
-      @cExtendedInfo       NVARCHAR( 20),
-      @cExtendedInfoSP     NVARCHAR( 20),
-      @cExtendedValidateSP NVARCHAR( 20),
-      @cExtendedUpdateSP   NVARCHAR( 20),
-      @cAutoScanIn         NVARCHAR( 1),
-      @cSuggestLOC         NVARCHAR( 1),   
-      @cDecodeSP           NVARCHAR( 20),
-      @cSwapIDSP           NVARCHAR( 20),
-      @cDefaultToLOC       NVARCHAR( 10),
-      @cMoveQTYAlloc       NVARCHAR( 1), 
-      @cMoveQTYPick        NVARCHAR( 1), 
-      @cVerifyPickZone     NVARCHAR( 1),
-      @cSuggestToLOCSP     NVARCHAR( 20),
-      @cOverrideToLOC      NVARCHAR( 20),
-      @cLOCCheckDigitSP    NVARCHAR( 20),
-      @cShortOption        NVARCHAR( 1),
-
-      @cExtScnSP           NVARCHAR( 20),
 
 
    SET @nAfterScn = @nScn
    SET @nAfterStep = @nStep
 
+   -- init variables
+   SET @cOption         = @cUDF01
+   SET @cDecodeSP       = @cUDF02
+   SET @cID             = @cUDF03
+
+   SET @cBarcode        = @cUDF05
+   SET @cPickSlipNo     = @cUDF06
+   SET @cLOC            = @cUDF07
+   SET @nTaskQTY        = @cUDF08
+   SET @cSKU            = @cUDF09
+   SET @cSuggToLOC      = @cUDF10
+   SET @cSuggestToLOCSP = @cUDF11
+   SET @cPickZone       = @cUDF12
+   SET @cPUOM           = @cUDF13
+   SET @nPTaskQTY       = @cUDF14
+   SET @nMTaskQTY       = @cUDF15
+   SET @cLottableCode   = @cUDF16
+   SET @cSuggID         = @cUDF17
+   SET @cSKUDescr       = @cUDF18
+   SET @cMUOM_Desc      = @cUDF19
+   SET @cPUOM_Desc      = @cUDF20
+   SET @nPUOM_Div       = @cUDF21
+   SET @cExtendedInfoSP = @cUDF22
+   SET @cSuggLOC        = @cUDF23
+   SET @cToLOC          = @cUDF24
+   SET @cExtendedInfo   = @cUDF25 
+
    IF @nFunc = 1864
    BEGIN
-      -- Getting Mobile information
-      SELECT
-         @nFunc            = Func,
-         @nScn             = Scn,
-         @nStep            = Step,
-         @nInputKey        = InputKey,
-         @nMenu            = Menu,
-         @cLangCode        = Lang_code,
-
-         @cStorerKey       = StorerKey,
-         @cFacility        = Facility,
-
-         @cPickSlipNo      = V_PickSlipNo,
-         @cLoadKey         = V_LoadKey,
-         @cOrderKey        = V_OrderKey,
-         @cPickZone        = V_Zone,
-         @cLOC             = V_LOC,
-         @cID              = V_ID,
-         @cSKU             = V_SKU,
-         @cSKUDescr        = V_SKUDescr,
-         @cPUOM            = V_UOM,
-         @nPUOM_Div        = V_PUOM_Div, 
-         @nTaskQTY         = V_TaskQTY,
-         @nPTaskQTY        = V_PTaskQTY,
-         @nMTaskQTY        = V_MTaskQTY,
-         @cLottable01      = V_Lottable01,    
-         @cLottable02      = V_Lottable02,    
-         @cLottable03      = V_Lottable03,    
-         @dLottable04      = V_Lottable04,    
-         @dLottable05      = V_Lottable05,    
-         @cLottable06      = V_Lottable06,    
-         @cLottable07      = V_Lottable07,    
-         @cLottable08      = V_Lottable08,    
-         @cLottable09      = V_Lottable09,    
-         @cLottable10      = V_Lottable10,    
-         @cLottable11      = V_Lottable11,    
-         @cLottable12      = V_Lottable12,    
-         @dLottable13      = V_Lottable13,    
-         @dLottable14      = V_Lottable14,    
-         @dLottable15      = V_Lottable15,
-
-         @cSuggLOC         = V_String1,
-         @cSuggID          = V_String2,
-         @cLottableCode    = V_String3,
-         @cPUOM_Desc       = V_String4,
-         @cMUOM_Desc       = V_String5,
-         @cToLOC           = V_String6,
-         @cZone            = V_String7,
-         @cSuggToLOC       = V_String8,
-
-         @cExtendedInfo       = V_String21,
-         @cExtendedInfoSP     = V_String22,
-         @cExtendedValidateSP = V_String23,
-         @cExtendedUpdateSP   = V_String24,
-         @cAutoScanIn         = V_String25,
-         @cSuggestLOC         = V_String26,
-         @cDecodeSP           = V_String27,
-         @cSwapIDSP           = V_String28,
-         @cDefaultToLOC       = V_String29,
-         @cMoveQTYAlloc       = V_String30,
-         @cMoveQTYPick        = V_String31,
-         @cVerifyPickZone     = V_string32,
-         @cSuggestToLOCSP     = V_string33,
-         @cOverrideToLOC      = V_string34,
-         @cLOCCheckDigitSP    = V_string35,
-         @cShortOption        = V_string36,
-         @cExtScnSP           = V_string37,
-
-         @cBarcode            = V_String41,
-
-         @cInField01 = I_Field01,   @cOutField01 = O_Field01,  @cFieldAttr01  = FieldAttr01,
-         @cInField02 = I_Field02,   @cOutField02 = O_Field02,  @cFieldAttr02  = FieldAttr02,
-         @cInField03 = I_Field03,   @cOutField03 = O_Field03,  @cFieldAttr03  = FieldAttr03,
-         @cInField04 = I_Field04,   @cOutField04 = O_Field04,  @cFieldAttr04  = FieldAttr04,
-         @cInField05 = I_Field05,   @cOutField05 = O_Field05,  @cFieldAttr05  = FieldAttr05,
-         @cInField06 = I_Field06,   @cOutField06 = O_Field06,  @cFieldAttr06  = FieldAttr06,
-         @cInField07 = I_Field07,   @cOutField07 = O_Field07,  @cFieldAttr07  = FieldAttr07,
-         @cInField08 = I_Field08,   @cOutField08 = O_Field08,  @cFieldAttr08  = FieldAttr08,
-         @cInField09 = I_Field09,   @cOutField09 = O_Field09,  @cFieldAttr09  = FieldAttr09,
-         @cInField10 = I_Field10,   @cOutField10 = O_Field10,  @cFieldAttr10  = FieldAttr10,
-         @cInField11 = I_Field11,   @cOutField11 = O_Field11,  @cFieldAttr11  = FieldAttr11,
-         @cInField12 = I_Field12,   @cOutField12 = O_Field12,  @cFieldAttr12  = FieldAttr12,
-         @cInField13 = I_Field13,   @cOutField13 = O_Field13,  @cFieldAttr13  = FieldAttr13,
-         @cInField14 = I_Field14,   @cOutField14 = O_Field14,  @cFieldAttr14  = FieldAttr14,
-         @cInField15 = I_Field15,   @cOutField15 = O_Field15,  @cFieldAttr15  = FieldAttr15
-      FROM rdt.rdtMobRec (NOLOCK)
-      WHERE  Mobile = @nMobile
-
-      SET @cID = @cSuggID
-      SET @cBarcode = @cID
-
+      -- if press enter
       IF @nInputKey = 1
       BEGIN
          -- screen mapping
@@ -487,27 +407,7 @@ BEGIN
             SET @nAfterScn = @nScn
             SET @nAfterStep = @nStep
 
-            UPDATE rdt.rdtMobRec WITH (ROWLOCK) SET
-               EditDate = GETDATE(),
-               ErrMsg = @cErrMsg,
-               Func   = @nFunc,
-
-               V_SKU = @cSKU,
-               V_TaskQTY = @nTaskQTY,
-               V_LOC = @cLOC,
-               V_ID = @cID,
-               V_String8 = @cSuggToLOC,
-               V_MTaskQTY = @nMTaskQTY,
-               V_PTaskQTY = @nPTaskQTY,
-               V_String3 = @cLottableCode,
-               V_SKUDescr = @cSKUDescr,
-               V_String5 = @cMUOM_Desc,
-               V_String4 = @cPUOM_Desc,
-               V_PUOM_Div = @nPUOM_Div,
-            WHERE Mobile = @nMobile
-
          END
-
          -- Skip Task
          IF @cOption = '2'
          BEGIN
@@ -601,24 +501,6 @@ BEGIN
                         SET @cOutField15 = @cExtendedInfo
                END
             END
-            
-            UPDATE rdt.rdtMobRec WITH (ROWLOCK) SET
-               EditDate = GETDATE(),
-               ErrMsg = @cErrMsg,
-               Func   = @nFunc,
-               
-               V_SKU = @cSKU,
-               V_TaskQTY = @nTaskQTY,
-               V_LOC = @cLOC,
-               V_ID = @cID,
-               V_MTaskQTY = @nMTaskQTY,
-               V_PTaskQTY = @nPTaskQTY,
-               V_String3 = @cLottableCode,
-               V_SKUDescr = @cSKUDescr,
-               V_String5 = @cMUOM_Desc,
-               V_String4 = @cPUOM_Desc,
-               V_PUOM_Div = @nPUOM_Div,
-            WHERE Mobile = @nMobile
          END
          GOTO Quit
       END
@@ -645,6 +527,33 @@ BEGIN
    END
 
 Quit:
+BEGIN
+   -- save variables
+   SET @cUDF01 = @cOption         
+   SET @cUDF02 = @cDecodeSP       
+   SET @cUDF03 = @cID             
+   SET @cUDF04 = @cUPC            
+   SET @cUDF05 = @cBarcode        
+   SET @cUDF06 = @cPickSlipNo     
+   SET @cUDF07 = @cLOC            
+   SET @cUDF08 = @nTaskQTY        
+   SET @cUDF09 = @cSKU            
+   SET @cUDF10 = @cSuggToLOC      
+   SET @cUDF11 = @cSuggestToLOCSP 
+   SET @cUDF12 = @cPickZone       
+   SET @cUDF13 = @cPUOM           
+   SET @cUDF14 = @nPTaskQTY       
+   SET @cUDF15 = @nMTaskQTY       
+   SET @cUDF16 = @cLottableCode   
+   SET @cUDF17 = @cSuggID         
+   SET @cUDF18 = @cSKUDescr       
+   SET @cUDF19 = @cMUOM_Desc      
+   SET @cUDF20 = @cPUOM_Desc      
+   SET @cUDF21 = @nPUOM_Div       
+   SET @cUDF22 = @cExtendedInfoSP 
+   SET @cUDF23 = @cSuggLOC        
+   SET @cUDF24 = @cToLOC          
+   SET @cUDF25 = @cExtendedInfo  
 END
 
 GO
