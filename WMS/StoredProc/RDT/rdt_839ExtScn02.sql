@@ -157,7 +157,7 @@ BEGIN
    BEGIN
       IF @nAction = 0
       BEGIN
-         IF @nStep = 4 
+         IF @nStep <> '' AND @nStep <> 0 AND @nAfterStep = 1
          BEGIN
             IF @nInputKey = 1
             BEGIN
@@ -250,7 +250,7 @@ BEGIN
                   DECLARE @curPKD CURSOR
                   SET @curPKD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
                      SELECT 
-                        Loc, ID, Qty, Sku
+                        OrderKey, Loc, ID, Qty, Sku
                      FROM PICKDETAIL PKD WITH(NOLOCK)
                      WHERE StorerKey = @cStorerKey
                         AND DropID = @cDropID
@@ -263,18 +263,15 @@ BEGIN
                      SAVE TRANSACTION rdt_839ExtScn02_01
 
                   BEGIN TRY
-                     IF ISNULL(@cOutField01,'') <> '' AND @cToLOC <> @cOutField01
-                     BEGIN
-                        UPDATE OI
-                        SET OrderInfo10 = @cToLOC
-                        FROM OrderInfo OI WITH(ROWLOCK)
-                        INNER JOIN PICKHEADER PKH WITH (NOLOCK) ON OI.OrderKey = PKH.OrderKey
-                        WHERE PKH.PickHeaderKey = @cPickSlipNo 
-                           AND PKH.StorerKey = @cStorerKey
-                     END
+                     UPDATE OI
+                     SET OrderInfo10 = @cToLOC
+                     FROM OrderInfo OI WITH(ROWLOCK)
+                     INNER JOIN PICKHEADER PKH WITH (NOLOCK) ON OI.OrderKey = PKH.OrderKey
+                     WHERE PKH.PickHeaderKey = @cPickSlipNo 
+                        AND PKH.StorerKey = @cStorerKey
 
                      OPEN @curPKD
-                     FETCH NEXT FROM @curPKD INTO @cSourceLoc, @cSourceID, @cPickedQty, @cSku
+                     FETCH NEXT FROM @curPKD INTO @cOrderKey, @cSourceLoc, @cSourceID, @cPickedQty, @cSku
                      WHILE @@FETCH_STATUS = 0
                      BEGIN
 
@@ -292,6 +289,7 @@ BEGIN
                            @cFromID        = @cSourceID,
                            @cSKU           = @cSku,
                            @cToID          = @cDropID,
+                           @cOrderKey      = @cOrderKey,
                            @nQTY           = @cPickedQty,
                            @nQTYPick       = @cPickedQty,
                            @nFunc          = @nFunc
@@ -315,7 +313,7 @@ BEGIN
                            GOTO Quit
                         END
 
-                     FETCH NEXT FROM @curPKD INTO @cSourceLoc, @cSourceID, @cPickedQty, @cSku
+                     FETCH NEXT FROM @curPKD INTO @cOrderKey, @cSourceLoc, @cSourceID, @cPickedQty, @cSku
                      END
                      CLOSE @curPKD
                      DEALLOCATE @curPKD
