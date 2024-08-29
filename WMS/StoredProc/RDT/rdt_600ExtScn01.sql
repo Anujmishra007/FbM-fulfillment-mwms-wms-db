@@ -13,6 +13,7 @@ GO
 /* Date       Rev  Author   Purposes                                    */
 /* 2024-02-26 1.0  Dennis   Draft                                       */
 /* 2024-03-01 1.1  Dennis   UWP-14799                                   */
+/* 2024-08-26 1.2  VPA235                                               */
 /*                                                                      */
 /************************************************************************/
 
@@ -225,6 +226,34 @@ BEGIN
                         SET @cLottable06 = '1'
                      END
                   END
+
+                  --ADDED BY VPA235 FOR FG NEAR EXPIRY START
+                  IF ISNULL(@dLottable04, '') <> '' AND
+                     DATEDIFF(DAY, GETDATE(), @dLottable04) > 0 AND
+                     DATEDIFF(DAY, GETDATE(), @dLottable04) <= 180 AND
+                     (ISNULL([rdt].[RDTGetConfig](@nFunc, 'FGNEAREXPIRYVLD', @cStorerKey),
+                              '0') != '0')
+                  BEGIN
+                     SET @cExpiredCode = ''
+                     
+                     SELECT @cExpiredCode = ISNULL([Code], '')
+                     FROM [CODELKUP] WITH (NOLOCK)
+                     WHERE [storerkey] = @cStorerkey
+                        AND [UDF01] = 'FG_NearExpire'
+                        AND [LISTNAME] = 'SLCode'
+                     
+                     IF ISNULL(@cExpiredCode, '') = ''
+                     BEGIN
+                        SET @nErrNo = 63533;
+                        SET @cErrMsg = 'Near Expire Code is not configured for this Storer key' + @cStorerkey;
+                        GOTO Quit
+                     END
+                     ELSE
+                     BEGIN
+                        SET @cLottable07 = @cExpiredCode
+                     END
+                  END
+                  --ADDED BY VPA235 FOR FG NEAR EXPIRY END
                END
             END
          END
