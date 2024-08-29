@@ -146,7 +146,8 @@ BEGIN
                SELECT @cOrderKey = OrderKey
                FROM dbo.ORDERS WITH(NOLOCK)
                WHERE StorerKey = @cStorerKey
-                  AND ISNULL(BuyerPO, '') = @cContainerNo
+                  AND ExternOrderKey = @cContainerNo
+                  AND Status NOT IN ('9', 'CANC')
 
                SELECT @nRowCount = @@ROWCOUNT
 
@@ -177,6 +178,7 @@ BEGIN
                INNER JOIN dbo.PICKDETAIL pkd WITH(NOLOCK) ON MBOLD.OrderKey = pkd.OrderKey
                WHERE MBOLD.MBolKey = @cMBOLKEY
                   AND pkd.StorerKey = @cStorerKey
+                  AND pkd.Status NOT IN ('4', '9')
 
                SET @cTotalCnt = IIF(@cTotalCnt IS NULL, '0', @cTotalCnt)
 

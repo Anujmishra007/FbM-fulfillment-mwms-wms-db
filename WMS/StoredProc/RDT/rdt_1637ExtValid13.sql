@@ -94,7 +94,7 @@ AS
             GOTO Quit
          END
 
-         SELECT @cCurrentContainerNo = ISNULL(BuyerPO, '')
+         SELECT @cCurrentContainerNo = ExternOrderKey
          FROM dbo.ORDERS WITH(NOLOCK)
          WHERE StorerKey = @cStorerkey
             AND OrderKey = @cOrderKey

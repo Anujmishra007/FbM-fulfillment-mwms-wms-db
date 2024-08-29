@@ -59,6 +59,7 @@ BEGIN
          INNER JOIN dbo.PICKDETAIL pkd WITH(NOLOCK) ON MBOLD.OrderKey = pkd.OrderKey
          WHERE MBOLD.MBolKey = @cMBOLKEY
             AND pkd.StorerKey = @cStorerKey
+            AND pkd.Status NOT IN ('4', '9')
 
          SET @cExtendedInfo1 = 'Total:' + ISNULL(TRY_CAST(@nTotalCnt AS NVARCHAR(5)), '0')
       END
