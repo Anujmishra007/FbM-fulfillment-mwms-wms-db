@@ -18,6 +18,7 @@ GO
 /* 2024-04-11   1.4  Ung        WMS-25227 Add SuggestToLOCSP, OverrideToLOC   */
 /* 2024-05-21   1.5  Dennis     FCR-336 Check Digit                           */
 /* 2024-05-28   1.6  Ung        UWP-19459 Fix suggested ID sequence           */
+/* 2024-08-26   1.7  LJQ006     FCR-735 Add new screen of short pick option   */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_PickPallet_NEW] (

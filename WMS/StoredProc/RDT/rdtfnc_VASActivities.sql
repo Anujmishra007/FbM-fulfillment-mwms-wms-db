@@ -15,11 +15,11 @@ GO
 /*                                                                               */
 /* Purpose: Execute VAS Operation                                                */
 /*                                                                               */
-/* Version: 1.0                                                                  */
+/* Version: 1.1                                                                  */
 /*                                                                               */
 /* Date       Rev  Author      Purposes                                          */
 /* 2024-02-27 1.0  NLT013      Create   first version (UWP-15257)                */
-/* 2024-08-14 1.1  LJQ006      Update   Outbound VAS (FCR-657)                   */                                                                                                                  */
+/* 2024-08-14 1.1  LJQ006      Update   Outbound VAS (FCR-657)                   */
 /*********************************************************************************/
 
 CREATE PROCEDURE [rdt].[rdtfnc_VASActivities] (
@@ -258,7 +258,6 @@ BEGIN
 
 
       IF @nRowCount > 0
-
       -- add validation of storer key and it's error message
       -- cause combined message is too long to display on RDT
       BEGIN
@@ -282,26 +281,52 @@ BEGIN
          WHERE DropID IS NOT NULL
          AND DropID <> @cID
          AND ID = @cID
+         AND StorerKey = @cStorerKey
+         AND Status = 5
 
          IF @nRowCount > 0
          BEGIN
-            SET @nErrNo = 211722
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Please Use Drop ID Instead
-            GOTO Step_ID_Fail
+            -- consolidation validating (pallet move)
+            SELECT
+               @nRowCount = COUNT(1)
+            FROM rdt.rdtSTDEventlog rse WITH(NOLOCK)
+            INNER JOIN dbo.PICKDETAIL pd WITH(NOLOCK) ON rse.Orderkey = pd.OrderKey
+            WHERE FunctionID = '1813'
+            AND ToID = @cID
+
+            IF @nRowCount = 0
+            BEGIN
+               SET @nErrNo = 211722
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Please Use Drop ID Instead
+               GOTO Step_ID_Fail
+            END
+
+            -- for drop id moves to ToID 
+            SELECT TOP 1
+               @cOrderKey = OrderKey,
+               @cOrderLineNumber = OrderLineNumber,
+               @cPickSKU = SKU
+            FROM dbo.PICKDETAIL WITH(NOLOCK)
+            WHERE DropID <> @cID 
+            AND ID = @cID
+            AND Storerkey = @cStorerKey
+            AND Status = 5
+            SET @nRowCount = @@ROWCOUNT
+         END
+         ELSE
+         BEGIN
+            SELECT TOP 1
+               @cOrderKey = OrderKey,
+               @cOrderLineNumber = OrderLineNumber,
+               @cPickSKU = SKU
+            FROM dbo.PICKDETAIL WITH(NOLOCK)
+            WHERE (DropID = @cID OR (DropId IS NULL AND ID = @cID))
+            AND Storerkey = @cStorerKey
+            AND Status = 5
+            SET @nRowCount = @@ROWCOUNT
          END
 
-         SELECT 
-            @cOrderKey = OrderKey,
-            @cOrderLineNumber = OrderLineNumber,
-            @cPickSKU = SKU
-
-         FROM dbo.PICKDETAIL WITH(NOLOCK)
-         WHERE (DropID = @cID OR (DropId IS NULL AND ID = @cID))
-         AND Storerkey = @cStorerKey
-         AND Status = 5
-
          -- Add err message on checking if the ID exists in pickdetail
-         SET @nRowCount = @@ROWCOUNT
          IF @nRowCount = 0
          BEGIN
             SET @nErrNo = 211718
@@ -453,7 +478,94 @@ BEGIN
       -- OVAS scenario
       IF @cOVASFlag = 1
       BEGIN
-         GOTO Step_OVASCode
+         IF (@cServiceType IS NOT NULL AND LEN(TRIM(@cServiceType)) > 0)
+         BEGIN
+            -- Check if OVAS code master data were configured or not
+            SELECT 
+            @nRowCount = COUNT(1)
+            FROM dbo.CODELKUP WITH(NOLOCK)
+            WHERE Storerkey     = @cStorerKey
+            AND LISTNAME     = @cACTVASWO
+            AND Code         = @cServiceType
+            AND UDF01        = @cFacility
+            AND code2        = 'OVAS'
+         END
+            
+         IF @nRowCount = 0
+         BEGIN
+            SET @nErrNo = 211719
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- OVAS Code Invalid
+            GOTO Step_VASCode_Fail
+         END
+
+         -- Check option
+         IF (@cOption IS NOT NULL AND LEN(TRIM(@cOption)) > 0)
+         BEGIN
+            IF @cOption <> '0'
+            BEGIN
+               SET @nErrNo = 211704
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP' ) --Invalida Option
+               GOTO Step_VASCode_Fail
+            END
+         END
+
+         IF (@cServiceType IS NOT NULL AND LEN(TRIM(@cServiceType)) > 0)
+         BEGIN
+            -- Create Work Order if everything is good
+            EXEC rdt.rdt_CreateVASWorkOrder @nFunc, @nMobile, @cLangCode, @cStorerKey, @cFacility, 
+               '', 
+               '',
+               @cOrderKey,
+               @cOrderLineNumber,
+               '',
+               @cWKOrderUdef01,
+               @cGenerateCharges,
+               @cServiceType,
+               @cPickSKU,
+               @cACTVASWO,
+               2,                     --1. Inbound    2. Outbound
+               @nErrNo     OUTPUT,
+               @cErrMsg    OUTPUT
+
+            IF @nErrNo <> 0
+            BEGIN
+               GOTO Step_VASCode_Fail
+            END
+
+            SET @nInforMsgNo = 211717
+            SET @cInforMsg = rdt.rdtgetmessage( @nInforMsgNo, @cLangCode, 'DSP') --Create WorkOrder Success
+            SET @cOutField03 = @cInforMsg
+         END
+
+         IF (@cOption IS NOT NULL AND TRIM(@cOption) = '0')
+         BEGIN
+            -- Finalize Work
+            EXEC rdt.rdt_FinalizeVASWorkOrder @nFunc, @nMobile, @cLangCode, @cStorerKey, @cFacility, 
+               @cWKOrderUdef01,
+               @nErrNo     OUTPUT,
+               @cErrMsg    OUTPUT
+
+            IF @nErrNo <> 0
+            BEGIN
+               GOTO Step_VASCode_Fail
+            END
+
+            -- Prepare prev screen var
+            SET @cOutField01 = ''
+            SET @cOVASFlag = ''
+            -- Go back to previous screen
+            SET @nScn  = @nScn_ID
+            SET @nStep = @nStep_ID
+            GOTO Quit
+         END
+         -- Prepare next screen var
+         SET @cOutField01 = ''
+         SET @cOutField02 = ''
+
+         -- Go to next screen
+         SET @nScn  = @nScn_VASCode
+         SET @nStep = @nStep_VASCode  
+         GOTO Quit  
       END
       
       --Check VAS Code
@@ -544,90 +656,6 @@ BEGIN
       -- Go to next screen
       SET @nScn  = @nScn_VASCode
       SET @nStep = @nStep_VASCode
-   END
-
-   Step_OVASCode:
-   BEGIN
-      IF (@cServiceType IS NOT NULL AND LEN(TRIM(@cServiceType)) > 0)
-      BEGIN
-      -- Check if OVAS code master data were configured or not
-         SELECT 
-         @nRowCount = COUNT(1)
-         FROM dbo.CODELKUP WITH(NOLOCK)
-         WHERE Storerkey     = @cStorerKey
-         AND LISTNAME     = @cACTVASWO
-         AND Code         = @cServiceType
-         AND UDF01        = @cFacility
-         AND code2        = 'OVAS'
-      END
-            
-      IF @nRowCount = 0
-      BEGIN
-         SET @nErrNo = 211719
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- OVAS Code Invalid
-         GOTO Step_VASCode_Fail
-      END
-
-      -- Check option
-      IF (@cOption IS NOT NULL AND LEN(TRIM(@cOption)) > 0)
-      BEGIN
-         IF @cOption <> '0'
-         BEGIN
-            SET @nErrNo = 211704
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP' ) --Invalida Option
-            GOTO Step_VASCode_Fail
-         END
-      END
-
-      IF (@cServiceType IS NOT NULL AND LEN(TRIM(@cServiceType)) > 0)
-      BEGIN
-         -- Create Work Order if everything is good
-         EXEC rdt.rdt_CreateVASWorkOrder @nFunc, @nMobile, @cLangCode, @cStorerKey, @cFacility, 
-            '', 
-            '',
-            @cOrderKey,
-            @cOrderLineNumber,
-            '',
-            @cWKOrderUdef01,
-            @cGenerateCharges,
-            @cServiceType,
-            @cPickSKU,
-            @cACTVASWO,
-            2,                     --1. Inbound    2. Outbound
-            @nErrNo     OUTPUT,
-            @cErrMsg    OUTPUT
-
-         IF @nErrNo <> 0
-         BEGIN
-            GOTO Step_VASCode_Fail
-         END
-
-         SET @nInforMsgNo = 211717
-         SET @cInforMsg = rdt.rdtgetmessage( @nInforMsgNo, @cLangCode, 'DSP') --Create WorkOrder Success
-         SET @cOutField03 = @cInforMsg
-      END
-
-      IF (@cOption IS NOT NULL AND TRIM(@cOption) = '0')
-      BEGIN
-         -- Finalize Work
-         EXEC rdt.rdt_FinalizeVASWorkOrder @nFunc, @nMobile, @cLangCode, @cStorerKey, @cFacility, 
-            @cWKOrderUdef01,
-            @nErrNo     OUTPUT,
-            @cErrMsg    OUTPUT
-
-         IF @nErrNo <> 0
-         BEGIN
-            GOTO Step_VASCode_Fail
-         END
-
-         -- Prepare prev screen var
-         SET @cOutField01 = ''
-         SET @cOVASFlag = ''
-         -- Go back to previous screen
-         SET @nScn  = @nScn_ID
-         SET @nStep = @nStep_ID
-         GOTO Quit
-      END    
    END
 
    IF @nInputKey = 0 -- Esc or No
