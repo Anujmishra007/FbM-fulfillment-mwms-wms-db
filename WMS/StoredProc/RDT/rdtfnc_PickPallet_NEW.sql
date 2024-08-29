@@ -107,6 +107,7 @@ DECLARE
    @cOverrideToLOC      NVARCHAR( 20),
    @cLOCCheckDigitSP    NVARCHAR( 20),
    @cShortOption        NVARCHAR( 1),
+   @cShortFlag          INT,
 
    @cExtScnSP           NVARCHAR( 20),
    @nAction             INT,
@@ -197,6 +198,7 @@ SELECT
    @cLOCCheckDigitSP    = V_string35,
    @cShortOption        = V_string36,
    @cExtScnSP           = V_string37,
+   @cShortFlag          = V_string38,
    
    @cBarcode            = V_String41,
 
@@ -927,6 +929,8 @@ Scn 3 = 5912. ID screen
 ******************************************************************************/
 Step_ID:
 BEGIN
+   SET @cShortFlag = 0 -- refresh shortflag
+   SET @cID = '' -- refresh cID
    IF @nInputKey = 1 -- ENTER
    BEGIN
       -- Screen mapping
@@ -1625,15 +1629,31 @@ BEGIN
          GOTO Quit
       END
 
-      -- Confirm task
-      EXECUTE rdt.rdt_PickPallet_Confirm @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 
-         @cPickSlipNo, @cPickZone, @cLOC, @cID, @cSKU, @nTaskQTY, @cToLOC, @cLottableCode, 
-         @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05, 
-         @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10, 
-         @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, 
-         @nErrNo OUTPUT, @cErrMsg OUTPUT
-      IF @nErrNo <> 0
-         GOTO Quit
+      IF @cShortFlag = 1
+      BEGIN
+         -- Confirm Short Pick Task
+         EXECUTE rdt.rdt_PickPallet_ConfirmShort @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 
+            @cPickSlipNo, @cPickZone, @cLOC, @cID, @cSKU, @nTaskQTY, @cToLOC, @cLottableCode, 
+            @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05, 
+            @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10, 
+            @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, 
+            @nErrNo OUTPUT, @cErrMsg OUTPUT
+         IF @nErrNo <> 0
+            GOTO Quit
+         SET @cShortFlag = 0
+      END
+      ELSE
+      BEGIN
+         -- Confirm task
+         EXECUTE rdt.rdt_PickPallet_Confirm @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 
+            @cPickSlipNo, @cPickZone, @cLOC, @cID, @cSKU, @nTaskQTY, @cToLOC, @cLottableCode, 
+            @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05, 
+            @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10, 
+            @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, 
+            @nErrNo OUTPUT, @cErrMsg OUTPUT
+         IF @nErrNo <> 0
+            GOTO Quit
+      END
 
       -- Go to next screen
       EXEC rdt.rdt_PickPallet_GoToNextScreen @nMobile, @nFunc, @cLangCode, @nInputKey, @cFacility, @cStorerKey, 
@@ -1768,13 +1788,24 @@ BEGIN
    GOTO Quit
 END
 GOTO Quit
-
+-- FCR-735 Ext Screen
 Step_ExtScn:
 BEGIN
    IF @cExtScnSP <> ''
    BEGIN
       IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
       BEGIN
+         DECLARE
+            @cUDF01  NVARCHAR( 250), @cUDF02 NVARCHAR( 250), @cUDF03 NVARCHAR( 250),
+            @cUDF04  NVARCHAR( 250), @cUDF05 NVARCHAR( 250), @cUDF06 NVARCHAR( 250),
+            @cUDF07  NVARCHAR( 250), @cUDF08 NVARCHAR( 250), @cUDF09 NVARCHAR( 250),
+            @cUDF10  NVARCHAR( 250), @cUDF11 NVARCHAR( 250), @cUDF12 NVARCHAR( 250),
+            @cUDF13  NVARCHAR( 250), @cUDF14 NVARCHAR( 250), @cUDF15 NVARCHAR( 250),
+            @cUDF16  NVARCHAR( 250), @cUDF17 NVARCHAR( 250), @cUDF18 NVARCHAR( 250),
+            @cUDF19  NVARCHAR( 250), @cUDF20 NVARCHAR( 250), @cUDF21 NVARCHAR( 250),
+            @cUDF22  NVARCHAR( 250), @cUDF23 NVARCHAR( 250), @cUDF24 NVARCHAR( 250),
+            @cUDF25  NVARCHAR( 250), @cUDF26 NVARCHAR( 250), @cUDF27 NVARCHAR( 250),
+            @cUDF28  NVARCHAR( 250), @cUDF29 NVARCHAR( 250), @cUDF30 NVARCHAR( 250)
 
          SET @cUDF01 = @cOption         
          SET @cUDF02 = @cDecodeSP       
@@ -1800,7 +1831,12 @@ BEGIN
          SET @cUDF22 = @cExtendedInfoSP 
          SET @cUDF23 = @cSuggLOC        
          SET @cUDF24 = @cToLOC          
-         SET @cUDF25 = @cExtendedInfo   
+         SET @cUDF25 = @cExtendedInfo
+         SET @cUDF26 = @cMoveQTYAlloc
+         SET @cUDF27 = @cMoveQTYPick 
+         SET @cUDF28 = @cDefaultToLoc  
+
+         SET @nAction = 0
 
          EXECUTE [RDT].[rdt_ExtScnEntry]
                  @cExtScnSP,
@@ -1865,6 +1901,11 @@ BEGIN
          SET @cSuggLOC        = @cUDF23
          SET @cToLOC          = @cUDF24
          SET @cExtendedInfo   = @cUDF25 
+         SET @cMoveQTYAlloc   = @cUDF26
+         SET @cMoveQTYPick    = @cUDF27
+         SET @cDefaultToLoc   = @cUDF28
+
+         SET @cShortFlag      = @cUDF29
       END
    END
 
@@ -1946,6 +1987,8 @@ BEGIN
       V_string34     = @cOverrideToLOC,
       V_string35     = @cLOCCheckDigitSP,
       V_string36     = @cShortOption,  -- short option
+      V_string37     = @cExtScnSP,
+      V_string38     = @cShortFlag,
    
       V_String41     = @cBarcode,
 

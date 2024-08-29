@@ -14,7 +14,7 @@ GO
 /* 2024-08-27 1.0  LJQ006   Migrated from rdt_PickPallet_Confirm              */
 /******************************************************************************/
 
-CREATE OR ALTER PROCEDURE [RDT].[rdt_PickPallet_Confirm] (
+CREATE OR ALTER PROCEDURE [RDT].[rdt_PickPallet_ConfirmShort] (
    @nMobile       INT,
    @nFunc         INT,
    @cLangCode     NVARCHAR( 18),
@@ -499,5 +499,5 @@ GO
 SET ANSI_NULLS ON
 GO
 
-GRANT EXECUTE ON RDT.rdt_PickPallet_Confirm TO NSQL
+GRANT EXECUTE ON RDT.rdt_PickPallet_ConfirmShort TO NSQL
 GO

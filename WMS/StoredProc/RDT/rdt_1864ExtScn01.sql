@@ -90,9 +90,26 @@ BEGIN
       @cExtendedInfoSP NVARCHAR( 20),
       @cSuggLOC        NVARCHAR( 10),
       @cToLOC          NVARCHAR( 10),
-      @cExtendedInfo   NVARCHAR( 20)   
+      @cExtendedInfo   NVARCHAR( 20),
+      @cMoveQTYAlloc   NVARCHAR( 1),
+      @cMoveQTYPick    NVARCHAR( 1),
+      @cDefaultToLOC  NVARCHAR( 10),
+      @nStep_SkipTask  INT,
+      @nScn_ToLOC      INT,
+      @nStep_ToLOC     INT,
+      @nScn_ID         INT,
+      @nStep_ID        INT,
+      @cShortFlag      INT
 
 
+
+   SET @nScn_ToLOC = 6264
+   SET @nStep_ToLOC = 5
+
+   SET @nScn_ID = 6262
+   SET @nStep_ID = 3
+
+   SET @nStep_SkipTask = 4
 
    SET @nAfterScn = @nScn
    SET @nAfterStep = @nStep
@@ -123,12 +140,17 @@ BEGIN
    SET @cSuggLOC        = @cUDF23
    SET @cToLOC          = @cUDF24
    SET @cExtendedInfo   = @cUDF25 
+   SET @cMoveQTYAlloc   = @cUDF26
+   SET @cMoveQTYPick    = @cUDF27
+   SET @cDefaultToLoc   = @cUDF28
+   SET @cShortFlag      = @cUDF29
 
    IF @nFunc = 1864
    BEGIN
       -- if press enter
       IF @nInputKey = 1
       BEGIN
+         SET @cID = @cSuggID
          -- screen mapping
          SET @cOption = @cInField01
          -- Validate blank
@@ -371,6 +393,20 @@ BEGIN
                   SET @cSuggToLOC = @cSuggestToLOCSP
             END
 
+            -- To LOC
+            IF @cMoveQTYAlloc = '1' OR @cMoveQTYPick = '1'
+            BEGIN
+               -- Go to TO LOC screen
+               SET @nAfterScn = @nScn_ToLOC
+               SET @nAfterStep = @nStep_ToLOC
+
+               SET @cOutField01 = @cSuggToLOC 
+               SET @cOutField02 = @cDefaultToLOC -- TO LOC
+
+               SET @cShortFlag = 1
+
+               GOTO Quit
+            END
             -- Confirm
             EXECUTE rdt.rdt_PickPallet_ConfirmShort @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 
                @cPickSlipNo, @cPickZone, @cLOC, @cID, @cSKU, @nTaskQTY, @cToLOC, @cLottableCode, 
@@ -406,7 +442,6 @@ BEGIN
             
             SET @nAfterScn = @nScn
             SET @nAfterStep = @nStep
-
          END
          -- Skip Task
          IF @cOption = '2'
@@ -508,8 +543,8 @@ BEGIN
       IF @nInputKey = 0 -- ESC
       BEGIN
          -- Go to ID screen
-         SET @nScn = @nScn_ID
-         SET @nStep = @nStep_ID
+         SET @nAfterScn = @nScn_ID
+         SET @nAfterStep = @nStep_ID
       END
       GOTO Quit
 
@@ -525,9 +560,7 @@ BEGIN
       SET @cOutField14 = '' -- ID
       GOTO Quit
    END
-
 Quit:
-BEGIN
    -- save variables
    SET @cUDF01 = @cOption         
    SET @cUDF02 = @cDecodeSP       
@@ -554,13 +587,17 @@ BEGIN
    SET @cUDF23 = @cSuggLOC        
    SET @cUDF24 = @cToLOC          
    SET @cUDF25 = @cExtendedInfo  
-END
+   SET @cUDF26 = @cMoveQTYAlloc
+   SET @cUDF27 = @cMoveQTYPick
+   SET @cUDF28 = @cDefaultToLoc
+   SET @cUDF29 = @cShortFlag
+END;
 
-GO
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS ON
 GO
+
 GRANT EXECUTE ON rdt.rdt_1864ExtScn01 TO NSQL
 GO
  
