@@ -264,7 +264,7 @@ BEGIN
                   FROM dbo.WorkOrderDetail wod  WITH(NOLOCK)
                   INNER JOIN dbo.WorkOrder wo WITH(NOLOCK) ON wo.WorkOrderKey = wod.WorkOrderKey
                   INNER JOIN dbo.CODELKUP lk WITH(NOLOCK) ON wo.StorerKey = lk.StorerKey AND wod.Type = lk.Code AND lk.LISTNAME = 'WKORDTYPE' AND lk.UDF04 = 'LVSPRICELB'
-                  INNER JOIN dbo.PickDetail pkd WITH(NOLOCK) ON wo.StorerKey = pkd.StorerKey AND ISNULL(wod.ExternWorkOrderKey, '') = pkd.OrderKey AND pkd.OrderLinenumber = wod.ExternLineNo
+                  INNER JOIN dbo.PickDetail pkd WITH(NOLOCK) ON wo.StorerKey = pkd.StorerKey AND ISNULL(wod.ExternWorkOrderKey, '') = pkd.OrderKey AND pkd.OrderLinenumber = wod.ExternLineNo AND pkd.Status = @cPickConfirmStatus
                   LEFT JOIN (SELECT DISTINCT lk1.LISTNAME, wod1.StorerKey, lk1.Code, Lk1.code2, lk1.UDF01 FROM dbo.WorkOrderDetail wod1 WITH(NOLOCK) 
                            INNER JOIN dbo.PickDetail pkd1 WITH(NOLOCK) ON wod1.StorerKey = pkd1.StorerKey AND ISNULL(wod1.ExternWorkOrderKey, '') = pkd1.OrderKey
                            INNER JOIN dbo.CODELKUP lk1 WITH(NOLOCK) ON wod1.StorerKey = lk1.StorerKey AND lk1.LISTNAME = 'LVSPRICELB' AND wod1.Type = lk1.code2
@@ -278,12 +278,23 @@ BEGIN
                      AND wod.ExternLineNo <> ''
 
                   INSERT INTO @tLabels(WorkOrderKey, WorkOrderLineNumber, LabelListName, VASCode, LabelName, Qty, PrintSequence)
-                  SELECT DISTINCT wod.WorkOrderKey, wod.WorkOrderLineNumber, IIF(lk1.LISTNAME IS NULL, lk.LISTNAME, lk1.LISTNAME), wod.Type, IIF(lk1.LISTNAME IS NULL, lk.UDF01, lk1.UDF01), pkd.Qty, lk.Code
-                  FROM dbo.WorkOrderDetail wod WITH(NOLOCK)
+                  SELECT DISTINCT wod.WorkOrderKey, wod.WorkOrderLineNumber, IIF(lk1.LISTNAME IS NULL, lk.LISTNAME, lk1.LISTNAME), wod.Type, IIF(lk1.LISTNAME IS NULL, lk.UDF01, lk1.UDF01), pakd.Qty, lk.Code
+                  FROM (SELECT StorerKey, WorkOrderKey, ExternWorkOrderKey, ExternLineNo, WorkOrderLineNumber, Type
+                        FROM
+                           (SELECT 
+                              wod1.StorerKey, wod1.WorkOrderKey, wod1.ExternWorkOrderKey, wod1.ExternLineNo, wod1.WorkOrderLineNumber, wod1.Type, 
+                              ROW_NUMBER()OVER(PARTITION BY WorkOrderKey, ExternWorkOrderKey, ExternLineNo ORDER BY WorkOrderKey, ExternWorkOrderKey, ExternLineNo) AS ROW# 
+                              FROM dbo.WorkOrderDetail wod1 WITH(NOLOCK)
+                              INNER JOIN dbo.CODELKUP lk2 WITH(NOLOCK) ON wod1.StorerKey = lk2.StorerKey AND lk2.LISTNAME = 'WKORDTYPE' AND lk2.UDF04 = 'LVSCatalog' AND wod1.Type = lk2.Code
+                              WHERE wod1.StorerKey = @cStorerKey
+                                 AND TRIM(wod1.Type) <> ''
+                                 AND TRIM(wod1.ExternLineNo) <> '') AS t
+                        WHERE ROW# = 1) AS wod
                   INNER JOIN dbo.WorkOrder wo WITH(NOLOCK) ON wo.WorkOrderKey = wod.WorkOrderKey
                   INNER JOIN dbo.ORDERS orm WITH(NOLOCK) ON wod.StorerKey = orm.StorerKey AND ISNULL(wod.ExternWorkOrderKey, '') = orm.OrderKey
                   INNER JOIN dbo.CODELKUP lk WITH(NOLOCK) ON wo.StorerKey = lk.StorerKey AND wod.Type = lk.Code AND lk.LISTNAME = 'WKORDTYPE' AND lk.UDF04 = 'LVSCatalog' 
-                  INNER JOIN dbo.PickDetail pkd WITH(NOLOCK) ON wo.StorerKey = pkd.StorerKey AND ISNULL(wod.ExternWorkOrderKey, '') = pkd.OrderKey AND pkd.OrderLinenumber = wod.ExternLineNo
+                  INNER JOIN dbo.PickDetail pkd WITH(NOLOCK) ON wo.StorerKey = pkd.StorerKey AND ISNULL(wod.ExternWorkOrderKey, '') = pkd.OrderKey AND pkd.OrderLinenumber = wod.ExternLineNo AND pkd.Status = @cPickConfirmStatus
+                  INNER JOIN dbo.PackDetail pakd WITH(NOLOCK) ON pkd.StorerKey = pakd.StorerKey AND ISNULL(pkd.CaseID, '') = pakd.LabelNo AND pakd.SKU = pkd.SKU
                   LEFT JOIN dbo.CODELKUP lk1 WITH(NOLOCK) ON lk.StorerKey = lk1.StorerKey AND lk.Code = lk1.Code AND lk.UDF04 = lk1.LISTNAME AND lk1.Code2 <> ''
                      AND (orm.ConsigneeKey = lk1.Code2 OR  MarkforKey = lk1.Code2 OR BillToKey = lk1.Code2)
                   WHERE wo.StorerKey = @cStorerKey
@@ -407,7 +418,7 @@ BEGIN
                IF @nTranCount = 0
                   BEGIN TRANSACTION
                ELSE
-                  SAVE TRANSACTION rdt_855ExtUpd13
+                  SAVE TRANSACTION rdt_855ExtUpd13_01
 
                BEGIN TRY
                   --Mark PPA as 5 (audit finished)
@@ -504,16 +515,20 @@ BEGIN
                      END
                   END
 
-                  IF @nTranCount = 0 
-                     COMMIT
+                  WHILE @@TRANCOUNT > @nTranCount
+                     COMMIT TRANSACTION
                END TRY
                BEGIN CATCH
-                  IF @nTranCount = 0 AND @@TRANCOUNT > 0
+                  IF @nTranCount > 0
+                  BEGIN
+                     IF XACT_STATE() <> -1  
+                        ROLLBACK TRANSACTION rdt_855ExtUpd13_01
+                  END
+                  ELSE
+                  BEGIN
                      ROLLBACK TRANSACTION
-                  
-                  IF @@TRANCOUNT > @nTranCount AND @@TRANCOUNT > 0
-                     ROLLBACK TRANSACTION rdt_855ExtUpd13
-                  
+                  END
+
                   IF @nErrNo = 0
                   BEGIN
                      SET @nErrNo = 217803
@@ -741,8 +756,6 @@ BEGIN
    END
    GOTO Quit
 Quit:  
-   WHILE  @@TRANCOUNT > @nTranCount
-      COMMIT TRANSACTION
 
 END
 GO
