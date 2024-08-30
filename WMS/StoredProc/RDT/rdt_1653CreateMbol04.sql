@@ -42,7 +42,9 @@ BEGIN
 
    DECLARE @cSKU                    NVARCHAR( 20)
    DECLARE @nQtyPicked              INT
+   DECLARE @nTranCount              INT
    DECLARE @cFromLoc                NVARCHAR( 20)
+   DECLARE @cFromLot                NVARCHAR( 20)
    DECLARE @cPDID                   NVARCHAR( 20)
    DECLARE @cPDLabelNo              NVARCHAR( 20)
    DECLARE @cPalletLineNumber          NVARCHAR( 5)
@@ -50,6 +52,8 @@ BEGIN
    DECLARE @cSuggestLoc             NVARCHAR( 1)
    DECLARE @cOverrideLoc            NVARCHAR( 1)
    DECLARE @curDel                  CURSOR
+   Declare @cCursorPickDetail       CURSOR
+   Declare @cCursorPalletDetail       CURSOR
 
 
    SELECT
@@ -58,6 +62,10 @@ BEGIN
       @cFacility              = Facility
    FROM rdt.RDTMOBREC (NOLOCK)
    WHERE Mobile = @nMobile
+
+   SET @nTranCount = @@TRANCOUNT
+   BEGIN TRAN  -- Begin our own transaction
+   SAVE TRAN rdt_CreateMbol04 -- For rollback or commit only our own transaction
 
 
    -- New Pallet
@@ -85,7 +93,7 @@ BEGIN
             BEGIN
                SET @nErrNo = 219105
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Del PltDtl Err
-               GOTO Quit
+               GOTO RollBackTran_CreateMbol04
             END
 
             FETCH NEXT FROM @curDel INTO @cPalletLineNumber
@@ -96,11 +104,11 @@ BEGIN
          DELETE FROM PALLET WHERE PalletKey = @cPalletKey
 
          IF @@ERROR <> 0
-            BEGIN
-               SET @nErrNo = 219106
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Del PltHdr Err
-               GOTO Quit
-            END
+         BEGIN
+            SET @nErrNo = 219106
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Del PltHdr Err
+            GOTO RollBackTran_CreateMbol04
+         END
       END
 
       INSERT INTO dbo.Pallet (PalletKey, StorerKey, Status)
@@ -109,47 +117,62 @@ BEGIN
       BEGIN
          SET @nErrNo = 219103
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INS PalletFail
-         GOTO Quit
+         GOTO RollBackTran_CreateMbol04
       END
    END
 
    -- PalletDetail
    IF NOT EXISTS( SELECT 1 FROM PalletDetail WITH (NOLOCK) WHERE PalletKey = @cPalletKey AND (CaseID = @cLabelNo or CaseID = @cTrackNo))
    BEGIN
-      SELECT TOP 1   @cSKU = SKU,
-                     @nPDQty = Qty,
-                     @cPDLabelNo = LabelNo
+
+      SET @cCursorPalletDetail = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+
+      SELECT LabelNo, SKU, Qty
       FROM dbo.PackDetail WITH (NOLOCK)
       WHERE StorerKey = @cStorerKey
-      AND   (LabelNo = @cTrackNo OR LabelNo = @cLabelNo)
-      ORDER BY 1
+        AND   (LabelNo = @cTrackNo OR LabelNo = @cLabelNo)
 
-      INSERT INTO dbo.PalletDetail
-         (PalletKey, PalletLineNumber, CaseID, StorerKey, SKU, LOC, QTY, Status, OrderKey, TrackingNo, UserDefine01)
-      VALUES
-         (@cPalletKey, '0', @cPDLabelNo, @cStorerKey, @cSKU, @cLane, @nPDQty, '0', @cOrderKey, @cTrackNo, @cMBOLKey)
-
-      IF @@ERROR <> 0
-      BEGIN
-         SET @nErrNo = 219104
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INS PLDtl Err
-         GOTO Quit
-      END
-
-
-      DECLARE CURSOR_PICKDETAIL_MOVE CURSOR FAST_FORWARD READ_ONLY FOR
-      SELECT PD.Loc, PD.Qty, PD.ID
-      FROM PICKDETAIL PD WITH (NOLOCK)
-              INNER JOIN LOTxLOCxID LLI WITH (NOLOCK)
-                         ON (LLI.Loc = PD.Loc AND LLI.LOT = PD.LOT AND LLI.Id=PD.ID)
-      WHERE ISNULL(PD.CaseID , '') <> '' AND
-         (PD.CaseID = @cTrackNo OR PD.CASEID =@cLabelNo)
-
-      OPEN CURSOR_PICKDETAIL_MOVE
-      FETCH NEXT FROM CURSOR_PICKDETAIL_MOVE INTO @cFromLoc, @nQtyPicked, @cPDID
+      OPEN @cCursorPalletDetail
+      FETCH NEXT FROM @cCursorPalletDetail INTO @cPDLabelNo, @cSKU, @nPDQty
       WHILE (@@FETCH_STATUS <> -1)
       BEGIN
 
+         SELECT @cPalletLineNumber = RIGHT( '00000' + CAST( CAST( ISNULL(MAX( PalletLineNumber), 0) AS INT) + 1 AS NVARCHAR( 5)), 5)
+            FROM dbo.PalletDetail WITH (NOLOCK)
+            WHERE PalletKey = @cPalletKey
+
+         INSERT INTO dbo.PalletDetail
+         ( PalletKey, PalletLineNumber, CaseID, StorerKey, SKU, LOC, QTY, Status, OrderKey, TrackingNo, UserDefine01)
+         VALUES
+         (@cPalletKey, @cPalletLineNumber, @cPDLabelNo, @cStorerKey,@cSKU, @cLane, @nPDQty, '0', @cOrderKey, @cTrackNo, @cMBOLKey)
+
+         IF @@ERROR <> 0
+         BEGIN
+            SET @nErrNo = 219104
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INS PLDtl Err
+            GOTO RollBackTran_CreateMbol04
+         END
+
+         FETCH NEXT FROM @cCursorPalletDetail INTO @cPDLabelNo, @cSKU, @nPDQty
+      END
+
+      CLOSE @cCursorPalletDetail
+      DEALLOCATE @cCursorPalletDetail
+
+      ----Loop LOTxLOCxID, possible 1 PICKDETAIL to N LOCxLOTxID
+      SET @cCursorPickDetail = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+         SELECT PD.Loc, PD.Lot, PD.Qty, PD.ID, PD.SKU
+         FROM PICKDETAIL PD WITH (NOLOCK)
+                 INNER JOIN LOTxLOCxID LLI WITH (NOLOCK)
+                            ON (LLI.Loc = PD.Loc AND LLI.LOT = PD.LOT AND LLI.Id=PD.ID)
+         WHERE ISNULL(PD.CaseID , '') <> '' AND
+            (PD.CaseID = @cTrackNo OR PD.CASEID =@cLabelNo)
+      OPEN @cCursorPickDetail
+      FETCH NEXT FROM @cCursorPickDetail INTO @cFromLoc, @cFromLot, @nQtyPicked, @cPDID, @cSKU
+      WHILE (@@FETCH_STATUS <> -1)
+      BEGIN
+
+         SELECT @cFromLoc,@cFromLot, @nQtyPicked, @cPDID
          --    Create LOTxLOCxID record
          EXECUTE rdt.rdt_Move
                  @nMobile     = @nMobile,
@@ -166,24 +189,31 @@ BEGIN
                  @cSKU        = @cSKU,
                  @nQTY        = @nQtyPicked,
                  @nQTYPick    = @nQtyPicked,
+                 @cFromLOT    = @cFromLot,
+                 @cOrderKey   = @cOrderKey,
                  @nFunc       = @nFunc
          IF @nErrNo > 0
-            GOTO Quit
+            GOTO RollBackTran_CreateMbol04
 
 
-         FETCH NEXT FROM CURSOR_PICKDETAIL_MOVE INTO @cFromLoc, @nQtyPicked, @cPDID
+         FETCH NEXT FROM @cCursorPickDetail INTO @cFromLoc, @cFromLot, @nQtyPicked, @cPDID, @cSKU
       END
 
-      CLOSE CURSOR_PICKDETAIL_MOVE
-      DEALLOCATE CURSOR_PICKDETAIL_MOVE
+      CLOSE @cCursorPickDetail
+      DEALLOCATE @cCursorPickDetail
    END
 
+   COMMIT TRAN rdt_CreateMbol04
+   GOTO Quit_CreateMbol04
+
+   RollBackTran_CreateMbol04:
+      ROLLBACK TRAN -- Only rollback change made here
+   Quit_CreateMbol04:
+      WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
+         COMMIT TRAN
+
+
 Quit:
-   IF (SELECT CURSOR_STATUS('LOCAL','CURSOR_PICKDETAIL_MOVE')) >=0
-   BEGIN
-      CLOSE CURSOR_PICKDETAIL_MOVE
-      DEALLOCATE CURSOR_PICKDETAIL_MOVE
-   END
 
 END
 GO
