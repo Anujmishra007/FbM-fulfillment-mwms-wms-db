@@ -48,6 +48,9 @@ execute rdt.rdtAddMsg 74533 ,10, '74533^Option needed', 'us_english'
 execute rdt.rdtAddMsg 74534 ,10, '74534^Invalid Option', 'us_english'
 execute rdt.rdtAddMsg 74535 ,10, '74535^Upd LastCC Err', 'us_english'
 
+--WMS-23113
+execute rdt.rdtAddMsg 74536 ,10, '74536^Del SN# Err   ', 'us_english'
+
 Update rdt.rdtmsg set Func = 1768 Where Message_ID Between  74501 AND 74550
 
 
