@@ -139,51 +139,51 @@ BEGIN
          BEGIN  
             SET @n_continue = 3    
             SET @c_errmsg = CONVERT(NVARCHAR(250),@n_err)
-            SET @n_err = 562251   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
-            SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Delete PackDetail Table Failed. (mspRVWAV03)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
-         END
+            SET @n_err = 562251   -- Should Be Set To The SQL Errmessage but I don't know how to do so.    
+            SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Delete PackDetail Table Failed. (mspRVWAV03)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '    
+         END 
 
          DELETE dbo.PackInfo
          WHERE PickSlipNo = @c_PickSlipNo
 
-         SET @n_err = @@ERROR
-         IF @n_err <> 0
-         BEGIN
-            SET @n_continue = 3
+         SET @n_err = @@ERROR  
+         IF @n_err <> 0   
+         BEGIN  
+            SET @n_continue = 3    
             SET @c_errmsg = CONVERT(NVARCHAR(250),@n_err)
-            SET @n_err = 562252   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
-            SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Delete PackInfo Table Failed. (mspRVWAV03)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
-         END
+            SET @n_err = 562252   -- Should Be Set To The SQL Errmessage but I don't know how to do so.    
+            SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Delete PackInfo Table Failed. (mspRVWAV03)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '    
+         END 
 
          DELETE dbo.PackHeader
          WHERE PickSlipNo = @c_PickSlipNo
 
-         SET @n_err = @@ERROR
-         IF @n_err <> 0
-         BEGIN
-            SET @n_continue = 3
+         SET @n_err = @@ERROR  
+         IF @n_err <> 0   
+         BEGIN  
+            SET @n_continue = 3    
             SET @c_errmsg = CONVERT(NVARCHAR(250),@n_err)
-            SET @n_err = 562253   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
-            SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Delete PackHeader Table Failed. (mspRVWAV03)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
-         END
+            SET @n_err = 562253   -- Should Be Set To The SQL Errmessage but I don't know how to do so.    
+            SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Delete PackHeader Table Failed. (mspRVWAV03)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '    
+         END 
 
          FETCH NEXT FROM @CUR_DELPRECARTON INTO @c_PickSlipNo
       END
       CLOSE @CUR_DELPRECARTON
       DEALLOCATE @CUR_DELPRECARTON
-   END
+   END      
 
-   ----delete tasks
-   IF @n_continue = 1 OR @n_continue = 2
-   BEGIN
+   ----delete tasks  
+   IF @n_continue = 1 OR @n_continue = 2  
+   BEGIN 
       SET @CUR_DELTASK = CURSOR FAST_FORWARD READ_ONLY FOR
-      SELECT TaskDetailKey = CASE WHEN TD.TaskType = @c_TaskType AND TD.[Status] IN ('0','X')
+      SELECT TaskDetailKey = CASE WHEN TD.TaskType = @c_TaskType AND TD.[Status] IN ('0','X') 
                                  THEN TD.TaskDetailkey
                                  ELSE ''
                                  END
-      FROM TASKDETAIL TD (NOLOCK)
-      WHERE TD.Wavekey = @c_Wavekey
-      AND  TD.Sourcetype = @c_SourceType
+      FROM TASKDETAIL TD (NOLOCK)   
+      WHERE TD.Wavekey = @c_Wavekey  
+      AND  TD.Sourcetype = @c_SourceType 
       AND  TD.TaskType = @c_TaskType
       AND  TD.[Status] IN ('0','X')
       ORDER BY 1 DESC
@@ -194,33 +194,33 @@ BEGIN
 
       WHILE @@FETCH_STATUS = 0 AND @c_TaskDetailKey <> '' AND @n_Continue = 1
       BEGIN
-         DELETE TASKDETAIL
-         WHERE TASKDETAIL.TaskDetailKey = @c_TaskDetailKey
-         AND TASKDETAIL.Sourcetype = @c_SourceType
-         AND TASKDETAIL.TaskType = @c_TaskType
-         AND TASKDETAIL.Status IN ('0','X')
-
-         SET @n_err = @@ERROR
-         IF @n_err <> 0
-         BEGIN
-            SET @n_continue = 3
+         DELETE TASKDETAIL  
+         WHERE TASKDETAIL.TaskDetailKey = @c_TaskDetailKey   
+         AND TASKDETAIL.Sourcetype = @c_SourceType 
+         AND TASKDETAIL.TaskType = @c_TaskType 
+         AND TASKDETAIL.Status IN ('0','X') 
+           
+         SET @n_err = @@ERROR  
+         IF @n_err <> 0   
+         BEGIN  
+            SET @n_continue = 3    
             SET @c_errmsg = CONVERT(NVARCHAR(250),@n_err)
-            SET @n_err = 562254   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
-            SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Delete Taskdetail Table Failed. (mspRVWAV03)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
-         END
+            SET @n_err = 562254   -- Should Be Set To The SQL Errmessage but I don't know how to do so.    
+            SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Delete Taskdetail Table Failed. (mspRVWAV03)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '    
+         END 
          FETCH NEXT FROM @CUR_DELTASK INTO @c_TaskDetailKey
       END
       CLOSE @CUR_DELTASK
       DEALLOCATE @CUR_DELTASK
-   END
-
-   ----Remove taskdetailkey from pickdetail of the wave
-   IF @n_continue = 1 OR @n_continue = 2
-   BEGIN
+   END  
+            
+   ----Remove taskdetailkey from pickdetail of the wave  
+   IF @n_continue = 1 OR @n_continue = 2  
+   BEGIN 
       SET @CUR_DELPICK = CURSOR FAST_FORWARD READ_ONLY FOR
       SELECT PickDetailKey = PICKDETAIL.PickDetailKey
-      FROM WAVEDETAIL (NOLOCK)
-      JOIN PICKDETAIL (NOLOCK) ON WAVEDETAIL.Orderkey = PICKDETAIL.Orderkey
+      FROM WAVEDETAIL (NOLOCK)    
+      JOIN PICKDETAIL (NOLOCK) ON WAVEDETAIL.Orderkey = PICKDETAIL.Orderkey  
       WHERE WAVEDETAIL.Wavekey = @c_Wavekey
       ORDER BY PICKDETAIL.PickDetailKey
 
@@ -230,41 +230,41 @@ BEGIN
 
       WHILE @@FETCH_STATUS = 0 AND @c_PickDetailKey <> '' AND @n_Continue = 1
       BEGIN
-         UPDATE PICKDETAIL WITH (ROWLOCK)
-            SET PICKDETAIL.TaskdetailKey = ''
+         UPDATE PICKDETAIL WITH (ROWLOCK)   
+            SET PICKDETAIL.TaskdetailKey = ''   
                ,CaseID=''
-               ,TrafficCop = NULL
-         WHERE PICKDETAIL.PickDetailKey = @c_PickDetailKey
-
-         SET @n_err = @@ERROR
-         IF @n_err <> 0
-         BEGIN
-            SET @n_continue = 3
+               ,TrafficCop = NULL               
+         WHERE PICKDETAIL.PickDetailKey = @c_PickDetailKey   
+           
+         SET @n_err = @@ERROR  
+         IF @n_err <> 0   
+         BEGIN  
+            SET @n_continue = 3    
             SET @c_errmsg = CONVERT(NVARCHAR(250),@n_err)
-            SET @n_err = 562255   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
-            SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update Pickdetail Table Failed. (mspRVWAV03)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
-         END
+            SET @n_err = 562255   -- Should Be Set To The SQL Errmessage but I don't know how to do so.    
+            SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update Pickdetail Table Failed. (mspRVWAV03)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '    
+         END 
          FETCH NEXT FROM @CUR_DELPICK INTO @c_PickDetailKey
       END
       CLOSE @CUR_DELPICK
       DEALLOCATE @CUR_DELPICK
-   END
-
-   -----Reverse wave status------
-   IF @n_continue = 1 or @n_continue = 2
-   BEGIN
-      UPDATE WAVE
-         SET TMReleaseFlag = 'N'
-          ,  TrafficCop = NULL
-          ,  EditWho = SUSER_SNAME()
-          ,  EditDate= GETDATE()
-      WHERE WAVEKEY = @c_wavekey
-      SELECT @n_err = @@ERROR
-      IF @n_err <> 0
-      BEGIN
-         SET @n_continue = 3
+   END          
+      
+   -----Reverse wave status------  
+   IF @n_continue = 1 or @n_continue = 2    
+   BEGIN    
+      UPDATE WAVE   
+         SET TMReleaseFlag = 'N'                
+          ,  TrafficCop = NULL                  
+          ,  EditWho = SUSER_SNAME()            
+          ,  EditDate= GETDATE()                 
+      WHERE WAVEKEY = @c_wavekey                
+      SELECT @n_err = @@ERROR    
+      IF @n_err <> 0    
+      BEGIN    
+         SET @n_continue = 3    
          SET @c_errmsg = CONVERT(NVARCHAR(250),@n_err)
-         SET @n_err = 562256   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+         SET @n_err = 562256   -- Should Be Set To The SQL Errmessage but I don't know how to do so.    
          SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update on wave Failed (mspRVWAV03)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '    
       END    
    END    
