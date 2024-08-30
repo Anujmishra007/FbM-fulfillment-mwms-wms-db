@@ -21,6 +21,7 @@ GO
 /* 2021-06-15 1.7  James    WMS-17221 Move capture rdt_STD_EventLog to  */
 /*                          rdt_MoveToID_Close (james02)                */
 /* 2023-07-29 1.8  Ung      WMS-23069 Add serial no                     */
+/* 2024-08-30 1.9  Dennis   UWP-23768 Qty NULL Bug fix                  */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_MoveToID] (
@@ -793,7 +794,7 @@ BEGIN
       SET @nQTY = @nQTY + @nMQTY
 
       -- Validate QTY
-      IF @nQTY = 0
+      IF @nQTY = 0 OR @nQTY IS NULL
       BEGIN
          --SET @nErrNo = 78912
          --SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --QTY needed
