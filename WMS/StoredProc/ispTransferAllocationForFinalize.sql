@@ -67,7 +67,8 @@ BEGIN
 		, @c_UserDefined02      NVARCHAR(20) = ''
 		, @canBeAllocated       INT =1
 		, @b_SuccessLog         INT= 1
-		, @c_UpdateSLOnLottable06Change  NVARCHAR(1) = 'N'
+		, @c_UpdateSLOnLottable06Change  NVARCHAR(20) = 'N'
+		, @c_ConfigKey          NVARCHAR(20)  = 'ShelfLifeCalcFnc'
 		, @n_ErrNo              INT = 0
 
 	------- Retrieve records from TRANSFER UserDefine02='AUTOREL'
@@ -108,7 +109,10 @@ BEGIN
 	WHILE @@FETCH_STATUS <> -1
 		BEGIN
 			IF @c_UpdateSLOnLottable06Change = '1'
-				SET @c_UpdateSLOnLottable06Change = 'Y'
+				SELECT @c_UpdateSLOnLottable06Change = SValue
+				FROM StorerConfig WITH (NOLOCK)
+				WHERE StorerKey = @c_ToStorerkey
+					AND ConfigKey = @c_ConfigKey
 			ELSE
 				SET @c_UpdateSLOnLottable06Change = 'N'
 			
@@ -215,8 +219,10 @@ BEGIN
 							--- Update/Insert into TRANSFERDETAIL -- Split New Transfer Line--
 							SET @c_TransferStatus = '0'
 							SET @c_UserDefined02 = 'ALLOCATION_DONE'
-							IF @c_UpdateSLOnLottable06Change='Y'
-								SELECT @c_ToLottable07 =  dbo.fnc_CalcShelfLife01(@c_ToStorerkey, @c_ToSku, @dt_Lottable04)
+							IF @c_UpdateSLOnLottable06Change='fnc_CalcShelfLifeBUL'
+								SELECT @c_ToLottable07 =  dbo.fnc_CalcShelfLifeBUL(@c_ToStorerkey, @c_ToSku, @dt_Lottable04)
+							ELSE IF @c_UpdateSLOnLottable06Change='fnc_CalcShelfLifeBUD'
+								SELECT @c_ToLottable07 =  dbo.fnc_CalcShelfLifeBUD(@c_ToStorerkey, @c_ToSku, @dt_Lottable04, @dt_Lottable13)
 							ELSE
 								SET @c_ToLottable07 = @c_Lottable07
 							IF @c_ToLottable07 = 'ML51'
