@@ -4,7 +4,7 @@ SET QUOTED_IDENTIFIER OFF
 GO
 
 /*******************************************************************************/        
-/* Copyright: IDS                                                              */        
+/* Copyright: Maersk                                                           */        
 /* Purpose: For BarTender Generic Store Procedure                              */        
 /*                                                                             */        
 /* Modifications log:                                                          */        

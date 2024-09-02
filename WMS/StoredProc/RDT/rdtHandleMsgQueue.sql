@@ -5,7 +5,7 @@ GO
 
 
 /******************************************************************************/
-/* Copyright: IDS                                                             */
+/* Copyright: Maersk                                                          */
 /*                                                                            */
 /* Purpose: Valid the username and password in the message queue              */
 /* Updates:                                                                   */

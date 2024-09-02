@@ -10,8 +10,8 @@ GO
                      
                       
 /******************************************************************************/                    
-/* Store procedure: RDTResumeSession                                         */                    
-/* Copyright      : IDS                                                       */                    
+/* Store procedure: RDTResumeSession                                          */                    
+/* Copyright      : Maersk                                                    */                    
 /*                                                                            */                    
 /* Purpose: Resume the previous session                                       */                    
 /*                                                                            */                    

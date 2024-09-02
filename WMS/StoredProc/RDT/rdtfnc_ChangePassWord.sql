@@ -7,7 +7,7 @@ SET QUOTED_IDENTIFIER OFF
 GO
 
 /************************************************************************/
-/* Copyright: IDS                                                       */
+/* Copyright: Maersk                                                    */
 /* Purpose: ChangePassWord                                              */
 /*                                                                      */
 /* Modifications log:                                                   */
@@ -294,5 +294,5 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS ON
 GO
-GRANT EXECUTE ON RDT.rdtfnc_ChangeASNStorer TO NSQL
+GRANT EXECUTE ON RDT.rdtfnc_ChangePassWord TO NSQL
 GO

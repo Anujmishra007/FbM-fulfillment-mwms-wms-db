@@ -47,6 +47,7 @@ GO
 /* 2021-01-21   James   2.7   WMS-15781 Add AllowResumeSession (james03)*/
 /* 2024-05-24   NLT013  2.8   Add session id to get unique mobile       */
 /* 2024-07-26   JACKC   2.9   UWP-19305 Encrypt rdt password            */
+/* 2024-08-15   JACKC   3.0   UWP-15736 Penetration Testing Fix         */
 /************************************************************************/
 
 CREATE PROC [RDT].[rdtLogin] (
@@ -81,7 +82,9 @@ AS
           @cDeviceID             NVARCHAR(20),
           @cActive               NVARCHAR(1),
           @cLightMode            NVARCHAR(10), -- (ChewKP01)
-          @cAllowResumeSession   NVARCHAR( 1)   -- (james03)
+          @cAllowResumeSession   NVARCHAR( 1),   -- (james03)
+          @nLoginFailCount       INT,
+          @dLastLoginDate        DATETIME
 
    SELECT @nFunc     = Func,
           @nScn      = Scn,
@@ -97,6 +100,31 @@ AS
       EXEC rdt.rdtSetFocusField @nMobile, 1
       GOTO RETURN_SP
    END
+
+   --V3.0 JacKc
+   SELECT TOP 1 @dLastLoginDate = AddDate 
+   FROM rdt.rdtloginlog WITH (NOLOCK) 
+   WHERE Remarks = 'LOGIN' 
+      AND UserName = @cUsrName 
+   ORDER BY AddDate DESC
+
+   SELECT @nLoginFailCount = COUNT(1) 
+      FROM RDT.RDTLoginLog WITH (NOLOCK)
+      WHERE UserName = @cUsrName 
+         AND Remarks = 'InvIDPwd'  
+         AND datediff(second,adddate,GETDATE()) < 30
+         AND AddDate > ISNULL(@dLastLoginDate, '1900-01-01 00:00:00.000')
+      
+   IF @nLoginFailCount > 4
+   BEGIN
+      SELECT @nErrNo = -1,
+      @nStep = 0,
+      @cErrMsg = rdt.rdtgetmessage(221151,@cLangCode,'DSP')
+      EXEC rdt.rdtSetFocusField @nMobile, 1
+      GOTO EXIT_PROCESS
+   END
+
+   --V3.0 Jackc End
 
    --V2.9 Jackc
    SET @cEncryptPwd = rdt.rdt_RDTUserEncryption(@cUsrName, @cPassword)
@@ -121,6 +149,9 @@ AS
 
    IF @@ROWCOUNT = 0 OR (@cUsrPasswd IS NULL) OR (@cUsrPasswd <> @cEncryptPwd)
    BEGIN
+      INSERT INTO RDT.rdtLoginLog (UserName, Mobile, ClientIP, Remarks, SessionID)
+      VALUES (@cUsrname, @nMobile, @cClientIP, 'InvIDPwd', @cSessionID)
+
       SELECT @nErrNo = -1,
          @nStep = 0,
          @cErrMsg = rdt.rdtgetmessage(1,@cLangCode,'DSP')
@@ -203,6 +234,10 @@ AS
       SET @nErrNo = -1
       SET @nStep = 0
    END
+
+   --V3.0 Jackc
+   EXIT_PROCESS:
+   --V3.0 Jackc end
 
    IF @nErrNo <> -1
    BEGIN
