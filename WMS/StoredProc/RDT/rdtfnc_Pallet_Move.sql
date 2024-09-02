@@ -30,7 +30,7 @@ GO
 /* 2024-07-16 1.3  CYU027   FCR-575                                     */
 /************************************************************************/
 
-CREATE PROCEDURE [RDT].[rdtfnc_Pallet_Move] (
+CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_Pallet_Move] (
    @nMobile    INT,
    @nErrNo     INT  OUTPUT,
    @cErrMsg    NVARCHAR( 20) OUTPUT -- screen limitation, 20 char max
