@@ -12,6 +12,7 @@ GO
 /* Date         Author   Rev  Purposes                                        */
 /* 2020-06-24   YeeKung  1.0  Created                                         */
 /* 2022-11-10   yeekung  1.1  WMS-21053. Add dynamic screen(yeekung01)        */
+/* 2024-07-26   Jackc    1.2  UWP-21905 Encrypt password                      */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtHandleMsgQueue] (
@@ -29,7 +30,7 @@ SET CONCAT_NULL_YIELDS_NULL OFF
 
    DECLARE   @cVerifystatus  NVARCHAR(20),
              @cUsername     NVARCHAR(20),
-             @cPassword     NVARCHAR(20),
+             @cPassword     NVARCHAR(32), --V1.2 Jackc, extend length to 32
              @nMsgQStatus   NVARCHAR(1),
              @cUserID       NVARCHAR(20),
              @cFacility     NVARCHAR(20),

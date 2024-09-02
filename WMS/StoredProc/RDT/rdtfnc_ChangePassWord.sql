@@ -16,6 +16,7 @@ GO
 /* 2014-06-18 1.0  Roy He   ChangePassWord                              */
 /* 2016-09-30 1.1  Ung      Performance tuning                          */
 /* 2018-10-30 1.2  TungGH   Performance                                 */
+/* 2024-07-26 1.3  Jackc    UWP-21905 Encrypt password                  */
 /************************************************************************/
 
 CREATE PROCEDURE [RDT].[rdtfnc_ChangePassWord] (
@@ -131,13 +132,14 @@ Step_1:
 BEGIN
    IF @nInputKey = 1 -- Yes or Send
    BEGIN
-   	  -- Declare Var
-   	  DECLARE 
-         @cUserCount INT,
-   	     @cUser NVARCHAR(15),
-   	     @cNewPas NVARCHAR(15),
-   	     @cConfirmPas NVARCHAR(15)
-   	     
+      -- Declare Var
+      DECLARE 
+         @cUserCount    INT,
+         @cUser         NVARCHAR(15),
+         @cNewPas       NVARCHAR(15),
+         @cConfirmPas   NVARCHAR(15),
+         @cEncryptPaw   NVARCHAR(32)
+         
       -- Screen mapping
       SET @cUser = @cInField01
       SET @cNewPas = @cInField02
@@ -195,10 +197,14 @@ BEGIN
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- NewPas Not Match
          GOTO QUIT
       END
+
+      --V1.3 Jackc
+      SET @cEncryptPaw = rdt.rdt_RDTUserEncryption(@cUser, @cNewPas)
+      --V1.3 Jackc End
       
       -- Update in backend
       UPDATE rdt.RdtUser WITH (ROWLOCK) SET
-         PASSWORD = ISNULL(RTRIM(@cNewPas),'')
+         PASSWORD = ISNULL(RTRIM(@cEncryptPaw),'')
       WHERE UserName = @cUser
       IF @@ERROR <> 0
       BEGIN

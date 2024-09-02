@@ -75,6 +75,7 @@ GO
 /* 2023-04-04 23.6 Wan01      WMS-22125 - Backend Bartender DB-MQ              */
 /* 2023-10-23 23.7 Wan02      Get Print Over Internet Printing                 */
 /* 2023-12-19 24.8 Wan        UWP-12373-MWMS Deploy MasterSP to V2             */
+/* 2024-07-26 24.9 JackC      UWP-26905 Encrypt user password                  */
 /*******************************************************************************/        
 --> For CN Only: @cCmdType = 'PRN'        
 CREATE OR ALTER PROC [dbo].[isp_BT_GenBartenderCommand](        
@@ -863,7 +864,7 @@ BEGIN
             ,DefaultPrinter_Paper  ,sqluseradddate        
             )        
          VALUES        
-            (@c_userID          ,'EXceedUser'    ,@c_userID        
+            (@c_userID          ,rdt.rdt_RDTUserEncryption(UPPER(@c_userID),'EXceedUser')    ,@c_userID        
             ,''                 ,''              ,'ENG'        
             ,5                  ,'6'             ,''        
             ,''                 ,GETDATE() )        
@@ -911,7 +912,7 @@ BEGIN
             ,DefaultPrinter_Paper ,sqluseradddate      )        
          VALUES        
            (        
-             @c_GetUserID   ,'EXceedUser'     ,@c_GetUserID        
+             @c_GetUserID   ,rdt.rdt_RDTUserEncryption(UPPER(@c_GetUserID),'EXceedUser')     ,@c_GetUserID        
             ,''             ,''              ,'ENG'        
             ,5              ,'6'           ,''        
             ,''             ,GETDATE()           )        
