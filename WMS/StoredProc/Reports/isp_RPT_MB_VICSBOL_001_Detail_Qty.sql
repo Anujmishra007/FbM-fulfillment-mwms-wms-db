@@ -50,7 +50,7 @@ BEGIN
                    END AS NMFC
                  , SKU.BUSR7
                  , ISNULL(CODELKUP.[Description], SKU.BUSR7) AS [DESCRIPTION]
-                 , QTY = MD.TTLCTN
+                 , QTY = PK.TTLCTN
                  , [WEIGHT] = MD.TTLWeight
    FROM MBOLDETAIL WITH (NOLOCK)
    JOIN LoadPlan WITH (NOLOCK) ON (MBOLDETAIL.LoadKey = LoadPlan.LoadKey)
@@ -65,6 +65,10 @@ BEGIN
            GROUP BY MBOLKey) AS MD ON (MD.MBLKey = MBOLDETAIL.MbolKey)
    JOIN PICKDETAIL PD (NOLOCK) ON PD.OrderKey = ORDERDETAIL.OrderKey AND PD.OrderLineNumber = ORDERDETAIL.OrderLineNumber
                               AND PD.Storerkey = SKU.StorerKey AND PD.SKU = SKU.SKU
+   CROSS APPLY ( SELECT COUNT(DISTINCT P.LabelNo) AS TTLCTN 
+                 FROM PACKDETAIL P (NOLOCK)
+                 JOIN PACKHEADER PH (NOLOCK) ON P.Pickslipno = PH.Pickslipno
+                 WHERE PH.Orderkey = ORDERS.Orderkey ) AS PK
    WHERE MBOLDETAIL.MbolKey = @c_Mbolkey 
    AND ORDERS.ConsigneeKey = @c_Consigneekey
    GROUP BY SKU.BUSR3
@@ -73,8 +77,9 @@ BEGIN
           , CODELKUP.[Description]
           , ORDERS.ExternOrderKey
           , ORDERS.ConsigneeKey
-          , MD.TTLCTN
+          , PK.TTLCTN
           , MD.TTLWeight
+          , ORDERS.Orderkey
 END -- procedure
 GO
 GRANT EXECUTE ON [dbo].[isp_RPT_MB_VICSBOL_001_Detail_Qty] TO [NSQL]

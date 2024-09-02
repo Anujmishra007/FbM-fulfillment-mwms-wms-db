@@ -86,11 +86,15 @@ BEGIN
       INSERT INTO #T_INFO (ExternOrderKey, userDefine03, PKG, [WEIGHT], PALLETS)
       SELECT ORDERS.ExternOrderKey
            , 'Dept: ' + ISNULL(TRIM(ORDERS.UserDefine03), '') AS UserDefine03
-           , PKG = SUM(CONVERT(INT, MBOLDETAIL.TotalCartons))
+           , PKG = SUM(CONVERT(INT, PK.TTLCTN))
            , [WEIGHT] = SUM(MBOLDETAIL.[Weight])
            , 'Y / N  ' PALLETS
       FROM MBOLDETAIL WITH (NOLOCK)
       JOIN ORDERS WITH (NOLOCK) ON (MBOLDETAIL.OrderKey = ORDERS.OrderKey)
+      CROSS APPLY ( SELECT COUNT(DISTINCT P.LabelNo) AS TTLCTN 
+                    FROM PACKDETAIL P (NOLOCK)
+                    JOIN PACKHEADER PH (NOLOCK) ON P.Pickslipno = PH.Pickslipno
+                    WHERE PH.Orderkey = ORDERS.Orderkey ) AS PK
       WHERE (MBOLDETAIL.MbolKey = @c_Mbolkey) AND (ORDERS.ConsigneeKey = @c_Consigneekey)
       GROUP BY ORDERS.ExternOrderKey
              , ISNULL(TRIM(ORDERS.UserDefine03), '') 
