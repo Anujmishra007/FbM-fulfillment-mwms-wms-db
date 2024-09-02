@@ -108,7 +108,8 @@ BEGIN
                   END
 
                   -- total sku weight + empty pallet weight
-                  SET @cOutField05 = ISNUL(@nTotalWeight,0) + ISNULL(@nEmptyPalletWgt,0)
+                  SET @cOutField05 = ISNULL(@nTotalWeight,0) + ISNULL(@nEmptyPalletWgt,0)
+
                END
                
                GOTO QUIT
