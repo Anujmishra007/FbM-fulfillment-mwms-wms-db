@@ -306,10 +306,11 @@ BEGIN
          END
          ELSE
          BEGIN
-            INSERT INTO dbo.PackInfo (PickslipNo, CartonNo, QTY, CartonType, RefNo, Length, Width, Height, UCCNo, TrackingNo)
+            INSERT INTO dbo.PackInfo (PickslipNo, CartonNo, Cube, QTY, CartonType, RefNo, Length, Width, Height, UCCNo, TrackingNo)
                SELECT TOP 1 
                   @cPickSlipNo,
                   @nCartonNo,
+                  Cube,
                   @nQTY,
                   CartonType,
                   @cLabelNo,
