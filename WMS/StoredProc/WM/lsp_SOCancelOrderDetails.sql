@@ -101,7 +101,7 @@ BEGIN
                   IF(ISNULL(@c_CancelReasonCode,'')='')
                      BEGIN
                            SET @n_continue = 3
-                           SET @n_err = 556110
+                           SET @n_err = 562601
                            SET @c_ErrMsg='Please select the cancel reason code for order line number: '
 
                            INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
@@ -112,7 +112,7 @@ BEGIN
                   IF (@c_status<>'0' AND @c_status<>'CANC')
                      BEGIN
                            SET @n_continue = 3
-                           SET @n_err = 556111
+                           SET @n_err = 562602
                            SET @c_ErrMsg='Order details are not in normal status for line number: '
 
                            INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
@@ -122,7 +122,7 @@ BEGIN
                   IF (@c_status='CANC')
                      BEGIN
                            SET @n_continue = 3
-                           SET @n_err = 556112
+                           SET @n_err = 562603
                            SET @c_ErrMsg='Order details had been cancelled for line number: '
 
                            INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
@@ -180,7 +180,7 @@ BEGIN
    ELSE
       BEGIN
          SET @n_Continue = 3
-			SET @n_Err= 556114
+			SET @n_Err= 562605
          SET @c_ErrMsg = 'NSQL'+ CONVERT(Char(6),@n_err)+': Order line number is required. (lsp_SOCancelOrderDetails)'
 
          INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
@@ -205,7 +205,7 @@ BEGIN
 
    BEGIN CATCH
       SET @n_continue = 3
-      SET @n_Err = 556113
+      SET @n_Err = 562604
       SET @c_ErrMsg = ERROR_MESSAGE()
       SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': UPDATE Orders fail. (lsp_SOCancelOrderDetails)'
                      + '(' + @c_ErrMsg + ')'
