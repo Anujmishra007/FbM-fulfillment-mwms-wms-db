@@ -55,7 +55,7 @@ BEGIN
 
    SELECT DISTINCT MBOL.MbolKey
                  , MBOL.ExternMbolKey
-                 , MBOL.VoyageNumber
+                 , VoyageNumber = MBOL.OtherReference
                  , MBOL.Carrieragent
                  , MBOL.DRIVERName
                  , MBOL.VesselQualifier
