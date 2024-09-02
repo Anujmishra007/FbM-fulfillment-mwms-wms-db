@@ -22,7 +22,8 @@ GO
 /*                                                                      */  
 /* Date       Rev  Author   Purposes                                    */  
 /* 2024-09-02 1.0  LowZhe   Created UWP-23555.                          */
-/*                          Based on rdt_940SwapUCCSP01                 */  
+/*                          Based on rdt_940SwapUCCSP01                 */ 
+/* 2024-09-02 1.1  JCH507   Fixed the missing part in V1.0              */ 
 /************************************************************************/  
   
   
@@ -264,9 +265,11 @@ BEGIN
 --                                         @cOrderLineNumber = UCC.OrderLineNumber,
                                          @cOriginalUCC  = RP.RefNo,
                                          @cToLoc        = RP.ToLoc,
-                                         @cLoc          = RP.FromLoc
+                                         @cLoc          = RP.FromLoc,
+                                         @cToLocType    = L.LocationType -- V1.1 JCH507
 --                                         @cOriginalStatus = UCC.Status
-               FROM dbo.Replenishment RP WITH (NOLOCK) 
+               FROM dbo.Replenishment RP WITH (NOLOCK)
+               INNER JOIN Loc L WITH (NOLOCK) ON RP.ToLoc = L.Loc -- V1.1 JCH507
 --               INNER JOIN dbo.Replenishment RP WITH (NOLOCK) ON 
 --                             RP.ID      = UCC.ID
 --                        AND  RP.FromLoc = UCC.Loc
@@ -310,7 +313,7 @@ BEGIN
                   
                   IF ISNULL(RTRIM(@cUCCStatus),'')  <> '1' 
                   BEGIN
-                     IF @cToLocType = 'PICK' 
+                     IF @cToLocType = 'PICK' -- V1.1 JCH507
                      BEGIN
                         IF NOT EXISTS ( SELECT 1 FROM dbo.UCC WITH (NOLOCK)
                                         WHERE UCCNo = @cUCC
