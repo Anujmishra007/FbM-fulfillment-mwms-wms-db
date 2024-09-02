@@ -133,7 +133,7 @@ BEGIN
             IF (@n_Continue=1)
                BEGIN
                   UPDATE ORDERDETAIL WITH (ROWLOCK)
-                  SET OpenQty=0, TrafficCop=NULL, Status='CANC'
+                  SET OpenQty=0, Status='CANC'
                   WHERE OrderKey=@c_Orderkey AND OrderLineNumber =@c_OrderLineNumber;
 
                   set @n_RowsUpdated= @@ROWCOUNT
