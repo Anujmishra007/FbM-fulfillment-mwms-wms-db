@@ -284,7 +284,7 @@ BEGIN
          SET @n_continue = 3
          SET @n_Err = 556102
          SET @c_ErrMsg = ERROR_MESSAGE()
-         SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': UPDATE Orders fail. (lsp_WaveCancelOrder)'
+         SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': UPDATE Orders/Order details fail. (lsp_WaveCancelOrder)'
                        + '(' + @c_ErrMsg + ')'
 
          --(Wan02) - START
