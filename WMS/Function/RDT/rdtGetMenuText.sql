@@ -88,6 +88,6 @@ END
 
 GO
 
-GRANT SELECT ON [RDT].[rdtGetMenuText] TO NSQL
+GRANT EXECUTE ON [RDT].[rdtGetMenuText] TO NSQL
 
 GO

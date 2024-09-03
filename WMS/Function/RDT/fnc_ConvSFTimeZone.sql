@@ -81,6 +81,6 @@ END
 
 GO
 
-GRANT SELECT ON [dbo].[fnc_ConvSFTimeZone] TO NSQL
+GRANT EXECUTE ON [dbo].[fnc_ConvSFTimeZone] TO NSQL
 
 GO
