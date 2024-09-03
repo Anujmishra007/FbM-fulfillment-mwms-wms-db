@@ -1,4 +1,3 @@
-/****** Object:  StoredProcedure [WM].[lsp_WaveCancelOrder]    Script Date: 2024-08-28 10:50:50 ******/
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -112,39 +111,6 @@ BEGIN
    --   GOTO EXIT_SP
    --END
 
-    ----(PPA371)---  START
-         SELECT @c_StorerKey=StorerKey , @c_CancelReasonCode= CancelReasonCode FROM ORDERS WITH (NOLOCK) WHERE OrderKey=@c_Orderkey
-
-         SELECT @c_CancelReasonEnabled=ReasonCodeReqForSOCancel FROM StorerSODefault WITH (NOLOCK)  WHERE StorerKey = @c_storerKey
-
-         IF @c_cancelReasonEnabled='Yes'
-            BEGIN
-                  If exists (SELECT 1 FROM orders WITH (NOLOCK)  WHERE OrderKey=@c_Orderkey and CancelReasonCode = '')
-                     BEGIN
-                        SET @n_continue = 3
-                        SET @n_err = 556105
-                        SET @c_errmsg = 'Please select cancellation Reason Code for order : '
-
-                        INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
-                        VALUES (@c_TableName, @c_SourceType, @c_WaveKey, @c_Orderkey, '', 'ERROR', 0, @n_err, @c_errmsg)
-
-                        GOTO EXIT_SP
-                     END
-
-                  IF( select COUNT(distinct(Status)) from ORDERDETAIL WITH (NOLOCK) WHERE  Status not in ('0', 'CANC'))>0
-                     BEGIN
-                        SET @n_continue = 3
-                        SET @n_err = 556106
-                        SET @c_errmsg = 'Order can not be cancelled as one of the order line is in progress: '
-
-                        INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
-                        VALUES (@c_TableName, @c_SourceType, @c_WaveKey, @c_Orderkey, '', 'ERROR', 0, @n_err, @c_errmsg)
-
-                        GOTO EXIT_SP
-                     END
-            END
-
-   ------------------(PPA371) END
    --(mingle01) - START
 
    SET @n_ErrGroupKey = 0        --(Wan02)
@@ -181,6 +147,44 @@ BEGIN
 
          GOTO EXIT_CANC
       END
+
+----(PPA371)---  START
+   SELECT @c_StorerKey=StorerKey , @c_CancelReasonCode= CancelReasonCode FROM ORDERS WITH (NOLOCK) WHERE OrderKey=@c_Orderkey
+
+   SELECT @c_CancelReasonEnabled=ReasonCodeReqForSOCancel FROM StorerSODefault WITH (NOLOCK)  WHERE StorerKey = @c_storerKey
+
+   IF @c_cancelReasonEnabled='Yes'
+      BEGIN
+            If exists (SELECT 1 FROM orders WITH (NOLOCK)  WHERE OrderKey=@c_Orderkey and CancelReasonCode = '')
+               BEGIN
+                  SET @n_continue = 3
+                  SET @n_err = 556105
+                  SET @c_errmsg = 'NSQL' + CONVERT(CHAR(6), @n_err)
+                        + 'Please select cancellation Reason Code for order key #:' + @c_Orderkey + '. (lsp_WaveCancelOrder)'
+                        + ' |' + @c_Orderkey
+
+                  INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
+                  VALUES (@c_TableName, @c_SourceType, @c_WaveKey, @c_Orderkey, '', 'ERROR', 0, @n_err, @c_errmsg)
+
+                  GOTO EXIT_SP
+               END
+
+            IF EXISTS ( select 1 from PICKDETAIL WITH (NOLOCK) WHERE OrderKey='' )
+               BEGIN
+                  SET @n_continue = 3
+                  SET @n_err = 556106
+                  SET @c_errmsg = 'NSQL' + CONVERT(CHAR(6), @n_err)
+                        + 'Order can not be cancelled as one of the order line is in progress:  #:' + @c_Orderkey + '. (lsp_WaveCancelOrder)'
+                        + ' |' + @c_Orderkey
+
+                  INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
+                  VALUES (@c_TableName, @c_SourceType, @c_WaveKey, @c_Orderkey, '', 'ERROR', 0, @n_err, @c_errmsg)
+
+                  GOTO EXIT_SP
+               END
+      END
+
+------------------(PPA371) END
 
       --(Wan02) - START
       IF @c_WaveKey <> ''
