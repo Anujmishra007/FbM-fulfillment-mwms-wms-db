@@ -5,7 +5,7 @@ SET QUOTED_IDENTIFIER OFF
 GO
 
 /************************************************************************/
-/* Function       : fnc_CalcShelfLife01                                 */
+/* Function       : fnc_CalcShelfLifeBUL                                */
 /* Copyright      : Maersk Logistics                                    */
 /*                                                                      */
 /* Purpose: BUL has Finished Goods (FG) and Raw Material and Packaging  */
@@ -16,7 +16,7 @@ GO
 /* Date         Rev  Author     Purposes                                */
 /* 2012-04-13   1.0  Shong      Created UWP-22021                       */
 /************************************************************************/
-CREATE OR ALTER FUNCTION [dbo].[fnc_CalcShelfLife01]   
+CREATE OR ALTER FUNCTION [dbo].[fnc_CalcShelfLifeBUL]   
 (  
   @cStorerKey NVARCHAR(15),
   @cSKU       NVARCHAR(20),

@@ -69,6 +69,8 @@ BEGIN
         , @d_Lottable14             DATETIME
         , @d_Lottable15             DATETIME
         , @c_ShelfLife              NVARCHAR(30) = ''
+        , @c_ShelfLifeFnc           NVARCHAR(20) = ''
+        , @c_ConfigKey              NVARCHAR(20) = 'ShelfLifeCalcFnc'
         , @c_ReasonCode             NVARCHAR(10) = '';
 
 
@@ -125,6 +127,19 @@ BEGIN
                             ': CODELKUP.Short Setup not exists(For Reason Code). Listname:' + ISNULL(RTRIM(@c_Listname), '') + ', Code:' + ISNULL(RTRIM(@c_ReasonCode), '') + ' (msp_ULACalcShelfLife)';
             GOTO QUIT;
         END;
+
+    SELECT TOP 1 @c_ShelfLifeFnc = SValue
+    FROM dbo.StorerConfig WITH (NOLOCK)
+    WHERE ConfigKey = @c_ConfigKey AND Storerkey = @c_StorerKey
+    IF ISNULL(RTRIM(@c_ShelfLifeFnc), '') = ''
+        BEGIN
+            SET @n_continue = 3;
+            SET @n_err = 68003;
+            SET @c_errmsg = 'NSQL' + CONVERT(varchar(5),ISNULL(@n_err,0)) +
+                            ': StorerConfig.SValue does not exist. For ConfigKey:' + ISNULL(RTRIM(@c_ConfigKey), '') + ', Storerkey:' + ISNULL(RTRIM(@c_StorerKey), '') + ' (msp_ULACalcShelfLife)';
+            GOTO QUIT;
+        END;
+
     /*********************************************/
     /* Main Validation (END)                     */
     /*********************************************/
@@ -137,7 +152,7 @@ BEGIN
                 SET @c_Facility   = '';
                 -- Retrieve related info from inventory table into a cursor
                 DECLARE CUR_TRANSFER CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-                    SELECT DISTINCT LOC.Facility, LA.Sku, LA.Lottable04, LA.Lottable07
+                    SELECT DISTINCT LOC.Facility, LA.Sku, LA.Lottable04, LA.Lottable07, LA.Lottable13
                     FROM dbo.LOT WITH (NOLOCK)
                              JOIN dbo.LOTAttribute AS LA WITH (NOLOCK, INDEX(PKLOTAttribute) ) ON (LOT.Lot = LA.LOT)
                              JOIN dbo.LOTxLOCxID LLI WITH (NOLOCK) ON LLI.Lot = LOT.Lot
@@ -148,11 +163,18 @@ BEGIN
                       AND LA.Lottable06 in ( '0' , '')
                       AND SKU.SKUGROUP IN ('FG', 'RM', 'PC');
                 OPEN CUR_TRANSFER;
-                FETCH NEXT FROM CUR_TRANSFER INTO @c_Facility, @c_SKU, @d_Lottable04, @c_Lottable07;
+                FETCH NEXT FROM CUR_TRANSFER INTO @c_Facility, @c_SKU, @d_Lottable04, @c_Lottable07, @d_Lottable13;
                 WHILE @@FETCH_STATUS <> -1
                     BEGIN
                         -- Calculate new Shelf Life
-                        SELECT @c_ShelfLife =  dbo.fnc_CalcShelfLife01(@c_StorerKey, @c_SKU, @d_Lottable04);
+                        IF @c_ShelfLifeFnc = 'fnc_CalcShelfLifeBUL'
+                            BEGIN
+                                SELECT @c_ShelfLife =  dbo.fnc_CalcShelfLifeBUL(@c_StorerKey, @c_SKU, @d_Lottable04);
+                            END
+                        ELSE IF @c_ShelfLifeFnc = 'fnc_CalcShelfLifeBUD'
+                            BEGIN
+                                SELECT @c_ShelfLife =  dbo.fnc_CalcShelfLifeBUD(@c_StorerKey, @c_SKU, @d_Lottable04, @d_Lottable13);
+                            END
                         -- If Lottable07 not required to change, getting next record
                         IF @c_ShelfLife = @c_Lottable07
                             GOTO NextRecord;
@@ -450,7 +472,7 @@ BEGIN
 
 
                         NextRecord:
-                            FETCH NEXT FROM CUR_TRANSFER INTO @c_Facility, @c_SKU, @d_Lottable04, @c_Lottable07;
+                            FETCH NEXT FROM CUR_TRANSFER INTO @c_Facility, @c_SKU, @d_Lottable04, @c_Lottable07, @d_Lottable13;
                     END; -- WHILE @@FETCH_STATUS <> -1
                 CLOSE CUR_Transfer;
                 DEALLOCATE CUR_TRANSFER;

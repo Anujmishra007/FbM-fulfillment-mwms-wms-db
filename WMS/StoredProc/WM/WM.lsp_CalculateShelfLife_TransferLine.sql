@@ -39,6 +39,9 @@ BEGIN
          , @c_SKU                NVARCHAR(100) = ''
          , @dt_Lottable04        DATETIME
          , @n_Continue           INT           = 1
+         , @dt_Lottable13        DATETIME
+         , @c_ShelfLifeFnc       NVARCHAR(100) = ''
+         , @c_ConfigKey          NVARCHAR(20)  = 'ShelfLifeCalcFnc'
 
    SET @b_Success = 1
    SET @c_ErrMsg = ''
@@ -49,14 +52,24 @@ BEGIN
       SELECT
          @c_StorerKey = ToStorerKey,
          @c_SKU = ToSku,
-         @dt_Lottable04 = tolottable04
-      FROM TRANSFERDETAIL
-      WHERE 
+         @dt_Lottable04 = tolottable04,
+         @dt_Lottable13 = tolottable13
+      FROM TRANSFERDETAIL WITH (NOLOCK)
+      WHERE
          TransferKey = @c_TransferKey AND
          TransferLineNumber = @c_TransferLineNumber
+
+      SELECT @c_ShelfLifeFnc = SValue
+      FROM StorerConfig WITH (NOLOCK)
+      WHERE ConfigKey = @c_ConfigKey
+         AND StorerKey = @c_StorerKey
+
       IF @dt_Lottable04 IS NOT NULL
          BEGIN
-            SELECT @c_shelfLife =  dbo.fnc_CalcShelfLife01(@c_StorerKey, @c_SKU, @dt_Lottable04)
+            IF @c_ShelfLifeFnc = 'fnc_CalcShelfLifeBUL'
+               SELECT @c_shelfLife =  dbo.fnc_CalcShelfLifeBUL(@c_StorerKey, @c_SKU, @dt_Lottable04)
+            ELSE IF @c_ShelfLifeFnc = 'fnc_CalcShelfLifeBUD'
+               SELECT @c_shelfLife =  dbo.fnc_CalcShelfLifeBUD(@c_StorerKey, @c_SKU, @dt_Lottable04, @dt_Lottable13)
          END
    END TRY   
    BEGIN CATCH
