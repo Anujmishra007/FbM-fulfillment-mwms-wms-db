@@ -102,7 +102,9 @@ BEGIN
                      BEGIN
                            SET @n_continue = 3
                            SET @n_err = 562601
-                           SET @c_ErrMsg='Please select the cancel reason code for order line number: '
+                           SET @c_ErrMsg= 'NSQL' + CONVERT(CHAR(6), @n_err)
+                                           + 'Please select the cancel reason code for Line number #:' + @c_OrderLineNumber + '. (lsp_SOCancelOrderDetails)'
+                                           + ' |' + @c_OrderLineNumber
 
                            INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
                            VALUES (@c_TableName, @c_SourceType, @c_Orderkey,@c_OrderLineNumber, '', 'ERROR', 0, @n_err, @c_errmsg)
@@ -113,7 +115,9 @@ BEGIN
                      BEGIN
                            SET @n_continue = 3
                            SET @n_err = 562602
-                           SET @c_ErrMsg='Order details are not in normal status for line number: '
+                           SET @c_ErrMsg='NSQL' + CONVERT(CHAR(6), @n_err)
+                                          + 'Order details are not in normal status for Line number #:' + @c_OrderLineNumber + '. (lsp_SOCancelOrderDetails)'
+                                          + ' |' + @c_OrderLineNumber
 
                            INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
                            VALUES (@c_TableName, @c_SourceType, @c_Orderkey,@c_OrderLineNumber, '', 'ERROR', 0, @n_err, @c_errmsg)
@@ -123,7 +127,9 @@ BEGIN
                      BEGIN
                            SET @n_continue = 3
                            SET @n_err = 562603
-                           SET @c_ErrMsg='Order details had been cancelled for line number: '
+                           SET @c_ErrMsg='NSQL' + CONVERT(CHAR(6), @n_err)
+                                        + 'Order details had been cancelled for Line number #:' + @c_OrderLineNumber + '. (lsp_SOCancelOrderDetails)'
+                                        + ' |' + @c_OrderLineNumber
 
                            INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
                            VALUES (@c_TableName, @c_SourceType, @c_Orderkey,@c_OrderLineNumber, '', 'ERROR', 0, @n_err, @c_errmsg)
@@ -191,12 +197,12 @@ BEGIN
       IF @n_continue = 1
       BEGIN
 
-         SET @c_errmsg = 'Order detail is cancelled.'
+         SET @c_errmsg = 'Order detail is cancelled for Line number '+@c_OrderLineNumber+'.'
          IF(@n_RowsUpdated>1)
             BEGIN
-               SET @c_errmsg = 'Order details are cancelled.'
+               SET @c_errmsg = 'Order details are cancelled for line numbers '+@c_OrderLineNumber+'.'
             END
-         - START
+
          INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
          VALUES (@c_TableName, @c_SourceType, @c_Orderkey, @c_OrderLineNumber, '', 'MESSAGE', 0, @n_err, @c_errmsg)
       END
@@ -218,13 +224,13 @@ BEGIN
    END CATCH
 
 EXIT_SP:
-   - START
+
    IF (XACT_STATE()) = -1
    BEGIN
       SET @n_Continue=3
       ROLLBACK TRAN
    END
-   - END
+
 
    IF @n_Continue=3  -- Error Occured - Process And Return
    BEGIN
@@ -252,7 +258,7 @@ EXIT_SP:
       END
    END
 
-   - START
+
    SET @CUR_ERRLIST = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
    SELECT   twl.TableName
          ,  twl.SourceType
@@ -308,7 +314,7 @@ EXIT_SP:
    CLOSE @CUR_ERRLIST
    DEALLOCATE @CUR_ERRLIST
 
-   - END
+
    WHILE @@TRANCOUNT < @n_StartTCnt
    BEGIN
       BEGIN TRAN
