@@ -17,7 +17,7 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 1.2                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -28,8 +28,9 @@ GO
 /* 2021-05-12  Wan      1.0   Created                                   */
 /* 2021-10-21  Wan01    1.1   WMS-18121 - [CN]Nike_Phoeix_B2C_Exceed_   */
 /*                            Exception_Tracking-CR                     */
+/* 23-Apr-2024 WLChooi  1.2   WMS-25317 - Return Receipt.Signatory(WL01)*/
 /************************************************************************/
-CREATE FUNCTION dbo.fnc_ASNExceptionGetOverdue 
+CREATE   FUNCTION [dbo].[fnc_ASNExceptionGetOverdue] 
 (
    @n_RowRef      BIGINT
 ,  @c_documentno  NVARCHAR(10)
@@ -39,6 +40,7 @@ RETURNS @t_Overdue TABLE
 ,  Documentno        NVARCHAR(10)
 ,  [Status]          NVARCHAR(20)
 ,  Message_Pass      NVARCHAR(20)
+,  Signatory         NVARCHAR(50)   --WL01
 )       
 AS
 BEGIN   
@@ -49,6 +51,7 @@ BEGIN
          
          , @c_UserDefine02    NVARCHAR(30)   = '' 
          , @c_Message_Pass    NVARCHAR(20)   = ''
+         , @c_Signatory       NVARCHAR(50)   = ''   --WL01
 
    SELECT TOP 1 @c_ReceiptKey = di.Key1 
    FROM DocStatusTrack AS dst WITH (NOLOCK)  
@@ -62,6 +65,7 @@ BEGIN
    
    SELECT @dt_Userdefine06 = r.UserDefine06
          ,@c_UserDefine02 = ISNULL(r.UserDefine02,'')
+         ,@c_Signatory = ISNULL(r.Signatory,'')   --WL01
    FROM RECEIPT AS r WITH (NOLOCK)
    WHERE r.ReceiptKey = @c_ReceiptKey
 
@@ -76,11 +80,13 @@ BEGIN
    END
 
    EXIT_FUNCTION: 
-   INSERT INTO @t_Overdue ( RowRef, DocumentNo, [Status], Message_Pass ) 
-   VALUES ( @n_RowRef, @c_DocumentNo, @c_Overdue, @c_Message_Pass )
+   INSERT INTO @t_Overdue ( RowRef, DocumentNo, [Status], Message_Pass, Signatory )   --WL01
+   VALUES ( @n_RowRef, @c_DocumentNo, @c_Overdue, @c_Message_Pass, @c_Signatory )     --WL01
 
    RETURN
 END -- procedure
 GO
 
 GRANT SELECT ON dbo.fnc_ASNExceptionGetOverdue TO NSQL
+
+GO
