@@ -19,7 +19,6 @@ GO
 /*                            only (james03)                               */
 /* 2022-12-22   1.4  yeekung  JSM-118875 blank mbolkey (yeekung01)         */
 /* 2023-03-27   1.5  James    WMS-22063 Add ExtUpdSP to step 4 (james04)   */
-/* 2024-01-22   1.5  James    WMS-24624 Bug fix (james05)                  */
 /***************************************************************************/      
       
 CREATE or alter  PROC [RDT].[rdtfnc_MbolCreation](      
@@ -579,7 +578,7 @@ BEGIN
             GOTO Step_Scan_Fail      
          END      
              
-         IF @cOrderKey = '' AND @cLoadKey = '' AND @cRefNo1 = '' AND  @cRefNo2  = '' AND   @cRefNo3  = '' -- (james05)     
+         IF @cOrderKey = '' AND @cLoadKey = ''
          BEGIN      
             SET @nErrNo = 172116      
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --OrdOrLoad Req     
