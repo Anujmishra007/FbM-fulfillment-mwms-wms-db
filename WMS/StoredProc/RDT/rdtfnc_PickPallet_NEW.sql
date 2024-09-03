@@ -108,7 +108,6 @@ DECLARE
    @cOverrideToLOC      NVARCHAR( 20),
    @cLOCCheckDigitSP    NVARCHAR( 20),
    @cShortOption        NVARCHAR( 1),
-   @cShortFlag          INT,
 
    @cExtScnSP           NVARCHAR( 20),
    @nAction             INT,
@@ -199,7 +198,6 @@ SELECT
    @cLOCCheckDigitSP    = V_string35,
    @cShortOption        = V_string36,
    @cExtScnSP           = V_string37,
-   @cShortFlag          = V_string38,
    
    @cBarcode            = V_String41,
 
@@ -930,7 +928,6 @@ Scn 3 = 5912. ID screen
 ******************************************************************************/
 Step_ID:
 BEGIN
-   SET @cShortFlag = 0 -- refresh shortflag
    SET @cID = '' -- refresh cID
    IF @nInputKey = 1 -- ENTER
    BEGIN
@@ -941,28 +938,12 @@ BEGIN
       -- Skip task
       IF @cID = ''
       BEGIN
-         -- Short Option ON
-         IF @cShortOption = '1'
-         BEGIN
-            SET @cOutField01 = '' -- Option
-
-            SET @nScn = @nScn_ExtScn
-            SET @nStep = @nStep_ExtScn
-
-            GOTO Quit
-         END
-
-         IF @cShortOption = ''
-         BEGIN
-            -- Prepare next screen var
-            SET @cOutField01 = '' -- Option
-
-            -- Go to skip task screen
-            SET @nScn = @nScn_SkipTask
-            SET @nStep = @nStep_SkipTask
-
-            GOTO Quit
-         END     
+         -- Prepare next screen var
+         SET @cOutField01 = '' -- Option
+         -- Go to skip task screen
+         SET @nScn = @nScn_SkipTask
+         SET @nStep = @nStep_SkipTask
+         GOTO Step_ExtScn
       END 
  
       DECLARE @cUPC      NVARCHAR( 30),
@@ -1630,31 +1611,15 @@ BEGIN
          GOTO Quit
       END
 
-      IF @cShortFlag = 1
-      BEGIN
-         -- Confirm Short Pick Task
-         EXECUTE rdt.rdt_PickPallet_ConfirmShort @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 
-            @cPickSlipNo, @cPickZone, @cLOC, @cID, @cSKU, @nTaskQTY, @cToLOC, @cLottableCode, 
-            @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05, 
-            @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10, 
-            @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, 
-            @nErrNo OUTPUT, @cErrMsg OUTPUT
-         IF @nErrNo <> 0
-            GOTO Quit
-         SET @cShortFlag = 0
-      END
-      ELSE
-      BEGIN
-         -- Confirm task
-         EXECUTE rdt.rdt_PickPallet_Confirm @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 
-            @cPickSlipNo, @cPickZone, @cLOC, @cID, @cSKU, @nTaskQTY, @cToLOC, @cLottableCode, 
-            @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05, 
-            @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10, 
-            @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, 
-            @nErrNo OUTPUT, @cErrMsg OUTPUT
-         IF @nErrNo <> 0
-            GOTO Quit
-      END
+      -- Confirm task
+      EXECUTE rdt.rdt_PickPallet_Confirm @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 
+         @cPickSlipNo, @cPickZone, @cLOC, @cID, @cSKU, @nTaskQTY, @cToLOC, @cLottableCode, 
+         @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05, 
+         @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10, 
+         @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, 
+         @nErrNo OUTPUT, @cErrMsg OUTPUT
+      IF @nErrNo <> 0
+         GOTO Quit
 
       -- Go to next screen
       EXEC rdt.rdt_PickPallet_GoToNextScreen @nMobile, @nFunc, @cLangCode, @nInputKey, @cFacility, @cStorerKey, 
@@ -1788,7 +1753,7 @@ BEGIN
    END
    GOTO Quit
 END
-GOTO Quit
+
 -- FCR-735 Ext Screen
 Step_ExtScn:
 BEGIN
@@ -1807,35 +1772,6 @@ BEGIN
             @cUDF22  NVARCHAR( 250), @cUDF23 NVARCHAR( 250), @cUDF24 NVARCHAR( 250),
             @cUDF25  NVARCHAR( 250), @cUDF26 NVARCHAR( 250), @cUDF27 NVARCHAR( 250),
             @cUDF28  NVARCHAR( 250), @cUDF29 NVARCHAR( 250), @cUDF30 NVARCHAR( 250)
-
-         SET @cUDF01 = @cOption         
-         SET @cUDF02 = @cDecodeSP       
-         SET @cUDF03 = @cID             
-         -- SET @cUDF04 = @cUPC            
-         SET @cUDF05 = @cBarcode        
-         SET @cUDF06 = @cPickSlipNo     
-         SET @cUDF07 = @cLOC            
-         SET @cUDF08 = @nTaskQTY        
-         SET @cUDF09 = @cSKU            
-         SET @cUDF10 = @cSuggToLOC      
-         SET @cUDF11 = @cSuggestToLOCSP 
-         SET @cUDF12 = @cPickZone       
-         SET @cUDF13 = @cPUOM           
-         SET @cUDF14 = @nPTaskQTY       
-         SET @cUDF15 = @nMTaskQTY       
-         SET @cUDF16 = @cLottableCode   
-         SET @cUDF17 = @cSuggID         
-         SET @cUDF18 = @cSKUDescr       
-         SET @cUDF19 = @cMUOM_Desc      
-         SET @cUDF20 = @cPUOM_Desc      
-         SET @cUDF21 = @nPUOM_Div       
-         SET @cUDF22 = @cExtendedInfoSP 
-         SET @cUDF23 = @cSuggLOC        
-         SET @cUDF24 = @cToLOC          
-         SET @cUDF25 = @cExtendedInfo
-         SET @cUDF26 = @cMoveQTYAlloc
-         SET @cUDF27 = @cMoveQTYPick 
-         SET @cUDF28 = @cDefaultToLoc  
 
          SET @nAction = 0
 
@@ -1880,7 +1816,7 @@ BEGIN
          SET @cOption         = @cUDF01
          SET @cDecodeSP       = @cUDF02
          SET @cID             = @cUDF03
-         -- SET @cUPC            = @cUDF04
+         SET @cUPC            = @cUDF04
          SET @cBarcode        = @cUDF05
          SET @cPickSlipNo     = @cUDF06
          SET @cLOC            = @cUDF07
@@ -1902,20 +1838,15 @@ BEGIN
          SET @cSuggLOC        = @cUDF23
          SET @cToLOC          = @cUDF24
          SET @cExtendedInfo   = @cUDF25 
-         SET @cMoveQTYAlloc   = @cUDF26
-         SET @cMoveQTYPick    = @cUDF27
-         SET @cDefaultToLoc   = @cUDF28
-
-         SET @cShortFlag      = @cUDF29
+         SET @cZone           = @cUDF26
       END
    END
-
    GOTO Quit
-
    Step_99_Fail:
    BEGIN
       GOTO Quit
    END
+   GOTO Quit
 END
 
 
@@ -1989,7 +1920,6 @@ BEGIN
       V_string35     = @cLOCCheckDigitSP,
       V_string36     = @cShortOption,  -- short option
       V_string37     = @cExtScnSP,
-      V_string38     = @cShortFlag,
    
       V_String41     = @cBarcode,
 
