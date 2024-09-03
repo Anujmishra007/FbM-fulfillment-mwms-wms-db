@@ -279,7 +279,7 @@ BEGIN
 
          IF @n_Continue = 1 
          BEGIN
-            SET @c_errmsg = 'Populate Order Type 2 Successfully.'
+            SET @c_errmsg = 'Populate Orders Successfully.'
 
             EXEC [WM].[lsp_WriteError_List] 
                @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
