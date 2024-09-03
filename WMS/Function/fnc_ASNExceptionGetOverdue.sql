@@ -1,7 +1,3 @@
-IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[fnc_ASNExceptionGetOverdue]') AND type in (N'FN', N'IF', N'TF', N'FS', N'FT'))
-BEGIN
-   DROP FUNCTION [dbo].[fnc_ASNExceptionGetOverdue]
-END
 
 SET ANSI_NULLS OFF
 GO
@@ -30,7 +26,7 @@ GO
 /*                            Exception_Tracking-CR                     */
 /* 23-Apr-2024 WLChooi  1.2   WMS-25317 - Return Receipt.Signatory(WL01)*/
 /************************************************************************/
-CREATE   FUNCTION [dbo].[fnc_ASNExceptionGetOverdue] 
+CREATE OR ALTER FUNCTION [dbo].[fnc_ASNExceptionGetOverdue] 
 (
    @n_RowRef      BIGINT
 ,  @c_documentno  NVARCHAR(10)
