@@ -1,4 +1,4 @@
-/****** Object:  UserDefinedFunction [dbo].[fnc_ConvSFTimeZone]    Script Date: 11/16/2023 4:49:19 PM ******/
+﻿/****** Object:  UserDefinedFunction [dbo].[fnc_ConvSFTimeZone]    Script Date: 11/16/2023 4:49:19 PM ******/
 SET ANSI_NULLS OFF
 GO
 
@@ -21,12 +21,10 @@ GO
 /* Data Modifications:                                                  */
 /*                                                                      */
 /* Updates:                                                             */
-/* Date         Author        Purposes                                  */
-/* 2023-09-14   1.0      Initial Version								         */
+/* Date         Author   By   Purposes                                  */
+/* 2023-09-14   1.0      SWT  Initial Version								   */
 /* 2024-01-22   1.1      SWT  Not doing any convertion if Input Date not*/
 /*                            timestamp                                 */
-/* 2024-02-23   1.2      Getting Timezone from Facility instead of      */
-/*                       StorerConfig                                   */
 /************************************************************************/
 CREATE OR ALTER   FUNCTION [dbo].[fnc_ConvSFTimeZone]
 (
@@ -37,7 +35,7 @@ CREATE OR ALTER   FUNCTION [dbo].[fnc_ConvSFTimeZone]
 RETURNS DATETIME
 AS
 BEGIN
-   DECLARE @cTimeZone NVARCHAR(128)= '', 
+   DECLARE @cTimeZone VARCHAR(100)= '', 
            @dLocalTime DATETIME 
 
    -- If UTC Date do not have time, then do nothing
@@ -47,38 +45,43 @@ BEGIN
    END
    ELSE 
    BEGIN
-      IF ISNULL(RTRIM(@cFacility), '') = '' AND ISNULL(RTRIM(@cStorerKey), '') <> ''
-      BEGIN
-         SELECT @cFacility = ISNULL(Facility,'') 
-         FROM dbo.STORER WITH (NOLOCK) 
-         WHERE StorerKey = @cStorerKey
-      END
+      SELECT TOP 1 
+         @cTimeZone=ISNULL([SValue],'')
+      FROM [dbo].[StorerConfig] WITH (NOLOCK) 
+      WHERE [StorerKey] = @cStorerKey
+      AND [Facility] = @cFacility
+      AND [ConfigKey] = 'TimeZone'
+      ORDER BY [AddDate] DESC
 
-      IF ISNULL(RTRIM(@cFacility), '') <> ''
+      IF ISNULL(@cTimeZone,'') = ''
       BEGIN
-         SELECT @cTimeZone=ISNULL(TimeZone,'')
-         FROM dbo.FACILITY WITH (NOLOCK) 
-         WHERE  [Facility] = @cFacility
+         SELECT TOP 1 
+            @cTimeZone=ISNULL([SValue],'')
+         FROM [dbo].[StorerConfig] WITH (NOLOCK) 
+         WHERE [StorerKey] = @cStorerKey
+         AND [Facility] = ''
+         AND [ConfigKey] = 'TimeZone'       
+         ORDER BY [AddDate] DESC
       END
 
       IF ISNULL(@cTimeZone,'') = '' OR 
          NOT EXISTS(SELECT 1 FROM sys.[time_zone_info]
-                  WHERE [name]= @cTimeZone)
+                    WHERE [name]= @cTimeZone)
       BEGIN
          SET @dLocalTime = @dUTCDate 
       END
       ELSE
       BEGIN
          SELECT @dLocalTime = CONVERT(DATETIME,
-                  @dUTCDate AT TIME ZONE 'UTC'
-                     AT TIME ZONE @cTimeZone);
+                   @dUTCDate AT TIME ZONE 'UTC'
+                       AT TIME ZONE @cTimeZone);
 
-      END
-   END 
+      END       
+   END
+
    RETURN @dLocalTime
 
 END
-
 GO
 
 GRANT EXECUTE ON [dbo].[fnc_ConvSFTimeZone] TO NSQL
