@@ -149,13 +149,13 @@ BEGIN
       END
 
 ----(PPA371)---  START
-   SELECT @c_StorerKey=StorerKey , @c_CancelReasonCode= CancelReasonCode FROM ORDERS WITH (NOLOCK) WHERE OrderKey=@c_Orderkey
+   SELECT @c_StorerKey=StorerKey , @c_CancelReasonCode= ISNULL(CancelReasonCode,'') FROM ORDERS WITH (NOLOCK) WHERE OrderKey=@c_Orderkey
 
    SELECT @c_CancelReasonEnabled=ReasonCodeReqForSOCancel FROM StorerSODefault WITH (NOLOCK)  WHERE StorerKey = @c_storerKey
 
    IF @c_cancelReasonEnabled='Yes'
       BEGIN
-            If exists (SELECT 1 FROM orders WITH (NOLOCK)  WHERE OrderKey=@c_Orderkey and CancelReasonCode = '')
+            If (@c_CancelReasonCode='')
                BEGIN
                   SET @n_continue = 3
                   SET @n_err = 556105
