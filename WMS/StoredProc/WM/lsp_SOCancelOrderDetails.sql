@@ -95,7 +95,7 @@ BEGIN
          SELECT @c_CancelReasonEnabled=ReasonCodeReqForSOCancel FROM StorerSODefault WITH (NOLOCK)  WHERE StorerKey = @c_storerKey
 
          select @c_CancelReasonCode=cancelreasoncode ,@c_status= Status
-                  from ORDERDETAIL
+                  from ORDERDETAIL WITH (NOLOCK)
                   where  OrderKey=@c_Orderkey AND OrderLineNumber= @c_OrderLineNumber
 
                   IF(ISNULL(@c_CancelReasonCode,'')='')
@@ -111,12 +111,12 @@ BEGIN
                            GOTO EXIT_SP
                      END
 
-                  IF (@c_status<>'0' AND @c_status<>'CANC')
+                  IF EXISTS (select 1 from PICKDETAIL WITH (NOLOCK) where OrderKey=@c_Orderkey and OrderLineNumber=@c_OrderLineNumber)
                      BEGIN
                            SET @n_continue = 3
                            SET @n_err = 562602
                            SET @c_ErrMsg='NSQL' + CONVERT(CHAR(6), @n_err)
-                                          + 'Order details are not in normal status for Line number #:' + @c_OrderLineNumber + '. (lsp_SOCancelOrderDetails)'
+                                          + 'Order detail is not in normal status for Line number #:' + @c_OrderLineNumber + '. (lsp_SOCancelOrderDetails)'
                                           + ' |' + @c_OrderLineNumber
 
                            INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
@@ -173,7 +173,7 @@ BEGIN
                         ,[Lottable15],[Notes],[Notes2],[Channel],[HashValue],[SalesChannel],[CancelReasonCode] FROM ORDERDETAIL  WITH (NOLOCK)
                   WHERE OrderKey=@c_Orderkey AND OrderLineNumber =@c_OrderLineNumber
 
-                  IF((SELECT COUNT(OrderKey) from ORDERDETAIL where OrderKey=@c_Orderkey and Status='CANC')= (SELECT COUNT(OrderKey) from ORDERDETAIL where OrderKey=@c_Orderkey))
+                  IF((SELECT COUNT(OrderKey) from ORDERDETAIL WITH (NOLOCK) where OrderKey=@c_Orderkey and Status='CANC')= (SELECT COUNT(OrderKey) from ORDERDETAIL WITH (NOLOCK) where OrderKey=@c_Orderkey))
                      BEGIN
                         UPDATE ORDERS WITH (ROWLOCK)
                               SET [Status] = 'CANC'
