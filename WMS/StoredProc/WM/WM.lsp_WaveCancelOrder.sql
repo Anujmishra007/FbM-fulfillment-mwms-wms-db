@@ -169,12 +169,29 @@ BEGIN
                   GOTO EXIT_SP
                END
 
-            IF EXISTS ( select 1 from PICKDETAIL WITH (NOLOCK) WHERE OrderKey='' )
+              IF EXISTS (select 1 FROM orderdetail WITH (NOLOCK) where orderkey = @c_Orderkey AND Status <>'CANC' and  (CancelReasonCode = '' OR CancelReasonCode IS NULL))
+                  BEGIN
+                     IF NOT EXISTS (SELECT 1 FROM  CODELKUP WITH (NOLOCK) where listname = 'ODCANC' and Code = @c_CancelReasonCode)
+                       BEGIN
+                           SET @n_continue = 3
+                           SET @n_err = 556107
+                           SET @c_errmsg = 'NSQL' + CONVERT(CHAR(6), @n_err)
+                                 + 'Cancel reason code mismatch. Please select another cancel reason code for order detail(s) #:' + @c_Orderkey + '. (lsp_WaveCancelOrder)'
+                                 + ' |' + @c_Orderkey
+
+                           INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
+                           VALUES (@c_TableName, @c_SourceType, @c_WaveKey, @c_Orderkey, '', 'ERROR', 0, @n_err, @c_errmsg)
+
+                           GOTO EXIT_SP
+                         END
+                  END
+
+            IF EXISTS ( select 1 from PICKDETAIL WITH (NOLOCK) WHERE OrderKey=@c_Orderkey)
                BEGIN
                   SET @n_continue = 3
-                  SET @n_err = 556106
+                  SET @n_err = 556107
                   SET @c_errmsg = 'NSQL' + CONVERT(CHAR(6), @n_err)
-                        + 'Order can not be cancelled as one of the order line is in progress:  #:' + @c_Orderkey + '. (lsp_WaveCancelOrder)'
+                        + 'Order can not be cancelled, order is not in normal status #:' + @c_Orderkey + '. (lsp_WaveCancelOrder)'
                         + ' |' + @c_Orderkey
 
                   INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
@@ -251,7 +268,7 @@ BEGIN
 ------------------(PPA371) START----
          UPDATE ORDERDETAIL
             SET OpenQty=0, cancelreasoncode = @c_CancelReasonCode
-         WHERE OrderKey=@c_Orderkey
+         WHERE OrderKey=@c_Orderkey AND Status <>'CANC'
 
          INSERT INTO [dbo].[ORDERDETAIL_CANCLOG]
                ([OrderKey],[OrderLineNumber],[OrderDetailSysId],[ExternOrderKey],[ExternLineNo]
@@ -280,7 +297,7 @@ BEGIN
                ,[ExternConsoOrderKey],[ConsoOrderLineNo],[Lottable06],[Lottable07],[Lottable08]
                ,[Lottable09],[Lottable10],[Lottable11],[Lottable12],[Lottable13],[Lottable14]
                ,[Lottable15],[Notes],[Notes2],[Channel],[HashValue],[SalesChannel],[CancelReasonCode] FROM ORDERDETAIL  WITH (NOLOCK)
-         WHERE OrderKey=@c_Orderkey
+         WHERE OrderKey=@c_Orderkey AND Status <>'CANC'
 ------------------(PPA371) END------
       END TRY
 
