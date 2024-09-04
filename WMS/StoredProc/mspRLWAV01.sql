@@ -35,6 +35,8 @@ GO
 /*                            qtyexpected                               */
 /* 2024-07-18  Wan06    1.5   UWP-22202-Mattel DPP with commingleSku    */
 /*                            Prompt Error if DPP different Sku         */
+/* 2024-09-02  WLChooi  1.6   UWP-23643-Get ToLoc from LoadplanLanedetail*/
+/*                            (WL01)                                     */
 /*************************************************************************/     
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV01]        
   @c_wavekey      NVARCHAR(10)    
@@ -90,6 +92,7 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV01]
          , @n_QtyNeed                  INT            = 0                           --(Wan02)
          , @n_QtyToReplen              INT            = 0                           --(Wan02)
          , @n_QtyRelease2Pick          INT            = 0                           --(Wan02)
+         , @c_LPLDLoc                  NVARCHAR(10)   = ''                          --WL01
 
          ,@cur_waveord                 CURSOR
          ,@cur_WaveReplfr              CURSOR                                       --(Wan02)
@@ -424,6 +427,7 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV01]
                 ,ISNULL(CL.Code,''9'') AS Priority   
                 ,CONVERT(NVARCHAR(8), O.DeliveryDate, 112) AS DeliveryDate  
                 ,'''' AS Loadkey                                                    --(Wan01)   
+                ,LPLD.Loc   --WL01
           FROM WAVEDETAIL WD (NOLOCK)  
           JOIN WAVE W (NOLOCK) ON WD.Wavekey = W.Wavekey                            
           JOIN ORDERS O (NOLOCK) ON WD.Orderkey = O.Orderkey  
@@ -437,6 +441,9 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV01]
           LEFT JOIN CODELKUP CL (NOLOCK) ON O.Storerkey = CL.Storerkey AND CL.Listname = ''TMPRIORITY'' 
                                          AND LEFT(O.Route,1) = CL.Short            
           OUTER APPLY (SELECT TOP 1 TL.Loc FROM LOC TL (NOLOCK) WHERE TL.Putawayzone = SSO.Route) AS TOLOC  
+          OUTER APPLY (SELECT TOP 1 ISNULL(LPD.Loc, '''') AS Loc   --WL01
+                       FROM LoadPlanLaneDetail LPD (NOLOCK)        --WL01
+                       WHERE LPD.LoadKey = O.Loadkey) AS LPLD      --WL01
           WHERE WD.Wavekey = @c_Wavekey  
           AND PD.Status = ''0''  
           AND PD.WIP_RefNo = @c_SourceType  
@@ -453,6 +460,7 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV01]
                   ,CONVERT(NVARCHAR(8), O.DeliveryDate, 112) 
                   ,LOC.LogicalLocation
                   ,TOLOC.Loc, ISNULL(CL.Code,''9'')                    
+                  ,LPLD.Loc   --WL01
           ORDER BY O.Route                                                          --(Wan01)  
               , CASE WHEN @c_DispatchCasePickMethod =''1''                          --(Wan01)
                      THEN O.Consigneekey ELSE '''' END                                       
@@ -474,7 +482,7 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV01]
       FETCH NEXT FROM cur_pick INTO @c_Storerkey, @c_Sku, @c_Lot, @c_FromLoc, @c_ID
                                   , @n_Qty, @c_UOM, @n_UOMQty
                                   , @c_Route, @c_Orderkey, @c_ToLoc, @c_Priority, @dt_DeliveryDate
-                                  , @c_Loadkey  
+                                  , @c_Loadkey, @c_LPLDLoc   --WL01
          
       WHILE @@FETCH_STATUS = 0 AND @n_continue IN (1,2)  
       BEGIN                       
@@ -483,6 +491,11 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV01]
          
          IF ISNULL(@c_DefaultLoc,'') <> ''  
            SET @c_ToLoc = @c_DefaultLoc  
+
+         --WL01 S
+         IF ISNULL(@c_LPLDLoc,'') <> ''  
+            SET @c_ToLoc = @c_LPLDLoc
+         --WL01 E
                                 
          IF ISNULL(@c_Toloc,'') = ''  
          BEGIN           
@@ -700,7 +713,7 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV01]
          FETCH NEXT FROM cur_pick INTO @c_Storerkey, @c_Sku, @c_Lot, @c_FromLoc, @c_ID
                                      , @n_Qty, @c_UOM, @n_UOMQty
                                      , @c_Route, @c_Orderkey, @c_ToLoc, @c_Priority, @dt_DeliveryDate
-                                     , @c_Loadkey  
+                                     , @c_Loadkey, @c_LPLDLoc   --WL01
       END  
       CLOSE cur_pick  
       DEALLOCATE cur_pick         
