@@ -129,7 +129,18 @@ DECLARE
    @cInField12 NVARCHAR( 60),   @cOutField12 NVARCHAR( 60),    @cFieldAttr12 NVARCHAR( 1),
    @cInField13 NVARCHAR( 60),   @cOutField13 NVARCHAR( 60),    @cFieldAttr13 NVARCHAR( 1),
    @cInField14 NVARCHAR( 60),   @cOutField14 NVARCHAR( 60),    @cFieldAttr14 NVARCHAR( 1),
-   @cInField15 NVARCHAR( 60),   @cOutField15 NVARCHAR( 60),    @cFieldAttr15 NVARCHAR( 1)
+   @cInField15 NVARCHAR( 60),   @cOutField15 NVARCHAR( 60),    @cFieldAttr15 NVARCHAR( 1),
+
+   @cUDF01  NVARCHAR( 250), @cUDF02 NVARCHAR( 250), @cUDF03 NVARCHAR( 250),
+   @cUDF04  NVARCHAR( 250), @cUDF05 NVARCHAR( 250), @cUDF06 NVARCHAR( 250),
+   @cUDF07  NVARCHAR( 250), @cUDF08 NVARCHAR( 250), @cUDF09 NVARCHAR( 250),
+   @cUDF10  NVARCHAR( 250), @cUDF11 NVARCHAR( 250), @cUDF12 NVARCHAR( 250),
+   @cUDF13  NVARCHAR( 250), @cUDF14 NVARCHAR( 250), @cUDF15 NVARCHAR( 250),
+   @cUDF16  NVARCHAR( 250), @cUDF17 NVARCHAR( 250), @cUDF18 NVARCHAR( 250),
+   @cUDF19  NVARCHAR( 250), @cUDF20 NVARCHAR( 250), @cUDF21 NVARCHAR( 250),
+   @cUDF22  NVARCHAR( 250), @cUDF23 NVARCHAR( 250), @cUDF24 NVARCHAR( 250),
+   @cUDF25  NVARCHAR( 250), @cUDF26 NVARCHAR( 250), @cUDF27 NVARCHAR( 250),
+   @cUDF28  NVARCHAR( 250), @cUDF29 NVARCHAR( 250), @cUDF30 NVARCHAR( 250)
 
 -- Getting Mobile information
 SELECT
@@ -196,7 +207,7 @@ SELECT
    @cSuggestToLOCSP     = V_string33,
    @cOverrideToLOC      = V_string34,
    @cLOCCheckDigitSP    = V_string35,
-   @cShortOption        = V_string36,
+
    @cExtScnSP           = V_string37,
    
    @cBarcode            = V_String41,
@@ -270,10 +281,6 @@ BEGIN
    SET @cOverrideToLOC = rdt.RDTGetConfig( @nFunc, 'OverrideToLOC', @cStorerKey)
    SET @cSuggestLOC = rdt.RDTGetConfig( @nFunc, 'SuggestLOC', @cStorerKey)
    SET @cVerifyPickZone = rdt.RDTGetConfig( @nFunc, 'verifypickzone', @cStorerKey)
-
-   SET @cShortOption = ISNULL(rdt.RDTGetConfig( @nFunc, 'ShortOption', @cStorerKey), '')
-   IF @cShortOption = '0'
-      SET @cShortOption = ''
       
    SET @cDecodeSP = rdt.RDTGetConfig( @nFunc, 'DecodeSP', @cStorerKey)
    IF @cDecodeSP = '0'
@@ -1761,17 +1768,24 @@ BEGIN
    BEGIN
       IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
       BEGIN
-         DECLARE
-            @cUDF01  NVARCHAR( 250), @cUDF02 NVARCHAR( 250), @cUDF03 NVARCHAR( 250),
-            @cUDF04  NVARCHAR( 250), @cUDF05 NVARCHAR( 250), @cUDF06 NVARCHAR( 250),
-            @cUDF07  NVARCHAR( 250), @cUDF08 NVARCHAR( 250), @cUDF09 NVARCHAR( 250),
-            @cUDF10  NVARCHAR( 250), @cUDF11 NVARCHAR( 250), @cUDF12 NVARCHAR( 250),
-            @cUDF13  NVARCHAR( 250), @cUDF14 NVARCHAR( 250), @cUDF15 NVARCHAR( 250),
-            @cUDF16  NVARCHAR( 250), @cUDF17 NVARCHAR( 250), @cUDF18 NVARCHAR( 250),
-            @cUDF19  NVARCHAR( 250), @cUDF20 NVARCHAR( 250), @cUDF21 NVARCHAR( 250),
-            @cUDF22  NVARCHAR( 250), @cUDF23 NVARCHAR( 250), @cUDF24 NVARCHAR( 250),
-            @cUDF25  NVARCHAR( 250), @cUDF26 NVARCHAR( 250), @cUDF27 NVARCHAR( 250),
-            @cUDF28  NVARCHAR( 250), @cUDF29 NVARCHAR( 250), @cUDF30 NVARCHAR( 250)
+         DELETE FROM @tExtScnData
+
+         INSERT INTO @tExtScnData (Variable, Value) VALUES
+            ('@cPickSlipNo'  , @cPickSlipNo  ),               
+            ('@cLOC'         , @cLOC         ),        
+            ('@nTaskQTY'     , CAST(@nTaskQTY  AS NVARCHAR)),
+            ('@nPTaskQTY'    , CAST(@nPTaskQTY AS NVARCHAR)),
+            ('@nMTaskQTY'    , CAST(@nMTaskQTY AS NVARCHAR)),
+            ('@cLottableCode', @cLottableCode),
+            ('@cSKUDescr'    , @cSKUDescr    ),
+            ('@cMUOM_Desc'   , @cMUOM_Desc   ),
+            ('@cPUOM_Desc'   , @cPUOM_Desc   ),
+            ('@nPUOM_Div'    , CAST(@nPUOM_Div AS NVARCHAR)),
+            ('@cPickZone'    , @cPickZone    ),
+            ('@cPUOM'        , @cPUOM        ),
+            ('@cSuggLOC'     , @cSuggLOC     ),
+            ('@cSuggID'      , @cSuggID      ),
+            ('@cSKU'         , @cSKU         )
 
          SET @nAction = 0
 
@@ -1812,33 +1826,6 @@ BEGIN
          BEGIN
             GOTO Step_99_Fail
          END
-         -- refresh variables
-         SET @cOption         = @cUDF01
-         SET @cDecodeSP       = @cUDF02
-         SET @cID             = @cUDF03
-         SET @cUPC            = @cUDF04
-         SET @cBarcode        = @cUDF05
-         SET @cPickSlipNo     = @cUDF06
-         SET @cLOC            = @cUDF07
-         SET @nTaskQTY        = @cUDF08
-         SET @cSKU            = @cUDF09
-         SET @cSuggToLOC      = @cUDF10
-         SET @cSuggestToLOCSP = @cUDF11
-         SET @cPickZone       = @cUDF12
-         SET @cPUOM           = @cUDF13
-         SET @nPTaskQTY       = @cUDF14
-         SET @nMTaskQTY       = @cUDF15
-         SET @cLottableCode   = @cUDF16
-         SET @cSuggID         = @cUDF17
-         SET @cSKUDescr       = @cUDF18
-         SET @cMUOM_Desc      = @cUDF19
-         SET @cPUOM_Desc      = @cUDF20
-         SET @nPUOM_Div       = @cUDF21
-         SET @cExtendedInfoSP = @cUDF22
-         SET @cSuggLOC        = @cUDF23
-         SET @cToLOC          = @cUDF24
-         SET @cExtendedInfo   = @cUDF25 
-         SET @cZone           = @cUDF26
       END
    END
    GOTO Quit
@@ -1918,7 +1905,7 @@ BEGIN
       V_string33     = @cSuggestToLOCSP,
       V_string34     = @cOverrideToLOC,
       V_string35     = @cLOCCheckDigitSP,
-      V_string36     = @cShortOption,  -- short option
+
       V_string37     = @cExtScnSP,
    
       V_String41     = @cBarcode,
