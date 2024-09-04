@@ -20,6 +20,7 @@ GO
 /* 2019-05-21 1.1  YeeKung  WMS-9156 Add RDTformat on TOID   (yeekung01)      */
 /* 2019-11-08 1.2  Ung      Fix SET option                                    */
 /* 2020-09-01 1.3  James    WMS-11639 Fix step in ExtInfoSP @ step 7 (james01)*/
+/* 2024-09-04 1.4  Dennis   UWP-23980 Bug Fix (de01)                          */
 /******************************************************************************/
 CREATE PROC [RDT].[rdtfnc_BuildToUCC](
    @nMobile    INT,
@@ -708,7 +709,7 @@ BEGIN
       BEGIN
          SET @nErrNo = 134444
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --ToID needed
-         GOTO Step_1_Fail
+         GOTO Step_4_Fail --de01
       END
 
       -- Check barcode format
@@ -716,7 +717,7 @@ BEGIN
       BEGIN
          SET @nErrNo = 134445
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Format
-         GOTO Step_1_Fail
+         GOTO Step_4_Fail--de01
       END
       -- Prep next screen var
       SET @cOutField01 = @cFromLoc
