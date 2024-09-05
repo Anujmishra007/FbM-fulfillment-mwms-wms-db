@@ -723,6 +723,7 @@ SET @cSkipLottable03 = rdt.RDTGetConfig( @nFunc, 'SkipLottable03', @cStorerKey)
 SET @cSkipLottable04 = rdt.RDTGetConfig( @nFunc, 'SkipLottable04', @cStorerKey)
 
 -- For Fcr-549
+SET @cAddRCPTValidtn = rdt.RDTGetConfig( @nFunc, 'AddRCPTValidtn', @cStorerKey)
 IF @cAddRCPTValidtn = '1'
 BEGIN
    SET @cSkipLottable01 = '0'
