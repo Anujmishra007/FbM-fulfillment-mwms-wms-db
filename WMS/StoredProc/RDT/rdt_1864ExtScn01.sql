@@ -81,7 +81,8 @@ BEGIN
       @cPUOM           NVARCHAR( 1),
       @cSuggLOC        NVARCHAR( 10),
       @cSuggID         NVARCHAR( 18),
-      @cSKU            NVARCHAR( 20)
+      @cSKU            NVARCHAR( 20),
+      @cPickConfirmStatus NVARCHAR( 1)
    
    SELECT
    @nFunc            = Func,
@@ -110,6 +111,11 @@ BEGIN
    SET @cShortOption = ISNULL(rdt.RDTGetConfig( @nFunc, 'ShortOption', @cStorerKey), '')
    IF @cShortOption = '0'
       SET @cShortOption = ''
+   SET @cPickConfirmStatus = rdt.RDTGetConfig( @nFunc, 'PickConfirmStatus', @cStorerKey)
+   IF @cPickConfirmStatus = '0'
+      SET @cPickConfirmStatus = '5'
+   IF @cPickConfirmStatus NOT IN ( '3', '5')
+      SET @cPickConfirmStatus = '5'
 
    DECLARE
       @nStep_ID      INT,
@@ -209,10 +215,11 @@ BEGIN
                   FROM dbo.PICKDETAIL pd WITH(NOLOCK)
                   INNER JOIN dbo.PickHeader ph WITH(NOLOCK) ON ph.OrderKey = pd.OrderKey
                   INNER JOIN dbo.LOC loc WITH(NOLOCK) ON pd.Loc = loc.Loc
-                  WHERE pd.Status < 4
+                  WHERE pd.Status <> 4
                   AND ph.PickHeaderKey = @cPickSlipNo
                   AND pd.ID = @cID
                   AND pd.Loc = @cLoc
+                  AND pd.Status < @cPickConfirmStatus
 
                   IF @@ERROR <> 0
                   BEGIN
