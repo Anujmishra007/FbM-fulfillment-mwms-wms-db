@@ -1,7 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[RDT].[rdtfnc_PutawayByID]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [RDT].[rdtfnc_PutawayByID]
-GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -33,7 +29,7 @@ GO
 /* 2024-07-31 2.1  CYU027   FCR-122 Add Reason Code for Override        */
 /************************************************************************/
 
-CREATE PROC [RDT].[rdtfnc_PutawayByID] (
+CREATE OR ALTER PROC [RDT].[rdtfnc_PutawayByID] (
    @nMobile    INT,
    @nErrNo     INT  OUTPUT,
    @cErrMsg    NVARCHAR(1024) OUTPUT -- screen limitation, 20 char max
@@ -1407,21 +1403,6 @@ BEGIN
       GOTO Quit
    END
 END
-
-
-GOTO Quit
-
-
-   Step_99_Fail:
-   BEGIN
-      GOTO Quit
-   END
-END
-
-
-GOTO Quit
-
-
 
 /********************************************************************************
 Quit. Update back to I/O table, ready to be pick up by JBOSS
