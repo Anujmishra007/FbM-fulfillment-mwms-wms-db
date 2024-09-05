@@ -117,9 +117,7 @@ BEGIN
          @nToIDQTY            INT,
          @cPickSlipNo         NVARCHAR( 10),
          @cOption             NVARCHAR( 10),
-         @nPre_Step           INT,
          @cToLOC              NVARCHAR(50),
-         @cTOLOCConfig        NVARCHAR(10),
          @cMoveQTYPick        NVARCHAR( 1),
          @cPickConfirmStatus  NVARCHAR( 1),
          @cDropID             NVARCHAR( 20),
@@ -129,7 +127,6 @@ BEGIN
          @nTranCount          INT
 
    SELECT @cOption = Value FROM @tExtScnData WHERE Variable = '@cOption'
-   SELECT @nPre_Step = Value FROM @tExtScnData WHERE Variable = '@nPre_Step'
 
    SET @cMoveQTYPick = rdt.rdtGetConfig( @nFunc, 'MoveQTYPick', @cStorerKey)
    SET @cPickConfirmStatus = rdt.RDTGetConfig( @nFunc, 'PickConfirmStatus', @cStorerKey)
@@ -157,7 +154,7 @@ BEGIN
    BEGIN
       IF @nAction = 0
       BEGIN
-         IF @nStep <> '' AND @nStep <> 0 AND @nAfterStep = 1
+         IF ISNULL(@nStep, 0) > 0 AND @nAfterStep = 1
          BEGIN
             IF @nInputKey = 1
             BEGIN
@@ -237,14 +234,11 @@ BEGIN
 
                   SET @cMODIFYTOLOC = rdt.RDTGetConfig( @nFunc, 'MODIFYTOLOC', @cStorerKey)
 
-                  IF @cTOLOCConfig = '1'
+                  IF ISNULL(@cOutField01,'') <> '' AND @cToLOC <> @cOutField01 AND @cMODIFYTOLOC <> '1'
                   BEGIN
-                     IF ISNULL(@cOutField01,'') <> '' AND @cToLOC <> @cOutField01 AND @cMODIFYTOLOC <> '1'
-                     BEGIN
-                        SET @nErrNo = 221301
-                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Diff TO LOC
-                        GOTO Quit
-                     END
+                     SET @nErrNo = 221301
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Diff TO LOC
+                     GOTO Quit
                   END
 
                   DECLARE @curPKD CURSOR
