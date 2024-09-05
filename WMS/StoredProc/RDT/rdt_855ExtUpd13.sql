@@ -85,7 +85,8 @@ BEGIN
       @cOrderInfo03              NVARCHAR(20),
       @cPickConfirmStatus        NVARCHAR( 1),
       @fCartonWeight             FLOAT,
-      @fSKUWeight                FLOAT
+      @fSKUWeight                FLOAT,
+      @nVASQtyOverThan7          INT
 
    DECLARE @tLabels TABLE
    (
@@ -168,11 +169,12 @@ BEGIN
                   AND (pd.SKU = ISNULL(wod.WkOrdUdef1, '') OR ISNULL(wod.WkOrdUdef1, '') = '')
                
                --1. VAS is needed, display VAS code and Print VAS label
-               IF @nRowCount > 0
+               IF @nRowCount > 0 OR ISNULL(@cOrderInfo03, '') <> ''
                BEGIN
                   SET @nLoopIndex = 1
                   SET @cMsg09 = ''
                   SET @cMsg10 = 'Press ESC for More'
+                  SET @nVASQtyOverThan7 = 0
 
                   DECLARE CUR_PPA CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
                      SELECT DISTINCT
@@ -202,6 +204,7 @@ BEGIN
 
                      IF @cMsg02 IS NOT NULL AND TRIM(@cMsg02) <> '' AND @nLoopIndex % 7 = 0
                      BEGIN
+                        SET @nVASQtyOverThan7 = 1
                         SET @cMsg01 = @cOrderInfo03
                         EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo, @cErrMsg, 
                               @cMsg01, 
@@ -231,7 +234,7 @@ BEGIN
                   CLOSE CUR_PPA 
                   DEALLOCATE CUR_PPA 
 
-                  IF @cMsg02 IS NOT NULL AND TRIM(@cMsg02) <> ''
+                  IF (@nVASQtyOverThan7 = 0 AND ISNULL(@cOrderInfo03, '') <> '') OR (@cMsg02 IS NOT NULL AND TRIM(@cMsg02) <> '')
                   BEGIN
                      SET @cMsg01 = @cOrderInfo03
                      SET @cMsg10 = 'Press ESC Continue'
