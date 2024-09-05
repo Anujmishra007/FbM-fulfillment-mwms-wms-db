@@ -935,7 +935,6 @@ Scn 3 = 5912. ID screen
 ******************************************************************************/
 Step_ID:
 BEGIN
-   SET @cID = '' -- refresh cID
    IF @nInputKey = 1 -- ENTER
    BEGIN
       -- Screen mapping
@@ -1773,14 +1772,14 @@ BEGIN
          INSERT INTO @tExtScnData (Variable, Value) VALUES
             ('@cPickSlipNo'  , @cPickSlipNo  ),               
             ('@cLOC'         , @cLOC         ),        
-            ('@nTaskQTY'     , CAST(@nTaskQTY  AS NVARCHAR)),
-            ('@nPTaskQTY'    , CAST(@nPTaskQTY AS NVARCHAR)),
-            ('@nMTaskQTY'    , CAST(@nMTaskQTY AS NVARCHAR)),
+            ('@nTaskQTY'     , CAST(@nTaskQTY  AS NVARCHAR(20))),
+            ('@nPTaskQTY'    , CAST(@nPTaskQTY AS NVARCHAR(20))),
+            ('@nMTaskQTY'    , CAST(@nMTaskQTY AS NVARCHAR(20))),
             ('@cLottableCode', @cLottableCode),
             ('@cSKUDescr'    , @cSKUDescr    ),
             ('@cMUOM_Desc'   , @cMUOM_Desc   ),
             ('@cPUOM_Desc'   , @cPUOM_Desc   ),
-            ('@nPUOM_Div'    , CAST(@nPUOM_Div AS NVARCHAR)),
+            ('@nPUOM_Div'    , CAST(@nPUOM_Div AS NVARCHAR(20))),
             ('@cPickZone'    , @cPickZone    ),
             ('@cPUOM'        , @cPUOM        ),
             ('@cSuggLOC'     , @cSuggLOC     ),
@@ -1833,7 +1832,6 @@ BEGIN
    BEGIN
       GOTO Quit
    END
-   GOTO Quit
 END
 
 

@@ -85,10 +85,8 @@ BEGIN
       @cPickConfirmStatus NVARCHAR( 1)
    
    SELECT
-   @nFunc            = Func,
    @nScn             = Scn,
-   @nStep            = Step,
-   @nInputKey        = InputKey
+   @nStep            = Step
    FROM rdt.RDTMOBREC
    WHERE Mobile = @nMobile
 
@@ -144,11 +142,11 @@ BEGIN
                   -- Go to extend screen process
                   SET @nAfterStep = @nStep_ExtScn
                   SET @nAfterScn = @nScn_ExtScn
-                  GOTO ExtScnQuit
+                  GOTO Quit
                END
                ELSE
                BEGIN
-                  GOTO ExtScnQuit
+                  GOTO Quit
                END
             END
          END
@@ -174,7 +172,7 @@ BEGIN
                -- Back to ID screen
                SET @nAfterScn = @nScn_ID
                SET @nAfterStep = @nStep_ID
-               GOTO ExtScnQuit
+               GOTO Quit
             END  
             -- if press enter
             ELSE IF @nInputKey = 1
@@ -201,12 +199,8 @@ BEGIN
                -- Short Pick
                IF @cOption = '1'
                BEGIN
-                  -- Handling transaction
-                  DECLARE @nTranCount INT
-                  SET @nTranCount = @@TRANCOUNT
-                  BEGIN TRAN  -- Begin our own transaction
-                  SAVE TRAN rdt_PickPallet_Short -- For rollback or commit only our own transaction
-
+               
+                  BEGIN TRY
                   -- Confirm PickDetail
                   UPDATE pd SET
                      pd.Status = 4,
@@ -220,23 +214,12 @@ BEGIN
                   AND pd.ID = @cID
                   AND pd.Loc = @cLoc
                   AND pd.Status < @cPickConfirmStatus
-
-                  IF @@ERROR <> 0
-                  BEGIN
+                  END TRY
+                  BEGIN CATCH
                      SET @nErrNo = 222807
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD PKDtl Fail
-                     GOTO RollBackTran
-                  END
-
-                  COMMIT TRAN rdt_PickPallet_Short
-                  GOTO QuitTran
-                  
-                  RollBackTran:
-                     ROLLBACK TRAN rdt_PickPallet_Short
-
-                  QuitTran:
-                     WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
-                        COMMIT TRAN
+                     GOTO Quit
+                  END CATCH
 
                   -- Go to next screen
                   EXEC rdt.rdt_PickPallet_GoToNextScreen @nMobile, @nFunc, @cLangCode, @nInputKey, @cFacility, @cStorerKey, 
@@ -263,7 +246,7 @@ BEGIN
 
                   SET @nAfterScn = @nScn
                   SET @nAfterStep = @nStep
-                  GOTO ExtScnQuit
+                  GOTO Quit
                END
                -- Skip Task
                IF @cOption = '2'
@@ -295,7 +278,7 @@ BEGIN
                   SET @nAfterScn = @nScn
                   SET @nAfterStep = @nStep
 
-                  GOTO ExtScnQuit
+                  GOTO Quit
                END
             END
          END
@@ -306,17 +289,6 @@ END
 Short_Option_Fail:
 BEGIN
    SET @cOutField01 = '' -- Option
-   GOTO Quit
-END
-
-ID_Fail:
-BEGIN
-   SET @cOutField01 = '' -- ID
-   GOTO Quit
-END
-
-ExtScnQuit:
-BEGIN
    GOTO Quit
 END
 
