@@ -4,13 +4,14 @@ SET ANSI_NULLS OFF
 GO
 /************************************************************************/
 /* Store procedure: rdt_840DecodeSP03                                   */
-/* Copyright      : LF logistics                                        */
+/* Copyright      : MAERSK                                              */
 /*                                                                      */
 /* Purpose: Return orders using pickdetail.dropid                       */
 /*                                                                      */
 /* Modifications log:                                                   */
 /* Date        Rev  Author      Purposes                                */
 /* 2021-11-25  1.0  James       WMS-18321. Created                      */
+/* 2024-09-06  1.1  James       Rearrange Pickslip output param(james03)*/
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE rdt.rdt_840DecodeSP03
@@ -23,7 +24,6 @@ CREATE OR ALTER PROCEDURE rdt.rdt_840DecodeSP03
    @cBarcode     NVARCHAR( 2000),
    @cDropID      NVARCHAR( 20),
    @cOrderKey    NVARCHAR( 10)  OUTPUT,
-   @cPickslipNo  NVARCHAR( 10)  OUTPUT,
    @cSKU         NVARCHAR( 20)  OUTPUT,
    @cTrackingNo  NVARCHAR( 20)  OUTPUT,
    @cLottable01  NVARCHAR( 18)  OUTPUT,
@@ -44,7 +44,8 @@ CREATE OR ALTER PROCEDURE rdt.rdt_840DecodeSP03
    @cSerialNo    NVARCHAR(30)  OUTPUT,  
    @nSerialQTY   INT            OUTPUT,   
    @nErrNo       INT            OUTPUT,
-   @cErrMsg      NVARCHAR( 20)  OUTPUT  
+   @cErrMsg      NVARCHAR( 20)  OUTPUT,
+   @cPickSlipNo  NVARCHAR( 10)  OUTPUT    
 
 AS
 BEGIN

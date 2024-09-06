@@ -1,23 +1,21 @@
-IF EXISTS (SELECT name FROM sysobjects WHERE name = 'rdt_840DecodeSP02' AND type = 'P')
-   DROP PROC rdt.rdt_840DecodeSP02
-GO
-
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
 GO
-/************************************************************************/
-/* Store procedure: rdt_840DecodeSP02                                   */
-/* Copyright      : LF logistics                                        */
-/*                                                                      */
-/* Purpose: decode serialno to sku                                      */
-/*                                                                      */
-/* Modifications log:                                                   */
-/* Date        Rev  Author      Purposes                                */
-/* 2021-04-02  1.0  YeeKung     WMS-16717 Created                       */ 
-/************************************************************************/
 
-CREATE PROCEDURE rdt.rdt_840DecodeSP02
+/***************************************************************************/
+/* Store procedure: rdt_840DecodeSP02                                      */
+/* Copyright      : MAERSK                                                 */
+/*                                                                         */
+/* Purpose: decode serialno to sku                                         */
+/*                                                                         */
+/* Modifications log:                                                      */
+/* Date        Rev  Author      Purposes                                   */
+/* 2021-04-02  1.0  YeeKung     WMS-16717 Created                          */ 
+/* 2024-09-06  1.1  James       Add Pickslip output during decode (james01)*/
+/***************************************************************************/
+
+CREATE OR ALTER PROCEDURE rdt.rdt_840DecodeSP02
    @nMobile      INT,
    @nFunc        INT,
    @cLangCode    NVARCHAR( 3),
@@ -47,7 +45,8 @@ CREATE PROCEDURE rdt.rdt_840DecodeSP02
    @cSerialNo    NVARCHAR( 30)  OUTPUT,    
    @nSerialQTY   INT            OUTPUT,                               
    @nErrNo       INT            OUTPUT,
-   @cErrMsg      NVARCHAR( 20)  OUTPUT  
+   @cErrMsg      NVARCHAR( 20)  OUTPUT,
+   @cPickSlipNo  NVARCHAR( 10)  OUTPUT
 
 
 AS
@@ -62,8 +61,7 @@ BEGIN
            @cTempSKU                NVARCHAR( 20),
            @cTempLottable02         NVARCHAR( 18),
            @cShowErrMsgInNewScn     NVARCHAR( 1),       
-           @cDecodeUCCNo            NVARCHAR( 1),
-           @cPickSlipNO             NVARCHAR(20)      
+           @cDecodeUCCNo            NVARCHAR( 1)
    
    SET @nErrNo = 0
             

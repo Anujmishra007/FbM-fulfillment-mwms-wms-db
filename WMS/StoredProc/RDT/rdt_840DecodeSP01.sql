@@ -1,14 +1,11 @@
-IF EXISTS (SELECT name FROM sysobjects WHERE name = 'rdt_840DecodeSP01' AND type = 'P')
-   DROP PROC rdt.rdt_840DecodeSP01
-GO
-
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
 GO
+
 /************************************************************************/
 /* Store procedure: rdt_840DecodeSP01                                   */
-/* Copyright      : LF logistics                                        */
+/* Copyright      : MAERSK                                              */
 /*                                                                      */
 /* Purpose: Return orders using pickdetail.dropid                       */
 /*                                                                      */
@@ -20,9 +17,10 @@ GO
 /*                              Move orders (james02)                   */
 /* 2021-04-01  1.3 YeeKung      WMS-16717 Add serialno and serialqty    */
 /*                              Params (yeekung01)                      */
+/* 2024-09-06  1.4  James       Rearrange Pickslip output param(james03)*/
 /************************************************************************/
 
-CREATE PROCEDURE rdt.rdt_840DecodeSP01
+CREATE OR ALTER PROCEDURE rdt.rdt_840DecodeSP01
    @nMobile      INT,
    @nFunc        INT,
    @cLangCode    NVARCHAR( 3),
@@ -32,7 +30,6 @@ CREATE PROCEDURE rdt.rdt_840DecodeSP01
    @cBarcode     NVARCHAR( 2000),
    @cDropID      NVARCHAR( 20),
    @cOrderKey    NVARCHAR( 10)  OUTPUT,
-   @cPickslipNo  NVARCHAR( 10)  OUTPUT,
    @cSKU         NVARCHAR( 20)  OUTPUT,
    @cTrackingNo  NVARCHAR( 20)  OUTPUT,
    @cLottable01  NVARCHAR( 18)  OUTPUT,
@@ -53,7 +50,8 @@ CREATE PROCEDURE rdt.rdt_840DecodeSP01
    @cSerialNo    NVARCHAR(30)  OUTPUT,  
    @nSerialQTY   INT            OUTPUT,   
    @nErrNo       INT            OUTPUT,
-   @cErrMsg      NVARCHAR( 20)  OUTPUT  
+   @cErrMsg      NVARCHAR( 20)  OUTPUT,
+   @cPickSlipNo  NVARCHAR( 10)  OUTPUT  
 
 AS
 BEGIN
