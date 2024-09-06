@@ -141,8 +141,8 @@ BEGIN
       END
    END
    --add for FCR-771 
-   IF dbo.fnc_GetRight( @cFacility, @cStorerKey, '', 'Innobec') = '1' and exists ( select * from dbo.ORDERS where OrderKey = @cOrderKey and DocType = 'N' )
-   Begin
+   IF dbo.fnc_GetRight( @cFacility, @cStorerKey, '', 'Innobec') = '1' AND EXISTS ( SELECT * FROM dbo.ORDERS WITH (NOLOCK) WHERE OrderKey = @cOrderKey AND DocType = 'N' )
+   BEGIN
       IF @nIsNoEmptyDropID = 1
       BEGIN
          EXEC dbo.ispGenTransmitLog2
@@ -171,3 +171,16 @@ END
 GO
 GRANT EXECUTE ON  [RDT].[rdt_839SendMsgToWCS] TO [NSQL]
 GO
+/*
+testing configuration dbo.StorerConfig
+--ConfigKey	ConfigDesc	SValue
+--Innobec	Innobec	   1
+--WCS	      WCS	      1
+
+testing configuration rdt.StorerConfig
+--Function_ID	ConfigKey	ConfigDesc	SValue
+--839	         ExtendedUpdateSP		   rdt_839ExtUpd06
+--839	         ExtendedValidateSP		rdt_839ExtValidSP14
+--839	         GetTaskSP		         rdt_839GetTaskSP11
+
+*/
