@@ -51,21 +51,17 @@ BEGIN
 
    DECLARE  @n_StartTCnt      INT = @@TRANCOUNT
          ,  @n_Continue       INT = 1
-
          ,  @c_TableName      NVARCHAR(50)   = 'Orders'
          ,  @c_SourceType     NVARCHAR(50)   = 'lsp_WaveCancelOrder'
-
          ,  @c_Wavedetailkey  NVARCHAR(10)   = ''
-
          ,  @c_Refkey1        NVARCHAR(20)   = ''                    --(Wan02)
          ,  @c_Refkey2        NVARCHAR(20)   = ''                    --(Wan02)
          ,  @c_Refkey3        NVARCHAR(20)   = ''                    --(Wan02)
          ,  @c_WriteType      NVARCHAR(50)   = ''                    --(Wan02)
          ,  @n_LogWarningNo   INT            = 0                     --(Wan02)
-
          ,  @CUR_ERRLIST      CURSOR                                 --(Wan02)
          ,  @c_CancelReasonEnabled NVARCHAR(3)
-         ,  @c_StorerKey      NVARCHAR(10)
+         ,  @c_StorerKey      NVARCHAR(15)
          ,  @c_CancelReasonCode NVARCHAR(60)
 
    DECLARE  @t_WMSErrorList   TABLE                                  --(Wan02)
@@ -160,7 +156,7 @@ BEGIN
                   SET @n_continue = 3
                   SET @n_err = 556105
                   SET @c_errmsg = 'NSQL' + CONVERT(CHAR(6), @n_err)
-                        + 'Please select cancellation Reason Code for order key #:' + @c_Orderkey + '. (lsp_WaveCancelOrder)'
+                        + ': Please select cancellation Reason Code for order key #:' + @c_Orderkey + '. (lsp_WaveCancelOrder)'
                         + ' |' + @c_Orderkey
 
                   INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
@@ -176,7 +172,7 @@ BEGIN
                            SET @n_continue = 3
                            SET @n_err = 556107
                            SET @c_errmsg = 'NSQL' + CONVERT(CHAR(6), @n_err)
-                                 + 'Cancel reason code mismatch. Please select another cancel reason code for order detail(s) #:' + @c_Orderkey + '. (lsp_WaveCancelOrder)'
+                                 + ': Cancel reason code mismatch. Please select another cancel reason code for order detail(s) #:' + @c_Orderkey + '. (lsp_WaveCancelOrder)'
                                  + ' |' + @c_Orderkey
 
                            INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
@@ -191,7 +187,7 @@ BEGIN
                   SET @n_continue = 3
                   SET @n_err = 556107
                   SET @c_errmsg = 'NSQL' + CONVERT(CHAR(6), @n_err)
-                        + 'Order can not be cancelled, order is not in normal status #:' + @c_Orderkey + '. (lsp_WaveCancelOrder)'
+                        + ': Order can not be cancelled, order is not in normal status #:' + @c_Orderkey + '. (lsp_WaveCancelOrder)'
                         + ' |' + @c_Orderkey
 
                   INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
@@ -268,7 +264,11 @@ BEGIN
 ------------------(PPA371) START----
          UPDATE ORDERDETAIL
             SET OpenQty=0, cancelreasoncode = @c_CancelReasonCode
-         WHERE OrderKey=@c_Orderkey AND Status <>'CANC'
+         WHERE OrderKey=@c_Orderkey AND Status ='CANC' AND cancelreasoncode=''
+
+         UPDATE ORDERDETAIL
+                     SET OpenQty=0
+                  WHERE OrderKey=@c_Orderkey AND Status ='CANC' AND cancelreasoncode<>'';
 
          INSERT INTO [dbo].[ORDERDETAIL_CANCLOG]
                ([OrderKey],[OrderLineNumber],[OrderDetailSysId],[ExternOrderKey],[ExternLineNo]
@@ -297,7 +297,7 @@ BEGIN
                ,[ExternConsoOrderKey],[ConsoOrderLineNo],[Lottable06],[Lottable07],[Lottable08]
                ,[Lottable09],[Lottable10],[Lottable11],[Lottable12],[Lottable13],[Lottable14]
                ,[Lottable15],[Notes],[Notes2],[Channel],[HashValue],[SalesChannel],[CancelReasonCode] FROM ORDERDETAIL  WITH (NOLOCK)
-         WHERE OrderKey=@c_Orderkey AND Status <>'CANC'
+         WHERE OrderKey=@c_Orderkey AND Status ='CANC'
 ------------------(PPA371) END------
       END TRY
 

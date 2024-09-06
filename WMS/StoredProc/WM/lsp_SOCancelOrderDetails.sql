@@ -49,10 +49,12 @@ BEGIN
          ,  @n_LogWarningNo   INT            = 0
          ,  @CUR_ERRLIST      CURSOR
          ,  @c_CancelReasonEnabled NVARCHAR(3)
-         ,  @c_StorerKey      NVARCHAR(10)
+         ,  @c_StorerKey      NVARCHAR(15)
          ,  @c_CancelReasonCode NVARCHAR(60)
          ,  @c_status NVARCHAR(10)
          ,  @n_RowsUpdated int
+			,  @sql NVARCHAR(MAX)
+         ,  @c_orderlineNo NVARCHAR(max)
 
    DECLARE  @t_WMSErrorList   TABLE
          (  RowID             INT            IDENTITY(1,1)
@@ -89,89 +91,150 @@ BEGIN
    SET @n_ErrGroupKey = 0
    BEGIN TRAN
    BEGIN TRY
-   IF(@c_OrderLineNumber <> '')
-      BEGIN
+
          SELECT @c_StorerKey=StorerKey FROM ORDERS WITH (NOLOCK) WHERE OrderKey=@c_Orderkey
          SELECT @c_CancelReasonEnabled=ReasonCodeReqForSOCancel FROM StorerSODefault WITH (NOLOCK)  WHERE StorerKey = @c_storerKey
 
-         select @c_CancelReasonCode=cancelreasoncode ,@c_status= Status
-                  from ORDERDETAIL WITH (NOLOCK)
-                  where  OrderKey=@c_Orderkey AND OrderLineNumber= @c_OrderLineNumber
+				CREATE TABLE #OrderLineNumbers(OrderLineNumber NVARCHAR(5), cancelreasoncode NVARCHAR(60), [Status] NVARCHAR(10))
+            SET @sql = N'INSERT INTO #OrderLineNumbers select OrderLineNumber, cancelreasoncode , Status from ORDERDETAIL where OrderKey=@c_Orderkey'
+            IF (@c_OrderLineNumber <>'')
+               SET @sql = @sql + N' AND orderlinenumber = @c_orderlinenumber '
+               EXEC sp_executesql @sql, N'@c_orderlinenumber NVARCHAR(20), @c_Orderkey NVARCHAR(10)',@c_orderlinenumber , @c_Orderkey
 
+         DECLARE OrderLineCursor CURSOR
+         FOR
+            select OrderLineNumber , cancelreasoncode , Status from #OrderLineNumbers
+            OPEN OrderLineCursor
+            FETCH NEXT FROM OrderLineCursor
+            INTO @c_orderlineNo, @c_CancelReasonCode, @c_status
+            WHILE @@FETCH_STATUS = 0
+               BEGIN
                   IF(ISNULL(@c_CancelReasonCode,'')='')
                      BEGIN
                            SET @n_continue = 3
                            SET @n_err = 562601
                            SET @c_ErrMsg= 'NSQL' + CONVERT(CHAR(6), @n_err)
-                                           + 'Please select the cancel reason code for Line number #:' + @c_OrderLineNumber + '. (lsp_SOCancelOrderDetails)'
-                                           + ' |' + @c_OrderLineNumber
+                                           + ': Please select the cancel reason code for Line number #:' + @c_orderlineNo + '. (lsp_SOCancelOrderDetails)'
+                                           + ' |' + @c_orderlineNo
 
                            INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
-                           VALUES (@c_TableName, @c_SourceType, @c_Orderkey,@c_OrderLineNumber, '', 'ERROR', 0, @n_err, @c_errmsg)
+                           VALUES (@c_TableName, @c_SourceType, @c_Orderkey,@c_orderlineNo, '', 'ERROR', 0, @n_err, @c_errmsg)
                            GOTO EXIT_SP
                      END
 
-                  IF EXISTS (select 1 from PICKDETAIL WITH (NOLOCK) where OrderKey=@c_Orderkey and OrderLineNumber=@c_OrderLineNumber)
+                  IF EXISTS (select 1 from PICKDETAIL WITH (NOLOCK) where OrderKey=@c_Orderkey and OrderLineNumber=@c_orderlineNo)
                      BEGIN
                            SET @n_continue = 3
                            SET @n_err = 562602
                            SET @c_ErrMsg='NSQL' + CONVERT(CHAR(6), @n_err)
-                                          + 'Order detail is not in normal status for Line number #:' + @c_OrderLineNumber + '. (lsp_SOCancelOrderDetails)'
-                                          + ' |' + @c_OrderLineNumber
+                                          + ': Order detail is not in normal status for Line number #:' + @c_orderlineNo + '. (lsp_SOCancelOrderDetails)'
+                                          + ' |' + @c_orderlineNo
 
                            INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
-                           VALUES (@c_TableName, @c_SourceType, @c_Orderkey,@c_OrderLineNumber, '', 'ERROR', 0, @n_err, @c_errmsg)
+                           VALUES (@c_TableName, @c_SourceType, @c_Orderkey,@c_orderlineNo, '', 'ERROR', 0, @n_err, @c_errmsg)
                            GOTO EXIT_SP
                      END
-                  IF (@c_status='CANC')
+                  IF (@c_status='CANC' AND @c_OrderLineNumber<>'')
                      BEGIN
                            SET @n_continue = 3
                            SET @n_err = 562603
                            SET @c_ErrMsg='NSQL' + CONVERT(CHAR(6), @n_err)
-                                        + 'Order details had been cancelled for Line number #:' + @c_OrderLineNumber + '. (lsp_SOCancelOrderDetails)'
-                                        + ' |' + @c_OrderLineNumber
+                                        + ': Order details had been cancelled for Line number #:' + @c_orderlineNo + '. (lsp_SOCancelOrderDetails)'
+                                        + ' |' + @c_orderlineNo
 
                            INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
-                           VALUES (@c_TableName, @c_SourceType, @c_Orderkey,@c_OrderLineNumber, '', 'ERROR', 0, @n_err, @c_errmsg)
+                           VALUES (@c_TableName, @c_SourceType, @c_Orderkey,@c_orderlineNo, '', 'ERROR', 0, @n_err, @c_errmsg)
                            GOTO EXIT_SP
                      END
 
+               FETCH NEXT FROM OrderLineCursor
+               INTO @c_orderlineNo, @c_CancelReasonCode, @c_status
+            END
+            CLOSE OrderLineCursor
+            DEALLOCATE OrderLineCursor
+            DROP TABLE #OrderLineNumbers
+
+
             IF (@n_Continue=1)
                BEGIN
-                  UPDATE ORDERDETAIL WITH (ROWLOCK)
-                  SET OpenQty=0, Status='CANC'
-                  WHERE OrderKey=@c_Orderkey AND OrderLineNumber =@c_OrderLineNumber;
+						IF(@c_OrderLineNumber<>'')
+							BEGIN
+								UPDATE ORDERDETAIL WITH (ROWLOCK)
+								SET OpenQty=0, Status='CANC'
+								WHERE OrderKey=@c_Orderkey AND OrderLineNumber =@c_OrderLineNumber;
 
-                  set @n_RowsUpdated= @@ROWCOUNT
+								set @n_RowsUpdated= @@ROWCOUNT
 
-                  INSERT INTO [dbo].[ORDERDETAIL_CANCLOG]
-                        ([OrderKey],[OrderLineNumber],[OrderDetailSysId],[ExternOrderKey],[ExternLineNo]
-                        ,[Sku],[StorerKey],[ManufacturerSku],[RetailSku],[AltSku]
-                        ,[OriginalQty],[OpenQty],[ShippedQty],[AdjustedQty]
-                        ,[QtyPreAllocated],[QtyAllocated],[QtyPicked],[UOM],[PackKey],[PickCode]
-                        ,[CartonGroup],[Lot],[ID],[Facility],[Status],[UnitPrice],[Tax01],[Tax02],[ExtendedPrice]
-                        ,[UpdateSource],[Lottable01],[Lottable02],[Lottable03],[Lottable04],[Lottable05],[EffectiveDate]
-                        ,[AddDate],[AddWho],[EditDate],[EditWho],[TrafficCop],[ArchiveCop],[TariffKey],[FreeGoodQty]
-                        ,[GrossWeight],[Capacity],[LoadKey],[MBOLKey],[QtyToProcess],[MinShelfLife],[UserDefine01]
-                        ,[UserDefine02],[UserDefine03],[UserDefine04],[UserDefine05],[UserDefine06],[UserDefine07]
-                        ,[UserDefine08],[UserDefine09],[POkey],[ExternPOKey],[UserDefine10],[EnteredQTY],[ConsoOrderKey]
-                        ,[ExternConsoOrderKey],[ConsoOrderLineNo],[Lottable06],[Lottable07],[Lottable08]
-                        ,[Lottable09],[Lottable10],[Lottable11],[Lottable12],[Lottable13],[Lottable14]
-                        ,[Lottable15],[Notes],[Notes2],[Channel],[HashValue],[SalesChannel],[CancelReasonCode])
-                     select [OrderKey],[OrderLineNumber],[OrderDetailSysId],[ExternOrderKey],[ExternLineNo]
-                        ,[Sku],[StorerKey],[ManufacturerSku],[RetailSku],[AltSku]
-                        ,[OriginalQty],[OpenQty],[ShippedQty],[AdjustedQty]
-                        ,[QtyPreAllocated],[QtyAllocated],[QtyPicked],[UOM],[PackKey],[PickCode]
-                        ,[CartonGroup],[Lot],[ID],[Facility],[Status],[UnitPrice],[Tax01],[Tax02],[ExtendedPrice]
-                        ,[UpdateSource],[Lottable01],[Lottable02],[Lottable03],[Lottable04],[Lottable05],[EffectiveDate]
-                        ,[AddDate],[AddWho],[EditDate],[EditWho],[TrafficCop],[ArchiveCop],[TariffKey],[FreeGoodQty]
-                        ,[GrossWeight],[Capacity],[LoadKey],[MBOLKey],[QtyToProcess],[MinShelfLife],[UserDefine01]
-                        ,[UserDefine02],[UserDefine03],[UserDefine04],[UserDefine05],[UserDefine06],[UserDefine07]
-                        ,[UserDefine08],[UserDefine09],[POkey],[ExternPOKey],[UserDefine10],[EnteredQTY],[ConsoOrderKey]
-                        ,[ExternConsoOrderKey],[ConsoOrderLineNo],[Lottable06],[Lottable07],[Lottable08]
-                        ,[Lottable09],[Lottable10],[Lottable11],[Lottable12],[Lottable13],[Lottable14]
-                        ,[Lottable15],[Notes],[Notes2],[Channel],[HashValue],[SalesChannel],[CancelReasonCode] FROM ORDERDETAIL  WITH (NOLOCK)
-                  WHERE OrderKey=@c_Orderkey AND OrderLineNumber =@c_OrderLineNumber
+								INSERT INTO [dbo].[ORDERDETAIL_CANCLOG]
+										([OrderKey],[OrderLineNumber],[OrderDetailSysId],[ExternOrderKey],[ExternLineNo]
+										,[Sku],[StorerKey],[ManufacturerSku],[RetailSku],[AltSku]
+										,[OriginalQty],[OpenQty],[ShippedQty],[AdjustedQty]
+										,[QtyPreAllocated],[QtyAllocated],[QtyPicked],[UOM],[PackKey],[PickCode]
+										,[CartonGroup],[Lot],[ID],[Facility],[Status],[UnitPrice],[Tax01],[Tax02],[ExtendedPrice]
+										,[UpdateSource],[Lottable01],[Lottable02],[Lottable03],[Lottable04],[Lottable05],[EffectiveDate]
+										,[AddDate],[AddWho],[EditDate],[EditWho],[TrafficCop],[ArchiveCop],[TariffKey],[FreeGoodQty]
+										,[GrossWeight],[Capacity],[LoadKey],[MBOLKey],[QtyToProcess],[MinShelfLife],[UserDefine01]
+										,[UserDefine02],[UserDefine03],[UserDefine04],[UserDefine05],[UserDefine06],[UserDefine07]
+										,[UserDefine08],[UserDefine09],[POkey],[ExternPOKey],[UserDefine10],[EnteredQTY],[ConsoOrderKey]
+										,[ExternConsoOrderKey],[ConsoOrderLineNo],[Lottable06],[Lottable07],[Lottable08]
+										,[Lottable09],[Lottable10],[Lottable11],[Lottable12],[Lottable13],[Lottable14]
+										,[Lottable15],[Notes],[Notes2],[Channel],[HashValue],[SalesChannel],[CancelReasonCode])
+									select [OrderKey],[OrderLineNumber],[OrderDetailSysId],[ExternOrderKey],[ExternLineNo]
+										,[Sku],[StorerKey],[ManufacturerSku],[RetailSku],[AltSku]
+										,[OriginalQty],[OpenQty],[ShippedQty],[AdjustedQty]
+										,[QtyPreAllocated],[QtyAllocated],[QtyPicked],[UOM],[PackKey],[PickCode]
+										,[CartonGroup],[Lot],[ID],[Facility],[Status],[UnitPrice],[Tax01],[Tax02],[ExtendedPrice]
+										,[UpdateSource],[Lottable01],[Lottable02],[Lottable03],[Lottable04],[Lottable05],[EffectiveDate]
+										,[AddDate],[AddWho],[EditDate],[EditWho],[TrafficCop],[ArchiveCop],[TariffKey],[FreeGoodQty]
+										,[GrossWeight],[Capacity],[LoadKey],[MBOLKey],[QtyToProcess],[MinShelfLife],[UserDefine01]
+										,[UserDefine02],[UserDefine03],[UserDefine04],[UserDefine05],[UserDefine06],[UserDefine07]
+										,[UserDefine08],[UserDefine09],[POkey],[ExternPOKey],[UserDefine10],[EnteredQTY],[ConsoOrderKey]
+										,[ExternConsoOrderKey],[ConsoOrderLineNo],[Lottable06],[Lottable07],[Lottable08]
+										,[Lottable09],[Lottable10],[Lottable11],[Lottable12],[Lottable13],[Lottable14]
+										,[Lottable15],[Notes],[Notes2],[Channel],[HashValue],[SalesChannel],[CancelReasonCode] FROM ORDERDETAIL  WITH (NOLOCK)
+									WHERE OrderKey=@c_Orderkey AND OrderLineNumber =@c_OrderLineNumber
+							END
+                  ELSE
+							BEGIN
+								UPDATE ORDERDETAIL WITH (ROWLOCK)
+								SET OpenQty=0, Status='CANC'
+								WHERE OrderKey=@c_Orderkey AND Status <>'CANC';
+
+								set @n_RowsUpdated= @@ROWCOUNT
+
+								IF(@n_RowsUpdated>0)
+									BEGIN
+										INSERT INTO [dbo].[ORDERDETAIL_CANCLOG]
+										([OrderKey],[OrderLineNumber],[OrderDetailSysId],[ExternOrderKey],[ExternLineNo]
+										,[Sku],[StorerKey],[ManufacturerSku],[RetailSku],[AltSku]
+										,[OriginalQty],[OpenQty],[ShippedQty],[AdjustedQty]
+										,[QtyPreAllocated],[QtyAllocated],[QtyPicked],[UOM],[PackKey],[PickCode]
+										,[CartonGroup],[Lot],[ID],[Facility],[Status],[UnitPrice],[Tax01],[Tax02],[ExtendedPrice]
+										,[UpdateSource],[Lottable01],[Lottable02],[Lottable03],[Lottable04],[Lottable05],[EffectiveDate]
+										,[AddDate],[AddWho],[EditDate],[EditWho],[TrafficCop],[ArchiveCop],[TariffKey],[FreeGoodQty]
+										,[GrossWeight],[Capacity],[LoadKey],[MBOLKey],[QtyToProcess],[MinShelfLife],[UserDefine01]
+										,[UserDefine02],[UserDefine03],[UserDefine04],[UserDefine05],[UserDefine06],[UserDefine07]
+										,[UserDefine08],[UserDefine09],[POkey],[ExternPOKey],[UserDefine10],[EnteredQTY],[ConsoOrderKey]
+										,[ExternConsoOrderKey],[ConsoOrderLineNo],[Lottable06],[Lottable07],[Lottable08]
+										,[Lottable09],[Lottable10],[Lottable11],[Lottable12],[Lottable13],[Lottable14]
+										,[Lottable15],[Notes],[Notes2],[Channel],[HashValue],[SalesChannel],[CancelReasonCode])
+										select [OrderKey],[OrderLineNumber],[OrderDetailSysId],[ExternOrderKey],[ExternLineNo]
+										,[Sku],[StorerKey],[ManufacturerSku],[RetailSku],[AltSku]
+										,[OriginalQty],[OpenQty],[ShippedQty],[AdjustedQty]
+										,[QtyPreAllocated],[QtyAllocated],[QtyPicked],[UOM],[PackKey],[PickCode]
+										,[CartonGroup],[Lot],[ID],[Facility],[Status],[UnitPrice],[Tax01],[Tax02],[ExtendedPrice]
+										,[UpdateSource],[Lottable01],[Lottable02],[Lottable03],[Lottable04],[Lottable05],[EffectiveDate]
+										,[AddDate],[AddWho],[EditDate],[EditWho],[TrafficCop],[ArchiveCop],[TariffKey],[FreeGoodQty]
+										,[GrossWeight],[Capacity],[LoadKey],[MBOLKey],[QtyToProcess],[MinShelfLife],[UserDefine01]
+										,[UserDefine02],[UserDefine03],[UserDefine04],[UserDefine05],[UserDefine06],[UserDefine07]
+										,[UserDefine08],[UserDefine09],[POkey],[ExternPOKey],[UserDefine10],[EnteredQTY],[ConsoOrderKey]
+										,[ExternConsoOrderKey],[ConsoOrderLineNo],[Lottable06],[Lottable07],[Lottable08]
+										,[Lottable09],[Lottable10],[Lottable11],[Lottable12],[Lottable13],[Lottable14]
+										,[Lottable15],[Notes],[Notes2],[Channel],[HashValue],[SalesChannel],[CancelReasonCode] FROM ORDERDETAIL  WITH (NOLOCK)
+										WHERE OrderKey=@c_Orderkey AND Status ='CANC'
+									END
+
+							END
 
                   IF((SELECT COUNT(OrderKey) from ORDERDETAIL WITH (NOLOCK) where OrderKey=@c_Orderkey and Status='CANC')= (SELECT COUNT(OrderKey) from ORDERDETAIL WITH (NOLOCK) where OrderKey=@c_Orderkey))
                      BEGIN
@@ -179,28 +242,16 @@ BEGIN
                               SET [Status] = 'CANC'
                                  ,[SOStatus] = 'CANC'
                                  ,CancelReasonCode=''
-                            WHERE Orderkey = @c_Orderkey
+                            WHERE Orderkey = @c_Orderkey AND CancelReasonCode=''
                      END
                END
-    END
-   ELSE
-      BEGIN
-         SET @n_Continue = 3
-			SET @n_Err= 562605
-         SET @c_ErrMsg = 'NSQL'+ CONVERT(Char(6),@n_err)+': Order line number is required. (lsp_SOCancelOrderDetails)'
-
-         INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
-         VALUES (@c_TableName, @c_SourceType, @c_Orderkey, @c_OrderLineNumber, '', 'ERROR', 0, @n_err, @c_errmsg)
-         GOTO EXIT_SP
-      END
 
       IF @n_continue = 1
       BEGIN
-
-         SET @c_errmsg = 'Order detail is cancelled for Line number '+@c_OrderLineNumber+'.'
-         IF(@n_RowsUpdated>1)
+         SET @c_errmsg = 'Order detail is cancelled for Line number: '+@c_OrderLineNumber+'.'
+         IF(@c_OrderLineNumber='')
             BEGIN
-               SET @c_errmsg = 'Order details are cancelled for line numbers '+@c_OrderLineNumber+'.'
+               SET @c_errmsg = 'Order details are cancelled for Order key: '+@c_Orderkey+'.'
             END
 
          INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
