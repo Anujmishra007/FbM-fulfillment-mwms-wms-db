@@ -60,6 +60,7 @@ GO
 /* 2023-06-26  CF01     2.9   Reduce increment to only by one           */
 /* 2023-10-12  Wan17    2.9   LFWM-4529 - PROD-CNWAVE Release group     */
 /*                            search slow and build wave slow           */
+/* 2023-10-12  USH18    3.0   Fixed missing @n_MaxOpenQty Parameter     */
 /************************************************************************/                                                                                  
 CREATE OR ALTER PROC [WM].[lsp_Build_Wave]                                                                                                                       
       @c_BuildParmKey      NVARCHAR(10)                                                                                                                    
@@ -1102,6 +1103,12 @@ AS
             SET @n_BuildGroupCnt = @n_BuildGroupCnt + 1
          END
 
+         IF CURSOR_STATUS('global', 'CUR_WAVEGRP') IN (0 , 1)                   --(USH18) - START
+         BEGIN
+           CLOSE CUR_WAVEGRP
+           DEALLOCATE CUR_WAVEGRP
+         END                                                                    --(USH18) - END
+
          SET @c_SQLBuildByGroup  = N'DECLARE CUR_WAVEGRP CURSOR FAST_FORWARD READ_ONLY FOR '
                                  + CHAR(13) + ' SELECT @c_Storerkey '
                                  + @c_SQLField
@@ -1112,8 +1119,9 @@ AS
          EXEC SP_EXECUTESQL @c_SQLBuildByGroup 
                , N'@c_StorerKey NVARCHAR(15), @c_Facility NVARCHAR(5), @c_BuildParmKey NVARCHAR(10)  
                   ,@c_Field01 NVARCHAR(60), @c_Field02 NVARCHAR(60), @c_Field03 NVARCHAR(60),@c_Field04 NVARCHAR(60), @c_Field05 NVARCHAR(60)
-                  ,@c_Field06 NVARCHAR(60), @c_Field07 NVARCHAR(60), @c_Field08 NVARCHAR(60),@c_Field09 NVARCHAR(60), @c_Field10 NVARCHAR(60)' --(Wan03)
-               , @c_StorerKey                                                                                          
+                  ,@c_Field06 NVARCHAR(60), @c_Field07 NVARCHAR(60), @c_Field08 NVARCHAR(60),@c_Field09 NVARCHAR(60), @c_Field10 NVARCHAR(60) --(Wan03)
+                  ,@n_MaxOpenQty INT'     --(USH18)
+               , @c_StorerKey
                , @c_Facility 
                , @c_BuildParmKey       --(Wan11)               
                , @c_Field01            --(Wan03)
@@ -1125,7 +1133,8 @@ AS
                , @c_Field07            --(Wan03)
                , @c_Field08            --(Wan03)
                , @c_Field09            --(Wan03)
-               , @c_Field10            --(Wan03)                                                                             
+               , @c_Field10            --(Wan03)
+               ,@n_MaxOpenQty          --(USH18)
                                                                                                                                                                                                                      
          OPEN CUR_WAVEGRP                                                                                                                                         
          FETCH NEXT FROM CUR_WAVEGRP INTO @c_Storerkey
