@@ -74,6 +74,7 @@ BEGIN
       @cPaperPrinter             NVARCHAR(10),
       @cPackList                 NVARCHAR(20),
       @cExternWorkOrder          NVARCHAR(20),
+      @cCode2                    NVARCHAR(30),
 
       @nError                    INT, 
       @cErrorMessage             NVARCHAR(4000),
@@ -584,18 +585,71 @@ BEGIN
                DECLARE @tDefaultLabels TABLE
                (
                   id             INT IDENTITY(1,1),
+                  Code           NVARCHAR(30),
                   code2          NVARCHAR(30),
                   UDF01          NVARCHAR(30),
                   Short          NVARCHAR(10)
                )
 
-               INSERT INTO @tDefaultLabels (code2, UDF01, Short)
-               SELECT code2, UDF01, Short
+               INSERT INTO @tDefaultLabels (code2, UDF01, Short, Code)
+               SELECT code2, UDF01, Short, Code
                FROM dbo.CODELKUP WITH(NOLOCK) 
                WHERE StorerKey = @cStorerKey
                   AND LISTNAME = 'LVSCARTLBL'
                   AND ISNULL(Long, '') = 'A'
                ORDER BY ISNULL(Short, '99999')
+
+               DECLARE @tCustWorkOrderLabels TABLE
+               (
+                  id             INT IDENTITY(1,1),
+                  Type           NVARCHAR(12),
+                  UDF01          NVARCHAR(30),
+                  code2          NVARCHAR(30)
+               )
+
+               INSERT INTO @tCustWorkOrderLabels (Type, UDF01, code2)
+               SELECT DISTINCT lk.Code, lk.UDF01, lk.code2
+               FROM dbo.WorkOrder wo WITH(NOLOCK)
+               INNER JOIN dbo.WorkOrderDetail wod WITH(NOLOCK) ON wo.WorkOrderKey = wod.WorkOrderKey
+               INNER JOIN dbo.PickDetail pkd WITH(NOLOCK) ON wod.StorerKey = pkd.StorerKey AND wod.ExternWorkOrderKey = pkd.OrderKey 
+               INNER JOIN dbo.CODELKUP lk WITH(NOLOCK) ON wod.StorerKey = lk.StorerKey AND wod.Type = lk.Code AND lk.LISTNAME = 'LVSCARTLBL' AND ISNULL(wod.Remarks, '-1') = lk.code2
+               WHERE wod.StorerKey = @cStorerKey
+                  AND wod.Type <> ''
+                  AND wod.ExternLineNo = ''
+                  AND ISNULL(pkd.CaseID, '') = @cDropID
+                  AND ISNULL(wod.Remarks, '') <> ''
+
+               --Print Special Labels
+               SET @nLoopIndex = -1
+               WHILE 1 = 1
+               BEGIN
+                  SELECT TOP 1 
+                     @cVASCode = Type,
+                     @cLabelName = UDF01,
+                     @cCode2 = code2,
+                     @nLoopIndex = id
+                  FROM @tCustWorkOrderLabels
+                     WHERE id > @nLoopIndex
+                  ORDER BY id
+
+                  IF @@ROWCOUNT = 0
+                     BREAK
+
+                  DELETE FROM @tDefaultLabels WHERE (Code = @cVASCode OR code2 = @cCode2)
+
+                  -- Print label
+                  EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cLabelPrinterGroup, @cPaperPrinter,
+                     @cLabelName, -- Report type
+                     @tCartonLabelList, -- Report params
+                     'rdt_855ExtUpd13',
+                     @nErrNo  OUTPUT,
+                     @cErrMsg OUTPUT
+                     
+                  IF @nErrNo <> 0
+                  BEGIN
+                     GOTO Quit
+                  END
+               END
 
                SELECT TOP 1 @cConsigneeKey = orm.ConsigneeKey,
                   @cBillToKey = orm.BillToKey,
@@ -625,7 +679,8 @@ BEGIN
                BEGIN
                   DECLARE CUR_CARTONLABEL CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
                      SELECT CustLabelData.Description, CustLabels.UDF01 AS CustLabelType, ISNULL(CustLabels.Short, '99999') AS CustSequence, CustLabelData.Long
-                     FROM (SELECT StorerKey, Description, ISNULL(Long, '') AS Long FROM dbo.CODELKUP WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND LISTNAME = 'LVSCUSPREF'  AND code2 = @cConsigneeKey) AS CustLabelData
+                     FROM (SELECT StorerKey, Description, ISNULL(Long, '') AS Long FROM dbo.CODELKUP AS LK WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND LISTNAME = 'LVSCUSPREF'  AND code2 = @cConsigneeKey
+                           AND NOT EXISTS (SELECT 1 FROM @tCustWorkOrderLabels AS CWOL WHERE CWOL.Type = LK.Long OR CWOL.code2 = LK.Description)) AS CustLabelData
                      LEFT JOIN (SELECT StorerKey, code2, Code, UDF01, Short FROM dbo.CODELKUP WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND LISTNAME = 'LVSCARTLBL'  AND ISNULL(Long, '') <> 'A') AS CustLabels 
                         ON CustLabelData.StorerKey = CustLabels.StorerKey AND CustLabelData.Description = CustLabels.code2 AND CustLabelData.Long = CustLabels.Code
                      ORDER BY ISNULL(CustLabels.Short, '99999')
@@ -633,7 +688,8 @@ BEGIN
                ELSE 
                   DECLARE CUR_CARTONLABEL CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
                      SELECT CustLabelData.Description, CustLabels.UDF01 AS CustLabelType, ISNULL(CustLabels.Short, '99999') AS CustSequence, CustLabelData.Long
-                     FROM (SELECT StorerKey, Description, ISNULL(Long, '') AS Long FROM dbo.CODELKUP WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND LISTNAME = 'LVSCUSPREF'  AND (code2 = @cConsigneeKey OR code2 = @cBillToKey)) AS CustLabelData
+                     FROM (SELECT StorerKey, Description, ISNULL(Long, '') AS Long FROM dbo.CODELKUP LK WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND LISTNAME = 'LVSCUSPREF'  AND (code2 = @cConsigneeKey OR code2 = @cBillToKey)
+                           AND NOT EXISTS (SELECT 1 FROM @tCustWorkOrderLabels AS CWOL WHERE CWOL.Type = LK.Long OR CWOL.code2 = LK.Description)) AS CustLabelData
                      LEFT JOIN (SELECT StorerKey, code2, Code, UDF01, Short FROM dbo.CODELKUP WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND LISTNAME = 'LVSCARTLBL'  AND ISNULL(Long, '') <> 'A') AS CustLabels 
                         ON CustLabelData.StorerKey = CustLabels.StorerKey AND CustLabelData.Description = CustLabels.code2 AND CustLabelData.Long = CustLabels.Code
                      ORDER BY ISNULL(CustLabels.Short, '99999')
