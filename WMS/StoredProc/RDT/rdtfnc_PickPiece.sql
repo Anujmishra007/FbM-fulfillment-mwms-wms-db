@@ -805,6 +805,7 @@ BEGIN
       SET @cCurrLOC = ''
       SET @cSkippedSKU = ''
       SET @cSuggSKU = ''
+      SET @cOutField15 = ''
 
       EXEC rdt.rdtSetFocusField @nMobile, 2 -- PickZone
 
@@ -2455,6 +2456,7 @@ BEGIN
                   SET @cOutField01 = @cPickSlipNo -- '' -- PickSlipNo
                   SET @cOutField02 = CASE WHEN @cDefaultPickZone = '1' THEN @cPickZone ELSE '' END
                   SET @cOutField03 = ''
+                  SET @cOutField15 = ''
 
                   -- Go to PickSlipNo screen
                   SET @nScn = @nScn_PickZone
@@ -2617,6 +2619,7 @@ BEGIN
 
       SET @cOutField01 = '' -- Option
       SET @cOutField12 =''
+      SET @cOutField15 =''
 
       -- Go to Abort screen
       SET @nScn = @nScn_AbortPick
@@ -2870,6 +2873,7 @@ BEGIN
          SET @cOutField01 = @cPickSlipNo --'' -- PickSlipNo
          SET @cOutField02 = CASE WHEN @cDefaultPickZone = '1' THEN @cPickZone ELSE '' END
          SET @cOutField03 = ''
+         SET @cOutField15 = ''
 
          -- Go to PickSlipNo screen
          SET @nScn = @nScn_PickZone
@@ -3687,6 +3691,7 @@ BEGIN
                   SET @cOutField01 = @cPickSlipNo -- '' -- PickSlipNo
                   SET @cOutField02 = CASE WHEN @cDefaultPickZone = '1' THEN @cPickZone ELSE '' END
                   SET @cOutField03 = ''
+                  SET @cOutField15 = ''
 
                   -- Go to PickZone screen
                   SET @nScn = @nScn_PickZone
@@ -3782,6 +3787,7 @@ BEGIN
          SET @cOutField01 = @cPickSlipNo
          SET @cOutField02 = CASE WHEN @cDefaultPickZone = '1' THEN @cPickZone ELSE '' END
          SET @cOutField03 = ''
+         SET @cOutField15 = ''
 
          SET @nScn = @nScn_PickZone
          SET @nStep = @nStep_PickZone
@@ -3980,6 +3986,7 @@ BEGIN
                SET @cOutField01 = @cPickSlipNo -- '' -- PickSlipNo
                SET @cOutField02 = CASE WHEN @cDefaultPickZone = '1' THEN @cPickZone ELSE '' END
                SET @cOutField03 = ''
+               SET @cOutField15 = ''
 
                -- Go to PickZone screen
                SET @nScn = @nScn_PickZone
@@ -4638,6 +4645,7 @@ BEGIN
       SET @cOutField01 = @cPickSlipNo
       SET @cOutField02 = CASE WHEN @cDefaultPickZone = '1' THEN @cPickZone ELSE '' END
       SET @cOutField03 = '' --DropID
+      SET @cOutField15 = ''
 
       SET @cCurrLOC=@cSuggLOC
       SET @cCurrSKU=@cSuggSKU
@@ -4830,6 +4838,7 @@ BEGIN
          SET @cOutField01 = @cPickSlipNo
          SET @cOutField02 = CASE WHEN @cDefaultPickZone = '1' THEN @cPickZone ELSE '' END
          SET @cOutField03 = '' --DropID
+         SET @cOutField15 = ''
          SET @nTtlBalQty = 0
          SET @nBalQty = 0
 
@@ -5120,6 +5129,7 @@ BEGIN
          SET @cOutField01 = @cPickSlipNo
          SET @cOutField02 = '' --PickZone
          SET @cOutField03 = '' --DropID
+         SET @cOutField15 = ''
          SET @nTtlBalQty = 0
          SET @nBalQty = 0
          SET @cSuggLOC = ''
@@ -5709,6 +5719,7 @@ BEGIN
                SET @cOutField01 = @cPickSlipNo -- '' -- PickSlipNo
                SET @cOutField02 = CASE WHEN @cDefaultPickZone = '1' THEN @cPickZone ELSE '' END
                SET @cOutField03 = ''
+               SET @cOutField15 = ''
 
                -- Go to PickSlipNo screen
                SET @nScn = @nScn_PickZone
@@ -6236,6 +6247,7 @@ BEGIN
                SET @cOutField01 = @cPickSlipNo -- '' -- PickSlipNo
                SET @cOutField02 = CASE WHEN @cDefaultPickZone = '1' THEN @cPickZone ELSE '' END
                SET @cOutField03 = ''
+               SET @cOutField15 = ''
 
                -- Go to zone screen
                SET @nScn = @nScn_PickZone
@@ -6475,6 +6487,7 @@ BEGIN
                SET @cOutField01 = @cPickSlipNo
                SET @cOutField02 = CASE WHEN @cDefaultPickZone = '1' THEN @cPickZone ELSE '' END
                SET @cOutField03 = ''
+               SET @cOutField15 = ''
 
                SET @nScn = @nScn_PickZone
                SET @nStep = @nStep_PickZone
