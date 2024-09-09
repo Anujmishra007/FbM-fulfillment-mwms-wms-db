@@ -64,37 +64,135 @@ BEGIN
    DECLARE @nExists  INT
    DECLARE @cShort   NVARCHAR(20)
    
+   DECLARE
+      @cStoredProcedure  NVARCHAR(50),
+      @cCCTaskType       NVARCHAR(60),
+      @cHoldType         NVARCHAR(60),
+      @cSQL              NVARCHAR( MAX),
+      @cSQLParam         NVARCHAR( MAX),
+      @cLot              NVARCHAR(10),
+      @cID               NVARCHAR(20),
+      @cReasonCode       NVARCHAR(20),
+      @b_Success         INT,
+      @n_err             INT,
+      @cPickDetailKey    NVARCHAR(50) = '',
+      @cOrderKey         NVARCHAR(10) = '',
+      @cLoadKey          NVARCHAR(10) = '',
+      @cZone             NVARCHAR(18) = '',
+      @c_errmsg          NVARCHAR(250)
+      
    SET @nErrNo          = 0
    SET @cErrMSG         = ''
 
    IF @nFunc = 839
    BEGIN
-      IF @nStep = 5
+      IF @nStep = 1
       BEGIN
-         -- Short pick
-         IF @nInputKey = 1
          BEGIN
-            DECLARE
-               @cStoredProcedure  NVARCHAR(50),
-               @cCCTaskType       NVARCHAR(60),
-               @cHoldType         NVARCHAR(60),
-               @cSQL              NVARCHAR( MAX),
-               @cSQLParam         NVARCHAR( MAX),
-               @cLot              NVARCHAR(10),
-               @cID               NVARCHAR(20),
-               @cReasonCode       NVARCHAR(20),
-               @b_Success         INT,
-               @n_err             INT,
-               @cPickDetailKey    NVARCHAR(50) = '',
-               @cOrderKey         NVARCHAR(10) = '',
-               @cLoadKey          NVARCHAR(10) = '',
-               @cZone             NVARCHAR(18) = '',
-               @c_errmsg          NVARCHAR(250)
+            DECLARE @curOrder  CURSOR
+            
+            /*
+               The auto scan-in at parent module, sometimes does not trigger update Orders.Status = 3
+               
+               Exceed base, scan-in backgroup (ntrPickingInfoAdd or isp_ScanInPickslip):
+                  insert PickingInfo, with pickslip, date and picker, whether trigger update Orders.Status = 3
+                     if cross dock pickslip, not trigger 
+                     if discrete pickslip, trigger
+                     if conso pickslip , trigger
+                     if customize pickslip, not trigger 
+                     
+                     Note: Cross dock and customize pickslip, works on Order line level, not at order level
 
-            -- Short
-            IF @cOption = '1'
+                  Update PickingInfo, with date and picker, does not trigger Orders.Status = 3
+            */
+            
+            -- Get PickHeader info
+            SELECT TOP 1
+               @cOrderKey = OrderKey,
+               @cLoadKey = ExternOrderKey,
+               @cZone = Zone
+            FROM dbo.PickHeader WITH (NOLOCK)
+            WHERE PickHeaderKey = @cPickSlipNo
+      
+            -- Cross dock PickSlip
+            IF @cZone IN ('XD', 'LB', 'LP')
+               SET @curOrder = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR 
+                  SELECT DISTINCT O.OrderKey
+                  FROM dbo.RefKeyLookup RKL WITH (NOLOCK)
+                     JOIN dbo.Orders O WITH (NOLOCK) ON (O.OrderKey = RKL.Orderkey)
+                  WHERE RKL.PickSlipNo = @cPickSlipNo
+                     AND O.Status < '3'
+
+            -- Discrete PickSlip
+            ELSE IF @cOrderKey <> ''
+               SET @curOrder = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR 
+                  SELECT OrderKey
+                  FROM dbo.Orders WITH (NOLOCK)
+                  WHERE OrderKey = @cOrderKey
+                     AND Status < '3'
+               
+            -- Conso PickSlip
+            ELSE IF @cLoadKey <> ''
+               SET @curOrder = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR 
+                  SELECT DISTINCT O.OrderKey
+                  FROM dbo.LoadPlanDetail LPD WITH (NOLOCK)
+                     JOIN dbo.Orders O (NOLOCK) ON (LPD.OrderKey = O.OrderKey)
+                  WHERE LPD.LoadKey = @cLoadKey
+                     AND O.Status < '3'
+            
+            -- Custom PickSlip
+            ELSE
+               SET @curOrder = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR 
+                  SELECT DISTINCT O.OrderKey
+                  FROM dbo.Orders O WITH (NOLOCK)
+                     JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.OrderKey = O.OrderKey)
+                  WHERE PD.PickSlipNo = @cPickSlipNo
+                     AND O.Status < '3'
+           
+            -- Loop orders
+            OPEN @curOrder
+            FETCH NEXT FROM @curOrder INTO @cOrderKey
+            WHILE @@FETCH_STATUS = 0
             BEGIN
-               SELECT 
+               -- Update order 
+               UPDATE dbo.Orders SET
+                  Status = '3', -- In-progress
+                  EditDate = GETDATE(), 
+                  EditWho = SUSER_SNAME()
+               WHERE OrderKey = @cOrderKey
+               SET @nErrNo = @@ERROR 
+               IF @nErrNo <> 0
+               BEGIN
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- 
+                  GOTO Quit
+               END
+               FETCH NEXT FROM @curOrder INTO @cOrderKey
+            END
+         END
+      END
+
+    
+      IF @nStep = 5 -- Close DropID or Short pick
+      BEGIN
+         IF @nInputKey = 1 AND @cOption IN ('1', '3') -- ENTER and close drop ID --NLT013 option = 1 is short pick, need trigger msg to WCS
+         BEGIN
+            -- Using drop ID, send tote to WCS
+            IF @cDropID <> ''
+            BEGIN
+               --Trigger MSG to WCS 
+               EXEC rdt.rdt_839SendMsgToWCS @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey
+                  ,@cPickSlipNo
+                  ,@cDropID
+                  ,@nErrNo       OUTPUT
+                  ,@cErrMsg      OUTPUT
+               IF @nErrNo <> 0
+                  GOTO Quit
+            END
+         END
+
+         IF @nInputKey = 1 AND @cOption = '1'
+         BEGIN
+            SELECT 
                   @cReasonCode = code2,
                   @cCCTaskType = UDF01,-- CC task type
                   @cHoldType = UDF02 -- Hold type
@@ -241,9 +339,46 @@ BEGIN
                      END
                   END
                END
-            END
          END
       END
+
+      IF @nStep = 7 -- Confirm pick loc
+      BEGIN
+         IF @nInputKey = 0 --Esc
+         BEGIN
+            -- Using drop ID, send tote to WCS
+            IF @cDropID <> ''
+            BEGIN
+               --Trigger MSG to WCS 
+               EXEC rdt.rdt_839SendMsgToWCS @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey
+                  ,@cPickSlipNo
+                  ,@cDropID
+                  ,@nErrNo       OUTPUT
+                  ,@cErrMsg      OUTPUT
+               IF @nErrNo <> 0
+                  GOTO Quit
+            END 
+         END
+      END
+
+      IF @nStep = 8 -- Abort Picking
+      BEGIN
+         IF @nInputKey = 1 AND @cOption ='1' -- ENTER and close drop ID
+         BEGIN
+            -- Using drop ID, send tote to WCS
+            IF @cDropID <> ''
+            BEGIN
+               --Trigger MSG to WCS 
+               EXEC rdt.rdt_839SendMsgToWCS @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey
+                  ,@cPickSlipNo
+                  ,@cDropID
+                  ,@nErrNo       OUTPUT
+                  ,@cErrMsg      OUTPUT
+               IF @nErrNo <> 0
+                  GOTO Quit
+            END 
+         END
+      END      
    END
 Quit:
 
