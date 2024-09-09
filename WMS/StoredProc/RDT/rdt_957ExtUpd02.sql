@@ -62,6 +62,26 @@ BEGIN
    DECLARE @nExists  INT
    DECLARE @cShort   NVARCHAR(20)
 
+   DECLARE @cLoadKey  NVARCHAR( 10) = ''
+   DECLARE @cOrderKey NVARCHAR( 10) = ''
+   DECLARE @cZone     NVARCHAR( 18) = ''
+   DECLARE @curOrder  CURSOR
+   
+   DECLARE
+      @cStoredProcedure  NVARCHAR(50),
+      @cCCTaskType       NVARCHAR(60),
+      @cHoldType         NVARCHAR(60),
+      @cSQL              NVARCHAR(MAX),
+      @cSQLParam         NVARCHAR(MAX),
+      @cLOC              NVARCHAR(10), 
+      @cLot              NVARCHAR(10),
+      @cID               NVARCHAR(20),
+      @cSKU              NVARCHAR(20),
+      @cReasonCode       NVARCHAR(20),
+      @b_Success         INT,
+      @n_err             INT,
+      @cPickDetailKey    NVARCHAR(50) = '',
+      @c_errmsg          NVARCHAR(250)
          
    SET @nErrNo          = 0
    SET @cErrMSG         = ''
@@ -69,32 +89,97 @@ BEGIN
    
    IF @nFunc = 957
    BEGIN
-      IF @nStep = 5
+      IF @nStep = 1 -- PickZone
+      BEGIN
+         IF @nInputKey = 1 -- ENTER
+         BEGIN
+            
+            
+            /*
+               The auto scan-in at parent module, sometimes does not trigger update Orders.Status = 3
+               
+               Exceed base, scan-in backgroup (ntrPickingInfoAdd or isp_ScanInPickslip):
+                  insert PickingInfo, with pickslip, date and picker, whether trigger update Orders.Status = 3
+                     if cross dock pickslip, not trigger 
+                     if discrete pickslip, trigger
+                     if conso pickslip , trigger
+                     if customize pickslip, not trigger 
+                     
+                     Note: Cross dock and customize pickslip, works on Order line level, not at order level
+
+                  Update PickingInfo, with date and picker, does not trigger Orders.Status = 3
+            */
+            
+            -- Get PickHeader info
+            SELECT TOP 1
+               @cOrderKey = OrderKey,
+               @cLoadKey = ExternOrderKey,
+               @cZone = Zone
+            FROM dbo.PickHeader WITH (NOLOCK)
+            WHERE PickHeaderKey = @cPickSlipNo
+      
+            -- Cross dock PickSlip
+            IF @cZone IN ('XD', 'LB', 'LP')
+               SET @curOrder = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR 
+                  SELECT DISTINCT O.OrderKey
+                  FROM dbo.RefKeyLookup RKL WITH (NOLOCK)
+                     JOIN dbo.Orders O WITH (NOLOCK) ON (O.OrderKey = RKL.Orderkey)
+                  WHERE RKL.PickSlipNo = @cPickSlipNo
+                     AND O.Status < '3'
+
+            -- Discrete PickSlip
+            ELSE IF @cOrderKey <> ''
+               SET @curOrder = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR 
+                  SELECT OrderKey
+                  FROM dbo.Orders WITH (NOLOCK)
+                  WHERE OrderKey = @cOrderKey
+                     AND Status < '3'
+               
+            -- Conso PickSlip
+            ELSE IF @cLoadKey <> ''
+               SET @curOrder = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR 
+                  SELECT DISTINCT O.OrderKey
+                  FROM dbo.LoadPlanDetail LPD WITH (NOLOCK)
+                     JOIN dbo.Orders O (NOLOCK) ON (LPD.OrderKey = O.OrderKey)
+                  WHERE LPD.LoadKey = @cLoadKey
+                     AND O.Status < '3'
+            
+            -- Custom PickSlip
+            ELSE
+               SET @curOrder = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR 
+                  SELECT DISTINCT O.OrderKey
+                  FROM dbo.Orders O WITH (NOLOCK)
+                     JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.OrderKey = O.OrderKey)
+                  WHERE PD.PickSlipNo = @cPickSlipNo
+                     AND O.Status < '3'
+            
+            -- Loop orders
+            OPEN @curOrder
+            FETCH NEXT FROM @curOrder INTO @cOrderKey
+            WHILE @@FETCH_STATUS = 0
+            BEGIN
+               -- Update order 
+               UPDATE dbo.Orders SET
+                  Status = '3', -- In-progress
+                  EditDate = GETDATE(), 
+                  EditWho = SUSER_SNAME()
+               WHERE OrderKey = @cOrderKey
+               SET @nErrNo = @@ERROR 
+               IF @nErrNo <> 0
+               BEGIN
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- 
+                  GOTO Quit
+               END
+               FETCH NEXT FROM @curOrder INTO @cOrderKey
+            END
+         END
+      END
+      
+      ELSE IF @nStep = 5
       BEGIN
          -- Short pick
          IF @nInputKey = 1
-         BEGIN
-            DECLARE
-               @cStoredProcedure  NVARCHAR(50),
-               @cCCTaskType       NVARCHAR(60),
-               @cHoldType         NVARCHAR(60),
-               @cSQL              NVARCHAR(MAX),
-               @cSQLParam         NVARCHAR(MAX),
-               @cLOC              NVARCHAR(10), 
-               @cLot              NVARCHAR(10),
-               @cID               NVARCHAR(20),
-               @cSKU              NVARCHAR(20),
-               @cReasonCode       NVARCHAR(20),
-               @b_Success         INT,
-               @n_err             INT,
-               @cPickDetailKey    NVARCHAR(50) = '',
-               @cOrderKey         NVARCHAR(10) = '',
-               @cLoadKey          NVARCHAR(10) = '',
-               @cZone             NVARCHAR(18) = '',
-               @c_errmsg          NVARCHAR(250)
-
-            
-
+         BEGIN                     
             -- Short
             IF @cOption = '1'
             BEGIN
