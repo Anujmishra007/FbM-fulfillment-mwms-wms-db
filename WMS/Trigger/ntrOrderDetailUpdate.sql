@@ -79,6 +79,8 @@ BEGIN
       @c_NotUpdUD03        NVARCHAR(1),  -- SOS72718
       @c_OrderKey          NVARCHAR(10)
 
+      , @CUR_UPD           CURSOR                                                   --2024-09-09
+
    SELECT @n_continue=1, @n_starttcnt=@@TRANCOUNT
 
    /* Abort Trigger if called From An Insert Trigger */
@@ -175,17 +177,37 @@ BEGIN
 
 
       /*Cannot cancel the order details status Column PPA371*/
-      IF UPDATE (status)
+
+      IF @n_continue IN (1,2) AND UPDATE (status)                                   --2024-09-09
       BEGIN
-         IF (EXISTS(SELECT 1 FROM PICKDETAIL with (NOLOCK)
-                        JOIN INSERTED ON PICKDETAIL.OrderKey = INSERTED.Orderkey
-                        WHERE PICKDETAIL.OrderLineNumber = INSERTED.OrderLineNumber AND INSERTED.[Status] = 'CANC'))
+         IF EXISTS(SELECT 1 FROM PICKDETAIL with (NOLOCK)
+                   JOIN INSERTED ON PICKDETAIL.OrderKey = INSERTED.Orderkey
+                   WHERE PICKDETAIL.OrderLineNumber = INSERTED.OrderLineNumber
+                   AND INSERTED.[Status] = 'CANC'
+                   )
          BEGIN
-            SELECT @n_continue = 3, @n_err = 61741 --63004
+            SELECT @n_continue = 3, @n_err = 61748
             SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+":  Order detail is not normal staus and is not allowed to cancel! (ntrOrderDetailUpdate)"
                   + " ( " + " SQLSvr MESSAGE=" + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + " ) "
          END
-      END
+
+         IF @n_continue IN (1,2)
+         BEGIN
+            IF EXISTS(SELECT 1 FROM INSERTED
+                      JOIN StorerSODefault sod (NOLOCK) ON sod.Storerkey = INSERTED.Storerkey
+                      JOIN ORDERDETAIL od (NOLOCK) ON  od.Orderkey = INSERTED.ORderkey
+                                                   AND od.OrderLineNumber = INSERTED.OrderLineNumber
+                      WHERE INSERTED.[Status] = 'CANC'
+                      AND INSERTED.CancelReasonCode = ''
+                      AND sod.ReasonCodeReqForSOCancel = 'Yes'
+                     )
+            BEGIN
+               SET @n_continue = 3
+               SET @n_err = 61748
+               SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Cancel ReasonCode is required. (ntrOrderDetailUpdate)'
+            END
+         END
+      END                                                                           --2024-09-09
       /*End Cannot cancel the order details status Column PPA371*/
 
       /* Update The OriginalQTY column if the shippedqty column Is 0 */
@@ -203,6 +225,8 @@ BEGIN
                                   THEN (INSERTED.openqty + INSERTED.shippedqty) - orderdetail.originalqty
                                   ELSE INSERTED.Adjustedqty
                              END,
+               OpenQty = CASE WHEN INSERTED.Status='CANC'               --2024-09-09
+                              THEN 0 ELSE ORDERDETAIL.openqty END,      --2024-09-09
               [Status] = CASE WHEN INSERTED.Status='CANC'         --PPA371
                                  THEN INSERTED.Status             --PPA371
                               WHEN INSERTED.OriginalQty + INSERTED.AdjustedQty + INSERTED.FreeGoodQty = INSERTED.ShippedQty AND INSERTED.ShippedQty <> 0
@@ -440,17 +464,14 @@ BEGIN
    /* Main Processing ends */
 
    /* Post Process Starts */
-
    IF (@n_continue = 1 or @n_continue=2)
    BEGIN
       IF EXISTS ( SELECT 1 FROM ORDERDETAIL with (NOLOCK)
-             JOIN INSERTED ON ORDERDETAIL.OrderKey = INSERTED.Orderkey
-                                 AND ORDERDETAIL.OrderLineNumber = INSERTED.OrderLineNumber
+                  JOIN INSERTED ON ORDERDETAIL.OrderKey = INSERTED.Orderkey
+                                AND ORDERDETAIL.OrderLineNumber = INSERTED.OrderLineNumber
                   WHERE ORDERDETAIL.STATUS in ( '9' , 'CANC') )
              AND NOT UPDATE(EditDate)
       BEGIN
-
-
          -- TLTING01
          UPDATE ORDERDETAIL with (ROWLOCK)
          SET EditDate   = GETDATE(),
@@ -470,6 +491,88 @@ BEGIN
             /* End Trap SQL Server Error */
          END
       END
+      --2024-09-09 - START
+      IF @n_Continue = 1 OR @n_Continue = 2
+      BEGIN
+         IF EXISTS (SELECT 1 FROM INSERTED WHERE INSERTED.[Status] = 'CANC')
+         BEGIN
+            SET @CUR_UPD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+            SELECT od.Orderkey
+            FROM INSERTED i
+            JOIN ORDERDETAIL od (NOLOCK) ON  od.Orderkey = i.Orderkey
+            WHERE i.[Status] = 'CANC'
+            GROUP BY od.Orderkey
+            HAVING COUNT(1) = SUM(CASE WHEN od.[Status] = 'CANC' THEN 1 ELSE 0 END)
+            ORDER BY od.Orderkey
+
+            OPEN @CUR_UPD
+
+            FETCH NEXT FROM @CUR_UPD INTO @c_Orderkey
+
+            WHILE @@FETCH_STATUS <> -1 AND @n_Continue IN (1,2)
+            BEGIN
+               UPDATE ORDERS WITH (ROWLOCK)
+                  SET [Status] = 'CANC'
+                     ,SOStatus = 'CANC'
+                     ,Trafficcop = NULL
+               WHERE Orderkey = @c_Orderkey
+
+               IF @@ERROR <> 0
+               BEGIN
+                  SET @n_Continue = 3
+               END
+
+               FETCH NEXT FROM @CUR_UPD INTO @c_Orderkey
+            END
+            CLOSE @CUR_UPD
+            DEALLOCATE @CUR_UPD
+
+            IF @n_Continue IN (1,2)
+            BEGIN
+				   INSERT INTO [dbo].[ORDERDETAIL_CANCLOG]
+				   ([OrderKey],[OrderLineNumber],[OrderDetailSysId]
+               ,[ExternOrderKey],[ExternLineNo]
+				   ,[Sku],[StorerKey],[ManufacturerSku],[RetailSku],[AltSku]
+				   ,[OriginalQty],[OpenQty],[ShippedQty],[AdjustedQty]
+				   ,[QtyPreAllocated],[QtyAllocated],[QtyPicked],[UOM],[PackKey],[PickCode]
+				   ,[CartonGroup],[Lot],[ID],[Facility],[Status]
+               ,[UnitPrice],[Tax01],[Tax02],[ExtendedPrice],[UpdateSource]
+               ,[Lottable01],[Lottable02],[Lottable03],[Lottable04],[Lottable05]
+               ,[EffectiveDate],[AddDate],[AddWho],[EditDate],[EditWho],[TrafficCop],[ArchiveCop]
+               ,[TariffKey],[FreeGoodQty]
+				   ,[GrossWeight],[Capacity],[LoadKey],[MBOLKey],[QtyToProcess],[MinShelfLife]
+               ,[UserDefine01],[UserDefine02],[UserDefine03],[UserDefine04],[UserDefine05]
+               ,[UserDefine06],[UserDefine07],[UserDefine08],[UserDefine09],[POkey],[ExternPOKey],[UserDefine10]
+               ,[EnteredQTY],[ConsoOrderKey],[ExternConsoOrderKey],[ConsoOrderLineNo]
+               ,[Lottable06],[Lottable07],[Lottable08],[Lottable09],[Lottable10]
+               ,[Lottable11],[Lottable12],[Lottable13],[Lottable14],[Lottable15]
+               ,[Notes],[Notes2],[Channel],[HashValue],[SalesChannel],[CancelReasonCode])
+	            SELECT d.[OrderKey],d.[OrderLineNumber],d.[OrderDetailSysId]
+               ,d.[ExternOrderKey],d.[ExternLineNo]
+				   ,d.[Sku],d.[StorerKey],d.[ManufacturerSku],d.[RetailSku],d.[AltSku]
+				   ,d.[OriginalQty],d.[OpenQty],d.[ShippedQty],d.[AdjustedQty]
+				   ,d.[QtyPreAllocated],d.[QtyAllocated],d.[QtyPicked],d.[UOM],d.[PackKey],d.[PickCode]
+				   ,d.[CartonGroup],d.[Lot],d.[ID],d.[Facility],d.[Status]
+               ,d.[UnitPrice],d.[Tax01],d.[Tax02],d.[ExtendedPrice],d.[UpdateSource]
+               ,d.[Lottable01],d.[Lottable02],d.[Lottable03],d.[Lottable04],d.[Lottable05]
+               ,d.[EffectiveDate],d.[AddDate],d.[AddWho],d.[EditDate],d.[EditWho],d.[TrafficCop],d.[ArchiveCop]
+               ,d.[TariffKey],d.[FreeGoodQty]
+				   ,d.[GrossWeight],d.[Capacity],d.[LoadKey],d.[MBOLKey],d.[QtyToProcess],d.[MinShelfLife]
+               ,d.[UserDefine01],d.[UserDefine02],d.[UserDefine03],d.[UserDefine04],d.[UserDefine05]
+               ,d.[UserDefine06],d.[UserDefine07],d.[UserDefine08],d.[UserDefine09],d.[POkey],d.[ExternPOKey],d.[UserDefine10]
+               ,d.[EnteredQTY],d.[ConsoOrderKey],d.[ExternConsoOrderKey],d.[ConsoOrderLineNo]
+               ,d.[Lottable06],d.[Lottable07],d.[Lottable08],d.[Lottable09],d.[Lottable10]
+               ,d.[Lottable11],d.[Lottable12],d.[Lottable13],d.[Lottable14],d.[Lottable15]
+               ,d.[Notes],d.[Notes2],d.[Channel],d.[HashValue],d.[SalesChannel],d.[CancelReasonCode]
+   			   FROM INSERTED i
+               JOIN DELETED d (NOLOCK) ON d.Orderkey = i.Orderkey
+                                       AND d.OrderlineNumber = i.OrderLinenumber
+               WHERE i.[Status] = 'CANC'
+               AND d.[Status] <> 'CANC'
+            END
+         END
+      END
+      --2024-09-09 - END
    END
    /* #INCLUDE <TRODU2.SQL> */
    /* Post Process Ends */

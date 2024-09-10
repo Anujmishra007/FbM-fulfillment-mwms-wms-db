@@ -145,58 +145,57 @@ BEGIN
       END
 
 ----(PPA371)---  START
-   SELECT @c_StorerKey=StorerKey , @c_CancelReasonCode= ISNULL(CancelReasonCode,'') FROM ORDERS WITH (NOLOCK) WHERE OrderKey=@c_Orderkey
+      SELECT @c_StorerKey=StorerKey , @c_CancelReasonCode= ISNULL(CancelReasonCode,'') FROM ORDERS WITH (NOLOCK) WHERE OrderKey=@c_Orderkey
 
-   SELECT @c_CancelReasonEnabled=ReasonCodeReqForSOCancel FROM StorerSODefault WITH (NOLOCK)  WHERE StorerKey = @c_storerKey
+      SELECT @c_CancelReasonEnabled=ReasonCodeReqForSOCancel FROM StorerSODefault WITH (NOLOCK)  WHERE StorerKey = @c_storerKey
 
-   IF @c_cancelReasonEnabled='Yes'
+      IF @c_cancelReasonEnabled='Yes'
       BEGIN
-            If (@c_CancelReasonCode='')
-               BEGIN
-                  SET @n_continue = 3
-                  SET @n_err = 556105
-                  SET @c_errmsg = 'NSQL' + CONVERT(CHAR(6), @n_err)
-                        + ': Please select cancellation Reason Code for order key #:' + @c_Orderkey + '. (lsp_WaveCancelOrder)'
+         If (@c_CancelReasonCode='')
+         BEGIN
+            SET @n_continue = 3
+            SET @n_err = 556105
+            SET @c_errmsg = 'NSQL' + CONVERT(CHAR(6), @n_err)
+                  + ': Please select cancellation Reason Code for order key #:' + @c_Orderkey + '. (lsp_WaveCancelOrder)'
+                  + ' |' + @c_Orderkey
+
+            INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
+            VALUES (@c_TableName, @c_SourceType, @c_WaveKey, @c_Orderkey, '', 'ERROR', 0, @n_err, @c_errmsg)
+
+            GOTO EXIT_SP
+         END
+
+         IF EXISTS (select 1 FROM orderdetail WITH (NOLOCK) where orderkey = @c_Orderkey AND Status <>'CANC' and  (CancelReasonCode = '' OR CancelReasonCode IS NULL))
+         BEGIN
+            IF NOT EXISTS (SELECT 1 FROM  CODELKUP WITH (NOLOCK) where listname = 'ODCANC' and Code = @c_CancelReasonCode)
+            BEGIN
+               SET @n_continue = 3
+               SET @n_err = 556107
+               SET @c_errmsg = 'NSQL' + CONVERT(CHAR(6), @n_err)
+                        + ': Cancel reason code mismatch. Please select another cancel reason code for order detail(s) #:' + @c_Orderkey + '. (lsp_WaveCancelOrder)'
                         + ' |' + @c_Orderkey
 
                   INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
                   VALUES (@c_TableName, @c_SourceType, @c_WaveKey, @c_Orderkey, '', 'ERROR', 0, @n_err, @c_errmsg)
 
                   GOTO EXIT_SP
-               END
+            END
+         END
 
-              IF EXISTS (select 1 FROM orderdetail WITH (NOLOCK) where orderkey = @c_Orderkey AND Status <>'CANC' and  (CancelReasonCode = '' OR CancelReasonCode IS NULL))
-                  BEGIN
-                     IF NOT EXISTS (SELECT 1 FROM  CODELKUP WITH (NOLOCK) where listname = 'ODCANC' and Code = @c_CancelReasonCode)
-                       BEGIN
-                           SET @n_continue = 3
-                           SET @n_err = 556107
-                           SET @c_errmsg = 'NSQL' + CONVERT(CHAR(6), @n_err)
-                                 + ': Cancel reason code mismatch. Please select another cancel reason code for order detail(s) #:' + @c_Orderkey + '. (lsp_WaveCancelOrder)'
-                                 + ' |' + @c_Orderkey
+         IF EXISTS ( select 1 from PICKDETAIL WITH (NOLOCK) WHERE OrderKey=@c_Orderkey)
+         BEGIN
+            SET @n_continue = 3
+            SET @n_err = 556107
+            SET @c_errmsg = 'NSQL' + CONVERT(CHAR(6), @n_err)
+                  + ': Order can not be cancelled, order is not in normal status #:' + @c_Orderkey + '. (lsp_WaveCancelOrder)'
+                  + ' |' + @c_Orderkey
 
-                           INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
-                           VALUES (@c_TableName, @c_SourceType, @c_WaveKey, @c_Orderkey, '', 'ERROR', 0, @n_err, @c_errmsg)
+            INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
+            VALUES (@c_TableName, @c_SourceType, @c_WaveKey, @c_Orderkey, '', 'ERROR', 0, @n_err, @c_errmsg)
 
-                           GOTO EXIT_SP
-                         END
-                  END
-
-            IF EXISTS ( select 1 from PICKDETAIL WITH (NOLOCK) WHERE OrderKey=@c_Orderkey)
-               BEGIN
-                  SET @n_continue = 3
-                  SET @n_err = 556107
-                  SET @c_errmsg = 'NSQL' + CONVERT(CHAR(6), @n_err)
-                        + ': Order can not be cancelled, order is not in normal status #:' + @c_Orderkey + '. (lsp_WaveCancelOrder)'
-                        + ' |' + @c_Orderkey
-
-                  INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
-                  VALUES (@c_TableName, @c_SourceType, @c_WaveKey, @c_Orderkey, '', 'ERROR', 0, @n_err, @c_errmsg)
-
-                  GOTO EXIT_SP
-               END
+            GOTO EXIT_SP
+         END
       END
-
 ------------------(PPA371) END
 
       --(Wan02) - START
@@ -256,49 +255,18 @@ BEGIN
       SET @n_WarningNo = 0
 
       BEGIN TRY
+
+------------------(PPA371) START----
+         UPDATE ORDERDETAIL
+            SET CancelReasonCode = @c_CancelReasonCode
+               ,TrafficCop = NULL
+         WHERE OrderKey=@c_Orderkey  AND [Status] <> 'CANC' AND (CancelReasonCode = '' OR CancelReasonCode IS NULL)
+------------------(PPA371) END------
          UPDATE ORDERS
             SET [Status] = 'CANC'
                ,[SOStatus] = 'CANC'
          WHERE Orderkey = @c_Orderkey
 
-------------------(PPA371) START----
-         UPDATE ORDERDETAIL
-            SET OpenQty=0, cancelreasoncode = @c_CancelReasonCode
-         WHERE OrderKey=@c_Orderkey AND Status ='CANC' AND cancelreasoncode=''
-
-         UPDATE ORDERDETAIL
-                     SET OpenQty=0
-                  WHERE OrderKey=@c_Orderkey AND Status ='CANC' AND cancelreasoncode<>'';
-
-         INSERT INTO [dbo].[ORDERDETAIL_CANCLOG]
-               ([OrderKey],[OrderLineNumber],[OrderDetailSysId],[ExternOrderKey],[ExternLineNo]
-               ,[Sku],[StorerKey],[ManufacturerSku],[RetailSku],[AltSku]
-               ,[OriginalQty],[OpenQty],[ShippedQty],[AdjustedQty]
-               ,[QtyPreAllocated],[QtyAllocated],[QtyPicked],[UOM],[PackKey],[PickCode]
-               ,[CartonGroup],[Lot],[ID],[Facility],[Status],[UnitPrice],[Tax01],[Tax02],[ExtendedPrice]
-               ,[UpdateSource],[Lottable01],[Lottable02],[Lottable03],[Lottable04],[Lottable05],[EffectiveDate]
-               ,[AddDate],[AddWho],[EditDate],[EditWho],[TrafficCop],[ArchiveCop],[TariffKey],[FreeGoodQty]
-               ,[GrossWeight],[Capacity],[LoadKey],[MBOLKey],[QtyToProcess],[MinShelfLife],[UserDefine01]
-               ,[UserDefine02],[UserDefine03],[UserDefine04],[UserDefine05],[UserDefine06],[UserDefine07]
-               ,[UserDefine08],[UserDefine09],[POkey],[ExternPOKey],[UserDefine10],[EnteredQTY],[ConsoOrderKey]
-               ,[ExternConsoOrderKey],[ConsoOrderLineNo],[Lottable06],[Lottable07],[Lottable08]
-               ,[Lottable09],[Lottable10],[Lottable11],[Lottable12],[Lottable13],[Lottable14]
-               ,[Lottable15],[Notes],[Notes2],[Channel],[HashValue],[SalesChannel],[CancelReasonCode])
-          select [OrderKey],[OrderLineNumber],[OrderDetailSysId],[ExternOrderKey],[ExternLineNo]
-               ,[Sku],[StorerKey],[ManufacturerSku],[RetailSku],[AltSku]
-               ,[OriginalQty],[OpenQty],[ShippedQty],[AdjustedQty]
-               ,[QtyPreAllocated],[QtyAllocated],[QtyPicked],[UOM],[PackKey],[PickCode]
-               ,[CartonGroup],[Lot],[ID],[Facility],[Status],[UnitPrice],[Tax01],[Tax02],[ExtendedPrice]
-               ,[UpdateSource],[Lottable01],[Lottable02],[Lottable03],[Lottable04],[Lottable05],[EffectiveDate]
-               ,[AddDate],[AddWho],[EditDate],[EditWho],[TrafficCop],[ArchiveCop],[TariffKey],[FreeGoodQty]
-               ,[GrossWeight],[Capacity],[LoadKey],[MBOLKey],[QtyToProcess],[MinShelfLife],[UserDefine01]
-               ,[UserDefine02],[UserDefine03],[UserDefine04],[UserDefine05],[UserDefine06],[UserDefine07]
-               ,[UserDefine08],[UserDefine09],[POkey],[ExternPOKey],[UserDefine10],[EnteredQTY],[ConsoOrderKey]
-               ,[ExternConsoOrderKey],[ConsoOrderLineNo],[Lottable06],[Lottable07],[Lottable08]
-               ,[Lottable09],[Lottable10],[Lottable11],[Lottable12],[Lottable13],[Lottable14]
-               ,[Lottable15],[Notes],[Notes2],[Channel],[HashValue],[SalesChannel],[CancelReasonCode] FROM ORDERDETAIL  WITH (NOLOCK)
-         WHERE OrderKey=@c_Orderkey AND Status ='CANC'
-------------------(PPA371) END------
       END TRY
 
       BEGIN CATCH
@@ -533,3 +501,6 @@ EXIT_SP:
    END
    REVERT
 END
+GO
+GRANT EXECUTE ON [WM].[lsp_WaveCancelOrder] TO nSQL
+GO
