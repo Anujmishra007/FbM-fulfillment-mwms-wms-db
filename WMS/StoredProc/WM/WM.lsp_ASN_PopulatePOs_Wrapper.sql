@@ -38,7 +38,8 @@ GO
 /* 2021-12-21  Wan05    2.0   LFWM-3210 - SCE UAT SG ASN Should Not     */
 /*                            Populate Same POKey+POLinenumber          */
 /* 2023-03-01  Wan06    3.0   LFWM-3874 - [CN] SCE populate all for PO  */
-/*                            population                                */
+/* 2023-09-06  USH07    3.0   UWP-22179 - NoSamePO2DiffASN maintained   */
+/*                                                                      */
 /************************************************************************/
 CREATE OR ALTER PROC [WM].[lsp_ASN_PopulatePOs_Wrapper]
       @c_ReceiptKey           NVARCHAR(10)
@@ -1707,7 +1708,10 @@ BEGIN
             END TRY
             BEGIN CATCH
                --2020-09-15 - START
-               ROLLBACK TRAN
+                IF (XACT_STATE()) = -1                --(USH07- Start)
+               	BEGIN
+               			ROLLBACK TRAN
+               	END                                   --(USH07- End)
 
                WHILE @@TRANCOUNT < @n_StartTCnt
                BEGIN
