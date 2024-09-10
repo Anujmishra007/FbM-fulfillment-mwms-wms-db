@@ -1,7 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[RDT].[rdtfnc_BuildToUCC]') AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 )
-   DROP PROCEDURE [RDT].[rdtfnc_BuildToUCC]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -22,7 +18,7 @@ GO
 /* 2020-09-01 1.3  James    WMS-11639 Fix step in ExtInfoSP @ step 7 (james01)*/
 /* 2024-09-04 1.4  Dennis   UWP-23980 Bug Fix (de01)                          */
 /******************************************************************************/
-CREATE PROC [RDT].[rdtfnc_BuildToUCC](
+CREATE OR ALTER PROC [RDT].[rdtfnc_BuildToUCC](
    @nMobile    INT,
    @nErrNo     INT  OUTPUT,
    @cErrMsg    NVARCHAR(20) OUTPUT -- screen limitation, 20 char max
