@@ -4,6 +4,7 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
+
 /************************************************************************/
 /* Stored Procedure: mspRLWAV03                                         */
 /* Creation Date: 08-MAY-2024                                           */
@@ -25,6 +26,10 @@ GO
 /* 13-Aug-2024  SHONG    1.0  Bug Fixing                                */
 /* 20-Aug-2024  SHONG    1.1  Chane Mapping in PackInfo Insert          */
 /* 22-Aug-2024  SHONG    1.2 FCR-243 Not mix SKUGroup and Item Class    */
+/* 09-Sep-2024  SHONG    1.3 Group by Item Group and Class, not checking*/
+/*                           LxWxH for SKU                              */
+/* 09-Sep-2024  Yung     1.4 Block Releave wave if replenishment        */
+/*                           incomplete                                 */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[mspRLWAV03]
    @c_WaveKey NVARCHAR(10)
@@ -90,6 +95,8 @@ BEGIN
           ,@c_PreOrderGroup           NVARCHAR(10) = ''
           ,@n_SortSeq                 INT    
           ,@n_CTNRowID                INT = 0 
+          ,@n_SKUGroupCube            DECIMAL(15,7)=0
+		  ,@C_Replenishmentkey       NVARCHAR(10)
 
    DECLARE @n_VAS_LineCount INT = 0,
            @n_VAS_QtyCanPack INT = 0,
@@ -222,6 +229,21 @@ BEGIN
         SET @c_Errmsg='NSQL'+CONVERT(NVARCHAR(10),@n_Err)+': StdCube or LxWxH must setup for Sku ' + RTRIM(@c_Sku) + '. (mspRLWAV03)'     
         GOTO QUIT_SP  
      END     
+	 
+	 SET @C_Replenishmentkey ='' --Yung
+	 SELECT TOP 1 @C_Replenishmentkey = RP.Replenishmentkey 
+	 FROM replenishment RP (NOLOCK) 
+	 INNER JOIN wave W (nolock)  on RP.Wavekey = W.Wavekey
+	 WHERE W.wavekey = @C_Wavekey
+	 AND RP.Confirmed <> 'Y'
+
+	IF ISNULL(@C_Replenishmentkey,'') <> ''
+     BEGIN
+        SET @n_continue = 3
+        SET @n_Err = 561016
+        SET @c_Errmsg='NSQL'+CONVERT(NVARCHAR(10),@n_Err)+': Replenishment incomplete' + RTRIM(@C_Replenishmentkey) + '. (mspRLWAV03)'     
+        GOTO QUIT_SP  
+     END	 
    END
 
   --Initialize Pickdetail work in progress staging table    
@@ -314,6 +336,11 @@ BEGIN
       
       CREATE TABLE #ROWTRACK (RowID INT)
       CREATE TABLE #CTNTRACK (RowID INT)
+
+      CREATE TABLE #SKUGROUP (RowID INT IDENTITY(1,1) PRIMARY KEY,
+                              SkuGroup  NVARCHAR(10),
+                              ItemClass NVARCHAR(10),
+                              TotalCube DECIMAL(15,7))
                                                                                                           
       SELECT @c_RLWAV_Opt5 = SC.Option5
       FROM dbo.fnc_GetRight2(@c_Facility, @c_Storerkey, '', 'WAVGENPACKFROMPICKED_SP') AS SC 
@@ -359,9 +386,9 @@ BEGIN
              -- None MPOC Order, Pack by OrderKey
             IF @n_MPOCFlag = 1
             BEGIN
-                   UPDATE #OrderGroup
-                     SET MPOCFlag = CAST(@n_MPOCFlag AS CHAR(1))
-                   WHERE OrderKey = @c_Orderkey
+               UPDATE #OrderGroup
+               SET MPOCFlag = CAST(@n_MPOCFlag AS CHAR(1))
+               WHERE OrderKey = @c_Orderkey
             END 
 
             FETCH NEXT FROM CUR_MPOCFLAG INTO @c_Orderkey
@@ -558,73 +585,93 @@ BEGIN
       
       WHILE @@FETCH_STATUS <> -1 AND @n_continue IN(1,2) 
       BEGIN            
-           SET @c_NewCarton = 'Y'
-           SET @n_CartonNo = 0
-           
-           IF @b_debug=2
-           BEGIN
-               PRINT '---- OrderKey: ' + @c_Orderkey + '  ------'
+         TRUNCATE TABLE #SKUGROUP
 
-           END
-           --pack full carton qty
-           IF @n_continue IN(1,2) 
-           BEGIN                                         
-             DECLARE CUR_UCC CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-             SELECT OS.RowID, OS.Sku, PD.Qty, PD.DropID, OS.StdCube
-             FROM #ORDERSKU OS (NOLOCK)
-             JOIN #PickDetail_WIP PD (NOLOCK) ON OS.Orderkey = PD.Orderkey AND OS.Storerkey = PD.Storerkey AND OS.Sku = PD.Sku        
-             WHERE OS.Orderkey = @c_Orderkey
-             AND PD.UOM = '2'
-             AND ISNULL(PD.DropID,'') <> ''
-             ORDER BY OS.RowID
-
-             OPEN CUR_UCC
-      
-             FETCH NEXT FROM CUR_UCC INTO @n_RowID, @c_Sku, @n_PackQty, @c_UCCNo, @n_StdCube
-      
-             WHILE @@FETCH_STATUS <> -1 AND @n_continue IN(1,2) 
-               BEGIN                 
-              SET @n_CartonNo = @n_CartonNo + 1            
-
-             INSERT INTO #CARTON (Orderkey, CartonNo, LabelNo, CartonGroup, CartonType, MaxCube, MaxWeight, MaxCount, MaxSku, CartonLength, CartonWidth, CartonHeight, UCCNo, OrderGroup)
-             VALUES (@c_Orderkey, @n_CartonNo, '', @c_CartonGroup, '', 0, 0, 0, 0, 0, 0, 0, @c_UCCNo, '')                                  
-               
-             INSERT INTO #CARTONDETAIL (OrderGroup, Orderkey, Storerkey, Sku, CartonNo, Qty, RowRef)  --refer to ORDERSKU.RowID
-             VALUES ('', @c_Orderkey, @c_Storerkey, @c_Sku, @n_CartonNo, @n_PackQty, @n_RowID) 
-                             
-             UPDATE #ORDERSKU 
-             SET TotalQtyPacked = TotalQtyPacked + @n_PackQty, 
-                 TotalCubePacked = TotalCubePacked + (@n_PackQty * @n_StdCube)
-             WHERE RowID = @n_RowID                    
-                            
-              FETCH NEXT FROM CUR_UCC INTO @n_RowID, @c_Sku, @n_PackQty, @c_UCCNo, @n_StdCube
-          END
-          CLOSE CUR_UCC
-          DEALLOCATE CUR_UCC                                                                                      
-         END
+         SET @c_NewCarton = 'Y'
+         SET @n_CartonNo = 0
          
          IF @b_debug=2
          BEGIN
-            SELECT 'Full Carton: ', * 
+            PRINT '---- OrderKey: ' + @c_Orderkey + '  ------'
+         END
+
+         --Pack full carton qty, UCC full carton
+         IF @n_continue IN(1,2) 
+         BEGIN                                         
+            DECLARE CUR_UCC CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+            SELECT OS.RowID, OS.Sku, PD.Qty, PD.DropID, OS.StdCube
+            FROM #ORDERSKU OS (NOLOCK)
+            JOIN #PickDetail_WIP PD (NOLOCK) ON OS.Orderkey = PD.Orderkey AND OS.Storerkey = PD.Storerkey AND OS.Sku = PD.Sku        
+            WHERE OS.Orderkey = @c_Orderkey
+            AND PD.UOM = '2'
+            AND ISNULL(PD.DropID,'') <> ''
+            ORDER BY OS.RowID
+
+            OPEN CUR_UCC
+   
+            FETCH NEXT FROM CUR_UCC INTO @n_RowID, @c_Sku, @n_PackQty, @c_UCCNo, @n_StdCube
+   
+            WHILE @@FETCH_STATUS <> -1 AND @n_continue IN(1,2) 
+            BEGIN                 
+            SET @n_CartonNo = @n_CartonNo + 1            
+
+            INSERT INTO #CARTON (Orderkey, CartonNo, LabelNo, CartonGroup, CartonType, MaxCube, MaxWeight, MaxCount, MaxSku, CartonLength, CartonWidth, CartonHeight, UCCNo, OrderGroup)
+            VALUES (@c_Orderkey, @n_CartonNo, '', @c_CartonGroup, '', 0, 0, 0, 0, 0, 0, 0, @c_UCCNo, '')                                  
+            
+            INSERT INTO #CARTONDETAIL (OrderGroup, Orderkey, Storerkey, Sku, CartonNo, Qty, RowRef)  --refer to ORDERSKU.RowID
+            VALUES ('', @c_Orderkey, @c_Storerkey, @c_Sku, @n_CartonNo, @n_PackQty, @n_RowID) 
+                           
+            UPDATE #ORDERSKU 
+            SET TotalQtyPacked = TotalQtyPacked + @n_PackQty, 
+               TotalCubePacked = TotalCubePacked + (@n_PackQty * @n_StdCube)
+            WHERE RowID = @n_RowID                    
+                           
+            FETCH NEXT FROM CUR_UCC INTO @n_RowID, @c_Sku, @n_PackQty, @c_UCCNo, @n_StdCube
+         END
+         CLOSE CUR_UCC
+         DEALLOCATE CUR_UCC                                                                                      
+      END -- IF @n_continue IN(1,2) 
+         
+      IF @b_debug=2
+      BEGIN         
+         IF EXISTS(SELECT 1 FROM #CARTONDETAIL)
+         BEGIN
+            PRINT '*** Full Carton '
+            SELECT * 
             FROM  #CARTONDETAIL
             Where Orderkey = @c_Orderkey 
          END 
+      END 
 
          /**************************************************/
          --      Pack loose carton
          /**************************************************/
          SET @c_NewCarton = 'Y'
 
+         INSERT INTO #SKUGroup (SkuGroup, ItemClass, TotalCube)
+         SELECT SKU.SKUGROUP, 
+                SKU.ItemClass,
+                SUM(SKU.STDCUBE * (O.TotalQty - O.TotalQtyPacked))   
+         FROM #ORDERSKU O
+         JOIN dbo.SKU SKU WITH (NOLOCK) ON O.Storerkey = SKU.StorerKey AND O.Sku = SKU.Sku
+         WHERE O.Orderkey = @c_Orderkey
+           AND O.TotalQty - O.TotalQtyPacked > 0
+         GROUP BY SKU.SKUGROUP, SKU.ItemClass      
+
+         SELECT @n_OrderCube = SUM(O.TotalCube - O.TotalCubePacked)
+         FROM #ORDERSKU O
+          WHERE O.Orderkey = @c_Orderkey
+           AND O.TotalQty - O.TotalQtyPacked > 0
+           
          DECLARE CUR_ORDCTNGROUP CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-         SELECT SUM(O.TotalCube - O.TotalCubePacked),
-                SUM(O.TotalQty - O.TotalQtyPacked),
-                O.Sku,
+         SELECT O.Sku,
+                SUM(O.TotalQty - O.TotalQtyPacked), 
                 O.Length,
                 O.Width,
                 O.Height, 
                 O.StdCube, 
                 SKU.SKUGROUP, 
-                SKU.itemclass
+                SKU.ItemClass
          FROM #ORDERSKU O
          JOIN dbo.SKU SKU WITH (NOLOCK) ON O.Storerkey = SKU.StorerKey AND O.Sku = SKU.Sku
          WHERE O.Orderkey = @c_Orderkey
@@ -635,12 +682,12 @@ BEGIN
                   O.Height,
                   O.StdCube, 
                 SKU.SKUGROUP, 
-                SKU.itemclass
-         ORDER BY SKU.SKUGROUP, SKU.itemclass, O.Sku;
+                SKU.ItemClass
+         ORDER BY SKU.SKUGROUP, SKU.ItemClass, O.Sku;
          
          OPEN CUR_ORDCTNGROUP
          
-         FETCH NEXT FROM CUR_ORDCTNGROUP INTO @n_OrderCube, @n_OrderQty, @c_Sku, @n_SKULength, @n_SKUWidth, @n_SKUHeight, @n_StdCube, @c_SkuGroup, @c_ItemClass 
+         FETCH NEXT FROM CUR_ORDCTNGROUP INTO @c_Sku, @n_OrderQty, @n_SKULength, @n_SKUWidth, @n_SKUHeight, @n_StdCube, @c_SkuGroup, @c_ItemClass 
          
          SET @n_CartonNo = 0         
          WHILE @@FETCH_STATUS <> -1 AND @n_continue IN(1,2)  --pack by order
@@ -686,12 +733,13 @@ BEGIN
             WHERE OrderKey = @c_Orderkey
 
             /* FCR-243 OrderGroup 30 Roles*/
-            IF @c_OrderGroup='30' AND @c_NewCarton='N'
+            --IF @c_OrderGroup='30' AND @c_NewCarton='N'
+            IF @c_NewCarton='N'
             BEGIN
                -- If Current Carton SKU Group and Item Class not match to current SKU. Pack to new carton
                IF NOT EXISTS(SELECT 1 FROM #CARTONDETAIL CTD 
                              JOIN dbo.SKU SKU WITH (NOLOCK) ON SKU.StorerKey = CTD.Storerkey AND SKU.Sku = CTD.Sku
-                             WHERE SKU.SKUGROUP = @c_SkuGroup AND SKU.itemclass = @c_ItemClass
+                             WHERE SKU.SKUGROUP = @c_SkuGroup AND SKU.ItemClass = @c_ItemClass
                              AND CTD.CartonNo = @n_CartonNo AND CTD.Orderkey = @c_Orderkey)
                BEGIN
                    SET @c_NewCarton='Y'
@@ -701,7 +749,8 @@ BEGIN
             WHILE 1=1 AND @n_continue IN(1,2) AND @n_OrderQty > 0
             BEGIN    
                SELECT @n_QtyCanPackByCube = 0, @n_QtyCanPackByCount = 0, @n_QtyCanPack = 0
-               SELECT @n_OrderCube = @n_OrderQty * @n_StdCube
+
+               --SELECT @n_OrderCube = @n_OrderQty * @n_StdCube
 
                IF @b_debug=2
                BEGIN
@@ -730,19 +779,20 @@ BEGIN
                      FROM #CARTONIZATION CZ 
                      WHERE CZ.CartonType = @c_VAS_CartonType
                   
-                     IF dbo.fnc_CartonCanFit(@n_SKULength, @n_SKUWidth, @n_SKUHeight, @n_CartonLength, @n_CartonWidth, @n_CartonHeight) = 0
-                     BEGIN
-                        SET @c_CartonType = N'';
-                     END;
+                     -- IF dbo.fnc_CartonCanFit(@n_SKULength, @n_SKUWidth, @n_SKUHeight, @n_CartonLength, @n_CartonWidth, @n_CartonHeight) = 0
+                     -- BEGIN
+                     --    SET @c_CartonType = N'';
+                     -- END;
                   END
                   IF @c_CartonType = N''
                   BEGIN
                      TRUNCATE TABLE #CTNTRACK
-
+                     -- Loop to get carton type that can fit 
                      WHILE 1=1 AND @n_continue IN(1,2) 
                      BEGIN
                         SET @c_CartonType = N''
                         
+                        -- Pick Carton that can fit the order cube
                         SELECT TOP 1
                                  @n_CTNRowID = RowID,
                                  @c_CartonType = CZ.CartonType,
@@ -753,10 +803,43 @@ BEGIN
                         WHERE CZ.Cube >= @n_OrderCube
                         AND NOT EXISTS(SELECT 1 FROM #CTNTRACK C WHERE C.ROWID = CZ.RowID)
                         ORDER BY CZ.Cube;
+                        -- Pick carton type that can fit the entire SKU Group total Cude
+                        IF @c_CartonType = N''
+                        BEGIN
+                           SET @n_SKUGroupCube = 0
+
+                           SELECT @n_SKUGroupCube = TotalCube 
+                           FROM #SKUGROUP 
+                           WHERE SkuGroup = @c_SkuGroup 
+                           and ItemClass = @c_ItemClass
+
+                           IF @b_debug=2
+                           BEGIN
+                              PRINT ' SKUGroup Cube: ' + CAST(@n_SKUGroupCube AS VARCHAR(20)) 
+                                      + ' Sku Group: ' + @c_SkuGroup + ' Item Class: ' + @c_ItemClass 
+                              SELECT * FROM #SKUGROUP
+                           END
+
+                           IF @n_SKUGroupCube > 0 
+                           BEGIN
+                              SELECT TOP 1 @n_CTNRowID = RowID,
+                                 @c_CartonType= CZ.CartonType, 
+                                 @n_CartonLength=CZ.CartonLength, 
+                                 @n_CartonWidth=CZ.CartonWidth, 
+                                 @n_CartonHeight=CZ.CartonHeight 
+                              FROM #CARTONIZATION CZ 
+                              WHERE CZ.Cube >= @n_SKUGroupCube
+                              AND NOT EXISTS(SELECT 1 FROM #CTNTRACK C WHERE C.ROWID = CZ.RowID) 
+                              ORDER BY CZ.Cube DESC 
+                           END 
+                        END
+                        -- If can't find carton can fit SKU Group Cube, 
+                        -- Pick other carton that can fit the SKU Standard Cude
                         IF @c_CartonType = N''
                         BEGIN
                            SELECT TOP 1 @n_CTNRowID = RowID,
-                              @c_CartonType= CZ.CartonType, @n_CartonLength=CZ.CartonLength, @n_CartonWidth=CZ.CartonWidth, @n_CartonHeight=CZ.CartonHeight 
+                              @c_CartonType= CZ.CartonType, @n_CartonLength=CZ.CartonLength, 
+                              @n_CartonWidth=CZ.CartonWidth, @n_CartonHeight=CZ.CartonHeight 
                            FROM #CARTONIZATION CZ 
                            WHERE CZ.Cube >= @n_StdCube
                            AND NOT EXISTS(SELECT 1 FROM #CTNTRACK C WHERE C.ROWID = CZ.RowID) 
@@ -765,22 +848,31 @@ BEGIN
                         IF @c_CartonType=N'' 
                         BEGIN
                             SET @n_OrderQty=0;
+                            IF @b_debug=2
+                            BEGIN
+                               PRINT 'Cannot find any carton type can fit. Order No: ' + @c_Orderkey
+                               --SELECT * FROM #CARTONIZATION CZ
+                               --SELECT * FROM #CTNTRACK C  
+                            END 
                             BREAK;
-                        END;
-                        IF dbo.fnc_CartonCanFit(@n_SKULength, @n_SKUWidth, @n_SKUHeight, @n_CartonLength, @n_CartonWidth, @n_CartonHeight) = 1
-                        BEGIN                           
-                           BREAK
                         END
-                      ELSE 
-                       BEGIN
-                           IF @b_debug=2
-                           BEGIN
-                              PRINT 'Carton Type: ' + @c_CartonType + ' Can''t Fit'
-                              PRINT 'SKU Length: ' + CAST(@n_SKULength AS VARCHAR(20)) + ' SKU Width: ' + CAST(@n_SKUWidth AS VARCHAR(20)) + ' SKU Height: ' + CAST(@n_SKUHeight AS VARCHAR(20))  
-                              + ' Carton Length: ' + CAST(@n_CartonLength AS VARCHAR(20)) + ' Carton Width: ' + CAST(@n_CartonWidth AS VARCHAR(20)) + ' Carton Height: ' + CAST(@n_CartonHeight AS VARCHAR(20)) 
-                           END 
-                          SET @c_CartonType = N''
-                        END 
+                        ELSE
+                           BREAK;
+                        -- Do not check L,W and H
+                        -- IF dbo.fnc_CartonCanFit(@n_SKULength, @n_SKUWidth, @n_SKUHeight, @n_CartonLength, @n_CartonWidth, @n_CartonHeight) = 1
+                        -- BEGIN                           
+                        --    BREAK
+                        -- END
+                        -- ELSE 
+                        -- BEGIN
+                        --    IF @b_debug=2
+                        --    BEGIN
+                        --       PRINT 'Carton Type: ' + @c_CartonType + ' Can''t Fit'
+                        --       PRINT 'SKU Length: ' + CAST(@n_SKULength AS VARCHAR(20)) + ' SKU Width: ' + CAST(@n_SKUWidth AS VARCHAR(20)) + ' SKU Height: ' + CAST(@n_SKUHeight AS VARCHAR(20))  
+                        --       + ' Carton Length: ' + CAST(@n_CartonLength AS VARCHAR(20)) + ' Carton Width: ' + CAST(@n_CartonWidth AS VARCHAR(20)) + ' Carton Height: ' + CAST(@n_CartonHeight AS VARCHAR(20)) 
+                        --    END 
+                        --    SET @c_CartonType = N''
+                        -- END 
 
                       INSERT INTO #CTNTRACK VALUES (@n_CTNRowID)
                    END -- WHILE 1=1
@@ -811,7 +903,7 @@ BEGIN
                   WHERE CZ.CartonType = @c_CartonType
 
                   INSERT INTO #CARTON (Orderkey, CartonNo, LabelNo, CartonGroup, CartonType, MaxCube, MaxWeight, MaxCount, MaxSku, CartonLength, CartonWidth, CartonHeight, UCCNo, OrderGroup)
-                VALUES (@c_Orderkey, @n_CartonNo, '', @c_CartonGroup, @c_CartonType, @n_CartonMaxCube, @n_CartonMaxWeight, @n_CartonMaxCount, @n_CartonMaxSku, @n_CartonLength , @n_CartonWidth, @n_CartonHeight, '', '')                                            
+                  VALUES (@c_Orderkey, @n_CartonNo, '', @c_CartonGroup, @c_CartonType, @n_CartonMaxCube, @n_CartonMaxWeight, @n_CartonMaxCount, @n_CartonMaxSku, @n_CartonLength , @n_CartonWidth, @n_CartonHeight, '', '')                                            
               END -- IF @c_NewCarton = 'Y'
               
                
@@ -965,7 +1057,7 @@ BEGIN
 
             NEXT_CTNORSKU:     
 
-            FETCH NEXT FROM CUR_ORDCTNGROUP INTO @n_OrderCube, @n_OrderQty, @c_Sku, @n_SKULength, @n_SKUWidth, @n_SKUHeight, @n_StdCube, @c_SkuGroup, @c_ItemClass       
+            FETCH NEXT FROM CUR_ORDCTNGROUP INTO @c_Sku, @n_OrderQty, @n_SKULength, @n_SKUWidth, @n_SKUHeight, @n_StdCube, @c_SkuGroup, @c_ItemClass       
          END
          CLOSE CUR_ORDCTNGROUP
          DEALLOCATE CUR_ORDCTNGROUP
@@ -976,7 +1068,10 @@ BEGIN
       CLOSE CUR_ORD
       DEALLOCATE CUR_ORD
    END -- No MPOC Orders  
+
+   --------------------------------------------------
    -- Process Cartonization for MPOC Orders
+   --------------------------------------------------
    -- XXXXXX
 
    IF @n_continue IN(1,2) 
@@ -1020,51 +1115,51 @@ BEGIN
 
             OPEN CUR_UCC
       
-        FETCH NEXT FROM CUR_UCC INTO @n_RowID, @c_Sku, @n_PackQty, @c_UCCNo, @n_StdCube, @c_Orderkey
+         FETCH NEXT FROM CUR_UCC INTO @n_RowID, @c_Sku, @n_PackQty, @c_UCCNo, @n_StdCube, @c_Orderkey
       
-          WHILE @@FETCH_STATUS <> -1 AND @n_continue IN(1,2) 
-        BEGIN                
-              SET @n_CartonNo = @n_CartonNo + 1            
+         WHILE @@FETCH_STATUS <> -1 AND @n_continue IN(1,2) 
+         BEGIN                
+            SET @n_CartonNo = @n_CartonNo + 1            
 
-             INSERT INTO #CARTON (Orderkey, CartonNo, LabelNo, CartonGroup, CartonType, MaxCube, MaxWeight, MaxCount, MaxSku, CartonLength, CartonWidth, CartonHeight, UCCNo, OrderGroup)
-             VALUES (@c_Orderkey, @n_CartonNo, '', @c_CartonGroup, '', 0, 0, 0, 0, 0, 0, 0, @c_UCCNo, @c_OrderGroup)                                 
-               
-             INSERT INTO #CARTONDETAIL (OrderGroup, Orderkey, Storerkey, Sku, CartonNo, Qty, RowRef)  --refer to ORDERSKU.RowID
-             VALUES (@c_OrderGroup, @c_Orderkey, @c_Storerkey, @c_Sku, @n_CartonNo, @n_PackQty, @n_RowID) 
-                             
-             UPDATE #ORDERSKU 
-             SET TotalQtyPacked = TotalQtyPacked + @n_PackQty, 
-                 TotalCubePacked = TotalCubePacked + (@n_PackQty * @n_StdCube)
-             WHERE RowID = @n_RowID                    
-                            
-              FETCH NEXT FROM CUR_UCC INTO @n_RowID, @c_Sku, @n_PackQty, @c_UCCNo, @n_StdCube, @c_Orderkey
-          END
-          CLOSE CUR_UCC
-          DEALLOCATE CUR_UCC                                                                                      
-         END
+            INSERT INTO #CARTON (Orderkey, CartonNo, LabelNo, CartonGroup, CartonType, MaxCube, MaxWeight, MaxCount, MaxSku, CartonLength, CartonWidth, CartonHeight, UCCNo, OrderGroup)
+            VALUES (@c_Orderkey, @n_CartonNo, '', @c_CartonGroup, '', 0, 0, 0, 0, 0, 0, 0, @c_UCCNo, @c_OrderGroup)                                 
+            
+            INSERT INTO #CARTONDETAIL (OrderGroup, Orderkey, Storerkey, Sku, CartonNo, Qty, RowRef)  --refer to ORDERSKU.RowID
+            VALUES (@c_OrderGroup, @c_Orderkey, @c_Storerkey, @c_Sku, @n_CartonNo, @n_PackQty, @n_RowID) 
+                           
+            UPDATE #ORDERSKU 
+            SET TotalQtyPacked = TotalQtyPacked + @n_PackQty, 
+               TotalCubePacked = TotalCubePacked + (@n_PackQty * @n_StdCube)
+            WHERE RowID = @n_RowID                    
+                           
+            FETCH NEXT FROM CUR_UCC INTO @n_RowID, @c_Sku, @n_PackQty, @c_UCCNo, @n_StdCube, @c_Orderkey
+         END -- While
+         CLOSE CUR_UCC
+         DEALLOCATE CUR_UCC                                                                                      
+      END -- continue = 1
 
-         SET @c_NewCarton = 'Y'                                      
+      SET @c_NewCarton = 'Y'                                      
 
-         --pack loose carton
-         DECLARE CUR_MPOC_ORDCTNGROUP CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-         SELECT SUM(O.TotalCube - O.TotalCubePacked),
-                SUM(O.TotalQty - O.TotalQtyPacked),
-                O.Sku,
-                O.Length,
-                O.Width,
-                O.Height, 
-                O.MasterShipmentID
-         FROM #ORDERSKU O
-         WHERE O.OrderGroup = @c_OrderGroup
-           AND O.TotalQty - O.TotalQtyPacked > 0
-         GROUP BY O.Sku,
-                  O.Length,
-                  O.Width,
-                  O.Height, 
-                  O.MasterShipmentID
-         ORDER BY O.Sku;
-         
-         OPEN CUR_MPOC_ORDCTNGROUP
+      --pack loose carton
+      DECLARE CUR_MPOC_ORDCTNGROUP CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      SELECT SUM(O.TotalCube - O.TotalCubePacked),
+               SUM(O.TotalQty - O.TotalQtyPacked),
+               O.Sku,
+               O.Length,
+               O.Width,
+               O.Height, 
+               O.MasterShipmentID
+      FROM #ORDERSKU O
+      WHERE O.OrderGroup = @c_OrderGroup
+         AND O.TotalQty - O.TotalQtyPacked > 0
+      GROUP BY O.Sku,
+               O.Length,
+               O.Width,
+               O.Height, 
+               O.MasterShipmentID
+      ORDER BY O.Sku;
+      
+      OPEN CUR_MPOC_ORDCTNGROUP
          
          FETCH NEXT FROM CUR_MPOC_ORDCTNGROUP INTO @n_OrderCube, @n_OrderQty, @c_Sku, @n_SKULength, @n_SKUWidth, @n_SKUHeight, @c_MasterShpmntID  
          
