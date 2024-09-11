@@ -20,6 +20,7 @@ GO
 /* Updates:                                                              */  
 /* Date       Author   Ver   Purposes                                    */ 
 /* 2023-03-29 Wan      1.0   Created & DevOps Combine Script             */
+/* 2024-05-24 CSCHONG  1.1   WMS-25490 revised field logic (CS01)        */ 
 /*************************************************************************/   
 CREATE OR ALTER PROCEDURE [dbo].[isp_SubmitPrintJobToCloudPrint] 
    @c_DataProcess    NVARCHAR(50) = ''
@@ -85,6 +86,7 @@ BEGIN
          , @c_ReqeustID             NVARCHAR(20)   = ''  
          , @c_Version               NVARCHAR(10)   = ''
          , @c_Status                NVARCHAR(10)   = ''
+         , @c_PrefixPrn             NVARCHAR(100)  = '\\localhost\'         --CS01
          
    DECLARE @t_JFormat   TABLE
          ( RowID        INT            IDENTITY(1,1)  PRIMARY KEY
@@ -113,7 +115,8 @@ BEGIN
          ,@c_IsLandScape          = rpjl.IsLandScape 
          ,@c_IsColor              = rpjl.IsColor     
          ,@c_IsDuplex             = rpjl.IsDuplex  
-         ,@c_IsCollate            = rpjl.IsCollate            
+         ,@c_IsCollate            = rpjl.IsCollate 
+         ,@n_NoOfCopy             = rpjl.NoofCopy --(yeekung)
    FROM rdt.RDTPrintJob_Log AS rpjl (NOLOCK)
    WHERE rpjl.JobId = @c_JobID
    
@@ -159,6 +162,14 @@ BEGIN
    BEGIN
       GOTO QUIT_SP
    END
+
+   --CS01 S
+   IF UPPER(@c_PrintType) = 'ZPL'
+   BEGIN
+     SET @c_PrinterName = @c_PrefixPrn + @c_PrinterName
+   END
+
+   --CS01 E
    
    BEGIN TRY
       SET @c_vbErrMsg = '' 
