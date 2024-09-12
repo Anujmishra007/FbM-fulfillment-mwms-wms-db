@@ -638,7 +638,7 @@ BEGIN
                            
                      IF @b_success <> 1      
                      BEGIN      
-                        SET @nErrNo = 220576      
+                        SET @nErrNo = 220756      
                         SET @cErrmsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Get groupkey failure 
                         GOTO LockTask_RollBackTran       
                      END
