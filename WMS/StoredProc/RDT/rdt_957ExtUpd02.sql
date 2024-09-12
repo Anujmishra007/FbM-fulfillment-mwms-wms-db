@@ -15,6 +15,7 @@ GO
 /*                                                                            */
 /* Date         Author    Ver.  Purposes                                      */
 /* 2024-07-16   JHU151    1.0   FCR-428 Created                               */
+/* 2024-09-09   PXL009    1.1   FCR-770 Tote closure                          */
 /******************************************************************************/
 
 CREATE OR ALTER     PROCEDURE [RDT].[rdt_957ExtUpd02]
@@ -62,10 +63,13 @@ BEGIN
    DECLARE @nExists  INT
    DECLARE @cShort   NVARCHAR(20)
 
-   DECLARE @cLoadKey  NVARCHAR( 10) = ''
-   DECLARE @cOrderKey NVARCHAR( 10) = ''
-   DECLARE @cZone     NVARCHAR( 18) = ''
-   DECLARE @curOrder  CURSOR
+   DECLARE @cLoadKey    NVARCHAR( 10) = ''
+   DECLARE @cOrderKey   NVARCHAR( 10) = ''
+   DECLARE @cZone       NVARCHAR( 18) = ''
+   DECLARE @curOrder    CURSOR
+   DECLARE @cActUCCNo   NVARCHAR( 40) = ''
+   DECLARE @cActDropID  NVARCHAR( 40) = ''
+   DECLARE @cActCaseID  NVARCHAR( 40) = ''
    
    DECLARE
       @cStoredProcedure  NVARCHAR(50),
@@ -175,7 +179,93 @@ BEGIN
          END
       END
       
-      ELSE IF @nStep = 5
+      IF @nStep = 3
+      BEGIN
+         -- 
+         IF @nInputKey = 1
+         BEGIN
+            /*--------------------------------------------------------------------------------------------------
+                                                         Innobec
+            --------------------------------------------------------------------------------------------------*/
+            IF dbo.fnc_GetRight( @cFacility, @cStorerKey, '', 'Innobec') = '1'
+            BEGIN
+
+               SET @cLOC = @cSuggLOC
+               SET @cID = @cSuggID
+               SET @cSKU = @cSuggSKU
+
+               SELECT @cActUCCNo = I_Field05
+               FROM rdt.rdtMobRec WITH (NOLOCK)
+               WHERE Mobile = @nMobile
+
+               SELECT TOP 1
+                     @cOrderKey = OrderKey
+               FROM dbo.PickHeader WITH (NOLOCK)
+               WHERE PickHeaderKey = @cPickSlipNo
+
+               SELECT TOP 1
+                  @cActDropID = DropID
+               FROM dbo.PickDetail PD WITH (NOLOCK)
+               WHERE PD.OrderKey = @cOrderKey
+                  AND PD.DropID = @cActUCCNo
+                  AND PD.LOC = @cLOC
+                  AND PD.SKU = @cSKU
+                  AND PD.ID = @cID
+                  AND (PD.Status = '3' OR PD.Status = '5')
+
+               IF @@ROWCOUNT > 0 AND @cActDropID <> ''
+               BEGIN
+                  EXEC dbo.ispGenTransmitLog2
+                     @c_TableName      = 'WSTOTECFMlb',
+                     @c_Key1           = @cOrderKey,
+                     @c_Key2           = @cActDropID,
+                     @c_Key3           = @cStorerKey,
+                     @c_TransmitBatch  = '',
+                     @b_success        = @bSuccess    OUTPUT,
+                     @n_err            = @nErrNo      OUTPUT,
+                     @c_errmsg         = @cErrMsg     OUTPUT
+                  IF @bSuccess <> 1
+                  BEGIN
+                     SET @nErrNo = 209784
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INS TLog2 Fail
+                     GOTO Quit
+                  END
+               END
+
+               SELECT TOP 1
+                  @cActCaseID = CaseID
+               FROM dbo.PickDetail PD WITH (NOLOCK)
+               WHERE PD.OrderKey = @cOrderKey
+                  AND PD.DropID = @cActUCCNo
+                  AND PD.LOC = @cLOC
+                  AND PD.SKU = @cSKU
+                  AND PD.ID = @cID
+                  AND (PD.Status = '3' OR PD.Status = '5')
+                  AND UOM = '2'
+
+               IF @@ROWCOUNT > 0 AND @cActCaseID <> ''
+               BEGIN
+                  EXEC dbo.ispGenTransmitLog2
+                     @c_TableName      = 'WSBOXCFMlb',
+                     @c_Key1           = @cOrderKey,
+                     @c_Key2           = @cActCaseID,
+                     @c_Key3           = @cStorerKey,
+                     @c_TransmitBatch  = '',
+                     @b_success        = @bSuccess    OUTPUT,
+                     @n_err            = @nErrNo      OUTPUT,
+                     @c_errmsg         = @cErrMsg     OUTPUT
+                  IF @bSuccess <> 1
+                  BEGIN
+                     SET @nErrNo = 209784
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INS TLog2 Fail
+                     GOTO Quit
+                  END
+               END
+            END
+         END
+      END
+
+      IF @nStep = 5
       BEGIN
          -- Short pick
          IF @nInputKey = 1
