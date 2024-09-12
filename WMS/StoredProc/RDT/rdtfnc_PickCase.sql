@@ -1380,65 +1380,7 @@ BEGIN
          GOTO Step_5_Fail
       END
 
-      -- Extended update
-      IF @cExtendedUpdateSP <> ''
-      BEGIN
-         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedUpdateSP AND type = 'P')
-         BEGIN
-            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +
-               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, ' +
-               ' @cPickSlipNo, @cPickZone, @cDropID, @cSuggLOC, @cSuggID, @cSuggSKU, @nSuggQTY, @cOption, @cLottableCode, ' +
-               ' @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05, ' +
-               ' @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10, ' +
-               ' @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, ' +
-               ' @nErrNo OUTPUT, @cErrMsg OUTPUT '
-            SET @cSQLParam =
-               ' @nMobile         INT                      ' +
-               ',@nFunc           INT                      ' +
-               ',@cLangCode       NVARCHAR( 3)             ' +
-               ',@nStep           INT                      ' +
-               ',@nInputKey       INT                      ' +
-               ',@cFacility       NVARCHAR( 5)             ' +
-               ',@cStorerKey      NVARCHAR( 15)            ' +
-               ',@cPickSlipNo     NVARCHAR( 10)            ' +
-               ',@cPickZone       NVARCHAR( 10)            ' +
-               ',@cDropID         NVARCHAR( 20)            ' +
-               ',@cSuggLOC        NVARCHAR( 10)            ' +
-               ',@cSuggID         NVARCHAR( 18)            ' +
-               ',@cSuggSKU        NVARCHAR( 20)            ' +
-               ',@nSuggQTY        INT                      ' +
-               ',@cOption         NVARCHAR( 1)             ' +
-               ',@cLottableCode   NVARCHAR( 30)            ' +
-               ',@cLottable01     NVARCHAR( 18)            ' +
-               ',@cLottable02     NVARCHAR( 18)            ' +
-               ',@cLottable03     NVARCHAR( 18)            ' +
-               ',@dLottable04     DATETIME                 ' +
-               ',@dLottable05     DATETIME                 ' +
-               ',@cLottable06     NVARCHAR( 30)            ' +
-               ',@cLottable07     NVARCHAR( 30)            ' +
-               ',@cLottable08     NVARCHAR( 30)            ' +
-               ',@cLottable09     NVARCHAR( 30)            ' +
-               ',@cLottable10     NVARCHAR( 30)            ' +
-               ',@cLottable11     NVARCHAR( 30)            ' +
-               ',@cLottable12     NVARCHAR( 30)            ' +
-               ',@dLottable13     DATETIME                 ' +
-               ',@dLottable14     DATETIME                 ' +
-               ',@dLottable15     DATETIME                 ' +
-               ',@nErrNo          INT           OUTPUT     ' +
-               ',@cErrMsg         NVARCHAR(250) OUTPUT     '
-
-            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,
-               @cPickSlipNo, @cPickZone, @cDropID, @cSuggLOC, @cSuggID, @cSuggSKU, @nSuggQTY, @cOption, @cLottableCode, 
-               @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
-               @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
-               @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,
-               @nErrNo OUTPUT, @cErrMsg OUTPUT
-
-            IF @nErrNo <> 0
-               GOTO Step_5_Fail
-         END
-      END
+      
 
       IF @cOption = '1'  -- Yes    
       BEGIN
@@ -1456,6 +1398,67 @@ BEGIN
             ,@cErrMsg      OUTPUT
          IF @nErrNo <> 0
             GOTO Quit
+
+         -- Extended update
+         IF @cExtendedUpdateSP <> ''
+         BEGIN
+            IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedUpdateSP AND type = 'P')
+            BEGIN
+               SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +
+                  ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, ' +
+                  ' @cPickSlipNo, @cPickZone, @cDropID, @cSuggLOC, @cSuggID, @cSuggSKU, @nSuggQTY, @cOption, @cLottableCode, ' +
+                  ' @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05, ' +
+                  ' @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10, ' +
+                  ' @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, ' +
+                  ' @nErrNo OUTPUT, @cErrMsg OUTPUT '
+               SET @cSQLParam =
+                  ' @nMobile         INT                      ' +
+                  ',@nFunc           INT                      ' +
+                  ',@cLangCode       NVARCHAR( 3)             ' +
+                  ',@nStep           INT                      ' +
+                  ',@nInputKey       INT                      ' +
+                  ',@cFacility       NVARCHAR( 5)             ' +
+                  ',@cStorerKey      NVARCHAR( 15)            ' +
+                  ',@cPickSlipNo     NVARCHAR( 10)            ' +
+                  ',@cPickZone       NVARCHAR( 10)            ' +
+                  ',@cDropID         NVARCHAR( 20)            ' +
+                  ',@cSuggLOC        NVARCHAR( 10)            ' +
+                  ',@cSuggID         NVARCHAR( 18)            ' +
+                  ',@cSuggSKU        NVARCHAR( 20)            ' +
+                  ',@nSuggQTY        INT                      ' +
+                  ',@cOption         NVARCHAR( 1)             ' +
+                  ',@cLottableCode   NVARCHAR( 30)            ' +
+                  ',@cLottable01     NVARCHAR( 18)            ' +
+                  ',@cLottable02     NVARCHAR( 18)            ' +
+                  ',@cLottable03     NVARCHAR( 18)            ' +
+                  ',@dLottable04     DATETIME                 ' +
+                  ',@dLottable05     DATETIME                 ' +
+                  ',@cLottable06     NVARCHAR( 30)            ' +
+                  ',@cLottable07     NVARCHAR( 30)            ' +
+                  ',@cLottable08     NVARCHAR( 30)            ' +
+                  ',@cLottable09     NVARCHAR( 30)            ' +
+                  ',@cLottable10     NVARCHAR( 30)            ' +
+                  ',@cLottable11     NVARCHAR( 30)            ' +
+                  ',@cLottable12     NVARCHAR( 30)            ' +
+                  ',@dLottable13     DATETIME                 ' +
+                  ',@dLottable14     DATETIME                 ' +
+                  ',@dLottable15     DATETIME                 ' +
+                  ',@nErrNo          INT           OUTPUT     ' +
+                  ',@cErrMsg         NVARCHAR(250) OUTPUT     '
+
+               EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                  @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,
+                  @cPickSlipNo, @cPickZone, @cDropID, @cSuggLOC, @cSuggID, @cSuggSKU, @nSuggQTY, @cOption, @cLottableCode, 
+                  @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
+                  @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
+                  @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,
+                  @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+               IF @nErrNo <> 0
+                  GOTO Step_5_Fail
+            END
+         END
+         
          SET @cExtendedScreenSP =  ISNULL(rdt.RDTGetConfig( @nFunc, '957ExtendedScreenSP', @cStorerKey), '')
          SET @nAction = 1
          IF @cExtendedScreenSP <> ''
