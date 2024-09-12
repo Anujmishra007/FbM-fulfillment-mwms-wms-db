@@ -14,7 +14,8 @@ GO
 /* Modifications log:                                                   */  
 /*                                                                      */  
 /* Date       Rev  Author     Purposes                                  */  
-/* 2024-07-31 1.0  JACKC      FCR-652. Created                          */  
+/* 2024-07-31 1.0  JACKC      FCR-652. Created                          */
+/* 2024-09-12 1.1  JACKC      FCR-652. Fix Groupkey generation issue    */  
 /************************************************************************/  
   
 CREATE OR ALTER PROC [RDT].[rdt_1855ExtScn01] (
@@ -624,8 +625,24 @@ BEGIN
                         BREAK */     
                   END      
                         
-                  IF @cGroupKey = ''      
-                     SET @cGroupKey = @cLockTaskKey      
+                  IF @cGroupKey = ''
+                  BEGIN
+                     DECLARE @b_success INT      
+                     EXECUTE dbo.nspg_GetKey                                      
+                        'LVSLOCK',                                  
+                        10 ,                                        
+                        @cGroupKey OUTPUT,                       
+                        @b_success OUTPUT,                           
+                        @nErrNo OUTPUT,                                 
+                        @cErrmsg OUTPUT                              
+                           
+                     IF @b_success <> 1      
+                     BEGIN      
+                        SET @nErrNo = 220756      
+                        SET @cErrmsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Get groupkey failure 
+                        GOTO LockTask_RollBackTran       
+                     END
+                  END -- get group key      
                
                   UPDATE dbo.TaskDetail SET       
                      STATUS = '3',      
