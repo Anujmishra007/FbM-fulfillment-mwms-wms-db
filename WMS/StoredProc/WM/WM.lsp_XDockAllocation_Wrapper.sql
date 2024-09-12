@@ -26,8 +26,10 @@ GO
 /* 2020-12-29  SWT01    1.1   Missing Execute Login As                  */
 /* 15-Jan-2021 Wan02    1.2   Add Big Outer Begin try/Catch             */
 /*                            Execute Login if @c_UserName<>SUSER_SNAME()*/
-/* 26-Feb-2024 NJOW01  1.3    UWP-14044 ASN support XDOCK allocation by */
+/* 26-Feb-2024 NJOW01   1.3   UWP-14044 ASN support XDOCK allocation by */
 /*                            multiple externpokey per ASN              */
+/* 06-Sep-2024 SWT02    1.4   Allow Partial Allocation for avaialble    */
+/*                            Orders                                    */
 /************************************************************************/   
 CREATE OR ALTER PROCEDURE [WM].[lsp_XDockAllocation_Wrapper]  
    @c_ReceiptKey NVARCHAR(10),    
@@ -144,32 +146,40 @@ BEGIN
                FETCH NEXT FROM @CUR_ALC INTO @c_externpokey
                
                WHILE @@FETCH_STATUS <> -1 AND @n_Continue = 1
-               BEGIN            	
-                  BEGIN TRY              
-                        EXEC nsp_xdockorderprocessing 
-                           @c_Externpokey = @c_Externpokey,
-                           @c_Storerkey = @c_Storerkey, 
-                           @c_docarton = 'Y',
-                           @c_doroute = 'N',
-                           @c_facility = @c_Facility 
-                  END TRY
-                  BEGIN CATCH                  	 
-                     IF (XACT_STATE()) = -1  
-                     BEGIN
-                        ROLLBACK TRAN
-                     END
-                     
-                     WHILE @@TRANCOUNT < @n_starttcnt
-                     BEGIN
-                        BEGIN TRAN
-                     END 
-                                       	
-                     SET @n_Continue = 3
-                     SET @n_Err    = 553903
-                     SET @c_ErrMsg = ERROR_MESSAGE()   
-                     SET @c_ErrMsg = 'Error Executing nsp_xdockorderprocessing.'  
-                                   + ' << ' + @c_ErrMsg + ' >>'                                                                                              
-                  END CATCH
+               BEGIN
+                  -- (WST02) Only execute allocation when Order Lines exist AND when there is available stock, otherwise will stop with error
+				      IF EXISTS(SELECT 1 FROM ORDERDETAIL WITH (NOLOCK) 
+                           WHERE StorerKey = @c_StorerKey 
+                           and ExternPOKey = @c_Externpokey)
+						 AND
+					     EXISTS(SELECT 1 FROM BI.V_Inventory WITH (NOLOCK) WHERE StorerKey=@c_StorerKey AND LOTTABLE03=@c_ExternPOKey AND Qty>0 AND (Qty-QtyAllocated-QtyPicked)>0)
+				      BEGIN
+                     BEGIN TRY              
+                           EXEC nsp_xdockorderprocessing 
+                              @c_Externpokey = @c_Externpokey,
+                              @c_Storerkey = @c_Storerkey, 
+                              @c_docarton = 'Y',
+                              @c_doroute = 'N',
+                              @c_facility = @c_Facility 
+                     END TRY
+                     BEGIN CATCH                  	 
+                        IF (XACT_STATE()) = -1  
+                        BEGIN
+                           ROLLBACK TRAN
+                        END
+                        
+                        WHILE @@TRANCOUNT < @n_starttcnt
+                        BEGIN
+                           BEGIN TRAN
+                        END 
+                                             
+                        SET @n_Continue = 3
+                        SET @n_Err    = 553903
+                        SET @c_ErrMsg = ERROR_MESSAGE()   
+                        SET @c_ErrMsg = 'Error Executing nsp_xdockorderprocessing.'  
+                                    + ' << ' + @c_ErrMsg + ' >>'                                                                                              
+                     END CATCH
+                  END
 
                   FETCH NEXT FROM @CUR_ALC INTO @c_externpokey
                END   
@@ -209,7 +219,7 @@ BEGIN
                   SET @CUR_ALC = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR               
                   SELECT RD.ExternPOKey
                   FROM RECEIPTDETAIL RD WITH (NOLOCK) 
-                  JOIN PO p WITH (NOLOCK) ON rd.pokey = p.pokey
+                  LEFT JOIN PO p WITH (NOLOCK) ON rd.pokey = p.pokey
                   WHERE RD.ReceiptKey = @c_ReceiptKey 
                   GROUP BY RD.ExternPOKey
                   ORDER BY RD.ExternPOKey               
@@ -219,32 +229,40 @@ BEGIN
                   FETCH NEXT FROM @CUR_ALC INTO @c_externpokey
                   
                   WHILE @@FETCH_STATUS <> -1 AND @n_Continue = 1
-                  BEGIN            	
-                     BEGIN TRY              
-                           EXEC nsp_xdockorderprocessing 
-                              @c_Externpokey = @c_Externpokey,
-                              @c_Storerkey = @c_Storerkey, 
-                              @c_docarton = 'Y',
-                              @c_doroute = 'N',
-                              @c_facility = @c_Facility 
-                     END TRY
-                     BEGIN CATCH                  	 
-                        IF (XACT_STATE()) = -1  
-                        BEGIN
-                           ROLLBACK TRAN
-                        END
-                        
-                        WHILE @@TRANCOUNT < @n_starttcnt
-                        BEGIN
-                           BEGIN TRAN
-                        END 
-                     	
-                        SET @n_Continue = 3
-                        SET @n_Err    = 553904
-                        SET @c_ErrMsg = ERROR_MESSAGE()   
-                        SET @c_ErrMsg = 'Error Executing nsp_xdockorderprocessing.'  
-                                      + ' << ' + @c_ErrMsg + ' >>'                        
-                     END CATCH
+                  BEGIN
+                     -- (WST02) Only execute allocation when Order Lines exist AND when there is available stock, otherwise will stop with error
+                     IF EXISTS(SELECT 1 FROM ORDERDETAIL WITH (NOLOCK) 
+                              WHERE StorerKey = @c_StorerKey 
+                              and ExternPOKey = @c_Externpokey)
+						AND
+					    EXISTS(SELECT 1 FROM BI.V_Inventory WITH (NOLOCK) WHERE StorerKey=@c_StorerKey AND LOTTABLE03=@c_ExternPOKey AND Qty>0 AND (Qty-QtyAllocated-QtyPicked)>0)
+                     BEGIN
+                        BEGIN TRY              
+                              EXEC nsp_xdockorderprocessing 
+                                 @c_Externpokey = @c_Externpokey,
+                                 @c_Storerkey = @c_Storerkey, 
+                                 @c_docarton = 'Y',
+                                 @c_doroute = 'N',
+                                 @c_facility = @c_Facility 
+                        END TRY
+                        BEGIN CATCH                  	 
+                           IF (XACT_STATE()) = -1  
+                           BEGIN
+                              ROLLBACK TRAN
+                           END
+                           
+                           WHILE @@TRANCOUNT < @n_starttcnt
+                           BEGIN
+                              BEGIN TRAN
+                           END 
+                           
+                           SET @n_Continue = 3
+                           SET @n_Err    = 553904
+                           SET @c_ErrMsg = ERROR_MESSAGE()   
+                           SET @c_ErrMsg = 'Error Executing nsp_xdockorderprocessing.'  
+                                       + ' << ' + @c_ErrMsg + ' >>'                        
+                        END CATCH
+					      END
 
                      FETCH NEXT FROM @CUR_ALC INTO @c_externpokey
                   END   
