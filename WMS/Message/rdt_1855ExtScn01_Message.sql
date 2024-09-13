@@ -9,5 +9,7 @@ execute rdt.rdtAddMsg 220753, 10, '220753PKZoneNoTask', 'us_english', 1855,0, '2
 execute rdt.rdtAddMsg 220754, 10, '220754ReachCartLmt', 'us_english', 1855,0, '220754: Exceed Cart Limitation'
 execute rdt.rdtAddMsg 220755, 10, '220755InvCase', 'us_english', 1855,0, '220755: Invalid Case ID'
 execute rdt.rdtAddMsg 220756, 10, '220756GetGroupKeyFail', 'us_english', 1855,0, '220756: Get Group Key Failure'
+execute rdt.rdtAddMsg 220757, 10, '220757NotUnderPSNO', 'us_english', 1855,0, '220757: Carton ID not under PSNO'
+
 
 select * from rdt.rdtmsg (nolock) where message_id between 220751 AND 220800

@@ -20,6 +20,7 @@ GO
 /* 2023-05-03   1.4  James    WMS-22330 Add config to control whether allow   */
 /*                            pick with mix wavekey (james03)                 */
 /* 2024-07-31   1.5  Jackc    FCR-652 Add ext scn entry                       */
+/* 2024-09-13   1.6  Jackc    FCR-xxx Lock tasks on carton level              */
 /******************************************************************************/        
         
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_Assist_ClusterPick](        
@@ -149,6 +150,7 @@ DECLARE
    @tExtScnData         VariableTable,
    @cExtendedScnSP      NVARCHAR( 20),
    @nAction             INT,
+   @cPickSlipNo         NVARCHAR( 18), --V1.6 JACKC
    
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),  @cFieldAttr01 NVARCHAR( 1),  @cLottable01  NVARCHAR( 18),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),  @cFieldAttr02 NVARCHAR( 1),  @cLottable02  NVARCHAR( 18),     
@@ -3537,6 +3539,7 @@ BEGIN
                SET  @cResult04         = ISNULL(@cExtScnUDF13,'')
                SET  @cResult05         = ISNULL(@cExtScnUDF14,'')
                SET  @cMethod           = ISNULL(@cExtScnUDF15,'')
+               SET  @cPickSlipNo       = ISNULL(@cExtScnUDF16,'')
             END -- SCN 6414  new scn 1 Enter
             ELSE IF @nPreSCn = '6416' AND @nPreInputKey = 1
             BEGIN
@@ -3580,7 +3583,8 @@ BEGIN
       V_Loc      = @cFromLoc,        
       V_CaseID   = @cCartonID,        
       V_TaskDetailKey = @cTaskDetailKey,      
-      V_WaveKey  = @cWaveKey,      
+      V_WaveKey  = @cWaveKey,
+      V_PickSlipNo = @cPickSlipNo,      
             
       V_Integer1 = @nSuggQty,        
       V_Integer2 = @nPickedQty,        

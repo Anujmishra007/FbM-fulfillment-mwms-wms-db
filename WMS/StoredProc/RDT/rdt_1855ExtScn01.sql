@@ -15,7 +15,8 @@ GO
 /*                                                                      */  
 /* Date       Rev  Author     Purposes                                  */  
 /* 2024-07-31 1.0  JACKC      FCR-652. Created                          */
-/* 2024-09-12 1.1  JACKC      FCR-652. Fix Groupkey generation issue    */  
+/* 2024-09-12 1.1  JACKC      FCR-652. Fix Groupkey generation issue    */
+/* 2024-09-13 1.1  JACKC      FCR-xxx. Lock Tasks on carton level       */   
 /************************************************************************/  
   
 CREATE OR ALTER PROC [RDT].[rdt_1855ExtScn01] (
@@ -161,6 +162,7 @@ BEGIN
          @cFromLoc                     = V_Loc,
          @cCartonID                    = V_CaseID,
          @cTaskDetailKey               = V_TaskDetailKey,
+         @cPickSlipNo                  = V_PickSlipNo,
          @cWaveKey                     = V_WaveKey,
          @nSuggQty                    = V_Integer1, 
          @cCartID                      = V_String8,
@@ -551,12 +553,16 @@ BEGIN
                   END        
                END        
                
+               --V1.2 Jackc
+               /*
                DECLARE @cCurCaseID  NVARCHAR( 20)      
                DECLARE @cNewCaseID  NVARCHAR( 20)      
                DECLARE @nCtnCount   INT      
                SET @cCurCaseID = ''      
                SET @cNewCaseID = ''      
-               SET @nCtnCount = 0      
+               SET @nCtnCount = 0
+               */
+               --V1.2 Jackc end      
                      
                SELECT @nCartLimit = Short      
                FROM dbo.CODELKUP WITH (NOLOCK)      
@@ -586,6 +592,28 @@ BEGIN
                   -- FCR-652 Jackc end      
                END
 
+               --V1.2 jackc Generate Groupkey
+               SET @cGroupKey = ''      
+               SET @nErrNo = 0
+
+               DECLARE @b_success INT      
+               EXECUTE dbo.nspg_GetKey                                      
+                  'LVSLOCK',                                  
+                  10 ,                                        
+                  @cGroupKey OUTPUT,                       
+                  @b_success OUTPUT,                           
+                  @nErrNo OUTPUT,                                 
+                  @cErrmsg OUTPUT                              
+                     
+               IF @b_success <> 1      
+               BEGIN      
+                  SET @nErrNo = 220756      
+                  SET @cErrmsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Get groupkey failure       
+               END
+               --V1.2 jackc Generate Groupkey
+
+               --V1.2 Jackc Remove lock logic from step 1
+               /*
                SET @nTranCount = @@TRANCOUNT      
                BEGIN TRAN      
                SAVE TRAN LockTask      
@@ -849,7 +877,9 @@ BEGIN
                      ROLLBACK TRAN LockTask        
                LockTask_Commit:        
                   WHILE @@TRANCOUNT > @nTranCount        
-                     COMMIT TRAN        
+                     COMMIT TRAN
+               */ 
+               --V1.2 Jackc Remove lock logic from step 1       
                
                IF @nErrNo <> 0      
                   GOTO Quit      
@@ -860,6 +890,8 @@ BEGIN
                SET @cResult04 = ''      
                SET @cResult05 = ''      
                
+               --V1.2 Jackc No need to show matrix on step2
+               /*
                -- Draw matrix           
                SET @nNextPage = 0            
                EXEC rdt.rdt_TM_Assist_ClusterPick_Matrix         
@@ -880,7 +912,9 @@ BEGIN
                   @cResult05        = @cResult05   OUTPUT,          
                   @nNextPage        = @nNextPage   OUTPUT,          
                   @nErrNo           = @nErrNo      OUTPUT,          
-                  @cErrMsg          = @cErrMsg     OUTPUT        
+                  @cErrMsg          = @cErrMsg     OUTPUT
+               */ 
+               --V1.2 Jackc No need to show matrix on step2 end       
                      
                IF @nErrNo <> 0            
                   GOTO Quit            
@@ -922,6 +956,7 @@ BEGIN
                   SET @cUDF13 = @cResult04
                   SET @cUDF14 = @cResult05
                   SET @cUDF15 = @cMethod
+                  SET @cUDF16 = @cPickSlipNo
    
             END -- SCN 6414 Screen 1 Inputkey 1
 
@@ -1041,6 +1076,8 @@ BEGIN
                   END                
                   ELSE  --Something scanned      
                   BEGIN
+                     --V1.2 JACKC No needs to release task as lock task per scanned carton
+                     /*
                      --FCR-652 release tasks which not scanned
                      UPDATE dbo.TaskDetail WITH (ROWLOCK) SET       
                         STATUS = '0',      
@@ -1058,8 +1095,10 @@ BEGIN
                         AND   UserKey = @cUserName      
                         AND   DeviceID = @cCartID
                         AND   DropID = ''
-
                      --FCR-652 release tasks which not scanned end
+                     */
+                     --V1.2 JACKC No needs to release task as lock task per scanned carton end
+
 
                      --Get task for next loc        
                      SET @nErrNo = 0        
@@ -1100,7 +1139,19 @@ BEGIN
                      GOTO SCN6416_Return_Value    
                      --GOTO Quit      
                   END      
-               END        
+               END
+
+               -- V1.2 JACKC Carton ID under current pickslipno
+               IF NOT EXISTS ( SELECT 1
+                               FROM PackDetail WITH (NOLOCK)
+                               WHERE PickSlipNo = @cPickSlipNo
+                                 AND LabelNo = @cCartonID)
+               BEGIN
+                  SET @nErrNo = 220757        
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Not under PSNO        
+                  GOTO Step_Matrix_Fail
+               END
+               --V1.2 Jackc  Carton ID under current pickslipno end       
                
                IF EXISTS ( SELECT 1       
                            FROM dbo.TaskDetail WITH (NOLOCK)      
@@ -1117,8 +1168,9 @@ BEGIN
                   GOTO Step_Matrix_Fail        
                END        
                
-               -- Check if all carton assigned      
-               IF NOT EXISTS ( SELECT 1      
+               -- Check if all carton assigned
+               -- V1.2 Jackc Change logic due to no pre-lock tasks      
+               /*IF NOT EXISTS ( SELECT 1      
                               FROM dbo.TaskDetail WITH (NOLOCK)      
                               WHERE Storerkey = @cStorerKey      
                               AND   TaskType = 'ASTCPK'      
@@ -1126,7 +1178,22 @@ BEGIN
                               AND   Groupkey = @cGroupKey      
                               AND   UserKey = @cUserName      
                               AND   DeviceID = @cCartID      
-                              AND   DropID = '')      
+                              AND   DropID = '') */
+               IF NOT EXISTS ( SELECT 1      
+                              FROM dbo.TaskDetail TD WITH (NOLOCK)      
+                              WHERE Storerkey = @cStorerKey      
+                              AND   TaskType = 'ASTCPK'      
+                              AND   [Status] = '0'      
+                              AND   Groupkey = ''      
+                              AND   UserKey = ''      
+                              AND   DeviceID = ''    
+                              AND   DropID = ''
+                              AND EXISTS ( SELECT 1 FROM PackDetail PD WITH (NOLOCK)
+                                            WHERE PD.PickSlipNo = @cPickSlipNo
+                                                AND PD.StorerKey = TD.Storerkey
+                                                AND PD.LabelNo = TD.Caseid)
+                              )
+               -- V1.2 Jackc Change logic due to no pre-lock tasks     
                BEGIN      
                   SET @nErrNo = 171812        
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --All Assigned        
@@ -1176,6 +1243,8 @@ BEGIN
                END
                ---- FCR-652 Jack check cannot exceed the cart limit END
 
+               --v1.2 JACKC Remove the carton validation against on locked task
+               /*
                -- FCR-652 by Jack Scanned carton must be in the locked task
                IF NOT EXISTS (SELECT 1      
                               FROM dbo.TaskDetail WITH (NOLOCK)      
@@ -1191,9 +1260,10 @@ BEGIN
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InvalidCarton        
                   GOTO Step_Matrix_Fail
                END
+               -- FCR-652 by Jack Scanned carton must be in the locked task
+               */      
+               --v1.2 JACKC Remove the carton validation against on locked task
 
-               -- FCR-652 by Jack Scanned carton must be in the locked task      
-               
                -- Extended validate        
                IF @cExtendedValidateSP <> ''        
                BEGIN        
@@ -1235,16 +1305,6 @@ BEGIN
                         GOTO Step_Matrix_Fail        
                   END        
                END        
-               
-               /*SELECT @nCartonScanned = COUNT( DISTINCT DropID)      
-               FROM dbo.TaskDetail WITH (NOLOCK)      
-               WHERE Storerkey = @cStorerKey      
-                  AND   TaskType = 'ASTCPK'      
-                  AND   [Status] = '3'      
-                  AND   Groupkey = @cGroupKey      
-                  AND   UserKey = @cUserName      
-                  AND   DeviceID = @cCartID      
-                  AND   DropID <> ''  */ -- FCR-652 move forward to validation part    
                   
                SELECT @cCartonType = UDF01      
                FROM dbo.CODELKUP WITH (NOLOCK)      
@@ -1258,7 +1318,21 @@ BEGIN
                WHERE LISTNAME = 'TMPICKMTD'      
                   AND   Storerkey = @cStorerKey      
                   AND   UDF01 = SUBSTRING( @cCartonId, 1, 1)      
-                  
+
+               --V1.2 Lock task based on input key. Replace old logic
+               UPDATE dbo.TaskDetail SET
+                     STATUS = '3',      
+                     UserKey = @cUserName,      
+                     Groupkey = @cGroupKey,       
+                     DeviceID = @cCartID,             
+                     StartTime = GETDATE(),       
+                     DropID = @cCartonID,       
+                     StatusMsg =  CAST( @nCartonScanned + 1 AS NVARCHAR( 1)) + '-' + @cCartonType,      
+                     EditWho = @cUserName,       
+                     EditDate = GETDATE()      
+                  WHERE Storerkey = @cStorerKey
+                     AND Caseid = @cCartonID  
+               /*
                SELECT TOP 1 @cLockCaseID = Caseid--@cLockTaskKey = TaskDetailKey      
                FROM dbo.TaskDetail WITH (NOLOCK)      
                WHERE Storerkey = @cStorerKey      
@@ -1304,7 +1378,8 @@ BEGIN
                   END      
                      
                   FETCH NEXT FROM @curLockCase INTO @cLockTaskKey      
-               END      
+               END 
+               --V1.2 Lock task based on input key. Replace old logic end     
                      
                -- Prepare next screen var        
                SET @cOutField01 = @cCartPickMethod        
@@ -1325,6 +1400,7 @@ BEGIN
                   SET @nInputKey = 1
                   GOTO SCN6416_Start
                END
+               */
                --FCR-652 Start to pick when total scanned cases reach the cart limit end      
                
                EXEC rdt.rdtSetFocusField @nMobile, 8
