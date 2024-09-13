@@ -37,6 +37,9 @@ GO
 /*                            Prompt Error if DPP different Sku         */
 /* 2024-09-02  WLChooi  1.6   UWP-23643-Get ToLoc from LoadplanLanedetail*/
 /*                            (WL01)                                     */
+/* 2024-09-02  SSA01    1.7   UWP-23370 & 23372-query for priority value*/
+/*                            from codelkup and takeout deliverydate for*/
+/*                            consolidated pick                         */
 /*************************************************************************/     
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV01]        
   @c_wavekey      NVARCHAR(10)    
@@ -411,8 +414,17 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV01]
       JOIN LOC (NOLOCK) ON CL.Long = LOC.Loc  
       WHERE CL.Listname = 'TM_TOLOC'  
       AND CL.Storerkey = @c_Storerkey  
-      AND CL.Code = 'DEFAULT'  
-        
+      AND CL.Code = 'DEFAULT'
+
+      SELECT @c_Priority = CL.Short                                               --(SSA01)
+            FROM CODELKUP CL (NOLOCK)
+            WHERE CL.Storerkey = @c_Storerkey
+            AND CL.LISTNAME = 'TMPKPRIORI'
+            AND CL.Code = 'Lowest'
+
+      IF ISNULL(@c_Priority,'') = ''                                              --(SSA01)
+           SET @c_Priority = '9'
+
       SET @c_SQL = N'  
           DECLARE cur_pick CURSOR FAST_FORWARD READ_ONLY FOR    
           SELECT PD.Storerkey, PD.Sku
@@ -424,8 +436,9 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV01]
                 ,CASE WHEN @c_DispatchCasePickMethod =''1''                         --(Wan01)
                       THEN O.Orderkey ELSE '''' END AS Orderkey    
                 ,TOLOC.Loc AS ToLoc   
-                ,ISNULL(CL.Code,''9'') AS Priority   
-                ,CONVERT(NVARCHAR(8), O.DeliveryDate, 112) AS DeliveryDate  
+                ,@c_Priority AS Priority                                            --(SSA01)
+                ,CASE WHEN @c_DispatchCasePickMethod =''1''                         --(SSA01)
+                      THEN CONVERT(NVARCHAR(8), O.DeliveryDate, 112) ELSE '''' END AS DeliveryDate
                 ,'''' AS Loadkey                                                    --(Wan01)   
                 ,LPLD.Loc   --WL01
           FROM WAVEDETAIL WD (NOLOCK)  
@@ -437,9 +450,10 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV01]
                                            AND TD.Sourcetype = @c_SourceType 
                                            AND TD.Tasktype IN (''FPK'',''FCP'',''FPP'') 
                                            AND TD.Status <> ''X''              
-          LEFT JOIN STORERSODEFAULT SSO (NOLOCK) ON SSO.Storerkey = O.Consigneekey           
-          LEFT JOIN CODELKUP CL (NOLOCK) ON O.Storerkey = CL.Storerkey AND CL.Listname = ''TMPRIORITY'' 
-                                         AND LEFT(O.Route,1) = CL.Short            
+          LEFT JOIN STORERSODEFAULT SSO (NOLOCK) ON SSO.Storerkey = O.Consigneekey
+          --(SSA01)  -- removing joinng codelkup
+          --LEFT JOIN CODELKUP CL (NOLOCK) ON O.Storerkey = CL.Storerkey AND CL.Listname = ''TMPRIORITY''
+          --                               AND LEFT(O.Route,1) = CL.Short
           OUTER APPLY (SELECT TOP 1 TL.Loc FROM LOC TL (NOLOCK) WHERE TL.Putawayzone = SSO.Route) AS TOLOC  
           OUTER APPLY (SELECT TOP 1 ISNULL(LPD.Loc, '''') AS Loc   --WL01
                        FROM LoadPlanLaneDetail LPD (NOLOCK)        --WL01
@@ -457,9 +471,10 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV01]
                   , CASE WHEN @c_DispatchCasePickMethod =''1''                      --(Wan01)
                         THEN O.Orderkey ELSE '''' END
                   --,O.loadkey                                                      --(Wan01)
-                  ,CONVERT(NVARCHAR(8), O.DeliveryDate, 112) 
+                  ,CASE WHEN @c_DispatchCasePickMethod =''1''                       --(SSA01)
+                      THEN CONVERT(NVARCHAR(8), O.DeliveryDate, 112) ELSE '''' END
                   ,LOC.LogicalLocation
-                  ,TOLOC.Loc, ISNULL(CL.Code,''9'')                    
+                  ,TOLOC.Loc                                                        --(SSA01)                  
                   ,LPLD.Loc   --WL01
           ORDER BY O.Route                                                          --(Wan01)  
               , CASE WHEN @c_DispatchCasePickMethod =''1''                          --(Wan01)
@@ -472,10 +487,12 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV01]
       EXEC sp_executesql @c_SQL   
          , N'@c_Wavekey    NVARCHAR(10)
             ,@c_SourceType NVARCHAR(30)
-            ,@c_DispatchCasePickMethod NVARCHAR(10)'    
+            ,@c_DispatchCasePickMethod NVARCHAR(10)
+            ,@c_Priority NVARCHAR(10)'                                              --(SSA01)
          , @c_Wavekey  
          , @c_SourceType 
          , @c_DispatchCasePickMethod
+         , @c_Priority                                                              --(SSA01)
                
       OPEN cur_pick    
          
