@@ -20,6 +20,7 @@ GO
 /* 2023-05-03   1.4  James    WMS-22330 Add config to control whether allow   */
 /*                            pick with mix wavekey (james03)                 */
 /* 2024-07-31   1.5  Jackc    FCR-652 Add ext scn entry                       */
+/* 2024-09-13   1.6  Jackc    FCR-652 Fix bug when continue task              */
 /******************************************************************************/        
         
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_Assist_ClusterPick](        
@@ -3548,6 +3549,19 @@ BEGIN
                SET @nSuggQty        = CAST(@cExtScnUDF06 AS INT)
                SET @cTaskDetailKey  = ISNULL(@cExtScnUDF07,'')
             END -- SCN 6416 new scn 2 enter
+            --V1.6 JACKC
+            ELSE IF @nPreSCn = 5929 AND @nPreInputKey = 1 AND @cOption = 1
+            BEGIN
+               --IF continue task, then update results returned from 6416 to rdtmobred
+               SET @cCartonID       = ISNULL(@cExtScnUDF01,'')
+               SET @cSuggFromLOC    = ISNULL(@cExtScnUDF02,'')
+               SET @cSuggCartonID   = ISNULL(@cExtScnUDF03,'')
+               SET @cSuggToteId     = ISNULL(@cExtScnUDF04,'')
+               SET @cSuggSKU        = ISNULL(@cExtScnUDF05,'')
+               SET @nSuggQty        = CAST(@cExtScnUDF06 AS INT)
+               SET @cTaskDetailKey  = ISNULL(@cExtScnUDF07,'')
+            END -- SCN 5929 Continue screen
+            --V1.6 JACKC END
          END -- rdt_1855ExtScn01
 
          IF @nErrNo <> 0
