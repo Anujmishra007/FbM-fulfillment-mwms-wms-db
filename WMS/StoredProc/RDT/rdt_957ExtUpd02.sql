@@ -226,7 +226,7 @@ BEGIN
                      @c_errmsg         = @cErrMsg     OUTPUT
                   IF @bSuccess <> 1
                   BEGIN
-                     SET @nErrNo = 209784
+                     SET @nErrNo = 223451
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INS TLog2 Fail
                      GOTO Quit
                   END
@@ -256,7 +256,7 @@ BEGIN
                      @c_errmsg         = @cErrMsg     OUTPUT
                   IF @bSuccess <> 1
                   BEGIN
-                     SET @nErrNo = 209784
+                     SET @nErrNo = 223451
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INS TLog2 Fail
                      GOTO Quit
                   END
