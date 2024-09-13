@@ -2,6 +2,7 @@ SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
+
 /************************************************************************/
 /* Trigger: ntrOrderDetailUpdate                                        */
 /* Creation Date:                                                       */
@@ -48,9 +49,11 @@ GO
 /* 28-Jul-2017  TLTING03 Performance tune                               */
 /* 16-Oct-2017  SHONG    Performance Tuning (SWT01)                     */
 /* 26-Oct-2017  SHONG    Performance Tuning (SWT02)                     */
+/* 07-May-2024  NJOW01   UWP-18748  Allow config to call custom sp      */
 /* 06-09-2024   PPA371   Validate if status is cancel                   */
 /************************************************************************/
-CREATE OR ALTER TRIGGER [dbo].[ntrOrderDetailUpdate]
+
+CREATE OR ALTER TRIGGER [dbo].[ntrOrderDetailUpdate]        
 ON [dbo].[ORDERDETAIL]
 FOR Update
 AS
@@ -130,6 +133,48 @@ BEGIN
    /* #INCLUDE <TRODU1.SQL> */
    /* End Execute Preprocess */
 
+   --NJOW01
+   IF @n_continue=1 or @n_continue=2          
+   BEGIN   	  
+      IF EXISTS (SELECT 1 FROM DELETED d   ----->Put INSERTED if INSERT action
+                 JOIN storerconfig s WITH (NOLOCK) ON  d.storerkey = s.storerkey    
+                 JOIN sys.objects sys ON sys.type = 'P' AND sys.name = s.Svalue
+                 WHERE  s.configkey = 'OrderDetailTrigger_SP')   -----> Current table trigger storerconfig
+      BEGIN        	  
+         IF OBJECT_ID('tempdb..#INSERTED') IS NOT NULL
+            DROP TABLE #INSERTED
+
+      	 SELECT * 
+      	 INTO #INSERTED
+      	 FROM INSERTED
+          
+         IF OBJECT_ID('tempdb..#DELETED') IS NOT NULL
+            DROP TABLE #DELETED
+
+      	 SELECT * 
+      	 INTO #DELETED
+      	 FROM DELETED
+
+         EXECUTE dbo.isp_OrdertDetailTrigger_Wrapper ----->wrapper for current table trigger
+                   'UPDATE'  -----> @c_Action can be INSERT, UPDATE, DELETE
+                 , @b_Success  OUTPUT  
+                 , @n_Err      OUTPUT   
+                 , @c_ErrMsg   OUTPUT  
+
+         IF @b_success <> 1  
+         BEGIN  
+            SELECT @n_continue = 3  
+                  ,@c_errmsg = 'ntrOrderDetailUpdate ' + RTRIM(LTRIM(ISNULL(@c_errmsg,'')))  -----> Put current trigger name
+         END  
+         
+         IF OBJECT_ID('tempdb..#INSERTED') IS NOT NULL
+            DROP TABLE #INSERTED
+
+         IF OBJECT_ID('tempdb..#DELETED') IS NOT NULL
+            DROP TABLE #DELETED
+      END
+   END         
+    
 -- start tlting sos143271
    -- To trigger Order Status
    IF UPDATE(ExternOrderkey) AND -- (tlting01)
@@ -207,6 +252,17 @@ BEGIN
                SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Cancel ReasonCode is required. (ntrOrderDetailUpdate)'
             END
          END
+		 IF Exists(select 1 from inserted join deleted on (INSERTED.orderkey = DELETED.orderkey AND INSERTED.orderlinenumber = DELETED.orderlinenumber)
+					where inserted.Status='CANC' and deleted.Status<>'CANC')
+		 BEGIN
+			UPDATE ORDERDETAIL WITH (ROWLOCK)
+			SET OpenQty=0,TrafficCop=NULL
+			FROM ORDERDETAIL
+			JOIN INSERTED ON (ORDERDETAIL.orderkey = INSERTED.orderkey AND ORDERDETAIL.orderlinenumber = INSERTED.orderlinenumber )
+			JOIN DELETED ON (INSERTED.orderkey = DELETED.orderkey AND INSERTED.orderlinenumber = DELETED.orderlinenumber)
+			where inserted.Status='CANC' and deleted.Status<>'CANC'
+		 END
+
       END                                                                           --2024-09-09
       /*End Cannot cancel the order details status Column PPA371*/
 
@@ -225,11 +281,7 @@ BEGIN
                                   THEN (INSERTED.openqty + INSERTED.shippedqty) - orderdetail.originalqty
                                   ELSE INSERTED.Adjustedqty
                              END,
-               OpenQty = CASE WHEN INSERTED.Status='CANC'               --2024-09-09
-                              THEN 0 ELSE ORDERDETAIL.openqty END,      --2024-09-09
-              [Status] = CASE WHEN INSERTED.Status='CANC'         --PPA371
-                                 THEN INSERTED.Status             --PPA371
-                              WHEN INSERTED.OriginalQty + INSERTED.AdjustedQty + INSERTED.FreeGoodQty = INSERTED.ShippedQty AND INSERTED.ShippedQty <> 0
+              [Status] = CASE WHEN INSERTED.OriginalQty + INSERTED.AdjustedQty + INSERTED.FreeGoodQty = INSERTED.ShippedQty AND INSERTED.ShippedQty <> 0
                                  THEN '9' -- Shipped
                               WHEN INSERTED.ShippedQty > 0
                                  THEN '9' -- Shipped
@@ -552,7 +604,7 @@ BEGIN
 				   ,d.[Sku],d.[StorerKey],d.[ManufacturerSku],d.[RetailSku],d.[AltSku]
 				   ,d.[OriginalQty],d.[OpenQty],d.[ShippedQty],d.[AdjustedQty]
 				   ,d.[QtyPreAllocated],d.[QtyAllocated],d.[QtyPicked],d.[UOM],d.[PackKey],d.[PickCode]
-				   ,d.[CartonGroup],d.[Lot],d.[ID],d.[Facility],d.[Status]
+				   ,d.[CartonGroup],d.[Lot],d.[ID],d.[Facility],i.[Status]
                ,d.[UnitPrice],d.[Tax01],d.[Tax02],d.[ExtendedPrice],d.[UpdateSource]
                ,d.[Lottable01],d.[Lottable02],d.[Lottable03],d.[Lottable04],d.[Lottable05]
                ,d.[EffectiveDate],d.[AddDate],d.[AddWho],d.[EditDate],d.[EditWho],d.[TrafficCop],d.[ArchiveCop]
