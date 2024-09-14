@@ -1438,6 +1438,11 @@ BEGIN
          BEGIN
             IF @cOption = '1'
             BEGIN
+               --v1.1 JACKC
+               SELECT @cGroupKey = Value
+               FROM @tExtScnData
+               WHERE Variable = '@cGroupKey'
+               --V1.1 JACKC END
                GOTO SCN6416_Start
             END -- option 1
 
