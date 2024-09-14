@@ -446,9 +446,16 @@ BEGIN
                         AND ISNULL(RefNo, '') = @cDropID
 
                      --Calculate carton weight
-                     SELECT @fCartonWeight = InvWeight + CartonWeight
+                     DECLARE @tCartonWeight TABLE
+                     (
+                        CaseID            NVARCHAR(30),
+                        Weight            FLOAT
+                     )
+
+                     INSERT INTO @tCartonWeight (CaseID, Weight)
+                     SELECT CaseID, InvWeight + CartonWeight
                      FROM
-                        (SELECT CART.CartonWeight, SUM(PKD.qty * SKU.StdGrossWgt) AS InvWeight
+                        (SELECT PKD.CaseID, CART.CartonWeight, SUM(PKD.qty * SKU.StdGrossWgt) AS InvWeight
                         FROM dbo.CARTONIZATION CART WITH(NOLOCK)
                         INNER JOIN dbo.PackInfo PKI WITH(NOLOCK) ON CART.CartonType = ISNULL(PKI.CartonType, '')
                         INNER JOIN dbo.PickDetail PKD WITH(NOLOCK) ON ISNULL(PKI.RefNo, '') = ISNULL(PKD.CaseID, '-1') 
@@ -456,11 +463,13 @@ BEGIN
                         WHERE PKI.PickSlipNo = @cPickSlipNo
                            AND PKD.StorerKey = @cStorerKey
                            AND PKD.Status = @cPickConfirmStatus
-                        GROUP BY CART.CartonWeight) AS t
+                        GROUP BY PKD.CaseID, CART.CartonWeight) AS t
 
-                     UPDATE dbo.PackInfo WITH(ROWLOCK) 
-                     SET Weight = @fCartonWeight
-                     WHERE PickSlipNo = @cPickSlipNo
+                     UPDATE PI WITH(ROWLOCK) 
+                     SET PI.Weight = CW.Weight
+                     FROM dbo.PackInfo PI
+                     INNER JOIN @tCartonWeight CW ON ISNULL(PI.RefNo, '') = CW.CaseID
+                     WHERE PI.PickSlipNo = @cPickSlipNo
 
                      --If all Packedinfo are marked as PACKED, mark PackHeader as 9
                      IF (SELECT COUNT(1) FROM dbo.PackInfo WITH(NOLOCK) WHERE PickSlipNo = @cPickSlipNo)
