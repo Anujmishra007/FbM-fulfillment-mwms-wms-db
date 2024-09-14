@@ -3475,7 +3475,8 @@ BEGIN
       BEGIN
          DELETE FROM @tExtScnData
          INSERT INTO @tExtScnData (Variable, Value) VALUES 
-            ('@cOption',       @cOption)
+            ('@cOption',   @cOption),
+            ('@cGroupKey', @cGroupKey)
 
          DECLARE  @nPreSCn       INT,
                   @nPreInputKey  INT
