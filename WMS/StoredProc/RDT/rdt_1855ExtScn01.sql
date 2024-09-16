@@ -16,7 +16,7 @@ GO
 /* Date       Rev  Author     Purposes                                  */  
 /* 2024-07-31 1.0  JACKC      FCR-652. Created                          */
 /* 2024-09-12 1.1  JACKC      FCR-652. Fix Groupkey generation issue    */
-/* 2024-09-13 1.1  JACKC      FCR-xxx. Lock Tasks on carton level       */   
+/* 2024-09-13 1.2  JACKC      FCR-856. Lock Tasks on carton level       */   
 /************************************************************************/  
   
 CREATE OR ALTER PROC [RDT].[rdt_1855ExtScn01] (
@@ -359,6 +359,29 @@ BEGIN
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Need PickSlip No          
                   EXEC rdt.rdtSetFocusField @nMobile, 1          
                   GOTO Quit          
+               END
+               --FCR-652 Validate PSNO end
+               -- V1.2 Jackc Check there is available task under PSNO
+               IF NOT EXISTS ( SELECT 1      
+                              FROM dbo.TaskDetail TD WITH (NOLOCK)      
+                              WHERE Storerkey = @cStorerKey      
+                              AND   TaskType = 'ASTCPK'      
+                              AND   [Status] = '0'      
+                              AND   Groupkey = ''      
+                              AND   UserKey = ''      
+                              AND   DeviceID = ''    
+                              AND   DropID = ''
+                              AND EXISTS ( SELECT 1 FROM PackDetail PD WITH (NOLOCK)
+                                            WHERE PD.PickSlipNo = @cPickSlipNo
+                                                AND PD.StorerKey = TD.Storerkey
+                                                AND PD.LabelNo = TD.Caseid)
+                              )
+               --V1.2 Jackc Check there is available task under PSNO    
+               BEGIN      
+                  SET @nErrNo = 220758        
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --No open task        
+                  EXEC rdt.rdtSetFocusField @nMobile, 1          
+                  GOTO Quit      
                END 
 
                SET @cWaveKey = ''
@@ -397,7 +420,7 @@ BEGIN
                IF NOT EXISTS( SELECT 1 FROM dbo.TaskDetail TD WITH (NOLOCK)       
                               JOIN dbo.LOC LOC WITH (NOLOCK) ON ( TD.FromLoc = LOC.Loc)       
                               WHERE TD.Storerkey = @cStorerKey      
-                  AND   TD.TaskType = 'ASTCPK'      
+                              AND   TD.TaskType = 'ASTCPK'      
                               AND   TD.[Status] = '0'      
                               AND   TD.Groupkey = ''      
                               AND   TD.UserKey = ''      
@@ -1195,8 +1218,8 @@ BEGIN
                               )
                -- V1.2 Jackc Change logic due to no pre-lock tasks     
                BEGIN      
-                  SET @nErrNo = 171812        
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --All Assigned        
+                  SET @nErrNo = 220759        
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Carton Assigned        
                   GOTO Step_Matrix_Fail      
                END      
                      
@@ -1378,7 +1401,8 @@ BEGIN
                   END      
                      
                   FETCH NEXT FROM @curLockCase INTO @cLockTaskKey      
-               END 
+               END
+               */ 
                --V1.2 Lock task based on input key. Replace old logic end     
                      
                -- Prepare next screen var        
@@ -1400,7 +1424,7 @@ BEGIN
                   SET @nInputKey = 1
                   GOTO SCN6416_Start
                END
-               */
+               
                --FCR-652 Start to pick when total scanned cases reach the cart limit end      
                
                EXEC rdt.rdtSetFocusField @nMobile, 8

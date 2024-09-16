@@ -21,6 +21,7 @@ GO
 /*                            pick with mix wavekey (james03)                 */
 /* 2024-07-31   1.5  Jackc    FCR-652 Add ext scn entry                       */
 /* 2024-09-13   1.6  Jackc    FCR-652 Fix bug when continue task              */
+/* 2024-09-14   1.7  Jackc    FCR-856 Lock Tasks on carton level              */
 /******************************************************************************/        
         
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_Assist_ClusterPick](        
@@ -199,7 +200,8 @@ SELECT
    @cSKU             = V_SKU,        
    @cSKUDescr        = V_SKUDescr,        
    @cTaskDetailKey   = V_TaskDetailKey,        
-   @cWaveKey         = V_WaveKey,      
+   @cWaveKey         = V_WaveKey,
+   @cPickSlipNo      = V_PickSlipNo,      
          
    @nSuggQty       = V_Integer1,        
    @nPickedQty     = V_Integer2,        
@@ -3521,7 +3523,8 @@ BEGIN
          BEGIN
             IF @nPreScn = '6414' AND @nPreInputKey = 0 -- Back to Menu
             BEGIN
-               SET @nFunc = @nScn
+               SET @nFunc     =  @nScn
+               SET @cGroupKey =  '' --V1.7 Clear groupkey when exists func
             END
             ELSE IF @nPreSCn = '6414' AND @nPreInputKey = 1 -- Save value to mobred
             BEGIN
