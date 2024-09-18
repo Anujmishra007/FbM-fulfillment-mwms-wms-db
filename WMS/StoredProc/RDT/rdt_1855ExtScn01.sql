@@ -15,7 +15,8 @@ GO
 /*                                                                      */  
 /* Date       Rev  Author     Purposes                                  */  
 /* 2024-07-31 1.0  JACKC      FCR-652. Created                          */
-/* 2024-09-12 1.1  JACKC      FCR-652. Fix Groupkey generation issue    */  
+/* 2024-09-12 1.1  JACKC      FCR-652. Fix Groupkey generation issue    */
+/* 2024-09-18 1.2  JACKC      FCR-652. Per support request              */   
 /************************************************************************/  
   
 CREATE OR ALTER PROC [RDT].[rdt_1855ExtScn01] (
@@ -1149,7 +1150,7 @@ BEGIN
                IF EXISTS ( SELECT 1 FROM dbo.TaskDetail WITH (NOLOCK)      
                            WHERE Storerkey = @cStorerKey      
                            AND   TaskType = 'ASTCPK'      
-                           AND   [Status] < '9'      
+                           AND   [Status] < '5' --V1.2, change from 5 to 9, Jackc
                            AND   DropID = @cCartonID)      
                BEGIN      
                   SET @nErrNo = 171833        
