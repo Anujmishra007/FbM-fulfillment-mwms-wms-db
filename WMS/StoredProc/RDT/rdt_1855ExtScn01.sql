@@ -15,8 +15,8 @@ GO
 /*                                                                      */  
 /* Date       Rev  Author     Purposes                                  */  
 /* 2024-07-31 1.0  JACKC      FCR-652. Created                          */
-/* 2024-09-12 1.1  JACKC      FCR-652. Fix Groupkey generation issue    */
-/* 2024-09-13 1.2  JACKC      FCR-856. Lock Tasks on carton level       */   
+/* 2024-09-18 1.2  JACKC      FCR-652. Per support request              */
+/* 2024-09-13 1.3  JACKC      FCR-856. Lock Tasks on carton level       */ 
 /************************************************************************/  
   
 CREATE OR ALTER PROC [RDT].[rdt_1855ExtScn01] (
@@ -361,7 +361,7 @@ BEGIN
                   GOTO Quit          
                END
                --FCR-652 Validate PSNO end
-               -- V1.2 Jackc Check there is available task under PSNO
+               -- v1.3 Jackc Check there is available task under PSNO
                IF NOT EXISTS ( SELECT 1      
                               FROM dbo.TaskDetail TD WITH (NOLOCK)      
                               WHERE Storerkey = @cStorerKey      
@@ -376,7 +376,7 @@ BEGIN
                                                 AND PD.StorerKey = TD.Storerkey
                                                 AND PD.LabelNo = TD.Caseid)
                               )
-               --V1.2 Jackc Check there is available task under PSNO    
+               --v1.3 Jackc Check there is available task under PSNO    
                BEGIN      
                   SET @nErrNo = 220758        
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --No open task        
@@ -576,7 +576,7 @@ BEGIN
                   END        
                END        
                
-               --V1.2 Jackc
+               --v1.3 Jackc
                /*
                DECLARE @cCurCaseID  NVARCHAR( 20)      
                DECLARE @cNewCaseID  NVARCHAR( 20)      
@@ -585,7 +585,7 @@ BEGIN
                SET @cNewCaseID = ''      
                SET @nCtnCount = 0
                */
-               --V1.2 Jackc end      
+               --v1.3 Jackc end      
                      
                SELECT @nCartLimit = Short      
                FROM dbo.CODELKUP WITH (NOLOCK)      
@@ -635,7 +635,7 @@ BEGIN
                END
                --V1.2 jackc Generate Groupkey
 
-               --V1.2 Jackc Remove lock logic from step 1
+               --v1.3 Jackc Remove lock logic from step 1
                /*
                SET @nTranCount = @@TRANCOUNT      
                BEGIN TRAN      
@@ -902,7 +902,7 @@ BEGIN
                   WHILE @@TRANCOUNT > @nTranCount        
                      COMMIT TRAN
                */ 
-               --V1.2 Jackc Remove lock logic from step 1       
+               --v1.3 Jackc Remove lock logic from step 1       
                
                IF @nErrNo <> 0      
                   GOTO Quit      
@@ -913,7 +913,7 @@ BEGIN
                SET @cResult04 = ''      
                SET @cResult05 = ''      
                
-               --V1.2 Jackc No need to show matrix on step2
+               --v1.3 Jackc No need to show matrix on step2
                /*
                -- Draw matrix           
                SET @nNextPage = 0            
@@ -937,7 +937,7 @@ BEGIN
                   @nErrNo           = @nErrNo      OUTPUT,          
                   @cErrMsg          = @cErrMsg     OUTPUT
                */ 
-               --V1.2 Jackc No need to show matrix on step2 end       
+               --v1.3 Jackc No need to show matrix on step2 end       
                      
                IF @nErrNo <> 0            
                   GOTO Quit            
@@ -1099,7 +1099,7 @@ BEGIN
                   END                
                   ELSE  --Something scanned      
                   BEGIN
-                     --V1.2 JACKC No needs to release task as lock task per scanned carton
+                     --v1.3 JACKC No needs to release task as lock task per scanned carton
                      /*
                      --FCR-652 release tasks which not scanned
                      UPDATE dbo.TaskDetail WITH (ROWLOCK) SET       
@@ -1120,7 +1120,7 @@ BEGIN
                         AND   DropID = ''
                      --FCR-652 release tasks which not scanned end
                      */
-                     --V1.2 JACKC No needs to release task as lock task per scanned carton end
+                     --v1.3 JACKC No needs to release task as lock task per scanned carton end
 
 
                      --Get task for next loc        
@@ -1164,7 +1164,7 @@ BEGIN
                   END      
                END
 
-               -- V1.2 JACKC Carton ID under current pickslipno
+               -- v1.3 JACKC Carton ID under current pickslipno
                IF NOT EXISTS ( SELECT 1
                                FROM PackDetail WITH (NOLOCK)
                                WHERE PickSlipNo = @cPickSlipNo
@@ -1174,7 +1174,7 @@ BEGIN
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Not under PSNO        
                   GOTO Step_Matrix_Fail
                END
-               --V1.2 Jackc  Carton ID under current pickslipno end       
+               --v1.3 Jackc  Carton ID under current pickslipno end       
                
                IF EXISTS ( SELECT 1       
                            FROM dbo.TaskDetail WITH (NOLOCK)      
@@ -1192,7 +1192,7 @@ BEGIN
                END        
                
                -- Check if all carton assigned
-               -- V1.2 Jackc Change logic due to no pre-lock tasks      
+               -- v1.3 Jackc Change logic due to no pre-lock tasks      
                /*IF NOT EXISTS ( SELECT 1      
                               FROM dbo.TaskDetail WITH (NOLOCK)      
                               WHERE Storerkey = @cStorerKey      
@@ -1216,7 +1216,7 @@ BEGIN
                                                 AND PD.StorerKey = TD.Storerkey
                                                 AND PD.LabelNo = TD.Caseid)
                               )
-               -- V1.2 Jackc Change logic due to no pre-lock tasks     
+               -- v1.3 Jackc Change logic due to no pre-lock tasks     
                BEGIN      
                   SET @nErrNo = 220759        
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Carton Assigned        
@@ -1239,7 +1239,7 @@ BEGIN
                IF EXISTS ( SELECT 1 FROM dbo.TaskDetail WITH (NOLOCK)      
                            WHERE Storerkey = @cStorerKey      
                            AND   TaskType = 'ASTCPK'      
-                           AND   [Status] < '9'      
+                           AND   [Status] < '5' --V1.2, change from 5 to 9, Jackc
                            AND   DropID = @cCartonID)      
                BEGIN      
                   SET @nErrNo = 171833        
@@ -1266,7 +1266,7 @@ BEGIN
                END
                ---- FCR-652 Jack check cannot exceed the cart limit END
 
-               --v1.2 JACKC Remove the carton validation against on locked task
+               --v1.3 JACKC Remove the carton validation against on locked task
                /*
                -- FCR-652 by Jack Scanned carton must be in the locked task
                IF NOT EXISTS (SELECT 1      
@@ -1285,7 +1285,7 @@ BEGIN
                END
                -- FCR-652 by Jack Scanned carton must be in the locked task
                */      
-               --v1.2 JACKC Remove the carton validation against on locked task
+               --v1.3 JACKC Remove the carton validation against on locked task
 
                -- Extended validate        
                IF @cExtendedValidateSP <> ''        
@@ -1342,7 +1342,7 @@ BEGIN
                   AND   Storerkey = @cStorerKey      
                   AND   UDF01 = SUBSTRING( @cCartonId, 1, 1)      
 
-               --V1.2 Lock task based on input key. Replace old logic
+               --v1.3 Lock task based on input key. Replace old logic
                UPDATE dbo.TaskDetail SET
                      STATUS = '3',      
                      UserKey = @cUserName,      
@@ -1403,7 +1403,7 @@ BEGIN
                   FETCH NEXT FROM @curLockCase INTO @cLockTaskKey      
                END
                */ 
-               --V1.2 Lock task based on input key. Replace old logic end     
+               --v1.3 Lock task based on input key. Replace old logic end     
                      
                -- Prepare next screen var        
                SET @cOutField01 = @cCartPickMethod        
