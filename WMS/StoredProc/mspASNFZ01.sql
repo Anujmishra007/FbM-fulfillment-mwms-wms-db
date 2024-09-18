@@ -41,6 +41,10 @@ GO
 /*                            for ASN auto allocation,substring            */
 /*                            sellerrefernce value to pass 15 characters   */
 /*                            to storre into BillToKey                     */
+/* 2024-08-23  Wan01    1.5   UWP-23194- XDock and Delayed XDock Allocation*/
+/*                            control                                      */
+/* 2024-08-13  SSA06    1.6   Added ORDERDETAIL.ID = RECEIPTDETAIL.TOID    */
+/*                            mapping                                      */
 /***************************************************************************/
 CREATE OR ALTER   PROC [dbo].[mspASNFZ01]
 (     @c_Receiptkey  NVARCHAR(10)
@@ -68,6 +72,7 @@ BEGIN
          , @c_StorerKey          NVARCHAR(15)   = ''
          , @c_Facility           NVARCHAR(10)   = ''
          , @c_ExternOrderkey     NVARCHAR(50)   = ''
+         , @c_RecType            NVARCHAR(10)   = ''                      --(Wan01)
          , @c_OrderLineNumber    NVARCHAR(5)    = ''
          , @c_ExternLineNo       NVARCHAR(20)   = ''
          , @c_Sku                NVARCHAR(20)   = ''
@@ -87,6 +92,7 @@ BEGIN
          , @c_DeliveryDate       DATETIME
          , @c_Door               NVARCHAR(10)  = ''
          , @c_ExternPOKey        NVARCHAR(20)  = ''            --(SSA04)
+         , @c_Id                 NVARCHAR(36)                  --(SSA06)
          , @CUR_RECDET           CURSOR
 
    SET @b_Success= 1
@@ -245,6 +251,7 @@ BEGIN
       ,  UserDefine06      DATETIME       NULL
       ,  PutawayLoc        NVARCHAR(10)   NULL  DEFAULT('')
       ,  ExternPOKey       NVARCHAR(20)   NULL  DEFAULT('')
+      ,  ID                NVARCHAR(36)   NULL                 --(SSA06)
       )
 
    SET @n_Cnt = 0
@@ -253,6 +260,7 @@ BEGIN
          ,@c_DocType        = RECEIPT.DocType
          ,@n_Cnt            = 1
          ,@c_ASNStatus      = RECEIPT.ASNStatus
+         ,@c_RecType        = RECEIPT.RECType                  --(Wan01)
    FROM RECEIPT WITH (NOLOCK)
    WHERE RECEIPT.ReceiptKey = @c_ReceiptKey
 
@@ -303,6 +311,7 @@ BEGIN
             ,  DeliveryDate = ISNULL(RD.UserDefine06,'1900-01-01')
             ,  Door         = ISNULL(RD.PutawayLoc  ,'')
             ,  RD.ExternPOKey                                  --(SSA04)
+            ,  RD.ToId                                         --(SSA06)
          FROM  RECEIPT RH WITH (NOLOCK)
          JOIN  RECEIPTDETAIL RD WITH (NOLOCK) ON (RH.ReceiptKey = RD.ReceiptKey)
          JOIN  PODETAIL POD WITH (NOLOCK) ON (RD.Pokey = POD.Pokey)
@@ -319,7 +328,7 @@ BEGIN
 
          FETCH NEXT FROM CUR_RECDET INTO @c_Receiptkey, @c_POKey, @c_POLineNumber, @c_ExternReceiptkey,@c_ExternLineNo,@c_Storerkey,
          @c_Sku, @c_Packkey, @c_UOM, @n_OriginalQty,@n_OpenQty,@c_Lottable03,@c_Lottable02, @c_Lottable08, @c_Lottable11, @c_Consigneekey,    -- (SSA03)
-         @c_DeliveryDate,@c_Door,@c_ExternPOKey                                                                                                --(SSA04)
+         @c_DeliveryDate,@c_Door,@c_ExternPOKey,@c_Id                                                                                         -- (SSA04),(SSA06)
 
          WHILE @@FETCH_STATUS <> -1 AND @n_continue IN(1,2)
          BEGIN
@@ -446,14 +455,15 @@ BEGIN
             ,  Userdefine02
             ,  UserDefine06
             ,  PutawayLoc
-            ,  ExternPOKey                                                                                                                        -- (SSA04)
+            ,  ExternPOKey
+            ,  ID                                                                                                                    -- (SSA04),(SSA06)
             ) values (@c_Orderkey,@c_Receiptkey, @c_POKey, @c_POLineNumber, @c_ExternReceiptkey,@c_ExternLineNo,@c_Storerkey,
             @c_Sku, @c_Packkey, @c_UOM, @n_OriginalQty,@n_OpenQty,@c_Lottable03,@c_Lottable02, @c_Lottable08, @c_Lottable11,                      -- (SSA03)
-            @c_Consigneekey,@c_DeliveryDate,@c_Door,@c_ExternPOKey)                                                                               -- (SSA04)
+            @c_Consigneekey,@c_DeliveryDate,@c_Door,@c_ExternPOKey,@c_Id)                                                                         -- (SSA04),(SSA06)
 
             FETCH NEXT FROM CUR_RECDET INTO @c_Receiptkey, @c_POKey, @c_POLineNumber, @c_ExternReceiptkey,@c_ExternLineNo,@c_Storerkey,
             @c_Sku, @c_Packkey, @c_UOM, @n_OriginalQty,@n_OpenQty,@c_Lottable03,@c_Lottable02, @c_Lottable08, @c_Lottable11, @c_Consigneekey,     -- (SSA03)
-            @c_DeliveryDate,@c_Door,@c_ExternPOKey                                                                                                -- (SSA04)
+            @c_DeliveryDate,@c_Door,@c_ExternPOKey,@c_Id                                                                                          -- (SSA04),(SSA06)
          -- (SSA01) end ---
          END
          CLOSE CUR_RECDET
@@ -744,6 +754,7 @@ BEGIN
             ,  Tariffkey
             ,  Lottable03                                                           -- (SSA03)
             ,  ExternPOKey                                                          -- (SSA04)
+            ,  ID                                                                   -- (SSA06)
             )
       SELECT td.Orderkey                                                            -- (SSA01)
             ,OrderLineNumber =  RIGHT('00000' + CONVERT(NVARCHAR(5),
@@ -766,6 +777,7 @@ BEGIN
                           END
             ,td.Lottable03                                                           -- (SSA03)
             ,td.ExternPOKey                                                          -- (SSA04)
+            ,td.ID                                                                   -- (SSA06)
       FROM #TMP_ORDDTL td
       JOIN dbo.SKU s (NOLOCK) ON  td.Storerkey = s.Storerkey
                               AND td.Sku = s.Sku
@@ -782,6 +794,11 @@ BEGIN
                        + ': INSERT INTO ORDERDETAIL Table Failed. (mspASNFZ01)'
          GOTO QUIT_SP
       END
+
+      IF @c_RecType = 'XDELAY'                                                      --(Wan01) - START
+      BEGIN
+         GOTO QUIT_SP
+      END                                                                           --(Wan01) - END
       -- Adding for XDOCK ASN allocation     (SSA03)
        EXEC [WM].[lsp_XDockAllocation_Wrapper]
        @c_ReceiptKey = @c_ReceiptKey,
