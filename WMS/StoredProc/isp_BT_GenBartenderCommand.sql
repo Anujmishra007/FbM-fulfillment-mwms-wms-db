@@ -76,22 +76,23 @@ GO
 /* 2023-10-23 23.7 Wan02      Get Print Over Internet Printing                 */
 /* 2023-12-19 24.8 Wan        UWP-12373-MWMS Deploy MasterSP to V2             */
 /* 2024-07-26 24.9 JackC      UWP-26905 Encrypt user password                  */
+/* 2024-09-11 25.0 NLT013     UWP-24328 Extended the length for @c_Param0      */
 /*******************************************************************************/        
 --> For CN Only: @cCmdType = 'PRN'        
 CREATE OR ALTER PROC [dbo].[isp_BT_GenBartenderCommand](        
       @cPrinterID          NVARCHAR(50)        
      ,@c_LabelType         NVARCHAR(30)        
      ,@c_userid            NVARCHAR(256)           --CS44   
-     ,@c_Parm01            NVARCHAR(60)        
-     ,@c_Parm02            NVARCHAR(60)        
-     ,@c_Parm03            NVARCHAR(60)        
-     ,@c_Parm04            NVARCHAR(60)        
-     ,@c_Parm05            NVARCHAR(60)        
-     ,@c_Parm06            NVARCHAR(60)        
-     ,@c_Parm07            NVARCHAR(60)        
-     ,@c_Parm08            NVARCHAR(60)        
-     ,@c_Parm09            NVARCHAR(60)        
-     ,@c_Parm10            NVARCHAR(60)        
+     ,@c_Parm01            NVARCHAR(80)        
+     ,@c_Parm02            NVARCHAR(80)        
+     ,@c_Parm03            NVARCHAR(80)        
+     ,@c_Parm04            NVARCHAR(80)        
+     ,@c_Parm05            NVARCHAR(80)        
+     ,@c_Parm06            NVARCHAR(80)        
+     ,@c_Parm07            NVARCHAR(80)        
+     ,@c_Parm08            NVARCHAR(80)        
+     ,@c_Parm09            NVARCHAR(80)        
+     ,@c_Parm10            NVARCHAR(80)        
      ,@c_StorerKey         NVARCHAR(15) =''            --CS03        
      ,@c_NoCopy            CHAR(5)                     --CS02 --CS12        
      ,@b_Debug             CHAR(1)=0       
@@ -185,16 +186,16 @@ BEGIN
           ,@c_vbErrMsg          NVARCHAR(4000)        
           ,@n_Status_Out        INT        
           ,@n_SerialNo_Out      INT        
-          ,@c_BT_Parm01         NVARCHAR(60)        
-          ,@c_BT_Parm02         NVARCHAR(60)        
-          ,@c_BT_Parm03         NVARCHAR(60)        
-          ,@c_BT_Parm04         NVARCHAR(60)        
-          ,@c_BT_Parm05         NVARCHAR(60)        
-          ,@c_BT_Parm06         NVARCHAR(60)        
-          ,@c_BT_Parm07         NVARCHAR(60)        
-          ,@c_BT_Parm08         NVARCHAR(60)        
-          ,@c_BT_Parm09         NVARCHAR(60)        
-          ,@c_BT_Parm10         NVARCHAR(60)        
+          ,@c_BT_Parm01         NVARCHAR(80)        
+          ,@c_BT_Parm02         NVARCHAR(80)        
+          ,@c_BT_Parm03         NVARCHAR(80)        
+          ,@c_BT_Parm04         NVARCHAR(80)        
+          ,@c_BT_Parm05         NVARCHAR(80)        
+          ,@c_BT_Parm06         NVARCHAR(80)        
+          ,@c_BT_Parm07         NVARCHAR(80)        
+          ,@c_BT_Parm08         NVARCHAR(80)        
+          ,@c_BT_Parm09         NVARCHAR(80)        
+          ,@c_BT_Parm10         NVARCHAR(80)        
           ,@c_tempfilepath      NVARCHAR(215)   --CS08        
           ,@c_FullText          NVARCHAR(MAX)   --CS08        
           ,@c_HeaderText        NVARCHAR(MAX)   --CS08        
@@ -306,16 +307,16 @@ BEGIN
           ,@c_LKEY04             NVARCHAR(60)        
           ,@c_LKEY05             NVARCHAR(60)        
           ,@n_LCmdCounter        INT        
-          ,@c_BT_LParm01         NVARCHAR(60)        
-          ,@c_BT_LParm02         NVARCHAR(60)        
-          ,@c_BT_LParm03         NVARCHAR(60)        
-          ,@c_BT_LParm04         NVARCHAR(60)        
-          ,@c_BT_LParm05         NVARCHAR(60)        
-          ,@c_BT_LParm06         NVARCHAR(60)        
-          ,@c_BT_LParm07         NVARCHAR(60)        
-          ,@c_BT_LParm08         NVARCHAR(60)        
-          ,@c_BT_LParm09         NVARCHAR(60)        
-          ,@c_BT_LParm10         NVARCHAR(60)        
+          ,@c_BT_LParm01         NVARCHAR(80)        
+          ,@c_BT_LParm02         NVARCHAR(80)        
+          ,@c_BT_LParm03         NVARCHAR(80)        
+          ,@c_BT_LParm04         NVARCHAR(80)        
+          ,@c_BT_LParm05         NVARCHAR(80)        
+          ,@c_BT_LParm06         NVARCHAR(80)        
+          ,@c_BT_LParm07         NVARCHAR(80)        
+          ,@c_BT_LParm08         NVARCHAR(80)        
+          ,@c_BT_LParm09         NVARCHAR(80)        
+          ,@c_BT_LParm10         NVARCHAR(80)        
           ,@c_GetKey05           NVARCHAR(60)        
           ,@n_BatchCnt           INT        
           ,@c_GetRecNo           NVARCHAR(80)        
@@ -526,16 +527,16 @@ BEGIN
   DECLARE  @t_BartenderCommand  TABLE        
    (   [ID]    [INT] IDENTITY(1,1) NOT NULL        
       --,RecNo    INT        
-      ,PARM01   NVARCHAR(60)        
-      ,PARM02  NVARCHAR(60)        
-      ,PARM03  NVARCHAR(60)        
-      ,PARM04  NVARCHAR(60)        
-      ,PARM05  NVARCHAR(60)        
-      ,PARM06  NVARCHAR(60)        
-      ,PARM07  NVARCHAR(60)        
-      ,PARM08  NVARCHAR(60)        
-      ,PARM09  NVARCHAR(60)        
-      ,PARM10  NVARCHAR(60)        
+      ,PARM01  NVARCHAR(80)        
+      ,PARM02  NVARCHAR(80)        
+      ,PARM03  NVARCHAR(80)        
+      ,PARM04  NVARCHAR(80)        
+      ,PARM05  NVARCHAR(80)        
+      ,PARM06  NVARCHAR(80)        
+      ,PARM07  NVARCHAR(80)        
+      ,PARM08  NVARCHAR(80)        
+      ,PARM09  NVARCHAR(80)        
+      ,PARM10  NVARCHAR(80)        
       ,KEY01   NVARCHAR(60)        
       ,KEY02 NVARCHAR(60)        
       ,KEY03   NVARCHAR(60)        
@@ -547,16 +548,16 @@ BEGIN
   DECLARE @t_BartenderCommand_table TABLE        
    (   [ID]    [INT] IDENTITY(1,1) NOT NULL        
       --,RecNo    INT        
-      ,PARM01   NVARCHAR(60)        
-      ,PARM02  NVARCHAR(60)        
-      ,PARM03  NVARCHAR(60)        
-      ,PARM04  NVARCHAR(60)        
-      ,PARM05  NVARCHAR(60)        
-      ,PARM06  NVARCHAR(60)        
-      ,PARM07  NVARCHAR(60)        
-      ,PARM08  NVARCHAR(60)        
-      ,PARM09  NVARCHAR(60)        
-      ,PARM10  NVARCHAR(60)        
+      ,PARM01  NVARCHAR(80)        
+      ,PARM02  NVARCHAR(80)        
+      ,PARM03  NVARCHAR(80)        
+      ,PARM04  NVARCHAR(80)        
+      ,PARM05  NVARCHAR(80)        
+      ,PARM06  NVARCHAR(80)        
+      ,PARM07  NVARCHAR(80)        
+      ,PARM08  NVARCHAR(80)        
+      ,PARM09  NVARCHAR(80)        
+      ,PARM10  NVARCHAR(80)        
       ,KEY01   NVARCHAR(60)        
       ,KEY02   NVARCHAR(60)        
       ,KEY03   NVARCHAR(60)        
@@ -1076,10 +1077,10 @@ BEGIN
          ,PARM10      ,KEY01       ,KEY02        
          ,KEY03       ,KEY04       ,KEY05)        
       EXEC sp_executesql @cSQL,        
-            N'@Parm01 nvarchar(60) ,@Parm02 nvarchar(60) ,@Parm03 nvarchar(60)        
-         ,@Parm04 nvarchar(60)   ,@Parm05 nvarchar(60) ,@Parm06 nvarchar(60)        
-         ,@Parm07 nvarchar(60)   ,@Parm08 nvarchar(60) ,@Parm09 nvarchar(60)        
-         ,@Parm10 nvarchar(60)   ,@NCopy nvarchar(10)  '        
+            N'@Parm01 nvarchar(80) ,@Parm02 nvarchar(80) ,@Parm03 nvarchar(80)        
+         ,@Parm04 nvarchar(80)   ,@Parm05 nvarchar(80) ,@Parm06 nvarchar(80)        
+         ,@Parm07 nvarchar(80)   ,@Parm08 nvarchar(80) ,@Parm09 nvarchar(80)        
+         ,@Parm10 nvarchar(80)   ,@NCopy nvarchar(10)  '        
          ,@c_Parm01, @c_Parm02 ,@c_Parm03        
          ,@c_Parm04, @c_Parm05 ,@c_Parm06        
          ,@c_Parm07, @c_Parm08 ,@c_Parm09        
@@ -1099,10 +1100,10 @@ BEGIN
       INSERT INTO @t_BartenderCommand(PARM01,PARM02,PARM03,PARM04,PARM05,PARM06,PARM07,PARM08,PARM09,PARM10        
                                     ,Key01,Key02,Key03,Key04,Key05)        
       EXEC sp_executesql @cSQL,        
-         N'@Parm01 nvarchar(60) ,@Parm02 nvarchar(60) ,@Parm03 nvarchar(60)        
-         ,@Parm04 nvarchar(60)   ,@Parm05 nvarchar(60) ,@Parm06 nvarchar(60)        
-         ,@Parm07 nvarchar(60)   ,@Parm08 nvarchar(60) ,@Parm09 nvarchar(60)        
-         ,@Parm10 nvarchar(60)   ,@NCopy nvarchar(10)  '        
+         N'@Parm01 nvarchar(80) ,@Parm02 nvarchar(80) ,@Parm03 nvarchar(80)        
+         ,@Parm04 nvarchar(80)   ,@Parm05 nvarchar(80) ,@Parm06 nvarchar(80)        
+         ,@Parm07 nvarchar(80)   ,@Parm08 nvarchar(80) ,@Parm09 nvarchar(80)        
+         ,@Parm10 nvarchar(80)   ,@NCopy nvarchar(10)  '        
          ,@c_Parm01, @c_Parm02 ,@c_Parm03        
          ,@c_Parm04, @c_Parm05 ,@c_Parm06        
          ,@c_Parm07, @c_Parm08 ,@c_Parm09        
