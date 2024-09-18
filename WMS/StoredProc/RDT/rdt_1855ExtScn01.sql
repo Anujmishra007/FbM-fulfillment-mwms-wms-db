@@ -371,10 +371,14 @@ BEGIN
                               AND   UserKey = ''      
                               AND   DeviceID = ''    
                               AND   DropID = ''
-                              AND EXISTS ( SELECT 1 FROM PackDetail PD WITH (NOLOCK)
-                                            WHERE PD.PickSlipNo = @cPickSlipNo
+                              AND EXISTS ( SELECT 1 FROM PickHeader PH WITH (NOLOCK)
+                                             INNER JOIN PickDeTail PD WITH (NOLOCK)
+                                                ON PH.StorerKey = PD.StorerKey
+                                                AND PH.OrderKey = PD.OrderKey
+                                            WHERE PH.PickHeaderKey = @cPickSlipNo
                                                 AND PD.StorerKey = TD.Storerkey
-                                                AND PD.LabelNo = TD.Caseid)
+                                                AND PD.CaseID = TD.Caseid
+                                                AND PD.Status = '0')
                               )
                --v1.3 Jackc Check there is available task under PSNO    
                BEGIN      
@@ -396,7 +400,7 @@ BEGIN
                IF @cWaveKey = ''
                BEGIN
                   SET @nErrNo = 220752          
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid PSNO          
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --NoWaveKey Found          
                   EXEC rdt.rdtSetFocusField @nMobile, 4
                   SET @cOutField04 = ''          
                   GOTO Quit
@@ -418,14 +422,22 @@ BEGIN
                   
                -- Check pickzone valid          
                IF NOT EXISTS( SELECT 1 FROM dbo.TaskDetail TD WITH (NOLOCK)       
-                              JOIN dbo.LOC LOC WITH (NOLOCK) ON ( TD.FromLoc = LOC.Loc)       
+                              JOIN dbo.LOC LOC WITH (NOLOCK) ON ( TD.FromLoc = LOC.Loc)
+                              JOIN PickDetail PKD WITH (NOLOCK)
+                                 ON TD.Storerkey = PKD.StorerKey AND TD.TaskDetailKey = PKD.TaskDetailKey
+                              JOIN PickHeader PKH WITH (NOLOCK)
+                                 ON PKD.Storerkey = PKH.StorerKey AND PKD.OrderKey = PKH.OrderKey       
                               WHERE TD.Storerkey = @cStorerKey      
                               AND   TD.TaskType = 'ASTCPK'      
                               AND   TD.[Status] = '0'      
                               AND   TD.Groupkey = ''      
                               AND   TD.UserKey = ''      
                               AND   TD.DeviceID = ''
-                              AND   TD.WaveKey = @cWaveKey -- FCR-652 add wavekey by JACKC      
+                              --V1.3 
+                              --AND   TD.WaveKey = @cWaveKey -- FCR-652 add wavekey by JACKC
+                              AND   PKH.PickHeaderKey = @cPickSlipNo
+                              AND   PKD.Status = '0'
+                              --V1.3 end   
                               AND   LOC.Facility = @cFacility       
                               AND   LOC.PickZone = @cPickZone)          
                BEGIN --FCR 652 change err msg by JACKC         
@@ -472,7 +484,24 @@ BEGIN
                   EXEC rdt.rdtSetFocusField @nMobile, 2          
                   SET @cOutField02 = ''          
                   GOTO Quit          
-               END          
+               END
+
+               --v1.3 Check scanned cart in step1 but not start to scan carton
+               IF EXISTS ( SELECT 1 FROM rdt.RDTMOBREC WITH (NOLOCK)
+                           WHERE Func = @nFunc
+                              AND Step = 99
+                              AND Scn = 6416
+                              AND V_string8 = @cCartID -- CartID
+                              AND UserName <> @cUserName)
+               BEGIN         
+                  SET @nErrNo = 220761          
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Cart in use          
+                  EXEC rdt.rdtSetFocusField @nMobile, 2          
+                  SET @cOutField02 = ''          
+                  GOTO Quit          
+               END
+               --v1.3 Check scanned cart in step1 but not start to scan carton
+                         
                SET @cOutField02 = @cCartID          
                   
                -- Check blank          
@@ -636,272 +665,7 @@ BEGIN
                --V1.2 jackc Generate Groupkey
 
                --v1.3 Jackc Remove lock logic from step 1
-               /*
-               SET @nTranCount = @@TRANCOUNT      
-               BEGIN TRAN      
-               SAVE TRAN LockTask      
-
-               --SET @cWaveKey = '' -- FCR-652 Jackc
-               SET @cGroupKey = ''      
-               SET @nErrNo = 0      
-               
-               DECLARE @curLockTask CURSOR      
-               SET @curLockTask = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR      
-               SELECT TD.TaskDetailKey, TD.Caseid, TD.WaveKey      
-               FROM dbo.TaskDetail TD WITH (NOLOCK)      
-               JOIN dbo.LOC LOC WITH (NOLOCK) ON ( TD.FromLoc = LOC.LOC)      
-               WHERE TD.Storerkey = @cStorerKey      
-               AND   TD.TaskType = 'ASTCPK'      
-               AND   TD.[Status] = '0'      
-               AND   TD.Groupkey = ''      
-               AND   TD.UserKey = ''      
-               AND   TD.DeviceID = ''      
-               AND   ((TD.UserKeyOverRide = '') OR (TD.UserKeyOverRide = @cUserName))      
-               AND   (( @cPickNoMixWave = '0' AND TD.WaveKey = TD.WaveKey) OR ( @cPickNoMixWave = '1' AND TD.WaveKey = @cPickWaveKey))
-               AND   LOC.Facility = @cFacility       
-               AND   LOC.PickZone = @cPickZone        
-               AND   EXISTS ( SELECT 1 FROM @tPickMethod PM WHERE TD.PickMethod = PM.Method)      
-               ORDER BY CASE WHEN TD.UserKeyOverRide = @cUserName THEN '0' ELSE '1' END, TD.WaveKey, TD.Caseid      
-               OPEN @curLockTask      
-               FETCH NEXT FROM @curLockTask INTO @cLockTaskKey, @cNewCaseID, @cPickWaveKey      
-               WHILE @@FETCH_STATUS = 0      
-               BEGIN      
-                  IF @cCurCaseID <> @cNewCaseID      
-                  BEGIN      
-                     SET @cCurCaseID = @cNewCaseID      
-                     SET @nCtnCount = @nCtnCount + 1      
-
-                     -- FCR-652 Lock all tasks in the wave
-                     /*IF @nCtnCount > @nCartLimit      
-                        BREAK */     
-                  END      
-                        
-                  IF @cGroupKey = ''
-                  BEGIN
-                     DECLARE @b_success INT      
-                     EXECUTE dbo.nspg_GetKey                                      
-                        'LVSLOCK',                                  
-                        10 ,                                        
-                        @cGroupKey OUTPUT,                       
-                        @b_success OUTPUT,                           
-                        @nErrNo OUTPUT,                                 
-                        @cErrmsg OUTPUT                              
-                           
-                     IF @b_success <> 1      
-                     BEGIN      
-                        SET @nErrNo = 220756      
-                        SET @cErrmsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Get groupkey failure 
-                        GOTO LockTask_RollBackTran       
-                     END
-                  END -- get group key      
-               
-                  UPDATE dbo.TaskDetail SET       
-                     STATUS = '3',      
-                     UserKey = @cUserName,      
-                     Groupkey = @cGroupKey,       
-                     DeviceID = @cCartID,      
-                     EditWho = @cUserName,       
-                     EditDate = GETDATE(),       
-                     StartTime = GETDATE()      
-                  WHERE TaskDetailKey = @cLockTaskKey      
-                        
-                  IF @@ERROR <> 0      
-                  BEGIN      
-                     SET @nErrNo = 171809          
-                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Lock Task Fail          
-                     GOTO LockTask_RollBackTran          
-                  END      
-                  
-                  FETCH NEXT FROM @curLockTask INTO @cLockTaskKey, @cNewCaseID, @cPickWaveKey      
-               END      
-               
-               --FCR-652 JACKC 
-               /*
-               SELECT TOP 1 @cWaveKey = WaveKey  
-               FROM dbo.TaskDetail WITH (NOLOCK)  
-               WHERE Storerkey = @cStorerKey  
-                  AND   TaskType = 'ASTCPK'  
-                  AND   STATUS = '3'  
-                  AND   Groupkey = @cGroupKey  
-                  AND   UserKey = @cUserName  
-                  AND   DeviceID = @cCartID  
-                  ORDER BY 1
-               */
-               --FCR-652 JACKC END  
-               
-               -- Temp check for mismatch case qty between taskdetail and pickdetail       
-               DECLARE @tTask TABLE      
-               (      
-                  CaseID    NVARCHAR( 20) NOT NULL,      
-                  Qty       INT      
-               )      
-               
-               DECLARE @tPick TABLE      
-               (      
-                  CaseID    NVARCHAR( 20) NOT NULL,      
-                  Qty       INT      
-               )      
-               
-               INSERT INTO @tTask( CaseID, Qty)      
-               SELECT CaseId, SUM( Qty) FROM dbo.TaskDetail WITH (NOLOCK)       
-               WHERE UserKey = @cUserName AND Groupkey = @cGroupKey AND STATUS = '3'       
-               GROUP BY CaseID      
-                  
-               INSERT INTO @tPick( CaseID, Qty)      
-               SELECT CaseId, SUM( Qty) FROM dbo.PICKDETAIL WITH (NOLOCK) WHERE TaskDetailKey IN (      
-               SELECT TaskDetailKey FROM dbo.TaskDetail WITH (NOLOCK) WHERE UserKey = @cUserName AND Groupkey = @cGroupKey AND STATUS = '3')       
-               GROUP BY CaseId      
-               
-               IF EXISTS ( SELECT 1 FROM @tTask t JOIN @tPick p ON ( t.CaseID = p.CaseID)       
-                           GROUP BY t.CaseID HAVING SUM( T.Qty) <> SUM( P.Qty))      
-               BEGIN      
-               DECLARE @curPatchTD CURSOR, @curPatchPD CURSOR  
-               DECLARE @cPatchTDKey NVARCHAR( 10), @cPatchCaseId NVARCHAR( 20), @cPatchLot NVARCHAR(10), @cPatchLoc NVARCHAR( 10), @cPatchId NVARCHAR( 18), @cPatchSKU NVARCHAR( 20), @nPatchQty INT  
-               DECLARE @cPatchPDKey NVARCHAR( 10), @nPatchPD_Qty INT, @cOriPatchTDKey NVARCHAR( 10)  
-               SET @curPatchTD = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR  
-               SELECT TD.TaskDetailKey, TD.Caseid, TD.Lot, TD.FromLoc, TD.FromID, TD.Sku, TD.Qty  
-               FROM dbo.TaskDetail TD WITH (NOLOCK)  
-               WHERE TD.Storerkey = @cStorerKey  
-               AND   TD.TaskType = 'ASTCPK'  
-               AND   TD.WaveKey = @cWaveKey  
-               AND   TD.[Status] = '3'  
-               AND   TD.UserKey = @cUserName   
-               AND   TD.Groupkey = @cGroupKey  
-               AND   NOT EXISTS ( SELECT 1 FROM dbo.PICKDETAIL PD WITH (NOLOCK)  
-                                 WHERE TD.TaskDetailKey = PD.TaskDetailKey  
-                                 AND   TD.Storerkey = PD.Storerkey  
-                                 --AND   TD.Lot = PD.Lot          
-                                 AND   TD.FromLoc = PD.Loc  
-                                 AND   TD.FromID = PD.ID  
-                                 AND   TD.Sku = PD.Sku  
-                                 AND   PD.[Status] IN ('0', '3'))  
-                  OPEN @curPatchTD  
-                  FETCH NEXT FROM @curPatchTD INTO @cPatchTDKey, @cPatchCaseId, @cPatchLot, @cPatchLoc, @cPatchId, @cPatchSKU, @nPatchQty  
-                  WHILE @@FETCH_STATUS = 0  
-                  BEGIN  
-                     SET @curPatchPD = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR  
-                     SELECT PickDetailKey, Qty, TaskDetailKey  
-                     FROM dbo.PICKDETAIL WITH (NOLOCK)  
-                     WHERE Storerkey = @cStorerKey  
-                     AND   [Status] IN ('0', '3')  
-                     --AND   Lot = @cPatchLot  
-                     AND   Loc = @cPatchLoc  
-                     AND   ID = @cPatchId  
-                     AND   SKU = @cPatchSKU  
-                     AND   ISNULL( TaskDetailKey, '') = ''  
-                     OPEN @curPatchPD  
-                     FETCH NEXT FROM @curPatchPD INTO @cPatchPDKey, @nPatchPD_Qty, @cOriPatchTDKey  
-                     WHILE @@FETCH_STATUS = 0  
-                     BEGIN  
-                     IF @nPatchQty >= @nPatchPD_Qty  
-                     BEGIN  
-                        UPDATE dbo.PickDeTail SET   
-                           TaskDetailKey = @cPatchTDKey,  
-                           EditWho = SUSER_SNAME(),  
-                           EditDate = GETDATE()  
-                        WHERE PickDetailKey = @cPatchPDKey  
-                           
-                           IF @@ERROR <> 0  
-                              GOTO Quit_Patch  
-                           INSERT INTO traceinfo(TraceName, TimeIn, Step1, Step2, Step3, Step4, Step5, Col1, Col2, Col3, Col4, Col5) VALUES   
-                           ('1855_patchlog', GETDATE(), @cPatchTDKey, @cPatchCaseId, @cPatchLot, @cPatchLoc, @cPatchId, @cPatchSKU, @nPatchQty, @cPatchPDKey, @nPatchPD_Qty, @cOriPatchTDKey)  
-                     END  
-                        
-                     SET @nPatchQty = @nPatchQty - @nPatchPD_Qty  
-                        
-                     IF @nPatchQty <= 0  
-                        BREAK  
-                     FETCH NEXT FROM @curPatchPD INTO @cPatchPDKey, @nPatchPD_Qty, @cOriPatchTDKey  
-                     END  
-                     FETCH NEXT FROM @curPatchTD INTO @cPatchTDKey, @cPatchCaseId, @cPatchLot, @cPatchLoc, @cPatchId, @cPatchSKU, @nPatchQty   
-                  END  
-         
-                  DELETE FROM @tTask  
-                  DELETE FROM @tPick  
-                  
-                  INSERT INTO @tTask( CaseID, Qty)      
-                  SELECT CaseId, SUM( Qty) FROM dbo.TaskDetail WITH (NOLOCK)       
-                  WHERE UserKey = @cUserName AND Groupkey = @cGroupKey AND STATUS = '3'       
-                  GROUP BY CaseID      
-                  
-                  INSERT INTO @tPick( CaseID, Qty)      
-                  SELECT CaseId, SUM( Qty) FROM dbo.PICKDETAIL WITH (NOLOCK) WHERE TaskDetailKey IN (      
-                  SELECT TaskDetailKey FROM dbo.TaskDetail WITH (NOLOCK) WHERE UserKey = @cUserName AND Groupkey = @cGroupKey AND STATUS = '3')       
-                  GROUP BY CaseId      
-         
-                  IF EXISTS ( SELECT 1 FROM @tTask t JOIN @tPick p ON ( t.CaseID = p.CaseID)       
-                              GROUP BY t.CaseID HAVING SUM( T.Qty) <> SUM( P.Qty))      
-                  BEGIN      
-                     Quit_Patch:  
-                     SET @nErrNo = 171831          
-                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --TaskQtyXTally          
-                     GOTO LockTask_RollBackTran  
-                  END          
-               END      
-               
-               DECLARE @tTaskLoc TABLE      
-               (      
-                  TaskDetailKey NVARCHAR( 10) NOT NULL,      
-                  Loc NVARCHAR( 10)      
-               )      
-               
-               DECLARE @tPickLoc TABLE      
-               (      
-                  TaskDetailKey NVARCHAR( 10) NOT NULL,      
-                  Loc NVARCHAR( 10)      
-               )      
-               
-               INSERT INTO @tTaskLoc( TaskDetailKey, Loc)      
-               SELECT TaskDetailKey, FromLoc FROM dbo.TaskDetail WITH (NOLOCK)      
-               WHERE UserKey = @cUserName AND Groupkey = @cGroupKey AND STATUS = '3'      
-               
-               INSERT INTO @tPickLoc( TaskDetailKey, Loc)      
-               SELECT TaskDetailKey, Loc FROM dbo.PICKDETAIL WITH (NOLOCK) WHERE TaskDetailKey IN (      
-               SELECT TaskDetailKey FROM dbo.TaskDetail WITH (NOLOCK) WHERE UserKey = @cUserName AND Groupkey = @cGroupKey AND STATUS = '3')   
-               
-               IF EXISTS ( SELECT 1      
-                           FROM @tTaskLoc t JOIN @tPickLoc p ON ( t.TaskDetailKey = p.TaskDetailKey)      
-                           GROUP BY t.Loc, p.Loc       
-                           HAVING t.Loc <> p.Loc)      
-               BEGIN      
-                  SET @nErrNo = 171834          
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --TaskLocXTally          
-                  GOTO LockTask_RollBackTran          
-               END      
-               
-               --IF EXISTS ( SELECT 1       
-               --   FROM taskdetail TD (NOLOCK)      
-               --   LEFT JOIN PICKDETAIL PD (NOLOCK) ON TD.WaveKey = PD.WaveKey AND TD.SKU = PD.SKU   
-               --      AND TD.CASEID = PD.CaseID AND TD.TaskType = 'ASTCPK' --AND TD.Lot = PD.LoT  
-               --      AND TD.FromLoc = PD.Loc AND TD.FromID = PD.ID      
-               --   WHERE TD.WaveKey = @cWaveKey      
-               --   AND TD.TaskDetailKey <> PD.TaskDetailKey)      
-               IF EXISTS ( SELECT 1  
-                           FROM dbo.TaskDetail TD WITH (NOLOCK)  
-                           WHERE TD.WaveKey = @cWaveKey  
-                           AND   TD.TaskType IN ('CPK', 'ASTCPK')  
-                           AND   TD.[Status] = '0'  
-                           AND   NOT EXISTS ( SELECT 1 FROM dbo.PICKDETAIL PD WITH (NOLOCK)  
-                                             JOIN dbo.WAVEDETAIL WD WITH (NOLOCK) ON ( PD.OrderKey = WD.OrderKey)  
-                                             WHERE TD.TaskDetailKey = PD.TaskDetailKey  
-                                             AND   PD.Status IN ('0', '3')  
-                                             AND   WD.WaveKey = @cWaveKey))  
-               BEGIN      
-                  SET @nErrNo = 171835          
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Task Mismatch      
-                  GOTO LockTask_RollBackTran          
-               END      
-               
-               
-               
-               GOTO LockTask_Commit      
-               
-               LockTask_RollBackTran:        
-                     ROLLBACK TRAN LockTask        
-               LockTask_Commit:        
-                  WHILE @@TRANCOUNT > @nTranCount        
-                     COMMIT TRAN
-               */ 
+               /* Remove task lock logic in base 1855 step1*/
                --v1.3 Jackc Remove lock logic from step 1       
                
                IF @nErrNo <> 0      
@@ -935,13 +699,13 @@ BEGIN
                   @cResult05        = @cResult05   OUTPUT,          
                   @nNextPage        = @nNextPage   OUTPUT,          
                   @nErrNo           = @nErrNo      OUTPUT,          
-                  @cErrMsg          = @cErrMsg     OUTPUT
-               */ 
-               --v1.3 Jackc No need to show matrix on step2 end       
+                  @cErrMsg          = @cErrMsg     OUTPUT 
                      
                IF @nErrNo <> 0            
                   GOTO Quit            
-                     
+               */ 
+               --v1.3 Jackc No need to show matrix on step2 end 
+
                -- Prepare next screen var        
                SET @cOutField01 = @cCartPickMethod        
                SET @cOutField02 = @cCartID        
@@ -1162,13 +926,17 @@ BEGIN
                      GOTO SCN6416_Return_Value    
                      --GOTO Quit      
                   END      
-               END
+               END -- CartonID = ''
 
                -- v1.3 JACKC Carton ID under current pickslipno
                IF NOT EXISTS ( SELECT 1
-                               FROM PackDetail WITH (NOLOCK)
-                               WHERE PickSlipNo = @cPickSlipNo
-                                 AND LabelNo = @cCartonID)
+                               FROM PICKHEADER PKH WITH (NOLOCK)
+                               JOIN PICKDETAIL PKD WITH (NOLOCK)
+                                 ON PKH.StorerKey = PKD.Storerkey 
+                                 AND PKH.OrderKey = PKD.OrderKey
+                               WHERE PKH.PickHeaderKey = @cPickSlipNo
+                                 AND PKH.StorerKey = @cStorerKey
+                                 AND PKD.CaseID = @cCartonID)
                BEGIN
                   SET @nErrNo = 220757        
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Not under PSNO        
@@ -1205,23 +973,59 @@ BEGIN
                IF NOT EXISTS ( SELECT 1      
                               FROM dbo.TaskDetail TD WITH (NOLOCK)      
                               WHERE Storerkey = @cStorerKey      
-                              AND   TaskType = 'ASTCPK'      
-                              AND   [Status] = '0'      
-                              AND   Groupkey = ''      
-                              AND   UserKey = ''      
-                              AND   DeviceID = ''    
-                              AND   DropID = ''
-                              AND EXISTS ( SELECT 1 FROM PackDetail PD WITH (NOLOCK)
-                                            WHERE PD.PickSlipNo = @cPickSlipNo
-                                                AND PD.StorerKey = TD.Storerkey
-                                                AND PD.LabelNo = TD.Caseid)
+                                 AND   TaskType = 'ASTCPK'      
+                                 AND   [Status] = '0'      
+                                 AND   Groupkey = ''      
+                                 AND   UserKey = ''      
+                                 AND   DeviceID = ''    
+                                 AND   DropID = ''
+                                 AND   UserKey = ''
+                                 AND   CaseID = @cCartonID
+                                 AND EXISTS ( SELECT 1
+                                             FROM PICKHEADER PKH WITH (NOLOCK)
+                                             JOIN PICKDETAIL PKD WITH (NOLOCK)
+                                                ON PKH.StorerKey = PKD.Storerkey 
+                                                AND PKH.OrderKey = PKD.OrderKey
+                                             WHERE PKH.PickHeaderKey = @cPickSlipNo
+                                                AND PKH.StorerKey = @cStorerKey
+                                                AND PKD.CaseID = TD.Caseid
+                                                AND PKD.Status = '0'
+                                             )
                               )
-               -- v1.3 Jackc Change logic due to no pre-lock tasks     
-               BEGIN      
-                  SET @nErrNo = 220759        
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Carton Assigned        
-                  GOTO Step_Matrix_Fail      
-               END      
+               BEGIN
+                  IF NOT EXISTS ( SELECT 1      
+                                 FROM dbo.TaskDetail TD WITH (NOLOCK)      
+                                 WHERE Storerkey = @cStorerKey      
+                                    AND   TaskType = 'ASTCPK'      
+                                    AND   [Status] = '3'      
+                                    AND   Groupkey <> ''      
+                                    AND   UserKey <> ''      
+                                    AND   DeviceID <> ''    
+                                    AND   DropID <> ''
+                                    AND   CaseID = @cCartonID
+                                    AND EXISTS ( SELECT 1
+                                                FROM PICKHEADER PKH WITH (NOLOCK)
+                                                JOIN PICKDETAIL PKD WITH (NOLOCK)
+                                                   ON PKH.StorerKey = PKD.Storerkey 
+                                                   AND PKH.OrderKey = PKD.OrderKey
+                                                WHERE PKH.PickHeaderKey = @cPickSlipNo
+                                                   AND PKH.StorerKey = @cStorerKey
+                                                   AND PKD.CaseID = TD.Caseid
+                                                )
+                                 ) -- All task were picked
+                  BEGIN
+                     SET @nErrNo = 220760        
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Carton Picked        
+                     GOTO Step_Matrix_Fail  
+                  END
+                  ELSE
+                  BEGIN       
+                     SET @nErrNo = 220759        
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Carton Assigned        
+                     GOTO Step_Matrix_Fail  
+                  END    
+               END
+               -- v1.3 Jackc Change logic due to no pre-lock tasks end      
                      
                IF EXISTS ( SELECT 1 FROM dbo.PICKDETAIL WITH (NOLOCK)      
                            WHERE Storerkey = @cStorerKey      
@@ -1353,8 +1157,14 @@ BEGIN
                      StatusMsg =  CAST( @nCartonScanned + 1 AS NVARCHAR( 1)) + '-' + @cCartonType,      
                      EditWho = @cUserName,       
                      EditDate = GETDATE()      
-                  WHERE Storerkey = @cStorerKey
-                     AND Caseid = @cCartonID  
+               WHERE Storerkey = @cStorerKey
+                  AND Caseid = @cCartonID   
+                  AND   TaskType = 'ASTCPK'      
+                  AND   [Status] = '0'      
+                  AND   Groupkey = ''      
+                  AND   UserKey = ''      
+                  AND   DeviceID = ''    
+                  AND   DropID = ''
                /*
                SELECT TOP 1 @cLockCaseID = Caseid--@cLockTaskKey = TaskDetailKey      
                FROM dbo.TaskDetail WITH (NOLOCK)      
