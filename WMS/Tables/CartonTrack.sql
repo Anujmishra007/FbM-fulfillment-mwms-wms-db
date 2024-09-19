@@ -23,7 +23,8 @@ BEGIN
         [UDF03] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_CartonTrack_UDF03] DEFAULT (''),
         [TrackingURL] [nvarchar] (200) NULL,
         [VendorTrackingURL] [nvarchar] (200) NULL,
-        [PrintData] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_CartonTrack_PrintData] DEFAULT ('')
+        [PrintData] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_CartonTrack_PrintData] DEFAULT (''),
+        [Cost] [float] NULL CONSTRAINT [DF_CartonTrack_Cost] DEFAULT 0
     ) ON [PRIMARY]
 
     ALTER TABLE [dbo].[CartonTrack] ADD CONSTRAINT [PK_CartonTrack] PRIMARY KEY CLUSTERED ([RowRef]) WITH (FILLFACTOR=90) ON [PRIMARY]
@@ -47,6 +48,7 @@ BEGIN
     EXEC sp_addextendedproperty N'MS_Description', N'User define field 3.', 'SCHEMA', N'dbo', 'TABLE', N'CartonTrack', 'COLUMN', N'UDF03'
     EXEC sp_addextendedproperty N'MS_Description', N'URL for TrackYourParcel website.', 'SCHEMA', N'dbo', 'TABLE', N'CartonTrack', 'COLUMN', N'TrackingURL'
     EXEC sp_addextendedproperty N'MS_Description', N'Tracking URL from supplier', 'SCHEMA', N'dbo', 'TABLE', N'CartonTrack', 'COLUMN', N'VendorTrackingURL'
+    EXEC sp_addextendedproperty N'MS_Description', N'Total charges per parcel', 'SCHEMA', N'dbo', 'TABLE', N'CartonTrack', 'COLUMN', N'Cost'
 END
 ELSE
 BEGIN
@@ -63,5 +65,12 @@ BEGIN
             BEGIN
         ALTER TABLE CartonTrack ADD VendorTrackingURL NVARCHAR(200) NULL;
         EXEC sp_addextendedproperty N'MS_Description', N'Tracking URL from supplier', 'SCHEMA', N'dbo', 'TABLE', N'CartonTrack', 'COLUMN', N'VendorTrackingURL'
+    END
+    IF NOT EXISTS (SELECT 1
+    FROM sys.columns
+    WHERE Name = 'Cost' AND Object_ID = Object_ID('CartonTrack'))
+            BEGIN
+        ALTER TABLE CartonTrack ADD Cost FLOAT NULL CONSTRAINT [DF_CartonTrack_Cost] DEFAULT 0;
+        EXEC sp_addextendedproperty N'MS_Description', N'Total charges per parcel', 'SCHEMA', N'dbo', 'TABLE', N'CartonTrack', 'COLUMN', N'Cost'
     END
 END
