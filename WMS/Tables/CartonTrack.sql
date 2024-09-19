@@ -24,7 +24,7 @@ BEGIN
         [TrackingURL] [nvarchar] (200) NULL,
         [VendorTrackingURL] [nvarchar] (200) NULL,
         [PrintData] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_CartonTrack_PrintData] DEFAULT (''),
-        [Cost] [float] NULL DEFAULT 0
+        [Cost] [float] NULL CONSTRAINT [DF_CartonTrack_Cost] DEFAULT 0
     ) ON [PRIMARY]
 
     ALTER TABLE [dbo].[CartonTrack] ADD CONSTRAINT [PK_CartonTrack] PRIMARY KEY CLUSTERED ([RowRef]) WITH (FILLFACTOR=90) ON [PRIMARY]
@@ -70,7 +70,7 @@ BEGIN
     FROM sys.columns
     WHERE Name = 'Cost' AND Object_ID = Object_ID('CartonTrack'))
             BEGIN
-        ALTER TABLE CartonTrack ADD Cost FLOAT NULL DEFAULT 0;
+        ALTER TABLE CartonTrack ADD Cost FLOAT NULL CONSTRAINT [DF_CartonTrack_Cost] DEFAULT 0;
         EXEC sp_addextendedproperty N'MS_Description', N'Total charges per parcel', 'SCHEMA', N'dbo', 'TABLE', N'CartonTrack', 'COLUMN', N'Cost'
     END
 END
