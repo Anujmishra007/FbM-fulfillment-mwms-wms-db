@@ -252,6 +252,8 @@ BEGIN
                   
                   -- Reduce parent order
                   UPDATE dbo.Orders SET
+                     Status = CASE WHEN OpenQTY - @nQTY = 0 THEN '0' ELSE Status END, 
+                     SOStatus = CASE WHEN OpenQTY - @nQTY = 0 THEN 'CLOSED' ELSE SOStatus END, 
                      OpenQTY = OpenQTY - @nQty, 
                      EditDate = GETDATE(),  
                      EditWho = SUSER_SNAME(), 
@@ -342,7 +344,28 @@ BEGIN
                      OriginalQty  = OriginalQty - @nQTY,  
                      OpenQty      = OpenQty - @nQTY,  
                      QtyPicked    = QtyPicked - @nQtyPicked, 
-                     QtyAllocated = QtyAllocated - @nQtyAllocated,  
+                     QtyAllocated = QtyAllocated - @nQtyAllocated, 
+                     /*
+                     Status       = 
+                        -- Reference ntrOrderDetailUpdate but not exactly follow (for e.g. without the ship part, as parent order does not ship)
+                        CASE   
+                           -- 0=Open (alloc + pick) = 0
+                           WHEN (QtyAllocated - @nQtyAllocated) + (QtyPicked - @nQtyPicked) = 0 THEN '0'
+                           
+                           -- 1=Partially allocated (open > alloc and pick = 0)
+                           WHEN (OpenQty - @nQTY) > (QtyAllocated - @nQtyAllocated) AND (QtyPicked - @nQtyPicked) = 0 THEN '1'
+
+                           -- 2=Fully allocated (open = alloc and pick = 0)
+                           WHEN (OpenQty - @nQTY) = (QtyAllocated - @nQtyAllocated) AND (QtyPicked - @nQtyPicked) = 0 THEN '2'
+                           
+                           -- 3=Picking in progress (alloc > 0 and pick > 0)
+                           WHEN (QtyAllocated - @nQtyAllocated) > 0 AND (QtyPicked - @nQtyPicked) > 0 THEN '3'          
+                           
+                           -- 5=Fully picked (alloc = 0 and pick > 0)
+                           WHEN (QtyAllocated - @nQtyAllocated) = 0 AND (QtyPicked - @nQtyPicked) > 0 THEN '5'
+                           ELSE Status
+                        END,
+                     */ 
                      EditDate = GETDATE(),  
                      TrafficCop = NULL 
                   WHERE OrderKey = @cParentOrderKey
