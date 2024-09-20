@@ -147,7 +147,7 @@ BEGIN
                
                WHILE @@FETCH_STATUS <> -1 AND @n_Continue = 1
                BEGIN
-                  -- (WST02) Only execute allocation when Order Lines exist AND not yet shipped AND when there is available stock, otherwise will stop with error
+                  -- (WST02) Only execute allocation when Order Lines exist AND Status < 2 AND when there is available stock, otherwise will stop with error
 				      IF EXISTS(SELECT 1 FROM ORDERDETAIL WITH (NOLOCK) 
                            WHERE StorerKey = @c_StorerKey 
                            AND ExternPOKey = @c_Externpokey
@@ -235,7 +235,7 @@ BEGIN
                   
                   WHILE @@FETCH_STATUS <> -1 AND @n_Continue = 1
                   BEGIN
-                     -- (WST02) Only execute allocation when Order Lines exist AND not yet shipped AND when there is available stock, otherwise will stop with error
+                     -- (WST02) Only execute allocation when Order Lines exist AND Status < 2 AND when there is available stock, otherwise will stop with error
                      IF EXISTS(SELECT 1 FROM ORDERDETAIL WITH (NOLOCK) 
                               WHERE StorerKey = @c_StorerKey 
                               AND ExternPOKey = @c_Externpokey 
