@@ -151,7 +151,7 @@ BEGIN
 				      IF EXISTS(SELECT 1 FROM ORDERDETAIL WITH (NOLOCK) 
                            WHERE StorerKey = @c_StorerKey 
                            AND ExternPOKey = @c_Externpokey
-						   AND Status <> '9')
+						   AND Status < 2)
 						 AND
 					     EXISTS(SELECT 1 FROM BI.V_Inventory WITH (NOLOCK)
 						   WHERE StorerKey=@c_StorerKey
@@ -239,7 +239,7 @@ BEGIN
                      IF EXISTS(SELECT 1 FROM ORDERDETAIL WITH (NOLOCK) 
                               WHERE StorerKey = @c_StorerKey 
                               AND ExternPOKey = @c_Externpokey 
-							  AND Status <> '9')
+							  AND Status < 2)
 						AND
 					    EXISTS(SELECT 1 FROM BI.V_Inventory WITH (NOLOCK) 
 						      WHERE StorerKey=@c_StorerKey 
