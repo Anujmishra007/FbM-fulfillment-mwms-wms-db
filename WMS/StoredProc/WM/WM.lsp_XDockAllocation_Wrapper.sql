@@ -147,12 +147,17 @@ BEGIN
                
                WHILE @@FETCH_STATUS <> -1 AND @n_Continue = 1
                BEGIN
-                  -- (WST02) Only execute allocation when Order Lines exist AND when there is available stock, otherwise will stop with error
+                  -- (WST02) Only execute allocation when Order Lines exist AND not yet shipped AND when there is available stock, otherwise will stop with error
 				      IF EXISTS(SELECT 1 FROM ORDERDETAIL WITH (NOLOCK) 
                            WHERE StorerKey = @c_StorerKey 
-                           and ExternPOKey = @c_Externpokey)
+                           AND ExternPOKey = @c_Externpokey
+						   AND Status <> '9')
 						 AND
-					     EXISTS(SELECT 1 FROM BI.V_Inventory WITH (NOLOCK) WHERE StorerKey=@c_StorerKey AND LOTTABLE03=@c_ExternPOKey AND Qty>0 AND (Qty-QtyAllocated-QtyPicked)>0)
+					     EXISTS(SELECT 1 FROM BI.V_Inventory WITH (NOLOCK)
+						   WHERE StorerKey=@c_StorerKey
+						   AND LOTTABLE03=@c_ExternPOKey
+						   AND Qty>0
+						   AND (Qty-QtyAllocated-QtyPicked)>0)
 				      BEGIN
                      BEGIN TRY              
                            EXEC nsp_xdockorderprocessing 
@@ -230,12 +235,17 @@ BEGIN
                   
                   WHILE @@FETCH_STATUS <> -1 AND @n_Continue = 1
                   BEGIN
-                     -- (WST02) Only execute allocation when Order Lines exist AND when there is available stock, otherwise will stop with error
+                     -- (WST02) Only execute allocation when Order Lines exist AND not yet shipped AND when there is available stock, otherwise will stop with error
                      IF EXISTS(SELECT 1 FROM ORDERDETAIL WITH (NOLOCK) 
                               WHERE StorerKey = @c_StorerKey 
-                              and ExternPOKey = @c_Externpokey)
+                              AND ExternPOKey = @c_Externpokey 
+							  AND Status <> '9')
 						AND
-					    EXISTS(SELECT 1 FROM BI.V_Inventory WITH (NOLOCK) WHERE StorerKey=@c_StorerKey AND LOTTABLE03=@c_ExternPOKey AND Qty>0 AND (Qty-QtyAllocated-QtyPicked)>0)
+					    EXISTS(SELECT 1 FROM BI.V_Inventory WITH (NOLOCK) 
+						      WHERE StorerKey=@c_StorerKey 
+							  AND LOTTABLE03=@c_ExternPOKey 
+							  AND Qty>0 
+							  AND (Qty-QtyAllocated-QtyPicked)>0)
                      BEGIN
                         BEGIN TRY              
                               EXEC nsp_xdockorderprocessing 
