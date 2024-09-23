@@ -75,29 +75,29 @@ BEGIN
    SELECT @cBatchCheck = SValue
          FROM rdt.StorerConfig (NOLOCK)
          WHERE Function_ID = @nFunc AND StorerKey = @cStorerKey AND ConfigKey = 'BatchCheck'
-   if ISNULL(@cBatchCheck,'')=''
+   IF ISNULL(@cBatchCheck,'')=''
    BEGIN
       GOTO Quit
-   end
-   else IF ISNULL(@cBatchCheck,'') IN ('1','Lottable01','Lottable1')
+   END
+   ELSE IF ISNULL(@cBatchCheck,'') IN ('1','Lottable01','Lottable1')
       SELECT @cLottableV=@cLottable01
-   ELSE IF isnull(@cBatchCheck,'') IN ('2','Lottable02','Lottable2')
+   ELSE IF ISNULL(@cBatchCheck,'') IN ('2','Lottable02','Lottable2')
 	   SELECT @cLottableV=@cLottable02
-   ELSE IF isnull(@cBatchCheck,'') IN ('3','Lottable03','Lottable3')
+   ELSE IF ISNULL(@cBatchCheck,'') IN ('3','Lottable03','Lottable3')
 	   SELECT @cLottableV=@cLottable03
-   ELSE IF isnull(@cBatchCheck,'') IN ('6','Lottable06','Lottable6')
+   ELSE IF ISNULL(@cBatchCheck,'') IN ('6','Lottable06','Lottable6')
 	   SELECT @cLottableV=@cLottable06
-   ELSE IF isnull(@cBatchCheck,'') IN ('7','Lottable07','Lottable7')
+   ELSE IF ISNULL(@cBatchCheck,'') IN ('7','Lottable07','Lottable7')
 	   SELECT @cLottableV=@cLottable07
-   ELSE IF isnull(@cBatchCheck,'') IN ('8','Lottable08','Lottable8')
+   ELSE IF ISNULL(@cBatchCheck,'') IN ('8','Lottable08','Lottable8')
 	   SELECT @cLottableV=@cLottable08
-   ELSE IF isnull(@cBatchCheck,'') IN ('9','Lottable09','Lottable9')
+   ELSE IF ISNULL(@cBatchCheck,'') IN ('9','Lottable09','Lottable9')
 	   SELECT @cLottableV=@cLottable09
-   ELSE IF isnull(@cBatchCheck,'') IN ('10','Lottable10','Lottable10')
+   ELSE IF ISNULL(@cBatchCheck,'') IN ('10','Lottable10','Lottable10')
 	   SELECT @cLottableV=@cLottable10
-   ELSE IF isnull(@cBatchCheck,'') IN ('11','Lottable11','Lottable11')
+   ELSE IF ISNULL(@cBatchCheck,'') IN ('11','Lottable11','Lottable11')
 	   SELECT @cLottableV=@cLottable11
-   ELSE IF isnull(@cBatchCheck,'') IN ('12','Lottable12','Lottable12')
+   ELSE IF ISNULL(@cBatchCheck,'') IN ('12','Lottable12','Lottable12')
 	   SELECT @cLottableV=@cLottable12
    ELSE
    BEGIN
