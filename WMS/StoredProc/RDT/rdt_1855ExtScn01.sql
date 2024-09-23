@@ -361,33 +361,18 @@ BEGIN
                   GOTO Quit          
                END
                --FCR-652 Validate PSNO end
-               -- v1.3 Jackc Check there is available task under PSNO
-               IF NOT EXISTS ( SELECT 1      
-                              FROM dbo.TaskDetail TD WITH (NOLOCK)      
-                              WHERE Storerkey = @cStorerKey      
-                              AND   TaskType = 'ASTCPK'      
-                              AND   [Status] = '0'      
-                              AND   Groupkey = ''      
-                              AND   UserKey = ''      
-                              AND   DeviceID = ''    
-                              AND   DropID = ''
-                              AND EXISTS ( SELECT 1 FROM PickHeader PH WITH (NOLOCK)
-                                             INNER JOIN PickDeTail PD WITH (NOLOCK)
-                                                ON PH.StorerKey = PD.StorerKey
-                                                AND PH.OrderKey = PD.OrderKey
-                                            WHERE PH.PickHeaderKey = @cPickSlipNo
-                                                AND PD.StorerKey = TD.Storerkey
-                                                AND PD.CaseID = TD.Caseid
-                                                AND PD.Status = '0')
-                              )
-               --v1.3 Jackc Check there is available task under PSNO    
-               BEGIN      
-                  SET @nErrNo = 220758        
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --No open task        
-                  EXEC rdt.rdtSetFocusField @nMobile, 1          
-                  GOTO Quit      
-               END 
 
+               --v1.3 Scanned PSNO is valid
+               IF NOT EXISTS (SELECT 1 FROM PickHeader WITH (NOLOCK)
+                           WHERE PickHeaderKey = @cPickSlipNo)
+               BEGIN          
+                  SET @nErrNo = 220762          
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --PSNO not found          
+                  EXEC rdt.rdtSetFocusField @nMobile, 1          
+                  GOTO Quit          
+               END
+               --Scanned PSNO is valid
+                 
                SET @cWaveKey = ''
                SELECT TOP 1 @cWaveKey = PKD.WaveKey FROM PICKHEADER PKH WITH (NOLOCK)
                   INNER JOIN PICKDETAIL PKD WITH (NOLOCK)
@@ -411,6 +396,26 @@ BEGIN
 
                --FCR-652 Validate PSNO end
 
+               -- v1.3 Jackc Check there is available task under Wave
+               IF NOT EXISTS ( SELECT 1      
+                              FROM dbo.TaskDetail TD WITH (NOLOCK)      
+                              WHERE Storerkey = @cStorerKey      
+                              AND   TaskType = 'ASTCPK'      
+                              AND   [Status] = '0'      
+                              AND   Groupkey = ''      
+                              AND   UserKey = ''      
+                              AND   DeviceID = ''    
+                              AND   DropID = ''
+                              AND   WaveKey = @cWaveKey
+                              )
+               BEGIN      
+                  SET @nErrNo = 220758        
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --No open task        
+                  EXEC rdt.rdtSetFocusField @nMobile, 1          
+                  GOTO Quit      
+               END 
+               --v1.3 Jackc Check there is available task under Wave  
+
                -- Check blank          
                IF @cPickZone = ''          
                BEGIN          
@@ -422,22 +427,14 @@ BEGIN
                   
                -- Check pickzone valid          
                IF NOT EXISTS( SELECT 1 FROM dbo.TaskDetail TD WITH (NOLOCK)       
-                              JOIN dbo.LOC LOC WITH (NOLOCK) ON ( TD.FromLoc = LOC.Loc)
-                              JOIN PickDetail PKD WITH (NOLOCK)
-                                 ON TD.Storerkey = PKD.StorerKey AND TD.TaskDetailKey = PKD.TaskDetailKey
-                              JOIN PickHeader PKH WITH (NOLOCK)
-                                 ON PKD.Storerkey = PKH.StorerKey AND PKD.OrderKey = PKH.OrderKey       
+                              JOIN dbo.LOC LOC WITH (NOLOCK) ON ( TD.FromLoc = LOC.Loc)    
                               WHERE TD.Storerkey = @cStorerKey      
                               AND   TD.TaskType = 'ASTCPK'      
                               AND   TD.[Status] = '0'      
                               AND   TD.Groupkey = ''      
                               AND   TD.UserKey = ''      
                               AND   TD.DeviceID = ''
-                              --V1.3 
-                              --AND   TD.WaveKey = @cWaveKey -- FCR-652 add wavekey by JACKC
-                              AND   PKH.PickHeaderKey = @cPickSlipNo
-                              AND   PKD.Status = '0'
-                              --V1.3 end   
+                              AND   TD.WaveKey = @cWaveKey -- FCR-652 add wavekey by JACKC
                               AND   LOC.Facility = @cFacility       
                               AND   LOC.PickZone = @cPickZone)          
                BEGIN --FCR 652 change err msg by JACKC         
@@ -928,21 +925,19 @@ BEGIN
                   END      
                END -- CartonID = ''
 
-               -- v1.3 JACKC Carton ID under current pickslipno
+               -- v1.3 JACKC Carton ID under current wave
                IF NOT EXISTS ( SELECT 1
-                               FROM PICKHEADER PKH WITH (NOLOCK)
-                               JOIN PICKDETAIL PKD WITH (NOLOCK)
-                                 ON PKH.StorerKey = PKD.Storerkey 
-                                 AND PKH.OrderKey = PKD.OrderKey
-                               WHERE PKH.PickHeaderKey = @cPickSlipNo
-                                 AND PKH.StorerKey = @cStorerKey
-                                 AND PKD.CaseID = @cCartonID)
+                               FROM TaskDetail WITH (NOLOCK)
+                               WHERE Storerkey = @cStorerKey
+                                 AND WaveKey = @cWaveKey
+                                 AND Caseid = @cCartonID
+                               )
                BEGIN
                   SET @nErrNo = 220757        
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Not under PSNO        
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Not under Wave        
                   GOTO Step_Matrix_Fail
                END
-               --v1.3 Jackc  Carton ID under current pickslipno end       
+               --v1.3 Jackc  Carton ID under current wave end       
                
                IF EXISTS ( SELECT 1       
                            FROM dbo.TaskDetail WITH (NOLOCK)      
@@ -981,16 +976,7 @@ BEGIN
                                  AND   DropID = ''
                                  AND   UserKey = ''
                                  AND   CaseID = @cCartonID
-                                 AND EXISTS ( SELECT 1
-                                             FROM PICKHEADER PKH WITH (NOLOCK)
-                                             JOIN PICKDETAIL PKD WITH (NOLOCK)
-                                                ON PKH.StorerKey = PKD.Storerkey 
-                                                AND PKH.OrderKey = PKD.OrderKey
-                                             WHERE PKH.PickHeaderKey = @cPickSlipNo
-                                                AND PKH.StorerKey = @cStorerKey
-                                                AND PKD.CaseID = TD.Caseid
-                                                AND PKD.Status = '0'
-                                             )
+                                 AND   WaveKey = @cWaveKey
                               )
                BEGIN
                   IF NOT EXISTS ( SELECT 1      
@@ -1003,15 +989,7 @@ BEGIN
                                     AND   DeviceID <> ''    
                                     AND   DropID <> ''
                                     AND   CaseID = @cCartonID
-                                    AND EXISTS ( SELECT 1
-                                                FROM PICKHEADER PKH WITH (NOLOCK)
-                                                JOIN PICKDETAIL PKD WITH (NOLOCK)
-                                                   ON PKH.StorerKey = PKD.Storerkey 
-                                                   AND PKH.OrderKey = PKD.OrderKey
-                                                WHERE PKH.PickHeaderKey = @cPickSlipNo
-                                                   AND PKH.StorerKey = @cStorerKey
-                                                   AND PKD.CaseID = TD.Caseid
-                                                )
+                                    AND   WaveKey = @cWaveKey
                                  ) -- All task were picked
                   BEGIN
                      SET @nErrNo = 220760        
@@ -1043,7 +1021,7 @@ BEGIN
                IF EXISTS ( SELECT 1 FROM dbo.TaskDetail WITH (NOLOCK)      
                            WHERE Storerkey = @cStorerKey      
                            AND   TaskType = 'ASTCPK'      
-                           AND   [Status] < '5' --V1.2, change from 5 to 9, Jackc
+                           AND   [Status] < '5' --V1.2, change from 9 to 5, Jackc
                            AND   DropID = @cCartonID)      
                BEGIN      
                   SET @nErrNo = 171833        
