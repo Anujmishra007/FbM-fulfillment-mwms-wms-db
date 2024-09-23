@@ -4,7 +4,6 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-
 /************************************************************************/
 /* Stored Procedure: mspRLWAV03                                         */
 /* Creation Date: 08-MAY-2024                                           */
@@ -15,7 +14,7 @@ GO
 /*                                                                      */
 /* Called By: Wave                                                      */
 /*                                                                      */
-/* GitHub Version: 1.0                                                  */
+/* GitHub Version: 2.0                                                  */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -30,6 +29,14 @@ GO
 /*                           LxWxH for SKU                              */
 /* 09-Sep-2024  Yung     1.4 Block Releave wave if replenishment        */
 /*                           incomplete                                 */
+/* 11-Sep-2024  Shong    1.5 Fixing VAS Order Issues                    */
+/* 12-Sep-2024  Shong    1.6 If OrderInfo03 = J05, set Carton Max SKU=5 */
+/* 15-Sep-2024  Shong    1.7 VAS LPN_SIZE - No Volume restriction       */
+/*                       (SWT01)                                        */
+/* 17-Sep-2024  WLChooi  1.8 Bug Fix + FCR version v2.1 (WL01)          */
+/* 18-Sep-2024  WLChooi  1.9 Map Workorderdetail.Type instead of Order  */
+/*                           info - FCR V2.2 (WL02)                     */
+/* 20-Sep-2024  WLChooi  2.0 Merge with ALiang01 changes from PROD      */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[mspRLWAV03]
    @c_WaveKey NVARCHAR(10)
@@ -60,6 +67,7 @@ BEGIN
           ,@n_CartonMaxWeight         DECIMAL(20,7)           
           ,@n_CartonMaxCount          INT
           ,@n_CartonMaxSku            INT
+          ,@n_ForceCartonMaxSku       INT
           ,@c_Orderkey                NVARCHAR(10)
           ,@n_OrderCube               DECIMAL(15,7)
           ,@n_OrderWeight             DECIMAL(15,7)                         
@@ -96,7 +104,8 @@ BEGIN
           ,@n_SortSeq                 INT    
           ,@n_CTNRowID                INT = 0 
           ,@n_SKUGroupCube            DECIMAL(15,7)=0
-		  ,@C_Replenishmentkey       NVARCHAR(10)
+		    ,@c_Replenishmentkey        NVARCHAR(10)
+          ,@b_OneSKUPerCarton         BIT = 0 
 
    DECLARE @n_VAS_LineCount INT = 0,
            @n_VAS_QtyCanPack INT = 0,
@@ -305,8 +314,9 @@ BEGIN
                                    MaxSku       INT,
                                    CartonLength DECIMAL(15,7),      
                                    CartonWidth  DECIMAL(15,7),      
-                                   CartonHeight DECIMAL(15,7))
-                                   
+                                   CartonHeight DECIMAL(15,7),
+                                   IsGeneric    INT DEFAULT 1)   --WL01
+
       CREATE TABLE #CARTON (RowID        INT IDENTITY(1,1) PRIMARY KEY,
                             OrderGroup   NVARCHAR(10) NOT NULL,
                             Orderkey     NVARCHAR(10) NOT NULL, 
@@ -410,7 +420,8 @@ BEGIN
                                   MaxSku,
                                   CartonLength,
                                   CartonWidth,
-                                  CartonHeight)
+                                  CartonHeight,
+                                  IsGeneric)   --WL01
       SELECT CZ.CartonizationGroup, CZ.CartonType, CZ.UseSequence,
              CASE WHEN ISNULL(CZ.CartonLength,0) * ISNULL(CZ.CartonWidth,0) * ISNULL(CZ.CartonHeight,0) > 0 THEN
                        CZ.CartonLength * CZ.CartonWidth * CZ.CartonHeight
@@ -419,12 +430,38 @@ BEGIN
              CZ.MaxWeight,
              CASE WHEN CZ.MaxCount = 0 THEN 9999999 ELSE CZ.MaxCount END AS [MaxCount],
              9999999 AS[MaxSku],
-             ISNULL(CZ.CartonLength,0), ISNULL(CZ.CartonWidth,0), ISNULL(CZ.CartonHeight,0)
+             ISNULL(CZ.CartonLength,0), ISNULL(CZ.CartonWidth,0), ISNULL(CZ.CartonHeight,0), 1   --WL01
       FROM dbo.CARTONIZATION CZ (NOLOCK)                                                                       
       WHERE CZ.CartonizationGroup = @c_CartonGroup         
       
       IF @b_debug = 1
-        SELECT * FROM #CARTONIZATION                                                                                           
+        SELECT * FROM #CARTONIZATION    
+
+      --WL01 S
+      --For VAS CartonType
+      INSERT INTO #CARTONIZATION (CartonizationGroup,
+                                  CartonType,
+                                  UseSequence,
+                                  Cube,
+                                  MaxWeight,
+                                  MaxCount,
+                                  MaxSku,
+                                  CartonLength,
+                                  CartonWidth,
+                                  CartonHeight,
+                                  IsGeneric)
+      SELECT CZ.CartonizationGroup, CZ.CartonType, CZ.UseSequence,
+             CASE WHEN ISNULL(CZ.CartonLength,0) * ISNULL(CZ.CartonWidth,0) * ISNULL(CZ.CartonHeight,0) > 0 THEN
+                       CZ.CartonLength * CZ.CartonWidth * CZ.CartonHeight
+                  ELSE CZ.Cube  
+             END * (CASE WHEN ISNULL(CZ.FillTolerance,0) = 0 THEN 1 ELSE CZ.FillTolerance * 0.01 END ) AS  [Cube],
+             CZ.MaxWeight,
+             CASE WHEN CZ.MaxCount = 0 THEN 9999999 ELSE CZ.MaxCount END AS [MaxCount],
+             9999999 AS[MaxSku],
+             ISNULL(CZ.CartonLength,0), ISNULL(CZ.CartonWidth,0), ISNULL(CZ.CartonHeight,0), 0
+      FROM dbo.CARTONIZATION CZ (NOLOCK)                                                                       
+      WHERE CZ.CartonizationGroup = TRIM(@c_CartonGroup) + 'CUST'
+      --WL01 E                                                                                       
                                             
       --Order sku info
       INSERT INTO #ORDERSKU (Orderkey, Storerkey, Sku, TotalQty, TotalCube, TotalQtyPacked, TotalCubePacked, StdCube, Length, Width, Height, OrderGroup, MasterShipmentID)
@@ -595,6 +632,26 @@ BEGIN
             PRINT '---- OrderKey: ' + @c_Orderkey + '  ------'
          END
 
+         --WL02 S
+         SET @n_ForceCartonMaxSku = 0
+         --SELECT @n_ForceCartonMaxSku = CASE WHEN ORDERINFO03 = 'J05' then 5 ELSE 0 END
+         --FROM ORDERINFO (NOLOCK)
+         --WHERE OrderKey = @c_Orderkey
+         SELECT TOP 1 @n_ForceCartonMaxSku = IIF(WOD.[Type] = 'J05', 5, 0)
+         FROM dbo.WorkOrderDetail WOD WITH (NOLOCK) 
+         WHERE WOD.ExternWorkOrderKey = @c_Orderkey
+         AND WOD.ExternLineNo = '0H'
+         --WL02 E
+
+         -- (SWT01) 
+         SET @c_VAS_CartonType=N''
+         SELECT TOP 1 
+               @c_VAS_CartonType= REPLACE(WOD.Type, 'U', 'RS')   --WL01
+         FROM dbo.WorkOrderDetail WOD WITH (NOLOCK) 
+         WHERE WOD.ExternWorkOrderKey = @c_Orderkey
+         AND WOD.Remarks='LPNSIZE'   --WL01
+         ORDER BY WOD.ExternLineNo         
+
          --Pack full carton qty, UCC full carton
          IF @n_continue IN(1,2) 
          BEGIN                                         
@@ -616,7 +673,7 @@ BEGIN
             SET @n_CartonNo = @n_CartonNo + 1            
 
             INSERT INTO #CARTON (Orderkey, CartonNo, LabelNo, CartonGroup, CartonType, MaxCube, MaxWeight, MaxCount, MaxSku, CartonLength, CartonWidth, CartonHeight, UCCNo, OrderGroup)
-            VALUES (@c_Orderkey, @n_CartonNo, '', @c_CartonGroup, '', 0, 0, 0, 0, 0, 0, 0, @c_UCCNo, '')                                  
+            VALUES (@c_Orderkey, @n_CartonNo, '', @c_CartonGroup, '9999', 0, 0, 0, 0, 0, 0, 0, @c_UCCNo, '') --ALiang01 hardcode 9999 for carton type                                 
             
             INSERT INTO #CARTONDETAIL (OrderGroup, Orderkey, Storerkey, Sku, CartonNo, Qty, RowRef)  --refer to ORDERSKU.RowID
             VALUES ('', @c_Orderkey, @c_Storerkey, @c_Sku, @n_CartonNo, @n_PackQty, @n_RowID) 
@@ -692,20 +749,15 @@ BEGIN
          SET @n_CartonNo = 0         
          WHILE @@FETCH_STATUS <> -1 AND @n_continue IN(1,2)  --pack by order
          BEGIN        
-            SELECT @n_VAS_LineCount = 0, @c_VAS_CartonType=''
+            SELECT @n_VAS_LineCount = 0
+            SELECT @n_VAS_QtyCanPack = 0   --WL01
 
             SELECT @n_VAS_LineCount = COUNT(1) 
             FROM dbo.WorkOrderDetail WOD WITH (NOLOCK) 
+            JOIN ORDERDETAIL OD WITH (NOLOCK) ON WOD.ExternWorkOrderKey = OD.OrderKey and WOD.ExternLineNo = OD.OrderLineNumber
             WHERE WOD.ExternWorkOrderKey = @c_Orderkey
-            AND WOD.Sku = @c_Sku
-            AND WOD.Type = 'S02'
-
-            SELECT TOP 1 
-                 @c_VAS_CartonType= WOD.Type
-            FROM dbo.WorkOrderDetail WOD WITH (NOLOCK) 
-            WHERE WOD.ExternWorkOrderKey = @c_Orderkey
-            AND WOD.Remarks='LPN_SIZE'
-            ORDER BY WOD.ExternLineNo
+            AND OD.Sku = @c_Sku
+            AND WOD.Type IN ('S02','S06')
 
             IF @n_VAS_LineCount = 1
             BEGIN
@@ -713,9 +765,10 @@ BEGIN
 
                SELECT @n_VAS_QtyCanPack = WOD.Qty 
                FROM dbo.WorkOrderDetail WOD WITH (NOLOCK) 
+               JOIN ORDERDETAIL OD WITH (NOLOCK) ON WOD.ExternWorkOrderKey = OD.OrderKey and WOD.ExternLineNo = OD.OrderLineNumber
                WHERE WOD.ExternWorkOrderKey = @c_Orderkey
-               AND WOD.Sku = @c_Sku
-               AND WOD.Type = 'S02' 
+               AND OD.Sku = @c_Sku
+               AND WOD.Type IN ('S02','S06')   --WL01
             END
             ELSE IF @n_VAS_LineCount > 1
             BEGIN
@@ -723,11 +776,12 @@ BEGIN
 
                SELECT @n_VAS_QtyCanPack = WOD.Qty 
                FROM dbo.WorkOrderDetail WOD WITH (NOLOCK) 
+               JOIN ORDERDETAIL OD WITH (NOLOCK) ON WOD.ExternWorkOrderKey = OD.OrderKey and WOD.ExternLineNo = OD.OrderLineNumber
                WHERE WOD.ExternWorkOrderKey = @c_Orderkey
-               AND WOD.Sku = @c_Sku
+               AND OD.Sku = @c_Sku
                AND WOD.Type = 'S02'                 
             END
-
+			
             SELECT TOP 1 @c_OrderGroup = O.OrderGroup
             FROM dbo.ORDERS O WITH (NOLOCK) 
             WHERE OrderKey = @c_Orderkey
@@ -745,6 +799,12 @@ BEGIN
                    SET @c_NewCarton='Y'
                END
             END 
+            -- IF ORDERINFO03 > 0, Force to pack to new carton if SKU count >= ORDERINFO03
+            IF @n_ForceCartonMaxSku > 0
+            BEGIN
+               IF (SELECT COUNT(DISTINCT SKU) FROM #CARTONDETAIL WHERE Orderkey = @c_Orderkey AND CartonNo = @n_CartonNo) >= @n_ForceCartonMaxSku
+                  SET @c_NewCarton = 'Y'
+            END
 
             WHILE 1=1 AND @n_continue IN(1,2) AND @n_OrderQty > 0
             BEGIN    
@@ -754,8 +814,8 @@ BEGIN
 
                IF @b_debug=2
                BEGIN
-                     PRINT 'NewCarton: ' + @c_NewCarton + ' Order Qty: ' +CAST(@n_OrderQty AS VARCHAR(20)) + ' Order Cube: ' + CAST(@n_OrderCube AS VARCHAR(20)) 
-                          + ' StdCube: ' + CAST(@n_StdCube AS VARCHAR(20)) 
+                  PRINT 'NewCarton: ' + @c_NewCarton + ' Order Qty: ' +CAST(@n_OrderQty AS VARCHAR(20)) + ' Order Cube: ' + CAST(@n_OrderCube AS VARCHAR(20)) 
+                        + ' StdCube: ' + CAST(@n_StdCube AS VARCHAR(20)) 
                END
                
                IF @c_NewCarton = 'Y' --new carton
@@ -763,6 +823,8 @@ BEGIN
                   SELECT @n_CartonMaxCube = 0, @n_CartonMaxCount = 0, @n_CartonMaxWeight = 0, @c_NewCarton = 'N', @n_CartonNo = 0, @c_CartonType = ''
                   SELECT @n_CartonLength = 0, @n_CartonWidth = 0, @n_CartonHeight = 0, @n_CartonRemainCube=0   
                   
+                  IF @n_VAS_QtyCanPack > 0 SET @c_NewCarton = 'Y'   --WL01
+
                   SELECT @n_CartonNo = MAX(CartonNo)
                   FROM #CARTON
                   WHERE Orderkey = @c_Orderkey
@@ -771,13 +833,15 @@ BEGIN
                                                 
                   SET @n_CartonNo = @n_CartonNo + 1
                     
-                  -- Getting Right Carton Type by LWH and Cube
+                  -- Getting Right Carton Type by LWH and Cube (SWT01)
                   IF @c_VAS_CartonType <> ''
                   BEGIN
-                     SELECT @c_CartonType=CZ.CartonType, @n_CartonLength=CZ.CartonLength, 
-                            @n_CartonWidth=CZ.CartonWidth, @n_CartonHeight=CZ.CartonHeight                              
-                     FROM #CARTONIZATION CZ 
-                     WHERE CZ.CartonType = @c_VAS_CartonType
+                     SET @c_CartonType = @c_VAS_CartonType
+
+                     -- SELECT @c_CartonType=CZ.CartonType, @n_CartonLength=CZ.CartonLength, 
+                     --        @n_CartonWidth=CZ.CartonWidth, @n_CartonHeight=CZ.CartonHeight                              
+                     -- FROM #CARTONIZATION CZ 
+                     -- WHERE CZ.CartonType = @c_VAS_CartonType
                   
                      -- IF dbo.fnc_CartonCanFit(@n_SKULength, @n_SKUWidth, @n_SKUHeight, @n_CartonLength, @n_CartonWidth, @n_CartonHeight) = 0
                      -- BEGIN
@@ -787,11 +851,34 @@ BEGIN
                   IF @c_CartonType = N''
                   BEGIN
                      TRUNCATE TABLE #CTNTRACK
-                     -- Loop to get carton type that can fit 
+
                      WHILE 1=1 AND @n_continue IN(1,2) 
                      BEGIN
                         SET @c_CartonType = N''
                         
+                        --WL01 S
+                        --WITH MDS - 30 Qty per Line, S02/S06 = 10, 10 Qty/ctn, total 3 CTNs, no remainder
+                        --NOT MDS  - 30 Qty per Line, S02/S06 = 8, 3 Cartons - 8 Qty, 1 Carton - 6 Qty total 4 CTNs, with remainder
+                        IF @n_VAS_QtyCanPack > 0
+                        BEGIN
+                           SELECT TOP 1
+                                     @n_CTNRowID = RowID,
+                                     @c_CartonType = CZ.CartonType,
+                                     @n_CartonLength = CZ.CartonLength,
+                                     @n_CartonWidth = CZ.CartonWidth,
+                                     @n_CartonHeight = CZ.CartonHeight
+                           FROM #CARTONIZATION CZ
+                           WHERE CZ.Cube >= (@n_StdCube * IIF(@n_OrderQty >= @n_VAS_QtyCanPack, @n_VAS_QtyCanPack, @n_OrderQty) )
+                           AND NOT EXISTS(SELECT 1 FROM #CTNTRACK C WHERE C.ROWID = CZ.RowID)
+                           AND CZ.IsGeneric = 1
+                           ORDER BY CZ.Cube;
+
+                           IF @b_Debug = 10
+                              SELECT 'VAS Qty', (@n_StdCube * IIF(@n_OrderQty >= @n_VAS_QtyCanPack, @n_VAS_QtyCanPack, @n_OrderQty) ), @c_SKU, @n_OrderQty
+                        END
+
+                        IF @c_CartonType = N''
+                        --WL01 E
                         -- Pick Carton that can fit the order cube
                         SELECT TOP 1
                                  @n_CTNRowID = RowID,
@@ -802,6 +889,7 @@ BEGIN
                         FROM #CARTONIZATION CZ
                         WHERE CZ.Cube >= @n_OrderCube
                         AND NOT EXISTS(SELECT 1 FROM #CTNTRACK C WHERE C.ROWID = CZ.RowID)
+                        AND CZ.IsGeneric = 1   --WL01
                         ORDER BY CZ.Cube;
                         -- Pick carton type that can fit the entire SKU Group total Cude
                         IF @c_CartonType = N''
@@ -830,6 +918,7 @@ BEGIN
                               FROM #CARTONIZATION CZ 
                               WHERE CZ.Cube >= @n_SKUGroupCube
                               AND NOT EXISTS(SELECT 1 FROM #CTNTRACK C WHERE C.ROWID = CZ.RowID) 
+                              AND CZ.IsGeneric = 1   --WL01
                               ORDER BY CZ.Cube DESC 
                            END 
                         END
@@ -843,6 +932,7 @@ BEGIN
                            FROM #CARTONIZATION CZ 
                            WHERE CZ.Cube >= @n_StdCube
                            AND NOT EXISTS(SELECT 1 FROM #CTNTRACK C WHERE C.ROWID = CZ.RowID) 
+                           AND CZ.IsGeneric = 1   --WL01
                            ORDER BY CZ.Cube DESC 
                         END
                         IF @c_CartonType=N'' 
@@ -874,8 +964,8 @@ BEGIN
                         --    SET @c_CartonType = N''
                         -- END 
 
-                      INSERT INTO #CTNTRACK VALUES (@n_CTNRowID)
-                   END -- WHILE 1=1
+                        INSERT INTO #CTNTRACK VALUES (@n_CTNRowID)
+                     END -- WHILE 1=1
                       
                   END -- IF @c_CartonType = N''
                                        
@@ -926,18 +1016,34 @@ BEGIN
                     BEGIN
                         PRINT 'Exists in Carton Detail'
                     END
-                    --Get the sku can fully best fit in the existing carton
-                    SELECT TOP 1 @n_RowID = OS.RowID,                           
-                          @n_StdCube = OS.StdCube,
-                          @n_PackQty = OS.TotalQty - OS.TotalQtyPacked
-                    FROM #ORDERSKU OS (NOLOCK)
-                    WHERE OS.Orderkey = @c_Orderkey
-                    AND OS.TotalQty - OS.TotalQtyPacked > 0
-                    AND OS.RowID NOT IN(SELECT RowID FROM #ROWTRACK)
-                    AND @n_CartonRemainCube >= (OS.TotalCube - OS.TotalCubePacked)
-                    AND OS.Sku = @c_Sku
-                    ORDER BY (OS.TotalCube - OS.TotalCubePacked) DESC, OS.Sku
-                      
+                    IF @c_VAS_CartonType <> '' -- (SWT01) 
+                    BEGIN
+                       --Get the SKU remaining Qty regardless of Volume
+                        SELECT TOP 1 @n_RowID = OS.RowID,                           
+                              @n_StdCube = OS.StdCube,
+                              @n_PackQty = OS.TotalQty - OS.TotalQtyPacked
+                        FROM #ORDERSKU OS (NOLOCK)
+                        WHERE OS.Orderkey = @c_Orderkey
+                        AND OS.TotalQty - OS.TotalQtyPacked > 0
+                        AND OS.RowID NOT IN(SELECT RowID FROM #ROWTRACK)
+                        AND OS.Sku = @c_Sku
+                        ORDER BY (OS.TotalCube - OS.TotalCubePacked) DESC, OS.Sku
+                    END
+
+                    IF @n_RowID = 0
+                    BEGIN
+                        --Get the sku can fully best fit in the existing carton
+                        SELECT TOP 1 @n_RowID = OS.RowID,                           
+                              @n_StdCube = OS.StdCube,
+                              @n_PackQty = OS.TotalQty - OS.TotalQtyPacked
+                        FROM #ORDERSKU OS (NOLOCK)
+                        WHERE OS.Orderkey = @c_Orderkey
+                        AND OS.TotalQty - OS.TotalQtyPacked > 0
+                        AND OS.RowID NOT IN(SELECT RowID FROM #ROWTRACK)
+                        AND @n_CartonRemainCube >= (OS.TotalCube - OS.TotalCubePacked)
+                        AND OS.Sku = @c_Sku
+                        ORDER BY (OS.TotalCube - OS.TotalCubePacked) DESC, OS.Sku
+                    END  
                     IF @n_RowID = 0
                     BEGIN
                         --Get the smaller cube of the sku mix with existing carton 
@@ -987,28 +1093,41 @@ BEGIN
 
                   INSERT INTO #ROWTRACK(RowID) VALUES (@n_RowID)
                                        
-                 --Validate the carton at lease can fit 1 qty of the sku
-                IF NOT EXISTS(SELECT 1 FROM #CARTONIZATION WHERE Cube >= @n_StdCube AND CartonType = @c_CartonType) 
-                BEGIN
-                     SET @n_continue = 3
-                     SET @n_Err = 562205
-                     SET @c_Errmsg='NSQL'+CONVERT(NVARCHAR(10),@n_Err)+': No Carton type can fit a Sku ' + RTRIM(@c_Sku) + '.(mspRLWAV03)'
-
-                  IF @b_debug=2
+                  --Validate the carton at lease can fit 1 qty of the sku
+                  IF NOT EXISTS(SELECT 1 FROM #CARTONIZATION WHERE Cube >= @n_StdCube AND CartonType = @c_CartonType) 
                   BEGIN
-                     PRINT 'Error: ' + @c_Errmsg
-                  END
+                        SET @n_continue = 3
+                        SET @n_Err = 562205
+                        SET @c_Errmsg='NSQL'+CONVERT(NVARCHAR(10),@n_Err)+': No Carton type can fit a Sku ' + RTRIM(@c_Sku) + '.(mspRLWAV03)'
 
-                   BREAK
-                END                
-                  
-                 IF @n_StdCube > 0
-                     SET @n_QtyCanPackByCube = FLOOR(@n_CartonRemainCube / @n_StdCube)
-                                                        
-                 SET @n_QtyCanPack = @n_QtyCanPackByCube
+                     IF @b_debug=2
+                     BEGIN
+                        PRINT 'Error: ' + @c_Errmsg
+                     END
+
+                     BREAK
+                  END                
+                  -- (SWT01) Do not check total cube is VAS Carton Type is set
+                  IF @c_VAS_CartonType <> ''
+                  BEGIN
+                     SET @n_QtyCanPack = @n_PackQty 
+                  END 
+                  ELSE 
+                  BEGIN
+                     IF @n_StdCube > 0
+                     BEGIN 
+                        SET @n_QtyCanPackByCube = FLOOR(@n_CartonRemainCube / @n_StdCube)  
+                        SET @n_QtyCanPack = @n_QtyCanPackByCube 
+                     END 
+                     ELSE 
+                        SET @n_QtyCanPack = @n_PackQty                   
+                  END 
                  
                   IF @n_VAS_QtyCanPack > 0
-                     SET @n_QtyCanPack = @n_VAS_QtyCanPack
+                  BEGIN
+                     IF @n_QtyCanPack > @n_VAS_QtyCanPack
+                        SET @n_QtyCanPack = @n_VAS_QtyCanPack
+                  END
 
                  IF @n_StdCube = 0  --if sku cube not setup just pack all qty
                     SET @n_QtyCanPack = @n_PackQty                                             
@@ -1068,10 +1187,7 @@ BEGIN
       CLOSE CUR_ORD
       DEALLOCATE CUR_ORD
    END -- No MPOC Orders  
-
-   --------------------------------------------------
    -- Process Cartonization for MPOC Orders
-   --------------------------------------------------
    -- XXXXXX
 
    IF @n_continue IN(1,2) 
@@ -1122,7 +1238,7 @@ BEGIN
             SET @n_CartonNo = @n_CartonNo + 1            
 
             INSERT INTO #CARTON (Orderkey, CartonNo, LabelNo, CartonGroup, CartonType, MaxCube, MaxWeight, MaxCount, MaxSku, CartonLength, CartonWidth, CartonHeight, UCCNo, OrderGroup)
-            VALUES (@c_Orderkey, @n_CartonNo, '', @c_CartonGroup, '', 0, 0, 0, 0, 0, 0, 0, @c_UCCNo, @c_OrderGroup)                                 
+            VALUES (@c_Orderkey, @n_CartonNo, '', @c_CartonGroup, '9999', 0, 0, 0, 0, 0, 0, 0, @c_UCCNo, @c_OrderGroup)  --ALiang01 hardcode 9999 for carton type                                
             
             INSERT INTO #CARTONDETAIL (OrderGroup, Orderkey, Storerkey, Sku, CartonNo, Qty, RowRef)  --refer to ORDERSKU.RowID
             VALUES (@c_OrderGroup, @c_Orderkey, @c_Storerkey, @c_Sku, @n_CartonNo, @n_PackQty, @n_RowID) 
@@ -1194,6 +1310,7 @@ BEGIN
                   SELECT CZ.CartonType, CZ.CartonLength, CZ.CartonWidth, CZ.CartonHeight                              
                   FROM #CARTONIZATION CZ 
                   WHERE CZ.Cube >= @n_OrderCube
+                  AND CZ.IsGeneric = 1   --WL01
                   ORDER BY CZ.Cube
 
                   OPEN CUR_CartonType
