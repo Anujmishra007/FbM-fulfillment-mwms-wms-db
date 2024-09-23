@@ -1,12 +1,14 @@
 
 /************************************************************************/
-/* Store procedure: rdt_LottableProcess_BatchCheck                       */
+/* Store procedure: rdt_LottableProcess_BatchCheck                      */
 /* Copyright      : Maersk                                              */
 /*                                                                      */
 /* Purpose:                                                             */
 /*                                                                      */
 /* Date       Rev  Author     Purposes                                  */
-/* 2024-09-19 1.0  YYS027     FCR-827 Normal receiving is used by HUDA. */
+/* 2024-09-19 1.0  YYS027     FCR-827 Add BatchCheck Normal receipt     */
+/*                            for HUDA.                                 */
+/*                            this is a ProcessSP for lottableCode      */
 /************************************************************************/
 CREATE OR ALTER PROCEDURE rdt.rdt_LottableProcess_BatchCheck(
     @nMobile          INT
@@ -148,8 +150,8 @@ BEGIN
    SELECT @nShelfLife=ShelfLife FROM SKU WHERE StorerKey=@cStorerKey AND Sku=@cSKU
    SELECT @nYear=CONVERT(INT,@cYearCode)+CONVERT(INT,substring(@cLottableV,4,1))
    SELECT @dLottable13=CONVERT(DATETIME,'01/01/'+CONVERT(VARCHAR(20),@nYear),103)
-   SELECT @dLottable13=DATEADD(DAY,@nDays,@dLottable13)
-   SELECT @dLottable04=DATEADD(DAY,ISNULL(@nShelfLife,0),@dLottable13)
+   SELECT @dLottable13=DATEADD(DAY,@nDays,@dLottable13)                                --Production Date
+   SELECT @dLottable04=DATEADD(DAY,ISNULL(@nShelfLife,0),@dLottable13)                 --Exp Date
 
 Quit:
 
