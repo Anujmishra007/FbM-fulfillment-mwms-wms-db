@@ -151,13 +151,15 @@ BEGIN
 				      IF EXISTS(SELECT 1 FROM ORDERDETAIL WITH (NOLOCK) 
                            WHERE StorerKey = @c_StorerKey 
                            AND ExternPOKey = @c_Externpokey
-						   AND Status < 2)
+						   AND Status < '2')
 						 AND
-					     EXISTS(SELECT 1 FROM BI.V_Inventory WITH (NOLOCK)
-						   WHERE StorerKey=@c_StorerKey
-						   AND LOTTABLE03=@c_ExternPOKey
-						   AND Qty>0
-						   AND (Qty-QtyAllocated-QtyPicked)>0)
+					     EXISTS(SELECT 1 FROM LOTxLOCxID AS LLI WITH (NOLOCK) 
+						        LEFT JOIN LOTATTRIBUTE AS LA WITH (NOLOCK) 
+								ON LLI.Lot = LA.Lot 
+								WHERE LLI.StorerKey = @c_StorerKey 
+								AND LA.Lottable03 = @c_ExternPOKey 
+								AND LLI.Qty > 0 
+								AND (LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked) > 0)
 				      BEGIN
                      BEGIN TRY              
                            EXEC nsp_xdockorderprocessing 
@@ -239,13 +241,15 @@ BEGIN
                      IF EXISTS(SELECT 1 FROM ORDERDETAIL WITH (NOLOCK) 
                               WHERE StorerKey = @c_StorerKey 
                               AND ExternPOKey = @c_Externpokey 
-							  AND Status < 2)
+							  AND Status < '2')
 						AND
-					    EXISTS(SELECT 1 FROM BI.V_Inventory WITH (NOLOCK) 
-						      WHERE StorerKey=@c_StorerKey 
-							  AND LOTTABLE03=@c_ExternPOKey 
-							  AND Qty>0 
-							  AND (Qty-QtyAllocated-QtyPicked)>0)
+					    EXISTS(SELECT 1 FROM LOTxLOCxID AS LLI WITH (NOLOCK) 
+						        LEFT JOIN LOTATTRIBUTE AS LA WITH (NOLOCK) 
+								ON LLI.Lot = LA.Lot 
+								WHERE LLI.StorerKey = @c_StorerKey 
+								AND LA.Lottable03 = @c_ExternPOKey 
+								AND LLI.Qty > 0 
+								AND (LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked) > 0)
                      BEGIN
                         BEGIN TRY              
                               EXEC nsp_xdockorderprocessing 
