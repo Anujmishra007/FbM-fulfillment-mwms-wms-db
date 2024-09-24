@@ -148,17 +148,15 @@ BEGIN
                WHILE @@FETCH_STATUS <> -1 AND @n_Continue = 1
                BEGIN
                   -- (WST02) Only execute allocation when Order Lines exist AND Status < 2 AND when there is available stock, otherwise will stop with error
-				      IF EXISTS(SELECT 1 FROM ORDERDETAIL WITH (NOLOCK) 
-                           WHERE StorerKey = @c_StorerKey 
-                           AND ExternPOKey = @c_Externpokey
-						   AND Status < '2')
-						 AND
-					     EXISTS(SELECT 1 FROM LOTxLOCxID AS LLI WITH (NOLOCK) 
-						        LEFT JOIN LOTATTRIBUTE AS LA WITH (NOLOCK) 
-								ON LLI.Lot = LA.Lot 
-								WHERE LLI.StorerKey = @c_StorerKey 
-								AND LA.Lottable03 = @c_ExternPOKey 
-								AND LLI.Qty > 0 
+				      IF EXISTS(SELECT 1
+								FROM ORDERDETAIL OD WITH (NOLOCK)
+								JOIN LOTxLOCxID AS LLI WITH (NOLOCK) ON LLI.StorerKey = OD.StorerKey AND LLI.Sku = OD.SKU
+								JOIN LOTATTRIBUTE AS LA WITH (NOLOCK) ON LLI.Lot = LA.Lot
+								WHERE OD.StorerKey = @c_StorerKey
+								AND OD.ExternPOKey = @c_Externpokey
+								AND OD.Status < '2'
+								AND LA.Lottable03 = @c_ExternPOKey
+								AND LLI.Qty > 0
 								AND (LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked) > 0)
 				      BEGIN
                      BEGIN TRY              
@@ -238,17 +236,15 @@ BEGIN
                   WHILE @@FETCH_STATUS <> -1 AND @n_Continue = 1
                   BEGIN
                      -- (WST02) Only execute allocation when Order Lines exist AND Status < 2 AND when there is available stock, otherwise will stop with error
-                     IF EXISTS(SELECT 1 FROM ORDERDETAIL WITH (NOLOCK) 
-                              WHERE StorerKey = @c_StorerKey 
-                              AND ExternPOKey = @c_Externpokey 
-							  AND Status < '2')
-						AND
-					    EXISTS(SELECT 1 FROM LOTxLOCxID AS LLI WITH (NOLOCK) 
-						        LEFT JOIN LOTATTRIBUTE AS LA WITH (NOLOCK) 
-								ON LLI.Lot = LA.Lot 
-								WHERE LLI.StorerKey = @c_StorerKey 
-								AND LA.Lottable03 = @c_ExternPOKey 
-								AND LLI.Qty > 0 
+                     IF EXISTS(SELECT 1
+								FROM ORDERDETAIL OD WITH (NOLOCK)
+								JOIN LOTxLOCxID AS LLI WITH (NOLOCK) ON LLI.StorerKey = OD.StorerKey AND LLI.Sku = OD.SKU
+								JOIN LOTATTRIBUTE AS LA WITH (NOLOCK) ON LLI.Lot = LA.Lot
+								WHERE OD.StorerKey = @c_StorerKey
+								AND OD.ExternPOKey = @c_Externpokey
+								AND OD.Status < '2'
+								AND LA.Lottable03 = @c_ExternPOKey
+								AND LLI.Qty > 0
 								AND (LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked) > 0)
                      BEGIN
                         BEGIN TRY              
