@@ -2,7 +2,6 @@ SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
-
 /************************************************************************/
 /* Trigger: ntrPickDetailPreDelete                                      */
 /* Creation Date: 2024-06-04                                            */
@@ -21,113 +20,131 @@ GO
 /*                                                                      */
 /* Local Variables:                                                     */
 /*                                                                      */
-/* Called By: When records INSERTED                                     */
+/* Called By: When records DELETED                                      */
 /*                                                                      */
-/* GITHUB Version: 1.1                                                  */
+/* GITHUB Version: 1.2                                                  */
 /*                                                                      */
 /* Version: 2                                                           */
 /*                                                                      */
-/* Data Modifications:                                                  */
-/*                                                                      */
-/* Updates:                                                             */
-/* Date        Author   ver   Purposes                                  */
+/* Modifications:                                                       */
+/* Date        Author   Ver   Purposes                                  */
 /* 2024-06-04  Wan      1.0   Created.                                  */
-/* 2024-06-21  Wan01    1.1   UWP-18393 - Fixed                         */
+/* 2024-06-21  Wan01    1.1   UWP-18393 - Fixed.                        */
+/* 2024-08-01  Wan02    1.2   INC7095402- Split Storer ConfigKey check. */
+/*                                      - Revise LocationType (Leong01) */
 /************************************************************************/
+
 CREATE OR ALTER TRIGGER [dbo].[ntrPickDetailPreDelete]
-ON  [dbo].[PICKDETAIL]
-INSTEAD OF DELETE  
+ON [dbo].[PICKDETAIL]
+INSTEAD OF DELETE
 AS
 BEGIN
-   IF @@ROWCOUNT = 0  
-   BEGIN  
-      RETURN  
-   END 
+   IF @@ROWCOUNT = 0
+   BEGIN
+      RETURN
+   END
 
    SET NOCOUNT ON
    SET ANSI_NULLS OFF
    SET QUOTED_IDENTIFIER OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
- 
+
    DECLARE
-           @n_StartTCnt       INT            = @@TRANCOUNT
-         , @n_Continue        INT            = 1   
-         , @b_Success         INT            = 1 -- Populated by calls to stored procedures - was the proc successful?
-         , @n_err             INT            = 0 -- Error number returned by stored procedure or this trigger
-         , @c_errmsg          NVARCHAR(250)  = ''-- Error message returned by stored procedure or this trigger
-         , @c_Facility        NVARCHAR(5)  = ''
-         , @c_Storerkey       NVARCHAR(15) = ''
-         , @c_LockedID        NVARCHAR(10) = '' 
-         , @c_Loc             NVARCHAR(10) = ''          
-         , @c_ID              NVARCHAR(18) = ''                            
-                         
-         , @CUR_ID            CURSOR                                       
- 
-   IF EXISTS( SELECT 1 FROM DELETED WHERE ArchiveCop = '9')
+        @n_StartTCnt       INT            = @@TRANCOUNT
+      , @n_Continue        INT            = 1
+      , @b_Success         INT            = 1 -- Populated by calls to stored procedures - was the proc successful?
+      , @n_err             INT            = 0 -- Error number returned by stored procedure or this trigger
+      , @c_errmsg          NVARCHAR(250)  = ''-- Error message returned by stored procedure or this trigger
+      , @c_Facility        NVARCHAR(5)  = ''
+      , @c_StorerKey       NVARCHAR(15) = ''
+      , @c_LockedID        NVARCHAR(10) = ''
+      , @c_Loc             NVARCHAR(10) = ''
+      , @c_ID              NVARCHAR(18) = ''
+      , @c_PickDetailKey   NVARCHAR(10) = ''
+
+      , @CUR_ID            CURSOR
+      , @CUR_SCFG          CURSOR --(Wan01)
+
+   IF EXISTS(SELECT 1 FROM DELETED WHERE ArchiveCop = '9')
+   BEGIN
       SET @n_Continue = 4
-
-   IF OBJECT_ID('tempdb..#tmpPICKDETAIL','u') IS NOT NULL
-   BEGIN
-      DROP TABLE #tmpPICKDETAIL;
    END
 
-   CREATE TABLE #tmpPICKDETAIL (PickDetailKey  NVARCHAR(10)   NOT NULL PRIMARY KEY)
-
-   INSERT INTO #tmpPICKDETAIL (Pickdetailkey)
-   SELECT Pickdetailkey FROM deleted d
-
-   IF @n_continue IN (1, 2) 
+   IF OBJECT_ID('tempdb..#tmpPICKDETAIL','U') IS NOT NULL
    BEGIN
-      SET @CUR_ID = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-      SELECT d.Storerkey, d.Loc, d.ID 
-      FROM DELETED d
-      JOIN PICKDETAIL pd (NOLOCK) ON  pd.Storerkey = d.Storerkey      
-                                  AND pd.ID = d.ID
-      JOIN SKUxLOC sl (NOLOCK) ON  sl.Storerkey = d.Storerkey
-                               AND sl.Sku = d.Sku
-                               AND sl.Loc = d.Loc
-      JOIN LOC l (NOLOCK) ON l.loc = d.loc
-      CROSS APPLY dbo.fnc_SelectGetRight (l.Facility, d.storerkey, '', 'StockOnLockedID') sc --(Wan01)
-      WHERE d.[Status] < '9'
-      AND sl.LocationType NOT IN ('CASE', 'PICK')
-      AND l.Loc NOT IN ('DYNPPICK','DYNPICKP','DYNPICKR')
-      AND sc.Authority = '1'
-      GROUP BY d.Storerkey, d.Loc, d.ID
-      ORDER BY d.Storerkey, d.Loc, d.ID
+      DROP TABLE #tmpPICKDETAIL
+   END
 
-      OPEN @CUR_ID
+   CREATE TABLE #tmpPICKDETAIL (PickDetailKey NVARCHAR(10) NOT NULL PRIMARY KEY)
 
-      FETCH NEXT FROM @CUR_ID INTO @c_Storerkey, @c_Loc, @c_ID
+   INSERT INTO #tmpPICKDETAIL (PickDetailKey)
+   SELECT PickDetailKey FROM DELETED
 
-      WHILE @@FETCH_STATUS = 0 AND @n_continue IN (1, 2)
+   IF @n_Continue IN (1, 2)
+   BEGIN
+      SET @CUR_SCFG = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR     --(Wan02) - START
+      SELECT D.StorerKey, OH.Facility
+      FROM DELETED D
+      JOIN ORDERS OH WITH (NOLOCK)
+      ON OH.OrderKey = D.OrderKey AND OH.StorerKey = D.StorerKey
+      CROSS APPLY dbo.fnc_SelectGetRight (OH.Facility, D.StorerKey, '', 'StockOnLockedID') SC
+      WHERE SC.Authority = '1'
+      GROUP BY D.StorerKey, OH.Facility
+      ORDER BY D.StorerKey, OH.Facility
+
+      OPEN @CUR_SCFG
+      FETCH NEXT FROM @CUR_SCFG INTO @c_StorerKey, @c_Facility
+
+      WHILE @@FETCH_STATUS = 0 AND @n_Continue IN (1, 2)
       BEGIN
-         INSERT INTO #tmpPICKDETAIL (Pickdetailkey)
-         SELECT pd.PickDetailKey
-         FROM PICKDETAIL pd (NOLOCK) 
-         LEFT OUTER JOIN DELETED d ON  d.PickDetailKey = pd.PickDetailKey      
-         WHERE pd.Storerkey = @c_Storerkey
-         AND   pd.Loc = @c_Loc
-         AND   pd.ID = @c_ID
-         AND   pd.[Status] < '9'
-         AND   d.PickDetailKey IS NULL
+         SET @CUR_ID = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+         SELECT D.StorerKey, D.Loc, D.Id
+         FROM DELETED D
+         --JOIN PICKDETAIL PD WITH (NOLOCK) ON  PD.StorerKey = D.StorerKey               --(Wan02)
+         --                                 AND PD.ID = D.ID                             --(Wan02)
+         --                                 AND PD.Loc = D.Loc                           --(Wan02)
+         JOIN SKUxLOC SL WITH (NOLOCK) ON  SL.StorerKey = D.StorerKey
+                                       AND SL.Sku = D.Sku
+                                       AND SL.Loc = D.Loc
+         JOIN LOC L WITH (NOLOCK) ON L.Loc = D.Loc
+         --CROSS APPLY dbo.fnc_SelectGetRight (L.Facility, D.StorerKey, '', 'StockOnLockedID') SC --(Wan02)
+         WHERE D.[Status] < '9'
+         AND SL.LocationType NOT IN ('CASE', 'PICK')
+         AND L.LocationType NOT IN ('DYNPPICK','DYNPICKP','DYNPICKR') --(Leong01)
+         --AND SC.Authority = '1' --(Wan02)
+         AND D.StorerKey = @c_StorerKey
+         AND L.Facility = @c_Facility
+         GROUP BY D.StorerKey, D.Loc, D.Id
+         ORDER BY D.StorerKey, D.Loc, D.Id
 
-         FETCH NEXT FROM @CUR_ID INTO @c_Storerkey, @c_Loc, @c_ID
+         OPEN @CUR_ID
+         FETCH NEXT FROM @CUR_ID INTO @c_StorerKey, @c_Loc, @c_Id
+
+         WHILE @@FETCH_STATUS = 0 AND @n_Continue IN (1, 2)
+         BEGIN
+            INSERT INTO #tmpPICKDETAIL (PickDetailKey)
+            SELECT PD.PickDetailKey
+            FROM PICKDETAIL PD WITH (NOLOCK)
+            LEFT OUTER JOIN DELETED D ON D.PickDetailKey = PD.PickDetailKey
+            WHERE PD.StorerKey = @c_StorerKey
+            AND   PD.Loc = @c_Loc
+            AND   PD.Id = @c_Id
+            AND   PD.[Status] < '9'
+            AND   D.PickDetailKey IS NULL
+
+            FETCH NEXT FROM @CUR_ID INTO @c_StorerKey, @c_Loc, @c_Id
+         END
+         CLOSE @CUR_ID
+         DEALLOCATE @CUR_ID
+
+         FETCH NEXT FROM @CUR_SCFG INTO @c_StorerKey, @c_Facility
       END
-      CLOSE @CUR_ID
-      DEALLOCATE @CUR_ID
+      CLOSE @CUR_SCFG
+      DEALLOCATE @CUR_SCFG   --(Wan02) - END
    END
 
-   DELETE P 
+   DELETE P
    FROM PICKDETAIL P
-   JOIN #tmpPICKDETAIL d ON p.PickDetailKey = d.PickDetailKey
+   JOIN #tmpPICKDETAIL D ON P.PickDetailKey = D.PickDetailKey
+
 END -- Trigger
-GO
-SET QUOTED_IDENTIFIER OFF
-GO
-SET ANSI_NULLS OFF
-GO
-
-
---ALTER TABLE [dbo].[PICKDETAIL] ENABLE TRIGGER [ntrPickDetailPreDelete]
---GO
-
