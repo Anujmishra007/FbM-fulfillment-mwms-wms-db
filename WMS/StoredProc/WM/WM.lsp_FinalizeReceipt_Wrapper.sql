@@ -643,11 +643,11 @@ BEGIN
          END
 
          SET @c_ReceiptLineNo = ''
+         SET @c_ASNReason = ''
          WHILE 1 = 1
          BEGIN
             SET @c_Toloc     = ''
             SET @c_ToID      = ''
-            SET @c_ASNReason = ''
             SET @c_POKey     = ''
             SET @c_ExternReceiptKey = ''
             SELECT TOP 1                                                            --(Wan07)
