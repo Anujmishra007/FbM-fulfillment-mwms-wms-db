@@ -133,7 +133,9 @@ BEGIN
    END
    --first 3 chars, be days of year, should be less than 366
    SELECT @nDays=CONVERT(INT,LEFT(@cLottableV,3))
-   IF @nDays>=366 OR @nDays<0
+   --    in document of Confluence content, the batch no 3214A, the production date should be 2024+321st day = 16th Nov2024.
+   --    days should be dayofyear, and based on 1
+   IF @nDays>366 OR @nDays<=0
    BEGIN
 	  ----Message 223701 to 223750
       SET @nErrNo = 223701
@@ -150,7 +152,7 @@ BEGIN
    SELECT @nShelfLife=ShelfLife FROM SKU WHERE StorerKey=@cStorerKey AND Sku=@cSKU
    SELECT @nYear=CONVERT(INT,@cYearCode)+CONVERT(INT,substring(@cLottableV,4,1))
    SELECT @dLottable13=CONVERT(DATETIME,'01/01/'+CONVERT(VARCHAR(20),@nYear),103)
-   SELECT @dLottable13=DATEADD(DAY,@nDays,@dLottable13)                                --Production Date
+   SELECT @dLottable13=DATEADD(DAY,@nDays-1,@dLottable13)                              --Production Date
    SELECT @dLottable04=DATEADD(DAY,ISNULL(@nShelfLife,0),@dLottable13)                 --Exp Date
 
 Quit:
