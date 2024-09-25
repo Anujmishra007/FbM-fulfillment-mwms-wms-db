@@ -219,7 +219,6 @@ BEGIN
 					@c_DeviceType = @c_DeviceType,
 					@c_DeviceID = @c_DeviceID,
 					@n_Func = @n_Func,
-					@cPTSZone = @cPTSZone,
 					@cLightcmd = @cLightcmd
 			END
 
@@ -311,11 +310,11 @@ BEGIN
         INSERT INTO PTL.LFLightLinkLOG(
                 Application, LocalEndPoint,   RemoteEndPoint,
                 SourceKey,      MessageType,     Data,
-                Status,      AddDate,         DeviceIPAddress )
+                Status,      AddDate,         DeviceIPAddress,Facility )
          VALUES(
                 'LFLigthLink', '' , '',
                 '0', 'COMMAND', @c_LightCommand ,
-                '0', GetDate(), @c_DeviceIP  )
+                '0', GetDate(), @c_DeviceIP, @cFacility  )
 
          SET @cLightCmd = @c_LightCommand
 
@@ -329,11 +328,11 @@ BEGIN
          INSERT INTO PTL.LFLightLinkLOG(
                 Application, LocalEndPoint,   RemoteEndPoint,
                 SourceKey,      MessageType,     Data,
-                Status,      AddDate,         DeviceIPAddress )
+                Status,      AddDate,         DeviceIPAddress,Facility )
          VALUES(
                 'LFLigthLink', '' , '',
                 '0', 'COMMAND', @c_LightCommand + @c_LightAddress,
-                '0', GetDate(), @c_DeviceIP  )
+                '0', GetDate(), @c_DeviceIP, @cFacility  )
 
       END
 
@@ -364,7 +363,6 @@ BEGIN
 				@c_DeviceType = @c_DeviceType,
 				@c_DeviceID = @c_DeviceID,
 				@n_Func = @n_Func,
-				@cPTSZone = @cPTSZone,
 				@cLightcmd = @cLightcmd
 		END
 

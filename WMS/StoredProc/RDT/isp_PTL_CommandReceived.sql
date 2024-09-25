@@ -85,7 +85,7 @@ BEGIN
          AND   IPAddress = @c_DeviceIPAddress
          AND   DevicePosition = @c_DevicePosition
          AND   [Status] = '0'
-			AND   Facility = = @c_Facility
+			AND   Facility = @c_Facility
       END
 
       SELECT @n_Step = ls.Step,
@@ -148,7 +148,7 @@ BEGIN
                WHERE IPAddress = @c_DeviceIPAddress
                AND   DevicePosition = @c_DevicePosition
                AND   [Status] = '1'
-					AND   Facility = = @c_Facility
+					AND   Facility = @c_Facility
             END
             ELSE
             BEGIN

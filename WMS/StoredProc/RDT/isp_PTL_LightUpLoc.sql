@@ -61,7 +61,8 @@ BEGIN
            @n_LenOfValues     INT,      
            @c_CommandValue    NVARCHAR(15),     
            @nTranCount        INT,    
-           @cPTSZone          NVARCHAR(10)    
+           @cPTSZone          NVARCHAR(10),
+		   @cPORT			  NVARCHAR(10)
         
    DECLARE @c_StorerKey      NVARCHAR(15)                
           --,@c_DeviceID       VARCHAR(20)                
@@ -87,7 +88,7 @@ BEGIN
 --   END    
 
 
-	SELECT   @cFacility = Facility
+	SELECT   @cFacility = Facility,@cPORT= PortNo
 	FROM DeviceProfile ll WITH (NOLOCK)    
 	WHERE ll.DeviceID = @c_DeviceID   
 		AND ll.DevicePosition=@c_DevicePos 
@@ -195,7 +196,7 @@ BEGIN
    END
    ELSE IF @c_DeviceModel IN ('BATCH','LIGHT')
    BEGIN
-      SET @c_LightAction  = 'Operation'    
+      SET @c_LightAction  = 'Operation'   
       SELECT @c_LightCommand = [PTL].fnc_PTL_GenLightCommand(@c_LightAction, @c_LModMode, ISNULL(@c_ForceColor,''),@c_DeviceModel ) --Yeekung04   
       SET @n_LenOfValues = LEN(@c_DisplayValue)  
 
@@ -296,7 +297,7 @@ BEGIN
           SourceKey,      MessageType,     Data,    
           Status,      AddDate,         DeviceIPAddress,Facility )    
    VALUES(    
-          'LFLigthLink', '' , '',    
+          'LFLigthLink', @c_DeviceIP +':'+@cPORT , '',    
           @n_PTLKey, 'COMMAND', @c_LightCommand,    
           '0', @dAddDate, @c_DeviceIP,@cFacility  )    
 
