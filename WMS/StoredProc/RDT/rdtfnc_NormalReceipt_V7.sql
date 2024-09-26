@@ -82,9 +82,6 @@ DECLARE
    @tPalletLabel   VariableTable,
    @tExtScnData    VariableTable
 
-DECLARE @cBatchCheck NVARCHAR(20)
-   --use V_String19 to indicate decode count  - FCR827
-
 -- Session variable
 DECLARE
    @nFunc        INT,
