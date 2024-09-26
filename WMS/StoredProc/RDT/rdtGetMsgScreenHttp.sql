@@ -28,6 +28,7 @@
 /* Date         Rev    Author    Purposes                                    */
 /* 07-Nov-2023  1.0    JLC042    Copy from rdtGetMsgScreen                   */
 /* 17-07-2024   1.1    JACKC     UWP-21829 Error msg not visible             */
+/* 26-09-2024   1.2    NLT013    UWP-24932 Error message UI issue            */
 /*****************************************************************************/
 
 CREATE OR ALTER  PROC [RDT].[rdtGetMsgScreenHttp] (

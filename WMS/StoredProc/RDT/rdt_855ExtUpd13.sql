@@ -15,6 +15,7 @@ GO
 /* Date       Rev  Author   Purposes                                          */
 /* 2024-06-18 1.0  NLT013   FCR-386. Created                                  */
 /* 2024-08-06 1.1  Dennis   FCR-386. Remove order group condition             */
+/* 2024-09-26 1.2  NLT013   UWP-24932 Error message UI issue                  */
 /******************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_855ExtUpd13 (

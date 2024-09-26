@@ -30,6 +30,7 @@ BEGIN
 END
 ELSE
 BEGIN
+   /* 2024-09-26 NLT013   UWP-24932 Error message UI issue                  BEGIN*/
    IF NOT EXISTS (SELECT 1
    FROM sys.columns
    WHERE Name = 'DisplayMsg' AND Object_ID = Object_ID('RDT.rdtMsgQueue'))
@@ -37,6 +38,7 @@ BEGIN
       ALTER TABLE RDT.rdtMsgQueue ADD DisplayMsg INT NULL;
       EXEC sp_addextendedproperty N'MS_Description', N'Display the message if it is 1.', 'SCHEMA', N'rdt', 'TABLE', N'rdtMsgQueue', 'COLUMN', N'DisplayMsg'
    END
+   /* 2024-09-26 NLT013   UWP-24932 Error message UI issue                  END*/
 END
 GO
 GRANT DELETE ON  [RDT].[rdtMsgQueue] TO [NSQL]
