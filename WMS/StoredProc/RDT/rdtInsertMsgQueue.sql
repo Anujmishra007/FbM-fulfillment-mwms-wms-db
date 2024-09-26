@@ -43,7 +43,8 @@ CREATE  or ALTER  PROC rdt.rdtInsertMsgQueue (
    @cLine12    NVARCHAR(125) = '',  
    @cLine13    NVARCHAR(125) = '',  
    @cLine14    NVARCHAR(125) = '',  
-   @cLine15    NVARCHAR(125) = ''  
+   @cLine15    NVARCHAR(125) = ''  ,
+   @nDisplayMsg      INT = 1
 )  
 AS  
 SET NOCOUNT ON  
@@ -73,14 +74,16 @@ INSERT INTO RDT.rdtMsgQueue
            ,Line04           ,Line05           ,Line06  
            ,Line07           ,Line08           ,Line09  
            ,Line10           ,Line11           ,Line12  
-           ,Line13           ,Line14           ,Line15)  
+           ,Line13           ,Line14           ,Line15
+           ,DisplayMsg)  
      VALUES  
            (@nMobile,   
             @cLine01,         @cLine02,         @cLine03,               
             @cLine04,         @cLine05,         @cLine06,               
             @cLine07,         @cLine08,         @cLine09,               
             @cLine10,         @cLine11,         @cLine12,               
-            @cLine13,         @cLine14,         @cLine15)   
+            @cLine13,         @cLine14,         @cLine15,
+            @nDisplayMsg)   
   
 SET @nErrNo = @@ERROR   
 IF @nErrNo <> 0   

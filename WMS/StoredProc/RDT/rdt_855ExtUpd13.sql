@@ -203,7 +203,6 @@ BEGIN
                            BREAK
 
                         SET @cMsg01 = 'VAS Header'
-                        SET @cMsg10 = 'Press ESC Continue'
                         IF @nLoopIndex % 7 = 1 SET @cMsg02 = @cVASCode + '-' + @cVASCodeDesc
                         ELSE IF @nLoopIndex % 7  = 2 SET @cMsg03 = @cVASCode + '-' + @cVASCodeDesc
                         ELSE IF @nLoopIndex % 7  = 3 SET @cMsg04 = @cVASCode + '-' + @cVASCodeDesc
@@ -214,17 +213,20 @@ BEGIN
 
                         IF @cMsg01 IS NOT NULL AND TRIM(@cMsg01) <> '' AND @nLoopIndex % 7 = 0
                         BEGIN
-                           EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo, @cErrMsg, 
-                              @cMsg01, 
-                              @cMsg02, 
-                              @cMsg03, 
-                              @cMsg04, 
-                              @cMsg05, 
-                              @cMsg06, 
-                              @cMsg07, 
-                              @cMsg08, 
-                              @cMsg09, 
-                              @cMsg10
+                           EXEC rdt.rdtInsertMsgQueue 
+                              @nMobile = @nMobile, 
+                              @nErrNo = @nErrNo, 
+                              @cErrMsg = @cErrMsg, 
+                              @cLine01 = @cMsg01, 
+                              @cLine02 = @cMsg02, 
+                              @cLine03 = @cMsg03, 
+                              @cLine04 = @cMsg04, 
+                              @cLine05 = @cMsg05, 
+                              @cLine06 = @cMsg06, 
+                              @cLine07 = @cMsg07, 
+                              @cLine08 = @cMsg08, 
+                              @cLine09 = @cMsg09, 
+                              @nDisplayMsg = 0
 
                            SET @cMsg01 = ''
                            SET @cMsg02 = ''
@@ -240,18 +242,20 @@ BEGIN
                      IF @cMsg02 IS NOT NULL AND TRIM(@cMsg02) <> ''
                      BEGIN
                         SET @cMsg01 = 'VAS Header'
-                        SET @cMsg10 = 'Press ESC Continue'
-                        EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo, @cErrMsg, 
-                              @cMsg01, 
-                              @cMsg02, 
-                              @cMsg03, 
-                              @cMsg04, 
-                              @cMsg05, 
-                              @cMsg06, 
-                              @cMsg07, 
-                              @cMsg08, 
-                              @cMsg09, 
-                              @cMsg10
+                        EXEC rdt.rdtInsertMsgQueue 
+                           @nMobile = @nMobile, 
+                           @nErrNo = @nErrNo, 
+                           @cErrMsg = @cErrMsg, 
+                           @cLine01 = @cMsg01, 
+                           @cLine02 = @cMsg02, 
+                           @cLine03 = @cMsg03, 
+                           @cLine04 = @cMsg04, 
+                           @cLine05 = @cMsg05, 
+                           @cLine06 = @cMsg06, 
+                           @cLine07 = @cMsg07, 
+                           @cLine08 = @cMsg08, 
+                           @cLine09 = @cMsg09, 
+                           @nDisplayMsg = 0
 
                         SET @cMsg01 = ''
                         SET @cMsg02 = ''
@@ -281,7 +285,6 @@ BEGIN
                BEGIN
                   SET @nLoopIndex = 1
                   SET @cMsg09 = ''
-                  SET @cMsg10 = 'Press ESC for More'
 
                   DECLARE CUR_PPA CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
                      SELECT DISTINCT
@@ -312,17 +315,19 @@ BEGIN
 
                      IF @cMsg01 IS NOT NULL AND TRIM(@cMsg01) <> '' AND @nLoopIndex % 8 = 0
                      BEGIN
-                        EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo, @cErrMsg, 
-                              @cMsg01, 
-                              @cMsg02, 
-                              @cMsg03, 
-                              @cMsg04, 
-                              @cMsg05, 
-                              @cMsg06, 
-                              @cMsg07, 
-                              @cMsg08, 
-                              @cMsg09, 
-                              @cMsg10
+                        EXEC rdt.rdtInsertMsgQueue @nMobile = @nMobile, 
+                           @nErrNo = @nErrNo, 
+                           @cErrMsg = @cErrMsg, 
+                           @cLine01 = @cMsg01, 
+                           @cLine02 = @cMsg02, 
+                           @cLine03 = @cMsg03, 
+                           @cLine04 = @cMsg04, 
+                           @cLine05 = @cMsg05, 
+                           @cLine06 = @cMsg06, 
+                           @cLine07 = @cMsg07, 
+                           @cLine08 = @cMsg08, 
+                           @cLine09 = @cMsg09, 
+                           @nDisplayMsg = 0
 
                         SET @cMsg01 = ''
                         SET @cMsg02 = ''
@@ -342,18 +347,19 @@ BEGIN
 
                   IF @cMsg01 IS NOT NULL AND TRIM(@cMsg01) <> ''
                   BEGIN
-                     SET @cMsg10 = 'Press ESC Continue'
-                     EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo, @cErrMsg, 
-                           @cMsg01, 
-                           @cMsg02, 
-                           @cMsg03, 
-                           @cMsg04, 
-                           @cMsg05, 
-                           @cMsg06, 
-                           @cMsg07, 
-                           @cMsg08, 
-                           @cMsg09, 
-                           @cMsg10
+                     EXEC rdt.rdtInsertMsgQueue @nMobile = @nMobile, 
+                        @nErrNo = @nErrNo, 
+                        @cErrMsg = @cErrMsg, 
+                        @cLine01 = @cMsg01, 
+                        @cLine02 = @cMsg02, 
+                        @cLine03 = @cMsg03, 
+                        @cLine04 = @cMsg04, 
+                        @cLine05 = @cMsg05, 
+                        @cLine06 = @cMsg06, 
+                        @cLine07 = @cMsg07, 
+                        @cLine08 = @cMsg08, 
+                        @cLine09 = @cMsg09, 
+                        @nDisplayMsg = 0
 
                      SET @cMsg01 = ''
                      SET @cMsg02 = ''
