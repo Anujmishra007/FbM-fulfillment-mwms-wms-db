@@ -998,22 +998,22 @@ BEGIN
 
             SET @cLightMode = rdt.RDTGetConfig( @nFunc, 'LightMode', @cStorerKey) 
 
-            SELECT @nRowRef = RowRef
+            SELECT @cPosition   = Position
             FROM rdt.rdtPTLStationLog (NOLOCK)
             WHERE Station IN (@cStation1, @cStation2, @cStation3, @cStation4, @cStation5)
                AND CartonID = @cNewCartonID
             
-            SELECT   @cIPAddress  = IPAddress,
+            SELECT   @cIPAddress = IPAddress,
                      @cPosition   = DevicePosition,
-                     @nQTY        = QTY,
+                     @nQTY        = ExpectedQty,
                      @cStation    = DeviceID,
-					      @cPTLKey     = PTLKey
+					 @cPTLKey     = PTLKey
             FROM PTL.PTLTran WITH (NOLOCK)
-            WHERE SourceType = @nRowRef
-               AND Status = 0
+            WHERE DevicePosition = @cPosition
                AND LightUP = 0 
-               
-            EXEC PTL.isp_PTL_LightUpLoc 
+			   AND Facility = @cFacility
+
+            EXEC PTL.isp_PTL_LightUpLoc
                @n_Func            = @nFunc
                ,@n_PTLKey         = @cPTLKey
                ,@c_DisplayValue   = @nQTY 
@@ -1025,7 +1025,7 @@ BEGIN
                ,@c_DeviceIP       = @cIPAddress  
                ,@c_LModMode       = @cLightMode
             IF @nErrNo <> 0
-               GOTO Quit
+               GOTO RollBackTran
          END  
       END
 
