@@ -229,7 +229,8 @@ BEGIN
          BEGIN
             UPDATE PTL.PTLTran WITH (ROWLOCK)
             SET
-               LightUp = '0'
+               LightUp = '0',
+               Status  = '0'
             WHERE PTLKey = @n_PTLKey
             IF @@ERROR <> 0
             BEGIN
