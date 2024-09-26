@@ -4,15 +4,15 @@ SET ANSI_NULLS OFF
 GO 
 
 /************************************************************************/  
-/* Store procedure: rdt_600ExtScnLot01                                    */  
-/*                                                                      */  
+/* Store procedure: rdt_600ExtScn03                                  */  
+/* CUSTOMER :   HUDA                                                    */  
 /* Modifications log:                                                   */  
 /*                                                                      */  
 /* Date       Rev  Author     Purposes                                  */  
-/* 2024-09-25 1.0  Dennis     FCR-827. Created                          */  
+/* 2024-09-25 1.0  YYS027     FCR-827. Created                          */  
 /************************************************************************/  
   
-CREATE OR ALTER PROC [RDT].[rdt_600ExtScnLot01] (
+CREATE OR ALTER PROC [RDT].[rdt_600ExtScn03] (
    @nMobile      INT,           
    @nFunc        INT,           
    @cLangCode    NVARCHAR( 3),  
@@ -61,10 +61,16 @@ BEGIN
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
+
    DECLARE 
       @V_String19 VARCHAR(20),
       @nCount INT
    DECLARE @cBatchCheck NVARCHAR(20)
+
+   SET @nErrNo = 0
+   SET @cErrMsg = ''
+
+
    SELECT @cBatchCheck = SValue
          FROM rdt.StorerConfig (NOLOCK)
          WHERE Function_ID = @nFunc AND StorerKey = @cStorerKey AND ConfigKey = 'BatchCheck'
@@ -73,9 +79,6 @@ BEGIN
       GOTO Quit
    END
 
-   SET @nErrNo = 0
-   SET @cErrMsg = ''
-   set @nAfterStep = 0
 
    IF @nFunc = 600
    BEGIN
@@ -114,5 +117,5 @@ GO
 SET ANSI_NULLS ON
 GO
 
-GRANT EXECUTE ON rdt.rdt_600ExtScnLot01 to nSQL
+GRANT EXECUTE ON rdt.rdt_600ExtScn03 to nSQL
 GO

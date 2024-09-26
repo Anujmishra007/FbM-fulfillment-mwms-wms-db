@@ -148,7 +148,6 @@ DECLARE
 
    @cExtendedScreenSP   NVARCHAR( 20),
    @cExtScnSP           NVARCHAR( 20),
-   @cExtScnLotSP        NVARCHAR( 20),
 
    @cSuggLOC    NVARCHAR( 20),
    @nAction     INT,
@@ -2066,18 +2065,68 @@ BEGIN
 
       IF @nMorePage = 1 -- Yes
       BEGIN
+         IF @cExtendedUpdateSP <> '' --(yys027 update V_String19 via rdt_600ExtUpd11)
+         BEGIN
+            IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedUpdateSP AND type = 'P')
+            BEGIN
+               SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +
+                  ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cReceiptKey, @cPOKey, @cLOC, @cID, @cSKU, ' +
+                  ' @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05, ' +
+                  ' @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10, ' +
+                  ' @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, ' +
+                  ' @nQTY, @cReasonCode, @cSuggToLOC, @cFinalLOC, @cReceiptLineNumber, ' +
+                  ' @nErrNo OUTPUT, @cErrMsg OUTPUT'
+               SET @cSQLParam =
+                  '@nMobile      INT,           ' +
+                  '@nFunc        INT,           ' +
+                  '@cLangCode    NVARCHAR( 3),  ' +
+                  '@nStep        INT,           ' +
+                  '@nInputKey    INT,           ' +
+                  '@cFacility    NVARCHAR( 5),  ' +
+                  '@cStorerKey   NVARCHAR( 15), ' +
+                  '@cReceiptKey  NVARCHAR( 10), ' +
+                  '@cPOKey       NVARCHAR( 10), ' +
+                  '@cLOC         NVARCHAR( 10), ' +
+                  '@cID          NVARCHAR( 18), ' +
+                  '@cSKU         NVARCHAR( 20), ' +
+                  '@cLottable01  NVARCHAR( 18), ' +
+                  '@cLottable02  NVARCHAR( 18), ' +
+                  '@cLottable03  NVARCHAR( 18), ' +
+                  '@dLottable04  DATETIME,      ' +
+                  '@dLottable05  DATETIME,      ' +
+                  '@cLottable06  NVARCHAR( 30), ' +
+                  '@cLottable07  NVARCHAR( 30), ' +
+                  '@cLottable08  NVARCHAR( 30), ' +
+                  '@cLottable09  NVARCHAR( 30), ' +
+                  '@cLottable10  NVARCHAR( 30), ' +
+                  '@cLottable11  NVARCHAR( 30), ' +
+                  '@cLottable12  NVARCHAR( 30), ' +
+                  '@dLottable13  DATETIME,      ' +
+                  '@dLottable14  DATETIME,      ' +
+                  '@dLottable15  DATETIME,      ' +
+                  '@nQTY         INT,           ' +
+                  '@cReasonCode  NVARCHAR( 10), ' +
+                  '@cSuggToLOC   NVARCHAR( 10), ' +
+                  '@cFinalLOC    NVARCHAR( 10), ' +
+                  '@cReceiptLineNumber NVARCHAR( 10), ' +
+                  '@nErrNo             INT            OUTPUT, ' +
+                  '@cErrMsg            NVARCHAR( 20)  OUTPUT'
+
+               EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                  @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cReceiptKey, @cPOKey, @cLOC, @cID, @cSKU,
+                  @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
+                  @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
+                  @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,
+                  @nQTY, @cReasonCode, @cSuggToLOC, @cFinalLOC, @cReceiptLineNumber,
+                  @nErrNo OUTPUT, @cErrMsg OUTPUT
+            END   --SP checked
+            IF @nErrno<>0
+               GOTO QUIT
+         END
          -- Go to dynamic lottable screen
          SET @nFromScn = @nScn
          SET @nScn = 3990
          SET @nStep = @nStep + 1
-         SELECT @cBatchCheck = SValue
-            FROM rdt.StorerConfig (NOLOCK)
-            WHERE Function_ID = @nFunc AND StorerKey = @cStorerKey AND ConfigKey = 'BatchCheck'
-         IF ISNULL(@cBatchCheck,'')<>''
-         BEGIN
-            UPDATE rdt.RDTMOBREC SET V_String19='0' WHERE Mobile = @nMobile
-            EXEC rdt.rdtSetFocusField @nMobile,2
-         END
       END
       ELSE
       BEGIN
@@ -2405,6 +2454,7 @@ BEGIN
    BEGIN
       IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
       BEGIN
+         SET @cUDF01=''
          DELETE FROM @tExtScnData
          INSERT INTO @tExtScnData (Variable, Value) VALUES
             ('@cSKU', @cSKU),
@@ -2446,7 +2496,7 @@ BEGIN
          @cUDF28   OUTPUT, @cUDF29  OUTPUT, @cUDF30  OUTPUT
          IF @nErrNo <> 0
             GOTO Quit
-         IF @nStep = 6
+         IF @nStep = 6 AND ISNULL(@cUDF01,'')<>''
          BEGIN
             SET @cPUOM_Desc = @cUDF01
             SET @nPUOM_Div = CAST(ISNULL(@cUDF02,1) AS INT)
@@ -2515,14 +2565,20 @@ BEGIN
          GOTO Quit
 
       --check for stay this step or not
-      SET @cExtScnLotSP = rdt.RDTGetConfig( @nFunc, 'ExtScnLotSP', @cStorerkey)
-      IF ISNULL(@cExtScnLotSP,'')<>''
+      SET @cExtScnSP = rdt.RDTGetConfig( @nFunc, 'ExtScnSP', @cStorerkey)
+      IF ISNULL(@cExtScnSP,'')<>''
       BEGIN
-         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnLotSP AND type = 'P')
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
          BEGIN
+            SET @cUDF01=''
             DELETE FROM @tExtScnData
+            INSERT INTO @tExtScnData (Variable, Value) VALUES
+               ('@cSKU', @cSKU),
+               ('@cID', @cID),
+               ('@cPUOM_Desc', @cPUOM_Desc),
+               ('@nPUOM_Div', CONCAT(@nPUOM_Div,''))            
             EXECUTE [RDT].[rdt_ExtScnEntry]
-               @cExtScnLotSP,
+               @cExtScnSP,
                @nMobile, @nFunc, @cLangCode, @nOri_Step, @nOri_Scn, @nInputKey, @cFacility, @cStorerKey, @tExtScnData ,
                @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01  OUTPUT,
                @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02  OUTPUT,
@@ -2886,6 +2942,7 @@ BEGIN
    BEGIN
       IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
       BEGIN
+         SET @cUDF01=''
          DELETE FROM @tExtScnData
          INSERT INTO @tExtScnData (Variable, Value) VALUES
             ('@cSKU', @cSKU),
@@ -2953,7 +3010,7 @@ BEGIN
                @nFunc
             GOTO Quit
          END
-         IF @nStep = 6
+         IF @nStep = 6 AND ISNULL(@cUDF01,'')<>''
          BEGIN
             SET @cPUOM_Desc = @cUDF01
             SET @nPUOM_Div = CAST(ISNULL(@cUDF02,1) AS INT)
@@ -3504,15 +3561,66 @@ BEGIN
       IF @nMorePage = 1 -- Yes
       BEGIN
          -- Go to dynamic lottable screen
+         IF @cExtendedUpdateSP <> '' --(yys027 update 0 into V_String19 via rdt_600ExtUpd11)
+         BEGIN
+            IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedUpdateSP AND type = 'P')
+            BEGIN
+               SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +
+                  ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cReceiptKey, @cPOKey, @cLOC, @cID, @cSKU, ' +
+                  ' @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05, ' +
+                  ' @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10, ' +
+                  ' @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, ' +
+                  ' @nQTY, @cReasonCode, @cSuggToLOC, @cFinalLOC, @cReceiptLineNumber, ' +
+                  ' @nErrNo OUTPUT, @cErrMsg OUTPUT'
+               SET @cSQLParam =
+                  '@nMobile      INT,           ' +
+                  '@nFunc        INT,           ' +
+                  '@cLangCode    NVARCHAR( 3),  ' +
+                  '@nStep        INT,           ' +
+                  '@nInputKey    INT,           ' +
+                  '@cFacility    NVARCHAR( 5),  ' +
+                  '@cStorerKey   NVARCHAR( 15), ' +
+                  '@cReceiptKey  NVARCHAR( 10), ' +
+                  '@cPOKey       NVARCHAR( 10), ' +
+                  '@cLOC         NVARCHAR( 10), ' +
+                  '@cID          NVARCHAR( 18), ' +
+                  '@cSKU         NVARCHAR( 20), ' +
+                  '@cLottable01  NVARCHAR( 18), ' +
+                  '@cLottable02  NVARCHAR( 18), ' +
+                  '@cLottable03  NVARCHAR( 18), ' +
+                  '@dLottable04  DATETIME,      ' +
+                  '@dLottable05  DATETIME,      ' +
+                  '@cLottable06  NVARCHAR( 30), ' +
+                  '@cLottable07  NVARCHAR( 30), ' +
+                  '@cLottable08  NVARCHAR( 30), ' +
+                  '@cLottable09  NVARCHAR( 30), ' +
+                  '@cLottable10  NVARCHAR( 30), ' +
+                  '@cLottable11  NVARCHAR( 30), ' +
+                  '@cLottable12  NVARCHAR( 30), ' +
+                  '@dLottable13  DATETIME,      ' +
+                  '@dLottable14  DATETIME,      ' +
+                  '@dLottable15  DATETIME,      ' +
+                  '@nQTY         INT,           ' +
+                  '@cReasonCode  NVARCHAR( 10), ' +
+                  '@cSuggToLOC   NVARCHAR( 10), ' +
+                  '@cFinalLOC    NVARCHAR( 10), ' +
+                  '@cReceiptLineNumber NVARCHAR( 10), ' +
+                  '@nErrNo             INT            OUTPUT, ' +
+                  '@cErrMsg            NVARCHAR( 20)  OUTPUT'
+
+               EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                  @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cReceiptKey, @cPOKey, @cLOC, @cID, @cSKU,
+                  @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
+                  @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
+                  @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,
+                  @nQTY, @cReasonCode, @cSuggToLOC, @cFinalLOC, @cReceiptLineNumber,
+                  @nErrNo OUTPUT, @cErrMsg OUTPUT
+            END   --SP checked
+            IF @nErrno<>0
+               GOTO QUIT
+         END         
          SET @nScn = 3990
          SET @nStep = @nStep - 1
-         SELECT @cBatchCheck = SValue
-            FROM rdt.StorerConfig (NOLOCK)
-            WHERE Function_ID = @nFunc AND StorerKey = @cStorerKey AND ConfigKey = 'BatchCheck'
-         IF ISNULL(@cBatchCheck,'')<>''
-         BEGIN
-            UPDATE rdt.RDTMOBREC SET V_String19='0' WHERE Mobile = @nMobile
-         END
       END
       ELSE
       BEGIN
