@@ -2493,7 +2493,7 @@ BEGIN
          @cUDF28   OUTPUT, @cUDF29  OUTPUT, @cUDF30  OUTPUT
          IF @nErrNo <> 0
             GOTO Quit
-         IF @nStep = 6 AND ISNULL(@cUDF01,'')<>''
+         IF @nStep = 6 AND ISNULL(@cUDF01,'')<>''        --if ExtScnSP is not dennis version, skip to use @cUDF01
          BEGIN
             SET @cPUOM_Desc = @cUDF01
             SET @nPUOM_Div = CAST(ISNULL(@cUDF02,1) AS INT)
@@ -3007,7 +3007,7 @@ BEGIN
                @nFunc
             GOTO Quit
          END
-         IF @nStep = 6 AND ISNULL(@cUDF01,'')<>''
+         IF @nStep = 6 AND ISNULL(@cUDF01,'')<>''             --if ExtScnSP is not dennis version, skip to use @cUDF01
          BEGIN
             SET @cPUOM_Desc = @cUDF01
             SET @nPUOM_Div = CAST(ISNULL(@cUDF02,1) AS INT)
