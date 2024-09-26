@@ -1,4 +1,5 @@
 
+
 /************************************************************************/
 /* Store procedure: rdt_LottableProcess_BatchCheck                      */
 /* Copyright      : Maersk                                              */
@@ -69,6 +70,10 @@ BEGIN
    DECLARE @nYear       INT
    DECLARE @nShelfLife  INT
    DECLARE @cFacility   NVARCHAR( 5)
+   DECLARE @V_String19  VARCHAR(20)
+   DECLARE @nCount      INT
+
+   SELECT @V_String19 = V_String19 FROM rdt.RDTMOBREC (NOLOCK) WHERE Mobile = @nMobile
 
    SELECT @cFacility  = Facility FROM RDT.RDTMOBREC WITH (NOLOCK) WHERE Mobile = @nMobile
    DECLARE @cBatchCheck NVARCHAR(20)
@@ -105,16 +110,22 @@ BEGIN
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Invalid Config
       GOTO Quit
    END
-
-   IF @cLottableV='9999'
+   SELECT @cLottableV=ISNULL(@cLottableV,'')
+   IF @cLottableV=''
    BEGIN
-      SELECT @dLottable13=convert(datetime,'31-12-2099',103),@dLottable04=NULL
+      SET @nErrNo = 223704
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Batch Mandatory
       GOTO Quit
    END
-
+   ELSE IF @cLottableV='9999'
+   BEGIN
+      --raiserror(@cLottableV,16,1)
+      SELECT @dLottable13=CONVERT(DATETIME,'31-12-2099',103)
+      select @dLottable04=NULL where isnumeric(@V_String19)=0 or @V_String19='0'
+      GOTO QuitWithRecordCount
+   END
 
    SET @nLength = LEN( @cLottableV)
-
    IF @nLength NOT IN (4,5)
    BEGIN
 	  ----Message 223701 to 223750
@@ -123,6 +134,7 @@ BEGIN
       GOTO Quit
    END
 
+   --raiserror(@cLottableV,16,1)
    -- first 4 chars, should be numeric
    IF ISNUMERIC(LEFT(@cLottableV,4))=0
    BEGIN
@@ -154,7 +166,12 @@ BEGIN
    SELECT @dLottable13=CONVERT(DATETIME,'01/01/'+CONVERT(VARCHAR(20),@nYear),103)
    SELECT @dLottable13=DATEADD(DAY,@nDays-1,@dLottable13)                              --Production Date
    SELECT @dLottable04=DATEADD(DAY,ISNULL(@nShelfLife,0),@dLottable13)                 --Exp Date
-
+QuitWithRecordCount:
+   IF ISNUMERIC(@V_String19) = 1
+      SET @nCount = CONVERT(INT,@V_String19) + 1
+   ELSE
+      SET @nCount = 1
+   UPDATE rdt.RDTMOBREC SET V_String19=CONVERT(VARCHAR(20),@nCount) WHERE Mobile = @nMobile
 Quit:
 
 END

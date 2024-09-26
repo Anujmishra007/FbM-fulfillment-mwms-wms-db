@@ -52,6 +52,8 @@ GO
 /* 2024-04-19 4.6  Dennis   UWP-18504 Condition Code Enhancements                */
 /* 2024-07-02 4.7  Cuize    UWP-20470 Custom Auto GenID SSCC                     */
 /* 2024-07-02 4.8  Dennis   FCR-387   Accept Decimal Qty                         */
+/* 2024-09-25 4.9  YYS027   FCR-827   Add ExtendScreen:rdt_600ExtScnLot01 for    */
+/*                          BatchCheck                                           */
 /*********************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_NormalReceipt_V7] (
@@ -79,6 +81,9 @@ DECLARE
    @cSQLParam      NVARCHAR( MAX),
    @tPalletLabel   VariableTable,
    @tExtScnData    VariableTable
+
+DECLARE @cBatchCheck NVARCHAR(20)
+   --use V_String19 to indicate decode count  - FCR827
 
 -- Session variable
 DECLARE
@@ -142,7 +147,9 @@ DECLARE
    @nPABookingKey       INT,
 
    @cExtendedScreenSP   NVARCHAR( 20),
-   @cExtScnSP   NVARCHAR( 20),
+   @cExtScnSP           NVARCHAR( 20),
+   @cExtScnLotSP        NVARCHAR( 20),
+
    @cSuggLOC    NVARCHAR( 20),
    @nAction     INT,
    @nAfterScn   INT,
@@ -2063,6 +2070,14 @@ BEGIN
          SET @nFromScn = @nScn
          SET @nScn = 3990
          SET @nStep = @nStep + 1
+         SELECT @cBatchCheck = SValue
+            FROM rdt.StorerConfig (NOLOCK)
+            WHERE Function_ID = @nFunc AND StorerKey = @cStorerKey AND ConfigKey = 'BatchCheck'
+         IF ISNULL(@cBatchCheck,'')<>''
+         BEGIN
+            UPDATE rdt.RDTMOBREC SET V_String19='0' WHERE Mobile = @nMobile
+            EXEC rdt.rdtSetFocusField @nMobile,2
+         END
       END
       ELSE
       BEGIN
@@ -2498,6 +2513,57 @@ BEGIN
       
       IF @nMorePage = 1 -- Yes
          GOTO Quit
+
+      --check for stay this step or not
+      SET @cExtScnLotSP = rdt.RDTGetConfig( @nFunc, 'ExtScnLotSP', @cStorerkey)
+      IF ISNULL(@cExtScnLotSP,'')<>''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnLotSP AND type = 'P')
+         BEGIN
+            DELETE FROM @tExtScnData
+            EXECUTE [RDT].[rdt_ExtScnEntry]
+               @cExtScnLotSP,
+               @nMobile, @nFunc, @cLangCode, @nOri_Step, @nOri_Scn, @nInputKey, @cFacility, @cStorerKey, @tExtScnData ,
+               @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01  OUTPUT,
+               @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02  OUTPUT,
+               @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03  OUTPUT,
+               @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04  OUTPUT,
+               @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  @dLottable05  OUTPUT,
+               @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  @cLottable06  OUTPUT,
+               @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  @cLottable07  OUTPUT,
+               @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  @cLottable08  OUTPUT,
+               @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  @cLottable09  OUTPUT,
+               @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  @cLottable10  OUTPUT,
+               @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  @cLottable11  OUTPUT,
+               @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT,  @cLottable12  OUTPUT,
+               @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  @dLottable13  OUTPUT,
+               @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT,  @dLottable14  OUTPUT,
+               @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT,  @dLottable15  OUTPUT,
+               @nAction,
+               @nAfterScn OUTPUT,  @nAfterStep OUTPUT,
+               @nErrNo   OUTPUT,
+               @cErrMsg  OUTPUT,
+               @cUDF01   OUTPUT, @cUDF02  OUTPUT, @cUDF03  OUTPUT,
+               @cUDF04   OUTPUT, @cUDF05  OUTPUT, @cUDF06  OUTPUT,
+               @cUDF07   OUTPUT, @cUDF08  OUTPUT, @cUDF09  OUTPUT,
+               @cUDF10   OUTPUT, @cUDF11  OUTPUT, @cUDF12  OUTPUT,
+               @cUDF13   OUTPUT, @cUDF14  OUTPUT, @cUDF15  OUTPUT,
+               @cUDF16   OUTPUT, @cUDF17  OUTPUT, @cUDF18  OUTPUT,
+               @cUDF19   OUTPUT, @cUDF20  OUTPUT, @cUDF21  OUTPUT,
+               @cUDF22   OUTPUT, @cUDF23  OUTPUT, @cUDF24  OUTPUT,
+               @cUDF25   OUTPUT, @cUDF26  OUTPUT, @cUDF27  OUTPUT,
+               @cUDF28   OUTPUT, @cUDF29  OUTPUT, @cUDF30  OUTPUT
+
+            IF @nErrNo <> 0
+               GOTO Step_5_Fail
+            IF @nAfterStep = 5
+            BEGIN
+               --to solve the error Invalid length parameter passed to the LEFT or SUBSTRING function.
+               SELECT @cOutField15=@cOutField15Backup
+               GOTO Quit
+            END
+         END
+      END
 
       SET @cExtendedScreenSP =  ISNULL(rdt.RDTGetConfig( @nFunc, 'ExtendedScreenSP', @cStorerKey), '')
       SET @nAction = 1
@@ -3440,6 +3506,13 @@ BEGIN
          -- Go to dynamic lottable screen
          SET @nScn = 3990
          SET @nStep = @nStep - 1
+         SELECT @cBatchCheck = SValue
+            FROM rdt.StorerConfig (NOLOCK)
+            WHERE Function_ID = @nFunc AND StorerKey = @cStorerKey AND ConfigKey = 'BatchCheck'
+         IF ISNULL(@cBatchCheck,'')<>''
+         BEGIN
+            UPDATE rdt.RDTMOBREC SET V_String19='0' WHERE Mobile = @nMobile
+         END
       END
       ELSE
       BEGIN
