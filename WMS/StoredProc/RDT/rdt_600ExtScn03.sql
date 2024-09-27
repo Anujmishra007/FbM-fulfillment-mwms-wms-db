@@ -71,9 +71,7 @@ BEGIN
    SET @cErrMsg = ''
 
 
-   SELECT @cBatchCheck = SValue
-         FROM rdt.StorerConfig (NOLOCK)
-         WHERE Function_ID = @nFunc AND StorerKey = @cStorerKey AND ConfigKey = 'BatchCheck'
+   SELECT  @cBatchCheck= rdt.rdtGetConfig(@nFunc,'BatchCheck',@cStorerKey)
    IF ISNULL(@cBatchCheck,'')=''
    BEGIN
       GOTO Quit
