@@ -134,7 +134,6 @@ BEGIN
       GOTO Quit
    END
 
-   --raiserror(@cLottableV,16,1)
    -- first 4 chars, should be numeric
    IF ISNUMERIC(LEFT(@cLottableV,4))=0
    BEGIN

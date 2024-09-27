@@ -2121,7 +2121,6 @@ BEGIN
       
       IF @nMorePage = 1 -- Yes
       BEGIN
-
          -- Go to dynamic lottable screen
          SET @nFromScn = @nScn
          SET @nScn = 3990
@@ -3618,7 +3617,6 @@ BEGIN
       IF @nMorePage = 1 -- Yes
       BEGIN
          -- Go to dynamic lottable screen
-
          SET @nScn = 3990
          SET @nStep = @nStep - 1
       END
