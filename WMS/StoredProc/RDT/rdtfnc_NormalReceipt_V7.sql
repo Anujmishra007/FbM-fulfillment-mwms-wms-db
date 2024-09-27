@@ -52,7 +52,7 @@ GO
 /* 2024-04-19 4.6  Dennis   UWP-18504 Condition Code Enhancements                */
 /* 2024-07-02 4.7  Cuize    UWP-20470 Custom Auto GenID SSCC                     */
 /* 2024-07-02 4.8  Dennis   FCR-387   Accept Decimal Qty                         */
-/* 2024-09-25 4.9  YYS027   FCR-827   Add ExtendScreen:rdt_600ExtScnLot01 for    */
+/* 2024-09-25 4.9  YYS027   FCR-827   Add ExtendScreen:rdt_600ExtScn03 for       */
 /*                          BatchCheck                                           */
 /*********************************************************************************/
 
@@ -2452,7 +2452,6 @@ BEGIN
    BEGIN
       IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
       BEGIN
-         --SET @cUDF01=''
          DELETE FROM @tExtScnData
          INSERT INTO @tExtScnData (Variable, Value) VALUES
             ('@cSKU', @cSKU),
