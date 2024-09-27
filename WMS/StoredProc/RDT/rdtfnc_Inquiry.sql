@@ -6,7 +6,7 @@ GO
 
 /************************************************************************/
 /* Store procedure: rdtfnc_Inquiry                                      */
-/* Copyright      : IDS                                                 */
+/* Copyright      : MAERSK                                              */
 /*                                                                      */
 /* Purpose: Inquiry                                                     */
 /*                                                                      */
@@ -66,6 +66,8 @@ GO
 /* 2022-11-01 4.2  James      WMS-20940-Extend variable langth (james11)*/
 /* 2023-10-02 4.3  YeeKung    WMS-23810 Add DispStyleColorSize          */
 /*                           (yeekung04)                                */
+/* 2019-08-30 4.4  James      WMS-10415 Remove Qty hold and replace with*/
+/*                            Pendingmovein (james12)                   */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_Inquiry] (
@@ -160,7 +162,9 @@ DECLARE
    @cSKUBarcode2        NVARCHAR( 20),
    @cChkStorerKey       NVARCHAR( 15),
    @cSKUStatus          NVARCHAR( 10) , -- (james09)
-
+   @nMQTY_PMV           FLOAT,          -- (james12)
+   @nPQTY_PMV           FLOAT,          -- (james1)
+   
    @cLottableCode NVARCHAR( 30),
    @cLottable01 NVARCHAR( 18),
    @cLottable02 NVARCHAR( 18),
@@ -258,10 +262,10 @@ SELECT
    @nCurrentRec   = V_Integer2,
    @nPQTY_Avail   = V_Integer3,
    @nPQTY_Alloc   = V_Integer4,
-   @nPQTY_Hold    = V_Integer5,
+   @nPQTY_PMV     = V_Integer5,
    @nMQTY_Avail   = V_Integer6,
    @nMQTY_Alloc   = V_Integer7,
-   @nMQTY_Hold    = V_Integer8,
+   @nMQTY_PMV     = V_Integer8,
    @nMQTY_TTL     = V_Integer9,
    @nMQTY_RPL     = V_Integer10,
    @nPQTY_TTL     = V_Integer11,
@@ -989,7 +993,8 @@ BEGIN
             @dLottable14 = LA.Lottable14,
             @dLottable15 = LA.Lottable15,
             @nMQty_TTL = LLI.Qty,        -- (james02)
-            @nMQty_RPL = CASE WHEN LLI.QtyReplen < 0 THEN 0 ELSE LLI.QtyReplen END    -- (james02)
+            @nMQty_RPL = CASE WHEN LLI.QtyReplen < 0 THEN 0 ELSE LLI.QtyReplen END,    -- (james02)
+            @nMQTY_PMV = LLI.PendingMoveIN   -- (james12)
          FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
             INNER JOIN dbo.LotAttribute LA WITH (NOLOCK) ON (LLI.LOT = LA.LOT)
             INNER JOIN dbo.LOC LOC WITH (NOLOCK) ON (LOC.LOC = LLI.LOC)
@@ -1000,46 +1005,6 @@ BEGIN
             AND (LLI.QTY <> 0 OR LLI.QtyAllocated <> 0 OR LLI.QtyPicked <> 0 OR LLI.QtyExpected <> 0) -- (ChewKP02)
             AND LLI.LOC = @cInquiry_LOC
          ORDER BY LLI.SKU + LLI.LOC + LLI.ID + LLI.LOT -- Needed for looping
-
-         -- (Vicky01) - Start
-         SET @nMQTY_Hold = 0
-
-         IF EXISTS (SELECT 1 FROM dbo.LOC WITH (NOLOCK)
-                    WHERE LOC = @cInquiry_LOC AND Facility = @cFacility AND LocationFlag = 'HOLD')
-         BEGIN
-            SELECT @nMQTY_Hold = SUM(LLI.QTY)
-            FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
-            WHERE LLI.StorerKey = CASE WHEN @nMultiStorer = 1 THEN LLI.StorerKey ELSE @cStorerKey END
-            AND  LLI.SKU = @cSKU
-            AND  LLI.LOC = @cInquiry_LOC
-            AND  LLI.LOT = @cLOT
-            AND  LLI.ID = @cID
-         END
-         ELSE IF EXISTS (SELECT 1 FROM dbo.InventoryHold WITH (NOLOCK)
-                         WHERE LOT = @cLOT AND Hold = '1')
-         BEGIN
-            SELECT @nMQTY_Hold = SUM(LLI.QTY)
-            FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
-            WHERE LLI.StorerKey = CASE WHEN @nMultiStorer = 1 THEN LLI.StorerKey ELSE @cStorerKey END
-            AND  LLI.SKU = @cSKU
-            AND  LLI.LOC = @cInquiry_LOC
-            AND  LLI.LOT = @cLOT
-            AND  LLI.ID = @cID
-         END
-         ELSE IF EXISTS (SELECT 1 FROM dbo.ID WITH (NOLOCK)
-                         WHERE ID = @cID AND Status = 'HOLD')
-         BEGIN
-            SELECT @nMQTY_Hold = SUM(LLI.QTY)
-            FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
-            WHERE LLI.StorerKey = CASE WHEN @nMultiStorer = 1 THEN LLI.StorerKey ELSE @cStorerKey END
-            AND  LLI.SKU = @cSKU
-            AND  LLI.LOC = @cInquiry_LOC
-            AND  LLI.LOT = @cLOT
-            AND  LLI.ID = @cID
-          END
-
-          SET @nMQTY_Avail = @nMQTY_Avail - @nMQTY_Hold
-         -- (Vicky01) - End
       END
       ELSE IF @cInquiry_ID  <> ''
       BEGIN
@@ -1091,7 +1056,8 @@ BEGIN
             @dLottable14 = LA.Lottable14,
             @dLottable15 = LA.Lottable15,
             @nMQty_TTL = LLI.Qty,        -- (james02)
-            @nMQty_RPL = CASE WHEN LLI.QtyReplen < 0 THEN 0 ELSE LLI.QtyReplen END    -- (james02)
+            @nMQty_RPL = CASE WHEN LLI.QtyReplen < 0 THEN 0 ELSE LLI.QtyReplen END,    -- (james02)
+            @nMQTY_PMV = LLI.PendingMoveIN   -- (james12)
          FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
             INNER JOIN dbo.LotAttribute LA WITH (NOLOCK) ON (LLI.LOT = LA.LOT)
             INNER JOIN dbo.LOC LOC WITH (NOLOCK) ON (LOC.LOC = LLI.LOC)
@@ -1102,46 +1068,6 @@ BEGIN
             AND (LLI.QTY <> 0 OR LLI.QtyAllocated <> 0 OR LLI.QtyPicked <> 0 OR LLI.QtyExpected <> 0) -- (ChewKP02)
             AND LLI.ID  = @cInquiry_ID
          ORDER BY LLI.SKU + LLI.LOC + LLI.ID + LLI.LOT -- Needed for looping
-
-         -- (Vicky01) - Start
-         SET @nMQTY_Hold = 0
-
-         IF EXISTS (SELECT 1 FROM dbo.LOC WITH (NOLOCK)
-                    WHERE LOC = @cLOC AND Facility = @cFacility AND LocationFlag = 'HOLD')
-         BEGIN
-            SELECT @nMQTY_Hold = SUM(LLI.QTY)
-            FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
-            WHERE LLI.StorerKey = CASE WHEN @nMultiStorer = 1 THEN LLI.StorerKey ELSE @cStorerKey END
-            AND  LLI.SKU = @cSKU
-            AND  LLI.LOC = @cLOC
-            AND  LLI.LOT = @cLOT
-            AND  LLI.ID = @cInquiry_ID
-         END
-         ELSE IF EXISTS (SELECT 1 FROM dbo.InventoryHold WITH (NOLOCK)
-                         WHERE LOT = @cLOT AND Hold = '1')
-         BEGIN
-            SELECT @nMQTY_Hold = SUM(LLI.QTY)
-            FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
-            WHERE LLI.StorerKey = CASE WHEN @nMultiStorer = 1 THEN LLI.StorerKey ELSE @cStorerKey END
-            AND  LLI.SKU = @cSKU
-            AND  LLI.LOC = @cLOC
-            AND  LLI.LOT = @cLOT
-            AND  LLI.ID = @cInquiry_ID
-         END
-         ELSE IF EXISTS (SELECT 1 FROM dbo.ID WITH (NOLOCK)
-                         WHERE ID = @cInquiry_ID AND Status = 'HOLD')
-         BEGIN
-            SELECT @nMQTY_Hold = SUM(LLI.QTY)
-            FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
-            WHERE LLI.StorerKey = CASE WHEN @nMultiStorer = 1 THEN LLI.StorerKey ELSE @cStorerKey END
-            AND  LLI.SKU = @cSKU
-            AND  LLI.LOC = @cLOC
-            AND  LLI.LOT = @cLOT
-            AND  LLI.ID = @cInquiry_ID
-          END
-
-          SET @nMQTY_Avail = @nMQTY_Avail - @nMQTY_Hold
-         -- (Vicky01) - End
       END
       ELSE
       BEGIN
@@ -1193,7 +1119,8 @@ BEGIN
             @dLottable14 = LA.Lottable14,
             @dLottable15 = LA.Lottable15,
             @nMQty_TTL = LLI.Qty,        -- (james02)
-            @nMQty_RPL = CASE WHEN LLI.QtyReplen < 0 THEN 0 ELSE LLI.QtyReplen END    -- (james02)
+            @nMQty_RPL = CASE WHEN LLI.QtyReplen < 0 THEN 0 ELSE LLI.QtyReplen END,    -- (james02)
+            @nMQTY_PMV = LLI.PendingMoveIN   -- (james12)
          FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
             INNER JOIN dbo.LotAttribute LA WITH (NOLOCK) ON (LLI.LOT = LA.LOT)
             INNER JOIN dbo.LOC LOC WITH (NOLOCK) ON (LOC.LOC = LLI.LOC)
@@ -1205,46 +1132,6 @@ BEGIN
             AND (LLI.QTY <> 0 OR LLI.QtyAllocated <> 0 OR LLI.QtyPicked <> 0 OR LLI.QtyExpected <> 0) -- (ChewKP02)
             AND LLI.SKU = @cInquiry_SKU
          ORDER BY LLI.SKU + LLI.LOC + LLI.ID + LLI.LOT -- Needed for looping
-
-         -- (Vicky01) - Start
-         SET @nMQTY_Hold = 0
-
-         IF EXISTS (SELECT 1 FROM dbo.LOC WITH (NOLOCK)
-                    WHERE LOC = @cLOC AND Facility = @cFacility AND LocationFlag = 'HOLD')
-         BEGIN
-            SELECT @nMQTY_Hold = SUM(LLI.QTY)
-            FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
-            WHERE LLI.StorerKey = CASE WHEN @nMultiStorer = 1 THEN LLI.StorerKey ELSE @cStorerKey END
-            AND  LLI.SKU = @cInquiry_SKU
-            AND  LLI.LOC = @cLOC
-            AND  LLI.LOT = @cLOT
-            AND  LLI.ID = @cID
-         END
-         ELSE IF EXISTS (SELECT 1 FROM dbo.InventoryHold WITH (NOLOCK)
-                         WHERE LOT = @cLOT AND Hold = '1')
-         BEGIN
-            SELECT @nMQTY_Hold = SUM(LLI.QTY)
-            FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
-            WHERE LLI.StorerKey = CASE WHEN @nMultiStorer = 1 THEN LLI.StorerKey ELSE @cStorerKey END
-            AND  LLI.SKU = @cInquiry_SKU
-            AND  LLI.LOC = @cLOC
-            AND  LLI.LOT = @cLOT
-            AND  LLI.ID = @cID
-         END
-         ELSE IF EXISTS (SELECT 1 FROM dbo.ID WITH (NOLOCK)
-                         WHERE ID = @cInquiry_ID AND Status = 'HOLD')
-         BEGIN
-            SELECT @nMQTY_Hold = SUM(LLI.QTY)
-            FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
-            WHERE LLI.StorerKey = CASE WHEN @nMultiStorer = 1 THEN LLI.StorerKey ELSE @cStorerKey END
-            AND  LLI.SKU = @cInquiry_SKU
-            AND  LLI.LOC = @cLOC
-            AND  LLI.LOT = @cLOT
-            AND  LLI.ID = @cID
-          END
-
-          SET @nMQTY_Avail = @nMQTY_Avail - @nMQTY_Hold
-         -- (Vicky01) - End
       END
 
       -- Validate if any result
@@ -1305,7 +1192,7 @@ BEGIN
             SET @cPUOM_Desc = ''
             SET @nPQTY_Alloc = 0
             SET @nPQTY_Avail = 0
-            SET @nPQTY_Hold = 0 -- (Vicky01)
+            SET @nPQTY_PMV = 0 -- (james12)
             SET @nPQTY_TTL = 0 -- (james02)
             SET @nPQTY_RPL = 0 -- (james02)
             SET @nPQTY_Pick = 0
@@ -1314,10 +1201,10 @@ BEGIN
          BEGIN
             SET @nMQTY_Avail = @nMQTY_Avail / @nPUOM_Div
             SET @nMQTY_Alloc = @nMQTY_Alloc / @nPUOM_Div
-            SET @nMQTY_Hold  = @nMQTY_Hold / @nPUOM_Div -- (Vicky01)
             SET @nMQTY_TTL   = @nMQTY_TTL / @nPUOM_Div  -- (james02)
             SET @nMQTY_RPL   = @nMQTY_RPL / @nPUOM_Div  -- (james02)
             SET @nMQTY_Pick  = @nMQTY_Pick / @nPUOM_Div  -- (james02)
+            SET @nMQTY_PMV   = @nMQTY_PMV / @nPUOM_Div   -- (james12)
          END
       END
       ELSE
@@ -1328,7 +1215,7 @@ BEGIN
             SET @cPUOM_Desc = ''
             SET @nPQTY_Alloc = 0
             SET @nPQTY_Avail = 0
-            SET @nPQTY_Hold = 0 -- (Vicky01)
+            SET @nPQTY_PMV = 0 -- (james12)
             SET @nPQTY_TTL = 0 -- (james02)
             SET @nPQTY_RPL = 0 -- (james02)
             --SET @nMQTY_Pick = 0 -- (james02)  -- (ChewKP02)
@@ -1338,7 +1225,7 @@ BEGIN
             -- Calc QTY in preferred UOM
             SET @nPQTY_Avail = CAST(@nMQTY_Avail AS INT) / @nPUOM_Div  -- (ChewKP04)
             SET @nPQTY_Alloc = CAST(@nMQTY_Alloc AS INT) / @nPUOM_Div  -- (ChewKP04)
-            SET @nPQTY_Hold  = CAST(@nMQTY_Hold  AS INT) / @nPUOM_Div  -- (Vicky01)  -- (ChewKP04)
+            SET @nPQTY_PMV   = CAST(@nMQTY_PMV   AS INT) / @nPUOM_Div -- (james12)
             SET @nPQTY_TTL   = CAST(@nMQTY_TTL   AS INT) / @nPUOM_Div  -- (james02) -- (ChewKP04)
             SET @nPQTY_RPL   = CAST(@nMQTY_RPL   AS INT) / @nPUOM_Div  -- (james02) -- (ChewKP04)
             SET @nPQTY_Pick  = CAST(@nMQTY_Pick  AS INT) / @nPUOM_Div  -- (james02) -- (ChewKP04)
@@ -1346,7 +1233,7 @@ BEGIN
             -- Calc the remaining in master unit
             SET @nMQTY_Avail = CAST(@nMQTY_Avail as INT)  % @nPUOM_Div
             SET @nMQTY_Alloc = CAST(@nMQTY_Alloc as INT)  % @nPUOM_Div
-            SET @nMQTY_Hold  = CAST(@nMQTY_Hold  as INT)  % @nPUOM_Div   -- (Vicky01)
+            SET @nMQTY_PMV   = CAST(@nMQTY_PMV   as INT) % @nPUOM_Div  -- (james12)
             SET @nMQTY_TTL   = CAST(@nMQTY_TTL   as INT)  % @nPUOM_Div   -- (james02)
             SET @nMQTY_RPL   = CAST(@nMQTY_RPL   as INT)  % @nPUOM_Div   -- (james02)
             SET @nMQTY_Pick  = CAST(@nMQTY_Pick  as INT)  % @nPUOM_Div   -- (james02)
@@ -1374,10 +1261,10 @@ BEGIN
          END
 
          SET @cOutField08 = LTRIM(STR(@nMQTY_TTL,10,5))
-         SET @cOutField09 = LTRIM(STR(@nMQTY_Hold,10,5))
-         SET @cOutField10 = LTRIM(STR(@nMQTY_Alloc,10,5))
-         SET @cOutField11 = LTRIM(STR(@nMQTY_Pick,10,5))
-         SET @cOutField12 = LTRIM(STR(@nMQTY_RPL,10,5))
+         SET @cOutField09 = LTRIM(STR(@nMQTY_Alloc,10,5))
+         SET @cOutField10 = LTRIM(STR(@nMQTY_Pick,10,5))
+         SET @cOutField11 = LTRIM(STR(@nMQTY_RPL,10,5))
+         SET @cOutField12 = LTRIM(STR(@nMQTY_PMV,10,5))
          SET @cOutField13 = LTRIM(STR(@nMQTY_Avail,10,5))
       END
       ELSE
@@ -1390,19 +1277,19 @@ BEGIN
                             THEN LEFT( CAST( LEFT(@nPQTY_TTL, 5) AS NVARCHAR( 5)) + REPLICATE(' ', 6), 6) + CAST( LEFT(@nMQTY_TTL, 5) AS NVARCHAR( 5))
                             ELSE SPACE( 6) + CAST( LEFT(@nMQTY_TTL, 5)   AS NVARCHAR( 5)) END
          SET @cOutField09 = CASE WHEN @cPUOM_Desc <> ''
-                            THEN LEFT( CAST( LEFT(@nPQTY_Hold, 5) AS NVARCHAR( 5)) + REPLICATE(' ', 6), 6) + CAST( LEFT(@nMQTY_Hold, 5) AS NVARCHAR( 5))
-                            ELSE SPACE( 6) + CAST( LEFT(@nMQTY_Hold, 5)  AS NVARCHAR( 5)) END -- (Vicky01)
-         SET @cOutField10 = CASE WHEN @cPUOM_Desc <> ''
                             THEN LEFT( CAST( LEFT(@nPQTY_Alloc, 5) AS NVARCHAR( 5)) + REPLICATE(' ', 6), 6) + CAST( LEFT(@nMQTY_Alloc, 5) AS NVARCHAR( 5))
                             ELSE SPACE( 6) + CAST( LEFT(@nMQTY_Alloc, 5) AS NVARCHAR( 5)) END
-         SET @cOutField11 = CASE WHEN @cPUOM_Desc <> ''
+         SET @cOutField10 = CASE WHEN @cPUOM_Desc <> ''
                             THEN LEFT( CAST( LEFT(@nPQTY_Pick, 5) AS NVARCHAR( 5)) + REPLICATE(' ', 6), 6) + CAST( LEFT(@nMQTY_Pick, 5) AS NVARCHAR( 5))
                             ELSE SPACE( 6) + CAST( LEFT(@nMQTY_Pick, 5) AS NVARCHAR( 5)) END
-         SET @cOutField12 = CASE WHEN @cPUOM_Desc <> ''
+         SET @cOutField11 = CASE WHEN @cPUOM_Desc <> ''
                             THEN LEFT( CAST( LEFT(@nPQTY_RPL, 5) AS NVARCHAR( 5)) + REPLICATE(' ', 6), 6) + CAST( LEFT(@nMQTY_RPL, 5) AS NVARCHAR( 5))
                             ELSE SPACE( 6) + CAST( LEFT(@nMQTY_RPL, 5)   AS NVARCHAR( 5)) END -- (james02)
+         SET @cOutField12 = CASE WHEN @cPUOM_Desc <> ''
+                            THEN LEFT( CAST( LEFT(@nPQTY_PMV, 5) AS NVARCHAR( 5)) + REPLICATE(' ', 6), 6) + CAST( LEFT(@nMQTY_PMV, 5) AS NVARCHAR( 5))
+                            ELSE SPACE( 6) + CAST( LEFT(@nMQTY_PMV, 5)   AS NVARCHAR( 5)) END -- (james12)
          SET @cOutField13 = CASE WHEN @cPUOM_Desc <> ''
-                       THEN LEFT( CAST( LEFT(@nPQTY_Avail, 5) AS NVARCHAR( 5)) + REPLICATE(' ', 6), 6) + CAST( LEFT(@nMQTY_Avail, 5) AS NVARCHAR( 5))
+                            THEN LEFT( CAST( LEFT(@nPQTY_Avail, 5) AS NVARCHAR( 5)) + REPLICATE(' ', 6), 6) + CAST( LEFT(@nMQTY_Avail, 5) AS NVARCHAR( 5))
                             ELSE SPACE( 6) + CAST( LEFT(@nMQTY_Avail, 5) AS NVARCHAR( 5)) END
          -- end --(CheWKP03)
       END
@@ -1715,7 +1602,8 @@ BEGIN
             @dLottable14 = LA.Lottable14,
             @dLottable15 = LA.Lottable15,
             @nMQty_TTL = LLI.Qty,        -- (james02)
-            @nMQty_RPL = CASE WHEN LLI.QtyReplen < 0 THEN 0 ELSE LLI.QtyReplen END    -- (james02)
+            @nMQty_RPL = CASE WHEN LLI.QtyReplen < 0 THEN 0 ELSE LLI.QtyReplen END,    -- (james02)
+            @nMQTY_PMV = LLI.PendingMoveIN   -- (james12)
          FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
             INNER JOIN dbo.LotAttribute LA WITH (NOLOCK) ON (LLI.LOT = LA.LOT)
             INNER JOIN dbo.LOC LOC WITH (NOLOCK) ON (LOC.LOC = LLI.LOC)
@@ -1727,46 +1615,6 @@ BEGIN
             AND LLI.LOC = @cInquiry_LOC
             AND (LLI.SKU + LLI.LOC + LLI.ID + LLI.LOT) > (@cSKU + @cLOC + @cID + @cLOT) -- next row
          ORDER BY LLI.SKU + LLI.LOC + LLI.ID + LLI.LOT
-
-         -- (Vicky01) - Start
-         SET @nMQTY_Hold = 0
-
-         IF EXISTS (SELECT 1 FROM dbo.LOC WITH (NOLOCK)
-                    WHERE LOC = @cInquiry_LOC AND Facility = @cFacility AND LocationFlag = 'HOLD')
-         BEGIN
-            SELECT @nMQTY_Hold = SUM(LLI.QTY)
-            FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
-            WHERE LLI.StorerKey = CASE WHEN @nMultiStorer = 1 THEN LLI.StorerKey ELSE @cStorerKey END
-            AND  LLI.SKU = @cSKU
-            AND  LLI.LOC = @cInquiry_LOC
-            AND  LLI.LOT = @cLOT
-            AND  LLI.ID = @cID
-         END
-         ELSE IF EXISTS (SELECT 1 FROM dbo.InventoryHold WITH (NOLOCK)
-                         WHERE LOT = @cLOT AND Hold = '1')
-         BEGIN
-            SELECT @nMQTY_Hold = SUM(LLI.QTY)
-            FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
-            WHERE LLI.StorerKey = CASE WHEN @nMultiStorer = 1 THEN LLI.StorerKey ELSE @cStorerKey END
-            AND  LLI.SKU = @cSKU
-            AND  LLI.LOC = @cInquiry_LOC
-            AND  LLI.LOT = @cLOT
-            AND  LLI.ID = @cID
-         END
-         ELSE IF EXISTS (SELECT 1 FROM dbo.ID WITH (NOLOCK)
-                         WHERE ID = @cID AND Status = 'HOLD')
-         BEGIN
-            SELECT @nMQTY_Hold = SUM(LLI.QTY)
-            FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
-            WHERE LLI.StorerKey = CASE WHEN @nMultiStorer = 1 THEN LLI.StorerKey ELSE @cStorerKey END
-            AND  LLI.SKU = @cSKU
-            AND  LLI.LOC = @cInquiry_LOC
-            AND  LLI.LOT = @cLOT
-            AND  LLI.ID = @cID
-          END
-
-          SET @nMQTY_Avail = @nMQTY_Avail - @nMQTY_Hold
-          -- (Vicky01) - End
       END
       ELSE IF @cInquiry_ID <> ''
       BEGIN
@@ -1818,7 +1666,8 @@ BEGIN
             @dLottable14 = LA.Lottable14,
             @dLottable15 = LA.Lottable15,
             @nMQty_TTL = LLI.Qty,        -- (james02)
-            @nMQty_RPL = CASE WHEN LLI.QtyReplen < 0 THEN 0 ELSE LLI.QtyReplen END    -- (james02)
+            @nMQty_RPL = CASE WHEN LLI.QtyReplen < 0 THEN 0 ELSE LLI.QtyReplen END,    -- (james02)
+            @nMQTY_PMV = LLI.PendingMoveIN   -- (james12)
          FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
             INNER JOIN dbo.LotAttribute LA WITH (NOLOCK) ON (LLI.LOT = LA.LOT)
             INNER JOIN dbo.LOC LOC WITH (NOLOCK) ON (LOC.LOC = LLI.LOC)
@@ -1830,46 +1679,6 @@ BEGIN
             AND LLI.ID = @cInquiry_ID
             AND (LLI.SKU + LLI.LOC + LLI.ID + LLI.LOT) > (@cSKU + @cLOC + @cID + @cLOT) -- next row
          ORDER BY LLI.SKU + LLI.LOC + LLI.ID + LLI.LOT
-
-         -- (Vicky01) - Start
-         SET @nMQTY_Hold = 0
-
-         IF EXISTS (SELECT 1 FROM dbo.LOC WITH (NOLOCK)
-                    WHERE LOC = @cLOC AND Facility = @cFacility AND LocationFlag = 'HOLD')
-         BEGIN
-           SELECT @nMQTY_Hold = SUM(LLI.QTY)
-           FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
-           WHERE LLI.StorerKey = CASE WHEN @nMultiStorer = 1 THEN LLI.StorerKey ELSE @cStorerKey END
-            AND  LLI.SKU = @cSKU
-            AND  LLI.LOC = @cLOC
-            AND  LLI.LOT = @cLOT
-            AND  LLI.ID = @cInquiry_ID
-         END
-         ELSE IF EXISTS (SELECT 1 FROM dbo.InventoryHold WITH (NOLOCK)
-                         WHERE LOT = @cLOT AND Hold = '1')
-         BEGIN
-           SELECT @nMQTY_Hold = SUM(LLI.QTY)
-           FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
-           WHERE LLI.StorerKey = CASE WHEN @nMultiStorer = 1 THEN LLI.StorerKey ELSE @cStorerKey END
-            AND  LLI.SKU = @cSKU
-            AND  LLI.LOC = @cLOC
-            AND  LLI.LOT = @cLOT
-            AND  LLI.ID = @cInquiry_ID
-         END
-         ELSE IF EXISTS (SELECT 1 FROM dbo.ID WITH (NOLOCK)
-                         WHERE ID = @cInquiry_ID AND Status = 'HOLD')
-         BEGIN
-           SELECT @nMQTY_Hold = SUM(LLI.QTY)
-           FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
-           WHERE LLI.StorerKey = CASE WHEN @nMultiStorer = 1 THEN LLI.StorerKey ELSE @cStorerKey END
-            AND  LLI.SKU = @cSKU
-            AND  LLI.LOC = @cLOC
-            AND  LLI.LOT = @cLOT
-            AND  LLI.ID = @cInquiry_ID
-          END
-
-          SET @nMQTY_Avail = @nMQTY_Avail - @nMQTY_Hold
-         -- (Vicky01) - End
       END
       ELSE
       BEGIN
@@ -1921,7 +1730,8 @@ BEGIN
             @dLottable14 = LA.Lottable14,
             @dLottable15 = LA.Lottable15,
             @nMQty_TTL = LLI.Qty,        -- (james02)
-            @nMQty_RPL = CASE WHEN LLI.QtyReplen < 0 THEN 0 ELSE LLI.QtyReplen END    -- (james02)
+            @nMQty_RPL = CASE WHEN LLI.QtyReplen < 0 THEN 0 ELSE LLI.QtyReplen END,    -- (james02)
+            @nMQTY_PMV = LLI.PendingMoveIN   -- (james12)
          FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
             INNER JOIN dbo.LotAttribute LA WITH (NOLOCK) ON (LLI.LOT = LA.LOT)
             INNER JOIN dbo.LOC LOC WITH (NOLOCK) ON (LOC.LOC = LLI.LOC)
@@ -1934,46 +1744,6 @@ BEGIN
             AND LLI.SKU  = @cInquiry_SKU
             AND (LLI.SKU + LLI.LOC + LLI.ID + LLI.LOT) > (@cSKU + @cLOC + @cID + @cLOT) -- next row
          ORDER BY LLI.SKU + LLI.LOC + LLI.ID + LLI.LOT
-
-         -- (Vicky01) - Start
-         SET @nMQTY_Hold = 0
-
-         IF EXISTS (SELECT 1 FROM dbo.LOC WITH (NOLOCK)
-                    WHERE LOC = @cLOC AND Facility = @cFacility AND LocationFlag = 'HOLD')
-         BEGIN
-           SELECT @nMQTY_Hold = SUM(LLI.QTY)
-           FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
-           WHERE LLI.StorerKey = CASE WHEN @nMultiStorer = 1 THEN LLI.StorerKey ELSE @cStorerKey END
-            AND  LLI.SKU = @cInquiry_SKU
-            AND  LLI.LOC = @cLOC
-            AND  LLI.LOT = @cLOT
-            AND  LLI.ID = @cID
-         END
-         ELSE IF EXISTS (SELECT 1 FROM dbo.InventoryHold WITH (NOLOCK)
-                         WHERE LOT = @cLOT AND Hold = '1')
-         BEGIN
-           SELECT @nMQTY_Hold = SUM(LLI.QTY)
-           FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
-           WHERE LLI.StorerKey = CASE WHEN @nMultiStorer = 1 THEN LLI.StorerKey ELSE @cStorerKey END
-            AND  LLI.SKU = @cInquiry_SKU
-            AND  LLI.LOC = @cLOC
-            AND  LLI.LOT = @cLOT
-            AND  LLI.ID = @cID
-         END
-         ELSE IF EXISTS (SELECT 1 FROM dbo.ID WITH (NOLOCK)
-                         WHERE ID = @cInquiry_ID AND Status = 'HOLD')
-         BEGIN
-           SELECT @nMQTY_Hold = SUM(LLI.QTY)
-           FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
-           WHERE LLI.StorerKey = CASE WHEN @nMultiStorer = 1 THEN LLI.StorerKey ELSE @cStorerKey END
-            AND  LLI.SKU = @cInquiry_SKU
-            AND  LLI.LOC = @cLOC
-            AND  LLI.LOT = @cLOT
-            AND  LLI.ID = @cID
-          END
-
-          SET @nMQTY_Avail = @nMQTY_Avail - @nMQTY_Hold
-         -- (Vicky01) - End
       END
 
       -- Validate if any result
@@ -2034,7 +1804,7 @@ BEGIN
             SET @cPUOM_Desc = ''
             SET @nPQTY_Alloc = 0
             SET @nPQTY_Avail = 0
-            SET @nPQTY_Hold = 0 -- (Vicky01)
+            SET @nPQTY_PMV = 0 -- (james12)
             SET @nPQTY_TTL = 0 -- (james02)
             SET @nPQTY_RPL = 0 -- (james02)
             SET @nPQTY_Pick = 0
@@ -2043,7 +1813,7 @@ BEGIN
          BEGIN
             SET @nMQTY_Avail = @nMQTY_Avail / @nPUOM_Div
             SET @nMQTY_Alloc = @nMQTY_Alloc / @nPUOM_Div
-            SET @nMQTY_Hold  = @nMQTY_Hold / @nPUOM_Div -- (Vicky01)
+            SET @nMQTY_PMV   = @nMQTY_PMV / @nPUOM_Div  -- (james12)
             SET @nMQTY_TTL   = @nMQTY_TTL / @nPUOM_Div  -- (james02)
             SET @nMQTY_RPL   = @nMQTY_RPL / @nPUOM_Div  -- (james02)
             SET @nMQTY_Pick  = @nMQTY_Pick / @nPUOM_Div  -- (james02)
@@ -2057,7 +1827,7 @@ BEGIN
             SET @cPUOM_Desc = ''
             SET @nPQTY_Alloc = 0
             SET @nPQTY_Avail = 0
-            SET @nPQTY_Hold = 0 -- (Vicky01)
+            SET @nPQTY_PMV = 0 -- (james12)
             SET @nPQTY_TTL = 0 -- (james02)
             SET @nPQTY_RPL = 0 -- (james02)
          END
@@ -2066,7 +1836,7 @@ BEGIN
             -- Calc QTY in preferred UOM
             SET @nPQTY_Avail = CAST(@nMQTY_Avail AS INT) / @nPUOM_Div -- (ChewKP04)
             SET @nPQTY_Alloc = CAST(@nMQTY_Alloc AS INT) / @nPUOM_Div -- (ChewKP04)
-            SET @nPQTY_Hold  = CAST(@nMQTY_Hold  AS INT) / @nPUOM_Div -- (Vicky01) -- (ChewKP04)
+            SET @nPQTY_PMV   = CAST(@nMQTY_PMV   AS INT) / @nPUOM_Div -- (james12)
             SET @nPQTY_TTL   = CAST(@nMQTY_TTL   AS INT) / @nPUOM_Div  -- (james02)  -- (ChewKP04)
             SET @nPQTY_RPL   = CAST(@nMQTY_RPL   AS INT) / @nPUOM_Div  -- (james02)  -- (ChewKP04)
             SET @nPQTY_Pick  = CAST(@nMQTY_Pick  AS INT) / @nPUOM_Div  -- (james02)  -- (ChewKP04)
@@ -2074,7 +1844,7 @@ BEGIN
             -- Calc the remaining in master unit
             SET @nMQTY_Avail = CAST(@nMQTY_Avail as INT) % @nPUOM_Div
             SET @nMQTY_Alloc = CAST(@nMQTY_Alloc as INT) % @nPUOM_Div
-            SET @nMQTY_Hold  = CAST(@nMQTY_Hold  as INT) % @nPUOM_Div   -- (Vicky01)
+            SET @nMQTY_PMV   = CAST(@nMQTY_PMV   as INT) % @nPUOM_Div  -- (james12)
             SET @nMQTY_TTL   = CAST(@nMQTY_TTL   as INT) % @nPUOM_Div  -- (james02)
             SET @nMQTY_RPL   = CAST(@nMQTY_RPL  as INT) % @nPUOM_Div   -- (james02)
             SET @nMQTY_Pick  = CAST(@nMQTY_Pick  as INT) % @nPUOM_Div   -- (james02)
@@ -2115,10 +1885,10 @@ BEGIN
          END
 
          SET @cOutField08 = LTRIM(STR(@nMQTY_TTL,10,5))
-         SET @cOutField09 = LTRIM(STR(@nMQTY_Hold,10,5))
-         SET @cOutField10 = LTRIM(STR(@nMQTY_Alloc,10,5))
-         SET @cOutField11 = LTRIM(STR(@nMQTY_Pick,10,5))
-         SET @cOutField12 = LTRIM(STR(@nMQTY_RPL,10,5))
+         SET @cOutField09 = LTRIM(STR(@nMQTY_Alloc,10,5))
+         SET @cOutField10 = LTRIM(STR(@nMQTY_Pick,10,5))
+         SET @cOutField11 = LTRIM(STR(@nMQTY_RPL,10,5))
+         SET @cOutField12 = LTRIM(STR(@nMQTY_PMV,10,5))
          SET @cOutField13 = LTRIM(STR(@nMQTY_Avail,10,5))
       END
       ELSE
@@ -2131,17 +1901,17 @@ BEGIN
                             THEN LEFT( CAST( LEFT(@nPQTY_TTL, 5) AS NVARCHAR( 5)) + REPLICATE(' ', 6), 6) + CAST( LEFT(@nMQTY_TTL, 5) AS NVARCHAR( 5))
                             ELSE SPACE( 6) + CAST( LEFT(@nMQTY_TTL, 5)   AS NVARCHAR( 5)) END -- (james02)
          SET @cOutField09 = CASE WHEN @cPUOM_Desc <> ''
-                            THEN LEFT( CAST( LEFT(@nPQTY_Hold, 5) AS NVARCHAR( 5)) + REPLICATE(' ', 6), 6) + CAST( LEFT(@nMQTY_Hold, 5) AS NVARCHAR( 5))
-                            ELSE SPACE( 6) + CAST( LEFT(@nMQTY_Hold, 5)  AS NVARCHAR( 5)) END -- (Vicky01)
-         SET @cOutField10 = CASE WHEN @cPUOM_Desc <> ''
                             THEN LEFT( CAST( LEFT(@nPQTY_Alloc, 5) AS NVARCHAR( 5)) + REPLICATE(' ', 6), 6) + CAST(LEFT(@nMQTY_Alloc, 5) AS NVARCHAR( 5))
                             ELSE SPACE( 6) + CAST( LEFT(@nMQTY_Alloc, 5) AS NVARCHAR( 5)) END
-         SET @cOutField11 = CASE WHEN @cPUOM_Desc <> ''
+         SET @cOutField10 = CASE WHEN @cPUOM_Desc <> ''
                             THEN LEFT( CAST( LEFT(@nPQTY_Pick, 5) AS NVARCHAR( 5)) + REPLICATE(' ', 6), 6) + CAST( LEFT(@nMQTY_Pick, 5) AS NVARCHAR( 5))
                             ELSE SPACE( 6) + CAST( LEFT(@nMQTY_Pick, 5) AS NVARCHAR( 5)) END
-         SET @cOutField12 = CASE WHEN @cPUOM_Desc <> ''
+         SET @cOutField11 = CASE WHEN @cPUOM_Desc <> ''
                             THEN LEFT( CAST( LEFT(@nPQTY_RPL, 5) AS NVARCHAR( 5)) + REPLICATE(' ', 6), 6) + CAST( LEFT(@nMQTY_RPL, 5) AS NVARCHAR( 5))
                             ELSE SPACE( 6) + CAST( LEFT(@nMQTY_RPL, 5)   AS NVARCHAR( 5)) END -- (james02)
+         SET @cOutField12 = CASE WHEN @cPUOM_Desc <> ''
+                            THEN LEFT( CAST( LEFT(@nPQTY_PMV, 5) AS NVARCHAR( 5)) + REPLICATE(' ', 6), 6) + CAST( LEFT(@nMQTY_PMV, 5) AS NVARCHAR( 5))
+                            ELSE SPACE( 6) + CAST( LEFT(@nMQTY_PMV, 5)  AS NVARCHAR( 5)) END -- (james12)
          SET @cOutField13 = CASE WHEN @cPUOM_Desc <> ''
                             THEN LEFT( CAST( LEFT(@nPQTY_Avail, 5) AS NVARCHAR( 5)) + REPLICATE(' ', 6), 6) + CAST( LEFT(@nMQTY_Avail, 5) AS NVARCHAR( 5))
                             ELSE SPACE( 6) + CAST( LEFT(@nMQTY_Avail, 5) AS NVARCHAR( 5)) END
@@ -2169,19 +1939,19 @@ BEGIN
                          ELSE SPACE( 6) + @cMUOM_Desc END
       SET @cOutField08 = CASE WHEN @cPUOM_Desc <> ''
                          THEN LEFT( CAST( @nPQTY_TTL AS NVARCHAR( 5)) + REPLICATE(' ', 6), 6) + CAST( @nMQTY_TTL AS NVARCHAR( 5))
-                   ELSE SPACE( 6) + CAST( @nMQTY_TTL   AS NVARCHAR( 5)) END
+                         ELSE SPACE( 6) + CAST( @nMQTY_TTL   AS NVARCHAR( 5)) END
       SET @cOutField09 = CASE WHEN @cPUOM_Desc <> ''
-                         THEN LEFT( CAST( @nPQTY_Hold AS NVARCHAR( 5)) + REPLICATE(' ', 6), 6) + CAST( @nMQTY_Hold AS NVARCHAR( 5))
-                         ELSE SPACE( 6) + CAST( @nMQTY_Hold  AS NVARCHAR( 5)) END -- (Vicky01)
-      SET @cOutField10 = CASE WHEN @cPUOM_Desc <> ''
                          THEN LEFT( CAST( @nPQTY_Alloc AS NVARCHAR( 5)) + REPLICATE(' ', 6), 6) + CAST( @nMQTY_Alloc AS NVARCHAR( 5))
                          ELSE SPACE( 6) + CAST( @nMQTY_Alloc AS NVARCHAR( 5)) END
-      SET @cOutField11 = CASE WHEN @cPUOM_Desc <> ''
+      SET @cOutField10 = CASE WHEN @cPUOM_Desc <> ''
                          THEN LEFT( CAST( @nPQTY_Pick AS NVARCHAR( 5)) + REPLICATE(' ', 6), 6) + CAST( @nMQTY_Pick AS NVARCHAR( 5))
                          ELSE SPACE( 6) + CAST( @nMQTY_Pick AS NVARCHAR( 5)) END
-      SET @cOutField12 = CASE WHEN @cPUOM_Desc <> ''
+      SET @cOutField11 = CASE WHEN @cPUOM_Desc <> ''
                          THEN LEFT( CAST( @nPQTY_RPL AS NVARCHAR( 5)) + REPLICATE(' ', 6), 6) + CAST( @nMQTY_RPL AS NVARCHAR( 5))
                          ELSE SPACE( 6) + CAST( @nMQTY_RPL   AS NVARCHAR( 5)) END -- (james02)
+      SET @cOutField12 = CASE WHEN @cPUOM_Desc <> ''
+                         THEN LEFT( CAST( @nPQTY_PMV AS NVARCHAR( 5)) + REPLICATE(' ', 6), 6) + CAST( @nMQTY_PMV AS NVARCHAR( 5))
+                         ELSE SPACE( 6) + CAST( @nMQTY_PMV  AS NVARCHAR( 5)) END -- (james12)
       SET @cOutField13 = CASE WHEN @cPUOM_Desc <> ''
                          THEN LEFT( CAST( @nPQTY_Avail AS NVARCHAR( 5)) + REPLICATE(' ', 6), 6) + CAST( @nMQTY_Avail AS NVARCHAR( 5))
                          ELSE SPACE( 6) + CAST( @nMQTY_Avail AS NVARCHAR( 5)) END
@@ -2306,10 +2076,10 @@ BEGIN
       V_Integer2  = @nCurrentRec,
       V_Integer3  = @nPQTY_Avail,
       V_Integer4  = @nPQTY_Alloc,
-      V_Integer5  = @nPQTY_Hold,
+      V_Integer5  = @nPQTY_PMV,
       V_Integer6  = @nMQTY_Avail,
       V_Integer7  = @nMQTY_Alloc,
-      V_Integer8  = @nMQTY_Hold,
+      V_Integer8  = @nMQTY_PMV,
       V_Integer9  = @nMQTY_TTL,
       V_Integer10 = @nMQTY_RPL,
       V_Integer11 = @nPQTY_TTL,
