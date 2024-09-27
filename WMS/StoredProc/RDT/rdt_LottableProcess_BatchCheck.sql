@@ -70,10 +70,10 @@ BEGIN
    DECLARE @nYear       INT
    DECLARE @nShelfLife  INT
    DECLARE @cFacility   NVARCHAR( 5)
-   DECLARE @V_String19  VARCHAR(20)
+   DECLARE @cString  VARCHAR(20)                -- use field rdt.RDTMOBREC.C_String1
    DECLARE @nCount      INT
 
-   SELECT @V_String19 = V_String19 FROM rdt.RDTMOBREC (NOLOCK) WHERE Mobile = @nMobile
+   SELECT @cString = C_String1 FROM rdt.RDTMOBREC (NOLOCK) WHERE Mobile = @nMobile
 
    SELECT @cFacility  = Facility FROM RDT.RDTMOBREC WITH (NOLOCK) WHERE Mobile = @nMobile
    DECLARE @cBatchCheck NVARCHAR(20)
@@ -121,7 +121,7 @@ BEGIN
    BEGIN
       --raiserror(@cLottableV,16,1)
       SELECT @dLottable13=CONVERT(DATETIME,'31-12-2099',103)
-      select @dLottable04=NULL where isnumeric(@V_String19)=0 or @V_String19='0'
+      select @dLottable04=NULL where isnumeric(@cString)=0 or @cString='0'
       GOTO QuitWithRecordCount
    END
 
@@ -167,11 +167,11 @@ BEGIN
    SELECT @dLottable13=DATEADD(DAY,@nDays-1,@dLottable13)                              --Production Date
    SELECT @dLottable04=DATEADD(DAY,ISNULL(@nShelfLife,0),@dLottable13)                 --Exp Date
 QuitWithRecordCount:
-   IF ISNUMERIC(@V_String19) = 1
-      SET @nCount = CONVERT(INT,@V_String19) + 1
+   IF ISNUMERIC(@cString) = 1
+      SET @nCount = CONVERT(INT,@cString) + 1
    ELSE
       SET @nCount = 1
-   UPDATE rdt.RDTMOBREC SET V_String19=CONVERT(VARCHAR(20),@nCount) WHERE Mobile = @nMobile
+   UPDATE rdt.RDTMOBREC SET C_String1=CONVERT(VARCHAR(20),@nCount) WHERE Mobile = @nMobile
 Quit:
 
 END

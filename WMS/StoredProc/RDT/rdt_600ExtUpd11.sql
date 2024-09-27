@@ -10,7 +10,7 @@ GO
 /* Copyright    Maersk                                                        */
 /* Customer     HUDA                                                          */
 /*                                                                            */
-/* Purpose: save or clear count into rdt.RDTMOBREC.V_String19                 */
+/* Purpose: save or clear count into rdt.RDTMOBREC.C_String1                  */
 /*                                                                            */
 /* Date         Author    Ver.  Purposes                                      */
 /* 26-Sep-2024  yys027    1.0   FCR-827 Created (Batch No)                    */
@@ -68,12 +68,13 @@ BEGIN
    BEGIN
       IF @nStep = 4 AND @nInputKey = 1 -- Scan SKU  && Enter
       BEGIN
-         UPDATE rdt.RDTMOBREC SET V_String19='0' WHERE Mobile = @nMobile
+         -- use field rdt.RDTMOBREC.C_String1
+         UPDATE rdt.RDTMOBREC SET C_String1='0' WHERE Mobile = @nMobile
          EXEC rdt.rdtSetFocusField @nMobile,2
       END
       ELSE IF @nStep = 6 AND @nInputKey = 0    -- ESC when input qty
       BEGIN
-         UPDATE rdt.RDTMOBREC SET V_String19='0' WHERE Mobile = @nMobile
+         UPDATE rdt.RDTMOBREC SET C_String1='0' WHERE Mobile = @nMobile
       END
    END
 

@@ -63,7 +63,7 @@ BEGIN
 
 
    DECLARE 
-      @V_String19 VARCHAR(20),
+      @cString VARCHAR(20),         -- use field rdt.RDTMOBREC.C_String1
       @nCount INT
    DECLARE @cBatchCheck NVARCHAR(20)
 
@@ -84,9 +84,9 @@ BEGIN
       BEGIN
          IF @nStep = 5 
          BEGIN
-            SELECT @V_String19 = V_String19 FROM rdt.RDTMOBREC (NOLOCK) WHERE Mobile = @nMobile
-            IF ISNUMERIC(@V_String19) = 1
-               SET @nCount = CONVERT(INT,@V_String19) 
+            SELECT @cString = C_String1 FROM rdt.RDTMOBREC (NOLOCK) WHERE Mobile = @nMobile
+            IF ISNUMERIC(@cString) = 1
+               SET @nCount = CONVERT(INT,@cString) 
             ELSE
                SET @nCount = 0
             IF @nCount=1
@@ -102,7 +102,7 @@ BEGIN
          END
          ELSE
          BEGIN
-            UPDATE rdt.RDTMOBREC SET V_String19 = '0' WHERE Mobile = @nMobile
+            UPDATE rdt.RDTMOBREC SET C_String1 = '0' WHERE Mobile = @nMobile
          END      
       END
    END
