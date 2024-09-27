@@ -1,5 +1,4 @@
 
-
 /************************************************************************/
 /* Store procedure: rdt_LottableProcess_BatchCheck                      */
 /* Copyright      : Maersk                                              */
@@ -63,23 +62,21 @@ BEGIN
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
-   DECLARE @cLottableV   NVARCHAR(30)
+   DECLARE @cLottableV  NVARCHAR(30)
    DECLARE @nLength     INT
    DECLARE @nDays       INT
    DECLARE @cYearCode   NVARCHAR(4)
    DECLARE @nYear       INT
    DECLARE @nShelfLife  INT
    DECLARE @cFacility   NVARCHAR( 5)
-   DECLARE @cString  VARCHAR(20)                -- use field rdt.RDTMOBREC.C_String1
+   DECLARE @cString     VARCHAR(20)                -- use field rdt.RDTMOBREC.C_String1
    DECLARE @nCount      INT
 
    SELECT @cString = C_String1 FROM rdt.RDTMOBREC (NOLOCK) WHERE Mobile = @nMobile
 
    SELECT @cFacility  = Facility FROM RDT.RDTMOBREC WITH (NOLOCK) WHERE Mobile = @nMobile
    DECLARE @cBatchCheck NVARCHAR(20)
-   SELECT @cBatchCheck = SValue
-         FROM rdt.StorerConfig (NOLOCK)
-         WHERE Function_ID = @nFunc AND StorerKey = @cStorerKey AND ConfigKey = 'BatchCheck'
+   SELECT  @cBatchCheck= rdt.rdtGetConfig(@nFunc,'BatchCheck',@cStorerKey)
    IF ISNULL(@cBatchCheck,'')=''
    BEGIN
       GOTO Quit
@@ -119,7 +116,6 @@ BEGIN
    END
    ELSE IF @cLottableV='9999'
    BEGIN
-      --raiserror(@cLottableV,16,1)
       SELECT @dLottable13=CONVERT(DATETIME,'31-12-2099',103)
       select @dLottable04=NULL where isnumeric(@cString)=0 or @cString='0'
       GOTO QuitWithRecordCount
