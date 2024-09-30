@@ -17,8 +17,8 @@ GO
 /* 2024-09-02 1.0  LowZhe   Created UWP-23555.                          */
 /*                          Based on rdt_940SwapUCCSP01                 */ 
 /* 2024-09-02 1.1  JCH507   Fixed the missing part in V1.0              */ 
-/* 2024-0-30  1.2  NLT013   Update REPLENISHMENT and PickDetail after   */
-/*                          swapping UCC                                */ 
+/* 2024-0-30  1.2  NLT013   FCR-884 Update REPLENISHMENT and PickDetail */
+/*                           after swapping UCC                         */ 
 /************************************************************************/  
   
 CREATE OR ALTER PROC [RDT].[rdt_940SwapUCCSP02] (  
@@ -364,25 +364,32 @@ BEGIN
                IF @cLOC = '' OR @cLOC IS NULL  
                BEGIN  
                   UPDATE RP WITH (ROWLOCK) SET  
+                     RP.DropID = @cUCC
+                  FROM dbo.Replenishment RP  
+                  WHERE RP.RefNo = @cOriginalUCC
+                     AND StorerKey = @cStorerKey  
+                     AND SKU = @cSKU  
+
+                  UPDATE RP WITH (ROWLOCK) SET  
                      RP.RefNo = @cUCC
                   FROM dbo.Replenishment RP  
                   WHERE RP.RefNo IN (@cUCC, @cOriginalUCC)  
                      AND StorerKey = @cStorerKey  
                      AND SKU = @cSKU  
      
-                  SELECT @nError = @@ERROR, @nRowCount = @@ROWCOUNT  
-
-                  UPDATE RP WITH (ROWLOCK) SET  
-                     RP.DropID = @cUCC
-                  FROM dbo.Replenishment RP  
-                  WHERE RP.RefNo = @cOriginalUCC
-                     AND StorerKey = @cStorerKey  
-                     AND SKU = @cSKU  
-                  SELECT @nError = @@ERROR
+                  SELECT @nError = @@ERROR, @nRowCount = @@ROWCOUNT
                END  
                ELSE  
                BEGIN  
                   UPDATE RP WITH (ROWLOCK) SET  
+                     RP.DropID = @cUCC
+                  FROM dbo.Replenishment RP  
+                  WHERE RP.RefNo = @cOriginalUCC
+                     AND StorerKey = @cStorerKey  
+                     AND SKU = @cSKU  
+                     AND FromLoc = @cLOC
+
+                  UPDATE RP WITH (ROWLOCK) SET  
                      RP.RefNo = @cUCC
                   FROM dbo.Replenishment RP  
                   WHERE RP.RefNo IN (@cUCC, @cOriginalUCC)  
@@ -391,16 +398,6 @@ BEGIN
                      AND FromLoc = @cLOC  
      
                   SELECT @nError = @@ERROR, @nRowCount = @@ROWCOUNT  
-
-                  UPDATE RP WITH (ROWLOCK) SET  
-                     RP.DropID = @cUCC
-                  FROM dbo.Replenishment RP  
-                  WHERE RP.RefNo = @cOriginalUCC
-                     AND StorerKey = @cStorerKey  
-                     AND SKU = @cSKU  
-                     AND FromLoc = @cLOC  
-     
-                  SELECT @nError = @@ERROR
                END  
      
                IF @nError <> 0   
@@ -428,8 +425,6 @@ BEGIN
                   GOTO RollBackTran   
                END  
                
-               
-               
                UPDATE dbo.UCC WITH (ROWLOCK) 
                SET Status           = '1' 
                   ,OrderKey         = ''
@@ -445,8 +440,7 @@ BEGIN
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') --UpdOldUCCfail  
                   GOTO RollBackTran   
                END  
-               
-               -- Update PickDetail CartonGroup to new UCC
+
                UPDATE dbo.PickDetail 
                   SET CartonGroup = RIGHT ( @cUCC ,8 )
                      , DropID = @cUCC
@@ -454,8 +448,8 @@ BEGIN
                      , EditDate    = Getdate()
                      , Trafficcop  = NULL
                WHERE StorerKey   = @cStorerKey
-               AND OrderKey      = @cOrderKey
-               AND PickDetailKey = @cPickDetailKey 
+                  AND ISNULL(DropID, '') =  @cOriginalUCC
+                  AND SKU = @cSKU  
 
 --               
                IF @@ERROR <> 0 
