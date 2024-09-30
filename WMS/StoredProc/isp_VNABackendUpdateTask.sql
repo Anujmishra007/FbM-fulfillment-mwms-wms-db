@@ -40,6 +40,7 @@ BEGIN
          , @b_success   INT
          , @n_err       INT
          , @c_errmsg    NVARCHAR(255)
+         , @trigger_UpdateTaskDetailAndPendingMoveIn   NVARCHAR(4) = 'YES'
 
    SELECT @n_starttcnt = @@TRANCOUNT
         , @n_Continue = 1
@@ -287,7 +288,15 @@ BEGIN
             BEGIN
                SET @n_Continue = 3
             END
-
+		SELECT @trigger_UpdateTaskDetailAndPendingMoveIn =
+			CASE
+				WHEN (SELECT COUNT(*) from (SELECT LOC.LocAisle FROM LOC LOC
+				WHERE LOC.LOC = @c_FromLoc AND LOC.LOC = @c_ToLoc) LOC_AISLES
+				GROUP BY LOC_AISLES.LocAisle HAVING COUNT(*) > 1) > 1
+				THEN 'NO'
+			END
+		IF @trigger_UpdateTaskDetailAndPendingMoveIn = 'YES'
+		  BEGIN
             UPDATE TaskDetail
             SET ToLoc = @c_PNDLoc
               , LogicalToLoc = @c_LogicalPNDLoc
@@ -323,7 +332,7 @@ BEGIN
             BEGIN
                SET @n_Continue = 3
             END
-
+		  END
             --Trigger will reset Userkey if updating status to 0
             UPDATE TaskDetail
             SET [Status] = '0'
