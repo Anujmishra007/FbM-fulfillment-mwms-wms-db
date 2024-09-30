@@ -57,6 +57,8 @@ GO
 /* 2022-04-12 4.0  James   WMS-22928 Add RDTFormat for UCC Qty (james03)   */
 /* 2023-12-04 4.1  Ung     WMS-24276 Add DecodeSP                          */
 /* 2024-06-18 4.2  CYU027  UWP-20900 bugfix for NOPO check                 */
+/* 2024-09-30 4.3  YYS027  UWP-25017 bugfix for string(dmy) to date when   */
+/*                         calling rdt_UCCReceive_Confirm                  */
 /***************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdtfnc_UCCReceive](
    @nMobile    INT,
@@ -87,6 +89,7 @@ DECLARE
    @cTempLotLabel                   NVARCHAR(20),
    @cLottableLabel                  NVARCHAR(20),
    @dTempLottable04                 DATETIME,
+   @dTempLottable09                 DATETIME,
    @nSKUCnt                         INT,
    @cSQL                            NVARCHAR(1000),
    @cSQLParam                       NVARCHAR(1000),
@@ -2120,6 +2123,7 @@ BEGIN
                      AND SKU.SKU = @cSKU
 
                   -- Update ReceiptDetail
+                  SET @dTempLottable09 = rdt.rdtConvertToDate(@cOutField09)            --for UWP-25017
                   EXEC rdt.rdt_UCCReceive_Confirm
                      @nFunc         = @nFunc,
                      @nMobile       = @nMobile,
@@ -2142,7 +2146,7 @@ BEGIN
                      @cLottable01   = @cOutField06,
                      @cLottable02   = @cOutField07,
                      @cLottable03   = @cOutField08,
-                     @dLottable04   = @cOutField09,
+                     @dLottable04   = @dTempLottable09,                 --@cOutField09,  --for UWP-25017
                      @dLottable05   = NULL,
                      @nNOPOFlag     = @cPOKeyDefaultValue,
                      @cConditionCode = 'OK',
@@ -2232,6 +2236,7 @@ BEGIN
             END
             ELSE
             BEGIN
+               SET @dTempLottable09 = rdt.rdtConvertToDate(@cOutField09)            --for UWP-25017
                EXEC rdt.rdt_UCCReceive_Confirm
                   @nFunc         = @nFunc,
                   @nMobile       = @nMobile,
@@ -2254,7 +2259,7 @@ BEGIN
                   @cLottable01   = @cOutField06,
                   @cLottable02   = @cOutField07,
                   @cLottable03   = @cOutField08,
-                  @dLottable04   = @cOutField09,
+                  @dLottable04   = @dTempLottable09,                 --@cOutField09,  --for UWP-25017
                   @dLottable05   = NULL,
                   @nNOPOFlag     = @cPOKeyDefaultValue,
                   @cConditionCode = 'OK',
@@ -3289,6 +3294,7 @@ BEGIN
       IF @cUCC = 'NOUCC'
       BEGIN
          --update transaction
+         SET @dTempLottable09 = rdt.rdtConvertToDate(@cOutField09)            --for UWP-25017
 		   EXEC rdt.rdt_UCCReceive_Confirm
             @nFunc         = @nFunc,
             @nMobile       = @nMobile,
@@ -3311,7 +3317,7 @@ BEGIN
             @cLottable01   = @cOutField06,
             @cLottable02   = @cOutField07,
             @cLottable03   = @cOutField08,
-            @dLottable04   = @cOutField09,
+            @dLottable04   = @dTempLottable09,                 --@cOutField09,  --for UWP-25017
             @dLottable05   = NULL,
             @nNOPOFlag     = @cPOKeyDefaultValue,
             @cConditionCode = 'OK',
@@ -3321,6 +3327,7 @@ BEGIN
       ELSE IF @cUCC <> '' AND @cUCC <> 'NOUCC'
       BEGIN
          --update transaction
+         SET @dTempLottable09 = rdt.rdtConvertToDate(@cOutField09)            --for UWP-25017
          EXEC rdt.rdt_UCCReceive_Confirm
             @nFunc         = @nFunc,
             @nMobile       = @nMobile,
@@ -3343,7 +3350,7 @@ BEGIN
             @cLottable01   = @cOutField06,
             @cLottable02   = @cOutField07,
             @cLottable03   = @cOutField08,
-            @dLottable04   = @cOutField09,
+            @dLottable04   = @dTempLottable09,              -- @cOutField09,  --for UWP-25017
             @dLottable05   = NULL,
             @nNOPOFlag     = @cPOKeyDefaultValue,
             @cConditionCode = 'OK',
