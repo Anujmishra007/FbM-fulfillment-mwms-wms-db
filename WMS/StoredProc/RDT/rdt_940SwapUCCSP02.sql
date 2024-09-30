@@ -1,10 +1,3 @@
-
-/****** Object:  StoredProcedure [RDT].[rdt_940SwapUCCSP02]    Script Date: 08/22/2008 22:40:25 ******/
-IF  EXISTS (SELECT * FROM dbo.sysobjects WHERE id = OBJECT_ID(N'[RDT].[rdt_940SwapUCCSP02]') AND OBJECTPROPERTY(id,N'IsProcedure') = 1)
-DROP PROCEDURE [RDT].[rdt_940SwapUCCSP02]
-GO
-
-/****** Object:  StoredProcedure [RDT].[rdt_940SwapUCCSP02]    Script Date: 08/22/2008 22:40:16 ******/
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -24,10 +17,11 @@ GO
 /* 2024-09-02 1.0  LowZhe   Created UWP-23555.                          */
 /*                          Based on rdt_940SwapUCCSP01                 */ 
 /* 2024-09-02 1.1  JCH507   Fixed the missing part in V1.0              */ 
+/* 2024-0-30  1.2  NLT013   Update REPLENISHMENT and PickDetail after   */
+/*                          swapping UCC                                */ 
 /************************************************************************/  
   
-  
-CREATE         PROC [RDT].[rdt_940SwapUCCSP02] (  
+CREATE OR ALTER PROC [RDT].[rdt_940SwapUCCSP02] (  
     @nMobile          INT,   
     @nFunc            INT,   
     @cLangCode        NVARCHAR( 3),  
@@ -95,7 +89,6 @@ BEGIN
    
    IF @nFunc = 940 
    BEGIN
-      
       IF @nStep = 4
       BEGIN
     
@@ -142,24 +135,13 @@ BEGIN
             END
             
             -- Get Matching UCC Records
-            SELECT  Top 1 --@cPickDetailKey= UCC.PickDetailKey,  
-                          --@cStatus       = UCC.Status,  
-                          --@cWaveKey      = UCC.WaveKey,  
-                          --@cLoadKey      = UCC.Userdefined01 , 
-                          --@cOrderKey     = UCC.OrderKey,
-                          --@cOrderLineNumber = UCC.OrderLineNumber,
+            SELECT  Top 1
                            @cOriginalUCC  = RP.RefNo,
                            @cToLoc        = RP.ToLoc,
                            @cLoc          = RP.FromLoc,
                            @cToLocType    = L.LocationType
             FROM dbo.Replenishment RP WITH (NOLOCK) 
             Inner join Loc L WITH (NOLOCK) on RP.ToLoc = L.LOC
---            INNER JOIN dbo.Replenishment RP WITH (NOLOCK) ON 
---                          RP.ID      = UCC.ID
---                     AND  RP.FromLoc = UCC.Loc
---                     AND  RP.SKU     = UCC.SKU
---                     AND  RP.Lot     = UCC.Lot
-            --INNER JOIN dbo.Loc Loc WITH (NOLOCK) ON Loc.Loc = RP.ToLoc  
             WHERE RP.StorerKey = @cStorerKey
             AND RP.SKU = @cSKU
             AND RP.Lot = @cLot
@@ -217,29 +199,9 @@ BEGIN
                END
             END
             
-    
-            
---            INSERT INTO TRACEINFO (TracEName , TimeIN , Col1, Col2, Col3 , col4, col5 ) 
---            VALUES ( 'UCCTBL', Getdate() , @cUCC , @cOriginalUCC , @cPickDetailKey , @cOrderKey , '1')
 
             IF ISNULL(RTRIM(@cOriginalUCC),'')  <> ISNULL(RTRIM(@cUCC),'') 
             BEGIN
-                
-                --validate ucc to check whether the status ='1' or status ='3'  
-                  
---                IF NOT EXISTS(SELECT 1  
---                   FROM dbo.UCC WITH (NOLOCK)  
---                   WHERE UCCNo = @cUCC  
---                      AND StorerKey = @cStorerKey     
---                      AND Status = '1'
---                      AND Lot <> '')  
---                BEGIN  
---                   SET @nErrNo = 93451  
---                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') --Invalid UCC  
---                   GOTO RollBackTran    
---                END  
-    
-         
                SET @cPickDetailKey= ''
                SET @cStatus       = ''
                SET @cWaveKey      = '' 
@@ -257,25 +219,13 @@ BEGIN
                   GOTO RollBackTran    
                END
 
-               SELECT  Top 1 --@cPickDetailKey= UCC.PickDetailKey,  
---                                         --@cStatus       = UCC.Status,  
---                                         @cWaveKey      = UCC.WaveKey,  
---                                         @cLoadKey      = UCC.Userdefined01 , 
---                                         @cOrderKey     = UCC.OrderKey,
---                                         @cOrderLineNumber = UCC.OrderLineNumber,
+               SELECT  Top 1 
                                          @cOriginalUCC  = RP.RefNo,
                                          @cToLoc        = RP.ToLoc,
                                          @cLoc          = RP.FromLoc,
                                          @cToLocType    = L.LocationType -- V1.1 JCH507
---                                         @cOriginalStatus = UCC.Status
                FROM dbo.Replenishment RP WITH (NOLOCK)
                INNER JOIN Loc L WITH (NOLOCK) ON RP.ToLoc = L.Loc -- V1.1 JCH507
---               INNER JOIN dbo.Replenishment RP WITH (NOLOCK) ON 
---                             RP.ID      = UCC.ID
---                        AND  RP.FromLoc = UCC.Loc
---                        AND  RP.SKU     = UCC.SKU
---                        AND  RP.Lot     = UCC.Lot  
-               --INNER JOIN dbo.Loc Loc WITH (NOLOCK) ON Loc.Loc = RP.ToLoc                          
                WHERE RP.StorerKey = @cStorerKey
                AND RP.SKU = @cSKU
                AND RP.Lot = @cLot
@@ -283,7 +233,6 @@ BEGIN
                AND RP.FromLoc = @cUCCLoc
                AND RP.ID  = @cID
                AND RP.RefNo <> @cUCC
-               --AND UCC.Status = '1'
                AND RP.ReplenishmentGroup = @cReplenGroup
                AND RP.Confirmed = 'N'
                ORDER BY RP.RefNo
@@ -362,9 +311,6 @@ BEGIN
 
             SET @cNewUCC = @cUCC
      
---            INSERT INTO TRACEINFO (TracEName , TimeIN , Col1, Col2, Col3 , col4, col5 ) 
---            VALUES ( 'UCCTBL', Getdate() , @cUCC , @cOriginalUCC , @cPickDetailKey , @cOrderKey , '2')
-
             -- Check if scanned UCC (sku, qty, lot, loc, id) exists in our replenishmentgroup  
             IF NOT EXISTS (SELECT 1   
                            FROM dbo.Replenishment RP WITH (NOLOCK)  
@@ -373,10 +319,6 @@ BEGIN
                            WHERE RP.StorerKey = @cStorerKey   
                            AND RP.SKU = @cSku  
                            AND RP.ReplenishmentGroup = @cReplenGroup   
---                           AND (RP.Confirmed = 'W' OR   
---                               (RP.Confirmed = 'Y' AND DropID = '') OR   
---                               (RP.Confirmed = 'Y' AND DropID = 'L') OR   
---                               (RP.Confirmed = 'L' AND DropID = '') )  
                            AND RP.QTY = @nQty  
                            AND RP.FromLOC = @cUCCLoc  
                            AND RP.ID = @cID  
@@ -388,45 +330,7 @@ BEGIN
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') --Invalid UCC  
                GOTO RollBackTran    
             END  
-     
-            --get the swap ucc with same information  
-            --SET @cNewUCC = ''  
-     
---            SET ROWCOUNT 1  
---              
---            SELECT @cNewUCC = UCC.UCCNo,  
---                   @cNewPickDetailKey = UCC.PickDetailKey,  
---                   @cNewStatus  = UCC.Status,  
---                   @cNewWaveKey = UCC.WaveKey,  
---                   @cNewLoadKey = UCC.Userdefined01   
---            FROM dbo.UCC UCC WITH (NOLOCK)  
---            JOIN dbo.LotAttribute LOT WITH (NOLOCK)  
---                  ON UCC.Lot = LOT.Lot AND UCC.StorerKey = LOT.StorerKey AND UCC.Sku = LOT.Sku   
---            JOIN dbo.Replenishment RP WITH (NOLOCK)   
---                  ON RP.StorerKey = RP.StorerKey AND RP.SKU = UCC.SKU AND RP.RefNo = UCC.UCCNo   
---            WHERE UCC.StorerKey = @cStorerKey  
---               AND UCC.Sku = @cSku  
---               AND UCC.Qty = @nQty  
---               AND UCC.LOT = @cLOT  
---               AND UCC.Loc = @cUCCLoc  
---               AND UCC.ID  = @cID  
---               AND UCC.UCCNo <> @cUCC  
---               AND UCC.Status in ('1')  
---               AND RP.ReplenishmentGroup = @cReplenGroup   
-----               AND (RP.Confirmed = 'W' OR   
-----                   (RP.Confirmed = 'Y' AND DropID = '') OR   
-----                   (RP.Confirmed = 'Y' AND DropID = 'L') OR   
-----                   (RP.Confirmed = 'L' AND DropID = '') )  
---     
---            SET ROWCOUNT 0  
---     
---            IF @cNewUCC = '' OR @cNewUCC IS NULL  
---            BEGIN  
---               SET @nErrNo = 93453  
---               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') --No UCC to swap  
---               GOTO RollBackTran   
---            END  
-     
+
             -- Swap Begin  
             BEGIN  
 
@@ -465,12 +369,16 @@ BEGIN
                   WHERE RP.RefNo IN (@cUCC, @cOriginalUCC)  
                      AND StorerKey = @cStorerKey  
                      AND SKU = @cSKU  
---                     AND (RP.Confirmed = 'W' OR   
---                         (RP.Confirmed = 'Y' AND DropID = '') OR   
---                         (RP.Confirmed = 'Y' AND DropID = 'L') OR   
---                         (RP.Confirmed = 'L' AND DropID = '') )  
      
                   SELECT @nError = @@ERROR, @nRowCount = @@ROWCOUNT  
+
+                  UPDATE RP WITH (ROWLOCK) SET  
+                     RP.DropID = @cUCC
+                  FROM dbo.Replenishment RP  
+                  WHERE RP.RefNo = @cOriginalUCC
+                     AND StorerKey = @cStorerKey  
+                     AND SKU = @cSKU  
+                  SELECT @nError = @@ERROR
                END  
                ELSE  
                BEGIN  
@@ -481,13 +389,18 @@ BEGIN
                      AND StorerKey = @cStorerKey  
                      AND SKU = @cSKU  
                      AND FromLoc = @cLOC  
---                     AND (RP.Confirmed = 'W' OR   
---                         (RP.Confirmed = 'Y' AND DropID = '') OR   
---                         (RP.Confirmed = 'Y' AND DropID = 'L') OR   
---                         (RP.Confirmed = 'L' AND DropID = ''))  
-     
      
                   SELECT @nError = @@ERROR, @nRowCount = @@ROWCOUNT  
+
+                  UPDATE RP WITH (ROWLOCK) SET  
+                     RP.DropID = @cUCC
+                  FROM dbo.Replenishment RP  
+                  WHERE RP.RefNo = @cOriginalUCC
+                     AND StorerKey = @cStorerKey  
+                     AND SKU = @cSKU  
+                     AND FromLoc = @cLOC  
+     
+                  SELECT @nError = @@ERROR
                END  
      
                IF @nError <> 0   
@@ -533,12 +446,10 @@ BEGIN
                   GOTO RollBackTran   
                END  
                
---               INSERT INTO TRACEINFO (TracEName , TimeIN , Col1, Col2, Col3 , col4, col5 ) 
---               VALUES ( 'UCCTBL', Getdate() , @cUCC , @cOrderKey , @cPickDetailKey , RIGHT ( @cUCC ,8 )  , '3')
-
                -- Update PickDetail CartonGroup to new UCC
                UPDATE dbo.PickDetail 
-                  SET CartonGroup = RIGHT ( @cUCC ,8 ) 
+                  SET CartonGroup = RIGHT ( @cUCC ,8 )
+                     , DropID = @cUCC
                      , EditWho     = suser_sname()
                      , EditDate    = Getdate()
                      , Trafficcop  = NULL
@@ -546,8 +457,6 @@ BEGIN
                AND OrderKey      = @cOrderKey
                AND PickDetailKey = @cPickDetailKey 
 
---               INSERT INTO TRACEINFO (TracEName , TimeIN , Col1, Col2, Col3 , col4, col5 ) 
---               VALUES ( 'UCCTBL', Getdate() , @cUCC , @@ROWCOUNT , @cPickDetailKey , RIGHT ( @cUCC ,8 )  , '4')
 --               
                IF @@ERROR <> 0 
                BEGIN
@@ -556,30 +465,6 @@ BEGIN
                   GOTO RollBackTran  
                END
                
---               UPDATE UCC WITH (ROWLOCK) SET  
---                  UCC.Status =   
---                     CASE WHEN UCC.Status = @cNewStatus THEN @cStatus  
---                          WHEN UCC.Status = @cStatus THEN @cNewStatus END,  
---                  UCC.WaveKey =   
---                     CASE WHEN UCC.WaveKey = @cNewWaveKey THEN @cWaveKey  
---                          WHEN UCC.WaveKey = @cWaveKey THEN @cNewWaveKey END,   
---                  UCC.Userdefined01 =   
---                     CASE WHEN UCC.Userdefined01 = @cNewLoadKey THEN @cLoadKey  
---                          WHEN UCC.Userdefined01 = @cLoadKey THEN @cNewLoadKey END  
---                  UCC.OrderKey =   
---                     CASE WHEN UCC.OrderKey = @cNewLoadKey THEN @cLoadKey  
---                          WHEN UCC.OrderKey = @cLoadKey THEN @cNewLoadKey END  
---                  UCC.OrderLineNumber =   
---                     CASE WHEN UCC.OrderLineNumber = @cNewLoadKey THEN @cLoadKey  
---                          WHEN UCC.OrderLineNumber = @cLoadKey THEN @cNewLoadKey END  
---                  UCC.PickDetailKey =   
---                     CASE WHEN UCC.PickDetailKey = @cNewLoadKey THEN @cLoadKey  
---                          WHEN UCC.PickDetailKey = @cLoadKey THEN @cNewLoadKey END          
---               FROM dbo.UCC UCC  
---               WHERE UCC.UCCNo IN (@cUCC, @cNewUCC)  
---                  AND StorerKey = @cStorerKey  
---                  AND SKU = @cSKU  
-     
   
             END  
       
