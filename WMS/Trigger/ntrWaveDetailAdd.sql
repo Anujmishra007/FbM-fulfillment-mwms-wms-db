@@ -44,6 +44,9 @@ GO
 /* 26-OCT-2023  Wan02      1.6   LFWM-4529 - PROD-CNWAVE Release group        */
 /*                               search slow and build wave slow              */
 /*                               - By Pass Trigger if Trafficcop = '9'        */
+/* 05-DEC-2023  Wan03      2.1   LFWM-4625 - CLONE - PROD-CNWAVE Release      */
+/*                               group search slow and build wave slow        */
+/*                               By Pass Trigger if Trafficcop = ''(optimization)*/
 /******************************************************************************/
 CREATE OR ALTER TRIGGER [dbo].[ntrWaveDetailAdd]
 ON [dbo].[WAVEDETAIL]
@@ -65,7 +68,7 @@ BEGIN
           ,@n_cnt         INT
           ,@c_wavekey     NVARCHAR(10)
           ,@c_OrderKey    NVARCHAR(10) --INC0349006
-          
+
           ,@c_Status_ORD      NVARCHAR(10)   = '0'                -- (Wan01)
           ,@c_Status_Wav      NVARCHAR(10)   = '0'                -- (Wan01)
           ,@c_WaveKey_Prior   NVARCHAR(10)   = ''                 -- (Wan01)
@@ -76,16 +79,17 @@ BEGIN
    SELECT @n_continue = 1
          ,@n_starttcnt = @@TRANCOUNT
    /* #INCLUDE <TROHA1.SQL> */
-   IF @n_continue = 1 OR @n_continue = 2                                            --(Wan02) - START                
-   BEGIN      
-      IF EXISTS (SELECT 1 FROM INSERTED WHERE TrafficCop IS NOT NULL)      
-      BEGIN 
+   IF @n_continue = 1 OR @n_continue = 2                                            --(Wan02) - START
+   BEGIN
+      IF EXISTS (SELECT 1 FROM INSERTED WHERE TrafficCop IS NOT NULL)
+      BEGIN
          UPDATE w WITH (ROWLOCK)
             SET w.TrafficCop = NULL
                ,w.ArchiveCop = w.ArchiveCop
          FROM INSERTED
-         JOIN dbo.WAVEDETAIL AS w ON w.WaveDetailKey = Inserted.WaveDetailKey 
+         JOIN dbo.WAVEDETAIL AS w ON w.WaveDetailKey = Inserted.WaveDetailKey
          AND w.TrafficCop IS NOT NULL
+         AND w.TrafficCop <> ''                                                     --(Wan03)
          
          IF @@ERROR <> 0
          BEGIN
