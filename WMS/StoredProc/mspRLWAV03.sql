@@ -37,6 +37,9 @@ GO
 /* 18-Sep-2024  WLChooi  1.9 Map Workorderdetail.Type instead of Order  */
 /*                           info - FCR V2.2 (WL02)                     */
 /* 20-Sep-2024  WLChooi  2.0 Merge with ALiang01 changes from PROD      */
+/* 01-Oct-2024  Shong    2.1 Need to check Carton size for VAS Carton   */
+/*                           specified. Adding checking to reject when  */
+/*                           SKU Cube or LxWxH can't fit                */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[mspRLWAV03]
    @c_WaveKey NVARCHAR(10)
@@ -650,7 +653,26 @@ BEGIN
          FROM dbo.WorkOrderDetail WOD WITH (NOLOCK) 
          WHERE WOD.ExternWorkOrderKey = @c_Orderkey
          AND WOD.Remarks='LPNSIZE'   --WL01
-         ORDER BY WOD.ExternLineNo         
+         ORDER BY WOD.ExternLineNo   
+
+         -- (SWT02) checking is all SKU can fit into this carton type
+         IF @c_VAS_CartonType <> '' 
+         BEGIN
+            SELECT @n_CartonLength=CZ.CartonLength, 
+                   @n_CartonWidth=CZ.CartonWidth,
+                   @n_CartonHeight=CZ.CartonHeight,
+                   @n_CartonMaxCube=CZ.Cube
+            FROM #CARTONIZATION CZ 
+            WHERE CZ.CartonType = @c_VAS_CartonType
+
+            IF EXISTS( SELECT 1 FROM #ORDERSKU OS WHERE OS.Orderkey = @c_Orderkey AND OS.StdCube > @n_CartonMaxCube )
+            BEGIN
+               SET @n_continue = 3
+               SET @n_Err = 562204
+               SET @c_Errmsg='NSQL'+CONVERT(NVARCHAR(10),@n_Err)+': SKU(s) Standard Cube cannot fit into carton type ' + RTRIM(@c_VAS_CartonType) + '. (mspRLWAV03)'     
+               GOTO QUIT_SP  
+            END
+         END -- IF @c_VAS_CartonType <> ''      
 
          --Pack full carton qty, UCC full carton
          IF @n_continue IN(1,2) 
@@ -838,15 +860,19 @@ BEGIN
                   BEGIN
                      SET @c_CartonType = @c_VAS_CartonType
 
-                     -- SELECT @c_CartonType=CZ.CartonType, @n_CartonLength=CZ.CartonLength, 
-                     --        @n_CartonWidth=CZ.CartonWidth, @n_CartonHeight=CZ.CartonHeight                              
-                     -- FROM #CARTONIZATION CZ 
-                     -- WHERE CZ.CartonType = @c_VAS_CartonType
+                     -- (SWT02) Check if SKU LxWxH can fit into the carton type
+                     SELECT @c_CartonType=CZ.CartonType, @n_CartonLength=CZ.CartonLength, 
+                            @n_CartonWidth=CZ.CartonWidth, @n_CartonHeight=CZ.CartonHeight                              
+                     FROM #CARTONIZATION CZ 
+                     WHERE CZ.CartonType = @c_VAS_CartonType
                   
-                     -- IF dbo.fnc_CartonCanFit(@n_SKULength, @n_SKUWidth, @n_SKUHeight, @n_CartonLength, @n_CartonWidth, @n_CartonHeight) = 0
-                     -- BEGIN
-                     --    SET @c_CartonType = N'';
-                     -- END;
+                     IF dbo.fnc_CartonCanFit(@n_SKULength, @n_SKUWidth, @n_SKUHeight, @n_CartonLength, @n_CartonWidth, @n_CartonHeight) = 0
+                     BEGIN
+                        SET @n_continue = 3
+                        SET @n_Err = 562204
+                        SET @c_Errmsg='NSQL'+CONVERT(NVARCHAR(10),@n_Err)+': SKU(s) LxWxH cannot fit into carton type ' + RTRIM(@c_VAS_CartonType) + '. (mspRLWAV03)'     
+                        GOTO QUIT_SP
+                     END;
                   END
                   IF @c_CartonType = N''
                   BEGIN
@@ -1108,12 +1134,13 @@ BEGIN
                      BREAK
                   END                
                   -- (SWT01) Do not check total cube is VAS Carton Type is set
-                  IF @c_VAS_CartonType <> ''
-                  BEGIN
-                     SET @n_QtyCanPack = @n_PackQty 
-                  END 
-                  ELSE 
-                  BEGIN
+                  -- (SWT02) Still need to check total cube if VAS Carton Type is set
+                  -- IF @c_VAS_CartonType <> ''
+                  -- BEGIN
+                  --    SET @n_QtyCanPack = @n_PackQty 
+                  -- END 
+                  -- ELSE 
+                  -- BEGIN
                      IF @n_StdCube > 0
                      BEGIN 
                         SET @n_QtyCanPackByCube = FLOOR(@n_CartonRemainCube / @n_StdCube)  
@@ -1121,7 +1148,7 @@ BEGIN
                      END 
                      ELSE 
                         SET @n_QtyCanPack = @n_PackQty                   
-                  END 
+                  -- END 
                  
                   IF @n_VAS_QtyCanPack > 0
                   BEGIN
