@@ -52,6 +52,7 @@ BEGIN
          DECLARE @cPackConfirm       NVARCHAR(1)         
          DECLARE @npickedQty     INT = 0
          DECLARE @nPackedQty     INT = 0
+         DECLARE @nCQty          INT = 0
 
          SET @cPackConfirm = rdt.RDTGetConfig( @nFunc, 'PackConfirm', @cStorerKey)
 
@@ -77,8 +78,17 @@ BEGIN
             ON pd.pickslipno = ph.pickslipno 
             WHERE ph.orderkey = @cOrderKey AND ph.Storerkey = @cStorerKey
 
+            SELECT @nCQty = SUM(RD.CQTY)
+            FROM packheader ph (NOLOCK)
+            JOIN packdetail PD (NOLOCK) ON ph.PickSlipNo = pd.PickSlipNo
+            JOIN rdt.rdtppa  RD (NOLOCK) ON pd.DropID = rd.DropID 
+            AND pd.sku = rd.sku 
+            AND pd.StorerKey = rd.StorerKey
+            WHERE ph.orderkey = @cOrderKey
+              AND ph.storerkey = @cStorerKey
+
             -- Pack confirm
-            IF @npickedQty = @nPackedQty
+            IF @npickedQty = @nPackedQty AND @npickedQty = @nCQty
             BEGIN
                -- Pack confirm
                UPDATE PackHeader SET
