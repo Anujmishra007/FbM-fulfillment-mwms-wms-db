@@ -84,24 +84,6 @@ BEGIN
    WHERE Station IN (@cStation1, @cStation2, @cStation3, @cStation4, @cStation5)  
       AND OrderKey <> ''  
 
-   IF EXISTS ( SELECT 1  
-               FROM @tOrders O  
-                  JOIN PickDetail PD WITH (NOLOCK) ON (PD.OrderKey = O.OrderKey)  
-                  JOIN Orders AO WITH (NOLOCK) ON (O.OrderKey = AO.OrderKey )  
-               WHERE PD.StorerKey = @cStorerKey  
-                  AND PD.Status <= '5'  
-                  AND PD.CaseID = ''
-                  AND PD.QTY > 0  
-                  AND PD.Status <> '4'  
-                  AND AO.Status <> 'CANC'  
-                  AND AO.SOStatus <> 'CANC'  
-                  AND PD.UOM <> '2'  
-            )  
-   BEGIN  
-      SET @nErrNo = 223504
-      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --WaveNotSorted
-      GOTO RollBackTran
-   END  
 
    -- rdtPTLStationLog
    DECLARE @curDPL CURSOR

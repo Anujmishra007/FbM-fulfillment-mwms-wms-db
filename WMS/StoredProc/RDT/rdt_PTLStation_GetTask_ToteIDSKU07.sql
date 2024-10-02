@@ -50,6 +50,7 @@ BEGIN
           ,@cOrderKey   NVARCHAR(10)
 
    DECLARE  @bSuccess       INT
+   DECLARE  @cLightMode     NVARCHAR( 4)
 
 
    SET @nErrNo = 0
@@ -80,6 +81,8 @@ BEGIN
       
       IF @cLight = '1' 
       BEGIN
+         
+         SET @cLightMode = rdt.RDTGetConfig( @nFunc, 'LightMode', @cStorerKey) 
          -- Off all lights  
          EXEC  PTL.isp_PTL_TerminateModuleSingle  
             @cStorerKey  
@@ -90,7 +93,21 @@ BEGIN
             ,@nErrNo       OUTPUT  
             ,@cErrMsg      OUTPUT  
          IF @nErrNo <> 0  
-            GOTO Quit   
+            GOTO Quit  
+
+         EXEC PTL.isp_PTL_LightUpLoc
+            @n_Func            = @nFunc
+            ,@n_PTLKey         = 0
+            ,@c_DisplayValue   = 'LOC' 
+            ,@b_Success        = @bSuccess    OUTPUT    
+            ,@n_Err            = @nErrNo      OUTPUT  
+            ,@c_ErrMsg         = @cErrMsg     OUTPUT
+            ,@c_DeviceID       = @cStation1
+            ,@c_DevicePos      = @cPosition
+            ,@c_DeviceIP       = @cIPAddress  
+            ,@c_LModMode       = @cLightMode
+            IF @nErrNo <> 0
+               GOTO Quit 
       END
    END
 

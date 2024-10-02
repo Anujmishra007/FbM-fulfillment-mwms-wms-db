@@ -95,23 +95,55 @@ BEGIN
       SELECT @nTotalCarton = COUNT(1)  
       FROM rdt.rdtPTLStationLog WITH (NOLOCK)  
       WHERE Station IN (@cStation1, @cStation2, @cStation3, @cStation4, @cStation5)  
-         AND CartonID <> ''  
+         AND CartonID <> '' 
+
+      SELECT @cLight  = V_String27
+      FROM RDT.RDTMobrec (NOLOCK)
+      WHERE Mobile = @nMobile
   
       -- Get carton not yet assign  
       IF @nTotalLoad > @nTotalCarton  
       BEGIN  
-         -- Get consignee not yet assign  
+         -- Get carton not yet assign  
          SELECT TOP 1  
-            @cWaveKey = WaveKey,  
             @cStation = Station,  
-            @cPosition = Position  
-         FROM rdt.rdtPTLStationLog WITH (NOLOCK)  
+            @cIPAddress =  DP.IPAddress,  
+            @cPosition = DP.DevicePosition,  
+            @cCartonID = '',  
+            @cSuggestLOC = PTL.LOC  
+         FROM rdt.rdtPTLStationLog PTL WITH (NOLOCK)  
+            JOIN DeviceProfile DP (nolock) ON PTL.Position = DP.DevicePosition AND PTL.Station = DP.DeviceID 
          WHERE Station IN (@cStation1, @cStation2, @cStation3, @cStation4, @cStation5)  
             AND CartonID = ''  
+         ORDER BY CAST(DP.logicalpos AS INT)
   
-       EXEC rdt.rdtSetFocusField @nMobile, 4 -- Carton ID  
+         SELECT @nTotalLoad = COUNT(1)  
+         FROM rdt.rdtPTLStationLog WITH (NOLOCK)  
+         WHERE Station IN (@cStation1, @cStation2, @cStation3, @cStation4, @cStation5)  
   
-       SET @cFieldAttr01 = 'O' -- LoadKey  
+         SELECT @nTotalCarton = COUNT(1)  
+         FROM rdt.rdtPTLStationLog WITH (NOLOCK)  
+         WHERE Station IN (@cStation1, @cStation2, @cStation3, @cStation4, @cStation5)  
+            AND CartonID <> ''  
+
+
+         IF @cLight = '1' 
+         BEGIN
+               
+            EXEC PTL.isp_PTL_LightUpLoc 
+               @n_Func           = @nFunc
+               ,@n_PTLKey         = 0
+               ,@c_DisplayValue   = 'LOC' 
+               ,@b_Success        = @bSuccess    OUTPUT    
+               ,@n_Err            = @nErrNo      OUTPUT  
+               ,@c_ErrMsg         = @cErrMsg     OUTPUT
+               ,@c_DeviceID       = @cStation
+               ,@c_DevicePos      = @cPosition
+               ,@c_DeviceIP       = @cIPAddress  
+               ,@c_LModMode       = @cLightMode
+            IF @nErrNo <> 0
+               GOTO Quit
+         END   
       END  
       ELSE  
       BEGIN  
@@ -641,4 +673,4 @@ GO
 GRANT EXECUTE ON  [RDT].[rdt_PTLStation_Assign_WaveCarton04] TO [NSQL]
 GO
 
-  
+  s
