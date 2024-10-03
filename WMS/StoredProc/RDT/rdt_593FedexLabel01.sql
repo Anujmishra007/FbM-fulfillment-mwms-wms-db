@@ -64,7 +64,7 @@ AS
       GOTO Quit
    END
 
-   SELECT @cShipperKey = ISNULL(ORM.ShipperKey, '')
+   SELECT DISTINCT @cShipperKey = ISNULL(ORM.ShipperKey, '')
    FROM PACKDETAIL PAK WITH(NOLOCK) 
    INNER JOIN PICKDETAIL PKD WITH(NOLOCK) ON PAK.StorerKey = PKD.StorerKey AND PAK.LabelNo = ISNULL(PKD.CaseID, '')
    INNER JOIN ORDERS ORM WITH(NOLOCK) ON PKD.StorerKey = ORM.StorerKey AND PKD.OrderKey = ORM.OrderKey
