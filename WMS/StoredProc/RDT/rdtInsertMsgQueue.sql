@@ -23,6 +23,7 @@ GO
 /* Date        Rev  Author   Purposes                                   */  
 /* 2020-Jun-24 1.1  YeeKung  Add Input Username and pasword (yeekung01) */
 /* 2022-Oct-03 1.2  YeeKung  Fix length params (yeekung02)              */
+/* 2024-Sep-26 1.3  NLT013   UWP-24932 Error message UI issue           */
 /************************************************************************/  
   
 CREATE  or ALTER  PROC rdt.rdtInsertMsgQueue (  
@@ -43,7 +44,8 @@ CREATE  or ALTER  PROC rdt.rdtInsertMsgQueue (
    @cLine12    NVARCHAR(125) = '',  
    @cLine13    NVARCHAR(125) = '',  
    @cLine14    NVARCHAR(125) = '',  
-   @cLine15    NVARCHAR(125) = ''  
+   @cLine15    NVARCHAR(125) = ''  ,
+   @nDisplayMsg      INT = 1
 )  
 AS  
 SET NOCOUNT ON  
@@ -73,14 +75,16 @@ INSERT INTO RDT.rdtMsgQueue
            ,Line04           ,Line05           ,Line06  
            ,Line07           ,Line08           ,Line09  
            ,Line10           ,Line11           ,Line12  
-           ,Line13           ,Line14           ,Line15)  
+           ,Line13           ,Line14           ,Line15
+           ,DisplayMsg)  
      VALUES  
            (@nMobile,   
             @cLine01,         @cLine02,         @cLine03,               
             @cLine04,         @cLine05,         @cLine06,               
             @cLine07,         @cLine08,         @cLine09,               
             @cLine10,         @cLine11,         @cLine12,               
-            @cLine13,         @cLine14,         @cLine15)   
+            @cLine13,         @cLine14,         @cLine15,
+            @nDisplayMsg)   
   
 SET @nErrNo = @@ERROR   
 IF @nErrNo <> 0   
