@@ -2057,7 +2057,7 @@ BEGIN
 
          GOTO Step_2_Fail
       END
-
+            
       SELECT
          @cLotLabel01 = IsNULL(( SELECT TOP 1 C.[Description]
                                  FROM dbo.CodeLKUP C WITH (NOLOCK)
