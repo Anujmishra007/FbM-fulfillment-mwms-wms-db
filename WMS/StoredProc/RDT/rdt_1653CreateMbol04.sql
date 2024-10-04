@@ -13,7 +13,8 @@ GO
 /*                                                                      */
 /* Modifications log:                                                   */
 /* Date        Rev  Author   Purposes                                   */
-/* 2024-07-05  1.0  CYU027   FCR 539. Created                          */
+/* 2024-07-05  1.0  CYU027   FCR 539. Created                           */
+/* 2024-10-03  1.1  NLT013   UWP-25272 Fix issue: move wrong qty to pallet */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1653CreateMbol04] (
@@ -40,20 +41,22 @@ BEGIN
    SET QUOTED_IDENTIFIER OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
-   DECLARE @cSKU                    NVARCHAR( 20)
-   DECLARE @nQtyPicked              INT
-   DECLARE @nTranCount              INT
-   DECLARE @cFromLoc                NVARCHAR( 20)
-   DECLARE @cFromLot                NVARCHAR( 20)
-   DECLARE @cPDID                   NVARCHAR( 20)
-   DECLARE @cPDLabelNo              NVARCHAR( 20)
+   DECLARE @cSKU                       NVARCHAR( 20)
+   DECLARE @nQtyPicked                 INT
+   DECLARE @nTranCount                 INT
+   DECLARE @cFromLoc                   NVARCHAR( 20)
+   DECLARE @cFromLot                   NVARCHAR( 20)
+   DECLARE @cPDID                      NVARCHAR( 20)
+   DECLARE @cPDLabelNo                 NVARCHAR( 20)
    DECLARE @cPalletLineNumber          NVARCHAR( 5)
-   DECLARE @nPDQty                  INT
-   DECLARE @cSuggestLoc             NVARCHAR( 1)
-   DECLARE @cOverrideLoc            NVARCHAR( 1)
-   DECLARE @curDel                  CURSOR
-   Declare @cCursorPickDetail       CURSOR
-   Declare @cCursorPalletDetail       CURSOR
+   DECLARE @nPDQty                     INT
+   DECLARE @cSuggestLoc                NVARCHAR( 1)
+   DECLARE @cOverrideLoc               NVARCHAR( 1)
+   DECLARE @curDel                     CURSOR
+   Declare @cCursorPickDetail          CURSOR
+   Declare @cCursorPalletDetail        CURSOR
+   DECLARE @cPickConfirmStatus         NVARCHAR( 1)
+   DECLARE @cPDOrderKey                NVARCHAR( 20)
 
 
    SELECT
@@ -62,6 +65,11 @@ BEGIN
       @cFacility              = Facility
    FROM rdt.RDTMOBREC (NOLOCK)
    WHERE Mobile = @nMobile
+
+   -- Get storer config
+   SET @cPickConfirmStatus = rdt.RDTGetConfig( @nFunc, 'PickConfirmStatus', @cStorerKey)
+   IF @cPickConfirmStatus = '0'
+      SET @cPickConfirmStatus = '5'
 
    SET @nTranCount = @@TRANCOUNT
    BEGIN TRAN  -- Begin our own transaction
@@ -161,18 +169,18 @@ BEGIN
 
       ----Loop LOTxLOCxID, possible 1 PICKDETAIL to N LOCxLOTxID
       SET @cCursorPickDetail = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-         SELECT PD.Loc, PD.Lot, PD.Qty, PD.ID, PD.SKU
+         SELECT PD.Loc, PD.Lot, PD.Qty, PD.ID, PD.SKU, PD.OrderKey
          FROM PICKDETAIL PD WITH (NOLOCK)
-                 INNER JOIN LOTxLOCxID LLI WITH (NOLOCK)
-                            ON (LLI.Loc = PD.Loc AND LLI.LOT = PD.LOT AND LLI.Id=PD.ID)
-         WHERE ISNULL(PD.CaseID , '') <> '' AND
-            (PD.CaseID = @cTrackNo OR PD.CASEID =@cLabelNo)
+         INNER JOIN LOTxLOCxID LLI WITH (NOLOCK)
+            ON (LLI.Loc = PD.Loc AND LLI.LOT = PD.LOT AND LLI.Id = PD.ID AND PD.Sku = LLI.Sku)
+         WHERE ISNULL(PD.CaseID , '') <> '' 
+            AND (PD.CaseID = @cTrackNo OR PD.CASEID =@cLabelNo)
+            AND PD.Status = @cPickConfirmStatus
+
       OPEN @cCursorPickDetail
-      FETCH NEXT FROM @cCursorPickDetail INTO @cFromLoc, @cFromLot, @nQtyPicked, @cPDID, @cSKU
+      FETCH NEXT FROM @cCursorPickDetail INTO @cFromLoc, @cFromLot, @nQtyPicked, @cPDID, @cSKU, @cPDOrderKey
       WHILE (@@FETCH_STATUS <> -1)
       BEGIN
-
-         SELECT @cFromLoc,@cFromLot, @nQtyPicked, @cPDID
          --    Create LOTxLOCxID record
          EXECUTE rdt.rdt_Move
                  @nMobile     = @nMobile,
@@ -190,13 +198,13 @@ BEGIN
                  @nQTY        = @nQtyPicked,
                  @nQTYPick    = @nQtyPicked,
                  @cFromLOT    = @cFromLot,
-                 @cOrderKey   = @cOrderKey,
+                 @cOrderKey   = @cPDOrderKey,
                  @nFunc       = @nFunc
          IF @nErrNo > 0
             GOTO RollBackTran_CreateMbol04
 
 
-         FETCH NEXT FROM @cCursorPickDetail INTO @cFromLoc, @cFromLot, @nQtyPicked, @cPDID, @cSKU
+         FETCH NEXT FROM @cCursorPickDetail INTO @cFromLoc, @cFromLot, @nQtyPicked, @cPDID, @cSKU, @cPDOrderKey
       END
 
       CLOSE @cCursorPickDetail
