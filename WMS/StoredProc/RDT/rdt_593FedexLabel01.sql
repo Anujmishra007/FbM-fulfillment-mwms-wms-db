@@ -10,7 +10,9 @@ GO
 /* Modifications log:                                                         */
 /*                                                                            */
 /* Date       Rev  Author     Purposes                                        */
-/* 2018-02-07 1.0  NLT03      FCR-727 Create                                  */
+/* 2024-09-01 1.0  NLT03      FCR-727 Create                                  */
+/* 2024-10-03 1.1  NLT03      Grainte urgent case fix                         */
+/* 2024-10-05 1.2  NLT03      FCR-949 new request, enhancement                */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_593FedexLabel01] (
@@ -57,17 +59,32 @@ AS
    IF LEN(@cDropID) = 20 AND LEFT(@cDropID, 2) = '00'
       SET @cDropID = RIGHT(@cDropID, 18)
 
-   IF NOT EXISTS(SELECT 1 FROM PACKDETAIL WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND LabelNo = @cDropID)
+   IF NOT EXISTS(SELECT 1 FROM dbo.PACKDETAIL WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND LabelNo = @cDropID)
    BEGIN
       SET @nErrNo = 223002
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InvalidLabel
       GOTO Quit
    END
 
+   IF EXISTS(SELECT 1 FROM dbo.Transmitlog2 WITH(NOLOCK) 
+            WHERE Tablename = 'WSSOECL'
+               AND Key2 = @cDropID
+               AND Key3 = @cStorerkey)
+   BEGIN
+      UPDATE dbo.Transmitlog2 WITH(ROWLOCK) 
+      SET transmitflag = '0',
+         AddWho = SYSTEM_USER
+      WHERE Tablename = 'WSSOECL'
+         AND Key2 = @cDropID
+         AND Key3 = @cStorerkey
+
+      GOTO Quit
+   END
+
    SELECT DISTINCT @cShipperKey = ISNULL(ORM.ShipperKey, '')
-   FROM PACKDETAIL PAK WITH(NOLOCK) 
-   INNER JOIN PICKDETAIL PKD WITH(NOLOCK) ON PAK.StorerKey = PKD.StorerKey AND PAK.LabelNo = ISNULL(PKD.CaseID, '')
-   INNER JOIN ORDERS ORM WITH(NOLOCK) ON PKD.StorerKey = ORM.StorerKey AND PKD.OrderKey = ORM.OrderKey
+   FROM dbo.PACKDETAIL PAK WITH(NOLOCK) 
+   INNER JOIN dbo.PICKDETAIL PKD WITH(NOLOCK) ON PAK.StorerKey = PKD.StorerKey AND PAK.LabelNo = ISNULL(PKD.CaseID, '')
+   INNER JOIN dbo.ORDERS ORM WITH(NOLOCK) ON PKD.StorerKey = ORM.StorerKey AND PKD.OrderKey = ORM.OrderKey
    WHERE PAK.StorerKey = @cStorerKey
       AND PAK.LabelNo = @cDropID
 
@@ -80,7 +97,7 @@ AS
       GOTO Quit
    END
 
-   IF EXISTS(SELECT 1 FROM CODELKUP WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND LISTNAME = 'WSCourier' AND @cShipperKey = ISNULL(notes,'-1'))
+   IF EXISTS(SELECT 1 FROM dbo.CODELKUP WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND LISTNAME = 'WSCourier' AND @cShipperKey = ISNULL(notes,'-1'))
    BEGIN
       DECLARE @cTrauncatedDropID    NVARCHAR(10) = @cDropID
       -- Insert transmitlog2 here
