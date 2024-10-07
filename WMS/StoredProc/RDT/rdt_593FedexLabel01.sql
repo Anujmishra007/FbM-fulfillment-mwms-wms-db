@@ -97,6 +97,9 @@ AS
       GOTO Quit
    END
 
+   --Remove additional space 
+   SET @cShipperKey = TRIM(@cShipperKey)
+
    IF EXISTS(SELECT 1 FROM dbo.CODELKUP WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND LISTNAME = 'WSCourier' AND @cShipperKey = ISNULL(notes,'-1'))
    BEGIN
       DECLARE @cTrauncatedDropID    NVARCHAR(10) = @cDropID
