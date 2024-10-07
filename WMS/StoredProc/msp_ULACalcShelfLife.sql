@@ -328,7 +328,7 @@ BEGIN
 
                                         SET @c_TransferLineNumber = RIGHT('0000' + RTRIM(CAST(CAST(ISNULL(@c_TransferLineNumber,0) AS int) + 1 AS NVARCHAR(5))),5);
 
-                                        IF @c_ShelfLife = 'ML51' or @c_ShelfLife = 'ML49'
+                                        IF @c_ShelfLife = 'ML51' or @c_ShelfLife = 'ML49' or @c_ShelfLife = 'ML13'
                                             SET @c_ToLottable06 = '1'
                                         ELSE
                                             SET @c_ToLottable06 = @c_Lottable06
