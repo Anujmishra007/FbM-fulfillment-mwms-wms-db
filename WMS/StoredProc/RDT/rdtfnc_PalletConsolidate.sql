@@ -131,24 +131,10 @@ DECLARE
    @cOnScreenSKU        NVARCHAR(20),
    @nFromScn            INT,
    @nFromStep           INT,
-   @cExtendedScreenSP   NVARCHAR(20), -- LJQ006
-   @tExtScnData         VariableTable,
-
-   @cLottable01   NVARCHAR( 18),
-   @cLottable02   NVARCHAR( 18),
-   @cLottable03   NVARCHAR( 18),
-   @dLottable04   DATETIME,
-   @dLottable05   DATETIME,
-   @cLottable06   NVARCHAR( 30),
-   @cLottable07   NVARCHAR( 30),
-   @cLottable08   NVARCHAR( 30),
-   @cLottable09   NVARCHAR( 30),
-   @cLottable10   NVARCHAR( 30),
-   @cLottable11   NVARCHAR( 30),
-   @cLottable12   NVARCHAR( 30),
-   @dLottable13   DATETIME,
-   @dLottable14   DATETIME,
-   @dLottable15   DATETIME,
+   
+   @cGenID              NVARCHAR(20), -- LJQ006 FCR-877
+   @tExtData            VariableTable, -- LJQ006 FCR-877
+   @cAutoID             NVARCHAR(18), --LJQ006 FCR-877
 
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),
@@ -173,19 +159,7 @@ DECLARE
    @cFieldAttr09 NVARCHAR( 1), @cFieldAttr10 NVARCHAR( 1),
    @cFieldAttr11 NVARCHAR( 1), @cFieldAttr12 NVARCHAR( 1),
    @cFieldAttr13 NVARCHAR( 1), @cFieldAttr14 NVARCHAR( 1),
-   @cFieldAttr15 NVARCHAR( 1),
-   
-   @nAction      INT,
-   @cUDF01  NVARCHAR( 250), @cUDF02 NVARCHAR( 250), @cUDF03 NVARCHAR( 250),
-   @cUDF04  NVARCHAR( 250), @cUDF05 NVARCHAR( 250), @cUDF06 NVARCHAR( 250),
-   @cUDF07  NVARCHAR( 250), @cUDF08 NVARCHAR( 250), @cUDF09 NVARCHAR( 250),
-   @cUDF10  NVARCHAR( 250), @cUDF11 NVARCHAR( 250), @cUDF12 NVARCHAR( 250),
-   @cUDF13  NVARCHAR( 250), @cUDF14 NVARCHAR( 250), @cUDF15 NVARCHAR( 250),
-   @cUDF16  NVARCHAR( 250), @cUDF17 NVARCHAR( 250), @cUDF18 NVARCHAR( 250),
-   @cUDF19  NVARCHAR( 250), @cUDF20 NVARCHAR( 250), @cUDF21 NVARCHAR( 250),
-   @cUDF22  NVARCHAR( 250), @cUDF23 NVARCHAR( 250), @cUDF24 NVARCHAR( 250),
-   @cUDF25  NVARCHAR( 250), @cUDF26 NVARCHAR( 250), @cUDF27 NVARCHAR( 250),
-   @cUDF28  NVARCHAR( 250), @cUDF29 NVARCHAR( 250), @cUDF30 NVARCHAR( 250)
+   @cFieldAttr15 NVARCHAR( 1)
    
 -- Load RDT.RDTMobRec
 SELECT
@@ -237,8 +211,6 @@ SELECT
    @cExtendedValidateSP = V_String27,
    @cOnScreenSKU        = V_String28,
 
-   @cExtendedScreenSP   = V_String29,
-
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,
    @cInField03 = I_Field03,   @cOutField03 = O_Field03,
@@ -280,7 +252,6 @@ BEGIN
    IF @nStep = 7 GOTO Step_7   -- Scn = 4056. Option
    IF @nStep = 8 GOTO Step_8   -- Scn = 4057. OrderKey
    IF @nStep = 9 GOTO Step_9   -- Scn = 3570. Multi SKU Barocde
-   IF @nStep = 99 GOTO Step_ExtScn -- ExtendScn
 END
 
 RETURN -- Do nothing if incorrect step
@@ -346,10 +317,6 @@ BEGIN
    SET @cExtendedValidateSP = rdt.rdtGetConfig( @nFunc, 'ExtendedValidateSP', @cStorerKey)
    IF @cExtendedValidateSP = '0'
       SET @cExtendedValidateSP = ''
-   
-   SET @cExtendedScreenSP = rdt.RDTGetConfig( @nFunc, 'ExtScnSP', @cStorerKey)
-   IF @cExtendedScreenSP = '0'
-      SET @cExtendedScreenSP = ''
 
    -- Prep next screen var
    SET @cFromID = ''
@@ -1434,6 +1401,29 @@ BEGIN
       END
       */
 
+      -- Get Autogen ToID Conf
+      SET @cGenID = rdt.rdtGetConfig( @nFunc, 'AutoGenID', @cStorerKey)
+      IF @cGenID = '0'
+      BEGIN
+        SET @cGenID = ''
+      END
+      -- Get AutoGenID
+      IF @cGenID <> ''
+      BEGIN
+         INSERT INTO @tExtData (Variable, Value) VALUES 
+            ('@cIDType', 'ID')
+         EXEC [rdt].[rdt_AutoGenID]
+            @nMobile,
+            @nFunc,
+            @nStep,
+            @cLangCode,
+            @cGenID,
+            @tExtData,
+            @cAutoID    OUTPUT,
+            @nErrNo     OUTPUT,
+            @cErrMsg    OUTPUT
+      END
+
       -- Prepare next screen var
       SET @cOutField01 = @cFromID
       SET @cOutField02 = @cSKU
@@ -1452,21 +1442,21 @@ BEGIN
       END
       SET @cOutField07 = @cMUOM_Desc
       SET @cOutField08 = CAST( @nMQTY_Move AS NVARCHAR( 5))
-      SET @cOutField09 = '' -- To DropID
+      -- SET @cOutField09 = '' -- To DropID
+      -- SET AutoGenID
+      IF @cAutoID <> ''
+      BEGIN
+         SET @cOutField09 = @cAutoID
+      END
+      ELSE 
+      BEGIN
+         SET @cOutField09 = ''
+      END      
 
       -- Go to next screen
       SET @nScn  = @nScn + 1
       SET @nStep = @nStep + 1
 
-      -- go to extended screen to generate ID automatically
-      IF @cExtendedScreenSP = '0'
-      BEGIN
-         SET @cExtendedScreenSP = ''
-      END
-      IF @cExtendedScreenSP <> ''
-      BEGIN
-         GOTO Step_ExtScn
-      END 
    END
 
    IF @nInputKey = 0 -- ESC
@@ -2632,6 +2622,30 @@ BEGIN
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Inv Orderkey
          GOTO Step_8_Fail
       END
+      
+      -- Get Autogen ToID Conf
+      SET @cGenID = rdt.rdtGetConfig( @nFunc, 'AutoGenID', @cStorerKey)
+      IF @cGenID = '0'
+      BEGIN
+        SET @cGenID = ''
+      END
+      -- Get AutoGenID
+      IF @cGenID <> ''
+      BEGIN
+         DELETE FROM @tExtData;
+         INSERT INTO @tExtData (Variable, Value) VALUES 
+            ('@cIDType', 'ID');
+         EXEC [rdt].[rdt_AutoGenID]
+            @nMobile,
+            @nFunc,
+            @nStep,
+            @cLangCode,
+            @cGenID,
+            @tExtData,
+            @cAutoID    OUTPUT,
+            @nErrNo     OUTPUT,
+            @cErrMsg    OUTPUT
+      END      
    
       -- Prepare next screen var
       SET @cOutField01 = @cFromID
@@ -2651,21 +2665,19 @@ BEGIN
       END
       SET @cOutField07 = @cMUOM_Desc
       SET @cOutField08 = CAST( @nMQTY_Move AS NVARCHAR( 5))
-      SET @cOutField09 = '' -- To DropID
-
+      -- SET @cOutField09 = '' -- To DropID
+      IF @cAutoID <> ''
+      BEGIN
+         SET @cOutField09 = @cAutoID
+      END
+      ELSE 
+      BEGIN
+         SET @cOutField09 = ''
+      END
       -- Go to next screen
       SET @nScn  = @nScn - 4
       SET @nStep = @nStep - 4
       
-      -- go to extended screen to generate ID automatically
-      IF @cExtendedScreenSP = '0'
-      BEGIN
-         SET @cExtendedScreenSP = ''
-      END
-      IF @cExtendedScreenSP <> ''
-      BEGIN
-         GOTO Step_ExtScn
-      END
    END
 
    IF @nInputKey = 0 -- ESC
@@ -2960,59 +2972,6 @@ BEGIN
 END
 GOTO Quit
 
-Step_ExtScn:
-BEGIN
-   IF @cExtendedScreenSP <> ''
-   BEGIN
-      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
-      BEGIN      
-         
-         EXECUTE [RDT].[rdt_ExtScnEntry] 
-         @cExtendedScreenSP, 
-         @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorerKey, @tExtScnData ,
-         @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01 OUTPUT,  
-         @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02 OUTPUT,  
-         @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03 OUTPUT,  
-         @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04 OUTPUT,  
-         @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  @dLottable05 OUTPUT,  
-         @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  @cLottable06 OUTPUT, 
-         @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  @cLottable07 OUTPUT, 
-         @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  @cLottable08 OUTPUT, 
-         @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  @cLottable09 OUTPUT, 
-         @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  @cLottable10 OUTPUT, 
-         @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  @cLottable11 OUTPUT,
-         @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT,  @cLottable12 OUTPUT,
-         @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  @dLottable13 OUTPUT,
-         @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT,  @dLottable14 OUTPUT,
-         @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT,  @dLottable15 OUTPUT,
-         @nAction, 
-         @nScn     OUTPUT,  @nStep OUTPUT,
-         @nErrNo   OUTPUT, 
-         @cErrMsg  OUTPUT,
-         @cUDF01   OUTPUT, @cUDF02 OUTPUT, @cUDF03 OUTPUT,
-         @cUDF04   OUTPUT, @cUDF05 OUTPUT, @cUDF06 OUTPUT,
-         @cUDF07   OUTPUT, @cUDF08 OUTPUT, @cUDF09 OUTPUT,
-         @cUDF10   OUTPUT, @cUDF11 OUTPUT, @cUDF12 OUTPUT,
-         @cUDF13   OUTPUT, @cUDF14 OUTPUT, @cUDF15 OUTPUT,
-         @cUDF16   OUTPUT, @cUDF17 OUTPUT, @cUDF18 OUTPUT,
-         @cUDF19   OUTPUT, @cUDF20 OUTPUT, @cUDF21 OUTPUT,
-         @cUDF22   OUTPUT, @cUDF23 OUTPUT, @cUDF24 OUTPUT,
-         @cUDF25   OUTPUT, @cUDF26 OUTPUT, @cUDF27 OUTPUT,
-         @cUDF28   OUTPUT, @cUDF29 OUTPUT, @cUDF30 OUTPUT
-
-         IF @nErrNo <> 0
-            GOTO Step_99_Fail
-      END
-   END
-
-   GOTO Quit
-
-   Step_99_Fail:
-   BEGIN
-      GOTO Quit
-   END
-END
-
 /********************************************************************************
 Quit. Update back to I/O table, ready to be pick up by JBOSS
 ********************************************************************************/
@@ -3063,7 +3022,6 @@ BEGIN
       V_String26 = @nFromStep,
       V_String27 = @cExtendedValidateSP,
       V_String28 = @cOnScreenSKU,
-      V_String29 = @cExtendedScreenSP,
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01, 
       I_Field02 = @cInField02,  O_Field02 = @cOutField02, 
