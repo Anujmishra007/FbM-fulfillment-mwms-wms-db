@@ -5,7 +5,7 @@ SET ANSI_NULLS OFF
 GO
 /************************************************************************/
 /* Store procedure: rdt_GENERATEIDGen                                   */
-/* Copyright      : LF Logistics                                        */
+/* Copyright      : Maersk                                              */
 /*                                                                      */
 /* Purpose: Auto generate ID for codelist GENERATEID                    */
 /*                                                                      */
