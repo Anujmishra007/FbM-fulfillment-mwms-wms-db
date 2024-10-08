@@ -1,6 +1,3 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE Id = OBJECT_ID(N'[dbo].[ispCheckOutstandingOrders]') AND OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   DROP PROCEDURE [dbo].[ispCheckOutstandingOrders]
-GO
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -45,9 +42,11 @@ GO
 /* 29-JUN-2016  Wan04    1.5  SOS#370874 - TW Add Cycle Count Strategy  */
 /* 24-NOV-2016  Wan05    1.6  WMS-648 - GW StockTake Parameter2         */
 /*                            Enhancement                               */
+/* 15-OCT-2024  SKB01    1.7  UWP-20468 joining PickDetail table to get */
+/*                            Qty picked                                */
 /************************************************************************/
 
-CREATE PROC ispCheckOutstandingOrders (
+CREATE OR ALTER  PROC ispCheckOutstandingOrders (
     @c_StockTakeKey NVARCHAR(10),
     @c_CountNo      NVARCHAR(1),
     @c_ByPalletLevel NVARCHAR(10) = 'N' -- NJOW03
@@ -75,7 +74,7 @@ DECLARE @c_facility        NVARCHAR(5),
 @c_SkuGroupParm    NVARCHAR(125),
 @c_ExcludeQtyPicked NVARCHAR(1)  --NJOW02
 , @c_GenCCdetailbyExcludePKDStatus3 NVARCHAR(1)
-, @c_PickDetailJoinQuery NVARCHAR(255) = ''
+, @c_PickDetailJoinQuery NVARCHAR(255) = ''        --(SKB01)
 , @c_PickDetailQtyAddQuery NVARCHAR(255) = ''
 --(Wan01) - START
 , @c_Extendedparm1Field      NVARCHAR(50)
@@ -226,7 +225,7 @@ SELECT @n_continue = 1, @b_debug = 0
     IF @c_GenCCdetailbyExcludePKDStatus3 = '1'
         BEGIN
             SET @c_GenCCdetailbyExcludePKDStatus3 = 'Y'
-            SET @c_PickDetailJoinQuery = 'LEFT JOIN PICKDETAIL WITH (NOLOCK) ON PICKDETAIL.Lot = LOTxLOCxID.Lot and PICKDETAIL.Loc = LOTxLOCxID.Loc and PICKDETAIL.ID = LOTxLOCxID.Id '
+            SET @c_PickDetailJoinQuery = 'LEFT JOIN PICKDETAIL WITH (NOLOCK) ON PICKDETAIL.Lot = LOTxLOCxID.Lot and PICKDETAIL.Loc = LOTxLOCxID.Loc and PICKDETAIL.ID = LOTxLOCxID.Id ' --(SKB01)
             SET @c_PickDetailQtyAddQuery = ' + CASE WHEN PICKDETAIL.Status=''3'' THEN PICKDETAIL.Qty ELSE 0 END '
         END
     ELSE
@@ -428,7 +427,8 @@ SELECT @n_continue = 1, @b_debug = 0
                                 + 'JOIN LOTxLOCxID WITH (NOLOCK) ON LOTxLOCxID.LOC = LOC.LOC '
                                 + 'JOIN SKU WITH (NOLOCK) ON SKU.Storerkey = LOTxLOCxID.Storerkey AND SKU.SKU = LOTxLOCxID.SKU '
                                 + 'JOIN LOTATTRIBUTE WITH (NOLOCK) ON LOTATTRIBUTE.Lot = LOTxLOCxID.Lot '             --(Wan01)
-                                +  @c_PickDetailJoinQuery
+                                +  @c_PickDetailJoinQuery                                                             --(SKB01)
+                                + 'WHERE 1=1 '                                                                        --(SKB01)
                                 +  @c_StorerSQL + ' ' + @c_StorerSQL2 + ' '
                                 --+ 'AND LOTxLOCxID.QtyAllocated + QtyPicked > 0 '
                                 + @c_ExcludePickedSQL + ' '
@@ -453,7 +453,8 @@ SELECT @n_continue = 1, @b_debug = 0
                                 + 'JOIN LOTxLOCxID WITH (NOLOCK) ON LOTxLOCxID.LOC = LOC.LOC '
                                 + 'JOIN SKU WITH (NOLOCK) ON SKU.Storerkey = LOTxLOCxID.Storerkey AND SKU.SKU = LOTxLOCxID.SKU '
                                 + 'JOIN LOTATTRIBUTE WITH (NOLOCK) ON LOTATTRIBUTE.Lot = LOTxLOCxID.Lot '             --(Wan01)
-                                +  @c_PickDetailJoinQuery                                      --(Wan01)
+                                +  @c_PickDetailJoinQuery                                                             --(SKB01)
+                                + 'WHERE 1=1 '                                                                        --(SKB01)
                                 +  @c_StorerSQL + ' ' + @c_StorerSQL2 + ' '
                                 --+ 'AND LOTxLOCxID.QtyAllocated + QtyPicked > 0 '
                                 + @c_ExcludePickedSQL + ' '
@@ -488,7 +489,7 @@ SELECT @n_continue = 1, @b_debug = 0
                         + 'JOIN LOTxLOCxID WITH (NOLOCK) ON LOTxLOCxID.LOC = LOC.LOC '
                         + 'JOIN SKU WITH (NOLOCK) ON SKU.Storerkey = LOTxLOCxID.Storerkey AND SKU.SKU = LOTxLOCxID.SKU '
                         + 'JOIN LOTATTRIBUTE WITH (NOLOCK) ON LOTATTRIBUTE.Lot = LOTxLOCxID.Lot '             --(Wan01)
-                        +  @c_PickDetailJoinQuery
+                        +  @c_PickDetailJoinQuery                                                             --(SKB01)
 
                     --(Wan05) - START
                     SET @c_sql = @c_sql + @c_StocktakeParm2SQL
