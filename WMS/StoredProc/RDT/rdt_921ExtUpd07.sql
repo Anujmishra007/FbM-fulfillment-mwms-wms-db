@@ -70,7 +70,6 @@ BEGIN
             SELECT @npickedQty = SUM(qty) FROM PickDetail WITH(NOLOCK) 
             WHERE orderkey = @cOrderKey 
             AND Storerkey = @cStorerKey
-            AND status = '5'
 
             SELECT @nPackedQty = SUM(qty) 
             FROM PackDetail pd WITH(NOLOCK) 
