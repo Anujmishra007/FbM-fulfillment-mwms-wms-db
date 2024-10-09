@@ -530,6 +530,7 @@ BEGIN
    IF @cGenDROPIDSP <> '' AND @nStep = 1
    BEGIN
       -- Auto generate DROPID
+      DELETE FROM @tExtData
       INSERT INTO @tExtData (Variable, Value) 
       VALUES ('@cIDType', 'DROPID')
 
