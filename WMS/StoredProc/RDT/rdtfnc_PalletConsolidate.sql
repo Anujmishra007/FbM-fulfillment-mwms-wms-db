@@ -1422,6 +1422,11 @@ BEGIN
             @cAutoID    OUTPUT,
             @nErrNo     OUTPUT,
             @cErrMsg    OUTPUT
+            
+         IF @nErrNo <> 0
+         BEGIN
+            GOTO Step_3_Fail
+         END
       END
 
       -- Prepare next screen var
@@ -2645,6 +2650,11 @@ BEGIN
             @cAutoID    OUTPUT,
             @nErrNo     OUTPUT,
             @cErrMsg    OUTPUT
+         
+         IF @nErrno <> 0
+         BEGIN
+            GOTO Step_8_Fail
+         END
       END      
    
       -- Prepare next screen var
