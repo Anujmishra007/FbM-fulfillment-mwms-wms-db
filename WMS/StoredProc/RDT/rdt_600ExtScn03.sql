@@ -1,17 +1,22 @@
+
+SET ANSI_NULLS OFF
+GO
 SET QUOTED_IDENTIFIER OFF
 GO
-SET ANSI_NULLS OFF
-GO 
 
-/************************************************************************/  
-/* Store procedure: rdt_600ExtScn03                                  */  
-/* CUSTOMER :   HUDA                                                    */  
-/* Modifications log:                                                   */  
-/*                                                                      */  
-/* Date       Rev  Author     Purposes                                  */  
-/* 2024-09-25 1.0  YYS027     FCR-827. Created                          */  
-/************************************************************************/  
-  
+/************************************************************************/
+/* Store procedure: rdt_600ExtScn03                                     */
+/* Copyright      : Maersk WMS                                          */
+/*                                                                      */
+/* Purpose:       For Unilever                                          */
+/*                                                                      */
+/* Date       Rev  Author   Purposes                                    */
+/* 2024-02-26 1.0  Dennis   Draft                                       */
+/* 2024-03-01 1.1  Dennis   UWP-14799                                   */
+/* 2024-08-26 1.2  VPA235                                               */
+/* 2024-08-30 1.3  CYU027   UWP-12109                                   */
+/************************************************************************/
+
 CREATE OR ALTER PROC [RDT].[rdt_600ExtScn03] (
    @nMobile      INT,           
    @nFunc        INT,           
@@ -22,7 +27,15 @@ CREATE OR ALTER PROC [RDT].[rdt_600ExtScn03] (
    @cFacility    NVARCHAR( 5),  
    @cStorerKey   NVARCHAR( 15), 
 
-   @tExtScnData   VariableTable READONLY,
+   @cSuggLOC     NVARCHAR( 10) OUTPUT, 
+   @cLOC         NVARCHAR( 20) OUTPUT, 
+   @cID          NVARCHAR( 20) OUTPUT, 
+   @cSKU         NVARCHAR( 20) OUTPUT, 
+   @cReceiptKey  NVARCHAR( 10), 
+   @cPOKey       NVARCHAR( 10),
+   @cReasonCode  NVARCHAR( 10),
+   @cReceiptLineNumber  NVARCHAR( 5),
+   @cPalletType  NVARCHAR( 10),  
 
    @cInField01       NVARCHAR( 60) OUTPUT,  @cOutField01 NVARCHAR( 60) OUTPUT,  @cFieldAttr01 NVARCHAR( 1) OUTPUT,  @cLottable01 NVARCHAR( 18) OUTPUT,  
    @cInField02       NVARCHAR( 60) OUTPUT,  @cOutField02 NVARCHAR( 60) OUTPUT,  @cFieldAttr02 NVARCHAR( 1) OUTPUT,  @cLottable02 NVARCHAR( 18) OUTPUT,  
@@ -42,17 +55,7 @@ CREATE OR ALTER PROC [RDT].[rdt_600ExtScn03] (
    @nAction      INT, --0 Jump Screen, 1 Validation(pass through all input fields), 2 Update, 3 Prepare output fields .....
    @nAfterScn    INT OUTPUT, @nAfterStep    INT OUTPUT, 
    @nErrNo             INT            OUTPUT, 
-   @cErrMsg            NVARCHAR( 20)  OUTPUT,
-   @cUDF01  NVARCHAR( 250) OUTPUT, @cUDF02 NVARCHAR( 250) OUTPUT, @cUDF03 NVARCHAR( 250) OUTPUT,
-   @cUDF04  NVARCHAR( 250) OUTPUT, @cUDF05 NVARCHAR( 250) OUTPUT, @cUDF06 NVARCHAR( 250) OUTPUT,
-   @cUDF07  NVARCHAR( 250) OUTPUT, @cUDF08 NVARCHAR( 250) OUTPUT, @cUDF09 NVARCHAR( 250) OUTPUT,
-   @cUDF10  NVARCHAR( 250) OUTPUT, @cUDF11 NVARCHAR( 250) OUTPUT, @cUDF12 NVARCHAR( 250) OUTPUT,
-   @cUDF13  NVARCHAR( 250) OUTPUT, @cUDF14 NVARCHAR( 250) OUTPUT, @cUDF15 NVARCHAR( 250) OUTPUT,
-   @cUDF16  NVARCHAR( 250) OUTPUT, @cUDF17 NVARCHAR( 250) OUTPUT, @cUDF18 NVARCHAR( 250) OUTPUT,
-   @cUDF19  NVARCHAR( 250) OUTPUT, @cUDF20 NVARCHAR( 250) OUTPUT, @cUDF21 NVARCHAR( 250) OUTPUT,
-   @cUDF22  NVARCHAR( 250) OUTPUT, @cUDF23 NVARCHAR( 250) OUTPUT, @cUDF24 NVARCHAR( 250) OUTPUT,
-   @cUDF25  NVARCHAR( 250) OUTPUT, @cUDF26 NVARCHAR( 250) OUTPUT, @cUDF27 NVARCHAR( 250) OUTPUT,
-   @cUDF28  NVARCHAR( 250) OUTPUT, @cUDF29 NVARCHAR( 250) OUTPUT, @cUDF30 NVARCHAR( 250) OUTPUT
+   @cErrMsg            NVARCHAR( 20)  OUTPUT
 )
 AS
 BEGIN
@@ -60,53 +63,559 @@ BEGIN
    SET QUOTED_IDENTIFIER OFF
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
+   DECLARE @nShelfLife FLOAT
+   DECLARE @cResultCode NVARCHAR( 60)
+   DECLARE
+   @nRowCount            INT,
+   @cexternReceiptKey    NVARCHAR( 30), 
+   @cexternLineNo        NVARCHAR( 30),    
+   @nLotNum              INT,
+   @cListName            NVARCHAR( 30),
+   @cLotValue            NVARCHAR( 30),     
+   @cStorerConfig        NVARCHAR( 50),  
+   @SQL                  NVARCHAR( MAX),
+   @cUserDefine08        NVARCHAR( 30),  
+   @nSQLResult           INT,
+   @nCheckDigit          INT,
+   @cActLoc              NVARCHAR( 20),
+   @cPalletTypeInUse     NVARCHAR( 5),
+   @cPalletTypeSave      NVARCHAR( 10),
+   @cLott10              NVARCHAR( 30),
+   @cSKUReceived         NVARCHAR( 20),
+   @cDamagedCode         NVARCHAR(30),
+   @cExpiredCode         NVARCHAR(30),
 
+   @cRectype             NVARCHAR(10),
+   @cAvailcode           NVARCHAR(5),
+   @cSkutype             NVARCHAR(50)
 
-   DECLARE 
-      @cString VARCHAR(20),         -- use field rdt.RDTMOBREC.C_String1
-      @nCount INT
-   DECLARE @cBatchCheck NVARCHAR(20)
+   SELECT
+      @cLott10 = C_String1,
+      @cPalletTypeSave = C_String2,
+      @cSKUReceived = C_String3
+   FROM RDT.RDTMOBREC WITH (NOLOCK)
+   WHERE Mobile = @nMobile
 
-   SET @nErrNo = 0
-   SET @cErrMsg = ''
-
-
-   SELECT  @cBatchCheck= rdt.rdtGetConfig(@nFunc,'BatchCheck',@cStorerKey)
-   IF ISNULL(@cBatchCheck,'')=''
+   IF @nAction = 3 --Prepare output fields
    BEGIN
+      IF @nFunc = 600 
+      BEGIN
+         IF @nInputKey = 1
+         BEGIN
+            IF( @nStep IN (4,5,8) )
+            BEGIN
+               IF rdt.RDTGetConfig( @nFunc, 'DEFCONDASN', @cStorerKey) = '1'
+               BEGIN
+                  SELECT TOP 1 @cOutField10 = ISNULL(RD.Lottable12,'')
+                  FROM dbo.Receipt R WITH (NOLOCK)
+                     INNER JOIN dbo.ReceiptDetail RD WITH (NOLOCK) ON R.ReceiptKey  = RD.ReceiptKey
+                  WHERE R.Facility = @cFacility AND R.StorerKey = @cStorerKey
+                     AND R.ReceiptKey = @cReceiptKey AND (@cPOKey='NOPO' or RD.POKey = @cPOKey)
+                     AND RD.Sku = @cSKU
+                  ORDER BY RD.ReceiptLineNumber
+               END
+            END
+         END
+         IF @nInputKey = 0
+         BEGIN
+            IF( @nStep = 14 )
+            BEGIN
+               IF rdt.RDTGetConfig( @nFunc, 'DEFCONDASN', @cStorerKey) = '1'
+               BEGIN
+                  SELECT TOP 1 @cOutField10 = ISNULL(RD.Lottable12,'')
+                  FROM dbo.Receipt R WITH (NOLOCK)
+                     INNER JOIN dbo.ReceiptDetail RD WITH (NOLOCK) ON R.ReceiptKey  = RD.ReceiptKey
+                  WHERE R.Facility = @cFacility AND R.StorerKey = @cStorerKey
+                     AND R.ReceiptKey = @cReceiptKey AND (@cPOKey='NOPO' or RD.POKey = @cPOKey)
+                     AND RD.Sku = @cSKU
+                  ORDER BY RD.ReceiptLineNumber
+               END
+            END
+         END
+      END
       GOTO Quit
    END
 
-
-   IF @nFunc = 600
+   IF @nAction = 2 --Update fields
    BEGIN
-      IF @nInputKey = 1
+      IF @nFunc = 600 
       BEGIN
-         IF @nStep = 5 
+         IF @nInputKey = 1
          BEGIN
-            SELECT @cString = C_String1 FROM rdt.RDTMOBREC (NOLOCK) WHERE Mobile = @nMobile
-            IF ISNUMERIC(@cString) = 1
-               SET @nCount = CONVERT(INT,@cString) 
-            ELSE
-               SET @nCount = 0
-            IF @nCount=1
-            begin
-               SET @nAfterStep=5
-               --o02 = i02
-               --o04 = lot13
-               --o06 = lot04
-               SELECT @cOutField02=@cInField02, 
-                  @cOutField04=rdt.rdtFormatDate(@dLottable13),
-                  @cOutField06=rdt.rdtFormatDate(@dLottable04)
-            end
+            IF( @nStep = 6 )
+            BEGIN
+               IF (ISNULL( rdt.RDTGetConfig( @nFunc, 'RCTSHLFVLD', @cStorerKey),'') != '')
+               BEGIN
+                  SET @cLottable11 = ''
+
+                  SELECT TOP 1 @cUserDefine08 = ISNULL(RD.UserDefine08,''),@cRectype=R.RECType
+                  FROM dbo.Receipt R WITH (NOLOCK)
+                     INNER JOIN dbo.ReceiptDetail RD WITH (NOLOCK) ON R.ReceiptKey  = RD.ReceiptKey
+                  WHERE R.Facility = @cFacility AND R.StorerKey = @cStorerKey
+                     AND R.ReceiptKey = @cReceiptKey AND (@cPOKey='NOPO' or RD.POKey = @cPOKey)
+                     AND RD.Sku = @cSKU
+                  ORDER BY RD.ReceiptLineNumber
+
+                  SELECT TOP 1 @nShelfLife = ISNULL(UDF02,0),@cResultCode = UDF03
+                  FROM dbo.CodeLKUP WITH (NOLOCK)
+                     WHERE ListName = 'CCODEVALID'
+                     -- AND UDF01 = 'IBD'              --VPA235(0914)
+                     AND UDF01 = @cRectype
+                     AND Code = @cFacility
+                     AND code2 = @cUserDefine08
+                     AND Storerkey = @cStorerKey
+
+
+                                                                                                         
+                --VPA235(0914)
+                  --IF (DATEDIFF(day,GETDATE(),@dLottable04) < (DATEDIFF(day,@dLottable13,@dLottable04) * @nShelfLife/100 )) AND GETDATE() < @dLottable04
+                  --BEGIN
+                  --   SET @cLottable11 = @cResultCode
+                  --END
+
+                  IF (DATEDIFF(day,GETDATE(),@dLottable04) < (DATEDIFF(day,@dLottable13,@dLottable04) * @nShelfLife/100 )) 
+                     AND GETDATE() < @dLottable04 AND @cRectype ='IBD'
+                  BEGIN
+                     SET @cLottable11 = @cResultCode
+                  END
+              
+                       
+                  IF (@cUserDefine08 != '' AND ISNULL(@cUserDefine08,N'OK' ) != N'OK') OR ISNULL(@cLottable11,'')!='' OR ISNULL(@cLottable12,'')!=''
+                  BEGIN    
+                     --SET @cLottable06 = '1'
+                     SET @cResultCode =''      
+                
+                     SELECT TOP 1 @cResultCode = UDF03
+                     FROM dbo.CodeLKUP WITH (NOLOCK)
+                     WHERE ListName = 'CCODEVALID'
+                        AND Code = @cFacility
+                        AND code2 = @cUserDefine08
+                        AND Storerkey = @cStorerKey
+
+                     SET @cLottable06 = '1'
+                     SET @cLottable07 = CASE WHEN  @cUserDefine08 IN ('OK','') THEN @cLottable07 ELSE @cResultCode END
+                  END
+             
+                 -- IF ((@cUserDefine08 = '' OR ISNULL(@cUserDefine08,N'OK') = N'OK')  AND ISNULL(@cLottable11,'')='' AND   @cRectype  IN ('IBD', 'TO') )
+               IF @cRectype  IN ('IBD', 'TO')  AND ISNULL(@cLottable12,'')='' AND (@cUserDefine08 = '' OR ISNULL(@cUserDefine08,N'OK') = N'OK')
+               BEGIN
+                  --    SET @cAvailcode = ''
+
+                  --   SELECT @cAvailcode = ISNULL(Code,'')
+                  --   FROM CODELKUP WITH (NOLOCK)
+                  --   WHERE storerkey = @cStorerkey
+                  --      AND UDF01 = 'BUDFG_AVL' 
+                  --AND LISTNAME = 'SLCode'  
+
+                       --SET @cLottable06 = ''
+                     --SET @cLottable07 = @cAvailcode
+
+                                 
+                  SELECT @cSkutype= BUSR3 FROM SKU WHERE SKU= @cSKU AND STORERKEY= @cStorerKey
+
+                  IF( (ISNULL(@dLottable04, '') <> '' AND DATEDIFF(DAY, GETDATE(), @dLottable04) < 211 
+                        AND ROUND(CAST((DATEDIFF (day, getdate(), @dLottable04)  ) as float)/ CAST((DATEDIFF (day,@dLottable13,@dLottable04)  ) as float)*100,2)< 60
+                        AND DATEDIFF(DAY, GETDATE(), @dLottable04) > 60  
+                  AND @cSkutype ='FROZEN_FOOD' ) 
+                        OR 
+                        (ISNULL(@dLottable04, '') <> '' AND DATEDIFF(DAY, GETDATE(), @dLottable04) < 391 
+                        AND ROUND(CAST((DATEDIFF (day, getdate(), @dLottable04)  ) as float)/ CAST((DATEDIFF (day,@dLottable13,@dLottable04)  ) as float)*100,2)< 60
+                  AND DATEDIFF(DAY, GETDATE(), @dLottable04) > 60 
+                        AND  @cSkutype = 'CABINETS' ))
+                  BEGIN     
+                     SET @cAvailcode = ''
+                     SELECT @cAvailcode = ISNULL(Code,'')
+                     FROM CODELKUP WITH (NOLOCK)
+                     WHERE storerkey = @cStorerkey
+                     AND UDF01 = 'FG_NearExpire_<310'
+                     AND LISTNAME = 'SLCode'
+
+                     SET @cLottable06 = ''
+                     SET @cLottable07 = @cAvailcode
+                  END
+
+                  IF( (ISNULL(@dLottable04, '') <> '' AND DATEDIFF(DAY, GETDATE(), @dLottable04) > 210 
+                     AND ROUND(CAST((DATEDIFF (day, getdate(), @dLottable04)  ) as float)/ CAST((DATEDIFF (day,@dLottable13,@dLottable04)  ) as float)*100,2)< 60
+                     AND @cSkutype ='FROZEN_FOOD' ) 
+                     OR 
+                     (ISNULL(@dLottable04, '') <> '' AND DATEDIFF(DAY, GETDATE(), @dLottable04) > 390 
+                     AND ROUND(CAST((DATEDIFF (day, getdate(), @dLottable04)  ) as float)/ CAST((DATEDIFF (day,@dLottable13,@dLottable04)  ) as float)*100,2)< 60
+                     AND  @cSkutype = 'CABINETS' ))
+                  BEGIN     
+                     SET @cAvailcode = ''
+
+                     SELECT @cAvailcode = ISNULL(Code,'')
+                     FROM CODELKUP WITH (NOLOCK)
+                     WHERE storerkey = @cStorerkey
+                        AND UDF01 = 'FG_NearExpire_>310'
+                        AND LISTNAME = 'SLCode'
+
+                     SET @cLottable06 = ''
+                     SET @cLottable07 = @cAvailcode
+                   END
+               END                          
+                  END   
+                 
+               IF (ISNULL( rdt.RDTGetConfig( @nFunc, 'ULLottable06', @cStorerKey),'0') != '0')
+               BEGIN
+                  --SET @cLottable06 = ''                  
+
+              --VPA235(0914)
+                  --IF ISNULL(@cLottable12,'') <> '' AND      
+                IF ISNULL(@cLottable12,'') <> '' AND  @cRectype NOT IN ('RO', 'CF') AND 
+                  EXISTS (SELECT 1 FROM CODELKUP WITH (NOLOCK) 
+                              WHERE LISTNAME = 'ASNREASON'
+                              AND Code = @cLottable12
+                              AND StorerKey = @cStorerkey)
+                  BEGIN
+                     SET @cDamagedCode = ''
+                     SELECT @cDamagedCode = ISNULL(Code,'')
+                     FROM CODELKUP WITH (NOLOCK)
+                     WHERE storerkey = @cStorerkey
+                        AND UDF01 = 'RMPM_Damaged'
+                        AND LISTNAME = 'SLCode'
+
+                     IF ISNULL(@cDamagedCode,'') <> ''
+                     BEGIN
+                        SET @cLottable06 = '1'
+                        SET @cLottable07 = @cDamagedCode
+                     END
+                     ELSE 
+                     BEGIN
+                        SET @nErrNo = 63533;
+                        SET @cErrMsg = 'Damaged Code is not configured for this Storer key' +@cStorerkey;
+                        GOTO QUIT
+                     END 
+                  END
+
+
+               IF ISNULL(@dLottable04,'') <> '' AND DATEDIFF(DAY, GETDATE(), @dLottable04) <= 60  
+               BEGIN
+                  SET @cExpiredCode = ''
+
+                  SELECT @cExpiredCode = ISNULL(Code,'')
+                  FROM CODELKUP WITH (NOLOCK)
+                  WHERE storerkey = @cStorerkey
+                     AND UDF01 = 'RMPM_Expired' 
+                     AND LISTNAME = 'SLCode'         
+                           
+                     
+                     SET @cLottable06 = '1'
+                  SET @cLottable07 = @cExpiredCode
+                  END
+
+               IF @cRectype  IN ('RO', 'CF')
+               BEGIN
+                  SET @cExpiredCode = ''
+
+                  SELECT @cExpiredCode = ISNULL(Code,'')
+                  FROM CODELKUP WITH (NOLOCK)
+                  WHERE storerkey = @cStorerkey
+                     AND UDF01 = 'BUDFG_RET' 
+                     AND LISTNAME = 'SLCode'
+
+                  SET @cLottable06 = '1'
+                  SET @cLottable07 = @cExpiredCode
+               END
+                  
+                  --ADDED BY VPA235 FOR FG NEAR EXPIRY END
+               END
+               IF (ISNULL( rdt.RDTGetConfig( @nFunc, 'PLTRCPT', @cStorerKey),'') = '1')
+               BEGIN
+                  --UWP-12109
+                  IF EXISTS(
+                     SELECT 1 FROM SKU WITH (NOLOCK )
+                     WHERE SKU.Storerkey = @cStorerKey
+                       AND SKU.Sku = @cSKU
+                        AND SKU.SKUGROUP = 'HU'
+                  )
+                  BEGIN
+                     SELECT @cLOC = SKU.PUTAWAYLOC FROM SKU WITH (NOLOCK )
+                     WHERE SKU.Storerkey = @cStorerKey
+                       AND SKU.Sku = @cSKU
+
+                     SET @cID = ''
+                  END
+               END
+            END
          END
-         ELSE
+
+         IF( @nStep = 7)
          BEGIN
-            UPDATE rdt.RDTMOBREC SET C_String1 = '0' WHERE Mobile = @nMobile
-         END      
+            IF (ISNULL( rdt.RDTGetConfig( @nFunc, 'ACTVASWO', @cStorerKey),'0') != '0')
+            BEGIN
+               SET @cLott10 = @cLottable10
+               IF ISNULL(@cLottable09,'') != ''
+               BEGIN
+                  BEGIN TRANSACTION
+                  BEGIN TRY
+
+                     SELECT 
+                        @cexternReceiptKey = ExternReceiptKey,
+                        @cexternLineNo = ExternLineNo
+                     FROM dbo.ReceiptDetail RD WITH (NOLOCK)
+                     WHERE RD.ReceiptKey = @cReceiptKey
+                        AND RD.ReceiptLineNumber = @cReceiptLineNumber
+
+                     EXECUTE [RDT].[rdt_CreateVASWorkOrder] 
+                        @nFunc
+                        ,@nMobile
+                        ,@cLangCode
+                        ,@cStorerKey
+                        ,@cFacility
+                        ,@cexternReceiptKey
+                        ,@cexternLineNo
+                        ,''
+                        ,''
+                        ,@cLottable09 -- From ID
+                        ,@cID
+                        ,'YES'
+                        ,'RPLT IB PL'
+                        ,@cSKU
+                        ,'VASWOCODE'
+                        ,1
+                        ,@nErrNo OUTPUT
+                        ,@cErrMsg OUTPUT
+
+                     IF @nErrNo = 211710
+                     BEGIN
+                        SET @nErrNo = 0
+                        SET @cErrMsg = ''
+                        COMMIT TRANSACTION 
+                        GOTO Quit
+                     END
+
+                     IF @cLottable10 = 'N' --Auto Finalize
+                     BEGIN
+                        EXEC [RDT].[rdt_FinalizeVASWorkOrder]
+                        @nFunc = @nFunc,
+                        @nMobile = @nMobile,
+                        @cLangCode = @cLangCode,
+                        @cStorerKey = @cStorerKey,
+                        @cFacility = @cFacility,
+                        @cPalletID = @cID,
+                        @nErrNo = @nErrNo OUTPUT,
+                        @cErrMsg = @cErrMsg OUTPUT
+                     END
+                  END TRY
+                  BEGIN CATCH
+                     SET @nErrNo = 211714
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Generate WorkOrder Fail'
+                     GOTO Exception
+                  END CATCH
+
+                  COMMIT TRANSACTION 
+                  GOTO Quit
+               END
+            END
+         END 
+
+         IF( @nStep = 9)
+         BEGIN
+            IF (ISNULL( rdt.RDTGetConfig( @nFunc, 'ACTVASWO', @cStorerKey),'0') != '0')
+            BEGIN
+               BEGIN TRANSACTION
+               BEGIN TRY
+                  SELECT 
+                     @cexternReceiptKey = ExternReceiptKey,
+                     @cexternLineNo = ExternLineNo
+                  FROM dbo.ReceiptDetail RD WITH (NOLOCK)
+                  WHERE RD.ReceiptKey = @cReceiptKey
+                  AND RD.ReceiptLineNumber = @cReceiptLineNumber
+
+                  EXECUTE [RDT].[rdt_CreateVASWorkOrder] 
+                     @nFunc
+                     ,@nMobile
+                     ,@cLangCode
+                     ,@cStorerKey
+                     ,@cFacility
+                     ,@cexternReceiptKey
+                     ,@cexternLineNo
+                     ,''
+                     ,''
+                     ,'' -- From ID
+                     ,@cID
+                     ,'YES'
+                     ,'LABEL PLT'
+                     ,@cSKUReceived
+                     ,'VASWOCODE'
+                     ,1
+                     ,@nErrNo OUTPUT
+                     ,@cErrMsg OUTPUT
+
+                  IF @nErrNo = 211710
+                  BEGIN
+                     SET @nErrNo = 0
+                     SET @cErrMsg = ''
+                     COMMIT TRANSACTION 
+                     GOTO Quit
+                  END
+
+                  IF @cLott10 = 'N' --Auto Finalize
+                  BEGIN
+                     EXEC [RDT].[rdt_FinalizeVASWorkOrder]
+                     @nFunc = @nFunc,
+                     @nMobile = @nMobile,
+                     @cLangCode = @cLangCode,
+                     @cStorerKey = @cStorerKey,
+                     @cFacility = @cFacility,
+                     @cPalletID = @cID,
+                     @nErrNo = @nErrNo OUTPUT,
+                     @cErrMsg = @cErrMsg OUTPUT
+                  END
+               END TRY
+               BEGIN CATCH
+                  SET @nErrNo = 211714
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Generate WorkOrder Fail'
+                  GOTO Exception
+               END CATCH
+
+               COMMIT TRANSACTION 
+               GOTO Quit
+            END
+         END 
+         
       END
+      GOTO Quit
    END
+
+   IF @nAction = 1 --Validation
+   BEGIN
+      IF @nFunc = 600 
+      BEGIN
+         IF @nInputKey = 1
+         BEGIN
+            IF( @nStep = 99 )
+            BEGIN
+               IF (ISNULL( rdt.RDTGetConfig( @nFunc, 'ValidatePalletType', @cStorerKey),'0') != '0')
+               BEGIN
+                  SELECT 
+                  @cPalletTypeInUse = PalletTypeInUse
+                  FROM dbo.PalletTypeMaster WITH (NOLOCK)
+                     WHERE StorerKey = @cStorerKey
+                     AND Facility = @cFacility
+                     AND PalletType = @cPalletType
+
+                  IF @@ROWCOUNT = 0
+                  BEGIN
+                     SET @nErrNo = 212601
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --212601Pallet Type Not Configured
+                     GOTO Quit
+                  END
+
+                  IF @cPalletTypeInUse != 'Y'
+                  BEGIN
+                     SET @nErrNo = 212602
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --212602Pallet Type Not In Use
+                     GOTO Quit
+                  END
+
+                  SET @cPalletTypeSave = @cPalletType
+               END
+            END
+            IF( @nStep = 2 )
+            BEGIN
+               IF ISNULL(rdt.RDTGetConfig( @nFunc, 'ReceiveDefaultToLoc', @cStorerKey),'') = @cLOC
+                  GOTO QUIT
+
+               SELECT
+                  @nCheckDigit = CheckDigitLengthForLocation
+               FROM dbo.FACILITY WITH (NOLOCK)
+               WHERE facility = @cFacility
+
+               IF @nCheckDigit > 0
+               BEGIN
+                  SELECT @cActLoc = loc 
+                  FROM dbo.LOC WITH (NOLOCK)
+                  WHERE Facility = @cFacility AND CONCAT(LOC,LOCCHECKDIGIT) = @cLOC
+                  SET @nRowCount = @@ROWCOUNT
+                  IF @nRowCount > 1
+                  BEGIN
+                     SET @nErrNo = 212603
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --212603Unique location not identified
+                     GOTO Quit
+                  END
+                  ELSE IF @nRowCount = 0
+                  BEGIN
+                     SET @nErrNo = 212604
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --212604Loc Not Found
+                     GOTO Quit
+                  END
+                  SET @cLOC = @cActLoc
+                  GOTO QUIT
+               END
+            END
+            IF( @nStep = 5 )
+            BEGIN
+               SET @cStorerConfig = ISNULL(rdt.RDTGetConfig( @nFunc, 'ValidateLottable', @cStorerKey),'')
+               IF @cStorerConfig != ''
+               BEGIN
+                  SELECT TOP 1 @nLotNum = TRY_CAST(value AS INT) FROM STRING_SPLIT(@cStorerConfig, ',')
+                  SELECT @cListName = value FROM STRING_SPLIT(@cStorerConfig, ',')
+                  SET @cLotValue = CASE
+                                    WHEN @nLotNum = 1  THEN @cLottable01 WHEN @nLotNum = 2  THEN @cLottable02 
+                                    WHEN @nLotNum = 3  THEN @cLottable03 WHEN @nLotNum = 6  THEN @cLottable06 
+                                    WHEN @nLotNum = 7  THEN @cLottable07 WHEN @nLotNum = 8  THEN @cLottable08 
+                                    WHEN @nLotNum = 9  THEN @cLottable09 WHEN @nLotNum = 10 THEN @cLottable10 
+                                    WHEN @nLotNum = 11 THEN @cLottable11 WHEN @nLotNum = 12 THEN @cLottable12
+                                    END 
+                  IF ISNULL(@cLotValue,'') = ''
+                  BEGIN
+                     GOTO Quit
+                  END
+                  SET @SQL = 'SELECT  @Result = COUNT(1)
+                     FROM dbo.CodeLKUP WITH (NOLOCK)
+                     WHERE ListName = '+CONCAT('''',@cListName,'''')+
+                     'AND Storerkey = '+CONCAT('''',@cStorerkey,'''')
+                  EXEC sp_executesql @SQL,N'@Result INT OUTPUT', @nSQLResult OUTPUT
+                  IF @nSQLResult = 0
+                  BEGIN
+                     SET @nErrNo = 212605
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'List not maintained'
+                     GOTO Quit
+                  END
+                  SET @SQL = 'SELECT  @Result = COUNT(1)
+                     FROM dbo.CodeLKUP WITH (NOLOCK)
+                     WHERE ListName = '+CONCAT('''',@cListName,'''')+
+                     'AND Storerkey = '+CONCAT('''',@cStorerkey,'''')+
+                     'AND Code ='+ CONCAT('''',@cLotValue,'''')
+                  EXEC sp_executesql @SQL,N'@Result INT OUTPUT', @nSQLResult OUTPUT
+                  IF @nSQLResult = 0
+                  BEGIN
+                     SET @nErrNo = 212606
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Invalid Value'
+                     GOTO Quit
+                  END
+               END
+            END
+            IF( @nStep = 6 )
+            BEGIN
+               IF(ISNULL(rdt.RDTGetConfig( @nFunc, 'ValidatePalletType', @cStorerKey),'0'))!='0' -- Capture pallet type
+               BEGIN
+                  IF ISNULL(@cPalletTypeSave,'')!=''
+                  BEGIN
+                     UPDATE RECEIPTDETAIL SET PalletType = @cPalletTypeSave
+                     WHERE ReceiptKey = @cReceiptKey
+                     AND ReceiptLineNumber = @cReceiptLineNumber
+                  END
+               END
+            END
+         END
+      END
+      GOTO Quit
+   END
+
+Exception:
+   ROLLBACK TRANSACTION
+
 Quit:
+   UPDATE RDT.RDTMOBREC WITH(ROWLOCK)
+   SET
+      C_String1 = @cLott10,
+      C_String2 = @cPalletTypeSave,
+      C_String3 = CASE WHEN ISNULL(@cSKU,'')='' THEN @cSKUReceived ELSE @cSKU END 
+   WHERE Mobile = @nMobile
+
 END
 GO
 
