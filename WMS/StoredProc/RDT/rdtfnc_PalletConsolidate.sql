@@ -27,7 +27,6 @@ GO
 /*                          input SKU at Step 2(TanJH01)                */
 /* 2018-09-12 1.6  James    WMS6078 - Add MultiSKUBarcode (james03)     */
 /* 2018-09-12 1.6  James    Change doctype LLL to fullname (james04)    */
-/* 2024-09-26 1.7  LJQ006   FCR-877 AutoGenID (LJQ006)                  */
 /************************************************************************/
 
 CREATE PROC [RDT].[rdtfnc_PalletConsolidate] (
@@ -131,10 +130,6 @@ DECLARE
    @cOnScreenSKU        NVARCHAR(20),
    @nFromScn            INT,
    @nFromStep           INT,
-   
-   @cGenID              NVARCHAR(20), -- LJQ006 FCR-877
-   @tExtData            VariableTable, -- LJQ006 FCR-877
-   @cAutoID             NVARCHAR(18), --LJQ006 FCR-877
 
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),
@@ -1400,35 +1395,6 @@ BEGIN
          GOTO Step_3_Fail
       END
       */
-
-      -- Get Autogen ToID Conf
-      SET @cGenID = rdt.rdtGetConfig( @nFunc, 'AutoGenID', @cStorerKey)
-      IF @cGenID = '0'
-      BEGIN
-        SET @cGenID = ''
-      END
-      -- Get AutoGenID
-      IF @cGenID <> ''
-      BEGIN
-         INSERT INTO @tExtData (Variable, Value) VALUES 
-            ('@cIDType', 'ID')
-         EXEC [rdt].[rdt_AutoGenID]
-            @nMobile,
-            @nFunc,
-            @nStep,
-            @cLangCode,
-            @cGenID,
-            @tExtData,
-            @cAutoID    OUTPUT,
-            @nErrNo     OUTPUT,
-            @cErrMsg    OUTPUT
-            
-         IF @nErrNo <> 0
-         BEGIN
-            GOTO Step_3_Fail
-         END
-      END
-
       -- Prepare next screen var
       SET @cOutField01 = @cFromID
       SET @cOutField02 = @cSKU
@@ -1447,21 +1413,11 @@ BEGIN
       END
       SET @cOutField07 = @cMUOM_Desc
       SET @cOutField08 = CAST( @nMQTY_Move AS NVARCHAR( 5))
-      -- SET @cOutField09 = '' -- To DropID
-      -- SET AutoGenID
-      IF @cAutoID <> ''
-      BEGIN
-         SET @cOutField09 = @cAutoID
-      END
-      ELSE 
-      BEGIN
-         SET @cOutField09 = ''
-      END      
+      SET @cOutField09 = '' -- To DropID
 
       -- Go to next screen
       SET @nScn  = @nScn + 1
       SET @nStep = @nStep + 1
-
    END
 
    IF @nInputKey = 0 -- ESC
@@ -2627,35 +2583,6 @@ BEGIN
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Inv Orderkey
          GOTO Step_8_Fail
       END
-      
-      -- Get Autogen ToID Conf
-      SET @cGenID = rdt.rdtGetConfig( @nFunc, 'AutoGenID', @cStorerKey)
-      IF @cGenID = '0'
-      BEGIN
-        SET @cGenID = ''
-      END
-      -- Get AutoGenID
-      IF @cGenID <> ''
-      BEGIN
-         DELETE FROM @tExtData;
-         INSERT INTO @tExtData (Variable, Value) VALUES 
-            ('@cIDType', 'ID');
-         EXEC [rdt].[rdt_AutoGenID]
-            @nMobile,
-            @nFunc,
-            @nStep,
-            @cLangCode,
-            @cGenID,
-            @tExtData,
-            @cAutoID    OUTPUT,
-            @nErrNo     OUTPUT,
-            @cErrMsg    OUTPUT
-         
-         IF @nErrno <> 0
-         BEGIN
-            GOTO Step_8_Fail
-         END
-      END      
    
       -- Prepare next screen var
       SET @cOutField01 = @cFromID
@@ -2675,19 +2602,11 @@ BEGIN
       END
       SET @cOutField07 = @cMUOM_Desc
       SET @cOutField08 = CAST( @nMQTY_Move AS NVARCHAR( 5))
-      -- SET @cOutField09 = '' -- To DropID
-      IF @cAutoID <> ''
-      BEGIN
-         SET @cOutField09 = @cAutoID
-      END
-      ELSE 
-      BEGIN
-         SET @cOutField09 = ''
-      END
+      SET @cOutField09 = '' -- To DropID
+
       -- Go to next screen
       SET @nScn  = @nScn - 4
       SET @nStep = @nStep - 4
-      
    END
 
    IF @nInputKey = 0 -- ESC
