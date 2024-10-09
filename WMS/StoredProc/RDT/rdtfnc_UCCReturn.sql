@@ -19,11 +19,12 @@
 /*                                                                      */  
 /* Modifications log:                                                   */  
 /*                                                                      */  
-/* Date       Rev  Author   Purposes                                    */  
-/* 2006-02-13 1.0  jwong    Created                                     */  
-/* 2012-02-25 1.1  ChewKP   Bug Fixes (ChewKP01)                        */  
-/* 2016-09-30 1.2  Ung      Performance tuning                          */    
-/* 2018-10-26 1.3  Gan      Performance tuning                          */  
+/* Date       Rev  Author     Purposes                                  */  
+/* 2006-02-13 1.0  jwong      Created                                   */  
+/* 2012-02-25 1.1  ChewKP     Bug Fixes (ChewKP01)                      */  
+/* 2016-09-30 1.2  Ung        Performance tuning                        */    
+/* 2018-10-26 1.3  Gan        Performance tuning                        */
+/* 2024-10-08 1.4  JCH507     UWP-25454 Data convertion error at st6    */   
 /************************************************************************/  
 CREATE PROC [RDT].[rdtfnc_UCCReturn] (  
 @nMobile    int,  
@@ -962,9 +963,18 @@ BEGIN
   
    IF @nInputKey = 1     -- Yes OR Send / Esc OR No  
       BEGIN  
-         SET @cQty = @cInField08  
+         SET @cQty = @cInField08 
+
+         --V1.4
+         IF ISNUMERIC(@cQTY) = 0  
+         BEGIN  
+            SET @cErrMsg = rdt.rdtgetmessage( 61116, @cLangCode, 'DSP') --61116 invalid qty  
+            SET @cQty = ''  
+            GOTO Step_6_Fail        
+         END
+         --V1.4 END   
   
-         IF CAST(@cQTY AS INT) <= 0 OR ISNUMERIC(@cQTY) = 0  
+         IF CAST(@cQTY AS INT) <= 0 --OR ISNUMERIC(@cQTY) = 0  --V1.4
             BEGIN  
                SET @cErrMsg = rdt.rdtgetmessage( 61116, @cLangCode, 'DSP') --61116 invalid qty  
                SET @cQty = ''  

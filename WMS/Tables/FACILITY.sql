@@ -74,7 +74,7 @@ IF NOT EXISTS (SELECT *
             [Fax2]           [nvarchar](18) COLLATE SQL_Latin1_General_CP1_CI_AS  NULL,
             [Email1]         [nvarchar](60) COLLATE SQL_Latin1_General_CP1_CI_AS  NULL,
             [Email2]         [nvarchar](60) COLLATE SQL_Latin1_General_CP1_CI_AS  NULL,
-            [TimeZone]       [nvarchar](10) COLLATE SQL_Latin1_General_CP1_CI_AS  NULL,
+            [TimeZone]       [nvarchar](128) COLLATE SQL_Latin1_General_CP1_CI_AS  NULL,
             [Type]           [nvarchar](20) COLLATE SQL_Latin1_General_CP1_CI_AS  NOT NULL
                 CONSTRAINT [DF_FACILITY_Type] DEFAULT (' '),
             [SqFeet]         [int]                                                NOT NULL
@@ -349,6 +349,8 @@ ELSE
                 EXEC sp_addextendedproperty N'MS_Description', 'CheckDigitLengthForLocation', 'SCHEMA', N'dbo',
                      'TABLE', N'FACILITY', 'COLUMN', N'CheckDigitLengthForLocation'
             END
+
+        ALTER TABLE FACILITY ALTER COLUMN TimeZone NVARCHAR(128)
     END
 
 GRANT SELECT ON [dbo].[FACILITY] TO [JReportRole]

@@ -3,26 +3,28 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-/************************************************************************/
-/* SP: isp_RPT_MB_VICSBOL_001_Main                                      */
-/* Creation Date: 18-Jun-2024                                           */
-/* Copyright: Maersk                                                    */
-/* Written by: WLChooi                                                  */
-/*                                                                      */
-/* Purpose: UWP-20706 - Granite | MWMS | BOL Report                     */
-/*        :                                                             */
-/* Called By: RPT_MB_VICSBOL_001_Main                                   */
-/*          :                                                           */
-/* Github Version: 1.0                                                  */
-/*                                                                      */
-/* Version: 7.0                                                         */
-/*                                                                      */
-/* Data Modifications:                                                  */
-/*                                                                      */
-/* Updates:                                                             */
-/* Date        Author   Ver   Purposes                                  */
-/* 18-Jun-2024 WLChooi  1.0   DevOps Combine Script                     */
-/************************************************************************/
+/***************************************************************************************/
+/* SP: isp_RPT_MB_VICSBOL_001_Main                                                     */
+/* Creation Date: 18-Jun-2024                                                          */
+/* Copyright: Maersk                                                                   */
+/* Written by: WLChooi                                                                 */
+/*                                                                                     */
+/* Purpose: UWP-20706 - Granite | MWMS | BOL Report                                    */
+/*        :                                                                            */
+/* Called By: RPT_MB_VICSBOL_001_Main                                                  */
+/*          :                                                                          */
+/* Github Version: 1.1                                                                 */
+/*                                                                                     */
+/* Version: 7.0                                                                        */
+/*                                                                                     */
+/* Data Modifications:                                                                 */
+/*                                                                                     */
+/* Updates:                                                                            */
+/* Date        Author   Ver   Purposes                                                 */
+/* 18-Jun-2024 WLChooi  1.0   DevOps Combine Script                                    */
+/* 01-Oct-2024 WLChooi  1.1   FCR-920 - Add new fields (WL01)                          */
+/* 08-Oct-2024 CalvinK  1.2   FCR-956 - Change OtherReference to VoyageNumber (CLVN01) */
+/***************************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[isp_RPT_MB_VICSBOL_001_Main]
 (
    @c_Mbolkey      NVARCHAR(10)
@@ -87,13 +89,15 @@ BEGIN
                  , MBOL.CarrierKey
                  , MBOL.ContainerNo
                  , MBOL.SealNo
+                 , LocationNo = ISNULL(ORDERS.C_contact1, '')   --WL01
+                 , CustomerNo = ISNULL(ORDERS.BillToKey, '')    --WL01
    FROM MBOL WITH (NOLOCK)
    JOIN FACILITY WITH (NOLOCK) ON (MBOL.Facility = FACILITY.Facility)
    JOIN MBOLDETAIL WITH (NOLOCK) ON (MBOL.MbolKey = MBOLDETAIL.MbolKey)
    JOIN ORDERS WITH (NOLOCK) ON (MBOLDETAIL.OrderKey = ORDERS.OrderKey)
    LEFT OUTER JOIN STORER WITH (NOLOCK) ON (ORDERS.StorerKey = STORER.StorerKey)
    LEFT OUTER JOIN STORER Storer2 WITH (NOLOCK) ON (ORDERS.ConsigneeKey = Storer2.StorerKey)
-   LEFT OUTER JOIN STORER Storer3 WITH (NOLOCK) ON (MBOL.OtherReference = Storer3.StorerKey)
+   LEFT OUTER JOIN STORER Storer3 WITH (NOLOCK) ON (MBOL.VoyageNumber = Storer3.StorerKey) --(CLVN01)
    LEFT OUTER JOIN STORER Storer4 WITH (NOLOCK) ON (MBOL.CarrierKey = Storer4.StorerKey)
    LEFT OUTER JOIN CODELKUP CLK WITH (NOLOCK) ON (MBOL.TransMethod = CLK.Code AND CLK.LISTNAME = 'TRANSMETH')
    WHERE MBOL.MbolKey = @c_Mbolkey 

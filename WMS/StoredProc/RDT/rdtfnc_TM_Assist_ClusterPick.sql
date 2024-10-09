@@ -20,6 +20,8 @@ GO
 /* 2023-05-03   1.4  James    WMS-22330 Add config to control whether allow   */
 /*                            pick with mix wavekey (james03)                 */
 /* 2024-07-31   1.5  Jackc    FCR-652 Add ext scn entry                       */
+/* 2024-09-13   1.6  Jackc    FCR-652 Fix bug when continue task              */
+/* 2024-09-14   1.7  Jackc    FCR-856 Lock Tasks on carton level              */
 /******************************************************************************/        
         
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_Assist_ClusterPick](        
@@ -149,6 +151,7 @@ DECLARE
    @tExtScnData         VariableTable,
    @cExtendedScnSP      NVARCHAR( 20),
    @nAction             INT,
+   @cPickSlipNo         NVARCHAR( 18), --V1.6 JACKC
    
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),  @cFieldAttr01 NVARCHAR( 1),  @cLottable01  NVARCHAR( 18),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),  @cFieldAttr02 NVARCHAR( 1),  @cLottable02  NVARCHAR( 18),     
@@ -197,7 +200,8 @@ SELECT
    @cSKU             = V_SKU,        
    @cSKUDescr        = V_SKUDescr,        
    @cTaskDetailKey   = V_TaskDetailKey,        
-   @cWaveKey         = V_WaveKey,      
+   @cWaveKey         = V_WaveKey,
+   @cPickSlipNo      = V_PickSlipNo,      
          
    @nSuggQty       = V_Integer1,        
    @nPickedQty     = V_Integer2,        
@@ -2997,50 +3001,8 @@ BEGIN
          -- Ext Scn SP
          IF @cExtendedScnSP <> ''
          BEGIN
-            IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScnSP AND type = 'P')
-            BEGIN
-               SET @nAction = 0
-
-               EXECUTE [RDT].[rdt_ExtScnEntry] 
-               @cExtendedScnSP, 
-               @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorerKey, @tExtScnData ,
-               @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01 OUTPUT,  
-               @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02 OUTPUT,  
-               @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03 OUTPUT,  
-               @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04 OUTPUT,  
-               @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  @dLottable05 OUTPUT,  
-               @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  @cLottable06 OUTPUT, 
-               @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  @cLottable07 OUTPUT, 
-               @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  @cLottable08 OUTPUT, 
-               @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  @cLottable09 OUTPUT, 
-               @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  @cLottable10 OUTPUT, 
-               @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  @cLottable11 OUTPUT,
-               @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT,  @cLottable12 OUTPUT,
-               @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  @dLottable13 OUTPUT,
-               @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT,  @dLottable14 OUTPUT,
-               @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT,  @dLottable15 OUTPUT,
-               @nAction, 
-               @nScn OUTPUT,  @nStep OUTPUT,
-               @nErrNo   OUTPUT, 
-               @cErrMsg  OUTPUT,
-               @cExtScnUDF01   OUTPUT, @cExtScnUDF02 OUTPUT, @cExtScnUDF03 OUTPUT,
-               @cExtScnUDF04   OUTPUT, @cExtScnUDF05 OUTPUT, @cExtScnUDF06 OUTPUT,
-               @cExtScnUDF07   OUTPUT, @cExtScnUDF08 OUTPUT, @cExtScnUDF09 OUTPUT,
-               @cExtScnUDF10   OUTPUT, @cExtScnUDF11 OUTPUT, @cExtScnUDF12 OUTPUT,
-               @cExtScnUDF13   OUTPUT, @cExtScnUDF14 OUTPUT, @cExtScnUDF15 OUTPUT,
-               @cExtScnUDF16   OUTPUT, @cExtScnUDF17 OUTPUT, @cExtScnUDF18 OUTPUT,
-               @cExtScnUDF19   OUTPUT, @cExtScnUDF20 OUTPUT, @cExtScnUDF21 OUTPUT,
-               @cExtScnUDF22   OUTPUT, @cExtScnUDF23 OUTPUT, @cExtScnUDF24 OUTPUT,
-               @cExtScnUDF25   OUTPUT, @cExtScnUDF26 OUTPUT, @cExtScnUDF27 OUTPUT,
-               @cExtScnUDF28   OUTPUT, @cExtScnUDF29 OUTPUT, @cExtScnUDF30 OUTPUT
-               
-               IF @nErrNo <> 0
-               BEGIN
-                  GOTO  Quit
-               END
-
-               GOTO Quit
-            END
+            SET @nAction = 0
+            GOTO Step_99
          END -- ExtendedScreenSP <> ''      
                
          GOTO Quit      
@@ -3078,50 +3040,8 @@ BEGIN
          -- Ext Scn SP
          IF @cExtendedScnSP <> ''
          BEGIN
-            IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScnSP AND type = 'P')
-            BEGIN
-               SET @nAction = 0
-
-               EXECUTE [RDT].[rdt_ExtScnEntry] 
-               @cExtendedScnSP, 
-               @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorerKey, @tExtScnData ,
-               @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01 OUTPUT,  
-               @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02 OUTPUT,  
-               @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03 OUTPUT,  
-               @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04 OUTPUT,  
-               @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  @dLottable05 OUTPUT,  
-               @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  @cLottable06 OUTPUT, 
-               @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  @cLottable07 OUTPUT, 
-               @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  @cLottable08 OUTPUT, 
-               @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  @cLottable09 OUTPUT, 
-               @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  @cLottable10 OUTPUT, 
-               @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  @cLottable11 OUTPUT,
-               @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT,  @cLottable12 OUTPUT,
-               @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  @dLottable13 OUTPUT,
-               @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT,  @dLottable14 OUTPUT,
-               @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT,  @dLottable15 OUTPUT,
-               @nAction, 
-               @nScn OUTPUT,  @nStep OUTPUT,
-               @nErrNo   OUTPUT, 
-               @cErrMsg  OUTPUT,
-               @cExtScnUDF01   OUTPUT, @cExtScnUDF02 OUTPUT, @cExtScnUDF03 OUTPUT,
-               @cExtScnUDF04   OUTPUT, @cExtScnUDF05 OUTPUT, @cExtScnUDF06 OUTPUT,
-               @cExtScnUDF07   OUTPUT, @cExtScnUDF08 OUTPUT, @cExtScnUDF09 OUTPUT,
-               @cExtScnUDF10   OUTPUT, @cExtScnUDF11 OUTPUT, @cExtScnUDF12 OUTPUT,
-               @cExtScnUDF13   OUTPUT, @cExtScnUDF14 OUTPUT, @cExtScnUDF15 OUTPUT,
-               @cExtScnUDF16   OUTPUT, @cExtScnUDF17 OUTPUT, @cExtScnUDF18 OUTPUT,
-               @cExtScnUDF19   OUTPUT, @cExtScnUDF20 OUTPUT, @cExtScnUDF21 OUTPUT,
-               @cExtScnUDF22   OUTPUT, @cExtScnUDF23 OUTPUT, @cExtScnUDF24 OUTPUT,
-               @cExtScnUDF25   OUTPUT, @cExtScnUDF26 OUTPUT, @cExtScnUDF27 OUTPUT,
-               @cExtScnUDF28   OUTPUT, @cExtScnUDF29 OUTPUT, @cExtScnUDF30 OUTPUT
-               
-               IF @nErrNo <> 0
-               BEGIN
-                  GOTO  Quit
-               END
-
-               GOTO Quit
-            END
+            SET @nAction = 0
+            GOTO Step_99
          END -- ExtendedScreenSP <> ''       
                
          GOTO Quit       
@@ -3473,7 +3393,8 @@ BEGIN
       BEGIN
          DELETE FROM @tExtScnData
          INSERT INTO @tExtScnData (Variable, Value) VALUES 
-            ('@cOption',       @cOption)
+            ('@cOption',   @cOption),
+            ('@cGroupKey', @cGroupKey)
 
          DECLARE  @nPreSCn       INT,
                   @nPreInputKey  INT
@@ -3518,7 +3439,8 @@ BEGIN
          BEGIN
             IF @nPreScn = '6414' AND @nPreInputKey = 0 -- Back to Menu
             BEGIN
-               SET @nFunc = @nScn
+               SET @nFunc     =  @nScn
+               SET @cGroupKey =  '' --V1.7 Clear groupkey when exists func
             END
             ELSE IF @nPreSCn = '6414' AND @nPreInputKey = 1 -- Save value to mobred
             BEGIN
@@ -3537,6 +3459,7 @@ BEGIN
                SET  @cResult04         = ISNULL(@cExtScnUDF13,'')
                SET  @cResult05         = ISNULL(@cExtScnUDF14,'')
                SET  @cMethod           = ISNULL(@cExtScnUDF15,'')
+               SET  @cPickSlipNo       = ISNULL(@cExtScnUDF16,'')
             END -- SCN 6414  new scn 1 Enter
             ELSE IF @nPreSCn = '6416' AND @nPreInputKey = 1
             BEGIN
@@ -3548,6 +3471,26 @@ BEGIN
                SET @nSuggQty        = CAST(@cExtScnUDF06 AS INT)
                SET @cTaskDetailKey  = ISNULL(@cExtScnUDF07,'')
             END -- SCN 6416 new scn 2 enter
+            --V1.6 JACKC
+            ELSE IF @nPreSCn = 5929 AND @nPreInputKey = 1 AND @cOption = 1
+            BEGIN
+               --IF continue task, then update results returned from 6416 to rdtmobred
+               SET @cCartonID       = ISNULL(@cExtScnUDF01,'')
+               SET @cSuggFromLOC    = ISNULL(@cExtScnUDF02,'')
+               SET @cSuggCartonID   = ISNULL(@cExtScnUDF03,'')
+               SET @cSuggToteId     = ISNULL(@cExtScnUDF04,'')
+               SET @cSuggSKU        = ISNULL(@cExtScnUDF05,'')
+               SET @nSuggQty        = CAST(@cExtScnUDF06 AS INT)
+               SET @cTaskDetailKey  = ISNULL(@cExtScnUDF07,'')
+            END -- SCN 5929 Continue screen
+            --V1.6 JACKC END
+            ELSE IF @nScn = 6414 AND @nStep = 99
+            BEGIN
+               --V1.7 
+               SET @cGroupKey = '' -- clear groupkey, cart id when back to 1 step
+               SET @cCartID = ''
+               --V1.7 end
+            END
          END -- rdt_1855ExtScn01
 
          IF @nErrNo <> 0
@@ -3580,7 +3523,8 @@ BEGIN
       V_Loc      = @cFromLoc,        
       V_CaseID   = @cCartonID,        
       V_TaskDetailKey = @cTaskDetailKey,      
-      V_WaveKey  = @cWaveKey,      
+      V_WaveKey  = @cWaveKey,
+      V_PickSlipNo = @cPickSlipNo,      
             
       V_Integer1 = @nSuggQty,        
       V_Integer2 = @nPickedQty,        

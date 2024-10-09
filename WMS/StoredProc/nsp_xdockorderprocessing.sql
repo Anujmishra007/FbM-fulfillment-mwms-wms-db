@@ -57,6 +57,7 @@ GO
 /* 07-Mar-2024  Wan01           UWP-16306 - Moorebank Australia - Picking    */
 /*                              issue while order processing for XDock       */
 /* 15-Apr-2024 USH022-01        Ticket - UWP-18028- XDock Allocation Issue   */
+/* 25-Sep-2024 SSA01            UWP-24194 - Enhanced XDock Allocation Strategy*/
 /*****************************************************************************/
 CREATE OR ALTER PROCEDURE nsp_XDockOrderProcessing
    @c_ExternPOKey NVARCHAR(20) ,
@@ -109,6 +110,7 @@ BEGIN
    DECLARE @d_LoadingDate datetime, @c_Sellername NVARCHAR(45), @c_SellerTerm NVARCHAR(10), @n_CalcPORcvQty float, 
            @d_StartDT datetime, @d_EndDT datetime, @n_CaseCnt float, @c_ConsigneeKey NVARCHAR(15), 
            @n_RemainOrdQty float, @n_PercentRemain float, @n_RemainCaseQty float, @n_CalcQty float
+   DECLARE @c_SQLParms NVARCHAR(1000) = ''                                --(SSA01)
 
    SELECT @i_success = 0, @i_Error = 0, @n_Continue = 1, @n_starttcnt=@@TRANCOUNT 
    SELECT @n_err=0, @n_cnt = 0, @b_debug = '0'
@@ -163,7 +165,8 @@ CREATE TABLE #Ordlines
   ExternPOKey nvarchar(20) NULL,
   Facility nvarchar(5) NULL,
   CalOrdQty int NULL,
-  Rowno int IDENTITY(1,1) NOT NULL
+  Rowno int IDENTITY(1,1) NOT NULL,
+  ID nvarchar(18) NOT NULL                                                   --(SSA01)
 )
 
 CREATE TABLE #Inventory
@@ -272,12 +275,13 @@ INSERT INTO #TEMPSKU
                              "OriginalQty, OpenQty, ShippedQty, AdjustedQty, " +
                              "Qtypreallocated, QtyAllocated, Qtypicked, Packkey, " +
                              "UOM, Lottable03, Lottable05, ExternPOKey, " +
-                             "Facility, CalOrdQty) " +
+                             "Facility, CalOrdQty, ID) " +                                              --(SSA01)
                              "SELECT OD.Orderkey, OD.Orderlinenumber, OD.Storerkey, OD.Sku, "   +
                              "OD.OriginalQty, OD.OpenQty, OD.ShippedQty, OD.AdjustedQty, "      +
                              "OD.Qtypreallocated, OD.QtyAllocated, OD.Qtypicked, OD.Packkey, "  +       
                              "OD.UOM, OD.Lottable03, OD.Lottable05, OD.ExternPOKey, "           + 
-                             "OH.Facility, (OD.OpenQty - OD.QtyAllocated - OD.Qtypicked) AS CalOrdQty " +
+                             "OH.Facility, (OD.OpenQty - OD.QtyAllocated - OD.Qtypicked) AS CalOrdQty," +
+                             "OD.ID "                                                          +       --(SSA01)
                              "FROM ORDERDETAIL OD (NOLOCK), ORDERS OH (NOLOCK) "                +
                              "WHERE OH.Orderkey = OD.Orderkey "                                 + 
                              "AND OH.facility = N'" + dbo.fnc_RTrim(@c_facility) + "' "                  + 
@@ -373,12 +377,13 @@ INSERT INTO #TEMPSKU
                              "OriginalQty, OpenQty, ShippedQty, AdjustedQty, " +
                              "Qtypreallocated, QtyAllocated, Qtypicked, Packkey, " +
                              "UOM, Lottable03, Lottable05, ExternPOKey, " +
-                             "Facility, CalOrdQty) " +
+                             "Facility, CalOrdQty,  ID) " +                                           --(SSA01)
                              "SELECT OD.Orderkey, OD.Orderlinenumber, OD.Storerkey, OD.Sku, "   +
                              "OD.OriginalQty, OD.OpenQty, OD.ShippedQty, OD.AdjustedQty, "      +
                              "OD.Qtypreallocated, OD.QtyAllocated, OD.Qtypicked, OD.Packkey, "  +       
                              "OD.UOM, OD.Lottable03, OD.Lottable05, OD.ExternPOKey, "           + 
-                             "OH.Facility, (OD.OpenQty - OD.QtyAllocated - OD.Qtypicked) AS CalOrdQty  " + 
+                             "OH.Facility, (OD.OpenQty - OD.QtyAllocated - OD.Qtypicked) AS CalOrdQty, " +
+                             "OD.ID " +                                                                --(SSA01)
                              "FROM ORDERDETAIL OD (NOLOCK), ORDERS OH (NOLOCK) "                +
                              "WHERE OD.ExternPOKey = N'" + dbo.fnc_RTrim(@c_ExternPOKey) + "' "          + 
                              "AND OH.Storerkey = N'" + dbo.fnc_RTrim(@c_StorerKey) + "' "                + 
@@ -1243,7 +1248,8 @@ INSERT INTO #TEMPSKU
                 @c_SKU = Sku, @n_OpenQty = OpenQty - Qtypicked - QtyAllocated  , 
                 @n_ShippedQty = ShippedQty, @n_AllocateQty = QtyAllocated, @n_PickQty = Qtypicked, 
                 @c_Packkey = Packkey, @c_UOM = UOM, @c_Lottable03 = Lottable03, 
-                @n_CalOrdQty = CalOrdQty  /* - Qtypicked - QtyAllocated */ 
+                @n_CalOrdQty = CalOrdQty  /* - Qtypicked - QtyAllocated */
+                ,@c_Storerkey = Storerkey, @c_ID = ID                                --(SSA01)
            FROM #Ordlines 
           WHERE Rowno > @n_RowNo 
           ORDER BY Rowno 
@@ -1338,26 +1344,59 @@ INSERT INTO #TEMPSKU
                COMMIT TRAN
             END 
          END -- @n_CalOrdQty > @n_OpenQty 
+         SET @c_SQLStmt = N'SELECT TOP 1 @n_RowNo1 = rowno'                         --(SSA01)
+            +', @n_InvQty = Qty'
+            +', @c_lot = Lot'
+            +', @c_loc = Loc'
+            +', @c_Id  = ID'
+            +' FROM  #Inventory'
+            +' WHERE Storerkey = @c_Storerkey'
+            +' AND   Sku = @c_SKU'
+            +' AND   Qty > 0'
+            + CASE WHEN @c_ID <> '' THEN 'AND ID = @c_ID' ELSE '' END
+            +' AND   Rowno >= @n_RowNo1'
+            +' ORDER BY Rowno'
 
+         SET @c_SQLParms = N'@n_RowNo1      INT OUTPUT'
+                         + ',@n_InvQty      INT OUTPUT'
+                         + ',@c_lot         NVARCHAR(10) OUTPUT'
+                         + ',@c_loc         NVARCHAR(10) OUTPUT'
+                         + ',@c_ID          NVARCHAR(18) OUTPUT'
+                         + ',@c_Storerkey   NVARCHAR(15) '
+                         + ',@c_Sku         NVARCHAR(20) '
          SELECT @n_RowNo1 = 0
          
          WHILE (@n_RemainQty > 0)
          BEGIN
-            SET ROWCOUNT 1
+            --(SSA01) - START
+            --SET ROWCOUNT 1
        
-            SELECT @n_RowNo1 = rowno, @n_InvQty = Qty, @c_lot = Lot, @c_loc = Loc, @c_Id = ID
-            FROM  #Inventory 
-            WHERE Sku = @c_SKU 
-            AND   Qty > 0 
-            AND   Rowno >= @n_RowNo1 
+            --SELECT @n_RowNo1 = rowno, @n_InvQty = Qty, @c_lot = Lot, @c_loc = Loc, @c_Id = ID
+            --FROM  #Inventory
+            --WHERE Sku = @c_SKU
+            --AND   Qty > 0
+            --AND   Rowno >= @n_RowNo1
+
+            SET @c_Lot = '' SET @c_Loc = ''
+
+            EXEC sp_ExecuteSQL @c_SQLStmt
+                              ,@c_SQLParms
+                              ,@n_RowNo1     OUTPUT
+                              ,@n_InvQty     OUTPUT
+                              ,@c_lot        OUTPUT
+                              ,@c_loc        OUTPUT
+                              ,@c_ID         OUTPUT
+                              ,@c_Storerkey
+                              ,@c_Sku
    
             IF @@ROWCOUNT = 0 
             BEGIN 
-               SET ROWCOUNT 0
+               --SET ROWCOUNT 0
                BREAK 
             END
 
-            SET ROWCOUNT 0
+            --SET ROWCOUNT 0
+            --(SSA01) - END
 
         -- SOS30495 UOM Allocation
             -- UOM1 = Pallet, UOM2 = Case, UOM3 = InnerPack, UOM4 = Master Unit

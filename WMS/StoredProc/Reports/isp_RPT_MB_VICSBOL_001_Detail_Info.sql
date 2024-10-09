@@ -3,26 +3,27 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-/************************************************************************/
-/* SP: isp_RPT_MB_VICSBOL_001_Detail_Info                               */
-/* Creation Date: 18-Jun-2024                                           */
-/* Copyright: Maersk                                                    */
-/* Written by: WLChooi                                                  */
-/*                                                                      */
-/* Purpose: UWP-20706 - Granite | MWMS | BOL Report                     */
-/*        :                                                             */
-/* Called By: RPT_MB_VICSBOL_001_Detail_Info                            */
-/*          :                                                           */
-/* Github Version: 1.0                                                  */
-/*                                                                      */
-/* Version: 7.0                                                         */
-/*                                                                      */
-/* Data Modifications:                                                  */
-/*                                                                      */
-/* Updates:                                                             */
-/* Date        Author   Ver   Purposes                                  */
-/* 18-Jun-2024 WLChooi  1.0   DevOps Combine Script                     */
-/************************************************************************/
+/********************************************************************************/
+/* SP: isp_RPT_MB_VICSBOL_001_Detail_Info                                       */
+/* Creation Date: 18-Jun-2024                                                   */
+/* Copyright: Maersk                                                            */
+/* Written by: WLChooi                                                          */
+/*                                                                              */
+/* Purpose: UWP-20706 - Granite | MWMS | BOL Report                             */
+/*        :                                                                     */
+/* Called By: RPT_MB_VICSBOL_001_Detail_Info                                    */
+/*          :                                                                   */
+/* Github Version: 1.0                                                          */
+/*                                                                              */
+/* Version: 7.0                                                                 */
+/*                                                                              */
+/* Data Modifications:                                                          */
+/*                                                                              */
+/* Updates:                                                                     */
+/* Date        Author   Ver   Purposes                                          */
+/* 18-Jun-2024 WLChooi  1.0   DevOps Combine Script                             */
+/* 08-Oct-2024 CalvinK  1.1   FCR-956 Change Externorderkey to BuyerPO (CLVN01) */
+/********************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[isp_RPT_MB_VICSBOL_001_Detail_Info]
 (
    @c_Mbolkey      NVARCHAR(10)
@@ -84,7 +85,8 @@ BEGIN
    ELSE
    BEGIN
       INSERT INTO #T_INFO (ExternOrderKey, userDefine03, PKG, [WEIGHT], PALLETS)
-      SELECT ORDERS.ExternOrderKey
+      SELECT --ORDERS.ExternOrderKey  --(CLVN01)
+            ORDERS.BUYERPO           --(CLVN01)
            , 'Dept: ' + ISNULL(TRIM(ORDERS.UserDefine03), '') AS UserDefine03
            , PKG = SUM(CONVERT(INT, PK.TTLCTN))
            , [WEIGHT] = SUM(MBOLDETAIL.[Weight])
@@ -96,7 +98,8 @@ BEGIN
                     JOIN PACKHEADER PH (NOLOCK) ON P.Pickslipno = PH.Pickslipno
                     WHERE PH.Orderkey = ORDERS.Orderkey ) AS PK
       WHERE (MBOLDETAIL.MbolKey = @c_Mbolkey) AND (ORDERS.ConsigneeKey = @c_Consigneekey)
-      GROUP BY ORDERS.ExternOrderKey
+      GROUP BY --ORDERS.ExternOrderKey  --(CLVN01)
+              ORDERS.BUYERPO         --(CLVN01)
              , ISNULL(TRIM(ORDERS.UserDefine03), '') 
    END
 

@@ -75,8 +75,8 @@ BEGIN
       @nTotalCQty = SUM(CQTY)
    FROM RDT.RDTPPA WITH(NOLOCK)
    WHERE storerkey = @cStorerKey
-   AND PickslipNo = @cPickSlipNo
-   AND DropID = @cCartonNo
+   --AND PickslipNo = @cPickSlipNo
+   AND DropID = @cParam1
 
    DECLARE @tShipLabel AS VariableTable
 
@@ -90,9 +90,9 @@ BEGIN
       SET @cReportType = 'PackInfLBL'
 
       INSERT INTO @tShipLabel (Variable, Value) VALUES 
-      ( '@StorerKey',  @cStorerKey), 
-      ( '@PickSlipNo', @cPickSlipNo), 
-      ( '@CartonNo',   CAST( @cCartonNo AS NVARCHAR(10)))
+      ( '@cStorerKey',  @cStorerKey), 
+      ( '@cPickSlipNo', @cPickSlipNo), 
+      ( '@nCartonNo',   CAST( @cCartonNo AS NVARCHAR(10)))
    END
    ELSE IF @nTotalPackQty = @nTotalCQty
       AND EXISTS(SELECT 1
@@ -104,14 +104,18 @@ BEGIN
       SET @cReportType = 'PackInfLE2'
       
       INSERT INTO @tShipLabel (Variable, Value) VALUES 
-      ( '@DropID',   CAST( @cParam1 AS NVARCHAR(10)))
+      ( '@DropID',   CAST( @cParam1 AS NVARCHAR(20))),
+      ( '@cStorerKey',  @cStorerKey), 
+      ( '@cPickSlipNo', @cPickSlipNo)
    END
    ELSE IF @nTotalPackQty <> @nTotalCQty
    BEGIN
       SET @cReportType = 'PackInfLE'
 
       INSERT INTO @tShipLabel (Variable, Value) VALUES 
-      ( '@DropID',   CAST( @cParam1 AS NVARCHAR(10)))
+      ( '@DropID',   CAST( @cParam1 AS NVARCHAR(20))),
+      ( '@cStorerKey',  @cStorerKey), 
+      ( '@cPickSlipNo', @cPickSlipNo)
    END
    ELSE
    BEGIN

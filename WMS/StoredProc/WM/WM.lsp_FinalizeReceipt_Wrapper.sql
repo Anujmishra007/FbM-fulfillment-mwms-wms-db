@@ -12,7 +12,7 @@ GO
 /*                                                                         */
 /* Called By: SCE                                                          */
 /*          :                                                              */
-/* PVCS Version: 2.6                                                       */
+/* PVCS Version: 2.7                                                       */
 /*                                                                         */
 /* Version: 8.0                                                            */
 /*                                                                         */
@@ -48,6 +48,7 @@ GO
 /* 2023-08-16  Wan14    2.6   LFWM-4417 - SCE PROD SG Receipt - Disallow   */
 /*                            Duplicate Movable Unit ID Error When Save when*/
 /*                            exists Receipt Reversed Detail               */
+/* 2024-09-24  Wan15    2.7   SPP-36048 - Empty Reason Code prompt         */
 /***************************************************************************/
 
 CREATE OR ALTER PROCEDURE [WM].[lsp_FinalizeReceipt_Wrapper]
@@ -643,11 +644,12 @@ BEGIN
          END
 
          SET @c_ReceiptLineNo = ''
+         --SET @c_ASNReason = ''                                                    --(Wan15)
          WHILE 1 = 1
          BEGIN
             SET @c_Toloc     = ''
             SET @c_ToID      = ''
-            SET @c_ASNReason = ''
+			
             SET @c_POKey     = ''
             SET @c_ExternReceiptKey = ''
             SELECT TOP 1                                                            --(Wan07)
@@ -662,7 +664,7 @@ BEGIN
                   ,@c_ExternReceiptKey   = ISNULL(RTRIM(RD.ExternReceiptKey),'')
                   ,@c_ExternLineNo       = ISNULL(RTRIM(RD.ExternLineNo),'')
                   ,@c_POKey              = ISNULL(RTRIM(RD.POkey),'')
-                  ,@c_ASNReason          = ISNULL(RTRIM(RD.UserDefine03),'')
+                  --,@c_ASNReason          = ISNULL(RTRIM(RD.UserDefine03),'')      --(Wan15)
                   ,@dt_Lottable04        = ISNULL(RTRIM(RD.Lottable04),'')
                   ,@dt_Lottable05        = ISNULL(RTRIM(RD.Lottable05),'')
             FROM @tRECEIPTDETAIL t
@@ -1665,7 +1667,7 @@ BEGIN
             ,  @c_Sku      = ''
             ,  @c_Configkey= 'AsnDetRsn'
             ,  @b_Success  = @b_Success         OUTPUT
-            ,  @c_Authority= @c_CrossWH         OUTPUT
+            ,  @c_Authority= @c_ASNDetRSN       OUTPUT                              --(Wan15)
             ,  @n_Err      = @n_Err             OUTPUT
             ,  @c_ErrMsg   = @c_ErrMsg          OUTPUT
       END TRY
@@ -1860,6 +1862,7 @@ BEGIN
          SELECT @c_AllowDupWithinPLTCnt = dbo.fnc_GetParamValueFromString('@c_AllowDupWithinPLTCnt', @c_DisAllowDupIDsOnWSRcpt_Option5, @c_AllowDupWithinPLTCnt)
       END
       --(Wan11) - END
+ 
       SET @c_ReceiptLineNo = ''
       WHILE 1 = 1
       BEGIN
@@ -2869,6 +2872,7 @@ BEGIN
    
    REVERT
 END -- End Procedure
+
 GO
 GRANT EXECUTE ON [WM].[lsp_FinalizeReceipt_Wrapper] TO nSQL
 GO

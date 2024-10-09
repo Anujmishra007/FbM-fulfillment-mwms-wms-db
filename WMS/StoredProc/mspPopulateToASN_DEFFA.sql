@@ -1,7 +1,3 @@
-USE [GLOWMS]
-GO
-
-/****** Object:  StoredProcedure [dbo].[mspPopulateToASN_DEFFA]    Script Date: 7/10/2024 10:00:55 AM ******/
 SET ANSI_NULLS OFF
 GO
 

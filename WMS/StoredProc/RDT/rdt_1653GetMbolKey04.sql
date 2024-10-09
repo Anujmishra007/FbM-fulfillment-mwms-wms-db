@@ -13,7 +13,8 @@ GO
 /*                                                                      */    
 /* Modifications log:                                                   */    
 /* Date        Rev  Author   Purposes                                   */    
-/* 2024-07-05  1.0  CYU027   FCR 539. Created                          */
+/* 2024-07-05  1.0  CYU027   FCR 539. Created                           */
+/* 2024-09-20  1.1  CYU027   Add Validation TrackNo                     */
 /************************************************************************/
     
 CREATE OR ALTER PROC [RDT].[rdt_1653GetMbolKey04] (
@@ -43,7 +44,14 @@ BEGIN
    DECLARE @cCur_OrderKey                 NVARCHAR( 10) = ''
    DECLARE @cPalletNotAllowMixShipperKey  NVARCHAR( 1)
 
-
+   IF EXISTS ( SELECT 1 FROM dbo.PalletDetail WITH (NOLOCK)
+                  WHERE StorerKey = @cStorerKey
+                     AND (CaseID = @cTrackNo OR TrackingNo = @cTrackNo))
+   BEGIN
+      SET @nErrNo = 219157
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --TrackNo In Use
+      GOTO Quit
+   END
 
 
    SELECT @cNew_ShipperKey = ShipperKey

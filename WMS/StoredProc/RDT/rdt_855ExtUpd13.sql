@@ -15,6 +15,7 @@ GO
 /* Date       Rev  Author   Purposes                                          */
 /* 2024-06-18 1.0  NLT013   FCR-386. Created                                  */
 /* 2024-08-06 1.1  Dennis   FCR-386. Remove order group condition             */
+/* 2024-09-26 1.2  NLT013   UWP-24932 Error message UI issue                  */
 /******************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_855ExtUpd13 (
@@ -83,7 +84,6 @@ BEGIN
       @nWorkOrderDetailQty       INT,
       @cLabelListName            NVARCHAR(10),
       @cShipperKey               NVARCHAR(15),
-      @cOrderInfo03              NVARCHAR(20),
       @cPickConfirmStatus        NVARCHAR( 1),
       @fCartonWeight             FLOAT,
       @fSKUWeight                FLOAT,
@@ -150,13 +150,125 @@ BEGIN
             --4. Insert transmitlog2
             IF @nTotalPQty = @nTotalCQty -- Audit finished
             BEGIN
-               SELECT TOP 1 @cOrderInfo03 = ISNULL(OI.OrderInfo03, '') + '-' + ISNULL(CLK.Description, '')
-               FROM dbo.OrderInfo OI WITH(NOLOCK)
-               INNER JOIN dbo.PickDetail PKD WITH(NOLOCK) ON OI.OrderKey = PKD.OrderKey
-               INNER JOIN dbo.CODELKUP CLK WITH(NOLOCK) ON PKD.StorerKey = CLK.StorerKey AND CLK.LISTNAME = 'VASORD' AND ISNULL(OI.OrderInfo03, '') = CLK.Code
-               WHERE PKD.StorerKey = @cStorerKey
-                  AND ISNULL(PKD.CaseID, '') = @cDropID
-                  AND PKD.Sku = @cSKU
+               DECLARE @nDisplayVASHeader          INT = 1
+
+               SELECT @nRowCount = COUNT(1)
+               FROM RDT.RDTPPA WITH(NOLOCK)
+               WHERE StorerKey = @cStorerKey
+                  AND DropID = @cDropID
+                  AND Status = '5'
+
+               IF @nRowCount > 0
+                  SET @nDisplayVASHeader = 0
+
+               --Display VAS Header
+               IF @nDisplayVASHeader = 1
+               BEGIN
+                  DECLARE @tVASHeader TABLE
+                  (
+                     RowIndex                INT IDENTITY(1,1),
+                     Code                    NVARCHAR(30),
+                     Description             NVARCHAR(30)
+                  )
+                  
+                  INSERT INTO @tVASHeader (Code, Description)
+                  SELECT DISTINCT
+                        CLK.Code,
+                        CLK.Description
+                  FROM dbo.WorkOrderDetail WOD WITH(NOLOCK)
+                  INNER JOIN dbo.PickDetail PKD WITH(NOLOCK) ON WOD.StorerKey = PKD.StorerKey AND WOD.ExternWorkOrderKey = PKD.OrderKey
+                  INNER JOIN dbo.CODELKUP CLK WITH(NOLOCK) ON PKD.StorerKey = CLK.StorerKey AND CLK.LISTNAME = 'VASORD' AND WOD.Type = CLK.Code
+                  WHERE PKD.StorerKey = @cStorerKey
+                     AND ISNULL(PKD.CaseID, '') = @cDropID
+                     AND WOD.ExternLineNo = '0H'
+                  ORDER BY CLK.Code ASC
+                  
+                  SELECT @nRowCount = @@ROWCOUNT
+
+                  IF @nRowCount > 0
+                  BEGIN
+                     SET @nLoopIndex = -1
+                     WHILE 1 = 1
+                     BEGIN
+                        SELECT TOP 1
+                           @nLoopIndex = RowIndex,
+                           @cVASCode = Code, 
+                           @cVASCodeDesc = Description
+                        FROM @tVASHeader
+                        WHERE RowIndex > @nLoopIndex
+                        ORDER BY RowIndex
+
+                        SELECT @nRowCount = @@ROWCOUNT
+
+                        IF @nRowCount = 0
+                           BREAK
+
+                        SET @cMsg01 = 'VAS Header'
+                        IF @nLoopIndex % 7 = 1 SET @cMsg02 = @cVASCode + '-' + @cVASCodeDesc
+                        ELSE IF @nLoopIndex % 7  = 2 SET @cMsg03 = @cVASCode + '-' + @cVASCodeDesc
+                        ELSE IF @nLoopIndex % 7  = 3 SET @cMsg04 = @cVASCode + '-' + @cVASCodeDesc
+                        ELSE IF @nLoopIndex % 7  = 4 SET @cMsg05 = @cVASCode + '-' + @cVASCodeDesc
+                        ELSE IF @nLoopIndex % 7  = 5 SET @cMsg06 = @cVASCode + '-' + @cVASCodeDesc
+                        ELSE IF @nLoopIndex % 7  = 6 SET @cMsg07 = @cVASCode + '-' + @cVASCodeDesc
+                        ELSE IF @nLoopIndex % 7  = 0 SET @cMsg08 = @cVASCode + '-' + @cVASCodeDesc
+
+                        IF @cMsg01 IS NOT NULL AND TRIM(@cMsg01) <> '' AND @nLoopIndex % 7 = 0
+                        BEGIN
+                           EXEC rdt.rdtInsertMsgQueue 
+                              @nMobile = @nMobile, 
+                              @nErrNo = @nErrNo, 
+                              @cErrMsg = @cErrMsg, 
+                              @cLine01 = @cMsg01, 
+                              @cLine02 = @cMsg02, 
+                              @cLine03 = @cMsg03, 
+                              @cLine04 = @cMsg04, 
+                              @cLine05 = @cMsg05, 
+                              @cLine06 = @cMsg06, 
+                              @cLine07 = @cMsg07, 
+                              @cLine08 = @cMsg08, 
+                              @cLine09 = @cMsg09, 
+                              @nDisplayMsg = 0
+
+                           SET @cMsg01 = ''
+                           SET @cMsg02 = ''
+                           SET @cMsg03 = ''
+                           SET @cMsg04 = ''
+                           SET @cMsg05 = ''
+                           SET @cMsg06 = ''
+                           SET @cMsg07 = ''
+                           SET @cMsg08 = ''
+                        END
+                     END
+
+                     IF @cMsg02 IS NOT NULL AND TRIM(@cMsg02) <> ''
+                     BEGIN
+                        SET @cMsg01 = 'VAS Header'
+                        EXEC rdt.rdtInsertMsgQueue 
+                           @nMobile = @nMobile, 
+                           @nErrNo = @nErrNo, 
+                           @cErrMsg = @cErrMsg, 
+                           @cLine01 = @cMsg01, 
+                           @cLine02 = @cMsg02, 
+                           @cLine03 = @cMsg03, 
+                           @cLine04 = @cMsg04, 
+                           @cLine05 = @cMsg05, 
+                           @cLine06 = @cMsg06, 
+                           @cLine07 = @cMsg07, 
+                           @cLine08 = @cMsg08, 
+                           @cLine09 = @cMsg09, 
+                           @nDisplayMsg = 0
+
+                        SET @cMsg01 = ''
+                        SET @cMsg02 = ''
+                        SET @cMsg03 = ''
+                        SET @cMsg04 = ''
+                        SET @cMsg05 = ''
+                        SET @cMsg06 = ''
+                        SET @cMsg07 = ''
+                        SET @cMsg08 = ''
+                     END
+                  END
+               END
 
                SELECT @nRowCount = COUNT(1) 
                FROM dbo.WorkOrder wo WITH(NOLOCK)
@@ -170,12 +282,10 @@ BEGIN
                   AND (pd.SKU = ISNULL(wod.WkOrdUdef1, '') OR ISNULL(wod.WkOrdUdef1, '') = '')
                
                --1. VAS is needed, display VAS code and Print VAS label
-               IF @nRowCount > 0 OR ISNULL(@cOrderInfo03, '') <> ''
+               IF @nRowCount > 0
                BEGIN
                   SET @nLoopIndex = 1
                   SET @cMsg09 = ''
-                  SET @cMsg10 = 'Press ESC for More'
-                  SET @nVASQtyOverThan7 = 0
 
                   DECLARE CUR_PPA CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
                      SELECT DISTINCT
@@ -195,29 +305,30 @@ BEGIN
 
                   WHILE @@FETCH_STATUS = 0 
                   BEGIN
-                     IF @nLoopIndex % 7 = 1 SET @cMsg02 = @cVASCode + '-' + @cVASCodeDesc
-                     ELSE IF @nLoopIndex % 7  = 2 SET @cMsg03 = @cVASCode + '-' + @cVASCodeDesc
-                     ELSE IF @nLoopIndex % 7  = 3 SET @cMsg04 = @cVASCode + '-' + @cVASCodeDesc
-                     ELSE IF @nLoopIndex % 7  = 4 SET @cMsg05 = @cVASCode + '-' + @cVASCodeDesc
-                     ELSE IF @nLoopIndex % 7  = 5 SET @cMsg06 = @cVASCode + '-' + @cVASCodeDesc
-                     ELSE IF @nLoopIndex % 7  = 6 SET @cMsg07 = @cVASCode + '-' + @cVASCodeDesc
-                     ELSE IF @nLoopIndex % 7  = 0 SET @cMsg08 = @cVASCode + '-' + @cVASCodeDesc
+                     IF @nLoopIndex % 8 = 1 SET @cMsg01 = @cVASCode + '-' + @cVASCodeDesc
+                     ELSE IF @nLoopIndex % 8  = 2 SET @cMsg02 = @cVASCode + '-' + @cVASCodeDesc
+                     ELSE IF @nLoopIndex % 8  = 3 SET @cMsg03 = @cVASCode + '-' + @cVASCodeDesc
+                     ELSE IF @nLoopIndex % 8  = 4 SET @cMsg04 = @cVASCode + '-' + @cVASCodeDesc
+                     ELSE IF @nLoopIndex % 8  = 5 SET @cMsg05 = @cVASCode + '-' + @cVASCodeDesc
+                     ELSE IF @nLoopIndex % 8  = 6 SET @cMsg06 = @cVASCode + '-' + @cVASCodeDesc
+                     ELSE IF @nLoopIndex % 8  = 7 SET @cMsg07 = @cVASCode + '-' + @cVASCodeDesc
+                     ELSE IF @nLoopIndex % 8  = 0 SET @cMsg08 = @cVASCode + '-' + @cVASCodeDesc
 
-                     IF @cMsg02 IS NOT NULL AND TRIM(@cMsg02) <> '' AND @nLoopIndex % 7 = 0
+                     IF @cMsg01 IS NOT NULL AND TRIM(@cMsg01) <> '' AND @nLoopIndex % 8 = 0
                      BEGIN
-                        SET @nVASQtyOverThan7 = 1
-                        SET @cMsg01 = @cOrderInfo03
-                        EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo, @cErrMsg, 
-                              @cMsg01, 
-                              @cMsg02, 
-                              @cMsg03, 
-                              @cMsg04, 
-                              @cMsg05, 
-                              @cMsg06, 
-                              @cMsg07, 
-                              @cMsg08, 
-                              @cMsg09, 
-                              @cMsg10
+                        EXEC rdt.rdtInsertMsgQueue @nMobile = @nMobile, 
+                           @nErrNo = @nErrNo, 
+                           @cErrMsg = @cErrMsg, 
+                           @cLine01 = @cMsg01, 
+                           @cLine02 = @cMsg02, 
+                           @cLine03 = @cMsg03, 
+                           @cLine04 = @cMsg04, 
+                           @cLine05 = @cMsg05, 
+                           @cLine06 = @cMsg06, 
+                           @cLine07 = @cMsg07, 
+                           @cLine08 = @cMsg08, 
+                           @cLine09 = @cMsg09, 
+                           @nDisplayMsg = 0
 
                         SET @cMsg01 = ''
                         SET @cMsg02 = ''
@@ -235,21 +346,21 @@ BEGIN
                   CLOSE CUR_PPA 
                   DEALLOCATE CUR_PPA 
 
-                  IF (@nVASQtyOverThan7 = 0 AND ISNULL(@cOrderInfo03, '') <> '') OR (@cMsg02 IS NOT NULL AND TRIM(@cMsg02) <> '')
+                  IF @cMsg01 IS NOT NULL AND TRIM(@cMsg01) <> ''
                   BEGIN
-                     SET @cMsg01 = @cOrderInfo03
-                     SET @cMsg10 = 'Press ESC Continue'
-                     EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo, @cErrMsg, 
-                           @cMsg01, 
-                           @cMsg02, 
-                           @cMsg03, 
-                           @cMsg04, 
-                           @cMsg05, 
-                           @cMsg06, 
-                           @cMsg07, 
-                           @cMsg08, 
-                           @cMsg09, 
-                           @cMsg10
+                     EXEC rdt.rdtInsertMsgQueue @nMobile = @nMobile, 
+                        @nErrNo = @nErrNo, 
+                        @cErrMsg = @cErrMsg, 
+                        @cLine01 = @cMsg01, 
+                        @cLine02 = @cMsg02, 
+                        @cLine03 = @cMsg03, 
+                        @cLine04 = @cMsg04, 
+                        @cLine05 = @cMsg05, 
+                        @cLine06 = @cMsg06, 
+                        @cLine07 = @cMsg07, 
+                        @cLine08 = @cMsg08, 
+                        @cLine09 = @cMsg09, 
+                        @nDisplayMsg = 0
 
                      SET @cMsg01 = ''
                      SET @cMsg02 = ''

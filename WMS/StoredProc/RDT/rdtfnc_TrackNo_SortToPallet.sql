@@ -45,6 +45,7 @@ GO
 /*                            Step5 (WC01)                              */  
 /* 2023-11-14   2.7  James    WMS-23712 Extend Lane var length (james13)*/
 /* 2024-07-09   2.8  CYU027   FCR-539 Granite Scan to Pallet            */
+/* 2024-09-20   2.9  CYU027   Add Validation TrackNo                    */
 /************************************************************************/
   
 CREATE OR ALTER PROC [RDT].[rdtfnc_TrackNo_SortToPallet] (  
@@ -338,7 +339,8 @@ BEGIN
    SET @cOption = ''  
    SET @cLane = ''  
    SET @cMBOLKey = ''  
-   SET @cPalletKey = ''  
+   SET @cPalletKey = ''
+   SET @cOrderKey = ''
   
    EXEC rdt.rdtSetFocusField @nMobile, 1  
   
