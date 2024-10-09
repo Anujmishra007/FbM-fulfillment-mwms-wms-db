@@ -2027,6 +2027,25 @@ BEGIN
             -- Prepare next screen var
             SET @cDropID = ''
             SET @cOutField01 = '' -- @cDropID
+            
+            IF @cGenDROPIDSP <> ''
+            BEGIN
+               -- Auto generate DROPID
+               DELETE FROM @tExtData
+               INSERT INTO @tExtData (Variable, Value) 
+               VALUES ('@cIDType', 'DROPID')
+
+               EXEC rdt.rdt_AutoGenID @nMobile, @nFunc, @nStep, @cLangCode
+                  ,@cGenDROPIDSP
+                  ,@tExtData
+                  ,@cAutoID  OUTPUT
+                  ,@nErrNo   OUTPUT
+                  ,@cErrMsg  OUTPUT
+               IF @nErrNo <> 0
+                  GOTO Step_5_Fail
+
+               SET @cOutField01 = @cAutoID
+            END
 
             SET @nScn = @nScn - 4
             SET @nStep = @nStep - 4
