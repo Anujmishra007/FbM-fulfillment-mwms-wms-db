@@ -133,7 +133,6 @@ DECLARE
    @nFromStep           INT,
    
    @cGenID              NVARCHAR(20), -- LJQ006 FCR-877
-   @tExtData            VariableTable, -- LJQ006 FCR-877
    @cAutoID             NVARCHAR(18), --LJQ006 FCR-877
 
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),
@@ -1410,15 +1409,12 @@ BEGIN
       -- Get AutoGenID
       IF @cGenID <> ''
       BEGIN
-         INSERT INTO @tExtData (Variable, Value) VALUES 
-            ('@cIDType', 'ID')
          EXEC [rdt].[rdt_AutoGenID]
             @nMobile,
             @nFunc,
             @nStep,
             @cLangCode,
             @cGenID,
-            @tExtData,
             @cAutoID    OUTPUT,
             @nErrNo     OUTPUT,
             @cErrMsg    OUTPUT
@@ -2637,16 +2633,12 @@ BEGIN
       -- Get AutoGenID
       IF @cGenID <> ''
       BEGIN
-         DELETE FROM @tExtData;
-         INSERT INTO @tExtData (Variable, Value) VALUES 
-            ('@cIDType', 'ID');
          EXEC [rdt].[rdt_AutoGenID]
             @nMobile,
             @nFunc,
             @nStep,
             @cLangCode,
             @cGenID,
-            @tExtData,
             @cAutoID    OUTPUT,
             @nErrNo     OUTPUT,
             @cErrMsg    OUTPUT
