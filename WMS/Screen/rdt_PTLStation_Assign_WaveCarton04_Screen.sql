@@ -1,0 +1,18 @@
+-- 6391 = ?? screen
+DELETE rdt.RDTScn WHERE Scn = 6391 AND Lang_Code = 'ENG'
+EXECUTE rdt.rdtAddScn 6391, 'ENG'
+   ,@cLine01 = N'WAVEKEY:       %05d05'
+   ,@cLine02 = N'%10i01'
+   ,@cLine03 = N''
+   ,@cLine04 = N'STATION:'
+   ,@cLine05 = N'%10d02'
+   ,@cLine06 = N''
+   ,@cLine07 = N'LOCATION:      '
+   ,@cLine08 = N'%10d03'
+   ,@cLine09 = N'%10i04'
+   ,@cLine10 = N''
+   ,@cLine11 = N'CARTON ID:     %05d07'
+   ,@cLine12 = N'%20i06'
+   ,@cLine14 = N'%e'
+   ,@cWebGroup = N'{"1":["1","2"],"2":["4","5"],"3":["7","8","9"],"4":["11","12"]}'
+ 
