@@ -47,8 +47,11 @@ BEGIN
    IF @nFunc IN (1812, 1813)
    BEGIN
    
-      SELECT @cIDType = Value FROM @tExtData WHERE Variable = N'@cIDType';
-      IF @@ROWCOUNT <> 1
+      SET @cIDType = [rdt].[rdtGetConfig]( @nFunc, N'GenIDType', @cStorerKey)
+      IF @cIDType = N'0'
+         SET @cIDType = N''
+
+      IF ISNULL(@cIDType, N'') = N''
       BEGIN
          SET @nErrNo = 224956
          SET @cErrMsg = [rdt].[rdtGetMessage](@nErrNo, @cLangCode, N'DSP')
