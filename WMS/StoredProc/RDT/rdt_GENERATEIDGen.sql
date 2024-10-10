@@ -44,10 +44,10 @@ BEGIN
       FROM rdt.rdtmobrec (NOLOCK)
       WHEre mobile=@nMobile
 
-   IF @nFunc IN (1812, 1813)
+   IF @nFunc IS NOT NULL
    BEGIN
    
-      SET @cIDType = [rdt].[rdtGetConfig]( @nFunc, N'GenIDType', @cStorerKey)
+      SET @cIDType = [rdt].[rdtGetConfig](@nFunc, N'GenIDType', @cStorerKey)
       IF @cIDType = N'0'
          SET @cIDType = N''
 
