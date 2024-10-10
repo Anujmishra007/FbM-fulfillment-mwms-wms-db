@@ -1,11 +1,8 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[ptl].[isp_PTL_CommandReceived]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [ptl].[isp_PTL_CommandReceived]
-GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
 
 /******************************************************************************/
 /* Stored Procedure: isp_PTL_CommandReceived                                  */
@@ -18,8 +15,9 @@ GO
 /* 2013-03-02 1.0  Shong      Created                                         */
 /* 2019-01-22 1.1  ChewKP     Performance Tuning                              */
 /* 2020-04-21 1.2  Ung        INC1120103 Remove transaction                   */
+/* 2024-07-30 1.3  yeekung    UWP-22410 Add new Column(yeekung05)					*/
 /******************************************************************************/
-CREATE PROC [PTL].[isp_PTL_CommandReceived]
+CREATE OR ALTER PROC [PTL].[isp_PTL_CommandReceived]
 (  @c_DeviceIPAddress NVARCHAR(30)
   ,@c_DevicePosition  NVARCHAR(20)
   ,@c_FuncKey         NVARCHAR(2) -- 00 = NO, 10 = YES
@@ -28,6 +26,7 @@ CREATE PROC [PTL].[isp_PTL_CommandReceived]
   ,@b_Success         INT OUTPUT
   ,@n_ErrNo           INT OUTPUT
   ,@c_ErrMsg          NVARCHAR(215) OUTPUT
+  ,@c_Facility			 NVARCHAR(20)
 )
 AS
 BEGIN
@@ -49,6 +48,7 @@ BEGIN
           ,@n_LghIn_SerialNo   BIGINT
           ,@c_AlertLightMode   NVARCHAR(10)
           ,@c_StorerKey        NVARCHAR(15)
+          ,@cDebug             NVARCHAR( 1) = 0
 
    SET @b_Success = 1
    SET @n_ErrNo   = 0
@@ -61,7 +61,8 @@ BEGIN
          SELECT @c_InputValue = DisplayValue
          FROM PTL.LightStatus WITH (NOLOCK)
          WHERE IPAddress = @c_DeviceIPAddress
-         AND DevicePosition = @c_DevicePosition
+				AND DevicePosition = @c_DevicePosition
+				AND Facility = @c_Facility
       END
 
       SET @n_LghIn_SerialNo = 0
@@ -72,6 +73,7 @@ BEGIN
       WHERE li.IPAddress = @c_DeviceIPAddress
       AND   li.DevicePosition = @c_DevicePosition
       AND   li.[Status] = '0'
+		AND   li.Facility = @c_Facility
       ORDER BY li.SerialNo
 
       IF ISNULL(@n_LghIn_SerialNo, 0) <> 0
@@ -84,6 +86,7 @@ BEGIN
          AND   IPAddress = @c_DeviceIPAddress
          AND   DevicePosition = @c_DevicePosition
          AND   [Status] = '0'
+			AND   Facility = @c_Facility
       END
 
       SELECT @n_Step = ls.Step,
@@ -95,6 +98,7 @@ BEGIN
       FROM PTL.LightStatus AS ls WITH (NOLOCK)
       WHERE ls.IPAddress = @c_DeviceIPAddress
       AND   ls.DevicePosition = @c_DevicePosition
+		AND	ls.Facility = @c_Facility
 
       SET @n_ErrNo = 0
       SET @c_StoredProcName = ''
@@ -122,10 +126,10 @@ BEGIN
             SET @c_StoredProcName = N'EXEC PTL.' + RTRIM(@c_StoredProcName)
             SET @c_StoredProcName = RTRIM(@c_StoredProcName) +
                                     N' @c_DeviceIPAddress, @c_DevicePosition, @c_FuncKey, @n_LghIn_SerialNo, ' +
-                                    N'@c_InputValue, @n_ErrNo OUTPUT, @c_ErrMsg OUTPUT'
+                                    N'@c_InputValue, @n_ErrNo OUTPUT, @c_ErrMsg OUTPUT,@cDebug,@c_Facility'
             SET @c_StoredProcParm = N'@c_DeviceIPAddress NVARCHAR(30), @c_DevicePosition  NVARCHAR(20), ' +
                                     N'@c_FuncKey NVARCHAR(2), @n_LghIn_SerialNo BIGINT, @c_InputValue NVARCHAR(30), ' +
-                                    N'@n_ErrNo int OUTPUT,  @c_ErrMsg NVARCHAR(125) OUTPUT'
+                                    N'@n_ErrNo int OUTPUT,  @c_ErrMsg NVARCHAR(125) OUTPUT,@cDebug NVARCHAR( 1),@c_Facility NVARCHAR(20)'
             EXEC sp_executesql @c_StoredProcName,
                @c_StoredProcParm,
                @c_DeviceIPAddress,
@@ -134,7 +138,9 @@ BEGIN
                @n_LghIn_SerialNo,
                @c_InputValue,
                @n_ErrNo OUTPUT,
-               @c_ErrMsg OUTPUT
+               @c_ErrMsg OUTPUT,
+               @cDebug,
+               @c_Facility
 
             IF ISNULL(RTRIM(@c_ErrMsg),'') <> ''
             BEGIN
@@ -145,6 +151,7 @@ BEGIN
                WHERE IPAddress = @c_DeviceIPAddress
                AND   DevicePosition = @c_DevicePosition
                AND   [Status] = '1'
+					AND   Facility = @c_Facility
             END
             ELSE
             BEGIN
@@ -166,11 +173,5 @@ Quit:
 
 END
 GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
-SET ANSI_NULLS ON
-GO
-
-GRANT EXECUTE ON ptl.isp_PTL_CommandReceived TO NSQL
+GRANT EXECUTE ON  [PTL].[isp_PTL_CommandReceived] TO [NSQL]
 GO
