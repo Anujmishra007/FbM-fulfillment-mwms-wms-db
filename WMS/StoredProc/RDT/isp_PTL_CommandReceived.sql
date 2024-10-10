@@ -48,6 +48,7 @@ BEGIN
           ,@n_LghIn_SerialNo   BIGINT
           ,@c_AlertLightMode   NVARCHAR(10)
           ,@c_StorerKey        NVARCHAR(15)
+          ,@cDebug             NVARCHAR( 1) = 0
 
    SET @b_Success = 1
    SET @n_ErrNo   = 0
@@ -61,7 +62,7 @@ BEGIN
          FROM PTL.LightStatus WITH (NOLOCK)
          WHERE IPAddress = @c_DeviceIPAddress
 				AND DevicePosition = @c_DevicePosition
-				AND   li.Facility = @c_Facility
+				AND Facility = @c_Facility
       END
 
       SET @n_LghIn_SerialNo = 0
@@ -97,7 +98,7 @@ BEGIN
       FROM PTL.LightStatus AS ls WITH (NOLOCK)
       WHERE ls.IPAddress = @c_DeviceIPAddress
       AND   ls.DevicePosition = @c_DevicePosition
-		AND	ls.Facility = = @c_Facility
+		AND	ls.Facility = @c_Facility
 
       SET @n_ErrNo = 0
       SET @c_StoredProcName = ''
@@ -125,10 +126,10 @@ BEGIN
             SET @c_StoredProcName = N'EXEC PTL.' + RTRIM(@c_StoredProcName)
             SET @c_StoredProcName = RTRIM(@c_StoredProcName) +
                                     N' @c_DeviceIPAddress, @c_DevicePosition, @c_FuncKey, @n_LghIn_SerialNo, ' +
-                                    N'@c_InputValue, @n_ErrNo OUTPUT, @c_ErrMsg OUTPUT'
+                                    N'@c_InputValue, @n_ErrNo OUTPUT, @c_ErrMsg OUTPUT,@cDebug,@c_Facility'
             SET @c_StoredProcParm = N'@c_DeviceIPAddress NVARCHAR(30), @c_DevicePosition  NVARCHAR(20), ' +
                                     N'@c_FuncKey NVARCHAR(2), @n_LghIn_SerialNo BIGINT, @c_InputValue NVARCHAR(30), ' +
-                                    N'@n_ErrNo int OUTPUT,  @c_ErrMsg NVARCHAR(125) OUTPUT'
+                                    N'@n_ErrNo int OUTPUT,  @c_ErrMsg NVARCHAR(125) OUTPUT,@cDebug NVARCHAR( 1),@c_Facility NVARCHAR(20)'
             EXEC sp_executesql @c_StoredProcName,
                @c_StoredProcParm,
                @c_DeviceIPAddress,
@@ -137,7 +138,9 @@ BEGIN
                @n_LghIn_SerialNo,
                @c_InputValue,
                @n_ErrNo OUTPUT,
-               @c_ErrMsg OUTPUT
+               @c_ErrMsg OUTPUT,
+               @cDebug,
+               @c_Facility
 
             IF ISNULL(RTRIM(@c_ErrMsg),'') <> ''
             BEGIN
