@@ -28,6 +28,7 @@ GO
 /* 2024-04-26   SSA01   1.4   UWP-12854-Partial Allocate Order Include - */
 /*                                     ChilePuma                         */
 /* 2024-09-26   SSA02   1.5   UWP-24265-Puma - Wave Release update       */
+/* 2024-09-26   SSA03   1.6   UWP-24265-Puma - Removed alias variable    */
 /*************************************************************************/   
 CREATE OR ALTER PROCEDURE [dbo].[msp_mWaveReleaseWCS_Std]      
   @c_Wavekey      NVARCHAR(10)  
@@ -112,11 +113,11 @@ CREATE OR ALTER PROCEDURE [dbo].[msp_mWaveReleaseWCS_Std]
     
    IF @c_CfgWCS = '1'
    BEGIN
-      SET @c_SQL = N'SELECT ORD.OrderKey, ORD.ECOM_SINGLE_Flag, ORD.DocType'         --(SSA02)
+      SET @c_SQL = N'SELECT ORDERS.OrderKey, ORDERS.ECOM_SINGLE_Flag, ORDERS.DocType'         --(SSA02),(SSA03)
                  + ' FROM dbo.WAVEDETAIL (NOLOCK)'
-                 + ' JOIN ORDERS ORD (NOLOCK) ON ORD.OrderKey = WAVEDETAIL.OrderKey' --(SSA02)
+                 + ' JOIN ORDERS (NOLOCK) ON ORDERS.OrderKey = WAVEDETAIL.OrderKey' --(SSA02)
                  + ' WHERE WAVEDETAIL.WaveKey = @c_Wavekey'
-                 + ' AND ORD.[Status] IN (@c_OrderStatus,@c_PartialOrderStatus)'     --(SSA01)
+                 + ' AND ORDERS.[Status] IN (@c_OrderStatus,@c_PartialOrderStatus)'     --(SSA01)
 
       SET @c_SQL= @c_SQL + ' ' + @c_ConditionQuery + ' ORDER BY WAVEDETAIL.WaveDetailKey'
 
