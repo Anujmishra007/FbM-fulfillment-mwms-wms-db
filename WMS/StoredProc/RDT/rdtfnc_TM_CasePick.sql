@@ -967,6 +967,25 @@ BEGIN
             SET @cDropID = ''
             SET @cOutField01 = '' -- DropID
 
+            IF @cGenDROPIDSP <> ''
+            BEGIN
+               -- Auto generate DROPID
+               DELETE FROM @tExtData
+               INSERT INTO @tExtData (Variable, Value) 
+               VALUES ('@cIDType', 'DROPID')
+
+               EXEC rdt.rdt_AutoGenID @nMobile, @nFunc, @nStep, @cLangCode
+                  ,@cGenDROPIDSP
+                  ,@tExtData
+                  ,@cAutoID  OUTPUT
+                  ,@nErrNo   OUTPUT
+                  ,@cErrMsg  OUTPUT
+               IF @nErrNo <> 0
+                  GOTO Quit
+
+               SET @cOutField01 = @cAutoID
+            END
+
             SET @nScn  = @nScn - 1
             SET @nStep = @nStep - 1
 
