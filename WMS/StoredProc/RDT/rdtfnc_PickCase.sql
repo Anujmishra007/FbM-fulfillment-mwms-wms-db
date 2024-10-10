@@ -20,6 +20,7 @@ GO
 /* 2024-07-09   1.8  NLT013      FCR-454 Add ExtScnSP to Pick UCC             */
 /* 2024-07-16   1.9  JHU151      FCR-428 gen cctask and hold inv for short pk */
 /* 2024-09-09   2.0  PXL009      FCR-770 Tote closure                         */
+/* 2024-09-23   2.1  CYU027      FCR-808 PUMA SKU IMAGE widget                */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_PickCase] (
@@ -811,7 +812,7 @@ BEGIN
          SET @cFromStep = @nStep
 
          -- Go to skip LOC screen
-         SET @nScn = @nScn + 3
+         SET @nScn = 5295
          SET @nStep = @nStep + 3
 
          GOTO Quit
@@ -1268,7 +1269,7 @@ BEGIN
                   SET @cOutField02 = '' -- LOC
 
                   -- Go to confirm LOC screen
-                  SET @nScn = @nScn + 4
+                  SET @nScn = 5296
                   SET @nStep = @nStep + 4
                END
                ELSE
@@ -1302,7 +1303,7 @@ BEGIN
                SET @cOutField01 = '' -- PickSlipNo
 
                -- Go to PickSlipNo screen
-               SET @nScn = @nScn - 2
+               SET @nScn = 5290
                SET @nStep = @nStep - 2
             END
          END
@@ -1322,9 +1323,16 @@ BEGIN
       SET @cFieldAttr07 = '' -- QTY
 
       -- Go to prev screen
-      SET @nScn = @nScn - 1
+      SET @nScn = 5291
       SET @nStep = @nStep - 1
    END
+
+   IF @cExtScnSP <> '' AND EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
+   BEGIN
+      SET @nAction = 0
+      GOTO Step_99
+   END
+
    GOTO Quit
 
    Step_3_Fail:
@@ -1365,7 +1373,7 @@ BEGIN
          SET @cOutField02 = '' -- LOC
 
          -- Go to confirm LOC screen
-         SET @nScn = @nScn + 3
+         SET @nScn = 5296
          SET @nStep = @nStep + 3
       END
       ELSE
@@ -1387,7 +1395,7 @@ BEGIN
          --SET @cFieldAttr07 = CASE WHEN @nTotalQty = '1' THEN 'O' ELSE '' END
 
          -- Go to SKU QTY screen
-         SET @nScn = @nScn - 1
+         SET @nScn = 5292
          SET @nStep = @nStep - 1
       END
    END
@@ -1410,6 +1418,13 @@ BEGIN
       SET @nStep = @nStep - 3
    END
 END
+
+IF @cExtScnSP <> '' AND EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
+BEGIN
+   SET @nAction = 0
+   GOTO Step_99
+END
+
 GOTO Quit
 
 
@@ -1586,6 +1601,13 @@ BEGIN
             SET @nScn = @nScn - 1
             SET @nStep = @nStep - 1
          END
+
+         IF @cExtScnSP <> '' AND EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
+         BEGIN
+            SET @nAction = 0
+            GOTO Step_99
+         END
+
          GOTO Quit
       END
 
@@ -1669,6 +1691,12 @@ BEGIN
    SET @nScn = @nScn - 2
    SET @nStep = @nStep - 2
 
+   IF @cExtScnSP <> '' AND EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
+   BEGIN
+      SET @nAction = 0
+      GOTO Step_99
+   END
+
    GOTO Quit
 
    Step_5_Fail:
@@ -1734,7 +1762,7 @@ BEGIN
                SET @cOutField02 = '' -- LOC
 
                -- Go to confirm LOC screen
-               SET @nScn = @nScn + 1
+               SET @nScn = 5296
                SET @nStep = @nStep + 1
             END
             ELSE
@@ -1756,14 +1784,14 @@ BEGIN
                --SET @cFieldAttr07 = CASE WHEN @nTotalQty = '1' THEN 'O' ELSE '' END
 
                -- Go to SKU QTY screen
-               SET @nScn = @nScn - 3
+               SET @nScn = 5292
                SET @nStep = @nStep - 3
             END
          END
          ELSE
          BEGIN
             -- Go to no more task in loc screen
-            SET @nScn = @nScn - 2
+            SET @nScn = 5293
             SET @nStep = @nStep - 2
          END
          GOTO Quit
@@ -1789,7 +1817,7 @@ BEGIN
       EXEC rdt.rdtSetFocusField @nMobile, 5 -- SKU
 
       -- Go to SKU QTY screen
-      SET @nScn = @nScn - 3
+      SET @nScn = 5292
       SET @nStep = @nStep - 3
    END
 
@@ -1800,7 +1828,7 @@ BEGIN
       SET @cOutField02 = '' -- LOC
 
       -- Go to confirm LOC screen
-      SET @nScn = @nScn + 1
+      SET @nScn = 5296
       SET @nStep = @nStep + 1
    END
 
@@ -1841,7 +1869,7 @@ BEGIN
             SET @cFromStep = @nStep
 
             -- Go to skip LOC screen
-            SET @nScn = @nScn - 1
+            SET @nScn = 5295
             SET @nStep = @nStep - 1
 
             GOTO Quit
@@ -1879,7 +1907,7 @@ BEGIN
       --SET @cFieldAttr07 = CASE WHEN @nTotalQty = '1' THEN 'O' ELSE '' END
 
       -- Go to SKU QTY screen
-      SET @nScn = @nScn - 4
+      SET @nScn = 5292
       SET @nStep = @nStep - 4
    END
 
@@ -1915,9 +1943,16 @@ BEGIN
       EXEC rdt.rdtSetFocusField @nMobile, 2 -- PickZone
 
       -- Go to prev screen
-      SET @nScn = @nScn - 5
+      SET @nScn = 5291
       SET @nStep = @nStep - 5
    END
+
+   IF @cExtScnSP <> '' AND EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
+   BEGIN
+      SET @nAction = 0
+      GOTO Step_99
+   END
+
    GOTO Quit
 
    Step_7_Fail:
@@ -1939,9 +1974,9 @@ BEGIN
 
          DELETE FROM @tExtScnData
          INSERT INTO @tExtScnData (Variable, Value) VALUES    
-         ('@nMenu',     CONVERT(Nvarchar(20),@nMenu)),
-         ('@cUserName', @cUserName)
-
+         ('@nMenu',        CONVERT(Nvarchar(20),@nMenu)),
+         ('@cUserName',    @cUserName),
+         ('@cSuggSKU',     @cSuggSKU)
          EXECUTE [RDT].[rdt_ExtScnEntry] 
          @cExtScnSP, 
          @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorerKey, @tExtScnData ,

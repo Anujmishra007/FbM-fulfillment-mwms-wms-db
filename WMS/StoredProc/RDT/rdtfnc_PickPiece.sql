@@ -72,6 +72,7 @@ GO
 /* 2023-12-07   5.4  Tony        WMS-24315 Trigger msg to WCS                 */
 /* 2024-04-28   5.5  Dennis      UWP-18232 Dropid Restriction                 */
 /* 2024-08-14   5.6  Dennis      FCR-540 TO LOC Scn                           */
+/* 2024-09-23   5.7  CYU027      FCR-809 PUMA SKU IMAGE widget                */
 /******************************************************************************/
 
 CREATE OR ALTER   PROC [RDT].[rdtfnc_PickPiece] (
@@ -1376,6 +1377,13 @@ BEGIN
             SET @cOutField12 = @cExtendedInfo
       END
    END
+
+   --Jump point
+   IF @cExtScnSP <> '' AND EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
+   BEGIN
+      GOTO Step_99
+   END
+
    GOTO Quit
 
    Step_2_Fail:
@@ -2965,7 +2973,13 @@ BEGIN
             SET @nPre_Step = 4
             SET @nAction = 0
          END
-         
+
+         IF @cExtScnSP = 'rdt_839ExtScn03'
+         BEGIN
+            INSERT INTO @tExtScnData (Variable, Value) VALUES
+               ('@cSuggSKU',     @cSuggSKU)
+         END
+
          EXECUTE [RDT].[rdt_ExtScnEntry] 
             @cExtScnSP, 
             @nMobile, @nFunc, @cLangCode, @nOri_Step, @nOri_Scn, @nInputKey, @cFacility, @cStorerKey, @tExtScnData,
@@ -4091,6 +4105,11 @@ BEGIN
       END
    END
 
+   IF @cExtScnSP <> '' AND EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
+   BEGIN
+      GOTO Step_99
+   END
+
    GOTO Quit
 
    Step_5_Fail:
@@ -4364,6 +4383,11 @@ BEGIN
          IF @nStep IN (3,9)
             SET @cOutField12 = @cExtendedInfo
       END
+   END
+
+   IF @cExtScnSP <> '' AND EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
+   BEGIN
+      GOTO Step_99
    END
 
    GOTO Quit
@@ -4656,6 +4680,12 @@ BEGIN
       SET @nScn = @nScn_PickZone
       SET @nStep = @nStep_PickZone
    END
+
+   IF @cExtScnSP <> '' AND EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
+   BEGIN
+      GOTO Step_99
+   END
+
    GOTO Quit
 
    Step_7_Fail:
@@ -4912,6 +4942,12 @@ BEGIN
       SET @nScn = @nScn_SKUQTY
       SET @nStep = @nStep_SKUQTY
    END
+
+   IF @cExtScnSP <> '' AND EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
+   BEGIN
+      GOTO Step_99
+   END
+
    GOTO Quit
 
    Step_8_Fail:
@@ -5143,6 +5179,12 @@ BEGIN
          SET @nStep = @nStep_PickZone
       END
    END
+
+   IF @cExtScnSP <> '' AND EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
+   BEGIN
+      GOTO Step_99
+   END
+
    GOTO Quit
 
    Step_9_Fail:
@@ -5321,6 +5363,12 @@ BEGIN
    SET @nStep = @nStep_SKUQTY
 
 END
+
+IF @cExtScnSP <> '' AND EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
+BEGIN
+   GOTO Step_99
+END
+
 GOTO Quit
 
 /********************************************************************************
@@ -5790,6 +5838,12 @@ BEGIN
             SET @nPre_Step = 11
             SET @nAction = 0
          END
+
+         IF @cExtScnSP = 'rdt_839ExtScn03'
+         BEGIN
+            INSERT INTO @tExtScnData (Variable, Value) VALUES
+               ('@cSuggSKU',     @cSuggSKU)
+         END
          
          EXECUTE [RDT].[rdt_ExtScnEntry] 
             @cExtScnSP, 
@@ -5930,6 +5984,13 @@ BEGIN
          -- Go to SKU screen
          SET @nScn = @nScn_SKUQTY
          SET @nStep = @nStep_SKUQTY
+
+         --Jump point
+         IF @cExtScnSP <> '' AND EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
+         BEGIN
+            GOTO Step_99
+         END
+
          GOTO Quit
       END
 
@@ -6055,6 +6116,13 @@ BEGIN
          -- Go to SKU screen
          SET @nScn = @nScn_SKUQTY
          SET @nStep = @nStep_SKUQTY
+
+         --Jump point
+         IF @cExtScnSP <> '' AND EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
+         BEGIN
+            GOTO Step_99
+         END
+
          GOTO Quit
       END
       ELSE
@@ -6318,7 +6386,13 @@ BEGIN
             SET @nPre_Step = 12
             SET @nAction = 0
          END
-         
+
+         IF @cExtScnSP = 'rdt_839ExtScn03'
+         BEGIN
+            INSERT INTO @tExtScnData (Variable, Value) VALUES
+               ('@cSuggSKU',     @cSuggSKU)
+         END
+
          EXECUTE [RDT].[rdt_ExtScnEntry] 
             @cExtScnSP, 
             @nMobile, @nFunc, @cLangCode, @nOri_Step, @nOri_Scn, @nInputKey, @cFacility, @cStorerKey, @tExtScnData,
@@ -6421,6 +6495,8 @@ BEGIN
       BEGIN
          SET @nAction = 1
          DELETE FROM @tExtScnData
+         INSERT INTO @tExtScnData (Variable, Value) VALUES
+          ('@cSuggSKU',     @cSuggSKU)
          
          EXECUTE [RDT].[rdt_ExtScnEntry] 
             @cExtScnSP, 

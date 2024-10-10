@@ -36,6 +36,7 @@ GO
 /* 01-10-2014  1.1  Ung          Support multi language                       */
 /* 02-10-2018  1.2  Ung          INC0383981 V_Field need case sensitive in XML*/
 /* 17-10-2023  1.3  JLC042       Add DataType and Web Group                   */
+/* 2024-09-23  1.4  CYU027       FCR-808 Add Image + Type                     */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[isp_OldScn_to_NewScn] (
@@ -165,6 +166,9 @@ BEGIN
       IF @nPos = 0
          SET @nPos = CHARINDEX('v', @cFieldLabel)
 
+      IF @nPos = 0
+         SET @nPos = CHARINDEX('m', @cFieldLabel) -- Image
+
       SET @InpType = CASE SUBSTRING(@cFieldLabel, @nPos, 1)
             WHEN 'p'
                THEN 'p'
@@ -172,6 +176,8 @@ BEGIN
                THEN 'i'
             WHEN 'd'
                THEN 'd'
+            WHEN 'm'
+               THEN 'm'
             WHEN 'v'
                THEN 'i' -- Inverse is not used?
             END
