@@ -101,12 +101,20 @@ BEGIN
                   AND storerkey = @cStorerKey
                   AND status IN ('0','4'))
    BEGIN
+      /**
       SET @cReportType = 'PackInfLE2'
       
       INSERT INTO @tShipLabel (Variable, Value) VALUES 
       ( '@DropID',   CAST( @cParam1 AS NVARCHAR(20))),
       ( '@cStorerKey',  @cStorerKey), 
       ( '@cPickSlipNo', @cPickSlipNo)
+      **/
+      SET @cReportType = 'PackInfLE2'
+
+      INSERT INTO @tShipLabel (Variable, Value) VALUES 
+      ( '@cStorerKey',  @cStorerKey), 
+      ( '@cPickSlipNo', @cPickSlipNo), 
+      ( '@nCartonNo',   CAST( @cCartonNo AS NVARCHAR(10)))
    END
    ELSE IF @nTotalPackQty <> @nTotalCQty
    BEGIN
