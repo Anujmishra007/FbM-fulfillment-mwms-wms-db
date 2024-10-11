@@ -143,9 +143,7 @@ BEGIN
 				@c_ErrMsg  = @c_ErrMsg OUTPUT, 
 				@c_DeviceType = @c_DeviceType,
 				@c_DeviceID = @c_DeviceID,
-				@n_Func = @n_Func,
-				@cPTSZone = @cPTSZone,
-				@cLightcmd = @cLightcmd
+				@n_Func = @n_Func
 		END
 
       --SET @c_LightAddress = ''
