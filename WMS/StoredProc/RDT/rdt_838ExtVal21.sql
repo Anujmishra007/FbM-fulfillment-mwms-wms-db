@@ -15,7 +15,7 @@ GO
 /*                             if orders.userdefine02='G'               */
 /************************************************************************/
 
-CREATE PROC rdt.rdt_838ExtVal21 (
+CREATE OR ALTER PROC rdt.rdt_838ExtVal21 (
    @nMobile          INT,
    @nFunc            INT,
    @cLangCode        NVARCHAR( 3),
@@ -76,6 +76,7 @@ BEGIN
                select @nCount = count(1) from @tSKUs
                IF isnull(@nCount,0)>1
                BEGIN
+                  EXEC rdt.rdtSetFocusField @nMobile, 3 -- SKU
                   SET @nErrNo = 225951
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Not allow Mix SKU
                   GOTO Quit
