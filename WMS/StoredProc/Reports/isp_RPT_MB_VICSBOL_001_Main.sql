@@ -13,7 +13,7 @@ GO
 /*        :                                                                            */
 /* Called By: RPT_MB_VICSBOL_001_Main                                                  */
 /*          :                                                                          */
-/* Github Version: 1.1                                                                 */
+/* Github Version: 1.4                                                                 */
 /*                                                                                     */
 /* Version: 7.0                                                                        */
 /*                                                                                     */
@@ -24,6 +24,9 @@ GO
 /* 18-Jun-2024 WLChooi  1.0   DevOps Combine Script                                    */
 /* 01-Oct-2024 WLChooi  1.1   FCR-920 - Add new fields (WL01)                          */
 /* 08-Oct-2024 CalvinK  1.2   FCR-956 - Change OtherReference to VoyageNumber (CLVN01) */
+/* 09-Oct-2024 CalvinK  1.3   FCR-956 - ShipFrom Address mapping change (CLVN02)       */
+/* 09-Oct-2024 WLChooi  1.4   FCR-968 - Change Mapping (WL02)                          */
+/* 10-Oct-2024 GHUI     1.5   FCR-968 - Change Mapping (GH01)                          */ 
 /***************************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[isp_RPT_MB_VICSBOL_001_Main]
 (
@@ -62,12 +65,14 @@ BEGIN
                  , MBOL.DRIVERName
                  , MBOL.VesselQualifier
                  , MBOL.BookingReference
-                 , Remarks = CONVERT(NVARCHAR(2000), MBOL.Remarks)
+                 , Remarks = CONVERT(NVARCHAR(2000), Storer2.Notes1)   --GH01 
                  , ORDERS.UserDefine02
                  , ORDERS.ConsigneeKey
                  , ShipCompany = ISNULL(TRIM(STORER.Company), '') + ' ' + ISNULL(RTRIM(FACILITY.UserDefine10), '')
-                 , ShipAddress = ISNULL(TRIM(FACILITY.Descr), '')
-                 , ShipAddress2 = CONCAT(TRIM(FACILITY.UserDefine01), ', ' + TRIM(FACILITY.UserDefine03), ', ' + TRIM(FACILITY.UserDefine04))
+                -- , ShipAddress = ISNULL(TRIM(FACILITY.Descr), '')                                                                                    --(CLVN02) 
+                -- , ShipAddress2 = CONCAT(TRIM(FACILITY.UserDefine01), ', ' + TRIM(FACILITY.UserDefine03), ', ' + TRIM(FACILITY.UserDefine04))        --(CLVN02) 
+                 , ShipAddress = ISNULL(TRIM(FACILITY.Address1), '')                                                                                   --(CLVN02) 
+                 , ShipAddress2 = CONCAT(TRIM(FACILITY.City), ', ' + TRIM(FACILITY.State), ', ' + TRIM(FACILITY.Zip))                                  --(CLVN02)
                  , C_Company = ISNULL(TRIM(Storer2.Company), TRIM(ORDERS.C_Company))
                  , C_Address = CONCAT(TRIM(ORDERS.C_Address1), TRIM(ORDERS.C_Address2), TRIM(ORDERS.C_Address3), TRIM(ORDERS.C_Address4))
                  , C_Address2 = CONCAT(TRIM(ORDERS.C_City), ', ' + TRIM(ORDERS.C_State), ', ' + TRIM(ORDERS.C_Zip))
@@ -87,7 +92,7 @@ BEGIN
                  , MBOL.TransMethod
                  , Storer4.Company AS carrier_company
                  , MBOL.CarrierKey
-                 , MBOL.ContainerNo
+                 , ContainerNo = MBOL.Vessel   --WL02
                  , MBOL.SealNo
                  , LocationNo = ISNULL(ORDERS.C_contact1, '')   --WL01
                  , CustomerNo = ISNULL(ORDERS.BillToKey, '')    --WL01
