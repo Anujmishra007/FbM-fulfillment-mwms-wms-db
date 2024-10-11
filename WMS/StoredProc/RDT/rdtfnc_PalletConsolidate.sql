@@ -133,6 +133,7 @@ DECLARE
    @nFromStep           INT,
    
    @cGenID              NVARCHAR(20), -- LJQ006 FCR-877
+   @tExtData            VariableTable,
    @cAutoID             NVARCHAR(18), --LJQ006 FCR-877
 
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),
@@ -1415,6 +1416,7 @@ BEGIN
             @nStep,
             @cLangCode,
             @cGenID,
+            @tExtData,
             @cAutoID    OUTPUT,
             @nErrNo     OUTPUT,
             @cErrMsg    OUTPUT
@@ -2639,6 +2641,7 @@ BEGIN
             @nStep,
             @cLangCode,
             @cGenID,
+            @tExtData,
             @cAutoID    OUTPUT,
             @nErrNo     OUTPUT,
             @cErrMsg    OUTPUT
