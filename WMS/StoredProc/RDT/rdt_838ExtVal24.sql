@@ -78,8 +78,8 @@ BEGIN
                      AND CartonNo = @nCartonNo
                IF NOT EXISTS(SELECT 1 from @tSKUs where SKU=@cSKU)
                   INSERT INTO @tSKUs(SKU) VALUES(@cSKU)
-               SELECT @nCount = count(1) FROM @tSKUs
-               IF isnull(@nCount,0)>1
+               SELECT @nCount = COUNT(1) FROM @tSKUs
+               IF ISNULL(@nCount,0)>1
                BEGIN
                   EXEC rdt.rdtSetFocusField @nMobile, 3 -- SKU
                   SET @nErrNo = 225951
