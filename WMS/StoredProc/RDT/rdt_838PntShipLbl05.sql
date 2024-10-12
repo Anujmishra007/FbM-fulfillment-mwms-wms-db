@@ -555,7 +555,7 @@ BEGIN
                         GOTO Quit
                   END
                END  --END of BTD or Logi
-               ELSE IF CHARINDEX('SFTP',@cSourceType)>0
+               ELSE IF @cSourceType = 'SFTP'
                BEGIN
                   --for Packlist print(Step 6) via SFTP
                   --CommercialInvoice	Commercial Invoice	   SFTP PDF from customer     PACKLIST
@@ -575,9 +575,9 @@ BEGIN
                   END
                   SELECT @cFilePath=ltrim(rtrim(@cFilePath))
                   IF RIGHT(@cFilePath,1) IN ('\','/')
-                     SELECT @cPrintDataFile = @cFilePath +REPLACE( REPLACE(REPLACE(@cFileName,'<code>',@cLabelName),'<ExterOderkey>',@cOrderKey),'<ExternOderkey>',@cOrderKey)
+                     SELECT @cPrintDataFile = @cFilePath + REPLACE(REPLACE(@cFileName,'<code>',@cLabelName),'<ExternOrderkey>',@cExternOrderKey)
                   ELSE
-                     SELECT @cPrintDataFile = @cFilePath + '/' +REPLACE( REPLACE(REPLACE(@cFileName,'<code>',@cLabelName),'<ExterOderkey>',@cOrderKey),'<ExternOderkey>',@cOrderKey)
+                     SELECT @cPrintDataFile = @cFilePath + '/' + REPLACE(REPLACE(@cFileName,'<code>',@cLabelName),'<ExternOrderkey>',@cExternOrderKey)
                   EXEC MASTER.DBO.isp_URLEncode
                      @c_InputString = @cPrintDataFile,
                      @c_OutputString = @cPrintDataFileEncode OUTPUT,
