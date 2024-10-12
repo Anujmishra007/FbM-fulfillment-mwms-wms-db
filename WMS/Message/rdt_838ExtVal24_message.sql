@@ -1,4 +1,4 @@
--- rdt_838ExtVal21
+-- rdt_838ExtVal24
 execute rdt.rdtDropMsg 225951  , 226000		
 
 execute rdt.rdtAddMsg 225951, 10, '225951Not allow Mix SKU', 'us_english', 838

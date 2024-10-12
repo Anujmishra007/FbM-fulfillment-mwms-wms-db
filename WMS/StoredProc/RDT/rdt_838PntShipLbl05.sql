@@ -143,6 +143,12 @@ BEGIN
             SELECT TOP 1 @cConsigneyKey = ConsigneeKey, @cExternOrderKey = ExternOrderKey
             FROM ORDERS WITH(NOLOCK) 
             WHERE Orders.orderKey = @cOrderKey
+            IF ISNULL(@cExternOrderKey, '') = '' 
+            BEGIN
+               SET @nErrNo = 225859
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Invalid ExternOrderkey
+               GOTO Quit
+            END            
             /*
             * Search CODELKUP via @tCodes
             */
@@ -188,9 +194,11 @@ BEGIN
                         @cOrderKey = @cOrderKey
                   END TRY
                   BEGIN CATCH
+                     DECLARE @cSQLErrorMessage nvarchar(max)
+                     SELECT @cSQLErrorMessage = ERROR_MESSAGE()
                      SET @nErrNo = 225856
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP')      -- Invalid Condition
-                     EXEC rdt.rdtInsertMsgQueue @nMobile, 0, '', '', @cErrMsg, @cLabelName, @cCondition
+                     EXEC rdt.rdtInsertMsgQueue @nMobile, 0, '', '', @cErrMsg, @cLabelName, @cCondition, cSQLErrorMessage
                      GOTO Quit
                   END CATCH
                END
@@ -419,6 +427,12 @@ BEGIN
             SELECT TOP 1 @cConsigneyKey = ConsigneeKey, @cExternOrderKey = ExternOrderKey
             FROM ORDERS WITH(NOLOCK) 
             WHERE Orders.orderKey = @cOrderKey
+            IF ISNULL(@cExternOrderKey, '') = '' 
+            BEGIN
+               SET @nErrNo = 225859
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Invalid ExternOrderkey
+               GOTO Quit
+            END               
             /*
             * Search CODELKUP via @tCodes
             */

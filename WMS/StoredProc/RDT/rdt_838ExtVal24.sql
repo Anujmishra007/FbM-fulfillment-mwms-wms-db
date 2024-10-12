@@ -6,7 +6,7 @@ SET ANSI_NULLS OFF
 GO
 
 /************************************************************************/
-/* Store procedure: rdt_838ExtVal21                                     */
+/* Store procedure: rdt_838ExtVal24                                     */
 /* Copyright      : LF Logistics                                        */
 /* CLIENT         : Huda Beauty                                         */
 /*                                                                      */
@@ -15,7 +15,7 @@ GO
 /*                             if orders.userdefine02='G'               */
 /************************************************************************/
 
-CREATE OR ALTER PROC rdt.rdt_838ExtVal21 (
+CREATE OR ALTER PROC rdt.rdt_838ExtVal24 (
    @nMobile          INT,
    @nFunc            INT,
    @cLangCode        NVARCHAR( 3),
@@ -97,5 +97,5 @@ GO
 SET ANSI_NULLS ON
 GO
 
-GRANT EXECUTE ON RDT.rdt_838ExtVal02 TO NSQL
+GRANT EXECUTE ON RDT.rdt_838ExtVal24 TO NSQL
 GO
