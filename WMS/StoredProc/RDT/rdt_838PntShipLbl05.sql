@@ -7,6 +7,7 @@ GO
 /******************************************************************************/
 /* Store procedure: rdt_838PntShipLbl05                                       */
 /* Copyright      : Maersk                                                    */
+/* CLIENT         : Huda Beauty                                               */
 /*                                                                            */
 /* Date       Rev  Author     Purposes                                        */
 /* 09-10-2024 1.0  YYS027     FCR-861-Maersk_V2 Huda_RDT Print labels after   */
