@@ -567,12 +567,12 @@ BEGIN
                      GOTO Quit
                   END
                   SELECT @cReportType = @cLabelName
-                  IF NOT @cReportType IN ('CInvoice')
-                  BEGIN
-                     SET @nErrNo = 225855
-                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Invalid Label Name
-                     GOTO Quit
-                  END
+                  --IF NOT @cReportType IN ('CInvoice')
+                  --BEGIN
+                  --   SET @nErrNo = 225855
+                  --   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Invalid Label Name
+                  --   GOTO Quit
+                  --END
                   SELECT @cFilePath=ltrim(rtrim(@cFilePath))
                   IF RIGHT(@cFilePath,1) IN ('\','/')
                      SELECT @cPrintDataFile = @cFilePath + REPLACE(REPLACE(@cFileName,'<code>',@cLabelName),'<ExternOrderkey>',@cExternOrderKey)
