@@ -53,6 +53,11 @@ BEGIN
    SET QUOTED_IDENTIFIER OFF
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
+   declare @bDebugFlag    BINARY = 0
+
+   SELECT @nErrNo= ISNULL(@nErrNo,0)
+   IF @bDebugFlag = 1 
+     select  'Enter rdt_838ExtVal24' as Title
 
    IF @nFunc = 838 -- Pack
    BEGIN
@@ -73,7 +78,7 @@ BEGIN
                      AND CartonNo = @nCartonNo
                IF NOT EXISTS(SELECT 1 from @tSKUs where SKU=@cSKU)
                   INSERT INTO @tSKUs(SKU) VALUES(@cSKU)
-               select @nCount = count(1) from @tSKUs
+               SELECT @nCount = count(1) FROM @tSKUs
                IF isnull(@nCount,0)>1
                BEGIN
                   EXEC rdt.rdtSetFocusField @nMobile, 3 -- SKU
@@ -88,7 +93,8 @@ BEGIN
    END
 
 Quit:
-
+   IF @bDebugFlag = 1 
+     select  'exit rdt_838ExtVal24' as Title
 END
 GO
 

@@ -91,7 +91,7 @@ BEGIN
       --Print Job
       @cJobStatus    NVARCHAR(1) = '9',
       @nJobID        INT,
-      @bDebugFlag    BINARY = 0
+      @bDebugFlag    INT = 0
 
    DECLARE @cOrderKey         NVARCHAR( 20)
    DECLARE @cConsigneyKey     NVARCHAR( 20)
@@ -116,6 +116,9 @@ BEGIN
    DECLARE @bPrinting   BIT
    DECLARE @c_VbErrMsg  NVARCHAR( MAX)
    
+   IF @bDebugFlag > 0 
+     select  'Enter rdt_838PntShipLbl05' as Title, @nStep as Step,@nInputKey as InputKey, @cOption as [Option]
+
    IF @nStep = 5 -- Print Ship label
    BEGIN
       IF @nInputKey = 1 -- ENTER
@@ -141,14 +144,18 @@ BEGIN
             Recovery consigney Key from order
             */
             SELECT TOP 1 @cConsigneyKey = ConsigneeKey, @cExternOrderKey = ExternOrderKey
-            FROM ORDERS WITH(NOLOCK) 
-            WHERE Orders.orderKey = @cOrderKey
+               FROM ORDERS WITH(NOLOCK) 
+               WHERE Orders.orderKey = @cOrderKey
+
+            IF @bDebugFlag = 5 
+               SELECT 'Query ExternOrderKey' as Title, @cExternOrderKey as ExternOrderKey,@cOrderKey as OrderKey, @cLabelPrinter as LabelPrinter, @cPaperPrinter as PaperPrinter
+
             IF ISNULL(@cExternOrderKey, '') = '' 
             BEGIN
                SET @nErrNo = 225859
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Invalid ExternOrderkey
                GOTO Quit
-            END            
+            END   
             /*
             * Search CODELKUP via @tCodes
             */
@@ -175,7 +182,7 @@ BEGIN
                   @cPrinterType  = PrinterType
                FROM @tCodes WHERE RowId=@nRowID
                
-               IF @bDebugFlag = 1
+               IF @bDebugFlag = 5
                   SELECT 'Code:', @cLabelName AS LabelName, @cSourceType AS SourceType, @cCondition AS Condition, @cLabelSize AS LabelSize,
                            @cFilePath AS FilePath, @cFileName AS FileName, @cPrinterType AS PrinterType
                -----handle condition checking------------
@@ -186,7 +193,7 @@ BEGIN
                BEGIN                                                                      --@cCondition, is sql-where-statement for orders
                   SET @cSQL = 'SELECT @iRetCount=count(1) FROM orders WHERE orders.OrderKey = @cOrderKey AND ' + @cCondition
                   SET @cSQLParam = N'@iRetCount INT OUTPUT, @cOrderKey VARCHAR(20)'
-                  IF @bDebugFlag = 1 
+                  IF @bDebugFlag = 5 
                      select  @cSQL as SQL
                   BEGIN TRY
                      EXEC sp_ExecuteSQL @cSQL, @cSQLParam, 
@@ -209,14 +216,15 @@ BEGIN
                --RawBox	Raw Box Label for IRF Orders 	      BTD                        SHP         ***
                IF @iRetCount=0
                BEGIN
-                  PRINT 'condition is not matched'
+                  IF @bDebugFlag = 5 
+                     SELECT 'condition is not matched:' +@cLabelName + ' - ' + @cCondition
                END
                ELSE IF @cSourceType = 'Logi' OR @cSourceType = 'BTD'
                BEGIN
                   SELECT @cReportType = @cLabelName, @bPrinting=0
                   -- Common params
                   DELETE @tReportParams
-                  IF @cReportType='ShipConsignee'
+                  IF @cReportType='ShipConsig'
                   BEGIN
                      INSERT INTO @tReportParams (Variable, Value) VALUES
                         ( '@cStorerKey',     @cStorerKey),
@@ -225,6 +233,7 @@ BEGIN
                         ( '@cPackDtlDropID', @cPackDtlDropID),
                         ( '@cLabelNo',       @cLabelNo),
                         ( '@nCartonNo',      CAST( @nCartonNo AS NVARCHAR(10)))
+                        --@cPickSlipNo	@nCartonNo
                      SET @bPrinting = 1
                   END
                   else if @cReportType='UAEBox'
@@ -249,6 +258,8 @@ BEGIN
                         ( '@nCartonNo',      CAST( @nCartonNo AS NVARCHAR(10)))
                      SET @bPrinting = 1
                   END
+                  IF @bDebugFlag = 5 
+                     select @cReportType as ReportType, @bPrinting as Printing
                   if @bPrinting = 1
                   BEGIN
                      -- Print label
@@ -309,8 +320,8 @@ BEGIN
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- URLEncode Failure
                      BREAK
                   END
-                  IF @bDebugFlag = 1
-                     SELECT 'Print Data File', @cPrintDataFile as DataFile, @cPrintDataFileEncode as DataFileEncode
+                  IF @bDebugFlag = 5
+                     SELECT 'Print Data File', @cPrintDataFile as DataFile, @cPrintDataFileEncode as DataFileEncode,@cReportType as ReportType
                   -----BEGIN of cloud print---------------
                   SET @cPrinter = @cLabelPrinter            --for Screen 5(Ship Label), the printer Type should be label
                   --Verify printer
@@ -354,7 +365,7 @@ BEGIN
                   SET   @cCloudClientPrinterID = CASE WHEN ISNULL(@cCloudClientPrinterID  , '') = '' THEN '' ELSE @cCloudClientPrinterID   END
 
                   -- Insert print job
-                  IF @bDebugFlag = 1
+                  IF @bDebugFlag = 5
                      SELECT 'Create Print Job', @cReportType AS RptType, @cPrinter AS Printer, @nRptNoOfCopy AS NoOfCopy, @cPrintDataFileEncode AS PrintData,
                               @cDCropHeight AS width, @cDCropHeight AS height, @cIsLandScape AS IsLandScape, @cIsDuplex AS IsDuplex, @cIsColor AS IsColor,
                               @cIsCollate AS IsCollate, @cPaperSize AS PaperSize, @cCloudClientPrinterID AS CloudClientID
@@ -385,7 +396,7 @@ BEGIN
                         @c_ErrMsg = @cErrMsg OUTPUT,
                         @c_PrintData = @cPrintDataFileEncode
 
-                  IF @bDebugFlag = 1
+                  IF @bDebugFlag = 5
                      SELECT 'Submit to cloud print', @nJobID AS JobID, @cJobStatus AS JobStatus, @b_Success AS bSuccess, @nErrNo AS ErrNo, @cErrMsg AS ErrMsg
 
                   IF @b_Success <> 1
@@ -459,7 +470,7 @@ BEGIN
                   @cPrinterType  = PrinterType
                FROM @tCodes WHERE RowId=@nRowID
                
-               IF @bDebugFlag = 1
+               IF @bDebugFlag = 6
                   SELECT 'Code:', @cLabelName AS LabelName, @cSourceType AS SourceType, @cCondition AS Condition, @cLabelSize AS LabelSize,
                            @cFilePath AS FilePath, @cFileName AS FileName, @cPrinterType AS PrinterType
                -----handle condition checking------------
@@ -470,7 +481,7 @@ BEGIN
                BEGIN                                                                      --@cCondition, is sql where statement for orders
                   SET @cSQL = 'SELECT @iRetCount=count(1) FROM orders WHERE orders.OrderKey = @cOrderKey AND ' + @cCondition
                   SET @cSQLParam = N'@iRetCount INT OUTPUT, @cOrderKey VARCHAR(20)'
-                  IF @bDebugFlag = 1 
+                  IF @bDebugFlag = 6 
                      select  @cSQL as SQL
                   BEGIN TRY
                      EXEC sp_ExecuteSQL @cSQL, @cSQLParam, 
@@ -488,7 +499,8 @@ BEGIN
                SET @bPrinting = 0
                IF @iRetCount=0
                BEGIN
-                  PRINT 'Condition is not matched'
+                  IF @bDebugFlag = 6
+                     SELECT 'condition is not matched:' +@cLabelName + ' - ' + @cCondition
                END
                ELSE IF @cSourceType='Logi' OR @cSourceType='BTD'
                BEGIN
@@ -509,7 +521,7 @@ BEGIN
                         ( '@nCartonNo',      CAST( @nCartonNo AS NVARCHAR(10)))
                      SET @bPrinting = 1
                   END
-                  else if @cReportType='Packinglist'
+                  else if @cReportType='PackList'
                   BEGIN
                      INSERT INTO @tReportParams (Variable, Value) VALUES
                         ( '@cStorerKey',     @cStorerKey),
@@ -520,6 +532,7 @@ BEGIN
                         ( '@nCartonNo',      CAST( @nCartonNo AS NVARCHAR(10)))
                      SET @bPrinting = 1
                   END
+                  SELECT @cReportType as ReportType, @bPrinting as Printing
                   if @bPrinting = 1
                   BEGIN
                      -- Print label
@@ -535,7 +548,7 @@ BEGIN
                         @cPaperPrinter,
                         @cReportType, -- Report type
                         @tReportParams, -- Report params
-                        'rdtfnc_Pack',
+                        'rdt_838PntShipLbl05',
                         @nErrNo  OUTPUT,
                         @cErrMsg OUTPUT
                      IF @nErrNo <> 0
@@ -554,7 +567,7 @@ BEGIN
                      GOTO Quit
                   END
                   SELECT @cReportType = @cLabelName
-                  IF NOT @cReportType IN ('CommercialInvoice')
+                  IF NOT @cReportType IN ('CInvoice')
                   BEGIN
                      SET @nErrNo = 225855
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Invalid Label Name
@@ -570,20 +583,18 @@ BEGIN
                      @c_OutputString = @cPrintDataFileEncode OUTPUT,
                      @c_VbErrMsg = @c_VbErrMsg OUTPUT
 
+                  IF @bDebugFlag = 6
+                     SELECT 'Print Data File', @cPrintDataFile as DataFile, @cPrintDataFileEncode as DataFileEncode, @cLabelName LabelName,@c_VbErrMsg as ErrMsg, @cPaperPrinter as PaperPrinter
+
                   IF ISNULL(@c_VbErrMsg,'') <> ''
                   BEGIN
                      SET @nErrNo = 225857
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- URLEncode Failure
                      BREAK
                   END
-                  IF @bDebugFlag = 1
-                     SELECT 'Print Data File', @cPrintDataFile as DataFile, @cPrintDataFileEncode as DataFileEncode
                   -----BEGIN of cloud print---------------
 
-                  IF CHARINDEX('Label',@cPrinterType)>0
-                     SET @cPrinter = @cLabelPrinter
-                  ELSE
-                     SET @cPrinter = @cPaperPrinter
+                  SET @cPrinter = @cPaperPrinter         --for Pack list, the printer should be PaperPrinter
                   --Verify printer
                   SELECT @cCloudClientPrinterID= CloudPrintClientID
                   FROM rdt.rdtprinter WITH (NOLOCK) 
@@ -615,6 +626,13 @@ BEGIN
                      AND Storerkey = @cStorerKey
                      AND Function_ID = @nFunc
 
+                  --IF @@ROWCOUNT = 0
+                  --BEGIN
+                  --   SET @nErrNo = 225860
+                  --   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- PrinterNotExists
+                  --   GOTO Quit
+                  --END
+
                   SET   @cDCropWidth    = CASE WHEN ISNULL(@cDCropWidth , '') = '' THEN '' ELSE @cDCropWidth  END
                   SET   @cDCropHeight   = CASE WHEN ISNULL(@cDCropHeight, '') = '' THEN '' ELSE @cDCropHeight END
                   SET   @cIsLandScape   = CASE WHEN ISNULL(@cIsLandScape, '') = '' THEN '' ELSE @cIsLandScape END
@@ -625,7 +643,7 @@ BEGIN
                   SET   @cCloudClientPrinterID = CASE WHEN ISNULL(@cCloudClientPrinterID  , '') = '' THEN '' ELSE @cCloudClientPrinterID   END
 
                   -- Insert print job
-                  IF @bDebugFlag = 1
+                  IF @bDebugFlag = 6
                      SELECT 'Create Print Job', @cReportType AS RptType, @cPrinter AS Printer, @nRptNoOfCopy AS NoOfCopy, @cPrintDataFileEncode AS PrintData,
                               @cDCropHeight AS width, @cDCropHeight AS height, @cIsLandScape AS IsLandScape, @cIsDuplex AS IsDuplex, @cIsColor AS IsColor,
                               @cIsCollate AS IsCollate, @cPaperSize AS PaperSize, @cCloudClientPrinterID AS CloudClientID
@@ -656,7 +674,7 @@ BEGIN
                         @c_ErrMsg = @cErrMsg OUTPUT,
                         @c_PrintData = @cPrintDataFileEncode
 
-                  IF @bDebugFlag = 1
+                  IF @bDebugFlag = 6
                      SELECT 'Submit to cloud print', @nJobID AS JobID, @cJobStatus AS JobStatus, @b_Success AS bSuccess, @nErrNo AS ErrNo, @cErrMsg AS ErrMsg
 
                   IF @b_Success <> 1
@@ -673,7 +691,8 @@ BEGIN
    END  --end of step 6
 
 Quit:
-
+   IF @bDebugFlag >0 
+     select  'exit rdt_838PntShipLbl05' as Title
 END
 GO
 
