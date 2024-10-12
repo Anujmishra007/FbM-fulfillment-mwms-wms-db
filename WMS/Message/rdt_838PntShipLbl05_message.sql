@@ -10,6 +10,7 @@ EXECUTE rdt.rdtAddMsg 225856, 10, '225856Invalid Condition', 'us_english', 838
 EXECUTE rdt.rdtAddMsg 225857, 10, '225857URLEncode Failure', 'us_english', 838
 EXECUTE rdt.rdtAddMsg 225858, 10, '225858INS PrnJobFail', 'us_english', 838
 EXECUTE rdt.rdtAddMsg 225859, 10, '225859Invalid ExternOrderkey', 'us_english', 838
+EXECUTE rdt.rdtAddMsg 225860, 10, '225860Invalid RptDtl', 'us_english', 838
 
 
 SELECT * FROM RDT.RDTMSG (NOLOCK) WHERE MESSAGE_ID BETWEEN 225851 AND 225900

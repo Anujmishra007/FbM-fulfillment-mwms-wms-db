@@ -86,7 +86,8 @@ GO
 /* 2024-07-08   6.2 Jackc       FCR-392 Add ext scn entry and codes                             */
 /* 2024-07-08   6.3 JHU151      FCR-330 SSCC code generator                                     */
 /* 2024-08-22   6.4 JCH507      FCR-392 Add errno handling to step3>ESC>ExtUpd                  */
-/* 2024-10-12   6.5 YYS027      FCR-861-Add support CstLabelSP for Pack List Printing(Step 6)   */ 
+/* 2024-10-12   6.5 YYS027      FCR-861 Add support CstLabelSP for Pack List Printing(Step 6)   */ 
+/*                              similiar with ship-label printing(Step 5)*/
 /************************************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_Pack] (
