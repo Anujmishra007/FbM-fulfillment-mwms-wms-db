@@ -53,7 +53,7 @@ BEGIN
    SET QUOTED_IDENTIFIER OFF
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
-   DECLARE @bDebugFlag    BINARY = 0
+   DECLARE @bDebugFlag    BINARY = 0         -- 1 debug
 
    SELECT @nErrNo= ISNULL(@nErrNo,0)
    IF @bDebugFlag = 1 

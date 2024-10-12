@@ -92,7 +92,7 @@ BEGIN
       --Print Job
       @cJobStatus    NVARCHAR(1) = '9',
       @nJobID        INT,
-      @bDebugFlag    INT = 0
+      @bDebugFlag    INT = 0           --5 debug for Ship label, 6 debug for pack list
 
    DECLARE @cOrderKey         NVARCHAR( 20)
    DECLARE @cConsigneyKey     NVARCHAR( 20)
