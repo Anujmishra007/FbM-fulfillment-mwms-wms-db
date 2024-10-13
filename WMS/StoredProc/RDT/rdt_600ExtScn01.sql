@@ -119,61 +119,6 @@ BEGIN
                      AND RD.Sku = @cSKU
                   ORDER BY RD.ReceiptLineNumber
                END
-               -- FCR-911 Display PUOM in receiptdetail
-               IF rdt.RDTGetConfig( @nFunc, 'RcptUoM', @cStorerKey) = '1'
-               BEGIN
-                  SELECT @cMUOM_Desc = pack.PackUOM3,
-                     @cPackKey = pack.PackKey
-                  FROM dbo.SKU sku WITH (NOLOCK)
-                     INNER JOIN dbo.Pack pack WITH (NOLOCK) ON (sku.PackKey = pack.PackKey)
-                  WHERE SKU.StorerKey = @cStorerKey
-                     AND SKU.SKU = @cSKU
-                  
-                  SELECT TOP 1 @cPUOM_Desc = ISNULL(rd.UOM, @cMUOM_Desc)
-                  FROM dbo.RECEIPTDETAIL rd WITH (NOLOCK)
-                     INNER JOIN dbo.PACK pk WITH (NOLOCK) ON rd.PackKey = pk.PackKey
-                  WHERE rd.ReceiptKey = @cReceiptKey
-                     AND rd.ReceiptLineNumber = '00001'
-
-                  -- when pd uom equals to master uom, only show one input box
-                  IF (@cPUOM_Desc = @cMUOM_Desc)
-                  BEGIN
-                     SET @cFieldAttr08 = 'O'
-                  END
-                  ELSE
-                  BEGIN
-                    SET @cFieldAttr08 = ''
-                  END
-                     
-                  SET @cOutField06 = rdt.rdtRightAlign( @cPUOM_Desc, 5)
-                  SET @cOutField07 = rdt.rdtRightAlign( @cMUOM_Desc, 5)
-
-                  DELETE FROM @tTmpPackUom;
-                  INSERT INTO @tTmpPackUom (UomDesc, UomQty)
-                  (
-                     SELECT PackUOM1, CaseCnt FROM dbo.PACK WITH(NOLOCK) WHERE PackKey = @cPackKey
-                     UNION ALL
-                     SELECT PackUOM2, InnerPack FROM dbo.PACK WITH(NOLOCK) WHERE PackKey = @cPackKey
-                     UNION ALL
-                     SELECT PackUOM3, Qty FROM dbo.PACK WITH(NOLOCK) WHERE PackKey = @cPackKey
-                     UNION ALL
-                     SELECT PackUOM4, Pallet FROM dbo.PACK WITH(NOLOCK) WHERE PackKey = @cPackKey
-                     UNION ALL
-                     SELECT PackUOM5, [Cube] FROM dbo.PACK WITH(NOLOCK) WHERE PackKey = @cPackKey
-                     UNION ALL
-                     SELECT PackUOM6, GrossWgt FROM dbo.PACK WITH(NOLOCK) WHERE PackKey = @cPackKey
-                     UNION ALL
-                     SELECT PackUOM7, NetWgt FROM dbo.PACK WITH(NOLOCK) WHERE PackKey = @cPackKey
-                     UNION ALL
-                     SELECT PackUOM8, OtherUnit1 FROM dbo.PACK WITH(NOLOCK) WHERE PackKey = @cPackKey
-                     UNION ALL
-                     SELECT PackUOM9, OtherUnit2 FROM dbo.PACK WITH(NOLOCK) WHERE PackKey = @cPackKey
-                  )
-
-                  SELECT TOP 1 @nPUOM_Div = UomQty FROM @tTmpPackUom WHERE UomDesc = @cPUOM_Desc
-
-                  SET @cOutField05 = '1:' + CASE WHEN @nPUOM_Div > 99999 THEN '*' ELSE CAST( @nPUOM_Div AS NCHAR( 5)) END
-               END
             END
          END
          IF @nInputKey = 0
@@ -189,54 +134,6 @@ BEGIN
                      AND R.ReceiptKey = @cReceiptKey AND (@cPOKey='NOPO' or RD.POKey = @cPOKey)
                      AND RD.Sku = @cSKU
                   ORDER BY RD.ReceiptLineNumber
-               END
-               -- FCR-911 Display PUOM in receiptdetail
-               IF rdt.RDTGetConfig( @nFunc, 'RcptUoM', @cStorerKey) = '1'
-               BEGIN
-                  SELECT @cMUOM_Desc = pack.PackUOM3,
-                     @cPackKey = pack.PackKey
-                  FROM dbo.SKU sku WITH (NOLOCK)
-                     INNER JOIN dbo.Pack pack WITH (NOLOCK) ON (sku.PackKey = pack.PackKey)
-                  WHERE SKU.StorerKey = @cStorerKey
-                     AND SKU.SKU = @cSKU
-                  
-                  SELECT TOP 1 @cPUOM_Desc = ISNULL(rd.UOM, @cMUOM_Desc)
-                  FROM dbo.RECEIPTDETAIL rd WITH (NOLOCK)
-                     INNER JOIN dbo.PACK pk WITH (NOLOCK) ON rd.PackKey = pk.PackKey
-                  WHERE rd.ReceiptKey = @cReceiptKey
-                     AND rd.ReceiptLineNumber = '00001'
-
-                  -- when pd uom equals to master uom, only show one input box
-                  IF @cPUOM_Desc = @cMUOM_Desc
-                     SET @cFieldAttr08 = 'O'
-                     
-                  SET @cOutField08 = @cPUOM_Desc
-
-                  DELETE FROM @tTmpPackUom;
-                  INSERT INTO @tTmpPackUom (UomDesc, UomQty)
-                  (
-                     SELECT PackUOM1, CaseCnt FROM dbo.PACK WITH(NOLOCK) WHERE PackKey = @cPackKey
-                     UNION ALL
-                     SELECT PackUOM2, InnerPack FROM dbo.PACK WITH(NOLOCK) WHERE PackKey = @cPackKey
-                     UNION ALL
-                     SELECT PackUOM3, Qty FROM dbo.PACK WITH(NOLOCK) WHERE PackKey = @cPackKey
-                     UNION ALL
-                     SELECT PackUOM4, Pallet FROM dbo.PACK WITH(NOLOCK) WHERE PackKey = @cPackKey
-                     UNION ALL
-                     SELECT PackUOM5, [Cube] FROM dbo.PACK WITH(NOLOCK) WHERE PackKey = @cPackKey
-                     UNION ALL
-                     SELECT PackUOM6, GrossWgt FROM dbo.PACK WITH(NOLOCK) WHERE PackKey = @cPackKey
-                     UNION ALL
-                     SELECT PackUOM7, NetWgt FROM dbo.PACK WITH(NOLOCK) WHERE PackKey = @cPackKey
-                     UNION ALL
-                     SELECT PackUOM8, OtherUnit1 FROM dbo.PACK WITH(NOLOCK) WHERE PackKey = @cPackKey
-                     UNION ALL
-                     SELECT PackUOM9, OtherUnit2 FROM dbo.PACK WITH(NOLOCK) WHERE PackKey = @cPackKey
-                  )
-
-                  SELECT TOP 1 @nPUOM_Div = UomQty FROM @tTmpPackUom WHERE UomDesc = @cPUOM_Desc
-
-                  SET @cOutField05 = '1:' + CASE WHEN @nPUOM_Div > 99999 THEN '*' ELSE CAST( @nPUOM_Div AS NCHAR( 5)) END
                END
             END
          END
