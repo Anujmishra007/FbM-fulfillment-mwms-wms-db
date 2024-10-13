@@ -83,16 +83,7 @@ BEGIN
    @cLott10              NVARCHAR( 30),
    @cSKUReceived         NVARCHAR( 20),
    @cDamagedCode         NVARCHAR(30),
-   @cExpiredCode         NVARCHAR(30),
-   @cPUOM_Desc           NVARCHAR(10), -- LJQ006 FCR911
-   @cMUOM_Desc           NVARCHAR(10), -- LJQ006 FCR911
-   @nPUOM_Div           INT -- LJQ006 FCR911
-   
-   DECLARE @tTmpPackUom TABLE (
-      UomDesc NVARCHAR(10),
-      UomQty  FLOAT
-   );
-   DECLARE @cPackKey    NVARCHAR(10);
+   @cExpiredCode         NVARCHAR(30)
 
    SELECT
    @cLott10 = C_String1,
