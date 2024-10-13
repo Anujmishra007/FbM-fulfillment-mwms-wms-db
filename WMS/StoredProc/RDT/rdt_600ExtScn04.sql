@@ -138,6 +138,7 @@ BEGIN
                
                SET @cUDF04 = @cRcptUoM
                SET @cUDF05 = @nUOM_Div
+               SET @cUDF07 = @cRcptUomDesc
                SET @cOutField05 = '1:' + CASE WHEN @nUOM_Div > 99999 THEN '*' ELSE CAST( @nUOM_Div AS NCHAR( 5)) END
                SET @cOutField06 = rdt.rdtRightAlign( @cRcptUomDesc, 5)
 

@@ -2506,7 +2506,7 @@ BEGIN
          BEGIN
             SET @cPUOM = @cUDF04
             SET @nPUOM_Div = CAST(ISNULL(@cUDF05,1) AS INT)
-            SET @cPUOM_Desc = @cUDF06
+            SET @cPUOM_Desc = @cUDF07
          END
       END
    END
@@ -4208,7 +4208,7 @@ BEGIN
             BEGIN
                SET @cPUOM = @cUDF04
                SET @nPUOM_Div = CAST(ISNULL(@cUDF05,1) AS INT)
-               SET @cPUOM_Desc = @cUDF06
+               SET @cPUOM_Desc = @cUDF07
             END
          END
       END
