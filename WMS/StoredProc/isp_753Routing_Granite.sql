@@ -1,9 +1,8 @@
-   SET ANSI_NULLS ON
-   GO
 
-   SET QUOTED_IDENTIFIER ON
-   GO
-
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
 
 /***************************************************************************************/
 /* Store Procedure:  isp_753Routing_Granite                                            */
@@ -25,7 +24,7 @@
 /* 2024-08-10   Shong       1.0         Created                                        */
 /* 2024-10-14   Shong       1.1         Adding Valication for Pickup date Userdefine02 */
 /***************************************************************************************/
-CREATE OR ALTER PROCEDURE isp_753Routing_Granite
+ALTER   PROCEDURE [dbo].[isp_753Routing_Granite]
    @c_WaveKey NVARCHAR(10),
    @b_Success INT OUTPUT,
    @n_err     INT OUTPUT,
@@ -75,7 +74,7 @@ BEGIN
    BEGIN 
       SELECT @n_continue = 3;
       SELECT @n_err = 500253;
-      SELECT @c_errmsg='NSQL' + CONVERT(char(6), @n_err) + ': Wrong Date Format, Correct Format is (MM/DD/YYYY). (isp_753Routing_Granite)';
+      SELECT @c_errmsg='NSQL' + CONVERT(char(6), @n_err) + ': Wrong Date Format - ' + @d_PicUpDate + ', Correct Format is (MM/DD/YYYY). (isp_753Routing_Granite)';
       GOTO RETURN_SP; 
    END     
 
@@ -237,7 +236,8 @@ BEGIN
 
       DECLARE CUR_CODELKUP_QUERY CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
       SELECT SortOrder= CASE WHEN CLK.Code2 = '' THEN '999' ELSE CLK.Code2 END,
-            CLK.UDF01, CLK.UDF02, CLK.Notes, CLK.UDF03
+            CLK.UDF01, CLK.UDF02, ISNULL(TRIM(CLK.Notes), '') AS SQLCondition, 
+            CLK.UDF03
       FROM dbo.CODELKUP CLK WITH (NOLOCK) 
       WHERE CLK.LISTNAME = 'DYNROUTE'
       AND CLK.Code=@c_BillToKey
@@ -260,11 +260,14 @@ BEGIN
                           'WHERE WAVE.WaveKey = ''' + @c_WaveKey + ''' '  + CHAR(13) +
                           '  AND ORDERS.BillToKey = ''' + @c_BillToKey + ''' '  + CHAR(13)  
          
-         IF CHARINDEX('AND ', LTRIM(@c_SQLFilter), 1) = 1 
-            SET @c_SQL = @c_SQL + @c_SQLFilter
-         ELSE 
-            SET @c_SQL = @c_SQL + ' AND ' + @c_SQLFilter
-         
+         IF TRIM(@c_SQLFilter) <> ''
+         BEGIN
+            IF CHARINDEX('AND ', LTRIM(@c_SQLFilter), 1) = 1 
+               SET @c_SQL = @c_SQL + @c_SQLFilter
+            ELSE 
+               SET @c_SQL = @c_SQL + ' AND ' + @c_SQLFilter
+         END 
+
          IF @b_Debug = 1
          BEGIN
             PRINT @c_SQL
