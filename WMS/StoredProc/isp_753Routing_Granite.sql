@@ -20,7 +20,6 @@ GO
 /*                                                                                     */
 /* Updates:                                                                            */
 /* Date         Author      Ver         Purposes                                       */
-/* YYYY-DD-MM   {author}    {ver}       Close Cursor                                   */
 /* 2024-08-10   Shong       1.0         Created                                        */
 /* 2024-10-14   Shong       1.1         Adding Valication for Pickup date Userdefine02 */
 /***************************************************************************************/
