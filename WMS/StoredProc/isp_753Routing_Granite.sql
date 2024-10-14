@@ -1,4 +1,4 @@
-﻿   SET ANSI_NULLS ON
+   SET ANSI_NULLS ON
    GO
 
    SET QUOTED_IDENTIFIER ON
@@ -23,6 +23,7 @@
 /* Date         Author      Ver         Purposes                                       */
 /* YYYY-DD-MM   {author}    {ver}       Close Cursor                                   */
 /* 2024-08-10   Shong       1.0         Created                                        */
+/* 2024-10-14   Shong       1.1         Adding Valication for Pickup date Userdefine02 */
 /***************************************************************************************/
 CREATE OR ALTER PROCEDURE isp_753Routing_Granite
    @c_WaveKey NVARCHAR(10),
@@ -49,10 +50,47 @@ BEGIN
          , @n_Continue        INT = 1
          , @n_StartTranCnt    INT
          , @b_Debug           INT = 0 
+         , @d_PicUpDate       DATETIME
+         , @c_UserDefine02    NVARCHAR(20)
          
 
    SET @n_Continue = 1
    SELECT @n_StartTranCnt = @@TRANCOUNT
+
+   SET @c_UserDefine02 = ''
+   SELECT @c_UserDefine02 = ISNULL(TRIM(UserDefine02),'')
+   FROM WAVE WITH (NOLOCK)
+   WHERE WaveKey = @c_WaveKey
+
+   IF @c_UserDefine02 = ''
+   BEGIN 
+      SELECT @n_continue = 3;
+      SELECT @n_err = 562751;
+      SELECT @c_errmsg='NSQL' + CONVERT(char(6), @n_err) + ': Pickup Date (UserDefine02) cannot be BLANK. (isp_753Routing_Granite)';
+      GOTO RETURN_SP; 
+   END   
+
+   SET DATEFORMAT mdy;
+   IF ISDATE(@c_UserDefine02) <> 1
+   BEGIN 
+      SELECT @n_continue = 3;
+      SELECT @n_err = 500253;
+      SELECT @c_errmsg='NSQL' + CONVERT(char(6), @n_err) + ': Wrong Date Format, Correct Format is (MM/DD/YYYY). (isp_753Routing_Granite)';
+      GOTO RETURN_SP; 
+   END     
+
+   -- Check if date fall under Suturday (7) or Sunday (1)
+   SET @d_PicUpDate = TRY_CAST (@c_UserDefine02 AS Datetime)
+   IF @d_PicUpDate IS NOT NULL 
+   BEGIN
+      IF DATEPART(weekday, @d_PicUpDate) IN (1,7)
+      BEGIN 
+         SELECT @n_continue = 3;
+         SELECT @n_err = 500254;
+         SELECT @c_errmsg='NSQL' + CONVERT(char(6), @n_err) + ': The pick-up date cannot fall on a Saturday or Sunday. (isp_753Routing_Granite)';
+         GOTO RETURN_SP; 
+      END   
+   END 
 
    DECLARE CUR_BillToKey CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
    SELECT Distinct O.BillToKey, O.StorerKey 
