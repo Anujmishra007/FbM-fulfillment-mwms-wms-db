@@ -99,7 +99,7 @@ BEGIN
    BEGIN
       IF @nInputKey = 1
       BEGIN
-         IF @nStep = 4 
+         IF @nStep IN (4, 8) 
          BEGIN
             IF @cRcptUomConf = 1
             BEGIN
