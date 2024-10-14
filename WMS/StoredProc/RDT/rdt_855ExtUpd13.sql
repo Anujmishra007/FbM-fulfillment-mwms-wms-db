@@ -389,8 +389,8 @@ BEGIN
                      AND ISNULL(pkd.CaseID, '') = @cDropID
                      AND wod.ExternLineNo <> ''
 
-                  INSERT INTO @tLabels(WorkOrderKey, WorkOrderLineNumber, LabelListName, VASCode, LabelName, Qty, PrintSequence)
-                  SELECT DISTINCT wod.WorkOrderKey, wod.WorkOrderLineNumber, IIF(lk1.LISTNAME IS NULL, lk.LISTNAME, lk1.LISTNAME), wod.Type, IIF(lk1.LISTNAME IS NULL, lk.UDF01, lk1.UDF01), pakd.Qty, lk.Code
+                  INSERT INTO @tLabels(LabelListName, VASCode, LabelName, Qty, PrintSequence)
+                  SELECT DISTINCT IIF(lk1.LISTNAME IS NULL, lk.LISTNAME, lk1.LISTNAME), wod.Type, IIF(lk1.LISTNAME IS NULL, lk.UDF01, lk1.UDF01), pakd.Qty, lk.Code
                   FROM (SELECT StorerKey, WorkOrderKey, ExternWorkOrderKey, ExternLineNo, WorkOrderLineNumber, Type
                         FROM
                            (SELECT 
@@ -586,7 +586,6 @@ BEGIN
                         INNER JOIN dbo.PackInfo PI WITH(NOLOCK) 
                            ON PH.PickSlipNo = PI.PickSlipNo
                         WHERE ISNULL(PI.RefNo, '') = @cDropID
-                           AND PI.StorerKey = @cStorerkey
                      END
 
                      IF TRIM(@cShipperKey) <> ''
