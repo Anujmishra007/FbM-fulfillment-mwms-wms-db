@@ -41,7 +41,6 @@ AS
       @nLoopIndex                INT,
       @nRowCount                 INT,
       @tPriceLabelList           VariableTable,
-      @cPickSlipNo               NVARCHAR( 10),
       @cLabelPrinterGroup        NVARCHAR( 10),
       @cPaperPrinter             NVARCHAR( 10),
       @cPickConfirmStatus        NVARCHAR( 1),
@@ -122,11 +121,6 @@ AS
    FROM RDT.RDTMOBREC WITH(NOLOCK)
    WHERE Mobile = @nMobile
 
-   SELECT @cPickSlipNo = PickSlipNo
-   FROM dbo.PackDetail WITH(NOLOCK) 
-   WHERE StorerKey = @cStorerKey 
-   AND labelno = @cDropID
-
    INSERT INTO @tLabels(LabelName)
    SELECT DISTINCT IIF(wodEX.UDF01 IS NULL, lk.UDF01, wodEX.UDF01)
    FROM dbo.WorkOrderDetail wod  WITH(NOLOCK)
@@ -174,7 +168,6 @@ AS
 
       INSERT INTO @tPriceLabelList (Variable, Value) 
       VALUES 
-         ( '@cPickSlipNo', @cPickSlipNo),
          ( '@cLabelNo', @cDropID),
          ( '@cSKU', @cSKU)
 

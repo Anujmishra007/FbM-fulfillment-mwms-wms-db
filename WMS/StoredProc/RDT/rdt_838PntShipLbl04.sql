@@ -100,7 +100,6 @@ BEGIN
             -- Common params
             INSERT INTO @tCartonLabelList (Variable, Value) VALUES
             ( '@cStorerKey',     @cStorerKey),
-            ( '@cPickSlipNo',    @cPickSlipNo),
             ( '@cOrderKey',      @cOrderKey),
             ( '@cLabelNo',       @cLabelNo)
 

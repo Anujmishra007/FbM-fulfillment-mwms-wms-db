@@ -45,7 +45,6 @@ AS
       @cCustLabelDataDesc        NVARCHAR(30),
       @cCustomCode               NVARCHAR(30),
       @cPickConfirmStatus        NVARCHAR( 1),
-      @cPickSlipNo               NVARCHAR( 10),
       @cLabelPrinterGroup        NVARCHAR( 10),
       @cLabelName                NVARCHAR( 30),
       @cPaperPrinter             NVARCHAR( 10),
@@ -105,14 +104,8 @@ AS
       GOTO Quit
    END
 
-   SELECT @cPickSlipNo = PickSlipNo
-   FROM dbo.PackDetail WITH(NOLOCK) 
-   WHERE StorerKey = @cStorerKey 
-      AND labelno = @cDropID
-
    INSERT INTO @tCartonLabelList (Variable, Value) 
    VALUES 
-         ( '@cPickSlipNo', @cPickSlipNo),
          ( '@cLabelNo', @cDropID)
 
    INSERT INTO @tDefaultLabels (code2, UDF01, Short, Code)

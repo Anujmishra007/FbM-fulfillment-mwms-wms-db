@@ -16,6 +16,7 @@ GO
 /* 2024-06-18 1.0  NLT013   FCR-386. Created                                  */
 /* 2024-08-06 1.1  Dennis   FCR-386. Remove order group condition             */
 /* 2024-09-26 1.2  NLT013   UWP-24932 Error message UI issue                  */
+/* 2024-10-12 1.3  NLT013   Enhancement, PPA by LabelNo, instead of PickSLipNo*/
 /******************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_855ExtUpd13 (
@@ -137,11 +138,6 @@ BEGIN
             WHERE StorerKey = @cStorerKey
                AND DropID = @cDropID
                AND Sku = @cSKU
-
-            SELECT @cPickSlipNo = PickSlipNo
-            FROM dbo.PackDetail WITH(NOLOCK) 
-            WHERE StorerKey = @cStorerKey 
-            AND labelno = @cDropID
 
             --Audit finished
             --1. Display all VAS code and print labels
@@ -446,7 +442,6 @@ BEGIN
 
                         INSERT INTO @tPriceLabelList (Variable, Value) 
                         VALUES 
-                           ( '@cPickSlipNo', @cPickSlipNo),
                            ( '@cLabelNo', @cDropID),
                            ( '@cSKU', @cSKU)
 
@@ -470,7 +465,6 @@ BEGIN
                         -- Common params
                         INSERT INTO @tcatelogLabelList (Variable, Value) 
                         VALUES 
-                           ( '@cPickSlipNo', @cPickSlipNo),
                            ( '@cLabelNo', @cDropID),
                            ( '@cSKU', @cSKU)
 
@@ -494,7 +488,6 @@ BEGIN
                         -- Common params
                         INSERT INTO @tNormalLabelList (Variable, Value)
                         VALUES 
-                           ( '@cPickSlipNo', @cPickSlipNo),
                            ( '@cLabelNo', @cDropID),
                            ( '@cSKU', @cSKU)
 
@@ -554,8 +547,7 @@ BEGIN
                      --Mark PackInfo as PACKED
                      UPDATE dbo.PackInfo WITH(ROWLOCK)
                      SET CartonStatus = 'PACKED'
-                     WHERE PickSlipNo = @cPickSlipNo
-                        AND ISNULL(RefNo, '') = @cDropID
+                     WHERE ISNULL(RefNo, '') = @cDropID
 
                      --Calculate carton weight
                      DECLARE @tCartonWeight TABLE
@@ -572,7 +564,7 @@ BEGIN
                         INNER JOIN dbo.PackInfo PKI WITH(NOLOCK) ON CART.CartonType = ISNULL(PKI.CartonType, '')
                         INNER JOIN dbo.PickDetail PKD WITH(NOLOCK) ON ISNULL(PKI.RefNo, '') = ISNULL(PKD.CaseID, '-1') 
                         INNER JOIN dbo.SKU SKU WITH(NOLOCK) ON PKD.StorerKey = SKU.StorerKey AND PKD.Sku = SKU.Sku
-                        WHERE PKI.PickSlipNo = @cPickSlipNo
+                        WHERE PKD.CaseID = @cDropID
                            AND PKD.StorerKey = @cStorerKey
                            AND PKD.Status = @cPickConfirmStatus
                         GROUP BY PKD.CaseID, CART.CartonWeight) AS t
@@ -581,16 +573,20 @@ BEGIN
                      SET PI.Weight = CW.Weight
                      FROM dbo.PackInfo PI
                      INNER JOIN @tCartonWeight CW ON ISNULL(PI.RefNo, '') = CW.CaseID
-                     WHERE PI.PickSlipNo = @cPickSlipNo
+                     WHERE ISNULL(PI.RefNo, '') = @cDropID
 
                      --If all Packedinfo are marked as PACKED, mark PackHeader as 9
-                     IF (SELECT COUNT(1) FROM dbo.PackInfo WITH(NOLOCK) WHERE PickSlipNo = @cPickSlipNo)
+                     IF (SELECT COUNT(1) FROM dbo.PackInfo WITH(NOLOCK) WHERE ISNULL(RefNo, '') = @cDropID)
                         =
-                        (SELECT COUNT(1) FROM dbo.PackInfo WITH(NOLOCK) WHERE PickSlipNo = @cPickSlipNo AND ISNULL(CartonStatus, '') = 'PACKED')
+                        (SELECT COUNT(1) FROM dbo.PackInfo WITH(NOLOCK) WHERE ISNULL(RefNo, '') = @cDropID AND ISNULL(CartonStatus, '') = 'PACKED')
                      BEGIN
-                        UPDATE dbo.PackHeader WITH(ROWLOCK)
-                        SET Status = '9'
-                        WHERE PickSlipNo = @cPickSlipNo
+                        UPDATE PH
+                        SET PH.Status = '9'
+                        FROM dbo.PackHeader PH WITH(ROWLOCK)
+                        INNER JOIN dbo.PackInfo PI WITH(NOLOCK) 
+                           ON PH.PickSlipNo = PI.PickSlipNo
+                        WHERE ISNULL(PI.RefNo, '') = @cDropID
+                           AND PI.StorerKey = @cStorerkey
                      END
 
                      IF TRIM(@cShipperKey) <> ''
@@ -690,18 +686,11 @@ BEGIN
                   @cDefaultLabelName         NVARCHAR(30),
                   @cCustLabelDataDesc        NVARCHAR(30),
                   @cCustomCode               NVARCHAR(30)
-                  
-
-               SELECT @cPickSlipNo = PickSlipNo
-               FROM dbo.PackDetail WITH(NOLOCK) 
-               WHERE StorerKey = @cStorerKey 
-                  AND labelno = @cDropID
 
                DECLARE @tCartonLabelList VariableTable
                INSERT INTO @tCartonLabelList (Variable, Value) 
                VALUES 
-                     ( '@cPickSlipNo', @cPickSlipNo),
-                     ( '@cLabelNo', @cDropID)
+                  ( '@cLabelNo', @cDropID)
 
                DECLARE @tDefaultLabels TABLE
                (
@@ -904,16 +893,10 @@ BEGIN
 
                   IF @cLabelName <> ''
                   BEGIN
-                     SELECT @cPickSlipNo = PickSlipNo
-                     FROM dbo.PackDetail WITH(NOLOCK) 
-                     WHERE StorerKey = @cStorerKey 
-                        AND labelno = @cDropID
-                        
                      DECLARE @tCQCLabelList VariableTable
                      -- Common params
                      INSERT INTO @tCQCLabelList (Variable, Value) 
                      VALUES 
-                        ( '@cPickSlipNo', @cPickSlipNo),
                         ( '@cLabelNo', @cDropID)
 
                      -- Print label
