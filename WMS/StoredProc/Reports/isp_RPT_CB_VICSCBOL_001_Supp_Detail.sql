@@ -3,27 +3,28 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-/************************************************************************/
-/* SP: isp_RPT_CB_VICSCBOL_001_Supp_Detail                              */
-/* Creation Date: 06-Sep-2024                                           */
-/* Copyright: Maersk                                                    */
-/* Written by: WLChooi                                                  */
-/*                                                                      */
-/* Purpose: UWP-24135 & FCR-798 - NAM|Maersk Logi Report|LVSUSA| Migrate*/
-/*          VICS CBOL report to Maersk WMS V2 for Granite Project       */
-/*        :                                                             */
-/* Called By: RPT_CB_VICSCBOL_001_Supp_Detail                           */
-/*          :                                                           */
-/* Github Version: 1.0                                                  */
-/*                                                                      */
-/* Version: 7.0                                                         */
-/*                                                                      */
-/* Data Modifications:                                                  */
-/*                                                                      */
-/* Updates:                                                             */
-/* Date        Author   Ver   Purposes                                  */
-/* 06-Sep-2024 WLChooi  1.0   DevOps Combine Script                     */
-/************************************************************************/
+/********************************************************************************/
+/* SP: isp_RPT_CB_VICSCBOL_001_Supp_Detail                                      */
+/* Creation Date: 06-Sep-2024                                                   */
+/* Copyright: Maersk                                                            */
+/* Written by: WLChooi                                                          */
+/*                                                                              */
+/* Purpose: UWP-24135 & FCR-798 - NAM|Maersk Logi Report|LVSUSA| Migrate        */
+/*          VICS CBOL report to Maersk WMS V2 for Granite Project               */
+/*        :                                                                     */
+/* Called By: RPT_CB_VICSCBOL_001_Supp_Detail                                   */
+/*          :                                                                   */
+/* Github Version: 1.0                                                          */
+/*                                                                              */
+/* Version: 7.0                                                                 */
+/*                                                                              */
+/* Data Modifications:                                                          */
+/*                                                                              */
+/* Updates:                                                                     */
+/* Date        Author   Ver   Purposes                                          */
+/* 06-Sep-2024 WLChooi  1.0   DevOps Combine Script                             */
+/* 11-Oct-2024 CalvinK  1.1   FCR-995 Change ExternOrderkey to BuyerPO (CLVN01) */
+/********************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[isp_RPT_CB_VICSCBOL_001_Supp_Detail]
 (
    @n_Cbolkey  BIGINT
@@ -82,7 +83,8 @@ BEGIN
    ELSE
    BEGIN
       ;WITH CTE (ExternOrderKey, userDefine03, PKG, [WEIGHT], PALLETS, CBOLReference) AS (
-         SELECT ORDERS.ExternOrderKey,
+         --SELECT ORDERS.ExternOrderKey, --(CLVN01)
+         SELECT ORDERS.BuyerPO,			 --(CLVN01)
                 'Dept: ' + TRIM(ORDERS.userDefine03),
                 PKG = SUM(CONVERT(INT, PK.TTLCTN)),          
                 [WEIGHT] = SUM(MBOLDETAIL.[Weight]),        
@@ -98,7 +100,8 @@ BEGIN
                         WHERE PH.Orderkey = ORDERS.Orderkey ) AS PK
           WHERE ( MBOL.Cbolkey = @n_Cbolkey   ) 
           AND ( ISNULL(MBOL.Cbolkey, 0) <> 0 )
-          GROUP BY ORDERS.ExternOrderKey, 
+          --GROUP BY ORDERS.ExternOrderKey, --(CLVN01)
+          GROUP BY ORDERS.BuyerPO,	        --(CLVN01)
                    ORDERS.userDefine03,
                    CBOL.CBOLReference 
          )
