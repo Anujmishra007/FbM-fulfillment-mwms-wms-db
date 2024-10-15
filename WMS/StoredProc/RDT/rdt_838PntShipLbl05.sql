@@ -78,7 +78,9 @@ BEGIN
       @cTargetDB              NVARCHAR( 20),
       @cDataWindow            NVARCHAR( 50),
       @cPrintDataFile         NVARCHAR( MAX),
+      @cPrintDataFileEncrypt  NVARCHAR( MAX),
       @cPrintDataFileEncode   NVARCHAR( MAX),
+      @cPrintDataFileFull     NVARCHAR( MAX),
       @cCloudClientPrinterID  NVARCHAR( 100),
       @cDCropWidth            NVARCHAR( 10)= '' ,
       @cDCropHeight           NVARCHAR( 10)= '',
@@ -88,7 +90,7 @@ BEGIN
       @cIsCollate             NVARCHAR( 1) = '',
       @cPaperSize             NVARCHAR( 20),
       @cPDFPreview            NVARCHAR( 20),
-
+      @cWebRequestURL         NVARCHAR( MAX),
       --Print Job
       @cJobStatus    NVARCHAR(1) = '9',
       @nJobID        INT,
@@ -162,7 +164,7 @@ BEGIN
             */
             DELETE @tCodes
             INSERT INTO @tCodes(RowId, LabelName, SourceType, Condition, LabelSize, FilePath, FileName, PrinterType)
-               SELECT RANK() OVER(ORDER BY code) as RowId, code, Short, Notes, UDF01, UDF02, UDF03, code2 
+               SELECT RANK() OVER(ORDER BY code) AS RowId, code, Short, Notes, UDF01, UDF02, UDF03, code2 
                FROM CODELKUP WITH (NOLOCK) 
                WHERE listname = 'PACKPRTCON'
                   AND storerkey = @cStorerKey
@@ -195,14 +197,14 @@ BEGIN
                   SET @cSQL = 'SELECT @iRetCount=count(1) FROM orders WHERE orders.OrderKey = @cOrderKey AND ' + @cCondition
                   SET @cSQLParam = N'@iRetCount INT OUTPUT, @cOrderKey VARCHAR(20)'
                   IF @bDebugFlag = 5 
-                     select  @cSQL as SQL
+                     SELECT  @cSQL as SQL
                   BEGIN TRY
                      EXEC sp_ExecuteSQL @cSQL, @cSQLParam, 
-                        @iRetCount = @iRetCount output,
+                        @iRetCount = @iRetCount OUTPUT,
                         @cOrderKey = @cOrderKey
                   END TRY
                   BEGIN CATCH
-                     DECLARE @cSQLErrorMessage nvarchar(max)
+                     DECLARE @cSQLErrorMessage NVARCHAR(max)
                      SELECT @cSQLErrorMessage = ERROR_MESSAGE()
                      SET @nErrNo = 225856
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP')      -- Invalid Condition
@@ -237,7 +239,7 @@ BEGIN
                         --@cPickSlipNo	@nCartonNo
                      SET @bPrinting = 1
                   END
-                  else if @cReportType='UAEBox'
+                  ELSE IF @cReportType='UAEBox'
                   BEGIN
                      INSERT INTO @tReportParams (Variable, Value) VALUES
                         ( '@cStorerKey',     @cStorerKey),
@@ -248,7 +250,7 @@ BEGIN
                         ( '@nCartonNo',      CAST( @nCartonNo AS NVARCHAR(10)))
                      SET @bPrinting = 1
                   END
-                  else if @cReportType='RawBox'
+                  ELSE IF @cReportType='RawBox'
                   BEGIN
                      INSERT INTO @tReportParams (Variable, Value) VALUES
                         ( '@cStorerKey',     @cStorerKey),
@@ -260,8 +262,8 @@ BEGIN
                      SET @bPrinting = 1
                   END
                   IF @bDebugFlag = 5 
-                     select @cReportType as ReportType, @bPrinting as Printing
-                  if @bPrinting = 1
+                     SELECT @cReportType AS ReportType, @bPrinting AS Printing
+                  IF @bPrinting = 1
                   BEGIN
                      -- Print label
                      EXEC RDT.rdt_Print 
@@ -302,6 +304,19 @@ BEGIN
                   --   GOTO Quit
                   --END
 
+                  --Check Web Service cfg
+                  SELECT @cWebRequestURL = WebRequestURL
+                  FROM WebServiceCfg WITH (NOLOCK)
+                  WHERE DataProcess = 'FNGETFILE'
+                     AND ActiveFlag = 1
+
+                  IF ISNULL(@cWebRequestURL, '') = ''
+                  BEGIN
+                     SET @nErrNo = 225862
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- MissWebSrvc
+                     GOTO Quit
+                  END
+
                   --file name(need to replace <code> as actual code value, replace <ExterOrderkey> as actual externorderkey
                   SELECT @cFilePath=ltrim(rtrim(@cFilePath))
                   IF RIGHT(@cFilePath,1) IN ('\','/')
@@ -309,9 +324,17 @@ BEGIN
                   ELSE
                      SELECT @cPrintDataFile = @cFilePath + '/' + REPLACE(REPLACE(@cFileName,'<code>',@cLabelName),'<ExternOrderKey>',@cExternOrderKey)
 
+                  BEGIN TRY
+                     SELECT @cPrintDataFileEncrypt = MASTER.DBO.fnc_CryptoEncrypt(cPrintDataFile, '')           --refer from rdt_593PrntCldFile01
+                  END TRY
+                  BEGIN CATCH
+                     SET @nErrNo = 225861
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Failed to encrypt file path
+                     BREAK
+                  END CATCH
 
                   EXEC MASTER.DBO.isp_URLEncode
-                     @c_InputString = @cPrintDataFile,
+                     @c_InputString = @cPrintDataFileEncrypt,
                      @c_OutputString = @cPrintDataFileEncode OUTPUT,
                      @c_VbErrMsg = @c_VbErrMsg OUTPUT
 
@@ -321,8 +344,11 @@ BEGIN
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- URLEncode Failure
                      BREAK
                   END
+                  --Build Full URL
+                  SET @cPrintDataFileFull = @cWebRequestURL + @c_OutputString
+
                   IF @bDebugFlag = 5
-                     SELECT 'Print Data File', @cPrintDataFile as DataFile, @cPrintDataFileEncode as DataFileEncode,@cReportType as ReportType
+                     SELECT 'Print Data File', @cPrintDataFile as DataFile,@cPrintDataFileEncrypt as DataFileEncrypt, @cPrintDataFileEncode as DataFileEncode,@cPrintDataFileFull as DataFileFull,@cReportType as ReportType
                   -----BEGIN of cloud print---------------
                   SET @cPrinter = @cLabelPrinter            --for Screen 5(Ship Label), the printer Type should be label
                   --Verify printer
@@ -367,7 +393,7 @@ BEGIN
 
                   -- Insert print job
                   IF @bDebugFlag = 5
-                     SELECT 'Create Print Job', @cReportType AS RptType, @cPrinter AS Printer, @nRptNoOfCopy AS NoOfCopy, @cPrintDataFileEncode AS PrintData,
+                     SELECT 'Create Print Job', @cReportType AS RptType, @cPrinter AS Printer, @nRptNoOfCopy AS NoOfCopy, @cPrintDataFileFull AS PrintData,
                               @cDCropHeight AS width, @cDCropHeight AS height, @cIsLandScape AS IsLandScape, @cIsDuplex AS IsDuplex, @cIsColor AS IsColor,
                               @cIsCollate AS IsCollate, @cPaperSize AS PaperSize, @cCloudClientPrinterID AS CloudClientID
 
@@ -375,7 +401,7 @@ BEGIN
                      JobName, ReportID, JobStatus, Datawindow, Parm1, Printer, NoOfCopy, Mobile, TargetDB, PrintData, JobType, StorerKey,
                      Function_ID, PaperSizeWxH, DCropWidth, DCropHeight, IsLandScape, IsColor, IsDuplex, IsCollate)
                   VALUES(
-                     'rdt_838PntShipLbl05', @cReportType, @cJobStatus, @cDataWindow, @cOrderKey, @cPrinter, @nRptNoOfCopy, @nMobile, DB_NAME(), @cPrintDataFileEncode, 'LogiReport', @cStorerKey,
+                     'rdt_838PntShipLbl05', @cReportType, @cJobStatus, @cDataWindow, @cOrderKey, @cPrinter, @nRptNoOfCopy, @nMobile, DB_NAME(), @cPrintDataFileFull, 'LogiReport', @cStorerKey,
                      @nFunc, @cPaperSize, @cDCropWidth, @cDCropHeight, @cIsLandScape, @cIsColor, @cIsDuplex, @cIsCollate)
 
                   SELECT @nJobID = SCOPE_IDENTITY(), @nErrNo = @@ERROR
@@ -395,7 +421,7 @@ BEGIN
                         @b_Success = @b_Success OUTPUT,
                         @n_Err  = @nErrNo OUTPUT,
                         @c_ErrMsg = @cErrMsg OUTPUT,
-                        @c_PrintData = @cPrintDataFileEncode
+                        @c_PrintData = @cPrintDataFileFull
 
                   IF @bDebugFlag = 5
                      SELECT 'Submit to cloud print', @nJobID AS JobID, @cJobStatus AS JobStatus, @b_Success AS bSuccess, @nErrNo AS ErrNo, @cErrMsg AS ErrMsg
@@ -412,7 +438,7 @@ BEGIN
          END   --IF @cOption = 1 -- Yes
       END
    END      --end of step 5
-   else IF @nStep = 6 -- Print Pack List
+   ELSE IF @nStep = 6 -- Print Pack List
    BEGIN
       IF @nInputKey = 1 -- ENTER
       BEGIN
@@ -426,7 +452,7 @@ BEGIN
             WHERE Mobile = @nMobile 
             
             /*Recovery Order*/
-            SELECT top 1 @cOrderKey = ph.OrderKey 
+            SELECT TOP 1 @cOrderKey = ph.OrderKey 
                FROM PackHeader ph WITH (NOLOCK) 
                JOIN PackDetail pd WITH (NOLOCK)
                ON ph.StorerKey = pd.StorerKey
@@ -511,7 +537,7 @@ BEGIN
                   SELECT @cReportType = @cLabelName, @bPrinting=0
                   -- Common params
                   DELETE @tReportParams
-                  if @cReportType='DGD'
+                  IF @cReportType='DGD'
                   BEGIN
                      INSERT INTO @tReportParams (Variable, Value) VALUES
                         ( '@cStorerKey',     @cStorerKey),
@@ -522,7 +548,7 @@ BEGIN
                         ( '@nCartonNo',      CAST( @nCartonNo AS NVARCHAR(10)))
                      SET @bPrinting = 1
                   END
-                  else if @cReportType='PackList'
+                  ELSE IF @cReportType='PackList'
                   BEGIN
                      INSERT INTO @tReportParams (Variable, Value) VALUES
                         ( '@cStorerKey',     @cStorerKey),
@@ -534,7 +560,7 @@ BEGIN
                      SET @bPrinting = 1
                   END
                   SELECT @cReportType as ReportType, @bPrinting as Printing
-                  if @bPrinting = 1
+                  IF @bPrinting = 1
                   BEGIN
                      -- Print label
                      EXEC RDT.rdt_Print 
@@ -574,18 +600,44 @@ BEGIN
                   --   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Invalid Label Name
                   --   GOTO Quit
                   --END
+
+                  --Check Web Service cfg
+                  SELECT @cWebRequestURL = WebRequestURL
+                  FROM WebServiceCfg WITH (NOLOCK)
+                  WHERE DataProcess = 'FNGETFILE'
+                     AND ActiveFlag = 1
+
+                  IF ISNULL(@cWebRequestURL, '') = ''
+                  BEGIN
+                     SET @nErrNo = 225862
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- MissWebSrvc
+                     GOTO Quit
+                  END
+
                   SELECT @cFilePath=ltrim(rtrim(@cFilePath))
                   IF RIGHT(@cFilePath,1) IN ('\','/')
                      SELECT @cPrintDataFile = @cFilePath + REPLACE(REPLACE(@cFileName,'<code>',@cLabelName),'<ExternOrderkey>',@cExternOrderKey)
                   ELSE
                      SELECT @cPrintDataFile = @cFilePath + '/' + REPLACE(REPLACE(@cFileName,'<code>',@cLabelName),'<ExternOrderkey>',@cExternOrderKey)
+
+                  BEGIN TRY
+                     SELECT @cPrintDataFileEncrypt = MASTER.DBO.fnc_CryptoEncrypt(cPrintDataFile, '')           --refer from rdt_593PrntCldFile01
+                  END TRY
+                  BEGIN CATCH
+                     SET @nErrNo = 225861
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Failed to encrypt file path
+                     BREAK
+                  END CATCH
+
                   EXEC MASTER.DBO.isp_URLEncode
-                     @c_InputString = @cPrintDataFile,
+                     @c_InputString = @cPrintDataFileEncrypt,
                      @c_OutputString = @cPrintDataFileEncode OUTPUT,
                      @c_VbErrMsg = @c_VbErrMsg OUTPUT
+                  --Build Full URL
+                  SET @cPrintDataFileFull = @cWebRequestURL + @c_OutputString
 
                   IF @bDebugFlag = 6
-                     SELECT 'Print Data File', @cPrintDataFile as DataFile, @cPrintDataFileEncode as DataFileEncode, @cLabelName LabelName,@c_VbErrMsg as ErrMsg, @cPaperPrinter as PaperPrinter
+                     SELECT 'Print Data File', @cPrintDataFile as DataFile,@cPrintDataFileEncrypt as DataFileEncrypt, @cPrintDataFileEncode as DataFileEncode,@cPrintDataFileFull as DataFileFull,@cReportType as ReportType
 
                   IF ISNULL(@c_VbErrMsg,'') <> ''
                   BEGIN
@@ -645,7 +697,7 @@ BEGIN
 
                   -- Insert print job
                   IF @bDebugFlag = 6
-                     SELECT 'Create Print Job', @cReportType AS RptType, @cPrinter AS Printer, @nRptNoOfCopy AS NoOfCopy, @cPrintDataFileEncode AS PrintData,
+                     SELECT 'Create Print Job', @cReportType AS RptType, @cPrinter AS Printer, @nRptNoOfCopy AS NoOfCopy, @cPrintDataFileFull AS PrintData,
                               @cDCropHeight AS width, @cDCropHeight AS height, @cIsLandScape AS IsLandScape, @cIsDuplex AS IsDuplex, @cIsColor AS IsColor,
                               @cIsCollate AS IsCollate, @cPaperSize AS PaperSize, @cCloudClientPrinterID AS CloudClientID
 
@@ -653,7 +705,7 @@ BEGIN
                      JobName, ReportID, JobStatus, Datawindow, Parm1, Printer, NoOfCopy, Mobile, TargetDB, PrintData, JobType, StorerKey,
                      Function_ID, PaperSizeWxH, DCropWidth, DCropHeight, IsLandScape, IsColor, IsDuplex, IsCollate)
                   VALUES(
-                     'rdt_838PntShipLbl05', @cReportType, @cJobStatus, @cDataWindow, @cOrderKey, @cPrinter, @nRptNoOfCopy, @nMobile, DB_NAME(), @cPrintDataFileEncode, 'LogiReport', @cStorerKey,
+                     'rdt_838PntShipLbl05', @cReportType, @cJobStatus, @cDataWindow, @cOrderKey, @cPrinter, @nRptNoOfCopy, @nMobile, DB_NAME(), @cPrintDataFileFull, 'LogiReport', @cStorerKey,
                      @nFunc, @cPaperSize, @cDCropWidth, @cDCropHeight, @cIsLandScape, @cIsColor, @cIsDuplex, @cIsCollate)
 
                   SELECT @nJobID = SCOPE_IDENTITY(), @nErrNo = @@ERROR
@@ -673,7 +725,7 @@ BEGIN
                         @b_Success = @b_Success OUTPUT,
                         @n_Err  = @nErrNo OUTPUT,
                         @c_ErrMsg = @cErrMsg OUTPUT,
-                        @c_PrintData = @cPrintDataFileEncode
+                        @c_PrintData = @cPrintDataFileFull
 
                   IF @bDebugFlag = 6
                      SELECT 'Submit to cloud print', @nJobID AS JobID, @cJobStatus AS JobStatus, @b_Success AS bSuccess, @nErrNo AS ErrNo, @cErrMsg AS ErrMsg
