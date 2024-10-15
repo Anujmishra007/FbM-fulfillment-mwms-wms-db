@@ -105,7 +105,7 @@ BEGIN
                SELECT @cReceiptKey = Value FROM @tExtScnData WHERE Variable = '@cReceiptKey'
                SELECT @cSKU = Value FROM @tExtScnData WHERE Variable = '@cSKU'
                SELECT @cMUOM_Desc = Value FROM @tExtScnData WHERE Variable = '@cMUOM_Desc'
-               SELECT @cPackKey = PackKey FROM dbo.SKU WITH(NOLOCK) WHERE SKU = @cSKU
+               SELECT @cPackKey = PackKey FROM dbo.SKU WITH(NOLOCK) WHERE SKU = @cSKU AND StorerKey = @cStorerKey
                -- insert all pack uoms into a table variable
                DELETE FROM @tTmpPackUom;
                INSERT INTO @tTmpPackUom (UomDesc, UomDiv, UomNo)
@@ -127,6 +127,7 @@ BEGIN
                FROM dbo.RECEIPTDETAIL WITH(NOLOCK)
                WHERE ReceiptKey = @cReceiptKey
                   AND Sku = @cSKU
+                  AND StorerKey = @cStorerKey
                ORDER BY ReceiptLineNumber ASC
                -- match the rcpt uom with pack uom and get the uom no
                SELECT TOP 1 
@@ -134,6 +135,7 @@ BEGIN
                   @nUOM_Div = UomDiv
                FROM @tTmpPackUom 
                WHERE UomDesc = @cRcptUomDesc
+                  AND UomDesc IS NOT NULL
                
                SET @cUDF04 = @cRcptUoM
                SET @cUDF05 = @nUOM_Div
