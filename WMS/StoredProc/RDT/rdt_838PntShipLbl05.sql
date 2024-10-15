@@ -168,7 +168,7 @@ BEGIN
                FROM CODELKUP WITH (NOLOCK) 
                WHERE listname = 'PACKPRTCON'
                   AND storerkey = @cStorerKey
-                  AND code2 = 'Label printer'              --Step 5, output label, so Printer Type should be 'label printer', according spec doc, the result should be 5 records, 3 are normal(logi and BTD), 2 are SFTP
+                  AND code2 = 'Label printer'              --Step 5, Printer Type should be 'label printer', according spec doc, the result should be 5 records, 3 are normal(logi and BTD), 2 are SFTP
             SELECT @nRowCount = COUNT(1) FROM @tCodes
             SELECT @nRowCount = ISNULL(@nRowCount,0), @nRowID=0
 
@@ -197,7 +197,7 @@ BEGIN
                   SET @cSQL = 'SELECT @iRetCount=count(1) FROM orders WHERE orders.OrderKey = @cOrderKey AND ' + @cCondition
                   SET @cSQLParam = N'@iRetCount INT OUTPUT, @cOrderKey VARCHAR(20)'
                   IF @bDebugFlag = 5 
-                     SELECT  @cSQL as SQL
+                     SELECT  @cSQL AS SQL
                   BEGIN TRY
                      EXEC sp_ExecuteSQL @cSQL, @cSQLParam, 
                         @iRetCount = @iRetCount OUTPUT,
@@ -348,13 +348,13 @@ BEGIN
                   SET @cPrintDataFileFull = @cWebRequestURL + @cPrintDataFileEncode
 
                   IF @bDebugFlag = 5
-                     SELECT 'Print Data File', @cPrintDataFile as DataFile,@cPrintDataFileEncrypt as DataFileEncrypt, @cPrintDataFileEncode as DataFileEncode,@cPrintDataFileFull as DataFileFull,@cReportType as ReportType
+                     SELECT 'Print Data File', @cPrintDataFile AS DataFile,@cPrintDataFileEncrypt AS DataFileEncrypt, @cPrintDataFileEncode AS DataFileEncode,@cPrintDataFileFull AS DataFileFull,@cReportType as ReportType
                   -----BEGIN of cloud print---------------
                   SET @cPrinter = @cLabelPrinter            --for Screen 5(Ship Label), the printer Type should be label
                   --Verify printer
                   SELECT @cCloudClientPrinterID= CloudPrintClientID
-                  FROM rdt.rdtprinter WITH (NOLOCK) 
-                  WHERE PrinterID = @cPrinter
+                     FROM rdt.rdtprinter WITH (NOLOCK) 
+                     WHERE PrinterID = @cPrinter
 
                   IF @@ROWCOUNT = 0
                   BEGIN
@@ -480,7 +480,7 @@ BEGIN
                FROM CODELKUP WITH (NOLOCK) 
                WHERE listname = 'PACKPRTCON'
                   AND storerkey = @cStorerKey
-                  AND code2 = 'Paper Printer'      --Step 6, output Pack list, so Printer Type should be 'paper printer', according spec doc, the result should be 3 records, 2 are normal(logi), 1 are SFTP
+                  AND code2 = 'Paper Printer'      --Step 6, Printer Type should be 'paper printer', according spec doc, the result should be 3 records, 2 are normal(logi), 1 are SFTP
             SELECT @nRowCount = COUNT(1) FROM @tCodes
             SELECT @nRowCount = ISNULL(@nRowCount,0), @nRowID=0
 
@@ -509,10 +509,10 @@ BEGIN
                   SET @cSQL = 'SELECT @iRetCount=count(1) FROM orders WHERE orders.OrderKey = @cOrderKey AND ' + @cCondition
                   SET @cSQLParam = N'@iRetCount INT OUTPUT, @cOrderKey VARCHAR(20)'
                   IF @bDebugFlag = 6 
-                     select  @cSQL as SQL
+                     SELECT  @cSQL AS SQL
                   BEGIN TRY
                      EXEC sp_ExecuteSQL @cSQL, @cSQLParam, 
-                        @iRetCount = @iRetCount output,
+                        @iRetCount = @iRetCount OUTPUT,
                         @cOrderKey = @cOrderKey
                   END TRY
                   BEGIN CATCH
@@ -559,7 +559,7 @@ BEGIN
                         ( '@nCartonNo',      CAST( @nCartonNo AS NVARCHAR(10)))
                      SET @bPrinting = 1
                   END
-                  SELECT @cReportType as ReportType, @bPrinting as Printing
+                  SELECT @cReportType AS ReportType, @bPrinting AS Printing
                   IF @bPrinting = 1
                   BEGIN
                      -- Print label
@@ -587,7 +587,7 @@ BEGIN
                   --for Packlist print(Step 6) via SFTP
                   --CommercialInvoice	Commercial Invoice	   SFTP PDF from customer     PACKLIST
                   --file name(need to replace <code> as actual code value, replace <ExterOderkey> as actual exterorderkey
-                  IF ISNULL(@cFilePath, '') = '' or ISNULL(@cFileName, '') = ''
+                  IF ISNULL(@cFilePath, '') = '' OR ISNULL(@cFileName, '') = ''
                   BEGIN
                      SET @nErrNo = 225851
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- GetFilePathFail
