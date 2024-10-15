@@ -325,7 +325,7 @@ BEGIN
                      SELECT @cPrintDataFile = @cFilePath + '/' + REPLACE(REPLACE(@cFileName,'<code>',@cLabelName),'<ExternOrderKey>',@cExternOrderKey)
 
                   BEGIN TRY
-                     SELECT @cPrintDataFileEncrypt = MASTER.DBO.fnc_CryptoEncrypt(cPrintDataFile, '')           --refer from rdt_593PrntCldFile01
+                     SELECT @cPrintDataFileEncrypt = MASTER.DBO.fnc_CryptoEncrypt(@cPrintDataFile, '')           --refer from rdt_593PrntCldFile01
                   END TRY
                   BEGIN CATCH
                      SET @nErrNo = 225861
@@ -345,7 +345,7 @@ BEGIN
                      BREAK
                   END
                   --Build Full URL
-                  SET @cPrintDataFileFull = @cWebRequestURL + @c_OutputString
+                  SET @cPrintDataFileFull = @cWebRequestURL + @cPrintDataFileEncode
 
                   IF @bDebugFlag = 5
                      SELECT 'Print Data File', @cPrintDataFile as DataFile,@cPrintDataFileEncrypt as DataFileEncrypt, @cPrintDataFileEncode as DataFileEncode,@cPrintDataFileFull as DataFileFull,@cReportType as ReportType
@@ -378,7 +378,7 @@ BEGIN
                            ,@cIsCollate   = IsCollate  
                            ,@cPaperSize   = PaperSizeWxH  
                   FROM rdt.rdtReportdetail (NOLOCK)
-                  Where reporttype = @cReportType
+                  WHERE reporttype = @cReportType
                      AND Storerkey = @cStorerKey
                      AND Function_ID = @nFunc
 
@@ -621,7 +621,7 @@ BEGIN
                      SELECT @cPrintDataFile = @cFilePath + '/' + REPLACE(REPLACE(@cFileName,'<code>',@cLabelName),'<ExternOrderkey>',@cExternOrderKey)
 
                   BEGIN TRY
-                     SELECT @cPrintDataFileEncrypt = MASTER.DBO.fnc_CryptoEncrypt(cPrintDataFile, '')           --refer from rdt_593PrntCldFile01
+                     SELECT @cPrintDataFileEncrypt = MASTER.DBO.fnc_CryptoEncrypt(@cPrintDataFile, '')           --refer from rdt_593PrntCldFile01
                   END TRY
                   BEGIN CATCH
                      SET @nErrNo = 225861
@@ -634,7 +634,7 @@ BEGIN
                      @c_OutputString = @cPrintDataFileEncode OUTPUT,
                      @c_VbErrMsg = @c_VbErrMsg OUTPUT
                   --Build Full URL
-                  SET @cPrintDataFileFull = @cWebRequestURL + @c_OutputString
+                  SET @cPrintDataFileFull = @cWebRequestURL + @cPrintDataFileEncode
 
                   IF @bDebugFlag = 6
                      SELECT 'Print Data File', @cPrintDataFile as DataFile,@cPrintDataFileEncrypt as DataFileEncrypt, @cPrintDataFileEncode as DataFileEncode,@cPrintDataFileFull as DataFileFull,@cReportType as ReportType
