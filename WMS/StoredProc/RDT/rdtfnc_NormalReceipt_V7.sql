@@ -2502,7 +2502,7 @@ BEGIN
             SET @nPUOM_Div = CAST(ISNULL(@cUDF02,1) AS INT)
             SET @cPUOM = @cUDF03
          END
-         IF @nStep = 6 AND @cExtScnSP = 'rdt_600ExtScn04' AND @cUDF06 = '1'
+         IF @nStep = 6 AND @cExtScnSP = 'rdt_600ExtScn05' AND @cUDF06 = '1'
          BEGIN
             SET @cPUOM = @cUDF04
             SET @nPUOM_Div = CAST(ISNULL(@cUDF05,1) AS INT)
@@ -3025,7 +3025,7 @@ BEGIN
             SET @nPUOM_Div = CAST(ISNULL(@cUDF02,1) AS INT)
             SET @cPUOM = @cUDF03
          END
-         IF @nStep = 6 AND @cExtScnSP = 'rdt_600ExtScn04' AND @cUDF06 = '1'
+         IF @nStep = 6 AND @cExtScnSP = 'rdt_600ExtScn05' AND @cUDF06 = '1'
          BEGIN
             SET @cPUOM = @cUDF04
             SET @nPUOM_Div = CAST(ISNULL(@cUDF05,1) AS INT)
@@ -4214,7 +4214,7 @@ BEGIN
             @cUDF28   OUTPUT, @cUDF29  OUTPUT, @cUDF30  OUTPUT
             IF @nErrNo <> 0
                GOTO Quit
-            IF @nStep = 6 AND @cExtScnSP = 'rdt_600ExtScn04' AND @cUDF06 = '1'
+            IF @nStep = 6 AND @cExtScnSP = 'rdt_600ExtScn05' AND @cUDF06 = '1'
             BEGIN
                SET @cPUOM = @cUDF04
                SET @nPUOM_Div = CAST(ISNULL(@cUDF05,1) AS INT)
