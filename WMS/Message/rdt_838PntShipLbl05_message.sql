@@ -1,7 +1,7 @@
 -- rdt_838PntShipLbl05
 EXECUTE rdt.rdtDropMsg 225851  , 225900		
 
-EXECUTE rdt.rdtAddMsg 225851, 10, '225851GetFilePathFail', 'us_english', 838, 0, '225851Get File Path Failure'
+EXECUTE rdt.rdtAddMsg 225851, 10, '225851GetFilePathFail', 'us_english', 838, 0, '225851 Get File Path Failure'
 EXECUTE rdt.rdtAddMsg 225852, 10, '225852SubCldPrtFail  ', 'us_english', 838, 0, '225852 Submit Cloud Print Task Failure'
 EXECUTE rdt.rdtAddMsg 225853, 10, '225853PrinterNotExist', 'us_english', 838, 0, '225853 Printer is not exist.'
 EXECUTE rdt.rdtAddMsg 225854, 10, '225854MissCldPrntID  ', 'us_english', 838, 0, '225854 Miss Cloud Printer ID'
