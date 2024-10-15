@@ -4,7 +4,7 @@ SET ANSI_NULLS OFF
 GO 
 
 /************************************************************************/  
-/* Store procedure: rdt_600ExtScn04                                     */  
+/* Store procedure: rdt_600ExtScn05                                     */  
 /* CUSTOMER :   Unilever                                                */  
 /* Modifications log:                                                   */  
 /*                                                                      */  
@@ -12,7 +12,7 @@ GO
 /* 2024-10-11 1.0  LJQ006     FCR-911  Created                          */  
 /************************************************************************/  
   
-CREATE OR ALTER PROC [RDT].[rdt_600ExtScn04] (
+CREATE OR ALTER PROC [RDT].[rdt_600ExtScn05] (
    @nMobile      INT,           
    @nFunc        INT,           
    @cLangCode    NVARCHAR( 3),  
@@ -79,7 +79,6 @@ BEGIN
    );
       
    SELECT
-   @nScn             = Scn,
    @nStep            = Step
    FROM rdt.RDTMOBREC
    WHERE Mobile = @nMobile
@@ -99,7 +98,7 @@ BEGIN
    BEGIN
       IF @nInputKey = 1
       BEGIN
-         IF @nStep IN (4, 8) 
+         IF @nStep IN (4, 5, 8) AND @nAfterScn = 4035
          BEGIN
             IF @cRcptUomConf = 1
             BEGIN
@@ -176,5 +175,5 @@ GO
 SET ANSI_NULLS ON
 GO
 
-GRANT EXECUTE ON rdt.rdt_600ExtScn04 to nSQL
+GRANT EXECUTE ON rdt.rdt_600ExtScn05 to nSQL
 GO

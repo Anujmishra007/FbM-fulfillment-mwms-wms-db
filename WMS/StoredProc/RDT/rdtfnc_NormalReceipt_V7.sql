@@ -2582,7 +2582,9 @@ BEGIN
                ('@cSKU', @cSKU),
                ('@cID', @cID),
                ('@cPUOM_Desc', @cPUOM_Desc),
-               ('@nPUOM_Div', CONCAT(@nPUOM_Div,''))            
+               ('@nPUOM_Div', CONCAT(@nPUOM_Div,'')),
+               ('@cMUOM_Desc', @cMUOM_Desc),
+               ('@cReceiptKey', @cReceiptKey)            
             EXECUTE [RDT].[rdt_ExtScnEntry]
                @cExtScnSP,
                @nMobile, @nFunc, @cLangCode, @nOri_Step, @nOri_Scn, @nInputKey, @cFacility, @cStorerKey, @tExtScnData ,
@@ -2954,7 +2956,9 @@ BEGIN
             ('@cID', @cID),
             ('@cPUOM_Desc', @cPUOM_Desc),
             ('@ctemp_OutField15', @ctemp_OutField15),
-            ('@nPUOM_Div', CONCAT(@nPUOM_Div,''))
+            ('@nPUOM_Div', CONCAT(@nPUOM_Div,'')),
+            ('@cMUOM_Desc', @cMUOM_Desc),
+            ('@cReceiptKey', @cReceiptKey) 
 
          EXECUTE [RDT].[rdt_ExtScnEntry]
          @cExtScnSP,
@@ -3020,6 +3024,12 @@ BEGIN
             SET @cPUOM_Desc = @cUDF01
             SET @nPUOM_Div = CAST(ISNULL(@cUDF02,1) AS INT)
             SET @cPUOM = @cUDF03
+         END
+         IF @nStep = 6 AND @cExtScnSP = 'rdt_600ExtScn04' AND @cUDF06 = '1'
+         BEGIN
+            SET @cPUOM = @cUDF04
+            SET @nPUOM_Div = CAST(ISNULL(@cUDF05,1) AS INT)
+            SET @cPUOM_Desc = @cUDF07
          END
       END
    END
