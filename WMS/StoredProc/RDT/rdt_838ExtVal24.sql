@@ -7,7 +7,7 @@ GO
 
 /************************************************************************/
 /* Store procedure: rdt_838ExtVal24                                     */
-/* Copyright      : LF Logistics                                        */
+/* Copyright      : Maersk                                              */
 /* CLIENT         : Huda Beauty                                         */
 /*                                                                      */
 /* Date       Rev  Author      Purposes                                 */
