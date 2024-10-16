@@ -13,5 +13,6 @@ EXECUTE rdt.rdtAddMsg 225859, 10, '225859InvalidExOrdkey', 'us_english', 838, 0,
 EXECUTE rdt.rdtAddMsg 225860, 10, '225860Invalid RptDtl ', 'us_english', 838, 0, '225860 Invalid Report Detail'
 EXECUTE rdt.rdtAddMsg 225861, 10, '225861EncryptFileFail', 'us_english', 838, 0, '225861 FilePath Encryption Failure'
 EXECUTE rdt.rdtAddMsg 225862, 10, '225862MissWebSrvc    ', 'us_english', 838, 0, '225862 Missing Web Service URL'
+EXECUTE rdt.rdtAddMsg 225863, 10, '225863ReportNotSetup ', 'us_english', 838, 0, '225863 Report is not setup'
 
 SELECT * FROM RDT.RDTMSG (NOLOCK) WHERE MESSAGE_ID BETWEEN 225851 AND 225900

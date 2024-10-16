@@ -72,11 +72,11 @@ BEGIN
       @cPaperPrinter          NVARCHAR( 10),
       @cReportType            NVARCHAR( 10),
       @cRptDesc               NVARCHAR( 60),
-      @cRptProcessType        NVARCHAR( 15),
-      --@cRptPaperType          NVARCHAR( 10),
+      --@cRptProcessType        NVARCHAR( 15),
+      @cRptPaperType          NVARCHAR( 10),          --'LABEL' / 'PAPER'
       @nRptNoOfCopy           INT,
-      @cTargetDB              NVARCHAR( 20),
-      @cDataWindow            NVARCHAR( 50),
+      --@cRptTargetDB           NVARCHAR( 20),
+      @cRptDataWindow         NVARCHAR( 50),
       @cPrintDataFile         NVARCHAR( MAX),
       @cPrintDataFileEncrypt  NVARCHAR( MAX),
       @cPrintDataFileEncode   NVARCHAR( MAX),
@@ -304,6 +304,8 @@ BEGIN
                   --   GOTO Quit
                   --END
 
+                  -----BEGIN of cloud print---------------
+
                   --Check Web Service cfg
                   SELECT @cWebRequestURL = WebRequestURL
                   FROM WebServiceCfg WITH (NOLOCK)
@@ -349,8 +351,30 @@ BEGIN
 
                   IF @bDebugFlag = 5
                      SELECT 'Print Data File', @cPrintDataFile AS DataFile,@cPrintDataFileEncrypt AS DataFileEncrypt, @cPrintDataFileEncode AS DataFileEncode,@cPrintDataFileFull AS DataFileFull,@cReportType as ReportType
-                  -----BEGIN of cloud print---------------
-                  SET @cPrinter = @cLabelPrinter            --for Screen 5(Ship Label), the printer Type should be label
+
+                  SELECT TOP 1
+                     @cRptDataWindow = DataWindow,                
+                     @cRptPaperType = PaperType,
+                     @nRptNoOfCopy = NoOfCopy
+                  FROM rdt.rdtReport WITH (NOLOCK)
+                  WHERE StorerKey = @cStorerKey
+                     AND ReportTYpe = @cReportType
+                     AND (Function_ID = @nFunc OR Function_ID = 0)
+                  ORDER BY Function_ID DESC
+
+                  IF @@ROWCOUNT = 0
+                  BEGIN
+                     SET @nErrNo = 225863
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --ReportNotSetup
+                     BREAK
+                  END
+                  --SET @cPrinter = @cLabelPrinter            --for Screen 5(Ship Label), the printer Type should be label
+                  --we can't determine the @cPrinter by step 5 or step 6 , because the cases are exists for output paper when step 5 or output label when step 6
+                  --so determine the @cPrinter via rdtreport.PaperType, its values are 'LABEL' or 'PAPER'
+                  IF @cRptPaperType = 'LABEL'
+                     SET @cPrinter = @cLabelPrinter
+                  ELSE
+                     SET @cPrinter = @cPaperPrinter                  
                   --Verify printer
                   SELECT @cCloudClientPrinterID= CloudPrintClientID
                      FROM rdt.rdtprinter WITH (NOLOCK) 
@@ -401,7 +425,7 @@ BEGIN
                      JobName, ReportID, JobStatus, Datawindow, Parm1, Printer, NoOfCopy, Mobile, TargetDB, PrintData, JobType, StorerKey,
                      Function_ID, PaperSizeWxH, DCropWidth, DCropHeight, IsLandScape, IsColor, IsDuplex, IsCollate)
                   VALUES(
-                     'rdt_838PntShipLbl05', @cReportType, @cJobStatus, @cDataWindow, @cOrderKey, @cPrinter, @nRptNoOfCopy, @nMobile, DB_NAME(), @cPrintDataFileFull, 'LogiReport', @cStorerKey,
+                     'rdt_838PntShipLbl05', @cReportType, @cJobStatus, @cRptDataWindow, @cOrderKey, @cPrinter, @nRptNoOfCopy, @nMobile, DB_NAME(), @cPrintDataFileFull, 'LogiReport', @cStorerKey,
                      @nFunc, @cPaperSize, @cDCropWidth, @cDCropHeight, @cIsLandScape, @cIsColor, @cIsDuplex, @cIsCollate)
 
                   SELECT @nJobID = SCOPE_IDENTITY(), @nErrNo = @@ERROR
@@ -601,6 +625,8 @@ BEGIN
                   --   GOTO Quit
                   --END
 
+                  -----BEGIN of cloud print---------------
+
                   --Check Web Service cfg
                   SELECT @cWebRequestURL = WebRequestURL
                   FROM WebServiceCfg WITH (NOLOCK)
@@ -645,9 +671,29 @@ BEGIN
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- URLEncode Failure
                      BREAK
                   END
-                  -----BEGIN of cloud print---------------
+                  SELECT TOP 1
+                     @cRptDataWindow = DataWindow,                
+                     @cRptPaperType = PaperType,
+                     @nRptNoOfCopy = NoOfCopy
+                  FROM rdt.rdtReport WITH (NOLOCK)
+                  WHERE StorerKey = @cStorerKey
+                     AND ReportTYpe = @cReportType
+                     AND (Function_ID = @nFunc OR Function_ID = 0)
+                  ORDER BY Function_ID DESC
 
-                  SET @cPrinter = @cPaperPrinter         --for Pack list, the printer should be PaperPrinter
+                  IF @@ROWCOUNT = 0
+                  BEGIN
+                     SET @nErrNo = 225863
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --ReportNotSetup
+                     BREAK
+                  END
+                  --SET @cPrinter = @cLabelPrinter            --for Screen 5(Ship Label), the printer Type should be label
+                  --we can't determine the @cPrinter by step 5 or step 6 , because the cases are exists for output paper when step 5 or output label when step 6
+                  --so determine the @cPrinter via rdtreport.PaperType, its values are 'LABEL' or 'PAPER'
+                  IF @cRptPaperType = 'LABEL'
+                     SET @cPrinter = @cLabelPrinter
+                  ELSE
+                     SET @cPrinter = @cPaperPrinter   
                   --Verify printer
                   SELECT @cCloudClientPrinterID= CloudPrintClientID
                   FROM rdt.rdtprinter WITH (NOLOCK) 
@@ -705,7 +751,7 @@ BEGIN
                      JobName, ReportID, JobStatus, Datawindow, Parm1, Printer, NoOfCopy, Mobile, TargetDB, PrintData, JobType, StorerKey,
                      Function_ID, PaperSizeWxH, DCropWidth, DCropHeight, IsLandScape, IsColor, IsDuplex, IsCollate)
                   VALUES(
-                     'rdt_838PntShipLbl05', @cReportType, @cJobStatus, @cDataWindow, @cOrderKey, @cPrinter, @nRptNoOfCopy, @nMobile, DB_NAME(), @cPrintDataFileFull, 'LogiReport', @cStorerKey,
+                     'rdt_838PntShipLbl05', @cReportType, @cJobStatus, @cRptDataWindow, @cOrderKey, @cPrinter, @nRptNoOfCopy, @nMobile, DB_NAME(), @cPrintDataFileFull, 'LogiReport', @cStorerKey,
                      @nFunc, @cPaperSize, @cDCropWidth, @cDCropHeight, @cIsLandScape, @cIsColor, @cIsDuplex, @cIsCollate)
 
                   SELECT @nJobID = SCOPE_IDENTITY(), @nErrNo = @@ERROR
