@@ -57,7 +57,7 @@ BEGIN
 
    SELECT @nErrNo= ISNULL(@nErrNo,0)
    IF @bDebugFlag = 1 
-     select  'Enter rdt_838ExtVal24' as Title
+     SELECT  'Enter rdt_838ExtVal24' AS Title
 
    IF @nFunc = 838 -- Pack
    BEGIN
@@ -94,7 +94,7 @@ BEGIN
 
 Quit:
    IF @bDebugFlag = 1 
-     select  'exit rdt_838ExtVal24' as Title
+     SELECT  'exit rdt_838ExtVal24' AS Title
 END
 GO
 
