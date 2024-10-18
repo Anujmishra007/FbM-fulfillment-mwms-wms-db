@@ -66,7 +66,8 @@ BEGIN
          IF @nInputKey = 1 -- ENTER
          BEGIN
             -- Current carton
-            IF @nCartonNo > 0
+            IF @nCartonNo > 0 AND EXISTS(SELECT * FROM PICKHEADER ph INNER JOIN orders o ON ph.OrderKey=o.OrderKey
+               WHERE ph.PickHeaderKey=@cPickSlipNo AND ph.StorerKey=@cStorerKey AND o.UserDefine02='G')
             BEGIN
                DECLARE @tSKUs    TABLE(SKU NVARCHAR(20))
                DECLARE @nCount   INT
