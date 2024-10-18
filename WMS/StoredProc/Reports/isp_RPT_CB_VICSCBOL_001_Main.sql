@@ -1,31 +1,35 @@
+
 SET ANSI_NULLS OFF
 GO
+
 SET QUOTED_IDENTIFIER OFF
 GO
 
-/****************************************************************************/ 
-/* SP: isp_RPT_CB_VICSCBOL_001_Main                                         */ 
-/* Creation Date: 06-Sep-2024                                               */ 
-/* Copyright: Maersk                                                        */ 
-/* Written by: WLChooi                                                      */ 
-/*                                                                          */ 
-/* Purpose: UWP-24135 & FCR-798 - NAM|Maersk Logi Report|LVSUSA| Migrate    */ 
-/*          VICS CBOL report to Maersk WMS V2 for Granite Project           */ 
-/*        :                                                                 */ 
-/* Called By: RPT_CB_VICSCBOL_001_Main                                      */ 
-/*          :                                                               */ 
-/* Github Version: 1.1                                                      */ 
-/*                                                                          */ 
-/* Version: 7.0                                                             */ 
-/*                                                                          */ 
-/* Data Modifications:                                                      */ 
-/*                                                                          */ 
-/* Updates:                                                                 */ 
-/* Date        Author   Ver   Purposes                                      */ 
-/* 06-Sep-2024 WLChooi  1.0   DevOps Combine Script                         */ 
-/* 08-Oct-2024 WLChooi  1.1   FCR-798 - Change mapping (WL01)               */ 
-/* 15-Oct-2024 CalvinK  1.2   FCR-995 - Change Remarks and Address (CLVN01) */ 
-/****************************************************************************/ 
+
+/***************************************************************************************/ 
+/* SP: isp_RPT_CB_VICSCBOL_001_Main                                                    */ 
+/* Creation Date: 06-Sep-2024                                                          */ 
+/* Copyright: Maersk                                                                   */ 
+/* Written by: WLChooi                                                                 */ 
+/*                                                                                     */ 
+/* Purpose: UWP-24135 & FCR-798 - NAM|Maersk Logi Report|LVSUSA| Migrate               */ 
+/*          VICS CBOL report to Maersk WMS V2 for Granite Project                      */ 
+/*        :                                                                            */ 
+/* Called By: RPT_CB_VICSCBOL_001_Main                                                 */ 
+/*          :                                                                          */ 
+/* Github Version: 1.1                                                                 */ 
+/*                                                                                     */ 
+/* Version: 7.0                                                                        */ 
+/*                                                                                     */ 
+/* Data Modifications:                                                                 */ 
+/*                                                                                     */ 
+/* Updates:                                                                            */ 
+/* Date        Author   Ver   Purposes                                                 */ 
+/* 06-Sep-2024 WLChooi  1.0   DevOps Combine Script                                    */ 
+/* 08-Oct-2024 WLChooi  1.1   FCR-798 - Change mapping (WL01)                          */ 
+/* 15-Oct-2024 CalvinK  1.2   FCR-995 - Change Remarks and Address (CLVN01)            */ 
+/* 18-Oct-2024 CalvinK  1.3   FCR-1053 - Change Otherreference to voyagenumber (CLVN02)*/
+/***************************************************************************************/ 
 CREATE OR ALTER PROCEDURE [dbo].[isp_RPT_CB_VICSCBOL_001_Main]
 ( 
    @n_Cbolkey  BIGINT 
@@ -81,14 +85,13 @@ BEGIN
    JOIN ORDERS WITH (NOLOCK) ON (MBOLDETAIL.OrderKey = ORDERS.OrderKey) 
    LEFT OUTER JOIN STORER WITH (NOLOCK) ON (ORDERS.StorerKey = STORER.StorerKey) 
    LEFT OUTER JOIN STORER Storer2 WITH (NOLOCK) ON (CBOL.Consigneekey = Storer2.StorerKey) 
-   LEFT OUTER JOIN STORER Storer3 WITH (NOLOCK) ON (MBOL.OtherReference = Storer3.StorerKey) 
+   --LEFT OUTER JOIN STORER Storer3 WITH (NOLOCK) ON (MBOL.OtherReference = Storer3.StorerKey) --(CLVN02)
+   LEFT OUTER JOIN STORER Storer3 WITH (NOLOCK) ON (MBOL.VoyageNumber = Storer3.StorerKey) 	   --(CLVN02)
    LEFT OUTER JOIN STORER Storer4 WITH (NOLOCK) ON (CBOL.SCAC = Storer4.StorerKey) 
    LEFT OUTER JOIN CODELKUP CLK WITH (NOLOCK) ON (MBOL.TransMethod = CLK.Code AND CLK.LISTNAME = 'TRANSMETH') 
    WHERE CBOL.CBOLKey = @n_Cbolkey  
    AND ORDERS.[Status] >= '5' 
 END -- procedure 
 GO
-GRANT EXECUTE ON [dbo].[isp_RPT_CB_VICSCBOL_001_Main] TO [NSQL]
-GO
-GRANT EXECUTE ON [dbo].[isp_RPT_CB_VICSCBOL_001_Main] TO [LogiReportRoleWM]
-GO
+
+
