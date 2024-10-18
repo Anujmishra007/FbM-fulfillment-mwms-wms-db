@@ -14,5 +14,7 @@ execute rdt.rdtAddMsg 219159, 10, '219159InvalidOption',                'us_engl
 execute rdt.rdtAddMsg 219160, 10, '219160RemoveCTNFail',                'us_english', 1653
 execute rdt.rdtAddMsg 219161, 10, '219161NoUSIDOutPre',                 'us_english', 1653
 execute rdt.rdtAddMsg 219162, 10, '219162InvalidPrefix',                'us_english', 1653
+execute rdt.rdtAddMsg 219163, 10, '219163DupliPallet',                  'us_english', 1653, 0, '219136 Duplicate PalletKey'
+
 
 SELECT * FROM RDT.RDTMsg WHERE Message_ID BETWEEN 219151 AND 219200
