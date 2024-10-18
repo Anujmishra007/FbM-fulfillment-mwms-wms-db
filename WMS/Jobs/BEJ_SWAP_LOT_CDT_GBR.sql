@@ -4,6 +4,7 @@ GO
 /****** Object:  Job [BEJ - Backend Ship (All)(GBR)]    Script Date: 5/14/2024 9:35:34 AM ******/
 BEGIN TRANSACTION
 DECLARE @ReturnCode INT
+      , @astart_date NVARCHAR(8) = REPLACE(CONVERT(NVARCHAR(10), GETDATE(),121),'-','')
 SELECT @ReturnCode = 0
 /****** Object:  JobCategory [[Uncategorized (Local)]]    Script Date: 5/14/2024 9:35:34 AM ******/
 IF NOT EXISTS (SELECT name FROM msdb.dbo.syscategories WHERE name=N'[Uncategorized (Local)]' AND category_class=1)

@@ -102,3 +102,6 @@ QUIT_SP:
       END    
    END  
 END
+GO
+GRANT EXECUTE ON msp_BEJ_SwapLot TO nSQL
+GO

@@ -160,3 +160,6 @@ QUIT_SP:
       END    
    END  
 END
+GO
+GRANT EXECUTE ON msp_BEJ_MLPRepl TO nSQL
+GO

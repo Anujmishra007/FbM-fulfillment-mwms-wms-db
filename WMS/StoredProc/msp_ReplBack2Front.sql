@@ -207,3 +207,6 @@ QUIT_SP:
   
  END        
 END
+GO
+GRANT EXECUTE ON msp_ReplBack2Front TO nSQL
+GO
