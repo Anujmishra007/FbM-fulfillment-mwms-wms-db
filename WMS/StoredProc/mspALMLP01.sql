@@ -28,6 +28,8 @@ GO
 /* 2024-06-25  Wan02    1.3  UWP-21046 shelf-life by % for consignee       */
 /* 2024-07-09  Wan03    1.4  UWP-21046 shelf-life by % for consignee       */ 
 /*                           % need to be as float for calculation         */
+/* 2024-10-16  Wan04    1.5  UWP-24391 [FCR-837] Unilever Replenishment for*/
+/*                           Flowrack locations                            */
 /***************************************************************************/
 CREATE OR ALTER PROC [dbo].[mspALMLP01]
    @c_DocumentNo        NVARCHAR(10)
@@ -83,14 +85,25 @@ BEGIN
          , @c_Loadkey                        NVARCHAR(10)   =''
          , @c_key3                           NVARCHAR(10)   =''
          , @c_LocationCategory               NVARCHAR(10)   ='VNA'
-         , @c_SkipLottableFilter  NVARCHAR(60)   --SSA91301
-         , @c_CLKCondition NVARCHAR(MAX)         --SSA91301
-         , @c_CLKConditionFlag NCHAR(1)          --SSA91301
-         , @c_AllocateStrategyKey NVARCHAR(10)   --SSA91301
-         , @n_Cnt                  INT   --SSA91301
+         , @c_SkipLottableFilter             NVARCHAR(60)                           --SSA91301
+         , @c_CLKCondition                   NVARCHAR(MAX)                          --SSA91301
+         , @c_CLKConditionFlag               NCHAR(1)                               --SSA91301
+         , @c_AllocateStrategyKey            NVARCHAR(10)                           --SSA91301
+         , @n_Cnt                            INT                                    --SSA91301
          , @c_ConsigneeSkuGroupPCTG          NVARCHAR(10)   = ''                    --(Wan02)
          , @c_ShelfLifeSQL                   NVARCHAR(100)  = ''                    --(Wan02)
          , @c_ShelfLifeStrategyCode          NVARCHAR(20)   = ''                    --(Wan02)
+
+         , @c_UDF01                          NVARCHAR(30)   = ''                    --(Wan04)
+         , @c_UDF02                          NVARCHAR(30)   = ''                    --(Wan04)  
+         , @c_UDF03                          NVARCHAR(30)   = ''                    --(Wan04) 
+         , @c_UDF04                          NVARCHAR(30)   = ''                    --(Wan04)
+         , @c_UDF05                          NVARCHAR(30)   = ''                    --(Wan04)
+         , @c_LocTypeSort                    NVARCHAR(2000) = ''                    --(Wan04)
+         , @c_SortingFlag                    NCHAR(1)       = 'N'                   --(Wan04)
+         , @c_Sortfields                     NVARCHAR(2000) = ''                    --(Wan04)   
+         , @c_SortMode                       NVARCHAR(10)   = ''                    --(Wan04)
+         , @c_FromPickLocFlag                NCHAR(1)       = 'N'                   --(Wan04)
 
    SET @c_Condition = ''
    SET @n_SkuOutGoingMinShelfLife = 0
@@ -174,6 +187,14 @@ BEGIN
       WHERE SKU.Storerkey = @c_Storerkey
       AND SKU.Sku = @c_Sku
 
+   IF EXISTS(  SELECT 1 FROM ALLOCATESTRATEGYDETAIL (NOLOCK)                        --(Wan04) - START
+               WHERE LocationTypeOverride IN ('PICK','CASE')  
+               AND AllocateStrategyKey = @c_AllocateStrategykey
+            ) 
+   BEGIN
+      SET @c_OverAllocateFlag = 'Y'   
+   END                                                                              --(Wan04) - END
+
    INSERT INTO @TMP_CODELKUP (Listname, Code, Description, Short, Long, Notes, Notes2, Storerkey, UDF01, UDF02, UDF03, UDF04, UDF05, Code2)
    SELECT CODELKUP.Listname,
           CODELKUP.Code,
@@ -221,11 +242,28 @@ BEGIN
       END
    END
 
+   SELECT TOP 1 @c_FromPickLocFlag = ISNULL(UDF01,'')                               --(Wan04) - START 
+   FROM @TMP_CODELKUP  
+   WHERE Code = 'FROMPICKLOC' --allocation from pick location only. default is all location type.  
+   AND Code2 IN (@c_UOM,'') 
+   ORDER BY CASE WHEN Code2 = @c_UOM THEN 0 ELSE 1 END
+
+   SELECT TOP 1 @c_SortFields = ISNULL(Notes,''), @c_SortMode = ISNULL(UDF01,'')      
+   FROM @TMP_CODELKUP  
+   WHERE Code = 'SORTING' --user can define sorting fields. default is FIFO.  
+   AND Code2 IN (@c_UOM,'') 
+   ORDER BY CASE WHEN Code2 = @c_UOM THEN 0 ELSE 1 END                              --(Wan04) - END
+
    SELECT TOP 1 @c_SkipLottableFilter = ISNULL(UDF01,'')
    FROM @TMP_CODELKUP
    WHERE Code = 'SKIPLOTTABLEFILTER' --Skip lottable filtering.
    AND Code2 IN (@c_UOM,'')
    ORDER BY CASE WHEN Code2 = @c_UOM THEN 0 ELSE 1 END
+
+   IF ISNULL(@c_SortFields,'') <> ''                                                --(Wan04) - START                                                              
+   BEGIN  
+      SET @c_SortingFlag = 'Y'  
+   END                                                                              --(Wan04) - END
 
    IF (ISNULL(@c_Lottable01,'') <> '' AND CHARINDEX('01',@c_SkipLottableFilter,1) = 0)
    BEGIN
@@ -458,17 +496,98 @@ BEGIN
                        + ' AND SKUXLOC.LocationType NOT IN (''PICK'',''CASE'')'
                        + ' AND LOC.LocationCategory = @c_LocationCategory'
    END
-   ELSE
+   ELSE IF @c_FromPickLocFlag = 'Y'                                                 --(Wan04)
    BEGIN
-      SET @c_Condition = ISNULL(RTRIM(@c_Condition),'') + ' AND SKUXLOC.LocationType IN (''PICK'',''CASE'')'
+      SET @c_Condition = ISNULL(RTRIM(@c_Condition),'') 
+                       + ' AND SKUXLOC.LocationType IN (''PICK'',''CASE'')'
    END
 
-   SET @c_SortBy = ' ORDER BY Lotattribute.Lottable04, Lotattribute.Lottable05,'
-                 + CASE WHEN @c_UOM = 1 THEN 'LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QTYREPLEN DESC'
-                                        ELSE '1' END
-                 + ',Lotattribute.Lot, LotxLocxID.ID'
+   IF @c_SortingFlag = 'Y'                                                          --(Wan04) - START 
+   BEGIN  
+      IF @c_SortMode = 'DYNAMICSQL'    
+      BEGIN  
+        SELECT @c_SQL = @c_SortFields  
+        SET @c_SortFields = ''  
+          
+        SET @c_SQLParms = N'@c_Facility NVARCHAR(5), @c_StorerKey NVARCHAR(15), @c_SKU  NVARCHAR(20), @c_UOM NVARCHAR(10), @c_HostWHCode NVARCHAR(10)'  
+             +', @n_UOMBase INT, @n_QtyLeftToFulfill INT, @c_Orderkey NVARCHAR(10), @c_OrderLineNumber NVARCHAR(5), @c_Loadkey NVARCHAR(10), @c_Wavekey NVARCHAR(10)'  
+             +',@c_Lottable01 NVARCHAR(18), @c_Lottable02 NVARCHAR(18), @c_Lottable03 NVARCHAR(18), @d_Lottable04 DATETIME, @d_Lottable05 DATETIME'  
+             +',@c_Lottable06 NVARCHAR(30), @c_Lottable07 NVARCHAR(30), @c_Lottable08 NVARCHAR(30), @c_Lottable09 NVARCHAR(30), @c_Lottable10 NVARCHAR(30)'  
+             +',@c_Lottable11 NVARCHAR(30), @c_Lottable12 NVARCHAR(30), @d_Lottable13 DATETIME, @d_Lottable14 DATETIME, @d_Lottable15 DATETIME'  
+             +',@n_OrderMinShelfLife INT, @n_ConsigneeSkuMinShelfLife INT,@n_ConsigneeSkuGroupMinShelfLife INT'  
+             +',@n_SkuOutGoingMinShelfLife INT, @n_StorerSkuMinShelfLife INT'  
+             +',@c_ID NVARCHAR(18)'  
+             +',@c_UDF01 NVARCHAR(30), @c_UDF02 NVARCHAR(30), @c_UDF03 NVARCHAR(30), @c_UDF04 NVARCHAR(30), @c_UDF05 NVARCHAR(30)'  
+             +',@c_SortFields NVARCHAR(2000) OUTPUT'               
+           
+         EXEC sp_executesql @c_SQL, @c_SQLParms,     
+            @c_Facility     
+           ,@c_StorerKey    
+           ,@c_SKU          
+           ,@c_UOM          
+           ,@c_HostWHCode   
+           ,@n_UOMBase      
+           ,@n_QtyLeftToFulfill   
+           ,@c_Orderkey
+           ,@c_OrderLineNumber  
+           ,@c_Loadkey   
+           ,@c_Wavekey    
+           ,@c_Lottable01                                     
+           ,@c_Lottable02                                     
+           ,@c_Lottable03                                     
+           ,@d_Lottable04                                     
+           ,@d_Lottable05                                     
+           ,@c_Lottable06                                     
+           ,@c_Lottable07                                     
+           ,@c_Lottable08                                     
+           ,@c_Lottable09                                     
+           ,@c_Lottable10                                     
+           ,@c_Lottable11                                     
+           ,@c_Lottable12                                     
+           ,@d_Lottable13                                     
+           ,@d_Lottable14                                     
+           ,@d_Lottable15                                     
+           ,@n_OrderMinShelfLife                              
+           ,@n_ConsigneeSkuMinShelfLife                       
+           ,@n_ConsigneeSkuGroupMinShelfLife                  
+           ,@n_SkuOutGoingMinShelfLife                        
+           ,@n_StorerSkuMinShelfLife                          
+           ,@c_ID                                             
+           ,@c_UDF01                                          
+           ,@c_UDF02                                          
+           ,@c_UDF03                                          
+           ,@c_UDF04                                          
+           ,@c_UDF05          
+           ,@c_SortFields OUTPUT  
+             
+         IF @c_SortFields = 'FIFO'  
+            SET @c_SortBy = ' ORDER BY ' + RTRIM(@c_LocTypeSort) + ' Lotattribute.Lottable05, Lotattribute.Lot, Loc.LogicalLocation, Loc.Loc'  
+         ELSE IF @c_SortFields =  'FEFO'  
+            SET @c_SortBy = ' ORDER BY ' + RTRIM(@c_LocTypeSort) + ' Lotattribute.Lottable04, Lotattribute.Lot, Loc.LogicalLocation, Loc.Loc'  
+         ELSE IF ISNULL(@c_SortFields,'') = ''  
+            SET @c_SortBy = ' ORDER BY ' + RTRIM(@c_LocTypeSort) + ' Lotattribute.Lottable05, Lotattribute.Lot, Loc.LogicalLocation, Loc.Loc'  
+         ELSE     
+            SET @c_SortBy = ' ORDER BY ' + RTRIM(@c_LocTypeSort) + RTRIM(@c_SortFields) + " "                                                           
+      END  
+      ELSE  
+      BEGIN  
+         IF @c_SortFields = 'FIFO'  
+            SET @c_SortBy = ' ORDER BY ' + RTRIM(@c_LocTypeSort) + ' Lotattribute.Lottable05, Lotattribute.Lot, Loc.LogicalLocation, Loc.Loc' 
+         ELSE IF @c_SortFields =  'FEFO'  
+            SET @c_SortBy = ' ORDER BY ' + RTRIM(@c_LocTypeSort) + ' Lotattribute.Lottable04, Lotattribute.Lot, Loc.LogicalLocation, Loc.Loc'  
+         ELSE  
+            SET @c_SortBy = ' ORDER BY ' + RTRIM(@c_LocTypeSort) + RTRIM(@c_SortFields) + ' '  
+      END  
+   END  
+   ELSE 
+   BEGIN
+      SET @c_SortBy = ' ORDER BY Lotattribute.Lottable04, Lotattribute.Lottable05,'
+                    + CASE WHEN @c_UOM = 1 THEN 'LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QTYREPLEN DESC'
+                                           ELSE '1' END
+                    + ',Lotattribute.Lot, LotxLocxID.ID'
+   END                                                                              --(Wan04) - END
 
-   IF (@c_FullPalletByLocFlag = 'Y' AND @c_UOM = '1') --OR (@c_OverAllocateFlag = 'Y')  
+   IF (@c_FullPalletByLocFlag = 'Y' AND @c_UOM = '1') OR (@c_OverAllocateFlag = 'Y')--(Wan04)          
    BEGIN
       SET @c_SQL = N'DECLARE CURSOR_AVAILABLECFG CURSOR FAST_FORWARD READ_ONLY FOR'  
                  + ' SELECT LOTxLOCxID.LOT, LOTxLOCxID.LOC,LOTxLOCxID.ID'
@@ -546,6 +665,7 @@ BEGIN
       BEGIN
          IF NOT EXISTS(SELECT 1 FROM #TMP_LOT WHERE Lot = @c_Lot)
          BEGIN
+           -- Checking available lot for normal and overallocate
            INSERT INTO #TMP_LOT (Lot, QtyAvailable)
            SELECT LOTXLOCXID.Lot
                , SUM(LOTXLOCXID.Qty - LOTXLOCXID.QtyAllocated 
@@ -560,8 +680,8 @@ BEGIN
            AND   LOC.Status = 'OK'
            AND   LOC.LocationFlag NOT IN ('HOLD','DAMAGE')
            AND   LOC.Facility = @c_Facility
-           AND   LOTXLOCXID.Qty - LOTXLOCXID.QtyAllocated                           --(Wan01)
-               - LOTXLOCXID.QtyPicked - LOTXLOCXID.QtyReplen > 0                    --(Wan01)
+           --AND   LOTXLOCXID.Qty - LOTXLOCXID.QtyAllocated                         --(Wan04) --(Wan01)
+           --    - LOTXLOCXID.QtyPicked - LOTXLOCXID.QtyReplen > 0                  --(Wan04) --(Wan01)
            GROUP BY LOTXLOCXID.Lot      
          END
          
