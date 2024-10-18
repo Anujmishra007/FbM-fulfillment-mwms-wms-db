@@ -1,4 +1,3 @@
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -41,6 +40,7 @@ GO
 /*                           specified. Adding checking to reject when  */
 /*                           SKU Cube or LxWxH can't fit                */
 /* 03-Oct-2024 Shong     2.2 Fixing VAS Carton Size issue  (SWT03)      */
+/* 18-Oct-2024 Shong     2.2.1 Hot fix for Bugs (SWT05)                 */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[mspRLWAV03]
    @c_WaveKey NVARCHAR(10)
@@ -1689,7 +1689,7 @@ BEGIN
 							 -- SWT03
                SELECT @n_CartonMaxCube = CT.MaxCube
                FROM #Carton CT 
-               WHERE CT.OrderGroup = @c_OrderGroup
+               WHERE CT.OrderGroup = @c_Orderkey -- SWT05
                AND CartonNo = @n_CartonNo
 
                SELECT @n_TotCartonQty  = SUM(CTD.Qty), 
