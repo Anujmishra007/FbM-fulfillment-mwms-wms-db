@@ -291,7 +291,8 @@ BEGIN
    -- Redirect to respective screen
    IF @nStep = 0  GOTO Step_0  -- Menu. Func = 993
    IF @nStep = 1  GOTO Step_1  -- Scn = 6490. PickSlipNo, FromDropID, ToDropID
-   /*IF @nStep = 2  GOTO Step_2  -- Scn = 6491. Statistic
+   IF @nStep = 2  GOTO Step_2  -- Scn = 6491. Statistic
+   /*
    IF @nStep = 3  GOTO Step_3  -- Scn = 4652. SKU QTY
    IF @nStep = 4  GOTO Step_4  -- Scn = 4653. Carton type, weight, cube, refno
    IF @nStep = 5  GOTO Step_5  -- Scn = 4654. Print label?
@@ -563,15 +564,20 @@ BEGIN
          GOTO Quit
 
       -- Prepare next screen var
-      SET @cOutField01 = @cPickSlipNo
-      SET @cOutField02 = CAST( @nTotalPick AS NVARCHAR(8))  -- ZG02
-      SET @cOutField03 = CAST( @nTotalPack AS NVARCHAR(8))  -- ZG02
-      SET @cOutField04 = CAST( @nTotalShort AS NVARCHAR(8))  -- ZG02
+      SET @cOutField01 = @cLabelNo
+      SET @cOutField02 = CAST( @nTotalPick AS NVARCHAR(8))  
+      SET @cOutField03 = CAST( @nTotalPack AS NVARCHAR(8))  
+      SET @cOutField04 = CAST( @nTotalShort AS NVARCHAR(8)) 
+      SET @cOutField05 = CAST( @nCartonSKU AS NVARCHAR(5))
+      SET @cOutField06 = CAST( @nCartonQTY AS NVARCHAR(5))
+
+      /*
       SET @cOutField05 = ''--RTRIM( @cCustomNo) + '/' + CAST( @nTotalCarton AS NVARCHAR(5))
       SET @cOutField06 = ''--@cCustomID
       SET @cOutField07 = CAST( @nCartonSKU AS NVARCHAR(5))
       SET @cOutField08 = CAST( @nCartonQTY AS NVARCHAR(5))
       SET @cOutField09 = @cDefaultOption
+      */
 
       IF EXISTS( SELECT 1 FROM STRING_SPLIT( @cFlowThruScreen, ',') WHERE TRIM( value) = '2') -- Statistic screen 
       BEGIN
@@ -610,7 +616,7 @@ GOTO Quit
 
 
 /********************************************************************************
-Scn = 4651. Statistic screen
+Scn = 6491. Statistic screen
    OPTION    (field09, input)
 ********************************************************************************/
 Step_2:
@@ -1052,21 +1058,18 @@ BEGIN
 
    IF @nInputKey = 0 -- ESC
    BEGIN
-      -- Pack confirm
-      IF EXISTS( SELECT 1 FROM PackHeader WITH (NOLOCK) WHERE PickSlipNo = @cPickSlipNo AND Status <> '9')
-      BEGIN
-         -- Pack confirm
-         SET @cPrintPackList = ''
-         EXEC rdt.rdt_Pack_PackConfirm @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey
-            ,@cPickSlipNo
-            ,@cFromDropID
-            ,@cPackDtlDropID
-            ,@cPrintPackList OUTPUT
-            ,@nErrNo         OUTPUT
-            ,@cErrMsg        OUTPUT
-         -- IF @nErrNo <> 0
-         --    GOTO Quit
-      END
+      SET @cPrintPackList = ''
+      EXEC rdt.rdt_Pack_LVSUSA_PackConfirm @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey
+         ,@cPickSlipNo
+         ,@cFromDropID
+         ,@cPackDtlDropID
+         ,@cLabelNo
+         ,@cPrintPackList OUTPUT
+         ,@nErrNo         OUTPUT
+         ,@cErrMsg        OUTPUT
+
+      IF @nErrNo <> 0
+         GOTO Quit
 
       -- Extended update
       IF @cExtendedUpdateSP <> ''
@@ -1115,9 +1118,8 @@ BEGIN
                @nCartonNo, @cLabelNo, @cSKU, @nQTY, @cUCCNo, @cCartonType, @cCube, @cWeight, @cRefNo, @cSerialNo, @nSerialQTY, @cOption,
                @cPackDtlRefNo, @cPackDtlRefNo2, @cPackDtlUPC, @cPackDtlDropID, @cPackData1, @cPackData2, @cPackData3,
                @nErrNo OUTPUT, @cErrMsg OUTPUT
-
          END
-      END
+      END -- ExtUpd
 
       IF EXISTS( SELECT 1 FROM PackHeader WITH (NOLOCK) WHERE PickSlipNo = @cPickSlipNo AND Status = '9') OR @cPrintPackList = 'Y'
       BEGIN
@@ -1136,80 +1138,15 @@ BEGIN
       END
 
       -- Prepare prev screen var
-      SET @cOutField01 = CASE WHEN @cShowPickSlipNo = '1' THEN @cPickSlipNo ELSE '' END -- PickSlipNo (james17)
-      SET @cOutField02 = '' -- FromDropID
-      SET @cOutField03 = '' -- ToDropID
+      SET @cOutField01 = ''
 
-      IF @cFromDropID <> ''
-         EXEC rdt.rdtSetFocusField @nMobile, 2  -- FromDropID
-      ELSE
-      BEGIN
-         IF @cPackDtlDropID <> ''
-            EXEC rdt.rdtSetFocusField @nMobile, 3 -- ToDropID
-         ELSE
-            EXEC rdt.rdtSetFocusField @nMobile, 1  -- PickSlipNo
-      END
+      EXEC rdt.rdtSetFocusField @nMobile, 1  -- LabelNo
 
-      -- Go to PickSlipNo screen
-      SET @nScn = @nScn - 1
-      SET @nStep = @nStep - 1
+      -- Go to LabelNo screen
+      SET @nScn = 6490
+      SET @nStep = 1
    END -- Inputkey = 0
 
-
-   -- Ext Scn SP
-   SET @cExtendedScreenSP = rdt.RDTGetConfig( @nFunc, 'ExtScnSP', @cStorerKey)
-   IF @cExtendedScreenSP = '0'
-   BEGIN
-      SET @cExtendedScreenSP = ''
-   END
-   
-   IF @cExtendedScreenSP <> ''
-   BEGIN
-      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
-      BEGIN
-         SET @nAction = 0
-
-         EXECUTE [RDT].[rdt_ExtScnEntry] 
-         @cExtendedScreenSP, 
-         @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorerKey, @tExtScnData ,
-         @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01 OUTPUT,  
-         @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02 OUTPUT,  
-         @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03 OUTPUT,  
-         @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04 OUTPUT,  
-         @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  @dLottable05 OUTPUT,  
-         @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  @cLottable06 OUTPUT, 
-         @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  @cLottable07 OUTPUT, 
-         @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  @cLottable08 OUTPUT, 
-         @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  @cLottable09 OUTPUT, 
-         @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  @cLottable10 OUTPUT, 
-         @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  @cLottable11 OUTPUT,
-         @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT,  @cLottable12 OUTPUT,
-         @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  @dLottable13 OUTPUT,
-         @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT,  @dLottable14 OUTPUT,
-         @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT,  @dLottable15 OUTPUT,
-         @nAction, 
-         @nScn OUTPUT,  @nStep OUTPUT,
-         @nErrNo   OUTPUT, 
-         @cErrMsg  OUTPUT,
-         @cUDF01   OUTPUT, @cUDF02 OUTPUT, @cUDF03 OUTPUT,
-         @cUDF04   OUTPUT, @cUDF05 OUTPUT, @cUDF06 OUTPUT,
-         @cUDF07   OUTPUT, @cUDF08 OUTPUT, @cUDF09 OUTPUT,
-         @cUDF10   OUTPUT, @cUDF11 OUTPUT, @cUDF12 OUTPUT,
-         @cUDF13   OUTPUT, @cUDF14 OUTPUT, @cUDF15 OUTPUT,
-         @cUDF16   OUTPUT, @cUDF17 OUTPUT, @cUDF18 OUTPUT,
-         @cUDF19   OUTPUT, @cUDF20 OUTPUT, @cUDF21 OUTPUT,
-         @cUDF22   OUTPUT, @cUDF23 OUTPUT, @cUDF24 OUTPUT,
-         @cUDF25   OUTPUT, @cUDF26 OUTPUT, @cUDF27 OUTPUT,
-         @cUDF28   OUTPUT, @cUDF29 OUTPUT, @cUDF30 OUTPUT
-         
-         IF @nErrNo <> 0
-         BEGIN
-            GOTO  Quit
-         END
-
-         GOTO Quit
-      END
-   END -- ExtendedScreenSP <> ''
 END -- step 2
 
 GOTO Quit

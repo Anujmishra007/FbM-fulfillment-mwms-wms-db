@@ -79,7 +79,7 @@ BEGIN
    SET @cZone = ''
 
    INSERT INTO @tPSNO
-      SELECT PH.PickSlipNO
+      SELECT DISTINCT PH.PickSlipNO
       FROM PackHeader PH WITH (NOLOCK)
       JOIN PackDetail PD WITH (NOLOCK)
          ON PH.StorerKey = PD.StorerKey
@@ -95,7 +95,7 @@ BEGIN
 
    -- Get PickHeader Info
    INSERT INTO @tOrder
-      SELECT OrderKey
+      SELECT DISTINCT OrderKey
       FROM PickHeader PKH WITH (NOLOCK)
       JOIN @tPSNO PSNO
       ON PKH.PickHeaderKey = PSNO.PickSlipNo

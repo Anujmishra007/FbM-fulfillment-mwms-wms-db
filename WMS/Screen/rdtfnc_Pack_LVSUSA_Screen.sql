@@ -15,21 +15,21 @@ EXECUTE rdt.rdtAddScn 6490, 'ENG'
 -- 6491 = Statistic screen
 DELETE rdt.RDTScn WHERE Scn = 6491 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 6491, 'ENG'
-   ,@cLine01 = 'CartonNo: %10d01'
+   ,@cLine01 = 'CARTON NO: %10d01'
    ,@cLine02 = 'TOTAL PICK: %05d02'
    ,@cLine03 = 'TOTAL PACK: %05d03'
    ,@cLine04 = 'SHORT PICK: %03d04'
-   ,@cLine05 = ''
-   ,@cLine06 = 'CARTON NO:  %08d05'
-   ,@cLine07 = 'CARTON ID:'
-   ,@cLine08 = '%20d06'
-   ,@cLine09 = 'SKU: %04d07 QTY: %05d08'
+   ,@cLine05 = 'SKU: %04d05'
+   ,@cLine06 = 'QTY: %05d06'
+   ,@cLine07 = ''
+   ,@cLine08 = ''
+   ,@cLine09 = ''
    ,@cLine10 = ''
    ,@cLine11 = 'OPTION: %02i09      '
    ,@cLine12 = '1=NEW 2=Merge'
    ,@cLine13 = '%20d15'    -- WMS-10890 ExtInfo
    ,@cLine14 = '%e'
-   ,@cWebGroup = '{"1":["1"],"2":["2","3","4"],"3":["6","7","8","9"],"4":["11","12"],"5":["11"]}'
+   ,@cWebGroup = '{"1":["1"],"2":["2","3","4"],"3":["5","6"],"4":["11","12"],"5":["11"]}'
    ,@nFunc = 993
 /*
 -- 4652 = SKU QTY screen
