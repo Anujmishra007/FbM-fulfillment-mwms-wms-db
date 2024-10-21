@@ -65,6 +65,7 @@ GO
 /* 2020-03-17   3.6  James      WMS-12504 Add auto scan in pickslip (james15) */
 /* 2022-03-09   3.7  yeekung    WMS-18588 Add Extendedvalidate (yeekung01)    */
 /* 2022-05-19   3.8  Ung        WMS-22486 Add pick pallet with UCC            */
+/* 2022-10-21   3.9  PXL009     UWP-25970 Fix Implicit type conversion error  */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_Pick] (
@@ -184,7 +185,7 @@ DECLARE
    @dLottable15            DATETIME,
    @cDropIDBarcode         NVARCHAR( 60),
    @cPickDontShowLot02     NVARCHAR( 20),
-   @cDefaultToPickQty      INT,
+   @cDefaultToPickQty      NVARCHAR( 20),
    @cAutoScanIn            NVARCHAR( 1),  -- (james15)
 
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),
