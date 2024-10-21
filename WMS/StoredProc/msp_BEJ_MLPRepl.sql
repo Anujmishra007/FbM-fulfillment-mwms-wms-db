@@ -23,6 +23,9 @@ GO
 /* 2024-10-08  Wan      1.0   Created.                                  */
 /************************************************************************/
 CREATE OR ALTER PROC msp_BEJ_MLPRepl
+   @c_Storerkey   NVARCHAR(15)   = ''
+,  @c_Facility    NVARCHAR(5)    = ''
+,  @c_OtherConfig NVARCHAR(4000) = ''
 AS
 BEGIN
    SET NOCOUNT ON
@@ -37,103 +40,71 @@ BEGIN
          , @n_Err             INT            = 0
          , @c_ErrMsg          NVARCHAR(255)  = ''
  
-         , @c_Storerkey       NVARCHAR(15)   = ''
-         , @c_Facility        NVARCHAR(5)    = ''
          , @c_Sku             NVARCHAR(20)   = ''
          , @c_Loc             NVARCHAR(10)   = ''
 
          , @CUR_JOB           CURSOR
          , @CUR_REPL          CURSOR
    
-   SET @CUR_JOB = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-   SELECT cl.Storerkey, cl.code2
-   FROM   CODELKUP cl WITH (NOLOCK)
-   WHERE  cl.ListName = 'BEJMLPRepl'
-   AND    cl.SHORT    = 'Y'            --Short:EnableStep
-   ORDER BY cl.UDF01, cl.Code          --UDF01:Priority, Code:JobStep
-   
-   OPEN @CUR_JOB
-   
-   FETCH NEXT FROM @CUR_JOB INTO @c_Storerkey, @c_Facility 
-
-   WHILE @@FETCH_STATUS <> -1
-   BEGIN  
-      BEGIN TRY
-         IF @c_Facility <> ''
-         BEGIN
-            SET @CUR_REPL = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-            SELECT l.Facility
-                  ,sl.Sku
-                  ,sl.Loc
-            FROM   SKUxLOC sl WITH (NOLOCK)
-            JOIN   Loc l WITH (NOLOCK) ON  sl.Loc = l.Loc
-            WHERE  sl.Storerkey = @c_Storerkey
-            AND    sl.LocationType IN ('CASE', 'PICK')
-            AND    l.Facility = @c_Facility
-            ORDER BY sl.Sku
-                  ,  sl.Loc
-         END
-         ELSE
-         BEGIN
-            SET @CUR_REPL = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-            SELECT l.Facility
-                  ,sl.Sku
-                  ,sl.Loc
-            FROM   SKUxLOC sl WITH (NOLOCK)
-            JOIN   Loc l WITH (NOLOCK) ON  sl.Loc = l.Loc
-            WHERE  sl.Storerkey = @c_Storerkey
-            AND    sl.LocationType IN ('CASE', 'PICK')
-            GROUP BY l.Facility
-                  ,  sl.Sku
-                  ,  sl.Loc
-            ORDER BY l.Facility
-                  ,  sl.Sku
-                  ,  sl.Loc
-         END
-
-         OPEN @CUR_REPL
-   
-         FETCH NEXT FROM @CUR_REPL INTO @c_Facility, @c_Sku, @c_Loc
-
-         WHILE @@FETCH_STATUS <> -1 AND @n_Continue = 1
-         BEGIN
-            EXEC isp_ODMRPL01
-               @c_Facility   = @c_Facility 
-            ,  @c_Storerkey  = @c_Storerkey
-            ,  @c_SKU        = @c_SKU      
-            ,  @c_LOC        = @c_LOC      
-            ,  @c_ReplenType = 'T'   -- T=TaskManager/R-Replenishment
-            ,  @c_ReplenishmentGroup = '' 
-            ,  @b_Success    = @b_Success OUTPUT
-            ,  @n_Err        = @n_Err     OUTPUT
-            ,  @c_ErrMsg     = @c_ErrMsg  OUTPUT
-
-            IF @b_Success = 0
-            BEGIN
-               SET @n_Continue = 3
-            END
-
-            FETCH NEXT FROM @CUR_REPL INTO @c_Facility, @c_Sku, @c_Loc
-         END
-         CLOSE @CUR_REPL
-         DEALLOCATE @CUR_REPL
-      END TRY
-
-      BEGIN CATCH
-         SET @n_Continue = 3
-         SET @c_ErrMsg   = ERROR_MESSAGE()
-      END CATCH
-
-      IF (XACT_STATE()) = -1  
-      BEGIN
-         SET @n_Continue = 3 
-         ROLLBACK TRAN
-      END  
-
-      FETCH NEXT FROM @CUR_JOB INTO @c_Storerkey, @c_Facility 
+   IF @c_Facility <> ''
+   BEGIN
+      SET @CUR_REPL = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      SELECT l.Facility
+            ,sl.Sku
+            ,sl.Loc
+      FROM   SKUxLOC sl WITH (NOLOCK)
+      JOIN   Loc l WITH (NOLOCK) ON  sl.Loc = l.Loc
+      WHERE  sl.Storerkey = @c_Storerkey
+      AND    sl.LocationType IN ('CASE', 'PICK')
+      AND    l.Facility = @c_Facility
+      ORDER BY sl.Sku
+            ,  sl.Loc
    END
-   CLOSE @CUR_JOB
-   DEALLOCATE @CUR_JOB
+   ELSE
+   BEGIN
+      SET @CUR_REPL = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      SELECT l.Facility
+            ,sl.Sku
+            ,sl.Loc
+      FROM   SKUxLOC sl WITH (NOLOCK)
+      JOIN   Loc l WITH (NOLOCK) ON  sl.Loc = l.Loc
+      WHERE  sl.Storerkey = @c_Storerkey
+      AND    sl.LocationType IN ('CASE', 'PICK')
+      GROUP BY l.Facility
+            ,  sl.Sku
+            ,  sl.Loc
+      ORDER BY l.Facility
+            ,  sl.Sku
+            ,  sl.Loc
+   END
+
+   OPEN @CUR_REPL
+   
+   FETCH NEXT FROM @CUR_REPL INTO @c_Facility, @c_Sku, @c_Loc
+
+   WHILE @@FETCH_STATUS <> -1 AND @n_Continue = 1
+   BEGIN
+      EXEC isp_ODMRPL01
+         @c_Facility   = @c_Facility 
+      ,  @c_Storerkey  = @c_Storerkey
+      ,  @c_SKU        = @c_SKU      
+      ,  @c_LOC        = @c_LOC      
+      ,  @c_ReplenType = 'T'   -- T=TaskManager/R-Replenishment
+      ,  @c_ReplenishmentGroup = '' 
+      ,  @b_Success    = @b_Success OUTPUT
+      ,  @n_Err        = @n_Err     OUTPUT
+      ,  @c_ErrMsg     = @c_ErrMsg  OUTPUT
+
+      IF @b_Success = 0
+      BEGIN
+         SET @n_Continue = 3
+      END
+
+      FETCH NEXT FROM @CUR_REPL INTO @c_Facility, @c_Sku, @c_Loc
+   END
+   CLOSE @CUR_REPL
+   DEALLOCATE @CUR_REPL
+  
 QUIT_SP:
    IF @n_continue=3    
    BEGIN  
