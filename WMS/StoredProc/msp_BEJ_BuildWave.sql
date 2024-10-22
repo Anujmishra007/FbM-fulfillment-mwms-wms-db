@@ -357,14 +357,14 @@ BEGIN
          AND   o.Userdefine10 = @c_ParcelType
          GROUP BY wd.Wavekey 
          HAVING MIN(o.Status) = '0'
-         AND COUNT(1) <= @n_MaxOrdPerBld
+         AND COUNT(1) < @n_MaxOrdPerBld
          ORDER BY wd.WaveKey
 
          UPDATE BUILDPARMDETAIL WITH (ROWLOCK)
             SET BuildValue = @c_ParcelType
                ,TrafficCop = NULL
          WHERE BuildParmKey = @c_BuildParmKey
-         AND BuildParmLineNo= @c_BuildParmLineNo 
+         AND BuildParmLineNo= @c_BuildParmLineNo
 
          IF @@ERROR <> 0
          BEGIN
@@ -387,19 +387,19 @@ BEGIN
             ,  @n_err            = @n_err          OUTPUT
             ,  @c_ErrMsg         = @c_ErrMsg       OUTPUT
             ,  @c_UserName       = @c_UserName
-            ,  @dt_Date_Fr       = @dt_Date_Fr               
-            ,  @dt_Date_To       = @dt_Date_To  
+            ,  @dt_Date_Fr       = @dt_Date_Fr
+            ,  @dt_Date_To       = @dt_Date_To
             ,  @c_Wavekey        = @c_Wavekey
 
             IF @b_Success = 0
-            BEGIN 
+            BEGIN
                SET @n_Continue = 3
             END
          END
 
          IF @n_Continue = 1
          BEGIN
-            UPDATE #TMP_ORD 
+            UPDATE #TMP_ORD
                SET Wavekey = wd.Wavekey
             FROM #TMP_ORD t
             JOIN WAVEDETAIL wd (NOLOCK) ON wd.Orderkey = t.Orderkey
@@ -431,7 +431,7 @@ BEGIN
 
       OPEN @CUR_ORD
 
-      FETCH NEXT FROM @CUR_ORD INTO @c_Wavekey, @c_ParcelType 
+      FETCH NEXT FROM @CUR_ORD INTO @c_Wavekey, @c_ParcelType
 
       WHILE @@FETCH_STATUS <> -1 AND @n_Continue = 1
       BEGIN
@@ -443,8 +443,8 @@ BEGIN
 
          UPDATE WAVE WITH (ROWLOCK)
             SET UserDefine01 = CONVERT(NVARCHAR(21), @d_DeliveryDate, 121)
-               ,UserDefine02 = CASE WHEN @c_ParcelType = 'PARCEL'
-                                    THEN @c_ParcelType
+               ,UserDefine02 = CASE WHEN @c_ParcelType = 'PARCEL' THEN @c_ParcelType
+                                    WHEN @c_ParcelType = 'UNKNOWN' THEN @c_ParcelType
                                     ELSE UserDefine02
                                     END
                ,EditWho = SUSER_SNAME()
