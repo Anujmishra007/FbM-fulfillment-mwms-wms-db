@@ -27,6 +27,8 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Rev   Purposes                                  */
 /* 2024-06-12  Wan01    1.1   UWP-18392-JCB-MixSkuAllocation for Normal */
+/* 2024-10-09  SSA01    1.2   UWP-24678-JCB- Allocation for Kitting and */
+/*                                    Decanting                         */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[ispPRJCB04] (
      @c_OrderKey        NVARCHAR(10)
@@ -92,8 +94,9 @@ BEGIN
           ,@c_PickDetailKey          NVARCHAR(10)
           ,@c_Type                   NVARCHAR(10)
 
-   SET @c_UOM = '7'   
-   SET @c_Conditions = ' AND LOC.LocationType = ''BULK'' '
+   SET @c_UOM = '7'
+   --Added PA.Zonecategory (SSA01)
+   SET @c_Conditions = ' AND LOC.LocationType = ''BULK'' AND PA.ZoneCategory  = ''EMG'' '
                      --(Wan01) - START
                      + ' AND NOT EXISTS(SELECT 1 FROM LOTXLOCXID L (NOLOCK) WHERE L.Storerkey = LLI.Storerkey      
                          AND L.Sku <> LLI.Sku AND L.Loc = LLI.Loc AND L.Id = LLI.Id AND L.Qty > 0) ' 
@@ -131,7 +134,8 @@ BEGIN
          AND (OD.OpenQty - (OD.QtyAllocated + OD.QtyPicked)) > 0
          AND o.SOStatus <> 'CANC' 
          AND o.Status < '9'            
-         AND O.Type = @c_Type         
+         AND O.Type = @c_Type
+         AND SKU.BUSR7 <> '1'                                         --(SSA01)
          ORDER BY OD.Orderkey, OD.OrderLineNumber
       END
       ELSE IF ISNULL(@c_Loadkey,'') <> ''
@@ -164,7 +168,8 @@ BEGIN
          AND (OD.OpenQty - (OD.QtyAllocated + OD.QtyPicked)) > 0
          AND o.SOStatus <> 'CANC' 
          AND o.Status < '9'                     
-         AND O.Type = @c_Type                  
+         AND O.Type = @c_Type
+         AND SKU.BUSR7 <> '1'                                               --(SSA01)
          ORDER BY OD.Orderkey, OD.OrderLineNumber
       END
       ELSE IF ISNULL(@c_Wavekey,'') <> ''
@@ -197,7 +202,8 @@ BEGIN
          AND (OD.OpenQty - (OD.QtyAllocated + OD.QtyPicked)) > 0
          AND o.SOStatus <> 'CANC' 
          AND o.Status < '9'                     
-         AND O.Type = @c_Type                 
+         AND O.Type = @c_Type
+         AND SKU.BUSR7 <> '1'                                                 --(SSA01)
          ORDER BY OD.Orderkey, OD.OrderLineNumber
       END
       
@@ -264,7 +270,7 @@ BEGIN
                            + '( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '                                                            
             END                                                                                                                
           END              
-          
+         --Joined  PUTAWAYZONE (SSA01)
          SET @c_SQL = ' DECLARE CUR_INV CURSOR FAST_FORWARD READ_ONLY FOR      
             SELECT LLI.Lot, LLI.Loc, LLI.ID, 
                   (LLI.QTY - LLI.QTYALLOCATED - LLI.QTYPICKED - LLI.QtyReplen - ISNULL(REPLEN.ReplenQty,0))
@@ -275,6 +281,7 @@ BEGIN
             JOIN LOTATTRIBUTE LA (NOLOCK) ON LOT.LOT = LA.LOT
             JOIN SKUXLOC SL (NOLOCK) ON (LLI.Storerkey = SL.Storerkey AND LLI.Sku = SL.Sku AND LLI.Loc = SL.Loc)
             JOIN SKU (NOLOCK) ON (LLI.Storerkey = Sku.Storerkey AND LLI.Sku = Sku.Sku)
+            JOIN PUTAWAYZONE PA (NOLOCK) ON LOC.Putawayzone = PA.Putawayzone
             OUTER APPLY (SELECT SUM(PD.Qty) AS RePlenQty
                          FROM PICKDETAIL PD (NOLOCK)
                          WHERE PD.Storerkey = LLI.Storerkey
@@ -296,7 +303,7 @@ BEGIN
             CASE WHEN ISNULL(@c_Lottable02,'') <> '' THEN ' AND LA.Lottable02 = @c_Lottable02 ' ELSE '' END +
             CASE WHEN ISNULL(@c_Lottable03,'') <> '' THEN ' AND LA.Lottable03 = @c_Lottable03 ' ELSE '' END +
             CASE WHEN CONVERT(NVARCHAR(8) ,@d_Lottable04 ,112) <> '19000101' AND @d_Lottable04 IS NOT NULL THEN ' AND LA.Lottable04 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable04, 106)) ' ELSE ' ' END +
-            CASE WHEN CONVERT(NVARCHAR(8) ,@d_Lottable05 ,112) <> '19000101' AND @d_Lottable05 IS NOT NULL THEN ' AND LA.Lottable04 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable05, 106)) ' ELSE ' ' END +
+            CASE WHEN CONVERT(NVARCHAR(8) ,@d_Lottable05 ,112) <> '19000101' AND @d_Lottable05 IS NOT NULL THEN ' AND LA.Lottable05 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable05, 106)) ' ELSE ' ' END +
             CASE WHEN ISNULL(@c_Lottable06,'') <> '' THEN ' AND LA.Lottable06 = @c_Lottable06 ' ELSE '' END +
             CASE WHEN ISNULL(@c_Lottable07,'') <> '' THEN ' AND LA.Lottable07 = @c_Lottable07 ' ELSE '' END +
             CASE WHEN ISNULL(@c_Lottable08,'') <> '' THEN ' AND LA.Lottable08 = @c_Lottable08 ' ELSE '' END +
@@ -304,15 +311,15 @@ BEGIN
             CASE WHEN ISNULL(@c_Lottable10,'') <> '' THEN ' AND LA.Lottable10 = @c_Lottable10 ' ELSE '' END +
             CASE WHEN ISNULL(@c_Lottable11,'') <> '' THEN ' AND LA.Lottable11 = @c_Lottable11 ' ELSE '' END +
             CASE WHEN ISNULL(@c_Lottable12,'') <> '' THEN ' AND LA.Lottable12 = @c_Lottable12 ' ELSE '' END +
-            CASE WHEN CONVERT(NVARCHAR(8) ,@d_Lottable13 ,112) <> '19000101' AND @d_Lottable13 IS NOT NULL THEN ' AND LA.Lottable13 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable04, 106)) ' ELSE ' ' END +
-            CASE WHEN CONVERT(NVARCHAR(8) ,@d_Lottable14 ,112) <> '19000101' AND @d_Lottable14 IS NOT NULL THEN ' AND LA.Lottable14 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable04, 106)) ' ELSE ' ' END +
-            CASE WHEN CONVERT(NVARCHAR(8) ,@d_Lottable15 ,112) <> '19000101' AND @d_Lottable15 IS NOT NULL THEN ' AND LA.Lottable15 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable04, 106)) ' ELSE ' ' END +
+            CASE WHEN CONVERT(NVARCHAR(8) ,@d_Lottable13 ,112) <> '19000101' AND @d_Lottable13 IS NOT NULL THEN ' AND LA.Lottable13 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable13, 106)) ' ELSE ' ' END +
+            CASE WHEN CONVERT(NVARCHAR(8) ,@d_Lottable14 ,112) <> '19000101' AND @d_Lottable14 IS NOT NULL THEN ' AND LA.Lottable14 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable14, 106)) ' ELSE ' ' END +
+            CASE WHEN CONVERT(NVARCHAR(8) ,@d_Lottable15 ,112) <> '19000101' AND @d_Lottable15 IS NOT NULL THEN ' AND LA.Lottable15 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable15, 106)) ' ELSE ' ' END +
           ' ORDER BY LA.Lottable05, LOC.LogicalLocation, LLI.Loc '
           
          SET @c_SQLParm =  N'@c_StorerKey NVARCHAR(15), @c_SKU NVARCHAR(20), @c_Facility NVARCHAR(5), ' +
                             '@c_Lottable01 NVARCHAR(18), @c_Lottable02 NVARCHAR(18), @c_Lottable03 NVARCHAR(18), @d_Lottable04 DATETIME, @d_Lottable05 DATETIME, ' +
                             '@c_Lottable06 NVARCHAR(30), @c_Lottable07 NVARCHAR(30), @c_Lottable08 NVARCHAR(30), @c_Lottable09 NVARCHAR(30), @c_Lottable10 NVARCHAR(30), ' +
-                            '@c_Lottable11 NVARCHAR(30), @c_Lottable12 NVARCHAR(30), @d_Lottable013 DATETIME, @d_Lottable14 DATETIME, @d_Lottable15 DATETIME '
+                            '@c_Lottable11 NVARCHAR(30), @c_Lottable12 NVARCHAR(30), @d_Lottable13 DATETIME, @d_Lottable14 DATETIME, @d_Lottable15 DATETIME '
          
          EXEC sp_ExecuteSQL @c_SQL, @c_SQLParm, 
              @c_StorerKey, @c_SKU, @c_Facility, @c_Lottable01, @c_Lottable02, @c_Lottable03, @d_Lottable04, @d_Lottable05,
