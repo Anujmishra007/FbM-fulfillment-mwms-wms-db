@@ -22,7 +22,8 @@ GO
 /*                              Fix validation fail cursor on next field      */
 /* 08/02-2017  1.7  Ung         WMS-1000 Add VERIFY                           */
 /* 08-05-2024  1.8  Dennis      UWP-19017 Add VERIFY                          */
-/* 23-10-2024  1.9  Dennis      Regardless of if editable, call process sp    */
+/* 23-10-2024  1.9  Dennis      UWP-26096 Regardless of if editable,          */
+/*                              call process sp                               */
 /******************************************************************************/
 
 CREATE OR ALTER PROCEDURE rdt.rdt_Lottable
