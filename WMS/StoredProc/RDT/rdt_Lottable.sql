@@ -22,6 +22,7 @@ GO
 /*                              Fix validation fail cursor on next field      */
 /* 08/02-2017  1.7  Ung         WMS-1000 Add VERIFY                           */
 /* 08-05-2024  1.8  Dennis      UWP-19017 Add VERIFY                          */
+/* 23-10-2024  1.9  Dennis      Regardless of if editable, call process sp    */
 /******************************************************************************/
 
 CREATE OR ALTER PROCEDURE rdt.rdt_Lottable
@@ -891,7 +892,7 @@ BEGIN
                IF @nLottableNo = 15 SELECT @cLottable = rdt.rdtFormatDate( @dLottable15)
    
                -- Dynamic lottable rule (POST)
-               IF @nInputKey = 1 AND @cFieldAttr = '' -- ENTER and enable
+               IF @nInputKey = 1 AND (@cFieldAttr = '' OR ISNULL(rdt.RDTGetConfig( @nFunc, 'LotIgnoreIfEditable', @cStorerKey),'') = '1') -- ENTER and enable or Config is open
                   EXEC rdt.rdt_Lottable_Rule @nMobile, @nFunc, @cLangCode, @nInputKey, @cStorerKey, @cSKU, @cLottableCode, @nLottableNo, @cLottable, 'POST', 
                      @cLottable01 OUTPUT, @cLottable02 OUTPUT, @cLottable03 OUTPUT, @dLottable04 OUTPUT, @dLottable05 OUTPUT,  
                      @cLottable06 OUTPUT, @cLottable07 OUTPUT, @cLottable08 OUTPUT, @cLottable09 OUTPUT, @cLottable10 OUTPUT,  
