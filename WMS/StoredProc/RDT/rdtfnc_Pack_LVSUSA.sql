@@ -68,17 +68,21 @@ DECLARE
    @nFromScn         INT,
    @nFromStep        INT,
 
-   @cPackDtlRefNo    NVARCHAR( 20),
-   @cPackDtlRefNo2   NVARCHAR( 20),
-   @cLabelNo         NVARCHAR( 20),
-   @cCartTrkLabelNo  NVARCHAR( 20),
-   @cCartonType      NVARCHAR( 10),
-   @cCube            NVARCHAR( 10),
-   @cWeight          NVARCHAR( 10),
-   @cRefNo           NVARCHAR( 20),
-   @cLabelLine       NVARCHAR( 5),
-   @cPackDtlDropID   NVARCHAR( 20),
-   @cUCCCounter      NVARCHAR( 5),
+   @cPackDtlRefNo       NVARCHAR( 20),
+   @cPackDtlRefNo2      NVARCHAR( 20),
+   @cLabelNo            NVARCHAR( 20),
+   @cCartTrkLabelNo     NVARCHAR( 20),
+   @cCartonType         NVARCHAR( 10),
+   @cCube               NVARCHAR( 10),
+   @cWeight             NVARCHAR( 10),
+   @cRefNo              NVARCHAR( 20),
+   @cLabelLine          NVARCHAR( 5),
+   @cPackDtlDropID      NVARCHAR( 20),
+   @cUCCCounter         NVARCHAR( 5),
+   @cFromLabelNo        NVARCHAR( 20),
+   @cFromCartTrkLabelNo NVARCHAR( 20),
+   @cNewLabelNo         NVARCHAR( 20),
+   @cMasterLabelNo      NVARCHAR( 20),
                      
    @nCartonNo        INT,
    @nCartonSKU       INT,
@@ -95,6 +99,7 @@ DECLARE
    @cDefaultPrintPackListOption  NVARCHAR( 1),
    @cDefaultWeight      NVARCHAR( 1),
    @cFromDropID         NVARCHAR( 20),
+
    @cExtendedValidateSP NVARCHAR( 20),
    @cExtendedUpdateSP   NVARCHAR( 20),
    @cExtendedInfoSP     NVARCHAR( 20),
@@ -150,6 +155,7 @@ DECLARE
    @cJumpType           NVARCHAR( 10), --(JHU151) Forward/Back
    @tExtScnData			VariableTable, --(JHU151)
    @cPackByFromDropID   NVARCHAR( 1),
+   @nTranCount          INT, --JCH507 FCR946 temp
 
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),   @cFieldAttr01 NVARCHAR( 1), @cLottable01  NVARCHAR( 18),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),   @cFieldAttr02 NVARCHAR( 1), @cLottable02  NVARCHAR( 18),
@@ -197,14 +203,14 @@ SELECT
    @cSKU             = V_SKU,
    @nQTY             = V_QTY,
    @cSKUDescr        = V_SKUDescr,
-   -- @cCustomID        = V_CaseID,
+   @cCustomID        = V_CaseID,
    @nFromScn         = V_FromScn,
    @nFromStep        = V_FromStep,
    @cPUOM            = V_UOM,
 
    @cPackDtlRefNo       = V_String1,
    @cPackDtlRefNo2      = V_String2,
-   @cLabelNo            = V_String3,
+   @cMasterLabelNo      = V_String3, -- fcr946
    @cCartonType         = V_String4,
    @cCube               = V_String5,
    @cWeight             = V_String6,
@@ -235,7 +241,7 @@ SELECT
    @cDefaultPrintPackListOption = V_String17,
    @cDefaultWeight      = V_String18,
    @cUCCNo              = V_String19,
-   @cFromDropID         = V_String20,
+   @cFromLabelNo        = V_String20,
    @cExtendedValidateSP = V_String21,
    @cExtendedUpdateSP   = V_String22,
    @cExtendedInfoSP     = V_String23,
@@ -246,26 +252,26 @@ SELECT
    @cPackInfo           = V_String28,
    @cAllowWeightZero    = V_String29,
    @cAllowCubeZero      = V_String30,
-   @cAutoScanIn         = V_String31,
+   --@cAutoScanIn         = V_String31,
    @cDefaultOption      = V_String32,
    @cDisableOption      = V_String33,
-   @cSerialNoCapture    = V_String34,
+   --@cSerialNoCapture    = V_String34,
    @cPackList           = V_String35,
    @cShipLabel          = V_String36,
    @cCartonManifest     = V_String37,
-   @cCustomCartonNo     = V_String38,
-   @cCustomNo           = V_String39,
+   --@cCustomCartonNo     = V_String38,
+   --@cCustomNo           = V_String39,
    @cDataCaptureSP      = V_String40,
    @cPackDtlUPC         = V_String41,
-   @cPrePackIndicator   = V_String42,
-   @cPackQtyIndicator   = V_String43,
+   --@cPrePackIndicator   = V_String42,
+   --@cPackQtyIndicator   = V_String43,
    @cPackData1          = V_String44,
    @cPackData2          = V_String45,
    @cPackData3          = V_String46,
-   @cMultiSKUBarcode    = V_String47,
+   @cFromLabelNo        = V_String47, --fcr946
    @cDefaultQTY         = V_String48, --(cc01)
    @cDefaultcartontype  = V_String49,
-   @cPackByFromDropID   = V_String50,
+   @cNewLabelNo         = V_String50, -- fcr946
 
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,  @cFieldAttr01 = FieldAttr01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,  @cFieldAttr02 = FieldAttr02,
@@ -292,8 +298,10 @@ BEGIN
    IF @nStep = 0  GOTO Step_0  -- Menu. Func = 993
    IF @nStep = 1  GOTO Step_1  -- Scn = 6490. PickSlipNo, FromDropID, ToDropID
    IF @nStep = 2  GOTO Step_2  -- Scn = 6491. Statistic
+   IF @nStep = 3  GOTO Step_3  -- Scn = 4692. SKU QTY
+   IF @nStep = 4  GOTO Step_4  -- Scn = 4693. From Carton
+
    /*
-   IF @nStep = 3  GOTO Step_3  -- Scn = 4652. SKU QTY
    IF @nStep = 4  GOTO Step_4  -- Scn = 4653. Carton type, weight, cube, refno
    IF @nStep = 5  GOTO Step_5  -- Scn = 4654. Print label?
    IF @nStep = 6  GOTO Step_6  -- Scn = 4655. Print packing list?
@@ -301,8 +309,8 @@ BEGIN
    IF @nStep = 8  GOTO Step_8  -- Scn = 4657. UCC
    IF @nStep = 9  GOTO Step_9  -- Scn = 4830. Serial no
    IF @nStep = 10 GOTO Step_10 -- Scn = 4659. Data 1..3
-   IF @nStep = 11 GOTO Step_11 -- Scn = 3570. Multi SKU Barocde
-   IF @nStep = 99 GOTO Step_99 -- Extend SCN*/
+   IF @nStep = 11 GOTO Step_11 -- Scn = 3570. Multi SKU Barocde*/
+
 END
 RETURN -- Do nothing if incorrect step
 
@@ -316,31 +324,42 @@ BEGIN
    SELECT @cPUOM = DefaultUOM FROM rdt.rdtUser WITH (NOLOCK) WHERE UserName = @cUserName
    
    -- Get storer configure
-   SET @cAllowCubeZero = rdt.rdtGetConfig( @nFunc, 'AllowCubeZero', @cStorerKey)
-   SET @cAllowWeightZero = rdt.rdtGetConfig( @nFunc, 'AllowWeightZero', @cStorerKey)
-   SET @cAutoScanIn = rdt.rdtGetConfig( @nFunc, 'AutoScanIn', @cStorerKey)
-   SET @cCustomCartonNo = rdt.rdtGetConfig( @nFunc, 'CustomCartonNo', @cStorerKey)
-   SET @cDefaultWeight = rdt.RDTGetConfig( @nFunc, 'DefaultWeight', @cStorerKey)
+   --SET @cAllowCubeZero = rdt.rdtGetConfig( @nFunc, 'AllowCubeZero', @cStorerKey)
+   --SET @cAllowWeightZero = rdt.rdtGetConfig( @nFunc, 'AllowWeightZero', @cStorerKey)
+   --SET @cAutoScanIn = rdt.rdtGetConfig( @nFunc, 'AutoScanIn', @cStorerKey)
+   --SET @cCustomCartonNo = rdt.rdtGetConfig( @nFunc, 'CustomCartonNo', @cStorerKey)
+   --SET @cDefaultWeight = rdt.RDTGetConfig( @nFunc, 'DefaultWeight', @cStorerKey)
    SET @cDisableOption = rdt.rdtGetConfig( @nFunc, 'DisableOption', @cStorerKey)
    SET @cDisableQTYField = rdt.rdtGetConfig( @nFunc, 'DisableQTYField', @cStorerKey)
-   SET @cFlowThruScreen = rdt.RDTGetConfig( @nFunc, 'FlowThruScreen', @cStorerKey)
-   SET @cMultiSKUBarcode = rdt.RDTGetConfig( @nFunc, 'MultiSKUBarcode', @cStorerKey)
-   SET @cPackByFromDropID = rdt.rdtGetConfig( @nFunc, 'PackByFromDropID', @cStorerKey)
-   SET @cSerialNoCapture = rdt.RDTGetConfig( @nFunc, 'SerialNoCapture', @cStorerKey)
-   SET @cShowPickSlipNo = rdt.RDTGetConfig( @nFunc, 'ShowPickSlipNo', @cStorerKey)   
+   --SET @cFlowThruScreen = rdt.RDTGetConfig( @nFunc, 'FlowThruScreen', @cStorerKey)
+   --SET @cMultiSKUBarcode = rdt.RDTGetConfig( @nFunc, 'MultiSKUBarcode', @cStorerKey)
+   -- SET @cSerialNoCapture = rdt.RDTGetConfig( @nFunc, 'SerialNoCapture', @cStorerKey)
+   --SET @cShowPickSlipNo = rdt.RDTGetConfig( @nFunc, 'ShowPickSlipNo', @cStorerKey)
+   SET @cDisableQTYFieldSP = rdt.RDTGetConfig( @nFunc, 'DisableQTYFieldSP', @cStorerKey)
+   IF @cDisableQTYFieldSP = '0'
+      SET @cDisableQTYFieldSP = ''
+   SET @cExtendedValidateSP = rdt.rdtGetConfig( @nFunc, 'ExtendedValidateSP', @cStorerKey)
+   IF @cExtendedValidateSP = '0'
+      SET @cExtendedValidateSP = ''
+   SET @cExtendedUpdateSP = rdt.rdtGetConfig( @nFunc, 'ExtendedUpdateSP', @cStorerKey)
+   IF @cExtendedUpdateSP = '0'
+      SET @cExtendedUpdateSP = ''
+   SET @cExtendedInfoSP = rdt.rdtGetConfig( @nFunc, 'ExtendedInfoSP', @cStorerKey)
+   IF @cExtendedInfoSP = '0'
+      SET @cExtendedInfoSP = ''
+   SET @cDecodeSP = rdt.rdtGetConfig( @nFunc, 'DecodeSP', @cStorerKey)
+   IF @cDecodeSP = '0'
+      SET @cDecodeSP = ''
+   SET @cDataCaptureSP = rdt.RDTGetConfig( @nFunc, 'DataCaptureSP', @cStorerKey)
+   IF @cDataCaptureSP = '0'
+      SET @cDataCaptureSP = ''   
 
-   SET @cCapturePackInfoSP = rdt.RDTGetConfig( @nFunc, 'CapturePackInfoSP', @cStorerKey)
+   /*SET @cCapturePackInfoSP = rdt.RDTGetConfig( @nFunc, 'CapturePackInfoSP', @cStorerKey)
    IF @cCapturePackInfoSP = '0'
       SET @cCapturePackInfoSP = ''
    SET @cCartonManifest = rdt.RDTGetConfig( @nFunc, 'CartonManifest', @cStorerKey)
    IF @cCartonManifest = '0'
       SET @cCartonManifest = ''
-   SET @cDataCaptureSP = rdt.RDTGetConfig( @nFunc, 'DataCaptureSP', @cStorerKey)
-   IF @cDataCaptureSP = '0'
-      SET @cDataCaptureSP = ''
-   SET @cDecodeSP = rdt.rdtGetConfig( @nFunc, 'DecodeSP', @cStorerKey)
-   IF @cDecodeSP = '0'
-      SET @cDecodeSP = ''
    SET @cDefaultcartontype=rdt.RDTGetConfig( @nFunc, 'DefaultCartonType', @cStorerKey)  --(cc01)
    IF @cDefaultcartontype = '0'
       SET @cDefaultcartontype = ''
@@ -356,24 +375,12 @@ BEGIN
    SET @cDefaultQTY = rdt.RDTGetConfig( @nFunc, 'DefaultQTY', @cStorerKey)  --(cc01)
    IF @cDefaultQTY = '0'
       SET @cDefaultQTY = ''
-   SET @cDisableQTYFieldSP = rdt.RDTGetConfig( @nFunc, 'DisableQTYFieldSP', @cStorerKey)
-   IF @cDisableQTYFieldSP = '0'
-      SET @cDisableQTYFieldSP = ''
-   SET @cExtendedValidateSP = rdt.rdtGetConfig( @nFunc, 'ExtendedValidateSP', @cStorerKey)
-   IF @cExtendedValidateSP = '0'
-      SET @cExtendedValidateSP = ''
-   SET @cExtendedUpdateSP = rdt.rdtGetConfig( @nFunc, 'ExtendedUpdateSP', @cStorerKey)
-   IF @cExtendedUpdateSP = '0'
-      SET @cExtendedUpdateSP = ''
-   SET @cExtendedInfoSP = rdt.rdtGetConfig( @nFunc, 'ExtendedInfoSP', @cStorerKey)
-   IF @cExtendedInfoSP = '0'
-      SET @cExtendedInfoSP = ''
    SET @cPackList = rdt.RDTGetConfig( @nFunc, 'PackList', @cStorerKey)
    IF @cPackList = '0'
       SET @cPackList = ''
    SET @cShipLabel = rdt.RDTGetConfig( @nFunc, 'ShipLabel', @cStorerKey)
    IF @cShipLabel = '0'
-      SET @cShipLabel = ''
+      SET @cShipLabel = ''*/
 
    -- EventLog
    EXEC RDT.rdt_STD_EventLog
@@ -442,6 +449,8 @@ BEGIN
          ELSE
             SET @cLabelNo = @cCartTrkLabelNo -- retrieve label 
       END
+
+      SET @cMasterLabelNo = @cLabelNo
 
       -- Check LabelNo
       EXEC rdt.rdt_Pack_LVSUSA_Validate @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 'LabelNo'
@@ -544,7 +553,7 @@ BEGIN
       SET @nTotalShort  = 0
 
       -- Get task
-      EXEC rdt.rdt_Pack_GetStat @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 'CURRENT'
+      EXEC rdt.rdt_Pack_LVSUSA_GetStat @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 'CURRENT'
          ,@cPickSlipNo
          ,@cFromDropID
          ,@cPackDtlDropID
@@ -564,12 +573,13 @@ BEGIN
          GOTO Quit
 
       -- Prepare next screen var
-      SET @cOutField01 = @cLabelNo
+      SET @cOutField01 = @cMasterLabelNo
       SET @cOutField02 = CAST( @nTotalPick AS NVARCHAR(8))  
       SET @cOutField03 = CAST( @nTotalPack AS NVARCHAR(8))  
       SET @cOutField04 = CAST( @nTotalShort AS NVARCHAR(8)) 
       SET @cOutField05 = CAST( @nCartonSKU AS NVARCHAR(5))
       SET @cOutField06 = CAST( @nCartonQTY AS NVARCHAR(5))
+      SET @cOutField09 = @cDefaultOption
 
       /*
       SET @cOutField05 = ''--RTRIM( @cCustomNo) + '/' + CAST( @nTotalCarton AS NVARCHAR(5))
@@ -578,14 +588,6 @@ BEGIN
       SET @cOutField08 = CAST( @nCartonQTY AS NVARCHAR(5))
       SET @cOutField09 = @cDefaultOption
       */
-
-      IF EXISTS( SELECT 1 FROM STRING_SPLIT( @cFlowThruScreen, ',') WHERE TRIM( value) = '2') -- Statistic screen 
-      BEGIN
-         SET @cInField09 = '1' -- Option
-         SET @nScn = @nScn + 1
-         SET @nStep = @nStep + 1
-         GOTO Step_2
-      END
 
       -- Go to statistic screen
       SET @nScn = 6491
@@ -604,6 +606,9 @@ BEGIN
          @cFacility   = @cFacility,
          @cStorerKey  = @cStorerKey,
          @nStep       = @nStep
+
+      --Clear MasterLabelNo
+      SET @cMasterLabelNo = ''
 
       -- Back to menu
       SET @nFunc = @nMenu
@@ -625,50 +630,23 @@ BEGIN
    BEGIN
       -- Screen mapping
       SET @cOption = @cInField09
+      SET @cLabelNo = @cMasterLabelNo
 
-      -- Loop blank
+      -- Need option
       IF @cOption = ''
       BEGIN
-         -- Get task
-         EXEC rdt.rdt_Pack_GetStat @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 'NEXT'
-            ,@cPickSlipNo
-            ,@cFromDropID
-            ,@cPackDtlDropID
-            ,@nCartonNo    OUTPUT
-            ,@cLabelNo     OUTPUT
-            ,@cCustomNo    OUTPUT
-            ,@cCustomID    OUTPUT
-            ,@nCartonSKU   OUTPUT
-            ,@nCartonQTY   OUTPUT
-            ,@nTotalCarton OUTPUT
-            ,@nTotalPick   OUTPUT
-            ,@nTotalPack   OUTPUT
-            ,@nTotalShort  OUTPUT
-            ,@nErrNo       OUTPUT
-            ,@cErrMsg      OUTPUT
-         IF @nErrNo <> 0
-            GOTO Quit
-
-         -- Prepare next screen var
-         SET @cOutField01 = @cPickSlipNo
-         SET @cOutField02 = CAST( @nTotalPick AS NVARCHAR(8))  -- ZG02
-         SET @cOutField03 = CAST( @nTotalPack AS NVARCHAR(8))  -- ZG02
-         SET @cOutField04 = CAST( @nTotalShort AS NVARCHAR(8))  -- ZG02
-         SET @cOutField05 = RTRIM( @cCustomNo) + '/' + CAST( @nTotalCarton AS NVARCHAR(5))
-         SET @cOutField06 = @cCustomID
-         SET @cOutField07 = CAST( @nCartonSKU AS NVARCHAR(5))
-         SET @cOutField08 = CAST( @nCartonQTY AS NVARCHAR(5))
-         SET @cOutField09 = '' -- Option
-
+         SET @nErrNo = 226454
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Need Option
+         SET @cOutField08 = '' -- Option
          GOTO Quit
       END
 
       -- Validate option
-      IF @cOption NOT IN ('1', '2', '3', '4')
+      IF @cOption NOT IN ('1', '2')
       BEGIN
-         SET @nErrNo = 100205
+         SET @nErrNo = 226455
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Option
-         SET @cOutField08 = '' -- Option
+         SET @cOutField09 = '' -- Option
          GOTO Quit
       END
 
@@ -677,13 +655,14 @@ BEGIN
       BEGIN
          IF CHARINDEX( @cOption, @cDisableOption) > 0
          BEGIN
-            SET @nErrNo = 100205
+            SET @nErrNo = 226456
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --DisabledOption
-            SET @cOutField08 = '' -- Option
+            SET @cOutField09 = '' -- Option
             GOTO Quit
          END
       END
 
+      /*
       -- Check Pack confirmed
       IF EXISTS( SELECT 1 FROM PackHeader WITH (NOLOCK) WHERE PickSlipNo = @cPickSlipNo AND Status = '9')
       BEGIN
@@ -698,7 +677,7 @@ BEGIN
          SET @nErrNo = 100224
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --No carton
          GOTO Quit
-      END
+      END*/
 
       -- Extended validate
       IF @cExtendedValidateSP <> ''
@@ -821,7 +800,7 @@ BEGIN
       IF @cOption = '1'
       BEGIN
          SET @nCartonNo = 0
-         SET @cLabelNo = ''
+         -- SET @cLabelNo = '' -- JCH507, FCR946
          SET @cSKU = ''
          SET @nPackedQTY = 0
          SET @nCartonSKU = 0
@@ -853,18 +832,37 @@ BEGIN
          -- Go to SKU QTY screen
          SET @nScn = @nScn + 1
          SET @nStep = @nStep + 1
-      END
-
-      -- Edit carton
+      END -- Option 1
+      -- Merge Carton
       ELSE IF @cOption = '2'
       BEGIN
          -- Check UCC
-         IF EXISTS( SELECT 1 FROM PackInfo WITH (NOLOCK) WHERE PickSlipNo = @cPickSlipNo AND CartonNo = @nCartonNo AND UCCNo <> '')
+         IF EXISTS( SELECT 1 FROM PackInfo PI WITH (NOLOCK) 
+                     JOIN PackDetail PD WITH (NOLOCK)
+                     ON PI.PickSlipNo = PD.PickSlipNo
+                        AND PI.CartonNo = PD.CartonNo
+                     WHERE PD.LabelNo = @cMasterLabelNo 
+                        AND UCCNo <> '')
          BEGIN
-            SET @nErrNo = 100229
+            SET @nErrNo = 226457
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Cannot EditUCC
             GOTO Quit
          END
+
+         SET @cOutField01 = @cMasterLabelNo
+         SET @cOutField02 = ''
+
+         EXEC rdt.rdtSetFocusField @nMobile, 2  -- From Carton
+
+         -- Go to From Carton screen
+         SET @nScn = 6493
+         SET @nStep = 4
+
+      END
+      /*
+      ELSE IF @cOption = '2'
+      BEGIN
+         
 
          -- Get carton info
          SELECT TOP 1
@@ -978,24 +976,7 @@ BEGIN
          SET @nScn = @nScn + 5
          SET @nStep = @nStep + 5
       END
-
-      -- UCC
-      ELSE IF @cOption = '4'
-      BEGIN
-         -- Get total UCC
-         SELECT @nTotalUCC = COUNT(1) FROM PackInfo WITH (NOLOCK) WHERE PickSlipNo = @cPickSlipNo AND UCCNo <> ''
-
-         SET @cUCCCounter = ''
-
-         -- Prepare next screen var
-         SET @cOutField01 = '' -- UCC
-         SET @cOutField02 = '' -- Scan
-         SET @cOutField03 = CAST( @nTotalUCC AS NVARCHAR( 5))
-
-         -- Go to UCC screen
-         SET @nScn = @nScn + 6
-         SET @nStep = @nStep + 6
-      END
+      */
 
       -- Extended info
       IF @cExtendedInfoSP <> ''
@@ -1053,12 +1034,14 @@ BEGIN
             IF @nStep = 3
                SET @cOutField15 = @cExtendedInfo
          END
-      END
+      END --Extended info
    END
 
    IF @nInputKey = 0 -- ESC
    BEGIN
       SET @cPrintPackList = ''
+      SET @cLabelNo = @cMasterLabelNo
+
       EXEC rdt.rdt_Pack_LVSUSA_PackConfirm @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey
          ,@cPickSlipNo
          ,@cFromDropID
@@ -1153,7 +1136,7 @@ GOTO Quit
 
 
 /********************************************************************************
-Scn = 4652. SKU QTY screen
+Scn = 4692. SKU QTY screen
    CARTON NO   (field01)
    SKUCount    (field02)
    CartonSKU   (field02)
@@ -1186,6 +1169,14 @@ BEGIN
       SET @cUPC = LEFT( @cInField03, 30) -- SKU
       SET @cMQTY = CASE WHEN @cFieldAttr08 = 'O' THEN '' ELSE @cInField08 END
       SET @cPQTY = CASE WHEN @cFieldAttr14 = 'O' THEN '' ELSE @cInField14 END
+
+      -- if outfield01=NEW means it is the 1st SKYQty screen after select New
+      IF @cOutField01 = 'NEW'
+         SET @cLabelNo = ''
+      ELSE
+         SET @cLabelNo = @cOutField01
+
+      SET @cNewLabelNo = @cLabelNo
 
       -- Retain value
       SET @cOutField08 = CASE WHEN @cFieldAttr08 = 'O' THEN @cOutField08 ELSE @cInField08 END -- PQTY
@@ -1499,7 +1490,7 @@ BEGIN
          -- Check SKU valid
          IF @nSKUCnt = 0
          BEGIN
-            SET @nErrNo = 100207
+            SET @nErrNo = 226460
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid SKU
             GOTO Step_3_Fail
          END
@@ -1508,53 +1499,9 @@ BEGIN
          -- Check barcode return multi SKU
          IF @nSKUCnt > 1
          BEGIN
-            IF @cMultiSKUBarcode IN ('1', '2')
-            BEGIN
-               EXEC rdt.rdt_MultiSKUBarcode @nMobile, @nFunc, @cLangCode,
-                  @cInField01 OUTPUT,  @cOutField01 OUTPUT,
-                  @cInField02 OUTPUT,  @cOutField02 OUTPUT,
-                  @cInField03 OUTPUT,  @cOutField03 OUTPUT,
-                  @cInField04 OUTPUT,  @cOutField04 OUTPUT,
-                  @cInField05 OUTPUT,  @cOutField05 OUTPUT,
-                  @cInField06 OUTPUT,  @cOutField06 OUTPUT,
-                  @cInField07 OUTPUT,  @cOutField07 OUTPUT,
-                  @cInField08 OUTPUT,  @cOutField08 OUTPUT,
-                  @cInField09 OUTPUT,  @cOutField09 OUTPUT,
-                  @cInField10 OUTPUT,  @cOutField10 OUTPUT,
-                  @cInField11 OUTPUT,  @cOutField11 OUTPUT,
-                  @cInField12 OUTPUT,  @cOutField12 OUTPUT,
-                  @cInField13 OUTPUT,  @cOutField13 OUTPUT,
-                  @cInField14 OUTPUT,  @cOutField14 OUTPUT,
-                  @cInField15 OUTPUT,  @cOutField15 OUTPUT,
-                  'POPULATE',
-                  @cMultiSKUBarcode,
-                  @cStorerKey,
-                  @cUPC     OUTPUT,
-                  @nErrNo   OUTPUT,
-                  @cErrMsg  OUTPUT,
-                  'PICKSLIPNO',    -- DocType
-                  @cPickSlipNo
-
-               IF @nErrNo = 0 -- Populate multi SKU screen
-               BEGIN
-                  -- Go to Multi SKU screen
-                  SET @nFromScn = @nScn
-                  SET @nScn = 3570
-                  SET @nStep = @nStep + 8
-                  GOTO Quit
-               END
-               IF @nErrNo = -1 -- Found in Doc, skip multi SKU screen
-               BEGIN
-                  SET @nErrNo = 0
-                  SET @cSKU = @cUPC
-               END
-            END
-            ELSE
-            BEGIN
-               SET @nErrNo = 100208
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --MultiSKUBarcod
-               GOTO Step_3_Fail
-            END
+            SET @nErrNo = 226461
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --MultiSKUBarcod
+            GOTO Step_3_Fail
          END
 
          IF @nSKUCnt = 1
@@ -1567,11 +1514,12 @@ BEGIN
 
          SET @cSKU = @cUPC
 
-         -- Check SKU in PickSlipNo
-         EXEC rdt.rdt_Pack_Validate @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 'SKU'
+         -- Check scanned SKU in the master (original) Carton
+         EXEC rdt.rdt_Pack_LVSUSA_Validate @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 'SKU'
             ,@cPickSlipNo
             ,@cFromDropID
             ,@cPackDtlDropID
+            ,@cMasterLabelNo
             ,@cSKU
             ,0 --@nQTY
             ,0 --@nCartonNo
@@ -1612,11 +1560,13 @@ BEGIN
 
          -- Get PackDetail info
          SET @nPackedQTY = 0
+
+
          SELECT @nPackedQTY = QTY
          FROM PackDetail PD WITH (NOLOCK)
-         WHERE PD.PickSlipNo = @cPickSlipNo
-            AND PD.CartonNo = @nCartonNo -- Could be 0, no record
+         WHERE PD.LabelNo = @cLabelNo -- Get info from the new carton
             AND PD.SKU = @cSKU
+
 
          -- Disable QTY field (cc03)
          IF @cDisableQTYFieldSP <> ''
@@ -1744,7 +1694,7 @@ BEGIN
          SET @cOutField05 = rdt.rdtFormatString( @cSKUDescr, 1, 20)
          SET @cOutField06 = rdt.rdtFormatString( @cSKUDescr, 21, 20)
          SET @cOutField07 = CAST( @nPackedQTY AS NVARCHAR( 8))    -- ZG02
-         SET @cOutField10 = CASE WHEN @cPrePackIndicator = '2' THEN @cPackQtyIndicator ELSE '' END
+         --SET @cOutField10 = CASE WHEN @cPrePackIndicator = '2' THEN @cPackQtyIndicator ELSE '' END --fcr946
          SET @cOutField11 = '1:' + CASE WHEN @nPUOM_Div > 99999 THEN '*' ELSE CAST( @nPUOM_Div AS NCHAR( 5)) END
          SET @cOutField12 = rdt.rdtRightAlign( @cPUOM_Desc, 5)
          SET @cOutField13 = rdt.rdtRightAlign( @cMUOM_Desc, 5)
@@ -1766,86 +1716,22 @@ BEGIN
          EXEC rdt.rdtSetFocusField @nMobile, 8
       END
 
-      
-      --JHU151
-      Step_3_ExtScn:
-      BEGIN
-         SET @nAction = 3 --Prepare output fields
-         SET @cExtendedScreenSP = rdt.RDTGetConfig( @nFunc, 'ExtScnSP', @cStorerKey)
-         IF @cExtendedScreenSP = '0'
-         BEGIN
-            SET @cExtendedScreenSP = ''
-         END
-         IF @cExtendedScreenSP <> ''
-         BEGIN
-            IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
-               AND @nEnter = 0
-            BEGIN
-               DELETE FROM @tExtScnData
-               INSERT INTO @tExtScnData (Variable, Value) VALUES 	
-               ('@cPickSlipNo',     @cPickSlipNo),
-               ('@cSKU',            @cUPC)
-
-               EXECUTE [RDT].[rdt_ExtScnEntry] 
-               @cExtendedScreenSP, 
-               @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorerKey, @tExtScnData ,
-               @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01 OUTPUT,  
-               @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02 OUTPUT,  
-               @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03 OUTPUT,  
-               @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04 OUTPUT,  
-               @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  @dLottable05 OUTPUT,  
-               @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  @cLottable06 OUTPUT, 
-               @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  @cLottable07 OUTPUT, 
-               @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  @cLottable08 OUTPUT, 
-               @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  @cLottable09 OUTPUT, 
-               @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  @cLottable10 OUTPUT, 
-               @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  @cLottable11 OUTPUT,
-               @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT,  @cLottable12 OUTPUT,
-               @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  @dLottable13 OUTPUT,
-               @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT,  @dLottable14 OUTPUT,
-               @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT,  @dLottable15 OUTPUT,
-               @nAction, 
-               @nScn OUTPUT,  @nStep OUTPUT,
-               @nErrNo   OUTPUT, 
-               @cErrMsg  OUTPUT,
-               @cUDF01   OUTPUT, @cUDF02 OUTPUT, @cUDF03 OUTPUT,
-               @cUDF04   OUTPUT, @cUDF05 OUTPUT, @cUDF06 OUTPUT,
-               @cUDF07   OUTPUT, @cUDF08 OUTPUT, @cUDF09 OUTPUT,
-               @cUDF10   OUTPUT, @cUDF11 OUTPUT, @cUDF12 OUTPUT,
-               @cUDF13   OUTPUT, @cUDF14 OUTPUT, @cUDF15 OUTPUT,
-               @cUDF16   OUTPUT, @cUDF17 OUTPUT, @cUDF18 OUTPUT,
-               @cUDF19   OUTPUT, @cUDF20 OUTPUT, @cUDF21 OUTPUT,
-               @cUDF22   OUTPUT, @cUDF23 OUTPUT, @cUDF24 OUTPUT,
-               @cUDF25   OUTPUT, @cUDF26 OUTPUT, @cUDF27 OUTPUT,
-               @cUDF28   OUTPUT, @cUDF29 OUTPUT, @cUDF30 OUTPUT
-               
-               IF @nErrNo <> 0
-               BEGIN
-                  GOTO  Step_3_Fail
-               END 
-               
-               IF @cExtendedScreenSP = 'rdt_838ExtScn01' AND @cUDF30 = 'Y'
-               BEGIN
-                  SET @nEnter = 1  
-                  EXEC rdt.rdtSetFocusField @nMobile, 8
-                  GOTO Quit
-               END
-            END
-         END       
-      END
-
       --(cc01)  
       IF @cDefaultQTY >0 AND @nEnter = 0  
       BEGIN
-       SET @nEnter = 1  
+         SET @nEnter = 1  
          EXEC rdt.rdtSetFocusField @nMobile, 8
          GOTO Quit
       END
 
+      --Above is the SKU handling logic
+
+      -- Start to handling input qty
+
       -- Validate MQTY
       IF @cMQTY <> '' AND RDT.rdtIsValidQTY( @cMQTY, 1) = 0 --Check zero
       BEGIN
-         SET @nErrNo = 100209
+         SET @nErrNo = 226462
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Invalid QTY
          EXEC rdt.rdtSetFocusField @nMobile, 8 -- QTY
          GOTO Step_3_QTY_Fail
@@ -1854,7 +1740,7 @@ BEGIN
       -- Validate PQTY
       IF @cPQTY <> '' AND RDT.rdtIsValidQTY( @cPQTY, 1) = 0 --Check zero
       BEGIN
-         SET @nErrNo = 100238
+         SET @nErrNo = 226463
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Invalid QTY
          EXEC rdt.rdtSetFocusField @nMobile, 14 -- QTY
          GOTO Step_3_QTY_Fail
@@ -1898,10 +1784,11 @@ BEGIN
       SET @cOutField14 = CASE WHEN @cPUOM_Desc <> '' THEN @cPQTY ELSE '' END
 
       -- Check over pack
-      EXEC rdt.rdt_Pack_Validate @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 'QTY'
+      EXEC rdt.rdt_Pack_LVSUSA_Validate @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 'QTY'
          ,@cPickSlipNo
          ,@cFromDropID
          ,@cPackDtlDropID
+         ,@cLabelNo -- NewLabel
          ,@cSKU
          ,@nQTY
          ,@nCartonNo
@@ -2109,58 +1996,6 @@ BEGIN
          END
       END
 
-      -- Serial No
-      IF @cSerialNoCapture IN ('1', '3')  -- 1 = INBOUND & OUTBOUND; 2 = INBOUND ONLY; 3 = OUTBOUND ONLY
-      BEGIN
-         EXEC rdt.rdt_SerialNo @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cSKU, @cSKUDescr, @nQTY, 'CHECK', 'PICKSLIP', @cPickSlipNo,
-            @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,
-            @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,
-            @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,
-            @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,
-            @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,
-            @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,
-            @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,
-            @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,
-            @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,
-            @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,
-            @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,
-            @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT,
-            @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,
-            @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT,
-            @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT,
-            @nMoreSNO   OUTPUT,  @cSerialNo   OUTPUT,  @nSerialQTY   OUTPUT,
-            @nErrNo     OUTPUT,  @cErrMsg     OUTPUT,  @nScn = 0,
-            @nBulkSNO = 0,       @nBulkSNOQTY = 0,     @cSerialCaptureType = '3'
-
-         IF @nErrNo <> 0
-            GOTO Quit
-
-         IF @nMoreSNO = 1
-         BEGIN
-            -- Go to Serial No screen
-            SET @nScn = 4831
-            SET @nStep = @nStep + 6
-
-            -- Flow thru
-            IF @cSerialNo <> ''
-            BEGIN
-               IF EXISTS( SELECT 1 FROM STRING_SPLIT( @cFlowThruScreen, ',') WHERE TRIM( value) = '9') -- Serial no screen
-               BEGIN
-                  -- rdt_SerialNo will read from rdtMboRec directly
-                  UPDATE rdt.rdtMobRec SET 
-                     V_Max = @cSerialNo, 
-                     EditDate = GETDATE()
-                  WHERE Mobile = @nMobile
-                  
-                  SET @nInputKey='1'
-                  GOTO Step_9
-               END
-            END
-
-            GOTO Quit
-         END
-      END
-
       -- Confirm
       EXEC RDT.rdt_Pack_Confirm @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey
          ,@cPickSlipNo    = @cPickSlipNo
@@ -2311,7 +2146,7 @@ BEGIN
       END
 
       EXEC rdt.rdtSetFocusField @nMobile, 3 -- SKU
-   END
+   END -- Inputkey = 1
 
    IF @nInputKey = 0 -- ESC
    BEGIN
@@ -2369,7 +2204,8 @@ BEGIN
             END
          END
       END
-
+      
+      /*
       -- Repack without add SKU QTY
       IF @nCartonNo > 0 AND @nCartonQTY = 0
       BEGIN
@@ -2408,11 +2244,13 @@ BEGIN
                GOTO Quit
             END
          END
+         
 
          COMMIT TRAN rdtfnc_pack_LVSUSA
          WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
             COMMIT TRAN
-      END
+      
+      END*/
 
       -- Packed
       IF @nCartonQTY > 0
@@ -2565,71 +2403,56 @@ BEGIN
          END
       END
 
+      /*
       IF @nCartonNo = 0 OR @nCartonQTY = 0
          SET @cType = 'NEXT'
       ELSE
-         SET @cType = 'CURRENT'
+         SET @cType = 'CURRENT'*/
 
       -- Get task
-      EXEC rdt.rdt_Pack_GetStat @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cType
+      EXEC rdt.rdt_Pack_LVSUSA_GetStat @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 'CURRENT'
          ,@cPickSlipNo
          ,@cFromDropID
          ,@cPackDtlDropID
-         ,@nCartonNo    OUTPUT
-         ,@cLabelNo     OUTPUT
-         ,@cCustomNo    OUTPUT
-         ,@cCustomID    OUTPUT
-         ,@nCartonSKU   OUTPUT
-         ,@nCartonQTY   OUTPUT
-         ,@nTotalCarton OUTPUT
-         ,@nTotalPick   OUTPUT
-         ,@nTotalPack   OUTPUT
-         ,@nTotalShort  OUTPUT
-         ,@nErrNo       OUTPUT
-         ,@cErrMsg      OUTPUT
+         ,@nCartonNo          OUTPUT
+         ,@cMasterLabelNo     OUTPUT
+         ,@cCustomNo          OUTPUT
+         ,@cCustomID          OUTPUT
+         ,@nCartonSKU         OUTPUT
+         ,@nCartonQTY         OUTPUT
+         ,@nTotalCarton       OUTPUT
+         ,@nTotalPick         OUTPUT
+         ,@nTotalPack         OUTPUT
+         ,@nTotalShort        OUTPUT
+         ,@nErrNo             OUTPUT
+         ,@cErrMsg            OUTPUT
       IF @nErrNo <> 0
          GOTO Quit
 
-      -- Prepare next screen var
-      SET @cOutField01 = @cPickSlipNo
-      SET @cOutField02 = CAST( @nTotalPick AS NVARCHAR(8))  -- ZG02
-      SET @cOutField03 = CAST( @nTotalPack AS NVARCHAR(8))  -- ZG02
-      SET @cOutField04 = CAST( @nTotalShort AS NVARCHAR(8))  -- ZG02
-      SET @cOutField05 = RTRIM( @cCustomNo) + '/' + CAST( @nTotalCarton AS NVARCHAR(5))
-      SET @cOutField06 = @cCustomID
-      SET @cOutField07 = CAST( @nCartonSKU AS NVARCHAR(5))
-      SET @cOutField08 = CAST( @nCartonQTY AS NVARCHAR(5))
-      SET @cOutField09 = @cDefaultOption -- Option
+      -- back to screen 2
+      SET @cOutField01 = @cMasterLabelNo
+      SET @cOutField02 = CAST( @nTotalPick AS NVARCHAR(8))  
+      SET @cOutField03 = CAST( @nTotalPack AS NVARCHAR(8))  
+      SET @cOutField04 = CAST( @nTotalShort AS NVARCHAR(8)) 
+      SET @cOutField05 = CAST( @nCartonSKU AS NVARCHAR(5))
+      SET @cOutField06 = CAST( @nCartonQTY AS NVARCHAR(5))
+      SET @cOutField09 = @cDefaultOption
 
       -- Enable field
-      SET @cFieldAttr08 = '' -- QTY
+      SET @cFieldAttr08 = '' -- QTY23
 
       SET @cOutField15 = ''
+
+      --Clear NewLabelNo when back to screen 2 --fcr946
+      SET @cNewLabelNo = 0
 
       --Reset 
       SET @nEnter = 0 --(JHU151) 
 
       -- Go to statistic screen
-      SET @nScn = @nScn - 1
-      SET @nStep = @nStep - 1
-
-   END
-   
-   --(JHU151)      
-   SET @cExtendedScreenSP = rdt.RDTGetConfig( @nFunc, 'ExtScnSP', @cStorerKey)
-   IF @cExtendedScreenSP = '0'
-   BEGIN
-      SET @cExtendedScreenSP = ''
-   END
-   IF @cExtendedScreenSP <> ''
-   BEGIN
-      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
-      BEGIN
-         SET @nAction = 0 --Jump
-         SET @cJumpType = 'Back' --Jump
-         GOTO Step_99
-      END
-   END
+      SET @nScn = 6491
+      SET @nStep = 2
+   END --Inputkey = 0
    
    GOTO Quit
    
@@ -2662,6 +2485,179 @@ BEGIN
 END
 GOTO Quit
 
+/********************************************************************************
+Scn = 6493. From Carton Screen
+   CURRENT CARTON ID (field01)
+   FROM CARTON ID    (field02, input)
+********************************************************************************/
+Step_4:
+BEGIN
+   IF @nInputKey = 1 -- ENTER
+   BEGIN 
+      SET @cLabelNo = @cInField02
+
+      -- Check blank
+         IF @cLabelNo = ''
+         BEGIN
+            SET @nErrNo = 226458
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Need From Carton
+            GOTO Quit
+         END
+
+         --Scanned value could be LabelNo or TrackingNo, get exact LabelNo
+         IF NOT EXISTS (SELECT 1 FROM PackDetail WITH (NOLOCK)
+                              WHERE StorerKey = @cStorerKey
+                                 AND LabelNo = @cLabelNo
+                        )
+         BEGIN
+            -- Check if user scan the tracking no
+            SELECT  TOP 1 @cFromCartTrkLabelNo = LabelNo 
+            FROM CartonTrack WITH (NOLOCK)
+            WHERE TrackingNo = @cLabelNo
+               AND KeyName = @cStorerKey       
+
+            IF NOT EXISTS (SELECT 1 FROM PackDetail WITH (NOLOCK)
+                           WHERE StorerKey = @cStorerKey
+                              AND LabelNo = @cFromCartTrkLabelNo)             
+            BEGIN
+
+               SET @nErrNo = 226459
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --FromCartNotExist
+               SET @cOutField02 = '' --Clear input value
+               GOTO Quit
+
+            END -- end not in CartonTrack
+            ELSE
+               SET @cLabelNo = @cFromCartTrkLabelNo -- retrieve label 
+         END
+
+         SET @cFromLabelNo = @cLabelNo
+
+         -- Check FromLabelNo
+         EXEC rdt.rdt_Pack_LVSUSA_Validate @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 'LabelNo'
+            ,'' -- @cPickSlipNo
+            ,'' --@cFromDropID
+            ,'' --@cPackDtlDropID
+            ,@cLabelNo --@cLabelNo
+            ,'' --@cSKU
+            ,0  --@nQTY
+            ,0  --@nCartonNo
+            ,@nErrNo  OUTPUT
+            ,@cErrMsg OUTPUT
+         IF @nErrNo <> 0
+         BEGIN
+            EXEC rdt.rdtSetFocusField @nMobile, 2  -- FromLabelNo
+            SET @cOutField02 = '' --Clear input value
+            GOTO Quit
+         END
+
+         -- Extended validate
+         IF @cExtendedValidateSP <> ''
+         BEGIN
+            IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedValidateSP AND type = 'P')
+            BEGIN
+               SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +
+                  ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cPickSlipNo, @cFromDropID, ' +
+                  ' @nCartonNo, @cLabelNo, @cSKU, @nQTY, @cUCCNo, @cCartonType, @cCube, @cWeight, @cRefNo, @cSerialNo, @nSerialQTY, @cOption, ' +
+                  ' @cPackDtlRefNo, @cPackDtlRefNo2, @cPackDtlUPC, @cPackDtlDropID, @cPackData1, @cPackData2, @cPackData3, ' +
+                  ' @nErrNo OUTPUT, @cErrMsg OUTPUT '
+               SET @cSQLParam =
+                  '@nMobile         INT,           ' +
+                  '@nFunc           INT,           ' +
+                  '@cLangCode       NVARCHAR( 3),  ' +
+                  '@nStep           INT,           ' +
+                  '@nInputKey       INT,           ' +
+                  '@cFacility       NVARCHAR( 5),  ' +
+                  '@cStorerKey      NVARCHAR( 15), ' +
+                  '@cPickSlipNo     NVARCHAR( 10), ' +
+                  '@cFromDropID     NVARCHAR( 20), ' +
+                  '@nCartonNo       INT,           ' +
+                  '@cLabelNo        NVARCHAR( 20), ' +
+                  '@cSKU            NVARCHAR( 20), ' +
+                  '@nQTY            INT,           ' +
+                  '@cUCCNo          NVARCHAR( 20), ' +
+                  '@cCartonType     NVARCHAR( 10), ' +
+                  '@cCube           NVARCHAR( 10), ' +
+                  '@cWeight         NVARCHAR( 10), ' +
+                  '@cRefNo          NVARCHAR( 20), ' +
+                  '@cSerialNo       NVARCHAR( 30), ' +
+                  '@nSerialQTY      INT,           ' +
+                  '@cOption         NVARCHAR( 1),  ' +
+                  '@cPackDtlRefNo   NVARCHAR( 20), ' +
+                  '@cPackDtlRefNo2  NVARCHAR( 20), ' +
+                  '@cPackDtlUPC     NVARCHAR( 30), ' +
+                  '@cPackDtlDropID  NVARCHAR( 20), ' +
+                  '@cPackData1      NVARCHAR( 30), ' +
+                  '@cPackData2      NVARCHAR( 30), ' +
+                  '@cPackData3      NVARCHAR( 30), ' +
+                  '@nErrNo          INT            OUTPUT, ' +
+                  '@cErrMsg         NVARCHAR( 20)  OUTPUT'
+
+               EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                  @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cPickSlipNo, @cFromDropID,
+                  @nCartonNo, @cLabelNo, @cSKU, @nQTY, @cUCCNo, @cCartonType, @cCube, @cWeight, @cRefNo, @cSerialNo, @nSerialQTY, @cOption,
+                  @cPackDtlRefNo, @cPackDtlRefNo2, @cPackDtlUPC, @cPackDtlDropID, @cPackData1, @cPackData2, @cPackData3,
+                  @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+               IF @nErrNo <> 0
+                  GOTO Quit
+            END
+         END
+
+         -----------------------------------------------
+         --Merge Confirm Logic
+         -----------------------------------------------
+         -- To Do
+         /*EXEC RDT.rdt_Pack_LVSUSA_MergeConfirm @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey
+            ,@cFromLabelNo    = @cFromLabelNo
+            ,@cLabelNo        = @cLabelNo OUTPUT 
+            --,@cPickSlipNo    = @cPickSlipNo
+            --,@cFromDropID    = @cFromDropID
+            --,@cSKU           = @cSKU
+            --,@nQTY           = @nQTY
+            --,@cUCCNo         = '' -- @cUCCNo
+            --,@cSerialNo      = '' -- @cSerialNo
+            --,@nSerialQTY     = 0  -- @nSerialQTY
+            --,@cPackDtlRefNo  = @cPackDtlRefNo
+            --@cPackDtlUPC    = @cPackDtlUPC
+            --,@cPackDtlDropID = @cPackDtlDropID
+            --,@nCartonNo      = @nCartonNo    OUTPUT
+            --,@cLabelNo       = @cLabelNo     OUTPUT
+            ,@nErrNo         = @nErrNo       OUTPUT
+            ,@cErrMsg        = @cErrMsg      OUTPUT
+            --,@nBulkSNO       = 0
+            --,@nBulkSNOQTY    = 0
+            --,@cPackData1     = @cPackData1
+            --,@cPackData2     = @cPackData2
+            --,@cPackData3     = @cPackData3
+         IF @nErrNo <> 0
+            GOTO Quit*/
+
+
+      END -- Inputkey = 1
+
+      IF @nInputKey = 0
+      BEGIN
+         SET @cOutField01 = @cMasterLabelNo
+         SET @cOutField02 = CAST( @nTotalPick AS NVARCHAR(8))  
+         SET @cOutField03 = CAST( @nTotalPack AS NVARCHAR(8))  
+         SET @cOutField04 = CAST( @nTotalShort AS NVARCHAR(8)) 
+         SET @cOutField05 = CAST( @nCartonSKU AS NVARCHAR(5))
+         SET @cOutField06 = CAST( @nCartonQTY AS NVARCHAR(5))
+         SET @cOutField09 = @cDefaultOption
+
+         -- Clear FromLabelNo
+         SET @cFromLabelNo = '' -- fcr946
+
+         SET @nSCN = 6491 -- Stat Screen
+         SET @nStep = 2
+      END
+
+      
+
+END -- Step4
+GOTO Quit
+
 
 /********************************************************************************
 Scn = 4653. Capture pack info
@@ -2670,7 +2666,7 @@ Scn = 4653. Capture pack info
    Weight      (field03, input)
    RefNo       (field04, input)
 ********************************************************************************/
-Step_4:
+Step_104:
 BEGIN
    IF @nInputKey = 1 -- ENTER
    BEGIN
@@ -3097,7 +3093,7 @@ BEGIN
          IF @cUCCNo = ''
          BEGIN
             -- Get statistics
-            EXEC rdt.rdt_Pack_GetStat @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 'CURRENT'
+            EXEC rdt.rdt_Pack_LVSUSA_GetStat @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 'CURRENT'
                ,@cPickSlipNo
                ,@cFromDropID
                ,@cPackDtlDropID
@@ -3243,7 +3239,7 @@ BEGIN
       END
    END
 
-   Step_4_Quit:
+   Step_104_Quit:
    BEGIN
       -- Extended info
       IF @cExtendedInfoSP <> ''
@@ -3564,7 +3560,7 @@ BEGIN
       IF @cUCCNo = ''
       BEGIN
          -- Get statistics
-         EXEC rdt.rdt_Pack_GetStat @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 'CURRENT'
+         EXEC rdt.rdt_Pack_LVSUSA_GetStat @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 'CURRENT'
             ,@cPickSlipNo
             ,@cFromDropID
             ,@cPackDtlDropID
@@ -3905,7 +3901,7 @@ BEGIN
    IF @nInputKey = 0 -- ESC
    BEGIN
       -- Get statistics
-      EXEC rdt.rdt_Pack_GetStat @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 'CURRENT'
+      EXEC rdt.rdt_Pack_LVSUSA_GetStat @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 'CURRENT'
          ,@cPickSlipNo
          ,@cFromDropID
          ,@cPackDtlDropID
@@ -4093,7 +4089,7 @@ BEGIN
    END
 
    -- Get statistics
-   EXEC rdt.rdt_Pack_GetStat @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 'CURRENT'
+   EXEC rdt.rdt_Pack_LVSUSA_GetStat @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 'CURRENT'
       ,@cPickSlipNo
       ,@cFromDropID
       ,@cPackDtlDropID
@@ -4674,7 +4670,7 @@ BEGIN
    IF @nInputKey = 0 -- ESC
    BEGIN
       -- Get task
-      EXEC rdt.rdt_Pack_GetStat @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 'NEXT'
+      EXEC rdt.rdt_Pack_LVSUSA_GetStat @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 'NEXT'
          ,@cPickSlipNo
          ,@cFromDropID
          ,@cPackDtlDropID
@@ -5495,7 +5491,7 @@ BEGIN
       V_PickSlipNo   = @cPickSlipNo,
       V_SKU          = @cSKU,
       V_QTY          = @nQTY,
-      -- V_CaseID       = @cCustomID,
+      V_CaseID       = @cCustomID,
       V_SKUDescr     = @cSKUDescr,
       V_FromScn      = @nFromScn,
       V_FromStep     = @nFromStep,
@@ -5503,7 +5499,7 @@ BEGIN
 
       V_String1      = @cPackDtlRefNo,
       V_String2      = @cPackDtlRefNo2,
-      V_String3      = @cLabelNo,
+      V_String3      = @cMasterLabelNo, --fcr-946
       V_String4      = @cCartonType,
       V_String5      = @cCube,
       V_String6      = @cWeight,
@@ -5534,7 +5530,7 @@ BEGIN
       V_String17     = @cDefaultPrintPackListOption,
       V_String18     = @cDefaultWeight,
       V_String19     = @cUCCNo,
-      V_String20     = @cFromDropID,
+      V_String20     = @cFromLabelNo,
       V_String21     = @cExtendedValidateSP,
       V_String22     = @cExtendedUpdateSP,
       V_String23     = @cExtendedInfoSP,
@@ -5545,26 +5541,26 @@ BEGIN
       V_String28     = @cPackInfo,
       V_String29     = @cAllowWeightZero,
       V_String30     = @cAllowCubeZero,
-      V_String31     = @cAutoScanIn,
+      --V_String31     = @cAutoScanIn,
       V_String32     = @cDefaultOption,
       V_String33     = @cDisableOption,
-      V_String34     = @cSerialNoCapture,
+      --V_String34     = @cSerialNoCapture,
       V_String35     = @cPackList,
       V_String36     = @cShipLabel,
       V_String37     = @cCartonManifest,
-      V_String38     = @cCustomCartonNo,
-      V_String39     = @cCustomNo,
+      --V_String38     = @cCustomCartonNo,
+      --V_String39     = @cCustomNo,
       V_String40     = @cDataCaptureSP,
       V_String41     = @cPackDtlUPC,
-      V_String42     = @cPrePackIndicator,
-      V_String43     = @cPackQtyIndicator,
+      --V_String42     = @cPrePackIndicator,
+      --V_String43     = @cPackQtyIndicator,
       V_String44     = @cPackData1,
       V_String45     = @cPackData2,
       V_String46     = @cPackData3,
-      V_String47     = @cMultiSKUBarcode,
+      V_String47     = @cFromLabelNo, -- fcr-946
       V_String48     = @cDefaultQTY, --(cc01)
       V_String49     = @cDefaultcartontype,
-      V_String50     = @cPackByFromDropID,
+      V_String50     = @cNewLabelNo, --fcr-946
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,   FieldAttr01  = @cFieldAttr01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,   FieldAttr02  = @cFieldAttr02,

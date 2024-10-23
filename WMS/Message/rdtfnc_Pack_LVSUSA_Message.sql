@@ -2,9 +2,24 @@
 --FCR-946
 exec rdt.rdtdropmsg 226451 , 226500
 
-execute rdt.rdtAddMsg 226451, 10, '226451NeedCart', 'us_english', 993, 0, '226451 Carton No. Required'
+execute rdt.rdtAddMsg 226451, 10, '226451NeedCart', 'us_english', 993, 0, '226451 Carton ID Required'
 execute rdt.rdtAddMsg 226452, 10, '226452CartNotExist', 'us_english', 993, 0, '226452 Carton Not Exist'
 execute rdt.rdtAddMsg 226453, 10, '226453ReopenPKHFail', 'us_english', 993, 0, '226453 Failed to Reopen PKH'
+execute rdt.rdtAddMsg 226454, 10, '226454NeedOption', 'us_english', 993, 0, '226454 Option Required'
+execute rdt.rdtAddMsg 226455, 10, '226455InvalidOption', 'us_english', 993, 0, '226455 Invalid Option'
+execute rdt.rdtAddMsg 226456, 10, '226456OptDisabled', 'us_english', 993, 0, '226456 The Option Disabled'
+execute rdt.rdtAddMsg 226457, 10, '226457CantEditUCC', 'us_english', 993, 0, '226457 Can Not Edit UCC'
+execute rdt.rdtAddMsg 226458, 10, '226458FromLabelReq', 'us_english', 993, 0, '226458 From Carton ID Required'
+execute rdt.rdtAddMsg 226459, 10, '226459FromLabelNoExist', 'us_english', 993, 0, '226459 From Carton ID Not Exist'
+execute rdt.rdtAddMsg 226460, 10, '226460InvalidSKU', 'us_english', 993, 0, '226460 Invalid SKU'
+execute rdt.rdtAddMsg 226461, 10, '226461MultiSKU', 'us_english', 993, 0, '226461 Multiple SKU Barcode'
+execute rdt.rdtAddMsg 226462, 10, '226462InvalidQty', 'us_english', 993, 0, '226462 Invalid Qty'
+execute rdt.rdtAddMsg 226463, 10, '226463InvalidQty', 'us_english', 993, 0, '226463 Invalid Qty'
+
+
+
+
+
 
 
 select * from rdt.rdtmsg (nolock) where message_id between 226451 AND 226500

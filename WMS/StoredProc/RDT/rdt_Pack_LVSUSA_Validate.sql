@@ -89,47 +89,33 @@ BEGIN
    /***********************************************************************************************
                                              Standard validate
    ***********************************************************************************************/
-   DECLARE @cPackFilter NVARCHAR( MAX) = ''
-   DECLARE @cPickFilter NVARCHAR( MAX) = ''
-   DECLARE @cOrderKey   NVARCHAR( 10)
-   DECLARE @cLoadKey    NVARCHAR( 10)
-   DECLARE @cZone       NVARCHAR( 18)
-   DECLARE @cPickStatus NVARCHAR( 20)
-   DECLARE @nPackQTY    INT
-   DECLARE @nPickQTY    INT
-   DECLARE @cPackByFromDropID NVARCHAR( 1)
-   DECLARE @cChkStorerKey NVARCHAR( 15)
+   DECLARE @cPackFilter          NVARCHAR( MAX) = ''
+   DECLARE @cPickFilter          NVARCHAR( MAX) = ''
+   DECLARE @cOrderKey            NVARCHAR( 10)
+   DECLARE @cLoadKey             NVARCHAR( 10)
+   DECLARE @cZone                NVARCHAR( 18)
+   DECLARE @cPickStatus          NVARCHAR( 20)
+   DECLARE @nPackQTY             INT -- Total Pack Qty in both lableNo
+   DECLARE @nPickQTY             INT -- Total Pick Qty in both LabelNo
+   DECLARE @nMasterPackQty       INT -- Total Pack Qty in the master lable no
+   DECLARE @cPackByFromDropID    NVARCHAR( 1)
+   DECLARE @cChkStorerKey        NVARCHAR( 15)
+   DECLARE @cMasterLabelNo       NVARCHAR( 20)
+   DECLARE @bDebugFlag           BINARY = 0
+   
 
    SET @cOrderKey = ''
    SET @cLoadKey = ''
    SET @cZone = ''
    SET @nPackQTY = 0
    SET @nPickQTY = 0
-   
-   -- Get PickHeader info
-   SELECT TOP 1
-      @cOrderKey = OrderKey,
-      @cLoadKey = ExternOrderKey,
-      @cZone = Zone
-   FROM dbo.PickHeader WITH (NOLOCK)
-   WHERE PickHeaderKey = @cPickSlipNo
+
+   IF @bDebugFlag = 1
+      SELECT @cLabelNo AS LabelNo, @cType AS ValidationType, @nQty AS Qty, @cSKU AS SKU
 
    --Check LabelNo
    IF @cType = 'LabelNo'
    BEGIN
-      /*
-      SELECT @cChkStorerKey = StorerKey
-      FROM PackDetail WITH (NOLOCK)
-      WHERE LabelNo = @cLabelNo
-
-      IF @@ROWCOUNT = 0
-      BEGIN
-         SET @nErrNo = 226501
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Carton Not Exists
-         GOTO Quit
-      END
-      */
-
       IF NOT EXISTS ( SELECT 1 FROM PickDetail WITH (NOLOCK)
                   WHERE Storerkey = @cStorerkey
                      AND CaseId = @cLabelNo
@@ -154,10 +140,6 @@ BEGIN
 
    END -- check LabelNo
 
-
-   -------------------------------------------------------------------------------------------------------
-   -- rdt_Pack_Validate SP
-   --------------------------------------------------------------------------------------------------------
    -- Check QTY
    IF @cType = 'QTY'
    BEGIN
@@ -192,41 +174,148 @@ BEGIN
          AND StorerKey = @cStorerKey
          AND Code2 = @cFacility
 
-      -- Calc pack QTY
-      SET @nPackQTY = 0
-      /*
-      SELECT @nPackQTY = ISNULL( SUM( QTY), 0) 
-      FROM PackDetail WITH (NOLOCK) 
-      WHERE PickSlipNo = @cPickSlipNo
-         AND StorerKey = @cStorerKey
+      IF @bDebugFlag = 1
+         SELECT @cPickStatus AS PickStatus, @cPickFilter AS PickFilter, @cPackFilter AS PackFilter
+
+      -- Get Master Label No
+      SELECT @cMasterLabelNo = ISNULL(V_String3,'')
+      FROM RDT.RDTMOBREC WITH (NOLOCK)
+      WHERE Mobile = @nMobile
+
+      IF @cMasterLabelNo = ''
+      BEGIN
+         SET @nErrNo = 226506
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Failed to get MLabelNo
+         GOTO Quit
+      END
+
+      SELECT @nMasterPackQty = ISNULL( SUM(Qty),0)
+      FROM PackDetail WITH (NOLOCK)
+      WHERE Storerkey = @cStorerKey
          AND SKU = @cSKU
-         AND (@cFromDropID = '' OR DropID = @cFromDropID)
-      */
+         AND LabelNo = @cMasterLabelNo
+
+      IF @bDebugFlag = 1
+         SELECT @nMasterPackQty AS MasterPackQty
+
+      --The input qty cannot be greater than the qty left in the original label no
+      IF @nQty > @nMasterPackQty
+      BEGIN
+         SET @nErrNo = 226508
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Qty too great
+         GOTO Quit
+      END
+
+      --Not allow to empty the master label no in the New opertaion
+      IF @nQty = @nMasterPackQty
+      BEGIN
+         IF (  SELECT COUNT(1) 
+               FROM PackDetail WITH (NOLOCK) 
+               WHERE Storerkey = @cStorerKey
+                  AND SKU = @cSKU
+                  AND LabelNo = @cMasterLabelNo
+            ) = 1  -- The current packdetail is the last one in the master label no
+            BEGIN
+               SET @nErrNo = 226509
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Use merge
+               GOTO Quit
+            END
+      END
+      
+      -- Calc pack QTY in both Master and New
+      SET @nPackQTY = 0
+     
       SET @cSQL = 
          ' SELECT @nPackQTY = ISNULL( SUM( PD.QTY), 0) ' + 
          ' FROM PackDetail PD WITH (NOLOCK) ' + 
-         ' WHERE PD.PickSlipNo = @cPickSlipNo ' + 
+         ' WHERE ' +
+            CASE WHEN @cLabelNo = '' THEN 'PD.LabelNo = @cMasterLabelNo' ELSE 'PD.LabelNo IN (@cMasterLabelNo, @cLabelNo)' END + 
             ' AND PD.StorerKey = @cStorerKey ' + 
             ' AND PD.SKU = @cSKU '  + 
             CASE WHEN @cFromDropID <> '' AND @cPackByFromDropID = '1' THEN ' AND PD.DropID = @cFromDropID ' ELSE '' END + 
             CASE WHEN @cPackFilter <> '' THEN @cPackFilter ELSE '' END
       SET @cSQLParam = 
-         ' @cPickSlipNo NVARCHAR( 10), ' + 
-         ' @cStorerKey  NVARCHAR( 15), ' + 
-         ' @cSKU        NVARCHAR( 20), ' + 
-         ' @cFromDropID NVARCHAR( 20), ' + 
-         ' @nPackQTY    INT OUTPUT '
+         ' @cMasterLabelNo NVARCHAR( 20), ' +
+         ' @cLabelNo       NVARCHAR( 20), ' + 
+         ' @cStorerKey     NVARCHAR( 15), ' + 
+         ' @cSKU           NVARCHAR( 20), ' + 
+         ' @cFromDropID    NVARCHAR( 20), ' + 
+         ' @nPackQTY       INT OUTPUT '
       EXEC sp_executeSQL @cSQL, @cSQLParam
-         ,@cPickSlipNo = @cPickSlipNo
-         ,@cStorerKey  = @cStorerKey 
-         ,@cSKU        = @cSKU       
-         ,@cFromDropID = @cFromDropID
-         ,@nPackQTY    = @nPackQTY OUTPUT
+         ,@cMasterLabelNo  = @cMasterLabelNo
+         ,@cLabelNo        = @cLabelNo
+         ,@cStorerKey      = @cStorerKey 
+         ,@cSKU            = @cSKU       
+         ,@cFromDropID     = @cFromDropID
+         ,@nPackQTY        = @nPackQTY OUTPUT
 
-      -- Add QTY
+      IF @bDebugFlag = 1
+      BEGIN
+         SELECT @cSQL AS PackQtySQL
+         SELECT @nPackQty AS PackQty
+      END
+
       SET @nPackQTY = @nPackQTY + @nQTY
-   END
 
+      SET @cSQL = 
+            ' SELECT @nPickQTY = ISNULL( SUM( QTY), 0) ' + 
+            ' FROM dbo.PickDetail PD WITH (NOLOCK) ' + 
+            ' WHERE ' +
+               CASE WHEN @cLabelNo = '' THEN 'PD.CaseID = @cMasterLabelNo' ELSE 'PD.CaseID IN (@cMasterLabelNo, @cLabelNo)' END + 
+               ' AND PD.StorerKey = @cStorerKey ' + 
+               ' AND PD.SKU = @cSKU ' + 
+               ' AND PD.Status IN (' + @cPickStatus + ') ' + 
+               CASE WHEN @cFromDropID <> '' THEN ' AND PD.DropID = @cFromDropID ' ELSE '' END + 
+               CASE WHEN @cPickFilter <> '' THEN @cPickFilter ELSE '' END
+         SET @cSQLParam = 
+            ' @cMasterLabelNo    NVARCHAR( 20), ' +
+            ' @cLabelNo          NVARCHAR( 20), ' +  
+            ' @cStorerKey        NVARCHAR( 15), ' + 
+            ' @cSKU              NVARCHAR( 20), ' + 
+            ' @cFromDropID       NVARCHAR( 20), ' + 
+            ' @nPickQTY          INT OUTPUT '
+         EXEC sp_executeSQL @cSQL, @cSQLParam
+            ,@cMasterLabelNo  = @cMasterLabelNo
+            ,@cLabelNo        = @cLabelNo
+            ,@cStorerKey      = @cStorerKey
+            ,@cSKU            = @cSKU
+            ,@cFromDropID     = @cFromDropID
+            ,@nPickQTY        = @nPickQTY OUTPUT
+
+         IF @bDebugFlag = 1
+         BEGIN
+            SELECT @cSQL AS PickQtySQL
+            SELECT @nPickQty AS PickQty
+         END
+         
+         IF @nPackQTY > @nPickQTY
+         BEGIN
+            SET @nErrNo = 226507
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Over pack
+            GOTO Quit
+         END      
+
+   END -- Qty
+
+   IF @cType = 'SKU'
+   BEGIN
+      -- Check SKU in PickSlipNo
+      IF NOT EXISTS( SELECT TOP 1 1
+         FROM dbo.PickDetail PD WITH (NOLOCK) 
+         WHERE PD.CaseID = @cLabelNo
+            AND PD.StorerKey = @cStorerKey
+            AND PD.SKU = @cSKU
+            AND PD.QTY > 0)
+      BEGIN
+         SET @nErrNo = 226505
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SKU NotIn Carton
+         --EXEC rdt.rdtInsertMsgQueue @nMobile, 0, '', '', @nErrNo, @cErrMsg
+         --SET @cErrMsg = ''
+         GOTO Quit
+      END
+   END -- SKU
+
+/*
    -- Cross dock PickSlip
    IF @cZone IN ('XD', 'LB', 'LP')
    BEGIN
@@ -689,6 +778,7 @@ BEGIN
          END
       END
    END
+   */
 
 Quit:
 

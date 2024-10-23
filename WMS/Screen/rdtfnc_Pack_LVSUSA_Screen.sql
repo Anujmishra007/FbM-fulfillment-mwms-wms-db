@@ -1,7 +1,7 @@
 -- 6490 = CartonNo Screen
 DELETE rdt.RDTScn WHERE Scn = 6490 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 6490, 'ENG'
-   ,@cLine01 = 'Carton No:'
+   ,@cLine01 = 'Carton ID:'
    ,@cLine02 = '%20i01'
    ,@cLine03 = ''
    ,@cLine04 = ''
@@ -15,7 +15,7 @@ EXECUTE rdt.rdtAddScn 6490, 'ENG'
 -- 6491 = Statistic screen
 DELETE rdt.RDTScn WHERE Scn = 6491 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 6491, 'ENG'
-   ,@cLine01 = 'CARTON NO: %10d01'
+   ,@cLine01 = 'CARTON ID: %20d01'
    ,@cLine02 = 'TOTAL PICK: %05d02'
    ,@cLine03 = 'TOTAL PACK: %05d03'
    ,@cLine04 = 'SHORT PICK: %03d04'
@@ -26,16 +26,16 @@ EXECUTE rdt.rdtAddScn 6491, 'ENG'
    ,@cLine09 = ''
    ,@cLine10 = ''
    ,@cLine11 = 'OPTION: %02i09      '
-   ,@cLine12 = '1=NEW 2=Merge'
+   ,@cLine12 = '1=NEW 2=MERGE'
    ,@cLine13 = '%20d15'    -- WMS-10890 ExtInfo
    ,@cLine14 = '%e'
    ,@cWebGroup = '{"1":["1"],"2":["2","3","4"],"3":["5","6"],"4":["11","12"],"5":["11"]}'
    ,@nFunc = 993
-/*
--- 4652 = SKU QTY screen
-DELETE rdt.RDTScn WHERE Scn = 4652 AND Lang_Code = 'ENG'
-EXECUTE rdt.rdtAddScn 4652, 'ENG'
-   ,@cLine01 = 'CARTON NO: %03d01'
+
+-- 6492 = SKU QTY screen
+DELETE rdt.RDTScn WHERE Scn = 6492 AND Lang_Code = 'ENG'
+EXECUTE rdt.rdtAddScn 6492, 'ENG'
+   ,@cLine01 = 'CARTON ID: %20d01'
    ,@cLine02 = ''
    ,@cLine03 = 'SKU/UPC:       %05d02'
    ,@cLine04 = '%60i03'
@@ -51,8 +51,29 @@ EXECUTE rdt.rdtAddScn 4652, 'ENG'
    ,@cLine13 = '%05d15'
    ,@cLine14 = '%e'
    ,@cWebGroup = '{"1":["1"],"2":["3","4","5","6","7"],"3":["9"],"4":["10","11"],"5":["12"],"6":["13"]}'
-   ,@nFunc = 838
+   ,@nFunc = 993
 
+-- 6493 = From Carton screen
+DELETE rdt.RDTScn WHERE Scn = 6493 AND Lang_Code = 'ENG'
+EXECUTE rdt.rdtAddScn 6493, 'ENG'
+   ,@cLine01 = 'CURRENT CARTON ID: %20d01'
+   ,@cLine02 = ''
+   ,@cLine03 = 'FROM CARTON ID: '
+   ,@cLine04 = '%20i02'
+   ,@cLine05 = ''
+   ,@cLine06 = ''
+   ,@cLine07 = ''
+   ,@cLine08 = ''
+   ,@cLine09 = ''
+   ,@cLine10 = ''
+   ,@cLine11 = ''
+   ,@cLine12 = ''
+   ,@cLine13 = ''
+   ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2"],"2":["3","4"]}'
+   ,@nFunc = 993
+
+/*
 -- 4653 = Pack info screen
 DELETE rdt.RDTScn WHERE Scn = 4653 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 4653, 'ENG'
