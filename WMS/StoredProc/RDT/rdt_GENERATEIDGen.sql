@@ -95,12 +95,12 @@ BEGIN
       SET @cCounterKey = RTRIM(@cIDType) + N'_' + @cStorerKey
 
       IF EXISTS (
-         SELECT 1 FROM [nCounter] (NOLOCK)
+         SELECT 1 FROM [dbo].[nCounter] (NOLOCK)
          WHERE [KeyName] = @cCounterKey 
             AND ([KeyCount] < @dMinSequence OR [KeyCount] >= @dMaxSequence)
       )
       BEGIN
-         DELETE [nCounter]
+         DELETE [dbo].[nCounter]
          WHERE [KeyName] = @cCounterKey
          IF @@ROWCOUNT = 0
          BEGIN
@@ -110,9 +110,9 @@ BEGIN
          END
       END
 
-      IF NOT EXISTS( SELECT 1 FROM [nCounter] (NOLOCK) WHERE [KeyName] = @cCounterKey) AND @dMinSequence > 0
+      IF NOT EXISTS( SELECT 1 FROM [dbo].[nCounter] (NOLOCK) WHERE [KeyName] = @cCounterKey) AND @dMinSequence > 0
       BEGIN
-         INSERT [nCounter]([KeyName], [KeyCount]) VALUES (@cCounterKey, @dMinSequence - 1)
+         INSERT [dbo].[nCounter]([KeyName], [KeyCount]) VALUES (@cCounterKey, @dMinSequence - 1)
       END
 
       SET @bSuccess = 1
