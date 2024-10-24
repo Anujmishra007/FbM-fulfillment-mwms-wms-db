@@ -64,6 +64,8 @@ DECLARE
    @cSealNo6      NVARCHAR(10),
    @nTotal         INT,
    @nScanned       INT,
+   @c_ContainerKey       NVARCHAR(10),
+
    
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),
@@ -112,6 +114,7 @@ SELECT
    @cSealNo1      = V_String4,
    @cSealNo2      = V_String5,
    @cSealNo3      = V_String6,
+   @c_ContainerKey = V_String7,
 
    @nTotal        = V_Integer1,
    @nScanned      = V_Integer2,
@@ -395,9 +398,9 @@ BEGIN
             WHERE MD.MbolKey = @cMBOLKey AND PD.OrderKey = O.OrderKey)
          
          SELECT @nScanned = COUNT(PalletKey) 
-         FROM MBOLDETAIL MD WITH (NOLOCK)
-         WHERE MD.MbolKey = @cMBOLKey
-         AND PalletKey <> ''
+         FROM CONTAINERDETAIL CD (NOLOCK)
+         INNER JOIN CONTAINER C (NOLOCK) ON C.Containerkey = CD.Containerkey
+         WHERE C.MBOLKey = @cMBOLKey
 
          SET @cOutField01 = @cMBOLKey
          SET @cOutField02 = @cTruckID
@@ -446,9 +449,11 @@ BEGIN
    IF @nInputKey = 1 --ENTER
    BEGIN
       DECLARE @nTotalCarton INT = 0,
-      @c_MbolLineNumber     NVARCHAR(10),
       @cOrderKey            NVARCHAR(10),
-      @nTranCount           INT
+      @cLottable01          NVARCHAR(18),
+      @nTranCount           INT,
+      @n_LineNo             INT,
+      @c_LineNo             NVARCHAR(5)
 
       SET @cPallet = ISNULL(RTRIM(@cInField03),'')
       IF @cPallet = ''
@@ -457,8 +462,9 @@ BEGIN
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Pallet Connot Be Blank
          GOTO Step_4_Fail
       END
-      IF EXISTS (SELECT 1 from MBOLDETAIL WITH (NOLOCK) 
-                     WHERE PalletKey = @cPallet AND MbolKey = @cMBOLKey)
+      IF EXISTS (SELECT 1 from CONTAINERDETAIL CD WITH (NOLOCK) 
+                     INNER JOIN CONTAINER C WITH (NOLOCK) ON C.Containerkey = CD.Containerkey
+                     WHERE CD.PalletKey = @cPallet AND C.MbolKey = @cMBOLKey AND C.CarrierKey = @cTruckID)
       BEGIN
          SET @nErrNo = 218455
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Pallet ID
@@ -467,9 +473,14 @@ BEGIN
 
       SELECT 
          @nTotalCarton = COUNT (DISTINCT PD.CaseID)
-         ,@cOrderKey = OrderKey 
+         ,@cOrderKey = OrderKey
+         ,@cLottable01 = MAX(LOTR.Lottable01)
       FROM PICKDETAIL PD WITH (NOLOCK)
-      WHERE ID = @cPallet AND Storerkey= @cStorerKey
+      INNER JOIN LOTATTRIBUTE LOTR WITH(NOLOCK)
+      ON PD.Storerkey = LOTR.StorerKey
+      AND PD.Lot = LOTR.Lot
+      AND PD.Sku = LOTR.Sku
+      WHERE ID = @cPallet AND PD.Storerkey= @cStorerKey
       GROUP BY ID ,OrderKey
 
       IF ISNULL(@cOrderKey,'') = ''
@@ -483,68 +494,53 @@ BEGIN
       BEGIN TRAN  -- Begin our own transaction
       SAVE TRAN rdtfnc_ScanToTruck_Barry  -- For rollback or commit only our own transaction
 
-      SET @c_MbolLineNumber = ''
-
-      SELECT TOP 1 @c_MbolLineNumber = MbolLineNumber 
-      FROM MBOLDETAIL WITH (NOLOCK)
-      WHERE MbolKey = @cMBOLKey
-      AND ContainerKey = '' AND PalletKey = ''
-
-      IF ISNULL(RTRIM(@c_MbolLineNumber),'') = ''
+      IF NOT EXISTS (SELECT 1 FROM CONTAINER WHERE MBOLKey = @cMBOLKey AND CarrierKey = @cTruckID)
       BEGIN
-         SELECT @c_MbolLineNumber = ISNULL(MAX(MbolLineNumber),'')
-         FROM MBOLDETAIL WITH (NOLOCK)
-         WHERE MbolKey = @cMBOLKey
-         
-         IF ISNULL(RTRIM(@c_MbolLineNumber),'') = ''
+         SET @b_success = 0
+         EXECUTE nspg_GetKey
+            'CONTAINERKEY',
+            10,
+            @c_ContainerKey  OUTPUT,
+            @b_success       OUTPUT,
+            @n_err           OUTPUT,
+            @c_errmsg        OUTPUT
+
+         IF @b_success = 1
          BEGIN
-            SET @c_MbolLineNumber = '00001'
+            INSERT INTO CONTAINER (Containerkey,CarrierKey, MBOLKey,Status)
+            VALUES (@c_ContainerKey,@cTruckID,@cMBOLKey,0) 
+
+            SELECT @n_err = @@ERROR
+   	   	IF @n_err <> 0
+   	      BEGIN
+               GOTO RollBackTran
+            END
          END
          ELSE
          BEGIN
-            SET @c_MbolLineNumber = RIGHT('0000' + CONVERT(NVARCHAR(5), CAST(@c_MbolLineNumber AS INT) + 1), 5)
+            GOTO RollBackTran
          END
-         INSERT INTO MBOLDETAIL
-         (
-         MbolKey,          MbolLineNumber,      ContainerKey,        OrderKey,
-         PalletKey,        [Description],       GrossWeight,         Capacity,
-         InvoiceNo,        UPSINum,             PCMNum,              ExternReason,
-         InvoiceStatus,    InvoiceAmount,       OfficialReceipt,
-         ITS,              LoadKey,             [Weight],            [Cube],
-         OrderDate,        ExternOrderKey,      DeliveryDate,        DeliveryStatus,
-         TotalCartons,     UserDefine01,        UserDefine02,        UserDefine03,
-         UserDefine04,     UserDefine05,        UserDefine06,        UserDefine07,
-         UserDefine08,     UserDefine09,        UserDefine10,        CtnCnt1,
-         CtnCnt2,          CtnCnt3,             CtnCnt4,             CtnCnt5,
-         TrafficCop) 
-         SELECT
-         @cMBOLKey,        @c_MbolLineNumber,   @cTruckID,           @cOrderKey,
-         @cPallet,         '',                  0,                   0,
-         '',               '',                  '',                  '0',
-         '0',              0,                   '',
-         '',               Loadkey,             0,                    0,
-         OrderDate,        ExternOrderKey,      DeliveryDate,        '',
-         @nTotalCarton,    '',                  '',                  '',
-         '',               '',                  '',                  '',
-         '',               '',                  '',                  0,
-         0,                0,                   0,                   0,
-         '1'
-         FROM ORDERS O WITH (NOLOCK)
-         WHERE OrderKey = @cOrderKey AND StorerKey = @cStorerKey
       END
-      ELSE 
-      BEGIN
-         UPDATE MBOLDETAIL SET 
-         ContainerKey = @cTruckID,OrderKey = @cOrderKey,PalletKey = @cPallet
-         WHERE MbolKey = @cMBOLKey AND MbolLineNumber = @c_MbolLineNumber
-      END
+
+      SELECT @n_LineNo = ISNULL(CAST(MAX(ContainerLineNumber) AS INT),0),
+      @c_ContainerKey = C.Containerkey
+      FROM CONTAINERDETAIL CD (NOLOCK)
+      INNER JOIN CONTAINER C (NOLOCK) ON C.Containerkey = CD.Containerkey
+      WHERE MBOLKey = @cMBOLKey AND CarrierKey = @cTruckID
+      GROUP BY C.Containerkey
+
+      SET @n_LineNo = ISNULL(@n_LineNo,0) + 1
+      SET @c_LineNo = RIGHT('00000' + LTRIM(RTRIM(CAST(@n_LineNo AS NVARCHAR))), 5)
+
+      INSERT INTO CONTAINERDETAIL (Containerkey, ContainerLineNumber, Palletkey,Userdefine04,Userdefine05)
+      VALUES (@c_Containerkey, @c_LineNo, @cPallet,@cOrderKey,@cLottable01)
 
       COMMIT TRAN rdtfnc_ScanToTruck_Barry
 
       SELECT @nScanned = COUNT(PalletKey) 
-      FROM MBOLDETAIL MD WITH (NOLOCK)
-      WHERE MD.MbolKey = @cMBOLKey
-      AND PalletKey <> ''
+      FROM CONTAINERDETAIL CD (NOLOCK)
+      INNER JOIN CONTAINER C (NOLOCK) ON C.Containerkey = CD.Containerkey
+      WHERE C.MBOLKey = @cMBOLKey
 
       SET @cOutField03 = ''
       SET @cOutField04 = CONCAT(@nScanned,'/',@nTotal)
@@ -599,15 +595,12 @@ BEGIN
       SET @cOption = @cInField05
       IF @cOption = '1'
       BEGIN
-         UPDATE MBOLDETAIL SET 
-         Userdefine03 = @cSealNo1,
-         UserDefine04 = @cSealNo2,
-         UserDefine05 = @cSealNo3,
-         UserDefine08 = @cSealNo4,
-         UserDefine09 = @cSealNo5,
-         UserDefine10 = @cSealNo6
-         WHERE MbolKey = @cMBOLKey 
-         AND ContainerKey = @cTruckID
+         UPDATE CONTAINER SET 
+         Seal01 = @cSealNo1,
+         Seal02 = @cSealNo2,
+         Seal03 = @cSealNo3
+         WHERE MBOLKey = @cMBOLKey 
+         AND CarrierKey = @cTruckID
 
          SET @nScn = @nScn + 2
          SET @nStep = @nStep + 2
@@ -650,15 +643,15 @@ BEGIN
       SET @cSealNo5 = @cInField03
       SET @cSealNo6 = @cInField04
    
-      UPDATE MBOLDETAIL SET 
-      Userdefine03 = @cSealNo1,
-      UserDefine04 = @cSealNo2,
-      UserDefine05 = @cSealNo3,
-      UserDefine08 = @cSealNo4,
-      UserDefine09 = @cSealNo5,
-      UserDefine10 = @cSealNo6
-      WHERE MbolKey = @cMBOLKey 
-      AND ContainerKey = @cTruckID
+      UPDATE CONTAINER SET 
+      Seal01 = @cSealNo1,
+      Seal02 = @cSealNo2,
+      Seal03 = @cSealNo3,
+      UserDefine01 = @cSealNo4,
+      UserDefine02 = @cSealNo5,
+      UserDefine03 = @cSealNo6
+      WHERE MBOLKey = @cMBOLKey 
+      AND CarrierKey = @cTruckID
 
       -- Prepare Next Screen Variable
       SET @cOutField01 = @cTruckID
@@ -721,7 +714,7 @@ BEGIN
       V_String4 = @cSealNo1,
       V_String5 = @cSealNo2,
       V_String6 = @cSealNo3,
-
+      V_String7 = @c_ContainerKey,
       V_Integer1 = @nTotal,  
       V_Integer2 = @nScanned,
       

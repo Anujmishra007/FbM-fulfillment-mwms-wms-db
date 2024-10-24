@@ -1,11 +1,16 @@
 
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS OFF
+GO  
 /************************************************************************/
 /* Store procedure: [rdt_511ExtUpdVLT]                                  */
 /* Copyright: Maersk                                                    */
 /*                                                                      */
 /*                                                                      */
 /* Date       VER    Author   Purpose                                   */
-/* 15/07/24   1.0    PPA374	  Clearing outstanding pending moves        */
+/* 15/07/24   1.0    PPA374   Clearing outstanding pending moves        */
+/* 21/10/24   1.1    PPA374   UWP-25931                                 */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_511ExtUpdVLT] (
@@ -22,19 +27,51 @@ CREATE OR ALTER PROC [RDT].[rdt_511ExtUpdVLT] (
 @nErrNo     INT           OUTPUT,
 @cErrMsg    NVARCHAR( 20) OUTPUT
 ) AS
-BEGIN
-   SET NOCOUNT ON
-   SET QUOTED_IDENTIFIER OFF
-   SET ANSI_NULLS OFF
 
-   IF @nStep = 3 -- To Loc
-      -- Clearing outstanding pending moves, as since ID is moved, it is not required anymore.
+SET NOCOUNT ON
+SET QUOTED_IDENTIFIER OFF
+SET ANSI_NULLS OFF
+
+DECLARE 
+   @Orderkey NVARCHAR(15),
+   @Wavekey NVARCHAR(15),
+   @NextOrderKey NVARCHAR(15)
+
+SET @Orderkey = ''
+SET @Wavekey = ''
+SET @NextOrderKey = ''
+
+IF @nStep = 3 -- To Loc
+   -- Clearing outstanding pending moves, as since ID is moved, it is not required anymore.
+   BEGIN
+      UPDATE LOTxLOCxID WITH(ROWLOCK)
+      SET PendingMoveIN = 0
+      WHERE id = @cFromID AND PendingMoveIN > 0 AND StorerKey = @cStorerKey AND ID <> ''
+
+     IF EXISTS (SELECT 1 FROM loc L (NOLOCK) WHERE loc = @cToLOC 
+      AND EXISTS (SELECT 1 FROM CODELKUP (NOLOCK) WHERE LISTNAME = 'OUTZONHUSQ' AND Storerkey = @cStorerKey AND L.LocationType = Code))
       BEGIN
-         update LOTxLOCxID
-         set PendingMoveIN = 0
-         where id = @cFromID and PendingMoveIN > 0 and StorerKey = @cStorerKey and ID <> ''
+         SELECT TOP 1 @Orderkey = orderkey FROM PICKDETAIL (NOLOCK) WHERE id = @cFromID AND Storerkey = @cStorerKey
+         SELECT TOP 1 @Wavekey = wavekey FROM TaskDetail (NOLOCK) WHERE OrderKey = @Orderkey AND Storerkey = @cStorerKey AND TaskType in ('FCP','FPK')
+         SELECT TOP 1 @NextOrderKey = OrderKey FROM TaskDetail (NOLOCK) WHERE Message01 = '' AND orderkey <> @Orderkey AND WaveKey = @Wavekey AND Storerkey = @cStorerKey AND TaskType in ('FCP','FPK') order by TaskDetailKey
+
+         IF (SELECT isnull(sum(openqty),0)-isnull(sum(QtyPicked),0) FROM orderdetail (NOLOCK) 
+         WHERE orderkey = @Orderkey AND StorerKey = @cStorerKey AND Facility = @cFacility) <= 0
+         AND not EXISTS (SELECT 1 FROM PICKDETAIL (NOLOCK) WHERE OrderKey = @Orderkey AND Status < '5' AND Storerkey = @cStorerKey)
+         BEGIN
+            UPDATE TaskDetail WITH(ROWLOCK)
+            SET Message01 = 'Staged'
+            WHERE OrderKey = @Orderkey AND Message01 = ''
+
+            UPDATE TaskDetail WITH(ROWLOCK)
+            SET Status = '0'
+            WHERE OrderKey = @NextOrderKey AND status = 'S'
+         END
       END
-END
+   END
 GO
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS ON
+GO   
 GRANT EXECUTE ON [RDT].[rdt_511ExtUpdVLT] TO [NSQL]
-GO

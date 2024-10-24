@@ -15,6 +15,7 @@ GO
 /* Date        Rev  Author   Purposes                                   */    
 /* 2024-07-05  1.0  CYU027   FCR 539. Created                           */
 /* 2024-09-20  1.1  CYU027   Add Validation TrackNo                     */
+/* 2024-10-08  1.2  NLT013   FCR-950 Enhancement                        */
 /************************************************************************/
     
 CREATE OR ALTER PROC [RDT].[rdt_1653GetMbolKey04] (
@@ -44,14 +45,30 @@ BEGIN
    DECLARE @cCur_OrderKey                 NVARCHAR( 10) = ''
    DECLARE @cPalletNotAllowMixShipperKey  NVARCHAR( 1)
 
-   IF EXISTS ( SELECT 1 FROM dbo.PalletDetail WITH (NOLOCK)
-                  WHERE StorerKey = @cStorerKey
-                     AND (CaseID = @cTrackNo OR TrackingNo = @cTrackNo))
-   BEGIN
-      SET @nErrNo = 219157
-      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --TrackNo In Use
-      GOTO Quit
-   END
+   DECLARE
+      @cWaveKey                           NVARCHAR(10),
+      @cCODELKUPUdf01                     NVARCHAR(60),
+      @cCODELKUPUdf02                     NVARCHAR(60),
+      @cCODELKUPUdf03                     NVARCHAR(60),
+      @cCODELKUPUdf04                     NVARCHAR(60),
+      @cCODELKUPUdf05                     NVARCHAR(60),
+      @cCODELKUPUdf01Value                NVARCHAR(60),
+      @cCODELKUPUdf02Value                NVARCHAR(60),
+      @cCODELKUPUdf03Value                NVARCHAR(60),
+      @cCODELKUPUdf04Value                NVARCHAR(60),
+      @cCODELKUPUdf05Value                NVARCHAR(60),
+      @cWaveType                          NVARCHAR(18),
+      @cSQLString                         NVARCHAR(MAX),
+      @cSQLParam                          NVARCHAR(MAX)
+
+   -- IF EXISTS ( SELECT 1 FROM dbo.PalletDetail WITH (NOLOCK)
+   --                WHERE StorerKey = @cStorerKey
+   --                   AND (CaseID = @cTrackNo OR TrackingNo = @cTrackNo))
+   -- BEGIN
+   --    SET @nErrNo = 219157
+   --    SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --TrackNo In Use
+   --    GOTO Quit
+   -- END
 
 
    SELECT @cNew_ShipperKey = ShipperKey
@@ -79,15 +96,105 @@ BEGIN
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --MBOL Shipped    
          GOTO Quit    
       END    
+
+      --FCR-950 --BEGIN
+      SET @cPalletKey = ''
+      SELECT @cWaveKey = ISNULL(UserDefine09, '') 
+      FROM dbo.ORDERS WITH(NOLOCK)
+      WHERE OrderKey = @cOrderKey
+         AND StorerKey = @cStorerKey 
+
+      SELECT @cWaveType = WaveType
+      FROM dbo.Wave WITH(NOLOCK)
+      WHERE WaveKey = @cWaveKey
+
+      IF TRIM(@cWaveType) = '0'
+      BEGIN
+         SET @cPalletKey = ''
+         SELECT TOP 1
+            @cPalletKey = PalletKey
+         FROM dbo.PALLETDETAIL WITH (NOLOCK)
+         WHERE StorerKey = @cStorerKey
+            AND ISNULL(UserDefine01, '') = @cMBOLKey
+            AND Status = '0'
+         ORDER BY EditDate DESC
+      END
+      ELSE IF TRIM(@cWaveType) NOT IN ('', '0')
+      BEGIN
+         SELECT TOP 1 
+            @cCODELKUPUdf01 = TRIM(UDF01),
+            @cCODELKUPUdf02 = TRIM(UDF02),
+            @cCODELKUPUdf03 = TRIM(UDF03),
+            @cCODELKUPUdf04 = TRIM(UDF04),
+            @cCODELKUPUdf05 = TRIM(UDF05)
+         FROM dbo.CODELKUP WITH(NOLOCK)
+         WHERE LISTNAME = 'WAVETYPE'
+            AND StorerKey = @cStorerKey 
+            AND Code = @cWaveType
+
+         IF @cCODELKUPUdf01 IS NULL OR TRIM(@cCODELKUPUdf01) = ''
+         BEGIN
+            SET @nErrNo = 219108
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --PLT Group logic missing
+            GOTO Quit
+         END
+
+         BEGIN TRY
+            SET @cSQLString = 
+               ' SELECT  @cCODELKUPUdf01Value = ' + @cCODELKUPUdf01 + ' ' +
+               IIF(@cCODELKUPUdf02 <> '',   ', @cCODELKUPUdf02Value = ' + @cCODELKUPUdf02 + ' ', '') +
+               IIF(@cCODELKUPUdf03 <> '',   ', @cCODELKUPUdf03Value = ' + @cCODELKUPUdf03 + ' ', '') +
+               IIF(@cCODELKUPUdf04 <> '',   ', @cCODELKUPUdf04Value = ' + @cCODELKUPUdf04 + ' ', '') +
+               IIF(@cCODELKUPUdf05 <> '',   ', @cCODELKUPUdf05Value = ' + @cCODELKUPUdf05 + ' ', '') +
+               ' FROM dbo.ORDERS WITH(NOLOCK) '     +
+               ' WHERE OrderKey =  @cOrderKey' +
+               ' AND StorerKey = @cStorerKey'
+
+            SET @cSQLParam =  '@cOrderKey       NVARCHAR(20), ' +
+                              '@cStorerKey      NVARCHAR(20), ' +
+                              '@cCODELKUPUdf01Value  NVARCHAR(60) OUTPUT, ' +
+                              '@cCODELKUPUdf02Value  NVARCHAR(60) OUTPUT, ' +
+                              '@cCODELKUPUdf03Value  NVARCHAR(60) OUTPUT, ' +
+                              '@cCODELKUPUdf04Value  NVARCHAR(60) OUTPUT, ' +
+                              '@cCODELKUPUdf05Value  NVARCHAR(60) OUTPUT ' 
+                  
+            EXEC sp_executesql @cSQLString, @cSQLParam, 
+               @cOrderKey = @cOrderKey, 
+               @cStorerKey = @cStorerKey,
+               @cCODELKUPUdf01Value = @cCODELKUPUdf01Value OUTPUT, 
+               @cCODELKUPUdf02Value = @cCODELKUPUdf02Value OUTPUT, 
+               @cCODELKUPUdf03Value = @cCODELKUPUdf03Value OUTPUT, 
+               @cCODELKUPUdf04Value = @cCODELKUPUdf04Value OUTPUT, 
+               @cCODELKUPUdf05Value = @cCODELKUPUdf05Value OUTPUT
+         END TRY
+         BEGIN CATCH
+            SET @nErrNo = 219109
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Execute SQL Statement Fail
+            GOTO Quit
+         END CATCH
+
+         SELECT 
+            @cPalletKey = PalletKey
+         FROM dbo.PALLETDETAIL PD WITH(NOLOCK) 
+         WHERE StorerKey = @cStorerKey
+            AND ISNULL(UserDefine01, '') = @cCODELKUPUdf01Value
+            AND ISNULL(UserDefine02, '') LIKE IIF(@cCODELKUPUdf02 = '', '%%', @cCODELKUPUdf02Value)
+            AND ISNULL(UserDefine03, '') LIKE IIF(@cCODELKUPUdf03 = '', '%%', @cCODELKUPUdf03Value)
+            AND ISNULL(UserDefine04, '') LIKE IIF(@cCODELKUPUdf04 = '', '%%', @cCODELKUPUdf04Value)
+            AND ISNULL(UserDefine05, '') LIKE IIF(@cCODELKUPUdf05 = '', '%%', @cCODELKUPUdf05Value)
+            AND Status = '0' -- 0 means pallet is open, 9 means pallet is closed.
+      END
+
+      --FCR-950 --END
     
-      SET @cPalletKey = ''    
-      SELECT TOP 1     
-         @cPalletKey = PalletKey
-      FROM dbo.PALLETDETAIL WITH (NOLOCK)
-      WHERE StorerKey = @cStorerKey    
-      AND   UserDefine01 = @cMBOLKey
-      AND   Status = '0'
-      ORDER BY EditDate DESC
+      -- SET @cPalletKey = ''    
+      -- SELECT TOP 1     
+      --    @cPalletKey = PalletKey
+      -- FROM dbo.PALLETDETAIL WITH (NOLOCK)
+      -- WHERE StorerKey = @cStorerKey    
+      -- AND   UserDefine01 = @cMBOLKey
+      -- AND   Status = '0'
+      -- ORDER BY EditDate DESC
 
       SET @cLane = ''
       SELECT TOP 1

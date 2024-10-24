@@ -16,6 +16,7 @@ GO
 /* 2024-06-18 1.0    NLT013   FCR-386. Created                                  */
 /* 2024-08-06 1.1    Dennis   FCR-386. Remove order group condition             */
 /* 2024-09-26 1.2    NLT013   UWP-24932 Error message UI issue                  */
+/* 2024-09-30 1.3    NLT013   Fix printing special order labels issue           */
 /* 2024-10-12 1.3.0  NLT013   FCR-955 PPA by LabelNo, instead of PickSLipNo     */
 /********************************************************************************/
 
@@ -684,7 +685,15 @@ BEGIN
                   @cCustLabelName            NVARCHAR(30),
                   @cDefaultLabelName         NVARCHAR(30),
                   @cCustLabelDataDesc        NVARCHAR(30),
-                  @cCustomCode               NVARCHAR(30)
+                  @cCustomCode               NVARCHAR(30),
+                  @nSpecialCartonLabelPrinted       INT = 0,
+                  @nSpecialVendorLabelPrinted       INT = 0
+                  
+
+               SELECT @cPickSlipNo = PickSlipNo
+               FROM dbo.PackDetail WITH(NOLOCK) 
+               WHERE StorerKey = @cStorerKey 
+                  AND labelno = @cDropID
 
                DECLARE @tCartonLabelList VariableTable
                INSERT INTO @tCartonLabelList (Variable, Value) 
@@ -744,7 +753,16 @@ BEGIN
                   IF @@ROWCOUNT = 0
                      BREAK
 
-                  DELETE FROM @tDefaultLabels WHERE (Code = @cVASCode OR code2 = @cCode2)
+                  IF LEFT(@cLabelName, 3) = 'CTN'
+                  BEGIN
+                     DELETE FROM @tDefaultLabels WHERE (Code = @cVASCode OR code2 = @cCode2) AND LEFT(UDF01, 3) = 'CTN'
+                     SET @nSpecialCartonLabelPrinted = 1
+                  END
+                  ELSE
+                  BEGIN
+                     DELETE FROM @tDefaultLabels WHERE (Code = @cVASCode OR code2 = @cCode2) AND LEFT(UDF01, 3) <> 'CTN'
+                     SET @nSpecialVendorLabelPrinted = 1
+                  END
 
                   -- Print label
                   EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cLabelPrinterGroup, @cPaperPrinter,
@@ -790,7 +808,8 @@ BEGIN
                      SELECT CustLabelData.Description, CustLabels.UDF01 AS CustLabelType, ISNULL(CustLabels.Short, '99999') AS CustSequence, CustLabelData.Long
                      FROM (SELECT StorerKey, Description, ISNULL(Long, '') AS Long FROM dbo.CODELKUP AS LK WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND LISTNAME = 'LVSCUSPREF'  AND code2 = @cConsigneeKey
                            AND NOT EXISTS (SELECT 1 FROM @tCustWorkOrderLabels AS CWOL WHERE CWOL.Type = LK.Long OR CWOL.code2 = LK.Description)) AS CustLabelData
-                     LEFT JOIN (SELECT StorerKey, code2, Code, UDF01, Short FROM dbo.CODELKUP WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND LISTNAME = 'LVSCARTLBL'  AND ISNULL(Long, '') <> 'A') AS CustLabels 
+                     LEFT JOIN (SELECT StorerKey, code2, Code, UDF01, Short FROM dbo.CODELKUP WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND LISTNAME = 'LVSCARTLBL'  AND ISNULL(Long, '') <> 'A'
+                           ) AS CustLabels 
                         ON CustLabelData.StorerKey = CustLabels.StorerKey AND CustLabelData.Description = CustLabels.code2 AND CustLabelData.Long = CustLabels.Code
                      ORDER BY ISNULL(CustLabels.Short, '99999')
                END
@@ -799,7 +818,8 @@ BEGIN
                      SELECT CustLabelData.Description, CustLabels.UDF01 AS CustLabelType, ISNULL(CustLabels.Short, '99999') AS CustSequence, CustLabelData.Long
                      FROM (SELECT StorerKey, Description, ISNULL(Long, '') AS Long FROM dbo.CODELKUP LK WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND LISTNAME = 'LVSCUSPREF'  AND (code2 = @cConsigneeKey OR code2 = @cBillToKey)
                            AND NOT EXISTS (SELECT 1 FROM @tCustWorkOrderLabels AS CWOL WHERE CWOL.Type = LK.Long OR CWOL.code2 = LK.Description)) AS CustLabelData
-                     LEFT JOIN (SELECT StorerKey, code2, Code, UDF01, Short FROM dbo.CODELKUP WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND LISTNAME = 'LVSCARTLBL'  AND ISNULL(Long, '') <> 'A') AS CustLabels 
+                     LEFT JOIN (SELECT StorerKey, code2, Code, UDF01, Short FROM dbo.CODELKUP WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND LISTNAME = 'LVSCARTLBL'  AND ISNULL(Long, '') <> 'A'
+                           ) AS CustLabels 
                         ON CustLabelData.StorerKey = CustLabels.StorerKey AND CustLabelData.Description = CustLabels.code2 AND CustLabelData.Long = CustLabels.Code
                      ORDER BY ISNULL(CustLabels.Short, '99999')
 
@@ -809,6 +829,11 @@ BEGIN
                WHILE @@FETCH_STATUS = 0 
                BEGIN
                   IF @cCustLabelName IS NOT NULL AND TRIM(@cCustLabelName) <> ''
+                     AND ( 
+                           (@nSpecialCartonLabelPrinted = 0 AND LEFT(@cCustLabelName, 3) = 'CTN' )
+                           OR 
+                           (@nSpecialVendorLabelPrinted = 0 AND LEFT(@cCustLabelName, 3) <> 'CTN') 
+                        )
                   BEGIN
                      DELETE FROM @tDefaultLabels WHERE code2 = @cCustLabelDataDesc
                      SET @cLabelName = @cCustLabelName

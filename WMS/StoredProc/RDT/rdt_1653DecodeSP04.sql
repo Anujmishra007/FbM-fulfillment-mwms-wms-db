@@ -50,6 +50,9 @@ BEGIN
    WHERE KeyName = @cStorerKey
      AND   Trackingno = @cTrackNo
 
+   IF @@ROWCOUNT = 0
+      SET @cLabelNo = @cTrackNo
+
    SELECT TOP 1 @cOrderKey = PH.OrderKey
    FROM dbo.PackDetail PD WITH (NOLOCK)
            JOIN dbo.PackHeader PH WITH (NOLOCK) ON ( PD.PickSlipNo = PH.PickSlipNo)

@@ -78,7 +78,9 @@ BEGIN
                @cVASCode                  NVARCHAR( 12), --v1.4
                @cCode2                    NVARCHAR( 30), --v1.4
                @cCustomCode               NVARCHAR(30), --v1.4
-               @nLoopIndex                INT
+               @nLoopIndex                INT,
+               @nSpecialCartonLabelPrinted       INT = 0,
+               @nSpecialVendorLabelPrinted       INT = 0
 
             DECLARE @cLabelPrinter     NVARCHAR( 10)
             DECLARE @cPaperPrinter     NVARCHAR( 10)
@@ -179,7 +181,16 @@ BEGIN
                IF @@ROWCOUNT = 0
                   BREAK
 
-               DELETE FROM @tDefaultLabels WHERE (Code = @cVASCode OR code2 = @cCode2)
+               IF LEFT(@cLabelName, 3) = 'CTN'
+               BEGIN
+                  DELETE FROM @tDefaultLabels WHERE (Code = @cVASCode OR code2 = @cCode2) AND LEFT(UDF01, 3) = 'CTN'
+                  SET @nSpecialCartonLabelPrinted = 1
+               END
+               ELSE
+               BEGIN
+                  DELETE FROM @tDefaultLabels WHERE (Code = @cVASCode OR code2 = @cCode2) AND LEFT(UDF01, 3) <> 'CTN'
+                  SET @nSpecialVendorLabelPrinted = 1
+               END
 
                IF @bDebugFlag = 1
                BEGIN
@@ -241,7 +252,7 @@ BEGIN
                DECLARE CUR_CARTONLABEL CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
                   SELECT CustLabelData.Description, CustLabels.UDF01 AS CustLabelType, ISNULL(CustLabels.Short, '99999') AS CustSequence, CustLabelData.Long
                   FROM (SELECT StorerKey, Description, ISNULL(Long, '') AS Long FROM dbo.CODELKUP AS LK WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND LISTNAME = 'LVSCUSPREF'  AND code2 = @cConsigneeKey
-                        AND NOT EXISTS (SELECT 1 FROM @tCustWorkOrderLabels AS CWOL WHERE CWOL.Type = LK.Long OR CWOL.code2 = LK.Description)) AS CustLabelData
+                        ) AS CustLabelData
                   LEFT JOIN (SELECT StorerKey, code2, Code, UDF01, Short FROM dbo.CODELKUP WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND LISTNAME = 'LVSCARTLBL'  AND ISNULL(Long, '') <> 'A') AS CustLabels 
                      ON CustLabelData.StorerKey = CustLabels.StorerKey AND CustLabelData.Description = CustLabels.code2 AND CustLabelData.Long = CustLabels.Code
                   ORDER BY ISNULL(CustLabels.Short, '99999')
@@ -250,7 +261,7 @@ BEGIN
                DECLARE CUR_CARTONLABEL CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
                   SELECT CustLabelData.Description, CustLabels.UDF01 AS CustLabelType, ISNULL(CustLabels.Short, '99999') AS CustSequence, CustLabelData.Long
                   FROM (SELECT StorerKey, Description, ISNULL(Long, '') AS Long FROM dbo.CODELKUP LK WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND LISTNAME = 'LVSCUSPREF'  AND (code2 = @cConsigneeKey OR code2 = @cBillToKey)
-                        AND NOT EXISTS (SELECT 1 FROM @tCustWorkOrderLabels AS CWOL WHERE CWOL.Type = LK.Long OR CWOL.code2 = LK.Description)) AS CustLabelData
+                        ) AS CustLabelData
                   LEFT JOIN (SELECT StorerKey, code2, Code, UDF01, Short FROM dbo.CODELKUP WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND LISTNAME = 'LVSCARTLBL'  AND ISNULL(Long, '') <> 'A') AS CustLabels 
                      ON CustLabelData.StorerKey = CustLabels.StorerKey AND CustLabelData.Description = CustLabels.code2 AND CustLabelData.Long = CustLabels.Code
                   ORDER BY ISNULL(CustLabels.Short, '99999')
@@ -265,6 +276,11 @@ BEGIN
                      @cCustLblPrintSequence AS CustomPrintSequence, @cCustomCode AS CustomCode
 
                IF @cCustLabelName IS NOT NULL AND TRIM(@cCustLabelName) <> ''
+                  AND   (  
+                           (@nSpecialCartonLabelPrinted = 0 AND LEFT(@cCustLabelName, 3) = 'CTN' )
+                           OR 
+                           (@nSpecialVendorLabelPrinted = 0 AND LEFT(@cCustLabelName, 3) <> 'CTN') 
+                        )
                BEGIN
                   -- If customized lable found, delete default label from the list
                   IF @bDebugFlag = 1

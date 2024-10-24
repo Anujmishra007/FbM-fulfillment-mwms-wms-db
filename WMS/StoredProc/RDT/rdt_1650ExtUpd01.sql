@@ -291,67 +291,70 @@ SET ANSI_NULLS OFF
 
       IF @nStep = 3 
       BEGIN
-         IF ISNULL( @cMbolKey, '') <> ''
+         IF @cOption = '1'
          BEGIN
-            IF NOT EXISTS ( SELECT 1 FROM MBOLDETAIL MD WITH (NOLOCK) 
-                            JOIN rdt.rdtScanToTruck ST WITH (NOLOCK) ON ( MD.MBOLKey = ST.MBOLKey AND CartonType = 'SCNPT2DOOR')
-                            WHERE MD.MBOLKey = @cMbolKey
-                            AND   ST.Status < '9')
+            IF ISNULL( @cMbolKey, '') <> ''
             BEGIN
-               DECLARE CUR_LOOP CURSOR LOCAL READ_ONLY FAST_FORWARD FOR 
-               SELECT DISTINCT LoadKey
-               FROM dbo.MbolDetail MD WITH (NOLOCK) 
-               JOIN dbo.Mbol M WITH (NOLOCK) ON MD.MbolKey = M.MbolKey
-               WHERE M.MbolKey = @cMbolKey
-               AND   M.Status < '9'
-               OPEN CUR_LOOP
-               FETCH NEXT FROM CUR_LOOP INTO @cLoadkey
-               WHILE @@FETCH_STATUS <> -1 
+               IF NOT EXISTS ( SELECT 1 FROM MBOLDETAIL MD WITH (NOLOCK) 
+                              JOIN rdt.rdtScanToTruck ST WITH (NOLOCK) ON ( MD.MBOLKey = ST.MBOLKey AND CartonType = 'SCNPT2DOOR')
+                              WHERE MD.MBOLKey = @cMbolKey
+                              AND   ST.Status < '9')
                BEGIN
-                  UPDATE dbo.LoadPlanLaneDetail WITH (ROWLOCK) SET 
-                     [Status] = '9'
-                  WHERE Loadkey = @cLoadkey 
-                  AND  [Status] < '9'
-
-                  IF @@ERROR <> 0
-                  BEGIN
-                     SET @nErrNo = 53807   
-                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Close Lane Err
-                     CLOSE CUR_LOOP
-                     DEALLOCATE CUR_LOOP
-                     GOTO Quit
-                  END
-
+                  DECLARE CUR_LOOP CURSOR LOCAL READ_ONLY FAST_FORWARD FOR 
+                  SELECT DISTINCT LoadKey
+                  FROM dbo.MbolDetail MD WITH (NOLOCK) 
+                  JOIN dbo.Mbol M WITH (NOLOCK) ON MD.MbolKey = M.MbolKey
+                  WHERE M.MbolKey = @cMbolKey
+                  AND   M.Status < '9'
+                  OPEN CUR_LOOP
                   FETCH NEXT FROM CUR_LOOP INTO @cLoadkey
+                  WHILE @@FETCH_STATUS <> -1 
+                  BEGIN
+                     UPDATE dbo.LoadPlanLaneDetail WITH (ROWLOCK) SET 
+                        [Status] = '9'
+                     WHERE Loadkey = @cLoadkey 
+                     AND  [Status] < '9'
+
+                     IF @@ERROR <> 0
+                     BEGIN
+                        SET @nErrNo = 53807   
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Close Lane Err
+                        CLOSE CUR_LOOP
+                        DEALLOCATE CUR_LOOP
+                        GOTO Quit
+                     END
+
+                     FETCH NEXT FROM CUR_LOOP INTO @cLoadkey
+                  END
+                  CLOSE CUR_LOOP
+                  DEALLOCATE CUR_LOOP
                END
-               CLOSE CUR_LOOP
-               DEALLOCATE CUR_LOOP
-            END
 
-            IF @cAutoShipMBOL = '1'
-            BEGIN
-               SET @nKeyCount        = 0
-               SET @nWarningNo       = 0
+               IF @cAutoShipMBOL = '1'
+               BEGIN
+                  SET @nKeyCount        = 0
+                  SET @nWarningNo       = 0
 
-               BEGIN TRY
-                  EXEC [WM].[lsp_WaveShip] 
-                     @c_WaveKey              = '',
-                     @c_MBOLkey              = @cMbolKey,
-                     @c_ShipMode             = 'MBOL',
-                     @n_TotalSelectedKeys    = 1,
-                     @c_ProceedWithWarning   = 'N',
-                     @c_UserName             = @cUserName,
-                     @n_KeyCount             = @nKeyCount            OUTPUT,
-                     @b_Success              = @bSuccess             OUTPUT,
-                     @n_err                  = @nErrNo               OUTPUT,
-                     @c_ErrMsg               = @cErrMsg              OUTPUT,
-                     @n_WarningNo            = @nWarningNo           OUTPUT
-               END TRY
-               BEGIN CATCH
-                  SET @nErrNo = 53809
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --AUTO SHIP FAIL
-                  GOTO Quit
-               END CATCH
+                  BEGIN TRY
+                     EXEC [WM].[lsp_WaveShip] 
+                        @c_WaveKey              = '',
+                        @c_MBOLkey              = @cMbolKey,
+                        @c_ShipMode             = 'MBOL',
+                        @n_TotalSelectedKeys    = 1,
+                        @c_ProceedWithWarning   = 'N',
+                        @c_UserName             = @cUserName,
+                        @n_KeyCount             = @nKeyCount            OUTPUT,
+                        @b_Success              = @bSuccess             OUTPUT,
+                        @n_err                  = @nErrNo               OUTPUT,
+                        @c_ErrMsg               = @cErrMsg              OUTPUT,
+                        @n_WarningNo            = @nWarningNo           OUTPUT
+                  END TRY
+                  BEGIN CATCH
+                     SET @nErrNo = 53809
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --AUTO SHIP FAIL
+                     GOTO Quit
+                  END CATCH
+               END
             END
          END
       END

@@ -672,5 +672,3 @@ END
 GO
 GRANT EXECUTE ON  [RDT].[rdt_PTLStation_Assign_WaveCarton04] TO [NSQL]
 GO
-
-  s

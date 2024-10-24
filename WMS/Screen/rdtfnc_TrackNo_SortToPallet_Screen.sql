@@ -154,3 +154,25 @@ EXECUTE rdt.rdtAddScn 5807, 'ENG',
    ,@cLine13 = '%20d15'
    ,@cLine14 = '%e'
    ,@nFunc = 1653
+
+-- FCR-950
+-- 6447 = Remove Carton from Pallet?
+DELETE rdt.RDTScn WHERE Scn = 6447 AND Lang_Code = 'ENG'
+EXECUTE rdt.rdtAddScn 6447, 'ENG',
+    @cLine01 = 'Carton already'
+   ,@cLine02 = 'scanned to pallet.'
+   ,@cLine03 = 'Confirm to remove'
+   ,@cLine04 = 'carton from pallet?'
+   ,@cLine05 = 'Pallet Key:'
+   ,@cLine06 = '%20d02'
+   ,@cLine07 = '1 = Yes'
+   ,@cLine08 = '2 = No'
+   ,@cLine09 = 'Option: '
+   ,@cLine10 = '%1i01' 
+   ,@cLine11 = ''
+   ,@cLine12 = ''
+   ,@cLine13 = ''
+   ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2","3","4"],"2":["5","6"],"3":["7","8","9","10"]}'
+   ,@nFunc = 1653
+

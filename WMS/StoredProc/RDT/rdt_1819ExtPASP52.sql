@@ -14,6 +14,7 @@ GO
 /*                            and the PND location                                        */
 /* 2024-08-03   1.1  CLVN01   FCR-267 Error 216551 validation to exclude empty LLI and    */
 /*                            consider only LLI with Qty > 0 when determining Putawayzone */
+/* 2024-10-07   1.2  NLT013   FCR-954 Be able to specify putaway zone by configuration    */
 /******************************************************************************************/
         
 CREATE  OR ALTER PROC [RDT].[rdt_1819ExtPASP52] (
@@ -109,37 +110,11 @@ BEGIN
 
    SET @nTranCount = @@TRANCOUNT
 
-   SELECT @nRowCount = COUNT(DISTINCT sku.PutawayZone)
-   FROM SKU sku WITH(NOLOCK)
-   INNER JOIN LOTXLOCXID sto WITH(NOLOCK) ON sku.Sku = sto.Sku AND sku.StorerKey = sto.StorerKey
-   WHERE sto.StorerKey = @cStorerKey
-      AND sto.Id = @cID
-	  AND sto.Qty > 0 --(CLVN01)
+   SET @cPutawayZone = rdt.RDTGetConfig( @nFunc, 'DefaultPAzone', @cStorerkey)
+   IF @cPutawayZone = '0'
+      SET @cPutawayZone = ''
 
-   IF @nRowCount > 1
-   BEGIN
-      SET @nErrNo = 216551
-      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
-
-      IF @bDebug = 1
-      BEGIN
-         SET @cDebugMsg = 'Error: ' + ' Multiple Putaway Zone';
-         PRINT @cDebugMsg
-      END
-      GOTO Fail
-   END
-
-   SELECT TOP 1
-      @cPutawayZone = sku.PutawayZone,
-      @cSKU = sku.Sku
-   FROM SKU sku WITH(NOLOCK)
-   INNER JOIN LOTXLOCXID sto WITH(NOLOCK) ON sku.Sku = sto.Sku AND sku.StorerKey = sto.StorerKey
-   WHERE sto.StorerKey = @cStorerKey
-      AND sto.Id = @cID
-	  AND sto.Qty > 0 --(CLVN01)
-
-   SELECT @nRowCount = @@ROWCOUNT
-   IF @nRowCount = 0 OR ISNULL(@cPutawayZone, '') = ''
+   IF ISNULL(@cPutawayZone, '') = ''
    BEGIN
       SET @nErrNo = 216552
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --NoPutawayZone
@@ -157,6 +132,27 @@ BEGIN
       SET @cDebugMsg = 'Info: ' + 'Get Putaway Zone: ' + @cPutawayZone
       PRINT @cDebugMsg
    END 
+
+   SELECT TOP 1
+      @cSKU = sku.Sku
+   FROM SKU sku WITH(NOLOCK)
+   INNER JOIN LOTXLOCXID sto WITH(NOLOCK) ON sku.Sku = sto.Sku AND sku.StorerKey = sto.StorerKey
+   WHERE sto.StorerKey = @cStorerKey
+      AND sto.Id = @cID
+      AND sto.Qty > 0 --(CLVN01)
+
+   IF @cSKU IS NULL OR TRIM(@cSKU) = ''
+   BEGIN
+      SET @nErrNo = 216561
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --EmptyPallet
+
+      IF @bDebug = 1
+      BEGIN
+         SET @cDebugMsg = 'Error: ' + ' Empty Pallet';
+         PRINT @cDebugMsg
+      END
+      GOTO Fail
+   END
 
    SELECT @nUCCCartonQty = COUNT(1)
    FROM
