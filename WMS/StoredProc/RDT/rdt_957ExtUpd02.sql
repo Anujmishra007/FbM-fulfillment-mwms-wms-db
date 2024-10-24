@@ -13,9 +13,11 @@ GO
 /*                                                                            */
 /* Modifications log:                                                         */
 /*                                                                            */
-/* Date         Author    Ver.  Purposes                                      */
-/* 2024-07-16   JHU151    1.0   FCR-428 Created                               */
-/* 2024-09-09   PXL009    1.1   FCR-770 Tote closure                          */
+/* Date         Author    Ver.   Purposes                                     */
+/* 2024-07-16   JHU151    1.0    FCR-428 Created                              */
+/* 2024-09-09   PXL009    1.1    FCR-770 Tote closure                         */
+/* 2024-10-24   PXL009    1.1.1  FCR-770 UOM = 7 requested to be added        */
+/*                                  when inserting the value WSTOTECFMlb.     */
 /******************************************************************************/
 
 CREATE OR ALTER     PROCEDURE [RDT].[rdt_957ExtUpd02]
