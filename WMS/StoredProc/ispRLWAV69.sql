@@ -23,6 +23,7 @@ GO
 /* Updates:                                                              */
 /* Date         Author  Ver.  Purposes                                   */
 /* 21-Mar-2024  WLChooi 1.0   DevOps Combine Script                      */
+/* 23-Oct-2024  Wan01   1.1   UWP-24998 - MLP Outbound Staging Loc       */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV69]        
     @c_Wavekey      NVARCHAR(10)    
@@ -69,6 +70,9 @@ CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV69]
          , @c_Taskdetailkey           NVARCHAR(10) = ''
          , @c_FinalLoc                NVARCHAR(10)
          , @c_Orderkey                NVARCHAR(10)
+
+         , @c_RLWav_Opt5               NVARCHAR(1000) = ''                          --(Wan01) 
+         , @c_LoadAssignLane           NVARCHAR(10) = 'N'                           --(Wan01)
 
    SET @c_SourceType = 'ispRLWAV69'
              
@@ -138,7 +142,15 @@ CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV69]
 
    IF @@TRANCOUNT = 0
       BEGIN TRAN
-   
+
+   --(Wan01) - START
+   SELECT @c_RLWav_Opt5 = gr.Option5 
+   FROM fnc_GetRight2 (@c_Facility, @c_Storerkey, '', 'ReleaseWave_SP') gr
+
+   SELECT @c_LoadAssignLane = 
+   dbo.fnc_GetParamValueFromString('@c_LoadAssignLane', @c_RLWav_Opt5, @c_LoadAssignLane)
+   --(Wan01) - END
+
    IF @n_continue = 1 OR @n_continue = 2
    BEGIN 
       IF OBJECT_ID('#PickDetail_WIP') IS NOT NULL
@@ -307,15 +319,36 @@ CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV69]
 
          SET @c_LinkTaskToPick_SQL = 'PICKDETAIL.UOM = @c_UOM AND LOC.LocationType = ''VNA'' '
 
-         SELECT @c_FinalLoc = ISNULL(ORDERS.Door, '')
-         FROM ORDERS WITH (NOLOCK)
-         WHERE ORDERS.OrderKey = @c_Orderkey
+         --(Wan01) - START
+         IF @c_LoadAssignLane = 'Y'
+         BEGIN
+            IF @c_Loadkey <> '' OR @c_Loadkey IS NULL
+            BEGIN 
+               SELECT TOP 1 @c_FinalLoc = lpld.Loc
+               FROM LoadPlanLaneDetail lpld(NOLOCK) 
+               WHERE lpld.Loadkey = @c_Loadkey
+               AND   lpld.LocationCategory = 'STAGING'
+            END
+         END
+         ELSE
+         BEGIN
+            SELECT @c_FinalLoc = ISNULL(ORDERS.Door, '')
+            FROM ORDERS WITH (NOLOCK)
+            WHERE ORDERS.OrderKey = @c_Orderkey
+         END
+         --(Wan01) - END
 
          IF ISNULL(@c_FinalLoc,'') = ''
          BEGIN
             SELECT @n_continue = 3  
             SELECT @n_err = 67820    
-            SELECT @c_errmsg = 'NSQL' + CONVERT(NVARCHAR(5),@n_err)+': Invalid Outbound Staging Loc from ORDERS.Door. (ispRLWAV69)'              
+            SELECT @c_errmsg = 'NSQL' + CONVERT(NVARCHAR(5),@n_err)
+                             +': Invalid Outbound Staging Loc from '
+                             + CASE WHEN @c_LoadAssignLane = 'Y'                    --(Wan01)
+                                    THEN 'Assign Lane'
+                                    ELSE 'ORDERS.Door'
+                                    END
+                             +'. (ispRLWAV69)'                
          END
          ELSE IF NOT EXISTS (SELECT 1 FROM LOC (NOLOCK) WHERE LOC = @c_FinalLoc)
          BEGIN
@@ -444,15 +477,37 @@ CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV69]
          SET @c_Priority = '9'
          SET @c_LinkTaskToPick_SQL = 'PICKDETAIL.UOM = @c_UOM AND LOC.LocationType = ''VNA'' '
 
-         SELECT @c_ToLoc = ISNULL(ORDERS.Door, '')
-         FROM ORDERS WITH (NOLOCK)
-         WHERE ORDERS.OrderKey = @c_Orderkey
+         --(Wan01) - START
+         IF @c_LoadAssignLane = 'Y'
+         BEGIN
+            IF @c_Loadkey <> '' OR @c_Loadkey IS NULL
+            BEGIN 
+               SELECT TOP 1 @c_ToLoc = lpld.Loc
+               FROM LoadPlanLaneDetail lpld(NOLOCK) 
+               WHERE lpld.Loadkey = @c_Loadkey
+               AND   lpld.LocationCategory = 'STAGING'
+            END
+         END
+         ELSE
+         BEGIN
+            SELECT @c_ToLoc = ISNULL(ORDERS.Door, '')
+            FROM ORDERS WITH (NOLOCK)
+            WHERE ORDERS.OrderKey = @c_Orderkey
+         END
+         --(Wan01) - END
 
          IF ISNULL(@c_ToLoc,'') = ''
          BEGIN
             SELECT @n_continue = 3  
             SELECT @n_err = 67830    
-            SELECT @c_errmsg = 'NSQL' + CONVERT(NVARCHAR(5),@n_err)+': Invalid Outbound Staging Loc from ORDERS.Door. (ispRLWAV69)'              
+            SELECT @c_errmsg = 'NSQL' + CONVERT(NVARCHAR(5),@n_err)
+                             +': Invalid Outbound Staging Loc from '
+                             + CASE WHEN @c_LoadAssignLane = 'Y'                    --(Wan01)
+                                    THEN 'Assign Lane'
+                                    ELSE 'ORDERS.Door'
+                                    END
+                             +'. (ispRLWAV69)'                
+                   
          END
          ELSE IF NOT EXISTS (SELECT 1 FROM LOC (NOLOCK) WHERE LOC = @c_ToLoc)
          BEGIN
@@ -565,16 +620,37 @@ CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV69]
 
          SET @c_LinkTaskToPick_SQL = 'PICKDETAIL.UOM = @c_UOM AND LOC.LocationType <> ''VNA'' '
 
-         SELECT @c_ToLoc = ISNULL(ORDERS.Door, '')
-         FROM ORDERS WITH (NOLOCK)
-         WHERE ORDERS.OrderKey = @c_Orderkey
+         --(Wan01) - START
+         IF @c_LoadAssignLane = 'Y'  
+         BEGIN
+            IF @c_Loadkey <> '' OR @c_Loadkey IS NULL
+            BEGIN 
+               SELECT TOP 1 @c_ToLoc = lpld.Loc
+               FROM LoadPlanLaneDetail lpld(NOLOCK) 
+               WHERE lpld.Loadkey = @c_Loadkey
+               AND   lpld.LocationCategory = 'STAGING'
+            END
+         END
+         ELSE
+         BEGIN
+            SELECT @c_ToLoc = ISNULL(ORDERS.Door, '')
+            FROM ORDERS WITH (NOLOCK)
+            WHERE ORDERS.OrderKey = @c_Orderkey
+         END
+         --(Wan01) - END
 
          IF ISNULL(@c_ToLoc,'') = ''
          BEGIN
             SELECT @n_continue = 3  
             SELECT @n_err = 67845    
-            SELECT @c_errmsg = 'NSQL' + CONVERT(NVARCHAR(5),@n_err)+': Invalid Outbound Staging Loc from ORDERS.Door. (ispRLWAV69)'              
-         END
+            SELECT @c_errmsg = 'NSQL' + CONVERT(NVARCHAR(5),@n_err)
+                             +': Invalid Outbound Staging Loc from '
+                             + CASE WHEN @c_LoadAssignLane = 'Y'                    --(Wan01)
+                                    THEN 'Assign Lane'
+                                    ELSE 'ORDERS.Door'
+                                    END
+                             +'. (ispRLWAV69)'                
+              END
          ELSE IF NOT EXISTS (SELECT 1 FROM LOC (NOLOCK) WHERE LOC = @c_ToLoc)
          BEGIN
             SELECT @n_continue = 3  
@@ -636,7 +712,6 @@ CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV69]
       DEALLOCATE CUR_PICK_NONVNA
    END
 
-
    -----Update pickdetail_WIP work in progress staging table back to pickdetail 
    IF @n_continue = 1 or @n_continue = 2
    BEGIN
@@ -668,7 +743,7 @@ CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV69]
    --          ,@c_Refkeylookup = 'N'
    --          ,@b_Success = @b_Success OUTPUT
    --          ,@n_Err = @n_err OUTPUT 
-   --          ,@c_ErrMsg = @c_errmsg OUTPUT       	
+   --          ,@c_ErrMsg = @c_errmsg OUTPUT          
          
    --   IF @b_Success = 0
    --      SELECT @n_continue = 3   
