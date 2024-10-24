@@ -1820,7 +1820,8 @@ BEGIN
          END
          GOTO Quit
       END
-
+      --A new screen will  require the user to confirm the option . This will be prompted immediately after the user has entered the SKU Quantity on Step 4. 
+      --   If the user presses escape then he can be taken to quantity entry screen.
       SET @cReplenFlag = rdt.rdtGetConfig( @nFunc, 'ReplenFlag', @cStorerKey)
       IF @cReplenFlag = '0'
          SET @cReplenFlag = ''
