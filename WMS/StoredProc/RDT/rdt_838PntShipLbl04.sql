@@ -15,7 +15,8 @@ GO
 /* 2024-07-25 1.2    JACKC      FCR-392 Fix the issue found in FCR-386            */
 /* 2024-07-25 1.3    JACKC      FCR-392 Change prnt logic                         */
 /* 2024-09-11 1.4    JACKC      FCR-392 Handle special order                      */
-/* 2024-10-12 1.5.0  NLT013     FCR-955 PPA by LabelNo, instead of PickSLipNo     */
+/* 2024-09-30 1.5    NLT013     Fix printing special order labels issue           */
+/* 2024-10-12 1.6.0  NLT013     FCR-955 PPA by LabelNo, instead of PickSLipNo     */
 /**********************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_838PntShipLbl04 (
