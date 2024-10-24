@@ -27,7 +27,7 @@ GO
 /*                          input SKU at Step 2(TanJH01)                */
 /* 2018-09-12 1.6  James    WMS6078 - Add MultiSKUBarcode (james03)     */
 /* 2018-09-12 1.6  James    Change doctype LLL to fullname (james04)    */
-/* 2024-09-26 1.7  LJQ006   FCR-877 AutoGenID (LJQ006)                  */
+/* 2024-09-26 1.7.0  LJQ006    FCR-877 AutoGenID (LJQ006)               */
 /************************************************************************/
 
 CREATE PROC [RDT].[rdtfnc_PalletConsolidate] (
