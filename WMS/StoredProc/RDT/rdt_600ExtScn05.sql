@@ -93,80 +93,73 @@ BEGIN
    BEGIN
       IF @nInputKey = 1
       BEGIN
-         IF @nStep IN (4, 5, 8) AND @nAfterScn = 4035
+         IF ( @nStep IN (4, 5) OR (@nStep = 8 AND @cOption = 1) ) AND @nAfterScn = 4035
          BEGIN
             IF @nErrNo <> 0
             BEGIN
                GOTO Quit
             END
             
-            IF @cOption = '1'
+            IF @cRcptUomConf = 1
             BEGIN
-               IF @cRcptUomConf = 1
+               SELECT @cReceiptKey = Value FROM @tExtScnData WHERE Variable = '@cReceiptKey'
+               SELECT @cSKU = Value FROM @tExtScnData WHERE Variable = '@cSKU'
+               SELECT @cMUOM_Desc = Value FROM @tExtScnData WHERE Variable = '@cMUOM_Desc'
+               SELECT @cPackKey = PackKey FROM dbo.SKU WITH(NOLOCK) WHERE SKU = @cSKU AND StorerKey = @cStorerKey
+               -- insert all pack uoms into a table variable
+               DELETE FROM @tTmpPackUom;
+               INSERT INTO @tTmpPackUom (UomDesc, UomDiv, UomNo)
+               (
+                  SELECT PackUOM1, CaseCNT,'2' FROM dbo.PACK WITH(NOLOCK) WHERE PackKey = @cPackKey
+                  UNION ALL
+                  SELECT PackUOM2, InnerPack, '3' FROM dbo.PACK WITH(NOLOCK) WHERE PackKey = @cPackKey
+                  UNION ALL
+                  SELECT PackUOM3, QTY, '6' FROM dbo.PACK WITH(NOLOCK) WHERE PackKey = @cPackKey
+                  UNION ALL
+                  SELECT PackUOM4, Pallet, '1' FROM dbo.PACK WITH(NOLOCK) WHERE PackKey = @cPackKey
+                  UNION ALL
+                  SELECT PackUOM8, OtherUnit1, '4' FROM dbo.PACK WITH(NOLOCK) WHERE PackKey = @cPackKey
+                  UNION ALL
+                  SELECT PackUOM9, OtherUnit2, '5' FROM dbo.PACK WITH(NOLOCK) WHERE PackKey = @cPackKey
+               )
+               SELECT TOP 1 @cRcptUomDesc = UOM 
+               FROM dbo.RECEIPTDETAIL WITH(NOLOCK)
+               WHERE ReceiptKey = @cReceiptKey
+                  AND Sku = @cSKU
+                  AND StorerKey = @cStorerKey
+               ORDER BY ReceiptLineNumber ASC
+               -- match the rcpt uom with pack uom and get the uom no
+               SELECT TOP 1 
+                  @cRcptUoM = UomNo,
+                  @nUOM_Div = UomDiv
+               FROM @tTmpPackUom 
+               WHERE UomDesc = @cRcptUomDesc
+                  AND UomDesc IS NOT NULL
+               SET @cUDF04 = @cRcptUoM
+               SET @cUDF05 = @nUOM_Div
+               SET @cUDF07 = @cRcptUomDesc
+               SET @cOutField05 = '1:' + CASE WHEN @nUOM_Div > 99999 THEN '*' ELSE CAST( @nUOM_Div AS NCHAR( 5)) END
+               SET @cOutField06 = rdt.rdtRightAlign( @cRcptUomDesc, 5)
+               -- when pd uom equals to master uom, only show one input box
+               IF (@cRcptUomDesc = @cMUOM_Desc)
                BEGIN
-                  SELECT @cReceiptKey = Value FROM @tExtScnData WHERE Variable = '@cReceiptKey'
-                  SELECT @cSKU = Value FROM @tExtScnData WHERE Variable = '@cSKU'
-                  SELECT @cMUOM_Desc = Value FROM @tExtScnData WHERE Variable = '@cMUOM_Desc'
-                  SELECT @cPackKey = PackKey FROM dbo.SKU WITH(NOLOCK) WHERE SKU = @cSKU AND StorerKey = @cStorerKey
-                  -- insert all pack uoms into a table variable
-                  DELETE FROM @tTmpPackUom;
-                  INSERT INTO @tTmpPackUom (UomDesc, UomDiv, UomNo)
-                  (
-                     SELECT PackUOM1, CaseCNT,'2' FROM dbo.PACK WITH(NOLOCK) WHERE PackKey = @cPackKey
-                     UNION ALL
-                     SELECT PackUOM2, InnerPack, '3' FROM dbo.PACK WITH(NOLOCK) WHERE PackKey = @cPackKey
-                     UNION ALL
-                     SELECT PackUOM3, QTY, '6' FROM dbo.PACK WITH(NOLOCK) WHERE PackKey = @cPackKey
-                     UNION ALL
-                     SELECT PackUOM4, Pallet, '1' FROM dbo.PACK WITH(NOLOCK) WHERE PackKey = @cPackKey
-                     UNION ALL
-                     SELECT PackUOM8, OtherUnit1, '4' FROM dbo.PACK WITH(NOLOCK) WHERE PackKey = @cPackKey
-                     UNION ALL
-                     SELECT PackUOM9, OtherUnit2, '5' FROM dbo.PACK WITH(NOLOCK) WHERE PackKey = @cPackKey
-                  )
-
-                  SELECT TOP 1 @cRcptUomDesc = UOM 
-                  FROM dbo.RECEIPTDETAIL WITH(NOLOCK)
-                  WHERE ReceiptKey = @cReceiptKey
-                     AND Sku = @cSKU
-                     AND StorerKey = @cStorerKey
-                  ORDER BY ReceiptLineNumber ASC
-                  -- match the rcpt uom with pack uom and get the uom no
-                  SELECT TOP 1 
-                     @cRcptUoM = UomNo,
-                     @nUOM_Div = UomDiv
-                  FROM @tTmpPackUom 
-                  WHERE UomDesc = @cRcptUomDesc
-                     AND UomDesc IS NOT NULL
-
-                  SET @cUDF04 = @cRcptUoM
-                  SET @cUDF05 = @nUOM_Div
-                  SET @cUDF07 = @cRcptUomDesc
-                  SET @cOutField05 = '1:' + CASE WHEN @nUOM_Div > 99999 THEN '*' ELSE CAST( @nUOM_Div AS NCHAR( 5)) END
-                  SET @cOutField06 = rdt.rdtRightAlign( @cRcptUomDesc, 5)
-
-                  -- when pd uom equals to master uom, only show one input box
-                  IF (@cRcptUomDesc = @cMUOM_Desc)
-                  BEGIN
-                     SET @cOutField06 = ''
-                     SET @cFieldAttr08 = 'O'
-                  END
-                  ELSE
-                  BEGIN
-                     SET @cFieldAttr08 = ''
-                  END
-
-                  IF @cFieldAttr08 = ''
-                  BEGIN
-                     EXEC rdt.rdtSetFocusField @nMobile, 8 -- PQTY
-                  END
-                  -- IF @cFieldAttr08 = 'O'
-                  -- BEGIN
-                  --    UPDATE RDT.RDTXML_Root WITH (ROWLOCK) SET Focus = NULL
-                  -- END
-                  SET @nAfterScn = 4035 -- GOTO Qty Scn
-                  SET @nAfterStep = 6 -- GOTO Qty Step
+                  SET @cOutField06 = ''
+                  SET @cFieldAttr08 = 'O'
                END
+               ELSE
+               BEGIN
+                  SET @cFieldAttr08 = ''
+               END
+               IF @cFieldAttr08 = ''
+               BEGIN
+                  EXEC rdt.rdtSetFocusField @nMobile, 8 -- PQTY
+               END
+               -- IF @cFieldAttr08 = 'O'
+               -- BEGIN
+               --    UPDATE RDT.RDTXML_Root WITH (ROWLOCK) SET Focus = NULL
+               -- END
+               SET @nAfterScn = 4035 -- GOTO Qty Scn
+               SET @nAfterStep = 6 -- GOTO Qty Step
             END
          END
       END
