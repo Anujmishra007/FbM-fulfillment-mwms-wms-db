@@ -1829,7 +1829,7 @@ BEGIN
       IF @cReplenFlag = '1'
       BEGIN
          SET @nScn = 4028
-         SET @nStep = 10
+         SET @nStep = 10               -- Goto 1=YES, 9=NO choice empty or not.
          GOTO Quit
       END
 
