@@ -31,6 +31,7 @@ GO
 /* 2024-03-12 2.3  CYU027     UWP-15734 Add Extended Print SP				      */
 /* 2024-04-10 2.4  Dennis     UWP-16909 Check Digit            			      */
 /* 2024-07-08 2.5  JHU151     FCR-330 SSCC code generator                     */
+/* 2024-10-08 2.6  PXL009     FCR-872 Auto Generated Dropid                   */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_CasePick](
@@ -43,6 +44,7 @@ SET NOCOUNT ON
 SET QUOTED_IDENTIFIER OFF
 SET ANSI_NULLS OFF
 SET CONCAT_NULL_YIELDS_NULL OFF
+DECLARE @cReplenFlag    NVARCHAR(20)
 
 -- Misc variable
 DECLARE
@@ -147,6 +149,9 @@ DECLARE
    @cLOCLookupSP        NVARCHAR(20),
    @cDecodeSP           NVARCHAR(20),
    @cDispStyleColorSize NVARCHAR( 1),
+   @cAutoGenDROPIDSP    NVARCHAR(20),
+   @tExtData            VariableTable,
+   @cAutoID             NVARCHAR( 18),
 
    @cAreaKey            NVARCHAR(10),
    @cTTMStrategykey     NVARCHAR(10),
@@ -274,6 +279,7 @@ SELECT
    @cRefKey05          = V_String39,
    @cOverwriteToLOC    = V_String40,
    @cExtScnSP          = V_String42,
+   @cAutoGenDROPIDSP   = V_String43,
 
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,  @cFieldAttr01  = FieldAttr01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,  @cFieldAttr02  = FieldAttr02,
@@ -307,6 +313,7 @@ BEGIN
    IF @nStep = 7 GOTO Step_7   -- Scn = 4026 Pallet is close. Next task / Exit
    IF @nStep = 8 GOTO Step_8   -- Scn = 4027 Short pick / Close pallet
    IF @nStep = 9 GOTO Step_9   -- Scn = 2100 Reason code
+   IF @nStep = 10 GOTO Step_10   -- Scn = 4028 Is the location completely empty?
 END
 
 RETURN -- Do nothing if incorrect step
@@ -395,6 +402,10 @@ BEGIN
    SET @cExtScnSP = rdt.RDTGetConfig( @nFunc, 'ExtScnSP', @cStorerKey)
    IF @cExtScnSP = '0'
       SET @cExtScnSP = ''
+
+   SET @cAutoGenDROPIDSP = [rdt].[RDTGetConfig]( @nFunc, 'AutoGenDropID', @cStorerKey)
+   IF @cAutoGenDROPIDSP = '0'
+      SET @cAutoGenDROPIDSP = ''
 
    -- Disable QTY field
    IF @cDisableQTYFieldSP <> ''
@@ -516,6 +527,21 @@ BEGIN
 
       SET @nScn = @nScn + 1
       SET @nStep = @nStep + 1
+   END
+
+   IF @cAutoGenDROPIDSP <> '' AND @nStep = 1
+   BEGIN
+      -- Auto generate DROPID
+      EXEC rdt.rdt_AutoGenID @nMobile, @nFunc, @nStep, @cLangCode
+         ,@cAutoGenDROPIDSP
+         ,@tExtData
+         ,@cAutoID  OUTPUT
+         ,@nErrNo   OUTPUT
+         ,@cErrMsg  OUTPUT
+      IF @nErrNo <> 0
+         GOTO Quit
+
+      SET @cOutField01 = @cAutoID
    END
 
    -- Extended info
@@ -938,6 +964,21 @@ BEGIN
             -- Prepare prev screen var
             SET @cDropID = ''
             SET @cOutField01 = '' -- DropID
+
+            IF @cAutoGenDROPIDSP <> ''
+            BEGIN
+               -- Auto generate DROPID
+               EXEC rdt.rdt_AutoGenID @nMobile, @nFunc, @nStep, @cLangCode
+                  ,@cAutoGenDROPIDSP
+                  ,@tExtData
+                  ,@cAutoID  OUTPUT
+                  ,@nErrNo   OUTPUT
+                  ,@cErrMsg  OUTPUT
+               IF @nErrNo <> 0
+                  GOTO Quit
+
+               SET @cOutField01 = @cAutoID
+            END
 
             SET @nScn  = @nScn - 1
             SET @nStep = @nStep - 1
@@ -1780,6 +1821,17 @@ BEGIN
          GOTO Quit
       END
 
+      SET @cReplenFlag = rdt.rdtGetConfig( @nFunc, 'ReplenFlag', @cStorerKey)
+      IF @cReplenFlag = '0'
+         SET @cReplenFlag = ''
+      
+      IF @cReplenFlag = '1'
+      BEGIN
+         SET @nScn = 4028
+         SET @nStep = 10
+         GOTO Quit
+      END
+
       -- QTY short
       IF @nQTY < @nQTY_RPL
       BEGIN
@@ -1999,6 +2051,21 @@ BEGIN
             -- Prepare next screen var
             SET @cDropID = ''
             SET @cOutField01 = '' -- @cDropID
+            
+            IF @cAutoGenDROPIDSP <> ''
+            BEGIN
+               -- Auto generate DROPID
+               EXEC rdt.rdt_AutoGenID @nMobile, @nFunc, @nStep, @cLangCode
+                  ,@cAutoGenDROPIDSP
+                  ,@tExtData
+                  ,@cAutoID  OUTPUT
+                  ,@nErrNo   OUTPUT
+                  ,@cErrMsg  OUTPUT
+               IF @nErrNo <> 0
+                  GOTO Step_5_Fail
+
+               SET @cOutField01 = @cAutoID
+            END
 
             SET @nScn = @nScn - 4
             SET @nStep = @nStep - 4
@@ -3112,6 +3179,21 @@ BEGIN
          -- Prepare next screen variable
          SET @cDropID = ''
          SET @cOutField01 = '' -- DropID
+
+         IF @cAutoGenDROPIDSP <> ''
+         BEGIN
+            -- Auto generate DROPID
+            EXEC rdt.rdt_AutoGenID @nMobile, @nFunc, @nStep, @cLangCode
+               ,@cAutoGenDROPIDSP
+               ,@tExtData
+               ,@cAutoID  OUTPUT
+               ,@nErrNo   OUTPUT
+               ,@cErrMsg  OUTPUT
+            IF @nErrNo <> 0
+               GOTO Quit
+
+            SET @cOutField01 = @cAutoID
+         END
       END
 
       -- Go to FromLOC screen
@@ -3176,7 +3258,99 @@ BEGIN
 END
 GOTO Quit
 
-   
+/********************************************************************************
+Step 10. screen = 4028. Is the location completely empty?
+    1 = YES
+    9 = NO
+    Option (Field01, input)
+********************************************************************************/
+Step_10:
+BEGIN
+   IF @nInputKey = 1 -- ENTER
+   BEGIN
+      -- Screen mapping
+      SET @cOption = @cInField01
+
+      -- Check blank option
+      IF @cOption = ''
+      BEGIN
+         SET @nErrNo = 51369
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Option needed
+         GOTO Step_5_Fail
+      END
+
+      -- Check option is valid
+      IF @cOption <> '1' AND @cOption <> '9'
+      BEGIN
+         SET @nErrNo = 51370
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Option
+         GOTO Step_5_Fail
+      END
+
+      -- New replen task
+      IF @cOption = '1'             --OPTION YES, LOCATION is empty
+      BEGIN
+      END
+
+      IF @cOption = '9'             --OPTION NO, Location is not empty
+      BEGIN
+
+      END
+   END
+   IF @nInputKey = 0 -- ESC pressed, return to SKU screen
+   BEGIN
+      -- Dynamic lottable
+      EXEC rdt.rdt_Lottable @nMobile, @nFunc, @cLangCode, @nScn, @nInputKey, @cStorerKey, @cSKU, @cLottableCode, 'DISPLAY', 'POPULATE', 4, 4,
+         @cInField01  OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01 OUTPUT,
+         @cInField02  OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02 OUTPUT,
+         @cInField03  OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03 OUTPUT,
+         @cInField04  OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04 OUTPUT,
+         @cInField05  OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  @dLottable05 OUTPUT,
+         @cInField06  OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  @cLottable06 OUTPUT,
+         @cInField07  OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  @cLottable07 OUTPUT,
+         @cInField08  OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  @cLottable08 OUTPUT,
+         @cInField09  OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  @cLottable09 OUTPUT,
+         @cInField10  OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  @cLottable10 OUTPUT,
+         @cInField11  OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  @cLottable11 OUTPUT,
+         @cInField12  OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT,  @cLottable12 OUTPUT,
+         @cInField13  OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  @dLottable13 OUTPUT,
+         @cInField14  OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT,  @dLottable14 OUTPUT,
+         @cInField15  OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT,  @dLottable15 OUTPUT,
+         @nMorePage   OUTPUT,
+         @nErrNo      OUTPUT,
+         @cErrMsg     OUTPUT,
+         '',      -- SourceKey
+         @nFunc   -- SourceType
+      
+      -- Prepare next screen variable
+      SET @cOutField01 = @cSuggSKU
+      SET @cOutField02 = SUBSTRING( @cSKUDesc, 1, 20)
+      SET @cOutField03 = SUBSTRING( @cSKUDesc, 21, 20)
+      SET @cBarcode    = '' -- SKU
+      SET @cOutField09 = ''
+      SET @cOutField10 = @cExtendedInfo1
+      SET @cOutField11 = '1:' + CAST( @nPUOM_Div AS NCHAR( 6)) + ' ' + @cPUOM_Desc + ' ' + @cMUOM_Desc
+      SET @cOutField12 = CASE WHEN (@cPUOM = '6' OR @nPUOM_Div = 0) THEN '' ELSE CAST( @nPQTY_RPL AS NVARCHAR( 5)) END
+      SET @cOutField13 = CAST( @nMQTY_RPL AS NVARCHAR( 5))
+      SET @cOutField14 = CASE WHEN (@cPUOM = '6' OR @nPUOM_Div = 0) THEN '' ELSE CAST( @nPQTY AS NVARCHAR( 5)) END
+      SET @cOutField15 = CAST( @nMQTY AS NVARCHAR( 5))
+      EXEC rdt.rdtSetFocusField @nMobile, 'V_Barcode' -- SKU
+
+      -- Go to SKU screen (STEP 4)
+      SET @nScn = 4
+      SET @nStep = 4023
+   END
+   GOTO Quit
+
+Step_10_Fail:
+   BEGIN
+      SET @cOption = ''
+      SET @cOutField01 = '' -- Option
+   END
+END
+
+
+
 Step_99:
 BEGIN
    IF @cExtScnSP <> ''
@@ -3323,6 +3497,7 @@ BEGIN
       V_String39   = @cRefKey05,
       V_String40   = @cOverwriteToLOC,   
       V_String42   = @cExtScnSP,
+      V_String43   = @cAutoGenDROPIDSP,
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,   FieldAttr01  = @cFieldAttr01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,   FieldAttr02  = @cFieldAttr02,
