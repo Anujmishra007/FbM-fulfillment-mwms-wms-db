@@ -3,15 +3,16 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-/******************************************************************************/
-/* Store procedure: rdt_593VendorLabel01                                      */
-/* Customer: Granite                                                          */
-/*                                                                            */
-/* Modifications log:                                                         */
-/*                                                                            */
-/* Date       Rev  Author     Purposes                                        */
-/* 2018-02-07 1.0  NLT03      FCR-727 Create                                  */
-/******************************************************************************/
+/********************************************************************************/
+/* Store procedure: rdt_593VendorLabel01                                        */
+/* Customer: Granite                                                            */
+/*                                                                              */
+/* Modifications log:                                                           */
+/*                                                                              */
+/* Date       Rev    Author     Purposes                                        */
+/* 2018-02-07 1.0    NLT03      FCR-727 Create                                  */
+/* 2024-10-12 1.2.0  NLT013     FCR-955 PPA by LabelNo, instead of PickSLipNo   */
+/********************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_593VendorLabel01] (
    @nMobile    INT,

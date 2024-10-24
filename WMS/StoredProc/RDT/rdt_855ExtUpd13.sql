@@ -4,20 +4,20 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-/******************************************************************************/
-/* Store procedure: rdt_855ExtUpd13                                           */
-/* Copyright      : Maersk                                                    */
-/* Customer: Granite                                                          */
-/*                                                                            */
-/* Purpose: Print the VAS label                                               */
-/*                                                                            */
-/* Modifications log:                                                         */
-/* Date       Rev  Author   Purposes                                          */
-/* 2024-06-18 1.0  NLT013   FCR-386. Created                                  */
-/* 2024-08-06 1.1  Dennis   FCR-386. Remove order group condition             */
-/* 2024-09-26 1.2  NLT013   UWP-24932 Error message UI issue                  */
-/* 2024-10-12 1.3  NLT013   Enhancement, PPA by LabelNo, instead of PickSLipNo*/
-/******************************************************************************/
+/********************************************************************************/
+/* Store procedure: rdt_855ExtUpd13                                             */
+/* Copyright      : Maersk                                                      */
+/* Customer: Granite                                                            */
+/*                                                                              */
+/* Purpose: Print the VAS label                                                 */
+/*                                                                              */
+/* Modifications log:                                                           */
+/* Date       Rev    Author   Purposes                                          */
+/* 2024-06-18 1.0    NLT013   FCR-386. Created                                  */
+/* 2024-08-06 1.1    Dennis   FCR-386. Remove order group condition             */
+/* 2024-09-26 1.2    NLT013   UWP-24932 Error message UI issue                  */
+/* 2024-10-12 1.3.0  NLT013   FCR-955 PPA by LabelNo, instead of PickSLipNo     */
+/********************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_855ExtUpd13 (
    @nMobile      INT,   
