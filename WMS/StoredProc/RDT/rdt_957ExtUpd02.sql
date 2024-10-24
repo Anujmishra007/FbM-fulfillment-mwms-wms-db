@@ -260,7 +260,7 @@ BEGIN
                FETCH NEXT FROM @curPickDetail INTO @cOrderKey,@cActDropID,@cActCaseID,@cUOM
                WHILE @@FETCH_STATUS = 0
                BEGIN
-                  IF @cActDropID <> ''
+                  IF @cUOM = '7' AND @cActDropID <> ''
                   BEGIN
                      EXEC dbo.ispGenTransmitLog2
                         @c_TableName      = 'WSTOTECFMlb',
