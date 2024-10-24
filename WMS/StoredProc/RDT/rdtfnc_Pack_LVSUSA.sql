@@ -352,7 +352,10 @@ BEGIN
       SET @cDecodeSP = ''
    SET @cDataCaptureSP = rdt.RDTGetConfig( @nFunc, 'DataCaptureSP', @cStorerKey)
    IF @cDataCaptureSP = '0'
-      SET @cDataCaptureSP = ''   
+      SET @cDataCaptureSP = ''
+   SET @cDefaultcartontype=rdt.RDTGetConfig( @nFunc, 'DefaultCartonType', @cStorerKey)  --(cc01)
+   IF @cDefaultcartontype = '0'
+      SET @cDefaultcartontype = ''   
 
    /*SET @cCapturePackInfoSP = rdt.RDTGetConfig( @nFunc, 'CapturePackInfoSP', @cStorerKey)
    IF @cCapturePackInfoSP = '0'
