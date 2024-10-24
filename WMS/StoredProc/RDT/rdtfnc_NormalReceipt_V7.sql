@@ -54,7 +54,7 @@ GO
 /* 2024-07-02 4.8  Dennis   FCR-387   Accept Decimal Qty                         */
 /* 2024-09-25 4.9  YYS027   FCR-827   Add ExtendScreen:rdt_600ExtScn03 for       */
 /*                          BatchCheck                                           */
-/* 2024-10-12 4.10 LJQ006   FCR0911   use uom in receiptdetail                   */
+/* 2024-10-12 4.10 LJQ006   FCR-911   use uom in receiptdetail                   */
 /*********************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_NormalReceipt_V7] (
