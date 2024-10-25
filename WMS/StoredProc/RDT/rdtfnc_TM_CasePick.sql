@@ -6,7 +6,7 @@ GO
 
 /******************************************************************************/
 /* Store procedure: rdtfnc_TM_CasePick                                        */
-/* Copyright      : LFLogistics                                               */
+/* Copyright      : Maersk                                               */
 /*                                                                            */
 /* Purpose: case pick                                                         */
 /*                                                                            */
@@ -32,6 +32,7 @@ GO
 /* 2024-04-10 2.4  Dennis     UWP-16909 Check Digit            			      */
 /* 2024-07-08 2.5  JHU151     FCR-330 SSCC code generator                     */
 /* 2024-10-08 2.6  PXL009     FCR-872 Auto Generated Dropid                   */
+/* 2024-10-24 2.7  YYS027     FCR-989 Min Max Replenishment                   */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_CasePick](
@@ -119,6 +120,7 @@ DECLARE
    @cDisableQTYField    NVARCHAR(1),
    @cSwapTaskSP         NVARCHAR(20),
    @cOverwriteToLOC     NVARCHAR(1),    --(yeekung02)
+   @cLocEmptyOption     NVARCHAR(1),    --YYS027 FCR-989
 
    @cPUOM_Desc          NCHAR( 5),
    @cMUOM_Desc          NCHAR( 5),
@@ -251,6 +253,7 @@ SELECT
    @cPUOM_Desc         = V_String11,
    @cMultiSKUBarcode   = V_String12,
    @cLottableCode      = V_String13,
+   @cLocEmptyOption    = V_String14,
 
    @cDispStyleColorSize= V_String17,
    @cDecodeSP          = V_String18,
@@ -1832,6 +1835,8 @@ BEGIN
          SET @nStep = 10               -- Goto 1=YES, 9=NO choice empty or not.
          GOTO Quit
       END
+      ELSE
+         SET @cLocEmptyOption = ''
 
       -- QTY short
       IF @nQTY < @nQTY_RPL
@@ -3288,14 +3293,56 @@ BEGIN
          GOTO Step_5_Fail
       END
 
-      -- New replen task
-      IF @cOption = '1'             --OPTION YES, LOCATION is empty
+      -------here, will call ExternUpdate SP if defined---------------------------
+      -- Extended update
+      IF @cExtendedUpdateSP <> ''
       BEGIN
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')
+         BEGIN
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cTaskdetailKey, @cDropID, @nQTY, @cToLOC, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nAfterStep '
+            SET @cSQLParam =
+               '@nMobile         INT,           ' +
+               '@nFunc           INT,           ' +
+               '@cLangCode       NVARCHAR( 3),  ' +
+               '@nStep           INT,           ' +
+               '@nInputKey       INT,           ' +
+               '@cTaskdetailKey  NVARCHAR( 10), ' +
+               '@cDropID         NVARCHAR( 20), ' +
+               '@nQTY            INT,           ' +
+               '@cToLOC          NVARCHAR( 10), ' +
+               '@nErrNo          INT OUTPUT,    ' +
+               '@cErrMsg         NVARCHAR( 20) OUTPUT, ' +
+               '@nAfterStep      INT            '
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cTaskdetailKey, @cDropID, @nQTY, @cToLOC, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nStep
+
+            IF @nErrNo <> 0
+               GOTO Quit
+         END
+      END
+      ----------------------------------------------------------------------------
+
+      IF @nQTY < @nQTY_RPL
+      BEGIN
+         -- Prepare next screen var
+         SET @cOption = ''
+         SET @cOutField01 = '' -- Option
+
+         SET @nScn = @nScn - 2  -- step from 10 to 8          (Short/Close Pallet)
+         SET @nStep = @nStep - 1  --screen from 4028 to 4027
       END
 
-      IF @cOption = '9'             --OPTION NO, Location is not empty
+      -- QTY fulfill
+      IF @nQTY >= @nQTY_RPL
       BEGIN
+         -- Prepare next screen var
+         SET @cOption = ''
+         SET @cOutField01 = '' -- Option
 
+         SET @nScn = @nScn - 5      --step from 10 to 5          (next task /close pallet)
+         SET @nStep = @nStep - 4    --screen from 4048 to 4024
       END
    END
    IF @nInputKey = 0 -- ESC pressed, return to SKU screen
@@ -3470,6 +3517,7 @@ BEGIN
       V_String11   = @cPUOM_Desc,
       V_String12   = @cMultiSKUBarcode,
       V_String13   = @cLottableCode,
+      V_String14   = @cLocEmptyOption,    --YYS027 FCR-989
 
       V_String17   = @cDispStyleColorSize,
       V_String18   = @cDecodeSP, 
