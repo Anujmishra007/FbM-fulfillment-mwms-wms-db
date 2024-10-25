@@ -14,8 +14,10 @@ GO
 /* 2024-10-08 1.1    NLT013   FCR-950 Enhancement                           */
 /* 2024-10-18 1.2    JCH507   FCR-950 Verify palletkey not exists when      */
 /*                            New Pallet                                    */
-/* 2024-10-08 1.3.0  NLT013   FCR-1084, add additional validation  for      */
+/* 2024-10-24 1.3.0  NLT013   FCR-1084, add additional validation  for      */
 /*                            location and pallet id                        */
+/* 2024-10-25 1.3.1  JCH507   FCR-1084, add status when check label exists  */
+/*                            in pallet id                                  */
 /*                                                                          */
 /*                                                                          */
 /****************************************************************************/
@@ -110,7 +112,9 @@ BEGIN
 
             SELECT @cLabelNo = Value FROM @tExtScnData WHERE Variable = '@cLabelNo'
 
-            IF ISNULL( @cLabelNo, '' ) <> '' AND EXISTS (SELECT 1 FROM dbo.PalletDetail WITH(NOLOCK) WHERE CaseID = @cLabelNo )
+            IF ISNULL( @cLabelNo, '' ) <> '' AND EXISTS (SELECT 1 FROM dbo.PalletDetail WITH(NOLOCK) 
+                                                            WHERE CaseID = @cLabelNo 
+                                                            AND Status <> '9' ) --V1.3.1
             BEGIN
                SET @cOutField01 = '' 
                SET @cOutField02 = @cPalletKey
