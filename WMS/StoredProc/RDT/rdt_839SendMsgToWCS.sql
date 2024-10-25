@@ -141,6 +141,7 @@ BEGIN
       END
    END
    --add for FCR-771 
+   SELECT @cOrderKey=OrderKey FROM PICKDETAIL WITH (NOLOCK) WHERE PickSlipNo = @cPickSlipNo AND DropID= @cDropID     --due for cross-dock, OrderKey is empty, so here ,re-query for @cOrderKey
    IF dbo.fnc_GetRight( @cFacility, @cStorerKey, '', 'Innobec') = '1' AND EXISTS ( SELECT * FROM dbo.ORDERS WITH (NOLOCK) WHERE OrderKey = @cOrderKey AND DocType = 'N' )
    BEGIN
       IF @nIsNoEmptyDropID = 1
