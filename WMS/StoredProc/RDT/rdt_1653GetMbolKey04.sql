@@ -3,20 +3,23 @@ GO
 SET ANSI_NULLS OFF
 GO
   
-/************************************************************************/    
-/* Store procedure: rdt_1653GetMbolKey04                                */
-/* Copyright      : MAERSK                                              */    
-/*                                                                      */    
-/* Called from: rdt_TrackNo_SortToPallet_GetMbolKey                     */    
-/*                                                                      */    
-/* Purpose: Get MBOLKey/Lane/Pallet                                     */
-/*                                                                      */    
-/* Modifications log:                                                   */    
-/* Date        Rev  Author   Purposes                                   */    
-/* 2024-07-05  1.0  CYU027   FCR 539. Created                           */
-/* 2024-09-20  1.1  CYU027   Add Validation TrackNo                     */
-/* 2024-10-08  1.2  NLT013   FCR-950 Enhancement                        */
-/************************************************************************/
+/**************************************************************************/
+/* Store procedure: rdt_1653GetMbolKey04                                  */
+/* Copyright      : MAERSK                                                */
+/* Customer       : Granite                                               */
+/*                                                                        */
+/* Called from: rdt_TrackNo_SortToPallet_GetMbolKey                       */
+/*                                                                        */
+/* Purpose: Get MBOLKey/Lane/Pallet                                       */
+/*                                                                        */
+/* Modifications log:                                                     */
+/* Date        Rev    Author   Purposes                                   */
+/* 2024-07-05  1.0    CYU027   FCR 539. Created                           */
+/* 2024-09-20  1.1    CYU027   Add Validation TrackNo                     */
+/* 2024-10-08  1.2    NLT013   FCR-950 Enhancement                        */
+/* 2024-10-08  1.3.0  NLT013   FCR-950 Enhancement, if no existing pallet */
+/*                             leave location as empty                    */
+/**************************************************************************/
     
 CREATE OR ALTER PROC [RDT].[rdt_1653GetMbolKey04] (
    @nMobile        INT,    
@@ -196,6 +199,7 @@ BEGIN
       -- AND   Status = '0'
       -- ORDER BY EditDate DESC
 
+
       SET @cLane = ''
       SELECT TOP 1
          @cLane = LOC
@@ -236,8 +240,10 @@ BEGIN
       END
 
       IF @cPalletKey = ''
+      BEGIN
          SET @cPalletKey = 'NEW PALLET'
-
+         SET @cLane = '' 
+      END
    END    
 Quit:
 END 
