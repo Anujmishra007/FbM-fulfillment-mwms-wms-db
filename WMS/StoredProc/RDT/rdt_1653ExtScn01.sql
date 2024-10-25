@@ -12,7 +12,8 @@ GO
 /* Date       Rev  Author   Purposes                                    */
 /* 2024-07-08 1.0  CYU027   CREATE                                      */
 /* 2024-10-08 1.1  NLT013   FCR-950 Enhancement                         */
-/*                                                                      */
+/* 2024-10-18 1.2  JCH507   FCR-950 Verify palletkey not exists when    */
+/*                          New Pallet                                  */
 /************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_1653ExtScn01] (
@@ -215,7 +216,18 @@ BEGIN
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InvalidPrefix
                      GOTO Step_ShowPalletID_Fail
                   END
-               END
+
+                  --V1.2
+                  IF EXISTS ( SELECT 1 FROM PALLET WITH (NOLOCK)
+                              WHERE StorerKey = @cStorerKey
+                                 AND PalletKey = @cPalletKey
+                              )
+                  BEGIN
+                     SET @nErrNo = 219163
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --DuplicateKey
+                     GOTO Step_ShowPalletID_Fail
+                  END --V1.2 END
+               END -- New Pallet
 
                IF ISNULL(@cInField05,'') = ''
                BEGIN
