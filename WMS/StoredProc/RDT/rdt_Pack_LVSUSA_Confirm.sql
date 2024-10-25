@@ -134,16 +134,17 @@ BEGIN
    DECLARE @cPackDetailCartonID  NVARCHAR( 20)
    DECLARE @cPackByFromDropID    NVARCHAR( 1)
 
-   DECLARE @cPSNO          NVARCHAR( 20)
-   DECLARE @nFromCartonNo  INT
-   DECLARE @cFromLabeLLine NVARCHAR( 5)
-   DECLARE @nFromQty       INT
+   DECLARE @cPSNO             NVARCHAR( 20)
+   DECLARE @nFromCartonNo     INT
+   DECLARE @cFromLabeLLine    NVARCHAR( 5)
+   DECLARE @nFromQty          INT
+   DECLARE @nNewCartonNo      INT
 
    DECLARE @nBalQty              INT
    DECLARE @nAdjustQty           INT
 
    DECLARE @nTranCount INT
-   DECLARE @bDebugFlag BINARY = 1
+   DECLARE @bDebugFlag BINARY = 0
 
    DECLARE @tMoveLog TABLE
    (
@@ -248,26 +249,32 @@ BEGIN
             @nFromQTY         = Qty
          FROM PackDetail WITH (NOLOCK)
          WHERE StorerKey = @cStorerKey
-            AND @cLabelNo = @cMasterLabelNo
-            AND @cSKU = SKU
+            AND LabelNo = @cMasterLabelNo
+            AND SKU = @cSKU
          ORDER BY Qty DESC
 
          IF @bDebugFlag = 1
          BEGIN
             SELECT 'Handling PackDetail'
-            SELECT @cPSNO AS PSNO, @cMasterLabelNo AS MasterLableNo, @nFromCartonNo AS MasterCartonNo, @cFromLabelLine AS FromLabelLine,
-                     @nFromQty AS FromQty, @cLabelNo AS ToLabelNo
+            SELECT @cPSNO AS PSNO, @cMasterLabelNo AS MasterLableNo, @nFromCartonNo AS MasterCartonNo, @cSKU AS SKU, 
+                     @cFromLabelLine AS FromLabelLine, @nFromQty AS FromQty, @cLabelNo AS ToLabelNo
          END
          
          -- Handle master carton start
+         IF @bDebugFlag = 1
+            SELECT 'Start to handle MasterLabel'
+
          IF @nBalQty < @nFromQTY
          BEGIN
+            IF @bDebugFlag= 1
+               SELECT 'Update Master Carton PackDetail'
+
             UPDATE PackDetail WITH (ROWLOCK)
             SET Qty = @nFromQty - @nBalQty
             WHERE PickSlipNo = @cPSNO
                AND CartonNo = @nFromCartonNo
                AND LabelNo = @cMasterLabelNo
-               AND LableLine = @cFromLabelLine
+               AND LabelLine = @cFromLabelLine
 
             IF @@Error <> 0
             BEGIN
@@ -280,18 +287,19 @@ BEGIN
 
             IF @bDebugFLag = 1
                SELECT '@BalQty < @FromQty', @nAdjustQty AS AdjustQty
-
-            BREAK
          END -- BalQty < FromQty
          ELSE
          BEGIN
+            IF @bDebugFlag= 1
+               SELECT 'Delete Master Carton Pack Detail'
+
             SET @nAdjustQty = @nFromQty
 
             DELETE PackDetail WITH (ROWLOCK)
             WHERE PickSlipNo = @cPSNO
                AND CartonNo = @nFromCartonNo
                AND LabelNo = @cMasterLabelNo
-               AND LableLine = @cFromLabelLine
+               AND LabelLine = @cFromLabelLine
             IF @@Error <> 0
             BEGIN
                SET @nErrNo = 227604
@@ -303,17 +311,32 @@ BEGIN
                SELECT '@BalQty >= @FromQty', @nAdjustQty AS AdjustQty, @nBalQty AS LeftBalQty
          END--BalQty >= FromQty
 
+         -- Handle MasterCarton PickDetail Start
+
+         -- Handle Master Carton PickDetail End
+
          -- Handle Master Carton END
+         IF @bDebugFlag = 1
+            SELECT 'Start to handle ToLabel'
 
          --Handle To Carton Start
-         IF @cNewCarton = 'Y'
+         IF @cNewCarton = 'Y' OR NOT EXISTS (SELECT 1 FROM PackDetail WITH (NOLOCK)
+                                             WHERE PickSlipNO = @cPSNO
+                                                AND LabelNo = @cLabelNo)
          BEGIN
             IF @bDebugFlag = 1
-               SELECT 'Insert new carton'
+               SELECT 'Insert new carton packdetail and packinfo'
 
-            --PackdetailAdd trigger will handle cartonNo and LabelLine
+            --PackdetailAdd trigger will handle cartonNo and LabelLine            
+            SELECT @nNewCartonNo = COALESCE(MAX(CartonNo),0) + 1
+            FROM PackDetail WITH (NOLOCK)
+            WHERE PickSlipNo = @cPSNO
+
+            IF @bDebugFLag = 1
+               SELECT 'Get New CartonNo', @nNewCartonNo AS NewCartonNo
+
             INSERT INTO PackDetail (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, Qty)
-            VALUES (cPSNO, 0, @cLabelNo, '', @cStorerKey, @cSKU, @nAdjustQty) 
+            VALUES (@cPSNO, @nNewCartonNo, @cLabelNo,'00001', @cStorerKey, @cSKU, @nAdjustQty)
             
             IF @@Error <> 0
             BEGIN
@@ -322,22 +345,15 @@ BEGIN
                GOTO RollBackTran
             END
 
-
-            --PackdetailAdd trigger will handle packinfo generation
-            /*
             INSERT INTO PackInfo (PickSlipNO, CartonNo, Qty)
-            SELECT @cPSNO,
-                   COALESCE(MAX(CartonNo),0) + 1,
-                   @nQty
-            FROM PackDetail WITH (NOLOCK)
-            WHERE PickSlipNo = @cPSNO
+            VALUES (@cPSNO, @nNewCartonNo, @nAdjustQty)
 
             IF @@Error <> 0
             BEGIN
                SET @nErrNo = 227607
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Ins PackInfo Fail
                GOTO RollBackTran
-            END*/
+            END
          END -- New Carton
          ELSE
          BEGIN-- Existing carton existing label line
@@ -368,8 +384,8 @@ BEGIN
                   SELECT 'Add new label line to the existing carton'
 
                INSERT INTO PackDetail (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, Qty)
-               SELECT PickSlipNo,
-                     CartonNO,
+               SELECT @cPSNO,
+                     MAX(CartonNo),
                      @cLabelNo,
                      RIGHT( '00000' + CAST( CAST( ISNULL( MAX( LabelLine), 0) AS INT) + 1 AS NVARCHAR( 5)), 5),
                      @cStorerKey,
@@ -390,17 +406,35 @@ BEGIN
 
          -- Log the label adjustment for pickdetail handling
          BEGIN TRY
-            INSERT INTO @tMoveLog (PickSlipNo, LabelNo, SKU, MoveQty)
-            VALUES (@cPSNO, @cMasterLableNo, @cSKU, -@nAdjustQty)
+            MERGE INTO @tMoveLog AS a
+            USING (SELECT @cPSNO AS PickSlipNo, @cMasterLabelNo AS LabelNo, @cSKU AS SKU, -@nAdjustQty AS MoveQty) AS b
+            ON (a.PickSlipNo = b.PickSlipNo AND a.LabelNo = b.LabelNo AND a.SKU = b.SKU)
+            WHEN MATCHED THEN
+               UPDATE SET a.MoveQty = a.MoveQty + b.MoveQty
+            WHEN NOT MATCHED THEN
+               INSERT (PickSlipNo, LabelNo, SKU, MoveQty)
+               VALUES (b.PickSlipNo, b.LabelNo, b.SKU, b.MoveQty);
 
-            INSERT INTO @tMoveLog (PickSlipNo, LabelNo, SKU, MoveQty)
-            VALUES (@cPSNO, @cLableNo, @cSKU, @nAdjustQty)
+            MERGE INTO @tMoveLog AS a
+            USING (SELECT @cPSNO AS PickSlipNo, @cMasterLabelNo AS LabelNo, @cSKU AS SKU, @nAdjustQty AS MoveQty) AS b
+            ON (a.PickSlipNo = b.PickSlipNo AND a.LabelNo = b.LabelNo AND a.SKU = b.SKU)
+            WHEN MATCHED THEN
+               UPDATE SET a.MoveQty = a.MoveQty + b.MoveQty
+            WHEN NOT MATCHED THEN
+               INSERT (PickSlipNo, LabelNo, SKU, MoveQty)
+               VALUES (b.PickSlipNo, b.LabelNo, b.SKU, b.MoveQty);
          END TRY
          BEGIN CATCH
             SET @nErrNo = 227610
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Ins PackDetail Fail
             GOTO RollBackTran
          END CATCH  
+
+         IF @bDebugFlag = 1
+         BEGIN
+            SELECT 'Get @tMoveLog'
+            SELECT * FROM @tMoveLog
+         END
          --Handle toCarton End
 
          SET @nBalQTY = @nBalQty - @nFromQty
@@ -413,13 +447,14 @@ BEGIN
              CartonNo, 
              LabelNo, 
              LabelLine, 
-             ROW_NUMBER() OVER (PARTITION BY PickSlipNo, CartonNo, LabelNo ORDER BY LabelLine) AS NewLabelNo
+             ROW_NUMBER() OVER (PARTITION BY PickSlipNo, CartonNo, LabelNo ORDER BY LabelLine) AS NewLabelLine
       FROM PackDetail WITH (NOLOCK)
          WHERE LabelNo IN (@cMasterLabelNo, @cLabelNo)
+            AND StorerKey = @cStorerKey
       )
 
       UPDATE PackDetail
-         SET LabelNo = RIGHT(REPLICATE('0',5)+CAST(LabelRenumbered.NewLabelNo AS VARCHAR), 5)
+         SET LabelLine = RIGHT(REPLICATE('0',5)+CAST(LabelRenumbered.NewLabelLine AS VARCHAR), 5)
       FROM LabelRenumbered
       WHERE PackDetail.PickSlipNo = LabelRenumbered.PickSlipNo
          AND PackDetail.CartonNo = LabelRenumbered.CartonNo
@@ -451,6 +486,7 @@ BEGIN
 
 RollBackTran:
 BEGIN
+   SELECT 'Rollback Tran'
    ROLLBACK TRAN rdt_Pack_LVSUSA_Confirm -- Only rollback change made here
    IF @cNewCarton = 'Y'
    BEGIN
@@ -464,7 +500,10 @@ Quit:
       COMMIT TRAN
    
    IF @bDebugFlag = 1
+   BEGIN
+      SELECT 'Quit'
       SELECT @nErrNo AS ErrNo, @cErrMsg AS ErrMsg
+   END
 END
 GO
 
