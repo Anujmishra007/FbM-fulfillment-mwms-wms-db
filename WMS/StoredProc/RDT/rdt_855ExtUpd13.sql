@@ -88,7 +88,11 @@ BEGIN
       @cPickConfirmStatus        NVARCHAR( 1),
       @fCartonWeight             FLOAT,
       @fSKUWeight                FLOAT,
-      @nVASQtyOverThan7          INT
+      @nVASQtyOverThan7          INT,
+      @cConsigneeKey             NVARCHAR(15),
+      @cBillToKey                NVARCHAR(15),
+      @cMPOCFlag                 NVARCHAR(10),
+      @cOLPSCode                 NVARCHAR(10)
 
    DECLARE @tLabels TABLE
    (
@@ -100,6 +104,12 @@ BEGIN
       LabelName                  NVARCHAR(30),
       Qty                        INT,
       PrintSequence              NVARCHAR(5)
+   )
+
+   DECLARE @tOrder TABLE
+   (
+      ID                      INT IDENTITY(1,1),
+      OrderKey                NVARCHAR(10)
    )
 
    SET @nErrNo = 0
@@ -592,6 +602,70 @@ BEGIN
                         UPDATE dbo.PackHeader WITH(ROWLOCK)
                         SET Status = '9'
                         WHERE PickSlipNo = @cPickSlipNo
+
+                        DELETE FROM @tOrder
+
+                        INSERT INTO @tOrder( OrderKey )
+                        SELECT DISTINCT OrderKey
+                        FROM dbo.PickDetail WITH(NOLOCK)
+                        WHERE StorerKey = @cStorerKey
+                           AND ISNULL(PKD.CaseID, '-1') = @cDropID
+
+                        SET @nLoopIndex = -1
+
+                        WHILE 1 = 1
+                        BEGIN
+                           SELECT TOP 1
+                              @cOrderKey = OrderKey,
+                              @nLoopIndex = id
+                           FROM @tOrder
+                           WHERE id > @nLoopIndex
+                           ORDER BY id
+                           SET @nRowCount = @@ROWCOUNT
+
+                           IF @nRowCount = 0
+                              BREAk
+
+                           IF (SELECT COUNT( DISTINCT CaseID ) FROM dbo.PICKDETAIL WITH(NOLOCK) WHERE OrderKey = @cOrderKey AND Status = @cPickConfirmStatus)
+                              =
+                              (SELECT COUNT( DISTINCT RefNo )
+                              FROM dbo.PICKDETAIL PD WITH(NOLOCK)
+                              INNER JOIN dbo.PackInfo PI WITH(NOLOCK) ON ISNULL(PD.CaseID, '-1') = ISNULL(PI.RefNo, '')
+                              WHERE PD.OrderKey = @cOrderKey 
+                                 AND CartonStatus = 'PACKED')
+                           BEGIN
+                              -- Print Logi report
+                              SELECT @cConsigneeKey = ISNULL(ConsigneeKey, ''),
+                                 @cBillToKey = ISNULL(BillToKey, '')
+                              FROM dbo.ORDERS WITH(NOLOCK)
+                              WHERE StorerKey = @cStorerKey
+                                 AND OrderKey = @cOrderKey
+
+                              --If an order has consigneekey or billtokey associated with codelkup.code where codelkup.listname = ‘MPOC_PERMITTED’  and short ! = 0, short not NULL, short not blank  then exclude from auto-print logic
+                              SELECT @cMPOCFlag = ISNULL(Short, '')
+                              FROM dbo.CODELKUP WITH(NOLOCK)
+                              WHERE StorerKey = @cStorerKey
+                                 AND LISTNAME = 'MPOC_PERMITTED'
+                                 AND Code IN (@cConsigneeKey, @cBillToKey)
+
+                              IF ISNULL(@cMPOCFlag, '') NOT IN ('', '0')
+                                 CONTINUE
+
+                              SELECT @cOLPSCode = ISNULL(Long, '')
+                              FROM dbo.CODELKUP WITH(NOLOCK)
+                              WHERE StorerKey = @cStorerKey
+                                 AND LISTNAME = 'LVSCUSPREF' 
+                                 AND Description = 'OlpsPlacement'
+                                 AND ISNULL(code2, '') <> ''
+                                 AND code2 IN (@cConsigneeKey, @cBillToKey)
+
+                              SET @nRowCount = @@ROWCOUNT
+
+                              -- If cOLPSCode is not one of ('1', '2', '3', '5'), no need to print logi report automatically
+                              IF @nRowCount = 0 OR ISNUL(@cOLPSCode, '') NOT IN ('1', '2', '3', '5')
+                                 CONTINUE
+                           END
+                        END
                      END
 
                      IF TRIM(@cShipperKey) <> ''
@@ -683,8 +757,6 @@ BEGIN
             IF @cOption = '1' -- 1. Print Carton Label
             BEGIN
                DECLARE 
-                  @cConsigneeKey             NVARCHAR(15),
-                  @cBillToKey                NVARCHAR(15),
                   @cCustLblPrintSequence     NVARCHAR(10),
                   @cDefaultLblPrintSequence  NVARCHAR(10),
                   @cCustLabelName            NVARCHAR(30),
