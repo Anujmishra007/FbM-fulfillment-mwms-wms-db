@@ -38,6 +38,7 @@ BEGIN
    DECLARE @cFromLOC       NVARCHAR( 10)
    DECLARE @cFacility      NVARCHAR( 5)
    DECLARE @b_Success      INT
+   DECLARE @bDebug         INT = 0
 
    -- Get storer
    SELECT TOP 1 
@@ -395,6 +396,11 @@ REPLEN_TASK:
       SELECT @cFacility = Facility FROM LOC WITH (NOLOCK) WHERE LOC = @cFromLOC
       SELECT @cLocEmptyOption = V_String14 FROM   RDT.RDTMOBREC WITH (NOLOCK) WHERE  Mobile = @nMobile
 
+      IF @bDebug>0
+         INSERT INTO DocInfo(TableName,key1,key2,key3,StorerKey,[Data],DataType)
+         VALUES('YSLOG',@cSKU,@cFromLOC,@cLocEmptyOption,@cStorerKey,'Enter to replenishment','LOG')
+
+
       --Operator say the location is empty /or/ qty hits min threshold
       IF ISNULL(RTRIM(@cLocEmptyOption), '') = '1' OR EXISTS(
          SELECT 1 FROM SKUXLOC SL(NOLOCK)
@@ -464,10 +470,13 @@ REPLEN_TASK:
             GOTO Quit
          END
          BEGIN TRY
+            IF @bDebug>0
+               INSERT INTO DocInfo(TableName,key1,key2,key3,StorerKey,[Data],DataType)
+               VALUES('YSLOG',@cFacility,@cIP,@cPORT,@cStorerKey,'Prepare:'+@cSQlCommand,'LOG')         
             EXEC isp_QCmd_SubmitTaskToQCommander
                   @cTaskType           = 'O' -- D=By Datastream, T=Transmitlog, O=Others
                   , @cStorerKey        = @cStorerKey
-                  , @cDataStream       = 'Replenishment'
+                  , @cDataStream       = ''
                   , @cCmdType          = 'SQL'
                   , @cCommand          = @cSQlCommand
                   , @cTransmitlogKey   = ''
@@ -485,9 +494,15 @@ REPLEN_TASK:
             END TRY
             BEGIN CATCH
            	   SET @cErrMsg = ERROR_MESSAGE()
-           	   PRINT @cErrMsg            
+           	   PRINT @cErrMsg     
+               IF @bDebug>0
+                  INSERT INTO DocInfo(TableName,key1,key2,key3,StorerKey,[Data],DataType)
+                  VALUES('YSLOG',@cFacility,@cIP,@cPORT,@cStorerKey,'ERROR:' + @cErrMsg ,'LOG')                        
             	GOTO Quit               
-            END CATCH                                
+            END CATCH   
+            IF @bDebug>0
+               INSERT INTO DocInfo(TableName,key1,key2,key3,StorerKey,[Data],DataType)
+               VALUES('YSLOG',@cFacility,@cIP,@cPORT,@cStorerKey,'DONE:'+@cSQlCommand,'LOG')                                 
       END
    END
    GOTO Quit
@@ -496,6 +511,9 @@ Quit:
 WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
    COMMIT TRAN
 END
+IF @bDebug>0
+   INSERT INTO DocInfo(TableName,key1,key2,key3,StorerKey,[Data],DataType)
+   VALUES('YSLOG','','','','','Exit rdt_TM_CasePick_ClosePallet01','LOG')   
 GO
 
 SET QUOTED_IDENTIFIER OFF
