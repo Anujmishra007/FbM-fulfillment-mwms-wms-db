@@ -2,6 +2,7 @@
 /************************************************************************/
 /* Store procedure: rdt_TM_CasePick_ClosePallet01                       */
 /* Copyright      : Maersk                                              */
+/* Customer       : Unilever                                            */
 /*                                                                      */
 /* Purpose: Confirm pick                                                */
 /*                                                                      */
@@ -110,7 +111,7 @@ BEGIN
 
    -- Handling transaction
    BEGIN TRAN  -- Begin our own transaction
-   SAVE TRAN rdt_TM_CasePick_ClosePallet -- For rollback or commit only our own transaction
+   SAVE TRAN rdt_TM_CasePick_ClosePallet01 -- For rollback or commit only our own transaction
 
    -- Loop tasks
    DECLARE @curRPTask CURSOR
@@ -204,7 +205,7 @@ BEGIN
                      @cLangCode   = @cLangCode,
                      @nErrNo      = @nErrNo  OUTPUT,
                      @cErrMsg     = @cErrMsg OUTPUT,
-                     @cSourceType = 'rdt_TM_CasePick_ClosePallet',
+                     @cSourceType = 'rdt_TM_CasePick_ClosePallet01',
                      @cStorerKey  = @cStorerKey,
                      @cFacility   = @cFacility,
                      @cFromLOC    = @cFromLOC,
@@ -280,7 +281,7 @@ BEGIN
                      @cLangCode   = @cLangCode,
                      @nErrNo      = @nErrNo  OUTPUT,
                      @cErrMsg     = @cErrMsg OUTPUT,
-                     @cSourceType = 'rdt_TM_CasePick_ClosePallet',
+                     @cSourceType = 'rdt_TM_CasePick_ClosePallet01',
                      @cStorerKey  = @cStorerKey,
                      @cFacility   = @cFacility,
                      @cFromLOC    = @cFromLOC,
@@ -356,18 +357,31 @@ BEGIN
    IF @nErrNo <> 0
       GOTO RollBackTran
 
-   COMMIT TRAN rdt_TM_CasePick_ClosePallet -- Only commit change made here
+   COMMIT TRAN rdt_TM_CasePick_ClosePallet01 -- Only commit change made here
 
    GOTO REPLEN_TASK
 
 RollBackTran:
-   ROLLBACK TRAN rdt_TM_CasePick_ClosePallet -- Only rollback change made here
+   ROLLBACK TRAN rdt_TM_CasePick_ClosePallet01 -- Only rollback change made here
 Fail:
 
 REPLEN_TASK:
+   --FOR FCR-989 the trigger replenishment is changed to submitted to QCommander
    IF @cReplenFlag = '1'
    BEGIN
-
+      DECLARE @cLocEmptyOption  NVARCHAR(20)
+      DECLARE @cSQlCommand      NVARCHAR(MAX)
+      DECLARE @cAPP_DB_Name     NVARCHAR(20)  
+      , @cDataStream            VARCHAR(10)  
+      , @nThreadPerAcct         INT  
+      , @nThreadPerStream       INT  
+      , @nMilisecondDelay       INT  
+      , @cIP                    NVARCHAR(20)  
+      , @cPORT                  NVARCHAR(5)  
+      , @cIniFilePath           NVARCHAR(200)  
+      , @cCmdType               NVARCHAR(10)  
+      , @cTaskType              NVARCHAR(1)   
+      , @bSuccess               INT        
       -- Get storer
       SELECT TOP 1
             @cStorerKey = StorerKey,
@@ -379,9 +393,10 @@ REPLEN_TASK:
       ORDER BY TaskDetailKey
 
       SELECT @cFacility = Facility FROM LOC WITH (NOLOCK) WHERE LOC = @cFromLOC
+      SELECT @cLocEmptyOption = V_String14 FROM   RDT.RDTMOBREC WITH (NOLOCK) WHERE  Mobile = @nMobile
 
-      --qty hits min threshold
-      IF EXISTS(
+      --Operator say the location is empty /or/ qty hits min threshold
+      IF ISNULL(RTRIM(@cLocEmptyOption), '') = '1' OR EXISTS(
          SELECT 1 FROM SKUXLOC SL(NOLOCK)
                           JOIN LOTxLOCxID LLI WITH (NOLOCK) ON SL.StorerKey = LLI.StorerKey AND SL.SKU = LLI.SKU AND SL.LOC = LLI.LOC
          WHERE SL.StorerKey = @cStorerKey
@@ -395,18 +410,85 @@ REPLEN_TASK:
             SL.QtyLocationMinimum
          HAVING (SUM(LLI.Qty) - SUM(LLI.QtyPicked) + SUM(LLI.PendingMoveIn)) <= SL.QtyLocationMinimum
       )
+      BEGIN
+         /*  --- original statement for trigger replenishment
+         EXEC isp_ODMRPL01
+               @c_Facility = @cFacility,
+               @c_Storerkey = @cStorerKey,
+               @c_SKU = @cSKU,
+               @c_LOC = @cFromLOC,
+               @c_ReplenType = N'T',
+               @b_Success = @b_Success OUTPUT,
+               @n_Err = @nErrNo OUTPUT,
+               @c_ErrMsg = @cErrMsg OUTPUT,
+               @b_Debug = 0
+         */
+         -----New code
+
+         SET @cSQlCommand = N'
+            DECLARE  @bSuccess INT,
+                     @nErrNo   INT,
+                     @cErrMsg  NVARCHAR(255) 
+            EXEC [dbo].[isp_ODMRPL01]
+               @c_Facility = ''' + @cFacility + ''',
+               @c_Storerkey = ''' + @cStorerKey + ''',
+               @c_SKU = ''' + @cSKU + ''',
+               @c_LOC = ''' + @cFromLOC + ''',
+               @c_ReplenType = N''T'',
+               @b_Success = @bSuccess OUTPUT,
+               @n_Err = @nErrNo OUTPUT,
+               @c_ErrMsg = @cErrMsg OUTPUT,
+               @b_Debug = 0'
+         
+         SELECT TOP 1 @cAPP_DB_Name       = APP_DB_Name,
+                     @cDataStream        = DataStream,
+                     @nThreadPerAcct     = ThreadPerAcct,
+                     @nThreadPerStream   = ThreadPerStream,
+                     @nMilisecondDelay   = MilisecondDelay,
+                     @cIP                = [IP],
+                     @cPORT              = [PORT],
+                     @cIniFilePath       = IniFilePath,
+                     @cCmdType           = CmdType,
+                     @cTaskType          = TaskType
+         FROM QCmd_TransmitlogConfig WITH (NOLOCK)
+         WHERE TableName  = 'Replenishment'
+            AND [App_Name] = 'WMS'
+            AND  (StorerKey = @cStorerKey OR StorerKey = 'ALL')
+         ORDER BY
+            CASE WHEN StorerKey = @cStorerKey THEN 0 ELSE 1 END ASC 
+
+         IF @@ROWCOUNT<=0
          BEGIN
-            EXEC isp_ODMRPL01
-                 @c_Facility = @cFacility,
-                 @c_Storerkey = @cStorerKey,
-                 @c_SKU = @cSKU,
-                 @c_LOC = @cFromLOC,
-                 @c_ReplenType = N'T',
-                 @b_Success = @b_Success OUTPUT,
-                 @n_Err = @nErrNo OUTPUT,
-                 @c_ErrMsg = @cErrMsg OUTPUT,
-                 @b_Debug = 0
+            SET @nErrNo = 51152
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- NO replenishment config
+            GOTO Quit
          END
+         BEGIN TRY
+            EXEC isp_QCmd_SubmitTaskToQCommander
+                  @cTaskType           = 'O' -- D=By Datastream, T=Transmitlog, O=Others
+                  , @cStorerKey        = @cStorerKey
+                  , @cDataStream       = 'Replenishment'
+                  , @cCmdType          = 'SQL'
+                  , @cCommand          = @cSQlCommand
+                  , @cTransmitlogKey   = ''
+                  , @nThreadPerAcct    = @nThreadPerAcct
+                  , @nThreadPerStream  = @nThreadPerStream
+                  , @nMilisecondDelay  = @nMilisecondDelay
+                  , @nSeq              = 1
+                  , @cIP               = @cIP
+                  , @cPORT             = @cPORT
+                  , @cIniFilePath      = @cIniFilePath
+                  , @cAPPDBName        = @cAPP_DB_Name
+                  , @bSuccess          = @bSuccess OUTPUT
+                  , @nErr              = @nErrNo OUTPUT
+                  , @cErrMsg           = @cErrMsg OUTPUT   
+            END TRY
+            BEGIN CATCH
+           	   SET @cErrMsg = ERROR_MESSAGE()
+           	   PRINT @cErrMsg            
+            	GOTO Quit               
+            END CATCH                                
+      END
    END
    GOTO Quit
 

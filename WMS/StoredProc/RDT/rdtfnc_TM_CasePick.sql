@@ -120,7 +120,7 @@ DECLARE
    @cDisableQTYField    NVARCHAR(1),
    @cSwapTaskSP         NVARCHAR(20),
    @cOverwriteToLOC     NVARCHAR(1),    --(yeekung02)
-   @cLocEmptyOption     NVARCHAR(1),    --YYS027 FCR-989
+   @cLocEmptyOption     NVARCHAR(20),   --YYS027 FCR-989
 
    @cPUOM_Desc          NCHAR( 5),
    @cMUOM_Desc          NCHAR( 5),
