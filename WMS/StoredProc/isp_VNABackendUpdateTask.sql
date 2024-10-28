@@ -69,6 +69,7 @@ BEGIN
          , @c_FromLoc            NVARCHAR(10)
          , @c_ID                 NVARCHAR(18)
          , @c_Sku                NVARCHAR(20)
+         , @c_Message02          NVARCHAR(10)
 
    SET @c_UOM = N'1'
    SET @c_Status = N'Q'
@@ -127,13 +128,26 @@ BEGIN
          END
          ELSE
          BEGIN
-            UPDATE TaskDetail
-            SET UserKey = LEFT(@c_DeviceID, 18)
-              , Listkey = @c_Taskdetailkey
-              , TrafficCop = NULL
-              , EditWho = SUSER_SNAME()
-              , EditDate = GETDATE()
-            WHERE TaskDetailKey = @c_Taskdetailkey
+            SELECT @c_Message02 = TD.Message02 from TaskDetail TD WITH (NOLOCK) WHERE TD.TaskDetailKey = @c_Taskdetailkey;
+            IF @c_Message02 = 'RP2'
+            BEGIN
+                UPDATE TaskDetail
+                SET UserKey = LEFT(@c_DeviceID, 18)
+                  , TrafficCop = NULL
+                  , EditWho = SUSER_SNAME()
+                  , EditDate = GETDATE()
+                WHERE TaskDetailKey = @c_Taskdetailkey
+            END
+            ELSE
+            BEGIN
+                UPDATE TaskDetail
+                SET UserKey = LEFT(@c_DeviceID, 18)
+                        , Listkey = @c_Taskdetailkey
+                        , TrafficCop = NULL
+                        , EditWho = SUSER_SNAME()
+                        , EditDate = GETDATE()
+                WHERE TaskDetailKey = @c_Taskdetailkey
+            END
 
             IF @@ERROR <> 0
             BEGIN
@@ -285,13 +299,26 @@ BEGIN
          END
          ELSE
          BEGIN
-            UPDATE TaskDetail
-            SET UserKey = LEFT(@c_DeviceID, 18)
-              , Listkey = @c_Taskdetailkey
-              , TrafficCop = NULL
-              , EditWho = SUSER_SNAME()
-              , EditDate = GETDATE()
-            WHERE TaskDetailKey = @c_Taskdetailkey
+            SELECT @c_Message02 = TD.Message02 from TaskDetail TD WITH (NOLOCK) WHERE TD.TaskDetailKey = @c_Taskdetailkey;
+            IF @c_Message02 = 'RP2'
+            BEGIN
+                UPDATE TaskDetail
+                SET UserKey = LEFT(@c_DeviceID, 18)
+                      , TrafficCop = NULL
+                      , EditWho = SUSER_SNAME()
+                      , EditDate = GETDATE()
+                WHERE TaskDetailKey = @c_Taskdetailkey
+            END
+            ELSE
+            BEGIN
+                UPDATE TaskDetail
+                SET UserKey = LEFT(@c_DeviceID, 18)
+                        , Listkey = @c_Taskdetailkey
+                        , TrafficCop = NULL
+                        , EditWho = SUSER_SNAME()
+                        , EditDate = GETDATE()
+                WHERE TaskDetailKey = @c_Taskdetailkey
+            END
 
             IF @@ERROR <> 0
             BEGIN
