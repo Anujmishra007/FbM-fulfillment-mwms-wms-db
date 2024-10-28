@@ -10,6 +10,7 @@ GO
 /*                                                                            */
 /* Date       Rev  Author   Purposes                                          */
 /* 03-04-2024 1.0  YeeKung  UWP-16963 Created                                 */
+/* 23-09-2024 1.1  YeeKung  UWP-24769 Add new currentSP (yeekung02)           */
 /******************************************************************************/
 CREATE OR ALTER PROC rdt.rdt_805AsignExtVal01 (
    @nMobile     INT,           
@@ -59,6 +60,40 @@ BEGIN
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --CartonAdyUsed
                GOTO Quit
             END
+         END
+      END
+   END
+
+   IF @cCurrentSP = 'rdt_PTLStation_Assign_WaveCarton04'
+   BEGIN
+      -- Parameter mapping
+      SELECT @cCartonID = Value FROM @tVar WHERE Variable = '@cCartonID'
+      SELECT @cWavekey = Value FROM @tVar WHERE Variable = '@cwavekey'
+
+      IF @cType='CHECK'
+      BEGIN
+
+         IF @cCartonID <> ''
+         BEGIN   
+            IF EXISTS ( SELECT 1 FROM rdt.rdtPTLStationLog  (NOLOCK)
+                        WHERE StorerKey = @cStorerKey  
+                           AND CartonID = @cCartonID )  
+            BEGIN
+               SET @nErrNo = 213352 
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --CartonAdyUsed
+               GOTO Quit
+            END         
+            -- Check carton ID on hold
+            IF EXISTS(  SELECT 1 FROM PICKDETAIL PD (NOLOCK)
+                        WHERE caseid=@cCartonID
+                           AND Storerkey=@cStorerKey
+                           AND status < '9' )
+            BEGIN
+               SET @nErrNo = 213353
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --CartonAdyUsed
+               GOTO Quit
+            END
+
          END
       END
    END

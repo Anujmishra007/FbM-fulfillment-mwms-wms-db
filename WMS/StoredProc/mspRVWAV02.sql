@@ -250,5 +250,5 @@ RETURN_SP:
    END       
 END --sp end  
 GO
-GRANT EXECUTE ON [dbo].[mspRVWAV01] TO [NSQL]
+GRANT EXECUTE ON [dbo].[mspRVWAV02] TO [NSQL]
 GO

@@ -1,222 +1,438 @@
-CREATE TABLE [RDT].[RDTMOBREC]
-(
-[Mobile] [int] NOT NULL,
-[Func] [int] NOT NULL CONSTRAINT [DF_RDTMOBREC_Func] DEFAULT ((0)),
-[Scn] [int] NOT NULL CONSTRAINT [DF_RDTMOBREC_Scn] DEFAULT ((0)),
-[Step] [int] NOT NULL CONSTRAINT [DF_RDTMOBREC_Step] DEFAULT ((0)),
-[Menu] [int] NOT NULL CONSTRAINT [DF_RDTMOBREC_Menu] DEFAULT ((0)),
-[Lang_Code] [nvarchar] (3) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[InputKey] [int] NOT NULL,
-[ErrMsg] [nvarchar] (125) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[StorerKey] [nvarchar] (15) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[Facility] [nvarchar] (5) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[UserName] [nvarchar] (128) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RDTMOBREC_UserName] DEFAULT ('RDT'),
-[Printer] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[MsgQueueNo] [int] NULL CONSTRAINT [DF_RDTMOBREC_MsgQueueNo] DEFAULT ((0)),
-[V_ReceiptKey] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_ReceiptKey] DEFAULT (''),
-[V_POKey] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[V_LoadKey] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_LoadKey] DEFAULT (''),
-[V_OrderKey] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_OrderKey] DEFAULT (''),
-[V_PickSlipNo] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_PickSlipNo] DEFAULT (''),
-[V_Zone] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_Zone] DEFAULT (''),
-[V_Loc] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_Loc] DEFAULT (''),
-[V_SKU] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_SKU] DEFAULT (''),
-[V_UOM] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_UOM] DEFAULT (''),
-[V_ID] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_ID] DEFAULT (''),
-[V_ConsigneeKey] [nvarchar] (15) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_ConsigneeKey] DEFAULT (''),
-[V_CaseID] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_CaseID] DEFAULT (''),
-[V_SKUDescr] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_SKUDescr] DEFAULT (''),
-[V_QTY] [int] NULL CONSTRAINT [DF_RDTMOBREC_V_QTY] DEFAULT ((0)),
-[V_UCC] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_UCC] DEFAULT (''),
-[V_Lot] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_Lot] DEFAULT (''),
-[V_Lottable01] [nvarchar] (18) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_Lottable01] DEFAULT (''),
-[V_Lottable02] [nvarchar] (18) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_Lottable02] DEFAULT (''),
-[V_Lottable03] [nvarchar] (18) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_Lottable03] DEFAULT (''),
-[V_Lottable04] [datetime] NULL,
-[V_Lottable05] [datetime] NULL,
-[V_Lottable06] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_Lottable06] DEFAULT (''),
-[V_Lottable07] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_Lottable07] DEFAULT (''),
-[V_Lottable08] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_Lottable08] DEFAULT (''),
-[V_Lottable09] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_Lottable09] DEFAULT (''),
-[V_Lottable10] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_Lottable10] DEFAULT (''),
-[V_Lottable11] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_Lottable11] DEFAULT (''),
-[V_Lottable12] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[V_Lottable13] [datetime] NULL,
-[V_Lottable14] [datetime] NULL,
-[V_Lottable15] [datetime] NULL,
-[V_LottableLabel01] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_LottableLabel01] DEFAULT (''),
-[V_LottableLabel02] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_LottableLabel02] DEFAULT (''),
-[V_LottableLabel03] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_LottableLabel03] DEFAULT (''),
-[V_LottableLabel04] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_LottableLabel04] DEFAULT (''),
-[V_LottableLabel05] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_LottableLabel05] DEFAULT (''),
-[V_LottableLabel06] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_LottableLabel06] DEFAULT (''),
-[V_LottableLabel07] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_LottableLabel07] DEFAULT (''),
-[V_LottableLabel08] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_LottableLabel08] DEFAULT (''),
-[V_LottableLabel09] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_LottableLabel09] DEFAULT (''),
-[V_LottableLabel10] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_LottableLabel10] DEFAULT (''),
-[V_LottableLabel11] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_LottableLabel11] DEFAULT (''),
-[V_LottableLabel12] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_LottableLabel12] DEFAULT (''),
-[V_LottableLabel13] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_LottableLabel13] DEFAULT (''),
-[V_LottableLabel14] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_LottableLabel14] DEFAULT (''),
-[V_LottableLabel15] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_LottableLabel15] DEFAULT (''),
-[I_Field01] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[I_Field02] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[I_Field03] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[I_Field04] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[I_Field05] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[I_Field06] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[I_Field07] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[I_Field08] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[I_Field09] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[I_Field10] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[I_Field11] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[I_Field12] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[I_Field13] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[I_Field14] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[I_Field15] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[O_Field01] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[O_Field02] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[O_Field03] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[O_Field04] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[O_Field05] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[O_Field06] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[O_Field07] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[O_Field08] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[O_Field09] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[O_Field10] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[O_Field11] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[O_Field12] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[O_Field13] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[O_Field14] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[O_Field15] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[V_String1] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String1] DEFAULT (''),
-[V_String2] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String2] DEFAULT (''),
-[V_String3] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String3] DEFAULT (''),
-[V_String4] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String4] DEFAULT (''),
-[V_String5] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String5] DEFAULT (''),
-[V_String6] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String6] DEFAULT (''),
-[V_String7] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String7] DEFAULT (''),
-[V_String8] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String8] DEFAULT (''),
-[V_String9] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String9] DEFAULT (''),
-[V_String10] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String10] DEFAULT (''),
-[V_String11] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String11] DEFAULT (''),
-[V_String12] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String12] DEFAULT (''),
-[V_String13] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String13] DEFAULT (''),
-[V_String14] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String14] DEFAULT (''),
-[V_String15] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String15] DEFAULT (''),
-[V_String16] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String16] DEFAULT (''),
-[V_String17] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String17] DEFAULT (''),
-[V_String18] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String18] DEFAULT (''),
-[V_String19] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String19] DEFAULT (''),
-[V_String20] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String20] DEFAULT (''),
-[V_String21] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String21] DEFAULT (''),
-[V_String22] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String22] DEFAULT (''),
-[V_String23] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String23] DEFAULT (''),
-[V_String24] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String24] DEFAULT (''),
-[V_String25] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String25] DEFAULT (''),
-[V_String26] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String26] DEFAULT (''),
-[V_String27] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String27] DEFAULT (''),
-[V_String28] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String28] DEFAULT (''),
-[V_String29] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String29] DEFAULT (''),
-[V_String30] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String30] DEFAULT (''),
-[V_String31] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String31] DEFAULT (''),
-[V_String32] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String32] DEFAULT (''),
-[V_String33] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String33] DEFAULT (''),
-[V_String34] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String34] DEFAULT (''),
-[V_String35] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String35] DEFAULT (''),
-[V_String36] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String36] DEFAULT (''),
-[V_String37] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String37] DEFAULT (''),
-[V_String38] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String38] DEFAULT (''),
-[V_String39] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String39] DEFAULT (''),
-[V_String40] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String40] DEFAULT (''),
-[FieldAttr01] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_FieldAttr01] DEFAULT (''),
-[FieldAttr02] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_FieldAttr02] DEFAULT (''),
-[FieldAttr03] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_FieldAttr03] DEFAULT (''),
-[FieldAttr04] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_FieldAttr04] DEFAULT (''),
-[FieldAttr05] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_FieldAttr05] DEFAULT (''),
-[FieldAttr06] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_FieldAttr06] DEFAULT (''),
-[FieldAttr07] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_FieldAttr07] DEFAULT (''),
-[FieldAttr08] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_FieldAttr08] DEFAULT (''),
-[FieldAttr09] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_FieldAttr09] DEFAULT (''),
-[FieldAttr10] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_FieldAttr10] DEFAULT (''),
-[FieldAttr11] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_FieldAttr11] DEFAULT (''),
-[FieldAttr12] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_FieldAttr12] DEFAULT (''),
-[FieldAttr13] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_FieldAttr13] DEFAULT (''),
-[FieldAttr14] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_FieldAttr14] DEFAULT (''),
-[FieldAttr15] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_FieldAttr15] DEFAULT (''),
-[AddDate] [datetime] NULL CONSTRAINT [DF_RDTMOBREC_AddDate] DEFAULT (getdate()),
-[EditDate] [datetime] NULL CONSTRAINT [DF_RDTMOBREC_EditDate] DEFAULT (getdate()),
-[Printer_Paper] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[MenuStack] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_MenuStack] DEFAULT (''),
-[V_TaskDetailKey] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMobRec_V_TaskDetailKey] DEFAULT (''),
-[V_Max] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RDTMOBREC_V_Max] DEFAULT (''),
-[RemotePrint] [int] NULL CONSTRAINT [DF_RDTMOBREC_RemotePrint] DEFAULT ((0)),
-[DeviceID] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_DeviceID] DEFAULT (''),
-[LightMode] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_LightMode] DEFAULT (''),
-[StorerGroup] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RDTMOBREC_StorerGroup] DEFAULT (''),
-[V_StorerKey] [nvarchar] (15) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RDTMOBREC_V_StorerKey] DEFAULT (''),
-[V_String41] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String41] DEFAULT (''),
-[V_String42] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String42] DEFAULT (''),
-[V_String43] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String43] DEFAULT (''),
-[V_String44] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String44] DEFAULT (''),
-[V_String45] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String45] DEFAULT (''),
-[V_String46] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String46] DEFAULT (''),
-[V_String47] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String47] DEFAULT (''),
-[V_String48] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String48] DEFAULT (''),
-[V_String49] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String49] DEFAULT (''),
-[V_String50] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String50] DEFAULT (''),
-[V_WaveKey] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RDTMOBREC_V_WaveKey] DEFAULT (''),
-[V_Cartonno] [int] NULL CONSTRAINT [DF_RDTMOBREC_V_Cartonno] DEFAULT ((0)),
-[V_PUOM_Div] [int] NULL CONSTRAINT [DF_RDTMOBREC_V_PUOM_Div] DEFAULT ((0)),
-[V_MQTY] [int] NULL CONSTRAINT [DF_RDTMOBREC_V_MQTY] DEFAULT ((0)),
-[V_PQTY] [int] NULL CONSTRAINT [DF_RDTMOBREC_V_PQTY] DEFAULT ((0)),
-[V_FromScn] [int] NULL CONSTRAINT [DF_RDTMOBREC_V_FromScn] DEFAULT ((0)),
-[V_FromStep] [int] NULL CONSTRAINT [DF_RDTMOBREC_V_FromStep] DEFAULT ((0)),
-[V_MTaskQty] [int] NULL CONSTRAINT [DF_RDTMOBREC_V_MTaskQty] DEFAULT ((0)),
-[V_PTaskQty] [int] NULL CONSTRAINT [DF_RDTMOBREC_V_PTaskQty] DEFAULT ((0)),
-[V_TaskQTY] [int] NULL CONSTRAINT [DF_RDTMOBREC_V_TaskQty] DEFAULT ((0)),
-[V_Integer1] [int] NULL CONSTRAINT [DF_RDTMOBREC_V_Integer1] DEFAULT ((0)),
-[V_Integer2] [int] NULL CONSTRAINT [DF_RDTMOBREC_V_Integer2] DEFAULT ((0)),
-[V_Integer3] [int] NULL CONSTRAINT [DF_RDTMOBREC_V_Integer3] DEFAULT ((0)),
-[V_Integer4] [int] NULL CONSTRAINT [DF_RDTMOBREC_V_Integer4] DEFAULT ((0)),
-[V_Integer5] [int] NULL CONSTRAINT [DF_RDTMOBREC_V_Integer5] DEFAULT ((0)),
-[V_Integer6] [int] NULL CONSTRAINT [DF_RDTMOBREC_V_Integer6] DEFAULT ((0)),
-[V_Integer7] [int] NULL CONSTRAINT [DF_RDTMOBREC_V_Integer7] DEFAULT ((0)),
-[V_Integer8] [int] NULL CONSTRAINT [DF_RDTMOBREC_V_Integer8] DEFAULT ((0)),
-[V_Integer9] [int] NULL CONSTRAINT [DF_RDTMOBREC_V_Integer9] DEFAULT ((0)),
-[V_Integer10] [int] NULL CONSTRAINT [DF_RDTMOBREC_V_Integer10] DEFAULT ((0)),
-[V_Integer11] [int] NULL CONSTRAINT [DF_RDTMOBREC_V_Integer11] DEFAULT ((0)),
-[V_Integer12] [int] NULL CONSTRAINT [DF_RDTMOBREC_V_Integer12] DEFAULT ((0)),
-[V_Integer13] [int] NULL CONSTRAINT [DF_RDTMOBREC_V_Integer13] DEFAULT ((0)),
-[V_Integer14] [int] NULL CONSTRAINT [DF_RDTMOBREC_V_Integer14] DEFAULT ((0)),
-[V_Integer15] [int] NULL CONSTRAINT [DF_RDTMOBREC_V_Integer15] DEFAULT ((0)),
-[V_DateTime1] [datetime] NULL CONSTRAINT [DF_RDTMOBREC_V_DateTime1] DEFAULT (NULL),
-[V_DateTime2] [datetime] NULL CONSTRAINT [DF_RDTMOBREC_V_DateTime2] DEFAULT (NULL),
-[V_DateTime3] [datetime] NULL CONSTRAINT [DF_RDTMOBREC_V_DateTime3] DEFAULT (NULL),
-[V_DateTime4] [datetime] NULL CONSTRAINT [DF_RDTMOBREC_V_DateTime4] DEFAULT (NULL),
-[V_DateTime5] [datetime] NULL CONSTRAINT [DF_RDTMOBREC_V_DateTime5] DEFAULT (NULL),
-[I_Field16] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtMobRec_I_Field16] DEFAULT (''),
-[I_Field17] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtMobRec_I_Field17] DEFAULT (''),
-[I_Field18] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtMobRec_I_Field18] DEFAULT (''),
-[I_Field19] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtMobRec_I_Field19] DEFAULT (''),
-[I_Field20] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtMobRec_I_Field20] DEFAULT (''),
-[O_Field16] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtMobRec_O_Field16] DEFAULT (''),
-[O_Field17] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtMobRec_O_Field17] DEFAULT (''),
-[O_Field18] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtMobRec_O_Field18] DEFAULT (''),
-[O_Field19] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtMobRec_O_Field19] DEFAULT (''),
-[O_Field20] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtMobRec_O_Field20] DEFAULT (''),
-[FieldAttr16] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtMobRec_FieldAttr16] DEFAULT (''),
-[FieldAttr17] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtMobRec_FieldAttr17] DEFAULT (''),
-[FieldAttr18] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtMobRec_FieldAttr18] DEFAULT (''),
-[FieldAttr19] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtMobRec_FieldAttr19] DEFAULT (''),
-[FieldAttr20] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtMobRec_FieldAttr20] DEFAULT (''),
-[V_DropID] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RDTMOBREC_V_DropID] DEFAULT (''),
-[V_SerialNo] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RDTMOBREC_V_SerialNo] DEFAULT ('')
-) ON [PRIMARY]
+IF NOT EXISTS (SELECT 1
+FROM sys.tables
+WHERE name = 'RDTMOBREC' AND type = 'U')
+BEGIN
+   CREATE TABLE [RDT].[RDTMOBREC]
+   (
+   [Mobile] [int] NOT NULL,
+   [Func] [int] NOT NULL CONSTRAINT [DF_RDTMOBREC_Func] DEFAULT ((0)),
+   [Scn] [int] NOT NULL CONSTRAINT [DF_RDTMOBREC_Scn] DEFAULT ((0)),
+   [Step] [int] NOT NULL CONSTRAINT [DF_RDTMOBREC_Step] DEFAULT ((0)),
+   [Menu] [int] NOT NULL CONSTRAINT [DF_RDTMOBREC_Menu] DEFAULT ((0)),
+   [Lang_Code] [nvarchar] (3) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+   [InputKey] [int] NOT NULL,
+   [ErrMsg] [nvarchar] (125) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+   [StorerKey] [nvarchar] (15) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+   [Facility] [nvarchar] (5) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+   [UserName] [nvarchar] (128) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RDTMOBREC_UserName] DEFAULT ('RDT'),
+   [Printer] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+   [MsgQueueNo] [int] NULL CONSTRAINT [DF_RDTMOBREC_MsgQueueNo] DEFAULT ((0)),
+   [V_ReceiptKey] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_ReceiptKey] DEFAULT (''),
+   [V_POKey] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+   [V_LoadKey] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_LoadKey] DEFAULT (''),
+   [V_OrderKey] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_OrderKey] DEFAULT (''),
+   [V_PickSlipNo] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_PickSlipNo] DEFAULT (''),
+   [V_Zone] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_Zone] DEFAULT (''),
+   [V_Loc] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_Loc] DEFAULT (''),
+   [V_SKU] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_SKU] DEFAULT (''),
+   [V_UOM] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_UOM] DEFAULT (''),
+   [V_ID] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_ID] DEFAULT (''),
+   [V_ConsigneeKey] [nvarchar] (15) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_ConsigneeKey] DEFAULT (''),
+   [V_CaseID] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_CaseID] DEFAULT (''),
+   [V_SKUDescr] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_SKUDescr] DEFAULT (''),
+   [V_QTY] [int] NULL CONSTRAINT [DF_RDTMOBREC_V_QTY] DEFAULT ((0)),
+   [V_UCC] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_UCC] DEFAULT (''),
+   [V_Lot] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_Lot] DEFAULT (''),
+   [V_Lottable01] [nvarchar] (18) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_Lottable01] DEFAULT (''),
+   [V_Lottable02] [nvarchar] (18) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_Lottable02] DEFAULT (''),
+   [V_Lottable03] [nvarchar] (18) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_Lottable03] DEFAULT (''),
+   [V_Lottable04] [datetime] NULL,
+   [V_Lottable05] [datetime] NULL,
+   [V_Lottable06] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_Lottable06] DEFAULT (''),
+   [V_Lottable07] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_Lottable07] DEFAULT (''),
+   [V_Lottable08] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_Lottable08] DEFAULT (''),
+   [V_Lottable09] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_Lottable09] DEFAULT (''),
+   [V_Lottable10] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_Lottable10] DEFAULT (''),
+   [V_Lottable11] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_Lottable11] DEFAULT (''),
+   [V_Lottable12] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+   [V_Lottable13] [datetime] NULL,
+   [V_Lottable14] [datetime] NULL,
+   [V_Lottable15] [datetime] NULL,
+   [V_LottableLabel01] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_LottableLabel01] DEFAULT (''),
+   [V_LottableLabel02] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_LottableLabel02] DEFAULT (''),
+   [V_LottableLabel03] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_LottableLabel03] DEFAULT (''),
+   [V_LottableLabel04] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_LottableLabel04] DEFAULT (''),
+   [V_LottableLabel05] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_LottableLabel05] DEFAULT (''),
+   [V_LottableLabel06] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_LottableLabel06] DEFAULT (''),
+   [V_LottableLabel07] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_LottableLabel07] DEFAULT (''),
+   [V_LottableLabel08] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_LottableLabel08] DEFAULT (''),
+   [V_LottableLabel09] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_LottableLabel09] DEFAULT (''),
+   [V_LottableLabel10] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_LottableLabel10] DEFAULT (''),
+   [V_LottableLabel11] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_LottableLabel11] DEFAULT (''),
+   [V_LottableLabel12] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_LottableLabel12] DEFAULT (''),
+   [V_LottableLabel13] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_LottableLabel13] DEFAULT (''),
+   [V_LottableLabel14] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_LottableLabel14] DEFAULT (''),
+   [V_LottableLabel15] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_LottableLabel15] DEFAULT (''),
+   [I_Field01] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+   [I_Field02] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+   [I_Field03] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+   [I_Field04] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+   [I_Field05] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+   [I_Field06] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+   [I_Field07] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+   [I_Field08] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+   [I_Field09] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+   [I_Field10] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+   [I_Field11] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+   [I_Field12] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+   [I_Field13] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+   [I_Field14] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+   [I_Field15] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+   [O_Field01] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+   [O_Field02] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+   [O_Field03] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+   [O_Field04] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+   [O_Field05] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+   [O_Field06] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+   [O_Field07] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+   [O_Field08] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+   [O_Field09] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+   [O_Field10] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+   [O_Field11] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+   [O_Field12] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+   [O_Field13] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+   [O_Field14] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+   [O_Field15] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+   [V_String1] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String1] DEFAULT (''),
+   [V_String2] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String2] DEFAULT (''),
+   [V_String3] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String3] DEFAULT (''),
+   [V_String4] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String4] DEFAULT (''),
+   [V_String5] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String5] DEFAULT (''),
+   [V_String6] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String6] DEFAULT (''),
+   [V_String7] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String7] DEFAULT (''),
+   [V_String8] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String8] DEFAULT (''),
+   [V_String9] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String9] DEFAULT (''),
+   [V_String10] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String10] DEFAULT (''),
+   [V_String11] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String11] DEFAULT (''),
+   [V_String12] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String12] DEFAULT (''),
+   [V_String13] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String13] DEFAULT (''),
+   [V_String14] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String14] DEFAULT (''),
+   [V_String15] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String15] DEFAULT (''),
+   [V_String16] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String16] DEFAULT (''),
+   [V_String17] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String17] DEFAULT (''),
+   [V_String18] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String18] DEFAULT (''),
+   [V_String19] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String19] DEFAULT (''),
+   [V_String20] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String20] DEFAULT (''),
+   [V_String21] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String21] DEFAULT (''),
+   [V_String22] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String22] DEFAULT (''),
+   [V_String23] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String23] DEFAULT (''),
+   [V_String24] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String24] DEFAULT (''),
+   [V_String25] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String25] DEFAULT (''),
+   [V_String26] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String26] DEFAULT (''),
+   [V_String27] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String27] DEFAULT (''),
+   [V_String28] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String28] DEFAULT (''),
+   [V_String29] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String29] DEFAULT (''),
+   [V_String30] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String30] DEFAULT (''),
+   [V_String31] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String31] DEFAULT (''),
+   [V_String32] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String32] DEFAULT (''),
+   [V_String33] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String33] DEFAULT (''),
+   [V_String34] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String34] DEFAULT (''),
+   [V_String35] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String35] DEFAULT (''),
+   [V_String36] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String36] DEFAULT (''),
+   [V_String37] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String37] DEFAULT (''),
+   [V_String38] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String38] DEFAULT (''),
+   [V_String39] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String39] DEFAULT (''),
+   [V_String40] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String40] DEFAULT (''),
+   [FieldAttr01] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_FieldAttr01] DEFAULT (''),
+   [FieldAttr02] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_FieldAttr02] DEFAULT (''),
+   [FieldAttr03] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_FieldAttr03] DEFAULT (''),
+   [FieldAttr04] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_FieldAttr04] DEFAULT (''),
+   [FieldAttr05] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_FieldAttr05] DEFAULT (''),
+   [FieldAttr06] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_FieldAttr06] DEFAULT (''),
+   [FieldAttr07] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_FieldAttr07] DEFAULT (''),
+   [FieldAttr08] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_FieldAttr08] DEFAULT (''),
+   [FieldAttr09] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_FieldAttr09] DEFAULT (''),
+   [FieldAttr10] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_FieldAttr10] DEFAULT (''),
+   [FieldAttr11] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_FieldAttr11] DEFAULT (''),
+   [FieldAttr12] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_FieldAttr12] DEFAULT (''),
+   [FieldAttr13] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_FieldAttr13] DEFAULT (''),
+   [FieldAttr14] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_FieldAttr14] DEFAULT (''),
+   [FieldAttr15] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_FieldAttr15] DEFAULT (''),
+   [AddDate] [datetime] NULL CONSTRAINT [DF_RDTMOBREC_AddDate] DEFAULT (getdate()),
+   [EditDate] [datetime] NULL CONSTRAINT [DF_RDTMOBREC_EditDate] DEFAULT (getdate()),
+   [Printer_Paper] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+   [MenuStack] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_MenuStack] DEFAULT (''),
+   [V_TaskDetailKey] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMobRec_V_TaskDetailKey] DEFAULT (''),
+   [V_Max] [nvarchar] (max) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RDTMOBREC_V_Max] DEFAULT (''),
+   [RemotePrint] [int] NULL CONSTRAINT [DF_RDTMOBREC_RemotePrint] DEFAULT ((0)),
+   [DeviceID] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_DeviceID] DEFAULT (''),
+   [LightMode] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_LightMode] DEFAULT (''),
+   [StorerGroup] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RDTMOBREC_StorerGroup] DEFAULT (''),
+   [V_StorerKey] [nvarchar] (15) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RDTMOBREC_V_StorerKey] DEFAULT (''),
+   [V_String41] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String41] DEFAULT (''),
+   [V_String42] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String42] DEFAULT (''),
+   [V_String43] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String43] DEFAULT (''),
+   [V_String44] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String44] DEFAULT (''),
+   [V_String45] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String45] DEFAULT (''),
+   [V_String46] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String46] DEFAULT (''),
+   [V_String47] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String47] DEFAULT (''),
+   [V_String48] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String48] DEFAULT (''),
+   [V_String49] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String49] DEFAULT (''),
+   [V_String50] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String50] DEFAULT (''),
+   [V_WaveKey] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RDTMOBREC_V_WaveKey] DEFAULT (''),
+   [V_Cartonno] [int] NULL CONSTRAINT [DF_RDTMOBREC_V_Cartonno] DEFAULT ((0)),
+   [V_PUOM_Div] [int] NULL CONSTRAINT [DF_RDTMOBREC_V_PUOM_Div] DEFAULT ((0)),
+   [V_MQTY] [int] NULL CONSTRAINT [DF_RDTMOBREC_V_MQTY] DEFAULT ((0)),
+   [V_PQTY] [int] NULL CONSTRAINT [DF_RDTMOBREC_V_PQTY] DEFAULT ((0)),
+   [V_FromScn] [int] NULL CONSTRAINT [DF_RDTMOBREC_V_FromScn] DEFAULT ((0)),
+   [V_FromStep] [int] NULL CONSTRAINT [DF_RDTMOBREC_V_FromStep] DEFAULT ((0)),
+   [V_MTaskQty] [int] NULL CONSTRAINT [DF_RDTMOBREC_V_MTaskQty] DEFAULT ((0)),
+   [V_PTaskQty] [int] NULL CONSTRAINT [DF_RDTMOBREC_V_PTaskQty] DEFAULT ((0)),
+   [V_TaskQTY] [int] NULL CONSTRAINT [DF_RDTMOBREC_V_TaskQty] DEFAULT ((0)),
+   [V_Integer1] [int] NULL CONSTRAINT [DF_RDTMOBREC_V_Integer1] DEFAULT ((0)),
+   [V_Integer2] [int] NULL CONSTRAINT [DF_RDTMOBREC_V_Integer2] DEFAULT ((0)),
+   [V_Integer3] [int] NULL CONSTRAINT [DF_RDTMOBREC_V_Integer3] DEFAULT ((0)),
+   [V_Integer4] [int] NULL CONSTRAINT [DF_RDTMOBREC_V_Integer4] DEFAULT ((0)),
+   [V_Integer5] [int] NULL CONSTRAINT [DF_RDTMOBREC_V_Integer5] DEFAULT ((0)),
+   [V_Integer6] [int] NULL CONSTRAINT [DF_RDTMOBREC_V_Integer6] DEFAULT ((0)),
+   [V_Integer7] [int] NULL CONSTRAINT [DF_RDTMOBREC_V_Integer7] DEFAULT ((0)),
+   [V_Integer8] [int] NULL CONSTRAINT [DF_RDTMOBREC_V_Integer8] DEFAULT ((0)),
+   [V_Integer9] [int] NULL CONSTRAINT [DF_RDTMOBREC_V_Integer9] DEFAULT ((0)),
+   [V_Integer10] [int] NULL CONSTRAINT [DF_RDTMOBREC_V_Integer10] DEFAULT ((0)),
+   [V_Integer11] [int] NULL CONSTRAINT [DF_RDTMOBREC_V_Integer11] DEFAULT ((0)),
+   [V_Integer12] [int] NULL CONSTRAINT [DF_RDTMOBREC_V_Integer12] DEFAULT ((0)),
+   [V_Integer13] [int] NULL CONSTRAINT [DF_RDTMOBREC_V_Integer13] DEFAULT ((0)),
+   [V_Integer14] [int] NULL CONSTRAINT [DF_RDTMOBREC_V_Integer14] DEFAULT ((0)),
+   [V_Integer15] [int] NULL CONSTRAINT [DF_RDTMOBREC_V_Integer15] DEFAULT ((0)),
+   [V_DateTime1] [datetime] NULL CONSTRAINT [DF_RDTMOBREC_V_DateTime1] DEFAULT (NULL),
+   [V_DateTime2] [datetime] NULL CONSTRAINT [DF_RDTMOBREC_V_DateTime2] DEFAULT (NULL),
+   [V_DateTime3] [datetime] NULL CONSTRAINT [DF_RDTMOBREC_V_DateTime3] DEFAULT (NULL),
+   [V_DateTime4] [datetime] NULL CONSTRAINT [DF_RDTMOBREC_V_DateTime4] DEFAULT (NULL),
+   [V_DateTime5] [datetime] NULL CONSTRAINT [DF_RDTMOBREC_V_DateTime5] DEFAULT (NULL),
+   [I_Field16] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtMobRec_I_Field16] DEFAULT (''),
+   [I_Field17] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtMobRec_I_Field17] DEFAULT (''),
+   [I_Field18] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtMobRec_I_Field18] DEFAULT (''),
+   [I_Field19] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtMobRec_I_Field19] DEFAULT (''),
+   [I_Field20] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtMobRec_I_Field20] DEFAULT (''),
+   [O_Field16] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtMobRec_O_Field16] DEFAULT (''),
+   [O_Field17] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtMobRec_O_Field17] DEFAULT (''),
+   [O_Field18] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtMobRec_O_Field18] DEFAULT (''),
+   [O_Field19] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtMobRec_O_Field19] DEFAULT (''),
+   [O_Field20] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtMobRec_O_Field20] DEFAULT (''),
+   [FieldAttr16] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtMobRec_FieldAttr16] DEFAULT (''),
+   [FieldAttr17] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtMobRec_FieldAttr17] DEFAULT (''),
+   [FieldAttr18] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtMobRec_FieldAttr18] DEFAULT (''),
+   [FieldAttr19] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtMobRec_FieldAttr19] DEFAULT (''),
+   [FieldAttr20] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtMobRec_FieldAttr20] DEFAULT (''),
+   [V_DropID] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RDTMOBREC_V_DropID] DEFAULT (''),
+   [V_SerialNo] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RDTMOBREC_V_SerialNo] DEFAULT (''),
+   [C_String1] [nvarchar] (250) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_C_String1] DEFAULT (''),
+   [C_String2] [nvarchar] (250) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_C_String2] DEFAULT (''),
+   [C_String3] [nvarchar] (250) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_C_String3] DEFAULT (''),
+   [C_String4] [nvarchar] (250) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_C_String4] DEFAULT (''),
+   [C_String5] [nvarchar] (250) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_C_String5] DEFAULT (''),
+   [C_String6] [nvarchar] (250) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_C_String6] DEFAULT (''),
+   [C_String7] [nvarchar] (250) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_C_String7] DEFAULT (''),
+   [C_String8] [nvarchar] (250) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_C_String8] DEFAULT (''),
+   [C_String9] [nvarchar] (250) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_C_String9] DEFAULT (''),
+   [C_String10] [nvarchar] (250) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_C_String10] DEFAULT (''),
+   [C_String11] [nvarchar] (250) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_C_String11] DEFAULT (''),
+   [C_String12] [nvarchar] (250) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_C_String12] DEFAULT (''),
+   [C_String13] [nvarchar] (250) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_C_String13] DEFAULT (''),
+   [C_String14] [nvarchar] (250) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_C_String14] DEFAULT (''),
+   [C_String15] [nvarchar] (250) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_C_String15] DEFAULT (''),
+   [C_String16] [nvarchar] (250) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_C_String16] DEFAULT (''),
+   [C_String17] [nvarchar] (250) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_C_String17] DEFAULT (''),
+   [C_String18] [nvarchar] (250) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_C_String18] DEFAULT (''),
+   [C_String19] [nvarchar] (250) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_C_String19] DEFAULT (''),
+   [C_String20] [nvarchar] (250) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_C_String20] DEFAULT (''),
+   [C_String21] [nvarchar] (250) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_C_String21] DEFAULT (''),
+   [C_String22] [nvarchar] (250) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_C_String22] DEFAULT (''),
+   [C_String23] [nvarchar] (250) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_C_String23] DEFAULT (''),
+   [C_String24] [nvarchar] (250) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_C_String24] DEFAULT (''),
+   [C_String25] [nvarchar] (250) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_C_String25] DEFAULT (''),
+   [C_String26] [nvarchar] (250) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_C_String26] DEFAULT (''),
+   [C_String27] [nvarchar] (250) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_C_String27] DEFAULT (''),
+   [C_String28] [nvarchar] (250) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_C_String28] DEFAULT (''),
+   [C_String29] [nvarchar] (250) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_C_String29] DEFAULT (''),
+   [C_String30] [nvarchar] (250) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_C_String30] DEFAULT (''),
+   [C_Integer1] [int] NULL CONSTRAINT [DF_RDTMOBREC_C_Integer1] DEFAULT ((0)),
+   [C_Integer2] [int] NULL CONSTRAINT [DF_RDTMOBREC_C_Integer2] DEFAULT ((0)),
+   [C_Integer3] [int] NULL CONSTRAINT [DF_RDTMOBREC_C_Integer3] DEFAULT ((0)),
+   [C_Integer4] [int] NULL CONSTRAINT [DF_RDTMOBREC_C_Integer4] DEFAULT ((0)),
+   [C_Integer5] [int] NULL CONSTRAINT [DF_RDTMOBREC_C_Integer5] DEFAULT ((0)),
+   [C_DateTime1] [datetime] NULL CONSTRAINT [DF_RDTMOBREC_C_DateTime1] DEFAULT (NULL),
+   [C_DateTime2] [datetime] NULL CONSTRAINT [DF_RDTMOBREC_C_DateTime2] DEFAULT (NULL),
+   [C_DateTime3] [datetime] NULL CONSTRAINT [DF_RDTMOBREC_C_DateTime3] DEFAULT (NULL),
+   [C_DateTime4] [datetime] NULL CONSTRAINT [DF_RDTMOBREC_C_DateTime4] DEFAULT (NULL),
+   [C_DateTime5] [datetime] NULL CONSTRAINT [DF_RDTMOBREC_C_DateTime5] DEFAULT (NULL)
+   ) ON [PRIMARY]
+
+   ALTER TABLE [RDT].[RDTMOBREC] ADD CONSTRAINT [PK_RDTMOBREC] PRIMARY KEY CLUSTERED ([Mobile]) WITH (FILLFACTOR=90) ON [PRIMARY]
+   CREATE NONCLUSTERED INDEX [IX_rdtMobRec_Username] ON [RDT].[RDTMOBREC] ([UserName]) ON [PRIMARY]
+
+   GRANT DELETE ON  [RDT].[RDTMOBREC] TO [NSQL]
+   GRANT INSERT ON  [RDT].[RDTMOBREC] TO [NSQL]
+   GRANT SELECT ON  [RDT].[RDTMOBREC] TO [NSQL]
+   GRANT UPDATE ON  [RDT].[RDTMOBREC] TO [NSQL]
+   EXEC sp_addextendedproperty N'MS_Description', N'Store Carton No', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_Cartonno'
+   EXEC sp_addextendedproperty N'MS_Description', N'Store DropID Value', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_DropID'
+   EXEC sp_addextendedproperty N'MS_Description', N'Store current screen no before go to next screen', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_FromScn'
+   EXEC sp_addextendedproperty N'MS_Description', N'Store current step no before go to next step', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_FromStep'
+   EXEC sp_addextendedproperty N'MS_Description', N'Store misc integer variable', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_Integer1'
+   EXEC sp_addextendedproperty N'MS_Description', N'Store misc integer variable', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_Integer10'
+   EXEC sp_addextendedproperty N'MS_Description', N'Store misc integer variable', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_Integer11'
+   EXEC sp_addextendedproperty N'MS_Description', N'Store misc integer variable', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_Integer12'
+   EXEC sp_addextendedproperty N'MS_Description', N'Store misc integer variable', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_Integer13'
+   EXEC sp_addextendedproperty N'MS_Description', N'Store misc integer variable', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_Integer14'
+   EXEC sp_addextendedproperty N'MS_Description', N'Store misc integer variable', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_Integer15'
+   EXEC sp_addextendedproperty N'MS_Description', N'Store misc integer variable', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_Integer2'
+   EXEC sp_addextendedproperty N'MS_Description', N'Store misc integer variable', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_Integer3'
+   EXEC sp_addextendedproperty N'MS_Description', N'Store misc integer variable', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_Integer4'
+   EXEC sp_addextendedproperty N'MS_Description', N'Store misc integer variable', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_Integer5'
+   EXEC sp_addextendedproperty N'MS_Description', N'Store misc integer variable', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_Integer6'
+   EXEC sp_addextendedproperty N'MS_Description', N'Store misc integer variable', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_Integer7'
+   EXEC sp_addextendedproperty N'MS_Description', N'Store misc integer variable', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_Integer8'
+   EXEC sp_addextendedproperty N'MS_Description', N'Store misc integer variable', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_Integer9'
+   EXEC sp_addextendedproperty N'MS_Description', N'Store qty in master uom', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_MQTY'
+   EXEC sp_addextendedproperty N'MS_Description', N'Store task qty in master uom', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_MTaskQty'
+   EXEC sp_addextendedproperty N'MS_Description', N'Store qty in prefered uom', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_PQTY'
+   EXEC sp_addextendedproperty N'MS_Description', N'Store task qty in prefered uom ', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_PTaskQty'
+   EXEC sp_addextendedproperty N'MS_Description', N'Store prefered uom configuration', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_PUOM_Div'
+   EXEC sp_addextendedproperty N'MS_Description', 'Serial no', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_SerialNo'
+   EXEC sp_addextendedproperty N'MS_Description', N'Store task qty', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_TaskQTY'
+   EXEC sp_addextendedproperty N'MS_Description', 'WaveKey for RDT session', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_WaveKey'
+END
+ELSE
+BEGIN
+   IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String1')
+      ALTER TABLE RDT.RDTMOBREC ADD C_String1 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String1 DEFAULT('')
+
+   IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String2')
+      ALTER TABLE RDT.RDTMOBREC ADD C_String2 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String2 DEFAULT('')
+
+   IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String3')
+      ALTER TABLE RDT.RDTMOBREC ADD C_String3 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String3 DEFAULT('')
+
+   IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String4')
+      ALTER TABLE RDT.RDTMOBREC ADD C_String4 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String4 DEFAULT('')
+
+   IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String5')
+      ALTER TABLE RDT.RDTMOBREC ADD C_String5 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String5 DEFAULT('')
+
+   IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String6')
+      ALTER TABLE RDT.RDTMOBREC ADD C_String6 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String6 DEFAULT('')
+
+   IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String7')
+      ALTER TABLE RDT.RDTMOBREC ADD C_String7 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String7 DEFAULT('')
+
+   IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String8')
+      ALTER TABLE RDT.RDTMOBREC ADD C_String8 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String8 DEFAULT('')
+
+   IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String9')
+      ALTER TABLE RDT.RDTMOBREC ADD C_String9 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String9 DEFAULT('')
+
+   IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String10')
+      ALTER TABLE RDT.RDTMOBREC ADD C_String10 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String10 DEFAULT('')
+
+   IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String11')
+      ALTER TABLE RDT.RDTMOBREC ADD C_String11 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String11 DEFAULT('')
+
+   IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String12')
+      ALTER TABLE RDT.RDTMOBREC ADD C_String12 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String12 DEFAULT('')
+
+   IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String13')
+      ALTER TABLE RDT.RDTMOBREC ADD C_String13 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String13 DEFAULT('')
+
+   IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String14')
+      ALTER TABLE RDT.RDTMOBREC ADD C_String14 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String14 DEFAULT('')
+
+   IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String15')
+      ALTER TABLE RDT.RDTMOBREC ADD C_String15 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String15 DEFAULT('')
+
+   IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String16')
+      ALTER TABLE RDT.RDTMOBREC ADD C_String16 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String16 DEFAULT('')
+
+   IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String17')
+      ALTER TABLE RDT.RDTMOBREC ADD C_String17 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String17 DEFAULT('')
+
+   IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String18')
+      ALTER TABLE RDT.RDTMOBREC ADD C_String18 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String18 DEFAULT('')
+
+   IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String19')
+      ALTER TABLE RDT.RDTMOBREC ADD C_String19 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String19 DEFAULT('')
+
+   IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String20')
+      ALTER TABLE RDT.RDTMOBREC ADD C_String20 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String20 DEFAULT('')
+
+   IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String21')
+      ALTER TABLE RDT.RDTMOBREC ADD C_String21 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String21 DEFAULT('')
+
+   IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String22')
+      ALTER TABLE RDT.RDTMOBREC ADD C_String22 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String22 DEFAULT('')
+
+   IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String23')
+      ALTER TABLE RDT.RDTMOBREC ADD C_String23 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String23 DEFAULT('')
+
+   IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String24')
+      ALTER TABLE RDT.RDTMOBREC ADD C_String24 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String24 DEFAULT('')
+
+   IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String25')
+      ALTER TABLE RDT.RDTMOBREC ADD C_String25 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String25 DEFAULT('')
+
+   IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String26')
+      ALTER TABLE RDT.RDTMOBREC ADD C_String26 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String26 DEFAULT('')
+
+   IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String27')
+      ALTER TABLE RDT.RDTMOBREC ADD C_String27 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String27 DEFAULT('')
+
+   IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String28')
+      ALTER TABLE RDT.RDTMOBREC ADD C_String28 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String28 DEFAULT('')
+
+   IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String29')
+      ALTER TABLE RDT.RDTMOBREC ADD C_String29 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String29 DEFAULT('')
+
+   IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String30')
+      ALTER TABLE RDT.RDTMOBREC ADD C_String30 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String30 DEFAULT('')
+
+   -- rdtMobRec.C_Integer1
+   IF NOT EXISTS( SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'rdtMobRec' AND COLUMN_NAME = 'C_Integer1')
+      ALTER TABLE rdt.rdtMobRec ADD C_Integer1 INT NOT NULL CONSTRAINT DF_rdtMobRec_C_Integer1 DEFAULT (0) WITH VALUES
+
+   -- rdtMobRec.C_Integer2
+   IF NOT EXISTS( SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'rdtMobRec' AND COLUMN_NAME = 'C_Integer2')
+      ALTER TABLE rdt.rdtMobRec ADD C_Integer2 INT NOT NULL CONSTRAINT DF_rdtMobRec_C_Integer2 DEFAULT (0) WITH VALUES
+
+   -- rdtMobRec.C_Integer3
+   IF NOT EXISTS( SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'rdtMobRec' AND COLUMN_NAME = 'C_Integer3')
+      ALTER TABLE rdt.rdtMobRec ADD C_Integer3 INT NOT NULL CONSTRAINT DF_rdtMobRec_C_Integer3 DEFAULT (0) WITH VALUES
+
+   -- rdtMobRec.C_Integer4
+   IF NOT EXISTS( SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'rdtMobRec' AND COLUMN_NAME = 'C_Integer4')
+      ALTER TABLE rdt.rdtMobRec ADD C_Integer4 INT NOT NULL CONSTRAINT DF_rdtMobRec_C_Integer4 DEFAULT (0) WITH VALUES
+
+   -- rdtMobRec.C_Integer5
+   IF NOT EXISTS( SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'rdtMobRec' AND COLUMN_NAME = 'C_Integer5')
+      ALTER TABLE rdt.rdtMobRec ADD C_Integer5 INT NOT NULL CONSTRAINT DF_rdtMobRec_C_Integer5 DEFAULT (0) WITH VALUES
+
+   -- rdtMobRec.C_DateTime1
+   IF NOT EXISTS( SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'rdtMobRec' AND COLUMN_NAME = 'C_DateTime1')
+      ALTER TABLE rdt.rdtMobRec ADD C_DateTime1 DATETIME NULL CONSTRAINT DF_rdtMobRec_C_DateTime1 DEFAULT (NULL) WITH VALUES
+
+   -- rdtMobRec.C_DateTime2
+   IF NOT EXISTS( SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'rdtMobRec' AND COLUMN_NAME = 'C_DateTime2')
+      ALTER TABLE rdt.rdtMobRec ADD C_DateTime2 DATETIME NULL CONSTRAINT DF_rdtMobRec_C_DateTime2 DEFAULT (NULL) WITH VALUES
+
+   -- rdtMobRec.C_DateTime3
+   IF NOT EXISTS( SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'rdtMobRec' AND COLUMN_NAME = 'C_DateTime3')
+      ALTER TABLE rdt.rdtMobRec ADD C_DateTime3 DATETIME NULL CONSTRAINT DF_rdtMobRec_C_DateTime3 DEFAULT (NULL) WITH VALUES
+
+   -- rdtMobRec.C_DateTime4
+   IF NOT EXISTS( SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'rdtMobRec' AND COLUMN_NAME = 'C_DateTime4')
+      ALTER TABLE rdt.rdtMobRec ADD C_DateTime4 DATETIME NULL CONSTRAINT DF_rdtMobRec_C_DateTime4 DEFAULT (NULL) WITH VALUES
+
+   -- rdtMobRec.C_DateTime5
+   IF NOT EXISTS( SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'rdtMobRec' AND COLUMN_NAME = 'C_DateTime5')
+      ALTER TABLE rdt.rdtMobRec ADD C_DateTime5 DATETIME NULL CONSTRAINT DF_rdtMobRec_C_DateTime5 DEFAULT (NULL) WITH VALUES
+END
 GO
 SET QUOTED_IDENTIFIER ON
 GO
 SET ANSI_NULLS ON
+GO
+
+IF OBJECT_ID ('RDT.ntrRDTMobRecDelete', 'TR') IS NOT NULL  
+   DROP TRIGGER [RDT].[ntrRDTMobRecDelete]
 GO
 
 CREATE  TRIGGER [RDT].[ntrRDTMobRecDelete] ON [RDT].[RDTMOBREC] 
@@ -274,7 +490,9 @@ GO
 /* 28-Oct-2013  TLTING    1.5 Review Editdate column update             */
 /* 28-Mar-2015  James     1.6 SOS330761-Fix fieldattr not reset(james02)*/
 /************************************************************************/
-
+IF OBJECT_ID ('RDT.ntrRDTMobRecUpdate', 'TR') IS NOT NULL  
+   DROP TRIGGER [RDT].[ntrRDTMobRecUpdate]
+GO
 CREATE TRIGGER [RDT].[ntrRDTMobRecUpdate]
 ON [RDT].[RDTMOBREC]
 FOR UPDATE
@@ -377,210 +595,4 @@ BEGIN
       END
    END
 END
-GO
-ALTER TABLE [RDT].[RDTMOBREC] ADD CONSTRAINT [PK_RDTMOBREC] PRIMARY KEY CLUSTERED ([Mobile]) WITH (FILLFACTOR=90) ON [PRIMARY]
-GO
-CREATE NONCLUSTERED INDEX [IX_rdtMobRec_Username] ON [RDT].[RDTMOBREC] ([UserName]) ON [PRIMARY]
-GO
-GRANT DELETE ON  [RDT].[RDTMOBREC] TO [NSQL]
-GO
-GRANT INSERT ON  [RDT].[RDTMOBREC] TO [NSQL]
-GO
-GRANT SELECT ON  [RDT].[RDTMOBREC] TO [NSQL]
-GO
-GRANT UPDATE ON  [RDT].[RDTMOBREC] TO [NSQL]
-GO
-EXEC sp_addextendedproperty N'MS_Description', N'Store Carton No', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_Cartonno'
-GO
-EXEC sp_addextendedproperty N'MS_Description', N'Store DropID Value', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_DropID'
-GO
-EXEC sp_addextendedproperty N'MS_Description', N'Store current screen no before go to next screen', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_FromScn'
-GO
-EXEC sp_addextendedproperty N'MS_Description', N'Store current step no before go to next step', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_FromStep'
-GO
-EXEC sp_addextendedproperty N'MS_Description', N'Store misc integer variable', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_Integer1'
-GO
-EXEC sp_addextendedproperty N'MS_Description', N'Store misc integer variable', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_Integer10'
-GO
-EXEC sp_addextendedproperty N'MS_Description', N'Store misc integer variable', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_Integer11'
-GO
-EXEC sp_addextendedproperty N'MS_Description', N'Store misc integer variable', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_Integer12'
-GO
-EXEC sp_addextendedproperty N'MS_Description', N'Store misc integer variable', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_Integer13'
-GO
-EXEC sp_addextendedproperty N'MS_Description', N'Store misc integer variable', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_Integer14'
-GO
-EXEC sp_addextendedproperty N'MS_Description', N'Store misc integer variable', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_Integer15'
-GO
-EXEC sp_addextendedproperty N'MS_Description', N'Store misc integer variable', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_Integer2'
-GO
-EXEC sp_addextendedproperty N'MS_Description', N'Store misc integer variable', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_Integer3'
-GO
-EXEC sp_addextendedproperty N'MS_Description', N'Store misc integer variable', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_Integer4'
-GO
-EXEC sp_addextendedproperty N'MS_Description', N'Store misc integer variable', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_Integer5'
-GO
-EXEC sp_addextendedproperty N'MS_Description', N'Store misc integer variable', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_Integer6'
-GO
-EXEC sp_addextendedproperty N'MS_Description', N'Store misc integer variable', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_Integer7'
-GO
-EXEC sp_addextendedproperty N'MS_Description', N'Store misc integer variable', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_Integer8'
-GO
-EXEC sp_addextendedproperty N'MS_Description', N'Store misc integer variable', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_Integer9'
-GO
-EXEC sp_addextendedproperty N'MS_Description', N'Store qty in master uom', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_MQTY'
-GO
-EXEC sp_addextendedproperty N'MS_Description', N'Store task qty in master uom', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_MTaskQty'
-GO
-EXEC sp_addextendedproperty N'MS_Description', N'Store qty in prefered uom', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_PQTY'
-GO
-EXEC sp_addextendedproperty N'MS_Description', N'Store task qty in prefered uom ', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_PTaskQty'
-GO
-EXEC sp_addextendedproperty N'MS_Description', N'Store prefered uom configuration', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_PUOM_Div'
-GO
-EXEC sp_addextendedproperty N'MS_Description', 'Serial no', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_SerialNo'
-GO
-EXEC sp_addextendedproperty N'MS_Description', N'Store task qty', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_TaskQTY'
-GO
-EXEC sp_addextendedproperty N'MS_Description', 'WaveKey for RDT session', 'SCHEMA', N'RDT', 'TABLE', N'RDTMOBREC', 'COLUMN', N'V_WaveKey'
-GO
-
-IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String1')
-   ALTER TABLE RDT.RDTMOBREC ADD C_String1 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String1 DEFAULT('')
-GO
-IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String2')
-   ALTER TABLE RDT.RDTMOBREC ADD C_String2 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String2 DEFAULT('')
-GO
-IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String3')
-   ALTER TABLE RDT.RDTMOBREC ADD C_String3 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String3 DEFAULT('')
-GO
-IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String4')
-   ALTER TABLE RDT.RDTMOBREC ADD C_String4 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String4 DEFAULT('')
-GO
-IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String5')
-   ALTER TABLE RDT.RDTMOBREC ADD C_String5 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String5 DEFAULT('')
-GO
-IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String6')
-   ALTER TABLE RDT.RDTMOBREC ADD C_String6 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String6 DEFAULT('')
-GO
-IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String7')
-   ALTER TABLE RDT.RDTMOBREC ADD C_String7 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String7 DEFAULT('')
-GO
-IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String8')
-   ALTER TABLE RDT.RDTMOBREC ADD C_String8 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String8 DEFAULT('')
-GO
-IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String9')
-   ALTER TABLE RDT.RDTMOBREC ADD C_String9 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String9 DEFAULT('')
-GO
-IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String10')
-   ALTER TABLE RDT.RDTMOBREC ADD C_String10 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String10 DEFAULT('')
-GO
-IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String11')
-   ALTER TABLE RDT.RDTMOBREC ADD C_String11 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String11 DEFAULT('')
-GO
-IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String12')
-   ALTER TABLE RDT.RDTMOBREC ADD C_String12 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String12 DEFAULT('')
-GO
-IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String13')
-   ALTER TABLE RDT.RDTMOBREC ADD C_String13 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String13 DEFAULT('')
-GO
-IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String14')
-   ALTER TABLE RDT.RDTMOBREC ADD C_String14 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String14 DEFAULT('')
-GO
-IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String15')
-   ALTER TABLE RDT.RDTMOBREC ADD C_String15 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String15 DEFAULT('')
-GO
-IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String16')
-   ALTER TABLE RDT.RDTMOBREC ADD C_String16 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String16 DEFAULT('')
-GO
-IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String17')
-   ALTER TABLE RDT.RDTMOBREC ADD C_String17 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String17 DEFAULT('')
-GO
-IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String18')
-   ALTER TABLE RDT.RDTMOBREC ADD C_String18 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String18 DEFAULT('')
-GO
-IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String19')
-   ALTER TABLE RDT.RDTMOBREC ADD C_String19 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String19 DEFAULT('')
-GO
-IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String20')
-   ALTER TABLE RDT.RDTMOBREC ADD C_String20 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String20 DEFAULT('')
-GO
-IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String21')
-   ALTER TABLE RDT.RDTMOBREC ADD C_String21 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String21 DEFAULT('')
-GO
-IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String22')
-   ALTER TABLE RDT.RDTMOBREC ADD C_String22 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String22 DEFAULT('')
-GO
-IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String23')
-   ALTER TABLE RDT.RDTMOBREC ADD C_String23 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String23 DEFAULT('')
-GO
-IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String24')
-   ALTER TABLE RDT.RDTMOBREC ADD C_String24 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String24 DEFAULT('')
-GO
-IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String25')
-   ALTER TABLE RDT.RDTMOBREC ADD C_String25 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String25 DEFAULT('')
-GO
-IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String26')
-   ALTER TABLE RDT.RDTMOBREC ADD C_String26 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String26 DEFAULT('')
-GO
-IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String27')
-   ALTER TABLE RDT.RDTMOBREC ADD C_String27 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String27 DEFAULT('')
-GO
-IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String28')
-   ALTER TABLE RDT.RDTMOBREC ADD C_String28 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String28 DEFAULT('')
-GO
-IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String29')
-   ALTER TABLE RDT.RDTMOBREC ADD C_String29 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String29 DEFAULT('')
-GO
-IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'C_String30')
-   ALTER TABLE RDT.RDTMOBREC ADD C_String30 NVARCHAR(250)  NULL CONSTRAINT DF_RDTMOBREC_C_String30 DEFAULT('')
-GO
--- rdtMobRec.C_Integer1
-IF NOT EXISTS( SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'rdtMobRec' AND COLUMN_NAME = 'C_Integer1')
-   ALTER TABLE rdt.rdtMobRec ADD C_Integer1 INT NOT NULL CONSTRAINT DF_rdtMobRec_C_Integer1 DEFAULT (0) WITH VALUES
-GO
-
--- rdtMobRec.C_Integer2
-IF NOT EXISTS( SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'rdtMobRec' AND COLUMN_NAME = 'C_Integer2')
-   ALTER TABLE rdt.rdtMobRec ADD C_Integer2 INT NOT NULL CONSTRAINT DF_rdtMobRec_C_Integer2 DEFAULT (0) WITH VALUES
-GO
-
--- rdtMobRec.C_Integer3
-IF NOT EXISTS( SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'rdtMobRec' AND COLUMN_NAME = 'C_Integer3')
-   ALTER TABLE rdt.rdtMobRec ADD C_Integer3 INT NOT NULL CONSTRAINT DF_rdtMobRec_C_Integer3 DEFAULT (0) WITH VALUES
-GO
-
--- rdtMobRec.C_Integer4
-IF NOT EXISTS( SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'rdtMobRec' AND COLUMN_NAME = 'C_Integer4')
-   ALTER TABLE rdt.rdtMobRec ADD C_Integer4 INT NOT NULL CONSTRAINT DF_rdtMobRec_C_Integer4 DEFAULT (0) WITH VALUES
-GO
-
--- rdtMobRec.C_Integer5
-IF NOT EXISTS( SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'rdtMobRec' AND COLUMN_NAME = 'C_Integer5')
-   ALTER TABLE rdt.rdtMobRec ADD C_Integer5 INT NOT NULL CONSTRAINT DF_rdtMobRec_C_Integer5 DEFAULT (0) WITH VALUES
-GO
-
--- rdtMobRec.C_DateTime1
-IF NOT EXISTS( SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'rdtMobRec' AND COLUMN_NAME = 'C_DateTime1')
-   ALTER TABLE rdt.rdtMobRec ADD C_DateTime1 DATETIME NULL CONSTRAINT DF_rdtMobRec_C_DateTime1 DEFAULT (NULL) WITH VALUES
-GO
-
--- rdtMobRec.C_DateTime2
-IF NOT EXISTS( SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'rdtMobRec' AND COLUMN_NAME = 'C_DateTime2')
-   ALTER TABLE rdt.rdtMobRec ADD C_DateTime2 DATETIME NULL CONSTRAINT DF_rdtMobRec_C_DateTime2 DEFAULT (NULL) WITH VALUES
-GO
-
--- rdtMobRec.C_DateTime3
-IF NOT EXISTS( SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'rdtMobRec' AND COLUMN_NAME = 'C_DateTime3')
-   ALTER TABLE rdt.rdtMobRec ADD C_DateTime3 DATETIME NULL CONSTRAINT DF_rdtMobRec_C_DateTime3 DEFAULT (NULL) WITH VALUES
-GO
-
--- rdtMobRec.C_DateTime4
-IF NOT EXISTS( SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'rdtMobRec' AND COLUMN_NAME = 'C_DateTime4')
-   ALTER TABLE rdt.rdtMobRec ADD C_DateTime4 DATETIME NULL CONSTRAINT DF_rdtMobRec_C_DateTime4 DEFAULT (NULL) WITH VALUES
-GO
-
--- rdtMobRec.C_DateTime5
-IF NOT EXISTS( SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'rdtMobRec' AND COLUMN_NAME = 'C_DateTime5')
-   ALTER TABLE rdt.rdtMobRec ADD C_DateTime5 DATETIME NULL CONSTRAINT DF_rdtMobRec_C_DateTime5 DEFAULT (NULL) WITH VALUES
 GO

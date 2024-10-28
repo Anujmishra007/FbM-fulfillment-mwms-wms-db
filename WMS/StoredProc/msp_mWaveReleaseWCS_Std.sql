@@ -27,6 +27,8 @@ GO
 /* 2024-04-09   Wan03   1.3   UWP-12854-Order Include-ChilePuma          */
 /* 2024-04-26   SSA01   1.4   UWP-12854-Partial Allocate Order Include - */
 /*                                     ChilePuma                         */
+/* 2024-09-26   SSA02   1.5   UWP-24265-Puma - Wave Release update       */
+/* 2024-09-26   SSA03   1.6   UWP-24265-Puma - Removed alias variable    */
 /*************************************************************************/   
 CREATE OR ALTER PROCEDURE [dbo].[msp_mWaveReleaseWCS_Std]      
   @c_Wavekey      NVARCHAR(10)  
@@ -64,7 +66,8 @@ CREATE OR ALTER PROCEDURE [dbo].[msp_mWaveReleaseWCS_Std]
           , @c_SQL               NVARCHAR(1000)= ''                                 --(Wan03)
           , @c_SQLParms          NVARCHAR(1000)= ''                                 --(Wan03)
           , @c_ConditionQuery    NVARCHAR(1000)= ''                                 --(Wan03)
-          
+          , @c_EcomSingleFlag    NVARCHAR(1)= ''                                    --(SSA02)
+          , @c_DocType           NVARCHAR(1)= 'N'                                   --(SSA02)
           , @cur_OPENORD         CURSOR
 
    IF OBJECT_ID('tempdb..#tORDERS') IS NOT NULL                                     --(Wan03) - START                             
@@ -75,6 +78,8 @@ CREATE OR ALTER PROCEDURE [dbo].[msp_mWaveReleaseWCS_Std]
    CREATE TABLE #tORDERS
       (  RowID          INT            NOT NULL IDENTITY(1,1)  PRIMARY KEY
       ,  Orderkey       NVARCHAR(10)   NOT NULL DEFAULT('')
+      ,  ECOM_SINGLE_Flag NVARCHAR(1)   NOT NULL DEFAULT('')                        --(SSA02)
+      ,  DocType NVARCHAR(1)   NOT NULL DEFAULT('N')                                --(SSA02)
       )                                                                             --(Wan03) - END   
 
    SELECT TOP 1 
@@ -108,9 +113,9 @@ CREATE OR ALTER PROCEDURE [dbo].[msp_mWaveReleaseWCS_Std]
     
    IF @c_CfgWCS = '1'
    BEGIN
-      SET @c_SQL = N'SELECT ORDERS.OrderKey'
+      SET @c_SQL = N'SELECT ORDERS.OrderKey, ORDERS.ECOM_SINGLE_Flag, ORDERS.DocType'         --(SSA02),(SSA03)
                  + ' FROM dbo.WAVEDETAIL (NOLOCK)'
-                 + ' JOIN ORDERS (NOLOCK) ON ORDERS.OrderKey = WAVEDETAIL.OrderKey'
+                 + ' JOIN ORDERS (NOLOCK) ON ORDERS.OrderKey = WAVEDETAIL.OrderKey' --(SSA02)
                  + ' WHERE WAVEDETAIL.WaveKey = @c_Wavekey'
                  + ' AND ORDERS.[Status] IN (@c_OrderStatus,@c_PartialOrderStatus)'     --(SSA01)
 
@@ -120,45 +125,75 @@ CREATE OR ALTER PROCEDURE [dbo].[msp_mWaveReleaseWCS_Std]
                       + ',@c_OrderStatus  NVARCHAR(10)'
                       + ',@c_PartialOrderStatus  NVARCHAR(10)'         --(SSA01)
 
-      INSERT INTO #tORDERS ( Orderkey ) 
+      INSERT INTO #tORDERS ( Orderkey, ECOM_SINGLE_Flag, DocType)      --(SSA02)
       EXEC sp_ExecuteSQL @c_SQL
                      ,@c_SQLParms
                      ,@c_Wavekey
                      ,@c_OrderStatus
-                     ,@c_PartialOrderStatus                        --(SSA01)
+                     ,@c_PartialOrderStatus                            --(SSA01)
 
       SET @cur_OPENORD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-      SELECT o.Orderkey
+      SELECT o.Orderkey, o.ECOM_SINGLE_Flag, o.DocType                              --(SSA02)
       FROM #tORDERS o
       ORDER BY o.RowID                                                              --(Wan03) - END
          
       OPEN @cur_OPENORD
       
-      FETCH NEXT FROM @cur_OPENORD INTO @c_OrderKey
+      FETCH NEXT FROM @cur_OPENORD INTO @c_OrderKey, @c_EcomSingleFlag, @c_DocType     --(SSA02)
       
       WHILE @@FETCH_STATUS <> -1 AND @n_Continue = 1
       BEGIN
-         SET @c_TableName = 'WSORDCFM'                                              --(Wan02)
-         SET @c_Key1 = @c_OrderKey
-         SET @c_Key2 = @c_Wavekey
-         SET @c_Key3 = @c_Storerkey                                                 --(wan02)
-         
-         EXEC dbo.ispGenTransmitLog2
-               @c_TableName   = @c_TableName
-            ,  @c_Key1        = @c_Key1
-            ,  @c_Key2        = @c_Key2
-            ,  @c_Key3        = @c_Key3
-            ,  @c_TransmitBatch = @c_TransmitBatch 
-            ,  @b_Success     = @b_Success
-            ,  @n_err         = @n_err
-            ,  @c_errmsg      = @c_errmsg
-         
-         IF @b_Success = 0
+        IF @c_EcomSingleFlag = 'M' AND @c_DocType = 'E'                                --(SSA02)
+           BEGIN
+             SET @c_TableName = 'WSORDCFM'                                              --(Wan02)
+             SET @c_Key1 = @c_OrderKey
+             SET @c_Key2 = @c_Wavekey
+             SET @c_Key3 = @c_Storerkey                                                 --(wan02)
+
+             EXEC dbo.ispGenTransmitLog2
+                   @c_TableName   = @c_TableName
+                ,  @c_Key1        = @c_Key1
+                ,  @c_Key2        = @c_Key2
+                ,  @c_Key3        = @c_Key3
+                ,  @c_TransmitBatch = @c_TransmitBatch
+                ,  @b_Success     = @b_Success
+                ,  @n_err         = @n_err
+                ,  @c_errmsg      = @c_errmsg
+
+             IF @b_Success = 0
+             BEGIN
+                SET @n_Continue = 3
+             END
+             SET @b_RelWSWVCHKPTW = 1                                                   --(Wan03)
+          END
+         ----(SSA02) start ---
+        ELSE
          BEGIN
-            SET @n_Continue = 3
+            IF @n_Continue = 1 AND @c_DocType = 'N'
+              BEGIN
+                 SET @c_TableName = 'WSORDCFMlb'
+                 SET @c_Key1 = @c_OrderKey
+                 SET @c_Key2 = @c_Wavekey
+                 SET @c_Key3 = @c_Storerkey
+
+                 EXEC dbo.ispGenTransmitLog2
+                       @c_TableName   = @c_TableName
+                    ,  @c_Key1        = @c_Key1
+                    ,  @c_Key2        = @c_Key2
+                    ,  @c_Key3        = @c_Key3
+                    ,  @c_TransmitBatch = @c_TransmitBatch
+                    ,  @b_Success     = @b_Success
+                    ,  @n_err         = @n_err
+                    ,  @c_errmsg      = @c_errmsg
+
+                 IF @b_Success = 0
+                 BEGIN
+                    SET @n_Continue = 3
+                 END
+              END
          END
-         SET @b_RelWSWVCHKPTW = 1                                                   --(Wan03) 
-         FETCH NEXT FROM @cur_OPENORD INTO @c_OrderKey   
+         ----(SSA02) End--
+         FETCH NEXT FROM @cur_OPENORD INTO @c_OrderKey, @c_EcomSingleFlag, @c_DocType      --(SSA02)
       END
       CLOSE @cur_OPENORD
       DEALLOCATE @cur_OPENORD

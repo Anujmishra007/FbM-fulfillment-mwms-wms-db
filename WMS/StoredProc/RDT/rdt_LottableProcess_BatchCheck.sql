@@ -62,19 +62,21 @@ BEGIN
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
-   DECLARE @cLottableV   NVARCHAR(30)
+   DECLARE @cLottableV  NVARCHAR(30)
    DECLARE @nLength     INT
    DECLARE @nDays       INT
    DECLARE @cYearCode   NVARCHAR(4)
    DECLARE @nYear       INT
    DECLARE @nShelfLife  INT
    DECLARE @cFacility   NVARCHAR( 5)
+   DECLARE @cString     VARCHAR(20)                -- use field rdt.RDTMOBREC.C_String1
+   DECLARE @nCount      INT
+
+   SELECT @cString = C_String1 FROM rdt.RDTMOBREC (NOLOCK) WHERE Mobile = @nMobile
 
    SELECT @cFacility  = Facility FROM RDT.RDTMOBREC WITH (NOLOCK) WHERE Mobile = @nMobile
    DECLARE @cBatchCheck NVARCHAR(20)
-   SELECT @cBatchCheck = SValue
-         FROM rdt.StorerConfig (NOLOCK)
-         WHERE Function_ID = @nFunc AND StorerKey = @cStorerKey AND ConfigKey = 'BatchCheck'
+   SELECT  @cBatchCheck= rdt.rdtGetConfig(@nFunc,'BatchCheck',@cStorerKey)
    IF ISNULL(@cBatchCheck,'')=''
    BEGIN
       GOTO Quit
@@ -105,16 +107,21 @@ BEGIN
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Invalid Config
       GOTO Quit
    END
-
-   IF @cLottableV='9999'
+   SELECT @cLottableV=ISNULL(@cLottableV,'')
+   IF @cLottableV=''
    BEGIN
-      SELECT @dLottable13=convert(datetime,'31-12-2099',103),@dLottable04=NULL
+      SET @nErrNo = 223704
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Batch Mandatory
       GOTO Quit
    END
-
+   ELSE IF @cLottableV='9999'
+   BEGIN
+      SELECT @dLottable13=CONVERT(DATETIME,'31-12-2099',103)
+      select @dLottable04=NULL where isnumeric(@cString)=0 or @cString='0'
+      GOTO QuitWithRecordCount
+   END
 
    SET @nLength = LEN( @cLottableV)
-
    IF @nLength NOT IN (4,5)
    BEGIN
 	  ----Message 223701 to 223750
@@ -133,7 +140,9 @@ BEGIN
    END
    --first 3 chars, be days of year, should be less than 366
    SELECT @nDays=CONVERT(INT,LEFT(@cLottableV,3))
-   IF @nDays>=366 OR @nDays<0
+   --    in document of Confluence content, the batch no 3214A, the production date should be 2024+321st day = 16th Nov2024.
+   --    days should be dayofyear, and based on 1
+   IF @nDays>366 OR @nDays<=0
    BEGIN
 	  ----Message 223701 to 223750
       SET @nErrNo = 223701
@@ -150,9 +159,14 @@ BEGIN
    SELECT @nShelfLife=ShelfLife FROM SKU WHERE StorerKey=@cStorerKey AND Sku=@cSKU
    SELECT @nYear=CONVERT(INT,@cYearCode)+CONVERT(INT,substring(@cLottableV,4,1))
    SELECT @dLottable13=CONVERT(DATETIME,'01/01/'+CONVERT(VARCHAR(20),@nYear),103)
-   SELECT @dLottable13=DATEADD(DAY,@nDays,@dLottable13)                                --Production Date
+   SELECT @dLottable13=DATEADD(DAY,@nDays-1,@dLottable13)                              --Production Date
    SELECT @dLottable04=DATEADD(DAY,ISNULL(@nShelfLife,0),@dLottable13)                 --Exp Date
-
+QuitWithRecordCount:
+   IF ISNUMERIC(@cString) = 1
+      SET @nCount = CONVERT(INT,@cString) + 1
+   ELSE
+      SET @nCount = 1
+   UPDATE rdt.RDTMOBREC SET C_String1=CONVERT(VARCHAR(20),@nCount) WHERE Mobile = @nMobile
 Quit:
 
 END

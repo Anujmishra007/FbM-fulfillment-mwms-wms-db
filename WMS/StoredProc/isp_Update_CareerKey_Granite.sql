@@ -6,12 +6,12 @@ GO
 
 
 /************************************************************************/
-/* Store Procedure:  isp_Update_CareerKey_Granite						*/
-/* Creation Date:  13-Sep-2024											*/
-/* Copyright: Maersk WMS												*/
+/* Store Procedure:  isp_Update_CareerKey_Granite						            */
+/* Creation Date:  13-Sep-2024											                    */
+/* Copyright: Maersk WMS												                        */
 /* Written by:  USH022                                                  */
-/* JIRA TICKET: UWP-23560	                                            */
-/* Purpose:  To update Orders.ShipperKey From Mbol.CareerKey			*/
+/* JIRA TICKET: UWP-23560	                                              */
+/* Purpose:  To update Orders.ShipperKey From Mbol.CareerKey			      */
 /*                                                                      */
 /* Input Parameters:                                                    */
 /*  @c_WaveKey                                                          */
@@ -72,6 +72,15 @@ BEGIN
 	SELECT @n_StartTranCnt = @@TRANCOUNT;
 
 	BEGIN TRAN;
+
+	IF EXISTS(SELECT 1 FROM MBOL mbol WITH (NOLOCK) WHERE mbol.MBOLKey = @c_MbolKey AND mbol.Status = '9')
+  BEGIN
+        SELECT @n_continue = 3;
+        SELECT @n_err = 63501;
+        SELECT @c_errmsg='NSQL' + CONVERT(char(5), @n_err) + ': Carrier Key cannot be updated for Shipped Status.';
+        GOTO RETURN_SP;
+  END;
+
 	IF NOT EXISTS(SELECT TOP (1) 1 FROM ORDERS O WITH (NOLOCK) WHERE O.MBOLKey = @c_MbolKey)
     BEGIN
         SELECT @n_continue = 3;
@@ -96,14 +105,16 @@ BEGIN
 
 	DECLARE updateShipperKeyCursor CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
 
-		SELECT
-		mbol.CarrierKey, O.Orderkey
-		FROM ORDERS O WITH (NOLOCK) LEFT OUTER JOIN MBOL mbol WITH (NOLOCK)
-		ON O.MBOLKey =  mbol.MbolKey
-		WHERE
-		O.StorerKey = @c_StorerKey AND
-		mbol.MbolKey = @c_MbolKey AND
-		(mbol.CarrierKey is not null AND mbol.CarrierKey <> '')
+	SELECT
+	mbol.CarrierKey, O.Orderkey
+	FROM ORDERS O WITH (NOLOCK)
+	JOIN MBOLDETAIL MD (NOLOCK) ON MD.MBOLKey = O.MBOLKey
+	JOIN MBOL mbol WITH (NOLOCK) ON mbol.MbolKey = MD.MBOLKey
+	WHERE
+	O.StorerKey = @c_StorerKey AND O.Status < '9' AND
+	MD.MbolKey = @c_MbolKey AND
+	(mbol.CarrierKey is not null AND mbol.CarrierKey <> '')
+	GROUP BY mbol.CarrierKey, O.Orderkey
 
 	OPEN updateShipperKeyCursor;
 	FETCH NEXT FROM updateShipperKeyCursor INTO @c_CareerKey, @c_OrderKey

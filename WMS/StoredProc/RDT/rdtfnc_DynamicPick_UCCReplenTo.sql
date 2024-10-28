@@ -18,6 +18,7 @@ GO
 /* 2018-11-01 1.4  Gan        Performance tuning                        */
 /* 2019-10-09 1.5  Chermaine  WMS-10777 Add EventLog                    */
 /* 2023-05-31 1.6  James      WMS-22615 Add UCCWithMultiSKU (james01)   */
+/* 2024-10-02 1.7  NLT013     FCR-939 Correct ExtValidateSP parameters  */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_DynamicPick_UCCReplenTo] (
@@ -90,6 +91,7 @@ DECLARE
    @cExecStatements    NVARCHAR(4000), -- (ChewKP01)
    @cExecArguments     NVARCHAR(4000), -- (ChewKP01)
    @nUCC_RowRef        INT,
+   @tExtValidateData       VariableTable,
 
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),
@@ -371,43 +373,50 @@ BEGIN
       BEGIN
          IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedValidateSP AND type = 'P')
          BEGIN
-            
-            
             SET @cExecStatements = N'EXEC rdt.' + RTRIM( @cExtendedValidateSP) + 
-                                    '   @nMobile               ' +  
-                                    ' , @nFunc                 ' +                   
-                                    ' , @cLangCode             ' +      
-                                    ' , @cFacility             ' +      
-                                    ' , @cStorerKey            ' +      
-                                    ' , @cUCC                  ' +   
-                                    ' , @cToLoc2               ' +    
+                                    '   @nMobile               ' +
+                                    ' , @nFunc                 ' +
+                                    ' , @cLangCode             ' +
+                                    ' , @nStep                 ' +
+                                    ' , @nInputKey             ' +
+                                    ' , @cFacility             ' +
+                                    ' , @cStorerKey            ' +
+                                    ' , @cUCC                  ' +
+                                    ' , @cToLoc                ' +
+                                    ' , @tExtValidateData      ' +
                                     ' , @nErrNo       OUTPUT   ' +
                                     ' , @cErrMSG      OUTPUT   ' 
       
              
             SET @cExecArguments = 
-                      N'@nMobile     int,                    ' +
-                       '@nFunc       int,                    ' +    
-                       '@cLangCode   nvarchar(3),            ' +    
-                       '@cFacility   nvarchar(5),            ' +    
-                       '@cStorerKey  nvarchar(15),           ' +    
-                       '@cUCC        nvarchar(20),           ' +    
-                       '@cToLoc2     nvarchar(10),           ' +
-                       '@nErrNo      int  OUTPUT,            ' +
-                       '@cErrMsg     nvarchar(1024) OUTPUT   ' 
+                      N'@nMobile     INT,                    ' +
+                       '@nFunc       INT,                    ' +    
+                       '@cLangCode   NVARCHAR(3),            ' +    
+                       '@nStep       INT,                    ' +
+                       '@nInputKey   INT,                    ' +
+                       '@cFacility   NVARCHAR(5),            ' +    
+                       '@cStorerKey  NVARCHAR(15),           ' +    
+                       '@cUCC        NVARCHAR(20),           ' +    
+                       '@cToLoc      NVARCHAR(10),           ' +
+                       '@tExtValidateData       VariableTable READONLY,' +
+                       '@nErrNo      INT  OUTPUT,            ' +
+                       '@cErrMsg     NVARCHAR(1024) OUTPUT   ' 
                        
        
             
             EXEC sp_executesql @cExecStatements, @cExecArguments, 
-                                  @nMobile               
-                                , @nFunc                                 
-                                , @cLangCode                    
-                                , @cFacility       
-                                , @cStorerKey               
-                                , @cUCC            
-                                , @cToLoc2 
-                                , @nErrNo       OUTPUT   
-                                , @cErrMSG      OUTPUT   
+                                  @nMobile
+                                , @nFunc
+                                , @cLangCode
+                                , @nStep
+                                , @nInputKey
+                                , @cFacility
+                                , @cStorerKey
+                                , @cUCC
+                                , @cToLoc2
+                                , @tExtValidateData
+                                , @nErrNo       OUTPUT
+                                , @cErrMSG      OUTPUT
          END
          
          IF @nErrNo <> 0 

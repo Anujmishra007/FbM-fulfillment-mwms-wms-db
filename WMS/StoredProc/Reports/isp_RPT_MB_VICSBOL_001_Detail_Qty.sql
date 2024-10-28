@@ -22,6 +22,7 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 18-Jun-2024 WLChooi  1.0   DevOps Combine Script                     */
+/* 04-oCT-2024 CalvinK  1.1   Sum Qty and remove Distinct (CLVN01)      */
 /************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[isp_RPT_MB_VICSBOL_001_Detail_Qty]
 (
@@ -37,7 +38,8 @@ BEGIN
    DECLARE @n_continue  INT = 1
          , @n_StartTCnt INT = @@TRANCOUNT
 
-   SELECT DISTINCT SKU.BUSR3
+   --SELECT DISTINCT SKU.BUSR3 --(CLVN01)
+   SELECT SKU.BUSR3            --(CLVN01)
                  , CASE WHEN ROUND((SUM(SKU.GrossWgt * PD.Qty) / IIF(SUM(SKU.StdCube * PD.Qty) = 0, 1, SUM(SKU.StdCube * PD.Qty))), 0) < 1   THEN '49880/1'
                         WHEN ROUND((SUM(SKU.GrossWgt * PD.Qty) / IIF(SUM(SKU.StdCube * PD.Qty) = 0, 1, SUM(SKU.StdCube * PD.Qty))), 0) < 2   THEN '49880/2'
                         WHEN ROUND((SUM(SKU.GrossWgt * PD.Qty) / IIF(SUM(SKU.StdCube * PD.Qty) = 0, 1, SUM(SKU.StdCube * PD.Qty))), 0) < 4   THEN '49880/3'
@@ -52,6 +54,7 @@ BEGIN
                  , ISNULL(CODELKUP.[Description], SKU.BUSR7) AS [DESCRIPTION]
                  , QTY = PK.TTLCTN
                  , [WEIGHT] = MD.TTLWeight
+   INTO #TEMP --(CLVN01)
    FROM MBOLDETAIL WITH (NOLOCK)
    JOIN LoadPlan WITH (NOLOCK) ON (MBOLDETAIL.LoadKey = LoadPlan.LoadKey)
    JOIN ORDERS WITH (NOLOCK) ON (MBOLDETAIL.OrderKey = ORDERS.OrderKey)
@@ -80,6 +83,11 @@ BEGIN
           , PK.TTLCTN
           , MD.TTLWeight
           , ORDERS.Orderkey
+
+   SELECT BUSR3, NMFC, BUSR7, [DESCRIPTION], SUM(QTY) AS QTY, [WEIGHT] --(CLVN01)
+   FROM #TEMP                                             --(CLVN01)
+   GROUP BY BUSR3, NMFC, BUSR7, [DESCRIPTION], [WEIGHT]               --(CLVN01)
+   
 END -- procedure
 GO
 GRANT EXECUTE ON [dbo].[isp_RPT_MB_VICSBOL_001_Detail_Qty] TO [NSQL]

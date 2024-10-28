@@ -52,6 +52,9 @@ GO
 /* 2024-04-19 4.6  Dennis   UWP-18504 Condition Code Enhancements                */
 /* 2024-07-02 4.7  Cuize    UWP-20470 Custom Auto GenID SSCC                     */
 /* 2024-07-02 4.8  Dennis   FCR-387   Accept Decimal Qty                         */
+/* 2024-09-25 4.9  YYS027   FCR-827   Add ExtendScreen:rdt_600ExtScn03 for       */
+/*                          BatchCheck                                           */
+/* 2024-10-12 4.10 LJQ006   FCR-911   use uom in receiptdetail                   */
 /*********************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_NormalReceipt_V7] (
@@ -142,7 +145,8 @@ DECLARE
    @nPABookingKey       INT,
 
    @cExtendedScreenSP   NVARCHAR( 20),
-   @cExtScnSP   NVARCHAR( 20),
+   @cExtScnSP           NVARCHAR( 20),
+
    @cSuggLOC    NVARCHAR( 20),
    @nAction     INT,
    @nAfterScn   INT,
@@ -2057,6 +2061,65 @@ BEGIN
       IF @nErrNo <> 0
          GOTO Quit
 
+      IF @cExtendedUpdateSP <> '' --(yys027 update C_String1 via rdt_600ExtUpd11)
+      BEGIN
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedUpdateSP AND type = 'P')
+         BEGIN
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cReceiptKey, @cPOKey, @cLOC, @cID, @cSKU, ' +
+               ' @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05, ' +
+               ' @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10, ' +
+               ' @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, ' +
+               ' @nQTY, @cReasonCode, @cSuggToLOC, @cFinalLOC, @cReceiptLineNumber, ' +
+               ' @nErrNo OUTPUT, @cErrMsg OUTPUT'
+            SET @cSQLParam =
+               '@nMobile      INT,           ' +
+               '@nFunc        INT,           ' +
+               '@cLangCode    NVARCHAR( 3),  ' +
+               '@nStep        INT,           ' +
+               '@nInputKey    INT,           ' +
+               '@cFacility    NVARCHAR( 5),  ' +
+               '@cStorerKey   NVARCHAR( 15), ' +
+               '@cReceiptKey  NVARCHAR( 10), ' +
+               '@cPOKey       NVARCHAR( 10), ' +
+               '@cLOC         NVARCHAR( 10), ' +
+               '@cID          NVARCHAR( 18), ' +
+               '@cSKU         NVARCHAR( 20), ' +
+               '@cLottable01  NVARCHAR( 18), ' +
+               '@cLottable02  NVARCHAR( 18), ' +
+               '@cLottable03  NVARCHAR( 18), ' +
+               '@dLottable04  DATETIME,      ' +
+               '@dLottable05  DATETIME,      ' +
+               '@cLottable06  NVARCHAR( 30), ' +
+               '@cLottable07  NVARCHAR( 30), ' +
+               '@cLottable08  NVARCHAR( 30), ' +
+               '@cLottable09  NVARCHAR( 30), ' +
+               '@cLottable10  NVARCHAR( 30), ' +
+               '@cLottable11  NVARCHAR( 30), ' +
+               '@cLottable12  NVARCHAR( 30), ' +
+               '@dLottable13  DATETIME,      ' +
+               '@dLottable14  DATETIME,      ' +
+               '@dLottable15  DATETIME,      ' +
+               '@nQTY         INT,           ' +
+               '@cReasonCode  NVARCHAR( 10), ' +
+               '@cSuggToLOC   NVARCHAR( 10), ' +
+               '@cFinalLOC    NVARCHAR( 10), ' +
+               '@cReceiptLineNumber NVARCHAR( 10), ' +
+               '@nErrNo             INT            OUTPUT, ' +
+               '@cErrMsg            NVARCHAR( 20)  OUTPUT'
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cReceiptKey, @cPOKey, @cLOC, @cID, @cSKU,
+               @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
+               @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
+               @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,
+               @nQTY, @cReasonCode, @cSuggToLOC, @cFinalLOC, @cReceiptLineNumber,
+               @nErrNo OUTPUT, @cErrMsg OUTPUT
+         END   --SP checked
+         IF @nErrno<>0
+            GOTO QUIT
+      END
+      
       IF @nMorePage = 1 -- Yes
       BEGIN
          -- Go to dynamic lottable screen
@@ -2395,7 +2458,9 @@ BEGIN
             ('@cSKU', @cSKU),
             ('@cID', @cID),
             ('@cPUOM_Desc', @cPUOM_Desc),
-            ('@nPUOM_Div', CONCAT(@nPUOM_Div,''))
+            ('@nPUOM_Div', CONCAT(@nPUOM_Div,'')),
+            ('@cMUOM_Desc', @cMUOM_Desc),
+            ('@cReceiptKey', @cReceiptKey)
 
          EXECUTE [RDT].[rdt_ExtScnEntry]
          @cExtScnSP,
@@ -2431,11 +2496,17 @@ BEGIN
          @cUDF28   OUTPUT, @cUDF29  OUTPUT, @cUDF30  OUTPUT
          IF @nErrNo <> 0
             GOTO Quit
-         IF @nStep = 6
+         IF @nStep = 6 AND @cExtScnSP = 'rdt_600ExtScn02'       --if ExtScnSP is not dennis version, skip to use @cUDF01
          BEGIN
             SET @cPUOM_Desc = @cUDF01
             SET @nPUOM_Div = CAST(ISNULL(@cUDF02,1) AS INT)
             SET @cPUOM = @cUDF03
+         END
+         IF @nStep = 6 AND @cExtScnSP = 'rdt_600ExtScn05' AND @cUDF06 = '1'
+         BEGIN
+            SET @cPUOM = @cUDF04
+            SET @nPUOM_Div = CAST(ISNULL(@cUDF05,1) AS INT)
+            SET @cPUOM_Desc = @cUDF07
          END
       END
    END
@@ -2498,6 +2569,65 @@ BEGIN
       
       IF @nMorePage = 1 -- Yes
          GOTO Quit
+
+      --check for stay this step or not
+      SET @cExtScnSP = rdt.RDTGetConfig( @nFunc, 'ExtScnSP', @cStorerkey)
+      IF ISNULL(@cExtScnSP,'')<>''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
+         BEGIN
+            SET @cUDF01=''
+            DELETE FROM @tExtScnData
+            INSERT INTO @tExtScnData (Variable, Value) VALUES
+               ('@cSKU', @cSKU),
+               ('@cID', @cID),
+               ('@cPUOM_Desc', @cPUOM_Desc),
+               ('@nPUOM_Div', CONCAT(@nPUOM_Div,'')),
+               ('@cMUOM_Desc', @cMUOM_Desc),
+               ('@cReceiptKey', @cReceiptKey)            
+            EXECUTE [RDT].[rdt_ExtScnEntry]
+               @cExtScnSP,
+               @nMobile, @nFunc, @cLangCode, @nOri_Step, @nOri_Scn, @nInputKey, @cFacility, @cStorerKey, @tExtScnData ,
+               @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01  OUTPUT,
+               @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02  OUTPUT,
+               @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03  OUTPUT,
+               @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04  OUTPUT,
+               @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  @dLottable05  OUTPUT,
+               @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  @cLottable06  OUTPUT,
+               @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  @cLottable07  OUTPUT,
+               @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  @cLottable08  OUTPUT,
+               @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  @cLottable09  OUTPUT,
+               @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  @cLottable10  OUTPUT,
+               @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  @cLottable11  OUTPUT,
+               @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT,  @cLottable12  OUTPUT,
+               @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  @dLottable13  OUTPUT,
+               @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT,  @dLottable14  OUTPUT,
+               @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT,  @dLottable15  OUTPUT,
+               @nAction,
+               @nAfterScn OUTPUT,  @nAfterStep OUTPUT,
+               @nErrNo   OUTPUT,
+               @cErrMsg  OUTPUT,
+               @cUDF01   OUTPUT, @cUDF02  OUTPUT, @cUDF03  OUTPUT,
+               @cUDF04   OUTPUT, @cUDF05  OUTPUT, @cUDF06  OUTPUT,
+               @cUDF07   OUTPUT, @cUDF08  OUTPUT, @cUDF09  OUTPUT,
+               @cUDF10   OUTPUT, @cUDF11  OUTPUT, @cUDF12  OUTPUT,
+               @cUDF13   OUTPUT, @cUDF14  OUTPUT, @cUDF15  OUTPUT,
+               @cUDF16   OUTPUT, @cUDF17  OUTPUT, @cUDF18  OUTPUT,
+               @cUDF19   OUTPUT, @cUDF20  OUTPUT, @cUDF21  OUTPUT,
+               @cUDF22   OUTPUT, @cUDF23  OUTPUT, @cUDF24  OUTPUT,
+               @cUDF25   OUTPUT, @cUDF26  OUTPUT, @cUDF27  OUTPUT,
+               @cUDF28   OUTPUT, @cUDF29  OUTPUT, @cUDF30  OUTPUT
+
+            IF @nErrNo <> 0
+               GOTO Step_5_Fail
+            IF @nAfterStep = 5
+            BEGIN
+               --to solve the error Invalid length parameter passed to the LEFT or SUBSTRING function.
+               SELECT @cOutField15=@cOutField15Backup
+               GOTO Quit
+            END
+         END
+      END
 
       SET @cExtendedScreenSP =  ISNULL(rdt.RDTGetConfig( @nFunc, 'ExtendedScreenSP', @cStorerKey), '')
       SET @nAction = 1
@@ -2826,7 +2956,9 @@ BEGIN
             ('@cID', @cID),
             ('@cPUOM_Desc', @cPUOM_Desc),
             ('@ctemp_OutField15', @ctemp_OutField15),
-            ('@nPUOM_Div', CONCAT(@nPUOM_Div,''))
+            ('@nPUOM_Div', CONCAT(@nPUOM_Div,'')),
+            ('@cMUOM_Desc', @cMUOM_Desc),
+            ('@cReceiptKey', @cReceiptKey) 
 
          EXECUTE [RDT].[rdt_ExtScnEntry]
          @cExtScnSP,
@@ -2887,11 +3019,17 @@ BEGIN
                @nFunc
             GOTO Quit
          END
-         IF @nStep = 6
+         IF @nStep = 6 AND @cExtScnSP = 'rdt_600ExtScn02'             --if ExtScnSP is not dennis version, skip to use @cUDF01
          BEGIN
             SET @cPUOM_Desc = @cUDF01
             SET @nPUOM_Div = CAST(ISNULL(@cUDF02,1) AS INT)
             SET @cPUOM = @cUDF03
+         END
+         IF @nStep = 6 AND @cExtScnSP = 'rdt_600ExtScn05' AND @cUDF06 = '1'
+         BEGIN
+            SET @cPUOM = @cUDF04
+            SET @nPUOM_Div = CAST(ISNULL(@cUDF05,1) AS INT)
+            SET @cPUOM_Desc = @cUDF07
          END
       END
    END
@@ -3435,6 +3573,65 @@ BEGIN
       IF @nErrNo <> 0
          GOTO Quit
 
+      IF @cExtendedUpdateSP <> '' --(yys027 update 0 into C_String1 via rdt_600ExtUpd11)
+      BEGIN
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedUpdateSP AND type = 'P')
+         BEGIN
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cReceiptKey, @cPOKey, @cLOC, @cID, @cSKU, ' +
+               ' @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05, ' +
+               ' @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10, ' +
+               ' @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, ' +
+               ' @nQTY, @cReasonCode, @cSuggToLOC, @cFinalLOC, @cReceiptLineNumber, ' +
+               ' @nErrNo OUTPUT, @cErrMsg OUTPUT'
+            SET @cSQLParam =
+               '@nMobile      INT,           ' +
+               '@nFunc        INT,           ' +
+               '@cLangCode    NVARCHAR( 3),  ' +
+               '@nStep        INT,           ' +
+               '@nInputKey    INT,           ' +
+               '@cFacility    NVARCHAR( 5),  ' +
+               '@cStorerKey   NVARCHAR( 15), ' +
+               '@cReceiptKey  NVARCHAR( 10), ' +
+               '@cPOKey       NVARCHAR( 10), ' +
+               '@cLOC         NVARCHAR( 10), ' +
+               '@cID          NVARCHAR( 18), ' +
+               '@cSKU         NVARCHAR( 20), ' +
+               '@cLottable01  NVARCHAR( 18), ' +
+               '@cLottable02  NVARCHAR( 18), ' +
+               '@cLottable03  NVARCHAR( 18), ' +
+               '@dLottable04  DATETIME,      ' +
+               '@dLottable05  DATETIME,      ' +
+               '@cLottable06  NVARCHAR( 30), ' +
+               '@cLottable07  NVARCHAR( 30), ' +
+               '@cLottable08  NVARCHAR( 30), ' +
+               '@cLottable09  NVARCHAR( 30), ' +
+               '@cLottable10  NVARCHAR( 30), ' +
+               '@cLottable11  NVARCHAR( 30), ' +
+               '@cLottable12  NVARCHAR( 30), ' +
+               '@dLottable13  DATETIME,      ' +
+               '@dLottable14  DATETIME,      ' +
+               '@dLottable15  DATETIME,      ' +
+               '@nQTY         INT,           ' +
+               '@cReasonCode  NVARCHAR( 10), ' +
+               '@cSuggToLOC   NVARCHAR( 10), ' +
+               '@cFinalLOC    NVARCHAR( 10), ' +
+               '@cReceiptLineNumber NVARCHAR( 10), ' +
+               '@nErrNo             INT            OUTPUT, ' +
+               '@cErrMsg            NVARCHAR( 20)  OUTPUT'
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cReceiptKey, @cPOKey, @cLOC, @cID, @cSKU,
+               @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
+               @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
+               @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,
+               @nQTY, @cReasonCode, @cSuggToLOC, @cFinalLOC, @cReceiptLineNumber,
+               @nErrNo OUTPUT, @cErrMsg OUTPUT
+         END   --SP checked
+         IF @nErrno<>0
+            GOTO QUIT
+      END         
+
       IF @nMorePage = 1 -- Yes
       BEGIN
          -- Go to dynamic lottable screen
@@ -3970,6 +4167,60 @@ BEGIN
       SET @nScn = @nScn - 4
       SET @nStep = @nStep - 4
    END
+
+   IF @cExtScnSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
+      BEGIN
+         DELETE FROM @tExtScnData
+         INSERT INTO @tExtScnData (Variable, Value) VALUES
+            ('@cSKU', @cSKU),
+            ('@cMUOM_Desc', @cMUOM_Desc),
+            ('@cReceiptKey', @cReceiptKey),
+            ('@cOption', @cOption)
+         EXECUTE [RDT].[rdt_ExtScnEntry]
+         @cExtScnSP,
+         @nMobile, @nFunc, @cLangCode, @nOri_Step, @nOri_Scn, @nInputKey, @cFacility, @cStorerKey, @tExtScnData ,
+         @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01  OUTPUT,
+         @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02  OUTPUT,
+         @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03  OUTPUT,
+         @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04  OUTPUT,
+         @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  @dLottable05  OUTPUT,
+         @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  @cLottable06  OUTPUT,
+         @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  @cLottable07  OUTPUT,
+         @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  @cLottable08  OUTPUT,
+         @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  @cLottable09  OUTPUT,
+         @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  @cLottable10  OUTPUT,
+         @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  @cLottable11  OUTPUT,
+         @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT,  @cLottable12  OUTPUT,
+         @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  @dLottable13  OUTPUT,
+         @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT,  @dLottable14  OUTPUT,
+         @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT,  @dLottable15  OUTPUT,
+         @nAction,
+         @nScn OUTPUT,  @nStep OUTPUT,
+         @nErrNo   OUTPUT,
+         @cErrMsg  OUTPUT,
+         @cUDF01   OUTPUT, @cUDF02  OUTPUT, @cUDF03  OUTPUT,
+         @cUDF04   OUTPUT, @cUDF05  OUTPUT, @cUDF06  OUTPUT,
+         @cUDF07   OUTPUT, @cUDF08  OUTPUT, @cUDF09  OUTPUT,
+         @cUDF10   OUTPUT, @cUDF11  OUTPUT, @cUDF12  OUTPUT,
+         @cUDF13   OUTPUT, @cUDF14  OUTPUT, @cUDF15  OUTPUT,
+         @cUDF16   OUTPUT, @cUDF17  OUTPUT, @cUDF18  OUTPUT,
+         @cUDF19   OUTPUT, @cUDF20  OUTPUT, @cUDF21  OUTPUT,
+         @cUDF22   OUTPUT, @cUDF23  OUTPUT, @cUDF24  OUTPUT,
+         @cUDF25   OUTPUT, @cUDF26  OUTPUT, @cUDF27  OUTPUT,
+         @cUDF28   OUTPUT, @cUDF29  OUTPUT, @cUDF30  OUTPUT
+         IF @nErrNo <> 0
+            GOTO Quit
+         IF @nStep = 6 AND @cExtScnSP = 'rdt_600ExtScn05' AND @cUDF06 = '1'
+         BEGIN
+            SET @cPUOM = @cUDF04
+            SET @nPUOM_Div = CAST(ISNULL(@cUDF05,1) AS INT)
+            SET @cPUOM_Desc = @cUDF07
+         END
+      END
+   END
+
    GOTO Quit
 
    Step_8_Fail:

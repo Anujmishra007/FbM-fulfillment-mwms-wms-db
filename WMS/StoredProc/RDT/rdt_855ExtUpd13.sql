@@ -15,6 +15,8 @@ GO
 /* Date       Rev  Author   Purposes                                          */
 /* 2024-06-18 1.0  NLT013   FCR-386. Created                                  */
 /* 2024-08-06 1.1  Dennis   FCR-386. Remove order group condition             */
+/* 2024-09-26 1.2  NLT013   UWP-24932 Error message UI issue                  */
+/* 2024-09-30 1.3  NLT013   Fix printing special order labels issue           */
 /******************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_855ExtUpd13 (
@@ -203,7 +205,6 @@ BEGIN
                            BREAK
 
                         SET @cMsg01 = 'VAS Header'
-                        SET @cMsg10 = 'Press ESC Continue'
                         IF @nLoopIndex % 7 = 1 SET @cMsg02 = @cVASCode + '-' + @cVASCodeDesc
                         ELSE IF @nLoopIndex % 7  = 2 SET @cMsg03 = @cVASCode + '-' + @cVASCodeDesc
                         ELSE IF @nLoopIndex % 7  = 3 SET @cMsg04 = @cVASCode + '-' + @cVASCodeDesc
@@ -214,17 +215,20 @@ BEGIN
 
                         IF @cMsg01 IS NOT NULL AND TRIM(@cMsg01) <> '' AND @nLoopIndex % 7 = 0
                         BEGIN
-                           EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo, @cErrMsg, 
-                              @cMsg01, 
-                              @cMsg02, 
-                              @cMsg03, 
-                              @cMsg04, 
-                              @cMsg05, 
-                              @cMsg06, 
-                              @cMsg07, 
-                              @cMsg08, 
-                              @cMsg09, 
-                              @cMsg10
+                           EXEC rdt.rdtInsertMsgQueue 
+                              @nMobile = @nMobile, 
+                              @nErrNo = @nErrNo, 
+                              @cErrMsg = @cErrMsg, 
+                              @cLine01 = @cMsg01, 
+                              @cLine02 = @cMsg02, 
+                              @cLine03 = @cMsg03, 
+                              @cLine04 = @cMsg04, 
+                              @cLine05 = @cMsg05, 
+                              @cLine06 = @cMsg06, 
+                              @cLine07 = @cMsg07, 
+                              @cLine08 = @cMsg08, 
+                              @cLine09 = @cMsg09, 
+                              @nDisplayMsg = 0
 
                            SET @cMsg01 = ''
                            SET @cMsg02 = ''
@@ -240,18 +244,20 @@ BEGIN
                      IF @cMsg02 IS NOT NULL AND TRIM(@cMsg02) <> ''
                      BEGIN
                         SET @cMsg01 = 'VAS Header'
-                        SET @cMsg10 = 'Press ESC Continue'
-                        EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo, @cErrMsg, 
-                              @cMsg01, 
-                              @cMsg02, 
-                              @cMsg03, 
-                              @cMsg04, 
-                              @cMsg05, 
-                              @cMsg06, 
-                              @cMsg07, 
-                              @cMsg08, 
-                              @cMsg09, 
-                              @cMsg10
+                        EXEC rdt.rdtInsertMsgQueue 
+                           @nMobile = @nMobile, 
+                           @nErrNo = @nErrNo, 
+                           @cErrMsg = @cErrMsg, 
+                           @cLine01 = @cMsg01, 
+                           @cLine02 = @cMsg02, 
+                           @cLine03 = @cMsg03, 
+                           @cLine04 = @cMsg04, 
+                           @cLine05 = @cMsg05, 
+                           @cLine06 = @cMsg06, 
+                           @cLine07 = @cMsg07, 
+                           @cLine08 = @cMsg08, 
+                           @cLine09 = @cMsg09, 
+                           @nDisplayMsg = 0
 
                         SET @cMsg01 = ''
                         SET @cMsg02 = ''
@@ -281,7 +287,6 @@ BEGIN
                BEGIN
                   SET @nLoopIndex = 1
                   SET @cMsg09 = ''
-                  SET @cMsg10 = 'Press ESC for More'
 
                   DECLARE CUR_PPA CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
                      SELECT DISTINCT
@@ -312,17 +317,19 @@ BEGIN
 
                      IF @cMsg01 IS NOT NULL AND TRIM(@cMsg01) <> '' AND @nLoopIndex % 8 = 0
                      BEGIN
-                        EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo, @cErrMsg, 
-                              @cMsg01, 
-                              @cMsg02, 
-                              @cMsg03, 
-                              @cMsg04, 
-                              @cMsg05, 
-                              @cMsg06, 
-                              @cMsg07, 
-                              @cMsg08, 
-                              @cMsg09, 
-                              @cMsg10
+                        EXEC rdt.rdtInsertMsgQueue @nMobile = @nMobile, 
+                           @nErrNo = @nErrNo, 
+                           @cErrMsg = @cErrMsg, 
+                           @cLine01 = @cMsg01, 
+                           @cLine02 = @cMsg02, 
+                           @cLine03 = @cMsg03, 
+                           @cLine04 = @cMsg04, 
+                           @cLine05 = @cMsg05, 
+                           @cLine06 = @cMsg06, 
+                           @cLine07 = @cMsg07, 
+                           @cLine08 = @cMsg08, 
+                           @cLine09 = @cMsg09, 
+                           @nDisplayMsg = 0
 
                         SET @cMsg01 = ''
                         SET @cMsg02 = ''
@@ -342,18 +349,19 @@ BEGIN
 
                   IF @cMsg01 IS NOT NULL AND TRIM(@cMsg01) <> ''
                   BEGIN
-                     SET @cMsg10 = 'Press ESC Continue'
-                     EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo, @cErrMsg, 
-                           @cMsg01, 
-                           @cMsg02, 
-                           @cMsg03, 
-                           @cMsg04, 
-                           @cMsg05, 
-                           @cMsg06, 
-                           @cMsg07, 
-                           @cMsg08, 
-                           @cMsg09, 
-                           @cMsg10
+                     EXEC rdt.rdtInsertMsgQueue @nMobile = @nMobile, 
+                        @nErrNo = @nErrNo, 
+                        @cErrMsg = @cErrMsg, 
+                        @cLine01 = @cMsg01, 
+                        @cLine02 = @cMsg02, 
+                        @cLine03 = @cMsg03, 
+                        @cLine04 = @cMsg04, 
+                        @cLine05 = @cMsg05, 
+                        @cLine06 = @cMsg06, 
+                        @cLine07 = @cMsg07, 
+                        @cLine08 = @cMsg08, 
+                        @cLine09 = @cMsg09, 
+                        @nDisplayMsg = 0
 
                      SET @cMsg01 = ''
                      SET @cMsg02 = ''
@@ -378,6 +386,7 @@ BEGIN
                            INNER JOIN dbo.CODELKUP lk1 WITH(NOLOCK) ON wod1.StorerKey = lk1.StorerKey AND lk1.LISTNAME = 'LVSPRICELB' AND wod1.Type = lk1.code2
                            WHERE wod1.StorerKey = @cStorerKey
                               AND wod1.ExternLineNo = ''
+                              AND wod1.Remarks = 'PriceTicketFormat'
                               AND ISNULL(pkd1.CaseID, '') = @cDropID) AS wodEX
                      ON wod.StorerKey = wodEX.StorerKey AND lk.Code = wodEX.Code
                   WHERE wo.StorerKey = @cStorerKey
@@ -681,7 +690,9 @@ BEGIN
                   @cCustLabelName            NVARCHAR(30),
                   @cDefaultLabelName         NVARCHAR(30),
                   @cCustLabelDataDesc        NVARCHAR(30),
-                  @cCustomCode               NVARCHAR(30)
+                  @cCustomCode               NVARCHAR(30),
+                  @nSpecialCartonLabelPrinted       INT = 0,
+                  @nSpecialVendorLabelPrinted       INT = 0
                   
 
                SELECT @cPickSlipNo = PickSlipNo
@@ -748,7 +759,16 @@ BEGIN
                   IF @@ROWCOUNT = 0
                      BREAK
 
-                  DELETE FROM @tDefaultLabels WHERE (Code = @cVASCode OR code2 = @cCode2)
+                  IF LEFT(@cLabelName, 3) = 'CTN'
+                  BEGIN
+                     DELETE FROM @tDefaultLabels WHERE (Code = @cVASCode OR code2 = @cCode2) AND LEFT(UDF01, 3) = 'CTN'
+                     SET @nSpecialCartonLabelPrinted = 1
+                  END
+                  ELSE
+                  BEGIN
+                     DELETE FROM @tDefaultLabels WHERE (Code = @cVASCode OR code2 = @cCode2) AND LEFT(UDF01, 3) <> 'CTN'
+                     SET @nSpecialVendorLabelPrinted = 1
+                  END
 
                   -- Print label
                   EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cLabelPrinterGroup, @cPaperPrinter,
@@ -794,7 +814,8 @@ BEGIN
                      SELECT CustLabelData.Description, CustLabels.UDF01 AS CustLabelType, ISNULL(CustLabels.Short, '99999') AS CustSequence, CustLabelData.Long
                      FROM (SELECT StorerKey, Description, ISNULL(Long, '') AS Long FROM dbo.CODELKUP AS LK WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND LISTNAME = 'LVSCUSPREF'  AND code2 = @cConsigneeKey
                            AND NOT EXISTS (SELECT 1 FROM @tCustWorkOrderLabels AS CWOL WHERE CWOL.Type = LK.Long OR CWOL.code2 = LK.Description)) AS CustLabelData
-                     LEFT JOIN (SELECT StorerKey, code2, Code, UDF01, Short FROM dbo.CODELKUP WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND LISTNAME = 'LVSCARTLBL'  AND ISNULL(Long, '') <> 'A') AS CustLabels 
+                     LEFT JOIN (SELECT StorerKey, code2, Code, UDF01, Short FROM dbo.CODELKUP WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND LISTNAME = 'LVSCARTLBL'  AND ISNULL(Long, '') <> 'A'
+                           ) AS CustLabels 
                         ON CustLabelData.StorerKey = CustLabels.StorerKey AND CustLabelData.Description = CustLabels.code2 AND CustLabelData.Long = CustLabels.Code
                      ORDER BY ISNULL(CustLabels.Short, '99999')
                END
@@ -803,7 +824,8 @@ BEGIN
                      SELECT CustLabelData.Description, CustLabels.UDF01 AS CustLabelType, ISNULL(CustLabels.Short, '99999') AS CustSequence, CustLabelData.Long
                      FROM (SELECT StorerKey, Description, ISNULL(Long, '') AS Long FROM dbo.CODELKUP LK WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND LISTNAME = 'LVSCUSPREF'  AND (code2 = @cConsigneeKey OR code2 = @cBillToKey)
                            AND NOT EXISTS (SELECT 1 FROM @tCustWorkOrderLabels AS CWOL WHERE CWOL.Type = LK.Long OR CWOL.code2 = LK.Description)) AS CustLabelData
-                     LEFT JOIN (SELECT StorerKey, code2, Code, UDF01, Short FROM dbo.CODELKUP WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND LISTNAME = 'LVSCARTLBL'  AND ISNULL(Long, '') <> 'A') AS CustLabels 
+                     LEFT JOIN (SELECT StorerKey, code2, Code, UDF01, Short FROM dbo.CODELKUP WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND LISTNAME = 'LVSCARTLBL'  AND ISNULL(Long, '') <> 'A'
+                           ) AS CustLabels 
                         ON CustLabelData.StorerKey = CustLabels.StorerKey AND CustLabelData.Description = CustLabels.code2 AND CustLabelData.Long = CustLabels.Code
                      ORDER BY ISNULL(CustLabels.Short, '99999')
 
@@ -813,6 +835,11 @@ BEGIN
                WHILE @@FETCH_STATUS = 0 
                BEGIN
                   IF @cCustLabelName IS NOT NULL AND TRIM(@cCustLabelName) <> ''
+                     AND ( 
+                           (@nSpecialCartonLabelPrinted = 0 AND LEFT(@cCustLabelName, 3) = 'CTN' )
+                           OR 
+                           (@nSpecialVendorLabelPrinted = 0 AND LEFT(@cCustLabelName, 3) <> 'CTN') 
+                        )
                   BEGIN
                      DELETE FROM @tDefaultLabels WHERE code2 = @cCustLabelDataDesc
                      SET @cLabelName = @cCustLabelName

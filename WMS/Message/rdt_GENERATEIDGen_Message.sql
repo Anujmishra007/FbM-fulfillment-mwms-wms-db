@@ -12,5 +12,3 @@ execute rdt.rdtAddMsg 224956 ,10, '224956^No GenIDType'                 , 'us_en
 
 
 SELECT * FROM RDT.RDTMsg (NOLOCK) WHERE Message_ID BETWEEN 224951 AND 225000
-
- 

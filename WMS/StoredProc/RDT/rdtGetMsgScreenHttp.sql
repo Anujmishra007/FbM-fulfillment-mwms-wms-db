@@ -28,6 +28,7 @@
 /* Date         Rev    Author    Purposes                                    */
 /* 07-Nov-2023  1.0    JLC042    Copy from rdtGetMsgScreen                   */
 /* 17-07-2024   1.1    JACKC     UWP-21829 Error msg not visible             */
+/* 26-09-2024   1.2    NLT013    UWP-24932 Error message UI issue            */
 /*****************************************************************************/
 
 CREATE OR ALTER  PROC [RDT].[rdtGetMsgScreenHttp] (
@@ -60,6 +61,7 @@ AS
            @cLine13 NVARCHAR(MaX),    --(yeekung01)
            @cLine14 NVARCHAR(MaX),    --(yeekung01)
            @cLine15 NVARCHAR(MaX),     --(yeekung01)
+           @nDisplayMsg INT,
            @cCounter  INT = 0,
            @cStatus   NVARCHAR(2)
 
@@ -90,6 +92,7 @@ AS
           @cLine12 = ISNULL(Line12, ''),   */
           @cLine13 = ISNULL(Line13, ''),     --(yeekung01)
           @cLine14 = ISNULL(Line14, ''),     --(yeekung01)
+          @nDisplayMsg = ISNULL(DisplayMsg, 1), 
           /*@cLine15 = ISNULL(Line15, ''),
           (Vicky01) - End  */
           @nMsgQueueNo = MsgQueueNo,
@@ -140,7 +143,7 @@ AS
 
    --Out Message Header
    SET @cXMLHeader = '<?xml version="1.0" encoding="UTF-8"?>' +
-        '<tordt number="' + RTRIM( CAST( @nMobile AS NVARCHAR( 10))) + '" status = ''error'' >'
+        '<tordt number="' + RTRIM( CAST( @nMobile AS NVARCHAR( 10))) + IIF(@nDisplayMsg = 1, '" status = ''error'' >', '" >' )
 
    --Out Message Screen Title, XML screen <screen title="">
    SET @cXMLScreen = '<screen'

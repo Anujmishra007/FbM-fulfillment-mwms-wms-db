@@ -602,7 +602,7 @@ BEGIN
 	            SELECT d.[OrderKey],d.[OrderLineNumber],d.[OrderDetailSysId]
                ,d.[ExternOrderKey],d.[ExternLineNo]
 				   ,d.[Sku],d.[StorerKey],d.[ManufacturerSku],d.[RetailSku],d.[AltSku]
-				   ,d.[OriginalQty],d.[OpenQty],d.[ShippedQty],d.[AdjustedQty]
+				   ,d.[OriginalQty],0,d.[ShippedQty],d.[AdjustedQty]
 				   ,d.[QtyPreAllocated],d.[QtyAllocated],d.[QtyPicked],d.[UOM],d.[PackKey],d.[PickCode]
 				   ,d.[CartonGroup],d.[Lot],d.[ID],d.[Facility],i.[Status]
                ,d.[UnitPrice],d.[Tax01],d.[Tax02],d.[ExtendedPrice],d.[UpdateSource]

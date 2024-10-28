@@ -12,6 +12,7 @@ GO
 /* Date         Ver. Author    Purposes                                    */
 /* 26-Sep-2023  1.0  YZH230    Created base on rdtScr2XMLHttp 2019-06-03   */
 /* 17-07-2024   1.1  JACKC     UWP-21829 Error msg not visible             */
+/* 2024-09-23   1.3  CYU027    Add Type Image                              */
 /***************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtScr2XMLHttp] (
@@ -41,6 +42,7 @@ DECLARE @cMobRecColName NVARCHAR(30)
 DECLARE @cDataType      NVARCHAR(15)
 DECLARE @cWebGroup      NVARCHAR(20)
 DECLARE @cMsgLong       NVARCHAR(250)
+DECLARE @cAttrAndVal    NVARCHAR(MAX) = ''
 
 -- Custom messages
 IF @nScnKey IS NULL
@@ -163,17 +165,22 @@ BEGIN
          SET @cMsgLong = rdt.rdtReplaceSpecialCharInXMLData( @cMsgLong)
       --1.1 Jackc end
 
+      --Add Style in XML Attribute, by storerkey + line + Scn
+      EXEC rdt.rdtGetExtraAttribute @nScn, @cY, @nMobile, @cAttrAndVal OUTPUT
+
       IF @cFieldNo = '' 
          SET @cXML = @cXML + '<field typ="output" x="' + @cX + '" y="' + @cY +   
             '" value="' + CASE WHEN @cMsgLong IS NULL OR @cMsgLong = '' THEN @cColText ELSE @cMsgLong END +   
-            '" color="' + @cTxtColor +   
-            '" label="true' +
-            '" webgroup="' + @cWebGroup + '"/>'  
+            '" color="' + @cTxtColor +
+            '" label="true"' +
+            + @cAttrAndVal +
+            ' webgroup="' + @cWebGroup + '"/>'
       ELSE
          SET @cXML = @cXML + '<field typ="output" x="' + @cX + '" y="' + @cY +   
             '" value="' + CASE WHEN @cMsgLong IS NULL OR @cMsgLong = '' THEN @cColText ELSE @cMsgLong END +   
-            '" color="' + @cTxtColor +   
-            '" webgroup="' + @cWebGroup + '"/>'  
+            '" color="' + @cTxtColor + '"'
+            + @cAttrAndVal +
+            ' webgroup="' + @cWebGroup + '"/>'
    END
 
    RETURN
@@ -347,9 +354,36 @@ BEGIN
       '" text="' + @cColText + 
       '" value="' + @cColVal + 
       '" webgroup="' + @cWebGroup +'"/>'
-
    RETURN
 END
+
+ELSE IF @cColType = 'm'
+BEGIN
+
+   IF ISNUMERIC( @cFieldNo) = 1
+      SET @cMobRecColName = 'O_Field' + @cFieldNo
+   ELSE
+      SET @cMobRecColName = @cFieldNo
+   EXEC rdt.rdtGetColumnValue @nMobile, @cMobRecColName, @cColText OUTPUT
+
+   IF @cColText <> ''
+      SET @cColText = rdt.rdtReplaceSpecialCharInXMLData( @cColText)
+   ELSE
+      RETURN
+
+
+   EXEC rdt.rdtGetExtraAttribute @nScn, @cY, @nMobile, @cAttrAndVal OUTPUT
+
+
+   SET @cXML = @cXML + '<field typ="img" x="' + @cX + '" y="' + @cY +
+               '" value="' + @cColText +'"'
+               + @cAttrAndVal +
+               ' webgroup="' + @cWebGroup +'"/>'
+
+   RETURN
+
+END
+
 
 GO
 GRANT EXECUTE ON [RDT].[rdtScr2XMLHttp] TO NSQL

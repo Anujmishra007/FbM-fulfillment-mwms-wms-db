@@ -16,6 +16,7 @@ GO
 /* 2018-10-05 1.5  TungGH   Performance                                          */
 /* 2020-07-29 1.6  YeeKung  WMS-14414 Add flowthrough (yeekung01)                */
 /* 2022-02-21 1.7  YeeKung  WMS-18676 fix extendevalidate (yeekung02)            */
+/* 2024-09-19 1.8  JHU151   FCR-752                                              */
 /*********************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_PalletReceive] (
@@ -74,8 +75,11 @@ DECLARE
    @cExtendedValidateSP NVARCHAR( 20),
    @cExtendedUpdateSP   NVARCHAR( 20),
    @cExtendedInfoSP     NVARCHAR( 20),
+   @cExtendedScreenSP   NVARCHAR( 20), --(JHU151)
    @cExtendedInfo       NVARCHAR( 20),
    @cDefaultOption      NVARCHAR( 1),
+   @tExtScnData			VariableTable, --(JHU151)
+   @nAction             INT, --(JHU151)
 
    @cRefNo              NVARCHAR( 20),
    @cActReceiptKey      NVARCHAR( 10),
@@ -106,8 +110,25 @@ DECLARE
    @cFieldAttr09 NVARCHAR( 1), @cFieldAttr10 NVARCHAR( 1),
    @cFieldAttr11 NVARCHAR( 1), @cFieldAttr12 NVARCHAR( 1),
    @cFieldAttr13 NVARCHAR( 1), @cFieldAttr14 NVARCHAR( 1),
-   @cFieldAttr15 NVARCHAR( 1)
+   @cFieldAttr15 NVARCHAR( 1),
 
+   @cLottable01  NVARCHAR( 18), @cLottable02  NVARCHAR( 18), @cLottable03  NVARCHAR( 18),
+   @dLottable04  DATETIME, @dLottable05  DATETIME,
+   @cLottable06  NVARCHAR( 30), @cLottable07  NVARCHAR( 30), @cLottable08  NVARCHAR( 30),
+   @cLottable09  NVARCHAR( 30), @cLottable10  NVARCHAR( 30), @cLottable11  NVARCHAR( 30),
+   @cLottable12  NVARCHAR( 30),
+   @dLottable13  DATETIME, @dLottable14  DATETIME, @dLottable15  DATETIME,
+
+   @cUDF01  NVARCHAR( 250), @cUDF02 NVARCHAR( 250), @cUDF03 NVARCHAR( 250),
+   @cUDF04  NVARCHAR( 250), @cUDF05 NVARCHAR( 250), @cUDF06 NVARCHAR( 250),
+   @cUDF07  NVARCHAR( 250), @cUDF08 NVARCHAR( 250), @cUDF09 NVARCHAR( 250),
+   @cUDF10  NVARCHAR( 250), @cUDF11 NVARCHAR( 250), @cUDF12 NVARCHAR( 250),
+   @cUDF13  NVARCHAR( 250), @cUDF14 NVARCHAR( 250), @cUDF15 NVARCHAR( 250),
+   @cUDF16  NVARCHAR( 250), @cUDF17 NVARCHAR( 250), @cUDF18 NVARCHAR( 250),
+   @cUDF19  NVARCHAR( 250), @cUDF20 NVARCHAR( 250), @cUDF21 NVARCHAR( 250),
+   @cUDF22  NVARCHAR( 250), @cUDF23 NVARCHAR( 250), @cUDF24 NVARCHAR( 250),
+   @cUDF25  NVARCHAR( 250), @cUDF26 NVARCHAR( 250), @cUDF27 NVARCHAR( 250),
+   @cUDF28  NVARCHAR( 250), @cUDF29 NVARCHAR( 250), @cUDF30 NVARCHAR( 250)
 -- Load RDT.RDTMobRec
 SELECT
    @nFunc      = Func,
@@ -153,6 +174,7 @@ SELECT
    @cDecodeSP           = V_String23,
    @cFlowThruScreen     = V_String24,
    @cDefaultcursor      = V_String25,
+   @cExtendedScreenSP   = V_String26,
 
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,
@@ -189,6 +211,7 @@ BEGIN
    IF @nStep = 1 GOTO Step_1   -- Scn = 4250. ASN, RefNo
    IF @nStep = 2 GOTO Step_2   -- Scn = 4251. ID
    IF @nStep = 3 GOTO Step_3   -- Scn = 4252. ID detail
+   IF @nStep = 99 GOTO Step_99 -- Ext Screen
 END
 RETURN -- Do nothing if incorrect step
 
@@ -201,6 +224,11 @@ Step_0:
 BEGIN
 
    SET @cFlowThruScreen = rdt.RDTGetConfig( @nFunc, 'FlowThruScreen', @cStorerKey) --(yeekung01)
+
+   --JHU151
+   SET @cExtendedScreenSP = rdt.RDTGetConfig( @nFunc, 'ExtScnSP', @cStorerKey)
+   IF @cExtendedScreenSP = '0'
+      SET @cExtendedScreenSP = ''
 
    -- EventLog
    EXEC RDT.rdt_STD_EventLog
@@ -803,6 +831,15 @@ BEGIN
       SET @nScn = @nScn - 1
       SET @nStep = @nStep - 1
    END
+
+   
+   --JHU151   
+   IF @cExtendedScreenSP = 'rdt_605ExtScn01'
+   BEGIN
+      SET @nAction = 0 -- jump new screen
+      GOTO Step_99
+   END
+
    GOTO Quit
 
    Step_2_Fail:
@@ -1081,6 +1118,87 @@ END
 GOTO Quit
 
 
+--JHU151
+Step_99:
+BEGIN
+   IF @cExtendedScreenSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
+      BEGIN
+         DECLARE @nPreScn     INT
+         SET @nPreScn = @nScn
+
+         EXECUTE [RDT].[rdt_ExtScnEntry] 
+               @cExtendedScreenSP, 
+               @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorerKey, @tExtScnData ,
+               @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01 OUTPUT,  
+               @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02 OUTPUT,  
+               @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03 OUTPUT,  
+               @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04 OUTPUT,  
+               @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  @dLottable05 OUTPUT,  
+               @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  @cLottable06 OUTPUT, 
+               @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  @cLottable07 OUTPUT, 
+               @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  @cLottable08 OUTPUT, 
+               @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  @cLottable09 OUTPUT, 
+               @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  @cLottable10 OUTPUT, 
+               @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  @cLottable11 OUTPUT,
+               @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT,  @cLottable12 OUTPUT,
+               @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  @dLottable13 OUTPUT,
+               @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT,  @dLottable14 OUTPUT,
+               @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT,  @dLottable15 OUTPUT,
+               @nAction, 
+               @nScn     OUTPUT,  @nStep OUTPUT,
+               @nErrNo   OUTPUT, 
+               @cErrMsg  OUTPUT,
+               @cUDF01   OUTPUT, @cUDF02 OUTPUT, @cUDF03 OUTPUT,
+               @cUDF04   OUTPUT, @cUDF05 OUTPUT, @cUDF06 OUTPUT,
+               @cUDF07   OUTPUT, @cUDF08 OUTPUT, @cUDF09 OUTPUT,
+               @cUDF10   OUTPUT, @cUDF11 OUTPUT, @cUDF12 OUTPUT,
+               @cUDF13   OUTPUT, @cUDF14 OUTPUT, @cUDF15 OUTPUT,
+               @cUDF16   OUTPUT, @cUDF17 OUTPUT, @cUDF18 OUTPUT,
+               @cUDF19   OUTPUT, @cUDF20 OUTPUT, @cUDF21 OUTPUT,
+               @cUDF22   OUTPUT, @cUDF23 OUTPUT, @cUDF24 OUTPUT,
+               @cUDF25   OUTPUT, @cUDF26 OUTPUT, @cUDF27 OUTPUT,
+               @cUDF28   OUTPUT, @cUDF29 OUTPUT, @cUDF30 OUTPUT
+
+         IF @cExtendedScreenSP = 'rdt_605ExtScn01'
+         BEGIN
+            IF @nPreScn = 6441 AND @nInputKey = 1
+            BEGIN
+               SET @nPQTY = @cUDF01
+               SET @nMQTY = @cUDF02
+               SET @nQTY = @cUDF03
+               SET @nCurrentLine = @cUDF04
+               SET @nTotalLine = @cUDF05
+               SET @nCurrentScanned = @cUDF06
+               SET @cRDLineNo = @cUDF07
+               SET @cReceiptKey = @cUDF08
+               SET @cActReceiptKey = @cUDF09
+               SET @cRefNo = @cUDF10
+               SET @cExtendedInfo = @cUDF11
+               SET @cID = @cUDF12
+               SET @cSKU = @cUDF13
+               SET @cDescr = @cUDF14
+               SET @cPUOM = @cUDF15
+               SET @cMUOM_Desc = @cUDF16
+               SET @cPUOM_Desc = @cUDF17
+            END
+         END
+
+         IF @nErrNo <> 0
+            GOTO Step_99_Fail
+      END
+   END
+
+   GOTO Quit
+
+Step_99_Fail:
+   BEGIN
+      GOTO Quit
+   END
+END
+GOTO Quit
+
 /********************************************************************************
 Quit. Update back to I/O table, ready to be pick up by JBOSS
 ********************************************************************************/
@@ -1127,6 +1245,7 @@ BEGIN
       V_String23   = @cDecodeSP,
       V_String24   = @cFlowThruScreen,
       V_String25   = @cDefaultcursor, --(yeekung01)
+      V_String26   = @cExtendedScreenSP,
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,
