@@ -1,19 +1,16 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[RDT].[rdt_511SuggestLOC01]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-    drop procedure [RDT].[rdt_511SuggestLOC01]
-GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
 GO
 
-/******************************************************************************/
-/* Store procedure: rdt_511SuggestLOC01                                       */
-/* Copyright      : Maersk WMS                                                */
-/*                                                                            */
-/* Date        Rev  Author      Purposes                                      */
-/* 06-Mars-2024  1.0  CYU027       UWP-15739 Created, for Unilever            */
-/******************************************************************************/
+/*********************************************************************************/
+/* Store procedure: rdt_511SuggestLOC01                                          */
+/* Copyright      : Maersk WMS                                                   */
+/*                                                                               */
+/* Date        Rev      Author       Purposes                                    */
+/* 2024-03-06  1.0      CYU027       UWP-15739 Created, for Unilever             */
+/* 2024-10-28  1.1.0    NLT013       UWP-26270 Fix an issue                      */
+/*********************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_511SuggestLOC01] (
     @nMobile         INT,
@@ -49,86 +46,84 @@ CREATE OR ALTER PROC [RDT].[rdt_511SuggestLOC01] (
 AS
 BEGIN
 
-   DECLARE @toLoc						NVARCHAR(30) = ''
-   DECLARE @cVasLOC					NVARCHAR(30) = ''
-   DECLARE @cLottableNo				NVARCHAR(30) = ''
-   DECLARE @cLottableValue			NVARCHAR(30) = ''
-   DECLARE @nRowcnt					INT = 0
-   DECLARE @cSQL						NVARCHAR(MAX)
-   DECLARE @cSQLParam				NVARCHAR(MAX)
-   DECLARE @cSQLRes					INT
-   DECLARE @t_Subsitute				TABLE
-                                   (  RowID    INT				IDENTITY(1,1)  PRIMARY KEY
-                                      ,Parm     NVARCHAR(100)	NOT NULL DEFAULT('')
-                                   )
+   DECLARE @toLoc                   NVARCHAR(30) = ''
+   DECLARE @cVasLOC                 NVARCHAR(30) = ''
+   DECLARE @cLottableNo             NVARCHAR(30) = ''
+   DECLARE @cLottableValue          NVARCHAR(30) = ''
+   DECLARE @nRowcnt                 INT = 0
+   DECLARE @cSQL                    NVARCHAR(MAX)
+   DECLARE @cSQLParam               NVARCHAR(MAX)
+   DECLARE @cSQLRes                 INT
+   DECLARE @t_Subsitute             TABLE
+      (  RowID    INT            IDENTITY(1,1)  PRIMARY KEY
+         ,Parm     NVARCHAR(100)   NOT NULL DEFAULT('')
+      )
 
    -- Check config exists
    IF rdt.RDTGetConfig( @nFunc, 'DefaultToLoc', @cStorerkey) <> '0'
-      BEGIN
+   BEGIN
 
-         INSERT INTO @t_Subsitute ( Parm )
-         SELECT Parm = LTRIM(RTRIM(s.[Value]))
-         FROM STRING_SPLIT(rdt.RDTGetConfig( @nFunc, 'DefaultToLoc', @cStorerkey), ',') AS s
+      INSERT INTO @t_Subsitute ( Parm )
+      SELECT Parm = LTRIM(RTRIM(s.[Value]))
+      FROM STRING_SPLIT(rdt.RDTGetConfig( @nFunc, 'DefaultToLoc', @cStorerkey), ',') AS s
 
-         --3 Params in DefaultToLoc
-         SELECT @nRowcnt = COUNT(1) FROM @t_Subsitute
+      --3 Params in DefaultToLoc
+      SELECT @nRowcnt = COUNT(1) FROM @t_Subsitute
 
-         IF @nRowcnt = 3
-            BEGIN
-               SELECT @cVasLOC = Parm FROM @t_Subsitute WHERE RowID = 1
-               SELECT @cLottableNo = Parm FROM @t_Subsitute WHERE RowID = 2
-               SELECT @cLottableValue = Parm FROM @t_Subsitute WHERE RowID = 3
+      IF @nRowcnt = 3
+         BEGIN
+            SELECT @cVasLOC = Parm FROM @t_Subsitute WHERE RowID = 1
+            SELECT @cLottableNo = Parm FROM @t_Subsitute WHERE RowID = 2
+            SELECT @cLottableValue = Parm FROM @t_Subsitute WHERE RowID = 3
 
+            SET @cSQL =
+                        'SELECT  @cSQLRes = COUNT(*) '                                                   +
+                        'FROM LOTATTRIBUTE LA WITH (NOLOCK) '                                          +
+                        'INNER JOIN LotxLocxID LLI WITH (NOLOCK) ON LLI.LOT = LA.LOT '                  +
+                        'WHERE LA.StorerKey = @cStorerKey '                                             +
+                        'AND LA.SKU = @cSKU '                                                            +
+                        'AND LLI.ID = @cFromID '                                                         +
+                        'AND LA.Lottable'+@cLottableNo+' = @cLottableValue'
 
-               SET @cSQL =
-                          'SELECT  @cSQLRes = COUNT(*) '																   +
-                          'FROM LOTATTRIBUTE LA WITH (NOLOCK) '														+
-                          'INNER JOIN LotxLocxID LLI WITH (NOLOCK) ON LLI.LOT = LA.LOT '	               +
-                          'WHERE LA.StorerKey = @cStorerKey '															+
-                          'AND LA.SKU = @cSKU '																			   +
-                          'AND LLI.ID = @cFromID '																		   +
-                          'AND LA.Lottable'+@cLottableNo+' = @cLottableValue'
+            SET @cSQLParam =
+                        '@cStorerKey         NVARCHAR(20),'                +
+                        '@cSKU               NVARCHAR(20),'                +
+                        '@cFromID            NVARCHAR(20),'                +
+                        '@cLottableValue      NVARCHAR(20),'             +
+                        '@cSQLRes            INT OUTPUT'
 
-               SET @cSQLParam =
-                          '@cStorerKey			NVARCHAR(20),'				    +
-                          '@cSKU					NVARCHAR(20),'				    +
-                          '@cFromID				NVARCHAR(20),'				    +
-                          '@cLottableValue		NVARCHAR(20),'				 +
-                          '@cSQLRes				INT OUTPUT'
+            BEGIN TRY
+               EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                     @cStorerKey, @cSKU, @cFromID, @cLottableValue,@cSQLRes OUTPUT
+            END TRY
+            BEGIN CATCH
+               RETURN
+            END CATCH
 
-               BEGIN TRY
-                  EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-                       @cStorerKey, @cSKU, @cFromID, @cLottableValue,@cSQLRes OUTPUT
-               END TRY
-               BEGIN CATCH
-                  RETURN
-               END CATCH
-
-               IF (@cSQLRes>0)
-                  SET @toLoc = @cVasLOC
-            END
-
-         --1 Param in DefaultToLoc
-         IF @nRowcnt = 1
-            BEGIN
-               --vas location
-               SELECT @cVasLOC = Parm FROM @t_Subsitute WHERE RowID = 1
+            IF (@cSQLRes>0)
                SET @toLoc = @cVasLOC
-            END
+         END
 
-         -- Check Default VAS LOC Valid
-         IF EXISTS(
-            SELECT 1
-            FROM LOC WITH (NOLOCK)
-            where LocationFlag <> 'HOLD'
-              AND Facility = @cFacility
-              AND Loc = @toLoc
-         )
-            BEGIN
-               SET @cOutField11 = @cVasLOC
-            END
+      --1 Param in DefaultToLoc
+      IF @nRowcnt = 1
+         BEGIN
+            --vas location
+            SELECT @cVasLOC = Parm FROM @t_Subsitute WHERE RowID = 1
+            SET @toLoc = @cVasLOC
+         END
 
-      END
+      -- Check Default VAS LOC Valid
+      IF EXISTS(
+         SELECT 1
+         FROM LOC WITH (NOLOCK)
+         WHERE LocationFlag <> 'DAMAGE'
+            AND Facility = @cFacility
+            AND Loc = @toLoc
+      )
+         BEGIN
+            SET @cOutField11 = @cVasLOC
+         END
+   END
 
 END
 GO
