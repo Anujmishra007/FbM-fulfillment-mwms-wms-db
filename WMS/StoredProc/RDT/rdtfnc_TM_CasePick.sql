@@ -1832,24 +1832,10 @@ BEGIN
       
       IF @cReplenFlag = '1'
       BEGIN
-         DECLARE @nOtherConfirmedQty   INT
          DECLARE @AvlInvQty         INT
          --so if qty of location in system is zero, RDT will show new empty choice screen, and if non-zero, no screen change, is right?
-         --yes, if it is non zero... then the screen will not be shown... that is the whole idea of asking the user if the location is actually empty
-
-         --Caculate the picking qty and inventory qty
-         SELECT @nOtherConfirmedQty= SUM ( QTY )
-            FROM dbo.TaskDetail WITH (NOLOCK)
-            WHERE UserKey = @cUserName
-            AND FromLOC = @cFromLOC
-            AND SKU = @cSKU
-            AND StorerKey = @cStorerKey
-            AND Status = '5'        
-            and TaskType = @cTTMTaskType 
-            AND ListKey <> @cListKey
-         --Confirmed Pick/Task  Status = 5;
-         --Close Pallet         Status = 9
-         SELECT @AvlInvQty = (SUM(LLI.Qty) - SUM(LLI.QtyPicked) + SUM(LLI.PendingMoveIn)) 
+         --Sandeep: yes, if it is non zero... then the screen will not be shown... that is the whole idea of asking the user if the location is actually empty
+         SELECT @AvlInvQty = (SUM(LLI.Qty) - SUM(LLI.QtyPicked))       --   + SUM(LLI.PendingMoveIn)) 
             FROM dbo.SKUXLOC SL(NOLOCK)
                JOIN dbo.LOTxLOCxID LLI WITH (NOLOCK) ON SL.StorerKey = LLI.StorerKey AND SL.SKU = LLI.SKU AND SL.LOC = LLI.LOC
          WHERE SL.StorerKey = @cStorerKey
@@ -1857,7 +1843,7 @@ BEGIN
          AND SL.LOC = @cFromLOC
          --AND SL.LocationType IN ( 'CASE','PALLET','PICK')          --do not check location type for invntory zero checking.
          
-         IF ISNULL(@nOtherConfirmedQty,0) + @nQTY >= @AvlInvQty 
+         IF @nQTY >= @AvlInvQty 
          BEGIN
             SET @cOutField01 = '' -- Option            
             SET @nScn = 4028
@@ -3453,8 +3439,8 @@ BEGIN
       EXEC rdt.rdtSetFocusField @nMobile, 'V_Barcode' -- SKU
 
       -- Go to SKU screen (STEP 4)
-      SET @nScn = 4
-      SET @nStep = 4023
+      SET @nStep = 4
+      SET @nScn = 4023
    END
    GOTO Quit
 
