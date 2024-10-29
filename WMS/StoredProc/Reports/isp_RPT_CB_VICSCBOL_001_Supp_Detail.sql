@@ -14,7 +14,7 @@ GO
 /*        :                                                                     */
 /* Called By: RPT_CB_VICSCBOL_001_Supp_Detail                                   */
 /*          :                                                                   */
-/* Github Version: 1.0                                                          */
+/* Github Version: 1.2                                                          */
 /*                                                                              */
 /* Version: 7.0                                                                 */
 /*                                                                              */
@@ -24,6 +24,7 @@ GO
 /* Date        Author   Ver   Purposes                                          */
 /* 06-Sep-2024 WLChooi  1.0   DevOps Combine Script                             */
 /* 11-Oct-2024 CalvinK  1.1   FCR-995 Change ExternOrderkey to BuyerPO (CLVN01) */
+/* 24-Oct-2024 WLChooi  1.2   FCR-1076 Add Total Weight (WL01)                  */
 /********************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[isp_RPT_CB_VICSCBOL_001_Supp_Detail]
 (
@@ -37,6 +38,61 @@ BEGIN
 
    DECLARE @n_continue  INT = 1
          , @n_StartTCnt INT = @@TRANCOUNT
+
+   --WL01 S
+   DECLARE @c_Userdefine09 NVARCHAR(10) = ''
+         , @c_Storerkey    NVARCHAR(15) = ''
+         , @n_PalletWgt    FLOAT = 0.00
+         , @n_TTLPLT       INT = 0
+         , @n_TTLPLTWgt    FLOAT = 0.00
+         , @c_Mbolkey      NVARCHAR(10) = ''
+
+   SELECT @c_Storerkey = MAX(ORDERS.StorerKey)
+   FROM MBOL (NOLOCK)
+   JOIN ORDERS (NOLOCK) ON ORDERS.MBOLKey = MBOL.MbolKey
+   WHERE MBOL.CBOLKey = @n_Cbolkey
+
+   SET @n_TTLPLTWgt = 0.00
+
+   DECLARE CUR_PLT CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+   SELECT DISTINCT MBOL.MBOLKey, MBOL.UserDefine09
+   FROM MBOL (NOLOCK)
+   WHERE MBOL.CBOLKey = @n_Cbolkey
+
+   OPEN CUR_PLT
+
+   FETCH NEXT FROM CUR_PLT INTO @c_Mbolkey, @c_Userdefine09
+
+   WHILE @@FETCH_STATUS <> -1
+   BEGIN
+      SET @n_TTLPLT = 0
+      SET @n_PalletWgt = 0.00
+
+      ;WITH CTE AS ( SELECT TOP 1 CODELKUP.Short, SeqNo = 2
+                     FROM CODELKUP (NOLOCK)
+                     WHERE CODELKUP.LISTNAME = 'LVSUSPLT' AND CODELKUP.Storerkey = @c_Storerkey AND CODELKUP.Code = '1'
+                     UNION ALL
+                     SELECT TOP 1 CODELKUP.Short, SeqNo = 1
+                     FROM CODELKUP (NOLOCK)
+                     WHERE CODELKUP.LISTNAME = 'LVSUSPLT' AND CODELKUP.Storerkey = @c_Storerkey AND CODELKUP.Code = @c_Userdefine09 )
+      SELECT TOP 1 @n_PalletWgt = IIF(ISNUMERIC(CTE.Short) = 1, CAST(CTE.Short AS FLOAT), 1.0)
+      FROM CTE
+      ORDER BY CTE.SeqNo
+
+      SELECT @n_TTLPLT = COUNT(DISTINCT PLTD.Palletkey)
+      FROM ORDERS OH (NOLOCK)
+      JOIN PACKHEADER PH (NOLOCK) ON PH.OrderKey = OH.OrderKey
+      JOIN PACKDETAIL PD (NOLOCK) ON PH.PickSlipNo = PD.PickSlipNo
+      JOIN PALLETDETAIL PLTD (NOLOCK) ON PD.LabelNo = PLTD.CaseId AND PD.StorerKey = PLTD.StorerKey
+      WHERE OH.MBOLKey = @c_Mbolkey
+
+      SET @n_TTLPLTWgt = @n_TTLPLTWgt + (@n_TTLPLT * @n_PalletWgt)
+
+      FETCH NEXT FROM CUR_PLT INTO @c_Mbolkey, @c_Userdefine09
+   END
+   CLOSE CUR_PLT
+   DEALLOCATE CUR_PLT
+   --WL01 E
 
    IF EXISTS ( SELECT 1 FROM ORDERS O (NOLOCK) 
                JOIN ORDERDETAIL OD (NOLOCK) ON O.Orderkey = OD.Orderkey
@@ -78,6 +134,7 @@ BEGIN
            , SumWeight = (SELECT SUM([WEIGHT]) FROM CTE)
            , TotalRow  = (SELECT COUNT(1) FROM CTE)
            , CBOLReference
+           , TTLPLTWGT = (@n_TTLPLTWgt) + (SELECT SUM([WEIGHT]) FROM CTE)   --WL01
       FROM CTE
    END
    ELSE
@@ -114,6 +171,7 @@ BEGIN
            , SumWeight = (SELECT SUM([WEIGHT]) FROM CTE)
            , TotalRow  = (SELECT COUNT(1) FROM CTE)
            , CBOLReference
+           , TTLPLTWGT = (@n_TTLPLTWgt) + (SELECT SUM([WEIGHT]) FROM CTE)   --WL01
       FROM CTE
    END
 
@@ -122,6 +180,13 @@ BEGIN
       
    IF OBJECT_ID('tempdb..#CONSOORD') IS NOT NULL
       DROP TABLE #CONSOORD  
+
+   --WL01
+   IF CURSOR_STATUS('LOCAL', 'CUR_PLT') IN (0 , 1)
+   BEGIN
+      CLOSE CUR_PLT
+      DEALLOCATE CUR_PLT   
+   END
 END -- procedure
 GO
 GRANT EXECUTE ON [dbo].[isp_RPT_CB_VICSCBOL_001_Supp_Detail] TO [NSQL]

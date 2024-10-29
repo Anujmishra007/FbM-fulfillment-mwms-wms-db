@@ -13,7 +13,7 @@ GO
 /*        :                                                                     */
 /* Called By: RPT_MB_VICSBOL_001_Supp_Detail                                    */
 /*          :                                                                   */
-/* Github Version: 1.0                                                          */
+/* Github Version: 1.2                                                          */
 /*                                                                              */
 /* Version: 7.0                                                                 */
 /*                                                                              */
@@ -23,6 +23,7 @@ GO
 /* Date        Author   Ver   Purposes                                          */
 /* 18-Jun-2024 WLChooi  1.0   DevOps Combine Script                             */
 /* 08-Oct-2024 CalvinK  1.1   FCR-956 Change Externorderkey to BuyerPO (CLVN01) */
+/* 24-Oct-2024 WLChooi  1.2   FCR-1075 Add Total Weight (WL01)                  */
 /********************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[isp_RPT_MB_VICSBOL_001_Supp_Detail]
 (
@@ -38,6 +39,38 @@ BEGIN
    DECLARE @n_continue  INT = 1
          , @n_StartTCnt INT = @@TRANCOUNT
          , @c_Vics_MBOL NVARCHAR(50) = ''
+
+   --WL01 S
+   DECLARE @c_Userdefine09 NVARCHAR(10) = ''
+         , @c_Storerkey    NVARCHAR(15) = ''
+         , @n_PalletWgt    FLOAT = 0.00
+         , @n_TTLPLT       INT = 0
+
+   SELECT @c_Userdefine09 = MBOL.UserDefine09
+        , @c_Storerkey = ORDERS.StorerKey
+   FROM ORDERS (NOLOCK)
+   JOIN MBOL (NOLOCK) ON ORDERS.MBOLKey = MBOL.MbolKey
+   WHERE ORDERS.MbolKey = @c_Mbolkey
+
+   ;WITH CTE AS ( SELECT TOP 1 CODELKUP.Short, SeqNo = 2
+                  FROM CODELKUP (NOLOCK)
+                  WHERE CODELKUP.LISTNAME = 'LVSUSPLT' AND CODELKUP.Storerkey = @c_Storerkey AND CODELKUP.Code = '1'
+                  UNION ALL
+                  SELECT TOP 1 CODELKUP.Short, SeqNo = 1
+                  FROM CODELKUP (NOLOCK)
+                  WHERE CODELKUP.LISTNAME = 'LVSUSPLT' AND CODELKUP.Storerkey = @c_Storerkey AND CODELKUP.Code = @c_Userdefine09 )
+   SELECT TOP 1 @n_PalletWgt = IIF(ISNUMERIC(CTE.Short) = 1, CAST(CTE.Short AS FLOAT), 1.0)
+   FROM CTE
+   ORDER BY CTE.SeqNo
+
+   SELECT @n_TTLPLT = COUNT(DISTINCT PLTD.Palletkey)
+   FROM ORDERS OH (NOLOCK)
+   JOIN PACKHEADER PH (NOLOCK) ON PH.OrderKey = OH.OrderKey
+   JOIN PACKDETAIL PD (NOLOCK) ON PH.PickSlipNo = PD.PickSlipNo
+   JOIN PALLETDETAIL PLTD (NOLOCK) ON PD.LabelNo = PLTD.CaseId AND PD.StorerKey = PLTD.StorerKey
+   WHERE OH.MBOLKey = @c_Mbolkey
+   AND OH.ConsigneeKey = @c_Consigneekey
+   --WL01 E
 
    EXEC [dbo].[isp_GetVicsMbol] @c_Mbolkey = @c_Mbolkey
                               , @c_Vics_MBOL = @c_Vics_MBOL OUTPUT
@@ -89,6 +122,7 @@ BEGIN
            , SumWeight = (SELECT SUM([WEIGHT]) FROM CTE)
            , TotalRow  = (SELECT COUNT(1) FROM CTE)
            , ExternMbolkey = @c_Vics_MBOL
+           , TTLPLTWGT = (@n_TTLPLT * @n_PalletWgt) + (SELECT SUM([WEIGHT]) FROM CTE)   --WL01
       FROM CTE
    END
    ELSE
@@ -116,6 +150,7 @@ BEGIN
            , SumWeight = (SELECT SUM([WEIGHT]) FROM CTE)
            , TotalRow  = (SELECT COUNT(1) FROM CTE)
            , ExternMbolkey = @c_Vics_MBOL
+           , TTLPLTWGT = (@n_TTLPLT * @n_PalletWgt) + (SELECT SUM([WEIGHT]) FROM CTE)   --WL01
       FROM CTE
    END
 
