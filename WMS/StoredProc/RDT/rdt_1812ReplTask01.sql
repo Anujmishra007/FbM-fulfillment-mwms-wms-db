@@ -43,8 +43,8 @@ BEGIN
    IF @bDebug>0
       INSERT INTO DocInfo(TableName,key1,key2,key3,StorerKey,[Data],DataType,LineSeq)
       VALUES('YSLOG','','','','','Enter rdt_1812ReplTask01','LOG',0)  
-print @cListKey
-print @cUserName
+   --print @cListKey
+   --print @cUserName
    -- Get storer
    SELECT TOP 1 
       @cStorerKey = StorerKey
