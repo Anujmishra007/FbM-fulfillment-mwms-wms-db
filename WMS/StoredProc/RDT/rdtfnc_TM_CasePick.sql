@@ -6,7 +6,7 @@ GO
 
 /******************************************************************************/
 /* Store procedure: rdtfnc_TM_CasePick                                        */
-/* Copyright      : Maersk                                               */
+/* Copyright      : Maersk                                                    */
 /*                                                                            */
 /* Purpose: case pick                                                         */
 /*                                                                            */
@@ -28,8 +28,8 @@ GO
 /* 2023-05-16 2.1  Ung        WMS-22435 Add DecodeSP                          */
 /*                            Expand SKU field to max                         */
 /* 2023-06-20 2.2  Ung        WMS-22834 Add DispStyleColorSize                */
-/* 2024-03-12 2.3  CYU027     UWP-15734 Add Extended Print SP				      */
-/* 2024-04-10 2.4  Dennis     UWP-16909 Check Digit            			      */
+/* 2024-03-12 2.3  CYU027     UWP-15734 Add Extended Print SP                 */
+/* 2024-04-10 2.4  Dennis     UWP-16909 Check Digit                           */
 /* 2024-07-08 2.5  JHU151     FCR-330 SSCC code generator                     */
 /* 2024-10-08 2.6  PXL009     FCR-872 Auto Generated Dropid                   */
 /* 2024-10-24 2.7  YYS027     FCR-989 Min Max Replenishment                   */
@@ -164,7 +164,7 @@ DECLARE
    @cRefKey04           NVARCHAR(20),
    @cRefKey05           NVARCHAR(20),
    @cMultiSKUBarcode    NVARCHAR( 1),  -- (james01)
-   @tExtScnData			VariableTable, --(JHU151)
+   @tExtScnData         VariableTable, --(JHU151)
 
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),    @cFieldAttr01 NVARCHAR( 1),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),    @cFieldAttr02 NVARCHAR( 1),
