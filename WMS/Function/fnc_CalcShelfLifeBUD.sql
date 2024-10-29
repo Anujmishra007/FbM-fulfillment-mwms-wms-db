@@ -35,7 +35,7 @@ BEGIN
          CASE
             WHEN CAST(DATEDIFF(dd, GETDATE(), @dLottable04) AS FLOAT) >= CAST(0.6 * DATEDIFF(dd, @dLottable13, @dLottable04) AS FLOAT) THEN 'ML11'
             WHEN SKU.BUSR3 = @cFrozenFood
-               AND DATEDIFF(dd, GETDATE(),@dLottable04) >= 210
+               AND DATEDIFF(dd, GETDATE(),@dLottable04) > 210
                AND CAST(DATEDIFF(dd, GETDATE(),@dLottable04) AS FLOAT) < CAST(0.6 * DATEDIFF(dd, @dLottable13, @dLottable04) AS FLOAT)
             THEN 'ML19'
             WHEN SKU.BUSR3 = @cCabinets
@@ -52,7 +52,7 @@ BEGIN
                AND DATEDIFF(dd, GETDATE(),@dLottable04) < 391
                AND CAST(DATEDIFF(dd, GETDATE(),@dLottable04) AS FLOAT) < CAST(0.6 * DATEDIFF(dd, @dLottable13, @dLottable04) AS FLOAT)
             THEN 'ML18'
-            WHEN DATEDIFF(dd, GETDATE(),@dLottable04) <= 60 THEN 'ML13'
+            WHEN DATEDIFF(dd, GETDATE(),@dLottable04) < 61 THEN 'ML13'
             ELSE 'ML12'
          END
       FROM dbo.SKU SKU WITH (NOLOCK) 
