@@ -1845,6 +1845,7 @@ BEGIN
             AND SKU = @cSKU
             AND StorerKey = @cStorerKey
             AND Status = '5'        
+            and TaskType = @cTTMTaskType 
             AND ListKey <> @cListKey
          --Confirmed Pick/Task  Status = 5;
          --Close Pallet         Status = 9
