@@ -31,6 +31,7 @@ GO
 /* 2024-03-12 2.3  CYU027     UWP-15734 Add Extended Print SP				      */
 /* 2024-04-10 2.4  Dennis     UWP-16909 Check Digit            			      */
 /* 2024-07-08 2.5  JHU151     FCR-330 SSCC code generator                     */
+/* 2024-10-08 2.6  PXL009     FCR-872 Auto Generated Dropid                   */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_CasePick](
@@ -147,6 +148,9 @@ DECLARE
    @cLOCLookupSP        NVARCHAR(20),
    @cDecodeSP           NVARCHAR(20),
    @cDispStyleColorSize NVARCHAR( 1),
+   @cAutoGenDROPIDSP    NVARCHAR(20),
+   @tExtData            VariableTable,
+   @cAutoID             NVARCHAR( 18),
 
    @cAreaKey            NVARCHAR(10),
    @cTTMStrategykey     NVARCHAR(10),
@@ -274,6 +278,7 @@ SELECT
    @cRefKey05          = V_String39,
    @cOverwriteToLOC    = V_String40,
    @cExtScnSP          = V_String42,
+   @cAutoGenDROPIDSP   = V_String43,
 
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,  @cFieldAttr01  = FieldAttr01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,  @cFieldAttr02  = FieldAttr02,
@@ -396,6 +401,10 @@ BEGIN
    IF @cExtScnSP = '0'
       SET @cExtScnSP = ''
 
+   SET @cAutoGenDROPIDSP = [rdt].[RDTGetConfig]( @nFunc, 'AutoGenDropID', @cStorerKey)
+   IF @cAutoGenDROPIDSP = '0'
+      SET @cAutoGenDROPIDSP = ''
+
    -- Disable QTY field
    IF @cDisableQTYFieldSP <> ''
    BEGIN
@@ -516,6 +525,21 @@ BEGIN
 
       SET @nScn = @nScn + 1
       SET @nStep = @nStep + 1
+   END
+
+   IF @cAutoGenDROPIDSP <> '' AND @nStep = 1
+   BEGIN
+      -- Auto generate DROPID
+      EXEC rdt.rdt_AutoGenID @nMobile, @nFunc, @nStep, @cLangCode
+         ,@cAutoGenDROPIDSP
+         ,@tExtData
+         ,@cAutoID  OUTPUT
+         ,@nErrNo   OUTPUT
+         ,@cErrMsg  OUTPUT
+      IF @nErrNo <> 0
+         GOTO Quit
+
+      SET @cOutField01 = @cAutoID
    END
 
    -- Extended info
@@ -938,6 +962,21 @@ BEGIN
             -- Prepare prev screen var
             SET @cDropID = ''
             SET @cOutField01 = '' -- DropID
+
+            IF @cAutoGenDROPIDSP <> ''
+            BEGIN
+               -- Auto generate DROPID
+               EXEC rdt.rdt_AutoGenID @nMobile, @nFunc, @nStep, @cLangCode
+                  ,@cAutoGenDROPIDSP
+                  ,@tExtData
+                  ,@cAutoID  OUTPUT
+                  ,@nErrNo   OUTPUT
+                  ,@cErrMsg  OUTPUT
+               IF @nErrNo <> 0
+                  GOTO Quit
+
+               SET @cOutField01 = @cAutoID
+            END
 
             SET @nScn  = @nScn - 1
             SET @nStep = @nStep - 1
@@ -1999,6 +2038,21 @@ BEGIN
             -- Prepare next screen var
             SET @cDropID = ''
             SET @cOutField01 = '' -- @cDropID
+            
+            IF @cAutoGenDROPIDSP <> ''
+            BEGIN
+               -- Auto generate DROPID
+               EXEC rdt.rdt_AutoGenID @nMobile, @nFunc, @nStep, @cLangCode
+                  ,@cAutoGenDROPIDSP
+                  ,@tExtData
+                  ,@cAutoID  OUTPUT
+                  ,@nErrNo   OUTPUT
+                  ,@cErrMsg  OUTPUT
+               IF @nErrNo <> 0
+                  GOTO Step_5_Fail
+
+               SET @cOutField01 = @cAutoID
+            END
 
             SET @nScn = @nScn - 4
             SET @nStep = @nStep - 4
@@ -3112,6 +3166,21 @@ BEGIN
          -- Prepare next screen variable
          SET @cDropID = ''
          SET @cOutField01 = '' -- DropID
+
+         IF @cAutoGenDROPIDSP <> ''
+         BEGIN
+            -- Auto generate DROPID
+            EXEC rdt.rdt_AutoGenID @nMobile, @nFunc, @nStep, @cLangCode
+               ,@cAutoGenDROPIDSP
+               ,@tExtData
+               ,@cAutoID  OUTPUT
+               ,@nErrNo   OUTPUT
+               ,@cErrMsg  OUTPUT
+            IF @nErrNo <> 0
+               GOTO Quit
+
+            SET @cOutField01 = @cAutoID
+         END
       END
 
       -- Go to FromLOC screen
@@ -3323,6 +3392,7 @@ BEGIN
       V_String39   = @cRefKey05,
       V_String40   = @cOverwriteToLOC,   
       V_String42   = @cExtScnSP,
+      V_String43   = @cAutoGenDROPIDSP,
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,   FieldAttr01  = @cFieldAttr01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,   FieldAttr02  = @cFieldAttr02,
