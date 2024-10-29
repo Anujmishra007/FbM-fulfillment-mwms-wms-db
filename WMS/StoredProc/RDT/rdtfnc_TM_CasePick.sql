@@ -1854,7 +1854,7 @@ BEGIN
          WHERE SL.StorerKey = @cStorerKey
          AND SL.SKU = @cSKU
          AND SL.LOC = @cFromLOC
-         --AND SL.LocationType IN ( 'CASE','PALLET','PICK')          --Closed Task
+         --AND SL.LocationType IN ( 'CASE','PALLET','PICK')          --do not check location type for invntory zero checking.
          
          IF ISNULL(@nOtherConfirmedQty,0) + @nQTY >= @AvlInvQty 
          BEGIN
