@@ -93,7 +93,8 @@ DECLARE
    @nTotalShort      INT,
    @nPackedQTY       INT,
    @nAction          INT, --(JHU151)   
-   @nEnter           INT, --(cc01)  
+   @nEnter           INT, --(cc01)
+   @nSKURank         INT, -- fcr-946  
 
    @cDefaultPrintLabelOption     NVARCHAR( 1),
    @cDefaultPrintPackListOption  NVARCHAR( 1),
@@ -234,7 +235,8 @@ SELECT
    @nPUOM_Div           = V_Integer8,
    @nPQTY               = V_Integer9,
    @nMQTY               = V_Integer10,
-   @nEnter              = V_Integer11,  --(cc01)  
+   @nEnter              = V_Integer11,  --(cc01)
+   @nSKURank            = V_Integer12, --fcr-946  
 
    @cShowPickSlipNo     = V_String15,
    @cDefaultPrintLabelOption    = V_String16,
@@ -833,8 +835,8 @@ BEGIN
          EXEC rdt.rdtSetFocusField @nMobile, 6  -- SKU
 
          -- Go to SKU QTY screen
-         SET @nScn = @nScn + 1
-         SET @nStep = @nStep + 1
+         SET @nScn = 6492
+         SET @nStep = 3
       END -- Option 1
       -- Merge Carton
       ELSE IF @cOption = '2'
@@ -1192,24 +1194,18 @@ BEGIN
          BEGIN
             -- Get carton info
             SELECT TOP 1
-               @cSKU = SKU,
-               @cLabelLine = LabelLine
+               @cSKU = SKU
             FROM PackDetail WITH (NOLOCK)
-            WHERE PickSlipNo = @cPickSlipNo
-               AND CartonNo = @nCartonNo
-               AND LabelNo = @cLabelNo
-               AND LabelLine > @cLabelLine
-            ORDER BY LabelLine
+            WHERE LabelNo = @cLabelNo
+               AND SKU > @cSKU
+            ORDER BY SKU
 
             IF @@ROWCOUNT = 0
                SELECT TOP 1
-                  @cSKU = SKU,
-                  @cLabelLine = LabelLine
+                  @cSKU = SKU
                FROM PackDetail WITH (NOLOCK)
-               WHERE PickSlipNo = @cPickSlipNo
-                  AND CartonNo = @nCartonNo
-                  AND LabelNo = @cLabelNo
-               ORDER BY LabelLine
+               WHERE LabelNo = @cLabelNo
+                  AND SKU = @cSKU
 
             -- Get SKU info
             SELECT
@@ -1303,16 +1299,30 @@ BEGIN
             END
 
             -- Get PackDetail info
-            SELECT @nPackedQTY = PD.QTY
-            FROM dbo.PackDetail PD WITH (NOLOCK)
-            WHERE PD.PickSlipNo = @cPickSlipNo
-               AND CartonNo = @nCartonNo
-               AND LabelNo = @cLabelNo
-               AND LabelLine = @cLabelLine
+            ;WITH RankedSKUs AS (
+               SELECT 
+                  LabelNo,
+                  SKU,
+                  SUM(Qty) AS Total_Qty,
+                  ROW_NUMBER() OVER (PARTITION BY LabelNo ORDER BY SKU) AS SKU_Rank
+               FROM 
+                  PackDetail PD
+               WHERE PD.LabelNo = @cNewLabelNo
+               GROUP BY 
+                  LabelNo, SKU
+            )
+            SELECT 
+               @nPackedQty = Total_Qty,
+               @nSKURank = SKU_Rank
+            FROM 
+               RankedSKUs
+            WHERE SKU = @cSKU
+            ORDER BY 
+               SKU;
 
             -- Prepare next screen var
-            SET @cOutField01 = RTRIM( @cCustomNo)
-            SET @cOutField02 = CAST( CAST( @cLabelLine AS INT) AS NVARCHAR(5)) + '/' + CAST( @nCartonSKU AS NVARCHAR(5))
+            SET @cOutField01 = CASE WHEN ISNULL(RTRIM( @cNewLabelNo),'') = '' THEN 'NEW' ELSe RTRIM( @cNewLabelNo) END -- fcr-946
+            SET @cOutField02 = CAST( @nSKURank AS NVARCHAR(5)) + '/' + CAST( @nCartonSKU AS NVARCHAR(5))
             SET @cOutField03 = '' -- SKU
             SET @cOutField04 = @cSKU
             SET @cOutField05 = rdt.rdtFormatString( @cSKUDescr, 1, 20)
@@ -1791,7 +1801,7 @@ BEGIN
          ,@cPickSlipNo
          ,@cFromDropID
          ,@cPackDtlDropID
-         ,@cLabelNo -- NewLabel
+         ,@cNewLabelNo -- NewLabel
          ,@cSKU
          ,@nQTY
          ,@nCartonNo
@@ -2000,9 +2010,9 @@ BEGIN
       END
 
       -- Confirm
-      EXEC RDT.rdt_Pack_Confirm @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey
-         ,@cPickSlipNo    = @cPickSlipNo
-         ,@cFromDropID    = @cFromDropID
+      EXEC RDT.rdt_Pack_LVSUSA_Confirm @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey
+         ,@cType          = 'NEW'
+         ,@cMasterLabelNo = @cMasterLabelNo
          ,@cSKU           = @cSKU
          ,@nQTY           = @nQTY
          ,@cUCCNo         = '' -- @cUCCNo
@@ -2013,7 +2023,7 @@ BEGIN
          ,@cPackDtlUPC    = @cPackDtlUPC
          ,@cPackDtlDropID = @cPackDtlDropID
          ,@nCartonNo      = @nCartonNo    OUTPUT
-         ,@cLabelNo       = @cLabelNo     OUTPUT
+         ,@cLabelNo       = @cNewLabelNo  OUTPUT --NewLabelNo
          ,@nErrNo         = @nErrNo       OUTPUT
          ,@cErrMsg        = @cErrMsg      OUTPUT
          ,@nBulkSNO       = 0
@@ -2024,17 +2034,17 @@ BEGIN
       IF @nErrNo <> 0
          GOTO Quit
 
+      SET @cLabelNo = @cNewLabelNo
+
       -- Calc carton info
       SELECT
-         @nCartonSKU = COUNT( 1), --DISTINCT PD.SKU
+         @nCartonSKU = COUNT(DISTINCT SKU), --DISTINCT PD.SKU
          @nCartonQTY = ISNULL( SUM( PD.QTY), 0)
       FROM dbo.PackDetail PD WITH (NOLOCK)
-      WHERE PD.PickSlipNo = @cPickSlipNo
-         AND CartonNo = @nCartonNo
-         AND LabelNo = @cLabelNo
+      WHERE PD.LabelNo = @cNewLabelNo
 
-      -- Get carton info
-      DECLARE @cPD_DropID NVARCHAR(20)
+      -- Get sku info in carton
+      /*DECLARE @cPD_DropID NVARCHAR(20)
       DECLARE @cPD_RefNo  NVARCHAR(20)
       DECLARE @cPD_RefNo2 NVARCHAR(30)
       SELECT
@@ -2047,17 +2057,38 @@ BEGIN
       WHERE PD.PickSlipNo = @cPickSlipNo
          AND CartonNo = @nCartonNo
          AND LabelNo = @cLabelNo
-         AND SKU = @cSKU
+         AND SKU = @cSKU*/
+
+      ;WITH RankedSKUs AS (
+         SELECT 
+            LabelNo,
+            SKU,
+            SUM(Qty) AS Total_Qty,
+            ROW_NUMBER() OVER (PARTITION BY LabelNo ORDER BY SKU) AS SKU_Rank
+         FROM 
+            PackDetail PD
+         WHERE PD.LabelNo = @cNewLabelNo
+         GROUP BY 
+            LabelNo, SKU
+      )
+      SELECT 
+         @nPackedQty = Total_Qty,
+         @nSKURank = SKU_Rank
+      FROM 
+         RankedSKUs
+      WHERE SKU = @cSKU
+      ORDER BY 
+         SKU;
 
       -- Get custom carton no
-      SELECT
+      /*SELECT
          @cCustomNo =
             CASE @cCustomCartonNo
                WHEN '1' THEN LEFT( @cPD_DropID, 5)
                WHEN '2' THEN LEFT( @cPD_RefNo, 5)
                WHEN '3' THEN LEFT( @cPD_RefNo2, 5)
                ELSE CAST( @nCartonNo AS NVARCHAR(5))
-            END
+            END*/
 
       -- Extended info
       IF @cExtendedInfoSP <> ''
@@ -2118,13 +2149,13 @@ BEGIN
       END
 
       -- Prepare next screen var
-      SET @cOutField01 = RTRIM( @cCustomNo)
-      SET @cOutField02 = CAST( CAST( @cLabelLine AS INT) AS NVARCHAR(5)) + '/' + CAST( @nCartonSKU AS NVARCHAR(5))
+      SET @cOutField01 = CASE WHEN ISNULL(RTRIM( @cNewLabelNo),'') = '' THEN 'NEW' ELSE RTRIM( @cNewLabelNo) END -- fcr-946
+      SET @cOutField02 = CAST( @nSKURank AS NVARCHAR(5)) + '/' + CAST( @nCartonSKU AS NVARCHAR(5))
       SET @cOutField03 = '' -- SKU
       SET @cOutField04 = @cSKU
       SET @cOutField05 = rdt.rdtFormatString( @cSKUDescr, 1, 20)
       SET @cOutField06 = rdt.rdtFormatString( @cSKUDescr, 21, 20)
-      SET @cOutField07 = CAST( @nPackedQTY AS NVARCHAR( 8))    -- ZG02
+      SET @cOutField07 = CAST( @nPackedQTY AS NVARCHAR( 8))    -- FCR-946
       SET @cOutField08 = CASE WHEN @cDisableQTYField = '1' THEN @cQTY ELSE @cDefaultQTY END --(cc01)
       SET @cOutField09 = CAST( @nCartonQTY AS NVARCHAR( 5))
       SET @cOutField10 = CASE WHEN @cPrePackIndicator = '2' THEN @cPackQtyIndicator ELSE '' END
@@ -2655,8 +2686,6 @@ BEGIN
          SET @nSCN = 6491 -- Stat Screen
          SET @nStep = 2
       END
-
-      
 
 END -- Step4
 GOTO Quit
@@ -4143,7 +4172,7 @@ BEGIN
    END
 
 
-Step_7_Quit:
+   Step_7_Quit:
    -- Extended info
    IF @cExtendedInfoSP <> ''
    BEGIN
@@ -4820,6 +4849,7 @@ BEGIN
          AND SKU = @cSKU
 
       -- Get custom carton no
+      /*
       SELECT
          @cCustomNo =
             CASE @cCustomCartonNo
@@ -4827,7 +4857,7 @@ BEGIN
                WHEN '2' THEN LEFT( @cPD_RefNo, 5)
                WHEN '3' THEN LEFT( @cPD_RefNo2, 5)
                ELSE CAST( @nCartonNo AS NVARCHAR(5))
-            END
+            END*/
 
       -- Prepare next screen var
       SET @cOutField01 = RTRIM( @cCustomNo)
@@ -5146,6 +5176,7 @@ BEGIN
    END
 
    -- Get custom carton no
+   /*
    SELECT
       @cCustomNo =
          CASE @cCustomCartonNo
@@ -5153,7 +5184,7 @@ BEGIN
             WHEN '2' THEN LEFT( @cPD_RefNo, 5)
             WHEN '3' THEN LEFT( @cPD_RefNo2, 5)
             ELSE CAST( @nCartonNo AS NVARCHAR(5))
-         END
+         END*/
 
    SET @cFieldAttr02 = ''
    SET @cFieldAttr04 = ''
@@ -5526,7 +5557,8 @@ BEGIN
       V_Integer8     = @nPUOM_Div,
       V_Integer9     = @nPQTY,
       V_Integer10    = @nMQTY,
-      V_Integer11    = @nEnter,     --(cc01)  
+      V_Integer11    = @nEnter,     --(cc01)
+      V_Integer12    = @nSKURank, --fcr-946  
 
       V_String15     = @cShowPickSlipNo,
       V_String16     = @cDefaultPrintLabelOption,

@@ -11,6 +11,8 @@ execute rdt.rdtAddMsg 227607, 10, '227607InsPackDetailFail', 'us_english', 993, 
 execute rdt.rdtAddMsg 227608, 10, '227608UpdPackDetailFail', 'us_english', 993, 0 , '227608 PackDetail Update Failure'
 execute rdt.rdtAddMsg 227609, 10, '227609InsPackDetailFail', 'us_english', 993, 0 , '227609 Insert PackDetail Fail'
 execute rdt.rdtAddMsg 227610, 10, '227610InsMoveLogFail', 'us_english', 993, 0 , '227610 Fail to Insert MoveLog'
+execute rdt.rdtAddMsg 227611, 10, '227611QtyTooGreat', 'us_english', 993, 0 , '227611 Qty is too great'
+execute rdt.rdtAddMsg 227612, 10, '227612FailtoHandlePickDetail', 'us_english', 993, 0 , '227612 Fail to Handle PickDetail'
 
 
 select * from rdt.rdtmsg (nolock) where message_id between 227601 AND 227650

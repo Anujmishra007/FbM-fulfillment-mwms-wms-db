@@ -287,6 +287,9 @@ BEGIN
             SELECT @cSQL AS PickQtySQL
             SELECT @nPickQty AS PickQty
          END
+
+         IF @cLabelNo = ''
+            SET @nPackQTY = 0
          
          IF @nPackQTY > @nPickQTY
          BEGIN
