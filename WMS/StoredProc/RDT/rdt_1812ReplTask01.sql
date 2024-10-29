@@ -54,12 +54,12 @@ BEGIN
       --AND Status = '5' -- 3=Fetch, 5=Picked, 9=Complete, --here, the task is confirm and closed, so don't use the condition status=5
    ORDER BY TaskDetailKey   
 
-print '@cStorerKey:'+isnull(@cStorerKey,'')
+   --print '@cStorerKey:'+isnull(@cStorerKey,'')
    -- Get storer config
    SET @cReplenFlag = rdt.rdtGetConfig( @nFunc, 'ReplenFlag', @cStorerKey)
    IF @cReplenFlag = '0'
       SET @cReplenFlag = ''
-print @cReplenFlag
+   --print @cReplenFlag
    SET @nTranCount = @@TRANCOUNT
    
    --FOR FCR-989 the trigger replenishment is changed to submitted to QCommander
@@ -195,7 +195,7 @@ print @cReplenFlag
                IF @bDebug>0
                   INSERT INTO DocInfo(TableName,key1,key2,key3,StorerKey,[Data],DataType,LineSeq,StoredProc)
                   VALUES('YSLOG',@cFacility,@cIP,@cPORT,@cStorerKey,'ERROR:' + @cErrMsg2 ,'LOG',0,'rdt_1812ReplTask01')                        
-            	GOTO Quit               
+               GOTO Quit               
             END CATCH   
             IF @bDebug>0
                INSERT INTO DocInfo(TableName,key1,key2,key3,StorerKey,[Data],DataType,LineSeq,StoredProc)
