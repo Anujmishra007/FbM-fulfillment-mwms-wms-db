@@ -41,8 +41,8 @@ BEGIN
    DECLARE @bDebug         INT = 0
 
    IF @bDebug>0
-      INSERT INTO DocInfo(TableName,key1,key2,key3,StorerKey,[Data],DataType,LineSeq)
-      VALUES('YSLOG','','','','','Enter rdt_1812ReplTask01','LOG',0)  
+      INSERT INTO DocInfo(TableName,key1,key2,key3,StorerKey,[Data],DataType,LineSeq,StoredProc)
+      VALUES('YSLOG','','','','','Enter','LOG',0,'rdt_1812ReplTask01')  
    --print @cListKey
    --print @cUserName
    -- Get storer
@@ -92,8 +92,8 @@ print @cReplenFlag
       SELECT @cLocEmptyOption = V_String14 FROM   RDT.RDTMOBREC WITH (NOLOCK) WHERE  Mobile = @nMobile
 
       IF @bDebug>0
-         INSERT INTO DocInfo(TableName,key1,key2,key3,StorerKey,[Data],DataType,LineSeq)
-         VALUES('YSLOG',@cSKU,@cFromLOC,@cLocEmptyOption,@cStorerKey,'Info','LOG',0)
+         INSERT INTO DocInfo(TableName,key1,key2,key3,StorerKey,[Data],DataType,LineSeq,StoredProc)
+         VALUES('YSLOG',@cSKU,@cFromLOC,@cLocEmptyOption,@cStorerKey,'Info','LOG',0,'rdt_1812ReplTask01')
 
 
       --Operator say the location is empty /or/ qty hits min threshold
@@ -168,8 +168,8 @@ print @cReplenFlag
          declare @cErrMsg2        NVARCHAR(20)
          BEGIN TRY
             IF @bDebug>0
-               INSERT INTO DocInfo(TableName,key1,key2,key3,StorerKey,[Data],DataType,LineSeq)
-               VALUES('YSLOG',@cFacility,@cIP,@cPORT,@cStorerKey,'Prepare:'+@cSQlCommand,'LOG',0)         
+               INSERT INTO DocInfo(TableName,key1,key2,key3,StorerKey,[Data],DataType,LineSeq,StoredProc)
+               VALUES('YSLOG',@cFacility,@cIP,@cPORT,@cStorerKey,'Prepare:'+@cSQlCommand,'LOG',0,'rdt_1812ReplTask01')         
             EXEC isp_QCmd_SubmitTaskToQCommander
                   @cTaskType           = 'O' -- D=By Datastream, T=Transmitlog, O=Others
                   , @cStorerKey        = @cStorerKey
@@ -193,13 +193,13 @@ print @cReplenFlag
            	   SET @cErrMsg2 = ERROR_MESSAGE()
            	   PRINT @cErrMsg2   
                IF @bDebug>0
-                  INSERT INTO DocInfo(TableName,key1,key2,key3,StorerKey,[Data],DataType,LineSeq)
-                  VALUES('YSLOG',@cFacility,@cIP,@cPORT,@cStorerKey,'ERROR:' + @cErrMsg2 ,'LOG',0)                        
+                  INSERT INTO DocInfo(TableName,key1,key2,key3,StorerKey,[Data],DataType,LineSeq,StoredProc)
+                  VALUES('YSLOG',@cFacility,@cIP,@cPORT,@cStorerKey,'ERROR:' + @cErrMsg2 ,'LOG',0,'rdt_1812ReplTask01')                        
             	GOTO Quit               
             END CATCH   
             IF @bDebug>0
-               INSERT INTO DocInfo(TableName,key1,key2,key3,StorerKey,[Data],DataType,LineSeq)
-               VALUES('YSLOG',@cFacility,@cIP,@cPORT,@cStorerKey,'DONE:'+@cErrMsg2,'LOG',0)                                 
+               INSERT INTO DocInfo(TableName,key1,key2,key3,StorerKey,[Data],DataType,LineSeq,StoredProc)
+               VALUES('YSLOG',@cFacility,@cIP,@cPORT,@cStorerKey,'DONE:'+@cErrMsg2,'LOG',0,'rdt_1812ReplTask01')                                 
       END
    END
    GOTO Quit
@@ -209,8 +209,8 @@ WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
    COMMIT TRAN
 END
 IF @bDebug>0
-   INSERT INTO DocInfo(TableName,key1,key2,key3,StorerKey,[Data],DataType,LineSeq)
-   VALUES('YSLOG','','','','','Exit rdt_1812ReplTask01','LOG',0)   
+   INSERT INTO DocInfo(TableName,key1,key2,key3,StorerKey,[Data],DataType,LineSeq,StoredProc)
+   VALUES('YSLOG','','','','','Exit','LOG',0,'rdt_1812ReplTask01')   
 GO
 
 SET QUOTED_IDENTIFIER OFF
