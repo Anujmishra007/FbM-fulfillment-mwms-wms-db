@@ -4,20 +4,21 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-/******************************************************************************/
-/* Store procedure: rdt_855ExtUpd13                                           */
-/* Copyright      : Maersk                                                    */
-/* Customer: Granite                                                          */
-/*                                                                            */
-/* Purpose: Print the VAS label                                               */
-/*                                                                            */
-/* Modifications log:                                                         */
-/* Date       Rev  Author   Purposes                                          */
-/* 2024-06-18 1.0  NLT013   FCR-386. Created                                  */
-/* 2024-08-06 1.1  Dennis   FCR-386. Remove order group condition             */
-/* 2024-09-26 1.2  NLT013   UWP-24932 Error message UI issue                  */
-/* 2024-09-30 1.3  NLT013   Fix printing special order labels issue           */
-/******************************************************************************/
+/***********************************************************************************/
+/* Store procedure: rdt_855ExtUpd13                                                */
+/* Copyright      : Maersk                                                         */
+/* Customer: Granite                                                               */
+/*                                                                                 */
+/* Purpose: Print the VAS label                                                    */
+/*                                                                                 */
+/* Modifications log:                                                              */
+/* Date       Rev       Author   Purposes                                          */
+/* 2024-06-18 1.0       NLT013   FCR-386. Created                                  */
+/* 2024-08-06 1.1       Dennis   FCR-386. Remove order group condition             */
+/* 2024-09-26 1.2       NLT013   UWP-24932 Error message UI issue                  */
+/* 2024-09-30 1.3       NLT013   Fix printing special order labels issue           */
+/* 2024-10-28 1.4.0     NLT013   FCR-1085 Automate print Order Level labels        */
+/***********************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_855ExtUpd13 (
    @nMobile      INT,   
@@ -93,6 +94,7 @@ BEGIN
       @cBillToKey                NVARCHAR(15),
       @cMPOCFlag                 NVARCHAR(10),
       @cOLPSCode                 NVARCHAR(10)
+      DECLARE @tPackList         VariableTable
 
    DECLARE @tLabels TABLE
    (
@@ -647,6 +649,7 @@ BEGIN
                               WHERE StorerKey = @cStorerKey
                                  AND LISTNAME = 'MPOC_PERMITTED'
                                  AND Code IN (@cConsigneeKey, @cBillToKey)
+                              ORDER BY IIF(Code = @cConsigneeKey, 1, 2)
 
                               IF ISNULL(@cMPOCFlag, '') NOT IN ('', '0')
                                  CONTINUE
@@ -658,12 +661,28 @@ BEGIN
                                  AND Description = 'OlpsPlacement'
                                  AND ISNULL(code2, '') <> ''
                                  AND code2 IN (@cConsigneeKey, @cBillToKey)
+                              ORDER BY IIF(code2 = @cConsigneeKey, 1, 2)
 
                               SET @nRowCount = @@ROWCOUNT
 
                               -- If cOLPSCode is not one of ('1', '2', '3', '5'), no need to print logi report automatically
                               IF @nRowCount = 0 OR ISNUL(@cOLPSCode, '') NOT IN ('1', '2', '3', '5')
                                  CONTINUE
+
+                              INSERT INTO @tPackList (Variable, Value) 
+                              VALUES 
+                                 ( '@cPickSlipNo', @cPickSlipNo),
+                                 ( '@cLabelNo', @cDropID),
+                                 ( '@cSKU', @cSKU)
+
+                              -- Print Order Level packing list label
+                              EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cLabelPrinterGroup, @cPaperPrinter,
+                                 @cLabelName, -- Report type
+                                 @tcatelogLabelList, -- Report params
+                                 'rdt_855ExtUpd13',
+                                 @nErrNo  OUTPUT,
+                                 @cErrMsg OUTPUT,
+                                 @nNoOfCopy = @nWorkOrderDetailQty
                            END
                         END
                      END
