@@ -160,7 +160,7 @@ print @cReplenFlag
 
          IF @@ROWCOUNT<=0
          BEGIN
-            SET @nErrNo = 51152
+            SET @nErrNo = 228001
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- NO replenishment config
             GOTO Quit
          END
@@ -186,20 +186,20 @@ print @cReplenFlag
                   , @cIniFilePath      = @cIniFilePath
                   , @cAPPDBName        = @cAPP_DB_Name
                   , @bSuccess          = @bSuccess OUTPUT
-                  , @nErr              = @nErrNo2 OUTPUT
+                  , @nErr              = @nErrNo2  OUTPUT
                   , @cErrMsg           = @cErrMsg2 OUTPUT   
             END TRY
             BEGIN CATCH
-           	   SET @cErrMsg = ERROR_MESSAGE()
-           	   PRINT @cErrMsg     
+           	   SET @cErrMsg2 = ERROR_MESSAGE()
+           	   PRINT @cErrMsg2   
                IF @bDebug>0
                   INSERT INTO DocInfo(TableName,key1,key2,key3,StorerKey,[Data],DataType,LineSeq)
-                  VALUES('YSLOG',@cFacility,@cIP,@cPORT,@cStorerKey,'ERROR:' + @cErrMsg ,'LOG',0)                        
+                  VALUES('YSLOG',@cFacility,@cIP,@cPORT,@cStorerKey,'ERROR:' + @cErrMsg2 ,'LOG',0)                        
             	GOTO Quit               
             END CATCH   
             IF @bDebug>0
                INSERT INTO DocInfo(TableName,key1,key2,key3,StorerKey,[Data],DataType,LineSeq)
-               VALUES('YSLOG',@cFacility,@cIP,@cPORT,@cStorerKey,'DONE:'+@cErrMsg,'LOG',0)                                 
+               VALUES('YSLOG',@cFacility,@cIP,@cPORT,@cStorerKey,'DONE:'+@cErrMsg2,'LOG',0)                                 
       END
    END
    GOTO Quit
