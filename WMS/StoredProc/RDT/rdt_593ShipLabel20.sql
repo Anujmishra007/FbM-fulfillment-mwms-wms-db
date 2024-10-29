@@ -1,5 +1,6 @@
 SET ANSI_NULLS OFF
 GO
+
 SET QUOTED_IDENTIFIER OFF
 GO
 
@@ -11,13 +12,11 @@ GO
 /*                                                                            */
 /* Modifications log:                                                         */
 /*                                                                            */
-/* Date       Rev  Author     Purposes                                        */
-/* 2024-03-13 1.0  Vikas      UWP-15734 Created                               */
+/* Date       Rev    Author     Purposes                                      */
+/* 2024-03-13 1.0    Vikas      UWP-15734 Created                             */
+/* 2024-10-28 1.1.0  Vikas      UWP-26275 Added UOM display                   */
 /******************************************************************************/
-
-
-
-CREATE OR ALTER PROC [RDT].[rdt_593ShipLabel20] (
+CREATE OR ALTER   PROC [RDT].[rdt_593ShipLabel20] (
    @nMobile    INT,
    @nFunc      INT='',
    @nStep      INT='',
@@ -49,10 +48,11 @@ BEGIN
       @cCity            NVARCHAR( 20),
       @cLoc             NVARCHAR( 20),
       @cSku             NVARCHAR( 20),
-      @cQty             NVARCHAR( 10),
+      @cQty             NVARCHAR( 30),
+      @cQty2             NVARCHAR( 50),
       @cPalletID        NVARCHAR( 20),
       @cShipment        NVARCHAR( 20),
-      @nWight           NVARCHAR( 10),
+      @nWight           NVARCHAR( 50),
       @cShipLabel       NVARCHAR(10)
 
    -- Parameter mapping
@@ -61,16 +61,16 @@ BEGIN
    -- Check blank
    IF @cPalletID = ''
    BEGIN
-      SET @nErrNo = 121651
+      SET @nErrNo = 227851
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') --Need DropID
       GOTO Quit
    END
 
    -- Get login info
    SELECT
-         @cFacility = Facility,
-         @cLabelPrinter = Printer,
-         @cPaperPrinter = Printer_Paper
+      @cFacility = Facility,
+      @cLabelPrinter = Printer,
+      @cPaperPrinter = Printer_Paper
    FROM rdt.rdtMobrec WITH (NOLOCK)
    WHERE Mobile = @nMobile
 
@@ -79,35 +79,66 @@ BEGIN
 
    DECLARE cursor_product CURSOR LOCAL FOR
 
-   SELECT
-      O.ORDERKEY,
-      TD.FinalLOC,
-      ORD.SKU,
-      SUM(PKD.QTY),
-      CASE WHEN MAX(S.STDGROSSWGT)>0 THEN (SUM(PKD.QTY)*MAX(S.STDGROSSWGT)/1000) ELSE SUM(PKD.QTY) END ,
-      MD.MbolKey
-   FROM ORDERS O WITH (NOLOCK) JOIN ORDERDETAIL ORD WITH (NOLOCK)
-      ON ORD.OrderKey=O.OrderKey AND ORD.StorerKey=O.StorerKey
-   JOIN PICKDETAIL PKD WITH (NOLOCK)
-      ON PKD.OrderKey=ORD.OrderKey AND PKD.OrderLineNumber=ORD.OrderLineNumber
-   JOIN MBOLDETAIL MD WITH (NOLOCK)
-      ON MD.OrderKey=PKD.OrderKey
-   JOIN TASKDETAIL TD WITH (NOLOCK)
-      ON TD.TaskDetailKey=PKD.TaskDetailKey
-   JOIN SKU S WITH (NOLOCK)
-      ON S.SKU=ORD.SKU AND S.StorerKey=ORD.StorerKey
-   WHERE ((PKD.ID=@cPalletID AND TD.PICKMETHOD='FP') OR ( PKD.DropID= @cPalletID  AND TD.PICKMETHOD='PP'))
-     AND PKD.Storerkey= @cStorerKey AND PKD.Status IN (5,9)
-   GROUP BY
-      O.ORDERKEY,
-      ORD.SKU,
-      PKD.ID,
-      TD.FinalLOC,
-      MD.MbolKey
+   SELECT ORDERKEY, FINALLOC, SKU, 
+      CASE
+         WHEN @cStorerKey <>'SABULRPM' THEN CAST(CASECNT AS VARCHAR) +''+' CS'
+         WHEN UOM ='LT' THEN CAST(CASECNT/1000 AS VARCHAR) +''+' LT' 
+         WHEN UOM ='KG' THEN CAST(CASECNT/1000 AS VARCHAR) +''+' KG'
+         WHEN UOM ='MT' THEN CAST(CASECNT/100 AS VARCHAR) +''+' MT'
+         WHEN UOM ='PC' THEN CAST(CASECNT AS VARCHAR) +''+' PC'
+         WHEN UOM ='G'  THEN CAST(CASECNT/1000 AS VARCHAR) +''+' KG' 
+         ELSE CAST(CASECNT AS VARCHAR) 
+      END AS QTY,
+      CASE 
+         WHEN @cStorerKey  NOT IN ('SABULFG', 'SABULRPM') THEN  CAST(SHRCNT AS VARCHAR)+' SHR' 
+         ELSE '' 
+      END AS QTY2,
+      Weight, 
+      MBOLKEY 
+   FROM (
+         SELECT
+            O.ORDERKEY,
+            TD.FinalLOC,
+            ORD.SKU,
+            MAX(ORD.UOM)  AS UOM,
+            CASE  
+               WHEN @cStorerKey <>'SABULRPM' THEN  SUM(PKD.QTY)/MAX(P.CASECNT) 
+               ELSE  SUM(PKD.QTY) 
+            END AS CASECNT,
+            CASE  
+               WHEN @cStorerKey <>'SABULRPM' THEN CAST(SUM(PKD.QTY) AS DECIMAL(10,2))% CAST(MAX(P.CASECNT) AS DECIMAL(10,2)) 
+               ELSE 0 
+            END AS SHRCNT,
+            CASE WHEN MAX(S.STDGROSSWGT)>0 THEN (SUM(PKD.QTY)*MAX(S.STDGROSSWGT)/1000) 
+               ELSE SUM(PKD.QTY) 
+            END Weight,
+            MD.MbolKey
+         FROM dbo.ORDERS O WITH (NOLOCK) 
+         INNER JOIN dbo.ORDERDETAIL ORD WITH (NOLOCK)
+            ON ORD.OrderKey=O.OrderKey AND ORD.StorerKey=O.StorerKey
+         INNER JOIN dbo.PICKDETAIL PKD WITH (NOLOCK)
+            ON PKD.OrderKey=ORD.OrderKey AND PKD.OrderLineNumber=ORD.OrderLineNumber
+         INNER JOIN dbo.MBOLDETAIL MD WITH (NOLOCK)
+            ON MD.OrderKey=PKD.OrderKey
+         INNER JOIN dbo.TASKDETAIL TD WITH (NOLOCK)
+            ON TD.TaskDetailKey=PKD.TaskDetailKey
+         INNER JOIN dbo.SKU S WITH (NOLOCK)
+            ON S.SKU=ORD.SKU AND S.StorerKey=ORD.StorerKey
+         INNER JOIN dbo.PACK P WITH (NOLOCK) 
+               ON P.PACKKEY=S.PACKKEY 
+         WHERE ((PKD.ID= @cPalletID AND (TD.PICKMETHOD='FP' OR TD.PICKMETHOD='PP')) OR ( PKD.DropID= @cPalletID  AND (TD.PICKMETHOD='FP' OR TD.PICKMETHOD='PP')))
+            AND PKD.Storerkey= @cStorerKey AND PKD.Status IN (5,9)
+         GROUP BY
+            O.ORDERKEY,
+            ORD.SKU,
+            PKD.ID,
+            TD.FinalLOC,
+            MD.MbolKey
+         )t
 
    IF @@ROWCOUNT = 0
    BEGIN
-      SET @nErrNo = 121652
+      SET @nErrNo = 227852
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') --Invalid DropID
       GOTO Quit
    END
@@ -119,6 +150,7 @@ BEGIN
       @cLoc,
       @cSku,
       @cQty,
+      @cQty2,
       @nWight,
       @cShipment;
 
@@ -130,6 +162,7 @@ BEGIN
       ('@cLoc'     ,@cLoc     ),
       ('@cSku'     ,@cSku     ),
       ('@cQty'     ,@cQty     ),
+      ('@cQty2'    ,@cQty2    ),
       ('@nWight'   ,@nWight   ),
       ('@cShipment',@cShipment),
       ('@cPalletID',@cPalletID),
@@ -150,6 +183,7 @@ BEGIN
          @cLoc,
          @cSku,
          @cQty,
+         @cQty2,
          @nWight,
          @cShipment;
    END;
@@ -157,15 +191,14 @@ BEGIN
    CLOSE cursor_product;
 
    DEALLOCATE cursor_product;
-
-
    Quit:
 END
+GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS ON
 GO
 
-GRANT EXECUTE ON rdt.rdt_593ShipLabel20 TO NSQL
+GRANT EXECUTE ON RDT.rdt_593ShipLabel20 TO NSQL
 GO
