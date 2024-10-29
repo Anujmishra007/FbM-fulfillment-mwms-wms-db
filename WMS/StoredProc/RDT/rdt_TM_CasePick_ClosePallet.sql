@@ -418,7 +418,6 @@ REPLEN_TASK:
    IF @cReplenFlag = '1'
    BEGIN
 
-
       -- Get storer
       SELECT TOP 1
             @cStorerKey = StorerKey,
