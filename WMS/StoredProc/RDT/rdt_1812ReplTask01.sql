@@ -1,16 +1,16 @@
 
-/************************************************************************/
-/* Store procedure: rdt_1812ReplTask01                                  */
-/* Copyright      : Maersk                                              */
-/* Customer       : Unilever                                            */
-/*                                                                      */
-/* Purpose: Confirm pick                                                */
-/*                                                                      */
-/* Date        Rev  Author    Purposes                                  */
-/* 25-Oct-2024 1.0  YYS027    FCR-989 Created from                      */
-/*                            v1.4 rdt_TM_CasePick_ClosePallet for      */
- /*                           trigger replenishment to QCommander       */
-/************************************************************************/
+/*************************************************************************************/
+/* Store procedure: rdt_1812ReplTask01                                               */
+/* Copyright      : Maersk                                                           */
+/* Customer       : Unilever                                                         */
+/*                                                                                   */
+/* Purpose: Confirm pick                                                             */
+/*                                                                                   */
+/* Date        Rev  Author    Purposes                                               */
+/* 25-Oct-2024 1.0  YYS027    FCR-989 Created from v1.4 rdt_TM_CasePick_ClosePallet  */
+/*                            for trigger replenishment submit to QCommander         */
+/*                            used by ReplenTaskSP in rdt.storerconfig               */
+/*************************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_1812ReplTask01] (
    @nMobile        INT,
