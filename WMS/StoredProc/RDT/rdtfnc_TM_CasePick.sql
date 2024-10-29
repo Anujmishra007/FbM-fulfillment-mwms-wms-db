@@ -1832,12 +1832,37 @@ BEGIN
       
       IF @cReplenFlag = '1'
       BEGIN
+         DECLARE @nOtherConfirmedQty   INT
+         DECLARE @AvlInvQty         INT
          --so if qty of location in system is zero, RDT will show new empty choice screen, and if non-zero, no screen change, is right?
          --yes, if it is non zero... then the screen will not be shown... that is the whole idea of asking the user if the location is actually empty
- 
-         SET @nScn = 4028
-         SET @nStep = 10               -- Goto 1=YES, 9=NO choice empty or not.
-         GOTO Quit
+
+         --Caculate the picking qty and inventory qty
+         SELECT @nOtherConfirmedQty= SUM ( QTY )
+            FROM dbo.TaskDetail WITH (NOLOCK)
+            WHERE UserKey = @cUserName
+            AND FromLOC = @cFromLOC
+            AND SKU = @cSKU
+            AND StorerKey = @cStorerKey
+            AND Status = '5'        
+            AND ListKey <> @cListKey
+         --Confirmed Pick/Task  Status = 5;
+         --Close Pallet         Status = 9
+         SELECT @AvlInvQty = (SUM(LLI.Qty) - SUM(LLI.QtyPicked) + SUM(LLI.PendingMoveIn)) 
+            FROM dbo.SKUXLOC SL(NOLOCK)
+               JOIN dbo.LOTxLOCxID LLI WITH (NOLOCK) ON SL.StorerKey = LLI.StorerKey AND SL.SKU = LLI.SKU AND SL.LOC = LLI.LOC
+         WHERE SL.StorerKey = @cStorerKey
+         AND SL.SKU = @cSKU
+         AND SL.LOC = @cFromLOC
+         --AND SL.LocationType IN ( 'CASE','PALLET','PICK')          --Closed Task
+         
+         IF ISNULL(@nOtherConfirmedQty,0) + @nQTY >= @AvlInvQty 
+         BEGIN
+            SET @cOutField01 = '' -- Option            
+            SET @nScn = 4028
+            SET @nStep = 10               -- Goto 1=YES, 9=NO choice empty or not.
+            GOTO Quit
+         END
       END
 
       -- QTY short
@@ -2727,11 +2752,14 @@ BEGIN
       SET @nToStep = 0
 
       -- Check if function setup
-      SELECT
+      SELECT TOP 1
          @nToFunc = Function_ID,
          @nToStep = Step
       FROM rdt.rdtTaskManagerConfig WITH (NOLOCK)
       WHERE TaskType = @cTTMTaskType
+         AND ISNULL(RTRIM(StorerKey),'') IN ('',@cStorerKey)
+      ORDER BY CASE WHEN StorerKey=@cStorerKey THEN 0 ELSE 1 END ASC 
+
       IF @nToFunc = 0
       BEGIN
          SET @nErrNo = 51373
@@ -3301,7 +3329,11 @@ BEGIN
          --If the user responds with 9 = NO, please refer to the RDT storer configuration NOREPLENREASON. 
          --If the Svalue maintained can be found in RDTREASON code list (Code2), then appropriate action has to be taken as mentioned in Code UDF01, Code UDF02, and Code UDF03. 
          --Please refer to FCR-428 for more information on implementing reason code.
-         DECLARE @cNoReplenReason NVARCHAR(80)
+         DECLARE @cNoReplenReason NVARCHAR(80),
+            @cCCTaskType       NVARCHAR(60),
+            @cHoldCheckFlg     NVARCHAR(60),
+            @cHoldType         NVARCHAR(60),
+            @cStoredProcedure  NVARCHAR(1000)
          SET @cNoReplenReason = rdt.rdtGetConfig(@nFunc, 'NOREPLENREASON', @cStorerKey)
          SELECT 
             @cReasonCode = Code2,
@@ -3313,9 +3345,10 @@ BEGIN
          AND storerkey = @cStorerKey
          AND Code2 = ISNULL(@cNoReplenReason,'')
 
-         SET @cLoc = @cSuggLOC
-         SET @cID = @cSuggID
-         SET @cSKU = @cSuggSKU
+         --SET @cLoc = @cSuggLOC
+         --SET @cID = @cSuggID
+         --SET @cSKU = @cSuggSKU
+         --set @cLot = @cSuggLOT
 
          SET @cStoredProcedure = rdt.rdtGetConfig( @nFunc, 'ActRDTreason', @cStorerKey)
          IF @cStoredProcedure = '0'
@@ -3325,6 +3358,7 @@ BEGIN
          BEGIN
             IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cStoredProcedure AND type = 'P')
             BEGIN
+               ---- Generate CC task /or/ Hold Type(LOC/ID/LOT)
                SET @cSQL = 'EXEC rdt.' + RTRIM( @cStoredProcedure) +
                      ' @nMobile, @nFunc, @cStorerKey, ' +
                      ' @cSKU, @cLOC, @cLot, @cID, @cReasonCode, ' +                      
@@ -3340,115 +3374,18 @@ BEGIN
                      ',@cReasonCode     NVARCHAR( 20)            ' +                          
                      ',@nErrNo          INT           OUTPUT     ' +
                      ',@cErrMsg         NVARCHAR(250) OUTPUT  '
+               --@cSKU from TaskDetail.SKU
+               --@cLOC from TaskDetail.FromLoc
+               --@cLot from TaskDetail.Lot
+               --@cID  from TaskDetail.FromID
 
-               SELECT TOP 1
-                     @cOrderKey = OrderKey,
-                     @cLoadKey = ExternOrderKey,
-                     @cZone = Zone
-               FROM dbo.PickHeader WITH (NOLOCK)
-               WHERE PickHeaderKey = @cPickSlipNo
+               EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                     @nMobile, @nFunc, @cStorerKey,
+                     @cSuggSKU, @cSuggFromLOC, @cSuggLOT, @cSuggID, @cReasonCode,
+                     @nErrNo OUTPUT, @cErrMsg OUTPUT
 
-               WHILE (1=1)
-               BEGIN
-                  -- Cross dock PickSlip
-                  IF @cZone IN ('XD', 'LB', 'LP')
-                  BEGIN
-                     SELECT TOP 1
-                        @cPickDetailKey = PD.PickDetailKey,
-                        @cLot = Lot,
-                        @cID = ID
-                     FROM dbo.RefKeyLookup RKL WITH (NOLOCK)
-                        JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
-                     WHERE RKL.PickSlipNo = @cPickSlipNo
-                        AND PD.LOC = @cLOC
-                        AND PD.SKU = @cSKU
-                        AND (ISNULL(@cID,'') = '' OR ID = @cID)
-                        AND PD.QTY > 0
-                        AND (
-                              (@nFunc = 839  AND PD.status = '4')
-                              OR 
-                              (@nFunc = 957 AND PD.Status <> '4' AND PD.Status < '5')
-                              )
-                        AND PD.PickDetailKey > @cPickDetailKey
-                     ORDER BY PD.PickDetailKey
-                  END
-                  ELSE IF @cOrderKey <> ''
-                  BEGIN
-                     SELECT TOP 1
-                        @cPickDetailKey = PD.PickDetailKey,
-                        @cLot = Lot,
-                        @cID = ID
-                     FROM dbo.PickDetail PD WITH (NOLOCK)
-                        JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
-                     WHERE PD.OrderKey = @cOrderKey
-                        AND PD.LOC = @cLOC
-                        AND PD.SKU = @cSKU
-                        AND (ISNULL(@cID,'') = '' OR ID = @cID)
-                        AND PD.QTY > 0
-                        AND (
-                              (@nFunc = 839  AND PD.status = '4')
-                              OR 
-                              (@nFunc = 957 AND PD.Status <> '4' AND PD.Status < '5')
-                              )
-                        AND PD.PickDetailKey > @cPickDetailKey
-                     ORDER BY PD.PickDetailKey
-                  END
-                  ELSE IF @cLoadKey <> ''
-                  BEGIN
-                     
-                     SELECT TOP 1
-                           @cPickDetailKey = PD.PickDetailKey,
-                           @cLot = Lot,
-                           @cID = ID
-                     FROM dbo.LoadPlanDetail LPD WITH (NOLOCK)
-                        JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)
-                        JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
-                     WHERE LPD.LoadKey = @cLoadKey
-                        AND PD.LOC = @cLOC
-                        AND PD.SKU = @cSKU
-                        AND (ISNULL(@cID,'') = '' OR ID = @cID)
-                        AND PD.QTY > 0
-                        AND (
-                           (@nFunc = 839  AND PD.status = '4')
-                           OR 
-                           (@nFunc = 957 AND PD.Status <> '4' AND PD.Status < '5')
-                           )
-                        AND PD.PickDetailKey > @cPickDetailKey
-                     ORDER BY PD.PickDetailKey
-                  END
-                  ELSE
-                  BEGIN
-                     SELECT TOP 1
-                           @cPickDetailKey = PD.PickDetailKey,
-                           @cLot = Lot,
-                           @cID = ID
-                     FROM dbo.PickDetail PD WITH (NOLOCK)
-                     JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
-                     WHERE PD.PickSlipNo = @cPickSlipNo
-                     AND PD.LOC = @cLOC
-                     AND PD.SKU = @cSKU
-                     AND (ISNULL(@cID,'') = '' OR ID = @cID)
-                        AND PD.QTY > 0
-                        AND (
-                           (@nFunc = 839  AND PD.status = '4')
-                           OR 
-                           (@nFunc = 957 AND PD.Status <> '4' AND PD.Status < '5')
-                           )
-                        AND PD.PickDetailKey > @cPickDetailKey
-                     ORDER BY PD.PickDetailKey
-                  END
-                  IF @@ROWCOUNT = 0
-                  BEGIN
-                     BREAK
-                  END
-                  EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-                        @nMobile, @nFunc, @cStorerKey,
-                        @cSKU, @cLOC, @cLot, @cID, @cReasonCode,
-                        @nErrNo OUTPUT, @cErrMsg OUTPUT
-
-                  IF @nErrNo <> 0
-                        GOTO Quit
-               END
+               IF @nErrNo <> 0
+                     GOTO Quit
             END
          END
          ----------------------------------------------------
@@ -3460,8 +3397,8 @@ BEGIN
          SET @cOption = ''
          SET @cOutField01 = '' -- Option
 
-         SET @nScn = @nScn - 2  -- step from 10 to 8          (Short/Close Pallet)
-         SET @nStep = @nStep - 1  --screen from 4028 to 4027
+         SET @nStep = @nStep - 2  -- step from 10 to 8          (Short/Close Pallet)
+         SET @nScn = @nScn - 1  --screen from 4028 to 4027
       END
 
       -- QTY fulfill
@@ -3471,8 +3408,8 @@ BEGIN
          SET @cOption = ''
          SET @cOutField01 = '' -- Option
 
-         SET @nScn = @nScn - 5      --step from 10 to 5          (next task /close pallet)
-         SET @nStep = @nStep - 4    --screen from 4048 to 4024
+         SET @nStep = @nStep - 5      --step from 10 to 5          (next task /close pallet)
+         SET @nScn = @nScn - 4    --screen from 4048 to 4024
       END
    END
    IF @nInputKey = 0 -- ESC pressed, return to SKU screen

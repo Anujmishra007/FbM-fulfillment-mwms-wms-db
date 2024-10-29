@@ -22,6 +22,7 @@ GO
 /* 03-Jan-2019 1.2  Ung       WMS-3273 Fix full short                   */
 /* 07-Mar-2019 1.3  Ung       WMS-8058 Fix move UCC                     */
 /* 01-Apr-2024 1.4  CYU027    UWP-17449 Create Replen task              */
+/* 29-Oct-2024 1.4  YYS027    FCR-989 add ReplenTaskSP                  */
 /************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_TM_CasePick_ClosePallet] (
@@ -44,6 +45,7 @@ BEGIN
    DECLARE @cSQLParam      NVARCHAR(MAX)
 
    DECLARE @cClosePalletSP NVARCHAR(20)
+   DECLARE @cReplenTaskSP  NVARCHAR(20)
    DECLARE @cReplenFlag    NVARCHAR(20)
    DECLARE @cStorerKey     NVARCHAR( 15)
    DECLARE @cSKU           NVARCHAR( 20)
@@ -69,6 +71,11 @@ BEGIN
    SET @cReplenFlag = rdt.rdtGetConfig( @nFunc, 'ReplenFlag', @cStorerKey)
    IF @cReplenFlag = '0'
       SET @cReplenFlag = ''
+
+   -- Get storer config
+   SET @cReplenTaskSP = rdt.rdtGetConfig( @nFunc, 'ReplenTaskSP', @cStorerKey)
+   IF @cReplenTaskSP = '0'
+      SET @cReplenTaskSP = ''
 
    SET @nTranCount = @@TRANCOUNT
    
@@ -378,8 +385,39 @@ RollBackTran:
 Fail:
 
 REPLEN_TASK:
+
+   /***********************************************************************************************
+                                          Custom Replenishment Task
+   ***********************************************************************************************/
+   IF @cReplenTaskSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cReplenTaskSP AND type = 'P')
+      BEGIN
+         SET @cSQL = 'EXEC rdt.' + RTRIM( @cReplenTaskSP) +
+            ' @nMobile, @nFunc, @cLangCode, @cUserName, @cListKey, @nErrNo OUTPUT, @cErrMsg OUTPUT '
+         SET @cSQLParam =
+            '@nMobile   INT,           ' +
+            '@nFunc     INT,           ' +
+            '@cLangCode NVARCHAR( 3),  ' +
+            '@cUserName NVARCHAR(18),  ' +
+            '@cListKey  NVARCHAR( 10), ' +
+            '@nErrNo    INT           OUTPUT, ' +
+            '@cErrMsg   NVARCHAR( 20) OUTPUT  ' 
+
+         EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+            @nMobile, @nFunc, @cLangCode, @cUserName, @cListKey, @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+         GOTO Quit
+      END
+   END
+
+   /***********************************************************************************************
+                                          Standard Replenishment Task
+   ***********************************************************************************************/
+
    IF @cReplenFlag = '1'
    BEGIN
+
 
       -- Get storer
       SELECT TOP 1
