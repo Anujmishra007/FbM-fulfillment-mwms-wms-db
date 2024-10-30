@@ -651,7 +651,7 @@ BEGIN
                                  AND Code IN (@cConsigneeKey, @cBillToKey)
                               ORDER BY IIF(Code = @cConsigneeKey, 1, 2)
 
-                              IF ISNULL(@cMPOCFlag, '') NOT IN ('', '0')
+                              IF TRIM(ISNULL(@cMPOCFlag, '')) NOT IN ('', '0')
                                  CONTINUE
 
                               SELECT @cOLPSCode = ISNULL(Long, '')
@@ -666,23 +666,39 @@ BEGIN
                               SET @nRowCount = @@ROWCOUNT
 
                               -- If cOLPSCode is not one of ('1', '2', '3', '5'), no need to print logi report automatically
-                              IF @nRowCount = 0 OR ISNUL(@cOLPSCode, '') NOT IN ('1', '2', '3', '5')
+                              IF @nRowCount = 0 OR TRIM(ISNUL(@cOLPSCode, '')) NOT IN ('1', '2', '3', '5')
                                  CONTINUE
 
+                              -- codelkup.listname = ‘LVSCUSPREF’ not available for consigneekey/billtokey
+                              IF NOT EXISTS (SELECT 1  
+                                 FROM dbo.CODELKUP WITH(NOLOCK)
+                                 WHERE StorerKey = @cStorerKey
+                                    AND LISTNAME = 'LVSCUSPREF' 
+                                    AND ISNULL(code2, '') <> ''
+                                    AND code2 IN (@cConsigneeKey, @cBillToKey))
+                              BEGIN
+                                 CONTINUE
+                              END
+
+                              SET @cLabelName = 'LVSPSORD'
                               INSERT INTO @tPackList (Variable, Value) 
                               VALUES 
-                                 ( '@cPickSlipNo', @cPickSlipNo),
-                                 ( '@cLabelNo', @cDropID),
-                                 ( '@cSKU', @cSKU)
+                                 ( '@cStorerKey', @cStorerKey),
+                                 ( '@cOrderKey', @cOrderKey)
 
                               -- Print Order Level packing list label
                               EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cLabelPrinterGroup, @cPaperPrinter,
                                  @cLabelName, -- Report type
-                                 @tcatelogLabelList, -- Report params
+                                 @tPackList, -- Report params
                                  'rdt_855ExtUpd13',
                                  @nErrNo  OUTPUT,
                                  @cErrMsg OUTPUT,
-                                 @nNoOfCopy = @nWorkOrderDetailQty
+                                 @nNoOfCopy = 1
+
+                              IF @nErrNo <> 0
+                              BEGIN
+                                 GOTO Quit
+                              END
                            END
                         END
                      END
