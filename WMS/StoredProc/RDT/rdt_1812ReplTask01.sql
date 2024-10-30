@@ -4,7 +4,7 @@
 /* Copyright      : Maersk                                                           */
 /* Customer       : Unilever                                                         */
 /*                                                                                   */
-/* Purpose: Confirm pick                                                             */
+/* Purpose: Trigger replenishment                                                    */
 /*                                                                                   */
 /* Date        Rev  Author    Purposes                                               */
 /* 25-Oct-2024 1.0  YYS027    FCR-989 Created from v1.4 rdt_TM_CasePick_ClosePallet  */
