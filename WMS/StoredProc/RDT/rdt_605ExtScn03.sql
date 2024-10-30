@@ -1,20 +1,21 @@
-/****** Object:  StoredProcedure [RDT].[rdt_600ExtScn01]    Script Date: 3/21/2024 10:14:40 AM ******/
+
+/****** Object:  StoredProcedure [RDT].[rdt_605ExtScn03]    Script Date: 10/30/2024 9:12:06 AM ******/
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
 /************************************************************************/
-/* Store procedure: rdt_605ExtScn01                                     */
+/* Store procedure: rdt_605ExtScn03                                     */
 /* Copyright      : Maersk                                              */
 /*                                                                      */
 /* Purpose:       For Unilever                                          */
 /*                                                                      */
 /* Date       Rev  Author   Purposes                                    */
-/* 2024-09-19 1.0  JHU151   Created                                     */
+/* 2024-10-08 1.0  Vikas   Created                                      */
 /************************************************************************/
 
-CREATE OR ALTER  PROC [RDT].[rdt_605ExtScn01] (
+CREATE OR ALTER PROC [RDT].[rdt_605ExtScn03] (
 	@nMobile          INT,           
    @nFunc            INT,           
    @cLangCode        NVARCHAR( 3),  
@@ -106,6 +107,11 @@ BEGIN
            @nQTY           INT,
            @nPQTY          INT,
            @nMQTY          INT
+
+
+   Declare @cRectype             NVARCHAR(10),
+           @cAvailcode           NVARCHAR(5),
+           @cSkutype             NVARCHAR(50)
 
    SET @nAfterScn = @nScn
    SET @nAfterStep = @nStep
@@ -264,9 +270,9 @@ BEGIN
                GOTO Quit
             END
             
-            IF (ISNULL( rdt.RDTGetConfig( @nFunc, 'RCTSHLFVLD', @cStorerKey),'') != '')
-            BEGIN
-               SELECT
+             IF (ISNULL( rdt.RDTGetConfig( @nFunc, 'RCTSHLFVLD', @cStorerKey),'') != '')
+               BEGIN
+                     SELECT
                   @dLottable04 = Lottable04,
                   @dLottable13 = Lottable13
                FROM ReceiptDetail WITH(NOLOCK)
@@ -298,7 +304,7 @@ BEGIN
                ELSE IF @cOption = '4'
                BEGIN
                   SET @cLottable10 = 'Y'
-                  --VPA235 2024/10/10 Start
+				  --VPA235 2024/10/10 Start
                   --SELECT TOP 1
                   --   @cLottable12 = Code
                   --FROM CodeLKUP
@@ -306,21 +312,22 @@ BEGIN
                   --AND UDF01 = 'LOT12_DMG'
                   --AND LISTNAME = 'SLCODE'
 
-                  SELECT TOP 1
+				   SELECT TOP 1
                      @cLottable12 = ISNULL(Code,'INTRDMG')
-                  FROM CodeLKUP
+				  FROM CodeLKUP
                   WHERE storerkey =  @cStorerkey
                   AND SHORT = 'INTRDMG'
                   AND LISTNAME = 'ASNREASON'
 
-                  --VPA235 2024/10/10 End
+				  --VPA235 2024/10/10 End
+
 
                   --SET @cLottable12 = 'In transit DMG'
                END
 
                SET @cLottable11 = ''
 
-               SELECT TOP 1 @cUserDefine08 = ISNULL(RD.UserDefine08,'')
+               SELECT TOP 1 @cUserDefine08 = ISNULL(RD.UserDefine08,'') ,@cRectype=R.RECType
                FROM dbo.Receipt R WITH (NOLOCK)
                   INNER JOIN dbo.ReceiptDetail RD WITH (NOLOCK) ON R.ReceiptKey  = RD.ReceiptKey
                WHERE R.Facility = @cFacility AND R.StorerKey = @cStorerKey
@@ -329,111 +336,153 @@ BEGIN
                   AND RD.Sku = @cSKU
                ORDER BY RD.ReceiptLineNumber
 
-               SELECT TOP 1 @nShelfLife = ISNULL(UDF02,0),@cResultCode = UDF03
-               FROM dbo.CodeLKUP WITH (NOLOCK)
-                  WHERE ListName = 'CCODEVALID'
-                  AND UDF01 = 'IBD'
-                  AND Code = @cFacility
-                  AND code2 = @cUserDefine08
-                  AND Storerkey = @cStorerKey
+                  SELECT TOP 1 @nShelfLife = ISNULL(UDF02,0),@cResultCode = UDF03
+                  FROM dbo.CodeLKUP WITH (NOLOCK)
+                     WHERE ListName = 'CCODEVALID'
+                     -- AND UDF01 = 'IBD'              --VPA235(1008)
+                     AND UDF01 = @cRectype
+                     AND Code = @cFacility
+                     AND code2 = @cUserDefine08
+                     AND Storerkey = @cStorerKey
 
-               IF (DATEDIFF(day,GETDATE(),@dLottable04) < (DATEDIFF(day,@dLottable13,@dLottable04) * @nShelfLife/100 )) AND GETDATE() < @dLottable04
-               BEGIN
-                  SET @cLottable11 = @cResultCode
-               END
-            END
-            IF (ISNULL( rdt.RDTGetConfig( @nFunc, 'ULLottable06', @cStorerKey),'0') != '0')
-            BEGIN
-               SET @cLottable06 = ''
-               SELECT TOP 1 @cUserDefine08 = ISNULL(RD.UserDefine08,'')
-               FROM dbo.Receipt R WITH (NOLOCK)
-                  INNER JOIN dbo.ReceiptDetail RD WITH (NOLOCK) ON R.ReceiptKey  = RD.ReceiptKey
-               WHERE R.Facility = @cFacility AND R.StorerKey = @cStorerKey
-                  AND R.ReceiptKey = @cReceiptKey 
-                  --AND (@cPOKey='NOPO' or RD.POKey = @cPOKey)
-                  AND RD.Sku = @cSKU
-               ORDER BY RD.ReceiptLineNumber
-               IF (@cUserDefine08 != '' AND ISNULL(@cUserDefine08,N'OK') != N'OK') OR ISNULL(@cLottable11,'')!='' OR ISNULL(@cLottable12,'')!=''
-               BEGIN    
-                  SET @cLottable06 = '1'
-               END
-               IF ISNULL(@cLottable12,'') <> '' AND 
-               EXISTS (SELECT 1 FROM CODELKUP WITH (NOLOCK) 
-                           WHERE LISTNAME = 'ASNREASON'
-                           AND Code = @cLottable12
-                           AND StorerKey = @cStorerkey)
-               BEGIN
-                  SET @cDamagedCode = ''
-                  SELECT @cDamagedCode = ISNULL(Code,'')
-                  FROM CODELKUP WITH (NOLOCK)
-                  WHERE storerkey = @cStorerkey
-               -- AND UDF01 = 'UL_Damage'
-                  AND UDF01 = 'RMPM_Damaged'
-                  AND LISTNAME = 'SLCode'
 
-                  IF ISNULL(@cDamagedCode,'') <> ''
+					 					 									  				   				   				  
+                --VPA235(1008)
+                  --IF (DATEDIFF(day,GETDATE(),@dLottable04) < (DATEDIFF(day,@dLottable13,@dLottable04) * @nShelfLife/100 )) AND GETDATE() < @dLottable04
+                  --BEGIN
+                  --   SET @cLottable11 = @cResultCode
+                  --END
+
+                  IF (DATEDIFF(day,GETDATE(),@dLottable04) < (DATEDIFF(day,@dLottable13,@dLottable04) * @nShelfLife/100 )) 
+                     AND GETDATE() < @dLottable04 AND @cRectype ='IBD'
                   BEGIN
+                     SET @cLottable11 = @cResultCode
+                  END
+				  				  		   
+              --IF (@cUserDefine08 != '' AND ISNULL(@cUserDefine08,N'OK' ) != N'OK') OR ISNULL(@cLottable11,'')!='' OR ISNULL(@cLottable12,'')!=''				  
+                IF   (@cLottable01='ML12' OR  ISNULL(@cLottable12,'')!='')
+                  BEGIN                         
+                     SET @cLottable06 = '1'                  
+                  END
+				  				   				   				  							 			 
+             
+--				    IF @cRectype  IN ('IBD', 'TO')  AND ISNULL(@cLottable12,'')='' AND (@cUserDefine08 = '' OR ISNULL(@cUserDefine08,N'OK') = N'OK')
+                    IF (@cRectype  IN ('IBD', 'TO')  AND ISNULL(@cLottable12,'')='')
+                  BEGIN    
+                					   				
+                     SELECT @cSkutype= BUSR3 FROM SKU WHERE SKU= @cSKU AND STORERKEY= @cStorerKey
+
+                     IF( (ISNULL(@dLottable04, '') <> '' AND DATEDIFF(DAY, GETDATE(), @dLottable04) < 211 
+                        AND ROUND(CAST((DATEDIFF (day, getdate(), @dLottable04)  ) as float)/ CAST((DATEDIFF (day,@dLottable13,@dLottable04)  ) as float)*100,2)< 60
+                        AND DATEDIFF(DAY, GETDATE(), @dLottable04) > 60  
+						AND @cSkutype ='FROZEN_FOOD' ) 
+                        OR 
+                        (ISNULL(@dLottable04, '') <> '' AND DATEDIFF(DAY, GETDATE(), @dLottable04) < 391 
+                        AND ROUND(CAST((DATEDIFF (day, getdate(), @dLottable04)  ) as float)/ CAST((DATEDIFF (day,@dLottable13,@dLottable04)  ) as float)*100,2)< 60
+						AND DATEDIFF(DAY, GETDATE(), @dLottable04) > 60 
+                        AND  @cSkutype = 'CABINETS' ))
+                  BEGIN     
+                     SET @cAvailcode = ''
+                     SELECT @cAvailcode = ISNULL(Code,'')
+                     FROM CODELKUP WITH (NOLOCK)
+                     WHERE storerkey = @cStorerkey
+                     AND UDF01 = 'FG_NearExpire_<310'
+                     AND LISTNAME = 'SLCode'
+
+                     SET @cLottable06 = '1'
+                     SET @cLottable07 = CASE WHEN @cLottable01='ML11' THEN @cAvailcode 
+					                    ELSE  @cLottable07 END 
+
+                  END
+
+                  IF( (ISNULL(@dLottable04, '') <> '' AND DATEDIFF(DAY, GETDATE(), @dLottable04) > 210 
+                     AND ROUND(CAST((DATEDIFF (day, getdate(), @dLottable04)  ) as float)/ CAST((DATEDIFF (day,@dLottable13,@dLottable04)  ) as float)*100,2)< 60
+                     AND @cSkutype ='FROZEN_FOOD' ) 
+                     OR 
+                     (ISNULL(@dLottable04, '') <> '' AND DATEDIFF(DAY, GETDATE(), @dLottable04) > 390 
+                     AND ROUND(CAST((DATEDIFF (day, getdate(), @dLottable04)  ) as float)/ CAST((DATEDIFF (day,@dLottable13,@dLottable04)  ) as float)*100,2)< 60
+                     AND  @cSkutype = 'CABINETS' ))
+                  BEGIN     
+                     SET @cAvailcode = ''
+
+                     SELECT @cAvailcode = ISNULL(Code,'')
+                     FROM CODELKUP WITH (NOLOCK)
+                     WHERE storerkey = @cStorerkey
+                        AND UDF01 = 'FG_NearExpire_>310'
+                        AND LISTNAME = 'SLCode'
+
+                   
+                     SET @cLottable07 = CASE WHEN @cLottable01='ML11' THEN @cAvailcode 
+					                    ELSE  @cLottable07 END 
+                   END
+               END		                    
+             END   
+                 
+               IF (ISNULL( rdt.RDTGetConfig( @nFunc, 'ULLottable06', @cStorerKey),'0') != '0')
+               BEGIN
+                  --SET @cLottable06 = ''                  
+
+              --VPA235(1008)
+                  --IF ISNULL(@cLottable12,'') <> '' AND      
+                IF ISNULL(@cLottable12,'') <> '' AND  @cRectype NOT IN ('RO', 'CF') AND 
+                  EXISTS (SELECT 1 FROM CODELKUP WITH (NOLOCK) 
+                              WHERE LISTNAME = 'ASNREASON'
+                              AND Code = @cLottable12
+                              AND StorerKey = @cStorerkey)
+                  BEGIN
+                     SET @cDamagedCode = ''
+                     SELECT @cDamagedCode = ISNULL(Code,'')
+                     FROM CODELKUP WITH (NOLOCK)
+                     WHERE storerkey = @cStorerkey
+                        AND UDF01 = 'RMPM_Damaged'
+                        AND LISTNAME = 'SLCode'
+
+                     IF ISNULL(@cDamagedCode,'') <> ''
+                     BEGIN
                         SET @cLottable06 = '1'
                         SET @cLottable07 = @cDamagedCode
+                     END
+                     ELSE 
+                     BEGIN
+                        SET @nErrNo = 63533;
+                        SET @cErrMsg = 'Damaged Code is not configured for this Storer key' +@cStorerkey;
+                        GOTO QUIT
+                     END 
                   END
-                  ELSE 
-                  BEGIN
-                     SET @nErrNo = 224255;
-                     SET @cErrMsg = 'Damaged Code is not configured for this Storer key' +@cStorerkey;
-                     GOTO QUIT
-                  END 
-               END
-               IF ISNULL(@dLottable04,'') <> '' AND DATEDIFF(DAY, GETDATE(), @dLottable04) <= 0
-               BEGIN
-                  SET @cExpiredCode = ''
 
-                  SELECT @cExpiredCode = ISNULL(Code,'')
-                  FROM CODELKUP WITH (NOLOCK)
-                  WHERE storerkey = @cStorerkey
-                     --AND UDF01 = 'UL_Expired' 
-                     AND UDF01 = 'RMPM_Expired' 
-                     AND LISTNAME = 'SLCode'         
-                           
-                  IF ISNULL(@cExpiredCode,'') = ''
+
+				   IF ISNULL(@dLottable04,'') <> ''  AND @cLottable01<>'ML12' AND ISNULL(@cLottable12,'')='' AND DATEDIFF(DAY, GETDATE(), @dLottable04) <= 60  
                   BEGIN
-                     SET @nErrNo = 224256;
-                     SET @cErrMsg = 'Expired Code is not configured for this Storer key' +@cStorerkey;
-                     GOTO Quit
-                  END
-                  ELSE
+                     SET @cExpiredCode = ''
+
+                     SELECT @cExpiredCode = ISNULL(Code,'')
+                     FROM CODELKUP WITH (NOLOCK)
+                     WHERE storerkey = @cStorerkey
+                        AND UDF01 = 'RMPM_Expired' 
+                        AND LISTNAME = 'SLCode'         
+                              
+                      
+                        SET @cLottable06 = '1'
+                     SET @cLottable07 =	 CASE WHEN @cLottable01='ML11' THEN @cExpiredCode 
+					                     ELSE  @cLottable07 END 
+                   END
+
+				   IF @cRectype  IN ('RO', 'CF')
                   BEGIN
-                     SET @cLottable07 = @cExpiredCode
+                     SET @cExpiredCode = ''
+
+                     SELECT @cExpiredCode = ISNULL(Code,'')
+                     FROM CODELKUP WITH (NOLOCK)
+                     WHERE storerkey = @cStorerkey
+                        AND UDF01 = 'BUDFG_RET' 
+                        AND LISTNAME = 'SLCode'
+
                      SET @cLottable06 = '1'
-                  END
-               END
-
-               IF ISNULL(@dLottable04, '') <> '' AND
-                  DATEDIFF(DAY, GETDATE(), @dLottable04) > 0 AND
-                  DATEDIFF(DAY, GETDATE(), @dLottable04) <= 180 AND
-                  (ISNULL([rdt].[RDTGetConfig](@nFunc, 'FGNEAREXPIRYVLD', @cStorerKey),
-                           '0') != '0')
-               BEGIN
-                  SET @cExpiredCode = ''
-                  
-                  SELECT @cExpiredCode = ISNULL([Code], '')
-                  FROM [CODELKUP] WITH (NOLOCK)
-                  WHERE [storerkey] = @cStorerkey
-                     AND [UDF01] = 'FG_NearExpire'
-                     AND [LISTNAME] = 'SLCode'
-                  
-                  IF ISNULL(@cExpiredCode, '') = ''
-                  BEGIN
-                     SET @nErrNo = 224257;
-                     SET @cErrMsg = 'Near Expire Code is not configured for this Storer key' + @cStorerkey;
-                     GOTO Quit
-                  END
-                  ELSE
-                  BEGIN
                      SET @cLottable07 = @cExpiredCode
                   END
-               END                           
-               
-            END
+                  
+                  --ADDED BY VPA235(1008) FOR FG NEAR EXPIRY END
+               END
             
             DECLARE @nTranCount INT
             SET @nTranCount = @@TRANCOUNT
@@ -670,10 +719,12 @@ Quit:
       SET @cUDF17 = @cPUOM_Desc
    END
 END
+
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
 GO
 
-GRANT EXECUTE ON rdt.rdt_605ExtScn01 TO NSQL
+
+GRANT EXECUTE ON rdt.rdt_605ExtScn03 TO NSQL
 GO
