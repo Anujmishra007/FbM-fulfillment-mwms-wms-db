@@ -1835,14 +1835,25 @@ BEGIN
          DECLARE @AvlInvQty         INT
          --so if qty of location in system is zero, RDT will show new empty choice screen, and if non-zero, no screen change, is right?
          --Sandeep: yes, if it is non zero... then the screen will not be shown... that is the whole idea of asking the user if the location is actually empty
+         
+         --print '----@cStorerKey:'
+         --print @cStorerKey
+         --print '----@cSKU:'
+         --print @cSuggSKU
+         --print '----@cFromLOC:'
+         --print @cSuggFromLOC
+
          SELECT @AvlInvQty = (SUM(LLI.Qty) - SUM(LLI.QtyPicked))       --   + SUM(LLI.PendingMoveIn)) 
             FROM dbo.SKUXLOC SL(NOLOCK)
                JOIN dbo.LOTxLOCxID LLI WITH (NOLOCK) ON SL.StorerKey = LLI.StorerKey AND SL.SKU = LLI.SKU AND SL.LOC = LLI.LOC
          WHERE SL.StorerKey = @cStorerKey
-         AND SL.SKU = @cSKU
-         AND SL.LOC = @cFromLOC
+         AND SL.SKU = @cSuggSKU
+         AND SL.LOC = @cSuggFromLOC
          --AND SL.LocationType IN ( 'CASE','PALLET','PICK')          --do not check location type for invntory zero checking.
-         
+         --print '----@nQTY:'
+         --print @nQTY
+         --print '----@AvlInvQty:'
+         --print @AvlInvQty         
          IF @nQTY >= @AvlInvQty 
          BEGIN
             SET @cOutField01 = '' -- Option            
