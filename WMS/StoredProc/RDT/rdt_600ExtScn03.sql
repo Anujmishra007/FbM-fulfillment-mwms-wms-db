@@ -18,7 +18,7 @@ GO
 /* 2024-10-28 1.4.0  VPA235   FCR-801                                     */
 /**************************************************************************/
 
-ALTER   PROC [RDT].[rdt_600ExtScn03] (
+CREATE OR ALTER PROC [RDT].[rdt_600ExtScn03] (
    @nMobile      INT,           
    @nFunc        INT,           
    @cLangCode    NVARCHAR( 3),  
