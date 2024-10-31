@@ -73,6 +73,39 @@ EXECUTE rdt.rdtAddScn 6493, 'ENG'
    ,@cWebGroup = '{"1":["1","2"],"2":["3","4"]}'
    ,@nFunc = 993
 
+-- 6494 = New Carton Type screen
+DELETE rdt.RDTScn WHERE Scn = 6494 AND Lang_Code = 'ENG'
+EXECUTE rdt.rdtAddScn 6494, 'ENG'
+   ,@cLine01 = 'NEW CARTON ID: %20d01'
+   ,@cLine02 = ''
+   ,@cLine03 = 'NEW CARTON TYPE: '
+   ,@cLine04 = '%10i02'
+   ,@cLine05 = ''
+   ,@cLine06 = ''
+   ,@cLine07 = ''
+   ,@cLine08 = ''
+   ,@cLine09 = ''
+   ,@cLine10 = ''
+   ,@cLine11 = ''
+   ,@cLine12 = ''
+   ,@cLine13 = ''
+   ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2"],"2":["3","4"]}'
+   ,@nFunc = 993
+
+-- 6495 = Print label screen
+DELETE rdt.RDTScn WHERE Scn = 6495 AND Lang_Code = 'ENG'
+EXECUTE rdt.rdtAddScn 6495, 'ENG'
+   ,@cLine01 = '%40d01' -- carton id
+   ,@cLine02 = ''
+   ,@cLine03 = 'PRINT LABEL?'
+   ,@cLine04 = '1 = YES'
+   ,@cLine05 = '2 = NO'
+   ,@cLine06 = ''
+   ,@cLine07 = 'OPTION: %01i02'
+   ,@cLine14 = '%e'
+   ,@nFunc = 993
+
 /*
 -- 4653 = Pack info screen
 DELETE rdt.RDTScn WHERE Scn = 4653 AND Lang_Code = 'ENG'

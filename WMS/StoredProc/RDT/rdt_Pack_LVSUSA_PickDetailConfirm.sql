@@ -117,6 +117,14 @@ BEGIN
          SELECT 'Start handling PKD', @nQTY AS InputQty, @nBalQty AS BalQty, @cLabelNo AS LabelNo    
    END
 
+   --Get all unpacked pick detail with same sku under this pickslip no 
+   SELECT TOP 1
+      @cOrderKey = OrderKey,
+      @cLoadKey = ExternOrderKey,
+      @cZone = Zone
+   FROM dbo.PickHeader WITH (NOLOCK)
+   WHERE PickHeaderKey = @cPickSlipNo
+
    SET @nTranCount = @@TRANCOUNT
    BEGIN TRAN  -- Begin our own transaction
    SAVE TRAN rdt_Pack_LVSUSA_PKDCfm -- For rollback or commit only our own transaction
@@ -133,6 +141,7 @@ BEGIN
 	   		UOMQty, DropID, Loc, ID, PackKey, CartonGroup, PickMethod, WaveKey, @cStorerKey
       FROM PICKDETAIL with(nolock)
       WHERE Storerkey = @cStorerKey
+         AND OrderKey = @cOrderKey
 	      AND CaseID = @cLabelNo
          AND Status = '5'
          AND SKU = @cSKU
@@ -359,12 +368,12 @@ BEGIN
          SELECT 'Add SKU to Carton', @nQTY AS NewQtyInCarton, @nCartonPackQty AS OldQtyInCarton
 
       --Get all unpacked pick detail with same sku under this pickslip no 
-      SELECT TOP 1
+      /*SELECT TOP 1
          @cOrderKey = OrderKey,
          @cLoadKey = ExternOrderKey,
          @cZone = Zone
       FROM dbo.PickHeader WITH (NOLOCK)
-      WHERE PickHeaderKey = @cPickSlipNo
+      WHERE PickHeaderKey = @cPickSlipNo*/
 
       INSERT INTO @tPKD (PickDetailKey, CaseID, PickHeaderKey, OrderKey, OrderLineNumber, SKU, Qty, AdjustQty,Lot, UOM,
                   UOMQty, DropID, Loc, ID, PackKey, CartonGroup, PickMethod, WaveKey, StorerKey)

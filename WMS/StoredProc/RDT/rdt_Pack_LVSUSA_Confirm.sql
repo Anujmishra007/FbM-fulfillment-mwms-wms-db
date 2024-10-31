@@ -157,6 +157,8 @@ BEGIN
       MoveQty     INT
    )
 
+   SET @nErrNo = 0
+
    -- Generic Validation
    IF @cType NOT IN ('NEW','MERGE')
    BEGIN
@@ -165,14 +167,7 @@ BEGIN
       GOTO Quit
    END
 
-   IF NOT EXISTS (SELECT 1 FROM PackDetail WITH (NOLOCK)
-                  WHERE LabelNo = @cMasterLabelNo
-                     AND SKU = @cSKU)
-   BEGIN
-      SET @nErrNo = 227602
-      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Inv type
-      GOTO Quit
-   END
+   
 
    SELECT @nMasterPackQty = ISNULL( SUM(Qty),0)
       FROM PackDetail WITH (NOLOCK)
@@ -193,6 +188,15 @@ BEGIN
    BEGIN
       IF @bDebugFlag = 1
          SELECT 'Type = NEW'
+
+      IF NOT EXISTS (SELECT 1 FROM PackDetail WITH (NOLOCK)
+                  WHERE LabelNo = @cMasterLabelNo
+                     AND SKU = @cSKU)
+      BEGIN
+         SET @nErrNo = 227602
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SKU not in master label no
+         GOTO Quit
+      END
 
       --Generate LabelNo if it is new carton
       IF @cLabelNo = ''
@@ -271,7 +275,7 @@ BEGIN
          WHERE StorerKey = @cStorerKey
             AND LabelNo = @cMasterLabelNo
             AND SKU = @cSKU
-         ORDER BY Qty DESC
+         ORDER BY Qty DESC, PickSlipNo
 
          IF @bDebugFlag = 1
          BEGIN
@@ -531,6 +535,15 @@ BEGIN
          AND PackDetail.LabelLine = LabelRenumbered.LabelLine;
       --Reorganize the label no in the cases end   
    END -- NEW
+
+   IF @cType = 'MERGE'
+   BEGIN
+      IF @bDebugFlag = 1
+         SELECT 'Type = MERGE'
+
+      
+
+   END -- MERGE
 
    
    /*EXEC RDT.rdt_STD_EventLog           
