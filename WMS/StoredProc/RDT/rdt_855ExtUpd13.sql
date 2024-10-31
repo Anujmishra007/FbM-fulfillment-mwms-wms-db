@@ -681,6 +681,7 @@ BEGIN
                               END
 
                               SET @cLabelName = 'LVSPSORD'
+                              DELETE FROM @tPackList
                               INSERT INTO @tPackList (Variable, Value) 
                               VALUES 
                                  ( '@cStorerKey', @cStorerKey),
