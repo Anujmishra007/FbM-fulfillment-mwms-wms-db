@@ -47,6 +47,8 @@ GO
 /* 2024-07-09   2.8  CYU027   FCR-539 Granite Scan to Pallet            */
 /* 2024-09-20   2.9  CYU027   Add Validation TrackNo                    */
 /* 2024-10-08   3.0  NLT013   FCR-950 Add OrderKey into @tExtScnData    */
+/* 2024-10-31   3.1  NLT013   UWP-26400 The validation for new pallet   */
+/*                            does not work in some scenarios           */
 /************************************************************************/
   
 CREATE OR ALTER PROC [RDT].[rdtfnc_TrackNo_SortToPallet] (  
@@ -723,6 +725,8 @@ BEGIN
       BEGIN
          SET @nStep = 1
       END
+
+      SET @cSuggPalletKey = @cPalletKey
 
       GOTO Step_ExtScn
    END

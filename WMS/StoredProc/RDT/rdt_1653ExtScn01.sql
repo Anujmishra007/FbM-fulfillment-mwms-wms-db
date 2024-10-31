@@ -18,6 +18,8 @@ GO
 /*                            location and pallet id                        */
 /* 2024-10-25 1.3.1  JCH507   FCR-1084, add status when check label exists  */
 /*                            in pallet id                                  */
+/* 2024-10-31 1.4.0  NLT013   UWP-26400 The validation for new pallet       */
+/*                            does not work in some scenarios               */
 /*                                                                          */
 /*                                                                          */
 /****************************************************************************/
@@ -94,6 +96,7 @@ BEGIN
       @cTrackNo               = V_String41,
       @cOrderKey              = V_OrderKey,
       @cLane                  = V_String42,
+      @cSuggPalletKey         = V_String5,
       @nCurrentScn            = Scn
    FROM rdt.RDTMOBREC (NOLOCK)
    WHERE Mobile = @nMobile
@@ -169,7 +172,7 @@ BEGIN
                      LOC/LANE:         (field05, input)
                ********************************************************************************/
                -- Initialize value
-               SET @cSuggPalletKey = @cOutField03
+               --SET @cSuggPalletKey = @cOutField03
                SET @cPalletKey = @cInField04
 
                IF ISNULL(@cOverrideLoc,'0') <> '1' AND @cLane <> @cInField05 AND ISNULL(@cLane,'') <> ''
@@ -470,7 +473,7 @@ BEGIN
    END
 Quit:
 END
-
+GO
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS ON
