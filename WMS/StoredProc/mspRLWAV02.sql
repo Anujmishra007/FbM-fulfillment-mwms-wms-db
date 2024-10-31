@@ -131,7 +131,7 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV02]
           + CASE WHEN @c_Type = '1' THEN ' AND PD.UOM = ''7'''
                  WHEN @c_Type = '6' THEN ' AND PD.UOM = ''1'''
                  WHEN @c_Type = '2' THEN ' AND PD.UOM IN (''1'',''7'')'
-                 ELSE ''
+                 ELSE 'AND PD.UOM = ''7'''
                  END
           + ' AND TD.Taskdetailkey IS NULL )'
           + ' BEGIN '
@@ -150,9 +150,9 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV02]
                           ,@c_Wavekey
                           ,@c_SourceType
                           ,@c_TaskType
-                          ,@n_continue
-                          ,@n_err
-                          ,@c_errmsg
+                          ,@n_continue OUTPUT
+                          ,@n_err OUTPUT
+                          ,@c_errmsg OUTPUT
 
 		 END
 
@@ -261,7 +261,7 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV02]
       + CASE WHEN @c_Type = '1' THEN ' AND PD.UOM = ''7'''
                  WHEN @c_Type = '6' THEN ' AND PD.UOM = ''1'''
                  WHEN @c_Type = '2' THEN ' AND PD.UOM IN (''1'',''7'')'
-                 ELSE ''
+                 ELSE ' AND PD.UOM = ''7'''
                  END
       +' AND PD.WIP_RefNo = @c_SourceType'
       +' AND TD.Taskdetailkey IS NULL'
@@ -529,13 +529,14 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV02]
               END
               CLOSE CUR_Pick
               DEALLOCATE CUR_Pick
+             END
            END
            FETCH NEXT FROM cur_WaveReplto INTO @c_Storerkey, @c_Sku, @c_Lot, @c_FromLoc, @c_FromID, @c_ToLoc, @c_ToID
                                                ,@c_UOM
          END
          CLOSE cur_WaveReplto
          DEALLOCATE cur_WaveReplto
-      END
+
    END
 
    -----Update pickdetail_WIP work in progress staging table back to pickdetail
