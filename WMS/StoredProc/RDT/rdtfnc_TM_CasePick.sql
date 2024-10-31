@@ -2756,7 +2756,7 @@ BEGIN
       FROM rdt.rdtTaskManagerConfig WITH (NOLOCK)
       WHERE TaskType = @cTTMTaskType
          AND ISNULL(RTRIM(StorerKey),'') IN ('',@cStorerKey)
-      ORDER BY CASE WHEN StorerKey=@cStorerKey THEN 0 ELSE 1 END ASC 
+      ORDER BY CASE WHEN StorerKey=@cStorerKey THEN 0 ELSE 1 END ASC  -- to solve query wrong record if multible records are existed. 
 
       IF @nToFunc = 0
       BEGIN
