@@ -4,20 +4,22 @@ GO
 SET ANSI_NULLS OFF
 GO
 
-/***************************************************************************/
-/* Store procedure: rdt_1764ClosePlt03                                     */
-/* Copyright      : Maersk WMS                                             */
-/*                                                                         */
-/* Purpose: Confirm replenish.                                             */
-/*                                                                         */
-/* Called from:                                                            */
-/*                                                                         */
-/* Modifications log:                                                      */
-/*                                                                         */
-/* Date        Rev  Author    Purposes                                     */
-/* 2024-05-21  1.0  NLT013    UWP-19518 Created                            */
-/* 2024-10-22  1.1  NLT013    FCR-973 Update the final task as VNAOUT      */
-/***************************************************************************/
+/*******************************************************************************/
+/* Store procedure: rdt_1764ClosePlt03                                         */
+/* Copyright      : Maersk WMS                                                 */
+/* Customer       :  UL                                                        */
+/*                                                                             */
+/* Purpose: Confirm replenish.                                                 */
+/*                                                                             */
+/* Called from:                                                                */
+/*                                                                             */
+/* Modifications log:                                                          */
+/*                                                                             */
+/* Date        Rev      Author    Purposes                                     */
+/* 2024-05-21  1.0      NLT013    UWP-19518 Created                            */
+/* 2024-10-22  1.1.0    NLT013    FCR-973 Update the final task as VNAOUT      */
+/* 2024-10-22  1.1.1    NLT013    FCR-973 Update UOM and ListKey for last task */
+/*******************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_1764ClosePlt03] (
    @nMobile        INT,
@@ -64,6 +66,7 @@ BEGIN
    DECLARE @cLocCategory                  NVARCHAR( 10)
    DECLARE @cNewTaskDetailKey             NVARCHAR( 10)
    DECLARE @cFinalLOC      NVARCHAR( 10)
+   DECLARE @cUOM           NVARCHAR( 5)
 
    -- Init var
    SET @nErrNo = 0
@@ -557,7 +560,8 @@ BEGIN
       Priority = CASE WHEN @cLocCategory IN ('PND_IN', 'PND_OUT', 'PND') AND @cPnDTransitTaskPriority BETWEEN 1 AND 9 THEN @cPnDTransitTaskPriority ELSE Priority END
    WHERE TaskDetailKey = @cNewTaskDetailKey 
 
-   SELECT TOP 1 @cFinalLOC = FinalLoc
+   SELECT TOP 1 @cFinalLOC = FinalLoc,
+      @cUOM = UOM
    FROM dbo.TaskDetail WITH(NOLOCK)
    WHERE StorerKey = @cStorerKey
       AND ListKey = @cListKey
@@ -569,7 +573,7 @@ BEGIN
    IF @cToLOC = @cFinalLOC
    BEGIN
       UPDATE dbo.TaskDetail WITH (ROWLOCK) SET 
-         TaskType = 'VNAOUT', Message02 = 'RP2', Message03 = 'RPF', FinalLoc = @cFinalLOC
+         TaskType = 'VNAOUT', Message02 = 'RP2', Message03 = 'RPF', FinalLoc = @cFinalLOC, Status = 'Q', ListKey = @cListKey, UOM = @cUOM
       WHERE TaskDetailKey = @cNewTaskDetailKey 
    END
 
