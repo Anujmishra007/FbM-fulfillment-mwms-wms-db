@@ -36,7 +36,7 @@ GO
 /*            2.7.1  YYS027     move new screen to rdt_1812ExtScn04             */
 /********************************************************************************/
 
-CREATE OR ALTER PROC [RDT].[rdtfnc_TM_CasePick1](
+CREATE OR ALTER PROC [RDT].[rdtfnc_TM_CasePick](
    @nMobile    INT,
    @nErrNo     INT  OUTPUT,
    @cErrMsg    NVARCHAR(1024) OUTPUT -- screen limitation, 20 char max
@@ -3501,5 +3501,5 @@ BEGIN
    END
 END
 GO
-GRANT EXECUTE ON  [RDT].[rdtfnc_TM_CasePick1] TO [NSQL]
+GRANT EXECUTE ON  [RDT].[rdtfnc_TM_CasePick] TO [NSQL]
 GO
