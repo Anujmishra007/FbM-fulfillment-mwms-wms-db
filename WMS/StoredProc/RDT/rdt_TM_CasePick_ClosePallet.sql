@@ -1,29 +1,21 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[rdt].[rdt_TM_CasePick_ClosePallet]') and objectproperty(id, N'IsProcedure') = 1)
-   DROP PROC [rdt].[rdt_TM_CasePick_ClosePallet]
-GO
 
-SET QUOTED_IDENTIFIER OFF
-GO
-SET ANSI_NULLS OFF
-GO
-
-/************************************************************************/
-/* Store procedure: rdt_TM_CasePick_ClosePallet                         */
-/* Copyright      : LF Logistics                                        */
-/*                                                                      */
-/* Purpose: Confirm pick                                                */
-/*                                                                      */
-/* Date        Rev  Author    Purposes                                  */
-/* 17-Dec-2014 1.0  Ung       SOS327467 Created                         */
-/* 17-Apr-2018 1.1  Ung       WMS-3273                                  */
-/*                            Add MoveQTYAlloc, MoveQTYPick             */
-/*                            Add PickConfirmStatus                     */
-/*                            Add ClosePalletSP                         */
-/* 03-Jan-2019 1.2  Ung       WMS-3273 Fix full short                   */
-/* 07-Mar-2019 1.3  Ung       WMS-8058 Fix move UCC                     */
-/* 01-Apr-2024 1.4  CYU027    UWP-17449 Create Replen task              */
-/* 29-Oct-2024 1.4  YYS027    FCR-989 add ReplenTaskSP                  */
-/************************************************************************/
+/***************************************************************************/
+/* Store procedure: rdt_TM_CasePick_ClosePallet                            */
+/* Copyright      : Maersk                                                 */
+/*                                                                         */
+/* Purpose: Confirm pick                                                   */
+/*                                                                         */
+/* Date        Rev     Author    Purposes                                  */
+/* 17-Dec-2014 1.0     Ung       SOS327467 Created                         */
+/* 17-Apr-2018 1.1     Ung       WMS-3273                                  */
+/*                               Add MoveQTYAlloc, MoveQTYPick             */
+/*                               Add PickConfirmStatus                     */
+/*                               Add ClosePalletSP                         */
+/* 03-Jan-2019 1.2     Ung       WMS-3273 Fix full short                   */
+/* 07-Mar-2019 1.3     Ung       WMS-8058 Fix move UCC                     */
+/* 01-Apr-2024 1.4     CYU027    UWP-17449 Create Replen task              */
+/* 29-Oct-2024 1.5.0   YYS027    FCR-989 add ReplenTaskSP                  */
+/***************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_TM_CasePick_ClosePallet] (
    @nMobile        INT,

@@ -4,38 +4,39 @@ SET QUOTED_IDENTIFIER OFF
 GO
 
 
-/******************************************************************************/
-/* Store procedure: rdtfnc_TM_CasePick                                        */
-/* Copyright      : Maersk                                                    */
-/*                                                                            */
-/* Purpose: case pick                                                         */
-/*                                                                            */
-/* Modifications log:                                                         */
-/*                                                                            */
-/* Date       Rev  Author     Purposes                                        */
-/* 2014-12-17 1.0  Ung        SOS327467 Created                               */
-/* 2016-09-30 1.1  Ung        Performance tuning                              */
-/* 2017-07-31 1.2  Ung        WMS-2475 DropID add RDTFormat                   */
-/* 2018-07-10 1.3  Ung        WMS-4221 Fix ExtendedUpdateSP param             */
-/* 2018-08-31 1.4  Ung        WMS-5943 Add ExtendedInfo at screen 1, 2        */
-/* 2018-11-21 1.5  Ung        WMS-3273 Add fully short                        */
-/* 2019-02-27 1.6  Ung        WMS-8058 Add SwapUCCSP, LOCLookupSP             */
-/*                            Fix PQTY not shown if DisableQTYField           */
-/* 2020-02-21 1.7  YeeKung    WMS-12082 Add ExtendedValidate(yeekung01)       */
-/* 2019-05-14 1.8  James      WMS-9920 Add MultiSKUBarcode (james01)          */
-/* 2022-09-09 1.9  YeeKung    WMS-20712 Add overwritetoloc (Yeekung02)        */
-/* 2023-03-24 2.0  Ung        WMS-22020 Add dynamic lottable                  */
-/* 2023-05-16 2.1  Ung        WMS-22435 Add DecodeSP                          */
-/*                            Expand SKU field to max                         */
-/* 2023-06-20 2.2  Ung        WMS-22834 Add DispStyleColorSize                */
-/* 2024-03-12 2.3  CYU027     UWP-15734 Add Extended Print SP                 */
-/* 2024-04-10 2.4  Dennis     UWP-16909 Check Digit                           */
-/* 2024-07-08 2.5  JHU151     FCR-330 SSCC code generator                     */
-/* 2024-10-08 2.6  PXL009     FCR-872 Auto Generated Dropid                   */
-/* 2024-10-24 2.7  YYS027     FCR-989 Min Max Replenishment                   */
-/******************************************************************************/
+/********************************************************************************/
+/* Store procedure: rdtfnc_TM_CasePick                                          */
+/* Copyright      : Maersk                                                      */
+/*                                                                              */
+/* Purpose: case pick                                                           */
+/*                                                                              */
+/* Modifications log:                                                           */
+/*                                                                              */
+/* Date       Rev    Author     Purposes                                        */
+/* 2014-12-17 1.0    Ung        SOS327467 Created                               */
+/* 2016-09-30 1.1    Ung        Performance tuning                              */
+/* 2017-07-31 1.2    Ung        WMS-2475 DropID add RDTFormat                   */
+/* 2018-07-10 1.3    Ung        WMS-4221 Fix ExtendedUpdateSP param             */
+/* 2018-08-31 1.4    Ung        WMS-5943 Add ExtendedInfo at screen 1, 2        */
+/* 2018-11-21 1.5    Ung        WMS-3273 Add fully short                        */
+/* 2019-02-27 1.6    Ung        WMS-8058 Add SwapUCCSP, LOCLookupSP             */
+/*                              Fix PQTY not shown if DisableQTYField           */
+/* 2020-02-21 1.7    YeeKung    WMS-12082 Add ExtendedValidate(yeekung01)       */
+/* 2019-05-14 1.8    James      WMS-9920 Add MultiSKUBarcode (james01)          */
+/* 2022-09-09 1.9    YeeKung    WMS-20712 Add overwritetoloc (Yeekung02)        */
+/* 2023-03-24 2.0    Ung        WMS-22020 Add dynamic lottable                  */
+/* 2023-05-16 2.1    Ung        WMS-22435 Add DecodeSP                          */
+/*                              Expand SKU field to max                         */
+/* 2023-06-20 2.2    Ung        WMS-22834 Add DispStyleColorSize                */
+/* 2024-03-12 2.3    CYU027     UWP-15734 Add Extended Print SP                 */
+/* 2024-04-10 2.4    Dennis     UWP-16909 Check Digit                           */
+/* 2024-07-08 2.5    JHU151     FCR-330 SSCC code generator                     */
+/* 2024-10-08 2.6    PXL009     FCR-872 Auto Generated Dropid                   */
+/* 2024-10-24 2.7    YYS027     FCR-989 Min Max Replenishment                   */
+/*            2.7.1  YYS027     move new screen to rdt_1812ExtScn04             */
+/********************************************************************************/
 
-CREATE OR ALTER PROC [RDT].[rdtfnc_TM_CasePick](
+CREATE OR ALTER PROC [RDT].[rdtfnc_TM_CasePick1](
    @nMobile    INT,
    @nErrNo     INT  OUTPUT,
    @cErrMsg    NVARCHAR(1024) OUTPUT -- screen limitation, 20 char max
@@ -120,7 +121,6 @@ DECLARE
    @cDisableQTYField    NVARCHAR(1),
    @cSwapTaskSP         NVARCHAR(20),
    @cOverwriteToLOC     NVARCHAR(1),    --(yeekung02)
-   @cLocEmptyOption     NVARCHAR(20),   --YYS027 FCR-989
 
    @cPUOM_Desc          NCHAR( 5),
    @cMUOM_Desc          NCHAR( 5),
@@ -253,7 +253,6 @@ SELECT
    @cPUOM_Desc         = V_String11,
    @cMultiSKUBarcode   = V_String12,
    @cLottableCode      = V_String13,
-   @cLocEmptyOption    = V_String14,
 
    @cDispStyleColorSize= V_String17,
    @cDecodeSP          = V_String18,
@@ -316,7 +315,7 @@ BEGIN
    IF @nStep = 7 GOTO Step_7   -- Scn = 4026 Pallet is close. Next task / Exit
    IF @nStep = 8 GOTO Step_8   -- Scn = 4027 Short pick / Close pallet
    IF @nStep = 9 GOTO Step_9   -- Scn = 2100 Reason code
-   IF @nStep = 10 GOTO Step_10   -- Scn = 4028 Is the location completely empty?
+   IF @nStep = 99  GOTO Step_99  -- Scn = Extended Screen   -- Scn = 4028 Is the location completely empty?
 END
 
 RETURN -- Do nothing if incorrect step
@@ -1825,42 +1824,15 @@ BEGIN
       END
       --A new screen will  require the user to confirm the option . This will be prompted immediately after the user has entered the SKU Quantity on Step 4. 
       --   If the user presses escape then he can be taken to quantity entry screen. Act as a popup Window
-      SET @cLocEmptyOption = ''
       SET @cReplenFlag = rdt.rdtGetConfig( @nFunc, 'ReplenFlag', @cStorerKey)
       IF @cReplenFlag = '0'
          SET @cReplenFlag = ''
       
-      IF @cReplenFlag = '1'
+      IF @cReplenFlag = '1' AND ISNULL(@cExtScnSP,'')<>'' AND EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
       BEGIN
-         DECLARE @AvlInvQty         INT
-         --so if qty of location in system is zero, RDT will show new empty choice screen, and if non-zero, no screen change, is right?
-         --Sandeep: yes, if it is non zero... then the screen will not be shown... that is the whole idea of asking the user if the location is actually empty
-         
-         --PRINT '----@cStorerKey:'
-         --PRINT @cStorerKey
-         --PRINT '----@cSKU:'
-         --PRINT @cSuggSKU
-         --PRINT '----@cFromLOC:'
-         --PRINT @cSuggFromLOC
-
-         SELECT @AvlInvQty = (SUM(LLI.Qty) - SUM(LLI.QtyPicked))       --   + SUM(LLI.PendingMoveIn)) 
-            FROM dbo.SKUXLOC SL(NOLOCK)
-               JOIN dbo.LOTxLOCxID LLI WITH (NOLOCK) ON SL.StorerKey = LLI.StorerKey AND SL.SKU = LLI.SKU AND SL.LOC = LLI.LOC
-         WHERE SL.StorerKey = @cStorerKey
-         AND SL.SKU = @cSuggSKU
-         AND SL.LOC = @cSuggFromLOC
-         --AND SL.LocationType IN ( 'CASE','PALLET','PICK')          --do not check location type for invntory zero checking.
-         --PRINT '----@nQTY:'
-         --PRINT @nQTY
-         --PRINT '----@AvlInvQty:'
-         --PRINT @AvlInvQty         
-         IF @nQTY >= @AvlInvQty 
-         BEGIN
-            SET @cOutField01 = '' -- Option            
-            SET @nScn = 4028
-            SET @nStep = 10               -- Goto 1=YES, 9=NO choice empty or not.
-            GOTO Quit
-         END
+         -- if @cReplenFlag=1 and @cExtScnSP is ready, Goto 99 to 
+         SET @nAction =0
+         Goto Step_99
       END
 
       -- QTY short
@@ -2750,13 +2722,11 @@ BEGIN
       SET @nToStep = 0
 
       -- Check if function setup
-      SELECT TOP 1
+      SELECT 
          @nToFunc = Function_ID,
          @nToStep = Step
       FROM rdt.rdtTaskManagerConfig WITH (NOLOCK)
       WHERE TaskType = @cTTMTaskType
-         AND ISNULL(RTRIM(StorerKey),'') IN ('',@cStorerKey)
-      ORDER BY CASE WHEN StorerKey=@cStorerKey THEN 0 ELSE 1 END ASC  -- to solve query wrong record if multible records are existed. (YYS027)
 
       IF @nToFunc = 0
       BEGIN
@@ -3292,184 +3262,26 @@ BEGIN
 END
 GOTO Quit
 
-/********************************************************************************
-Step 10. screen = 4028. Is the location completely empty?
-    1 = YES
-    9 = NO
-    Option (Field01, input)
-********************************************************************************/
-Step_10:
-BEGIN
-   IF @nInputKey = 1 -- ENTER
-   BEGIN
-      -- Screen mapping
-      SET @cOption = @cInField01
-
-      -- Check blank option
-      IF @cOption = ''
-      BEGIN
-         SET @nErrNo = 51369
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Option needed
-         GOTO Step_5_Fail
-      END
-
-      -- Check option is valid
-      IF @cOption <> '1' AND @cOption <> '9'
-      BEGIN
-         SET @nErrNo = 51370
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Option
-         GOTO Step_5_Fail
-      END
-      SET @cLocEmptyOption = @cOption     --to Save to V_String14
-
-      IF @cOption='9'
-      BEGIN
-         --If the user responds with 9 = NO, please refer to the RDT storer configuration NOREPLENREASON. 
-         --If the Svalue maintained can be found in RDTREASON code list (Code2), then appropriate action has to be taken as mentioned in Code UDF01, Code UDF02, and Code UDF03. 
-         --Please refer to FCR-428 for more information on implementing reason code.
-         DECLARE @cNoReplenReason NVARCHAR(80),
-            @cCCTaskType       NVARCHAR(60),
-            @cHoldCheckFlg     NVARCHAR(60),
-            @cHoldType         NVARCHAR(60),
-            @cStoredProcedure  NVARCHAR(1000)
-         SET @cNoReplenReason = rdt.rdtGetConfig(@nFunc, 'NOREPLENREASON', @cStorerKey)
-         SELECT 
-            @cReasonCode = Code2,
-            @cCCTaskType = UDF01,-- CC task type
-            @cHoldType = UDF02 -- Hold type
-         FROM codelkup 
-         WHERE listname = 'RDTREASON'
-         AND code = @nFunc
-         AND storerkey = @cStorerKey
-         AND Code2 = ISNULL(@cNoReplenReason,'')
-
-         --SET @cLoc = @cSuggLOC
-         --SET @cID = @cSuggID
-         --SET @cSKU = @cSuggSKU
-         --set @cLot = @cSuggLOT
-
-         SET @cStoredProcedure = rdt.rdtGetConfig( @nFunc, 'ActRDTreason', @cStorerKey)
-         IF @cStoredProcedure = '0'
-            SET @cStoredProcedure = ''
-               
-         IF @cStoredProcedure <> ''
-         BEGIN
-            IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cStoredProcedure AND type = 'P')
-            BEGIN
-               ---- Generate CC task /or/ Hold Type(LOC/ID/LOT)
-               SET @cSQL = 'EXEC rdt.' + RTRIM( @cStoredProcedure) +
-                     ' @nMobile, @nFunc, @cStorerKey, ' +
-                     ' @cSKU, @cLOC, @cLot, @cID, @cReasonCode, ' +                      
-                     ' @nErrNo OUTPUT, @cErrMsg OUTPUT '
-               SET @cSQLParam =
-                     ' @nMobile         INT                      ' +
-                     ',@nFunc           INT                      ' +
-                     ',@cStorerKey      NVARCHAR( 15)            ' +
-                     ',@cSKU            NVARCHAR( 20)            ' +
-                     ',@cLOC            NVARCHAR( 10)            ' +
-                     ',@cLot            NVARCHAR( 10)            ' +
-                     ',@cID             NVARCHAR( 20)            ' +
-                     ',@cReasonCode     NVARCHAR( 20)            ' +                          
-                     ',@nErrNo          INT           OUTPUT     ' +
-                     ',@cErrMsg         NVARCHAR(250) OUTPUT  '
-               --@cSKU from TaskDetail.SKU
-               --@cLOC from TaskDetail.FromLoc
-               --@cLot from TaskDetail.Lot
-               --@cID  from TaskDetail.FromID
-
-               EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-                     @nMobile, @nFunc, @cStorerKey,
-                     @cSuggSKU, @cSuggFromLOC, @cSuggLOT, @cSuggID, @cReasonCode,
-                     @nErrNo OUTPUT, @cErrMsg OUTPUT
-
-               IF @nErrNo <> 0
-                     GOTO Quit
-            END
-         END
-         ----------------------------------------------------
-      END
-
-      IF @nQTY < @nQTY_RPL
-      BEGIN
-         -- Prepare next screen var
-         SET @cOption = ''
-         SET @cOutField01 = '' -- Option
-
-         SET @nStep = @nStep - 2  -- step from 10 to 8          (Short/Close Pallet)
-         SET @nScn = @nScn - 1  --screen from 4028 to 4027
-      END
-
-      -- QTY fulfill
-      IF @nQTY >= @nQTY_RPL
-      BEGIN
-         -- Prepare next screen var
-         SET @cOption = ''
-         SET @cOutField01 = '' -- Option
-
-         SET @nStep = @nStep - 5      --step from 10 to 5          (next task /close pallet)
-         SET @nScn = @nScn - 4    --screen from 4048 to 4024
-      END
-   END
-   IF @nInputKey = 0 -- ESC pressed, return to SKU screen
-   BEGIN
-      -- Dynamic lottable
-      EXEC rdt.rdt_Lottable @nMobile, @nFunc, @cLangCode, @nScn, @nInputKey, @cStorerKey, @cSKU, @cLottableCode, 'DISPLAY', 'POPULATE', 4, 4,
-         @cInField01  OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01 OUTPUT,
-         @cInField02  OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02 OUTPUT,
-         @cInField03  OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03 OUTPUT,
-         @cInField04  OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04 OUTPUT,
-         @cInField05  OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  @dLottable05 OUTPUT,
-         @cInField06  OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  @cLottable06 OUTPUT,
-         @cInField07  OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  @cLottable07 OUTPUT,
-         @cInField08  OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  @cLottable08 OUTPUT,
-         @cInField09  OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  @cLottable09 OUTPUT,
-         @cInField10  OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  @cLottable10 OUTPUT,
-         @cInField11  OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  @cLottable11 OUTPUT,
-         @cInField12  OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT,  @cLottable12 OUTPUT,
-         @cInField13  OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  @dLottable13 OUTPUT,
-         @cInField14  OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT,  @dLottable14 OUTPUT,
-         @cInField15  OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT,  @dLottable15 OUTPUT,
-         @nMorePage   OUTPUT,
-         @nErrNo      OUTPUT,
-         @cErrMsg     OUTPUT,
-         '',      -- SourceKey
-         @nFunc   -- SourceType
-      
-      -- Prepare next screen variable
-      SET @cOutField01 = @cSuggSKU
-      SET @cOutField02 = SUBSTRING( @cSKUDesc, 1, 20)
-      SET @cOutField03 = SUBSTRING( @cSKUDesc, 21, 20)
-      SET @cBarcode    = '' -- SKU
-      SET @cOutField09 = ''
-      SET @cOutField10 = @cExtendedInfo1
-      SET @cOutField11 = '1:' + CAST( @nPUOM_Div AS NCHAR( 6)) + ' ' + @cPUOM_Desc + ' ' + @cMUOM_Desc
-      SET @cOutField12 = CASE WHEN (@cPUOM = '6' OR @nPUOM_Div = 0) THEN '' ELSE CAST( @nPQTY_RPL AS NVARCHAR( 5)) END
-      SET @cOutField13 = CAST( @nMQTY_RPL AS NVARCHAR( 5))
-      SET @cOutField14 = CASE WHEN (@cPUOM = '6' OR @nPUOM_Div = 0) THEN '' ELSE CAST( @nPQTY AS NVARCHAR( 5)) END
-      SET @cOutField15 = CAST( @nMQTY AS NVARCHAR( 5))
-      EXEC rdt.rdtSetFocusField @nMobile, 'V_Barcode' -- SKU
-
-      -- Go to SKU screen (STEP 4)
-      SET @nStep = 4
-      SET @nScn = 4023
-   END
-   GOTO Quit
-
-Step_10_Fail:
-   BEGIN
-      SET @cOption = ''
-      SET @cOutField01 = '' -- Option
-   END
-END
-
-
-
 Step_99:
 BEGIN
    IF @cExtScnSP <> ''
    BEGIN
       IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
       BEGIN      
+         DECLARE @nStepBak INT
+         DECLARE @nScnBak INT
+         SELECT @nStepBak = @nStep, @nScnBak = @nScn, @nErrNo=0, @cErrMsg=''
+         DELETE FROM @tExtScnData
+         INSERT INTO @tExtScnData (Variable, Value) VALUES    
+         ('@cTaskDetailKey',  @cTaskDetailKey),
+         ('@cListKey',        @cListKey),
+         ('@cDropID',         @cDropID),
+         ('@cSuggSKU',        @cSuggSKU),
+         ('@cSuggFromLOC',    @cSuggFromLOC),
+         ('@cSuggLOT',        @cSuggLOT),
+         ('@cSuggID',         @cSuggID),
+         ('@cQTY',            CONVERT(Nvarchar(20),@nQTY)),
+         ('@cQTY_RPL',        CONVERT(Nvarchar(20),@nQTY_RPL))
 
          EXECUTE [RDT].[rdt_ExtScnEntry] 
          @cExtScnSP, 
@@ -3503,6 +3315,45 @@ BEGIN
          @cUDF22   OUTPUT, @cUDF23 OUTPUT, @cUDF24 OUTPUT,
          @cUDF25   OUTPUT, @cUDF26 OUTPUT, @cUDF27 OUTPUT,
          @cUDF28   OUTPUT, @cUDF29 OUTPUT, @cUDF30 OUTPUT
+
+         IF @nScnBak = 99 AND @nScnBak = 4028 AND @nInputKey=0
+         BEGIN
+            -- Dynamic lottable
+            EXEC rdt.rdt_Lottable @nMobile, @nFunc, @cLangCode, @nScn, @nInputKey, @cStorerKey, @cSKU, @cLottableCode, 'DISPLAY', 'POPULATE', 4, 4,
+               @cInField01  OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01 OUTPUT,
+               @cInField02  OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02 OUTPUT,
+               @cInField03  OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03 OUTPUT,
+               @cInField04  OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04 OUTPUT,
+               @cInField05  OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  @dLottable05 OUTPUT,
+               @cInField06  OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  @cLottable06 OUTPUT,
+               @cInField07  OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  @cLottable07 OUTPUT,
+               @cInField08  OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  @cLottable08 OUTPUT,
+               @cInField09  OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  @cLottable09 OUTPUT,
+               @cInField10  OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  @cLottable10 OUTPUT,
+               @cInField11  OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  @cLottable11 OUTPUT,
+               @cInField12  OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT,  @cLottable12 OUTPUT,
+               @cInField13  OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  @dLottable13 OUTPUT,
+               @cInField14  OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT,  @dLottable14 OUTPUT,
+               @cInField15  OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT,  @dLottable15 OUTPUT,
+               @nMorePage   OUTPUT,
+               @nErrNo      OUTPUT,
+               @cErrMsg     OUTPUT,
+               '',      -- SourceKey
+               @nFunc   -- SourceType         
+            -- Prepare next screen variable
+            SET @cOutField01 = @cSuggSKU
+            SET @cOutField02 = SUBSTRING( @cSKUDesc, 1, 20)
+            SET @cOutField03 = SUBSTRING( @cSKUDesc, 21, 20)
+            SET @cBarcode    = '' -- SKU    --barcode is nvarchar(max), can't be passed as parameter
+            SET @cOutField09 = ''
+            SET @cOutField10 = @cExtendedInfo1
+            SET @cOutField11 = '1:' + CAST( @nPUOM_Div AS NCHAR( 6)) + ' ' + @cPUOM_Desc + ' ' + @cMUOM_Desc
+            SET @cOutField12 = CASE WHEN (@cPUOM = '6' OR @nPUOM_Div = 0) THEN '' ELSE CAST( @nPQTY_RPL AS NVARCHAR( 5)) END
+            SET @cOutField13 = CAST( @nMQTY_RPL AS NVARCHAR( 5))
+            SET @cOutField14 = CASE WHEN (@cPUOM = '6' OR @nPUOM_Div = 0) THEN '' ELSE CAST( @nPQTY AS NVARCHAR( 5)) END
+            SET @cOutField15 = CAST( @nMQTY AS NVARCHAR( 5))
+            EXEC rdt.rdtSetFocusField @nMobile, 'V_Barcode' -- SKU         
+         END
 
          IF @nErrNo <> 0
             GOTO Step_99_Fail
@@ -3582,7 +3433,6 @@ BEGIN
       V_String11   = @cPUOM_Desc,
       V_String12   = @cMultiSKUBarcode,
       V_String13   = @cLottableCode,
-      V_String14   = @cLocEmptyOption,    --YYS027 FCR-989
 
       V_String17   = @cDispStyleColorSize,
       V_String18   = @cDecodeSP, 
@@ -3651,5 +3501,5 @@ BEGIN
    END
 END
 GO
-GRANT EXECUTE ON  [RDT].[rdtfnc_TM_CasePick] TO [NSQL]
+GRANT EXECUTE ON  [RDT].[rdtfnc_TM_CasePick1] TO [NSQL]
 GO

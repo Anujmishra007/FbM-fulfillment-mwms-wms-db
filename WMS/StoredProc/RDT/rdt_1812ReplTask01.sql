@@ -1,16 +1,16 @@
 
-/*************************************************************************************/
-/* Store procedure: rdt_1812ReplTask01                                               */
-/* Copyright      : Maersk                                                           */
-/* Customer       : Unilever                                                         */
-/*                                                                                   */
-/* Purpose: Trigger replenishment                                                    */
-/*                                                                                   */
-/* Date        Rev  Author    Purposes                                               */
-/* 25-Oct-2024 1.0  YYS027    FCR-989 Created from v1.4 rdt_TM_CasePick_ClosePallet  */
-/*                            for trigger replenishment submit to QCommander         */
-/*                            used by ReplenTaskSP in rdt.storerconfig               */
-/*************************************************************************************/
+/*****************************************************************************************/
+/* Store procedure: rdt_1812ReplTask01                                                   */
+/* Copyright      : Maersk                                                               */
+/* Customer       : Unilever                                                             */
+/*                                                                                       */
+/* Purpose: Trigger replenishment                                                        */
+/*                                                                                       */
+/* Date        Rev      Author    Purposes                                               */
+/* 25-Oct-2024 1.0.0    YYS027    FCR-989 Created from v1.4 rdt_TM_CasePick_ClosePallet  */
+/*                                for trigger replenishment submit to QCommander         */
+/*                                used by ReplenTaskSP in rdt.storerconfig               */
+/*****************************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_1812ReplTask01] (
    @nMobile        INT,
@@ -41,8 +41,7 @@ BEGIN
    DECLARE @bDebug         INT = 0
 
    IF @bDebug>0
-      INSERT INTO DocInfo(TableName,key1,key2,key3,StorerKey,[Data],DataType,LineSeq,StoredProc)
-      VALUES('YSLOG','','','','','Enter','LOG',0,'rdt_1812ReplTask01')  
+      SELECT 'rdt_1812ReplTask01','Enter'
    --print @cListKey
    --print @cUserName
    -- Get storer
@@ -88,18 +87,17 @@ BEGIN
         AND UserKey = @cUserName
       ORDER BY TaskDetailKey
 
-      SELECT @cFacility = Facility FROM LOC WITH (NOLOCK) WHERE LOC = @cFromLOC
-      SELECT @cLocEmptyOption = V_String14 FROM   RDT.RDTMOBREC WITH (NOLOCK) WHERE  Mobile = @nMobile
+      SELECT @cFacility = Facility FROM dbo.LOC WITH (NOLOCK) WHERE LOC = @cFromLOC
+      SELECT @cLocEmptyOption = C_String14 FROM RDT.RDTMOBREC WITH (NOLOCK) WHERE  Mobile = @nMobile
 
       IF @bDebug>0
-         INSERT INTO DocInfo(TableName,key1,key2,key3,StorerKey,[Data],DataType,LineSeq,StoredProc)
-         VALUES('YSLOG',@cSKU,@cFromLOC,@cLocEmptyOption,@cStorerKey,'Info','LOG',0,'rdt_1812ReplTask01')
+         SELECT 'rdt_1812ReplTask01',@cSKU,@cFromLOC,@cLocEmptyOption,@cStorerKey
 
 
       --Operator say the location is empty /or/ qty hits min threshold
       IF ISNULL(RTRIM(@cLocEmptyOption), '') = '1' OR EXISTS(
-         SELECT 1 FROM SKUXLOC SL(NOLOCK)
-                          JOIN LOTxLOCxID LLI WITH (NOLOCK) ON SL.StorerKey = LLI.StorerKey AND SL.SKU = LLI.SKU AND SL.LOC = LLI.LOC
+         SELECT 1 FROM dbo.SKUXLOC SL(NOLOCK)
+                          JOIN dbo.LOTxLOCxID LLI WITH (NOLOCK) ON SL.StorerKey = LLI.StorerKey AND SL.SKU = LLI.SKU AND SL.LOC = LLI.LOC
          WHERE SL.StorerKey = @cStorerKey
            AND SL.SKU = @cSKU
            AND SL.LOC = @cFromLOC
@@ -151,7 +149,7 @@ BEGIN
                      @cIniFilePath       = IniFilePath,
                      @cCmdType           = CmdType,
                      @cTaskType          = TaskType
-         FROM QCmd_TransmitlogConfig WITH (NOLOCK)
+         FROM dbo.QCmd_TransmitlogConfig WITH (NOLOCK)
          WHERE TableName  = 'Replenishment'
             AND [App_Name] = 'WMS'
             AND  (StorerKey = @cStorerKey OR StorerKey = 'ALL')
@@ -168,8 +166,7 @@ BEGIN
          declare @cErrMsg2        NVARCHAR(20)
          BEGIN TRY
             IF @bDebug>0
-               INSERT INTO DocInfo(TableName,key1,key2,key3,StorerKey,[Data],DataType,LineSeq,StoredProc)
-               VALUES('YSLOG',@cFacility,@cIP,@cPORT,@cStorerKey,'Prepare:'+@cSQlCommand,'LOG',0,'rdt_1812ReplTask01')         
+               SELECT 'rdt_1812ReplTask01',@cFacility,@cIP,@cPORT,@cStorerKey,'Prepare:'+@cSQlCommand
             EXEC isp_QCmd_SubmitTaskToQCommander
                   @cTaskType           = 'O' -- D=By Datastream, T=Transmitlog, O=Others
                   , @cStorerKey        = @cStorerKey
@@ -193,24 +190,18 @@ BEGIN
            	   SET @cErrMsg2 = ERROR_MESSAGE()
            	   PRINT @cErrMsg2   
                IF @bDebug>0
-                  INSERT INTO DocInfo(TableName,key1,key2,key3,StorerKey,[Data],DataType,LineSeq,StoredProc)
-                  VALUES('YSLOG',@cFacility,@cIP,@cPORT,@cStorerKey,'ERROR:' + @cErrMsg2 ,'LOG',0,'rdt_1812ReplTask01')                        
+                  SELECT 'rdt_1812ReplTask01',@cFacility,@cIP,@cPORT,@cStorerKey,'ERROR:' + @cErrMsg2
                GOTO Quit               
             END CATCH   
             IF @bDebug>0
-               INSERT INTO DocInfo(TableName,key1,key2,key3,StorerKey,[Data],DataType,LineSeq,StoredProc)
-               VALUES('YSLOG',@cFacility,@cIP,@cPORT,@cStorerKey,'DONE:'+@cErrMsg2,'LOG',0,'rdt_1812ReplTask01')                                 
+               SELECT 'rdt_1812ReplTask01',@cFacility,@cIP,@cPORT,@cStorerKey,'DONE:'+@cErrMsg2,'LOG'
       END
    END
-   GOTO Quit
 
 Quit:
-WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
-   COMMIT TRAN
+   IF @bDebug>0
+      SELECT 'rdt_1812ReplTask01','Exit'
 END
-IF @bDebug>0
-   INSERT INTO DocInfo(TableName,key1,key2,key3,StorerKey,[Data],DataType,LineSeq,StoredProc)
-   VALUES('YSLOG','','','','','Exit','LOG',0,'rdt_1812ReplTask01')   
 GO
 
 SET QUOTED_IDENTIFIER OFF
