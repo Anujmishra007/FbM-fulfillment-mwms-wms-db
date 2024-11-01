@@ -663,23 +663,6 @@ BEGIN
          END
       END
 
-      /*
-      -- Check Pack confirmed
-      IF EXISTS( SELECT 1 FROM PackHeader WITH (NOLOCK) WHERE PickSlipNo = @cPickSlipNo AND Status = '9')
-      BEGIN
-         SET @nErrNo = 100203
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Pack confirmed
-         GOTO Quit
-      END
-
-      -- Check valid carton
-      IF @nCartonNo = 0 AND @cOption IN ('2', '3')
-      BEGIN
-         SET @nErrNo = 100224
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --No carton
-         GOTO Quit
-      END*/
-
       -- Extended validate
       IF @cExtendedValidateSP <> ''
       BEGIN
@@ -860,124 +843,6 @@ BEGIN
          SET @nStep = 4
 
       END
-      /*
-      ELSE IF @cOption = '2'
-      BEGIN
-         
-
-         -- Get carton info
-         SELECT TOP 1
-            @cSKU = SKU,
-            @cLabelLine = LabelLine
-         FROM PackDetail WITH (NOLOCK)
-         WHERE PickSlipNo = @cPickSlipNo
-            AND CartonNo = @nCartonNo
-            AND LabelNo = @cLabelNo
-         ORDER BY LabelLine
-
-         -- Get SKU info
-         SELECT
-            @cSKUDescr = Descr,
-            @cPrePackIndicator = ISNULL( PrePackIndicator, ''),
-            @cPackQtyIndicator = LEFT( ISNULL( PackQtyIndicator, '0'), 3),
-            @cMUOM_Desc = Pack.PackUOM3,
-            @cPUOM_Desc =
-               CASE @cPUOM
-                  WHEN '2' THEN Pack.PackUOM1 -- Case
-                  WHEN '3' THEN Pack.PackUOM2 -- Inner pack
-                  WHEN '6' THEN Pack.PackUOM3 -- Master unit
-                  WHEN '1' THEN Pack.PackUOM4 -- Pallet
-                  WHEN '4' THEN Pack.PackUOM8 -- Other unit 1
-                  WHEN '5' THEN Pack.PackUOM9 -- Other unit 2
-               END,
-               @nPUOM_Div = CAST( IsNULL(
-               CASE @cPUOM
-                  WHEN '2' THEN Pack.CaseCNT
-                  WHEN '3' THEN Pack.InnerPack
-                  WHEN '6' THEN Pack.QTY
-                  WHEN '1' THEN Pack.Pallet
-                  WHEN '4' THEN Pack.OtherUnit1
-                  WHEN '5' THEN Pack.OtherUnit2
-               END, 1) AS INT)
-         FROM dbo.SKU SKU WITH (NOLOCK)
-            INNER JOIN dbo.Pack Pack WITH (NOLOCK) ON (SKU.PackKey = Pack.PackKey)
-         WHERE SKU.StorerKey = @cStorerKey
-            AND SKU.SKU = @cSKU
-
-         -- Get PackDetail info
-         SELECT @nPackedQTY = PD.QTY
-         FROM dbo.PackDetail PD WITH (NOLOCK)
-         WHERE PD.PickSlipNo = @cPickSlipNo
-            AND CartonNo = @nCartonNo
-            AND LabelNo = @cLabelNo
-            AND LabelLine = @cLabelLine
-
-         -- Convert to prefer UOM QTY
-         IF @cPUOM = '6' OR -- When preferred UOM = master unit
-            @nPUOM_Div = 0  -- UOM not setup
-         BEGIN
-            SET @cPUOM_Desc = ''
-            SET @nPQTY = 0
-            SET @cFieldAttr14 = 'O' -- @nPQTY
-         END
-
-         -- Prepare next screen var
-         SET @cOutField01 = RTRIM( @cCustomNo)
-         SET @cOutField02 = CAST( CAST( @cLabelLine AS INT) AS NVARCHAR(5)) + '/' + CAST( @nCartonSKU AS NVARCHAR(5))
-         SET @cOutField03 = '' -- SKU
-         SET @cOutField04 = @cSKU
-         SET @cOutField05 = rdt.rdtFormatString( @cSKUDescr, 1, 20)
-         SET @cOutField06 = rdt.rdtFormatString( @cSKUDescr, 21, 20)
-         SET @cOutField07 = CAST( @nPackedQTY AS NVARCHAR( 8))    -- ZG02
-         SET @cOutField08 = '' -- QTY
-         SET @cOutField09 = CAST( @nCartonQTY AS NVARCHAR( 5))
-         SET @cOutField10 = CASE WHEN @cPrePackIndicator = '2' THEN @cPackQtyIndicator ELSE '' END
-         SET @cOutField11 = '1:' + CASE WHEN @nPUOM_Div > 99999 THEN '*' ELSE CAST( @nPUOM_Div AS NCHAR( 5)) END
-         SET @cOutField12 = rdt.rdtRightAlign( @cPUOM_Desc, 5)
-         SET @cOutField13 = rdt.rdtRightAlign( @cMUOM_Desc, 5)
-         SET @cOutField14 = '' -- PQTY
-         SET @cOutField15 = '' -- ExtendedInfo
-
-         -- Convert to prefer UOM QTY
-         IF @cPUOM = '6' OR -- When preferred UOM = master unit
-            @nPUOM_Div = 0  -- UOM not setup
-         BEGIN
-            SET @cPUOM_Desc = ''
-            SET @nPQTY = 0
-            SET @cFieldAttr14 = 'O' -- @nPQTY
-         END
-         ELSE
-         BEGIN
-            SET @cFieldAttr14 = '' -- @nPQTY
-         END
-
-         SET @nEnter = 0 --(JHU151)  
-
-         -- Enable field
-         SET @cFieldAttr08 = CASE WHEN @cDisableQTYField = '1' THEN 'O' ELSE '' END
-
-         EXEC rdt.rdtSetFocusField @nMobile, 3  -- SKU
-
-         -- Go to SKU QTY screen
-         SET @nScn = @nScn + 1
-         SET @nStep = @nStep + 1
-
-      END
-
-      -- Repack carton
-      ELSE IF @cOption = '3'
-      BEGIN
-         -- Prepare next screen var
-         SET @cOutField01 = RTRIM( @cCustomNo)
-         SET @cOutField02 = '' -- Option
-
-         SET @nEnter = 0 --(JHU151)  
-
-         -- Go to repack screen
-         SET @nScn = @nScn + 5
-         SET @nStep = @nStep + 5
-      END
-      */
 
       -- Extended info
       IF @cExtendedInfoSP <> ''
@@ -1572,12 +1437,30 @@ BEGIN
 
          -- Get PackDetail info
          SET @nPackedQTY = 0
+         SET @nSKURank = 0
 
+         -- Get PackDetail info
+         ;WITH RankedSKUs AS (
+            SELECT 
+               LabelNo,
+               SKU,
+               SUM(Qty) AS Total_Qty,
+               ROW_NUMBER() OVER (PARTITION BY LabelNo ORDER BY SKU) AS SKU_Rank
+            FROM 
+               PackDetail PD
+            WHERE PD.LabelNo = @cNewLabelNo
+            GROUP BY 
+               LabelNo, SKU
+         )
+         SELECT 
+            @nPackedQty = Total_Qty,
+            @nSKURank = SKU_Rank
+         FROM 
+            RankedSKUs
+         WHERE SKU = @cSKU
+         ORDER BY 
+            SKU;
 
-         SELECT @nPackedQTY = QTY
-         FROM PackDetail PD WITH (NOLOCK)
-         WHERE PD.LabelNo = @cLabelNo -- Get info from the new carton
-            AND PD.SKU = @cSKU
 
 
          -- Disable QTY field (cc03)
@@ -1701,6 +1584,7 @@ BEGIN
             END
          END
 
+         SET @cOutField02 = CAST( @nSKURank AS NVARCHAR(5)) + '/' + CAST( @nCartonSKU AS NVARCHAR(5))
          SET @cOutField03 = CASE WHEN @cDisableQTYField = '1' THEN '' ELSE @cSKU END
          SET @cOutField04 = @cSKU
          SET @cOutField05 = rdt.rdtFormatString( @cSKUDescr, 1, 20)
@@ -2669,44 +2553,6 @@ BEGIN
       SET @nErrNo = 226469
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Must input carton type
       GOTO Quit 
-
-      /*
-      SET @cOutField01 = CASE WHEN ISNULL(RTRIM( @cNewLabelNo),'') = '' THEN 'NEW' ELSe RTRIM( @cNewLabelNo) END -- fcr-946
-      SET @cOutField02 = CAST( @nSKURank AS NVARCHAR(5)) + '/' + CAST( @nCartonSKU AS NVARCHAR(5))
-      SET @cOutField03 = '' -- SKU
-      SET @cOutField04 = @cSKU
-      SET @cOutField05 = rdt.rdtFormatString( @cSKUDescr, 1, 20)
-      SET @cOutField06 = rdt.rdtFormatString( @cSKUDescr, 21, 20)
-      SET @cOutField07 = CAST( @nPackedQTY AS NVARCHAR( 8))    -- ZG02
-      SET @cOutField08 = @cDefaultQTY -- QTY --(cc01)
-      SET @cOutField09 = CAST( @nCartonQTY AS NVARCHAR( 5))
-      SET @cOutField10 = CASE WHEN @cPrePackIndicator = '2' THEN @cPackQtyIndicator ELSE '' END
-      SET @cOutField11 = '1:' + CASE WHEN @nPUOM_Div > 99999 THEN '*' ELSE CAST( @nPUOM_Div AS NCHAR( 5)) END
-      SET @cOutField12 = rdt.rdtRightAlign( @cPUOM_Desc, 5)
-      SET @cOutField13 = rdt.rdtRightAlign( @cMUOM_Desc, 5)
-      SET @cOutField14 = '' -- PQTY
-
-      -- Convert to prefer UOM QTY
-      IF @cPUOM = '6' OR -- When preferred UOM = master unit
-         @nPUOM_Div = 0  -- UOM not setup
-      BEGIN
-         SET @cPUOM_Desc = ''
-         SET @nPQTY = 0
-         SET @cFieldAttr14 = 'O' -- @nPQTY
-      END
-      ELSE
-      BEGIN
-         SET @cFieldAttr14 = '' -- @nPQTY
-      END
-
-      SET @cFieldAttr08 = CASE WHEN @cDisableQTYField = '1' THEN 'O' ELSE '' END
-
-      EXEC rdt.rdtSetFocusField @nMobile, 3 -- SKU
-
-      -- Go to SKU QTY screen
-      SET @nScn = 6492
-      SET @nStep = 3*/
-
    END --ESC
    
 END -- step5
