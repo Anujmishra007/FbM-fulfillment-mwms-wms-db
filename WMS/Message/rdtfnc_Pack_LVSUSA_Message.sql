@@ -21,10 +21,12 @@ execute rdt.rdtAddMsg 226466, 10, '226466InvCartonType', 'us_english', 993, 0, '
 execute rdt.rdtAddMsg 226467, 10, '226467OptionRequired', 'us_english', 993, 0, '226467 Option Required'
 execute rdt.rdtAddMsg 226468, 10, '226468InvalidOption', 'us_english', 993, 0, '226468 Invalid Option'
 execute rdt.rdtAddMsg 226469, 10, '226469MustSetCartType', 'us_english', 993, 0, '226469 Must Input New Carton Type'
-
-
-
-
+execute rdt.rdtAddMsg 226470, 10, '226470UpdCartWgtFail', 'us_english', 993, 0, '226470 Fail to Update Carton Weight'
+execute rdt.rdtAddMsg 226471, 10, '226471UpdPackInfoFail', 'us_english', 993, 0, '226471 Fail to Master Label No PackInfo'
+execute rdt.rdtAddMsg 226472, 10, '226472UpdCartWgtFail', 'us_english', 993, 0, '226472 Fail to Update Carton Weight'
+execute rdt.rdtAddMsg 226473, 10, '226473UpdPackInfoFail', 'us_english', 993, 0, '226473 Fail to New Label No PackInfo'
+execute rdt.rdtAddMsg 226474, 10, '226474UpdCartWgtFail', 'us_english', 993, 0, '226474 Fail to Update Carton Weight'
+execute rdt.rdtAddMsg 226475, 10, '226475LabelNoEmpty', 'us_english', 993, 0, '226475 Label No Is Empty'
 
 
 

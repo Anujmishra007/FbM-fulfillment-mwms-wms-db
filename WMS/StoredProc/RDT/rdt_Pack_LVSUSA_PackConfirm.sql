@@ -95,7 +95,7 @@ BEGIN
    DECLARE @cPackConfirm   NVARCHAR( 1)
    DECLARE @nCounter       INT = 0
    DECLARE @nMax           INT = 0
-   DECLARE @bDebugFlag     BINARY
+   DECLARE @bDebugFlag     BINARY = 0
 
    DECLARE @tPSNO TABLE
    (
@@ -119,14 +119,11 @@ BEGIN
    SET @nPickQTY = 0
 
    INSERT INTO @tPSNO (PickSlipNO)
-      SELECT DISTINCT PH.PickSlipNO
-      FROM PackHeader PH WITH (NOLOCK)
-      JOIN PackDetail PD WITH (NOLOCK)
-         ON PH.StorerKey = PD.StorerKey
-         AND PH.PickSlipNo = PD.PickSlipNo
-      WHERE PH.StorerKey = @cStorerKey
-         AND PD.LabelNo = @cLabelNo
-      Order BY PH.PickSlipNo
+      SELECT DISTINCT PickSlipNO
+      FROM PackDetail  WITH (NOLOCK)
+      WHERE StorerKey = @cStorerKey
+         AND LabelNo = @cLabelNo
+      ORDER BY PickSlipNo
 
    IF @@ROWCOUNT = 0
    BEGIN
@@ -164,9 +161,9 @@ BEGIN
 
    -- Check pack confirm already  
    IF NOT EXISTS( SELECT 1 FROM PackHeader PH WITH (NOLOCK)
-               JOIN @tPSNO PSNO 
-                  ON  PH.PickSlipNo = PSNO.PickSlipNo
-               WHERE Status <> '9')
+                  JOIN @tPSNO PSNO 
+                     ON  PH.PickSlipNo = PSNO.PickSlipNo
+                  WHERE Status <> '9')
    BEGIN
       IF @bDebugFlag = 1
          SELECT 'All Confirmed. Quit'  
@@ -189,13 +186,16 @@ BEGIN
 
       SET @cPickSlipNo = ''
       SET @cOrderKey = ''
-      SET @cPackConfirm = 'Y'
+      SET @cPackConfirm = ''
       SET @nPackQTY = 0
 
       SELECT @cPickSlipNo = PickSlipNo,
          @cOrderKey = OrderKey
       FROM @tOrder
       WHERE RowNumber = @nCounter
+
+      IF @bDebugFlag = 1
+         SELECT @cPickSlipNo AS PSNO, @cOrderKey AS OrderKey
 
       -- Calc pack QTY   
       SELECT @nPackQTY = ISNULL( SUM( QTY), 0) 
@@ -212,6 +212,9 @@ BEGIN
       ELSE  
          SET @cPackConfirm = 'Y'
 
+      IF @bDebugFlag = 1
+         SELECT 'PickDetail Check', @cPackConfirm AS PackConfirm
+
       -- Check fully packed  
       IF @cPackConfirm = 'Y'  
       BEGIN  
@@ -224,8 +227,7 @@ BEGIN
       END
 
       IF @bDebugFlag = 1
-         SELECT @cPickSlipNo AS PSNO, @cOrderKey AS OrderKey, @cPackConfirm AS PackConfirm, @nPickQty AS PickQty,
-               @nPackQty AS PackQty 
+         SELECT 'Compare Pick&Pack Qty', @cPackConfirm AS PackConfirm, @nPickQty AS PickQty, @nPackQty AS PackQty 
       
       -- Close the PackHeader
       IF @cPackConfirm = 'Y'
@@ -247,7 +249,6 @@ BEGIN
       END CATCH
 
       SET @nCounter = @nCounter + 1
-
    END -- Go through orderky
    
 Quit:  

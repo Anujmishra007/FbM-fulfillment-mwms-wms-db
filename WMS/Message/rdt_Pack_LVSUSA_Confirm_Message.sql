@@ -13,6 +13,11 @@ execute rdt.rdtAddMsg 227609, 10, '227609InsPackDetailFail', 'us_english', 993, 
 execute rdt.rdtAddMsg 227610, 10, '227610InsMoveLogFail', 'us_english', 993, 0 , '227610 Fail to Insert MoveLog'
 execute rdt.rdtAddMsg 227611, 10, '227611QtyTooGreat', 'us_english', 993, 0 , '227611 Qty is too great'
 execute rdt.rdtAddMsg 227612, 10, '227612FailtoHandlePickDetail', 'us_english', 993, 0 , '227612 Fail to Handle PickDetail'
-
+execute rdt.rdtAddMsg 227613, 10, '227613InsMoveLogFail', 'us_english', 993, 0 , '227613 Fail to Insert MoveLog'
+execute rdt.rdtAddMsg 227614, 10, '227614UpdPackDetailFail', 'us_english', 993, 0 , '227614 Failed to Update PackDetail'
+execute rdt.rdtAddMsg 227615, 10, '227615InsPackDetailFail', 'us_english', 993, 0 , '227615 Failed to Insert PackDetail'
+execute rdt.rdtAddMsg 227616, 10, '227616DelPackDetailFail', 'us_english', 993, 0 , '227616 Failed to Delete PackDetail'
+execute rdt.rdtAddMsg 227617, 10, '227617FailtoHandlePickDetail', 'us_english', 993, 0 , '227617 Fail to Handle PickDetail'
+execute rdt.rdtAddMsg 227618, 10, '227618UpdPickDetailFail', 'us_english', 993, 0 , '227618 Fail to Update PickDetail'
 
 select * from rdt.rdtmsg (nolock) where message_id between 227601 AND 227650

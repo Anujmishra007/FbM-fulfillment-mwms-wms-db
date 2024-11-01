@@ -143,7 +143,12 @@ BEGIN
    DECLARE @nBalQty           INT
    DECLARE @nAdjustQty        INT
    DECLARE @nMaxCount         INT
-   DECLARE @nRowNo             INT
+   DECLARE @nRowNo            INT
+
+   DECLARE @cPickDetailPSNO     NVARCHAR( 10)
+   DECLARE @cPickDetailLabelNo  NVARCHAR( 20)
+   DECLARE @cPickDetailSKU      NVARCHAR( 20)
+   DECLARE @nPickDetailQty      INT
 
    DECLARE @nTranCount INT
    DECLARE @bDebugFlag BINARY = 0
@@ -167,27 +172,24 @@ BEGIN
       GOTO Quit
    END
 
-   
-
    SELECT @nMasterPackQty = ISNULL( SUM(Qty),0)
-      FROM PackDetail WITH (NOLOCK)
-      WHERE Storerkey = @cStorerKey
-         AND SKU = @cSKU
-         AND LabelNo = @cMasterLabelNo
-
-   --The input qty cannot be greater than the qty left in the original label no
-   IF @nQty > @nMasterPackQty
-   BEGIN
-      SET @nErrNo = 227611
-      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Qty too great
-      GOTO Quit
-   END
-
+   FROM PackDetail WITH (NOLOCK)
+   WHERE Storerkey = @cStorerKey
+      AND SKU = @cSKU
+      AND LabelNo = @cMasterLabelNo
 
    IF @cType = 'NEW'
    BEGIN
       IF @bDebugFlag = 1
          SELECT 'Type = NEW'
+
+      --The input qty cannot be greater than the qty left in the original label no
+      IF @nQty > @nMasterPackQty
+      BEGIN
+         SET @nErrNo = 227611
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Qty too great
+         GOTO Quit
+      END
 
       IF NOT EXISTS (SELECT 1 FROM PackDetail WITH (NOLOCK)
                   WHERE LabelNo = @cMasterLabelNo
@@ -466,10 +468,6 @@ BEGIN
       IF @bDebugFlag = 1
          SELECT 'Handling PickDetail (NEW)'
 
-      DECLARE @cPickDetailPSNO      NVARCHAR( 10),
-               @cPickDetailLabelNo  NVARCHAR( 20),
-               @nPickDetailQty      INT
-
       WHILE 1 = 1
       BEGIN
          SELECT TOP 1 @nRowNo = RowNumber, 
@@ -541,12 +539,207 @@ BEGIN
       IF @bDebugFlag = 1
          SELECT 'Type = MERGE'
 
-      
+      -- Log the label adjustment for from carton
+      BEGIN TRY
+         MERGE INTO @tMoveLog AS a
+         USING (SELECT PickSlipNO, LabelNo, SKU, -Qty AS MoveQty 
+                FROM PackDetail WITH (NOLOCK)
+                WHERE StorerKey = @cStorerKey
+                  AND LabelNo = @cLabelNo) AS b
+         ON (a.PickSlipNo = b.PickSlipNo AND a.LabelNo = b.LabelNo AND a.SKU = b.SKU)
+         WHEN MATCHED THEN
+            UPDATE SET a.MoveQty = a.MoveQty + b.MoveQty
+         WHEN NOT MATCHED THEN
+            INSERT (PickSlipNo, LabelNo, SKU, MoveQty)
+            VALUES (b.PickSlipNo, b.LabelNo, b.SKU, b.MoveQty);
 
+         MERGE INTO @tMoveLog AS a
+         USING (SELECT PickSlipNO, @cMasterLabelNo AS LabelNo, SKU, Qty AS MoveQty 
+                FROM PackDetail WITH (NOLOCK)
+                WHERE StorerKey = @cStorerKey
+                  AND LabelNo = @cLabelNo) AS b
+         ON (a.PickSlipNo = b.PickSlipNo AND a.LabelNo = b.LabelNo AND a.SKU = b.SKU)
+         WHEN MATCHED THEN
+            UPDATE SET a.MoveQty = a.MoveQty + b.MoveQty
+         WHEN NOT MATCHED THEN
+            INSERT (PickSlipNo, LabelNo, SKU, MoveQty)
+            VALUES (b.PickSlipNo, b.LabelNo, b.SKU, b.MoveQty);
+      END TRY
+      BEGIN CATCH
+         SET @nErrNo = 227613
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Ins @tMoveLog Fail
+         GOTO RollBackTran
+      END CATCH
+
+      IF @bDebugFlag = 1
+      BEGIN
+         SELECT 'Get @tMoveLog'
+         SELECT * FROM @tMoveLog
+      END
+
+      SET @nTranCount = @@TRANCOUNT
+      BEGIN TRAN  -- Begin our own transaction
+      SAVE TRAN rdt_Pack_LVSUSA_Confirm -- For rollback or commit only our own transaction
+
+      --PackDetail Handling (Merge)
+
+      IF @bDebugFlag = 1
+         SELECT 'Hanlding PackDetail'
+
+      -- Delete From Carton's PackDetail
+      BEGIN TRY
+         DELETE FROM PackDetail WHERE LabelNo = @cLabelNo
+      END TRY
+      BEGIN CATCH
+         SET @nErrNo = 227616
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Delete PackDetail Fail
+         GOTO RollBackTran
+      END CATCH
+
+      BEGIN TRY
+         UPDATE pd1 WITH (ROWLOCK)
+            SET pd1.Qty = pd1.Qty + ABS(temp.MoveQty)
+         FROM PackDetail pd1
+         JOIN @tMoveLog temp
+            ON pd1.PickSlipNo = temp.PickSlipNo
+            AND pd1.SKU = temp.SKU
+            AND pd1.StorerKey = @cStorerKey
+            AND pd1.LabelNo = @cMasterLabelNo
+            AND temp.LabelNo = @cLabelNo
+      END TRY
+      BEGIN CATCH
+         SET @nErrNo = 227614
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Update PackDetail Fail
+         GOTO RollBackTran
+      END CATCH
+
+      BEGIN TRY
+         DECLARE @nMaxCartonNo   INT
+
+         SELECT @nMaxCartonNo = MAX(CartonNo)
+         FROM PackDetail WITH (NOLOCK)
+         WHERE LabelNo = @cMasterLabelNo
+            AND StorerKey = @cStorerKey
+
+         DECLARE @tMaxLabelLine TABLE (
+            PickSlipNo     NVARCHAR( 20),
+            MaxLabelLine   INT
+         )
+
+         INSERT INTO @tMaxLabelLine (PickSlipNo, MaxLabelLine)
+				SELECT PickSlipNo, MAX(CAST(LabelLine AS INT))
+				FROM PackDetail WITH (NOLOCK)
+				WHERE LabelNo = @cMasterLabelNo
+				GROUP BY PickSlipNo
+         
+
+         INSERT INTO PackDetail (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, Qty)
+            SELECT temp.PickSlipNo, 
+                  @nMaxCartonNo, 
+                  @cMasterLabelNo, 
+                  RIGHT('00000' + CAST((ISNULL(ml.MaxLabelLine, 0) + ROW_NUMBER() OVER (PARTITION BY temp.PickSlipNo ORDER BY temp.SKU)) AS VARCHAR(5)), 5), 
+                  @cStorerKey, 
+                  temp.SKU, 
+                  ABS(temp.MoveQty)
+            FROM @tMoveLog temp
+            LEFT JOIN @tMaxLabelLine ml
+               ON temp.PickSlipNo = ml.PickSlipNo
+            LEFT JOIN PackDetail pd1
+               ON pd1.PickSlipNo = temp.PickSlipNo
+                  AND pd1.SKU = temp.SKU
+                  AND pd1.StorerKey = @cStorerKey
+                  AND pd1.LabelNo = @cMasterLabelNo
+            WHERE temp.LabelNo = @cLabelNo
+               AND pd1.PickSlipNo IS NULL;
+      END TRY
+      BEGIN CATCH
+         SET @nErrNo = 227615
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Ins PackDetail Fail
+         GOTO RollBackTran
+      END CATCH
+      --PackDetail Handling (Merge) END
+
+      IF @bDebugFlag = 1
+      BEGIN
+         SELECT 'Finish PackDetail'
+         SELECT * FROM PackDetail WITH (NOLOCK) WHERE LabelNo IN (@cMasterLabelNo, @cLabelNo) ORDER BY LabelLine
+      END
+
+      --PickDetail Hanlding (Merge) Start
+      IF @bDebugFlag = 1
+         SELECT 'Handling PickDetail (Merge)'
+
+      --Similar to repack, update fromcarton pickdetail caseid to empty
+      IF @bDebugFlag = 1
+         SELECT 'Empty CaseID in PickDetail'
+      BEGIN TRY
+         UPDATE dbo.PickDetail WITH (ROWLOCK)
+         SET 
+            CaseID = '', 
+            EditDate = GETDATE(), 
+            EditWho  = SUSER_SNAME(), 
+            TrafficCop = NULL
+         WHERE StorerKey = @cStorerKey
+            AND CaseID = @cLabelNo
+      END TRY
+      BEGIN CATCH
+         SET @nErrNo = 227618
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Empty PickDetail CaseID Fail
+         GOTO RollBackTran
+      END CATCH
+
+      IF @bDebugFlag = 1
+         SELECT 'Merge PickDetail to Master Carton'
+      --Only handle the master carton record
+      WHILE 1 = 1 
+      BEGIN
+         SELECT TOP 1 @nRowNo = RowNumber, 
+               @cPickDetailPSNO = PickSlipNo,
+               @cPickDetailLabelNo = LabelNo,
+               @cPickDetailSKU = SKU,
+               @nPickDetailQty = MoveQty
+         FROM @tMoveLog
+         WHERE MoveQty > 0
+         ORDER BY MoveQty
+
+         IF @@ROWCOUNT = 0
+         BEGIN
+            IF @bDebugFlag = 1
+               SELECT 'No records in @tMoveLog, Exit'
+            BREAK -- All records were handled
+         END
+
+         IF @bDebugFlag = 1
+            SELECT 'Current Handling PickDetail', @nRowNo AS RowNo, @cPickDetailPSNO AS PSNO, @cPickDetailLabelNo AS LabelNo, @cPickDetailSKU AS SKU, @nPickDetailQty AS Qty
+
+         EXEC rdt.rdt_Pack_LVSUSA_PickDetailConfirm @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey
+         ,@cPickDetailPSNO --PickSlipNo
+         ,'' --FromDropID
+         ,@cPickDetailSKU --SKU
+         ,@nPickDetailQty
+         ,@nCartonNo             OUTPUT
+         ,@cPickDetailLabelNo    OUTPUT 
+         ,@nErrNo                OUTPUT
+         ,@cErrMsg               OUTPUT
+         
+         IF @nErrNo <> 0
+         BEGIN
+            SET @nErrNo = 227617
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Handle PickDetail Fail
+            GOTO RollBackTran
+         END
+
+         DELETE @tMoveLog WHERE RowNumber = @nRowNo
+
+         IF @bDebugFlag = 1
+            SELECT 'Delete RowNumber: ' + CAST(@nRowNo AS NVARCHAR(3)) + ' In @tMoveLog'
+      END -- PickDetail while
+      IF @bDebugFlag = 1
+         SELECT 'Handling PickDetail (Merge) END'
+      --PickDetail Handling (Merge) End
    END -- MERGE
-
    
-   /*EXEC RDT.rdt_STD_EventLog           
+   EXEC RDT.rdt_STD_EventLog           
    @cActionType         = '3',              
    @nMobileNo           = @nMobile,        
    @nFunctionID         = @nFunc,        
@@ -558,7 +751,7 @@ BEGIN
    @cSKU                = @cSKU,  
    @cRefNo1             = @cLabelNo,
    @cPickSlipNo         = '',
-   @cLabelNo            = @cMasterLabelNo*/
+   @cLabelNo            = @cMasterLabelNo
 
    COMMIT TRAN rdt_Pack_LVSUSA_Confirm
    GOTO Quit
@@ -566,7 +759,8 @@ BEGIN
 RollBackTran:
 BEGIN
    SELECT 'Rollback Tran'
-   ROLLBACK TRAN rdt_Pack_LVSUSA_Confirm -- Only rollback change made here
+   IF @@ROWCOUNT > 0
+      ROLLBACK TRAN rdt_Pack_LVSUSA_Confirm -- Only rollback change made here
    IF @cNewCarton = 'Y'
    BEGIN
       SET @nCartonNo = 0
