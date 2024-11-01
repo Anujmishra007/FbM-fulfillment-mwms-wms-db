@@ -93,7 +93,7 @@ BEGIN
    SELECT @nQTY = CONVERT(INT,@cQTY) WHERE ISNUMERIC(@cQTY)=1
    SELECT @nQTY_RPL = CONVERT(INT,@cQTY_RPL) WHERE ISNUMERIC(@cQTY_RPL)=1
 
-   IF @nAction = 0
+   IF ISNULL(@nAction,0) = 0
    BEGIN
       IF @nFunc = 1812
       BEGIN
@@ -254,8 +254,8 @@ Step 99. screen = 4028. Is the location completely empty?
                   SET @cOption = ''
                   SET @cOutField01 = '' -- Option
 
-                  SET @nStep = 8 --@nStep - 2  -- step from 10 to 8          (Short/Close Pallet)
-                  SET @nScn = 4027 --@nScn - 1  --screen from 4028 to 4027
+                  SET @nAfterStep = 8 --@nStep - 2  -- step from 10 to 8          (Short/Close Pallet)
+                  SET @nAfterScn = 4027 --@nScn - 1  --screen from 4028 to 4027
                END
 
                -- QTY fulfill
@@ -265,15 +265,15 @@ Step 99. screen = 4028. Is the location completely empty?
                   SET @cOption = ''
                   SET @cOutField01 = '' -- Option
 
-                  SET @nStep = 5 -- @nStep - 5      --step from 10 to 5          (next task /close pallet)
-                  SET @nScn = 4024 --@nScn - 4    --screen from 4048 to 4024
+                  SET @nAfterStep = 5 -- @nStep - 5      --step from 10 to 5          (next task /close pallet)
+                  SET @nAfterScn = 4024 --@nScn - 4    --screen from 4048 to 4024
                END
             END
             IF @nInputKey = 0 -- ESC pressed, return to SKU screen
             BEGIN
                -- Go to SKU screen (STEP 4)
-               SET @nStep = 4
-               SET @nScn = 4023
+               SET @nAfterStep = 4
+               SET @nAfterScn = 4023
             END
             GOTO Quit
          END  --end if @nScn = 4028

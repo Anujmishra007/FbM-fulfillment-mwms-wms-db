@@ -3316,7 +3316,7 @@ BEGIN
          @cUDF25   OUTPUT, @cUDF26 OUTPUT, @cUDF27 OUTPUT,
          @cUDF28   OUTPUT, @cUDF29 OUTPUT, @cUDF30 OUTPUT
 
-         IF @nScnBak = 99 AND @nScnBak = 4028 AND @nInputKey=0
+         IF @nStepBak = 99 AND @nScnBak = 4028 AND @nInputKey=0
          BEGIN
             -- Dynamic lottable
             EXEC rdt.rdt_Lottable @nMobile, @nFunc, @cLangCode, @nScn, @nInputKey, @cStorerKey, @cSKU, @cLottableCode, 'DISPLAY', 'POPULATE', 4, 4,
