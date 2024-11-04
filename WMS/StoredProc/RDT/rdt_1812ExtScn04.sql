@@ -101,6 +101,7 @@ BEGIN
          BEGIN
             IF @nInputKey = 1
             BEGIN
+               UPDATE rdt.RDTMOBREC WITH(ROWLOCK) SET C_String14 = '' WHERE Mobile = @nMobile
                SET @cReplenFlag = rdt.rdtGetConfig( @nFunc, 'ReplenFlag', @cStorerKey)
                IF @cReplenFlag = '0'
                SET @cReplenFlag = ''
@@ -109,8 +110,6 @@ BEGIN
                BEGIN
                   --so if qty of location in system is zero, RDT will show new empty choice screen, and if non-zero, no screen change, is right?
                   --Sandeep: yes, if it is non zero... then the screen will not be shown... that is the whole idea of asking the user if the location is actually empty
-                  
-                  UPDATE rdt.RDTMOBREC WITH(ROWLOCK) SET C_String14 = '' WHERE Mobile = @nMobile
 
                   SELECT @AvlInvQty = (SUM(LLI.Qty) - SUM(LLI.QtyPicked))       --   + SUM(LLI.PendingMoveIn)) 
                      FROM dbo.SKUXLOC SL(NOLOCK)
