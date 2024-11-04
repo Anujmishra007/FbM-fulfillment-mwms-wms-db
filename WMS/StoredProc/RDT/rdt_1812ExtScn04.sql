@@ -5,7 +5,7 @@ GO
 
 /**********************************************************************************/
 /* Store procedure: rdt_1812ExtScn04                                              */
-/* Copyright      : Maersk WMS                                                    */
+/* Copyright      : Maersk                                                        */
 /* Client         : Unilever                                                      */
 /*                                                                                */
 /* Purpose:                                                                       */
