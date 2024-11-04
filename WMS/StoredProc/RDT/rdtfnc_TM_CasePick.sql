@@ -1824,13 +1824,9 @@ BEGIN
       END
       --A new screen will  require the user to confirm the option . This will be prompted immediately after the user has entered the SKU Quantity on Step 4. 
       --   If the user presses escape then he can be taken to quantity entry screen. Act as a popup Window
-      SET @cReplenFlag = rdt.rdtGetConfig( @nFunc, 'ReplenFlag', @cStorerKey)
-      IF @cReplenFlag = '0'
-         SET @cReplenFlag = ''
-      
-      IF @cReplenFlag = '1' AND ISNULL(@cExtScnSP,'')<>'' AND EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
+      IF ISNULL(@cExtScnSP,'')<>'' AND EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
       BEGIN
-         -- if @cReplenFlag=1 and @cExtScnSP is ready, Goto 99 to 
+         -- @cExtScnSP is ready, Goto 99 to call @cExtScnSP, and @cReplenFlag=1 will be check in @cExtScnSP
          SET @nAction =0
          Goto Step_99
       END

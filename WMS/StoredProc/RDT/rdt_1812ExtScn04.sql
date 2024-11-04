@@ -99,56 +99,57 @@ BEGIN
       BEGIN
          IF @nStep = 4                 --Scn = 4023 SKU, QTY
          BEGIN
-            --so if qty of location in system is zero, RDT will show new empty choice screen, and if non-zero, no screen change, is right?
-            --Sandeep: yes, if it is non zero... then the screen will not be shown... that is the whole idea of asking the user if the location is actually empty
-            
-            --PRINT '----@cStorerKey:'
-            --PRINT @cStorerKey
-            --PRINT '----@cSKU:'
-            --PRINT @cSuggSKU
-            --PRINT '----@cFromLOC:'
-            --PRINT @cSuggFromLOC
-            UPDATE rdt.RDTMOBREC set C_String14 = '' where Mobile = @nMobile
-
-            SELECT @AvlInvQty = (SUM(LLI.Qty) - SUM(LLI.QtyPicked))       --   + SUM(LLI.PendingMoveIn)) 
-               FROM dbo.SKUXLOC SL(NOLOCK)
-                  JOIN dbo.LOTxLOCxID LLI WITH (NOLOCK) ON SL.StorerKey = LLI.StorerKey AND SL.SKU = LLI.SKU AND SL.LOC = LLI.LOC
-            WHERE SL.StorerKey = @cStorerKey
-            AND SL.SKU = @cSuggSKU
-            AND SL.LOC = @cSuggFromLOC
-            --AND SL.LocationType IN ( 'CASE','PALLET','PICK')          --do not check location type for invntory zero checking.
-            --PRINT '----@nQTY:'
-            --PRINT @nQTY
-            --PRINT '----@AvlInvQty:'
-            --PRINT @AvlInvQty         
-            IF @nQTY >= @AvlInvQty 
+            IF @nInputKey = 1
             BEGIN
-               SET @cOutField01 = '' -- Option            
-               SET @nAfterScn = 4028
-               SET @nAfterStep = 99               -- Goto new screen for choice 1=YES, 9=NO choice location is empty or not.
-               GOTO Quit
-            END
-            -- QTY short
-            IF @nQTY < @nQTY_RPL
-            BEGIN
-               -- Prepare next screen var
-               SET @cOption = ''
-               SET @cOutField01 = '' -- Option
+               SET @cReplenFlag = rdt.rdtGetConfig( @nFunc, 'ReplenFlag', @cStorerKey)
+               IF @cReplenFlag = '0'
+               SET @cReplenFlag = ''
+         
+               IF @cReplenFlag = '1' 
+               BEGIN
+                  --so if qty of location in system is zero, RDT will show new empty choice screen, and if non-zero, no screen change, is right?
+                  --Sandeep: yes, if it is non zero... then the screen will not be shown... that is the whole idea of asking the user if the location is actually empty
+                  
+                  UPDATE rdt.RDTMOBREC WITH(ROWLOCK) SET C_String14 = '' WHERE Mobile = @nMobile
 
-               SET @nAfterScn = @nScn + 4
-               SET @nAfterStep = @nStep + 4          --goto Step 8 and scn=4027
-            END
+                  SELECT @AvlInvQty = (SUM(LLI.Qty) - SUM(LLI.QtyPicked))       --   + SUM(LLI.PendingMoveIn)) 
+                     FROM dbo.SKUXLOC SL(NOLOCK)
+                        JOIN dbo.LOTxLOCxID LLI WITH (NOLOCK) ON SL.StorerKey = LLI.StorerKey AND SL.SKU = LLI.SKU AND SL.LOC = LLI.LOC
+                  WHERE SL.StorerKey = @cStorerKey
+                  AND SL.SKU = @cSuggSKU
+                  AND SL.LOC = @cSuggFromLOC
+                  --AND SL.LocationType IN ( 'CASE','PALLET','PICK')          --do not check location type for invntory zero checking.
 
-            -- QTY fulfill
-            IF @nQTY >= @nQTY_RPL                     -- it is not reachable.
-            BEGIN
-               -- Prepare next screen var
-               SET @cOption = ''
-               SET @cOutField01 = '' -- Option
+                  IF @nQTY >= @AvlInvQty 
+                  BEGIN
+                     SET @cOutField01 = '' -- Option            
+                     SET @nAfterScn = 4028
+                     SET @nAfterStep = 99               -- Goto new screen for choice 1=YES, 9=NO choice location is empty or not.
+                     GOTO Quit
+                  END
+               END   --end of IF @cReplenFlag = '1' 
+               -- QTY short
+               IF @nQTY < @nQTY_RPL
+               BEGIN
+                  -- Prepare next screen var
+                  SET @cOption = ''
+                  SET @cOutField01 = '' -- Option
 
-               SET @nAfterScn = @nScn + 1    
-               SET @nAfterStep = @nStep + 1          --goto step 5 and 4024
-            END
+                  SET @nAfterScn = @nScn + 4
+                  SET @nAfterStep = @nStep + 4          --goto Step 8 and scn=4027
+               END
+
+               -- QTY fulfill
+               IF @nQTY >= @nQTY_RPL                    
+               BEGIN
+                  -- Prepare next screen var
+                  SET @cOption = ''
+                  SET @cOutField01 = '' -- Option
+
+                  SET @nAfterScn = @nScn + 1    
+                  SET @nAfterStep = @nStep + 1          --goto step 5 and 4024
+               END
+            END --end of inputkey = 1
          END --end of step 4
 /********************************************************************************
 Step 99. screen = 4028. Is the location completely empty?
@@ -178,8 +179,8 @@ Step 99. screen = 4028. Is the location completely empty?
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Option
                   GOTO Quit_4028
                END
-               SET @cLocEmptyOption = @cOption     --to Save to V_String14
-               UPDATE rdt.RDTMOBREC set C_String14 = @cLocEmptyOption where Mobile = @nMobile
+               SET @cLocEmptyOption = @cOption     --to Save to V_String14 => C_String14
+               UPDATE rdt.RDTMOBREC WITH(ROWLOCK) SET C_String14 = @cLocEmptyOption WHERE Mobile = @nMobile
 
                IF @cOption='9'
                BEGIN
@@ -196,7 +197,7 @@ Step 99. screen = 4028. Is the location completely empty?
                      @cReasonCode = Code2,
                      @cCCTaskType = UDF01,-- CC task type
                      @cHoldType = UDF02 -- Hold type
-                  FROM codelkup 
+                  FROM codelkup WITH(NOLOCK)
                   WHERE listname = 'RDTREASON'
                   AND code = @nFunc
                   AND storerkey = @cStorerKey
