@@ -22,8 +22,11 @@ GO
 /* Date        Author   Ver   Purposes                                   */
 /* 2024-06-04  SSA01    1.1   Updated to update the taskdetailkey        */
 /*                            in the pickDetail table                    */
-/* 2024-06-04  SSA02    1.2   UWP-25919-JCB-Release & Reverse Wave       */
+/* 2024-10-04  SSA02    1.2   UWP-25919-JCB-Release & Reverse Wave       */
 /*                            for Kitting and Decanting                  */
+/* 2024-11-04  SSA03    1.3   Updating size for the LOC and ID variables */
+/*                            while fetching qty from inventory ,updated */
+/*                            lot mapping while fetching orderkey        */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV02]
   @c_wavekey      NVARCHAR(10)
@@ -296,10 +299,10 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV02]
                  +' AND lli.Qty - lli.QtyAllocated - lli.QtyPicked - lli.QtyReplen > 0'
 
         SET @c_SQLParams= N'@c_Lot   NVARCHAR(10)'
-                                    + ',@c_FromLoc NVARCHAR(30)'
-                                    + ',@c_FromID   NVARCHAR(10)'
-                                    + ',@c_ToLoc         NVARCHAR(10)'
-                                    + ',@c_ToID NVARCHAR(10)'
+                                    + ',@c_FromLoc NVARCHAR(10)'       --(SSA03)
+                                    + ',@c_FromID   NVARCHAR(18)'      --(SSA03)
+                                    + ',@c_ToLoc    NVARCHAR(10)'
+                                    + ',@c_ToID NVARCHAR(18)'          --(SSA03)
                                     +',@n_Qty int OUTPUT'
 
         EXEC sp_executesql @c_SQL
@@ -335,7 +338,7 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV02]
             SELECT @c_Orderkey = orderkey from #PICKDETAIL_WIP PD (NOLOCK)  --(SSA01)
             WHERE PD.Storerkey = @c_Storerkey
             AND PD.Sku = @c_Sku
-            AND PD.Lot = @c_ToLoc
+            AND PD.Lot = @c_Lot             --(SSA03)
             AND PD.CaseId = @c_FromID
             AND PD.ToLoc = @c_FromLoc
             AND PD.ID = @c_ToID
