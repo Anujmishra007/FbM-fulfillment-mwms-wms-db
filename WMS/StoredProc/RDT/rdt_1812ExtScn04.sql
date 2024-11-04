@@ -202,11 +202,6 @@ Step 99. screen = 4028. Is the location completely empty?
                   AND storerkey = @cStorerKey
                   AND Code2 = ISNULL(@cNoReplenReason,'')
 
-                  --SET @cLoc = @cSuggLOC
-                  --SET @cID = @cSuggID
-                  --SET @cSKU = @cSuggSKU
-                  --set @cLot = @cSuggLOT
-
                   SET @cStoredProcedure = rdt.rdtGetConfig( @nFunc, 'ActRDTreason', @cStorerKey)
                   IF @cStoredProcedure = '0'
                      SET @cStoredProcedure = ''

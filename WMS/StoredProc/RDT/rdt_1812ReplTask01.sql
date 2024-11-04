@@ -93,7 +93,6 @@ BEGIN
       IF @bDebug>0
          SELECT 'rdt_1812ReplTask01',@cSKU,@cFromLOC,@cLocEmptyOption,@cStorerKey
 
-
       --Operator say the location is empty /or/ qty hits min threshold
       IF ISNULL(RTRIM(@cLocEmptyOption), '') = '1' OR EXISTS(
          SELECT 1 FROM dbo.SKUXLOC SL(NOLOCK)
@@ -187,14 +186,14 @@ BEGIN
                   , @cErrMsg           = @cErrMsg2 OUTPUT   
             END TRY
             BEGIN CATCH
-           	   SET @cErrMsg2 = ERROR_MESSAGE()
-           	   PRINT @cErrMsg2   
+               SET @cErrMsg2 = ERROR_MESSAGE()
+               PRINT @cErrMsg2   
                IF @bDebug>0
                   SELECT 'rdt_1812ReplTask01',@cFacility,@cIP,@cPORT,@cStorerKey,'ERROR:' + @cErrMsg2
                GOTO Quit               
             END CATCH   
             IF @bDebug>0
-               SELECT 'rdt_1812ReplTask01',@cFacility,@cIP,@cPORT,@cStorerKey,'DONE:'+@cErrMsg2,'LOG'
+               SELECT 'rdt_1812ReplTask01',@cFacility,@cIP,@cPORT,@cStorerKey,'DONE:'+@cErrMsg2
       END
    END
 
