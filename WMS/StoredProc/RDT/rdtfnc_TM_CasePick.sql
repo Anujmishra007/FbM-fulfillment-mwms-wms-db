@@ -301,7 +301,7 @@ SELECT
 
 FROM   RDT.RDTMOBREC WITH (NOLOCK)
 WHERE  Mobile = @nMobile
-
+SET @nAction = 0 
 -- Redirect to respective screen
 IF @nFunc = 1812
 BEGIN

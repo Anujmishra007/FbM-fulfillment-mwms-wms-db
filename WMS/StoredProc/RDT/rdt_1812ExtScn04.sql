@@ -12,7 +12,8 @@ GO
 /*                                                                                */
 /* Date       Rev     Author   Purposes                                           */
 /* 2024-11-01 1.0.0   YYS027   FCR-989 Min Max Replenishment to add               */
-/*                             screen for choicing location is empty.             */
+/*                             screen for choicing whether location is empty.     */
+/*                             use config ExtScnSP in rdt.StorerConfig            */
 /**********************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_1812ExtScn04] (
@@ -80,17 +81,17 @@ BEGIN
    DECLARE @cSQL                NVARCHAR(MAX)
    DECLARE @cSQLParam           NVARCHAR(MAX)
 
-   SELECT @cTaskDetailKey     = Value FROM @tExtScnData WHERE Variable = '@cTaskDetailKey'
-   SELECT @cDropID     = Value FROM @tExtScnData WHERE Variable = '@cDropID'
-   SELECT @cListKey     = Value FROM @tExtScnData WHERE Variable = '@cListKey'
-   SELECT @cSuggSKU     = Value FROM @tExtScnData WHERE Variable = '@cSuggSKU'
-   SELECT @cSuggFromLOC     = Value FROM @tExtScnData WHERE Variable = '@cSuggFromLOC'
-   SELECT @cSuggLOT     = Value FROM @tExtScnData WHERE Variable = '@cSuggLOT'
-   SELECT @cSuggID     = Value FROM @tExtScnData WHERE Variable = '@cSuggID'
-   SELECT @cQTY     = Value FROM @tExtScnData WHERE Variable = '@cQTY'
-   SELECT @cQTY_RPL     = Value FROM @tExtScnData WHERE Variable = '@cQTY_RPL'
+   SELECT @cTaskDetailKey = Value FROM @tExtScnData WHERE Variable = '@cTaskDetailKey'
+   SELECT @cDropID        = Value FROM @tExtScnData WHERE Variable = '@cDropID'
+   SELECT @cListKey       = Value FROM @tExtScnData WHERE Variable = '@cListKey'
+   SELECT @cSuggSKU       = Value FROM @tExtScnData WHERE Variable = '@cSuggSKU'
+   SELECT @cSuggFromLOC   = Value FROM @tExtScnData WHERE Variable = '@cSuggFromLOC'
+   SELECT @cSuggLOT       = Value FROM @tExtScnData WHERE Variable = '@cSuggLOT'
+   SELECT @cSuggID        = Value FROM @tExtScnData WHERE Variable = '@cSuggID'
+   SELECT @cQTY           = Value FROM @tExtScnData WHERE Variable = '@cQTY'
+   SELECT @cQTY_RPL       = Value FROM @tExtScnData WHERE Variable = '@cQTY_RPL'
    SELECT @nQTY = 0, @nQTY_RPL = 0
-   SELECT @nQTY = CONVERT(INT,@cQTY) WHERE ISNUMERIC(@cQTY)=1
+   SELECT @nQTY     = CONVERT(INT,@cQTY) WHERE ISNUMERIC(@cQTY)=1
    SELECT @nQTY_RPL = CONVERT(INT,@cQTY_RPL) WHERE ISNUMERIC(@cQTY_RPL)=1
 
    IF ISNULL(@nAction,0) = 0
@@ -249,7 +250,7 @@ Step 99. screen = 4028. Is the location completely empty?
                   SET @cOption = ''
                   SET @cOutField01 = '' -- Option
 
-                  SET @nAfterStep = 8 --@nStep - 2  -- step from 10 to 8          (Short/Close Pallet)
+                  SET @nAfterStep = 8 --@nStep - 2  -- step from 10=>99 to 8          (Short/Close Pallet)
                   SET @nAfterScn = 4027 --@nScn - 1  --screen from 4028 to 4027
                END
 
@@ -260,7 +261,7 @@ Step 99. screen = 4028. Is the location completely empty?
                   SET @cOption = ''
                   SET @cOutField01 = '' -- Option
 
-                  SET @nAfterStep = 5 -- @nStep - 5      --step from 10 to 5          (next task /close pallet)
+                  SET @nAfterStep = 5 -- @nStep - 5      --step from 10=>99 to 5          (next task /close pallet)
                   SET @nAfterScn = 4024 --@nScn - 4    --screen from 4048 to 4024
                END
             END
