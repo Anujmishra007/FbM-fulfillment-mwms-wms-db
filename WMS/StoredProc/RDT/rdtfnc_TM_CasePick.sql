@@ -190,7 +190,7 @@ DECLARE
    @cUDF19  NVARCHAR( 250), @cUDF20 NVARCHAR( 250), @cUDF21 NVARCHAR( 250),
    @cUDF22  NVARCHAR( 250), @cUDF23 NVARCHAR( 250), @cUDF24 NVARCHAR( 250),
    @cUDF25  NVARCHAR( 250), @cUDF26 NVARCHAR( 250), @cUDF27 NVARCHAR( 250),
-   @cUDF28  NVARCHAR( 250), @cUDF29 NVARCHAR( 250), @cUDF30 NVARCHAR( 250)
+   @cUDF28  NVARCHAR( 250), @cUDF29 NVARCHAR( 250), @cUDF30 NVARCHAR( MAX)
 
 -- Getting Mobile information
 SELECT
@@ -3275,8 +3275,19 @@ BEGIN
          ('@cSuggFromLOC',    @cSuggFromLOC),
          ('@cSuggLOT',        @cSuggLOT),
          ('@cSuggID',         @cSuggID),
-         ('@cQTY',            CONVERT(Nvarchar(20),@nQTY)),
-         ('@cQTY_RPL',        CONVERT(Nvarchar(20),@nQTY_RPL))
+         ('@cQTY',            CONVERT(NVARCHAR(20), @nQTY)),
+         ('@cQTY_RPL',        CONVERT(NVARCHAR(20), @nQTY_RPL)),
+         ('@cLottableCode',   @cLottableCode),
+         ('@cSKUDesc',        @cSKUDesc),
+         ('@cExtendedInfo1',  @cExtendedInfo1),
+         ('@cPUOM',           @cPUOM),
+         ('@cPUOM_Desc',      @cPUOM_Desc),
+         ('@cMUOM_Desc',      @cMUOM_Desc),
+         ('@cPUOM_Div',       CONVERT(NVARCHAR(20), @nPUOM_Div)),
+         ('@cPQTY_RPL',       CONVERT(NVARCHAR(20), @nPQTY_RPL)),
+         ('@cMQTY_RPL',       CONVERT(NVARCHAR(20), @nMQTY_RPL)),
+         ('@cPQTY',           CONVERT(NVARCHAR(20), @nPQTY)),
+         ('@cMQTY',           CONVERT(NVARCHAR(20), @nMQTY))
 
          EXECUTE [RDT].[rdt_ExtScnEntry] 
          @cExtScnSP, 
@@ -3311,47 +3322,13 @@ BEGIN
          @cUDF25   OUTPUT, @cUDF26 OUTPUT, @cUDF27 OUTPUT,
          @cUDF28   OUTPUT, @cUDF29 OUTPUT, @cUDF30 OUTPUT
 
-         IF @nStepBak = 99 AND @nScnBak = 4028 AND @nInputKey=0
-         BEGIN
-            -- Dynamic lottable
-            EXEC rdt.rdt_Lottable @nMobile, @nFunc, @cLangCode, @nScn, @nInputKey, @cStorerKey, @cSKU, @cLottableCode, 'DISPLAY', 'POPULATE', 4, 4,
-               @cInField01  OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01 OUTPUT,
-               @cInField02  OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02 OUTPUT,
-               @cInField03  OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03 OUTPUT,
-               @cInField04  OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04 OUTPUT,
-               @cInField05  OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  @dLottable05 OUTPUT,
-               @cInField06  OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  @cLottable06 OUTPUT,
-               @cInField07  OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  @cLottable07 OUTPUT,
-               @cInField08  OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  @cLottable08 OUTPUT,
-               @cInField09  OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  @cLottable09 OUTPUT,
-               @cInField10  OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  @cLottable10 OUTPUT,
-               @cInField11  OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  @cLottable11 OUTPUT,
-               @cInField12  OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT,  @cLottable12 OUTPUT,
-               @cInField13  OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  @dLottable13 OUTPUT,
-               @cInField14  OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT,  @dLottable14 OUTPUT,
-               @cInField15  OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT,  @dLottable15 OUTPUT,
-               @nMorePage   OUTPUT,
-               @nErrNo      OUTPUT,
-               @cErrMsg     OUTPUT,
-               '',      -- SourceKey
-               @nFunc   -- SourceType         
-            -- Prepare next screen variable
-            SET @cOutField01 = @cSuggSKU
-            SET @cOutField02 = SUBSTRING( @cSKUDesc, 1, 20)
-            SET @cOutField03 = SUBSTRING( @cSKUDesc, 21, 20)
-            SET @cBarcode    = '' -- SKU    --barcode is nvarchar(max), can't be passed as parameter
-            SET @cOutField09 = ''
-            SET @cOutField10 = @cExtendedInfo1
-            SET @cOutField11 = '1:' + CAST( @nPUOM_Div AS NCHAR( 6)) + ' ' + @cPUOM_Desc + ' ' + @cMUOM_Desc
-            SET @cOutField12 = CASE WHEN (@cPUOM = '6' OR @nPUOM_Div = 0) THEN '' ELSE CAST( @nPQTY_RPL AS NVARCHAR( 5)) END
-            SET @cOutField13 = CAST( @nMQTY_RPL AS NVARCHAR( 5))
-            SET @cOutField14 = CASE WHEN (@cPUOM = '6' OR @nPUOM_Div = 0) THEN '' ELSE CAST( @nPQTY AS NVARCHAR( 5)) END
-            SET @cOutField15 = CAST( @nMQTY AS NVARCHAR( 5))
-            EXEC rdt.rdtSetFocusField @nMobile, 'V_Barcode' -- SKU         
-         END
-
          IF @nErrNo <> 0
             GOTO Step_99_Fail
+
+         IF @nStepBak = 99 AND @nScnBak = 4028 AND @nInputKey=0
+         BEGIN
+            SET @cBarcode = @cUDF30
+         END
       END
    END
 
