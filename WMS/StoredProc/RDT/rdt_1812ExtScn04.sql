@@ -77,9 +77,11 @@ BEGIN
    DECLARE @AvlInvQty       INT
    DECLARE @cOption         NVARCHAR(1)
    DECLARE @cLocEmptyOption NVARCHAR(20)   
-   DECLARE @cReasonCode         NVARCHAR(10)
-   DECLARE @cSQL                NVARCHAR(MAX)
-   DECLARE @cSQLParam           NVARCHAR(MAX)
+   DECLARE @cReasonCode     NVARCHAR(10)
+   DECLARE @cSQL            NVARCHAR(MAX)
+   DECLARE @cSQLParam       NVARCHAR(MAX)
+   DECLARE @cReplenFlag     NVARCHAR(20)
+
 
    SELECT @cTaskDetailKey = Value FROM @tExtScnData WHERE Variable = '@cTaskDetailKey'
    SELECT @cDropID        = Value FROM @tExtScnData WHERE Variable = '@cDropID'

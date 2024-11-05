@@ -9,7 +9,7 @@
 /* Date        Rev      Author    Purposes                                               */
 /* 25-Oct-2024 1.0.0    YYS027    FCR-989 Created from v1.4 rdt_TM_CasePick_ClosePallet  */
 /*                                for trigger replenishment submit to QCommander         */
-/*                                used by ReplenTaskSP in rdt.storerconfig               */
+/*                                used config ReplenTaskSP in rdt.storerconfig           */
 /*****************************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_1812ReplTask01] (
