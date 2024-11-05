@@ -90,6 +90,13 @@ BEGIN
 
    -- fetch extern order key 
    SET @cOrderKey = @cParam1
+
+   IF ISNULL(@cOrderKey, '') = ''
+   BEGIN
+      SET @nErrno = 228511
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- NeedOrderKey
+   END
+
    SELECT TOP 1 @cExternOrderKey = ExternOrderKey 
    FROM dbo.ORDERS WITH(NOLOCK) 
    WHERE OrderKey = @cOrderKey
@@ -104,28 +111,25 @@ BEGIN
    
    -- fetch print code data
    SELECT 
-      @cLabelName = Code, 
-      @cSourceType = Short, 
-      @cCondition = Notes, 
-      @cLabelSize = UDF01, 
-      @cFilePath = UDF02, 
-      @cFileName = UDF03, 
-      @cPrinterType = code2
+      @cLabelName = c1.Code, 
+      @cSourceType = c1.Short, 
+      @cCondition = c1.Notes, 
+      @cLabelSize = c1.UDF01, 
+      @cFilePath = c1.UDF02, 
+      @cFileName = c1.UDF03, 
+      @cPrinterType = c1.code2
    FROM
-   dbo.CODELKUP WITH(NOLOCK)
-   WHERE LISTNAME = 'PACKPRTCON'
-      AND StorerKey = @cStorerKey
-      AND Short = 'SFTP'
-      AND Code IN (
-         SELECT 
-            code2 
-         FROM dbo.CODELKUP WITH(NOLOCK) 
-         WHERE LISTNAME = 'RDTLBLRPT' 
-            AND StorerKey = @cStorerKey
-            AND ISNULL(code2, '') <> ''
-            AND Long = 'rdt_593PrtCldFile02'
-            AND Code = @cOption
-      )
+      dbo.CODELKUP c1 WITH(NOLOCK)
+   INNER JOIN dbo.CODELKUP c2 WITH(NOLOCK)
+      ON c1.Code = c2.code2
+   WHERE c1.LISTNAME = 'PACKPRTCON'
+      AND c1.StorerKey = @cStorerKey
+      AND c1.Short = 'SFTP'
+      AND c2.LISTNAME = 'RDTLBLRPT' 
+      AND c2.StorerKey = @cStorerKey
+      AND ISNULL(c2.code2, '') <> ''
+      AND c2.Long = 'rdt_593PrtCldFile02'
+      AND c2.Code = @cOption;
 
    SELECT @nRowCount = @@ROWCOUNT
    IF @nRowCount = 0
@@ -159,7 +163,7 @@ BEGIN
    END CATCH
    -- check url prefix cfg
    SELECT @cWebRequestURL = WebRequestURL
-   FROM WebServiceCfg WITH (NOLOCK)
+   FROM dbo.WebServiceCfg WITH (NOLOCK)
    WHERE DataProcess = 'FNGETFILE'
       AND ActiveFlag = 1
    -- URL prifix verify
@@ -296,6 +300,11 @@ BEGIN
 
    Quit:
 END
+GO
+
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS ON
 GO
 
 GRANT EXECUTE ON  [RDT].[rdt_593PrtCldFile02] TO [NSQL]
