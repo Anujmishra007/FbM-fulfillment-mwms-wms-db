@@ -16,6 +16,8 @@ GO
 /* Modifications log:                                                         */
 /* Date        Author    Ver  Purposes                                        */
 /* 2024-04-17  NLT013    1.0  UWP-17667 Created                               */
+/* 2024-04-14  TLE109    1.1  FCR-905 - Moveto Loc associated with            */
+/*                            PickZone and Level                              */
 /******************************************************************************/
 CREATE PROC [dbo].[nspTTMFC01]
     @c_UserID        NVARCHAR(18)
@@ -62,7 +64,9 @@ BEGIN
       ,@cFacility     NVARCHAR(5)
       ,@cLangCode     NVARCHAR(3)
       ,@cSkipPnDLocation    NVARCHAR(30)
-      ,@FunID        INT
+      ,@cPICKZONETOLOC      NVARCHAR( 10)  --FCR-905
+      ,@FunID         INT
+      
 
    SELECT 
        @b_debug = 0
@@ -87,6 +91,11 @@ BEGIN
 
    IF @cSkipPnDLocation IS NULL OR TRIM(@cSkipPnDLocation) = ''
       SET @cSkipPnDLocation = '0'
+
+   SET @cPICKZONETOLOC = rdt.RDTGetConfig( @FunID, 'PICKZONETOLOC', @c_StorerKey)
+
+   IF @cPICKZONETOLOC IS NULL OR TRIM(@cPICKZONETOLOC) = ''
+      SET @cPICKZONETOLOC = '0'
 
    -- Handling transaction
    DECLARE @nTranCount INT
@@ -237,16 +246,16 @@ BEGIN
       FROM dbo.LOC WITH (NOLOCK) 
       WHERE LOC = @c_FromLoc
 
-      IF @c_LOCCategory <> 'VNA' AND @cSkipPnDLocation <> '0' AND EXISTS(SELECT 1 FROM CODELKUP where LISTNAME = 'LOCCATEGRY' AND Code = @cSkipPnDLocation)
+      IF @c_LOCCategory <> 'VNA' AND @cPICKZONETOLOC = '0' AND @cSkipPnDLocation <> '0' AND EXISTS(SELECT 1 FROM CODELKUP where LISTNAME = 'LOCCATEGRY' AND Code = @cSkipPnDLocation)
       BEGIN
          IF EXISTS( SELECT 1 
             FROM dbo.TaskDetail TD WITH (NOLOCK) 
-               JOIN dbo.LOC L1 WITH (NOLOCK) ON (TD.FromLOC = L1.LOC)
-               LEFT JOIN dbo.LOC L2 WITH (NOLOCK) ON (TD.ToLOC = L2.LOC)
+            JOIN dbo.LOC L1 WITH (NOLOCK) ON (TD.FromLOC = L1.LOC)
+            LEFT JOIN dbo.LOC L2 WITH (NOLOCK) ON (TD.ToLOC = L2.LOC)
             WHERE TD.Status > '0' AND TD.Status < '9'
-               AND @c_Facility IN (L1.Facility, L2.Facility)
-               AND @c_LOCAisle IN (L1.LOCAisle, L2.LOCAisle)
-               AND UserKey <> @c_userid)
+            AND @c_Facility IN (L1.Facility, L2.Facility)
+            AND @c_LOCAisle IN (L1.LOCAisle, L2.LOCAisle)
+            AND UserKey <> @c_userid)
          BEGIN
             FETCH NEXT FROM Cursor_FPKTaskCandidates INTO @c_TaskDetailKey
             CONTINUE
