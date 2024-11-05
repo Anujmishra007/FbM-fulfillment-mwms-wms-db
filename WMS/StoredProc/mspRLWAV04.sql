@@ -240,7 +240,7 @@ BEGIN
          SET @n_Continue = 3
          SET @n_Err = 85040
          SET @c_errmsg='NSQL'+LTRIM(RTRIM(CONVERT(NVARCHAR(5),@n_err))) +
-         ':Incorrect Order Type, You are not allow to Release Wave. (mspRLWAV04)'
+         ':Incorrect Order Type,'+ @c_OrderKey +' You are not allow to Release Wave. (mspRLWAV04)'
          GOTO RETURN_SP;
       END
    END
