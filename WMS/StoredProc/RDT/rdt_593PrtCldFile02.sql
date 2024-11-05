@@ -14,7 +14,7 @@ GO
 /* Modifications log:                                                         */
 /*                                                                            */
 /* Date       Rev    Author     Purposes                                      */
-/* 2024-11-05 1.0.0  JCH507     FCR-870 Created                               */
+/* 2024-11-05 1.0.0  LJQ006     FCR-870 Created                               */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_593PrtCldFile02] (
@@ -90,7 +90,17 @@ BEGIN
 
    -- fetch extern order key 
    SET @cOrderKey = @cParam1
-   SELECT TOP 1 @cExternOrderKey = ExternOrderKey FROM dbo.ORDERS WITH(NOLOCK) WHERE OrderKey = @cOrderKey
+   SELECT TOP 1 @cExternOrderKey = ExternOrderKey 
+   FROM dbo.ORDERS WITH(NOLOCK) 
+   WHERE OrderKey = @cOrderKey
+      AND StorerKey = @cStorerKey
+
+   IF ISNULL(@cExternOrderKey, '') = ''
+   BEGIN
+      SET @nErrNo = 228510
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- NeedExtOrderKey
+      GOTO Quit
+   END
    
    -- fetch print code data
    SELECT 
@@ -160,7 +170,7 @@ BEGIN
       GOTO Quit
    END
    -- build file path
-   SELECT @cFilePath=LTRIM(RTRIM(@cFilePath))
+   SELECT @cFilePath = LTRIM(RTRIM(@cFilePath))
    IF RIGHT(@cFilePath,1) IN ('\','/')
    BEGIN
       SELECT @cPrintDataFile = @cFilePath 
@@ -170,7 +180,7 @@ BEGIN
       SELECT @cPrintDataFile = @cFilePath 
          + '/' + REPLACE(REPLACE(@cFileName,'<code>',@cLabelName),'<ExternOrderkey>',@cExternOrderKey)
    END
-
+   -- override file path in debug
    IF @bDebugFlag = 1
    BEGIN
       SELECT @cPrintDataFile = 'C:\\targetdir\\filename.PDF'
