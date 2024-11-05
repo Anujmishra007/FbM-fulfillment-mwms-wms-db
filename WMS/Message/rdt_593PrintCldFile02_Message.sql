@@ -11,6 +11,6 @@ execute rdt.rdtAddMsg 228507, 10, '228507MISSCLDID', 'us_english', 593, 0, '2285
 execute rdt.rdtAddMsg 228508, 10, '228508JOBINSFAIL', 'us_english', 593, 0, '228508 Job Insert Fail'
 execute rdt.rdtAddMsg 228509, 10, '228509JOBSUBFAIL', 'us_english', 593, 0, '228509 Job Submit Fail'
 execute rdt.rdtAddMsg 228510, 10, '228510NEEDEXTKEY', 'us_english', 593, 0, '228510 Need Ext Order Key'
-execute rdt.rdtAddMsg 228511, 10, '228510NEEDORDKEY', 'us_english', 593, 0, '228511 Need  Order Key'
+execute rdt.rdtAddMsg 228511, 10, '228511NEEDORDKEY', 'us_english', 593, 0, '228511 Need Order Key'
 
 SELECT * FROM RDT.RDTMSG (NOLOCK) WHERE MESSAGE_ID BETWEEN 228501 AND 228550
