@@ -22,7 +22,7 @@ GO
 /* Date        Author   Ver   Purposes                                  */
 /* 2024-09-30  Wan      1.0   Created.                                  */
 /************************************************************************/
-CREATE OR ALTER   PROC [dbo].[msp_RCM_ASN_ULP_StockOwnerChange]
+CREATE OR ALTER       PROC [dbo].[msp_RCM_ASN_ULP_StockOwnerChange]
    @c_Receiptkey  NVARCHAR(10)
 ,  @b_success  INT          = 1  OUTPUT
 ,  @n_err      INT          = 0  OUTPUT
@@ -297,6 +297,21 @@ BEGIN
                   ,BeforeReceivedQty = @n_Qty
                   ,ToLoc=@c_Loc
 				  ,ToId=@c_ID
+				  ,Lottable01=@c_Lottable01
+				  ,Lottable02=@c_Lottable02
+				  ,Lottable03=@c_Lottable03
+				  ,Lottable04=@d_Lottable04
+				  ,Lottable05=@d_Lottable05
+				  ,Lottable06=@c_Lottable06
+				  ,Lottable07=@c_Lottable07
+				  ,Lottable08=@c_Lottable08
+				  ,Lottable09=@c_Lottable09
+				  ,Lottable10=@c_Lottable10
+				  ,Lottable11=@c_Lottable11
+				  ,Lottable12=@c_Lottable12
+				  ,Lottable13=@d_Lottable13
+				  ,Lottable14=@d_Lottable14
+				  ,Lottable15=@d_Lottable15
                   ,TrafficCop = NULL
             WHERE ReceiptKey = @c_Receiptkey
             AND ReceiptLineNumber = @c_ReceiptLineNumber
@@ -502,5 +517,5 @@ QUIT_SP:
 END -- procedure
 GO
 GRANT EXECUTE ON msp_RCM_ASN_ULP_StockOwnerChange TO nSQL
-GO 
+GO
 
