@@ -21,6 +21,8 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 2024-10-08  Wan      1.0   Created.                                  */
+/* 2024-11-06  Wan01    1.1   UWP-24391 Fixed. New pick face without    */
+/*                            lotxlocxid                                */
 /************************************************************************/
 CREATE OR ALTER PROC msp_ReplBack2Front
    @c_Facility   NVARCHAR(5)     = '' 
@@ -57,14 +59,14 @@ BEGIN
    
    SET @b_Success = 1
 
-   IF NOT EXISTS (SELECT 1
-                  FROM   LOTxLOCxID lli WITH (NOLOCK)
-                  WHERE  lli.Storerkey = @c_Storerkey
-                  AND    lli.Sku       = @c_Sku
-                  AND    lli.Loc       = @c_Loc_front
-                  GROUP BY lli.Storerkey, lli.Loc
-                  HAVING   SUM(lli.Qty - lli.QtyPicked) <= 0
-                 )
+   IF EXISTS ( SELECT 1                                                             --(Wan01)
+               FROM   LOTxLOCxID lli WITH (NOLOCK)
+               WHERE  lli.Storerkey = @c_Storerkey
+               AND    lli.Sku       = @c_Sku
+               AND    lli.Loc       = @c_Loc_front
+               GROUP BY lli.Storerkey, lli.Loc
+               HAVING   SUM(lli.Qty - lli.QtyPicked) > 0                            --(Wan01)       
+               )
    BEGIN
       SET @n_Continue = 4
    END

@@ -14,7 +14,7 @@ GO
 /*                                                                         */
 /* Called By: RDT and SCE Generate Report Stored Procedure                 */
 /*                                                                         */
-/* PVCS Version: 1.4                                                       */
+/* PVCS Version: 1.6                                                       */
 /*                                                                         */
 /* Version: MWMS V2                                                        */
 /*                                                                         */
@@ -32,6 +32,8 @@ GO
 /*                            to same PickFace                             */
 /* 16-OCT-2014 Wan04    1.5   UWP-24391 [FCR-837] Unilever Replenishment for*/
 /*                            Flowrack                                     */
+/* 05-NOV-2014 Wan05    1.6   UWP-24391 Fixed. Insert SkuxLoc If BackLoc is*/
+/*                            new loc                                      */
 /***************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_ODMRPL01]
    @c_Facility   NVARCHAR(5)    = '',
@@ -251,32 +253,25 @@ BEGIN
          IF @c_LocationGroup <> ''
          BEGIN
              --Find Back Loc
-            SET @c_SQL = N'SELECT @c_Loc = l.Loc              
-                           FROM SKUxLOC sl (NOLOCK)
-                           JOIN LOC l (NOLOCK) ON sl.loc = l.loc
-                           WHERE sl.Storerkey = @c_Storerkey
-                           AND   sl.Sku       = @c_sku
-                           AND   sl.LocationType NOT IN (''CASE'',''PICK'')
-                           AND   l.LocationGroup = @c_LocationGroup
-                           AND   l.Facility = @c_Facility'
+            SET @c_SQL = N'SELECT TOP 1 @c_Loc = l.Loc'                             --(Wan05) - START                  
+                       + ' FROM LOC l (NOLOCK)' 
+                       + ' WHERE l.LocationGroup = @c_LocationGroup'
+                       + ' AND   l.Facility = @c_Facility'
                        + CASE WHEN @c_B2FLocType <> '' THEN 
                          ' AND   l.LocationType  = @c_B2FLocType' ELSE '' END
+                       + ' ORDER BY l.Loc'
                            
-            SET @c_SQLParms = N'@c_Storerkey       NVARCHAR(15)
-                              , @c_sku             NVARCHAR(20)
-                              , @c_LocationGroup   NVARCHAR(10)
+            SET @c_SQLParms = N'@c_LocationGroup   NVARCHAR(10)
                               , @c_B2FLocType      NVARCHAR(10)
                               , @c_Facility        NVARCHAR(5)
                               , @c_Loc             NVARCHAR(10) OUTPUT'
                               
             EXECUTE sp_ExecuteSQL @c_SQL 
                                  ,@c_SQLParms
-                                 ,@c_Storerkey    
-                                 ,@c_sku          
                                  ,@c_LocationGroup
                                  ,@c_B2FLocType   
                                  ,@c_Facility     
-                                 ,@c_Loc           OUTPUT   
+                                 ,@c_Loc           OUTPUT                           --(Wan05) - END   
                               
             IF @c_Loc <> '' AND @c_AutoReplB2F = 'Y'
             BEGIN
@@ -295,7 +290,20 @@ BEGIN
                BEGIN
                   SET @n_Continue = 3
                END
-            END         
+            END    
+            
+            IF @n_Continue = 1 AND @c_Loc <> ''                                     --(Wan05) - START
+            BEGIN
+               IF NOT EXISTS (SELECT 1 FROM SKUxLOC sl(NOLOCK)
+                              WHERE sl.Storerkey = @c_Storerkey
+                              AND   sl.Sku = @c_Sku
+                              AND   sl.Loc = @c_Loc
+                              )
+               BEGIN
+                  INSERT INTO SKUxLOC (Storerkey, Sku, Loc, LocationType, Qty) 
+                  VALUES (@c_Storerkey, @c_Sku, @c_Loc, '', 0)
+               END                                                                  --(Wan05) - END
+            END
          END
       END                                                                           
    END                                                                              --(Wan04) - END
