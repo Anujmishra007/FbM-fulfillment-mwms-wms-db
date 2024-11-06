@@ -61,7 +61,7 @@ CREATE TABLE [dbo].[ADJUSTMENTDETAIL]
 [Lottable15] [datetime] NULL,
 [Channel] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_AdjustmentDetail_Channel] DEFAULT (''),
 [Channel_ID] [bigint] NULL CONSTRAINT [DF_AdjustmentDetail_Channel_ID] DEFAULT ((0)),
-[SerialNo] [nvarchar] (50) NOT NULL CONSTRAINT [DF_AdjustmentDetail_Serial_No] DEFAULT ('')
+[SerialNo] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_AdjustmentDetail_Serial_No] DEFAULT ('')
 ) ON [PRIMARY]
 
 GRANT SELECT ON  [dbo].[ADJUSTMENTDETAIL] TO [JReportRole]
