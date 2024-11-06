@@ -27,6 +27,8 @@ GO
 /* 2024-11-04  SSA03    1.3   Updating size for the LOC and ID variables */
 /*                            while fetching qty from inventory ,updated */
 /*                            lot mapping while fetching orderkey        */
+/* 2024-11-04  SSA04    1.4   Updating to fetch @n_qty, @c_FromID for the*/
+/*                            UOM= 1 and updated to fetch the sortlane   */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV02]
   @c_wavekey      NVARCHAR(10)
@@ -248,9 +250,9 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV02]
 
    IF @n_continue IN(1,2)
    BEGIN
-   ------(SSA02) start----------
+   ------(SSA02) ,(SSA04)start----------
    SET @c_SQL =N'DECLARE cur_WaveReplto CURSOR FAST_FORWARD READ_ONLY FOR '
-      +' SELECT PD.Storerkey, PD.Sku, PD.Lot, PD.ToLoc, PD.CaseId, PD.Loc, PD.ID,PD.UOM'
+      +' SELECT PD.Storerkey, PD.Sku, PD.Lot, PD.ToLoc, PD.CaseId, PD.Loc, PD.ID,PD.UOM,SUM(PD.QTY)'
       +' FROM WAVEDETAIL WD (NOLOCK)'
       +' JOIN WAVE W (NOLOCK) ON WD.Wavekey = W.Wavekey'
       +' JOIN ORDERS O (NOLOCK) ON WD.Orderkey = O.Orderkey'
@@ -286,33 +288,17 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV02]
       OPEN cur_WaveReplto
 
       FETCH NEXT FROM cur_WaveReplto INTO @c_Storerkey, @c_Sku, @c_Lot, @c_FromLoc, @c_FromID, @c_ToLoc, @c_ToID
-                                          ,@c_UOM
+                                          ,@c_UOM,@n_Qty
       WHILE @@FETCH_STATUS = 0 AND @n_continue IN (1,2)
       BEGIN
         ------(SSA02) start----------
-          SET @c_SQL = 'SELECT @n_Qty = lli.Qty - lli.QtyAllocated - lli.QtyPicked - lli.QtyReplen from LOTxLOCxID lli (NOLOCK) '
-                +'where lli.Lot = @c_Lot '
-                + CASE WHEN @c_UOM = '7' THEN ' AND lli.Loc = @c_FromLoc AND lli.ID  = @c_FromID'
-                       WHEN @c_UOM = '1' THEN ' AND lli.Loc = @c_ToLoc AND lli.ID  = @c_ToID '
-                  ELSE ''
-                  END
-                 +' AND lli.Qty - lli.QtyAllocated - lli.QtyPicked - lli.QtyReplen > 0'
-
-        SET @c_SQLParams= N'@c_Lot   NVARCHAR(10)'
-                                    + ',@c_FromLoc NVARCHAR(10)'       --(SSA03)
-                                    + ',@c_FromID   NVARCHAR(18)'      --(SSA03)
-                                    + ',@c_ToLoc    NVARCHAR(10)'
-                                    + ',@c_ToID NVARCHAR(18)'          --(SSA03)
-                                    +',@n_Qty int OUTPUT'
-
-        EXEC sp_executesql @c_SQL
-                          ,@c_SQLParams
-                          ,@c_Lot
-                          ,@c_FromLoc
-                          ,@c_FromID
-                          ,@c_ToLoc
-                          ,@c_ToID
-                          ,@n_Qty OUTPUT
+         IF @c_UOM = '7'  --(SSA04)
+        BEGIN
+          SELECT @n_Qty = lli.Qty - lli.QtyAllocated - lli.QtyPicked - lli.QtyReplen from LOTxLOCxID lli (NOLOCK)
+                WHERE lli.Lot = @c_Lot
+                AND lli.Loc = @c_ToLoc AND lli.ID  = @c_ToID
+                AND lli.Qty - lli.QtyAllocated - lli.QtyPicked - lli.QtyReplen > 0
+         END
          SET @c_PickDetailLoc = @c_ToLoc
          SET @c_PickDetailToLoc = @c_FromLoc
          IF @c_Type = '1' AND @c_UOM = '7'
@@ -349,15 +335,16 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV02]
            IF (@c_Type = '6' AND @c_UOM = '1') OR (@c_Type = '2' AND @c_UOM = '1')
             BEGIN
                SET @c_FromLoc = @c_ToLoc
+               SET @c_FromID = @c_ToID       --(SSA04)
                SELECT @c_LocationGroup = loc.locationgroup
                   FROM Loc loc (NOLOCK)
                   WHERE loc.loc = @c_FromLoc
 
-               SELECT TOP 1 @c_SortLane  = ISNULL(lli.loc,'') ,@n_SortLaneQty = Sum(lli.Qty), @c_userDefine01 = ISNULL(cdlkup.UDF01, '')
-               FROM Lotxlocxid lli  (NOLOCK)
-               JOIN codelkup cdlkup (NOLOCK) on cdlkup.code = lli.loc
+               SELECT TOP 1 @c_SortLane  = ISNULL(cdlkup.code,'') ,@n_SortLaneQty = Sum(ISNULL(lli.Qty,0)), @c_userDefine01 = ISNULL(cdlkup.UDF01, '')
+               FROM codelkup cdlkup  (NOLOCK)
+               LEFT JOIN Lotxlocxid lli (NOLOCK) on cdlkup.code = lli.loc
                WHERE cdlkup.Listname ='JCB_SORTL'  AND cdlkup.Storerkey = @c_Storerkey
-               GROUP by lli.loc ,cdlkup.UDF01 order by Sum(lli.Qty) ASC
+               GROUP by cdlkup.code ,cdlkup.UDF01 order by Sum(lli.Qty),cdlkup.code ASC
 
                IF @c_userDefine01 <> '' and @c_userDefine01 = '1'
                BEGIN
@@ -456,6 +443,9 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV02]
 
               SET @c_LinkTaskToPick_SQL  = ' AND WAVEDETAIL.Wavekey = @c_Wavekey ' + CHAR(13) +  @c_LinkTaskToPick_SQL
               SET @c_LinkTaskToPick_SQL  = ' AND PICKDETAIL.WIP_RefNo = @c_WIP_RefNo ' + CHAR(13) +  @c_LinkTaskToPick_SQL
+              --(SSA04)
+              IF OBJECT_ID('tempdb..#TMP_PICK') IS NOT NULL
+              DROP TABLE #TMP_PICK
 
               CREATE TABLE #TMP_PICK (Pickdetailkey NVARCHAR(10) primary key,
 	 	                          Qty           INT NULL,
@@ -529,13 +519,14 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV02]
                        END
                    SET @c_CurrTaskDetailKey = @c_TaskdetailKey
                  END
+                 FETCH NEXT FROM CUR_Pick INTO @c_CurrPickdetailkey, @n_PickQty, @c_CurrTaskDetailKey
               END
               CLOSE CUR_Pick
               DEALLOCATE CUR_Pick
              END
            END
            FETCH NEXT FROM cur_WaveReplto INTO @c_Storerkey, @c_Sku, @c_Lot, @c_FromLoc, @c_FromID, @c_ToLoc, @c_ToID
-                                               ,@c_UOM
+                                               ,@c_UOM,@n_Qty
          END
          CLOSE cur_WaveReplto
          DEALLOCATE cur_WaveReplto
