@@ -296,7 +296,7 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV02]
         BEGIN
           SELECT @n_Qty = lli.Qty - lli.QtyAllocated - lli.QtyPicked - lli.QtyReplen from LOTxLOCxID lli (NOLOCK)
                 WHERE lli.Lot = @c_Lot
-                AND lli.Loc = @c_ToLoc AND lli.ID  = @c_ToID
+                AND lli.Loc = @c_FromLoc AND lli.ID  = @c_FromID
                 AND lli.Qty - lli.QtyAllocated - lli.QtyPicked - lli.QtyReplen > 0
          END
          SET @c_PickDetailLoc = @c_ToLoc
