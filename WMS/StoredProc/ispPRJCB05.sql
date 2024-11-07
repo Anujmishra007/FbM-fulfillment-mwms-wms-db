@@ -25,6 +25,7 @@ GO
 /* Date        Author   Rev   Purposes                                  */
 /* 2024-10-09  SSA01    1.1   UWP-24678-JCB- Allocation for Kitting and */
 /*                                    Decanting                         */
+/* 2024-11-07  SSA02    1.2   Updated DropId with ID for K4 Kitting order*/
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[ispPRJCB05] (
      @c_OrderKey        NVARCHAR(10)
@@ -446,7 +447,7 @@ BEGIN
                              @c_OrderKey,            @c_OrderLineNumber,     @c_LOT,
                              @c_StorerKey,           @c_SKU,                 '',
                              @c_UOM,                 @n_PickQty,             @n_PickQty,
-                             0,                      '0',                    '',
+                             0,                      '0',                    @c_ID,                 --(SSA02)
                              @c_LOC,                 @c_ID,                  @c_PackKey,
                              '0',                    'STD',                  '',
                              '',                     'N',                    '',
