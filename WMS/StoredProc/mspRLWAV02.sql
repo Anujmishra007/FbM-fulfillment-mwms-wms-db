@@ -27,8 +27,9 @@ GO
 /* 2024-11-04  SSA03    1.3   Updating size for the LOC and ID variables */
 /*                            while fetching qty from inventory ,updated */
 /*                            lot mapping while fetching orderkey        */
-/* 2024-11-04  SSA04    1.4   Updating to fetch @n_qty, @c_FromID for the*/
+/* 2024-11-06  SSA04    1.4   Updating to fetch @n_qty, @c_FromID for the*/
 /*                            UOM= 1 and updated to fetch the sortlane   */
+/* 2024-11-07  SSA05    1.5   Updating to fetch @n_qty for the K4 Kitting*/
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV02]
   @c_wavekey      NVARCHAR(10)
@@ -298,6 +299,12 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV02]
                 WHERE lli.Lot = @c_Lot
                 AND lli.Loc = @c_FromLoc AND lli.ID  = @c_FromID
                 AND lli.Qty - lli.QtyAllocated - lli.QtyPicked - lli.QtyReplen > 0
+         END
+         IF @c_UOM = '1' AND @c_Type = '6' --(SSA05)
+         BEGIN
+         SELECT @n_Qty = lli.Qty from LOTxLOCxID lli (NOLOCK)
+                WHERE lli.Lot = @c_Lot
+                AND lli.Loc = @c_ToLoc AND lli.ID  = @c_ToID
          END
          SET @c_PickDetailLoc = @c_ToLoc
          SET @c_PickDetailToLoc = @c_FromLoc
