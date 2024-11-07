@@ -95,7 +95,10 @@ DECLARE
    @nAction          INT, --(JHU151)   
    @nEnter           INT, --(cc01)
    @nSKURank         INT, -- fcr-946
-   @fCartonWeight    FLOAT, -- fcr-946  
+   @fCartonWeight    FLOAT, -- fcr-946
+   @fCartonLength    FLOAT, -- fcr-946 
+   @fCartonWidth    FLOAT, -- fcr-946 
+   @fCartonHeight    FLOAT, -- fcr-946  
 
    @cDefaultPrintLabelOption     NVARCHAR( 1),
    @cDefaultPrintPackListOption  NVARCHAR( 1),
@@ -2471,7 +2474,11 @@ BEGIN
          GOTO Quit
       END
 
-      SELECT @fCartonWeight = ISNULL(CartonWeight, 0)
+      SELECT 
+         @fCartonWeight = ISNULL(CartonWeight, 0),
+         @fCartonHeight = ISNULL(CartonHeight, 0),
+         @fCartonWidth  = ISNULL(CartonWidth, 0),
+         @fCartonLength = ISNULL(CartonWidth, 0)
       FROM CARTONIZATION CAT WITH (NOLOCK)
       JOIN Storer WITH (NOLOCK)
          ON Storer.StorerKey = @cStorerKey AND Storer.CartonGroup = CAT.CartonizationGroup
@@ -2501,6 +2508,10 @@ BEGIN
          )
          UPDATE PackInfo WITH (ROWLOCK) SET
             PackInfo.Weight = CartonInfo.WGT,
+            PackInfo.Height = @fCartonHeight,
+            PackInfo.Width = @fCartonWidth,
+            PackInfo.Length = @fCartonLength,
+            PackInfo.Cube = @fCartonHeight * @fCartonLength * @fCartonWidth, -- Calculate cube
             PackInfo.CartonType = @cCartonType,
             PackInfo.CartonStatus = 'PACKED'
          FROM PackInfo

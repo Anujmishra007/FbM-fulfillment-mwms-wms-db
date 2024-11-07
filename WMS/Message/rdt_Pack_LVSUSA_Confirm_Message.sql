@@ -19,5 +19,7 @@ execute rdt.rdtAddMsg 227615, 10, '227615InsPackDetailFail', 'us_english', 993, 
 execute rdt.rdtAddMsg 227616, 10, '227616DelPackDetailFail', 'us_english', 993, 0 , '227616 Failed to Delete PackDetail'
 execute rdt.rdtAddMsg 227617, 10, '227617FailtoHandlePickDetail', 'us_english', 993, 0 , '227617 Fail to Handle PickDetail'
 execute rdt.rdtAddMsg 227618, 10, '227618UpdPickDetailFail', 'us_english', 993, 0 , '227618 Fail to Update PickDetail'
+execute rdt.rdtAddMsg 227619, 10, '227619InsPackDetailFail', 'us_english', 993, 0 , '227619 Fail to Insert PickDetail'
+execute rdt.rdtAddMsg 227620, 10, '227620DelPackInfoFail', 'us_english', 993, 0 , '227620 Failed to Delete PackInfo'
 
 select * from rdt.rdtmsg (nolock) where message_id between 227601 AND 227650
