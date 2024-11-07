@@ -34,6 +34,8 @@ GO
 /*                            Flowrack                                     */
 /* 05-NOV-2014 Wan05    1.6   UWP-24391 Fixed. Insert SkuxLoc If BackLoc is*/
 /*                            new loc                                      */
+/* 07-NOV-2014 SSA01    1.7   UWP-26065 updated priority to 1 for VNAOUT   */
+/*                            task                                         */
 /***************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_ODMRPL01]
    @c_Facility   NVARCHAR(5)    = '',
@@ -1762,7 +1764,7 @@ BEGIN
                ,'FP' -- PickMethod
                ,'Q' -- Status
                , '' -- StatusMsg
-               , @c_TaskPriority -- Priority                                        --(Wan01)
+               ,'1' -- Priority                                        --(Wan01)(SSA01)
                ,'' -- Source Priority
                ,'' -- Hold Key
                ,'' -- UserKey
