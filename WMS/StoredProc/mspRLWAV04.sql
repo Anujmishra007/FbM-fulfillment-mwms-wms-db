@@ -45,6 +45,7 @@ BEGIN
          , @c_C_Zip              NVARCHAR(18) = ''
          , @c_Orderkey_Last      NVARCHAR(10) = ''
          , @c_ParcelType         NVARCHAR(30) = ''
+         , @c_ParcelType_Last    NVARCHAR(30) = ''
          , @c_OtherReference     NVARCHAR(10) = ''
 
          , @c_PickDetailkey      NVARCHAR(10) = ''
@@ -210,13 +211,18 @@ BEGIN
    BEGIN
       -- Check if all Orders have the same Userdefined10 (Parcel/Non-Parcel)
       DECLARE @n_OrderTypeCount INT
-      DECLARE @n_OrderKeyCount INT;
+      DECLARE @n_OrderKeyCount INT, @n_InvalidParcelType INT = 0;
 
-      SELECT @n_OrderTypeCount = COUNT(DISTINCT ISNULL(O.Userdefine10,''))
+      SELECT @n_OrderTypeCount = COUNT(DISTINCT ISNULL(cl.UDF01,''))
            , @n_OrderKeyCount  = COUNT(O.Orderkey)
+           , @n_InvalidParcelType = MAX(CASE WHEN cl.ListName IS NULL THEN 1 ELSE 0 END)
       FROM Orders O (NOLOCK)
       JOIN WAVEDETAIL WD (NOLOCK) ON WD.OrderKey = O.OrderKey
-      WHERE WD.WaveKey=@c_WaveKey;
+      LEFT OUTER JOIN #TMP_CODELKUP cl ON  cl.listName = 'HUSQPKTYPE'
+                                             AND cl.StorerKey = O.Storerkey
+                                             AND cl.Short = o.Userdefine10
+      WHERE
+      WD.WaveKey = @c_WaveKey;
 
       IF @n_OrderTypeCount > 1
       BEGIN
@@ -231,11 +237,7 @@ BEGIN
    IF @n_continue = 1 OR @n_continue = 2
    BEGIN
       -- Check if Orders.Userdefined10 is not in the Codelkup for HUSQPKTYPE
-      IF NOT EXISTS( SELECT 1 FROM #TMP_CODELKUP cl
-                     WHERE cl.listName = 'HUSQPKTYPE'
-                     AND cl.StorerKey = @c_Storerkey
-                     AND cl.Short = @c_ParcelType
-                   )
+      IF @n_InvalidParcelType > 0
       BEGIN
          SET @n_Continue = 3
          SET @n_Err = 85040
@@ -467,6 +469,7 @@ BEGIN
             ,LoadKey = ISNULL(OH.Loadkey,'')
             ,OH.Consigneekey
             ,OH.C_Zip
+            ,OH.Userdefine10
       FROM #PickDetail_WIP PD (NOLOCK)
       JOIN ORDERS     OH (NOLOCK) ON OH.OrderKey = PD.Orderkey
       JOIN WAVEDETAIL WD (NOLOCK) ON WD.Orderkey = OH.Orderkey
@@ -508,7 +511,7 @@ BEGIN
                                  ,  @c_Loadkey
                                  ,  @c_Consigneekey
                                  ,  @c_C_Zip
-
+                                 ,  @c_ParcelType
       WHILE @@FETCH_STATUS <> -1 AND @n_Continue = 1
       BEGIN
          IF @c_Orderkey <> @c_Orderkey_Last
@@ -651,7 +654,7 @@ BEGIN
             END
             ELSE
             BEGIN
-               IF @c_TaskType <> 'ASTCPK'
+               IF @c_TaskType = @c_ParcelType_Last
                BEGIN
                   SET @c_BoxType   = ''
                   SET @c_ParcelSize= ''
@@ -947,6 +950,7 @@ BEGIN
          END
 
          SET @c_Orderkey_Last = @c_Orderkey
+         SET @c_ParcelType_Last = @c_ParcelType
          SET @c_Sku_Last      = @c_Sku
          SET @c_SkuClass_Last = @c_SkuClass
          SET @c_GroupKey_Last = @c_GroupKey
@@ -970,6 +974,7 @@ BEGIN
                                     ,  @c_Loadkey
                                     ,  @c_Consigneekey
                                     ,  @c_C_Zip
+                                    ,  @c_ParcelType
       END
       CLOSE @CUR_PCK
       DEALLOCATE @CUR_PCK
