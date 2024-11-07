@@ -30,6 +30,8 @@ GO
 /* 2024-11-06  SSA04    1.4   Updating to fetch @n_qty, @c_FromID for the*/
 /*                            UOM= 1 and updated to fetch the sortlane   */
 /* 2024-11-07  SSA05    1.5   Updating to fetch @n_qty for the K4 Kitting*/
+/* 2024-11-07  SSA06    1.6   Updating to remove the creating task for   */
+/*                             type 2 with UOM1                          */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV02]
   @c_wavekey      NVARCHAR(10)
@@ -124,7 +126,7 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV02]
    END
 
    ------(SSA02) Start----------
-
+   -- (SSA06) Removed UOM = 1 for Type 2 ------
    -----Wave Validation
    IF @n_continue = 1 OR @n_continue = 2
    BEGIN
@@ -136,8 +138,8 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV02]
           + ' AND PD.Status = ''0'''
           + CASE WHEN @c_Type = '1' THEN ' AND PD.UOM = ''7'''
                  WHEN @c_Type = '6' THEN ' AND PD.UOM = ''1'''
-                 WHEN @c_Type = '2' THEN ' AND PD.UOM IN (''1'',''7'')'
-                 ELSE 'AND PD.UOM = ''7'''
+                 WHEN @c_Type = '2' THEN ' AND PD.UOM = ''7'''
+                 ELSE ' AND PD.UOM = ''7'''
                  END
           + ' AND TD.Taskdetailkey IS NULL )'
           + ' BEGIN '
@@ -252,6 +254,7 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV02]
    IF @n_continue IN(1,2)
    BEGIN
    ------(SSA02) ,(SSA04)start----------
+   ----- (SSA06) Removed UOM = 1 for Type 2
    SET @c_SQL =N'DECLARE cur_WaveReplto CURSOR FAST_FORWARD READ_ONLY FOR '
       +' SELECT PD.Storerkey, PD.Sku, PD.Lot, PD.ToLoc, PD.CaseId, PD.Loc, PD.ID,PD.UOM,SUM(PD.QTY)'
       +' FROM WAVEDETAIL WD (NOLOCK)'
@@ -266,7 +269,7 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV02]
       +' AND PD.Status = ''0'''
       + CASE WHEN @c_Type = '1' THEN ' AND PD.UOM = ''7'''
                  WHEN @c_Type = '6' THEN ' AND PD.UOM = ''1'''
-                 WHEN @c_Type = '2' THEN ' AND PD.UOM IN (''1'',''7'')'
+                 WHEN @c_Type = '2' THEN ' AND PD.UOM = ''7'''
                  ELSE ' AND PD.UOM = ''7'''
                  END
       +' AND PD.WIP_RefNo = @c_SourceType'
@@ -339,7 +342,7 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV02]
          END
          ELSE
          BEGIN
-           IF (@c_Type = '6' AND @c_UOM = '1') OR (@c_Type = '2' AND @c_UOM = '1')
+           IF (@c_Type = '6' AND @c_UOM = '1')     --(SSA06)
             BEGIN
                SET @c_FromLoc = @c_ToLoc
                SET @c_FromID = @c_ToID       --(SSA04)
