@@ -221,7 +221,7 @@ BEGIN
    IF @@ROWCOUNT = 0
    BEGIN
       SET @nErrNo = 228505
-      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Miss Cloud Printer ID
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Report Not Exist
       --EXEC rdt.rdtInsertMsgQueue @nMobile, 0, '', '', @cErrMsg, @cReportType
       GOTO Quit
    END

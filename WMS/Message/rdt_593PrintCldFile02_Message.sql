@@ -5,7 +5,7 @@ execute rdt.rdtAddMsg 228501, 10, '228501MISSCODECONF', 'us_english', 593, 0, '2
 execute rdt.rdtAddMsg 228502, 10, '228503INVALIDCOND', 'us_english', 593, 0, '228502 Invalid Condition'
 execute rdt.rdtAddMsg 228503, 10, '228503MISSWSCONF', 'us_english', 593, 0, '228503 Miss WS Config'
 execute rdt.rdtAddMsg 228504, 10, '228504FAILENCRYPT', 'us_english', 593, 0, '228504 Failed to encrypt file path'
-execute rdt.rdtAddMsg 228505, 10, '228505LACKPRINTID', 'us_english', 593, 0, '228505 Miss Printer ID'
+execute rdt.rdtAddMsg 228505, 10, '228505REPORTNOTEXIST', 'us_english', 593, 0, '228505 Report Not Exist'
 execute rdt.rdtAddMsg 228506, 10, '228506PRINTERNOTEXIST', 'us_english', 593, 0, '228506 Printer Not Exist'
 execute rdt.rdtAddMsg 228507, 10, '228507MISSCLDID', 'us_english', 593, 0, '228507 Miss Cloud Print ID'
 execute rdt.rdtAddMsg 228508, 10, '228508JOBINSFAIL', 'us_english', 593, 0, '228508 Job Insert Fail'
