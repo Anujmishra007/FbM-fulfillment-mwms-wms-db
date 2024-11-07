@@ -7,6 +7,7 @@ GO
 /* Store procedure: rdt_593InvStatus01                                        */
 /*                                                                            */
 /* Copyright: Maersk                                                          */
+/* Customer : Barry                                                           */
 /*                                                                            */
 /* Modifications log:                                                         */
 /*                                                                            */
@@ -304,11 +305,11 @@ BEGIN
                   @d_Lottable13 = attr.Lottable13,
                   @d_Lottable14 = attr.Lottable14,
                   @d_Lottable15 = attr.Lottable15
-              FROM LOTATTRIBUTE lot
-             INNER JOIN LOTxLOCxID inv ON lot.Lot = inv.Lot
-             INNER JOIN ID ON inv.Id = Id.Id
-             INNER JOIN LOC on inv.loc = loc.loc
-             INNER JOIN LOTATTRIBUTE attr on inv.Lot = attr.Lot and inv.StorerKey = attr.StorerKey and inv.Sku = attr.Sku
+              FROM LOTATTRIBUTE lot WITH(NOLOCK)
+             INNER JOIN LOTxLOCxID inv WITH(NOLOCK) ON lot.Lot = inv.Lot
+             INNER JOIN ID WITH(NOLOCK) ON inv.Id = Id.Id
+             INNER JOIN LOC WITH(NOLOCK) on inv.loc = loc.loc
+             INNER JOIN LOTATTRIBUTE attr WITH(NOLOCK) on inv.Lot = attr.Lot and inv.StorerKey = attr.StorerKey and inv.Sku = attr.Sku
              WHERE lot.StorerKey = @cStorerKey
                AND lot.Lottable01 = @cBatchNo
                AND inv.Qty > 0
@@ -561,11 +562,11 @@ BEGIN
                   @d_Lottable13 = attr.Lottable13,
                   @d_Lottable14 = attr.Lottable14,
                   @d_Lottable15 = attr.Lottable15
-              FROM LOTATTRIBUTE lot
-             INNER JOIN LOTxLOCxID inv ON lot.Lot = inv.Lot
-             INNER JOIN ID ON inv.Id = Id.Id
-             INNER JOIN LOC on inv.loc = loc.loc
-             INNER JOIN LOTATTRIBUTE attr on inv.Lot = attr.Lot and inv.StorerKey = attr.StorerKey and inv.Sku = attr.Sku
+              FROM LOTATTRIBUTE lot WITH(NOLOCK)
+             INNER JOIN LOTxLOCxID inv WITH(NOLOCK) ON lot.Lot = inv.Lot
+             INNER JOIN ID WITH(NOLOCK) ON inv.Id = Id.Id
+             INNER JOIN LOC WITH(NOLOCK) on inv.loc = loc.loc
+             INNER JOIN LOTATTRIBUTE attr WITH(NOLOCK) on inv.Lot = attr.Lot and inv.StorerKey = attr.StorerKey and inv.Sku = attr.Sku
              WHERE lot.StorerKey = @cStorerKey
                AND lot.Lottable01 = @cBatchNo
                AND inv.Qty > 0
@@ -815,11 +816,11 @@ BEGIN
                   @d_Lottable13 = attr.Lottable13,
                   @d_Lottable14 = attr.Lottable14,
                   @d_Lottable15 = attr.Lottable15
-              FROM LOTATTRIBUTE lot
-             INNER JOIN LOTxLOCxID inv ON lot.Lot = inv.Lot
-             INNER JOIN ID ON inv.Id = Id.Id
-             INNER JOIN LOC on inv.loc = loc.loc
-             INNER JOIN LOTATTRIBUTE attr on inv.Lot = attr.Lot and inv.StorerKey = attr.StorerKey and inv.Sku = attr.Sku
+              FROM LOTATTRIBUTE lot WITH(NOLOCK)
+             INNER JOIN LOTxLOCxID inv WITH(NOLOCK) ON lot.Lot = inv.Lot
+             INNER JOIN ID WITH(NOLOCK) ON inv.Id = Id.Id
+             INNER JOIN LOC WITH(NOLOCK) on inv.loc = loc.loc
+             INNER JOIN LOTATTRIBUTE attr WITH(NOLOCK) on inv.Lot = attr.Lot and inv.StorerKey = attr.StorerKey and inv.Sku = attr.Sku
              WHERE lot.StorerKey = @cStorerKey
                AND lot.Lottable01 = @cBatchNo
                AND inv.Qty > 0
@@ -938,5 +939,5 @@ GO
 SET ANSI_NULLS ON
 GO
 
-GRANT EXECUTE ON RDT.rdt_593InvStatus01 TO NSQL
+GRANT EXECUTE ON [RDT].[rdt_593InvStatus01] TO [NSQL]
 GO

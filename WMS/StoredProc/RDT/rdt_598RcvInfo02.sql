@@ -14,7 +14,7 @@ GO
 /* 3-June-2024  Bruce Ping 1.0   UWP-20196 Created                            */
 /******************************************************************************/
   
-CREATE OR ALTER PROCEDURE [RDT].[rdt_598RcvInfo02]  
+CREATE OR ALTER   PROCEDURE [RDT].[rdt_598RcvInfo02]  
   
    @nMobile      INT,             
    @nFunc        INT,             
@@ -51,6 +51,12 @@ BEGIN
    SET QUOTED_IDENTIFIER OFF  
    SET ANSI_NULLS OFF  
    SET CONCAT_NULL_YIELDS_NULL OFF  
+
+
+   DECLARE @cTareWeight FLOAT
+   DECLARE @cExternReceiptKey NVARCHAR(50)
+   DECLARE @cReceiptKey NVARCHAR(10)
+   DECLARE @nCnt  INT
   
    IF @nFunc = 598
    BEGIN
@@ -71,24 +77,45 @@ BEGIN
             @cLottable12 = Lottable12,
             @dLottable13 = Lottable13,
             @dLottable14 = Lottable14,
-            @dLottable15 = Lottable15
+            @dLottable15 = Lottable15,
+            @cTareWeight = sku.TareWeight,
+            @cExternReceiptKey = rpt.ExternReceiptKey,
+            @cReceiptKey = rpt.ReceiptKey
          FROM dbo.ReceiptDetail RD WITH (NOLOCK)
             JOIN rdt.rdtConReceiveLog CRL WITH (NOLOCK) ON (RD.ReceiptKey = CRL.ReceiptKey)
+            JOIN dbo.RECEIPT rpt WITH(NOLOCK) ON RD.ReceiptKey = rpt.ReceiptKey
+            JOIN dbo.SKU sku WITH(NOLOCK) ON RD.Sku = sku.Sku AND RD.storerkey = sku.storerkey
          WHERE CRL.Mobile = @nMobile
-            AND SKU = @cSKU
+            AND RD.SKU = @cSKU
          ORDER BY
             CASE WHEN @cID = ToID THEN 0 ELSE 1 END,
             CASE WHEN QTYExpected > 0 AND QTYExpected > BeforeReceivedQTY THEN 0 ELSE 1 END,
             ReceiptLineNumber
 
+
+
+         SELECT @cLottable02 = @cExternReceiptKey
          SELECT @cLottable06 = ''
-         SELECT @cLottable08 = ''
-         SELECT @cLottable09 = ''
+         SELECT @cLottable08 = '0'
+         SELECT @cLottable09 = '0'
+         SELECT @cLottable10 = @cTareWeight
+         SELECT @cLottable11 = 'QI'
 
          SELECT TOP 1 @cLottable07 = P.GrossWgt
          FROM dbo.PALLET P WITH (NOLOCK)
          WHERE PalletKey = @cID
             AND StorerKey = @cStorerKey
+
+         SELECT @nCnt = COUNT(1)
+           FROM ReceiptDetail WITH(NOLOCK) 
+          WHERE ReceiptKey = @cReceiptKey
+            AND Sku = @cSKU
+            AND BeforeReceivedQty > 1
+
+         IF @nCnt = 0
+         BEGIN
+           SELECT @cLottable01 = ''
+         END
       END -- End step 4
    END -- End 598
   
@@ -99,7 +126,5 @@ GO
 SET ANSI_NULLS ON
 GO
 
-GRANT EXECUTE ON rdt.rdt_598RcvInfo02 TO NSQL
+GRANT EXECUTE ON [RDT].[rdt_598RcvInfo02] TO [NSQL]
 GO
-  
-  
