@@ -227,20 +227,21 @@ Step 99. screen = 4028. Is the location completely empty?
                   --If the Svalue maintained can be found in RDTREASON code list (Code2), then appropriate action has to be taken as mentioned in Code UDF01, Code UDF02, and Code UDF03. 
                   --Please refer to FCR-428 for more information on implementing reason code.
                   DECLARE @cNoReplenReason NVARCHAR(80),
-                     @cCCTaskType       NVARCHAR(60),
-                     @cHoldCheckFlg     NVARCHAR(60),
-                     @cHoldType         NVARCHAR(60),
+                     --@cCCTaskType       NVARCHAR(60),
+                     --@cHoldCheckFlg     NVARCHAR(60),
+                     --@cHoldType         NVARCHAR(60),
                      @cStoredProcedure  NVARCHAR(1000)
                   SET @cNoReplenReason = rdt.rdtGetConfig(@nFunc, 'NOREPLENREASON', @cStorerKey)
-                  SELECT 
-                     @cReasonCode = Code2,
-                     @cCCTaskType = UDF01,-- CC task type
-                     @cHoldType = UDF02 -- Hold type
-                  FROM codelkup WITH(NOLOCK)
-                  WHERE listname = 'RDTREASON'
-                  AND code = @nFunc
-                  AND storerkey = @cStorerKey
-                  AND Code2 = ISNULL(@cNoReplenReason,'')
+                  SET @cReasonCode = ISNULL(@cNoReplenReason,'')
+                  --SELECT 
+                  --   @cReasonCode = Code2,
+                  --   @cCCTaskType = UDF01,-- CC task type
+                  --   @cHoldType = UDF02 -- Hold type
+                  --FROM codelkup WITH(NOLOCK)
+                  --WHERE listname = 'RDTREASON'
+                  --AND code = @nFunc
+                  --AND storerkey = @cStorerKey
+                  --AND Code2 = ISNULL(@cNoReplenReason,'')
 
                   SET @cStoredProcedure = rdt.rdtGetConfig( @nFunc, 'ActRDTreason', @cStorerKey)
                   IF @cStoredProcedure = '0'
