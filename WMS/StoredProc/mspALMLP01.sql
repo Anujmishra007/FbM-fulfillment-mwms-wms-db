@@ -1,3 +1,4 @@
+
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -30,6 +31,8 @@ GO
 /*                           % need to be as float for calculation         */
 /* 2024-10-16  Wan04    1.5  UWP-24391 [FCR-837] Unilever Replenishment for*/
 /*                           Flowrack locations                            */
+/* 2024-11-07  Shong01  1.6  Remove QtyReplen when calculate Qty Available */
+/* 2024-11-08  SHONG02  1.7  Include Staging in to Location Category Filter*/
 /***************************************************************************/
 CREATE OR ALTER PROC [dbo].[mspALMLP01]
    @c_DocumentNo        NVARCHAR(10)
@@ -84,7 +87,7 @@ BEGIN
          , @c_Wavekey                        NVARCHAR(10)   =''
          , @c_Loadkey                        NVARCHAR(10)   =''
          , @c_key3                           NVARCHAR(10)   =''
-         , @c_LocationCategory               NVARCHAR(10)   ='VNA'
+         , @c_LocationCategory               NVARCHAR(100)  ='(''VNA'',''STAGE'')' --SHONG02
          , @c_SkipLottableFilter             NVARCHAR(60)                           --SSA91301
          , @c_CLKCondition                   NVARCHAR(MAX)                          --SSA91301
          , @c_CLKConditionFlag               NCHAR(1)                               --SSA91301
@@ -493,8 +496,9 @@ BEGIN
    IF @c_UOM = '1'
    BEGIN
       SET @c_Condition = ISNULL(RTRIM(@c_Condition),'') 
-                       + ' AND SKUXLOC.LocationType NOT IN (''PICK'',''CASE'')'
-                       + ' AND LOC.LocationCategory = @c_LocationCategory'
+                       + ' AND SKUXLOC.LocationType NOT IN (''PICK'',''CASE'')' 
+                       + ' AND LOC.LocationCategory IN ' + @c_LocationCategory 
+                       --+ ' AND LOC.LocationCategory = @c_LocationCategory' -- (SHONG02)
    END
    ELSE IF @c_FromPickLocFlag = 'Y'                                                 --(Wan04)
    BEGIN
@@ -619,7 +623,7 @@ BEGIN
           +',@c_Lottable11 NVARCHAR(30), @c_Lottable12 NVARCHAR(30), @d_Lottable13 DATETIME, @d_Lottable14 DATETIME, @d_Lottable15 DATETIME'
           +',@n_OrderMinShelfLife INT, @n_ConsigneeSkuMinShelfLife INT,@n_ConsigneeSkuGroupMinShelfLife INT'
           +',@n_SkuOutGoingMinShelfLife INT, @n_StorerSkuMinShelfLife INT'
-          +',@c_ID NVARCHAR(18), @c_LocationCategory NVARCHAR(10)'
+          +',@c_ID NVARCHAR(18), @c_LocationCategory NVARCHAR(100)'
 
       EXEC sp_executesql @c_SQL
                         ,@c_SQLParms 
@@ -668,8 +672,9 @@ BEGIN
            -- Checking available lot for normal and overallocate
            INSERT INTO #TMP_LOT (Lot, QtyAvailable)
            SELECT LOTXLOCXID.Lot
-               , SUM(LOTXLOCXID.Qty - LOTXLOCXID.QtyAllocated 
-                   - LOTXLOCXID.QtyPicked - LOTXLOCXID.QtyReplen)  
+               , SUM(LOTXLOCXID.Qty - LOTXLOCXID.QtyAllocated - LOTXLOCXID.QtyPicked )
+                -- (Shong01) Should not include QtyReplen
+                -- - LOTXLOCXID.QtyPicked - LOTXLOCXID.QtyReplen)  
            FROM LOTXLOCXID (NOLOCK)
            JOIN LOT (NOLOCK) ON (LOTxLOCxID.Lot = LOT.Lot)
            JOIN LOC (NOLOCK) ON (LOTxLOCxID.Loc = LOC.LOC)
@@ -801,7 +806,7 @@ BEGIN
           +',@c_Lottable11 NVARCHAR(30), @c_Lottable12 NVARCHAR(30), @d_Lottable13 DATETIME, @d_Lottable14 DATETIME, @d_Lottable15 DATETIME'
           +',@n_OrderMinShelfLife INT, @n_ConsigneeSkuMinShelfLife INT,@n_ConsigneeSkuGroupMinShelfLife INT'
           +',@n_SkuOutGoingMinShelfLife INT, @n_StorerSkuMinShelfLife INT'
-          +',@c_ID NVARCHAR(18), @c_LocationCategory NVARCHAR(10)'
+          +',@c_ID NVARCHAR(18), @c_LocationCategory NVARCHAR(100)'
           --+',@c_UDF01 NVARCHAR(30), @c_UDF02 NVARCHAR(30), @c_UDF03 NVARCHAR(30), @c_UDF04 NVARCHAR(30), @c_UDF05 NVARCHAR(30)'
 
       EXEC sp_executesql @c_SQL 
@@ -847,8 +852,3 @@ BEGIN
       DEALLOCATE CURSOR_AVAILABLECFG
    END
 END
-GO
-GRANT EXECUTE ON  [dbo].[mspALMLP01] TO [NSQL]
-GO
-
-
