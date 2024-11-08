@@ -152,7 +152,7 @@ BEGIN
                   --Sandeep: yes, if it is non zero... then the screen will not be shown... that is the whole idea of asking the user if the location is actually empty
 
                   SELECT @AvlInvQty = (SUM(LLI.Qty) - SUM(LLI.QtyPicked))       --   + SUM(LLI.PendingMoveIn)) 
-                     FROM dbo.SKUXLOC SL(NOLOCK)
+                     FROM dbo.SKUXLOC SL WITH (NOLOCK)
                         JOIN dbo.LOTxLOCxID LLI WITH (NOLOCK) ON SL.StorerKey = LLI.StorerKey AND SL.SKU = LLI.SKU AND SL.LOC = LLI.LOC
                   WHERE SL.StorerKey = @cStorerKey
                   AND SL.SKU = @cSuggSKU
