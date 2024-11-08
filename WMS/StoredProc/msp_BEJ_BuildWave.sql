@@ -20,14 +20,14 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 2024-10-17  Wan      1.0   Created.                                  */
-/* 2024-11-08  ALT      1.1   FCR-764 - Bug Fix.                        */
+/* 2024-11-08  ALT028      1.1   FCR-764 - Bug Fix.                     */
 /************************************************************************/
 
 CREATE OR ALTER PROC msp_BEJ_BuildWave
    @c_Storerkey   NVARCHAR(15)   = ''
 ,  @c_Facility    NVARCHAR(5)    = ''
 ,  @c_OtherConfig NVARCHAR(4000) = ''
-,  @b_Debug       INT            = 0
+
 AS
 BEGIN
    SET NOCOUNT ON
@@ -80,12 +80,13 @@ BEGIN
 
          , @c_SQL             NVARCHAR(MAX)  = ''
          , @c_SQLParms        NVARCHAR(500)  = ''
+		 , @b_Debug       INT    			 = 0
 
          , @CUR_ORD           CURSOR
 
    SELECT @c_BuildParmKey = dbo.fnc_GetParamValueFromString ('@c_BuildParmKey',@c_OtherConfig, @c_BuildParmKey)
 
-   IF @b_Debug = 1
+  IF @b_Debug = 1
    BEGIN
       PRINT '@c_BuildParmKey: ' + @c_BuildParmKey
        + ',Now = ' + CONVERT(NVARCHAR(25), GETDATE(),121)
@@ -138,6 +139,7 @@ BEGIN
       OrderKey    NVARCHAR(10)   NOT NULL DEFAULT ('')   PRIMARY KEY
    ,  Wavekey     NVARCHAR(10)   NOT NULL DEFAULT ('')
    ,  ParcelType  NVARCHAR(30)   NOT NULL DEFAULT ('')
+   ,  DeliveryDate DATETIME    NULL
    )
 
    IF OBJECT_ID('tempdb..#TMP_CODELKUP','u') IS NOT NULL
@@ -208,14 +210,14 @@ BEGIN
       SET @n_FromPos   = CHARINDEX('FROM ', @c_SQLBuildWave , 1)
       SET @n_ToPos = LEN(@c_SQLBuildWave) - @n_FromPos + 1
 
-      SET @c_SQL  = N'SELECT ORDERS.Orderkey'
+      SET @c_SQL  = N'SELECT ORDERS.Orderkey, CONVERT(VARCHAR(10), ORDERS.DeliveryDate, 121) '
                   + ' ' + CHAR(13) + SUBSTRING(@c_SQLBuildWave, @n_FromPos, @n_ToPos)
 
       SET @c_SQLParms = N'@c_Facility     NVARCHAR(5)'
                       + ',@c_Storerkey    NVARCHAR(15)'
                       + ',@n_MaxOpenQty   INT'
 
-      INSERT INTO #TMP_ORD (Orderkey)
+      INSERT INTO #TMP_ORD (Orderkey, DeliveryDate)
       EXEC SP_EXECUTESQL
             @c_SQL
          ,  @c_SQLParms
@@ -259,8 +261,8 @@ BEGIN
 
       IF @b_Debug = 1
       BEGIN
-         select * from #TMP_ORD
-         select *From #TMP_CODELKUP
+         SELECT '#TMP_ORD', * FROM #TMP_ORD
+         SELECT '#TMP_CODELKUP', * FROM #TMP_CODELKUP
       END
 
       SET @CUR_ORD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
@@ -269,7 +271,6 @@ BEGIN
       ORDER BY t.Orderkey
 
       OPEN @CUR_ORD
-
       FETCH NEXT FROM @CUR_ORD INTO @c_Orderkey
 
       WHILE @@FETCH_STATUS <> -1 AND @n_Continue = 1
@@ -350,20 +351,25 @@ BEGIN
       SELECT @c_BuildParmLineNo = bpd.BuildParmLineNo
       FROM BUILDPARMDETAIL bpd (NOLOCK)
       WHERE bpd.BuildParmKey = @c_BuildParmKey
-      AND   bpd.[Type] = 'CONDITION'
-      AND   bpd.FieldName = 'ORDERS.UserDefine10'
+      AND   bpd.[Type] = 'GROUP'
+      AND   bpd.FieldName = 'ORDERS.UserDefine10' */
 
+    BEGIN
       SET @CUR_ORD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-      SELECT t.ParcelType
-      FROM #TMP_ORD t
-      ORDER BY t.ParcelType
+      SELECT IIF(LEFT(t.ParcelType,6) = 'Parcel', 'Parcel', t.ParcelType), t.DeliveryDate
+	  FROM #TMP_ORD t
+	  Where LEFT(t.ParcelType,6) = 'Parcel'
+	  GROUP BY IIF(LEFT(t.ParcelType,6) = 'Parcel', 'Parcel', t.ParcelType), t.DeliveryDate
+	  ORDER BY IIF(LEFT(t.ParcelType,6) = 'Parcel', 'Parcel', t.ParcelType), t.DeliveryDate
 
       OPEN @CUR_ORD
+      FETCH NEXT FROM @CUR_ORD INTO @c_ParcelType, @d_DeliveryDate
 
-      FETCH NEXT FROM @CUR_ORD INTO @c_ParcelType
+      WHILE @@FETCH_STATUS <> -1 AND @n_Continue = 1
+      BEGIN
+         SET @dt_Date_Fr = @d_DeliveryDate
+         SET @dt_Date_To = CONVERT(VARCHAR(10), @d_DeliveryDate, 121) + ' 23:59:59.998'
 
-      WHILE @@FETCH_STATUS <> -1 AND @n_Continue = 1 */
-     BEGIN
          SET @c_Wavekey = ''
          SELECT TOP 1 @c_Wavekey = wd.Wavekey
          FROM ORDERS o (NOLOCK)
@@ -371,10 +377,16 @@ BEGIN
          WHERE o.Storerkey = @c_Storerkey
          --AND   o.Userdefine10 = @c_ParcelType
          AND LEFT(o.Userdefine10,7) = 'Parcel-'  --AL01
+         AND CONVERT(VARCHAR, o.DeliveryDate, 112) = CONVERT(VARCHAR, @d_DeliveryDate, 112)
          GROUP BY wd.Wavekey
          HAVING MIN(o.Status) = '0'
          AND COUNT(1) < @n_MaxOrdPerBld
          ORDER BY wd.WaveKey
+
+         IF @b_Debug = 1
+         BEGIN
+            SELECT @c_Wavekey '@c_Wavekey', @d_DeliveryDate '@d_DeliveryDate', @c_ParcelType '@c_ParcelType',@dt_Date_To '@dt_Date_To',@dt_Date_Fr '@dt_Date_Fr'
+         END
 
      /*    UPDATE BUILDPARMDETAIL WITH (ROWLOCK)
             SET BuildValue = @c_ParcelType
@@ -425,10 +437,10 @@ BEGIN
 
 
          END
-       /*  FETCH NEXT FROM @CUR_ORD INTO @c_ParcelType
+      FETCH NEXT FROM @CUR_ORD INTO @c_ParcelType, @d_DeliveryDate
       END
       CLOSE @CUR_ORD
-      DEALLOCATE @CUR_ORD*/
+      DEALLOCATE @CUR_ORD
     END
 
    IF @n_Continue = 1
@@ -453,7 +465,7 @@ BEGIN
 
          UPDATE WAVE WITH (ROWLOCK)
             SET UserDefine01 = CONVERT(NVARCHAR(21), @d_DeliveryDate, 121)
-               ,UserDefine02 = CASE WHEN @c_ParcelType = 'PARCEL' THEN @c_ParcelType
+               ,UserDefine02 = CASE WHEN LEFT(@c_ParcelType,6) = 'PARCEL' THEN 'PARCEL'
                                     WHEN @c_ParcelType = 'UNKNOWN' THEN @c_ParcelType
                                     ELSE UserDefine02
                                     END
@@ -474,7 +486,7 @@ BEGIN
       DEALLOCATE @CUR_ORD
    END
 QUIT_SP:
-   IF @n_continue=3
+   IF @n_continue = 3
    BEGIN
       SET @b_Success = 0
       IF @@TRANCOUNT = 1 and @@TRANCOUNT > @n_StartTCnt
