@@ -9,7 +9,9 @@ GO
 /* Modifications log:                                                   */  
 /*                                                                      */  
 /* Date       Rev  Author     Purposes                                  */  
-/* 2024-06-19 1.0  JHU151     FCR-352. Created                          */  
+/* 2024-06-19 1.0  JHU151     FCR-352. Created                          */
+/* 2024-10-24 1.1  JHU151      UWP-26078 added get pickdetaikey logic   */
+/*                             when both loadkey and orderkey are empty */
 /************************************************************************/  
   
 CREATE OR ALTER PROC [RDT].[rdt_838ExtScn01] (
@@ -126,7 +128,7 @@ BEGIN
                      AND   PD.SKU = @cSKU
                      GROUP BY PD.SKU
                   END
-                  ELSE
+                  ELSE IF ISNULL(@cExtOrderKey, '') <> ''
                   BEGIN
                      SELECT @nPickedQTY = SUM(Qty),
                      @nPackedQTY = MAX(pack.packedqty)
@@ -143,6 +145,27 @@ BEGIN
                         ON PD.Storerkey = pack.StorerKey
                         AND PD.Sku = pack.SKU
                      WHERE PH.PickHeaderKey = @cPickSlipNo    
+                     AND   PD.Status = N'5'
+                     AND   PD.StorerKey  = @cStorerKey
+                     AND   PD.SKU = @cSKU
+                     GROUP BY PD.SKU
+                  END
+                  ELSE
+                  BEGIN
+                     
+                     SELECT @nPickedQTY = SUM(Qty),
+                           @nPackedQTY = MAX(pack.packedqty)
+                     FROM dbo.PickDetail PD (NOLOCK)
+                     LEFT OUTER JOIN
+                     (SELECT SUM(qty) AS packedqty,PAD.PickSlipNo,PAD.StorerKey,PAD.SKU
+                        FROM dbo.PackDetail PAD WITH(NOLOCK)
+                        WHERE PAD.PickSlipNo = @cPickSlipNo
+                        AND PAD.StorerKey = @cStorerKey
+                        AND PAD.sku = @cSku
+                     GROUP BY PAD.PickSlipNo,PAD.StorerKey,PAD.SKU) pack
+                        ON PD.Storerkey = pack.StorerKey
+                        AND PD.Sku = pack.SKU
+                     WHERE PD.PickSlipNo = @cPickSlipNo    
                      AND   PD.Status = N'5'
                      AND   PD.StorerKey  = @cStorerKey
                      AND   PD.SKU = @cSKU
