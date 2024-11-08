@@ -1,10 +1,7 @@
 SET ANSI_NULLS OFF
 GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
-
-
 /************************************************************************/
 /* Stored Proc: msp_BEJ_BuildWave                                       */
 /* Creation Date: 2024-10-17                                            */
@@ -23,11 +20,14 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 2024-10-17  Wan      1.0   Created.                                  */
+/* 2024-11-08  ALT      1.1   FCR-764 - Bug Fix.                        */
 /************************************************************************/
-CREATE OR ALTER PROC [dbo].[msp_BEJ_BuildWave]
+
+CREATE OR ALTER PROC msp_BEJ_BuildWave
    @c_Storerkey   NVARCHAR(15)   = ''
 ,  @c_Facility    NVARCHAR(5)    = ''
 ,  @c_OtherConfig NVARCHAR(4000) = ''
+,  @b_Debug       INT            = 0
 AS
 BEGIN
    SET NOCOUNT ON
@@ -60,6 +60,7 @@ BEGIN
 
          , @c_BuildParmKey    NVARCHAR(10)   = ''
          , @c_BuildParmLineNo NVARCHAR(10)   = ''
+         , @c_BuildParmLineNo2 NVARCHAR(10)   = ''  --AL01
          , @c_GenByBuildValue NCHAR(1)       = 'N'
          , @c_SQLBuildWave    NVARCHAR(MAX)  = ''
          , @c_UserName        NVARCHAR(128)  = SUSER_SNAME()
@@ -70,8 +71,6 @@ BEGIN
          , @c_Wavekey         NVARCHAR(10)   = ''
          , @c_Shipperkey      NVARCHAR(15)   = ''
          , @c_ParcelType      NVARCHAR(10)   = ''
-         , @c_ParcelTypes     NVARCHAR(500)  = ''
-         , @c_ParcelCategory  NVARCHAR(30)   = ''
          , @d_DeliveryDate    DATETIME       = ''
 
          , @n_Cube_Retail     FLOAT          = 0.00
@@ -85,9 +84,13 @@ BEGIN
          , @CUR_ORD           CURSOR
 
    SELECT @c_BuildParmKey = dbo.fnc_GetParamValueFromString ('@c_BuildParmKey',@c_OtherConfig, @c_BuildParmKey)
-   PRINT '@c_BuildParmKey: ' + @c_BuildParmKey
-    + ',Now = ' + CONVERT(NVARCHAR(25), GETDATE(),121)
-    + ',@c_OtherConfig: ' + @c_OtherConfig
+
+   IF @b_Debug = 1
+   BEGIN
+      PRINT '@c_BuildParmKey: ' + @c_BuildParmKey
+       + ',Now = ' + CONVERT(NVARCHAR(25), GETDATE(),121)
+       + ',@c_OtherConfig: ' + @c_OtherConfig
+   END
 
    IF @c_BuildParmKey = ''
    BEGIN
@@ -116,6 +119,7 @@ BEGIN
       ,  Storerkey      NVARCHAR(15)   NOT NULL DEFAULT('')
       ,  Sku            NVARCHAR(20)   NOT NULL DEFAULT('')
       ,  Qty            INT            NOT NULL DEFAULT(0)
+
       )
    END
    ELSE
@@ -131,10 +135,9 @@ BEGIN
 
    CREATE TABLE #TMP_ORD
    (
-      OrderKey        NVARCHAR(10)   NOT NULL DEFAULT ('')   PRIMARY KEY
-   ,  Wavekey         NVARCHAR(10)   NOT NULL DEFAULT ('')
-   ,  ParcelType      NVARCHAR(10)   NOT NULL DEFAULT ('')
-   ,  ParcelCategory  NVARCHAR(60)   NOT NULL DEFAULT ('')
+      OrderKey    NVARCHAR(10)   NOT NULL DEFAULT ('')   PRIMARY KEY
+   ,  Wavekey     NVARCHAR(10)   NOT NULL DEFAULT ('')
+   ,  ParcelType  NVARCHAR(30)   NOT NULL DEFAULT ('')
    )
 
    IF OBJECT_ID('tempdb..#TMP_CODELKUP','u') IS NOT NULL
@@ -233,9 +236,6 @@ BEGIN
       WHERE ListName  = 'HUSQPKTYPE'
       AND   Storerkey = @c_Storerkey
 
-      INSERT INTO #TMP_CODELKUP (ListName, Code,  Short, UDF01)
-      VALUES ('HUSQPKTYPE', '999', 'UNKNOWN',  'UNKNOWN')
-
       INSERT INTO #TMP_CODELKUP
          (ListName, Code, Short, UDF01, UDF02, UDF03, UDF04, UDF05, Storerkey,Code2)
       SELECT ListName, Code
@@ -256,6 +256,12 @@ BEGIN
       WHERE t.UDF01 = 'PARCEL'
       AND   t.Code2 = 'Undersized'
       ORDER BY TRY_CONVERT (float, t.UDF04) DESC
+
+      IF @b_Debug = 1
+      BEGIN
+         select * from #TMP_ORD
+         select *From #TMP_CODELKUP
+      END
 
       SET @CUR_ORD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
       SELECT t.Orderkey
@@ -279,12 +285,12 @@ BEGIN
          JOIN PACK p (NOLOCK) ON p.Packkey = s.Packkey
          WHERE od.OrderKey = @c_Orderkey
 
+         SET @c_ParcelType = ''
          SELECT TOP 1 @c_ParcelType = t.Short
          FROM #TMP_CODELKUP t
          WHERE t.Storerkey = @c_Storerkey
          AND t.UDF01 = 'PARCEL'
          AND @n_Cube_Ord BETWEEN CONVERT(FLOAT, t.UDF03) AND CONVERT(FLOAT, t.UDF04)
-
 
          SET @c_ShipperKey = ''
          IF @n_OpenQty = 1
@@ -292,7 +298,7 @@ BEGIN
             SELECT TOP 1 @c_ShipperKey = t.Short
             FROM #TMP_CODELKUP t
             WHERE t.Storerkey = @c_Storerkey
-            AND t.ListName = 'WSCourier'
+            AND t.UDF01 = 'WSCourier'
             AND t.Code  = 'FML-1'
          END
 
@@ -306,7 +312,7 @@ BEGIN
             BEGIN
                SET @c_ParcelType = 'Non-Parcel'
             END
-         END
+        END
 
          IF @c_ParcelType = ''
          BEGIN
@@ -330,13 +336,7 @@ BEGIN
             SET @c_ErrMsg   = ERROR_MESSAGE()
          END
 
-         SELECT @c_ParcelCategory = cl.UDF01
-         FROM  #TMP_CODELKUP cl
-         WHERE cl.ListName  = 'HUSQPKTYPE'
-         AND   cl.Storerkey = @c_Storerkey
-         AND   cl.Short     = @c_ParcelType
-
-         UPDATE #TMP_ORD SET ParcelType = @c_ParcelType, ParcelCategory = @c_ParcelCategory
+         UPDATE #TMP_ORD SET ParcelType = @c_ParcelType
          WHERE Orderkey = @c_Orderkey
 
          FETCH NEXT FROM @CUR_ORD INTO @c_Orderkey
@@ -346,7 +346,7 @@ BEGIN
    END
 
    IF @n_Continue = 1
-   BEGIN
+   /*BEGIN
       SELECT @c_BuildParmLineNo = bpd.BuildParmLineNo
       FROM BUILDPARMDETAIL bpd (NOLOCK)
       WHERE bpd.BuildParmKey = @c_BuildParmKey
@@ -354,41 +354,30 @@ BEGIN
       AND   bpd.FieldName = 'ORDERS.UserDefine10'
 
       SET @CUR_ORD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-      SELECT t.ParcelCategory
+      SELECT t.ParcelType
       FROM #TMP_ORD t
-      WHERE t.ParcelCategory  <> 'Non-Parcel'
-      GROUP BY  t.ParcelCategory
-      ORDER BY  t.ParcelCategory
+      ORDER BY t.ParcelType
 
       OPEN @CUR_ORD
 
-      FETCH NEXT FROM @CUR_ORD INTO @c_ParcelCategory
+      FETCH NEXT FROM @CUR_ORD INTO @c_ParcelType
 
-      WHILE @@FETCH_STATUS <> -1 AND @n_Continue = 1
-      BEGIN
+      WHILE @@FETCH_STATUS <> -1 AND @n_Continue = 1 */
+     BEGIN
          SET @c_Wavekey = ''
          SELECT TOP 1 @c_Wavekey = wd.Wavekey
          FROM ORDERS o (NOLOCK)
          JOIN WAVEDETAIL wd (NOLOCK) ON wd.Orderkey = o.Orderkey
-         JOIN #TMP_CODELKUP cl ON  cl.ListName = 'HUSQPKTYPE'
-                               AND cl.Storerkey= o.Storerkey
-                               AND cl.Short    = o.Userdefine10
          WHERE o.Storerkey = @c_Storerkey
-         AND   cl.Udf01    = @c_ParcelCategory
+         --AND   o.Userdefine10 = @c_ParcelType
+         AND LEFT(o.Userdefine10,7) = 'Parcel-'  --AL01
          GROUP BY wd.Wavekey
          HAVING MIN(o.Status) = '0'
          AND COUNT(1) < @n_MaxOrdPerBld
          ORDER BY wd.WaveKey
 
-         SET @c_ParcelTypes = ''
-         SELECT @c_ParcelTypes = STRING_AGG ('''' + t.ParcelType + '''', ',')
-           WITHIN GROUP (ORDER BY t.ParcelType ASC)
-         FROM #TMP_ORD t
-         WHERE t.ParcelCategory = @c_ParcelCategory
-         GROUP BY t.ParcelType
-
-         UPDATE BUILDPARMDETAIL WITH (ROWLOCK)
-            SET BuildValue = @c_ParcelTypes        -- Use Operator = 'IN'
+     /*    UPDATE BUILDPARMDETAIL WITH (ROWLOCK)
+            SET BuildValue = @c_ParcelType
                ,TrafficCop = NULL
          WHERE BuildParmKey = @c_BuildParmKey
          AND BuildParmLineNo= @c_BuildParmLineNo
@@ -398,6 +387,7 @@ BEGIN
             SET @n_Continue = 3
             SET @c_ErrMsg   = ERROR_MESSAGE()
          END
+     */  --AL01 Group all userdefine10= parcel type
 
          IF @n_Continue = 1
          BEGIN
@@ -430,36 +420,28 @@ BEGIN
                SET Wavekey = wd.Wavekey
             FROM #TMP_ORD t
             JOIN WAVEDETAIL wd (NOLOCK) ON wd.Orderkey = t.Orderkey
-            WHERE ParcelCategory = @c_ParcelCategory
+            --WHERE t.ParcelType = @c_ParcelType
+         WHERE LEFT(t.ParcelType,6) = 'Parcel'
 
-            IF EXISTS (SELECT 1
-                       FROM #TMP_ORD t
-                       JOIN ORDERS o (NOLOCK) ON o.Orderkey = t.Orderkey
-                       WHERE t.ParcelCategory = @c_ParcelCategory
-                       AND   o.UserDefine10 = ''
-                      )
-            BEGIN
-               CONTINUE
-            END
+
          END
-         FETCH NEXT FROM @CUR_ORD INTO @c_ParcelCategory
+       /*  FETCH NEXT FROM @CUR_ORD INTO @c_ParcelType
       END
       CLOSE @CUR_ORD
-      DEALLOCATE @CUR_ORD
-   END
+      DEALLOCATE @CUR_ORD*/
+    END
 
    IF @n_Continue = 1
    BEGIN
       SET @CUR_ORD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-      SELECT t.Wavekey, t.ParcelCategory
+      SELECT t.Wavekey, MIN(t.ParcelType)
       FROM #TMP_ORD t
-      WHERE t.Wavekey <> ''
-      GROUP BY t.Wavekey, t.ParcelCategory
-      ORDER BY t.Wavekey
+      GROUP BY Wavekey
+      ORDER BY Wavekey
 
       OPEN @CUR_ORD
 
-      FETCH NEXT FROM @CUR_ORD INTO @c_Wavekey, @c_ParcelCategory
+      FETCH NEXT FROM @CUR_ORD INTO @c_Wavekey, @c_ParcelType
 
       WHILE @@FETCH_STATUS <> -1 AND @n_Continue = 1
       BEGIN
@@ -470,8 +452,11 @@ BEGIN
          ORDER BY wd.WaveDetailKey DESC
 
          UPDATE WAVE WITH (ROWLOCK)
-            SET UserDefine01 = CONVERT(NVARCHAR(21), @d_DeliveryDate, 120)
-               ,UserDefine02 = @c_ParcelCategory
+            SET UserDefine01 = CONVERT(NVARCHAR(21), @d_DeliveryDate, 121)
+               ,UserDefine02 = CASE WHEN @c_ParcelType = 'PARCEL' THEN @c_ParcelType
+                                    WHEN @c_ParcelType = 'UNKNOWN' THEN @c_ParcelType
+                                    ELSE UserDefine02
+                                    END
                ,EditWho = SUSER_SNAME()
                ,EditDate = GETDATE()
                ,TrafficCop = NULL
@@ -483,7 +468,7 @@ BEGIN
             SET @c_ErrMsg   = ERROR_MESSAGE()
          END
 
-         FETCH NEXT FROM @CUR_ORD INTO @c_Wavekey, @c_ParcelCategory
+         FETCH NEXT FROM @CUR_ORD INTO @c_Wavekey, @c_ParcelType
       END
       CLOSE @CUR_ORD
       DEALLOCATE @CUR_ORD
@@ -491,7 +476,6 @@ BEGIN
 QUIT_SP:
    IF @n_continue=3
    BEGIN
-
       SET @b_Success = 0
       IF @@TRANCOUNT = 1 and @@TRANCOUNT > @n_StartTCnt
       BEGIN
@@ -515,6 +499,3 @@ QUIT_SP:
       END
    END
 END
-GO
-GRANT EXECUTE ON msp_BEJ_BuildWave TO nSQL
-GO 
