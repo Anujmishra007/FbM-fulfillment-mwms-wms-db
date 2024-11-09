@@ -86,6 +86,7 @@ GO
 /* 2024-07-08   6.2 Jackc       FCR-392 Add ext scn entry and codes                             */
 /* 2024-07-08   6.3 JHU151      FCR-330 SSCC code generator                                     */
 /* 2024-08-22   6.4 JCH507      FCR-392 Add errno handling to step3>ESC>ExtUpd                  */
+/* 2024-10-24   6.5 TLE109      FCR-990. Packing Serial Number Validation                       */
 /************************************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_Pack] (
@@ -113,6 +114,7 @@ DECLARE
    @cCustomID      NVARCHAR( 20),
    @nTotalUCC      INT,
    @cSerialNo      NVARCHAR( 30) = '',
+   @cIsValSerialNo NVARCHAR( 1) = '0',  --TLE109
    @nSerialQTY     INT,
    @nMoreSNO       INT,
    @nBulkSNO       INT,
@@ -5113,6 +5115,57 @@ Step_9:
 BEGIN
    IF @nInputKey = 1 -- ENTER
    BEGIN
+      IF @cExtendedValidateSP <> '' AND @cIsValSerialNo = '0'
+      BEGIN
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedValidateSP AND type = 'P')
+         BEGIN
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cPickSlipNo, @cFromDropID, ' +
+               ' @nCartonNo, @cLabelNo, @cSKU, @nQTY, @cUCCNo, @cCartonType, @cCube, @cWeight, @cRefNo, @cSerialNo, @nSerialQTY, @cOption, ' +
+               ' @cPackDtlRefNo, @cPackDtlRefNo2, @cPackDtlUPC, @cPackDtlDropID, @cPackData1, @cPackData2, @cPackData3, ' +
+               ' @nErrNo OUTPUT, @cErrMsg OUTPUT '
+            SET @cSQLParam =
+               '@nMobile         INT,           ' +
+               '@nFunc           INT,           ' +
+               '@cLangCode       NVARCHAR( 3),  ' +
+               '@nStep           INT,           ' +
+               '@nInputKey       INT,           ' +
+               '@cFacility       NVARCHAR( 5),  ' +
+               '@cStorerKey      NVARCHAR( 15), ' +
+               '@cPickSlipNo     NVARCHAR( 10), ' +
+               '@cFromDropID     NVARCHAR( 20), ' +
+               '@nCartonNo       INT,           ' +
+               '@cLabelNo        NVARCHAR( 20), ' +
+               '@cSKU            NVARCHAR( 20), ' +
+               '@nQTY            INT,           ' +
+               '@cUCCNo          NVARCHAR( 20), ' +
+               '@cCartonType     NVARCHAR( 10), ' +
+               '@cCube           NVARCHAR( 10), ' +
+               '@cWeight         NVARCHAR( 10), ' +
+               '@cRefNo          NVARCHAR( 20), ' +
+               '@cSerialNo       NVARCHAR( 30), ' +
+               '@nSerialQTY      INT,           ' +
+               '@cOption         NVARCHAR( 1),  ' +
+               '@cPackDtlRefNo   NVARCHAR( 20), ' +
+               '@cPackDtlRefNo2  NVARCHAR( 20), ' +
+               '@cPackDtlUPC     NVARCHAR( 30), ' +
+               '@cPackDtlDropID  NVARCHAR( 20), ' +
+               '@cPackData1      NVARCHAR( 30), ' +
+               '@cPackData2      NVARCHAR( 30), ' +
+               '@cPackData3      NVARCHAR( 30), ' +
+               '@nErrNo          INT            OUTPUT, ' +
+               '@cErrMsg         NVARCHAR( 20)  OUTPUT'
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cPickSlipNo, @cFromDropID,
+               @nCartonNo, @cLabelNo, @cSKU, @nQTY, @cUCCNo, @cCartonType, @cCube, @cWeight, @cRefNo, @cSerialNo, @nSerialQTY, @cOption,
+               @cPackDtlRefNo, @cPackDtlRefNo2, @cPackDtlUPC, @cPackDtlDropID, @cPackData1, @cPackData2, @cPackData3,
+               @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+            IF @nErrNo <> 0
+               GOTO Step_9_Quit
+         END
+      END
       -- Update SKU setting
       EXEC rdt.rdt_SerialNo @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cSKU, @cSKUDescr, @nQTY, 'UPDATE', 'PICKSLIP', @cPickSlipNo,
          @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,
@@ -5302,6 +5355,22 @@ BEGIN
 
    Step_9_Quit:
    BEGIN
+
+      SET @cExtendedScreenSP = rdt.RDTGetConfig( @nFunc, 'ExtScnSP', @cStorerKey)
+      IF @cExtendedScreenSP = '0'
+      BEGIN
+         SET @cExtendedScreenSP = ''
+      END
+      IF @cExtendedScreenSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
+         BEGIN
+            SET @nAction = 0
+            GOTO Step_99
+         END
+      END
+
+
       -- Extended info
       IF @cExtendedInfoSP <> ''
       BEGIN
@@ -5810,6 +5879,18 @@ BEGIN
             ELSE IF @nScn = 4650
             BEGIN
                EXEC rdt.rdtSetFocusField @nMobile, 1  -- PickSlipNo
+            END
+            ELSE IF @nScn = 4831
+            BEGIN
+               SET @cOutField01 = ''
+               SET @cOutField02= @cSKU
+               SET @cOutField03 = @cSKUDescr
+               IF @cUDF01 = '1'
+               BEGIN
+                  SET @cIsValSerialNo = '1'  -- set validated to jump the serial no check
+                  SET @nInputKey='1'
+                  GOTO Step_9
+               END
             END
          END --rdt_838ExtScn01
          IF @cExtendedScreenSP = 'rdt_838ExtScn02'

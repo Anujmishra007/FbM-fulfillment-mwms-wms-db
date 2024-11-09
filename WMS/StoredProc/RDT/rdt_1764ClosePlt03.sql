@@ -1,27 +1,27 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[rdt].[rdt_1764ClosePlt03]') and objectproperty(id, N'IsProcedure') = 1)
-   DROP PROC [rdt].[rdt_1764ClosePlt03]
-GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
 GO
 
-/***************************************************************************/
-/* Store procedure: rdt_1764ClosePlt03                                     */
-/* Copyright      : Maersk WMS                                             */
-/*                                                                         */
-/* Purpose: Confirm replenish.                                             */
-/*                                                                         */
-/* Called from:                                                            */
-/*                                                                         */
-/* Modifications log:                                                      */
-/*                                                                         */
-/* Date        Rev  Author    Purposes                                     */
-/* 2024-05-21  1.0  NLT013    UWP-19518 Created                            */
-/***************************************************************************/
+/*******************************************************************************/
+/* Store procedure: rdt_1764ClosePlt03                                         */
+/* Copyright      : Maersk WMS                                                 */
+/* Customer       :  UL                                                        */
+/*                                                                             */
+/* Purpose: Confirm replenish.                                                 */
+/*                                                                             */
+/* Called from:                                                                */
+/*                                                                             */
+/* Modifications log:                                                          */
+/*                                                                             */
+/* Date        Rev      Author    Purposes                                     */
+/* 2024-05-21  1.0      NLT013    UWP-19518 Created                            */
+/* 2024-10-22  1.1.0    NLT013    FCR-973 Update the final task as VNAOUT      */
+/* 2024-10-22  1.1.1    NLT013    FCR-973 Update UOM and ListKey for last task */
+/*******************************************************************************/
 
-CREATE PROC [RDT].[rdt_1764ClosePlt03] (
+CREATE OR ALTER PROCEDURE [RDT].[rdt_1764ClosePlt03] (
    @nMobile        INT,
    @nFunc          INT,
    @cLangCode      NVARCHAR(3),
@@ -65,6 +65,8 @@ BEGIN
    DECLARE @cPnDTransitTaskPriority       NVARCHAR( 10)
    DECLARE @cLocCategory                  NVARCHAR( 10)
    DECLARE @cNewTaskDetailKey             NVARCHAR( 10)
+   DECLARE @cFinalLOC      NVARCHAR( 10)
+   DECLARE @cUOM           NVARCHAR( 5)
 
    -- Init var
    SET @nErrNo = 0
@@ -534,7 +536,8 @@ BEGIN
       GOTO RollBackTran
    
    SELECT TOP 1 @cFromLoc = FromLOC,
-      @cNewTaskDetailKey = TaskDetailKey
+      @cNewTaskDetailKey = TaskDetailKey,
+      @cToLOC = ToLoc
    FROM TaskDetail WITH(NOLOCK)
    WHERE ListKey = @cListKey
       AND StorerKey = @cStorerKey
@@ -556,6 +559,23 @@ BEGIN
    UPDATE dbo.TaskDetail WITH (ROWLOCK) SET 
       Priority = CASE WHEN @cLocCategory IN ('PND_IN', 'PND_OUT', 'PND') AND @cPnDTransitTaskPriority BETWEEN 1 AND 9 THEN @cPnDTransitTaskPriority ELSE Priority END
    WHERE TaskDetailKey = @cNewTaskDetailKey 
+
+   SELECT TOP 1 @cFinalLOC = FinalLoc,
+      @cUOM = UOM
+   FROM dbo.TaskDetail WITH(NOLOCK)
+   WHERE StorerKey = @cStorerKey
+      AND ListKey = @cListKey
+      AND TaskType = 'VNAOUT'
+      AND Status = '9'
+   ORDER BY TransitCount
+
+   --If ToLoc is pickface location, need update PickDetail, set 
+   IF @cToLOC = @cFinalLOC
+   BEGIN
+      UPDATE dbo.TaskDetail WITH (ROWLOCK) SET 
+         TaskType = 'VNAOUT', Message02 = 'RP2', Message03 = 'RPF', FinalLoc = @cFinalLOC, Status = 'Q', ListKey = @cListKey, UOM = @cUOM
+      WHERE TaskDetailKey = @cNewTaskDetailKey 
+   END
 
    COMMIT TRAN rdt_1764ClosePlt03 -- Only commit change made here
    GOTO Quit

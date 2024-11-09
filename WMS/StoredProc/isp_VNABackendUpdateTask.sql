@@ -14,7 +14,7 @@ GO
 /*                                                                       */
 /* Called By:                                                            */
 /*                                                                       */
-/* GitHub Version: 1.0                                                   */
+/* GitHub Version: 1.2                                                   */
 /*                                                                       */
 /* Version: 7.0                                                          */
 /*                                                                       */
@@ -23,6 +23,10 @@ GO
 /* Updates:                                                              */
 /* Date         Author  Ver.  Purposes                                   */
 /* 21-Mar-2024  WLChooi 1.0   DevOps Combine Script                      */
+/* 01-OCT-2024  Ansuman 1.1   UWP-20570: Create 1 VNAOUT Task for Replenishment if From 
+                              & To Locations are in same Aisle           */
+/* 29-OCT-2024  Wan01   1.2   UWP-26065[FCR-952][UL]VNAOUT Task priorities*/
+/*                            based on a code list value                 */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[isp_VNABackendUpdateTask] 
       @c_Storerkey NVARCHAR(15)
@@ -54,6 +58,7 @@ BEGIN
          , @c_LogicalPNDLoc      NVARCHAR(10)
          , @c_Facility           NVARCHAR(5)
          , @c_LocAisle           NVARCHAR(10)
+         , @c_ToLocAisle         NVARCHAR(10)                                       --Ansuman
          , @c_DeviceID           NVARCHAR(20)
          , @c_Status             NVARCHAR(10)
          , @c_PATaskType         NVARCHAR(10)
@@ -66,6 +71,14 @@ BEGIN
          , @c_FromLoc            NVARCHAR(10)
          , @c_ID                 NVARCHAR(18)
          , @c_Sku                NVARCHAR(20)
+         , @c_Message02          NVARCHAR(10)
+
+         , @b_PA_Caller          BIT          = 0                                   --(Wan01)
+         , @b_RPF_FPK_Caller     BIT          = 0                                   --(Wan01)
+         , @c_TaskType           NVARCHAR(10) = ''                                  --(Wan01)
+         , @c_Priority           NVARCHAR(10) = ''                                  --(Wan01)
+
+   DECLARE @CUR_VNA              CURSOR                                             --(Wan01)
 
    SET @c_UOM = N'1'
    SET @c_Status = N'Q'
@@ -73,7 +86,58 @@ BEGIN
    SET @c_ReplenPickTaskType = N'VNAOUT'
    SET @c_SourceType = N'ispRLWAV69'
 
+   --(Wan01) - START
+   IF @n_Continue = 1 OR @n_Continue = 2
+   BEGIN
+      SET @CUR_VNA = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      SELECT TD.TaskType
+      FROM TaskDetail TD WITH (NOLOCK)
+      LEFT OUTER JOIN CODELKUP CL (NOLOCK) ON  cl.ListName = 'ULTASKPRI'
+                                           AND cl.Code = td.TaskType
+                                           AND cl.Short <> '' 
+                                           AND cl.Short IS NOT NULL
+      WHERE TD.TaskType IN ( @c_PATaskType, @c_ReplenPickTaskType ) 
+      AND TD.Storerkey = @c_Storerkey 
+      AND TD.[Status] = @c_Status 
+      GROUP BY TD.TaskType
+           , CASE WHEN cl.ListName IS NOT NULL THEN cl.Short
+                  WHEN cl.ListName IS NULL AND TD.TaskType = 'VNAIN'  THEN '99998'
+                  WHEN cl.ListName IS NULL AND TD.TaskType = 'VNAOUT' THEN '99999'
+                  END
+      ORDER BY CASE WHEN cl.ListName IS NOT NULL THEN cl.Short
+                    WHEN cl.ListName IS NULL AND TD.TaskType = 'VNAIN'  THEN '99998'
+                    WHEN cl.ListName IS NULL AND TD.TaskType = 'VNAOUT' THEN '99999'
+                    END
+
+      OPEN @CUR_VNA
+
+      FETCH NEXT FROM @CUR_VNA INTO @c_TaskType
+
+      WHILE @@FETCH_STATUS <> -1 AND @n_Continue = 1
+      BEGIN
+         IF @c_TaskType = @c_PATaskType
+         BEGIN
+            SET @b_PA_Caller = 1
+            GOTO PA_TASK
+            PA_CALLER:
+         END
+         ELSE IF @c_TaskType = @c_ReplenPickTaskType
+         BEGIN
+            SET @b_RPF_FPK_Caller = 1
+            GOTO REPLENPICK_TASK
+            RPF_FPK_CALLER:
+         END
+         FETCH NEXT FROM @CUR_VNA INTO @c_TaskType
+      END
+      CLOSE @CUR_VNA
+      DEALLOCATE @CUR_VNA
+
+      SET @n_Continue = 4
+   END
+   --(Wan01) - END
+   
    --PA Task
+   PA_TASK:                                                                         --(Wan01)
    IF @n_Continue = 1 OR @n_Continue = 2
    BEGIN
       DECLARE CUR_PA CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
@@ -124,14 +188,27 @@ BEGIN
          END
          ELSE
          BEGIN
-            UPDATE TaskDetail
-            SET UserKey = LEFT(@c_DeviceID, 18)
-              , Listkey = @c_Taskdetailkey
-              , TrafficCop = NULL
-              , EditWho = SUSER_SNAME()
-              , EditDate = GETDATE()
-            WHERE TaskDetailKey = @c_Taskdetailkey
-
+            SELECT @c_Message02 = TD.Message02 from TaskDetail TD WITH (NOLOCK) WHERE TD.TaskDetailKey = @c_Taskdetailkey;
+            IF @c_Message02 = 'RP2'
+            BEGIN
+                UPDATE TaskDetail
+                SET UserKey = LEFT(@c_DeviceID, 18)
+                  , TrafficCop = NULL
+                  , EditWho = SUSER_SNAME()
+                  , EditDate = GETDATE()
+                WHERE TaskDetailKey = @c_Taskdetailkey
+            END
+            ELSE
+            BEGIN
+               UPDATE TaskDetail
+               SET UserKey = LEFT(@c_DeviceID, 18)
+                 , Listkey = @c_Taskdetailkey
+                 , TrafficCop = NULL
+                 , EditWho = SUSER_SNAME()
+                 , EditDate = GETDATE()
+               WHERE TaskDetailKey = @c_Taskdetailkey
+            END
+            
             IF @@ERROR <> 0
             BEGIN
                SET @n_Continue = 3
@@ -183,11 +260,14 @@ BEGIN
       END
       CLOSE CUR_PA
       DEALLOCATE CUR_PA
-   END
 
+      IF @b_PA_Caller = 1 GOTO PA_CALLER                                            --(Wan01) 
+   END
+ 
    --REPLEN & PICK Task
    --Message03 = RPF - REPLEN
    --Message03 - FPK - Pick
+   REPLENPICK_TASK:                                                                 --(Wan01)
    IF @n_Continue = 1 OR @n_Continue = 2
    BEGIN
       DECLARE CUR_REPLEN_PICK CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
@@ -200,8 +280,10 @@ BEGIN
            , L.LocAisle
            , L.Facility
            , TD.Qty
+           , l2.LocAisle                                                            --Ansuman
       FROM TaskDetail TD WITH (NOLOCK)
       JOIN LOC L WITH (NOLOCK) ON L.Loc = TD.FromLoc
+      JOIN LOC l2 WITH (NOLOCK) ON l2.Loc = TD.ToLoc                                --Ansuman
       WHERE TD.TaskType = @c_ReplenPickTaskType
       AND   TD.Storerkey = @c_Storerkey
       AND   TD.[Status] = @c_Status
@@ -216,6 +298,7 @@ BEGIN
              , L.Facility
              , TD.Qty
              , TD.[Priority]
+             , l2.LocAisle                                                          --Ansuman
       ORDER BY TD.[Priority]
              , TD.TaskDetailKey
 
@@ -231,6 +314,7 @@ BEGIN
          , @c_LocAisle
          , @c_Facility
          , @n_PendingMoveIn
+         , @c_ToLocAisle                                                            --Ansuman
 
       WHILE @@FETCH_STATUS <> -1
       BEGIN
@@ -248,16 +332,19 @@ BEGIN
          AND   L.LocAisle = @c_LocAisle
          AND   L.Facility = @c_Facility
 
-         SELECT TOP 1 @c_PNDLoc = L.Loc
-                    , @c_LogicalPNDLoc = L.LogicalLocation
-         FROM LOC L WITH (NOLOCK)
-         LEFT JOIN LOTxLOCxID LLI WITH (NOLOCK) ON LLI.Loc = L.Loc
-         WHERE L.LocationType = 'PND' 
-         AND L.LocAisle = @c_LocAisle 
-         AND L.Facility = @c_Facility
-         GROUP BY L.Loc, L.LogicalLocation
-         HAVING SUM(ISNULL(LLI.Qty, 0) + ISNULL(LLI.PendingMoveIN, 0)) = 0
-         ORDER BY L.Loc
+         IF @c_LocAisle <> @c_ToLocAisle                                            --Ansuman
+         BEGIN
+            SELECT TOP 1 @c_PNDLoc = L.Loc
+                       , @c_LogicalPNDLoc = L.LogicalLocation
+            FROM LOC L WITH (NOLOCK)
+            LEFT JOIN LOTxLOCxID LLI WITH (NOLOCK) ON LLI.Loc = L.Loc
+            WHERE L.LocationType = 'PND' 
+            AND L.LocAisle = @c_LocAisle 
+            AND L.Facility = @c_Facility
+            GROUP BY L.Loc, L.LogicalLocation
+            HAVING SUM(ISNULL(LLI.Qty, 0) + ISNULL(LLI.PendingMoveIN, 0)) = 0
+            ORDER BY L.Loc
+         END
 
          IF ISNULL(@c_DeviceID, '') = ''
          BEGIN
@@ -266,7 +353,7 @@ BEGIN
             SELECT @c_errmsg = N'NSQL' + CONVERT(NVARCHAR(5), @n_err)
                                + N': Cannot find available VNA Device for task ' + @c_Taskdetailkey + '. (isp_VNABackendUpdateTask)'
          END
-         ELSE IF ISNULL(@c_PNDLoc, '') = ''
+         ELSE IF ISNULL(@c_PNDLoc, '') = '' AND @c_LocAisle <> @c_ToLocAisle        --Ansuman
          BEGIN
             SELECT @n_Continue = 3
             SELECT @n_err = 83040
@@ -275,55 +362,69 @@ BEGIN
          END
          ELSE
          BEGIN
-            UPDATE TaskDetail
-            SET UserKey = LEFT(@c_DeviceID, 18)
-              , Listkey = @c_Taskdetailkey
-              , TrafficCop = NULL
-              , EditWho = SUSER_SNAME()
-              , EditDate = GETDATE()
-            WHERE TaskDetailKey = @c_Taskdetailkey
+            SELECT @c_Message02 = TD.Message02 from TaskDetail TD WITH (NOLOCK) WHERE TD.TaskDetailKey = @c_Taskdetailkey;
+            IF @c_Message02 = 'RP2'
+            BEGIN
+                UPDATE TaskDetail
+                SET UserKey = LEFT(@c_DeviceID, 18)
+                      , TrafficCop = NULL
+                      , EditWho = SUSER_SNAME()
+                      , EditDate = GETDATE()
+                WHERE TaskDetailKey = @c_Taskdetailkey
+            END
+            ELSE
+            BEGIN
+               UPDATE TaskDetail
+               SET UserKey = LEFT(@c_DeviceID, 18)
+                 , Listkey = @c_Taskdetailkey
+                 , TrafficCop = NULL
+                 , EditWho = SUSER_SNAME()
+                 , EditDate = GETDATE()
+               WHERE TaskDetailKey = @c_Taskdetailkey
+            END
 
             IF @@ERROR <> 0
             BEGIN
                SET @n_Continue = 3
             END
-
-            UPDATE TaskDetail
-            SET ToLoc = @c_PNDLoc
-              , LogicalToLoc = @c_LogicalPNDLoc
-              , TransitLOC = @c_PNDLoc
-              --, PendingMoveIn = @n_PendingMoveIn
-            WHERE TaskDetailKey = @c_Taskdetailkey
-
-            IF @@ERROR <> 0
+            IF @c_LocAisle <> @c_ToLocAisle                                         --Ansuman
             BEGIN
-               SET @n_Continue = 3
-            END
+               UPDATE TaskDetail
+               SET ToLoc = @c_PNDLoc
+                 , LogicalToLoc = @c_LogicalPNDLoc
+                 , TransitLOC = @c_PNDLoc
+                 --, PendingMoveIn = @n_PendingMoveIn
+               WHERE TaskDetailKey = @c_Taskdetailkey
 
-            SET @n_Err = 0 
-            EXEC rdt.rdt_Putaway_PendingMoveIn   
-                   @cUserName = ''  
-                  ,@cType = 'LOCK'  
-                  ,@cFromLoc = @c_FromLOC  
-                  ,@cFromID = @c_ID  
-                  ,@cSuggestedLOC = @c_PNDLoc  
-                  ,@cStorerKey = @c_Storerkey
-                  ,@nErrNo = @n_Err OUTPUT  
-                  ,@cErrMsg = @c_Errmsg OUTPUT  
-                  ,@cSKU = @c_Sku  
-                  ,@nPutawayQTY    = @n_PendingMoveIn  
-                  ,@cFromLOT       = @c_Lot  
-                  ,@cTaskDetailKey = @c_TaskdetailKey  
-                  ,@nFunc = 0  
-                  ,@nPABookingKey = 0  
-                  ,@cMoveQTYAlloc = '1'  
-                  ,@cMoveQTYReplen= '1'
+               IF @@ERROR <> 0
+               BEGIN
+                  SET @n_Continue = 3
+               END
+
+               SET @n_Err = 0 
+               EXEC rdt.rdt_Putaway_PendingMoveIn   
+                      @cUserName = ''  
+                     ,@cType = 'LOCK'  
+                     ,@cFromLoc = @c_FromLOC  
+                     ,@cFromID = @c_ID  
+                     ,@cSuggestedLOC = @c_PNDLoc  
+                     ,@cStorerKey = @c_Storerkey
+                     ,@nErrNo = @n_Err OUTPUT  
+                     ,@cErrMsg = @c_Errmsg OUTPUT  
+                     ,@cSKU = @c_Sku  
+                     ,@nPutawayQTY    = @n_PendingMoveIn  
+                     ,@cFromLOT       = @c_Lot  
+                     ,@cTaskDetailKey = @c_TaskdetailKey  
+                     ,@nFunc = 0  
+                     ,@nPABookingKey = 0  
+                     ,@cMoveQTYAlloc = '1'  
+                     ,@cMoveQTYReplen= '1'
                                                                                                                      
-            IF @n_Err <> 0
-            BEGIN
-               SET @n_Continue = 3
-            END
-
+               IF @n_Err <> 0
+               BEGIN
+                  SET @n_Continue = 3
+               END
+            END                                                                     --Ansuman
             --Trigger will reset Userkey if updating status to 0
             UPDATE TaskDetail
             SET [Status] = '0'
@@ -371,9 +472,11 @@ BEGIN
             , @c_LocAisle
             , @c_Facility
             , @n_PendingMoveIn
+            , @c_ToLocAisle                                                            --Ansuman
       END
       CLOSE CUR_REPLEN_PICK
       DEALLOCATE CUR_REPLEN_PICK
+      IF @b_RPF_FPK_Caller = 1 GOTO RPF_FPK_CALLER                                     --(Wan01)
    END
 
    IF CURSOR_STATUS('LOCAL', 'CUR_PA') IN ( 0, 1 )

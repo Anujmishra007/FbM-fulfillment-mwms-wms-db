@@ -3,17 +3,24 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-/************************************************************************/
-/* Store procedure: rdt_1653ExtScn01                                    */
-/* Copyright      :  Maersk                                             */
-/*                                                                      */
-/* Purpose:       FCR-539                                               */
-/*                                                                      */
-/* Date       Rev  Author   Purposes                                    */
-/* 2024-07-08 1.0  CYU027   CREATE                                      */
-/* 2024-10-08 1.1  NLT013   FCR-950 Enhancement                         */
-/*                                                                      */
-/************************************************************************/
+/****************************************************************************/
+/* Store procedure: rdt_1653ExtScn01                                        */
+/* Copyright      :  Maersk                                                 */
+/*                                                                          */
+/* Purpose:       FCR-539                                                   */
+/*                                                                          */
+/* Date       Rev    Author   Purposes                                      */
+/* 2024-07-08 1.0    CYU027   CREATE                                        */
+/* 2024-10-08 1.1    NLT013   FCR-950 Enhancement                           */
+/* 2024-10-18 1.2    JCH507   FCR-950 Verify palletkey not exists when      */
+/*                            New Pallet                                    */
+/* 2024-10-24 1.3.0  NLT013   FCR-1084, add additional validation  for      */
+/*                            location and pallet id                        */
+/* 2024-10-25 1.3.1  JCH507   FCR-1084, add status when check label exists  */
+/*                            in pallet id                                  */
+/*                                                                          */
+/*                                                                          */
+/****************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_1653ExtScn01] (
    @nMobile          INT,           
@@ -105,7 +112,9 @@ BEGIN
 
             SELECT @cLabelNo = Value FROM @tExtScnData WHERE Variable = '@cLabelNo'
 
-            IF ISNULL( @cLabelNo, '' ) <> '' AND EXISTS (SELECT 1 FROM dbo.PalletDetail WITH(NOLOCK) WHERE CaseID = @cLabelNo )
+            IF ISNULL( @cLabelNo, '' ) <> '' AND EXISTS (SELECT 1 FROM dbo.PalletDetail WITH(NOLOCK) 
+                                                            WHERE CaseID = @cLabelNo 
+                                                            AND Status <> '9' ) --V1.3.1
             BEGIN
                SET @cOutField01 = '' 
                SET @cOutField02 = @cPalletKey
@@ -215,6 +224,13 @@ BEGIN
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InvalidPrefix
                      GOTO Step_ShowPalletID_Fail
                   END
+
+                  IF EXISTS (SELECT 1 FROM dbo.PALLET WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND PalletKey = @cPalletKey)
+                  BEGIN
+                     SET @nErrNo = 219166
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --PalletExists
+                     GOTO Step_ShowPalletID_Fail
+                  END
                END
 
                IF ISNULL(@cInField05,'') = ''
@@ -231,6 +247,44 @@ BEGIN
                BEGIN
                   SET @nErrNo = 219155
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --LOC NOT FOUND
+                  GOTO Step_ShowPalletID_Fail
+               END
+
+               SELECT @nRowCount = COUNT(1)
+               FROM dbo.CODELKUP WITH(NOLOCK)
+               WHERE LISTNAME = 'LVSPLTLOC'
+                  AND StorerKey = @cStorerKey
+
+               IF @nRowCount = 0
+               BEGIN
+                  SET @nErrNo = 219163
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --NoLocPre
+                  GOTO Step_ShowPalletID_Fail
+               END
+
+               IF NOT EXISTS ( SELECT 1
+                              FROM dbo.CODELKUP WITH (NOLOCK)
+                              WHERE StorerKey = @cStorerKey
+                                 AND ListName = 'LVSPLTLOC'
+                                 AND Code = LEFT(@cInField05, LEN(Code)) )
+               BEGIN
+                  SET @nErrNo = 219164
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InvalidLoc
+                  GOTO Step_ShowPalletID_Fail
+               END
+
+               IF EXISTS(SELECT 1
+                        FROM dbo.PALLETDETAIL PD WITH(NOLOCK)
+                        INNER JOIN dbo.PALLET PA WITH(NOLOCK)
+                           ON PD.StorerKey = PA.StorerKey
+                           AND PD.PalletKey = PA.PalletKey
+                        WHERE PD.StorerKey = @cStorerKey
+                           AND PD.Loc = @cInField05
+                           AND PD.PalletKey <> @cPalletKey
+                           AND PA.Status < '9') --JCH507
+               BEGIN
+                  SET @nErrNo = 219165
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --219165 Existing Pallet is Closed
                   GOTO Step_ShowPalletID_Fail
                END
 

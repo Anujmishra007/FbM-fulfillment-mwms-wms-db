@@ -300,7 +300,7 @@ SELECT
 
 FROM   RDT.RDTMOBREC WITH (NOLOCK)
 WHERE  Mobile = @nMobile
-SET @nAction = 0 
+SET @nAction = 0
 -- Redirect to respective screen
 IF @nFunc = 1812
 BEGIN
@@ -1821,7 +1821,7 @@ BEGIN
          END
          GOTO Quit
       END
-      --A new screen will  require the user to confirm the option . This will be prompted immediately after the user has entered the SKU Quantity on Step 4. 
+      --A new screen will  require the user to confirm the option . This will be prompted immediately after the user has entered the SKU Quantity on Step 4.
       --   If the user presses escape then he can be taken to quantity entry screen. Act as a popup Window
       IF ISNULL(@cExtScnSP,'')<>'' AND EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
       BEGIN
@@ -2049,7 +2049,7 @@ BEGIN
             -- Prepare next screen var
             SET @cDropID = ''
             SET @cOutField01 = '' -- @cDropID
-            
+
             IF @cAutoGenDROPIDSP <> ''
             BEGIN
                -- Auto generate DROPID
@@ -2717,7 +2717,7 @@ BEGIN
       SET @nToStep = 0
 
       -- Check if function setup
-      SELECT 
+      SELECT
          @nToFunc = Function_ID,
          @nToStep = Step
       FROM rdt.rdtTaskManagerConfig WITH (NOLOCK)
@@ -3267,7 +3267,7 @@ BEGIN
          DECLARE @nScnBak INT
          SELECT @nStepBak = @nStep, @nScnBak = @nScn, @nErrNo=0, @cErrMsg=''
          DELETE FROM @tExtScnData
-         INSERT INTO @tExtScnData (Variable, Value) VALUES    
+         INSERT INTO @tExtScnData (Variable, Value) VALUES
          ('@cTaskDetailKey',  @cTaskDetailKey),
          ('@cListKey',        @cListKey),
          ('@cDropID',         @cDropID),

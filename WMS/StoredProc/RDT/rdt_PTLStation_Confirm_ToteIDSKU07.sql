@@ -1078,6 +1078,7 @@ BEGIN
             FROM PTL.PTLTran WITH (NOLOCK)
             WHERE DevicePosition = @cPosition
                AND LightUP = 0 
+               AND Status = 0
 			   AND Facility = @cFacility
 
             -- Off all lights  
