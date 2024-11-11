@@ -87,6 +87,7 @@ GO
 /* 2024-07-08   6.3 JHU151      FCR-330 SSCC code generator                                     */
 /* 2024-08-22   6.4 JCH507      FCR-392 Add errno handling to step3>ESC>ExtUpd                  */
 /* 2024-10-24   6.5 TLE109      FCR-990. Packing Serial Number Validation                       */
+/* 2024-11-08   6.6 CYU027      UWP-26811 UCC Multi Storerkey                                   */
 /************************************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_Pack] (
@@ -4605,7 +4606,10 @@ BEGIN
       END
 
       -- UCC scanned
-      IF EXISTS( SELECT 1 FROM PackInfo WITH (NOLOCK) WHERE UCCNo = @cUCCNo)
+      IF EXISTS(
+         SELECT 1 FROM PackInfo I (NOLOCK)
+            JOIN PACKDETAIL D (NOLOCK) ON I.PickSlipNo = D.PickSlipNo AND I.CartonNo = D.CartonNo
+         WHERE I.UCCNo = @cUCCNo AND D.storerkey = @cStorerKey)
       BEGIN
          SET @nErrNo = 100230
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UCC scanned
