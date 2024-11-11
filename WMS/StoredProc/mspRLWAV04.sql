@@ -649,8 +649,13 @@ BEGIN
                SET @c_Message02 = @n_MaxHeight
                SET @c_Message03 = @n_NoOfPallet
                SET @c_GroupKey  = @c_LocAisle
-               SET @c_TaskStatus = @c_TaskStatus_FPK
-
+               IF EXISTS (SELECT TOP 1 OrderKey from TaskDetail td (nolock) Where td.OrderKey
+               IN (SELECT TOP 1 orderkey FROM orders WHERE userdefine09 = @c_OrderKey
+               							AND storerkey = @c_StorerKey
+               							ORDER BY deliverydate))
+               BEGIN
+               			SET @c_TaskStatus = '0'
+               END
             END
             ELSE
             BEGIN
@@ -768,6 +773,7 @@ BEGIN
                   AND   td.TaskType  = 'ASTCPK'
                   AND   td.[Status] IN ('0', 'S')
                   AND   td.UOM = '6'
+                  AND	  td.OrderKey <> @c_Orderkey_Last
 
                   IF @n_NoOfOrderPerGrp = 1
                   BEGIN
@@ -775,6 +781,10 @@ BEGIN
                      SET @n_Err = 85080
                      SET @c_errmsg = 'NSQL'+CONVERT(NVARCHAR(5),@n_err) +': An Order Parcel limit exceeded'
                                    + '. Orderkey: ' + @c_Orderkey + '. (mspRLWAV04)'
+                  END
+                  ELSE
+                  	  BEGIN
+                  		SET @c_GroupKey = @c_GroupKey_Last;
                   END
                END
 
