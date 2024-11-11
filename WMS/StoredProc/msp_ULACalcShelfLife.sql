@@ -311,6 +311,7 @@ BEGIN
                                         AND (LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked) > 0
                                         AND LOC.Facility = @c_Facility
                                         AND LA.Lottable04 = @d_Lottable04
+                                        AND LA.Lottable06 in ( '0' , '')
                                         AND LA.Lottable07 = @c_Lottable07;
 
                                 OPEN CUR_TRANSFERDETAIL;
