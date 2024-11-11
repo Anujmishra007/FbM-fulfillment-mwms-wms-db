@@ -11,6 +11,7 @@ GO
 /*                                                                            */
 /* Date       Rev    Author     Purposes                                      */
 /* 2024-10-29 1.0.0  NLT03      FCR-1096 re-print Order Level labels          */
+/* 2024-11-11 1.0.1  Dennis     PickDetail status >= picked status            */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_593PackSlipRpt] (
@@ -68,7 +69,7 @@ AS
    SELECT @nRowCount = COUNT( DISTINCT CaseID ) 
    FROM dbo.PICKDETAIL WITH(NOLOCK) 
    WHERE OrderKey = @cOrderKey 
-      AND Status = @cPickConfirmStatus
+      AND Status >= @cPickConfirmStatus
       AND TRIM(CaseID) <> ''
 
    IF @nRowCount = 0
@@ -81,7 +82,7 @@ AS
    IF (SELECT COUNT( DISTINCT CaseID ) 
       FROM dbo.PICKDETAIL WITH(NOLOCK) 
       WHERE OrderKey = @cOrderKey 
-         AND Status = @cPickConfirmStatus
+         AND Status >= @cPickConfirmStatus
          AND TRIM(CaseID) <> '')
       <>
       (SELECT COUNT( DISTINCT RefNo )
