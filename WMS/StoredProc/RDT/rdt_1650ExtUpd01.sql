@@ -1,6 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'rdt.rdt_1650ExtUpd01') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure rdt.rdt_1650ExtUpd01
-GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -21,9 +18,11 @@ GO
 /* 2015-12-18 1.3  James      Deadlock tuning (james03)                 */
 /* 2017-04-07 1.4  James      Deadlock tuning (james04)                 */
 /* 2024-05-09 1.5  NLT013     FCR-117 Auto ship on RDT                  */
+/* 2024-10-22 1.6  JHU151     UWP-24991 WHen Cls Truck then             */
+/*                                      Trigger LogiReport              */
 /************************************************************************/
 
-CREATE PROC [RDT].[rdt_1650ExtUpd01] (
+CREATE OR ALTER PROC [RDT].[rdt_1650ExtUpd01] (
    @nMobile          INT, 
    @nFunc            INT, 
    @nStep            INT, 
@@ -290,7 +289,7 @@ SET ANSI_NULLS OFF
       END
 
       IF @nStep = 3 
-      BEGIN
+      BEGIN         
          IF @cOption = '1'
          BEGIN
             IF ISNULL( @cMbolKey, '') <> ''
@@ -355,8 +354,91 @@ SET ANSI_NULLS OFF
                      GOTO Quit
                   END CATCH
                END
+
+               DECLARE
+                  @cTriggerRptAPI NVARCHAR(10)
+               SET @cTriggerRptAPI = rdt.rdtGetConfig(@nFunc, 'TriggerRptAPI', @cStorerKey)
+               IF @cTriggerRptAPI = '0'
+                  SET @cTriggerRptAPI = ''
+
+               IF @cTriggerRptAPI = '1'
+               BEGIN
+                  DECLARE 
+                        @c_ResponseString NVARCHAR(MAX), 
+                        @c_vbHttpStatusCode NVARCHAR(10), 
+                        @c_vbHttpStatusDesc NVARCHAR(100);
+                  DECLARE 
+                        @c_doc1 NVARCHAR(MAX),
+                        @c_vbErrMsg  NVARCHAR(MAX),
+                        @c_PDFFileName_Courier NVARCHAR(MAX),
+                        @b_Debug int = 1
+                  DECLARE
+                        @ctriggerName     NVARCHAR(30),
+                        @cReportName      NVARCHAR(30),
+                        @cFileFolder	   NVARCHAR(200),
+                        @cWebRequestURL   NVARCHAR(4000)
+
+                  SELECT
+                     @ctriggerName = parm1_label,
+                     @cReportName = JReportFileName,
+                     @cFileFolder = FileFolder,
+                     @cWebRequestURL = PrintSettings
+                  FROM RDT.rdtReportDetail WITH(NOLOCK)
+                  WHERE storerkey = @cStorerkey
+                  AND ReportType = 'CLSTRUCK'
+
+                  
+                  DECLARE CUR_ORDER_LOOP CURSOR LOCAL READ_ONLY FAST_FORWARD FOR 
+                  SELECT DISTINCT M.OrderKey,ORD.ExternOrderKey
+                  FROM dbo.MbolDetail M WITH (NOLOCK)
+                  INNER JOIN ORDERS ORD WITH (NOLOCK) ON M.OrderKey = ORD.OrderKey
+                  WHERE M.MbolKey = @cMbolKey
+                  OPEN CUR_ORDER_LOOP
+                  FETCH NEXT FROM CUR_ORDER_LOOP INTO @cOrderKey,@cExternOrderKey
+                  WHILE @@FETCH_STATUS <> -1 
+                  BEGIN
+                     SET @c_doc1 = '{    "triggerName":"' + @ctriggerName + '",'
+                     SET @c_doc1 = @c_doc1 + '    "storerKey":"' + @cStorerKey + '",'
+                     SET @c_doc1 = @c_doc1 + '    "reportName":"' + @cReportName + '",'                     
+                     SET @c_doc1 = @c_doc1 + '    "parameters":{        "Param_Facility":"' + @cFacility + '",    '
+                     SET @c_doc1 = @c_doc1 + '                          "Param_Storerkey":"' + @cStorerKey + '",    '
+                     SET @c_doc1 = @c_doc1 + '                          "Param_OrderKey":"' + @cOrderKey + '",    '
+                     SET @c_doc1 = @c_doc1 + '                          "Param_SellerOrder":"' + @cExternOrderKey + '"    }'
+                     SET @c_doc1 = @c_doc1 + '}'
+                     
+
+                     --SET @cFileFolder = N'E:\COMObject\GenericWebServiceClient\WSconfig.ini'
+                     --SET @cWebRequestURL = N'https://172.16.64.7:443/logi_trigger.jsp'
+                     EXEC master.dbo.isp_GenericWebServiceClientV5 
+                           @c_IniFilePath = @cFileFolder,
+                           @c_WebRequestURL = @cWebRequestURL,
+                           @c_WebRequestMethod = N'POST', -- nvarchar(10)
+                           @c_ContentType = N'application/json', -- nvarchar(100)
+                           @c_WebRequestEncoding = N'UTF-8', -- nvarchar(30)
+                           @c_RequestString = @c_doc1,
+                           @c_ResponseString = @c_ResponseString OUTPUT, -- nvarchar(max)
+                           @c_vbErrMsg = @c_vbErrMsg OUTPUT, -- nvarchar(max)
+                           @n_WebRequestTimeout = 0, -- int
+                           @c_NetworkCredentialUserName = N'', -- nvarchar(100)
+                           @c_NetworkCredentialPassword = N'', -- nvarchar(100)
+                           @b_IsSoapRequest = 0, -- bit
+                           @c_RequestHeaderSoapAction = N'', -- nvarchar(100)
+                           @c_HeaderAuthorization = N'', -- nvarchar(4000)
+                           @c_ProxyByPass = N'1', -- nvarchar(1)
+                           @c_WebRequestHeaders = 'ClientSystem:RDT', -- Folder:Z:\GBR\DTSToExceed\nikecn01-chn-cdt|FileName:WMS_TESTING.pdf
+                           @c_vbHttpStatusCode = @c_vbHttpStatusCode OUTPUT, -- nvarchar(10)
+                           @c_vbHttpStatusDesc = @c_vbHttpStatusDesc OUTPUT -- nvarchar(100)
+
+                     FETCH NEXT FROM CUR_ORDER_LOOP INTO  @cOrderKey,@cExternOrderKey
+                  END
+                  CLOSE CUR_ORDER_LOOP
+                  DEALLOCATE CUR_ORDER_LOOP
+
+                  
+                              
+               END  
             END
-         END
+         END         
       END
    END
    GOTO Quit
