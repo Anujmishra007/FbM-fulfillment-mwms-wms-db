@@ -14,6 +14,8 @@ GO
 /* 2024-11-01 1.0.0   YYS027   FCR-989 Min Max Replenishment to add               */
 /*                             screen for choicing whether location is empty.     */
 /*                             use config ExtScnSP in rdt.StorerConfig            */
+/* 2024-11-12 1.1     PXL009   FCR-1125 v0->v2 Code Sync for CROCS                */
+/*                                ExtScnSP call logic change in generic SP        */
 /**********************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_1812ExtScn04] (
@@ -64,6 +66,8 @@ BEGIN
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
+   DECLARE @nMOBRECStep     INT
+   DECLARE @nMOBRECScn      INT
    DECLARE @cTaskDetailKey  NVARCHAR( 10)
    DECLARE @cListKey        NVARCHAR( 20)
    DECLARE @cDropID         NVARCHAR( 20)
@@ -133,11 +137,16 @@ BEGIN
    SELECT @nPQTY          = CONVERT(INT,@cPQTY)     WHERE ISNUMERIC(@cPQTY)=1
    SELECT @nMQTY          = CONVERT(INT,@cMQTY)     WHERE ISNUMERIC(@cMQTY)=1
 
+   SELECT @nMOBRECStep      = [Step]
+      ,@nMOBRECScn          = [Scn]
+   FROM rdt.rdtMobRec WITH (NOLOCK)  
+   WHERE Mobile = @nMobile  
+
    IF ISNULL(@nAction,0) = 0
    BEGIN
       IF @nFunc = 1812
       BEGIN
-         IF @nStep = 4                 --Scn = 4023 SKU, QTY
+         IF @nMOBRECStep = 4                 --Scn = 4023 SKU, QTY
          BEGIN
             IF @nInputKey = 1
             BEGIN
@@ -167,6 +176,7 @@ BEGIN
                      GOTO Quit
                   END
                END   --end of IF @cReplenFlag = '1' 
+               /*
                -- QTY short
                IF @nQTY < @nQTY_RPL
                BEGIN
@@ -188,6 +198,7 @@ BEGIN
                   SET @nAfterScn = @nScn + 1    
                   SET @nAfterStep = @nStep + 1          --goto step 5 and 4024
                END
+               */
             END --end of inputkey = 1
          END --end of step 4
 /********************************************************************************
@@ -196,7 +207,7 @@ Step 99. screen = 4028. Is the location completely empty?
     9 = NO
     Option (Field01, input)
 ********************************************************************************/         
-         ELSE IF @nScn = 4028            --new screen for choice location is empty
+         ELSE IF @nMOBRECScn = 4028            --new screen for choice location is empty
          BEGIN
             IF @nInputKey = 1 -- ENTER
             BEGIN

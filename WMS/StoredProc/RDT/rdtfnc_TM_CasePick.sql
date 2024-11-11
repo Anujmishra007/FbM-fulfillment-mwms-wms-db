@@ -28,12 +28,15 @@ GO
 /* 2023-05-16 2.1    Ung        WMS-22435 Add DecodeSP                          */
 /*                              Expand SKU field to max                         */
 /* 2023-06-20 2.2    Ung        WMS-22834 Add DispStyleColorSize                */
+/*                               Fix DecodeSP without UCC                       */
 /* 2024-03-12 2.3    CYU027     UWP-15734 Add Extended Print SP                 */
 /* 2024-04-10 2.4    Dennis     UWP-16909 Check Digit                           */
 /* 2024-07-08 2.5    JHU151     FCR-330 SSCC code generator                     */
 /* 2024-10-08 2.6    PXL009     FCR-872 Auto Generated Dropid                   */
 /* 2024-10-24 2.7    YYS027     FCR-989 Min Max Replenishment                   */
 /*            2.7.1  YYS027     move new screen to rdt_1812ExtScn04             */
+/* 2024-09-23 2.8    James      WMS-26122 Add ExtendedScreenSP (james02)        */  
+/* 2024-11-12 2.9    PXL009     FCR-1125 Merged 2.2, 2.3->2.8 from v0 branch    */  
 /********************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_CasePick](
@@ -1390,6 +1393,7 @@ BEGIN
       DECLARE @cLabelNo NVARCHAR( 60)
       DECLARE @nUCCQTY  INT
 
+      SET @cUCC = ''
       SET @nUCCQTY = 0
 
       -- Screen mapping
@@ -1436,6 +1440,7 @@ BEGIN
                EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cBarcode,
                   @cUPC    = @cDecodeSKU  OUTPUT,
                   @nQTY    = @nDecodeQTY  OUTPUT,
+                  @cUCCNo  = @cUCC        OUTPUT,
                   @nErrNo  = @nErrNo      OUTPUT,
                   @cErrMsg = @cErrMsg     OUTPUT,
                   @cType   = 'UPC'
@@ -1821,14 +1826,6 @@ BEGIN
          END
          GOTO Quit
       END
-      --A new screen will  require the user to confirm the option . This will be prompted immediately after the user has entered the SKU Quantity on Step 4.
-      --   If the user presses escape then he can be taken to quantity entry screen. Act as a popup Window
-      IF ISNULL(@cExtScnSP,'')<>'' AND EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
-      BEGIN
-         -- @cExtScnSP is ready, Goto 99 to call @cExtScnSP, and @cReplenFlag=1 will be check in @cExtScnSP
-         SET @nAction =0
-         Goto Step_99
-      END
 
       -- QTY short
       IF @nQTY < @nQTY_RPL
@@ -1850,6 +1847,15 @@ BEGIN
 
          SET @nScn = @nScn + 1
          SET @nStep = @nStep + 1
+      END
+
+      --A new screen will  require the user to confirm the option . This will be prompted immediately after the user has entered the SKU Quantity on Step 4.
+      --   If the user presses escape then he can be taken to quantity entry screen. Act as a popup Window
+      IF ISNULL(@cExtScnSP,'')<>'' AND EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
+      BEGIN
+         -- @cExtScnSP is ready, Goto 99 to call @cExtScnSP, and @cReplenFlag=1 will be check in @cExtScnSP
+         SET @nAction =0
+         Goto Step_99
       END
    END
 
@@ -2443,6 +2449,34 @@ BEGIN
          END   
       END
 
+      -- Extended validate
+      IF @cExtendedValidateSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedValidateSP AND type = 'P')
+         BEGIN
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cTaskdetailKey, @cDropID, @nQTY, @cToLOC, @nErrNo OUTPUT, @cErrMsg OUTPUT'
+            SET @cSQLParam =
+               '@nMobile         INT,           ' +
+               '@nFunc           INT,           ' +
+               '@cLangCode       NVARCHAR( 3),  ' +
+               '@nStep           INT,           ' +
+               '@nInputKey       INT,           ' +
+               '@cTaskdetailKey  NVARCHAR( 10), ' +
+               '@cDropID         NVARCHAR( 20), ' +
+               '@nQTY            INT,           ' +
+               '@cToLOC          NVARCHAR( 10), ' +
+               '@nErrNo          INT OUTPUT,    ' +
+               '@cErrMsg         NVARCHAR( 20) OUTPUT '
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cTaskdetailKey, @cDropID, @nQTY, @cToLOC, @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+            IF @nErrNo <> 0
+               GOTO Quit
+         END
+      END
+
       -- Confirm (TaskDetail to status 5, PickDetail to status 5)
       EXEC rdt.rdt_TM_CasePick_Confirm @nMobile, @nFunc, @cLangCode, @cUserName, @cFacility, @cStorerKey,
          @cTaskDetailKey,
@@ -2563,6 +2597,16 @@ BEGIN
             SET @cOutField10 = @cExtendedInfo1
          END
       END
+
+      -- call extended screen 
+      IF @cExtScnSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
+         BEGIN      
+            Goto Step_99
+         END
+      END
+
    END
 
    IF @nInputKey = 0 -- ESC
@@ -2605,6 +2649,7 @@ BEGIN
    BEGIN
       SET @cToLOC = ''
       SET @cOutField03 = '' -- To LOC
+      EXEC rdt.rdtSetFocusField @nMobile, 3  -- ToLOC
    END
 END
 GOTO Quit
@@ -3287,7 +3332,8 @@ BEGIN
          ('@cPQTY_RPL',       CONVERT(NVARCHAR(20), @nPQTY_RPL)),
          ('@cMQTY_RPL',       CONVERT(NVARCHAR(20), @nMQTY_RPL)),
          ('@cPQTY',           CONVERT(NVARCHAR(20), @nPQTY)),
-         ('@cMQTY',           CONVERT(NVARCHAR(20), @nMQTY))
+         ('@cMQTY',           CONVERT(NVARCHAR(20), @nMQTY)),
+         ('@cToLOC',          @cToLOC)
 
          EXECUTE [RDT].[rdt_ExtScnEntry] 
          @cExtScnSP, 
@@ -3329,6 +3375,32 @@ BEGIN
          BEGIN
             SET @cBarcode = @cUDF30
          END
+      END
+   END
+
+   -- Extended info
+   IF @cExtendedInfoSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')
+      BEGIN
+         SET @cExtendedInfo1 = ''
+         SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
+            ' @nMobile, @nFunc, @cLangCode, @nStep, @cTaskdetailKey, @cExtendedInfo1 OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nAfterStep'
+         SET @cSQLParam =
+            '@nMobile         INT,           ' +
+            '@nFunc           INT,           ' +
+            '@cLangCode       NVARCHAR( 3),  ' +
+            '@nStep           INT,           ' +
+            '@cTaskdetailKey  NVARCHAR( 10), ' +
+            '@cExtendedInfo1  NVARCHAR( 20) OUTPUT, ' +
+            '@nErrNo          INT           OUTPUT, ' +
+            '@cErrMsg         NVARCHAR( 20) OUTPUT, ' +
+            '@nAfterStep      INT '
+
+         EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+            @nMobile, @nFunc, @cLangCode, 99, @cTaskdetailKey, @cExtendedInfo1 OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nStep
+
+         SET @cOutField10 = @cExtendedInfo1
       END
    END
 
