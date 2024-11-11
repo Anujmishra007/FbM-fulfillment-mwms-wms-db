@@ -21,7 +21,9 @@ GO
 /* Data Modifications:                                                   */    
 /*                                                                       */    
 /* Updates:                                                              */    
-/* Date        Author   Ver   Purposes                                   */                                            
+/* Date        Author   Ver   Purposes                                   */
+/* 2024-11-11  SSA01    1.1   Updated to restrict release for already    */
+/*                            started tasks                              */
 /*************************************************************************/     
 CREATE OR ALTER PROCEDURE [dbo].[mspRVWAV02]        
  @c_wavekey      NVARCHAR(10) 
@@ -91,7 +93,7 @@ BEGIN
       AND  TD.[Status] NOT IN ('0','X')
       ORDER BY 1 DESC
 
-      IF @n_AllowToRev = 1
+      IF @n_AllowToRev = 0         --(SSA01)
       BEGIN  
           SET @n_continue = 3    
           SET @n_err = 81020    
