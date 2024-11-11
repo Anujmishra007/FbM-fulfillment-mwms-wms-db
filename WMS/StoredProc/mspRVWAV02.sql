@@ -90,10 +90,10 @@ BEGIN
       WHERE TD.Wavekey = @c_Wavekey  
       AND  TD.Sourcetype = @c_SourceType
       AND  TD.TaskType = @c_TaskType
-      AND  TD.[Status] NOT IN ('0','X')
+      AND  TD.[Status]  IN ('0','X')
       ORDER BY 1 DESC
 
-      IF @n_AllowToRev = 0         --(SSA01)
+      IF ISNULL(@n_AllowToRev,0) = 0          --(SSA01)
       BEGIN  
           SET @n_continue = 3    
           SET @n_err = 81020    
