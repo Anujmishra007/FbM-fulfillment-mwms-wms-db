@@ -14,7 +14,7 @@ GO
 /*                                                                         */
 /* Called By: RDT and SCE Generate Report Stored Procedure                 */
 /*                                                                         */
-/* PVCS Version: 1.6                                                       */
+/* PVCS Version: 1.9                                                       */
 /*                                                                         */
 /* Version: MWMS V2                                                        */
 /*                                                                         */
@@ -30,14 +30,16 @@ GO
 /*                            lottable06=1 from the inventory              */
 /* 02-AUG-2024 Wan03    1.4   UWP-21574 -MPL Disallow Different Lottables  */
 /*                            to same PickFace                             */
-/* 16-OCT-2014 Wan04    1.5   UWP-24391 [FCR-837] Unilever Replenishment for*/
+/* 16-OCT-2024 Wan04    1.5   UWP-24391 [FCR-837] Unilever Replenishment for*/
 /*                            Flowrack                                     */
-/* 05-NOV-2014 Wan05    1.6   UWP-24391 Fixed. Insert SkuxLoc If BackLoc is*/
+/* 05-NOV-2024 Wan05    1.6   UWP-24391 Fixed. Insert SkuxLoc If BackLoc is*/
 /*                            new loc                                      */
-/* 07-NOV-2014 SSA01    1.7   UWP-26065 updated priority to 1 for VNAOUT   */
+/* 07-NOV-2024 SSA01    1.7   UWP-26065 updated priority to 1 for VNAOUT   */
 /*                            task                                         */
-/* 12-NOV-2014 WAN06    1.8   UWP-26935 Prerequisite to create assign loc  */
+/* 12-NOV-2024 WAN06    1.8   UWP-26935 Prerequisite to create assign loc  */
 /*                            for BackLoc. remove auto create              */
+/* 12-NOV-2024 WAN07    1.9   UWP-26935 BACK Loc setup MaxPallet, Replenish*/
+/*                            break when MaxPallet meet                    */
 /***************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_ODMRPL01]
    @c_Facility   NVARCHAR(5)    = '',
@@ -197,6 +199,7 @@ BEGIN
       , @c_AutoReplB2F           NVARCHAR(10)   = 'N'                            --(Wan04)
       , @c_loc_F                NVARCHAR(10)   = ''                             --(Wan04)
       , @c_LocationGroup         NVARCHAR(10)   = ''                             --(Wan04)
+      , @n_MaxPallet             INT            = 0                              --(Wan07)
 
    WHILE @@TRANCOUNT > 0
    BEGIN
@@ -258,7 +261,8 @@ BEGIN
          IF @c_LocationGroup <> ''
          BEGIN
              --Find Back Loc
-            SET @c_SQL = N'SELECT TOP 1 @c_Loc = l.Loc'                             --(Wan05) - START                  
+            SET @c_SQL = N'SELECT TOP 1 @c_Loc = l.Loc'                             --(Wan05) - START   
+                       +           ',   @n_MaxPallet = l.MaxPallet'                 --(Wan07)                
                        + ' FROM LOC l (NOLOCK)' 
                        + ' WHERE l.LocationGroup = @c_LocationGroup'
                        + ' AND   l.Facility = @c_Facility'
@@ -269,14 +273,16 @@ BEGIN
             SET @c_SQLParms = N'@c_LocationGroup   NVARCHAR(10)
                               , @c_B2FLocType      NVARCHAR(10)
                               , @c_Facility        NVARCHAR(5)
-                              , @c_Loc             NVARCHAR(10) OUTPUT'
+                              , @c_Loc             NVARCHAR(10) OUTPUT 
+                              , @n_MaxPallet       INT OUTPUT'                      --(Wan07)                                      
                               
             EXECUTE sp_ExecuteSQL @c_SQL 
                                  ,@c_SQLParms
                                  ,@c_LocationGroup
                                  ,@c_B2FLocType   
                                  ,@c_Facility     
-                                 ,@c_Loc           OUTPUT                           --(Wan05) - END   
+                                 ,@c_Loc           OUTPUT                           --(Wan05) - END  
+                                 ,@n_MaxPallet     OUTPUT                           --(Wan07)                                         
 
             IF @c_Loc <> ''                                                         --(Wan06) - START
             BEGIN
@@ -1135,6 +1141,24 @@ BEGIN
 
          WHILE @@Fetch_Status <> -1 AND @n_RemainingQty > 0
          BEGIN
+            
+            IF @c_REPLB2F = 'Y' AND  @n_MaxPallet > 0                               --(Wan07) - START
+            BEGIN
+             print @n_MaxPallet
+               IF EXISTS(  SELECT 1
+                           FROM #Replenishment AS r WITH(NOLOCK)
+                           WHERE r.Storerkey = @c_CurrentStorer
+                           AND   r.Sku       = @c_CurrentSKU
+                           AND   r.ToLOC     = @c_CurrentLoc
+                           AND   r.ID        <> ''
+                           GROUP BY r.Storerkey, r.Sku, r.ToLOC
+                           HAVING COUNT(DISTINCT r.ID) >= @n_MaxPallet
+                           )
+               BEGIN
+                  BREAK
+               END
+            END                                                                     --(Wan07) - END
+
             IF EXISTS( SELECT 1
             FROM #Replenishment AS r WITH(NOLOCK)
             WHERE r.Lot = @c_Fromlot
@@ -1244,7 +1268,14 @@ BEGIN
                END
             END
 
-            IF @c_ToLocationType = 'PALLET'
+            IF @c_REPLB2F = 'Y'                                                     --(Wan07) - START
+            BEGIN
+               IF @n_FromQty > @n_RemainingQty AND @c_ReplAllPalletQty = 'Y'
+               BEGIN
+                  SET @n_FromQty = 0
+               END
+            END                                                                     --(Wan07) - END
+            ELSE IF @c_ToLocationType = 'PALLET'
             BEGIN
                IF @b_debug = 1
                BEGIN
