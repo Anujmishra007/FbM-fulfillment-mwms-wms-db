@@ -72,7 +72,6 @@ BEGIN
             -- Execute pack confirmation after step 5
             IF @nFromScn = 6494 AND @nFromStep = 5
             BEGIN
-               DECLARE @bSuccess       INT  
                DECLARE @cLoadKey       NVARCHAR( 10)  
                DECLARE @cOrderKey      NVARCHAR( 10)  
                DECLARE @cZone          NVARCHAR( 18)  
@@ -94,7 +93,12 @@ BEGIN
                   RowNumber   INT IDENTITY NOT NULL,
                   PickSlipNo  NVARCHAR(20) NOT NULL,
                   OrderKey    NVARCHAR(10) NOT NULL
-               )  
+               )
+               
+               -- When option = 2, LabelNo will be empty, so fetch it from NewLabelNo
+               SELECT @cLabelNo = V_String50
+               FROM rdt.RDTMOBREC WITH(NOLOCK)
+               WHERE Mobile = @nMobile
 
                SET @cOrderKey = ''  
                SET @cLoadKey = ''  
@@ -106,17 +110,17 @@ BEGIN
                -- Exclude PSNO in master carton
                INSERT INTO @tPSNO (PickSlipNO)
                SELECT DISTINCT PickSlipNO
-               FROM dbo.PackDetail  WITH (NOLOCK)
-               WHERE StorerKey = @cStorerKey
-                  AND LabelNo = @cLabelNo
+               FROM dbo.PackDetail pd  WITH (NOLOCK)
+               WHERE pd.StorerKey = @cStorerKey
+                  AND pd.LabelNo = @cLabelNo
                   AND NOT EXISTS(
                      SELECT 1 
-                     FROM dbo.PackDetail 
-                     WHERE PickSlipNo = @PickSlipNo 
-                        AND LabelNo = @cMasterLabelNo
+                     FROM dbo.PackDetail pd2 
+                     WHERE pd2.PickSlipNo = pd.PickSlipNo 
+                        AND pd2.LabelNo = @cMasterLabelNo
+                        AND pd2.StorerKey = @cStorerKey
                   ) 
                ORDER BY PickSlipNo
-
                IF @@ROWCOUNT = 0
                BEGIN
                   SET @nErrNo = 226901  

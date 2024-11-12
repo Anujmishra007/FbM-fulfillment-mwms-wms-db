@@ -564,6 +564,13 @@ BEGIN
    BEGIN
       IF @bDebugFlag = 1
          SELECT 'Type = MERGE'
+      -- Valid if from carton is equal to master carton  
+      IF @cMasterLabelNo = @cLabelNo
+      BEGIN
+         SET @nErrNo = 227623
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Invalid From Carton No
+         GOTO RollBackTran
+      END
 
       -- Log the label adjustment for from carton
       BEGIN TRY

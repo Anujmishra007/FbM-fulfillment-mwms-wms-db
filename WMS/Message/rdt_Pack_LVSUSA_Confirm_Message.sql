@@ -23,4 +23,5 @@ execute rdt.rdtAddMsg 227619, 10, '227619InsPackDetailFail', 'us_english', 993, 
 execute rdt.rdtAddMsg 227620, 10, '227620DelPackInfoFail', 'us_english', 993, 0 , '227620 Failed to Delete PackInfo'
 execute rdt.rdtAddMsg 227621, 10, '227621UpdPackdetailFail', 'us_english', 993, 0 , '227621 Failed to Update Packdetail'
 execute rdt.rdtAddMsg 227622, 10, '227622UpdPackInfoFail', 'us_english', 993, 0 , '227622 Failed to Update PackInfo'
+execute rdt.rdtAddMsg 227623, 10, '227623InvFromCtn', 'us_english', 993, 0 , '227623 Invalid From Carton ID'
 select * from rdt.rdtmsg (nolock) where message_id between 227601 AND 227650
