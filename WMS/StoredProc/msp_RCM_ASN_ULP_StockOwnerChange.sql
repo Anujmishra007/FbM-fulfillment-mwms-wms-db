@@ -8,7 +8,7 @@ GO
 /* Copyright: Maersk Logistics                                          */
 /* Written by: Wan                                                      */
 /*                                                                      */
-/* Purpose: UWP-23788 - Stock Owner Change Without Pysical Move         */
+/* Purpose: UWP-23788 - Stock Owner Change Without Physical Move         */
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
@@ -22,7 +22,7 @@ GO
 /* Date        Author   Ver   Purposes                                  */
 /* 2024-09-30  Wan      1.0   Created.                                  */
 /************************************************************************/
-CREATE OR ALTER       PROC [dbo].[msp_RCM_ASN_ULP_StockOwnerChange]
+CREATE OR ALTER   PROC [dbo].[msp_RCM_ASN_ULP_StockOwnerChange]
    @c_Receiptkey  NVARCHAR(10)
 ,  @b_success  INT          = 1  OUTPUT
 ,  @n_err      INT          = 0  OUTPUT
@@ -76,6 +76,7 @@ BEGIN
          , @d_Lottable13         DATETIME
          , @d_Lottable14         DATETIME
          , @d_Lottable15         DATETIME
+
 
          , @CUR_Sku              CURSOR
          , @CUR_PD               CURSOR
@@ -297,14 +298,13 @@ BEGIN
                   ,BeforeReceivedQty = @n_Qty
                   ,ToLoc=@c_Loc
 				  ,ToId=@c_ID
-				  ,Lottable01=@c_Lottable01
+          ,Lottable01= CASE WHEN ISNULL(Lottable01,'')='' THEN 'ML11' ELSE Lottable01 END
 				  ,Lottable02=@c_Lottable02
-				  ,Lottable03=@c_Lottable03
 				  ,Lottable04=@d_Lottable04
-				  ,Lottable05=@d_Lottable05
-				  ,Lottable06=@c_Lottable06
-				  ,Lottable07=@c_Lottable07
-				  ,Lottable08=@c_Lottable08
+				  ,Lottable06= CASE WHEN [dbo].[fnc_CalcShelfLifeBUD](@c_Storerkey,@c_Sku, @d_Lottable04,@d_Lottable13) IN ('ML18', 'ML13')
+				                    THEN '1'
+				                    ELSE '' END
+          ,Lottable07=[dbo].[fnc_CalcShelfLifeBUD](@c_Storerkey,@c_Sku, @d_Lottable04,@d_Lottable13)
 				  ,Lottable09=@c_Lottable09
 				  ,Lottable10=@c_Lottable10
 				  ,Lottable11=@c_Lottable11
@@ -351,7 +351,7 @@ BEGIN
                                       ,Lottable02
                                       ,Lottable03
                                       ,Lottable04
-                                      ,Lottable05
+                                      --,Lottable05
                                       ,Lottable06
                                       ,Lottable07
                                       ,Lottable08
@@ -393,14 +393,16 @@ BEGIN
                   ,ExternLineNo
                   ,Vesselkey
                   ,Voyagekey
-                  ,@c_Lottable01
+                  ,CASE WHEN ISNULL(Lottable01,'')='' THEN 'ML11' ELSE Lottable01 END
                   ,@c_Lottable02
-                  ,@c_Lottable03
+                  ,Lottable03
                   ,@d_Lottable04
-                  ,@d_Lottable05
-                  ,@c_Lottable06
-                  ,@c_Lottable07
-                  ,@c_Lottable08
+--                ,@d_Lottable05
+				          ,CASE WHEN [dbo].[fnc_CalcShelfLifeBUD](@c_Storerkey,@c_Sku, @d_Lottable04,@d_Lottable13) IN ('ML18', 'ML13')
+				                    THEN '1'
+				                    ELSE '' END
+                  ,[dbo].[fnc_CalcShelfLifeBUD](@c_Storerkey,@c_Sku, @d_Lottable04,@d_Lottable13)
+                  ,Lottable08
                   ,@c_Lottable09
                   ,@c_Lottable10
                   ,@c_Lottable11
