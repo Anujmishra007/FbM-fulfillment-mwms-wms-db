@@ -36,6 +36,8 @@ GO
 /*                            new loc                                      */
 /* 07-NOV-2014 SSA01    1.7   UWP-26065 updated priority to 1 for VNAOUT   */
 /*                            task                                         */
+/* 12-NOV-2014 WAN06    1.8   UWP-26935 Prerequisite to create assign loc  */
+/*                            for BackLoc. remove auto create              */
 /***************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_ODMRPL01]
    @c_Facility   NVARCHAR(5)    = '',
@@ -250,6 +252,7 @@ BEGIN
       AND   cl.Storerkey = @c_Storerkey
  
       SET @c_loc_F = @c_loc
+
       IF @c_REPLB2F = 'Y'
       BEGIN
          IF @c_LocationGroup <> ''
@@ -274,7 +277,19 @@ BEGIN
                                  ,@c_B2FLocType   
                                  ,@c_Facility     
                                  ,@c_Loc           OUTPUT                           --(Wan05) - END   
-                              
+
+            IF @c_Loc <> ''                                                         --(Wan06) - START
+            BEGIN
+               IF NOT EXISTS (SELECT 1 FROM SKUxLOC sl(NOLOCK)                         
+                              WHERE sl.Storerkey = @c_Storerkey
+                              AND   sl.Sku = @c_Sku
+                              AND   sl.Loc = @c_Loc
+                              )
+               BEGIN
+                  SET @c_Loc = ''
+               END                                                                  
+            END                                                                     --(Wan06) - END
+            
             IF @c_Loc <> '' AND @c_AutoReplB2F = 'Y'
             BEGIN
                EXEC msp_ReplBack2Front
@@ -294,18 +309,18 @@ BEGIN
                END
             END    
             
-            IF @n_Continue = 1 AND @c_Loc <> ''                                     --(Wan05) - START
-            BEGIN
-               IF NOT EXISTS (SELECT 1 FROM SKUxLOC sl(NOLOCK)
-                              WHERE sl.Storerkey = @c_Storerkey
-                              AND   sl.Sku = @c_Sku
-                              AND   sl.Loc = @c_Loc
-                              )
-               BEGIN
-                  INSERT INTO SKUxLOC (Storerkey, Sku, Loc, LocationType, Qty) 
-                  VALUES (@c_Storerkey, @c_Sku, @c_Loc, '', 0)
-               END                                                                  --(Wan05) - END
-            END
+            --IF @n_Continue = 1 AND @c_Loc <> ''                                   --(Wan06)(Wan05) - START
+            --BEGIN
+            --   IF NOT EXISTS (SELECT 1 FROM SKUxLOC sl(NOLOCK)
+            --                  WHERE sl.Storerkey = @c_Storerkey
+            --                  AND   sl.Sku = @c_Sku
+            --                  AND   sl.Loc = @c_Loc
+            --                  )
+            --   BEGIN
+            --      INSERT INTO SKUxLOC (Storerkey, Sku, Loc, LocationType, Qty) 
+            --      VALUES (@c_Storerkey, @c_Sku, @c_Loc, '', 0)
+            --   END                                                                
+            --END                                                                   --(Wan06)(Wan05) - END
          END
       END                                                                           
    END                                                                              --(Wan04) - END
@@ -1022,7 +1037,7 @@ BEGIN
                + ' AND LOTxLOCxID.qty - LOTxLOCxID.QtyPicked - LOTxLOCxID.QtyAllocated - LOTxLOCxID.QtyReplen >= 1'
                + ' AND LOTxLOCxID.QtyExpected = 0'
                + ' AND LOC.LocationFlag NOT IN (''DAMAGE'', ''HOLD'')'
-               + ' AND LOC.LocationType NOT IN (''CASE'',''PICK'',''PALLET'',''STAGING'')'
+               + ' AND LOC.LocationType NOT IN (''CASE'',''PICK'',''PALLET'',''STAGING'', @c_B2FLocType)'   --(Wan06)
                + ' AND LOC.Facility= @c_Facility'
                + ' AND LOC.Status  = ''OK'' AND LOT.Status  = ''OK'' '
                + @c_condition  
@@ -1061,6 +1076,7 @@ BEGIN
                               + ', @dt_Lottable14_2   DATETIME'                                 --(Wan03) 
                               + ', @dt_Lottable15     DATETIME'                                 --(Wan03)
                               + ', @dt_Lottable15_2   DATETIME'                                 --(Wan03) 
+                              + ', @c_B2FLocType      NVARCHAR(10)'                             --(Wan06)
 
                Execute SP_ExecuteSQL @SQL_QUERY, @SQL_Parms, @c_CurrentLoc , @c_CurrentStorer, @c_CurrentSku , @c_Facility, @n_Pallet        --(ppa371)--end
                                     ,@c_Lot_SL                                                  --(Wan03)
@@ -1084,6 +1100,7 @@ BEGIN
                                     ,@dt_Lottable14_2                                           --(Wan03)
                                     ,@dt_Lottable15                                             --(Wan03)
                                     ,@dt_Lottable15_2                                           --(Wan03)
+                                    ,@c_B2FLocType                                              --(Wan06)
 
          OPEN CUR_REPL
 
