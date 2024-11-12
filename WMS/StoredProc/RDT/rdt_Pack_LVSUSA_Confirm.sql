@@ -195,6 +195,14 @@ BEGIN
    WHERE Storerkey = @cStorerKey
       AND SKU = @cSKU
       AND LabelNo = @cMasterLabelNo
+      
+   --Log the PSNO under source and dest cartons
+   INSERT INTO @tPSNO (PickSlipNO)
+   SELECT DISTINCT PickSlipNO
+   FROM PackDetail  WITH (NOLOCK)
+   WHERE StorerKey = @cStorerKey
+      AND LabelNo IN (@cLabelNo, @cMasterLabelNo)
+   ORDER BY PickSlipNo
 
    IF @cType = 'NEW'
    BEGIN
@@ -557,14 +565,6 @@ BEGIN
       IF @bDebugFlag = 1
          SELECT 'Type = MERGE'
 
-      --Log the PSNO under source and dest cartons
-      INSERT INTO @tPSNO (PickSlipNO)
-      SELECT DISTINCT PickSlipNO
-      FROM PackDetail  WITH (NOLOCK)
-      WHERE StorerKey = @cStorerKey
-         AND LabelNo IN (@cLabelNo, @cMasterLabelNo)
-      ORDER BY PickSlipNo
-
       -- Log the label adjustment for from carton
       BEGIN TRY
          MERGE INTO @tMoveLog AS a
@@ -807,68 +807,70 @@ BEGIN
       END -- PickDetail while
       IF @bDebugFlag = 1
          SELECT 'Handling PickDetail (Merge) END'
-
-      -- Reorganize the master carton packdetail
-      BEGIN TRY
-         ;WITH TempPackDetail AS (
-            SELECT 
-               DENSE_RANK() OVER (PARTITION BY PickSlipNo ORDER BY LabelNo) AS NewCartonNo,
-               RIGHT('00000' + CAST(ROW_NUMBER() OVER (PARTITION BY PickSlipNo, CartonNo ORDER BY SKU) AS VARCHAR(5)), 5) AS NewLabelLine,
-               PickSlipNo, 
-               CartonNo, 
-               LabelNo, 
-               LabelLine, 
-               StorerKey, 
-               SKU, 
-               Qty
-            FROM dbo.PackDetail WITH (NOLOCK)
-            WHERE PickSlipNo IN (SELECT PickSlipNo FROM @tPSNO )
-         )
-         UPDATE pd
-         SET pd.CartonNo = tpd.NewCartonNo,
-            pd.LabelLine = tpd.NewLabelLine
-         FROM dbo.PackDetail pd
-         JOIN TempPackDetail tpd
-         ON pd.PickSlipNo = tpd.PickSlipNo
-         AND pd.LabelNo = tpd.LabelNo
-         AND pd.LabelLine = tpd.LabelLine;
-      END TRY
-      BEGIN CATCH
-         SET @nErrNo = 227621
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Handle PickDetail Fail
-         GOTO RollBackTran
-      END CATCH
-
-      --Insert back master carton packinfo
-
-      IF @bDebugFlag = 1
-      BEGIN
-         SELECT 'renewed packdetail'
-         SELECT * FROM PackDetail WHERE LabelNo = @cMasterLabelNo
-      END
-
-      --Re-generate the new packinfo for MasterLabel
-      BEGIN TRY
-         MERGE INTO PackInfo AS PI
-         USING (SELECT PickSlipNo, CartonNo, LabelNo, SUM(Qty) AS Qty
-                  FROM PackDetail WITH (NOLOCK)
-                  WHERE StorerKey = @cStorerkey
-                     AND PickSlipNo IN (SELECT PickSlipNo FROM @tPSNO )
-                  GROUP BY StorerKey, PickSlipNo, CartonNo, LabelNo) AS PD
-         ON (PI.PickSlipNo = PD.PickSlipNo AND PI.RefNo = PD.LabelNo)
-         WHEN MATCHED THEN
-            UPDATE SET PI.CartonNo = PD.CartonNo, PI.Qty = PD.Qty
-         WHEN NOT MATCHED THEN
-            INSERT (PickSlipNo, CartonNo, Qty, CartonType, RefNo, Length, Width, Height, CartonStatus)
-            VALUES (PD.PickSlipNo, PD.CartonNo, PD.Qty, @cMasterCartonType, PD.LabelNo, @fMasterCartonLength, @fMasterCartonWidth, @fMasterCartonHeight, 'Packed');
-      END TRY
-      BEGIN CATCH
-         SET @nErrNo = 227622
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Handle PickDetail Fail
-         GOTO RollBackTran
-      END CATCH
       --PickDetail Handling (Merge) End
    END -- MERGE
+   
+   -- Reorganize the master carton packdetail
+   BEGIN TRY
+      ;WITH TempPackDetail AS (
+         SELECT 
+            DENSE_RANK() OVER (PARTITION BY PickSlipNo ORDER BY LabelNo) AS NewCartonNo,
+            RIGHT('00000' + CAST(ROW_NUMBER() OVER (PARTITION BY PickSlipNo, CartonNo ORDER BY SKU) AS VARCHAR(5)), 5) AS NewLabelLine,
+            PickSlipNo, 
+            CartonNo, 
+            LabelNo, 
+            LabelLine, 
+            StorerKey, 
+            SKU, 
+            Qty
+         FROM dbo.PackDetail WITH (NOLOCK)
+         WHERE PickSlipNo IN (SELECT PickSlipNo FROM @tPSNO )
+      )
+      UPDATE pd
+      SET pd.CartonNo = tpd.NewCartonNo,
+         pd.LabelLine = tpd.NewLabelLine
+      FROM dbo.PackDetail pd
+      JOIN TempPackDetail tpd
+      ON pd.PickSlipNo = tpd.PickSlipNo
+      AND pd.LabelNo = tpd.LabelNo
+      AND pd.LabelLine = tpd.LabelLine;
+   END TRY
+   BEGIN CATCH
+      SET @nErrNo = 227621
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Handle PickDetail Fail
+      GOTO RollBackTran
+   END CATCH
+
+   --Insert back master carton packinfo
+
+   IF @bDebugFlag = 1
+   BEGIN
+      SELECT 'renewed packdetail'
+      SELECT * FROM PackDetail WHERE LabelNo = @cMasterLabelNo
+   END
+
+   --Re-generate the new packinfo for MasterLabel
+   BEGIN TRY
+      MERGE INTO PackInfo AS PI
+      USING (SELECT PickSlipNo, CartonNo, LabelNo, SUM(Qty) AS Qty
+               FROM PackDetail WITH (NOLOCK)
+               WHERE StorerKey = @cStorerkey
+                  AND PickSlipNo IN (SELECT PickSlipNo FROM @tPSNO )
+               GROUP BY StorerKey, PickSlipNo, CartonNo, LabelNo) AS PD
+      ON (PI.PickSlipNo = PD.PickSlipNo AND PI.RefNo = PD.LabelNo)
+      WHEN MATCHED THEN
+         UPDATE SET PI.CartonNo = PD.CartonNo, PI.Qty = PD.Qty
+      WHEN NOT MATCHED THEN
+         INSERT (PickSlipNo, CartonNo, Qty, CartonType, RefNo, Length, Width, Height, CartonStatus)
+         VALUES (PD.PickSlipNo, PD.CartonNo, PD.Qty,
+            ISNULL(@cMasterCartonType, ''), PD.LabelNo, ISNULL(@fMasterCartonLength, 0), 
+               ISNULL(@fMasterCartonWidth, 0), ISNULL(@fMasterCartonHeight, 0), 'Packed');
+   END TRY
+   BEGIN CATCH
+      SET @nErrNo = 227622
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Handle PickDetail Fail
+      GOTO RollBackTran
+   END CATCH
 
    IF @bDebugFlag = 1
    BEGIN

@@ -1,5 +1,4 @@
 
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -56,12 +55,194 @@ BEGIN
 
    DECLARE  @bDebugFlag             BINARY = 0
 
+   DECLARE  @nFromScn               INT
+   DECLARE  @nFromStep              INT
+   DECLARE  @cMasterLabelNo         NVARCHAR(20)
+
+   SELECT @nFromScn = V_FromScn, @nFromStep = V_FromStep, @cMasterLabelNo = V_String3
+   FROM rdt.RDTMOBREC WITH(NOLOCK)
+   WHERE Mobile = @nMobile
+
    IF @nFunc = 993 -- Pack
    BEGIN
       IF @nStep = 6 -- Print label
       BEGIN
          IF @nInputKey = 1 -- ENTER
          BEGIN
+            -- Execute pack confirmation after step 5
+            IF @nFromScn = 6494 AND @nFromStep = 5
+            BEGIN
+               DECLARE @bSuccess       INT  
+               DECLARE @cLoadKey       NVARCHAR( 10)  
+               DECLARE @cOrderKey      NVARCHAR( 10)  
+               DECLARE @cZone          NVARCHAR( 18)  
+               DECLARE @nPackQTY       INT  
+               DECLARE @nPickQTY       INT  
+               DECLARE @cPickStatus    NVARCHAR( 20)  
+               DECLARE @cPackConfirm   NVARCHAR( 1)
+               DECLARE @nCounter       INT = 0
+               DECLARE @nMax           INT = 0
+
+               DECLARE @tPSNO TABLE
+               (
+                  RowNumber   INT IDENTITY NOT NULL,
+                  PickSlipNo  NVARCHAR(20) NOT NULL
+               )
+
+               DECLARE @tOrder TABLE
+               (
+                  RowNumber   INT IDENTITY NOT NULL,
+                  PickSlipNo  NVARCHAR(20) NOT NULL,
+                  OrderKey    NVARCHAR(10) NOT NULL
+               )  
+
+               SET @cOrderKey = ''  
+               SET @cLoadKey = ''  
+               SET @cZone = ''  
+               SET @cPackConfirm = '' 
+               SET @cPickSlipNo = '' 
+               SET @nPackQTY = 0  
+               SET @nPickQTY = 0
+               -- Exclude PSNO in master carton
+               INSERT INTO @tPSNO (PickSlipNO)
+               SELECT DISTINCT PickSlipNO
+               FROM dbo.PackDetail  WITH (NOLOCK)
+               WHERE StorerKey = @cStorerKey
+                  AND LabelNo = @cLabelNo
+                  AND NOT EXISTS(
+                     SELECT 1 
+                     FROM dbo.PackDetail 
+                     WHERE PickSlipNo = @PickSlipNo 
+                        AND LabelNo = @cMasterLabelNo
+                  ) 
+               ORDER BY PickSlipNo
+
+               IF @@ROWCOUNT = 0
+               BEGIN
+                  SET @nErrNo = 226901  
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- No PSNO Found
+                  GOTO Quit
+               END
+
+               IF @bDebugFlag = 1
+               BEGIN
+                  SELECT 'PSNO List', @cLabelNo AS LabelNo
+                  SELECT * FROM @tPSNO
+               END
+               
+               -- Get Order Info
+               INSERT INTO @tOrder (PickSlipNo,OrderKey)
+                  SELECT DISTINCT PickSlipNo, OrderKey
+                  FROM PickHeader PKH WITH (NOLOCK)
+                  JOIN @tPSNO PSNO
+                  ON PKH.PickHeaderKey = PSNO.PickSlipNo
+                  ORDER BY OrderKey
+                  
+               IF @@ROWCOUNT = 0
+               BEGIN
+                  SET @nErrNo = 226902  
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- No Order Found
+                  GOTO Quit
+               END
+
+               IF @bDebugFlag = 1
+               BEGIN
+                  SELECT 'Order List'
+                  SELECT * FROM @tOrder
+               END
+
+               -- Check pack confirm already  
+               IF NOT EXISTS( SELECT 1 FROM PackHeader PH WITH (NOLOCK)
+                              JOIN @tPSNO PSNO 
+                                 ON  PH.PickSlipNo = PSNO.PickSlipNo
+                              WHERE Status <> '9')
+               BEGIN
+                  IF @bDebugFlag = 1
+                     SELECT 'All Confirmed. Quit'  
+                  GOTO Quit
+               END
+
+               -- Storer config  
+               SET @cPickStatus = rdt.rdtGetConfig( @nFunc, 'PickStatus', @cStorerKey) 
+
+               -- Go through each orderkey in the carton
+               SET @nCounter = 1
+
+               SELECT @nMax = COUNT(1)
+               FROM @tOrder
+               
+               WHILE @nCounter <= @nMax
+               BEGIN
+                  IF @bDebugFlag = 1
+                     SELECT @nCounter AS Counter, @nMax AS Max
+
+                  SET @cPickSlipNo = ''
+                  SET @cOrderKey = ''
+                  SET @cPackConfirm = ''
+                  SET @nPackQTY = 0
+
+                  SELECT @cPickSlipNo = PickSlipNo,
+                     @cOrderKey = OrderKey
+                  FROM @tOrder
+                  WHERE RowNumber = @nCounter
+
+                  IF @bDebugFlag = 1
+                     SELECT @cPickSlipNo AS PSNO, @cOrderKey AS OrderKey
+
+                  -- Calc pack QTY   
+                  SELECT @nPackQTY = ISNULL( SUM( QTY), 0) 
+                  FROM PackDetail PD WITH (NOLOCK)
+                  WHERE PickSlipNo = @cPickSlipNo
+
+                  IF EXISTS( SELECT TOP 1 1  
+                     FROM dbo.PickDetail PD WITH (NOLOCK)  
+                     WHERE PD.OrderKey = @cOrderKey  
+                        AND PD.Status < '5'  
+                        AND PD.QTY > 0  
+                        AND (PD.Status = '4' OR CHARINDEX( PD.Status, @cPickStatus) = 0))  -- Short or not yet pick  
+                     SET @cPackConfirm = 'N'  
+                  ELSE  
+                     SET @cPackConfirm = 'Y'
+
+                  IF @bDebugFlag = 1
+                     SELECT 'PickDetail Check', @cPackConfirm AS PackConfirm
+
+                  -- Check fully packed  
+                  IF @cPackConfirm = 'Y'  
+                  BEGIN  
+                     SELECT @nPickQTY = SUM( PD.QTY)   
+                     FROM dbo.PickDetail PD WITH (NOLOCK)   
+                     WHERE PD.OrderKey = @cOrderKey  
+
+                     IF @nPickQTY <> @nPackQTY  
+                        SET @cPackConfirm = 'N'  
+                  END
+
+                  IF @bDebugFlag = 1
+                     SELECT 'Compare Pick&Pack Qty', @cPackConfirm AS PackConfirm, @nPickQty AS PickQty, @nPackQty AS PackQty 
+
+                  -- Close the PackHeader
+                  IF @cPackConfirm = 'Y'
+                  BEGIN TRY
+                     UPDATE PackHeader WITH (ROWLOCK) SET   
+                        Status = '9'   
+                     WHERE PickSlipNo = @cPickSlipNo  
+                        AND Status <> '9'  
+
+                  END TRY
+                  BEGIN CATCH
+                     SET @nErrNo = @@ERROR
+                     IF @nErrNo <> 0  
+                     BEGIN  
+                        SET @nErrNo = 226903  
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- PackCfm Fail  
+                        GOTO Quit  
+                     END
+                  END CATCH
+
+                  SET @nCounter = @nCounter + 1
+               END -- Go through orderky
+            END
             IF @cOption = 1 -- Yes
             BEGIN
                DECLARE @bSuccess             INT
