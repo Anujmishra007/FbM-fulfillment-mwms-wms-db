@@ -47,6 +47,7 @@ GO
 /* 2023-10-12 3.7  James      WMS-23113 Add Serial No (james17)               */
 /*                            Add lottable06 ~ 15 parameters whenever required*/
 /* 2024-05-28 3.8  JACKC      FCR-395 Merge WMS-23113 to V2                   */
+/* 2024-11-12 3.9  Dennis     UWP-26828 Fix Conversion bug from str to dtime  */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_CycleCount_SKU] (
@@ -2225,14 +2226,14 @@ BEGIN
                 SET @cTempLottable01 = IsNULL( @cTempLottable01, '')
                 SET @cTempLottable02 = IsNULL( @cTempLottable02, '')
                 SET @cTempLottable03 = IsNULL( @cTempLottable03, '')
-                SET @dTempLottable04 = IsNULL( @dTempLottable04, '0')--ang01
-                SET @dTempLottable05 = IsNULL( @dTempLottable05, '0')--ang01
+                SET @dTempLottable04 = @dTempLottable04--NLT013
+                SET @dTempLottable05 = @dTempLottable05--NLT013
 
 
                 SET @cOutField02 = CASE WHEN @cTempLottable01 <> '' THEN @cTempLottable01 ELSE @cLottable01 END
                 SET @cOutField04 = CASE WHEN @cTempLottable02 <> '' THEN @cTempLottable02 ELSE @cLottable02 END
                 SET @cOutField06 = CASE WHEN @cTempLottable03 <> '' THEN @cTempLottable03 ELSE @cLottable03 END
-                SET @cOutField08 = CASE WHEN @dTempLottable04 <> '0'  THEN rdt.rdtFormatDate( @dTempLottable04) ELSE @cLottable04 END --ang01
+                SET @cOutField08 = CASE WHEN @dTempLottable04 IS NOT NULL AND TRY_CAST(@dTempLottable04 AS DATETIME) IS NOT NULL THEN rdt.rdtFormatDate( @dTempLottable04) ELSE @cLottable04 END --ang01
 
                 SET @cLottable01 = IsNULL(@cOutField02, '')
                 SET @cLottable02 = IsNULL(@cOutField04, '')
@@ -2568,9 +2569,9 @@ BEGIN
             
             IF @nReCountLoc <> 0
             BEGIN
-            	SET @cInField01 = @nReCountLoc
-            	
-            	GOTO Step_3
+               SET @cInField01 = @nReCountLoc
+               
+               GOTO Step_3
             END
          END  
       END  
@@ -4594,7 +4595,7 @@ BEGIN
          ELSE
          BEGIN
             -- if default qty turned on then overwrite the actual MQty (james02)
-		      --SET @cDefaultQty = rdt.RDTGetConfig( @nFunc, 'TMCCDefaultQty', @cStorerkey)
+            --SET @cDefaultQty = rdt.RDTGetConfig( @nFunc, 'TMCCDefaultQty', @cStorerkey)
             IF RDT.rdtIsValidQTY( @cDefaultQty, 1) = 1
                SET @nDefaultQty = CAST( @cDefaultQty AS INT)
             ELSE
