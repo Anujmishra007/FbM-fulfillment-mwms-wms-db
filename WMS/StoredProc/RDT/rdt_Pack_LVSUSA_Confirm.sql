@@ -240,6 +240,11 @@ BEGIN
          BEGIN
             IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cGenLabelNo_SP AND type = 'P')  
             BEGIN
+               SELECT TOP 1 @cPSNO = PickSlipNo
+               FROM dbo.PackDetail WITH(NOLOCK)
+               WHERE StorerKey = @cStorerKey
+                  AND LabelNo = @cMasterLabelNo
+               ORDER BY PickSlipNo
                SET @cSQL = 'EXEC dbo.' + RTRIM( @cGenLabelNo_SP) +
                   ' @cPSNO, ' +  --fcr-946
                   ' @nCartonNo,   ' +  
