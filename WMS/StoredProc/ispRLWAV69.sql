@@ -1,31 +1,6 @@
-SET QUOTED_IDENTIFIER OFF 
+SET QUOTED_IDENTIFIER ON
 GO
-SET ANSI_NULLS OFF 
-GO
-
-/*************************************************************************/
-/* Stored Procedure: ispRLWAV69                                          */
-/* Creation Date: 21-Mar-2024                                            */
-/* Copyright: MAERSK                                                     */
-/* Written by: WLChooi                                                   */
-/*                                                                       */
-/* Purpose: UWP-16612 - Wave Release - create VNAOUT tasks during wave   */
-/*                      release for Picking                              */
-/*                                                                       */
-/* Called By:                                                            */
-/*                                                                       */
-/* GitHub Version: 1.0                                                   */
-/*                                                                       */
-/* Version: 7.0                                                          */
-/*                                                                       */
-/* Data Modifications:                                                   */
-/*                                                                       */
-/* Updates:                                                              */
-/* Date         Author  Ver.  Purposes                                   */
-/* 21-Mar-2024  WLChooi 1.0   DevOps Combine Script                      */
-/* 23-Oct-2024  Wan01   1.1   UWP-24998 - MLP Outbound Staging Loc       */
-/*************************************************************************/
-CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV69]        
+ALTER    PROCEDURE [dbo].[ispRLWAV69]        
     @c_Wavekey      NVARCHAR(10)    
    ,@b_Success      INT            OUTPUT    
    ,@n_err          INT            OUTPUT    
@@ -293,7 +268,8 @@ CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV69]
        WHERE WAVEDETAIL.WaveKey = @c_Wavekey  
        AND PICKDETAIL.[Status] = '0'  
        AND PICKDETAIL.WIP_Refno = @c_SourceType 
-       AND PICKDETAIL.UOM = '1'
+     --AND PICKDETAIL.UOM = '1'                  VPA235
+       AND PICKDETAIL.UOM IN ( '1','6')
        AND LOC.LocationType = 'VNA'
        GROUP BY PICKDETAIL.Storerkey 
             , PICKDETAIL.Sku 
@@ -561,7 +537,8 @@ CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV69]
             END
             
             UPDATE TASKDETAIL
-            SET Groupkey = @c_Taskdetailkey
+        --  SET Groupkey = @c_Taskdetailkey                       VPA235
+            SET Groupkey = @c_Loadkey
             WHERE TaskDetailKey = @c_Taskdetailkey
          END
 
@@ -702,7 +679,8 @@ CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV69]
             END
             
             UPDATE TASKDETAIL
-            SET Groupkey = @c_Taskdetailkey
+      --    SET Groupkey = @c_Taskdetailkey              VPA235
+            SET Groupkey = @c_Loadkey
             WHERE TaskDetailKey = @c_Taskdetailkey
          END
 
@@ -846,7 +824,4 @@ CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV69]
       END    
       RETURN    
    END
-END --sp end  
-GO
-GRANT EXECUTE ON [dbo].[ispRLWAV69] TO [NSQL]
-GO
+END --sp end
