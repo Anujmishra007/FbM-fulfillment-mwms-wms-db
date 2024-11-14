@@ -21,10 +21,10 @@ jobs:
       - name: Trigger  Workflow
         uses: peter-evans/workflow-dispatch@v1
         with:
-          repository: 'Maersk-Global/fbm-infra-automation'  # Replace with actual organization and repo name
-          workflow: 'cdt-db-deploy.yaml'  # Replace with the name of the workflow file in repo-A
-          ref: 'main'  # Specify the branch of repo-A you want to trigger the workflow from
+          repository: 'Maersk-Global/fbm-infra-automation' 
+          workflow: 'cdt-db-deploy.yaml'  
+          ref: 'main' 
           inputs: |
             authToken: ${{ github.event.inputs.authToken }}
         env:
-          GITHUB_TOKEN: ${{ secrets.db_token }}  # Use the secret PAT from repo-B to authenticate
+          GITHUB_TOKEN: ${{ secrets.db_token }}  
