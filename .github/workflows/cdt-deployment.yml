@@ -2,14 +2,14 @@ name: cdt db deployment
 
 on:
   workflow_dispatch:
-    # inputs:
-    #   environment:
-    #     description: 'The environment to run (CDT, Stage, Americas, Europe, Asia)'
-    #     required: true
+    inputs:
+      # environment:
+      #   description: 'The environment to run (CDT, Stage, Americas, Europe, Asia)'
+      #   required: true
       authToken:
         description: 'Authentication token for the API'
         required: true
-        default: ''
+        #default: ''
 
 jobs:
   trigger-repo-a-workflow:
