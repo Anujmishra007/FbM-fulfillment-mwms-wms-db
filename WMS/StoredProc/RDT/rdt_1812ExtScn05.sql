@@ -94,6 +94,8 @@ BEGIN
    -- Get session info  
    SELECT @nMOBRECStep      = [Step]
       ,@nMOBRECScn          = [Scn]
+      ,@nFromScn            = [V_FromScn]
+      ,@nFromStep           = [V_FromStep]
    FROM rdt.rdtMobRec WITH (NOLOCK)  
    WHERE Mobile = @nMobile  
   
@@ -291,7 +293,7 @@ BEGIN
 
                -- Back to prev screen
                SET @nAfterScn = @nFromScn
-               SET @nAfterScn = @nFromStep
+               SET @nAfterStep = @nFromStep
             END  
               
             GOTO Quit  

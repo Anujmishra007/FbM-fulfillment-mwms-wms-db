@@ -33,7 +33,7 @@ GO
 /*                          accurate, rewrite the checking part         */
 /* 2008-03-19 1.6  James    Break @curUCC into 2 statement and forced   */
 /*                          to use index hint IDX_UCC_LOTxLOCxID        */
-/* 2010-10-01 1.7  Shong    Qty Available need to deduct ReplenQty  */
+/* 2010-10-01 1.7  Shong    Qty Available need to deduct ReplenQty      */
 /* 2011-11-11 1.8  ChewKP   LCI Project Changes Update UCC Table        */
 /*                          (ChewKP01)                                  */
 /* 2011-11-29 1.9  Ung      SOS229877 Add MoveCheckLOCColumnRestriction */
@@ -71,6 +71,7 @@ GO
 /* 2023-07-24 4.4  Ung      WMS-22703 Fix move by SKU, MOveQTYAlloc     */
 /* 2024-04-07 4.5  Ung      WMS-25173 Add UCC.Status = 4-Replen         */
 /* 2024-10-01 4.6  James    WMS-26122 Add UCCPickStatus (james05)       */
+/* 2024-11-12 4.7  PXL009   FCR-1125 Merged 4.5, 4.6 from v0 branch     */
 /************************************************************************/
 
 CREATE OR ALTER  PROCEDURE [RDT].[rdt_Move] (
