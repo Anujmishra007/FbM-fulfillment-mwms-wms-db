@@ -211,11 +211,12 @@ BEGIN
    BEGIN
       -- Check if all Orders have the same Userdefined10 (Parcel/Non-Parcel)
       DECLARE @n_OrderTypeCount INT
-      DECLARE @n_OrderKeyCount INT, @n_InvalidParcelType INT = 0;
+      DECLARE @n_OrderKeyCount INT, @n_InvalidParcelType INT = 0, @n_UDF10_AS_UNKNOWN INT = 0;;
 
       SELECT @n_OrderTypeCount = COUNT(DISTINCT ISNULL(cl.UDF01,''))
            , @n_OrderKeyCount  = COUNT(O.Orderkey)
            , @n_InvalidParcelType = MAX(CASE WHEN cl.ListName IS NULL THEN 1 ELSE 0 END)
+           , @n_UDF10_AS_UNKNOWN =	MAX(CASE WHEN O.UserDefine10 = 'UNKNOWN' THEN 1 ELSE 0 END)
       FROM Orders O (NOLOCK)
       JOIN WAVEDETAIL WD (NOLOCK) ON WD.OrderKey = O.OrderKey
       LEFT OUTER JOIN #TMP_CODELKUP cl ON  cl.listName = 'HUSQPKTYPE'
@@ -230,6 +231,15 @@ BEGIN
          SET @n_Err = 85030
          SET @c_errmsg='NSQL'+LTRIM(RTRIM(CONVERT(NVARCHAR(5),@n_err))) +
          ':Mixed Order Type, You are not allow to Release Wave: '+ @c_Wavekey + '. (mspRLWAV04)'
+         GOTO RETURN_SP;
+      END
+
+      IF @n_UDF10_AS_UNKNOWN > 0
+         BEGIN
+         SET @n_Continue = 3
+         SET @n_Err = 85030
+         SET @c_errmsg='NSQL'+LTRIM(RTRIM(CONVERT(NVARCHAR(5),@n_err))) +
+         ':Unknown Order type, You are not allow to Release Wave: '+ @c_Wavekey + '. Please correct the order type (mspRLWAV04)'
          GOTO RETURN_SP;
       END
    END
@@ -641,11 +651,11 @@ BEGIN
 
                SELECT @n_Weight = @n_Qty * @n_StdGrossWgt
 
-              IF @c_PalletType = 'CHEP'              SET @c_ToLoc = 'DNVAS01'
-              IF @n_Height    <= @n_MaxHeight        SET @c_ToLoc = 'DNVAS01'
-              IF @n_Weight    <= @n_MaxWeight        SET @c_ToLoc = 'DNVAS01'
-              IF @b_VASFlag = 0                      SET @c_ToLoc = 'DNVAS01'
-              IF @c_SerialNoCapture NOT IN ('1','3') SET @c_ToLoc = 'DNVAS01'
+              IF @c_PalletType <> 'CHEP'            SET @c_ToLoc = 'DNVAS01'
+              IF @n_Height    > @n_MaxHeight        SET @c_ToLoc = 'DNVAS01'
+              IF @n_Weight    > @n_MaxWeight        SET @c_ToLoc = 'DNVAS01'
+              IF @b_VASFlag = 1                     SET @c_ToLoc = 'DNVAS01'
+              IF @c_SerialNoCapture IN ('1','3') SET @c_ToLoc = 'DNVAS01'
 
                SET @c_Message01 = @c_PalletType
                SET @c_Message02 = @n_MaxHeight
@@ -676,7 +686,7 @@ BEGIN
                SET @c_ToLoc = @c_OtherReference
                IF @b_NonParcel = 1 AND @b_VASFlag = 1
                BEGIN
-                  SET @c_ToLoc = 'VAS01'
+                  SET @c_ToLoc = 'DNVAS01'
                END
 
                SET @c_Message01 = @c_PalletType
