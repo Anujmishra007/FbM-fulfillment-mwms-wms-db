@@ -1,6 +1,34 @@
-SET QUOTED_IDENTIFIER ON
+SET ANSI_NULLS OFF
 GO
-ALTER    PROCEDURE [dbo].[ispRLWAV69]        
+SET QUOTED_IDENTIFIER OFF
+
+GO
+/*************************************************************************/
+/* Stored Procedure: ispRLWAV69                                          */
+/* Creation Date: 21-Mar-2024                                            */
+/* Copyright: MAERSK                                                     */
+/* Written by: WLChooi                                                   */
+/*                                                                       */
+/* Purpose: UWP-16612 - Wave Release - create VNAOUT tasks during wave   */
+/*                      release for Picking                              */
+/*                                                                       */
+/* Called By:                                                            */
+/*                                                                       */
+/* GitHub Version: 1.0                                                   */
+/*                                                                       */
+/* Version: 7.0                                                          */
+/*                                                                       */
+/* Data Modifications:                                                   */
+/*                                                                       */
+/* Updates:                                                              */
+/* Date         Author  Ver.  Purposes                                   */
+/* 21-Mar-2024  WLChooi 1.0   DevOps Combine Script                      */
+/* 23-Oct-2024  Wan01   1.1   UWP-24998 - MLP Outbound Staging Loc     */
+/* 13-NOV-2024  VPA235  1.2   UWP-26879 - Change task group key to Load ID */
+/*************************************************************************/
+
+
+CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]        
     @c_Wavekey      NVARCHAR(10)    
    ,@b_Success      INT            OUTPUT    
    ,@n_err          INT            OUTPUT    
@@ -825,3 +853,6 @@ ALTER    PROCEDURE [dbo].[ispRLWAV69]
       RETURN    
    END
 END --sp end
+GO
+GRANT EXECUTE ON [dbo].[ispRLWAV69] TO [NSQL]
+GO
