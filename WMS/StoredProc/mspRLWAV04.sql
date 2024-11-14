@@ -770,24 +770,24 @@ BEGIN
                   ORDER BY t.RowID DESC
                END
 
-               IF @c_GroupKey = '' AND @b_NonParcel = 0
-               BEGIN
-                  SET @n_NoOfOrderPerGrp = 0
-                  SELECT @n_NoOfOrderPerGrp = count(distinct td.orderkey) FROM TaskDetail td (NOLOCK)
-                  WHERE td.Wavekey  = @c_Wavekey
-                  AND   td.GroupKey = @c_GroupKey_Last
-                  AND   td.TaskType  = 'ASTCPK'
-                  AND   td.[Status] IN ('0', 'S')
-                  AND   td.UOM = '6'
-
-                  IF @n_NoOfOrderPerGrp = 1
-                  BEGIN
-                     SET @n_Continue = 3
-                     SET @n_Err = 85080
-                     SET @c_errmsg = 'NSQL'+CONVERT(NVARCHAR(5),@n_err) +': An Order Parcel limit exceeded'
-                                   + '. Orderkey: ' + @c_Orderkey + '. (mspRLWAV04)'
-                  END
-               END
+--               IF @c_GroupKey = '' AND @b_NonParcel = 0
+--               BEGIN
+--                  SET @n_NoOfOrderPerGrp = 0
+--                  SELECT @n_NoOfOrderPerGrp = count(distinct td.orderkey) FROM TaskDetail td (NOLOCK)
+--                  WHERE td.Wavekey  = @c_Wavekey
+--                  AND   td.GroupKey = @c_GroupKey_Last
+--                  AND   td.TaskType  = 'ASTCPK'
+--                  AND   td.[Status] IN ('0', 'S')
+--                  AND   td.UOM = '6'
+--
+--                  IF @n_NoOfOrderPerGrp = 1
+--                  BEGIN
+--                     SET @n_Continue = 3
+--                     SET @n_Err = 85080
+--                     SET @c_errmsg = 'NSQL'+CONVERT(NVARCHAR(5),@n_err) +': An Order Parcel limit exceeded'
+--                                   + '. Orderkey: ' + @c_Orderkey + '. (mspRLWAV04)'
+--                  END
+--               END
 
                IF @n_Continue = 1 AND @c_GroupKey = ''
                BEGIN
