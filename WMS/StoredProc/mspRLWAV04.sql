@@ -287,6 +287,7 @@ BEGIN
       -- Check if any SKU is missing dimensions or if any dimension is '0'
       DECLARE @c_dimention INT;
       SET @c_dimention = 0;
+      SET @c_SKU = '';
       SELECT @c_dimention = SUM(P.WidthUOM3 * P.LengthUOM3 * P.HeightUOM3), @c_Sku = S.Sku
       FROM PACK P (NOLOCK)
       JOIN SKU S (NOLOCK) ON S.PackKey = P.PACKKey
@@ -295,8 +296,9 @@ BEGIN
       JOIN WAVEDETAIL WD (NOLOCK) ON WD.OrderKey = OD.OrderKey
       WHERE WD.WAVEKey = @c_WaveKey
       GROUP BY P.PackKey, S.Sku
+      HAVING SUM(P.WidthUOM3 * P.LengthUOM3 * P.HeightUOM3) = 0
 
-      IF(@c_dimention = 0)
+      IF(@c_dimention = 0 AND @c_SKU <> '')
       BEGIN
          SET @n_Continue = 3
          SET @n_Err = 85060
@@ -554,8 +556,8 @@ BEGIN
                BEGIN
                   SET @c_PickSlipNo_New = N'P' + @c_PickSlipNo_New
 
-                  INSERT INTO PICKHEADER (PickHeaderKey, Orderkey, ExternOrderKey, Loadkey, [Zone], Wavekey)
-                  VALUES (@c_PickSlipNo_New, @c_Orderkey, @c_Loadkey, @c_Loadkey, 'LP', @c_Wavekey)
+                  INSERT INTO PICKHEADER (PickHeaderKey, Orderkey, ExternOrderKey, Loadkey, [Zone], Wavekey, StorerKey)
+                  VALUES (@c_PickSlipNo_New, @c_Orderkey, @c_Loadkey, @c_Loadkey, 'LP', @c_Wavekey, @c_Storerkey)
 
                   IF @@ERROR <> 0
                   BEGIN
@@ -639,23 +641,17 @@ BEGIN
 
                SELECT @n_Weight = @n_Qty * @n_StdGrossWgt
 
-               IF @c_PalletType = 'CHEP'              SET @c_ToLoc = 'DNVAS01'
-               IF @n_Height    <= @n_MaxHeight        SET @c_ToLoc = 'DNVAS01'
-               IF @n_Weight    <= @n_MaxWeight        SET @c_ToLoc = 'DNVAS01'
-               IF @b_VASFlag = 0                      SET @c_ToLoc = 'DNVAS01'
-               IF @c_SerialNoCapture NOT IN ('1','3') SET @c_ToLoc = 'DNVAS01'
+              IF @c_PalletType = 'CHEP'              SET @c_ToLoc = 'DNVAS01'
+              IF @n_Height    <= @n_MaxHeight        SET @c_ToLoc = 'DNVAS01'
+              IF @n_Weight    <= @n_MaxWeight        SET @c_ToLoc = 'DNVAS01'
+              IF @b_VASFlag = 0                      SET @c_ToLoc = 'DNVAS01'
+              IF @c_SerialNoCapture NOT IN ('1','3') SET @c_ToLoc = 'DNVAS01'
 
                SET @c_Message01 = @c_PalletType
                SET @c_Message02 = @n_MaxHeight
                SET @c_Message03 = @n_NoOfPallet
                SET @c_GroupKey  = @c_LocAisle
-               IF EXISTS (SELECT TOP 1 OrderKey from TaskDetail td (nolock) Where td.OrderKey
-               IN (SELECT TOP 1 orderkey FROM orders WHERE userdefine09 = @c_OrderKey
-               							AND storerkey = @c_StorerKey
-               							ORDER BY deliverydate))
-               BEGIN
-               			SET @c_TaskStatus = '0'
-               END
+               SET @c_TaskStatus = @c_TaskStatus_FPK
             END
             ELSE
             BEGIN
@@ -773,7 +769,6 @@ BEGIN
                   AND   td.TaskType  = 'ASTCPK'
                   AND   td.[Status] IN ('0', 'S')
                   AND   td.UOM = '6'
-                  AND	  td.OrderKey <> @c_Orderkey_Last
 
                   IF @n_NoOfOrderPerGrp = 1
                   BEGIN
@@ -781,10 +776,6 @@ BEGIN
                      SET @n_Err = 85080
                      SET @c_errmsg = 'NSQL'+CONVERT(NVARCHAR(5),@n_err) +': An Order Parcel limit exceeded'
                                    + '. Orderkey: ' + @c_Orderkey + '. (mspRLWAV04)'
-                  END
-                  ELSE
-                  	  BEGIN
-                  		SET @c_GroupKey = @c_GroupKey_Last;
                   END
                END
 
@@ -884,8 +875,10 @@ BEGIN
 
             SET @c_LinkTaskToPick_SQL = 'PICKDETAIL.Orderkey = @c_Orderkey AND PICKDETAIL.UOM = @c_UOM'
             --Insert Taskdetail
+            SET @c_TaskDetailKey = ''
             EXEC isp_InsertTaskDetail
-               @c_TaskType              = @c_TaskType
+               @c_TaskDetailKey         = @c_TaskDetailKey OUTPUT
+            ,  @c_TaskType              = @c_TaskType
             ,  @c_Storerkey             = @c_Storerkey
             ,  @c_Sku                   = @c_Sku
             ,  @c_Lot                   = @c_Lot
@@ -924,9 +917,10 @@ BEGIN
          IF @n_Continue = 1 AND @b_NewPickSlipno = 1
          BEGIN
             UPDATE PICKDETAIL WITH (ROWLOCK)
-               SET PickSlipNo = @c_PickSlipNo_New
+               SET PickSlipNo = CASE WHEN @b_NewPickSlipNo = 1 THEN @c_PickSlipNo ELSE @c_PickSlipNo_New  END
                   , EditDate = GETDATE()
                   , TrafficCop = NULL
+                  , TaskDetailKey = @c_TaskDetailKey
             WHERE PickDetailKey = @c_PickDetailkey
 
             IF @@ERROR <> 0
