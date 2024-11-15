@@ -55,6 +55,7 @@ GO
 /* 2024-09-25 4.9  YYS027   FCR-827   Add ExtendScreen:rdt_600ExtScn03 for       */
 /*                          BatchCheck                                           */
 /* 2024-10-12 4.10 LJQ006   FCR-911   use uom in receiptdetail                   */
+/* 2024-10-08 5.0  TianLei  FCR-839   Add Fully received go back to screen 1     */
 /*********************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_NormalReceipt_V7] (
@@ -81,7 +82,8 @@ DECLARE
    @cSQL           NVARCHAR( MAX),
    @cSQLParam      NVARCHAR( MAX),
    @tPalletLabel   VariableTable,
-   @tExtScnData    VariableTable
+   @tExtScnData    VariableTable,
+   @nLineWithBal   INT
 
 -- Session variable
 DECLARE
@@ -198,6 +200,7 @@ DECLARE
    @cClosePallet        NVARCHAR( 20), --(yeekung06)
    @tExtData            VariableTable,
    @ctemp_OutField15    NVARCHAR( 60),
+   @cBacktoScreen1      NVARCHAR( 1),  --(Tianlei)
 
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),    @cFieldAttr01 NVARCHAR( 1),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),    @cFieldAttr02 NVARCHAR( 1),
@@ -311,6 +314,7 @@ SELECT
    @cClosePallet        = V_String44, --(yeekung06)
    @cExtScnSP           = V_String45,
    @cDecimalQty         = V_String46,
+   @cBacktoScreen1      = V_String47,  --(Tianlei)
 
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,  @cFieldAttr01 = FieldAttr01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,  @cFieldAttr02 = FieldAttr02,
@@ -2584,7 +2588,7 @@ BEGIN
                ('@cPUOM_Desc', @cPUOM_Desc),
                ('@nPUOM_Div', CONCAT(@nPUOM_Div,'')),
                ('@cMUOM_Desc', @cMUOM_Desc),
-               ('@cReceiptKey', @cReceiptKey)            
+               ('@cReceiptKey', @cReceiptKey)
             EXECUTE [RDT].[rdt_ExtScnEntry]
                @cExtScnSP,
                @nMobile, @nFunc, @cLangCode, @nOri_Step, @nOri_Scn, @nInputKey, @cFacility, @cStorerKey, @tExtScnData ,
@@ -2958,7 +2962,7 @@ BEGIN
             ('@ctemp_OutField15', @ctemp_OutField15),
             ('@nPUOM_Div', CONCAT(@nPUOM_Div,'')),
             ('@cMUOM_Desc', @cMUOM_Desc),
-            ('@cReceiptKey', @cReceiptKey) 
+            ('@cReceiptKey', @cReceiptKey)
 
          EXECUTE [RDT].[rdt_ExtScnEntry]
          @cExtScnSP,
@@ -3854,6 +3858,41 @@ BEGIN
       GOTO Quit
    END
 
+   -- check if go back to screen 1 when fully received
+   SET @cBacktoScreen1 = rdt.RDTGetConfig( @nFunc, 'CompleteReceiveBacktoScreen1', @cStorerKey)
+   IF @cBacktoScreen1 = '1'
+   BEGIN
+      -- check fully received
+      SET @nLineWithBal = 0
+      IF @cPOKey IN ('', 'NOPO')
+      BEGIN
+         SELECT TOP 1 @nLineWithBal = 1
+         FROM dbo.ReceiptDetail WITH (NOLOCK)
+         WHERE ReceiptKey = @cReceiptKey
+            AND QTYExpected > BeforeReceivedQTY
+      END
+      ELSE
+      BEGIN
+         SELECT TOP 1 @nLineWithBal = 1
+         FROM dbo.ReceiptDetail WITH (NOLOCK)
+         WHERE ReceiptKey = @cReceiptKey
+            AND POKey = @cPOKey
+            AND QTYExpected > BeforeReceivedQTY
+      END
+
+      IF @nLineWithBal = 0
+      BEGIN
+         SET @cOutField01 = '' -- ASN
+         SET @cOutField02 = @cPOKeyDefaultValue
+         SET @cOutField03 = '' -- ContainerNo
+
+         SET @nScn = @nScn - 6
+         SET @nStep = @nStep - 6
+
+         GOTO Step_7_Quit
+      END
+   END
+
    IF @cPalletRecv = '1'
    BEGIN
       -- AutoGenID
@@ -3861,11 +3900,11 @@ BEGIN
       IF @cAutoGenID <> ''
       BEGIN
          EXEC rdt.rdt_AutoGenID @nMobile, @nFunc, @nStep, @cLangCode
-            ,@cAutoGenID
-            ,@tExtData
-            ,@cAutoID  OUTPUT
-            ,@nErrNo   OUTPUT
-            ,@cErrMsg  OUTPUT
+         ,@cAutoGenID
+         ,@tExtData
+         ,@cAutoID  OUTPUT
+         ,@nErrNo   OUTPUT
+         ,@cErrMsg  OUTPUT
          IF @nErrNo <> 0
             GOTO Step_2_Fail
 
@@ -3893,7 +3932,8 @@ BEGIN
       SET @nStep = @nStep - 3
    END
 
-    -- Extended info
+   Step_7_Quit:
+   -- Extended info
    IF @cExtendedInfoSP <> ''
    BEGIN
       IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedInfoSP AND type = 'P')
@@ -5625,6 +5665,7 @@ BEGIN
       V_String44   = @cClosePallet, --(yeekung06)
       V_String45   = @cExtScnSP,
       V_String46   = @cDecimalQty,
+      V_String47   = @cBacktoScreen1,  --(Tianlei)
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,   FieldAttr01  = @cFieldAttr01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,   FieldAttr02  = @cFieldAttr02,
