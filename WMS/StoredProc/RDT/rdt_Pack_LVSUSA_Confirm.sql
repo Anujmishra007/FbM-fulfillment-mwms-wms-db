@@ -389,8 +389,8 @@ BEGIN
             IF @bDebugFLag = 1
                SELECT 'Get New CartonNo', @nNewCartonNo AS NewCartonNo
 
-            INSERT INTO PackDetail (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, Qty)
-            VALUES (@cPSNO, @nNewCartonNo, @cLabelNo,'00001', @cStorerKey, @cSKU, @nAdjustQty)
+            INSERT INTO PackDetail (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, Qty, DropID)
+            VALUES (@cPSNO, @nNewCartonNo, @cLabelNo,'00001', @cStorerKey, @cSKU, @nAdjustQty, @cLabelNo)
             
             IF @@Error <> 0
             BEGIN
@@ -437,14 +437,15 @@ BEGIN
                IF @bDebugFlag = 1
                   SELECT 'Add new label line to the existing carton'
 
-               INSERT INTO PackDetail (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, Qty)
+               INSERT INTO PackDetail (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, Qty, DropID)
                SELECT @cPSNO,
                      MAX(CartonNo),
                      @cLabelNo,
                      RIGHT( '00000' + CAST( CAST( ISNULL( MAX( LabelLine), 0) AS INT) + 1 AS NVARCHAR( 5)), 5),
                      @cStorerKey,
                      @cSKU,
-                     @nQty
+                     @nQty,
+                     @cLabelNo
                FROM PackDetail WITH (NOLOCK)
                WHERE PickSlipNo = @cPSNO
                   AND LabelNo = @cLabelNo
@@ -753,7 +754,7 @@ BEGIN
                IF @bDebugFlag = 1
                   SELECT 'Dest Carton has same psno, but no same sku'
                
-               INSERT INTO dbo.PackDetail (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, Qty)
+               INSERT INTO dbo.PackDetail (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, Qty, DropID)
                   SELECT 
                      @cTempPSNO,
                      MAX(CartonNo),
@@ -761,7 +762,8 @@ BEGIN
                      RIGHT('00000' + CAST((ISNULL(MAX(LabelLine), 0) + 1) AS VARCHAR(5)), 5),
                      @cStorerKey,
                      @cTempSKU,
-                     @nTempQty
+                     @nTempQty,
+                     @cTempLabelNo
                   FROM dbo.PackDetail WITH (NOLOCK)
                   WHERE PickSlipNo = @cTempPSNO
                      AND LabelNo = @cTempLabelNo
@@ -772,7 +774,7 @@ BEGIN
                IF @bDebugFlag = 1
                   SELECT 'Dest Carton has no same psno, no same sku'
 
-               INSERT INTO dbo.PackDetail (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, Qty)
+               INSERT INTO dbo.PackDetail (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, Qty, DropID)
                   SELECT 
                      @cTempPSNO,
                      MAX(CartonNo)+1,
@@ -780,7 +782,8 @@ BEGIN
                      '00001',
                      @cStorerKey,
                      @cTempSKU,
-                     @nTempQty
+                     @nTempQty,
+                     @cTempLabelNo
                   FROM dbo.PackDetail WITH (NOLOCK)
                   WHERE PickSlipNo = @cTempPSNO
             END -- -- no same psno, no samp sku
@@ -873,10 +876,12 @@ BEGIN
       WHEN MATCHED THEN
          UPDATE SET PI.CartonNo = PD.CartonNo, PI.Qty = PD.Qty
       WHEN NOT MATCHED THEN
-         INSERT (PickSlipNo, CartonNo, Qty, CartonType, RefNo, Length, Width, Height, CartonStatus)
-         VALUES (PD.PickSlipNo, PD.CartonNo, PD.Qty,
+         INSERT (PickSlipNo, CartonNo, Cube, Qty, 
+                  CartonType, RefNo, Length, 
+                  Width, Height, CartonStatus)
+         VALUES (PD.PickSlipNo, PD.CartonNo, ISNULL(@fMasterCartonCube,0), PD.Qty,
             ISNULL(@cMasterCartonType, ''), PD.LabelNo, ISNULL(@fMasterCartonLength, 0), 
-               ISNULL(@fMasterCartonWidth, 0), ISNULL(@fMasterCartonHeight, 0), 'Packed');
+               ISNULL(@fMasterCartonWidth, 0), ISNULL(@fMasterCartonHeight, 0), 'PACKED');
    END TRY
    BEGIN CATCH
       SET @nErrNo = 227622
