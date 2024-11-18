@@ -42,6 +42,8 @@ GO
 /* 01-Jun-2020  Wan03        2.2    WMS-13117 - [CN] Sephora_WMS_ITRN_Add_UCC_CR*/
 /* 01-AUG-2024  Wan04        2.3    LFWM-4397 - RG [GIT] Serial Number Solution*/
 /*                                  - Adjustment by Serial Number              */
+/* 12-NOV-2024  Satyam      2.4    UWP-23314 - Duplicate ID validation wrt     */
+/*                                           locations                         */
 /*******************************************************************************/
 
 CREATE OR ALTER PROCEDURE [dbo].[isp_FinalizeADJ]
@@ -158,23 +160,23 @@ BEGIN
    BEGIN
       --(Wan01) - START
       --IF NOT EXISTS (SELECT 1 FROM ADJUSTMENTDETAIL (NOLOCK) WHERE Adjustmentkey = @c_ADJKey AND FinalizedFlag = 'N')
-      IF NOT EXISTS (
-            SELECT 1
-            FROM   ADJUSTMENTDETAIL(NOLOCK)
-            WHERE  Adjustmentkey = @c_ADJKey
-                     AND FinalizedFlag IN ('N' ,'S' ,'A')
-         ) AND EXISTS (
-            SELECT 1 
-            FROM   ADJUSTMENT (NOLOCK)               -- ZG01
-            WHERE  AdjustmentKey = @c_ADJKey    
-                     AND FinalizedFlag = 'Y'
-         )
-         --(Wan01) - END
-      BEGIN
-         SELECT @n_continue = 3
-         SELECT @n_err = 72800
-         SELECT @c_errmsg = 'NSQL'+CONVERT(NVARCHAR(5) ,@n_err)+
-                  ': No more Adjustment Details to finalize. (isp_FinalizeADJ)'
+            IF NOT EXISTS (
+                     SELECT 1
+                     FROM   ADJUSTMENTDETAIL(NOLOCK)
+                     WHERE  Adjustmentkey = @c_ADJKey
+                              AND FinalizedFlag IN ('N' ,'S' ,'A')
+                  ) AND EXISTS (
+                     SELECT 1 
+                     FROM   ADJUSTMENT (NOLOCK)               -- ZG01
+                     WHERE  AdjustmentKey = @c_ADJKey    
+                              AND FinalizedFlag = 'Y'
+                  )
+                  --(Wan01) - END
+            BEGIN
+                  SELECT @n_continue = 3
+                  SELECT @n_err = 72800
+                  SELECT @c_errmsg = 'NSQL'+CONVERT(NVARCHAR(5) ,@n_err)+
+                        ': No more Adjustment Details to finalize. (isp_FinalizeADJ)'
       END
    END
     
@@ -1212,6 +1214,41 @@ BEGIN
    IF @n_continue=1
       OR @n_continue=2
    BEGIN
+      --Satyam - START
+      IF @c_ASNFizUpdLotToSerialNo = '1' AND @c_SerialNoCapture IN ('1', '2')
+            BEGIN
+               IF EXISTS (SELECT 1
+                        FROM AdjustmentDetail (NOLOCK)
+                        WHERE 1 = 1
+                           AND AdjustmentKey = @c_ADJKey
+                           AND FinalizedFlag IN ('N', 'S', 'A')
+                        GROUP BY ID
+                        HAVING COUNT(DISTINCT Loc) > 1)
+                     BEGIN
+                        SELECT @n_continue = 3
+                        SELECT @c_ErrMsg = 'Duplicate LOCs found in same ID' +
+                                          ': Finalize Adjustment Fail. (''isp_FinalizeADJ'')' + ' ( ' + ' SQLSvr MESSAGE=' +
+                                          RTRIM(@c_ErrMsg) + ' ) '
+                        ROLLBACK TRAN
+                     END
+               IF EXISTS (SELECT 1
+                        FROM AdjustmentDetail AD (NOLOCK)
+                                 JOIN LotxLocxId LLI (NOLOCK) ON AD.ID = LLI.Id
+                        WHERE 1 = 1
+                           AND LLI.QTY > 0
+                           AND LLI.STORERKEY <> ''
+                           AND AD.ID <> ''
+                           AND AD.Loc <> LLI.Loc
+                           AND AD.AdjustmentKey = @c_ADJKey)
+                     BEGIN
+                        SELECT @n_continue = 3
+                        SELECT @c_ErrMsg = 'Duplicate IDs found in different locations' +
+                                          ': Finalize Adjustment Fail. (''isp_FinalizeADJ'')' + ' ( ' + ' SQLSvr MESSAGE=' +
+                                          RTRIM(@c_ErrMsg) + ' ) '
+                        ROLLBACK TRAN
+                     END
+            END
+      --Satyam - END
       -- 01
       DECLARE adj_cur CURSOR LOCAL FAST_FORWARD READ_ONLY 
       FOR
