@@ -2478,7 +2478,7 @@ BEGIN
          @fCartonWeight = ISNULL(CartonWeight, 0),
          @fCartonHeight = ISNULL(CartonHeight, 0),
          @fCartonWidth  = ISNULL(CartonWidth, 0),
-         @fCartonLength = ISNULL(CartonWidth, 0)
+         @fCartonLength = ISNULL(CartonLength, 0)
       FROM CARTONIZATION CAT WITH (NOLOCK)
       JOIN Storer WITH (NOLOCK)
          ON Storer.StorerKey = @cStorerKey AND Storer.CartonGroup = CAT.CartonizationGroup
