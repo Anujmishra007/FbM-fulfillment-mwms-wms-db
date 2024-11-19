@@ -24,8 +24,9 @@ GO
 /* 19-Oct-2024    USH022    1.0   UWP-24680                              */
 /* 16-Nov-2024    SHONG     1.1   Revise coding logic for multiple issues*/
 /* 18-Nov-2024    SHONG     1.2   Revise Task Message                    */
+/* 19-Nov-2024    SHONG     1.3   Missing torelance for non-parcel       */
 /*************************************************************************/
-ALTER    PROC [dbo].[mspRLWAV04]
+CREATE OR ALTER PROC [dbo].[mspRLWAV04]
    @c_WaveKey NVARCHAR(10)
  , @b_Success INT           OUTPUT
  , @n_Err     INT           OUTPUT
@@ -1034,11 +1035,23 @@ BEGIN
          SET @n_TotalWeight = 0
          SET @c_GroupKey = ''
 
+         IF @b_debug=1
+         BEGIN
+            PRINT '@n_Capacity:' + cast(@n_Capacity as varchar(10)) + '@n_Tolerance:' + cast(@n_Tolerance as varchar(10))
+            PRINT '@n_MaxWeight:' + cast(@n_MaxWeight as varchar(10)) + '@n_MaxCube:' + cast(@n_MaxCube as varchar(10))
+         END 
+
+         SET @n_MaxCube   = @n_MaxCube   * (@n_Tolerance / 100.00)  
+         SET @n_MaxWeight = @n_MaxWeight * (@n_Tolerance / 100.00)  
+
          IF @n_Capacity=2
          BEGIN
-            SET @n_MaxCube   = @n_MaxCube   * (@n_Tolerance / 100.00) * 2
-            SET @n_MaxWeight = @n_MaxWeight * (@n_Tolerance / 100.00) * 2
+            SET @n_MaxCube   = @n_MaxCube * 2
+            SET @n_MaxWeight = @n_MaxWeight * 2
          END
+
+         IF @b_debug=1
+            PRINT '@n_MaxWeight:' + cast(@n_MaxWeight as varchar(10)) + '@n_MaxCube:' + cast(@n_MaxCube as varchar(10))
        
           DECLARE CUR_OrderTask CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
           SELECT RowID, TaskDetailKey, TaskCube, TaskWeight, SKU, SKUClass
