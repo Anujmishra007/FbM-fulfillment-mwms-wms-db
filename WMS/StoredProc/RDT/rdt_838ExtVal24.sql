@@ -54,6 +54,7 @@ BEGIN
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
    DECLARE @bDebugFlag    BINARY = 0         -- 1 debug
+   DECLARE @cOrderKey     NVARCHAR(10)
 
    SELECT @nErrNo= ISNULL(@nErrNo,0)
    IF @bDebugFlag = 1 
@@ -66,28 +67,37 @@ BEGIN
          IF @nInputKey = 1 -- ENTER
          BEGIN
             -- Current carton
-            IF @nCartonNo > 0 AND EXISTS(SELECT * FROM PICKHEADER ph INNER JOIN orders o ON ph.OrderKey=o.OrderKey
-               WHERE ph.PickHeaderKey=@cPickSlipNo AND ph.StorerKey=@cStorerKey AND o.UserDefine02='G')
+            IF @nCartonNo > 0 
             BEGIN
-               DECLARE @tSKUs    TABLE(SKU NVARCHAR(20))
-               DECLARE @nCount   INT
-               -- Get SKU info
-               INSERT INTO @tSKUs(SKU)
-                  SELECT DISTINCT SKU
-                  FROM PackDetail WITH (NOLOCK) 
-                  WHERE PickSlipNo = @cPickSlipNo 
-                     AND CartonNo = @nCartonNo
-               IF NOT EXISTS(SELECT 1 from @tSKUs where SKU=@cSKU)
-                  INSERT INTO @tSKUs(SKU) VALUES(@cSKU)
-               SELECT @nCount = COUNT(1) FROM @tSKUs
-               IF ISNULL(@nCount,0)>1
+               SELECT @cOrderKey = OrderKey FROM PICKHEADER WITH (NOLOCK) WHERE PickHeaderKey=@cPickSlipNo AND StorerKey=@cStorerKey
+               --Discrete PickSlip or not
+               IF (ISNULL(@cOrderKey,'') <>'' AND EXISTS(SELECT 1 FROM orders WITH (NOLOCK) 
+                     WHERE OrderKey = @cOrderKey and StorerKey=@cStorerKey AND UserDefine02='G')
+                  )
+                  OR (ISNULL(@cOrderKey,'') = '' AND EXISTS (SELECT 1 FROM PickDetail pd WITH (NOLOCK)
+                        INNER JOIN orders o WITH (NOLOCK) ON pd.OrderKey=o.OrderKey 
+                        WHERE pd.PickSlipNo = @cPickSlipNo and pd.StorerKey=@cStorerKey AND pd.SKU=@cSKU AND o.UserDefine02='G' )
+                  )
                BEGIN
-                  EXEC rdt.rdtSetFocusField @nMobile, 3 -- SKU
-                  SET @nErrNo = 225951
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Not allow Mix SKU
-                  GOTO Quit
+                  DECLARE @tSKUs    TABLE(SKU NVARCHAR(20))
+                  DECLARE @nCount   INT
+                  -- Get SKU info
+                  INSERT INTO @tSKUs(SKU)
+                     SELECT DISTINCT SKU
+                     FROM PackDetail WITH (NOLOCK) 
+                     WHERE PickSlipNo = @cPickSlipNo 
+                        AND CartonNo = @nCartonNo
+                  IF NOT EXISTS(SELECT 1 from @tSKUs where SKU=@cSKU)
+                     INSERT INTO @tSKUs(SKU) VALUES(@cSKU)
+                  SELECT @nCount = COUNT(1) FROM @tSKUs
+                  IF ISNULL(@nCount,0)>1
+                  BEGIN
+                     EXEC rdt.rdtSetFocusField @nMobile, 3 -- SKU
+                     SET @nErrNo = 225951
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Not allow Mix SKU
+                     GOTO Quit
+                  END
                END
-            
             END
          END
       END

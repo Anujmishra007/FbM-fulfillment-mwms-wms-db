@@ -160,11 +160,12 @@ BEGIN
                GOTO Quit
             END   
             /*
-            * Search CODELKUP via @tCodes
+            * Search CODELKUP via @tCodes 
+            * 2024-11-18 Requirement change: since the length limition for userdefine02, we have to change the PDF location=codelkup.notes2
             */
             DELETE @tCodes
             INSERT INTO @tCodes(RowId, LabelName, SourceType, Condition, LabelSize, FilePath, FileName, PrinterType)
-               SELECT RANK() OVER(ORDER BY code) AS RowId, code, Short, Notes, UDF01, UDF02, UDF03, code2 
+               SELECT RANK() OVER(ORDER BY code) AS RowId, code, Short, Notes, UDF01, Notes2, UDF03, code2 
                FROM CODELKUP WITH (NOLOCK) 
                WHERE listname = 'PACKPRTCON'
                   AND storerkey = @cStorerKey
@@ -497,10 +498,11 @@ BEGIN
             END               
             /*
             * Search CODELKUP via @tCodes
+            * 2024-11-18 Requirement change: since the length limition for userdefine02, we have to change the PDF location=codelkup.notes2
             */
             DELETE @tCodes
             INSERT INTO @tCodes(RowId, LabelName, SourceType, Condition, LabelSize, FilePath, FileName, PrinterType)
-               SELECT RANK() OVER(ORDER BY code) as RowId, code, Short, Notes, UDF01, UDF02, UDF03, code2 
+               SELECT RANK() OVER(ORDER BY code) as RowId, code, Short, Notes, UDF01, Notes2, UDF03, code2 
                FROM CODELKUP WITH (NOLOCK) 
                WHERE listname = 'PACKPRTCON'
                   AND storerkey = @cStorerKey
