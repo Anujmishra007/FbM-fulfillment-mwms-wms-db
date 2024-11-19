@@ -69,15 +69,17 @@ BEGIN
             -- Current carton
             IF @nCartonNo > 0 
             BEGIN
-               SELECT @cOrderKey = OrderKey FROM PICKHEADER WITH (NOLOCK) WHERE PickHeaderKey=@cPickSlipNo AND StorerKey=@cStorerKey
-               --Discrete PickSlip or not
-               IF (ISNULL(@cOrderKey,'') <>'' AND EXISTS(SELECT 1 FROM orders WITH (NOLOCK) 
-                     WHERE OrderKey = @cOrderKey and StorerKey=@cStorerKey AND UserDefine02='G')
-                  )
-                  OR (ISNULL(@cOrderKey,'') = '' AND EXISTS (SELECT 1 FROM PickDetail pd WITH (NOLOCK)
-                        INNER JOIN orders o WITH (NOLOCK) ON pd.OrderKey=o.OrderKey 
-                        WHERE pd.PickSlipNo = @cPickSlipNo and pd.StorerKey=@cStorerKey AND pd.SKU=@cSKU AND o.UserDefine02='G' )
-                  )
+               IF EXISTS(SELECT * FROM PICKHEADER ph INNER JOIN orders o ON ph.OrderKey=o.OrderKey
+                  WHERE ph.PickHeaderKey=@cPickSlipNo AND ph.StorerKey=@cStorerKey AND o.UserDefine02='G')
+               --SELECT @cOrderKey = OrderKey FROM PICKHEADER WITH (NOLOCK) WHERE PickHeaderKey=@cPickSlipNo AND StorerKey=@cStorerKey
+               ----Discrete PickSlip or not
+               --IF (ISNULL(@cOrderKey,'') <>'' AND EXISTS(SELECT 1 FROM orders WITH (NOLOCK) 
+               --      WHERE OrderKey = @cOrderKey and StorerKey=@cStorerKey AND UserDefine02='G')
+               --   )
+               --   OR (ISNULL(@cOrderKey,'') = '' AND EXISTS (SELECT 1 FROM PickDetail pd WITH (NOLOCK)
+               --         INNER JOIN orders o WITH (NOLOCK) ON pd.OrderKey=o.OrderKey 
+               --         WHERE pd.PickSlipNo = @cPickSlipNo and pd.StorerKey=@cStorerKey AND pd.SKU=@cSKU AND o.UserDefine02='G' )
+               --   )
                BEGIN
                   DECLARE @tSKUs    TABLE(SKU NVARCHAR(20))
                   DECLARE @nCount   INT
