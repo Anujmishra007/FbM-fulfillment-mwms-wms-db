@@ -5,15 +5,15 @@ GO
 SET ANSI_NULLS OFF
 GO
 
-/************************************************************************/
-/* Store procedure: rdt_838ExtVal24                                     */
-/* Copyright      : Maersk                                              */
-/* CLIENT         : Huda Beauty                                         */
-/*                                                                      */
-/* Date       Rev  Author      Purposes                                 */
-/* 24-05-2017 1.0  YYS027      FCR-861 Not allow Mix SKU for one carton */
-/*                             if orders.userdefine02='G'               */
-/************************************************************************/
+/*************************************************************************/
+/* Store procedure: rdt_838ExtVal24                                      */
+/* Copyright      : Maersk                                               */
+/* CLIENT         : Huda Beauty                                          */
+/*                                                                       */
+/* Date       Rev   Author      Purposes                                 */
+/* 24-05-2017 1.0   YYS027      FCR-861 Not allow Mix SKU for one carton */
+/*                              if orders.userdefine02='G'               */
+/*************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_838ExtVal24 (
    @nMobile          INT,
