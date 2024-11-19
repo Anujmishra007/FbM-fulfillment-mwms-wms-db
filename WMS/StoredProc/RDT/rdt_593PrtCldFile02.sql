@@ -115,7 +115,7 @@ BEGIN
       @cSourceType = c1.Short, 
       @cCondition = c1.Notes, 
       @cLabelSize = c1.UDF01, 
-      @cFilePath = c1.UDF02, 
+      @cFilePath = c1.Notes2, 
       @cFileName = c1.UDF03, 
       @cPrinterType = c1.code2
    FROM
