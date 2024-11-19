@@ -4,17 +4,18 @@ GO
 SET ANSI_NULLS OFF
 GO
 
-/******************************************************************************/
-/* Store procedure: rdt_838PntShipLbl05                                       */
-/* Copyright      : Maersk                                                    */
-/* CLIENT         : Huda Beauty                                               */
-/*                                                                            */
-/* Date       Rev  Author     Purposes                                        */
-/* 09-10-2024 1.0  YYS027     FCR-861-Maersk_V2 Huda_RDT Print labels after   */
-/*                            pack based for B2B and Inflencer orders         */
-/*                            ShipLabel=CstLabelSP; CstLabelSP=this sp;       */
-/*                            Do Not use the config CartonManifest            */
-/******************************************************************************/
+/*******************************************************************************/
+/* Store procedure: rdt_838PntShipLbl05                                        */
+/* Copyright      : Maersk                                                     */
+/* CLIENT         : Huda Beauty                                                */
+/*                                                                             */
+/* Date       Rev   Author     Purposes                                        */
+/* 09-10-2024 1.0   YYS027     FCR-861-Maersk_V2 Huda_RDT Print labels after   */
+/*                             pack based for B2B and Inflencer orders         */
+/*                             ShipLabel=CstLabelSP; CstLabelSP=this sp;       */
+/*                             Do Not use the config CartonManifest            */
+/*            1.0.1 YYS027     location=codelkup.notes2                        */
+/*******************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_838PntShipLbl05 (
    @nMobile          INT,
