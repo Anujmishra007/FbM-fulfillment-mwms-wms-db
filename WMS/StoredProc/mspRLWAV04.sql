@@ -1,28 +1,31 @@
+
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
-/************************************************************************/
-/* Stored Procedure: mspRLWAV04                                         */
-/* Creation Date: 19-Oct-2024                                           */
-/* Copyright: MAERSK                                                    */
-/* Written by: USH022                                                   */
-/*                                                                      */
-/* Purpose: UWP-24680 - [FCR-774] [HUSQ] TM wave release rules          */
-/*                                                                      */
-/* Called By: Wave                                                      */
-/*                                                                      */
-/* GitHub Version: 2.0                                                  */
-/*                                                                      */
-/* Version: 7.0                                                         */
-/*                                                                      */
-/* Data Modifications:                                                  */
-/*                                                                      */
-/* Updates:                                                             */
-/* Date           Author    Ver   Purposes                              */
-/* 19-Oct-2024    USH022    1.0   UWP-24680                             */
-/************************************************************************/
-CREATE  OR ALTER PROC [dbo].[mspRLWAV04]
+/*************************************************************************/
+/* Stored Procedure: mspRLWAV04                                          */
+/* Creation Date: 19-Oct-2024                                            */
+/* Copyright: MAERSK                                                     */
+/* Written by: USH022                                                    */
+/*                                                                       */
+/* Purpose: UWP-24680 - [FCR-774] [HUSQ] TM wave release rules           */
+/*                                                                       */
+/* Called By: Wave                                                       */
+/*                                                                       */
+/* GitHub Version: 2.0                                                   */
+/*                                                                       */
+/* Version: 7.0                                                          */
+/*                                                                       */
+/* Data Modifications:                                                   */
+/*                                                                       */
+/* Updates:                                                              */
+/* Date           Author    Ver   Purposes                               */
+/* 19-Oct-2024    USH022    1.0   UWP-24680                              */
+/* 16-Nov-2024    SHONG     1.1   Revise coding logic for multiple issues*/
+/* 18-Nov-2024    SHONG     1.2   Revise Task Message                    */
+/*************************************************************************/
+ALTER    PROC [dbo].[mspRLWAV04]
    @c_WaveKey NVARCHAR(10)
  , @b_Success INT           OUTPUT
  , @n_Err     INT           OUTPUT
@@ -43,13 +46,13 @@ BEGIN
          , @c_Loadkey            NVARCHAR(10) = ''
          , @c_Consigneekey       NVARCHAR(15) = ''
          , @c_C_Zip              NVARCHAR(18) = ''
-         , @c_Orderkey_Last      NVARCHAR(10) = ''
+         , @c_OrderKey_Last      NVARCHAR(10) = ''
          , @c_ParcelType         NVARCHAR(30) = ''
          , @c_ParcelType_Last    NVARCHAR(30) = ''
          , @c_OtherReference     NVARCHAR(10) = ''
 
          , @c_PickDetailkey      NVARCHAR(10) = ''
-         , @c_Orderkey           NVARCHAR(10) = ''
+         , @c_OrderKey           NVARCHAR(10) = ''
          , @c_OrderLineNumber    NVARCHAR(5)  = ''
          , @c_Storerkey          NVARCHAR(15) = ''
          , @c_Sku                NVARCHAR(20) = ''
@@ -70,10 +73,10 @@ BEGIN
 
          , @c_PickSlipNo         NVARCHAR(10) = ''
          , @c_PickHeaderKey      NVARCHAR(10) = ''
-         , @c_PickSlipNo_New     NVARCHAR(10) = ''
 
          , @c_TaskDetailKey      NVARCHAR(10) = ''
          , @c_TaskType           NVARCHAR(10) = ''
+         , @c_TaskType_Last      NVARCHAR(10) = ''
          , @c_ToLoc              NVARCHAR(10) = ''
          , @c_ToLogicalLoc       NVARCHAR(10) = ''
          , @c_PickMethod         NVARCHAR(10) = ''
@@ -102,7 +105,6 @@ BEGIN
          , @c_OneBrand           NVARCHAR(10) = ''
          , @c_PalletType         NVARCHAR(10) = ''
 
-         , @b_NewPickSlipNo      BIT          = 0
          , @b_VASFlag            BIT          = ''
          , @b_NonParcel          BIT          = 0
          , @n_OrderCnt           INT          = 0
@@ -110,6 +112,7 @@ BEGIN
          , @n_NoOfOrderPerGrp    INT          = 0
          , @c_BoxType            NVARCHAR(50) = ''
          , @c_ParcelSize         NVARCHAR(50) = ''
+         , @c_ParcelSize_Last    NVARCHAR(50) = ''
          , @n_Cube_ORD           FLOAT        = 0.00
          , @n_Cube               FLOAT        = 0.00
          , @n_Height             FLOAT        = 0.00
@@ -126,6 +129,12 @@ BEGIN
          , @n_MaxOrdPerBld03     INT          = 0
          , @n_MaxOrdPerBld04     INT          = 0
          , @n_MaxOrdPerBld05     INT          = 0
+         , @c_FirstOrderKey      NVARCHAR(10) = ''
+
+      DECLARE @n_Capacity INT = 0,
+              @n_MaxSKU   INT = 0,
+              @n_RowID    INT = 0,
+              @n_TotalSKU INT = 0
 
    DECLARE @CUR_PCK        CURSOR
          , @CUR_TSK        CURSOR
@@ -158,7 +167,7 @@ BEGIN
             , @c_OrderKey   = OH.OrderKey
             , @c_ParcelType = ISNULL(OH.UserDefine10,'')
       FROM WAVEDETAIL WD (NOLOCK)
-      JOIN ORDERS OH (NOLOCK) ON OH.Orderkey = WD.Orderkey
+      JOIN ORDERS OH (NOLOCK) ON OH.OrderKey = WD.OrderKey
       WHERE WD.Wavekey = @c_Wavekey
       ORDER BY ISNULL(OH.UserDefine10,'')
 
@@ -205,6 +214,7 @@ BEGIN
       FROM CODELKUP (NOLOCK)
       WHERE ListName  = 'HUSQPKTYPE'
       AND   Storerkey = @c_Storerkey
+
    END
 
    IF @n_continue = 1 OR @n_continue = 2
@@ -214,7 +224,7 @@ BEGIN
       DECLARE @n_OrderKeyCount INT, @n_InvalidParcelType INT = 0, @n_UDF10_AS_UNKNOWN INT = 0;;
 
       SELECT @n_OrderTypeCount = COUNT(DISTINCT ISNULL(cl.UDF01,''))
-           , @n_OrderKeyCount  = COUNT(O.Orderkey)
+           , @n_OrderKeyCount  = COUNT(O.OrderKey)
            , @n_InvalidParcelType = MAX(CASE WHEN cl.ListName IS NULL THEN 1 ELSE 0 END)
            , @n_UDF10_AS_UNKNOWN =	MAX(CASE WHEN O.UserDefine10 = 'UNKNOWN' THEN 1 ELSE 0 END)
       FROM Orders O (NOLOCK)
@@ -317,34 +327,85 @@ BEGIN
          GOTO RETURN_SP;
       END
    END
-
+   IF @n_continue = 1 OR @n_continue = 2
+   BEGIN
+      IF EXISTS(SELECT 1 FROM WAVEDETAIL WD (NOLOCK)
+            LEFT OUTER JOIN MBOLDETAIL MD (NOLOCK) ON WD.OrderKey = MD.OrderKey
+            LEFT OUTER JOIN MBOL M (NOLOCK) ON MD.MBOlKey =  M.MbolKey
+            WHERE WD.WaveKey = @c_WaveKey
+            AND M.MbolKey IS NULL)
+      BEGIN
+         SET @n_Continue = 3
+         SET @n_Err = 85090
+         SET @c_errmsg='NSQL'+LTRIM(RTRIM(CONVERT(NVARCHAR(5),@n_err))) +
+         ':Shipping Reference not being generated, You are not allow to Release Wave: '+
+         @c_Wavekey +'. (mspRLWAV04)'
+         GOTO RETURN_SP;
+      END   
+   END 
+   IF @n_continue = 1 OR @n_continue = 2
+   BEGIN
+      IF EXISTS(SELECT 1 FROM WAVEDETAIL WD (NOLOCK)
+            LEFT OUTER JOIN LoadPlanDetail LD (NOLOCK) ON WD.OrderKey = LD.OrderKey
+            WHERE WD.WaveKey = @c_WaveKey
+            AND LD.LoadKey IS NULL)
+      BEGIN
+         SET @n_Continue = 3
+         SET @n_Err = 85100
+         SET @c_errmsg='NSQL'+LTRIM(RTRIM(CONVERT(NVARCHAR(5),@n_err))) +
+         ':Load not being generated, You are not allow to Release Wave: '+
+         @c_Wavekey +'. (mspRLWAV04)'
+         GOTO RETURN_SP;
+      END   
+   END 
    IF @n_continue = 1 OR @n_continue = 2
    BEGIN
       SET @c_OtherReference = '';
 
-      -- SELECING MBOL.OtherReference for a WaveKey
-      SELECT TOP 1
-      @c_OtherReference =
-      M.OtherReference FROM MBOL M (NOLOCK)
-      JOIN MBOLDETAIL MD (NOLOCK) ON MD.MBOlKey =  M.MbolKey
-      JOIN WAVEDETAIL WD (NOLOCK) ON WD.ORDERKey = MD.ORderKEy
-      JOIN LOC loc (NOLOCK) ON loc.Loc = M.OtherReference
-      WHERE
-      WD.WaveKey = @c_WaveKey
-      AND M.OtherReference <> '' AND M.OtherReference IS NOT NULL
-      AND loc.Facility = @c_Facility;
-
-      --Validating for @c_OtherReference is empty or null and location not in for OtherReference
-      IF(ISNULL(@c_OtherReference, '') = '')
+      IF EXISTS(SELECT 1 FROM MBOL M (NOLOCK)
+            JOIN MBOLDETAIL MD (NOLOCK) ON MD.MBOlKey =  M.MbolKey
+            JOIN WAVEDETAIL WD (NOLOCK) ON WD.OrderKey = MD.OrderKey
+            LEFT OUTER JOIN LOC loc (NOLOCK) ON loc.Loc = M.OtherReference AND loc.Facility = @c_Facility
+            WHERE WD.WaveKey = @c_WaveKey
+            AND (M.OtherReference = '' OR M.OtherReference IS NULL OR LOC.LOC IS NULL))
       BEGIN
          SET @n_Continue = 3
          SET @n_Err = 85070
          SET @c_errmsg='NSQL'+LTRIM(RTRIM(CONVERT(NVARCHAR(5),@n_err))) +
-         ':Missing marshalling assignment - '+@c_Orderkey+', You are not allow to Release Wave: '+
+         ':Missing marshalling assignment - '+@c_WaveKey+', You are not allow to Release Wave: '+
+         @c_Wavekey +'. (mspRLWAV04)'
+         GOTO RETURN_SP;
+      END
+
+
+      SELECT TOP 1
+         @c_OtherReference = M.OtherReference
+      FROM MBOL M (NOLOCK)
+      JOIN MBOLDETAIL MD (NOLOCK) ON MD.MBOlKey =  M.MbolKey
+      JOIN WAVEDETAIL WD (NOLOCK) ON WD.OrderKey = MD.OrderKey
+      LEFT OUTER JOIN LOC loc (NOLOCK) ON loc.Loc = M.OtherReference AND loc.Facility = @c_Facility
+      WHERE WD.WaveKey = @c_WaveKey
+      AND (M.OtherReference > '' AND M.OtherReference IS NOT NULL)
+
+      IF EXISTS(SELECT 1  
+            FROM MBOL M (NOLOCK)
+            JOIN MBOLDETAIL MD (NOLOCK) ON MD.MBOlKey =  M.MbolKey
+            JOIN WAVEDETAIL WD (NOLOCK) ON WD.OrderKey = MD.OrderKey
+            JOIN LOC loc (NOLOCK) ON loc.Loc = M.OtherReference AND loc.Facility = @c_Facility
+            WHERE WD.WaveKey <> @c_WaveKey
+            AND M.OtherReference = @c_OtherReference
+            AND M.Status <> '9'
+            AND (M.OtherReference > '' AND M.OtherReference IS NOT NULL))
+      BEGIN
+         SET @n_Continue = 3
+         SET @n_Err = 85080
+         SET @c_errmsg='NSQL'+LTRIM(RTRIM(CONVERT(NVARCHAR(5),@n_err))) +
+         ':Marshalling lanes are used for different waves, You are not allow to Release Wave: '+
          @c_Wavekey +'. (mspRLWAV04)'
          GOTO RETURN_SP;
       END
    END
+
 
    IF @n_continue = 1 OR @n_continue = 2
    BEGIN
@@ -451,7 +512,7 @@ BEGIN
       CREATE TABLE #TMP_BRAND
       (  RowID       INT            NOT NULL    IDENTITY(1,1)     PRIMARY KEY
       ,  GroupKey    NVARCHAR(10)   NOT NULL    DEFAULT ('')
-      ,  Orderkey    NVARCHAR(10)   NOT NULL    DEFAULT ('')
+      ,  OrderKey    NVARCHAR(10)   NOT NULL    DEFAULT ('')
       ,  Class       NVARCHAR(10)   NOT NULL    DEFAULT ('')
       ,  TotalCube   FLOAT          NOT NULL    DEFAULT ('')
       ,  TotalWeight FLOAT          NOT NULL    DEFAULT ('')
@@ -462,7 +523,7 @@ BEGIN
    BEGIN
       SET @CUR_PCK = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
       SELECT PD.PickdetailKey
-            ,PD.Orderkey
+            ,PD.OrderKey
             ,PD.OrderLineNumber
             ,PD.Storerkey
             ,PD.Sku
@@ -471,7 +532,6 @@ BEGIN
             ,PD.ID
             ,PD.UOM
             ,PD.Qty
-            ,PickSlipNo = ISNULL(PD.PickSlipNo,'')
             ,S.Class
             ,S.SerialNoCapture
             ,S.StdGrossWgt
@@ -483,8 +543,8 @@ BEGIN
             ,OH.C_Zip
             ,OH.Userdefine10
       FROM #PickDetail_WIP PD (NOLOCK)
-      JOIN ORDERS     OH (NOLOCK) ON OH.OrderKey = PD.Orderkey
-      JOIN WAVEDETAIL WD (NOLOCK) ON WD.Orderkey = OH.Orderkey
+      JOIN ORDERS     OH (NOLOCK) ON OH.OrderKey = PD.OrderKey
+      JOIN WAVEDETAIL WD (NOLOCK) ON WD.OrderKey = OH.OrderKey
       JOIN SKU        S  (NOLOCK) ON  S.Storerkey = PD.Storerkey
                                   AND S.Sku = PD.Sku
       JOIN PACK       P  (NOLOCK) ON  P.Packkey = S.Packkey
@@ -494,7 +554,7 @@ BEGIN
       AND   PD.TaskDetailKey = ''
       AND   PD.UOM IN ('1','6')
       ORDER BY OH.DeliveryDate
-             , PD.Orderkey
+             , PD.OrderKey
              , PD.UOM
              , L.LogicalLocation
              , S.Class
@@ -504,7 +564,7 @@ BEGIN
       OPEN @CUR_PCK
 
       FETCH NEXT FROM @CUR_PCK INTO @c_PickdetailKey
-                                 ,  @c_Orderkey
+                                 ,  @c_OrderKey
                                  ,  @c_OrderLineNumber
                                  ,  @c_Storerkey
                                  ,  @c_Sku
@@ -513,7 +573,6 @@ BEGIN
                                  ,  @c_ID
                                  ,  @c_UOM
                                  ,  @n_Qty
-                                 ,  @c_PickSlipNo
                                  ,  @c_SkuClass
                                  ,  @c_SerialNoCapture
                                  ,  @n_StdGrossWgt
@@ -526,25 +585,28 @@ BEGIN
                                  ,  @c_ParcelType
       WHILE @@FETCH_STATUS <> -1 AND @n_Continue = 1
       BEGIN
-         IF @c_Orderkey <> @c_Orderkey_Last
+         IF @c_FirstOrderKey = '' AND @c_ParcelType='Non-Parcel'
          BEGIN
-            SET @c_PickHeaderKey = ''
-            SELECT TOP 1 @c_PickHeaderKey = ph.PickHeaderKey
-            FROM PICKHEADER ph (NOLOCK)
-            WHERE ph.OrderKey = @c_Orderkey
-            AND ph.[Zone] = 'LP'
-            ORDER BY CASE WHEN ph.PickHeaderKey = @c_PickSlipNo THEN 1 ELSE 9 END
-                 ,   ph.PickHeaderKey DESC
+            SET @c_FirstOrderKey = @c_OrderKey
+         END 
 
-            IF @c_PickHeaderKey <> '' AND @c_PickHeaderKey = @c_PickSlipNo
-            BEGIN
-               SET @b_NewPickSlipNo = 0
-            END
-            ELSE
-            BEGIN
-               SET @b_NewPickSlipNo = 1
-               SET @c_PickSlipNo = @c_PickHeaderKey
-            END
+         SET @c_TaskStatus_FPK = 'S'
+         SET @c_TaskStatus = 'S'
+
+         IF @c_FirstOrderKey = @c_OrderKey
+         BEGIN
+            SET @c_TaskStatus_FPK = '0'
+            SET @c_TaskStatus = '0'
+         END 
+
+         IF @c_OrderKey <> @c_OrderKey_Last
+         BEGIN
+            SET @c_PickSlipNo = ''
+
+            SELECT @c_PickSlipNo = ISNULL(ph.PickHeaderKey,'')
+            FROM PICKHEADER ph (NOLOCK)
+            WHERE ph.OrderKey = @c_OrderKey
+            AND ph.[Zone] = 'LP'
 
             IF @c_PickSlipNo = ''
             BEGIN
@@ -552,7 +614,7 @@ BEGIN
                EXECUTE nspg_getkey
                        @KeyName   = 'PICKSLIP'
                      , @fieldlength = 9
-                     , @KeyString   = @c_PickSlipNo_New  OUTPUT
+                     , @KeyString   = @c_PickSlipNo      OUTPUT
                      , @b_success   = @b_success         OUTPUT
                      , @n_err       = @n_err             OUTPUT
                      , @c_errmsg    = @c_errmsg          OUTPUT
@@ -564,10 +626,10 @@ BEGIN
 
                IF @n_Continue = 1
                BEGIN
-                  SET @c_PickSlipNo_New = N'P' + @c_PickSlipNo_New
+                  SET @c_PickSlipNo = N'P' + @c_PickSlipNo
 
-                  INSERT INTO PICKHEADER (PickHeaderKey, Orderkey, ExternOrderKey, Loadkey, [Zone], Wavekey, StorerKey)
-                  VALUES (@c_PickSlipNo_New, @c_Orderkey, @c_Loadkey, @c_Loadkey, 'LP', @c_Wavekey, @c_Storerkey)
+                  INSERT INTO PICKHEADER (PickHeaderKey, OrderKey, ExternOrderKey, Loadkey, [Zone], Wavekey, StorerKey)
+                  VALUES (@c_PickSlipNo, @c_OrderKey, @c_Loadkey, @c_Loadkey, 'LP', @c_Wavekey, @c_Storerkey)
 
                   IF @@ERROR <> 0
                   BEGIN
@@ -584,8 +646,8 @@ BEGIN
                   SET @c_GroupKey = ''
                END
 
-               SET @c_TaskStatus_FPK = 'S'
-               IF @c_UOM = '1' AND @c_Orderkey_Last = '' SET @c_TaskStatus_FPK = '0'
+               --IF @c_UOM = '1' AND @c_OrderKey_Last = '' 
+               --   SET @c_TaskStatus_FPK = '0'
 
                SET @n_MaxCube      = @n_MaxCube_df
                SET @n_MaxHeight    = @n_MaxHeight_df
@@ -606,7 +668,7 @@ BEGIN
                   JOIN STORER ST (NOLOCK) ON  ST.Address1 = OH.ConsigneeKey
                                           AND ST.Zip      = OH.C_Zip
                                           AND ST.ConsigneeFor = OH.Storerkey
-                  WHERE OH.Orderkey = @c_Orderkey
+                  WHERE OH.OrderKey = @c_OrderKey
                   AND OH.ConsigneeKey <> ''
                   AND ST.[Type] = '2'
                END
@@ -639,6 +701,7 @@ BEGIN
             SET @c_Message01 = ''
             SET @c_Message02 = ''
             SET @c_Message03 = ''
+
             IF @c_UOM = '1'
             BEGIN
                SET @c_TaskType  = 'FPK'
@@ -661,24 +724,28 @@ BEGIN
                SET @c_Message02 = @n_MaxHeight
                SET @c_Message03 = @n_NoOfPallet
                SET @c_GroupKey  = @c_LocAisle
-               SET @c_TaskStatus = @c_TaskStatus_FPK
+               --SET @c_TaskStatus = @c_TaskStatus_FPK
             END
             ELSE
             BEGIN
-               IF @c_TaskType = @c_ParcelType_Last
-               BEGIN
-                  SET @c_BoxType   = ''
-                  SET @c_ParcelSize= ''
-                  SET @b_NonParcel = 0
-                  SELECT TOP 1
-                         @b_NonParcel = IIF(cl.UDF01= 'Non-Parcel',1,0)
-                       , @c_BoxType   = IIF(cl.UDF01= 'Parcel',cl.UDF02,'')
-                       , @c_ParcelSize= IIF(cl.UDF01= 'Parcel',cl.Code2,'')
-                  FROM #TMP_CODELKUP cl
-                  WHERE cl.ListName = 'HUSQPKTYPE'
-                  AND cl.Storerkey = @c_Storerkey
-                  AND cl.Short = @c_ParcelType
-               END
+               IF @b_debug=1
+                  PRINT '@c_ParcelType:' + @c_ParcelType + ', @c_TaskType=' + @c_TaskType 
+                  PRINT '>>> ' + @c_OrderKey  
+
+
+               SET @c_BoxType   = ''
+               SET @c_ParcelSize= ''
+               SET @b_NonParcel = 0
+               SET @c_GroupKey  = ''
+
+               SELECT TOP 1
+                       @b_NonParcel = IIF(cl.UDF01= 'Non-Parcel',1,0)
+                     , @c_BoxType   = IIF(cl.UDF01= 'Parcel',cl.UDF02,'')
+                     , @c_ParcelSize= IIF(cl.UDF01= 'Parcel',cl.Code2,'')
+               FROM #TMP_CODELKUP cl
+               WHERE cl.ListName = 'HUSQPKTYPE'
+               AND cl.Storerkey = @c_Storerkey
+               AND cl.Short = @c_ParcelType
 
                SET @c_TaskType  = 'ASTCPK'
                SET @c_PickMethod= 'PP'
@@ -689,190 +756,23 @@ BEGIN
                   SET @c_ToLoc = 'DNVAS01'
                END
 
-               SET @c_Message01 = @c_PalletType
-               IF @c_BoxType <> '' SET @c_Message01 = @c_BoxType
-               IF @b_NonParcel = 1 SET @c_Message02 = @n_MaxHeight
-               SET @c_Message03 = @n_NoOfPallet
+               IF @c_BoxType <> '' 
+                  SET @c_Message01 = @c_BoxType
+               ELSE 
+                  SET @c_Message01 = @c_PalletType
 
-               IF @b_NonParcel = 1              -- 1 Orderkey = 1 Groukey
+               IF @b_NonParcel = 1 
+                  SET @c_Message02 = @n_MaxHeight 
+
+               IF @b_NonParcel = 1 
+                  SET @c_Message03 = @n_NoOfPallet
+
+               IF @b_debug=1
                BEGIN
-                  SET @n_Cube   = @n_Qty * @n_PackCube
-                  SET @n_Weight = @n_Qty * @n_StdGrossWgt
+                  PRINT '@b_NonParcel:' + CAST(@b_NonParcel as varchar(10))
+                  SELECT @c_GroupKey '@c_GroupKey', @n_NoOfPallet '@n_NoOfPallet', @c_Sku '@c_Sku' ,@c_Sku_Last '@c_Sku_Last', @c_SkuClass '@c_SkuClass'
+               END 
 
-                  IF @c_GroupKey <> '' AND @n_NoOfPallet = 1 AND @c_Orderkey = @c_Orderkey_Last AND @c_Sku <> @c_Sku_Last
-                  BEGIN
-                     SET @c_GroupKey  = ''
-                  END
-
-                  IF @c_GroupKey <> '' AND @c_OneBrand = 'Y'
-                     AND @c_Orderkey = @c_Orderkey_Last AND @c_SkuClass <> @c_SkuClass_Last
-                  BEGIN
-                     SET @c_GroupKey = ''
-                  END
-               END
-               ELSE
-               IF @b_NonParcel = 0              -- 1 Groukey >= Mulitiple Orderke
-               BEGIN
-                  IF @c_ParcelSize = 'UnderSized'
-                  BEGIN
-                     SET @n_Cube = @n_Qty * @n_PackCube
-                     SET @n_Weight     = 0.00
-
-                     IF @n_Tolerance_T = 0.00
-                     BEGIN
-                        SET @n_Tolerance_T = 100.00
-                        SELECT @n_Tolerance_T = IIF(ISNUMERIC(cl.UDF05)=1,CONVERT(FLOAT,cl.UDF05),100.00)
-                        FROM CODELKUP cl (NOLOCK)
-                        WHERE cl.LISTNAME ='TRLCAPHUSQ'
-                        AND cl.Storerkey = @c_Storerkey
-                        AND cl.Code ='OUT'
-                        AND cl.Short= '1'
-                     END
-
-                     IF @n_TrolleyCube = 0.00
-                     BEGIN
-                        SELECT TOP 1 @n_TrolleyCube = l.[Cube]          --All the Trolley Cube will be same
-                        FROM LOC l(NOLOCK)
-                        WHERE l.Facility = @c_Facility
-                        AND l.LocationType = 'TROLLEYOB'
-                        ORDER BY l.Loc
-                     END
-
-                     SET @n_TrolleyCube = @n_TrolleyCube * (@n_Tolerance_T / 100.00)
-                     SET @n_MaxCube = @n_TrolleyCube
-                     SET @n_MaxWeight  = 0.00
-                  END
-                  ELSE IF @c_ParcelSize = 'OverSized' AND @n_OrderCnt > @n_MaxOrderPerGroup
-                  BEGIN
-                     SET @n_OrderCnt = 0
-                     SET @c_GroupKey = ''
-                  END
-
-                  SET @c_OneBrand = 'N'
-               END
-
-               IF @c_GroupKey <> ''
-               BEGIN
-                  IF @n_TotalCube + @n_Cube  > @n_MaxCube   SET @c_GroupKey  = ''
-                  IF @n_TotalWeight + @n_Weight > @n_Maxweight SET @c_GroupKey  = ''
-               END
-
-               IF @c_GroupKey = '' AND @c_OneBrand = 'Y'
-               BEGIN
-                  SELECT TOP 1 @c_GroupKey    = t.GroupKey
-                           ,   @n_TotalCube   = t.TotalCube
-                           ,   @n_TotalWeight = t.TotalWeight
-                  FROM #TMP_BRAND t
-                  WHERE t.Orderkey = @c_Orderkey
-                  AND   t.Class = @c_SkuClass
-                  AND   t.TotalCube + @n_Cube <= @n_MaxCube
-                  AND   t.TotalWeight + @n_Weight <= @n_MaxWeight
-                  ORDER BY t.RowID DESC
-               END
-
---               IF @c_GroupKey = '' AND @b_NonParcel = 0
---               BEGIN
---                  SET @n_NoOfOrderPerGrp = 0
---                  SELECT @n_NoOfOrderPerGrp = count(distinct td.orderkey) FROM TaskDetail td (NOLOCK)
---                  WHERE td.Wavekey  = @c_Wavekey
---                  AND   td.GroupKey = @c_GroupKey_Last
---                  AND   td.TaskType  = 'ASTCPK'
---                  AND   td.[Status] IN ('0', 'S')
---                  AND   td.UOM = '6'
---
---                  IF @n_NoOfOrderPerGrp = 1
---                  BEGIN
---                     SET @n_Continue = 3
---                     SET @n_Err = 85080
---                     SET @c_errmsg = 'NSQL'+CONVERT(NVARCHAR(5),@n_err) +': An Order Parcel limit exceeded'
---                                   + '. Orderkey: ' + @c_Orderkey + '. (mspRLWAV04)'
---                  END
---               END
-
-               IF @n_Continue = 1 AND @c_GroupKey = ''
-               BEGIN
-                  SET @n_TotalCube   = 0.00
-                  SET @n_TotalWeight = 0.00
-                  SET @b_success = 1
-                  EXECUTE nspg_getkey
-                          @KeyName   = 'GroupKey'
-                        , @fieldlength = 10
-                        , @KeyString   = @c_GroupKey     OUTPUT
-                        , @b_success   = @b_success      OUTPUT
-                        , @n_err       = @n_err          OUTPUT
-                        , @c_errmsg    = @c_errmsg       OUTPUT
-
-                  IF @b_success = 0
-                  BEGIN
-                     SET @n_Continue = 3
-                  END
-
-                  IF @n_Continue = 1 AND @b_NonParcel = 0 AND @n_NoOfOrderPerGrp > 1
-                  BEGIN
-                     SET @CUR_TSK = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-                     SELECT td.TaskdetailKey
-                           ,[Cube] = P.WidthUOM3 * P.LengthUOM3 * P.HeightUOM3 * td.Qty
-                     FROM TaskDetail td (NOLOCK)
-                     JOIN SKU        S  (NOLOCK) ON  S.Storerkey = td.Storerkey
-                                                 AND S.Sku = td.Sku
-                     JOIN PACK       P  (NOLOCK) ON  P.Packkey = S.Packkey
-                     WHERE td.Wavekey  = @c_Wavekey
-                     AND   td.Orderkey = @c_Orderkey
-                     AND   td.TaskType  = 'ASTCPK'
-                     AND   td.[Status] IN ('0', 'S')
-                     AND   td.UOM = '6'
-                     AND   td.Groupkey <> @c_GroupKey
-                     ORDER BY td.TaskdetailKey
-
-                     OPEN @CUR_TSK
-
-                     FETCH NEXT FROM @CUR_TSK INTO @c_TaskdetailKey, @n_Cube_ORD
-                     WHILE @@FETCH_STATUS <> -1 AND @n_Continue = 1
-                     BEGIN
-                        UPDATE TaskDetail WITH (ROWLOCK)
-                           SET GroupKey = @c_GroupKey
-                              ,TrafficCop = NULL
-                              ,EditDate   = GETDATE()
-                        WHERE Taskdetailkey = @c_TaskdetailKey
-
-                        IF @@ERROR <> 0
-                        BEGIN
-                           SET @n_Continue = 3
-                        END
-
-                        SET @n_TotalCube = @n_TotalCube + @n_Cube_ORD
-                        FETCH NEXT FROM @CUR_TSK INTO @c_TaskdetailKey, @n_Cube_ORD
-                     END
-                     CLOSE @CUR_TSK
-                     DEALLOCATE @CUR_TSK
-                  END
-               END
-
-               SET @n_TotalCube   = @n_TotalCube + @n_Cube
-               SET @n_TotalWeight = @n_TotalWeight + @n_Weight
-
-               IF @n_Continue = 1 AND @c_OneBrand = 'Y'
-               BEGIN
-                  IF EXISTS (SELECT 1 FROM #TMP_BRAND t WHERE t.GroupKey = @c_GroupKey)
-                  BEGIN
-                     UPDATE #TMP_BRAND
-                        SET TotalCube = @n_TotalCube
-                           ,TotalWeight = @n_TotalWeight
-                     WHERE Groupkey = @c_GroupKey
-                  END
-                  ELSE
-                  BEGIN
-                     INSERT INTO #TMP_BRAND (GroupKey, Orderkey, Class, TotalCube, TotalWeight)
-                     VALUES (@c_GroupKey, @c_Orderkey, @c_SkuClass, @n_TotalCube, @n_TotalWeight)
-                  END
-
-                  IF @@ERROR <> 0
-                  BEGIN
-                     SET @n_Continue = 3
-                  END
-               END
-
-               SET @c_TaskStatus = '0'
             END
          END
 
@@ -883,8 +783,12 @@ BEGIN
             FROM LOC l (NOLOCK)
             WHERE l.Loc = @c_ToLoc
 
-            SET @c_LinkTaskToPick_SQL = 'PICKDETAIL.Orderkey = @c_Orderkey AND PICKDETAIL.UOM = @c_UOM'
+            SET @c_LinkTaskToPick_SQL = 'PICKDETAIL.OrderKey = @c_OrderKey AND PICKDETAIL.UOM = @c_UOM'
+
             --Insert Taskdetail
+            IF @b_NonParcel=0
+               SET @c_TaskStatus = '0'
+
             SET @c_TaskDetailKey = ''
             EXEC isp_InsertTaskDetail
                @c_TaskDetailKey         = @c_TaskDetailKey OUTPUT
@@ -907,7 +811,7 @@ BEGIN
             ,  @c_SourceType            = @c_SourceType
             ,  @c_SourceKey             = @c_Wavekey
             ,  @c_PickDetailkey         = @c_PickDetailkey
-            ,  @c_OrderKey              = @c_Orderkey
+            ,  @c_OrderKey              = @c_OrderKey
             ,  @c_Groupkey              = @c_Groupkey
             ,  @c_WaveKey               = @c_Wavekey
             ,  @c_AreaKey               = '?F'  -- ?F=Get from location areakey
@@ -922,12 +826,14 @@ BEGIN
             ,  @n_Err                   = @n_err         OUTPUT
             ,  @c_ErrMsg                = @c_errmsg      OUTPUT
             ,  @c_Status                = @c_TaskStatus
+            ,  @c_Loadkey               = @c_Loadkey  -- 16/11 WS: added to allows me testig RDT FCR's but Please validate this
          END
 
-         IF @n_Continue = 1 AND @b_NewPickSlipno = 1
+
+         IF @n_Continue = 1  
          BEGIN
             UPDATE PICKDETAIL WITH (ROWLOCK)
-               SET PickSlipNo = CASE WHEN @b_NewPickSlipNo = 1 THEN @c_PickSlipNo ELSE @c_PickSlipNo_New  END
+               SET PickSlipNo = CASE WHEN ISNULL(PickSlipNo,'') = '' THEN @c_PickSlipNo ELSE PickSlipNo END
                   , EditDate = GETDATE()
                   , TrafficCop = NULL
                   , TaskDetailKey = @c_TaskDetailKey
@@ -944,8 +850,8 @@ BEGIN
             IF EXISTS (SELECT 1 FROM RefKeyLookup (NOLOCK) WHERE PickDetailkey = @c_PickDetailkey)
             BEGIN
                UPDATE RefKeyLookup WITH (ROWLOCK)
-                     SET Pickslipno = @c_PickSlipNo_New
-                        ,Orderkey = @c_Orderkey
+                     SET Pickslipno = @c_PickSlipNo
+                        ,OrderKey = @c_OrderKey
                         ,OrderLineNumber = @c_OrderLineNumber
                         ,Loadkey = @c_Loadkey
                         ,ArchiveCop = NULL
@@ -954,7 +860,7 @@ BEGIN
             ELSE
             BEGIN
                INSERT INTO RefKeyLookup (PickDetailkey, Pickslipno, OrderKey, OrderLineNumber, Loadkey)
-               VALUES (@c_PickDetailkey, @c_PickSlipNo_New, @c_Orderkey, @c_OrderLineNumber, @c_Loadkey)
+               VALUES (@c_PickDetailkey, @c_PickSlipNo, @c_OrderKey, @c_OrderLineNumber, @c_Loadkey)
             END
 
             IF @@ERROR <> 0
@@ -963,13 +869,16 @@ BEGIN
             END
          END
 
-         SET @c_Orderkey_Last = @c_Orderkey
+         SET @c_OrderKey_Last = @c_OrderKey
          SET @c_ParcelType_Last = @c_ParcelType
          SET @c_Sku_Last      = @c_Sku
          SET @c_SkuClass_Last = @c_SkuClass
          SET @c_GroupKey_Last = @c_GroupKey
+         SET @c_TaskType_Last = @c_TaskType
+         SET @c_ParcelSize_Last = @c_ParcelSize
+
          FETCH NEXT FROM @CUR_PCK INTO @c_PickdetailKey
-                                    ,  @c_Orderkey
+                                    ,  @c_OrderKey
                                     ,  @c_OrderLineNumber
                                     ,  @c_Storerkey
                                     ,  @c_Sku
@@ -978,7 +887,6 @@ BEGIN
                                     ,  @c_ID
                                     ,  @c_UOM
                                     ,  @n_Qty
-                                    ,  @c_PickSlipNo
                                     ,  @c_SkuClass
                                     ,  @c_SerialNoCapture
                                     ,  @n_StdGrossWgt
@@ -993,6 +901,475 @@ BEGIN
       CLOSE @CUR_PCK
       DEALLOCATE @CUR_PCK
    END
+
+   IF @b_debug=1
+   BEGIN
+       SELECT TD.Storerkey
+       , TD.TaskDetailKey
+       , LOC.LogicalLocation
+       , OH.OrderKey
+       , S.Sku
+       , S.Class
+       , TD.Qty * (P.WidthUOM3 * P.LengthUOM3 * P.HeightUOM3) AS TaskCube
+       , TD.Qty * S.StdGrossWgt AS [TaskWeight]
+       , CL.UDF01
+       , GroupKey
+       , TD.TaskType  
+       , CL.Code2
+      FROM dbo.TaskDetail TD WITH (NOLOCK) 
+      JOIN dbo.LOC LOC WITH (NOLOCK) ON LOC.Loc = TD.FromLoc 
+      JOIN SKU S (NOLOCK) ON  S.Storerkey = TD.Storerkey AND S.Sku = TD.Sku
+      JOIN dbo.ORDERS OH WITH (NOLOCK) ON OH.OrderKey = TD.OrderKey
+      JOIN PACK P  (NOLOCK) ON  P.Packkey = S.Packkey
+      JOIN dbo.CODELKUP cl ON  cl.listName = 'HUSQPKTYPE'
+                           AND cl.StorerKey = OH.Storerkey
+                           AND cl.Short = OH.Userdefine10
+      WHERE  TD.TaskType = 'ASTCPK'
+      AND TD.WaveKey = @c_Wavekey
+   END 
+   /*****************************************************/
+   /* Assign Group Key for task type ASTCPK- non-parcel */
+   /*****************************************************/
+   IF @n_Continue=1
+   BEGIN
+      IF OBJECT_ID('tempdb..#tmpNonParcel','u') IS NOT NULL
+      BEGIN
+         DROP TABLE #tmpNonParcel;
+      END
+
+      CREATE TABLE #tmpNonParcel (
+      RowID INT IDENTITY(1, 1) PRIMARY KEY,
+      StorerKey         NVARCHAR(15),
+      TaskDetailKey     NVARCHAR(10),
+      LogicalLocation   NVARCHAR(10),
+      OrderKey          NVARCHAR(10),
+      SKU               NVARCHAR(10),
+      SKUClass          NVARCHAR(20),
+      TaskCube          FLOAT,
+      TaskWeight        FLOAT,
+      GroupKey          NVARCHAR(10)
+      )
+   
+      SELECT TOP 1 @c_Storerkey = Storerkey
+      FROM dbo.TaskDetail WITH (NOLOCK) 
+      WHERE WaveKey = @c_WaveKey
+
+      SELECT @n_MaxCube_df      = IIF(ISNUMERIC(ST.SUSR1)=1,CONVERT(FLOAT,ST.SUSR1),0.00)
+            ,@n_MaxHeight_df    = IIF(ISNUMERIC(ST.SUSR2)=1,CONVERT(FLOAT,ST.SUSR2),0.00)
+            ,@n_MaxWeight_df    = IIF(ISNUMERIC(ST.SUSR3)=1,CONVERT(FLOAT,ST.SUSR3),0.00)
+            ,@c_OneBrand_df     = ST.SUSR4
+            ,@n_NoOfPallet_df   = IIF(ISNULL(ST.CreditLimit,'0') IN ('0',''),2,1)
+            ,@c_PalletType_df   = ISNULL(ST.Pallet,'')
+      FROM STORER ST (NOLOCK)
+      WHERE ST.[Type] = '2'
+      AND   ST.ConsigneeFor = @c_Storerkey
+      AND   ST.Storerkey = '0000000001'
+
+      INSERT INTO #tmpNonParcel (
+            StorerKey       
+         ,   TaskDetailKey   
+         ,   LogicalLocation 
+         ,   OrderKey        
+         ,   SKU             
+         ,   SKUClass        
+         ,   TaskCube        
+         ,   TaskWeight      
+         ,   GroupKey        
+      )
+       SELECT TD.Storerkey
+       , TD.TaskDetailKey
+       , LOC.LogicalLocation
+       , OH.OrderKey
+       , S.Sku
+       , S.Class
+       , TD.Qty * (P.WidthUOM3 * P.LengthUOM3 * P.HeightUOM3) AS TaskCube
+       , TD.Qty * S.StdGrossWgt AS [TaskWeight]
+       , '' AS GroupKey
+      FROM dbo.TaskDetail TD WITH (NOLOCK) 
+      JOIN dbo.LOC LOC WITH (NOLOCK) ON LOC.Loc = TD.FromLoc 
+      JOIN SKU S (NOLOCK) ON  S.Storerkey = TD.Storerkey AND S.Sku = TD.Sku
+      JOIN dbo.ORDERS OH WITH (NOLOCK) ON OH.OrderKey = TD.OrderKey
+      JOIN PACK P  (NOLOCK) ON  P.Packkey = S.Packkey
+      JOIN dbo.CODELKUP cl ON  cl.listName = 'HUSQPKTYPE'
+                           AND cl.StorerKey = OH.Storerkey
+                           AND cl.Short = OH.Userdefine10
+      WHERE  TD.TaskType = 'ASTCPK'
+      AND CL.UDF01 = 'Non-Parcel'
+      AND TD.WaveKey = @c_WaveKey 
+      ORDER BY LOC.LogicalLocation 
+
+      SET @n_Tolerance = 100.00
+      SELECT @n_Tolerance = IIF(ISNUMERIC(cl.UDF05)=1,CONVERT(FLOAT,cl.UDF05),100.00)
+      FROM CODELKUP cl(NOLOCK)
+      WHERE cl.LISTNAME ='HUSQ_MHE'
+      AND cl.Storerkey = @c_Storerkey
+      AND cl.Code ='PALL_MHE'
+               
+      DECLARE CUR_NonParcelTask CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
+      SELECT DISTINCT OrderKey
+      FROM #tmpNonParcel
+      ORDER BY OrderKey 
+
+      OPEN CUR_NonParcelTask
+   
+      FETCH NEXT FROM CUR_NonParcelTask INTO @c_OrderKey
+   
+      WHILE @@FETCH_STATUS = 0
+      BEGIN
+         SELECT @n_MaxCube   = IIF(ISNUMERIC(ST.SUSR1)=1,CONVERT(FLOAT,ST.SUSR1),@n_MaxCube_df)
+               ,@n_MaxHeight = IIF(ISNUMERIC(ST.SUSR2)=1,CONVERT(FLOAT,ST.SUSR2),@n_MaxHeight_df)
+               ,@n_MaxWeight = IIF(ISNUMERIC(ST.SUSR3)=1,CONVERT(FLOAT,ST.SUSR3),@n_MaxWeight_df)
+               ,@c_OneBrand  = IIF(ST.SUSR4 IS NULL,@c_OneBrand_df,ST.SUSR4)
+               ,@n_Capacity  = CASE WHEN ISNULL(ST.CreditLimit, 0) = 0 THEN 2 ELSE 1 END
+               ,@n_MaxSKU    = CASE WHEN ISNULL(ST.CreditLimit, 0) > 0 THEN CAST(ST.CreditLimit AS INT) ELSE 0 END
+               ,@c_PalletType= IIF(ST.Pallet IN ('',NULL),@c_PalletType_df,ST.Pallet)
+         FROM ORDERS OH (NOLOCK)
+         LEFT OUTER JOIN STORER ST (NOLOCK) ON  ST.Address1 = OH.ConsigneeKey
+                                 AND ST.Zip      = OH.C_Zip
+                                 AND ST.ConsigneeFor = OH.Storerkey
+                                 AND ST.[Type] = '2'
+         WHERE OH.OrderKey = @c_OrderKey                  
+      
+         SET @n_TotalCube = 0
+         SET @n_TotalWeight = 0
+         SET @c_GroupKey = ''
+
+         IF @n_Capacity=2
+         BEGIN
+            SET @n_MaxCube   = @n_MaxCube   * (@n_Tolerance / 100.00) * 2
+            SET @n_MaxWeight = @n_MaxWeight * (@n_Tolerance / 100.00) * 2
+         END
+       
+          DECLARE CUR_OrderTask CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
+          SELECT RowID, TaskDetailKey, TaskCube, TaskWeight, SKU, SKUClass
+          FROM #tmpNonParcel
+          WHERE OrderKey=@c_OrderKey
+          ORDER BY RowID
+
+       
+          OPEN CUR_OrderTask
+       
+          FETCH NEXT FROM CUR_OrderTask INTO @n_RowID, @c_TaskDetailKey, @n_Cube, @n_Weight, @c_Sku, @c_SkuClass
+       
+          WHILE @@FETCH_STATUS = 0
+          BEGIN
+              SET @n_TotalWeight = @n_TotalWeight + @n_Weight 
+              SET @n_TotalCube = @n_TotalCube + @n_Cube
+
+              IF @c_GroupKey <> ''
+              BEGIN
+                 IF @n_TotalWeight > @n_MaxWeight OR @n_TotalCube > @n_MaxCube
+                 BEGIN
+                    SET @c_GroupKey = '' 
+                    SET @n_TotalWeight = @n_Weight
+                    SET @n_TotalCube = @n_Cube 
+                    GOTO Gen_GroupKey
+                 END
+              
+                 IF @n_Capacity=1
+                 BEGIN
+                     SET @n_TotalSKU = 0 
+                     SELECT @n_TotalSKU = COUNT(DISTINCT SKU) 
+                     FROM #tmpNonParcel
+                     WHERE GroupKey = @c_GroupKey 
+                     AND SKU <> @c_SKU
+
+                     IF @n_TotalSKU + 1 > @n_MaxSKU
+                     BEGIN
+                        SET @c_GroupKey = ''
+                        GOTO Gen_GroupKey
+                     END
+                 END
+
+                 IF @c_OneBrand = 'Y'
+                 BEGIN
+                    IF NOT EXISTS(SELECT 1 FROM #tmpNonParcel WHERE GroupKey = @c_GroupKey AND SKUClass = @c_SkuClass)
+                    BEGIN
+                        SET @c_GroupKey = ''
+                        GOTO Gen_GroupKey                     
+                    END
+                 END               
+              END
+           
+              Gen_GroupKey:
+              IF @c_GroupKey = ''
+              BEGIN
+                  SET @b_success = 1
+                  EXECUTE nspg_getkey
+                           @KeyName   = 'GroupKey'
+                        , @fieldlength = 10
+                        , @KeyString   = @c_GroupKey     OUTPUT
+                        , @b_success   = @b_success      OUTPUT
+                        , @n_err       = @n_err          OUTPUT
+                        , @c_errmsg    = @c_errmsg       OUTPUT
+
+                  IF @b_success = 0
+                  BEGIN
+                     SET @n_Continue = 3
+                  END               
+              END
+
+              UPDATE #tmpNonParcel
+                SET GroupKey = @c_GroupKey
+              WHERE RowID = @n_RowID
+
+              UPDATE dbo.TaskDetail
+                SET Groupkey=@c_GroupKey,
+                    EditDate=GETDATE()
+              WHERE TaskDetailKey = @c_TaskDetailKey 
+       
+              FETCH NEXT FROM CUR_OrderTask INTO @n_RowID, @c_TaskDetailKey, @n_Cube, @n_Weight, @c_Sku, @c_SkuClass
+          END
+       
+          CLOSE CUR_OrderTask
+          DEALLOCATE CUR_OrderTask
+   
+          FETCH NEXT FROM CUR_NonParcelTask INTO @c_OrderKey
+      END
+   
+      CLOSE CUR_NonParcelTask
+      DEALLOCATE CUR_NonParcelTask       
+   END -- IF continue - 1
+
+   
+   /*****************************************************/
+   /* Assign Group Key for task type ASTCPK- Parcel     */
+   /*****************************************************/
+   IF @n_Continue=1
+   BEGIN
+      IF OBJECT_ID('tempdb..#tmpParcel','u') IS NOT NULL
+      BEGIN
+         DROP TABLE #tmpParcel;
+      END
+
+      CREATE TABLE #tmpParcel (
+      RowID INT IDENTITY(1, 1) PRIMARY KEY,
+      StorerKey         NVARCHAR(15),
+      ParcelSize        NVARCHAR(30),
+      TaskDetailKey     NVARCHAR(10),
+      LogicalLocation   NVARCHAR(10),
+      OrderKey          NVARCHAR(10),
+      SKU               NVARCHAR(10),
+      SKUClass          NVARCHAR(20),
+      TaskCube          FLOAT,
+      TaskWeight        FLOAT,
+      GroupKey          NVARCHAR(10)
+      )
+   
+      SELECT TOP 1 
+            @c_Storerkey = TD.Storerkey,
+            @c_Facility = LOC.Facility 
+      FROM dbo.TaskDetail TD WITH (NOLOCK) 
+      JOIN dbo.LOC LOC WITH (NOLOCK) ON TD.FromLoc = LOC.LOC
+      WHERE WaveKey = @c_WaveKey
+
+      SELECT @n_MaxCube_df      = IIF(ISNUMERIC(ST.SUSR1)=1,CONVERT(FLOAT,ST.SUSR1),0.00)
+            ,@n_MaxHeight_df    = IIF(ISNUMERIC(ST.SUSR2)=1,CONVERT(FLOAT,ST.SUSR2),0.00)
+            ,@n_MaxWeight_df    = IIF(ISNUMERIC(ST.SUSR3)=1,CONVERT(FLOAT,ST.SUSR3),0.00)
+            ,@c_OneBrand_df     = ST.SUSR4
+            ,@n_NoOfPallet_df   = IIF(ISNULL(ST.CreditLimit,'0') IN ('0',''),2,1)
+            ,@c_PalletType_df   = ISNULL(ST.Pallet,'')
+      FROM STORER ST (NOLOCK)
+      WHERE ST.[Type] = '2'
+      AND   ST.ConsigneeFor = @c_Storerkey
+      AND   ST.Storerkey = '0000000001'
+
+      SET @n_Tolerance_T = 100.00
+      SELECT @n_Tolerance_T = IIF(ISNUMERIC(cl.long)=1,CONVERT(FLOAT,cl.long),100.00)
+      FROM CODELKUP cl (NOLOCK)
+      WHERE cl.LISTNAME ='TRLCAPHUSQ'
+      AND cl.Storerkey = @c_Storerkey
+      AND cl.Code ='OUT'
+      AND cl.Short= '1'
+
+      SET @n_TrolleyCube = 0.00
+      SELECT TOP 1 @n_TrolleyCube = l.[Cube]          
+      FROM LOC l(NOLOCK)
+      WHERE l.Facility = @c_Facility
+      AND l.LocationType = 'TROLLEYOB'
+      ORDER BY l.Loc
+
+      SET @n_TrolleyCube = @n_TrolleyCube * (@n_Tolerance_T / 100.00)
+
+      INSERT INTO #tmpParcel (
+         StorerKey        
+       , ParcelSize       
+       , TaskDetailKey    
+       , LogicalLocation  
+       , OrderKey         
+       , SKU              
+       , SKUClass         
+       , TaskCube         
+       , TaskWeight       
+       , GroupKey         
+      )
+       SELECT TD.Storerkey
+       , CL.code2
+       , TD.TaskDetailKey
+       , LOC.LogicalLocation
+       , OH.OrderKey
+       , S.Sku
+       , S.Class
+       , TD.Qty * (P.WidthUOM3 * P.LengthUOM3 * P.HeightUOM3) AS TaskCube
+       , TD.Qty * S.StdGrossWgt AS [TaskWeight]
+       , '' AS GroupKey
+      FROM dbo.TaskDetail TD WITH (NOLOCK) 
+      JOIN dbo.LOC LOC WITH (NOLOCK) ON LOC.Loc = TD.FromLoc 
+      JOIN SKU S (NOLOCK) ON  S.Storerkey = TD.Storerkey AND S.Sku = TD.Sku
+      JOIN dbo.ORDERS OH WITH (NOLOCK) ON OH.OrderKey = TD.OrderKey
+      JOIN PACK P  (NOLOCK) ON  P.Packkey = S.Packkey
+      JOIN dbo.CODELKUP cl ON  cl.listName = 'HUSQPKTYPE'
+                           AND cl.StorerKey = OH.Storerkey
+                           AND cl.Short = OH.Userdefine10
+      WHERE  TD.TaskType = 'ASTCPK'
+      AND CL.UDF01 = 'Parcel'
+      AND TD.WaveKey = @c_WaveKey 
+      ORDER BY LOC.LogicalLocation 
+
+      SET @n_Tolerance = 100.00
+      SELECT @n_Tolerance = IIF(ISNUMERIC(cl.UDF05)=1,CONVERT(FLOAT,cl.UDF05),100.00)
+      FROM CODELKUP cl(NOLOCK)
+      WHERE cl.LISTNAME ='HUSQ_MHE'
+      AND cl.Storerkey = @c_Storerkey
+      AND cl.Code ='PALL_MHE'
+   
+      DECLARE CUR_NonParcelTask CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
+      SELECT DISTINCT ParcelSize
+      FROM #tmpParcel
+      ORDER BY ParcelSize 
+
+      OPEN CUR_NonParcelTask
+   
+      FETCH NEXT FROM CUR_NonParcelTask INTO @c_ParcelSize
+   
+      WHILE @@FETCH_STATUS = 0
+      BEGIN
+         IF @b_debug = 1
+         BEGIN
+            PRINT '@c_ParcelSize: ' + @c_ParcelSize 
+         END 
+
+         SET @n_TotalCube = 0
+         SET @n_TotalWeight = 0
+         SET @c_GroupKey = ''
+
+         IF @c_ParcelSize = 'UnderSized'
+         BEGIN
+            SET @n_MaxCube = @n_TrolleyCube
+            SET @n_MaxWeight  = 0.00
+         END
+       
+          DECLARE CUR_OrderTask CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
+          SELECT RowID, TaskDetailKey, TaskCube, TaskWeight, SKU, SKUClass, OrderKey
+          FROM #tmpParcel
+          WHERE ParcelSize = @c_ParcelSize
+          ORDER BY OrderKey, RowID
+
+       
+          OPEN CUR_OrderTask
+       
+          FETCH NEXT FROM CUR_OrderTask INTO @n_RowID, @c_TaskDetailKey, @n_Cube, @n_Weight, @c_Sku, @c_SkuClass, @c_OrderKey
+       
+          WHILE @@FETCH_STATUS = 0
+          BEGIN
+             IF @c_ParcelSize = 'UnderSized'
+             BEGIN
+                SET @n_Weight  = 0.00
+             END
+
+            SELECT @c_OneBrand  = IIF(ST.SUSR4 IS NULL,@c_OneBrand_df,ST.SUSR4)
+            FROM ORDERS OH (NOLOCK)
+            LEFT OUTER JOIN STORER ST (NOLOCK) ON  ST.Address1 = OH.ConsigneeKey
+                                    AND ST.Zip      = OH.C_Zip
+                                    AND ST.ConsigneeFor = OH.Storerkey
+                                    AND ST.[Type] = '2'
+            WHERE OH.OrderKey = @c_OrderKey 
+
+              SET @n_TotalWeight = @n_TotalWeight + @n_Weight 
+              SET @n_TotalCube = @n_TotalCube + @n_Cube
+
+               IF @b_debug = 1
+               BEGIN
+                  PRINT '@n_TotalCube: ' + CAST(@n_TotalCube as VARCHAR(20)) +  ', @n_MaxCube:' + CAST(@n_MaxCube as VARCHAR(20)) 
+               END 
+
+              IF @c_GroupKey <> ''
+              BEGIN
+                 IF @c_ParcelSize = 'UnderSized' AND (@n_TotalWeight > @n_MaxWeight OR @n_TotalCube > @n_MaxCube)
+                 BEGIN
+                    SET @c_GroupKey = '' 
+                    SET @n_TotalWeight = @n_Weight
+                    SET @n_TotalCube = @n_Cube 
+                    GOTO Gen_ParcelGroupKey
+                 END
+                 IF @c_ParcelSize = 'OverSized'
+                 BEGIN
+                     SET @n_OrderCnt = 0 
+                     SELECT @n_OrderCnt = COUNT(DISTINCT OrderKey)
+                     FROM #tmpParcel
+                     WHERE GroupKey = @c_GroupKey 
+                     AND ParcelSize = @c_ParcelSize
+                     AND OrderKey <> @c_OrderKey 
+
+                     SET @n_OrderCnt = @n_OrderCnt + 1
+                     IF @n_OrderCnt > @n_MaxOrderPerGroup
+                     BEGIN
+                        SET @c_GroupKey = ''
+                        GOTO Gen_ParcelGroupKey                            
+                     END
+                 END
+                 IF @c_OneBrand = 'Y'
+                 BEGIN
+                    IF NOT EXISTS(SELECT 1 FROM #tmpParcel WHERE GroupKey = @c_GroupKey AND SKUClass = @c_SkuClass)
+                    BEGIN
+                        SET @c_GroupKey = ''
+                        GOTO Gen_ParcelGroupKey                     
+                    END
+                 END               
+              END
+           
+              Gen_ParcelGroupKey:
+              IF @c_GroupKey = ''
+              BEGIN
+                  SET @b_success = 1
+                  EXECUTE nspg_getkey
+                           @KeyName   = 'GroupKey'
+                        , @fieldlength = 10
+                        , @KeyString   = @c_GroupKey     OUTPUT
+                        , @b_success   = @b_success      OUTPUT
+                        , @n_err       = @n_err          OUTPUT
+                        , @c_errmsg    = @c_errmsg       OUTPUT
+
+                  IF @b_success = 0
+                  BEGIN
+                     SET @n_Continue = 3
+                  END               
+              END
+
+              UPDATE #tmpParcel
+                SET GroupKey = @c_GroupKey
+              WHERE RowID = @n_RowID
+
+              UPDATE dbo.TaskDetail
+                SET Groupkey=@c_GroupKey, 
+                    Message02 = '',
+                    Message03 = '', 
+                    EditDate=GETDATE()
+              WHERE TaskDetailKey = @c_TaskDetailKey 
+              
+              FETCH NEXT FROM CUR_OrderTask INTO @n_RowID, @c_TaskDetailKey, @n_Cube, @n_Weight, @c_Sku, @c_SkuClass, @c_OrderKey
+          END
+       
+          CLOSE CUR_OrderTask
+          DEALLOCATE CUR_OrderTask
+   
+          FETCH NEXT FROM CUR_NonParcelTask INTO @c_ParcelSize
+      END
+   
+      CLOSE CUR_NonParcelTask
+      DEALLOCATE CUR_NonParcelTask       
+   END -- IF continue - 1
+   
 RETURN_SP:
  -----Delete pickdetail_WIP work in progress staging table
    IF @n_continue IN (1,2)
@@ -1044,6 +1421,3 @@ RETURN_SP:
       END
    END
 END -- procedure
-GO
-GRANT EXECUTE ON [dbo].[mspRLWAV04] TO nSQL
-GO
