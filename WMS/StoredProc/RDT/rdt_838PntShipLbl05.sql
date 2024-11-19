@@ -322,7 +322,7 @@ BEGIN
                   END
 
                   --file name(need to replace <code> as actual code value, replace <ExterOrderkey> as actual externorderkey
-                  SELECT @cFilePath=ltrim(rtrim(@cFilePath))
+                  SELECT @cFilePath=LTRIM(RTRIM(@cFilePath))
                   IF RIGHT(@cFilePath,1) IN ('\','/')
                      SELECT @cPrintDataFile = @cFilePath + REPLACE(REPLACE(@cFileName,'<code>',@cLabelName),'<ExternOrderKey>',@cExternOrderKey)
                   ELSE
