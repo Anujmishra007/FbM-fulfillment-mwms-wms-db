@@ -25,8 +25,8 @@ GO
 /* Date        Author   Rev   Purposes                                  */
 /* 2024-10-09  SSA01    1.1   UWP-24678-JCB- Allocation for Kitting and */
 /*                                    Decanting                         */
-/* 2024-11-07  SSA02    1.1   Updated to exclude pallets which used for */
-/*                                     K4 Kitting                        */
+/* 2024-11-07  SSA02    1.2   Updated to exclude pallets which used for */
+/*                                      Kitting                         */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[ispPRJCB08] (
      @c_OrderKey        NVARCHAR(10)
@@ -237,6 +237,7 @@ BEGIN
         SET @n_QtyLeftToFulfill = @n_OpenQty
 
         SET @c_PickLoc = ''
+        --(SSA03)
         SET @c_SQL = N'SELECT TOP 1 @c_PickLoc = SL.Loc'
                    + ' FROM SKUXLOC SL (NOLOCK)'
                    + ' JOIN LOC (NOLOCK) ON SL.Loc = LOC.Loc'

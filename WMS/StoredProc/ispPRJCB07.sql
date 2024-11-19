@@ -25,6 +25,7 @@ GO
 /* Date        Author   Rev   Purposes                                  */
 /* 2024-10-09  SSA01    1.1   UWP-24678-JCB- Allocation for Kitting and */
 /*                                    Decanting                         */
+/* 2024-11-18  SSA02    1.2   Updated picklocation(SL.LocationType = 'PICK') */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[ispPRJCB07] (
      @c_OrderKey        NVARCHAR(10)
@@ -96,7 +97,7 @@ BEGIN
    SET @c_ErrMsg  = ''
    SET @c_UOM     = '6'   
    SET @c_Conditions = ' AND LOC.LocationType = ''PICK'' '
-                     + ' AND SL.LocationType IN ( ''PICK'', ''CASE'') '
+                     + ' AND SL.LocationType IN ( ''PICK'') '
    SET @c_Type    = '2'
                                              
    IF ISNULL(@c_Orderkey,'') <> ''

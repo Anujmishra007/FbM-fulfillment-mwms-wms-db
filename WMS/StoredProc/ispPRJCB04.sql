@@ -231,7 +231,7 @@ BEGIN
           AND SL.Storerkey = @c_Storerkey
           AND SL.Sku = @c_Sku
           AND LOC.LocationType = 'PICK'
-          AND SL.LocationType IN ('PICK','CASE')
+          AND SL.LocationType IN ('CASE','PICK')
           ORDER BY CASE WHEN OP.Loc IS NOT NULL THEN 1 ELSE 2 END, SL.Qty, LOC.LogicalLocation, LOC.Loc                                 
 
          IF ISNULL(@c_PickLoc,'') = ''
