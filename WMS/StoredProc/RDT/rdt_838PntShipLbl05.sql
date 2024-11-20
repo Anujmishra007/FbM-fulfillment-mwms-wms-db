@@ -229,40 +229,51 @@ BEGIN
                   SELECT @cReportType = @cLabelName, @bPrinting=0
                   -- Common params
                   DELETE @tReportParams
-                  IF @cReportType='ShipConsig'
-                  BEGIN
-                     INSERT INTO @tReportParams (Variable, Value) VALUES
-                        ( '@cStorerKey',     @cStorerKey),
-                        ( '@cPickSlipNo',    @cPickSlipNo),
-                        ( '@cFromDropID',    @cFromDropID), -->
-                        ( '@cPackDtlDropID', @cPackDtlDropID),
+                  --IF @cReportType='ShipConsig'
+                  --BEGIN
+                  --   INSERT INTO @tReportParams (Variable, Value) VALUES
+                  --      ( '@cStorerKey',     @cStorerKey),
+                  --      ( '@cPickSlipNo',    @cPickSlipNo),
+                  --      ( '@cFromDropID',    @cFromDropID), -->
+                  --      ( '@cPackDtlDropID', @cPackDtlDropID),
+                  --      ( '@cLabelNo',       @cLabelNo),
+                  --      ( '@nCartonNo',      CAST( @nCartonNo AS NVARCHAR(10)))
+                  --      --@cPickSlipNo	@nCartonNo
+                  --   SET @bPrinting = 1
+                  --END
+                  --ELSE IF @cReportType='UAEBox'
+                  --BEGIN
+                  --   INSERT INTO @tReportParams (Variable, Value) VALUES
+                  --      ( '@cStorerKey',     @cStorerKey),
+                  --      ( '@cPickSlipNo',    @cPickSlipNo),
+                  --      ( '@cFromDropID',    @cFromDropID), -->
+                  --      ( '@cPackDtlDropID', @cPackDtlDropID),
+                  --      ( '@cLabelNo',       @cLabelNo),
+                  --      ( '@nCartonNo',      CAST( @nCartonNo AS NVARCHAR(10)))
+                  --   SET @bPrinting = 1
+                  --END
+                  --ELSE IF @cReportType='RawBox'
+                  --BEGIN
+                  --   INSERT INTO @tReportParams (Variable, Value) VALUES
+                  --      ( '@cStorerKey',     @cStorerKey),
+                  --      ( '@cPickSlipNo',    @cPickSlipNo),
+                  --      ( '@cFromDropID',    @cFromDropID), -->
+                  --      ( '@cPackDtlDropID', @cPackDtlDropID),
+                  --      ( '@cLabelNo',       @cLabelNo),
+                  --      ( '@nCartonNo',      CAST( @nCartonNo AS NVARCHAR(10)))
+                  --   SET @bPrinting = 1
+                  --END
+
+                  --2024-11-20 huhu & Danny Bing Cao
+                  --     labelno = packdetail.lableno
+                  --     Orderkey. = orders.orderkey
+                  --Danny Bing Cao
+                  --     1：@cLabelNo   2：@cOrderKey
+                  INSERT INTO @tReportParams (Variable, Value) VALUES
                         ( '@cLabelNo',       @cLabelNo),
-                        ( '@nCartonNo',      CAST( @nCartonNo AS NVARCHAR(10)))
-                        --@cPickSlipNo	@nCartonNo
-                     SET @bPrinting = 1
-                  END
-                  ELSE IF @cReportType='UAEBox'
-                  BEGIN
-                     INSERT INTO @tReportParams (Variable, Value) VALUES
-                        ( '@cStorerKey',     @cStorerKey),
-                        ( '@cPickSlipNo',    @cPickSlipNo),
-                        ( '@cFromDropID',    @cFromDropID), -->
-                        ( '@cPackDtlDropID', @cPackDtlDropID),
-                        ( '@cLabelNo',       @cLabelNo),
-                        ( '@nCartonNo',      CAST( @nCartonNo AS NVARCHAR(10)))
-                     SET @bPrinting = 1
-                  END
-                  ELSE IF @cReportType='RawBox'
-                  BEGIN
-                     INSERT INTO @tReportParams (Variable, Value) VALUES
-                        ( '@cStorerKey',     @cStorerKey),
-                        ( '@cPickSlipNo',    @cPickSlipNo),
-                        ( '@cFromDropID',    @cFromDropID), -->
-                        ( '@cPackDtlDropID', @cPackDtlDropID),
-                        ( '@cLabelNo',       @cLabelNo),
-                        ( '@nCartonNo',      CAST( @nCartonNo AS NVARCHAR(10)))
-                     SET @bPrinting = 1
-                  END
+                        ( '@cOrderKey',      @cOrderKey)
+                  SET @bPrinting = 1
+
                   IF @bDebugFlag = 5 
                      SELECT @cReportType AS ReportType, @bPrinting AS Printing
                   IF @bPrinting = 1
@@ -564,29 +575,41 @@ BEGIN
                   SELECT @cReportType = @cLabelName, @bPrinting=0
                   -- Common params
                   DELETE @tReportParams
-                  IF @cReportType='DGD'
-                  BEGIN
-                     INSERT INTO @tReportParams (Variable, Value) VALUES
-                        ( '@cStorerKey',     @cStorerKey),
-                        ( '@cPickSlipNo',    @cPickSlipNo),
-                        ( '@cFromDropID',    @cFromDropID), -->
-                        ( '@cPackDtlDropID', @cPackDtlDropID),
+                  --IF @cReportType='DGD'
+                  --BEGIN
+                  --   INSERT INTO @tReportParams (Variable, Value) VALUES
+                  --      ( '@cStorerKey',     @cStorerKey),
+                  --      ( '@cPickSlipNo',    @cPickSlipNo),
+                  --      ( '@cFromDropID',    @cFromDropID), -->
+                  --      ( '@cPackDtlDropID', @cPackDtlDropID),
+                  --      ( '@cLabelNo',       @cLabelNo),
+                  --      ( '@nCartonNo',      CAST( @nCartonNo AS NVARCHAR(10)))
+                  --   SET @bPrinting = 1
+                  --END
+                  --ELSE IF @cReportType='PackList'
+                  --BEGIN
+                  --   INSERT INTO @tReportParams (Variable, Value) VALUES
+                  --      ( '@cStorerKey',     @cStorerKey),
+                  --      ( '@cPickSlipNo',    @cPickSlipNo),
+                  --      ( '@cFromDropID',    @cFromDropID), -->
+                  --      ( '@cPackDtlDropID', @cPackDtlDropID),
+                  --      ( '@cLabelNo',       @cLabelNo),
+                  --      ( '@nCartonNo',      CAST( @nCartonNo AS NVARCHAR(10)))
+                  --   SET @bPrinting = 1
+                  --END
+
+                  --2024-11-20 huhu & Danny Bing Cao
+                  --     labelno = packdetail.lableno
+                  --     Orderkey. = orders.orderkey
+                  --Danny Bing Cao
+                  --     1：@cLabelNo   2：@cOrderKey
+                  INSERT INTO @tReportParams (Variable, Value) VALUES
                         ( '@cLabelNo',       @cLabelNo),
-                        ( '@nCartonNo',      CAST( @nCartonNo AS NVARCHAR(10)))
-                     SET @bPrinting = 1
-                  END
-                  ELSE IF @cReportType='PackList'
-                  BEGIN
-                     INSERT INTO @tReportParams (Variable, Value) VALUES
-                        ( '@cStorerKey',     @cStorerKey),
-                        ( '@cPickSlipNo',    @cPickSlipNo),
-                        ( '@cFromDropID',    @cFromDropID), -->
-                        ( '@cPackDtlDropID', @cPackDtlDropID),
-                        ( '@cLabelNo',       @cLabelNo),
-                        ( '@nCartonNo',      CAST( @nCartonNo AS NVARCHAR(10)))
-                     SET @bPrinting = 1
-                  END
-                  SELECT @cReportType AS ReportType, @bPrinting AS Printing
+                        ( '@cOrderKey',      @cOrderKey)
+                  SET @bPrinting = 1
+
+                  IF @bDebugFlag = 6 
+                     SELECT @cReportType AS ReportType, @bPrinting AS Printing
                   IF @bPrinting = 1
                   BEGIN
                      -- Print label
