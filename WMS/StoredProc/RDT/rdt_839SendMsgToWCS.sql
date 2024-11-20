@@ -173,8 +173,20 @@ BEGIN
          ELSE
          BEGIN
             --@cOrderKey is empty. for this case, the result of query by PickSlipNo and DropID, maybe, have multible records
-            DECLARE ordcur CURSOR LOCAL FOR SELECT DISTINCT OrderKey FROM dbo.PICKDETAIL WITH (NOLOCK) 
-               WHERE PickSlipNo = @cPickSlipNo AND DropID = @cDropID AND Storerkey = @cStorerKey ORDER BY OrderKey
+            DECLARE ordcur CURSOR LOCAL FOR 
+               SELECT DISTINCT OrderKey FROM dbo.PICKDETAIL WITH (NOLOCK) 
+                  WHERE PickSlipNo = @cPickSlipNo AND DropID = @cDropID AND Storerkey = @cStorerKey --ORDER BY OrderKey
+               UNION
+               SELECT DISTINCT lpd.OrderKey FROM dbo.PICKHEADER ph  WITH (NOLOCK) 
+                  INNER JOIN LoadPlanDetail lpd  WITH (NOLOCK) ON ph.ExternOrderKey=lpd.LoadKey
+                  INNER JOIN PICKDETAIL pd  WITH (NOLOCK) ON lpd.OrderKey=pd.OrderKey
+                  WHERE ph.PickHeaderKey=@cPickSlipNo AND ph.Storerkey = @cStorerKey and pd.DropID = @cDropID --and isnull(ph.OrderKey,'')='' and not ph.Zone in ('XD','LB', 'LP')
+               UNION
+               SELECT DISTINCT rkl.OrderKey  FROM dbo.PICKHEADER ph  WITH (NOLOCK) 
+                  INNER JOIN RefKeyLookup rkl  WITH (NOLOCK) ON ph.PickHeaderKey=rkl.Pickslipno
+                  INNER JOIN PICKDETAIL pd  WITH (NOLOCK) ON pd.PickDetailKey=rkl.PickDetailkey
+                  WHERE ph.PickHeaderKey=@cPickSlipNo AND ph.Storerkey = @cStorerKey AND pd.DropID = @cDropID --and isnull(ph.OrderKey,'')='' and ph.Zone in ('XD','LB', 'LP')
+               ORDER BY OrderKey
             OPEN ordcur
             FETCH NEXT FROM ordcur INTO @cOrderKey
             WHILE @@FETCH_STATUS = 0
