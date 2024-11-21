@@ -1,25 +1,19 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[RDT].[rdt_PTLStation_Confirm_ToteIDSKU]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [RDT].[rdt_PTLStation_Confirm_ToteIDSKU]
-GO
-
-SET QUOTED_IDENTIFIER OFF
+GET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
 GO
 
 /******************************************************************************/
-/* Store procedure: rdt_PTLStation_Confirm_ToteIDSKU                          */
-/* Copyright      : LF Logistics                                              */
+/* Store procedure: rdt_PTLStation_Confirm_ToteIDSKU08                        */
+/* Copyright      : Maersk                                                    */
 /*                                                                            */
 /* Purpose: Close working batch                                               */
 /*                                                                            */
-/* Date       Rev Author      Purposes                                        */
-/* 28-06-2017 1.0 Ung         WMS-2307 Created                                */
-/* 20-07-2017 1.1 Ung         Fix pick confirm. Change get track no logic     */
-/* 10-04-2019 1.2 Ung         WMS-8632 Add custom PackDetail.LabelNo          */
+/* Date       Rev   Author      Purposes                                      */
+/* 21-11-2024 1.0.0 LJQ006      UWP-27210. Created                            */
 /******************************************************************************/
 
-CREATE PROC rdt.rdt_PTLStation_Confirm_ToteIDSKU (
+CREATE OR ALTER PROC rdt.rdt_PTLStation_Confirm_ToteIDSKU08 (
     @nMobile      INT
    ,@nFunc        INT
    ,@cLangCode    NVARCHAR( 3)
@@ -1179,5 +1173,5 @@ GO
 SET ANSI_NULLS ON
 GO
 
-GRANT EXECUTE ON RDT.rdt_PTLStation_Confirm_ToteIDSKU TO NSQL
+GRANT EXECUTE ON RDT.rdt_PTLStation_Confirm_ToteIDSKU08 TO NSQL
 GO
