@@ -15,6 +15,7 @@ GO
 /*                                                                            */
 /* Date       Rev    Author     Purposes                                      */
 /* 2024-11-05 1.0.0  LJQ006     FCR-870 Created                               */
+/* 2024-11-21 1.0.1  LQJ006     Use LabelNo and Orderkey as params            */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_593PrtCldFile02] (
@@ -43,6 +44,7 @@ BEGIN
       @bDebugFlag        BINARY = 0,
       @cOrderKey         NVARCHAR(10),
       @cExternOrderKey   NVARCHAR(10),
+      @cLabelNo          NVARCHAR(10),
       @cLabelName        NVARCHAR(30),
       @cReportType       NVARCHAR(10),
       @cSourceType       NVARCHAR(10), 
@@ -80,7 +82,8 @@ BEGIN
       @cRptDataWindow         NVARCHAR( 50),
       @b_Success              INT,
       @c_VbErrMsg             NVARCHAR( MAX),
-      @nRtnCnt                INT
+      @nRtnCnt                INT,
+      @nCartonCount           INT
 
    -- fetch printer
    SELECT @cLabelPrinter = Printer
@@ -88,8 +91,39 @@ BEGIN
    FROM rdt.rdtMobRec WITH (NOLOCK)
    WHERE Mobile = @nMobile
 
-   -- fetch extern order key 
-   SET @cOrderKey = @cParam1
+   -- fetch extern order key
+   SET @cLabelNo = @cParam1
+   SET @cOrderKey = @cParam2
+
+   -- get orderkey by labelno if only labelno is scanned
+   IF (ISNULL(@cLabelNo, '') <> '' AND ISNULL(@cOrderKey, '') = '')
+   BEGIN
+      SELECT @nCartonCount = COUNT(1)
+      FROM dbo.PackDetail WITH(NOLOCK)
+      WHERE LabelNo = @cLabelNo
+
+      IF @nCartonCount = 0
+      BEGIN
+         SET @nErrno = 228513
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Invalid LabelNo
+         GOTO Quit
+      END
+
+      IF @nCartonCount > 1
+      BEGIN
+         SET @nErrno = 228512
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Multiple Carton Found
+         GOTO Quit
+      END
+      ELSE
+      BEGIN
+         SELECT TOP 1 @cOrderKey = ph.OrderKey
+         FROM dbo.PackHeader ph WITH(NOLOCK)
+         INNER JOIN dbo.PackDetail pd WITH(NOLOCK)
+         ON ph.PickSlipNo = pd.PickSlipNo
+         WHERE pd.LabelNo = @cLabelNo
+      END
+   END
 
    IF ISNULL(@cOrderKey, '') = ''
    BEGIN
