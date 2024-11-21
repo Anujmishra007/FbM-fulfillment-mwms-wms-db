@@ -2543,6 +2543,8 @@ Step_5:
 BEGIN
    IF @nInputKey = 1 -- Yes or Send
    BEGIN
+      declare @nErrNoBackup      INT
+      declare @cErrMsgBackup     NVARCHAR( 20)
       DECLARE @cOutField15Backup NVARCHAR( 60) = @cOutField15
       SET @ctemp_OutField15 = @cOutField15Backup
       -- Dynamic lottable
@@ -2568,13 +2570,9 @@ BEGIN
          @cReceiptKey,
          @nFunc
       
-      IF @nErrNo <> 0
-         GOTO Quit
-      
-      IF @nMorePage = 1 -- Yes
-         GOTO Quit
+      SELECT @nErrNoBackup = @nErrNo, @cErrMsgBackup = @cErrMsg
 
-      --check for stay this step or not
+      --check for stay this step or not + if batch is empty, the field04 and 06 are required to clear, so error happen, call ExtScnSP to do it
       SET @cExtScnSP = rdt.RDTGetConfig( @nFunc, 'ExtScnSP', @cStorerkey)
       IF ISNULL(@cExtScnSP,'')<>''
       BEGIN
@@ -2632,6 +2630,13 @@ BEGIN
             END
          END
       END
+
+      SELECT @nErrNo = @nErrNoBackup, @cErrMsg = @cErrMsgBackup
+      IF @nErrNo <> 0
+         GOTO Quit
+      
+      IF @nMorePage = 1 -- Yes
+         GOTO Quit
 
       SET @cExtendedScreenSP =  ISNULL(rdt.RDTGetConfig( @nFunc, 'ExtendedScreenSP', @cStorerKey), '')
       SET @nAction = 1
