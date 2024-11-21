@@ -1,4 +1,4 @@
-GET QUOTED_IDENTIFIER OFF
+SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
 GO
@@ -229,7 +229,7 @@ BEGIN
                      @cToID       = @cActCartonID,  
                      @cSKU        = @cSKU,  
                      @nQty        = @nPDQty,--@nExpectedQTY,  
-                     @nQTYAlloc   = @nPDQty,--@nExpectedQTY,  
+                     @nQTYPick   = @nPDQty,--@nExpectedQTY,  
                      @cDropID     = @cActCartonID,
                      --@cFromLOT    = @cPDLot,
                      @nFunc       = 805
