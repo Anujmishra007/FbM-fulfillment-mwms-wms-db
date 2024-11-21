@@ -82,6 +82,13 @@ BEGIN
    DECLARE @cUpdateTrackNo    NVARCHAR(1)
    DECLARE @cGenLabelNo_SP    NVARCHAR(20)
 
+   -- Move 
+   DECLARE @cStationLoc       NVARCHAR(10)
+   DECLARE @cPDLoc            NVARCHAR(10)
+   DECLARE @nPDQty            INT
+   DECLARE @cMoveQTYPick      NVARCHAR(1)
+   DECLARE @cDeviceID         NVARCHAR(10)
+
    SET @cUpdatePickDetail = rdt.rdtGetConfig( @nFunc, 'UpdatePickDetail', @cStorerKey)
    SET @cUpdatePackDetail = rdt.rdtGetConfig( @nFunc, 'UpdatePackDetail', @cStorerKey)
    SET @cAutoPackConfirm = rdt.rdtGetConfig( @nFunc, 'AutoPackConfirm', @cStorerKey)
@@ -89,6 +96,9 @@ BEGIN
    SET @cGenLabelNo_SP = rdt.RDTGetConfig( @nFunc, 'GenLabelNo_SP', @cStorerkey)
    IF @cGenLabelNo_SP = '0'
       SET @cGenLabelNo_SP = ''
+   SET @cMoveQTYPick = rdt.rdtGetConfig( @nFunc, 'MoveQTYPick', @cStorerKey)
+   IF @cMoveQTYPick = '0'
+      SET @cMoveQTYPick = ''
 
    /***********************************************************************************************
 
@@ -99,14 +109,14 @@ BEGIN
    BEGIN
       -- Confirm entire ID
       SET @curPTL = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-         SELECT PTLKey, IPAddress, DevicePosition, ExpectedQTY
+         SELECT PTLKey, IPAddress, DevicePosition, ExpectedQTY, DeviceID
          FROM PTL.PTLTran WITH (NOLOCK)
          WHERE DeviceID IN (@cStation1, @cStation2, @cStation3, @cStation4, @cStation5)
             AND DropID = @cScanID
             AND SKU = @cSKU
             AND Status <> '9'
       OPEN @curPTL
-      FETCH NEXT FROM @curPTL INTO @nPTLKey, @cIPAddress, @cPosition, @nExpectedQTY
+      FETCH NEXT FROM @curPTL INTO @nPTLKey, @cIPAddress, @cPosition, @nExpectedQTY, @cDeviceID
       WHILE @@FETCH_STATUS = 0
       BEGIN
          -- Get carton
@@ -117,7 +127,13 @@ BEGIN
          WHERE Station IN (@cStation1, @cStation2, @cStation3, @cStation4, @cStation5)
             AND IPAddress = @cIPAddress
             AND Position = @cPosition
-         
+
+         -- Get station loc
+         SELECT @cStationLoc = Loc
+         FROM dbo.DeviceProfile WITH (NOLOCK)
+         WHERE DeviceID = @cDeviceID
+            AND DevicePosition = @cPosition
+
         -- Transaction at order level
          SET @nTranCount = @@TRANCOUNT
          BEGIN TRAN  -- Begin our own transaction
@@ -165,7 +181,7 @@ BEGIN
             
             -- Loop PickDetail
             SET @curPD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-               SELECT PickDetailKey
+               SELECT PickDetailKey, PD.QTY, PD.Loc
                FROM Orders O WITH (NOLOCK) 
                   JOIN PickDetail PD WITH (NOLOCK) ON (PD.OrderKey = O.OrderKey)
                WHERE O.OrderKey = @cOrderKey
@@ -178,7 +194,7 @@ BEGIN
                   AND O.Status <> 'CANC' 
                   AND O.SOStatus <> 'CANC'
             OPEN @curPD
-            FETCH NEXT FROM @curPD INTO @cPickDetailKey
+            FETCH NEXT FROM @curPD INTO @cPickDetailKey, @nPDQty, @cPDLoc
             WHILE @@FETCH_STATUS = 0
             BEGIN
                -- Confirm PickDetail
@@ -195,25 +211,32 @@ BEGIN
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD PKDtl Fail
                   GOTO RollBackTran
                END
-               -- Move DropID to PTL Loc
-               EXECUTE rdt.rdt_Move  
-                  @nMobile     = @nMobile,  
-                  @cLangCode   = @cLangCode,  
-                  @nErrNo      = @nErrNo  OUTPUT,  
-                  @cErrMsg     = @cErrMsg OUTPUT,  
-                  @cSourceType = 'rdt_PTLStation_Confirm_ToteIDSKU08',  
-                  @cStorerKey  = @cStorerKey,  
-                  @cFacility   = @cFacility,  
-                  @cFromLOC    = @cPDLoc,  
-                  @cToLOC      = @cPTLLoc, -- Final LOC  
-                  @cFromID     = @cScanID,  
-                  @cToID       = @cActCartonID,  
-                  @cSKU        = @cSKU,  
-                  @nQty        = @nPDQty,--@nExpectedQTY,  
-                  @nQTYAlloc   = @nPDQty,--@nExpectedQTY,  
-                  @cDropID     = @cActCartonID,
-                  --@cFromLOT    = @cPDLot,
-                  @nFunc       = 805
+               
+               IF @cMoveQTYPick = '1'
+               BEGIN
+                  SELECT @cStationLoc = Loc
+                  FROM dbo.DeviceProfile WITH(NOLOCK)
+                  WHERE DeviceID = 
+                  -- Move DropID to PTL Loc
+                  EXECUTE rdt.rdt_Move  
+                     @nMobile     = @nMobile,  
+                     @cLangCode   = @cLangCode,  
+                     @nErrNo      = @nErrNo  OUTPUT,  
+                     @cErrMsg     = @cErrMsg OUTPUT,  
+                     @cSourceType = 'rdt_PTLStation_Confirm_ToteIDSKU08',  
+                     @cStorerKey  = @cStorerKey,  
+                     @cFacility   = @cFacility,  
+                     @cFromLOC    = @cPDLoc,  
+                     @cToLOC      = @cStationLoc, -- Final LOC  
+                     @cFromID     = @cScanID,  
+                     @cToID       = @cActCartonID,  
+                     @cSKU        = @cSKU,  
+                     @nQty        = @nPDQty,--@nExpectedQTY,  
+                     @nQTYAlloc   = @nPDQty,--@nExpectedQTY,  
+                     @cDropID     = @cActCartonID,
+                     --@cFromLOT    = @cPDLot,
+                     @nFunc       = 805
+               END
            
                IF @nErrNo <> 0  
                GOTO RollBackTran
