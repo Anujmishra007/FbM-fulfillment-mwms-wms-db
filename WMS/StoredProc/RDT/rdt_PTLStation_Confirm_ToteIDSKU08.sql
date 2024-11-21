@@ -214,9 +214,6 @@ BEGIN
                
                IF @cMoveQTYPick = '1'
                BEGIN
-                  SELECT @cStationLoc = Loc
-                  FROM dbo.DeviceProfile WITH(NOLOCK)
-                  WHERE DeviceID = 
                   -- Move DropID to PTL Loc
                   EXECUTE rdt.rdt_Move  
                      @nMobile     = @nMobile,  
