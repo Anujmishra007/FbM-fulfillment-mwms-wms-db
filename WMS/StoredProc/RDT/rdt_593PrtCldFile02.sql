@@ -212,11 +212,11 @@ BEGIN
    IF RIGHT(@cFilePath,1) IN ('\','/')
    BEGIN
       SELECT @cPrintDataFile = @cFilePath 
-         + REPLACE(REPLACE(@cFileName,'<code>',@cLabelName),'<ExterOderkey>',@cExternOrderKey)
+         + REPLACE(REPLACE(@cFileName,'<code>',@cLabelName),'<ExternOrderkey>',@cExternOrderKey)
    END
    ELSE BEGIN
       SELECT @cPrintDataFile = @cFilePath 
-         + '/' + REPLACE(REPLACE(@cFileName,'<code>',@cLabelName),'<ExterOderkey>',@cExternOrderKey)
+         + '/' + REPLACE(REPLACE(@cFileName,'<code>',@cLabelName),'<ExternOrderkey>',@cExternOrderKey)
    END
    -- override file path in debug
    IF @bDebugFlag = 1
