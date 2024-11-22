@@ -140,7 +140,7 @@ BEGIN
          SAVE TRAN rdt_PTLStation_Confirm -- For rollback or commit only our own transaction
          
          -- Confirm PTLTran
-         UPDATE PTL.PTLTran SET
+         UPDATE PTL.PTLTran WITH(ROWLOCK) SET
             Status = '9', 
             QTY = ExpectedQTY, 
             CaseID = @cActCartonID, 
@@ -198,7 +198,7 @@ BEGIN
             WHILE @@FETCH_STATUS = 0
             BEGIN
                -- Confirm PickDetail
-               UPDATE PickDetail SET
+               UPDATE PickDetail WITH(ROWLOCK) SET
                   Status = '5', 
                   CaseID = @cActCartonID, 
                   DropID = @cActCartonID, 
@@ -357,7 +357,7 @@ BEGIN
                   ORDER BY RowRef
                   
                   -- Stamp track no used
-                  UPDATE CartonTrack SET 
+                  UPDATE CartonTrack WITH(ROWLOCK) SET 
                      CarrierRef2 = 'GET', 
                      LabelNo = @cLabelNo
                   WHERE RowRef = @nRowRef
@@ -430,7 +430,7 @@ BEGIN
                   IF @nPackQTY = @nPickQTY
                   BEGIN
                      -- Pack confirm
-                     UPDATE PackHeader SET 
+                     UPDATE PackHeader WITH(ROWLOCK) SET 
                         Status = '9' 
                      WHERE PickSlipNo = @cPickSlipNo
                         AND Status <> '9'
@@ -954,7 +954,7 @@ BEGIN
                   ORDER BY RowRef
                   
                   -- Stamp track no used
-                  UPDATE CartonTrack SET 
+                  UPDATE CartonTrack WITH(ROWLOCK) SET 
                      CarrierRef2 = 'GET', 
                      LabelNo = @cLabelNo
                   WHERE RowRef = @nRowRef
@@ -1026,7 +1026,7 @@ BEGIN
                   IF @nPackQTY = @nPickQTY
                   BEGIN
                      -- Pack confirm
-                     UPDATE PackHeader SET 
+                     UPDATE PackHeader WITH(ROWLOCK) SET 
                         Status = '9' 
                      WHERE PickSlipNo = @cPickSlipNo
                         AND Status <> '9'
@@ -1056,7 +1056,7 @@ BEGIN
          WHILE @@FETCH_STATUS = 0
          BEGIN
             -- Change carton on rdtPTLStationLog
-            UPDATE rdt.rdtPTLStationLog SET
+            UPDATE rdt.rdtPTLStationLog WITH(ROWLOCK) SET
                CartonID = @cNewCartonID
             WHERE RowRef = @nRowRef 
             IF @@ERROR <> 0
@@ -1096,7 +1096,7 @@ BEGIN
                   AND Position = @cPosition
                
                -- Confirm PTLTran
-               UPDATE PTL.PTLTran SET
+               UPDATE PTL.PTLTran WITH(ROWLOCK) SET
                   Status = '9', 
                   QTY = 0, 
                   CaseID = @cActCartonID, 
@@ -1153,7 +1153,7 @@ BEGIN
                   WHILE @@FETCH_STATUS = 0
                   BEGIN
                      -- Confirm PickDetail
-                     UPDATE PickDetail SET
+                     UPDATE PickDetail WITH(ROWLOCK) SET
                         Status = '4', 
                         --CaseID = @cActCartonID, 
                         DropID = @cActCartonID, 
