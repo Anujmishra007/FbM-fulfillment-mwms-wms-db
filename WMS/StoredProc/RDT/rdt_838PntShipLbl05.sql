@@ -170,7 +170,7 @@ BEGIN
                FROM CODELKUP WITH (NOLOCK) 
                WHERE listname = 'PACKPRTCON'
                   AND storerkey = @cStorerKey
-                  AND code2 = 'Label printer'              --Step 5, Printer Type should be 'label printer', according spec doc, the result should be 5 records, 3 are normal(logi and BTD), 2 are SFTP
+                  AND code2 = 'Label'              --Step 5, Printer Type should be 'label printer', according spec doc, the result should be 5 records, 3 are normal(logi and BTD), 2 are SFTP
             SELECT @nRowCount = COUNT(1) FROM @tCodes
             SELECT @nRowCount = ISNULL(@nRowCount,0), @nRowID=0
 
@@ -518,7 +518,7 @@ BEGIN
                FROM CODELKUP WITH (NOLOCK) 
                WHERE listname = 'PACKPRTCON'
                   AND storerkey = @cStorerKey
-                  AND code2 = 'Paper Printer'      --Step 6, Printer Type should be 'paper printer', according spec doc, the result should be 3 records, 2 are normal(logi), 1 are SFTP
+                  AND code2 = 'Paper'      --Step 6, Printer Type should be 'paper printer', according spec doc, the result should be 3 records, 2 are normal(logi), 1 are SFTP
             SELECT @nRowCount = COUNT(1) FROM @tCodes
             SELECT @nRowCount = ISNULL(@nRowCount,0), @nRowID=0
 
