@@ -592,6 +592,14 @@ BEGIN
               , TrafficCop   = NULL
          WHERE WaveKey = @c_WaveKey
 
+         UPDATE ORDERS WITH (ROWLOCK)
+         SET UserDefine03 = 'WaveLock'
+         WHERE UserDefine09 = @c_WaveKey
+         AND EXISTS (SELECT 1 FROM CODELKUP CL (NOLOCK) WHERE CL.ListName  = 'HUSQPKTYPE'
+         AND CL.StorerKey = ORDERS.StorerKey
+         AND CL.Short = ORDERS.Userdefine10
+         AND UDF03 <> '' AND UDF04 <> '')
+
          IF @@ERROR <> 0
          BEGIN
             SET @n_Continue = 3
