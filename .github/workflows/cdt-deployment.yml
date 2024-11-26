@@ -11,20 +11,38 @@ on:
         required: true
         #default: ''
 
-jobs:
-  trigger-repo-a-workflow:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v2
 
-      - name: Trigger  Workflow
-        uses: peter-evans/workflow-dispatch@v1
-        with:
-          repository: 'Maersk-Global/fbm-infra-automation' 
-          workflow: 'cdt-db-deploy.yaml'  
-          ref: 'main' 
-          inputs: |
-            authToken: ${{ github.event.inputs.authToken }}
-        env:
-          GITHUB_TOKEN: ${{ secrets.db_token }}  
+jobs:
+  trigger-repo-infra:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Trigger Repo infra Workflow
+        run: |
+          curl -X POST \
+          -H "Accept: application/vnd.github.everest-preview+json" \
+          -H "Authorization: Bearer ${{ secrets.db_token}}" \
+          https://api.github.com/repos/Maersk-Global/fbm-infra-automation/dispatches \
+          -d '{
+                "event_type": "trigger-by-FbM-fulfillment-mwms-wms-db",
+                "client_payload": {
+                  "authToken": "${{ github.event.inputs.authToken }}"
+                }
+              }'
+# jobs:
+  # trigger-repo-a-workflow:
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Checkout code
+  #       uses: actions/checkout@v2
+
+  #     - name: Trigger  Workflow
+  #       uses: peter-evans/workflow-dispatch@v1
+  #       with:
+  #         repository: 'Maersk-Global/fbm-infra-automation' 
+  #         workflow: 'cdt-db-deploy.yaml'  
+  #         ref: 'main' 
+  #         inputs: |
+  #           authToken: ${{ github.event.inputs.authToken }}
+  #       env:
+  #         GITHUB_TOKEN: ${{ secrets.db_token }}  
