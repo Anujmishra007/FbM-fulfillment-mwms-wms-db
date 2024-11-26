@@ -79,18 +79,20 @@ AS
       GOTO Quit
    END
 
-   IF (SELECT COUNT( DISTINCT CaseID ) 
+    IF (SELECT COUNT( DISTINCT CaseID ) 
       FROM dbo.PICKDETAIL WITH(NOLOCK) 
-      WHERE OrderKey = @cOrderKey 
-         AND Status >= @cPickConfirmStatus
+      WHERE StorerKey = @cStorerKey
+         AND OrderKey = @cOrderKey 
+         AND Status IN ('5', '9')
          AND TRIM(CaseID) <> '')
-      <>
+      =
       (SELECT COUNT( DISTINCT RefNo )
-      FROM dbo.PICKDETAIL PD WITH(NOLOCK)
-      INNER JOIN dbo.PackInfo PI WITH(NOLOCK) ON ISNULL(PD.CaseID, '-1') = ISNULL(PI.RefNo, '')
-      WHERE PD.OrderKey = @cOrderKey 
+      FROM dbo.PICKDETAIL PKD WITH(NOLOCK)
+      INNER JOIN dbo.PackInfo PI WITH(NOLOCK) ON ISNULL(PKD.CaseID, '-1') = ISNULL(PI.RefNo, '')
+      WHERE PKD.StorerKey = @cStorerKey
+         AND PKD.OrderKey = @cOrderKey 
          AND PI.CartonStatus = 'PACKED'
-         AND TRIM(ISNULL(PI.RefNo, '')) <> '')
+         AND TRIM(ISNULL(RefNo, '')) <> '')
    BEGIN
       SET @nErrNo = 227952
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --PackNotDone
