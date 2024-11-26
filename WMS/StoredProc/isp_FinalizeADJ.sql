@@ -1229,7 +1229,6 @@ BEGIN
                         SELECT @c_ErrMsg = 'Duplicate LOCs found in same ID' +
                                           ': Finalize Adjustment Fail. (''isp_FinalizeADJ'')' + ' ( ' + ' SQLSvr MESSAGE=' +
                                           RTRIM(@c_ErrMsg) + ' ) '
-                        ROLLBACK TRAN
                      END
                IF EXISTS (SELECT 1
                         FROM AdjustmentDetail AD (NOLOCK)
@@ -1245,7 +1244,6 @@ BEGIN
                         SELECT @c_ErrMsg = 'Duplicate IDs found in different locations' +
                                           ': Finalize Adjustment Fail. (''isp_FinalizeADJ'')' + ' ( ' + ' SQLSvr MESSAGE=' +
                                           RTRIM(@c_ErrMsg) + ' ) '
-                        ROLLBACK TRAN
                      END
             END
       --Satyam - END
