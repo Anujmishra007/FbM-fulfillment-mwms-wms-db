@@ -49,6 +49,7 @@ GO
 /* 2024-05-28 3.8    JACKC      FCR-395 Merge WMS-23113 to V2                   */
 /* 2024-11-12 3.9    Dennis     UWP-26828 Fix Conversion bug from str to dtime  */
 /* 2024-11-21 4.0.0  NLT03      UWP-27346 Additional textbox displays           */
+/* 2024-11-21 4.1.0  PXL003     UWP-27584 Fix SKU/UPC decode                    */
 /********************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_CycleCount_SKU] (
@@ -573,6 +574,8 @@ BEGIN
       IF @cDecodeSP <> ''
       BEGIN
          SET @cBarcode = ISNULL(RTRIM(@cInField03),'')
+         SET @cUPC = @cBarcode
+         SET @nQTY = @nActQTY
 
          -- Standard decode
          IF @cDecodeSP = '1'
@@ -607,7 +610,7 @@ BEGIN
                ' @cLOC           NVARCHAR( 10), ' +
                ' @cID            NVARCHAR( 18), ' +
                ' @cUPC           NVARCHAR( 20)  OUTPUT, ' +
-          ' @nQTY           INT            OUTPUT, ' +
+               ' @nQTY           INT            OUTPUT, ' +
                ' @cLottable01    NVARCHAR( 18)  OUTPUT, ' +
                ' @cLottable02    NVARCHAR( 18)  OUTPUT, ' +
                ' @cLottable03    NVARCHAR( 18)  OUTPUT, ' +
@@ -640,14 +643,16 @@ BEGIN
                @cUserDefine01 OUTPUT, @cUserDefine02  OUTPUT, @cUserDefine03  OUTPUT, @cUserDefine04  OUTPUT, @cUserDefine05  OUTPUT,
                @nErrNo        OUTPUT, @cErrMsg        OUTPUT
 
-            SET @cCommodity = @cUPC
-            SET @nActQTY = @nQTY
-
-            -- The sku/qty screen doesn't has suggested qty
-            -- If decode return qty then default it
-            IF @nQty > 0
-               SET @cDefaultQty = @nQty
          END
+
+         SET @cCommodity = @cUPC
+         SET @nActQTY = @nQTY
+
+         -- The sku/qty screen doesn't has suggested qty
+         -- If decode return qty then default it
+         IF @nQty > 0
+            SET @cDefaultQty = @nQty
+
       END   -- End for DecodeSP
 
       SET @cCheckSKUExistsInLoc = rdt.RDTGetConfig( @nFunc, 'CheckSKUExistsInLoc', @cStorerKey)  
@@ -1861,6 +1866,8 @@ BEGIN
       IF @cDecodeSP <> ''
       BEGIN
          SET @cBarcode = @cInField12
+         SET @cUPC = @cActSKU
+         SET @nQTY = @nActQTY
 
          -- Standard decode
          IF @cDecodeSP = '1'
@@ -1928,9 +1935,10 @@ BEGIN
                @cUserDefine01 OUTPUT, @cUserDefine02  OUTPUT, @cUserDefine03  OUTPUT, @cUserDefine04  OUTPUT, @cUserDefine05  OUTPUT,
                @nErrNo        OUTPUT, @cErrMsg        OUTPUT
 
-            SET @cActSKU = @cUPC
-            SET @nActQTY = @nQTY
          END
+
+         SET @cActSKU = @cUPC
+         SET @nActQTY = @nQTY
       END   -- End for DecodeSP
 
       IF ISNULL( @cActSKU, '') = ''
