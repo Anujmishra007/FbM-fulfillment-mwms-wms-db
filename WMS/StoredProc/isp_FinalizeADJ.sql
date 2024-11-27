@@ -1300,7 +1300,7 @@ BEGIN
             SELECT @n_continue = 3
             SELECT @c_errmsg = CONVERT(NVARCHAR(250) ,@n_err)
                   ,@n_err = 72806 -- Should Be Set To The SQL Errmessage but I don't know how to do so.
-            SELECT @c_errmsg = "NSQL"+CONVERT(NVARCHAR(5) ,@n_err)+
+            SELECT @c_errmsg = 'NSQL'+CONVERT(NVARCHAR(5) ,@n_err)+
                   ": Update Failed On Table AdjustmentDetail. (isp_FinalizeADJ)" 
                   +" ( "+" SQLSvr MESSAGE="+dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) 
                   +" ) "
@@ -1332,7 +1332,7 @@ BEGIN
             SELECT @n_continue = 3
             SELECT @c_errmsg = CONVERT(NVARCHAR(250) ,@n_err)
                   ,@n_err = 72809 -- Should Be Set To The SQL Errmessage but I don't know how to do so.
-            SELECT @c_errmsg = "NSQL"+CONVERT(NVARCHAR(5) ,@n_err)+
+            SELECT @c_errmsg = 'NSQL'+CONVERT(NVARCHAR(5) ,@n_err)+
                   ": Update Failed On Table AdjustmentDetail. (isp_FinalizeADJ)" 
                   +" ( "+" SQLSvr MESSAGE="+dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) 
                   +" ) "
@@ -1396,7 +1396,7 @@ BEGIN
             SELECT @n_continue = 3
             SELECT @c_errmsg = CONVERT(NVARCHAR(250) ,@n_err)
                   ,@n_err = 72807 -- Should Be Set To The SQL Errmessage but I don't know how to do so.
-            SELECT @c_errmsg = "NSQL"+CONVERT(NVARCHAR(5) ,@n_err)+
+            SELECT @c_errmsg = 'NSQL'+CONVERT(NVARCHAR(5) ,@n_err)+
                   ": Update Failed On Table Adjustment. (isp_FinalizeADJ)" 
                   +" ( "+" SQLSvr MESSAGE="+dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) 
                   +" ) "
@@ -1442,7 +1442,7 @@ BEGIN
             SELECT @n_continue = 3
             SELECT @c_errmsg = CONVERT(NVARCHAR(250) ,@n_err)
                   ,@n_err = 72808 -- Should Be Set To The SQL Errmessage but I don't know how to do so.
-            SELECT @c_errmsg = "NSQL"+CONVERT(NVARCHAR(5) ,@n_err)+
+            SELECT @c_errmsg = 'NSQL'+CONVERT(NVARCHAR(5) ,@n_err)+
                   ": Update Failed On Table Adjustment. (isp_FinalizeADJ)" 
                   +" ( "+" SQLSvr MESSAGE="+dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) 
                   +" ) "
