@@ -63,13 +63,16 @@ BEGIN
  
 
    -- 
-   IF @nFunc = 1766
+   IF @nFunc = 1768
    BEGIN
       IF @naction = 3
       BEGIN
-         IF @nStep = 3
+         IF @nStep = 1
          BEGIN
-            SET @cOutField15 = ''
+            IF @nInputKey = 1
+            BEGIN
+               SET @cOutField15 = ''
+            END
          END
       END
    END
