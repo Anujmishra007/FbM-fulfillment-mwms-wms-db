@@ -18,6 +18,7 @@ GO
 /* 2024-09-26 1.2       NLT013   UWP-24932 Error message UI issue                  */
 /* 2024-09-30 1.3       NLT013   Fix printing special order labels issue           */
 /* 2024-10-28 1.4.0     NLT013   FCR-1085 Automate print Order Level labels        */
+/* 2024-11-27 1.4.1     NLT013   FCR-1085 Fix bug - print duplicate reports        */
 /***********************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_855ExtUpd13 (
@@ -529,12 +530,12 @@ BEGIN
                   END
                END
 
-               SELECT @nTotalPQty = SUM(PQty)
+               SELECT @nTotalCQty = SUM(CQty)
                FROM RDT.RDTPPA WITH(NOLOCK)
                WHERE StorerKey = @cStorerKey
                   AND DropID = @cDropID
 
-               SELECT @nTotalCQty = SUM(Qty)
+               SELECT @nTotalPQty = SUM(Qty)
                FROM dbo.PickDetail WITH(NOLOCK)
                WHERE StorerKey = @cStorerKey
                   AND ISNULL(CaseID, '') = @cDropID
