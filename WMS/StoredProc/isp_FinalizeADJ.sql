@@ -845,6 +845,44 @@ BEGIN
             END
          END
             
+         --Satyam - START
+         IF (@n_continue=1 OR @n_continue=2)
+         BEGIN
+            IF @c_ASNFizUpdLotToSerialNo = '1' AND @c_SerialNoCapture IN ('1', '2')
+                  BEGIN
+                     IF EXISTS (SELECT 1
+                              FROM AdjustmentDetail (NOLOCK)
+                              WHERE 1 = 1
+                                 AND AdjustmentKey = @c_ADJKey
+                                 AND AdjustmentLineNumber = @c_adjline
+                                 AND FinalizedFlag IN ('N', 'S', 'A')
+                              GROUP BY ID
+                              HAVING COUNT(DISTINCT Loc) > 1)
+                           BEGIN
+                              SELECT @n_continue = 3
+                              SELECT @c_ErrMsg = 'Duplicate LOCs found in same ID' +
+                                                ': Finalize Adjustment Fail. (''isp_FinalizeADJ'')' + ' ( ' + ' SQLSvr MESSAGE=' +
+                                                RTRIM(@c_ErrMsg) + ' ) '
+                           END
+                     IF EXISTS (SELECT 1
+                              FROM AdjustmentDetail AD (NOLOCK)
+                              JOIN LotxLocxId LLI (NOLOCK) ON AD.ID = LLI.Id
+                              WHERE 1 = 1
+                                 AND LLI.QTY - LLI.QtyPicked > 0
+                                 AND AD.STORERKEY <> ''
+                                 AND AD.ID <> ''
+                                 AND AD.Loc <> LLI.Loc
+                                 AND AD.AdjustmentKey = @c_ADJKey
+                                 AND AdjustmentLineNumber = @c_adjline)
+                           BEGIN
+                              SELECT @n_continue = 3
+                              SELECT @c_ErrMsg = 'Duplicate IDs found in different locations' +
+                                                ': Finalize Adjustment Fail. (''isp_FinalizeADJ'')' + ' ( ' + ' SQLSvr MESSAGE=' +
+                                                RTRIM(@c_ErrMsg) + ' ) '
+                           END
+                  END
+         END
+         --Satyam - END
          --(CS01) -START
          IF @n_LottableRules=1
          BEGIN
@@ -1210,43 +1248,8 @@ BEGIN
       DEALLOCATE CUR_AJD
    END
    --(Wan02) - End
-  
-   IF @n_continue=1
-      OR @n_continue=2
+IF (@n_continue=1 OR @n_continue=2)
    BEGIN
-      --Satyam - START
-      IF @c_ASNFizUpdLotToSerialNo = '1' AND @c_SerialNoCapture IN ('1', '2')
-            BEGIN
-               IF EXISTS (SELECT 1
-                        FROM AdjustmentDetail (NOLOCK)
-                        WHERE 1 = 1
-                           AND AdjustmentKey = @c_ADJKey
-                           AND FinalizedFlag IN ('N', 'S', 'A')
-                        GROUP BY ID
-                        HAVING COUNT(DISTINCT Loc) > 1)
-                     BEGIN
-                        SELECT @n_continue = 3
-                        SELECT @c_ErrMsg = 'Duplicate LOCs found in same ID' +
-                                          ': Finalize Adjustment Fail. (''isp_FinalizeADJ'')' + ' ( ' + ' SQLSvr MESSAGE=' +
-                                          RTRIM(@c_ErrMsg) + ' ) '
-                     END
-               IF EXISTS (SELECT 1
-                        FROM AdjustmentDetail AD (NOLOCK)
-                                 JOIN LotxLocxId LLI (NOLOCK) ON AD.ID = LLI.Id
-                        WHERE 1 = 1
-                           AND LLI.QTY > 0
-                           AND LLI.STORERKEY <> ''
-                           AND AD.ID <> ''
-                           AND AD.Loc <> LLI.Loc
-                           AND AD.AdjustmentKey = @c_ADJKey)
-                     BEGIN
-                        SELECT @n_continue = 3
-                        SELECT @c_ErrMsg = 'Duplicate IDs found in different locations' +
-                                          ': Finalize Adjustment Fail. (''isp_FinalizeADJ'')' + ' ( ' + ' SQLSvr MESSAGE=' +
-                                          RTRIM(@c_ErrMsg) + ' ) '
-                     END
-            END
-      --Satyam - END
       -- 01
       DECLARE adj_cur CURSOR LOCAL FAST_FORWARD READ_ONLY 
       FOR
@@ -1301,9 +1304,9 @@ BEGIN
             SELECT @c_errmsg = CONVERT(NVARCHAR(250) ,@n_err)
                   ,@n_err = 72806 -- Should Be Set To The SQL Errmessage but I don't know how to do so.
             SELECT @c_errmsg = 'NSQL'+CONVERT(NVARCHAR(5) ,@n_err)+
-                  ": Update Failed On Table AdjustmentDetail. (isp_FinalizeADJ)" 
-                  +" ( "+" SQLSvr MESSAGE="+dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) 
-                  +" ) "
+                  ': Update Failed On Table AdjustmentDetail. (isp_FinalizeADJ)' 
+                  +' ( '+' SQLSvr MESSAGE='+dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) 
+                  +' ) '
                 
             ROLLBACK TRAN
             BREAK
@@ -1333,9 +1336,9 @@ BEGIN
             SELECT @c_errmsg = CONVERT(NVARCHAR(250) ,@n_err)
                   ,@n_err = 72809 -- Should Be Set To The SQL Errmessage but I don't know how to do so.
             SELECT @c_errmsg = 'NSQL'+CONVERT(NVARCHAR(5) ,@n_err)+
-                  ": Update Failed On Table AdjustmentDetail. (isp_FinalizeADJ)" 
-                  +" ( "+" SQLSvr MESSAGE="+dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) 
-                  +" ) "
+                  ': Update Failed On Table AdjustmentDetail. (isp_FinalizeADJ)'
+                  +' ( '+' SQLSvr MESSAGE='+dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) 
+                  +' ) '
                 
             ROLLBACK TRAN
             BREAK
@@ -1397,9 +1400,9 @@ BEGIN
             SELECT @c_errmsg = CONVERT(NVARCHAR(250) ,@n_err)
                   ,@n_err = 72807 -- Should Be Set To The SQL Errmessage but I don't know how to do so.
             SELECT @c_errmsg = 'NSQL'+CONVERT(NVARCHAR(5) ,@n_err)+
-                  ": Update Failed On Table Adjustment. (isp_FinalizeADJ)" 
-                  +" ( "+" SQLSvr MESSAGE="+dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) 
-                  +" ) "
+                  ': Update Failed On Table Adjustment. (isp_FinalizeADJ)' 
+                  +' ( '+' SQLSvr MESSAGE='+dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) 
+                  +' ) '
                 
             ROLLBACK TRAN
             BREAK
@@ -1443,9 +1446,9 @@ BEGIN
             SELECT @c_errmsg = CONVERT(NVARCHAR(250) ,@n_err)
                   ,@n_err = 72808 -- Should Be Set To The SQL Errmessage but I don't know how to do so.
             SELECT @c_errmsg = 'NSQL'+CONVERT(NVARCHAR(5) ,@n_err)+
-                  ": Update Failed On Table Adjustment. (isp_FinalizeADJ)" 
-                  +" ( "+" SQLSvr MESSAGE="+dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) 
-                  +" ) "
+                  ': Update Failed On Table Adjustment. (isp_FinalizeADJ)' 
+                  +' ( '+' SQLSvr MESSAGE='+dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) 
+                  +' ) '
                 
             ROLLBACK TRAN
          END
@@ -1519,7 +1522,7 @@ BEGIN
       SELECT @b_success = 0
       EXECUTE nsp_logerror @n_err,
             @c_errmsg,
-            "isp_FinalizeADJ"
+            'isp_FinalizeADJ'
         
       RAISERROR (@c_errmsg ,16 ,1) 
       WITH SETERROR -- SQL2012
