@@ -1,3 +1,7 @@
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS OFF
+GO
 
 /**************************************************************************/
 /* Trigger: ispFinalizeTransfer                                           */
@@ -2644,3 +2648,6 @@ BEGIN
       RETURN
    END
 END -- procedure
+GO
+GRANT EXECUTE ON [dbo].[ispFinalizeTransfer] TO nSQL
+GO
