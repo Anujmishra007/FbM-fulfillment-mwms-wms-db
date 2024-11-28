@@ -1030,41 +1030,21 @@ BEGIN
             ,@c_FromSku        = FromSku
             ,@c_FromLoc        = FromLoc
             ,@n_FromQty        = FromQty
-            ,@c_FromLottable01 = CASE WHEN RTRIM(trn.FromLot)='' THEN trn.Lottable01 ELSE Fromattr.Lottable01 END
-            ,@c_FromLottable02 = CASE WHEN RTRIM(trn.FromLot)='' THEN trn.Lottable02 ELSE Fromattr.Lottable02 END
-            ,@c_FromLottable03 = CASE WHEN RTRIM(trn.FromLot)='' THEN trn.Lottable03 ELSE Fromattr.Lottable03 END
-            ,@d_FromLottable04 = CASE WHEN RTRIM(trn.FromLot)  ='' AND trn.Lottable04 IS NULL THEN '19000101' 
-                                      WHEN RTRIM(trn.FromLot)  ='' AND trn.Lottable04 IS NOT NULL THEN trn.Lottable04
-                                      WHEN RTRIM(trn.FromLot) !='' AND Fromattr.Lottable04 IS NULL THEN '19000101'
-                                      WHEN RTRIM(trn.FromLot) !='' AND Fromattr.Lottable04 IS NOT NULL THEN Fromattr.Lottable04 
-                                      ELSE trn.Lottable04 END
-            ,@d_FromLottable05 = CASE WHEN RTRIM(trn.FromLot)  ='' AND trn.Lottable05 IS NULL THEN '19000101' 
-                                      WHEN RTRIM(trn.FromLot)  ='' AND trn.Lottable05 IS NOT NULL THEN trn.Lottable05
-                                      WHEN RTRIM(trn.FromLot) !='' AND Fromattr.Lottable05 IS NULL THEN '19000101'
-                                      WHEN RTRIM(trn.FromLot) !='' AND Fromattr.Lottable05 IS NOT NULL THEN Fromattr.Lottable05 
-                                      ELSE trn.Lottable05 END
-            ,@c_FromLottable06 = CASE WHEN RTRIM(trn.FromLot)='' THEN trn.Lottable06 ELSE Fromattr.Lottable06 END
-            ,@c_FromLottable07 = CASE WHEN RTRIM(trn.FromLot)='' THEN trn.Lottable07 ELSE Fromattr.Lottable07 END
-            ,@c_FromLottable08 = CASE WHEN RTRIM(trn.FromLot)='' THEN trn.Lottable08 ELSE Fromattr.Lottable08 END
-            ,@c_FromLottable09 = CASE WHEN RTRIM(trn.FromLot)='' THEN trn.Lottable09 ELSE Fromattr.Lottable09 END
-            ,@c_FromLottable10 = CASE WHEN RTRIM(trn.FromLot)='' THEN trn.Lottable10 ELSE Fromattr.Lottable10 END
-            ,@c_FromLottable11 = CASE WHEN RTRIM(trn.FromLot)='' THEN trn.Lottable11 ELSE Fromattr.Lottable11 END
-            ,@c_FromLottable12 = CASE WHEN RTRIM(trn.FromLot)='' THEN trn.Lottable12 ELSE Fromattr.Lottable12 END
-            ,@d_FromLottable13 = CASE WHEN RTRIM(trn.FromLot)  ='' AND trn.Lottable13 IS NULL THEN '19000101' 
-                                      WHEN RTRIM(trn.FromLot)  ='' AND trn.Lottable13 IS NOT NULL THEN trn.Lottable13
-                                      WHEN RTRIM(trn.FromLot) !='' AND Fromattr.Lottable13 IS NULL THEN '19000101'
-                                      WHEN RTRIM(trn.FromLot) !='' AND Fromattr.Lottable13 IS NOT NULL THEN Fromattr.Lottable13 
-                                      ELSE trn.Lottable13 END
-            ,@d_FromLottable14 = CASE WHEN RTRIM(trn.FromLot)  ='' AND trn.Lottable14 IS NULL THEN '19000101' 
-                                      WHEN RTRIM(trn.FromLot)  ='' AND trn.Lottable14 IS NOT NULL THEN trn.Lottable14
-                                      WHEN RTRIM(trn.FromLot) !='' AND Fromattr.Lottable14 IS NULL THEN '19000101'
-                                      WHEN RTRIM(trn.FromLot) !='' AND Fromattr.Lottable14 IS NOT NULL THEN Fromattr.Lottable14 
-                                      ELSE trn.Lottable14 END
-            ,@d_FromLottable15 = CASE WHEN RTRIM(trn.FromLot)  ='' AND trn.Lottable15 IS NULL THEN '19000101' 
-                                      WHEN RTRIM(trn.FromLot)  ='' AND trn.Lottable15 IS NOT NULL THEN trn.Lottable15
-                                      WHEN RTRIM(trn.FromLot) !='' AND Fromattr.Lottable15 IS NULL THEN '19000101'
-                                      WHEN RTRIM(trn.FromLot) !='' AND Fromattr.Lottable15 IS NOT NULL THEN Fromattr.Lottable15 
-                                      ELSE trn.Lottable15 END
+            ,@c_FromLottable01 = Fromattr.Lottable01
+            ,@c_FromLottable02 = Fromattr.Lottable02
+            ,@c_FromLottable03 = Fromattr.Lottable03
+            ,@d_FromLottable04 = CASE WHEN Fromattr.Lottable04 IS NULL THEN '19000101' ELSE Fromattr.Lottable04 END
+            ,@d_FromLottable05 = CASE WHEN Fromattr.Lottable05 IS NULL THEN '19000101' ELSE Fromattr.Lottable05 END
+            ,@c_FromLottable06 = Fromattr.Lottable06
+            ,@c_FromLottable07 = Fromattr.Lottable07
+            ,@c_FromLottable08 = Fromattr.Lottable08
+            ,@c_FromLottable09 = Fromattr.Lottable09
+            ,@c_FromLottable10 = Fromattr.Lottable10
+            ,@c_FromLottable11 = Fromattr.Lottable11
+            ,@c_FromLottable12 = Fromattr.Lottable12
+            ,@d_FromLottable13 = CASE WHEN Fromattr.Lottable13 IS NULL THEN '19000101' ELSE Fromattr.Lottable13 END
+            ,@d_FromLottable14 = CASE WHEN Fromattr.Lottable14 IS NULL THEN '19000101' ELSE Fromattr.Lottable14 END
+            ,@d_FromLottable15 = CASE WHEN Fromattr.Lottable15 IS NULL THEN '19000101' ELSE Fromattr.Lottable15 END
             ,@c_ToStorerkey    = ToStorerkey
             ,@c_ToSku          = ToSku
             ,@c_ToLoc          = ToLoc
