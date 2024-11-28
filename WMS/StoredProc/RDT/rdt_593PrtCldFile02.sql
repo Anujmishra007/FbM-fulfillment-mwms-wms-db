@@ -82,8 +82,7 @@ BEGIN
       @cRptDataWindow         NVARCHAR( 50),
       @b_Success              INT,
       @c_VbErrMsg             NVARCHAR( MAX),
-      @nRtnCnt                INT,
-      @nCartonCount           INT
+      @nRtnCnt                INT
 
    -- fetch printer
    SELECT @cLabelPrinter = Printer
@@ -98,30 +97,23 @@ BEGIN
    -- get orderkey by labelno if only labelno is scanned
    IF (ISNULL(@cLabelNo, '') <> '' AND ISNULL(@cOrderKey, '') = '')
    BEGIN
-      SELECT @nCartonCount = COUNT(1)
-      FROM dbo.PackDetail WITH(NOLOCK)
-      WHERE LabelNo = @cLabelNo
+      SELECT DISTINCT @cOrderKey = ph.OrderKey
+      FROM dbo.PackHeader ph WITH(NOLOCK)
+      INNER JOIN dbo.PackDetail pd WITH(NOLOCK)
+      ON ph.PickSlipNo = pd.PickSlipNo
+      WHERE pd.LabelNo = @cLabelNo
 
-      IF @nCartonCount = 0
+      IF @@ROWCOUNT = 0
       BEGIN
          SET @nErrno = 228513
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Invalid LabelNo
          GOTO Quit
       END
-
-      IF @nCartonCount > 1
+      IF @@ROWCOUNT > 1
       BEGIN
          SET @nErrno = 228512
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Multiple Carton Found
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Multiple Order Found
          GOTO Quit
-      END
-      ELSE
-      BEGIN
-         SELECT TOP 1 @cOrderKey = ph.OrderKey
-         FROM dbo.PackHeader ph WITH(NOLOCK)
-         INNER JOIN dbo.PackDetail pd WITH(NOLOCK)
-         ON ph.PickSlipNo = pd.PickSlipNo
-         WHERE pd.LabelNo = @cLabelNo
       END
    END
 
