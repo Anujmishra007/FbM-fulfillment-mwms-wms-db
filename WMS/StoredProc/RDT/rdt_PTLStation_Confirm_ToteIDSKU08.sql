@@ -237,7 +237,7 @@ BEGIN
            
                IF @nErrNo <> 0  
                GOTO RollBackTran
-               FETCH NEXT FROM @curPD INTO @cPickDetailKey
+               FETCH NEXT FROM @curPD INTO @cPickDetailKey, @nPDQty, @cPDLoc
             END
          END
          
@@ -450,7 +450,7 @@ BEGIN
          WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
             COMMIT TRAN
          
-         FETCH NEXT FROM @curPTL INTO @nPTLKey, @cIPAddress, @cPosition, @nExpectedQTY
+         FETCH NEXT FROM @curPTL INTO @nPTLKey, @cIPAddress, @cPosition, @nExpectedQTY,@cDeviceID
       END
    END
 
