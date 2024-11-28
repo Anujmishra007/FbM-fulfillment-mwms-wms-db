@@ -3,74 +3,73 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
     
-/**************************************************************************/    
-/* Store procedure: rdt_Move                                              */    
-/* Copyright      : IDS                                                   */    
-/*                                                                        */    
-/* Purpose: RDT common move                                               */    
-/*                                                                        */    
-/* Called from: 3                                                         */    
-/*    1. From PowerBuilder                                                */    
-/*    2. From scheduler                                                   */    
-/*    3. From others stored procedures or triggers                        */    
-/*    4. From interface program. DX, DTS                                  */    
-/*                                                                        */    
-/* Exceed version: 5.4                                                    */    
-/*                                                                        */    
-/* Modifications log:                                                     */    
-/*                                                                        */    
-/* Date       Rev    Author   Purposes                                    */    
-/* 2006-07-10 1.0    UngDH    Created                                     */    
-/* 2006-10-27 1.1    UngDH    Add storer config MoveToLOCNotCheckFacility */    
-/*                            Fix ToID cannot set to blank                */    
-/* 2006-11-22 1.2    UngDH    Fix checking of CantMixSKU&UCC doesnt get   */    
-/*                            location type                               */    
-/* 2007-04-27 1.3    James    SOS67842 Add no. of move that can be        */    
-/*                            performed per session                       */    
-/* 2007-05-15 1.4    AuwYong  SOS72009 Adding Checking for location not   */    
-/*                            allow for comingle sku                      */    
-/* 2007-05-31 1.5    Vicky    SOS#77266 - Commingle sku checking not      */    
-/*                            accurate, rewrite the checking part         */    
-/* 2008-03-19 1.6    James    Break @curUCC into 2 statement and forced   */    
-/*                            to use index hint IDX_UCC_LOTxLOCxID        */    
-/* 2010-10-01 1.7    Shong    Qty Available need to deduct ReplenQty  */    
-/* 2011-11-11 1.8    ChewKP   LCI Project Changes Update UCC Table        */    
-/*                            (ChewKP01)                                  */    
-/* 2011-11-29 1.9    Ung      SOS229877 Add MoveCheckLOCColumnRestriction */    
-/* 2012-02-14 2.0    James    For UCC move, if from loc doesn't have id   */    
-/*                            then ignore id (james01)                    */    
-/* 2012-05-07 2.1    ChewKP   SOS#243561 - LoseUCC (ChewKP02)             */    
-/* 2012-07-19 2.2    ChewKP   SOS#250946 - LoseID for UCC (ChewKP03)      */    
-/* 2012-09-24 2.3    Leong    SOS# 256205/258672 - Bug fix.               */    
-/* 2013-01-17 2.4    Ung      Move QTYAlloc and QTYPick by CaseID (ung01) */    
-/*                            Multi SKU UCC (ung02)                       */    
-/* 2013-07-10 2.5    ChewKP   TBL Enhancement -- (ChewKP04)               */    
-/* 2013-10-02 2.6    Chee     Added StorerConfig ByPassCantMixSKUnUCC     */    
-/*                            (Chee01)                                    */    
-/* 2013-01-30 2.7    Ung      SOS251326 Fix trigger rollback but not itrn */    
-/* 2014-02-06 2.8    Ung      SOS296465 Move QTYAlloc with UCC.Status=3   */    
-/* 2014-10-16 2.9    Ung      SOS323013 Performance tuning                */    
-/* 2015-04-30 3.0    Ung      SOS339417 Performance tuning MoveQTYAlloc   */    
-/*                            SOS315975 Add MoveQTYPick                   */    
-/*                            SOS342435 Add QTYReplen                     */    
-/*                            SOS336606 MoveCheckLOCColumnRestriction chg */    
-/* 2015-04-30 3.1    Ung      SOS336606 MoveCheckLOCColumnRestriction chg */    
-/* 2016-03-24 3.2    Ung      SOS366906 Add UCC MoveQTYAlloc without task */    
-/*                            SOS360339 Add MoveQTYAlloc/Pick with CaseID */    
-/* 2016-09-05 3.3    Ung      SOS372531 Fix QTYReplen calc                */    
-/* 2017-07-26 3.4    Ung      Performance tuning                          */    
-/* 2018-10-30 3.5    Ung      WMS-6866 Add Channel                        */    
-/* 2018-12-17 3.6    Ung      WMS-3273 MoveToLOCNotCheckFacility to func  */    
-/* 2019-01-11 3.7    Ung      Performance tuning (to reduce deadlock)     */    
-/* 2020-05-18 3.8    Ung      WMS-127706 Add MoveCheckLOCColumnExactMatch */    
-/* 2020-06-16 3.9    James    WMS-13116 Add insert ItrnUCC (james02)      */    
-/* 2020-08-07 4.0    Ung      Performance tuning (remove where case when) */    
-/* 2021-02-18 4.1    James    WMS-16020 Add WaveKey (james03)             */    
-/* 2022-03-11 4.2    TLTING01 Perfromance tune - Force Order              */ 
-/* 2023-01-09 4.3    James    WMS-21437 Add ToLoc MaxSKU check (james04)  */
-/* 2023-07-24 4.4    Ung      WMS-22703 Fix move by SKU, MOveQTYAlloc     */
-/* 2023-11-27 4.5.0  NLT013   FCR-1522 Support Overallocation for UL      */
-/**************************************************************************/    
+/************************************************************************/    
+/* Store procedure: rdt_Move                                            */    
+/* Copyright      : IDS                                                 */    
+/*                                                                      */    
+/* Purpose: RDT common move                                             */    
+/*                                                                      */    
+/* Called from: 3                                                       */    
+/*    1. From PowerBuilder                                              */    
+/*    2. From scheduler                                                 */    
+/*    3. From others stored procedures or triggers                      */    
+/*    4. From interface program. DX, DTS                                */    
+/*                                                                      */    
+/* Exceed version: 5.4                                                  */    
+/*                                                                      */    
+/* Modifications log:                                                   */    
+/*                                                                      */    
+/* Date       Rev  Author   Purposes                                    */    
+/* 2006-07-10 1.0  UngDH    Created                                     */    
+/* 2006-10-27 1.1  UngDH    Add storer config MoveToLOCNotCheckFacility */    
+/*                          Fix ToID cannot set to blank                */    
+/* 2006-11-22 1.2  UngDH    Fix checking of CantMixSKU&UCC doesnt get   */    
+/*                          location type                               */    
+/* 2007-04-27 1.3  James    SOS67842 Add no. of move that can be        */    
+/*                          performed per session                       */    
+/* 2007-05-15 1.4  AuwYong  SOS72009 Adding Checking for location not   */    
+/*                          allow for comingle sku                      */    
+/* 2007-05-31 1.5  Vicky    SOS#77266 - Commingle sku checking not      */    
+/*                          accurate, rewrite the checking part         */    
+/* 2008-03-19 1.6  James    Break @curUCC into 2 statement and forced   */    
+/*                          to use index hint IDX_UCC_LOTxLOCxID        */    
+/* 2010-10-01 1.7  Shong    Qty Available need to deduct ReplenQty  */    
+/* 2011-11-11 1.8  ChewKP   LCI Project Changes Update UCC Table        */    
+/*                          (ChewKP01)                                  */    
+/* 2011-11-29 1.9  Ung      SOS229877 Add MoveCheckLOCColumnRestriction */    
+/* 2012-02-14 2.0  James    For UCC move, if from loc doesn't have id   */    
+/*                          then ignore id (james01)                    */    
+/* 2012-05-07 2.1  ChewKP   SOS#243561 - LoseUCC (ChewKP02)             */    
+/* 2012-07-19 2.2  ChewKP   SOS#250946 - LoseID for UCC (ChewKP03)      */    
+/* 2012-09-24 2.3  Leong    SOS# 256205/258672 - Bug fix.               */    
+/* 2013-01-17 2.4  Ung      Move QTYAlloc and QTYPick by CaseID (ung01) */    
+/*                          Multi SKU UCC (ung02)                       */    
+/* 2013-07-10 2.5  ChewKP   TBL Enhancement -- (ChewKP04)               */    
+/* 2013-10-02 2.6  Chee     Added StorerConfig ByPassCantMixSKUnUCC     */    
+/*                          (Chee01)                                    */    
+/* 2013-01-30 2.7  Ung      SOS251326 Fix trigger rollback but not itrn */    
+/* 2014-02-06 2.8  Ung      SOS296465 Move QTYAlloc with UCC.Status=3   */    
+/* 2014-10-16 2.9  Ung      SOS323013 Performance tuning                */    
+/* 2015-04-30 3.0  Ung      SOS339417 Performance tuning MoveQTYAlloc   */    
+/*                          SOS315975 Add MoveQTYPick                   */    
+/*                          SOS342435 Add QTYReplen                     */    
+/*                          SOS336606 MoveCheckLOCColumnRestriction chg */    
+/* 2015-04-30 3.1  Ung      SOS336606 MoveCheckLOCColumnRestriction chg */    
+/* 2016-03-24 3.2  Ung      SOS366906 Add UCC MoveQTYAlloc without task */    
+/*                          SOS360339 Add MoveQTYAlloc/Pick with CaseID */    
+/* 2016-09-05 3.3  Ung      SOS372531 Fix QTYReplen calc                */    
+/* 2017-07-26 3.4  Ung      Performance tuning                          */    
+/* 2018-10-30 3.5  Ung      WMS-6866 Add Channel                        */    
+/* 2018-12-17 3.6  Ung      WMS-3273 MoveToLOCNotCheckFacility to func  */    
+/* 2019-01-11 3.7  Ung      Performance tuning (to reduce deadlock)     */    
+/* 2020-05-18 3.8  Ung      WMS-127706 Add MoveCheckLOCColumnExactMatch */    
+/* 2020-06-16 3.9  James    WMS-13116 Add insert ItrnUCC (james02)      */    
+/* 2020-08-07 4.0  Ung      Performance tuning (remove where case when) */    
+/* 2021-02-18 4.1  James    WMS-16020 Add WaveKey (james03)             */    
+/* 2022-03-11 4.2  TLTING01 Perfromance tune - Force Order              */ 
+/* 2023-01-09 4.3  James    WMS-21437 Add ToLoc MaxSKU check (james04)  */
+/* 2023-07-24 4.4  Ung      WMS-22703 Fix move by SKU, MOveQTYAlloc     */
+/************************************************************************/    
     
 CREATE OR ALTER  PROCEDURE [RDT].[rdt_Move] (    
    @nMobile     INT,    
@@ -1281,8 +1280,7 @@ SET @cSQL =
          ' LLI.LOC, ' +     
          ' LLI.ID,  ' +     
          ' LLI.QTY, ' +     
-         --' LLI.QTY - LLI.QTYAllocated - LLI.QTYPicked - ' +
-		 ' LLI.QTY - (LLI.QTYAllocated - LLI.QTYExpected) - LLI.QTYPicked - ' +  --FCR-1152
+         ' LLI.QTY - LLI.QTYAllocated - LLI.QTYPicked - ' +     
          CASE WHEN @nQTYReplen > 0 THEN '0' ELSE '(CASE WHEN LLI.QtyReplen < 0 THEN 0 ELSE LLI.QtyReplen END)' END + ' QTYAvail, ' +     
          ' LLI.QTYAllocated, ' +     
          ' LLI.QTYPicked, ' +     
@@ -1295,19 +1293,18 @@ SET @cSQL =
          ' INNER JOIN dbo.Pack Pack (NOLOCK) ON (SKU.PackKey = Pack.PackKey) ' +     
       ' WHERE LLI.StorerKey = @cStorerKey ' +      
          ' AND LLI.LOC = @cFromLOC ' +      
-         ' AND LLI.Qty > 0 ' +      
          CASE WHEN @cFromID  IS NULL THEN '' ELSE ' AND LLI.ID  = @cFromID  ' END +     
          CASE WHEN @cFromLOT IS NULL THEN '' ELSE ' AND LLI.LOT = @cFromLOT ' END +     
          CASE WHEN @cSKU     IS NULL THEN '' ELSE ' AND LLI.SKU = @cSKU     ' END + -- Move by SKU    
          CASE WHEN @cUCC     IS NULL THEN '' ELSE ' AND LLI.LOT = @cUCCLOT  ' END + -- Move by UCC (already got LOT,LOC,ID)    
          ' AND LLI.QTY - ' +     
-            CASE WHEN @cMoveQTYAlloc = '1' THEN '0' ELSE ' (LLI.QTYAllocated - LLI.QTYExpected) ' END + ' - ' +       --FCR-1152
+            CASE WHEN @cMoveQTYAlloc = '1' THEN '0' ELSE ' LLI.QTYAllocated ' END + ' - ' +     
             CASE WHEN @cMoveQTYPick = '1'  THEN '0' ELSE ' LLI.QTYPicked ' END + ' - ' +     
             CASE WHEN @nQTYReplen > 0      THEN '0' ELSE ' (CASE WHEN LLI.QtyReplen < 0 THEN 0 ELSE LLI.QtyReplen END) ' END +     
-            ' >= 0 ' +     
+            ' > 0 ' +     
       ' ORDER BY SKU.SKU, LLI.LOT, LLI.QTY ' +        --tlting01
       ' OPTION (FORCE ORDER) ' +  --tlting01
-      ' OPEN @curLLI '
+      ' OPEN @curLLI '     
     
 SET @cSQLParam =     
    ' @curLLI      CURSOR OUTPUT, ' +     
