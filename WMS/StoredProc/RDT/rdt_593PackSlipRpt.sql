@@ -12,6 +12,7 @@ GO
 /* Date       Rev    Author     Purposes                                      */
 /* 2024-10-29 1.0.0  NLT03      FCR-1096 re-print Order Level labels          */
 /* 2024-11-11 1.0.1  Dennis     PickDetail status >= picked status            */
+/* 2024-11-27 1.0.1  NLT03      FCR-1096 fix wrong validationn                */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_593PackSlipRpt] (
@@ -85,7 +86,7 @@ AS
          AND OrderKey = @cOrderKey 
          AND Status IN ('5', '9')
          AND TRIM(CaseID) <> '')
-      =
+      <>
       (SELECT COUNT( DISTINCT RefNo )
       FROM dbo.PICKDETAIL PKD WITH(NOLOCK)
       INNER JOIN dbo.PackInfo PI WITH(NOLOCK) ON ISNULL(PKD.CaseID, '-1') = ISNULL(PI.RefNo, '')
