@@ -866,11 +866,9 @@ BEGIN
                            END
                      IF EXISTS (SELECT 1
                               FROM AdjustmentDetail AD (NOLOCK)
-                              JOIN LotxLocxId LLI (NOLOCK) ON AD.ID = LLI.Id
-                              WHERE 1 = 1
+                              JOIN LotxLocxId LLI (NOLOCK) ON AD.ID = LLI.Id AND AD.StorerKey = LLI.StorerKey
+                              WHERE AD.ID <> ''
                                  AND LLI.QTY - LLI.QtyPicked > 0
-                                 AND AD.STORERKEY <> ''
-                                 AND AD.ID <> ''
                                  AND AD.Loc <> LLI.Loc
                                  AND AD.AdjustmentKey = @c_ADJKey
                                  AND AdjustmentLineNumber = @c_adjline)
