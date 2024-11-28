@@ -561,7 +561,7 @@ BEGIN
          FETCH NEXT FROM CUR_TRFCHANNEL INTO @cTransferLineNumber, @cFromLOT, @cFromSKU, @cFromChannel, @nFromQty, @cToChannel       
          
          WHILE @@FETCH_STATUS = 0 AND @nContinue IN (1,2)
-         BEGIN         	
+         BEGIN          
             SET @n_Channel_ID = 0
             SET @n_ChannelAvailableQty = 0
             
@@ -574,7 +574,7 @@ BEGIN
                    ,@n_Channel_ID  = @n_Channel_ID OUTPUT
                    ,@b_Success     = @b_Success OUTPUT
                    ,@n_ErrNo       = @n_Err     OUTPUT
-                   ,@c_ErrMsg      = @c_ErrMsg  OUTPUT      	
+                   ,@c_ErrMsg      = @c_ErrMsg  OUTPUT         
             
             IF ISNULL(@n_Channel_ID,0) = 0
             BEGIN
@@ -582,7 +582,7 @@ BEGIN
                SET @n_err = 80030
                SET @c_errmsg =  'NSQL' + CONVERT(CHAR(5), ISNULL(RTrim(@n_err),0))
                              + ' Unable find from Channel inventory at transfer line ' + @cTransferLineNumber + ' (ispFinalizeTransfer) ( '
-                             + ' SQLSvr MESSAGE=' + ISNULL(dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)),'') + ' ) '            	
+                             + ' SQLSvr MESSAGE=' + ISNULL(dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)),'') + ' ) '             
             END
             ELSE
             BEGIN
@@ -596,17 +596,17 @@ BEGIN
                   SET @n_err = 80040
                   SET @c_errmsg =  'NSQL' + CONVERT(CHAR(5), ISNULL(RTrim(@n_err),0))
                                 + ' Insufficient from Channel inventory qty at transfer line ' + @cTransferLineNumber + ' (ispFinalizeTransfer) ( '
-                                + ' SQLSvr MESSAGE=' + ISNULL(dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)),'') + ' ) '            	                  
-               END                           	
+                                + ' SQLSvr MESSAGE=' + ISNULL(dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)),'') + ' ) '                               
+               END                              
             END
-            	  
+                 
             FETCH NEXT FROM CUR_TRFCHANNEL INTO @cTransferLineNumber, @cFromLOT, @cFromSKU, @cFromChannel, @nFromQty, @cToChannel       
          END
          CLOSE CUR_TRFCHANNEL
-         DEALLOCATE CUR_TRFCHANNEL      	      
+         DEALLOCATE CUR_TRFCHANNEL              
          
          IF @nContinue = 3
-            GOTO Quit_Proc         	
+            GOTO Quit_Proc          
       END      
    END
    --NJOW05 E
@@ -1089,8 +1089,8 @@ BEGIN
                                       WHEN RTRIM(trn.ToLot) !='' AND Toattr.Lottable15 IS NOT NULL THEN Toattr.Lottable15
                                       ELSE trn.ToLottable15 END
       FROM TRANSFERDETAIL trn WITH (NOLOCK)
-      LEFT JOIN LOTATTRIBUTE Fromattr WITH(NOLOCK) ON trn.FromLot = Fromattr.Lot
-      LEFT JOIN LOTATTRIBUTE Toattr WITH(NOLOCK) ON trn.ToLot = Toattr.Lot
+      INNER JOIN LOTATTRIBUTE Fromattr WITH(NOLOCK) ON trn.FromLot = Fromattr.Lot
+      LEFT OUTER JOIN LOTATTRIBUTE Toattr WITH(NOLOCK) ON trn.ToLot = Toattr.Lot
       WHERE TransferKey = @c_TrfKey
       AND   TransferLineNumber = @c_TrfLineNo
 
