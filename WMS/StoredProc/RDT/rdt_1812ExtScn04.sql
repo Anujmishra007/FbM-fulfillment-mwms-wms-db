@@ -14,6 +14,7 @@ GO
 /* 2024-11-01 1.0.0   YYS027   FCR-989 Min Max Replenishment to add               */
 /*                             screen for choicing whether location is empty.     */
 /*                             use config ExtScnSP in rdt.StorerConfig            */
+/* 2024-11-01 1.1.0   NLT013   UWP-27662 fix a bug: DropID is invisibe            */
 /**********************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_1812ExtScn04] (
@@ -208,7 +209,8 @@ Step 99. screen = 4028. Is the location completely empty?
                BEGIN
                   SET @nErrNo = 228201
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Option needed
-                  GOTO Quit_4028
+                  SET @cOutField01 = ''
+                  GOTO Quit
                END
 
                -- Check option is valid
@@ -216,7 +218,9 @@ Step 99. screen = 4028. Is the location completely empty?
                BEGIN
                   SET @nErrNo = 228202
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Option
-                  GOTO Quit_4028
+                  SET @cOption = ''
+                  SET @cOutField01 = ''
+                  GOTO Quit
                END
                SET @cLocEmptyOption = @cOption     --to Save to V_String14 => C_String14
                UPDATE rdt.RDTMOBREC WITH(ROWLOCK) SET C_String14 = @cLocEmptyOption WHERE Mobile = @nMobile
@@ -352,16 +356,9 @@ Step 99. screen = 4028. Is the location completely empty?
       END
 
    END
-Quit_4028:
-   BEGIN
-      SET @cOption = ''
-      SET @cOutField01 = '' -- Option
-   END
-   GOTO Quit
-
 Quit:
 
-END; 
+END
 
 SET QUOTED_IDENTIFIER OFF 
 GO
