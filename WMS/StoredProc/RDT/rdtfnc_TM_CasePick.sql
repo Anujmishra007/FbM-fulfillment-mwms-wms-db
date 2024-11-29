@@ -36,7 +36,8 @@ GO
 /* 2024-10-24 2.7    YYS027     FCR-989 Min Max Replenishment                   */
 /*            2.7.1  YYS027     move new screen to rdt_1812ExtScn04             */
 /* 2024-09-23 2.8    James      WMS-26122 Add ExtendedScreenSP (james02)        */  
-/* 2024-11-12 2.9    PXL009     FCR-1125 Merged 2.2, 2.3->2.8 from v0 branch    */  
+/* 2024-11-12 2.9    PXL009     FCR-1125 Merged 2.2, 2.3->2.8 from v0 branch    */
+/* 2024-11-29 2.9.1  PXL009       change the ExtScn call point in step 4        */
 /********************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_CasePick](
@@ -1848,15 +1849,6 @@ BEGIN
          SET @nScn = @nScn + 1
          SET @nStep = @nStep + 1
       END
-
-      --A new screen will  require the user to confirm the option . This will be prompted immediately after the user has entered the SKU Quantity on Step 4.
-      --   If the user presses escape then he can be taken to quantity entry screen. Act as a popup Window
-      IF ISNULL(@cExtScnSP,'')<>'' AND EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
-      BEGIN
-         -- @cExtScnSP is ready, Goto 99 to call @cExtScnSP, and @cReplenFlag=1 will be check in @cExtScnSP
-         SET @nAction =0
-         Goto Step_99
-      END
    END
 
    IF @nInputKey = 0 -- ESC
@@ -1903,6 +1895,16 @@ BEGIN
          END
       END
    END
+
+   --A new screen will  require the user to confirm the option . This will be prompted immediately after the user has entered the SKU Quantity on Step 4.
+   --   If the user presses escape then he can be taken to quantity entry screen. Act as a popup Window
+   IF ISNULL(@cExtScnSP,'')<>'' AND EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
+   BEGIN
+      -- @cExtScnSP is ready, Goto 99 to call @cExtScnSP, and @cReplenFlag=1 will be check in @cExtScnSP
+      SET @nAction =0
+      Goto Step_99
+   END
+
    GOTO Quit
 
    Step_4_Fail:
