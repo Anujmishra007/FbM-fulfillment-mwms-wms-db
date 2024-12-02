@@ -12,7 +12,8 @@ GO
 /* Purpose: Accept QTY in CS-PCS, format 9-999                          */      
 /*                                                                      */      
 /* Date       Rev  Author   Purposes                                    */      
-/* 02-09-2024 1.0  YeeKung  FCR-609 Created                             */      
+/* 02-09-2024 1.0  YeeKung  FCR-609 Created                             */   
+/* 02-12-2024 1.1  YeeKung  UWP-27793 Solved DB Blocking (yeekung01)    */
 /************************************************************************/      
       
 CREATE  OR ALTER  PROC [PTL].[isp_805PTL_Confirm14] (      
@@ -855,8 +856,12 @@ BEGIN TRY
    END CATCH      
       
 Quit:      
-WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started      
-   COMMIT TRAN 
+IF XACT_STATE() <> -1      
+BEGIN                      -- XACT_STATE() = 1 (committable), -1 (uncommittable), 0 (no transaction)  
+   WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started  
+   COMMIT TRAN  
+
+END 
 GO
 GRANT EXECUTE ON  [PTL].[isp_805PTL_Confirm11] TO [NSQL]
 GO
