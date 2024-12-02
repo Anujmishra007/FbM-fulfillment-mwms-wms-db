@@ -38,7 +38,7 @@ GO
 /* 2024-09-23 2.8    James      WMS-26122 Add ExtendedScreenSP (james02)        */  
 /* 2024-11-12 2.9    PXL009     FCR-1125 Merged 2.2, 2.3->2.8 from v0 branch    */
 /* 2024-11-29 2.9.1  PXL009             change the ExtScn call point in step 4  */
-/* 2024-11-29 2.9.2  PXL009             change the ExtScn call point in step 6  */
+/* 2024-12-02 2.9.2  PXL009             change the ExtScn call point in step 6  */
 /********************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_CasePick](
