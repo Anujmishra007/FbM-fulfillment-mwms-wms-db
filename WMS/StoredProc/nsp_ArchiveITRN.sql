@@ -1,61 +1,58 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[nsp_ArchiveITRN]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[nsp_ArchiveITRN]
-GO
- 
+
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
-/************************************************************************/  
-/* Stored Proc : nsp_ArchiveITRN                                        */  
-/* Creation Date:                                                       */  
-/* Copyright: IDS                                                       */  
-/* Written by:                                                          */  
-/*                                                                      */  
-/* Purpose:                                                             */  
-/*                                                                      */  
-/* Input Parameters: NONE                                               */  
-/*                                                                      */  
-/* Output Parameters: NONE                                              */  
-/*                                                                      */  
-/* Return Status: NONE                                                  */  
-/*                                                                      */  
-/* Usage:                                                               */  
-/*                                                                      */  
-/* Local Variables:                                                     */  
-/*                                                                      */  
-/* Called By: nspArchiveShippingOrder                                   */  
-/*                                                                      */  
-/* PVCS Version: 1.15                                                   */  
-/*                                                                      */  
-/* Version: 6.0                                                         */  
-/*                                                                      */  
-/* Data Modifications:                                                  */  
-/*                                                                      */  
-/* Updates:                                                             */  
-/* Date         Author     Purposes                                     */  
-/* 18-Aug-2005  Shong      CONVERT Bug Update to Cursor loop            */  
-/* 24-Aug-2005  YokeBeen   - SQL2K Upgrading Project-V6.0.              */  
-/*                           Changed double quote to single quote.      */  
-/*                           Added dbo. for all the EXECUTE statement.  */  
-/*                           - (YokeBeen01).                            */  
-/* 13-Dec-2005  Shong      Capture proper error message when failed     */  
-/* 04-May-2007  Shong      Commit Transaction by Line Level             */  
-/* 07-Jan-2010  Vicky      Archive LotxLocxID should also look at       */  
-/*                         PendingMoveIn QTY (Vicky01)                  */  
-/* 31-May-2010  TLTING     LOT check on PendingMoveIn (tlting01)        */
-/* 30-Jul-2010  TLTING     DELETE lot when lotxlocxid delete            */  
-/* 12-Oct-2011  TLTING01   check pickdetail when lotxlocxid delete      */  
-/* 07-Dec-2011  TLTING01   IF E1 storer delete all lli is 0             */
-/* 24-Sep-2014  TLTING02   not to disable Pickdetail Constraint         */
-/* 03-May-2017  TLTING03   Filter editdate                              */
-/* 29-Jun-2017  TLTING04   Add parameter to skip Pickdetail check in    */
-/*                          Lotxlocxid housekeep                        */
-/* 21-Jul-2020  TLTING05   Add ITRNUCC                                  */
-/************************************************************************/  
-  
-CREATE   PROC    nsp_ArchiveITRN  
+/*************************************************************************/  
+/* Stored Proc : nsp_ArchiveITRN                                         */  
+/* Creation Date:                                                        */  
+/* Copyright: Maersk                                                     */  
+/* Written by:                                                           */  
+/*                                                                       */  
+/* Purpose:                                                              */  
+/*                                                                       */  
+/* Input Parameters: NONE                                                */  
+/*                                                                       */  
+/* Output Parameters: NONE                                               */  
+/*                                                                       */  
+/* Return Status: NONE                                                   */  
+/*                                                                       */  
+/* Usage:                                                                */  
+/*                                                                       */  
+/* Local Variables:                                                      */  
+/*                                                                       */  
+/* Called By: nspArchiveShippingOrder                                    */  
+/*                                                                       */  
+/* PVCS Version: 1.15                                                    */  
+/*                                                                       */  
+/* Version: 6.0                                                          */  
+/*                                                                       */  
+/* Data Modifications:                                                   */  
+/*                                                                       */  
+/* Updates:                                                              */  
+/* Date         Author     Purposes                                      */  
+/* 18-Aug-2005  Shong      CONVERT Bug Update to Cursor loop             */  
+/* 24-Aug-2005  YokeBeen   - SQL2K Upgrading Project-V6.0.               */  
+/*                           Changed double quote to single quote.       */  
+/*                           Added dbo. for all the EXECUTE statement.   */  
+/*                           - (YokeBeen01).                             */  
+/* 13-Dec-2005  Shong      Capture proper error message when failed      */  
+/* 04-May-2007  Shong      Commit Transaction by Line Level              */  
+/* 07-Jan-2010  Vicky      Archive LotxLocxID should also look at        */  
+/*                         PendingMoveIn QTY (Vicky01)                   */  
+/* 31-May-2010  TLTING     LOT check on PendingMoveIn (tlting01)         */
+/* 30-Jul-2010  TLTING     DELETE lot when lotxlocxid delete             */  
+/* 12-Oct-2011  TLTING01   check pickdetail when lotxlocxid delete       */  
+/* 07-Dec-2011  TLTING01   IF E1 storer delete all lli is 0              */
+/* 24-Sep-2014  TLTING02   not to disable Pickdetail Constraint          */
+/* 03-May-2017  TLTING03   Filter editdate                               */
+/* 29-Jun-2017  TLTING04   Add parameter to skip Pickdetail check in     */
+/*                          Lotxlocxid housekeep                         */
+/* 21-Jul-2020  TLTING05   Add ITRNUCC                                   */
+/* 02-Dec-2024  SWT01      FCR-1651 Add LocationType BackLoc filter      */
+/*                         in SKUxLOC                                    */
+/*************************************************************************/  
+CREATE OR ALTER PROC    [dbo].[nsp_ArchiveITRN]  
  @c_archivekey  NVARCHAR(10),  
  @b_Success      int        OUTPUT,      
  @n_err          int        OUTPUT,     
@@ -611,7 +608,7 @@ IF ((@n_continue = 1 OR @n_continue = 2) AND @copyrowstoarchivedatabase = 'y')
       WHERE Qty = 0  
         AND QtyAllocated = 0  
         AND QtyPicked = 0  
-        AND LocationType NOT IN ('PICK','CASE')  
+        AND LocationType NOT IN ('PICK','CASE','BACKLOC')  -- (SWT01)
        
      OPEN C_ARC_SKUxLOC    
        
@@ -804,6 +801,3 @@ QUIT:
  END  
    
 END -- main
-GO
-GRANT EXECUTE ON [dbo].[nsp_ArchiveITRN] TO nSQL 
-GO
