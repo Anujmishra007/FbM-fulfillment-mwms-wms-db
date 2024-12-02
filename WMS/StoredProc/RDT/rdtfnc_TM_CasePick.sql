@@ -3381,32 +3381,6 @@ BEGIN
       END
    END
 
-   -- Extended info
-   IF @cExtendedInfoSP <> ''
-   BEGIN
-      IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')
-      BEGIN
-         SET @cExtendedInfo1 = ''
-         SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
-            ' @nMobile, @nFunc, @cLangCode, @nStep, @cTaskdetailKey, @cExtendedInfo1 OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nAfterStep'
-         SET @cSQLParam =
-            '@nMobile         INT,           ' +
-            '@nFunc           INT,           ' +
-            '@cLangCode       NVARCHAR( 3),  ' +
-            '@nStep           INT,           ' +
-            '@cTaskdetailKey  NVARCHAR( 10), ' +
-            '@cExtendedInfo1  NVARCHAR( 20) OUTPUT, ' +
-            '@nErrNo          INT           OUTPUT, ' +
-            '@cErrMsg         NVARCHAR( 20) OUTPUT, ' +
-            '@nAfterStep      INT '
-
-         EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-            @nMobile, @nFunc, @cLangCode, 99, @cTaskdetailKey, @cExtendedInfo1 OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nStep
-
-         SET @cOutField10 = @cExtendedInfo1
-      END
-   END
-
    GOTO Quit
 
 Step_99_Fail:

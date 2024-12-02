@@ -70,7 +70,11 @@ BEGIN
    @cDropID          NVARCHAR( 20),
    @cQTY             NVARCHAR( 20),
    @nQTY             INT, 
-   @cToLOC           NVARCHAR( 10)
+   @cToLOC           NVARCHAR( 10),
+   @cSQL             NVARCHAR(MAX),
+   @cSQLParam        NVARCHAR(MAX),
+   @cExtendedInfo1   NVARCHAR(20),
+   @cExtendedInfoSP  NVARCHAR(20)
 
    -- Screen constant  
    DECLARE @nScn_ToLane    INT = 6520  
@@ -302,6 +306,33 @@ BEGIN
    END  
      
 Quit:  
+
+-- Extended info
+IF @cExtendedInfoSP <> ''
+BEGIN
+   IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')
+   BEGIN
+      SET @cExtendedInfo1 = ''
+      SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
+         ' @nMobile, @nFunc, @cLangCode, @nStep, @cTaskdetailKey, @cExtendedInfo1 OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nAfterStep'
+      SET @cSQLParam =
+         '@nMobile         INT,           ' +
+         '@nFunc           INT,           ' +
+         '@cLangCode       NVARCHAR( 3),  ' +
+         '@nStep           INT,           ' +
+         '@cTaskdetailKey  NVARCHAR( 10), ' +
+         '@cExtendedInfo1  NVARCHAR( 20) OUTPUT, ' +
+         '@nErrNo          INT           OUTPUT, ' +
+         '@cErrMsg         NVARCHAR( 20) OUTPUT, ' +
+         '@nAfterStep      INT '
+
+      EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+         @nMobile, @nFunc, @cLangCode, 99, @cTaskdetailKey, @cExtendedInfo1 OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nAfterStep
+
+      SET @cOutField10 = @cExtendedInfo1
+   END
+END
+
 END  
   
 SET QUOTED_IDENTIFIER OFF 
