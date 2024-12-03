@@ -61,67 +61,15 @@ BEGIN
             DECLARE @cBatchPrefixU     NVARCHAR(10)
             DECLARE @cBatchPrefixNotU  NVARCHAR(10)
 
-            SELECT @cOption = Code 
-              FROM dbo.CODELKUP WITH(NOLOCK)
-             WHERE Storerkey = @cStorerKey
-               AND LISTNAME = 'RDTLBLRPT'
-               AND code2 = 'FULLLPWGT' 
-
-            -- Print label
-            EXEC RDT.rdt_593PrintHK01
-                @nMobile    ,
-                @nFunc      ,
-                @nStep      ,
-                @cLangCode  ,
-                @cStorerKey ,
-                @cOption    ,
-                @cReceiptKey,
-                @cID        ,
-                ''          ,
-                ''          ,
-                ''          ,
-                @nErrNo     OUTPUT,
-                @cErrMsg    OUTPUT
-            IF @nErrNo <> 0
-               GOTO Quit
-
-
-            IF ISNULL(@cLottable08,'0') != '0'  AND ISNULL(@cLottable09,'0') != '0'
-            BEGIN
-                SELECT @cOption = Code 
-                  FROM dbo.CODELKUP WITH(NOLOCK)
-                 WHERE Storerkey = @cStorerKey
-                   AND LISTNAME = 'RDTLBLRPT'
-                   AND code2 = 'SWEEPINGBAG' 
-
-               EXEC RDT.rdt_593PrintHK01
-                    @nMobile    ,
-                    @nFunc      ,
-                    @nStep      ,
-                    @cLangCode  ,
-                    @cStorerKey ,
-                    @cOption    ,
-                    @cReceiptKey,
-                    ''          ,
-                    ''          ,
-                    ''          ,
-                    ''          ,
-                    @nErrNo     OUTPUT,
-                    @cErrMsg    OUTPUT
-                IF @nErrNo <> 0
-                   GOTO Quit
-            END
-
-
             SELECT @cBatchPrefixNotU = Short
-              FROM dbo.CODELKUP WITH(NOLOCK)
-             WHERE LISTNAME = 'RPTREASON'
+            FROM dbo.CODELKUP WITH(NOLOCK)
+            WHERE LISTNAME = 'RPTREASON'
                AND Storerkey = @cStorerKey
                AND code = 'BatchPrefixNotU'
 
             SELECT @cBatchPrefixU = Short
-              FROM dbo.CODELKUP WITH(NOLOCK)
-             WHERE LISTNAME = 'RPTREASON'
+            FROM dbo.CODELKUP WITH(NOLOCK)
+            WHERE LISTNAME = 'RPTREASON'
                AND Storerkey = @cStorerKey
                AND code = 'BatchPrefixU'
 
@@ -137,16 +85,66 @@ BEGIN
 
             UPDATE dbo.RECEIPTDETAIL WITH(ROWLOCK)
                SET ConditionCode = CASE WHEN substring(Lottable01,1,1) = 'U' THEN @cBatchPrefixU ELSE @cBatchPrefixNotU END
-             WHERE StorerKey = @cStorerKey
+            WHERE StorerKey = @cStorerKey
                AND ReceiptKey = @cReceiptKey
                AND ToId = @cID
 
+
+            SELECT @cOption = Code 
+            FROM dbo.CODELKUP WITH(NOLOCK)
+            WHERE Storerkey = @cStorerKey
+               AND LISTNAME = 'RDTLBLRPT'
+               AND code2 = 'FULLLPWGT' 
+
+            -- Print label
+            EXEC RDT.rdt_593PrintHK01
+               @nMobile    ,
+               @nFunc      ,
+               @nStep      ,
+               @cLangCode  ,
+               @cStorerKey ,
+               @cOption    ,
+               @cReceiptKey,
+               @cID        ,
+               ''          ,
+               ''          ,
+               ''          ,
+               @nErrNo     OUTPUT,
+               @cErrMsg    OUTPUT
+            IF @nErrNo <> 0
+               GOTO Quit
+
+
+            IF ISNULL(@cLottable08,'0') != '0'  AND ISNULL(@cLottable09,'0') != '0'
+            BEGIN
+               SELECT @cOption = Code 
+               FROM dbo.CODELKUP WITH(NOLOCK)
+               WHERE Storerkey = @cStorerKey
+                  AND LISTNAME = 'RDTLBLRPT'
+                  AND code2 = 'SWEEPINGBAG' 
+
+               EXEC RDT.rdt_593PrintHK01
+                  @nMobile    ,
+                  @nFunc      ,
+                  @nStep      ,
+                  @cLangCode  ,
+                  @cStorerKey ,
+                  @cOption    ,
+                  @cReceiptKey,
+                  ''          ,
+                  ''          ,
+                  ''          ,
+                  ''          ,
+                  @nErrNo     OUTPUT,
+                  @cErrMsg    OUTPUT
+               IF @nErrNo <> 0
+                  GOTO Quit
+            END
          END
       END
    END
 
 Quit:
-
 END
 
 GO 
