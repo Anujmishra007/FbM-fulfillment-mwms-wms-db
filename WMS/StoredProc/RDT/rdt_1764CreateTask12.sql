@@ -11,7 +11,8 @@
 /* Modifications log:                                                   */
 /*                                                                      */
 /* Date        Rev  Author    Purposes                                  */
-/* 29-Nov-2024 1.0  VBH079	  Change the Lock PND transit LOC. 1=Yes,0=No*/
+/* 29-Nov-2024 1.0  VBH079	   FCR-1652 Change the Lock PND transit LOC. */
+/*                               1=Yes,0=No*/
 /*************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1764CreateTask12] (
