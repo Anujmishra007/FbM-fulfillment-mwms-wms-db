@@ -3,7 +3,6 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-
 /*********************************************************************************/
 /* Store procedure: rdtfnc_TM_CasePick                                           */
 /* Copyright      : Maersk                                                       */
@@ -39,6 +38,7 @@ GO
 /* 2024-10-31 2.8.1  PXL009              Restore preferred UOM when exit         */
 /* 2024-09-23 2.9    James      WMS-26122 Add ExtendedScreenSP (james02)         */
 /* 2024-11-12 3.0    PXL009     FCR-1125 Merged 2.2, 2.3->2.9 from v0 branch     */
+/* 2024-11-28 3.1    JCH507     UWP-27664 Throw printing error from st6 to st7  */
 /*********************************************************************************/
 
 CREATE OR ALTER  PROC [RDT].[rdtfnc_TM_CasePick](
@@ -2606,7 +2606,7 @@ BEGIN
             IF @nErrNo <> 0
                BEGIN
                   EXEC rdt.rdtSetFocusField @nMobile, 4
-                  GOTO Quit
+                  --GOTO Quit --V3.1 JCH507 
                END
          END
       END
