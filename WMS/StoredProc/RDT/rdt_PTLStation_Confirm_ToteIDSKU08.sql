@@ -476,10 +476,17 @@ BEGIN
          SELECT 
             @cIPAddress = IPAddress, 
             @cPosition = Position, 
-            @cOrderKey = OrderKey
+            @cOrderKey = OrderKey,
+            @cDeviceID = Station
          FROM rdt.rdtPTLStationLog WITH (NOLOCK) 
          WHERE Station IN (@cStation1, @cStation2, @cStation3, @cStation4, @cStation5)
             AND CartonID = @cCartonID
+
+         -- Get station loc
+         SELECT @cStationLoc = Loc
+         FROM dbo.DeviceProfile WITH (NOLOCK)
+         WHERE DeviceID = @cDeviceID
+            AND DevicePosition = @cPosition
 
          SET @nExpectedQTY = NULL
          SET @nQTY_Bal = @nCartonQTY         
@@ -643,7 +650,7 @@ BEGIN
          
             -- Get PickDetail candidate
             SET @curPD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
-               SELECT PickDetailKey, QTY
+               SELECT PickDetailKey, QTY, PD.Loc
                FROM Orders O WITH (NOLOCK) 
                   JOIN PickDetail PD WITH (NOLOCK) ON (PD.OrderKey = O.OrderKey)
                WHERE O.OrderKey = @cOrderKey
@@ -656,7 +663,7 @@ BEGIN
                   AND O.Status <> 'CANC' 
                   AND O.SOStatus <> 'CANC'
             OPEN @curPD
-            FETCH NEXT FROM @curPD INTO @cPickDetailKey, @nQTY_PD 
+            FETCH NEXT FROM @curPD INTO @cPickDetailKey, @nQTY_PD, @cPDLoc 
             WHILE @@FETCH_STATUS = 0
             BEGIN
                -- Exact match
@@ -675,6 +682,29 @@ BEGIN
                      SET @nErrNo = 111615
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD PKDtl Fail
                      GOTO RollBackTran
+                  END
+
+                  IF @cMoveQTYPick = '1'
+                  BEGIN
+                     -- Move DropID to PTL Loc
+                     EXECUTE rdt.rdt_Move  
+                        @nMobile     = @nMobile,  
+                        @cLangCode   = @cLangCode,  
+                        @nErrNo      = @nErrNo  OUTPUT,  
+                        @cErrMsg     = @cErrMsg OUTPUT,  
+                        @cSourceType = 'rdt_PTLStation_Confirm_ToteIDSKU08',  
+                        @cStorerKey  = @cStorerKey,  
+                        @cFacility   = @cFacility,  
+                        @cFromLOC    = @cPDLoc,  
+                        @cToLOC      = @cStationLoc, -- Final LOC  
+                        @cFromID     = @cScanID,  
+                        @cToID       = @cCartonID,  
+                        @cSKU        = @cSKU,  
+                        @nQty        = @nQTY_PD,--@nExpectedQTY,  
+                        @nQTYPick   = @nQTY_PD,--@nExpectedQTY,  
+                        @cDropID     = @cCartonID,
+                        --@cFromLOT    = @cPDLot,
+                        @nFunc       = 805
                   END
          
                   SET @nQTY_Bal = 0 -- Reduce balance
@@ -696,6 +726,29 @@ BEGIN
                      SET @nErrNo = 111616
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD PKDtl Fail
                      GOTO RollBackTran
+                  END
+
+                  IF @cMoveQTYPick = '1'
+                  BEGIN
+                     -- Move DropID to PTL Loc
+                     EXECUTE rdt.rdt_Move  
+                        @nMobile     = @nMobile,  
+                        @cLangCode   = @cLangCode,  
+                        @nErrNo      = @nErrNo  OUTPUT,  
+                        @cErrMsg     = @cErrMsg OUTPUT,  
+                        @cSourceType = 'rdt_PTLStation_Confirm_ToteIDSKU08',  
+                        @cStorerKey  = @cStorerKey,  
+                        @cFacility   = @cFacility,  
+                        @cFromLOC    = @cPDLoc,  
+                        @cToLOC      = @cStationLoc, -- Final LOC  
+                        @cFromID     = @cScanID,  
+                        @cToID       = @cCartonID,  
+                        @cSKU        = @cSKU,  
+                        @nQty        = @nQTY_PD,--@nExpectedQTY,  
+                        @nQTYPick   = @nQTY_PD,--@nExpectedQTY,  
+                        @cDropID     = @cCartonID,
+                        --@cFromLOT    = @cPDLot,
+                        @nFunc       = 805
                   END
          
                   SET @nQTY_Bal = @nQTY_Bal - @nQTY_PD -- Reduce balance
@@ -824,6 +877,29 @@ BEGIN
                         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD PKDtl Fail
                         GOTO RollBackTran
                      END
+
+                     IF @cMoveQTYPick = '1'
+                     BEGIN
+                        -- Move DropID to PTL Loc
+                        EXECUTE rdt.rdt_Move  
+                           @nMobile     = @nMobile,  
+                           @cLangCode   = @cLangCode,  
+                           @nErrNo      = @nErrNo  OUTPUT,  
+                           @cErrMsg     = @cErrMsg OUTPUT,  
+                           @cSourceType = 'rdt_PTLStation_Confirm_ToteIDSKU08',  
+                           @cStorerKey  = @cStorerKey,  
+                           @cFacility   = @cFacility,  
+                           @cFromLOC    = @cPDLoc,  
+                           @cToLOC      = @cStationLoc, -- Final LOC  
+                           @cFromID     = @cScanID,  
+                           @cToID       = @cCartonID,  
+                           @cSKU        = @cSKU,  
+                           @nQty        = @nQTY_PD,--@nExpectedQTY,  
+                           @nQTYPick   = @nQTY_PD,--@nExpectedQTY,  
+                           @cDropID     = @cCartonID,
+                           --@cFromLOT    = @cPDLot,
+                           @nFunc       = 805
+                     END
             
                      SET @nQTY_Bal = 0 -- Reduce balance
                   END
@@ -833,7 +909,7 @@ BEGIN
                IF @cType = 'CLOSECARTON' AND @nQTY_Bal = 0
                   BREAK
          
-               FETCH NEXT FROM @curPD INTO @cPickDetailKey, @nQTY_PD 
+               FETCH NEXT FROM @curPD INTO @cPickDetailKey, @nQTY_PD, @cPDLoc
             END 
          END
       
