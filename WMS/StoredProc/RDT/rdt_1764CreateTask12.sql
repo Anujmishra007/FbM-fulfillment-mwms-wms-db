@@ -1,4 +1,7 @@
-
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS OFF
+GO
 
 /************************************************************************/
 /* Store procedure: rdt_1764CreateTask12                                */
@@ -341,3 +344,12 @@ Quit:
    WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
       COMMIT TRAN
 END
+GO
+
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS ON
+GO
+
+GRANT EXECUTE ON [rdt].[rdt_1764CreateTask12] TO NSQL
+GO
