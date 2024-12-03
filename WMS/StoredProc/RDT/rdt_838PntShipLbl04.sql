@@ -17,6 +17,7 @@ GO
 /* 2024-09-11 1.4    JACKC      FCR-392 Handle special order                      */
 /* 2024-09-30 1.5    NLT013     Fix printing special order labels issue           */
 /* 2024-10-12 1.6.0  NLT013     FCR-955 PPA by LabelNo, instead of PickSLipNo     */
+/* 2024-12-03 1.7.0  NLT013     FCR-1659 Be able to print label for MPOC          */
 /**********************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_838PntShipLbl04 (
@@ -81,7 +82,9 @@ BEGIN
                @cCustomCode               NVARCHAR(30), --v1.4
                @nLoopIndex                INT,
                @nSpecialCartonLabelPrinted       INT = 0,
-               @nSpecialVendorLabelPrinted       INT = 0
+               @nSpecialVendorLabelPrinted       INT = 0,
+               @nMPOCCarton               INT = 0,
+               @nRowCount                 INT = 0
 
             DECLARE @cLabelPrinter     NVARCHAR( 10)
             DECLARE @cPaperPrinter     NVARCHAR( 10)
@@ -145,11 +148,13 @@ BEGIN
                id             INT IDENTITY(1,1),
                Type           NVARCHAR(12),
                UDF01          NVARCHAR(30),
-               code2          NVARCHAR(30)
+               code2          NVARCHAR(30),
+               PrintSequence  INT,
+               IgnoreFlag     INT DEFAULT 0
             )
 
-            INSERT INTO @tCustWorkOrderLabels (Type, UDF01, code2)
-               SELECT DISTINCT lk.Code, lk.UDF01, lk.code2
+            INSERT INTO @tCustWorkOrderLabels (Type, UDF01, code2, PrintSequence)
+               SELECT DISTINCT lk.Code, lk.UDF01, lk.code2, IIF(UPPER(LEFT(lk.code2, 4)) = 'MPOC', 1, 2)
                FROM dbo.WorkOrder wo WITH(NOLOCK)
                INNER JOIN dbo.WorkOrderDetail wod WITH(NOLOCK) ON wo.WorkOrderKey = wod.WorkOrderKey
                INNER JOIN dbo.PickDetail pkd WITH(NOLOCK) ON wod.StorerKey = pkd.StorerKey AND wod.ExternWorkOrderKey = pkd.OrderKey 
@@ -159,12 +164,32 @@ BEGIN
                   AND wod.ExternLineNo = ''
                   AND ISNULL(pkd.CaseID, '') = @cLabelNo
                   AND ISNULL(wod.Remarks, '') <> ''
+               ORDER BY IIF(UPPER(LEFT(lk.code2, 4)) = 'MPOC', 1, 2)
 
             IF @bDebugFlag = 1
             BEGIN
                SELECT 'CustWorkOrderLabel List'
                SELECT * FROM @tCustWorkOrderLabels
             END
+
+            SELECT @nRowCount = COUNT( DISTINCT CONCAT(ORM.BillToKey, ORM.ShipperKey, ORM.MarkforKey) )
+            FROM dbo. PKD WITH(NOLOCK)
+            INNER JOIN dbo.ORDERS ORM WITH(NOLOCK)
+               ON PKD.StorerKey = ORM.StorerKey 
+               AND PKD.OrderKey = ORM.OrderKey
+            WHERE PKD.StorerKey = @cStorerKey 
+               AND ISNULL(PKD.CaseID, '') = @cLabelNo
+
+            IF @nRowCount = 1
+               SET @nMPOCCarton = 1
+            
+            SELECT @nRowCount = COUNT( DISTINCT OrderKey )
+            FROM dbo.PickDetail WITH(NOLOCK)
+            WHERE StorerKey = @cStorerKey 
+               AND ISNULL(CaseID, '') = @cLabelNo
+
+            IF @nRowCount < 2
+               SET @nMPOCCarton = 0
 
             --Print Special Labels
             SET @nLoopIndex = -1
@@ -176,21 +201,40 @@ BEGIN
                   @cCode2 = code2,
                   @nLoopIndex = id
                FROM @tCustWorkOrderLabels
-                  WHERE id > @nLoopIndex
+               WHERE id > @nLoopIndex
+                  AND IgnoreFlag = 0
                ORDER BY id
 
                IF @@ROWCOUNT = 0
                   BREAK
 
-               IF LEFT(@cLabelName, 3) = 'CTN'
+               IF @nMPOCCarton = 1 AND LEFT(@cCode2, 4) = 'MPOC'
                BEGIN
-                  DELETE FROM @tDefaultLabels WHERE (Code = @cVASCode OR code2 = @cCode2) AND LEFT(UDF01, 3) = 'CTN'
-                  SET @nSpecialCartonLabelPrinted = 1
+                  IF UPPER(LEFT(@cCode2, 11)) = 'MPOCCONTENT'
+                  BEGIN
+                     DELETE FROM @tDefaultLabels WHERE LEFT(UDF01, 3) = 'CTN'
+                     UPDATE @tCustWorkOrderLabels SET IgnoreFlag = 1 WHERE LEFT(Code2, 4) <> 'MPOC' AND LEFT(UDF01, 3) = 'CTN' AND id > @nLoopIndex
+                     SET @nSpecialCartonLabelPrinted = 1
+                  END
+                  ELSE
+                  BEGIN
+                     DELETE FROM @tDefaultLabels WHERE LEFT(UDF01, 3) <> 'CTN'
+                     UPDATE @tCustWorkOrderLabels SET IgnoreFlag = 1 WHERE LEFT(Code2, 4) <> 'MPOC' AND LEFT(UDF01, 3) <> 'CTN' AND id > @nLoopIndex
+                     SET @nSpecialVendorLabelPrinted = 1
+                  END
                END
                ELSE
                BEGIN
-                  DELETE FROM @tDefaultLabels WHERE (Code = @cVASCode OR code2 = @cCode2) AND LEFT(UDF01, 3) <> 'CTN'
-                  SET @nSpecialVendorLabelPrinted = 1
+                  IF LEFT(@cLabelName, 3) = 'CTN'
+                  BEGIN
+                     DELETE FROM @tDefaultLabels WHERE (Code = @cVASCode OR code2 = @cCode2) AND LEFT(UDF01, 3) = 'CTN'
+                     SET @nSpecialCartonLabelPrinted = 1
+                  END
+                  ELSE
+                  BEGIN
+                     DELETE FROM @tDefaultLabels WHERE (Code = @cVASCode OR code2 = @cCode2) AND LEFT(UDF01, 3) <> 'CTN'
+                     SET @nSpecialVendorLabelPrinted = 1
+                  END
                END
 
                IF @bDebugFlag = 1

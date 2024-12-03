@@ -12,6 +12,7 @@ GO
 /* Date       Rev    Author     Purposes                                        */
 /* 2018-02-07 1.0    NLT03      FCR-727 Create                                  */
 /* 2024-10-12 1.2.0  NLT013     FCR-955 PPA by LabelNo, instead of PickSLipNo   */
+/* 2024-12-03 1.3.0  NLT013     FCR-1659 Be able to print label for MPOC        */
 /********************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_593CartonLabel01] (
@@ -56,7 +57,9 @@ AS
       @nDefaultLabelQty          INT,
       @nCustomizeLabelQty        INT,
       @nCustWorkOrderLabelQty    INT,
-      @nLoopIndex                INT
+      @nLoopIndex                INT,
+      @nRowCount                 INT,
+      @nMPOCCarton               INT
 
    
    DECLARE @tDefaultLabels TABLE
@@ -105,6 +108,25 @@ AS
       GOTO Quit
    END
 
+   SELECT @nRowCount = COUNT( DISTINCT CONCAT(ORM.BillToKey, ORM.ShipperKey, ORM.MarkforKey) )
+   FROM dbo. PKD WITH(NOLOCK)
+   INNER JOIN dbo.ORDERS ORM WITH(NOLOCK)
+      ON PKD.StorerKey = ORM.StorerKey 
+      AND PKD.OrderKey = ORM.OrderKey
+   WHERE PKD.StorerKey = @cStorerKey 
+      AND ISNULL(PKD.CaseID, '') = @cDropID
+
+   IF @nRowCount = 1
+      SET @nMPOCCarton = 1
+   
+   SELECT @nRowCount = COUNT( DISTINCT OrderKey )
+   FROM dbo.PickDetail WITH(NOLOCK)
+   WHERE StorerKey = @cStorerKey 
+      AND ISNULL(CaseID, '') = @cDropID
+
+   IF @nRowCount < 2
+      SET @nMPOCCarton = 0
+
    INSERT INTO @tCartonLabelList (Variable, Value) 
    VALUES 
          ( '@cLabelNo', @cDropID)
@@ -125,11 +147,12 @@ AS
       id             INT IDENTITY(1,1),
       Type           NVARCHAR(12),
       UDF01          NVARCHAR(30),
-      code2          NVARCHAR(30)
+      code2          NVARCHAR(30),
+      PrintSequence  INT
    )
 
-   INSERT INTO @tCustWorkOrderLabels (Type, UDF01, code2)
-   SELECT DISTINCT lk.Code, lk.UDF01, lk.code2
+   INSERT INTO @tCustWorkOrderLabels (Type, UDF01, code2, PrintSequence)
+   SELECT DISTINCT lk.Code, lk.UDF01, lk.code2, IIF(UPPER(LEFT(lk.code2, 4)) = 'MPOC', 1, 2)
    FROM dbo.WorkOrder wo WITH(NOLOCK)
    INNER JOIN dbo.WorkOrderDetail wod WITH(NOLOCK) ON wo.WorkOrderKey = wod.WorkOrderKey
    INNER JOIN dbo.PickDetail pkd WITH(NOLOCK) ON wod.StorerKey = pkd.StorerKey AND wod.ExternWorkOrderKey = pkd.OrderKey 
@@ -139,7 +162,8 @@ AS
       AND wod.ExternLineNo = ''
       AND ISNULL(pkd.CaseID, '') = @cDropID
       AND ISNULL(wod.Remarks, '') <> ''
-      AND LEFT(lk.UDF01, 3) = 'CTN' 
+      AND CHARINDEX('CONTENT', lk.code2) > 0
+   ORDER BY IIF(UPPER(LEFT(lk.code2, 4)) = 'MPOC', 1, 2)
 
    SELECT @nCustWorkOrderLabelQty = COUNT(1) FROM @tCustWorkOrderLabels
 
@@ -169,10 +193,8 @@ AS
          @nErrNo  OUTPUT,
          @cErrMsg OUTPUT
          
-      IF @nErrNo <> 0
-      BEGIN
-         GOTO Quit
-      END
+      -- Only print 1 carton label
+      GOTO Quit
    END
 
    SELECT TOP 1 @cConsigneeKey = orm.ConsigneeKey,
@@ -257,13 +279,10 @@ AS
             @nErrNo  OUTPUT,
             @cErrMsg OUTPUT
 
-         IF @nErrNo <> 0
-         BEGIN
+            -- Only print 1 carton label
             CLOSE CUR_CARTONLABEL_REPRINT 
             DEALLOCATE CUR_CARTONLABEL_REPRINT 
-
             GOTO Quit
-         END
       END
       ELSE IF @cCustomCode = 'UNO'
       BEGIN
@@ -297,10 +316,8 @@ AS
          @nErrNo  OUTPUT,
          @cErrMsg OUTPUT
          
-      IF @nErrNo <> 0
-      BEGIN
-         GOTO Quit
-      END
+      -- Only print 1 carton label
+      GOTO Quit
    END
 
 Fail:
