@@ -894,8 +894,8 @@ BEGIN
                            @cFromID     = @cScanID,  
                            @cToID       = @cCartonID,  
                            @cSKU        = @cSKU,  
-                           @nQty        = @nQTY_PD,--@nExpectedQTY,  
-                           @nQTYPick   = @nQTY_PD,--@nExpectedQTY,  
+                           @nQty        = @nQTY_Bal,--@nExpectedQTY,  
+                           @nQTYPick   = @nQTY_Bal,--@nExpectedQTY,  
                            @cDropID     = @cCartonID,
                            --@cFromLOT    = @cPDLot,
                            @nFunc       = 805
