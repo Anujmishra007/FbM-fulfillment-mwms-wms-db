@@ -39,6 +39,7 @@ GO
 /* 2024-11-12 2.9    PXL009     FCR-1125 Merged 2.2, 2.3->2.8 from v0 branch    */
 /* 2024-11-29 2.9.1  PXL009             change the ExtScn call point in step 4  */
 /* 2024-12-02 2.9.2  PXL009             change the ExtScn call point in step 6  */
+/* 2024-12-02 2.9.3  PXL009             Save/restore @cToLoc                    */
 /********************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_CasePick](
@@ -286,6 +287,7 @@ SELECT
    @cOverwriteToLOC    = V_String40,
    @cExtScnSP          = V_String42,
    @cAutoGenDROPIDSP   = V_String43,
+   @cToLOC             = V_String44,
 
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,  @cFieldAttr01  = FieldAttr01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,  @cFieldAttr02  = FieldAttr02,
@@ -3483,6 +3485,7 @@ BEGIN
       V_String40   = @cOverwriteToLOC,   
       V_String42   = @cExtScnSP,
       V_String43   = @cAutoGenDROPIDSP,
+      V_String44   = @ToLoc,
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,   FieldAttr01  = @cFieldAttr01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,   FieldAttr02  = @cFieldAttr02,
