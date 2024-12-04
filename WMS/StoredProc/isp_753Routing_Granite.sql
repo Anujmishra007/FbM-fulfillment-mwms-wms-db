@@ -24,8 +24,9 @@ GO
 /* 2024-08-10   Shong       1.0         Created                                        */
 /* 2024-10-14   Shong       1.1         Adding Valication for Pickup date Userdefine02 */
 /* 2024-10-15   Shong       1.2         Changing Update By Dynamic group setup         */
+/* 2024-11-18   Shong       1.3         New validation logic before actual SP begins   */
 /***************************************************************************************/
-CREATE OR ALTER   PROCEDURE [dbo].[isp_753Routing_Granite]
+ALTER   PROCEDURE [dbo].[isp_753Routing_Granite]
    @c_WaveKey NVARCHAR(10),
    @b_Success INT OUTPUT,
    @n_err     INT OUTPUT,
@@ -50,7 +51,7 @@ BEGIN
          , @n_Continue        INT = 1
          , @n_StartTranCnt    INT
          , @b_Debug           INT = 0 
-         , @d_PicUpDate       DATETIME
+         , @d_PickupDate       DATETIME
          , @c_UserDefine02    NVARCHAR(20)
 
    DECLARE @c_SortOrder     NVARCHAR(10)
@@ -60,14 +61,20 @@ BEGIN
          , @c_TransmitBatch NVARCHAR(60)
          , @c_SQL           NVARCHAR(4000)
          , @c_SQL2          NVARCHAR(4000)
-         , @b_RecordFound   BIT           = 0;        
+         , @b_RecordFound   BIT           = 0
+         , @c_TMReleaseFlag NVARCHAR(20) = 'N'
+         , @cTransmitLogSubmitDate NVARCHAR(10) = ''; --(Ver 1.3)
 
    SET @n_Continue = 1
    SELECT @n_StartTranCnt = @@TRANCOUNT
 
    SET @c_UserDefine02 = ''
+   SET @cTransmitLogSubmitDate = ''
+
    SELECT @c_UserDefine02 = ISNULL(TRIM(UserDefine02),'')
-   FROM WAVE WITH (NOLOCK)
+        , @c_TMReleaseFlag=ISNULL(Wave.TMReleaseFlag,'N')
+        , @cTransmitLogSubmitDate = ISNULL(Wave.UserDefine10, '')
+   FROM dbo.WAVE WITH (NOLOCK)
    WHERE WaveKey = @c_WaveKey
 
    IF @c_UserDefine02 = ''
@@ -76,22 +83,30 @@ BEGIN
       SELECT @n_err = 562751;
       SELECT @c_errmsg='NSQL' + CONVERT(char(6), @n_err) + ': Pickup Date (UserDefine02) cannot be BLANK. (isp_753Routing_Granite)';
       GOTO RETURN_SP; 
-   END   
+   END  
 
    SET DATEFORMAT mdy;
-   IF ISDATE(@c_UserDefine02) <> 1
+   IF ISDATE(@c_UserDefine02) <> 1 OR @c_UserDefine02 NOT LIKE '[0-9][0-9]/[0-9][0-9]/[0-9][0-9][0-9][0-9]'
    BEGIN 
       SELECT @n_continue = 3;
       SELECT @n_err = 500253;
-      SELECT @c_errmsg='NSQL' + CONVERT(char(6), @n_err) + ': Wrong Date Format - ' + @d_PicUpDate + ', Correct Format is (MM/DD/YYYY). (isp_753Routing_Granite)';
+      SELECT @c_errmsg='NSQL' + CONVERT(char(6), @n_err) + ': Wrong Date Format - ' + @d_PickupDate + ', Correct Format is (MM/DD/YYYY). (isp_753Routing_Granite)';
       GOTO RETURN_SP; 
    END     
 
+   IF @cTransmitLogSubmitDate <> '' AND ISDATE(@cTransmitLogSubmitDate) = 1
+   BEGIN 
+      SELECT @n_continue = 3;
+      SELECT @n_err = 500256;
+      SELECT @c_errmsg='NSQL' + CONVERT(char(6), @n_err) + ': Retrigger of 753 is not allow. Trigger had submitted on ' + @cTransmitLogSubmitDate + '. (isp_753Routing_Granite)';
+      GOTO RETURN_SP; 
+   END   
+
    -- Check if date fall under Suturday (7) or Sunday (1)
-   SET @d_PicUpDate = TRY_CAST (@c_UserDefine02 AS Datetime)
-   IF @d_PicUpDate IS NOT NULL 
+   SET @d_PickupDate = TRY_CAST (@c_UserDefine02 AS Datetime)
+   IF @d_PickupDate IS NOT NULL 
    BEGIN
-      IF DATEPART(weekday, @d_PicUpDate) IN (1,7)
+      IF DATEPART(weekday, @d_PickupDate) IN (1,7)
       BEGIN 
          SELECT @n_continue = 3;
          SELECT @n_err = 500254;
@@ -99,6 +114,32 @@ BEGIN
          GOTO RETURN_SP; 
       END   
    END 
+
+   --(Ver 1.3) Begin
+   IF @c_TMReleaseFlag <> 'Y' 
+   BEGIN 
+      SELECT @n_continue = 3;
+      SELECT @n_err = 500255;
+      SELECT @c_errmsg='NSQL' + CONVERT(char(6), @n_err) + ': Wave not release yet. (isp_753Routing_Granite)';
+      GOTO RETURN_SP; 
+   END   
+   
+   DECLARE @c_MBOLKey NVARCHAR(10) = N'';
+   SELECT TOP 1 @c_MBOLKey = MD.MbolKey
+   FROM dbo.WAVEDETAIL WD WITH (NOLOCK) 
+   JOIN dbo.MBOLDETAIL MD WITH (NOLOCK) ON WD.OrderKey = MD.OrderKey
+   WHERE WD.WaveKey = @c_WaveKey
+   ORDER BY MD.MbolKey DESC 
+
+   IF @c_MBOLKey <> ''
+   BEGIN
+      SELECT @n_continue = 3;
+      SELECT @n_err = 500256;
+      SELECT @c_errmsg='NSQL' + CONVERT(char(6), @n_err) + ': Order already exist in Ship Ref ' + @c_MBOLKey + '. (isp_753Routing_Granite)';
+      GOTO RETURN_SP;        
+   END
+
+   -- (Ver 1.3) End
 
    DECLARE CUR_BillToKey CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
    SELECT Distinct O.BillToKey, O.StorerKey 
@@ -445,6 +486,16 @@ BEGIN
       FETCH NEXT FROM CUR_BillToKey INTO @c_BillToKey, @c_StorerKey
    END 
    CLOSE CUR_BillToKey
+
+   IF @n_Continue IN (1,2)
+   BEGIN
+       SET @cTransmitLogSubmitDate= CONVERT(NVARCHAR(10), GETDATE(), 110)
+       UPDATE dbo.WAVE WITH (ROWLOCK)
+         SET UserDefine10 = @cTransmitLogSubmitDate, 
+             EditDate=GETDATE()
+       WHERE WaveKey = @c_WaveKey
+       
+   END
 
    RETURN_SP:
 	IF @n_continue = 3  -- Error Occurred - Process And Return
