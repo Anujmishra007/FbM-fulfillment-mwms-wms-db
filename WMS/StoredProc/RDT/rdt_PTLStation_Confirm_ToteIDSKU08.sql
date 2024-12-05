@@ -807,7 +807,7 @@ BEGIN
                         OptimizeCop)
                      SELECT 
                         CaseID, PickHeaderKey, OrderKey, OrderLineNumber, Lot, StorerKey, SKU, AltSku, UOM, 
-                        UOMQTY, QTYMoved, Status, DropID, LOC, ID, PackKey, UpdateSource, CartonGroup, 
+                        UOMQTY, QTYMoved, '4', DropID, LOC, ID, PackKey, UpdateSource, CartonGroup, 
                         CartonType, ToLoc, DoReplenish, ReplenishZone, DoCartonize, PickMethod, WaveKey,
                         EffectiveDate, ArchiveCop, ShipFlag, PickSlipNo, TaskDetailKey, TaskManagerReasonKey, Notes, 
                         @cNewPickDetailKey, 
