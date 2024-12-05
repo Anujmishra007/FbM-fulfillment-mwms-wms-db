@@ -61,13 +61,33 @@ BEGIN
    SET CONCAT_NULL_YIELDS_NULL OFF
 
    DECLARE @cSuggSKU       NVARCHAR( 20)
+   DECLARE @cDropIDMandatory NVARCHAR(1)
+   DECLARE @cDropID        NVARCHAR(20)
+
+   SELECT @nStep = Step FROM rdt.RDTMOBREC WHERE Mobile = @nMobile  
 
    SELECT @cSuggSKU     = Value FROM @tExtScnData WHERE Variable = '@cSuggSKU'
+   SELECT @cDropID     = Value FROM @tExtScnData WHERE Variable = 'cDropID'
 
    IF @nAction = 0
    BEGIN
       IF @nFunc = 957
       BEGIN
+         -- add dropid null validation
+         IF (@nScn = 5292 AND nStep = 2)
+         BEGIN
+            SELECT @cDropIDMandatory = rdt.rdtGetConfig(@nFunc, 'DropIDMandatory', @cStorerKey)
+            IF @cDropIDMandatory = '0'
+            BEGIN
+               SET @cDropIDMandatory = ''
+            END
+            IF ISNULL(@cDropID, '') = ''
+            BEGIN
+               SET @nErrNo = 114514
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- DropID cannot be blank
+               GOTO Quit
+            END
+         END
          IF @nScn = 5292 OR @nScn = 6443
          BEGIN
             --redirect
