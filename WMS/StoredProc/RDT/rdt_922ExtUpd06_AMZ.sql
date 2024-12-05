@@ -237,38 +237,6 @@ BEGIN
                         END 
                      END
                   END
-                  --ELSE
-                  --BEGIN
-                  --   -- Top up child order
-                  --   UPDATE dbo.Orders SET
-                  --      OpenQTY = OpenQTY + @nQty, 
-                  --      EditDate = GETDATE(),  
-                  --      EditWho = SUSER_SNAME(), 
-                  --      TrafficCop = NULL 
-                  --   WHERE OrderKey = @cChildOrderKey  
-                  --   IF @@ERROR <> 0  
-                  --   BEGIN
-                  --      SET @nErrNo = 212005
-                  --      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo ,@cLangCode, 'DSP') --UPD Order Fail
-                  --      GOTO RollbackTran
-                  --   END
-                  --END
-                  
-                  ---- Reduce parent order
-                  --UPDATE dbo.Orders SET
-                  --   Status = CASE WHEN OpenQTY - @nQTY = 0 THEN '0' ELSE Status END, 
-                  --   SOStatus = CASE WHEN OpenQTY - @nQTY = 0 THEN 'CLOSED' ELSE SOStatus END, 
-                  --   OpenQTY = OpenQTY - @nQty, 
-                  --   EditDate = GETDATE(),  
-                  --   EditWho = SUSER_SNAME(), 
-                  --   TrafficCop = NULL 
-                  --WHERE OrderKey = @cParentOrderKey  
-                  --IF @@ERROR <> 0  
-                  --BEGIN
-                  --   SET @nErrNo = 212006
-                  --   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo ,@cLangCode, 'DSP') --UPD Order Fail
-                  --   GOTO RollbackTran
-                  --END
 
                   -- Top up / create child OrderDetail
                   IF NOT EXISTS( SELECT 1 FROM dbo.OrderDetail WITH (NOLOCK) WHERE OrderKey = @cChildOrderKey AND OrderLineNumber = @cOrderLineNumber)  
