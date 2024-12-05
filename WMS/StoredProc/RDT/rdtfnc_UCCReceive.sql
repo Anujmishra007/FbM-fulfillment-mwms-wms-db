@@ -303,7 +303,7 @@ SELECT
    @cDecodeQty             = V_String36, --(yeekung01)
    @cVerifySKU             = V_String37, --(yeekung01)
 
-   @cExtScnSP              = V_String38, --(ShaoAn)
+   @cExtScnSP              = V_String39, --(ShaoAn)
 
    @nQTY             = V_Integer1,
    @nCaseCntQty      = V_Integer2,
@@ -4148,7 +4148,7 @@ BEGIN
       V_String35 = @cDecodeSP,
       V_String36 = @cDecodeQty,
       V_String37 = @cVerifySKU,
-      V_String38 = @cExtScnSP,
+      V_String39 = @cExtScnSP,
 
       V_Lottable01 = @cLottable01,
       V_Lottable02 = @cLottable02,
