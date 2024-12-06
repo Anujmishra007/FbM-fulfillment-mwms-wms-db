@@ -38,7 +38,7 @@ EXECUTE rdt.rdtAddScn 6532, 'ENG'
 -- 6533 = confirm option screen
 DELETE rdt.RDTScn WHERE Scn = 6533 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 6533, 'ENG'
-   ,@cLine01 = '%Temp Entered: %5d01'
+   ,@cLine01 = 'Temp Entered: %5d01'
    ,@cLine02 = 'is not in range.'
    ,@cLine03 = 'Do you want to '
    ,@cLine04 = 'continue?'
