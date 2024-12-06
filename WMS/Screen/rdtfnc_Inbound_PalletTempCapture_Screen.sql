@@ -1,5 +1,5 @@
 --rdtfnc_Inbound_PalletTempCapture
---FCR-1869
+--FCR-1398
 --6530-6539
 
 IF NOT EXISTS ( SELECT 1 FROM RDT.RDTMsg (NOLOCK) WHERE Message_ID = 1869)
