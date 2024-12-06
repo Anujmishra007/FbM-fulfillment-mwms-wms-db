@@ -16,7 +16,7 @@ GO
 /* 2024-10-18 1.1.0  NLT013     UWP-27868 Open qty is wrong                                        */
 /***************************************************************************************************/
 
-ALTER     PROC [RDT].[rdt_922ExtUpd06_AMZ] (
+CREATE OR ALTER     PROC [RDT].[rdt_922ExtUpd06_AMZ] (
    @nMobile     INT,
    @nFunc       INT,
    @cLangCode   NVARCHAR( 3),
