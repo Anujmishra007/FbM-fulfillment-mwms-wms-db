@@ -57,7 +57,9 @@ AS
       @nDefaultLabelQty          INT,
       @nCustomizeLabelQty        INT,
       @nCustWorkOrderLabelQty    INT,
-      @nLoopIndex                INT
+      @nLoopIndex                INT,
+      @nRowCount                 INT,
+      @nMPOCCarton               INT
 
    
    DECLARE @tDefaultLabels TABLE
@@ -105,6 +107,25 @@ AS
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InvalidLabelNo
       GOTO Quit
    END
+
+   SELECT @nRowCount = COUNT( DISTINCT CONCAT(ORM.BillToKey, ORM.ShipperKey, ORM.MarkforKey) )
+   FROM dbo.PickDetail PKD WITH(NOLOCK)
+   INNER JOIN dbo.ORDERS ORM WITH(NOLOCK)
+      ON PKD.StorerKey = ORM.StorerKey 
+      AND PKD.OrderKey = ORM.OrderKey
+   WHERE PKD.StorerKey = @cStorerKey 
+      AND ISNULL(PKD.CaseID, '') = @cDropID
+
+   IF @nRowCount = 1
+      SET @nMPOCCarton = 1
+   
+   SELECT @nRowCount = COUNT( DISTINCT OrderKey )
+   FROM dbo.PickDetail WITH(NOLOCK)
+   WHERE StorerKey = @cStorerKey 
+      AND ISNULL(CaseID, '') = @cDropID
+
+   IF @nRowCount < 2
+      SET @nMPOCCarton = 0
 
    INSERT INTO @tCartonLabelList (Variable, Value) 
    VALUES 
@@ -161,6 +182,12 @@ AS
 
       IF @@ROWCOUNT = 0
          BREAK
+
+      IF @nMPOCCarton = 1 AND LEFT(@cCode2, 4) <> 'MPOC'
+         CONTINUE
+
+      IF @nMPOCCarton = 0 AND LEFT(@cCode2, 4) = 'MPOC'
+         CONTINUE
 
       DELETE FROM @tDefaultLabels WHERE Code = @cVASCode OR code2 = @cCode2
 

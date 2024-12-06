@@ -183,6 +183,12 @@ AS
       IF @@ROWCOUNT = 0
          BREAK
 
+      IF @nMPOCCarton = 1 AND LEFT(@cCode2, 4) <> 'MPOC'
+         CONTINUE
+
+      IF @nMPOCCarton = 0 AND LEFT(@cCode2, 4) = 'MPOC'
+         CONTINUE
+
       DELETE FROM @tDefaultLabels WHERE Code = @cVASCode OR code2 = @cCode2
 
       -- Print label
