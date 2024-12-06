@@ -225,6 +225,8 @@ BEGIN
                END
                ELSE
                BEGIN
+                  IF LEFT(@cCode2, 4) = 'MPOC'
+                     CONTINUE
                   IF LEFT(@cLabelName, 3) = 'CTN'
                   BEGIN
                      DELETE FROM @tDefaultLabels WHERE (Code = @cVASCode OR code2 = @cCode2) AND LEFT(UDF01, 3) = 'CTN'
