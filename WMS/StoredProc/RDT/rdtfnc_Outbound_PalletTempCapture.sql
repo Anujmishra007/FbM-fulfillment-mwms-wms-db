@@ -350,10 +350,10 @@ BEGIN
          SET @nErrNo = 230160
          SET @cErrMsg1 = [RDT].[rdtGetMessageLong]( 230159, @cLangCode, N'DSP')  -- Item class code
          SET @cErrMsg2 = [RDT].[rdtGetMessageLong]( 230160, @cLangCode, N'DSP')  -- needs to be maintained properly
+         SET @cErrMsg1 = @cErrMsg1 + N' ' + @cItemClass
          EXEC [RDT].[rdtInsertMsgQueue] @nMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT
             , N'230160'
             , @cErrMsg1
-            , @cItemClass
             , @cErrMsg2
          GOTO Step_2_QUIT
       END
@@ -364,25 +364,25 @@ BEGIN
          SET @cErrMsg1 = [RDT].[rdtGetMessageLong]( 230159, @cLangCode, N'DSP')  -- Item class code
          SET @cErrMsg2 = [RDT].[rdtGetMessageLong]( 230160, @cLangCode, N'DSP')  -- needs to be maintained properly
          SET @cErrMsg3 = [RDT].[rdtGetMessageLong]( 230161, @cLangCode, N'DSP')  -- Code User Define 01
+         SET @cErrMsg1 = @cErrMsg1 + N' ' + @cItemClass
          EXEC [RDT].[rdtInsertMsgQueue] @nMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT
             , N'230161'
             , @cErrMsg1
-            , @cItemClass
             , @cErrMsg2
             , @cErrMsg3
          GOTO Step_2_QUIT
       END
 
-      IF TRY_CONVERT(DECIMAL(5,2), @cTemperatureMin) IS NULL
+      IF TRY_CONVERT(DECIMAL(5,2), @cTemperatureMax) IS NULL
       BEGIN
          SET @nErrNo = 230162
          SET @cErrMsg1 = [RDT].[rdtGetMessageLong]( 230159, @cLangCode, N'DSP')  -- Item class code
          SET @cErrMsg2 = [RDT].[rdtGetMessageLong]( 230160, @cLangCode, N'DSP')  -- needs to be maintained properly
          SET @cErrMsg3 = [RDT].[rdtGetMessageLong]( 230162, @cLangCode, N'DSP')  -- Code User Define 02
+         SET @cErrMsg1 = @cErrMsg1 + N' ' + @cItemClass
          EXEC [RDT].[rdtInsertMsgQueue] @nMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT
             , N'230162'
             , @cErrMsg1
-            , @cItemClass
             , @cErrMsg2
             , @cErrMsg3
          GOTO Step_2_QUIT
@@ -417,7 +417,7 @@ GOTO QUIT
 Step_2_QUIT:
 BEGIN
    SET @cOutField01  = @cMBOLKey
-   SET @cOutField02  = @cPalletID
+   SET @cOutField02  = N''
    SET @cOutField03  = N''
    EXEC [RDT].[rdtSetFocusField] @nMobile, 3
 END
