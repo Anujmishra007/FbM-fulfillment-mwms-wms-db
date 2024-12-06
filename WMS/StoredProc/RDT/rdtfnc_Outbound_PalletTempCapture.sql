@@ -41,17 +41,24 @@ DECLARE
    @cStorerKey          NVARCHAR( 15),
    @cUserName           NVARCHAR( 18),
    @cErrMsg1            NVARCHAR( 125),
+   @cErrMsg2            NVARCHAR( 125),
+   @cErrMsg3            NVARCHAR( 125),
+   @cErrMsg4            NVARCHAR( 125),
+   @cErrMsg5            NVARCHAR( 125),
 
    @cPalletChoice       NVARCHAR( 20),
    @cMBOLKey            NVARCHAR( 10),
-   @cID                 NVARCHAR( 20),
+   @cPalletID           NVARCHAR( 20),
    @cSKU                NVARCHAR( 20),
    @cItemClass          NVARCHAR( 10),
-   @cTempValue          NVARCHAR( 20),
-   @nTempValue          DECIMAL(5 ,2),
-   @cTempUnit           NVARCHAR( 20),
-   @cTempMin            NVARCHAR( 20),
-   @cTempMax            NVARCHAR( 20),
+   @cTemperature        NVARCHAR( 20),
+   @nTemperature        DECIMAL(5 ,2),
+   @cTemperatureUnit    NVARCHAR( 20),
+   @cTemperatureMin     NVARCHAR( 20),
+   @nTemperatureMin     DECIMAL(5 ,2),
+   @cTemperatureMax     NVARCHAR( 20),
+   @nTemperatureMax     DECIMAL(5 ,2),
+   @cTempCheckPoint     NVARCHAR( 20),
    @cOption             NVARCHAR( 1),
 
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),   @cFieldAttr01 NVARCHAR( 1), @cLottable01  NVARCHAR( 18),
@@ -96,12 +103,14 @@ SELECT
 
    @cMBOLKey         = [V_String1],
    @cPalletChoice    = [V_String2],
-   @cID              = [V_String3],
+   @cPalletID        = [V_String3],
    @cSKU             = [V_String4],
    @cItemClass       = [V_String5],
-   @cTempValue       = [V_String6],
-   @cTempMin         = [V_String7],
-   @cTempMax         = [V_String8],
+   @cTemperature     = [V_String6],
+   @cTemperatureMin  = [V_String7],
+   @cTemperatureMax  = [V_String8],
+   @cTemperatureUnit = [V_String9],
+   @cTempCheckPoint  = [V_String10],
 
    @cInField01 = [I_Field01],   @cOutField01 = [O_Field01],  @cFieldAttr01 = [FieldAttr01],
    @cInField02 = [I_Field02],   @cOutField02 = [O_Field02],  @cFieldAttr02 = [FieldAttr02],
@@ -140,7 +149,7 @@ Step_0:
 BEGIN
      -- EventLog
    EXEC [RDT].[rdt_STD_EventLog]
-      @cActionType = '1', -- Sign-in
+      @cActionType = N'1', -- Sign-in
       @cUserID     = @cUserName,
       @nMobileNo   = @nMobile,
       @nFunctionID = @nFunc,
@@ -201,7 +210,6 @@ BEGIN
       -- Prepare next screen var
       SET @cOutField01  = @cMBOLKey
       SET @cOutField02  = N''
-      SET @cInField01   = N''
 
       -- Go to next screen
       SET @nScn   = @nScn + 1
@@ -214,7 +222,7 @@ BEGIN
    BEGIN
       -- EventLog
       EXEC [RDT].[rdt_STD_EventLog]
-         @cActionType = '9', -- Sign-out
+         @cActionType = N'9', -- Sign-out
          @cUserID     = @cUserName,
          @nMobileNo   = @nMobile,
          @nFunctionID = @nFunc,
@@ -256,14 +264,14 @@ BEGIN
          GOTO Step_2_QUIT
       END
 
-      SET @cID = @cInField02
+      SET @cPalletID = @cInField02
 
       IF NOT EXISTS(
          SELECT 1
          FROM [dbo].[PickDetail] [PD] WITH(NOLOCK)
          WHERE [PD].[StorerKey] = @cStorerKey
             AND [PD].[Status] IN (N'3', N'5')
-            AND ((@cPalletChoice IN (N'BOTH', N'ID') AND [PD].[ID] = @cID) OR (@cPalletChoice IN (N'BOTH', N'DROPID') AND [PD].[DropID] = @cID))
+            AND ((@cPalletChoice IN (N'BOTH', N'ID') AND [PD].[ID] = @cPalletID) OR (@cPalletChoice IN (N'BOTH', N'DROPID') AND [PD].[DropID] = @cPalletID))
       )
       BEGIN
          SET @nErrNo = 230156
@@ -277,7 +285,7 @@ BEGIN
             INNER JOIN [dbo].[ORDERS] [O] WITH(NOLOCK) ON [PD].[StorerKey] = [O].[StorerKey] AND [PD].[OrderKey] = [O].[OrderKey]
          WHERE [PD].[StorerKey] = @cStorerKey
             AND [PD].[Status] IN (N'3', N'5')
-            AND ((@cPalletChoice IN (N'BOTH', N'ID') AND [PD].[ID] = @cID) OR (@cPalletChoice IN (N'BOTH', N'DROPID') AND [PD].[DropID] = @cID))
+            AND ((@cPalletChoice IN (N'BOTH', N'ID') AND [PD].[ID] = @cPalletID) OR (@cPalletChoice IN (N'BOTH', N'DROPID') AND [PD].[DropID] = @cPalletID))
             AND [O].[MBOLKey] = @cMBOLKey
       )
       BEGIN
@@ -291,30 +299,33 @@ BEGIN
       FROM [dbo].[PickDetail] [PD] WITH(NOLOCK)
       WHERE [PD].[StorerKey] = @cStorerKey
          AND [PD].[Status] IN (N'3', N'5')
-         AND ((@cPalletChoice IN (N'BOTH', N'ID') AND [PD].[ID] = @cID) OR (@cPalletChoice IN (N'BOTH', N'DROPID') AND [PD].[DropID] = @cID))
+         AND ((@cPalletChoice IN (N'BOTH', N'ID') AND [PD].[ID] = @cPalletID) OR (@cPalletChoice IN (N'BOTH', N'DROPID') AND [PD].[DropID] = @cPalletID))
 
       -- get Itemclass
       SELECT TOP 1 @cItemClass = [itemclass]
       FROM [dbo].[SKU] WITH(NOLOCK)
       WHERE [StorerKey] = @cStorerKey
-         AND [Sku] = [SKU]
+         AND [Sku] = @cSKU
 
       -- validate code lookup config exists
       IF NOT EXISTS(SELECT 1 FROM [dbo].[CodeLKUP] WITH(NOLOCK) WHERE [StorerKey] = @cStorerKey AND [LISTNAME] = N'ITEMCLASS' AND [Code] = @cItemClass AND [UDF04] IN (N'BOTH', N'LDG'))
       BEGIN
          SET @nErrNo = 230158
-         SET @cErrMsg1 = [RDT].[rdtGetMessageLong]( @nErrNo, @cLangCode, N'DSP')  --230158 - Code List entry is missing for %CODE%
-         SET @cErrMsg1 = REPLACE( @cErrMsg1, N'%CODE%', @cItemClass )
-         EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT, @cErrMsg1
+         SET @cErrMsg1 = [RDT].[rdtGetMessageLong]( @nErrNo, @cLangCode, N'DSP')  -- Code List entry is missing for
+         EXEC [RDT].[rdtInsertMsgQueue] @nMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT
+            , N'230158'
+            , @cErrMsg1
+            , @cItemClass
          GOTO Step_2_QUIT
       END
 
       -- get code lookup config
       -- BOTH have higher priority
       SELECT TOP 1 
-          @cTempMin  = [UDF01]
-         ,@cTempMax  = [UDF02]
-         ,@cTempUnit = [UDF03]
+          @cTemperatureMin  = [UDF01]
+         ,@cTemperatureMax  = [UDF02]
+         ,@cTemperatureUnit = [UDF03]
+         ,@cTempCheckPoint  = [UDF04]
       FROM [dbo].[CodeLKUP] WITH(NOLOCK) 
       WHERE [StorerKey] = @cStorerKey
          AND [LISTNAME] = N'ITEMCLASS'
@@ -323,9 +334,10 @@ BEGIN
       IF @@ROWCOUNT = 0
       BEGIN
          SELECT TOP 1 
-             @cTempMin  = [UDF01]
-            ,@cTempMax  = [UDF02]
-            ,@cTempUnit = [UDF03]
+             @cTemperatureMin  = [UDF01]
+            ,@cTemperatureMax  = [UDF02]
+            ,@cTemperatureUnit = [UDF03]
+            ,@cTempCheckPoint  = [UDF04]
          FROM [dbo].[CodeLKUP] WITH(NOLOCK) 
          WHERE [StorerKey] = @cStorerKey
             AND [LISTNAME] = N'ITEMCLASS'
@@ -333,20 +345,54 @@ BEGIN
             AND [UDF04]    = N'LDG'
       END
 
-      IF @cTempMin = N'' OR @cTempMax = N'' OR @cTempUnit = N''
+      IF ISNULL(@cTemperatureMin, N'') = N'' OR ISNULL(@cTemperatureMax, N'') = N'' OR ISNULL(@cTemperatureUnit, N'') = N''
       BEGIN
-         SET @nErrNo = 230159
-         SET @cErrMsg1 = [RDT].[rdtGetMessageLong]( @nErrNo, @cLangCode, N'DSP')  --230159 - Item class code %CODE% needs to be maintained properly
-         SET @cErrMsg1 = REPLACE( @cErrMsg1, N'%CODE%', @cItemClass )
-         EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT, @cErrMsg1
+         SET @nErrNo = 230160
+         SET @cErrMsg1 = [RDT].[rdtGetMessageLong]( 230159, @cLangCode, N'DSP')  -- Item class code
+         SET @cErrMsg2 = [RDT].[rdtGetMessageLong]( 230160, @cLangCode, N'DSP')  -- needs to be maintained properly
+         EXEC [RDT].[rdtInsertMsgQueue] @nMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT
+            , N'230160'
+            , @cErrMsg1
+            , @cItemClass
+            , @cErrMsg2
+         GOTO Step_2_QUIT
+      END
+
+      IF TRY_CONVERT(DECIMAL(5,2), @cTemperatureMin) IS NULL
+      BEGIN
+         SET @nErrNo = 230161
+         SET @cErrMsg1 = [RDT].[rdtGetMessageLong]( 230159, @cLangCode, N'DSP')  -- Item class code
+         SET @cErrMsg2 = [RDT].[rdtGetMessageLong]( 230160, @cLangCode, N'DSP')  -- needs to be maintained properly
+         SET @cErrMsg3 = [RDT].[rdtGetMessageLong]( 230161, @cLangCode, N'DSP')  -- Code User Define 01
+         EXEC [RDT].[rdtInsertMsgQueue] @nMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT
+            , N'230161'
+            , @cErrMsg1
+            , @cItemClass
+            , @cErrMsg2
+            , @cErrMsg3
+         GOTO Step_2_QUIT
+      END
+
+      IF TRY_CONVERT(DECIMAL(5,2), @cTemperatureMin) IS NULL
+      BEGIN
+         SET @nErrNo = 230162
+         SET @cErrMsg1 = [RDT].[rdtGetMessageLong]( 230159, @cLangCode, N'DSP')  -- Item class code
+         SET @cErrMsg2 = [RDT].[rdtGetMessageLong]( 230160, @cLangCode, N'DSP')  -- needs to be maintained properly
+         SET @cErrMsg3 = [RDT].[rdtGetMessageLong]( 230162, @cLangCode, N'DSP')  -- Code User Define 02
+         EXEC [RDT].[rdtInsertMsgQueue] @nMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT
+            , N'230162'
+            , @cErrMsg1
+            , @cItemClass
+            , @cErrMsg2
+            , @cErrMsg3
          GOTO Step_2_QUIT
       END
 
       -- Prepare next screen var
       SET @cOutField01  = @cMBOLKey
-      SET @cOutField02  = @cID
-      SET @cOutField04  = CASE @cTempUnit WHEN N'Celcius' THEN N'℃' WHEN N'Fahrenheit' THEN '℉' ELSE @cTempUnit END
-      SET @cInField03   = N''
+      SET @cOutField02  = @cPalletID
+      SET @cOutField03  = N''
+      SET @cOutField04  = CASE @cTemperatureUnit WHEN N'Celcius' THEN N'℃' WHEN N'Fahrenheit' THEN '℉' ELSE @cTemperatureUnit END
 
       -- Go to next screen
       SET @nScn   = @nScn + 1
@@ -370,8 +416,10 @@ GOTO QUIT
 
 Step_2_QUIT:
 BEGIN
-   SET @cOutField02 = ''
-   EXEC [RDT].[rdtSetFocusField] @nMobile, 1
+   SET @cOutField01  = @cMBOLKey
+   SET @cOutField02  = @cPalletID
+   SET @cOutField03  = N''
+   EXEC [RDT].[rdtSetFocusField] @nMobile, 3
 END
 GOTO QUIT
 
@@ -386,8 +434,39 @@ Step_3:
 BEGIN
    IF @nInputKey = 1
    BEGIN
-      SET @cTempValue = @cInField03
-      -- TODO: validation and confirm 
+      SET @cTemperature = @cInField03
+      SET @nTemperature = TRY_CONVERT(DECIMAL(5,2), @cTemperature)
+      IF @nTemperature IS NULL
+      BEGIN
+         SET @nErrNo = 230163
+         SET @cErrMsg = [RDT].[rdtGetMessage]( @nErrNo, @cLangCode, N'DSP')  --230163 - Invalid temperature format
+         GOTO Step_3_QUIT
+      END
+
+      SET @nTemperatureMin = TRY_CONVERT(DECIMAL(5,2), @cTemperatureMin)
+      SET @nTemperatureMax = TRY_CONVERT(DECIMAL(5,2), @cTemperatureMax)
+      IF @nTemperature < @nTemperatureMin OR @nTemperature > @nTemperatureMax
+      BEGIN
+         -- Prepare next screen var
+         SET @cOutField03   = @cTemperature
+         SET @cOutField04   = N''
+
+         -- Go to next screen
+         SET @nScn   = @nScn + 1
+         SET @nStep  = @nStep + 1
+
+         GOTO QUIT
+      END
+
+      -- Confirm
+      EXEC [RDT].[rdt_Outbound_PalletTempCapture_Confirm] @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility,
+            @cMBOLKey, @cPalletID, @cSKU, @cItemClass, @nTemperature,
+            @nErrNo OUTPUT, @cErrMsg OUTPUT
+      IF @nErrNo <> 0
+         GOTO Step_3_QUIT
+
+      GOTO QUIT
+
    END
 
    IF @nInputKey = 0
@@ -405,51 +484,88 @@ GOTO QUIT
 
 Step_3_QUIT:
 BEGIN
-   SET @cOutField01 = ''
+   SET @cOutField01  = @cMBOLKey
+   SET @cOutField02  = @cPalletID
+   SET @cOutField03  = N''
+   SET @cOutField04  = CASE @cTemperatureUnit WHEN N'Celcius' THEN N'℃' WHEN N'Fahrenheit' THEN '℉' ELSE @cTemperatureUnit END
 END
 GOTO QUIT
 
 
 /********************************************************************************
 Scn = 6543. Confirm Prompt
-   OPTION    (field05, input)
+   OPTION    (field04, input)
 ********************************************************************************/
 Step_4:
 BEGIN
    IF @nInputKey = 1
    BEGIN
-
-      IF @cInField05 = '1'
+      SET @cOption = @cInField04
+      IF @cOption NOT IN (N'1', N'9')
       BEGIN
-         -- TODO: confirm
+         SET @nErrNo = 230164
+         SET @cErrMsg = [RDT].[rdtGetMessage]( @nErrNo, @cLangCode, N'DSP')  --230164 - Invalid Option
+         GOTO Step_4_QUIT
+      END
+
+      IF @cOption = N'1'
+      BEGIN
+
+         SET @nTemperature = TRY_CONVERT(DECIMAL(5,2), @cTemperature)
+         -- Confirm
+         EXEC [RDT].[rdt_Outbound_PalletTempCapture_Confirm] @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility,
+               @cMBOLKey, @cPalletID, @cSKU, @cItemClass, @nTemperature,
+               @nErrNo OUTPUT, @cErrMsg OUTPUT
+         IF @nErrNo <> 0
+            GOTO Step_4_QUIT
+
+         -- Prepare prev screen var
+         SET @cOutField01  = @cMBOLKey
+         SET @cOutField02  = @cPalletID
+         SET @cOutField03  = N''
+         SET @cOutField04  = CASE @cTemperatureUnit WHEN N'Celcius' THEN N'℃' WHEN N'Fahrenheit' THEN '℉' ELSE @cTemperatureUnit END
 
          -- Go to prev screen
-         SET @nScn = @nScn - 1
-         SET @nStep = @nStep - 1
+         SET @nScn   = @nScn - 1
+         SET @nStep  = @nStep - 1
          GOTO QUIT
       END
 
-      IF @cInField05 = '9'
+      IF @cOption = N'9'
       BEGIN
          -- Prepare prev screen var
          SET @cOutField01  = @cMBOLKey
-         SET @cOutField02  = @cID
-         SET @cOutField04  = CASE @cTempUnit WHEN N'Celcius' THEN N'℃' WHEN N'Fahrenheit' THEN '℉' ELSE @cTempUnit END
-         SET @cInField03   = N''
+         SET @cOutField02  = @cPalletID
+         SET @cOutField03  = N''
+         SET @cOutField04  = CASE @cTemperatureUnit WHEN N'Celcius' THEN N'℃' WHEN N'Fahrenheit' THEN '℉' ELSE @cTemperatureUnit END
 
          -- Go to prev screen
-         SET @nScn = @nScn - 1
-         SET @nStep = @nStep - 1
+         SET @nScn   = @nScn - 1
+         SET @nStep  = @nStep - 1
          GOTO QUIT
       END
+   END
+
+   IF @nInputKey = 0
+   BEGIN
+      -- Prepare prev screen var
+      SET @cOutField01  = @cMBOLKey
+      SET @cOutField02  = @cPalletID
+      SET @cOutField03  = N''
+      SET @cOutField04  = CASE @cTemperatureUnit WHEN N'Celcius' THEN N'℃' WHEN N'Fahrenheit' THEN '℉' ELSE @cTemperatureUnit END
+
+      -- Go to prev screen
+      SET @nScn   = @nScn - 1
+      SET @nStep  = @nStep - 1
+      GOTO QUIT
    END
 END
 
 Step_4_QUIT:
 BEGIN
-   SET @cOutFIeld05 = ''
+   SET @cOutField03  = @cTemperature
+   SET @cOutFIeld04  = N''
 END
-
 
 Quit:
 BEGIN
@@ -462,12 +578,14 @@ BEGIN
 
       [V_String1]       = @cMBOLKey,
       [V_String2]       = @cPalletChoice,
-      [V_String3]       = @cID,
+      [V_String3]       = @cPalletID,
       [V_String4]       = @cSKU,
       [V_String5]       = @cItemClass,
-      [V_String6]       = @cTempValue,
-      [V_String7]       = @cTempMin,
-      [V_String8]       = @cTempMax,
+      [V_String6]       = @cTemperature,
+      [V_String7]       = @cTemperatureMin,
+      [V_String8]       = @cTemperatureMax,
+      [V_String9]       = @cTemperatureUnit,
+      [V_String10]      = @cTempCheckPoint,
 
       [I_Field01] = @cInField01,  [O_Field01] = @cOutField01,   [FieldAttr01]  = @cFieldAttr01,
       [I_Field02] = @cInField02,  [O_Field02] = @cOutField02,   [FieldAttr02]  = @cFieldAttr02,
