@@ -109,7 +109,7 @@ AS
    END
 
    SELECT @nRowCount = COUNT( DISTINCT CONCAT(ORM.BillToKey, ORM.ShipperKey, ORM.MarkforKey) )
-   FROM dbo. PKD WITH(NOLOCK)
+   FROM dbo.PickDetail PKD WITH(NOLOCK)
    INNER JOIN dbo.ORDERS ORM WITH(NOLOCK)
       ON PKD.StorerKey = ORM.StorerKey 
       AND PKD.OrderKey = ORM.OrderKey
