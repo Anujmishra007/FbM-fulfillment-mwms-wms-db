@@ -45,6 +45,7 @@ BEGIN
       @ctemperature                 NVARCHAR( 5),
       @fTemperature                 DECIMAL(5, 2),
       @cASNStatus                   NVARCHAR(10),
+      @cASNSCanctatus               NVARCHAR(10),
       @nRowCount                    INT,
       @cStorerGroup                 NVARCHAR( 20),
       @cTempScale                   NVARCHAR( 5),
@@ -56,11 +57,11 @@ BEGIN
       
       @nStep_ASN                    INT,
       @nStep_ID                     INT,
-      @nStep_temperature             INT,
+      @nStep_Temperature            INT,
       @nStep_Confrim                INT,
       @nScn_ASN                     INT,
       @nScn_ID                      INT,
-      @nScn_temperature              INT,
+      @nScn_temperature             INT,
       @nScn_Confrim                 INT,
 
       @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),  @cFieldAttr01 NVARCHAR( 1),  @cLottable01  NVARCHAR( 18),
@@ -132,7 +133,7 @@ BEGIN
    SELECT        
       @nStep_ASN              = 1,  @nScn_ASN            = 6530,
       @nStep_ID               = 2,  @nScn_ID             = 6531,
-      @nStep_temperature       = 3,  @nScn_temperature     = 6532,
+      @nStep_Temperature      = 3,  @nScn_temperature    = 6532,
       @nStep_Confrim          = 4,  @nScn_Confrim        = 6533
 
 
@@ -195,6 +196,7 @@ BEGIN
          END
 
          SELECT @cASNStatus   = Status,
+            @cASNSCanctatus   = ASNStatus,
             @cASNFacility     = ISNULL(Facility, ''),
             @cASNStorerKey    = StorerKey
          FROM dbo.Receipt WITH(NOLOCK)
@@ -243,7 +245,7 @@ BEGIN
             GOTO Step_1_Fail
          END
 
-         IF @cASNStatus = 'CANC'
+         IF @cASNSCanctatus = 'CANC'
          BEGIN
             SET @nErrNo = 230207
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --ASNCancelled
@@ -332,8 +334,8 @@ BEGIN
          FROM dbo.SKU WITH(NOLOCK)
          INNER JOIN dbo.RECEIPTDETAIL RP WITH(NOLOCK)
             ON SKU.StorerKey = RP.StorerKey
-            AND SKU.Skue = RP.Sku
-         WHERE StorerKey = @cStorerKey
+            AND SKU.Sku = RP.Sku
+         WHERE SKU.StorerKey = @cStorerKey
             AND RP.ToID = @cID
 
          IF @cItemClass IS NULL

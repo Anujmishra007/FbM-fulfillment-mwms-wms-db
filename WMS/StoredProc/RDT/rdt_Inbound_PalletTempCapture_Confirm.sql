@@ -52,7 +52,7 @@ BEGIN
       IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cConfirmSP AND type = 'P')
       BEGIN
          SET @cSQL = 'EXEC rdt.' + RTRIM( @cConfirmSP) +
-            ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, ' +
+            ' @nMobile, @nFunc, @cLangCode, @cUserName, @cFacility, @cStorerKey, ' +
             ' @cReceiptKey, @cID, @fTemperature, ' +
             ' @nErrNo OUTPUT, @cErrMsg OUTPUT '
 
@@ -70,7 +70,7 @@ BEGIN
             ' @cErrMsg       NVARCHAR( 20) OUTPUT  '
 
          EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-            @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,
+            @nMobile, @nFunc, @cLangCode, @cUserName, @cFacility, @cStorerKey,
             @cReceiptKey, @cID, @fTemperature,
             @nErrNo OUTPUT, @cErrMsg OUTPUT
 
@@ -85,6 +85,8 @@ BEGIN
       (Facility, StorerKey, ReceiptKey, PalletID, Temperature, TempCheckPoint, CheckUser, EditDate, EditWho )
    VALUES
       (@cFacility, @cStorerKey, @cReceiptKey, @cID, @fTemperature, 'R', @cUserName, GETDATE(), @cUserName )
+
+   Quit:
 END
 GO
 

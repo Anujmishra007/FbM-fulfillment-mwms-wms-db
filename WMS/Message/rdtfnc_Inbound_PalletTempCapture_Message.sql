@@ -2,7 +2,7 @@
 --FCR-1398
 EXECUTE rdt.rdtdropmsg 230201 , 230250
 
-EXECUTE rdt.rdtAddMsg 230201, 10, '230201IASNIsNeeded',           'us_english', 1869
+EXECUTE rdt.rdtAddMsg 230201, 10, '230201ASNIsNeeded',            'us_english', 1869
 EXECUTE rdt.rdtAddMsg 230202, 10, '230202ASNNotExist',            'us_english', 1869
 EXECUTE rdt.rdtAddMsg 230203, 10, '230203DiffFacility',           'us_english', 1869
 EXECUTE rdt.rdtAddMsg 230204, 10, '230204DiffStorer',             'us_english', 1869
