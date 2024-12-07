@@ -88,7 +88,23 @@ BEGIN
                GOTO Quit
             END
          END
-         IF @nScn = 5292 OR @nScn = 6443
+         -- return to step 2 when UCC scan succeed to scan a new DropID for another UCC
+         IF @nScn IN (6443, 5294)
+         BEGIN
+            -- Prepare LOC screen var
+            SET @cOutField01 = @cPickSlipNo
+            SET @cOutField02 = '' --PickZone
+            SET @cOutField03 = '' --DropID
+
+            EXEC rdt.rdtSetFocusField @nMobile, 2 -- PickZone
+
+            -- Enable field
+            SET @cFieldAttr07 = '' -- QTY
+            SET @nAfterScn = 5291
+            SET @nAfterStep = 2
+            GOTO Quit
+         END
+         IF @nScn = 5292 
          BEGIN
             --redirect
             SET @nAfterScn = 6443

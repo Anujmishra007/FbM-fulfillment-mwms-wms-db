@@ -1976,7 +1976,8 @@ BEGIN
          INSERT INTO @tExtScnData (Variable, Value) VALUES    
          ('@nMenu',        CONVERT(Nvarchar(20),@nMenu)),
          ('@cUserName',    @cUserName),
-         ('@cSuggSKU',     @cSuggSKU)
+         ('@cSuggSKU',     @cSuggSKU),
+         ('@cDropID',     @cDropID)
          EXECUTE [RDT].[rdt_ExtScnEntry] 
          @cExtScnSP, 
          @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorerKey, @tExtScnData ,

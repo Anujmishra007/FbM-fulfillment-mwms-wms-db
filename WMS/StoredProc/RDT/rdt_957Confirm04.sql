@@ -366,7 +366,10 @@ BEGIN
          -- Update PickDetail
          UPDATE dbo.PickDetail SET
             Status = CASE WHEN UOM = '2' THEN '5' ELSE '3' END,
-            CaseID = CASE WHEN UOM = '2' THEN @cActUCCNo ELSE CaseID END,
+            --CaseID = CASE WHEN UOM = '2' THEN @cActUCCNo ELSE CaseID END,
+            CaseID = CASE WHEN UOM = '2' THEN @cDropID ELSE CaseID END,
+            Notes = @cActUCCNo,
+            DropID = @cDropID,
             EditDate = GETDATE(),
             EditWho = SUSER_SNAME()
          WHERE PickDetailKey = @cPickDetailKey
@@ -382,6 +385,7 @@ BEGIN
       -- Actual
       UPDATE dbo.UCC SET
          Status = '5', -- 5=Picked
+         UserDefine01 = @cDropID,
          EditDate = GETDATE(),
          EditWho = SUSER_SNAME()
       WHERE StorerKey = @cStorerkey
@@ -483,9 +487,12 @@ BEGIN
          BEGIN
             -- Update PickDetail
             UPDATE dbo.PickDetail SET
-               DropID = @cActUCCNo,
-               CaseID = CASE WHEN UOM = '2' THEN @cActUCCNo ELSE CaseID END,
+               --DropID = @cActUCCNo,
+               DropID = @cDropID,
+               -- CaseID = CASE WHEN UOM = '2' THEN @cActUCCNo ELSE CaseID END,
+               CaseID = CASE WHEN UOM = '2' THEN @cDropID ELSE CaseID END,
                Status = @cPickConfirmStatus,
+               Notes = @cActUCCNo,
                EditDate = GETDATE(),
                EditWho = SUSER_SNAME()
             WHERE PickDetailKey = @cPickDetailKey
@@ -532,8 +539,11 @@ BEGIN
             UPDATE dbo.PickDetail SET
                Status = @cPickConfirmStatus,
                LOT = @cActUCCLOT,
-               DropID = @cActUCCNo,
-               CaseID = CASE WHEN UOM = '2' THEN @cActUCCNo ELSE CaseID END,
+               --DropID = @cActUCCNo,
+               DropID = @cDropID,
+               Notes = @cActUCCNo,
+               --CaseID = CASE WHEN UOM = '2' THEN @cActUCCNo ELSE CaseID END,
+               CaseID = CASE WHEN UOM = '2' THEN @cDropID ELSE CaseID END,
                QTY = @nQTY,
                EditDate = GETDATE(),
                EditWho = SUSER_SNAME()
@@ -565,6 +575,7 @@ BEGIN
       -- Actual
       UPDATE dbo.UCC SET
          Status = '5', -- 5=Picked
+         UserDefine01 = @cDropID
          EditDate = GETDATE(),
          EditWho = SUSER_SNAME()
       WHERE StorerKey = @cStorerkey
@@ -631,8 +642,11 @@ BEGIN
          BEGIN
             -- Update PickDetail
             UPDATE dbo.PickDetail SET
-               DropID = @cActUCCNo,
-               CaseID = CASE WHEN UOM = '2' THEN @cActUCCNo ELSE CaseID END,
+               -- DropID = @cActUCCNo,
+               DropID = @cDropID,
+               -- CaseID = CASE WHEN UOM = '2' THEN @cActUCCNo ELSE CaseID END,
+               CaseID = CASE WHEN UOM = '2' THEN @cDropID ELSE CaseID END,
+               Notes = @cActUCCNo,
                Status = @cPickConfirmStatus,
                EditDate = GETDATE(),
                EditWho = SUSER_SNAME()
@@ -725,8 +739,11 @@ BEGIN
             UPDATE dbo.PickDetail SET
                Status = @cPickConfirmStatus,
                LOT = @cActUCCLOT,
-               DropID = @cActUCCNo,
-               CaseID = CASE WHEN UOM = '2' THEN @cActUCCNo ELSE CaseID END,
+               -- DropID = @cActUCCNo,
+               DropID = @cDropID,
+               --CaseID = CASE WHEN UOM = '2' THEN @cActUCCNo ELSE CaseID END,
+               CaseID = CASE WHEN UOM = '2' THEN @cDropID ELSE CaseID END,
+               Notes = @cActUCCNo,
                QTY = @nQTY,
                EditDate = GETDATE(),
                EditWho = SUSER_SNAME()
@@ -768,6 +785,7 @@ BEGIN
       -- Actual
       UPDATE dbo.UCC SET
          Status = '5', -- 5=Picked
+         UserDefine01 = @cDropID,
          EditDate = GETDATE(),
          EditWho = SUSER_SNAME()
       WHERE StorerKey = @cStorerkey
@@ -949,8 +967,11 @@ BEGIN
          BEGIN
             -- Update PickDetail
             UPDATE dbo.PickDetail SET
-               DropID = @cActUCCNo,
-               CaseID = CASE WHEN UOM = '2' THEN @cActUCCNo ELSE CaseID END,
+               -- DropID = @cActUCCNo,
+               DropID = @cDropID,
+               -- CaseID = CASE WHEN UOM = '2' THEN @cActUCCNo ELSE CaseID END,
+               CaseID = CASE WHEN UOM = '2' THEN @cDropID ELSE CaseID END,
+               Notes = @cActUCCNo,
                Status = @cPickConfirmStatus,
                EditDate = GETDATE(),
                EditWho = SUSER_SNAME()
@@ -1031,8 +1052,11 @@ BEGIN
          BEGIN
             UPDATE dbo.PickDetail SET
                LOT = @cActUCCLOT,
-               DropID = @cActUCCNo,
-               CaseID = CASE WHEN UOM = '2' THEN @cActUCCNo ELSE CaseID END,
+               --DropID = @cActUCCNo,
+               DropID = @cDropID,
+               -- CaseID = CASE WHEN UOM = '2' THEN @cActUCCNo ELSE CaseID END,
+               CaseID = CASE WHEN UOM = '2' THEN @cDropID ELSE CaseID END,
+               Notes = @cActUCCNo,
                QTY = @nQTY,
                Status = @cPickConfirmStatus,
                EditDate = GETDATE(),
@@ -1168,6 +1192,7 @@ BEGIN
       -- Actual
       UPDATE dbo.UCC SET
          Status = '5', -- 5=Picked
+         UserDefine01 = @cDropID,
          EditDate = GETDATE(),
          EditWho = SUSER_SNAME()
       WHERE StorerKey = @cStorerkey
@@ -1304,7 +1329,8 @@ BEGIN
             ,@cPackDtlRefNo  = '' -- @cPackDtlRefNo
             ,@cPackDtlRefNo2 = '' -- @cPackDtlRefNo2
             ,@cPackDtlUPC    = '' -- @cPackDtlUPC
-            ,@cPackDtlDropID = @cActUCCNo -- @cPackDtlDropID
+            --,@cPackDtlDropID = @cActUCCNo -- @cPackDtlDropID
+            ,@cPackDtlDropID = @cDropID
             ,@nCartonNo      = @nCartonNo    OUTPUT
             ,@cLabelNo       = @cLabelNo     OUTPUT
             ,@nErrNo         = @nErrNo       OUTPUT
@@ -1345,7 +1371,8 @@ BEGIN
                ,@cPackDtlRefNo  = '' -- @cPackDtlRefNo
                ,@cPackDtlRefNo2 = '' -- @cPackDtlRefNo2
                ,@cPackDtlUPC    = '' -- @cPackDtlUPC
-               ,@cPackDtlDropID = @cActUCCNo -- @cPackDtlDropID
+               -- ,@cPackDtlDropID = @cActUCCNo -- @cPackDtlDropID
+               ,@cPackDtlDropID = @cDropID
                ,@nCartonNo      = @nCartonNo    OUTPUT
                ,@cLabelNo       = @cLabelNo     OUTPUT
                ,@nErrNo         = @nErrNo       OUTPUT
