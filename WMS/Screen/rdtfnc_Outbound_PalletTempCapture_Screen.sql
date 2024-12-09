@@ -13,6 +13,7 @@ EXECUTE rdt.rdtAddScn 6540, 'ENG'
    ,@cLine01 = 'MBOL: %10i01'
    ,@cLine14 = '%e'
    ,@nFunc = 1870
+   ,@cWebGroup = '{"1":["1"]}'
 
 
 -- 6541 = Scan DropID/ID
@@ -50,7 +51,7 @@ EXECUTE rdt.rdtAddScn 6543, 'ENG'
    ,@cLine06 = '1 Yes'
    ,@cLine07 = '9 No'
    ,@cLine08 = ''
-   ,@cLine09 = 'OPT: %01i04 '
+   ,@cLine09 = 'OPT: %01i04'
    ,@cLine14 = '%e'
    ,@nFunc = 1870
    ,@cWebGroup = '{"1":["1","2"],"3":["9"]}'
