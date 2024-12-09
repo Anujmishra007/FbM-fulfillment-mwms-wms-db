@@ -12,10 +12,11 @@ execute rdt.rdtAddMsg 230157  ,10   ,'230157^ID not in MBOL'      ,'us_english' 
 execute rdt.rdtAddMsg 230158  ,10   ,'230158^CodeLKUP Miss'       ,'us_english'  ,1870 ,0 ,'Code List entry is missing for'
 execute rdt.rdtAddMsg 230159  ,10   ,'230159^Item Cls Code'       ,'us_english'  ,1870 ,0 ,'Item class code'
 execute rdt.rdtAddMsg 230160  ,10   ,'230160^CodeLKUP Miss'       ,'us_english'  ,1870 ,0 ,'needs to be maintained properly'
-execute rdt.rdtAddMsg 230161  ,10   ,'230161^UDF01 ERR '          ,'us_english'  ,1870 ,0 ,'Code User Define 01'
+execute rdt.rdtAddMsg 230161  ,10   ,'230161^UDF01 ERR'           ,'us_english'  ,1870 ,0 ,'Code User Define 01'
 execute rdt.rdtAddMsg 230162  ,10   ,'230162^UDF02 ERR'           ,'us_english'  ,1870 ,0 ,'Code User Define 02'
-execute rdt.rdtAddMsg 230163  ,10   ,'230163^Invalid format'      ,'us_english'  ,1870 ,0 ,'230163 - Invalid temperature format'
-execute rdt.rdtAddMsg 230164  ,10   ,'230164^Invalid Option'      ,'us_english'  ,1870 ,0 ,'230164 - Invalid Option'
+execute rdt.rdtAddMsg 230163  ,10   ,'230163^Temp is needed'      ,'us_english'  ,1870 ,0 ,'230163 - Temperature is needed'
+execute rdt.rdtAddMsg 230164  ,10   ,'230164^Invalid Temp'        ,'us_english'  ,1870 ,0 ,'230164 - Invalid temperature'
+execute rdt.rdtAddMsg 230165  ,10   ,'230165^Invalid Option'      ,'us_english'  ,1870 ,0 ,'230165 - Invalid Option'
 
 SELECT * FROM RDT.RDTMSG (NOLOCK) WHERE MESSAGE_ID BETWEEN 230151 AND 230200
 

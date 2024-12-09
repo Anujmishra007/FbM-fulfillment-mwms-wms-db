@@ -434,12 +434,20 @@ Step_3:
 BEGIN
    IF @nInputKey = 1
    BEGIN
+
+      IF @cInField03 = N''
+      BEGIN
+         SET @nErrNo = 230163
+         SET @cErrMsg = [RDT].[rdtGetMessage]( @nErrNo, @cLangCode, N'DSP')  --230163 - Temperature is needed
+         GOTO Step_3_QUIT
+      END
+
       SET @cTemperature = @cInField03
       SET @nTemperature = TRY_CONVERT(DECIMAL(5,2), @cTemperature)
       IF @nTemperature IS NULL
       BEGIN
-         SET @nErrNo = 230163
-         SET @cErrMsg = [RDT].[rdtGetMessage]( @nErrNo, @cLangCode, N'DSP')  --230163 - Invalid temperature format
+         SET @nErrNo = 230164
+         SET @cErrMsg = [RDT].[rdtGetMessage]( @nErrNo, @cLangCode, N'DSP')  --230164 - Invalid temperature
          GOTO Step_3_QUIT
       END
 
@@ -503,8 +511,8 @@ BEGIN
       SET @cOption = @cInField04
       IF @cOption NOT IN (N'1', N'9')
       BEGIN
-         SET @nErrNo = 230164
-         SET @cErrMsg = [RDT].[rdtGetMessage]( @nErrNo, @cLangCode, N'DSP')  --230164 - Invalid Option
+         SET @nErrNo = 230165
+         SET @cErrMsg = [RDT].[rdtGetMessage]( @nErrNo, @cLangCode, N'DSP')  --230165 - Invalid Option
          GOTO Step_4_QUIT
       END
 
