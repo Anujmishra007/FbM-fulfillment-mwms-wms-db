@@ -1977,7 +1977,8 @@ BEGIN
          ('@nMenu',        CONVERT(Nvarchar(20),@nMenu)),
          ('@cUserName',    @cUserName),
          ('@cSuggSKU',     @cSuggSKU),
-         ('@cDropID',     @cDropID)
+         ('@cDropID',     @cDropID),
+         ('@cPickSlipNo', @cPickSlipNo)
          EXECUTE [RDT].[rdt_ExtScnEntry] 
          @cExtScnSP, 
          @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorerKey, @tExtScnData ,

@@ -63,46 +63,54 @@ BEGIN
    DECLARE @cSuggSKU       NVARCHAR( 20)
    DECLARE @cDropIDMandatory NVARCHAR(1)
    DECLARE @cDropID        NVARCHAR(20)
+   DECLARE @cPickSlipNo    NVARCHAR(10)
 
    SELECT @nStep = Step FROM rdt.RDTMOBREC WHERE Mobile = @nMobile  
 
    SELECT @cSuggSKU     = Value FROM @tExtScnData WHERE Variable = '@cSuggSKU'
-   SELECT @cDropID     = Value FROM @tExtScnData WHERE Variable = 'cDropID'
+   SELECT @cDropID     = Value FROM @tExtScnData WHERE Variable = '@cDropID'
+   SELECT @cPickSlipNo     = Value FROM @tExtScnData WHERE Variable = '@cPickSlipNo'
 
    IF @nAction = 0
    BEGIN
       IF @nFunc = 957
       BEGIN
-         -- add dropid null validation
-         IF (@nScn = 5292 AND nStep = 2)
+         IF @nInputKey = 1
          BEGIN
-            SELECT @cDropIDMandatory = rdt.rdtGetConfig(@nFunc, 'DropIDMandatory', @cStorerKey)
-            IF @cDropIDMandatory = '0'
+            -- add dropid null validation
+            IF (@nScn = 5292 AND @nStep = 2)
             BEGIN
-               SET @cDropIDMandatory = ''
-            END
-            IF ISNULL(@cDropID, '') = ''
-            BEGIN
-               SET @nErrNo = 114514
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- DropID cannot be blank
-               GOTO Quit
+               SELECT @cDropIDMandatory = rdt.rdtGetConfig(@nFunc, 'DropIDMandatory', @cStorerKey)
+               IF @cDropIDMandatory = '0'
+               BEGIN
+                  SET @cDropIDMandatory = ''
+               END
+               IF ISNULL(@cDropID, '') = ''
+               BEGIN
+                  SET @nErrNo = 230601
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- DropID cannot be blank
+                  GOTO Quit
+               END
             END
          END
-         -- return to step 2 when UCC scan succeed to scan a new DropID for another UCC
-         IF @nScn IN (6443, 5294)
+         IF @nInputKey = 1
          BEGIN
-            -- Prepare LOC screen var
-            SET @cOutField01 = @cPickSlipNo
-            SET @cOutField02 = '' --PickZone
-            SET @cOutField03 = '' --DropID
+            -- return to step 2 when UCC scan succeed to scan a new DropID for another UCC
+            IF @nScn IN (6443, 5294)
+            BEGIN
+               -- Prepare LOC screen var
+               SET @cOutField01 = @cPickSlipNo
+               SET @cOutField02 = '' --PickZone
+               SET @cOutField03 = '' --DropID
 
-            EXEC rdt.rdtSetFocusField @nMobile, 2 -- PickZone
+               EXEC rdt.rdtSetFocusField @nMobile, 2 -- PickZone
 
-            -- Enable field
-            SET @cFieldAttr07 = '' -- QTY
-            SET @nAfterScn = 5291
-            SET @nAfterStep = 2
-            GOTO Quit
+               -- Enable field
+               SET @cFieldAttr07 = '' -- QTY
+               SET @nAfterScn = 5291
+               SET @nAfterStep = 2
+               GOTO Quit
+            END
          END
          IF @nScn = 5292 
          BEGIN
