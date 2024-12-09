@@ -4,7 +4,7 @@ SET ANSI_NULLS OFF
 GO
 
 /************************************************************************/
-/* Store procedure: rdt_Inbound_PalletTempCapture_Confirm               */
+/* Store procedure: rdt_Inbound_IDTempCap_Confirm                       */
 /* Copyright      : Maersk                                              */
 /* Customer       : BRITISH EGYPTIAN                                    */
 /*                                                                      */
@@ -14,7 +14,7 @@ GO
 /* 2024-12-06 1.0  NLT013      FCR-1398 Created                         */
 /************************************************************************/
 
-CREATE PROC rdt.rdt_Inbound_PalletTempCapture_Confirm (
+CREATE OR ALTER PROC rdt.rdt_Inbound_IDTempCap_Confirm (
    @nMobile          INT,
    @nFunc            INT,
    @cLangCode        NVARCHAR( 3),
@@ -34,11 +34,15 @@ BEGIN
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
    
-   DECLARE @cSQL      NVARCHAR( MAX)
-   DECLARE @cSQLParam NVARCHAR( MAX)
+   DECLARE 
+      @cSQL                NVARCHAR( MAX),
+      @cSQLParam           NVARCHAR( MAX),
+      @bSuccess            INT,
+      @nTranCount          INT,
+      @cTemperatureLogID   NVARCHAR( 10)
 
    -- Get RDT storer configure
-   DECLARE @cConfirmSP NVARCHAR(20)
+   DECLARE @cConfirmSP NVARCHAR(30)
    SET @cConfirmSP = rdt.RDTGetConfig( @nFunc, 'ConfirmSP', @cStorerKey)
    IF @cConfirmSP = '0'
       SET @cConfirmSP = ''
@@ -65,7 +69,7 @@ BEGIN
             ' @cStorerKey    NVARCHAR( 15), ' +
             ' @cReceiptKey   NVARCHAR( 10), ' +
             ' @cID           NVARCHAR( 18), ' +
-            ' @fTemperature  DECIMAL(5,2),  ' +
+            ' @fTemperature  DECIMAL(7,2),  ' +
             ' @nErrNo        INT           OUTPUT, ' +
             ' @cErrMsg       NVARCHAR( 20) OUTPUT  '
 
@@ -81,10 +85,66 @@ BEGIN
    /***********************************************************************************************
                                              Standard confirm
    ***********************************************************************************************/
-   INSERT INTO [dbo].[TemperatureLog]
-      (Facility, StorerKey, ReceiptKey, PalletID, Temperature, TempCheckPoint, CheckUser, EditDate, EditWho )
-   VALUES
-      (@cFacility, @cStorerKey, @cReceiptKey, @cID, @fTemperature, 'R', @cUserName, GETDATE(), @cUserName )
+
+   BEGIN TRANSACTION
+
+   IF EXISTS(SELECT 1 FROM dbo.TemperatureLog WITH(NOLOCK) WHERE Facility = @cFacility AND StorerKey = @cStorerKey AND ReceiptKey = @cReceiptKey AND PalletID = @cID AND TempCheckPoint = 'R')
+   BEGIN
+      BEGIN TRY
+         UPDATE dbo.TemperatureLog WITH(ROWLOCK)
+         SET Temperature = @fTemperature
+         WHERE Facility = @cFacility 
+            AND StorerKey = @cStorerKey 
+            AND ReceiptKey = @cReceiptKey 
+            AND PalletID = @cID 
+            AND TempCheckPoint = 'R'
+      END TRY
+      BEGIN CATCH
+         SET @nErrNo = 230451  
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UpdTmpLogFail
+         GOTO RollBackTran
+      END CATCH
+   END
+   ELSE
+   BEGIN
+      EXECUTE dbo.nspg_GetKey  
+               'TemperatureLogID',  
+               10 ,  
+               @cTemperatureLogID OUTPUT,  
+               @bSuccess         OUTPUT,  
+               @nErrNo            OUTPUT,  
+               @cErrMsg           OUTPUT  
+
+      IF @bSuccess <> 1  
+      BEGIN  
+         SET @nErrNo = 230452
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --GetKeyFail
+         GOTO RollBackTran  
+      END  
+      
+      BEGIN TRY
+         INSERT INTO dbo.TemperatureLog
+            (TemperatureLogID, Facility, StorerKey, ReceiptKey, MbolKey, PalletID, Temperature, TempCheckPoint, CheckUser, EditDate, EditWho )
+         VALUES
+            (@cTemperatureLogID, @cFacility, @cStorerKey, @cReceiptKey, NULL, @cID, @fTemperature, 'R', @cUserName, GETDATE(), @cUserName )
+      END TRY
+      BEGIN CATCH
+         SET @nErrNo = 230453
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --AddTmpLogFail
+         GOTO RollBackTran
+      END CATCH
+   END
+
+   IF @@TRANCOUNT > 0
+      COMMIT TRANSACTION
+
+   GOTO Quit
+
+   RollBackTran:
+   BEGIN
+      IF @@TRANCOUNT > 0
+         ROLLBACK TRANSACTION
+   END
 
    Quit:
 END
@@ -95,5 +155,5 @@ GO
 SET ANSI_NULLS ON
 GO
 
-GRANT EXECUTE ON RDT.rdt_Inbound_PalletTempCapture_Confirm TO NSQL
+GRANT EXECUTE ON RDT.rdt_Inbound_IDTempCap_Confirm TO NSQL
 GO

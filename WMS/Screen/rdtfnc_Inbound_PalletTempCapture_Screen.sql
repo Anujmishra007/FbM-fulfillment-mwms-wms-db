@@ -22,6 +22,7 @@ EXECUTE rdt.rdtAddScn 6531, 'ENG'
    ,@cLine02 = ''
    ,@cLine03 = 'ID:%18i02'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2","3"]}'
    ,@nFunc = 1869
 
 -- 6532 = ASN/ID/Temprature screen
@@ -31,15 +32,17 @@ EXECUTE rdt.rdtAddScn 6532, 'ENG'
    ,@cLine02 = ''
    ,@cLine03 = 'ID:%18d02'
    ,@cLine04 = ''
-   ,@cLine05 = 'Temp:%10i03%5d04'
+   ,@cLine05 = 'Temp:'
+   ,@cLine06 = '%7i03 %5d04'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2","3","4"],"2":["5","6"]}'
    ,@nFunc = 1869
 
 -- 6533 = confirm option screen
 DELETE rdt.RDTScn WHERE Scn = 6533 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 6533, 'ENG'
-   ,@cLine01 = 'Temp Entered: %5d01'
-   ,@cLine02 = 'is not in range.'
+   ,@cLine01 = 'Temp Entered:%7d01'
+   ,@cLine02 = 'It is not in range.'
    ,@cLine03 = 'Do you want to '
    ,@cLine04 = 'continue?'
    ,@cLine05 = 'Option'
@@ -49,4 +52,5 @@ EXECUTE rdt.rdtAddScn 6533, 'ENG'
    ,@cLine09 = ''
    ,@cLine10 = 'OPT%01i02'
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2","3","4"],"2":["5","6","7","8","9","10"]}'
    ,@nFunc = 1869

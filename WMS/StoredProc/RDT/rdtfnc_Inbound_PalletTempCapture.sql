@@ -43,15 +43,15 @@ BEGIN
       @cUserName                    NVARCHAR( 18),
       @cFacility                    NVARCHAR( 15), 
       @ctemperature                 NVARCHAR( 5),
-      @fTemperature                 DECIMAL(5, 2),
+      @fTemperature                 DECIMAL(6, 2),
       @cASNStatus                   NVARCHAR(10),
       @cASNSCanctatus               NVARCHAR(10),
       @nRowCount                    INT,
       @cStorerGroup                 NVARCHAR( 20),
       @cTempScale                   NVARCHAR( 5),
       @cItemClass                   NVARCHAR(10),
-      @fLowerTemp                   DECIMAL(5, 2),
-      @fHigherTemp                  DECIMAL(5, 2),
+      @fLowerTemp                   DECIMAL(7, 2),
+      @fHigherTemp                  DECIMAL(7, 2),
       @cScale                       NVARCHAR(5),
       @cOption                      NVARCHAR(1),
       
@@ -106,10 +106,10 @@ BEGIN
       @cID              = V_ID,
       @cStorerGroup     = StorerGroup, 
 
-      @fTemperature      = TRY_CAST(V_String1 AS DECIMAL(5, 2)),
+      @fTemperature      = TRY_CAST(V_String1 AS DECIMAL(7, 2)),
       @cTempScale       = V_String2,
-      @fLowerTemp       = TRY_CAST(V_String3 AS DECIMAL(5, 2)),
-      @fHigherTemp      = TRY_CAST(V_String4 AS DECIMAL(5, 2)),
+      @fLowerTemp       = TRY_CAST(V_String3 AS DECIMAL(7, 2)),
+      @fHigherTemp      = TRY_CAST(V_String4 AS DECIMAL(7, 2)),
 
       @cInField01 = I_Field01,   @cOutField01 = O_Field01,  @cFieldAttr01 = FieldAttr01,
       @cInField02 = I_Field02,   @cOutField02 = O_Field02,  @cFieldAttr02 = FieldAttr02,
@@ -200,8 +200,7 @@ BEGIN
             @cASNFacility     = ISNULL(Facility, ''),
             @cASNStorerKey    = StorerKey
          FROM dbo.Receipt WITH(NOLOCK)
-         WHERE StorerKey = @cStorerKey
-            AND ReceiptKey = @cReceiptKey
+         WHERE ReceiptKey = @cReceiptKey
          
          SELECT @nRowCount = @@ROWCOUNT
 
@@ -302,7 +301,7 @@ BEGIN
       BEGIN
          SET @cID = @cInField02
 
-         IF @cReceiptKey = ''
+         IF @cID = ''
          BEGIN
             SET @nErrNo = 230208
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --IDIsNeeded
@@ -338,16 +337,19 @@ BEGIN
          WHERE SKU.StorerKey = @cStorerKey
             AND RP.ToID = @cID
 
-         IF @cItemClass IS NULL
+         IF @cItemClass IS NULL OR @cItemClass = ''
          BEGIN
             SET @nErrNo = 230213
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --NoItemClass
             GOTO Step_2_Fail
          END
 
-         SELECT @fLowerTemp = TRY_CAST(UDF01 AS DECIMAL(5, 2)),
-            @fHigherTemp = TRY_CAST(UDF02 AS DECIMAL(5, 2)),
-            @cScale = UDF03
+         SELECT @fLowerTemp = TRY_CAST(UDF01 AS DECIMAL(7, 2)),
+            @fHigherTemp = TRY_CAST(UDF02 AS DECIMAL(7, 2)),
+            @cScale = CASE UDF03 
+                        WHEN 'Celcius' THEN 'C'
+                        ELSE 'F'
+                     END
          FROM dbo.CODELKUP WITH(NOLOCK)
          WHERE StorerKey = @cStorerKey
             AND LISTNAME = 'ITEMCLASS'
@@ -374,6 +376,7 @@ BEGIN
          SET @cOutField02 = @cID          --ID
          SET @cOutField03 = ''            --Temp
          SET @cOutField04 = @cScale       --Temp Scale
+         
 
          SET @nScn = @nScn + 1
          SET @nStep = @nStep + 1
@@ -395,6 +398,8 @@ BEGIN
       BEGIN
          SET @cOutField01 = @cReceiptKey  --ASN
          SET @cOutField02 = ''            --ID
+         SET @cOutField03 = ''            --Temp
+         SET @cOutField04 = @cScale       --Temp Scale
 
          SET @cID = ''                    --ID
          
@@ -422,7 +427,7 @@ BEGIN
             GOTO Step_3_Fail
          END
 
-         SET @fTemperature = TRY_CAST(@ctemperature AS DECIMAL(5,2))
+         SET @fTemperature = TRY_CAST(@ctemperature AS DECIMAL(7,2))
 
          IF @fTemperature IS NULL
          BEGIN
@@ -443,7 +448,7 @@ BEGIN
          ELSE
          BEGIN
             BEGIN TRY
-               EXEC rdt.rdt_Inbound_PalletTempCapture_Confirm @nMobile, @nFunc, @cLangCode, @cUserName, @cFacility, @cStorerKey,
+               EXEC rdt.rdt_Inbound_IDTempCap_Confirm @nMobile, @nFunc, @cLangCode, @cUserName, @cFacility, @cStorerKey,
                   @cReceiptKey,
                   @cID,
                   @fTemperature,
@@ -521,7 +526,7 @@ BEGIN
          IF @cOption = '1'
          BEGIN
             BEGIN TRY
-               EXEC rdt.rdt_Inbound_PalletTempCapture_Confirm @nMobile, @nFunc, @cLangCode, @cUserName, @cFacility, @cStorerKey,
+               EXEC rdt.rdt_Inbound_IDTempCap_Confirm @nMobile, @nFunc, @cLangCode, @cUserName, @cFacility, @cStorerKey,
                   @cReceiptKey,
                   @cID,
                   @fTemperature,
@@ -559,9 +564,10 @@ BEGIN
       IF @nInputKey = 0 -- ESC
       BEGIN
          --prepare prev screen variable
-         SET @cOutField01 = @cReceiptKey
-         SET @cOutField02 = @cID
-         SET @cOutField02 = ''
+         SET @cOutField01 = @cReceiptKey  --ASN
+         SET @cOutField02 = @cID          --ID
+         SET @cOutField03 = ''            --Temp
+         SET @cOutField04 = @cScale       --Temp Scale
 
          EXEC rdt.rdtSetFocusField @nMobile, 1 -- ID
 
@@ -598,10 +604,10 @@ BEGIN
          V_ReceiptKey      = @cReceiptKey,
          V_ID              = @cID,
 
-         V_String1 = TRY_CAST(@fTemperature AS NVARCHAR(5)),
+         V_String1 = TRY_CAST(@fTemperature AS NVARCHAR(7)),
          V_String2 = @cTempScale,
-         V_String3 = TRY_CAST(@fLowerTemp AS NVARCHAR(5)),
-         V_String4 = TRY_CAST(@fHigherTemp AS NVARCHAR(5)),
+         V_String3 = TRY_CAST(@fLowerTemp AS NVARCHAR(7)),
+         V_String4 = TRY_CAST(@fHigherTemp AS NVARCHAR(7)),
             
          I_Field01 = @cInField01,  O_Field01 = @cOutField01,   FieldAttr01  = @cFieldAttr01,
          I_Field02 = @cInField02,  O_Field02 = @cOutField02,   FieldAttr02  = @cFieldAttr02,
