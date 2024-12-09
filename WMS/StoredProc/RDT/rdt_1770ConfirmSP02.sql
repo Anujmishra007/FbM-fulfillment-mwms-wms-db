@@ -10,7 +10,9 @@ GO
 /*                                                                         */
 /* Date        Rev   Author    Purposes                                    */
 /* 2014-08-21  1.0   Ung       WMS-26055 base rdt_TM_PalletPick_Confirm    */
-/* 2024-11-11  1.1   PXL009    FCR-1124 Merged 1.0 from v0 branch          */
+/* 2024-10-15  1.1   CheeMun   INC7331096 - Insert PalletDetail for        */
+/*                                         multiple lines of caseID        */
+/* 2024-12-09  1.2   PXL009    FCR-1124 Merged 1.0,1.1 from v0 branch      */
 /***************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_1770ConfirmSP02] (
@@ -55,6 +57,7 @@ BEGIN
    DECLARE @cLOT           NVARCHAR( 10)
    DECLARE @cPickMethod    NVARCHAR( 10)
    DECLARE @cPickConfirmStatus NVARCHAR( 1)
+   DECLARE @cPalletLineNumber NVARCHAR( 5)  --INC7331096
 
    -- Init var
    SET @nQTY_Move = 0
@@ -145,7 +148,7 @@ BEGIN
          END
 
          -- PickDetail have less
-   		ELSE IF @nQTY_PD < @nQTY_Bal
+         ELSE IF @nQTY_PD < @nQTY_Bal
          BEGIN
             -- Confirm PickDetail
             UPDATE dbo.PickDetail WITH (ROWLOCK) SET
@@ -167,7 +170,7 @@ BEGIN
          END
 
          -- PickDetail have more
-   		ELSE IF @nQTY_PD > @nQTY_Bal
+         ELSE IF @nQTY_PD > @nQTY_Bal
          BEGIN
             -- Short pick
             IF @nQTY_Bal = 0 -- Don't need to split
@@ -229,10 +232,10 @@ BEGIN
                   NULL, --TrafficCop,
                   '1'  --OptimizeCop
                FROM dbo.PickDetail WITH (NOLOCK)
-      			WHERE PickDetailKey = @cPickDetailKey
+               WHERE PickDetailKey = @cPickDetailKey
                IF @@ERROR <> 0
                BEGIN
-      				SET @nErrNo = 221457
+                  SET @nErrNo = 221457
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Ins PDtl Fail
                   GOTO RollBackTran
                END
@@ -496,7 +499,8 @@ BEGIN
                Width = TRY_CAST( @cUDF02 AS FLOAT),
                Height = TRY_CAST( @cUDF03 AS FLOAT),
                EditDate = GETDATE(),
-               EditWho = SUSER_SNAME()
+               EditWho = SUSER_SNAME(),
+               TrafficCop = NULL
             WHERE PalletKey = @cFromID
             IF @@ERROR <> 0
             BEGIN
@@ -688,8 +692,19 @@ BEGIN
          -- PalletDetail
          IF NOT EXISTS( SELECT 1 FROM dbo.PalletDetail WITH (NOLOCK) WHERE PalletKey = @cFromID)
          BEGIN
+            /*INC7331096 (START)*/
+            SELECT @cPalletLineNumber = RIGHT( '00000' + CAST( CAST( IsNULL( MAX( PalletLineNumber), 0) AS INT) + 1 AS NVARCHAR( 5)), 5)
+            FROM dbo.PalletDetail WITH (NOLOCK)
+            WHERE PalletKey = @cFromID
+
+            INSERT INTO dbo.PalletDetail (PalletKey, PalletLineNumber, CaseID, StorerKey, SKU, LOC, Qty, Status, UserDefine01, UserDefine03, ArchiveCop)
+            VALUES (@cFromID, @cPalletLineNumber, @cLabelNo, @cStorerKey, @cSKU, @cFinalLOC, @nPackQTY, '9', @cOrderKey, @cDropID, '9')
+            /*INC7331096 (END)*/
+
+            /*
             INSERT INTO dbo.PalletDetail (PalletKey, PalletLineNumber, CaseID, StorerKey, SKU, LOC, QTY, Status, UserDefine01, UserDefine03, ArchiveCop)
             VALUES (@cFromID, '00001', @cLabelNo, @cStorerKey, @cSKU, @cFinalLOC, @nPackQTY, '9', @cOrderKey, @cDropID, '9')
+            */
             IF @@ERROR <> 0
             BEGIN
                SET @nErrNo = 221473
@@ -749,7 +764,8 @@ BEGIN
          UPDATE dbo.Pallet SET
             GrossWgt = @nGrossWgt,
             EditDate = GETDATE(),
-            EditWho = SUSER_SNAME()
+            EditWho = SUSER_SNAME(),
+            TrafficCop = NULL
          WHERE PalletKey = @cFromID
          IF @@ERROR <> 0
          BEGIN
