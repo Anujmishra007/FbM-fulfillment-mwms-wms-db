@@ -150,7 +150,7 @@ BEGIN
          WHERE PTLKey = @nPTLKey
          IF @@ERROR <> 0
          BEGIN
-            SET @nErrNo = 111601
+            SET @nErrNo = 230501
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD PTL Fail
             GOTO RollBackTran
          END
@@ -160,7 +160,7 @@ BEGIN
          BEGIN
             -- Get PickDetail tally PTLTran
             SELECT @nQTY_PD = ISNULL( SUM( PD.QTY), 0)
-            FROM Orders O WITH (NOLOCK) 
+            FROM dbo.Orders O WITH (NOLOCK) 
                JOIN PickDetail PD WITH (NOLOCK) ON (PD.OrderKey = O.OrderKey)
             WHERE O.OrderKey = @cOrderKey
                AND PD.DropID = @cScanID
@@ -174,7 +174,7 @@ BEGIN
 
             IF @nQTY_PD <> @nExpectedQTY
             BEGIN
-               SET @nErrNo = 111602
+               SET @nErrNo = 230502
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --PKDtl changed
                GOTO RollBackTran
             END
@@ -182,7 +182,7 @@ BEGIN
             -- Loop PickDetail
             SET @curPD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
                SELECT PickDetailKey, PD.QTY, PD.Loc
-               FROM Orders O WITH (NOLOCK) 
+               FROM dbo.Orders O WITH (NOLOCK) 
                   JOIN PickDetail PD WITH (NOLOCK) ON (PD.OrderKey = O.OrderKey)
                WHERE O.OrderKey = @cOrderKey
                   AND PD.DropID = @cScanID
@@ -198,7 +198,7 @@ BEGIN
             WHILE @@FETCH_STATUS = 0
             BEGIN
                -- Confirm PickDetail
-               UPDATE PickDetail WITH(ROWLOCK) SET
+               UPDATE dbo.PickDetail WITH(ROWLOCK) SET
                   Status = '5', 
                   CaseID = @cActCartonID, 
                   DropID = @cActCartonID, 
@@ -207,7 +207,7 @@ BEGIN
                WHERE PickDetailKey = @cPickDetailKey
                IF @@ERROR <> 0
                BEGIN
-                  SET @nErrNo = 111603
+                  SET @nErrNo = 230503
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD PKDtl Fail
                   GOTO RollBackTran
                END
@@ -272,7 +272,7 @@ BEGIN
                VALUES (@cPickSlipNo, @cStorerKey, @cOrderKey)
                IF @@ERROR <> 0
                BEGIN
-                  SET @nErrNo = 111604
+                  SET @nErrNo = 230504
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InsPHdrFail
                   GOTO RollBackTran
                END
@@ -320,7 +320,7 @@ BEGIN
                      @cErrMsg       OUTPUT
                   IF @nErrNo <> 0
                   BEGIN
-                     SET @nErrNo = 100404
+                     SET @nErrNo = 230534
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --GenLabelNoFail
                      GOTO RollBackTran
                   END
@@ -328,7 +328,7 @@ BEGIN
 
                IF @cLabelNo = ''
                BEGIN
-                  SET @nErrNo = 111632
+                  SET @nErrNo = 230532
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --GenLabelNoFail
                   GOTO RollBackTran
                END
@@ -337,12 +337,12 @@ BEGIN
                IF @cUpdateTrackNo = '1'
                BEGIN
                   -- Get order info
-                  SELECT @cUserDefine03 = UserDefine03 FROM Orders WITH (NOLOCK) WHERE OrderKey = @cOrderKey
+                  SELECT @cUserDefine03 = UserDefine03 FROM dbo.Orders WITH (NOLOCK) WHERE OrderKey = @cOrderKey
                   
                   -- Get code lookup info
                   SELECT TOP 1 
                      @cNotes = LEFT( ISNULL( Notes, ''), 30)
-                  FROM CodeLKUP WITH (NOLOCK) 
+                  FROM dbo.CodeLKUP WITH (NOLOCK) 
                   WHERE ListName = 'LOTTELBL' 
                      AND Short = @cUserDefine03 
                      AND StorerKey = @cStorerKey
@@ -351,19 +351,19 @@ BEGIN
                   SELECT TOP 1 
                      @nRowRef = RowRef, 
                      @cTrackNo = TrackingNo
-                  FROM CartonTrack WITH (NOLOCK)
+                  FROM dbo.CartonTrack WITH (NOLOCK)
                   WHERE KeyName = @cNotes
                      AND CarrierRef2 <> 'GET'
                   ORDER BY RowRef
                   
                   -- Stamp track no used
-                  UPDATE CartonTrack WITH(ROWLOCK) SET 
+                  UPDATE dbo.CartonTrack WITH(ROWLOCK) SET 
                      CarrierRef2 = 'GET', 
                      LabelNo = @cLabelNo
                   WHERE RowRef = @nRowRef
                   IF @@ERROR <> 0
                   BEGIN
-                     SET @nErrNo = 111605
+                     SET @nErrNo = 230505
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UpdTrackNoFail
                      GOTO RollBackTran
                   END 
@@ -392,7 +392,7 @@ BEGIN
                   'rdt.' + SUSER_SNAME(), GETDATE(), 'rdt.' + SUSER_SNAME(), GETDATE())
                IF @@ERROR <> 0
                BEGIN
-                  SET @nErrNo = 111606
+                  SET @nErrNo = 230506
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InsPackDtlFail
                   GOTO RollBackTran
                END     
@@ -411,7 +411,7 @@ BEGIN
                   AND SKU = @cSKU
                IF @@ERROR <> 0
                BEGIN
-                  SET @nErrNo = 111607
+                  SET @nErrNo = 230507
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UpdPackDtlFail
                   GOTO RollBackTran
                END
@@ -420,23 +420,23 @@ BEGIN
             IF @cAutoPackConfirm = '1'
             BEGIN
                -- No outstanding PickDetail
-               IF NOT EXISTS( SELECT 1 FROM PickDetail WITH (NOLOCK) WHERE OrderKey = @cOrderKey AND Status < '5')
+               IF NOT EXISTS( SELECT 1 FROM dbo.PickDetail WITH (NOLOCK) WHERE OrderKey = @cOrderKey AND Status < '5')
                BEGIN
                   SET @nPackQTY = 0
                   SET @nPickQTY = 0
-                  SELECT @nPackQTY = SUM( QTY) FROM PackDetail WITH (NOLOCK) WHERE PickSlipNo = @cPickSlipNo
-                  SELECT @nPickQTY = SUM( QTY) FROM PickDetail WITH (NOLOCK) WHERE OrderKey = @cOrderKey
+                  SELECT @nPackQTY = SUM( QTY) FROM dbo.PackDetail WITH (NOLOCK) WHERE PickSlipNo = @cPickSlipNo
+                  SELECT @nPickQTY = SUM( QTY) FROM dbo.PickDetail WITH (NOLOCK) WHERE OrderKey = @cOrderKey
       
                   IF @nPackQTY = @nPickQTY
                   BEGIN
                      -- Pack confirm
-                     UPDATE PackHeader WITH(ROWLOCK) SET 
+                     UPDATE dbo.PackHeader WITH(ROWLOCK) SET 
                         Status = '9' 
                      WHERE PickSlipNo = @cPickSlipNo
                         AND Status <> '9'
                      IF @@ERROR <> 0
                      BEGIN
-                        SET @nErrNo = 111608
+                        SET @nErrNo = 230508
                         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --PackCfm Fail
                         GOTO RollBackTran
                      END
@@ -521,7 +521,7 @@ BEGIN
                WHERE PTLKey = @nPTLKey
                IF @@ERROR <> 0
                BEGIN
-                  SET @nErrNo = 111609
+                  SET @nErrNo = 230509
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD PTL Fail
                   GOTO RollBackTran
                END
@@ -543,7 +543,7 @@ BEGIN
                WHERE PTLKey = @nPTLKey
                IF @@ERROR <> 0
                BEGIN
-                  SET @nErrNo = 111610
+                  SET @nErrNo = 230510
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD PTL Fail
                   GOTO RollBackTran
                END
@@ -568,7 +568,7 @@ BEGIN
                   WHERE PTLKey = @nPTLKey
                   IF @@ERROR <> 0
                   BEGIN
-                     SET @nErrNo = 111611
+                     SET @nErrNo = 230511
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD PTL Fail
                      GOTO RollBackTran
                   END
@@ -588,7 +588,7 @@ BEGIN
          			WHERE PTLKey = @nPTLKey			            
                   IF @@ERROR <> 0
                   BEGIN
-         				SET @nErrNo = 111612
+         				SET @nErrNo = 230512
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INS PTL Fail
                      GOTO RollBackTran
                   END
@@ -605,7 +605,7 @@ BEGIN
                   WHERE PTLKey = @nPTLKey
                   IF @@ERROR <> 0
                   BEGIN
-                     SET @nErrNo = 111613
+                     SET @nErrNo = 230513
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD PTL Fail
                      GOTO RollBackTran
                   END
@@ -626,7 +626,7 @@ BEGIN
          BEGIN            
             -- Get PickDetail tally PTLTran
             SELECT @nQTY_PD = ISNULL( SUM( PD.QTY), 0)
-            FROM Orders O WITH (NOLOCK) 
+            FROM dbo.Orders O WITH (NOLOCK) 
                JOIN PickDetail PD WITH (NOLOCK) ON (PD.OrderKey = O.OrderKey)
             WHERE O.OrderKey = @cOrderKey
                AND PD.DropID = @cScanID
@@ -640,7 +640,7 @@ BEGIN
 
             IF @nQTY_PD <> @nExpectedQTY
             BEGIN
-               SET @nErrNo = 111614
+               SET @nErrNo = 230514
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --PKDtl changed
                GOTO RollBackTran
             END
@@ -651,7 +651,7 @@ BEGIN
             -- Get PickDetail candidate
             SET @curPD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
                SELECT PickDetailKey, QTY, PD.Loc
-               FROM Orders O WITH (NOLOCK) 
+               FROM dbo.Orders O WITH (NOLOCK) 
                   JOIN PickDetail PD WITH (NOLOCK) ON (PD.OrderKey = O.OrderKey)
                WHERE O.OrderKey = @cOrderKey
                   AND PD.DropID = @cScanID
@@ -679,7 +679,7 @@ BEGIN
                   WHERE PickDetailKey = @cPickDetailKey
                   IF @@ERROR <> 0
                   BEGIN
-                     SET @nErrNo = 111615
+                     SET @nErrNo = 230515
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD PKDtl Fail
                      GOTO RollBackTran
                   END
@@ -723,7 +723,7 @@ BEGIN
                   WHERE PickDetailKey = @cPickDetailKey
                   IF @@ERROR <> 0
                   BEGIN
-                     SET @nErrNo = 111616
+                     SET @nErrNo = 230516
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD PKDtl Fail
                      GOTO RollBackTran
                   END
@@ -771,7 +771,7 @@ BEGIN
                      WHERE PickDetailKey = @cPickDetailKey
                      IF @@ERROR <> 0
                      BEGIN
-                        SET @nErrNo = 111617
+                        SET @nErrNo = 230517
                         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD PKDtl Fail
                         GOTO RollBackTran
                      END
@@ -790,7 +790,7 @@ BEGIN
                         @cErrMsg           OUTPUT
                      IF @bSuccess <> 1
                      BEGIN
-                        SET @nErrNo = 111618
+                        SET @nErrNo = 230518
                         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --nspg_GetKey
                         GOTO RollBackTran
                      END
@@ -818,7 +818,7 @@ BEGIN
             			WHERE PickDetailKey = @cPickDetailKey			            
                      IF @@ERROR <> 0
                      BEGIN
-            				SET @nErrNo = 111619
+            				SET @nErrNo = 230519
                         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INS PKDtl Fail
                         GOTO RollBackTran
                      END
@@ -835,16 +835,16 @@ BEGIN
                      
                      -- Get PickSlipNo
                      SET @cPickSlipNo = ''
-                     SELECT @cPickSlipNo = PickHeaderKey FROM PickHeader WITH (NOLOCK) WHERE OrderKey = @cOrderKey
+                     SELECT @cPickSlipNo = PickHeaderKey FROM dbo.PickHeader WITH (NOLOCK) WHERE OrderKey = @cOrderKey
                      IF @cPickSlipNo = ''
-                        SELECT TOP 1 @cPickSlipNo = PickHeaderKey FROM PickHeader WITH (NOLOCK) WHERE ExternOrderKey = @cLoadKey
+                        SELECT TOP 1 @cPickSlipNo = PickHeaderKey FROM dbo.PickHeader WITH (NOLOCK) WHERE ExternOrderKey = @cLoadKey
                      
                      -- Insert into 
                      INSERT INTO dbo.RefKeyLookup (PickDetailkey, Pickslipno, OrderKey, OrderLineNumber, Loadkey)
                      VALUES (@cNewPickDetailKey, @cPickSlipNo, @cOrderKey, @cOrderLineNumber, @cLoadkey)
                      IF @@ERROR <> 0
                      BEGIN
-                        SET @nErrNo = 111620
+                        SET @nErrNo = 230520
                         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INS RefKeyFail
                         GOTO RollBackTran
                      END
@@ -860,7 +860,7 @@ BEGIN
                      WHERE PickDetailKey = @cPickDetailKey 
                      IF @@ERROR <> 0
                      BEGIN
-                        SET @nErrNo = 111621
+                        SET @nErrNo = 230521
                         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD PKDtl Fail
                         GOTO RollBackTran
                      END
@@ -873,7 +873,7 @@ BEGIN
                      WHERE PickDetailKey = @cPickDetailKey
                      IF @@ERROR <> 0
                      BEGIN
-                        SET @nErrNo = 111622
+                        SET @nErrNo = 230522
                         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD PKDtl Fail
                         GOTO RollBackTran
                      END
@@ -944,7 +944,7 @@ BEGIN
                VALUES (@cPickSlipNo, @cStorerKey, @cOrderKey)
                IF @@ERROR <> 0
                BEGIN
-                  SET @nErrNo = 111623
+                  SET @nErrNo = 230523
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InsPHdrFail
                   GOTO RollBackTran
                END
@@ -992,7 +992,7 @@ BEGIN
                      @cErrMsg       OUTPUT
                   IF @nErrNo <> 0
                   BEGIN
-                     SET @nErrNo = 100404
+                     SET @nErrNo = 230534
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --GenLabelNoFail
                      GOTO RollBackTran
                   END
@@ -1001,7 +1001,7 @@ BEGIN
                -- Check label no
                IF @cLabelNo = ''
                BEGIN
-                  SET @nErrNo = 111633
+                  SET @nErrNo = 230533
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --GenLabelNoFail
                   GOTO RollBackTran
                END
@@ -1010,12 +1010,12 @@ BEGIN
                IF @cUpdateTrackNo = '1'
                BEGIN
                   -- Get order info
-                  SELECT @cUserDefine03 = UserDefine03 FROM Orders WITH (NOLOCK) WHERE OrderKey = @cOrderKey
+                  SELECT @cUserDefine03 = UserDefine03 FROM dbo.Orders WITH (NOLOCK) WHERE OrderKey = @cOrderKey
                   
                   -- Get code lookup info
                   SELECT TOP 1 
                      @cNotes = LEFT( ISNULL( Notes, ''), 30)
-                  FROM CodeLKUP WITH (NOLOCK) 
+                  FROM dbo.CodeLKUP WITH (NOLOCK) 
                   WHERE ListName = 'LOTTELBL' 
                      AND Short = @cUserDefine03
                      AND StorerKey = @cStorerKey
@@ -1024,19 +1024,19 @@ BEGIN
                   SELECT TOP 1 
                      @nRowRef = RowRef, 
                      @cTrackNo = TrackingNo
-                  FROM CartonTrack WITH (NOLOCK)
+                  FROM dbo.CartonTrack WITH (NOLOCK)
                   WHERE KeyName = @cNotes
                      AND CarrierRef2 <> 'GET'
                   ORDER BY RowRef
                   
                   -- Stamp track no used
-                  UPDATE CartonTrack WITH(ROWLOCK) SET 
+                  UPDATE dbo.CartonTrack WITH(ROWLOCK) SET 
                      CarrierRef2 = 'GET', 
                      LabelNo = @cLabelNo
                   WHERE RowRef = @nRowRef
                   IF @@ERROR <> 0 OR @@ROWCOUNT <> 1
                   BEGIN
-                     SET @nErrNo = 111624
+                     SET @nErrNo = 230524
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UpdTrackNoFail
                      GOTO RollBackTran
                   END 
@@ -1064,7 +1064,7 @@ BEGIN
                    'rdt.' + SUSER_SNAME(), GETDATE(), 'rdt.' + SUSER_SNAME(), GETDATE())
                IF @@ERROR <> 0
                BEGIN
-                  SET @nErrNo = 111625
+                  SET @nErrNo = 230525
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InsPackDtlFail
                   GOTO RollBackTran
                END     
@@ -1083,7 +1083,7 @@ BEGIN
                   AND SKU = @cSKU
                IF @@ERROR <> 0
                BEGIN
-                  SET @nErrNo = 111626
+                  SET @nErrNo = 230526
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UpdPackDtlFail
                   GOTO RollBackTran
                END
@@ -1092,23 +1092,23 @@ BEGIN
             IF @cAutoPackConfirm = '1'
             BEGIN
                -- No outstanding PickDetail
-               IF NOT EXISTS( SELECT 1 FROM PickDetail WITH (NOLOCK) WHERE OrderKey = @cOrderKey AND Status < '5')
+               IF NOT EXISTS( SELECT 1 FROM dbo.PickDetail WITH (NOLOCK) WHERE OrderKey = @cOrderKey AND Status < '5')
                BEGIN
                   SET @nPackQTY = 0
                   SET @nPickQTY = 0
-                  SELECT @nPackQTY = SUM( QTY) FROM PackDetail WITH (NOLOCK) WHERE PickSlipNo = @cPickSlipNo
-                  SELECT @nPickQTY = SUM( QTY) FROM PickDetail WITH (NOLOCK) WHERE OrderKey = @cOrderKey
+                  SELECT @nPackQTY = SUM( QTY) FROM dbo.PackDetail WITH (NOLOCK) WHERE PickSlipNo = @cPickSlipNo
+                  SELECT @nPickQTY = SUM( QTY) FROM dbo.PickDetail WITH (NOLOCK) WHERE OrderKey = @cOrderKey
       
                   IF @nPackQTY = @nPickQTY
                   BEGIN
                      -- Pack confirm
-                     UPDATE PackHeader WITH(ROWLOCK) SET 
+                     UPDATE dbo.PackHeader WITH(ROWLOCK) SET 
                         Status = '9' 
                      WHERE PickSlipNo = @cPickSlipNo
                         AND Status <> '9'
                      IF @@ERROR <> 0
                      BEGIN
-                        SET @nErrNo = 111627
+                        SET @nErrNo = 230527
                         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --PackCfm Fail
                         GOTO RollBackTran
                      END
@@ -1137,7 +1137,7 @@ BEGIN
             WHERE RowRef = @nRowRef 
             IF @@ERROR <> 0
             BEGIN
-               SET @nErrNo = 111628
+               SET @nErrNo = 230528
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD Log Fail
                GOTO RollBackTran
             END
@@ -1182,7 +1182,7 @@ BEGIN
                WHERE PTLKey = @nPTLKey
                IF @@ERROR <> 0
                BEGIN
-                  SET @nErrNo = 111629
+                  SET @nErrNo = 230529
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD PTL Fail
                   GOTO RollBackTran
                END
@@ -1192,7 +1192,7 @@ BEGIN
                BEGIN
                   -- Get PickDetail tally PTLTran
                   SELECT @nQTY_PD = ISNULL( SUM( PD.QTY), 0)
-                  FROM Orders O WITH (NOLOCK) 
+                  FROM dbo.Orders O WITH (NOLOCK) 
                      JOIN PickDetail PD WITH (NOLOCK) ON (PD.OrderKey = O.OrderKey)
                   WHERE O.OrderKey = @cOrderKey
                      AND PD.DropID = @cScanID
@@ -1205,7 +1205,7 @@ BEGIN
                      AND O.SOStatus <> 'CANC'
                   IF @nQTY_PD <> @nExpectedQTY
                   BEGIN
-                     SET @nErrNo = 111630
+                     SET @nErrNo = 230530
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --PKDtl changed
                      GOTO RollBackTran
                   END
@@ -1213,7 +1213,7 @@ BEGIN
                   -- Loop PickDetail
                   SET @curPD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
                      SELECT PickDetailKey
-                     FROM Orders O WITH (NOLOCK) 
+                     FROM dbo.Orders O WITH (NOLOCK) 
                         JOIN PickDetail PD WITH (NOLOCK) ON (PD.OrderKey = O.OrderKey)
                      WHERE O.OrderKey = @cOrderKey
                         AND PD.DropID = @cScanID
@@ -1229,7 +1229,7 @@ BEGIN
                   WHILE @@FETCH_STATUS = 0
                   BEGIN
                      -- Confirm PickDetail
-                     UPDATE PickDetail WITH(ROWLOCK) SET
+                     UPDATE dbo.PickDetail WITH(ROWLOCK) SET
                         Status = '4', 
                         --CaseID = @cActCartonID, 
                         DropID = @cActCartonID, 
@@ -1238,7 +1238,7 @@ BEGIN
                      WHERE PickDetailKey = @cPickDetailKey
                      IF @@ERROR <> 0
                      BEGIN
-                        SET @nErrNo = 111631
+                        SET @nErrNo = 230531
                         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD PKDtl Fail
                         GOTO RollBackTran
                      END
