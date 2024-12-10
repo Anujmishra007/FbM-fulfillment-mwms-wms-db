@@ -6,12 +6,14 @@ GO
 
 /******************************************************************************/
 /* Store procedure: rdt_PTLStation_Confirm_ToteIDSKU07                        */
-/* Copyright      : LF Logistics                                              */
+/* Copyright      : Maersk                                                    */
+/* rdt_PTLStation_Confirm_ToteIDSKU ->rdt_PTLStation_Confirm_ToteIDSKU07      */
 /*                                                                            */
 /* Purpose: Close working batch                                               */
 /*                                                                            */
 /* Date       Rev Author      Purposes                                        */
-/* 26-09-2024 1.0  yeekung    FCR-609 Created                                 */  
+/* 26-09-2024 1.0  yeekung    FCR-609 Created                                 */ 
+/* 30-09-2024 1.1  yeekung    FCR-772 Created                                 */ 
 /******************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_PTLStation_Confirm_ToteIDSKU07 (
@@ -381,6 +383,40 @@ BEGIN
                END
             END
 
+            IF NOT EXISTS (SELECT TOP 1 1  
+                           FROM  PickDetail PD WITH (NOLOCK) 
+                           WHERE PD.Orderkey = @cOrderKey
+                              AND PD.StorerKey = @cStorerKey  
+                              AND PD.Status  <= '5'
+                              AND PD.Status  <> '4'
+                              AND PD.CaseID = ''  
+                              AND PD.QTY > 0)  
+            BEGIN
+               IF EXISTS ( SELECT 1
+                           From dbo.StorerConfig (Nolock) 
+                  WHERE Configkey = 'Innobec'
+                     AND Storerkey = @cStorerkey
+                     And Svalue = '1'
+               )
+               BEGIN
+                  -- Insert transmitlog2 here  
+                  EXEC ispGenTransmitLog2   
+                        @c_TableName        = 'WSBOXCFMlb'  
+                     ,@c_Key1             = @cOrderkey  
+                     ,@c_Key2             = @cActCartonID  
+                     ,@c_Key3             = @cStorerkey  
+                     ,@c_TransmitBatch    = ''  
+                     ,@b_Success          = @bSuccess    OUTPUT  
+                     ,@n_err              = @nErrNo      OUTPUT  
+                     ,@c_errmsg           = @cErrMsg     OUTPUT        
+
+                  -- Insert TL2 here only, the web service will do the printing  
+                  -- quit after excute        
+                  IF @bSuccess <> 1      
+                     GOTO Quit  
+               END
+            END
+
             IF @cAutoPackConfirm = '1'
             BEGIN
                -- No outstanding PickDetail
@@ -390,6 +426,7 @@ BEGIN
                   SET @nPickQTY = 0
                   SELECT @nPackQTY = SUM( QTY) FROM PackDetail WITH (NOLOCK) WHERE PickSlipNo = @cPickSlipNo
                   SELECT @nPickQTY = SUM( QTY) FROM PickDetail WITH (NOLOCK) WHERE OrderKey = @cOrderKey
+
       
                   IF @nPackQTY = @nPickQTY
                   BEGIN
@@ -1056,6 +1093,35 @@ BEGIN
             FETCH NEXT FROM @curLOG INTO @nRowRef
          END
 
+         IF EXISTS ( SELECT 1
+                     From dbo.StorerConfig (Nolock) 
+               WHERE Configkey = 'Innobec'
+                  AND Storerkey = @cStorerkey
+                  And Svalue = '1'
+            )
+         BEGIN
+
+            SELECT @cOrderkey = Orderkey 
+            FROM rdt.rdtPTLStationLog WITH (NOLOCK)
+            WHERE RowRef = @nRowRef
+
+            -- Insert transmitlog2 here  
+            EXEC ispGenTransmitLog2   
+                  @c_TableName        = 'WSBOXCFMlb'  
+               ,@c_Key1             = @cOrderkey  
+               ,@c_Key2             = @cCartonID  
+               ,@c_Key3             = @cStorerkey  
+               ,@c_TransmitBatch    = ''  
+               ,@b_Success          = @bSuccess    OUTPUT  
+               ,@n_err              = @nErrNo      OUTPUT  
+               ,@c_errmsg           = @cErrMsg     OUTPUT        
+
+            -- Insert TL2 here only, the web service will do the printing  
+            -- quit after excute        
+            IF @bSuccess <> 1      
+               GOTO Quit  
+         END
+
          SELECT @cLight  = V_String27
          FROM RDT.RDTMobrec (NOLOCK)
          WHERE Mobile = @nMobile
@@ -1207,6 +1273,40 @@ BEGIN
                         GOTO RollBackTran
                      END
                      FETCH NEXT FROM @curPD INTO @cPickDetailKey
+                  END
+               END
+
+               IF NOT EXISTS (SELECT TOP 1 1  
+                              FROM  PickDetail PD WITH (NOLOCK) 
+                              WHERE PD.Orderkey = @cOrderKey
+                                 AND PD.StorerKey = @cStorerKey  
+                                 AND PD.Status  <= '5'
+                                 AND PD.Status  <> '4'
+                                 AND PD.CaseID = ''  
+                                 AND PD.QTY > 0)  
+               BEGIN
+                  IF EXISTS ( SELECT 1
+                              From dbo.StorerConfig (Nolock) 
+                     WHERE Configkey = 'Innobec'
+                        AND Storerkey = @cStorerkey
+                        And Svalue = '1'
+                  )
+                  BEGIN
+                     -- Insert transmitlog2 here  
+                     EXEC ispGenTransmitLog2   
+                           @c_TableName        = 'WSBOXCFMlb'  
+                        ,@c_Key1             = @cOrderkey  
+                        ,@c_Key2             = @cActCartonID  
+                        ,@c_Key3             = @cStorerkey  
+                        ,@c_TransmitBatch    = ''  
+                        ,@b_Success          = @bSuccess    OUTPUT  
+                        ,@n_err              = @nErrNo      OUTPUT  
+                        ,@c_errmsg           = @cErrMsg     OUTPUT        
+
+                     -- Insert TL2 here only, the web service will do the printing  
+                     -- quit after excute        
+                     IF @bSuccess <> 1      
+                        GOTO Quit  
                   END
                END
                
