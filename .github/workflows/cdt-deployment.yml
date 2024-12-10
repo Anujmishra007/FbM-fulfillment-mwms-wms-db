@@ -1,48 +1,40 @@
-name: cdt db deployment
+name: Trigger CI Workflow in infra repo with AuthToken
 
 on:
   workflow_dispatch:
     inputs:
-      # environment:
-      #   description: 'The environment to run (CDT, Stage, Americas, Europe, Asia)'
-      #   required: true
       authToken:
-        description: 'Authentication token for the API'
+        description: 'Authentication Token'
         required: true
-        #default: ''
-
+        type: string
 
 jobs:
-  trigger-repo-infra:
+  trigger-workflow:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Trigger Repo infra Workflow
-        run: |
-          curl -X POST \
-          -H "Accept: application/vnd.github.everest-preview+json" \
-          -H "Authorization: Bearer ${{ secrets.db_token}}" \
-          https://api.github.com/repos/Maersk-Global/fbm-infra-automation/dispatches \
-          -d '{
-                "event_type": "trigger-by-FbM-fulfillment-mwms-wms-db",
-                "client_payload": {
-                  "authToken": "${{ github.event.inputs.authToken }}"
-                }
-              }'
-# jobs:
-  # trigger-repo-a-workflow:
-  #   runs-on: ubuntu-latest
-  #   steps:
-  #     - name: Checkout code
-  #       uses: actions/checkout@v2
+      # Step 1: Checkout the code from repo-b (not strictly necessary for this task)
+      - name: Checkout 
+        uses: actions/checkout@v3
 
-  #     - name: Trigger  Workflow
-  #       uses: peter-evans/workflow-dispatch@v1
-  #       with:
-  #         repository: 'Maersk-Global/fbm-infra-automation' 
-  #         workflow: 'cdt-db-deploy.yaml'  
-  #         ref: 'main' 
-  #         inputs: |
-  #           authToken: ${{ github.event.inputs.authToken }}
-  #       env:
-  #         GITHUB_TOKEN: ${{ secrets.db_token }}  
+      # Step 2: Set up GitHub CLI
+      - name: Set up GitHub CLI
+        uses: cli/cli-action@v2.0.0
+        with:
+          gh-version: 'latest'
+
+      # Step 3: Authenticate with GitHub CLI
+      - name: Authenticate with GitHub CLI
+        run: |
+          echo "${{ secrets.DB_TOKEN }}" | gh auth login --with-token
+
+      # Step 4: Trigger cdt-test-deployment.yml in infrawith the authToken passed as input
+      - name: Trigger cdt-test-deployment.yml in infra repo with authToken
+        run: |
+          gh workflow run cdt-test-deployment.yml \
+            --repo Maersk-Global/fbm-infra-automation \
+            -f authToken="${{ github.event.inputs.authToken }}"
+
+      # Optional: Check the status of the triggered workflow
+      - name: List workflow runs in infra repo
+        run: gh run list --repo Maersk-Global/fbm-infra-automation
