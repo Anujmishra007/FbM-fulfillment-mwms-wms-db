@@ -12,6 +12,7 @@ GO
 /*                                                                            */
 /* Date          Rev       Author   Purposes                                  */
 /* 2024-10-22    ShaoAn    1.0      FCR-759-1001 ID and UCC Length Issue      */
+/* 2024-12-21    Dennis    1.1      No need to decode on step 3               */
 /******************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_514DecodeSP02 (
@@ -68,28 +69,28 @@ BEGIN
          END
       END
 
-      IF @nStep = 3
-      BEGIN
-         IF @nInputKey = 1 -- ENTER
-            If @cBarcode <> ''  -- ID  Decode
-            BEGIN
-               IF LEN(@cBarcode) = 18
-               BEGIN
-                  SET @cSKU = @cBarcode
-                  GOTO Quit
-               END
+      -- IF @nStep = 3
+      -- BEGIN
+      --    IF @nInputKey = 1 -- ENTER
+      --       If @cBarcode <> ''  -- ID  Decode
+      --       BEGIN
+      --          IF LEN(@cBarcode) = 18
+      --          BEGIN
+      --             SET @cSKU = @cBarcode
+      --             GOTO Quit
+      --          END
 
-               IF LEN(@cBarcode) <> 25
-               BEGIN
-                     SET @nErrNo = 227151
-                     SET @cErrMsg = [rdt].[rdtgetmessage]( @nErrNo, @cLangCode, N'DSP') -- Invalid ID(25 digit)
-                     GOTO Quit
-               END
-               SET @cSKU = RIGHT(@cBarcode, 18)
-               END
-            END
-         END
-      END
+      --          IF LEN(@cBarcode) <> 25
+      --          BEGIN
+      --                SET @nErrNo = 227151
+      --                SET @cErrMsg = [rdt].[rdtgetmessage]( @nErrNo, @cLangCode, N'DSP') -- Invalid ID(25 digit)
+      --                GOTO Quit
+      --          END
+      --          SET @cSKU = RIGHT(@cBarcode, 18)
+      --          END
+      --       END
+      --    END
+      -- END
    END
 
    Quit:
@@ -101,6 +102,6 @@ GO
 SET ANSI_NULLS ON
 GO
 
-GRANT EXEC ON RDT.rdt_514DecodeSP01 TO NSQL
+GRANT EXEC ON RDT.rdt_514DecodeSP02 TO NSQL
 GO
 
