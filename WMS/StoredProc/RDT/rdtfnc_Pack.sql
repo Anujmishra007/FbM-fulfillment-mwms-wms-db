@@ -86,8 +86,11 @@ GO
 /* 2024-07-08   6.2 Jackc       FCR-392 Add ext scn entry and codes                             */
 /* 2024-07-08   6.3 JHU151      FCR-330 SSCC code generator                                     */
 /* 2024-08-22   6.4 JCH507      FCR-392 Add errno handling to step3>ESC>ExtUpd                  */
-/* 2024-10-24   6.5 TLE109      FCR-990. Packing Serial Number Validation                       */
-/* 2024-11-08   6.6 CYU027      UWP-26811 UCC Multi Storerkey                                   */
+/* 2024-10-25   6.5  PXL009     FCR-759 ID and UCC Length Issue                                 */
+/* 2024-10-24   6.6 TLE109      FCR-990. Packing Serial Number Validation                       */
+/* 2024-11-08   6.7 CYU027      UWP-26811 UCC Multi Storerkey                                   */
+/* 2024-10-12   6.8 YYS027      FCR-861 Add support CstLabelSP for Pack List Printing(Step 6)   */ 
+/*                              similiar with ship-label printing(Step 5)                       */
 /************************************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_Pack] (
@@ -121,7 +124,19 @@ DECLARE
    @nBulkSNO       INT,
    @nBulkSNOQTY    INT,
    @tVar                VariableTable, 
-   @tVarDisableQTYField VARIABLETABLE
+   @tVarDisableQTYField VARIABLETABLE,
+   @cBarcode               NVARCHAR( 60),
+   @cBarcode2              NVARCHAR( 60),
+   @cFromDropIDDecode      NVARCHAR( 20),
+   @cToDropIDDecode        NVARCHAR( 20),
+   @cUPC                   NVARCHAR( 30),
+   @cQTY                   NVARCHAR( 5),
+   @nDecodeQTY             INT,
+   @cPackDtlDropID_Decode  NVARCHAR(20),
+   @cSKUDataCapture        NVARCHAR(1),
+   @cDataCapture           NVARCHAR(1)
+
+DECLARE @cCstLabelSP NVARCHAR(30)
 
 -- RDT.RDTMobRec variables
 DECLARE
@@ -167,6 +182,7 @@ DECLARE
    @nPackedQTY       INT,
    @nAction          INT, --(JHU151)   
    @nEnter           INT, --(cc01)  
+   
 
    @cDefaultPrintLabelOption     NVARCHAR( 1),
    @cDefaultPrintPackListOption  NVARCHAR( 1),
@@ -546,6 +562,10 @@ BEGIN
       SET @cPickSlipNo = @cInField01
       SET @cFromDropID = @cInField02
       SET @cPackDtlDropID = @cInField03
+      SET @cBarcode = @cInField02
+      SET @cBarcode2 = @cInField03
+      SET @cFromDropIDDecode = ''
+      SET @cToDropIDDecode = ''
 
       -- Check blank
       IF @cPickSlipNo = '' AND @cFromDropID = ''
@@ -553,6 +573,60 @@ BEGIN
          SET @nErrNo = 100232
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Need PS/DropID
          GOTO Quit
+      END
+
+      -- Decode
+      IF @cDecodeSP <> ''
+      BEGIN
+         -- Customize decode
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cDecodeSP AND type = 'P')
+         BEGIN
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cDecodeSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cPickSlipNo, @cFromDropID, @cBarcode, @cBarcode2, ' +
+               ' @cSKU OUTPUT, @nQTY OUTPUT, @cPackDtlRefNo OUTPUT, @cPackDtlRefNo2 OUTPUT, @cPackDtlUPC OUTPUT, @cPackDtlDropID OUTPUT, @cSerialNo OUTPUT, ' +
+               ' @cFromDropIDDecode OUTPUT, @cToDropIDDecode OUTPUT, @cUCCNo OUTPUT, ' +
+               ' @nErrNo OUTPUT, @cErrMsg OUTPUT '
+            SET @cSQLParam =
+               ' @nMobile           INT,           ' +
+               ' @nFunc             INT,           ' +
+               ' @cLangCode         NVARCHAR( 3),  ' +
+               ' @nStep             INT,           ' +
+               ' @nInputKey         INT,           ' +
+               ' @cFacility         NVARCHAR( 5),  ' +
+               ' @cStorerKey        NVARCHAR( 15), ' +
+               ' @cPickSlipNo       NVARCHAR( 10), ' +
+               ' @cFromDropID       NVARCHAR( 20), ' +
+               ' @cBarcode          NVARCHAR( 60), ' +
+               ' @cBarcode2         NVARCHAR( 60), ' +
+               ' @cSKU              NVARCHAR( 20)  OUTPUT, ' +
+               ' @nQTY              INT            OUTPUT, ' +
+               ' @cPackDtlRefNo     NVARCHAR( 20)  OUTPUT, ' +
+               ' @cPackDtlRefNo2    NVARCHAR( 20)  OUTPUT, ' +
+               ' @cPackDtlUPC       NVARCHAR( 30)  OUTPUT, ' +
+               ' @cPackDtlDropID    NVARCHAR( 20)  OUTPUT, ' +
+               ' @cSerialNo         NVARCHAR( 30)  OUTPUT, ' +
+               ' @cFromDropIDDecode NVARCHAR( 30)  OUTPUT, ' +
+               ' @cToDropIDDecode   NVARCHAR( 30)  OUTPUT, ' +
+               ' @cUCCNo            NVARCHAR( 30)  OUTPUT, ' +
+               ' @nErrNo            INT            OUTPUT, ' +
+               ' @cErrMsg           NVARCHAR( 20)  OUTPUT'
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cPickSlipNo, @cFromDropID, @cBarcode, @cBarcode2,
+               @cUPC OUTPUT, @nQTY OUTPUT, @cPackDtlRefNo OUTPUT, @cPackDtlRefNo2 OUTPUT, @cPackDtlUPC OUTPUT, @cPackDtlDropID_Decode OUTPUT, @cSerialNo OUTPUT,
+               @cFromDropIDDecode OUTPUT, @cToDropIDDecode OUTPUT, @cUCCNo OUTPUT,
+               @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+            IF @nErrNo <> 0
+               GOTO Quit
+         END
+
+         IF @cFromDropIDDecode <> ''
+            SET @cFromDropID = @cFromDropIDDecode
+
+         IF @cToDropIDDecode <> ''
+            SET @cPackDtlDropID = @cToDropIDDecode
+
       END
 
       IF @cFromDropID <> ''
@@ -1544,13 +1618,6 @@ Step_3:
 BEGIN
    IF @nInputKey = 1 -- ENTER
    BEGIN
-      DECLARE @cBarcode NVARCHAR( 60)
-      DECLARE @cUPC     NVARCHAR( 30)
-      DECLARE @cQTY     NVARCHAR( 5)
-      DECLARE @nDecodeQTY INT
-      DECLARE @cPackDtlDropID_Decode NVARCHAR(20)
-      DECLARE @cSKUDataCapture       NVARCHAR(1)
-      DECLARE @cDataCapture          NVARCHAR(1)
 
       SET @nQTY = 0
       SET @nDecodeQTY = 0
@@ -1558,6 +1625,7 @@ BEGIN
 
       -- Screen mapping
       SET @cBarcode = @cInField03 -- SKU
+      SET @cBarcode2 = ''
       SET @cUPC = LEFT( @cInField03, 30) -- SKU
       SET @cMQTY = CASE WHEN @cFieldAttr08 = 'O' THEN '' ELSE @cInField08 END
       SET @cPQTY = CASE WHEN @cFieldAttr14 = 'O' THEN '' ELSE @cInField14 END
@@ -1820,33 +1888,39 @@ BEGIN
             ELSE IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cDecodeSP AND type = 'P')
             BEGIN
                SET @cSQL = 'EXEC rdt.' + RTRIM( @cDecodeSP) +
-                  ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cPickSlipNo, @cFromDropID, @cBarcode, ' +
+                  ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cPickSlipNo, @cFromDropID, @cBarcode, @cBarcode2, ' +
                   ' @cSKU OUTPUT, @nQTY OUTPUT, @cPackDtlRefNo OUTPUT, @cPackDtlRefNo2 OUTPUT, @cPackDtlUPC OUTPUT, @cPackDtlDropID OUTPUT, @cSerialNo OUTPUT, ' +
+                  ' @cFromDropIDDecode OUTPUT, @cToDropIDDecode OUTPUT, @cUCCNo OUTPUT, ' +
                   ' @nErrNo OUTPUT, @cErrMsg OUTPUT '
                SET @cSQLParam =
-                  ' @nMobile        INT,           ' +
-                  ' @nFunc          INT,           ' +
-                  ' @cLangCode      NVARCHAR( 3),  ' +
-                  ' @nStep          INT,           ' +
-                  ' @nInputKey      INT,           ' +
-                  ' @cFacility      NVARCHAR( 5),  ' +
-                  ' @cStorerKey     NVARCHAR( 15), ' +
-                  ' @cPickSlipNo    NVARCHAR( 10), ' +
-                  ' @cFromDropID    NVARCHAR( 20), ' +
-                  ' @cBarcode       NVARCHAR( 60), ' +
-                  ' @cSKU           NVARCHAR( 20)  OUTPUT, ' +
-                  ' @nQTY           INT            OUTPUT, ' +
-                  ' @cPackDtlRefNo  NVARCHAR( 20)  OUTPUT, ' +
-                  ' @cPackDtlRefNo2 NVARCHAR( 20)  OUTPUT, ' +
-                  ' @cPackDtlUPC    NVARCHAR( 30)  OUTPUT, ' +
-                  ' @cPackDtlDropID NVARCHAR( 20)  OUTPUT, ' +
-                  ' @cSerialNo      NVARCHAR( 30)  OUTPUT, ' +
-                  ' @nErrNo         INT            OUTPUT, ' +
-                  ' @cErrMsg        NVARCHAR( 20)  OUTPUT'
+                  ' @nMobile           INT,           ' +
+                  ' @nFunc             INT,           ' +
+                  ' @cLangCode         NVARCHAR( 3),  ' +
+                  ' @nStep             INT,           ' +
+                  ' @nInputKey         INT,           ' +
+                  ' @cFacility         NVARCHAR( 5),  ' +
+                  ' @cStorerKey        NVARCHAR( 15), ' +
+                  ' @cPickSlipNo       NVARCHAR( 10), ' +
+                  ' @cFromDropID       NVARCHAR( 20), ' +
+                  ' @cBarcode          NVARCHAR( 60), ' +
+                  ' @cBarcode2         NVARCHAR( 60), ' +
+                  ' @cSKU              NVARCHAR( 20)  OUTPUT, ' +
+                  ' @nQTY              INT            OUTPUT, ' +
+                  ' @cPackDtlRefNo     NVARCHAR( 20)  OUTPUT, ' +
+                  ' @cPackDtlRefNo2    NVARCHAR( 20)  OUTPUT, ' +
+                  ' @cPackDtlUPC       NVARCHAR( 30)  OUTPUT, ' +
+                  ' @cPackDtlDropID    NVARCHAR( 20)  OUTPUT, ' +
+                  ' @cSerialNo         NVARCHAR( 30)  OUTPUT, ' +
+                  ' @cFromDropIDDecode NVARCHAR( 30)  OUTPUT, ' +
+                  ' @cToDropIDDecode   NVARCHAR( 30)  OUTPUT, ' +
+                  ' @cUCCNo            NVARCHAR( 30)  OUTPUT, ' +
+                  ' @nErrNo            INT            OUTPUT, ' +
+                  ' @cErrMsg           NVARCHAR( 20)  OUTPUT'
 
                EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-                  @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cPickSlipNo, @cFromDropID, @cBarcode,
+                  @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cPickSlipNo, @cFromDropID, @cBarcode, @cBarcode2,
                   @cUPC OUTPUT, @nQTY OUTPUT, @cPackDtlRefNo OUTPUT, @cPackDtlRefNo2 OUTPUT, @cPackDtlUPC OUTPUT, @cPackDtlDropID_Decode OUTPUT, @cSerialNo OUTPUT, 
+                  @cFromDropIDDecode OUTPUT, @cToDropIDDecode OUTPUT, @cUCCNo OUTPUT,
                   @nErrNo OUTPUT, @cErrMsg OUTPUT
 
                IF @nErrNo <> 0
@@ -3782,7 +3856,6 @@ BEGIN
          BEGIN
             IF @cShipLabel = 'CstLabelSP'
             BEGIN
-               DECLARE @cCstLabelSP NVARCHAR(30)
                SET @cCstLabelSP = rdt.RDTGetConfig( @nFunc, 'CstLabelSP', @cStorerKey)
                IF @cCstLabelSP = '0'
                   SET @cCstLabelSP = ''
@@ -4188,22 +4261,79 @@ BEGIN
 
       IF @cOption = '1'  -- Yes
       BEGIN
-         -- Get report param
-         DECLARE @tPackList AS VariableTable
-         INSERT INTO @tPackList (Variable, Value) VALUES
-            ( '@cPickSlipNo',    @cPickSlipNo),
-            ( '@cFromDropID',    @cFromDropID),
-            ( '@cPackDtlDropID', @cPackDtlDropID)
+         IF @cPackList = 'CstLabelSP'
+         BEGIN
+            SET @cCstLabelSP = rdt.RDTGetConfig( @nFunc, 'CstLabelSP', @cStorerKey)
+            IF @cCstLabelSP = '0'
+               SET @cCstLabelSP = ''
+            IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cCstLabelSP AND type = 'P')  --Customize Print Label
+            BEGIN
+               SET @cSQL = 'EXEC rdt.' + RTRIM( @cCstLabelSP) +
+                  ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cPickSlipNo, @cFromDropID, ' +
+                  ' @nCartonNo, @cLabelNo, @cSKU, @nQTY, @cUCCNo, @cCartonType, @cCube, @cWeight, @cRefNo, @cSerialNo, @nSerialQTY, @cOption, ' +
+                  ' @cPackDtlRefNo, @cPackDtlRefNo2, @cPackDtlUPC, @cPackDtlDropID, @cPackData1, @cPackData2, @cPackData3, ' +
+                  ' @nErrNo OUTPUT, @cErrMsg OUTPUT '
+               SET @cSQLParam =
+                  '@nMobile         INT,           ' +
+                  '@nFunc           INT,           ' +
+                  '@cLangCode       NVARCHAR( 3),  ' +
+                  '@nStep           INT,           ' +
+                  '@nInputKey       INT,           ' +
+                  '@cFacility       NVARCHAR( 5),  ' +
+                  '@cStorerKey      NVARCHAR( 15), ' +
+                  '@cPickSlipNo     NVARCHAR( 10), ' +
+                  '@cFromDropID     NVARCHAR( 20), ' +
+                  '@nCartonNo       INT,           ' +
+                  '@cLabelNo        NVARCHAR( 20), ' +
+                  '@cSKU            NVARCHAR( 20), ' +
+                  '@nQTY            INT,           ' +
+                  '@cUCCNo          NVARCHAR( 20), ' +
+                  '@cCartonType     NVARCHAR( 10), ' +
+                  '@cCube           NVARCHAR( 10), ' +
+                  '@cWeight         NVARCHAR( 10), ' +
+                  '@cRefNo          NVARCHAR( 20), ' +
+                  '@cSerialNo       NVARCHAR( 30), ' +
+                  '@nSerialQTY      INT,           ' +
+                  '@cOption         NVARCHAR( 1),  ' +
+                  '@cPackDtlRefNo   NVARCHAR( 20), ' +
+                  '@cPackDtlRefNo2  NVARCHAR( 20), ' +
+                  '@cPackDtlUPC     NVARCHAR( 30), ' +
+                  '@cPackDtlDropID  NVARCHAR( 20), ' +
+                  '@cPackData1      NVARCHAR( 30), ' +
+                  '@cPackData2      NVARCHAR( 30), ' +
+                  '@cPackData3      NVARCHAR( 30), ' +
+                  '@nErrNo          INT            OUTPUT, ' +
+                  '@cErrMsg         NVARCHAR( 20)  OUTPUT'
 
-         -- Print packing list
-         EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cLabelPrinter, @cPaperPrinter,
-            @cPackList, -- Report type
-            @tPackList, -- Report params
-            'rdtfnc_Pack',
-            @nErrNo  OUTPUT,
-            @cErrMsg OUTPUT
-         IF @nErrNo <> 0
-            GOTO Quit
+               EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                  @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cPickSlipNo, @cFromDropID,
+                  @nCartonNo, @cLabelNo, @cSKU, @nQTY, @cUCCNo, @cCartonType, @cCube, @cWeight, @cRefNo, @cSerialNo, @nSerialQTY, @cOption,
+                  @cPackDtlRefNo, @cPackDtlRefNo2, @cPackDtlUPC, @cPackDtlDropID, @cPackData1, @cPackData2, @cPackData3,
+                  @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+               IF @nErrNo <> 0
+                  GOTO Quit
+            END
+         END
+         ELSE
+         BEGIN                --STANDARD PRINT
+            -- Get report param
+            DECLARE @tPackList AS VariableTable
+            INSERT INTO @tPackList (Variable, Value) VALUES
+               ( '@cPickSlipNo',    @cPickSlipNo),
+               ( '@cFromDropID',    @cFromDropID),
+               ( '@cPackDtlDropID', @cPackDtlDropID)
+
+            -- Print packing list
+            EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cLabelPrinter, @cPaperPrinter,
+               @cPackList, -- Report type
+               @tPackList, -- Report params
+               'rdtfnc_Pack',
+               @nErrNo  OUTPUT,
+               @cErrMsg OUTPUT
+            IF @nErrNo <> 0
+               GOTO Quit
+         END
       END
 
       -- Extended update
@@ -4596,6 +4726,8 @@ BEGIN
    BEGIN
       -- Screen mapping
       SET @cUCCNo = @cInField01
+      SET @cBarcode = @cInField01
+      SET @cBarcode2 = ''
 
       -- Validate blank
       IF @cUCCNo = ''
@@ -4603,6 +4735,66 @@ BEGIN
          SET @nErrNo = 100220
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UCCNo required
          GOTO Quit
+      END
+
+      -- Decode
+      IF @cDecodeSP <> ''
+      BEGIN
+         -- Standard decode
+         IF @cDecodeSP = '1'
+         BEGIN
+            EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cBarcode,
+               @cUCCNo  = @cUCCNo      OUTPUT,
+               @nErrNo  = @nErrNo      OUTPUT,
+               @cErrMsg = @cErrMsg     OUTPUT,
+               @cType   = 'UCCNo'
+
+               IF @nErrNo <> 0
+                  GOTO Quit
+         END
+
+         -- Customize decode
+         ELSE IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cDecodeSP AND type = 'P')
+         BEGIN
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cDecodeSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cPickSlipNo, @cFromDropID, @cBarcode, @cBarcode2, ' +
+               ' @cSKU OUTPUT, @nQTY OUTPUT, @cPackDtlRefNo OUTPUT, @cPackDtlRefNo2 OUTPUT, @cPackDtlUPC OUTPUT, @cPackDtlDropID OUTPUT, @cSerialNo OUTPUT, ' +
+               ' @cFromDropIDDecode OUTPUT, @cToDropIDDecode OUTPUT, @cUCCNo OUTPUT, ' +
+               ' @nErrNo OUTPUT, @cErrMsg OUTPUT '
+            SET @cSQLParam =
+               ' @nMobile           INT,           ' +
+               ' @nFunc             INT,           ' +
+               ' @cLangCode         NVARCHAR( 3),  ' +
+               ' @nStep             INT,           ' +
+               ' @nInputKey         INT,           ' +
+               ' @cFacility         NVARCHAR( 5),  ' +
+               ' @cStorerKey        NVARCHAR( 15), ' +
+               ' @cPickSlipNo       NVARCHAR( 10), ' +
+               ' @cFromDropID       NVARCHAR( 20), ' +
+               ' @cBarcode          NVARCHAR( 60), ' +
+               ' @cBarcode2         NVARCHAR( 60), ' +
+               ' @cSKU              NVARCHAR( 20)  OUTPUT, ' +
+               ' @nQTY              INT            OUTPUT, ' +
+               ' @cPackDtlRefNo     NVARCHAR( 20)  OUTPUT, ' +
+               ' @cPackDtlRefNo2    NVARCHAR( 20)  OUTPUT, ' +
+               ' @cPackDtlUPC       NVARCHAR( 30)  OUTPUT, ' +
+               ' @cPackDtlDropID    NVARCHAR( 20)  OUTPUT, ' +
+               ' @cSerialNo         NVARCHAR( 30)  OUTPUT, ' +
+               ' @cFromDropIDDecode NVARCHAR( 30)  OUTPUT, ' +
+               ' @cToDropIDDecode   NVARCHAR( 30)  OUTPUT, ' +
+               ' @cUCCNo            NVARCHAR( 30)  OUTPUT, ' +
+               ' @nErrNo            INT            OUTPUT, ' +
+               ' @cErrMsg           NVARCHAR( 20)  OUTPUT'
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cPickSlipNo, @cFromDropID, @cBarcode, @cBarcode2,
+               @cUPC OUTPUT, @nQTY OUTPUT, @cPackDtlRefNo OUTPUT, @cPackDtlRefNo2 OUTPUT, @cPackDtlUPC OUTPUT, @cPackDtlDropID_Decode OUTPUT, @cSerialNo OUTPUT,
+               @cFromDropIDDecode OUTPUT, @cToDropIDDecode OUTPUT, @cUCCNo OUTPUT,
+               @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+            IF @nErrNo <> 0
+               GOTO Quit
+         END
       END
 
       -- UCC scanned

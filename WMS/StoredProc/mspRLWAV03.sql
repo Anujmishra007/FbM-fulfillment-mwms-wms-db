@@ -41,6 +41,8 @@ GO
 /*                           SKU Cube or LxWxH can't fit                */
 /* 03-Oct-2024 Shong     2.2 Fixing VAS Carton Size issue  (SWT03)      */
 /* 18-Oct-2024 Shong     2.2.1 Hot fix for Bugs (SWT05)                 */
+/* 11-Nov-2024 Shong     2.9 FCR-1132 Wave Release SCE Trigger for      */ 
+/*                           BOLbyConsignee (SWT05)                     */ 
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[mspRLWAV03]
    @c_WaveKey NVARCHAR(10)
@@ -2094,6 +2096,92 @@ BEGIN
 ,              @n_err            = @n_Err        OUTPUT
 ,              @c_errmsg         = @c_ErrMsg     OUTPUT
    END
+
+   -- (SWT05) Start  
+   -------------------------------------------------- 
+   -- FCR-1132 Wave Release SCE Trigger for BOLbyConsignee 
+   --------------------------------------------------  
+   IF @n_continue IN(1,2) 
+   BEGIN 
+      DECLARE @c_BOLbyConsigneeKey NVARCHAR(20) = '', 
+              @c_FacilityPrefix NVARCHAR(60) = '', 
+              @n_FieldLength INT = 0 
+ 
+      DECLARE CUR_BOLbyConsigneekey CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
+         SELECT OH.ConsigneeKey, OH.Facility, MAX(ISNULL(OI.ReferenceId,''))  
+         FROM dbo.ORDERS OH WITH (NOLOCK)  
+         JOIN dbo.OrderInfo OI WITH (NOLOCK) ON OH.OrderKey = OI.OrderKey 
+         JOIN dbo.WAVEDETAIL WD WITH (NOLOCK) ON WD.OrderKey = OH.OrderKey 
+         WHERE WD.WaveKey = @c_WaveKey  
+         AND OH.OrderGroup='30' 
+         GROUP BY OH.ConsigneeKey, OH.Facility  
+       
+      OPEN CUR_BOLbyConsigneekey 
+    
+      FETCH NEXT FROM CUR_BOLbyConsigneekey INTO @c_ConsigneeKey, @c_Facility, @c_BOLbyConsigneeKey 
+    
+      WHILE @@FETCH_STATUS = 0 
+      BEGIN 
+          IF TRIM(@c_BOLbyConsigneeKey) = '' 
+          BEGIN 
+             SET @c_FacilityPrefix = '' 
+              
+             SELECT @c_FacilityPrefix = ISNULL(TRIM(CODELKUP.UDF01),'0') 
+             FROM dbo.CODELKUP (NOLOCK) 
+             WHERE CODELKUP.LISTNAME = 'LVSFAC' 
+             AND CODELKUP.Code = @c_Facility 
+ 
+             SET @n_FieldLength = 10 - LEN(@c_FacilityPrefix) 
+              
+             EXECUTE dbo.nspg_GetKey   
+               @KeyName='BOLbyCons',   
+               @fieldlength=@n_FieldLength,   
+               @keystring=@c_BOLbyConsigneeKey OUTPUT,   
+               @b_Success = @b_success OUTPUT,   
+               @n_err = @n_err OUTPUT,   
+               @c_errmsg = @c_errmsg OUTPUT   
+              
+             IF NOT @b_success = 1   
+             BEGIN   
+                SELECT @n_continue = 3   
+                BREAK   
+             END     
+              
+             SET @c_BOLbyConsigneeKey = RIGHT(@c_FacilityPrefix + @c_BOLbyConsigneeKey, 10)  
+             DECLARE CUR_UPDATE_BOLbyConsigneekey CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
+             SELECT OH.OrderKey 
+             FROM dbo.ORDERS OH WITH (NOLOCK)  
+             JOIN dbo.OrderInfo OI WITH (NOLOCK) ON OH.OrderKey = OI.OrderKey 
+             JOIN dbo.WAVEDETAIL WD WITH (NOLOCK) ON WD.OrderKey = OH.OrderKey 
+             WHERE WD.WaveKey = @c_WaveKey  
+             AND OH.OrderGroup='30' 
+             AND OH.ConsigneeKey = @c_ConsigneeKey              
+             AND OH.Facility = @c_Facility 
+             AND (OI.ReferenceId = '' OR OI.ReferenceId IS NULL) 
+              
+             OPEN CUR_UPDATE_BOLbyConsigneekey 
+              
+             FETCH NEXT FROM CUR_UPDATE_BOLbyConsigneekey INTO @c_Orderkey 
+              
+             WHILE @@FETCH_STATUS = 0 
+             BEGIN 
+                 UPDATE dbo.OrderInfo WITH (ROWLOCK)  
+                  SET ReferenceId = @c_BOLbyConsigneeKey, EditDate=GETDATE() 
+                 WHERE OrderKey= @c_Orderkey 
+              
+                 FETCH NEXT FROM CUR_UPDATE_BOLbyConsigneekey INTO @c_Orderkey 
+             END 
+              
+             CLOSE CUR_UPDATE_BOLbyConsigneekey 
+             DEALLOCATE CUR_UPDATE_BOLbyConsigneekey 
+          END 
+    
+          FETCH NEXT FROM CUR_BOLbyConsigneekey INTO @c_ConsigneeKey, @c_Facility, @c_BOLbyConsigneeKey 
+      END 
+      CLOSE CUR_BOLbyConsigneekey 
+      DEALLOCATE CUR_BOLbyConsigneekey 
+   END  
+   -- (SWT05) End
 
    QUIT_SP:
 

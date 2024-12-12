@@ -56,6 +56,7 @@ GO
 /*                          BatchCheck                                           */
 /* 2024-10-12 4.10 LJQ006   FCR-911   use uom in receiptdetail                   */
 /* 2024-10-08 5.0  TianLei  FCR-839   Add Fully received go back to screen 1     */
+/* 2024-11-12 5.2  CYU027   FCR-759   UPDATE ID UDF01                            */
 /*********************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_NormalReceipt_V7] (
@@ -279,7 +280,8 @@ SELECT
    @cFlowThruScreen     = V_String9,
    @cMUOM_Desc          = V_String10,
    @cPUOM_Desc          = V_String11,
-   
+   @cUserDefine01       = V_String12,
+
    @nPUOM_Div           = V_PUOM_Div,
    @nPQTY               = V_PQTY,
    @nMQTY               = V_MQTY,
@@ -1175,10 +1177,11 @@ BEGIN
       IF @cDecodeSP = '1'
       BEGIN
          EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cIDBarcode,
-            @cID     = @cID     OUTPUT,
-            @nErrNo  = @nErrNo  OUTPUT,
-            @cErrMsg = @cErrMsg OUTPUT,
-            @cType   = 'ID'
+            @cID           = @cID     OUTPUT,
+            @cUserDefine01 = @cUserDefine01 OUTPUT,
+            @nErrNo        = @nErrNo  OUTPUT,
+            @cErrMsg       = @cErrMsg OUTPUT,
+            @cType         = 'ID'
 
          IF @nErrNo <> 0
             GOTO Step_3_Fail
@@ -2634,7 +2637,7 @@ BEGIN
       SELECT @nErrNo = @nErrNoBackup, @cErrMsg = @cErrMsgBackup
       IF @nErrNo <> 0
          GOTO Quit
-      
+
       IF @nMorePage = 1 -- Yes
          GOTO Quit
 
@@ -5635,7 +5638,8 @@ BEGIN
       V_String9    = @cFlowThruScreen,
       V_String10   = @cMUOM_Desc,
       V_String11   = @cPUOM_Desc,
-      
+      V_String12   = @cUserDefine01,
+
       V_PUOM_Div   = @nPUOM_Div ,
       V_PQTY       = @nPQTY,
       V_MQTY       = @nMQTY,

@@ -3,16 +3,17 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-/******************************************************************************/
-/* Store procedure: rdt_839SendMsgToWCS                                       */
-/* Purpose:Trigger Msg to WMSC on ID level                                    */
-/*                                                                            */
-/* Modifications log:                                                         */
-/*                                                                            */
-/* Date         Author    Ver.  Purposes                                      */
-/* 2023-12-01   Ung       1.0   WMS-24315                                     */
-/* 2024-09-05   YYS027    1.1   FCR-771                                       */
-/******************************************************************************/
+/*************************************************************************************/
+/* Store procedure: rdt_839SendMsgToWCS                                              */
+/* Purpose:Trigger Msg to WMSC on ID level                                           */
+/*                                                                                   */
+/* Modifications log:                                                                */
+/*                                                                                   */
+/* Date         Author    Ver.    Purposes                                           */
+/* 2023-12-01   Ung       1.0     WMS-24315                                          */
+/* 2024-09-05   YYS027    1.1     FCR-771                                            */
+/* 2024-11-08   YYS027    1.1.1   FCR-771 to add cursor for muiltible orderkeys      */
+/*************************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_839SendMsgToWCS]
     @nMobile         INT
@@ -141,32 +142,83 @@ BEGIN
       END
    END
    --add for FCR-771 
-   IF dbo.fnc_GetRight( @cFacility, @cStorerKey, '', 'Innobec') = '1' AND EXISTS ( SELECT * FROM dbo.ORDERS WITH (NOLOCK) WHERE OrderKey = @cOrderKey AND DocType = 'N' )
+   --SELECT @cOrderKey=OrderKey FROM dbo.PICKDETAIL WITH (NOLOCK) WHERE PickSlipNo = @cPickSlipNo AND DropID = @cDropID AND Storerkey = @cStorerKey AND ISNULL(@cOrderKey,'') = ''     --due for cross-dock, OrderKey is empty, so here ,re-query for @cOrderKey
+   --IF dbo.fnc_GetRight( @cFacility, @cStorerKey, '', 'Innobec') = '1' AND EXISTS ( SELECT * FROM dbo.ORDERS WITH (NOLOCK) WHERE OrderKey = @cOrderKey AND Storerkey = @cStorerKey AND DocType = 'N' )
+   IF dbo.fnc_GetRight( @cFacility, @cStorerKey, '', 'Innobec') = '1'
    BEGIN
       IF @nIsNoEmptyDropID = 1
       BEGIN
-         EXEC dbo.ispGenTransmitLog2
-                        @c_TableName      = 'WSTOTECFMlb',
-                        @c_Key1           = @cOrderKey,
-                        @c_Key2           = @cDropID,
-                        @c_Key3           = @cStorerKey,
-                        @c_TransmitBatch  = '',
-                        @b_success        = @bSuccess    OUTPUT,
-                        @n_err            = @nErrNo      OUTPUT,
-                        @c_errmsg         = @cErrMsg     OUTPUT
-
-         IF @bSuccess <> 1
+         IF ISNULL(@cOrderKey,'') <> '' 
          BEGIN
-            SET @nErrNo = 249406
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INS TLog2 Fail
-            GOTO Quit
+            IF EXISTS ( SELECT * FROM dbo.ORDERS WITH (NOLOCK) WHERE OrderKey = @cOrderKey AND Storerkey = @cStorerKey AND DocType = 'N' )
+            BEGIN
+               EXEC dbo.ispGenTransmitLog2
+                              @c_TableName      = 'WSTOTECFMlb',
+                              @c_Key1           = @cOrderKey,
+                              @c_Key2           = @cDropID,
+                              @c_Key3           = @cStorerKey,
+                              @c_TransmitBatch  = '',
+                              @b_success        = @bSuccess    OUTPUT,
+                              @n_err            = @nErrNo      OUTPUT,
+                              @c_errmsg         = @cErrMsg     OUTPUT
+
+               IF @bSuccess <> 1
+               BEGIN
+                  SET @nErrNo = 249406
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INS TLog2 Fail
+                  GOTO Quit
+               END
+            END
          END
-      END
-   END
+         ELSE
+         BEGIN
+            --@cOrderKey is empty. for this case, the result of query by PickSlipNo and DropID, maybe, have multible records
+            DECLARE ordcur CURSOR LOCAL FOR 
+               SELECT DISTINCT OrderKey FROM dbo.PICKDETAIL WITH (NOLOCK) 
+                  WHERE PickSlipNo = @cPickSlipNo AND DropID = @cDropID AND Storerkey = @cStorerKey --ORDER BY OrderKey
+               UNION
+               SELECT DISTINCT lpd.OrderKey FROM dbo.PICKHEADER ph  WITH (NOLOCK) 
+                  INNER JOIN LoadPlanDetail lpd  WITH (NOLOCK) ON ph.ExternOrderKey=lpd.LoadKey
+                  INNER JOIN PICKDETAIL pd  WITH (NOLOCK) ON lpd.OrderKey=pd.OrderKey
+                  WHERE ph.PickHeaderKey=@cPickSlipNo AND ph.Storerkey = @cStorerKey and pd.DropID = @cDropID --and isnull(ph.OrderKey,'')='' and not ph.Zone in ('XD','LB', 'LP')
+               UNION
+               SELECT DISTINCT rkl.OrderKey  FROM dbo.PICKHEADER ph  WITH (NOLOCK) 
+                  INNER JOIN RefKeyLookup rkl  WITH (NOLOCK) ON ph.PickHeaderKey=rkl.Pickslipno
+                  INNER JOIN PICKDETAIL pd  WITH (NOLOCK) ON pd.PickDetailKey=rkl.PickDetailkey
+                  WHERE ph.PickHeaderKey=@cPickSlipNo AND ph.Storerkey = @cStorerKey AND pd.DropID = @cDropID --and isnull(ph.OrderKey,'')='' and ph.Zone in ('XD','LB', 'LP')
+               ORDER BY OrderKey
+            OPEN ordcur
+            FETCH NEXT FROM ordcur INTO @cOrderKey
+            WHILE @@FETCH_STATUS = 0
+            BEGIN
+               IF EXISTS ( SELECT * FROM dbo.ORDERS WITH (NOLOCK) WHERE OrderKey = @cOrderKey AND Storerkey = @cStorerKey AND DocType = 'N' )
+               BEGIN
+                  EXEC dbo.ispGenTransmitLog2
+                                 @c_TableName      = 'WSTOTECFMlb',
+                                 @c_Key1           = @cOrderKey,
+                                 @c_Key2           = @cDropID,
+                                 @c_Key3           = @cStorerKey,
+                                 @c_TransmitBatch  = '',
+                                 @b_success        = @bSuccess    OUTPUT,
+                                 @n_err            = @nErrNo      OUTPUT,
+                                 @c_errmsg         = @cErrMsg     OUTPUT
+
+                  IF @bSuccess <> 1
+                  BEGIN
+                     SET @nErrNo = 249406
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INS TLog2 Fail
+                     GOTO Quit
+                  END
+               END         --end of normal order DocType = 'N'
+               FETCH NEXT FROM ordcur INTO @cOrderKey
+            END         --end of while
+            CLOSE ordcur
+            DEALLOCATE ordcur
+         END      --end of @cOrderKey is empty
+      END      --end of @nIsNoEmptyDropID = 1
+   END      --end of dbo.fnc_GetRight( @cFacility, @cStorerKey, '', 'Innobec') = '1'
    --end of FCR-771
 Quit:
-
-
 END
 GO
 GRANT EXECUTE ON  [RDT].[rdt_839SendMsgToWCS] TO [NSQL]
