@@ -89,6 +89,8 @@ GO
 /* 2024-10-25   6.5  PXL009     FCR-759 ID and UCC Length Issue                                 */
 /* 2024-10-24   6.6 TLE109      FCR-990. Packing Serial Number Validation                       */
 /* 2024-11-08   6.7 CYU027      UWP-26811 UCC Multi Storerkey                                   */
+/* 2024-10-12   6.8 YYS027      FCR-861 Add support CstLabelSP for Pack List Printing(Step 6)   */ 
+/*                              similiar with ship-label printing(Step 5)                       */
 /************************************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_Pack] (
@@ -134,6 +136,8 @@ DECLARE
    @cSKUDataCapture        NVARCHAR(1),
    @cDataCapture           NVARCHAR(1)
 
+DECLARE @cCstLabelSP NVARCHAR(30)
+
 -- RDT.RDTMobRec variables
 DECLARE
    @nFunc            INT,
@@ -178,6 +182,7 @@ DECLARE
    @nPackedQTY       INT,
    @nAction          INT, --(JHU151)   
    @nEnter           INT, --(cc01)  
+   
 
    @cDefaultPrintLabelOption     NVARCHAR( 1),
    @cDefaultPrintPackListOption  NVARCHAR( 1),
@@ -3851,7 +3856,6 @@ BEGIN
          BEGIN
             IF @cShipLabel = 'CstLabelSP'
             BEGIN
-               DECLARE @cCstLabelSP NVARCHAR(30)
                SET @cCstLabelSP = rdt.RDTGetConfig( @nFunc, 'CstLabelSP', @cStorerKey)
                IF @cCstLabelSP = '0'
                   SET @cCstLabelSP = ''
@@ -4257,22 +4261,79 @@ BEGIN
 
       IF @cOption = '1'  -- Yes
       BEGIN
-         -- Get report param
-         DECLARE @tPackList AS VariableTable
-         INSERT INTO @tPackList (Variable, Value) VALUES
-            ( '@cPickSlipNo',    @cPickSlipNo),
-            ( '@cFromDropID',    @cFromDropID),
-            ( '@cPackDtlDropID', @cPackDtlDropID)
+         IF @cPackList = 'CstLabelSP'
+         BEGIN
+            SET @cCstLabelSP = rdt.RDTGetConfig( @nFunc, 'CstLabelSP', @cStorerKey)
+            IF @cCstLabelSP = '0'
+               SET @cCstLabelSP = ''
+            IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cCstLabelSP AND type = 'P')  --Customize Print Label
+            BEGIN
+               SET @cSQL = 'EXEC rdt.' + RTRIM( @cCstLabelSP) +
+                  ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cPickSlipNo, @cFromDropID, ' +
+                  ' @nCartonNo, @cLabelNo, @cSKU, @nQTY, @cUCCNo, @cCartonType, @cCube, @cWeight, @cRefNo, @cSerialNo, @nSerialQTY, @cOption, ' +
+                  ' @cPackDtlRefNo, @cPackDtlRefNo2, @cPackDtlUPC, @cPackDtlDropID, @cPackData1, @cPackData2, @cPackData3, ' +
+                  ' @nErrNo OUTPUT, @cErrMsg OUTPUT '
+               SET @cSQLParam =
+                  '@nMobile         INT,           ' +
+                  '@nFunc           INT,           ' +
+                  '@cLangCode       NVARCHAR( 3),  ' +
+                  '@nStep           INT,           ' +
+                  '@nInputKey       INT,           ' +
+                  '@cFacility       NVARCHAR( 5),  ' +
+                  '@cStorerKey      NVARCHAR( 15), ' +
+                  '@cPickSlipNo     NVARCHAR( 10), ' +
+                  '@cFromDropID     NVARCHAR( 20), ' +
+                  '@nCartonNo       INT,           ' +
+                  '@cLabelNo        NVARCHAR( 20), ' +
+                  '@cSKU            NVARCHAR( 20), ' +
+                  '@nQTY            INT,           ' +
+                  '@cUCCNo          NVARCHAR( 20), ' +
+                  '@cCartonType     NVARCHAR( 10), ' +
+                  '@cCube           NVARCHAR( 10), ' +
+                  '@cWeight         NVARCHAR( 10), ' +
+                  '@cRefNo          NVARCHAR( 20), ' +
+                  '@cSerialNo       NVARCHAR( 30), ' +
+                  '@nSerialQTY      INT,           ' +
+                  '@cOption         NVARCHAR( 1),  ' +
+                  '@cPackDtlRefNo   NVARCHAR( 20), ' +
+                  '@cPackDtlRefNo2  NVARCHAR( 20), ' +
+                  '@cPackDtlUPC     NVARCHAR( 30), ' +
+                  '@cPackDtlDropID  NVARCHAR( 20), ' +
+                  '@cPackData1      NVARCHAR( 30), ' +
+                  '@cPackData2      NVARCHAR( 30), ' +
+                  '@cPackData3      NVARCHAR( 30), ' +
+                  '@nErrNo          INT            OUTPUT, ' +
+                  '@cErrMsg         NVARCHAR( 20)  OUTPUT'
 
-         -- Print packing list
-         EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cLabelPrinter, @cPaperPrinter,
-            @cPackList, -- Report type
-            @tPackList, -- Report params
-            'rdtfnc_Pack',
-            @nErrNo  OUTPUT,
-            @cErrMsg OUTPUT
-         IF @nErrNo <> 0
-            GOTO Quit
+               EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                  @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cPickSlipNo, @cFromDropID,
+                  @nCartonNo, @cLabelNo, @cSKU, @nQTY, @cUCCNo, @cCartonType, @cCube, @cWeight, @cRefNo, @cSerialNo, @nSerialQTY, @cOption,
+                  @cPackDtlRefNo, @cPackDtlRefNo2, @cPackDtlUPC, @cPackDtlDropID, @cPackData1, @cPackData2, @cPackData3,
+                  @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+               IF @nErrNo <> 0
+                  GOTO Quit
+            END
+         END
+         ELSE
+         BEGIN                --STANDARD PRINT
+            -- Get report param
+            DECLARE @tPackList AS VariableTable
+            INSERT INTO @tPackList (Variable, Value) VALUES
+               ( '@cPickSlipNo',    @cPickSlipNo),
+               ( '@cFromDropID',    @cFromDropID),
+               ( '@cPackDtlDropID', @cPackDtlDropID)
+
+            -- Print packing list
+            EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cLabelPrinter, @cPaperPrinter,
+               @cPackList, -- Report type
+               @tPackList, -- Report params
+               'rdtfnc_Pack',
+               @nErrNo  OUTPUT,
+               @cErrMsg OUTPUT
+            IF @nErrNo <> 0
+               GOTO Quit
+         END
       END
 
       -- Extended update
