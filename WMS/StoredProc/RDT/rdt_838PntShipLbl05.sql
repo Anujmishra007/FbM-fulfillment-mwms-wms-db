@@ -138,8 +138,8 @@ BEGIN
             
             /*Recovery Order*/
             SELECT top 1 @cOrderKey = ph.OrderKey 
-               FROM PackHeader ph WITH (NOLOCK) 
-               JOIN PackDetail pd WITH (NOLOCK)
+               FROM dbo.PackHeader ph WITH (NOLOCK) 
+               JOIN dbo.PackDetail pd WITH (NOLOCK)
                ON ph.StorerKey = pd.StorerKey
                AND pd.PickSlipNo = ph.PickSlipNo
             WHERE ph.StorerKey = @cStorerKey
@@ -148,7 +148,7 @@ BEGIN
             Recovery consigney Key from order
             */
             SELECT TOP 1 @cConsigneyKey = ConsigneeKey, @cExternOrderKey = ExternOrderKey
-               FROM ORDERS WITH(NOLOCK) 
+               FROM dbo.ORDERS WITH(NOLOCK) 
                WHERE Orders.orderKey = @cOrderKey
 
             IF @bDebugFlag = 5 
@@ -167,7 +167,7 @@ BEGIN
             DELETE @tCodes
             INSERT INTO @tCodes(RowId, LabelName, SourceType, Condition, LabelSize, FilePath, FileName, PrinterType)
                SELECT RANK() OVER(ORDER BY code) AS RowId, code, Short, Notes, UDF01, Notes2, UDF03, code2 
-               FROM CODELKUP WITH (NOLOCK) 
+               FROM dbo.CODELKUP WITH (NOLOCK) 
                WHERE listname = 'PACKPRTCON'
                   AND storerkey = @cStorerKey
                   AND code2 = 'Label'              --Step 5, Printer Type should be 'label printer', according spec doc, the result should be 5 records, 3 are normal(logi and BTD), 2 are SFTP
@@ -321,7 +321,7 @@ BEGIN
 
                   --Check Web Service cfg
                   SELECT @cWebRequestURL = WebRequestURL
-                  FROM WebServiceCfg WITH (NOLOCK)
+                  FROM dbo.WebServiceCfg WITH (NOLOCK)
                   WHERE DataProcess = 'FNGETFILE'
                      AND ActiveFlag = 1
 
@@ -490,8 +490,8 @@ BEGIN
             
             /*Recovery Order*/
             SELECT TOP 1 @cOrderKey = ph.OrderKey 
-               FROM PackHeader ph WITH (NOLOCK) 
-               JOIN PackDetail pd WITH (NOLOCK)
+               FROM dbo.PackHeader ph WITH (NOLOCK) 
+               JOIN dbo.PackDetail pd WITH (NOLOCK)
                ON ph.StorerKey = pd.StorerKey
                AND pd.PickSlipNo = ph.PickSlipNo
             WHERE ph.StorerKey = @cStorerKey
@@ -500,7 +500,7 @@ BEGIN
             Recovery consigney Key from order
             */
             SELECT TOP 1 @cConsigneyKey = ConsigneeKey, @cExternOrderKey = ExternOrderKey
-            FROM ORDERS WITH(NOLOCK) 
+            FROM dbo.ORDERS WITH(NOLOCK) 
             WHERE Orders.orderKey = @cOrderKey
             IF ISNULL(@cExternOrderKey, '') = '' 
             BEGIN
@@ -515,7 +515,7 @@ BEGIN
             DELETE @tCodes
             INSERT INTO @tCodes(RowId, LabelName, SourceType, Condition, LabelSize, FilePath, FileName, PrinterType)
                SELECT RANK() OVER(ORDER BY code) as RowId, code, Short, Notes, UDF01, Notes2, UDF03, code2 
-               FROM CODELKUP WITH (NOLOCK) 
+               FROM dbo.CODELKUP WITH (NOLOCK) 
                WHERE listname = 'PACKPRTCON'
                   AND storerkey = @cStorerKey
                   AND code2 = 'Paper'      --Step 6, Printer Type should be 'paper printer', according spec doc, the result should be 3 records, 2 are normal(logi), 1 are SFTP
@@ -655,7 +655,7 @@ BEGIN
 
                   --Check Web Service cfg
                   SELECT @cWebRequestURL = WebRequestURL
-                  FROM WebServiceCfg WITH (NOLOCK)
+                  FROM dbo.WebServiceCfg WITH (NOLOCK)
                   WHERE DataProcess = 'FNGETFILE'
                      AND ActiveFlag = 1
 

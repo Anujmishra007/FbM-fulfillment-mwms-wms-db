@@ -69,7 +69,7 @@ BEGIN
             -- Current carton
             IF @nCartonNo > 0 
             BEGIN
-               IF EXISTS(SELECT * FROM PICKHEADER ph INNER JOIN orders o ON ph.OrderKey=o.OrderKey
+               IF EXISTS(SELECT * FROM dbo.PICKHEADER ph WITH (NOLOCK) INNER JOIN dbo.orders o WITH (NOLOCK) ON ph.OrderKey=o.OrderKey
                   WHERE ph.PickHeaderKey=@cPickSlipNo AND ph.StorerKey=@cStorerKey AND o.UserDefine02='G')
                --SELECT @cOrderKey = OrderKey FROM PICKHEADER WITH (NOLOCK) WHERE PickHeaderKey=@cPickSlipNo AND StorerKey=@cStorerKey
                ----Discrete PickSlip or not
@@ -86,7 +86,7 @@ BEGIN
                   -- Get SKU info
                   INSERT INTO @tSKUs(SKU)
                      SELECT DISTINCT SKU
-                     FROM PackDetail WITH (NOLOCK) 
+                     FROM dbo.PackDetail WITH (NOLOCK) 
                      WHERE PickSlipNo = @cPickSlipNo 
                         AND CartonNo = @nCartonNo
                   IF NOT EXISTS(SELECT 1 from @tSKUs where SKU=@cSKU)
