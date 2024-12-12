@@ -30,6 +30,8 @@ GO
 /*                           % need to be as float for calculation         */
 /* 2024-10-16  Wan04    1.5  UWP-24391 [FCR-837] Unilever Replenishment for*/
 /*                           Flowrack locations                            */
+/* 2024-12-10  SHONG03  1.6  When UOM=1, Qty Allocated should be zero      */
+/*                           UWP-28329                                     */
 /***************************************************************************/
 CREATE OR ALTER PROC [dbo].[mspALMLP02]
    @c_DocumentNo        NVARCHAR(10)
@@ -495,6 +497,7 @@ BEGIN
       SET @c_Condition = ISNULL(RTRIM(@c_Condition),'') 
                        + ' AND SKUXLOC.LocationType NOT IN (''PICK'',''CASE'')'
                        + ' AND LOC.LocationCategory = @c_LocationCategory'
+                       + ' AND LOTxLOCxID.QtyAllocated = 0 ' -- (SHONG03) 
    END
    ELSE IF @c_FromPickLocFlag = 'Y'                                                 --(Wan04)
    BEGIN
