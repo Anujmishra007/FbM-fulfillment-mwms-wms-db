@@ -11,8 +11,8 @@ GO
 /*                                                                            */
 /* Modifications log:                                                         */
 /*                                                                            */
-/* Date         Rev  Author   Purposes                                        */
-/* 2024-12-05   1.0  NLT014   FCR-1398 Created                                */
+/* Date         Rev    Author   Purposes                                      */
+/* 2024-12-05   1.0.0  NLT013   FCR-1398 Created                              */
 /******************************************************************************/
         
 CREATE OR ALTER PROC [RDT].[rdtfnc_Inbound_PalletTempCapture](
@@ -43,15 +43,15 @@ BEGIN
       @cUserName                    NVARCHAR( 18),
       @cFacility                    NVARCHAR( 15), 
       @ctemperature                 NVARCHAR( 5),
-      @fTemperature                 DECIMAL(6, 2),
+      @fTemperature                 DECIMAL(5, 2),
       @cASNStatus                   NVARCHAR(10),
       @cASNSCanctatus               NVARCHAR(10),
       @nRowCount                    INT,
       @cStorerGroup                 NVARCHAR( 20),
       @cTempScale                   NVARCHAR( 5),
       @cItemClass                   NVARCHAR(10),
-      @fLowerTemp                   DECIMAL(7, 2),
-      @fHigherTemp                  DECIMAL(7, 2),
+      @fLowerTemp                   DECIMAL(5, 2),
+      @fHigherTemp                  DECIMAL(5, 2),
       @cScale                       NVARCHAR(5),
       @cOption                      NVARCHAR(1),
       
@@ -106,10 +106,10 @@ BEGIN
       @cID              = V_ID,
       @cStorerGroup     = StorerGroup, 
 
-      @fTemperature      = TRY_CAST(V_String1 AS DECIMAL(7, 2)),
+      @fTemperature     = TRY_CAST(V_String1 AS DECIMAL(5, 2)),
       @cTempScale       = V_String2,
-      @fLowerTemp       = TRY_CAST(V_String3 AS DECIMAL(7, 2)),
-      @fHigherTemp      = TRY_CAST(V_String4 AS DECIMAL(7, 2)),
+      @fLowerTemp       = TRY_CAST(V_String3 AS DECIMAL(5, 2)),
+      @fHigherTemp      = TRY_CAST(V_String4 AS DECIMAL(5, 2)),
 
       @cInField01 = I_Field01,   @cOutField01 = O_Field01,  @cFieldAttr01 = FieldAttr01,
       @cInField02 = I_Field02,   @cOutField02 = O_Field02,  @cFieldAttr02 = FieldAttr02,
@@ -344,8 +344,8 @@ BEGIN
             GOTO Step_2_Fail
          END
 
-         SELECT @fLowerTemp = TRY_CAST(UDF01 AS DECIMAL(7, 2)),
-            @fHigherTemp = TRY_CAST(UDF02 AS DECIMAL(7, 2)),
+         SELECT @fLowerTemp = TRY_CAST(UDF01 AS DECIMAL(5, 2)),
+            @fHigherTemp = TRY_CAST(UDF02 AS DECIMAL(5, 2)),
             @cScale = CASE UDF03 
                         WHEN 'Celcius' THEN 'C'
                         ELSE 'F'
@@ -427,7 +427,7 @@ BEGIN
             GOTO Step_3_Fail
          END
 
-         SET @fTemperature = TRY_CAST(@ctemperature AS DECIMAL(7,2))
+         SET @fTemperature = TRY_CAST(@ctemperature AS DECIMAL(5,2))
 
          IF @fTemperature IS NULL
          BEGIN

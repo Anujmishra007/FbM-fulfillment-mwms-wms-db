@@ -10,8 +10,8 @@ GO
 /*                                                                      */
 /* Purpose: Close working batch                                         */
 /*                                                                      */
-/* Date       Rev  Author      Purposes                                 */
-/* 2024-12-06 1.0  NLT013      FCR-1398 Created                         */
+/* Date       Rev    Author      Purposes                               */
+/* 2024-12-06 1.0.0  NLT013      FCR-1398 Created                       */
 /************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_Inbound_IDTempCap_Confirm (
@@ -86,67 +86,63 @@ BEGIN
                                              Standard confirm
    ***********************************************************************************************/
 
-   BEGIN TRANSACTION
-
-   IF EXISTS(SELECT 1 FROM dbo.TemperatureLog WITH(NOLOCK) WHERE Facility = @cFacility AND StorerKey = @cStorerKey AND ReceiptKey = @cReceiptKey AND PalletID = @cID AND TempCheckPoint = 'R')
+   SET @nTranCount = @@TRANCOUNT  
+    IF @nTranCount = 0
    BEGIN
-      BEGIN TRY
-         UPDATE dbo.TemperatureLog WITH(ROWLOCK)
-         SET Temperature = @fTemperature
-         WHERE Facility = @cFacility 
-            AND StorerKey = @cStorerKey 
-            AND ReceiptKey = @cReceiptKey 
-            AND PalletID = @cID 
-            AND TempCheckPoint = 'R'
-      END TRY
-      BEGIN CATCH
-         SET @nErrNo = 230451  
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UpdTmpLogFail
-         GOTO RollBackTran
-      END CATCH
+        BEGIN TRANSACTION
    END
    ELSE
    BEGIN
-      EXECUTE dbo.nspg_GetKey  
-               'TemperatureLogID',  
-               10 ,  
-               @cTemperatureLogID OUTPUT,  
-               @bSuccess         OUTPUT,  
-               @nErrNo            OUTPUT,  
-               @cErrMsg           OUTPUT  
-
-      IF @bSuccess <> 1  
-      BEGIN  
-         SET @nErrNo = 230452
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --GetKeyFail
-         GOTO RollBackTran  
-      END  
-      
-      BEGIN TRY
-         INSERT INTO dbo.TemperatureLog
-            (TemperatureLogID, Facility, StorerKey, ReceiptKey, MbolKey, PalletID, Temperature, TempCheckPoint, CheckUser, EditDate, EditWho )
-         VALUES
-            (@cTemperatureLogID, @cFacility, @cStorerKey, @cReceiptKey, NULL, @cID, @fTemperature, 'R', @cUserName, GETDATE(), @cUserName )
-      END TRY
-      BEGIN CATCH
-         SET @nErrNo = 230453
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --AddTmpLogFail
-         GOTO RollBackTran
-      END CATCH
+        SAVE TRANSACTION rdt_Inbound_IDTempCap_Confirm
    END
 
-   IF @@TRANCOUNT > 0
-      COMMIT TRANSACTION
+   EXECUTE dbo.nspg_GetKey  
+            'TemperatureLogID',  
+            10 ,  
+            @cTemperatureLogID OUTPUT,  
+            @bSuccess         OUTPUT,  
+            @nErrNo            OUTPUT,  
+            @cErrMsg           OUTPUT  
+
+   IF @bSuccess <> 1  
+   BEGIN  
+      SET @nErrNo = 230452
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --GetKeyFail
+      GOTO RollBackTran  
+   END  
+
+   BEGIN TRY
+      INSERT INTO dbo.TemperatureLog
+         (TemperatureLogID, Facility, StorerKey, ReceiptKey, MbolKey, PalletID, Temperature, TempCheckPoint, CheckUser, EditDate, EditWho )
+      VALUES
+         (@cTemperatureLogID, @cFacility, @cStorerKey, @cReceiptKey, NULL, @cID, @fTemperature, 'R', @cUserName, GETDATE(), @cUserName )
+   END TRY
+   BEGIN CATCH
+      SET @nErrNo = 230453
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --AddTmpLogFail
+      GOTO RollBackTran
+   END CATCH
 
    GOTO Quit
 
    RollBackTran:
    BEGIN
-      IF @@TRANCOUNT > 0
+      IF @nTranCount > 0
+      BEGIN
+         IF XACT_STATE() <> -1  
+         BEGIN
+            ROLLBACK TRANSACTION rdt_Inbound_IDTempCap_Confirm
+         END
+      END
+      ELSE
+      BEGIN
          ROLLBACK TRANSACTION
+      END
    END
 
    Quit:
+   WHILE @@TRANCOUNT > @nTranCount
+      COMMIT TRANSACTION
 END
 GO
 
