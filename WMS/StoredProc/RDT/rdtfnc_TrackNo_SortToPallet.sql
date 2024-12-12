@@ -46,6 +46,7 @@ GO
 /* 2023-11-14   2.7  James    WMS-23712 Extend Lane var length (james13)*/
 /* 2024-07-09   2.8  CYU027   FCR-539 Granite Scan to Pallet            */
 /* 2024-09-20   2.9  CYU027   Add Validation TrackNo                    */
+/* 2024-10-08   3.0  NLT013   FCR-950 Add OrderKey into @tExtScnData    */
 /************************************************************************/
   
 CREATE OR ALTER PROC [RDT].[rdtfnc_TrackNo_SortToPallet] (  
@@ -504,7 +505,10 @@ BEGIN
          BEGIN  
             IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedValidateSP AND type = 'P')  
             BEGIN  
-          SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +  
+               DELETE FROM @tExtValidVar
+               INSERT INTO @tExtValidVar (Variable, Value) VALUES ( '@cLabelNo',     @cLabelNo)
+
+               SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +  
                   ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, ' +  
                   ' @cTrackNo, @cOrderKey, @cPalletKey, @cMBOLKey, @cLane, @tExtValidVar, ' +  
                   ' @nErrNo OUTPUT, @cErrMsg OUTPUT '  
@@ -2711,8 +2715,9 @@ BEGIN
 
          DELETE FROM @tExtScnData
          INSERT INTO @tExtScnData (Variable, Value) VALUES
-             ('@cPalletKey',@cPalletKey),
-             ('@cLane', @cLane)
+             ('@cPalletKey',     @cPalletKey),
+             ('@cLane',          @cLane),
+             ('@cLabelNo',       @cLabelNo)
 
          EXECUTE [RDT].[rdt_ExtScnEntry]
                  @cExtendedScreenSP,

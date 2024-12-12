@@ -139,3 +139,24 @@ EXECUTE rdt.rdtAddScn 6417, 'ENG'
    ,@cLine14 = '%e'
    ,@cWebGroup = '{"1":["1","2"],"2":["4","5"]}'
    ,@nFunc = 839
+
+-- 6445 = SKU QTY screen
+DELETE rdt.RDTScn WHERE Scn = 6445 AND Lang_Code = 'ENG'
+EXECUTE rdt.rdtAddScn 6445, 'ENG'
+   ,@cLine01 = 'LOC: %10d01'
+   ,@cLine02 = '%20d02'
+   ,@cLine03 = '%20d03'
+   ,@cLine04 = '%20d04'
+   ,@cLine05 = '%20m14'
+--    ,@cLine06 = 'SKU/UPC:'
+   ,@cLine06 = 'SKU/UPC: %120iV_Barcode'  -- WMS-22147
+   ,@cLine07 = '%20d08'    -- Lottablenn (WMS5057)
+   ,@cLine08 = '%20d09'    -- Lottablenn (WMS5057)
+   ,@cLine09 = '%20d10'    -- Lottablenn (WMS5057)
+   ,@cLine10 = '%20d11'    -- Lottablenn (WMS5057)
+   ,@cLine11 = 'PICK: %05i07 ACT: %06d06'
+   ,@cLine12 = 'BAL QTY: %12d13'    -- WMS10357(yeekung01)
+   ,@cLine13 = '%20d12'    -- WMS10357
+   ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1"],"2":["2","3","4"],"3":["5","6"],"4":["7","8","9","10"],"5":["11","12"],"6":["13"]}'
+   ,@nFunc = 839

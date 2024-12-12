@@ -54,6 +54,9 @@ GO
 /* 2024-07-02 4.8  Dennis   FCR-387   Accept Decimal Qty                         */
 /* 2024-09-25 4.9  YYS027   FCR-827   Add ExtendScreen:rdt_600ExtScn03 for       */
 /*                          BatchCheck                                           */
+/* 2024-10-12 4.10 LJQ006   FCR-911   use uom in receiptdetail                   */
+/* 2024-10-08 5.0  TianLei  FCR-839   Add Fully received go back to screen 1     */
+/* 2024-11-12 5.2  CYU027   FCR-759   UPDATE ID UDF01                            */
 /*********************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_NormalReceipt_V7] (
@@ -80,7 +83,8 @@ DECLARE
    @cSQL           NVARCHAR( MAX),
    @cSQLParam      NVARCHAR( MAX),
    @tPalletLabel   VariableTable,
-   @tExtScnData    VariableTable
+   @tExtScnData    VariableTable,
+   @nLineWithBal   INT
 
 -- Session variable
 DECLARE
@@ -197,6 +201,7 @@ DECLARE
    @cClosePallet        NVARCHAR( 20), --(yeekung06)
    @tExtData            VariableTable,
    @ctemp_OutField15    NVARCHAR( 60),
+   @cBacktoScreen1      NVARCHAR( 1),  --(Tianlei)
 
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),    @cFieldAttr01 NVARCHAR( 1),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),    @cFieldAttr02 NVARCHAR( 1),
@@ -275,7 +280,8 @@ SELECT
    @cFlowThruScreen     = V_String9,
    @cMUOM_Desc          = V_String10,
    @cPUOM_Desc          = V_String11,
-   
+   @cUserDefine01       = V_String12,
+
    @nPUOM_Div           = V_PUOM_Div,
    @nPQTY               = V_PQTY,
    @nMQTY               = V_MQTY,
@@ -310,6 +316,7 @@ SELECT
    @cClosePallet        = V_String44, --(yeekung06)
    @cExtScnSP           = V_String45,
    @cDecimalQty         = V_String46,
+   @cBacktoScreen1      = V_String47,  --(Tianlei)
 
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,  @cFieldAttr01 = FieldAttr01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,  @cFieldAttr02 = FieldAttr02,
@@ -1170,10 +1177,11 @@ BEGIN
       IF @cDecodeSP = '1'
       BEGIN
          EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cIDBarcode,
-            @cID     = @cID     OUTPUT,
-            @nErrNo  = @nErrNo  OUTPUT,
-            @cErrMsg = @cErrMsg OUTPUT,
-            @cType   = 'ID'
+            @cID           = @cID     OUTPUT,
+            @cUserDefine01 = @cUserDefine01 OUTPUT,
+            @nErrNo        = @nErrNo  OUTPUT,
+            @cErrMsg       = @cErrMsg OUTPUT,
+            @cType         = 'ID'
 
          IF @nErrNo <> 0
             GOTO Step_3_Fail
@@ -2457,7 +2465,9 @@ BEGIN
             ('@cSKU', @cSKU),
             ('@cID', @cID),
             ('@cPUOM_Desc', @cPUOM_Desc),
-            ('@nPUOM_Div', CONCAT(@nPUOM_Div,''))
+            ('@nPUOM_Div', CONCAT(@nPUOM_Div,'')),
+            ('@cMUOM_Desc', @cMUOM_Desc),
+            ('@cReceiptKey', @cReceiptKey)
 
          EXECUTE [RDT].[rdt_ExtScnEntry]
          @cExtScnSP,
@@ -2499,6 +2509,12 @@ BEGIN
             SET @nPUOM_Div = CAST(ISNULL(@cUDF02,1) AS INT)
             SET @cPUOM = @cUDF03
          END
+         IF @nStep = 6 AND @cExtScnSP = 'rdt_600ExtScn05' AND @cUDF06 = '1'
+         BEGIN
+            SET @cPUOM = @cUDF04
+            SET @nPUOM_Div = CAST(ISNULL(@cUDF05,1) AS INT)
+            SET @cPUOM_Desc = @cUDF07
+         END
       END
    END
    GOTO Quit
@@ -2530,6 +2546,8 @@ Step_5:
 BEGIN
    IF @nInputKey = 1 -- Yes or Send
    BEGIN
+      declare @nErrNoBackup      INT
+      declare @cErrMsgBackup     NVARCHAR( 20)
       DECLARE @cOutField15Backup NVARCHAR( 60) = @cOutField15
       SET @ctemp_OutField15 = @cOutField15Backup
       -- Dynamic lottable
@@ -2555,13 +2573,9 @@ BEGIN
          @cReceiptKey,
          @nFunc
       
-      IF @nErrNo <> 0
-         GOTO Quit
-      
-      IF @nMorePage = 1 -- Yes
-         GOTO Quit
+      SELECT @nErrNoBackup = @nErrNo, @cErrMsgBackup = @cErrMsg
 
-      --check for stay this step or not
+      --check for stay this step or not + if batch is empty, the field04 and 06 are required to clear, so error happen, call ExtScnSP to do it
       SET @cExtScnSP = rdt.RDTGetConfig( @nFunc, 'ExtScnSP', @cStorerkey)
       IF ISNULL(@cExtScnSP,'')<>''
       BEGIN
@@ -2573,7 +2587,9 @@ BEGIN
                ('@cSKU', @cSKU),
                ('@cID', @cID),
                ('@cPUOM_Desc', @cPUOM_Desc),
-               ('@nPUOM_Div', CONCAT(@nPUOM_Div,''))            
+               ('@nPUOM_Div', CONCAT(@nPUOM_Div,'')),
+               ('@cMUOM_Desc', @cMUOM_Desc),
+               ('@cReceiptKey', @cReceiptKey)
             EXECUTE [RDT].[rdt_ExtScnEntry]
                @cExtScnSP,
                @nMobile, @nFunc, @cLangCode, @nOri_Step, @nOri_Scn, @nInputKey, @cFacility, @cStorerKey, @tExtScnData ,
@@ -2617,6 +2633,13 @@ BEGIN
             END
          END
       END
+
+      SELECT @nErrNo = @nErrNoBackup, @cErrMsg = @cErrMsgBackup
+      IF @nErrNo <> 0
+         GOTO Quit
+
+      IF @nMorePage = 1 -- Yes
+         GOTO Quit
 
       SET @cExtendedScreenSP =  ISNULL(rdt.RDTGetConfig( @nFunc, 'ExtendedScreenSP', @cStorerKey), '')
       SET @nAction = 1
@@ -2945,7 +2968,9 @@ BEGIN
             ('@cID', @cID),
             ('@cPUOM_Desc', @cPUOM_Desc),
             ('@ctemp_OutField15', @ctemp_OutField15),
-            ('@nPUOM_Div', CONCAT(@nPUOM_Div,''))
+            ('@nPUOM_Div', CONCAT(@nPUOM_Div,'')),
+            ('@cMUOM_Desc', @cMUOM_Desc),
+            ('@cReceiptKey', @cReceiptKey)
 
          EXECUTE [RDT].[rdt_ExtScnEntry]
          @cExtScnSP,
@@ -3011,6 +3036,12 @@ BEGIN
             SET @cPUOM_Desc = @cUDF01
             SET @nPUOM_Div = CAST(ISNULL(@cUDF02,1) AS INT)
             SET @cPUOM = @cUDF03
+         END
+         IF @nStep = 6 AND @cExtScnSP = 'rdt_600ExtScn05' AND @cUDF06 = '1'
+         BEGIN
+            SET @cPUOM = @cUDF04
+            SET @nPUOM_Div = CAST(ISNULL(@cUDF05,1) AS INT)
+            SET @cPUOM_Desc = @cUDF07
          END
       END
    END
@@ -3835,6 +3866,41 @@ BEGIN
       GOTO Quit
    END
 
+   -- check if go back to screen 1 when fully received
+   SET @cBacktoScreen1 = rdt.RDTGetConfig( @nFunc, 'CompleteReceiveBacktoScreen1', @cStorerKey)
+   IF @cBacktoScreen1 = '1'
+   BEGIN
+      -- check fully received
+      SET @nLineWithBal = 0
+      IF @cPOKey IN ('', 'NOPO')
+      BEGIN
+         SELECT TOP 1 @nLineWithBal = 1
+         FROM dbo.ReceiptDetail WITH (NOLOCK)
+         WHERE ReceiptKey = @cReceiptKey
+            AND QTYExpected > BeforeReceivedQTY
+      END
+      ELSE
+      BEGIN
+         SELECT TOP 1 @nLineWithBal = 1
+         FROM dbo.ReceiptDetail WITH (NOLOCK)
+         WHERE ReceiptKey = @cReceiptKey
+            AND POKey = @cPOKey
+            AND QTYExpected > BeforeReceivedQTY
+      END
+
+      IF @nLineWithBal = 0
+      BEGIN
+         SET @cOutField01 = '' -- ASN
+         SET @cOutField02 = @cPOKeyDefaultValue
+         SET @cOutField03 = '' -- ContainerNo
+
+         SET @nScn = @nScn - 6
+         SET @nStep = @nStep - 6
+
+         GOTO Step_7_Quit
+      END
+   END
+
    IF @cPalletRecv = '1'
    BEGIN
       -- AutoGenID
@@ -3842,11 +3908,11 @@ BEGIN
       IF @cAutoGenID <> ''
       BEGIN
          EXEC rdt.rdt_AutoGenID @nMobile, @nFunc, @nStep, @cLangCode
-            ,@cAutoGenID
-            ,@tExtData
-            ,@cAutoID  OUTPUT
-            ,@nErrNo   OUTPUT
-            ,@cErrMsg  OUTPUT
+         ,@cAutoGenID
+         ,@tExtData
+         ,@cAutoID  OUTPUT
+         ,@nErrNo   OUTPUT
+         ,@cErrMsg  OUTPUT
          IF @nErrNo <> 0
             GOTO Step_2_Fail
 
@@ -3874,7 +3940,8 @@ BEGIN
       SET @nStep = @nStep - 3
    END
 
-    -- Extended info
+   Step_7_Quit:
+   -- Extended info
    IF @cExtendedInfoSP <> ''
    BEGIN
       IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedInfoSP AND type = 'P')
@@ -4148,6 +4215,60 @@ BEGIN
       SET @nScn = @nScn - 4
       SET @nStep = @nStep - 4
    END
+
+   IF @cExtScnSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
+      BEGIN
+         DELETE FROM @tExtScnData
+         INSERT INTO @tExtScnData (Variable, Value) VALUES
+            ('@cSKU', @cSKU),
+            ('@cMUOM_Desc', @cMUOM_Desc),
+            ('@cReceiptKey', @cReceiptKey),
+            ('@cOption', @cOption)
+         EXECUTE [RDT].[rdt_ExtScnEntry]
+         @cExtScnSP,
+         @nMobile, @nFunc, @cLangCode, @nOri_Step, @nOri_Scn, @nInputKey, @cFacility, @cStorerKey, @tExtScnData ,
+         @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01  OUTPUT,
+         @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02  OUTPUT,
+         @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03  OUTPUT,
+         @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04  OUTPUT,
+         @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  @dLottable05  OUTPUT,
+         @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  @cLottable06  OUTPUT,
+         @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  @cLottable07  OUTPUT,
+         @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  @cLottable08  OUTPUT,
+         @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  @cLottable09  OUTPUT,
+         @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  @cLottable10  OUTPUT,
+         @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  @cLottable11  OUTPUT,
+         @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT,  @cLottable12  OUTPUT,
+         @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  @dLottable13  OUTPUT,
+         @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT,  @dLottable14  OUTPUT,
+         @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT,  @dLottable15  OUTPUT,
+         @nAction,
+         @nScn OUTPUT,  @nStep OUTPUT,
+         @nErrNo   OUTPUT,
+         @cErrMsg  OUTPUT,
+         @cUDF01   OUTPUT, @cUDF02  OUTPUT, @cUDF03  OUTPUT,
+         @cUDF04   OUTPUT, @cUDF05  OUTPUT, @cUDF06  OUTPUT,
+         @cUDF07   OUTPUT, @cUDF08  OUTPUT, @cUDF09  OUTPUT,
+         @cUDF10   OUTPUT, @cUDF11  OUTPUT, @cUDF12  OUTPUT,
+         @cUDF13   OUTPUT, @cUDF14  OUTPUT, @cUDF15  OUTPUT,
+         @cUDF16   OUTPUT, @cUDF17  OUTPUT, @cUDF18  OUTPUT,
+         @cUDF19   OUTPUT, @cUDF20  OUTPUT, @cUDF21  OUTPUT,
+         @cUDF22   OUTPUT, @cUDF23  OUTPUT, @cUDF24  OUTPUT,
+         @cUDF25   OUTPUT, @cUDF26  OUTPUT, @cUDF27  OUTPUT,
+         @cUDF28   OUTPUT, @cUDF29  OUTPUT, @cUDF30  OUTPUT
+         IF @nErrNo <> 0
+            GOTO Quit
+         IF @nStep = 6 AND @cExtScnSP = 'rdt_600ExtScn05' AND @cUDF06 = '1'
+         BEGIN
+            SET @cPUOM = @cUDF04
+            SET @nPUOM_Div = CAST(ISNULL(@cUDF05,1) AS INT)
+            SET @cPUOM_Desc = @cUDF07
+         END
+      END
+   END
+
    GOTO Quit
 
    Step_8_Fail:
@@ -5517,7 +5638,8 @@ BEGIN
       V_String9    = @cFlowThruScreen,
       V_String10   = @cMUOM_Desc,
       V_String11   = @cPUOM_Desc,
-      
+      V_String12   = @cUserDefine01,
+
       V_PUOM_Div   = @nPUOM_Div ,
       V_PQTY       = @nPQTY,
       V_MQTY       = @nMQTY,
@@ -5552,6 +5674,7 @@ BEGIN
       V_String44   = @cClosePallet, --(yeekung06)
       V_String45   = @cExtScnSP,
       V_String46   = @cDecimalQty,
+      V_String47   = @cBacktoScreen1,  --(Tianlei)
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,   FieldAttr01  = @cFieldAttr01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,   FieldAttr02  = @cFieldAttr02,

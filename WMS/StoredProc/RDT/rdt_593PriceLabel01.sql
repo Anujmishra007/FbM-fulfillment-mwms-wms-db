@@ -138,6 +138,7 @@ AS
             INNER JOIN dbo.CODELKUP lk1 WITH(NOLOCK) ON wod1.StorerKey = lk1.StorerKey AND lk1.LISTNAME = 'LVSPRICELB' AND wod1.Type = lk1.code2
             WHERE wod1.StorerKey = @cStorerKey
                AND wod1.ExternLineNo = ''
+               AND wod1.Remarks = 'PriceTicketFormat'
                AND ISNULL(pkd1.CaseID, '') = @cDropID) AS wodEX
       ON wod.StorerKey = wodEX.StorerKey AND lk.Code = wodEX.Code
    WHERE wo.StorerKey = @cStorerKey

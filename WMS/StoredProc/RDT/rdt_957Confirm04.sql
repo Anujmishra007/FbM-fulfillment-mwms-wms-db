@@ -1372,7 +1372,6 @@ BEGIN
 
       IF @cNoPackConfirm <> '1'
       BEGIN
-
          DECLARE @nPickQTY INT
          DECLARE @nPackQTY INT
          DECLARE @cPackConfirm NVARCHAR( 1) = ''
@@ -1433,7 +1432,7 @@ BEGIN
                   SET @cPackConfirm = 'N'
             END
          END
-         
+
          -- Pack confirm
          IF @cPackConfirm = 'Y'
          BEGIN

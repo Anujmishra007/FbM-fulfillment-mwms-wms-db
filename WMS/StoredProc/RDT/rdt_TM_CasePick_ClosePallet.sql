@@ -1,28 +1,22 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[rdt].[rdt_TM_CasePick_ClosePallet]') and objectproperty(id, N'IsProcedure') = 1)
-   DROP PROC [rdt].[rdt_TM_CasePick_ClosePallet]
-GO
 
-SET QUOTED_IDENTIFIER OFF
-GO
-SET ANSI_NULLS OFF
-GO
-
-/************************************************************************/
-/* Store procedure: rdt_TM_CasePick_ClosePallet                         */
-/* Copyright      : LF Logistics                                        */
-/*                                                                      */
-/* Purpose: Confirm pick                                                */
-/*                                                                      */
-/* Date        Rev  Author    Purposes                                  */
-/* 17-Dec-2014 1.0  Ung       SOS327467 Created                         */
-/* 17-Apr-2018 1.1  Ung       WMS-3273                                  */
-/*                            Add MoveQTYAlloc, MoveQTYPick             */
-/*                            Add PickConfirmStatus                     */
-/*                            Add ClosePalletSP                         */
-/* 03-Jan-2019 1.2  Ung       WMS-3273 Fix full short                   */
-/* 07-Mar-2019 1.3  Ung       WMS-8058 Fix move UCC                     */
-/* 01-Apr-2024 1.4  CYU027    UWP-17449 Create Replen task              */
-/************************************************************************/
+/***************************************************************************/
+/* Store procedure: rdt_TM_CasePick_ClosePallet                            */
+/* Copyright      : Maersk                                                 */
+/*                                                                         */
+/* Purpose: Confirm pick                                                   */
+/*                                                                         */
+/* Date        Rev     Author    Purposes                                  */
+/* 17-Dec-2014 1.0     Ung       SOS327467 Created                         */
+/* 17-Apr-2018 1.1     Ung       WMS-3273                                  */
+/*                               Add MoveQTYAlloc, MoveQTYPick             */
+/*                               Add PickConfirmStatus                     */
+/*                               Add ClosePalletSP                         */
+/* 03-Jan-2019 1.2     Ung       WMS-3273 Fix full short                   */
+/* 07-Mar-2019 1.3     Ung       WMS-8058 Fix move UCC                     */
+/* 01-Apr-2024 1.4     CYU027    UWP-17449 Create Replen task              */
+/* 29-Oct-2024 1.5.0   YYS027    FCR-989 add ReplenTaskSP                  */
+/* 27-Nov-2024 1.6     Dennis    FCR-1483 Remove ReplenTask                */
+/***************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_TM_CasePick_ClosePallet] (
    @nMobile        INT,
@@ -44,6 +38,7 @@ BEGIN
    DECLARE @cSQLParam      NVARCHAR(MAX)
 
    DECLARE @cClosePalletSP NVARCHAR(20)
+   DECLARE @cReplenTaskSP  NVARCHAR(20)
    DECLARE @cReplenFlag    NVARCHAR(20)
    DECLARE @cStorerKey     NVARCHAR( 15)
    DECLARE @cSKU           NVARCHAR( 20)
@@ -69,6 +64,11 @@ BEGIN
    SET @cReplenFlag = rdt.rdtGetConfig( @nFunc, 'ReplenFlag', @cStorerKey)
    IF @cReplenFlag = '0'
       SET @cReplenFlag = ''
+
+   -- Get storer config
+   SET @cReplenTaskSP = rdt.rdtGetConfig( @nFunc, 'ReplenTaskSP', @cStorerKey)
+   IF @cReplenTaskSP = '0'
+      SET @cReplenTaskSP = ''
 
    SET @nTranCount = @@TRANCOUNT
    
@@ -378,49 +378,7 @@ RollBackTran:
 Fail:
 
 REPLEN_TASK:
-   IF @cReplenFlag = '1'
-   BEGIN
 
-      -- Get storer
-      SELECT TOP 1
-            @cStorerKey = StorerKey,
-            @cSKU       = Sku,
-            @cFromLOC     = FromLoc
-      FROM dbo.TaskDetail WITH (NOLOCK)
-      WHERE ListKey = @cListKey
-        AND UserKey = @cUserName
-      ORDER BY TaskDetailKey
-
-      SELECT @cFacility = Facility FROM LOC WITH (NOLOCK) WHERE LOC = @cFromLOC
-
-      --qty hits min threshold
-      IF EXISTS(
-         SELECT 1 FROM SKUXLOC SL(NOLOCK)
-                          JOIN LOTxLOCxID LLI WITH (NOLOCK) ON SL.StorerKey = LLI.StorerKey AND SL.SKU = LLI.SKU AND SL.LOC = LLI.LOC
-         WHERE SL.StorerKey = @cStorerKey
-           AND SL.SKU = @cSKU
-           AND SL.LOC = @cFromLOC
-           AND SL.LocationType IN ( 'CASE','PALLET','PICK')
-         GROUP BY
-            SL.StorerKey,
-            SL.SKU,
-            SL.LOC,
-            SL.QtyLocationMinimum
-         HAVING (SUM(LLI.Qty) - SUM(LLI.QtyPicked) + SUM(LLI.PendingMoveIn)) <= SL.QtyLocationMinimum
-      )
-         BEGIN
-            EXEC isp_ODMRPL01
-                 @c_Facility = @cFacility,
-                 @c_Storerkey = @cStorerKey,
-                 @c_SKU = @cSKU,
-                 @c_LOC = @cFromLOC,
-                 @c_ReplenType = N'T',
-                 @b_Success = @b_Success OUTPUT,
-                 @n_Err = @nErrNo OUTPUT,
-                 @c_ErrMsg = @cErrMsg OUTPUT,
-                 @b_Debug = 0
-         END
-   END
    GOTO Quit
 
 Quit:

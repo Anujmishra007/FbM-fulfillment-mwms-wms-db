@@ -1,0 +1,40 @@
+name: Trigger CI Workflow in infra repo with AuthToken
+
+on:
+  workflow_dispatch:
+    inputs:
+      authToken:
+        description: 'Authentication Token'
+        required: true
+        type: string
+
+jobs:
+  trigger-workflow:
+    runs-on: ubuntu-latest
+
+    steps:
+      # Step 1: Checkout the code from repo-b (not strictly necessary for this task)
+      - name: Checkout 
+        uses: actions/checkout@v3
+
+      # Step 2: Set up GitHub CLI
+      # - name: Set up GitHub CLI
+      #   uses: cli/cli-action@v2.0.0
+      #   with:
+      #     gh-version: 'latest'
+
+      # Step 3: Authenticate with GitHub CLI
+      - name: Authenticate with GitHub CLI
+        run: |
+          echo "${{ secrets.DB_TOKEN }}" | gh auth login --with-token
+
+      # Step 4: Trigger cdt-test-deployment.yml in infrawith the authToken passed as input
+      - name: Trigger cdt-test-deployment.yml in infra repo with authToken
+        run: |
+          gh workflow run cdt-test-deployment.yml \
+            --repo Maersk-Global/fbm-infra-automation \
+            -f authToken="${{ github.event.inputs.authToken }}"
+
+      # Optional: Check the status of the triggered workflow
+      - name: List workflow runs in infra repo
+        run: gh run list --repo Maersk-Global/fbm-infra-automation

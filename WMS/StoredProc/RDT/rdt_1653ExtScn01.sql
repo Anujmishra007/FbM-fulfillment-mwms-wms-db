@@ -3,16 +3,24 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-/************************************************************************/
-/* Store procedure: rdt_1653ExtScn01                                    */
-/* Copyright      :  Maersk                                             */
-/*                                                                      */
-/* Purpose:       FCR-539                                               */
-/*                                                                      */
-/* Date       Rev  Author   Purposes                                    */
-/* 2024-07-08 1.0  CYU027   CREATE                                      */
-/*                                                                      */
-/************************************************************************/
+/****************************************************************************/
+/* Store procedure: rdt_1653ExtScn01                                        */
+/* Copyright      :  Maersk                                                 */
+/*                                                                          */
+/* Purpose:       FCR-539                                                   */
+/*                                                                          */
+/* Date       Rev    Author   Purposes                                      */
+/* 2024-07-08 1.0    CYU027   CREATE                                        */
+/* 2024-10-08 1.1    NLT013   FCR-950 Enhancement                           */
+/* 2024-10-18 1.2    JCH507   FCR-950 Verify palletkey not exists when      */
+/*                            New Pallet                                    */
+/* 2024-10-24 1.3.0  NLT013   FCR-1084, add additional validation  for      */
+/*                            location and pallet id                        */
+/* 2024-10-25 1.3.1  JCH507   FCR-1084, add status when check label exists  */
+/*                            in pallet id                                  */
+/*                                                                          */
+/*                                                                          */
+/****************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_1653ExtScn01] (
    @nMobile          INT,           
@@ -73,7 +81,10 @@ BEGIN
       @cSuggestLoc            NVARCHAR( 1),
       @cOverrideLoc           NVARCHAR( 1),
       @cOption                NVARCHAR( 1),
-      @tCreateMBOLVar         VARIABLETABLE
+      @tCreateMBOLVar         VARIABLETABLE,
+      @nRowCount              INT,
+      @cNewPalletKeyPrefix    NVARCHAR(30),
+      @nCurrentScn            INT
 
    SELECT
       @cLabelNo               = V_String1,
@@ -82,12 +93,10 @@ BEGIN
       @cOverrideLoc           = V_String30,
       @cTrackNo               = V_String41,
       @cOrderKey              = V_OrderKey,
-      @cLane                  = V_String42
-
+      @cLane                  = V_String42,
+      @nCurrentScn            = Scn
    FROM rdt.RDTMOBREC (NOLOCK)
    WHERE Mobile = @nMobile
-
-   SET @cOption = @cInField02
 
    SELECT @cPalletKey = Value FROM @tExtScnData WHERE Variable = '@cPalletKey'
    SELECT @cLane = Value FROM @tExtScnData WHERE Variable = '@cLane'
@@ -96,30 +105,50 @@ BEGIN
    BEGIN
       IF @nStep = 1
       BEGIN
+         SET @cOption = @cInField02
          IF ISNULL(@cOption,'') <> '1' AND @nInputKey = 1
          BEGIN
-
             SET @cFieldAttr05 = ''
+
+            SELECT @cLabelNo = Value FROM @tExtScnData WHERE Variable = '@cLabelNo'
+
+            IF ISNULL( @cLabelNo, '' ) <> '' AND EXISTS (SELECT 1 FROM dbo.PalletDetail WITH(NOLOCK) 
+                                                            WHERE CaseID = @cLabelNo 
+                                                            AND Status <> '9' ) --V1.3.1
+            BEGIN
+               SET @cOutField01 = '' 
+               SET @cOutField02 = @cPalletKey
+               SET @nAfterStep = 99
+               SET @nAfterScn = 6447
+               GOTO Quit
+            END
+            
             --FCR-539 Pallet Found, loc uneditable
             IF @cPalletKey <> 'NEW PALLET' AND ISNULL(@cPalletKey,'') <> ''
             BEGIN
                SET @cFieldAttr05 = 'O'
+
+               SELECT @nRowCount = COUNT(DISTINCT CaseID) FROM dbo.PalletDetail WITH(NOLOCK) WHERE PalletKey = @cPalletKey AND ISNULL(CaseID, '') <> ''
             END
             ELSE
-               --FCR-539 Pallet not Found, loc found, uneditable
-               BEGIN
-                  --Do not suggest LOC
-                  IF @cSuggestLoc <> '1'
-                     SET @cLane = ''
-                  --Do not override LOC
-                  IF @cOverrideLoc = '0' AND @cLane <> ''
-                     SET @cFieldAttr05 = 'O'
-               END
+            --FCR-539 Pallet not Found, loc found, uneditable
+            BEGIN
+               --Do not suggest LOC
+               IF @cSuggestLoc <> '1'
+                  SET @cLane = ''
+               --Do not override LOC
+               IF @cOverrideLoc = '0' AND @cLane <> ''
+                  SET @cFieldAttr05 = 'O'
+
+               SET @nRowCount = 0
+            END
 
             SET @cInField05 = @cLane
             SET @cOutField05 = @cLane
             SET @nAfterStep = 99
             SET @nAfterScn = 5807
+
+            SET @cOutField15 = 'Carton Count: ' + CAST(@nRowCount AS NVARCHAR(5))
             GOTO Quit
          END
       END
@@ -127,126 +156,309 @@ BEGIN
 
       IF @nStep = 99
       BEGIN
-         IF @nInputKey = 1 -- Yes or Send
+         IF @nCurrentScn = 5807
          BEGIN
-            /********************************************************************************
-               Scn = 5807. SCAN TO LOC/LANE
-                  TRACK NO          (field01)
-                  ORDERKEY          (field02)
-                  SCAN TO PALLET:   (field04, input)
-                  SCAN PALLET:      (field03)
-                  LOC/LANE:         (field05, input)
-            ********************************************************************************/
-            -- Initialize value
-            SET @cSuggPalletKey = @cOutField03
-            SET @cPalletKey = @cInField04
-
-            IF ISNULL(@cOverrideLoc,'0') <> '1' AND @cLane <> @cInField05 AND ISNULL(@cLane,'') <> ''
+            IF @nInputKey = 1 -- Yes or Send
             BEGIN
-               SET @nErrNo = 219151
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --cannot override location
-               GOTO Step_ShowPalletID_Fail
-            END
+               /********************************************************************************
+                  Scn = 5807. SCAN TO LOC/LANE
+                     TRACK NO          (field01)
+                     ORDERKEY          (field02)
+                     SCAN TO PALLET:   (field04, input)
+                     SCAN PALLET:      (field03)
+                     LOC/LANE:         (field05, input)
+               ********************************************************************************/
+               -- Initialize value
+               SET @cSuggPalletKey = @cOutField03
+               SET @cPalletKey = @cInField04
 
-            IF ISNULL( @cPalletKey, '') = ''
-            BEGIN
-               SET @nErrNo = 219152
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Need Pallet ID
-               GOTO Step_ShowPalletID_Fail
-            END
+               IF ISNULL(@cOverrideLoc,'0') <> '1' AND @cLane <> @cInField05 AND ISNULL(@cLane,'') <> ''
+               BEGIN
+                  SET @nErrNo = 219151
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --cannot override location
+                  GOTO Step_ShowPalletID_Fail
+               END
 
-            -- Check barcode format
-            IF rdt.rdtIsValidFormat( @nFunc, @cStorerKey, 'PalletKey', @cPalletKey) = 0
-            BEGIN
-               SET @nErrNo = 219153
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Format
-               GOTO Step_ShowPalletID_Fail
-            END
+               IF ISNULL( @cPalletKey, '') = ''
+               BEGIN
+                  SET @nErrNo = 219152
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Need Pallet ID
+                  GOTO Step_ShowPalletID_Fail
+               END
+
+               -- Check barcode format
+               IF rdt.rdtIsValidFormat( @nFunc, @cStorerKey, 'PalletKey', @cPalletKey) = 0
+               BEGIN
+                  SET @nErrNo = 219153
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Format
+                  GOTO Step_ShowPalletID_Fail
+               END
 
 
-            IF @cSuggPalletKey <> @cPalletKey AND @cSuggPalletKey <> 'NEW PALLET'
-            BEGIN
-               SET @nErrNo = 219154
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Pallet Not Match
-               GOTO Step_ShowPalletID_Fail
-            END
+               IF @cSuggPalletKey <> @cPalletKey AND @cSuggPalletKey <> 'NEW PALLET'
+               BEGIN
+                  SET @nErrNo = 219154
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Pallet Not Match
+                  GOTO Step_ShowPalletID_Fail
+               END
 
-            IF ISNULL(@cInField05,'') = ''
-            BEGIN
-               SET @nErrNo = 219156
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Location is required
-               GOTO Step_ShowPalletID_Fail
-            END
+               IF @cSuggPalletKey = 'NEW PALLET'
+               BEGIN
+                  SELECT @cNewPalletKeyPrefix = Code
+                  FROM dbo.CODELKUP WITH(NOLOCK)
+                  WHERE LISTNAME = 'USIDOutPre'
+                     AND StorerKey = @cStorerKey
 
-            IF NOT EXISTS ( SELECT 1
-                            FROM dbo.LOC WITH (NOLOCK)
-                            WHERE LOC = @cInField05
-                            AND Facility = @cFacility)
-            BEGIN
-               SET @nErrNo = 219155
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --LOC NOT FOUND
-               GOTO Step_ShowPalletID_Fail
-            END
+                  SELECT @nRowCount = @@ROWCOUNT
 
-            SET @nTranCount = @@TRANCOUNT
-            BEGIN TRAN  -- Begin our own transaction
-            SAVE TRAN rdt_CreateMbol -- For rollback or commit only our own transaction
+                  IF @nRowCount = 0
+                  BEGIN
+                     SET @nErrNo = 219161
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --NoUSIDOutPre
+                     GOTO Step_ShowPalletID_Fail
+                  END
 
-            SET @nErrNo = 0
-            EXEC [RDT].[rdt_TrackNo_SortToPallet_CreateMbol]
-                 @nMobile       = @nMobile,
-                 @nFunc         = @nFunc,
-                 @cLangCode     = @cLangCode,
-                 @nStep         = @nStep,
-                 @nInputKey     = @nInputKey,
-                 @cFacility     = @cFacility,
-                 @cStorerKey    = @cStorerKey,
-                 @cTrackNo      = @cTrackNo,
-                 @cOrderKey     = @cOrderKey,
-                 @cPalletKey    = @cPalletKey,
-                 @cMBOLKey      = @cMBOLKey,
-                 @cLane         = @cInField05,
-                 @cLabelNo      = @cLabelNo,
-                 @tCreateMBOLVar= @tCreateMBOLVar,
-                 @nErrNo        = @nErrNo      OUTPUT,
-                 @cErrMsg       = @cErrMsg     OUTPUT
+                  IF LEFT(@cPalletKey, LEN(@cNewPalletKeyPrefix)) <> @cNewPalletKeyPrefix
+                  BEGIN
+                     SET @nErrNo = 219162
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InvalidPrefix
+                     GOTO Step_ShowPalletID_Fail
+                  END
 
-            IF @nErrNo <> 0
-               ROLLBACK TRAN rdt_CreateMbol
-            ElSE
-               COMMIT TRAN rdt_CreateMbol
-            WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
-               COMMIT TRAN
+                  IF EXISTS (SELECT 1 FROM dbo.PALLET WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND PalletKey = @cPalletKey)
+                  BEGIN
+                     SET @nErrNo = 219166
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --PalletExists
+                     GOTO Step_ShowPalletID_Fail
+                  END
+               END
 
-            IF @nErrNo <> 0
+               IF ISNULL(@cInField05,'') = ''
+               BEGIN
+                  SET @nErrNo = 219156
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Location is required
+                  GOTO Step_ShowPalletID_Fail
+               END
+
+               IF NOT EXISTS ( SELECT 1
+                              FROM dbo.LOC WITH (NOLOCK)
+                              WHERE LOC = @cInField05
+                              AND Facility = @cFacility)
+               BEGIN
+                  SET @nErrNo = 219155
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --LOC NOT FOUND
+                  GOTO Step_ShowPalletID_Fail
+               END
+
+               SELECT @nRowCount = COUNT(1)
+               FROM dbo.CODELKUP WITH(NOLOCK)
+               WHERE LISTNAME = 'LVSPLTLOC'
+                  AND StorerKey = @cStorerKey
+
+               IF @nRowCount = 0
+               BEGIN
+                  SET @nErrNo = 219163
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --NoLocPre
+                  GOTO Step_ShowPalletID_Fail
+               END
+
+               IF NOT EXISTS ( SELECT 1
+                              FROM dbo.CODELKUP WITH (NOLOCK)
+                              WHERE StorerKey = @cStorerKey
+                                 AND ListName = 'LVSPLTLOC'
+                                 AND Code = LEFT(@cInField05, LEN(Code)) )
+               BEGIN
+                  SET @nErrNo = 219164
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InvalidLoc
+                  GOTO Step_ShowPalletID_Fail
+               END
+
+               IF EXISTS(SELECT 1
+                        FROM dbo.PALLETDETAIL PD WITH(NOLOCK)
+                        INNER JOIN dbo.PALLET PA WITH(NOLOCK)
+                           ON PD.StorerKey = PA.StorerKey
+                           AND PD.PalletKey = PA.PalletKey
+                        WHERE PD.StorerKey = @cStorerKey
+                           AND PD.Loc = @cInField05
+                           AND PD.PalletKey <> @cPalletKey
+                           AND PA.Status < '9') --JCH507
+               BEGIN
+                  SET @nErrNo = 219165
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --219165 Existing Pallet is Closed
+                  GOTO Step_ShowPalletID_Fail
+               END
+
+               SET @nTranCount = @@TRANCOUNT
+               BEGIN TRAN  -- Begin our own transaction
+               SAVE TRAN rdt_CreateMbol -- For rollback or commit only our own transaction
+
+               SET @nErrNo = 0
+               EXEC [RDT].[rdt_TrackNo_SortToPallet_CreateMbol]
+                  @nMobile       = @nMobile,
+                  @nFunc         = @nFunc,
+                  @cLangCode     = @cLangCode,
+                  @nStep         = @nStep,
+                  @nInputKey     = @nInputKey,
+                  @cFacility     = @cFacility,
+                  @cStorerKey    = @cStorerKey,
+                  @cTrackNo      = @cTrackNo,
+                  @cOrderKey     = @cOrderKey,
+                  @cPalletKey    = @cPalletKey,
+                  @cMBOLKey      = @cMBOLKey,
+                  @cLane         = @cInField05,
+                  @cLabelNo      = @cLabelNo,
+                  @tCreateMBOLVar= @tCreateMBOLVar,
+                  @nErrNo        = @nErrNo      OUTPUT,
+                  @cErrMsg       = @cErrMsg     OUTPUT
+
+               IF @nErrNo <> 0
+                  ROLLBACK TRAN rdt_CreateMbol
+               ElSE
+                  COMMIT TRAN rdt_CreateMbol
+               WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
+                  COMMIT TRAN
+
+               IF @nErrNo <> 0
+                  GOTO Quit
+
+               -- Prep next screen var
+               SET @cOutField01 = '' -- Track No
+               SET @cOutField02 = '' -- Option
+               SET @cOutField15 = ''
+
+               EXEC rdt.rdtSetFocusField @nMobile, 1
+
+               SET @nAfterScn = 5800
+               SET @nAfterStep = 1
+
+
                GOTO Quit
 
-            -- Prep next screen var
-            SET @cOutField01 = '' -- Track No
-            SET @cOutField02 = '' -- Option
+            END
 
-            EXEC rdt.rdtSetFocusField @nMobile, 1
+            IF @nInputKey = 0 -- Esc or No
+            BEGIN
+               -- Initialize value
+               SET @cTrackNo = ''
+               SET @cOrderKey = ''
 
-            SET @nAfterScn = 5800
-            SET @nAfterStep = 1
+               -- Prep next screen var
+               SET @cOutField01 = '' -- Track No
+               SET @cOutField02 = ''
 
-
-            GOTO Quit
-
+               SET @nAfterScn = 5800
+               SET @nAfterStep = 1
+            END
          END
-
-         IF @nInputKey = 0 -- Esc or No
+         /********************************************************************************
+         Scn = 6447. SConfirm to remove carton?
+         /*       Carton already      */
+         /*       Scanned to pallet.  */
+         /*       Confirm to remove   */
+         /*       carton from pallet? */
+         /*                           */
+         /*       1 - Yes             */
+         /*       2 - No              */
+         /*       Field01 (Input)     */
+         ********************************************************************************/
+         ELSE IF @nCurrentScn = 6447
          BEGIN
-            -- Initialize value
-            SET @cTrackNo = ''
-            SET @cOrderKey = ''
+            IF @nInputKey = 1 -- Enter
+            BEGIN
+               SET @cOption = @cInField01
+               IF @cOption NOT IN ('1', '2')
+               BEGIN
+                  SET @nErrNo = 219159
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InvalidOption
+                  GOTO Quit
+               END
+               --Yes, move the carton from the pallet
+               IF @cOption = '1'
+               BEGIN
+                  SET @nTranCount = @@TRANCOUNT  
 
-            -- Prep next screen var
-            SET @cOutField01 = '' -- Track No
-            SET @cOutField02 = ''
+                  SELECT @cLabelNo = Value FROM @tExtScnData WHERE Variable = '@cLabelNo'
 
-            SET @nAfterScn = 5800
-            SET @nAfterStep = 1
+                  SELECT TOP 1 @cPalletKey = PalletKey 
+                  FROM dbo.PalletDetail WITH(NOLOCK)
+                  WHERE ISNULL(CaseID, '') = @cLabelNo
+
+                  IF @nTranCount = 0
+                  BEGIN
+                     BEGIN TRANSACTION
+                  END
+                  ELSE
+                  BEGIN
+                     SAVE TRANSACTION TR_1653_6447
+                  END
+
+                  BEGIN TRY
+                     --Remove PalletDetails
+                     DELETE FROM dbo.PalletDetail
+                     WHERE PalletKey = @cPalletKey
+                        AND ISNULL(CaseID, '') = @cLabelNo
+
+                     SELECT @nRowCount = COUNT(1) 
+                     FROM dbo.PalletDetail WITH(NOLOCK)
+                     WHERE PalletKey = @cPalletKey
+
+                     --If no detail, need remove the Pallet Header
+                     IF @nRowCount = 0
+                     BEGIN
+                        DELETE FROM dbo.Pallet
+                        WHERE PalletKey = @cPalletKey
+                     END
+                  END TRY
+                  BEGIN CATCH
+                     IF @nTranCount > 0
+                     BEGIN
+                        IF XACT_STATE() <> -1  
+                        BEGIN
+                           ROLLBACK TRANSACTION TR_1653_6447
+                        END
+                     END
+                     ELSE
+                     BEGIN
+                        ROLLBACK TRANSACTION
+                     END
+
+                     SET @nErrNo = 219160
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --RemoveCTNFail
+                     GOTO Quit
+                  END CATCH
+
+                  WHILE @@TRANCOUNT > @nTranCount
+                     COMMIT TRANSACTION
+
+                  GOTO BACK_FIRST_SCREEN
+               END
+               --No, return to first screen
+               ELSE IF @cOption = '2'
+               BEGIN
+                  GOTO BACK_FIRST_SCREEN
+               END
+            END
+            --return to first screen
+            ELSE IF @nInputKey = 0 -- ESC
+            BEGIN
+               GOTO BACK_FIRST_SCREEN
+            END
+
+            BACK_FIRST_SCREEN:
+            BEGIN
+               -- Initialize value
+               SET @cTrackNo = ''
+               SET @cOrderKey = ''
+
+               -- Prep next screen var
+               SET @cOutField01 = '' -- Track No
+               SET @cOutField02 = ''
+               SET @cOutField15 = ''
+
+               SET @nAfterScn = 5800
+               SET @nAfterStep = 1
+               GOTO Quit
+            END
          END
       END
 
@@ -257,7 +469,7 @@ BEGIN
       END
    END
 Quit:
-END;
+END
 
 SET QUOTED_IDENTIFIER OFF
 GO

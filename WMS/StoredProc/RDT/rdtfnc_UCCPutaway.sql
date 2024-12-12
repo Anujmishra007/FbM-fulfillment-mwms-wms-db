@@ -7,48 +7,50 @@ GO
 SET ANSI_NULLS OFF
 GO
   
-/************************************************************************/  
-/* Store procedure: rdtfnc_UCCPutaway                                   */  
-/* Copyright      : IDS                                                 */  
-/*                                                                      */  
-/* Purpose: Putaway by UCC                                              */  
-/*                                                                      */  
-/* Called from: 3                                                       */  
-/*    1. From PowerBuilder                                              */  
-/*    2. From scheduler                                                 */  
-/*    3. From others stored procedures or triggers                      */  
-/*    4. From interface program. DX, DTS                                */  
-/*                                                                      */  
-/* Exceed version: 5.4                                                  */  
-/*                                                                      */  
-/* Modifications log:                                                   */  
-/*                                                                      */  
-/* Date        Rev  Author   Purposes                                   */  
-/* 08-Aug-2006 1.0  MaryVong Created                                    */  
-/* 14-Feb-2014 1.1  James    SOS301473 - Rewrite (james01)              */  
-/* 05-Oct-2015 1.2  James    SOS353559 - Add ExtendedValidateSP(james02)*/  
-/*                           Add ExtendedUpdateSP                       */  
-/* 30-Jun-2016 1.2  James    Bug fix (james02)                          */  
-/* 03-Aug-2016 1.3  James    SOS373949 Add PAZone & ExtendedInfoSP      */  
-/*                           to screen 2 (james03)                      */  
-/* 10-Sep-2016 1.4  Ung      IN00147078 Fix missing transaction protect */  
-/* 30-Sep-2016 1.5  Ung      Performance tuning                         */  
-/* 31-Mar-2017 1.6  James    WMS1481-Add GetSuggestedLoc sp (james04)   */  
-/* 31-Jan-2018 1.7  Ung      INC0120413 Fix move UCC without LOT        */  
-/* 04-Oct-2018 1.8  TungGH   Performance                                */  
-/* 09-Oct-2018 1.9  ChewKP   WMS-5157 Add ExtendedUpdate SP config      */  
-/*                           to step 1 (chewKP01)                       */  
-/* 08-Oct-2019 2.0  Chermain WMS-10753 Change a paramater               */  
-/*           when exec rdt_Putaway (cc01)               */  
-/* 30-Sep-2019 2.1  Ung      WMS-10642 Fix NoSuitableLOC not go next scn*/  
-/* 27-Mar-2020 2.2  Ung      WMS-12634 ConfirmSP                        */  
-/*                           Performance tuning                         */  
-/* 29-Mar-2021 2.3  Chermain WMS-16559 Add PAMatchSuggestLOC config(cc02)*/  
-/* 19-Aug-2021 2.4  Chermain WMS-17673 Add ExtendedInfo in st2&5 (cc03) */  
-/* 03-SEP-2021 2.5  James    WMS-17795 Remove hardcode PA Zone display  */  
-/*                           by config (james05)                        */  
-/* 21-Feb-2022 2.6  Yeekung  JSM-52910 comment step_1_fail (yeekung01)  */
-/************************************************************************/  
+/*****************************************************************************/  
+/* Store procedure: rdtfnc_UCCPutaway                                        */  
+/* Copyright      : IDS                                                      */  
+/*                                                                           */  
+/* Purpose: Putaway by UCC                                                   */  
+/*                                                                           */  
+/* Called from: 3                                                            */  
+/*    1. From PowerBuilder                                                   */  
+/*    2. From scheduler                                                      */  
+/*    3. From others stored procedures or triggers                           */  
+/*    4. From interface program. DX, DTS                                     */  
+/*                                                                           */  
+/* Exceed version: 5.4                                                       */  
+/*                                                                           */  
+/* Modifications log:                                                        */  
+/*                                                                           */  
+/* Date        Rev      Author   Purposes                                    */  
+/* 08-Aug-2006 1.0      MaryVong Created                                     */  
+/* 14-Feb-2014 1.1      James    SOS301473 - Rewrite (james01)               */  
+/* 05-Oct-2015 1.2      James    SOS353559 - Add ExtendedValidateSP(james02) */  
+/*                               Add ExtendedUpdateSP                        */  
+/* 30-Jun-2016 1.2      James    Bug fix (james02)                           */  
+/* 03-Aug-2016 1.3      James    SOS373949 Add PAZone & ExtendedInfoSP       */  
+/*                               to screen 2 (james03)                       */  
+/* 10-Sep-2016 1.4      Ung      IN00147078 Fix missing transaction protect  */  
+/* 30-Sep-2016 1.5      Ung      Performance tuning                          */  
+/* 31-Mar-2017 1.6      James    WMS1481-Add GetSuggestedLoc sp (james04)    */  
+/* 31-Jan-2018 1.7      Ung      INC0120413 Fix move UCC without LOT         */  
+/* 04-Oct-2018 1.8      TungGH   Performance                                 */  
+/* 09-Oct-2018 1.9      ChewKP   WMS-5157 Add ExtendedUpdate SP config       */  
+/*                               to step 1 (chewKP01)                        */  
+/* 08-Oct-2019 2.0      Chermain WMS-10753 Change a paramater                */  
+/*                      when exec rdt_Putaway (cc01)                         */  
+/* 30-Sep-2019 2.1      Ung      WMS-10642 Fix NoSuitableLOC not go next scn */  
+/* 27-Mar-2020 2.2      Ung      WMS-12634 ConfirmSP                         */  
+/*                               Performance tuning                          */  
+/* 29-Mar-2021 2.3      Chermain WMS-16559 Add PAMatchSuggestLOC config(cc02)*/  
+/* 19-Aug-2021 2.4      Chermain WMS-17673 Add ExtendedInfo in st2&5 (cc03)  */  
+/* 03-SEP-2021 2.5      James    WMS-17795 Remove hardcode PA Zone display   */  
+/*                               by config (james05)                         */  
+/* 21-Feb-2022 2.6      Yeekung  JSM-52910 comment step_1_fail (yeekung01)   */
+/* 17-Oct-2024 2.7      ShaoAn   FCR-759-1000 ID and UCC Length Issue        */
+/* 24-Oct-2024 2.7.1             Remove Customer Recode                      */
+/*****************************************************************************/  
   
 CREATE PROCEDURE [RDT].[rdtfnc_UCCPutaway] (  
    @nMobile    INT,  
@@ -82,7 +84,7 @@ DECLARE
    @cUserName           NVARCHAR( 18),  
    @cPUOM               NVARCHAR( 10),  
   
-   @cUCCNo              NVARCHAR( 20),  
+   @cUCCNo              NVARCHAR( 100),  
    @cFromLOC            NVARCHAR( 10),  
    @cID                 NVARCHAR( 18),  
    @cToLOC              NVARCHAR( 10),  
@@ -105,7 +107,7 @@ DECLARE
    @nPAErrNo            INT,              -- (james04)  
    @cPAMatchSuggestLOC  NVARCHAR( 1),     -- (cc02)  
    @cNotDisplayPAZone   NVARCHAR( 1),  
-     
+   @cDecodeSP           NVARCHAR( 20),    ---(ShaoAn)  
    @cInField01 NVARCHAR( 60),  @cOutField01 NVARCHAR( 60),  @cFieldAttr01 NVARCHAR( 1),  
    @cInField02 NVARCHAR( 60),  @cOutField02 NVARCHAR( 60),  @cFieldAttr02 NVARCHAR( 1),  
    @cInField03 NVARCHAR( 60),  @cOutField03 NVARCHAR( 60),  @cFieldAttr03 NVARCHAR( 1),  
@@ -153,7 +155,8 @@ SELECT
    @cPAMatchSuggestLOC  = V_String25, --(cc02)  
    @cToLOC              = V_String26, --(cc02)  
    @cNotDisplayPAZone   = V_String27,  
-        
+   @cDecodeSP           = V_String28, --(ShaoAn) 
+
    @nPABookingKey = V_Integer1,  
   
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,  @cFieldAttr01 = FieldAttr01,  
@@ -223,6 +226,10 @@ BEGIN
    -- (james05)  
    SET @cNotDisplayPAZone = rdt.RDTGetConfig( @nFunc, 'NotDisplayPAZone', @cStorerKey)  
   
+   SET @cDecodeSP = rdt.RDTGetConfig( @nFunc, 'DecodeSP', @cStorerKey)
+   IF @cDecodeSP = '0'
+      SET @cDecodeSP = ''
+
    -- reset all output  
    SET @cUCCNo = ''  
   
@@ -245,14 +252,32 @@ BEGIN
    BEGIN  
       -- Screen mapping  
       SET @cUCCNo = @cInField01  
-  
-      IF ISNULL( @cUCCNo, '') = ''  
+
+      SET @cUCCNo = RTRIM(LTRIM(ISNULL(@cUCCNo,'')))
+
+      IF @cUCCNo = ''  
       BEGIN  
          SET @nErrNo = 50011  
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- 'UCC req'  
          GOTO Step_1_Fail  
       END  
   
+     DECLARE @cBarcode NVARCHAR(60)
+	  SET @cBarcode = @cUCCNo
+
+      -- Decode
+      -- Standard decode
+      IF @cDecodeSP = '1'
+      BEGIN
+         EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cBarcode,
+               @cUCCNo  = @cUCCNo  OUTPUT,
+               @nErrNo  = @nErrNo   OUTPUT,
+               @cErrMsg = @cErrMsg  OUTPUT,
+               @cType   = 'UCCno'
+            IF @nErrNo <> 0
+               GOTO Step_1_Fail
+      END
+
       IF NOT EXISTS (SELECT 1 FROM dbo.UCC WITH (NOLOCK)  
                      WHERE StorerKey = @cStorerKey  
                      AND   UCCNo = @cUCCNo  
@@ -1110,7 +1135,8 @@ BEGIN
       V_String25 = @cPAMatchSuggestLOC, --(cc02)  
       V_String26 = @cToLOC, --(cc02)  
       V_String27 = @cNotDisplayPAZone,  
-        
+      V_String28 = @cDecodeSP,
+
       V_Integer1 = @nPABookingKey,  
   
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,  

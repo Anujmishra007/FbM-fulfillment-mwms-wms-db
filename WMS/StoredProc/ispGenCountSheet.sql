@@ -1,7 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ispGenCountSheet]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-    drop procedure [dbo].[ispGenCountSheet]
-GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -76,9 +72,10 @@ GO
 /* 12-Nov-2021  Wan07      WMS-18332 - [TW]LOR_CycleCount_CR                    */
 /* 04-Jan-2023  LZG        JSM-120963 - Default StorerKey for empty location    */
 /*                         if EmptyLOCWithStorerKey is turned on (ZG01)         */
+/* 15-OCT-2024  SKB01      UWP-20468 joining PickDetail table to get Qty picked */
 /********************************************************************************/
-
-CREATE PROC [dbo].[ispGenCountSheet] (
+    
+CREATE OR ALTER  PROC [dbo].[ispGenCountSheet] (
     @c_StockTakeKey NVARCHAR(10)
 )
 AS
@@ -104,7 +101,7 @@ BEGIN
         @c_SkuGroupParm      NVARCHAR(125),
         @c_ExcludeQtyPicked  NVARCHAR(1),
         @c_GenCCdetailbyExcludePKDStatus3 NVARCHAR(1),
-        @c_PickDetailJoinQuery NVARCHAR(255) = '',
+        @c_PickDetailJoinQuery NVARCHAR(255) = '',              --(SKB01)
         @c_PickDetailQtySubtractQuery NVARCHAR(255) = '',
         @c_authority NVARCHAR(1),
         @c_CCSheetNoKeyName  NVARCHAR(30), -- NJOW03
@@ -274,7 +271,7 @@ BEGIN
     IF @c_GenCCdetailbyExcludePKDStatus3 = '1'
         BEGIN
             SET @c_GenCCdetailbyExcludePKDStatus3 = 'Y'
-            SET @c_PickDetailJoinQuery = 'LEFT JOIN PICKDETAIL WITH (NOLOCK) ON PICKDETAIL.Lot = LOTxLOCxID.Lot and PICKDETAIL.Loc = LOTxLOCxID.Loc and PICKDETAIL.ID = LOTxLOCxID.Id '
+            SET @c_PickDetailJoinQuery = 'LEFT JOIN PICKDETAIL WITH (NOLOCK) ON PICKDETAIL.Lot = LOTxLOCxID.Lot and PICKDETAIL.Loc = LOTxLOCxID.Loc and PICKDETAIL.ID = LOTxLOCxID.Id '     --(SKB01)
             SET @c_PickDetailQtySubtractQuery = ' - CASE WHEN PICKDETAIL.Status=''3'' THEN PICKDETAIL.Qty ELSE 0 END '
         END
     ELSE
@@ -563,7 +560,8 @@ DECLARE @c_SkuConditionSQL          NVARCHAR(MAX)
                         + 'JOIN LOTxLOCxID WITH (NOLOCK) ON LOTxLOCxID.LOC = LOC.LOC '
                         + 'JOIN SKU WITH (NOLOCK) ON SKU.Storerkey = LOTxLOCxID.Storerkey AND SKU.SKU = LOTxLOCxID.SKU '
                         + 'JOIN LOTATTRIBUTE WITH (NOLOCK) ON LOTATTRIBUTE.Lot = LOTxLOCxID.Lot '             --(Wan01)
-                        + @c_PickDetailJoinQuery
+                        + @c_PickDetailJoinQuery                                                              --(SKB01)
+                        + 'WHERE 1 = 1 '                                                                      --(SKB01)
                         --(Wan03)
                         --+ CASE WHEN @c_ExcludeQtyPicked = 'Y' THEN 'AND   LOTxLOCxID.Qty-LOTxLOCxID.QtyPicked > 0 ' ELSE 'AND   LOTxLOCxID.Qty > 0 ' END
                         +  CASE WHEN @c_ExcludeQtyAllocated = 'Y' AND @c_ExcludeQtyPicked = 'Y' THEN 'AND LOTxLOCxID.Qty-LOTxLOCxID.Qtyallocated-LOTxLOCxID.Qtypicked'+ @c_PickDetailQtySubtractQuery +' > 0 '
@@ -612,7 +610,7 @@ DECLARE @c_SkuConditionSQL          NVARCHAR(MAX)
                         + 'JOIN  SKU WITH (NOLOCK) ON SKU.Storerkey = LOTxLOCxID.Storerkey AND SKU.SKU = LOTxLOCxID.SKU '
                         + 'JOIN  LOTATTRIBUTE WITH (NOLOCK) ON LOTATTRIBUTE.LOT = LOTxLOCxID.LOT '
                         + 'JOIN  LOC WITH (NOLOCK) ON LOC.LOC = LOTxLOCxID.LOC '
-                        + @c_PickDetailJoinQuery
+                        + @c_PickDetailJoinQuery                        --(SKB01)
 
 
                     --(Wan06) - START
@@ -783,7 +781,8 @@ DECLARE @c_SkuConditionSQL          NVARCHAR(MAX)
                         + 'JOIN LOTxLOCxID WITH (NOLOCK) ON LOTxLOCxID.LOC = LOC.LOC '
                         + 'JOIN SKU WITH (NOLOCK) ON SKU.Storerkey = LOTxLOCxID.Storerkey AND SKU.SKU = LOTxLOCxID.SKU '
                         + 'JOIN LOTATTRIBUTE WITH (NOLOCK) ON LOTATTRIBUTE.Lot = LOTxLOCxID.Lot '             --(Wan01)
-                        + @c_PickDetailJoinQuery
+                        + @c_PickDetailJoinQuery                                                              --(SKB01)
+                        + 'WHERE 1 = 1 '                                                                      --(SKB01)
                         --(Wan03) - START
                         --+ CASE WHEN @c_ExcludeQtyPicked = 'Y' THEN 'AND   LOTxLOCxID.Qty-LOTxLOCxID.QtyPicked > 0 ' ELSE 'AND   LOTxLOCxID.Qty > 0 ' END
                         +  CASE WHEN @c_ExcludeQtyAllocated = 'Y' AND @c_ExcludeQtyPicked = 'Y' THEN 'AND LOTxLOCxID.Qty-LOTxLOCxID.Qtyallocated-LOTxLOCxID.Qtypicked '+ @c_PickDetailQtySubtractQuery + ' > 0 '
@@ -832,7 +831,7 @@ DECLARE @c_SkuConditionSQL          NVARCHAR(MAX)
                         + 'JOIN  SKU WITH (NOLOCK) ON SKU.Storerkey = LOTxLOCxID.Storerkey AND SKU.SKU = LOTxLOCxID.SKU '
                         + 'JOIN  LOTATTRIBUTE WITH (NOLOCK) ON LOTATTRIBUTE.LOT = LOTxLOCxID.LOT '
                         + 'JOIN  LOC WITH (NOLOCK) ON LOC.LOC = LOTxLOCxID.LOC '
-                        + @c_PickDetailJoinQuery
+                        + @c_PickDetailJoinQuery                          --(SKB01)
 
                     --(Wan06) - START
                     SET @c_sql = @c_sql + @c_StocktakeParm2SQL
@@ -1000,7 +999,8 @@ DECLARE @c_SkuConditionSQL          NVARCHAR(MAX)
                         + 'JOIN LOTxLOCxID WITH (NOLOCK) ON LOTxLOCxID.LOC = LOC.LOC '
                         + 'JOIN SKU WITH (NOLOCK) ON SKU.Storerkey = LOTxLOCxID.Storerkey AND SKU.SKU = LOTxLOCxID.SKU '
                         + 'JOIN LOTATTRIBUTE WITH (NOLOCK) ON LOTATTRIBUTE.Lot = LOTxLOCxID.Lot '             --(Wan01)
-                        + @c_PickDetailJoinQuery
+                        + @c_PickDetailJoinQuery                                                              --(SKB01)
+                        + 'WHERE 1 = 1 '                                                                      --(SKB01)
                         --(Wan03) - START
                         --+ CASE WHEN @c_ExcludeQtyPicked = 'Y' THEN 'AND   LOTxLOCxID.Qty-LOTxLOCxID.QtyPicked > 0 ' ELSE 'AND   LOTxLOCxID.Qty > 0 ' END
                         +  CASE WHEN @c_ExcludeQtyAllocated = 'Y' AND @c_ExcludeQtyPicked = 'Y' THEN 'AND LOTxLOCxID.Qty-LOTxLOCxID.Qtyallocated-LOTxLOCxID.Qtypicked '+ @c_PickDetailQtySubtractQuery + '> 0 '
@@ -1049,7 +1049,7 @@ DECLARE @c_SkuConditionSQL          NVARCHAR(MAX)
                         + 'JOIN  SKU WITH (NOLOCK) ON SKU.Storerkey = LOTxLOCxID.Storerkey AND SKU.SKU = LOTxLOCxID.SKU '
                         + 'JOIN  LOTATTRIBUTE WITH (NOLOCK) ON LOTATTRIBUTE.LOT = LOTxLOCxID.LOT '
                         + 'JOIN  LOC WITH (NOLOCK) ON LOC.LOC = LOTxLOCxID.LOC '
-                        + @c_PickDetailJoinQuery
+                        + @c_PickDetailJoinQuery                            --(SKB01)
 
                     --(Wan06) - START
                     SET @c_sql = @c_sql + @c_StocktakeParm2SQL
