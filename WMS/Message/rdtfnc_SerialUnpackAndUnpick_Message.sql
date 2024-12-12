@@ -1,3 +1,10 @@
+--Add Menu
+IF NOT EXISTS( SELECT 1 FROM RDT.RDTMsg WITH(NOLOCK) WHERE Message_ID = 1868)
+BEGIN
+   INSERT INTO RDT.RDTMsg(Message_ID, Lang_Code, Message_Type, Message_Text, StoredProcName, EventType, Func, [URL], Message_Text_Long)
+   VALUES(1868, 'ENG', 'FNC', 'UnPack And UnPick by SN', 'rdtfnc_SerialUnpackAndUnpick', 0, 0, '', '')
+END
+
 --rdtfnc_SerialUnpackAndUnpick
 execute rdt.rdtDropMsg 228251, 228300
 
