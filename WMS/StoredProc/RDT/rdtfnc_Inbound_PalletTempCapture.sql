@@ -42,7 +42,7 @@ BEGIN
       @cStorerKey                   NVARCHAR( 15),
       @cUserName                    NVARCHAR( 18),
       @cFacility                    NVARCHAR( 15), 
-      @ctemperature                 NVARCHAR( 5),
+      @cTemperature                 NVARCHAR( 7),
       @fTemperature                 DECIMAL(5, 2),
       @cASNStatus                   NVARCHAR(10),
       @cASNSCanctatus               NVARCHAR(10),
@@ -418,16 +418,16 @@ BEGIN
    BEGIN
       IF @nInputKey = 1 -- ENTER
       BEGIN
-         SET @ctemperature = @cInField03
+         SET @cTemperature = @cInField03
 
-         IF @ctemperature = ''
+         IF @cTemperature = ''
          BEGIN
             SET @nErrNo = 230211
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --TempIsNeeded
             GOTO Step_3_Fail
          END
 
-         SET @fTemperature = TRY_CAST(@ctemperature AS DECIMAL(5,2))
+         SET @fTemperature = TRY_CAST(@cTemperature AS DECIMAL(5,2))
 
          IF @fTemperature IS NULL
          BEGIN
@@ -439,7 +439,7 @@ BEGIN
          IF @fTemperature < @fLowerTemp OR @fTemperature > @fHigherTemp
          BEGIN
             --prepare prev screen variable
-            SET @cOutField01 = @fTemperature  --temperature
+            SET @cOutField01 = @cTemperature  --temperature
             SET @cOutField02 = ''            --Option
 
             SET @nScn = @nScn + 1
