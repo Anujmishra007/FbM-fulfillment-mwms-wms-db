@@ -13,6 +13,7 @@ GO
 /* 2018-02-07 1.0    NLT03      FCR-727 Create                                  */
 /* 2024-10-12 1.2.0  NLT013     FCR-955 PPA by LabelNo, instead of PickSLipNo   */
 /* 2024-12-03 1.3.0  NLT013     FCR-1659 Be able to print label for MPOC        */
+/* 2024-12-03 1.3.1  NLT013     FCR-1659 Unable to reprint new carton           */
 /********************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_593VendorLabel01] (
@@ -96,12 +97,13 @@ AS
    IF LEN(@cDropID) = 20 AND LEFT(@cDropID, 2) = '00'
       SET @cDropID = RIGHT(@cDropID, 18)
 
-   IF NOT EXISTS (SELECT 1 FROM dbo.PICKDETAIL PKD WITH(NOLOCK)
-                  INNER JOIN RDT.RDTPPA PPA WITH(NOLOCK) ON PKD.StorerKey = PPA.StorerKey AND ISNULL(PKD.CaseID, '') = PPA.DropID AND PKD.Sku = PPA.Sku
-                  WHERE PKD.StorerKey = @cStorerKey
-                     AND ISNULL(PKD.CaseID, '') = @cDropID
-                     AND PPA.Status = '5'
-                     AND pkd.Status >= @cPickConfirmStatus)
+   IF NOT EXISTS (SELECT 1 FROM dbo.PackDetail PD WITH(NOLOCK)
+                  INNER JOIN dbo.PackHeader PH WITH(NOLOCK)
+                     ON PD.PickSlipNo = PH.PickSlipNO
+                     AND PD.StorerKey = PH.StorerKey
+                  WHERE PD.StorerKey = @cStorerKey
+                     AND PD.LabelNo = @cDropID
+                     AND PH.Status = '9')
    BEGIN
       SET @nErrNo = 222302
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InvalidLabelNo
