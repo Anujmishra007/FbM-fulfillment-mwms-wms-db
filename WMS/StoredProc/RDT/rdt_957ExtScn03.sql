@@ -9,8 +9,10 @@ GO
 /*                                                                      */
 /* Purpose:                                                             */
 /*                                                                      */
-/* Date       Rev  Author   Purposes                                    */
-/* 2024-09-23 1.0  CYU027   FCR-808 Add Image + Style                   */
+/* Date       Rev   Author   Purposes                                   */
+/* 2024-09-23 1.0   CYU027   FCR-808 Add Image + Style                  */
+/* 2024-12-12 1.1.0 LJQ006   FCR-1168 Add drop id validation            */
+/*                           and new screen navigation                  */
 /************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_957ExtScn03] (
@@ -89,6 +91,16 @@ BEGIN
                BEGIN
                   SET @nErrNo = 230601
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- DropID cannot be blank
+                  
+                  -- Prepare next screen var
+                  SET @cOutField01 = @cPickSlipNo
+                  SET @cOutField02 = '' --PickZone
+                  SET @cOutField03 = '' --DropID
+
+                  EXEC rdt.rdtSetFocusField @nMobile, 2 -- PickZone
+                  SET @nAfterScn = 5291
+                  SET @nAfterStep = 2
+
                   GOTO Quit
                END
             END

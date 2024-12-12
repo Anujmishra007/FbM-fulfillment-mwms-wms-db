@@ -21,7 +21,7 @@ GO
 /* 04-29-2024 1.1   CYU027     UWP-18306 Short Pick                                                */
 /* 06-05-2024 1.2   Dennis     FCR-133   Trigger only uom =7                                       */
 /* 08-05-2024 1.3   JHU151     FCR-330   No Pack Confirm                                           */
-/* 12-10-2024 1.4.0 LJQ006     FCR-1168  Adjust from WMS-24353                                     */
+/* 12-10-2024 1.4.0 LJQ006     FCR-1168  Adjust from WMS-24353, FCR-630                            */
 /***************************************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_957Confirm04] (
