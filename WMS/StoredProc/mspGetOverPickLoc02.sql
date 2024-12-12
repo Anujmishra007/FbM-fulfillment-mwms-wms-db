@@ -24,7 +24,7 @@ GO
 /* 2024-10-16  Wan      1.0   Created.                                  */
 /* 2024-12-09  Shong01  1.1   Handle DG Goods Allocation FCR-1715       */
 /************************************************************************/  
-ALTER   PROC [dbo].[mspGetOverPickLoc02]  
+CREATE OR ALTER PROC [dbo].[mspGetOverPickLoc02]  
    @c_Storerkey                  NVARCHAR(15)   
 ,  @c_Sku                        NVARCHAR(20)   
 ,  @c_AllocateStrategykey        NVARCHAR(10)  
