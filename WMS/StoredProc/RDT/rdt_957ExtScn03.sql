@@ -87,21 +87,24 @@ BEGIN
                BEGIN
                   SET @cDropIDMandatory = ''
                END
-               IF ISNULL(@cDropID, '') = ''
+               IF @cDropIDMandatory <> ''
                BEGIN
-                  SET @nErrNo = 230601
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- DropID cannot be blank
-                  
-                  -- Prepare next screen var
-                  SET @cOutField01 = @cPickSlipNo
-                  SET @cOutField02 = '' --PickZone
-                  SET @cOutField03 = '' --DropID
+                  IF ISNULL(@cDropID, '') = ''
+                  BEGIN
+                     SET @nErrNo = 230601
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- DropID cannot be blank
 
-                  EXEC rdt.rdtSetFocusField @nMobile, 2 -- PickZone
-                  SET @nAfterScn = 5291
-                  SET @nAfterStep = 2
+                     -- Prepare next screen var
+                     SET @cOutField01 = @cPickSlipNo
+                     SET @cOutField02 = '' --PickZone
+                     SET @cOutField03 = '' --DropID
 
-                  GOTO Quit
+                     EXEC rdt.rdtSetFocusField @nMobile, 2 -- PickZone
+                     SET @nAfterScn = 5291
+                     SET @nAfterStep = 2
+
+                     GOTO Quit
+                  END
                END
             END
          END
