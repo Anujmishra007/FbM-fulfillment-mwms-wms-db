@@ -1,65 +1,70 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE Id = OBJECT_ID(N'dbo.ispGenCCAdjustmentPost_MultiCnt') AND OBJECTPROPERTY(Id, N'IsProcedure') = 1)
-   DROP PROCEDURE dbo.ispGenCCAdjustmentPost_MultiCnt
-GO
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
 GO
 
-/*****************************************************************************/
-/* Stored Procedure: ispGenCCAdjustmentPost_MultiCnt                         */
-/* Creation Date  : 19-May-2005                                              */
-/* Copyright      : IDS                                                      */
-/* Written by     : Shong                                                    */
-/*                                                                           */
-/* Purpose:                                                                  */
-/*                                                                           */
-/* Called from: 1 (Stock Take )                                              */
-/*    1. From PowerBuilder                                                   */
-/*    2. From scheduler                                                      */
-/*    3. From others stored procedures or triggers                           */
-/*    4. From interface program. DX, DTS                                     */
-/*                                                                           */
-/* PVCS Version: 3.0                                                         */
-/*                                                                           */
-/* Version: 5.4                                                              */
-/*                                                                           */
-/* Data Modifications:                                                       */
-/*                                                                           */
-/* Updates:                                                                  */
-/* Date         Author    Ver.  Purposes                                     */
-/* 29-Jun-2005  June      1.0   SOS35681 - Turn ANSI NULL OFF before         */
-/*                              compiling, otherwise incorrect Lot#          */
-/* 01-Jul-2005  June      1.1   Add CCDetail Finalizeflag 'Y' checking       */
-/* 10-Nov-2005  MaryVong  1.2   SOS42806 Increase length of returned fields  */
-/*                              from ispParseParameters to NVARCHAR(800)     */
-/* 05-Jan-2006  MaryVong  1.3   SOS44193 Update CCDetail.Status = '9'        */
-/* 09-Nov-2006  Shong     1.4   Increase the Length of Id Variable, 10 to 18 */
-/* 18-Jan-2008  June      1.5   SOS66279 : Include STOCKTAKEPARM2 checking   */
-/* 05-Aug-2010  NJOW01    1.6   182454 - Add skugroup parameter              */
-/* 24-Jan-2011  NJOW02    1.7   201680 - Add exclude Qty picked checking when*/
-/*                              calculate system Qty                         */
-/* 21-Jun-2012  Ung       1.8   SOS227151 - TM RDT CC                        */
-/* 28-Aug-2012  Leong     1.9   SOS# 254455 - Group duplicate #Deposit record*/
-/*                                          - Insert detail with Lottables.  */
-/* 30-Aug-2012  SPChin    2.0   SOS254825-Update Adjustment.FinalizedFlag='Y'*/
-/* 10-Sep-2012  James     2.1   SOS# 255810 - Remove LTRIM & RTRIM function. */
-/* 19-Oct-2012  Ung       2.2   SOS254691 StocktakeSheetParameters.CountType */
-/*                              Block normal countsheet if detected UCC data */
-/* 03-Jan-2013  SPChin    2.3   SOS264402 - Bug Fixed                        */
-/* 28-May-2014  TKLIM     2.4   Added Lottables 06-15                        */
-/* 09-Sep-2014  YTWan     2.5   SOS#314647-Message prompt when there is no   */
-/*                              qty variance for cycle count adjustment      */
-/*                              posting. (Wan01)                             */
-/* 26-Mar-2015  NJOW03    2.6   315484-CC Post adj by pallet current loc     */
-/* 30-MAR-2016  Wan02     2.7   SOS#366947: SG-Stocktake LocationRoom Parm   */
-/* 16-JUN-2016  Wan03     2.8   SOS#366947: SOS#371185 - CN Carter's SH      */
-/*                              WMS Cycle Count module                       */
-/* 29-JUN-2016  Wan03     2.9   SOS#370874 - TW Add Cycle Count Strategy     */
-/* 23-NOV-2016  Wan04     3.0   WMS-648 - GW StockTake Parameter2 Enhancement*/
-/*****************************************************************************/
+/*********************************************************************************/
+/* Stored Procedure: ispGenCCAdjustmentPost_MultiCnt                             */
+/* Creation Date  : 19-May-2005                                                  */
+/* Copyright      : IDS                                                          */
+/* Written by     : Shong                                                        */
+/*                                                                               */
+/* Purpose:                                                                      */
+/*                                                                               */
+/* Called from: 1 (Stock Take )                                                  */
+/*    1. From PowerBuilder                                                       */
+/*    2. From scheduler                                                          */
+/*    3. From others stored procedures or triggers                               */
+/*    4. From interface program. DX, DTS                                         */
+/*                                                                               */
+/* PVCS Version: 3.0                                                             */
+/*                                                                               */
+/* Version: 5.4                                                                  */
+/*                                                                               */
+/* Data Modifications:                                                           */
+/*                                                                               */
+/* Updates:                                                                      */
+/* Date         Author    Ver.  Purposes                                         */
+/* 29-Jun-2005  June      1.0   SOS35681 - Turn ANSI NULL OFF before             */
+/*                              compiling, otherwise incorrect Lot#              */
+/* 01-Jul-2005  June      1.1   Add CCDetail Finalizeflag 'Y' checking           */
+/* 10-Nov-2005  MaryVong  1.2   SOS42806 Increase length of returned fields      */
+/*                              from ispParseParameters to NVARCHAR(800)         */
+/* 05-Jan-2006  MaryVong  1.3   SOS44193 Update CCDetail.Status = '9'            */
+/* 09-Nov-2006  Shong     1.4   Increase the Length of Id Variable, 10 to 18     */
+/* 18-Jan-2008  June      1.5   SOS66279 : Include STOCKTAKEPARM2 checking       */
+/* 05-Aug-2010  NJOW01    1.6   182454 - Add skugroup parameter                  */
+/* 24-Jan-2011  NJOW02    1.7   201680 - Add exclude Qty picked checking when    */
+/*                              calculate system Qty                             */
+/* 21-Jun-2012  Ung       1.8   SOS227151 - TM RDT CC                            */
+/* 28-Aug-2012  Leong     1.9   SOS# 254455 - Group duplicate #Deposit record    */
+/*                                          - Insert detail with Lottables.      */
+/* 30-Aug-2012  SPChin    2.0   SOS254825-Update Adjustment.FinalizedFlag='Y'    */
+/* 10-Sep-2012  James     2.1   SOS# 255810 - Remove LTRIM & RTRIM function.     */
+/* 19-Oct-2012  Ung       2.2   SOS254691 StocktakeSheetParameters.CountType     */
+/*                              Block normal countsheet if detected UCC data     */
+/* 03-Jan-2013  SPChin    2.3   SOS264402 - Bug Fixed                            */
+/* 28-May-2014  TKLIM     2.4   Added Lottables 06-15                            */
+/* 09-Sep-2014  YTWan     2.5   SOS#314647-Message prompt when there is no       */
+/*                              qty variance for cycle count adjustment          */
+/*                              posting. (Wan01)                                 */
+/* 26-Mar-2015  NJOW03    2.6   315484-CC Post adj by pallet current loc         */
+/* 30-MAR-2016  Wan02     2.7   SOS#366947: SG-Stocktake LocationRoom Parm       */
+/* 16-JUN-2016  Wan03     2.8   SOS#366947: SOS#371185 - CN Carter's SH          */
+/*                              WMS Cycle Count module                           */
+/* 29-JUN-2016  Wan03     2.9   SOS#370874 - TW Add Cycle Count Strategy         */
+/* 23-NOV-2016  Wan04     3.0   WMS-648 - GW StockTake Parameter2 Enhancement    */
+/* 25-JUL-2023  NJOW04    3.1   WMS-23046 add config to Post adjustment not      */
+/*                              compare current inventory and by CC Variance only*/
+/* 25-JUL-2023  NJOW04    3.1   DEVOPS Combine Script                            */
+/* 26-JUL-2023  NJOW05    3.2   WMS-23053 Move adj qty to other loc before adj   */
+/* 11-JAN-2024  James     3.3   WMS-24249 Add config control whether CC from RDT */  
+/*                              need auto finalize ADJ (james01)                 */
+/* 22-JAN-2024  NJOW06    3.4   WMS-24558 Add post CC adjustment call custom sp  */
+/* 23-AUG-2024  NJOW07    3.5   LFWM-5050 AU Fix to display correct error msg    */
+/*********************************************************************************/
 
-CREATE PROC [dbo].[ispGenCCAdjustmentPost_MultiCnt] (
+CREATE OR ALTER PROC [dbo].[ispGenCCAdjustmentPost_MultiCnt] (
    @c_StockTakeKey  NVARCHAR(10),
    @c_CountNo       NVARCHAR(1),
    @b_success       Int OUTPUT,
@@ -132,10 +137,14 @@ BEGIN
            @c_SkuGroupSQL      NVARCHAR(800),
            @c_SkuGroupSQL2     NVARCHAR(800),
            @c_LocSQL           NVARCHAR(800),
-           @c_Remark           NVARCHAR(260) --NJOW03
+           @c_Remark           NVARCHAR(260), --NJOW03
            --@c_Storer_SCSQL     NVARCHAR(800), --NJOW03
            --@c_Storer_SCSQL2    NVARCHAR(800), --NJOW03
            --@c_CCPostAdjByPalletID NVARCHAR(10) --NJOW03
+           @c_CCAdjNotCompareCurrInv NVARCHAR(30), --NJOW04  
+           @c_CCMoveAdjQtyToLoc      NVARCHAR(10)='', --NJOW05
+           @c_Hostwhcode_UDF01       NVARCHAR(10)='', --NJOW05
+           @n_MoveQty                INT --NJOW05
          --(Wan02) - START
          ,  @c_Extendedparm1SQL  NVARCHAR(800)
          ,  @c_Extendedparm1SQL2 NVARCHAR(800)
@@ -147,6 +156,8 @@ BEGIN
          ,  @c_StrategySQL    NVARCHAR(4000)       --(Wan03)
          ,  @c_StrategySkuSQL NVARCHAR(4000)       --(Wan03)
          ,  @c_StrategyLocSQL NVARCHAR(4000)       --(Wan03)
+         ,  @n_sysqty         INT = 0   --NJOW07
+         ,  @C_CCSheetNo      NVARCHAR(10)=''  --NJOW07
 
    --(Wan04) - START
    DECLARE @c_SkuConditionSQL          NVARCHAR(MAX)
@@ -196,7 +207,7 @@ BEGIN
            @c_errmsg           NVARCHAR(215)
 
    SET @b_success = 1 -- 1=Success
-   SELECT @n_continue = 1, @b_debug = 0
+   SELECT @n_continue = 1, @b_debug = 0  
 
    --(Wan02) - START
    SET @c_Extendedparm1Field   = ''
@@ -217,6 +228,11 @@ BEGIN
    --(Wan02) - END
 
    DECLARE @tAdjustment TABLE (AdjustmentKey NVARCHAR(10))
+   
+   --James01
+   DECLARE @nFunc                   INT    
+   DECLARE @nRDTNotAutoFinalizeAdj  INT = 0    
+   DECLARE @cStorerKey              NVARCHAR( 15)   
 
    SET @c_Loc = ISNULL(RTRIM(@c_Loc), '')
    SET @c_Sku = ISNULL(RTRIM(@c_Sku), '')
@@ -226,8 +242,13 @@ BEGIN
 
    IF @n_IsRDT = 1
    BEGIN
+      --James01
+      SELECT @nFunc = Func, @cStorerKey = StorerKey    
+      FROM RDT.RDTMOBREC WITH (NOLOCK)    
+      WHERE UserName = SUSER_SNAME()    
+   	
       -- Set stock take parameters
-      SELECT @c_StorerParm = '',
+      SELECT @c_StorerParm = @cStorerKey, ----James01
              @c_AisleParm = '',
              @c_LevelParm = '',
              @c_ZoneParm = '',
@@ -258,6 +279,8 @@ BEGIN
       BEGIN
          SET @c_SkuSQL = ' AND (LOTxLOCxID.Sku = ''' + @c_Sku + ''' )'
       END
+                
+      SET @nRDTNotAutoFinalizeAdj = rdt.rdtGetConfig( @nFunc, 'RDTNotAutoFinalizeAdj', @cStorerKey)          
    END
    ELSE
    BEGIN
@@ -592,6 +615,20 @@ BEGIN
    END   
    */
    --NJOW03 End
+   
+   --NJOW04 S
+   SELECT @c_CCAdjNotCompareCurrInv = dbo.fnc_GetRight(@c_Facility, @c_StorerParm, '','CCAdjNotCompareCurrInv')  --not support stock take with multiple storer   
+   --IF @n_IsRDT = 1
+   --   SET @c_CCAdjNotCompareCurrInv = '0'
+   --NJOW04 
+   
+   --NJOW05
+   SELECT TOP 1 @c_CCMoveAdjQtyToLoc = LOC.Loc,
+                @c_Hostwhcode_UDF01 = CL.UDF01
+   FROM CODELKUP CL (NOLOCK)
+   JOIN LOC (NOLOCK) ON CL.Code = LOC.Loc
+   WHERE CL.ListName = 'CCADJMVLOC'
+   AND CL.Storerkey = @c_StorerParm   --not support stock take with multiple storer   
    
    IF @n_continue = 1 OR @n_continue = 2
    BEGIN
@@ -930,11 +967,33 @@ BEGIN
          SELECT @c_sql = @c_sql + ' ' + @c_sqlWhere + ' ' + @c_sqlOther
       END
 
-      INSERT INTO #Withdraw (StorerKey, Sku, Lot, Id, Loc, Qty, 
-                              Lottable01, Lottable02, Lottable03, Lottable04, Lottable05, 
-                              Lottable06, Lottable07, Lottable08, Lottable09, Lottable10, 
-                              Lottable11, Lottable12, Lottable13, Lottable14, Lottable15)
-      EXEC ( @c_SQL )
+      IF @c_CCAdjNotCompareCurrInv = '1' --NJOW04
+      BEGIN
+         INSERT INTO #Withdraw (StorerKey, Sku, Lot, Id, Loc, Qty, 
+                                 Lottable01, Lottable02, Lottable03, Lottable04, Lottable05, 
+                                 Lottable06, Lottable07, Lottable08, Lottable09, Lottable10, 
+                                 Lottable11, Lottable12, Lottable13, Lottable14, Lottable15)        	          
+         SELECT CCD.Storerkey, CCD.Sku, CCD.Lot, CCD.ID, CCD.Loc, CCD.SystemQty,
+                LA.Lottable01, LA.Lottable02, LA.Lottable03, LA.Lottable04, LA.Lottable05, 
+                LA.Lottable06, LA.Lottable07, LA.Lottable08, LA.Lottable09, LA.Lottable10, 
+                LA.Lottable11, LA.Lottable12, LA.Lottable13, LA.Lottable14, LA.Lottable15                
+         FROM CCDETAIL CCD (NOLOCK)
+         JOIN LOTATTRIBUTE LA (NOLOCK) ON CCD.Lot = LA.Lot
+         WHERE CCD.CCKey = @c_StockTakeKey
+         AND CCD.CCSheetNo = CASE WHEN ISNULL(@c_TaskDetailkey,'') <> '' THEN @c_TaskDetailkey ELSE CCD.CCSheetNo END
+         --AND ((CCD.Finalizeflag = 'Y' AND @c_CountNo = '1')
+         --  OR (CCD.Finalizeflag_Cnt2 = 'Y' AND @c_CountNo = '2')
+         --  OR (CCD.Finalizeflag_Cnt3 = 'Y' AND @c_CountNo = '3')
+         --    )          
+      END
+      ELSE
+      BEGIN
+         INSERT INTO #Withdraw (StorerKey, Sku, Lot, Id, Loc, Qty, 
+                                 Lottable01, Lottable02, Lottable03, Lottable04, Lottable05, 
+                                 Lottable06, Lottable07, Lottable08, Lottable09, Lottable10, 
+                                 Lottable11, Lottable12, Lottable13, Lottable14, Lottable15)
+         EXEC ( @c_SQL )
+      END
 
       IF @b_debug = 1
       BEGIN
@@ -947,7 +1006,7 @@ BEGIN
    -- Generate Deposit Transaction From CCDETAIL Table
    IF @n_continue = 1 OR @n_continue = 2
    BEGIN
-      DECLARE @c_Checking NVARCHAR(255)
+      DECLARE @c_Checking NVARCHAR(255) 
 
       SELECT @c_Checking = ''
 
@@ -1186,7 +1245,7 @@ BEGIN
             Lottable06, Lottable07, Lottable08, Lottable09, Lottable10, 
             Lottable11, Lottable12, Lottable13, Lottable14, Lottable15
    END
-
+      
    --NJOW03
    IF (@n_continue = 1 OR @n_continue = 2) AND @c_ByPalletLevel = 'Y' 
    BEGIN   	
@@ -1244,24 +1303,48 @@ BEGIN
       FROM   #WithDraw W
       INNER JOIN #Deposit2 D ON (W.Lot = D.Lot and W.Loc = D.Loc and W.Id = D.Id)
       WHERE D.Qty <> W.Qty
+                  
+      IF @c_CCAdjNotCompareCurrInv = '1' AND NOT (@n_IsRDT = 1 AND @nRDTNotAutoFinalizeAdj = 1) --NJOW04  
+      BEGIN  
+        SELECT @c_Lot = '', @c_Loc = '', @c_ID = '', @n_Qty = 0  
+
+        SELECT TOP 1 @c_Lot = V.Lot, @c_Loc = V.Loc, @c_Id = V.Id, @n_Qty = SUM(V.Qty) * -1,  
+                     @n_Sysqty = SUM(LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked)   --NJOW07
+        FROM #Variance V  
+        JOIN LOTXLOCXID LLI (NOLOCK) ON v.Storerkey = LLI.Storerkey AND V.Sku = LLI.Sku AND V.Lot = LLI.Lot AND V.Loc = LLI.Loc AND V.ID = LLI.Id  
+        WHERE V.Qty < 0  
+        GROUP BY V.Lot, V.Loc, V.Id  
+        HAVING SUM(LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked) < (SUM(V.Qty) * -1)  
+        
+        --NJOW07
+        SELECT TOP 1 @c_CCSheetNo = CCSheetNo  
+        FROM CCDETAIL(NOLOCK)  
+        WHERE CCKey  = @c_StockTakeKey  
+        AND Lot = @c_Lot  
+        AND Loc = @c_Loc  
+        AND Id = @c_ID 
+         
+        IF @c_Lot <> '' AND @c_Loc <> ''  
+        BEGIN  
+           SELECT @n_continue = 3  
+           SELECT @n_err = 67105  
+           SELECT @c_errmsg = "NSQL" + CONVERT(Char(5), @n_err) + ": Insuffient bal to adj out " + CAST(@n_Qty AS NVARCHAR) + " qty from lot: " + RTRIM(@c_Lot) + " Loc: " + RTRIM(@c_Loc) + " ID: " 
+                  + RTRIM(@c_ID) + " SysQty: " + CAST(@n_Sysqty AS NVARCHAR) + " CSheet#: " + RTRIM(@c_CCSheetNo) + ". (ispGenCCAdjustmentPost_MultiCnt)" + " ( " + " SQLSvr MESSAGE=" + LTRIM(RTRIM(@c_errmsg)) + " ) "  --NJOW07
+           SELECT @b_success = 0  
+           RAISERROR(@c_errmsg, 16, 1) WITH SETERROR   --NJOW07
+           RETURN  --NJOW07
+        END          
+      END       
+            
    END
 
    IF @b_debug = 1
    BEGIN
-      SELECT * FROM #Variance
+      SELECT * FROM #Variance 
    END
 
    IF EXISTS(SELECT 1 FROM #Variance)
    BEGIN
-    SELECT V.StorerKey, V.Sku, V.Lot, V.Id, V.Loc, V.Qty, P.PackKey, P.PackUOM3, 
-            V.Lottable01, V.Lottable02, V.Lottable03, V.Lottable04, V.Lottable05, -- SOS# 254455
-            V.Lottable06, V.Lottable07, V.Lottable08, V.Lottable09, V.Lottable10, 
-            V.Lottable11, V.Lottable12, V.Lottable13, V.Lottable14, V.Lottable15
-      FROM   #Variance V
-      JOIN   Sku S (NOLOCK) ON S.StorerKey = V.StorerKey AND S.Sku = V.Sku
-      JOIN   PACK P (NOLOCK) ON S.PackKey = P.PackKey
-      ORDER BY V.StorerKey, V.Sku
-
       SET @c_PrevStorerKey = ''
       DECLARE CUR2 CURSOR READ_ONLY FAST_FORWARD FOR
          SELECT V.StorerKey, V.Sku, V.Lot, V.Id, V.Loc, V.Qty, P.PackKey, P.PackUOM3, 
@@ -1271,8 +1354,9 @@ BEGIN
          FROM   #Variance V
          JOIN   Sku S (NOLOCK) ON S.StorerKey = V.StorerKey AND S.Sku = V.Sku
          JOIN   PACK P (NOLOCK) ON S.PackKey = P.PackKey
-         ORDER BY V.StorerKey, V.Sku
-
+         ORDER BY V.StorerKey, V.Sku,
+                  CASE WHEN V.Qty > 0 THEN 0 ELSE 1 END --NJOW06
+                  
       OPEN CUR2
       FETCH NEXT FROM CUR2 INTO @c_StorerKey, @c_Sku, @c_Lot, @c_Id, @c_Loc, @n_Qty, @c_PackKey, @c_UOM, 
                               @c_Lottable01, @c_Lottable02, @c_Lottable03, @d_Lottable04, @d_Lottable05,
@@ -1346,6 +1430,79 @@ BEGIN
          SELECT @c_AdjDetailLine = RIGHT('0000' + RTRIM(CAST((ISNULL(MAX(AdjustmentLineNumber),0) + 1) AS NVARCHAR(5))),5)
          FROM  AdjustmentDetail WITH (NOLOCK)
          WHERE AdjustmentKey = @c_AdjustmentKey
+         
+         --NJOW05 S
+         IF ISNULL(@c_CCMoveAdjQtyToLoc,'') <> ''
+         BEGIN
+            IF EXISTS(SELECT 1
+                      FROM LOC (NOLOCK)
+                      WHERE LOC = @c_Loc
+                      AND (HostWhCode = @c_Hostwhcode_UDF01
+                        OR ISNULL(@c_Hostwhcode_UDF01,'') = '')
+                      )
+               AND @n_Qty < 0
+            BEGIN
+            	 SET @n_MoveQty = ABS(@n_Qty)
+               EXEC nspItrnAddMove
+                   @n_ItrnSysId =null,
+                   @c_StorerKey = @c_StorerKey,
+                   @c_Sku = @c_Sku,
+                   @c_Lot = @c_Lot,
+                   @c_FromLoc = @c_Loc,
+                   @c_FromID = @c_ID,
+                   @c_ToLoc = @c_CCMoveAdjQtyToLoc,
+                   @c_ToID = @c_ID,
+                   @c_Status ='0',
+                   @c_lottable01 ='',
+                   @c_lottable02 ='',
+                   @c_lottable03 ='',
+                   @d_lottable04 =null,
+                   @d_lottable05 =null,
+                   @c_lottable06 ='',
+                   @c_lottable07 ='',
+                   @c_lottable08 ='',
+                   @c_lottable09 ='',
+                   @c_lottable10 ='',
+                   @c_lottable11 ='',
+                   @c_lottable12 ='',
+                   @d_lottable13 =null,
+                   @d_lottable14 =null,
+                   @d_lottable15 =null,
+                   @n_casecnt =0,
+                   @n_innerpack =0,
+                   @n_qty = @n_MoveQty,
+                   @n_pallet =0,
+                   @f_cube =0,
+                   @f_grosswgt =0,
+                   @f_netwgt =0,
+                   @f_otherunit1 =0,
+                   @f_otherunit2 =0,
+                   @c_SourceKey = @c_AdjustmentKey,
+                   @c_SourceType = 'ispGenCCAdjustmentPost_MultiCnt',
+                   @c_PackKey = @c_PackKey,
+                   @c_UOM = @c_UOM,
+                   @b_UOMCalc =null,
+                   @d_EffectiveDate =null,
+                   @c_itrnkey =null,
+                   @b_Success = @b_Success OUTPUT,
+                   @n_err = @n_Err OUTPUT,
+                   @c_errmsg = @c_ErrMsg OUTPUT,
+                   @c_MoveRefKey =null,
+                   @c_Channel =null,
+                   @n_Channel_ID =null
+               
+               IF @b_Success <> 1
+               BEGIN
+                  SELECT @n_continue = 3
+                  SELECT @n_err = 67104
+                  SELECT @c_errmsg = "NSQL" + CONVERT(Char(5), @n_err) + ": Failed to Move Adjustment Stock. (ispGenCCAdjustmentPost_MultiCnt)" + " ( " + " SQLSvr MESSAGE=" + LTRIM(RTRIM(@c_errmsg)) + " ) "
+                  BREAK               	  
+               END                
+               ELSE               
+                  SET @c_Loc = @c_CCMoveAdjQtyToLoc
+            END            	 
+         END
+         --NJOW05 E         
 
          INSERT INTO AdjustmentDetail (AdjustmentKey, AdjustmentLineNumber, StorerKey, Sku, Loc, Lot, Id, ReasonCode, UOM, PackKey, Qty, 
                                        Lottable01, Lottable02, Lottable03, Lottable04, Lottable05, 
@@ -1360,7 +1517,7 @@ BEGIN
          IF @n_err <> 0
          BEGIN
             SELECT @n_continue = 3
-            SELECT @n_err = 67104
+            SELECT @n_err = 67105
             SELECT @c_errmsg = "NSQL" + CONVERT(Char(5), @n_err) + ": Failed to Create Adjustment Detail. (ispGenCCAdjustmentPost_MultiCnt)" + " ( " + " SQLSvr MESSAGE=" + LTRIM(RTRIM(@c_errmsg)) + " ) "
             BREAK
          END
@@ -1421,8 +1578,19 @@ BEGIN
          WHERE  CCDETAIL.CCKEY = @c_StockTakeKey
       END
    END
+   
+   --NJOW06 S
+   IF @n_Continue IN(1,2)
+   BEGIN
+      EXEC isp_PostCCAdjustment_Wrapper @c_StockTakeKey = @c_StockTakeKey,  
+                                        @c_SourceType = 'ispGenCCAdjustmentPost_MultiCnt',  
+                                        @b_Success = @b_Success OUTPUT,            
+                                        @n_Err = @n_err OUTPUT,            
+                                        @c_Errmsg = @c_errmsg OUTPUT                                                           
+   END
+   --NJOW06 E
 
-   IF @n_IsRDT = 1 AND EXISTS(SELECT 1 FROM @tAdjustment)
+   IF @n_IsRDT = 1 AND EXISTS(SELECT 1 FROM @tAdjustment) AND @nRDTNotAutoFinalizeAdj = 0  --James01
    BEGIN
       --BEGIN TRAN
       WHILE 1=1
@@ -1454,7 +1622,7 @@ BEGIN
                IF @n_err <> 0
                BEGIN
                   SELECT @n_continue = 3
-                  SELECT @n_err = 67105
+                  SELECT @n_err = 67106
                   SELECT @c_errmsg = "NSQL" + CONVERT(Char(5), @n_err) + ": Update Failed On Adjustment Table. (ispGenCCAdjustmentPost_MultiCnt)" + " ( " + " SQLSvr MESSAGE=" + LTRIM(RTRIM(@c_errmsg)) + " ) "
                   GOTO EXIT_SP
                END

@@ -44,6 +44,9 @@ GO
 /*                                  - Adjustment by Serial Number              */
 /* 12-NOV-2024  Satyam      2.4    UWP-23314 - Duplicate ID validation wrt     */
 /*                                           locations                         */
+/* 24-Nov-2024  NJOW04       2.5    WMS-23053 Skip check ucc qty if adj is     */
+/*                                  created from CC UCC adj posting            */
+/* 24-Nov-2024  NJOW04       2.5    DEVOPS Combine Script                      */
 /*******************************************************************************/
 
 CREATE OR ALTER PROCEDURE [dbo].[isp_FinalizeADJ]
@@ -793,6 +796,10 @@ BEGIN
                                                       
                IF (@n_Continue=1 OR @n_Continue=2)
                   AND ISNULL(RTRIM(@c_UCCNo) ,'')<>''
+                  AND NOT EXISTS(SELECT 1 
+                                 FROM ADJUSTMENT (NOLOCK)
+                                 JOIN StockTakeSheetParameters (NOLOCK) ON ADJUSTMENT.CustomerRefNo = StockTakeSheetParameters.StockTakeKey 
+                                 WHERE ADJUSTMENT.Adjustmentkey = @c_ADJKey) --NJOW04  UCC qty already deduction during CC UCC adj, so can't validate the qty                   
                BEGIN
                   IF EXISTS (
                            SELECT 1
