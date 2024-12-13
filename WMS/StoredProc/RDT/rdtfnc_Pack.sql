@@ -86,11 +86,12 @@ GO
 /* 2024-07-08   6.2 Jackc       FCR-392 Add ext scn entry and codes                             */
 /* 2024-07-08   6.3 JHU151      FCR-330 SSCC code generator                                     */
 /* 2024-08-22   6.4 JCH507      FCR-392 Add errno handling to step3>ESC>ExtUpd                  */
-/* 2024-10-25   6.5  PXL009     FCR-759 ID and UCC Length Issue                                 */
+/* 2024-10-25   6.5 PXL009     FCR-759 ID and UCC Length Issue                                 */
 /* 2024-10-24   6.6 TLE109      FCR-990. Packing Serial Number Validation                       */
 /* 2024-11-08   6.7 CYU027      UWP-26811 UCC Multi Storerkey                                   */
 /* 2024-10-12   6.8 YYS027      FCR-861 Add support CstLabelSP for Pack List Printing(Step 6)   */ 
 /*                              similiar with ship-label printing(Step 5)                       */
+/* 2024-11-30   6.9 Dennis      FCR-778 Add Extended Update SP to Step 2                        */
 /************************************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_Pack] (
@@ -991,6 +992,7 @@ BEGIN
          GOTO Step_99
       END
    END
+   
 END
 GOTO Quit
 
@@ -1130,6 +1132,57 @@ BEGIN
 
             IF @nErrNo <> 0
                GOTO Quit
+         END
+      END
+
+      -- Extended update
+      IF @cExtendedUpdateSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedUpdateSP AND type = 'P')
+         BEGIN
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cPickSlipNo, @cFromDropID, ' +
+               ' @nCartonNo, @cLabelNo, @cSKU, @nQTY, @cUCCNo, @cCartonType, @cCube, @cWeight, @cRefNo, @cSerialNo, @nSerialQTY, @cOption, ' +
+               ' @cPackDtlRefNo, @cPackDtlRefNo2, @cPackDtlUPC, @cPackDtlDropID, @cPackData1, @cPackData2, @cPackData3, ' +
+               ' @nErrNo OUTPUT, @cErrMsg OUTPUT '
+            SET @cSQLParam =
+               '@nMobile         INT,           ' +
+               '@nFunc           INT,           ' +
+               '@cLangCode       NVARCHAR( 3),  ' +
+               '@nStep           INT,           ' +
+               '@nInputKey       INT,           ' +
+               '@cFacility       NVARCHAR( 5),  ' +
+               '@cStorerKey      NVARCHAR( 15), ' +
+               '@cPickSlipNo     NVARCHAR( 10), ' +
+               '@cFromDropID     NVARCHAR( 20), ' +
+               '@nCartonNo       INT,           ' +
+               '@cLabelNo        NVARCHAR( 20), ' +
+               '@cSKU            NVARCHAR( 20), ' +
+               '@nQTY            INT,           ' +
+               '@cUCCNo          NVARCHAR( 20), ' +
+               '@cCartonType     NVARCHAR( 10), ' +
+               '@cCube           NVARCHAR( 10), ' +
+               '@cWeight         NVARCHAR( 10), ' +
+               '@cRefNo          NVARCHAR( 20), ' +
+               '@cSerialNo       NVARCHAR( 30), ' +
+               '@nSerialQTY      INT,           ' +
+               '@cOption         NVARCHAR( 1),  ' +
+               '@cPackDtlRefNo   NVARCHAR( 20), ' +
+               '@cPackDtlRefNo2  NVARCHAR( 20), ' +
+               '@cPackDtlUPC     NVARCHAR( 30), ' +
+               '@cPackDtlDropID  NVARCHAR( 20), ' +
+               '@cPackData1      NVARCHAR( 30), ' +
+               '@cPackData2      NVARCHAR( 30), ' +
+               '@cPackData3      NVARCHAR( 30), ' +
+               '@nErrNo          INT            OUTPUT, ' +
+               '@cErrMsg         NVARCHAR( 20)  OUTPUT'
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cPickSlipNo, @cFromDropID,
+               @nCartonNo, @cLabelNo, @cSKU, @nQTY, @cUCCNo, @cCartonType, @cCube, @cWeight, @cRefNo, @cSerialNo, @nSerialQTY, @cOption,
+               @cPackDtlRefNo, @cPackDtlRefNo2, @cPackDtlUPC, @cPackDtlDropID, @cPackData1, @cPackData2, @cPackData3,
+               @nErrNo OUTPUT, @cErrMsg OUTPUT
+
          END
       END
 
@@ -1526,15 +1579,10 @@ BEGIN
       SET @cOutField02 = '' -- FromDropID
       SET @cOutField03 = '' -- ToDropID
 
-      IF @cFromDropID <> ''
+      IF @cOutField01 <> ''
          EXEC rdt.rdtSetFocusField @nMobile, 2  -- FromDropID
       ELSE
-      BEGIN
-         IF @cPackDtlDropID <> ''
-            EXEC rdt.rdtSetFocusField @nMobile, 3 -- ToDropID
-         ELSE
-            EXEC rdt.rdtSetFocusField @nMobile, 1  -- PickSlipNo
-      END
+         EXEC rdt.rdtSetFocusField @nMobile, 1  -- PickSlipNo
 
       -- Go to PickSlipNo screen
       SET @nScn = @nScn - 1
