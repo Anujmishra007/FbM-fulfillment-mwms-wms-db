@@ -4,12 +4,12 @@ SET ANSI_NULLS OFF
 GO
 
 /************************************************************************/
-/* Stored Procedure: nspTMTM01                                          */
+/* Stored Procedure: nspTMTM04_VLT                                      */
 /* Creation Date:                                                       */
-/* Copyright: IDS                                                       */
+/* Copyright: Maersk                                                    */
 /* Written by:                                                          */
 /*                                                                      */
-/* Purpose:                                                             */
+/* Purpose:      FOR VLT                                                */
 /*                                                                      */
 /* Called By:                                                           */
 /*                                                                      */
@@ -21,70 +21,9 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date         Ver.  Author     Purposes                               */
-/* 28-09-2009   1.1   Vicky      Add Parameter                          */
-/*                               RDT Compatible Error Message (Vicky01) */
-/* 20-01-2010   1.2   Vicky      SOS#159576 - New TaskType = NMV        */
-/*                               (Vicky02)                              */
-/* 29-01-2010   1.3   Shong      Add New Parameters for Pick Task       */
-/*                               (Shong01)                              */
-/* 11-02-2010   1.4   Shong      Check Priority and Last Aisle For      */
-/*                               Interleaving                           */
-/* 26-02-2010   1.5   Vicky      Fix: P&D Loc will not have PAZone      */
-/*                                    therefore can never get any task  */
-/*                                    when linking to Putawayzone table */
-/*                               (Vicky03)                              */
-/* 27-02-2010   1.6   Vicky      NMV task to be retrieve differently    */
-/*                               (Vicky04)                              */
-/* 08-03-2010   1.7   James      1. Filter by Status = '0'              */
-/*                               2. If profile = 'VNA', not to select   */
-/*                                  task in same aisle (james01)        */
-/* 09-03-2010   1.8   James      Avoid same user getting same task      */
-/*                               (james02)                              */
-/* 10-03-2010   1.9   Shong      Unlock TaskDetail, update status back  */
-/*                               to "0"  (Shong02)                      */
-/* 18-05-2010   2.0   ChewKP     Additional TaskType = 'OPK' SOS#173479 */
-/*                               (ChewKP01)                             */
-/* 01-07-2010   2.1   Shong      Additional Task Type = 'DPK'           */
-/*                               (Shong03)                              */
-/* 05-07-2010   2.1   AQSKC      Additional TaskType = 'DRP' (KC01)     */
-/* 09-07-2010   2.2   Shong      Return the Correct Task Type           */
-/* 12-07-2010   2.2   ChewKP     Filter TD.Userkey = '' when retrieve   */
-/*                               Task (ChewKP02)                        */
-/* 22-07-2010   2.3   Shong      Solving Infinite Loop                  */
-/* 14-09-2010   2.4   KHLim      add parameter                          */
-/* 02-10-2010   2.5   Shong      Performance Tuning                     */
-/* 03-10-2010   2.6   TLTING     Change Variable Table                  */
-/* 01-11-2010   2.7   Shong      Separate Piece PPA Pick (SPK) and ECom */
-/*                               Pick (PK) (SHONG04)                    */
-/* 09-12-2010   2.8   TLTING     TraceInfo (tlting01)                   */
-/* 08-06-2012   2.9   SHONG      Performance Tuning                     */
-/* 09-11-2011   2.9   ChewKP     SOS#227151 TM CC (ChewKP03)            */
-/* 03-07-2012   3.0   Leong      SOS# 248996 - Reset DropId             */
-/* 14-01-2013   3.1   Ung        SOS257351 PAT task (ung01)             */
-/* 30-01-2013   3.2   Ung        SOS256104 PAF, PA1 task (ung02)        */
-/* 14-03-2013   3.3   Ung        SOS259759 RPF, RP1 task                */
-/* 04-09-2013   3.4   Shong      Filter By Permission when Get Next     */
-/*                               Task Type                              */
-/* 26-08-2014   3.4   ChewKP     Add RPT task (ChewKP05)                */
-/* 06-05-2014   3.5   Ung        SOS309193 MVF, MV1 task                */
-/* 19-05-2014   3.6   Ung        SOS309834 NMF, NM1 task                */
-/* 04-07-2014   3.7   Ung        SOS311415 FPK task                     */
-/* 18-12-2014   3.8   Ung        SOS327467 FCP task                     */
-/* 28-03-2017   3.9   James      WMS1349-PPK task (james03)             */
-/* 06-03-2018   4.0   Ung        Support RDT message                    */
-/* 03-12-2019   4.1   James      WMS-11350-Add new param (james04)      */
-/*                               Enable areakey as output param         */
-/*                               Retrieve user default areakey          */
-/* 18-06-2020   4.2   James      WMS-12055 Add CPK task type (james05)  */
-/* 03-11-2020   4.3   James      WMS-15573 Add config to let task       */
-/*                               dispatch all same task type within     */
-/*                               current area before move to next task  */
-/*                               task (james06)                         */
-/* 17-04-2024   4.4   NLT013     UWP-18215 Catch SQL Server exception   */
-/*                               for PA tasks                           */
-/* 18-10-2024   4.5   Dennis     FCR-775 Custom Logic                   */
+/* 18-10-2024   1.0   Dennis     FCR-775 Custom Logic                   */
 /************************************************************************/
-CREATE OR ALTER PROC    [dbo].[nspTMTM01]
+CREATE  OR ALTER PROC    [RDT].[nspTMTM04_VLT]
                @c_sendDelimiter    NVARCHAR(1)
 ,              @c_ptcid            NVARCHAR(5)
 ,              @c_userid           NVARCHAR(18)
@@ -130,127 +69,7 @@ BEGIN
     BEGIN
        SET @b_debug = 1
     END
-    
-   DECLARE @cSQL           NVARCHAR(MAX)
-   DECLARE @cSQLParam      NVARCHAR(MAX)
-   DECLARE @cCustomSP      NVARCHAR(20)
-   -- Get storer configure
-   SET @cCustomSP = rdt.RDTGetConfig( @n_Func , 'CustomTMTM', @c_StorerKey)
-   IF @cCustomSP = '0'
-      SET @cCustomSP = ''
 
-   /***********************************************************************************************
-                                              Custom 
-   ***********************************************************************************************/
-   -- Custom logic
-   IF @cCustomSP <> ''
-   BEGIN
-      IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cCustomSP AND type = 'P')
-      BEGIN
-         SET @cSQL = 'EXEC rdt.' + RTRIM( @cCustomSP) +
-                        '   @c_sendDelimiter    
-                           ,@c_ptcid            
-                           ,@c_userid
-                           ,@c_taskId
-                           ,@c_databasename     
-                           ,@c_appflag          
-                           ,@c_recordType       
-                           ,@c_server           
-                           ,@c_ttm
-                           ,@c_AreaKey01            OUTPUT 
-                           ,@c_AreaKey02        
-                           ,@c_AreaKey03        
-                           ,@c_AreaKey04        
-                           ,@c_AreaKey05        
-                           ,@c_LastLOC          
-                           ,@c_LastTaskType     
-                           ,@c_outstring  OUTPUT
-                           ,@b_Success    OUTPUT
-                           ,@n_err        OUTPUT
-                           ,@c_errmsg     OUTPUT
-                           ,@c_TaskDetailKey       OUTPUT 
-                           ,@c_TTMTaskType         OUTPUT 
-                           ,@c_RefKey01            OUTPUT 
-                           ,@c_RefKey02            OUTPUT 
-                           ,@c_RefKey03            OUTPUT 
-                           ,@c_RefKey04            OUTPUT 
-                           ,@c_RefKey05            OUTPUT 
-                           ,@n_Mobile           
-                           ,@n_Func             
-                           ,@c_StorerKey       ' 
-
-
-         SET @cSQLParam =
-                           '@c_sendDelimiter    NVARCHAR(1)
-                           ,@c_ptcid            NVARCHAR(5)
-                           ,@c_userid           NVARCHAR(18)
-                           ,@c_taskId           NVARCHAR(10)
-                           ,@c_databasename     NVARCHAR(30)
-                           ,@c_appflag          NVARCHAR(5)
-                           ,@c_recordType       NVARCHAR(2)
-                           ,@c_server           NVARCHAR(30)
-                           ,@c_ttm              NVARCHAR(5)
-                           ,@c_AreaKey01        NVARCHAR(10)    OUTPUT 
-                           ,@c_AreaKey02        NVARCHAR(10)
-                           ,@c_AreaKey03        NVARCHAR(10)
-                           ,@c_AreaKey04        NVARCHAR(10)
-                           ,@c_AreaKey05        NVARCHAR(10)
-                           ,@c_LastLOC          NVARCHAR(10)
-                           ,@c_LastTaskType     NVARCHAR(10)
-                           ,@c_outstring        NVARCHAR(255)  OUTPUT
-                           ,@b_Success          INT        OUTPUT
-                           ,@n_err              INT        OUTPUT
-                           ,@c_errmsg           NVARCHAR(250)  OUTPUT
-                           ,@c_TaskDetailKey    NVARCHAR(20)   OUTPUT 
-                           ,@c_TTMTaskType      NVARCHAR(20)   OUTPUT 
-                           ,@c_RefKey01         NVARCHAR(20)   OUTPUT 
-                           ,@c_RefKey02         NVARCHAR(20)   OUTPUT 
-                           ,@c_RefKey03         NVARCHAR(20)   OUTPUT 
-                           ,@c_RefKey04         NVARCHAR(20)   OUTPUT 
-                           ,@c_RefKey05         NVARCHAR(20)   OUTPUT 
-                           ,@n_Mobile           INT = 0
-                           ,@n_Func             INT = 0 
-                           ,@c_StorerKey        NVARCHAR( 15) ' 
-            
-         EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-            @c_senddelimiter
-            ,@c_ptcid            
-            ,@c_userid         
-            ,@c_taskId           
-            ,@c_databasename     
-            ,@c_appflag        
-            ,@c_recordType     
-            ,@c_server         
-            ,@c_ttm           
-            ,@c_AreaKey01           OUTPUT
-            ,@c_AreaKey02       
-            ,@c_AreaKey03       
-            ,@c_AreaKey04        
-            ,@c_AreaKey05        
-            ,@c_LastLOC          
-            ,@c_LastTaskType     
-            ,@c_outstring           OUTPUT
-            ,@b_Success             OUTPUT
-            ,@n_err                 OUTPUT
-            ,@c_errmsg              OUTPUT
-            ,@c_TaskDetailKey       OUTPUT 
-            ,@c_TTMTaskType         OUTPUT 
-            ,@c_RefKey01            OUTPUT 
-            ,@c_RefKey02            OUTPUT 
-            ,@c_RefKey03            OUTPUT 
-            ,@c_RefKey04            OUTPUT 
-            ,@c_RefKey05            OUTPUT 
-            ,@n_Mobile
-            ,@n_Func   
-            ,@c_StorerKey       
-
-         RETURN
-      END
-   END
-
-   /***********************************************************************************************
-                                             Standard
-   ***********************************************************************************************/
     DECLARE @n_continue       INT
            ,@n_starttcnt      INT -- Holds the current transaction count
            ,@n_cnt            INT -- Holds @@ROWCOUNT after certain operations
@@ -371,7 +190,7 @@ BEGIN
             SELECT @n_continue = 3
             SELECT @n_err = 63056 --78601
             SELECT @c_errmsg = 'NSQL'+CONVERT(NVARCHAR(5) ,@n_err)+
-                   ': Bad Strategy Key (nspTMTM01)'
+                   ': Bad Strategy Key (nspTMTM04_VLT)'
         END
 
 
@@ -396,7 +215,7 @@ BEGIN
                 SELECT @n_continue = 3
                 SELECT @n_err = 63057--78602
                 SELECT @c_errmsg = 'NSQL'+CONVERT(NVARCHAR(5) ,@n_err)+
-                       ': Bad TTMStrategy Key (nspTMTM01)'
+                       ': Bad TTMStrategy Key (nspTMTM04_VLT)'
             END
         END
 
@@ -440,7 +259,7 @@ BEGIN
                SELECT @n_continue = 3
                SELECT @n_err = 63058
                SELECT @c_errmsg = 'NSQL'+CONVERT(NVARCHAR(5) ,@n_err)+
-                      ': Update TASKDETAIL Failed. (nspTMTM01)'+' ( '+
+                      ': Update TASKDETAIL Failed. (nspTMTM04_VLT)'+' ( '+
                       ' SQLSvr MESSAGE='
                      +ISNULL(RTRIM(@c_errmsg) ,'')+' ) '
            END
@@ -601,7 +420,7 @@ BEGIN
                                             ELSE @c_AreaKey01
                                           END
                         AND td.status = '0' -- (james01)
-                        AND td.userkey = '' -- (ChewKP02)
+                        AND (td.userkey = '' OR td.userkey = @c_userid)
                         AND td.TaskType<>'NMV' -- (Vicky04)
                         ORDER BY
                                td.Priority
@@ -637,7 +456,7 @@ BEGIN
                                                            ELSE @c_AreaKey01
                                                       END
                                    AND td.status = '0' -- (james01)
-                                   AND td.userkey = '' -- (ChewKP02)
+                                   AND (td.userkey = '' OR td.userkey = @c_userid)
                                    AND td.TaskType<>'NMV' -- (Vicky04)
                             ORDER BY
                                    td.Priority
@@ -673,7 +492,7 @@ BEGIN
                                                   END
                                --                      AND   td.status NOT IN ('3','S','R','9')  -- (james01)
                                AND td.status = '0' -- (james01)
-                               AND td.userkey = '' -- (ChewKP02)
+                               AND (td.userkey = '' OR td.userkey = @c_userid)
                                AND tmud.UserKey = @c_userid
                                AND td.TaskType = 'NMV'
                         ORDER BY
@@ -708,7 +527,7 @@ BEGIN
 
                     IF @b_debug=1
                     BEGIN
- SELECT '@c_MinPriority'
+                        SELECT '@c_MinPriority'
                               ,@c_MinPriority
                               ,'@c_NextTaskType'
                               ,@c_NextTaskType
@@ -740,7 +559,7 @@ BEGIN
                                                    ELSE @c_AreaKey01
                                               END
                                AND td.status = '0'
-                               AND td.userkey = '' -- (ChewKP02)
+                               AND (td.userkey = '' OR td.userkey = @c_userid) -- (ChewKP02)
                                AND L.LocAisle<>@c_LastAisle
                                AND tmud.UserKey = @c_userid
                                AND td.TaskType<>'NMV'
@@ -778,11 +597,11 @@ BEGIN
                                             AND tmud.PermissionType = td.TaskType
                             WHERE  ad.AreaKey = CASE
                                                        WHEN ISNULL(RTRIM(@c_AreaKey01) ,'')
-   ='' THEN ad.AreaKey
+                                                        ='' THEN ad.AreaKey
                                                        ELSE @c_AreaKey01
                                                   END
                                    AND td.status = '0'
-                                   AND td.userkey = '' -- (ChewKP02)
+                                   AND (td.userkey = '' OR td.userkey = @c_userid) -- (ChewKP02)
                                    AND L.LocAisle<>@c_LastAisle
                                    AND tmud.UserKey = @c_userid
                                    AND td.TaskType<>'NMV'
@@ -825,7 +644,7 @@ BEGIN
                                                    ELSE @c_AreaKey01
                                               END
                                AND td.status = '0'
-                               AND td.userkey = '' -- (ChewKP02)
+                               AND (td.userkey = '' OR td.userkey = @c_userid) -- (ChewKP02)
                                AND L.LocAisle<>@c_LastAisle
                                AND tmud.UserKey = @c_userid
                                AND td.TaskType = 'NMV'
@@ -856,7 +675,7 @@ BEGIN
                     IF ISNULL(RTRIM(@c_OtherTaskType) ,'')=''
                     BEGIN
                         SET @c_OtherTaskType = ''
-   END
+                    END
 
                     IF ISNULL(RTRIM(@c_LastAisle) ,'')=''
                     BEGIN
@@ -917,16 +736,7 @@ BEGIN
                         WHERE  TTMStrategykey = @c_TTMStrategyKey
                         AND   TTMStrategyLineNumber > @c_CurrentLineNumber
                         ORDER BY TTMStrategyLineNumber
---                        AND   EXISTS(SELECT 1
---                                     FROM   TaskManagerUserDetail WITH (NOLOCK)
---                                     WHERE  USERKEY = @c_userid
---                                     AND PERMISSIONTYPE = TTMStrategyDetail.TaskType
---                                     AND PERMISSION = '1')
---                        ORDER BY CASE WHEN TTMStrategyLineNumber = @c_CurrentLineNumber THEN 9
---                                      WHEN TTMStrategyLineNumber < @c_CurrentLineNumber THEN 8
---                                      ELSE 1
---                                 END,
---                                 TTMStrategyLineNumber
+
 
                         IF @nCnt2=0
                         BEGIN
@@ -946,17 +756,9 @@ BEGIN
                     FROM   TTMStrategyDetail WITH (NOLOCK)
                     WHERE  TTMStrategykey = @c_TTMStrategyKey
                     AND    TTMStrategyLineNumber>@c_CurrentLineNumber
---                    AND   EXISTS(SELECT 1
---                                 FROM   TaskManagerUserDetail WITH (NOLOCK)
---                                 WHERE  USERKEY = @c_userid
---                                 AND PERMISSIONTYPE = TTMStrategyDetail.TaskType
---                                 AND PERMISSION = '1')
+
                     ORDER BY TTMStrategyLineNumber
---                    ORDER BY CASE WHEN TTMStrategyLineNumber = @c_CurrentLineNumber THEN 9
---                                  WHEN TTMStrategyLineNumber < @c_CurrentLineNumber THEN 8
---                                  ELSE 1
---                             END,
---                             TTMStrategyLineNumber
+
 
                     IF @nCnt2=0
                     BEGIN
@@ -965,11 +767,7 @@ BEGIN
                     END
                 END
 
---               INSERT INTO TRACEINFO (TraceName, TimeIn, Step1, Step2, Step3,
---                           Step4, Step5, Col1, Col2, Col3, Col4, Col5)
---               VALUES('nspTMTM01-InterLeave', GETDATE(), @c_LastTaskType, @c_LastLOC, @c_LastAisle,
---                     @c_NextTaskType,  @c_TTMTaskType,  @c_CurrentLineNumber,  @c_ttmpickcode,
---                     @c_ttmoverride, SUSER_SNAME(), @c_AreaKey01)
+
 
 
             END-- interleave = 1
@@ -1185,7 +983,7 @@ BEGIN
                 , @c_userid=@c_userid
                 , @c_Strategykey=@c_Strategykey
                 , @c_ttmStrategykey=@c_ttmStrategykey
-      , @c_ttmpickcode=@c_ttmpickcode
+            , @c_ttmpickcode=@c_ttmpickcode
                 , @c_ttmoverride=@c_ttmoverride
                 , @c_AreaKey01=@c_AreaKey01
                 , @c_AreaKey02=@c_AreaKey02
@@ -2426,7 +2224,7 @@ END
                     COMMIT TRAN
                 END
             END
-            EXECUTE nsp_logerror @n_err, @c_errmsg, 'nspTMTM01'
+            EXECUTE nsp_logerror @n_err, @c_errmsg, 'nspTMTM04_VLT'
             RAISERROR (@c_errmsg, 16, 1) WITH SETERROR    -- SQL2012
             RETURN
         END
@@ -2448,5 +2246,5 @@ GO
 SET ANSI_NULLS ON
 GO
 
-GRANT EXECUTE ON nspTMTM01 to nSQL
+GRANT EXECUTE ON RDT.nspTMTM04_VLT to nSQL
 GO
