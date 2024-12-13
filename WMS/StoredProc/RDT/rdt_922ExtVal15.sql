@@ -5,12 +5,13 @@ GO
 /************************************************************************/
 /* Store procedure: rdt_922ExtVal15                                     */
 /* Copyright      : Maersk                                              */
+/* Customer       : Mattel                                              */
 /*                                                                      */
-/* Date       Rev  Author     Purposes                                  */
-/* 2024-12-03 1.0  PSJ036     RITM7382535 Created                       */
+/* Date       Rev    Author     Purposes                                */
+/* 2024-12-03 1.0.0  PSJ036     UWP-28347 RITM7382535 Created           */
 /************************************************************************/
 
-CREATE     PROC [RDT].[rdt_922ExtVal15] (
+CREATE OR ALTER PROC [RDT].[rdt_922ExtVal15] (
    @nMobile     INT,
    @nFunc       INT,
    @cLangCode   NVARCHAR( 3),
@@ -42,17 +43,18 @@ IF @nFunc = 922 -- Scan to truck
 BEGIN
    IF @nStep = 4  -- DOOR, REFNO
    BEGIN
-      DECLARE @cChkDoor    		NVARCHAR(10) = '',
-	          @cChkTruckNo 		NVARCHAR(10) = '',
-			  @cPlaceOfLoading	NVARCHAR(10) = ''
+      IF @nInputKey = 1
+      DECLARE 
+         @cChkDoor          NVARCHAR(10) = '',
+         @cChkTruckNo       NVARCHAR(10) = '',
+         @cPlaceOfLoading   NVARCHAR(10) = ''
       
--- get Place of Loading
-		SELECT @cPlaceOfLoading = PlaceOfLoading,
-			   @cChkTruckNo 	= Vessel	
-		
-				FROM mbol WITH (NOLOCK)
-				WHERE MBOLKey = @cMBOLKey
-	  
+      -- get Place of Loading
+      SELECT @cPlaceOfLoading = PlaceOfLoading,
+            @cChkTruckNo    = Vessel  
+      FROM dbo.MBOL WITH (NOLOCK)
+      WHERE MBOLKey = @cMBOLKey
+     
       -- Get door rdt.rdtScanToTruck
       IF @cMBOLKey  <> '' 
          SELECT @cChkDoor = Door FROM rdt.rdtScanToTruck WITH (NOLOCK) WHERE MBOLKey = @cMBOLKey
@@ -62,53 +64,60 @@ BEGIN
 
       ELSE IF @cOrderKey <> '' 
          SELECT @cChkDoor = Door FROM rdt.rdtScanToTruck WITH (NOLOCK) WHERE OrderKey = @cOrderKey
-		 
-      
+       
       -- Check different door
       IF @cChkDoor <> '' AND @cChkDoor <> @cDoor
       BEGIN
-         SET @nErrNo = 205051
+         SET @nErrNo = 230701
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Diff Door rdt.rdtScanToTruck
          EXEC rdt.rdtSetFocusField @nMobile, 1 -- RefNo1
          GOTO Quit
       END
-	  
-	  -- Check if RefNo is Empty ->  door (WS- test)
-	  IF  ISNULL(@cDoor,'') = ''
-	  BEGIN
-		    SET @nErrNo = 218036
-			SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Empty Door Entry
-			GOTO Quit
-	  END  	  
+     
+     -- Check if RefNo is Empty ->  door (WS- test)
+      IF  ISNULL(@cDoor,'') = ''
+      BEGIN
+         SET @nErrNo = 230702
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Empty Door Entry
+         GOTO Quit
+      END
 
       -- Check different Place of loading
       IF @cPlaceOfLoading = '' OR @cPlaceOfLoading <> @cDoor
       BEGIN
-         SET @nErrNo = 205051
+         SET @nErrNo = 230703
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Diff Door MBOL.PlaceOfLoading
          EXEC rdt.rdtSetFocusField @nMobile, 1 -- RefNo1
          GOTO Quit
       END
-	  
-	  -- Check if Vehicle No is Empty ->  cRefNo
-	  IF  ISNULL(@cRefNo,'') = ''
-	  BEGIN
-		    SET @nErrNo = 113703
-			SET @cErrMsg = rdt.rdtgetmessage(@nErrNo,@cLangCode,'DSP') --Empty Vehicle Entry
-			GOTO Quit
-	  END  
-	  
+     
+      -- Check if Vehicle No is Empty ->  cRefNo
+      IF  ISNULL(@cRefNo,'') = ''
+      BEGIN
+         SET @nErrNo = 230704
+         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo,@cLangCode,'DSP') --Empty Vehicle Entry
+         GOTO Quit
+      END  
+     
       -- Check different Vehicle No.
       IF @cChkTruckNo = '' OR @cChkTruckNo <> @cRefNo
       BEGIN
-         SET @nErrNo = 113704
+         SET @nErrNo = 230705
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Diff Vehicle MBOL.Vessel
          EXEC rdt.rdtSetFocusField @nMobile, 2 -- RefNo2
          GOTO Quit
       END
-	  
- 
    END
 END
 
 Quit:
+GO
+
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS ON
+GO
+
+GRANT EXECUTE ON rdt.rdt_922ExtVal15 TO NSQL
+GO
+
