@@ -1229,7 +1229,7 @@ BEGIN
       FROM dbo.Orders O WITH (NOLOCK)
          JOIN dbo.PickDetail PD WITH (NOLOCK) ON (O.OrderKey = PD.OrderKey)
       WHERE O.StorerKey = @cStorerKey
-         AND PD.DropID = @cActUCCNo
+         AND PD.Notes = @cActUCCNo
          AND PD.Status <> '4'
          AND PD.QTY > 0
 
@@ -1497,7 +1497,8 @@ BEGIN
       IF @cPickUOM = '7'
       BEGIN
          DECLARE @cKey NVARCHAR( 20)
-         SET @cKey =  @cActUCCNo
+         -- SET @cKey =  @cActUCCNo
+         SET @cKey = @cDropID
 
          EXEC dbo.ispGenTransmitLog2
             @c_TableName      = 'WSRDTTOTECFM',
