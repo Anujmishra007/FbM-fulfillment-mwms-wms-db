@@ -1439,6 +1439,7 @@ BEGIN
           -- system should generate task as per current process as all Orders.OrderGroup = ''
           BREAK
        END
+
        ELSE
        BEGIN
           IF @c_FirstOrderGroup =  @c_OrderGroup
@@ -1476,9 +1477,6 @@ BEGIN
 
    CLOSE CUR_OrderGroup
    DEALLOCATE CUR_OrderGroup
-
-
-
 
 RETURN_SP:
  -----Delete pickdetail_WIP work in progress staging table
@@ -1531,3 +1529,4 @@ RETURN_SP:
       END
    END
 END -- procedure
+GO
