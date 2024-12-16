@@ -7,7 +7,7 @@ SET QUOTED_IDENTIFIER OFF
 GO
 
 /************************************************************************/
-/* Store Procedure:  isp_UpdatePalletUserdefine01     			            */
+/* Store Procedure:  msp_RCM_MB_LEVI_UpdatePallet     			            */
 /* Creation Date:  13-Dec-2024											                    */
 /* Copyright: Maersk WMS												                        */
 /* Written by:  USH022                                                  */
@@ -38,7 +38,7 @@ GO
 /* YYYY-DD-MM       {author}    {ver}		{Comments}					*/
 /* 2024-09-13       USH022      V.0		  Intital Implementation        */
 /************************************************************************/
-CREATE OR ALTER  PROCEDURE [dbo].[isp_UpdatePalletUserdefine01]
+CREATE OR ALTER  PROCEDURE [dbo].[msp_RCM_MB_LEVI_UpdatePallet]
     @c_MbolKey      NVARCHAR(10),
     @b_Success		  int OUTPUT,
     @n_err			    int OUTPUT,
