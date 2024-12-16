@@ -22,6 +22,7 @@ GO
 /* 06-05-2024 1.2   Dennis     FCR-133   Trigger only uom =7                                       */
 /* 08-05-2024 1.3   JHU151     FCR-330   No Pack Confirm                                           */
 /* 12-10-2024 1.4.0 LJQ006     FCR-1168  Adjust from WMS-24353, FCR-630                            */
+/* 12-16-2024 1.4.1 JCH507     FCR-1168  Store DropID to UCC.UDF03 instead of UDF01                */
 /***************************************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_957Confirm04] (
@@ -386,7 +387,8 @@ BEGIN
       -- Actual
       UPDATE dbo.UCC WITH(ROWLOCK) SET
          Status = '5', -- 5=Picked
-         UserDefined01 = @cDropID,
+         --UserDefined01 = @cDropID, --v1.4.1
+         UserDefined03 = @cDropID, --v1.4.1
          EditDate = GETDATE(),
          EditWho = SUSER_SNAME()
       WHERE StorerKey = @cStorerkey
@@ -576,7 +578,8 @@ BEGIN
       -- Actual
       UPDATE dbo.UCC WITH(ROWLOCK) SET
          Status = '5', -- 5=Picked
-         UserDefined01 = @cDropID,
+         --UserDefined01 = @cDropID, --v1.4.1
+         UserDefined03 = @cDropID, --v1.4.1
          EditDate = GETDATE(),
          EditWho = SUSER_SNAME()
       WHERE StorerKey = @cStorerkey
@@ -786,7 +789,8 @@ BEGIN
       -- Actual
       UPDATE dbo.UCC WITH(ROWLOCK) SET
          Status = '5', -- 5=Picked
-         UserDefined01 = @cDropID,
+         --UserDefined01 = @cDropID, --v1.4.1
+         UserDefined03 = @cDropID, --v1.4.1
          EditDate = GETDATE(),
          EditWho = SUSER_SNAME()
       WHERE StorerKey = @cStorerkey
@@ -1193,7 +1197,8 @@ BEGIN
       -- Actual
       UPDATE dbo.UCC WITH(ROWLOCK) SET
          Status = '5', -- 5=Picked
-         UserDefined01 = @cDropID,
+         --UserDefined01 = @cDropID, --v1.4.1
+         UserDefined03 = @cDropID, --v1.4.1
          EditDate = GETDATE(),
          EditWho = SUSER_SNAME()
       WHERE StorerKey = @cStorerkey
