@@ -175,6 +175,7 @@ GO
 /* 10-Nov-2023  TLTING07  5.9   Deadlock tune update UCC                    */
 /* 15-Mar-2024  Wan04     6.0   UWP-16968-Post PalletType to Inventory When */
 /*                              Finalize                                    */
+/* 12-Dec-2024  Wan05     6.1   UWP-28399-INC7516794 - Non Serialize process*/
 /****************************************************************************/ 
  
 CREATE OR ALTER TRIGGER [dbo].[ntrReceiptDetailUpdate] 
@@ -2393,7 +2394,7 @@ BEGIN
                BREAK 
             END 
 
-            IF @c_ASNFizUpdLotToSerialNo = '1'
+            IF @c_ASNFizUpdLotToSerialNo IN ( '1', '2' )                            --(Wan05)
             BEGIN
                SELECT TOP 1 @c_LOT = Lot                                           
                FROM ITRN WITH (NOLOCK)                                             
@@ -2432,7 +2433,7 @@ BEGIN
                       ID = @c_ToID,  
                       EditDate = GETDATE(),   
                       EditWho = SUSER_SNAME(),
-                      Lot = CASE WHEN @c_ASNFizUpdLotToSerialNo = '1' THEN @c_Lot ELSE Lot END --NJOW14
+                      Lot = CASE WHEN @c_ASNFizUpdLotToSerialNo IN('1','2') THEN @c_Lot ELSE Lot END --(Wan05)--NJOW14
                   WHERE SerialNoKey = @c_SerialNoKey 
  
                   IF @@ERROR <> 0 
@@ -2461,7 +2462,7 @@ BEGIN
                   END 
                    
                   -- Insert SerialNo 
-                  IF @c_ASNFizUpdLotToSerialNo = '1' --NJOW14
+                  IF @c_ASNFizUpdLotToSerialNo IN ('1', '2')                        --(Wan05) --NJOW14
                   BEGIN
                      INSERT INTO dbo.SerialNo (SerialNoKey, StorerKey, SKU, SerialNo, QTY, Status, ID, OrderKey, OrderLineNumber, UCCNo, Lot) 
                      VALUES (@c_SerialNoKey, @c_StorerKey, @c_SKU, @c_SerialNo, @n_SerialQTY, '1', @c_ToID, '', '', @c_SerialUCCNo, @c_Lot) 
