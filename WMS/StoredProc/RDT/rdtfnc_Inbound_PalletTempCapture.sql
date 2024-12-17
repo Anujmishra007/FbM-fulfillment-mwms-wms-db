@@ -53,6 +53,7 @@ BEGIN
       @fLowerTemp                   DECIMAL(5, 2),
       @fHigherTemp                  DECIMAL(5, 2),
       @cScale                       NVARCHAR(5),
+      @cUDF04                       NVARCHAR(10),
       @cOption                      NVARCHAR(1),
       
       @nStep_ASN                    INT,
@@ -350,12 +351,12 @@ BEGIN
                         WHEN 'Celcius' THEN 'C'
                         WHEN 'Fahrenheit' THEN 'F'
                         ELSE ''
-                     END
+                     END,
+            @cUDF04 = UDF04
          FROM dbo.CODELKUP WITH(NOLOCK)
          WHERE StorerKey = @cStorerKey
             AND LISTNAME = 'ITEMCLASS'
             AND Code = @cItemClass
-            AND UDF04 IN ('BOTH', 'RCV')
          ORDER BY UDF04
 
          SELECT @nRowCount = @@ROWCOUNT
@@ -367,7 +368,7 @@ BEGIN
             GOTO Step_2_Fail
          END
 
-         IF @fLowerTemp IS NULL OR @fHigherTemp IS NULL OR ISNULL(@cScale, '') = '' OR @fLowerTemp > @fHigherTemp
+         IF @fLowerTemp IS NULL OR @fHigherTemp IS NULL OR ISNULL(@cScale, '') = '' OR @fLowerTemp > @fHigherTemp OR ISNULL(@cUDF04, '') NOT IN ('BOTH', 'RCV')
          BEGIN
             SET @nErrNo = 230215
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --230215Item class code needs to be maintained properly
