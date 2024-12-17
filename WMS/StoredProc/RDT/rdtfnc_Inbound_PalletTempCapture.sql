@@ -355,6 +355,7 @@ BEGIN
             AND LISTNAME = 'ITEMCLASS'
             AND Code = @cItemClass
             AND UDF04 IN ('BOTH', 'RCV')
+         ORDER BY UDF04
 
          SELECT @nRowCount = @@ROWCOUNT
 
