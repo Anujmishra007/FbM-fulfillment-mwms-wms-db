@@ -3,20 +3,25 @@ GO
 SET ANSI_NULLS OFF
 GO
   
-/************************************************************************/    
-/* Store procedure: rdt_1653GetMbolKey04                                */
-/* Copyright      : MAERSK                                              */    
-/*                                                                      */    
-/* Called from: rdt_TrackNo_SortToPallet_GetMbolKey                     */    
-/*                                                                      */    
-/* Purpose: Get MBOLKey/Lane/Pallet                                     */
-/*                                                                      */    
-/* Modifications log:                                                   */    
-/* Date        Rev  Author   Purposes                                   */    
-/* 2024-07-05  1.0  CYU027   FCR 539. Created                           */
-/* 2024-09-20  1.1  CYU027   Add Validation TrackNo                     */
-/* 2024-10-08  1.2  NLT013   FCR-950 Enhancement                        */
-/************************************************************************/
+/**************************************************************************/
+/* Store procedure: rdt_1653GetMbolKey04                                  */
+/* Copyright      : MAERSK                                                */
+/* Customer       : Granite                                               */
+/*                                                                        */
+/* Called from: rdt_TrackNo_SortToPallet_GetMbolKey                       */
+/*                                                                        */
+/* Purpose: Get MBOLKey/Lane/Pallet                                       */
+/*                                                                        */
+/* Modifications log:                                                     */
+/* Date        Rev    Author   Purposes                                   */
+/* 2024-07-05  1.0    CYU027   FCR 539. Created                           */
+/* 2024-09-20  1.1    CYU027   Add Validation TrackNo                     */
+/* 2024-10-08  1.2    NLT013   FCR-950 Enhancement                        */
+/* 2024-10-08  1.3.0  NLT013   FCR-1084 Enhancement, if no existing pallet */
+/*                             leave location as empty                    */
+/* 2024-10-08  1.3.1  JCH507   FCR-1084 Fix bugs 1. Wrong Loc suggest      */
+/*                             2. Wrong pallet show on remove carton scn  */
+/**************************************************************************/
     
 CREATE OR ALTER PROC [RDT].[rdt_1653GetMbolKey04] (
    @nMobile        INT,    
@@ -173,16 +178,30 @@ BEGIN
             GOTO Quit
          END CATCH
 
-         SELECT 
+         --V1.3.1 If carton already on a pallet, then return that palletkey to remove carton screen
+         SET @cPalletKey = ''
+
+         SELECT TOP 1
             @cPalletKey = PalletKey
-         FROM dbo.PALLETDETAIL PD WITH(NOLOCK) 
+         FROM dbo.PALLETDETAIL WITH (NOLOCK)
          WHERE StorerKey = @cStorerKey
-            AND ISNULL(UserDefine01, '') = @cCODELKUPUdf01Value
-            AND ISNULL(UserDefine02, '') LIKE IIF(@cCODELKUPUdf02 = '', '%%', @cCODELKUPUdf02Value)
-            AND ISNULL(UserDefine03, '') LIKE IIF(@cCODELKUPUdf03 = '', '%%', @cCODELKUPUdf03Value)
-            AND ISNULL(UserDefine04, '') LIKE IIF(@cCODELKUPUdf04 = '', '%%', @cCODELKUPUdf04Value)
-            AND ISNULL(UserDefine05, '') LIKE IIF(@cCODELKUPUdf05 = '', '%%', @cCODELKUPUdf05Value)
-            AND Status = '0' -- 0 means pallet is open, 9 means pallet is closed.
+            AND CaseId = @cTrackNo
+            AND Status <> '9'
+
+         IF @@ROWCOUNT = 0
+         BEGIN
+            SELECT 
+               @cPalletKey = PalletKey
+            FROM dbo.PALLETDETAIL PD WITH(NOLOCK) 
+            WHERE StorerKey = @cStorerKey
+               AND ISNULL(UserDefine01, '') = @cCODELKUPUdf01Value
+               AND ISNULL(UserDefine02, '') LIKE IIF(@cCODELKUPUdf02 = '', '%%', @cCODELKUPUdf02Value)
+               AND ISNULL(UserDefine03, '') LIKE IIF(@cCODELKUPUdf03 = '', '%%', @cCODELKUPUdf03Value)
+               AND ISNULL(UserDefine04, '') LIKE IIF(@cCODELKUPUdf04 = '', '%%', @cCODELKUPUdf04Value)
+               AND ISNULL(UserDefine05, '') LIKE IIF(@cCODELKUPUdf05 = '', '%%', @cCODELKUPUdf05Value)
+               AND Status = '0' -- 0 means pallet is open, 9 means pallet is closed.
+         END
+         --V1.3.1 If carton already on a pallet, then return that palletkey to remove carton screen END
       END
 
       --FCR-950 --END
@@ -196,13 +215,26 @@ BEGIN
       -- AND   Status = '0'
       -- ORDER BY EditDate DESC
 
+
       SET @cLane = ''
-      SELECT TOP 1
-         @cLane = LOC
-      FROM dbo.PALLETDETAIL WITH (NOLOCK)
-      WHERE StorerKey = @cStorerKey
-        AND   UserDefine01 = @cMBOLKey
-      ORDER BY EditDate DESC
+
+      --1.3.1 start
+      IF @cPalletKey <> '' AND @cPalletKey IS NOT NULL
+      BEGIN
+         SELECT TOP 1 @cLane = LOC
+         FROM PALLETDETAIL WITH (NOLOCK)
+         WHERE StorerKey = @cStorerKey
+            AND PalletKey = @cPalletKey
+      END
+      ELSE
+      BEGIN
+         SELECT TOP 1 @cLane = LOC
+         FROM dbo.PALLETDETAIL WITH (NOLOCK)
+         WHERE StorerKey = @cStorerKey
+            AND UserDefine01 = @cMBOLKey
+         ORDER BY EditDate DESC
+      END
+      --1.3.1 END
 
       SET @cPalletNotAllowMixShipperKey = rdt.RDTGetConfig( @nFunc, 'PalletNotAllowMixShipperKey', @cStorerkey)    
       IF @cPalletNotAllowMixShipperKey = '0'    
@@ -236,8 +268,10 @@ BEGIN
       END
 
       IF @cPalletKey = ''
+      BEGIN
          SET @cPalletKey = 'NEW PALLET'
-
+         SET @cLane = '' 
+      END
    END    
 Quit:
 END 

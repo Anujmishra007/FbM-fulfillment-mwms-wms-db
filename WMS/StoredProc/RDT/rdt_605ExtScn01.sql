@@ -298,12 +298,22 @@ BEGIN
                ELSE IF @cOption = '4'
                BEGIN
                   SET @cLottable10 = 'Y'
+                  --VPA235 2024/10/10 Start
+                  --SELECT TOP 1
+                  --   @cLottable12 = Code
+                  --FROM CodeLKUP
+                  --WHERE storerkey = @cStorerkey
+                  --AND UDF01 = 'LOT12_DMG'
+                  --AND LISTNAME = 'SLCODE'
+
                   SELECT TOP 1
-                     @cLottable12 = Code
+                     @cLottable12 = ISNULL(Code,'INTRDMG')
                   FROM CodeLKUP
-                  WHERE storerkey = @cStorerkey
-                  AND UDF01 = 'LOT12_DMG'
-                  AND LISTNAME = 'SLCODE'
+                  WHERE storerkey =  @cStorerkey
+                  AND SHORT = 'INTRDMG'
+                  AND LISTNAME = 'ASNREASON'
+
+                  --VPA235 2024/10/10 End
 
                   --SET @cLottable12 = 'In transit DMG'
                END
@@ -357,7 +367,8 @@ BEGIN
                   SELECT @cDamagedCode = ISNULL(Code,'')
                   FROM CODELKUP WITH (NOLOCK)
                   WHERE storerkey = @cStorerkey
-                  AND UDF01 = 'UL_Damage'
+               -- AND UDF01 = 'UL_Damage'
+                  AND UDF01 = 'RMPM_Damaged'
                   AND LISTNAME = 'SLCode'
 
                   IF ISNULL(@cDamagedCode,'') <> ''
@@ -379,7 +390,8 @@ BEGIN
                   SELECT @cExpiredCode = ISNULL(Code,'')
                   FROM CODELKUP WITH (NOLOCK)
                   WHERE storerkey = @cStorerkey
-                     AND UDF01 = 'UL_Expired' 
+                     --AND UDF01 = 'UL_Expired' 
+                     AND UDF01 = 'RMPM_Expired' 
                      AND LISTNAME = 'SLCode'         
                            
                   IF ISNULL(@cExpiredCode,'') = ''
@@ -658,7 +670,6 @@ Quit:
       SET @cUDF17 = @cPUOM_Desc
    END
 END
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF

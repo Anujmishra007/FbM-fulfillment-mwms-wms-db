@@ -12,6 +12,8 @@ GO
 /*                                                                      */
 /* Date       Rev  Author      Purposes                                 */
 /* 2024-07-18 1.0  JHU151      FCR-608                                  */
+/* 2024-10-24 1.1  JHU151      UWP-26078 added get pickdetaikey logic   */
+/*                             when both loadkey and orderkey are empty */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_838ConfirmSP21] (
@@ -388,7 +390,7 @@ BEGIN
                   AND   PD.Qty > ISNULL(SNCnt,0)
                   AND   PD.SKU = @cSKU
                END
-               ELSE
+               ELSE IF ISNULL(@cLoadKey, '') <> ''
                BEGIN
                   SELECT 
                   @cPickDetailKey = ISNULL(PD.PickDetailKey,'')
@@ -404,6 +406,25 @@ BEGIN
                   GROUP BY PSN.PickDetailKey) pack
                   ON PD.PickDetailKey = pack.PickDetailKey
                   WHERE PH.PickHeaderKey = @cPickSlipNo    
+                  AND   PD.Status = N'5'
+                  AND   PD.StorerKey  = @cStorerKey
+                  AND   PD.Qty > ISNULL(SNCnt,0)
+                  AND   PD.SKU = @cSKU
+               END
+               else
+               BEGIN
+                  SELECT 
+                  @cPickDetailKey = ISNULL(PD.PickDetailKey,'')
+                  FROM dbo.PickDetail PD (NOLOCK)
+                  LEFT OUTER JOIN
+                  (SELECT COUNT(1) AS SNCnt,PickDetailKey
+                  FROM dbo.PackSerialNo PSN WITH(NOLOCK)
+                  WHERE PSN.PickSlipNo = @cPickSlipNo
+                  AND PSN.StorerKey = @cStorerKey
+                  AND PSN.sku = @cSku
+                  GROUP BY PSN.PickDetailKey) pack
+                  ON PD.PickDetailKey = pack.PickDetailKey
+                  WHERE PD.PickSlipNo = @cPickSlipNo    
                   AND   PD.Status = N'5'
                   AND   PD.StorerKey  = @cStorerKey
                   AND   PD.Qty > ISNULL(SNCnt,0)
@@ -516,7 +537,7 @@ BEGIN
                AND   PD.Qty > ISNULL(SNCnt,0)
                AND   PD.SKU = @cSKU
             END
-            ELSE
+            ELSE IF ISNULL(@cLoadKey, '') <> ''
             BEGIN
                SELECT 
                   @cPickDetailKey = ISNULL(PD.PickDetailKey,'')
@@ -532,6 +553,25 @@ BEGIN
                GROUP BY PSN.PickDetailKey) pack
                ON PD.PickDetailKey = pack.PickDetailKey
                WHERE PH.PickHeaderKey = @cPickSlipNo    
+               AND   PD.Status = N'5'
+               AND   PD.StorerKey  = @cStorerKey
+               AND   PD.Qty > ISNULL(SNCnt,0)
+               AND   PD.SKU = @cSKU
+            END
+            else
+            BEGIN
+               SELECT 
+               @cPickDetailKey = ISNULL(PD.PickDetailKey,'')
+               FROM dbo.PickDetail PD (NOLOCK)
+               LEFT OUTER JOIN
+               (SELECT COUNT(1) AS SNCnt,PickDetailKey
+               FROM dbo.PackSerialNo PSN WITH(NOLOCK)
+               WHERE PSN.PickSlipNo = @cPickSlipNo
+               AND PSN.StorerKey = @cStorerKey
+               AND PSN.sku = @cSku
+               GROUP BY PSN.PickDetailKey) pack
+               ON PD.PickDetailKey = pack.PickDetailKey
+               WHERE PD.PickSlipNo = @cPickSlipNo    
                AND   PD.Status = N'5'
                AND   PD.StorerKey  = @cStorerKey
                AND   PD.Qty > ISNULL(SNCnt,0)

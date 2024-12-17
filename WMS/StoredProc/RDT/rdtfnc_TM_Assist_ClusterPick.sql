@@ -1716,7 +1716,7 @@ BEGIN
             IF @cDecodeSP <> ''          
             BEGIN          
                -- Standard decode          
-  IF @cDecodeSP = '1'          
+               IF @cDecodeSP = '1'          
                BEGIN          
                   EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cBarcode,          
                      @cUPC        = @cUPC           OUTPUT,          

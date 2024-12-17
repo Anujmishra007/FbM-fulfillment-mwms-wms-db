@@ -9,8 +9,11 @@ GO
 /* Modifications log:                                                   */  
 /*                                                                      */  
 /* Date       Rev  Author     Purposes                                  */  
-/* 2024-06-19 1.0  JHU151     FCR-352. Created                          */  
-/************************************************************************/  
+/* 2024-06-19 1.0  JHU151     FCR-352. Created                          */
+/* 2024-10-24 1.1  JHU151      UWP-26078 added get pickdetaikey logic   */
+/*                             when both loadkey and orderkey are empty */
+/* 2024-10-24 1.2  TLE109     FCR-990. Packing Serial Number Validation */
+/************************************************************************/
   
 CREATE OR ALTER PROC [RDT].[rdt_838ExtScn01] (
    @nMobile          INT,           
@@ -72,11 +75,12 @@ BEGIN
       @cPrintPackList         NVARCHAR( 1),
       @cDisableQTYField       NVARCHAR( 1),
       @nPickedQTY             INT,
-      @nPackedQTY             INT
+      @nPackedQTY             INT,
+      @cSerialNo              NVARCHAR( 30)
 
 
-   SET @nErrNo = 0
-   SET @cErrMsg = ''
+   -- SET @nErrNo = 0
+   -- SET @cErrMsg = ''
 
    SELECT @cPickSlipNo = Value FROM @tExtScnData WHERE Variable = '@cPickSlipNo'
    SELECT @cSKU = Value FROM @tExtScnData WHERE Variable = '@cSKU'
@@ -85,7 +89,8 @@ BEGIN
    SELECT
 	   @cPackDtlDropID      = V_String9,
 	   @cDisableQTYField    = V_String26,
-	   @cFromDropID         = V_String20
+	   @cFromDropID         = V_String20,
+       @cSerialNo           = V_Max
 	FROM rdt.rdtMobRec WITH (NOLOCK)
 	WHERE Mobile = @nMobile
 
@@ -94,6 +99,10 @@ BEGIN
    BEGIN
       IF @nStep = 3
       BEGIN
+         IF @nErrNo <> 0
+         BEGIN
+            GOTO Quit
+         END
          IF @nAction = 3
          BEGIN
             IF @nInputKey = 1
@@ -126,7 +135,7 @@ BEGIN
                      AND   PD.SKU = @cSKU
                      GROUP BY PD.SKU
                   END
-                  ELSE
+                  ELSE IF ISNULL(@cExtOrderKey, '') <> ''
                   BEGIN
                      SELECT @nPickedQTY = SUM(Qty),
                      @nPackedQTY = MAX(pack.packedqty)
@@ -148,7 +157,28 @@ BEGIN
                      AND   PD.SKU = @cSKU
                      GROUP BY PD.SKU
                   END
-                  
+                  ELSE
+                  BEGIN
+
+                     SELECT @nPickedQTY = SUM(Qty),
+                           @nPackedQTY = MAX(pack.packedqty)
+                     FROM dbo.PickDetail PD (NOLOCK)
+                     LEFT OUTER JOIN
+                     (SELECT SUM(qty) AS packedqty,PAD.PickSlipNo,PAD.StorerKey,PAD.SKU
+                        FROM dbo.PackDetail PAD WITH(NOLOCK)
+                        WHERE PAD.PickSlipNo = @cPickSlipNo
+                        AND PAD.StorerKey = @cStorerKey
+                        AND PAD.sku = @cSku
+                     GROUP BY PAD.PickSlipNo,PAD.StorerKey,PAD.SKU) pack
+                        ON PD.Storerkey = pack.StorerKey
+                        AND PD.Sku = pack.SKU
+                     WHERE PD.PickSlipNo = @cPickSlipNo
+                     AND   PD.Status = N'5'
+                     AND   PD.StorerKey  = @cStorerKey
+                     AND   PD.SKU = @cSKU
+                     GROUP BY PD.SKU
+                  END
+
                   IF ISNULL(@nPickedQTY,0) = 0
                   BEGIN
                      SET @nErrNo = 216902
@@ -180,6 +210,10 @@ BEGIN
       END
       ELSE IF @nStep = 2
       BEGIN
+         IF @nErrNo <> 0
+         BEGIN
+            GOTO Quit
+         END
          IF @nAction = 0
          BEGIN
             IF @nScn = 4651
@@ -237,7 +271,76 @@ BEGIN
             END
          END
       END
-   END 
+      ELSE IF @nStep = 9
+      BEGIN
+         IF @nErrNo <> 0 AND @nErrNo <> 100250  ---- ErrNo 100251: Defy Jump to Scn 6449
+         BEGIN
+            GOTO Quit
+         END
+         SET @nErrNo = 0
+         SET @cErrMsg = ''
+         IF @nAction = 0
+         BEGIN
+            IF @nInputKey = 1
+            BEGIN
+               DECLARE  @cAddRCPTValidtn     NVARCHAR(10)
+               SET @cAddRCPTValidtn = rdt.RDTGetConfig( @nFunc, 'AddSerialValidtn', @cStorerKey)
+               IF @cAddRCPTValidtn = '1'
+               BEGIN
+                  SET @nAfterScn = 6449
+                  SET @nAfterStep = 99
+                  SET @cOutField01 = @cSerialNo
+                  SET @cOutField03= ''
+                  GOTO Quit
+               END
+            END
+         END
+      END
+      ELSE IF @nStep = 99
+      BEGIN
+         IF @nErrNo <> 0
+         BEGIN
+            GOTO Quit
+         END
+         IF @nInputKey = 1
+         BEGIN
+            IF @nScn = 6449
+            BEGIN
+               DECLARE @cOption    NVARCHAR(1)
+               SET @cOption = @cInField03
+               IF @cOption NOT IN ('1', '9')
+               BEGIN
+                  SET @nErrNo = 216903
+                  SET @cErrMsg = rdt.rdtgetmessage( 216903, @cLangCode, 'DSP')  --216903^InvalidOption
+                  GOTO Quit
+               END
+
+               SET @cUDF01 = @cOption
+               SET @nAfterScn = 4831
+               SET @nAfterStep = 9
+
+               IF @cOption = "9"
+               BEGIN
+                  UPDATE rdt.rdtMobRec SET
+                     V_Max = '',
+                     EditDate = GETDATE()
+                  WHERE Mobile = @nMobile
+               END
+
+
+            END
+         END
+
+         IF @nInputKey = 0
+         BEGIN
+            IF @nScn = 6449
+            BEGIN
+               SET @nAfterScn = 4831
+               SET @nAfterStep = 9
+            END
+         END
+      END
+   END
    GOTO Quit
 
 Quit:

@@ -70,9 +70,10 @@ BEGIN
    DECLARE @nShelfLife  INT
    DECLARE @cFacility   NVARCHAR( 5)
    DECLARE @cString     VARCHAR(20)                -- use field rdt.RDTMOBREC.C_String1
+   DECLARE @cLastBatch  VARCHAR(20)                -- use field rdt.RDTMOBREC.C_String2
    DECLARE @nCount      INT
 
-   SELECT @cString = C_String1 FROM rdt.RDTMOBREC (NOLOCK) WHERE Mobile = @nMobile
+   SELECT @cString = C_String1,@cLastBatch=C_String2 FROM rdt.RDTMOBREC (NOLOCK) WHERE Mobile = @nMobile
 
    SELECT @cFacility  = Facility FROM RDT.RDTMOBREC WITH (NOLOCK) WHERE Mobile = @nMobile
    DECLARE @cBatchCheck NVARCHAR(20)
@@ -107,9 +108,11 @@ BEGIN
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Invalid Config
       GOTO Quit
    END
+   UPDATE rdt.RDTMOBREC SET C_String2=@cLottableV WHERE Mobile = @nMobile
    SELECT @cLottableV=ISNULL(@cLottableV,'')
    IF @cLottableV=''
    BEGIN
+      SELECT @dLottable13 = NULL, @dLottable04 = NULL          --AS LEE required(2024-9-30), if input batch is empty, the prod-date and exp-date are clear also.
       SET @nErrNo = 223704
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Batch Mandatory
       GOTO Quit
@@ -162,8 +165,12 @@ BEGIN
    SELECT @dLottable13=DATEADD(DAY,@nDays-1,@dLottable13)                              --Production Date
    SELECT @dLottable04=DATEADD(DAY,ISNULL(@nShelfLife,0),@dLottable13)                 --Exp Date
 QuitWithRecordCount:
-   IF ISNUMERIC(@cString) = 1
+   IF ISNULL(@cLottableV,'')<>ISNULL(@cLastBatch,'')                                   --AS LEE required(2024-9-30), if input batch is not same with last one, keep screen in step 5. (Yu:set nCount=1)
+      SET @nCount = 1
+   ELSE IF ISNUMERIC(@cString) = 1
+   BEGIN
       SET @nCount = CONVERT(INT,@cString) + 1
+   END
    ELSE
       SET @nCount = 1
    UPDATE rdt.RDTMOBREC SET C_String1=CONVERT(VARCHAR(20),@nCount) WHERE Mobile = @nMobile

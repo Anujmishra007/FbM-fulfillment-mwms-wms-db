@@ -1,28 +1,24 @@
-IF NOT EXISTS(SELECT 1 FROM rdt.RDTMsg WITH(NOLOCK) WHERE Message_ID = 1202 AND Lang_Code = 'ENG' AND Message_Type = 'FNC')
-   INSERT INTO rdt.RDTMsg(Message_ID, Lang_Code, Message_Type, Message_Text, StoredProcName, EventType, Func, URL, Message_Text_Long)
-   VALUES( 1202, 'ENG', 'FNC', 'VNAOUT Replenishment Confirm', 'isp_VNAReplenishmentConfirm', '0', '0', '', '' )
-GO
-
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[dbo].[isp_VNAReplenishmentConfirm]') and objectproperty(id, N'IsProcedure') = 1)
-   DROP PROC [dbo].[isp_VNAReplenishmentConfirm]
-GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
 GO
 
-/************************************************************************/
-/* Store procedure: isp_VNAReplenishmentConfirm                         */
-/* Copyright      : Maersk WMS                                          */
-/*                                                                      */
-/* Date        Rev  Author    Purposes                                  */
-/* 2024-03-08  1.0  NLT013    UWP-16452 Created                         */
-/* 2024-04-30  2.0  NLT013    UWP-16455 Cannot find the sencond task    */
-/* 2024-05-16  1.1  NLT013    UWP-19518 Ability to config task priority */
-/************************************************************************/
+/****************************************************************************************/
+/* Store procedure: isp_VNAReplenishmentConfirm                                         */
+/* Copyright      : Maersk WMS                                                          */
+/* Customer       :  UL                                                                 */
+/*                                                                                      */
+/* Date        Rev      Author      Purposes                                            */
+/* 2024-03-08  1.0      NLT013      UWP-16452 Created                                   */
+/* 2024-04-30  1.1      NLT013      UWP-16455 Cannot find the sencond task              */
+/* 2024-05-16  1.2      NLT013      UWP-19518 Ability to config task priority           */
+/* 2024-10-22  1.3.0    NLT013      FCR-973 Diff Aisle: No need to create new task      */
+/*                                  ToLoc is PickFace location                          */
+/*                                  Same Aisle: Move inv to final location directly     */
+/* 2024-10-22  1.4.0    NLT013      UWP-27527 No need to add QtyRepl if ToLoc is not PND*/
+/****************************************************************************************/
 
-CREATE PROC [dbo].[isp_VNAReplenishmentConfirm] (
+CREATE OR ALTER PROCEDURE [dbo].[isp_VNAReplenishmentConfirm] (
    @cTaskDetailKey                  NVARCHAR( 10),
    @nErrNo                          INT            OUTPUT,
    @cErrMsg                         NVARCHAR( 255) OUTPUT
@@ -58,6 +54,7 @@ BEGIN
       @cTaskType                    NVARCHAR( 10),
       @cStatus                      NVARCHAR( 10),
       @cTaskCode                    NVARCHAR( 10),
+      @cTaskSubCode                 NVARCHAR( 10),
       @cLOT                         NVARCHAR( 10),
       @cPickMethod                  NVARCHAR( 10),
       @cSourceType                  NVARCHAR( 30),
@@ -77,10 +74,14 @@ BEGIN
       @cVNAOUT                      NVARCHAR( 10) = 'VNAOUT',
       @cRPF                         NVARCHAR( 10) = 'RPF',
       @cRP1                         NVARCHAR( 10) = 'RP1',
+      @cRP2                         NVARCHAR( 10) = 'RP2',
       @cUserName                    NVARCHAR( 18),
       @cNewTaskDetailKey            NVARCHAR( 10),
       @cPnDTransitTaskPriority      NVARCHAR( 10),
-      @cLocCategory                 NVARCHAR( 10)
+      @cLocCategory                 NVARCHAR( 10),
+      @cFromLocAisle                NVARCHAR( 10),
+      @cFinalLocAisle               NVARCHAR( 10),
+      @cMoveToLoc                   NVARCHAR( 10)
 
 
    -- Init var
@@ -99,6 +100,7 @@ BEGIN
    SELECT
       @cTaskType        = td.TaskType,
       @cTaskCode        = ISNULL(td.Message03, ''),
+      @cTaskSubCode     = ISNULL(td.Message02, ''),
       @cFacility        = ISNULL(loc.Facility, ''),
       @cStorerKey       = td.StorerKey,
       @cTaskFromLoc     = td.FromLoc,
@@ -130,7 +132,7 @@ BEGIN
       RETURN
    END
 
-   IF @cTaskType <> @cVNAOUT OR  @cTaskCode <> @cRPF
+   IF @cTaskType <> @cVNAOUT OR @cTaskCode NOT IN ( @cRPF, @cRP2 )
    BEGIN
       SET @nErrNo = 212537
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Not VNAOUTRPF Task
@@ -143,6 +145,16 @@ BEGIN
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Final Loc is missing
       RETURN
    END
+
+   SELECT @cFromLocAisle = LocAisle
+   FROM dbo.Loc loc WITH(NOLOCK)
+   WHERE Facility = @cFacility
+      AND Loc = @cTaskFromLoc
+
+   SELECT @cFinalLocAisle = LocAisle
+   FROM dbo.Loc loc WITH(NOLOCK)
+   WHERE Facility = @cFacility
+      AND Loc = @cTaskFinalLoc
 
    -- Handling transaction
    DECLARE @nTranCount INT
@@ -184,6 +196,8 @@ BEGIN
       GOTO RollBackTran
    END
 
+   SET @cMoveToLoc = IIF( ISNULL(@cFromLocAisle, '') = ISNULL(@cFinalLocAisle, '-1'), @cTaskFinalLoc, @cTaskToLoc )
+
    -- Move inventory
    EXECUTE rdt.rdt_Move
       @nMobile     = @nMobile,
@@ -194,7 +208,7 @@ BEGIN
       @cStorerKey  = @cStorerKey,
       @cFacility   = @cFacility,
       @cFromLOC    = @cTaskFromLoc,
-      @cToLOC      = @cTaskToLoc,
+      @cToLOC      = @cMoveToLoc,
       @cFromID     = @cID,
       @cToID       = @cID,
       @nFunc       = @nFunc,
@@ -252,6 +266,11 @@ BEGIN
       GOTO RollBackTran
    END
 
+   -- If the ToLoc is the final location , or task sub code is RP2, or FromLocAisle is same as FinalLocAisle
+   -- then no need to create new task
+   IF @cTaskToLoc = @cTaskFinalLoc OR @cTaskSubCode = @cRP2 OR @cFromLocAisle = @cFinalLocAisle
+      GOTO UPD_INV
+
    -- Create next task
    EXEC rdt.rdt_TM_Replen_CreateNextTask @nMobile, @nFunc, @cLangCode,
       @cUserName,
@@ -307,7 +326,7 @@ BEGIN
       GOTO RollBackTran
    END
 
-   -- Loc PF location
+   -- LocK PF location
    EXEC rdt.rdt_Putaway_PendingMoveIn 
       @cUserName              = ''
       ,@cType                 = 'LOCK'
@@ -326,6 +345,7 @@ BEGIN
       GOTO RollBackTran
    END
 
+   UPD_INV:
    -- Reduce QTYReplen
    UPDATE dbo.LOTxLOCxID WITH (ROWLOCK) SET
       QTYReplen = 0
@@ -339,11 +359,15 @@ BEGIN
       GOTO RollBackTran
    END
 
-   -- Add back QTYReplen
-   UPDATE dbo.LOTxLOCxID WITH (ROWLOCK) SET
-      QTYReplen = @nQTY
-   WHERE LOC = @cTaskToLoc
-      AND ID = @cID
+   -- Add QTYReplen to PND location
+   IF EXISTS (SELECT 1 FROM dbo.LOC WITH(NOLOCK) WHERE Facility = @cFacility AND LOC = @cTaskToLoc AND LocationCategory IN ('PND_IN', 'PND_OUT', 'PND') 
+      OR @cTaskToLoc <> @cTaskFinalLoc)
+   BEGIN
+      UPDATE dbo.LOTxLOCxID WITH (ROWLOCK) SET
+         QTYReplen = @nQTY
+      WHERE LOC = @cTaskToLoc
+         AND ID = @cID
+   END
 
    IF @@ERROR <> 0
    BEGIN

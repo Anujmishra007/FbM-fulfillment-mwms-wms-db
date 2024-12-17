@@ -311,6 +311,7 @@ BEGIN
                                         AND (LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked) > 0
                                         AND LOC.Facility = @c_Facility
                                         AND LA.Lottable04 = @d_Lottable04
+                                        AND LA.Lottable06 in ( '0' , '')
                                         AND LA.Lottable07 = @c_Lottable07;
 
                                 OPEN CUR_TRANSFERDETAIL;
@@ -328,7 +329,7 @@ BEGIN
 
                                         SET @c_TransferLineNumber = RIGHT('0000' + RTRIM(CAST(CAST(ISNULL(@c_TransferLineNumber,0) AS int) + 1 AS NVARCHAR(5))),5);
 
-                                        IF @c_ShelfLife = 'ML51' or @c_ShelfLife = 'ML49' or @c_ShelfLife = 'ML13'
+                                        IF @c_ShelfLife = 'ML51' or @c_ShelfLife = 'ML49' or @c_ShelfLife = 'ML13' or @c_ShelfLife = 'ML18'
                                             SET @c_ToLottable06 = '1'
                                         ELSE
                                             SET @c_ToLottable06 = @c_Lottable06

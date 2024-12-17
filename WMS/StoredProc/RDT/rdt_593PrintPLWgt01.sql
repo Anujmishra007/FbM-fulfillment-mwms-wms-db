@@ -1,15 +1,13 @@
-
-/****** Object:  StoredProcedure [RDT].[rdt_593PrintPLWgt01]    Script Date: 6/5/2024 11:00:11 AM ******/
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
 /******************************************************************************/
-/* Store procedure: rdt_593PrintPLWeight01                                    */
+/* Store procedure: rdt_593PrintPLWgt01                                       */
 /*                                                                            */
 /* Copyright: Maersk                                                          */
-/*                                                                            */
+/* Customer : Barry                                                           */
 /* Modifications log:                                                         */
 /*                                                                            */
 /* Date       Rev  Author     Purposes                                        */
@@ -62,14 +60,14 @@ BEGIN
    -- Check blank
    IF @cPalletWeight = ''
    BEGIN
-      SET @nErrNo = 60896
+      SET @nErrNo = 219901
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') 
       GOTO Quit
    END
 
    IF @cPalletQty = '' OR TRY_CAST(@cPalletQty as INT) IS NULL
    BEGIN
-      SET @nErrNo = 107701
+      SET @nErrNo = 219902
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') 
       GOTO Quit
    END
@@ -82,7 +80,7 @@ BEGIN
    -- Check data window blank
    IF @cLabelPrinter = ''
    BEGIN
-      SET @nErrNo = 108452
+      SET @nErrNo = 219903
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --NoLabelPrinter
       GOTO Quit
    END
@@ -94,18 +92,11 @@ BEGIN
    WHERE StorerKey = @cStorerKey  
       AND ReportType ='EMPTYLPWGT'  
   
-   -- Check data window  
-   IF ISNULL(@cDataWindow, '') = ''  
-   BEGIN  
-      SET @nErrNo = 93161  
-      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --DWNOTSetup  
-      GOTO Quit  
-   END  
   
    -- Check database  
    IF ISNULL(@cTargetDB, '') = ''  
    BEGIN  
-      SET @nErrNo = 93162  
+      SET @nErrNo = 219904  
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --TgetDB Not Set  
       GOTO Quit  
    END  
@@ -115,7 +106,7 @@ BEGIN
    WHILE(@c_cnt < @cPalletQty)
    BEGIN
       EXECUTE dbo.nspg_GetKey
-               'BTSLP',
+               'BCLP',
                5 ,
                @cID               OUTPUT,
                @b_success         OUTPUT,
@@ -123,7 +114,7 @@ BEGIN
                @c_errmsg          OUTPUT
       IF @b_success <> 1
       BEGIN
-         SET @nErrNo = 59418
+         SET @nErrNo = 219905
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') 
          GOTO Quit
       END
@@ -133,7 +124,7 @@ BEGIN
 
       IF @cID = '99999'
       BEGIN
-         DELETE nCounter WHERE keyname = 'BTSLP'
+         DELETE nCounter WHERE keyname = 'BCLP'
 
          UPDATE rdt.StorerConfig 
          SET SValue = CHAR(ASCII(SValue) + 1 ) 
@@ -153,24 +144,25 @@ BEGIN
          SELECT @c_RemainWeight = @c_RemainWeight - @c_weight
       END
 
-      SELECT @cID = 'BTSLP' + @cEmpltyPalletChar + @cID
+      SELECT @cID = 'BCLP' + @cEmpltyPalletChar + @cID
 
       INSERT INTO PALLET (PalletKey,StorerKey,GrossWgt) VALUES (@cID,@cStorerKey,@c_weight)
 
-      -- Insert print job
-      EXEC RDT.rdt_BuiltPrintJob
-         @nMobile,
-         @cStorerKey,
-         'EMPTYLPWGT',       -- ReportType
-         'PRINT_EMPTYLPTWGT', -- PrintJobName
-         @cDataWindow,
-         @cLabelPrinter,
-         @cTargetDB,
-         @cLangCode,
-         @nErrNo  OUTPUT,
-         @cErrMsg OUTPUT,
-         @cID,
-         @c_weight
+
+      EXEC RDT.rdt_593PrintHK01
+           @nMobile    ,
+           @nFunc      ,
+           @nStep      ,
+           @cLangCode  ,
+           @cStorerKey ,
+           @cOption    ,
+           @cID        ,
+           @cParam2    ,
+           @cParam3    ,
+           @cParam4    ,
+           @cParam5    ,
+           @nErrNo     OUTPUT,
+           @cErrMsg    OUTPUT
           
       SELECT @c_cnt += 1
    END -- end while
@@ -180,11 +172,10 @@ Quit:
 END -- END SP
 GO
 
-GRANT EXECUTE ON  [RDT].[rdt_593PrintPLWgt01] TO [NSQL]
-GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS ON
 GO
 
+GRANT EXECUTE ON [RDT].[rdt_593PrintPLWgt01] TO [NSQL]
+GO
