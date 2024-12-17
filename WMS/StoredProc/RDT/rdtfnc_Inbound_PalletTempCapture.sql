@@ -309,7 +309,7 @@ BEGIN
          END
 
          IF NOT EXISTS(
-            SELECT 1 FROM dbo.RECEIPTDETAIL WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND ToID = @cID
+            SELECT 1 FROM dbo.RECEIPTDETAIL WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND ReceiptKey = @cReceiptKey AND ToID = @cID
          )
          BEGIN
             SET @nErrNo = 230209
