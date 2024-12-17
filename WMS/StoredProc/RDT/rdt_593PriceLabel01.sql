@@ -3,15 +3,16 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-/******************************************************************************/
-/* Store procedure: rdt_593PriceLabel01                                       */
-/* Customer: Granite                                                          */
-/*                                                                            */
-/* Modifications log:                                                         */
-/*                                                                            */
-/* Date       Rev  Author     Purposes                                        */
-/* 2018-02-07 1.0  NLT03      FCR-727 Create                                  */
-/******************************************************************************/
+/********************************************************************************/
+/* Store procedure: rdt_593PriceLabel01                                         */
+/* Customer: Granite                                                            */
+/*                                                                              */
+/* Modifications log:                                                           */
+/*                                                                              */
+/* Date       Rev    Author     Purposes                                        */
+/* 2018-02-07 1.0    NLT03      FCR-727 Create                                  */
+/* 2024-10-12 1.2.0  NLT013     FCR-955 PPA by LabelNo, instead of PickSLipNo   */
+/********************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_593PriceLabel01] (
    @nMobile    INT,
@@ -41,7 +42,6 @@ AS
       @nLoopIndex                INT,
       @nRowCount                 INT,
       @tPriceLabelList           VariableTable,
-      @cPickSlipNo               NVARCHAR( 10),
       @cLabelPrinterGroup        NVARCHAR( 10),
       @cPaperPrinter             NVARCHAR( 10),
       @cPickConfirmStatus        NVARCHAR( 1),
@@ -122,11 +122,6 @@ AS
    FROM RDT.RDTMOBREC WITH(NOLOCK)
    WHERE Mobile = @nMobile
 
-   SELECT @cPickSlipNo = PickSlipNo
-   FROM dbo.PackDetail WITH(NOLOCK) 
-   WHERE StorerKey = @cStorerKey 
-   AND labelno = @cDropID
-
    INSERT INTO @tLabels(LabelName)
    SELECT DISTINCT IIF(wodEX.UDF01 IS NULL, lk.UDF01, wodEX.UDF01)
    FROM dbo.WorkOrderDetail wod  WITH(NOLOCK)
@@ -174,7 +169,6 @@ AS
 
       INSERT INTO @tPriceLabelList (Variable, Value) 
       VALUES 
-         ( '@cPickSlipNo', @cPickSlipNo),
          ( '@cLabelNo', @cDropID),
          ( '@cSKU', @cSKU)
 

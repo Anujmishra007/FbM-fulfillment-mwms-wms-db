@@ -28,6 +28,7 @@ GO
 /* 2024-06-02  Wan01    1.1   UWP-18392-JCB-MixSkuAllocation for Normal */
 /* 2024-10-09  SSA01    1.2   UWP-24678-JCB- Allocation for Kitting and */
 /*                                    Decanting                         */
+/* 2024-11-13  SOMA01   1.3  Hot fix to populate lottable03 in orderdetail*/
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[ispPRJCB01] (
      @c_OrderKey        NVARCHAR(10)
@@ -92,6 +93,7 @@ BEGIN
 
           , @c_PackUOM3             NVARCHAR(10) = ''                               --(Wan01)
           , @c_IDSku                NVARCHAR(20) =''                                --(Wan01)
+          , @c_IDLottable03         NVARCHAR(18)                                    --(SOMA01)
           , @c_OrderLineNoAlloc     NVARCHAR(5) =''                                 --(Wan01)
    
    SET @c_UOM = '1'
@@ -348,9 +350,10 @@ BEGIN
 
             DECLARE CUR_LOT CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
             SELECT LLI.Lot, LLI.QTY - LLI.QTYALLOCATED - LLI.QTYPICKED - LLI.QtyReplen
-                  ,LLI.Sku                                                          --(Wan01)
+                  ,LLI.Sku , LA.LOTTABLE03                                          --(Wan01)(SOMA01)
             FROM LOTXLOCXID LLI (NOLOCK)
             JOIN LOT (NOLOCK) ON LLI.Lot = LOT.Lot
+            JOIN LOTATTRIBUTE LA (NOLOCK) ON LA.Lot = LOT.Lot                       --(SOMA01)
             WHERE LLI.Storerkey = @c_Storerkey
             --AND LLI.Sku = @c_Sku                                                  --(Wan01)
             AND LLI.Loc = @c_Loc
@@ -361,7 +364,7 @@ BEGIN
 
             OPEN CUR_LOT
                                                                
-            FETCH FROM CUR_LOT INTO @c_Lot, @n_LotQtyAvai, @c_IDSku                 --(Wan01)
+            FETCH FROM CUR_LOT INTO @c_Lot, @n_LotQtyAvai, @c_IDSku , @c_IDLottable03               --(Wan01)(SOMA01)
                                        
             WHILE @@FETCH_STATUS = 0 AND @n_Continue IN(1,2) --get all the sku lots of the pallet 
             BEGIN                                                
@@ -439,17 +442,17 @@ BEGIN
                                              ,Lottable06, Lottable07, Lottable08, Lottable09, Lottable10                                             
                                              ,Lottable11, Lottable12, Lottable13, Lottable14, Lottable15                                            
                                              ,UserDefine01, UserDefine02, UserDefine03, UserDefine04, Userdefine05
-                                             ,UserDefine06, UserDefine07, UserDefine08, UserDefine09, Userdefine10                                           
+                                             ,UserDefine06, UserDefine07, UserDefine08, UserDefine09, Userdefine10, Facility             --(SOMA01)
                                              )
                      SELECT od.Orderkey, @c_OrderLineNoAlloc, od.Storerkey,@c_IDSku
                            ,ExternOrderkey, ExternLineNo, '', '','' 
                            ,@c_Packkey, @c_PackUOM3, @n_PickQty, @n_PickQty, @n_PickQty
                            ,Loadkey, MBOLKey
-                           ,'', '', '', NULL, NULL
+                           ,'', '', @c_IDLottable03, NULL, NULL                     --(SOMA01)
                            ,'', '', '', '', '' 
                            ,'', '', NULL,  NULL, NULL                                                
                            ,'0', @c_OrderLineNumber,'','',''
-                           ,'', '', '', '', '' 
+                           ,'', '', '', '', '' ,@c_Facility                        --(SOMA01)
                      FROM ORDERDETAIL od (NOLOCK)
                      WHERE Orderkey = @c_Orderkey
                      AND OrderLineNumber = @c_OrderLineNumber
@@ -523,7 +526,7 @@ BEGIN
                   END                                                               --(Wan01)
                END               
                
-               FETCH FROM CUR_LOT INTO @c_Lot, @n_LotQtyAvai, @c_IDSku              --(Wan01)
+               FETCH FROM CUR_LOT INTO @c_Lot, @n_LotQtyAvai, @c_IDSku ,@c_IDLottable03              --(Wan01)(SOMA01)
             END
             CLOSE CUR_LOT
             DEALLOCATE CUR_LOT

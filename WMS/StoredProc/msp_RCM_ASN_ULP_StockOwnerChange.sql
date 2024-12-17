@@ -8,7 +8,7 @@ GO
 /* Copyright: Maersk Logistics                                          */
 /* Written by: Wan                                                      */
 /*                                                                      */
-/* Purpose: UWP-23788 - Stock Owner Change Without Pysical Move         */
+/* Purpose: UWP-23788 - Stock Owner Change Without Physical Move         */
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
@@ -76,6 +76,7 @@ BEGIN
          , @d_Lottable13         DATETIME
          , @d_Lottable14         DATETIME
          , @d_Lottable15         DATETIME
+
 
          , @CUR_Sku              CURSOR
          , @CUR_PD               CURSOR
@@ -297,6 +298,20 @@ BEGIN
                   ,BeforeReceivedQty = @n_Qty
                   ,ToLoc=@c_Loc
 				  ,ToId=@c_ID
+          ,Lottable01= CASE WHEN ISNULL(Lottable01,'')='' THEN 'ML11' ELSE Lottable01 END
+				  ,Lottable02=@c_Lottable02
+				  ,Lottable04=@d_Lottable04
+				  ,Lottable06= CASE WHEN [dbo].[fnc_CalcShelfLifeBUD](@c_Storerkey,@c_Sku, @d_Lottable04,@d_Lottable13) IN ('ML18', 'ML13')
+				                    THEN '1'
+				                    ELSE '' END
+          ,Lottable07=[dbo].[fnc_CalcShelfLifeBUD](@c_Storerkey,@c_Sku, @d_Lottable04,@d_Lottable13)
+				  ,Lottable09=@c_Lottable09
+				  ,Lottable10=@c_Lottable10
+				  ,Lottable11=@c_Lottable11
+				  ,Lottable12=@c_Lottable12
+				  ,Lottable13=@d_Lottable13
+				  ,Lottable14=@d_Lottable14
+				  ,Lottable15=@d_Lottable15
                   ,TrafficCop = NULL
             WHERE ReceiptKey = @c_Receiptkey
             AND ReceiptLineNumber = @c_ReceiptLineNumber
@@ -336,7 +351,7 @@ BEGIN
                                       ,Lottable02
                                       ,Lottable03
                                       ,Lottable04
-                                      ,Lottable05
+                                      --,Lottable05
                                       ,Lottable06
                                       ,Lottable07
                                       ,Lottable08
@@ -378,14 +393,16 @@ BEGIN
                   ,ExternLineNo
                   ,Vesselkey
                   ,Voyagekey
-                  ,@c_Lottable01
+                  ,CASE WHEN ISNULL(Lottable01,'')='' THEN 'ML11' ELSE Lottable01 END
                   ,@c_Lottable02
-                  ,@c_Lottable03
+                  ,Lottable03
                   ,@d_Lottable04
-                  ,@d_Lottable05
-                  ,@c_Lottable06
-                  ,@c_Lottable07
-                  ,@c_Lottable08
+--                ,@d_Lottable05
+				          ,CASE WHEN [dbo].[fnc_CalcShelfLifeBUD](@c_Storerkey,@c_Sku, @d_Lottable04,@d_Lottable13) IN ('ML18', 'ML13')
+				                    THEN '1'
+				                    ELSE '' END
+                  ,[dbo].[fnc_CalcShelfLifeBUD](@c_Storerkey,@c_Sku, @d_Lottable04,@d_Lottable13)
+                  ,Lottable08
                   ,@c_Lottable09
                   ,@c_Lottable10
                   ,@c_Lottable11
@@ -502,5 +519,5 @@ QUIT_SP:
 END -- procedure
 GO
 GRANT EXECUTE ON msp_RCM_ASN_ULP_StockOwnerChange TO nSQL
-GO 
+GO
 

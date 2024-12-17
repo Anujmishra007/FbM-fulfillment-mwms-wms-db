@@ -1,12 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[nspTTMFC01]') AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 )
-   DROP PROCEDURE [dbo].[nspTTMFC01]
-GO
-
-SET ANSI_NULLS OFF
-GO
-SET QUOTED_IDENTIFIER OFF
-GO
-
 /******************************************************************************/
 /* Stored Procedure: nspTTMFC01                                               */
 /* Copyright: Maersk WMS                                                      */
@@ -16,8 +7,11 @@ GO
 /* Modifications log:                                                         */
 /* Date        Author    Ver  Purposes                                        */
 /* 2024-04-17  NLT013    1.0  UWP-17667 Created                               */
+/* 14-10-2024  TLE109    1.1  FCR-905 - Moveto Loc associated with            */
+/*                            PickZone and Level                              */
+/* 26-11-2024  SWT01     1.2  FCR-1522 Only Get Task have available qty       */
 /******************************************************************************/
-CREATE PROC [dbo].[nspTTMFC01]
+CREATE OR ALTER   PROC [dbo].[nspTTMFC01]
     @c_UserID        NVARCHAR(18)
    ,@c_AreaKey01     NVARCHAR(10)
    ,@c_AreaKey02     NVARCHAR(10)
@@ -62,7 +56,9 @@ BEGIN
       ,@cFacility     NVARCHAR(5)
       ,@cLangCode     NVARCHAR(3)
       ,@cSkipPnDLocation    NVARCHAR(30)
-      ,@FunID        INT
+      ,@cPICKZONETOLOC      NVARCHAR( 10)  --FCR-905
+      ,@FunID         INT
+      
 
    SELECT 
        @b_debug = 0
@@ -88,6 +84,11 @@ BEGIN
    IF @cSkipPnDLocation IS NULL OR TRIM(@cSkipPnDLocation) = ''
       SET @cSkipPnDLocation = '0'
 
+   SET @cPICKZONETOLOC = rdt.RDTGetConfig( @FunID, 'PICKZONETOLOC', @c_StorerKey)
+
+   IF @cPICKZONETOLOC IS NULL OR TRIM(@cPICKZONETOLOC) = ''
+      SET @cPICKZONETOLOC = '0'
+
    -- Handling transaction
    DECLARE @nTranCount INT
    SET @nTranCount = @@TRANCOUNT
@@ -107,10 +108,16 @@ BEGIN
             AND TaskDetail.TaskType IN ('FCP', 'FCP1')
             AND TaskDetail.Status = '0'
             AND TaskDetail.UserKeyOverRide IN (@c_userid, '')
-            AND (SELECT SUM( ISNULL( QTYAllocated, 0) - ISNULL( QTYExpected, 0))
+            --AND (SELECT SUM( ISNULL( QTYAllocated, 0) - ISNULL( QTYExpected, 0))
+            --   FROM LOTxLOCxID LLI WITH (NOLOCK)
+            --   WHERE LLI.LOC = TaskDetail.FromLOC
+            --      AND LLI.ID = TaskDetail.FromID) >= TaskDetail.QTY
+            -- SWT01 
+            AND (SELECT SUM(LLI.Qty - QtyPicked)
                FROM LOTxLOCxID LLI WITH (NOLOCK)
                WHERE LLI.LOC = TaskDetail.FromLOC
-                  AND LLI.ID = TaskDetail.FromID) >= TaskDetail.QTY
+                  AND LLI.ID = TaskDetail.FromID
+                  AND LLI.LOT = TaskDetail.LOT) > 0
             AND NOT EXISTS( SELECT 1
                FROM TaskDetail T1 WITH (NOLOCK)
                WHERE TaskDetail.GroupKey <> '' 
@@ -139,10 +146,16 @@ BEGIN
             AND TaskDetail.Status = '0'
             AND TaskDetail.UserKeyOverRide IN (@c_userid, '')
             AND LOC.Facility = @cFacility
-            AND (SELECT SUM( ISNULL( QTYAllocated, 0) - ISNULL( QTYExpected, 0))
+            --AND (SELECT SUM( ISNULL( QTYAllocated, 0) - ISNULL( QTYExpected, 0))
+            --   FROM LOTxLOCxID LLI WITH (NOLOCK)
+            --   WHERE LLI.LOC = TaskDetail.FromLOC
+            --      AND LLI.ID = TaskDetail.FromID) >= TaskDetail.QTY
+            -- SWT01 
+            AND (SELECT SUM(LLI.Qty - QtyPicked)
                FROM LOTxLOCxID LLI WITH (NOLOCK)
                WHERE LLI.LOC = TaskDetail.FromLOC
-                  AND LLI.ID = TaskDetail.FromID) >= TaskDetail.QTY
+                  AND LLI.ID = TaskDetail.FromID
+                  AND LLI.LOT = TaskDetail.LOT) > 0
             AND NOT EXISTS( SELECT 1
                FROM TaskDetail T1 WITH (NOLOCK)
                WHERE TaskDetail.GroupKey <> '' 
@@ -237,16 +250,17 @@ BEGIN
       FROM dbo.LOC WITH (NOLOCK) 
       WHERE LOC = @c_FromLoc
 
-      IF @c_LOCCategory <> 'VNA' AND @cSkipPnDLocation <> '0' AND EXISTS(SELECT 1 FROM CODELKUP where LISTNAME = 'LOCCATEGRY' AND Code = @cSkipPnDLocation)
+      IF @c_LOCCategory <> 'VNA' AND @cPICKZONETOLOC = '0' AND @cSkipPnDLocation <> '0' 
+         AND EXISTS(SELECT 1 FROM CODELKUP where LISTNAME = 'LOCCATEGRY' AND Code = @cSkipPnDLocation)
       BEGIN
          IF EXISTS( SELECT 1 
             FROM dbo.TaskDetail TD WITH (NOLOCK) 
-               JOIN dbo.LOC L1 WITH (NOLOCK) ON (TD.FromLOC = L1.LOC)
-               LEFT JOIN dbo.LOC L2 WITH (NOLOCK) ON (TD.ToLOC = L2.LOC)
+            JOIN dbo.LOC L1 WITH (NOLOCK) ON (TD.FromLOC = L1.LOC)
+            LEFT JOIN dbo.LOC L2 WITH (NOLOCK) ON (TD.ToLOC = L2.LOC)
             WHERE TD.Status > '0' AND TD.Status < '9'
-               AND @c_Facility IN (L1.Facility, L2.Facility)
-               AND @c_LOCAisle IN (L1.LOCAisle, L2.LOCAisle)
-               AND UserKey <> @c_userid)
+            AND @c_Facility IN (L1.Facility, L2.Facility)
+            AND @c_LOCAisle IN (L1.LOCAisle, L2.LOCAisle)
+            AND UserKey <> @c_userid)
          BEGIN
             FETCH NEXT FROM Cursor_FPKTaskCandidates INTO @c_TaskDetailKey
             CONTINUE

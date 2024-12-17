@@ -15,6 +15,7 @@ GO
 /* Date        Rev  Author   Purposes                                   */
 /* 2019-07-02  1.0  James    WMS-9565 Created                           */
 /* 2023-01-20  1.1  Ung      WMS-21577 Add unlimited UCC to move        */
+/* 2024-10-28  1.1  ShaoAn   Extend Parameter                           */
 /************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_514ExtUpdSP02] (
@@ -37,6 +38,7 @@ CREATE OR ALTER PROC [rdt].[rdt_514ExtUpdSP02] (
    @cUCC7          NVARCHAR( 20), 
    @cUCC8          NVARCHAR( 20), 
    @cUCC9          NVARCHAR( 20), 
+   @cUDF01         NVARCHAR( 30), 
    @nErrNo         INT           OUTPUT,  
    @cErrMsg        NVARCHAR( 20) OUTPUT
 ) AS

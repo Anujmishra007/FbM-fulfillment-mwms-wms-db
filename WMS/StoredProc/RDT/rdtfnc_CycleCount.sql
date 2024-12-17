@@ -143,6 +143,7 @@ GO
 /* 05-Sep-2023 5.6  James    WMS-23451 Add standard UCC decode (james32)*/
 /* 01-Aug-2024 5.7  NLT013   UWP-22515 Fix the issue:Keep Lottables     */
 /*                           does not work                              */
+/* 19-Nov-2024 5.8.0 NLT013  UWP-27188 Merge code, map @v_Barcode to @cUCC  */
 /************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdtfnc_CycleCount] (
    @nMobile    INT,
@@ -520,6 +521,7 @@ SELECT
    @cFlowThruStepSKU  = V_String45,
    @cSKUEditQTYNotAllowBlank = V_String46,
    @cStepSKUAllowOpt         = V_String47,
+   @cBarcode         = V_Barcode,
     
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,
@@ -3518,7 +3520,7 @@ BEGIN
          
          IF @cFlowThruStepSKU = '1'
          BEGIN
-         	SET @cInField14 = CASE WHEN @cCountedFlag = '[C]' THEN '' ELSE @cSKUCountDefaultOpt END
+            SET @cInField14 = CASE WHEN @cCountedFlag = '[C]' THEN '' ELSE @cSKUCountDefaultOpt END
             GOTO Step_SKU
          END
       END
@@ -8327,7 +8329,7 @@ BEGIN
       -- Validate QTY keyed in    
       IF @cSKUEditQTYNotAllowBlank = '1'
       BEGIN
-      	IF ISNULL( @cNewCaseQTY, '') = '' AND ISNULL( @cNewEachQTY, '') = ''
+         IF ISNULL( @cNewCaseQTY, '') = '' AND ISNULL( @cNewEachQTY, '') = ''
          BEGIN    
             SET @nErrNo = 77734    
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Qty    
@@ -15223,6 +15225,7 @@ BEGIN
 
       V_DateTime1    = @dNewLottable04,
       V_DateTime2    = @dNewLottable05,
+      V_Barcode      = @cBarcode, 
 
       I_Field01 = '',  O_Field01 = @cOutField01,
       I_Field02 = '',  O_Field02 = @cOutField02,

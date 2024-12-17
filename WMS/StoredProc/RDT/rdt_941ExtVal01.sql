@@ -12,6 +12,7 @@ GO
 /*                                                                      */
 /* Date       Rev  Author   Purposes                                    */
 /* 2024-10-01 1.0  NLT013   FCR-939 Created                             */
+/* 2024-11-12 1.1  PYW009   Filter Non Damage & Hold Location Flag(PY01)*/
 /************************************************************************/
 CREATE OR ALTER PROC rdt.rdt_941ExtVal01 (
    @nMobile                INT,
@@ -46,6 +47,7 @@ CREATE OR ALTER PROC rdt.rdt_941ExtVal01 (
             FROM dbo.Loc WITH (NOLOCK) 
             WHERE Facility = @cFacility 
                AND Loc = @cToLoc
+               AND loc.LocationFlag not in ('DAMAGE','HOLD') --py01
 
             SELECT @nRowCount = @@ROWCOUNT
             IF @nRowCount = 0

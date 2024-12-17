@@ -1,7 +1,9 @@
 SET ANSI_NULLS OFF
 GO
+
 SET QUOTED_IDENTIFIER OFF
 GO
+
 /***************************************************************************/
 /* Stored Procedure: mspASNFZ02                                            */
 /* Creation Date: 2024-07-15                                               */
@@ -20,7 +22,7 @@ GO
 /*                                                                         */
 /* Updates:                                                                */
 /* Date        Author   Ver   Purposes                                     */
-/* 2024-09-30  Wan      1.0   Created									   */
+/* 2024-09-30  Wan      1.0   Created									                     */
 /***************************************************************************/
 CREATE OR ALTER PROC [dbo].[mspASNFZ02]
    @c_Receiptkey        NVARCHAR(10)
@@ -56,10 +58,10 @@ BEGIN
    SET @c_ErrMsg = ''
 
 
-    select @c_ExternOrderKey = isnull(UserDefine08,'')
-		from RECEIPT with (Nolock)
-		where ReceiptKey=@c_Receiptkey
-			and exists(select 1 from CODELKUP with (Nolock) where LISTNAME='VENDORCODE' and UDF01=receipt.UserDefine03)
+    select @c_ExternOrderKey = isnull(R.UserDefine08,'')
+		from RECEIPT R with (Nolock) JOIN ORDERS O (nolock)
+		on O.ExternOrderKey=R.UserDefine08
+		where ReceiptKey=@c_Receiptkey and exists(select 1 from CODELKUP with (Nolock) where LISTNAME='VENDORCODE' and UDF01=R.UserDefine03)
 	if(@c_ExternOrderKey='')
 	Begin
       GOTO QUIT_SP
@@ -73,31 +75,27 @@ BEGIN
 			  SET @n_Continue = 3
               SET @n_Err = 68010
               SET @c_ErrMsg = 'NSQL'+ CONVERT(NVARCHAR(5), @n_Err)
-                            + ': Extern order key not found for the . (msp_RCM_WV_ULP_StockOwnerChange)'
+                            + ': Extern order key not found for the . (mspASNFZ02)'
               GOTO QUIT_SP
 
       END
 
-
    SET @CUR_RD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-   SELECT rd.Storerkey
-         ,rd.Sku
-         ,i.Lot
-         ,rd.ToLoc
-         ,rd.ID
-         ,Qty = ISNULL(SUM(rd.QtyReceived),0)
-   FROM RECEIPTDETAIL rd (NOLOCK)
-   JOIN ITRN i (NOLOCK) ON  i.TranType = 'DP'
-                        AND SourceKey = rd.ReceiptKey + rd.ReceiptLineNumber
-                        AND SourceType like 'ntrReceiptDetail%'
-   WHERE rd.Receiptkey = @c_Receiptkey
-   AND rd.FinalizeFlag = 'Y'
-   GROUP BY rd.Storerkey
-         ,  rd.Sku
-         ,  i.Lot
-         ,  rd.ToLoc
-         ,  rd.ID
-   ORDER BY MIN(rd.ReceiptLineNumber)
+   select pd.Storerkey
+         ,pd.Sku
+         ,pd.Lot
+         ,pd.Loc
+         ,pd.ID
+         ,Qty = ISNULL(SUM(pd.Qty),0)
+		 from ORDERS o (nolock)
+   join PICKDETAIL pd (nolock) on o.orderkey=pd.orderkey
+   where o.externorderkey=@c_ExternOrderKey and o.StorerKey=@c_StorerkeyFromOrder
+    GROUP BY pd.Storerkey
+         ,  pd.Sku
+         ,  pd.Lot
+         ,  pd.Loc
+         ,  pd.ID
+   ORDER BY MIN(pd.pickdetailkey)
 
    OPEN @CUR_RD
 
@@ -117,7 +115,7 @@ BEGIN
       ,  @cFromLoc         = @c_LOC
       ,  @cFromID          = @c_ID
       ,  @cSuggestedLOC    = @c_Loc
-      ,  @cStorerKey       = @c_StorerkeyFromOrder
+      ,  @cStorerKey       = @c_Storerkey
       ,  @nErrNo           = @n_Err       OUTPUT
       ,  @cErrMsg          = @c_Errmsg    OUTPUT
       ,  @cSKU             = @c_SKU

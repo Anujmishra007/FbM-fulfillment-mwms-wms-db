@@ -25,6 +25,8 @@ GO
 /* Date        Author   Rev   Purposes                                  */
 /* 2024-10-09  SSA01    1.1   UWP-24678-JCB- Allocation for Kitting and */
 /*                                    Decanting                         */
+/* 2024-11-07  SSA02    1.2   Updated to exclude pallets which used for */
+/*                                      Kitting                         */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[ispPRJCB08] (
      @c_OrderKey        NVARCHAR(10)
@@ -95,11 +97,18 @@ BEGIN
    SET @b_Success = 1
    SET @n_Err     = 0
    SET @c_ErrMsg  = ''
-   SET @c_UOM     = '7'   
+   SET @c_UOM     = '7'
+    --(SSA02) - Added condition to exclude pallet which used for K4 Kitting
    SET @c_Conditions = ' AND LOC.LocationType = ''BULK'''
                      + ' AND PA.ZoneCategory  = ''EMG''' 
                      + ' AND NOT EXISTS(SELECT 1 FROM LOTXLOCXID L (NOLOCK) WHERE L.Storerkey = LLI.Storerkey      
-                         AND L.Sku <> LLI.Sku AND L.Loc = LLI.Loc AND L.Id = LLI.Id AND L.Qty > 0) ' 
+                         AND L.Sku <> LLI.Sku AND L.Loc = LLI.Loc AND L.Id = LLI.Id AND L.Qty > 0) '
+                     +'  AND NOT EXISTS(SELECT 1 FROM PICKDETAIL PD (NOLOCK)
+			                   JOIN ORDERS O (NOLOCK) ON PD.ORDERKEY = O.ORDERKEY
+										     JOIN LOTxLOCxID L (NOLOCK) ON PD.Storerkey = LLI.Storerkey
+										     WHERE PD.ID = L.ID AND L.Storerkey = LLI.Storerkey AND L.ID =LLI.ID
+                         AND O.Type = ''6'') '
+
  
    SET @c_Type = '2'
                                              
@@ -228,6 +237,7 @@ BEGIN
         SET @n_QtyLeftToFulfill = @n_OpenQty
 
         SET @c_PickLoc = ''
+        --(SSA03)
         SET @c_SQL = N'SELECT TOP 1 @c_PickLoc = SL.Loc'
                    + ' FROM SKUXLOC SL (NOLOCK)'
                    + ' JOIN LOC (NOLOCK) ON SL.Loc = LOC.Loc'

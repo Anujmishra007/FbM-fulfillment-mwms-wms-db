@@ -41,8 +41,11 @@
    /* YYYY-DD-MM         {author}    {ver}       Close Cursor                             */
    /* 2024-07-16         USH022      V.0         Dynamic Replenishment                    */
    /* 2024-08-16         CLVN01      V.1         TEMP REMOVE MIN MAX REPLEN               */
-   /* 2024-08-18         USH022      V.2	 	 REMOVED MIN-MAX SCENARIO                 */
+   /* 2024-08-18         USH022      V.2         REMOVED MIN-MAX SCENARIO                 */
    /* 2024-10-08         SWT01       V.3         Demand Replenishment Logic Modification  */
+   /* 2024-10-29         WLC01       V.5         Consider PendingMoveIn Qty when finding  */
+   /*                                            friend                                   */
+   /* 2024-10-31         PYW009      V.6         Filter Non Damage & Hold Location Flag(PY01)*/   
    /***************************************************************************************/
    CREATE OR ALTER PROCEDURE [dbo].[isp_DynamicReplenishment_Granite]	
        @c_WaveKey NVARCHAR(10),
@@ -190,6 +193,7 @@
 					AND lli.StorerKey = @c_StorerKey
 					AND sl.LocationType = 'PICK'
 					AND loc.Facility = @c_Facility
+					AND loc.LocationFlag not in ('DAMAGE','HOLD') -- PY01
 					AND  loc.MaxCarton > 0
 					GROUP BY LOC.Loc, loc.LogicalLocation, LOC.LocAisle
 					HAVING SUM(lli.Qty - lli.QtyPicked + lli.PendingMoveIn) + @n_UCCQty <= MAX(sl.QtyLocationLimit)
@@ -218,8 +222,9 @@
 					   AND lli.StorerKey = @c_StorerKey
 					   AND loc.LocationType = 'DYNAMICPK'
 					   AND loc.Facility = @c_Facility
+					   AND loc.LocationFlag not in ('DAMAGE','HOLD') -- PY01
 					   AND  loc.MaxCarton > 0
-						AND LLI.Qty > 0 
+						AND (LLI.Qty - LLI.QtyPicked + LLI.PendingMoveIn) > 0   --WLC01 
 					   GROUP BY loc.Loc, loc.MaxCarton, loc.LogicalLocation, LOC.LocAisle
 					   HAVING (CEILING(SUM(lli.Qty - lli.QtyPicked + lli.PendingMoveIn)/@n_UCCQty) < LOC.MaxCarton)
 					   ORDER BY loc.LogicalLocation
@@ -233,6 +238,7 @@
 					   LEFT OUTER JOIN LOTxLOCxID lli (NOLOCK)  ON  loc.loc = lli.loc
 					   WHERE loc.LocationType = 'DYNAMICPK'
 					   AND  loc.Facility = @c_Facility
+					   AND loc.LocationFlag not in ('DAMAGE','HOLD') -- PY01
 					   AND  loc.MaxCarton > 0
 					   GROUP BY loc.Loc, loc.LogicalLocation, LOC.LocAisle
 					   HAVING (SUM(ISNULL(lli.Qty,0) - ISNULL(lli.QtyPicked,0) + ISNULL(lli.PendingMoveIn,0)) = 0)

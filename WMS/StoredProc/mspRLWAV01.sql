@@ -14,7 +14,7 @@ GO
 /*                                                                       */    
 /* Called By: Wave Release                                               */    
 /*                                                                       */    
-/* PVCS Version: 1.4                                                     */    
+/* PVCS Version: 1.8                                                     */    
 /*                                                                       */    
 /* Version: 7.0                                                          */    
 /*                                                                       */    
@@ -40,6 +40,8 @@ GO
 /* 2024-09-02  SSA01    1.7   UWP-23370 & 23372-query for priority value*/
 /*                            from codelkup and takeout deliverydate for*/
 /*                            consolidated pick                         */
+/* 2024-09-18  WLChooi  1.8   UWP-23368-Dispatch TM task with cube data  */
+/*                            (WL02)                                     */
 /*************************************************************************/     
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV01]        
   @c_wavekey      NVARCHAR(10)    
@@ -96,6 +98,27 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV01]
          , @n_QtyToReplen              INT            = 0                           --(Wan02)
          , @n_QtyRelease2Pick          INT            = 0                           --(Wan02)
          , @c_LPLDLoc                  NVARCHAR(10)   = ''                          --WL01
+         --WL02 S
+         , @c_Areakey                  NVARCHAR(10)   = '' 
+         , @n_Volume                   FLOAT = 0.00        
+         , @n_CubeUOM1                 FLOAT = 0.00        
+         , @n_CubeUOM3                 FLOAT = 0.00        
+         , @n_TTLVolume                FLOAT = 0.00        
+         , @c_MaxSkuVol                NVARCHAR(10)   = '' 
+         , @n_MaxSkuVol                FLOAT = 0.00        
+         , @c_PrevOrderkey             NVARCHAR(10)   = '' 
+         , @c_PrevAreakey              NVARCHAR(10)   = '' 
+         , @c_KeyName                  NVARCHAR(18)   = '' 
+         , @c_Option5                  NVARCHAR(MAX)  = '' 
+         , @n_LocLevel                 INT                 
+         , @c_StampGrpKey              NVARCHAR(1)    = 'N'
+         , @c_InsGrpKey                NVARCHAR(10)   = '' 
+         , @n_QtyToRelease             INT = 0
+         , @n_UOMQtyToRelease          INT = 0
+         , @n_NoOfGroup                INT = 0
+         , @n_MaxQtyPerGroup           INT = 0
+         , @n_Casecnt                  INT = 0
+         --WL02 E
 
          ,@cur_waveord                 CURSOR
          ,@cur_WaveReplfr              CURSOR                                       --(Wan02)
@@ -148,6 +171,21 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV01]
          SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Nothing to release. (mspRLWAV01)'         
       END        
    END  
+   
+   --WL02 S
+   IF @n_continue = 1 OR @n_continue = 2
+   BEGIN
+      SELECT @c_Option5 = fgr.Option5 
+      FROM dbo.fnc_GetRight2(@c_Facility, @c_Storerkey, '', 'ReleaseWave_SP') AS fgr
+   
+      SELECT @c_MaxSkuVol = dbo.fnc_GetParamValueFromString('@n_MaxSkuVol', @c_Option5, @c_MaxSkuVol)
+
+      IF ISNUMERIC(@c_MaxSkuVol) = 1
+         SET @n_MaxSkuVol = CAST(@c_MaxSkuVol AS FLOAT)
+      ELSE
+         SET @n_MaxSkuVol = 0.00
+   END
+   --WL02 E
          
    --Create pickdetail Work in progress temporary table  
    IF @n_continue = 1 OR @n_continue = 2  
@@ -417,10 +455,10 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV01]
       AND CL.Code = 'DEFAULT'
 
       SELECT @c_Priority = CL.Short                                               --(SSA01)
-            FROM CODELKUP CL (NOLOCK)
-            WHERE CL.Storerkey = @c_Storerkey
-            AND CL.LISTNAME = 'TMPKPRIORI'
-            AND CL.Code = 'Lowest'
+      FROM CODELKUP CL (NOLOCK)
+      WHERE CL.Storerkey = @c_Storerkey
+      AND CL.LISTNAME = 'TMPKPRIORI'
+      AND CL.Code = 'Lowest'
 
       IF ISNULL(@c_Priority,'') = ''                                              --(SSA01)
            SET @c_Priority = '9'
@@ -441,6 +479,10 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV01]
                       THEN CONVERT(NVARCHAR(8), O.DeliveryDate, 112) ELSE '''' END AS DeliveryDate
                 ,'''' AS Loadkey                                                    --(Wan01)   
                 ,LPLD.Loc   --WL01
+                ,AD.Areakey   --WL02
+                ,ISNULL(P.CubeUOM1, 0.00)   --WL02
+                ,ISNULL(P.CubeUOM3, 0.00)   --WL02
+                ,LOC.LocLevel   --WL02
           FROM WAVEDETAIL WD (NOLOCK)  
           JOIN WAVE W (NOLOCK) ON WD.Wavekey = W.Wavekey                            
           JOIN ORDERS O (NOLOCK) ON WD.Orderkey = O.Orderkey  
@@ -458,6 +500,9 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV01]
           OUTER APPLY (SELECT TOP 1 ISNULL(LPD.Loc, '''') AS Loc   --WL01
                        FROM LoadPlanLaneDetail LPD (NOLOCK)        --WL01
                        WHERE LPD.LoadKey = O.Loadkey) AS LPLD      --WL01
+          JOIN AreaDetail AD (NOLOCK) ON LOC.PutawayZone = AD.PutawayZone   --WL02
+          JOIN SKU S (NOLOCK) ON S.StorerKey = PD.Storerkey AND S.SKU = PD.Sku   --WL02
+          JOIN PACK P (NOLOCK) ON P.PackKey = S.PACKKey   --WL02
           WHERE WD.Wavekey = @c_Wavekey  
           AND PD.Status = ''0''  
           AND PD.WIP_RefNo = @c_SourceType  
@@ -476,12 +521,17 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV01]
                   ,LOC.LogicalLocation
                   ,TOLOC.Loc                                                        --(SSA01)                  
                   ,LPLD.Loc   --WL01
+                  ,AD.Areakey   --WL02
+                  ,ISNULL(P.CubeUOM1, 0.00)   --WL02
+                  ,ISNULL(P.CubeUOM3, 0.00)   --WL02
+                  ,LOC.LocLevel   --WL02
           ORDER BY O.Route                                                          --(Wan01)  
               , CASE WHEN @c_DispatchCasePickMethod =''1''                          --(Wan01)
                      THEN O.Consigneekey ELSE '''' END                                       
                   ,CASE WHEN @c_DispatchCasePickMethod =''1''                       --(Wan01)
                         THEN O.Orderkey ELSE '''' END
                   --,O.loadkey                                                      --(Wan01)
+                  ,AD.Areakey   --WL02
                   ,Loc.LogicalLocation, PD.Loc '           
   
       EXEC sp_executesql @c_SQL   
@@ -500,12 +550,18 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV01]
                                   , @n_Qty, @c_UOM, @n_UOMQty
                                   , @c_Route, @c_Orderkey, @c_ToLoc, @c_Priority, @dt_DeliveryDate
                                   , @c_Loadkey, @c_LPLDLoc   --WL01
+                                  , @c_Areakey, @n_CubeUOM1, @n_CubeUOM3, @n_LocLevel   --WL02
          
       WHILE @@FETCH_STATUS = 0 AND @n_continue IN (1,2)  
       BEGIN                       
          SET @c_LinkTaskToPick_SQL = ''   
-         SET @c_Groupkey = ''                                    
-         
+         --WL02 S
+         SET @c_Groupkey = IIF(@c_UOM = '1', '', @c_Groupkey)
+         SET @c_KeyName = LEFT(TRIM(@c_Storerkey) + 'GRPKEY', 18)   --MATTELGRPKEY
+         SET @c_StampGrpKey = 'N'
+         SET @c_InsGrpKey = ''
+         --WL02 E
+
          IF ISNULL(@c_DefaultLoc,'') <> ''  
            SET @c_ToLoc = @c_DefaultLoc  
 
@@ -558,6 +614,134 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV01]
                --END                                                                --(Wan04) - END
             END
          END                                                                        --(Wan02) - END     
+
+         --WL02 S
+         IF @c_UOM IN ('2', '6') AND @n_LocLevel = 0
+         BEGIN
+            SET @c_StampGrpKey = 'Y'
+            SET @n_Volume = 0.00
+            
+            IF @c_UOM = '2'
+               SET @n_Volume = @n_CubeUOM1 * @n_UOMQty   --Case
+            ELSE IF @c_UOM = '6'
+               SET @n_Volume = @n_CubeUOM3 * @n_Qty      --EA
+
+            SET @n_TTLVolume = ISNULL(@n_TTLVolume, 0.00) + @n_Volume
+
+            IF @n_TTLVolume > @n_MaxSkuVol
+               SET @c_Groupkey = ''
+
+            IF (@c_PrevOrderkey <> @c_Orderkey OR @c_Areakey <> @c_PrevAreakey OR ISNULL(@c_Groupkey, '') = '')
+            BEGIN
+               SET @n_TTLVolume = @n_Volume
+
+               IF @n_TTLVolume > @n_MaxSkuVol
+               BEGIN
+                  --Check if need how many groups
+                  SET @n_NoOfGroup = CEILING(@n_TTLVolume / @n_MaxSkuVol)
+                  SET @n_MaxQtyPerGroup = FLOOR(@n_MaxSkuVol / IIF(@c_UOM = '2', @n_CubeUOM1, @n_CubeUOM3))
+                  SET @n_Casecnt = (@n_Qty / @n_UOMQty)
+
+                  --Round up to case
+                  IF @c_UOM = '2'
+                  BEGIN
+                     SET @n_MaxQtyPerGroup = @n_MaxQtyPerGroup * @n_Casecnt
+                  END
+                  
+                  WHILE @n_NoOfGroup > 0
+                  BEGIN
+                     EXEC dbo.nspg_GetKey @KeyName = @c_KeyName
+                                        , @fieldlength = 10
+                                        , @keystring = @c_Groupkey OUTPUT
+                                        , @b_Success = @b_Success OUTPUT
+                                        , @n_err = @n_err OUTPUT
+                                        , @c_errmsg = @c_errmsg OUTPUT
+                     
+                     IF @n_continue IN (1,2) 
+                     BEGIN  
+                        SET @c_TaskType = 'FCP'  
+                        SET @c_PickMethod = 'PP'  
+        
+                        IF @c_DispatchCasePickMethod = '1'
+                        BEGIN
+                           SET @c_LinkTaskToPick_SQL = 'PICKDETAIL.UOM = @c_UOM AND ORDERS.Orderkey = @c_Orderkey'
+                        END
+                        ELSE
+                        BEGIN
+                           SET @c_LinkTaskToPick_SQL = 'PICKDETAIL.UOM = @c_UOM AND ORDERS.Userdefine09 = @c_Wavekey'
+                        END
+                        
+                        IF @n_Qty > @n_MaxQtyPerGroup
+                        BEGIN
+                           SET @n_Qty = @n_Qty - @n_MaxQtyPerGroup
+                           SET @n_QtyToRelease = @n_MaxQtyPerGroup
+                           SET @n_UOMQtyToRelease = @n_QtyToRelease / @n_Casecnt
+                        END
+                        ELSE
+                        BEGIN
+                           SET @n_QtyToRelease = @n_Qty
+                           SET @n_UOMQtyToRelease = @n_QtyToRelease / @n_Casecnt
+                           SET @n_Qty = 0
+                        END
+
+                        EXEC isp_InsertTaskDetail     
+                            @c_TaskType              = @c_TaskType               
+                           ,@c_Storerkey             = @c_Storerkey  
+                           ,@c_Sku                   = @c_Sku  
+                           ,@c_Lot                   = @c_Lot   
+                           ,@c_UOM                   = @c_UOM        
+                           ,@n_UOMQty                = @n_UOMQtyToRelease       
+                           ,@n_Qty                   = @n_QtyToRelease        
+                           ,@c_FromLoc               = @c_Fromloc        
+                           ,@c_LogicalFromLoc        = @c_FromLoc   
+                           ,@c_FromID                = @c_ID       
+                           ,@c_ToLoc                 = @c_ToLoc         
+                           ,@c_LogicalToLoc          = @c_ToLoc   
+                           ,@c_ToID                  = @c_ID         
+                           ,@c_PickMethod            = @c_PickMethod  
+                           ,@c_Priority              = @c_Priority       
+                           ,@c_SourcePriority        = '9'        
+                           ,@c_SourceType            = @c_SourceType        
+                           ,@c_SourceKey             = @c_Wavekey        
+                           ,@c_OrderKey              = @c_Orderkey        
+                           ,@c_Groupkey              = @c_Groupkey
+                           ,@c_WaveKey               = @c_Wavekey  
+                           ,@c_Loadkey               = @c_Loadkey    
+                           ,@c_AreaKey               = '?F'  -- ?F=Get from location areakey   
+                           ,@c_Message03             = ''  
+                           ,@c_LinkTaskToPick        = 'WIP' -- WIP=Update taskdetailkey to pickdetail_wip  
+                           ,@c_LinkTaskToPick_SQL    = @c_LinkTaskToPick_SQL    
+                           ,@c_SplitTaskByCase       ='N'   -- N=No slip Y=Split TASK by carton. Only apply if @n_casecnt > 0. include last partial carton.  
+                           ,@c_WIP_RefNo             = @c_SourceType  
+                           ,@b_Success               = @b_Success OUTPUT  
+                           ,@n_Err                   = @n_err OUTPUT   
+                           ,@c_ErrMsg                = @c_errmsg OUTPUT 
+                           ,@c_Status                = @c_TaskStatus         
+                            
+                        IF @b_Success <> 1   
+                        BEGIN  
+                           SET @n_continue = 3  
+                           SET @n_NoOfGroup = 0
+                        END                           
+                     END
+
+                     SET @n_NoOfGroup = @n_NoOfGroup - 1
+                  END
+               END
+               ELSE
+               BEGIN
+                  EXEC dbo.nspg_GetKey @KeyName = @c_KeyName
+                                     , @fieldlength = 10
+                                     , @keystring = @c_Groupkey OUTPUT
+                                     , @b_Success = @b_Success OUTPUT
+                                     , @n_err = @n_err OUTPUT
+                                     , @c_errmsg = @c_errmsg OUTPUT
+               END
+            END
+
+            SET @c_InsGrpKey = IIF(@c_StampGrpKey = 'Y', @c_Groupkey, '')
+         END
+         --WL02 E
 
          IF @c_UOM = '1' AND @n_continue IN (1,2)
          BEGIN   
@@ -618,19 +802,19 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV01]
                WHERE TaskDetailKey = @c_Taskdetailkey    
             END  
          END  
-         ELSE IF @c_UOM = '2' AND @n_continue IN (1,2) 
+         ELSE IF @c_UOM = '2' AND @n_continue IN (1,2) AND @n_Qty > 0   --WL02
          BEGIN  
             SET @c_TaskType = 'FCP'  
             SET @c_PickMethod = 'PP'  
             
             IF @c_DispatchCasePickMethod = '1'
             BEGIN
-               SET @c_GroupKey = @c_Orderkey
+               --SET @c_GroupKey = @c_Orderkey   --WL02
                SET @c_LinkTaskToPick_SQL = 'PICKDETAIL.UOM = @c_UOM AND ORDERS.Orderkey = @c_Orderkey'
             END
             ELSE
             BEGIN
-               SET @c_GroupKey = @c_Wavekey                                                                 --(Wan01) 
+               --SET @c_GroupKey = @c_Wavekey                                                               --(Wan01)   --WL02
                SET @c_LinkTaskToPick_SQL = 'PICKDETAIL.UOM = @c_UOM AND ORDERS.Userdefine09 = @c_Wavekey'   --(Wan01) 
             END
                 
@@ -654,7 +838,7 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV01]
                ,@c_SourceType            = @c_SourceType        
                ,@c_SourceKey             = @c_Wavekey        
                ,@c_OrderKey              = @c_Orderkey        
-               ,@c_Groupkey              = @c_Groupkey  
+               ,@c_Groupkey              = @c_InsGrpKey   --WL02  
                ,@c_WaveKey               = @c_Wavekey  
                ,@c_Loadkey               = @c_Loadkey    
                ,@c_AreaKey               = '?F'  -- ?F=Get from location areakey   
@@ -673,18 +857,18 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV01]
                SET @n_continue = 3    
             END                           
          END  
-         ELSE IF @n_continue IN (1,2) 
+         ELSE IF @n_continue IN (1,2) AND @n_Qty > 0   --WL02
          BEGIN  --UOM 6                       
             SET @c_TaskType = 'FCP'  
             SET @c_PickMethod = 'PP'  
             IF @c_DispatchCasePickMethod = '1'
             BEGIN
-               SET @c_GroupKey = @c_Orderkey
+               --SET @c_GroupKey = @c_Orderkey   --WL02
                SET @c_LinkTaskToPick_SQL = 'PICKDETAIL.UOM = @c_UOM AND ORDERS.Orderkey = @c_Orderkey'
             END
             ELSE
             BEGIN
-               SET @c_GroupKey = @c_Wavekey                                                                 --(Wan01) 
+               --SET @c_GroupKey = @c_Wavekey                                                               --(Wan01)   --WL02 
                SET @c_LinkTaskToPick_SQL = 'PICKDETAIL.UOM = @c_UOM AND ORDERS.UserDefine09 = @c_Wavekey'   --(Wan01)  
             END
                 
@@ -708,7 +892,7 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV01]
                ,@c_SourceType            = @c_SourceType        
                ,@c_SourceKey             = @c_Wavekey        
                ,@c_OrderKey              = @c_Orderkey        
-               ,@c_Groupkey              = @c_Groupkey  
+               ,@c_Groupkey              = @c_InsGrpKey   --WL02 
                ,@c_WaveKey               = @c_Wavekey  
                ,@c_LoadKey               = @c_Loadkey       
                ,@c_AreaKey               = '?F'  -- ?F=Get from location areakey   
@@ -726,11 +910,16 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV01]
                SET @n_continue = 3    
             END                              
          END  
-                 
+         
+         --WL02 S
+         SET @c_PrevOrderkey = @c_Orderkey
+         SET @c_PrevAreakey = @c_Areakey
+         --WL02 E
          FETCH NEXT FROM cur_pick INTO @c_Storerkey, @c_Sku, @c_Lot, @c_FromLoc, @c_ID
                                      , @n_Qty, @c_UOM, @n_UOMQty
                                      , @c_Route, @c_Orderkey, @c_ToLoc, @c_Priority, @dt_DeliveryDate
                                      , @c_Loadkey, @c_LPLDLoc   --WL01
+                                     , @c_Areakey, @n_CubeUOM1, @n_CubeUOM3, @n_LocLevel   --WL02
       END  
       CLOSE cur_pick  
       DEALLOCATE cur_pick         

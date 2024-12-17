@@ -39,6 +39,7 @@ GO
 /* 2021-01-04 2.9  Chermaine WMS-15903 add LOCLookupSP config (cc01)    */
 /* 2022-12-13 3.0  YeeKung   JSM-116802 Add func for rdt_move (yeekung02)*/
 /* 2023-02-22 3.1  YeeKung   WMS-21820 Add rdtformat toid (yeekung03)   */
+/* 2024-10-25 3.2  XLL045   FCR-759-1002 ID  Length Issue               */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_Move_LOC] (
@@ -105,6 +106,7 @@ DECLARE
    @cTempToID           NVARCHAR( 18),
    @cBarcode            NVARCHAR( 60),
    @cDecodeSP           NVARCHAR( 20),
+   @cExtUpdSP           NVARCHAR( 20),
    @cLottable01         NVARCHAR( 18),
    @cLottable02         NVARCHAR( 18),
    @cLottable03         NVARCHAR( 18),
@@ -158,6 +160,7 @@ SELECT
    @cSKU       = V_SKU,
    @cSKUDescr  = V_SKUDescr,
    @cPUOM      = V_UOM,
+   @nQTY       = V_QTY,
 
    @cFromLOC            = V_String2,
    @cToLOC              = V_String3,
@@ -166,6 +169,7 @@ SELECT
    @cToID               = V_String7,   -- (Vicky01)
    @cDecodeSP           = V_String9,
    @cLOCLookupSP        = V_String10, --(cc01)
+   @cExtendedUpdateSP   = V_String11,
 
    @nTotalRec     = V_Integer1,
    @nCurrentRec   = V_Integer2,
@@ -247,6 +251,11 @@ BEGIN
       SET @cExtendedInfoSP = ''
 
    SET @cLOCLookupSP = rdt.rdtGetConfig(@nFunc,'LOCLookupSP',@cStorerKey)   --(cc01)
+
+   --(XLL045)                                      
+   set @cExtendedUpdateSP = rdt.rdtGetConfig(@nFunc,'ExtendedUpdateSP',@cStorerKey)
+   IF @cExtendedUpdateSP = '0'
+      SET @cExtendedUpdateSP = ''
 
     -- (Vicky06) EventLog - Sign In Function
     EXEC RDT.rdt_STD_EventLog
@@ -663,6 +672,7 @@ BEGIN
          IF @nErrNo <> 0
             GOTO Step_2_Fail
       END
+      
 
       -- Validate blank
       IF @cToLOC = '' OR @cToLOC IS NULL
@@ -1008,6 +1018,46 @@ BEGIN
             CLOSE CUR_LOOP
             DEALLOCATE CUR_LOOP
          END
+         -- Extended update
+         IF @cExtendedUpdateSP <> ''
+         BEGIN
+            IF EXISTS(SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP and type = 'p')
+            BEGIN
+              
+               SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +
+                  ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cBarcode,@cSKU   OUTPUT,@nQTY     OUTPUT,' +
+                  ' @cToID         OUTPUT,' +
+                  ' @cFromLOC    OUTPUT, @cToLOC      OUTPUT, ' +
+                  ' @nErrNo      OUTPUT, @cErrMsg     OUTPUT'
+               SET @cSQLParam =
+                  ' @nMobile      INT,             ' +
+                  ' @nFunc        INT,             ' +
+                  ' @cLangCode    NVARCHAR( 3),    ' +
+                  ' @nStep        INT,             ' +
+                  ' @nInputKey    INT,             ' +
+                  ' @cStorerKey   NVARCHAR( 15),   ' +
+                  ' @cBarcode     NVARCHAR( 60), ' +
+                  ' @cSKU			NVARCHAR(20)   OUTPUT, ' +
+                  ' @nQTY			INT			   OUTPUT, ' +
+                  ' @cToID		NVARCHAR( 18)  OUTPUT, ' +
+                  ' @cFromLOC     NVARCHAR( 10)  OUTPUT, ' +
+                  ' @cToLOC       NVARCHAR( 10)  OUTPUT, ' +
+                  ' @nErrNo       INT            OUTPUT, ' +
+                  ' @cErrMsg      NVARCHAR( 20)  OUTPUT'
+   
+               EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                  @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cBarcode,
+                  @cSKU			OUTPUT, @nQTY		 OUTPUT,
+                  @cToID       OUTPUT, @cFromLOC    OUTPUT, @cToLOC     OUTPUT,
+                  @nErrNo      OUTPUT, @cErrMsg     OUTPUT
+   
+               IF @nErrNo <> 0
+               BEGIN
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+                  GOTO Step_2_Fail
+               END
+            END
+         END
       END
       -- Vicky01 - End
 
@@ -1316,6 +1366,7 @@ BEGIN
       V_SKU      = @cSKU,
       V_SKUDescr = @cSKUDescr,
       V_UOM      = @cPUOM,
+      V_QTY      = @nQTY,
 
       V_String2  = @cFromLOC,
       V_String3  = @cToLOC,
@@ -1331,6 +1382,7 @@ BEGIN
       V_String7 = @cToID,           -- (Vicky01)
       V_String9 = @cDecodeSP,
       V_String10 = @cLOCLookupSP,   --(cc01)
+      v_String11 = @cExtendedUpdateSP,
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,

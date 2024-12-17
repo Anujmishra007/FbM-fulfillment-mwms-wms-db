@@ -21,7 +21,9 @@ GO
 /* Data Modifications:                                                   */    
 /*                                                                       */    
 /* Updates:                                                              */    
-/* Date        Author   Ver   Purposes                                   */                                            
+/* Date        Author   Ver   Purposes                                   */
+/* 2024-11-11  SSA01    1.1   Updated to restrict release for already    */
+/*                            started tasks                              */
 /*************************************************************************/     
 CREATE OR ALTER PROCEDURE [dbo].[mspRVWAV02]        
  @c_wavekey      NVARCHAR(10) 
@@ -79,20 +81,14 @@ BEGIN
   
    ----reject if any task was started  
    IF @n_continue = 1 OR @n_continue = 2  
-   BEGIN  
-      SELECT TOP 1 @n_AllowToRev = CASE WHEN TD.TaskType = @c_TaskType AND TD.[Status] NOT IN ('0','X')
-                                        THEN 0
-                                        ELSE 1
-                                        END
-      FROM TASKDETAIL TD (NOLOCK)   
-      WHERE TD.Wavekey = @c_Wavekey  
-      AND  TD.Sourcetype = @c_SourceType
-      AND  TD.TaskType = @c_TaskType
-      AND  TD.[Status] NOT IN ('0','X')
-      ORDER BY 1 DESC
-
-      IF @n_AllowToRev = 1
-      BEGIN  
+   BEGIN
+    --(SSA01)
+      IF EXISTS (SELECT 1 FROM TASKDETAIL TD (NOLOCK)
+                     WHERE TD.Wavekey = @c_Wavekey
+                     AND  TD.Sourcetype = @c_SourceType
+                     AND  TD.TaskType = @c_TaskType
+                     AND  TD.[Status]  NOT IN ('0','X'))
+      BEGIN
           SET @n_continue = 3    
           SET @n_err = 81020    
           SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Some Tasks have been started. Not allow to Reverse Wave Released (mspRVWAV02)'         

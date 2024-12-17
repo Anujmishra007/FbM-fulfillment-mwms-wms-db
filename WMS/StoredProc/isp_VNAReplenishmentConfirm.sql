@@ -1,26 +1,22 @@
-IF NOT EXISTS(SELECT 1 FROM rdt.RDTMsg WITH(NOLOCK) WHERE Message_ID = 1202 AND Lang_Code = 'ENG' AND Message_Type = 'FNC')
-   INSERT INTO rdt.RDTMsg(Message_ID, Lang_Code, Message_Type, Message_Text, StoredProcName, EventType, Func, URL, Message_Text_Long)
-   VALUES( 1202, 'ENG', 'FNC', 'VNAOUT Replenishment Confirm', 'isp_VNAReplenishmentConfirm', '0', '0', '', '' )
-GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
 GO
 
-/**********************************************************************************/
-/* Store procedure: isp_VNAReplenishmentConfirm                                   */
-/* Copyright      : Maersk WMS                                                    */
-/* Customer       : Grainte                                                       */
-/*                                                                                */
-/* Date        Rev  Author    Purposes                                            */
-/* 2024-03-08  1.0  NLT013    UWP-16452 Created                                   */
-/* 2024-04-30  1.1  NLT013    UWP-16455 Cannot find the sencond task              */
-/* 2024-05-16  1.2  NLT013    UWP-19518 Ability to config task priority           */
-/* 2024-10-22  1.3  NLT013    FCR-973 Diff Aisle: No need to create new task      */
-/*                            ToLoc is PickFace location                          */
-/*                            Same Aisle: Move inv to final location directly     */
-/**********************************************************************************/
+/****************************************************************************************/
+/* Store procedure: isp_VNAReplenishmentConfirm                                         */
+/* Copyright      : Maersk WMS                                                          */
+/* Customer       :  UL                                                                 */
+/*                                                                                      */
+/* Date        Rev      Author      Purposes                                            */
+/* 2024-03-08  1.0      NLT013      UWP-16452 Created                                   */
+/* 2024-04-30  1.1      NLT013      UWP-16455 Cannot find the sencond task              */
+/* 2024-05-16  1.2      NLT013      UWP-19518 Ability to config task priority           */
+/* 2024-10-22  1.3.0    NLT013      FCR-973 Diff Aisle: No need to create new task      */
+/*                                  ToLoc is PickFace location                          */
+/*                                  Same Aisle: Move inv to final location directly     */
+/* 2024-10-22  1.4.0    NLT013      UWP-27527 No need to add QtyRepl if ToLoc is not PND*/
+/****************************************************************************************/
 
 CREATE OR ALTER PROCEDURE [dbo].[isp_VNAReplenishmentConfirm] (
    @cTaskDetailKey                  NVARCHAR( 10),
@@ -363,11 +359,15 @@ BEGIN
       GOTO RollBackTran
    END
 
-   -- Add back QTYReplen
-   UPDATE dbo.LOTxLOCxID WITH (ROWLOCK) SET
-      QTYReplen = @nQTY
-   WHERE LOC = @cTaskToLoc
-      AND ID = @cID
+   -- Add QTYReplen to PND location
+   IF EXISTS (SELECT 1 FROM dbo.LOC WITH(NOLOCK) WHERE Facility = @cFacility AND LOC = @cTaskToLoc AND LocationCategory IN ('PND_IN', 'PND_OUT', 'PND') 
+      OR @cTaskToLoc <> @cTaskFinalLoc)
+   BEGIN
+      UPDATE dbo.LOTxLOCxID WITH (ROWLOCK) SET
+         QTYReplen = @nQTY
+      WHERE LOC = @cTaskToLoc
+         AND ID = @cID
+   END
 
    IF @@ERROR <> 0
    BEGIN
