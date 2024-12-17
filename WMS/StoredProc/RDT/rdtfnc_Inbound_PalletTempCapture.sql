@@ -348,7 +348,8 @@ BEGIN
             @fHigherTemp = TRY_CAST(UDF02 AS DECIMAL(5, 2)),
             @cScale = CASE UDF03 
                         WHEN 'Celcius' THEN 'C'
-                        ELSE 'F'
+                        WHEN 'Fahrenheit' THEN 'F'
+                        ELSE ''
                      END
          FROM dbo.CODELKUP WITH(NOLOCK)
          WHERE StorerKey = @cStorerKey
@@ -366,7 +367,7 @@ BEGIN
             GOTO Step_2_Fail
          END
 
-         IF @fLowerTemp IS NULL OR @fHigherTemp IS NULL OR @fLowerTemp > @fHigherTemp
+         IF @fLowerTemp IS NULL OR @fHigherTemp IS NULL OR ISNULL(@cScale, '') = '' OR @fLowerTemp > @fHigherTemp
          BEGIN
             SET @nErrNo = 230215
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --230215Item class code needs to be maintained properly
