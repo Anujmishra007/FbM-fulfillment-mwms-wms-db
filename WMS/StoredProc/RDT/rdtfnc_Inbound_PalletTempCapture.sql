@@ -348,8 +348,8 @@ BEGIN
          SELECT @fLowerTemp = TRY_CAST(UDF01 AS DECIMAL(5, 2)),
             @fHigherTemp = TRY_CAST(UDF02 AS DECIMAL(5, 2)),
             @cScale = CASE UDF03 
-                        WHEN 'Celcius' THEN 'C'
-                        WHEN 'Fahrenheit' THEN 'F'
+                        WHEN 'Celcius' THEN '°C'
+                        WHEN 'Fahrenheit' THEN '°F'
                         ELSE ''
                      END,
             @cUDF04 = UDF04

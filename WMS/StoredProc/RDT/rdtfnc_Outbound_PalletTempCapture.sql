@@ -392,7 +392,7 @@ BEGIN
       SET @cOutField01  = @cMBOLKey
       SET @cOutField02  = @cPalletID
       SET @cOutField03  = N''
-      SET @cOutField04  = CASE @cTemperatureUnit WHEN N'Celcius' THEN N'℃' WHEN N'Fahrenheit' THEN '℉' ELSE @cTemperatureUnit END
+      SET @cOutField04  = CASE @cTemperatureUnit WHEN N'Celcius' THEN N'°C' WHEN N'Fahrenheit' THEN '°F' ELSE @cTemperatureUnit END
 
       -- Go to next screen
       SET @nScn   = @nScn + 1
