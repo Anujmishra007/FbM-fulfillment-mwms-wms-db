@@ -43,7 +43,7 @@ BEGIN
    DECLARE
       @bDebugFlag        BINARY = 0,
       @cOrderKey         NVARCHAR(10),
-      @cExternOrderKey   NVARCHAR(10),
+      @cExternOrderKey   NVARCHAR(50),
       @cLabelNo          NVARCHAR(10),
       @cLabelName        NVARCHAR(30),
       @cReportType       NVARCHAR(10),
