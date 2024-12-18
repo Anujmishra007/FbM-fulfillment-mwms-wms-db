@@ -19,6 +19,8 @@ GO
 /* Updates:                                                              */  
 /* Date         Author  Ver   Purposes                                   */ 
 /* 2024-11-19   SSA01   1.1   UWP-27112-[LEVI's] Release to WCS Update   */
+/* 2024-12-18   SSA02   1.2   UWP-27112-Added automated wave validation  */
+/*                            and update tasks status from H to 0        */
 /*************************************************************************/   
 CREATE OR ALTER PROCEDURE [dbo].[mspWaveReleaseWCS01]
   @c_Wavekey      NVARCHAR(10)  
@@ -45,6 +47,7 @@ CREATE OR ALTER PROCEDURE [dbo].[mspWaveReleaseWCS01]
           , @c_CfgWCS            NVARCHAR(10) = ''
           , @c_ConditionQuery    NVARCHAR(1000)= ''
           , @c_TMReleaseFlag    NVARCHAR(1)= ''
+          , @c_UserDefine09     NVARCHAR(1)= ''   --(SSA02)
 
 
     SELECT TOP 1
@@ -54,7 +57,7 @@ CREATE OR ALTER PROCEDURE [dbo].[mspWaveReleaseWCS01]
      JOIN dbo.ORDERS O (NOLOCK) ON O.OrderKey = WD.OrderKey
      WHERE WD.WaveKey = @c_Wavekey
 
-    SELECT @c_TMReleaseFlag = WAVE.TMReleaseFlag
+    SELECT @c_TMReleaseFlag = WAVE.TMReleaseFlag, @c_UserDefine09 = WAVE.UserDefine09
                 FROM dbo.WAVE WAVE (NOLOCK)
                 WHERE WAVE.WaveKey = @c_Wavekey
 
@@ -65,7 +68,16 @@ CREATE OR ALTER PROCEDURE [dbo].[mspWaveReleaseWCS01]
          SET @n_err = 81010
          SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Wave has not been Released.  (mspWaveReleaseWCS01) '
      END
-    IF @n_Continue IN (1,2)
+     --(SSA02) start ---
+     IF @c_UserDefine09 <> 'Y'
+     BEGIN
+         SET @n_continue = 3
+         SET @c_errmsg = CONVERT(NVARCHAR(250),@n_err)
+         SET @n_err = 81030
+         SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Wave is not Automation.  (mspWaveReleaseWCS01) '
+     END
+     --(SSA02) end----
+     IF @n_Continue IN (1,2)
      BEGIN
         SET @c_TableName = 'WSWAVELOG'
              SET @c_Key1 = @c_Wavekey
@@ -82,6 +94,9 @@ CREATE OR ALTER PROCEDURE [dbo].[mspWaveReleaseWCS01]
            END
            IF @n_Continue IN (1,2)
             BEGIN
+               ----(SSA02)
+               UPDATE TASKDETAIL SET STATUS = '0' WHERE WAVEKEY = @c_Wavekey AND TASKTYPE <> 'ASTCPK' AND STATUS = 'H'
+
                SET @b_Success = 1
                EXEC dbo.ispGenTransmitLog2
                      @c_TableName   = @c_TableName
