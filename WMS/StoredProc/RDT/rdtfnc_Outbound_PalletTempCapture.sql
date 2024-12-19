@@ -209,8 +209,6 @@ BEGIN
       -- Go to next screen
       SET @nScn   = @nScn + 1
       SET @nStep  = @nStep + 1
-
-      GOTO QUIT
    END
 
    IF @nInputKey = 0
@@ -229,18 +227,17 @@ BEGIN
       SET @nFunc = @nMenu
       SET @nScn  = @nMenu
       SET @nStep = 0
+   END
+   GOTO QUIT
 
+   Step_1_QUIT:
+   BEGIN
+      SET @cOutField01 = ''
+      EXEC [RDT].[rdtSetFocusField] @nMobile, 1
       GOTO QUIT
    END
 END
-GOTO QUIT
 
-Step_1_QUIT:
-BEGIN
-   SET @cOutField01 = ''
-   EXEC [RDT].[rdtSetFocusField] @nMobile, 1
-END
-GOTO QUIT
 
 /********************************************************************************
 Scn = 6541. Scan DropID/ID
@@ -366,8 +363,6 @@ BEGIN
       -- Go to next screen
       SET @nScn   = @nScn + 1
       SET @nStep  = @nStep + 1
-
-      GOTO QUIT
    END
 
    IF @nInputKey = 0
@@ -378,19 +373,20 @@ BEGIN
       -- Go to prev screen
       SET @nScn   = @nScn - 1
       SET @nStep  = @nStep - 1
+   END
+
+   GOTO QUIT
+
+   Step_2_QUIT:
+   BEGIN
+      SET @cOutField01  = @cMBOLKey
+      SET @cOutField02  = N''
+      SET @cOutField03  = N''
+      EXEC [RDT].[rdtSetFocusField] @nMobile, 3
       GOTO QUIT
    END
 END
-GOTO QUIT
 
-Step_2_QUIT:
-BEGIN
-   SET @cOutField01  = @cMBOLKey
-   SET @cOutField02  = N''
-   SET @cOutField03  = N''
-   EXEC [RDT].[rdtSetFocusField] @nMobile, 3
-END
-GOTO QUIT
 
 
 /********************************************************************************
@@ -442,8 +438,12 @@ BEGIN
       IF @nErrNo <> 0
          GOTO Step_3_QUIT
 
-      GOTO QUIT
-
+      -- Prepare prev screen var
+      SET @cOutField01 = @cMBOLKey
+      SET @cOutField02 = N''
+      -- Go to prev screen
+      SET @nScn   = @nScn - 1
+      SET @nStep  = @nStep - 1
    END
 
    IF @nInputKey = 0
@@ -454,19 +454,19 @@ BEGIN
       -- Go to prev screen
       SET @nScn   = @nScn - 1
       SET @nStep  = @nStep - 1
+   END
+
+   GOTO QUIT
+
+   Step_3_QUIT:
+   BEGIN
+      SET @cOutField01  = @cMBOLKey
+      SET @cOutField02  = @cPalletID
+      SET @cOutField03  = N''
+      SET @cOutField04  = CASE @cTemperatureUnit WHEN N'Celcius' THEN N'℃' WHEN N'Fahrenheit' THEN '℉' ELSE @cTemperatureUnit END
       GOTO QUIT
    END
 END
-GOTO QUIT
-
-Step_3_QUIT:
-BEGIN
-   SET @cOutField01  = @cMBOLKey
-   SET @cOutField02  = @cPalletID
-   SET @cOutField03  = N''
-   SET @cOutField04  = CASE @cTemperatureUnit WHEN N'Celcius' THEN N'℃' WHEN N'Fahrenheit' THEN '℉' ELSE @cTemperatureUnit END
-END
-GOTO QUIT
 
 
 /********************************************************************************
@@ -498,14 +498,13 @@ BEGIN
 
          -- Prepare prev screen var
          SET @cOutField01  = @cMBOLKey
-         SET @cOutField02  = @cPalletID
+         SET @cOutField02  = N''
          SET @cOutField03  = N''
-         SET @cOutField04  = CASE @cTemperatureUnit WHEN N'Celcius' THEN N'℃' WHEN N'Fahrenheit' THEN '℉' ELSE @cTemperatureUnit END
+         SET @cOutField04  = N''
 
-         -- Go to prev screen
-         SET @nScn   = @nScn - 1
-         SET @nStep  = @nStep - 1
-         GOTO QUIT
+         -- Go to screen 2
+         SET @nScn   = @nScn - 2
+         SET @nStep  = @nStep - 2
       END
 
       IF @cOption = N'9'
@@ -519,7 +518,6 @@ BEGIN
          -- Go to prev screen
          SET @nScn   = @nScn - 1
          SET @nStep  = @nStep - 1
-         GOTO QUIT
       END
    END
 
@@ -534,14 +532,16 @@ BEGIN
       -- Go to prev screen
       SET @nScn   = @nScn - 1
       SET @nStep  = @nStep - 1
+   END
+
+   GOTO QUIT
+
+   Step_4_QUIT:
+   BEGIN
+      SET @cOutField03  = @cTemperature
+      SET @cOutFIeld04  = N''
       GOTO QUIT
    END
-END
-
-Step_4_QUIT:
-BEGIN
-   SET @cOutField03  = @cTemperature
-   SET @cOutFIeld04  = N''
 END
 
 Quit:
