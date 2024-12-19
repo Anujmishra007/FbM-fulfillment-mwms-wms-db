@@ -40,11 +40,6 @@ DECLARE
    @cFacility           NVARCHAR( 5),
    @cStorerKey          NVARCHAR( 15),
    @cUserName           NVARCHAR( 18),
-   @cErrMsg1            NVARCHAR( 125),
-   @cErrMsg2            NVARCHAR( 125),
-   @cErrMsg3            NVARCHAR( 125),
-   @cErrMsg4            NVARCHAR( 125),
-   @cErrMsg5            NVARCHAR( 125),
 
    @cPalletChoice       NVARCHAR( 20),
    @cMBOLKey            NVARCHAR( 10),
@@ -311,11 +306,7 @@ BEGIN
       IF NOT EXISTS(SELECT 1 FROM [dbo].[CodeLKUP] WITH(NOLOCK) WHERE [StorerKey] = @cStorerKey AND [LISTNAME] = N'ITEMCLASS' AND [Code] = @cItemClass AND [UDF04] IN (N'BOTH', N'LDG'))
       BEGIN
          SET @nErrNo = 230158
-         SET @cErrMsg1 = [RDT].[rdtGetMessageLong]( @nErrNo, @cLangCode, N'DSP')  -- Code List entry is missing for
-         EXEC [RDT].[rdtInsertMsgQueue] @nMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT
-            , N'230158'
-            , @cErrMsg1
-            , @cItemClass
+         SET @cErrMsg = [RDT].[rdtGetMessageLong]( @nErrNo, @cLangCode, N'DSP')  -- Code List entry is missing for
          GOTO Step_2_QUIT
       END
 
@@ -347,44 +338,22 @@ BEGIN
 
       IF ISNULL(@cTemperatureMin, N'') = N'' OR ISNULL(@cTemperatureMax, N'') = N'' OR ISNULL(@cTemperatureUnit, N'') = N''
       BEGIN
-         SET @nErrNo = 230160
-         SET @cErrMsg1 = [RDT].[rdtGetMessageLong]( 230159, @cLangCode, N'DSP')  -- Item class code
-         SET @cErrMsg2 = [RDT].[rdtGetMessageLong]( 230160, @cLangCode, N'DSP')  -- needs to be maintained properly
-         SET @cErrMsg1 = @cErrMsg1 + N' ' + @cItemClass
-         EXEC [RDT].[rdtInsertMsgQueue] @nMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT
-            , N'230160'
-            , @cErrMsg1
-            , @cErrMsg2
+         SET @nErrNo = 230159
+         SET @cErrMsg = [RDT].[rdtGetMessageLong]( @nErrNo, @cLangCode, N'DSP')  -- Item class code needs to be maintained properly
          GOTO Step_2_QUIT
       END
 
       IF TRY_CONVERT(DECIMAL(5,2), @cTemperatureMin) IS NULL
       BEGIN
-         SET @nErrNo = 230161
-         SET @cErrMsg1 = [RDT].[rdtGetMessageLong]( 230159, @cLangCode, N'DSP')  -- Item class code
-         SET @cErrMsg2 = [RDT].[rdtGetMessageLong]( 230160, @cLangCode, N'DSP')  -- needs to be maintained properly
-         SET @cErrMsg3 = [RDT].[rdtGetMessageLong]( 230161, @cLangCode, N'DSP')  -- Code User Define 01
-         SET @cErrMsg1 = @cErrMsg1 + N' ' + @cItemClass
-         EXEC [RDT].[rdtInsertMsgQueue] @nMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT
-            , N'230161'
-            , @cErrMsg1
-            , @cErrMsg2
-            , @cErrMsg3
+         SET @nErrNo = 230160
+         SET @cErrMsg = [RDT].[rdtGetMessageLong]( @nErrNo, @cLangCode, N'DSP')  -- Item class code needs to be maintained properly: UDF01
          GOTO Step_2_QUIT
       END
 
       IF TRY_CONVERT(DECIMAL(5,2), @cTemperatureMax) IS NULL
       BEGIN
-         SET @nErrNo = 230162
-         SET @cErrMsg1 = [RDT].[rdtGetMessageLong]( 230159, @cLangCode, N'DSP')  -- Item class code
-         SET @cErrMsg2 = [RDT].[rdtGetMessageLong]( 230160, @cLangCode, N'DSP')  -- needs to be maintained properly
-         SET @cErrMsg3 = [RDT].[rdtGetMessageLong]( 230162, @cLangCode, N'DSP')  -- Code User Define 02
-         SET @cErrMsg1 = @cErrMsg1 + N' ' + @cItemClass
-         EXEC [RDT].[rdtInsertMsgQueue] @nMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT
-            , N'230162'
-            , @cErrMsg1
-            , @cErrMsg2
-            , @cErrMsg3
+         SET @nErrNo = 230161
+         SET @cErrMsg = [RDT].[rdtGetMessageLong]( @nErrNo, @cLangCode, N'DSP')  -- Item class code needs to be maintained properly: UDF02
          GOTO Step_2_QUIT
       END
 
