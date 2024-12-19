@@ -130,17 +130,21 @@ BEGIN
 
          IF @n_Continue = 1
          BEGIN
-            UPDATE ORDERS WITH (ROWLOCK)
-            SET [Status]   = '9'
-               ,SOStatus   = '9'
-               ,EditDate   = GETDATE()
-               ,EditWho    = SUSER_NAME()  
-               ,TrafficCop = NULL
-            WHERE Orderkey = @c_Orderkey
+            IF EXISTS ( SELECT 1 FROM ORDERS O(NOLOCK) WHERE O.Orderkey = @c_Orderkey_P
+                        AND O.[Status] < '9'
+                      )
+            BEGIN 
+               UPDATE ORDERS WITH (ROWLOCK)
+               SET [Status] = '9'
+                  ,SOStatus = '9'
+                  ,EditDate = GETDATE()
+                  ,EditWho  = SUSER_NAME()  
+               WHERE Orderkey = @c_Orderkey_P
 
-            IF @@ERROR <> 0
-            BEGIN
-               SET @n_Continue = 3
+               IF @@ERROR <> 0
+               BEGIN
+                  SET @n_Continue = 3
+               END
             END
          END
 
@@ -186,7 +190,6 @@ BEGIN
                      SET [Status] = '9'
                         ,EditDate = GETDATE()
                         ,EditWho  = SUSER_NAME()  
-                        ,TrafficCop= NULL
                      WHERE LoadKey = @c_LoadKey_P
 
                      IF @@ERROR <> 0
@@ -223,7 +226,6 @@ BEGIN
                      SET [Status] = '9'
                         ,EditDate = GETDATE()
                         ,EditWho  = SUSER_NAME()  
-                        ,TrafficCop= NULL
                      WHERE MBOLKey = @c_MBOLKey_P 
  
                      IF @@ERROR <> 0
