@@ -1,5 +1,5 @@
 --rdt_Outbound_PalletTempCapture_Confirm_Message
-
+--FCR-1398
 execute rdt.rdtdropmsg 230251 ,230300
 
 execute rdt.rdtAddMsg 230251  ,10   ,'230251^GetKeyFail'          ,'us_english'  ,1870 ,0 ,'230251 - Get TemperatureLogID Fail'

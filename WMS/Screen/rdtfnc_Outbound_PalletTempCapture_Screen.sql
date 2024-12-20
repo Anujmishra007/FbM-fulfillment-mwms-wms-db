@@ -1,5 +1,6 @@
 -- rdtfnc_Outbound_PalletTempCapture_Screen
 -- 6540 - 6549
+--FCR-1398
 
 -- Function Menu Message
 INSERT INTO RDT.RDTMsg (Message_ID, Lang_Code, Message_Type, Message_Text, StoredProcName, Eventtype)
