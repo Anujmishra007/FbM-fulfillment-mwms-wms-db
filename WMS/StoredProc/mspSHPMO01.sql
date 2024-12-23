@@ -50,194 +50,210 @@ BEGIN
          , @c_MBOLKey_P          NVARCHAR(10)   = ''
          , @c_Status_C           NVARCHAR(10)   = ''
 
+         , @CUR_ORD              CURSOR
          , @CUR_OD               CURSOR
 
    SET @b_Success= 1 
    SET @n_Err    = 0  
    SET @c_ErrMsg = ''
 
-   SELECT TOP 1 @c_ExternOrderkey = O.ExternOrderKey
+   IF @@TRANCOUNT = 0
+   BEGIN
+      BEGIN TRAN
+   END
+
+   SET @CUR_ORD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
+   SELECT O.ExternOrderKey 
    FROM ORDERS o (NOLOCK) 
    JOIN MBOLDETAIL md (NOLOCK) ON md.Orderkey = o.Orderkey
    WHERE md.MbolKey = @c_MBOLkey
-   ORDER BY md.MbolLineNumber
-     
-   SELECT TOP 1 @c_Status_C = o.[Status]
-   FROM ORDERS o WITH (NOLOCK)  
-   WHERE o.ExternOrderKey = @c_ExternOrderkey
    AND o.ExternOrderKey > ''
-   AND o.StorerKey = @c_Storerkey
-   AND o.Rdd = 'SplitOrder'
-   ORDER BY o.[Status]
+   GROUP BY O.ExternOrderKey
+   ORDER BY MIN(md.MbolLineNumber)
+   
+   OPEN @CUR_ORD  
+  
+   FETCH NEXT FROM @CUR_ORD INTO @c_ExternOrderkey 
 
-   IF @c_Status_C < '9'
+   WHILE @@FETCH_STATUS <> -1 AND @n_Continue = 1
    BEGIN
-      GOTO QUIT_SP
-   END
+      SET @c_Status_C = '0'
+      SELECT TOP 1 @c_Status_C = o.[Status]
+      FROM ORDERS o WITH (NOLOCK)  
+      WHERE o.ExternOrderKey = @c_ExternOrderkey
+      AND o.StorerKey = @c_Storerkey
+      AND o.Rdd = 'SplitOrder'      
+      ORDER BY o.[Status]
 
-   SELECT @c_OrderKey_P = o.Orderkey
-   FROM ORDERS o WITH (NOLOCK)  
-   WHERE o.ExternOrderKey = @c_ExternOrderkey
-   AND o.ExternOrderKey > ''
-   AND o.StorerKey = @c_Storerkey
-   AND o.Rdd <> 'SplitOrder'
-   AND o.[Status] < '9'
-   ORDER BY o.Orderkey
-
-   IF @c_OrderKey_P <> ''
-   BEGIN
-      IF @@TRANCOUNT = 0
+      IF @c_Status_C < '9'
       BEGIN
-         BEGIN TRAN
+         GOTO NEXT_CHILD_ORD
       END
 
-      IF NOT EXISTS (SELECT 1 
-                     FROM ORDERDETAIL od (NOLOCK)
-                     WHERE od.Orderkey = @c_OrderKey_P
-                     AND od.OpenQty > 0
-                    )
+      SET @c_OrderKey_P = ''
+      SELECT TOP 1 @c_OrderKey_P = o.Orderkey
+      FROM ORDERS o WITH (NOLOCK)  
+      WHERE o.ExternOrderKey = @c_ExternOrderkey
+      AND o.ExternOrderKey > ''
+      AND o.StorerKey = @c_Storerkey
+      AND o.Rdd <> 'SplitOrder'
+      AND o.[Status] < '9'
+      ORDER BY o.Orderkey
+
+      IF @c_OrderKey_P <> ''
       BEGIN
-         SET @CUR_OD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
-         SELECT od.Orderkey, od.OrderLineNumber
-         FROM ORDERDETAIL od WITH (NOLOCK)  
-         WHERE od.Orderkey = @c_Orderkey_P
-         AND   od.[Status] < '9'
-         ORDER BY od.OrderLineNumber
-  
-         OPEN @CUR_OD  
-  
-         FETCH NEXT FROM @CUR_OD INTO @c_Orderkey_P, @c_OrderLineNumber_P
-
-         WHILE @@FETCH_STATUS <> -1 AND @n_Continue = 1
-         BEGIN 
-            UPDATE ORDERDETAIL WITH (ROWLOCK)
-            SET [Status]   = '9'
-               ,EditDate = GETDATE()
-               ,EditWho  = SUSER_NAME()  
-               ,TrafficCop= NULL
-            WHERE Orderkey = @c_Orderkey_P 
-            AND   OrderLineNumber = @c_OrderLineNumber_P
-
-            IF @@ERROR <> 0
-            BEGIN
-               SET @n_Continue = 3
-            END
-
-            FETCH NEXT FROM @CUR_OD INTO @c_Orderkey_P, @c_OrderLineNumber_P
-         END
-         CLOSE @CUR_OD
-         DEALLOCATE @CUR_OD
-
-         IF @n_Continue = 1
+         IF NOT EXISTS (SELECT 1 
+                        FROM ORDERDETAIL od (NOLOCK)
+                        WHERE od.Orderkey = @c_OrderKey_P
+                        AND od.OpenQty > 0
+                       )
          BEGIN
-            IF EXISTS ( SELECT 1 FROM ORDERS O(NOLOCK) WHERE O.Orderkey = @c_Orderkey_P
-                        AND O.[Status] < '9'
-                      )
+            SET @CUR_OD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
+            SELECT od.Orderkey, od.OrderLineNumber
+            FROM ORDERDETAIL od WITH (NOLOCK)  
+            WHERE od.Orderkey = @c_Orderkey_P
+            AND   od.[Status] < '9'
+            ORDER BY od.OrderLineNumber
+  
+            OPEN @CUR_OD  
+  
+            FETCH NEXT FROM @CUR_OD INTO @c_Orderkey_P, @c_OrderLineNumber_P
+
+            WHILE @@FETCH_STATUS <> -1 AND @n_Continue = 1
             BEGIN 
-               UPDATE ORDERS WITH (ROWLOCK)
-               SET [Status] = '9'
-                  ,SOStatus = '9'
+               UPDATE ORDERDETAIL WITH (ROWLOCK)
+               SET [Status]   = '9'
                   ,EditDate = GETDATE()
                   ,EditWho  = SUSER_NAME()  
-               WHERE Orderkey = @c_Orderkey_P
+                  ,TrafficCop= NULL
+               WHERE Orderkey = @c_Orderkey_P 
+               AND   OrderLineNumber = @c_OrderLineNumber_P
 
                IF @@ERROR <> 0
                BEGIN
                   SET @n_Continue = 3
                END
+
+               FETCH NEXT FROM @CUR_OD INTO @c_Orderkey_P, @c_OrderLineNumber_P
             END
-         END
+            CLOSE @CUR_OD
+            DEALLOCATE @CUR_OD
 
-         IF @n_Continue = 1
-         BEGIN
-            SELECT @c_LoadKey_P = lpd.LoadKey
-                  ,@c_LoadLineNumber_P = lpd.LoadLineNumber
-            FROM LoadPlanDetail lpd (NOLOCK) 
-            WHERE lpd.OrderKey = @c_Orderkey_P
-            AND lpd.[Status] <= '9'
-
-            IF @c_LoadLineNumber_P > ''
+            IF @n_Continue = 1
             BEGIN
-               UPDATE LoadPlanDetail WITH (ROWLOCK)
-               SET [Status] = '9'
-                  ,EditDate = GETDATE()
-                  ,EditWho  = SUSER_NAME()  
-                  ,TrafficCop= NULL
-               WHERE LoadKey = @c_LoadKey_P 
-               AND   LoadLineNumber = @c_LoadLineNumber_P
+               IF EXISTS ( SELECT 1 FROM ORDERS O(NOLOCK) WHERE O.Orderkey = @c_Orderkey_P
+                           AND O.[Status] < '9'
+                         )
+               BEGIN 
+                  UPDATE ORDERS WITH (ROWLOCK)
+                  SET [Status] = '9'
+                     ,SOStatus = '9'
+                     ,EditDate = GETDATE()
+                     ,EditWho  = SUSER_NAME()  
+                  WHERE Orderkey = @c_Orderkey_P
 
-               IF @@ERROR <> 0
-               BEGIN
-                  SET @n_Continue = 3
+                  IF @@ERROR <> 0
+                  BEGIN
+                     SET @n_Continue = 3
+                  END
                END
             END
 
             IF @n_Continue = 1
             BEGIN
-               IF EXISTS ( SELECT 1
-                           FROM LoadPlan lp (NOLOCK) 
-                           WHERE lp.LoadKey = @c_LoadKey_P
-                           AND lp.[Status] < '9'
-                         )
-               BEGIN
-                  IF NOT EXISTS (SELECT 1
-                                 FROM LoadPlanDetail lpd (NOLOCK) 
-                                 WHERE lpd.LoadKey = @c_LoadKey_P
-                                 AND lpd.[Status] < '9'
-                                 )
-                  BEGIN
-                     UPDATE LoadPlan WITH (ROWLOCK)
-                     SET [Status] = '9'
-                        ,EditDate = GETDATE()
-                        ,EditWho  = SUSER_NAME()  
-                     WHERE LoadKey = @c_LoadKey_P
+               SELECT @c_LoadKey_P = lpd.LoadKey
+                     ,@c_LoadLineNumber_P = lpd.LoadLineNumber
+               FROM LoadPlanDetail lpd (NOLOCK) 
+               WHERE lpd.OrderKey = @c_Orderkey_P
+               AND lpd.[Status] <= '9'
 
-                     IF @@ERROR <> 0
+               IF @c_LoadLineNumber_P > ''
+               BEGIN
+                  UPDATE LoadPlanDetail WITH (ROWLOCK)
+                  SET [Status] = '9'
+                     ,EditDate = GETDATE()
+                     ,EditWho  = SUSER_NAME()  
+                     ,TrafficCop= NULL
+                  WHERE LoadKey = @c_LoadKey_P 
+                  AND   LoadLineNumber = @c_LoadLineNumber_P
+
+                  IF @@ERROR <> 0
+                  BEGIN
+                     SET @n_Continue = 3
+                  END
+               END
+
+               IF @n_Continue = 1
+               BEGIN
+                  IF EXISTS ( SELECT 1
+                              FROM LoadPlan lp (NOLOCK) 
+                              WHERE lp.LoadKey = @c_LoadKey_P
+                              AND lp.[Status] < '9'
+                            )
+                  BEGIN
+                     IF NOT EXISTS (SELECT 1
+                                    FROM LoadPlanDetail lpd (NOLOCK) 
+                                    WHERE lpd.LoadKey = @c_LoadKey_P
+                                    AND lpd.[Status] < '9'
+                                    )
                      BEGIN
-                        SET @n_Continue = 3
+                        UPDATE LoadPlan WITH (ROWLOCK)
+                        SET [Status] = '9'
+                           ,EditDate = GETDATE()
+                           ,EditWho  = SUSER_NAME()  
+                        WHERE LoadKey = @c_LoadKey_P
+
+                        IF @@ERROR <> 0
+                        BEGIN
+                           SET @n_Continue = 3
+                        END
                      END
                   END
                END
             END
-         END
 
-         IF @n_Continue = 1
-         BEGIN
-            SELECT @c_MBOLKey_P = md.MbolKey
-            FROM MBOLDETAIL md (NOLOCK) 
-            WHERE md.OrderKey = @c_Orderkey_P
-
-            IF @c_MBOLKey_P > ''
+            IF @n_Continue = 1
             BEGIN
-               IF EXISTS ( SELECT 1
-                           FROM MBOL m (NOLOCK) 
-                           WHERE m.MBOLKey = @c_MBOLKey_P
-                           AND m.[Status] < '9'
-                         )
+               SELECT @c_MBOLKey_P = md.MbolKey
+               FROM MBOLDETAIL md (NOLOCK) 
+               WHERE md.OrderKey = @c_Orderkey_P
+
+               IF @c_MBOLKey_P > ''
                BEGIN
-                  IF NOT EXISTS (SELECT 1
-                                 FROM MBOLDETAIL md (NOLOCK) 
-                                 JOIN ORDERS o (NOLOCK) ON o.Orderkey = md.Orderkey
-                                 WHERE md.MbolKey = @c_MBOLKey_P
-                                 AND o.[Status] < '9'
-                                 )
+                  IF EXISTS ( SELECT 1
+                              FROM MBOL m (NOLOCK) 
+                              WHERE m.MBOLKey = @c_MBOLKey_P
+                              AND m.[Status] < '9'
+                            )
                   BEGIN
-                     UPDATE MBOL WITH (ROWLOCK)
-                     SET [Status] = '9'
-                        ,EditDate = GETDATE()
-                        ,EditWho  = SUSER_NAME()  
-                     WHERE MBOLKey = @c_MBOLKey_P 
- 
-                     IF @@ERROR <> 0
+                     IF NOT EXISTS (SELECT 1
+                                    FROM MBOLDETAIL md (NOLOCK) 
+                                    JOIN ORDERS o (NOLOCK) ON o.Orderkey = md.Orderkey
+                                    WHERE md.MbolKey = @c_MBOLKey_P
+                                    AND o.[Status] < '9'
+                                    )
                      BEGIN
-                        SET @n_Continue = 3
+                        UPDATE MBOL WITH (ROWLOCK)
+                        SET [Status] = '9'
+                           ,EditDate = GETDATE()
+                           ,EditWho  = SUSER_NAME()  
+                        WHERE MBOLKey = @c_MBOLKey_P 
+ 
+                        IF @@ERROR <> 0
+                        BEGIN
+                           SET @n_Continue = 3
+                        END
                      END
                   END
                END
             END
          END
       END
+      NEXT_CHILD_ORD:
+      FETCH NEXT FROM @CUR_ORD INTO @c_ExternOrderkey 
    END
+   CLOSE @CUR_ORD 
+   DEALLOCATE @CUR_ORD
 
    QUIT_SP:
    
