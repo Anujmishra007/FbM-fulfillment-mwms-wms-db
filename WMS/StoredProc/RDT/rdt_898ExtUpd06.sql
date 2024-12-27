@@ -4,17 +4,18 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF 
 GO
-/************************************************************************/
-/* Store procedure: rdt_898ExtUpd06                                     */
-/* Copyright      : Maersk                                              */
-/*                                                                      */
-/* Purpose: Extended Upd for USLevis                                    */
-/*                                                                      */
-/* Date        Rev  Author      Purposes                                */
-/* 27-05-2024  1.0  JACKC       FCR-236 Created                         */
-/* 14-06-2024  1.1  JACKC       FCR-236 transmitlog2 requirement change */
-/* 27-11-2024  1.2  TLE109      FCR-1128 Finalize close pallet          */
-/************************************************************************/
+/***************************************************************************/
+/* Store procedure: rdt_898ExtUpd06                                        */
+/* Copyright      : Maersk                                                 */
+/*                                                                         */
+/* Purpose: Extended Upd for USLevis                                       */
+/*                                                                         */
+/* Date        Rev    Author      Purposes                                 */
+/* 27-05-2024  1.0    JACKC       FCR-236 Created                          */
+/* 14-06-2024  1.1    JACKC       FCR-236 transmitlog2 requirement change  */
+/* 27-11-2024  1.2    TLE109      FCR-1128 Finalize close pallet           */
+/* 27-12-2024  1.2.1  JCH507      FCR-1128 Fix finalize flag upd logic     */
+/***************************************************************************/
 
 CREATE OR ALTER PROCEDURE rdt.rdt_898ExtUpd06
     @nMobile     INT
@@ -89,6 +90,7 @@ BEGIN
                      INNER JOIN dbo.UCC WITH(NOLOCK) ON UCC.UCCNo = ReceiptDetail.UserDefine02 AND UCC.StorerKey = ReceiptDetail.StorerKey
                      WHERE ReceiptDetail.StorerKey = @cStorerKey AND ReceiptDetail.ReceiptKey = @cReceiptKey 
                         AND ReceiptDetail.FinalizeFlag = 'N'
+                        AND ReceiptDetail.ToId = @cToID --V1.2.1
                      IF @@ERROR <> 0
                      BEGIN  
                         SET @nErrNo = 215352  
