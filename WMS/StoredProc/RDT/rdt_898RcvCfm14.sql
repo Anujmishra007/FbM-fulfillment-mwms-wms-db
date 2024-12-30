@@ -2,16 +2,18 @@ SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
-/******************************************************************************/
-/* Store procedure: rdt_898RcvCfm14_ForRetrun                                           */
-/* Copyright      : Maersk                                                    */
-/*                                                                            */
-/* Purpose: For Levis - Changes in UCC Receive to process for returns         */  
-/*                                                                            */
-/* Date       Rev  Author      Purposes                                       */
-/* 2024-11-25 1.0  ShaoAn      FCR-1103 Changes in UCC Receive to process     */  
-/*                             for returns                                    */                               
-/******************************************************************************/
+/*********************************************************************************/
+/* Store procedure: rdt_898RcvCfm14                                              */
+/* Copyright      : Maersk                                                       */
+/*                                                                               */
+/* Purpose: For Levis - Changes in UCC Receive to process for returns            */  
+/*                                                                               */
+/* Date       Rev    Author      Purposes                                        */
+/* 2024-11-25 1.0    ShaoAn      FCR-1103 Changes in UCC Receive to process      */  
+/*                               for returns                                     */
+/* 2024-12-30 1.0.1  JCH507      FCR-1103 Rctp line not split when partial qty   */
+/*                                 received by a UCC                             */                                
+/*********************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_898RcvCfm14] (
    @nFunc          INT,
@@ -2574,19 +2576,107 @@ BEGIN
    END
 END  
 
-UPDATE dbo.ReceiptDetail WITH (ROWLOCK) SET  
-            UserDefine01 = CASE WHEN @cDocType = 'R' THEN @cUCC ELSE RD.UserDefine01 END,
-            UserDefine02 = @cUCC
-      FROM dbo.ReceiptDetail RD  
-            INNER JOIN @tRD T ON (T.ReceiptLineNumber = RD.ReceiptLineNumber)  
-      WHERE RD.ReceiptKey = @cReceiptKey  
-            AND T.BeforeReceivedQTY <> T.Org_BeforeReceivedQTY  
-IF @@ERROR <> 0 
-BEGIN  
-   SET @nErrNo = 229153  
-   SET @cErrMsg = rdt.rdtgetmessage(229153, @cLangCode, 'DSP') --'UpdUDF01Fail'   -- (ShaoAn For FCR-1103)
+BEGIN TRY
+   UPDATE dbo.ReceiptDetail WITH (ROWLOCK) SET  
+               UserDefine01 = CASE WHEN @cDocType = 'R' THEN @cUCC ELSE RD.UserDefine01 END,
+               UserDefine02 = @cUCC
+         FROM dbo.ReceiptDetail RD  
+               INNER JOIN @tRD T ON (T.ReceiptLineNumber = RD.ReceiptLineNumber)  
+         WHERE RD.ReceiptKey = @cReceiptKey  
+               AND T.BeforeReceivedQTY <> T.Org_BeforeReceivedQTY 
+END TRY 
+BEGIN CATCH 
+   SET @nErrNo = 231401  
+   SET @cErrMsg = rdt.rdtgetmessage(231401, @cLangCode, 'DSP') --'UpdUDF01Fail'   -- (ShaoAn For FCR-1103)
    GOTO RollBackTran  
+END CATCH
+
+--v1.0.1 start
+-- Split the ucc receipt line if the beforeReceivedQty < QTYExpected
+DECLARE @cReciptLineToSplit NVARCHAR(5),
+         @nNewRcptLineQty INT
+
+SELECT TOP 1 
+   @cReciptLineToSplit = ReceiptLineNumber,
+   @nNewRcptLineQty = QTYExpected - BeforeReceivedQTY 
+FROM dbo.RECEIPTDETAIL rd (NOLOCK)
+JOIN dbo.RECEIPT rm (NOLOCK) ON rd.RECEIPTKEY = rm.RECEIPTKEY
+WHERE rm.RECEIPTKEY = @cReceiptKey 
+AND rm.DOCTYPE = 'R' 
+AND BeforeReceivedQTY < QTYExpected
+AND rd.UserDefine02 = @cUCC
+
+IF @cDebug = '1'
+BEGIN
+   SELECT 'The splitted received receipt line for not fully received UCC'
+   SELECT *
+   FROM dbo.RECEIPTDETAIL rd (NOLOCK)
+   JOIN dbo.RECEIPT rm (NOLOCK) ON rd.RECEIPTKEY = rm.RECEIPTKEY
+   WHERE rm.RECEIPTKEY = @cReceiptKey 
+   AND rm.DOCTYPE = 'R' 
+   AND BeforeReceivedQTY < QTYExpected
+   AND rd.UserDefine02 = @cUCC
 END
+
+IF ISNULL(@cReciptLineToSplit,'') <> ''
+BEGIN
+   BEGIN TRY
+      UPDATE dbo.RECEIPTDETAIL WITH (ROWLOCK) SET  
+               QTYExpected = BeforeReceivedQTY,
+               TrafficCop = NULL,
+               EditDate = GETDATE(),  
+               EditWho = SUSER_SNAME()    
+         WHERE ReceiptKey = @cReceiptKey  
+               AND ReceiptLineNumber = @cReciptLineToSplit
+   END TRY
+   BEGIN CATCH
+      SET @cErrMsg = ERROR_MESSAGE() -- Update Receiptdetail fail
+      SET @nErrNo = 231402  
+      GOTO RollBackTran  
+   END CATCH
+
+   SET @cNewReceiptLineNumber = ''
+   SELECT @cNewReceiptLineNumber =
+      RIGHT( '00000' + CAST( CAST( IsNULL( MAX( ReceiptLineNumber), 0) AS INT) + 1 AS NVARCHAR( 5)), 5)
+   FROM dbo.ReceiptDetail (NOLOCK)
+   WHERE ReceiptKey = @cReceiptKey
+
+   IF @cDebug = '1'
+      SELECT 'NewReceiptLine', @cNewReceiptLineNumber
+
+   -- Insert new ReceiptDetail line
+   BEGIN TRY
+      INSERT INTO dbo.ReceiptDetail
+         (ReceiptKey, ReceiptLineNumber, POKey, StorerKey, SKU, QTYExpected, BeforeReceivedQTY,
+         ToID, ToLOC, Lottable01, Lottable02, Lottable03, Lottable04, --Lottable05,
+         Status, DateReceived, UOM, PackKey, ConditionCode, EffectiveDate, TariffKey, FinalizeFlag, SplitPalletFlag,
+         ExternReceiptKey, ExternLineNo, AltSku, VesselKey, -- Added By Vicky
+         VoyageKey, XdockKey, ContainerKey, UnitPrice, ExtendedPrice, FreeGoodQtyExpected,
+         FreeGoodQtyReceived, ExportStatus, LoadKey, ExternPoKey,
+         UserDefine01, UserDefine02, UserDefine03, UserDefine04, UserDefine05,
+         UserDefine06, UserDefine07, UserDefine08, UserDefine09, UserDefine10, POLineNumber, SubReasonCode, DuplicateFrom, Channel) 
+      SELECT
+         @cReceiptKey, @cNewReceiptLineNumber, POKey, StorerKey, SKU, @nNewRcptLineQty, 0,  
+         '', ToLOC, Lottable01, Lottable02, Lottable03, Lottable04, --@dLottable05,
+         '0', GETDATE(), UOM, PackKey, ConditionCode, GETDATE(), TariffKey, 'N', 'N',
+         ExternReceiptKey, ExternLineNo, AltSku, VesselKey,
+         VoyageKey, XdockKey, ContainerKey, UnitPrice, ExtendedPrice, FreeGoodQtyExpected,
+         FreeGoodQtyReceived, ExportStatus, LoadKey, ExternPoKey,
+         '', '', UserDefine03, UserDefine04, UserDefine05,
+         UserDefine06, UserDefine07, UserDefine08, UserDefine09, UserDefine10,
+         POLineNumber, SubreasonCode , @cReciptLineToSplit, Channel
+      FROM Receiptdetail (NOLOCK)
+      WHERE ReceiptKey = @cReceiptKey
+         AND ReceiptLineNumber = @cReciptLineToSplit
+   END TRY
+   BEGIN CATCH
+      SET @cErrMsg = ERROR_MESSAGE() -- Insert Receiptdetail fail
+      SET @nErrNo = 231403  
+      GOTO RollBackTran  
+   END CATCH
+END
+
+--v1.0.1 end
 
 IF @cDebug = '1'  
 BEGIN
