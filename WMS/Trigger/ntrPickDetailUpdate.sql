@@ -99,6 +99,7 @@ GO
 /* 23-JUL-2019  Wan03   3.8   ChannelInventoryMgmt use fnc_SelectGetRight*/
 /* 04-MAR-2021  Wan04   3.9   WMS-16390 - [CN] NIKE_O2_Ecompacking_Check*/
 /*                            _Pickdetail_status_CR                     */
+/* 2024-11-26   Wan05   4.0   UWP-23317 - [FCR-618  819] Unpick SerialNo*/
 /************************************************************************/
 
 CREATE TRIGGER [dbo].[ntrPickDetailUpdate]
@@ -156,6 +157,8 @@ DECLARE   @cPickDetailKey NVARCHAR(10)     -- (james02)
         , @c_PDKey        NVARCHAR(10)     -- SOS# 264916
         
         , @c_EPACK4PickedOrder         NVARCHAR(30)   --(Wan04)
+        , @n_PickSerialNoKey           BIGINT = 0     --(Wan05)
+        , @CUR_SNDEL                   CURSOR         --(Wan05)
 
 --(Wan01) - START
          ,@c_AllocateByConsNewExpiry   NVARCHAR(10)
@@ -685,6 +688,28 @@ BEGIN
    END
    --SET ROWCOUNT 0
 END
+
+--(Wan05) - START
+IF (@n_Continue=1 or @n_Continue=2) and (Update(Status) OR Update(Qty) OR Update(Lot) OR Update(ID))
+BEGIN
+   --Allow to update if update from ntrpackserialnodelete trigger. direct update not allow if serialno is picked
+   IF EXISTS ( SELECT TOP 1 1
+               FROM INSERTED i
+               JOIN DELETED  d ON d.Pickdetailkey = i.pickdetailkey
+               JOIN PickSerialNo psn WITH (NOLOCK) ON  psn.PickDetailKey = i.PickDetailKey
+               WHERE d.[Status] = '5' AND i.[Status] <= '5'
+               AND   psn.SerialNo > ''
+               GROUP BY d.PickDetailKey
+               HAVING COUNT(1) = SUM(d.Qty)
+             )
+   BEGIN
+      SET @n_continue = 3
+      SET @n_err   = 61622
+      SET @c_errmsg= 'NSQL'+CONVERT(char(6), @n_err)+': SerialNo is picked'
+                   + '. Disallow to change Lot/ID/Qty/Status. (ntrPickdetailUpdate)'
+   END
+END
+--(Wan05) - END
 
 /* #INCLUDE <TRPDU1.SQL> */
 IF @n_Continue = 1 or @n_Continue = 2
