@@ -11,8 +11,9 @@ GO
 /*                         For HuSQ                                           */
 /* Called from: rdt_TM_Assist_ClusterPick_ConfirmPickV2                       */
 /*                                                                            */
-/* Date         Rev  Author   Purposes                                        */
-/* 2024-10-10   1.0  JHU151    FCR-777 Created                                */ 
+/* Date         Rev   Author    Purposes                                      */
+/* 2024-10-10   1.0   JHU151    FCR-777 Created                               */
+/* 2024-12-27   1.1.0 Dennis    FCR-1872 Remove Lot                           */ 
 /******************************************************************************/  
   
 CREATE OR ALTER PROC rdt.rdt_1867Confirm01 (  
@@ -45,7 +46,7 @@ BEGIN
    DECLARE @cSQL        NVARCHAR( MAX)  
    DECLARE @cSQLParam   NVARCHAR( MAX)  
    DECLARE @nTranCount  INT  
-   
+   DECLARE @nTaskQty    INT =0 
 
 
    DECLARE @cOrderKey      NVARCHAR( 10)  
@@ -460,7 +461,8 @@ BEGIN
          AND   PD.Status <> '4' 
          AND   PD.Status < @cPickConfirmStatus 
          AND   PD.TaskDetailKey = @cTaskDetailKey
-         
+         ORDER BY CASE WHEN PD.QTY - @nQTY_Bal >=0 THEN 0 ELSE 1 END, ABS(PD.QTY - @nQTY_Bal)
+
          OPEN @curPD
 
          -- Loop PickDetail  
@@ -506,6 +508,7 @@ BEGIN
                END  
    
                SET @nQTY_Bal = @nQTY_Bal - @nQTY_PD -- Reduce balance  
+               SET @nTaskQty = @nTaskQty + @nQTY_PD
             END  
    
             -- PickDetail have more  
@@ -514,107 +517,105 @@ BEGIN
                -- Don't need to split  
                IF @nQTY_Bal = 0  
                BEGIN  
-                  -- Short pick  
-                  IF @cType = 'SHORT' -- Don't need to split  
-                  BEGIN  
-                     -- Confirm PickDetail  
-                     UPDATE dbo.PickDetail WITH (ROWLOCK) SET  
-                        Status = '4',  
-                        EditDate = GETDATE(),  
-                        EditWho  = SUSER_SNAME(),  
-                        TrafficCop = NULL  
-                     WHERE PickDetailKey = @cPickDetailKey  
-                     IF @@ERROR <> 0  
-                     BEGIN  
-                        SET @nErrNo = 171955  
-                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKDtl Fail  
-                        GOTO RollBackTran  
-                     END  
+                  -- -- Short pick  
+                  -- IF @cType = 'SHORT' -- Don't need to split  
+                  -- BEGIN  
+                  --    -- Confirm PickDetail  
+                  --    UPDATE dbo.PickDetail WITH (ROWLOCK) SET  
+                  --       Status = '4',  
+                  --       EditDate = GETDATE(),  
+                  --       EditWho  = SUSER_SNAME(),  
+                  --       TrafficCop = NULL  
+                  --    WHERE PickDetailKey = @cPickDetailKey  
+                  --    IF @@ERROR <> 0  
+                  --    BEGIN  
+                  --       SET @nErrNo = 171955  
+                  --       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKDtl Fail  
+                  --       GOTO RollBackTran  
+                  --    END  
                      
-                     UPDATE dbo.TaskDetail SET
-                        SystemQty = Qty, 
-                        Qty = @nQTY_Bal,  
-                        EditDate = GETDATE(),  
-                        EditWho  = SUSER_SNAME()
-                     WHERE TaskDetailKey = @cTaskDetailKey
-                     IF @@ERROR <> 0  
-                     BEGIN  
-                        SET @nErrNo = 227263  
-                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKDtl Fail  
-                        GOTO RollBackTran  
-                     End
+                  --    UPDATE dbo.TaskDetail SET
+                  --       SystemQty = Qty, 
+                  --       Qty = @nQTY_Bal,  
+                  --       EditDate = GETDATE(),  
+                  --       EditWho  = SUSER_SNAME()
+                  --    WHERE TaskDetailKey = @cTaskDetailKey
+                  --    IF @@ERROR <> 0  
+                  --    BEGIN  
+                  --       SET @nErrNo = 227263  
+                  --       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKDtl Fail  
+                  --       GOTO RollBackTran  
+                  --    End
 
-                     -- mutiple pickdetail in same taskdetailkey
-                     IF EXISTS(SELECT 1 FROM PickDetail PD WITH(NOLOCK)
-                                 WHERE storerkey = @cStorerkey
-                                 AND TaskDetailKey = @cTaskDetailKey
-                                 AND status <> '4')
-                     BEGIN                        
-                        EXECUTE dbo.nspg_getkey
-                        'TaskDetailKey'
-                        , 10
-                        , @cNewTaskDetailKey OUTPUT
-                        , @bSuccess OUTPUT
-                        , @nErrNo     --OUTPUT Commented by NLT013, it overrides the old error no, if the error was not 0, but no error happens while executing this SP, error no will be updated as 0
-                        , @cErrMsg OUTPUT
+                  --    -- mutiple pickdetail in same taskdetailkey
+                  --    IF EXISTS(SELECT 1 FROM PickDetail PD WITH(NOLOCK)
+                  --                WHERE storerkey = @cStorerkey
+                  --                AND TaskDetailKey = @cTaskDetailKey
+                  --                AND status <> '4')
+                  --    BEGIN                        
+                  --       EXECUTE dbo.nspg_getkey
+                  --       'TaskDetailKey'
+                  --       , 10
+                  --       , @cNewTaskDetailKey OUTPUT
+                  --       , @bSuccess OUTPUT
+                  --       , @nErrNo     --OUTPUT Commented by NLT013, it overrides the old error no, if the error was not 0, but no error happens while executing this SP, error no will be updated as 0
+                  --       , @cErrMsg OUTPUT
 
-                        IF NOT @bSuccess = 1
-                        BEGIN
-                           SET @nErrNo = 227271
-                           SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --GetKeyFailed(rdt_1867Confirm01)
-                           GOTO RollBackTran 
-                        END
+                  --       IF NOT @bSuccess = 1
+                  --       BEGIN
+                  --          SET @nErrNo = 227271
+                  --          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --GetKeyFailed(rdt_1867Confirm01)
+                  --          GOTO RollBackTran 
+                  --       END
 
-                        INSERT INTO dbo.TaskDetail
-                        (TaskDetailKey,TaskType,Storerkey,Sku,Lot,UOM,UOMQty,QTY,FromLoc,LogicalFromLoc,FromID,ToLoc,LogicalToLoc
-                        ,ToID,Caseid,PickMethod,Status,StatusMsg,Priority,SourcePriority,Holdkey,UserKey,UserPosition,UserKeyOverRide
-                        ,StartTime,EndTime,SourceType,SourceKey,PickDetailKey,OrderKey,OrderLineNumber,ListKey,WaveKey,ReasonKey
-                        ,Message01,Message02,Message03,RefTaskKey,LoadKey,AreaKey,DropID, SystemQty,Groupkey,TrafficCop)
-                        SELECT  TOP 1
-                        @cNewTaskDetailKey,TaskType,Storerkey,Sku,Lot,UOM,UOMQty,QTY-@nQTY_Bal,FromLoc,LogicalFromLoc,FromID,ToLoc,LogicalToLoc
-                        ,ToID,Caseid,PickMethod,Status,StatusMsg,Priority,SourcePriority,Holdkey,UserKey,UserPosition,UserKeyOverRide
-                        ,StartTime,EndTime,SourceType,SourceKey,PickDetailKey,OrderKey,OrderLineNumber,ListKey,WaveKey,ReasonKey
-                        ,Message01,Message02,Message03,RefTaskKey,LoadKey,AreaKey,DropID, SystemQty,GroupKey,'9'
-                        FROM dbo.TaskDetail WITH (NOLOCK)
-                        WHERE Taskdetailkey = @cTaskDetailKey
-                        AND Storerkey = @cStorerkey
+                  --       INSERT INTO dbo.TaskDetail
+                  --       (TaskDetailKey,TaskType,Storerkey,Sku,Lot,UOM,UOMQty,QTY,FromLoc,LogicalFromLoc,FromID,ToLoc,LogicalToLoc
+                  --       ,ToID,Caseid,PickMethod,Status,StatusMsg,Priority,SourcePriority,Holdkey,UserKey,UserPosition,UserKeyOverRide
+                  --       ,StartTime,EndTime,SourceType,SourceKey,PickDetailKey,OrderKey,OrderLineNumber,ListKey,WaveKey,ReasonKey
+                  --       ,Message01,Message02,Message03,RefTaskKey,LoadKey,AreaKey,DropID, SystemQty,Groupkey,TrafficCop)
+                  --       SELECT  TOP 1
+                  --       @cNewTaskDetailKey,TaskType,Storerkey,Sku,Lot,UOM,UOMQty,QTY-@nQTY_Bal,FromLoc,LogicalFromLoc,FromID,ToLoc,LogicalToLoc
+                  --       ,ToID,Caseid,PickMethod,Status,StatusMsg,Priority,SourcePriority,Holdkey,UserKey,UserPosition,UserKeyOverRide
+                  --       ,StartTime,EndTime,SourceType,SourceKey,PickDetailKey,OrderKey,OrderLineNumber,ListKey,WaveKey,ReasonKey
+                  --       ,Message01,Message02,Message03,RefTaskKey,LoadKey,AreaKey,DropID, SystemQty,GroupKey,'9'
+                  --       FROM dbo.TaskDetail WITH (NOLOCK)
+                  --       WHERE Taskdetailkey = @cTaskDetailKey
+                  --       AND Storerkey = @cStorerkey
                         
-                        IF @@ERROR <> 0
-                        BEGIN
-                           SET @nErrNo = 227272
-                           SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InsTaskFailed
-                           GOTO RollBackTran 
-                        END
+                  --       IF @@ERROR <> 0
+                  --       BEGIN
+                  --          SET @nErrNo = 227272
+                  --          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InsTaskFailed
+                  --          GOTO RollBackTran 
+                  --       END
 
-                        UPDATE dbo.PickDetail WITH (ROWLOCK) SET  
-                           EditDate = GETDATE(),  
-                           EditWho  = SUSER_SNAME(),  
-                           taskdetailkey = @cNewTaskDetailKey
-                        WHERE PickDetailKey = @cPickDetailKey
+                  --       UPDATE dbo.PickDetail WITH (ROWLOCK) SET  
+                  --          EditDate = GETDATE(),  
+                  --          EditWho  = SUSER_SNAME(),  
+                  --          taskdetailkey = @cNewTaskDetailKey
+                  --       WHERE PickDetailKey = @cPickDetailKey
 
-                        IF @@ERROR <> 0  
-                        BEGIN  
-                           SET @nErrNo = 171955  
-                           SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKDtl Fail  
-                           GOTO RollBackTran  
-                        END
+                  --       IF @@ERROR <> 0  
+                  --       BEGIN  
+                  --          SET @nErrNo = 171955  
+                  --          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKDtl Fail  
+                  --          GOTO RollBackTran  
+                  --       END
                         
-                        UPDATE dbo.TaskDetail SET                           
-                           RefTaskKey = @cNewTaskDetailKey,
-                           EditDate = GETDATE(),  
-                           EditWho  = SUSER_SNAME()
-                        WHERE TaskDetailKey = @cTaskDetailKey
-                        IF @@ERROR <> 0  
-                        BEGIN  
-                           SET @nErrNo = 227263  
-                           SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKDtl Fail  
-                           GOTO RollBackTran  
-                        End
-                     END
-
-
-
-                  END  
+                  --       UPDATE dbo.TaskDetail SET                           
+                  --          RefTaskKey = @cNewTaskDetailKey,
+                  --          EditDate = GETDATE(),  
+                  --          EditWho  = SUSER_SNAME()
+                  --       WHERE TaskDetailKey = @cTaskDetailKey
+                  --       IF @@ERROR <> 0  
+                  --       BEGIN  
+                  --          SET @nErrNo = 227263  
+                  --          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKDtl Fail  
+                  --          GOTO RollBackTran  
+                  --       End
+                  --    END
+                  -- END  
+                  print 1
                END  
                ELSE  
                BEGIN -- Have balance, need to split                                         
@@ -756,6 +757,7 @@ BEGIN
                         TrafficCop = NULL,
                         TaskDetailKey = @cNewTaskDetailKey
                      WHERE PickDetailKey = @cNewPickDetailKey
+                     OR (TaskDetailKey = @cTaskDetailKey AND Status <> '5' AND PickDetailKey <> @cPickDetailKey)
                      IF @@ERROR <> 0
                      BEGIN
                         SET @nErrNo = 227268
@@ -764,8 +766,8 @@ BEGIN
                      END
 
                      UPDATE dbo.TaskDetail SET
-                        SystemQty = @nQTY_Bal, 
-                        Qty = @nQTY_Bal,  
+                        SystemQty = @nQTY_Bal+@nTaskQty, 
+                        Qty = @nQTY_Bal+@nTaskQty,  
                         EditDate = GETDATE(),  
                         EditWho  = SUSER_SNAME(),
                         RefTaskKey = @cNewTaskDetailKey
