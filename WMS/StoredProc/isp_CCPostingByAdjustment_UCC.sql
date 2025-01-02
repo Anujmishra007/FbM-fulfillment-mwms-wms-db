@@ -42,6 +42,7 @@ GO
 /* 22-Nov-2023 2.2  NJOW01      DEVOPS Combine Script                   */
 /* 22-JAN-2024 2.3  NJOW02      WMS-24558 Add post CC adjustment call   */
 /*                              custom sp                               */
+/* 20-Dec-2024 2.4  CLVN01      FCR-2118 Skip DuplicateUCC Checking     */
 /************************************************************************/
 
 CREATE or ALTER PROCEDURE [dbo].[isp_CCPostingByAdjustment_UCC]
@@ -113,7 +114,8 @@ BEGIN -- main
       @n_MoveQty            INT, --NJOW01
       @n_AdjQty             INT, --NJOW01
       @c_FinalAdjustmentKey NVARCHAR(10), --NJOW01
-      @c_AdjLoc             NVARCHAR(10) --NJOW01
+      @c_AdjLoc             NVARCHAR(10), --NJOW01
+      @c_CCAdjPostByUCCNoCheckDup NVARCHAR(30) --(CLVN01)
       
    SET @b_success = 1 -- 1=Success
    SELECT @n_starttCnt = @@TRANCOUNT
@@ -353,6 +355,7 @@ BEGIN -- main
    BEGIN
       -- Get FinalizeStage, AdjustmentType and ReasonCode
       SELECT
+      	 @c_StorerKey = Storerkey, --(CLVN01)
          @n_FinalizeStage = FinalizeStage,
          @c_AdjType       = AdjType,
          @c_AdjReasonCode = AdjReasonCode
@@ -362,62 +365,85 @@ BEGIN -- main
       -- Clean up error report
       DELETE dbo.StockTakeErrorReport WITH (ROWLOCK) WHERE StockTakeKey = @c_CCKey
 
+      --(CLVN01) CHECK DUPLICATE UCC CONFIG (START)--
+	  BEGIN TRY  
+      EXEC nspGetRight  
+           @c_Facility  = ''  
+         , @c_StorerKey = @c_StorerKey  
+         , @c_sku       = NULL  
+         , @c_ConfigKey = 'UCC_CC_Adj_Post_NoCheckDupUCC'  
+         , @b_Success   = @b_Success                  OUTPUT  
+         , @c_authority = @c_CCAdjPostByUCCNoCheckDup OUTPUT  
+         , @n_err       = @n_err                      OUTPUT  
+         , @c_errmsg    = @c_errmsg                   OUTPUT  
+      END TRY  
+      BEGIN CATCH  
+         SET @n_err = 552954  
+         SET @c_ErrMsg = ERROR_MESSAGE()  
+         SET @c_ErrMsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': Error Executing nspGetRight - UCC_CC_Adj_Post_NoCheckDupUCC. (lsp_PostCCByUCC_Wrapper)'  
+                       + '( ' + @c_errmsg + ' )'  
+      END CATCH
+
+      IF @c_CCAdjPostByUCCNoCheckDup = '0'
+	  BEGIN
       -- Check duplicte UCC
-      DECLARE @cTitlePrinted NVARCHAR(1)
-      DECLARE @cDupUCCNo NVARCHAR( 20)
-      DECLARE @curDupUCC CURSOR
-      SET @cTitlePrinted = 'N'
-      SET @curDupUCC = CURSOR FOR
-         SELECT RefNo
-         FROM dbo.CCDetail WITH (NOLOCK)
-         WHERE CCKey = @c_CCKey
-            AND RefNo <> ''
-            AND Status IN ('2', '4')
-         GROUP BY RefNo
-         HAVING COUNT( DISTINCT Status) > 1
-      OPEN @curDupUCC
-      FETCH NEXT FROM @curDupUCC INTO @cDupUCCNo
-      WHILE @@FETCH_STATUS = 0
-      BEGIN
-         IF @cTitlePrinted = 'N'
-            --(Wan03) - START
-            AND EXISTS (SELECT 1
-                        FROM dbo.CCDetail DUP WITH (NOLOCK)
-                        WHERE DUP.CCKey = @c_CCKey
-                        AND DUP.RefNo = @cDupUCCNo
-                        GROUP BY DUP.Storerkey
-                              ,  DUP.Sku
-                        HAVING COUNT(DISTINCT DUP.Status) > 1)
-            --(Wan03) - END
-         BEGIN
-            INSERT INTO dbo.StockTakeErrorReport (StockTakeKey, ErrorNo, Type, LineText) VALUES (@c_CCKey, '', 'ERROR', REPLICATE( '-', 80))
-            INSERT INTO dbo.StockTakeErrorReport (StockTakeKey, ErrorNo, Type, LineText) VALUES (@c_CCKey, '', 'ERROR', 'DUPLICATE UCC: ' + @cDupUCCNo)
-            INSERT INTO dbo.StockTakeErrorReport (StockTakeKey, ErrorNo, Type, LineText) VALUES (@c_CCKey, '', 'ERROR', 'CCDETAILKEY  LOC         SKU')
-            INSERT INTO dbo.StockTakeErrorReport (StockTakeKey, ErrorNo, Type, LineText) VALUES (@c_CCKey, '', 'ERROR', '-----------  ----------  --------------------')
-            SET @cTitlePrinted = 'Y'
-         END
-
-         INSERT INTO dbo.StockTakeErrorReport (StockTakeKey, ErrorNo, Type, LineText)
-         SELECT @c_CCKey, '', 'ERROR', CCDetailKey + '  ' + LOC + '  ' + SKU
-         FROM dbo.CCDetail WITH (NOLOCK)
-         WHERE CCKey = @c_CCKey
-            AND RefNo = @cDupUCCNo
-            --(Wan01) - START
-            AND EXISTS (SELECT 1
-                        FROM dbo.CCDetail DUP WITH (NOLOCK)
-                        WHERE DUP.CCKey = CCDetail.CCKey
-             AND DUP.RefNo = CCDetail.RefNo
-                        AND DUP.Sku   = CCDetail.Sku
-                        GROUP BY DUP.Storerkey
-                              ,  DUP.Sku
-                        HAVING COUNT(DISTINCT DUP.Status) > 1)
-            --(Wan01) - END
-         FETCH NEXT FROM @curDupUCC INTO @cDupUCCNo
+        DECLARE @cTitlePrinted NVARCHAR(1)
+        DECLARE @cDupUCCNo NVARCHAR( 20)
+        DECLARE @curDupUCC CURSOR
+        SET @cTitlePrinted = 'N'
+        SET @curDupUCC = CURSOR FOR
+           SELECT RefNo
+           FROM dbo.CCDetail WITH (NOLOCK)
+           WHERE CCKey = @c_CCKey
+              AND RefNo <> ''
+              AND Status IN ('2', '4')
+           GROUP BY RefNo
+           HAVING COUNT( DISTINCT Status) > 1
+        OPEN @curDupUCC
+        FETCH NEXT FROM @curDupUCC INTO @cDupUCCNo
+        WHILE @@FETCH_STATUS = 0
+        BEGIN
+           IF @cTitlePrinted = 'N'
+              --(Wan03) - START
+              AND EXISTS (SELECT 1
+                          FROM dbo.CCDetail DUP WITH (NOLOCK)
+                          WHERE DUP.CCKey = @c_CCKey
+                          AND DUP.RefNo = @cDupUCCNo
+                          GROUP BY DUP.Storerkey
+                                ,  DUP.Sku
+                          HAVING COUNT(DISTINCT DUP.Status) > 1)
+              --(Wan03) - END
+           BEGIN
+              INSERT INTO dbo.StockTakeErrorReport (StockTakeKey, ErrorNo, Type, LineText) VALUES (@c_CCKey, '', 'ERROR', REPLICATE( '-', 80))
+              INSERT INTO dbo.StockTakeErrorReport (StockTakeKey, ErrorNo, Type, LineText) VALUES (@c_CCKey, '', 'ERROR', 'DUPLICATE UCC: ' + @cDupUCCNo)
+              INSERT INTO dbo.StockTakeErrorReport (StockTakeKey, ErrorNo, Type, LineText) VALUES (@c_CCKey, '', 'ERROR', 'CCDETAILKEY  LOC         SKU')
+              INSERT INTO dbo.StockTakeErrorReport (StockTakeKey, ErrorNo, Type, LineText) VALUES (@c_CCKey, '', 'ERROR', '-----------  ----------  --------------------')
+              SET @cTitlePrinted = 'Y'
+           END
+        
+           INSERT INTO dbo.StockTakeErrorReport (StockTakeKey, ErrorNo, Type, LineText)
+           SELECT @c_CCKey, '', 'ERROR', CCDetailKey + '  ' + LOC + '  ' + SKU
+           FROM dbo.CCDetail WITH (NOLOCK)
+           WHERE CCKey = @c_CCKey
+              AND RefNo = @cDupUCCNo
+              --(Wan01) - START
+              AND EXISTS (SELECT 1
+                          FROM dbo.CCDetail DUP WITH (NOLOCK)
+                          WHERE DUP.CCKey = CCDetail.CCKey
+               AND DUP.RefNo = CCDetail.RefNo
+                          AND DUP.Sku   = CCDetail.Sku
+                          GROUP BY DUP.Storerkey
+                                ,  DUP.Sku
+                          HAVING COUNT(DISTINCT DUP.Status) > 1)
+              --(Wan01) - END
+           FETCH NEXT FROM @curDupUCC INTO @cDupUCCNo
+        END
+        
+        -- Check any error in report
+        IF EXISTS( SELECT TOP 1 1 FROM dbo.StockTakeErrorReport WITH (NOLOCK) WHERE StockTakeKey = @c_CCKey)
+           RETURN
       END
-
-      -- Check any error in report
-      IF EXISTS( SELECT TOP 1 1 FROM dbo.StockTakeErrorReport WITH (NOLOCK) WHERE StockTakeKey = @c_CCKey)
-         RETURN
+      --(CLVN01) CHECK DUPLICATE UCC CONFIG (END)--
    END
 
 
