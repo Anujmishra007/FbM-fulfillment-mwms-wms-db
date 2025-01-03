@@ -5,15 +5,16 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-/***************************************************************************/  
-/* Store procedure: rdt_898ExtScn02                                        */  
-/*                                                                         */  
-/* Purpose:   For Levis - Changes in UCC Receive to process for returns    */  
-/*                                                                         */  
-/* Date        Rev   Author   Purposes                                     */  
-/* 2024-11-15  1.0   ShaoAn   FCR-1103 Changes in UCC Receive to process   */  
-/*                            for returns                                  */  
-/***************************************************************************/  
+/******************************************************************************/  
+/* Store procedure: rdt_898ExtScn02                                           */  
+/*                                                                            */  
+/* Purpose:   For Levis - Changes in UCC Receive to process for returns       */  
+/*                                                                            */  
+/* Date        Rev     Author   Purposes                                      */  
+/* 2024-11-15  1.0.0   ShaoAn   FCR-1103 Changes in UCC Receive to process    */  
+/*                              for returns                                   */
+/* 2025-01-02  1.0.1   jch507   FCR-1103 Add extinfo entry to step=10 section */  
+/******************************************************************************/  
   
 CREATE OR ALTER PROC  [RDT].[rdt_898ExtScn02] (
    @nMobile      INT,           
@@ -1287,7 +1288,7 @@ BEGIN
                         ' ,@nErrNo        INT           OUTPUT ' +
                         ' ,@cErrMsg       NVARCHAR( 20) OUTPUT '
                      EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-                        @nMobile, @nFunc, @cLangCode, 6, @nStep, @nInputKey, @cReceiptKey, @cPOKey, @cLOC, @cToID, @cLottable01, @cLottable02, @cLottable03, @dLottable04
+                        @nMobile, @nFunc, @cLangCode, 99, @nAfterStep, @nInputKey, @cReceiptKey, @cPOKey, @cLOC, @cToID, @cLottable01, @cLottable02, @cLottable03, @dLottable04
                         ,@cUCC, @cSKU, @nQTY, @cParam1, @cParam2, @cParam3, @cParam4, @cParam5, @cOption, @cExtendedInfo OUTPUT
                         ,@nErrNo   OUTPUT
                         ,@cErrMsg  OUTPUT
@@ -1434,6 +1435,57 @@ BEGIN
             SET @nAfterScn = @nStep_6_Scn
             SET @nAfterStep = @nStep_99
          END
+
+         --v1.0.1 Start
+         Step_10_Quit:
+         -- Extended info
+         IF @cExtendedInfoSP <> ''
+         BEGIN
+            IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')
+            BEGIN
+               SET @cOutField15 = ''
+               SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
+                  '  @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cReceiptKey, @cPOKey, @cLOC, @cToID, @cLottable01, @cLottable02, @cLottable03, @dLottable04 ' +
+                  ' ,@cUCC, @cSKU, @nQTY, @cParam1, @cParam2, @cParam3, @cParam4, @cParam5, @cOption, @cExtendedInfo OUTPUT ' +
+                  ' ,@nErrNo   OUTPUT ' +
+                  ' ,@cErrMsg  OUTPUT '
+               SET @cSQLParam = +
+                  '  @nMobile       INT           ' +
+                  ' ,@nFunc         INT           ' +
+                  ' ,@cLangCode     NVARCHAR(  3) ' +
+                  ' ,@nStep         INT           ' +
+                  ' ,@nAfterStep    INT           ' +
+                  ' ,@nInputKey     INT           ' +
+                  ' ,@cReceiptKey   NVARCHAR( 10) ' +
+                  ' ,@cPOKey        NVARCHAR( 10) ' +
+                  ' ,@cLOC          NVARCHAR( 10) ' +
+                  ' ,@cToID         NVARCHAR( 18) ' +
+                  ' ,@cLottable01   NVARCHAR( 18) ' +
+                  ' ,@cLottable02   NVARCHAR( 18) ' +
+                  ' ,@cLottable03   NVARCHAR( 18) ' +
+                  ' ,@dLottable04   DATETIME      ' +
+                  ' ,@cUCC          NVARCHAR( 20) ' +
+                  ' ,@cSKU          NVARCHAR( 20) ' +
+                  ' ,@nQTY          INT           ' +
+                  ' ,@cParam1       NVARCHAR( 20) ' +
+                  ' ,@cParam2       NVARCHAR( 20) ' +
+                  ' ,@cParam3       NVARCHAR( 20) ' +
+                  ' ,@cParam4       NVARCHAR( 20) ' +
+                  ' ,@cParam5       NVARCHAR( 20) ' +
+                  ' ,@cOption       NVARCHAR( 1)  ' +
+                  ' ,@cExtendedInfo NVARCHAR(20)  OUTPUT ' +
+                  ' ,@nErrNo        INT           OUTPUT ' +
+                  ' ,@cErrMsg       NVARCHAR( 20) OUTPUT '
+               EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                  @nMobile, @nFunc, @cLangCode, 10, @nAfterStep, @nInputKey, @cReceiptKey, @cPOKey, @cLOC, @cToID, @cLottable01, @cLottable02, @cLottable03, @dLottable04
+                  ,@cUCC, @cSKU, @nQTY, @cParam1, @cParam2, @cParam3, @cParam4, @cParam5, @cOption, @cExtendedInfo OUTPUT
+                  ,@nErrNo   OUTPUT
+                  ,@cErrMsg  OUTPUT
+
+               SET @cOutField15 = @cExtendedInfo
+            END
+         END
+         --v1.0.1 End
 
          GOTO Quit
 
