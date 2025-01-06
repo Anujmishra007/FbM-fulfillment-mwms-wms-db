@@ -29,12 +29,12 @@ jobs:
           echo "${{ secrets.DB_TOKEN }}" | gh auth login --with-token
 
       # Step 4: Trigger cdt-test-deployment.yml in infra with the authToken passed as input
-      - name: Trigger cdt-test-deployment.yml in infra repo with authToken
+      - name: Trigger america-db-deploy.yml in infra repo with authToken
         run: |
           gh workflow run cdt-test-deployment.yml \
             --repo Maersk-Global/fbm-infra-automation \
             -f authToken="${{ github.event.inputs.authToken }}"
 
       # Optional: Check the status of the triggered workflow
-      - name: List workflow runs in infra repo
-        run: gh run list --repo Maersk-Global/fbm-infra-automation
+      # - name: List workflow runs in infra repo
+      #   run: gh run list --repo Maersk-Global/fbm-infra-automation
