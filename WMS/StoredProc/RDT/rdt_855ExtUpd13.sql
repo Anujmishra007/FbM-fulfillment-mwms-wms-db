@@ -20,6 +20,7 @@ GO
 /* 2024-10-28 1.4.0  NLT013   FCR-1085 Automate print Order Level labels           */
 /* 2024-11-27 1.4.1  NLT013   FCR-1085 Fix bug - print duplicate reports           */
 /* 2024-12-03 1.5.0  NLT013   FCR-1659 Be able to print label for MPOC             */
+/* 2024-12-03 1.6.0  NLT013   UWP-28680 Remove the transaction                     */
 /***********************************************************************************/
 CREATE OR ALTER PROC rdt.rdt_855ExtUpd13 (
    @nMobile      INT,   
@@ -543,12 +544,6 @@ BEGIN
                   AND ISNULL(pkd.CaseID, '') = @cDropID
                ORDER BY orm.OrderKey
 
-               SET @nTranCount = @@TRANCOUNT  
-               IF @nTranCount = 0
-                  BEGIN TRANSACTION
-               ELSE
-                  SAVE TRANSACTION rdt_855ExtUpd13_01
-
                BEGIN TRY
                   --Mark PPA as 5 (audit finished)
                   UPDATE RDT.RDTPPA WITH(ROWLOCK)
@@ -762,26 +757,15 @@ BEGIN
                      END
                   END
 
-                  WHILE @@TRANCOUNT > @nTranCount
-                     COMMIT TRANSACTION
                END TRY
                BEGIN CATCH
-                  IF @nTranCount > 0
-                  BEGIN
-                     IF XACT_STATE() <> -1  
-                        ROLLBACK TRANSACTION rdt_855ExtUpd13_01
-                  END
-                  ELSE
-                  BEGIN
-                     ROLLBACK TRANSACTION
-                  END
-
                   IF @nErrNo = 0
                   BEGIN
                      SET @nErrNo = 217803
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --HandlePPAFail
-                     GOTO Quit
                   END
+
+                  GOTO Quit
                END CATCH
             END
          END

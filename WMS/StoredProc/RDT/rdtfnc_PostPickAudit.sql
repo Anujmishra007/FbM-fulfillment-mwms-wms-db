@@ -2811,12 +2811,16 @@ BEGIN
       GOTO Step_3_Commit
 
       Step_3_RollBackTran:
+      BEGIN
          ROLLBACK TRAN Step_3_Upd
+         GOTO Step_3_SetQty
+      END
 
       Step_3_Commit:
          WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
             COMMIT TRAN
 
+      Step_3_SetQty:
       IF @nPUOM_Div > 0 AND @cPUOM <> '6' 
       BEGIN
          SET @nPQTY = @nPQTY/@nPUOM_Div--rdt.rdtConvUOMQTY( @cStorer, @cSKU, @cMQTY, 6, @cPUOM)
