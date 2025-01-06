@@ -2812,9 +2812,10 @@ BEGIN
       GOTO Step_3_Commit
 
       Step_3_RollBackTran:
+      IF @@TRANCOUNT > 0
       BEGIN
-         ROLLBACK TRAN Step_3_Upd
-         GOTO Step_3_SetQty
+         ROLLBACK TRAN
+         GOTO Step_3_Set_Qty
       END
 
       Step_3_Commit:
