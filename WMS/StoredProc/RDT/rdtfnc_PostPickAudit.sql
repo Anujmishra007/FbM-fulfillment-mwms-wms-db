@@ -2815,7 +2815,7 @@ BEGIN
       IF @@TRANCOUNT > 0
       BEGIN
          ROLLBACK TRAN
-         GOTO Step_3_Set_Qty
+         GOTO Step_3_SetQty
       END
 
       Step_3_Commit:
