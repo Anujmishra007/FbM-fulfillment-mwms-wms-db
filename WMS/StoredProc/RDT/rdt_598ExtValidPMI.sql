@@ -1,4 +1,3 @@
-
 /******************************************************************************/
 /* Store procedure: rdt_598ExtValidPMI                                        */
 /* Copyright: Maersk                                                          */
@@ -77,5 +76,5 @@ Quit:
 END
 
 GO 
-GRANT EXECUTE ON [dbo].[rdt_598ExtValidPMI] TO [NSQL]
+GRANT EXECUTE ON [rdt].[rdt_598ExtValidPMI] TO [NSQL]
 GO
