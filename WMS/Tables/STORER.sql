@@ -93,7 +93,8 @@ BEGIN
         [SalesChannel] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_Storer_SalesChannel] DEFAULT (''),
         [CMDCode] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_Storer_CMDCode] DEFAULT (''),
         [ConcernCode] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_Storer_ConcernCode] DEFAULT (''),
-        [TradingName] [nvarchar] (127) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_Storer_TradingName] DEFAULT ('')
+        [TradingName] [nvarchar] (127) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_Storer_TradingName] DEFAULT (''),
+        [ArcheType] [nvarchar] (40) COLLATE SQL_Latin1_General_CP1_CI_AS DEFAULT ('')
     ) ON [PRIMARY]
 
     ALTER TABLE [dbo].[STORER] ADD CONSTRAINT [PKStorer] PRIMARY KEY CLUSTERED ([StorerKey]) WITH (FILLFACTOR=90) ON [PRIMARY]
@@ -263,13 +264,15 @@ BEGIN
     EXEC sp_addextendedproperty N'MS_Description', N'Concern Code.', 'SCHEMA', N'dbo', 'TABLE', N'STORER', 'COLUMN', N'ConcernCode'
 
     EXEC sp_addextendedproperty N'MS_Description', N'Trading Name.', 'SCHEMA', N'dbo', 'TABLE', N'STORER', 'COLUMN', N'TradingName'
+
+    EXEC sp_addextendedproperty N'MS_Description', N'Arche Type.', 'SCHEMA', N'dbo', 'TABLE', N'STORER', 'COLUMN', N'ArcheType'
 END
 ELSE
 BEGIN
     IF NOT EXISTS (SELECT 1
     FROM sys.columns
     WHERE Name = 'CMDCode' AND Object_ID = Object_ID('STORER'))
-				BEGIN
+	BEGIN
         ALTER TABLE Storer ADD CMDCode NVARCHAR(20) NOT NULL CONSTRAINT [DF_Storer_CMDCode] DEFAULT '';
         EXEC sp_addextendedproperty N'MS_Description', N'Customer Code.', 'SCHEMA', N'dbo', 'TABLE', N'STORER', 'COLUMN', N'CMDCode'
     END
@@ -278,7 +281,7 @@ BEGIN
     IF NOT EXISTS (SELECT 1
     FROM sys.columns
     WHERE Name = 'ConcernCode' AND Object_ID = Object_ID('STORER'))
-            BEGIN
+    BEGIN
         ALTER TABLE Storer ADD ConcernCode NVARCHAR(20) NULL CONSTRAINT [DF_Storer_ConcernCode] DEFAULT '';
         EXEC sp_addextendedproperty N'MS_Description', N'Concern Code.', 'SCHEMA', N'dbo', 'TABLE', N'STORER', 'COLUMN', N'ConcernCode'
     END
@@ -287,9 +290,17 @@ BEGIN
     IF NOT EXISTS (SELECT 1
     FROM sys.columns
     WHERE Name = 'TradingName' AND Object_ID = Object_ID('STORER'))
-        BEGIN
+    BEGIN
         ALTER TABLE Storer ADD TradingName NVARCHAR(127) NULL CONSTRAINT [DF_Storer_TradingName] DEFAULT '';
         EXEC sp_addextendedproperty N'MS_Description', N'Trading Name.', 'SCHEMA', N'dbo', 'TABLE', N'STORER', 'COLUMN', N'TradingName'
     END
 END
-
+BEGIN
+    IF NOT EXISTS (SELECT 1
+    FROM sys.columns
+    WHERE Name = 'ArcheType' AND Object_ID = Object_ID('STORER'))
+    BEGIN
+        ALTER TABLE Storer ADD ArcheType NVARCHAR(40) DEFAULT '';
+        EXEC sp_addextendedproperty N'MS_Description', N'Arche Type.', 'SCHEMA', N'dbo', 'TABLE', N'STORER', 'COLUMN', N'ArcheType'
+    END
+END
