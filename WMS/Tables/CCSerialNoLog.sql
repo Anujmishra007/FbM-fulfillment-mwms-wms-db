@@ -17,7 +17,7 @@ BEGIN
       [Lot] [nvarchar](10) NOT NULL,
       [Loc] [nvarchar](10) NOT NULL,
       [ID] [nvarchar](18) NOT NULL,
-      [Status] [nvarchar](10) NULL CONSTRAINT [DF_CCSerialNoLog_Status]  DEFAULT (suser_sname()),
+      [Status] [nvarchar](10) NULL CONSTRAINT [DF_CCSerialNoLog_Status]  DEFAULT ('0'),
    	[AddDate] [datetime] NULL CONSTRAINT [DF_CCSerialNoLog_AddDate]  DEFAULT (getdate()),
    	[AddWho] [nvarchar](18) NULL CONSTRAINT [DF_CCSerialNoLog_AddWho]  DEFAULT (suser_sname()),
    	[EditDate] [datetime] NULL CONSTRAINT [DF_CCSerialNoLog_EditDate]  DEFAULT (getdate()),
@@ -41,6 +41,15 @@ BEGIN
    --@level2type = N'Column', @level2name = [CountSerialKey]
    
 --GO   
+END
+ELSE
+BEGIN
+   --UWP-28817 start
+   -- Drop the existing default constraint
+   ALTER TABLE dbo.CCSerialNoLog DROP CONSTRAINT DF_CCSerialNoLog_Status;
+   ALTER TABLE dbo.CCSerialNoLog ADD CONSTRAINT DF_CCSerialNoLog_Status DEFAULT '0' FOR Status;
+   --UWP-28817 end
+
 END
 
 
