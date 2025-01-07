@@ -28,6 +28,7 @@ GO
 /* 2016-09-30 1.1  Ung      Performance tuning                          */
 /* 2018-10-11 1.2  TungGH   Performance                                 */
 /* 2024-07-16 1.3  CYU027   FCR-575                                     */
+/* 2024-11-28 1.4  CYU027   FCR-1391 Levis                              */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_Pallet_Move] (
@@ -64,10 +65,15 @@ DECLARE
    @cToLOC           NVARCHAR( 10),
    @cDropLoc         NVARCHAR( 10),
    @cLOC             NVARCHAR( 10),
+   @cSuggestLoc      NVARCHAR( 10),
    @cStatus          NVARCHAR( 10),
    @cDropID_Status   NVARCHAR( 10),
+   @cSQL             NVARCHAR( MAX),
+   @cSQLParam        NVARCHAR( MAX),
    
-   @cLocationCategory    NVARCHAR( 10),
+   @cLocationCategory      NVARCHAR( 10),
+   @cSuggestLocSP          NVARCHAR(20),
+   @cExtendedValidateSP    NVARCHAR( 20),
 
    @nTranCount       INT,
    
@@ -107,13 +113,16 @@ SELECT
 
    @cStorer    = StorerKey,
    @cFacility  = Facility,
-   @cPrinter   = Printer, 
+   @cPrinter   = Printer,
    @cUserName  = UserName,
 
    @cLOC       = V_LOC,
    @cID        = V_ID,
 
-   @cToLOC     = V_String1,
+   @cToLOC              = V_String1,
+   @cSuggestLoc         = V_String2,
+   @cSuggestLocSP       = V_String3,
+   @cExtendedValidateSP = V_String4,
 
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,
@@ -169,6 +178,14 @@ BEGIN
       @cStorerKey  = @cStorer,
       @nStep       = @nStep
 
+   SET @cSuggestLocSP = rdt.RDTGetConfig( @nFunc, 'SuggestLocSP', @cStorer)
+   IF @cSuggestLocSP = '0'
+      SET @cSuggestLocSP = ''
+
+   SET @cExtendedValidateSP = rdt.RDTGetConfig( @nFunc, 'ExtendedValidateSP', @cStorer)
+   IF @cExtendedValidateSP = '0'
+      SET @cExtendedValidateSP = ''
+
    -- Enable all fields
    SET @cFieldAttr01 = ''
    SET @cFieldAttr02 = ''
@@ -220,9 +237,35 @@ BEGIN
       IF @nErrNo <> 0
          GOTO Step_1_Fail
 
+      IF @cSuggestLocSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cSuggestLocSP AND type = 'P')
+         BEGIN
+            SET @cSuggestLoc = ''
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cSuggestLocSP) +
+                        ' @nMobile, @nFunc, @cLangCode, @cStorer, @nStep, @cID, @cSuggestLoc OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT'
+            SET @cSQLParam =
+                    '@nMobile         INT,           ' +
+                    '@nFunc           INT,           ' +
+                    '@cLangCode       NVARCHAR( 3),  ' +
+                    '@cStorer         NVARCHAR( 15), ' +
+                    '@nStep           INT,           ' +
+                    '@cID             NVARCHAR( 20), ' +
+                    '@cSuggestLoc     NVARCHAR( 15) OUTPUT, ' +
+                    '@nErrNo          INT           OUTPUT, ' +
+                    '@cErrMsg         NVARCHAR( 20) OUTPUT '
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                 @nMobile, @nFunc, @cLangCode,@cStorer, @nStep, @cID, @cSuggestLoc OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+            IF @nErrNo <> 0
+               GOTO Step_1_Fail
+         END
+      END
+
          -- Prepare next screen var
       SET @cOutField01 = @cID
       SET @cOutField02 = ''
+      SET @cOutField03 = @cSuggestLoc
 
       -- Go to next screen
       SET @nScn = @nScn + 1
@@ -262,6 +305,7 @@ GOTO Quit
 Step 2. Scn = 3361
    ID             (field01)
    Final LOC      (field02, input)
+   Sugeest LOC    (field03)
 ********************************************************************************/
 Step_2:
 BEGIN
@@ -300,6 +344,35 @@ IF @nInputKey = 1 -- ENTER
          GOTO Step_2_Fail
       END
 
+      IF @cExtendedValidateSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedValidateSP AND type = 'P')
+         BEGIN
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +
+                        ' @nMobile, @nFunc, @cLangCode, @nStep, @cFacility, @cStorer, @cID, @cToLOC, @cSuggestLoc, ' +
+                        ' @nErrNo OUTPUT, @cErrMsg OUTPUT'
+            SET @cSQLParam =
+                    '@nMobile      INT,           ' +
+                    '@nFunc        INT,           ' +
+                    '@cLangCode    NVARCHAR( 3),  ' +
+                    '@nStep        INT,           ' +
+                    '@cFacility    NVARCHAR( 5),  ' +
+                    '@cStorer      NVARCHAR( 15), ' +
+                    '@cID          NVARCHAR( 18), ' +
+                    '@cToLOC       NVARCHAR( 10), ' +
+                    '@cSuggestLoc  NVARCHAR( 10), ' +
+                    '@nErrNo             INT            OUTPUT, ' +
+                    '@cErrMsg            NVARCHAR( 20)  OUTPUT'
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                 @nMobile, @nFunc, @cLangCode, @nStep, @cFacility, @cStorer, @cID, @cToLOC, @cSuggestLoc,
+                 @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+            IF @nErrNo <> 0
+               GOTO Step_2_Fail
+         END
+      END
+
       SET @nErrNo = 0
       EXEC [RDT].[rdtfnc_Pallet_Move_update_ID]
            @nMobile           = @nMobile,
@@ -310,7 +383,7 @@ IF @nInputKey = 1 -- ENTER
            @cFacility         = @cFacility,
            @cStorerKey        = @cStorer,
            @cID               = @cID,
-           @cToLOC            =@cToLOC,
+           @cToLOC            = @cToLOC,
            @cLocationCategory = @cLocationCategory,
            @nErrNo            = @nErrNo      OUTPUT,
            @cErrMsg           = @cErrMsg     OUTPUT
@@ -391,9 +464,14 @@ BEGIN
       -- UserName  = @cUserName,
 
       V_LOC      = @cLOC,
+
       V_ID       = @cID,
       
       V_String1  = @cToLOC,
+      V_String2  = @cSuggestLoc,
+      V_String3  = @cSuggestLocSP,
+      V_String4  = @cExtendedValidateSP,
+
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,
