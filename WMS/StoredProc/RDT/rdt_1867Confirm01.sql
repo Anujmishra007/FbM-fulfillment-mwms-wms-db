@@ -731,10 +731,10 @@ BEGIN
                   ,StartTime,EndTime,SourceType,SourceKey,PickDetailKey,OrderKey,OrderLineNumber,ListKey,WaveKey,ReasonKey
                   ,Message01,Message02,Message03,RefTaskKey,LoadKey,AreaKey,DropID, SystemQty,Groupkey,DeviceID)
                   SELECT  TOP 1
-                  @cNewTaskDetailKey,TaskType,Storerkey,Sku,Lot,UOM,UOMQty,Qty - @nQTY_Bal,FromLoc,LogicalFromLoc,FromID,ToLoc,LogicalToLoc
+                  @cNewTaskDetailKey,TaskType,Storerkey,Sku,Lot,UOM,UOMQty,Qty - @nTaskQty - @nQTY_Bal,FromLoc,LogicalFromLoc,FromID,ToLoc,LogicalToLoc
                   ,ToID,Caseid,PickMethod,Status,StatusMsg,Priority,SourcePriority,Holdkey,UserKey,UserPosition,UserKeyOverRide
                   ,StartTime,EndTime,SourceType,SourceKey,PickDetailKey,OrderKey,OrderLineNumber,ListKey,WaveKey,ReasonKey
-                  ,Message01,Message02,Message03,RefTaskKey,LoadKey,AreaKey,DropID, Qty - @nQTY_Bal,GroupKey,DeviceID
+                  ,Message01,Message02,Message03,RefTaskKey,LoadKey,AreaKey,DropID, Qty - @nTaskQty - @nQTY_Bal,GroupKey,DeviceID
                   FROM dbo.TaskDetail WITH (NOLOCK)
                   WHERE Taskdetailkey = @cTaskDetailKey
                   AND Storerkey = @cStorerkey
