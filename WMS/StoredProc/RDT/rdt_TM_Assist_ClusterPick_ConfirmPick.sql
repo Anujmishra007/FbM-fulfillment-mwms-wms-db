@@ -16,6 +16,7 @@ GO
 /*                                                                            */
 /* Date         Rev  Author   Purposes                                        */
 /* 2020-07-26   1.0  James    WMS-17335 Created                               */
+/* 2024-12-17   1.1  JCH507   UWP-28528 Upd task qty wrong when parial short  */
 /******************************************************************************/  
   
 CREATE PROC rdt.rdt_TM_Assist_ClusterPick_ConfirmPick (  
@@ -451,7 +452,8 @@ BEGIN
 
                   UPDATE dbo.TaskDetail SET
                      SystemQty = Qty, 
-                     Qty = Qty - @nQTY_Bal,  
+                     --Qty = Qty - @nQTY_Bal, 
+                     Qty = @nQTY_Bal, -- V1.1 
                      EditDate = GETDATE(),  
                      EditWho  = SUSER_SNAME()
                   WHERE TaskDetailKey = @cTaskDetailKey

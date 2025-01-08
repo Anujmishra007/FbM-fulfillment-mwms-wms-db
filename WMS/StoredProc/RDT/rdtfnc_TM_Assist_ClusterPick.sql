@@ -3,26 +3,27 @@ GO
 SET ANSI_NULLS OFF 
 GO
   
-/******************************************************************************/        
-/* Store procedure: rdtfnc_TM_Assist_ClusterPick                              */        
-/* Copyright      : LF Logistics                                              */        
-/*                                                                            */        
-/* Purpose: TM Assisted Cluster Pick                                          */        
-/*                                                                            */        
-/* Modifications log:                                                         */        
-/*                                                                            */        
-/* Date         Rev  Author   Purposes                                        */        
-/* 2021-05-26   1.0  James    WMS-17335 Created                               */       
-/* 2022-02-10   1.1  Ung      WMS-18884 Add ExtendedInfoSP for SKU QTY screen */      
-/* 2022-02-28   1.2  James    Enhance assign tote logic (james01)             */      
-/* 2022-03-28   1.3  James    WMS-19202 Allow cart with assigned task continue*/      
-/*                            to pick (james02)                               */      
-/* 2023-05-03   1.4  James    WMS-22330 Add config to control whether allow   */
-/*                            pick with mix wavekey (james03)                 */
-/* 2024-07-31   1.5  Jackc    FCR-652 Add ext scn entry                       */
-/* 2024-09-13   1.6  Jackc    FCR-652 Fix bug when continue task              */
-/* 2024-09-14   1.7  Jackc    FCR-856 Lock Tasks on carton level              */
-/******************************************************************************/        
+/*********************************************************************************/        
+/* Store procedure: rdtfnc_TM_Assist_ClusterPick                                 */        
+/* Copyright      : Maersk                                                       */        
+/*                                                                               */        
+/* Purpose: TM Assisted Cluster Pick                                             */        
+/*                                                                               */        
+/* Modifications log:                                                            */        
+/*                                                                               */        
+/* Date         Rev  Author   Purposes                                           */        
+/* 2021-05-26   1.0  James    WMS-17335 Created                                  */       
+/* 2022-02-10   1.1  Ung      WMS-18884 Add ExtendedInfoSP for SKU QTY screen    */      
+/* 2022-02-28   1.2  James    Enhance assign tote logic (james01)                */      
+/* 2022-03-28   1.3  James    WMS-19202 Allow cart with assigned task continue   */      
+/*                            to pick (james02)                                  */      
+/* 2023-05-03   1.4  James    WMS-22330 Add config to control whether allow      */
+/*                            pick with mix wavekey (james03)                    */
+/* 2024-07-31   1.5  Jackc    FCR-652 Add ext scn entry                          */
+/* 2024-09-13   1.6  Jackc    FCR-652 Fix bug when continue task                 */
+/* 2024-09-14   1.7  Jackc    FCR-856 Lock Tasks on carton level                 */
+/* 2024-12-18   1.8  Jackc    UWP-28528 ActQty is reset to 0 when partial short  */
+/*********************************************************************************/        
         
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_Assist_ClusterPick](        
    @nMobile    int,        
@@ -309,7 +310,7 @@ BEGIN
    IF @nStep = 8  GOTO Step_UnAssign         -- Scn = 5927. Unassign Cart        
    IF @nStep = 9  GOTO Step_NextTask         -- Scn = 5928. End Task/Exit TM        
    IF @nStep = 10 GOTO Step_ContTask         -- Scn = 5929. Task exists, continue
-   IF @nStep = 99 GOTO Step_99              -- Ext Scn Jackc       
+   IF @nStep = 99 GOTO Step_99               -- Ext Scn Jackc       
          
 END        
         
@@ -1897,7 +1898,7 @@ BEGIN
       SET @nActQTY = @nActQTY + @nQTY          
           
       -- SKU scanned, remain in current screen          
-      IF @cBarcode <> ''  AND @cBarcode <> '99'        
+      IF (@cBarcode <> ''  AND @cBarcode <> '99') OR (@cSKUValidated = '1' AND @nQTY > 0)  --v1.8      
       BEGIN          
          SET @cOutField06 = '' -- SKU          
          SET @cOutField07 = CASE WHEN @cDefaultQTY = '0' THEN '' ELSE @cDefaultQTY END -- QTY        
@@ -1926,7 +1927,7 @@ BEGIN
       -- QTY short          
       IF @nActQTY < @nSuggQTY          
       BEGIN          
-         SET @nActQTY = @nActQTY - @nQTY        
+         --SET @nActQTY = @nActQTY - @nQTY --v1.8
         
          -- Prepare next screen var          
          SET @cOption = ''          
