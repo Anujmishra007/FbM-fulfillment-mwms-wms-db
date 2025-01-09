@@ -10,7 +10,7 @@ GO
 /*                                                                      */
 /* Purpose: UWP-18747 - Levis US MPOC and Cartonization                 */
 /*        :                                                             */
-/* PVCS Version: 1.2                                                    */
+/* PVCS Version: 1.0                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -19,7 +19,6 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 28-May-2024 Shong    1.1   Create                                    */
-/* 25-Oct-2024 WLChooi  1.2   Fix Listname & remove conditions (WL01)   */
 /************************************************************************/
 CREATE OR ALTER PROC msp_GetMPOCRequired
 (
@@ -159,7 +158,9 @@ BEGIN
                 JOIN dbo.ORDERDETAIL AS OD WITH (NOLOCK) ON O.OrderKey = OD.OrderKey
                 JOIN dbo.SKU AS S WITH (NOLOCK) ON S.StorerKey = OD.StorerKey AND S.SKU = OD.Sku
                 WHERE O.OrderKey = @c_OrderKey
-                AND (S.PrepackIndicator IS NOT NULL AND S.PrepackIndicator <> '')   --WL01
+                AND (( S.Size IS NULL OR S.Size = '' ) 
+                       OR ( S.Measurement IS NULL OR S.Measurement = '' )
+                       OR ( S.PrepackIndicator IS NOT NULL AND S.PrepackIndicator <> ''))
                 )
       BEGIN 
          SET @n_MPOCFlag = 0; 
@@ -177,7 +178,7 @@ BEGIN
                    ELSE 1 
                 END
           FROM dbo.ORDERS AS O WITH (NOLOCK)
-          JOIN dbo.CODELKUP AS C WITH (NOLOCK) ON LISTNAME = 'MPOCPERMIT'   --WL01
+          JOIN dbo.CODELKUP AS C WITH (NOLOCK) ON LISTNAME = 'MPOC_PERMITTED'
                              AND ( C.Code = O.BillToKey OR C.Code = O.ConsigneeKey )
                              AND C.Storerkey = O.StorerKey
           WHERE O.OrderKey = @c_OrderKey;
