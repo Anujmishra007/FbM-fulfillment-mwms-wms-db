@@ -21,6 +21,8 @@ GO
 /* 2024-11-19   SSA01   1.1   UWP-27112-[LEVI's] Release to WCS Update   */
 /* 2024-12-18   SSA02   1.2   UWP-27112-Added automated wave validation  */
 /*                            and update tasks status from H to 0        */
+/* 2025-01-08   SSA03   1.3   UWP-27112-Added extra logic to update tasks*/
+/*                            status from H to 0                         */
 /*************************************************************************/   
 CREATE OR ALTER PROCEDURE [dbo].[mspWaveReleaseWCS01]
   @c_Wavekey      NVARCHAR(10)  
@@ -94,9 +96,13 @@ CREATE OR ALTER PROCEDURE [dbo].[mspWaveReleaseWCS01]
            END
            IF @n_Continue IN (1,2)
             BEGIN
-               ----(SSA02)
-               UPDATE TASKDETAIL SET STATUS = '0' WHERE WAVEKEY = @c_Wavekey AND TASKTYPE <> 'ASTCPK' AND STATUS = 'H'
-
+               ----(SSA02),(SSA03) start-----
+               UPDATE td SET td.STATUS = '0'
+               FROM TASKDETAIL(NOLOCK) td
+               JOIN LOC(NOLOCK) loc on td.FROMLOC = loc.LOC
+               WHERE td.WAVEKEY = @c_Wavekey AND td.TASKTYPE <> 'ASTCPK'
+               AND td.STATUS = 'H' AND loc.locationtype <> 'PICKWCS'
+               ----(SSA02),(SSA03) end-----
                SET @b_Success = 1
                EXEC dbo.ispGenTransmitLog2
                      @c_TableName   = @c_TableName
