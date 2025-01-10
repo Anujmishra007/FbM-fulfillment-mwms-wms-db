@@ -1,7 +1,3 @@
-IF EXISTS (SELECT * FROM sys.objects WHERE object_id = Object_Id(N'[rdt].[rdtfnc_Pallet_Move]') AND OBJECTPROPERTY(object_id, N'IsProcedure') = 1)
-   DROP PROCEDURE [rdt].[rdtfnc_Pallet_Move]
-GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -23,12 +19,13 @@ GO
 /*                                                                      */
 /* Modifications log:                                                   */
 /*                                                                      */
-/* Date       Rev  Author   Purposes                                    */
-/* 2012-12-07 1.0  James    SOS257520 - Created                         */
-/* 2016-09-30 1.1  Ung      Performance tuning                          */
-/* 2018-10-11 1.2  TungGH   Performance                                 */
-/* 2024-07-16 1.3  CYU027   FCR-575                                     */
-/* 2024-11-28 1.4  CYU027   FCR-1391 Levis                              */
+/* Date       Rev   Author   Purposes                                   */
+/* 2012-12-07 1.0   James    SOS257520 - Created                        */
+/* 2016-09-30 1.1   Ung      Performance tuning                         */
+/* 2018-10-11 1.2   TungGH   Performance                                */
+/* 2024-07-16 1.3   CYU027   FCR-575                                    */
+/* 2024-11-28 1.4   CYU027   FCR-1391 Levis                             */
+/* 2025-01-10 1.5.0 Dennis   UWP-28966 BugFix                           */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_Pallet_Move] (
@@ -236,12 +233,12 @@ BEGIN
 
       IF @nErrNo <> 0
          GOTO Step_1_Fail
-
+      
+      SET @cSuggestLoc = ''
       IF @cSuggestLocSP <> ''
       BEGIN
          IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cSuggestLocSP AND type = 'P')
          BEGIN
-            SET @cSuggestLoc = ''
             SET @cSQL = 'EXEC rdt.' + RTRIM( @cSuggestLocSP) +
                         ' @nMobile, @nFunc, @cLangCode, @cStorer, @nStep, @cID, @cSuggestLoc OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT'
             SET @cSQLParam =
