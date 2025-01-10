@@ -40,8 +40,9 @@ GO
 /*                            for BackLoc. remove auto create              */
 /* 12-NOV-2024 WAN07    1.9   UWP-26935 BACK Loc setup MaxPallet, Replenish*/
 /*                            break when MaxPallet meet                    */
+/* 09-JAN-2025 WTS01    2.0   FCR-2214 call auto replen job based on Config*/
 /***************************************************************************/
-CREATE OR ALTER PROC [dbo].[isp_ODMRPL01]
+CREATE OR ALTER   PROC [dbo].[isp_ODMRPL01]
    @c_Facility   NVARCHAR(5)    = '',
    @c_Storerkey  NVARCHAR(15)   = '',
    @c_SKU        NVARCHAR(20)   = '',
@@ -197,9 +198,10 @@ BEGIN
       , @c_REPLB2F               NVARCHAR(10)   = 'N'                            --(Wan04)      
       , @c_B2FLocType            NVARCHAR(10)   = ''                             --(Wan04)
       , @c_AutoReplB2F           NVARCHAR(10)   = 'N'                            --(Wan04)
-      , @c_loc_F                NVARCHAR(10)   = ''                             --(Wan04)
+      , @c_loc_F                 NVARCHAR(10)   = ''                             --(Wan04)
       , @c_LocationGroup         NVARCHAR(10)   = ''                             --(Wan04)
       , @n_MaxPallet             INT            = 0                              --(Wan07)
+      , @c_GenerateReplenTask    NVARCHAR(10)   = 'N'                            --(SWT01)
 
    WHILE @@TRANCOUNT > 0
    BEGIN
@@ -249,7 +251,8 @@ BEGIN
             ,@c_REPLCond   = MAX(CASE WHEN cl.Code = 'Condition' THEN cl.Notes ELSE '' END)
             ,@c_REPLB2F    = MAX(CASE WHEN cl.Code = 'BackToFront' THEN cl.UDF01 ELSE 'N' END)
             ,@c_B2FLocType = MAX(CASE WHEN cl.Code = 'BackToFront' AND cl.UDF01 = 'Y' THEN cl.UDF02 ELSE '' END)
-      FROM CODELKUP cl (NOLOCK) 
+            ,@c_GenerateReplenTask = MAX(CASE WHEN cl.Code = 'EnableAutoRepln' AND cl.UDF01 = 'Y' THEN 'Y' ELSE 'N' END)
+      FROM dbo.CODELKUP cl (NOLOCK) 
       WHERE cl.ListName = 'REPLENCFG'
       AND   cl.code2 = 'isp_ODMRPL01'
       AND   cl.Storerkey = @c_Storerkey
@@ -295,7 +298,7 @@ BEGIN
                   SET @c_Loc = ''
                END                                                                  
             END                                                                     --(Wan06) - END
-            
+
             IF @c_Loc <> '' AND @c_AutoReplB2F = 'Y'
             BEGIN
                EXEC msp_ReplBack2Front
@@ -331,7 +334,10 @@ BEGIN
       END                                                                           
    END                                                                              --(Wan04) - END
    
-   IF @n_continue = 1
+   IF @c_GenerateReplenTask = 'N' -- (SWT01)
+      GOTO QUIT_SP
+
+   IF @n_continue = 1 AND @c_GenerateReplenTask = 'Y'
    BEGIN
       SET @c_ReplenishmentKey = ''
       SET @c_ReplFullPallet = 'Y'
@@ -437,8 +443,10 @@ BEGIN
       (
          Lot            NVARCHAR(10)   NOT NULL PRIMARY KEY
       )                                                                             --(Wan04) - END  
-              
-       -- Do not execute it Replenishment Task not done yet       
+      
+
+
+      -- Do not execute it Replenishment Task not done yet       
       IF @c_ReplenType = 'R'
       BEGIN        
         IF EXISTS(SELECT 1
@@ -466,7 +474,7 @@ BEGIN
             PRINT '>>>>>> Replenishment Task Exists, Do nothing'
             GOTO QUIT_SP
         END
-      END 
+      END 	 
 
         IF NOT EXISTS (SELECT 1
                        FROM SKUxLOC SL (NOLOCK) 
@@ -827,7 +835,7 @@ BEGIN
                      END
                      SET @dt_Lottable05_2 = NULL
                      IF @dt_Lottable05 IS NULL SET @dt_Lottable05_2 = '1900-01-01' 
-                     SET @c_SQLAddCond = @c_SQLAddCond 
+                        SET @c_SQLAddCond = @c_SQLAddCond 
                                        + ' AND LOTATTRIBUTE.Lottable05 IN (@dt_Lottable05_2, @dt_Lottable05)' 
                   END
                   IF @c_NoMixLottable06 = '1' 
@@ -1911,5 +1919,6 @@ QUIT_SP:
    END
 END
 GO
+
 GRANT EXECUTE ON [dbo].[isp_ODMRPL01] TO [NSQL]
 GO
