@@ -35,7 +35,9 @@ GO
 /* 22-APR-2022 Wan04    1.6   LFWM-3499 - [CN] UAT Carters - Outbound   */    
 /*                            unallocate issue                          */    
 /* 26-AUG-2022 KY01     1.7   INC1891678-AddOn close cursorCUR_PICKDETAIL*/  
-/* 13-OCT-2022 KY02     1.8   INC1929382-AddOn @c_PickHeader_Loadkey check*/  
+/* 13-OCT-2022 KY02     1.8   INC1929382-AddOn @c_PickHeader_Loadkey check*/
+/* 10-JAN-2025 SSA01    1.9   UWP-23317-Added validationn to redirect   */
+/*                            to pickserialnumber tab                   */
 /************************************************************************/       
 CREATE OR ALTER PROCEDURE [WM].[lsp_Unallocation_Wrapper]
     @c_Storerkey NVARCHAR(15) = ''      --optional    
@@ -317,9 +319,22 @@ BEGIN
          CLOSE CUR_PICKDETAIL  
          DEALLOCATE CUR_PICKDETAIL  
       END  
-             
+      --SSA01 start---
+      IF @n_continue IN(1,2) AND ISNULL(@c_UnallocateFrom, '') = 'UAPICKLINE'
+         BEGIN
+         IF EXISTS(SELECT  1 FROM dbo.PickDetail pd (NOLOCK)
+            JOIN dbo.PickSerialNo psn (NOLOCK) ON psn.Pickdetailkey = pd.PickdetailKey
+            WHERE psn.Pickdetailkey = @c_Pickdetailkey
+            AND psn.SerialNo > '')
+            BEGIN
+               SELECT @n_continue = 3
+               SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 551812
+               SELECT @c_errmsg='NSQL'+CONVERT(char(6),@n_err)+': Allocated by Serial number and unallocate from pickserial number tab(lsp_Unallocation_Wrapper)'
+            END
+      END
+         -- SSA01 END--
       IF @n_continue IN(1,2) AND ISNULL(@c_UnallocateFrom,'') IN ('','ORDER','UAORDER','UAPICKLINE')    
-      BEGIN    
+      BEGIN
          --(Wan02) - START    
          SET @c_SQL = N'DECLARE CUR_PICKDETAIL CURSOR FAST_FORWARD READ_ONLY FOR'    
                     + ' SELECT PD.Pickdetailkey'    
