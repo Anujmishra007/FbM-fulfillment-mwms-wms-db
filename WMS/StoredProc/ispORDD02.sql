@@ -68,7 +68,7 @@ BEGIN
 					INNER JOIN PACK P (NOLOCK) ON SKU.PACKKey = P.PackKey  
 					INNER JOIN #INSERTED I ON I.Orderkey = OD.Orderkey AND I.OrderLineNumber = OD.OrderLineNumber
 					WHERE OD.StorerKey = @c_Storerkey
-					AND OD.Status < 9
+					AND OD.Status < '9'
 					AND OD.OpenQty%convert(INT, P.CaseCnt) > 0
                   )             
 		BEGIN
@@ -79,7 +79,7 @@ BEGIN
 			INNER JOIN PACK P (NOLOCK) ON SKU.PACKKey = P.PackKey  
 			INNER JOIN #INSERTED I ON I.Orderkey = OD.Orderkey AND I.OrderLineNumber = OD.OrderLineNumber
 			WHERE OD.StorerKey = @c_Storerkey
-			AND OD.Status < 9
+			AND OD.Status < '9'
 			AND OD.OpenQty%convert(INT, P.CaseCnt) > 0
 
 			OPEN CUR_ORDERKEY_Insert
@@ -123,7 +123,7 @@ BEGIN
 					INNER JOIN #INSERTED I ON I.Orderkey = OD.Orderkey AND I.OrderLineNumber = OD.OrderLineNumber
 					INNER JOIN #DELETED D ON I.Orderkey = D.Orderkey AND I.OrderLineNumber = D.OrderLineNumber
 					WHERE OD.StorerKey = @c_Storerkey
-					  AND OD.Status < 9
+					  AND OD.Status < '9'
 					  AND OD.OpenQty%convert(INT, P.CaseCnt) > 0
                   )             
 		BEGIN
@@ -135,7 +135,7 @@ BEGIN
 			INNER JOIN #INSERTED I ON I.Orderkey = OD.Orderkey AND I.OrderLineNumber = OD.OrderLineNumber
 			INNER JOIN #DELETED D ON I.Orderkey = D.Orderkey AND I.OrderLineNumber = D.OrderLineNumber
 			WHERE OD.StorerKey = @c_Storerkey
-			  AND OD.Status < 9
+			  AND OD.Status < '9'
 			  AND OD.OpenQty%convert(INT, P.CaseCnt) > 0
 	   
 			OPEN CUR_ORDERKEY
