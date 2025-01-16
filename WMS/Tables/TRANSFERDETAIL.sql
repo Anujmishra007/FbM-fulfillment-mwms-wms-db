@@ -252,7 +252,7 @@ END
 BEGIN
  		IF NOT EXISTS (SELECT 1
  		               FROM sys.columns
- 		               WHERE Name = 'ToSerialNo' AND Object_ID = Object_ID('ITrnSerialNo'))
+ 		               WHERE Name = 'ToSerialNo' AND Object_ID = Object_ID('TRANSFERDETAIL'))
 BEGIN
 ALTER TABLE TRANSFERDETAIL ADD ToSerialNo NVARCHAR(30) NOT NULL CONSTRAINT [DF_TRANSFERDETAIL_ToSerialNo]  DEFAULT (' ');
 EXEC sp_addextendedproperty N'MS_Description', N'ToSerialNo', 'SCHEMA', N'dbo', 'TABLE', N'TRANSFERDETAIL', 'COLUMN', N'ToSerialNo'
