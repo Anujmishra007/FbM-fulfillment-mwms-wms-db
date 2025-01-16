@@ -38,6 +38,7 @@ GO
 /* 13-OCT-2022 KY02     1.8   INC1929382-AddOn @c_PickHeader_Loadkey check*/
 /* 10-JAN-2025 SSA01    1.9   UWP-23317-Added validationn to redirect   */
 /*                            to pickserialnumber tab                   */
+/* 29-Nov-2024 TLTING01 2.0   UWP-28805 Blocking tune                   */  
 /************************************************************************/       
 CREATE OR ALTER PROCEDURE [WM].[lsp_Unallocation_Wrapper]
     @c_Storerkey NVARCHAR(15) = ''      --optional    
@@ -99,7 +100,7 @@ BEGIN
    BEGIN TRY -- SWT01 - Begin Outer Begin Try       
         
       DECLARE @n_Continue              INT    
-            ,@n_starttcnt             INT    
+            ,@n_starttcnt              INT    
     
       SELECT @n_starttcnt=@@TRANCOUNT, @n_err=0, @b_success=1, @c_errmsg='', @n_continue=1    
     
@@ -190,7 +191,7 @@ BEGIN
                                              , @c_PickHeader_Loadkey    
           
          WHILE @@FETCH_STATUS <> -1    
-         BEGIN    										
+         BEGIN                                  
             SET @c_PickHeaderKey = ''    
              
             SELECT @c_PickHeaderKey = p.PickHeaderKey    
@@ -198,7 +199,7 @@ BEGIN
             WHERE p.OrderKey = @c_PickHeader_Orderkey    
              
             --IF @c_PickHeaderKey = ''    
-			IF ISNULL(@c_PickHeader_Loadkey,'') <> '' AND @c_PickHeaderKey = ''   --KY02
+         IF ISNULL(@c_PickHeader_Loadkey,'') <> '' AND @c_PickHeaderKey = ''   --KY02
             BEGIN    
                SELECT TOP 1 @c_PickHeaderKey = p.PickHeaderKey    
                FROM dbo.PICKHEADER AS p WITH (NOLOCK)    
@@ -207,7 +208,7 @@ BEGIN
             END    
              
             --IF @c_PickHeaderKey = ''    
-			IF ISNULL(@c_PickHeader_Loadkey,'') <> '' AND @c_PickHeaderKey = ''    --KY02
+         IF ISNULL(@c_PickHeader_Loadkey,'') <> '' AND @c_PickHeaderKey = ''    --KY02
             BEGIN    
                SELECT TOP 1 @c_PickHeaderKey = p.PickHeaderKey    
                FROM dbo.PICKHEADER AS p WITH (NOLOCK)    
@@ -332,7 +333,14 @@ BEGIN
                SELECT @c_errmsg='NSQL'+CONVERT(char(6),@n_err)+': Allocated by Serial number and unallocate from pickserial number tab(lsp_Unallocation_Wrapper)'
             END
       END
-         -- SSA01 END--
+      -- SSA01 END--
+         
+      -- tlting01
+      WHILE @@TRANCOUNT > 0      
+      BEGIN      
+       COMMIT TRAN      
+      END  
+         
       IF @n_continue IN(1,2) AND ISNULL(@c_UnallocateFrom,'') IN ('','ORDER','UAORDER','UAPICKLINE')    
       BEGIN
          --(Wan02) - START    
@@ -377,6 +385,8 @@ BEGIN
            
          WHILE @@FETCH_STATUS=0 AND @n_continue IN(1,2)    
          BEGIN    
+            --tlting01
+            BEGIN TRAN 
             DELETE PICKDETAIL  WITH (ROWLOCK)             --(Wan02)    
             WHERE Pickdetailkey = @c_Pickdetailkey    
      
@@ -387,19 +397,24 @@ BEGIN
                SELECT @n_continue = 3      
                SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 551807    
                SELECT @c_errmsg='NSQL'+CONVERT(char(6),@n_err)+': Delete Pickdetailkey fail. (lsp_Unallocation_Wrapper)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '     
+            END  
+            ELSE
+            BEGIN
+               COMMIT TRAN
             END               
            
             FETCH FROM CUR_PICKDETAIL INTO @c_Pickdetailkey    
          END              
          CLOSE CUR_PICKDETAIL    
          DEALLOCATE CUR_PICKDETAIL         
-      END        
-          
-      --(Wan03) - START    
-      IF @@TRANCOUNT = 0    
-      BEGIN     
-         BEGIN TRAN    
-      END    
+      END   
+           
+      -- tlting01  
+      --(Wan03) - START             
+      --IF @@TRANCOUNT = 0    
+      --BEGIN     
+      --   BEGIN TRAN    
+      --END   
     
       SET @CUR_DELPICKSLIP = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR    
       SELECT tph.PickHeaderKey    
@@ -417,7 +432,9 @@ BEGIN
          IF EXISTS (SELECT 1 FROM dbo.PackHeader AS ph WITH (NOLOCK) WHERE ph.PickSlipNo = @c_PickHeaderKey AND ph.[Status] < '9')    
          BEGIN    
             IF EXISTS (SELECT 1 FROM dbo.PackDetail AS pd WITH (NOLOCK) WHERE pd.PickSlipNo = @c_PickHeaderKey)    
-            BEGIN    
+            BEGIN  
+               --TLTING01   
+               BEGIN TRAN  
                ;WITH delpack AS ( SELECT pd.PickSlipNo, pd.CartonNo, pd.LabelNo, pd.LabelLine     
                                     FROM dbo.PackDetail AS pd WITH (NOLOCK)    
                                     WHERE pd.PickSlipNo = @c_PickHeaderKey      
@@ -434,11 +451,17 @@ BEGIN
                   SET @c_errmsg = ERROR_MESSAGE()    
                   SET @n_err = 551809    
                   SET @c_errmsg='NSQL'+CONVERT(char(6),@n_err)+': Delete PackDetail fail. (lsp_Unallocation_Wrapper)' + ' ( SQLSvr MESSAGE=' + @c_errmsg + ' ) '     
-               END    
+               END 
+               ELSE
+               BEGIN
+                  COMMIT TRAN
+               END      
             END     
                 
             IF @n_continue IN (1,2)     
-            BEGIN          
+            BEGIN 
+               --TLTING01
+               BEGIN TRAN                       
                DELETE FROM dbo.PackHeader WITH (ROWLOCK) WHERE PickSlipNo = @c_PickHeaderKey AND [Status] < '9'    
                 
                SET @n_err =  @@ERROR     
@@ -449,12 +472,18 @@ BEGIN
                   SET @c_errmsg = ERROR_MESSAGE()    
                   SET @n_err = 551810    
                   SET @c_errmsg='NSQL'+CONVERT(char(6),@n_err)+': Delete Packheader fail. (lsp_Unallocation_Wrapper)' + ' ( SQLSvr MESSAGE=' + @c_errmsg + ' ) '     
-               END    
+               END 
+               ELSE
+               BEGIN
+                  COMMIT TRAN                
+               END                     
             END    
          END    
             
          IF @n_continue IN (1,2) AND EXISTS (SELECT 1 FROM dbo.PickHeader AS ph WITH (NOLOCK) WHERE ph.PickHeaderKey = @c_PickHeaderKey)    
-         BEGIN     
+         BEGIN
+            --TLTING01
+            BEGIN TRAN      
             DELETE dbo.PickHeader WITH (ROWLOCK) WHERE PickHeaderKey = @c_PickHeaderKey     
              
             IF @n_err <> 0    
@@ -463,7 +492,11 @@ BEGIN
                SET @c_errmsg = ERROR_MESSAGE()    
                SET @n_err = 551811    
                SET @c_errmsg='NSQL'+CONVERT(char(6),@n_err)+': Delete PickHeader fail. (lsp_Unallocation_Wrapper)' + ' ( SQLSvr MESSAGE=' + @c_errmsg + ' ) '     
-            END    
+            END
+            ELSE
+            BEGIN
+               COMMIT TRAN
+            END                 
          END    
     
          FETCH NEXT FROM @CUR_DELPICKSLIP INTO @c_PickHeaderKey          
