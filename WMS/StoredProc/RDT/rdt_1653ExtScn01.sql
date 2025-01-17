@@ -535,6 +535,7 @@ BEGIN
                      DELETE FROM dbo.PalletDetail
                      WHERE PalletKey = @cPalletKey
                         AND ISNULL(CaseID, '') = @cLabelNo
+                        AND StorerKey = @cStorerKey
 
                      SELECT @nRowCount = COUNT(1) 
                      FROM dbo.PalletDetail WITH(NOLOCK)
