@@ -141,7 +141,8 @@ BEGIN
             SELECT @cLabelNo = Value FROM @tExtScnData WHERE Variable = '@cLabelNo'
 
             IF ISNULL( @cLabelNo, '' ) <> '' AND EXISTS (SELECT 1 FROM dbo.PalletDetail WITH(NOLOCK) 
-                                                            WHERE CaseID = @cLabelNo 
+                                                            WHERE CaseID IS NOT NULL
+                                                            AND CaseID = @cLabelNo 
                                                             AND StorerKey = @cStorerKey
                                                             AND Status <> '9' ) --V1.3.1
             BEGIN
@@ -201,7 +202,7 @@ BEGIN
                   IF @nRowCount = 1 AND @cCaseID = @cTrackNo
                      SET @cOutField14 = 'LAST CARTON'
                   
-                  SELECT @nRowCount = COUNT(DISTINCT CaseID) FROM dbo.PalletDetail WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND PalletKey = @cPalletKey AND ISNULL(CaseID, '') <> ''
+                  SELECT @nRowCount = COUNT(DISTINCT CaseID) FROM dbo.PalletDetail WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND PalletKey = @cPalletKey AND CaseID IS NOT NULL AND CaseID <> ''
                END TRY
                BEGIN CATCH
                   SET @nErrNo = 219109
@@ -518,7 +519,8 @@ BEGIN
 
                   SELECT TOP 1 @cPalletKey = PalletKey 
                   FROM dbo.PalletDetail WITH(NOLOCK)
-                  WHERE ISNULL(CaseID, '') = @cLabelNo
+                  WHERE CaseID IS NOT NULL
+                     AND CaseID = @cLabelNo
                      AND StorerKey = @cStorerKey
 
                   IF @nTranCount = 0
@@ -534,7 +536,8 @@ BEGIN
                      --Remove PalletDetails
                      DELETE FROM dbo.PalletDetail
                      WHERE PalletKey = @cPalletKey
-                        AND ISNULL(CaseID, '') = @cLabelNo
+                        AND CaseID IS NOT NULL
+                        AND CaseID = @cLabelNo
                         AND StorerKey = @cStorerKey
 
                      SELECT @nRowCount = COUNT(1) 
