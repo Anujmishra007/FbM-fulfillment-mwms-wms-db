@@ -141,6 +141,7 @@ BEGIN
 
             IF ISNULL( @cLabelNo, '' ) <> '' AND EXISTS (SELECT 1 FROM dbo.PalletDetail WITH(NOLOCK) 
                                                             WHERE CaseID = @cLabelNo 
+                                                            AND StorerKey = @cStorerKey
                                                             AND Status <> '9' ) --V1.3.1
             BEGIN
                SET @cOutField01 = '' 
@@ -199,7 +200,7 @@ BEGIN
                   IF @nRowCount = 1 AND @cCaseID = @cTrackNo
                      SET @cOutField14 = 'LAST CARTON'
                   
-                  SELECT @nRowCount = COUNT(DISTINCT CaseID) FROM dbo.PalletDetail WITH(NOLOCK) WHERE PalletKey = @cPalletKey AND ISNULL(CaseID, '') <> ''
+                  SELECT @nRowCount = COUNT(DISTINCT CaseID) FROM dbo.PalletDetail WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND PalletKey = @cPalletKey AND ISNULL(CaseID, '') <> ''
                END TRY
                BEGIN CATCH
                   SET @nErrNo = 219109
@@ -517,6 +518,7 @@ BEGIN
                   SELECT TOP 1 @cPalletKey = PalletKey 
                   FROM dbo.PalletDetail WITH(NOLOCK)
                   WHERE ISNULL(CaseID, '') = @cLabelNo
+                     AND StorerKey = @cStorerKey
 
                   IF @nTranCount = 0
                   BEGIN
@@ -536,6 +538,7 @@ BEGIN
                      SELECT @nRowCount = COUNT(1) 
                      FROM dbo.PalletDetail WITH(NOLOCK)
                      WHERE PalletKey = @cPalletKey
+                        AND StorerKey = @cStorerKey
 
                      --If no detail, need remove the Pallet Header
                      IF @nRowCount = 0

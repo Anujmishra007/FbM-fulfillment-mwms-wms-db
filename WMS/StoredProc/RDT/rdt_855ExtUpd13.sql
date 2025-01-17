@@ -286,12 +286,15 @@ BEGIN
                SELECT @nRowCount = COUNT(1) 
                FROM dbo.WorkOrder wo WITH(NOLOCK)
                INNER JOIN dbo.WorkOrderDetail wod WITH(NOLOCK) ON wo.WorkOrderKey = wod.WorkOrderKey
-               INNER JOIN dbo.PackHeader ph WITH(NOLOCK) ON wo.StorerKey = ph.StorerKey AND ISNULL(wo.ExternWorkOrderKey, '') = ph.OrderKey
+               INNER JOIN dbo.PackHeader ph WITH(NOLOCK) ON wo.StorerKey = ph.StorerKey AND wo.ExternWorkOrderKey = ph.OrderKey
                INNER JOIN dbo.PackDetail pd WITH(NOLOCK) ON ph.StorerKey = pd.StorerKey AND ph.PickSlipNo = pd.PickSlipNo
-               INNER JOIN dbo.PickDetail pkd WITH(NOLOCK) ON pd.StorerKey = pkd.StorerKey AND pd.labelno = ISNULL(pkd.CaseID, '') AND wod.ExternWorkOrderKey = pkd.OrderKey AND wod.ExternLineNo = pkd.OrderLinenumber
+               INNER JOIN dbo.PickDetail pkd WITH(NOLOCK) ON pd.StorerKey = pkd.StorerKey AND pd.labelno = pkd.CaseID AND wod.ExternWorkOrderKey = pkd.OrderKey AND wod.ExternLineNo = pkd.OrderLinenumber
                INNER JOIN dbo.CODELKUP lk WITH(NOLOCK) ON wo.StorerKey = lk.StorerKey AND wod.Type = lk.Code AND lk.LISTNAME = 'WKORDTYPE'
                WHERE pkd.StorerKey = @cStorerKey
-                  AND ISNULL(pkd.CaseID, '') = @cDropID
+                  AND wo.ExternWorkOrderKey IS NOT NULL
+                  AND wo.ExternWorkOrderKey <> ''
+                  AND pkd.CaseID <> ''
+                  AND pkd.CaseID = @cDropID
                   AND (pd.SKU = ISNULL(wod.WkOrdUdef1, '') OR ISNULL(wod.WkOrdUdef1, '') = '')
                
                --1. VAS is needed, display VAS code and Print VAS label
@@ -307,10 +310,13 @@ BEGIN
                      FROM dbo.WorkOrderDetail wod WITH(NOLOCK)
                      INNER JOIN dbo.WorkOrder wo WITH(NOLOCK) ON wo.WorkOrderKey = wod.WorkOrderKey
                      INNER JOIN dbo.CODELKUP lk WITH(NOLOCK) ON wo.StorerKey = lk.StorerKey AND wod.Type = lk.Code AND ISNULL(lk.Short, '') <> 'Y' AND lk.LISTNAME = 'WKORDTYPE'
-                     INNER JOIN dbo.PickDetail pkd WITH(NOLOCK) ON wo.StorerKey = pkd.StorerKey AND ISNULL(wod.ExternWorkOrderKey, '') = pkd.OrderKey AND pkd.OrderLinenumber = wod.ExternLineNo
+                     INNER JOIN dbo.PickDetail pkd WITH(NOLOCK) ON wo.StorerKey = pkd.StorerKey AND wod.ExternWorkOrderKey = pkd.OrderKey AND pkd.OrderLinenumber = wod.ExternLineNo
                      WHERE wo.StorerKey = @cStorerKey
                         AND pkd.Sku = @cSKU
-                        AND ISNULL(pkd.CaseID, '') = @cDropID
+                        AND wod.ExternWorkOrderKey IS NOT NULL
+                        AND wod.ExternWorkOrderKey <> ''
+                        AND pkd.CaseID <> ''
+                        AND pkd.CaseID = @cDropID
                      ORDER BY lk.Code ASC
    
                   OPEN CUR_PPA 
@@ -392,18 +398,24 @@ BEGIN
                   FROM dbo.WorkOrderDetail wod  WITH(NOLOCK)
                   INNER JOIN dbo.WorkOrder wo WITH(NOLOCK) ON wo.WorkOrderKey = wod.WorkOrderKey
                   INNER JOIN dbo.CODELKUP lk WITH(NOLOCK) ON wo.StorerKey = lk.StorerKey AND wod.Type = lk.Code AND lk.LISTNAME = 'WKORDTYPE' AND lk.UDF04 = 'LVSPRICELB'
-                  INNER JOIN dbo.PickDetail pkd WITH(NOLOCK) ON wo.StorerKey = pkd.StorerKey AND ISNULL(wod.ExternWorkOrderKey, '') = pkd.OrderKey AND pkd.OrderLinenumber = wod.ExternLineNo AND pkd.Status = @cPickConfirmStatus
+                  INNER JOIN dbo.PickDetail pkd WITH(NOLOCK) ON wo.StorerKey = pkd.StorerKey AND wod.ExternWorkOrderKey = pkd.OrderKey AND pkd.OrderLinenumber = wod.ExternLineNo AND pkd.Status = @cPickConfirmStatus
                   LEFT JOIN (SELECT DISTINCT lk1.LISTNAME, wod1.StorerKey, lk1.Code, Lk1.code2, lk1.UDF01 FROM dbo.WorkOrderDetail wod1 WITH(NOLOCK) 
-                           INNER JOIN dbo.PickDetail pkd1 WITH(NOLOCK) ON wod1.StorerKey = pkd1.StorerKey AND ISNULL(wod1.ExternWorkOrderKey, '') = pkd1.OrderKey
+                           INNER JOIN dbo.PickDetail pkd1 WITH(NOLOCK) ON wod1.StorerKey = pkd1.StorerKey AND wod1.ExternWorkOrderKey = pkd1.OrderKey
                            INNER JOIN dbo.CODELKUP lk1 WITH(NOLOCK) ON wod1.StorerKey = lk1.StorerKey AND lk1.LISTNAME = 'LVSPRICELB' AND wod1.Type = lk1.code2
                            WHERE wod1.StorerKey = @cStorerKey
                               AND wod1.ExternLineNo = ''
                               AND wod1.Remarks = 'PriceTicketFormat'
-                              AND ISNULL(pkd1.CaseID, '') = @cDropID) AS wodEX
+                              AND wod1.ExternWorkOrderKey IS NOT NULL
+                              AND wod1.ExternWorkOrderKey <> ''
+                              AND pkd1.CaseID <> ''
+                              AND pkd1.CaseID = @cDropID) AS wodEX
                      ON wod.StorerKey = wodEX.StorerKey AND lk.Code = wodEX.Code
                   WHERE wo.StorerKey = @cStorerKey
                      AND pkd.Sku = @cSKU
-                     AND ISNULL(pkd.CaseID, '') = @cDropID
+                     AND wod.ExternWorkOrderKey IS NOT NULL
+                     AND wod.ExternWorkOrderKey <> ''
+                     AND pkd.CaseID <> ''
+                     AND pkd.CaseID = @cDropID
                      AND wod.ExternLineNo <> ''
 
                   INSERT INTO @tLabels(LabelListName, VASCode, LabelName, Qty, PrintSequence)
@@ -417,22 +429,26 @@ BEGIN
                               INNER JOIN (SELECT DISTINCT StorerKey, OrderKey
                                           FROM dbo.PickDetail WITH(NOLOCK) 
                                           WHERE StorerKey = @cStorerKey
-                                             AND ISNULL(CaseID, '') = @cDropID) AS pkd1
-                                 ON wod1.StorerKey = pkd1.StorerKey AND ISNULL(wod1.ExternWorkOrderKey, '') = pkd1.OrderKey
+                                             AND CaseID <> ''
+                                             AND CaseID = @cDropID) AS pkd1
+                                 ON wod1.StorerKey = pkd1.StorerKey AND wod1.ExternWorkOrderKey IS NOT NULL AND wod1.ExternWorkOrderKey = pkd1.OrderKey
                               INNER JOIN dbo.CODELKUP lk2 WITH(NOLOCK) ON wod1.StorerKey = lk2.StorerKey AND lk2.LISTNAME = 'WKORDTYPE' AND lk2.UDF04 = 'LVSCatalog' AND wod1.Type = lk2.Code
                               WHERE wod1.StorerKey = @cStorerKey
-                                 AND TRIM(wod1.Type) <> ''
-                                 AND TRIM(wod1.ExternLineNo) <> '') AS t
+                                 AND wod1.Type <> ''
+                                 AND wod1.ExternLineNo <> ''
+                                 AND wod1.ExternWorkOrderKey IS NOT NULL
+                                 AND wod1.ExternWorkOrderKey <> '') AS t
                         WHERE ROW# = 1) AS wod
                   INNER JOIN dbo.WorkOrder wo WITH(NOLOCK) ON wo.WorkOrderKey = wod.WorkOrderKey
-                  INNER JOIN dbo.ORDERS orm WITH(NOLOCK) ON wod.StorerKey = orm.StorerKey AND ISNULL(wod.ExternWorkOrderKey, '') = orm.OrderKey
+                  INNER JOIN dbo.ORDERS orm WITH(NOLOCK) ON wod.StorerKey = orm.StorerKey AND wod.ExternWorkOrderKey = orm.OrderKey
                   INNER JOIN dbo.CODELKUP lk WITH(NOLOCK) ON wo.StorerKey = lk.StorerKey AND wod.Type = lk.Code AND lk.LISTNAME = 'WKORDTYPE' AND lk.UDF04 = 'LVSCatalog' 
-                  INNER JOIN dbo.PickDetail pkd WITH(NOLOCK) ON wo.StorerKey = pkd.StorerKey AND ISNULL(wod.ExternWorkOrderKey, '') = pkd.OrderKey AND pkd.OrderLinenumber = wod.ExternLineNo AND pkd.Status = @cPickConfirmStatus
+                  INNER JOIN dbo.PickDetail pkd WITH(NOLOCK) ON wo.StorerKey = pkd.StorerKey AND wod.ExternWorkOrderKey = pkd.OrderKey AND pkd.OrderLinenumber = wod.ExternLineNo AND pkd.Status = @cPickConfirmStatus
                   LEFT JOIN dbo.CODELKUP lk1 WITH(NOLOCK) ON lk.StorerKey = lk1.StorerKey AND lk.Code = lk1.Code AND lk.UDF04 = lk1.LISTNAME AND lk1.Code2 <> ''
                      AND (orm.ConsigneeKey = lk1.Code2 OR  MarkforKey = lk1.Code2 OR BillToKey = lk1.Code2)
                   WHERE wo.StorerKey = @cStorerKey
                      AND pkd.Sku = @cSKU
-                     AND ISNULL(pkd.CaseID, '') = @cDropID
+                     AND pkd.CaseID <> ''
+                     AND pkd.CaseID = @cDropID
                   ORDER BY lk.Code ASC
 
                   DECLARE @tPriceLabelList   VariableTable
@@ -536,7 +552,8 @@ BEGIN
                SELECT @nTotalPQty = SUM(Qty)
                FROM dbo.PickDetail WITH(NOLOCK)
                WHERE StorerKey = @cStorerKey
-                  AND ISNULL(CaseID, '') = @cDropID
+                  AND CaseID <> ''
+                  AND CaseID = @cDropID
                   AND Status NOT IN ('4', '9')
 
                DECLARE @cOrderGroup NVARCHAR(20) = ''
@@ -546,7 +563,8 @@ BEGIN
                FROM dbo.PICKDETAIL pkd WITH(NOLOCK)
                INNER JOIN dbo.ORDERS orm WITH(NOLOCK) ON pkd.StorerKey = orm.StorerKey AND pkd.OrderKey = orm.OrderKey
                WHERE pkd.StorerKey = @cStorerKey
-                  AND ISNULL(pkd.CaseID, '') = @cDropID
+                  AND pkd.CaseID <> ''
+                  AND pkd.CaseID = @cDropID
                ORDER BY orm.OrderKey
 
                BEGIN TRY
@@ -568,7 +586,9 @@ BEGIN
                      --Mark PackInfo as PACKED
                      UPDATE dbo.PackInfo WITH(ROWLOCK)
                      SET CartonStatus = 'PACKED'
-                     WHERE ISNULL(RefNo, '') = @cDropID
+                     WHERE 
+                        RefNo IS NOT NULL
+                        AND RefNo = @cDropID
 
                      --Calculate carton weight
                      DECLARE @tCartonWeight TABLE
@@ -583,9 +603,12 @@ BEGIN
                         (SELECT PKD.CaseID, CART.CartonWeight, SUM(PKD.qty * SKU.StdGrossWgt) AS InvWeight
                         FROM dbo.CARTONIZATION CART WITH(NOLOCK)
                         INNER JOIN dbo.PackInfo PKI WITH(NOLOCK) ON CART.CartonType = ISNULL(PKI.CartonType, '')
-                        INNER JOIN dbo.PickDetail PKD WITH(NOLOCK) ON ISNULL(PKI.RefNo, '') = ISNULL(PKD.CaseID, '-1') 
+                        INNER JOIN dbo.PickDetail PKD WITH(NOLOCK) ON PKI.RefNo = PKD.CaseID
                         INNER JOIN dbo.SKU SKU WITH(NOLOCK) ON PKD.StorerKey = SKU.StorerKey AND PKD.Sku = SKU.Sku
-                        WHERE PKD.CaseID = @cDropID
+                        WHERE PKD.CaseID <> ''
+                           AND PKI.RefNo IS NOT NULL
+                           AND PKD.CaseID <> ''
+                           AND PKD.CaseID = @cDropID
                            AND PKD.StorerKey = @cStorerKey
                            AND PKD.Status = @cPickConfirmStatus
                         GROUP BY PKD.CaseID, CART.CartonWeight) AS t
@@ -594,7 +617,9 @@ BEGIN
                      SET PI.Weight = CW.Weight
                      FROM dbo.PackInfo PI
                      INNER JOIN @tCartonWeight CW ON ISNULL(PI.RefNo, '') = CW.CaseID
-                     WHERE ISNULL(PI.RefNo, '') = @cDropID
+                     WHERE 
+                        PI.RefNo IS NOT NULL
+                        AND PI.RefNo = @cDropID
 
                      --Print PackSlipNo report once an order is finished
                      DELETE FROM @tOrder
@@ -603,7 +628,8 @@ BEGIN
                      SELECT DISTINCT OrderKey
                      FROM dbo.PickDetail WITH(NOLOCK)
                      WHERE StorerKey = @cStorerKey
-                        AND ISNULL(CaseID, '-1') = @cDropID
+                        AND CaseID <> ''
+                        AND CaseID = @cDropID
 
                      SET @nLoopIndex = -1
 
@@ -716,7 +742,8 @@ BEGIN
                         ON PH.StorerKey = PKD.StorerKey
                         AND PH.OrderKey = PKD.OrderKey
                      WHERE PKD.StorerKey = @cStorerKey
-                        AND ISNULL(pkd.CaseID, '') = @cDropID
+                        AND pkd.CaseID <> ''
+                        AND pkd.CaseID = @cDropID
 
                      SET @nLoopIndex = -1
                      WHILE 1 = 1
@@ -838,7 +865,8 @@ BEGIN
                   ON PKD.StorerKey = ORM.StorerKey 
                   AND PKD.OrderKey = ORM.OrderKey
                WHERE PKD.StorerKey = @cStorerKey 
-                  AND ISNULL(PKD.CaseID, '') = @cDropID
+                  AND CaseID <> ''
+                  AND PKD.CaseID = @cDropID
 
                IF @nRowCount = 1
                   SET @nMPOCCarton = 1
@@ -846,7 +874,8 @@ BEGIN
                SELECT @nRowCount = COUNT( DISTINCT OrderKey )
                FROM dbo.PickDetail WITH(NOLOCK)
                WHERE StorerKey = @cStorerKey 
-                  AND ISNULL(CaseID, '') = @cDropID
+                  AND CaseID <> ''
+                  AND CaseID = @cDropID
 
                IF @nRowCount < 2
                   SET @nMPOCCarton = 0
@@ -897,7 +926,8 @@ BEGIN
                WHERE wod.StorerKey = @cStorerKey
                   AND wod.Type <> ''
                   AND wod.ExternLineNo = ''
-                  AND ISNULL(pkd.CaseID, '') = @cDropID
+                  AND pkd.CaseID <> ''
+                  AND pkd.CaseID = @cDropID
                   AND ISNULL(wod.Remarks, '') <> ''
                ORDER BY IIF(UPPER(LEFT(lk.code2, 4)) = 'MPOC', 1, 2)
 
@@ -969,7 +999,8 @@ BEGIN
                FROM dbo.PickDetail pkd WITH(NOLOCK)
                INNER JOIN dbo.ORDERS orm WITH(NOLOCK) ON pkd.StorerKey = orm.StorerKey AND pkd.OrderKey = orm.OrderKey
                WHERE pkd.StorerKey = @cStorerKey
-                  AND ISNULL(pkd.CaseID, '') = @cDropID
+                  AND pkd.CaseID <> ''
+                  AND pkd.CaseID = @cDropID
 
                --IF code2 equals to ConsigneeKey and BillToKey, only fetch data which code2 = @cConsigneeKey
                IF EXISTS (SELECT 1
