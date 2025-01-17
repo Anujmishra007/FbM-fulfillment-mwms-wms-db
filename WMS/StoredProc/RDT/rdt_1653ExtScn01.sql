@@ -20,7 +20,6 @@ GO
 /*                            in pallet id                                  */
 /* 2024-10-25 1.4.0  Dennis   FCR-1316 Last Carton                          */
 /* 2024-12-19 1.4.1  NLT013   FCR-1316 Valid location is needed for new ID  */
-/* 2024-12-19 1.5.0  NLT013   UWP-29176 Performace Tune                     */
 /****************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_1653ExtScn01] (
@@ -141,9 +140,7 @@ BEGIN
             SELECT @cLabelNo = Value FROM @tExtScnData WHERE Variable = '@cLabelNo'
 
             IF ISNULL( @cLabelNo, '' ) <> '' AND EXISTS (SELECT 1 FROM dbo.PalletDetail WITH(NOLOCK) 
-                                                            WHERE CaseID IS NOT NULL
-                                                            AND CaseID = @cLabelNo 
-                                                            AND StorerKey = @cStorerKey
+                                                            WHERE CaseID = @cLabelNo 
                                                             AND Status <> '9' ) --V1.3.1
             BEGIN
                SET @cOutField01 = '' 
@@ -202,7 +199,7 @@ BEGIN
                   IF @nRowCount = 1 AND @cCaseID = @cTrackNo
                      SET @cOutField14 = 'LAST CARTON'
                   
-                  SELECT @nRowCount = COUNT(DISTINCT CaseID) FROM dbo.PalletDetail WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND PalletKey = @cPalletKey AND CaseID IS NOT NULL AND CaseID <> ''
+                  SELECT @nRowCount = COUNT(DISTINCT CaseID) FROM dbo.PalletDetail WITH(NOLOCK) WHERE PalletKey = @cPalletKey AND ISNULL(CaseID, '') <> ''
                END TRY
                BEGIN CATCH
                   SET @nErrNo = 219109
@@ -519,9 +516,7 @@ BEGIN
 
                   SELECT TOP 1 @cPalletKey = PalletKey 
                   FROM dbo.PalletDetail WITH(NOLOCK)
-                  WHERE CaseID IS NOT NULL
-                     AND CaseID = @cLabelNo
-                     AND StorerKey = @cStorerKey
+                  WHERE ISNULL(CaseID, '') = @cLabelNo
 
                   IF @nTranCount = 0
                   BEGIN
@@ -536,14 +531,11 @@ BEGIN
                      --Remove PalletDetails
                      DELETE FROM dbo.PalletDetail
                      WHERE PalletKey = @cPalletKey
-                        AND CaseID IS NOT NULL
-                        AND CaseID = @cLabelNo
-                        AND StorerKey = @cStorerKey
+                        AND ISNULL(CaseID, '') = @cLabelNo
 
                      SELECT @nRowCount = COUNT(1) 
                      FROM dbo.PalletDetail WITH(NOLOCK)
                      WHERE PalletKey = @cPalletKey
-                        AND StorerKey = @cStorerKey
 
                      --If no detail, need remove the Pallet Header
                      IF @nRowCount = 0
