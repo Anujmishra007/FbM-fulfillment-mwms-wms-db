@@ -20,6 +20,7 @@ GO
 /*                            in pallet id                                  */
 /* 2024-10-25 1.4.0  Dennis   FCR-1316 Last Carton                          */
 /* 2024-12-19 1.4.1  NLT013   FCR-1316 Valid location is needed for new ID  */
+/* 2024-12-19 1.5.0  NLT013   UWP-29176 Performace Tune                     */
 /****************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_1653ExtScn01] (
