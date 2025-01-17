@@ -22,7 +22,8 @@ GO
 /* 2024-12-03 1.5.0  NLT013   FCR-1659 Be able to print label for MPOC             */
 /* 2024-12-03 1.6.0  NLT013   UWP-28680 Remove the transaction                     */
 /* 2024-12-03 1.7.0  NLT013   UWP-28888 PackHeader status is not correct           */
-/* 2025-01-15 1.8.0  NLT013   UWP-29176 Performance Tune                           */
+/* 2025-01-15 1.8.0  NLT013   UWP-29176 Performance Tune Version 1                 */
+/* 2025-01-15 1.8.1  NLT013   UWP-29176 Performance Tune version 2                 */
 /***********************************************************************************/
 CREATE OR ALTER PROC rdt.rdt_855ExtUpd13 (
    @nMobile      INT,   
@@ -431,7 +432,7 @@ BEGIN
                                           WHERE StorerKey = @cStorerKey
                                              AND CaseID <> ''
                                              AND CaseID = @cDropID) AS pkd1
-                                 ON wod1.StorerKey = pkd1.StorerKey AND wod1.ExternWorkOrderKey IS NOT NULL AND wod1.ExternWorkOrderKey = pkd1.OrderKey
+                                 ON wod1.StorerKey = pkd1.StorerKey AND wod1.ExternWorkOrderKey = pkd1.OrderKey
                               INNER JOIN dbo.CODELKUP lk2 WITH(NOLOCK) ON wod1.StorerKey = lk2.StorerKey AND lk2.LISTNAME = 'WKORDTYPE' AND lk2.UDF04 = 'LVSCatalog' AND wod1.Type = lk2.Code
                               WHERE wod1.StorerKey = @cStorerKey
                                  AND wod1.Type <> ''
@@ -447,6 +448,8 @@ BEGIN
                      AND (orm.ConsigneeKey = lk1.Code2 OR  MarkforKey = lk1.Code2 OR BillToKey = lk1.Code2)
                   WHERE wo.StorerKey = @cStorerKey
                      AND pkd.Sku = @cSKU
+                     AND wod.ExternWorkOrderKey IS NOT NULL
+                     AND wod.ExternWorkOrderKey <> ''
                      AND pkd.CaseID <> ''
                      AND pkd.CaseID = @cDropID
                   ORDER BY lk.Code ASC
@@ -605,8 +608,7 @@ BEGIN
                         INNER JOIN dbo.PackInfo PKI WITH(NOLOCK) ON CART.CartonType = ISNULL(PKI.CartonType, '')
                         INNER JOIN dbo.PickDetail PKD WITH(NOLOCK) ON PKI.RefNo = PKD.CaseID
                         INNER JOIN dbo.SKU SKU WITH(NOLOCK) ON PKD.StorerKey = SKU.StorerKey AND PKD.Sku = SKU.Sku
-                        WHERE PKD.CaseID <> ''
-                           AND PKI.RefNo IS NOT NULL
+                        WHERE PKI.RefNo IS NOT NULL
                            AND PKD.CaseID <> ''
                            AND PKD.CaseID = @cDropID
                            AND PKD.StorerKey = @cStorerKey
@@ -865,7 +867,7 @@ BEGIN
                   ON PKD.StorerKey = ORM.StorerKey 
                   AND PKD.OrderKey = ORM.OrderKey
                WHERE PKD.StorerKey = @cStorerKey 
-                  AND CaseID <> ''
+                  AND PKD.CaseID <> ''
                   AND PKD.CaseID = @cDropID
 
                IF @nRowCount = 1
