@@ -1,6 +1,3 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE Id = OBJECT_ID(N'[dbo].[ntrPickDetailUpdate]') AND OBJECTPROPERTY(id, N'IsTrigger') = 1)
-   DROP TRIGGER [dbo].[ntrPickDetailUpdate]
-GO
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -100,9 +97,10 @@ GO
 /* 04-MAR-2021  Wan04   3.9   WMS-16390 - [CN] NIKE_O2_Ecompacking_Check*/
 /*                            _Pickdetail_status_CR                     */
 /* 2024-11-26   Wan05   4.0   UWP-23317 - [FCR-618  819] Unpick SerialNo*/
+/* 2024-11-26   Wan06   4.1   [FCR-618] - Fixed if change on lot,id,qty &*/
+/*                            Status                                    */
 /************************************************************************/
-
-CREATE TRIGGER [dbo].[ntrPickDetailUpdate]
+CREATE OR ALTER TRIGGER [dbo].[ntrPickDetailUpdate]
 ON  [dbo].[PICKDETAIL]
 FOR UPDATE
 AS
@@ -693,21 +691,30 @@ END
 IF (@n_Continue=1 or @n_Continue=2) and (Update(Status) OR Update(Qty) OR Update(Lot) OR Update(ID))
 BEGIN
    --Allow to update if update from ntrpackserialnodelete trigger. direct update not allow if serialno is picked
-   IF EXISTS ( SELECT TOP 1 1
-               FROM INSERTED i
+  SET @n_Cnt = 0
+  SELECT @n_Cnt = SUM(  CASE WHEN d.[Status] <> i.[Status] THEN 1                                  --(Wan06) 
+                        WHEN d.qty <> i.qty AND i.[Status] = '5' THEN 1                            --(Wan06) 
+                        WHEN d.Lot <> i.Lot AND i.[Status] = '5' AND sc.Authority ='1' THEN 1      --(Wan06) 
+                        WHEN d.ID  <> i.ID  AND i.[Status] = '5' THEN 1                            --(Wan06) 
+                        ELSE 0                                                                     --(Wan06) 
+                        END )                                                                      --(Wan06)
+               FROM INSERTED i   
                JOIN DELETED  d ON d.Pickdetailkey = i.pickdetailkey
                JOIN PickSerialNo psn WITH (NOLOCK) ON  psn.PickDetailKey = i.PickDetailKey
-               WHERE d.[Status] = '5' AND i.[Status] <= '5'
+               JOIN ORDERS o (NOLOCK) ON o.Orderkey = i.Orderkey
+               OUTER APPLY dbo.fnc_SelectGetRight(o.Facility, o.Storerkey, '', 'ASNFizUpdLotToSerialNo') AS sc
+               WHERE d.[Status] = '5' AND i.[Status] <= '5'                                        
                AND   psn.SerialNo > ''
-               GROUP BY d.PickDetailKey
+               GROUP BY d.PickDetailKey, o.Facility, o.Storerkey, sc.Authority
                HAVING COUNT(1) = SUM(d.Qty)
-             )
+   IF @n_Cnt > 0
    BEGIN
       SET @n_continue = 3
       SET @n_err   = 61622
       SET @c_errmsg= 'NSQL'+CONVERT(char(6), @n_err)+': SerialNo is picked'
                    + '. Disallow to change Lot/ID/Qty/Status. (ntrPickdetailUpdate)'
    END
+   SET @n_Cnt = 0
 END
 --(Wan05) - END
 
