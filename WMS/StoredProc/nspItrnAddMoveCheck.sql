@@ -67,6 +67,8 @@ GO
 /* 10-Feb-2023  NJOW04    DEVOPS Combine Script                           */
 /* 25-Sep-2023  NJOW05    WMS-23743 Update channelinv when move facility  */
 /* 21-Nov-2024  SWT04     FCR-822 - Merge Pallets with Serial Numbers     */
+/* 22-Jan-2025  Wan11     UWP-23317 - Unpick Serial if change on id.      */
+/*                        Fixed RDT move issue(FCR-540)                   */
 /**************************************************************************/
 
 CREATE OR ALTER PROCEDURE [dbo].[nspItrnAddMoveCheck]
@@ -2530,6 +2532,71 @@ BEGIN
          END
       END
    END
+
+   --(Wan11) - Move Sequence in between Lotxlocxid and Pickdetail Update
+   /* SWT04 FCR-822 - Merge Pallets with Serial Numbers 
+      Start*/
+   IF @n_continue = 1 or @n_continue = 2          
+   BEGIN 
+      IF EXISTS(SELECT 1 FROM dbo.SKU WITH (NOLOCK) 
+                WHERE SKU = @c_Sku
+                AND StorerKey = @c_StorerKey 
+                AND SerialNoCapture IN ('1','3'))
+      BEGIN
+         BEGIN TRY
+            EXEC dbo.msp_SerialNoMoveCheck 
+                  @c_itrnkey    = @c_itrnkey   
+                , @c_StorerKey  = @c_StorerKey 
+                , @c_Sku        = @c_Sku       
+                , @c_Lot        = @c_Lot       
+                , @c_fromloc    = @c_fromloc   
+                , @c_fromid     = @c_fromid    
+                , @c_ToLoc      = @c_ToLoc     
+                , @c_ToID       = @c_ToID      
+                , @c_packkey    = @c_packkey   
+                , @c_Status     = @c_Status    
+                , @n_casecnt    = @n_casecnt   
+                , @n_innerpack  = @n_innerpack 
+                , @n_Qty        = @n_Qty       
+                , @n_pallet     = @n_pallet    
+                , @f_cube       = @f_cube      
+                , @f_grosswgt   = @f_grosswgt  
+                , @f_netwgt     = @f_netwgt    
+                , @f_otherunit1 = @f_otherunit1
+                , @f_otherunit2 = @f_otherunit2
+                , @c_lottable01 = @c_lottable01
+                , @c_lottable02 = @c_lottable02
+                , @c_lottable03 = @c_lottable03
+                , @d_lottable04 = @d_lottable04
+                , @d_lottable05 = @d_lottable05
+                , @c_lottable06 = @c_lottable06
+                , @c_lottable07 = @c_lottable07
+                , @c_lottable08 = @c_lottable08
+                , @c_lottable09 = @c_lottable09
+                , @c_lottable10 = @c_lottable10
+                , @c_lottable11 = @c_lottable11
+                , @c_lottable12 = @c_lottable12
+                , @d_lottable13 = @d_lottable13
+                , @d_lottable14 = @d_lottable14
+                , @d_lottable15 = @d_lottable15
+                , @b_Success    = @b_Success OUTPUT  
+                , @n_err        = @n_err     OUTPUT  
+                , @c_errmsg     = @c_errmsg  OUTPUT  
+                , @c_MoveRefKey = @c_MoveRefKey
+                , @c_Channel    = @c_Channel   
+                , @n_Channel_ID = @n_Channel_ID OUTPUT
+         END TRY
+         BEGIN CATCH
+               SET @n_err = ERROR_NUMBER()
+               SET @c_ErrMsg = ERROR_MESSAGE()
+                               
+               SET @n_continue = 3
+               SET @c_ErrMsg = RTRIM(@c_ErrMsg) + '. (nspItrnAddMoveCheck)' 
+         END CATCH                                          
+      END
+   END
+   /* SWT04 FCR-822 END */
+
    /* If the TOLOC is not on hold, the TOID is is on hold and */
    /* the TOID is new, then call the nspInventoryHold SP. */
    IF @n_continue = 1 or @n_continue = 2
@@ -2592,7 +2659,7 @@ BEGIN
 
       IF EXISTS ( SELECT 1 FROM #tpickdet WITH (NOLOCK)  )
       BEGIN
-	      --SWT03
+         --SWT03
          IF EXISTS ( SELECT 1 FROM SKUxLOC WITH (NOLOCK) 
                      WHERE StorerKey = @c_StorerKey 
                      AND SKU = @c_SKU 
@@ -2606,7 +2673,7 @@ BEGIN
         SET
           LOC = #tpickdet.Loc,
           ID = #tpickdet.ID,
-		    UOM = CASE WHEN @b_UpdUOM = 1 AND UOM = '6' THEN '7' ELSE UOM END, -- SWT03
+          UOM = CASE WHEN @b_UpdUOM = 1 AND UOM = '6' THEN '7' ELSE UOM END, -- SWT03
           MoveRefKey = CASE WHEN @b_UpdUOM = 1 THEN @c_MoveRefKey ELSE '' END, --SWT03 WWANG02
           EditWho = SUSER_SNAME(),
           EditDate = GETDATE()
@@ -2789,84 +2856,20 @@ Begin
                
                --NJOW02
                IF @c_swlotoption1 = 'ReplSwapInv' 
-    	         BEGIN
-    	            EXEC isp_ReplSwapInv 
-    	                 @c_Storerkey = @c_Storerkey,
-    	                 @c_ForcePicked = 'N',    	   
-    	                 @c_Loc = @c_ToLoc,
-    	                 @c_Sku = @c_SKU,
-           	           @c_callfrom  = 'INVMOVE'
+               BEGIN
+                  EXEC isp_ReplSwapInv 
+                       @c_Storerkey = @c_Storerkey,
+                       @c_ForcePicked = 'N',          
+                       @c_Loc = @c_ToLoc,
+                       @c_Sku = @c_SKU,
+                       @c_callfrom  = 'INVMOVE'
 
-    	         END        
+               END        
             END           
          END           
       End          
    End          
 End    
-
-/* SWT04 FCR-822 - Merge Pallets with Serial Numbers 
-   Start*/
-IF @n_continue = 1 or @n_continue = 2          
-BEGIN 
-
-   IF EXISTS(SELECT 1 FROM dbo.SKU WITH (NOLOCK) 
-             WHERE SKU = @c_Sku
-             AND StorerKey = @c_StorerKey 
-             AND SerialNoCapture IN ('1','3'))
-   BEGIN
-      BEGIN TRY
-         EXEC dbo.msp_SerialNoMoveCheck 
-               @c_itrnkey    = @c_itrnkey   
-             , @c_StorerKey  = @c_StorerKey 
-             , @c_Sku        = @c_Sku       
-             , @c_Lot        = @c_Lot       
-             , @c_fromloc    = @c_fromloc   
-             , @c_fromid     = @c_fromid    
-             , @c_ToLoc      = @c_ToLoc     
-             , @c_ToID       = @c_ToID      
-             , @c_packkey    = @c_packkey   
-             , @c_Status     = @c_Status    
-             , @n_casecnt    = @n_casecnt   
-             , @n_innerpack  = @n_innerpack 
-             , @n_Qty        = @n_Qty       
-             , @n_pallet     = @n_pallet    
-             , @f_cube       = @f_cube      
-             , @f_grosswgt   = @f_grosswgt  
-             , @f_netwgt     = @f_netwgt    
-             , @f_otherunit1 = @f_otherunit1
-             , @f_otherunit2 = @f_otherunit2
-             , @c_lottable01 = @c_lottable01
-             , @c_lottable02 = @c_lottable02
-             , @c_lottable03 = @c_lottable03
-             , @d_lottable04 = @d_lottable04
-             , @d_lottable05 = @d_lottable05
-             , @c_lottable06 = @c_lottable06
-             , @c_lottable07 = @c_lottable07
-             , @c_lottable08 = @c_lottable08
-             , @c_lottable09 = @c_lottable09
-             , @c_lottable10 = @c_lottable10
-             , @c_lottable11 = @c_lottable11
-             , @c_lottable12 = @c_lottable12
-             , @d_lottable13 = @d_lottable13
-             , @d_lottable14 = @d_lottable14
-             , @d_lottable15 = @d_lottable15
-             , @b_Success    = @b_Success OUTPUT  
-             , @n_err        = @n_err     OUTPUT  
-             , @c_errmsg     = @c_errmsg  OUTPUT  
-             , @c_MoveRefKey = @c_MoveRefKey
-             , @c_Channel    = @c_Channel   
-             , @n_Channel_ID = @n_Channel_ID OUTPUT
-      END TRY
-      BEGIN CATCH
-            SET @n_err = ERROR_NUMBER()
-            SET @c_ErrMsg = ERROR_MESSAGE()
-                            
-            SET @n_continue = 3
-            SET @c_ErrMsg = RTRIM(@c_ErrMsg) + '. (nspItrnAddMoveCheck)' 
-      END CATCH                                          
-   END
-END
-/* SWT04 FCR-822 END */
 
 /* End Main Processing */
 /* Post Process Starts */
