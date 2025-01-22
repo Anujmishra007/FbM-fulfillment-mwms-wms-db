@@ -36,7 +36,9 @@ GO
 /* Updates:                                                             */
 /* Date             Author      Ver         Purposes                    */
 /* YYYY-DD-MM       {author}    {ver}		{Comments}					*/
-/* 2024-09-13       USH022      V.0		  Intital Implementation        */
+/* 2024-09-13       USH022      V.0		  Initial Implementation          */
+/* 2025-01-22       USH022_V1   V.1		  PalletKey association with      */
+/*                                        different Mbol orders         */
 /************************************************************************/
 CREATE OR ALTER  PROCEDURE [dbo].[msp_RCM_MB_LEVI_UpdatePallet]
     @c_MbolKey      NVARCHAR(10),
@@ -82,21 +84,24 @@ BEGIN
         GOTO RETURN_SP;
     END;
 
-	IF EXISTS (SELECT DISTINCT pd.id AS palletID
-		FROM PickDetail pd WITH (NOLOCK)
-		INNER JOIN ORDERS o1 WITH (NOLOCK) ON pd.orderkey = o1.orderkey
-		INNER JOIN PickDetail pd2 WITH (NOLOCK) ON pd.id = pd2.id
-		INNER JOIN ORDERS o2 WITH (NOLOCK) ON pd2.orderkey = o2.orderkey
-		WHERE o2.storerkey = @c_StorerKey
-		AND ISNULL(o2.mbolkey, '') = @c_MbolKey
-		AND ISNULL(pd.id, '') <> '')
+  SELECT TOP 1 @c_StorerKey = O.StorerKey FROM ORDERS O WITH (NOLOCK) WHERE O.MBOLKey = @c_MbolKey
+	IF EXISTS (
+    select p.ID From pickdetail p (NOLOCK)
+    JOIN mboldetail md (NOLOCK) on md.orderkey = p.orderkey
+    where md.mbolkey <> @c_MbolKey
+    AND p.Storerkey = @c_StorerKey
+    AND isnull(p.id,'') <>''
+    AND EXISTS (SELECT 1 FROM Pickdetail p1(NOLOCK)
+    JOIN mboldetail md1 (NOLOCK) on md1.orderkey = p1.orderkey
+    where md1.mbolkey = @c_MbolKey
+    AND p.ID = p1.ID)
+		)
 	BEGIN
 		    SELECT @n_continue = 3;
         SELECT @n_err = 63501;
         SELECT @c_errmsg='NSQL' + CONVERT(char(5), @n_err) + ': CaseID belonging to different MBOL found, please split manually.';
         GOTO RETURN_SP;
 	END
-	SELECT TOP 1 @c_StorerKey = O.StorerKey FROM ORDERS O WITH (NOLOCK) WHERE O.MBOLKey = @c_MbolKey
 
 	DECLARE update_userdefidefine01_cursor CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
 
