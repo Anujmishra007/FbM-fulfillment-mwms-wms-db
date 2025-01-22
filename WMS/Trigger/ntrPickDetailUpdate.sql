@@ -695,12 +695,14 @@ BEGIN
   SELECT @n_Cnt = SUM(  CASE WHEN d.[Status] <> i.[Status] THEN 1                                  --(Wan06) 
                         WHEN d.qty <> i.qty AND i.[Status] = '5' THEN 1                            --(Wan06) 
                         WHEN d.Lot <> i.Lot AND i.[Status] = '5' AND sc.Authority ='1' THEN 1      --(Wan06) 
-                        WHEN d.ID  <> i.ID  AND i.[Status] = '5' THEN 1                            --(Wan06) 
+                        WHEN d.ID  <> i.ID  AND i.ID <> sn.ID AND i.[Status] = '5' AND             --(Wan06)    
+                             sc.Authority ='1' THEN 1                                              --(Wan06) 
                         ELSE 0                                                                     --(Wan06) 
                         END )                                                                      --(Wan06)
                FROM INSERTED i   
                JOIN DELETED  d ON d.Pickdetailkey = i.pickdetailkey
-               JOIN PickSerialNo psn WITH (NOLOCK) ON  psn.PickDetailKey = i.PickDetailKey
+               JOIN PickSerialNo psn WITH (NOLOCK) ON psn.PickDetailKey = i.PickDetailKey
+               JOIN SerialNo sn WITH (NOLOCK) ON  sn.SerialNo = psn.SerialNo
                JOIN ORDERS o (NOLOCK) ON o.Orderkey = i.Orderkey
                OUTER APPLY dbo.fnc_SelectGetRight(o.Facility, o.Storerkey, '', 'ASNFizUpdLotToSerialNo') AS sc
                WHERE d.[Status] = '5' AND i.[Status] <= '5'                                        
