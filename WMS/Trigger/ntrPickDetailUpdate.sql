@@ -99,7 +99,9 @@ GO
 /* 2024-11-26   Wan05   4.0   UWP-23317 - [FCR-618  819] Unpick SerialNo*/
 /* 2024-11-26   Wan06   4.1   [FCR-618] - Fixed if change on lot,id,qty &*/
 /*                            Status                                    */
+/* 20-Jan-2024  TLTIN03 4.1   Bug fix - aft ship no change avoid change */
 /************************************************************************/
+
 CREATE OR ALTER TRIGGER [dbo].[ntrPickDetailUpdate]
 ON  [dbo].[PICKDETAIL]
 FOR UPDATE
@@ -299,21 +301,10 @@ END
 -- tlting01
 IF (@n_Continue=1 or @n_Continue=2)
 BEGIN
-   -- (SWT01) Performance Tuning 
-   --IF NOT EXISTS ( SELECT 1 -- not changing ShipFlag
-   --                 FROM  INSERTED, DELETED
-   --                 WHERE INSERTED.PICKDETAILKEY = DELETED.PICKDETAILKEY
-   --                 AND   INSERTED.ShipFlag <> DELETED.ShipFlag )
-   --                 AND   NOT EXISTS ( SELECT 1  -- not changing [Status]
-   --                                    FROM INSERTED, DELETED
-   --                                    WHERE INSERTED.PICKDETAILKEY = DELETED.PICKDETAILKEY
-   --                                    AND INSERTED.[Status] <> DELETED.[Status] )
-   --                                    AND EXISTS( SELECT 1 -- user shipped
-   --                                                FROM INSERTED
-   --                                                WHERE ShipFlag = 'Y' OR [Status] = '9'  )
-   IF NOT UPDATE(ShipFlag) AND 
-      NOT UPDATE(Status) AND 
-      EXISTS(SELECT 1 FROM INSERTED WHERE ShipFlag = 'Y' OR [Status] = '9')   
+	-- TLTIN03
+   IF EXISTS (SELECT 1 FROM DELETED WHERE ShipFlag = 'Y' OR [Status] = '9')   
+		AND  ( UPDATE (QTY) OR UPDATE(Sku) OR UPDATE(Lot) OR UPDATE(Loc) OR UPDATE(ID) OR UPDATE(Channel_ID) 
+		OR  UPDATE (Orderkey) OR UPDATE(Orderlinenumber)  )		 
    BEGIN
       SET @c_PDKey = '' -- SOS# 264916
       
