@@ -16,6 +16,7 @@ GO
 /* Date       Rev    Author     Purposes                                      */
 /* 2024-11-05 1.0.0  LJQ006     FCR-870 Created                               */
 /* 2024-11-21 1.0.1  LQJ006     Use LabelNo and Orderkey as params            */
+/* 2025-01-22 1.1    CYU027     UWP-29471 Change type SUMATRA                 */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_593PrtCldFile02] (
@@ -298,7 +299,7 @@ BEGIN
       JobName, ReportID, JobStatus, Datawindow, Parm1, Printer, NoOfCopy, Mobile, TargetDB, PrintData, JobType, StorerKey,
       Function_ID, PaperSizeWxH, DCropWidth, DCropHeight, IsLandScape, IsColor, IsDuplex, IsCollate)
    VALUES(
-      'rdt_593PrtCldFile02', @cReportType, @cJobStatus, @cRptDataWindow, @cExternOrderKey, @cPrinter, @nRptNoOfCopy, @nMobile, DB_NAME(), @cPrintDataFileFull, 'LogiReport', @cStorerKey,
+      'rdt_593PrtCldFile02', @cReportType, @cJobStatus, @cRptDataWindow, @cExternOrderKey, @cPrinter, @nRptNoOfCopy, @nMobile, DB_NAME(), @cPrintDataFileFull, 'CMDSUMATRA', @cStorerKey,
       @nFunc, @cPaperSize, @cDCropWidth, @cDCropHeight, @cIsLandScape, @cIsColor, @cIsDuplex, @cIsCollate)
    SELECT @nJobID = SCOPE_IDENTITY(), @nErrNo = @@ERROR
    IF @nErrNo <> 0
