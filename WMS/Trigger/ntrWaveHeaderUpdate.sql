@@ -36,6 +36,7 @@ GO
 /* 28-Oct-2013  TLTING     1.1  Review Editdate column update           */
 /* 20-OCT-2022  NJOW01     1.2  WMS-21042 call custom stored proc       */
 /* 20-OCT-2022  NJOW01     1.2  DEVOPS Combine Script                   */
+/* 10-JAN-2025  YT01       1.3  Add Generic Interface Trigger           */
 /************************************************************************/
 
 CREATE OR ALTER TRIGGER [dbo].[ntrWaveHeaderUpdate]
@@ -90,6 +91,14 @@ BEGIN
 	BEGIN
 		SELECT @n_continue = 4 
 	END
+
+   --(YT01)-S
+   DECLARE @b_ColumnsUpdated VARBINARY(1000)  
+          ,@c_WaveKey        NVARCHAR(10)
+          ,@c_Storerkey      NVARCHAR(15)
+
+   SET @b_ColumnsUpdated = COLUMNS_UPDATED()  
+   --(YT01)-E
 	
   --NJOW01
   IF @n_continue=1 or @n_continue=2                 
@@ -134,7 +143,77 @@ BEGIN
            DROP TABLE #DELETED          
      END          
   END          	
-	
+
+   --(YT01)-S
+   /********************************************************/
+   /* Interface Trigger Points Calling Process - (Start)   */
+   /********************************************************/
+   IF @n_continue = 1 OR @n_continue = 2
+   BEGIN
+      DECLARE Cur_TriggerPoints CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      SELECT DISTINCT INS.WaveKey, OH.StorerKey
+      FROM   INSERTED INS
+      JOIN   WAVEDETAIL WD WITH (NOLOCK)        ON INS.WaveKey = WD.WaveKey
+      JOIN   Orders OH WITH (NOLOCK)            ON WD.OrderKey = OH.OrderKey
+      JOIN   ITFTriggerConfig ITC WITH (NOLOCK) ON ITC.StorerKey = OH.StorerKey
+      WHERE  ITC.SourceTable = 'WAVE'
+      AND    ITC.sValue      = '1'
+
+      OPEN Cur_TriggerPoints
+      FETCH NEXT FROM Cur_TriggerPoints INTO @c_WaveKey, @c_Storerkey
+
+      WHILE @@FETCH_STATUS <> -1
+      BEGIN
+         EXECUTE dbo.isp_ITF_ntrWave
+                  @c_TriggerName    = 'ntrWaveHeaderUpdate'
+                , @c_SourceTable    = 'WAVE'
+                , @c_Storerkey      = @c_Storerkey
+                , @c_WaveKey        = @c_WaveKey
+                , @b_ColumnsUpdated = @b_ColumnsUpdated
+                , @b_Success        = @b_Success   OUTPUT
+                , @n_err            = @n_err       OUTPUT
+                , @c_errmsg         = @c_errmsg    OUTPUT
+
+         FETCH NEXT FROM Cur_TriggerPoints INTO @c_WaveKey, @c_Storerkey
+      END -- WHILE @@FETCH_STATUS <> -1
+      CLOSE Cur_TriggerPoints
+      DEALLOCATE Cur_TriggerPoints
+
+      DECLARE Cur_TriggerPoints CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      SELECT DISTINCT INS.WaveKey, OH.StorerKey
+      FROM   INSERTED INS
+      JOIN   WAVEDETAIL WD WITH (NOLOCK)        ON INS.WaveKey   = WD.WaveKey
+      JOIN   Orders OH WITH (NOLOCK)            ON WD.OrderKey   = OH.OrderKey
+      JOIN   ITFTriggerConfig ITC WITH (NOLOCK) ON ITC.StorerKey = 'ALL'
+      JOIN   StorerConfig STC WITH (NOLOCK)     ON OH.StorerKey = STC.StorerKey AND STC.ConfigKey = ITC.ConfigKey AND STC.SValue = '1'
+      WHERE  ITC.SourceTable = 'WAVE'
+      AND    ITC.sValue      = '1'
+
+      OPEN Cur_TriggerPoints
+      FETCH NEXT FROM Cur_TriggerPoints INTO @c_WaveKey, @c_Storerkey
+
+      WHILE @@FETCH_STATUS <> -1
+      BEGIN
+         EXECUTE dbo.isp_ITF_ntrWave
+                  @c_TriggerName    = 'ntrWaveHeaderUpdate'
+                , @c_SourceTable    = 'WAVE'
+                , @c_Storerkey      = @c_Storerkey
+                , @c_WaveKey        = @c_WaveKey
+                , @b_ColumnsUpdated = @b_ColumnsUpdated
+                , @b_Success        = @b_Success   OUTPUT
+                , @n_err            = @n_err       OUTPUT
+                , @c_errmsg         = @c_errmsg    OUTPUT
+
+         FETCH NEXT FROM Cur_TriggerPoints INTO @c_WaveKey, @c_Storerkey
+      END -- WHILE @@FETCH_STATUS <> -1
+      CLOSE Cur_TriggerPoints
+      DEALLOCATE Cur_TriggerPoints
+   END -- IF @n_continue = 1 OR @n_continue = 2
+   /********************************************************/
+   /* Interface Trigger Points Calling Process - (End)     */
+   /********************************************************/
+	--(YT01)-E
+
 	   /* #INCLUDE <TRTHU1.SQL> */     
 
 
