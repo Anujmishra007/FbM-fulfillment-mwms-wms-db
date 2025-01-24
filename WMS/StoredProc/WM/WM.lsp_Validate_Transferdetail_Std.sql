@@ -665,13 +665,13 @@ BEGIN
 
             IF @c_FromSerialNo <> @c_ToSerialNo OR
                @c_FromSku <> @c_ToSku OR
-               @c_FromLot <> @c_ToLot
+               @c_FromID <> @c_ToID                                                 --2024-09-25
             BEGIN
                SET @n_Continue = 3
                SET @n_Err = 557515
                SET @c_errmsg = 'NSQL' + CONVERT(CHAR(6), @n_Err)
                               + ': Serialno transfer are required same From & To Sku'
-                              + ', Lot And Serialno'
+                              + ', ID And Serialno'                                 --2024-09-25
                               + '. To SerialNo: ' + @c_ToSerialNo
                            + '. (lsp_Validate_TransferDetail_Std) |' + @c_ToSerialNo
                GOTO EXIT_SP
