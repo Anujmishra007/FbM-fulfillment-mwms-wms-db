@@ -23,6 +23,8 @@ GO
 /*                            and update tasks status from H to 0        */
 /* 2025-01-08   SSA03   1.3   UWP-27112-Added extra logic to update tasks*/
 /*                            status from H to 0                         */
+/* 2025-01-23   SSA04   1.4   UWP-27112-Added extra logic to update tasks*/
+/*                            status from H to 0                         */
 /*************************************************************************/   
 CREATE OR ALTER PROCEDURE [dbo].[mspWaveReleaseWCS01]
   @c_Wavekey      NVARCHAR(10)  
@@ -50,6 +52,11 @@ CREATE OR ALTER PROCEDURE [dbo].[mspWaveReleaseWCS01]
           , @c_ConditionQuery    NVARCHAR(1000)= ''
           , @c_TMReleaseFlag    NVARCHAR(1)= ''
           , @c_UserDefine09     NVARCHAR(1)= ''   --(SSA02)
+          , @c_TaskType         NVARCHAR(10)    --(SSA04)
+          , @c_LocationType     NVARCHAR(10)    --(SSA04)
+          , @c_TaskDetailKey    NVARCHAR(10)    --(SSA04)
+          , @b_IsUpdate         int = 1    --(SSA04)
+          , @CUR_TASKDETAIL        CURSOR --(SSA04)
 
 
     SELECT TOP 1
@@ -96,13 +103,31 @@ CREATE OR ALTER PROCEDURE [dbo].[mspWaveReleaseWCS01]
            END
            IF @n_Continue IN (1,2)
             BEGIN
-               ----(SSA02),(SSA03) start-----
-               UPDATE td SET td.STATUS = '0'
-               FROM TASKDETAIL(NOLOCK) td
-               JOIN LOC(NOLOCK) loc on td.FROMLOC = loc.LOC
-               WHERE td.WAVEKEY = @c_Wavekey AND td.TASKTYPE <> 'ASTCPK'
-               AND td.STATUS = 'H' AND loc.locationtype <> 'PICKWCS'
-               ----(SSA02),(SSA03) end-----
+               ----(SSA02),(SSA03),(SSA04)start-----
+                SET @CUR_TASKDETAIL = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+                SELECT td.TASKDETAILKEY,loc.LOCATIONTYPE,td.TASKTYPE FROM TASKDETAIL(NOLOCK) td
+                JOIN LOC(NOLOCK) loc on td.FROMLOC = loc.LOC
+                WHERE td.WAVEKEY = @c_Wavekey AND td.STATUS = 'H'
+
+                OPEN @CUR_TASKDETAIL
+                FETCH NEXT FROM @CUR_TASKDETAIL INTO @c_TaskDetailKey,@c_LocationType,@c_TaskType
+
+                WHILE @@FETCH_STATUS <> -1
+                BEGIN
+                  SET @b_IsUpdate = 1
+
+                  IF('ASTCPK' = @c_TaskType AND 'PICKWCS' <> @c_LocationType)
+                  SET @b_IsUpdate = 0
+
+                  IF(@b_IsUpdate = 1)
+                  UPDATE TASKDETAIL WITH (ROWLOCK) SET STATUS = '0' WHERE TASKDETAILKEY = @c_TaskDetailKey
+
+                FETCH NEXT FROM @CUR_TASKDETAIL INTO @c_TaskDetailKey,@c_LocationType,@c_TaskType
+                END
+                CLOSE @CUR_TASKDETAIL
+                DEALLOCATE @CUR_TASKDETAIL
+
+               ----(SSA02),(SSA03),(SSA04) end-----
                SET @b_Success = 1
                EXEC dbo.ispGenTransmitLog2
                      @c_TableName   = @c_TableName
