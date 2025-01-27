@@ -2182,6 +2182,16 @@ BEGIN
                   GOTO Quit_Proc
                END
             END
+            ELSE
+            BEGIN
+               SET @nContinue = 3
+               SET @n_Err = 80058
+               SET @c_errmsg = 'NSQL' + CONVERT(CHAR(5), @n_Err)
+                                 + ': Transfer from SerialNo not found: ' + @c_FromSerialNo
+                                 + '. Line #: ' + @cTransferLineNumber
+                                 + '. (ispFinalizeTransfer)'
+               GOTO Quit_Proc
+            END
          END
          ELSE IF @c_FromSerialNo <> ''
          BEGIN
