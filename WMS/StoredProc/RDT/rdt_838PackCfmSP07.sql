@@ -9,7 +9,7 @@ GO
 /* Copyright      : Maersk                                              */  
 /*                                                                      */  
 /* Date       Rev  Author      Purposes                                 */  
-/* 01-28-2025 1.0  JCH507      UWP-29680 Mis update packheader          */  
+/* 01-28-2025 1.0  JCH507      UWP-29680 Mis update packheader for levis*/  
 /************************************************************************/  
   
 CREATE OR ALTER PROC rdt.rdt_838PackCfmSP07 (  
