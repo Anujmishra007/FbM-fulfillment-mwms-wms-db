@@ -45,6 +45,22 @@ BEGIN
       BEGIN
          IF @nInputKey = 1 
          BEGIN
+		    IF EXISTS(SELECT 1 FROM dbo.PackDetail WITH(NOLOCK) WHERE DropID = @cDropID) AND
+			EXISTS(SELECT 1 FROM dbo.Dropid WITH(NOLOCK) WHERE DropID = @cDropID AND LoadKey IS NULL)
+			BEGIN
+			   UPDATE dbo.Dropid WITH(ROWLOCK)
+			   SET LoadKey = (SELECT TOP 1 LoadKey FROM LOADPLAN WITH(NOLOCK) WHERE MBOLKEY = (SELECT TOP 1 MBOLKEY FROM ORDERS WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND OrderKey = (SELECT TOP 1 OrderKey FROM PICKHEADER WITH(NOLOCK) WHERE PICKHEADERKEY = (SELECT TOP 1 PICKSLIPNO FROM PACKDETAIL WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND DROPID = @cDropID))))
+			   WHERE DropID = @cDropID
+			END
+
+			IF EXISTS(SELECT 1 FROM dbo.PackDetail WITH(NOLOCK) WHERE DropID = @cUCCNo) AND
+			EXISTS(SELECT 1 FROM dbo.Dropid WITH(NOLOCK) WHERE DropID = @cUCCNo AND LoadKey IS NULL)
+			BEGIN
+			   UPDATE dbo.Dropid WITH(ROWLOCK)
+			   SET LoadKey = (SELECT TOP 1 LoadKey FROM LOADPLAN WITH(NOLOCK) WHERE MBOLKEY = (SELECT TOP 1 MBOLKEY FROM ORDERS WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND OrderKey = (SELECT TOP 1 OrderKey FROM PICKHEADER WITH(NOLOCK) WHERE PICKHEADERKEY = (SELECT TOP 1 PICKSLIPNO FROM PACKDETAIL WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND DROPID = @cUCCNo))))
+			   WHERE DropID = @cUCCNo
+			END
+
             IF(SELECT TOP 1 UserDefine10 FROM dbo.ORDERS WITH(NOLOCK) 
                WHERE orderkey = (SELECT TOP 1 orderkey FROM dbo.PICKHEADER WITH(NOLOCK) 
                                  WHERE PickHeaderKey = (SELECT TOP 1 PickSlipNo FROM dbo.PackDetail WITH(NOLOCK) WHERE Dropid = @cUCCNo))) 
@@ -79,25 +95,26 @@ BEGIN
                                  WHERE PickHeaderKey = (SELECT TOP 1 PickSlipNo FROM dbo.PackDetail WITH(NOLOCK) WHERE Dropid = @cDropID))) 
                IN ('Non-Parcel','')
             BEGIN
-               DECLARE
-                  @Loc NVARCHAR(20),
-                  @cFromID NVARCHAR(20),
-                  @cSKU NVARCHAR(20),
-                  @nQTY INT,
-                  @cFromLot NVARCHAR(20),
-                  @curMV       CURSOR,
-                  @ChildID NVARCHAR(30)
 
-               SET @curMV = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
-               SELECT Dropid, Loc, ID, SKU, SUM(Qty), Lot FROM dbo.PICKDETAIL PD WITH(NOLOCK)
-               WHERE EXISTS (SELECT 1 FROM DropidDetail DD WITH(NOLOCK) WHERE PD.DropID = DD.ChildId AND DD.Dropid = @cDropID)
-               AND DropID = ID
-               GROUP BY DropID, Loc, ID, SKU, Lot
+            DECLARE
+               @Loc NVARCHAR(20),
+               @cFromID NVARCHAR(20),
+               @cSKU NVARCHAR(20),
+               @nQTY INT,
+               @cFromLot NVARCHAR(20),
+               @curMV       CURSOR,
+               @ChildID NVARCHAR(30)
 
-               OPEN @curMV
-               FETCH NEXT FROM @curMV INTO @ChildID, @Loc, @cFromID, @cSKU, @nQTY, @cFromLot
-               WHILE @@FETCH_STATUS = 0
-               BEGIN
+   SET @curMV = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
+   SELECT Dropid, Loc, ID, SKU, SUM(Qty), Lot FROM dbo.PICKDETAIL PD WITH(NOLOCK)
+   WHERE EXISTS (SELECT 1 FROM DropidDetail DD WITH(NOLOCK) WHERE PD.DropID = DD.ChildId AND DD.Dropid = @cDropID)
+   AND DropID = ID
+   GROUP BY DropID, Loc, ID, SKU, Lot
+
+            OPEN @curMV
+            FETCH NEXT FROM @curMV INTO @ChildID, @Loc, @cFromID, @cSKU, @nQTY, @cFromLot
+            WHILE @@FETCH_STATUS = 0
+            BEGIN
 
                               -- Move inventory
                   EXECUTE rdt.rdt_Move

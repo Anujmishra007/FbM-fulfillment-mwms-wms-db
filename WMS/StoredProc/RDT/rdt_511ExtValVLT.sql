@@ -67,13 +67,20 @@ BEGIN
    
          --LPN got putaway task. Should not be moved.
          ELSE IF EXISTS (SELECT 1 FROM dbo.LOTXLOCXID WITH(NOLOCK) WHERE ID = @cFromID AND PendingMoveIN > 0 AND StorerKey = @cStorerKey) AND 
-            EXISTS (SELECT 1 FROM dbo.LOC WITH(NOLOCK) WHERE loc = @FromLOC AND FACILITY = @cFacility AND (EXISTS (SELECT code FROM dbo.CODELKUP WITH (NOLOCK) 
+            EXISTS (SELECT 1 FROM dbo.LOC WITH(NOLOCK) WHERE Loc = @FromLOC AND FACILITY = @cFacility AND (EXISTS (SELECT code FROM dbo.CODELKUP WITH (NOLOCK) 
             WHERE LocationType = code AND LISTNAME = 'HUSQINBLOC' AND Storerkey = @cStorerKey) or LocationCategory = 'PND'))
          BEGIN
             SET @nErrNo = 217974 
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --LPN got putaway task. Should not be moved.
          END
-   
+
+       --LPN got picking task. Should not be moved.
+       ELSE IF EXISTS (SELECT 1 FROM dbo.TaskDetail WITH(NOLOCK) WHERE Storerkey = @cStorerKey AND FromID = @cFromID AND FromID <> '' AND Status NOT IN ('9','X'))
+       BEGIN
+          SET @nErrNo = 218064
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --LPN got pick task. Should not be moved.
+       END
+
          -- WS 28102024 - not allow to pick ID from TrolleyQC via Move by ID
          ELSE IF EXISTS (SELECT 1 FROM dbo.LOC WITH(NOLOCK) WHERE loc = @FromLOC AND FACILITY = @cFacility 
          AND LocationType IN ('TROLLEYIB','TROLLEYOB','TROLLEYQC')
@@ -155,7 +162,7 @@ BEGIN
         END
 
          --Target location is a pick location WITH no SKU setup or a different SKU setup than the SKU on the LPN.
-         ELSE IF @LOCType in ('PICK','CASE') AND @SKUPickChk = 0 
+         ELSE IF @LOCType in ('PICK','CASE','SHELF') AND @SKUPickChk = 0 
             AND (SELECT TOP 1 short FROM dbo.CODELKUP WITH(NOLOCK) WHERE LISTNAME = 'MVTOPFHUSQ' AND code = '511MV' AND Storerkey = @cStorerKey) = 0
          BEGIN
             SET @nErrNo = 217980

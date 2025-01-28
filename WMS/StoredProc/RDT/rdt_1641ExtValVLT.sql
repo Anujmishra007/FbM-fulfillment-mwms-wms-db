@@ -34,6 +34,11 @@ BEGIN
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
+   IF (SELECT TOP 1 UserDefine10 FROM dbo.ORDERS WITH(NOLOCK) WHERE OrderKey = (SELECT TOP 1 OrderKey FROM dbo.PICKHEADER WITH(NOLOCK) WHERE PickHeaderKey = (SELECT TOP 1 PickSlipNo FROM dbo.PackDetail WITH(NOLOCK) WHERE Dropid = @cDropID))) IN ('Non-Parcel','')
+   BEGIN
+      GOTO NonParcelOrder
+   END
+
    IF @nStep = 1 AND @nInputKey = 1
    BEGIN
       IF NOT EXISTS (SELECT 1 FROM dbo.PackDetail WITH(NOLOCK) WHERE DROPID = @cDropID AND StorerKey = @cstorerkey)
@@ -42,11 +47,6 @@ BEGIN
          SET @nErrNo = 218047
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')--'Not packed pallet ID'
          GOTO Quit
-      END
-
-      IF (SELECT TOP 1 UserDefine10 FROM dbo.ORDERS WITH(NOLOCK) WHERE OrderKey = (SELECT TOP 1 OrderKey FROM dbo.PICKHEADER WITH(NOLOCK) WHERE PickHeaderKey = (SELECT TOP 1 PickSlipNo FROM dbo.PackDetail WITH(NOLOCK) WHERE Dropid = @cDropID))) IN ('Non-Parcel','')
-      BEGIN
-         GOTO NonParcelOrder
       END
 
       IF EXISTS(SELECT 1 FROM dbo.Dropid WITH(NOLOCK) WHERE Dropid = @cDropID AND DropIDType = '0')
@@ -282,6 +282,6 @@ BEGIN
 Quit:
 END
 
-   GRANT EXECUTE ON [RDT].[rdt_1641ExtValVLT] TO [NSQL]
+GRANT EXECUTE ON [RDT].[rdt_1641ExtValVLT] TO [NSQL]
 GO
 

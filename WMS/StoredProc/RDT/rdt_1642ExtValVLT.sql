@@ -47,24 +47,27 @@ DECLARE
 SELECT TOP 1 @Storerkey = storerkey FROM rdt.RDTMOBREC WITH(NOLOCK) WHERE Mobile = @nMobile
 SELECT TOP 1 @Facility = Facility FROM rdt.RDTMOBREC WITH(NOLOCK) WHERE Mobile = @nMobile
 
-IF @nFunc = 1642 AND @nStep = 1 AND @nINputKey = 1
+IF @nFunc = 1642 AND @nStep = 1 AND @nInputKey = 1
    IF ISNULL(@cDropID,'') <> ''
    BEGIN
+      IF (SELECT DropIDType FROM dbo.Dropid WITH(NOLOCK) WHERE Dropid = @cDropID) <> 'B'
+	  BEGIN
+         SELECT TOP 1 @Orderkey = OrderKey FROM dbo.PICKHEADER WITH(NOLOCK) WHERE PickHeaderKey = (SELECT TOP 1 PickSlipNo FROM dbo.PackDetail WITH(NOLOCK) WHERE storerkey = @Storerkey AND dropid = @cDropID)
+	  END
 
-      SELECT TOP 1 @Orderkey = OrderKey FROM dbo.PICKHEADER WITH(NOLOCK) WHERE PickHeaderKey = (SELECT TOP 1 PickSlipNo FROM dbo.PackDetail WITH(NOLOCK) WHERE storerkey = @Storerkey AND dropid = @cDropID)
-
-      IF ISNULL(@Orderkey,'')='' AND EXISTS (SELECT 1 FROM dbo.Dropiddetail WITH(NOLOCK) WHERE Dropid = @cDropID)
-      BEGIN
-      SELECT TOP 1 @Orderkey = OrderKey FROM dbo.ORDERS O WITH(NOLOCK)
-         WHERE StorerKey = @Storerkey AND facility = @Facility
+	  IF (SELECT DropIDType FROM dbo.Dropid WITH(NOLOCK) WHERE Dropid = @cDropID) = 'B'
+	  BEGIN
+         IF ISNULL(@Orderkey,'')='' AND EXISTS (SELECT 1 FROM dbo.Dropiddetail WITH(NOLOCK) WHERE Dropid = @cDropID)
+         BEGIN
+            SELECT TOP 1 @Orderkey = OrderKey FROM dbo.ORDERS O WITH(NOLOCK)
+            WHERE StorerKey = @Storerkey AND facility = @Facility
             AND EXISTS (SELECT 1 FROM dbo.PICKHEADER PH WITH(NOLOCK)
             WHERE O.orderkey = PH.OrderKey
-               AND EXISTS (SELECT 1 FROM dbo.PackDetail PD WITH(NOLOCK)
-                  WHERE PD.PickSlipNo = PickHeaderKey AND storerkey = @Storerkey
-                     AND EXISTS (SELECT ChildId FROM dbo.DropidDetail DD WITH(NOLOCK) WHERE PD.dropid = DD.ChildId AND DD.Dropid = @cDropID)
-               )
-            )
-       ORDER BY OrderGroup ASC
+            AND EXISTS (SELECT 1 FROM dbo.PackDetail PD WITH(NOLOCK)
+            WHERE PD.PickSlipNo = PickHeaderKey AND storerkey = @Storerkey
+            AND EXISTS (SELECT ChildId FROM dbo.DropidDetail DD WITH(NOLOCK) WHERE PD.dropid = DD.ChildId AND DD.Dropid = @cDropID)))
+            ORDER BY CASE WHEN ISNULL(OrderGroup,'')='' THEN '9999999' ELSE ISNULL(OrderGroup,'') END
+         END
       END
 
       IF ISNULL(@Orderkey,'') = ''
@@ -74,7 +77,10 @@ IF @nFunc = 1642 AND @nStep = 1 AND @nINputKey = 1
          GOTO Quit
       END
 
-	  SET @FullyPicked = CASE WHEN (SELECT SUM(openqty)-SUM(QtyPicked) FROM dbo.ORDERDETAIL WITH(NOLOCK) WHERE OrderKey = @Orderkey AND StorerKey = @Storerkey) = 0 THEN 1 ELSE 0 END
+	  IF (SELECT DropIDType FROM dbo.Dropid WITH(NOLOCK) WHERE Dropid = @cDropID) <> 'B'
+	  BEGIN
+	     SET @FullyPicked = CASE WHEN (SELECT SUM(openqty)-SUM(QtyPicked) FROM dbo.ORDERDETAIL WITH(NOLOCK) WHERE OrderKey = @Orderkey AND StorerKey = @Storerkey) = 0 THEN 1 ELSE 0 END
+	  END
 
       IF (SELECT DropIDType FROM dbo.Dropid WITH(NOLOCK) WHERE Dropid = @cDropID) = 'B'
       BEGIN
@@ -88,25 +94,67 @@ IF @nFunc = 1642 AND @nStep = 1 AND @nINputKey = 1
 
       SELECT TOP 1 @DropIDSequence = OrderGroup FROM dbo.ORDERS WITH(NOLOCK) WHERE OrderKey = @Orderkey AND StorerKey = @Storerkey
 
-      SET @AtStage = CASE WHEN EXISTS(
-      SELECT Loc FROM dbo.PICKDETAIL PD WITH(NOLOCK)
+	  IF (SELECT DropIDType FROM dbo.Dropid WITH(NOLOCK) WHERE Dropid = @cDropID) <> 'B'
+	  BEGIN
+         SET @AtStage = CASE WHEN EXISTS(
+         SELECT Loc FROM dbo.PICKDETAIL PD WITH(NOLOCK)
          WHERE OrderKey = @Orderkey
          AND Storerkey = @Storerkey
          AND LOC NOT IN
-            (SELECT OtherReference FROM dbo.MBOL WITH(NOLOCK)
-               WHERE Facility = @Facility
-               AND MbolKey = (SELECT TOP 1 MbolKey FROM dbo.ORDERS WITH(NOLOCK) WHERE OrderKey = @Orderkey AND StorerKey = @Storerkey)
-            )
-      ) THEN 0 ELSE 1 END
+         (SELECT OtherReference FROM dbo.MBOL WITH(NOLOCK)
+         WHERE Facility = @Facility
+         AND MbolKey = (SELECT TOP 1 MbolKey FROM dbo.ORDERS WITH(NOLOCK) WHERE OrderKey = @Orderkey AND StorerKey = @Storerkey))
+         ) THEN 0 ELSE 1 END
+	  END
 
-	   SET @FullyPacked = CASE WHEN (
+	  IF (SELECT DropIDType FROM dbo.Dropid WITH(NOLOCK) WHERE Dropid = @cDropID) = 'B'
+	  BEGIN
+	     SET @AtStage = CASE WHEN EXISTS(
+         SELECT 1 FROM dbo.PICKDETAIL PD WITH(NOLOCK)
+         WHERE OrderKey in 
+         (SELECT OrderKey FROM PICKDETAIL PD1 WITH(NOLOCK)
+         WHERE EXISTS
+         (SELECT childid FROM DropidDetail DD1 WITH(NOLOCK)
+         WHERE PD1.Dropid = DD1.ChildId
+         AND EXISTS
+         (SELECT 1 FROM DropidDetail DD2 WITH(NOLOCK)
+         WHERE DD1.dropid = DD2.Dropid
+         AND EXISTS
+         (SELECT 1 FROM PICKDETAIL PD2 WITH(NOLOCK)
+         WHERE DD2.ChildId = PD2.DropID
+         AND PD2.OrderKey = @Orderkey
+         AND PD2.Storerkey = @Storerkey))))
+         AND Storerkey = @Storerkey
+         AND LOC NOT IN
+         (SELECT OtherReference FROM dbo.MBOL WITH(NOLOCK)
+         WHERE Facility = @Facility
+         AND MbolKey IN (SELECT MbolKey FROM dbo.ORDERS WITH(NOLOCK) WHERE OrderKey IN 
+         (SELECT OrderKey FROM PICKDETAIL PD1 WITH(NOLOCK)
+         WHERE EXISTS
+         (SELECT childid FROM DropidDetail DD1 WITH(NOLOCK)
+         WHERE PD1.Dropid = DD1.ChildId
+         AND EXISTS
+         (SELECT 1 FROM DropidDetail DD2 WITH(NOLOCK)
+         WHERE DD1.dropid = DD2.Dropid
+         AND EXISTS
+         (SELECT 1 FROM PICKDETAIL PD2 WITH(NOLOCK)
+         WHERE DD2.ChildId = PD2.DropID
+         AND PD2.OrderKey = @Orderkey
+         AND PD2.Storerkey = @Storerkey))))
+         AND StorerKey = @Storerkey))
+         )THEN 0 ELSE 1 END
+      END
+
+	  IF (SELECT DropIDType FROM dbo.Dropid WITH(NOLOCK) WHERE Dropid = @cDropID) <> 'B'
+	  BEGIN   
+		 SET @FullyPacked = CASE WHEN (
          SELECT ISNULL(SUM(openqty),0) FROM dbo.ORDERDETAIL WITH(NOLOCK)
-            WHERE OrderKey = @Orderkey AND StorerKey = @Storerkey
-      )=(SELECT ISNULL(SUM(qty),0) FROM dbo.PackDetail WITH(NOLOCK)
-      WHERE StorerKey = @Storerkey
-      AND PickSlipNo =
-      (SELECT TOP 1 PickSlipNo FROM dbo.PackDetail WITH(NOLOCK) WHERE storerkey = @Storerkey AND dropid = @cDropID))
-      THEN 1 ELSE 0 END
+         WHERE OrderKey = @Orderkey AND StorerKey = @Storerkey
+         )=(SELECT ISNULL(SUM(qty),0) FROM dbo.PackDetail WITH(NOLOCK)
+         WHERE StorerKey = @Storerkey
+         AND PickSlipNo = (SELECT TOP 1 PickSlipNo FROM dbo.PackDetail WITH(NOLOCK) WHERE StorerKey = @Storerkey AND dropid = @cDropID))
+         THEN 1 ELSE 0 END
+      END
 
       IF (SELECT DropIDType FROM dbo.Dropid WITH(NOLOCK) WHERE Dropid = @cDropID) = 'B'
       BEGIN
@@ -123,27 +171,50 @@ IF @nFunc = 1642 AND @nStep = 1 AND @nINputKey = 1
 		 (SELECT 1 FROM dbo.DropidDetail DD WITH(NOLOCK) WHERE PAD2.dropid = DD.ChildId AND Dropid = @cDropID)))
 	     THEN 1 ELSE 0 END
 	   END
+      
+	  IF (SELECT DropIDType FROM dbo.Dropid WITH(NOLOCK) WHERE Dropid = @cDropID) <> 'B'
+	  BEGIN
+         SET @GotSequence = CASE WHEN EXISTS
+	     (SELECT OrderGroup FROM dbo.ORDERS WITH(NOLOCK)
+         WHERE StorerKey = @Storerkey
+         AND orderkey IN
+         (SELECT OrderKey FROM dbo.WAVEDETAIL WITH(NOLOCK)
+         WHERE WaveKey IN
+         (SELECT TOP 1 wd.WaveKey FROM dbo.WAVEDETAIL WD WITH(NOLOCK)
+         JOIN dbo.Orders O WITH(NOLOCK)
+         ON O.OrderKey = WD.OrderKey
+         JOIN dbo.PICKDETAIL PID WITH(NOLOCK)
+         ON PID.OrderKey = O.OrderKey
+         JOIN dbo.PackDetail PAD WITH(NOLOCK)
+         ON PID.dropid = PAD.RefNo2
+         WHERE PAD.DropID = @cDropID
+         AND O.Storerkey = @Storerkey)
+         AND ISNUMERIC(OrderGroup)=1)
+         AND Status < '8'
+	     ) THEN 1 ELSE 0 END
+	  END
 
-      SET @GotSequence = CASE WHEN EXISTS
-	   (
-         SELECT OrderGroup FROM dbo.ORDERS WITH(NOLOCK)
-        WHERE StorerKey = @Storerkey
-        AND orderkey IN
-        (SELECT OrderKey FROM dbo.WAVEDETAIL WITH(NOLOCK)
-        WHERE WaveKey IN
-        (SELECT TOP 1 wd.WaveKey FROM dbo.WAVEDETAIL WD WITH(NOLOCK)
-        JOIN dbo.Orders O WITH(NOLOCK)
-        ON O.OrderKey = WD.OrderKey
-        JOIN dbo.PICKDETAIL PID WITH(NOLOCK)
-        ON PID.OrderKey = O.OrderKey
-        JOIN dbo.PackDetail PAD WITH(NOLOCK)
-        ON PID.dropid = PAD.RefNo2
-        WHERE PAD.DropID = CASE WHEN (SELECT TOP 1 DropIDType FROM dbo.Dropid WITH(NOLOCK) WHERE Dropid = @cDropID) <> 'B' THEN @cDropID
-        ELSE (SELECT TOP 1 ChildId FROM dbo.DropidDetail WITH(NOLOCK) WHERE Dropid = @cDropID) END
-        AND O.Storerkey = @Storerkey)
-        AND ISNUMERIC(OrderGroup)=1)
-        AND Status < '8'
-	   ) THEN 1 ELSE 0 END
+      IF (SELECT DropIDType FROM dbo.Dropid WITH(NOLOCK) WHERE Dropid = @cDropID) = 'B'
+	  BEGIN
+         SET @GotSequence = CASE WHEN EXISTS
+	     (SELECT OrderGroup FROM dbo.ORDERS WITH(NOLOCK)
+         WHERE StorerKey = @Storerkey
+         AND orderkey IN
+         (SELECT OrderKey FROM dbo.WAVEDETAIL WITH(NOLOCK)
+         WHERE WaveKey IN
+         (SELECT TOP 1 wd.WaveKey FROM dbo.WAVEDETAIL WD WITH(NOLOCK)
+         JOIN dbo.Orders O WITH(NOLOCK)
+         ON O.OrderKey = WD.OrderKey
+         JOIN dbo.PICKDETAIL PID WITH(NOLOCK)
+         ON PID.OrderKey = O.OrderKey
+         JOIN dbo.PackDetail PAD WITH(NOLOCK)
+         ON PID.dropid = PAD.RefNo2
+         WHERE PAD.DropID = (SELECT TOP 1 ChildId FROM dbo.DropidDetail WITH(NOLOCK) WHERE Dropid = @cDropID)
+         AND O.Storerkey = @Storerkey)
+         AND ISNUMERIC(OrderGroup)=1)
+         AND Status < '8'
+	     ) THEN 1 ELSE 0 END
+      END
 
       SET @GotNOSequence = IIF(@GotSequence = 1,0,1)
 	  /*CASE WHEN EXISTS
@@ -167,45 +238,97 @@ IF @nFunc = 1642 AND @nStep = 1 AND @nINputKey = 1
 	  AND Status < '8'
 	  ) THEN 1 ELSE 0 END*/
 
-      IF EXISTS
-        (SELECT OrderGroup FROM dbo.ORDERS WITH(NOLOCK)
-        WHERE StorerKey = @Storerkey
-        AND OrderKey IN
-        (SELECT OrderKey FROM dbo.WAVEDETAIL WITH(NOLOCK)
-        WHERE WaveKey IN
-        (SELECT TOP 1 wd.WaveKey FROM dbo.WAVEDETAIL WD WITH(NOLOCK)
-        INNER JOIN dbo.Orders O WITH(NOLOCK)
-        ON O.OrderKey = WD.OrderKey
-        INNER JOIN dbo.PICKDETAIL PID WITH(NOLOCK)
-        ON PID.OrderKey = O.OrderKey
-        INNER JOIN dbo.PackDetail PAD WITH(NOLOCK)
-        ON PID.dropid = PAD.RefNo2
-        WHERE PAD.DropID = @cDropID
-        AND O.Storerkey = @Storerkey)
-        AND ISNUMERIC(OrderGroup)=0
-        AND ISNULL(OrderGroup,'') <> ''))
-      BEGIN
-         SET @nErrNo = 217992
-		 SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Non-numeric sequence
-		 GOTO Quit
-	   END
+	  IF (SELECT DropIDType FROM dbo.Dropid WITH(NOLOCK) WHERE Dropid = @cDropID) <> 'B'
+	  BEGIN
+         IF EXISTS
+         (SELECT OrderGroup FROM dbo.ORDERS WITH(NOLOCK)
+         WHERE StorerKey = @Storerkey
+         AND OrderKey IN
+         (SELECT OrderKey FROM dbo.WAVEDETAIL WITH(NOLOCK)
+         WHERE WaveKey IN
+         (SELECT TOP 1 wd.WaveKey FROM dbo.WAVEDETAIL WD WITH(NOLOCK)
+         INNER JOIN dbo.Orders O WITH(NOLOCK)
+         ON O.OrderKey = WD.OrderKey
+         INNER JOIN dbo.PICKDETAIL PID WITH(NOLOCK)
+         ON PID.OrderKey = O.OrderKey
+         INNER JOIN dbo.PackDetail PAD WITH(NOLOCK)
+         ON PID.dropid = PAD.RefNo2
+         WHERE PAD.DropID = @cDropID
+         AND O.Storerkey = @Storerkey)
+         AND ISNUMERIC(OrderGroup)=0
+         AND ISNULL(OrderGroup,'') <> ''))
+         BEGIN
+            SET @nErrNo = 217992
+		    SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Non-numeric sequence
+		    GOTO Quit
+	     END
+      END
 
-      SELECT TOP 1 @NextSequence = OrderGroup FROM dbo.ORDERS WITH(NOLOCK)
-      WHERE StorerKey = @Storerkey
-      AND OrderKey IN
-      (SELECT OrderKey FROM dbo.WAVEDETAIL WITH(NOLOCK)
-      WHERE WaveKey IN
-      (SELECT TOP 1 wd.WaveKey FROM dbo.WAVEDETAIL WD WITH(NOLOCK)
-      INNER JOIN dbo.Orders O WITH(NOLOCK)
-      ON O.OrderKey = WD.OrderKey
-      INNER JOIN dbo.PICKDETAIL PID WITH(NOLOCK)
-      ON PID.OrderKey = O.OrderKey
-      INNER JOIN dbo.PackDetail PAD WITH(NOLOCK)
-      ON PID.dropid = PAD.RefNo2
-      WHERE PAD.DropID = @cDropID
-      AND O.Storerkey = @Storerkey)
-      AND Status <'8')
-      ORDER BY CASE WHEN ISNULL(OrderGroup,'') = '' THEN 'Y' ELSE ISNULL(OrderGroup,'') END
+	   IF (SELECT DropIDType FROM dbo.Dropid WITH(NOLOCK) WHERE Dropid = @cDropID) = 'B'
+	   BEGIN
+	      IF EXISTS
+          (SELECT OrderGroup FROM dbo.ORDERS WITH(NOLOCK)
+          WHERE StorerKey = @Storerkey
+          AND OrderKey IN
+          (SELECT OrderKey FROM dbo.WAVEDETAIL WITH(NOLOCK)
+          WHERE WaveKey IN
+          (SELECT TOP 1 wd.WaveKey FROM dbo.WAVEDETAIL WD WITH(NOLOCK)
+          INNER JOIN dbo.Orders O WITH(NOLOCK)
+          ON O.OrderKey = WD.OrderKey
+          INNER JOIN dbo.PICKDETAIL PID WITH(NOLOCK)
+          ON PID.OrderKey = O.OrderKey
+          INNER JOIN dbo.PackDetail PAD WITH(NOLOCK)
+          ON PID.dropid = PAD.RefNo2
+          WHERE PAD.DropID = (SELECT TOP 1 ChildId FROM dbo.DropidDetail WITH(NOLOCK) WHERE Dropid = @cDropID)
+          AND O.Storerkey = @Storerkey)
+          AND ISNUMERIC(OrderGroup)=0
+          AND ISNULL(OrderGroup,'') <> ''))
+          BEGIN
+            SET @nErrNo = 217992
+		    SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Non-numeric sequence
+		    GOTO Quit
+	      END
+      END
+
+	  IF (SELECT DropIDType FROM dbo.Dropid WITH(NOLOCK) WHERE Dropid = @cDropID) <> 'B'
+      BEGIN
+	     SELECT TOP 1 @NextSequence = OrderGroup FROM dbo.ORDERS WITH(NOLOCK)
+         WHERE StorerKey = @Storerkey
+         AND OrderKey IN
+         (SELECT OrderKey FROM dbo.WAVEDETAIL WITH(NOLOCK)
+         WHERE WaveKey IN
+         (SELECT TOP 1 wd.WaveKey FROM dbo.WAVEDETAIL WD WITH(NOLOCK)
+         INNER JOIN dbo.Orders O WITH(NOLOCK)
+         ON O.OrderKey = WD.OrderKey
+         INNER JOIN dbo.PICKDETAIL PID WITH(NOLOCK)
+         ON PID.OrderKey = O.OrderKey
+         INNER JOIN dbo.PackDetail PAD WITH(NOLOCK)
+         ON PID.dropid = PAD.RefNo2
+         WHERE PAD.DropID = @cDropID
+         AND O.Storerkey = @Storerkey)
+         AND Status <'8')
+         ORDER BY CASE WHEN ISNULL(OrderGroup,'') = '' THEN 'Y' ELSE ISNULL(OrderGroup,'') END
+      END
+
+	  IF (SELECT DropIDType FROM dbo.Dropid WITH(NOLOCK) WHERE Dropid = @cDropID) = 'B'
+	  BEGIN
+	     SELECT TOP 1 @NextSequence = OrderGroup FROM dbo.ORDERS WITH(NOLOCK)
+         WHERE StorerKey = @Storerkey
+         AND OrderKey IN
+         (SELECT OrderKey FROM dbo.WAVEDETAIL WITH(NOLOCK)
+         WHERE WaveKey IN
+         (SELECT TOP 1 wd.WaveKey FROM dbo.WAVEDETAIL WD WITH(NOLOCK)
+         INNER JOIN dbo.Orders O WITH(NOLOCK)
+         ON O.OrderKey = WD.OrderKey
+         INNER JOIN dbo.PICKDETAIL PID WITH(NOLOCK)
+         ON PID.OrderKey = O.OrderKey
+         INNER JOIN dbo.PackDetail PAD WITH(NOLOCK)
+         ON PID.dropid = PAD.RefNo2
+         WHERE PAD.DropID = (SELECT TOP 1 ChildId FROM dbo.DropidDetail WITH(NOLOCK) WHERE Dropid = @cDropID)
+         AND O.Storerkey = @Storerkey)
+         AND Status <'8')
+         ORDER BY CASE WHEN ISNULL(OrderGroup,'') = '' THEN 'Y' ELSE ISNULL(OrderGroup,'') END
+      END
 
 	  /*IF @GotSequence = 1 AND @GotNOSequence = 1
 	  BEGIN
@@ -220,31 +343,61 @@ IF @nFunc = 1642 AND @nStep = 1 AND @nINputKey = 1
          GOTO skip1
       END
 
-      IF EXISTS
-      (SELECT CASE WHEN COUNT(*) > 1 THEN 1 ELSE 0 END FROM dbo.ORDERS WITH(NOLOCK)
-      WHERE StorerKey = @Storerkey
-      AND OrderKey IN
-      (SELECT OrderKey FROM dbo.WAVEDETAIL WITH(NOLOCK)
-      WHERE WaveKey IN
-      (SELECT TOP 1 wd.WaveKey FROM dbo.WAVEDETAIL WD WITH(NOLOCK)
-      INNER JOIN dbo.Orders O WITH(NOLOCK)
-      ON O.OrderKey = WD.OrderKey
-      INNER JOIN dbo.PICKDETAIL PID WITH(NOLOCK)
-      ON PID.OrderKey = O.OrderKey
-      INNER JOIN dbo.PackDetail PAD WITH(NOLOCK)
-      ON PID.dropid = PAD.RefNo2
-      WHERE PAD.DropID = @cDropID
-      AND O.Storerkey = @Storerkey)
-      AND ISNUMERIC(OrderGroup)=1)
-      GROUP BY OrderGroup
-      HAVING CASE WHEN COUNT(*) > 1 THEN 1 ELSE 0 END >0)
-      BEGIN
-         SET @nErrNo = 217994
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Duplicated sequence
-         GOTO Quit
+	  IF (SELECT DropIDType FROM dbo.Dropid WITH(NOLOCK) WHERE Dropid = @cDropID) <> 'B'
+	  BEGIN
+         IF EXISTS
+         (SELECT CASE WHEN COUNT(*) > 1 THEN 1 ELSE 0 END FROM dbo.ORDERS WITH(NOLOCK)
+         WHERE StorerKey = @Storerkey
+         AND OrderKey IN
+         (SELECT OrderKey FROM dbo.WAVEDETAIL WITH(NOLOCK)
+         WHERE WaveKey IN
+         (SELECT TOP 1 wd.WaveKey FROM dbo.WAVEDETAIL WD WITH(NOLOCK)
+         INNER JOIN dbo.Orders O WITH(NOLOCK)
+         ON O.OrderKey = WD.OrderKey
+         INNER JOIN dbo.PICKDETAIL PID WITH(NOLOCK)
+         ON PID.OrderKey = O.OrderKey
+         INNER JOIN dbo.PackDetail PAD WITH(NOLOCK)
+         ON PID.dropid = PAD.RefNo2
+         WHERE PAD.DropID = @cDropID
+         AND O.Storerkey = @Storerkey)
+         AND ISNUMERIC(OrderGroup)=1)
+         GROUP BY OrderGroup
+         HAVING CASE WHEN COUNT(*) > 1 THEN 1 ELSE 0 END >0)
+         BEGIN
+            SET @nErrNo = 217994
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Duplicated sequence
+            GOTO Quit
+         END
       END
 
-	   IF @DropIDSequence <> @NextSequence
+	  IF (SELECT DropIDType FROM dbo.Dropid WITH(NOLOCK) WHERE Dropid = @cDropID) = 'B'
+	  BEGIN
+	     IF EXISTS
+         (SELECT CASE WHEN COUNT(*) > 1 THEN 1 ELSE 0 END FROM dbo.ORDERS WITH(NOLOCK)
+         WHERE StorerKey = @Storerkey
+         AND OrderKey IN
+         (SELECT OrderKey FROM dbo.WAVEDETAIL WITH(NOLOCK)
+         WHERE WaveKey IN
+         (SELECT TOP 1 wd.WaveKey FROM dbo.WAVEDETAIL WD WITH(NOLOCK)
+         INNER JOIN dbo.Orders O WITH(NOLOCK)
+         ON O.OrderKey = WD.OrderKey
+         INNER JOIN dbo.PICKDETAIL PID WITH(NOLOCK)
+         ON PID.OrderKey = O.OrderKey
+         INNER JOIN dbo.PackDetail PAD WITH(NOLOCK)
+         ON PID.dropid = PAD.RefNo2
+         WHERE PAD.DropID = (SELECT TOP 1 ChildId FROM dbo.DropidDetail WITH(NOLOCK) WHERE Dropid = @cDropID)
+         AND O.Storerkey = @Storerkey)
+         AND ISNUMERIC(OrderGroup)=1)
+         GROUP BY OrderGroup
+         HAVING CASE WHEN COUNT(*) > 1 THEN 1 ELSE 0 END >0)
+         BEGIN
+            SET @nErrNo = 217994
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Duplicated sequence
+            GOTO Quit
+         END
+      END
+
+	  IF @DropIDSequence <> @NextSequence
       BEGIN
          SET @loadSequenceOk = 0
       END
