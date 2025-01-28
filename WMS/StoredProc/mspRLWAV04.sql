@@ -27,6 +27,8 @@ GO
 /* 19-Nov-2024    SHONG     1.3   Missing torelance for non-parcel       */
 /* 04-Dec-2024    SHONG     1.4   Set Task Status Priority by OrderGroup */
 /* 10-Dec-2024    SHONG01   1.5   Revise VAS Flag logic                  */
+/* 27-Jan-2025    USH022-01 1.6   Exclude LOT for ASTCPK tasktype        */
+/*                                Ticket-UWP-28865                       */
 /*************************************************************************/
 CREATE OR ALTER PROC [dbo].[mspRLWAV04]
    @c_WaveKey NVARCHAR(10)
@@ -133,6 +135,10 @@ BEGIN
          , @n_MaxOrdPerBld04     INT          = 0
          , @n_MaxOrdPerBld05     INT          = 0
          , @c_FirstOrderKey      NVARCHAR(10) = ''
+         , @b_InsertTask         BIT          = 0            --USH022-01
+         , @c_ID_Last            NVARCHAR(18) = ''
+         , @c_Loc                NVARCHAR(10) = ''
+         , @c_Loc_Last           NVARCHAR(10) = ''           --USH022-01
 
       DECLARE @n_Capacity INT = 0,
               @n_MaxSKU   INT = 0,
@@ -570,7 +576,9 @@ BEGIN
              , OH.DeliveryDate
              , PD.OrderKey
              , PD.UOM
+             , CASE WHEN PD.UOM = '6' THEN PD.Loc ELSE '' END             --USH022-01
              , L.LogicalLocation
+             , CASE WHEN PD.UOM = '6' THEN PD.ID ELSE '' END              --USH022-01
              , S.Class
              , S.Sku
              , PD.PickDetailKey
@@ -660,9 +668,6 @@ BEGIN
                   SET @c_GroupKey = ''
                END
 
-               --IF @c_UOM = '1' AND @c_OrderKey_Last = ''
-               --   SET @c_TaskStatus_FPK = '0'
-
                SET @n_MaxCube      = @n_MaxCube_df
                SET @n_MaxHeight    = @n_MaxHeight_df
                SET @n_MaxWeight    = @n_MaxWeight_df
@@ -687,11 +692,6 @@ BEGIN
                   AND ST.[Type] = '2'
                END
 
-               -- (SHONG01)
-               --SELECT @b_VASFlag = 1
-               --FROM STORERSODEFAULT  SOD (NOLOCK)
-               --WHERE SOD.StorerKey = @c_ConsigneeKey
-               --AND   SOD.OrderType = 'Y'
                IF EXISTS(SELECT 1
                         FROM dbo.STORERSODEFAULT SOD (NOLOCK)
                         JOIN dbo.STORER S (NOLOCK) ON SOD.StorerKey = S.StorerKey
@@ -725,12 +725,16 @@ BEGIN
             SET @c_Message01 = ''
             SET @c_Message02 = ''
             SET @c_Message03 = ''
+            SET @c_Loc = @c_FromLoc;                    --USH022-01
+            SET @b_InsertTask = 0
 
             IF @c_UOM = '1'
             BEGIN
+               SET @b_InsertTask = 1;
                SET @c_TaskType  = 'FPK'
                SET @c_PickMethod= 'FP'
                SET @c_ToLoc = @c_OtherReference
+               SET @c_LinkTaskToPick_SQL = 'PICKDETAIL.OrderKey = @c_OrderKey AND PICKDETAIL.UOM = @c_UOM' --USH022-01
 
                SELECT @n_Height = IIF(ISNUMERIC(la.Lottable11)= 1,CONVERT(FLOAT,la.Lottable11),0.00)
                FROM LOTATTRIBUTE la (NOLOCK)
@@ -750,17 +754,24 @@ BEGIN
                SET @c_GroupKey  = @c_LocAisle
                --SET @c_TaskStatus = @c_TaskStatus_FPK
             END
-            ELSE
+            ELSE IF @c_UOM = '6' AND
+              (@c_ORderkey <> @c_Orderkey_Last OR @c_Loc <> @c_Loc_Last OR @c_ID <> @c_ID_Last)    --USH022-01
             BEGIN
                IF @b_debug=1
+               BEGIN
                   PRINT '@c_ParcelType:' + @c_ParcelType + ', @c_TaskType=' + @c_TaskType
                   PRINT '>>> ' + @c_OrderKey
-
+               END
 
                SET @c_BoxType   = ''
                SET @c_ParcelSize= ''
                SET @b_NonParcel = 0
                SET @c_GroupKey  = ''
+               SET @c_Lot = ''                                                      --USH022-01
+               SET @c_LinkTaskToPick_SQL = 'PICKDETAIL.OrderKey = @c_OrderKey
+                              AND PICKDETAIL.UOM = @c_UOM AND PICKDETAIL.Loc = @c_Fromloc
+                              AND PICKDETAIL.ID = @c_FromID'
+               SET @b_InsertTask = 1                                                --USH022-01
 
                SELECT TOP 1
                        @b_NonParcel = IIF(cl.UDF01= 'Non-Parcel',1,0)
@@ -791,6 +802,15 @@ BEGIN
                IF @b_NonParcel = 1
                   SET @c_Message03 = @n_NoOfPallet
 
+               SELECT @n_Qty = SUM(QTY) FROM #PickDetail_WIP PDW (NOLOCK)  --USH022-01
+               WHERE PDW.WaveKey = @c_WaveKey
+               AND PDW.Sku = @c_Sku
+               AND PDW.ID = @c_ID
+               AND PDW.Loc = @c_Loc
+               AND PDW.Orderkey = @c_Orderkey
+               AND PDW.[Status] < '5'
+               GROUP BY PDW.Sku, PDW.ID, PDW.Loc;                          --USH022-01
+
                IF @b_debug=1
                BEGIN
                   PRINT '@b_NonParcel:' + CAST(@b_NonParcel as varchar(10))
@@ -807,52 +827,54 @@ BEGIN
             FROM LOC l (NOLOCK)
             WHERE l.Loc = @c_ToLoc
 
-            SET @c_LinkTaskToPick_SQL = 'PICKDETAIL.OrderKey = @c_OrderKey AND PICKDETAIL.UOM = @c_UOM'
-
             --Insert Taskdetail
-            IF @b_NonParcel=0
-               SET @c_TaskStatus = '0'
+            IF @b_NonParcel = 0
+            SET @c_TaskStatus = '0'
 
-            SET @c_TaskDetailKey = ''
-            EXEC isp_InsertTaskDetail
-               @c_TaskDetailKey         = @c_TaskDetailKey OUTPUT
-            ,  @c_TaskType              = @c_TaskType
-            ,  @c_Storerkey             = @c_Storerkey
-            ,  @c_Sku                   = @c_Sku
-            ,  @c_Lot                   = @c_Lot
-            ,  @c_UOM                   = @c_UOM
-            ,  @n_UOMQty                = @n_UOMQty
-            ,  @n_Qty                   = @n_Qty
-            ,  @c_FromLoc               = @c_Fromloc
-            ,  @c_LogicalFromLoc        = @c_FromLogicalLoc
-            ,  @c_FromID                = @c_ID
-            ,  @c_ToLoc                 = @c_ToLoc
-            ,  @c_LogicalToLoc          = @c_ToLogicalLoc
-            ,  @c_ToID                  = @c_ID
-            ,  @c_PickMethod            = @c_PickMethod
-            ,  @c_Priority              = @c_Priority
-            ,  @c_SourcePriority        = '9'
-            ,  @c_SourceType            = @c_SourceType
-            ,  @c_SourceKey             = @c_Wavekey
-            ,  @c_PickDetailkey         = @c_PickDetailkey
-            ,  @c_OrderKey              = @c_OrderKey
-            ,  @c_Groupkey              = @c_Groupkey
-            ,  @c_WaveKey               = @c_Wavekey
-            ,  @c_AreaKey               = '?F'  -- ?F=Get from location areakey
-            ,  @c_Message01             = @c_Message01
-            ,  @c_Message02             = @c_Message02
-            ,  @c_Message03             = @c_Message03
-            ,  @c_LinkTaskToPick        = 'WIP' -- WIP=Update taskdetailkey to pickdetail_wip
-            ,  @c_LinkTaskToPick_SQL    = @c_LinkTaskToPick_SQL
-            ,  @c_SplitTaskByCase       ='N'   -- N=No slip Y=Split TASK by carton. Only apply if @n_casecnt > 0. include last partial carton.
-            ,  @c_WIP_RefNo             = @c_SourceType
-            ,  @b_Success               = @b_Success     OUTPUT
-            ,  @n_Err                   = @n_err         OUTPUT
-            ,  @c_ErrMsg                = @c_errmsg      OUTPUT
-            ,  @c_Status                = @c_TaskStatus
-            ,  @c_Loadkey               = @c_Loadkey  -- 16/11 WS: added to allows me testig RDT FCR's but Please validate this
+            IF @b_InsertTask = 1                                  --USH022-01
+            BEGIN
+                SET @c_TaskDetailKey = ''
+
+                EXEC isp_InsertTaskDetail
+                @c_TaskDetailKey         = @c_TaskDetailKey OUTPUT
+                ,  @c_TaskType              = @c_TaskType
+                ,  @c_Storerkey             = @c_Storerkey
+                ,  @c_Sku                   = @c_Sku
+                ,  @c_Lot                   = @c_Lot
+                ,  @c_UOM                   = @c_UOM
+                ,  @n_UOMQty                = @n_UOMQty
+                ,  @n_Qty                   = @n_Qty
+                ,  @c_FromLoc               = @c_Fromloc
+                ,  @c_LogicalFromLoc        = @c_FromLogicalLoc
+                ,  @c_FromID                = @c_ID
+                ,  @c_ToLoc                 = @c_ToLoc
+                ,  @c_LogicalToLoc          = @c_ToLogicalLoc
+                ,  @c_ToID                  = @c_ID
+                ,  @c_PickMethod            = @c_PickMethod
+                ,  @c_Priority              = @c_Priority
+                ,  @c_SourcePriority        = '9'
+                ,  @c_SourceType            = @c_SourceType
+                ,  @c_SourceKey             = @c_Wavekey
+                ,  @c_PickDetailkey         = @c_PickDetailkey
+                ,  @c_OrderKey              = @c_OrderKey
+                ,  @c_Groupkey              = @c_Groupkey
+                ,  @c_WaveKey               = @c_Wavekey
+                ,  @c_AreaKey               = '?F'  -- ?F=Get from location areakey
+                ,  @c_Message01             = @c_Message01
+                ,  @c_Message02             = @c_Message02
+                ,  @c_Message03             = @c_Message03
+                ,  @c_LinkTaskToPick        = 'WIP' -- WIP=Update taskdetailkey to pickdetail_wip
+                ,  @c_LinkTaskToPick_SQL    = @c_LinkTaskToPick_SQL
+                ,  @c_SplitTaskByCase       ='N'   -- N=No slip Y=Split TASK by carton. Only apply if @n_casecnt > 0. include last partial carton.
+                ,  @c_WIP_RefNo             = @c_SourceType
+                ,  @b_Success               = @b_Success     OUTPUT
+                ,  @n_Err                   = @n_err         OUTPUT
+                ,  @c_ErrMsg                = @c_errmsg      OUTPUT
+                ,  @c_Status                = @c_TaskStatus
+                ,  @c_Loadkey               = @c_Loadkey  -- 16/11 WS: added to allows me testig RDT FCR's but Please validate this
+
+            END
          END
-
 
          IF @n_Continue = 1
          BEGIN
@@ -901,7 +923,8 @@ BEGIN
          SET @c_GroupKey_Last = @c_GroupKey
          SET @c_TaskType_Last = @c_TaskType
          SET @c_ParcelSize_Last = @c_ParcelSize
-
+         SET @c_Loc_Last        = @c_Loc                    --USH022-01
+         SET @c_ID_Last         = @c_ID                     --USH022-01
          FETCH NEXT FROM @CUR_PCK INTO @c_PickdetailKey
                                     ,  @c_OrderKey
                                     ,  @c_OrderLineNumber
