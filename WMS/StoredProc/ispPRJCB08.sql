@@ -28,7 +28,7 @@ GO
 /* 2024-11-07  SSA02    1.2   Updated to exclude pallets which used for */
 /*                                      Kitting                         */
 /************************************************************************/
-CREATE OR ALTER PROC [dbo].[ispPRJCB08] (
+ALTER   PROC [dbo].[ispPRJCB08] (
      @c_OrderKey        NVARCHAR(10)
    , @c_LoadKey         NVARCHAR(10)
    , @c_Wavekey         NVARCHAR(10)
@@ -99,6 +99,7 @@ BEGIN
    SET @c_ErrMsg  = ''
    SET @c_UOM     = '7'
     --(SSA02) - Added condition to exclude pallet which used for K4 Kitting
+   SET @c_Type = '2'
    SET @c_Conditions = ' AND LOC.LocationType = ''BULK'''
                      + ' AND PA.ZoneCategory  = ''EMG''' 
                      + ' AND NOT EXISTS(SELECT 1 FROM LOTXLOCXID L (NOLOCK) WHERE L.Storerkey = LLI.Storerkey      
@@ -108,9 +109,10 @@ BEGIN
 										     JOIN LOTxLOCxID L (NOLOCK) ON PD.Storerkey = LLI.Storerkey
 										     WHERE PD.ID = L.ID AND L.Storerkey = LLI.Storerkey AND L.ID =LLI.ID
                          AND O.Type = ''6'') '
+                     + ' AND NOT EXISTS (SELECT 1 FROM CODELKUP (NOLOCK) WHERE LISTNAME = ''JCBEXALLOC''  AND CODE = ''' + @c_Type + '''  AND UDF01 = ''1'' AND LONG = LOC.Loc AND LONG IS NOT NULL)  '
 
  
-   SET @c_Type = '2'
+   --SET @c_Type = '2'
                                              
    IF ISNULL(@c_Orderkey,'') <> ''
    BEGIN
@@ -594,6 +596,4 @@ QUIT:
       RETURN
    END
 END
-GO
-GRANT EXECUTE ON  [dbo].[ispPRJCB08] TO [NSQL]
 GO
