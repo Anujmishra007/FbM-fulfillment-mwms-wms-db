@@ -29,7 +29,7 @@ GO
 /* 2024-10-09  SSA01    1.1  UWP-24678-JCB- Allocation for Kitting and */
 /*                                    Decanting                         */
 /************************************************************************/
-CREATE OR ALTER PROC [dbo].[ispPRJCB06] (
+ALTER   PROC [dbo].[ispPRJCB06] (
      @c_OrderKey        NVARCHAR(10)
    , @c_LoadKey         NVARCHAR(10)
    , @c_Wavekey         NVARCHAR(10)
@@ -96,7 +96,8 @@ BEGIN
    SET @b_Success = 1
    SET @n_Err     = 0
    SET @c_ErrMsg  = ''
-   SET @c_UOM     = '1'   
+   SET @c_UOM     = '1'  
+   SET @c_Type = '2'
    SET @c_Conditions = ' AND LOC.LocationType = ''BULK'' 
                          AND PA.ZoneCategory  = ''EMG'' 
                          AND NOT EXISTS(SELECT 1 FROM LOTXLOCXID L (NOLOCK) WHERE L.Storerkey = LLI.Storerkey
@@ -106,9 +107,10 @@ BEGIN
                                         AND L.Sku <> LLI.Sku AND L.Id = LLI.Id AND L.Loc = LLI.Loc AND L.Qty > 0) 
                          AND NOT EXISTS(SELECT 1 FROM PICKDETAIL PD (NOLOCK) WHERE PD.Storerkey = LLI.Storerkey
                                         AND PD.Sku = LLI.Sku AND PD.Lot = LLI.Lot AND PD.ToLoc = LLI.Loc
-                                        AND PD.CaseID = LLI.Id AND PD.Status = ''0'') '   
+                                        AND PD.CaseID = LLI.Id AND PD.Status = ''0'') 
+                         AND NOT EXISTS (SELECT 1 FROM CODELKUP (NOLOCK) WHERE LISTNAME = ''JCBEXALLOC''  AND CODE = ''' + @c_Type + '''  AND UDF01 = ''1'' AND LONG = LOC.Loc AND LONG IS NOT NULL)  '                                           
                                         
-   SET @c_Type = '2'                                     
+   --SET @c_Type = '2'                                     
                                              
    IF ISNULL(@c_Orderkey,'') <> ''
    BEGIN
@@ -528,6 +530,4 @@ QUIT:
       RETURN
    END
 END
-GO
-GRANT EXECUTE ON  [dbo].[ispPRJCB06] TO [NSQL]
 GO
