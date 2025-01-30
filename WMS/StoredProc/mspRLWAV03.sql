@@ -52,6 +52,7 @@ GO
 /*                           BOLbyConsignee (SWT05)                     */ 
 /* 20-Nov-2024 Wan01     3.0 UWP-27137 - [FCR-1348] [Levi's] Wave Release*/
 /*                           (Automation and Manual Operations)         */
+/* 30-Jan-2025 SSA01     3.1 UWP-27137 - [FCR-1348] Single tote for Single Sku*/
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[mspRLWAV03]
    @c_WaveKey NVARCHAR(10)
@@ -2521,6 +2522,22 @@ BEGIN
       
       WHILE @@FETCH_STATUS = 0 AND @n_Continue IN (1,2)
       BEGIN
+         --(SSA01) start--
+         SET @n_SplitQty  = 0
+         SET @n_TotalCube = @n_TotalCube + (@n_Qty_PD * @n_StdCube)
+
+         IF @c_Sku <> @c_Sku_Last OR @c_FromPAZone <> @c_FromPAZone_Last OR @c_Loc <> @c_Loc_Last OR
+            @n_TotalCube > @n_ToteSize OR @c_DropID = ''
+         BEGIN
+            IF @n_TotalCube > @n_ToteSize
+            BEGIN
+               SET @n_SplitQty = CEILING((@n_TotalCube - @n_ToteSize)/@n_StdCube)
+               SET @n_Qty_PD   = @n_Qty_PD - @n_SplitQty
+            END
+
+            SET @n_TotalCube = 0
+         END
+         --(SSA01) end--
          TOTEID_ASGM:
          IF @n_TotalCube = 0.00
          BEGIN
@@ -2546,21 +2563,6 @@ BEGIN
             SET @c_FromPAZone_Last = @c_FromPAZone
          END
 
-         SET @n_SplitQty  = 0
-         SET @n_TotalCube = @n_TotalCube + (@n_Qty_PD * @n_StdCube)
- 
-         IF @c_Sku <> @c_Sku_Last OR @c_FromPAZone <> @c_FromPAZone_Last OR @c_Loc <> @c_Loc_Last OR
-            @n_TotalCube > @n_ToteSize OR @c_DropID = ''
-         BEGIN
-            IF @n_TotalCube > @n_ToteSize
-            BEGIN 
-               SET @n_SplitQty = CEILING((@n_TotalCube - @n_ToteSize)/@n_StdCube)
-               SET @n_Qty_PD   = @n_Qty_PD - @n_SplitQty
-            END
-
-            SET @n_TotalCube = 0
-         END
- 
          IF @n_Continue IN (1,2)
          BEGIN
             UPDATE #PickDetail_WIP
