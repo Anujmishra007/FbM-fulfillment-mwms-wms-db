@@ -20,7 +20,8 @@ GO
 /*                             rdt_Print defaults the NoOfCopy (ZG01)    */
 /* 2024-12-17  1.6.0 Dennis   FCR-1446 Insert Trans Log if fully packed  */
 /* 2025-01-06  1.7.0 NLT013  FCR-1445 Print PDF once an order is finished*/
-/*************************************************************************/
+/* 2025-01-29  1.7.1 Dennis  FCR-1445 Move Printing Label behind commit */
+/************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdt_842ExtUpdSP08] (
    @nMobile        INT,
    @nFunc          INT,
@@ -1734,121 +1735,6 @@ BEGIN
                END
             END
          END
-         SET @cDelayLength = rdt.RDTGetConfig( @nFunc, 'PrintLabel', @cStorerKey)
-         IF @cDelayLength = '0'
-            SET @cDelayLength = ''
-         IF @cDelayLength <> ''
-         BEGIN
-            SET @nDelayLength = TRY_CAST(@cDelayLength AS INT)
-            IF @nDelayLength IS NOT NULL AND @nDelayLength > 0
-            BEGIN
-               DECLARE 
-                  @nMin       INT,
-                  @nSec       INT
-
-               --SET @nDelayLength = IIF( @nDelayLength > 5000, 5000, @nDelayLength)
-               SET @nDelayLength = IIF( @nDelayLength > 20000, 20000, @nDelayLength)
-               SET @nMin = @nDelayLength / 1000 / 60
-               SET @nSec = (@nDelayLength - (@nMin * 60 * 1000)) / 1000
-               SET @cDelayLength = '00:' + CAST(@nMin AS NVARCHAR(5)) + ':' + CAST(@nSec AS NVARCHAR(5))
-
-               WAITFOR DELAY @cDelayLength
-
-               SELECT @cOption = Code
-               FROM dbo.CodeLkup WITH (NOLOCK)
-               WHERE Listname = 'RDTLBLRPT'
-                  AND Storerkey = @cStorerKey
-                  AND Long = 'rdt_593PrintHK01'
-                  AND code2 = 'SHIPLABEL'
-
-               DELETE FROM @tOrders
-               INSERT INTO @tOrders(OrderKey)
-               SELECT DISTINCT ECL.OrderKey
-               FROM RDT.rdtECOMMLog ECL WITH (NOLOCK)
-               WHERE ECL.STATUS = '9' AND ECL.ToTeNo = @cDropID AND ECL.Mobile = @nMobile
-
-               SET @nLoopIndex = -1
-               WHILE 1 = 1
-               BEGIN
-                  SELECT TOP 1 
-                     @cTempOrderKey = OrderKey,
-                     @nLoopIndex = id
-                  FROM @tOrders
-                  WHERE id > @nLoopIndex
-                  ORDER BY id
-
-                  SELECT @nRowCount = @@ROWCOUNT
-
-                  IF @nRowCount = 0
-                     BREAK
-
-                  SELECT @cUDF02 = ISNULL(UDF02, 'Empty UDF02'), @cUDF03 = ISNULL(UDF03, 'Empty UDF03')
-                  FROM dbo.CartonTrack WITH(NOLOCK)
-                  WHERE LABELNO = @cTempOrderKey
-
-                  INSERT INTO dbo.TraceInfo (TraceName, Col1, Col2, Col3)
-                  VALUES('rdt_842ExtUpdSP08', @cTempOrderKey, @cUDF02, @cUDF03)
-
-                  IF EXISTS(SELECT 1 FROM dbo.CARTONTRACK WITH(NOLOCK) WHERE LABELNO = @cTempOrderKey AND ISNULL(UDF02, '') <> '' AND ISNULL(UDF03, '') <> '')
-                  BEGIN
-                     IF EXISTS ( SELECT 1 FROM dbo.sysobjects WHERE name = 'rdt_593PrintHK01' AND type = 'P')
-                     BEGIN
-                        EXEC RDT.rdt_593PrintHK01
-                           @nMobile,
-                           @nFunc,
-                           @nStep,
-                           @cLangCode,
-                           @cStorerKey,
-                           @cOption,
-                           @cTempOrderKey,
-                           '',
-                           '',
-                           '',
-                           '',
-                           @nErrNo,
-                           @cErrMsg
-
-                        IF @nErrNo <>''
-                        BEGIN
-                           GOTO ROLLBACKTRAN
-                        END
-                     END
-                     ELSE
-                     BEGIN
-                        SET @nErrNo = 151194
-                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --rdt_593PrintHK01 does not exist
-                        GOTO ROLLBACKTRAN
-                     END
-                  END
-                  ELSE
-                  BEGIN
-                     DECLARE
-                        @cMsg01  NVARCHAR(125),
-                        @cMsg02  NVARCHAR(125),
-                        @cMsg03  NVARCHAR(125)
-                     SELECT 
-                        @cMsg01 = rdt.rdtGetMessageLong( 151191, @cLangCode, 'DSP'),
-                        @cMsg02 = rdt.rdtGetMessageLong( 151192, @cLangCode, 'DSP'),
-                        @cMsg03 = rdt.rdtGetMessageLong( 151193, @cLangCode, 'DSP')
-
-                     EXEC rdt.rdtInsertMsgQueue 
-                        @nMobile = @nMobile, 
-                        @nErrNo = @nErrNo, 
-                        @cErrMsg = @cErrMsg,
-                        @cLine01 = @cMsg01,
-                        @cLine02 = @cMsg02,
-                        @cLine03 = @cMsg03,
-                        @cLine04 = '', 
-                        @cLine05 = '', 
-                        @cLine06 = '', 
-                        @cLine07 = '', 
-                        @cLine08 = '', 
-                        @cLine09 = '', 
-                        @nDisplayMsg = 0
-                  END
-               END
-            END
-         END      
       END
    END
 
@@ -2138,6 +2024,125 @@ RollBackTran:
 Quit:
    WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
       COMMIT TRAN rdt_842ExtUpdSP08
+   IF @nStep = 3 AND @cTaskStatus = '9'
+   BEGIN
+      SET @cDelayLength = rdt.RDTGetConfig( @nFunc, 'PrintLabel', @cStorerKey)
+      IF @cDelayLength = '0'
+         SET @cDelayLength = ''
+      IF @cDelayLength <> ''
+      BEGIN
+         SET @nDelayLength = TRY_CAST(@cDelayLength AS INT)
+         IF @nDelayLength IS NOT NULL AND @nDelayLength > 0
+         BEGIN
+            DECLARE
+               @nMin       INT,
+               @nSec       INT
+
+            --SET @nDelayLength = IIF( @nDelayLength > 5000, 5000, @nDelayLength)
+            SET @nDelayLength = IIF( @nDelayLength > 20000, 20000, @nDelayLength)
+            SET @nMin = @nDelayLength / 1000 / 60
+            SET @nSec = (@nDelayLength - (@nMin * 60 * 1000)) / 1000
+            SET @cDelayLength = '00:' + CAST(@nMin AS NVARCHAR(5)) + ':' + CAST(@nSec AS NVARCHAR(5))
+
+            WAITFOR DELAY @cDelayLength
+
+            SELECT @cOption = Code
+            FROM dbo.CodeLkup WITH (NOLOCK)
+            WHERE Listname = 'RDTLBLRPT'
+               AND Storerkey = @cStorerKey
+               AND Long = 'rdt_593PrintHK01'
+               AND code2 = 'SHIPLABEL'
+
+            DELETE FROM @tOrders
+            INSERT INTO @tOrders(OrderKey)
+            SELECT DISTINCT ECL.OrderKey
+            FROM RDT.rdtECOMMLog ECL WITH (NOLOCK)
+            WHERE ECL.STATUS = '9' AND ECL.ToTeNo = @cDropID AND ECL.Mobile = @nMobile
+
+            SET @nLoopIndex = -1
+            WHILE 1 = 1
+            BEGIN
+               SELECT TOP 1
+                  @cTempOrderKey = OrderKey,
+                  @nLoopIndex = id
+               FROM @tOrders
+               WHERE id > @nLoopIndex
+               ORDER BY id
+
+               SELECT @nRowCount = @@ROWCOUNT
+
+               IF @nRowCount = 0
+                  BREAK
+
+               SELECT @cUDF02 = ISNULL(UDF02, 'Empty UDF02'), @cUDF03 = ISNULL(UDF03, 'Empty UDF03')
+               FROM dbo.CartonTrack WITH(NOLOCK)
+               WHERE LABELNO = @cTempOrderKey
+
+               INSERT INTO dbo.TraceInfo (TraceName, Col1, Col2, Col3)
+               VALUES('rdt_842ExtUpdSP08', @cTempOrderKey, @cUDF02, @cUDF03)
+
+               IF EXISTS(SELECT 1 FROM dbo.CARTONTRACK WITH(NOLOCK) WHERE LABELNO = @cTempOrderKey AND ISNULL(UDF02, '') <> '' AND ISNULL(UDF03, '') <> '')
+               BEGIN
+                  IF EXISTS ( SELECT 1 FROM dbo.sysobjects WHERE name = 'rdt_593PrintHK01' AND type = 'P')
+                  BEGIN
+                     EXEC RDT.rdt_593PrintHK01
+                        @nMobile,
+                        @nFunc,
+                        @nStep,
+                        @cLangCode,
+                        @cStorerKey,
+                        @cOption,
+                        @cTempOrderKey,
+                        '',
+                        '',
+                        '',
+                        '',
+                        @nErrNo,
+                        @cErrMsg
+
+                     IF @nErrNo <>''
+                     BEGIN
+                        GOTO ROLLBACKTRAN
+                     END
+                  END
+                  ELSE
+                  BEGIN
+                     SET @nErrNo = 151194
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --rdt_593PrintHK01 does not exist
+                     GOTO ROLLBACKTRAN
+                  END
+               END
+               ELSE
+               BEGIN
+                  DECLARE
+                     @cMsg01  NVARCHAR(125),
+                     @cMsg02  NVARCHAR(125),
+                     @cMsg03  NVARCHAR(125)
+                  SELECT
+                     @cMsg01 = rdt.rdtGetMessageLong( 151191, @cLangCode, 'DSP'),
+                     @cMsg02 = rdt.rdtGetMessageLong( 151192, @cLangCode, 'DSP'),
+                     @cMsg03 = rdt.rdtGetMessageLong( 151193, @cLangCode, 'DSP')
+
+                  EXEC rdt.rdtInsertMsgQueue
+                     @nMobile = @nMobile,
+                     @nErrNo = @nErrNo,
+                     @cErrMsg = @cErrMsg,
+                     @cLine01 = @cMsg01,
+                     @cLine02 = @cMsg02,
+                     @cLine03 = @cMsg03,
+                     @cLine04 = '',
+                     @cLine05 = '',
+                     @cLine06 = '',
+                     @cLine07 = '',
+                     @cLine08 = '',
+                     @cLine09 = '',
+                     @nDisplayMsg = 0
+               END
+            END
+         END
+      END
+   END
+
 
 END
 GO
