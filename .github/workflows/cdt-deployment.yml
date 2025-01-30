@@ -1,40 +1,34 @@
-name: Trigger CI Workflow in infra repo with AuthToken
+name: Trigger Infra-Repo Workflow for SQL Deployment
 
 on:
   workflow_dispatch:
     inputs:
       authToken:
-        description: 'Authentication Token'
+        description: 'Authentication token for the infra-repo API'
         required: true
-        type: string
+      file_paths:
+        description: 'Comma-separated list of SQL file paths to deploy'
+        required: true
+      branch:
+        description: 'Branch name in infra-repo to run the workflow'
+        required: true
+        default: 'main'   
 
 jobs:
-  trigger-workflow:
+  trigger-infra-workflow:
     runs-on: ubuntu-latest
 
     steps:
-      # Step 1: Checkout the code from repo-b (not strictly necessary for this task)
-      - name: Checkout 
-        uses: actions/checkout@v3
+      - name: Checkout repo
+        uses: actions/checkout@v2
 
-      # Step 2: Set up GitHub CLI
-      # - name: Set up GitHub CLI
-      #   uses: cli/cli-action@v2.0.0
-      #   with:
-      #     gh-version: 'latest'
-
-      # Step 3: Authenticate with GitHub CLI
-      - name: Authenticate with GitHub CLI
+      - name: Trigger infra-repo workflow
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
         run: |
-          echo "${{ secrets.DB_TOKEN }}" | gh auth login --with-token
-
-      # Step 4: Trigger cdt-test-deployment.yml in infra with the authToken passed as input
-      - name: Trigger america-db-deploy.yml in infra repo with authToken
-        run: |
-          gh workflow run america-db-deploy.yml \
+          gh workflow run cdt-test-deployment.yml \
             --repo Maersk-Global/fbm-infra-automation \
-            -f authToken="${{ github.event.inputs.authToken }}"
+            --ref ${{ github.event.inputs.branch }} \
+            --field authToken="${{ github.event.inputs.authToken }}" \
+            --field file_paths="${{ github.event.inputs.file_paths }}"
 
-      # Optional: Check the status of the triggered workflow
-      # - name: List workflow runs in infra repo
-      #   run: gh run list --repo Maersk-Global/fbm-infra-automation
