@@ -151,4 +151,3 @@ BEGIN
    EXEC isp_Cursor_Allocate_Candidates
    @n_SkipPreAllocationFlag = 1
 END
-GO
