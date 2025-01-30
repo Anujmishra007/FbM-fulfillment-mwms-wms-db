@@ -105,8 +105,8 @@ BEGIN
    AND LOC.Status = 'OK'
    AND ID.Status = 'OK'
    AND LOT.Status = 'OK'
-   AND exists (select code from CODELKUP (NOLOCK) where PutawayZone = code and Storerkey = 'HUSQ' and LISTNAME = 'HUSQALLZON' and ((short <> 'PICK' and @c_UOM = 1) or (short = 'PICK' and @c_UOM <> 1)))
-   AND exists (select code from CODELKUP (NOLOCK) where PutawayZone = code and Storerkey = 'HUSQ' and LISTNAME = 'HUSQALLZON' and ((@ParcelOrder = 0) or (short = 'PICK' and @ParcelOrder = 1)))
+   AND exists (select code from CODELKUP (NOLOCK) where PutawayZone = code and Storerkey = 'HUSQ' and LISTNAME = 'HUSQALLZON' and ((short <> 'PICK' and @c_UOM = 1) or (short IN ('PICK','DAMAGED') and @c_UOM <> 1)))
+   AND exists (select code from CODELKUP (NOLOCK) where PutawayZone = code and Storerkey = 'HUSQ' and LISTNAME = 'HUSQALLZON' and ((@ParcelOrder = 0) or (short IN ('PICK','DAMAGED') and @ParcelOrder = 1)))
    AND LOC.HOSTWHCODE = (SELECT IIF(ISNULL(UserDefine01,'A')='','A',ISNULL(UserDefine01,'A')) FROM ORDERDETAIL (NOLOCK) WHERE OrderKey = left(@c_OtherParms,10) AND orderlinenumber = right(left(@c_OtherParms,15),5))
    AND lli.sku = (SELECT top 1 sku FROM orderdetail (NOLOCK)WHERE OrderKey = left(@c_OtherParms,10) AND orderlinenumber = right(left(@c_OtherParms,15),5))
    AND exists (SELECT Code FROM CODELKUP WITH (NOLOCK) WHERE LOC.LocationType = code and listname = 'HUSQALLLOC' AND Storerkey = 'HUSQ')
@@ -115,13 +115,13 @@ BEGIN
    AND (LLI.QTY - LLI.QTYALLOCATED - LLI.QTYPICKED - LLI.QtyReplen <=
    (SELECT OpenQty - QtyAllocated - QtyPicked - ShippedQty FROM ORDERDETAIL (NOLOCK)
    WHERE StorerKey = @c_StorerKey and OrderKey = left(@c_OtherParms,10) AND orderlinenumber = right(left(@c_OtherParms,15),5))
-   or LOC.LocationType in ('PICK','SHELF'))
+   or LOC.LocationType in ('PICK','SHELF','DAMAGED'))
    AND exists (SELECT Code FROM CODELKUP WITH (NOLOCK) WHERE PutawayZone = code and listname = 'HUSQALLZON' AND Storerkey = @c_StorerKey))T1)T2
    WHERE qtyinloc<=
    (SELECT OpenQty - QtyAllocated - QtyPicked - ShippedQty FROM ORDERDETAIL (NOLOCK)
    WHERE StorerKey = @c_StorerKey AND OrderKey = left(@c_OtherParms,10) AND orderlinenumber = right(left(@c_OtherParms,15),5))
-   or LocationType in ('PICK','SHELF'))T3)T4
-   WHERE RollingSum <= TotalQtyToPick or LocationType in ('PICK','SHELF')
+   or LocationType in ('PICK','SHELF','DAMAGED'))T3)T4
+   WHERE RollingSum <= TotalQtyToPick or LocationType in ('PICK','SHELF','DAMAGED')
    Order By CASE WHEN qtyinloc =
    (SELECT OpenQty - QtyAllocated - QtyPicked - QtyPreAllocated - ShippedQty FROM ORDERDETAIL (NOLOCK)
       WHERE StorerKey = @c_StorerKey AND OrderKey = left(@c_OtherParms,10) AND orderlinenumber = right(left(@c_OtherParms,15),5)) THEN 1 ELSE 99 END,
