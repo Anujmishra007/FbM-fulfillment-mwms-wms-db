@@ -53,6 +53,8 @@ GO
 /* 20-Nov-2024 Wan01     3.0 UWP-27137 - [FCR-1348] [Levi's] Wave Release*/
 /*                           (Automation and Manual Operations)         */
 /* 30-Jan-2025 SSA01     3.1 UWP-27137 - [FCR-1348] Single tote for Single Sku*/
+/* 30-Jan-2025 SSA02     3.2 UWP-27137 -NonSortable and Nonconveyable   */
+/*                             cartonization fix                        */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[mspRLWAV03]
    @c_WaveKey NVARCHAR(10)
@@ -923,7 +925,7 @@ BEGIN
          WHERE O.Orderkey = @c_Orderkey
            AND O.TotalQty - O.TotalQtyPacked > 0
            AND O.WCS = 0                                                            --(Wan01)
-           AND O.SoftCartonization = 0                                              --(Wan01)   
+           --AND O.SoftCartonization = 0                                              --(Wan01) (SSA02)
          GROUP BY O.Sku,
                   O.Length,
                   O.Width,
@@ -1573,6 +1575,7 @@ BEGIN
          JOIN dbo.SKU SKU WITH (NOLOCK) ON SKU.StorerKey = O.Storerkey AND SKU.Sku = O.Sku
          WHERE O.OrderGroup = @c_OrderGroup
             AND O.TotalQty - O.TotalQtyPacked > 0
+            AND O.WCS = 0        --(SSA02)
          GROUP BY O.Sku,
                   O.Length,
                   O.Width,
