@@ -30,6 +30,11 @@ ALTER TABLE [dbo].[PackInfo] ADD CONSTRAINT [PK_PackInfo] PRIMARY KEY CLUSTERED 
 
 CREATE NONCLUSTERED INDEX [IX_PackInfo_UCCNo] ON [dbo].[PackInfo] ([UCCNo]) ON [PRIMARY]
 
+CREATE NONCLUSTERED INDEX [IX_PackInfo_RefNo] ON [dbo].[PackInfo] ( RefNo )  include ( CartonStatus )
+
+CREATE NONCLUSTERED INDEX [IDX_PackInfo_TrackingNo] ON [dbo].[PackInfo]	(	[TrackingNo] ASC 	) ON [PRIMARY]
+
+
 EXEC sp_addextendedproperty N'MS_Description', 'Date of the information added. (System date)', 'SCHEMA', N'dbo', 'TABLE', N'PackInfo', 'COLUMN', N'AddDate'
 
 EXEC sp_addextendedproperty N'MS_Description', 'The username/login ID added the information.', 'SCHEMA', N'dbo', 'TABLE', N'PackInfo', 'COLUMN', N'AddWho'
