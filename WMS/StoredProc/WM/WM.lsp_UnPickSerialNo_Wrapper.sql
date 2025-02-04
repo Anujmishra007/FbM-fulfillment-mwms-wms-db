@@ -23,7 +23,8 @@ GO
 CREATE OR ALTER PROCEDURE [WM].[lsp_UnpickSerialNo_Wrapper]
    @c_Storerkey         NVARCHAR(15)  = ''         
 ,  @n_PickSerialNoKey   BIGINT        = 0        --optional      
-,  @c_Orderkey          NVARCHAR(10)  = ''       --optional   
+,  @c_Orderkey          NVARCHAR(10)  = ''       --optional
+,  @c_Wavekey           NVARCHAR(10)  = ''       --optional
 ,  @c_Action            NVARCHAR(15)  = 'UNPICK' -- UNPICK or UnPickAlloc
 ,  @b_Success           INT           = 1       OUTPUT     
 ,  @n_Err               INT           = 0       OUTPUT    
@@ -71,7 +72,7 @@ BEGIN
 
       IF @n_Continue IN (1,2)    
       BEGIN          
-         IF @n_PickSerialNoKey = 0 AND @c_Orderkey = ''
+         IF @n_PickSerialNoKey = 0 AND @c_Orderkey = '' AND @c_Wavekey = ''
          BEGIN    
             SET @n_continue = 3      
             SET @n_Err = 562901    
@@ -89,6 +90,17 @@ BEGIN
             FROM dbo.PickDetail pd (NOLOCK)
             JOIN dbo.PickSerialNo psn (NOLOCK) ON psn.Pickdetailkey = pd.PickdetailKey
             WHERE pd.Orderkey = @c_Orderkey
+            AND psn.SerialNo > ''
+            ORDER BY psn.PickSerialNoKey
+         END
+         ELSE IF @c_Wavekey > ''
+         BEGIN
+         SET @cur_PSNDEL = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+            SELECT psn.PickSerialNoKey, pd.PickDetailKey, pd.Orderkey, pd.OrderLineNumber
+            FROM dbo.PickDetail pd (NOLOCK)
+            JOIN dbo.PickSerialNo psn (NOLOCK) ON psn.Pickdetailkey = pd.PickdetailKey
+            JOIN dbo.WaveDetail wd(nolock) on wd.OrderKey = pd.OrderKey
+            WHERE wd.WaveKey = @c_Wavekey
             AND psn.SerialNo > ''
             ORDER BY psn.PickSerialNoKey
          END
