@@ -36,9 +36,12 @@ GO
 /*                            unallocate issue                          */    
 /* 26-AUG-2022 KY01     1.7   INC1891678-AddOn close cursorCUR_PICKDETAIL*/  
 /* 13-OCT-2022 KY02     1.8   INC1929382-AddOn @c_PickHeader_Loadkey check*/
+/* 22-APR-2023 Wan05    1.9   JSM-84413(AikLiang). Not to delete Pack if */
+/*                            not all pickdetail for conso loadkey are  */
+/*                            deleted (UWP-29893)                       */  
 /* 10-JAN-2025 SSA01    1.9   UWP-23317-Added validationn to redirect   */
 /*                            to pickserialnumber tab                   */
-/* 29-Nov-2024 TLTING01 2.0   UWP-28805 Blocking tune                   */  
+/* 29-Nov-2024 TLTING01 2.0   UWP-28805 Blocking tune                   */
 /************************************************************************/       
 CREATE OR ALTER PROCEDURE [WM].[lsp_Unallocation_Wrapper]
     @c_Storerkey NVARCHAR(15) = ''      --optional    
@@ -74,13 +77,15 @@ BEGIN
    DECLARE @c_PickHeader_Orderkey   NVARCHAR(10) = ''    
          , @c_PickHeader_Loadkey    NVARCHAR(10) = ''    
          , @c_PickHeaderKey         NVARCHAR(10) = ''    
-         , @c_PackStatus            NVARCHAR(10) = ''    
+         , @c_PackStatus            NVARCHAR(10) = '' 
+         , @c_PackType              CHAR(1)      = 'D'             
              
    DECLARE @CUR_DELPICKSLIP   CURSOR    
         
    DECLARE @t_UnAllocate  TABLE ( Orderkey      NVARCHAR(10) NOT NULL DEFAULT('') PRIMARY KEY    
                                  ,Loadkey       NVARCHAR(10) NOT NULL DEFAULT('')     
-                                 ,PickHeaderKey NVARCHAR(10) NOT NULL DEFAULT('')    
+                                 ,PickHeaderKey NVARCHAR(10) NOT NULL DEFAULT('')   
+                                 ,PackType      CHAR(1)      NOT NULL DEFAULT('')         --(Wan05)                                  
                                  )     
    --(Wan03) - END        
    SET @n_Err = 0     
@@ -192,28 +197,34 @@ BEGIN
           
          WHILE @@FETCH_STATUS <> -1    
          BEGIN                                  
-            SET @c_PickHeaderKey = ''    
+            SET @c_PickHeaderKey = ''
+            SET @c_PackType = 'D'                                             --(Wan05)                
              
-            SELECT @c_PickHeaderKey = p.PickHeaderKey    
+            SELECT TOP 1 @c_PickHeaderKey = p.PickHeaderKey                   --(Wan05) 
             FROM dbo.PICKHEADER AS p WITH (NOLOCK)    
-            WHERE p.OrderKey = @c_PickHeader_Orderkey    
+            WHERE p.OrderKey = @c_PickHeader_Orderkey  
+            ORDER BY p.PickHeaderKey DESC                                     --(Wan05)  
              
             --IF @c_PickHeaderKey = ''    
          IF ISNULL(@c_PickHeader_Loadkey,'') <> '' AND @c_PickHeaderKey = ''   --KY02
-            BEGIN    
+            BEGIN  
+               SET @c_PackType = 'C'                                          --(Wan05)                  
                SELECT TOP 1 @c_PickHeaderKey = p.PickHeaderKey    
                FROM dbo.PICKHEADER AS p WITH (NOLOCK)    
                WHERE p.ExternOrderKey = @c_PickHeader_Loadkey    
-               AND p.OrderKey = ''    
+               AND p.OrderKey = ''
+               ORDER BY p.PickHeaderKey DESC                                  --(Wan05)     
             END    
              
             --IF @c_PickHeaderKey = ''    
-         IF ISNULL(@c_PickHeader_Loadkey,'') <> '' AND @c_PickHeaderKey = ''    --KY02
-            BEGIN    
+            IF ISNULL(@c_PickHeader_Loadkey,'') <> '' AND @c_PickHeaderKey = ''    --KY02
+            BEGIN  
+               SET @c_PackType = 'C'                                          --(Wan05)                    
                SELECT TOP 1 @c_PickHeaderKey = p.PickHeaderKey    
                FROM dbo.PICKHEADER AS p WITH (NOLOCK)    
                WHERE p.Loadkey = @c_PickHeader_Loadkey    
-               AND p.OrderKey = ''    
+               AND p.OrderKey = ''  
+               ORDER BY p.PickHeaderKey DESC                                  --(Wan05)                  
             END    
              
             IF @c_PickHeaderKey <> ''    
@@ -233,7 +244,8 @@ BEGIN
                END                      
     
                UPDATE @t_UnAllocate    
-                  SET PickHeaderKey = @c_PickHeaderKey    
+                  SET PickHeaderKey = @c_PickHeaderKey 
+                    , PackType = @c_PackType                                  --(Wan05)                        
                WHERE Orderkey = @c_PickHeader_Orderkey    
                 
             END             
@@ -421,7 +433,17 @@ BEGIN
       FROM @t_UnAllocate AS tph    
       WHERE tph.PickHeaderKey <> ''    
       AND NOT EXISTS (SELECT 1 FROM dbo.PICKDETAIL AS p WITH (NOLOCK) WHERE p.OrderKey = tph.Orderkey)    
-      ORDER BY tph.Orderkey    
+      AND tph.PackType = 'D'                                         --(Wan05) - STaRT
+      UNION  
+      SELECT tph.PickHeaderKey    
+      FROM @t_UnAllocate AS tph    
+      WHERE tph.PickHeaderKey <> ''    
+      AND NOT EXISTS (SELECT 1 FROM dbo.PICKDETAIL AS p WITH (NOLOCK)
+                      JOIN dbo.ORDERS AS o WITH (NOLOCK) ON p.OrderKey = o.OrderKey
+                      WHERE o.Loadkey = tph.Loadkey) 
+      AND tph.PackType = 'C'        
+      GROUP BY tph.PickHeaderKey   
+      ORDER BY tph.PickHeaderKey                                     --(Wan05) - END
           
       OPEN @CUR_DELPICKSLIP    
           
