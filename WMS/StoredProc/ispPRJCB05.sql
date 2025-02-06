@@ -26,10 +26,10 @@ GO
 /* 2024-10-09  SSA01    1.1   UWP-24678-JCB- Allocation for Kitting and */
 /*                                    Decanting                         */
 /* 2024-11-07  SSA02    1.2   Updated DropId with ID for K4 Kitting order*/
-/* 2025-02-05  SKE140   1.3   UWP-25932 Updated condtion to exclude the */
+/* 2025-02-05  SKE140   1.3   UWP-29250 Updated condtion to exclude the */
 /*                              JCB-ALLOC                               */
 /************************************************************************/
-Create or ALTER   PROC [dbo].[ispPRJCB05] (
+CREATE OR ALTER   PROC [dbo].[ispPRJCB05] (
      @c_OrderKey        NVARCHAR(10)
    , @c_LoadKey         NVARCHAR(10)
    , @c_Wavekey         NVARCHAR(10)
