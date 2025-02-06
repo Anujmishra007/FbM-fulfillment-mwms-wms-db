@@ -29,7 +29,7 @@ GO
 /* 2025-02-05  SKE140   1.3   UWP-29250 Updated condtion to exclude the */
 /*                              JCB-ALLOC                               */
 /************************************************************************/
-CREATE OR ALTER   PROC [dbo].[ispPRJCB05] (
+CREATE OR ALTER     PROC [dbo].[ispPRJCB05] (
      @c_OrderKey        NVARCHAR(10)
    , @c_LoadKey         NVARCHAR(10)
    , @c_Wavekey         NVARCHAR(10)
@@ -111,7 +111,7 @@ BEGIN
                          AND NOT EXISTS(SELECT 1 FROM PICKDETAIL PD (NOLOCK) WHERE PD.Storerkey = LLI.Storerkey
                                         AND PD.Sku = LLI.Sku AND PD.Lot = LLI.Lot AND PD.ToLoc = LLI.Loc
                                         AND PD.CaseID = LLI.Id AND PD.Status = ''0'') 
-                         AND NOT EXISTS (SELECT 1 FROM CODELKUP (NOLOCK) WHERE LISTNAME = ''JCBEXALLOC''  AND CODE = ''' + @c_Type + '''  AND UDF01 = ''1'' AND LONG = LOC.Loc AND LONG IS NOT NULL)  '  --UWP-29250
+                         AND NOT EXISTS (SELECT 1 FROM CODELKUP (NOLOCK) WHERE LISTNAME = ''JCBEXALLOC''  AND CODE = @c_Type AND UDF01 = ''1'' AND LONG = LOC.Loc AND LONG IS NOT NULL)  '  --UWP-29250
     
      
    IF @n_continue IN(1,2)
@@ -298,14 +298,14 @@ BEGIN
                             END; OPEN @CUR_INV'
                             
 
-           SET @c_SQLParm = N'@c_StorerKey NVARCHAR(15), @c_SKU NVARCHAR(20), @c_Facility NVARCHAR(5)'
+           SET @c_SQLParm = N'@c_StorerKey NVARCHAR(15), @c_SKU NVARCHAR(20), @c_Facility NVARCHAR(5), @c_Type NVARCHAR(10)'
                           +' ,@c_Lottable01 NVARCHAR(18), @c_Lottable02 NVARCHAR(18), @c_Lottable03 NVARCHAR(18), @d_Lottable04 DATETIME, @d_Lottable05 DATETIME'
                           +' ,@c_Lottable06 NVARCHAR(30), @c_Lottable07 NVARCHAR(30), @c_Lottable08 NVARCHAR(30), @c_Lottable09 NVARCHAR(30), @c_Lottable10 NVARCHAR(30)'
                           +' ,@c_Lottable11 NVARCHAR(30), @c_Lottable12 NVARCHAR(30), @d_Lottable13 DATETIME, @d_Lottable14 DATETIME, @d_Lottable15 DATETIME'
                           +' ,@n_QtyLeftToFulfill INT, @CUR_INV CURSOR OUTPUT'
 
            EXEC sp_ExecuteSQL @c_SQL, @c_SQLParm
-             , @c_StorerKey, @c_SKU, @c_Facility
+             , @c_StorerKey, @c_SKU, @c_Facility , @c_Type
              , @c_Lottable01, @c_Lottable02, @c_Lottable03, @d_Lottable04, @d_Lottable05
              , @c_Lottable06, @c_Lottable07, @c_Lottable08, @c_Lottable09, @c_Lottable10
              , @c_Lottable11, @c_Lottable12, @d_Lottable13, @d_Lottable14, @d_Lottable15
@@ -397,7 +397,7 @@ BEGIN
                            + ' ORDER BY od.Orderkey, od.Orderlinenumber; OPEN @CUR_OD'
 
                  SET @c_SQLParm = N'@c_Loadkey NVARCHAR(10), @c_Wavekey NVARCHAR(10)'
-                                +' ,@c_StorerKey NVARCHAR(15), @c_SKU NVARCHAR(20), @c_Facility NVARCHAR(5)'
+                                +' ,@c_StorerKey NVARCHAR(15), @c_SKU NVARCHAR(20), @c_Facility NVARCHAR(5) ,@c_Type NVARCHAR(10)'
                                 +' ,@c_Lottable01 NVARCHAR(18), @c_Lottable02 NVARCHAR(18), @c_Lottable03 NVARCHAR(18), @d_Lottable04 DATETIME, @d_Lottable05 DATETIME'
                                 +' ,@c_Lottable06 NVARCHAR(30), @c_Lottable07 NVARCHAR(30), @c_Lottable08 NVARCHAR(30), @c_Lottable09 NVARCHAR(30), @c_Lottable10 NVARCHAR(30)'
                                 +' ,@c_Lottable11 NVARCHAR(30), @c_Lottable12 NVARCHAR(30), @d_Lottable13 DATETIME, @d_Lottable14 DATETIME, @d_Lottable15 DATETIME'
@@ -405,7 +405,7 @@ BEGIN
 
                  EXEC sp_ExecuteSQL @c_SQL, @c_SQLParm
                    , @c_Loadkey, @c_Wavekey
-                   , @c_StorerKey, @c_SKU, @c_Facility
+                   , @c_StorerKey, @c_SKU, @c_Facility , @c_Type
                    , @c_Lottable01, @c_Lottable02, @c_Lottable03, @d_Lottable04, @d_Lottable05
                    , @c_Lottable06, @c_Lottable07, @c_Lottable08, @c_Lottable09, @c_Lottable10
                    , @c_Lottable11, @c_Lottable12, @d_Lottable13, @d_Lottable14, @d_Lottable15
