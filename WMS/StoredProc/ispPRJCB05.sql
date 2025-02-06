@@ -78,8 +78,6 @@ BEGIN
           ,@c_UOM                   NVARCHAR(10)   = ''  
           ,@c_SQL                   NVARCHAR(MAX)  = ''
           ,@c_SQLParm               NVARCHAR(MAX)  = ''
-          ,@c_Conditions            NVARCHAR(MAX)  = ''
-          ,@c_ExConditions          NVARCHAR(MAX)  = ''
           ,@n_OpenQty               INT            = 0
           ,@n_PickQty               INT            = 0
           ,@n_IDQtyAvai             INT            = 0
