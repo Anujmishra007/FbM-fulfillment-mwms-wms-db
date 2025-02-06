@@ -111,24 +111,9 @@ BEGIN
                          AND NOT EXISTS(SELECT 1 FROM PICKDETAIL PD (NOLOCK) WHERE PD.Storerkey = LLI.Storerkey
                                         AND PD.Sku = LLI.Sku AND PD.Lot = LLI.Lot AND PD.ToLoc = LLI.Loc
                                         AND PD.CaseID = LLI.Id AND PD.Status = ''0'') 
-                         AND NOT EXISTS (SELECT 1 FROM CODELKUP (NOLOCK) WHERE LISTNAME = ''JCBEXALLOC''  AND CODE = ''' + @c_Type + '''  AND UDF01 = ''1'' AND LONG = LOC.Loc AND LONG IS NOT NULL)  '
+                         AND NOT EXISTS (SELECT 1 FROM CODELKUP (NOLOCK) WHERE LISTNAME = ''JCBEXALLOC''  AND CODE = ''' + @c_Type + '''  AND UDF01 = ''1'' AND LONG = LOC.Loc AND LONG IS NOT NULL)  '  --UWP-29250
     
-     --CHANGE IS IGNORE THE LOCATION FROM ALLOCATION BASED ON CODELKUP--
-     -- Fetch LONG values from CODELKUP
-    /*SELECT @c_locValues = STRING_AGG(LONG, ''',''')  FROM CODELKUP  WHERE LISTNAME = 'JCBEXALLOC' AND CODE = @c_Type  AND UDF01 = '1' AND LONG IS NOT NULL;
-
-    -- Check if there are any LOC/LONG values
-    IF @c_locValues IS NOT NULL
-    BEGIN
-    -- Create the dynamic exclusion part if there are LONG values
-    SET @c_excludeLocSQL = ' AND LOC.LOC NOT IN (''' + @c_locValues + ''')';
-    END
-    ELSE
-    BEGIN
-    -- No exclusion needed if no LONG values
-    SET @c_excludeLocSQL = '';
-    END                                       
-      ---AND LLI.SKU = @c_SKU  ' + RTRIM(@c_excludeLocSQL) + ' ' + */                             
+     
    IF @n_continue IN(1,2)
    BEGIN
       IF ISNULL(@c_Orderkey,'') <> ''
