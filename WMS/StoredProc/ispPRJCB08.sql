@@ -27,8 +27,10 @@ GO
 /*                                    Decanting                         */
 /* 2024-11-07  SSA02    1.2   Updated to exclude pallets which used for */
 /*                                      Kitting                         */
+/* 2025-02-05  SKE140   1.3   UWP-25932 Updated condtion to exclude the */
+/*                              JCB-ALLOC                               */
 /************************************************************************/
-ALTER   PROC [dbo].[ispPRJCB08] (
+CREATE OR ALTER   PROC [dbo].[ispPRJCB08] (
      @c_OrderKey        NVARCHAR(10)
    , @c_LoadKey         NVARCHAR(10)
    , @c_Wavekey         NVARCHAR(10)
