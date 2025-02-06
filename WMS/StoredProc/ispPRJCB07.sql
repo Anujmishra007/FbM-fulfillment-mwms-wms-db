@@ -102,7 +102,6 @@ BEGIN
    SET @c_Conditions = ' AND LOC.LocationType = ''PICK'' '
                      + ' AND SL.LocationType IN ( ''PICK'') '
                      + ' AND NOT EXISTS (SELECT 1 FROM CODELKUP (NOLOCK) WHERE LISTNAME = ''JCBEXALLOC''  AND CODE = @c_Type AND UDF01 = ''1'' AND LONG = LOC.Loc AND LONG IS NOT NULL)  '
-   --SET @c_Type    = '2'
                                              
    IF ISNULL(@c_Orderkey,'') <> ''
    BEGIN
