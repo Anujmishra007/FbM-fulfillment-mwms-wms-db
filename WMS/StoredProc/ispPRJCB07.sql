@@ -26,8 +26,10 @@ GO
 /* 2024-10-09  SSA01    1.1   UWP-24678-JCB- Allocation for Kitting and */
 /*                                    Decanting                         */
 /* 2024-11-18  SSA02    1.2   Updated picklocation(SL.LocationType = 'PICK') */
+/* 2025-02-05  SKE140   1.3   UWP-25932 Updated condtion to exclude the */
+/*                              JCB-ALLOC                               */
 /************************************************************************/
-ALTER   PROC [dbo].[ispPRJCB07] (
+CREATE OR ALTER   PROC [dbo].[ispPRJCB07] (
      @c_OrderKey        NVARCHAR(10)
    , @c_LoadKey         NVARCHAR(10)
    , @c_Wavekey         NVARCHAR(10)
