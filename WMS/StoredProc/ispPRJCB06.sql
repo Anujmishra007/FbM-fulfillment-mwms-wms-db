@@ -31,7 +31,7 @@ GO
 /* 2025-02-05  SKE140   1.3   UWP-29250 Updated condtion to exclude the */
 /*                              JCB-ALLOC                               */
 /************************************************************************/
-CREATE OR ALTER     PROC [dbo].[ispPRJCB06] (
+CREATE OR ALTER PROC [dbo].[ispPRJCB06] (
      @c_OrderKey        NVARCHAR(10)
    , @c_LoadKey         NVARCHAR(10)
    , @c_Wavekey         NVARCHAR(10)
