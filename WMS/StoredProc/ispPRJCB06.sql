@@ -111,8 +111,7 @@ BEGIN
                                         AND PD.Sku = LLI.Sku AND PD.Lot = LLI.Lot AND PD.ToLoc = LLI.Loc
                                         AND PD.CaseID = LLI.Id AND PD.Status = ''0'') 
                          AND NOT EXISTS (SELECT 1 FROM CODELKUP (NOLOCK) WHERE LISTNAME = ''JCBEXALLOC''  AND CODE = @c_Type  AND UDF01 = ''1'' AND LONG = LOC.Loc AND LONG IS NOT NULL)  '                                           
-                                        
-   --SET @c_Type = '2'                                     
+                                                                          
                                              
    IF ISNULL(@c_Orderkey,'') <> ''
    BEGIN
