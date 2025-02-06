@@ -26,8 +26,10 @@ GO
 /* 2024-10-09  SSA01    1.1   UWP-24678-JCB- Allocation for Kitting and */
 /*                                    Decanting                         */
 /* 2024-11-07  SSA02    1.2   Updated DropId with ID for K4 Kitting order*/
+/* 2025-02-05  SKE140   1.3   UWP-25932 Updated condtion to exclude the */
+/*                              JCB-ALLOC                               */
 /************************************************************************/
-ALTER   PROC [dbo].[ispPRJCB05] (
+Create or ALTER   PROC [dbo].[ispPRJCB05] (
      @c_OrderKey        NVARCHAR(10)
    , @c_LoadKey         NVARCHAR(10)
    , @c_Wavekey         NVARCHAR(10)
@@ -125,8 +127,7 @@ BEGIN
     BEGIN
     -- No exclusion needed if no LONG values
     SET @c_excludeLocSQL = '';
-    END                                   
-      -- PRINT @c_excludeLocSQL    
+    END                                       
       ---AND LLI.SKU = @c_SKU  ' + RTRIM(@c_excludeLocSQL) + ' ' + */                             
    IF @n_continue IN(1,2)
    BEGIN
@@ -139,7 +140,6 @@ BEGIN
       ELSE IF ISNULL(@c_Loadkey,'') <> ''
       
       BEGIN
-        PRINT @c_excludeLocSQL
          SET @CUR_ORDER_LINES = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
          SELECT DISTINCT OD.StorerKey, OD.Sku
                         ,Openqty = SUM(OD.OpenQty - (OD.QtyAllocated + OD.QtyPicked))
@@ -244,7 +244,6 @@ BEGIN
                ,  ISNULL(OD.LOTTABLE15,'19000101')
                ,  O.Facility
          ORDER BY OD.Storerkey, OD.Sku
-          PRINT @c_excludeLocSQL
       END
      
       IF @n_continue IN(1,2)
@@ -263,7 +262,6 @@ BEGIN
            BEGIN
               SELECT @c_OrderKey as orderkey, @c_OrderLineNumber as orderlinenumber, @c_SKU as sku, @n_OpenQty as openqty
            END
-           PRINT @c_excludeLocSQL
 
            SET @n_QtyLeftToFulfill = @n_OpenQty
 
@@ -320,7 +318,6 @@ BEGIN
                             ELSE 5
                             END; OPEN @CUR_INV'
                             
-                            PRINT @c_excludeLocSQL
 
            SET @c_SQLParm = N'@c_StorerKey NVARCHAR(15), @c_SKU NVARCHAR(20), @c_Facility NVARCHAR(5)'
                           +' ,@c_Lottable01 NVARCHAR(18), @c_Lottable02 NVARCHAR(18), @c_Lottable03 NVARCHAR(18), @d_Lottable04 DATETIME, @d_Lottable05 DATETIME'
@@ -334,7 +331,7 @@ BEGIN
              , @c_Lottable06, @c_Lottable07, @c_Lottable08, @c_Lottable09, @c_Lottable10
              , @c_Lottable11, @c_Lottable12, @d_Lottable13, @d_Lottable14, @d_Lottable15
              , @n_QtyLeftToFulfill, @CUR_INV OUTPUT
-         PRINT @c_SQL
+
            FETCH FROM @CUR_INV INTO @c_Loc, @c_ID, @n_IDQtyAvai
 
            WHILE @@FETCH_STATUS = 0 AND @n_Continue IN(1,2) AND @n_QtyLeftToFulFill > 0 --get pallet of the sku
