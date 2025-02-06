@@ -263,11 +263,6 @@ BEGIN
                  JOIN PUTAWAYZONE pa (NOLOCK) ON loc.Putawayzone = pa.Putawayzone
                  WHERE LOC.LocationFlag = ''NONE''
                  AND LOC.Status = ''OK''
-                /* AND LOC.LOC NOT IN (SELECT LONG 
-                                      FROM CODELKUP 
-                                      WHERE LISTNAME = ''JCBEXALLOC'' 
-                                      CODE = @c_Type
-                                      AND UDF01 = ''1'')  --EXLUSION CHECK BASED ON CODELKUP*/
                  AND LOT.Status = ''OK''
                  AND ID.Status = ''OK''
                  AND LOC.Facility = @c_Facility
@@ -275,7 +270,6 @@ BEGIN
                  AND LLI.STORERKEY = @c_StorerKey
                  AND LLI.SKU = @c_SKU ' +
                  RTRIM(@c_Conditions) + ' ' +
-               --  RTRIM(@c_ExConditions) + ' ' +
                  CASE WHEN ISNULL(@c_Lottable01,'') <> '' THEN ' AND LA.Lottable01 = @c_Lottable01 ' ELSE '' END +
                  CASE WHEN ISNULL(@c_Lottable02,'') <> '' THEN ' AND LA.Lottable02 = @c_Lottable02 ' ELSE '' END +
                  CASE WHEN ISNULL(@c_Lottable03,'') <> '' THEN ' AND LA.Lottable03 = @c_Lottable03 ' ELSE '' END +
