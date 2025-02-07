@@ -21,9 +21,7 @@ GO
 /* Updates:                                                             */                                                                                  
 /* Date        Author   Ver.  Purposes                                  */
 /* 2023-03-23  Wan      1.0   Created & DevOps Combine Script           */
-/* 2024-09-25  Wan01    1.1   LFWM-4446 - RG[GIT] Serial Number Solution*/
-/*                            - Transfer by Serial Number               */
-/************************************************************************/
+/************************************************************************/                                                                                  
 CREATE OR ALTER PROC [WM].[lsp_TRF_PopulateLLI_Wrapper]                                                                                                                     
    @c_TransferKey          NVARCHAR(10)         
 ,  @c_LotxLocxID           NVARCHAR(MAX)    --Eacg set of Lot,Loc,ID seperated by '|'. Eg 0000000001,STAGE,ID1|0000000002,STAGE,ID2
@@ -47,9 +45,6 @@ BEGIN
          ,  @n_RowID                      INT = 0
          ,  @n_FromQty                    INT = 0
          ,  @n_ToQty                      INT = 0
-
-         ,  @n_TotalSelected              INT = 0                                   --(Wan01)
-         ,  @n_TotalInserted              INT = 0                                   --(Wan01)
 
          ,  @c_DefaultUOM                 NVARCHAR(10)   = ''
          ,  @c_UOM1                       NVARCHAR(10)   = ''
@@ -114,8 +109,7 @@ BEGIN
          ,  @c_TRFCOPYL3                  NVARCHAR(10)   = ''
 
          ,  @c_INVTRFITF                  NVARCHAR(10)   = ''
-
-         ,  @c_ASNFizUpdLotToSerialNo     NVARCHAR(10)   = ''                       --(Wan01)
+                  
          ,  @c_ChannelInventoryMgmt_From  NVARCHAR(10)   = ''                         
          ,  @c_ChannelInventoryMgmt_To    NVARCHAR(10)   = ''                        
 
@@ -131,7 +125,7 @@ BEGIN
          
    DECLARE  @t_WMSErrorList   TABLE
          (  RowID             INT            IDENTITY(1,1)
-         ,  TableName         NVARCHAR(50)   NOT NULL DEFAULT('')                   --(Wan01)
+         ,  TableName         NVARCHAR(10)   NOT NULL DEFAULT('')
          ,  SourceType        NVARCHAR(50)   NOT NULL DEFAULT('')
          ,  Refkey1           NVARCHAR(20)   NOT NULL DEFAULT('')
          ,  Refkey2           NVARCHAR(20)   NOT NULL DEFAULT('')
@@ -172,14 +166,13 @@ BEGIN
       END
 
       CREATE TABLE #tLLI 
-         (  RowID                INT            NOT NULL IDENTITY(1,1)    PRIMARY KEY
-         ,  LotxLocxID           NVARCHAR(38)   NOT NULL DEFAULT('')
-         ,  Lot                  NVARCHAR(10)   NOT NULL DEFAULT('')
-         ,  Loc                  NVARCHAR(10)   NOT NULL DEFAULT('')
-         ,  ID                   NVARCHAR(18)   NOT NULL DEFAULT('')
-         ,  CommaIdx1            INT            NOT NULL DEFAULT(0)
-         ,  CommaIdx2            INT            NOT NULL DEFAULT(0)
-         ,  SkuSerialNoCapture   NVARCHAR(1)    NOT NULL DEFAULT('')
+         (  RowID       INT            NOT NULL IDENTITY(1,1)    PRIMARY KEY
+         ,  LotxLocxID  NVARCHAR(38)   NOT NULL DEFAULT('')
+         ,  Lot         NVARCHAR(10)   NOT NULL DEFAULT('')
+         ,  Loc         NVARCHAR(10)   NOT NULL DEFAULT('')
+         ,  ID          NVARCHAR(18)   NOT NULL DEFAULT('')
+         ,  CommaIdx1   INT            NOT NULL DEFAULT(0)
+         ,  CommaIdx2   INT            NOT NULL DEFAULT(0)
          )
    
       INSERT INTO #tLLI (LotxLocxID, Lot, CommaIdx1)
@@ -189,8 +182,6 @@ BEGIN
       FROM string_split (@c_LotxLocxID, '|') T
       GROUP BY T.[Value]
       
-      SET @n_TotalSelected = @@ROWCOUNT                                             --(Wan01)
-
       UPDATE #tLLI
           SET Loc = SUBSTRING(LotxLocxID
                             ,CommaIdx1+1
@@ -199,17 +190,10 @@ BEGIN
 
       UPDATE #tLLI
           SET ID = SUBSTRING(LotxLocxID,CommaIdx2+1, LEN(LotxLocxID) - CommaIdx2) 
-
-      UPDATE #tLLI                                                                  --(Wan01)
-         SET SkuSerialNoCapture = SKU.SerialNoCapture
-      FROM #tLLI
-      JOIN Lot (NOLOCK) ON Lot.lot = #tLLI.lot
-      JOIN Sku (NOLOCK) ON  Sku.Storerkey = Lot.Storerkey
-                        AND Sku.Sku = Lot.Sku
       /*-------------------------------------------------------*/
       /* BUILD TEMP TABLES & INSERT DATA - END                 */
       /*-------------------------------------------------------*/
-
+   
       SET @c_FromFacility = ''
       SET @c_FromStorerkey= ''
       SET @c_ToFacility = ''
@@ -223,8 +207,6 @@ BEGIN
       WHERE TH.TransferKey = @c_TransferKey
       
       -- Get Storerconfig 
-      SELECT @c_ASNFizUpdLotToSerialNo = fsgr.Authority                             --(Wan01)
-      FROM dbo.fnc_SelectGetRight(@c_FromFacility, @c_FromStorerkey, '', 'ASNFizUpdLotToSerialNo')AS fsgr
       SELECT @c_ChannelInventoryMgmt_From = fsgr.Authority FROM dbo.fnc_SelectGetRight (@c_FromFacility, @c_FromStorerkey,'','ChannelInventoryMgmt') AS fsgr
       SELECT @c_ChannelInventoryMgmt_To   = fsgr.Authority FROM dbo.fnc_SelectGetRight (@c_ToFacility, @c_ToStorerkey,'','ChannelInventoryMgmt') AS fsgr
  
@@ -282,7 +264,6 @@ BEGIN
          SET @c_FromLoc = ''
          SET @c_FromID  = ''
          SET @n_FromQty = 0
-
          SELECT Top 1
              @n_RowID      = tl.RowID
             ,@c_FromSku    = ltlci.Sku
@@ -297,7 +278,6 @@ BEGIN
                                                     AND ltlci.Id = tl.ID
          WHERE tl.RowID > @n_RowID 
          AND ltlci.Qty - ltlci.QtyAllocated - ltlci.QtyPicked > 0 
-         AND NOT (tl.SkuSerialNoCapture IN ('1','2') AND @c_ASNFizUpdLotToSerialNo = '1') --(Wan01)
          ORDER BY tl.RowID
 
          IF @@ROWCOUNT = 0 OR @c_FromSku = ''
@@ -400,9 +380,8 @@ BEGIN
             BEGIN 
                SET @c_Channel_To = @c_Channel_From
             END   
-         END
+         END                                                                          
          
-         SET @n_TotalInserted = @n_TotalInserted + 1                                --(Wan01)
          SET @c_TransferLineNumber = RIGHT( '00000' + CONVERT(NVARCHAR(5), CONVERT(INT, @c_TransferLineNumber) + 1), 5 )
          INSERT INTO TRANSFERDETAIL
                (  TransferKey
@@ -514,19 +493,6 @@ BEGIN
             GOTO EXIT_SP
          END
       END
-
-      IF @c_ASNFizUpdLotToSerialNo = 1 AND @n_TotalSelected > @n_TotalInserted
-      BEGIN
-         IF EXISTS (SELECT 1 FROM #tLLI WHERE SkuSerialNoCapture IN ('1','2'))
-         BEGIN
-            SET @n_Err    = 0
-            SET @c_ErrMsg = N'Warning: There are Inventories with mandatory SerialNo not populated!!!'
-                           + '. (lsp_TRF_PopulateLLI_Wrapper)'
-
-            INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
-            VALUES (@c_TableName, @c_SourceType, @c_TransferKey, '', '', 'WARNING', 0, @n_Err, @c_Errmsg)
-         END
-      END
    END TRY
    BEGIN CATCH
       SET @n_Continue = 3
@@ -557,7 +523,7 @@ EXIT_SP:
       END
       ELSE
       BEGIN
-         WHILE @@TRANCOUNT > 0                                                      --(Wan01)
+         WHILE @@TRANCOUNT > @n_StartTCnt
          BEGIN
             COMMIT TRAN
          END
@@ -567,7 +533,7 @@ EXIT_SP:
    ELSE
    BEGIN
       SET @b_Success = 1
-      WHILE @@TRANCOUNT > 0                                                         --(Wan01)
+      WHILE @@TRANCOUNT > @n_StartTCnt
       BEGIN
          COMMIT TRAN
       END
