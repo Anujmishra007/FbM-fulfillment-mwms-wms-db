@@ -52,7 +52,7 @@ GO
    /*                                             (PY01)                                           */
    /* 2025-02-04         TAK047      V.7         FCR-2650 Check Replen Task existence (CLVN02)     */
    /************************************************************************************************/ 
-   ALTER OR CREATE PROCEDURE [dbo].[isp_DynamicReplenishment_Granite]	 
+   CREATE OR ALTER PROCEDURE [dbo].[isp_DynamicReplenishment_Granite]	 
        @c_WaveKey NVARCHAR(10), 
        @b_Success int OUTPUT, 
        @n_err     int OUTPUT, 
