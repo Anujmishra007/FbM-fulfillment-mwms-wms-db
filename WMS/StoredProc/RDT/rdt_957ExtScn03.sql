@@ -9,8 +9,10 @@ GO
 /*                                                                      */
 /* Purpose:                                                             */
 /*                                                                      */
-/* Date       Rev  Author   Purposes                                    */
-/* 2024-09-23 1.0  CYU027   FCR-808 Add Image + Style                   */
+/* Date       Rev   Author   Purposes                                   */
+/* 2024-09-23 1.0   CYU027   FCR-808 Add Image + Style                  */
+/* 2024-12-12 1.1.0 LJQ006   FCR-1168 Add drop id validation            */
+/*                           and new screen navigation                  */
 /************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_957ExtScn03] (
@@ -61,14 +63,71 @@ BEGIN
    SET CONCAT_NULL_YIELDS_NULL OFF
 
    DECLARE @cSuggSKU       NVARCHAR( 20)
+   DECLARE @cDropIDMandatory NVARCHAR(1)
+   DECLARE @cDropID        NVARCHAR(20)
+   DECLARE @cPickSlipNo    NVARCHAR(10)
+
+   SELECT @nStep = Step FROM rdt.RDTMOBREC WHERE Mobile = @nMobile  
 
    SELECT @cSuggSKU     = Value FROM @tExtScnData WHERE Variable = '@cSuggSKU'
+   SELECT @cDropID     = Value FROM @tExtScnData WHERE Variable = '@cDropID'
+   SELECT @cPickSlipNo     = Value FROM @tExtScnData WHERE Variable = '@cPickSlipNo'
 
    IF @nAction = 0
    BEGIN
       IF @nFunc = 957
       BEGIN
-         IF @nScn = 5292 OR @nScn = 6443
+         IF @nInputKey = 1
+         BEGIN
+            -- add dropid null validation
+            IF (@nScn = 5292 AND @nStep = 2)
+            BEGIN
+               SELECT @cDropIDMandatory = rdt.rdtGetConfig(@nFunc, 'DropIDMandatory', @cStorerKey)
+               IF @cDropIDMandatory = '0'
+               BEGIN
+                  SET @cDropIDMandatory = ''
+               END
+               IF @cDropIDMandatory <> ''
+               BEGIN
+                  IF ISNULL(@cDropID, '') = ''
+                  BEGIN
+                     SET @nErrNo = 230601
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- DropID cannot be blank
+
+                     -- Prepare next screen var
+                     SET @cOutField01 = @cPickSlipNo
+                     SET @cOutField02 = '' --PickZone
+                     SET @cOutField03 = '' --DropID
+
+                     EXEC rdt.rdtSetFocusField @nMobile, 2 -- PickZone
+                     SET @nAfterScn = 5291
+                     SET @nAfterStep = 2
+
+                     GOTO Quit
+                  END
+               END
+            END
+         END
+         IF @nInputKey = 1
+         BEGIN
+            -- return to step 2 when UCC scan succeed to scan a new DropID for another UCC
+            IF @nScn IN (6443, 5294)
+            BEGIN
+               -- Prepare LOC screen var
+               SET @cOutField01 = @cPickSlipNo
+               SET @cOutField02 = '' --PickZone
+               SET @cOutField03 = '' --DropID
+
+               EXEC rdt.rdtSetFocusField @nMobile, 2 -- PickZone
+
+               -- Enable field
+               SET @cFieldAttr07 = '' -- QTY
+               SET @nAfterScn = 5291
+               SET @nAfterStep = 2
+               GOTO Quit
+            END
+         END
+         IF @nScn = 5292 
          BEGIN
             --redirect
             SET @nAfterScn = 6443
