@@ -11,8 +11,9 @@ GO
 /*                                                                            */        
 /* Modifications log:                                                         */        
 /*                                                                            */        
-/* Date         Rev  Author   Purposes                                        */        
-/* 2024-10-10   1.0  JHU151    FCR-777 Created                                */ 
+/* Date         Rev    Author    Purposes                                     */        
+/* 2024-10-10   1.0    JHU151    FCR-777 Created                              */ 
+/* 2025-02-08   1.1.0  NLT013    FCR-1872 ignore lottable values while picking*/ 
 /******************************************************************************/        
         
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_Assist_ClusterPickV2](        
@@ -2999,8 +3000,8 @@ BEGIN
             WHERE PKD.StorerKey = @cStorerKey        
             AND   PKD.Loc = @cFromLoc        
             AND   PKD.Sku = @cSuggSKU        
-            AND   PKD.CaseID = @cSuggCartonID        
-            AND   PKD.[Status] < @cPickConfirmStatus        
+            AND   TD.DropID = @cSuggToteId  --FCR-1872 NLT013 should sum up by TaskDetail.DropID
+            AND   PKD.[Status] < @cPickConfirmStatus    
             AND   TD.GroupKey = @cGroupKey
             AND   TD.TaskDetailKey = @cTaskdetailKey
 
@@ -3010,7 +3011,7 @@ BEGIN
             WHERE PKD.StorerKey = @cStorerKey        
             AND   PKD.Loc = @cFromLoc        
             AND   PKD.Sku = @cSuggSKU        
-            AND   PKD.CaseID = @cSuggCartonID        
+            AND   TD.DropID = @cSuggToteId  --FCR-1872 NLT013 should sum up by TaskDetail.DropID
             AND   PKD.[Status] = @cPickConfirmStatus        
             AND   TD.GroupKey = @cGroupKey
             AND   TD.TaskDetailKey = @cTaskdetailKey    
@@ -4500,6 +4501,7 @@ BEGIN
                WHERE storerkey = @cStorerKey
                AND taskdetailkey = @cTaskDetailKey
                AND status = '5')
+         AND @nActQTY > 0 --FCR-1872 NLT013 If it is full short pick, no need go to ConformTote screen
       BEGIN
          SELECT       
             @cPosition = StatusMsg,       
