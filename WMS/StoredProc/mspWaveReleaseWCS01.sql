@@ -25,6 +25,8 @@ GO
 /*                            status from H to 0                         */
 /* 2025-01-23   SSA04   1.4   UWP-27112-Added extra logic to update tasks*/
 /*                            status from H to 0                         */
+/* 2025-02-07   SSA05   1.5   UWP-30025-Update Destination ID before     */
+/*                            Releasing to WCS                           */
 /*************************************************************************/   
 CREATE OR ALTER PROCEDURE [dbo].[mspWaveReleaseWCS01]
   @c_Wavekey      NVARCHAR(10)  
@@ -50,13 +52,21 @@ CREATE OR ALTER PROCEDURE [dbo].[mspWaveReleaseWCS01]
           , @c_TransmitBatch     NVARCHAR(30) = ''
           , @c_CfgWCS            NVARCHAR(10) = ''
           , @c_ConditionQuery    NVARCHAR(1000)= ''
-          , @c_TMReleaseFlag    NVARCHAR(1)= ''
-          , @c_UserDefine09     NVARCHAR(1)= ''   --(SSA02)
-          , @c_TaskType         NVARCHAR(10)    --(SSA04)
-          , @c_LocationType     NVARCHAR(10)    --(SSA04)
-          , @c_TaskDetailKey    NVARCHAR(10)    --(SSA04)
-          , @b_IsUpdate         int = 1    --(SSA04)
-          , @CUR_TASKDETAIL        CURSOR --(SSA04)
+          , @c_TMReleaseFlag     NVARCHAR(1)= ''
+          , @c_UserDefine09      NVARCHAR(1)= ''   --(SSA02)
+          , @c_TaskType          NVARCHAR(10)    --(SSA04)
+          , @c_LocationType      NVARCHAR(10)    --(SSA04)
+          , @c_TaskDetailKey     NVARCHAR(10)    --(SSA04)
+          , @b_IsUpdate          int = 1    --(SSA04)
+          , @c_WCSCode           NVARCHAR(30) = ''  --(SSA05)
+          , @c_OrderKey          NVARCHAR(10)  --(SSA05)
+          , @c_ShipperKey        NVARCHAR(15)  --(SSA05)
+          , @c_ConsigneeKey      NVARCHAR(15)  --(SSA05)
+          , @b_IsParcel          int = 1    --(SSA05)
+          , @c_DestIdListName          NVARCHAR(10) = 'WCSDESTID' --(SSA05)
+          , @c_DestIdStorerType        NVARCHAR(30) = '2'  --(SSA05)
+          , @CUR_ORDERS          CURSOR --(SSA05)
+          , @CUR_TASKDETAIL      CURSOR --(SSA04)
 
 
     SELECT TOP 1
@@ -101,9 +111,82 @@ CREATE OR ALTER PROCEDURE [dbo].[mspWaveReleaseWCS01]
               SET @n_err = 81020
               SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Wave already released to WCS. (mspWaveReleaseWCS01) '
            END
+           ----(SSA05) start-----
            IF @n_Continue IN (1,2)
             BEGIN
-               ----(SSA02),(SSA03),(SSA04)start-----
+              IF NOT EXISTS (SELECT 1 FROM ORDERINFO(NOLOCK) oi
+               JOIN ORDERS(NOLOCK) o ON o.ORDERKEY = oi.ORDERKEY
+               JOIN WAVEDETAIL(NOLOCK) wd ON wd.ORDERKEY = o.ORDERKEY
+               WHERE wd.WAVEKEY = @c_Wavekey
+						   AND (oi.ORDERINFO09 IS NULL OR oi.ORDERINFO09 = ''))
+                BEGIN
+                  SET @n_continue = 3
+                  SET @c_errmsg = CONVERT(NVARCHAR(250),@n_err)
+                  SET @n_err = 81021
+                  SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Cannot Re-release to WCS. (mspWaveReleaseWCS01) '
+                END
+            END
+            ----(SSA05) end -----
+           IF @n_Continue IN (1,2)
+            BEGIN
+               ----(SSA05) start-----
+                SET @CUR_ORDERS = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+                SELECT o.OrderKey,o.ShipperKey,o.ConsigneeKey
+                FROM ORDERS(NOLOCK) o
+                JOIN ORDERINFO(NOLOCK) oi ON o.Orderkey = oi.OrderKey
+                JOIN WAVEDETAIL(NOLOCK) wd ON wd.OrderKey = o.OrderKey
+                WHERE wd.WaveKey = @c_Wavekey
+                AND o.Storerkey = @c_Storerkey
+                AND o.userdefine09 = @c_Wavekey
+
+                OPEN @CUR_ORDERS
+                FETCH NEXT FROM @CUR_ORDERS INTO @c_OrderKey,@c_ShipperKey,@c_ConsigneeKey
+
+                WHILE @@FETCH_STATUS <> -1
+                BEGIN
+                SET  @b_IsParcel = 0
+
+                IF EXISTS(SELECT 1 FROM CODELKUP clu (NOLOCK)
+                JOIN STORER s (NOLOCK) ON s.StorerKey = clu.Short
+                WHERE s.StorerKey = @c_ShipperKey AND clu.listname = 'WSCourier'
+                AND clu.code = 'ECL-1' AND s.type = '7'
+                )
+                BEGIN
+                  SET @b_IsParcel = 1
+                END
+
+                IF @b_IsParcel = 1
+                BEGIN
+                  SELECT @c_WCSCode = clu.Code FROM CODELKUP clu (NOLOCK)
+                  JOIN storer s (NOLOCK) ON s.SUSR5 = clu.Short
+                  WHERE s.StorerKey = @c_ConsigneeKey AND s.type = @c_DestIdStorerType
+                  AND clu.StorerKey = @c_Storerkey AND clu.Code2 = @c_ShipperKey
+                  AND clu.LISTNAME = @c_DestIdListName
+                END
+                ELSE
+                BEGIN
+                  SELECT @c_WCSCode = clu.Code FROM CODELKUP clu (NOLOCK)
+                  JOIN storer s (NOLOCK) ON s.SUSR5 = clu.Short
+                  WHERE s.StorerKey = @c_ConsigneeKey AND s.type = @c_DestIdStorerType
+                  AND clu.StorerKey = @c_Storerkey
+                  AND clu.LISTNAME = @c_DestIdListName
+                  AND ISNULL(clu.Code2, '') = ''
+                END
+                IF (ISNULL(@c_WCSCode, '') = '')
+                BEGIN
+                  SELECT @c_WCSCode = clu.Code FROM CODELKUP (NOLOCK) clu
+                  WHERE clu.LISTNAME = @c_DestIdListName AND clu.Code = 'Default' AND clu.StorerKey = @c_Storerkey
+                END
+
+                UPDATE ORDERINFO WITH (ROWLOCK) SET ORDERINFO09 = @c_WCSCode  WHERE ORDERKEY = @c_OrderKey
+
+                FETCH NEXT FROM @CUR_ORDERS INTO @c_OrderKey,@c_ShipperKey,@c_ConsigneeKey
+                END
+                CLOSE @CUR_ORDERS
+                DEALLOCATE @CUR_ORDERS
+
+                ----(SSA05) end -----
+                ----(SSA02),(SSA03),(SSA04)start-----
                 SET @CUR_TASKDETAIL = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
                 SELECT td.TASKDETAILKEY,loc.LOCATIONTYPE,td.TASKTYPE FROM TASKDETAIL(NOLOCK) td
                 JOIN LOC(NOLOCK) loc on td.FROMLOC = loc.LOC
