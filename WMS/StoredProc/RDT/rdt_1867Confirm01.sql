@@ -15,6 +15,7 @@ GO
 /* 2024-10-10   1.0   JHU151    FCR-777 Created                               */
 /* 2024-12-27   1.1.0 Dennis    FCR-1872 Remove Lot                           */ 
 /* 2025-02-08   1.1.1 NLT013    FCR-1872 Fix some bugs                        */ 
+/* 2025-02-08   1.1.2 NLT013    FCR-1872 Update PickDetailKey for PickSerialNo*/ 
 /******************************************************************************/  
   
 CREATE OR ALTER PROC rdt.rdt_1867Confirm01 (  
@@ -75,6 +76,7 @@ BEGIN
    DECLARE @cMethod              NVARCHAR( 1)
    DECLARE @nPickedQty           INT
    DECLARE @nPickDetailQty       INT
+   DECLARE @nRowCount            INT
 
    SELECT 
       @cUserName = UserName 
@@ -797,7 +799,72 @@ BEGIN
 
 
    END-- non serial no
-   GOTO Quit  
+
+   --Update PickDetailKey for PickSerialNo
+   SELECT @nRowCount = COUNT(1)
+   FROM dbo.PickSerialNo PSN WITH(NOLOCK)
+   INNER JOIN dbo.PickDetail PD WITH(NOLOCK)
+      ON PSN.PickDetailKey = PD.PickDetailKey
+   INNER JOIN dbo.TaskDetail TD WITH(NOLOCK)
+      ON PD.StorerKey = TD.StorerKey
+      AND PD.TaskDetailKey = TD.TaskDetailKey
+   WHERE TD.StorerKey = @cStorerKey
+      AND TD.TaskDetailKey = @cTaskDetailKey
+
+   IF @nRowCount > 0 AND @nQTY > 0
+   BEGIN
+      DECLARE
+         @nLoopIndex          INT,
+         @nUpdateIDStart      INT,
+         @nUpdateIDRange      INT
+
+      DECLARE @tPickDetails TABLE
+      (
+         id                   INT IDENTITY(1,1),
+         PickDetailKey        NVARCHAR(18),
+         Qty                  INT
+      )
+
+      DECLARE @tPickSerialNo TABLE
+      (
+         id                   INT IDENTITY(1,1),
+         PickSerialNoKey      BIGINT
+      )
+
+      INSERT INTO @tPickDetails( PickDetailKey, Qty)
+      SELECT PickDetailKey, Qty FROM dbo.PICKDETAIL WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND TaskDetailKey = @cTaskDetailKey
+
+      INSERT INTO @tPickSerialNo( PickSerialNoKey)
+      SELECT PickSerialNoKey 
+      FROM dbo.PickSerialNo PSN WITH(NOLOCK)
+      INNER JOIN @tPickDetails PD ON PSN.PickDetailKey = PD.PickDetailKey
+
+      SET @nLoopIndex = -1
+      SET @nUpdateIDStart = 1
+
+      WHILE 1 = 1
+      BEGIN
+         SELECT TOP 1
+            @cPickDetailKey = PickDetailKey,
+            @nQty = Qty,
+            @nLoopIndex = id
+         FROM @tPickDetails
+         WHERE id > @nLoopIndex
+
+         IF @@ROWCOUNT = 0
+            BREAK
+
+         SET @nUpdateIDRange = @nQty
+
+         UPDATE dbo.PickSerialNo WITH(ROWLOCK)
+         SET PickDetailKey = @cPickDetailKey
+         WHERE EXISTS(SELECT 1 FROM @tPickSerialNo PSN WHERE PSN.PickSerialNoKey = PickSerialNo.PickSerialNoKey AND PSN.id BETWEEN @nUpdateIDStart AND @nUpdateIDStart + @nUpdateIDRange - 1)
+
+         SET @nUpdateIDStart = @nUpdateIDStart + @nUpdateIDRange
+      END
+   END
+
+   GOTO Quit
   
 RollBackTran:  
    ROLLBACK TRAN ConfirmPick -- Only rollback change made here  
