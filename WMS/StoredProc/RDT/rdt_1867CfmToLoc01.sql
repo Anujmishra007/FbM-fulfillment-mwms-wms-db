@@ -14,6 +14,7 @@ GO
 /* Date         Rev    Author    Purposes                                     */
 /* 2024-10-10   1.0    JHU151    FCR-777 Created                              */ 
 /* 2025-02-11   1.1.0  NLT013    FCR-1872 Correct picked quantity             */ 
+/* 2025-02-11   1.1.1  NLT013    FCR-1872 Correct LabelLine                   */ 
 /******************************************************************************/  
   
 CREATE OR ALTER PROCEDURE rdt.rdt_1867CfmToLoc01 (  
@@ -301,15 +302,26 @@ BEGIN
            AND status <> @cStatus
       END
 
+      SET @cLabelLine = ''
+      SET @nMaxCartonNo = 0
 
       SELECT TOP 1
-         @cLabelLine = RIGHT( '00000' + CAST( CAST( IsNULL( MAX( LabelLine), 0) AS INT) + 1 AS NVARCHAR( 5)), 5) ,
+         @cLabelLine = RIGHT( '00000' + CAST( CAST( IsNULL( MAX( LabelLine), 0) AS INT) AS NVARCHAR( 5)), 5) ,
          @nMaxCartonNo = MAX(CartonNo)
       FROM dbo.PackDetail (NOLOCK)
       WHERE Pickslipno = @cPickSlipNo
-         --AND CartonNo = @nCartonNo
-         --AND LabelNo = @cDropID
+         AND LabelNo = @cDropID
          AND Storerkey = @cStorerKey
+
+      IF @cLabelLine = '00000'
+      BEGIN
+         SELECT TOP 1
+            @cLabelLine = RIGHT( '00000' + CAST( CAST( IsNULL( MAX( LabelLine), 0) AS INT) + 1 AS NVARCHAR( 5)), 5) ,
+            @nMaxCartonNo = MAX(CartonNo)
+         FROM dbo.PackDetail (NOLOCK)
+         WHERE Pickslipno = @cPickSlipNo
+            AND Storerkey = @cStorerKey
+      END
       
       IF @cLabelLine = ''
          SET @cLabelLine = '000001'
@@ -317,7 +329,6 @@ BEGIN
       BEGIN
          SET @nMaxCartonNo = 0
       END
-            
       
       IF NOT EXISTS(SELECT 1 FROM dbo.PackDetail WITH(NOLOCK)
                      WHERE PickslipNo = @cPickslipNo
