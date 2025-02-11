@@ -544,6 +544,7 @@ BEGIN
       FROM pickdetail PD WITH(NOLOCK)
       WHERE storerKey = @cStorerkey
       AND OrderKey =  @cOrderKey
+         AND STATUS NOT IN ('4', '9')
 
       SELECT @nPackedQty = SUM(Qty)
       FROM PackHeader PH WITH(NOLOCK)
