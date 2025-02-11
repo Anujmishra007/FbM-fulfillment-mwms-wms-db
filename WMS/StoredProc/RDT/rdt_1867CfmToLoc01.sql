@@ -11,8 +11,9 @@ GO
 /*                  For HUSQ                                                  */
 /* Called from: rdt_TM_Assist_ClusterPick_ConfirmToLoc                        */
 /*                                                                            */
-/* Date         Rev  Author   Purposes                                        */
-/* 2024-10-10   1.0  JHU151    FCR-777 Created                                */ 
+/* Date         Rev    Author    Purposes                                     */
+/* 2024-10-10   1.0    JHU151    FCR-777 Created                              */ 
+/* 2025-02-11   1.1.0  NLT013    FCR-1872 Correct picked quantity             */ 
 /******************************************************************************/  
   
 CREATE OR ALTER PROCEDURE rdt.rdt_1867CfmToLoc01 (  
