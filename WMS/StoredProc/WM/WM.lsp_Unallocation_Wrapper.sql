@@ -39,9 +39,12 @@ GO
 /* 22-APR-2023 Wan05    1.9   JSM-84413(AikLiang). Not to delete Pack if */
 /*                            not all pickdetail for conso loadkey are  */
 /*                            deleted (UWP-29893)                       */  
-/* 10-JAN-2025 SSA01    1.9   UWP-23317-Added validationn to redirect   */
+/* 10-JAN-2025 SSA01    2.0   UWP-23317-Added validationn to redirect   */
 /*                            to pickserialnumber tab                   */
-/* 29-Nov-2024 TLTING01 2.0   UWP-28805 Blocking tune                   */
+/* 29-Nov-2024 TLTING01 2.1   UWP-28805 Blocking tune                   */
+/* 11-Feb-2025 SSA02    2.2   UWP-29893 Removed @c_Pickdetailkey's empty*/
+/*                            check to restrict unallocation for packing*/
+/*                            orders while click on option1             */
 /************************************************************************/       
 CREATE OR ALTER PROCEDURE [WM].[lsp_Unallocation_Wrapper]
     @c_Storerkey NVARCHAR(15) = ''      --optional    
@@ -235,7 +238,8 @@ BEGIN
                JOIN dbo.PackDetail AS pd WITH (NOLOCK) ON pd.PickSlipNo = ph.PickSlipNo    
                WHERE ph.PickSlipNo = @c_PickHeaderKey    
                             
-               IF ISNULL(@c_Pickdetailkey,'') = '' AND @c_PackStatus IN ( '0','9' )    
+               --IF ISNULL(@c_Pickdetailkey,'') = '' AND @c_PackStatus IN ( '0','9' ) --(SSA02)
+               IF @c_PackStatus IN ( '0','9' )
                BEGIN     
                   SET @n_continue = 3      
                   SET @n_err = 551808    
