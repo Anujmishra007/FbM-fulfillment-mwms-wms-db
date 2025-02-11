@@ -2,7 +2,6 @@ SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
-
 /************************************************************************/
 /* Stored Procedure: mspRLWAV03                                         */
 /* Creation Date: 08-MAY-2024                                           */
@@ -52,9 +51,11 @@ GO
 /*                           BOLbyConsignee (SWT05)                     */ 
 /* 20-Nov-2024 Wan01     3.0 UWP-27137 - [FCR-1348] [Levi's] Wave Release*/
 /*                           (Automation and Manual Operations)         */
-/* 30-Jan-2025 SSA01     3.1 UWP-27137 - [FCR-1348] Single tote for Single Sku*/
+/* 30-Jan-2025 SSA01     3.1 UWP-27137 - [FCR-1348] Single tote for     */
+/*                           Single Sku                                 */
 /* 30-Jan-2025 SSA02     3.2 UWP-27137 -NonSortable and Nonconveyable   */
 /*                             cartonization fix                        */
+/* 11-Feb-2025 SWT06     3.3 Performance Tuning                         */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[mspRLWAV03]
    @c_WaveKey NVARCHAR(10)
@@ -2627,25 +2628,6 @@ BEGIN
       DEALLOCATE CUR_UPDATEDROPID
    END                                                                               --(Wan01) - END 
    
-   -----Update pickdetail_WIP work in progress staging table back to pickdetail    
-   IF @n_continue IN(1,2)
-   BEGIN
-      EXEC dbo.isp_CreatePickdetail_WIP
-            @c_Loadkey               = ''
-           ,@c_WaveKey               = @c_WaveKey
-           ,@c_WIP_RefNo             = @c_SourceType
-           ,@c_PickCondition_SQL     = ''
-           ,@c_Action                = 'U'    --I=Initialize pickdetail_wip table. U=Update pickdetail_WIP to pickdetail table and delete. D=Only delete pickdetail_WIP records
-           ,@c_RemoveTaskdetailkey   = 'N'    --N=No remove Y=Remove taskdetailkey from pickdetail record when initialization
-           ,@b_Success               = @b_Success OUTPUT
-           ,@n_Err                   = @n_Err     OUTPUT
-           ,@c_ErrMsg                = @c_ErrMsg  OUTPUT
-
-      IF @b_Success <> 1
-      BEGIN
-         SET @n_continue = 3
-      END
-   END    
 
    -- Gegerate Pick Tasks
    IF @n_continue IN(1,2) AND @c_Automation <> 'Y'                                  --(Wan01)
@@ -2739,7 +2721,10 @@ BEGIN
             GOTO QUIT_SP
          END
       
-         UPDATE dbo.PICKDETAIL WITH (ROWLOCK)
+         -- Update Temp Table instead of physical.  (SWT999) 
+         -- UPDATE dbo.PICKDETAIL WITH (ROWLOCK)
+
+         UPDATE #PickDetail_WIP 
             SET TaskDetailKey=@c_TaskDetailKey, TrafficCop=NULL
          WHERE PickDetailKey=@c_PickDetailKey
          SELECT @n_err = @@ERROR
@@ -2758,6 +2743,7 @@ BEGIN
       CLOSE CUR_PICKTASK
       DEALLOCATE CUR_PICKTASK
    END -- IF @n_continue IN(1,2)
+ 
    
    --WL04 S
    -- Insert Transmitlog2
@@ -3215,9 +3201,10 @@ BEGIN
                         SET TaskDetailKey=@c_TaskDetailKey 
                      WHERE PickDetailKey=@c_PickDetailKey
 
-                     UPDATE dbo.PICKDETAIL WITH (ROWLOCK)
-                        SET TaskDetailKey=@c_TaskDetailKey, TrafficCop=NULL
-                     WHERE PickDetailKey=@c_PickDetailKey
+                     -- (SWT999) Only update temp table.
+                     --UPDATE dbo.PICKDETAIL WITH (ROWLOCK)
+                     --   SET TaskDetailKey=@c_TaskDetailKey, TrafficCop=NULL
+                     --WHERE PickDetailKey=@c_PickDetailKey
 
                      SET @n_err = @@ERROR
                      IF @n_err <> 0
@@ -3370,7 +3357,27 @@ BEGIN
       CLOSE CUR_PNPTASK
       DEALLOCATE CUR_PNPTASK
    END
- 
+
+
+   -----Update pickdetail_WIP work in progress staging table back to pickdetail    
+   IF @n_continue IN(1,2)
+   BEGIN
+      EXEC dbo.isp_CreatePickdetail_WIP
+            @c_Loadkey               = ''
+           ,@c_WaveKey               = @c_WaveKey
+           ,@c_WIP_RefNo             = @c_SourceType
+           ,@c_PickCondition_SQL     = ''
+           ,@c_Action                = 'U'    --I=Initialize pickdetail_wip table. U=Update pickdetail_WIP to pickdetail table and delete. D=Only delete pickdetail_WIP records
+           ,@c_RemoveTaskdetailkey   = 'N'    --N=No remove Y=Remove taskdetailkey from pickdetail record when initialization
+           ,@b_Success               = @b_Success OUTPUT
+           ,@n_Err                   = @n_Err     OUTPUT
+           ,@c_ErrMsg                = @c_ErrMsg  OUTPUT
+
+      IF @b_Success <> 1
+      BEGIN
+         SET @n_continue = 3
+      END
+   END     
    QUIT_SP:
 
    IF @n_Continue = 3 -- Error Occured - Process AND Return  
