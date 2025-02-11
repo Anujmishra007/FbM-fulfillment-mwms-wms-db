@@ -20,7 +20,8 @@ GO
 /*                            in pallet id                                  */
 /* 2024-10-25 1.4.0  Dennis   FCR-1316 Last Carton                          */
 /* 2024-12-19 1.4.1  NLT013   FCR-1316 Valid location is needed for new ID  */
-/* 2025-02-06 1.4.1  CYU027   UWP-30023 Hotfix add trim avoid spaces        */
+/* 2025-02-06 1.4.2  CYU027   UWP-30023 Hotfix add trim avoid spaces        */
+/* 2025-01-10 1.4.3  Dennis   FCR-1316 Performance Issue                    */
 /****************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_1653ExtScn01] (
@@ -140,9 +141,8 @@ BEGIN
 
             SELECT @cLabelNo = Value FROM @tExtScnData WHERE Variable = '@cLabelNo'
 
-            IF ISNULL( @cLabelNo, '' ) <> '' AND EXISTS (SELECT 1 FROM dbo.PalletDetail WITH(NOLOCK) 
-                                                            WHERE CaseID = @cLabelNo 
-                                                            AND Status <> '9' ) --V1.3.1
+            IF ISNULL( @cLabelNo, '' ) <> ''
+            AND EXISTS (SELECT 1 FROM dbo.PalletDetail WITH(NOLOCK) WHERE CaseID IS NOT NULL AND CaseID = @cLabelNo AND StorerKey = @cStorerKey AND Status <> '9' ) --V1.3.1
             BEGIN
                SET @cOutField01 = '' 
                SET @cOutField02 = @cPalletKey
@@ -180,27 +180,41 @@ BEGIN
                SET @cFieldAttr05 = 'O'
                BEGIN TRY
                   SET @cSQLString =
-                  'SELECT DISTINCT @cCaseID = PD.caseid
-                  FROM dbo.PickDetail PD WITH (NOLOCK) 
-                  LEFT JOIN dbo.Orders O WITH (NOLOCK) ON PD.orderkey = O.orderkey
-                  WHERE 1=1 '
-                  +IIF(@cCODELKUPUdf01 <> '',   'AND EXISTS(SELECT 1 FROM dbo.PalletDetail PD2 WITH(NOLOCK) WHERE PD2.palletkey = @cPalletKey AND ISNULL(PD2.UserDefine01,'''') = O.' + @cCODELKUPUdf01 + ') ', '')
-                  +IIF(@cCODELKUPUdf02 <> '',   'AND EXISTS(SELECT 1 FROM dbo.PalletDetail PD2 WITH(NOLOCK) WHERE PD2.palletkey = @cPalletKey AND ISNULL(PD2.UserDefine02,'''') = O.' + @cCODELKUPUdf02 + ') ', '')
-                  +IIF(@cCODELKUPUdf03 <> '',   'AND EXISTS(SELECT 1 FROM dbo.PalletDetail PD2 WITH(NOLOCK) WHERE PD2.palletkey = @cPalletKey AND ISNULL(PD2.UserDefine03,'''') = O.' + @cCODELKUPUdf03 + ') ', '')
-                  +IIF(@cCODELKUPUdf04 <> '',   'AND EXISTS(SELECT 1 FROM dbo.PalletDetail PD2 WITH(NOLOCK) WHERE PD2.palletkey = @cPalletKey AND ISNULL(PD2.UserDefine04,'''') = O.' + @cCODELKUPUdf04 + ') ', '')
-                  +IIF(@cCODELKUPUdf05 <> '',   'AND EXISTS(SELECT 1 FROM dbo.PalletDetail PD2 WITH(NOLOCK) WHERE PD2.palletkey = @cPalletKey AND ISNULL(PD2.UserDefine05,'''') = O.' + @cCODELKUPUdf05 + ') ', '')
-                  +' AND NOT EXISTS (SELECT 1 FROM dbo.PalletDetail PD2 WITH(NOLOCK)
-                                 WHERE EXISTS (SELECT 1 FROM dbo.PalletDetail PD3 WITH(NOLOCK) WHERE PD3.PalletKey = @cPalletKey AND PD2.UserDefine01 = PD3.UserDefine01)
-                                 AND PD2.CaseID = PD.CaseID)'
+                  'WITH FilteredPalletDetail AS (
+                     SELECT
+                        UserDefine01,
+                        UserDefine02,
+                        UserDefine03,
+                        UserDefine04,
+                        UserDefine05,
+                        CaseID
+                     FROM
+                        dbo.PalletDetail PD2 WITH (NOLOCK)
+                     WHERE
+                        PD2.palletkey = @cPalletKey
+                        AND PD2.StorerKey = @cStorerKey
+                  )
+                  SELECT distinct
+                     @cCaseID = PD.caseid
+                  FROM dbo.PickDetail PD WITH (NOLOCK)
+                  JOIN dbo.Orders O WITH (NOLOCK) ON PD.orderkey = O.orderkey AND PD.StorerKey = O.StorerKey
+                  WHERE
+                  PD.StorerKey = @cStorerKey
+                  AND NOT EXISTS ( SELECT 1 FROM FilteredPalletDetail FPD WHERE FPD.CaseID = PD.CaseID AND EXISTS ( SELECT 1 FROM FilteredPalletDetail FPD2 WHERE FPD2.UserDefine01 = FPD.UserDefine01))'
+                  +IIF(@cCODELKUPUdf01 <> '',   ' AND EXISTS(SELECT 1 FROM FilteredPalletDetail FPD WHERE ISNULL(FPD.UserDefine01,'''') = O.' + @cCODELKUPUdf01 + ') ', '')
+                  +IIF(@cCODELKUPUdf02 <> '',   ' AND EXISTS(SELECT 1 FROM FilteredPalletDetail FPD WHERE ISNULL(FPD.UserDefine02,'''') = O.' + @cCODELKUPUdf02 + ') ', '')
+                  +IIF(@cCODELKUPUdf03 <> '',   ' AND EXISTS(SELECT 1 FROM FilteredPalletDetail FPD WHERE ISNULL(FPD.UserDefine03,'''') = O.' + @cCODELKUPUdf03 + ') ', '')
+                  +IIF(@cCODELKUPUdf04 <> '',   ' AND EXISTS(SELECT 1 FROM FilteredPalletDetail FPD WHERE ISNULL(FPD.UserDefine04,'''') = O.' + @cCODELKUPUdf04 + ') ', '')
+                  +IIF(@cCODELKUPUdf05 <> '',   ' AND EXISTS(SELECT 1 FROM FilteredPalletDetail FPD WHERE ISNULL(FPD.UserDefine05,'''') = O.' + @cCODELKUPUdf05 + ') ', '')
 
-                  SET @cSQLParam =  '@cPalletKey NVARCHAR(20), @cCaseID NVARCHAR(20) OUTPUT'
+                  SET @cSQLParam =  '@cStorerKey NVARCHAR( 15), @cPalletKey NVARCHAR(20), @cCaseID NVARCHAR(20) OUTPUT'
                   EXEC sp_executesql @cSQLString, @cSQLParam, 
-                     @cPalletKey = @cPalletKey, @cCaseID = @cCaseID OUTPUT
+                     @cStorerKey = @cStorerKey, @cPalletKey = @cPalletKey, @cCaseID = @cCaseID OUTPUT
                   SET @nRowCount = @@ROWCOUNT
                   IF @nRowCount = 1 AND @cCaseID = @cTrackNo
                      SET @cOutField14 = 'LAST CARTON'
                   
-                  SELECT @nRowCount = COUNT(DISTINCT CaseID) FROM dbo.PalletDetail WITH(NOLOCK) WHERE PalletKey = @cPalletKey AND ISNULL(CaseID, '') <> ''
+                  SELECT @nRowCount = COUNT(DISTINCT CaseID) FROM dbo.PalletDetail WITH(NOLOCK) WHERE PalletKey = @cPalletKey AND CaseID IS NOT NULL AND CaseID <> '' AND StorerKey = @cStorerKey
                END TRY
                BEGIN CATCH
                   SET @nErrNo = 219109
@@ -226,40 +240,61 @@ BEGIN
                   SET @cFieldAttr05 = 'O'
                BEGIN TRY
                   SET @cSQLString =
-                     'SELECT DISTINCT @cCaseID =  PD.caseid
-                     FROM dbo.PickDetail PD WITH (NOLOCK) 
-                     LEFT JOIN dbo.orders O WITH (NOLOCK) ON PD.orderkey = O.orderkey
-                     WHERE 1=1
-                     '  
-                     +IIF(@cCODELKUPUdf01 <> '',   ' AND EXISTS ( SELECT 1 FROM dbo.Orders O2 (NOLOCK) 
-                                 WHERE EXISTS( SELECT 1 FROM dbo.PickDetail PD2 WITH(NOLOCK) WHERE PD2.CaseID = @cTrackNo AND O2.ORDERKEY = PD2.ORDERKEY)
-                                 AND ISNULL(O2.'+@cCODELKUPUdf01+','''') = ISNULL(O.'+@cCODELKUPUdf01+','''')
-                              )', '')
-                     +IIF(@cCODELKUPUdf02 <> '',   ' AND EXISTS ( SELECT 1 FROM dbo.Orders O2 (NOLOCK) 
-                                 WHERE EXISTS( SELECT 1 FROM dbo.PickDetail PD2 WITH(NOLOCK) WHERE PD2.CaseID = @cTrackNo AND O2.ORDERKEY = PD2.ORDERKEY)
-                                 AND ISNULL(O2.'+@cCODELKUPUdf02+','''') = ISNULL(O.'+@cCODELKUPUdf02+','''')
-                              )', '')
-                     +IIF(@cCODELKUPUdf03 <> '',   ' AND EXISTS ( SELECT 1 FROM dbo.Orders O2 (NOLOCK) 
-                                 WHERE EXISTS( SELECT 1 FROM dbo.PickDetail PD2 WITH(NOLOCK) WHERE PD2.CaseID = @cTrackNo AND O2.ORDERKEY = PD2.ORDERKEY)
-                                 AND ISNULL(O2.'+@cCODELKUPUdf03+','''') = ISNULL(O.'+@cCODELKUPUdf03+','''')
-                              )', '')
-                     +IIF(@cCODELKUPUdf04 <> '',   ' AND EXISTS ( SELECT 1 FROM dbo.Orders O2 (NOLOCK) 
-                                 WHERE EXISTS( SELECT 1 FROM dbo.PickDetail PD2 WITH(NOLOCK) WHERE PD2.CaseID = @cTrackNo AND O2.ORDERKEY = PD2.ORDERKEY)
-                                 AND ISNULL(O2.'+@cCODELKUPUdf04+','''') = ISNULL(O.'+@cCODELKUPUdf04+','''')
-                              )', '')
-                     +IIF(@cCODELKUPUdf05 <> '',   ' AND EXISTS ( SELECT 1 FROM dbo.Orders O2 (NOLOCK) 
-                                 WHERE EXISTS( SELECT 1 FROM dbo.PickDetail PD2 WITH(NOLOCK) WHERE PD2.CaseID = @cTrackNo AND O2.ORDERKEY = PD2.ORDERKEY)
-                                 AND ISNULL(O2.'+@cCODELKUPUdf05+','''') = ISNULL(O.'+@cCODELKUPUdf05+','''')
-                              )', '')
-                     +' AND NOT EXISTS (SELECT 1 FROM dbo.PalletDetail PD2 WITH(NOLOCK) 
-                                    WHERE EXISTS (SELECT 1 FROM ORDERS O2 WITH(NOLOCK)
-                                       WHERE EXISTS(SELECT 1 FROM PickDetail PD3 WITH(NOLOCK) WHERE PD3.CaseID = @cTrackNo AND PD3.ORDERKEY = O2.ORDERKEY)
-                                       AND O2.MBOLKey = PD2.UserDefine01
-                                    ) 
-                                    AND PD2.CaseID = PD.CaseID)'
-                  SET @cSQLParam =  '@cTrackNo NVARCHAR(40), @cCaseID NVARCHAR(20) OUTPUT'
+                     'WITH FilteredOrders AS (
+                        SELECT '
+                        +IIF(@cCODELKUPUdf01 <> '',   'O2.'+@cCODELKUPUdf01+', ','')
+                        +IIF(@cCODELKUPUdf02 <> '',   'O2.'+@cCODELKUPUdf02+', ','')
+                        +IIF(@cCODELKUPUdf03 <> '',   'O2.'+@cCODELKUPUdf03+', ','')
+                        +IIF(@cCODELKUPUdf04 <> '',   'O2.'+@cCODELKUPUdf04+', ','')
+                        +IIF(@cCODELKUPUdf05 <> '',   'O2.'+@cCODELKUPUdf05+', ','')
+                     +' O2.ORDERKEY
+                        FROM
+                           dbo.Orders O2 WITH (NOLOCK)
+                        JOIN dbo.PickDetail PD2 WITH (NOLOCK) ON PD2.ORDERKEY = O2.ORDERKEY AND O2.StorerKey = PD2.StorerKey
+                        WHERE
+                           PD2.CaseID = @cTrackNo
+                           AND O2.StorerKey = @cStorerKey
+                     ),
+                     FilteredPalletDetail AS (
+                        SELECT
+                           PD2.CaseID,
+                           PD2.UserDefine01
+                        FROM
+                           dbo.PalletDetail PD2 WITH (NOLOCK)
+                        WHERE
+                           EXISTS (
+                                 SELECT 1
+                                 FROM dbo.Orders O2 WITH (NOLOCK)
+                                 JOIN dbo.PickDetail PD3 WITH (NOLOCK) ON PD3.ORDERKEY = O2.ORDERKEY AND O2.StorerKey = PD3.StorerKey
+                                 WHERE
+                                    PD3.CaseID = @cTrackNo
+                                    AND O2.MBOLKey = PD2.UserDefine01
+                                    AND O2.StorerKey = @cStorerKey
+                           )
+                           AND PD2.StorerKey = @cStorerKey
+                     )
+                     SELECT DISTINCT
+                        @cCaseID = PD.caseid
+                     FROM
+                        dbo.PickDetail PD WITH (NOLOCK)
+                     JOIN
+                        dbo.Orders O WITH (NOLOCK) ON PD.orderkey = O.orderkey AND PD.StorerKey = O.StorerKey
+                     WHERE
+                     PD.StorerKey = @cStorerKey
+                     AND NOT EXISTS (
+                           SELECT 1
+                           FROM FilteredPalletDetail FPD
+                           WHERE FPD.CaseID = PD.CaseID
+                        ) '
+                     +IIF(@cCODELKUPUdf01 <> '',   ' AND EXISTS ( SELECT 1 FROM FilteredOrders FO WHERE ISNULL(FO.'+@cCODELKUPUdf01+','''') = ISNULL(O.'+@cCODELKUPUdf01+',''''))', '')
+                     +IIF(@cCODELKUPUdf02 <> '',   ' AND EXISTS ( SELECT 1 FROM FilteredOrders FO WHERE ISNULL(FO.'+@cCODELKUPUdf02+','''') = ISNULL(O.'+@cCODELKUPUdf02+',''''))', '')
+                     +IIF(@cCODELKUPUdf03 <> '',   ' AND EXISTS ( SELECT 1 FROM FilteredOrders FO WHERE ISNULL(FO.'+@cCODELKUPUdf03+','''') = ISNULL(O.'+@cCODELKUPUdf03+',''''))', '')
+                     +IIF(@cCODELKUPUdf04 <> '',   ' AND EXISTS ( SELECT 1 FROM FilteredOrders FO WHERE ISNULL(FO.'+@cCODELKUPUdf04+','''') = ISNULL(O.'+@cCODELKUPUdf04+',''''))', '')
+                     +IIF(@cCODELKUPUdf05 <> '',   ' AND EXISTS ( SELECT 1 FROM FilteredOrders FO WHERE ISNULL(FO.'+@cCODELKUPUdf05+','''') = ISNULL(O.'+@cCODELKUPUdf05+',''''))', '')
+
+                  SET @cSQLParam =  '@cStorerKey NVARCHAR( 15), @cTrackNo NVARCHAR(40), @cCaseID NVARCHAR(20) OUTPUT'
                   EXEC sp_executesql @cSQLString, @cSQLParam, 
-                     @cTrackNo = @cTrackNo, @cCaseID = @cCaseID OUTPUT
+                     @cStorerKey = @cStorerKey, @cTrackNo = @cTrackNo, @cCaseID = @cCaseID OUTPUT
                   SET @nRowCount = @@ROWCOUNT
                   IF @nRowCount = 1 AND @cCaseID = @cTrackNo
                      SET @cOutField14 = 'LAST CARTON'
@@ -517,7 +552,9 @@ BEGIN
 
                   SELECT TOP 1 @cPalletKey = PalletKey 
                   FROM dbo.PalletDetail WITH(NOLOCK)
-                  WHERE ISNULL(CaseID, '') = @cLabelNo
+                  WHERE CaseID IS NOT NULL
+                     AND CaseID = @cLabelNo
+                     AND StorerKey = @cStorerKey
 
                   IF @nTranCount = 0
                   BEGIN
@@ -532,11 +569,14 @@ BEGIN
                      --Remove PalletDetails
                      DELETE FROM dbo.PalletDetail
                      WHERE PalletKey = @cPalletKey
-                        AND ISNULL(CaseID, '') = @cLabelNo
+                     AND CaseID IS NOT NULL
+                     AND CaseID = @cLabelNo
+                     AND StorerKey = @cStorerKey
 
                      SELECT @nRowCount = COUNT(1) 
                      FROM dbo.PalletDetail WITH(NOLOCK)
                      WHERE PalletKey = @cPalletKey
+                     AND StorerKey = @cStorerKey
 
                      --If no detail, need remove the Pallet Header
                      IF @nRowCount = 0
