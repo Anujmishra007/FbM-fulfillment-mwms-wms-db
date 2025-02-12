@@ -21,6 +21,7 @@ GO
 /* 2024-12-17  1.6.0 Dennis   FCR-1446 Insert Trans Log if fully packed  */
 /* 2025-01-06  1.7.0 NLT013  FCR-1445 Print PDF once an order is finished*/
 /* 2025-01-29  1.7.1 Dennis  FCR-1445 Move Printing Label behind commit */
+/* 2025-02-12  1.8.0 NLT013  UWP-30206 Order cannot be shipped          */
 /************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdt_842ExtUpdSP08] (
    @nMobile        INT,
@@ -1701,7 +1702,10 @@ BEGIN
             FROM RDT.rdtECOMMLog ECL WITH (NOLOCK)
             INNER JOIN PICKHEADER PH WITH (NOLOCK) ON PH.OrderKey = ECL.OrderKey
             INNER JOIN PackDetail PD WITH (NOLOCK) ON PD.PickSlipNo = PH.PickHeaderKey
+            INNER JOIN dbo.ORDERS ORM WITH(NOLOCK) ON PH.OrderKey = ORM.OrderKey AND PH.StorerKey = ORM.StorerKey 
             WHERE ECL.STATUS = '9' AND ECL.ToTeNo = @cDropID AND ECL.Mobile = @nMobile
+               AND ORM.StorerKey = @cStorerKey
+               AND ORM.Status < '9'
 
             SET @nLoopIndex = -1
             WHILE 1 = 1
@@ -2057,7 +2061,9 @@ Quit:
             INSERT INTO @tOrders(OrderKey)
             SELECT DISTINCT ECL.OrderKey
             FROM RDT.rdtECOMMLog ECL WITH (NOLOCK)
+            INNER JOIN dbo.ORDERS ORM WITH(NOLOCK) ON ECL.OrderKey = ORM.OrderKey AND ORM.StorerKey = @cStorerKey
             WHERE ECL.STATUS = '9' AND ECL.ToTeNo = @cDropID AND ECL.Mobile = @nMobile
+              AND ORM.Status < '9'
 
             SET @nLoopIndex = -1
             WHILE 1 = 1
