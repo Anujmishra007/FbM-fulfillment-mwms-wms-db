@@ -51,6 +51,7 @@ BEGIN
       AND RSN.SerialNo = SN.SerialNo
    WHERE SN.StorerKey = @cStorerKey
       AND SN.Status NOT IN ('0', '9')
+      AND SN.SerialNo = @cSerialNo
       AND RSN.ReceiptKey <> @cReceiptKey
 
    IF @nRowCount > 0
