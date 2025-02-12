@@ -2,10 +2,11 @@
 /******************************************************************************/
 /* Store procedure: rdt_598ExtUpd06                                           */
 /* Copyright: Maersk                                                          */
-/* Customer:  Barry                                                           */
+/* Customer:  Barry Callebaut                                                 */
 /*                                                                            */
-/* Date         Author    Ver.  Purposes                                      */
-/* 16-7-2024    Bruce     1.0   UWP-26490 Created                             */
+/* Date         Author    Ver.    Purposes                                    */
+/* 2024-07-16   PYU015    1.0.0   UWP-26490 Created                           */
+/* 2024-12-12   PYU015    1.1.0   UWP-28366 Merge code                        */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_598ExtUpd06] (
@@ -63,13 +64,13 @@ BEGIN
 
             SELECT @cBatchPrefixNotU = Short
             FROM dbo.CODELKUP WITH(NOLOCK)
-            WHERE LISTNAME = 'RPTREASON'
+             WHERE LISTNAME = 'RPTREASON'
                AND Storerkey = @cStorerKey
                AND code = 'BatchPrefixNotU'
 
             SELECT @cBatchPrefixU = Short
             FROM dbo.CODELKUP WITH(NOLOCK)
-            WHERE LISTNAME = 'RPTREASON'
+             WHERE LISTNAME = 'RPTREASON'
                AND Storerkey = @cStorerKey
                AND code = 'BatchPrefixU'
 
@@ -85,61 +86,62 @@ BEGIN
 
             UPDATE dbo.RECEIPTDETAIL WITH(ROWLOCK)
                SET ConditionCode = CASE WHEN substring(Lottable01,1,1) = 'U' THEN @cBatchPrefixU ELSE @cBatchPrefixNotU END
-            WHERE StorerKey = @cStorerKey
+             WHERE StorerKey = @cStorerKey
                AND ReceiptKey = @cReceiptKey
                AND ToId = @cID
 
 
             SELECT @cOption = Code 
             FROM dbo.CODELKUP WITH(NOLOCK)
-            WHERE Storerkey = @cStorerKey
+             WHERE Storerkey = @cStorerKey
                AND LISTNAME = 'RDTLBLRPT'
                AND code2 = 'FULLLPWGT' 
 
             -- Print label
             EXEC RDT.rdt_593PrintHK01
-               @nMobile    ,
-               @nFunc      ,
-               @nStep      ,
-               @cLangCode  ,
-               @cStorerKey ,
-               @cOption    ,
-               @cReceiptKey,
-               @cID        ,
-               ''          ,
-               ''          ,
-               ''          ,
-               @nErrNo     OUTPUT,
-               @cErrMsg    OUTPUT
+                @nMobile    ,
+                @nFunc      ,
+                @nStep      ,
+                @cLangCode  ,
+                @cStorerKey ,
+                @cOption    ,
+                @cReceiptKey,
+                @cID        ,
+                ''          ,
+                ''          ,
+                ''          ,
+                @nErrNo     OUTPUT,
+                @cErrMsg    OUTPUT
             IF @nErrNo <> 0
                GOTO Quit
 
-
+            /*
             IF ISNULL(@cLottable08,'0') != '0'  AND ISNULL(@cLottable09,'0') != '0'
             BEGIN
-               SELECT @cOption = Code 
-               FROM dbo.CODELKUP WITH(NOLOCK)
-               WHERE Storerkey = @cStorerKey
-                  AND LISTNAME = 'RDTLBLRPT'
-                  AND code2 = 'SWEEPINGBAG' 
+                SELECT @cOption = Code 
+                  FROM CODELKUP with(nolock)
+                 WHERE Storerkey = @cStorerKey
+                   AND LISTNAME = 'RDTLBLRPT'
+                   AND code2 = 'SWEEPINGBAG' 
 
                EXEC RDT.rdt_593PrintHK01
-                  @nMobile    ,
-                  @nFunc      ,
-                  @nStep      ,
-                  @cLangCode  ,
-                  @cStorerKey ,
-                  @cOption    ,
-                  @cReceiptKey,
-                  ''          ,
-                  ''          ,
-                  ''          ,
-                  ''          ,
-                  @nErrNo     OUTPUT,
-                  @cErrMsg    OUTPUT
-               IF @nErrNo <> 0
-                  GOTO Quit
+                    @nMobile    ,
+                    @nFunc      ,
+                    @nStep      ,
+                    @cLangCode  ,
+                    @cStorerKey ,
+                    @cOption    ,
+                    @cReceiptKey,
+                    ''          ,
+                    ''          ,
+                    ''          ,
+                    ''          ,
+                    @nErrNo     OUTPUT,
+                    @cErrMsg    OUTPUT
+                IF @nErrNo <> 0
+                   GOTO Quit
             END
+            */
          END
       END
    END

@@ -1,6 +1,3 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE Id = OBJECT_ID(N'[dbo].[isp_CCPostingByAdjustment_UCC]') AND OBJECTPROPERTY(Id, N'IsProcedure') = 1)
-   DROP PROCEDURE dbo.isp_CCPostingByAdjustment_UCC
-GO
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -40,9 +37,15 @@ GO
 /* 07-May-2014 1.9  TKLIM       Added Lottables 06-15                   */
 /* 12-Oct-2015 2.0  Leong       SOS# 354719 - Bug fix.                  */
 /* 07-Feb-2018 2.1  SWT02       Adding Paramater Variable to Calling SP */
+/* 22-Nov-2023 2.2  NJOW01      WMS-23053 Move adj qty to other loc     */
+/*                              before adj                              */
+/* 22-Nov-2023 2.2  NJOW01      DEVOPS Combine Script                   */
+/* 22-JAN-2024 2.3  NJOW02      WMS-24558 Add post CC adjustment call   */
+/*                              custom sp                               */
+/* 20-Dec-2024 2.4  CLVN01      FCR-2118 Skip DuplicateUCC Checking     */
 /************************************************************************/
 
-CREATE PROCEDURE [dbo].[isp_CCPostingByAdjustment_UCC]
+CREATE or ALTER PROCEDURE [dbo].[isp_CCPostingByAdjustment_UCC]
    @c_CCKey    NVARCHAR(10),
    @b_success  INT  OUTPUT,
    @c_TaskDetailKey NVARCHAR(10) = ''   -- From RDT
@@ -105,8 +108,15 @@ BEGIN -- main
       @c_PackUOM3       NVARCHAR(10),
       @cUserDefine01    NVARCHAR(20),
       @cUserDefine02    NVARCHAR(20),
-      @cUserDefine03    NVARCHAR(20)
-
+      @cUserDefine03    NVARCHAR(20),
+      @c_CCMoveAdjQtyToLoc  NVARCHAR(10)='', --NJOW01
+      @c_Hostwhcode_UDF01   NVARCHAR(10)='', --NJOW01
+      @n_MoveQty            INT, --NJOW01
+      @n_AdjQty             INT, --NJOW01
+      @c_FinalAdjustmentKey NVARCHAR(10), --NJOW01
+      @c_AdjLoc             NVARCHAR(10), --NJOW01
+      @c_CCAdjPostByUCCNoCheckDup NVARCHAR(30) --(CLVN01)
+      
    SET @b_success = 1 -- 1=Success
    SELECT @n_starttCnt = @@TRANCOUNT
 
@@ -325,7 +335,16 @@ BEGIN -- main
       , EditDate
    FROM LOTxLOCxID WITH (NOLOCK)
    WHERE EXISTS (SELECT TOP 1 1 FROM CCDetail WITH (NOLOCK) WHERE CCKey = @c_CCKey AND CCDetail.LOC = LOTxLOCxID.LOC)
-
+   
+   --NJOW01
+   SELECT TOP 1 @c_CCMoveAdjQtyToLoc = LOC.Loc,
+                @c_Hostwhcode_UDF01 = CL.UDF01
+   FROM STOCKTAKESHEETPARAMETERS SP (NOLOCK)
+   JOIN CODELKUP CL (NOLOCK) ON SP.StorerKey = CL.Storerkey   --not support stock take with multiple storer  
+   JOIN LOC (NOLOCK) ON CL.Code = LOC.Loc
+   WHERE SP.StockTakeKey = @c_CCKey
+   AND CL.ListName = 'CCADJMVLOC'
+   
    DECLARE @n_IsRDT Int
    EXECUTE RDT.rdtIsRDT @n_IsRDT OUTPUT
 --set @n_IsRDT = 1
@@ -336,6 +355,7 @@ BEGIN -- main
    BEGIN
       -- Get FinalizeStage, AdjustmentType and ReasonCode
       SELECT
+      	 @c_StorerKey = Storerkey, --(CLVN01)
          @n_FinalizeStage = FinalizeStage,
          @c_AdjType       = AdjType,
          @c_AdjReasonCode = AdjReasonCode
@@ -345,62 +365,85 @@ BEGIN -- main
       -- Clean up error report
       DELETE dbo.StockTakeErrorReport WITH (ROWLOCK) WHERE StockTakeKey = @c_CCKey
 
+      --(CLVN01) CHECK DUPLICATE UCC CONFIG (START)--
+	  BEGIN TRY  
+      EXEC nspGetRight  
+           @c_Facility  = ''  
+         , @c_StorerKey = @c_StorerKey  
+         , @c_sku       = NULL  
+         , @c_ConfigKey = 'UCC_CC_Adj_Post_NoCheckDupUCC'  
+         , @b_Success   = @b_Success                  OUTPUT  
+         , @c_authority = @c_CCAdjPostByUCCNoCheckDup OUTPUT  
+         , @n_err       = @n_err                      OUTPUT  
+         , @c_errmsg    = @c_errmsg                   OUTPUT  
+      END TRY  
+      BEGIN CATCH  
+         SET @n_err = 552954  
+         SET @c_ErrMsg = ERROR_MESSAGE()  
+         SET @c_ErrMsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': Error Executing nspGetRight - UCC_CC_Adj_Post_NoCheckDupUCC. (lsp_PostCCByUCC_Wrapper)'  
+                       + '( ' + @c_errmsg + ' )'  
+      END CATCH
+
+      IF @c_CCAdjPostByUCCNoCheckDup = '0'
+	  BEGIN
       -- Check duplicte UCC
-      DECLARE @cTitlePrinted NVARCHAR(1)
-      DECLARE @cDupUCCNo NVARCHAR( 20)
-      DECLARE @curDupUCC CURSOR
-      SET @cTitlePrinted = 'N'
-      SET @curDupUCC = CURSOR FOR
-         SELECT RefNo
-         FROM dbo.CCDetail WITH (NOLOCK)
-         WHERE CCKey = @c_CCKey
-            AND RefNo <> ''
-            AND Status IN ('2', '4')
-         GROUP BY RefNo
-         HAVING COUNT( DISTINCT Status) > 1
-      OPEN @curDupUCC
-      FETCH NEXT FROM @curDupUCC INTO @cDupUCCNo
-      WHILE @@FETCH_STATUS = 0
-      BEGIN
-         IF @cTitlePrinted = 'N'
-            --(Wan03) - START
-            AND EXISTS (SELECT 1
-                        FROM dbo.CCDetail DUP WITH (NOLOCK)
-                        WHERE DUP.CCKey = @c_CCKey
-                        AND DUP.RefNo = @cDupUCCNo
-                        GROUP BY DUP.Storerkey
-                              ,  DUP.Sku
-                        HAVING COUNT(DISTINCT DUP.Status) > 1)
-            --(Wan03) - END
-         BEGIN
-            INSERT INTO dbo.StockTakeErrorReport (StockTakeKey, ErrorNo, Type, LineText) VALUES (@c_CCKey, '', 'ERROR', REPLICATE( '-', 80))
-            INSERT INTO dbo.StockTakeErrorReport (StockTakeKey, ErrorNo, Type, LineText) VALUES (@c_CCKey, '', 'ERROR', 'DUPLICATE UCC: ' + @cDupUCCNo)
-            INSERT INTO dbo.StockTakeErrorReport (StockTakeKey, ErrorNo, Type, LineText) VALUES (@c_CCKey, '', 'ERROR', 'CCDETAILKEY  LOC         SKU')
-            INSERT INTO dbo.StockTakeErrorReport (StockTakeKey, ErrorNo, Type, LineText) VALUES (@c_CCKey, '', 'ERROR', '-----------  ----------  --------------------')
-            SET @cTitlePrinted = 'Y'
-         END
-
-         INSERT INTO dbo.StockTakeErrorReport (StockTakeKey, ErrorNo, Type, LineText)
-         SELECT @c_CCKey, '', 'ERROR', CCDetailKey + '  ' + LOC + '  ' + SKU
-         FROM dbo.CCDetail WITH (NOLOCK)
-         WHERE CCKey = @c_CCKey
-            AND RefNo = @cDupUCCNo
-            --(Wan01) - START
-            AND EXISTS (SELECT 1
-                        FROM dbo.CCDetail DUP WITH (NOLOCK)
-                        WHERE DUP.CCKey = CCDetail.CCKey
-             AND DUP.RefNo = CCDetail.RefNo
-                        AND DUP.Sku   = CCDetail.Sku
-                        GROUP BY DUP.Storerkey
-                              ,  DUP.Sku
-                        HAVING COUNT(DISTINCT DUP.Status) > 1)
-            --(Wan01) - END
-         FETCH NEXT FROM @curDupUCC INTO @cDupUCCNo
+        DECLARE @cTitlePrinted NVARCHAR(1)
+        DECLARE @cDupUCCNo NVARCHAR( 20)
+        DECLARE @curDupUCC CURSOR
+        SET @cTitlePrinted = 'N'
+        SET @curDupUCC = CURSOR FOR
+           SELECT RefNo
+           FROM dbo.CCDetail WITH (NOLOCK)
+           WHERE CCKey = @c_CCKey
+              AND RefNo <> ''
+              AND Status IN ('2', '4')
+           GROUP BY RefNo
+           HAVING COUNT( DISTINCT Status) > 1
+        OPEN @curDupUCC
+        FETCH NEXT FROM @curDupUCC INTO @cDupUCCNo
+        WHILE @@FETCH_STATUS = 0
+        BEGIN
+           IF @cTitlePrinted = 'N'
+              --(Wan03) - START
+              AND EXISTS (SELECT 1
+                          FROM dbo.CCDetail DUP WITH (NOLOCK)
+                          WHERE DUP.CCKey = @c_CCKey
+                          AND DUP.RefNo = @cDupUCCNo
+                          GROUP BY DUP.Storerkey
+                                ,  DUP.Sku
+                          HAVING COUNT(DISTINCT DUP.Status) > 1)
+              --(Wan03) - END
+           BEGIN
+              INSERT INTO dbo.StockTakeErrorReport (StockTakeKey, ErrorNo, Type, LineText) VALUES (@c_CCKey, '', 'ERROR', REPLICATE( '-', 80))
+              INSERT INTO dbo.StockTakeErrorReport (StockTakeKey, ErrorNo, Type, LineText) VALUES (@c_CCKey, '', 'ERROR', 'DUPLICATE UCC: ' + @cDupUCCNo)
+              INSERT INTO dbo.StockTakeErrorReport (StockTakeKey, ErrorNo, Type, LineText) VALUES (@c_CCKey, '', 'ERROR', 'CCDETAILKEY  LOC         SKU')
+              INSERT INTO dbo.StockTakeErrorReport (StockTakeKey, ErrorNo, Type, LineText) VALUES (@c_CCKey, '', 'ERROR', '-----------  ----------  --------------------')
+              SET @cTitlePrinted = 'Y'
+           END
+        
+           INSERT INTO dbo.StockTakeErrorReport (StockTakeKey, ErrorNo, Type, LineText)
+           SELECT @c_CCKey, '', 'ERROR', CCDetailKey + '  ' + LOC + '  ' + SKU
+           FROM dbo.CCDetail WITH (NOLOCK)
+           WHERE CCKey = @c_CCKey
+              AND RefNo = @cDupUCCNo
+              --(Wan01) - START
+              AND EXISTS (SELECT 1
+                          FROM dbo.CCDetail DUP WITH (NOLOCK)
+                          WHERE DUP.CCKey = CCDetail.CCKey
+               AND DUP.RefNo = CCDetail.RefNo
+                          AND DUP.Sku   = CCDetail.Sku
+                          GROUP BY DUP.Storerkey
+                                ,  DUP.Sku
+                          HAVING COUNT(DISTINCT DUP.Status) > 1)
+              --(Wan01) - END
+           FETCH NEXT FROM @curDupUCC INTO @cDupUCCNo
+        END
+        
+        -- Check any error in report
+        IF EXISTS( SELECT TOP 1 1 FROM dbo.StockTakeErrorReport WITH (NOLOCK) WHERE StockTakeKey = @c_CCKey)
+           RETURN
       END
-
-      -- Check any error in report
-      IF EXISTS( SELECT TOP 1 1 FROM dbo.StockTakeErrorReport WITH (NOLOCK) WHERE StockTakeKey = @c_CCKey)
-         RETURN
+      --(CLVN01) CHECK DUPLICATE UCC CONFIG (END)--
    END
 
 
@@ -593,10 +636,98 @@ BEGIN -- main
             END
          END
       END
-
+       
+      --NJOW01 S 
+      SELECT @c_FinalAdjustmentKey = CASE WHEN @c_UCC = '' THEN @c_AdjustmentKey ELSE @c_UCCAdjustmentKey END 
+      SELECT @c_AdjLoc = @c_Loc
+      
+      SELECT @c_PackKey = p.PackKey,    
+             @c_PackUOM3 = p.PackUOM3    --Move from below
+      FROM SKU s WITH (NOLOCK)
+      JOIN PACK p WITH (NOLOCK) ON p.PACKKey = s.PACKKey
+      WHERE s.StorerKey = @c_StorerKey
+      AND   s.Sku = @c_SKU      
+      --NJOW01 E
+      
       -- Not counted, need to adjust out
       IF @c_Status = '0'
       BEGIN
+         --NJOW01 S
+         SET @n_AdjQty = @n_SystemQty * -1
+         
+         IF ISNULL(@c_CCMoveAdjQtyToLoc,'') <> ''
+         BEGIN
+            IF EXISTS(SELECT 1
+                      FROM LOC (NOLOCK)
+                      WHERE LOC = @c_Loc
+                      AND (HostWhCode = @c_Hostwhcode_UDF01
+                        OR ISNULL(@c_Hostwhcode_UDF01,'') = '')
+                      )
+               AND @n_AdjQty < 0
+            BEGIN
+            	 SET @n_MoveQty = ABS(@n_AdjQty)
+               EXEC nspItrnAddMove
+                   @n_ItrnSysId =null,
+                   @c_StorerKey = @c_StorerKey,
+                   @c_Sku = @c_Sku,
+                   @c_Lot = @c_Lot,
+                   @c_FromLoc = @c_Loc,
+                   @c_FromID = @c_ID,
+                   @c_ToLoc = @c_CCMoveAdjQtyToLoc,
+                   @c_ToID = @c_ID,
+                   @c_Status ='0',
+                   @c_lottable01 ='',
+                   @c_lottable02 ='',
+                   @c_lottable03 ='',
+                   @d_lottable04 =null,
+                   @d_lottable05 =null,
+                   @c_lottable06 ='',
+                   @c_lottable07 ='',
+                   @c_lottable08 ='',
+                   @c_lottable09 ='',
+                   @c_lottable10 ='',
+                   @c_lottable11 ='',
+                   @c_lottable12 ='',
+                   @d_lottable13 =null,
+                   @d_lottable14 =null,
+                   @d_lottable15 =null,
+                   @n_casecnt =0,
+                   @n_innerpack =0,
+                   @n_qty = @n_MoveQty,
+                   @n_pallet =0,
+                   @f_cube =0,
+                   @f_grosswgt =0,
+                   @f_netwgt =0,
+                   @f_otherunit1 =0,
+                   @f_otherunit2 =0,
+                   @c_SourceKey = @c_FinalAdjustmentKey,
+                   @c_SourceType = 'isp_CCPostingByAdjustment_UCC',
+                   @c_PackKey = @c_PackKey,
+                   @c_UOM = @c_PackUOM3,
+                   @b_UOMCalc =null, 
+                   @d_EffectiveDate =null,
+                   @c_itrnkey =null,
+                   @b_Success = @b_Success OUTPUT,
+                   @n_err = @n_Err OUTPUT,
+                   @c_errmsg = @c_ErrMsg OUTPUT,
+                   @c_MoveRefKey =null,
+                   @c_Channel =null,
+                   @n_Channel_ID =null
+               
+               IF @b_Success <> 1
+               BEGIN
+                  SELECT @n_continue = 3
+                  SELECT @n_err = 67104
+                  SELECT @c_errmsg = "NSQL" + CONVERT(Char(5), @n_err) + ": Failed to Move Adjustment Stock. (isp_CCPostingByAdjustment_UCC)" + " ( " + " SQLSvr MESSAGE=" + LTRIM(RTRIM(@c_errmsg)) + " ) "
+                  ROLLBACK TRAN
+                  BREAK               	  
+               END                
+               ELSE               
+                  SET @c_AdjLoc = @c_CCMoveAdjQtyToLoc
+            END            	 
+         END
+         --NJOW01 E               	
+      	
          -- Adjust LotxLocxID
          INSERT AdjustmentDetail
             (AdjustmentKey,       AdjustmentLineNumber,          ReasonCode,
@@ -605,7 +736,7 @@ BEGIN -- main
          SELECT
              CASE WHEN @c_UCC = '' THEN @c_AdjustmentKey ELSE @c_UCCAdjustmentKey END,       RIGHT(@c_CCDetailKey, 5),      @c_AdjReasonCode,
              @c_StorerKey,           @c_SKU,   S.PackKey,           PackUOM3,
-             -@n_SystemQty,          @c_LOC,   @c_LOT,              @c_ID,
+             -@n_SystemQty,          @c_AdjLOC,   @c_LOT,              @c_ID,
              @c_UCC,                 @c_CCDetailKey,                @c_UCC
          FROM  SKU S WITH (NOLOCK)
             INNER JOIN PACK P WITH (NOLOCK) ON S.PackKey = P.PackKey
@@ -638,6 +769,82 @@ BEGIN -- main
       BEGIN
          IF (@n_CntQty - @n_SystemQty) <> 0  -- QTY has variance
          BEGIN
+            --NJOW01 S
+            SET @n_AdjQty = @n_CntQty - @n_SystemQty
+            
+            IF ISNULL(@c_CCMoveAdjQtyToLoc,'') <> ''
+            BEGIN
+               IF EXISTS(SELECT 1
+                         FROM LOC (NOLOCK)
+                         WHERE LOC = @c_Loc
+                         AND (HostWhCode = @c_Hostwhcode_UDF01
+                           OR ISNULL(@c_Hostwhcode_UDF01,'') = '')
+                         )
+                  AND @n_AdjQty < 0
+               BEGIN
+               	  SET @n_MoveQty = ABS(@n_AdjQty)
+                  EXEC nspItrnAddMove
+                      @n_ItrnSysId =null,
+                      @c_StorerKey = @c_StorerKey,
+                      @c_Sku = @c_Sku,
+                      @c_Lot = @c_Lot,
+                      @c_FromLoc = @c_Loc,
+                      @c_FromID = @c_ID,
+                      @c_ToLoc = @c_CCMoveAdjQtyToLoc,
+                      @c_ToID = @c_ID,
+                      @c_Status ='0',
+                      @c_lottable01 ='',
+                      @c_lottable02 ='',
+                      @c_lottable03 ='',
+                      @d_lottable04 =null,
+                      @d_lottable05 =null,
+                      @c_lottable06 ='',
+                      @c_lottable07 ='',
+                      @c_lottable08 ='',
+                      @c_lottable09 ='',
+                      @c_lottable10 ='',
+                      @c_lottable11 ='',
+                      @c_lottable12 ='',
+                      @d_lottable13 =null,
+                      @d_lottable14 =null,
+                      @d_lottable15 =null,
+                      @n_casecnt =0,
+                      @n_innerpack =0,
+                      @n_qty = @n_MoveQty,
+                      @n_pallet =0,
+                      @f_cube =0,
+                      @f_grosswgt =0,
+                      @f_netwgt =0,
+                      @f_otherunit1 =0,
+                      @f_otherunit2 =0,
+                      @c_SourceKey = @c_FinalAdjustmentKey,
+                      @c_SourceType = 'isp_CCPostingByAdjustment_UCC',
+                      @c_PackKey = @c_PackKey,
+                      @c_UOM = @c_PackUOM3,
+                      @b_UOMCalc =null, 
+                      @d_EffectiveDate =null,
+                      @c_itrnkey =null,
+                      @b_Success = @b_Success OUTPUT,
+                      @n_err = @n_Err OUTPUT,
+                      @c_errmsg = @c_ErrMsg OUTPUT,
+                      @c_MoveRefKey =null,
+                      @c_Channel =null,
+                      @n_Channel_ID =null
+                  
+                  IF @b_Success <> 1
+                  BEGIN
+                     SELECT @n_continue = 3
+                     SELECT @n_err = 67105
+                     SELECT @c_errmsg = "NSQL" + CONVERT(Char(5), @n_err) + ": Failed to Move Adjustment Stock. (isp_CCPostingByAdjustment_UCC)" + " ( " + " SQLSvr MESSAGE=" + LTRIM(RTRIM(@c_errmsg)) + " ) "
+                     ROLLBACK TRAN
+                     BREAK               	  
+                  END                
+                  ELSE               
+                     SET @c_AdjLoc = @c_CCMoveAdjQtyToLoc
+               END            	 
+            END
+            --NJOW01 E               	
+         	
             -- Adjust LotxLocxID
             INSERT AdjustmentDetail
                (AdjustmentKey,       AdjustmentLineNumber,          ReasonCode,
@@ -646,7 +853,7 @@ BEGIN -- main
             SELECT
                 CASE WHEN @c_UCC = '' THEN @c_AdjustmentKey ELSE @c_UCCAdjustmentKey END,       RIGHT(@c_CCDetailKey, 5),      @c_AdjReasonCode,
                 @c_StorerKey,           @c_SKU,   S.PackKey,           PackUOM3,
-                @n_CntQty-@n_SystemQty, @c_LOC,   @c_LOT,              @c_ID,
+                @n_CntQty-@n_SystemQty, @c_AdjLOC,   @c_LOT,              @c_ID,
                 @c_UCC,                 @c_CCDetailKey,                @c_UCC
             FROM  SKU S WITH (NOLOCK)
                INNER JOIN PACK P WITH (NOLOCK) ON S.PackKey = P.PackKey
@@ -809,11 +1016,13 @@ BEGIN -- main
             WHERE CCKey = @c_CCKey
             AND   CCDetailKey = @c_CCDetailKey
 
+            /*
             SELECT @c_PackKey = p.PackKey
             FROM SKU s WITH (NOLOCK)
             JOIN PACK p WITH (NOLOCK) ON p.PACKKey = s.PACKKey
             WHERE s.StorerKey = @c_StorerKey
             AND   s.Sku = @c_SKU
+            */
 
             -- Insert a dummy deposit to create inventory record
             SELECT @c_SourceKey = @c_CCKey + @c_CCDetailKey
@@ -934,7 +1143,84 @@ BEGIN -- main
                         AND   LOC = @c_OldLOC
                         AND   ID  = @c_OldID
                         AND   Qty > 0 )
-            BEGIN
+            BEGIN            	
+               --NJOW01 S
+               SET @n_AdjQty = @n_OldQty * -1
+               SET @c_AdjLoc = @c_OldLoc
+               
+               IF ISNULL(@c_CCMoveAdjQtyToLoc,'') <> ''
+               BEGIN
+                  IF EXISTS(SELECT 1
+                            FROM LOC (NOLOCK)
+                            WHERE LOC = @c_Loc
+                            AND (HostWhCode = @c_Hostwhcode_UDF01
+                              OR ISNULL(@c_Hostwhcode_UDF01,'') = '')
+                            )
+                     AND @n_AdjQty < 0
+                  BEGIN
+                  	 SET @n_MoveQty = ABS(@n_AdjQty)
+                     EXEC nspItrnAddMove
+                         @n_ItrnSysId =null,
+                         @c_StorerKey = @c_StorerKey,
+                         @c_Sku = @c_OldSku,
+                         @c_Lot = @c_OldLot,
+                         @c_FromLoc = @c_OldLoc,
+                         @c_FromID = @c_OldID,
+                         @c_ToLoc = @c_CCMoveAdjQtyToLoc,
+                         @c_ToID = @c_OldID,
+                         @c_Status ='0',
+                         @c_lottable01 ='',
+                         @c_lottable02 ='',
+                         @c_lottable03 ='',
+                         @d_lottable04 =null,
+                         @d_lottable05 =null,
+                         @c_lottable06 ='',
+                         @c_lottable07 ='',
+                         @c_lottable08 ='',
+                         @c_lottable09 ='',
+                         @c_lottable10 ='',
+                         @c_lottable11 ='',
+                         @c_lottable12 ='',
+                         @d_lottable13 =null,
+                         @d_lottable14 =null,
+                         @d_lottable15 =null,
+                         @n_casecnt =0,
+                         @n_innerpack =0,
+                         @n_qty = @n_MoveQty,
+                         @n_pallet =0,
+                         @f_cube =0,
+                         @f_grosswgt =0,
+                         @f_netwgt =0,
+                         @f_otherunit1 =0,
+                         @f_otherunit2 =0,
+                         @c_SourceKey = @c_FinalAdjustmentKey,
+                         @c_SourceType = 'isp_CCPostingByAdjustment_UCC',
+                         @c_PackKey = @c_PackKey,
+                         @c_UOM = @c_PackUOM3,
+                         @b_UOMCalc =null, 
+                         @d_EffectiveDate =null,
+                         @c_itrnkey =null,
+                         @b_Success = @b_Success OUTPUT,
+                         @n_err = @n_Err OUTPUT,
+                         @c_errmsg = @c_ErrMsg OUTPUT,
+                         @c_MoveRefKey =null,
+                         @c_Channel =null,
+                         @n_Channel_ID =null
+                     
+                     IF @b_Success <> 1
+                     BEGIN
+                        SELECT @n_continue = 3
+                        SELECT @n_err = 67106
+                        SELECT @c_errmsg = "NSQL" + CONVERT(Char(5), @n_err) + ": Failed to Move Adjustment Stock. (isp_CCPostingByAdjustment_UCC)" + " ( " + " SQLSvr MESSAGE=" + LTRIM(RTRIM(@c_errmsg)) + " ) "
+                        ROLLBACK TRAN
+                        BREAK               	  
+                     END                
+                     ELSE               
+                        SET @c_AdjLoc = @c_CCMoveAdjQtyToLoc
+                  END            	 
+               END
+               --NJOW01 E         
+                        	
                -- Insert AdjustmentDetail
                INSERT INTO ADJUSTMENTDETAIL
                   (AdjustmentKey,       AdjustmentLineNumber,           ReasonCode,
@@ -944,7 +1230,7 @@ BEGIN -- main
                SELECT
                    CASE WHEN @c_UCC = '' THEN @c_AdjustmentKey ELSE @c_UCCAdjustmentKey END,    'D'+RIGHT(@c_CCDetailKey, 4),   @c_AdjReasonCode,
                    @c_StorerKey,        @c_OldSKU,   S.PackKey, PackUOM3, @n_OldQty * -1,
-                   @c_OldLOC,           @c_OldLOT,   @c_OldID,  @c_UCC,   @c_CCDetailKey , @c_UCC       -- (james01)
+                   @c_AdjLOC,           @c_OldLOT,   @c_OldID,  @c_UCC,   @c_CCDetailKey , @c_UCC       -- (james01)
                FROM  SKU S WITH (NOLOCK)
                INNER JOIN PACK P WITH (NOLOCK) ON S.PackKey = P.PackKey
                WHERE S.StorerKey = @c_StorerKey
@@ -1005,7 +1291,12 @@ BEGIN -- main
          IF @c_UCC > ''
          BEGIN
             -- Recalc again the CntQty for status '4' (same ucc) as it might contain split line
-            SELECT @n_CntQty = ISNULL(SUM( Qty), 0)
+            --SELECT @n_CntQty = ISNULL(SUM( Qty), 0)            
+            SELECT SUM(CASE @n_FinalizeStage
+                          WHEN 1 THEN ISNULL(Qty,0)
+                          WHEN 2 THEN ISNULL(Qty_Cnt2,0)
+                          WHEN 3 THEN ISNULL(Qty_Cnt3,0)
+                       END)            --NJOW01
             FROM dbo.CCDetail WITH (NOLOCK)
             WHERE CCKey = @c_CCKey
             AND   Refno = @c_UCC
@@ -1068,6 +1359,14 @@ BEGIN -- main
 
    CLOSE CCDET_CUR
    DEALLOCATE CCDET_CUR
+   
+   --NJOW02 S
+   EXEC isp_PostCCAdjustment_Wrapper @c_StockTakeKey = @c_CCKey,  
+                                     @c_SourceType = 'isp_CCPostingByAdjustment_UCC',  
+                                     @b_Success = @b_Success OUTPUT,            
+                                     @n_Err = @n_err OUTPUT,            
+                                     @c_Errmsg = @c_errmsg OUTPUT                                                           
+   --NJOW02 E
 
    IF @n_IsRDT = 1
    BEGIN

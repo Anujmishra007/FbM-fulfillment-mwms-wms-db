@@ -14,7 +14,7 @@ GO
 /*                                                                       */    
 /* Called By: Wave Release                                               */    
 /*                                                                       */    
-/* PVCS Version: 1.8                                                     */    
+/* PVCS Version: 1.9                                                     */    
 /*                                                                       */    
 /* Version: 7.0                                                          */    
 /*                                                                       */    
@@ -42,6 +42,8 @@ GO
 /*                            consolidated pick                         */
 /* 2024-09-18  WLChooi  1.8   UWP-23368-Dispatch TM task with cube data  */
 /*                            (WL02)                                     */
+/* 2025-01-23  WLChooi  1.9   INC7625461-Review groupkey logic for UOM2  */
+/*                            (WL03)                                     */
 /*************************************************************************/     
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV01]        
   @c_wavekey      NVARCHAR(10)    
@@ -483,6 +485,7 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV01]
                 ,ISNULL(P.CubeUOM1, 0.00)   --WL02
                 ,ISNULL(P.CubeUOM3, 0.00)   --WL02
                 ,LOC.LocLevel   --WL02
+                ,P.Casecnt   --WL03 
           FROM WAVEDETAIL WD (NOLOCK)  
           JOIN WAVE W (NOLOCK) ON WD.Wavekey = W.Wavekey                            
           JOIN ORDERS O (NOLOCK) ON WD.Orderkey = O.Orderkey  
@@ -525,6 +528,7 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV01]
                   ,ISNULL(P.CubeUOM1, 0.00)   --WL02
                   ,ISNULL(P.CubeUOM3, 0.00)   --WL02
                   ,LOC.LocLevel   --WL02
+                  ,P.Casecnt   --WL03 
           ORDER BY O.Route                                                          --(Wan01)  
               , CASE WHEN @c_DispatchCasePickMethod =''1''                          --(Wan01)
                      THEN O.Consigneekey ELSE '''' END                                       
@@ -551,6 +555,7 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV01]
                                   , @c_Route, @c_Orderkey, @c_ToLoc, @c_Priority, @dt_DeliveryDate
                                   , @c_Loadkey, @c_LPLDLoc   --WL01
                                   , @c_Areakey, @n_CubeUOM1, @n_CubeUOM3, @n_LocLevel   --WL02
+                                  , @n_Casecnt   --WL03
          
       WHILE @@FETCH_STATUS = 0 AND @n_continue IN (1,2)  
       BEGIN                       
@@ -622,7 +627,7 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV01]
             SET @n_Volume = 0.00
             
             IF @c_UOM = '2'
-               SET @n_Volume = @n_CubeUOM1 * @n_UOMQty   --Case
+               SET @n_Volume = @n_CubeUOM1 * (@n_Qty / @n_Casecnt)   --Case   --WL03
             ELSE IF @c_UOM = '6'
                SET @n_Volume = @n_CubeUOM3 * @n_Qty      --EA
 
@@ -639,15 +644,17 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV01]
                BEGIN
                   --Check if need how many groups
                   SET @n_NoOfGroup = CEILING(@n_TTLVolume / @n_MaxSkuVol)
-                  SET @n_MaxQtyPerGroup = FLOOR(@n_MaxSkuVol / IIF(@c_UOM = '2', @n_CubeUOM1, @n_CubeUOM3))
-                  SET @n_Casecnt = (@n_Qty / @n_UOMQty)
+                  --WL03 S
+                  SET @n_MaxQtyPerGroup = FLOOR(IIF(@c_UOM = '2', (@n_MaxSkuVol / @n_CubeUOM1) * @n_Casecnt, @n_MaxSkuVol / @n_CubeUOM3))
+                  --SET @n_Casecnt = (@n_Qty / @n_UOMQty)
 
                   --Round up to case
-                  IF @c_UOM = '2'
-                  BEGIN
-                     SET @n_MaxQtyPerGroup = @n_MaxQtyPerGroup * @n_Casecnt
-                  END
-                  
+                  --IF @c_UOM = '2'
+                  --BEGIN
+                  --   SET @n_MaxQtyPerGroup = @n_MaxQtyPerGroup * @n_Casecnt
+                  --END
+                  --WL03 E
+
                   WHILE @n_NoOfGroup > 0
                   BEGIN
                      EXEC dbo.nspg_GetKey @KeyName = @c_KeyName
@@ -675,12 +682,12 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV01]
                         BEGIN
                            SET @n_Qty = @n_Qty - @n_MaxQtyPerGroup
                            SET @n_QtyToRelease = @n_MaxQtyPerGroup
-                           SET @n_UOMQtyToRelease = @n_QtyToRelease / @n_Casecnt
+                           SET @n_UOMQtyToRelease = @n_UOMQty   --@n_QtyToRelease / @n_Casecnt   --WL03
                         END
                         ELSE
                         BEGIN
                            SET @n_QtyToRelease = @n_Qty
-                           SET @n_UOMQtyToRelease = @n_QtyToRelease / @n_Casecnt
+                           SET @n_UOMQtyToRelease = @n_UOMQty   --@n_QtyToRelease / @n_Casecnt   --WL03
                            SET @n_Qty = 0
                         END
 
@@ -920,6 +927,7 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV01]
                                      , @c_Route, @c_Orderkey, @c_ToLoc, @c_Priority, @dt_DeliveryDate
                                      , @c_Loadkey, @c_LPLDLoc   --WL01
                                      , @c_Areakey, @n_CubeUOM1, @n_CubeUOM3, @n_LocLevel   --WL02
+                                     , @n_Casecnt   --WL03
       END  
       CLOSE cur_pick  
       DEALLOCATE cur_pick         

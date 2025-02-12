@@ -1,9 +1,4 @@
 
-SET ANSI_NULLS OFF
-GO
-SET QUOTED_IDENTIFIER OFF
-GO
-
 /************************************************************************/  
 /* Store procedure: rdt_1642ExtUpd02_VLT                                */  
 /* Purpose To activiate Scanned Flag in Fn1642 with ScanToDoor Rpt      */  
@@ -75,11 +70,11 @@ BEGIN
             GOTO RollbackTran
          END  
  
-         select top 1 @PickSLipNo = PickSlipNo from PackDetail (NOLOCK)
-         where dropid = @cDropID
-         and storerkey = @cStorerKey
+         SELECT TOP 1 @PickSLipNo = PickSlipNo from dbo.PackDetail WITH(NOLOCK)
+         WHERE DropID = @cDropID
+            AND StorerKey = @cStorerKey
 
-         select top 1 @cOrderKey = OrderKey from PICKHEADER (NOLOCK) where PickHeaderKey = @PickSLipNo
+         SELECT TOP 1 @cOrderKey = OrderKey FROM PICKHEADER WITH(NOLOCK) WHERE PickHeaderKey = @PickSLipNo
 
          -- Get the mbolkey for this particular dropid  
          SELECT @cMBOL4DropID = MbolKey, @cLoadKey = LoadKey    
@@ -87,11 +82,14 @@ BEGIN
          WHERE OrderKey = @cOrderKey  
     
          -- Add record into RDTScanToTruck (borrowed from james01 - rdt_1642ExtUpd01 )  
-         IF NOT EXISTS (SELECT 1 FROM RDT.RDTScanToTruck WITH (NOLOCK)   
+         IF NOT EXISTS (SELECT 1 FROM RDT.RDTScanToTruck WITH (NOLOCK)
          WHERE MBOLKey = @cMBOL4DropID  
-         AND RefNo = @cDropID  
-         AND [Status] = '9')  
-         BEGIN  
+            AND RefNo = @cDropID
+            AND [Status] = '9')
+                  AND NOT EXISTS(SELECT 1 FROM dbo.Dropid WITH (NOLOCK)
+                     WHERE Dropid = @cDropID
+                     AND DropIDType = 'B')
+         BEGIN
             INSERT INTO RDT.RDTScanToTruck  
             (MBOLKey, LoadKey, CartonType, RefNo, URNNo, Status, AddWho, AddDate, EditWho, EditDate)  
             VALUES (@cMBOLKey, @cLoadKey, '', @cDropID, '', '9', sUser_sName(), GETDATE(), sUser_sName(), GETDATE())   
@@ -102,21 +100,82 @@ BEGIN
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Ins Scn2Truck Fail
                GOTO RollbackTran 
             END  
-         END  -- not exists 
-  
-         IF @nstep = 2 and
-         not exists (select 1 from Dropid (NOLOCK) where dropid in (select dropid from packdetail (NOLOCK) where PickSlipNo = @PickSLipNo) and status < 9)
-         BEGIN  
-            update orders
-            set status = 8
-            where OrderKey = @cOrderkey
-			and StorerKey = @cStorerKey
+         END  -- not exists
+         ELSE
+            INSERT INTO RDT.RDTScanToTruck
+            (MBOLKey, LoadKey, CartonType, RefNo, URNNo, Status, AddWho, AddDate, EditWho, EditDate)
+            SELECT O.MBOLKey, D.Loadkey, '', Dropid, '', '9', sUser_sName(), GETDATE(), sUser_sName(), GETDATE()
+            FROM dbo.ORDERS O WITH(NOLOCK)
+               INNER JOIN dbo.PICKHEADER PH WITH(NOLOCK)
+               ON O.OrderKey = PH.OrderKey
+               INNER JOIN dbo.Dropid D WITH(NOLOCK)
+               ON D.PickSlipNo = PH.PickHeaderKey
+               WHERE exists
+               (SELECT ChildId FROM dbo.DropidDetail DD WITH(NOLOCK)
+                  WHERE Dropid = @cDropID and D.Dropid = DD.ChildId)
+                  AND NOT EXISTS (SELECT 1 FROM RDT.RDTScanToTruck RSTT WITH(NOLOCK) WHERE RSTT.RefNo = D.Dropid and RSTT.Status = '9' and RSTT.MBOLKey = O.MBOLKey)
+
+         IF @nstep = 2 AND
+         NOT EXISTS (SELECT 1 FROM Dropid D WITH(NOLOCK) WHERE EXISTS (SELECT 1 FROM dbo.PackDetail PD WITH(NOLOCK) WHERE D.dropid = PD.Dropid
+               AND PickSlipNo = @PickSLipNo) and Status < '9')
+               AND (SELECT TOP 1 DropIDType FROM dbo.Dropid WITH(NOLOCK) WHERE Dropid = @cDropID) <> 'B'
+         BEGIN
+            UPDATE dbo.ORDERS WITH(ROWLOCK)
+            SET STATUS = '8'
+            WHERE OrderKey = @cOrderkey
+                     AND StorerKey = @cStorerKey
+               SET @nErrNo = 217969
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Order is Loaded' 
+               SET @nErrNo = 0
+               GOTO Quit
+         END
+      
+         ELSE IF @nStep = 2 AND EXISTS (select 1 from dbo.Dropid WITH(NOLOCK) WHERE dropid = @cDropID and DropIDType = 'B')
+         BEGIN
+            UPDATE dbo.Dropid WITH(ROWLOCK)
+            SET STATUS = '9', Droploc = @cDoor, AdditionalLoc = @cDoor
+            WHERE exists
+            (SELECT 1 FROM dbo.PackDetail PD WITH(NOLOCK)
+            WHERE Dropid.Dropid = PD.DropID and StorerKey = @cStorerKey
+            AND EXISTS
+            (SELECT 1 FROM dbo.DropidDetail DD WITH(NOLOCK) WHERE Dropid = @cDropID and PD.Dropid = DD.ChildId))
+
+                  /*IF exists
+                  (select * from ORDERS O (NOLOCK)
+            where StorerKey = @cStorerKey
+                  and exists
+            (select 1 from PICKHEADER PH (NOLOCK)
+            where O.OrderKey = PH.OrderKey
+            and exists
+            (select 1 from PackDetail PD (NOLOCK)
+            where StorerKey = @cStorerKey
+                  and PH.PickHeaderKey = PD.PickSlipNo
+            and exists
+            (select 1 from Dropid D (NOLOCK)
+            where exists (select 1 from DropidDetail DD (NOLOCK) where DD.Dropid = @cDropID and D.Dropid = DD.ChildId)
+            and PD.DropID = D.Dropid
+            and not exists (select 1 from Dropid D2 (NOLOCK) where status < 9 and D2.PickSlipNo = PD.PickSlipNo)))))
+                  BEGIN*/
+            UPDATE dbo.ORDERS WITH(ROWLOCK)
+            SET Status = '8'
+            WHERE EXISTS
+            (SELECT 1 FROM PICKHEADER PH WITH(NOLOCK)
+            WHERE Orders.OrderKey = PH.OrderKey
+            AND EXISTS
+            (SELECT 1 FROM dbo.PackDetail PD WITH(NOLOCK)
+            WHERE PH.PickHeaderKey = PD.PickSlipNo
+            AND EXISTS
+            (SELECT 1 FROM dbo.Dropid D WITH(NOLOCK)
+            WHERE EXISTS (SELECT 1 FROM dbo.DropidDetail DD WITH(NOLOCK) WHERE DD.Dropid = @cDropID AND D.Dropid = DD.ChildId)
+            AND PD.DropID = D.Dropid
+            AND NOT EXISTS (SELECT 1 FROM dbo.Dropid D2 (NOLOCK) WHERE STATUS < '9' and D2.PickSlipNo = PD.PickSlipNo))))
+                  --END
             SET @nErrNo = 217969
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Order is Loaded' 
             SET @nErrNo = 0
             GOTO Quit
          END
-         GOTO Quit      
+         GOTO Quit
       END -- step2
    END--Inputkey =1 
 
@@ -128,11 +187,6 @@ BEGIN
    WHILE @@TRANCOUNT > @nStartTCnt -- Commit until the level we started    
       COMMIT TRAN rdt_1642ExtUpd02_VLT
 END -- sp
-GO
-GRANT EXECUTE ON [RDT].[rdt_1642ExtUpd02_VLT] TO [NSQL]
-GO
 
-SET QUOTED_IDENTIFIER OFF
-GO
-SET ANSI_NULLS ON
+GRANT EXECUTE ON [RDT].[rdt_1642ExtUpd02_VLT] TO [NSQL]
 GO

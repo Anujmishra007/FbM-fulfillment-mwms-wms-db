@@ -1,3 +1,4 @@
+
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -21,8 +22,9 @@ GO
 /* Updates:                                                             */    
 /* Date        Author   Ver   Purposes                                  */ 
 /* 2024-10-16  Wan      1.0   Created.                                  */
+/* 2024-12-09  Shong01  1.1   Handle DG Goods Allocation FCR-1715       */
 /************************************************************************/  
-CREATE OR ALTER PROC mspGetOverPickLoc02  
+CREATE OR ALTER PROC [dbo].[mspGetOverPickLoc02]  
    @c_Storerkey                  NVARCHAR(15)   
 ,  @c_Sku                        NVARCHAR(20)   
 ,  @c_AllocateStrategykey        NVARCHAR(10)  
@@ -58,15 +60,31 @@ BEGIN
                                                      
          , @d_Lottable04   DATETIME    = NULL
          , @d_Lottable04_2 DATETIME    = NULL
+         , @c_PutawayZone  NVARCHAR(20) = ''     -- (Shong01)
 
    SET @b_Success = 1    
    SET @n_Err = 0
    SET @c_ErrMsg = ''  
-  
+   
    CREATE TABLE #PICKLOCTYPE ( RowID         INT          IDENTITY(1,1) PRIMARY Key      
                              , loc           NVARCHAR(10) NOT NULL DEFAULT ('')
                              )  
-  
+   -- (Shong01) Start
+   SELECT @c_PutawayZone = PutawayZone
+   FROM SKU WITH (NOLOCK)
+   WHERE StorerKey = @c_Storerkey
+   AND SKU = @c_Sku 
+   IF @c_PutawayZone = 'DG'
+   BEGIN
+      -- Return Original Location
+      INSERT INTO #PICKLOCTYPE (LOC) VALUES (@c_Loc)
+      GOTO ReturnOverPickLoc
+   END
+   
+   IF @c_LocationTypeOverride NOT IN ('PICK','CASE')
+      GOTO ReturnOverPickLoc
+   -- (Shong01) End
+
    IF @n_continue IN (1,2)  
    BEGIN             
       SELECT @d_Lottable04 = la.Lottable04
@@ -107,7 +125,8 @@ BEGIN
                     ELSE 7
                     END 
                , ABS(lli.Qty - lli.QtyAllocated - lli.QtyPicked)
-                                                                             
+
+      ReturnOverPickLoc:   -- (Shong01)                                                                          
       IF @c_OverPickLoc = ''
       BEGIN
          SELECT TOP 1 @c_OverPickLoc= Loc                                                   
@@ -115,9 +134,10 @@ BEGIN
          ORDER BY RowID                                                                 
       END
    END  
-
    SELECT Loc FROM #PICKLOCTYPE
+   
 QUIT_SP:  
+
     
    IF @n_Continue=3  -- Error Occured - Process AND Return  
    BEGIN  
@@ -147,6 +167,3 @@ QUIT_SP:
       RETURN  
    END    
 END    
-GO
-GRANT EXECUTE ON mspGetOverPickLoc02 TO NSQL
-GO

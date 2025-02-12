@@ -21,6 +21,7 @@ GO
 /* 2024-07-16   1.9  JHU151      FCR-428 gen cctask and hold inv for short pk */
 /* 2024-09-09   2.0  PXL009      FCR-770 Tote closure                         */
 /* 2024-09-23   2.1  CYU027      FCR-808 PUMA SKU IMAGE widget                */
+/* 2024-12-13   2.2  LJQ006      FCR-1168 Add extend screen                   */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_PickCase] (
@@ -1976,7 +1977,9 @@ BEGIN
          INSERT INTO @tExtScnData (Variable, Value) VALUES    
          ('@nMenu',        CONVERT(Nvarchar(20),@nMenu)),
          ('@cUserName',    @cUserName),
-         ('@cSuggSKU',     @cSuggSKU)
+         ('@cSuggSKU',     @cSuggSKU),
+         ('@cDropID',     @cDropID),
+         ('@cPickSlipNo', @cPickSlipNo)
          EXECUTE [RDT].[rdt_ExtScnEntry] 
          @cExtScnSP, 
          @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorerKey, @tExtScnData ,

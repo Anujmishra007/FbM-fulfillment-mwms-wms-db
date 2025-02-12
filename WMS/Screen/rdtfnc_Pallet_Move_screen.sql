@@ -12,7 +12,8 @@ EXECUTE rdt.rdtAddScn 3361, 'ENG'
    ,@cLine01 = 'ID:'
    ,@cLine02 = '%20d01'
    ,@cLine04 = 'TO LOC:'
-   ,@cLine05 = '%10i02'
+   ,@cLine05 = '%10d03'
+   ,@cLine06 = '%10i02'
    ,@cLine14 = '%e'
    ,@nFunc = 1721
 

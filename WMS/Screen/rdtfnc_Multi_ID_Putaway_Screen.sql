@@ -1,9 +1,9 @@
 --rdtfnc_Multi_ID_Putaway
 -- 6450 - 6459
 
-
-INSERT INTO RDT.RDTMsg (Message_ID, Lang_Code, Message_Type, Message_Text, StoredProcName, Eventtype)
-VALUES ('747', 'ENG', 'FNC', 'Multi ID Putaway', 'rdtfnc_Multi_ID_Putaway', '0')
+IF NOT EXISTS (SELECT 1 FROM RDT.RDTMSG (NOLOCK) WHERE Message_ID = '747')
+   INSERT INTO RDT.RDTMsg (Message_ID, Lang_Code, Message_Type, Message_Text, StoredProcName, Eventtype)
+   VALUES ('747', 'ENG', 'FNC', 'Multi ID Putaway', 'rdtfnc_Multi_ID_Putaway', '0')
 
 -- Screen 1
 -- Scn = 6450

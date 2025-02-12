@@ -44,6 +44,11 @@ GO
 /*                                  - Adjustment by Serial Number              */
 /* 12-NOV-2024  Satyam      2.4    UWP-23314 - Duplicate ID validation wrt     */
 /*                                           locations                         */
+/* 24-Nov-2024  NJOW04       2.5    WMS-23053 Skip check ucc qty if adj is     */
+/*                                  created from CC UCC adj posting            */
+/* 24-Nov-2024  NJOW04       2.5    DEVOPS Combine Script                      */
+/* 03-JAN-2024  Wan05        2.6    LFWM-4405 - [GIT] Serial Number Solution-Post*/
+/*                                  Cycle Count by Adjustment Serialnon - Fix  */
 /*******************************************************************************/
 
 CREATE OR ALTER PROCEDURE [dbo].[isp_FinalizeADJ]
@@ -144,7 +149,8 @@ BEGIN
          , @c_SerialNo_Status          NVARCHAR(10) = ''                            --(Wan04)
          , @n_SerialNo_Cnt             INT          = 0                             --(Wan04)
          , @n_SerialNo_Qty             INT          = 0                             --(Wan04)         
-         , @n_SerialNo_AdjQty          INT          = 0                             --(Wan04)          
+         , @n_SerialNo_AdjQty          INT          = 0                             --(Wan04) 
+         , @n_SerialNo_AdjCnt          INT          = 0                             --(Wan05)                      
 
          , @c_ASNFizUpdLotToSerialNo   NVARCHAR(10) = ''                            --(Wan04)
 
@@ -643,16 +649,17 @@ BEGIN
 
                IF @n_Continue IN (1, 2) 
                BEGIN
-                  SET @n_SerialNo_Cnt    = 0
+                  SET @n_SerialNo_AdjCnt = 0                                        --(Wan05)
                   SET @n_SerialNo_AdjQty = 0
-                  SELECT @n_SerialNo_Cnt    = COUNT(1) 
+                  SELECT @n_SerialNo_AdjCnt = COUNT(1)                              --(Wan05)
                         ,@n_SerialNo_AdjQty = SUM(ad.Qty)
                   FROM ADJUSTMENTDETAIL ad (NOLOCK)
                   WHERE ad.AdjustmentKey = @c_ADJKey
                   AND ad.SerialNo = @c_SerialNo
                   GROUP BY ad.SerialNo
 
-                  IF @n_SerialNo_Cnt > 2 OR (@n_SerialNo_Cnt = 2 AND @n_SerialNo_AdjQty <> 0)
+                  IF @n_SerialNo_AdjCnt > 2 OR                                      --(Wan05)
+                    (@n_SerialNo_AdjCnt = 2 AND @n_SerialNo_AdjQty <> 0)            --(Wan05)
                   BEGIN 
                      SET @n_Continue = 3
                      SET @n_Err = 72873
@@ -663,7 +670,7 @@ BEGIN
                                    + '. (isp_FinalizeADJ)'
                   END
 
-                  IF @n_Continue IN (1, 2) AND @n_SerialNo_Cnt = 2
+                  IF @n_Continue IN (1, 2) AND @n_SerialNo_AdjCnt = 2               --(Wan05)
                   BEGIN
                      SET @n_SerialNo_AdjQty = 0
                      SELECT TOP 1 @n_SerialNo_AdjQty = ad.Qty
@@ -725,13 +732,13 @@ BEGIN
 
                         IF @c_SerialNo_Status IN ('CANC', '9')
                         BEGIN
-                           SET @n_SerialNo_Cnt = 0
+                           SET @n_SerialNo_AdjCnt = 0                               --(Wan05)
                         END
                      END 
                   END
 
                   IF @n_Continue IN (1, 2) AND 
-                     @n_Qty = 1 AND @n_SerialNo_Cnt = 1 AND @c_SerialNo_Status IN ('1','5','6')
+                     @n_Qty = 1 AND @n_SerialNo_AdjCnt = 1 AND @c_SerialNo_Status IN ('1','5','6') --(Wan05)
                   BEGIN
                      SET @n_Continue = 3
                      SET @n_Err = 72877
@@ -754,7 +761,7 @@ BEGIN
                   END
 
                   IF @n_Continue IN (1, 2) AND 
-                     @n_Qty = -1 AND @n_SerialNo_Cnt = 1 AND @c_SerialNo_Status IN ('5','6')
+                     @n_Qty = -1 AND @n_SerialNo_AdjCnt = 1 AND @c_SerialNo_Status IN ('5','6')    --(Wan05)
                   BEGIN
                      SET @n_Continue = 3
                      SET @n_Err = 72879
@@ -793,6 +800,10 @@ BEGIN
                                                       
                IF (@n_Continue=1 OR @n_Continue=2)
                   AND ISNULL(RTRIM(@c_UCCNo) ,'')<>''
+                  AND NOT EXISTS(SELECT 1 
+                                 FROM ADJUSTMENT (NOLOCK)
+                                 JOIN StockTakeSheetParameters (NOLOCK) ON ADJUSTMENT.CustomerRefNo = StockTakeSheetParameters.StockTakeKey 
+                                 WHERE ADJUSTMENT.Adjustmentkey = @c_ADJKey) --NJOW04  UCC qty already deduction during CC UCC adj, so can't validate the qty                   
                BEGIN
                   IF EXISTS (
                            SELECT 1

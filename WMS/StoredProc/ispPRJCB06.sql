@@ -28,6 +28,8 @@ GO
 /* Date         Author  Rev   Purposes                                  */
 /* 2024-10-09  SSA01    1.1  UWP-24678-JCB- Allocation for Kitting and */
 /*                                    Decanting                         */
+/* 2025-02-05  SKE140   1.3   UWP-29250 Updated condtion to exclude the */
+/*                              JCB-ALLOC                               */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[ispPRJCB06] (
      @c_OrderKey        NVARCHAR(10)
@@ -96,7 +98,8 @@ BEGIN
    SET @b_Success = 1
    SET @n_Err     = 0
    SET @c_ErrMsg  = ''
-   SET @c_UOM     = '1'   
+   SET @c_UOM     = '1'  
+   SET @c_Type = '2'
    SET @c_Conditions = ' AND LOC.LocationType = ''BULK'' 
                          AND PA.ZoneCategory  = ''EMG'' 
                          AND NOT EXISTS(SELECT 1 FROM LOTXLOCXID L (NOLOCK) WHERE L.Storerkey = LLI.Storerkey
@@ -106,9 +109,9 @@ BEGIN
                                         AND L.Sku <> LLI.Sku AND L.Id = LLI.Id AND L.Loc = LLI.Loc AND L.Qty > 0) 
                          AND NOT EXISTS(SELECT 1 FROM PICKDETAIL PD (NOLOCK) WHERE PD.Storerkey = LLI.Storerkey
                                         AND PD.Sku = LLI.Sku AND PD.Lot = LLI.Lot AND PD.ToLoc = LLI.Loc
-                                        AND PD.CaseID = LLI.Id AND PD.Status = ''0'') '   
-                                        
-   SET @c_Type = '2'                                     
+                                        AND PD.CaseID = LLI.Id AND PD.Status = ''0'') 
+                         AND NOT EXISTS (SELECT 1 FROM CODELKUP (NOLOCK) WHERE LISTNAME = ''JCBEXALLOC''  AND CODE = @c_Type  AND UDF01 = ''1'' AND LONG = LOC.Loc AND LONG IS NOT NULL)  '                                           
+                                                                          
                                              
    IF ISNULL(@c_Orderkey,'') <> ''
    BEGIN
@@ -284,14 +287,14 @@ BEGIN
            ' ORDER BY MIN(LA.Lottable05), LOC.LogicalLocation, LLI.Loc;' +
            ' OPEN @CUR_INV  '
 
-        SET @c_SQLParm = N'@c_StorerKey NVARCHAR(15), @c_SKU NVARCHAR(20), @c_Facility NVARCHAR(5), @n_QtyLeftToFulfill INT'
+        SET @c_SQLParm = N'@c_StorerKey NVARCHAR(15), @c_SKU NVARCHAR(20), @c_Facility NVARCHAR(5), @c_Type NVARCHAR(10), @n_QtyLeftToFulfill INT'
                        + ',@c_Lottable01 NVARCHAR(18), @c_Lottable02 NVARCHAR(18), @c_Lottable03 NVARCHAR(18), @d_Lottable04 DATETIME, @d_Lottable05 DATETIME'
                        + ',@c_Lottable06 NVARCHAR(30), @c_Lottable07 NVARCHAR(30), @c_Lottable08 NVARCHAR(30), @c_Lottable09 NVARCHAR(30), @c_Lottable10 NVARCHAR(30)'
                        + ',@c_Lottable11 NVARCHAR(30), @c_Lottable12 NVARCHAR(30), @d_Lottable013 DATETIME, @d_Lottable14 DATETIME, @d_Lottable15 DATETIME'
                        + ',@CUR_INV CURSOR OUTPUT'
 
         EXEC sp_ExecuteSQL @c_SQL, @c_SQLParm
-              , @c_StorerKey, @c_SKU, @c_Facility, @n_QtyLeftToFulfill
+              , @c_StorerKey, @c_SKU, @c_Facility, @c_Type, @n_QtyLeftToFulfill
               , @c_Lottable01, @c_Lottable02, @c_Lottable03, @d_Lottable04, @d_Lottable05
               , @c_Lottable06, @c_Lottable07, @c_Lottable08, @c_Lottable09, @c_Lottable10
               , @c_Lottable11, @c_Lottable12, @d_Lottable13, @d_Lottable14, @d_Lottable15
@@ -386,7 +389,7 @@ BEGIN
                         + ' ORDER BY od.Orderkey, od.Orderlinenumber; OPEN @CUR_OD'
 
               SET @c_SQLParm = N'@c_Loadkey NVARCHAR(10), @c_Wavekey NVARCHAR(10)'
-                             +' ,@c_StorerKey NVARCHAR(15), @c_SKU NVARCHAR(20), @c_Facility NVARCHAR(5)'
+                             +' ,@c_StorerKey NVARCHAR(15), @c_SKU NVARCHAR(20), @c_Facility NVARCHAR(5), @c_Type NVARCHAR(10)'
                              +' ,@c_Lottable01 NVARCHAR(18), @c_Lottable02 NVARCHAR(18), @c_Lottable03 NVARCHAR(18), @d_Lottable04 DATETIME, @d_Lottable05 DATETIME'
                              +' ,@c_Lottable06 NVARCHAR(30), @c_Lottable07 NVARCHAR(30), @c_Lottable08 NVARCHAR(30), @c_Lottable09 NVARCHAR(30), @c_Lottable10 NVARCHAR(30)'
                              +' ,@c_Lottable11 NVARCHAR(30), @c_Lottable12 NVARCHAR(30), @d_Lottable13 DATETIME, @d_Lottable14 DATETIME, @d_Lottable15 DATETIME'
@@ -394,7 +397,7 @@ BEGIN
 
               EXEC sp_ExecuteSQL @c_SQL, @c_SQLParm
                  , @c_Loadkey, @c_Wavekey
-                 , @c_StorerKey, @c_SKU, @c_Facility
+                 , @c_StorerKey, @c_SKU, @c_Facility , @c_Type
                  , @c_Lottable01, @c_Lottable02, @c_Lottable03, @d_Lottable04, @d_Lottable05
                  , @c_Lottable06, @c_Lottable07, @c_Lottable08, @c_Lottable09, @c_Lottable10
                  , @c_Lottable11, @c_Lottable12, @d_Lottable13, @d_Lottable14, @d_Lottable15
@@ -528,6 +531,4 @@ QUIT:
       RETURN
    END
 END
-GO
-GRANT EXECUTE ON  [dbo].[ispPRJCB06] TO [NSQL]
 GO

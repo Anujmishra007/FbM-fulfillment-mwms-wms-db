@@ -1,0 +1,27 @@
+-- rdt_Pack_LVSUSA_Confirm
+execute rdt.rdtDropMsg 227601, 227650
+
+execute rdt.rdtAddMsg 227601, 10, '227601InvalidType', 'us_english', 993, 0 , '227601 Invalid Type'
+execute rdt.rdtAddMsg 227602, 10, '227602SKUNotInOriCart', 'us_english', 993, 0 , '227602 SKU Not In Orignal Carton'
+execute rdt.rdtAddMsg 227603, 10, '227603GenLabelNoFail', 'us_english', 993, 0 , '227603 Generate Label No Failure'
+execute rdt.rdtAddMsg 227604, 10, '227604UpdPackDetailFail', 'us_english', 993, 0 , '227604 PackDetail Update Failure'
+execute rdt.rdtAddMsg 227605, 10, '227605DelPackDetailFail', 'us_english', 993, 0 , '227605 Delete PackDetail Fail'
+execute rdt.rdtAddMsg 227606, 10, '227606InsPackDetailFail', 'us_english', 993, 0 , '227606 Insert PackDetail Fail'
+execute rdt.rdtAddMsg 227607, 10, '227607InsPackDetailFail', 'us_english', 993, 0 , '227607 Insert PackInfo Fail'
+execute rdt.rdtAddMsg 227608, 10, '227608UpdPackDetailFail', 'us_english', 993, 0 , '227608 PackDetail Update Failure'
+execute rdt.rdtAddMsg 227609, 10, '227609InsPackDetailFail', 'us_english', 993, 0 , '227609 Insert PackDetail Fail'
+execute rdt.rdtAddMsg 227610, 10, '227610InsMoveLogFail', 'us_english', 993, 0 , '227610 Fail to Insert MoveLog'
+execute rdt.rdtAddMsg 227611, 10, '227611QtyTooGreat', 'us_english', 993, 0 , '227611 Qty is too great'
+execute rdt.rdtAddMsg 227612, 10, '227612FailtoHandlePickDetail', 'us_english', 993, 0 , '227612 Fail to Handle PickDetail'
+execute rdt.rdtAddMsg 227613, 10, '227613InsMoveLogFail', 'us_english', 993, 0 , '227613 Fail to Insert MoveLog'
+execute rdt.rdtAddMsg 227614, 10, '227614UpdPackDetailFail', 'us_english', 993, 0 , '227614 Failed to Update PackDetail'
+execute rdt.rdtAddMsg 227615, 10, '227615InsPackDetailFail', 'us_english', 993, 0 , '227615 Failed to Insert PackDetail'
+execute rdt.rdtAddMsg 227616, 10, '227616DelPackDetailFail', 'us_english', 993, 0 , '227616 Failed to Delete PackDetail'
+execute rdt.rdtAddMsg 227617, 10, '227617FailtoHandlePickDetail', 'us_english', 993, 0 , '227617 Fail to Handle PickDetail'
+execute rdt.rdtAddMsg 227618, 10, '227618UpdPickDetailFail', 'us_english', 993, 0 , '227618 Fail to Update PickDetail'
+execute rdt.rdtAddMsg 227619, 10, '227619InsPackDetailFail', 'us_english', 993, 0 , '227619 Fail to Insert PickDetail'
+execute rdt.rdtAddMsg 227620, 10, '227620DelPackInfoFail', 'us_english', 993, 0 , '227620 Failed to Delete PackInfo'
+execute rdt.rdtAddMsg 227621, 10, '227621UpdPackdetailFail', 'us_english', 993, 0 , '227621 Failed to Update Packdetail'
+execute rdt.rdtAddMsg 227622, 10, '227622UpdPackInfoFail', 'us_english', 993, 0 , '227622 Failed to Update PackInfo'
+execute rdt.rdtAddMsg 227623, 10, '227623InvFromCtn', 'us_english', 993, 0 , '227623 Invalid From Carton ID'
+select * from rdt.rdtmsg (nolock) where message_id between 227601 AND 227650

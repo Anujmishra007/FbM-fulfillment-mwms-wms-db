@@ -5,6 +5,7 @@
 /* Updates:                                                                           */
 /* Date         Author  Ver.  Purposes                                                */
 /* 05-MAY-2024  PPA374  1.0   Allowing to scan ID instead of SKU for WA and VNA picks */
+/* 2024-10-29   PXL009  1.1   FCR-759 ID and UCC Length Issue                         */
 /**************************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdt_830DecodeSPVLT]
    @nMobile      INT,
@@ -37,6 +38,7 @@ CREATE OR ALTER PROC [RDT].[rdt_830DecodeSPVLT]
    @dLottable13  DATETIME       OUTPUT,
    @dLottable14  DATETIME       OUTPUT,
    @dLottable15  DATETIME       OUTPUT,
+   @cUserDefine01 NVARCHAR(30)  OUTPUT,
    @nErrNo       INT            OUTPUT,
    @cErrMsg      NVARCHAR( 20)  OUTPUT
 AS

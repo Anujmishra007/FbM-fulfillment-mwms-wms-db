@@ -5,11 +5,12 @@ GO
 /******************************************************************************/
 /* Copyright: MAERSK                                                          */
 /* Purpose: isp_Bartender_SweepBag                                            */
-/* Customer: Barry                                                            */
+/* Customer: Barry Callebaut                                                  */
 /* Modifications log:                                                         */
 /*                                                                            */
-/* Date       Rev  Author     Purposes                                        */
-/* 2024-06-11 1.0  XGU017     Created                                         */
+/* Date       Rev    Author     Purposes                                      */
+/* 2024-06-11 1.0    XGU017     UWP-26866 Created                             */
+/* 2024-12-12 1.1.0  PYU015     UWP-28366 Merge code                          */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[isp_Bartender_SweepBag]
@@ -111,7 +112,7 @@ BEGIN
    SET @c_ExecStatements = N'SELECT RD.Lottable01'
                           + '     , RD.Sku'
                           + '     , RD.Lottable08'
-                          + '     , CAST( (CAST(RD.Lottable09 AS FLOAT) - RD.QtyReceived * CAST(RD.Lottable08 AS FLOAT) * (CAST(RD.Lottable10 AS FLOAT) - CAST(rptl.Lottable10 AS FLOAT))) AS NVARCHAR(100)) AS Lottable09 '
+                          + '     , CAST( (CAST(RD.Lottable09 AS FLOAT) - RD.QtyReceived * CAST(RD.Lottable08 AS FLOAT) * (CAST(RD.Lottable10 AS FLOAT) - CAST(isnull(rptl.Lottable10,s.TareWeight) AS FLOAT))) AS NVARCHAR(100)) AS Lottable09 '
                           + '     , RD.ToLoc'
                           + '     , '''','''','''','''',''''                          ' + CHAR(13) --10
                           + '     , '''','''','''','''','''','''','''','''','''','''' ' + CHAR(13) --20
@@ -119,9 +120,10 @@ BEGIN
                           + '     , '''','''','''','''','''','''','''','''','''','''' ' + CHAR(13) --40
                           + '     , '''','''','''','''','''','''','''','''','''','''' ' + CHAR(13) --50
                           + '     , '''','''','''','''','''','''','''','''','''','''' ' + CHAR(13) --60
-                          + '  FROM dbo.RECEIPTDETAIL RD with(nolock) '
+                          + '  FROM RECEIPTDETAIL RD with(nolock) '
+                          + ' INNER JOIN SKU s with(nolock) on RD.storerkey = s.storerkey and RD.sku = s.sku '
                           + ' OUTER APPLY (SELECT TOP 1 dtl.Lottable10 '
-                          + '  FROM dbo.RECEIPTDETAIL dtl WITH(NOLOCK) '
+                          + '  FROM RECEIPTDETAIL dtl WITH(NOLOCK) '
                           + ' WHERE dtl.storerkey = RD.storerkey '
                           + '   AND dtl.receiptkey = RD.receiptkey '
                           + '   AND dtl.Lottable02 = RD.Lottable02 '
@@ -148,6 +150,7 @@ BEGIN
 EXIT_SP:
 
 END -- procedure
+
 GO
 
 SET QUOTED_IDENTIFIER OFF

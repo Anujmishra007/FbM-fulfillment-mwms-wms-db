@@ -13,6 +13,7 @@ GO
 /* Date        Rev  Author      Purposes                                */
 /* 2023-07-26  1.0  yeekung     WMS-23078 Created                       */ 
 /* 2023-10-09  1.1  ivanyi  bug fix INC2178187(ivan01)                  */   
+/* 2024-10-24  1.2  ShaoAn      Extended parameter definition           */ 
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE rdt.rdt_523DecodeSP03
@@ -24,9 +25,10 @@ CREATE OR ALTER PROCEDURE rdt.rdt_523DecodeSP03
    @cFacility         NVARCHAR( 5),  
    @cStorerKey        NVARCHAR( 15), 
    @cBarcode          NVARCHAR( 60), 
-   @cID               NVARCHAR( 18), 
-   @cUCC              NVARCHAR( 20), 
-   @cLOC              NVARCHAR( 10), 
+   @cBarcodeUCC       NVARCHAR( 60), 
+   @cID               NVARCHAR( 18)  OUTPUT, 
+   @cUCC              NVARCHAR( 20)  OUTPUT, 
+   @cLOC              NVARCHAR( 10)  OUTPUT, 
    @cSKU              NVARCHAR( 20)  OUTPUT, 
    @nQTY              INT            OUTPUT, 
    @cLottable01       NVARCHAR( 18)  OUTPUT, 

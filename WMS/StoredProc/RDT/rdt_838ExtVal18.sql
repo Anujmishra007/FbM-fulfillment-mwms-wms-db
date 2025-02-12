@@ -6,10 +6,11 @@ GO
 
 /************************************************************************/
 /* Store procedure: rdt_838ExtVal18                                     */
-/* Copyright      : LF Logistics                                        */
+/* Copyright      : Maersk                                              */
 /*                                                                      */
 /* Date       Rev  Author      Purposes                                 */
 /* 2023-11-14 1.0  yeekung     WMS-23946 Created                        */
+/* 2024-01-09 1.1  Ung         WMS-24587 Add TO DROP ID reuse checking  */
 /************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_838ExtVal18 (
@@ -62,6 +63,27 @@ BEGIN
 
    IF @nFunc = 838 -- Pack
    BEGIN
+      IF @nStep = 2 -- Option
+      BEGIN
+         IF @nInputKey = 1 -- ENTER
+         BEGIN
+            IF @cPackDtlDropID <> '' AND  -- TO DROP ID
+               @cOption = '1'             -- NEW carton
+            BEGIN
+               -- Check TO DROP ID had used 
+               IF EXISTS( SELECT TOP 1 1 
+                  FROM dbo.PackDetail WITH (NOLOCK)
+                  WHERE StorerKey = @cStorerKey
+                     AND DropID = @cPackDtlDropID)
+               BEGIN
+                  SET @nErrNo = 208803
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Pack NewCarton
+                  GOTO Quit
+               END
+            END
+         END
+      END
+      
       IF @nStep = 3 -- SKU
       BEGIN
          IF @nInputKey = 1 -- ENTER

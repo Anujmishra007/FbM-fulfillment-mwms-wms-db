@@ -66,6 +66,7 @@ GO
 /* 2022-03-09   3.7  yeekung    WMS-18588 Add Extendedvalidate (yeekung01)    */
 /* 2022-05-19   3.8  Ung        WMS-22486 Add pick pallet with UCC            */
 /* 2022-10-21   3.9  PXL009     UWP-25970 Fix Implicit type conversion error  */
+/* 2024-10-22   4.0  PXL009     FCR-759 ID and UCC Length Issue               */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_Pick] (
@@ -2513,6 +2514,7 @@ BEGIN
    BEGIN
       -- Screen mapping
       SET @cUCC = @cInField10
+      SET @cBarcode = @cInField10
 
       -- (Vicky02) - Start
       SET @cFieldAttr01 = ''
@@ -2557,6 +2559,76 @@ BEGIN
             SET @nStep = @nStep_ShortPick
          END
          GOTO Quit
+      END
+
+      -- Decode
+      IF @cDecodeSP <> ''
+      BEGIN
+         -- Standard decode
+         IF @cDecodeSP = '1'
+         BEGIN
+            EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorer, @cFacility, @cBarcode,
+               @cUCCNo  = @cUCC        OUTPUT,
+               @nErrNo  = @nErrNo      OUTPUT,
+               @cErrMsg = @cErrMsg     OUTPUT,
+               @cType   = 'UCCNo'
+
+               IF @nErrNo <> 0
+                  GOTO UCC_Fail
+         END
+         -- Customize decode
+         ELSE IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cDecodeSP AND type = 'P')
+         BEGIN
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cDecodeSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cPickSlipNo, @cBarcode, ' +
+               ' @cDropID     OUTPUT, @cLOC        OUTPUT, @cID         OUTPUT, @cSKU        OUTPUT, @nQty        OUTPUT, ' +
+               ' @cLottable01 OUTPUT, @cLottable02 OUTPUT, @cLottable03 OUTPUT, @dLottable04 OUTPUT, @dLottable05 OUTPUT,' +
+               ' @cLottable06 OUTPUT, @cLottable07 OUTPUT, @cLottable08 OUTPUT, @cLottable09 OUTPUT, @cLottable10 OUTPUT,' +
+               ' @cLottable11 OUTPUT, @cLottable12 OUTPUT, @dLottable13 OUTPUT, @dLottable14 OUTPUT, @dLottable15 OUTPUT,' +
+               ' @nErrNo OUTPUT, @cErrMsg OUTPUT'
+            SET @cSQLParam =
+               '@nMobile         INT, '            +
+               '@nFunc           INT, '            +
+               '@cLangCode       NVARCHAR( 3), '   +
+               '@nStep           INT, '            +
+               '@nInputKey       INT, '            +
+               '@cStorerKey      NVARCHAR( 15), '  +
+               '@cPickSlipNo     NVARCHAR( 10), '  +
+               '@cBarcode        NVARCHAR( 60), '  +
+               '@cDropID         NVARCHAR(60)   OUTPUT, ' +
+               '@cLOC            NVARCHAR(10)   OUTPUT, ' +
+               '@cID             NVARCHAR(18)   OUTPUT, ' +
+               '@cSKU            NVARCHAR(20)   OUTPUT, ' +
+               '@nQty            INT            OUTPUT, ' +
+               '@cLottable01     NVARCHAR( 18)  OUTPUT, ' +
+               '@cLottable02     NVARCHAR( 18)  OUTPUT, ' +
+               '@cLottable03     NVARCHAR( 18)  OUTPUT, ' +
+               '@dLottable04     DATETIME       OUTPUT, ' +
+               '@dLottable05     DATETIME       OUTPUT, ' +
+               '@cLottable06     NVARCHAR( 30)  OUTPUT, ' +
+               '@cLottable07     NVARCHAR( 30)  OUTPUT, ' +
+               '@cLottable08     NVARCHAR( 30)  OUTPUT, ' +
+               '@cLottable09     NVARCHAR( 30)  OUTPUT, ' +
+               '@cLottable10     NVARCHAR( 30)  OUTPUT, ' +
+               '@cLottable11     NVARCHAR( 30)  OUTPUT, ' +
+               '@cLottable12     NVARCHAR( 30)  OUTPUT, ' +
+               '@dLottable13     DATETIME       OUTPUT, ' +
+               '@dLottable14     DATETIME       OUTPUT, ' +
+               '@dLottable15     DATETIME       OUTPUT, ' +
+               '@nErrNo          INT OUTPUT,    '         +
+               '@cErrMsg         NVARCHAR( 20) OUTPUT'
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorer, @cPickSlipNo, @cBarcode,
+               @cUCC             OUTPUT, @cLOC        OUTPUT, @cID         OUTPUT, @cSKU        OUTPUT, @nQty        OUTPUT,
+               @cLottable1       OUTPUT, @cLottable2  OUTPUT, @cLottable3  OUTPUT, @dLottable4  OUTPUT, @dLottable05 OUTPUT,
+               @cLottable06      OUTPUT, @cLottable07 OUTPUT, @cLottable08 OUTPUT, @cLottable09 OUTPUT, @cLottable10 OUTPUT,
+               @cLottable11      OUTPUT, @cLottable12 OUTPUT, @dLottable13 OUTPUT, @dLottable14 OUTPUT, @dLottable15 OUTPUT,
+               @nErrNo           OUTPUT, @cErrMsg     OUTPUT
+
+            IF @nErrNo <> 0
+               GOTO UCC_Fail
+         END
       END
 
       -- Validate UCC

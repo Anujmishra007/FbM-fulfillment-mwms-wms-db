@@ -14,7 +14,7 @@ GO
 /* 2024-10-18 1.0  VJI011     none packing process enhancement for JCB                             */
 /***************************************************************************************************/
 
-ALTER     PROC [RDT].[rdt_922ExtUpd06_JCB] (
+Create OR ALTER  PROC [RDT].[rdt_922ExtUpd06_JCB] (
    @nMobile     INT,
    @nFunc       INT,
    @cLangCode   NVARCHAR( 3),

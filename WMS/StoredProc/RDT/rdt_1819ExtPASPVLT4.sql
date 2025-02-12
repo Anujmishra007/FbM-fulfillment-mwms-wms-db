@@ -41,14 +41,66 @@ BEGIN
    @cFromLOCType NVARCHAR(20),
    @cFromLocPAZ  NVARCHAR(20)
 
-   select top 1 @SKU = SKU from LOTxLOCxID (NOLOCK) where qty > 0 and StorerKey = @cStorerkey and ID = @cID and Loc = @cFromLOC
-   select top 1 @Style = Style, @ABC = ABC, @Class = CLASS from SKU (NOLOCK) where Sku = @SKU and StorerKey = @cStorerkey
-   select top 1 @cFromLOCType = LocationType, @cFromLocPAZ = PutawayZone from Loc (NOLOCK) where Facility = @cFacility and loc = @cFromLOC
+   UPDATE dbo.LOTxLOCxID WITH(ROWLOCK)
+   SET PendingMoveIN = 0
+   WHERE StorerKey = @cStorerKey
+   AND PendingMoveIN > 0
+   AND id <> ''
+   AND NOT EXISTS (SELECT 1 FROM dbo.LOTxLOCxID lli2 WHERE qty>0 AND dbo.LOTxLOCxID.id = lli2.Id)
+
+   IF EXISTS (SELECT 1 FROM dbo.LOTxLOCxID LLI WITH(NOLOCK)
+   WHERE StorerKey = @cStorerKey
+   AND PendingMoveIN > 0 AND Qty = 0 AND ID <> ''
+   AND EXISTS (SELECT 1 FROM dbo.LOC L WITH(NOLOCK) WHERE LocationType = 'PND' AND facility = @cFacility AND LLI.loc = L.Loc))
+   BEGIN
+      UPDATE dbo.LOTxLOCxID
+      SET PendingMoveIN = 0
+	  WHERE StorerKey = @cStorerKey
+      AND PendingMoveIN > 0 AND qty = 0 AND ID <> ''
+      AND EXISTS (SELECT 1 FROM dbo.LOC L WITH(NOLOCK) WHERE LocationType = 'PND' AND facility = @cFacility AND dbo.LOTxLOCxID.loc = L.Loc)
+      AND EXISTS (SELECT 1 FROM dbo.LOTxLOCxID LLI2 WITH(NOLOCK) WHERE dbo.LOTxLOCxID.Id = LLI2.Id AND StorerKey = @cStorerKey AND qty > 0 AND exists
+      (SELECT 1 FROM dbo.LOC L2 WITH(NOLOCK) WHERE L2.Loc = LLI2.Loc 
+      AND EXISTS (SELECT 1 FROM dbo.CODELKUP WITH(NOLOCK) WHERE LISTNAME = 'HUSQALLZON' AND Storerkey = @cStorerKey AND L2.PutawayZone = Code)))
+   END
+
+   IF EXISTS (SELECT 1 FROM dbo.LOTxLOCxID WITH(NOLOCK)
+   WHERE StorerKey = @cStorerKey
+   AND PendingMoveIN > 0 AND ID <> ''
+   AND EXISTS (SELECT 1 FROM dbo.LOTxLOCxID LLI2 WITH(NOLOCK) WHERE LLI2.StorerKey = @cStorerKey AND dbo.LOTxLOCxID.Id = LLI2.Id AND LLI2.Qty > 0 AND ID <> ''
+   AND EXISTS (SELECT 1 FROM dbo.LOC L WITH(NOLOCK) WHERE L.Loc = LLI2.Loc AND (LocationCategory = 'VNA' or LocationType = 'DAMAGED') AND Facility = @cFacility)))
+   BEGIN
+      UPDATE dbo.LOTxLOCxID
+      SET PendingMoveIN = 0
+      WHERE StorerKey = @cStorerKey
+      AND PendingMoveIN > 0 AND ID <> ''
+      AND EXISTS (SELECT 1 FROM dbo.LOTxLOCxID LLI2 WITH(NOLOCK) WHERE LLI2.StorerKey = @cStorerKey AND dbo.LOTxLOCxID.Id = LLI2.Id AND LLI2.Qty > 0 AND ID <> ''
+      AND EXISTS (SELECT 1 FROM dbo.LOC L WITH(NOLOCK) WHERE L.Loc = LLI2.Loc AND (LocationCategory = 'VNA' or LocationType = 'DAMAGED') AND Facility = @cFacility))
+   END
+
+   IF EXISTS (SELECT 1 FROM dbo.LOTxLOCxID WITH(NOLOCK) 
+   WHERE StorerKey = @cStorerKey
+   AND PendingMoveIN > 0 AND ID <> ''
+   AND EXISTS (SELECT 1 FROM dbo.LOTxLOCxID LLI2 WITH(NOLOCK) WHERE LLI2.StorerKey = @cStorerKey AND dbo.LOTxLOCxID.Id = LLI2.Id AND LLI2.Qty > 0 AND ID <> ''
+   AND EXISTS (SELECT 1 FROM dbo.LOC L WITH(NOLOCK) WHERE L.Loc = LLI2.Loc AND Facility = @cFacility
+   AND EXISTS (SELECT 1 FROM dbo.CODELKUP C WITH(NOLOCK) WHERE C.Storerkey = @cStorerKey AND C.Code = L.putawayzone AND C.LISTNAME = 'WAZONEHUSQ'))))
+   BEGIN
+      UPDATE dbo.LOTxLOCxID
+      SET PendingMoveIN = 0
+      WHERE StorerKey = @cStorerKey
+      AND PendingMoveIN > 0 AND ID <> ''
+      AND EXISTS (SELECT 1 FROM dbo.LOTxLOCxID LLI2 WHERE LLI2.StorerKey = @cStorerKey AND dbo.LOTxLOCxID.Id = LLI2.Id AND LLI2.Qty > 0 AND ID <> ''
+      AND EXISTS (SELECT 1 FROM dbo.LOC L WITH(NOLOCK) WHERE L.Loc = LLI2.Loc AND Facility = @cFacility
+      AND EXISTS (SELECT 1 FROM dbo.CODELKUP C WITH(NOLOCK) WHERE C.Storerkey = @cStorerKey AND C.Code = L.putawayzone AND C.LISTNAME = 'WAZONEHUSQ')))
+   END
+
+   SELECT TOP 1 @SKU = SKU FROM dbo.LOTxLOCxID WITH(NOLOCK) WHERE qty > 0 AND StorerKey = @cStorerkey AND ID = @cID AND Loc = @cFromLOC
+   SELECT TOP 1 @Style = Style, @ABC = ABC, @Class = CLASS FROM dbo.SKU WITH(NOLOCK) WHERE Sku = @SKU AND StorerKey = @cStorerkey
+   SELECT TOP 1 @cFromLOCType = LocationType, @cFromLocPAZ = PutawayZone FROM dbo.LOC WITH(NOLOCK) WHERE Facility = @cFacility AND loc = @cFromLOC
 
    --Check that LPN got only one SKU
-   IF (select count(distinct sku) from LOTxLOCxID (NOLOCK) where qty > 0 and id = @cID and loc = @cFromLOC and storerkey = @cStorerKey)>1
-   and (1 not in (select short from CODELKUP (NOLOCK) where LISTNAME = 'HUSQPASSKU' and storerkey = @cStorerKey) 
-   or 0 in (select short from CODELKUP (NOLOCK) where LISTNAME = 'HUSQPASSKU' and storerkey = @cStorerKey))
+   IF (SELECT COUNT(DISTINCT sku) FROM dbo.LOTxLOCxID WITH(NOLOCK) WHERE qty > 0 AND id = @cID AND loc = @cFromLOC AND storerkey = @cStorerKey)>1
+   AND (1 NOT IN (SELECT short FROM dbo.CODELKUP WITH(NOLOCK) WHERE LISTNAME = 'HUSQPASSKU' AND storerkey = @cStorerKey) 
+   OR 0 IN (SELECT short FROM dbo.CODELKUP WITH(NOLOCK) WHERE LISTNAME = 'HUSQPASSKU' AND storerkey = @cStorerKey))
    BEGIN
       SET @nErrNo = 217987
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
@@ -56,17 +108,17 @@ BEGIN
    END
 
    --Check if pick location for SKU is set
-   IF exists (select Sku from LOTxLOCxID (NOLOCK)
-   where id = @cID
-   and qty > 0
-   and loc = @cFromLOC
-   and storerkey = @cStorerKey
-   and not exists 
-   (select sku from SKUxLOC (NOLOCK)
-   where storerkey = @cStorerKey
-   and sku = LOTxLOCxID.Sku
-   and locationtype in ('PICK','CASE')
-   and QtyLocationLimit > 0))
+   IF EXISTS (SELECT Sku FROM dbo.LOTxLOCxID WITH(NOLOCK)
+   WHERE id = @cID
+   AND qty > 0
+   AND loc = @cFromLOC
+   AND storerkey = @cStorerKey
+   AND NOT EXISTS 
+   (SELECT Sku FROM dbo.SKUxLOC WITH(NOLOCK)
+   WHERE storerkey = @cStorerKey
+   AND sku = dbo.LOTxLOCxID.Sku
+   AND locationtype in ('PICK','CASE')
+   AND QtyLocationLimit > 0))
 
    BEGIN
       SET @nErrNo = 217988
@@ -76,6 +128,20 @@ BEGIN
 
    --Establish an LPN type
    DECLARE @LPNPATYPE nvarchar(20)
+
+   IF @Style = 'SHLV'
+   BEGIN
+      SET @nErrNo = 218028
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+      GOTO RollBackTran
+   END
+
+   IF @Style = 'CON'
+   BEGIN
+      SET @nErrNo = 218029
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SKU is consumable
+      GOTO RollBackTran
+   END
 
    --Battery
    IF @Style = 'B'
@@ -123,7 +189,7 @@ BEGIN
       SET @Flymo = 1
    END
 
-   IF not exists (select 1 from CODELKUP (NOLOCK) where listname = 'HUSQLPNTYP' and udf01 = @LPNPAType and short = 'VNA' and Storerkey = @cStorerKey)
+   IF NOT EXISTS (SELECT 1 FROM dbo.CODELKUP WITH(NOLOCK) WHERE listname = 'HUSQLPNTYP' AND udf01 = @LPNPAType AND short = 'VNA' AND Storerkey = @cStorerKey)
    BEGIN
       GOTO SkipVNA
    END
@@ -131,49 +197,58 @@ BEGIN
    --Creating list of available PnDs
    DECLARE @AvailablePnDAisle as TABLE (AvailablePnDAisle NVARCHAR(20))
    
-   insert into @AvailablePnDAisle
-   select LocAisle from
-   (select MaxPallet, 
-   (select count(distinct ID) from LOTxLOCxID (NOLOCK) where qty+PendingMoveIN > 0 and loc = L.Loc and StorerKey = @cStorerKey) SpaceTaken, --Finding how many pallets are in the location and how much can fit there.
+   INSERT INTO @AvailablePnDAisle
+   SELECT LocAisle FROM
+   (SELECT MaxPallet, 
+   (SELECT COUNT(DISTINCT ID) FROM dbo.LOTxLOCxID WITH(NOLOCK) WHERE qty+PendingMoveIN > 0 AND loc = L.Loc AND StorerKey = @cStorerKey AND ID <> @cID) SpaceTaken, --Finding how many pallets are in the location AND how much can fit there.
    L.Loc, LocationType, LocationFlag, LocationCategory, L.Cube, WeightCapacity, Status, PutawayZone, LocAisle,
-   isnull(TotalWeight,0)TotalWeight, isnull(TotalCube,0)TotalCube, --This is from T1 table which calculate how much weight and cube is in the location based on SKU qty.
+   ISNULL(TotalWeight,0)TotalWeight, ISNULL(TotalCube,0)TotalCube, --This is FROM T1 table which calculate how much weight AND cube is in the location based on SKU qty.
    IDWeight, IDCube
-   from LOC L (NOLOCK)
+   FROM dbo.LOC L WITH(NOLOCK)
 
-   left join
+   LEFT JOIN
    (
-   select Loc, sum((LLI.qty+PendingMoveIN) * STDGROSSWGT) TotalWeight, sum((LLI.qty+PendingMoveIN) * (WidthUOM3 * LengthUOM3 * HeightUOM3)) TotalCube --Fnding how much weight and cube is in the location based on SKU qty.
-   from LOTxLOCxID LLI (NOLOCK)
-   join SKU S (NOLOCK)
+   SELECT Loc, SUM((LLI.qty+PendingMoveIN) * STDGROSSWGT) TotalWeight, SUM((LLI.qty+PendingMoveIN) * (WidthUOM3 * LengthUOM3 * HeightUOM3)) TotalCube --Fnding how much weight AND cube is in the location based on SKU qty.
+   FROM dbo.LOTxLOCxID LLI WITH(NOLOCK)
+   INNER JOIN dbo.SKU S WITH(NOLOCK)
    on LLI.Sku = S.Sku
-   join PACK P (NOLOCK)
+   INNER JOIN dbo.PACK P WITH(NOLOCK)
    on s.PACKKey = p.PackKey
-   where (LLI.qty+PendingMoveIN)> 0
-   and LLI.StorerKey = @cStorerKey
-   and S.StorerKey = @cStorerKey
-   group by loc
+   WHERE (LLI.qty+PendingMoveIN)> 0
+   AND LLI.StorerKey = @cStorerKey
+   AND S.StorerKey = @cStorerKey
+   AND id <> @cID
+   GROUP BY loc
    )T1
    ON L.Loc = T1.Loc
 
-   cross join
-   (select isnull(sum(lli.qty * STDGROSSWGT),0) IDWeight, isnull(sum(lli.qty * (WidthUOM3 * LengthUOM3 * HeightUOM3)),0) IDCube from lotxlocxid LLI(NOLOCK) 
-   join SKU S (NOLOCK)	on LLI.Sku = S.Sku join PACK P (NOLOCK) on S.PACKKey = P.PackKey
-   where lli.qty > 0 and LLI.storerkey = @cStorerKey and id = @cID and loc = @cFromLOC and s.StorerKey = @cStorerKey)T2
+   CROSS JOIN
+   (SELECT ISNULL(SUM(lli.qty * STDGROSSWGT),0) IDWeight, ISNULL(SUM(lli.qty * (WidthUOM3 * LengthUOM3 * HeightUOM3)),0) IDCube FROM dbo.LOTxLOCxID LLI(NOLOCK) 
+   INNER JOIN dbo.SKU S WITH(NOLOCK) ON LLI.Sku = S.Sku INNER JOIN dbo.PACK P WITH(NOLOCK) ON S.PACKKey = P.PackKey
+   WHERE lli.qty > 0 AND LLI.storerkey = @cStorerKey AND id = @cID AND loc = @cFromLOC AND s.StorerKey = @cStorerKey)T2
 
-   where facility = @cFacility
-   and PutawayZone in (select code from CODELKUP (NOLOCK) where LISTNAME = 'VNAZONHUSQ' and Storerkey = @cStorerKey)
-   and LocationCategory = 'PND'
-   and LocationFlag in ('','NONE')
-   and status = 'OK'
-   and not exists (select 1 from INVENTORYHOLD (NOLOCK) where Hold = 1 and isnull(loc,'') <> '' and loc = l.loc and Storerkey = @cStorerKey))T1
+   WHERE facility = @cFacility
+   AND EXISTS (SELECT 1 FROM dbo.CODELKUP CLU WITH(NOLOCK) WHERE L.PutawayZone = CLU.Code AND CLU.LISTNAME = 'VNAZONHUSQ' AND CLU.Storerkey = @cStorerKey)
+   AND LocationCategory = 'PND'
+   AND LocationFlag in ('','NONE')
+   AND status = 'OK'
+   AND not EXISTS (SELECT 1 FROM dbo.INVENTORYHOLD WITH(NOLOCK) WHERE Hold = 1 AND ISNULL(loc,'') <> '' AND loc = l.loc AND Storerkey = @cStorerKey))T1
 
-   where MaxPallet - SpaceTaken > 0 and 
-   case when 
-   (1 not in (select short from CODELKUP (NOLOCK) where LISTNAME = 'HUSQCHKPND' and storerkey = @cStorerKey) 
-   or 0 in (select short from CODELKUP (NOLOCK) where LISTNAME = 'HUSQCHKPND' and storerkey = @cStorerKey))
-   then 1 
-   when Cube - TotalCube - IDCube >= 0 and WeightCapacity - TotalWeight - IDWeight >= 0 then 1 else 0
-   end = 1
+   WHERE MaxPallet - SpaceTaken > 0 AND 
+   CASE WHEN 
+   (1 NOT IN (SELECT short FROM dbo.CODELKUP WITH(NOLOCK) WHERE LISTNAME = 'HUSQCHKPND' AND storerkey = @cStorerKey) 
+   OR 0 IN (SELECT short FROM dbo.CODELKUP WITH(NOLOCK) WHERE LISTNAME = 'HUSQCHKPND' AND storerkey = @cStorerKey))
+   THEN 1 
+   WHEN Cube - TotalCube - IDCube >= 0 AND WeightCapacity - TotalWeight - IDWeight >= 0 THEN 1 ELSE 0
+   END = 1
+
+   IF NOT EXISTS (SELECT 1 FROM @AvailablePnDAisle) AND
+   NOT EXISTS (SELECT 1 FROM dbo.CODELKUP WITH(NOLOCK) WHERE listname = 'HUSQLPNTYP' AND udf01 = @LPNPAType AND short = 'WA' AND Storerkey = @cStorerKey)
+   BEGIN
+      SET @nErrNo = 218006
+	  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'No available PnD'
+	  GOTO RollBackTran
+   END
 
    --Creating list of available VNA locations
    DECLARE @AvailableLoc as TABLE
@@ -181,210 +256,226 @@ BEGIN
    PALogicalLoc NVARCHAR(20),
    LocType NVARCHAR(20))
 
-   insert into @AvailableLoc
-   select top 1 Loc, PALogicalLoc, 'VNA' From
-   (select substring(L.Loc,6,1) LocLevel, MaxPallet, 
-   (select count(distinct ID) from LOTxLOCxID (NOLOCK) where qty+PendingMoveIN > 0 and loc = L.Loc and StorerKey = @cStorerKey) SpaceTaken, --Finding how many pallets are in the location and how much can fit there.
+   INSERT INTO @AvailableLoc
+   SELECT TOP 1 Loc, PALogicalLoc, 'VNA' FROM
+   (SELECT SUBSTRING(L.Loc,6,1) LocLevel, MaxPallet, 
+   (SELECT COUNT(DISTINCT ID) FROM dbo.LOTxLOCxID WITH(NOLOCK) WHERE qty+PendingMoveIN > 0 AND loc = L.Loc AND StorerKey = @cStorerKey AND id <> @cID) SpaceTaken, --Finding how many pallets are in the location AND how much can fit there.
    L.Loc, LocationType, LocationFlag, LocationCategory, l.Cube, WeightCapacity, Status, PutawayZone, LocAisle,
-   isnull(TotalWeight,0)TotalWeight, isnull(TotalCube,0)TotalCube, --This is from T1 table which calculate how much weight and cube is in the location based on SKU qty.
+   ISNULL(TotalWeight,0)TotalWeight, ISNULL(TotalCube,0)TotalCube, --This is FROM T1 table which calculate how much weight AND cube is in the location based on SKU qty.
    IDWeight, IDCube, PALogicalLoc
-   from LOC L (NOLOCK)
+   FROM dbo.LOC L WITH(NOLOCK)
 
-   left join
+   LEFT JOIN
    (
-   select sum((lli.qty+PendingMoveIN) * STDGROSSWGT) TotalWeight, sum((lli.qty+PendingMoveIN) * (WidthUOM3 * LengthUOM3 * HeightUOM3)) TotalCube, --Fnding how much weight and cube is in the location based on SKU qty.
+   SELECT SUM((lli.qty+PendingMoveIN) * STDGROSSWGT) TotalWeight, SUM((lli.qty+PendingMoveIN) * (WidthUOM3 * LengthUOM3 * HeightUOM3)) TotalCube, --Fnding how much weight AND cube is in the location based on SKU qty.
    Loc
-
-   from LOTxLOCxID LLI (NOLOCK)
-   join SKU S (NOLOCK)
-   on LLI.Sku = S.Sku
-   join PACK P (NOLOCK)
-   on S.PACKKey = P.PackKey
-   where (lli.qty+PendingMoveIN)> 0
-   and LLI.StorerKey = @cStorerKey
-   group by loc
+   FROM dbo.LOTxLOCxID LLI WITH(NOLOCK)
+   INNER JOIN dbo.SKU S WITH(NOLOCK)
+   ON LLI.Sku = S.Sku
+   INNER JOIN dbo.PACK P WITH(NOLOCK)
+   ON S.PACKKey = P.PackKey
+   WHERE (lli.qty+PendingMoveIN)> 0
+   AND LLI.StorerKey = @cStorerKey
+   AND id <> @cID
+   GROUP BY loc
    )T1
    ON L.Loc = T1.Loc
 
-   cross join
-   (select isnull(sum(lli.qty * STDGROSSWGT),0) IDWeight, isnull(sum(lli.qty * (WidthUOM3 * LengthUOM3 * HeightUOM3)),0) IDCube from lotxlocxid LLI(NOLOCK) 
-   join SKU S (NOLOCK)
+   CROSS JOIN
+   (SELECT ISNULL(SUM(lli.qty * STDGROSSWGT),0) IDWeight, ISNULL(SUM(lli.qty * (WidthUOM3 * LengthUOM3 * HeightUOM3)),0) IDCube FROM dbo.LOTxLOCxID LLI(NOLOCK) 
+   INNER JOIN dbo.SKU S WITH(NOLOCK)
    on LLI.Sku = S.Sku
-   join PACK P (NOLOCK)
+   INNER JOIN dbo.PACK P WITH(NOLOCK)
    on S.PACKKey = P.PackKey
-   where LLI.qty > 0 and LLI.storerkey = @cStorerKey and id = @cID and loc = @cFromLOC)T2
+   WHERE LLI.qty > 0 AND LLI.storerkey = @cStorerKey AND id = @cID AND loc = @cFromLOC)T2
 
-   where facility = @cFacility
-   and (PutawayZone in (select code from CODELKUP (NOLOCK) where Storerkey = @cStorerKey AND LISTNAME = 'VNAZONHUSQ'))
-   and (LocationCategory in (select code from CODELKUP (NOLOCK) where Storerkey = @cStorerKey AND LISTNAME = 'VNACATHUSQ'))
-   and (LocationType in (select code from CODELKUP (NOLOCK) where Storerkey = @cStorerKey AND LISTNAME = 'VNATYPHUSQ'))
-   and LocationFlag in ('','NONE')
-   and status = 'OK'
-   and LocAisle in (select AvailablePnDAisle from @AvailablePnDAisle)
-   and not exists (select 1 from INVENTORYHOLD (NOLOCK) where Hold = 1 and isnull(loc,'') <> '' and loc = l.loc and Storerkey = @cStorerKey))T3
+   WHERE facility = @cFacility
+   AND (EXISTS (SELECT 1 FROM dbo.CODELKUP CLU WITH(NOLOCK) WHERE L.PutawayZone = CLU.Code AND CLU.Storerkey = @cStorerKey AND CLU.LISTNAME = 'VNAZONHUSQ'))
+   AND (EXISTS (SELECT 1 FROM dbo.CODELKUP CLU WITH(NOLOCK) WHERE L.LocationCategory = CLU.Code AND CLU.Storerkey = @cStorerKey AND CLU.LISTNAME = 'VNACATHUSQ'))
+   AND (EXISTS (SELECT 1 FROM dbo.CODELKUP CLU WITH(NOLOCK) WHERE L.LocationType = CLU.Code AND CLU.Storerkey = @cStorerKey AND CLU.LISTNAME = 'VNATYPHUSQ'))
+   AND LocationFlag in ('','NONE')
+   AND status = 'OK'
+   AND LocAisle IN (SELECT AvailablePnDAisle FROM @AvailablePnDAisle)
+   AND NOT EXISTS (SELECT 1 FROM dbo.INVENTORYHOLD WITH(NOLOCK) WHERE Hold = 1 AND ISNULL(loc,'') <> '' AND loc = l.loc AND Storerkey = @cStorerKey))T3
 
-   where MaxPallet - SpaceTaken > 0 and Cube - TotalCube - IDCube > 0 and WeightCapacity - TotalWeight - IDWeight > 0
+   WHERE MaxPallet - SpaceTaken > 0 AND Cube - TotalCube - IDCube > 0 AND WeightCapacity - TotalWeight - IDWeight > 0
    
    --Filter by product type
-   and ((@Flymo = 1 and LocLevel in (select Long from CODELKUP (NOLOCK) where listname = 'HUSQLPNTYP' and udf01 = 'Flymo' and short = 'VNA' and Storerkey = @cStorerKey))or @Flymo <> 1)
-   and ((LocLevel in (select Long from CODELKUP (NOLOCK) where listname = 'HUSQLPNTYP' and udf01 = @LPNPAType and short = 'VNA' and Storerkey = @cStorerKey)))
+   AND ((@Flymo = 1 AND EXISTS (SELECT 1 FROM dbo.CODELKUP CLU WITH(NOLOCK) WHERE T3.LocLevel = CLU.Long AND CLU.listname = 'HUSQLPNTYP' AND CLU.udf01 = 'Flymo' AND CLU.short = 'VNA' AND CLU.Storerkey = @cStorerKey))or @Flymo <> 1)
+   AND ((EXISTS (SELECT 1 FROM dbo.CODELKUP CLU WITH(NOLOCK) WHERE T3.LocLevel = CLU.long AND CLU.listname = 'HUSQLPNTYP' AND CLU.udf01 = @LPNPAType AND CLU.short = 'VNA' AND CLU.Storerkey = @cStorerKey)))
 
-   order by PALogicalLoc
+   ORDER BY PALogicalLoc
+
+   IF not EXISTS (SELECT 1 FROM @AvailableLoc) and
+   not EXISTS (SELECT 1 FROM dbo.CODELKUP WITH(NOLOCK) WHERE listname = 'HUSQLPNTYP' AND udf01 = @LPNPAType AND short = 'WA' AND Storerkey = @cStorerKey)
+   BEGIN
+      SET @nErrNo = 218007
+	  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')--'No suitable VNA Loc'
+	  GOTO RollBackTran
+   END
 
    SkipVNA:
    --Creating list of available Wide Aisle locations
-   IF not exists (select 1 from CODELKUP (NOLOCK) where listname = 'HUSQLPNTYP' and udf01 = @LPNPAType and short = 'WA' and Storerkey = @cStorerKey)
+   IF NOT EXISTS (SELECT 1 FROM dbo.CODELKUP WITH(NOLOCK) WHERE listname = 'HUSQLPNTYP' AND udf01 = @LPNPAType AND short = 'WA' AND Storerkey = @cStorerKey)
    BEGIN
       GOTO SkipWA
    END
    
-   DECLARE @AvailableWALoc as TABLE (AvailableWALoc NVARCHAR(20), PALogicalLoc NVARCHAR(20))
+   DECLARE @AvailableWALoc AS TABLE (AvailableWALoc NVARCHAR(20), PALogicalLoc NVARCHAR(20))
    
-   Insert into @AvailableWALoc
-   select Loc, PALogicalLoc From
-   (select substring(L.Loc,6,1) LocLevel, MaxPallet, 
-   (select count(distinct ID) from LOTxLOCxID (NOLOCK) where qty+PendingMoveIN > 0 and loc = L.Loc and StorerKey = @cStorerKey) SpaceTaken, --Finding how many pallets are in the location and how much can fit there.
+   INSERT INTO @AvailableWALoc
+   SELECT Loc, PALogicalLoc FROM
+   (SELECT SUBSTRING(L.Loc,6,1) LocLevel, MaxPallet, 
+   (SELECT COUNT(DISTINCT ID) FROM dbo.LOTxLOCxID WITH(NOLOCK) WHERE qty+PendingMoveIN > 0 AND loc = L.Loc AND StorerKey = @cStorerKey AND id <> @cID) SpaceTaken, --Finding how many pallets are in the location AND how much can fit there.
    L.Loc, LocationType, LocationFlag, LocationCategory, L.Cube, WeightCapacity, Status, PutawayZone, LocAisle,
-   isnull(TotalWeight,0)TotalWeight, isnull(TotalCube,0)TotalCube, --This is from T1 table which calculate how much weight and cube is in the location based on SKU qty.
+   ISNULL(TotalWeight,0)TotalWeight, ISNULL(TotalCube,0)TotalCube, --This is FROM T1 table which calculate how much weight AND cube is in the location based on SKU qty.
    IDWeight, IDCube, PALogicalLoc
-   from LOC L (NOLOCK)
+   FROM dbo.LOC L WITH(NOLOCK)
 
-   left join
+   LEFT JOIN
    (
-   select sum((lli.qty+PendingMoveIN) * STDGROSSWGT) TotalWeight, sum((lli.qty+PendingMoveIN) * (WidthUOM3 * LengthUOM3 * HeightUOM3)) TotalCube, --Fnding how much weight and cube is in the location based on SKU qty.
+   SELECT SUM((lli.qty+PendingMoveIN) * STDGROSSWGT) TotalWeight, SUM((lli.qty+PendingMoveIN) * (WidthUOM3 * LengthUOM3 * HeightUOM3)) TotalCube, --Fnding how much weight AND cube is in the location based on SKU qty.
    Loc
-
-   from LOTxLOCxID LLI (NOLOCK)
-   join SKU S (NOLOCK)
-   on LLI.Sku = S.Sku
-   join PACK P (NOLOCK)
-   on S.PACKKey = p.PackKey
-   where (lli.qty+PendingMoveIN)> 0
-   and LLI.StorerKey = @cStorerKey
-   group by loc
+   FROM dbo.LOTxLOCxID LLI WITH(NOLOCK)
+   INNER JOIN dbo.SKU S WITH(NOLOCK)
+   ON LLI.Sku = S.Sku
+   INNER JOIN dbo.PACK P WITH(NOLOCK)
+   ON S.PACKKey = p.PackKey
+   WHERE (lli.qty+PendingMoveIN)> 0
+   AND LLI.StorerKey = @cStorerKey
+   AND id <> @cID
+   GROUP BY loc
    )T1
    ON L.Loc = T1.Loc
 
-   cross join
-   (select isnull(sum(lli.qty * STDGROSSWGT),0) IDWeight, isnull(sum(lli.qty * (WidthUOM3 * LengthUOM3 * HeightUOM3)),0) IDCube from lotxlocxid LLI(NOLOCK) 
-   join SKU S (NOLOCK)
-   on LLI.Sku = S.Sku
-   join PACK P (NOLOCK)
-   on S.PACKKey = P.PackKey
-   where lli.qty > 0 and LLI.storerkey = @cStorerKey and id = @cID and loc = @cFromLOC)T2
+   CROSS JOIN
+   (SELECT ISNULL(SUM(lli.qty * STDGROSSWGT),0) IDWeight, ISNULL(SUM(lli.qty * (WidthUOM3 * LengthUOM3 * HeightUOM3)),0) IDCube FROM dbo.LOTxLOCxID LLI(NOLOCK) 
+   INNER JOIN dbo.SKU S WITH(NOLOCK)
+   ON LLI.Sku = S.Sku
+   INNER JOIN dbo.PACK P WITH(NOLOCK)
+   ON S.PACKKey = P.PackKey
+   WHERE lli.qty > 0 AND LLI.storerkey = @cStorerKey AND id = @cID AND loc = @cFromLOC)T2
 
-   where facility = @cFacility
-   and (PutawayZone in (select code from CODELKUP (NOLOCK) where Storerkey = @cStorerKey AND LISTNAME = 'WAZONEHUSQ'))
-   and (LocationCategory in (select code from CODELKUP (NOLOCK) where Storerkey = @cStorerKey AND LISTNAME = 'WACATHUSQ'))
-   and (LocationType in (select code from CODELKUP (NOLOCK) where Storerkey = @cStorerKey AND LISTNAME = 'WATYPEHUSQ'))
-   and LocationFlag in ('','NONE')
-   and status = 'OK'
-   and not exists (select 1 from INVENTORYHOLD (NOLOCK) where Hold = 1 and isnull(loc,'') <> '' and loc = l.loc and Storerkey = @cStorerKey))T3
+   WHERE facility = @cFacility
+   AND (EXISTS (SELECT 1 FROM dbo.CODELKUP CLU WITH(NOLOCK) WHERE L.PutawayZone = CLU.Code AND CLU.Storerkey = @cStorerKey AND CLU.LISTNAME = 'WAZONEHUSQ'))
+   AND (EXISTS (SELECT 1 FROM dbo.CODELKUP CLU WITH(NOLOCK) WHERE L.LocationCategory = CLU.Code AND CLU.Storerkey = @cStorerKey AND CLU.LISTNAME = 'WACATHUSQ'))
+   AND (EXISTS (SELECT 1 FROM dbo.CODELKUP CLU WITH(NOLOCK) WHERE L.LocationType = CLU.code AND CLU.Storerkey = @cStorerKey AND CLU.LISTNAME = 'WATYPEHUSQ'))
+   AND LocationFlag in ('','NONE')
+   AND status = 'OK'
+   AND not EXISTS (SELECT 1 FROM dbo.INVENTORYHOLD WITH(NOLOCK) WHERE Hold = 1 AND ISNULL(loc,'') <> '' AND loc = l.loc AND Storerkey = @cStorerKey))T3
 
-   where MaxPallet - SpaceTaken > 0 and Cube - TotalCube - IDCube > 0 and WeightCapacity - TotalWeight - IDWeight > 0
+   WHERE MaxPallet - SpaceTaken > 0 AND Cube - TotalCube - IDCube > 0 AND WeightCapacity - TotalWeight - IDWeight > 0
 
    --Filter by product type
-   and ((@Flymo = 1 and LocLevel in (select Long from CODELKUP (NOLOCK) where listname = 'HUSQLPNTYP' and udf01 = 'Flymo' and short = 'WA' and Storerkey = @cStorerKey))or @Flymo <> 1)
-   and ((LocLevel in (select Long from CODELKUP (NOLOCK) where listname = 'HUSQLPNTYP' and udf01 = @LPNPAType and short = 'WA' and Storerkey = @cStorerKey)))	
+   AND ((@Flymo = 1 AND EXISTS (SELECT 1 FROM dbo.CODELKUP CLU WITH(NOLOCK) WHERE T3.LocLevel = CLU.Long AND CLU.listname = 'HUSQLPNTYP' AND CLU.udf01 = 'Flymo' AND CLU.short = 'WA' AND CLU.Storerkey = @cStorerKey))or @Flymo <> 1)
+   AND ((EXISTS (SELECT 1 FROM dbo.CODELKUP CLU WITH(NOLOCK) WHERE T3.LocLevel = CLU.Long AND CLU.listname = 'HUSQLPNTYP' AND CLU.udf01 = @LPNPAType AND CLU.short = 'WA' AND CLU.Storerkey = @cStorerKey)))	
 
    --Creating proximity check for Wide Aisle locations
-   insert into @AvailableLoc
-   select top 1 AvailableWALoc, PALogicalLoc, 'WA' from
-   (select AvailableWALoc, PALogicalLoc,
-   abs(convert(float,(convert(nvarchar(3),ASCII(substring(AvailableWALoc,1,1)))+
-   convert(nvarchar(3),ASCII(substring(AvailableWALoc,2,1)))+
-   convert(nvarchar(3),ASCII(substring(AvailableWALoc,3,1)))+
-   convert(nvarchar(3),ASCII(substring(AvailableWALoc,4,1)))+
-   convert(nvarchar(3),ASCII(substring(AvailableWALoc,5,1)))+
-   convert(nvarchar(3),ASCII(substring(AvailableWALoc,6,1)))+
-   convert(nvarchar(3),ASCII(substring(AvailableWALoc,7,1)))))
+   INSERT INTO @AvailableLoc
+   SELECT TOP 1 AvailableWALoc, PALogicalLoc, 'WA' FROM
+   (SELECT AvailableWALoc, PALogicalLoc,
+   ABS(CONVERT(float,(CONVERT(nvarchar(3),ASCII(SUBSTRING(AvailableWALoc,1,1)))+
+   CONVERT(nvarchar(3),ASCII(SUBSTRING(AvailableWALoc,2,1)))+
+   CONVERT(nvarchar(3),ASCII(SUBSTRING(AvailableWALoc,3,1)))+
+   CONVERT(nvarchar(3),ASCII(SUBSTRING(AvailableWALoc,4,1)))+
+   CONVERT(nvarchar(3),ASCII(SUBSTRING(AvailableWALoc,5,1)))+
+   CONVERT(nvarchar(3),ASCII(SUBSTRING(AvailableWALoc,6,1)))+
+   CONVERT(nvarchar(3),ASCII(SUBSTRING(AvailableWALoc,7,1)))))
    - Coordinates2)Proximity
-   from @AvailableWALoc
-   cross join
-   (select 
-   convert(nvarchar(3),ASCII(substring(Loc,1,1)))+
-   convert(nvarchar(3),ASCII(substring(Loc,2,1)))+
-   convert(nvarchar(3),ASCII(substring(Loc,3,1)))+
-   convert(nvarchar(3),ASCII(substring(Loc,4,1)))+
-   convert(nvarchar(3),ASCII(substring(Loc,5,1)))+
-   convert(nvarchar(3),ASCII(substring(Loc,6,1)))+
-   convert(nvarchar(3),ASCII(substring(Loc,7,1)))Coordinates2
-   from SKUxLOC (NOLOCK) --Retrieving pick SKUs 
-   where StorerKey = @cStorerKey 
-   and sku = (select top 1 sku from LOTxLOCxID (NOLOCK) where qty > 0 and id = @cID and loc = @cFromLOC and storerkey = @cStorerKey)
-   and QtyLocationLimit > 0)T1)T2
-   order by Proximity, PALogicalLoc
+   FROM @AvailableWALoc
+   CROSS JOIN
+   (SELECT 
+   CONVERT(nvarchar(3),ASCII(SUBSTRING(Loc,1,1)))+
+   CONVERT(nvarchar(3),ASCII(SUBSTRING(Loc,2,1)))+
+   CONVERT(nvarchar(3),ASCII(SUBSTRING(Loc,3,1)))+
+   CONVERT(nvarchar(3),ASCII(SUBSTRING(Loc,4,1)))+
+   CONVERT(nvarchar(3),ASCII(SUBSTRING(Loc,5,1)))+
+   CONVERT(nvarchar(3),ASCII(SUBSTRING(Loc,6,1)))+
+   CONVERT(nvarchar(3),ASCII(SUBSTRING(Loc,7,1)))Coordinates2
+   FROM dbo.SKUxLOC WITH(NOLOCK) --Retrieving pick SKUs 
+   WHERE StorerKey = @cStorerKey 
+   AND sku = (SELECT TOP 1 sku FROM dbo.LOTxLOCxID WITH(NOLOCK) WHERE qty > 0 AND id = @cID AND loc = @cFromLOC AND storerkey = @cStorerKey)
+   AND QtyLocationLimit > 0)T1)T2
+   ORDER BY Proximity, PALogicalLoc
 
-   ------custom code before global putaway SP end
+   IF NOT EXISTS (SELECT 1 FROM @AvailableWALoc)
+   AND NOT EXISTS (SELECT 1 FROM dbo.CODELKUP WITH(NOLOCK) WHERE listname = 'HUSQLPNTYP' AND udf01 = @LPNPAType AND short = 'VNA' AND Storerkey = @cStorerKey)
+   BEGIN
+      SET @nErrNo = 218008
+	  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')--'No suitable WA Loc'
+	  GOTO RollBackTran
+   END
+
+   ------custom code before global putaway SP END
    SkipWA:
 
    DECLARE @LocAisle NVARCHAR(10),
    @PendingLoc NVARCHAR(20)
 
-   SET @PendingLoc = case when exists (select 1 from LOTxLOCxID (NOLOCK) where id = @cID and PendingMoveIN > 0 and StorerKey = @cStorerKey) then
-   (select top 1 LOC from LOTxLOCxID (NOLOCK) where id = @cID and PendingMoveIN > 0 and StorerKey = @cStorerKey) else '' end
+   SET @PendingLoc = CASE WHEN EXISTS (SELECT 1 FROM dbo.LOTxLOCxID WITH(NOLOCK) WHERE id = @cID AND PendingMoveIN > 0 AND StorerKey = @cStorerKey) then
+   (SELECT TOP 1 LOC FROM dbo.LOTxLOCxID WITH(NOLOCK) WHERE id = @cID AND PendingMoveIN > 0 AND StorerKey = @cStorerKey) ELSE '' END
 
-   SET @cSuggLOC = case when @PendingLoc <> '' then @PendingLoc
-   when not exists (select 1 from @AvailableLoc) then '' else (select top 1 AvailableLoc from @AvailableLoc order by PALogicalLoc) end 
+   SET @cSuggLOC = CASE WHEN @PendingLoc <> '' THEN @PendingLoc
+   WHEN not EXISTS (SELECT 1 FROM @AvailableLoc) THEN '' ELSE (SELECT TOP 1 AvailableLoc FROM @AvailableLoc ORDER BY PALogicalLoc) END 
 
-   select top 1 @LocAisle = locaisle from loc (NOLOCK) where Facility = @cFacility AND loc = (select top 1 AvailableLoc from @AvailableLoc order by PALogicalLoc)
+   SELECT TOP 1 @LocAisle = locaisle FROM dbo.LOC WITH(NOLOCK) WHERE Facility = @cFacility AND loc = (SELECT TOP 1 AvailableLoc FROM @AvailableLoc ORDER BY PALogicalLoc)
 
-   SET @cPickAndDropLOC = case when not exists (select 1 from @AvailableLoc) 
-   or (select top 1 LocType from @AvailableLoc order by PALogicalLoc) <> 'VNA' 
-   or (@cFromLOCType = 'PND' and @cFromLocPAZ in (select code from CODELKUP (NOLOCK) where storerkey = @cStorerKey and LISTNAME = 'VNAZONHUSQ'))
-   then ''
+   SET @cPickAndDropLOC = CASE WHEN NOT EXISTS (SELECT 1 FROM @AvailableLoc) 
+   OR (SELECT TOP 1 LocType FROM @AvailableLoc ORDER BY PALogicalLoc) <> 'VNA' 
+   OR (@cFromLOCType = 'PND' AND EXISTS (SELECT 1 FROM dbo.CODELKUP WITH(NOLOCK) WHERE @cFromLocPAZ = code AND storerkey = @cStorerKey AND LISTNAME = 'VNAZONHUSQ'))
+   THEN ''
    else
-   (select top 1 Loc from
-   (select MaxPallet, 
-   (select count(distinct ID) from LOTxLOCxID (NOLOCK) where qty+PendingMoveIN > 0 and loc = L.Loc and StorerKey = @cStorerKey) SpaceTaken, --Finding how many pallets are in the location and how much can fit there.
+   (SELECT TOP 1 Loc FROM
+   (SELECT MaxPallet, 
+   (SELECT COUNT(DISTINCT ID) FROM dbo.LOTxLOCxID WITH(NOLOCK) WHERE qty+PendingMoveIN > 0 AND loc = L.Loc AND StorerKey = @cStorerKey AND id <> @cID) SpaceTaken, --Finding how many pallets are in the location AND how much can fit there.
    L.Loc, LocationType, LocationFlag, LocationCategory, L.Cube, WeightCapacity, Status, PutawayZone, LocAisle,
-   isnull(TotalWeight,0)TotalWeight, isnull(TotalCube,0)TotalCube, --This is from T1 table which calculate how much weight and cube is in the location based on SKU qty.
+   ISNULL(TotalWeight,0)TotalWeight, ISNULL(TotalCube,0)TotalCube, --This is FROM T1 table which calculate how much weight AND cube is in the location based on SKU qty.
    IDWeight, IDCube
-   from LOC L (NOLOCK)
+   FROM dbo.LOC L WITH(NOLOCK)
 
-   left join
+   LEFT JOIN
    (
-   select sum((lli.qty+PendingMoveIN) * STDGROSSWGT) TotalWeight, sum((lli.qty+PendingMoveIN) * (WidthUOM3 * LengthUOM3 * HeightUOM3)) TotalCube, --Fnding how much weight and cube is in the location based on SKU qty.
+   SELECT SUM((lli.qty+PendingMoveIN) * STDGROSSWGT) TotalWeight, SUM((lli.qty+PendingMoveIN) * (WidthUOM3 * LengthUOM3 * HeightUOM3)) TotalCube, --Fnding how much weight AND cube is in the location based on SKU qty.
    Loc
-
-   from LOTxLOCxID LLI (NOLOCK)
-   join SKU S (NOLOCK)
-   on LLI.Sku = S.Sku
-   JOIN PACK P (NOLOCK)
-   on S.PACKKey = P.PackKey
-   where (lli.qty+PendingMoveIN)> 0
-   and LLI.StorerKey = @cStorerKey
-   group by loc
+   FROM dbo.LOTxLOCxID LLI WITH(NOLOCK)
+   INNER JOIN dbo.SKU S WITH(NOLOCK)
+   ON LLI.Sku = S.Sku
+   INNER JOIN dbo.PACK P WITH(NOLOCK)
+   ON S.PACKKey = P.PackKey
+   WHERE (lli.qty+PendingMoveIN)> 0
+   AND LLI.StorerKey = @cStorerKey
+   AND id <> @cID
+   GROUP BY loc
    )T1
    ON L.Loc = T1.Loc
 
-   cross join
-   (select isnull(sum(lli.qty * STDGROSSWGT),0) IDWeight, isnull(sum(lli.qty * (WidthUOM3 * LengthUOM3 * HeightUOM3)),0) IDCube from lotxlocxid LLI(NOLOCK) 
-   join SKU S (NOLOCK)	on LLI.Sku = S.Sku join PACK P (NOLOCK) on S.PACKKey = P.PackKey
-   where lli.qty > 0 and LLI.storerkey = @cStorerKey and id = @cID and loc = @cFromLOC)T2
+   CROSS JOIN
+   (SELECT ISNULL(SUM(lli.qty * STDGROSSWGT),0) IDWeight, ISNULL(SUM(lli.qty * (WidthUOM3 * LengthUOM3 * HeightUOM3)),0) IDCube FROM dbo.LOTxLOCxID LLI(NOLOCK) 
+   INNER JOIN dbo.SKU S WITH(NOLOCK) ON LLI.Sku = S.Sku INNER JOIN dbo.PACK P WITH(NOLOCK) ON S.PACKKey = P.PackKey
+   WHERE lli.qty > 0 AND LLI.storerkey = @cStorerKey AND id = @cID AND loc = @cFromLOC)T2
 
-   where facility = @cFacility
-   and PutawayZone in (select code from CODELKUP (NOLOCK) where LISTNAME = 'VNAZONHUSQ' and Storerkey = @cStorerKey)
-   and LocationCategory = 'PND'
-   and LocationFlag in ('','NONE')
-   and status = 'OK'
-   and LocAisle = @LocAisle
-   and not exists (select 1 from INVENTORYHOLD (NOLOCK) where Hold = 1 and isnull(loc,'') <> '' and loc = l.loc and Storerkey = @cStorerKey))T1
+   WHERE facility = @cFacility
+   AND EXISTS (SELECT code FROM dbo.CODELKUP CLU WITH(NOLOCK) WHERE L.PutawayZone = CLU.code AND CLU.LISTNAME = 'VNAZONHUSQ' AND CLU.Storerkey = @cStorerKey)
+   AND L.LocationCategory = 'PND'
+   AND L.LocationFlag in ('','NONE')
+   AND Status = 'OK'
+   AND LocAisle = @LocAisle
+   AND NOT EXISTS (SELECT 1 FROM dbo.INVENTORYHOLD WITH(NOLOCK) WHERE Hold = 1 AND ISNULL(loc,'') <> '' AND loc = l.loc AND Storerkey = @cStorerKey))T1
 
-   where MaxPallet - SpaceTaken > 0 and 
-   case when 
-   (1 not in (select short from CODELKUP (NOLOCK) where LISTNAME = 'HUSQCHKPND' and storerkey = @cStorerKey) 
-   or 0 in (select short from CODELKUP (NOLOCK) where LISTNAME = 'HUSQCHKPND' and storerkey = @cStorerKey))
-   then 1 
-   when Cube - TotalCube - IDCube >= 0 and WeightCapacity - TotalWeight - IDWeight >= 0 then 1 else 0
-   end = 1) end
+   WHERE MaxPallet - SpaceTaken > 0 AND 
+   CASE WHEN 
+   (1 NOT IN (SELECT short FROM dbo.CODELKUP WITH(NOLOCK) WHERE LISTNAME = 'HUSQCHKPND' AND storerkey = @cStorerKey) 
+   OR 0 IN (SELECT short FROM dbo.CODELKUP WITH(NOLOCK) WHERE LISTNAME = 'HUSQCHKPND' AND storerkey = @cStorerKey))
+   THEN 1 
+   WHEN Cube - TotalCube - IDCube >= 0 AND WeightCapacity - TotalWeight - IDWeight >= 0 THEN 1 ELSE 0
+   END = 1) END
 
-   set @cFitCasesInAisle = ''
+   SET @cFitCasesInAisle = ''
 
    DECLARE @PnDRequired int
-   SET @PnDRequired = case when (select top 1 LocType from @AvailableLoc order by PALogicalLoc) = 'VNA' then 1 else 0 end
+   SET @PnDRequired = CASE WHEN (SELECT TOP 1 LocType FROM @AvailableLoc ORDER BY PALogicalLoc) = 'VNA' THEN 1 ELSE 0 END
 
-   IF @PnDRequired = 1 and not exists (select 1 from @AvailablePnDAisle)
+   IF @PnDRequired = 1 AND not EXISTS (SELECT 1 FROM @AvailablePnDAisle)
    BEGIN
       SET @nErrNo = 217990
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --No PnD loc available
@@ -451,15 +542,24 @@ BEGIN
             GOTO RollBackTran2
       END
 
-   update LOTxLOCxID
-   set PendingMoveIN = PendingMoveIN / 2
-   where id = @cID and loc = @PendingLoc and storerkey = @cStorerKey and PendingMoveIN > 0 and ID <> ''
+   UPDATE dbo.LOTxLOCxID
+   SET PendingMoveIN = PendingMoveIN / 2
+   WHERE id = @cID AND loc = @PendingLoc AND storerkey = @cStorerKey AND PendingMoveIN > 0 AND ID <> ''
 
    COMMIT TRAN rdt_1819ExtPASPVLT4 -- Only commit change made here
    END
 
-   delete from RFPUTAWAY
-   where id = @cID and StorerKey = @cStorerKey
+   DELETE FROM dbo.RFPUTAWAY
+   WHERE id = @cID AND StorerKey = @cStorerKey
+
+   UPDATE dbo.LOTxLOCxID
+   SET PendingMoveIN = 0
+   WHERE StorerKey = @cStorerKey
+   AND PendingMoveIN > 0 AND qty = 0 AND id = @cID AND ID <> ''
+   AND EXISTS (SELECT 1 FROM dbo.LOC L WITH(NOLOCK) WHERE LocationType = 'PND' AND facility = @cFacility AND dbo.LOTxLOCxID.loc = L.Loc)
+   AND EXISTS (SELECT 1 FROM dbo.LOTxLOCxID LLI2 WITH(NOLOCK) WHERE dbo.LOTxLOCxID.Id = LLI2.Id AND StorerKey = @cStorerKey AND qty > 0 AND exists
+   (SELECT 1 FROM dbo.LOC L2 WITH(NOLOCK) WHERE L2.Loc = LLI2.Loc 
+   AND EXISTS (SELECT 1 FROM dbo.CODELKUP WITH(NOLOCK) WHERE LISTNAME = 'HUSQALLZON' AND Storerkey = @cStorerKey AND L2.PutawayZone = Code)))
 
    GOTO Quit
 
