@@ -45,6 +45,8 @@ GO
 /* 11-Feb-2025 SSA02    2.2   UWP-29893 Removed @c_Pickdetailkey's empty*/
 /*                            check to restrict unallocation for packing*/
 /*                            orders while click on option1             */
+/* 11-Feb-2025 SSA03    2.3   UWP-29893 Reverting changes to fix PROD   */
+/*                            issue*/
 /************************************************************************/       
 CREATE OR ALTER PROCEDURE [WM].[lsp_Unallocation_Wrapper]
     @c_Storerkey NVARCHAR(15) = ''      --optional    
@@ -238,8 +240,7 @@ BEGIN
                JOIN dbo.PackDetail AS pd WITH (NOLOCK) ON pd.PickSlipNo = ph.PickSlipNo    
                WHERE ph.PickSlipNo = @c_PickHeaderKey    
                             
-               --IF ISNULL(@c_Pickdetailkey,'') = '' AND @c_PackStatus IN ( '0','9' ) --(SSA02)
-               IF @c_PackStatus IN ( '0','9' )
+               IF ISNULL(@c_Pickdetailkey,'') = '' AND @c_PackStatus IN ( '0','9' ) --(SSA02)(SSA03)
                BEGIN     
                   SET @n_continue = 3      
                   SET @n_err = 551808    
