@@ -1,4 +1,7 @@
-
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS OFF
+GO
 /****************************************************************************/
 /* Store procedure: rdt_511ExtInfoVLT1                                      */
 /*                                                                          */
@@ -6,6 +9,7 @@
 /* Date         VER   Author   Purpose                                      */
 /* 25/04/2024   1.0   PPA374   Suggesting up to 2 locations for VNA PA      */
 /* 15/07/2024   2.0   PPA374   Stopping picked LPNs to be moved incorrectly */
+/* 12/12/2024   2.1   PPA374   Excluding specific location from substring   */
 /****************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_511ExtInfoVLT1] (
@@ -28,24 +32,31 @@ BEGIN
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
-   IF @nFunc = 511 and @nStep = 2 and @nInputKey = 1
+   IF @nFunc = 511 AND @nStep = 2 AND @nInputKey = 1
    BEGIN
       DECLARE 
       @PNDPICKChk int,
+      @VASChk int,
       @Facility NVARCHAR(20)
 
-      select top 1 @Facility = FACILITY from rdt.RDTMOBREC (NOLOCK) where Mobile = @nMobile
-      set @PNDPICKChk = case when (select top 1 LocationType from loc WITH (NOLOCK) where loc = @cFromLoc and Facility = @Facility and loc like 'B_999%') = 'PND' and exists(select 1 from pickdetail (NOLOCK) where id = @cFromID and sku = @cSKU and status = 5 and dropid <> '' and Storerkey = @cStorerKey) then 1 else 0 end
+      SELECT TOP 1 @Facility = FACILITY FROM rdt.RDTMOBREC WITH (NOLOCK) WHERE Mobile = @nMobile
+      SET @PNDPICKChk = CASE WHEN (SELECT TOP 1 LocationType FROM dbo.LOC WITH (NOLOCK) WHERE loc = @cFromLoc AND Facility = @Facility AND loc LIKE 'B_999%') = 'PND' AND EXISTS (SELECT 1 FROM dbo.PICKDETAIL WITH (NOLOCK) WHERE id = @cFromID AND sku = @cSKU AND STATUS = 5 AND dropid <> '' AND Storerkey = @cStorerKey) THEN 1 ELSE 0 END
+      SET @VASChk = CASE WHEN (SELECT TOP 1 LocationType FROM dbo.LOC WITH (NOLOCK) WHERE loc = @cFromLoc AND Facility = @Facility) = 'VAS' AND EXISTS(SELECT 1 FROM dbo.PICKDETAIL WITH (NOLOCK) WHERE id = @cFromID AND sku = @cSKU AND STATUS = 5 AND dropid <> '' AND Storerkey = @cStorerKey) THEN 1 ELSE 0 END
 
-      IF @PNDPICKChk = 1
+      IF @PNDPICKChk = 1 OR @VASChk = 1
       BEGIN
          SET @cExtendedInfo = 'Move to '+
-         (select top 1 reverse(substring(reverse(OtherReference),4,10)) from mbol (NOLOCK) where facility = @Facility 
-      and mbolkey = (select top 1 mbolkey from orders (NOLOCK) where StorerKey = @cStorerKey and orderkey = 
-         (select top 1 OrderKey from pickdetail (NOLOCK) where Storerkey = @cStorerKey and id = @cFromID)))
+         (SELECT TOP 1 case when OtherReference LIKE 'DNEDEL%' or OtherReference LIKE 'DNPALN%' THEN OtherReference ELSE 
+		 reverse(substring(reverse(OtherReference),4,10)) END FROM dbo.MBOL WITH (NOLOCK) WHERE facility = @Facility 
+         AND mbolkey = (SELECT TOP 1 mbolkey FROM dbo.ORDERS WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND orderkey = 
+         (SELECT TOP 1 OrderKey FROM dbo.PICKDETAIL WITH (NOLOCK) WHERE Storerkey = @cStorerKey AND id = @cFromID)))
       END
    END
 END
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS ON
 GO
 GRANT EXECUTE ON [RDT].[rdt_511ExtInfoVLT1] TO [NSQL]
 GO

@@ -26,6 +26,7 @@ GO
 /* 23-Oct-2024  Wan01   1.1   UWP-24998 - MLP Outbound Staging Loc       */
 /* 13-NOV-2024  VPA235  1.2   UWP-26879 - Change task group key to Load ID */
 /* 22-NOV-2024  Wan02   1.3   FCR-1430 - Gap for Overallocation at FrontLoc*/
+/* 18-Dec-2024  SSA01   1.4   UWP-28305 -update Status = 0 for FCP tasks */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]        
     @c_Wavekey      NVARCHAR(10)    
@@ -594,7 +595,7 @@ CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]
                                        , @c_OrderKey = @c_Orderkey
                                        , @c_Message03 = @c_Message03
                                        , @n_SystemQty = @n_Qty
-                                       , @c_Status = 'Q'
+                                       , @c_Status = '0'        --(SSA01)
                                        , @c_AreaKey = '?F' -- ?F=Get from location areakey  
                                        , @c_UserPosition = '1'
                                        , @c_CallSource = 'WAVE'

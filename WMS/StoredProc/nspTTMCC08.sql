@@ -19,11 +19,12 @@ GO
 /* Data Modifications:                                                  */
 /*                                                                      */
 /* Updates:                                                             */
-/* Date         Author  Ver    Purposes                                 */
-/* 2024-11-22   NLT013  1.0.0  UWP-27392 consider Loc.CCLogicalLoc      */
+/* Date         Author  Ver  Purposes                                   */
+/* 2024-11-22   NLT013  1.0  UWP-27392 consider Loc.CCLogicalLoc        */
+/* 2024-12-16   CalvinK 1.1  MCLOPM-595 PUMACL USERKEYOVERRIDE (CLVN01) */
 /************************************************************************/
 
-CREATE OR ALTER PROC    dbo.nspTTMCC08
+CREATE OR ALTER PROC    [dbo].[nspTTMCC08]
    @c_userid           NVARCHAR(18),
    @c_areakey01        NVARCHAR(10),
    @c_areakey02        NVARCHAR(10),
@@ -70,7 +71,8 @@ BEGIN
             AND TaskManagerUserDetail.AreaKey = AreaDetail.AreaKey
             AND AreaDetail.Putawayzone = Loc.PutAwayZone
             AND TaskDetail.FromLoc = Loc.Loc
-            AND TaskDetail.UserKeyOverRide IN ( @c_userid, '')  -- (james01)
+            --AND TaskDetail.UserKeyOverRide IN ( @c_userid, '')  -- (james01) --(CLVN01)
+			AND TaskDetail.UserKeyOverRide IN ( @c_userid)  -- (james01)	   --(CLVN01)
          ORDER BY
             CASE WHEN TaskDetail.UserKeyOverRide = @c_userid THEN '0' ELSE '1' END, -- (james01)
             Loc.CCLogicalLoc,   --NLT013 UWP-27392
@@ -91,7 +93,8 @@ BEGIN
             AND AreaDetail.AreaKey = @c_areakey01
             AND AreaDetail.Putawayzone = Loc.PutAwayZone
             AND TaskDetail.FromLoc = Loc.Loc
-            AND TaskDetail.UserKeyOverRide IN ( @c_userid, '')  -- (james01)
+            --AND TaskDetail.UserKeyOverRide IN ( @c_userid, '')  -- (james01) --(CLVN01)
+			AND TaskDetail.UserKeyOverRide IN ( @c_userid)  -- (james01)	   --(CLVN01)
          ORDER BY
             CASE WHEN TaskDetail.UserKeyOverRide = @c_userid THEN '0' ELSE '1' END, -- (james01)
             Loc.CCLogicalLoc,   --NLT013 UWP-27392

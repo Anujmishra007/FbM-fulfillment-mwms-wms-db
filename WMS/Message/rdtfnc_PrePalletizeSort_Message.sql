@@ -12,7 +12,7 @@ execute rdt.rdtAddMsg 147708, 10, '47708^Diff Facility',    'us_english', 1841
 execute rdt.rdtAddMsg 147709, 10, '47709^UCC Required',     'us_english', 1841
 execute rdt.rdtAddMsg 147710, 10, '47710^UCC Not Exists',   'us_english', 1841
 execute rdt.rdtAddMsg 147711, 10, '47711^UCC Received',     'us_english', 1841
-execute rdt.rdtAddMsg 147712, 10, '47712^TOID Received',    'us_english', 1841
+execute rdt.rdtAddMsg 147712, 10, '47712^TOID Required',    'us_english', 1841
 execute rdt.rdtAddMsg 147713, 10, '47713^Invalid Format',   'us_english', 1841
 execute rdt.rdtAddMsg 147714, 10, '47714^PltID NotMatch',   'us_english', 1841
 execute rdt.rdtAddMsg 147715, 10, '47715^TOID Required',    'us_english', 1841
@@ -48,6 +48,8 @@ execute rdt.rdtAddMsg 147740, 10, '47740^Invalid weight',   'us_english', 1841
 execute rdt.rdtAddMsg 147741, 10, '47741^Need Cube     ',   'us_english', 1841
 execute rdt.rdtAddMsg 147742, 10, '47742^Invalid cube  ',   'us_english', 1841
 execute rdt.rdtAddMsg 147743, 10, '47743^Need RefNo    ',   'us_english', 1841
+--FCR-1066
+execute rdt.rdtAddMsg 147744, 10, '47744',   'us_english', 1841,0,'147744 Mix Position Not Allowed'
 
 SELECT * FROM RDT.RDTMSG (NOLOCK) WHERE Message_ID BETWEEN 147701 AND 147750
 

@@ -17,6 +17,7 @@ GO
 /*                                                                      */
 /* Date        Rev  Author   Purposes                                   */
 /* 2019-03-26  1.0  James    WMS-8352 Created                           */
+/* 2024-10-28  1.1  ShaoAn   Extend Parameter                           */
 /************************************************************************/
 
 CREATE PROC [rdt].[rdt_514ExtUpdSP01] (
@@ -39,6 +40,7 @@ CREATE PROC [rdt].[rdt_514ExtUpdSP01] (
    @cUCC7          NVARCHAR( 20), 
    @cUCC8          NVARCHAR( 20), 
    @cUCC9          NVARCHAR( 20), 
+   @cUDF01         NVARCHAR( 30), 
    @nErrNo         INT           OUTPUT,  
    @cErrMsg        NVARCHAR( 20) OUTPUT
 ) AS
@@ -67,12 +69,12 @@ BEGIN
    DECLARE @cFromLabelLine NVARCHAR( 5)
    DECLARE @cToLabelLine   NVARCHAR( 5)
    DECLARE @cRefNo         NVARCHAR( 20)
-   DECLARE @cDropID        NVARCHAR( 20)
    DECLARE @fStdGrossWGT   FLOAT
    DECLARE @fBoxWeight     FLOAT
    DECLARE @fModuleBoxWgt  FLOAT
+   DECLARE @cDropID        NVARCHAR( 20)
    DECLARE @fWoodenCrateWgt   FLOAT
-   DECLARE @fWeight        FLOAT
+   DECLARE @fWeight           FLOAT
    DECLARE @fHeight           FLOAT
    DECLARE @fLength           FLOAT
    DECLARE @fWidth            FLOAT

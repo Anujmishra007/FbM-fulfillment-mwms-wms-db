@@ -3,22 +3,26 @@ SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
-
-/******************************************************************************/
-/* Store procedure: rdt_855ExtUpd13                                           */
-/* Copyright      : Maersk                                                    */
-/* Customer: Granite                                                          */
-/*                                                                            */
-/* Purpose: Print the VAS label                                               */
-/*                                                                            */
-/* Modifications log:                                                         */
-/* Date       Rev  Author   Purposes                                          */
-/* 2024-06-18 1.0  NLT013   FCR-386. Created                                  */
-/* 2024-08-06 1.1  Dennis   FCR-386. Remove order group condition             */
-/* 2024-09-26 1.2  NLT013   UWP-24932 Error message UI issue                  */
-/* 2024-09-30 1.3  NLT013   Fix printing special order labels issue           */
-/******************************************************************************/
-
+/***********************************************************************************/
+/* Store procedure: rdt_855ExtUpd13                                                */
+/* Copyright      : Maersk                                                         */
+/* Customer: Granite                                                               */
+/*                                                                                 */
+/* Purpose: Print the VAS label                                                    */
+/*                                                                                 */
+/* Modifications log:                                                              */
+/* Date       Rev    Author   Purposes                                             */
+/* 2024-06-18 1.0    NLT013   FCR-386. Created                                     */
+/* 2024-08-06 1.1    Dennis   FCR-386. Remove order group condition                */
+/* 2024-09-26 1.2    NLT013   UWP-24932 Error message UI issue                     */
+/* 2024-09-30 1.3    NLT013   Fix printing special order labels issue              */
+/* 2024-10-12 1.3.0  NLT013   FCR-955 PPA by LabelNo, instead of PickSLipNo        */
+/* 2024-10-28 1.4.0  NLT013   FCR-1085 Automate print Order Level labels           */
+/* 2024-11-27 1.4.1  NLT013   FCR-1085 Fix bug - print duplicate reports           */
+/* 2024-12-03 1.5.0  NLT013   FCR-1659 Be able to print label for MPOC             */
+/* 2024-12-03 1.6.0  NLT013   UWP-28680 Remove the transaction                     */
+/* 2024-12-03 1.7.0  NLT013   UWP-28888 PackHeader status is not correct           */
+/***********************************************************************************/
 CREATE OR ALTER PROC rdt.rdt_855ExtUpd13 (
    @nMobile      INT,   
    @nFunc        INT,   
@@ -88,7 +92,13 @@ BEGIN
       @cPickConfirmStatus        NVARCHAR( 1),
       @fCartonWeight             FLOAT,
       @fSKUWeight                FLOAT,
-      @nVASQtyOverThan7          INT
+      @nVASQtyOverThan7          INT,
+      @cConsigneeKey             NVARCHAR(15),
+      @cBillToKey                NVARCHAR(15),
+      @cMPOCFlag                 NVARCHAR(10),
+      @cOLPSCode                 NVARCHAR(10),
+      @cOLPSDescription          NVARCHAR(15) = 'OlpsPlacement'
+      DECLARE @tPackSlipList     VariableTable
 
    DECLARE @tLabels TABLE
    (
@@ -100,6 +110,12 @@ BEGIN
       LabelName                  NVARCHAR(30),
       Qty                        INT,
       PrintSequence              NVARCHAR(5)
+   )
+
+   DECLARE @tOrder TABLE
+   (
+      ID                      INT IDENTITY(1,1),
+      OrderKey                NVARCHAR(10)
    )
 
    SET @nErrNo = 0
@@ -138,11 +154,6 @@ BEGIN
             WHERE StorerKey = @cStorerKey
                AND DropID = @cDropID
                AND Sku = @cSKU
-
-            SELECT @cPickSlipNo = PickSlipNo
-            FROM dbo.PackDetail WITH(NOLOCK) 
-            WHERE StorerKey = @cStorerKey 
-            AND labelno = @cDropID
 
             --Audit finished
             --1. Display all VAS code and print labels
@@ -394,8 +405,8 @@ BEGIN
                      AND ISNULL(pkd.CaseID, '') = @cDropID
                      AND wod.ExternLineNo <> ''
 
-                  INSERT INTO @tLabels(WorkOrderKey, WorkOrderLineNumber, LabelListName, VASCode, LabelName, Qty, PrintSequence)
-                  SELECT DISTINCT wod.WorkOrderKey, wod.WorkOrderLineNumber, IIF(lk1.LISTNAME IS NULL, lk.LISTNAME, lk1.LISTNAME), wod.Type, IIF(lk1.LISTNAME IS NULL, lk.UDF01, lk1.UDF01), pakd.Qty, lk.Code
+                  INSERT INTO @tLabels(LabelListName, VASCode, LabelName, Qty, PrintSequence)
+                  SELECT DISTINCT IIF(lk1.LISTNAME IS NULL, lk.LISTNAME, lk1.LISTNAME), wod.Type, IIF(lk1.LISTNAME IS NULL, lk.UDF01, lk1.UDF01), pakd.Qty, lk.Code
                   FROM (SELECT StorerKey, WorkOrderKey, ExternWorkOrderKey, ExternLineNo, WorkOrderLineNumber, Type
                         FROM
                            (SELECT 
@@ -447,7 +458,6 @@ BEGIN
 
                         INSERT INTO @tPriceLabelList (Variable, Value) 
                         VALUES 
-                           ( '@cPickSlipNo', @cPickSlipNo),
                            ( '@cLabelNo', @cDropID),
                            ( '@cSKU', @cSKU)
 
@@ -471,7 +481,6 @@ BEGIN
                         -- Common params
                         INSERT INTO @tcatelogLabelList (Variable, Value) 
                         VALUES 
-                           ( '@cPickSlipNo', @cPickSlipNo),
                            ( '@cLabelNo', @cDropID),
                            ( '@cSKU', @cSKU)
 
@@ -495,7 +504,6 @@ BEGIN
                         -- Common params
                         INSERT INTO @tNormalLabelList (Variable, Value)
                         VALUES 
-                           ( '@cPickSlipNo', @cPickSlipNo),
                            ( '@cLabelNo', @cDropID),
                            ( '@cSKU', @cSKU)
 
@@ -516,10 +524,16 @@ BEGIN
                   END
                END
 
-               SELECT @nTotalPQty = SUM(PQty), @nTotalCQty = SUM(CQty)
+               SELECT @nTotalCQty = SUM(CQty)
                FROM RDT.RDTPPA WITH(NOLOCK)
                WHERE StorerKey = @cStorerKey
                   AND DropID = @cDropID
+
+               SELECT @nTotalPQty = SUM(Qty)
+               FROM dbo.PickDetail WITH(NOLOCK)
+               WHERE StorerKey = @cStorerKey
+                  AND ISNULL(CaseID, '') = @cDropID
+                  AND Status NOT IN ('4', '9')
 
                DECLARE @cOrderGroup NVARCHAR(20) = ''
 
@@ -530,12 +544,6 @@ BEGIN
                WHERE pkd.StorerKey = @cStorerKey
                   AND ISNULL(pkd.CaseID, '') = @cDropID
                ORDER BY orm.OrderKey
-
-               SET @nTranCount = @@TRANCOUNT  
-               IF @nTranCount = 0
-                  BEGIN TRANSACTION
-               ELSE
-                  SAVE TRANSACTION rdt_855ExtUpd13_01
 
                BEGIN TRY
                   --Mark PPA as 5 (audit finished)
@@ -548,15 +556,15 @@ BEGIN
                   --Carton audit finished
                   --1. Mark PackInfo as PACKED
                   --2. Calculate carton weight
-                  --3. If all Packedinfo are marked as PACKED, mark PackHeader as 9
-                  --4. Insert transmitlog2
+                  --3. Print PackSlipNo report once an order is finished
+                  --4. If all Packedinfo are marked as PACKED, mark PackHeader as 9
+                  --5. Insert transmitlog2
                   IF @nTotalPQty = @nTotalCQty
                   BEGIN
                      --Mark PackInfo as PACKED
                      UPDATE dbo.PackInfo WITH(ROWLOCK)
                      SET CartonStatus = 'PACKED'
-                     WHERE PickSlipNo = @cPickSlipNo
-                        AND ISNULL(RefNo, '') = @cDropID
+                     WHERE ISNULL(RefNo, '') = @cDropID
 
                      --Calculate carton weight
                      DECLARE @tCartonWeight TABLE
@@ -573,7 +581,7 @@ BEGIN
                         INNER JOIN dbo.PackInfo PKI WITH(NOLOCK) ON CART.CartonType = ISNULL(PKI.CartonType, '')
                         INNER JOIN dbo.PickDetail PKD WITH(NOLOCK) ON ISNULL(PKI.RefNo, '') = ISNULL(PKD.CaseID, '-1') 
                         INNER JOIN dbo.SKU SKU WITH(NOLOCK) ON PKD.StorerKey = SKU.StorerKey AND PKD.Sku = SKU.Sku
-                        WHERE PKI.PickSlipNo = @cPickSlipNo
+                        WHERE PKD.CaseID = @cDropID
                            AND PKD.StorerKey = @cStorerKey
                            AND PKD.Status = @cPickConfirmStatus
                         GROUP BY PKD.CaseID, CART.CartonWeight) AS t
@@ -582,16 +590,154 @@ BEGIN
                      SET PI.Weight = CW.Weight
                      FROM dbo.PackInfo PI
                      INNER JOIN @tCartonWeight CW ON ISNULL(PI.RefNo, '') = CW.CaseID
-                     WHERE PI.PickSlipNo = @cPickSlipNo
+                     WHERE ISNULL(PI.RefNo, '') = @cDropID
 
-                     --If all Packedinfo are marked as PACKED, mark PackHeader as 9
-                     IF (SELECT COUNT(1) FROM dbo.PackInfo WITH(NOLOCK) WHERE PickSlipNo = @cPickSlipNo)
-                        =
-                        (SELECT COUNT(1) FROM dbo.PackInfo WITH(NOLOCK) WHERE PickSlipNo = @cPickSlipNo AND ISNULL(CartonStatus, '') = 'PACKED')
+                     --Print PackSlipNo report once an order is finished
+                     DELETE FROM @tOrder
+
+                     INSERT INTO @tOrder( OrderKey )
+                     SELECT DISTINCT OrderKey
+                     FROM dbo.PickDetail WITH(NOLOCK)
+                     WHERE StorerKey = @cStorerKey
+                        AND ISNULL(CaseID, '-1') = @cDropID
+
+                     SET @nLoopIndex = -1
+
+                     WHILE 1 = 1
                      BEGIN
-                        UPDATE dbo.PackHeader WITH(ROWLOCK)
-                        SET Status = '9'
-                        WHERE PickSlipNo = @cPickSlipNo
+                        SELECT TOP 1
+                           @cOrderKey = OrderKey,
+                           @nLoopIndex = id
+                        FROM @tOrder
+                        WHERE id > @nLoopIndex
+                        ORDER BY id
+                        SET @nRowCount = @@ROWCOUNT
+
+                        IF @nRowCount = 0
+                           BREAk
+
+                        IF (SELECT COUNT( DISTINCT CaseID ) 
+                           FROM dbo.PICKDETAIL WITH(NOLOCK) 
+                           WHERE StorerKey = @cStorerKey
+                              AND OrderKey = @cOrderKey 
+                              AND Status NOT IN ('4', '9')
+                              AND TRIM(CaseID) <> '')
+                           =
+                           (SELECT COUNT( DISTINCT RefNo )
+                           FROM dbo.PICKDETAIL PKD WITH(NOLOCK)
+                           INNER JOIN dbo.PackInfo PI WITH(NOLOCK) ON ISNULL(PKD.CaseID, '-1') = ISNULL(PI.RefNo, '')
+                           WHERE PKD.StorerKey = @cStorerKey
+                              AND PKD.OrderKey = @cOrderKey 
+                              AND PI.CartonStatus = 'PACKED'
+                              AND TRIM(ISNULL(RefNo, '')) <> '')
+                        BEGIN
+                           -- Print Logi report
+                           SELECT @cConsigneeKey = ISNULL(ConsigneeKey, ''),
+                              @cBillToKey = ISNULL(BillToKey, '')
+                           FROM dbo.ORDERS WITH(NOLOCK)
+                           WHERE StorerKey = @cStorerKey
+                              AND OrderKey = @cOrderKey
+
+                           --If an order has consigneekey or billtokey associated with codelkup.code where codelkup.listname = MPOCPERMIT  and short ! = 0, short not NULL, short not blank  then exclude from auto-print logic
+                           SELECT @cMPOCFlag = ISNULL(Short, '')
+                           FROM dbo.CODELKUP WITH(NOLOCK)
+                           WHERE StorerKey = @cStorerKey
+                              AND LISTNAME = 'MPOCPERMIT'
+                              AND Code IN (@cConsigneeKey, @cBillToKey)
+                           ORDER BY IIF(Code = @cConsigneeKey, 1, 2)
+
+                           IF TRIM(ISNULL(@cMPOCFlag, '')) NOT IN ('', '0')
+                              CONTINUE
+
+                           SELECT @cOLPSCode = ISNULL(Long, '')
+                           FROM dbo.CODELKUP WITH(NOLOCK)
+                           WHERE StorerKey = @cStorerKey
+                              AND LISTNAME = 'LVSCUSPREF' 
+                              AND Description = @cOLPSDescription
+                              AND ISNULL(code2, '') <> ''
+                              AND code2 IN (@cConsigneeKey, @cBillToKey)
+                           ORDER BY IIF(code2 = @cConsigneeKey, 1, 2)
+
+                           SET @nRowCount = @@ROWCOUNT
+
+                           -- If cOLPSCode is not one of ('1', '2', '3', '5'), no need to print logi report automatically
+                           IF @nRowCount = 0 OR TRIM(ISNULL(@cOLPSCode, '')) NOT IN ('1', '2', '3', '5')
+                              CONTINUE
+
+                           -- codelkup.listname = ‘LVSCUSPREF’ not available for consigneekey/billtokey
+                           IF NOT EXISTS (SELECT 1  
+                              FROM dbo.CODELKUP WITH(NOLOCK)
+                              WHERE StorerKey = @cStorerKey
+                                 AND LISTNAME = 'LVSCUSPREF' 
+                                 AND ISNULL(code2, '') <> ''
+                                 AND code2 IN (@cConsigneeKey, @cBillToKey))
+                           BEGIN
+                              CONTINUE
+                           END
+
+                           SET @cLabelName = 'LVSPSORD'
+                           DELETE FROM @tPackSlipList
+                           INSERT INTO @tPackSlipList (Variable, Value) 
+                           VALUES 
+                              ( '@cStorerKey', @cStorerKey),
+                              ( '@cOrderKey', @cOrderKey)
+
+                           -- Print Order Level packing list label
+                           EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cLabelPrinterGroup, @cPaperPrinter,
+                              @cLabelName, -- Report type
+                              @tPackSlipList, -- Report params
+                              'rdt_855ExtUpd13',
+                              @nErrNo  OUTPUT,
+                              @cErrMsg OUTPUT,
+                              @nNoOfCopy = 1
+
+                           IF @nErrNo <> 0
+                           BEGIN
+                              GOTO Quit
+                           END
+                        END
+                     END
+
+                     --Mark PackHeader as 9
+                     DECLARE @tPickSlipNoList TABLE
+                     (
+                        id INT IDENTITY(1,1),
+                        PickSlipNo        NVARCHAR(10)
+                     )
+
+                     INSERT INTO @tPickSlipNoList (PickSlipNo)
+                     SELECT PH.PickHeaderKey
+                     FROM dbo.PickHeader PH WITH(NOLOCK) 
+                     INNER JOIN dbo.PickDetail PKD WITH(NOLOCK)
+                        ON PH.StorerKey = PKD.StorerKey
+                        AND PH.OrderKey = PKD.OrderKey
+                     WHERE PKD.StorerKey = @cStorerKey
+                        AND ISNULL(pkd.CaseID, '') = @cDropID
+
+                     SET @nLoopIndex = -1
+                     WHILE 1 = 1
+                     BEGIN
+                        SELECT TOP 1
+                           @cPickSlipNo = PickSlipNo,
+                           @nLoopIndex = id
+                        FROM @tPickSlipNoList
+                        WHERE id > @nLoopIndex
+                        ORDER BY id
+
+                        SET @nRowCount = @@ROWCOUNT
+
+                        IF @nRowCount = 0
+                           BREAk
+
+                        --If all Packedinfo are marked as PACKED, mark PackHeader as 9
+                        IF (SELECT COUNT(1) FROM dbo.PackInfo WITH(NOLOCK) WHERE PickSlipNo = @cPickSlipNo)
+                           =
+                           (SELECT COUNT(1) FROM dbo.PackInfo WITH(NOLOCK) WHERE PickSlipNo = @cPickSlipNo AND ISNULL(CartonStatus, '') = 'PACKED')
+                        BEGIN
+                           UPDATE dbo.PackHeader WITH(ROWLOCK)
+                           SET Status = '9'
+                           WHERE PickSlipNo = @cPickSlipNo
+                        END
                      END
 
                      IF TRIM(@cShipperKey) <> ''
@@ -641,26 +787,15 @@ BEGIN
                      END
                   END
 
-                  WHILE @@TRANCOUNT > @nTranCount
-                     COMMIT TRANSACTION
                END TRY
                BEGIN CATCH
-                  IF @nTranCount > 0
-                  BEGIN
-                     IF XACT_STATE() <> -1  
-                        ROLLBACK TRANSACTION rdt_855ExtUpd13_01
-                  END
-                  ELSE
-                  BEGIN
-                     ROLLBACK TRANSACTION
-                  END
-
                   IF @nErrNo = 0
                   BEGIN
                      SET @nErrNo = 217803
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --HandlePPAFail
-                     GOTO Quit
                   END
+
+                  GOTO Quit
                END CATCH
             END
          END
@@ -683,8 +818,6 @@ BEGIN
             IF @cOption = '1' -- 1. Print Carton Label
             BEGIN
                DECLARE 
-                  @cConsigneeKey             NVARCHAR(15),
-                  @cBillToKey                NVARCHAR(15),
                   @cCustLblPrintSequence     NVARCHAR(10),
                   @cDefaultLblPrintSequence  NVARCHAR(10),
                   @cCustLabelName            NVARCHAR(30),
@@ -692,8 +825,27 @@ BEGIN
                   @cCustLabelDataDesc        NVARCHAR(30),
                   @cCustomCode               NVARCHAR(30),
                   @nSpecialCartonLabelPrinted       INT = 0,
-                  @nSpecialVendorLabelPrinted       INT = 0
-                  
+                  @nSpecialVendorLabelPrinted       INT = 0,
+                  @nMPOCCarton               INT = 0
+
+               SELECT @nRowCount = COUNT( DISTINCT CONCAT(ORM.BillToKey, ORM.ShipperKey, ORM.MarkforKey) )
+               FROM dbo.PickDetail PKD WITH(NOLOCK)
+               INNER JOIN dbo.ORDERS ORM WITH(NOLOCK)
+                  ON PKD.StorerKey = ORM.StorerKey 
+                  AND PKD.OrderKey = ORM.OrderKey
+               WHERE PKD.StorerKey = @cStorerKey 
+                  AND ISNULL(PKD.CaseID, '') = @cDropID
+
+               IF @nRowCount = 1
+                  SET @nMPOCCarton = 1
+               
+               SELECT @nRowCount = COUNT( DISTINCT OrderKey )
+               FROM dbo.PickDetail WITH(NOLOCK)
+               WHERE StorerKey = @cStorerKey 
+                  AND ISNULL(CaseID, '') = @cDropID
+
+               IF @nRowCount < 2
+                  SET @nMPOCCarton = 0
 
                SELECT @cPickSlipNo = PickSlipNo
                FROM dbo.PackDetail WITH(NOLOCK) 
@@ -703,8 +855,7 @@ BEGIN
                DECLARE @tCartonLabelList VariableTable
                INSERT INTO @tCartonLabelList (Variable, Value) 
                VALUES 
-                     ( '@cPickSlipNo', @cPickSlipNo),
-                     ( '@cLabelNo', @cDropID)
+                  ( '@cLabelNo', @cDropID)
 
                DECLARE @tDefaultLabels TABLE
                (
@@ -728,11 +879,13 @@ BEGIN
                   id             INT IDENTITY(1,1),
                   Type           NVARCHAR(12),
                   UDF01          NVARCHAR(30),
-                  code2          NVARCHAR(30)
+                  code2          NVARCHAR(30),
+                  PrintSequence  INT,
+                  IgnoreFlag     INT DEFAULT 0
                )
 
-               INSERT INTO @tCustWorkOrderLabels (Type, UDF01, code2)
-               SELECT DISTINCT lk.Code, lk.UDF01, lk.code2
+               INSERT INTO @tCustWorkOrderLabels (Type, UDF01, code2, PrintSequence)
+               SELECT DISTINCT lk.Code, lk.UDF01, lk.code2, IIF(UPPER(LEFT(lk.code2, 4)) = 'MPOC', 1, 2)
                FROM dbo.WorkOrder wo WITH(NOLOCK)
                INNER JOIN dbo.WorkOrderDetail wod WITH(NOLOCK) ON wo.WorkOrderKey = wod.WorkOrderKey
                INNER JOIN dbo.PickDetail pkd WITH(NOLOCK) ON wod.StorerKey = pkd.StorerKey AND wod.ExternWorkOrderKey = pkd.OrderKey 
@@ -742,6 +895,7 @@ BEGIN
                   AND wod.ExternLineNo = ''
                   AND ISNULL(pkd.CaseID, '') = @cDropID
                   AND ISNULL(wod.Remarks, '') <> ''
+               ORDER BY IIF(UPPER(LEFT(lk.code2, 4)) = 'MPOC', 1, 2)
 
                --Print Special Labels
                SET @nLoopIndex = -1
@@ -753,21 +907,42 @@ BEGIN
                      @cCode2 = code2,
                      @nLoopIndex = id
                   FROM @tCustWorkOrderLabels
-                     WHERE id > @nLoopIndex
+                  WHERE id > @nLoopIndex
+                     AND IgnoreFlag = 0
                   ORDER BY id
 
                   IF @@ROWCOUNT = 0
                      BREAK
 
-                  IF LEFT(@cLabelName, 3) = 'CTN'
+                  IF @nMPOCCarton = 1 AND LEFT(@cCode2, 4) = 'MPOC'
                   BEGIN
-                     DELETE FROM @tDefaultLabels WHERE (Code = @cVASCode OR code2 = @cCode2) AND LEFT(UDF01, 3) = 'CTN'
-                     SET @nSpecialCartonLabelPrinted = 1
+                     IF UPPER(LEFT(@cCode2, 11)) = 'MPOCCONTENT'
+                     BEGIN
+                        DELETE FROM @tDefaultLabels WHERE LEFT(UDF01, 3) = 'CTN'
+                        UPDATE @tCustWorkOrderLabels SET IgnoreFlag = 1 WHERE LEFT(Code2, 4) <> 'MPOC' AND LEFT(UDF01, 3) = 'CTN' AND id > @nLoopIndex
+                        SET @nSpecialCartonLabelPrinted = 1
+                     END
+                     ELSE
+                     BEGIN
+                        DELETE FROM @tDefaultLabels WHERE LEFT(UDF01, 3) <> 'CTN'
+                        UPDATE @tCustWorkOrderLabels SET IgnoreFlag = 1 WHERE LEFT(Code2, 4) <> 'MPOC' AND LEFT(UDF01, 3) <> 'CTN' AND id > @nLoopIndex
+                        SET @nSpecialVendorLabelPrinted = 1
+                     END
                   END
                   ELSE
                   BEGIN
-                     DELETE FROM @tDefaultLabels WHERE (Code = @cVASCode OR code2 = @cCode2) AND LEFT(UDF01, 3) <> 'CTN'
-                     SET @nSpecialVendorLabelPrinted = 1
+                     IF LEFT(@cCode2, 4) = 'MPOC'
+                        CONTINUE
+                     IF LEFT(@cLabelName, 3) = 'CTN'
+                     BEGIN
+                        DELETE FROM @tDefaultLabels WHERE (Code = @cVASCode OR code2 = @cCode2) AND LEFT(UDF01, 3) = 'CTN'
+                        SET @nSpecialCartonLabelPrinted = 1
+                     END
+                     ELSE
+                     BEGIN
+                        DELETE FROM @tDefaultLabels WHERE (Code = @cVASCode OR code2 = @cCode2) AND LEFT(UDF01, 3) <> 'CTN'
+                        SET @nSpecialVendorLabelPrinted = 1
+                     END
                   END
 
                   -- Print label
@@ -800,6 +975,7 @@ BEGIN
                         AND lk.LISTNAME = 'LVSCARTLBL' 
                         AND ISNULL(lk.Long, '') = ''
                         AND lk1.LISTNAME = 'LVSCUSPREF'
+                        AND ISNULL(lk1.Description, '') <> @cOLPSDescription
                         AND lk1.code2 = @cConsigneeKey)
                   AND EXISTS (SELECT 1
                      FROM dbo.CODELKUP lk WITH(NOLOCK) 
@@ -808,11 +984,12 @@ BEGIN
                         AND lk.LISTNAME = 'LVSCARTLBL' 
                         AND ISNULL(lk.Long, '') = ''
                         AND lk1.LISTNAME = 'LVSCUSPREF'
+                        AND ISNULL(lk1.Description, '') <> @cOLPSDescription
                         AND lk1.code2 = @cBillToKey)
                BEGIN
                   DECLARE CUR_CARTONLABEL CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
                      SELECT CustLabelData.Description, CustLabels.UDF01 AS CustLabelType, ISNULL(CustLabels.Short, '99999') AS CustSequence, CustLabelData.Long
-                     FROM (SELECT StorerKey, Description, ISNULL(Long, '') AS Long FROM dbo.CODELKUP AS LK WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND LISTNAME = 'LVSCUSPREF'  AND code2 = @cConsigneeKey
+                     FROM (SELECT StorerKey, Description, ISNULL(Long, '') AS Long FROM dbo.CODELKUP AS LK WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND LISTNAME = 'LVSCUSPREF'  AND code2 = @cConsigneeKey AND ISNULL(Description, '') <> @cOLPSDescription
                            AND NOT EXISTS (SELECT 1 FROM @tCustWorkOrderLabels AS CWOL WHERE CWOL.Type = LK.Long OR CWOL.code2 = LK.Description)) AS CustLabelData
                      LEFT JOIN (SELECT StorerKey, code2, Code, UDF01, Short FROM dbo.CODELKUP WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND LISTNAME = 'LVSCARTLBL'  AND ISNULL(Long, '') <> 'A'
                            ) AS CustLabels 
@@ -822,7 +999,7 @@ BEGIN
                ELSE 
                   DECLARE CUR_CARTONLABEL CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
                      SELECT CustLabelData.Description, CustLabels.UDF01 AS CustLabelType, ISNULL(CustLabels.Short, '99999') AS CustSequence, CustLabelData.Long
-                     FROM (SELECT StorerKey, Description, ISNULL(Long, '') AS Long FROM dbo.CODELKUP LK WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND LISTNAME = 'LVSCUSPREF'  AND (code2 = @cConsigneeKey OR code2 = @cBillToKey)
+                     FROM (SELECT StorerKey, Description, ISNULL(Long, '') AS Long FROM dbo.CODELKUP LK WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND LISTNAME = 'LVSCUSPREF' AND ISNULL(Description, '') <> @cOLPSDescription AND (code2 = @cConsigneeKey OR code2 = @cBillToKey)
                            AND NOT EXISTS (SELECT 1 FROM @tCustWorkOrderLabels AS CWOL WHERE CWOL.Type = LK.Long OR CWOL.code2 = LK.Description)) AS CustLabelData
                      LEFT JOIN (SELECT StorerKey, code2, Code, UDF01, Short FROM dbo.CODELKUP WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND LISTNAME = 'LVSCARTLBL'  AND ISNULL(Long, '') <> 'A'
                            ) AS CustLabels 
@@ -923,16 +1100,10 @@ BEGIN
 
                   IF @cLabelName <> ''
                   BEGIN
-                     SELECT @cPickSlipNo = PickSlipNo
-                     FROM dbo.PackDetail WITH(NOLOCK) 
-                     WHERE StorerKey = @cStorerKey 
-                        AND labelno = @cDropID
-                        
                      DECLARE @tCQCLabelList VariableTable
                      -- Common params
                      INSERT INTO @tCQCLabelList (Variable, Value) 
                      VALUES 
-                        ( '@cPickSlipNo', @cPickSlipNo),
                         ( '@cLabelNo', @cDropID)
 
                      -- Print label

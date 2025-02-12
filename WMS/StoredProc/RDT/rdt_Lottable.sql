@@ -3,28 +3,29 @@ GO
 SET ANSI_NULLS OFF 
 GO
 
-/******************************************************************************/
-/* Store procedure: rdt_Lottable                                              */
-/* Copyright      : LF                                                        */
-/*                                                                            */
-/* Purpose: Dynamic lottable                                                  */
-/*                                                                            */
-/* Date        Rev  Author      Purposes                                      */
-/* 08-10-2014  1.0  Ung         SOS317571. Created                            */
-/* 28-09-2015  1.1  Ung         SOS317571 Add PRE not visible                 */
-/*                              SOS350418 Add FormatSP                        */
-/*                              Add POST remain in current screen             */
-/* 21-10-2015  1.2  Ung         SOS352968 Add PRECAPTURE                      */
-/* 23-12-2016  1.3  Ung         WMS-835 Add FormatSP remain in current screen */
-/* 02-09-2018  1.4  Ung         WMS-5956 Fix CAPTURE 2nd page not shown       */
-/* 05-11-2019  1.5  Ung         INC0896693 Fix disable lottable not capture   */
-/* 08-12-2020  1.6  Ung         WMS-14691 Fix hidden field not clear          */
-/*                              Fix validation fail cursor on next field      */
-/* 08/02-2017  1.7  Ung         WMS-1000 Add VERIFY                           */
-/* 08-05-2024  1.8  Dennis      UWP-19017 Add VERIFY                          */
-/* 23-10-2024  1.9  Dennis      UWP-26096 Regardless of if editable,          */
-/*                              call process sp                               */
-/******************************************************************************/
+/********************************************************************************/
+/* Store procedure: rdt_Lottable                                                */
+/* Copyright      : LF                                                          */
+/*                                                                              */
+/* Purpose: Dynamic lottable                                                    */
+/*                                                                              */
+/* Date        Rev    Author      Purposes                                      */
+/* 08-10-2014  1.0    Ung         SOS317571. Created                            */
+/* 28-09-2015  1.1    Ung         SOS317571 Add PRE not visible                 */
+/*                                SOS350418 Add FormatSP                        */
+/*                                Add POST remain in current screen             */
+/* 21-10-2015  1.2    Ung         SOS352968 Add PRECAPTURE                      */
+/* 23-12-2016  1.3    Ung         WMS-835 Add FormatSP remain in current screen */
+/* 02-09-2018  1.4    Ung         WMS-5956 Fix CAPTURE 2nd page not shown       */
+/* 05-11-2019  1.5    Ung         INC0896693 Fix disable lottable not capture   */
+/* 08-12-2020  1.6    Ung         WMS-14691 Fix hidden field not clear          */
+/*                                Fix validation fail cursor on next field      */
+/* 08/02-2017  1.7    Ung         WMS-1000 Add VERIFY                           */
+/* 08-05-2024  1.8    Dennis      UWP-19017 Add VERIFY                          */
+/* 23-10-2024  1.9    Dennis      UWP-26096 Regardless of if editable,          */
+/*                                call process sp                               */
+/* 16-12-2024  2.0.0  NLT013      UWP-28462 Correct message id                  */
+/********************************************************************************/
 
 CREATE OR ALTER PROCEDURE rdt.rdt_Lottable
    @nMobile          INT, 
@@ -321,7 +322,7 @@ BEGIN
             IF @cLottable = ''
             BEGIN
                SET @nErrNo = 92317
-               SET @cErrMsg = RTRIM( rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')) + RIGHT( '0' + CAST( @nLottableNo AS NVARCHAR(2)), 2) --NeedLottable99
+               SET @cErrMsg = RTRIM( rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')) + RIGHT( '0' + CAST( @nLottableNo AS NVARCHAR(2)), 2) --NeedLottable
                SET @nMorePage = 0
                GOTO Quit
             END
@@ -834,8 +835,8 @@ BEGIN
                            END
                            IF @dLotDate >= DATEADD(DAY, 0, DATEDIFF(DAY, -1, GETDATE()))
                            BEGIN
-                              SET @nErrNo = 212607
-                              SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --212607DateRequiredToBeBeforeThanToday
+                              SET @nErrNo = 92321
+                              SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Date Required To BeBefore Than Today
                               SET @nCursorPos = @nCount * 2
                               EXEC rdt.rdtSetFocusField @nMobile, @nCursorPos
                               SET @nMorePage = 0
@@ -960,8 +961,8 @@ BEGIN
                -- Check blank
                IF @cLottable = '' AND @cRequired = '1'
                BEGIN
-                  SET @nErrNo = 92317
-                  SET @cErrMsg = RTRIM( rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')) + RIGHT( '0' + CAST( @nLottableNo AS NVARCHAR(2)), 2) --NeedLottable99
+                  SET @nErrNo = 92325
+                  SET @cErrMsg = RTRIM( rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')) + RIGHT( '0' + CAST( @nLottableNo AS NVARCHAR(2)), 2) --NeedLottable
                   SET @nCursorPos = @nCount * 2
                   EXEC rdt.rdtSetFocusField @nMobile, @nCursorPos
                   SET @nMorePage = 0
@@ -974,7 +975,7 @@ BEGIN
                   -- Check valid date
                   IF @cLottable <> '' AND rdt.rdtIsValidDate( @cLottable) = 0
                   BEGIN
-                     SET @nErrNo = 92318
+                     SET @nErrNo = 92322
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid date
                      SET @nCursorPos = @nCount * 2
                      EXEC rdt.rdtSetFocusField @nMobile, @nCursorPos
@@ -1205,7 +1206,7 @@ BEGIN
                IF @cLottable = ''
                BEGIN
                   SET @nErrNo = 92319
-                  SET @cErrMsg = RTRIM( rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')) + RIGHT( '0' + CAST( @nLottableNo AS NVARCHAR(2)), 2) --NeedLottable99
+                  SET @cErrMsg = RTRIM( rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')) + RIGHT( '0' + CAST( @nLottableNo AS NVARCHAR(2)), 2) --NeedLottable
                   GOTO Quit
                END
                --SET @nLottableNo = @nLottableNo + 1
@@ -1388,7 +1389,7 @@ BEGIN
                BEGIN
                   IF @cLottable <> '' AND RDT.rdtIsValidDate( @cLottable) = 0
                   BEGIN
-                     SET @nErrNo = 92318
+                     SET @nErrNo = 92324
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Date
                      SET @nCursorPos = @nCount * 2
                      EXEC rdt.rdtSetFocusField @nMobile, @nCursorPos
@@ -1417,7 +1418,7 @@ BEGIN
 
                IF @nErrNo = 92323
                BEGIN
-                  SET @cErrMsg = RTRIM( rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')) + RIGHT( '0' + CAST( @nLottableNo AS NVARCHAR(2)), 2) --DiffLottable99
+                  SET @cErrMsg = RTRIM( rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')) + RIGHT( '0' + CAST( @nLottableNo AS NVARCHAR(2)), 2) --DiffLottable
                   SET @nCursorPos = @nCount * 2
                   EXEC rdt.rdtSetFocusField @nMobile, @nCursorPos
                      
