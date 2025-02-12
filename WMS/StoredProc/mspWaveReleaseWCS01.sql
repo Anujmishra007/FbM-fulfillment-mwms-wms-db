@@ -27,6 +27,8 @@ GO
 /*                            status from H to 0                         */
 /* 2025-02-07   SSA05   1.5   UWP-30025-Update Destination ID before     */
 /*                            Releasing to WCS                           */
+/* 2025-02-12   SSA06   1.6   UWP-30025- Updated orderinfo.orderinfo09 to*/
+/*                            orderinfo.orderinfo06 as per v2.1          */
 /*************************************************************************/   
 CREATE OR ALTER PROCEDURE [dbo].[mspWaveReleaseWCS01]
   @c_Wavekey      NVARCHAR(10)  
@@ -118,7 +120,7 @@ CREATE OR ALTER PROCEDURE [dbo].[mspWaveReleaseWCS01]
                JOIN ORDERS(NOLOCK) o ON o.ORDERKEY = oi.ORDERKEY
                JOIN WAVEDETAIL(NOLOCK) wd ON wd.ORDERKEY = o.ORDERKEY
                WHERE wd.WAVEKEY = @c_Wavekey
-						   AND (oi.ORDERINFO09 IS NULL OR oi.ORDERINFO09 = ''))
+						   AND (oi.ORDERINFO06 IS NULL OR oi.ORDERINFO06 = ''))     --(SSA06)
                 BEGIN
                   SET @n_continue = 3
                   SET @c_errmsg = CONVERT(NVARCHAR(250),@n_err)
@@ -178,7 +180,7 @@ CREATE OR ALTER PROCEDURE [dbo].[mspWaveReleaseWCS01]
                   WHERE clu.LISTNAME = @c_DestIdListName AND clu.Code = 'Default' AND clu.StorerKey = @c_Storerkey
                 END
 
-                UPDATE ORDERINFO WITH (ROWLOCK) SET ORDERINFO09 = @c_WCSCode  WHERE ORDERKEY = @c_OrderKey
+                UPDATE ORDERINFO WITH (ROWLOCK) SET ORDERINFO06 = @c_WCSCode  WHERE ORDERKEY = @c_OrderKey  --(SSA06)
 
                 FETCH NEXT FROM @CUR_ORDERS INTO @c_OrderKey,@c_ShipperKey,@c_ConsigneeKey
                 END
