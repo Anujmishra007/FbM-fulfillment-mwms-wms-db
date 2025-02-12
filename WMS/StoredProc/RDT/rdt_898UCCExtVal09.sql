@@ -13,6 +13,8 @@ GO
 /* Date        Rev   Author   Purposes                                     */
 /* 2024-5-24   1.0   JackC    FCR-236. Created                             */
 /* 2024-6-21   1.1   JackC    FCR-236.Upd retrieve UCC logic               */
+/* 2024-12-04  1.2   ShaoAn   FCR-1103.Upd Changes in UCC Receive          */
+/*                            to process for returns                       */
 /***************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_898UCCExtVal09]
@@ -49,10 +51,12 @@ BEGIN
                , @cSKUSUSR1            NVARCHAR(18)
                , @cUCCUDF08            NVARCHAR(30)
                , @cUCCUDF09            NVARCHAR(30)
+               , @cDocType             NVARCHAR(1)
+               , @nRowCount            INT
 
 
       -- Get StorerKey
-      SELECT @cStorerKey = StorerKey FROM Receipt WITH (NOLOCK) WHERE ReceiptKey = @cReceiptKey 
+      SELECT @cStorerKey = StorerKey,@cDocType = DocType FROM Receipt WITH (NOLOCK) WHERE ReceiptKey = @cReceiptKey 
 
 
       SET @cUSUCCValidation = rdt.RDTGetConfig( @nFunc, 'USUCCValidation', @cStorerKey)
@@ -108,25 +112,42 @@ BEGIN
       WHERE UCCNo = @cUCC
       --AND ReceiptKey = @cReceiptKey -- remove since no receipt key before receiving
 
-      IF @@ROWCOUNT < 1
+      SET @nRowCount = @@ROWCOUNT
+
+      IF @cDocType = 'R' 
+      BEGIN 
+         IF EXISTS(SELECT 1 FROM dbo.UCC WITH (NOLOCK) WHERE UCCNo = @cUCC AND Status <>6)
+         BEGIN
+            SET @nErrNo = 229151
+            SET @cErrMsg = rdt.rdtgetmessage( 229151, @cLangCode, 'DSP') --UCC Already Exists
+            GOTO Quit
+         END
+      END
+      ELSE
       BEGIN
-         SET @nErrNo = 215312
-         SET @cErrMsg = rdt.rdtGetMessage(@nErrNo, @cLangCode, 'DSP') -- UCC Not Exist
-         GOTO Quit
+         IF @nRowCount < 1
+         BEGIN
+            SET @nErrNo = 215312
+            SET @cErrMsg = rdt.rdtGetMessage(@nErrNo, @cLangCode, 'DSP') -- UCC Not Exist
+            GOTO Quit
+         END
       END
 
       --GET SKU
       SELECT @cSKUSUSR1 = SUSR1 
       FROM SKU WITH (NOLOCK)
       WHERE StorerKey = @cStorerKey
-      AND SKU = @cSKU
+         AND SKU = @cSKU
 
-      IF @@ROWCOUNT < 1
+      IF @@ROWCOUNT < 1 AND @cDocType <> 'R' 
       BEGIN
          SET @nErrNo = 215304
          SET @cErrMsg = rdt.rdtGetMessage(@nErrNo, @cLangCode, 'DSP') -- SKU NOT EXISTS
          GOTO Quit
       END
+
+      IF @cDocType = 'R' 
+         GOTO Quit
 
       ------------------------------------------------------------------------------------------------------------------------------
       -- Main validation logic
