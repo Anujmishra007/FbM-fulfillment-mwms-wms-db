@@ -56,6 +56,7 @@ GO
 /* 30-Jan-2025 SSA02     3.2 UWP-27137 -NonSortable and Nonconveyable   */
 /*                             cartonization fix                        */
 /* 11-Feb-2025 SWT06     3.3 Performance Tuning                         */
+/* 14-Feb-2025 Shong     3.4 UWP-27137 Fixing Case ID issues (SWT07)    */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[mspRLWAV03]
    @c_WaveKey NVARCHAR(10)
@@ -2721,7 +2722,7 @@ BEGIN
             GOTO QUIT_SP
          END
       
-         -- Update Temp Table instead of physical.  (SWT999) 
+         -- Update Temp Table instead of physical.  (SWT06)
          -- UPDATE dbo.PICKDETAIL WITH (ROWLOCK)
 
          UPDATE #PickDetail_WIP 
@@ -3356,6 +3357,79 @@ BEGIN
       END
       CLOSE CUR_PNPTASK
       DEALLOCATE CUR_PNPTASK
+      -- (SWT07)
+      -- Split 'ASTCPK' Task Type to PickDetail.CaseID instead of PickDetail.DropID
+      DECLARE @n_SerialNo          INT = 0,
+              @c_NewTaskDetailKey  NVARCHAR(10) = N''
+
+      DECLARE CUR_ASTCPK_TASK CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+         SELECT TD.TaskDetailKey, PD.CaseID, PD.Qty,
+                ROW_NUMBER() OVER (PARTITION BY TD.TaskDetailKey ORDER BY PD.CaseID) AS SerialNo
+         FROM #PickDetail_WIP PD (NOLOCK)
+         JOIN TaskDetail TD (NOLOCK) ON PD.TaskDetailKey = TD.RefTaskKey AND TD.LOT = PD.LOT AND TD.CaseID = PD.DropID
+         JOIN SKUINFO SI (NOLOCK) ON PD.StorerKey = SI.StorerKey AND PD.SKU =SI.SKU
+         WHERE TD.WaveKey = @c_WaveKey
+         AND TD.TaskType = 'ASTCPK'
+         AND TD.PickMethod = 'B2B-Loose'
+         AND PD.UOM = '6'
+         AND SI.ExtendedField06='NonSortable'
+         AND SI.ExtendedField07 = 'NonConveyable'
+         ORDER BY TD.TaskDetailKey
+
+      OPEN CUR_ASTCPK_TASK
+
+      FETCH NEXT FROM CUR_ASTCPK_TASK INTO @c_TaskdetailKey, @c_DropId, @n_PickdetQty, @n_SerialNo
+      WHILE @@FETCH_STATUS = 0
+      BEGIN
+         IF @n_SerialNo = 1
+         BEGIN
+            UPDATE TASKDETAIL
+               SET Qty = @n_PickdetQty,
+			       UOMQty = @n_PickdetQty,
+                   Caseid = @c_DropId,
+                   EditDate=GETDATE(),
+                   EditWho = SUSER_SNAME()
+            WHERE TaskDetailKey = @c_TaskdetailKey
+         END
+         ELSE
+         BEGIN
+            SET @b_success = 1
+            EXECUTE dbo.nspg_Getkey
+               @KeyName       = 'TaskDetailKey'
+            ,  @fieldlength   =  10
+            ,  @keystring     =  @c_NewTaskDetailKey OUTPUT
+            ,  @b_Success     =  @b_success       OUTPUT
+            ,  @n_err         =  @n_err           OUTPUT
+            ,  @c_errmsg      =  @c_errmsg        OUTPUT
+
+            IF @b_success <> 1
+            BEGIN
+               SET @n_continue = 3
+            END
+            ELSE
+            BEGIN
+               INSERT dbo.TASKDETAIL
+               ( TaskDetailKey, TaskType, Storerkey, Sku, Lot
+               , UOM, UOMQty, Qty, FromLoc, LogicalFromLoc, FromID, ToLoc, LogicalToLoc
+               , ToId, SourceType, SourceKey, Caseid, Priority
+               , SourcePriority, OrderKey, OrderLineNumber, PickDetailKey
+               , PickMethod, STATUS, WaveKey, Areakey
+               , Message01, SystemQty, PendingMoveIn, FinalLoc, GroupKey, RefTaskKey)
+               SELECT @c_NewTaskDetailKey, TaskType, Storerkey, Sku, Lot
+               , UOM, @n_PickdetQty, @n_PickdetQty, FromLoc, LogicalFromLoc, FromID, ToLoc, LogicalToLoc
+               , ToId, SourceType, SourceKey, @c_DropId, Priority
+               , SourcePriority, OrderKey, OrderLineNumber, PickDetailKey
+               , PickMethod, STATUS, WaveKey, Areakey
+               , Message01, SystemQty, PendingMoveIn, FinalLoc, GroupKey, RefTaskKey
+               FROM TASKDETAIL (NOLOCK)
+               WHERE TaskDetailKey = @c_TaskdetailKey
+            END
+         END
+
+         FETCH NEXT FROM CUR_ASTCPK_TASK INTO @c_TaskdetailKey, @c_DropId, @n_PickdetQty, @n_SerialNo
+      END -- WHile
+      CLOSE CUR_ASTCPK_TASK
+      DEALLOCATE CUR_ASTCPK_TASK
    END
 
 
