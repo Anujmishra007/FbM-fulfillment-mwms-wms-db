@@ -17,6 +17,8 @@ GO
 /* 2025-01-23   1.2    Dennis    Fix Serial No Issue                          */ 
 /* 2025-02-11   1.3.0  NLT013    FCR-1872 Correct picked quantity             */ 
 /* 2025-02-11   1.3.1  NLT013    FCR-1872 Correct LabelLine                   */ 
+/* 2025-02-11   1.3.2  NLT013    FCR-1872 Be able to picking the remaining of */
+/*                               an order which  was unassigned cart          */ 
 /******************************************************************************/  
   
 CREATE OR ALTER PROCEDURE rdt.rdt_1867CfmToLoc01 (  
@@ -391,7 +393,8 @@ BEGIN
                       AND Sku = @cSKU
                       AND DropID = @cDropID)
       BEGIN
-         SELECT TOP 1 @nCartonNo = CartonNo   --PPA374 ADDED TOP 1 15/01/2025
+         SELECT TOP 1 @nCartonNo = CartonNo,   --PPA374 ADDED TOP 1 15/01/2025
+            @cLabelLine = RIGHT( '00000' + CONVERT(NVARCHAR(5), @cLabelLine + 1  ), 5)
          FROM dbo.PackDetail WITH(NOLOCK)
             WHERE PickslipNo = @cPickslipNo
                AND StorerKey = @cStorerKey
