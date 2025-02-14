@@ -115,12 +115,18 @@ GO
 /*                            Add custom sp config to update OPORDERLINES*/
 /* 27-SEP-2022  NJOW21   4.3  WMS-20812 Pass in additional parameters to*/
 /*                            isp_ChannelAllocGetHoldQty_Wrapper        */ 
-/* 16-May-2024  Wan09    4.4  UWP-19537-Mattel Overallocation           */
-/* 07-Jul-2024  Wan10    4.5  UWP-19537-Mattel Overallocation           */
+/* 17-APR-2024  NJOW22   4.4  WMS-25272 Allow auto set skippreallocation*/
+/*                            by config if not setup preallocation      */                        
+/* 22-Jan-2025  NJOW23   4.5  WMS-24396 - Fix @c_DynUOMQty condition    */           
+/* 17-APR-2024  NJOW22   4.4  WMS-25272 Allow auto set skippreallocation*/
+/*                            by config if not setup preallocation      */                        
+/* 16-May-2024  Wan09    4.6  UWP-19537-Mattel Overallocation           */
+/* 07-Jul-2024  Wan10    4.7  UWP-19537-Mattel Overallocation           */
 /*                            Get OverPickLoc from Sub SP               */
-/* 18-Jul-2024  Wan11    4.6  UWP-22202-Mattel Overallocation           */
+/* 18-Jul-2024  Wan11    4.8  UWP-22202-Mattel Overallocation           */
 /*                            Get OverQtyLeftToFulfill from Sub SP      */
 /*                            Do Not Overallocate to partial fulfill DPP*/
+/* 22-Jan-2025  NJOW23   4.9  WMS-24396 - Fix @c_DynUOMQty condition    */           
 /************************************************************************/  
 
 CREATE OR ALTER PROC [dbo].[nspOrderProcessing]  
@@ -184,6 +190,10 @@ BEGIN
          , @n_ChannelHoldQty            INT          --NJOW16
          , @c_FullPallet                NVARCHAR(10) --NJOW20
          , @c_DYNUOMQty                 NVARCHAR(10) --NJOW20
+         , @c_SkipPreAllocation_OPT5    NVARCHAR(MAX)='' --NJOW22
+         , @c_AutoSkipByStrategy        NVARCHAR(30)='N' --NJOW22
+         , @c_Loadkey                   NVARCHAR(10)=''  --NJOW22                    
+         , @c_Strategykey               NVARCHAR(10)=''  --NJOW22         
                
     -- NJOW05       
     DECLARE   
@@ -379,7 +389,87 @@ BEGIN
            @b_Success   = @b_Success               OUTPUT,  
            @c_authority = @c_SkipPreAllocationFlag OUTPUT,  
            @n_err       = @n_err                   OUTPUT,  
-           @c_errmsg    = @c_errmsg                OUTPUT  
+           @c_errmsg    = @c_errmsg                OUTPUT,
+           @c_Option5   = @c_SkipPreAllocation_OPT5 OUTPUT     --NJOW22             
+           
+      --NJOW22 S
+      SELECT @c_AutoSkipByStrategy = dbo.fnc_GetParamValueFromString ('@c_AutoSkipByStrategy', @c_SkipPreAllocation_OPT5, @c_AutoSkipByStrategy)
+      
+      IF @c_AutoSkipByStrategy = 'Y'
+      BEGIN 
+         IF ISNULL(@c_StrategykeyParm,'') <> ''
+         BEGIN
+            SET @c_Strategykey = @c_StrategykeyParm                  
+         END
+         ELSE IF (@c_extendparms = 'LP' OR @c_oskey <> '')  
+         BEGIN
+         	  IF @c_oskey <> ''
+         	  BEGIN
+         	     SET @c_Loadkey = @c_oskey
+         	  END
+         	  ELSE
+         	  BEGIN
+         	  	  SELECT @c_Loadkey = O.Loadkey
+         	  	  FROM ORDERS O (NOLOCK)
+         	  	  WHERE O.Orderkey = @c_Orderkey      	 	 
+         	  END   
+         	  
+         	  SELECT TOP 1 @c_Strategykey = SY.Strategykey
+   	        FROM LOADPLAN LP (NOLOCK)
+   	        JOIN LOADPLANDETAIL LPD (NOLOCK) ON LP.Loadkey = LPD.Loadkey
+   	        JOIN ORDERS O (NOLOCK) ON LPD.Orderkey = O.Orderkey
+   	        JOIN STORER S (NOLOCK) ON O.Storerkey = S.Storerkey
+   	        JOIN STRATEGY SY (NOLOCK) ON S.Strategykey = SY.Strategykey
+   	        AND LP.Loadkey = @c_Loadkey
+   	        AND LP.DefaultStrategykey = 'Y'
+   	        AND S.Strategykey <> ''
+   	        AND S.Strategykey IS NOT NULL      	       	   
+         END 
+         
+         IF ISNULL(@c_Strategykey,'') = ''                          
+         BEGIN
+            SELECT @c_Strategykey = SGY.Strategykey
+            FROM STORERCONFIG SC (NOLOCK) 
+            JOIN STRATEGY SGY (NOLOCK) ON SC.Svalue = SGY.Strategykey
+            WHERE SC.Storerkey = @c_Storerkey
+            AND SC.Facility = @c_Facility
+            AND SC.Configkey = 'StorerDefaultAllocStrategy'         	
+         END      
+         
+         IF ISNULL(@c_Strategykey,'') = '' 
+         BEGIN
+         	  IF @c_OrderKey <> ''
+         	  BEGIN
+         	     SELECT TOP 1 @c_Strategykey = SKU.Strategykey
+         	     FROM ORDERDETAIL OD (NOLOCK)
+         	     JOIN SKU (NOLOCK) ON OD.Storerkey = @c_Storerkey AND OD.Sku = SKU.Sku
+           	   WHERE OD.Orderkey = @c_Orderkey         	  
+         	  END
+         	  ELSE
+         	  BEGIN 
+      	       SELECT TOP 1 @c_Strategykey = SKU.Strategykey
+      	       FROM LOADPLANDETAIL LPD (NOLOCK)
+      	       JOIN ORDERDETAIL OD (NOLOCK) ON LPD.Orderkey = OD.Orderkey 
+      	       JOIN SKU (NOLOCK) ON OD.Storerkey = SKU.Storerkey AND OD.Sku = SKU.Sku
+      	       WHERE LPD.Loadkey = @c_oskey         	  	
+         	  END
+         END
+         
+         IF ISNULL(@c_Strategykey,'') <> '' 
+         BEGIN
+         	 IF NOT EXISTS (SELECT 1
+                          FROM STRATEGY SGY (NOLOCK)                                                                              
+                          JOIN PREALLOCATESTRATEGY PRS (NOLOCK) ON SGY.PreallocateStrategykey = PRS.PreallocateStrategykey        
+                          JOIN PREALLOCATESTRATEGYDETAIL PRSD (NOLOCK) ON PRS.Preallocatestrategykey = PRSD.Preallocatestrategykey
+                          WHERE SGY.Strategykey = @c_Strategykey
+                          AND PRSD.PreAllocatePickCode <> '' 
+                          AND PRSD.PreAllocatePickCode IS NOT NULL)
+            BEGIN
+               SELECT @c_SkipPreAllocationFlag = '1'
+            END                        
+         END      
+      END
+      --NJOW22 E                     
   
       IF (@n_Continue = 1 OR @n_Continue = 2) AND ISNULL(@c_SkipPreAllocationFlag,'0') <> '1' --NJOW05  
       BEGIN  
@@ -2413,10 +2503,10 @@ BEGIN
                           
                         --NJOW09  
                         --IF LEFT(@c_LocType,4) = 'UOM=' AND ISNULL(@c_SkipPreAllocationFlag,'0') = '1'    
-                        IF ISNUMERIC(@c_DYNUOMQty) = 1 AND ISNULL(@c_SkipPreAllocationFlag,'0') = '1'  --NJOW20
-                        BEGIN  
-                           IF ISNUMERIC(SUBSTRING(@c_LocType,5,10)) = 1  
-                           BEGIN                              
+                        --BEGIN  
+                           --IF ISNUMERIC(SUBSTRING(@c_LocType,5,10)) = 1  
+                           IF ISNUMERIC(@c_DYNUOMQty) = 1 AND ISNULL(@c_SkipPreAllocationFlag,'0') = '1'  --NJOW20 --NJOW23
+                           BEGIN                           	  
                               --SET @n_dynUOMQty = CAST(SUBSTRING(@c_LocType,5,10) AS INT)  
                               SET @n_dynUOMQty = CAST(@c_DYNUOMQty AS INT)  --NJOW20
                                 
@@ -2432,9 +2522,9 @@ BEGIN
                                  SET @n_otherunit2 = @n_dynUOMQty                         
                                 
                               SET @n_cPackQty = @n_dynUOMQty  
-                          END            
-                        END  
-
+                           END            
+                        --END                          
+                                      
                         --NJOW13  
                         IF @c_UCCAllocation = '1' AND @c_aUOM = '2'  
                         BEGIN  

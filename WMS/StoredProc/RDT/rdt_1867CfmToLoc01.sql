@@ -13,8 +13,10 @@ GO
 /*                                                                            */
 /* Date         Rev    Author    Purposes                                     */
 /* 2024-10-10   1.0    JHU151    FCR-777 Created                              */ 
-/* 2025-02-11   1.1.0  NLT013    FCR-1872 Correct picked quantity             */ 
-/* 2025-02-11   1.1.1  NLT013    FCR-1872 Correct LabelLine                   */ 
+/* 2025-01-17   1.1    PPA374    Adding TOP 1 to @nCartonNo to avoid grey scren */
+/* 2025-01-23   1.2    Dennis    Fix Serial No Issue                          */ 
+/* 2025-02-11   1.3.0  NLT013    FCR-1872 Correct picked quantity             */ 
+/* 2025-02-11   1.3.1  NLT013    FCR-1872 Correct LabelLine                   */ 
 /******************************************************************************/  
   
 CREATE OR ALTER PROCEDURE rdt.rdt_1867CfmToLoc01 (  
@@ -389,7 +391,7 @@ BEGIN
                       AND Sku = @cSKU
                       AND DropID = @cDropID)
       BEGIN
-         SELECT @nCartonNo = CartonNo
+         SELECT TOP 1 @nCartonNo = CartonNo   --PPA374 ADDED TOP 1 15/01/2025
          FROM dbo.PackDetail WITH(NOLOCK)
             WHERE PickslipNo = @cPickslipNo
                AND StorerKey = @cStorerKey
@@ -570,7 +572,8 @@ BEGIN
       IF @nPickedQty = @nPackedQty
       Begin
          UPDATE PackHeader
-         SET status = '9'
+         SET status = '9',
+         ArchiveCop = NULL
          WHERE OrderKey = @cOrderKey
          AND storerkey = @cStorerKey
          AND status <> '9'

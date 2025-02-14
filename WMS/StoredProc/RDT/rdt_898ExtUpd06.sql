@@ -4,16 +4,18 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF 
 GO
-/************************************************************************/
-/* Store procedure: rdt_898ExtUpd06                                    */
-/* Copyright      : Maersk                                              */
-/*                                                                      */
-/* Purpose: Extended Upd for USLevis                                    */
-/*                                                                      */
-/* Date        Rev  Author      Purposes                                */
-/* 27-05-2024  1.0  JACKC       FCR-236 Created                         */
-/* 14-06-2024  1.1  JACKC       FCR-236 transmitlog2 requirement change */
-/************************************************************************/
+/***************************************************************************/
+/* Store procedure: rdt_898ExtUpd06                                        */
+/* Copyright      : Maersk                                                 */
+/*                                                                         */
+/* Purpose: Extended Upd for USLevis                                       */
+/*                                                                         */
+/* Date        Rev    Author      Purposes                                 */
+/* 27-05-2024  1.0    JACKC       FCR-236 Created                          */
+/* 14-06-2024  1.1    JACKC       FCR-236 transmitlog2 requirement change  */
+/* 27-11-2024  1.2    TLE109      FCR-1128 Finalize close pallet           */
+/* 27-12-2024  1.2.1  JCH507      FCR-1128 Fix finalize flag upd logic     */
+/***************************************************************************/
 
 CREATE OR ALTER PROCEDURE rdt.rdt_898ExtUpd06
     @nMobile     INT
@@ -62,7 +64,79 @@ BEGIN
          BEGIN
             IF @cOption IN ('2','3')
             BEGIN
-               DECLARE  @b_Success           INT
+               DECLARE  @b_Success           INT,
+                        @cUCCFinalizeClosePallet NVARCHAR( 30)
+
+               SET @cUCCFinalizeClosePallet = rdt.RDTGetConfig( @nFunc, 'UCCFinalizeClosePallet', @cStorerKey) 
+               IF @cUCCFinalizeClosePallet = '1'
+               BEGIN
+                  --Finalize Close Pallet
+                  DECLARE @cDOCTYPE NVARCHAR( 2)
+                  
+                  SELECT
+                     @cDOCTYPE = DOCTYPE
+                  FROM dbo.RECEIPT WITH(NOLOCK)
+                  WHERE ReceiptKey = @cReceiptKey AND StorerKey = @cStorerKey
+
+                  IF @cDOCTYPE = 'A'
+                  BEGIN
+                     UPDATE dbo.ReceiptDetail WITH (ROWLOCK) SET  
+                        QTYReceived = BeforeReceivedQTY,  
+                        FinalizeFlag = 'Y',
+                        UserDefine02 = '',
+                        EditDate = GETDATE(),  
+                        EditWho = SUSER_SNAME()    
+                     FROM dbo.ReceiptDetail
+                     INNER JOIN dbo.UCC WITH(NOLOCK) ON UCC.UCCNo = ReceiptDetail.UserDefine02 AND UCC.StorerKey = ReceiptDetail.StorerKey
+                     WHERE ReceiptDetail.StorerKey = @cStorerKey AND ReceiptDetail.ReceiptKey = @cReceiptKey 
+                        AND ReceiptDetail.FinalizeFlag = 'N'
+                        AND ReceiptDetail.ToId = @cToID --V1.2.1
+                     IF @@ERROR <> 0
+                     BEGIN  
+                        SET @nErrNo = 215352  
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --215352^Finalize Fail
+                        GOTO Quit
+                     END
+
+                     -- Send new transmitlog2 per FCR-236 v1.4
+                     EXEC ispGenTransmitLog2 
+                           @c_TableName      = 'WSRCTPDETLOG', 
+                           @c_Key1           = @cReceiptkey,
+                           @c_Key2           = @cToID, 
+                           @c_Key3           = @cStorerkey, 
+                           @c_TransmitBatch  = '', 
+                           @b_Success        = @b_Success   OUTPUT,
+                           @n_err            = @nErrNo      OUTPUT,
+                           @c_errmsg         = @cErrMsg     OUTPUT               
+
+                     IF @b_Success <> 1
+                     BEGIN
+                        SET @nErrNo = 215351
+                        SET @cErrMsg = rdt.rdtGetMessage(@nErrNo, @cLangCode, 'DSP') -- Add TransmitLog2 Fail
+                        GOTO Quit
+                     END
+                  END
+               END
+               ELSE
+               BEGIN
+                  -- Send new transmitlog2 per FCR-236 v1.4
+                  EXEC ispGenTransmitLog2 
+                        @c_TableName      = 'WSRCTPDETLOG', 
+                        @c_Key1           = @cReceiptkey,
+                        @c_Key2           = @cToID, 
+                        @c_Key3           = @cStorerkey, 
+                        @c_TransmitBatch  = '', 
+                        @b_Success        = @b_Success   OUTPUT,
+                        @n_err            = @nErrNo      OUTPUT,
+                        @c_errmsg         = @cErrMsg     OUTPUT               
+
+                  IF @b_Success <> 1
+                  BEGIN
+                     SET @nErrNo = 215351
+                     SET @cErrMsg = rdt.rdtGetMessage(@nErrNo, @cLangCode, 'DSP') -- Add TransmitLog2 Fail
+                     GOTO Quit
+                  END
+               END
                         --,@cReceiptLineNumber NVARCHAR(5)
                         --,@cExternPOKey       NVARCHAR(20)
                         --,@cKey2              NVARCHAR(30)
@@ -97,23 +171,6 @@ BEGIN
                   FETCH NEXT FROM @curReceiptDetail INTO @cExternPOKey, @cReceiptLineNumber
                END -- End cursor */ -- Removed per FCR-236 FBR v1.4 change
 
-               -- Send new transmitlog2 per FCR-236 v1.4
-               EXEC ispGenTransmitLog2 
-                     @c_TableName      = 'WSRCTPDETLOG', 
-                     @c_Key1           = @cReceiptkey,
-                     @c_Key2           = @cToID, 
-                     @c_Key3           = @cStorerkey, 
-                     @c_TransmitBatch  = '', 
-                     @b_Success        = @b_Success   OUTPUT,
-                     @n_err            = @nErrNo      OUTPUT,
-                     @c_errmsg         = @cErrMsg     OUTPUT               
-
-               IF @b_Success <> 1
-               BEGIN
-                  SET @nErrNo = 215351
-                  SET @cErrMsg = rdt.rdtGetMessage(@nErrNo, @cLangCode, 'DSP') -- Add TransmitLog2 Fail
-                  GOTO Quit
-               END
             END -- END option
          END -- END ToID not empty
       END -- End step 12
@@ -131,3 +188,4 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS ON 
 GO
+

@@ -20,6 +20,8 @@ GO
 /* 2024-10-28 1.4.0  NLT013   FCR-1085 Automate print Order Level labels           */
 /* 2024-11-27 1.4.1  NLT013   FCR-1085 Fix bug - print duplicate reports           */
 /* 2024-12-03 1.5.0  NLT013   FCR-1659 Be able to print label for MPOC             */
+/* 2024-12-03 1.6.0  NLT013   UWP-28680 Remove the transaction                     */
+/* 2024-12-03 1.7.0  NLT013   UWP-28888 PackHeader status is not correct           */
 /***********************************************************************************/
 CREATE OR ALTER PROC rdt.rdt_855ExtUpd13 (
    @nMobile      INT,   
@@ -543,12 +545,6 @@ BEGIN
                   AND ISNULL(pkd.CaseID, '') = @cDropID
                ORDER BY orm.OrderKey
 
-               SET @nTranCount = @@TRANCOUNT  
-               IF @nTranCount = 0
-                  BEGIN TRANSACTION
-               ELSE
-                  SAVE TRANSACTION rdt_855ExtUpd13_01
-
                BEGIN TRY
                   --Mark PPA as 5 (audit finished)
                   UPDATE RDT.RDTPPA WITH(ROWLOCK)
@@ -702,17 +698,46 @@ BEGIN
                         END
                      END
 
-                     --If all Packedinfo are marked as PACKED, mark PackHeader as 9
-                     IF (SELECT COUNT(1) FROM dbo.PackInfo WITH(NOLOCK) WHERE ISNULL(RefNo, '') = @cDropID)
-                        =
-                        (SELECT COUNT(1) FROM dbo.PackInfo WITH(NOLOCK) WHERE ISNULL(RefNo, '') = @cDropID AND ISNULL(CartonStatus, '') = 'PACKED')
+                     --Mark PackHeader as 9
+                     DECLARE @tPickSlipNoList TABLE
+                     (
+                        id INT IDENTITY(1,1),
+                        PickSlipNo        NVARCHAR(10)
+                     )
+
+                     INSERT INTO @tPickSlipNoList (PickSlipNo)
+                     SELECT PH.PickHeaderKey
+                     FROM dbo.PickHeader PH WITH(NOLOCK) 
+                     INNER JOIN dbo.PickDetail PKD WITH(NOLOCK)
+                        ON PH.StorerKey = PKD.StorerKey
+                        AND PH.OrderKey = PKD.OrderKey
+                     WHERE PKD.StorerKey = @cStorerKey
+                        AND ISNULL(pkd.CaseID, '') = @cDropID
+
+                     SET @nLoopIndex = -1
+                     WHILE 1 = 1
                      BEGIN
-                        UPDATE PH
-                        SET PH.Status = '9'
-                        FROM dbo.PackHeader PH WITH(ROWLOCK)
-                        INNER JOIN dbo.PackInfo PI WITH(NOLOCK) 
-                           ON PH.PickSlipNo = PI.PickSlipNo
-                        WHERE ISNULL(PI.RefNo, '') = @cDropID
+                        SELECT TOP 1
+                           @cPickSlipNo = PickSlipNo,
+                           @nLoopIndex = id
+                        FROM @tPickSlipNoList
+                        WHERE id > @nLoopIndex
+                        ORDER BY id
+
+                        SET @nRowCount = @@ROWCOUNT
+
+                        IF @nRowCount = 0
+                           BREAk
+
+                        --If all Packedinfo are marked as PACKED, mark PackHeader as 9
+                        IF (SELECT COUNT(1) FROM dbo.PackInfo WITH(NOLOCK) WHERE PickSlipNo = @cPickSlipNo)
+                           =
+                           (SELECT COUNT(1) FROM dbo.PackInfo WITH(NOLOCK) WHERE PickSlipNo = @cPickSlipNo AND ISNULL(CartonStatus, '') = 'PACKED')
+                        BEGIN
+                           UPDATE dbo.PackHeader WITH(ROWLOCK)
+                           SET Status = '9'
+                           WHERE PickSlipNo = @cPickSlipNo
+                        END
                      END
 
                      IF TRIM(@cShipperKey) <> ''
@@ -762,26 +787,15 @@ BEGIN
                      END
                   END
 
-                  WHILE @@TRANCOUNT > @nTranCount
-                     COMMIT TRANSACTION
                END TRY
                BEGIN CATCH
-                  IF @nTranCount > 0
-                  BEGIN
-                     IF XACT_STATE() <> -1  
-                        ROLLBACK TRANSACTION rdt_855ExtUpd13_01
-                  END
-                  ELSE
-                  BEGIN
-                     ROLLBACK TRANSACTION
-                  END
-
                   IF @nErrNo = 0
                   BEGIN
                      SET @nErrNo = 217803
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --HandlePPAFail
-                     GOTO Quit
                   END
+
+                  GOTO Quit
                END CATCH
             END
          END

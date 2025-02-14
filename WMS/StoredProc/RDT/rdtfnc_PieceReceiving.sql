@@ -165,6 +165,7 @@ GO
 /* 2024-07-24 10.8 JHU151     FCR-549 Defy                               */
 /* 2024-07-27 10.9 Dennis     Dynamic Lottable                           */
 /* 2024-07-31 11.0 JHU151     FCR-550 Scan SN on sku screen              */
+/* 2024-12-27 12.0 Dennis     UWP-28649 Fix Capture Pallet Type Bug      */
 /************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdtfnc_PieceReceiving] (
    @nMobile    INT,
@@ -4915,6 +4916,21 @@ BEGIN
          GOTO Quit
       ELSE
          SET @cSKUValidated = '0'
+      
+      IF(ISNULL(rdt.RDTGetConfig( @nFunc, 'ValidatePalletType', @cStorer),'0'))!='0' -- Capture pallet type
+      BEGIN
+         SELECT
+         @cPalletType = C_String1
+         FROM RDT.RDTMOBREC (NOLOCK)
+         WHERE  Mobile = @nMobile
+
+         IF ISNULL(@cPalletType,'')!=''
+         BEGIN
+            UPDATE RECEIPTDETAIL SET PalletType = @cPalletType
+            WHERE ReceiptKey = @cReceiptKey
+            AND ReceiptLineNumber = @cReceiptLineNumber
+         END
+      END
 
       -- (james23)
       SELECT @cBUSR1 = BUSR1

@@ -41,7 +41,7 @@ BEGIN
          , @n_Continue           INT            = 1
          , @n_StartTCnt          INT            = @@TRANCOUNT
                                         
-         , @c_ExternOrderkey     NVARCHAR(10)   = ''
+         , @c_ExternOrderkey     NVARCHAR(50)   = ''
          , @c_Orderkey           NVARCHAR(10)   = ''
          , @c_OrderKey_P         NVARCHAR(10)   = ''
          , @c_OrderLineNumber_P  NVARCHAR(10)   = ''

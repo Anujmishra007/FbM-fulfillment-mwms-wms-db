@@ -1,93 +1,34 @@
-name: cdt db script deployment
+name: Trigger Infra-Repo Workflow for SQL Deployment
 
 on:
   workflow_dispatch:
     inputs:
-      # branchName:
-      #   description: 'Branch name for deployment'
-      #   required: true
-      #   default: 'db-deployments'
-      # env_name:
-      #   description: 'Environment name for deployment'
-      #   required: true
-      #   default: 'cdt'
       authToken:
-        description: 'Authentication token for the API'
+        description: 'Authentication token for the infra-repo API'
         required: true
-        #default: ''
+      file_paths:
+        description: 'Comma-separated list of SQL file paths to deploy'
+        required: true
+      branch:
+        description: 'Branch name in infra-repo to run the workflow'
+        required: true
+        default: 'main'   
 
 jobs:
-  call-api:
-    if: github.ref == 'refs/heads/main'
+  trigger-infra-workflow:
     runs-on: ubuntu-latest
-    
+
     steps:
-      - name: Checkout  repo
+      - name: Checkout repo
         uses: actions/checkout@v2
 
-      - name: Call Capella API
+      - name: Trigger infra-repo workflow
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
         run: |
-          curl -X POST "https://bffp.maersk-digital.net/v2/platforms/fbm/environments/cdt/products/wms/configurations" \
-          -H "Content-Type: application/json" \
-          -H "Authorization: Bearer ${{ github.event.inputs.authToken }}" \
-          -d '{
-            "region": "westeurope",
-            "repositoryName": "fbm-infra-automation",
-            "playbookPath": "db-deploy-cdt.yml",
-            "inventoryPath": "inventories/cdt.yml",
-            "branchName": "main",
-            "debugFlag": true,
-            "extraVars": {
-              "ENV_CODE": "cdt",
-              "ENV_TYPE": "cdt",
-              "REGION": "westeurope",
-              "GEOGRAPHY": "europe",
-              "PRODUCT_CODE": "wms",
-              "PLATFORM_CODE": "fbm",
-              "HASHICORP_VAULT_URL": "https://vault.maersk-digital.net",
-              "targets": "wmsdb1"
-            }
-          }'
+          gh workflow run cdt-test-deployment.yml \
+            --repo Maersk-Global/fbm-infra-automation \
+            --ref ${{ github.event.inputs.branch }} \
+            --field authToken="${{ github.event.inputs.authToken }}" \
+            --field file_paths="${{ github.event.inputs.file_paths }}"
 
-
-
-#name: Trigger CI Workflow in infra repo with AuthToken
-
-# on:
-#   workflow_dispatch:
-#     inputs:
-#       authToken:
-#         description: 'Authentication Token'
-#         required: true
-#         type: string
-
-# jobs:
-#   trigger-workflow:
-#     runs-on: ubuntu-latest
-
-#     steps:
-#       # Step 1: Checkout the code from repo-b (not strictly necessary for this task)
-#       - name: Checkout 
-#         uses: actions/checkout@v3
-
-#       # Step 2: Set up GitHub CLI
-#       # - name: Set up GitHub CLI
-#       #   uses: cli/cli-action@v2.0.0
-#       #   with:
-#       #     gh-version: 'latest'
-
-#       # Step 3: Authenticate with GitHub CLI
-#       - name: Authenticate with GitHub CLI
-#         run: |
-#           echo "${{ secrets.DB_TOKEN }}" | gh auth login --with-token
-
-#       # Step 4: Trigger cdt-test-deployment.yml in infrawith the authToken passed as input
-#       - name: Trigger cdt-test-deployment.yml in infra repo with authToken
-#         run: |
-#           gh workflow run cdt-test-deployment.yml \
-#             --repo Maersk-Global/fbm-infra-automation \
-#             -f authToken="${{ github.event.inputs.authToken }}"
-
-#       # Optional: Check the status of the triggered workflow
-#       - name: List workflow runs in infra repo
-#         run: gh run list --repo Maersk-Global/fbm-infra-automation

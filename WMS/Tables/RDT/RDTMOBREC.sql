@@ -169,6 +169,7 @@ BEGIN
    [V_String48] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String48] DEFAULT (''),
    [V_String49] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String49] DEFAULT (''),
    [V_String50] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String50] DEFAULT (''),
+   [V_String51] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTMOBREC_V_String51] DEFAULT (''),
    [V_WaveKey] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_RDTMOBREC_V_WaveKey] DEFAULT (''),
    [V_Cartonno] [int] NULL CONSTRAINT [DF_RDTMOBREC_V_Cartonno] DEFAULT ((0)),
    [V_PUOM_Div] [int] NULL CONSTRAINT [DF_RDTMOBREC_V_PUOM_Div] DEFAULT ((0)),
@@ -424,6 +425,11 @@ BEGIN
    -- rdtMobRec.C_DateTime5
    IF NOT EXISTS( SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'rdtMobRec' AND COLUMN_NAME = 'C_DateTime5')
       ALTER TABLE rdt.rdtMobRec ADD C_DateTime5 DATETIME NULL CONSTRAINT DF_rdtMobRec_C_DateTime5 DEFAULT (NULL) WITH VALUES
+
+   -- rdtMobRec.V_String51
+   IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_NAME = 'RDTMOBREC' AND COLUMN_NAME = 'V_String51')
+      ALTER TABLE RDT.RDTMOBREC ADD V_String51 NVARCHAR(60)  NULL CONSTRAINT DF_RDTMOBREC_V_String51 DEFAULT('')
+
 END
 GO
 SET QUOTED_IDENTIFIER ON
@@ -431,6 +437,8 @@ GO
 SET ANSI_NULLS ON
 GO
 
+--FCR-2435 Comment out the trigger creation.The trigger generation are in the independent scripts. by JCH507
+/*
 IF OBJECT_ID ('RDT.ntrRDTMobRecDelete', 'TR') IS NOT NULL  
    DROP TRIGGER [RDT].[ntrRDTMobRecDelete]
 GO
@@ -461,7 +469,7 @@ GO
 SET QUOTED_IDENTIFIER ON
 GO
 SET ANSI_NULLS ON
-GO
+GO*/
 
 /************************************************************************/
 /* Trigger: ntrRDTMobRecUpdate                                          */
@@ -490,6 +498,7 @@ GO
 /* 28-Oct-2013  TLTING    1.5 Review Editdate column update             */
 /* 28-Mar-2015  James     1.6 SOS330761-Fix fieldattr not reset(james02)*/
 /************************************************************************/
+/*
 IF OBJECT_ID ('RDT.ntrRDTMobRecUpdate', 'TR') IS NOT NULL  
    DROP TRIGGER [RDT].[ntrRDTMobRecUpdate]
 GO
@@ -596,3 +605,4 @@ BEGIN
    END
 END
 GO
+*/

@@ -55,3 +55,11 @@ EXECUTE rdt.rdtAddScn 4594, 'ENG'
    ,@cWebGroup = '{"1":["1","2"],"2":["4","5"]}'
    ,@nFunc = 803
    
+
+-- For Ace Turtle
+DELETE rdt.RDTScn WHERE Scn = 4595 AND Lang_Code = 'ENG'
+EXECUTE rdt.rdtAddScn 4595, 'ENG'
+   ,@cLine01 = 'Pallet ID:'
+   ,@cLine02 = '%20i01'
+   ,@cLine14 = '%e'
+   ,@nFunc = 803

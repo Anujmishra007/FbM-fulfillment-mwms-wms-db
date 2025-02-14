@@ -10,8 +10,9 @@ GO
 /* Customer : Barry                                                           */
 /* Modifications log:                                                         */
 /*                                                                            */
-/* Date       Rev  Author     Purposes                                        */
-/* 2024-05-31 1.0  Bruce      UWP-20408 Created                               */
+/* Date       Rev    Author     Purposes                                      */
+/* 2024-05-31 1.0    Bruce      UWP-20408 Created                             */
+/* 2025-01-08 1.1.0  Bruce      UWP-28870 Enhance Weight and Pallet validation*/
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_593PrintPLWgt01] (
@@ -58,14 +59,14 @@ BEGIN
    SET @cTargetDB     = ''
 
    -- Check blank
-   IF @cPalletWeight = ''
+   IF @cPalletWeight = '' OR TRY_CAST(@cPalletWeight AS FLOAT) IS NULL OR TRY_CAST(@cPalletWeight AS FLOAT) <= 0
    BEGIN
       SET @nErrNo = 219901
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') 
       GOTO Quit
    END
 
-   IF @cPalletQty = '' OR TRY_CAST(@cPalletQty as INT) IS NULL
+   IF @cPalletQty = '' OR TRY_CAST(@cPalletQty AS INT) IS NULL OR TRY_CAST(@cPalletQty AS INT) <= 0
    BEGIN
       SET @nErrNo = 219902
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') 

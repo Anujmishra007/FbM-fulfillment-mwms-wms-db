@@ -4,15 +4,16 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-/******************************************************************************/
-/* Store procedure: rdt_598RcvInfo02                                          */
-/* Copyright      : Maersk                                                    */
-/*                                                                            */
-/* Purpose: Get Receiving info for Baryy Callbaut                             */
-/*                                                                            */
-/* Date         Author     Ver.  Purposes                                     */
-/* 3-June-2024  Bruce Ping 1.0   UWP-20196 Created                            */
-/******************************************************************************/
+/*******************************************************************************/
+/* Store procedure: rdt_598RcvInfo02                                           */
+/* Copyright      : Maersk                                                     */
+/*                                                                             */
+/* Purpose: Get Receiving info for Baryy Callbaut                              */
+/*                                                                             */
+/* Date        Author     Ver.    Purposes                                     */
+/* 2024-06-03  Bruce Ping 1.0     UWP-20196 Created                            */
+/* 2025-01-08  Bruce Ping 1.1.0   UWP-28868                                    */
+/*******************************************************************************/
   
 CREATE OR ALTER   PROCEDURE [RDT].[rdt_598RcvInfo02]  
   
@@ -106,20 +107,12 @@ BEGIN
          WHERE PalletKey = @cID
             AND StorerKey = @cStorerKey
 
-         SELECT @nCnt = COUNT(1)
-           FROM ReceiptDetail WITH(NOLOCK) 
-          WHERE ReceiptKey = @cReceiptKey
-            AND Sku = @cSKU
-            AND BeforeReceivedQty > 1
-
-         IF @nCnt = 0
-         BEGIN
-           SELECT @cLottable01 = ''
-         END
       END -- End step 4
    END -- End 598
   
 END -- End Procedure
+
+GO 
 
 SET QUOTED_IDENTIFIER OFF
 GO

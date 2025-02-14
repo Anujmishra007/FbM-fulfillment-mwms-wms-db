@@ -30,7 +30,7 @@ GO
 /* 18-MAY-2015  YTWan     1.4 SOS#341733 - ToryBurch HK SAP - Allow      */
 /*                            CommingleSKU with NoMixLottablevalidation  */
 /*                            to Exceed and RDT (Wan02)                  */
-/* 01-JUN-2015  YTWan     1.5 SOS#343525 - UA �C NoMixLottable validation*/
+/* 01-JUN-2015  YTWan     1.5 SOS#343525 - UA  C NoMixLottable validation*/
 /*                            CR(Wan03)                                  */
 /* 06-Feb-2018  SWT02     1.6 Added Channel Management Logic             */
 /*                        1.6.1 Handle QtyOnHold For Channel Mgmt        */
@@ -41,6 +41,9 @@ GO
 /* 10-Feb-2023  NJOW01    1.8 DEVOPS Combine Script                      */
 /* 09-AUG-2023  Wan05     1.9 LFWM-4397 - RG [GIT] Serial Number Solution*/
 /*                            -  Adjustment by Serial Number             */
+/* 03-JAN-2024  Wan06     2.6 LFWM-4405 - [GIT] Serial Number Solution-Post*/
+/*                            Cycle Count by Adjustment Serialnon - Fix  */
+/*                            sourcetype truncate issue                  */
 /*************************************************************************/
 CREATE OR ALTER PROC  [dbo].[nspItrnAddAdjustmentCheck]
                @c_itrnkey      NVARCHAR(10)
@@ -135,7 +138,7 @@ BEGIN
       , @c_SerialNokey              NVARCHAR(10) = ''    --(Wan05)
       , @c_Status_SN                NVARCHAR(10) = '1'   --(Wan05)
       , @c_SourceKey                NVARCHAR(20) = ''    --(Wan05)
-      , @c_SourceType               NVARCHAR(10) = ''    --(Wan05)
+      , @c_SourceType               NVARCHAR(30) = ''    --(Wan06)(Wan05)
       , @c_TranType                 NVARCHAR(10) = ''    --(Wan05)
       , @c_ASNFizUpdLotToSerialNo   NVARCHAR(30) = ''    --(Wan05)
       

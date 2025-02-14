@@ -3,18 +3,22 @@ GO
 SET ANSI_NULLS OFF 
 GO
   
-/******************************************************************************/        
-/* Store procedure: rdtfnc_TM_Assist_ClusterPickV2                            */        
-/* Copyright      : Maersk                                                    */        
-/*                                                                            */        
-/* Purpose: For HUSQ                                                          */        
-/*                                                                            */        
-/* Modifications log:                                                         */        
-/*                                                                            */        
-/* Date         Rev    Author    Purposes                                     */        
-/* 2024-10-10   1.0    JHU151    FCR-777 Created                              */ 
-/* 2025-02-08   1.1.0  NLT013    FCR-1872 ignore lottable values while picking*/ 
-/******************************************************************************/        
+/*****************************************************************************************/
+/* Store procedure: rdtfnc_TM_Assist_ClusterPickV2                                       */
+/* Copyright      : Maersk                                                               */
+/*                                                                                       */
+/* Purpose: For HUSQ                                                                     */
+/*                                                                                       */
+/* Modifications log:                                                                    */
+/*                                                                                       */
+/* Date         Rev    Author   Purposes                                                 */
+/* 2024-10-10   1.0    JHU151   FCR-777 Created                                          */
+/* 2025-01-13   1.2    PPA374   Correcting issues on assignment where                    */
+/*                              pickdetail remains in status 5 with no ID                */
+/* 2025-01-13   1.2    PPA374   Allowing to use same DropID for trolley                  */
+/* 2025-01-17   1.3    PPA374   Fix for method 3 close option no DROPID update           */
+/* 2025-02-08   1.4.0  NLT013   FCR-1872 ignore lottable values while picking            */ 
+/*****************************************************************************************/
         
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_Assist_ClusterPickV2](        
    @nMobile    int,        
@@ -27,7 +31,7 @@ SET NOCOUNT ON
 SET QUOTED_IDENTIFIER OFF        
 SET ANSI_NULLS OFF        
 SET CONCAT_NULL_YIELDS_NULL OFF        
-        
+
 -- Misc variables        
 DECLARE         
    @cSQL           NVARCHAR(MAX),         
@@ -148,6 +152,7 @@ DECLARE
    @cMessage02          NVARCHAR( 20),
    @cMessage03          NVARCHAR( 20),
    @cMax                NVARCHAR(MAX),
+   @cUnassignToLOCFlag  NVARCHAR( 1),
 
    --extScn Jackc
    @tExtScnData         VariableTable,
@@ -247,7 +252,7 @@ SELECT
    @cRefKey03           = V_String37,          
    @cRefKey04           = V_String38,          
    @cRefKey05           = V_String39,          
-      
+   @cUnassignToLOCFlag  = V_String40,--Dennis 21/01/2025
    @cCartPickMethod     = V_String41,      
    @cContinuePickOnAssignedCart = V_String42,      
    @cPickNoMixWave      = V_String43,
@@ -341,7 +346,7 @@ BEGIN
    SET @cTTMStrategyKey = @cOutField08          
           
    -- Get task info          
-   SELECT          
+   SELECT TOP 1   --PPA374 Added TOP 1 15/01/2025
       @cTTMTaskType = TaskType,          
       @cStorerKey   = Storerkey,          
       @cSuggCartId  = DeviceID,        
@@ -555,7 +560,7 @@ BEGIN
       END          
       
       IF @cMethod <> '3'
-	   BEGIN
+      BEGIN
          -- Check cart valid          
          IF NOT EXISTS( SELECT 1 FROM dbo.DeviceProfile WITH (NOLOCK)       
                         WHERE DeviceType = 'CART'       
@@ -618,7 +623,7 @@ BEGIN
          **/
 
       -- Check Method valid          
-      SELECT @cCartPickMethod = Long      
+      SELECT TOP 1 @cCartPickMethod = Long      --PPA374 added 15/01/2025
       FROM dbo.CODELKUP WITH (NOLOCK)      
       WHERE LISTNAME = 'TMPickMtd'      
       AND   Code = @cMethod      
@@ -728,7 +733,7 @@ BEGIN
       SET @cNewCaseID = ''      
       SET @nCtnCount = 0      
             
-      SELECT @nCartLimit = Short      
+      SELECT TOP 1 @nCartLimit = Short   --PPA374 Added TOP 1 15/01/2025   
       FROM dbo.CODELKUP WITH (NOLOCK)      
       WHERE LISTNAME = 'TMPICKMTD'      
       AND   Code = @cMethod      
@@ -870,7 +875,7 @@ BEGIN
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Lock Task Fail          
             GOTO LockTask_RollBackTran          
          END      
-      	
+         
          FETCH NEXT FROM @curLockTask INTO @cLockTaskKey, @cNewCaseID, @cPickWaveKey, @cGroupkey  
       END      
         
@@ -1229,6 +1234,8 @@ Scn = 6471. Cart ID/Matrix screen
 ***********************************************************************************/        
 Step_CartMatrix:        
 BEGIN        
+   DECLARE @cLstTote    NVARCHAR(20)
+   DECLARE @cLstStatusMsg NVARCHAR(30)
    IF @nInputKey = 1 -- ENTER        
    BEGIN        
       -- Screen mapping
@@ -1327,6 +1334,43 @@ BEGIN
             IF @nErrNo <> 0        
                GOTO Quit        
          
+            IF @cMethod = '3' 
+            AND EXISTS ( SELECT 1 FROM dbo.TaskDetail WITH (NOLOCK)      
+               WHERE Storerkey = @cStorerKey      
+               AND   TaskType = 'ASTCPK'      
+               AND   [Status] IN ( '3', '5')      
+               AND   Groupkey = @cGroupkey      
+               AND   UserKey = @cUserName      
+               AND   DeviceID = @cCartID      
+               AND   DropID = '')
+            BEGIN
+               SELECT TOP 1
+                  @cLstTote = DropID,
+                  @cLstStatusMsg = StatusMsg
+               FROM dbo.TaskDetail WITH (NOLOCK)      
+               WHERE Storerkey = @cStorerKey      
+               AND   TaskType = 'ASTCPK'      
+               AND   [Status] IN ( '3', '5')      
+               AND   Groupkey = @cGroupkey      
+               AND   UserKey = @cUserName      
+               AND   DeviceID = @cCartId
+               AND   DropID <> ''
+               ORDER BY EditDate DESC
+
+               UPDATE dbo.TaskDetail
+               SET DropID = @cLstTote,
+                   StatusMsg = @cLstStatusMsg,
+                   EditWho = @cUserName,
+                   EditDate = GETDATE()
+               WHERE Storerkey = @cStorerKey      
+               AND   TaskType = 'ASTCPK'      
+               AND   [Status] IN ( '3', '5')      
+               AND   Groupkey = @cGroupkey      
+               AND   UserKey = @cUserName      
+               AND   DeviceID = @cCartId
+               AND   DropID = ''
+            END
+
             -- Prepare next screen var        
             SET @cOutField01 = @cCartPickMethod      
             SET @cOutField02 = @cSuggFromLOC         
@@ -1373,7 +1417,7 @@ BEGIN
       -- Validate blank        
       IF ISNULL( @cCartonId, '') = ''        
       BEGIN        
-         SELECT @nCartonScanned = COUNT( DISTINCT DropID)      
+         SELECT TOP 1 @nCartonScanned = COUNT( DISTINCT DropID)     --PPA374 Added TOP 1 15/01/2025 
          FROM dbo.TaskDetail WITH (NOLOCK)      
          WHERE Storerkey = @cStorerKey      
          AND   TaskType = 'ASTCPK'      
@@ -1390,7 +1434,7 @@ BEGIN
             GOTO Step_Matrix_Fail      
          END      
       
-         SELECT @nCartLimit = Short      
+         SELECT TOP 1 @nCartLimit = Short      --PPA374 Added TOP 1 15/01/2025
          FROM dbo.CODELKUP WITH (NOLOCK)      
          WHERE LISTNAME = 'TMPICKMTD'      
          AND   Code = @cMethod      
@@ -1398,12 +1442,12 @@ BEGIN
          
          IF @cMethod = '3'
          BEGIN            
-            SELECT @nCartonCnt = COUNT(1)
+            SELECT TOP 1 @nCartonCnt = COUNT(1)   --PPA374 Added TOP 1 15/01/2025
             FROM STRING_SPLIT(@cMax, '|')
          END
          else
          BEGIN
-            SELECT @nCartonCnt = COUNT( DISTINCT DropID)      
+            SELECT TOP 1 @nCartonCnt = COUNT( DISTINCT DropID)      --PPA374 Added TOP 1 15/01/2025
             FROM dbo.TaskDetail WITH (NOLOCK)      
             WHERE Storerkey = @cStorerKey      
             AND   TaskType = 'ASTCPK'      
@@ -1456,8 +1500,6 @@ BEGIN
                      AND   DeviceID = @cCartID      
                      AND   DropID = '')
             BEGIN
-               DECLARE @cLstTote    NVARCHAR(20)
-               DECLARE @cLstStatusMsg NVARCHAR(30)
                SELECT TOP 1
                   @cLstTote = DropID,
                   @cLstStatusMsg = StatusMsg
@@ -1535,22 +1577,22 @@ BEGIN
 
       --1.Exists in pickdetail                
       --2.Exists in Packdetail               
-      --3.Exists in Dropid                 
-      ELSE IF (EXISTS (SELECT 1 FROM dbo.PICKDETAIL WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND DropID = @cCartonId))                 
+      --3.Exists in Dropid        
+     --4.Not the same trolley order
+      ELSE IF ((EXISTS (SELECT 1 FROM dbo.PICKDETAIL WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND DropID = @cCartonId))                 
       OR EXISTS(select 1 FROM dbo.PackDetail (NOLOCK) where STORERKEY = @cStorerKey AND Dropid = @cCartonId)                 
-      OR EXISTS(SELECT dropid FROM dbo.dropid (NOLOCK) WHERE Dropid = @cCartonId)                 
+      OR EXISTS(SELECT dropid FROM dbo.dropid (NOLOCK) WHERE Dropid = @cCartonId))
+      AND (SELECT TOP 1 ORDERKEY FROM dbo.PICKDETAIL WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND DropID = @cCartonId AND STATUS <> '9') <> right(@cResult01,10)
       BEGIN                    
          SET @nErrNo = 229602                    
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')--DropIDIsUsed                    
          GOTO Quit                
       END                  
-      --1.Pickdetail not done & from loc is not PICK OR CASE loc                 
-      --2.Pickdetail not done & id <> ''                  
+      --Pickdetail from loc is not PICK, SHELF OR CASE loc                                 
       ELSE IF EXISTS (SELECT 1 FROM dbo.PICKDETAIL PD (NOLOCK)                   
-                     JOIN dbo.LOC LOC WITH (NOLOCK) ON LOC.LOC = PD.LOC                  
-                     WHERE PD.STORERKEY = @cStorerKey AND PD.STATUS <> '9' AND PD.dropid = @cCartonId                   
-                     AND (LOC.LocationType NOT IN ('PICK','CASE') AND LOC.Facility = @cFacility                 
-                     OR (SELECT TOP 1 ID FROM dbo.pickdetail (NOLOCK) WHERE STORERKEY = @cStorerKey AND STATUS <> '9' AND Dropid = @cCartonId)<>''))                 
+                     JOIN dbo.LOC LOC WITH (NOLOCK) ON LOC.LOC = PD.Notes                  
+                     WHERE PD.STORERKEY = @cStorerKey AND PD.dropid = @cCartonId                   
+                     AND (LOC.LocationType NOT IN ('PICK','CASE','SHELF') AND LOC.Facility = @cFacility))                 
       BEGIN                     
          SET @nErrNo = 229603                    
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --DropIDUsedforPAL                    
@@ -1575,7 +1617,7 @@ BEGIN
       IF @cMethod = '3'
       BEGIN
          IF @cMax <> ''
-            SELECT @nCartonCnt = COUNT(1)
+            SELECT TOP 1 @nCartonCnt = COUNT(1)   --PPA374 Added TOP 1 15/01/2025
                FROM STRING_SPLIT(@cMax, '|')
 
          IF EXISTS( SELECT 1 FROM dbo.TaskDetail WITH (NOLOCK)      
@@ -1678,7 +1720,7 @@ BEGIN
          END        
       END        
       
-      SELECT @nCartonScanned = COUNT( DISTINCT DropID)      
+      SELECT TOP 1 @nCartonScanned = COUNT( DISTINCT DropID)      --PPA374 Added TOP 1 15/01/2025
       FROM dbo.TaskDetail WITH (NOLOCK)      
       WHERE Storerkey = @cStorerKey      
       AND   TaskType = 'ASTCPK'      
@@ -1688,14 +1730,14 @@ BEGIN
       AND   DeviceID = @cCartID      
       AND   DropID <> ''      
       
-      SELECT @cCartonType = UDF01      
+      SELECT TOP 1 @cCartonType = UDF01      --PPA374 Added TOP 1 15/01/2025
       FROM dbo.CODELKUP WITH (NOLOCK)      
       WHERE LISTNAME = 'TMPICKMTD'      
       AND   Code = @cMethod      
       AND   Storerkey = @cStorerKey      
          
       SET @cPickMethod = ''      
-      SELECT @cPickMethod = Long       
+      SELECT TOP 1 @cPickMethod = Long       --PPA374 Added TOP 1 15/01/2025
       FROM dbo.CODELKUP WITH (NOLOCK)      
       WHERE LISTNAME = 'TMPICKMTD'      
       AND   Storerkey = @cStorerKey      
@@ -1732,7 +1774,7 @@ BEGIN
          ORDER BY 1 
 
          DECLARE @nAssignedCartonCnt      INT
-         SELECT @nAssignedCartonCnt = COUNT(DISTINCT DropID) 
+         SELECT TOP 1 @nAssignedCartonCnt = COUNT(DISTINCT DropID) --PPA374 Added TOP 1 15/01/2025
          FROM dbo.TaskDetail WITH(NOLOCK)
          WHERE Storerkey = @cStorerKey
             AND   TaskType = 'ASTCPK'
@@ -1991,12 +2033,12 @@ BEGIN
       SET @cFieldAttr09 = ''        
       SET @cFieldAttr10 = ''        
             
-      SELECT @cSKUDescr = DESCR        
+      SELECT TOP 1 @cSKUDescr = DESCR        --PPA374 Added TOP 1 15/01/2025
       FROM dbo.SKU WITH (NOLOCK)        
       WHERE StorerKey = @cStorerKey        
       AND   SKU = @cSuggSKU        
               
-      SELECT @nSuggQty = ISNULL( SUM( PKD.Qty), 0)        
+      SELECT TOP 1 @nSuggQty = ISNULL( SUM( PKD.Qty), 0)       --PPA374 Added TOP 1 15/01/2025 
       FROM dbo.PICKDETAIL PKD WITH (NOLOCK)
       INNER JOIN dbo.TaskDetail TD WITH(NOLOCK) ON (PKD.StorerKey = TD.StorerKey AND PKD.TaskDetailKey = TD.TaskDetailKey)
       WHERE PKD.StorerKey = @cStorerKey        
@@ -2007,7 +2049,7 @@ BEGIN
       AND   TD.GroupKey = @cGroupKey
       AND   TD.TaskDetailKey = @cTaskdetailKey
 
-      SELECT @nPickedQty = ISNULL( SUM( PKD.Qty), 0)        
+      SELECT TOP 1 @nPickedQty = ISNULL( SUM( PKD.Qty), 0)    --PPA374 Added TOP 1 15/01/2025    
       FROM dbo.PICKDETAIL PKD WITH (NOLOCK)
       INNER JOIN dbo.TaskDetail TD WITH(NOLOCK) ON (PKD.StorerKey = TD.StorerKey AND PKD.TaskDetailKey = TD.TaskDetailKey)
       WHERE PKD.StorerKey = @cStorerKey        
@@ -2048,7 +2090,7 @@ BEGIN
         
    IF @nInputKey = 0 -- ESC        
    BEGIN        
-      SELECT @nCartonScanned = COUNT( DISTINCT DropID)      
+      SELECT TOP 1 @nCartonScanned = COUNT( DISTINCT DropID)      --PPA374 Added TOP 1 15/01/2025
       FROM dbo.TaskDetail WITH (NOLOCK)      
       WHERE Storerkey = @cStorerKey      
       AND   TaskType = 'ASTCPK'      
@@ -2503,7 +2545,7 @@ BEGIN
             IF @nErrNo <> 0          
                GOTO Quit   
                
-            SELECT       
+            SELECT TOP 1 --PPA374 Added TOP 1 15/01/2025      
                @cPosition = StatusMsg,       
                @cSuggToteId = DropID      
             FROM dbo.TaskDetail WITH (NOLOCK)      
@@ -2631,7 +2673,7 @@ BEGIN
             END        
          END                
                
-         SELECT       
+         SELECT TOP 1 --PPA374 Added TOP 1 15/01/2025      
             @cPosition = StatusMsg,       
             @cSuggToteId = DropID      
          FROM dbo.TaskDetail WITH (NOLOCK)      
@@ -2844,7 +2886,7 @@ BEGIN
          IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')        
          Begin
             DELETE FROM @tExtUpdate
-            INSERT INTO @tExtUpdate (Variable, Value) VALUES 	
+            INSERT INTO @tExtUpdate (Variable, Value) VALUES    
             ('@cCartonId2Confirm',     @cCartonId2Confirm)
 
             SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +        
@@ -2914,12 +2956,12 @@ BEGIN
         
       IF @nErrNo = 0          
       BEGIN          
-         SELECT @cSKUDescr = DESCR        
+         SELECT TOP 1 @cSKUDescr = DESCR        --PPA374 Added TOP 1 15/01/2025
          FROM dbo.SKU WITH (NOLOCK)        
          WHERE StorerKey = @cStorerKey        
          AND   SKU = @cSuggSKU        
         
-         SELECT @nSuggQty = ISNULL( SUM( Qty), 0)        
+         SELECT TOP 1 @nSuggQty = ISNULL( SUM( Qty), 0)        --PPA374 Added TOP 1 15/01/2025
          FROM dbo.PICKDETAIL WITH (NOLOCK)        
          WHERE StorerKey = @cStorerKey        
          AND   Loc = @cFromLoc        
@@ -2927,7 +2969,7 @@ BEGIN
          AND   CaseID = @cSuggCartonID        
          AND   [Status] < @cPickConfirmStatus      
         
-         SELECT @nPickedQty = ISNULL( SUM( Qty), 0)        
+         SELECT TOP 1 @nPickedQty = ISNULL( SUM( Qty), 0)        --PPA374 Added TOP 1 15/01/2025
          FROM dbo.PICKDETAIL WITH (NOLOCK)        
          WHERE StorerKey = @cStorerKey        
          AND   Loc = @cFromLoc        
@@ -2988,13 +3030,13 @@ BEGIN
                   
          IF @nErrNo = 0        
          BEGIN        
-            SELECT @cSKUDescr = DESCR        
+            SELECT TOP 1 @cSKUDescr = DESCR        --PPA374 Added TOP 1 15/01/2025
             FROM dbo.SKU WITH (NOLOCK)        
             WHERE StorerKey = @cStorerKey        
             AND   SKU = @cSuggSKU        
            
 
-            SELECT @nSuggQty = ISNULL( SUM( PKD.Qty), 0)        
+            SELECT TOP 1 @nSuggQty = ISNULL( SUM( PKD.Qty), 0)        --PPA374 Added TOP 1 15/01/2025
             FROM dbo.PICKDETAIL PKD WITH (NOLOCK)
             INNER JOIN dbo.TaskDetail TD WITH(NOLOCK) ON (PKD.StorerKey = TD.StorerKey AND PKD.TaskDetailKey = TD.TaskDetailKey)
             WHERE PKD.StorerKey = @cStorerKey        
@@ -3005,7 +3047,7 @@ BEGIN
             AND   TD.GroupKey = @cGroupKey
             AND   TD.TaskDetailKey = @cTaskdetailKey
 
-            SELECT @nPickedQty = ISNULL( SUM( PKD.Qty), 0)        
+            SELECT TOP 1 @nPickedQty = ISNULL( SUM( PKD.Qty), 0)        --PPA374 Added TOP 1 15/01/2025
             FROM dbo.PICKDETAIL PKD WITH (NOLOCK)
             INNER JOIN dbo.TaskDetail TD WITH(NOLOCK) ON (PKD.StorerKey = TD.StorerKey AND PKD.TaskDetailKey = TD.TaskDetailKey)
             WHERE PKD.StorerKey = @cStorerKey        
@@ -3107,7 +3149,7 @@ BEGIN
                SET @nErrNo = 0          
                SET @cErrMsg = ''          
       
-               SELECT @cSuggToLOC = ToLoc      
+               SELECT TOP 1 @cSuggToLOC = ToLoc      --PPA374 Added TOP 1 15/01/2025
                FROM dbo.TaskDetail WITH (NOLOCK)      
                WHERE TaskDetailKey = @cTaskDetailKey      
       
@@ -3196,12 +3238,12 @@ BEGIN
       
       IF @cMethod = '3'
       BEGIN
-         SELECT @cSKUDescr = DESCR        
+         SELECT TOP 1 @cSKUDescr = DESCR        --PPA374 Added TOP 1 15/01/2025
          FROM dbo.SKU WITH (NOLOCK)        
          WHERE StorerKey = @cStorerKey        
          AND   SKU = @cSuggSKU        
          
-         SELECT @nSuggQty = ISNULL( SUM( PKD.Qty), 0)        
+         SELECT TOP 1 @nSuggQty = ISNULL( SUM( PKD.Qty), 0)        --PPA374 Added TOP 1 15/01/2025
          FROM dbo.PICKDETAIL PKD WITH (NOLOCK)
          INNER JOIN dbo.TaskDetail TD WITH(NOLOCK) ON (PKD.StorerKey = TD.StorerKey AND PKD.TaskDetailKey = TD.TaskDetailKey)
          WHERE PKD.StorerKey = @cStorerKey        
@@ -3212,7 +3254,7 @@ BEGIN
          AND   TD.GroupKey = @cGroupKey
          AND   TD.TaskDetailKey = @cTaskdetailKey
 
-         SELECT @nPickedQty = ISNULL( SUM( PKD.Qty), 0)        
+         SELECT TOP 1 @nPickedQty = ISNULL( SUM( PKD.Qty), 0)        --PPA374 Added TOP 1 15/01/2025
          FROM dbo.PICKDETAIL PKD WITH (NOLOCK)
          INNER JOIN dbo.TaskDetail TD WITH(NOLOCK) ON (PKD.StorerKey = TD.StorerKey AND PKD.TaskDetailKey = TD.TaskDetailKey)
          WHERE PKD.StorerKey = @cStorerKey        
@@ -3607,7 +3649,7 @@ BEGIN
             --should allow to overwrite only if TO_LOC is VAS
             --(LocationType = VAS), else the override is not allowed
             DECLARE @cToLoctionType    NVARCHAR(10)
-            SELECT @cToLoctionType = LocationType
+            SELECT TOP 1 @cToLoctionType = LocationType --PPA374 Added TOP 1 15/01/2025
             FROM Loc WITH(NOLOCK)
             WHERE Loc = @cSuggToLOC
 
@@ -3699,6 +3741,116 @@ BEGIN
       
       SET @cMax = ''
 
+      IF @cUnassignToLOCFlag = '1' --Dennis 21/01/2025
+      BEGIN
+         SET @nTranCount = @@TRANCOUNT      
+         BEGIN TRAN      
+         SAVE TRAN UnAssign2      
+            
+         -- 1. unassign those locked but not picked task      
+         SET @nErrNo = 0      
+         DECLARE @curUnAssign2 CURSOR      
+         SET @curUnAssign2 = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR      
+         SELECT TaskDetailKey      
+         FROM dbo.TaskDetail WITH (NOLOCK)      
+         WHERE Storerkey = @cStorerKey      
+         AND   TaskType = 'ASTCPK'      
+         AND   [Status] = '3'      
+         AND   Groupkey = @cGroupKey      
+         AND   UserKey = @cUserName      
+         AND   DeviceID = @cCartID
+         OPEN @curUnAssign2      
+         FETCH NEXT FROM @curUnAssign2 INTO @cUnAssignTaskKey      
+         WHILE @@FETCH_STATUS = 0      
+         BEGIN      
+            UPDATE dbo.TaskDetail SET       
+               STATUS = '0',      
+               UserKey = '',      
+               --Groupkey = '',       
+               DeviceID = '',      
+               DropID = '',      
+               StatusMsg = '',      
+               EditWho = @cUserName,       
+               EditDate = GETDATE()      
+            WHERE TaskDetailKey = @cUnAssignTaskKey      
+               
+            IF @@ERROR <> 0      
+            BEGIN      
+               SET @nErrNo = 227593          
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Lock Task Fail          
+               GOTO UnAssign_RollBackTran2          
+            END      
+               
+            FETCH NEXT FROM @curUnAssign2 INTO @cUnAssignTaskKey      
+         END      
+         CLOSE @curUnAssign2      
+         DEALLOCATE @curUnAssign2      
+      
+         -- 2. Confirm those locked and picked task      
+         SET @curUnAssign2 = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR      
+         SELECT TaskDetailKey      
+         FROM dbo.TaskDetail WITH (NOLOCK)      
+         WHERE Storerkey = @cStorerKey      
+         AND   TaskType = 'ASTCPK'      
+         AND   [Status] = '5'      
+         AND   Groupkey = @cGroupKey      
+         AND   UserKey = @cUserName      
+         AND   DeviceID = @cCartID      
+         OPEN @curUnAssign2      
+         FETCH NEXT FROM @curUnAssign2 INTO @cUnAssignTaskKey      
+         WHILE @@FETCH_STATUS = 0      
+         BEGIN      
+            UPDATE dbo.TaskDetail SET       
+               STATUS = '9',      
+               EditWho = @cUserName,       
+               EditDate = GETDATE()      
+            WHERE TaskDetailKey = @cUnAssignTaskKey      
+               
+            IF @@ERROR <> 0      
+            BEGIN      
+               SET @nErrNo = 227594          
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Lock Task Fail          
+               GOTO UnAssign_RollBackTran2          
+            END      
+               
+            FETCH NEXT FROM @curUnAssign2 INTO @cUnAssignTaskKey      
+         END      
+         
+         SET @cUnassignToLOCFlag = '' --Dennis 21/01/2025
+
+         GOTO UnAssign_Commit2      
+      
+         UnAssign_RollBackTran2:        
+               ROLLBACK TRAN UnAssign2        
+         UnAssign_Commit2:        
+            WHILE @@TRANCOUNT > @nTranCount        
+               COMMIT TRAN        
+      
+         IF @nErrNo <> 0      
+            GOTO Quit      
+         
+         SET @cMax = ''
+         -- Prepare next screen var        
+         SET @cOutField01 = ''        
+         SET @cOutField02 = ''         
+         SET @cOutField03 = ''      
+      
+         EXEC rdt.rdtSetFocusField @nMobile, 1          
+      
+         -- Go to next screen        
+         SET @nScn = @nScn_CartID        
+         SET @nStep = @nStep_CartID
+
+         -- Ext Scn SP
+         IF @cExtendedScnSP <> ''
+         BEGIN
+            SET @nAction = 0
+            GOTO Step_99
+         END -- ExtendedScreenSP <> ''      
+               
+         GOTO Quit
+      END
+
       -- Prepare next screen var          
       SET @cOutField01 = @cCartPickMethod          
       SET @cOutField02 = @cCartID      
@@ -3741,13 +3893,45 @@ BEGIN
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Option                  
          GOTO Step_UnAssign_Fail                  
       END                  
-            
-      IF @cOption = '1'      
-      BEGIN      
+      
+      IF @cOption = '1'
+      BEGIN
+         IF @cSKU <> ''  AND @cCartonID <> ''--Dennis 21/01/2025
+         BEGIN
+            SELECT TOP 1 @cSuggToLOC = ToLoc      --PPA374 Added TOP 1 15/01/2025
+            FROM dbo.TaskDetail WITH (NOLOCK)      
+            WHERE TaskDetailKey = @cTaskDetailKey
+
+            IF @cConfirmToLoc = '1' 
+            BEGIN
+               SET @cUnassignToLOCFlag = '1' --Dennis 21/01/2025
+
+               -- Prepare next screen var          
+               SET @cOutField01 = @cCartPickMethod      
+               SET @cOutField02 = @cSuggToLOC -- To LOC          
+               SET @cOutField03 = ''
+
+               SET @nScn = @nScn_ToLoc          
+               SET @nStep = @nStep_ToLoc
+               GOTO QUIT
+            END
+            ELSE
+            BEGIN
+               SET @cOutField01 = @cCartPickMethod      
+               SET @cOutField02 = @cSuggToLOC -- To LOC          
+               SET @cInField03 = @cSuggToLOC        
+                              
+                  -- Go to To LOC screen          
+               SET @nScn = @nScn_ToLoc        
+               SET @nStep = @nStep_ToLoc
+               GOTO Step_ToLoc
+            END
+         END
+
          SET @nTranCount = @@TRANCOUNT      
          BEGIN TRAN      
          SAVE TRAN UnAssign      
-            
+         
          -- 1. unassign those locked but not picked task      
          SET @nErrNo = 0      
          DECLARE @curUnAssign CURSOR      
@@ -3774,19 +3958,19 @@ BEGIN
                EditWho = @cUserName,       
                EditDate = GETDATE()      
             WHERE TaskDetailKey = @cUnAssignTaskKey      
-               
+            
             IF @@ERROR <> 0      
             BEGIN      
                SET @nErrNo = 227593          
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Lock Task Fail          
                GOTO UnAssign_RollBackTran          
             END      
-               
+            
             FETCH NEXT FROM @curUnAssign INTO @cUnAssignTaskKey      
          END      
          CLOSE @curUnAssign      
          DEALLOCATE @curUnAssign      
-      
+
          -- 2. Confirm those locked and picked task      
          SET @curUnAssign = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR      
          SELECT TaskDetailKey      
@@ -3806,36 +3990,36 @@ BEGIN
                EditWho = @cUserName,       
                EditDate = GETDATE()      
             WHERE TaskDetailKey = @cUnAssignTaskKey      
-               
+            
             IF @@ERROR <> 0      
             BEGIN      
                SET @nErrNo = 227594          
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Lock Task Fail          
                GOTO UnAssign_RollBackTran          
             END      
-               
+            
             FETCH NEXT FROM @curUnAssign INTO @cUnAssignTaskKey      
          END      
-               
+
          GOTO UnAssign_Commit      
-      
+   
          UnAssign_RollBackTran:        
-               ROLLBACK TRAN UnAssign        
+            ROLLBACK TRAN UnAssign        
          UnAssign_Commit:        
             WHILE @@TRANCOUNT > @nTranCount        
                COMMIT TRAN        
-      
+   
          IF @nErrNo <> 0      
             GOTO Quit      
-         
+      
          SET @cMax = ''
          -- Prepare next screen var        
          SET @cOutField01 = ''        
          SET @cOutField02 = ''         
          SET @cOutField03 = ''      
-      
+   
          EXEC rdt.rdtSetFocusField @nMobile, 1          
-      
+   
          -- Go to next screen        
          SET @nScn = @nScn_CartID        
          SET @nStep = @nStep_CartID
@@ -3845,14 +4029,13 @@ BEGIN
          BEGIN
             SET @nAction = 0
             GOTO Step_99
-         END -- ExtendedScreenSP <> ''      
-               
-         GOTO Quit      
-      END      
-      
+         END -- ExtendedScreenSP <> ''
+         GOTO Quit
+      END
+
       IF @cOption = '2'      
       BEGIN      
-         SELECT @nCartonScanned = COUNT( DISTINCT DropID)      
+         SELECT TOP 1 @nCartonScanned = COUNT( DISTINCT DropID)      --PPA374 Added TOP 1 15/01/2025
          FROM dbo.TaskDetail WITH (NOLOCK)      
          WHERE Storerkey = @cStorerKey      
          AND   TaskType = 'ASTCPK'      
@@ -3892,7 +4075,7 @@ BEGIN
                   
    IF @nInputKey = 0        
    BEGIN        
-      SELECT @nCartonScanned = COUNT( DISTINCT DropID)      
+      SELECT TOP 1 @nCartonScanned = COUNT( DISTINCT DropID)      --PPA374 Added TOP 1 15/01/2025
     FROM dbo.TaskDetail WITH (NOLOCK)      
       WHERE Storerkey = @cStorerKey      
       AND   TaskType = 'ASTCPK'      
@@ -4067,13 +4250,13 @@ BEGIN
          AND   DeviceID = @cCartID      
        ORDER BY 1      
       
-         SELECT @nCartLimit = Short      
+         SELECT TOP 1 @nCartLimit = Short     --PPA374 Added TOP 1 15/01/2025 
          FROM dbo.CODELKUP WITH (NOLOCK)      
          WHERE LISTNAME = 'TMPICKMTD'      
          AND UDF01 = RIGHT( @cCartType, CHARINDEX( '-', REVERSE( @cCartType)) - 1)      
          AND   Storerkey = @cStorerKey      
                
-         SELECT @nCartonCnt = COUNT( DISTINCT DropID)      
+         SELECT TOP 1 @nCartonCnt = COUNT( DISTINCT DropID)      --PPA374 Added TOP 1 15/01/2025
          FROM dbo.TaskDetail WITH (NOLOCK)      
        WHERE Storerkey = @cStorerKey      
          AND   TaskType = 'ASTCPK'      
@@ -4369,7 +4552,7 @@ BEGIN
          IF @nErrNo <> 0          
             GOTO Quit          
              
-         SELECT       
+         SELECT TOP 1 --PPA374 Added TOP 1 15/01/2025      
             @cPosition = StatusMsg,       
             @cSuggToteId = DropID      
          FROM dbo.TaskDetail WITH (NOLOCK)      
@@ -4482,7 +4665,7 @@ BEGIN
       END
 
       DECLARE @cRefTaskdetailKey       NVARCHAR(10)
-      SELECT @cRefTaskdetailKey = RefTaskKey 
+      SELECT TOP 1 @cRefTaskdetailKey = RefTaskKey --PPA374 Added TOP 1 15/01/2025
       FROM TaskDetail WITH(NOLOCK)
       WHERE storerKey = @cStorerKey
       AND TaskdetailKey = @cTaskdetailKey
@@ -4503,7 +4686,7 @@ BEGIN
                AND status = '5')
          AND @nActQTY > 0 --FCR-1872 NLT013 If it is full short pick, no need go to ConformTote screen
       BEGIN
-         SELECT       
+         SELECT TOP 1 --PPA374 Added TOP 1 15/01/2025      
             @cPosition = StatusMsg,       
             @cSuggToteId = DropID      
          FROM dbo.TaskDetail WITH (NOLOCK)      
@@ -4549,12 +4732,12 @@ BEGIN
          
          IF @nErrNo = 0          
          BEGIN          
-            SELECT @cSKUDescr = DESCR        
+            SELECT TOP 1 @cSKUDescr = DESCR      --PPA374 Added TOP 1 15/01/2025  
             FROM dbo.SKU WITH (NOLOCK)        
             WHERE StorerKey = @cStorerKey        
             AND   SKU = @cSuggSKU        
          
-            SELECT @nSuggQty = ISNULL( SUM( Qty), 0)        
+            SELECT TOP 1 @nSuggQty = ISNULL( SUM( Qty), 0)        --PPA374 Added TOP 1 15/01/2025
             FROM dbo.PICKDETAIL WITH (NOLOCK)        
             WHERE StorerKey = @cStorerKey        
             AND   Loc = @cFromLoc        
@@ -4562,7 +4745,7 @@ BEGIN
             AND   CaseID = @cSuggCartonID        
             AND   [Status] < @cPickConfirmStatus      
          
-            SELECT @nPickedQty = ISNULL( SUM( Qty), 0)        
+            SELECT TOP 1 @nPickedQty = ISNULL( SUM( Qty), 0)     --PPA374 Added TOP 1 15/01/2025   
             FROM dbo.PICKDETAIL WITH (NOLOCK)        
             WHERE StorerKey = @cStorerKey        
             AND   Loc = @cFromLoc        
@@ -4623,13 +4806,13 @@ BEGIN
                      
             IF @nErrNo = 0        
             BEGIN        
-               SELECT @cSKUDescr = DESCR        
+               SELECT TOP 1 @cSKUDescr = DESCR       --PPA374 Added TOP 1 15/01/2025 
                FROM dbo.SKU WITH (NOLOCK)        
                WHERE StorerKey = @cStorerKey        
                AND   SKU = @cSuggSKU        
             
 
-               SELECT @nSuggQty = ISNULL( SUM( PKD.Qty), 0)        
+               SELECT TOP 1 @nSuggQty = ISNULL( SUM( PKD.Qty), 0)        --PPA374 Added TOP 1 15/01/2025
                FROM dbo.PICKDETAIL PKD WITH (NOLOCK)
                INNER JOIN dbo.TaskDetail TD WITH(NOLOCK) ON (PKD.StorerKey = TD.StorerKey AND PKD.TaskDetailKey = TD.TaskDetailKey)
                WHERE PKD.StorerKey = @cStorerKey        
@@ -4640,7 +4823,7 @@ BEGIN
                AND   TD.GroupKey = @cGroupKey
                AND   TD.TaskDetailKey = @cTaskdetailKey
 
-               SELECT @nPickedQty = ISNULL( SUM( PKD.Qty), 0)        
+               SELECT TOP 1 @nPickedQty = ISNULL( SUM( PKD.Qty), 0)   --PPA374 Added TOP 1 15/01/2025     
                FROM dbo.PICKDETAIL PKD WITH (NOLOCK)
                INNER JOIN dbo.TaskDetail TD WITH(NOLOCK) ON (PKD.StorerKey = TD.StorerKey AND PKD.TaskDetailKey = TD.TaskDetailKey)
                WHERE PKD.StorerKey = @cStorerKey        
@@ -4742,7 +4925,7 @@ BEGIN
                   SET @nErrNo = 0          
                   SET @cErrMsg = ''          
          
-                  SELECT @cSuggToLOC = ToLoc      
+                  SELECT TOP 1 @cSuggToLOC = ToLoc      --PPA374 Added TOP 1 15/01/2025
                   FROM dbo.TaskDetail WITH (NOLOCK)      
                   WHERE TaskDetailKey = @cTaskDetailKey      
          
@@ -5081,7 +5264,8 @@ BEGIN
       V_String36 = @cRefKey02,          
       V_String37 = @cRefKey03,          
       V_String38 = @cRefKey04,          
-      V_String39 = @cRefKey05,          
+      V_String39 = @cRefKey05,       
+      V_String40 = @cUnassignToLOCFlag,--Dennis 21/01/2025
       V_String41 = @cCartPickMethod,      
       V_String42 = @cContinuePickOnAssignedCart,      
       V_String43 = @cPickNoMixWave,

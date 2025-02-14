@@ -123,6 +123,33 @@ BEGIN
             GOTO Quit
          END
 
+		 ELSE IF NOT EXISTS (SELECT 1 FROM dbo.PICKDETAIL PD WITH(NOLOCK) WHERE DROPID = @cFromDropID AND StorerKey = @cStorerKey AND EXISTS 
+		 (SELECT 1 FROM LOC L WITH(NOLOCK) WHERE L.Facility = @cFacility AND PD.LOC = L.LOC AND EXISTS
+		 (SELECT 1 FROM CODELKUP C WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND (L.PutawayZone = C.Code or L.LocationType = C.Code) AND LISTNAME in ('OUTZONHUSQ','VASZONHUSQ'))))
+		 BEGIN
+            SET @nErrNo = 218069
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, N'DSP') --From ID not in VAS/ML
+            GOTO Quit
+		 END
+
+		 ELSE IF NOT EXISTS (SELECT 1 FROM dbo.PICKDETAIL PD WITH(NOLOCK) WHERE DROPID = @cPackDtlDropID AND StorerKey = @cStorerKey AND EXISTS 
+		 (SELECT 1 FROM LOC L WITH(NOLOCK) WHERE L.Facility = @cFacility AND PD.LOC = L.LOC AND EXISTS
+		 (SELECT 1 FROM CODELKUP C WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND (L.PutawayZone = C.Code or L.LocationType = C.Code) AND LISTNAME in ('OUTZONHUSQ','VASZONHUSQ'))))
+		 AND (EXISTS (SELECT 1 FROM PICKDETAIL WITH(NOLOCK) WHERE Dropid = @cPackDtlDropID) OR EXISTS(SELECT 1 FROM PackDetail WITH(NOLOCK) WHERE Dropid = @cPackDtlDropID))
+		 BEGIN
+            SET @nErrNo = 218068
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, N'DSP') --To ID not in VAS/ML
+            GOTO Quit
+		 END
+
+		 ELSE IF (SELECT TOP 1 LOC FROM PICKDETAIL WITH(NOLOCK) WHERE DROPID = @cFromDropID AND StorerKey = @cStorerKey) <>
+		 (SELECT TOP 1 LOC FROM PICKDETAIL WITH(NOLOCK) WHERE DROPID = @cPackDtlDropID AND StorerKey = @cStorerKey)
+		 BEGIN
+            SET @nErrNo = 218066
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, N'DSP') --Cannot Pack To Different Location
+            GOTO Quit
+		 END
+
          ELSE IF (1 IN (SELECT short FROM dbo.CODELKUP WITH(NOLOCK) WHERE LISTNAME = 'HUSQPICCHK' AND storerkey = @cStorerKey)
             AND 0 NOT IN (SELECT short FROM dbo.CODELKUP WITH(NOLOCK) WHERE LISTNAME = 'HUSQPICCHK' AND storerkey = @cStorerKey)) AND
             EXISTS

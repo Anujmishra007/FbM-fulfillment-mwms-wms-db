@@ -21,6 +21,8 @@ GO
 /*                             leave location as empty                    */
 /* 2024-10-08  1.3.1  JCH507   FCR-1084 Fix bugs 1. Wrong Loc suggest      */
 /*                             2. Wrong pallet show on remove carton scn  */
+/* 2024-12-08  1.3.2  Dennis   FCR-1316 Fix Bugs when wave type =''       */
+/* 2024-12-08  1.3.3  Dennis   FCR-1316 Available pallet based on p.status*/
 /**************************************************************************/
     
 CREATE OR ALTER PROC [RDT].[rdt_1653GetMbolKey04] (
@@ -113,18 +115,19 @@ BEGIN
       FROM dbo.Wave WITH(NOLOCK)
       WHERE WaveKey = @cWaveKey
 
-      IF TRIM(@cWaveType) = '0'
+      IF TRIM(@cWaveType) IN ('', '0')
       BEGIN
          SET @cPalletKey = ''
          SELECT TOP 1
-            @cPalletKey = PalletKey
-         FROM dbo.PALLETDETAIL WITH (NOLOCK)
-         WHERE StorerKey = @cStorerKey
+            @cPalletKey = PD.PalletKey
+         FROM dbo.PALLETDETAIL PD WITH (NOLOCK)
+         JOIN dbo.Pallet P WITH (NOLOCK) ON P.PalletKey = PD.PalletKey AND P.StorerKey = PD.StorerKey
+         WHERE PD.StorerKey = @cStorerKey
             AND ISNULL(UserDefine01, '') = @cMBOLKey
-            AND Status = '0'
-         ORDER BY EditDate DESC
+            AND P.Status = '0'
+         ORDER BY PD.EditDate DESC
       END
-      ELSE IF TRIM(@cWaveType) NOT IN ('', '0')
+      ELSE
       BEGIN
          SELECT TOP 1 
             @cCODELKUPUdf01 = TRIM(UDF01),
@@ -182,24 +185,26 @@ BEGIN
          SET @cPalletKey = ''
 
          SELECT TOP 1
-            @cPalletKey = PalletKey
-         FROM dbo.PALLETDETAIL WITH (NOLOCK)
-         WHERE StorerKey = @cStorerKey
-            AND CaseId = @cTrackNo
-            AND Status <> '9'
+            @cPalletKey = PD.PalletKey
+         FROM dbo.PALLETDETAIL PD WITH (NOLOCK)
+         JOIN dbo.Pallet P WITH (NOLOCK) ON P.PalletKey = PD.PalletKey AND P.StorerKey = PD.StorerKey
+         WHERE PD.StorerKey = @cStorerKey
+            AND PD.CaseId = @cTrackNo
+            AND P.Status <> '9'
 
          IF @@ROWCOUNT = 0
          BEGIN
             SELECT 
-               @cPalletKey = PalletKey
+               @cPalletKey = PD.PalletKey
             FROM dbo.PALLETDETAIL PD WITH(NOLOCK) 
-            WHERE StorerKey = @cStorerKey
+            JOIN dbo.Pallet P WITH (NOLOCK) ON P.PalletKey = PD.PalletKey AND P.StorerKey = PD.StorerKey
+            WHERE PD.StorerKey = @cStorerKey
                AND ISNULL(UserDefine01, '') = @cCODELKUPUdf01Value
                AND ISNULL(UserDefine02, '') LIKE IIF(@cCODELKUPUdf02 = '', '%%', @cCODELKUPUdf02Value)
                AND ISNULL(UserDefine03, '') LIKE IIF(@cCODELKUPUdf03 = '', '%%', @cCODELKUPUdf03Value)
                AND ISNULL(UserDefine04, '') LIKE IIF(@cCODELKUPUdf04 = '', '%%', @cCODELKUPUdf04Value)
                AND ISNULL(UserDefine05, '') LIKE IIF(@cCODELKUPUdf05 = '', '%%', @cCODELKUPUdf05Value)
-               AND Status = '0' -- 0 means pallet is open, 9 means pallet is closed.
+               AND P.Status = '0' -- 0 means pallet is open, 9 means pallet is closed.
          END
          --V1.3.1 If carton already on a pallet, then return that palletkey to remove carton screen END
       END
@@ -246,10 +251,11 @@ BEGIN
          -- Get orderkey from existing pallet    
          SELECT TOP 1 @cCur_OrderKey = Orderkey,
                       @cLane = LOC
-         FROM dbo.PALLETDETAIL WITH (NOLOCK)    
-         WHERE PalletKey = @cPalletKey    
-         AND   StorerKey = @cStorerKey    
-         AND   [Status] = '0'     -- CHANGES   
+         FROM dbo.PALLETDETAIL PD WITH (NOLOCK)    
+         JOIN dbo.Pallet P WITH (NOLOCK) ON P.PalletKey = PD.PalletKey AND P.StorerKey = PD.StorerKey
+         WHERE PD.PalletKey = @cPalletKey    
+         AND   PD.StorerKey = @cStorerKey    
+         AND   P.[Status] = '0'     -- CHANGES   
          ORDER BY 1    
     
          -- Get shipperkey from orders on existing pallet    
