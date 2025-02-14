@@ -1,0 +1,11 @@
+--rdt_511ExtValid09
+--233301 - 233350
+
+execute rdt.rdtdropmsg 233301 , 233350
+
+execute rdt.rdtAddMsg 233301, 10, '233301IDNotAssociated', 'us_english', 511, 0, '23301 ID not associated with any Kit'
+execute rdt.rdtAddMsg 233302, 10, '233302NoProdLine', 'us_english', 511, 0, '23302 KIT for the ID no production line'
+execute rdt.rdtAddMsg 233303, 10, '233303InvalidProdLine', 'us_english', 511, 0, '23303 Prod line not a valid location'
+
+
+SELECT * FROM rdt.RDTMsg (NOLOCK) WHERE Message_ID BETWEEN 233301 AND 233350
