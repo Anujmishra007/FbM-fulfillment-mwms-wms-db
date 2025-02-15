@@ -95,8 +95,10 @@ GO
 /* 28-03-2024 6.5 YeeKung     UWP-16421 Add ExtendedvalidateSP                 */
 /*                            (yeekung09)                                      */
 /* 24-06-2024 6.6 NLT013      FCR-386 Add Extended Screen                      */
-/* 03-12-2024 6.7.0  NLT013   UWP-28680 No need to commit tran after rollback  */
-/*******************************************************************************/
+/* 21-11-2024 6.7.0 LJQ006    FCR-1109 Update Extend Screen and ExtInfo        */
+/* 2024-12-31 6.8.0  NLT013   UWP-28680 fix rollback transaction issue.        */
+/* 2025-02-05 6.9.0  CYU027   FCR-2630 Add Option=5 in step 5                  */
+/************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_PostPickAudit] (
    @nMobile    int,
@@ -354,6 +356,8 @@ SELECT
    @cMultiColScan                   = V_String48,
    @cExtendedScnSP                  = V_String49,
 
+   @nAction                         = V_Integer2,
+
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,  @cFieldAttr01 = FieldAttr01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,  @cFieldAttr02 = FieldAttr02,
    @cInField03 = I_Field03,   @cOutField03 = O_Field03,  @cFieldAttr03 = FieldAttr03,
@@ -562,6 +566,8 @@ BEGIN
    IF @nFunc in ( 850, 855) SET @cFieldAttr05 = '' ELSE SET @cFieldAttr05 = 'O' --DropID
    IF @nFunc in ( 850, 844) SET @cFieldAttr06 = '' ELSE SET @cFieldAttr06 = 'O' --ID
    IF @nFunc in ( 850, 906) SET @cFieldAttr07 = '' ELSE SET @cFieldAttr07 = 'O' --TaskDetailKey
+
+   GOTO Step_99
 END
 GOTO Quit
 
@@ -1665,8 +1671,7 @@ BEGIN
                SET @cOutField01 = '' -- Option
                SET @nScn = @nScn + 3
                SET @nStep = @nStep + 3
-
-               GOTO Quit
+               GOTO Step_99
             END
          END
       END
@@ -1738,6 +1743,8 @@ BEGIN
       -- Go to prev screen
       SET @nScn = @nScn - 1
       SET @nStep = @nStep - 1
+      -- Go to extend screen label, if no config, will jump to previous step
+      GOTO Step_99
    END
 END
 GOTO Quit
@@ -2815,14 +2822,14 @@ BEGIN
       IF @@TRANCOUNT > 0
       BEGIN
          ROLLBACK TRAN
-         GOTO Step_3_SetQty
+         GOTO Reset_Qty
       END
 
       Step_3_Commit:
          WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
             COMMIT TRAN
 
-      Step_3_SetQty:
+      Reset_Qty:
       IF @nPUOM_Div > 0 AND @cPUOM <> '6' 
       BEGIN
          SET @nPQTY = @nPQTY/@nPUOM_Div--rdt.rdtConvUOMQTY( @cStorer, @cSKU, @cMQTY, 6, @cPUOM)
@@ -3372,6 +3379,7 @@ BEGIN
       -- Go to first screen
       SET @nScn = @nScn - 3
       SET @nStep = @nStep - 3
+      GOTO Step_99
    END
 
    IF @nInputKey = 0 -- Esc OR No
@@ -3597,6 +3605,7 @@ BEGIN
       -- Go to first screen
       SET @nScn = @nScn - 4
       SET @nStep = @nStep - 4
+      GOTO Step_99
    END
 
    IF @nInputKey = 0 -- Esc OR No
@@ -4556,7 +4565,8 @@ BEGIN
       -- Go to st 1
       SET @nScn = 814
       SET @nStep = @nStep - 7
-   END    
+      GOTO Step_99
+   END
     
    IF @nInputKey = 0 -- ESC    
    BEGIN    
@@ -4659,7 +4669,8 @@ BEGIN
             ('@cDropID',      @cDropID), 
             ('@cID',          @cID), 
             ('@cSKU',         @cSKU), 
-            ('@nQTY',         CAST( @nQTY AS NVARCHAR( 10))), 
+            ('@cPUOM',        @cPUOM),
+            ('@nQTY',         CAST( @nQTY AS NVARCHAR( 10))),
             ('@nScn',         CAST( @nScn AS NVARCHAR( 10)))
          
          EXECUTE [RDT].[rdt_ExtScnEntry] 
@@ -4697,6 +4708,32 @@ BEGIN
 
          IF @nErrNo <> 0
             GOTO Step_99_Fail
+
+         IF (@cExtendedScnSP = 'rdt_855ExtScn01'
+            AND @nStep = 2)
+         BEGIN
+            SET @cDropId = @cUDF01
+            SET @nCSKU = CAST(@cUDF02 AS INT)
+            SET @nPSKU = CAST(@cUDF03 AS INT)
+            SET @nPQTY = CAST(@cUDF04 AS INT)
+            SET @nCQTY = CAST(@cUDF05 AS INT)
+            SET @cSKUStat = @cUDF06
+            SET @cQTYStat = @cUDF07
+            SET @cExtendedInfo = @cUDF08
+            SET @cPPACartonIDByPackDetailLabelNo = @cUDF09
+            SET @cPPACartonIDByPickDetailCaseID = @cUDF10
+         END
+
+         IF (@cExtendedScnSP = 'rdt_855ExtScn01'
+            AND @nStep = 0)
+         BEGIN
+            SET @nFunc = @nMenu
+         END
+         IF (@cExtendedScnSP = 'rdt_855ExtScn01'
+            AND @nStep = 99)
+         BEGIN
+            SET @nAction = CAST(@cUDF09 AS INT)
+         END
 
          GOTO Quit
       END
@@ -4786,6 +4823,8 @@ BEGIN
       v_String47 = @cExtendedRefNoSP,
       V_String48 = @cMultiColScan,
       V_String49 = @cExtendedScnSP,
+
+      V_Integer2 = @nAction,
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,   FieldAttr01 = @cFieldAttr01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,   FieldAttr02 = @cFieldAttr02,
