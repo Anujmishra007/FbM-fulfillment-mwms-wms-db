@@ -1,24 +1,25 @@
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
-GO  
-    
-/************************************************************************/    
-/* Store procedure: rdtfnc_TM_Assist_ReplenTo                           */    
-/* Copyright      : LF Logistics                                        */    
-/*                                                                      */    
-/* Date       Rev  Author   Purposes                                    */    
-/* 2019-08-13 1.0  Ung      WMS-10166 Created                           */   
-/* 2020-07-29 1.1  YeeKung  WMS-14059 Add Extendedupdatesp and          */  
-/*                            validatesp (yeekung01)                    */  
+GO
+
+/************************************************************************/
+/* Store procedure: rdtfnc_TM_Assist_ReplenTo                           */
+/* Copyright      : LF Logistics                                        */
+/*                                                                      */
+/* Date       Rev  Author   Purposes                                    */
+/* 2019-08-13 1.0  Ung      WMS-10166 Created                           */
+/* 2020-07-29 1.1  YeeKung  WMS-14059 Add Extendedupdatesp and          */
+/*                            validatesp (yeekung01)                    */
 /* 2020-01-20 1.2  YeeKung  WMS-16148 Display FinalLoc (yeekung02)      */
 /* 2021-02-15 1.3  James    WMS-15659 Add verify case id (james01)      */
 /*                          Add verify Sku, Qty                         */
 /* 2021-08-24 1.4  James    Add Suggest Qty (james02)                   */
 /* 2025-01-25 1.5.0Dennis   FCR-2517 Extend Error message length        */
-/************************************************************************/    
+/* 2024-12-04 1.6.0YYS027   FCR-1489 Fn1836 TM Assist Replen To         */
+/************************************************************************/
     
-CREATE OR ALTER PROC [RDT].[rdtfnc_TM_Assist_ReplenTo] (    
+CREATE OR ALTER PROC [RDT].[rdtfnc_TM_Assist_ReplenTo] (
    @nMobile    INT,    
    @nErrNo     INT  OUTPUT,    
    @cErrMsg    NVARCHAR(1024) OUTPUT -- screen limitation, 20 char max    
@@ -83,7 +84,8 @@ DECLARE
    @cCurrentTTMTaskType NVARCHAR( 10), -- (james01)         
    @cCurrentTaskDetailKey  NVARCHAR( 10), -- (james01)      
    @nSuggestQty         INT,           -- (james02)
-   
+   @cCLRPutawayZone     NVARCHAR( 20), -- (yys027)
+
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),    
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),    
    @cInField03 NVARCHAR( 60),   @cOutField03 NVARCHAR( 60),    
@@ -149,6 +151,7 @@ SELECT
    @cCurrentTTMTaskType = V_string17,
    @cCurrentTaskDetailKey = V_string18,
    @cFinalLOC           = V_string19,
+   @cCLRPutawayZone     = V_string20,     --(yys027) config for skipping the checking the putaway zone LULUCP (step 0)
 
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,    
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,    
@@ -244,7 +247,10 @@ BEGIN
    IF @cSwapTaskSP = '0'    
       SET @cSwapTaskSP = ''    
 
-   
+   set @cCLRPutawayZone = rdt.rdtGetConfig( @nFunc, 'CLRPutawayZone', @cStorerKey)
+   IF @cCLRPutawayZone = '0'
+      SET @cCLRPutawayZone = ''
+
    
    -- EventLog    
    EXEC RDT.rdt_STD_EventLog    
@@ -270,7 +276,7 @@ BEGIN
                   AND   TD.TaskType = 'RPF'
                   AND   TD.[Status] = '9'
                   AND   LOC.Facility = @cFacility
-                  AND   LOC.PutawayZone = 'LULUCP')
+                  AND   (@cCLRPutawayZone = '1' OR LOC.PutawayZone = 'LULUCP'   ) )
       BEGIN                  
          -- Prepare next screen var    
          SET @cOutField01 = @cCaseID    
@@ -302,7 +308,7 @@ BEGIN
             '@cTaskdetailKey  NVARCHAR( 10), ' +    
             '@cFinalLOC       NVARCHAR( 10), ' +    
             '@nErrNo          INT OUTPUT,    ' +    
-            '@cErrMsg         NVARCHAR( 1024) OUTPUT '    
+            '@cErrMsg         NVARCHAR( 1024) OUTPUT '
        
          EXEC sp_ExecuteSQL @cSQL, @cSQLParam,    
             @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cTaskdetailKey, @cFinalLOC, @nErrNo OUTPUT, @cErrMsg OUTPUT    
@@ -448,7 +454,7 @@ BEGIN
                '@cTaskdetailKey  NVARCHAR( 10), ' +    
                '@cFinalLOC       NVARCHAR( 10), ' +    
                '@nErrNo          INT OUTPUT,    ' +    
-               '@cErrMsg         NVARCHAR( 1024) OUTPUT '    
+               '@cErrMsg         NVARCHAR( 1024) OUTPUT '
        
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,    
                @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cTaskdetailKey, @cFinalLOC, @nErrNo OUTPUT, @cErrMsg OUTPUT    
@@ -470,7 +476,7 @@ BEGIN
                      AND   TD.TaskType = 'RPF'
                      AND   TD.[Status] = '9'
                      AND   LOC.Facility = @cFacility
-                     AND   LOC.PutawayZone = 'LULUCP')
+                     AND  (@cCLRPutawayZone = '1' OR LOC.PutawayZone = 'LULUCP') )
          BEGIN
             -- Get SKU info  
             SELECT @cSKUDesc = ISNULL( DescR, '')  
@@ -775,7 +781,7 @@ BEGIN
                         '@cTaskdetailKey  NVARCHAR( 10), ' +    
                         '@cFinalLOC       NVARCHAR( 10), ' +    
                         '@nErrNo          INT OUTPUT,    ' +    
-                        '@cErrMsg         NVARCHAR( 1024) OUTPUT '    
+                        '@cErrMsg         NVARCHAR( 1024) OUTPUT '
        
                      EXEC sp_ExecuteSQL @cSQL, @cSQLParam,    
                         @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cTaskdetailKey, @cFinalLOC, @nErrNo OUTPUT, @cErrMsg OUTPUT    
@@ -1043,7 +1049,7 @@ BEGIN
                '@cTaskdetailKey  NVARCHAR( 10), ' +    
                '@cFinalLOC       NVARCHAR( 10), ' +    
                '@nErrNo          INT OUTPUT,    ' +    
-               '@cErrMsg         NVARCHAR( 1024) OUTPUT '    
+               '@cErrMsg         NVARCHAR( 1024) OUTPUT '
        
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,    
                @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cTaskdetailKey, @cFinalLOC, @nErrNo OUTPUT, @cErrMsg OUTPUT    
@@ -1505,7 +1511,7 @@ BEGIN
                         '@cTaskdetailKey  NVARCHAR( 10), ' +    
                         '@cFinalLOC       NVARCHAR( 10), ' +    
                         '@nErrNo          INT OUTPUT,    ' +    
-                        '@cErrMsg         NVARCHAR( 1024) OUTPUT '    
+                        '@cErrMsg         NVARCHAR( 1024) OUTPUT '
        
                      EXEC sp_ExecuteSQL @cSQL, @cSQLParam,    
                         @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cTaskdetailKey, @cFinalLOC, @nErrNo OUTPUT, @cErrMsg OUTPUT    
@@ -1679,6 +1685,7 @@ BEGIN
       V_string17 = @cCurrentTTMTaskType,
       V_string18 = @cCurrentTaskDetailKey,
       V_string19 = @cFinalLOC,
+      V_string20 = @cCLRPutawayZone,       --(yys027)
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,    
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,    
