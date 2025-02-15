@@ -1,7 +1,3 @@
-if exists (select * from sys.objects where object_id = object_id(N'[RDT].[rdtfnc_TM_Assist_ReplenTo]') and OBJECTPROPERTY(object_id, N'IsProcedure') = 1)
-   drop procedure [RDT].[rdtfnc_TM_Assist_ReplenTo]
-GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -19,9 +15,10 @@ GO
 /* 2021-02-15 1.3  James    WMS-15659 Add verify case id (james01)      */
 /*                          Add verify Sku, Qty                         */
 /* 2021-08-24 1.4  James    Add Suggest Qty (james02)                   */
+/* 2025-01-25 1.5.0Dennis   FCR-2517 Extend Error message length        */
 /************************************************************************/    
     
-CREATE PROC [RDT].[rdtfnc_TM_Assist_ReplenTo] (    
+CREATE OR ALTER PROC [RDT].[rdtfnc_TM_Assist_ReplenTo] (    
    @nMobile    INT,    
    @nErrNo     INT  OUTPUT,    
    @cErrMsg    NVARCHAR(1024) OUTPUT -- screen limitation, 20 char max    
@@ -305,7 +302,7 @@ BEGIN
             '@cTaskdetailKey  NVARCHAR( 10), ' +    
             '@cFinalLOC       NVARCHAR( 10), ' +    
             '@nErrNo          INT OUTPUT,    ' +    
-            '@cErrMsg         NVARCHAR( 20) OUTPUT '    
+            '@cErrMsg         NVARCHAR( 1024) OUTPUT '    
        
          EXEC sp_ExecuteSQL @cSQL, @cSQLParam,    
             @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cTaskdetailKey, @cFinalLOC, @nErrNo OUTPUT, @cErrMsg OUTPUT    
@@ -451,7 +448,7 @@ BEGIN
                '@cTaskdetailKey  NVARCHAR( 10), ' +    
                '@cFinalLOC       NVARCHAR( 10), ' +    
                '@nErrNo          INT OUTPUT,    ' +    
-               '@cErrMsg         NVARCHAR( 20) OUTPUT '    
+               '@cErrMsg         NVARCHAR( 1024) OUTPUT '    
        
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,    
                @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cTaskdetailKey, @cFinalLOC, @nErrNo OUTPUT, @cErrMsg OUTPUT    
@@ -778,7 +775,7 @@ BEGIN
                         '@cTaskdetailKey  NVARCHAR( 10), ' +    
                         '@cFinalLOC       NVARCHAR( 10), ' +    
                         '@nErrNo          INT OUTPUT,    ' +    
-                        '@cErrMsg         NVARCHAR( 20) OUTPUT '    
+                        '@cErrMsg         NVARCHAR( 1024) OUTPUT '    
        
                      EXEC sp_ExecuteSQL @cSQL, @cSQLParam,    
                         @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cTaskdetailKey, @cFinalLOC, @nErrNo OUTPUT, @cErrMsg OUTPUT    
@@ -1046,7 +1043,7 @@ BEGIN
                '@cTaskdetailKey  NVARCHAR( 10), ' +    
                '@cFinalLOC       NVARCHAR( 10), ' +    
                '@nErrNo          INT OUTPUT,    ' +    
-               '@cErrMsg         NVARCHAR( 20) OUTPUT '    
+               '@cErrMsg         NVARCHAR( 1024) OUTPUT '    
        
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,    
                @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cTaskdetailKey, @cFinalLOC, @nErrNo OUTPUT, @cErrMsg OUTPUT    
@@ -1508,7 +1505,7 @@ BEGIN
                         '@cTaskdetailKey  NVARCHAR( 10), ' +    
                         '@cFinalLOC       NVARCHAR( 10), ' +    
                         '@nErrNo          INT OUTPUT,    ' +    
-                        '@cErrMsg         NVARCHAR( 20) OUTPUT '    
+                        '@cErrMsg         NVARCHAR( 1024) OUTPUT '    
        
                      EXEC sp_ExecuteSQL @cSQL, @cSQLParam,    
                         @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cTaskdetailKey, @cFinalLOC, @nErrNo OUTPUT, @cErrMsg OUTPUT    
