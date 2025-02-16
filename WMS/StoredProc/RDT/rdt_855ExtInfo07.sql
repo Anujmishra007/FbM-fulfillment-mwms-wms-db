@@ -33,14 +33,17 @@ BEGIN
 
    DECLARE
       @cCartonType         NVARCHAR(10),
-      @cDropID             NVARCHAR(20)
+      @cDropID             NVARCHAR(20),
+      @nScn                INT
 
    -- Variable mapping
    SELECT @cDropID = Value FROM @tExtInfo WHERE Variable = '@cDropID'
 
+   SELECT @nScn = Scn FROM rdt.rdtMobRec WITH (NOLOCK) WHERE Mobile = @nMobile
+
    IF @nFunc = 855 -- PPA by DropID
    BEGIN
-      IF @nStep = 1 -- SKU, QTY
+      IF @nStep = 1 OR (@nStep = 99 AND @nScn = 814)-- SKU, QTY
       BEGIN
          IF @nInputKey = 1 -- Enter
          BEGIN

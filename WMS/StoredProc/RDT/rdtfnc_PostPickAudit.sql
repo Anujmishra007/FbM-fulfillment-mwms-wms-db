@@ -566,8 +566,8 @@ BEGIN
    IF @nFunc in ( 850, 855) SET @cFieldAttr05 = '' ELSE SET @cFieldAttr05 = 'O' --DropID
    IF @nFunc in ( 850, 844) SET @cFieldAttr06 = '' ELSE SET @cFieldAttr06 = 'O' --ID
    IF @nFunc in ( 850, 906) SET @cFieldAttr07 = '' ELSE SET @cFieldAttr07 = 'O' --TaskDetailKey
-
-   GOTO Step_99
+   IF @cExtendedScnSP <> ''
+	   GOTO Step_99
 END
 GOTO Quit
 
