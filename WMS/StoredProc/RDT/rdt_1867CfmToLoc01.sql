@@ -230,6 +230,7 @@ BEGIN
       SELECT TOP 1
          @cPickDetailKey = PickDetailKey,
          @nPickDetailQty = PickDetailQty,
+         @cTaskDetailKey = TaskDetailKey,
          @nLoopIndex = id
       FROM @tTaskDetailPickDetail
       WHERE id > @nLoopIndex
@@ -672,8 +673,7 @@ BEGIN
       IF @nPickedQty = @nPackedQty
       Begin
          UPDATE PackHeader
-         SET status = '9',
-         ArchiveCop = NULL
+         SET status = '9'
          WHERE OrderKey = @cOrderKey
          AND storerkey = @cStorerKey
          AND status <> '9'
