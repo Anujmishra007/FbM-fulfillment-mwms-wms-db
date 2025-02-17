@@ -76,10 +76,10 @@ execute rdt.rdtAddMsg 217970, 10, '217970KeepCondEmpty',       'us_english'
 execute rdt.rdtAddMsg 217971, 10, '217971BadFormat/Len',       'us_english'
 execute rdt.rdtAddMsg 217972, 10, '217972IDinUse',             'us_english'
 
-execute rdt.rdtAddMsg 218070, 10, '218070Lottable03NotExists',             'us_english', 600, 0, '218070 Lottable03 Not Exist'
-execute rdt.rdtAddMsg 217971, 10, '217971Lottable03Mismatch ',             'us_english', 600, 0, '218071 Lottable03 Mismatch'
-execute rdt.rdtAddMsg 217972, 10, '217972LPNUsedDiffPO',                   'us_english', 600, 0, '218072 LPN Used Diff PO'
-execute rdt.rdtAddMsg 217973, 10, '217973OverReceipt',                     'us_english', 600, 0, '218073 Over Receipt'
+execute rdt.rdtAddMsg 218074, 10, '218074Lottable03NotExists',             'us_english', 600, 0, '218074 Lottable03 Not Exist'
+execute rdt.rdtAddMsg 217975, 10, '217975Lottable03Mismatch ',             'us_english', 600, 0, '218075 Lottable03 Mismatch'
+execute rdt.rdtAddMsg 217976, 10, '217976LPNUsedDiffPO',                   'us_english', 600, 0, '218076 LPN Used Diff PO'
+execute rdt.rdtAddMsg 217977, 10, '217977OverReceipt',                     'us_english', 600, 0, '218077 Over Receipt'
 
 SELECT * FROM rdt.rdtMsg WHERE Message_ID BETWEEN 217901 AND 218400
 

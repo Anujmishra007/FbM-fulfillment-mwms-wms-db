@@ -66,8 +66,8 @@ BEGIN
                         WHERE ReceiptKey = @cReceiptKey
                            AND Lottable01 = @cLottable01)
             BEGIN
-               SET @nErrNo = 218070
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --218070 Lottable03 Not Exist
+               SET @nErrNo = 218074
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --218074 Lottable03 Not Exist
                GOTO Quit
             END
 
@@ -77,8 +77,8 @@ BEGIN
                               AND Lottable03 = @cLottable03
                               AND POKey = @cPOKey)
             BEGIN
-               SET @nErrNo = 217971
-               SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') --217971 Lottable03 Mismatch
+               SET @nErrNo = 217975
+               SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') --217975 Lottable03 Mismatch
                GOTO Quit
             END
 
@@ -89,8 +89,8 @@ BEGIN
                            AND Lottable01 <> @cLottable01
                            AND Lottable03 <> @cLottable03)
             BEGIN
-                  SET @nErrNo = 217972
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --217972 LPN Used Diff PO
+                  SET @nErrNo = 217976
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --217976 LPN Used Diff PO
                   GOTO Quit
             END
 
@@ -102,8 +102,8 @@ BEGIN
                            AND Lottable03 = @cLottable03
                            HAVING SUM(BeforeReceivedQty) + @nQTY >SUM(QTYExpected))
             BEGIN
-               SET @nErrNo = 217973
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- 217973 Over Receipt
+               SET @nErrNo = 217977
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- 217977 Over Receipt
                GOTO Quit
             END
          END
