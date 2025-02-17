@@ -78,6 +78,7 @@ BEGIN
 
          , @c_FrStorerkey     NVARCHAR(15)  --(Wan02)
          , @c_IDTaskRelease   NVARCHAR(10)  --(Wan02)
+         , @c_PalletType      NVARCHAR(10) = N''  --WL01
 
   --(Wan04) - START
          , @c_HoldChannel     NVARCHAR(10)   = ''
