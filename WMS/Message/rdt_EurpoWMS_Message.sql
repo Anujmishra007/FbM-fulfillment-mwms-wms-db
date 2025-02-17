@@ -74,9 +74,12 @@ execute rdt.rdtAddMsg 217968, 10, '217968UPD PDInfoFail',      'us_english'
 execute rdt.rdtAddMsg 217969, 10, '217969OrderIsLoaded',       'us_english'
 execute rdt.rdtAddMsg 217970, 10, '217970KeepCondEmpty',       'us_english'
 execute rdt.rdtAddMsg 217971, 10, '217971BadFormat/Len',       'us_english'
-execute rdt.rdtAddMsg 217972, 10, '217972IDinUse',              'us_english'
+execute rdt.rdtAddMsg 217972, 10, '217972IDinUse',             'us_english'
 
-
+execute rdt.rdtAddMsg 218070, 10, '218070Lottable03NotExists',             'us_english', 600, 0, '218070 Lottable03 Not Exist'
+execute rdt.rdtAddMsg 217971, 10, '217971Lottable03Mismatch ',             'us_english', 600, 0, '218071 Lottable03 Mismatch'
+execute rdt.rdtAddMsg 217972, 10, '217972LPNUsedDiffPO',                   'us_english', 600, 0, '218072 LPN Used Diff PO'
+execute rdt.rdtAddMsg 217973, 10, '217973OverReceipt',                     'us_english', 600, 0, '218073 Over Receipt'
 
 SELECT * FROM rdt.rdtMsg WHERE Message_ID BETWEEN 217901 AND 218400
 
