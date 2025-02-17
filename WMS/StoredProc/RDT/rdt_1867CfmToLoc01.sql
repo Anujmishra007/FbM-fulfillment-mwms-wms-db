@@ -75,6 +75,18 @@ BEGIN
    DECLARE @nPickedQty     INT
    DECLARE @nPackedQty     INT
    DECLARE @bSuccess       INT
+   DECLARE @nLoopIndex         INT
+   DECLARE @cPickDetailKey      NVARCHAR(10)
+   DECLARE @nPickDetailQty      INT
+   DECLARE @cNewTaskDetailKey   NVARCHAR(10)
+
+   DECLARE @tTaskDetailPickDetail TABLE
+   (
+      id   INT IDENTITY(1,1),
+      TaskDetailKey   NVARCHAR(10),
+      PickDetailKey   NVARCHAR(10),
+      PickDetailQty   INT
+   )
 
 
    SELECT @cUserName = UserName
@@ -196,6 +208,91 @@ BEGIN
       
       FETCH NEXT FROM @cur INTO @cTaskKey
    END
+
+   --Split TaskDetails if needed
+   INSERT INTO @tTaskDetailPickDetail (TaskDetailKey, PickDetailKey, PickDetailQty)
+   SELECT TD.TaskDetailKey, PKD.PickDetailKey, PKD.Qty
+   FROM dbo.TASKDETAIL TD WITH (NOLOCK)   
+   INNER JOIN dbo.PickDetail PKD WITH (NOLOCK)  
+      ON TD.Storerkey = PKD.Storerkey AND TD.TaskDetailKey = PKD.TaskDetailKey
+   INNER JOIN dbo.PickDetail PKD1 WITH (NOLOCK)  
+      ON PKD.Storerkey = PKD1.Storerkey AND PKD.TaskDetailKey = PKD1.TaskDetailKey
+   WHERE TD.Groupkey = @cGroupKey 
+      AND TD.DeviceID = @cCartID 
+      AND TD.UserKey = @cUserName
+      AND TD.[Status] = '3' AND PKD.Status = '0'
+      AND PKD1.Status = '5'
+
+   SET @nLoopIndex = -1
+
+   WHILE 1 = 1
+   BEGIN
+      SELECT TOP 1
+         @cPickDetailKey = PickDetailKey,
+         @nPickDetailQty = PickDetailQty,
+         @nLoopIndex = id
+      FROM @tTaskDetailPickDetail
+      WHERE id > @nLoopIndex
+
+      IF @@ROWCOUNT = 0 
+         BREAK
+
+      EXECUTE dbo.nspg_getkey
+         'TaskDetailKey'
+         , 10
+         , @cNewTaskDetailKey OUTPUT
+         , @bSuccess OUTPUT
+         , @nErrNo
+         , @cErrMsg OUTPUT
+
+         IF NOT @bSuccess = 1
+         BEGIN
+            SET @nErrNo = 227208
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --GetKeyFailed
+            GOTO RollBackTran 
+         END
+
+      INSERT INTO dbo.TaskDetail
+        (TaskDetailKey,TaskType,Storerkey,Sku,Lot,UOM,UOMQty,QTY,FromLoc,LogicalFromLoc,FromID,ToLoc,LogicalToLoc
+        ,ToID,Caseid,PickMethod,Status,StatusMsg,Priority,SourcePriority,Holdkey,UserKey,UserPosition,UserKeyOverRide
+        ,StartTime,EndTime,SourceType,SourceKey,PickDetailKey,OrderKey,OrderLineNumber,ListKey,WaveKey,ReasonKey
+        ,Message01,Message02,Message03,RefTaskKey,LoadKey,AreaKey,DropID, SystemQty,Groupkey,TrafficCop, DeviceID)
+        SELECT  TOP 1
+        @cNewTaskDetailKey,TaskType,Storerkey,Sku,Lot,UOM,UOMQty,@nPickDetailQty,FromLoc,LogicalFromLoc,FromID,ToLoc,LogicalToLoc
+        ,ToID,Caseid,PickMethod,'3',StatusMsg,Priority,SourcePriority,Holdkey,UserKey,UserPosition,UserKeyOverRide
+        ,StartTime,EndTime,SourceType,SourceKey,PickDetailKey,OrderKey,OrderLineNumber,ListKey,WaveKey,ReasonKey
+        ,Message01,Message02,Message03,RefTaskKey,LoadKey,AreaKey,DropID, @nPickDetailQty,GroupKey,NULL, DeviceID
+        FROM dbo.TaskDetail WITH (NOLOCK)
+        WHERE Taskdetailkey = @cTaskDetailKey
+         AND Storerkey = @cStorerkey
+                        
+      IF @@ERROR <> 0
+      BEGIN
+         SET @nErrNo = 227209
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InsTaskFailed
+         GOTO RollBackTran 
+      END
+
+      UPDATE dbo.PickDetail SET 
+         TaskDetailKey = @cNewTaskDetailKey, 
+         EditWho = @cUserName, 
+         EditDate = GETDATE()
+      WHERE PickDetailKey = @cPickDetailKey 
+      AND Storerkey = @cStorerkey
+   END
+
+   UPDATE TD WITH(ROWLOCK)
+   SET TD.Status = '5',
+      TD.EditWho = SUSER_SNAME(),
+      TD.EditDate = GETDATE(), 
+      TD.EndTime = GETDATE()
+   FROM dbo.TASKDETAIL TD   
+   INNER JOIN dbo.PICKDETAIL PKD WITH(NOLOCK)
+      ON TD.StorerKey = PKD.StorerKey AND TD.TaskDetailKey = PKD.TaskDetailKey
+   WHERE TD.Groupkey = @cGroupKey 
+      AND TD.DeviceID = @cCartID 
+      AND TD.UserKey = @cUserName
+      AND TD.[Status] = '3' AND PKD.Status = '5'
 
    SET @cur = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
    SELECT TaskdetailKey,OrderKey,DropID,SKU,QTY
