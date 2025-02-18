@@ -13,6 +13,8 @@ GO
 /* 2023-03-29 1.2  James       WMS-21943 Add UCCNo param and column (james01) */
 /* 2025-02-11 1.3.0 NLT013     UWP-30047 Cannot receive the SerialNo if it is */
 /*                             received with other ASN                        */
+/* 2025-02-18 1.3.1 NLT013     UWP-30047 Add Configuration DisallowDuplicateSN*/
+/*                             Filter by SKU                                  */
 /******************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_Receive_ReceiptSerialNo] (
@@ -42,23 +44,30 @@ BEGIN
    DECLARE @cChkSerialSKU        NVARCHAR( 20)
    DECLARE @nChkSerialQTY        INT
    DECLARE @nChkSerialQTYExp     INT
+   DECLARE @cDisallowDuplicateSN    NVARCHAR(1)
 
    -- UWP-30047 Reject the serial no if it was received with other ASN
-   SELECT @nRowCount = COUNT(1)
-   FROM dbo.ReceiptSerialNo RSN WITH (NOLOCK)
-   INNER JOIN dbo.SerialNo SN WITH (NOLOCK)
-      ON RSN.StorerKey = SN.StorerKey
-      AND RSN.SerialNo = SN.SerialNo
-   WHERE SN.StorerKey = @cStorerKey
-      AND SN.Status NOT IN ('0', '9')
-      AND SN.SerialNo = @cSerialNo
-      AND RSN.ReceiptKey <> @cReceiptKey
+   SET @cDisallowDuplicateSN = rdt.RDTGetConfig( @nFunc, 'DisallowDuplicateSN', @cStorerKey)
 
-   IF @nRowCount > 0
+   IF (@cDisallowDuplicateSN = '1')
    BEGIN
-      SET @nErrNo = 142757
-      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Diff ASN
-      GOTO Quit
+      SELECT @nRowCount = COUNT(1)
+      FROM dbo.ReceiptSerialNo RSN WITH (NOLOCK)
+      INNER JOIN dbo.SerialNo SN WITH (NOLOCK)
+         ON RSN.StorerKey = SN.StorerKey
+         AND RSN.SerialNo = SN.SerialNo
+      WHERE SN.StorerKey = @cStorerKey
+         AND SN.Status NOT IN ('0', '9')
+         AND SN.SerialNo = @cSerialNo
+         AND RSN.Sku = @cSku
+         AND RSN.ReceiptKey <> @cReceiptKey
+
+      IF @nRowCount > 0
+      BEGIN
+         SET @nErrNo = 142757
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --DuplicateSN
+         GOTO Quit
+      END
    END
    
    -- Get serial no info
