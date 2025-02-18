@@ -14,7 +14,6 @@ GO
 /* 2025-02-11 1.3.0 NLT013     UWP-30047 Cannot receive the SerialNo if it is */
 /*                             received with other ASN                        */
 /* 2025-02-18 1.3.1 NLT013     UWP-30047 Add Configuration DisallowDuplicateSN*/
-/*                             Filter by SKU                                  */
 /******************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_Receive_ReceiptSerialNo] (
@@ -59,7 +58,6 @@ BEGIN
       WHERE SN.StorerKey = @cStorerKey
          AND SN.Status NOT IN ('0', '9')
          AND SN.SerialNo = @cSerialNo
-         AND RSN.Sku = @cSku
          AND RSN.ReceiptKey <> @cReceiptKey
 
       IF @nRowCount > 0
