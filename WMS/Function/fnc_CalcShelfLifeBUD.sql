@@ -16,6 +16,7 @@ GO
 /* 2024-09-02  1.0   SBA757   Created UWP-23707                         */
 /* 2024-01-23  1.1   Wan01    UWP-29372 - [FCR-1953] [Unilever] Modify  */
 /*                            Shelf Life Code Calculation Function      */
+/*                            - UDF04 value with delimiter fix          */
 /************************************************************************/
 CREATE OR ALTER FUNCTION [dbo].[fnc_CalcShelfLifeBUD]   
 (
@@ -59,12 +60,14 @@ BEGIN
            , cl.UDF01
            , UDF02 = IIF(ISNUMERIC(cl.UDF02)=0 AND (cl.UDF02 ='' AND cl.UDF03=''),'X',cl.UDF02)
            , UDF03 = IIF(ISNUMERIC(cl.UDF03)=0 AND (cl.UDF02 ='' AND cl.UDF03=''),'X',cl.UDF03)
-           , cl.UDF04, cl.UDF05
+           , [Value] As UDF04                                                       --Fixed
+           , cl.UDF05
            , cl.Storerkey, cl.Code2 
       FROM dbo.Codelkup cl(NOLOCK) 
+      CROSS APPLY STRING_SPLIT(cl.UDF04, ',')                                       --Fixed
       WHERE cl.ListName = 'SLCode'
       AND   cl.Storerkey= @cStorerkey
-      AND   cl.UDF04 IN (@c_ItemClass, '')
+      AND   RTRIM(LTRIM([Value])) IN (@c_ItemClass, '')                             --Fixed
 
       SELECT TOP 1 @cShelfLife = CASE WHEN cl.UDF03 = '' AND DATEDIFF(dd, GETDATE(),@dLottable04) <  cl.UDF02 THEN cl.Code
                                       WHEN cl.UDF02 = '' AND DATEDIFF(dd, GETDATE(),@dLottable04) >= cl.UDF03 THEN cl.Code
