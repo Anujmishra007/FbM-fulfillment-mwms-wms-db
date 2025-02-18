@@ -4,7 +4,7 @@ SET ANSI_NULLS OFF
 GO
 /*************************************************************************/
 /* Store procedure: rdt_842ExtUpdSP08                                    */
-/* Copyright      : LF                                                   */
+/* Copyright      : Maersk                                               */
 /*                                                                       */
 /* Purpose: AEO DTC Logic                                                */
 /*                                                                       */
@@ -21,7 +21,9 @@ GO
 /* 2024-12-17  1.6.0 Dennis   FCR-1446 Insert Trans Log if fully packed  */
 /* 2025-01-06  1.7.0 NLT013  FCR-1445 Print PDF once an order is finished*/
 /* 2025-01-29  1.7.1 Dennis  FCR-1445 Move Printing Label behind commit */
-/* 2025-02-12  1.8.0 NLT013  UWP-30206 Order cannot be shipped          */
+/* 2025-02-12  1.8.0 NLT013  UWP-30206 Exclude the shipped orders       */
+/* 2025-02-12  1.8.1 NLT013  UWP-30206 Exclude the orders not from same wave*/
+/* 2025-02-14  1.8.2 NLT013  UWP-30206 Endless printing                 */
 /************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdt_842ExtUpdSP08] (
    @nMobile        INT,
@@ -136,6 +138,8 @@ BEGIN
            ,@cTempLabelNo        NVARCHAR( 20)
            ,@cDelayLength        NVARCHAR( 20)
            ,@nDelayLength        INT
+           ,@cWaveKey            NVARCHAR( 10)
+           ,@cCurrentOrderKey    NVARCHAR( 10)
 
    DECLARE @cCartonLabel         NVARCHAR( 10)
    DECLARE @cPackList            NVARCHAR( 10)
@@ -150,6 +154,10 @@ BEGIN
 
    SET @nErrNo   = 0
    SET @cErrMsg  = ''
+
+   SELECT @cCurrentOrderKey = V_OrderKey
+   FROM rdt.RDTMOBREC WITH(NOLOCK)
+   WHERE Mobile = @nMobile
 
    SET @nTranCount = @@TRANCOUNT
 
@@ -1696,6 +1704,10 @@ BEGIN
 
          IF rdt.RDTGetConfig( @nFunc, 'GenTranLog2', @cStorerKey) = '1'
          BEGIN
+            SELECT @cWaveKey = WaveKey 
+            FROM dbo.WaveDetail WITH(NOLOCK)
+            WHERE OrderKey = @cCurrentOrderKey
+
             DELETE FROM @tOrders
             INSERT INTO @tOrders(OrderKey,LabelNo)
             SELECT DISTINCT ECL.OrderKey,PD.LabelNo
@@ -1703,9 +1715,11 @@ BEGIN
             INNER JOIN PICKHEADER PH WITH (NOLOCK) ON PH.OrderKey = ECL.OrderKey
             INNER JOIN PackDetail PD WITH (NOLOCK) ON PD.PickSlipNo = PH.PickHeaderKey
             INNER JOIN dbo.ORDERS ORM WITH(NOLOCK) ON PH.OrderKey = ORM.OrderKey AND PH.StorerKey = ORM.StorerKey 
+            INNER JOIN dbo.WaveDetail WD WITH(NOLOCK) ON WD.OrderKey = ORM.OrderKey
             WHERE ECL.STATUS = '9' AND ECL.ToTeNo = @cDropID AND ECL.Mobile = @nMobile
                AND ORM.StorerKey = @cStorerKey
                AND ORM.Status < '9'
+               AND WD.WaveKey = @cWaveKey
 
             SET @nLoopIndex = -1
             WHILE 1 = 1
@@ -2040,7 +2054,8 @@ Quit:
          BEGIN
             DECLARE
                @nMin       INT,
-               @nSec       INT
+               @nSec       INT,
+               @nPrintedOrderQty INT
 
             --SET @nDelayLength = IIF( @nDelayLength > 5000, 5000, @nDelayLength)
             SET @nDelayLength = IIF( @nDelayLength > 20000, 20000, @nDelayLength)
@@ -2057,15 +2072,28 @@ Quit:
                AND Long = 'rdt_593PrintHK01'
                AND code2 = 'SHIPLABEL'
 
+            SELECT @cWaveKey = WaveKey 
+            FROM dbo.WaveDetail WITH(NOLOCK)
+            WHERE OrderKey = @cCurrentOrderKey
+
             DELETE FROM @tOrders
+
             INSERT INTO @tOrders(OrderKey)
             SELECT DISTINCT ECL.OrderKey
             FROM RDT.rdtECOMMLog ECL WITH (NOLOCK)
             INNER JOIN dbo.ORDERS ORM WITH(NOLOCK) ON ECL.OrderKey = ORM.OrderKey AND ORM.StorerKey = @cStorerKey
+            INNER JOIN dbo.WaveDetail WD WITH(NOLOCK) ON WD.OrderKey = ORM.OrderKey
             WHERE ECL.STATUS = '9' AND ECL.ToTeNo = @cDropID AND ECL.Mobile = @nMobile
               AND ORM.Status < '9'
+              AND WD.WaveKey = @cWaveKey
+            ORDER BY ECL.OrderKey
 
+            INSERT INTO dbo.TraceInfo (TraceName, TimeIn, Col1, Col2, Col3, Col4, Col5)  
+            VALUES('rdt_842ExtUpdSP08-0', GETDATE(), '', @cDelayLength, @cStorerKey, @cDropID, @nMobile) 
+
+            SET @nPrintedOrderQty = 0
             SET @nLoopIndex = -1
+            SET @cTempOrderKey = ''
             WHILE 1 = 1
             BEGIN
                SELECT TOP 1
@@ -2073,6 +2101,7 @@ Quit:
                   @nLoopIndex = id
                FROM @tOrders
                WHERE id > @nLoopIndex
+                  AND OrderKey > @cTempOrderKey
                ORDER BY id
 
                SELECT @nRowCount = @@ROWCOUNT
@@ -2080,12 +2109,15 @@ Quit:
                IF @nRowCount = 0
                   BREAK
 
+               IF @nPrintedOrderQty > 200
+                  BREAK
+
                SELECT @cUDF02 = ISNULL(UDF02, 'Empty UDF02'), @cUDF03 = ISNULL(UDF03, 'Empty UDF03')
                FROM dbo.CartonTrack WITH(NOLOCK)
                WHERE LABELNO = @cTempOrderKey
 
-               INSERT INTO dbo.TraceInfo (TraceName, Col1, Col2, Col3)
-               VALUES('rdt_842ExtUpdSP08', @cTempOrderKey, @cUDF02, @cUDF03)
+               INSERT INTO dbo.TraceInfo (TraceName, TimeIn, Step1, Col1, Col2, Col3, Col4, Col5)
+               VALUES('rdt_842ExtUpdSP08', GetDate(), @nLoopIndex, @cTempOrderKey, @cUDF02, @cUDF03, @cDropID, CAST(@nMobile AS NVARCHAR(10)))
 
                IF EXISTS(SELECT 1 FROM dbo.CARTONTRACK WITH(NOLOCK) WHERE LABELNO = @cTempOrderKey AND ISNULL(UDF02, '') <> '' AND ISNULL(UDF03, '') <> '')
                BEGIN
@@ -2108,14 +2140,16 @@ Quit:
 
                      IF @nErrNo <>''
                      BEGIN
-                        GOTO ROLLBACKTRAN
+                        BREAK
                      END
+
+                     SET @nPrintedOrderQty = @nPrintedOrderQty + 1
                   END
                   ELSE
                   BEGIN
                      SET @nErrNo = 151194
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --rdt_593PrintHK01 does not exist
-                     GOTO ROLLBACKTRAN
+                     BREAK
                   END
                END
                ELSE
@@ -2143,6 +2177,7 @@ Quit:
                      @cLine08 = '',
                      @cLine09 = '',
                      @nDisplayMsg = 0
+                  BREAK
                END
             END
          END
