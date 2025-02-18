@@ -2106,35 +2106,32 @@ BEGIN
             SET @b_CheckToValue = 0
             IF @c_FromSerialNo > '' OR @c_ToSerialNo > ''
             BEGIN
-               IF @c_FromSerialNo <> @c_ToSerialNo OR
-                  @cFromSku <> @cToSku OR
-                  @nFromQty <> @nToQty
-               BEGIN
-                  SET @b_CheckToValue = 1
-               END
+                IF @c_FromSerialNo <> @c_ToSerialNo OR
+                    @cFromSku <> @cToSku OR
+                    @nFromQty <> @nToQty
+                BEGIN
+                    SET @b_CheckToValue = 1
+                END
 
-               IF @b_CheckToValue = 0 AND @c_ASNFizUpdLotToSerialNo = '1' AND
-                  @cFromID <> @cToID
-               BEGIN
-                  SET @b_CheckToValue = 1
-               END
+                IF @b_CheckToValue = 0 AND @c_ASNFizUpdLotToSerialNo = '1' AND
+                    @cFromID <> @cToID
+                BEGIN
+                    SET @b_CheckToValue = 1
+                END
 
-               IF @b_CheckToValue = 1
-               BEGIN
-                  SET @n_Err = 80053
-                  SET @c_errmsg = 'NSQL' + CONVERT(CHAR(6), @n_Err)
+                IF @b_CheckToValue = 1
+                BEGIN
+                    SET @n_Err = 80053
+                    SET @c_errmsg = 'NSQL' + CONVERT(CHAR(6), @n_Err)
                                  + ': Serialno transfer are required same From & To Sku'
                                  + ', ID And Serialno'
                                  + '. From SerialNo: ' + @c_FromSerialNo
                                  + ', Line #: ' + @cTransferLineNumber
                                  + '. (ispFinalizeTransfer)'
 
-                  GOTO Quit_Proc
-               END
-            END
+                    GOTO Quit_Proc
+                END
 
-            IF @c_FromSerialNo > '' OR @c_ToSerialNo > ''
-            BEGIN
                 SET @n_SerialNo_Cnt    = 0
                 SET @c_SerialNo_Lot = ''
                 SET @c_SerialNo_ID  = ''
