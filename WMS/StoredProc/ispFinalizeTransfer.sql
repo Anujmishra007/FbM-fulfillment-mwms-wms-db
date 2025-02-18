@@ -2105,6 +2105,7 @@ BEGIN
                 END
 
                 IF @c_FromSerialNo <> @c_ToSerialNo OR
+                   @cFromSku <> @cToSku OR
                    @cFromID  <> @cToID OR
                    @nFromQty <> @nToQty
                 BEGIN
