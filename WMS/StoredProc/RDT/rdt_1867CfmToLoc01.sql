@@ -280,6 +280,18 @@ BEGIN
          EditDate = GETDATE()
       WHERE PickDetailKey = @cPickDetailKey 
       AND Storerkey = @cStorerkey
+
+      UPDATE TD WITH(ROWLOCK)
+      SET SystemQty = PKD.Qty,
+         Qty = PKD.Qty,
+         TD.EditWho = SUSER_SNAME(),
+         TD.EditDate = GETDATE(), 
+         TD.EndTime = GETDATE()
+      FROM dbo.TASKDETAIL TD   
+      INNER JOIN dbo.PICKDETAIL PKD WITH(NOLOCK)
+         ON TD.StorerKey = PKD.StorerKey AND TD.TaskDetailKey = PKD.TaskDetailKey
+      WHERE TD.Taskdetailkey = @cTaskDetailKey
+         AND TD.Storerkey = @cStorerkey
    END
 
    UPDATE TD WITH(ROWLOCK)
