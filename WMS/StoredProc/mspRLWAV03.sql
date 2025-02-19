@@ -57,6 +57,7 @@ GO
 /*                             cartonization fix                        */
 /* 11-Feb-2025 SWT06     3.3 Performance Tuning                         */
 /* 14-Feb-2025 Shong     3.4 UWP-27137 Fixing Case ID issues (SWT07)    */
+/* 19-Feb-2025 SSA03     3.5 UWP-27137 added condition #ORDERSKU.wcs=0  */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[mspRLWAV03]
    @c_WaveKey NVARCHAR(10)
@@ -3367,13 +3368,12 @@ BEGIN
                 ROW_NUMBER() OVER (PARTITION BY TD.TaskDetailKey ORDER BY PD.CaseID) AS SerialNo
          FROM #PickDetail_WIP PD (NOLOCK)
          JOIN TaskDetail TD (NOLOCK) ON PD.TaskDetailKey = TD.RefTaskKey AND TD.LOT = PD.LOT AND TD.CaseID = PD.DropID
-         JOIN SKUINFO SI (NOLOCK) ON PD.StorerKey = SI.StorerKey AND PD.SKU =SI.SKU
+         JOIN #ORDERSKU OS (NOLOCK) ON PD.StorerKey = OS.StorerKey AND PD.SKU = OS.SKU AND PD.OrderKey = OS.OrderKey  --(SSA03)
          WHERE TD.WaveKey = @c_WaveKey
          AND TD.TaskType = 'ASTCPK'
          AND TD.PickMethod = 'B2B-Loose'
          AND PD.UOM = '6'
-         AND SI.ExtendedField06='NonSortable'
-         AND SI.ExtendedField07 = 'NonConveyable'
+         AND OS.WCS = 0                         --(SSA03)
          ORDER BY TD.TaskDetailKey
 
       OPEN CUR_ASTCPK_TASK
