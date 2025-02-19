@@ -384,7 +384,7 @@ BEGIN
                         AND ShipFlag <> 'Y'
                   END
 
-                  UPDATE RDT.RDTMOBREC WITH(ROWLOCK) SET C_STRING1 = @cDropIDFlag WHERE @nMobile = @nMobile
+                  UPDATE RDT.RDTMOBREC WITH(ROWLOCK) SET C_STRING1 = @cDropIDFlag WHERE Mobile = @nMobile
 
                   -- Migrated from step1 in PPA func, only 855 logic incouded
                   IF @cExtendedValidateSP <> ''

@@ -157,7 +157,7 @@ BEGIN
    
    IF @nFunc = 855 -- Post Pick Audit
    BEGIN
-      IF @nStep = 1 -- CartonID
+      IF @nStep = 1 OR (@nStep = 99 AND @nScn = 814)-- CartonID
       BEGIN
          IF EXISTS(SELECT 1 FROM RDT.RDTPPA WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND DropID = @cDropID AND Status = '2')
             UPDATE RDT.RDTPPA WITH(ROWLOCK)
@@ -1182,7 +1182,7 @@ BEGIN
                            GOTO Quit
                         END
 
-                        IF @cDropIDFlag = 'Y'
+                        IF @cDropIDFlag = 'Y' AND LEN(@cToteID) = 10
                         BEGIN
                            EXECUTE ispGenTransmitLog2
                                    @c_TableName      = 'WSSortTotRel',
@@ -1209,6 +1209,7 @@ BEGIN
                      BEGIN
                         UPDATE dbo.PackDetail WITH(ROWLOCK) SET DropID = CONCAT('ARC',DropID) WHERE DropID=@cToteID
                         UPDATE dbo.PICKDETAIL WITH(ROWLOCK) SET DropID = CONCAT('ARC',DropID) WHERE DropID=@cToteID
+                        UPDATE RDT.RDTMOBREC WITH(ROWLOCK) SET C_STRING1 = '' WHERE Mobile = @nMobile
                      END
                      WHILE @@TRANCOUNT > @nTranCount
                      COMMIT TRAN
