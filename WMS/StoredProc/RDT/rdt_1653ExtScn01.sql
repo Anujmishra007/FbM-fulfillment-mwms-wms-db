@@ -22,6 +22,7 @@ GO
 /* 2024-12-19 1.4.1  NLT013   FCR-1316 Valid location is needed for new ID  */
 /* 2025-02-06 1.4.2  CYU027   UWP-30023 Hotfix add trim avoid spaces        */
 /* 2025-01-10 1.4.3  Dennis   FCR-1316 Performance Issue                    */
+/* 2025-02-20 1.5.0  NLT013   UWP-30312 Performance Tune                    */
 /****************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_1653ExtScn01] (
@@ -173,6 +174,13 @@ BEGIN
                   AND Code = @cWaveType
             ELSE
                SET @cCODELKUPUdf01 = 'MBOLKey'
+
+            SET @cCODELKUPUdf01 = ISNULL(@cCODELKUPUdf01, '')
+            SET @cCODELKUPUdf02 = ISNULL(@cCODELKUPUdf02, '')
+            SET @cCODELKUPUdf03 = ISNULL(@cCODELKUPUdf03, '')
+            SET @cCODELKUPUdf04 = ISNULL(@cCODELKUPUdf04, '')
+            SET @cCODELKUPUdf05 = ISNULL(@cCODELKUPUdf05, '')
+
             SET @cTrackNo = @cOutField01
             --FCR-539 Pallet Found, loc uneditable
             IF @cPalletKey <> 'NEW PALLET' AND ISNULL(@cPalletKey,'') <> ''
@@ -197,15 +205,17 @@ BEGIN
                   SELECT distinct
                      @cCaseID = PD.caseid
                   FROM dbo.PickDetail PD WITH (NOLOCK)
-                  JOIN dbo.Orders O WITH (NOLOCK) ON PD.orderkey = O.orderkey AND PD.StorerKey = O.StorerKey
+                  INNER JOIN dbo.Orders O WITH (NOLOCK) ON PD.orderkey = O.orderkey AND PD.StorerKey = O.StorerKey
+                  INNER JOIN dbo.PackInfo PI WITH(NOLOCK) ON PI.RefNo IS NOT NULL AND PD.CaseID = PI.RefNo AND PI.CartonStatus = ''PACKED''
                   WHERE
-                  PD.StorerKey = @cStorerKey
-                  AND NOT EXISTS ( SELECT 1 FROM FilteredPalletDetail FPD WHERE FPD.CaseID = PD.CaseID AND EXISTS ( SELECT 1 FROM FilteredPalletDetail FPD2 WHERE FPD2.UserDefine01 = FPD.UserDefine01))'
-                  +IIF(@cCODELKUPUdf01 <> '',   ' AND EXISTS(SELECT 1 FROM FilteredPalletDetail FPD WHERE ISNULL(FPD.UserDefine01,'''') = O.' + @cCODELKUPUdf01 + ') ', '')
-                  +IIF(@cCODELKUPUdf02 <> '',   ' AND EXISTS(SELECT 1 FROM FilteredPalletDetail FPD WHERE ISNULL(FPD.UserDefine02,'''') = O.' + @cCODELKUPUdf02 + ') ', '')
-                  +IIF(@cCODELKUPUdf03 <> '',   ' AND EXISTS(SELECT 1 FROM FilteredPalletDetail FPD WHERE ISNULL(FPD.UserDefine03,'''') = O.' + @cCODELKUPUdf03 + ') ', '')
-                  +IIF(@cCODELKUPUdf04 <> '',   ' AND EXISTS(SELECT 1 FROM FilteredPalletDetail FPD WHERE ISNULL(FPD.UserDefine04,'''') = O.' + @cCODELKUPUdf04 + ') ', '')
-                  +IIF(@cCODELKUPUdf05 <> '',   ' AND EXISTS(SELECT 1 FROM FilteredPalletDetail FPD WHERE ISNULL(FPD.UserDefine05,'''') = O.' + @cCODELKUPUdf05 + ') ', '')
+                     PD.StorerKey = @cStorerKey
+                     AND PD.Status = ''5''
+                     AND NOT EXISTS ( SELECT 1 FROM FilteredPalletDetail FPD WHERE FPD.CaseID = PD.CaseID AND EXISTS ( SELECT 1 FROM FilteredPalletDetail FPD2 WHERE FPD2.UserDefine01 = FPD.UserDefine01))'
+                     +IIF(@cCODELKUPUdf01 <> '',   ' AND EXISTS(SELECT 1 FROM FilteredPalletDetail FPD WHERE ISNULL(FPD.UserDefine01,'''') = O.' + @cCODELKUPUdf01 + ') ', '')
+                     +IIF(@cCODELKUPUdf02 <> '',   ' AND EXISTS(SELECT 1 FROM FilteredPalletDetail FPD WHERE ISNULL(FPD.UserDefine02,'''') = O.' + @cCODELKUPUdf02 + ') ', '')
+                     +IIF(@cCODELKUPUdf03 <> '',   ' AND EXISTS(SELECT 1 FROM FilteredPalletDetail FPD WHERE ISNULL(FPD.UserDefine03,'''') = O.' + @cCODELKUPUdf03 + ') ', '')
+                     +IIF(@cCODELKUPUdf04 <> '',   ' AND EXISTS(SELECT 1 FROM FilteredPalletDetail FPD WHERE ISNULL(FPD.UserDefine04,'''') = O.' + @cCODELKUPUdf04 + ') ', '')
+                     +IIF(@cCODELKUPUdf05 <> '',   ' AND EXISTS(SELECT 1 FROM FilteredPalletDetail FPD WHERE ISNULL(FPD.UserDefine05,'''') = O.' + @cCODELKUPUdf05 + ') ', '')
 
                   SET @cSQLParam =  '@cStorerKey NVARCHAR( 15), @cPalletKey NVARCHAR(20), @cCaseID NVARCHAR(20) OUTPUT'
                   EXEC sp_executesql @cSQLString, @cSQLParam, 
@@ -248,9 +258,8 @@ BEGIN
                         +IIF(@cCODELKUPUdf04 <> '',   'O2.'+@cCODELKUPUdf04+', ','')
                         +IIF(@cCODELKUPUdf05 <> '',   'O2.'+@cCODELKUPUdf05+', ','')
                      +' O2.ORDERKEY
-                        FROM
-                           dbo.Orders O2 WITH (NOLOCK)
-                        JOIN dbo.PickDetail PD2 WITH (NOLOCK) ON PD2.ORDERKEY = O2.ORDERKEY AND O2.StorerKey = PD2.StorerKey
+                        FROM dbo.Orders O2 WITH (NOLOCK)
+                        INNER JOIN dbo.PickDetail PD2 WITH (NOLOCK) ON PD2.ORDERKEY = O2.ORDERKEY AND O2.StorerKey = PD2.StorerKey
                         WHERE
                            PD2.CaseID = @cTrackNo
                            AND O2.StorerKey = @cStorerKey
@@ -259,13 +268,12 @@ BEGIN
                         SELECT
                            PD2.CaseID,
                            PD2.UserDefine01
-                        FROM
-                           dbo.PalletDetail PD2 WITH (NOLOCK)
+                        FROM dbo.PalletDetail PD2 WITH (NOLOCK)
                         WHERE
                            EXISTS (
                                  SELECT 1
                                  FROM dbo.Orders O2 WITH (NOLOCK)
-                                 JOIN dbo.PickDetail PD3 WITH (NOLOCK) ON PD3.ORDERKEY = O2.ORDERKEY AND O2.StorerKey = PD3.StorerKey
+                                 INNER JOIN dbo.PickDetail PD3 WITH (NOLOCK) ON PD3.ORDERKEY = O2.ORDERKEY AND O2.StorerKey = PD3.StorerKey
                                  WHERE
                                     PD3.CaseID = @cTrackNo
                                     AND O2.MBOLKey = PD2.UserDefine01
@@ -275,22 +283,18 @@ BEGIN
                      )
                      SELECT DISTINCT
                         @cCaseID = PD.caseid
-                     FROM
-                        dbo.PickDetail PD WITH (NOLOCK)
-                     JOIN
-                        dbo.Orders O WITH (NOLOCK) ON PD.orderkey = O.orderkey AND PD.StorerKey = O.StorerKey
+                     FROM dbo.PickDetail PD WITH (NOLOCK)
+                     INNER JOIN dbo.Orders O WITH (NOLOCK) ON PD.orderkey = O.orderkey AND PD.StorerKey = O.StorerKey
+                     INNER JOIN dbo.PackInfo PI WITH(NOLOCK) ON PI.RefNo IS NOT NULL AND PD.CaseID = PI.RefNo AND PI.CartonStatus = ''PACKED''
                      WHERE
-                     PD.StorerKey = @cStorerKey
-                     AND NOT EXISTS (
-                           SELECT 1
-                           FROM FilteredPalletDetail FPD
-                           WHERE FPD.CaseID = PD.CaseID
-                        ) '
-                     +IIF(@cCODELKUPUdf01 <> '',   ' AND EXISTS ( SELECT 1 FROM FilteredOrders FO WHERE ISNULL(FO.'+@cCODELKUPUdf01+','''') = ISNULL(O.'+@cCODELKUPUdf01+',''''))', '')
-                     +IIF(@cCODELKUPUdf02 <> '',   ' AND EXISTS ( SELECT 1 FROM FilteredOrders FO WHERE ISNULL(FO.'+@cCODELKUPUdf02+','''') = ISNULL(O.'+@cCODELKUPUdf02+',''''))', '')
-                     +IIF(@cCODELKUPUdf03 <> '',   ' AND EXISTS ( SELECT 1 FROM FilteredOrders FO WHERE ISNULL(FO.'+@cCODELKUPUdf03+','''') = ISNULL(O.'+@cCODELKUPUdf03+',''''))', '')
-                     +IIF(@cCODELKUPUdf04 <> '',   ' AND EXISTS ( SELECT 1 FROM FilteredOrders FO WHERE ISNULL(FO.'+@cCODELKUPUdf04+','''') = ISNULL(O.'+@cCODELKUPUdf04+',''''))', '')
-                     +IIF(@cCODELKUPUdf05 <> '',   ' AND EXISTS ( SELECT 1 FROM FilteredOrders FO WHERE ISNULL(FO.'+@cCODELKUPUdf05+','''') = ISNULL(O.'+@cCODELKUPUdf05+',''''))', '')
+                        PD.StorerKey = @cStorerKey
+                        AND PD.Status = ''5''
+                        AND NOT EXISTS ( SELECT 1 FROM FilteredPalletDetail FPD WHERE FPD.CaseID = PD.CaseID ) '
+                        +IIF(@cCODELKUPUdf01 <> '',   ' AND EXISTS ( SELECT 1 FROM FilteredOrders FO WHERE (FO.' + @cCODELKUPUdf01 + ' IS NULL AND O.' + @cCODELKUPUdf01 + ' IS NULL) OR (FO.'+ @cCODELKUPUdf01 + ' IS NOT NULL AND O.' + @cCODELKUPUdf01 + ' IS NOT NULL AND FO.'+ @cCODELKUPUdf01 + ' = O.' + @cCODELKUPUdf01 + '))', '')
+                        +IIF(@cCODELKUPUdf02 <> '',   ' AND EXISTS ( SELECT 1 FROM FilteredOrders FO WHERE (FO.' + @cCODELKUPUdf02 + ' IS NULL AND O.' + @cCODELKUPUdf02 + ' IS NULL) OR (FO.'+ @cCODELKUPUdf02 + ' IS NOT NULL AND O.' + @cCODELKUPUdf02 + ' IS NOT NULL AND FO.'+ @cCODELKUPUdf02 + ' = O.' + @cCODELKUPUdf02 + '))', '')
+                        +IIF(@cCODELKUPUdf03 <> '',   ' AND EXISTS ( SELECT 1 FROM FilteredOrders FO WHERE (FO.' + @cCODELKUPUdf03 + ' IS NULL AND O.' + @cCODELKUPUdf03 + ' IS NULL) OR (FO.'+ @cCODELKUPUdf03 + ' IS NOT NULL AND O.' + @cCODELKUPUdf03 + ' IS NOT NULL AND FO.'+ @cCODELKUPUdf03 + ' = O.' + @cCODELKUPUdf03 + '))', '')
+                        +IIF(@cCODELKUPUdf04 <> '',   ' AND EXISTS ( SELECT 1 FROM FilteredOrders FO WHERE (FO.' + @cCODELKUPUdf04 + ' IS NULL AND O.' + @cCODELKUPUdf04 + ' IS NULL) OR (FO.'+ @cCODELKUPUdf04 + ' IS NOT NULL AND O.' + @cCODELKUPUdf04 + ' IS NOT NULL AND FO.'+ @cCODELKUPUdf04 + ' = O.' + @cCODELKUPUdf04 + '))', '')
+                        +IIF(@cCODELKUPUdf05 <> '',   ' AND EXISTS ( SELECT 1 FROM FilteredOrders FO WHERE (FO.' + @cCODELKUPUdf05 + ' IS NULL AND O.' + @cCODELKUPUdf05 + ' IS NULL) OR (FO.'+ @cCODELKUPUdf05 + ' IS NOT NULL AND O.' + @cCODELKUPUdf05 + ' IS NOT NULL AND FO.'+ @cCODELKUPUdf05 + ' = O.' + @cCODELKUPUdf05 + '))', '')
 
                   SET @cSQLParam =  '@cStorerKey NVARCHAR( 15), @cTrackNo NVARCHAR(40), @cCaseID NVARCHAR(20) OUTPUT'
                   EXEC sp_executesql @cSQLString, @cSQLParam, 
@@ -646,6 +650,7 @@ BEGIN
    END
 Quit:
 END
+GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
