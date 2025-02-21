@@ -14,6 +14,7 @@ GO
 /* Date       Rev Author      Purposes                                        */
 /* 26-09-2024 1.0  yeekung    FCR-609 Created                                 */ 
 /* 30-09-2024 1.1  yeekung    FCR-772 Created                                 */ 
+/* 28-01-2025 1.2  yeekung    FCR-1442 Add format carton                      */
 /******************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_PTLStation_Confirm_ToteIDSKU07 (
@@ -1049,6 +1050,14 @@ BEGIN
 
          IF @cNewCartonID <> ''
          BEGIN   
+            -- Check barcode format
+            IF rdt.rdtIsValidFormat( @nFunc, @cStorerKey, 'CartonID', @cNewCartonID) = 0
+            BEGIN
+               SET @nErrNo = 224786
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Format     
+               GOTO Quit
+            END
+
             IF EXISTS ( SELECT 1 FROM rdt.rdtPTLStationLog  (NOLOCK)
                         WHERE StorerKey = @cStorerKey  
                            AND CartonID = @cNewCartonID )  
