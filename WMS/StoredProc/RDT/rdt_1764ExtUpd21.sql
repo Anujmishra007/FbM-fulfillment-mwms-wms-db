@@ -5,13 +5,13 @@ GO
 
 /************************************************************************/
 /* Store procedure: rdt_1764ExtUpd21                                    */
-/* Purpose: Mattel, active the hold pick task once the repl task is done*/
+/* Purpose: Rollback FinalLoc and TransitLoc once quit the task         */
 /* Customer: Grainte Levis                                              */
 /*                                                                      */
 /* Modifications log:                                                   */
 /*                                                                      */
 /* Date         Author   Ver.  Purposes                                 */
-/* 2024-05-07   NLT013   1.0   UWP-19082 UWP-18889 Create Intial Version*/
+/* 2025-02-21   NLT013   1.0   UWP-30476 Create Intial Version          */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_1764ExtUpd21]
