@@ -16,6 +16,7 @@ GO
 /* 2024-12-27   1.1.0 Dennis    FCR-1872 Remove Lot                           */ 
 /* 2025-02-08   1.1.1 NLT013    FCR-1872 Fix some bugs                        */ 
 /* 2025-02-08   1.1.2 NLT013    FCR-1872 Update PickDetailKey for PickSerialNo*/ 
+/* 2025-02-22   1.1.3 NLT013    FCR-1872 Got an error when short pick for methond 1, 2*/ 
 /******************************************************************************/  
   
 CREATE OR ALTER PROC rdt.rdt_1867Confirm01 (  
@@ -638,49 +639,52 @@ BEGIN
                   END  
 
                   --Commented by NLT013-01
-                  -- EXECUTE dbo.nspg_getkey
-                  --    'TaskDetailKey'
-                  --    , 10
-                  --    , @cNewTaskDetailKey OUTPUT
-                  --    , @bSuccess OUTPUT
-                  --    , @nErrNo     --OUTPUT Commented by NLT013, it overrides the old error no, if the error was not 0, but no error happens while executing this SP, error no will be updated as 0
-                  --    , @cErrMsg OUTPUT
+                  IF @cType = 'SHORT' AND @nQTY_Bal  > 0
+                  BEGIN
+                     EXECUTE dbo.nspg_getkey
+                        'TaskDetailKey'
+                        , 10
+                        , @cNewTaskDetailKey OUTPUT
+                        , @bSuccess OUTPUT
+                        , @nErrNo     --OUTPUT Commented by NLT013, it overrides the old error no, if the error was not 0, but no error happens while executing this SP, error no will be updated as 0
+                        , @cErrMsg OUTPUT
 
-                  -- IF NOT @bSuccess = 1
-                  -- BEGIN
-                  --    SET @nErrNo = 227271
-                  --    SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --GetKeyFailed(rdt_1867Confirm01)
-                  --    GOTO RollBackTran 
-                  -- END
+                     IF NOT @bSuccess = 1
+                     BEGIN
+                        SET @nErrNo = 227271
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --GetKeyFailed(rdt_1867Confirm01)
+                        GOTO RollBackTran 
+                     END
 
-                  -- SELECT @nPickedQty = SUM(Qty) 
-                  -- FROM dbo.PickDetail WITH(NOLOCK)
-                  -- WHERE StorerKey = @cStorerKey
-                  -- AND TaskDetailKey = @cTaskDetailKey
-                  -- AND Status = @cPickConfirmStatus
+                     SELECT @nPickedQty = SUM(Qty) 
+                     FROM dbo.PickDetail WITH(NOLOCK)
+                     WHERE StorerKey = @cStorerKey
+                     AND TaskDetailKey = @cTaskDetailKey
+                     AND Status = @cPickConfirmStatus
 
-                  -- SET @nPickedQty = ISNULL(@nPickedQty, 0)
+                     SET @nPickedQty = ISNULL(@nPickedQty, 0)
 
-                  -- INSERT INTO dbo.TaskDetail
-                  -- (TaskDetailKey,TaskType,Storerkey,Sku,Lot,UOM,UOMQty,QTY,FromLoc,LogicalFromLoc,FromID,ToLoc,LogicalToLoc
-                  -- ,ToID,Caseid,PickMethod,Status,StatusMsg,Priority,SourcePriority,Holdkey,UserKey,UserPosition,UserKeyOverRide
-                  -- ,StartTime,EndTime,SourceType,SourceKey,PickDetailKey,OrderKey,OrderLineNumber,ListKey,WaveKey,ReasonKey
-                  -- ,Message01,Message02,Message03,RefTaskKey,LoadKey,AreaKey,DropID, SystemQty,Groupkey,DeviceID)
-                  -- SELECT  TOP 1
-                  -- @cNewTaskDetailKey,TaskType,Storerkey,Sku,Lot,UOM,UOMQty,@nQTY_PD - @nQTY_Bal,FromLoc,LogicalFromLoc,FromID,ToLoc,LogicalToLoc
-                  -- ,ToID,Caseid,PickMethod,Status,StatusMsg,Priority,SourcePriority,Holdkey,UserKey,UserPosition,UserKeyOverRide
-                  -- ,StartTime,EndTime,SourceType,SourceKey,PickDetailKey,OrderKey,OrderLineNumber,ListKey,WaveKey,ReasonKey
-                  -- ,Message01,Message02,Message03,RefTaskKey,LoadKey,AreaKey,DropID, @nQTY_PD - @nQTY_Bal,GroupKey,DeviceID
-                  -- FROM dbo.TaskDetail WITH (NOLOCK)
-                  -- WHERE Taskdetailkey = @cTaskDetailKey
-                  -- AND Storerkey = @cStorerkey
-                  
-                  -- IF @@ERROR <> 0
-                  -- BEGIN
-                  --    SET @nErrNo = 227272
-                  --    SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InsTaskFailed
-                  --    GOTO RollBackTran 
-                  -- END
+                     INSERT INTO dbo.TaskDetail
+                     (TaskDetailKey,TaskType,Storerkey,Sku,Lot,UOM,UOMQty,QTY,FromLoc,LogicalFromLoc,FromID,ToLoc,LogicalToLoc
+                     ,ToID,Caseid,PickMethod,Status,StatusMsg,Priority,SourcePriority,Holdkey,UserKey,UserPosition,UserKeyOverRide
+                     ,StartTime,EndTime,SourceType,SourceKey,PickDetailKey,OrderKey,OrderLineNumber,ListKey,WaveKey,ReasonKey
+                     ,Message01,Message02,Message03,RefTaskKey,LoadKey,AreaKey,DropID, SystemQty,Groupkey,DeviceID)
+                     SELECT  TOP 1
+                     @cNewTaskDetailKey,TaskType,Storerkey,Sku,Lot,UOM,UOMQty,@nQTY_PD - @nQTY_Bal,FromLoc,LogicalFromLoc,FromID,ToLoc,LogicalToLoc
+                     ,ToID,Caseid,PickMethod,Status,StatusMsg,Priority,SourcePriority,Holdkey,UserKey,UserPosition,UserKeyOverRide
+                     ,StartTime,EndTime,SourceType,SourceKey,PickDetailKey,OrderKey,OrderLineNumber,ListKey,WaveKey,ReasonKey
+                     ,Message01,Message02,Message03,RefTaskKey,LoadKey,AreaKey,DropID, @nQTY_PD - @nQTY_Bal,GroupKey,DeviceID
+                     FROM dbo.TaskDetail WITH (NOLOCK)
+                     WHERE Taskdetailkey = @cTaskDetailKey
+                     AND Storerkey = @cStorerkey
+                     
+                     IF @@ERROR <> 0
+                     BEGIN
+                        SET @nErrNo = 227272
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InsTaskFailed
+                        GOTO RollBackTran 
+                     END
+                  END
                   --Commented by NLT013-01
                   
                   -- Short pick
