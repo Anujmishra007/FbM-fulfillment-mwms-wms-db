@@ -1798,7 +1798,7 @@ BEGIN
          SET @nBal_Alloc  = @nBal_Alloc  - @nPD_Alloc    
          SET @nBal_Pick   = @nBal_Pick   - @nPD_Pick    
          SET @nBal_Replen = @nBal_Replen - @nQTY_Replen    
-         --select @nBal_Avail '@nBal_Avail', @nBal_Alloc '@nBal_Alloc', @nPD_Pick '@nPD_Pick', @nBal_Replen '@nBal_Replen'    
+--select @nBal_Avail '@nBal_Avail', @nBal_Alloc '@nBal_Alloc', @nPD_Pick '@nPD_Pick', @nBal_Replen '@nBal_Replen'    
     
          IF @nBal_Avail  = 0 AND    
             @nBal_Alloc  = 0 AND    
