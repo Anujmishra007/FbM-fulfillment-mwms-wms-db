@@ -3,16 +3,17 @@ GO
 SET ANSI_NULLS OFF
 GO
 
-/************************************************************************/
-/* Store procedure: rdt_1764ExtUpd21                                    */
-/* Purpose: Rollback FinalLoc and TransitLoc once quit the task         */
-/* Customer: Grainte Levis                                              */
-/*                                                                      */
-/* Modifications log:                                                   */
-/*                                                                      */
-/* Date         Author   Ver.  Purposes                                 */
-/* 2025-02-21   NLT013   1.0   UWP-30476 Create Intial Version          */
-/************************************************************************/
+/***************************************************************************/
+/* Store procedure: rdt_1764ExtUpd21                                       */
+/* Purpose: Rollback FinalLoc and TransitLoc once quit the task            */
+/* Customer: Grainte Levis                                                 */
+/*                                                                         */
+/* Modifications log:                                                      */
+/*                                                                         */
+/* Date         Author   Ver.    Purposes                                  */
+/* 2025-02-21   NLT013   1.0.0   UWP-30476 Create Intial Version           */
+/* 2025-02-25   JCH507   1.0.1   UWP-30476 Clear Final loc when status = H */
+/***************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_1764ExtUpd21]
     @nMobile         INT
@@ -78,7 +79,7 @@ BEGIN
             SAVE TRAN rdt_1764ExtUpd21
 
             BEGIN TRY
-               IF @cToLOCCat IN ('PND', 'PND_IN', 'PND_OUT') AND @cTaskStatus IN ('0', 'X') AND @cFinalLOC <> '' AND @cFinalLOC <> @cToLoc
+               IF @cToLOCCat IN ('PND', 'PND_IN', 'PND_OUT') AND @cTaskStatus IN ('0', 'X','H') AND @cFinalLOC <> '' AND @cFinalLOC <> @cToLoc
                BEGIN
                   UPDATE dbo.TaskDetail WITH (ROWLOCK)
                   SET ToLoc = @cFinalLOC,
