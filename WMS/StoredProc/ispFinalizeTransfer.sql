@@ -2079,30 +2079,6 @@ BEGIN
                GOTO Quit_Proc
             END
 
-            IF @nFromQty NOT IN (1)
-            BEGIN
-               SET @nContinue = 3
-               SET @n_Err = 80051
-               SET @c_errmsg = 'NSQL' + CONVERT(CHAR(5), @n_Err)
-                              + ': SerialNo transfer qty is mandatory to be 1'
-                              + '. From SerialNo: ' + @c_FromSerialNo
-                              + ', Line #: ' + @cTransferLineNumber
-                              + '. (ispFinalizeTransfer)'
-               GOTO Quit_Proc
-            END
-
-            IF @c_ASNFizUpdLotToSerialNo = '1' AND (@cFromID = '' Or @cToID ='')
-            BEGIN
-               SET @nContinue = 3
-               SET @n_Err = 80052
-               SET @c_errmsg = 'NSQL' + CONVERT(CHAR(5), @n_Err)
-                              + ': From & To ID are Required for SerialNo Transfer'
-                              + '. To SerialNo: ' + @c_ToSerialNo
-                              + ', Line #: ' + @cTransferLineNumber
-                              + '. (ispFinalizeTransfer)'
-               GOTO Quit_Proc
-            END
-
             SET @b_CheckToValue = 0
             IF @c_FromSerialNo > '' OR @c_ToSerialNo > ''
             BEGIN
@@ -2129,6 +2105,30 @@ BEGIN
                                  + ', Line #: ' + @cTransferLineNumber
                                  + '. (ispFinalizeTransfer)'
 
+                    GOTO Quit_Proc
+                END
+
+                IF @nFromQty NOT IN (1)
+                BEGIN
+                    SET @nContinue = 3
+                    SET @n_Err = 80051
+                    SET @c_errmsg = 'NSQL' + CONVERT(CHAR(5), @n_Err)
+                                  + ': SerialNo transfer qty is mandatory to be 1'
+                                  + '. From SerialNo: ' + @c_FromSerialNo
+                                  + ', Line #: ' + @cTransferLineNumber
+                                  + '. (ispFinalizeTransfer)'
+                    GOTO Quit_Proc
+                END
+
+                IF @c_ASNFizUpdLotToSerialNo = '1' AND (@cFromID = '' Or @cToID ='')
+                BEGIN
+                    SET @nContinue = 3
+                    SET @n_Err = 80052
+                    SET @c_errmsg = 'NSQL' + CONVERT(CHAR(5), @n_Err)
+                                  + ': From & To ID are Required for SerialNo Transfer'
+                                  + '. To SerialNo: ' + @c_ToSerialNo
+                                  + ', Line #: ' + @cTransferLineNumber
+                                  + '. (ispFinalizeTransfer)'
                     GOTO Quit_Proc
                 END
 
