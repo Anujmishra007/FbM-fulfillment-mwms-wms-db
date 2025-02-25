@@ -46,6 +46,7 @@ GO
 /* 2025-02-03   Wan01    2.4  UWP-29796 - Error on Gen Replenishment for*/
 /*                            multiple pickdetail record for same lot,  */
 /*                            loc and id                                */
+/* 2025-02-24                 - fixed incorrect pendingmovein           */
 /************************************************************************/      
 CREATE OR ALTER PROC [dbo].[ispGenDynamicLocReplenishment]     
    @cWaveKey NVARCHAR(10),    
@@ -875,12 +876,13 @@ BEGIN
                 BEGIN    
                     INSERT INTO LOTxLOCxID    
                       (    
-                        StorerKey, SKU, LOT, LOC, ID, Qty    
+                        StorerKey, SKU, LOT, LOC, ID, Qty, PendingMoveIN            --(Wan01)    
                       )    
               VALUES    
                       (    
                         --@cStorerKey, @cSKU, @cLOT, @cDynamicPickLoc, '', 0   --NJOW01    
-                        @cStorerKey, @cSKU, @cLOT, @cDynamicPickLoc, @cID, 0   --(ChewKP01)  
+                        --@cStorerKey, @cSKU, @cLOT, @cDynamicPickLoc, @cID, 0   --(ChewKP01) 
+                        @cStorerKey, @cSKU, @cLOT, @cDynamicPickLoc, @cID, 0, @nQty --(Wan01)  
                       )    
                     IF @@ERROR<>0    
                     BEGIN    
