@@ -179,8 +179,7 @@ AS
       GOTO Quit
    
       RollBackTran:  
-            RETURN
-            --ROLLBACK TRAN rdt_PackByTrackNo_PackCfm  
+            ROLLBACK TRAN rdt_PackByTrackNo_PackCfm  
       Quit:  
          WHILE @@TRANCOUNT > @nTranCount  
             COMMIT TRAN  
