@@ -173,14 +173,14 @@ BEGIN
       END          
   
       --IF (SELECT DataCount FROM #TMP_CC) > 0   --rmt01
-  if (select cckey from ccdetail(nolock) where cckey = @c_StockTakeKey) >'0'      
-      BEGIN  
-         SET @n_continue = 3      
-         SET @n_err = 552404  
-         SET @c_ErrMsg = 'CCDetail Transaction Found ! Regeneration Not Allow.'   
-        
-         GOTO EXIT_SP  
-      END  
+      IF EXISTS ( SELECT COUNT(DISTINCT CCKey) FROM CCDETAIL (NOLOCK) WHERE CCKey = @c_StockTakeKey HAVING COUNT(DISTINCT CCKey) > 0)
+      BEGIN
+          SET @n_continue = 3
+          SET @n_err = 552404
+          SET @c_ErrMsg = 'CCDetail Transaction Found ! Regeneration Not Allow.'
+
+          GOTO EXIT_SP
+      END
   
       IF @c_GenType = 'B'  
       BEGIN  
