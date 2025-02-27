@@ -12,6 +12,7 @@ GO
 /* Date       Rev  Author   Purposes                                         */
 /* 2024-07-04 1.0  NLT013   FCR-454 CREATE                                   */
 /* 2024-11-07 1.0  NLT013   UWP-26694 update orderkey info for swapped UCC   */
+/* 2025-02-27 1.0  NLT013   UWP-30644 FN957 case pick error                  */
 /*                                                                           */
 /*****************************************************************************/
 
@@ -666,7 +667,9 @@ BEGIN
                   WHERE pkh.StorerKey = @cStorerKey
                      AND pkh.PickHeaderKey = @cPickSlipNo
                      AND pkd.Status = @cPickConfirmStatus
-                     --AND pkd.ID = @cDropID
+                     AND ucc.Status <'5'
+                     AND pkd.CaseID = @cSSCC
+                     AND pkd.ID = @cDropID
 
                   OPEN C_UCC
                   FETCH NEXT FROM C_UCC INTO @cUCCNo, @cUCCLoc, @nUCCQTY, @cSKU, @cLOT, @cPickDetailKey, @cToID
