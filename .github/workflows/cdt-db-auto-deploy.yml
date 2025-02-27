@@ -112,7 +112,7 @@ jobs:
           echo "Response from API: $response"
 
       - name: Deployment Request Failure Notification
-        if: ${{ failure() }}
+        if: steps.deploy_CDT.outcome == 'failure'
         uses: jdcargile/ms-teams-notification@v1.3
         with:
           github-token: ${{ github.token }}
@@ -121,7 +121,7 @@ jobs:
           notification-color: D30A13
 
       - name: Deployment Request Success Notification
-        if: ${{ success() }}
+        if: steps.deploy_CDT.outcome == 'success'
         uses: jdcargile/ms-teams-notification@v1.3
         with:
           github-token: ${{ github.token }}
