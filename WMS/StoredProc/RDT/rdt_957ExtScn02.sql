@@ -6,13 +6,14 @@ GO
 /*****************************************************************************/
 /* Store procedure: rdt_957ExtScn02                                          */
 /* Copyright: Maersk WMS                                                     */
+/* Customer: Granite Levis                                                   */
 /*                                                                           */
 /* Purpose:                                                                  */
 /*                                                                           */
-/* Date       Rev  Author   Purposes                                         */
-/* 2024-07-04 1.0  NLT013   FCR-454 CREATE                                   */
-/* 2024-11-07 1.0  NLT013   UWP-26694 update orderkey info for swapped UCC   */
-/* 2025-02-27 1.0  NLT013   UWP-30644 FN957 case pick error                  */
+/* Date       Rev    Author   Purposes                                       */
+/* 2024-07-04 1.0    NLT013   FCR-454 CREATE                                 */
+/* 2024-11-07 1.1    NLT013   UWP-26694 update orderkey info for swapped UCC */
+/* 2025-02-27 1.2.0  NLT013   UWP-30644 FN957 case pick error                */
 /*                                                                           */
 /*****************************************************************************/
 
