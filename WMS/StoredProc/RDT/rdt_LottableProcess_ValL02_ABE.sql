@@ -16,7 +16,7 @@ GO
 /* 2025-02-21   JBI034    1.0.0 UWP-30670 Merge Code                          */
 /******************************************************************************/
 
-CREATE PROCEDURE [RDT].[rdt_LottableProcess_ValL02_ABE]
+CREATE OR ALTER PROCEDURE [RDT].[rdt_LottableProcess_ValL02_ABE]
     @nMobile          INT
    ,@nFunc            INT
    ,@cLangCode        NVARCHAR( 3)
