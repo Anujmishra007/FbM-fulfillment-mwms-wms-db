@@ -10,10 +10,11 @@ GO
 /* Modifications log:                                                      */
 /*                                                                         */
 /* Date         Author    Ver.   Purposes                                  */
-/* 2024-12-5    JCH507    1.0.0  FCR-1157 for Levis                        */
+/* 2024-12-05    JCH507    1.0.0  FCR-1157 for Levis                       */
 /*                               (Copy from 1764CfmExtUp01)                */
-/* 2025-01-7    JCH507    1.0.1  FCR-1157 Handle full ucc short since      */
+/* 2025-01-07    JCH507    1.0.1  FCR-1157 Handle full ucc short since     */
 /*                               systemQty <> PD Qty                       */
+/* 2025-02-27    JCH507    1.1.0  FCR-1157 Unlock toLoc when full short    */
 /***************************************************************************/
 
 CREATE OR ALTER PROCEDURE rdt.rdt_1764CfmExtUpd05
@@ -162,6 +163,24 @@ BEGIN
             GOTO RollBackTran
          END CATCH
 
+         --V1.1.0 Start
+         EXEC rdt.rdt_Putaway_PendingMoveIn '', 'UNLOCK'
+            ,''      --@cFromLOC
+            ,''      --@cFromID
+            ,''      --@cSuggestedLOC
+            ,''      --@cStorerKey
+            ,@nErrNo  OUTPUT
+            ,@cErrMsg OUTPUT
+            ,''      -- @cSKU
+            , 0      -- @nPutawayQty
+            , ''     -- @cUCCNo
+            , ''     -- @cFromLOT
+            , ''     -- @cToID
+            , @cTaskDetailKey -- @cTaskDetailKey
+
+         IF @nErrNo <> 0
+            GOTO RollbackTran
+         --V1.1.0 End
          SET @nShortQTY = 0
       END --Qty=0 --V1.0.1 end
       ELSE
