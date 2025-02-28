@@ -352,25 +352,41 @@ BEGIN
    -- Update UCC (rdt_Move does not update UCC if PickDetail.Status = 5)
    IF @cToLOC <> '' AND @cMoveQTYPick = '1'
    BEGIN
-      DECLARE @cUCCNo NVARCHAR( 20)
-      DECLARE @curUCC CURSOR
-      SET @curUCC = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
-         SELECT UCCNo
+      DECLARE @tUCC TABLE
+      (
+         id INT IDENTITY(1,1),
+         UCCNo	NVARCHAR(20)
+      )
+
+      INSERT INTO @tUCC(UCCNo)
+      SELECT UCCNo
          FROM dbo.UCC WITH (NOLOCK)
          WHERE StorerKey = @cStorerKey
             AND LOC = @cToLOC
             AND ID = @cID
-      OPEN @curUCC
-      FETCH NEXT FROM @curUCC INTO @cUCCNo
-      WHILE @@FETCH_STATUS = 0
+
+      DECLARE @nLoopIndex INT = -1
+      DECLARE @cUCCNo NVARCHAR( 20)
+
+      WHILE(1 = 1)
       BEGIN
+         SELECT TOP 1
+            @nLoopIndex = id,
+            @cUCCNo = UccNo
+         FROM @tUCC
+         WHERE id > @nLoopIndex
+
+         IF @@ROWCOUNT = 0
+            BREAK
+
          UPDATE dbo.UCC SET
             Status = '5', -- Pick
             PickDetailKey = @cPickDetailKey,
             EditDate = GETDATE(),
             EditWho = SUSER_SNAME()
          WHERE StorerKey = @cStorerKey
-            AND UCCNo = @cUCCNo
+         AND UCCNo = @cUCCNo
+
          IF @nErrNo <> 0
          BEGIN
             SET @nErrNo = 201807
