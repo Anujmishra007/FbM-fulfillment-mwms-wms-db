@@ -14,7 +14,7 @@ GO
 /* Called from: 1 (Stock Take )                                                  */
 /*    1. From scheduler                                                          */
 /*                                                                               */
-/* Version: 1.0                                                                  */
+/* Version: 1.2                                                                  */
 /*                                                                               */
 /* Data Modifications:                                                           */
 /*                                                                               */
@@ -22,6 +22,8 @@ GO
 /* Date        Author   Ver.  Purposes                                           */
 /* 2025-01-21  Wan01    1.1   UWP-29372 - [FCR-1953] [Unilever] Modify Shelf Life*/
 /*                            Code Calculation Function                          */
+/* 2025-02-27  Wan02    1.2   UWP-30082[FCR-2681] - ShelfLife Code Base on       */
+/*                            Configurable SkuGroup                              */
 /*********************************************************************************/
 
 CREATE OR ALTER PROC msp_ULACalcShelfLife (
@@ -180,14 +182,16 @@ BEGIN
           DECLARE CUR_TRANSFER CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
               SELECT DISTINCT LOC.Facility, LA.Sku, LA.Lottable04, LA.Lottable07, LA.Lottable13
               FROM dbo.LOT WITH (NOLOCK)
-                       JOIN dbo.LOTAttribute AS LA WITH (NOLOCK, INDEX(PKLOTAttribute) ) ON (LOT.Lot = LA.LOT)
-                       JOIN dbo.LOTxLOCxID LLI WITH (NOLOCK) ON LLI.Lot = LOT.Lot
-                       JOIN dbo.LOC WITH (NOLOCK) ON LOC.Loc = LLI.Loc
-                       JOIN dbo.SKU SKU WITH (NOLOCK) ON SKU.StorerKey = LOT.StorerKey AND SKU.SKU = LOT.Sku
+              JOIN dbo.LOTAttribute AS LA WITH (NOLOCK, INDEX(PKLOTAttribute) ) ON (LOT.Lot = LA.LOT)
+              JOIN dbo.LOTxLOCxID LLI WITH (NOLOCK) ON LLI.Lot = LOT.Lot
+              JOIN dbo.LOC WITH (NOLOCK) ON LOC.Loc = LLI.Loc
+              JOIN dbo.SKU SKU WITH (NOLOCK) ON SKU.StorerKey = LOT.StorerKey AND SKU.SKU = LOT.Sku
+              JOIN dbo.CODELKUP WITH (NOLOCK) ON  Codelkup.ListName = 'SLSKUGROUP'  --(Wan02)
+                                              AND Codelkup.Code = SKU.SKUGROUP      --(Wan02)
               WHERE LOT.StorerKey = @c_StorerKey
                 AND (LOT.Qty - LOT.QtyAllocated - LOT.QtyPicked) > 0
                 AND LA.Lottable06 in ( '0' , '')
-                AND SKU.SKUGROUP IN ('FG', 'RM', 'PC');
+                --AND SKU.SKUGROUP IN ('FG', 'RM', 'PC');                           --(Wan02)            
           OPEN CUR_TRANSFER;
           FETCH NEXT FROM CUR_TRANSFER INTO @c_Facility, @c_SKU, @d_Lottable04, @c_Lottable07, @d_Lottable13;
           WHILE @@FETCH_STATUS <> -1
