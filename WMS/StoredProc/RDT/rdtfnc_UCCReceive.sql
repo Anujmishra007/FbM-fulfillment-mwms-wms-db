@@ -68,7 +68,7 @@ GO
 /*                         calling rdt_UCCReceive_Confirm                  */
 /* 2024-10-14 5.0  CYU027  FCR-759 ID and UCC Length Issue                 */
 /* 2024-11-07 5.1  YYS027   Merged from 4.6(v0) and 4.3(V2) to 4.7(V2)      */
-/* 2024-12-05 5.1  ShaoAn  FCR-1103 Changes in UCC Receive to process      */
+/* 2024-12-05 5.2  ShaoAn  FCR-1103 Changes in UCC Receive to process      */
 /***************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdtfnc_UCCReceive](
    @nMobile    INT,
