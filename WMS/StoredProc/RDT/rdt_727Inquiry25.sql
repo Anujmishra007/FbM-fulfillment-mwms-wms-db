@@ -5,17 +5,18 @@ SET QUOTED_IDENTIFIER OFF
 GO
 
 
-/***************************************************************************/
-/* Store procedure: rdt_727Inquiry25                                       */
-/* Copyright      : Maersk                                                 */
-/*                                                                         */
-/* Modifications log:       LVSUSA                                         */
-/*                                                                         */
-/* Date       Rev  Author     Purposes                                     */
-/* 2024-10-08 1.0  JHU151     FCR-948                                      */
-/* 2024-10-15 1.2  JCH507     FCR-948 Fix st3,st4 display issue            */
-/***************************************************************************/
-CREATE OR ALTER   PROC [RDT].[rdt_727Inquiry25] (
+/******************************************************************************/
+/* Store procedure: rdt_727Inquiry25                                          */
+/* Copyright      : Maersk                                                    */
+/*                                                                            */
+/* Modifications log:       LVSUSA                                            */
+/*                                                                            */
+/* Date       Rev    Author     Purposes                                      */
+/* 2024-10-08 1.0.0  JHU151     FCR-948                                       */
+/* 2024-10-15 1.0.1  JCH507     FCR-948 Fix st3,st4 display issue             */
+/* 2024-02-26 1.1.0  SK         FCR-2707                                      */
+/******************************************************************************/
+CREATE OR ALTER PROC [RDT].[rdt_727Inquiry25] (
    @nMobile      INT,
    @nFunc        INT,
    @nStep        INT,
@@ -78,7 +79,6 @@ BEGIN
    BEGIN
       IF @nStep = 2 -- Inquiry sub module
       BEGIN
-
          IF @bDebugFlag = 1
             SELECT @nStep AS Step
          
@@ -94,11 +94,18 @@ BEGIN
          END
                   
          SELECT TOP 1 
-            @cLoc = ISNULL( PLTD.Loc, ''),
+            @cLoc = ISNULL(PLTD.Loc, ''),
             @cStatus = PLT.Status,
-            @cShipRef = ISNULL(PLTD.UserDefine01,'')
+            -- 1.1 Start
+            --@cShipRef = ISNULL(PLTD.UserDefine01,'')
+            @cShipRef = ISNULL(ord.MBOLKey, '')
+            -- 1.1 End 
          FROM dbo.PALLET PLT WITH (NOLOCK)
             JOIN dbo.PALLETDETAIL PLTD WITH (NOLOCK) ON (PLT.PalletKey = PLTD.PalletKey AND PLT.storerkey = PLTD.Storerkey)
+            -- 1.1 Start
+            JOIN pickdetail pd (nolock) On PLTD.Caseid = pd.caseid and PLTD.StorerKey = pd.Storerkey --and PLTD.sku = pd.sku --and PLTD.loc= pd.loc
+            JOIN orders ord (nolock) on pd.Storerkey = ord.StorerKey and  pd.OrderKey = ord.orderkey  
+            -- 1.1 End 
          WHERE PLTD.Storerkey = @cStorerkey
             AND PLT.PalletKey = @cID
             AND PLT.Status IN ( '0', '5','9') -- 0=Open, 5=Closed, 9=Shipped
@@ -154,9 +161,10 @@ BEGIN
 
          SET @c_oFieled10 = CAST( @nPage AS NVARCHAR( 5)) + '/' + CAST( @nTotalPage AS NVARCHAR( 5))
 
-         --V1.2 JCH507
+         --v1.0.1 jch507 start
          SET @c_oFieled08 = ''
          SET @c_oFieled09 = ''
+         --v1.0.1 jch507 end
 
          -- Populate case ID
          SET @i = 1
@@ -194,8 +202,8 @@ BEGIN
             SELECT @nStep AS Step
 
        -- Param mapping
-         SET @cCarton = @c_oFieled09  -- Last case ID of page --v1.2 jch507
-         SET @cID = @cParam1 --v1.2 JCH507
+         SET @cCarton = @c_oFieled09  -- Last case ID of page --v1.0.1 jch507
+         SET @cID = @cParam1 --v1.0.1 JCH507
 
          IF @bDebugFlag = 1
             SELECT @cCarton AS Carton
@@ -260,7 +268,7 @@ BEGIN
   
        
          -- Populate case ID
-         -- v1.2 Clear the values JCH507
+         -- v1.0.1 Clear the values JCH507
          SET @c_oFieled01 = ''
          SET @c_oFieled02 = ''
          SET @c_oFieled03 = ''
