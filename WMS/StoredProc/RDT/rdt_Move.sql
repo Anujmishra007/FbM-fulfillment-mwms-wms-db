@@ -1284,35 +1284,37 @@ SET @curLLI = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
    ORDER BY LLI.StorerKey, LLI.SKU, LLI.LOT, LLI.QTY OPTION (RECOMPILE)
 */
 
-SET @cSQL =
-   ' SET @curLLI = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR ' +
-      ' SELECT ' +
-         ' LLI.LOT, ' +
-         ' LLI.LOC, ' +
-         ' LLI.ID,  ' +
-         ' LLI.QTY, ' +
-         ' LLI.QTY - LLI.QTYAllocated - LLI.QTYPicked - ' +
-         CASE WHEN @nQTYReplen > 0 THEN '0' ELSE '(CASE WHEN LLI.QtyReplen < 0 THEN 0 ELSE LLI.QtyReplen END)' END + ' QTYAvail, ' +
-         ' LLI.QTYAllocated, ' +
-         ' LLI.QTYPicked, ' +
-         ' LLI.QTYReplen, ' +
-         ' SKU.SKU, ' +
-         ' SKU.PackKey, ' +
-         ' Pack.PackUOM3 ' +
-      ' FROM dbo.LOTxLOCxID LLI WITH (NOLOCK ) ' +
-         ' INNER JOIN dbo.SKU SKU (NOLOCK) ON (LLI.StorerKey = SKU.Storerkey AND LLI.SKU = SKU.SKU) ' +
-         ' INNER JOIN dbo.Pack Pack (NOLOCK) ON (SKU.PackKey = Pack.PackKey) ' +
-      ' WHERE LLI.StorerKey = @cStorerKey ' +
-         ' AND LLI.LOC = @cFromLOC ' +
-         CASE WHEN @cFromID  IS NULL THEN '' ELSE ' AND LLI.ID  = @cFromID  ' END +
-         CASE WHEN @cFromLOT IS NULL THEN '' ELSE ' AND LLI.LOT = @cFromLOT ' END +
-         CASE WHEN @cSKU     IS NULL THEN '' ELSE ' AND LLI.SKU = @cSKU     ' END + -- Move by SKU
-         CASE WHEN @cUCC     IS NULL THEN '' ELSE ' AND LLI.LOT = @cUCCLOT  ' END + -- Move by UCC (already got LOT,LOC,ID)
-         ' AND LLI.QTY - ' +
-            CASE WHEN @cMoveQTYAlloc = '1' THEN '0' ELSE ' LLI.QTYAllocated ' END + ' - ' +
-            CASE WHEN @cMoveQTYPick = '1'  THEN '0' ELSE ' LLI.QTYPicked ' END + ' - ' +
-            CASE WHEN @nQTYReplen > 0      THEN '0' ELSE ' (CASE WHEN LLI.QtyReplen < 0 THEN 0 ELSE LLI.QtyReplen END) ' END +
-            ' > 0 ' +
+SET @cSQL =     
+   ' SET @curLLI = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR ' +     
+      ' SELECT ' +     
+         ' LLI.LOT, ' +     
+         ' LLI.LOC, ' +     
+         ' LLI.ID,  ' +     
+         ' LLI.QTY, ' +     
+         --' LLI.QTY - LLI.QTYAllocated - LLI.QTYPicked - ' +
+		 ' LLI.QTY - (LLI.QTYAllocated - LLI.QTYExpected) - LLI.QTYPicked - ' +  --FCR-1152
+         CASE WHEN @nQTYReplen > 0 THEN '0' ELSE '(CASE WHEN LLI.QtyReplen < 0 THEN 0 ELSE LLI.QtyReplen END)' END + ' QTYAvail, ' +     
+         ' LLI.QTYAllocated, ' +     
+         ' LLI.QTYPicked, ' +     
+         ' LLI.QTYReplen, ' +     
+         ' SKU.SKU, ' +     
+         ' SKU.PackKey, ' +     
+         ' Pack.PackUOM3 ' +     
+      ' FROM dbo.LOTxLOCxID LLI WITH (NOLOCK ) ' +      
+         ' INNER JOIN dbo.SKU SKU (NOLOCK) ON (LLI.StorerKey = SKU.Storerkey AND LLI.SKU = SKU.SKU) ' +     
+         ' INNER JOIN dbo.Pack Pack (NOLOCK) ON (SKU.PackKey = Pack.PackKey) ' +     
+      ' WHERE LLI.StorerKey = @cStorerKey ' +      
+         ' AND LLI.LOC = @cFromLOC ' +      
+         ' AND LLI.Qty > 0 ' +      
+         CASE WHEN @cFromID  IS NULL THEN '' ELSE ' AND LLI.ID  = @cFromID  ' END +     
+         CASE WHEN @cFromLOT IS NULL THEN '' ELSE ' AND LLI.LOT = @cFromLOT ' END +     
+         CASE WHEN @cSKU     IS NULL THEN '' ELSE ' AND LLI.SKU = @cSKU     ' END + -- Move by SKU    
+         CASE WHEN @cUCC     IS NULL THEN '' ELSE ' AND LLI.LOT = @cUCCLOT  ' END + -- Move by UCC (already got LOT,LOC,ID)    
+         ' AND LLI.QTY - ' +     
+            CASE WHEN @cMoveQTYAlloc = '1' THEN '0' ELSE ' (LLI.QTYAllocated - LLI.QTYExpected) ' END + ' - ' +       --FCR-1152
+            CASE WHEN @cMoveQTYPick = '1'  THEN '0' ELSE ' LLI.QTYPicked ' END + ' - ' +     
+            CASE WHEN @nQTYReplen > 0      THEN '0' ELSE ' (CASE WHEN LLI.QtyReplen < 0 THEN 0 ELSE LLI.QtyReplen END) ' END +     
+            ' >= 0 ' +     
       ' ORDER BY SKU.SKU, LLI.LOT, LLI.QTY ' +        --tlting01
       ' OPTION (FORCE ORDER) ' +  --tlting01
       ' OPEN @curLLI '
