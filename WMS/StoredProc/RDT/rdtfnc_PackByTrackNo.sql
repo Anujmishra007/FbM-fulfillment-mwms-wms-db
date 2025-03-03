@@ -121,10 +121,9 @@ GO
 /* 2023-03-28 7.5  James    WMS-22039 Enhance ExtInfoSP at step 3 (james53)  */  
 /* 2024-06-02 7.6  James    WMS-24295 Add custom carton no sp (james54)      */
 /*                          Add ExtValidSP into step 1 (ESC)                 */
-/* 2024-09-03 7.7  James    WMS-26174 Add Tote/DropID format check (james55) */
-/* 2024-09-06 7.8  James    Add Pickslip output during decode (james54)      */
+/* 2024-09-06 7.7  James    Add Pickslip output during decode (james54)      */
+/* 2024-09-03 7.8  James    WMS-26174 Add Tote/DropID format check (james55) */
 /* 2024-11-08 7.9  PXL009   FCR-1118 Merged 7.8 from v0 branch               */
-/* 2025-02-24 7.10 NLT013  UWP-30499 Be albe to scan next SKU which is in same dropid */
 /*****************************************************************************/    
     
 CREATE OR ALTER PROC [RDT].[rdtfnc_PackByTrackNo](    
@@ -4489,7 +4488,7 @@ BEGIN
          IF @nExpectedQty > @nPackedQty      
          BEGIN      
             SET @nMoreToPack = 1      
-            SET @cInField02 = @cDropID   --NLT013 it is required for scan next sku which is in same DropID
+            SET @cOutField02 = @cDropID      
          END      
       END      
           
