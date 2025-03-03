@@ -128,4 +128,17 @@ EXECUTE rdt.rdtAddScn 6384, 'ENG'
    ,@cLine14 = '%e'
    ,@cWebGroup = '{"1":["1"],"2":["2","3"],"3":["4","5","6"],"4":["7"]}'
    ,@nFunc = 850
-   
+
+--FCR-2630
+-- 6464 = Print packing list + Automation label and doc
+DELETE rdt.RDTScn WHERE Scn = 6464 AND Lang_Code = 'ENG'
+EXECUTE rdt.rdtAddScn 6464, 'ENG',
+    @cLine01 = ''
+   ,@cLine02 = 'PRINT PACKING LIST?'
+   ,@cLine03 = ''
+   ,@cLine04 = '1 = YES'
+   ,@cLine05 = '5 = Automation label'
+   ,@cLine06 = '9 = NO'
+   ,@cLine07 = 'OPTION: %01i01'
+   ,@cLine14 = '%e'
+   ,@nFunc = 850

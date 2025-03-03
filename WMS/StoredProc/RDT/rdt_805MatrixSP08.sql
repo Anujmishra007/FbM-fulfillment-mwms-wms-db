@@ -10,6 +10,7 @@ GO
 /*                                                                      */
 /* Date       Rev  Author   Purposes                                    */
 /* 02-09-2024 1.0  yeekung  FCR-609 Created                             */
+/* 27-01-2024 1.1  yeekung  FCR-1484 Filter Storerkey (yeekung01)       */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_805MatrixSP08] (
@@ -114,7 +115,7 @@ BEGIN
    SET @curPTLTran = CURSOR FOR
       SELECT T.PTLKey, T.IPAddress, T.DevicePosition, T.ExpectedQTY, D.Loc 
       FROM PTL.PTLTran T WITH (NOLOCK)
-         JOIN dbo.DeviceProfile D WITH (NOLOCK) ON (D.DeviceID = T.DeviceID AND D.DevicePosition = T.DevicePosition) 
+         JOIN dbo.DeviceProfile D WITH (NOLOCK) ON (D.DeviceID = T.DeviceID AND D.DevicePosition = T.DevicePosition AND D.Storerkey = T.Storerkey) 
       WHERE D.DeviceID IN (@cStation1, @cStation2, @cStation3, @cStation4, @cStation5)
          AND D.DeviceType = 'STATION'
          AND D.DeviceID <> ''

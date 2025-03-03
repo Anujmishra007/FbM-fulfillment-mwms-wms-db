@@ -1,22 +1,40 @@
-CREATE TABLE [RDT].[RDTDynamicPickLog_DELLOG]
+SET ANSI_NULLS OFF
+GO
+
+SET QUOTED_IDENTIFIER OFF
+GO
+
+IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[rdt].[RDTDynamicPickLog_DELLOG]') AND type in (N'U'))
+BEGIN
+
+CREATE TABLE [RDT].[rdtDynamicPickLog_DELLOG](
+	[Rowref] [int] IDENTITY(1,1) NOT NULL,
+	[RowRefSource] [int] NOT NULL,
+	[Status] [nvarchar](1) NOT NULL,
+	[AddDate] [datetime] NOT NULL,
+	[AddWho] [nvarchar](128) NOT NULL,
+	[ArchiveCop] [nvarchar](1) NULL,
+ CONSTRAINT [PK_rdtDynamicPickLog_DELLOG] PRIMARY KEY CLUSTERED 
 (
-[RowRef] [int] NOT NULL IDENTITY(1, 1),
-[Zone] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[Loc] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[PickSlipNo] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[CartonNo] [int] NULL,
-[LabelNo] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[AddDate] [datetime] NULL,
-[AddWho] [nvarchar] (128) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[DelDate] [datetime] NULL CONSTRAINT [DF_RDTDynamicPickLog_DELLOG_DelDate] DEFAULT (getdate()),
-[DelWho] [nvarchar] (128) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTDynamicPickLog_DELLOG_DelWho] DEFAULT (suser_sname())
+	[Rowref] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, FILLFACTOR = 80, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 ) ON [PRIMARY]
+END
 GO
-GRANT DELETE ON  [RDT].[RDTDynamicPickLog_DELLOG] TO [NSQL]
+IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[rdt].[DF_rdtDynamicPickLog_DELLOG_Status]') AND type = 'D')
+BEGIN
+ALTER TABLE [RDT].[rdtDynamicPickLog_DELLOG] ADD  CONSTRAINT [DF_rdtDynamicPickLog_DELLOG_Status]  DEFAULT ('0') FOR [Status]
+END
 GO
-GRANT INSERT ON  [RDT].[RDTDynamicPickLog_DELLOG] TO [NSQL]
+IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[rdt].[DF_rdtDynamicPickLog_DELLOG_AddDate]') AND type = 'D')
+BEGIN
+ALTER TABLE [RDT].[rdtDynamicPickLog_DELLOG] ADD  CONSTRAINT [DF_rdtDynamicPickLog_DELLOG_AddDate]  DEFAULT (getdate()) FOR [AddDate]
+END
 GO
-GRANT SELECT ON  [RDT].[RDTDynamicPickLog_DELLOG] TO [NSQL]
+IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[rdt].[DF_rdtDynamicPickLog_DELLOG_AddWho]') AND type = 'D')
+BEGIN
+ALTER TABLE [RDT].[rdtDynamicPickLog_DELLOG] ADD  CONSTRAINT [DF_rdtDynamicPickLog_DELLOG_AddWho]  DEFAULT (suser_sname()) FOR [AddWho]
+END
 GO
-GRANT UPDATE ON  [RDT].[RDTDynamicPickLog_DELLOG] TO [NSQL]
-GO
+
+

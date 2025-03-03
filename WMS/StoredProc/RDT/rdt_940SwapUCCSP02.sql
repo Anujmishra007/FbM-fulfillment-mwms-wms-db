@@ -3,23 +3,24 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-/************************************************************************/  
-/* Store procedure: rdt_940SwapUCCSP02                                  */  
-/* Copyright      : Maersk                                              */  
-/*                                                                      */  
-/* Purpose: Swap UCC between allocated UCC and (allocated &             */  
-/*          unallocated UCC within replenishment) for Granite           */  
-/* Called by: UCC Replenishment From                                    */  
-/*                                                                      */  
-/* Modifications log:                                                   */  
-/*                                                                      */  
-/* Date       Rev  Author   Purposes                                    */  
-/* 2024-09-02 1.0  LowZhe   Created UWP-23555.                          */
-/*                          Based on rdt_940SwapUCCSP01                 */ 
-/* 2024-09-02 1.1  JCH507   Fixed the missing part in V1.0              */ 
-/* 2024-0-30  1.2  NLT013   FCR-884 Update REPLENISHMENT and PickDetail */
-/*                           after swapping UCC                         */ 
-/************************************************************************/  
+/**************************************************************************/  
+/* Store procedure: rdt_940SwapUCCSP02                                    */  
+/* Copyright      : Maersk                                                */  
+/*                                                                        */  
+/* Purpose: Swap UCC between allocated UCC and (allocated &               */  
+/*          unallocated UCC within replenishment) for Granite             */  
+/* Called by: UCC Replenishment From                                      */  
+/*                                                                        */  
+/* Modifications log:                                                     */  
+/*                                                                        */  
+/* Date       Rev    Author   Purposes                                    */  
+/* 2024-09-02 1.0    LowZhe   Created UWP-23555.                          */
+/*                            Based on rdt_940SwapUCCSP01                 */ 
+/* 2024-09-02 1.1    JCH507   Fixed the missing part in V1.0              */ 
+/* 2024-09-30 1.2    NLT013   FCR-884 Update REPLENISHMENT and PickDetail */
+/*                            after swapping UCC                          */ 
+/* 2024-11-04 1.3.0  NLT013   UWP-26518 Only non-allocated UCC is valid   */
+/**************************************************************************/  
   
 CREATE OR ALTER PROC [RDT].[rdt_940SwapUCCSP02] (  
     @nMobile          INT,   
@@ -123,7 +124,8 @@ BEGIN
             FROM dbo.UCC UCC WITH (NOLOCK)  
             JOIN dbo.Lotattribute LOT WITH (NOLOCK) ON UCC.Lot = LOT.Lot AND UCC.StorerKey = LOT.StorerKey  
             WHERE UCC.UCCNo = @cUCC  
-              AND UCC.StorerKey = @cStorerKey  
+               AND UCC.StorerKey = @cStorerKey
+
             IF ISNULL(RTRIM(@cFromLoc),'')  <> '' 
             BEGIN
                IF ISNULL(RTRIM(@cFromLoc),'')  <> ISNULL(RTRIM(@cUCCLoc),'') 
@@ -237,9 +239,7 @@ BEGIN
                AND RP.Confirmed = 'N'
                ORDER BY RP.RefNo
 
-        
-
-               IF ISNULL(RTRIM(@cOriginalUCC),'')  = ''
+               IF ISNULL(RTRIM(@cOriginalUCC),'')  = '' OR @cUCCStatus <> '1'
                BEGIN
                   SET @nErrNo = 93459
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') --InvalidUCC

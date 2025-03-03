@@ -62,9 +62,10 @@ GO
 /* 10-Feb-2023  NJOW04    3.3 DEVOPS Combine Script                       */
 /* 07-Aug-2023  NJOW05    3.4 INC2128003 fix transfer error by adding     */
 /*                            lot,loc,id and channel validation           */
+/* 08-Oct-2024  PYU015    3.5 fix transferdetail lot value                */
 /**************************************************************************/
 
-CREATE OR ALTER PROC ispFinalizeTransfer
+CREATE OR ALTER PROC [dbo].[ispFinalizeTransfer]
    @c_Transferkey    NVARCHAR(10),
    @b_Success        int = 0  OUTPUT,
    @n_err            int = 0  OUTPUT,
@@ -560,7 +561,7 @@ BEGIN
          FETCH NEXT FROM CUR_TRFCHANNEL INTO @cTransferLineNumber, @cFromLOT, @cFromSKU, @cFromChannel, @nFromQty, @cToChannel       
          
          WHILE @@FETCH_STATUS = 0 AND @nContinue IN (1,2)
-         BEGIN         	
+         BEGIN          
             SET @n_Channel_ID = 0
             SET @n_ChannelAvailableQty = 0
             
@@ -573,7 +574,7 @@ BEGIN
                    ,@n_Channel_ID  = @n_Channel_ID OUTPUT
                    ,@b_Success     = @b_Success OUTPUT
                    ,@n_ErrNo       = @n_Err     OUTPUT
-                   ,@c_ErrMsg      = @c_ErrMsg  OUTPUT      	
+                   ,@c_ErrMsg      = @c_ErrMsg  OUTPUT         
             
             IF ISNULL(@n_Channel_ID,0) = 0
             BEGIN
@@ -581,7 +582,7 @@ BEGIN
                SET @n_err = 80030
                SET @c_errmsg =  'NSQL' + CONVERT(CHAR(5), ISNULL(RTrim(@n_err),0))
                              + ' Unable find from Channel inventory at transfer line ' + @cTransferLineNumber + ' (ispFinalizeTransfer) ( '
-                             + ' SQLSvr MESSAGE=' + ISNULL(dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)),'') + ' ) '            	
+                             + ' SQLSvr MESSAGE=' + ISNULL(dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)),'') + ' ) '             
             END
             ELSE
             BEGIN
@@ -595,17 +596,17 @@ BEGIN
                   SET @n_err = 80040
                   SET @c_errmsg =  'NSQL' + CONVERT(CHAR(5), ISNULL(RTrim(@n_err),0))
                                 + ' Insufficient from Channel inventory qty at transfer line ' + @cTransferLineNumber + ' (ispFinalizeTransfer) ( '
-                                + ' SQLSvr MESSAGE=' + ISNULL(dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)),'') + ' ) '            	                  
-               END                           	
+                                + ' SQLSvr MESSAGE=' + ISNULL(dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)),'') + ' ) '                               
+               END                              
             END
-            	  
+                 
             FETCH NEXT FROM CUR_TRFCHANNEL INTO @cTransferLineNumber, @cFromLOT, @cFromSKU, @cFromChannel, @nFromQty, @cToChannel       
          END
          CLOSE CUR_TRFCHANNEL
-         DEALLOCATE CUR_TRFCHANNEL      	      
+         DEALLOCATE CUR_TRFCHANNEL              
          
          IF @nContinue = 3
-            GOTO Quit_Proc         	
+            GOTO Quit_Proc          
       END      
    END
    --NJOW05 E
@@ -947,6 +948,11 @@ BEGIN
       WHERE EXISTS (SELECT 1
                     FROM #TMP_TFD TD WITH (NOLOCK)
                     WHERE TD.ToLoc = LLI.Loc)
+      /* PYU015 Start*/
+     AND NOT EXISTS(SELECT 1
+                    FROM #TMP_TFD TD WITH (NOLOCK)
+                    WHERE TD.FromLoc = LLI.Loc)
+      /* PYU015 - end */
       AND LLI.Qty > 0
       GROUP BY LLI.Storerkey
             ,  LLI.Sku
@@ -980,7 +986,8 @@ BEGIN
 
    WHILE @@FETCH_STATUS <> -1
    BEGIN
-      SELECT @c_FromStorerkey  = FromStorerkey
+     /* PYU015 Start*/
+     /* SELECT @c_FromStorerkey  = FromStorerkey
             ,@c_FromSku        = FromSku
             ,@c_FromLoc        = FromLoc
             ,@n_FromQty        = FromQty
@@ -1021,7 +1028,73 @@ BEGIN
       FROM TRANSFERDETAIL WITH (NOLOCK)
       WHERE TransferKey = @c_TrfKey
       AND   TransferLineNumber = @c_TrfLineNo
+      */
 
+      SELECT @c_FromStorerkey  = FromStorerkey
+            ,@c_FromSku        = FromSku
+            ,@c_FromLoc        = FromLoc
+            ,@n_FromQty        = FromQty
+            ,@c_FromLottable01 = Fromattr.Lottable01
+            ,@c_FromLottable02 = Fromattr.Lottable02
+            ,@c_FromLottable03 = Fromattr.Lottable03
+            ,@d_FromLottable04 = CASE WHEN Fromattr.Lottable04 IS NULL THEN '19000101' ELSE Fromattr.Lottable04 END
+            ,@d_FromLottable05 = CASE WHEN Fromattr.Lottable05 IS NULL THEN '19000101' ELSE Fromattr.Lottable05 END
+            ,@c_FromLottable06 = Fromattr.Lottable06
+            ,@c_FromLottable07 = Fromattr.Lottable07
+            ,@c_FromLottable08 = Fromattr.Lottable08
+            ,@c_FromLottable09 = Fromattr.Lottable09
+            ,@c_FromLottable10 = Fromattr.Lottable10
+            ,@c_FromLottable11 = Fromattr.Lottable11
+            ,@c_FromLottable12 = Fromattr.Lottable12
+            ,@d_FromLottable13 = CASE WHEN Fromattr.Lottable13 IS NULL THEN '19000101' ELSE Fromattr.Lottable13 END
+            ,@d_FromLottable14 = CASE WHEN Fromattr.Lottable14 IS NULL THEN '19000101' ELSE Fromattr.Lottable14 END
+            ,@d_FromLottable15 = CASE WHEN Fromattr.Lottable15 IS NULL THEN '19000101' ELSE Fromattr.Lottable15 END
+            ,@c_ToStorerkey    = ToStorerkey
+            ,@c_ToSku          = ToSku
+            ,@c_ToLoc          = ToLoc
+            ,@n_ToQty          = ToQty
+            ,@c_ToLottable01   = CASE WHEN RTRIM(trn.ToLot)='' THEN trn.ToLottable01 ELSE Toattr.Lottable01 END
+            ,@c_ToLottable02   = CASE WHEN RTRIM(trn.ToLot)='' THEN trn.ToLottable02 ELSE Toattr.Lottable02 END
+            ,@c_ToLottable03   = CASE WHEN RTRIM(trn.ToLot)='' THEN trn.ToLottable03 ELSE Toattr.Lottable03 END
+            ,@d_ToLottable04   = CASE WHEN RTRIM(trn.ToLot)  ='' AND trn.ToLottable04 IS NULL THEN '19000101' 
+                                      WHEN RTRIM(trn.ToLot)  ='' AND trn.ToLottable04 IS NOT NULL THEN trn.ToLottable04
+                                      WHEN RTRIM(trn.ToLot) !='' AND Toattr.Lottable04 IS NULL THEN '19000101'
+                                      WHEN RTRIM(trn.ToLot) !='' AND Toattr.Lottable04 IS NOT NULL THEN Toattr.Lottable04
+                                      ELSE trn.ToLottable04 END
+            ,@d_ToLottable05   = CASE WHEN RTRIM(trn.ToLot)  ='' AND trn.ToLottable05 IS NULL THEN '19000101' 
+                                      WHEN RTRIM(trn.ToLot)  ='' AND trn.ToLottable05 IS NOT NULL THEN trn.ToLottable05
+                                      WHEN RTRIM(trn.ToLot) !='' AND Toattr.Lottable05 IS NULL THEN '19000101'
+                                      WHEN RTRIM(trn.ToLot) !='' AND Toattr.Lottable05 IS NOT NULL THEN Toattr.Lottable05
+                                      ELSE trn.ToLottable05 END
+            ,@c_ToLottable06   = CASE WHEN RTRIM(trn.ToLot)='' THEN trn.ToLottable06 ELSE Toattr.Lottable06 END
+            ,@c_ToLottable07   = CASE WHEN RTRIM(trn.ToLot)='' THEN trn.ToLottable07 ELSE Toattr.Lottable07 END
+            ,@c_ToLottable08   = CASE WHEN RTRIM(trn.ToLot)='' THEN trn.ToLottable08 ELSE Toattr.Lottable08 END
+            ,@c_ToLottable09   = CASE WHEN RTRIM(trn.ToLot)='' THEN trn.ToLottable09 ELSE Toattr.Lottable09 END
+            ,@c_ToLottable10   = CASE WHEN RTRIM(trn.ToLot)='' THEN trn.ToLottable10 ELSE Toattr.Lottable10 END
+            ,@c_ToLottable11   = CASE WHEN RTRIM(trn.ToLot)='' THEN trn.ToLottable11 ELSE Toattr.Lottable11 END
+            ,@c_ToLottable12   = CASE WHEN RTRIM(trn.ToLot)='' THEN trn.ToLottable12 ELSE Toattr.Lottable12 END
+            ,@d_ToLottable13   = CASE WHEN RTRIM(trn.ToLot)  ='' AND trn.ToLottable13 IS NULL THEN '19000101' 
+                                      WHEN RTRIM(trn.ToLot)  ='' AND trn.ToLottable13 IS NOT NULL THEN trn.ToLottable13
+                                      WHEN RTRIM(trn.ToLot) !='' AND Toattr.Lottable13 IS NULL THEN '19000101'
+                                      WHEN RTRIM(trn.ToLot) !='' AND Toattr.Lottable13 IS NOT NULL THEN Toattr.Lottable13
+                                      ELSE trn.ToLottable13 END
+            ,@d_ToLottable14   = CASE WHEN RTRIM(trn.ToLot)  ='' AND trn.ToLottable14 IS NULL THEN '19000101' 
+                                      WHEN RTRIM(trn.ToLot)  ='' AND trn.ToLottable14 IS NOT NULL THEN trn.ToLottable14
+                                      WHEN RTRIM(trn.ToLot) !='' AND Toattr.Lottable14 IS NULL THEN '19000101'
+                                      WHEN RTRIM(trn.ToLot) !='' AND Toattr.Lottable14 IS NOT NULL THEN Toattr.Lottable14
+                                      ELSE trn.ToLottable14 END
+            ,@d_ToLottable15   = CASE WHEN RTRIM(trn.ToLot)  ='' AND trn.ToLottable15 IS NULL THEN '19000101' 
+                                      WHEN RTRIM(trn.ToLot)  ='' AND trn.ToLottable15 IS NOT NULL THEN trn.ToLottable15
+                                      WHEN RTRIM(trn.ToLot) !='' AND Toattr.Lottable15 IS NULL THEN '19000101'
+                                      WHEN RTRIM(trn.ToLot) !='' AND Toattr.Lottable15 IS NOT NULL THEN Toattr.Lottable15
+                                      ELSE trn.ToLottable15 END
+      FROM TRANSFERDETAIL trn WITH (NOLOCK)
+      INNER JOIN LOTATTRIBUTE Fromattr WITH(NOLOCK) ON trn.FromLot = Fromattr.Lot
+      LEFT OUTER JOIN LOTATTRIBUTE Toattr WITH(NOLOCK) ON trn.ToLot = Toattr.Lot
+      WHERE TransferKey = @c_TrfKey
+      AND   TransferLineNumber = @c_TrfLineNo
+
+      /* PYU015 End*/
 
       -- WithDraw
       UPDATE #TMP_LLI

@@ -72,6 +72,7 @@ GO
 /* 2024-04-07 4.5  Ung      WMS-25173 Add UCC.Status = 4-Replen         */
 /* 2024-10-01 4.6  James    WMS-26122 Add UCCPickStatus (james05)       */
 /* 2024-11-12 4.7  PXL009   FCR-1125 Merged 4.5, 4.6 from v0 branch     */
+/* 2024-11-27 4.8.0  NLT013 FCR-1522 Support Overallocation for UL      */
 /************************************************************************/
 
 CREATE OR ALTER  PROCEDURE [RDT].[rdt_Move] (

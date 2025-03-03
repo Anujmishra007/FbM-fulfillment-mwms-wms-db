@@ -23,6 +23,7 @@ GO
 /* 2024-10-08  Wan      1.0   Created.                                  */
 /* 2024-11-06  Wan01    1.1   UWP-24391 Fixed. New pick face without    */
 /*                            lotxlocxid                                */
+/* 2024-11-23  Wan02    1.2   FCR-1430 - Gap on Swap lot when move      */
 /************************************************************************/
 CREATE OR ALTER PROC msp_ReplBack2Front
    @c_Facility   NVARCHAR(5)     = '' 
@@ -106,6 +107,7 @@ BEGIN
          WHERE  llib.Storerkey = @c_Storerkey
          AND    llib.Loc   = @c_Loc_back 
          AND    llib.ID    = @c_ID_back
+         AND    llib.Qty - llib.QtyAllocated - llib.QtyPicked > 0                   --(Wan02)
          ORDER BY llib.Lot
    
          OPEN @CUR_MV
@@ -168,6 +170,22 @@ BEGIN
             BEGIN 
                SET @n_Continue = 3
             END
+            
+            IF @n_Continue = 1                                                      --(Wan02) - START
+            BEGIN
+               EXEC [dbo].[msp_Back2FrontSwapLot]
+                  @c_LOT            = @c_LOT_back 
+               ,  @c_LOC            = @c_LOC_Front
+               ,  @c_ID             = @c_ID_back    
+               ,  @b_Success        = @b_Success    OUTPUT 
+               ,  @n_ErrNo          = @n_Err        OUTPUT    
+               ,  @c_ErrMsg         = @c_ErrMsg     OUTPUT  
+               
+               IF @b_Success = 0 OR @n_Err <> 0
+               BEGIN 
+                  SET @n_Continue = 3
+               END
+            END                                                                     -- (Wan02) - END
 
             FETCH NEXT FROM @CUR_MV INTO @c_Lot_back
                                        , @c_Sku_back

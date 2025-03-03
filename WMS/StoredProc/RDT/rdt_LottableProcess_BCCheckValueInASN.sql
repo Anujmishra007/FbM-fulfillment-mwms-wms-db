@@ -2,15 +2,16 @@ SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
-/******************************************************************************/
-/* Store procedure: rdt_LottableProcess_BCCheckValueInASN                     */
-/* Copyright      : Maersk                                                    */
-/* Customer: Barry                                                            */
-/* Purpose: Check lot values                                                  */
-/*                                                                            */
-/* Date        Author    Ver.  Purposes                                       */
-/* 11-02-2024  PYU015    1.0   UWP-26490 Created                              */
-/******************************************************************************/
+/********************************************************************************/
+/* Store procedure: rdt_LottableProcess_BCCheckValueInASN                       */
+/* Copyright      : Maersk                                                      */
+/* Customer       : Barry                                                       */
+/* Purpose: Check lot values                                                    */
+/*                                                                              */
+/* Date        Author    Ver.    Purposes                                       */
+/* 11-02-2024  PYU015    1.0     UWP-26490 Created                              */
+/* 11-18-2024  PYU015    1.1.0   UWP-27049 lottable01 can not be empty          */
+/********************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_LottableProcess_BCCheckValueInASN]
     @nMobile          INT
@@ -95,7 +96,7 @@ BEGIN
    END
    ELSE 
    BEGIN
-      IF CHARINDEX(@cLot01,@cLottable01Value) = 0
+      IF CHARINDEX(@cLot01,@cLottable01Value) = 0 OR ISNULL(@cLottable01Value,'') = ''
       BEGIN
          SET @nErrNo = 219932
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --ValueNotInList

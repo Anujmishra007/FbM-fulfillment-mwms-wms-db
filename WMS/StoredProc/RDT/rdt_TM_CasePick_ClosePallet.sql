@@ -17,6 +17,7 @@
 /* 29-Oct-2024 1.5.0   YYS027    FCR-989 add ReplenTaskSP                  */
 /* 01-Oct-2024 1.6     James     WMS-26122 Stamp TaskDetail.ToLoc (james01)*/
 /* 12-Nov-2024 1.7     PXL009    FCR-1125 Merged 1.4->1.6 from v0 branch   */
+/* 27-Nov-2024 1.8     Dennis    FCR-1483 Remove ReplenTask                */
 /***************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_TM_CasePick_ClosePallet] (
@@ -485,78 +486,6 @@ Fail:
 
 REPLEN_TASK:
 
-   /***********************************************************************************************
-                                          Custom Replenishment Task
-   ***********************************************************************************************/
-   IF @cReplenTaskSP <> ''
-   BEGIN
-      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cReplenTaskSP AND type = 'P')
-      BEGIN
-         SET @cSQL = 'EXEC rdt.' + RTRIM( @cReplenTaskSP) +
-            ' @nMobile, @nFunc, @cLangCode, @cUserName, @cListKey, @nErrNo OUTPUT, @cErrMsg OUTPUT '
-         SET @cSQLParam =
-            '@nMobile   INT,           ' +
-            '@nFunc     INT,           ' +
-            '@cLangCode NVARCHAR( 3),  ' +
-            '@cUserName NVARCHAR(18),  ' +
-            '@cListKey  NVARCHAR( 10), ' +
-            '@nErrNo    INT           OUTPUT, ' +
-            '@cErrMsg   NVARCHAR( 20) OUTPUT  ' 
-
-         EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-            @nMobile, @nFunc, @cLangCode, @cUserName, @cListKey, @nErrNo OUTPUT, @cErrMsg OUTPUT
-
-         GOTO Quit
-      END
-   END
-
-   /***********************************************************************************************
-                                          Standard Replenishment Task
-   ***********************************************************************************************/
-
-   IF @cReplenFlag = '1'
-   BEGIN
-
-      -- Get storer
-      SELECT TOP 1
-            @cStorerKey = StorerKey,
-            @cSKU       = Sku,
-            @cFromLOC     = FromLoc
-      FROM dbo.TaskDetail WITH (NOLOCK)
-      WHERE ListKey = @cListKey
-        AND UserKey = @cUserName
-      ORDER BY TaskDetailKey
-
-      SELECT @cFacility = Facility FROM LOC WITH (NOLOCK) WHERE LOC = @cFromLOC
-
-      --qty hits min threshold
-      IF EXISTS(
-         SELECT 1 FROM SKUXLOC SL(NOLOCK)
-                          JOIN LOTxLOCxID LLI WITH (NOLOCK) ON SL.StorerKey = LLI.StorerKey AND SL.SKU = LLI.SKU AND SL.LOC = LLI.LOC
-         WHERE SL.StorerKey = @cStorerKey
-           AND SL.SKU = @cSKU
-           AND SL.LOC = @cFromLOC
-           AND SL.LocationType IN ( 'CASE','PALLET','PICK')
-         GROUP BY
-            SL.StorerKey,
-            SL.SKU,
-            SL.LOC,
-            SL.QtyLocationMinimum
-         HAVING (SUM(LLI.Qty) - SUM(LLI.QtyPicked) + SUM(LLI.PendingMoveIn)) <= SL.QtyLocationMinimum
-      )
-         BEGIN
-            EXEC isp_ODMRPL01
-                 @c_Facility = @cFacility,
-                 @c_Storerkey = @cStorerKey,
-                 @c_SKU = @cSKU,
-                 @c_LOC = @cFromLOC,
-                 @c_ReplenType = N'T',
-                 @b_Success = @b_Success OUTPUT,
-                 @n_Err = @nErrNo OUTPUT,
-                 @c_ErrMsg = @cErrMsg OUTPUT,
-                 @b_Debug = 0
-         END
-   END
    GOTO Quit
 
 Quit:

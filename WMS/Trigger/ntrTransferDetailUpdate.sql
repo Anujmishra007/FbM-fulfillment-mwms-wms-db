@@ -1,6 +1,3 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE Id = OBJECT_ID(N'[dbo].[ntrTransferDetailUpdate]') AND OBJECTPROPERTY(id, N'IsTrigger') = 1)
-   DROP TRIGGER [dbo].[ntrTransferDetailUpdate]
-GO
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -38,9 +35,10 @@ GO
 /* 23-JUL-2019  Wan03       1.8      WMS-9872 - CN_NIKESDC_Exceed_Channel             */
 /* 23-FEB-2021  Wan04       1.9      WMS-16391 - [CN] ANFQHW_WMS_Transfer Finalize_CR */
 /* 12-Aug-2022  Leong       2.0      JSM-86964 Initialize variable.                   */
+/* 13-Feb-2025  WLChooi     2.1      UWP-30034 Populate PalletType (WL01)             */
 /**************************************************************************************/
 
-CREATE TRIGGER [dbo].[ntrTransferDetailUpdate]
+CREATE OR ALTER TRIGGER [dbo].[ntrTransferDetailUpdate]
 ON  [dbo].[TRANSFERDETAIL]
 FOR UPDATE
 AS
@@ -80,6 +78,7 @@ BEGIN
 
          , @c_FrStorerkey     NVARCHAR(15)  --(Wan02)
          , @c_IDTaskRelease   NVARCHAR(10)  --(Wan02)
+         , @c_PalletType      NVARCHAR(10) = N''  --WL01
 
   --(Wan04) - START
          , @c_HoldChannel     NVARCHAR(10)   = ''
@@ -623,6 +622,13 @@ BEGIN
                   BREAK
                END
 
+               --WL01 S
+               SET @c_PalletType = N''
+               SELECT @c_PalletType = ISNULL(ID.PalletType, '')
+               FROM ID WITH (NOLOCK)
+               WHERE ID.ID = @c_ToID
+               --WL01 E
+
                SET @n_ToChannel_ID = 0 -- JSM-86964
                EXECUTE nspItrnAddDeposit
                         @n_ItrnSysId  = NULL,
@@ -665,6 +671,7 @@ BEGIN
                         @b_UOMCalc    = 0,
                         @d_EffectiveDate = @d_EffectiveDate,
                         @c_ItrnKey    = '',
+                        @c_PalletType = @c_PalletType,   --WL01
                         @b_Success    = @b_Success OUTPUT,
                         @n_err        = @n_err     OUTPUT,
                         @c_errmsg     = @c_errmsg  OUTPUT

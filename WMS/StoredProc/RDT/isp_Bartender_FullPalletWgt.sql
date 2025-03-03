@@ -3,18 +3,19 @@ GO
 SET ANSI_NULLS OFF
 GO
 
-/******************************************************************************/
-/* Copyright: MAERSK                                                          */
-/* Purpose: isp_Bartender_EmptyPalletWgt                                      */
-/* Customer: Barry                                                            */
-/*                                                                            */
-/* Modifications log:                                                         */
-/*                                                                            */
-/* Date       Rev  Author     Purposes                                        */
-/* 2024-07-12 1.0  PYU015     UWP-26438 Created                               */
-/******************************************************************************/
+/********************************************************************************/
+/* Copyright: MAERSK                                                            */
+/* Purpose: isp_Bartender_FullPalletWgt                                         */
+/* Customer: Barry                                                              */
+/* Modifications log:                                                           */
+/*                                                                              */
+/* Date       Rev    Author     Purposes                                        */
+/* 2024-07-12 1.0    PYU015     UWP-26438 Created                               */
+/* 2024-11-20 1.1.0  XGU017     UWP-27316 Updated                               */
+/* 2024-11-21 1.1.1  XGU017     UWP-27316 Updated                               */
+/********************************************************************************/
 
-CREATE OR ALTER  PROC [dbo].[isp_Bartender_FullPalletWgt]
+CREATE OR ALTER   PROC [dbo].[isp_Bartender_FullPalletWgt]
 (  @c_Sparm01  NVARCHAR(250) = '',
    @c_Sparm02  NVARCHAR(250) = '',
    @c_Sparm03  NVARCHAR(250) = '',
@@ -118,7 +119,8 @@ BEGIN
                           + '     , rptdet.BeforeReceivedQty '
                           + '     , cast(rptdet.Lottable07 as float) '
                           + '     , cast(rptdet.lottable06 as float) '
-                          + '     ,'''',''''                                          ' + CHAR(13) --10
+                          + '     , cast(rptdet.lottable06 as float)-cast(rptdet.lottable07 as float)-cast(rptdet.lottable10 as float)*rptdet.BeforeReceivedQty '
+                          + '     ,''''                                               ' + CHAR(13) --10
                           + '     , '''','''','''','''','''','''','''','''','''','''' ' + CHAR(13) --20
                           + '     , '''','''','''','''','''','''','''','''','''','''' ' + CHAR(13) --30
                           + '     , '''','''','''','''','''','''','''','''','''','''' ' + CHAR(13) --40

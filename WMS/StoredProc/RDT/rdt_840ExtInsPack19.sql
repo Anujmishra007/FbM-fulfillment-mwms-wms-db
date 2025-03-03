@@ -5,6 +5,7 @@ GO
 
 /************************************************************************/
 /* Stored Procedure: rdt_840ExtInsPack19                                */
+/* Copyright      : Maersk                                              */
 /*                                                                      */
 /* Purpose: Insert/Update packdetail.                                   */
 /*          Print sku label                                             */
@@ -19,6 +20,10 @@ GO
 /* 2023-09-13   James     1.1   WMS-23401 Enhance ZPL print (james01)   */
 /* 2023-12-15   JihHaur   1.2   JSM-197652 Hit PACK IN 1 CARTON even    */
 /*                              just start first scanning   (JH01)      */
+/* 2024-06-18   James     1.3   WMS-24295 Stamp PackDetail.UPC RDT      */
+/*                              UserName (james02)                      */
+/*                              Allow auto increase ctn no (james02)    */
+/* 2024-11-08   PXL009    1.4   FCR-1118 Merged 1.3 from v0 branch      */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_840ExtInsPack19] (
@@ -109,7 +114,8 @@ BEGIN
    DECLARE @nCHKCartonNo      INT = 0            --TSY01
    DECLARE @cDropID           NVARCHAR( 50)      --TSY01
    DECLARE @cDropIDCheck      NVARCHAR( 1) = '0' --TSY01
-
+   DECLARE @nNewCtn           INT = 0
+   DECLARE @cLottable01       NVARCHAR( 18)
 
    SET @nTranCount = @@TRANCOUNT
 
@@ -128,21 +134,54 @@ BEGIN
    SET @cDropIDCheck = rdt.RDTGetConfig( @nFunc, 'CHKDropIDSKUQTY', @cStorerKey)
 
    --TSY01 START Look for Latest non closed Carton of the user
-   SET @nCHKCartonNo = 0
-   SELECT @nCHKCartonNo = MAX(PD.CARTONNO)
-   FROM dbo.PackDetail PD WITH (NOLOCK)
-   LEFT JOIN dbo.PackInfo PIF WITH (NOLOCK)
-        ON PD.PickSlipNo = PIF.PickSlipNo and PD.CARTONNO = PIF.CARTONNO
-   WHERE PD.PickSlipNo = @cPickSlipNo
-   AND PD.Storerkey = @cStorerkey
-   AND PD.AddWho = 'rdt.' + @cUserName
-   AND ISNULL(PIF.PickSlipNo,'') = ''
+   --SET @nCHKCartonNo = 0
+   --SELECT @nCHKCartonNo = MAX(PD.CARTONNO)
+   --FROM dbo.PackDetail PD WITH (NOLOCK)
+   --LEFT JOIN dbo.PackInfo PIF WITH (NOLOCK)
+   --     ON PD.PickSlipNo = PIF.PickSlipNo and PD.CARTONNO = PIF.CARTONNO
+   --WHERE PD.PickSlipNo = @cPickSlipNo
+   --AND PD.Storerkey = @cStorerkey
+   --AND PD.AddWho = 'rdt.' + @cUserName
+   --AND ISNULL(PIF.PickSlipNo,'') = ''
 
-   --If Latest Carton <> current carton, 0 for trigger to create new carton
-   IF ISNULL(@nCHKCartonNo,0) <> @nCartonNo
-      SET @nCartonNo = ISNULL(@nCHKCartonNo,0)
+   ----If Latest Carton <> current carton, 0 for trigger to create new carton
+   --IF ISNULL(@nCHKCartonNo,0) <> @nCartonNo
+   --   SET @nCartonNo = ISNULL(@nCHKCartonNo,0)
 
    --TSY01 END Look for Latest non closed Carton of the user
+
+   -- (james02)
+   -- This pickslip never packed anything before, set carton no = 0
+   IF NOT EXISTS ( SELECT 1 FROM dbo.PackHeader WITH (NOLOCK) WHERE PickSlipNo = @cPickSlipNo)
+      SET @nNewCtn = 1
+   ELSE
+   BEGIN
+      -- Get latest carton no for this carton
+      SELECT @nCartonNo = MAX( CartonNo)
+      FROM dbo.PackDetail WITH (NOLOCK)
+      WHERE PickSlipNo = @cPickSlipNo
+      AND   UPC = @cUserName
+
+      -- New user packing new tote then get new carton no
+      IF ISNULL( @nCartonNo, 0) = 0
+         SET @nNewCtn = 1
+      ELSE
+      BEGIN
+         -- Check if this carton already stamp with carton type
+         -- If yes then get new carton no else continue using existing carton no
+         IF EXISTS( SELECT 1
+                    FROM dbo.PackInfo WITH (NOLOCK)
+                    WHERE PickSlipNo = @cPickSlipNo
+                    AND   CartonNo = @nCartonNo
+                    AND   ISNULL( CartonType, '') <> '')
+            SET @nNewCtn = 1
+      END
+
+      IF @nNewCtn = 1
+      BEGIN
+         SET @nCartonNo = 0
+      END
+   END
 
    IF EXISTS ( SELECT 1
                FROM dbo.ORDERS O WITH (NOLOCK)
@@ -355,7 +394,28 @@ BEGIN
          END
 
          IF @nStep = 9
-            SET @cCOO = SUBSTRING( @cData1, 1, 10)
+         BEGIN
+            SELECT DISTINCT @cLottable01 = LOTTABLE01
+            FROM dbo.LOTATTRIBUTE LA WITH (NOLOCK)
+            JOIN dbo.LOTXLOCXID LLI WITH (NOLOCK) ON ( LLI.LOT = LA.LOT)
+            WHERE LLI.StorerKey = @cStorerKey
+            AND   LLI.SKU = @cSKU
+            AND   LLI.QTY > 0
+
+            SET @nRowCount = @@ROWCOUNT
+
+            IF @nRowCount = 1 AND
+               ISNULL( @cLottable01, '') <> '' AND
+               EXISTS( SELECT 1
+                        FROM dbo.CODELKUP WITH (NOLOCK)
+                        WHERE LISTNAME = 'LVSCOO'
+                        AND   Code = @cLottable01
+                        AND   Storerkey = @cStorerKey
+                        AND   LEN( Code) = 2)
+               SET @cCOO = @cLottable01
+            ELSE
+               SET @cCOO = SUBSTRING( @cData1, 1, 10)
+         END
 
          -- Check if this sku has already capture COO before
          -- Capture COO only happened 1 time per sku
@@ -378,10 +438,10 @@ BEGIN
          -- CartonNo = 0 & LabelLine = '0000', trigger will auto assign
          INSERT INTO dbo.PackDetail
             (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY,
-            Refno, AddWho, AddDate, EditWho, EditDate, DropID, LOTTABLEVALUE, Refno2)  --TSY01
+            Refno, UPC, AddWho, AddDate, EditWho, EditDate, DropID, LOTTABLEVALUE, Refno2)  --TSY01
          VALUES
             (@cPickSlipNo, 0, @cLabelNo, '00000', @cStorerKey, @cSku, @nQty,
-            ISNULL( @cCOO, ''), 'rdt.' + sUser_sName(), GETDATE(), 'rdt.' + sUser_sName(), GETDATE(), '', @cLottableValue, @cDropID) --TSY01
+            ISNULL( @cCOO, ''), @cUserName, 'rdt.' + sUser_sName(), GETDATE(), 'rdt.' + sUser_sName(), GETDATE(), '', @cLottableValue, @cDropID) --TSY01
 
          IF @@ERROR <> 0
          BEGIN
@@ -519,10 +579,10 @@ BEGIN
          -- need to use the existing labelno
          INSERT INTO dbo.PackDetail
             (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY,
-            Refno, AddWho, AddDate, EditWho, EditDate, DropID, LOTTABLEVALUE, Refno2) --TSY01
+            Refno, UPC, AddWho, AddDate, EditWho, EditDate, DropID, LOTTABLEVALUE, Refno2) --TSY01
          VALUES
             (@cPickSlipNo, @nCartonNo, @cCurLabelNo, @cCurLabelLine, @cStorerKey, @cSku, @nQty,
-            ISNULL( @cCOO, ''), 'rdt.' + sUser_sName(), GETDATE(), 'rdt.' + sUser_sName(), GETDATE(), '', @cLottableValue, @cDropID) --TSY01
+            ISNULL( @cCOO, ''), @cUserName, 'rdt.' + sUser_sName(), GETDATE(), 'rdt.' + sUser_sName(), GETDATE(), '', @cLottableValue, @cDropID) --TSY01
 
          IF @@ERROR <> 0
          BEGIN

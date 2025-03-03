@@ -4,32 +4,33 @@ SET QUOTED_IDENTIFIER OFF
 GO
 
 
-/*************************************************************************/    
-/* Stored Procedure: lsp_GenCountSheet_Wrapper                           */    
-/* Creation Date: 14-MAR-2018                                            */    
-/* Copyright: LFL                                                        */    
-/* Written by: Wan                                                       */    
-/*                                                                       */    
-/* Purpose: LFWM-263 - Stored Procedures for Release 2 Feature -         */  
-/*          Inventory  Cycle Count  Stock Take Parameters                */    
-/*                                                                       */    
-/* Called By:                                                            */    
-/*                                                                       */    
-/*                                                                       */    
-/* Version: 1.3                                                          */    
-/*                                                                       */    
-/* Data Modifications:                                                   */    
-/*                                                                       */    
-/* Updates:                                                              */    
-/* Date        Author   Ver   Purposes                                   */   
-/* 2021-02-05  mingle01 1.1   Add Big Outer Begin try/Catch              */  
-/*                            Execute Login if @c_UserName<>SUSER_SNAME()*/  
-/* 2021-12-02  Wan01    1.2   WMS-18332 - [TW]LOR_CycleCount_CR          */  
-/*             Wan01    1.2   DevOps Combine Script                      */  
-/* 2022-06-15  SPChin   1.3   JSM-70416 Revise logic                     */  
-/* 2023-04-07  TanWLeong1.4   JSM-121612 To overcome Insert cannot be    */
-/*                            nested issue  --rmt01                      */
-/* 2023-12-26  Calvin   1.5   JSM-199728 Set Rowcount to EXEC (CLVN01)   */
+/*****************************************************************************/
+/* Stored Procedure: lsp_GenCountSheet_Wrapper                               */
+/* Creation Date: 14-MAR-2018                                                */
+/* Copyright: LFL                                                            */
+/* Written by: Wan                                                           */
+/*                                                                           */
+/* Purpose: LFWM-263 - Stored Procedures for Release 2 Feature -             */
+/*          Inventory  Cycle Count  Stock Take Parameters                    */
+/*                                                                           */
+/* Called By:                                                                */
+/*                                                                           */
+/*                                                                           */
+/* Version: 1.3                                                              */
+/*                                                                           */
+/* Data Modifications:                                                       */
+/*                                                                           */
+/* Updates:                                                                  */
+/* Date        Author   Ver   Purposes                                       */
+/* 2021-02-05  mingle01 1.1   Add Big Outer Begin try/Catch                  */
+/*                            Execute Login if @c_UserName<>SUSER_SNAME()    */
+/* 2021-12-02  Wan01    1.2   WMS-18332 - [TW]LOR_CycleCount_CR              */
+/*             Wan01    1.2   DevOps Combine Script                          */
+/* 2022-06-15  SPChin   1.3   JSM-70416 Revise logic                         */
+/* 2023-04-07  TanWLeong1.4   JSM-121612 To overcome Insert cannot be        */
+/*                            nested issue  --rmt01                          */
+/* 2023-12-26  Calvin   1.5   JSM-199728 Set Rowcount to EXEC (CLVN01)       */
+/* 2025-02-28  SG01     1.6   UWP-30341 - Add check for CCDetail Transaction */
 /*************************************************************************/     
 CREATE OR ALTER PROCEDURE [WM].[lsp_GenCountSheet_Wrapper]    
    @c_StockTakeKey         NVARCHAR(10)  
@@ -173,14 +174,14 @@ BEGIN
       END          
   
       --IF (SELECT DataCount FROM #TMP_CC) > 0   --rmt01
-  if (select cckey from ccdetail(nolock) where cckey = @c_StockTakeKey) >'0'      
-      BEGIN  
-         SET @n_continue = 3      
-         SET @n_err = 552404  
-         SET @c_ErrMsg = 'CCDetail Transaction Found ! Regeneration Not Allow.'   
-        
-         GOTO EXIT_SP  
-      END  
+      IF EXISTS ( SELECT COUNT(DISTINCT CCKey) FROM CCDETAIL (NOLOCK) WHERE CCKey = @c_StockTakeKey HAVING COUNT(DISTINCT CCKey) > 0) -- SG01
+      BEGIN
+          SET @n_continue = 3
+          SET @n_err = 552404
+          SET @c_ErrMsg = 'CCDetail Transaction Found ! Regeneration Not Allow.'
+
+          GOTO EXIT_SP
+      END
   
       IF @c_GenType = 'B'  
       BEGIN  

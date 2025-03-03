@@ -14,11 +14,13 @@ GO
 /* 2024-11-01 1.0.0   YYS027   FCR-989 Min Max Replenishment to add               */
 /*                             screen for choicing whether location is empty.     */
 /*                             use config ExtScnSP in rdt.StorerConfig            */
-/* 2024-11-12 1.1     PXL009   FCR-1125 v0->v2 Code Sync for CROCS                */
+/* 2024-11-01 1.2.0   NLT013   UWP-27662 fix a bug: @cOutField01 is set as 0      */
+/* 2024-11-01 1.2.1   NLT013   UWP-27662 fix a bug: DropID is invisibe            */
+/* 2024-11-12 1.3     PXL009   FCR-1125 v0->v2 Code Sync for CROCS                */
 /*                                ExtScnSP call logic change in generic SP        */
 /**********************************************************************************/
 
-CREATE OR ALTER PROC [rdt].[rdt_1812ExtScn04] (
+CREATE OR ALTER  PROC [RDT].[rdt_1812ExtScn04] (
    @nMobile          INT,           
    @nFunc            INT,           
    @cLangCode        NVARCHAR( 3),  
@@ -173,8 +175,11 @@ BEGIN
                      SET @cOutField01 = '' -- Option            
                      SET @nAfterScn = 4028
                      SET @nAfterStep = 99               -- Goto new screen for choice 1=YES, 9=NO choice location is empty or not.
+
+	
                      GOTO Quit
                   END
+
                END   --end of IF @cReplenFlag = '1' 
                /*
                -- QTY short
@@ -219,7 +224,8 @@ Step 99. screen = 4028. Is the location completely empty?
                BEGIN
                   SET @nErrNo = 228201
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Option needed
-                  GOTO Quit_4028
+                  SET @cOutField01 = ''
+                  GOTO Quit
                END
 
                -- Check option is valid
@@ -227,7 +233,9 @@ Step 99. screen = 4028. Is the location completely empty?
                BEGIN
                   SET @nErrNo = 228202
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Option
-                  GOTO Quit_4028
+                  SET @cOption = ''
+                  SET @cOutField01 = ''
+                  GOTO Quit
                END
                SET @cLocEmptyOption = @cOption     --to Save to V_String14 => C_String14
                UPDATE rdt.RDTMOBREC WITH(ROWLOCK) SET C_String14 = @cLocEmptyOption WHERE Mobile = @nMobile
@@ -363,19 +371,14 @@ Step 99. screen = 4028. Is the location completely empty?
       END
 
    END
-Quit_4028:
-   BEGIN
-      SET @cOption = ''
-      SET @cOutField01 = '' -- Option
-   END
    GOTO Quit
 
 Quit:
 
-END; 
+END
 
 SET QUOTED_IDENTIFIER OFF 
-GO
+GO	
 SET ANSI_NULLS ON 
 GO
 

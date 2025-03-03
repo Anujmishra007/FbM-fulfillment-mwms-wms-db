@@ -1,8 +1,8 @@
-SET QUOTED_IDENTIFIER OFF 
+SET ANSI_NULLS OFF
 GO
-SET ANSI_NULLS OFF 
-GO
+SET QUOTED_IDENTIFIER OFF
 
+GO
 /*************************************************************************/
 /* Stored Procedure: ispRLWAV69                                          */
 /* Creation Date: 21-Mar-2024                                            */
@@ -24,8 +24,11 @@ GO
 /* Date         Author  Ver.  Purposes                                   */
 /* 21-Mar-2024  WLChooi 1.0   DevOps Combine Script                      */
 /* 23-Oct-2024  Wan01   1.1   UWP-24998 - MLP Outbound Staging Loc       */
+/* 13-NOV-2024  VPA235  1.2   UWP-26879 - Change task group key to Load ID */
+/* 22-NOV-2024  Wan02   1.3   FCR-1430 - Gap for Overallocation at FrontLoc*/
+/* 18-Dec-2024  SSA01   1.4   UWP-28305 -update Status = 0 for FCP tasks */
 /*************************************************************************/
-CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV69]        
+CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]        
     @c_Wavekey      NVARCHAR(10)    
    ,@b_Success      INT            OUTPUT    
    ,@n_err          INT            OUTPUT    
@@ -73,6 +76,14 @@ CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV69]
 
          , @c_RLWav_Opt5               NVARCHAR(1000) = ''                          --(Wan01) 
          , @c_LoadAssignLane           NVARCHAR(10) = 'N'                           --(Wan01)
+
+         , @n_Qty_Pick                 INT         = 0                              --(Wan02)
+         , @n_Qty_Avail                INT         = 0                              --(Wan02)
+         , @n_Qty_Task                 INT         = 0                              --(Wan02)
+         , @n_Qty_Alloc                INT         = 0                              --(Wan02) 
+         , @c_PickDetailKey            NVARCHAR(10) = ''                            --(Wan02)            
+         , @c_NewPickDetailKey         NVARCHAR(10) = ''                            --(Wan02)   
+         , @CUR_UPDPICK                CURSOR                                       --(Wan02)        
 
    SET @c_SourceType = 'ispRLWAV69'
              
@@ -208,7 +219,7 @@ CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV69]
       CREATE INDEX PDWIP_Wave ON #PickDetail_WIP (Wavekey, WIP_RefNo, UOM, [Status]) 
    END
 
-   --Initialize Pickdetail work in progress staging table
+    --Initialize Pickdetail work in progress staging table
    IF @n_continue = 1 or @n_continue = 2
    BEGIN
       EXEC isp_CreatePickdetail_WIP
@@ -293,7 +304,8 @@ CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV69]
        WHERE WAVEDETAIL.WaveKey = @c_Wavekey  
        AND PICKDETAIL.[Status] = '0'  
        AND PICKDETAIL.WIP_Refno = @c_SourceType 
-       AND PICKDETAIL.UOM = '1'
+     --AND PICKDETAIL.UOM = '1'                  VPA235
+       AND PICKDETAIL.UOM IN ( '1','6')
        AND LOC.LocationType = 'VNA'
        GROUP BY PICKDETAIL.Storerkey 
             , PICKDETAIL.Sku 
@@ -517,52 +529,103 @@ CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV69]
          END 
          ELSE
          BEGIN
-            SET @c_Taskdetailkey = ''
-            EXEC isp_InsertTaskDetail @c_TaskType = @c_TaskType
-                                    , @c_Storerkey = @c_Storerkey
-                                    , @c_Sku = @c_Sku
-                                    , @c_Lot = @c_Lot
-                                    , @c_UOM = @c_UOM
-                                    , @n_UOMQty = @n_UOMQty
-                                    , @n_Qty = @n_Qty
-                                    , @c_FromLoc = @c_FromLoc
-                                    , @c_LogicalFromLoc = '?'
-                                    , @c_FromID = @c_ID
-                                    , @c_ToLoc = @c_ToLoc
-                                    , @c_LogicalToLoc = '?'
-                                    , @c_ToID = @c_ID
-                                    , @c_FinalID = @c_ID
-                                    , @c_PickMethod = @c_PickMethod
-                                    , @c_Priority = @c_Priority
-                                    , @c_SourcePriority = @c_SourcePriority
-                                    , @c_SourceType = @c_SourceType
-                                    , @c_SourceKey = @c_Wavekey
-                                    , @c_WaveKey = @c_Wavekey
-                                    , @c_Loadkey = @c_Loadkey
-                                    , @c_OrderKey = @c_Orderkey
-                                    , @c_Message03 = @c_Message03
-                                    , @n_SystemQty = @n_Qty
-                                    , @c_Status = 'Q'
-                                    , @c_AreaKey = '?F' -- ?F=Get from location areakey  
-                                    , @c_UserPosition = '1'
-                                    , @c_CallSource = 'WAVE'
-                                    , @c_ReservePendingMoveIn = 'Y'
-                                    , @c_LinkTaskToPick = 'WIP' -- WIP=Update taskdetailkey to pickdetail_wip  
-                                    , @c_LinkTaskToPick_SQL = @c_LinkTaskToPick_SQL
-                                    , @c_WIP_RefNo = @c_SourceType
-                                    , @b_Success = @b_Success OUTPUT
-                                    , @n_Err = @n_err OUTPUT
-                                    , @c_ErrMsg = @c_errmsg OUTPUT
-                                    , @c_Taskdetailkey = @c_Taskdetailkey OUTPUT
-            
-            IF @b_Success <> 1
+            --(Wan02) - START
+            SET @n_Qty_Pick = @n_Qty
+            SET @n_Qty_Avail = 0
+            SET @n_Qty_Task  = 0
+
+            SELECT @n_Qty_Avail = lli.Qty - lli.Qtypicked
+            FROM LOTxLOCxID lli (NOLOCK)
+            WHERE lli.Lot = @c_Lot
+            AND   lli.Loc = @c_FromLoc
+            AND   lli.ID  = @c_ID
+
+            IF @n_Qty_Avail > 0
             BEGIN
-               SELECT @n_continue = 3
+               SELECT @n_Qty_Task = ISNULL(SUM(qty),0)
+               FROM TaskDetail td(NOLOCK)
+               WHERE td.Storerkey= @c_Storerkey
+               AND   td.Sku      = @c_Sku
+               AND   td.Tasktype = 'FCP'
+               AND   td.Lot      = @c_Lot
+               AND   td.FromLoc  = @c_FromLoc
+               AND   td.FromID   = @c_ID
+               AND   td.[Status] NOT IN ('X', '9')
+               AND   td.CaseID   = ''
+
+               SET @n_Qty_Avail = @n_Qty_Avail - @n_Qty_Task
             END
+
+            WHILE @n_Qty_Pick > 0 AND @n_continue = 1
+            BEGIN
+               
+               IF @n_Qty_Pick > @n_Qty_Avail AND @n_Qty_Avail > 0
+               BEGIN
+                  SET @n_Qty = @n_Qty_Avail
+               END
+               ELSE
+               BEGIN
+                  SET @n_Qty = @n_Qty_Pick
+               END
+
+               SET @n_Qty_Pick = @n_Qty_Pick - @n_Qty                 
+
+               SET @c_Taskdetailkey = ''
+               EXEC isp_InsertTaskDetail @c_TaskType = @c_TaskType
+                                       , @c_Storerkey = @c_Storerkey
+                                       , @c_Sku = @c_Sku
+                                       , @c_Lot = @c_Lot
+                                       , @c_UOM = @c_UOM
+                                       , @n_UOMQty = @n_UOMQty
+                                       , @n_Qty = @n_Qty
+                                       , @c_FromLoc = @c_FromLoc
+                                       , @c_LogicalFromLoc = '?'
+                                       , @c_FromID = @c_ID
+                                       , @c_ToLoc = @c_ToLoc
+                                       , @c_LogicalToLoc = '?'
+                                       , @c_ToID = @c_ID
+                                       , @c_FinalID = @c_ID
+                                       , @c_PickMethod = @c_PickMethod
+                                       , @c_Priority = @c_Priority
+                                       , @c_SourcePriority = @c_SourcePriority
+                                       , @c_SourceType = @c_SourceType
+                                       , @c_SourceKey = @c_Wavekey
+                                       , @c_WaveKey = @c_Wavekey
+                                       , @c_Loadkey = @c_Loadkey
+                                       , @c_OrderKey = @c_Orderkey
+                                       , @c_Message03 = @c_Message03
+                                       , @n_SystemQty = @n_Qty
+                                       , @c_Status = '0'        --(SSA01)
+                                       , @c_AreaKey = '?F' -- ?F=Get from location areakey  
+                                       , @c_UserPosition = '1'
+                                       , @c_CallSource = 'WAVE'
+                                       , @c_ReservePendingMoveIn = 'Y'
+                                       , @c_LinkTaskToPick = 'WIP' -- WIP=Update taskdetailkey to pickdetail_wip  
+                                       , @c_LinkTaskToPick_SQL = @c_LinkTaskToPick_SQL
+                                       , @c_WIP_RefNo = @c_SourceType
+                                       , @b_Success = @b_Success OUTPUT
+                                       , @n_Err = @n_err OUTPUT
+                                       , @c_ErrMsg = @c_errmsg OUTPUT
+                                       , @c_Taskdetailkey = @c_Taskdetailkey OUTPUT
             
-            UPDATE TASKDETAIL
-            SET Groupkey = @c_Taskdetailkey
-            WHERE TaskDetailKey = @c_Taskdetailkey
+               IF @b_Success <> 1
+               BEGIN
+                  SELECT @n_continue = 3
+               END
+            
+               IF @n_continue = 1
+               BEGIN
+                  UPDATE TASKDETAIL
+              --  SET Groupkey = @c_Taskdetailkey                       VPA235
+                  SET Groupkey = @c_Loadkey
+                  WHERE TaskDetailKey = @c_Taskdetailkey
+
+                  IF @@ERROR <> 0
+                  BEGIN
+                     SET @n_continue = 3
+                  END
+               END
+            END                                                      --(Wan02) - END
          END
 
          FETCH NEXT FROM CUR_PICK_FCP INTO @c_Storerkey, @c_SKU, @c_Lot, @c_FromLoc, @c_ID, @c_UOM, @n_UOMQty, @n_Qty, @c_Loadkey, @c_Orderkey
@@ -659,51 +722,103 @@ CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV69]
          END 
          ELSE
          BEGIN
-            SET @c_Taskdetailkey = ''
-            EXEC isp_InsertTaskDetail @c_TaskType = @c_TaskType
-                                    , @c_Storerkey = @c_Storerkey
-                                    , @c_Sku = @c_Sku
-                                    , @c_Lot = @c_Lot
-                                    , @c_UOM = @c_UOM
-                                    , @n_UOMQty = @n_UOMQty
-                                    , @n_Qty = @n_Qty
-                                    , @c_FromLoc = @c_FromLoc
-                                    , @c_LogicalFromLoc = '?'
-                                    , @c_FromID = @c_ID
-                                    , @c_ToLoc = @c_ToLoc
-                                    , @c_LogicalToLoc = '?'
-                                    , @c_ToID = @c_ID
-                                    , @c_FinalID = @c_ID
-                                    , @c_PickMethod = @c_PickMethod
-                                    , @c_Priority = @c_Priority
-                                    , @c_SourcePriority = @c_SourcePriority
-                                    , @c_SourceType = @c_SourceType
-                                    , @c_SourceKey = @c_Wavekey
-                                    , @c_WaveKey = @c_Wavekey
-                                    , @c_Loadkey = @c_Loadkey
-                                    , @c_OrderKey = @c_Orderkey
-                                    , @c_Message03 = @c_Message03
-                                    , @n_SystemQty = @n_Qty
-                                    , @c_Status = '0'
-                                    , @c_AreaKey = '?F' -- ?F=Get from location areakey  
-                                    , @c_UserPosition = '1'
-                                    , @c_CallSource = 'WAVE'
-                                    , @c_LinkTaskToPick = 'WIP' -- WIP=Update taskdetailkey to pickdetail_wip  
-                                    , @c_LinkTaskToPick_SQL = @c_LinkTaskToPick_SQL
-                                    , @c_WIP_RefNo = @c_SourceType
-                                    , @b_Success = @b_Success OUTPUT
-                                    , @n_Err = @n_err OUTPUT
-                                    , @c_ErrMsg = @c_errmsg OUTPUT
-                                    , @c_Taskdetailkey = @c_Taskdetailkey OUTPUT
-            
-            IF @b_Success <> 1
+            --(Wan02) - START
+            SET @n_Qty_Pick  = @n_Qty
+            SET @n_Qty_Avail = 0
+            SET @n_Qty_Task  = 0
+
+            IF @c_UOM IN ('2','3') 
             BEGIN
-               SELECT @n_continue = 3
+               SELECT @n_Qty_Avail = lli.Qty - lli.Qtypicked
+               FROM LOTxLOCxID lli (NOLOCK)
+               WHERE lli.Lot = @c_Lot
+               AND   lli.Loc = @c_FromLoc
+               AND   lli.ID  = @c_ID
+
+               IF @n_Qty_Avail > 0
+               BEGIN
+                  SELECT @n_Qty_Task = ISNULL(SUM(qty),0)
+                  FROM TaskDetail td(NOLOCK)
+                  WHERE td.Storerkey= @c_Storerkey
+                  AND   td.Sku      = @c_Sku
+                  AND   td.Tasktype = 'FCP'
+                  AND   td.Lot      = @c_Lot
+                  AND   td.FromLoc  = @c_FromLoc
+                  AND   td.FromID   = @c_ID
+                  AND   td.[Status] NOT IN ('X', '9')
+                  AND   td.CaseID   = ''
+
+                  SET @n_Qty_Avail = @n_Qty_Avail - @n_Qty_Task
+               END
             END
+
+            WHILE @n_Qty_Pick > 0 AND @n_Continue = 1
+            BEGIN
+               IF @n_Qty_Pick > @n_Qty_Avail AND @n_Qty_Avail > 0
+               BEGIN
+                  SET @n_Qty = @n_Qty_Avail
+               END               
+               ELSE
+               BEGIN
+                  SET @n_Qty = @n_Qty_Pick
+               END
+               SET @n_Qty_Pick = @n_Qty_Pick - @n_Qty     
+
+               SET @c_Taskdetailkey = ''
+               EXEC isp_InsertTaskDetail @c_TaskType = @c_TaskType
+                                       , @c_Storerkey = @c_Storerkey
+                                       , @c_Sku = @c_Sku
+                                       , @c_Lot = @c_Lot
+                                       , @c_UOM = @c_UOM
+                                       , @n_UOMQty = @n_UOMQty
+                                       , @n_Qty = @n_Qty
+                                       , @c_FromLoc = @c_FromLoc
+                                       , @c_LogicalFromLoc = '?'
+                                       , @c_FromID = @c_ID
+                                       , @c_ToLoc = @c_ToLoc
+                                       , @c_LogicalToLoc = '?'
+                                       , @c_ToID = @c_ID
+                                       , @c_FinalID = @c_ID
+                                       , @c_PickMethod = @c_PickMethod
+                                       , @c_Priority = @c_Priority
+                                       , @c_SourcePriority = @c_SourcePriority
+                                       , @c_SourceType = @c_SourceType
+                                       , @c_SourceKey = @c_Wavekey
+                                       , @c_WaveKey = @c_Wavekey
+                                       , @c_Loadkey = @c_Loadkey
+                                       , @c_OrderKey = @c_Orderkey
+                                       , @c_Message03 = @c_Message03
+                                       , @n_SystemQty = @n_Qty
+                                       , @c_Status = '0'
+                                       , @c_AreaKey = '?F' -- ?F=Get from location areakey  
+                                       , @c_UserPosition = '1'
+                                       , @c_CallSource = 'WAVE'
+                                       , @c_LinkTaskToPick = 'WIP' -- WIP=Update taskdetailkey to pickdetail_wip  
+                                       , @c_LinkTaskToPick_SQL = @c_LinkTaskToPick_SQL
+                                       , @c_WIP_RefNo = @c_SourceType
+                                       , @b_Success = @b_Success OUTPUT
+                                       , @n_Err = @n_err OUTPUT
+                                       , @c_ErrMsg = @c_errmsg OUTPUT
+                                       , @c_Taskdetailkey = @c_Taskdetailkey OUTPUT
             
-            UPDATE TASKDETAIL
-            SET Groupkey = @c_Taskdetailkey
-            WHERE TaskDetailKey = @c_Taskdetailkey
+               IF @b_Success <> 1
+               BEGIN
+                  SELECT @n_continue = 3
+               END
+            
+               IF @n_continue = 1
+               BEGIN
+                  UPDATE TASKDETAIL
+            --    SET Groupkey = @c_Taskdetailkey              VPA235
+                  SET Groupkey = @c_Loadkey
+                  WHERE TaskDetailKey = @c_Taskdetailkey
+
+                  IF @@ERROR <> 0
+                  BEGIN
+                     SET @n_continue = 3
+                  END
+               END
+            END                                                      --(Wan02) - END
          END
 
          FETCH NEXT FROM CUR_PICK_NONVNA INTO @c_Storerkey, @c_SKU, @c_Lot, @c_FromLoc, @c_ID, @c_UOM, @n_UOMQty, @n_Qty, @c_Loadkey, @c_Orderkey
@@ -846,7 +961,7 @@ CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV69]
       END    
       RETURN    
    END
-END --sp end  
+END --sp end
 GO
 GRANT EXECUTE ON [dbo].[ispRLWAV69] TO [NSQL]
 GO

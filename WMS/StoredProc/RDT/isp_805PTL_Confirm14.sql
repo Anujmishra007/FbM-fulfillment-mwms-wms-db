@@ -12,7 +12,10 @@ GO
 /* Purpose: Accept QTY in CS-PCS, format 9-999                          */      
 /*                                                                      */      
 /* Date       Rev  Author   Purposes                                    */      
-/* 02-09-2024 1.0  YeeKung  FCR-609 Created                             */      
+/* 02-09-2024 1.0  YeeKung  FCR-609 Created                             */ 
+/* 02-12-2024 1.1  YeeKung  UWP-27793 Solved DB Blocking (yeekung01)    */
+/* 30-09-2024 1.2  yeekung  FCR-772 Add Transmitlog2                    */
+/* 20-12-2024 1.3  yeekung  FCR-1484 light up all order in multi station*/      
 /************************************************************************/      
       
 CREATE  OR ALTER  PROC [PTL].[isp_805PTL_Confirm14] (      
@@ -717,6 +720,40 @@ BEGIN TRY
          END
       END
 
+      IF NOT EXISTS (SELECT TOP 1 1  
+               FROM  PickDetail PD WITH (NOLOCK) 
+               WHERE PD.Orderkey = @cOrderKey
+                  AND PD.StorerKey = @cStorerKey  
+                  AND PD.Status  <= '5'
+                  AND PD.Status  <> '4'
+                  AND PD.CaseID = ''  
+                  AND PD.QTY > 0)  
+      BEGIN
+         IF EXISTS ( SELECT 1
+                     From dbo.StorerConfig (Nolock) 
+            WHERE Configkey = 'Innobec'
+               AND Storerkey = @cStorerkey
+               And Svalue = '1'
+         )
+         BEGIN
+            -- Insert transmitlog2 here  
+            EXEC ispGenTransmitLog2   
+                  @c_TableName        = 'WSBOXCFMlb'  
+               ,@c_Key1             = @cOrderkey  
+               ,@c_Key2             = @cCartonID  
+               ,@c_Key3             = @cStorerkey  
+               ,@c_TransmitBatch    = ''  
+               ,@b_Success          = @bSuccess    OUTPUT  
+               ,@n_err              = @nErrNo      OUTPUT  
+               ,@c_errmsg           = @cErrMsg     OUTPUT        
+
+            -- Insert TL2 here only, the web service will do the printing  
+            -- quit after excute        
+            IF @bSuccess <> 1      
+               GOTO Quit  
+         END
+      END
+
       IF @cAutoPackConfirm = '1'
       BEGIN
          -- No outstanding PickDetail
@@ -762,25 +799,43 @@ BEGIN TRY
    BEGIN      
       SET @nErrNo = 0
       SET @cLightModeEnd = rdt.RDTGetConfig( @nFunc, 'LightModeEnd', @cStorerKey)      
+
+
+
+      DECLARE @curMultiStation CURSOR
+      SET @curMultiStation = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
+      SELECT Station,Position,IPAddress
+      FROM rdt.rdtPTLStationLog PTL WITH (NOLOCK)  
+      WHERE Wavekey =  @cWaveKey
+         AND Orderkey = @cOrderkey
+  
+      OPEN @curMultiStation      
+      FETCH NEXT FROM @curMultiStation INTO @cStation, @cPosition ,@cIPAddress      
+      WHILE @@FETCH_STATUS = 0      
+      BEGIN   
       
-      EXEC PTL.isp_PTL_LightUpLoc      
-         @n_Func           = @nFunc      
-         ,@n_PTLKey         = 0      
-         ,@c_DisplayValue   = 'End'      
-         ,@b_Success        = @bSuccess    OUTPUT      
-         ,@n_Err            = @nErrNo      OUTPUT      
-         ,@c_ErrMsg         = @cErrMsg     OUTPUT      
-         ,@c_DeviceID       = @cStation      
-         ,@c_DevicePos      = @cPosition      
-         ,@c_DeviceIP       = @cIPAddress      
-         ,@c_LModMode       = @cLightModeEnd      
-      
-      IF @nErrNo <> 0      
-      BEGIN      
-         SET @nErrNo = 222772      
-         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo ,@cLangCode ,'DSP') --'LightUpFail'      
-         GOTO RollBackTran      
-      END      
+         EXEC PTL.isp_PTL_LightUpLoc      
+            @n_Func           = @nFunc      
+            ,@n_PTLKey         = 0      
+            ,@c_DisplayValue   = 'End'      
+            ,@b_Success        = @bSuccess    OUTPUT      
+            ,@n_Err            = @nErrNo      OUTPUT      
+            ,@c_ErrMsg         = @cErrMsg     OUTPUT      
+            ,@c_DeviceID       = @cStation      
+            ,@c_DevicePos      = @cPosition      
+            ,@c_DeviceIP       = @cIPAddress      
+            ,@c_LModMode       = @cLightModeEnd      
+         
+         IF @nErrNo <> 0      
+         BEGIN      
+            SET @nErrNo = 222772      
+            SET @cErrMsg = rdt.rdtgetmessage(@nErrNo ,@cLangCode ,'DSP') --'LightUpFail'      
+            GOTO RollBackTran      
+         END  
+         FETCH NEXT FROM @curMultiStation INTO @cStation, @cPosition ,@cIPAddress  
+      END    
+      CLOSE @curMultiStation
+      DEALLOCATE @curMultiStation
    END     
    
    SET @nExpectedQTY = 0
@@ -855,10 +910,14 @@ BEGIN TRY
    END CATCH      
       
 Quit:      
-WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started      
-   COMMIT TRAN 
+IF XACT_STATE() <> -1      
+BEGIN                      -- XACT_STATE() = 1 (committable), -1 (uncommittable), 0 (no transaction)  
+   WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started  
+   COMMIT TRAN  
+
+END 
 GO
-GRANT EXECUTE ON  [PTL].[isp_805PTL_Confirm11] TO [NSQL]
+GRANT EXECUTE ON  [PTL].[isp_805PTL_Confirm14] TO [NSQL]
 GO
 
 

@@ -3,19 +3,20 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
         
-/******************************************************************************************/
-/* Store procedure: rdt_1819ExtPASP52                                                     */
-/*                                                                                        */
-/* Modifications log:                                                                     */
-/*                                                                                        */
-/* Date         Rev  Author   Purposes                                                    */
-/* 2024-06-03   1.0  NLT013   FCR-267. Created. Putaway a pallet with                     */
-/*                            multiple UCC, need book the final locations for each UCC    */
-/*                            and the PND location                                        */
-/* 2024-08-03   1.1  CLVN01   FCR-267 Error 216551 validation to exclude empty LLI and    */
-/*                            consider only LLI with Qty > 0 when determining Putawayzone */
-/* 2024-10-07   1.2  NLT013   FCR-954 Be able to specify putaway zone by configuration    */
-/******************************************************************************************/
+/*********************************************************************************************/
+/* Store procedure: rdt_1819ExtPASP52                                                        */
+/*                                                                                           */
+/* Modifications log:                                                                        */
+/*                                                                                           */
+/* Date         Rev     Author   Purposes                                                    */
+/* 2024-06-03   1.0     NLT013   FCR-267. Created. Putaway a pallet with                     */
+/*                               multiple UCC, need book the final locations for each UCC    */
+/*                               and the PND location                                        */
+/* 2024-08-03   1.1     CLVN01   FCR-267 Error 216551 validation to exclude empty LLI and    */
+/*                               consider only LLI with Qty > 0 when determining Putawayzone */
+/* 2024-10-07   1.2     NLT013   FCR-954 Be able to specify putaway zone by configuration    */
+/* 2024-11-20   1..3.0  NLT013   UWP-27329 Correct the length of @cLoopUCCNo                 */
+/*********************************************************************************************/
         
 CREATE  OR ALTER PROC [RDT].[rdt_1819ExtPASP52] (
    @nMobile          INT,
@@ -53,7 +54,7 @@ BEGIN
    DECLARE @nLoopLocQty    INT
    DECLARE @nSuggestLocQty    INT
    DECLARE @cSuggestAisle   NVARCHAR(10)
-   DECLARE @cLoopUCCNo      NVARCHAR(18)
+   DECLARE @cLoopUCCNo      NVARCHAR(20)
    DECLARE @cLoopUCCQty     NVARCHAR(18)
    DECLARE @cLoopUCCLot     NVARCHAR(10)
    DECLARE @nSuitAisleLocQty INT
