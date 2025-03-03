@@ -3,7 +3,6 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-
 /***************************************************************************/
 /* Store procedure: rdtfnc_UCCReceive                                      */
 /* Copyright      : IDS                                                    */
@@ -53,7 +52,7 @@ GO
 /* 2021-12-06 3.6  YeeKung WMS-18390 Add Multi UCC status (yeekung01)      */
 /* 2021-10-15 3.7  yeekung  WMS-19671 Add eventlog refno2(yeekung02)       */
 /* 2022-09-08 3.8  yeekung  WMS-20650 Add extendeinfo instep3(yeekung03)   */
-/* 2020-05-04 3.9  YeeKung  WMS-11867 Add verifySKU (yeekung01)            */
+/* 2020-05-04 3.9  YeeKung WMS-11867 Add verifySKU (yeekung01)            */
 /* 2022-04-12 4.0  James   WMS-22928 Add RDTFormat for UCC Qty (james03)   */
 /* 2023-12-04 4.1  Ung     WMS-24276 Add DecodeSP                          */
 /* 2024-01-16 4.2  James   WMS-24545 Add ExtValidSP @ step 8 (james04)     */
@@ -2977,8 +2976,7 @@ BEGIN
                GOTO Quit
             END
          END
-
-         -- Extended validate SP
+      -- Extended validate SP
          IF @cExtendedValidateSP <> ''
          BEGIN
             IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedValidateSP AND type = 'P')
@@ -3023,7 +3021,6 @@ BEGIN
                   GOTO Quit
             END
          END
-
          -- Piece scan
          IF @cDisableQTYField = '1'
          BEGIN
