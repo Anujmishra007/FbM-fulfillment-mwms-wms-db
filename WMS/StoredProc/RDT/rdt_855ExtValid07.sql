@@ -17,6 +17,7 @@ GO
 /* Modifications log:                                                   */
 /* Date        Rev  Author   Purposes                                   */
 /* 2024-06-13  1.0  NLT013   FCR-386. Created                           */
+/* 2025-02-08  1.1  Deenis   FCR-1109 Step 99 Validation                */
 /************************************************************************/
   
 CREATE OR ALTER PROC [RDT].[rdt_855ExtValid07] (  
@@ -49,16 +50,22 @@ BEGIN
          @cOption          NVARCHAR(1),
          @nRowCount        INT,
          @cNAMVAS855       NVARCHAR(1),
-         @cPPAStatus       NVARCHAR(1)
+         @cPPAStatus       NVARCHAR(1),
+         @nScn             INT
+
    
    SELECT @cInputKey = Value FROM @tExtValidate WHERE Variable = '@nInputKey'
    SELECT @cOption = Value FROM @tExtValidate WHERE Variable = '@cOption'
+   SELECT
+   @nScn       = Scn
+   FROM rdt.rdtMobRec WITH (NOLOCK)
+   WHERE Mobile = @nMobile
 
    -- Variable mapping
 
    IF @nFunc = 855   -- Function ID
    BEGIN
-      IF @nStep = 1  -- Drop ID
+      IF @nStep = 1 OR ( @nStep = 99 AND @nScn = 814) -- Drop ID
       BEGIN
          IF @cInputKey = '1'  -- Enter
          BEGIN

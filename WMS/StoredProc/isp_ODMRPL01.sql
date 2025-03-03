@@ -14,7 +14,7 @@ GO
 /*                                                                         */
 /* Called By: RDT and SCE Generate Report Stored Procedure                 */
 /*                                                                         */
-/* PVCS Version: 1.6                                                       */
+/* PVCS Version: 1.9                                                       */
 /*                                                                         */
 /* Version: MWMS V2                                                        */
 /*                                                                         */
@@ -30,14 +30,19 @@ GO
 /*                            lottable06=1 from the inventory              */
 /* 02-AUG-2024 Wan03    1.4   UWP-21574 -MPL Disallow Different Lottables  */
 /*                            to same PickFace                             */
-/* 16-OCT-2014 Wan04    1.5   UWP-24391 [FCR-837] Unilever Replenishment for*/
+/* 16-OCT-2024 Wan04    1.5   UWP-24391 [FCR-837] Unilever Replenishment for*/
 /*                            Flowrack                                     */
-/* 05-NOV-2014 Wan05    1.6   UWP-24391 Fixed. Insert SkuxLoc If BackLoc is*/
+/* 05-NOV-2024 Wan05    1.6   UWP-24391 Fixed. Insert SkuxLoc If BackLoc is*/
 /*                            new loc                                      */
-/* 07-NOV-2014 SSA01    1.7   UWP-26065 updated priority to 1 for VNAOUT   */
+/* 07-NOV-2024 SSA01    1.7   UWP-26065 updated priority to 1 for VNAOUT   */
 /*                            task                                         */
+/* 12-NOV-2024 WAN06    1.8   UWP-26935 Prerequisite to create assign loc  */
+/*                            for BackLoc. remove auto create              */
+/* 12-NOV-2024 WAN07    1.9   UWP-26935 BACK Loc setup MaxPallet, Replenish*/
+/*                            break when MaxPallet meet                    */
+/* 09-JAN-2025 WTS01    2.0   FCR-2214 call auto replen job based on Config*/
 /***************************************************************************/
-CREATE OR ALTER PROC [dbo].[isp_ODMRPL01]
+CREATE OR ALTER   PROC [dbo].[isp_ODMRPL01]
    @c_Facility   NVARCHAR(5)    = '',
    @c_Storerkey  NVARCHAR(15)   = '',
    @c_SKU        NVARCHAR(20)   = '',
@@ -193,8 +198,10 @@ BEGIN
       , @c_REPLB2F               NVARCHAR(10)   = 'N'                            --(Wan04)      
       , @c_B2FLocType            NVARCHAR(10)   = ''                             --(Wan04)
       , @c_AutoReplB2F           NVARCHAR(10)   = 'N'                            --(Wan04)
-      , @c_loc_F                NVARCHAR(10)   = ''                             --(Wan04)
+      , @c_loc_F                 NVARCHAR(10)   = ''                             --(Wan04)
       , @c_LocationGroup         NVARCHAR(10)   = ''                             --(Wan04)
+      , @n_MaxPallet             INT            = 0                              --(Wan07)
+      , @c_GenerateReplenTask    NVARCHAR(10)   = 'N'                            --(SWT01)
 
    WHILE @@TRANCOUNT > 0
    BEGIN
@@ -244,18 +251,21 @@ BEGIN
             ,@c_REPLCond   = MAX(CASE WHEN cl.Code = 'Condition' THEN cl.Notes ELSE '' END)
             ,@c_REPLB2F    = MAX(CASE WHEN cl.Code = 'BackToFront' THEN cl.UDF01 ELSE 'N' END)
             ,@c_B2FLocType = MAX(CASE WHEN cl.Code = 'BackToFront' AND cl.UDF01 = 'Y' THEN cl.UDF02 ELSE '' END)
-      FROM CODELKUP cl (NOLOCK) 
+            ,@c_GenerateReplenTask = MAX(CASE WHEN cl.Code = 'EnableAutoRepln' AND cl.UDF01 = 'Y' THEN 'Y' ELSE 'N' END)
+      FROM dbo.CODELKUP cl (NOLOCK) 
       WHERE cl.ListName = 'REPLENCFG'
       AND   cl.code2 = 'isp_ODMRPL01'
       AND   cl.Storerkey = @c_Storerkey
  
       SET @c_loc_F = @c_loc
+
       IF @c_REPLB2F = 'Y'
       BEGIN
          IF @c_LocationGroup <> ''
          BEGIN
              --Find Back Loc
-            SET @c_SQL = N'SELECT TOP 1 @c_Loc = l.Loc'                             --(Wan05) - START                  
+            SET @c_SQL = N'SELECT TOP 1 @c_Loc = l.Loc'                             --(Wan05) - START   
+                       +           ',   @n_MaxPallet = l.MaxPallet'                 --(Wan07)                
                        + ' FROM LOC l (NOLOCK)' 
                        + ' WHERE l.LocationGroup = @c_LocationGroup'
                        + ' AND   l.Facility = @c_Facility'
@@ -266,15 +276,29 @@ BEGIN
             SET @c_SQLParms = N'@c_LocationGroup   NVARCHAR(10)
                               , @c_B2FLocType      NVARCHAR(10)
                               , @c_Facility        NVARCHAR(5)
-                              , @c_Loc             NVARCHAR(10) OUTPUT'
+                              , @c_Loc             NVARCHAR(10) OUTPUT 
+                              , @n_MaxPallet       INT OUTPUT'                      --(Wan07)                                      
                               
             EXECUTE sp_ExecuteSQL @c_SQL 
                                  ,@c_SQLParms
                                  ,@c_LocationGroup
                                  ,@c_B2FLocType   
                                  ,@c_Facility     
-                                 ,@c_Loc           OUTPUT                           --(Wan05) - END   
-                              
+                                 ,@c_Loc           OUTPUT                           --(Wan05) - END  
+                                 ,@n_MaxPallet     OUTPUT                           --(Wan07)                                         
+
+            IF @c_Loc <> ''                                                         --(Wan06) - START
+            BEGIN
+               IF NOT EXISTS (SELECT 1 FROM SKUxLOC sl(NOLOCK)                         
+                              WHERE sl.Storerkey = @c_Storerkey
+                              AND   sl.Sku = @c_Sku
+                              AND   sl.Loc = @c_Loc
+                              )
+               BEGIN
+                  SET @c_Loc = ''
+               END                                                                  
+            END                                                                     --(Wan06) - END
+
             IF @c_Loc <> '' AND @c_AutoReplB2F = 'Y'
             BEGIN
                EXEC msp_ReplBack2Front
@@ -294,23 +318,26 @@ BEGIN
                END
             END    
             
-            IF @n_Continue = 1 AND @c_Loc <> ''                                     --(Wan05) - START
-            BEGIN
-               IF NOT EXISTS (SELECT 1 FROM SKUxLOC sl(NOLOCK)
-                              WHERE sl.Storerkey = @c_Storerkey
-                              AND   sl.Sku = @c_Sku
-                              AND   sl.Loc = @c_Loc
-                              )
-               BEGIN
-                  INSERT INTO SKUxLOC (Storerkey, Sku, Loc, LocationType, Qty) 
-                  VALUES (@c_Storerkey, @c_Sku, @c_Loc, '', 0)
-               END                                                                  --(Wan05) - END
-            END
+            --IF @n_Continue = 1 AND @c_Loc <> ''                                   --(Wan06)(Wan05) - START
+            --BEGIN
+            --   IF NOT EXISTS (SELECT 1 FROM SKUxLOC sl(NOLOCK)
+            --                  WHERE sl.Storerkey = @c_Storerkey
+            --                  AND   sl.Sku = @c_Sku
+            --                  AND   sl.Loc = @c_Loc
+            --                  )
+            --   BEGIN
+            --      INSERT INTO SKUxLOC (Storerkey, Sku, Loc, LocationType, Qty) 
+            --      VALUES (@c_Storerkey, @c_Sku, @c_Loc, '', 0)
+            --   END                                                                
+            --END                                                                   --(Wan06)(Wan05) - END
          END
       END                                                                           
    END                                                                              --(Wan04) - END
    
-   IF @n_continue = 1
+   IF @c_GenerateReplenTask = 'N' -- (SWT01)
+      GOTO QUIT_SP
+
+   IF @n_continue = 1 AND @c_GenerateReplenTask = 'Y'
    BEGIN
       SET @c_ReplenishmentKey = ''
       SET @c_ReplFullPallet = 'Y'
@@ -416,8 +443,10 @@ BEGIN
       (
          Lot            NVARCHAR(10)   NOT NULL PRIMARY KEY
       )                                                                             --(Wan04) - END  
-              
-       -- Do not execute it Replenishment Task not done yet       
+      
+
+
+      -- Do not execute it Replenishment Task not done yet       
       IF @c_ReplenType = 'R'
       BEGIN        
         IF EXISTS(SELECT 1
@@ -445,7 +474,7 @@ BEGIN
             PRINT '>>>>>> Replenishment Task Exists, Do nothing'
             GOTO QUIT_SP
         END
-      END 
+      END 	 
 
         IF NOT EXISTS (SELECT 1
                        FROM SKUxLOC SL (NOLOCK) 
@@ -806,7 +835,7 @@ BEGIN
                      END
                      SET @dt_Lottable05_2 = NULL
                      IF @dt_Lottable05 IS NULL SET @dt_Lottable05_2 = '1900-01-01' 
-                     SET @c_SQLAddCond = @c_SQLAddCond 
+                        SET @c_SQLAddCond = @c_SQLAddCond 
                                        + ' AND LOTATTRIBUTE.Lottable05 IN (@dt_Lottable05_2, @dt_Lottable05)' 
                   END
                   IF @c_NoMixLottable06 = '1' 
@@ -1022,7 +1051,7 @@ BEGIN
                + ' AND LOTxLOCxID.qty - LOTxLOCxID.QtyPicked - LOTxLOCxID.QtyAllocated - LOTxLOCxID.QtyReplen >= 1'
                + ' AND LOTxLOCxID.QtyExpected = 0'
                + ' AND LOC.LocationFlag NOT IN (''DAMAGE'', ''HOLD'')'
-               + ' AND LOC.LocationType NOT IN (''CASE'',''PICK'',''PALLET'',''STAGING'')'
+               + ' AND LOC.LocationType NOT IN (''CASE'',''PICK'',''PALLET'',''STAGING'', @c_B2FLocType)'   --(Wan06)
                + ' AND LOC.Facility= @c_Facility'
                + ' AND LOC.Status  = ''OK'' AND LOT.Status  = ''OK'' '
                + @c_condition  
@@ -1061,6 +1090,7 @@ BEGIN
                               + ', @dt_Lottable14_2   DATETIME'                                 --(Wan03) 
                               + ', @dt_Lottable15     DATETIME'                                 --(Wan03)
                               + ', @dt_Lottable15_2   DATETIME'                                 --(Wan03) 
+                              + ', @c_B2FLocType      NVARCHAR(10)'                             --(Wan06)
 
                Execute SP_ExecuteSQL @SQL_QUERY, @SQL_Parms, @c_CurrentLoc , @c_CurrentStorer, @c_CurrentSku , @c_Facility, @n_Pallet        --(ppa371)--end
                                     ,@c_Lot_SL                                                  --(Wan03)
@@ -1084,6 +1114,7 @@ BEGIN
                                     ,@dt_Lottable14_2                                           --(Wan03)
                                     ,@dt_Lottable15                                             --(Wan03)
                                     ,@dt_Lottable15_2                                           --(Wan03)
+                                    ,@c_B2FLocType                                              --(Wan06)
 
          OPEN CUR_REPL
 
@@ -1118,6 +1149,24 @@ BEGIN
 
          WHILE @@Fetch_Status <> -1 AND @n_RemainingQty > 0
          BEGIN
+            
+            IF @c_REPLB2F = 'Y' AND  @n_MaxPallet > 0                               --(Wan07) - START
+            BEGIN
+             print @n_MaxPallet
+               IF EXISTS(  SELECT 1
+                           FROM #Replenishment AS r WITH(NOLOCK)
+                           WHERE r.Storerkey = @c_CurrentStorer
+                           AND   r.Sku       = @c_CurrentSKU
+                           AND   r.ToLOC     = @c_CurrentLoc
+                           AND   r.ID        <> ''
+                           GROUP BY r.Storerkey, r.Sku, r.ToLOC
+                           HAVING COUNT(DISTINCT r.ID) >= @n_MaxPallet
+                           )
+               BEGIN
+                  BREAK
+               END
+            END                                                                     --(Wan07) - END
+
             IF EXISTS( SELECT 1
             FROM #Replenishment AS r WITH(NOLOCK)
             WHERE r.Lot = @c_Fromlot
@@ -1227,7 +1276,14 @@ BEGIN
                END
             END
 
-            IF @c_ToLocationType = 'PALLET'
+            IF @c_REPLB2F = 'Y'                                                     --(Wan07) - START
+            BEGIN
+               IF @n_FromQty > @n_RemainingQty AND @c_ReplAllPalletQty = 'Y'
+               BEGIN
+                  SET @n_FromQty = 0
+               END
+            END                                                                     --(Wan07) - END
+            ELSE IF @c_ToLocationType = 'PALLET'
             BEGIN
                IF @b_debug = 1
                BEGIN
@@ -1863,5 +1919,6 @@ QUIT_SP:
    END
 END
 GO
+
 GRANT EXECUTE ON [dbo].[isp_ODMRPL01] TO [NSQL]
 GO

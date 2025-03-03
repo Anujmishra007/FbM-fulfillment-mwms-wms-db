@@ -6,16 +6,16 @@
 /*                                                                      */                          
 /* PURPOSE: COUNT WEEKLY CARTON USED                                    */                     
 /* Conditions : o.storerkey ='FJ' and doctype ='E'                      */  
-/*				and m.shipdate in current 7 days                        */                     
+/*				and m.shipdate in current 7 days        */                     
 /*                                                                      */                         
 /* UPDATES:                                                             */                          
 /*                                                                      */                         
 /* DATE     AUTHOR   VER.  PURPOSES                                     */                          
 /* 20230721 zack     1.0  Request from CPI 57 BY HIROI-SAN              */     
-/* 20230801 zack     1.1  Request DEPLOY IN JPWMS PROD & UAT https://jiralfl.atlassian.net/browse/WMS-23175 */  
+/* 20230801 zack     1.1  Request DEPLOY IN JPWMS PROD & UAT            */
+/*                       https://jiralfl.atlassian.net/browse/WMS-23175 */  
 /************************************************************************/                     
-CREATE PROCEDURE [BI].[isp_jp_Fanatics_RPT_Weekly_Carton]                     
-                    
+CREATE OR ALTER PROCEDURE [BI].[isp_jp_Fanatics_RPT_Weekly_Carton]                                         
 AS                    
 BEGIN                    
  -- SET NOCOUNT ON added to prevent extra result sets from                    

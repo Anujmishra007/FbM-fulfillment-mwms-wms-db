@@ -1,7 +1,3 @@
-USE [GBRWMS]
-GO
-
-/****** Object:  StoredProcedure [dbo].[mspASNFZ01]    Script Date: 7/16/2024 8:15:54 PM ******/
 SET ANSI_NULLS OFF
 GO
 

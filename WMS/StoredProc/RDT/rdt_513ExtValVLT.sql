@@ -38,48 +38,63 @@ BEGIN
    SET ANSI_NULLS OFF
 
    DECLARE
-   @LOCAvail  INT,
-   @LOCCat    NVARCHAR(40),
-   @LOCFlag   NVARCHAR(20),
-   @LoseIDChk INT,
-   @SKUChk    INT,
-   @TOZONE    NVARCHAR(20),
-   @LOCType   NVARCHAR(20)
+      @LOCAvail  INT,
+      @LOCCat    NVARCHAR(40),
+      @LOCFlag   NVARCHAR(20),
+      @LoseIDChk INT,
+      @SKUChk    INT,
+      @TOZONE    NVARCHAR(20),
+      @LOCType   NVARCHAR(20)
 
    IF @nFunc = 513
    BEGIN
-      
       IF @nStep = 2
       BEGIN
          --LPN is IN multiple locations, should fix before moving.
-         IF EXISTS (SELECT 1 FROM dbo.LOTXLOCXID LLI (NOLOCK) WHERE id = @cFromID AND qty > 0 AND StorerKey = @cStorerKey AND id <> ''
-         AND EXISTS (SELECT 1 FROM dbo.LOTXLOCXID (NOLOCK) WHERE id = @cFromID AND qty > 0 AND loc <> lli.loc AND StorerKey = @cStorerKey))
+         IF EXISTS (SELECT 1 FROM dbo.LOTXLOCXID LLI WITH(NOLOCK) WHERE id = @cFromID AND qty > 0 AND StorerKey = @cStorerKey AND id <> ''
+         AND EXISTS (SELECT 1 FROM dbo.LOTXLOCXID WITH(NOLOCK) WHERE id = @cFromID AND qty > 0 AND loc <> lli.loc AND StorerKey = @cStorerKey))
          BEGIN
             SET @nErrNo = 217981
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --LPN is IN multiple locations, should fix before moving.
          END
 
+		 --LPN got picking task. Should not be moved.
+		 ELSE IF EXISTS (SELECT 1 FROM dbo.TaskDetail WITH(NOLOCK) WHERE Storerkey = @cStorerKey AND FromID = @cFromID AND FromID <> '' AND Status NOT IN ('9','X'))
+		 BEGIN
+		    SET @nErrNo = 218065
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --LPN got pick task. Should not be moved.
+		 END
+
          --LPN got putaway task. Should NOT be moved.
-         ELSE IF EXISTS (SELECT 1 FROM dbo.LOTXLOCXID (NOLOCK) WHERE ID = @cFromID AND PendingMoveIN > 0 AND StorerKey = @cStorerKey AND ID <> '') AND 
-            EXISTS (SELECT 1 FROM dbo.loc (NOLOCK) WHERE loc = @cFromLOC AND FACILITY = @cFacility AND (EXISTS(SELECT 1 FROM dbo.CODELKUP (NOLOCK) 
-            WHERE LISTNAME = 'HUSQINBLOC' AND Storerkey = @cStorerKey AND LocationType = Code) or LocationCategory = 'PND'))
+         ELSE IF EXISTS (SELECT 1 FROM dbo.LOTXLOCXID WITH(NOLOCK) WHERE ID = @cFromID AND PendingMoveIN > 0 AND StorerKey = @cStorerKey AND ID <> '') AND 
+            EXISTS (SELECT 1 FROM dbo.loc WITH(NOLOCK) WHERE loc = @cFromLOC AND FACILITY = @cFacility 
+                     AND (EXISTS(SELECT 1 FROM dbo.CODELKUP (NOLOCK) 
+                     WHERE LISTNAME = 'HUSQINBLOC' AND Storerkey = @cStorerKey AND LocationType = Code) OR LocationCategory = 'PND'))
          BEGIN
             SET @nErrNo = 217982 
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --LPN got putaway task. Should NOT be moved.
          END
 
          --LPN got replen task. Should NOT be moved.
-         ELSE IF EXISTS (SELECT 1 FROM dbo.LOTXLOCXID (NOLOCK) WHERE ID = @cFromID AND QtyReplen > 0 AND StorerKey = @cStorerKey AND ID <> '')
+         ELSE IF EXISTS (SELECT 1 FROM dbo.LOTXLOCXID WITH(NOLOCK) WHERE ID = @cFromID AND QtyReplen > 0 AND StorerKey = @cStorerKey AND ID <> '')
          BEGIN
             SET @nErrNo = 217983
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --LPN got replen task. Should NOT be moved.
+         END
+
+         -- WS 28102024 - not allow to pick ID from TrolleyQC via Move by ID
+         ELSE IF EXISTS (SELECT 1 FROM dbo.LOC WITH(NOLOCK) WHERE loc = @cFromLOC and FACILITY = @cFacility 
+            AND LocationType in ('TROLLEYIB','TROLLEYOB','TROLLEYQC'))
+         BEGIN
+            SET @nErrNo = 218043
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Not allow to move ID from Trolley and TrolleyQC locs
          END
       END
 
      IF @nStep = 3
      BEGIN
         --Consumables should NOT be moved
-        IF EXISTS (SELECT 1 FROM dbo.SKU S (NOLOCK) WHERE s.Sku = @cSKU AND Style = 'CON')
+        IF EXISTS (SELECT 1 FROM dbo.SKU S WITH(NOLOCK) WHERE s.Sku = @cSKU AND Style = 'CON')
         BEGIN
             SET @nErrNo = 218014
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')--'Consumable SKU LPN'
@@ -100,16 +115,16 @@ BEGIN
       BEGIN
         SELECT top 1 @LOCType = locationtype FROM dbo.LOC WITH (NOLOCK) WHERE loc = @cToLOC AND Facility = @cFacility
       
-         SELECT @LOCAvail = coalesce((SELECT TOP 1 MaxPallet FROM dbo.LOC (NOLOCK) WHERE loc = @cToLoc AND facility = @cFacility)
+         SELECT @LOCAvail = coalesce((SELECT TOP 1 MaxPallet FROM dbo.LOC WITH(NOLOCK) WHERE loc = @cToLoc AND facility = @cFacility)
          -
-         (SELECT count(distinct id) FROM dbo.LOTxLOCxID (NOLOCK) WHERE storerkey = @cstorerkey AND loc = @cToLoc AND qty+PendingMoveIN> 0),0)
+         (SELECT COUNT(DISTINCT id) FROM dbo.LOTxLOCxID WITH(NOLOCK) WHERE storerkey = @cstorerkey AND loc = @cToLoc AND qty+PendingMoveIN> 0),0)
 
          SELECT TOP 1 @LOCCat = locationcategory FROM dbo.LOC WITH (NOLOCK) WHERE loc = @cToLOC AND Facility = @cFacility
          SELECT TOP 1 @LOCFlag = LocationFlag FROM dbo.LOC WITH (NOLOCK) WHERE loc = @cToLOC AND Facility = @cFacility
          SELECT TOP 1 @LoseIDChk = loseid FROM dbo.LOC WITH (NOLOCK) WHERE loc = @cToLOC AND Facility = @cFacility
 
-         SET @SKUChk = CASE WHEN EXISTS (SELECT 1 FROM dbo.LOTxLOCxID (NOLOCK) WHERE @cSKu = sku AND StorerKey = @cStorerKey AND loc = @cToLOC AND (qty > 0 OR PendingMoveIN > 0)) THEN 1 ELSE 0 END
-         SET @TOZONE = CASE WHEN EXISTS (SELECT 1 FROM dbo.LOC (NOLOCK) WHERE @cToLOC = loc AND Facility = @cFacility AND EXISTS (SELECT 1 FROM dbo.CODELKUP WITH (NOLOCK) WHERE PutawayZone = code AND LISTNAME = 'HUSQZONE' AND Storerkey = @cStorerKey AND short = 1)) THEN 1 ELSE 0 END
+         SET @SKUChk = CASE WHEN EXISTS (SELECT 1 FROM dbo.LOTxLOCxID WITH(NOLOCK) WHERE @cSKu = sku AND StorerKey = @cStorerKey AND loc = @cToLOC AND (qty > 0 OR PendingMoveIN > 0)) THEN 1 ELSE 0 END
+         SET @TOZONE = CASE WHEN EXISTS (SELECT 1 FROM dbo.LOC WITH(NOLOCK) WHERE @cToLOC = loc AND Facility = @cFacility AND EXISTS (SELECT 1 FROM dbo.CODELKUP WITH (NOLOCK) WHERE PutawayZone = code AND LISTNAME = 'HUSQZONE' AND Storerkey = @cStorerKey AND short = 1)) THEN 1 ELSE 0 END
 
         --Target location is NOT IN the Husqvarna listed zone
          IF @TOZONE = 0
@@ -119,9 +134,9 @@ BEGIN
          END
 
         --Maximum capacity is reached or target location is a pick location that got different SKU IN it.
-         ELSE IF (@LOCAvail < 1 OR @LOCAvail is null) 
+         ELSE IF (@LOCAvail < 1 OR @LOCAvail IS NULL) 
             AND ((@LoseIDChk = 1 AND @SKUChk = 0) OR (@LoseIDChk = 0))
-            AND NOT EXISTS (SELECT 1 FROM dbo.LOTxLOCxID (NOLOCK) WHERE @cToID = id AND loc = @cToLOC AND (qty > 0 OR PendingMoveIN > 0) AND sku = @cSKU AND StorerKey = @cStorerKey)
+            AND NOT EXISTS (SELECT 1 FROM dbo.LOTxLOCxID WITH(NOLOCK) WHERE @cToID = id AND loc = @cToLOC AND (qty > 0 OR PendingMoveIN > 0) AND sku = @cSKU AND StorerKey = @cStorerKey)
             AND EXISTS (SELECT 1 FROM dbo.codelkup WITH (NOLOCK) WHERE @LOCCat = code AND listname = 'MAXPALCHK' AND storerkey = @cStorerKey AND short = 1)
          BEGIN
             SET @nErrNo = 217903 
@@ -170,15 +185,15 @@ BEGIN
          END
 
          --Not allowing to move to target location if location is NOT commingle AND SKU count would become more than one.
-         ELSE IF EXISTS (SELECT 1 FROM dbo.LOTxLOCxID WITH (NOLOCK) WHERE (qty > 0 OR PendingMoveIN > 0) AND loc = @cToLoc AND @cSKU <> Sku AND StorerKey = @cStorerKey
-            AND NOT EXISTS (SELECT 1 FROM dbo.LOC WITH (NOLOCK) WHERE lotxlocxid.loc = loc AND CommingleSku = 1 AND Facility = @cFacility))
+         ELSE IF EXISTS (SELECT 1 FROM dbo.LOTxLOCxID WITH(NOLOCK) WHERE (qty > 0 OR PendingMoveIN > 0) AND loc = @cToLoc AND @cSKU <> Sku AND StorerKey = @cStorerKey
+            AND NOT EXISTS (SELECT 1 FROM dbo.LOC WITH(NOLOCK) WHERE lotxlocxid.loc = loc AND CommingleSku = 1 AND Facility = @cFacility))
          BEGIN
             SET @nErrNo = 217908
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --OtherSKULOC
          END
 
          ELSE IF NOT EXISTS (SELECT loc FROM dbo.SKUxLOC WITH(NOLOCK) WHERE QtyLocationLimit > 0 AND sku = @cSKU AND loc = @cToLOC AND StorerKey = @cStorerKey)
-            AND @LOCType IN ('PICK','CASE') AND (SELECT TOP 1 Short FROM dbo.CODELKUP WITH(NOLOCK) WHERE LISTNAME = 'MVTOPFHUSQ' AND code = '513MV') = 0
+            AND @LOCType IN ('PICK','CASE','SHELF') AND (SELECT TOP 1 Short FROM dbo.CODELKUP WITH(NOLOCK) WHERE LISTNAME = 'MVTOPFHUSQ' AND code = '513MV') = 0
          BEGIN
             SET @nErrNo = 217984
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Target location is a pick location with no SKU or different SKU setup than on the LPN.
@@ -216,9 +231,17 @@ BEGIN
             SET @nErrNo = 218015
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')--'Loc is for Cons SKUs'
          END
+
+        --Trolley Location
+         ELSE IF EXISTS (SELECT 1 FROM loc (NOLOCK) WHERE facility = @cFacility AND loc = @cToLOC AND LocationType in ('TROLLEYIB','TROLLEYOB','TROLLEYQC'))
+         BEGIN
+            SET @nErrNo = 218041
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')--'Loc is trolley'
+         END
       END
    END
 END
+
 GO
 SET QUOTED_IDENTIFIER OFF
 GO

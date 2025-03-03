@@ -1,0 +1,34 @@
+name: Trigger Infra-Repo Workflow for SQL Deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      authToken:
+        description: 'Authentication token for the infra-repo API'
+        required: true
+      file_paths:
+        description: 'Comma-separated list of SQL file paths to deploy'
+        required: true
+      branch:
+        description: 'Branch name in infra-repo to run the workflow'
+        required: true
+        default: 'main'   
+
+jobs:
+  trigger-infra-workflow:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v2
+
+      - name: Trigger infra-repo workflow
+        env:
+          GITHUB_TOKEN: ${{ secrets.PAT_TOKEN }}
+        run: |
+          gh workflow run cdt-test-deployment.yml \
+            --repo Maersk-Global/fbm-infra-automation \
+            --ref ${{ github.event.inputs.branch }} \
+            --field authToken="${{ github.event.inputs.authToken }}" \
+            --field file_paths="${{ github.event.inputs.file_paths }}"
+

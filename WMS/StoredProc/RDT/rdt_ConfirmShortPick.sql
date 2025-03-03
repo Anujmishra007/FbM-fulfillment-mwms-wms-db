@@ -1,7 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[RDT].[rdt_ConfirmShortPick]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [RDT].[rdt_ConfirmShortPick]
-GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -15,11 +11,12 @@ GO
 /*                                                                      */
 /* Modifications log:                                                   */
 /*                                                                      */
-/* Date       Rev  Author   Purposes                                    */
-/* 2012-03-11 1.0  Ung      SOS238698 Created                           */
+/* Date       Rev   Author   Purposes                                   */
+/* 2012-03-11 1.0   Ung      SOS238698 Created                          */
+/* 2024-11-27 1.1.0 Dennis   FCR-1349 Fix Bug                           */
 /************************************************************************/
 
-CREATE PROC rdt.rdt_ConfirmShortPick (
+CREATE OR ALTER PROC rdt.rdt_ConfirmShortPick (
    @nMobile    INT,
    @nFunc      INT, 
    @cLangCode  NVARCHAR( 3),
@@ -36,7 +33,14 @@ SET QUOTED_IDENTIFIER OFF
 SET CONCAT_NULL_YIELDS_NULL OFF
 
 DECLARE @cPickDetailKey NVARCHAR( 10)
-DECLARE @cPickSlipNo    NVARCHAR( 10)
+DECLARE @cPickSlipNo    NVARCHAR( 10),
+@nLoopIndex INT,
+@nRowCount  INT
+DECLARE @List TABLE
+   (
+   ID INT IDENTITY(1,1) NOT NULL,
+   PickDetailKey NVARCHAR(10)
+   )
 
 DECLARE @nTranCount     INT
 SET @nTranCount = @@TRANCOUNT
@@ -48,16 +52,15 @@ SAVE TRAN rdt_ConfirmShortPick
                                           PickDetail line
 
 --------------------------------------------------------------------------------------------------*/
-DECLARE @curPD CURSOR
 IF @cOrderKey <> ''
-   SET @curPD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+   INSERT INTO @List
       SELECT PickDetailKey
       FROM PickDetail WITH (NOLOCK)
       WHERE OrderKey = @cOrderKey
          AND Status = '4'
 
 IF @cLoadKey <> ''
-   SET @curPD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+   INSERT INTO @List
       SELECT PickDetailKey
       FROM PickDetail PD WITH (NOLOCK)
          INNER JOIN OrderDetail OD WITH (NOLOCK) ON (OD.OrderKey = PD.OrderKey AND OD.OrderLineNumber = PD.OrderLineNumber)
@@ -65,42 +68,13 @@ IF @cLoadKey <> ''
          AND PD.Status = '4'
       
 IF @cWaveKey <> ''
-   SET @curPD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+   INSERT INTO @List
       SELECT PickDetailKey
       FROM PickDetail PD WITH (NOLOCK)
          INNER JOIN OrderDetail OD WITH (NOLOCK) ON (OD.OrderKey = PD.OrderKey AND OD.OrderLineNumber = PD.OrderLineNumber)
          INNER JOIN WaveDetail WD  WITH (NOLOCK) ON (OD.OrderKey = WD.OrderKey)
       WHERE WD.WaveKey = @cWaveKey
          AND PD.Status = '4'
-
-OPEN @curPD
-FETCH NEXT FROM @curPD INTO @cPickDetailKey
-WHILE @@FETCH_STATUS = 0
-BEGIN
-   -- Unallocate
-   UPDATE PickDetail SET
-      QTY = 0
-   WHERE PickDetailKey = @cPickDetailKey
-   IF @@ERROR <> 0
-   BEGIN
-      SET @nErrNo = 75551
-      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UpdPickDtlFail
-      GOTO RollBackTran
-   END
-
-   -- Confirm short pick
-   UPDATE PickDetail SET
-      Status = 0
-   WHERE PickDetailKey = @cPickDetailKey
-   IF @@ERROR <> 0
-   BEGIN
-      SET @nErrNo = 75552
-      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UpdPickDtlFail
-      GOTO RollBackTran
-   END
-   FETCH NEXT FROM @curPD INTO @cPickDetailKey
-END
-
 
 /*--------------------------------------------------------------------------------------------------
 
@@ -155,6 +129,42 @@ BEGIN
       END
    END
    FETCH NEXT FROM @curPickSlipNo INTO @cPickSlipNo   
+END
+SET @nLoopIndex = -1
+WHILE(1=1)
+BEGIN
+   SELECT TOP 1 
+      @cPickDetailKey = PickDetailKey,
+      @nLoopIndex = id
+   FROM @List
+   WHERE id > @nLoopIndex
+   ORDER BY id
+
+   SELECT @nRowCount = @@ROWCOUNT
+   IF @nRowCount = 0
+      BREAK
+
+   -- Unallocate
+   UPDATE dbo.PickDetail WITH(ROWLOCK) SET
+      QTY = 0
+   WHERE PickDetailKey = @cPickDetailKey
+   IF @@ERROR <> 0
+   BEGIN
+      SET @nErrNo = 75551
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UpdPickDtlFail
+      GOTO RollBackTran
+   END
+
+   -- Confirm short pick
+   UPDATE dbo.PickDetail WITH(ROWLOCK) SET
+      Status = 0
+   WHERE PickDetailKey = @cPickDetailKey
+   IF @@ERROR <> 0
+   BEGIN
+      SET @nErrNo = 75552
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UpdPickDtlFail
+      GOTO RollBackTran
+   END
 END
 
 COMMIT TRAN rdt_ConfirmShortPick -- Only commit change made in rdt_ConfirmShortPick

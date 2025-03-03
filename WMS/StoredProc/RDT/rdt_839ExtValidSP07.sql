@@ -1,11 +1,10 @@
-
-SET ANSI_NULLS OFF
-GO
 SET QUOTED_IDENTIFIER OFF
 GO
+SET ANSI_NULLS OFF
+GO  
 
 /************************************************************************/  
-/* Store procedure: rdt_839ExtValidSP10                                 */  
+/* Store procedure: rdt_839ExtValidSP07                                 */  
 /* Purpose: Validate option                                             */  
 /*                                                                      */  
 /* Modifications log:                                                   */  
@@ -14,7 +13,7 @@ GO
 /* 2021-12-20 1.0  James      WMS-18004. Created                        */
 /* 2023-04-17 1.1  James      Add PackData1~3 param (james01)           */
 /************************************************************************/  
-CREATE OR ALTER   PROC [RDT].[rdt_839ExtValidSP07] (  
+CREATE OR ALTER PROC rdt.rdt_839ExtValidSP07 (  
    @nMobile      INT,           
    @nFunc        INT,           
    @cLangCode    NVARCHAR( 3),  
@@ -76,7 +75,6 @@ END
   
 QUIT:  
 
-
 GO
 
 SET QUOTED_IDENTIFIER OFF
@@ -84,7 +82,7 @@ GO
 SET ANSI_NULLS ON
 GO
 
-GRANT EXEC ON RDT.rdt_839ExtValidSP07 TO NSQL
+GRANT EXEC ON rdt.rdt_839ExtValidSP07 TO NSQL
 GO
   
  

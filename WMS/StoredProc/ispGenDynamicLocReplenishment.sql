@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[ispGenDynamicLocReplenishment]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[ispGenDynamicLocReplenishment]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -48,8 +43,12 @@ GO
 /* 2012-04-02   SHONG    2.2  Exclude HOLD Location when search DPP Loc */
 /*                            SOS#240525                                */
 /* 2012-04-07   SHONG    2.3  Validate Tot PickDet Qty vs Replen Qty    */
+/* 2025-02-03   Wan01    2.4  UWP-29796 - Error on Gen Replenishment for*/
+/*                            multiple pickdetail record for same lot,  */
+/*                            loc and id                                */
+/* 2025-02-24                 - fixed incorrect pendingmovein           */
 /************************************************************************/      
-CREATE PROC [dbo].[ispGenDynamicLocReplenishment]     
+CREATE OR ALTER PROC [dbo].[ispGenDynamicLocReplenishment]     
    @cWaveKey NVARCHAR(10),    
    @bSuccess INT OUTPUT,    
    @nErrNo   INT OUTPUT,    
@@ -237,7 +236,7 @@ BEGIN
         SET @nErrNo = @nErrNo+1    
         SET @cErrMsg = 'Found More then 1 Dynamic Replen Configuration Setup'    
         SET @nContinue = 3     
-        GOTO ErrorHandling        	
+        GOTO ErrorHandling          
     END
                         
     CREATE TABLE #DynPick    
@@ -304,7 +303,7 @@ BEGIN
         SET @nErrNo = @nErrNo+1    
         SET @cErrMsg = 'Not Allow to Regenerate Modified PickDetail while Replenishment Already Generated'    
         SET @nContinue = 3     
-        GOTO ErrorHandling        	    	
+        GOTO ErrorHandling                
     END
                   
               
@@ -849,7 +848,8 @@ BEGIN
                 
             UPDATE Replenishment WITH (ROWLOCK)    
             SET    Qty = Qty+@nQty    
-                  ,OriginalQty = OriginalQty+@nQty    
+                  ,OriginalQty = OriginalQty+@nQty
+                  ,ArchiveCop  = NULL                                               --Wan01
             WHERE  ReplenishmentKey = @cReplenishmentKey     
                 
             SET @nErr = @@ERROR    
@@ -876,12 +876,13 @@ BEGIN
                 BEGIN    
                     INSERT INTO LOTxLOCxID    
                       (    
-                        StorerKey, SKU, LOT, LOC, ID, Qty    
+                        StorerKey, SKU, LOT, LOC, ID, Qty, PendingMoveIN            --(Wan01)    
                       )    
               VALUES    
                       (    
                         --@cStorerKey, @cSKU, @cLOT, @cDynamicPickLoc, '', 0   --NJOW01    
-                        @cStorerKey, @cSKU, @cLOT, @cDynamicPickLoc, @cID, 0   --(ChewKP01)  
+                        --@cStorerKey, @cSKU, @cLOT, @cDynamicPickLoc, @cID, 0   --(ChewKP01) 
+                        @cStorerKey, @cSKU, @cLOT, @cDynamicPickLoc, @cID, 0, @nQty --(Wan01)  
                       )    
                     IF @@ERROR<>0    
                     BEGIN    
@@ -968,7 +969,7 @@ BEGIN
                     SET @nErrNo = @nErrNo+1    
                     SET @cErrMsg = 'PickDetail Qty <> Replenishment Qty'    
                     SET @nContinue = 3     
-                    GOTO ErrorHandling                  	
+                    GOTO ErrorHandling                   
                 END
                                
             END-- Update LOTxLOCxID Succeed    
@@ -1003,7 +1004,7 @@ BEGIN
        SELECT @nErrNo = @nErrNo + 1
        SELECT @cErrMsg = 'NSQL' + CONVERT(CHAR(5),ISNULL(@nErrNo,0))           
                         + ': Retrieve of Right (PICKRESLOG) Failed ( '           
-                        + ' (ispWAVRL01)'     
+                        + ' (ispGenDynamicLocReplenishment)'                        --Put correct SP name   
     END
     
     IF @c_authority_pickreslog = '1'

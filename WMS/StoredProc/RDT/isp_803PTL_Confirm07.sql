@@ -1,13 +1,8 @@
-USE [SGWMS]
-GO
-
-/****** Object:  StoredProcedure [PTL].[isp_803PTL_Confirm07]    Script Date: 5/18/2022 5:11:38 PM ******/
 SET ANSI_NULLS OFF
 GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
-
 
 /*****************************************************************************/
 /* Store procedure: isp_803PTL_Confirm07                                     */
@@ -20,7 +15,7 @@ GO
 /* 18-05-2022 1.1  CalvinK    Add ChannelID to PickDetail Insertion (CLVN01) */
 /*****************************************************************************/
 
-ALTER PROC [PTL].[isp_803PTL_Confirm07] (
+CREATE OR ALTER PROC [PTL].[isp_803PTL_Confirm07] (
    @cIPAddress    NVARCHAR(30), 
    @cPosition     NVARCHAR(20),
    @cFuncKey      NVARCHAR(2), 

@@ -53,12 +53,14 @@ GO
 /* 2021-12-06 3.6  YeeKung WMS-18390 Add Multi UCC status (yeekung01)      */
 /* 2021-10-15 3.7  yeekung  WMS-19671 Add eventlog refno2(yeekung02)       */
 /* 2022-09-08 3.8  yeekung  WMS-20650 Add extendeinfo instep3(yeekung03)   */
-/* 2020-05-04 3.9  YeeKung  WMS-11867 Add verifySKU (yeekung01)             */
+/* 2020-05-04 3.9  YeeKung  WMS-11867 Add verifySKU (yeekung01)            */
 /* 2022-04-12 4.0  James   WMS-22928 Add RDTFormat for UCC Qty (james03)   */
 /* 2023-12-04 4.1  Ung     WMS-24276 Add DecodeSP                          */
 /* 2024-06-18 4.2  CYU027  UWP-20900 bugfix for NOPO check                 */
 /* 2024-09-30 4.3  YYS027  UWP-25017 bugfix for string(dmy) to date when   */
 /*                         calling rdt_UCCReceive_Confirm                  */
+/* 2024-10-14 4.4  CYU027  FCR-759 ID and UCC Length Issue                 */
+/* 2024-12-05 4.5  ShaoAn  FCR-1103 Changes in UCC Receive to process      */
 /***************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdtfnc_UCCReceive](
    @nMobile    INT,
@@ -150,6 +152,11 @@ DECLARE
    @cDecodeSP            NVARCHAR( 20), --(yeekung01)
    @cDecodeQty           NVARCHAR(1) ,--(yeekung01)
 
+   @cExtScnSP            NVARCHAR(20), --(ShaoAn)
+   @tExtScnData          VariableTable,           -- for support ExtScnSP
+
+   @nAction              INT,
+
    @cLottable01       NVARCHAR(18),
    @cLottable02       NVARCHAR(18),
    @cLottable03       NVARCHAR(18),
@@ -186,6 +193,8 @@ DECLARE
 
    @cUserName          NVARCHAR(18), -- (Vicky06)
    @cUCCLabel          NVARCHAR(20), --(cc01)
+   @cUserDefine08      NVARCHAR(30), -- FCR759
+   @cUserDefine09      NVARCHAR(30), -- FCR759
 
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),
@@ -210,8 +219,18 @@ DECLARE
    @cFieldAttr09 NVARCHAR( 1), @cFieldAttr10 NVARCHAR( 1),
    @cFieldAttr11 NVARCHAR( 1), @cFieldAttr12 NVARCHAR( 1),
    @cFieldAttr13 NVARCHAR( 1), @cFieldAttr14 NVARCHAR( 1),
-   @cFieldAttr15 NVARCHAR( 1)
+   @cFieldAttr15 NVARCHAR( 1),
 
+   @cUDF01  NVARCHAR( 250), @cUDF02 NVARCHAR( 250), @cUDF03 NVARCHAR( 250),
+   @cUDF04  NVARCHAR( 250), @cUDF05 NVARCHAR( 250), @cUDF06 NVARCHAR( 250),
+   @cUDF07  NVARCHAR( 250), @cUDF08 NVARCHAR( 250), @cUDF09 NVARCHAR( 250),
+   @cUDF10  NVARCHAR( 250), @cUDF11 NVARCHAR( 250), @cUDF12 NVARCHAR( 250),
+   @cUDF13  NVARCHAR( 250), @cUDF14 NVARCHAR( 250), @cUDF15 NVARCHAR( 250),
+   @cUDF16  NVARCHAR( 250), @cUDF17 NVARCHAR( 250), @cUDF18 NVARCHAR( 250),
+   @cUDF19  NVARCHAR( 250), @cUDF20 NVARCHAR( 250), @cUDF21 NVARCHAR( 250),
+   @cUDF22  NVARCHAR( 250), @cUDF23 NVARCHAR( 250), @cUDF24 NVARCHAR( 250),
+   @cUDF25  NVARCHAR( 250), @cUDF26 NVARCHAR( 250), @cUDF27 NVARCHAR( 250),
+   @cUDF28  NVARCHAR( 250), @cUDF29 NVARCHAR( 250), @cUDF30 NVARCHAR( MAX)
 -- Getting Mobile information
 SELECT
    @nFunc       = Func,
@@ -286,6 +305,10 @@ SELECT
    @cDecodeSP              = V_String35, --(yeekung01)
    @cDecodeQty             = V_String36, --(yeekung01)
    @cVerifySKU             = V_String37, --(yeekung01)
+   @cUserDefine08          = V_String38, -- FCR-759
+   @cUserDefine09          = V_String39, -- FCR-759
+
+   @cExtScnSP              = V_String40, --(ShaoAn)
 
    @nQTY             = V_Integer1,
    @nCaseCntQty      = V_Integer2,
@@ -336,7 +359,8 @@ BEGIN
    IF @nStep =10 GOTO Step_10  -- Scn = 1309   Extra data info
    IF @nStep =11 GOTO Step_11  -- Scn = 1310   Message. Not all ucc received. ESC anyway?
    IF @nStep =12 GOTO Step_12  -- Scn = 1311   Message. Close pallet?
-	IF @nStep =13 GOTO Step_13  -- Scn = 3950   Verify SKU
+   IF @nStep =13 GOTO Step_13  -- Scn = 3950   Verify SKU
+   IF @nStep =99 GOTO Step_ExtScn
 END
 
 RETURN -- Do nothing if incorrect step
@@ -378,6 +402,10 @@ BEGIN
    SET @cExtendedInfoSP = rdt.RDTGetConfig( @nFunc, 'ExtendedInfoSP', @cStorerKey)
    IF @cExtendedInfoSP = '0'
       SET @cExtendedInfoSP = ''
+      
+   SET @cExtScnSP = rdt.RDTGetConfig( @nFunc, 'ExtScnSP', @cStorerKey)
+   IF @cExtScnSP = '0'
+      SET @cExtScnSP = ''
 
    --(cc01)
    SET @cUCCLabel = rdt.rdtGetConfig( @nFunc, 'UCCLabel', @cStorerKey)
@@ -916,6 +944,72 @@ BEGIN
         END
       END
 
+	  DECLARE @cIDBarcode NVARCHAR(100)
+	  SET @cIDBarcode = @cInField04
+
+      -- Decode
+      -- Standard decode
+      IF @cDecodeSP = '1'
+      BEGIN
+         EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cIDBarcode,
+            @cID     = @cTOID   OUTPUT,
+            @nErrNo  = @nErrNo  OUTPUT,
+            @cErrMsg = @cErrMsg OUTPUT,
+            @cType   = 'ID'
+
+         IF @nErrNo <> 0
+            GOTO Step_3_Fail
+      END
+      ELSE
+      BEGIN
+         IF @cDecodeSP <> ''
+         BEGIN
+            IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cDecodeSP AND type = 'P')
+            BEGIN
+               SELECT @cSKU = '', @nQTY = 0
+
+               SET @cSQL = 'EXEC rdt.' + RTRIM( @cDecodeSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cReceiptKey, @cPOKey, @cLOC, ' +
+               ' @cUCC               OUTPUT,' +
+               ' @nUCCQTY            OUTPUT,' +
+               ' @cUserDefine08      OUTPUT,' +
+               ' @cUserDefine09      OUTPUT,' +
+               ' @nErrNo      OUTPUT, @cErrMsg     OUTPUT'
+
+				SET @cSQLParam =
+				   ' @nMobile              INT,           ' +
+				   ' @nFunc                INT,           ' +
+				   ' @cLangCode            NVARCHAR( 3),  ' +
+				   ' @nStep                INT,           ' +
+				   ' @nInputKey            INT,           ' +
+				   ' @cStorerKey           NVARCHAR( 15), ' +
+				   ' @cReceiptKey          NVARCHAR( 10), ' +
+				   ' @cPOKey               NVARCHAR( 10), ' +
+				   ' @cLOC                 NVARCHAR( 10), ' +
+				   ' @cUCC                 NVARCHAR( 2000)   OUTPUT, ' +
+				   ' @nUCCQTY              INT               OUTPUT, ' +
+               ' @cUserDefine08        NVARCHAR(30)      OUTPUT,' +
+               ' @cUserDefine09        NVARCHAR(30)      OUTPUT,' +
+				   ' @nErrNo               INT               OUTPUT, ' +
+				   ' @cErrMsg              NVARCHAR( 20)     OUTPUT'
+
+			   EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                  @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cReceiptKey, @cPOKey, @cLOC,
+				      @cIDBarcode       OUTPUT,
+                  @nQTY             OUTPUT,
+                  @cUserDefine08    OUTPUT,
+                  @cUserDefine09    OUTPUT,
+                  @nErrNo           OUTPUT, @cErrMsg     OUTPUT
+
+               IF @nErrNo <> 0
+                  GOTO Step_3_Fail
+
+				SET @cTOID = @cIDBarcode
+
+            END
+         END
+      END
+
       -- (james01)
       -- Extended validate SP
       IF @cExtendedValidateSP <> ''
@@ -1362,6 +1456,12 @@ BEGIN
       SET @nScn = @nScn - 1
       SET @nStep = @nStep - 1
    END
+
+   IF @cExtScnSP <> '' 
+   BEGIN
+      GOTO Step_ExtScn
+   END
+
    GOTO Quit
 
    Step_4_Fail:
@@ -1530,6 +1630,12 @@ BEGIN
       SET @nScn = @nScn - 1
       SET @nStep = @nStep - 1
    END
+
+   IF @cExtScnSP <> '' 
+   BEGIN
+      GOTO Step_ExtScn
+   END
+
    GOTO Quit
 
    Step_5_Fail:
@@ -1621,32 +1727,83 @@ BEGIN
       IF rdt.rdtIsValidDate(@cTempLottable04) = 1 --valid date
         SET @dTempLottable04 = rdt.rdtConvertToDate( @cTempLottable04)
 
+		SET @nQTY = 0
+
+      -- Decode
+      IF @cDecodeSP <> ''
+      BEGIN
+         DECLARE @nUCCQTY INT
+		   DECLARE @cUCCBarcode NVARCHAR(100)
+		   SET @cUCCBarcode = @cInField01
+
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cDecodeSP AND type = 'P')
+         BEGIN
+
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cDecodeSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cReceiptKey, @cPOKey, @cLOC, ' +
+               ' @cUCC               OUTPUT, ' +
+               ' @nUCCQTY            OUTPUT, ' +
+               ' @cUserDefine08      OUTPUT, ' +
+               ' @cUserDefine09      OUTPUT, ' +
+               ' @nErrNo      OUTPUT, @cErrMsg     OUTPUT'
+            SET @cSQLParam =
+               ' @nMobile              INT,           ' +
+               ' @nFunc                INT,           ' +
+               ' @cLangCode            NVARCHAR( 3),  ' +
+               ' @nStep                INT,           ' +
+               ' @nInputKey            INT,           ' +
+               ' @cStorerKey           NVARCHAR( 15), ' +
+               ' @cReceiptKey          NVARCHAR( 10), ' +
+               ' @cPOKey               NVARCHAR( 10), ' +
+               ' @cLOC                 NVARCHAR( 10), ' +
+               ' @cUCC                 NVARCHAR( 2000)   OUTPUT, ' +
+               ' @nUCCQTY              INT               OUTPUT, ' +
+               ' @cUserDefine08        NVARCHAR(30)      OUTPUT,' +
+               ' @cUserDefine09        NVARCHAR(30)      OUTPUT,' +
+               ' @nErrNo               INT               OUTPUT, ' +
+               ' @cErrMsg              NVARCHAR( 20)     OUTPUT'
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cReceiptKey, @cPOKey, @cLOC,
+               @cUCCBarcode      OUTPUT,
+               @nUCCQTY          OUTPUT,
+               @cUserDefine08    OUTPUT,
+               @cUserDefine09    OUTPUT,
+               @nErrNo           OUTPUT, @cErrMsg     OUTPUT
+
+			   IF @nErrNo <> 0
+                  GOTO Step_6_Fail
+
+			   SET @cUCC = @cUCCBarcode
+         END
+      END
+
       -- UCC extended validation
       IF @cUCCExtValidate <> ''
       BEGIN
          IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cUCCExtValidate AND type = 'P')
          BEGIN
             SET @cSQL = 'EXEC rdt.' + RTRIM( @cUCCExtValidate) +
-               '  @nMobile, @nFunc, @cLangCode, @cReceiptKey, @cPOKey, @cLOC, @cToID, @cLottable01, @cLottable02, @cLottable03, @dLottable04, @cUCC ' +
-               ' ,@nErrNo   OUTPUT ' +
-               ' ,@cErrMsg  OUTPUT '
+                        '  @nMobile, @nFunc, @cLangCode, @cReceiptKey, @cPOKey, @cLOC, @cToID, @cLottable01, @cLottable02, @cLottable03, @dLottable04, @cUCC ' +
+                        ' ,@nErrNo   OUTPUT ' +
+                        ' ,@cErrMsg  OUTPUT '
             SET @cSQLParam = +
-               '  @nMobile     INT       ' +
-               ' ,@nFunc       INT       ' +
-               ' ,@cLangCode   NVARCHAR(  3) ' +
-               ' ,@cReceiptKey NVARCHAR( 10) ' +
-               ' ,@cPOKey      NVARCHAR( 10) ' +
-               ' ,@cLOC        NVARCHAR( 10) ' +
-               ' ,@cToID       NVARCHAR( 18) ' +
-               ' ,@cLottable01 NVARCHAR( 18) ' +
-               ' ,@cLottable02 NVARCHAR( 18) ' +
-               ' ,@cLottable03 NVARCHAR( 18) ' +
-               ' ,@dLottable04 DATETIME  ' +
-               ' ,@cUCC        NVARCHAR( 20) ' +
-               ' ,@nErrNo      INT       OUTPUT ' +
-               ' ,@cErrMsg     NVARCHAR( 20) OUTPUT '
+                                '  @nMobile     INT       ' +
+                             ' ,@nFunc       INT       ' +
+                             ' ,@cLangCode   NVARCHAR(  3) ' +
+                             ' ,@cReceiptKey NVARCHAR( 10) ' +
+                             ' ,@cPOKey      NVARCHAR( 10) ' +
+                             ' ,@cLOC        NVARCHAR( 10) ' +
+                             ' ,@cToID       NVARCHAR( 18) ' +
+                             ' ,@cLottable01 NVARCHAR( 18) ' +
+                             ' ,@cLottable02 NVARCHAR( 18) ' +
+                             ' ,@cLottable03 NVARCHAR( 18) ' +
+                             ' ,@dLottable04 DATETIME  ' +
+                             ' ,@cUCC        NVARCHAR( 20) ' +
+                             ' ,@nErrNo      INT       OUTPUT ' +
+                             ' ,@cErrMsg     NVARCHAR( 20) OUTPUT '
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-                @nMobile, @nFunc, @cLangCode, @cReceiptKey, @cPOKey, @cLOC, @cToID, @cTempLottable01, @cTempLottable02, @cTempLottable03, @dTempLottable04, @cUCC
+                 @nMobile, @nFunc, @cLangCode, @cReceiptKey, @cPOKey, @cLOC, @cToID, @cTempLottable01, @cTempLottable02, @cTempLottable03, @dTempLottable04, @cUCC
                ,@nErrNo   OUTPUT
                ,@cErrMsg  OUTPUT
 
@@ -1655,63 +1812,6 @@ BEGIN
          END
       END
 
-		SET @nQTY = 0
-
-      -- Decode
-      IF @cDecodeSP <> ''
-      BEGIN
-         DECLARE @nUCCQTY INT
-
-         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cDecodeSP AND type = 'P')
-         BEGIN
-
-            SET @cSQL = 'EXEC rdt.' + RTRIM( @cDecodeSP) +
-               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cReceiptKey, @cPOKey, @cLOC, ' +
-               ' @cUCC        OUTPUT, @nUCCQTY     OUTPUT,' +
-               ' @cLottable01 OUTPUT, @cLottable02 OUTPUT, @cLottable03 OUTPUT, @dLottable04 OUTPUT, @dLottable05 OUTPUT, ' +
-               ' @cLottable06 OUTPUT, @cLottable07 OUTPUT, @cLottable08 OUTPUT, @cLottable09 OUTPUT, @cLottable10 OUTPUT, ' +
-               ' @cLottable11 OUTPUT, @cLottable12 OUTPUT, @dLottable13 OUTPUT, @dLottable14 OUTPUT, @dLottable15 OUTPUT, ' +
-               ' @nErrNo      OUTPUT, @cErrMsg     OUTPUT'
-            SET @cSQLParam =
-               ' @nMobile      INT,           ' +
-               ' @nFunc        INT,           ' +
-               ' @cLangCode    NVARCHAR( 3),  ' +
-               ' @nStep        INT,           ' +
-               ' @nInputKey    INT,           ' +
-               ' @cStorerKey   NVARCHAR( 15), ' +
-               ' @cReceiptKey  NVARCHAR( 10), ' +
-               ' @cPOKey       NVARCHAR( 10), ' +
-               ' @cLOC         NVARCHAR( 10), ' +
-               ' @cUCC         NVARCHAR( 20)  OUTPUT, ' +
-               ' @nUCCQTY      INT            OUTPUT, ' +
-               ' @cLottable01  NVARCHAR( 18)  OUTPUT, ' +
-               ' @cLottable02  NVARCHAR( 18)  OUTPUT, ' +
-               ' @cLottable03  NVARCHAR( 18)  OUTPUT, ' +
-               ' @dLottable04  DATETIME       OUTPUT, ' +
-               ' @dLottable05  DATETIME       OUTPUT, ' +
-               ' @cLottable06  NVARCHAR( 30)  OUTPUT, ' +
-               ' @cLottable07  NVARCHAR( 30)  OUTPUT, ' +
-               ' @cLottable08  NVARCHAR( 30)  OUTPUT, ' +
-               ' @cLottable09  NVARCHAR( 30)  OUTPUT, ' +
-               ' @cLottable10  NVARCHAR( 30)  OUTPUT, ' +
-               ' @cLottable11  NVARCHAR( 30)  OUTPUT, ' +
-               ' @cLottable12  NVARCHAR( 30)  OUTPUT, ' +
-               ' @dLottable13  DATETIME       OUTPUT, ' +
-               ' @dLottable14  DATETIME       OUTPUT, ' +
-               ' @dLottable15  DATETIME       OUTPUT, ' +
-               ' @nErrNo       INT            OUTPUT, ' +
-               ' @cErrMsg      NVARCHAR( 20)  OUTPUT'
-
-            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cReceiptKey, @cPOKey, @cLOC,
-               @cUCC        OUTPUT, @nUCCQTY     OUTPUT,
-               @cLottable01 OUTPUT, @cLottable02 OUTPUT, @cLottable03 OUTPUT, @dLottable04 OUTPUT, @dLottable05 OUTPUT,
-               @cLottable06 OUTPUT, @cLottable07 OUTPUT, @cLottable08 OUTPUT, @cLottable09 OUTPUT, @cLottable10 OUTPUT,
-               @cLottable11 OUTPUT, @cLottable12 OUTPUT, @dLottable13 OUTPUT, @dLottable14 OUTPUT, @dLottable15 OUTPUT,
-               @nErrNo      OUTPUT, @cErrMsg     OUTPUT
-
-         END
-      END
       --get ucc count
       SET @nCnt = 0
       SELECT @nCnt = COUNT(UCCNo)
@@ -2584,6 +2684,12 @@ BEGIN
          END
       END
    END
+
+   IF @cExtScnSP <> '' 
+   BEGIN
+      GOTO Step_ExtScn
+   END
+
    GOTO Quit
 
    Step_7_Fail:
@@ -3037,6 +3143,12 @@ BEGIN
          END
       END
    END
+
+   IF @cExtScnSP <> '' 
+   BEGIN
+      GOTO Step_ExtScn
+   END
+
    GOTO Quit
 
    Step_8_Fail:
@@ -3202,8 +3314,13 @@ BEGIN
       -- Go to previous screen
       SET @nScn = @nScn - 1
       SET @nStep = @nStep - 1
-
    END
+
+   IF @cExtScnSP <> '' 
+   BEGIN
+      GOTO Step_ExtScn
+   END
+
    GOTO Quit
 
    Step_9_Fail:
@@ -3608,6 +3725,12 @@ BEGIN
          END
       END
    END
+
+   IF @cExtScnSP <> '' 
+   BEGIN
+      GOTO Step_ExtScn
+   END
+   
    GOTO Quit
 
    Step_11_Fail:
@@ -3839,6 +3962,12 @@ BEGIN
          END
       END
    END
+
+   IF @cExtScnSP <> ''
+   BEGIN
+      GOTO Step_ExtScn
+   END
+
 END
 GOTO Quit
 /********************************************************************************
@@ -3929,6 +4058,96 @@ BEGIN
 END
 GOTO Quit
 
+/********************************************************************************
+Step 99. Scn = Customize
+********************************************************************************/
+
+Step_ExtScn:
+BEGIN
+   IF @cExtScnSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
+      BEGIN
+         DECLARE @nStepBak INT
+         DECLARE @nScnBak INT
+         SELECT @nStepBak = @nStep, @nScnBak = @nScn, @nErrNo=0, @cErrMsg=''
+         DELETE FROM @tExtScnData
+         INSERT INTO @tExtScnData (Variable, Value) VALUES
+         ('@cReceiptKey',  @cReceiptKey),
+         ('@cPOKey',  @cPOKey),
+         ('@cLOC',  @cLOC),
+         ('@cToID',  @cToID),
+         ('@cUCC',  @cUCC),
+         ('@cSKU',  @cSKU),
+         ('@cQTY',  CONVERT(VARCHAR(20),@nQTY)),         --cast
+         ('@cParam1',  @cParam1),
+         ('@cParam2',  @cParam2),
+         ('@cParam3',  @cParam3),
+         ('@cParam4',  @cParam4),
+         ('@cParam5',  @cParam5),
+         ('@cOption',  @cOption)
+
+         EXECUTE [RDT].[rdt_ExtScnEntry] 
+         @cExtScnSP, 
+         @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorerKey, @tExtScnData ,
+         @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01 OUTPUT,  
+         @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02 OUTPUT,  
+         @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03 OUTPUT,  
+         @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04 OUTPUT,  
+         @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  @dLottable05 OUTPUT,  
+         @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  @cLottable06 OUTPUT, 
+         @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  @cLottable07 OUTPUT, 
+         @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  @cLottable08 OUTPUT, 
+         @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  @cLottable09 OUTPUT, 
+         @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  @cLottable10 OUTPUT, 
+         @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  @cLottable11 OUTPUT,
+         @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT,  @cLottable12 OUTPUT,
+         @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  @dLottable13 OUTPUT,
+         @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT,  @dLottable14 OUTPUT,
+         @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT,  @dLottable15 OUTPUT,
+         @nAction, 
+         @nScn     OUTPUT,  @nStep OUTPUT,
+         @nErrNo   OUTPUT, 
+         @cErrMsg  OUTPUT,
+         @cUDF01   OUTPUT, @cUDF02 OUTPUT, @cUDF03 OUTPUT,
+         @cUDF04   OUTPUT, @cUDF05 OUTPUT, @cUDF06 OUTPUT,
+         @cUDF07   OUTPUT, @cUDF08 OUTPUT, @cUDF09 OUTPUT,
+         @cUDF10   OUTPUT, @cUDF11 OUTPUT, @cUDF12 OUTPUT,
+         @cUDF13   OUTPUT, @cUDF14 OUTPUT, @cUDF15 OUTPUT,
+         @cUDF16   OUTPUT, @cUDF17 OUTPUT, @cUDF18 OUTPUT,
+         @cUDF19   OUTPUT, @cUDF20 OUTPUT, @cUDF21 OUTPUT,
+         @cUDF22   OUTPUT, @cUDF23 OUTPUT, @cUDF24 OUTPUT,
+         @cUDF25   OUTPUT, @cUDF26 OUTPUT, @cUDF27 OUTPUT,
+         @cUDF28   OUTPUT, @cUDF29 OUTPUT, @cUDF30 OUTPUT
+
+         IF @cExtScnSP = 'rdt_898ExtScn02' AND @nInputKey = 1
+         BEGIN
+            IF @nStepBak = 99
+            BEGIN
+               SET @cUCC = @cUDF01
+               SET @nQTY = CAST(@cUDF02 AS INT)
+               SET @nCaseCntQty = CAST(@cUDF03 AS INT)
+               SET @nCnt = CAST(@cUDF04 AS INT)
+               SET @cReceiveAllowAddNewUCC = @cUDF05
+            END
+            ELSE IF @nStepBak = 10
+            BEGIN
+               SET @cCartonCnt = @cUDF01
+            END
+         END
+
+         IF @nErrNo <> 0
+         BEGIN
+            GOTO Step_99_Fail
+         END
+      END
+   END
+   GOTO Quit
+   Step_99_Fail:
+   BEGIN
+      GOTO Quit
+   END
+END
 
 /********************************************************************************
 Quit. Update back to I/O table, ready to be pick up by JBOSS
@@ -3994,6 +4213,9 @@ BEGIN
       V_String35 = @cDecodeSP,
       V_String36 = @cDecodeQty,
       V_String37 = @cVerifySKU,
+      V_String38 = @cUserDefine08,
+      V_String39 = @cUserDefine09,
+      V_String40 = @cExtScnSP,
 
       V_Lottable01 = @cLottable01,
       V_Lottable02 = @cLottable02,

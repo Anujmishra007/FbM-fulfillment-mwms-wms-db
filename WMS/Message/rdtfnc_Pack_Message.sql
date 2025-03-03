@@ -48,5 +48,8 @@ execute rdt.rdtAddMsg 100244, 10, '100244Need Height   ', 'us_english', 838
 execute rdt.rdtAddMsg 100245, 10, '100245Invalid Height', 'us_english', 838
 execute rdt.rdtAddMsg 100246, 10, '100246Invalid Format', 'us_english', 838
 execute rdt.rdtAddMsg 100247, 10, '100247NeedFromDropID', 'us_english', 838
+execute rdt.rdtAddMsg 100248, 10, '100248Invalid SN    ', 'us_english', 838, 0, '100248Invalid Serial No'
+execute rdt.rdtAddMsg 100249, 10, '100249SN Not Packed ', 'us_english', 838, 0, '100249Serial number cannot Be packed'
+execute rdt.rdtAddMsg 100250, 10, '100250Serial Confirm', 'us_english', 838
 
 SELECT * FROM rdt.rdtmsg (NOLOCK) WHERE Message_ID BETWEEN 100201 and 100250 AND lang_code = 'ENG'

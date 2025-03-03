@@ -8,7 +8,7 @@ GO
 /* Copyright: Maersk Logistics                                          */
 /* Written by: Wan                                                      */
 /*                                                                      */
-/* Purpose: UWP-23788 - Stock Owner Change Without Pysical Move         */
+/* Purpose: UWP-23788 - Stock Owner Change Without Physical Move        */
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
@@ -21,6 +21,7 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 2024-09-30  Wan      1.0   Created.                                  */
+/* 2024-11-14  Wan01    1.1   Fixed to loc pendingmove when qtypicked=qty*/
 /************************************************************************/
 CREATE OR ALTER PROC msp_RCM_WV_ULP_StockOwnerChange
    @c_Wavekey  NVARCHAR(10)
@@ -43,11 +44,11 @@ BEGIN
          , @n_ErrGroupKey        INT          = 0
          , @c_ProceedWithWarning CHAR(1)      = 'N'
          , @c_UserName           NVARCHAR(128)= SUSER_SNAME()
-		 , @b_PopupWindow        INT	= 0
-		 , @n_NoOfOrderNoLoad    INT	= 0
-		 , @c_BuildParmKeys     NVARCHAR(2000)=''
+         , @b_PopupWindow        INT	= 0
+         , @n_NoOfOrderNoLoad    INT	= 0
+         , @c_BuildParmKeys     NVARCHAR(2000)=''
 
-		 , @c_Orderkey			 NVARCHAR(10) = ''
+         , @c_Orderkey			 NVARCHAR(10) = ''
          , @c_Storerkey          NVARCHAR(15) = ''
          , @c_Sku                NVARCHAR(20) = ''
          , @c_Lot                NVARCHAR(10) = ''
@@ -204,6 +205,7 @@ SET @CUR_PD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
       ,  @nFunc            = 0
       ,  @nPABookingKey    = 0
       ,  @cMoveQTYAlloc    = '1'
+      ,  @cMoveQTYPick     = '1'         --2024-11-14 - Fixed.
       ,  @cMoveQTYReplen   = '1'
 
       IF @n_err <> 0

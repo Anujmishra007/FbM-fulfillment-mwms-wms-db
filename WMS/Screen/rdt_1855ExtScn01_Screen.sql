@@ -14,6 +14,7 @@ EXECUTE rdt.rdtAddScn 6414, 'ENG'
  
 
  -- 6416 = New CART MATRIX screen
+ --FCR-1755
 DELETE rdt.RDTScn WHERE Scn = 6416 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 6416, 'ENG'
    ,@cLine01 = 'TM Assist CPK'
@@ -27,7 +28,7 @@ EXECUTE rdt.rdtAddScn 6416, 'ENG'
    ,@cLine09 = '%20d07'
    ,@cLine10 = 'TOTE ID:'
    ,@cLine11 = '%20i08'
-   ,@cLine12 = 'ASSIGNED: %03d09'
-   ,@cLine13 = ''
+   ,@cLine12 = 'REQUIRED: %03d10'
+   ,@cLine13 = 'ASSIGNED: %03d09'
    ,@cLine14 = '%e'
    ,@nFunc = 1855

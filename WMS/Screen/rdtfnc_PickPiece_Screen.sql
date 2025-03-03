@@ -84,7 +84,7 @@ EXECUTE rdt.rdtAddScn 4646, 'ENG'
    ,@cLine01 = 'LOC: %10d01'
    ,@cLine02 = 'LOC: %10i02'
    ,@cLine14 = '%e'
-   ,@cWebGroup = '{"1":["1","2"]}'
+   ,@cWebGroup = '{"1":["1"],"2":["2"]}'
    ,@nFunc = 839
 
 -- 4647 = Abort LOC screen

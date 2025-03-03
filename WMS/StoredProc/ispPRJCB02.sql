@@ -29,6 +29,7 @@ GO
 /* Date        Author   Rev   Purposes                                  */
 /* 2024-10-09  SSA01    1.1   UWP-24678-JCB- Allocation for Kitting and */
 /*                                    Decanting                         */
+/* 2024-11-18  SSA02    1.2   Updated picklocation(SL.LocationType = 'CASE') */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[ispPRJCB02] (
      @c_OrderKey        NVARCHAR(10)
@@ -94,8 +95,8 @@ BEGIN
           ,@c_Type                   NVARCHAR(10)
 
    SET @c_UOM = '2'
-    --Added PA.Zonecategory (SSA01)
-   SET @c_Conditions = ' AND LOC.LocationType = ''PICK'' AND PA.ZoneCategory  = ''EMG'' '    --(SSA01)
+    --Added PA.Zonecategory (SSA01), (SSA02)
+   SET @c_Conditions = ' AND LOC.LocationType = ''PICK'' AND PA.ZoneCategory  = ''EMG'' AND SL.LocationType IN ( ''CASE'') '
    SET @c_Type = '1'
                                              
    IF @n_continue IN(1,2)

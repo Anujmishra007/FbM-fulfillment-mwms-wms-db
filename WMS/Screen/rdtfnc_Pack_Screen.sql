@@ -133,3 +133,39 @@ EXECUTE rdt.rdtAddScn 4659, 'ENG'
    ,@cLine14 = N'%e'
    ,@cWebGroup = '{"1":["1","2"],"2":["3","4"],"3":["5","6"]}'
    ,@nFunc = 838
+
+
+-- FCR-778  for rdt_838ExtScn04
+-- 6440 = TO DROP ID Screen
+DELETE rdt.RDTScn WHERE Scn = 6440 AND Lang_Code = 'ENG'
+EXECUTE rdt.rdtAddScn 6440, 'ENG'
+   ,@cLine01 = 'DROP ID:       %20d01'
+   ,@cLine02 = 'Pallet Type:   %10d02'
+   ,@cLine03 = 'Pallet Height: %10d03'
+   ,@cLine04 = 'Pallet Cube:   %10d04'
+   ,@cLine05 = 'WARNING:'
+   ,@cLine06 = '%20d05'
+   ,@cLine07 = '%20d06'
+   ,@cLine08 = '%20d07'
+   ,@cLine09 = '%20d08'
+   ,@cLine10 = '%20d09'
+   ,@cLine11 = '%20d10'
+   ,@cLine12 = '%e'
+   ,@cWebGroup = '{"1":["1"],"2":["2","3","4"],"3":["5","6","7","8","9","10","11"]}'
+   ,@nFunc = 838
+
+-- Step9 Extend Screen 6449 SerialNo Confirm
+DELETE rdt.RDTScn WHERE Scn = 6449 AND Lang_Code = 'ENG'
+EXECUTE rdt.rdtAddScn 6449, 'ENG'
+   ,@cLine01 = 'SERIAL NO:'
+   ,@cLine02 = '%30d01'
+   ,@cLine03 = ''
+   ,@cLine04 = 'INVALID SERIAL NO'
+   ,@cLine05 = 'CONFIRM?'
+   ,@cLine06 = ''
+   ,@cLine07 = '1 = YES'
+   ,@cLine08 = '9 = NO'
+   ,@cLine10 = 'OPTION: %01i03'
+   ,@cLine14 = '%e'
+   ,@nFunc = 838
+
