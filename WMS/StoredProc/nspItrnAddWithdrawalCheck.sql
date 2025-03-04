@@ -1,6 +1,3 @@
-IF EXISTS (SELECT name FROM dbo.sysobjects WHERE name = 'nspItrnAddWithdrawalCheck' AND type = 'P')
-   DROP PROC nspItrnAddWithdrawalCheck
-GO
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -39,9 +36,11 @@ GO
 /* 09-Aug-2022  NJOW01    2.0 Fix channel date format compatible with     */
 /*                            format in isp_ChannelGetID                  */
 /* 09-Aug-20200 NJOW01    2.0 DEVOPS Combine Script                       */
+/* 12-Aug-2024  Wan04     2.1 LFWM-4446 - RG[GIT] Serial Number Solution  */
+/*                            - Transfer by Serial Number                 */
 /**************************************************************************/
 
-CREATE PROC  [dbo].[nspItrnAddWithdrawalCheck]
+CREATE OR ALTER PROC  [dbo].[nspItrnAddWithdrawalCheck]
                 @c_itrnkey      NVARCHAR(10)
  ,              @c_StorerKey    NVARCHAR(15)
  ,              @c_SKU          NVARCHAR(20)
@@ -98,16 +97,16 @@ CREATE PROC  [dbo].[nspItrnAddWithdrawalCheck]
 
  IF @n_continue=1 or @n_continue=2
  BEGIN
-     IF @d_Lottable04 = ""
+     IF @d_Lottable04 = ''
      BEGIN
          SELECT @d_Lottable04 = NULL
      END
-     IF @d_Lottable05 = ""
+     IF @d_Lottable05 = ''
      BEGIN
          SELECT @d_Lottable05 = NULL
      END
  END
- SELECT @n_continue=1, @b_success=0, @n_Err = 1,@c_ErrMsg=""
+ SELECT @n_continue=1, @b_success=0, @n_Err = 1,@c_ErrMsg=''
 
  DECLARE @c_allowidqtyupdate NVARCHAR(1)
        , @c_ChannelInventoryMgmt  NVARCHAR(10) = '0' -- (SWT02)
@@ -117,7 +116,7 @@ CREATE PROC  [dbo].[nspItrnAddWithdrawalCheck]
  BEGIN
      SELECT @c_allowidqtyupdate = IsNull (NSQLValue, '0')
      FROM NSQLCONFIG (NOLOCK)
-     WHERE CONFIGKEY = "ALLOWIDQTYUPDATE"
+     WHERE CONFIGKEY = 'ALLOWIDQTYUPDATE'
  END
 
   -- (SWT02)
@@ -149,15 +148,15 @@ CREATE PROC  [dbo].[nspItrnAddWithdrawalCheck]
  BEGIN
      IF @n_continue=1 or @n_continue=2
      BEGIN
-         IF (@c_StorerKey = "") OR (@c_StorerKey IS NULL)
+         IF (@c_StorerKey = '') OR (@c_StorerKey IS NULL)
          BEGIN
              SELECT @c_StorerKey=( SELECT dbo.fnc_LTrim(dbo.fnc_RTrim(NSQLValue))
              FROM NSQLCONFIG (NOLOCK)
-             WHERE NSQLCONFIG.ConfigKey = "gc_storerdef")
+             WHERE NSQLCONFIG.ConfigKey = 'gc_storerdef')
              IF @c_StorerKey IS NULL
              BEGIN
                  SELECT @n_continue = 3 , @n_Err = 61911 --61300
-                 SELECT @c_ErrMsg="NSQL"+CONVERT(char(5),@n_Err)+": Storerkey is blank or null - not allowed! (nspItrnAddWithdrawalCheck)"
+                 SELECT @c_ErrMsg='NSQL'+CONVERT(char(5),@n_Err)+': Storerkey is blank or null - not allowed! (nspItrnAddWithdrawalCheck)'
              END
              ELSE BEGIN
                  UPDATE Itrn SET StorerKey = @c_StorerKey WHERE Itrn.ItrnKey = @c_ItrnKey
@@ -166,13 +165,13 @@ CREATE PROC  [dbo].[nspItrnAddWithdrawalCheck]
                  BEGIN
                      SELECT @n_continue = 3
                      SELECT @n_Err = 61912 --61301
-                     SELECT @c_ErrMsg="NSQL"+CONVERT(char(5),@n_Err)+": Insert Trigger On ITRN Failed Because An Attempt To Update StorerKey Failed. (nspItrnAddWithdrawalCheck)" + " ( " + " SQLSvr MESSAGE=" + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_ErrMsg)) + " ) "
+                     SELECT @c_ErrMsg='NSQL'+CONVERT(char(5),@n_Err)+': Insert Trigger On ITRN Failed Because An Attempt To Update StorerKey Failed. (nspItrnAddWithdrawalCheck)' + ' ( ' + ' SQLSvr MESSAGE=' + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_ErrMsg)) + ' ) '
                  END
                  ELSE IF @n_cnt = 0
                  BEGIN
                      SELECT @n_continue = 3
                      SELECT @n_Err = 61913 --61323
-                     SELECT @c_ErrMsg="NSQL"+CONVERT(char(5),@n_Err)+": Update To Table ITRN Returned Zero Rows Affected. (nspItrnAddWithdrawalCheck)"
+                     SELECT @c_ErrMsg='NSQL'+CONVERT(char(5),@n_Err)+': Update To Table ITRN Returned Zero Rows Affected. (nspItrnAddWithdrawalCheck)'
                  END
              END
         END
@@ -183,14 +182,14 @@ CREATE PROC  [dbo].[nspItrnAddWithdrawalCheck]
      BEGIN
          SELECT @c_SKUDefAllowed =( SELECT dbo.fnc_LTrim(dbo.fnc_RTrim(NSQLValue))
          FROM NSQLCONFIG (NOLOCK)
-         WHERE ConfigKey = "gb_skudefallowed" )
-         IF @c_SKUDefAllowed = "TRUE"
+         WHERE ConfigKey = 'gb_skudefallowed' )
+         IF @c_SKUDefAllowed = 'TRUE'
          BEGIN
-             SELECT @c_SKU=(SELECT NSQLVALUE FROM NSQLCONFIG (NOLOCK) WHERE NSQLCONFIG.Configkey="gc_skudef")
+             SELECT @c_SKU=(SELECT NSQLVALUE FROM NSQLCONFIG (NOLOCK) WHERE NSQLCONFIG.Configkey='gc_skudef')
              IF @c_SKU IS NULL
              BEGIN
                  SELECT @n_continue = 3 , @n_Err = 61914 --61302
-                 SELECT @c_ErrMsg="NSQL"+CONVERT(char(5),@n_Err)+": Storerkey is blank or null - not allowed! (nspItrnAddWithdrawalCheck)"
+                 SELECT @c_ErrMsg='NSQL'+CONVERT(char(5),@n_Err)+': Storerkey is blank or null - not allowed! (nspItrnAddWithdrawalCheck)'
              END
              ELSE BEGIN
                  UPDATE ITrn SET sku = @c_SKU WHERE itrnkey = @c_itrnkey
@@ -199,19 +198,19 @@ CREATE PROC  [dbo].[nspItrnAddWithdrawalCheck]
                  BEGIN
                      SELECT @n_continue = 3
                      SELECT @n_Err = 61915 --61303
-                     SELECT @c_ErrMsg="NSQL"+CONVERT(char(5),@n_Err)+": Insert Trigger On ITRN Failed Because An Attempt To Update SKU Failed. (nspItrnAddWithdrawalCheck)" + " ( " + " SQLSvr MESSAGE=" + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_ErrMsg)) + " ) "
+                     SELECT @c_ErrMsg='NSQL'+CONVERT(char(5),@n_Err)+': Insert Trigger On ITRN Failed Because An Attempt To Update SKU Failed. (nspItrnAddWithdrawalCheck)' + ' ( ' + ' SQLSvr MESSAGE=' + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_ErrMsg)) + ' ) '
                  END
                  ELSE IF @n_cnt = 0
                  BEGIN
                      SELECT @n_continue = 3
                      SELECT @n_Err = 61916 --61324
-                     SELECT @c_ErrMsg="NSQL"+CONVERT(char(5),@n_Err)+": Update To Table ITRN Returned Zero Rows Affected. (nspItrnAddWithdrawalCheck)"
+                     SELECT @c_ErrMsg='NSQL'+CONVERT(char(5),@n_Err)+': Update To Table ITRN Returned Zero Rows Affected. (nspItrnAddWithdrawalCheck)'
                  END
              END
          END
          ELSE BEGIN
              SELECT @n_continue = 3 , @n_Err = 61917 --61304
-             SELECT @c_ErrMsg="NSQL"+CONVERT(char(5),@n_Err)+": Default SKU Is Not Allowed And SKU Passed Is Blank! (nspItrnAddWithdrawalCheck)"
+             SELECT @c_ErrMsg='NSQL'+CONVERT(char(5),@n_Err)+': Default SKU Is Not Allowed And SKU Passed Is Blank! (nspItrnAddWithdrawalCheck)'
          END
      END
  END
@@ -230,7 +229,7 @@ CREATE PROC  [dbo].[nspItrnAddWithdrawalCheck]
              IF ISNULL(RTRIM(@c_LOT),'') = ''
              BEGIN
                  SELECT @n_continue = 3 , @n_Err = 61918 --61305
-                 SELECT @c_ErrMsg="NSQL"+CONVERT(char(5),@n_Err)+": Lot Number Does Not Exist In The LOTATTRIBUTE Table! (nspItrnAddWithdrawalCheck)"
+                 SELECT @c_ErrMsg='NSQL'+CONVERT(char(5),@n_Err)+': Lot Number Does Not Exist In The LOTATTRIBUTE Table! (nspItrnAddWithdrawalCheck)'
              END
          END
          ELSE BEGIN
@@ -243,17 +242,17 @@ CREATE PROC  [dbo].[nspItrnAddWithdrawalCheck]
          IF @@rowcount <> 1
          BEGIN
              SELECT @n_continue = 3 , @n_Err = 61919 --61306
-             SELECT @c_ErrMsg="NSQL"+CONVERT(char(5),@n_Err)+": Lot Number Is Not Unique Or Does Not Exist In The LOTATTRIBUTE Table! (nspItrnAddWithdrawalCheck)"
+             SELECT @c_ErrMsg='NSQL'+CONVERT(char(5),@n_Err)+': Lot Number Is Not Unique Or Does Not Exist In The LOTATTRIBUTE Table! (nspItrnAddWithdrawalCheck)'
          END
          ELSE BEGIN
              IF @c_SKU <> @c_verifysku
              BEGIN
                  SELECT @n_continue = 3 , @n_Err = 61920 --61307
-                 SELECT @c_ErrMsg = "NSQL"+CONVERT(CHAR(5), @n_Err)
-                                  + ": Lot Number: " + ISNULL(RTRIM(@c_lot),'')
-                                  + ", Sku In LotAttribute: " + ISNULL(RTRIM(@c_verifysku),'')
-                                  + ", Sku Passed In: " + ISNULL(RTRIM(@c_SKU),'')
-                                  + " - Do Not Matched with LOTATTRIBUTE.(nspItrnAddWithdrawalCheck)" -- INC0871401
+                 SELECT @c_ErrMsg = 'NSQL'+CONVERT(CHAR(5), @n_Err)
+                                  + ': Lot Number: ' + ISNULL(RTRIM(@c_lot),'')
+                                  + ', Sku In LotAttribute: ' + ISNULL(RTRIM(@c_verifysku),'')
+                                  + ', Sku Passed In: ' + ISNULL(RTRIM(@c_SKU),'')
+                                  + ' - Do Not Matched with LOTATTRIBUTE.(nspItrnAddWithdrawalCheck)' -- INC0871401
              END
          END
      END
@@ -279,18 +278,18 @@ CREATE PROC  [dbo].[nspItrnAddWithdrawalCheck]
          BEGIN
              SELECT @n_continue = 3
              SELECT @n_Err = 61921 --61308
-             SELECT @c_ErrMsg="NSQL"+CONVERT(char(5),@n_Err)+": Update Failed On Table LOT. (nspItrnAddWithdrawalCheck)" + " ( " + " SQLSvr MESSAGE=" + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_ErrMsg)) + " ) "
+             SELECT @c_ErrMsg='NSQL'+CONVERT(char(5),@n_Err)+': Update Failed On Table LOT. (nspItrnAddWithdrawalCheck)' + ' ( ' + ' SQLSvr MESSAGE=' + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_ErrMsg)) + ' ) '
          END
          ELSE IF @n_cnt = 0
          BEGIN
              SELECT @n_continue = 3, @n_Err = 61922 --61325
-             SELECT @c_ErrMsg="NSQL"+CONVERT(char(5),@n_Err)+": Update To Table LOT Returned Zero Rows Affected. (nspItrnAddWithdrawalCheck)"
+             SELECT @c_ErrMsg='NSQL'+CONVERT(char(5),@n_Err)+': Update To Table LOT Returned Zero Rows Affected. (nspItrnAddWithdrawalCheck)'
          END
      END
      ELSE BEGIN
          SELECT @n_continue = 3, @n_Err = 61923 --61309
-         SELECT @c_ErrMsg="NSQL"+CONVERT(char(5),@n_Err)+": Lot Table Did Not Return Expected Unique Row In Response To Query. (nspItrnAddWithdrawalCheck)"
-         SELECT @c_ErrMsg="NSQL"+CONVERT(char(5),@n_Err)+": Lot Table " + ISNULL(RTRIM(@c_lot),'') + " Did Not Return Expected Unique Row In Response To Query. (nspItrnAddWithdrawalCheck)"  --INC1362763
+         SELECT @c_ErrMsg='NSQL'+CONVERT(char(5),@n_Err)+': Lot Table Did Not Return Expected Unique Row In Response To Query. (nspItrnAddWithdrawalCheck)'
+         SELECT @c_ErrMsg='NSQL'+CONVERT(char(5),@n_Err)+': Lot Table ' + ISNULL(RTRIM(@c_lot),'') + ' Did Not Return Expected Unique Row In Response To Query. (nspItrnAddWithdrawalCheck)'  --INC1362763
      END
  END
 
@@ -309,7 +308,7 @@ CREATE PROC  [dbo].[nspItrnAddWithdrawalCheck]
          BEGIN
              SELECT @c_Status = @c_curstatus
          END
-         IF @c_allowidqtyupdate = "1"
+         IF @c_allowidqtyupdate = '1'
          BEGIN
             IF ISNULL(RTRIM(@c_toid),'') <> ''
             BEGIN
@@ -336,19 +335,19 @@ CREATE PROC  [dbo].[nspItrnAddWithdrawalCheck]
          BEGIN
              SELECT @n_continue = 3
              SELECT @n_Err = 61924 --61312
-             SELECT @c_ErrMsg="NSQL"+CONVERT(char(5),@n_Err)+": Update Failed On Table ID. (nspItrnAddWithdrawalCheck)" + " ( " + " SQLSvr MESSAGE=" + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_ErrMsg)) + " ) "
+             SELECT @c_ErrMsg='NSQL'+CONVERT(char(5),@n_Err)+': Update Failed On Table ID. (nspItrnAddWithdrawalCheck)' + ' ( ' + ' SQLSvr MESSAGE=' + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_ErrMsg)) + ' ) '
          END
          --ELSE IF @n_cnt = 0
          IF @n_cnt = 0 AND (@n_continue = 1 OR @n_continue = 2)
          BEGIN
              SELECT @n_continue = 3
              SELECT @n_Err = 61925 --61327
-             SELECT @c_ErrMsg="NSQL"+CONVERT(char(5),@n_Err)+": Update To Table ID Returned Zero Rows Affected. (nspItrnAddWithdrawalCheck)"
+             SELECT @c_ErrMsg='NSQL'+CONVERT(char(5),@n_Err)+': Update To Table ID Returned Zero Rows Affected. (nspItrnAddWithdrawalCheck)'
          END
      END
      ELSE BEGIN
          SELECT @n_continue = 3 , @n_Err = 61926 --61313
-         SELECT @c_ErrMsg="NSQL"+CONVERT(char(5),@n_Err)+": ID Table Did Not Return Expected Unique Row In Response To Query. (nspItrnAddWithdrawalCheck)"
+         SELECT @c_ErrMsg='NSQL'+CONVERT(char(5),@n_Err)+': ID Table Did Not Return Expected Unique Row In Response To Query. (nspItrnAddWithdrawalCheck)'
      END
      IF (@n_rcnt = 1 or @n_rcnt = 0) and (@n_continue =1 or @n_continue=2)
      BEGIN
@@ -370,7 +369,7 @@ CREATE PROC  [dbo].[nspItrnAddWithdrawalCheck]
                      BEGIN
                          SELECT @n_continue = 3
                          SELECT @n_Err = 61927 --61339
-                         SELECT @c_ErrMsg="NSQL"+CONVERT(char(5),@n_Err)+": Update To Table ID Returned Zero Rows Affected. (nspItrnAddWithdrawalCheck)"
+                         SELECT @c_ErrMsg='NSQL'+CONVERT(char(5),@n_Err)+': Update To Table ID Returned Zero Rows Affected. (nspItrnAddWithdrawalCheck)'
                      END
                  END
              END
@@ -390,18 +389,18 @@ CREATE PROC  [dbo].[nspItrnAddWithdrawalCheck]
          BEGIN
              SELECT @n_continue = 3
              SELECT @n_Err = 61928 --61333
-             SELECT @c_ErrMsg="NSQL"+CONVERT(char(5),@n_Err)+": Update Failed On Table SKUxLOC. (nspItrnAddWithdrawalCheck)" + " ( " + " SQLSvr MESSAGE=" + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_ErrMsg)) + " ) "
+             SELECT @c_ErrMsg='NSQL'+CONVERT(char(5),@n_Err)+': Update Failed On Table SKUxLOC. (nspItrnAddWithdrawalCheck)' + ' ( ' + ' SQLSvr MESSAGE=' + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_ErrMsg)) + ' ) '
          END
          ELSE IF @n_cnt = 0
          BEGIN
              SELECT @n_continue = 3
              SELECT @n_Err = 61929 --61334
-             SELECT @c_ErrMsg="NSQL"+CONVERT(char(5),@n_Err)+": Update To Table SKUxLOC Returned Zero Rows Affected. (nspItrnAddWithdrawalCheck)"
+             SELECT @c_ErrMsg='NSQL'+CONVERT(char(5),@n_Err)+': Update To Table SKUxLOC Returned Zero Rows Affected. (nspItrnAddWithdrawalCheck)'
          END
      END
      ELSE BEGIN
          SELECT @n_continue = 3 , @n_Err = 61930 --61335
-         SELECT @c_ErrMsg="NSQL"+CONVERT(char(5),@n_Err)+": SKUxLOC Table Did Not Return Expected Unique Row In Response To Query. (nspItrnAddWithdrawalCheck)"
+         SELECT @c_ErrMsg='NSQL'+CONVERT(char(5),@n_Err)+': SKUxLOC Table Did Not Return Expected Unique Row In Response To Query. (nspItrnAddWithdrawalCheck)'
      END
  END
  IF @n_continue=1 or @n_continue=2
@@ -417,24 +416,24 @@ CREATE PROC  [dbo].[nspItrnAddWithdrawalCheck]
          BEGIN
              SELECT @n_continue = 3
              SELECT @n_Err = 61931 --61320
-             SELECT @c_ErrMsg="NSQL"+CONVERT(char(5),@n_Err)+": Update Failed On Table LOTxLOCxID. (nspItrnAddWithdrawalCheck)" + " ( " + " SQLSvr MESSAGE=" + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_ErrMsg)) + " ) "
+             SELECT @c_ErrMsg='NSQL'+CONVERT(char(5),@n_Err)+': Update Failed On Table LOTxLOCxID. (nspItrnAddWithdrawalCheck)' + ' ( ' + ' SQLSvr MESSAGE=' + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_ErrMsg)) + ' ) '
          END
          ELSE IF @n_cnt = 0
          BEGIN
              SELECT @n_continue = 3
              SELECT @n_Err = 61932 --61331
-             SELECT @c_ErrMsg="NSQL"+CONVERT(char(5),@n_Err)+": Update To Table LOTxLOCxID Returned Zero Rows Affected. (nspItrnAddWithdrawalCheck)"
+             SELECT @c_ErrMsg='NSQL'+CONVERT(char(5),@n_Err)+': Update To Table LOTxLOCxID Returned Zero Rows Affected. (nspItrnAddWithdrawalCheck)'
          END
      END
      ELSE BEGIN
          SELECT @n_continue = 3 , @n_Err = 61933 --61321
-         SELECT @c_ErrMsg="NSQL"+CONVERT(char(5),@n_Err)+": LOTxLOCxID Table Did Not Return Expected Unique Row In Response To Query. (nspItrnAddDepositCheck)"
+         SELECT @c_ErrMsg='NSQL'+CONVERT(char(5),@n_Err)+': LOTxLOCxID Table Did Not Return Expected Unique Row In Response To Query. (nspItrnAddDepositCheck)'
      END
  END
  IF @n_continue = 1 or @n_continue = 2
  BEGIN
-     IF EXISTS(SELECT 1 FROM ID (NOLOCK) WHERE ID = @c_toid and STATUS <> "OK")
-     OR EXISTS (SELECT 1 FROM LOC (NOLOCK) WHERE LOC = @c_toloc and (STATUS <> "OK" OR LOCATIONFLAG = "HOLD" or LOCATIONFLAG = "DAMAGE"))
+     IF EXISTS(SELECT 1 FROM ID (NOLOCK) WHERE ID = @c_toid and STATUS <> 'OK')
+     OR EXISTS (SELECT 1 FROM LOC (NOLOCK) WHERE LOC = @c_toloc and (STATUS <> 'OK' OR LOCATIONFLAG = 'HOLD' or LOCATIONFLAG = 'DAMAGE'))
      BEGIN
          -- 12.16.99 BY WALLY
          -- to avoid negative qtyonhold
@@ -447,7 +446,7 @@ CREATE PROC  [dbo].[nspItrnAddWithdrawalCheck]
              BEGIN
                  SELECT @n_continue = 3
                  SELECT @n_Err = 61934 --61337
-                 SELECT @c_ErrMsg="NSQL"+CONVERT(char(5),@n_Err)+": Update Failed On Table LOT. (nspItrnAddWithdrawalCheck)" + " ( " + " SQLSvr MESSAGE=" + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_ErrMsg)) + " ) "
+                 SELECT @c_ErrMsg='NSQL'+CONVERT(char(5),@n_Err)+': Update Failed On Table LOT. (nspItrnAddWithdrawalCheck)' + ' ( ' + ' SQLSvr MESSAGE=' + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_ErrMsg)) + ' ) '
              END
      END
  END
@@ -748,8 +747,8 @@ CREATE PROC  [dbo].[nspItrnAddWithdrawalCheck]
                BEGIN
                   SELECT @n_continue = 3
                   SELECT @n_err = 61992
-                  SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)
-                  +": Update Failed on Table ChannelInv. (nspItrnAddWithdrawalCheck)" + " ( " + " SQLSvr MESSAGE=" + ISNULL(RTRIM(@c_errmsg),'') + " ) "
+                  SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)
+                  +': Update Failed on Table ChannelInv. (nspItrnAddWithdrawalCheck)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
                END
             END
             --(Wan02) - Allow Tranfer if from/to Channel ID are same and even if has qtyallocated & qtyonhold - END
@@ -853,11 +852,33 @@ CREATE PROC  [dbo].[nspItrnAddWithdrawalCheck]
    END
    --(Wan03) - END
 
+   --(Wan04) - START
+   IF @n_continue IN (1,2) AND @c_SourceType IN ('ntrTransferDetailAdd', 'ntrTransferDetailUpdate')
+   BEGIN
+      EXEC ispITrnSerialNoWithdrawal
+           @c_ITrnKey      = @c_ITrnKey
+         , @c_TranType     = 'WD'
+         , @c_StorerKey    = @c_StorerKey
+         , @c_Sku          = @c_Sku
+         , @n_Qty          = @n_Qty
+         , @c_SourceKey    = @c_SourceKey
+         , @c_SourceType   = @c_SourceType
+         , @b_Success      = @b_Success   OUTPUT
+         , @n_Err          = @n_Err       OUTPUT
+         , @c_ErrMsg       = @c_ErrMsg    OUTPUT
+
+      IF @b_success <> 1
+      BEGIN
+         SET @n_continue = 3 /* Other Error flags Set By nspItrnAddWithDrawalCheck */
+      END
+   END
+   --(Wan04) - END
+
    IF @n_continue = 1 or @n_continue = 2
    BEGIN
-      IF (SELECT NSQLValue FROM NSQLConfig (NOLOCK) WHERE ConfigKey = "WAREHOUSEBILLING") = "1"
+      IF (SELECT NSQLValue FROM NSQLConfig (NOLOCK) WHERE ConfigKey = 'WAREHOUSEBILLING') = '1'
       BEGIN
-         EXECUTE nspItrnAddDWBill "W",  @c_itrnkey,  @c_StorerKey,  @c_SKU,  @c_Lot,  @c_ToLoc,  @c_ToID,  @c_Status,  @n_CaseCnt,
+         EXECUTE nspItrnAddDWBill 'W',  @c_itrnkey,  @c_StorerKey,  @c_SKU,  @c_Lot,  @c_ToLoc,  @c_ToID,  @c_Status,  @n_CaseCnt,
             @n_InnerPack,  @n_Qty,  @n_Pallet,  @f_cube,  @f_GrossWgt,  @f_NetWgt,  @f_otherunit1,  @f_otherunit2,  @c_Lottable01,
             @c_Lottable02,  @c_Lottable03,  @d_Lottable04,  @d_Lottable05,  @c_sourcekey,  @c_sourcetype,
             @b_Success OUTPUT,    @n_Err OUTPUT,    @c_ErrMsg OUTPUT
@@ -894,7 +915,7 @@ BEGIN
    END
    ELSE
    BEGIN
-      EXECUTE nsp_logerror @n_Err, @c_ErrMsg, "nspItrnAddWithdrawalCheck"
+      EXECUTE nsp_logerror @n_Err, @c_ErrMsg, 'nspItrnAddWithdrawalCheck'
       RAISERROR (@c_ErrMsg, 16, 1) WITH SETERROR    -- SQL2012
       RETURN
    END
