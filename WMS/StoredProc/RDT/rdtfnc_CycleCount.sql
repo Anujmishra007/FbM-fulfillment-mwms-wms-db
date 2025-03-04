@@ -353,6 +353,7 @@ DECLARE  @cLottable01_Code    NVARCHAR( 20),
    @nID_Count              INT,            -- (james28)
    @tExtUpdate             VARIABLETABLE,  -- (james29)
    @cExtendedUpdateSP      NVARCHAR( 20),  -- (james29)
+   @cExtendedValidSP       NVARCHAR( 20),  -- (CYU027)
    @cPUOM                  NVARCHAR(  1),
    @nPUOM_Div              INT,
    @nPQTY                  INT,
@@ -521,6 +522,7 @@ SELECT
    @cFlowThruStepSKU  = V_String45,
    @cSKUEditQTYNotAllowBlank = V_String46,
    @cStepSKUAllowOpt         = V_String47,
+   @cExtendedValidSP = V_String48,
    @cBarcode         = V_Barcode,
     
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,
@@ -696,6 +698,10 @@ BEGIN
    SET @cExtendedUpdateSP = rdt.RDTGetConfig( @nFunc, 'ExtendedUpdateSP', @cStorer)
    IF @cExtendedUpdateSP IN ('0', '')
       SET @cExtendedUpdateSP = ''
+
+   SET @cExtendedValidSP = rdt.RDTGetConfig( @nFunc, 'ExtendedValidSP', @cStorer)
+   IF @cExtendedValidSP IN ('0', '')
+      SET @cExtendedValidSP = ''
 
    --SY01 START
    SET @cDoubleDeep = rdt.RDTGetConfig( @nFunc, 'DoubleDeep', @cStorer)
@@ -5116,6 +5122,63 @@ BEGIN
          END
       END
 
+
+      IF @cExtendedValidSP <> '' AND EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedValidSP AND type = 'P')
+      BEGIN
+
+         SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidSP) +
+                     ' @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cFacility, @cStorerKey, ' +
+                     ' @cCCRefNo, @cCCSheetNo, @nCCCountNo, @cZone1, @cZone2, @cZone3, @cZone4, @cZone5, @cAisle, @cLevel, ' +
+                     ' @cLOC, @cID, @cUCC, @cSKU, @nQty, @cNewLottable01, @cNewLottable02, @cNewLottable03, @cNewLottable04, @cNewLottable05, ' +
+                     ' @tExtValidate, @nSetFocusField OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT '
+         SET @cSQLParam =
+                 ' @nMobile            INT,           ' +
+                 ' @nFunc              INT,           ' +
+                 ' @cLangCode          NVARCHAR( 3),  ' +
+                 ' @nStep              INT,           ' +
+                 ' @nAfterStep         INT,           ' +
+                 ' @nInputKey          INT,           ' +
+                 ' @cFacility          NVARCHAR( 5),  ' +
+                 ' @cStorerKey         NVARCHAR( 15), ' +
+                 ' @cCCRefNo           NVARCHAR( 10), ' +
+                 ' @cCCSheetNo         NVARCHAR( 10), ' +
+                 ' @nCCCountNo         INT,           ' +
+                 ' @cZone1             NVARCHAR( 10), ' +
+                 ' @cZone2             NVARCHAR( 10), ' +
+                 ' @cZone3             NVARCHAR( 10), ' +
+                 ' @cZone4             NVARCHAR( 10), ' +
+                 ' @cZone5             NVARCHAR( 10), ' +
+                 ' @cAisle             NVARCHAR( 10), ' +
+                 ' @cLevel             NVARCHAR( 10), ' +
+                 ' @cLOC               NVARCHAR( 10), ' +
+                 ' @cID                NVARCHAR( 18), ' +
+                 ' @cUCC               NVARCHAR( 20), ' +
+                 ' @cSKU               NVARCHAR( 20), ' +
+                 ' @nQty               INT,           ' +
+                 ' @cNewLottable01     NVARCHAR( 18), ' +
+                 ' @cNewLottable02     NVARCHAR( 18), ' +
+                 ' @cNewLottable03     NVARCHAR( 18), ' +
+                 ' @cNewLottable04     NVARCHAR( 18), ' +
+                 ' @cNewLottable05     NVARCHAR( 18), ' +
+                 ' @tExtValidate       VariableTable READONLY, ' +
+                 ' @nSetFocusField     INT           OUTPUT,   ' +
+                 ' @nErrNo             INT           OUTPUT,   ' +
+                 ' @cErrMsg            NVARCHAR( 20) OUTPUT '
+
+         EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+              @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cFacility, @cStorer,
+              @cCCRefNo, @cCCSheetNo, @nCCCountNo, @cZone1, @cZone2, @cZone3, @cZone4, @cZone5, @cAisle, @cLevel,
+              @cLOC, @cID, @cUCC, @cSKU, @nQty, @cNewLottable01, @cNewLottable02, @cNewLottable03, @cNewLottable04, @cNewLottable05,
+              @tExtValidate,@nSetFocusField OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+         IF ISNULL(@cErrMsg, '') <> ''
+         BEGIN
+            EXEC rdt.rdtSetFocusField @nMobile, @nSetFocusField
+            GOTO UCC_Add_Lottables_Fail
+         END
+      END
+
+
       IF @cNewLottable04 <> '' AND @cNewLottable04 IS NOT NULL
          --SET @dNewLottable04 = CAST( @cNewLottable04 AS DATETIME) (james22)
          SET @dNewLottable04 = RDT.rdtConvertToDate( @cNewLottable04)
@@ -7873,6 +7936,61 @@ BEGIN
             GOTO SKU_Add_Lottables_Fail
          END
       END
+
+      IF @cExtendedValidSP <> '' AND EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedValidSP AND type = 'P')
+      BEGIN
+         SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidSP) +
+                     ' @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cFacility, @cStorerKey, ' +
+                     ' @cCCRefNo, @cCCSheetNo, @nCCCountNo, @cZone1, @cZone2, @cZone3, @cZone4, @cZone5, @cAisle, @cLevel, ' +
+                     ' @cLOC, @cID, @cUCC, @cSKU, @nQty, @cNewLottable01, @cNewLottable02, @cNewLottable03, @cNewLottable04, @cNewLottable05, ' +
+                     ' @tExtValidate, @nSetFocusField OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT '
+         SET @cSQLParam =
+                 ' @nMobile            INT,           ' +
+                 ' @nFunc              INT,           ' +
+                 ' @cLangCode          NVARCHAR( 3),  ' +
+                 ' @nStep              INT,           ' +
+                 ' @nAfterStep         INT,           ' +
+                 ' @nInputKey          INT,           ' +
+                 ' @cFacility          NVARCHAR( 5),  ' +
+                 ' @cStorerKey         NVARCHAR( 15), ' +
+                 ' @cCCRefNo           NVARCHAR( 10), ' +
+                 ' @cCCSheetNo         NVARCHAR( 10), ' +
+                 ' @nCCCountNo         INT,           ' +
+                 ' @cZone1             NVARCHAR( 10), ' +
+                 ' @cZone2             NVARCHAR( 10), ' +
+                 ' @cZone3             NVARCHAR( 10), ' +
+                 ' @cZone4             NVARCHAR( 10), ' +
+                 ' @cZone5             NVARCHAR( 10), ' +
+                 ' @cAisle             NVARCHAR( 10), ' +
+                 ' @cLevel             NVARCHAR( 10), ' +
+                 ' @cLOC               NVARCHAR( 10), ' +
+                 ' @cID                NVARCHAR( 18), ' +
+                 ' @cUCC               NVARCHAR( 20), ' +
+                 ' @cSKU               NVARCHAR( 20), ' +
+                 ' @nQty               INT,           ' +
+                 ' @cNewLottable01     NVARCHAR( 18), ' +
+                 ' @cNewLottable02     NVARCHAR( 18), ' +
+                 ' @cNewLottable03     NVARCHAR( 18), ' +
+                 ' @cNewLottable04     NVARCHAR( 18),      ' +
+                 ' @cNewLottable05     NVARCHAR( 18),      ' +
+                 ' @tExtValidate       VariableTable READONLY, ' +
+                 ' @nSetFocusField     INT           OUTPUT,   ' +
+                 ' @nErrNo             INT           OUTPUT,   ' +
+                 ' @cErrMsg            NVARCHAR( 20) OUTPUT '
+
+         EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+              @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cFacility, @cStorer,
+              @cCCRefNo, @cCCSheetNo, @nCCCountNo, @cZone1, @cZone2, @cZone3, @cZone4, @cZone5, @cAisle, @cLevel,
+              @cLOC, @cID, @cUCC, @cSKU, @nQty, @cNewLottable01, @cNewLottable02, @cNewLottable03, @cNewLottable04, @cNewLottable05,
+            @tExtValidate,@nSetFocusField OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+         IF ISNULL(@cErrMsg, '') <> ''
+         BEGIN
+            EXEC rdt.rdtSetFocusField @nMobile, @nSetFocusField
+            GOTO SKU_Add_Lottables_Fail
+         END
+      END
+
 
       -- Convert QTY
       IF @nNewCaseCnt > 0
@@ -15206,7 +15324,8 @@ BEGIN
       V_String45     = @cFlowThruStepSKU,
       V_String46     = @cSKUEditQTYNotAllowBlank,
       V_String47     = @cStepSKUAllowOpt,
-      
+      V_String48     = @cExtendedValidSP,
+
       V_Integer1     = @nQTY,
       V_Integer2     = @nCCCountNo,
       V_Integer3     = @nCntQTY,

@@ -3,41 +3,44 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-/*********************************************************************************/
-/* Store procedure: rdtfnc_TM_CasePick                                           */
-/* Copyright      : Maersk                                                       */
-/*                                                                               */
-/* Purpose: case pick                                                            */
-/*                                                                               */
-/* Modifications log:                                                            */
-/*                                                                               */
-/* Date       Rev    Author     Purposes                                         */
-/* 2014-12-17 1.0    Ung        SOS327467 Created                                */
-/* 2016-09-30 1.1    Ung        Performance tuning                               */
-/* 2017-07-31 1.2    Ung        WMS-2475 DropID add RDTFormat                    */
-/* 2018-07-10 1.3    Ung        WMS-4221 Fix ExtendedUpdateSP param              */
-/* 2018-08-31 1.4    Ung        WMS-5943 Add ExtendedInfo at screen 1, 2         */
-/* 2018-11-21 1.5    Ung        WMS-3273 Add fully short                         */
-/* 2019-02-27 1.6    Ung        WMS-8058 Add SwapUCCSP, LOCLookupSP              */
-/*                                  Fix PQTY not shown if DisableQTYField        */
-/* 2020-02-21 1.7    YeeKung    WMS-12082 Add ExtendedValidate(yeekung01)        */
-/* 2019-05-14 1.8    James      WMS-9920 Add MultiSKUBarcode (james01)           */
-/* 2022-09-09 1.9    YeeKung    WMS-20712 Add overwritetoloc (Yeekung02)         */
-/* 2023-03-24 2.0    Ung        WMS-22020 Add dynamic lottable                   */
-/* 2023-05-16 2.1    Ung        WMS-22435 Add DecodeSP                           */
-/*                                  Expand SKU field to max                      */
-/* 2023-06-20 2.2    Ung        WMS-22834 Add DispStyleColorSize                 */
-/*                               Fix DecodeSP without UCC                        */
-/* 2024-03-12 2.3    CYU027     UWP-15734 Add Extended Print SP                  */
-/* 2024-04-10 2.4    Dennis     UWP-16909 Check Digit                            */
-/* 2024-07-08 2.5    JHU151     FCR-330 SSCC code generator                      */
-/* 2024-10-08 2.6    PXL009     FCR-872 Auto Generated Dropid                    */
-/* 2024-10-24 2.7    YYS027     FCR-989 Min Max Replenishment                    */
-/*            2.7.1  YYS027     move new screen to rdt_1812ExtScn04              */
-/* 2024-10-31 2.8    PXL009     FCR-1079 UOMs in term of Task Detail UoM         */
-/* 2024-10-31 2.8.1  PXL009              Restore preferred UOM when exit         */
-/* 2024-09-23 2.9    James      WMS-26122 Add ExtendedScreenSP (james02)         */
-/* 2024-11-12 3.0    PXL009     FCR-1125 Merged 2.2, 2.3->2.9 from v0 branch     */
+
+/********************************************************************************/
+/* Store procedure: rdtfnc_TM_CasePick                                          */
+/* Copyright      : Maersk                                                      */
+/*                                                                              */
+/* Purpose: case pick                                                           */
+/*                                                                              */
+/* Modifications log:                                                           */
+/*                                                                              */
+/* Date       Rev    Author     Purposes                                        */
+/* 2014-12-17 1.0    Ung        SOS327467 Created                               */
+/* 2016-09-30 1.1    Ung        Performance tuning                              */
+/* 2017-07-31 1.2    Ung        WMS-2475 DropID add RDTFormat                   */
+/* 2018-07-10 1.3    Ung        WMS-4221 Fix ExtendedUpdateSP param             */
+/* 2018-08-31 1.4    Ung        WMS-5943 Add ExtendedInfo at screen 1, 2        */
+/* 2018-11-21 1.5    Ung        WMS-3273 Add fully short                        */
+/* 2019-02-27 1.6    Ung        WMS-8058 Add SwapUCCSP, LOCLookupSP             */
+/*                              Fix PQTY not shown if DisableQTYField           */
+/* 2020-02-21 1.7    YeeKung    WMS-12082 Add ExtendedValidate(yeekung01)       */
+/* 2019-05-14 1.8    James      WMS-9920 Add MultiSKUBarcode (james01)          */
+/* 2022-09-09 1.9    YeeKung    WMS-20712 Add overwritetoloc (Yeekung02)        */
+/* 2023-03-24 2.0    Ung        WMS-22020 Add dynamic lottable                  */
+/* 2023-05-16 2.1    Ung        WMS-22435 Add DecodeSP                          */
+/*                              Expand SKU field to max                         */
+/* 2023-06-20 2.2    Ung        WMS-22834 Add DispStyleColorSize                */
+/* 2024-03-12 2.3    CYU027     UWP-15734 Add Extended Print SP                 */
+/* 2024-04-10 2.4    Dennis     UWP-16909 Check Digit                           */
+/* 2024-07-08 2.5    JHU151     FCR-330 SSCC code generator                     */
+/* 2024-10-08 2.6    PXL009     FCR-872 Auto Generated Dropid                   */
+/* 2024-10-24 2.7    YYS027     FCR-989 Min Max Replenishment                   */
+/*            2.7.1  YYS027     move new screen to rdt_1812ExtScn04             */
+/* 2024-10-31 2.8    PXL009     FCR-1079 UOMs in term of Task Detail UoM        */
+/* 2024-10-31 2.8.1  PXL009              Restore preferred UOM when exit        */
+/* 2024-09-23 2.9    James      WMS-26122 Add ExtendedScreenSP (james02)        */
+/* 2024-11-12 3.0    PXL009     FCR-1125 Merged 2.2, 2.3->2.9 from v0 branch    */
+/* 2024-11-29 3.0.1  PXL009             change the ExtScn call point in step 4  */
+/* 2024-12-02 3.0.2  PXL009             change the ExtScn call point in step 6  */
+/* 2024-12-02 3.0.3  PXL009             Save/restore @cToLoc                    */
 /* 2024-11-28 3.1    JCH507     UWP-27664 Throw printing error from st6 to st7  */
 /*********************************************************************************/
 
@@ -260,6 +263,8 @@ SELECT
    @cPUOM_Desc         = V_String11,
    @cMultiSKUBarcode   = V_String12,
    @cLottableCode      = V_String13,
+   @cTaskDetailUOM     = V_String14,
+   @cTaskDetailPUOM    = V_String15,
 
    @cDispStyleColorSize= V_String17,
    @cDecodeSP          = V_String18,
@@ -289,8 +294,8 @@ SELECT
    @cOverwriteToLOC    = V_String40,
    @cExtScnSP          = V_String42,
    @cAutoGenDROPIDSP   = V_String43,
-   @cTaskDetailUOM     = V_String44,
-   @cTaskDetailPUOM    = V_String45,
+   @cToLOC             = V_String44,
+   
 
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,  @cFieldAttr01  = FieldAttr01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,  @cFieldAttr02  = FieldAttr02,
@@ -2680,15 +2685,14 @@ BEGIN
       SET @nStep = @nFromStep
    END
 
-   -- call extended screen
+   -- call extended screen 
    IF @cExtScnSP <> ''
    BEGIN
       IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
-      BEGIN
+      BEGIN      
          Goto Step_99
       END
    END
-
    GOTO Quit
 
    Step_6_Fail:
@@ -3529,6 +3533,8 @@ BEGIN
       V_String11   = @cPUOM_Desc,
       V_String12   = @cMultiSKUBarcode,
       V_String13   = @cLottableCode,
+      V_String14   = @cTaskDetailUOM,
+      V_String15   = @cTaskDetailPUOM,
 
       V_String17   = @cDispStyleColorSize,
       V_String18   = @cDecodeSP, 
@@ -3558,8 +3564,7 @@ BEGIN
       V_String40   = @cOverwriteToLOC,   
       V_String42   = @cExtScnSP,
       V_String43   = @cAutoGenDROPIDSP,
-      V_String44   = @cTaskDetailUOM,
-      V_String45   = @cTaskDetailPUOM,
+      V_String44   = @cToLoc,
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,   FieldAttr01  = @cFieldAttr01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,   FieldAttr02  = @cFieldAttr02,

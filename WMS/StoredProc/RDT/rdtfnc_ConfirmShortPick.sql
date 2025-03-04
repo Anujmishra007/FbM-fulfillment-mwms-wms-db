@@ -1,6 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[RDT].[rdtfnc_ConfirmShortPick]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [RDT].[rdtfnc_ConfirmShortPick]
-GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -9,18 +6,20 @@ GO
 
 /************************************************************************/
 /* Store procedure: rdtfnc_ConfirmShortPick                             */
-/* Copyright      : IDS                                                 */
+/* Copyright      : Maersk                                              */
 /* FBR: 85867                                                           */
 /* Purpose: Print carton label                                          */
 /*                                                                      */
 /* Modifications log:                                                   */
 /*                                                                      */
-/* Date         Rev  Author     Purposes                                */
-/* 11-Mar-2012  1.0  Ung        SOS238698 Created                       */
-/* 30-Sep-2016  1.1  Ung        Performance tuning                      */
+/* Date         Rev   Author     Purposes                               */
+/* 11-Mar-2012  1.0   Ung        SOS238698 Created                      */
+/* 30-Sep-2016  1.1   Ung        Performance tuning                     */
+/* 21-Nov-2024  1.2.0 Dennis     FCR-1349 Extended Update               */
+/* 27-Nov-2022  1.3.0 PXL009     UWP-27586 correct the step jump        */
 /************************************************************************/
 
-CREATE PROC rdt.rdtfnc_ConfirmShortPick(
+CREATE OR ALTER PROC rdt.rdtfnc_ConfirmShortPick(
    @nMobile    int,
    @nErrNo     int  OUTPUT,
    @cErrMsg    NVARCHAR(1024) OUTPUT -- screen limitation, 20 char max
@@ -56,6 +55,9 @@ DECLARE
    @cPick          NVARCHAR( 6),
    @nFocusField    INT,
    @cOrderCount    NVARCHAR( 5), 
+   @cExtendedUpdateSP   NVARCHAR( 20),
+   @cSQL           NVARCHAR( MAX),
+   @cSQLParam      NVARCHAR( MAX),
 
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),  @cFieldAttr01 NVARCHAR( 1),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),  @cFieldAttr02 NVARCHAR( 1),
@@ -97,6 +99,8 @@ SELECT
    @cWaveKey         = V_String4,
    @cOrderCount      = V_String5, 
 
+   @cExtendedUpdateSP   = V_String10,
+
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,  @cFieldAttr01 = FieldAttr01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,  @cFieldAttr02 = FieldAttr02,
    @cInField03 = I_Field03,   @cOutField03 = O_Field03,  @cFieldAttr03 = FieldAttr03,
@@ -136,6 +140,10 @@ BEGIN
    -- Set the entry point
    SET @nScn = 3050
    SET @nStep = 1
+
+   SET @cExtendedUpdateSP = rdt.RDTGetConfig( @nFunc, 'ExtendedUpdateSP', @cStorerKey)
+   IF @cExtendedUpdateSP = '0'
+      SET @cExtendedUpdateSP = ''
 
    -- Prepare next screen var
    SET @nFocusField = 1
@@ -427,10 +435,63 @@ BEGIN
          IF @nErrNo <> 0
             GOTO Quit
       END
+            -- Extended update
+      IF @cExtendedUpdateSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')
+         BEGIN
+            SET @cSQL = 'EXEC rdt.' + RTRIM(@cExtendedUpdateSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cOption, @cLoadKey, @cOrderKey,@cWaveKey, ' +
+               ' @nErrNo OUTPUT, @cErrMsg OUTPUT '
+            SET @cSQLParam =
+               '@nMobile        INT,           ' +
+               '@nFunc          INT,           ' +
+               '@cLangCode      NVARCHAR( 3),  ' +
+               '@nStep          INT,           ' +
+               '@nInputKey      INT,           ' +
+               '@cFacility      NVARCHAR( 5),  ' +
+               '@cStorerKey     NVARCHAR( 15), ' +
+               '@cOption        NVARCHAR(  1), ' +
+               '@cLoadKey       NVARCHAR( 10), ' +
+               '@cOrderKey      NVARCHAR( 10), ' +
+               '@cWaveKey       NVARCHAR( 10), ' +
+               '@nErrNo         INT           OUTPUT, ' +
+               '@cErrMsg        NVARCHAR( 20) OUTPUT'
 
-      -- Go to next screen
-      SET @nScn  = @nScn + 1
-      SET @nStep = @nStep + 1
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cOption, @cLoadKey, @cOrderKey,@cWaveKey,
+               @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+            IF @nErrNo <> 0
+            BEGIN
+               GOTO Quit
+            END
+         END
+      END
+
+      IF @cOption = '1' -- Yes
+      BEGIN
+          -- Go to next screen
+         SET @nScn  = @nScn + 1
+         SET @nStep = @nStep + 1
+         GOTO Quit
+      END
+
+      IF @cOption = '2' -- No
+      BEGIN
+         -- Prepare next screen var
+         SET @cOutField01 = @cWaveKey
+         SET @cOutField02 = @cLoadKey
+         SET @cOutField03 = @cOrderKey
+         SET @cOutField04 = @cOrderCount
+         SET @cOutField05 = @cPick
+         SET @cOutField06 = @cShort
+
+         -- Go to prev screen
+         SET @nScn  = @nScn - 1
+         SET @nStep = @nStep - 1
+         GOTO Quit
+      END
    END
 
    IF @nInputKey = 0 -- ESC
@@ -504,6 +565,8 @@ BEGIN
       V_String3    = @nFocusField,
       V_String4    = @cWaveKey, 
       V_String5    = @cOrderCount, 
+
+      V_String10   = @cExtendedUpdateSP,
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,  FieldAttr01  = @cFieldAttr01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,  FieldAttr02  = @cFieldAttr02,

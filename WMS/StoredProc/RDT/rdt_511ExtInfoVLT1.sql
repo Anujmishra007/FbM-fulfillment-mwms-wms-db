@@ -9,6 +9,7 @@ GO
 /* Date         VER   Author   Purpose                                      */
 /* 25/04/2024   1.0   PPA374   Suggesting up to 2 locations for VNA PA      */
 /* 15/07/2024   2.0   PPA374   Stopping picked LPNs to be moved incorrectly */
+/* 12/12/2024   2.1   PPA374   Excluding specific location from substring   */
 /****************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_511ExtInfoVLT1] (
@@ -45,7 +46,8 @@ BEGIN
       IF @PNDPICKChk = 1 OR @VASChk = 1
       BEGIN
          SET @cExtendedInfo = 'Move to '+
-         (SELECT TOP 1 reverse(substring(reverse(OtherReference),4,10)) FROM dbo.MBOL WITH (NOLOCK) WHERE facility = @Facility 
+         (SELECT TOP 1 case when OtherReference LIKE 'DNEDEL%' or OtherReference LIKE 'DNPALN%' THEN OtherReference ELSE 
+		 reverse(substring(reverse(OtherReference),4,10)) END FROM dbo.MBOL WITH (NOLOCK) WHERE facility = @Facility 
          AND mbolkey = (SELECT TOP 1 mbolkey FROM dbo.ORDERS WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND orderkey = 
          (SELECT TOP 1 OrderKey FROM dbo.PICKDETAIL WITH (NOLOCK) WHERE Storerkey = @cStorerKey AND id = @cFromID)))
       END

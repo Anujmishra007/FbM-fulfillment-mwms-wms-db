@@ -7,3 +7,7 @@ execute rdt.rdtAddMsg 142753, 10, '142753SNO Diff QTY',   'us_english'
 execute rdt.rdtAddMsg 142754, 10, '142754SNO ady rcv',    'us_english'
 execute rdt.rdtAddMsg 142755, 10, '142755UPD RSNO Fail',  'us_english'
 execute rdt.rdtAddMsg 142756, 10, '142756SNOMultiRecord', 'us_english'
+--UWP-30047
+execute rdt.rdtAddMsg 142757, 10, '142757Duplicate SN',       'us_english'
+
+SELECT * FROM rdt.RDTMsg WITH(NOLOCK) WHERE MESSAGE_ID BETWEEN 142751 AND 142800

@@ -105,7 +105,7 @@ BEGIN
      AND EXISTS (SELECT 1 FROM dbo.PICKDETAIL PD WITH(NOLOCK) WHERE DropID = @cFromDropID AND Status = 0 AND 
      EXISTS (SELECT 1 FROM dbo.LOC L WITH(NOLOCK) WHERE L.Loc = PD.Loc AND LocationType IN ('STAGEOB','TROLLEYOB','VAS')))
      BEGIN
-        UPDATE PICKDETAIL WITH(ROWLOCK)
+       UPDATE PICKDETAIL WITH(ROWLOCK)
        SET STATUS = 5
        WHERE DropID = @cFromDropID AND Status = 0 AND EXISTS (SELECT 1 FROM dbo.LOC L WITH(NOLOCK) WHERE L.Loc = PICKDETAIL.Loc AND LocationType IN ('STAGEOB','TROLLEYOB','VAS'))
      END  
@@ -125,7 +125,7 @@ BEGIN
         END
 
      --Inserting Weight and RefNo into PackInfo Tbale for E-delivery mapping for those E-delivery orders that have been repacked by RDT 838
-     ELSE IF @nStep = 2 -- In step 2 system updates PackInfo
+     IF @nStep = 2 -- In step 2 system updates PackInfo
      AND NOT EXISTS (SELECT 1 FROM dbo.PACKINFO WITH (NOLOCK) WHERE PickSlipNo = @cPickSlipNo  AND RefNo = @cPackDtlDropID AND CartonNo = @nCartonNo)
      BEGIN
       SELECT @fStdGrossWgt = @nQTY * StdGrossWgt
@@ -140,6 +140,15 @@ BEGIN
       WHERE PickSlipNo = @cPickSlipNo AND CartonNo = @nCartonNo		
       
      END
+
+	 IF @nStep = 2 AND 
+	 EXISTS(SELECT 1 FROM dbo.PackDetail WITH(NOLOCK) WHERE DropID = @cPackDtlDropID) AND
+	 EXISTS(SELECT 1 FROM dbo.Dropid WITH(NOLOCK) WHERE DropID = @cPackDtlDropID AND LoadKey IS NULL)
+	 BEGIN
+	    UPDATE dbo.Dropid WITH(ROWLOCK)
+		SET LoadKey = (SELECT TOP 1 LoadKey FROM LOADPLAN WITH(NOLOCK) WHERE MBOLKEY = (SELECT TOP 1 MBOLKEY FROM ORDERS WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND OrderKey = (SELECT TOP 1 OrderKey FROM PICKHEADER WITH(NOLOCK) WHERE PICKHEADERKEY = (SELECT TOP 1 PICKSLIPNO FROM PACKDETAIL WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND DROPID = @cPackDtlDropID))))
+		WHERE DropID = @cPackDtlDropID
+	 END
 
      --In case is a E-delivery Order repacked, Update table TRANSMITLOG2 to resend to E-delivery the request
      IF @nStep = 6 -- Print pack List screen only showed when user pack the last carton of the order

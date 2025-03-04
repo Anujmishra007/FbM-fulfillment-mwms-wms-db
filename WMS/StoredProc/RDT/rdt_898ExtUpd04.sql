@@ -1,6 +1,3 @@
-IF EXISTS (SELECT name FROM sysobjects WHERE name = 'rdt_898ExtUpd04' AND type = 'P')
-   DROP PROC rdt.rdt_898ExtUpd04
-GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -9,7 +6,7 @@ GO
 
 /************************************************************************/
 /* Store procedure: rdt_898ExtUpd04                                     */
-/* Copyright      : LF Logistics                                        */
+/* Copyright      : Maersk                                              */
 /*                                                                      */
 /* Called from: rdtfnc_UCCReceive                                       */
 /*              Release the pallet position after pallet closed         */
@@ -17,9 +14,10 @@ GO
 /*                                                                      */
 /* Date        Rev  Author    Purposes                                  */
 /* 05-02-2018  1.0  ChewKP    WMS-3859. Created                         */
+/* 01-10-2024  1.1  Ung       WMS-26411 Remove No RD Finalize error     */
 /************************************************************************/
 
-CREATE PROCEDURE rdt.rdt_898ExtUpd04
+CREATE OR ALTER PROCEDURE rdt.rdt_898ExtUpd04
     @nMobile      INT
    ,@nFunc        INT
    ,@nStep        INT
@@ -123,12 +121,14 @@ BEGIN
                FETCH NEXT FROM @curRD INTO @cReceiptLineNumber
             END
          END
+         /*
          ELSE 
          BEGIN
             SET @nErrNo = 119402
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- No RD Finalize
             GOTO RollBackTran
          END
+         */
                   
          -- Generate putaway task
 --         IF NOT EXISTS( SELECT 1 FROM dbo.TaskDetail WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND TaskType = 'PAF' AND FromID = @cToID)

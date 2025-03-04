@@ -21,9 +21,14 @@ GO
 /* 2024-11-27 1.4.1  NLT013   FCR-1085 Fix bug - print duplicate reports           */
 /* 2024-12-03 1.5.0  NLT013   FCR-1659 Be able to print label for MPOC             */
 /* 2024-12-03 1.6.0  NLT013   UWP-28680 Remove the transaction                     */
-/* 2024-12-03 1.7.0  NLT013   UWP-28888 PackHeader status is not correct           */
-/* 2025-01-15 1.8.0  NLT013   UWP-29176 Performance Tune Version 1                 */
-/* 2025-01-15 1.8.1  NLT013   UWP-29176 Performance Tune version 2                 */
+/* 2024-12-31 1.7.0  NLT013   UWP-28680 fix rollback transaction issue. The error  */
+/*                            code should be visible if any error happens          */
+/* 2024-11-15 1.8.0  LJQ006   FCR-1109. Insert transmitlog2 after PPA              */
+/* 2025-01-08 1.9.0  NLT013   UWP-28888 The PackHeader's status is wrong           */
+/* 2025-01-15 1.10.0 NLT013   UWP-29176 Performance Tune version 1                 */
+/* 2025-01-15 1.10.1 NLT013   UWP-29176 Performance Tune version 2                 */
+/* 2025-02-05 1.11.0 CYU027   FCR-2630 Add Option=5 in step 5                      */
+/* 2025-02-11 1.12.0 Dennis   FCR-2630 Clear the dropid info to reuse              */
 /***********************************************************************************/
 CREATE OR ALTER PROC rdt.rdt_855ExtUpd13 (
    @nMobile      INT,   
@@ -102,6 +107,13 @@ BEGIN
       @cOLPSDescription          NVARCHAR(15) = 'OlpsPlacement'
       DECLARE @tPackSlipList     VariableTable
 
+   DECLARE @cToteID      NVARCHAR(20)
+   DECLARE @cWaveKey     NVARCHAR(20),
+   @cDropIDFlag          NVARCHAR(1)
+   DECLARE @tWaveKeys    TABLE (
+      WaveKey NVARCHAR(50)
+   )
+   DECLARE @nWaveKeyCount INT
    DECLARE @tLabels TABLE
    (
       ID    INT IDENTITY(1,1),
@@ -112,6 +124,13 @@ BEGIN
       LabelName                  NVARCHAR(30),
       Qty                        INT,
       PrintSequence              NVARCHAR(5)
+   )
+
+   DECLARE @tMPOCLabels TABLE
+   (
+      ID    INT IDENTITY(1,1),
+      LabelName   NVARCHAR( 30),
+      OrderKey    NVARCHAR( 10)
    )
 
    DECLARE @tOrder TABLE
@@ -131,13 +150,14 @@ BEGIN
 
    SELECT @nScn = Scn,
       @cLabelPrinterGroup = Printer,
-      @cPaperPrinter = Printer_Paper
+      @cPaperPrinter = Printer_Paper,
+      @cDropIDFlag   = C_STRING1
    FROM rdt.RDTMOBREC WITH(NOLOCK)
    WHERE Mobile = @nMobile
    
    IF @nFunc = 855 -- Post Pick Audit
    BEGIN
-      IF @nStep = 1 -- CartonID
+      IF @nStep = 1 OR (@nStep = 99 AND @nScn = 814)-- CartonID
       BEGIN
          IF EXISTS(SELECT 1 FROM RDT.RDTPPA WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND DropID = @cDropID AND Status = '2')
             UPDATE RDT.RDTPPA WITH(ROWLOCK)
@@ -151,6 +171,26 @@ BEGIN
       BEGIN
          IF @nInputKey = 1 -- Enter
          BEGIN
+            DECLARE @tMsgQueue TABLE
+            (
+               id INT IDENTITY(1,1),
+               Line01    NVARCHAR(125),
+               Line02    NVARCHAR(125),
+               Line03    NVARCHAR(125),
+               Line04    NVARCHAR(125),
+               Line05    NVARCHAR(125),
+               Line06    NVARCHAR(125),
+               Line07    NVARCHAR(125),
+               Line08    NVARCHAR(125),
+               Line09    NVARCHAR(125),
+               Line10    NVARCHAR(125),
+               Line11    NVARCHAR(125),
+               Line12    NVARCHAR(125),
+               Line13    NVARCHAR(125),
+               Line14    NVARCHAR(125),
+               Line15    NVARCHAR(125)
+            )
+
             SELECT @nTotalPQty = SUM(PQty), @nTotalCQty = SUM(CQty)
             FROM RDT.RDTPPA WITH(NOLOCK)
             WHERE StorerKey = @cStorerKey
@@ -228,20 +268,39 @@ BEGIN
 
                         IF @cMsg01 IS NOT NULL AND TRIM(@cMsg01) <> '' AND @nLoopIndex % 7 = 0
                         BEGIN
-                           EXEC rdt.rdtInsertMsgQueue 
-                              @nMobile = @nMobile, 
-                              @nErrNo = @nErrNo, 
-                              @cErrMsg = @cErrMsg, 
-                              @cLine01 = @cMsg01, 
-                              @cLine02 = @cMsg02, 
-                              @cLine03 = @cMsg03, 
-                              @cLine04 = @cMsg04, 
-                              @cLine05 = @cMsg05, 
-                              @cLine06 = @cMsg06, 
-                              @cLine07 = @cMsg07, 
-                              @cLine08 = @cMsg08, 
-                              @cLine09 = @cMsg09, 
-                              @nDisplayMsg = 0
+                           INSERT INTO @tMsgQueue
+                           (
+                              Line01,
+                              Line02,
+                              Line03,
+                              Line04,
+                              Line05,
+                              Line06,
+                              Line07,
+                              Line08,
+                              Line09,
+                              Line10,
+                              Line11,
+                              Line12,
+                              Line13,
+                              Line14,
+                              Line15)
+                           VALUES(
+                              @cMsg01,
+                              @cMsg02,
+                              @cMsg03,
+                              @cMsg04,
+                              @cMsg05,
+                              @cMsg06,
+                              @cMsg07,
+                              @cMsg08,
+                              @cMsg09,
+                              '',
+                              '',
+                              '',
+                              '',
+                              '',
+                              '')
 
                            SET @cMsg01 = ''
                            SET @cMsg02 = ''
@@ -257,20 +316,39 @@ BEGIN
                      IF @cMsg02 IS NOT NULL AND TRIM(@cMsg02) <> ''
                      BEGIN
                         SET @cMsg01 = 'VAS Header'
-                        EXEC rdt.rdtInsertMsgQueue 
-                           @nMobile = @nMobile, 
-                           @nErrNo = @nErrNo, 
-                           @cErrMsg = @cErrMsg, 
-                           @cLine01 = @cMsg01, 
-                           @cLine02 = @cMsg02, 
-                           @cLine03 = @cMsg03, 
-                           @cLine04 = @cMsg04, 
-                           @cLine05 = @cMsg05, 
-                           @cLine06 = @cMsg06, 
-                           @cLine07 = @cMsg07, 
-                           @cLine08 = @cMsg08, 
-                           @cLine09 = @cMsg09, 
-                           @nDisplayMsg = 0
+                        INSERT INTO @tMsgQueue
+                        (
+                           Line01,
+                           Line02,
+                           Line03,
+                           Line04,
+                           Line05,
+                           Line06,
+                           Line07,
+                           Line08,
+                           Line09,
+                           Line10,
+                           Line11,
+                           Line12,
+                           Line13,
+                           Line14,
+                           Line15)
+                        VALUES(
+                           @cMsg01,
+                           @cMsg02,
+                           @cMsg03,
+                           @cMsg04,
+                           @cMsg05,
+                           @cMsg06,
+                           @cMsg07,
+                           @cMsg08,
+                           @cMsg09,
+                           '',
+                           '',
+                           '',
+                           '',
+                           '',
+                           '')
 
                         SET @cMsg01 = ''
                         SET @cMsg02 = ''
@@ -336,19 +414,39 @@ BEGIN
 
                      IF @cMsg01 IS NOT NULL AND TRIM(@cMsg01) <> '' AND @nLoopIndex % 8 = 0
                      BEGIN
-                        EXEC rdt.rdtInsertMsgQueue @nMobile = @nMobile, 
-                           @nErrNo = @nErrNo, 
-                           @cErrMsg = @cErrMsg, 
-                           @cLine01 = @cMsg01, 
-                           @cLine02 = @cMsg02, 
-                           @cLine03 = @cMsg03, 
-                           @cLine04 = @cMsg04, 
-                           @cLine05 = @cMsg05, 
-                           @cLine06 = @cMsg06, 
-                           @cLine07 = @cMsg07, 
-                           @cLine08 = @cMsg08, 
-                           @cLine09 = @cMsg09, 
-                           @nDisplayMsg = 0
+                        INSERT INTO @tMsgQueue
+                        (
+                           Line01,
+                           Line02,
+                           Line03,
+                           Line04,
+                           Line05,
+                           Line06,
+                           Line07,
+                           Line08,
+                           Line09,
+                           Line10,
+                           Line11,
+                           Line12,
+                           Line13,
+                           Line14,
+                           Line15)
+                        VALUES(
+                           @cMsg01,
+                           @cMsg02,
+                           @cMsg03,
+                           @cMsg04,
+                           @cMsg05,
+                           @cMsg06,
+                           @cMsg07,
+                           @cMsg08,
+                           @cMsg09,
+                           '',
+                           '',
+                           '',
+                           '',
+                           '',
+                           '')
 
                         SET @cMsg01 = ''
                         SET @cMsg02 = ''
@@ -368,19 +466,39 @@ BEGIN
 
                   IF @cMsg01 IS NOT NULL AND TRIM(@cMsg01) <> ''
                   BEGIN
-                     EXEC rdt.rdtInsertMsgQueue @nMobile = @nMobile, 
-                        @nErrNo = @nErrNo, 
-                        @cErrMsg = @cErrMsg, 
-                        @cLine01 = @cMsg01, 
-                        @cLine02 = @cMsg02, 
-                        @cLine03 = @cMsg03, 
-                        @cLine04 = @cMsg04, 
-                        @cLine05 = @cMsg05, 
-                        @cLine06 = @cMsg06, 
-                        @cLine07 = @cMsg07, 
-                        @cLine08 = @cMsg08, 
-                        @cLine09 = @cMsg09, 
-                        @nDisplayMsg = 0
+                     INSERT INTO @tMsgQueue
+                     (
+                        Line01,
+                        Line02,
+                        Line03,
+                        Line04,
+                        Line05,
+                        Line06,
+                        Line07,
+                        Line08,
+                        Line09,
+                        Line10,
+                        Line11,
+                        Line12,
+                        Line13,
+                        Line14,
+                        Line15)
+                     VALUES(
+                        @cMsg01,
+                        @cMsg02,
+                        @cMsg03,
+                        @cMsg04,
+                        @cMsg05,
+                        @cMsg06,
+                        @cMsg07,
+                        @cMsg08,
+                        @cMsg09,
+                        '',
+                        '',
+                        '',
+                        '',
+                        '',
+                        '')
 
                      SET @cMsg01 = ''
                      SET @cMsg02 = ''
@@ -454,98 +572,6 @@ BEGIN
                      AND pkd.CaseID <> ''
                      AND pkd.CaseID = @cDropID
                   ORDER BY lk.Code ASC
-
-                  DECLARE @tPriceLabelList   VariableTable
-                  DECLARE @tcatelogLabelList   VariableTable
-                  DECLARE @tNormalLabelList VariableTable
-
-                  SET @nLoopIndex = -1
-                  WHILE 1 = 1
-                  BEGIN
-                     SELECT TOP 1 
-                        @cLabelName = LabelName,
-                        @nWorkOrderDetailQty = Qty,
-                        @cLabelListName = LabelListName,
-                        @nLoopIndex = id
-                     FROM @tLabels
-                     WHERE id > @nLoopIndex
-                     ORDER BY id
-
-                     SELECT @nRowCount = @@ROWCOUNT
-
-                     IF @nRowCount = 0
-                        BREAK
-
-                     IF @cLabelListName = 'LVSPRICELB'
-                     BEGIN
-                        DELETE FROM @tPriceLabelList
-
-                        INSERT INTO @tPriceLabelList (Variable, Value) 
-                        VALUES 
-                           ( '@cLabelNo', @cDropID),
-                           ( '@cSKU', @cSKU)
-
-                        -- Print label
-                        EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cLabelPrinterGroup, @cPaperPrinter,
-                           @cLabelName, -- Report type
-                           @tPriceLabelList, -- Report params
-                           'rdt_855ExtUpd13',
-                           @nErrNo  OUTPUT,
-                           @cErrMsg OUTPUT,
-                           @nNoOfCopy = @nWorkOrderDetailQty
-            
-                        IF @nErrNo <> 0
-                        BEGIN
-                           GOTO Quit
-                        END
-                     END
-                     ELSE IF @cLabelListName = 'LVSCatalog'
-                     BEGIN
-                        DELETE FROM @tcatelogLabelList
-                        -- Common params
-                        INSERT INTO @tcatelogLabelList (Variable, Value) 
-                        VALUES 
-                           ( '@cLabelNo', @cDropID),
-                           ( '@cSKU', @cSKU)
-
-                        -- Print label
-                        EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cLabelPrinterGroup, @cPaperPrinter,
-                           @cLabelName, -- Report type
-                           @tcatelogLabelList, -- Report params
-                           'rdt_855ExtUpd13',
-                           @nErrNo  OUTPUT,
-                           @cErrMsg OUTPUT,
-                           @nNoOfCopy = @nWorkOrderDetailQty
-            
-                        IF @nErrNo <> 0
-                        BEGIN
-                           GOTO Quit
-                        END
-                     END
-                     ELSE IF @cLabelListName = 'WKORDTYPE'
-                     BEGIN
-                        DELETE FROM @tNormalLabelList
-                        -- Common params
-                        INSERT INTO @tNormalLabelList (Variable, Value)
-                        VALUES 
-                           ( '@cLabelNo', @cDropID),
-                           ( '@cSKU', @cSKU)
-
-                        -- Print label
-                        EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cLabelPrinterGroup, @cPaperPrinter,
-                           @cLabelName, -- Report type
-                           @tNormalLabelList, -- Report params
-                           'rdt_855ExtUpd13',
-                           @nErrNo  OUTPUT,
-                           @cErrMsg OUTPUT,
-                           @nNoOfCopy = @nWorkOrderDetailQty
-            
-                        IF @nErrNo <> 0
-                        BEGIN
-                           GOTO Quit
-                        END
-                     END
-                  END
                END
 
                SELECT @nTotalCQty = SUM(CQty)
@@ -590,7 +616,7 @@ BEGIN
                      --Mark PackInfo as PACKED
                      UPDATE dbo.PackInfo WITH(ROWLOCK)
                      SET CartonStatus = 'PACKED'
-                     WHERE 
+                     WHERE
                         RefNo IS NOT NULL
                         AND RefNo = @cDropID
 
@@ -620,7 +646,7 @@ BEGIN
                      SET PI.Weight = CW.Weight
                      FROM dbo.PackInfo PI
                      INNER JOIN @tCartonWeight CW ON ISNULL(PI.RefNo, '') = CW.CaseID
-                     WHERE 
+                     WHERE
                         PI.RefNo IS NOT NULL
                         AND PI.RefNo = @cDropID
 
@@ -634,6 +660,7 @@ BEGIN
                         AND CaseID <> ''
                         AND CaseID = @cDropID
 
+                     DELETE FROM @tMPOCLabels
                      SET @nLoopIndex = -1
 
                      WHILE 1 = 1
@@ -708,26 +735,8 @@ BEGIN
                               CONTINUE
                            END
 
-                           SET @cLabelName = 'LVSPSORD'
-                           DELETE FROM @tPackSlipList
-                           INSERT INTO @tPackSlipList (Variable, Value) 
-                           VALUES 
-                              ( '@cStorerKey', @cStorerKey),
-                              ( '@cOrderKey', @cOrderKey)
-
-                           -- Print Order Level packing list label
-                           EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cLabelPrinterGroup, @cPaperPrinter,
-                              @cLabelName, -- Report type
-                              @tPackSlipList, -- Report params
-                              'rdt_855ExtUpd13',
-                              @nErrNo  OUTPUT,
-                              @cErrMsg OUTPUT,
-                              @nNoOfCopy = 1
-
-                           IF @nErrNo <> 0
-                           BEGIN
-                              GOTO Quit
-                           END
+                           INSERT INTO @tMPOCLabels (LabelName, OrderKey)
+                           VALUES('LVSPSORD', @cOrderKey)
                         END
                      END
 
@@ -831,6 +840,172 @@ BEGIN
 
                   GOTO Quit
                END CATCH
+
+               --Display VAS code
+               SET @nLoopIndex = -1
+               WHILE 1=1
+               BEGIN
+                  SELECT TOP 1
+                     @cMsg01 = Line01,
+                     @cMsg02 = Line02,
+                     @cMsg03 = Line03,
+                     @cMsg04 = Line04,
+                     @cMsg05 = Line05,
+                     @cMsg06 = Line06,
+                     @cMsg07 = Line07,
+                     @cMsg08 = Line08,
+                     @cMsg09 = Line09,
+                     @nLoopIndex = id
+                  FROM @tMsgQueue
+                  WHERE id > @nLoopIndex
+                  ORDER BY id
+
+                  IF @@ROWCOUNT = 0
+                     BREAK
+
+                  EXEC rdt.rdtInsertMsgQueue @nMobile = @nMobile,
+                                 @nErrNo = @nErrNo,
+                                 @cErrMsg = @cErrMsg,
+                                 @cLine01 = @cMsg01,
+                                 @cLine02 = @cMsg02,
+                                 @cLine03 = @cMsg03,
+                                 @cLine04 = @cMsg04,
+                                 @cLine05 = @cMsg05,
+                                 @cLine06 = @cMsg06,
+                                 @cLine07 = @cMsg07,
+                                 @cLine08 = @cMsg08,
+                                 @cLine09 = @cMsg09,
+                                 @nDisplayMsg = 0
+               END
+
+               --Print VAS Labels
+               DECLARE @tPriceLabelList   VariableTable
+               DECLARE @tcatelogLabelList   VariableTable
+               DECLARE @tNormalLabelList VariableTable
+
+               SET @nLoopIndex = -1
+               WHILE 1 = 1
+               BEGIN
+                  SELECT TOP 1
+                     @cLabelName = LabelName,
+                     @nWorkOrderDetailQty = Qty,
+                     @cLabelListName = LabelListName,
+                     @nLoopIndex = id
+                  FROM @tLabels
+                  WHERE id > @nLoopIndex
+                  ORDER BY id
+
+                  SELECT @nRowCount = @@ROWCOUNT
+
+                  IF @nRowCount = 0
+                     BREAK
+
+                  IF @cLabelListName = 'LVSPRICELB'
+                  BEGIN
+                     DELETE FROM @tPriceLabelList
+
+                     INSERT INTO @tPriceLabelList (Variable, Value)
+                     VALUES
+                        ( '@cLabelNo', @cDropID),
+                        ( '@cSKU', @cSKU)
+
+                     -- Print label
+                     EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cLabelPrinterGroup, @cPaperPrinter,
+                        @cLabelName, -- Report type
+                        @tPriceLabelList, -- Report params
+                        'rdt_855ExtUpd13',
+                        @nErrNo  OUTPUT,
+                        @cErrMsg OUTPUT,
+                        @nNoOfCopy = @nWorkOrderDetailQty
+
+                     IF @nErrNo <> 0
+                     BEGIN
+                        GOTO Quit
+                     END
+                  END
+                  ELSE IF @cLabelListName = 'LVSCatalog'
+                  BEGIN
+                     DELETE FROM @tcatelogLabelList
+                     -- Common params
+                     INSERT INTO @tcatelogLabelList (Variable, Value)
+                     VALUES
+                        ( '@cLabelNo', @cDropID),
+                        ( '@cSKU', @cSKU)
+
+                     -- Print label
+                     EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cLabelPrinterGroup, @cPaperPrinter,
+                        @cLabelName, -- Report type
+                        @tcatelogLabelList, -- Report params
+                        'rdt_855ExtUpd13',
+                        @nErrNo  OUTPUT,
+                        @cErrMsg OUTPUT,
+                        @nNoOfCopy = @nWorkOrderDetailQty
+
+                     IF @nErrNo <> 0
+                     BEGIN
+                        GOTO Quit
+                     END
+                  END
+                  ELSE IF @cLabelListName = 'WKORDTYPE'
+                  BEGIN
+                     DELETE FROM @tNormalLabelList
+                     -- Common params
+                     INSERT INTO @tNormalLabelList (Variable, Value)
+                     VALUES
+                        ( '@cLabelNo', @cDropID),
+                        ( '@cSKU', @cSKU)
+
+                     -- Print label
+                     EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cLabelPrinterGroup, @cPaperPrinter,
+                        @cLabelName, -- Report type
+                        @tNormalLabelList, -- Report params
+                        'rdt_855ExtUpd13',
+                        @nErrNo  OUTPUT,
+                        @cErrMsg OUTPUT,
+                        @nNoOfCopy = @nWorkOrderDetailQty
+
+                     IF @nErrNo <> 0
+                     BEGIN
+                        GOTO Quit
+                     END
+                  END
+               END
+
+               --Print MPOC label
+               SET @nLoopIndex = -1
+               WHILE 1 = 1
+               BEGIN
+                  SELECT TOP 1
+                     @cLabelName = LabelName,
+                     @cOrderKey = OrderKey,
+                     @nLoopIndex = id
+                  FROM @tMPOCLabels
+                  WHERE id > @nLoopIndex
+                  ORDER BY id
+
+                  IF @@ROWCOUNT = 0
+                     BREAK
+
+                  DELETE FROM @tPackSlipList
+                  INSERT INTO @tPackSlipList (Variable, Value)
+                  VALUES
+                     ( '@cStorerKey', @cStorerKey),
+                     ( '@cOrderKey', @cOrderKey)
+
+                  -- Print Order Level packing list label
+                  EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cLabelPrinterGroup, @cPaperPrinter,
+                     @cLabelName, -- Report type
+                     @tPackSlipList, -- Report params
+                     'rdt_855ExtUpd13',
+                     @nErrNo  OUTPUT,
+                     @cErrMsg OUTPUT,
+                     @nNoOfCopy = 1
+
+                  IF @nErrNo <> 0
+                  BEGIN
+                     GOTO Quit
+                  END
+               END
             END
          END
       END
@@ -845,275 +1020,7 @@ BEGIN
             END
          END
       END
-      ELSE IF @nStep = 5  --Print Pack List
-      BEGIN
-         IF @nInputKey = 1 -- Press Enter
-         BEGIN
-            IF @cOption = '1' -- 1. Print Carton Label
-            BEGIN
-               DECLARE 
-                  @cCustLblPrintSequence     NVARCHAR(10),
-                  @cDefaultLblPrintSequence  NVARCHAR(10),
-                  @cCustLabelName            NVARCHAR(30),
-                  @cDefaultLabelName         NVARCHAR(30),
-                  @cCustLabelDataDesc        NVARCHAR(30),
-                  @cCustomCode               NVARCHAR(30),
-                  @nSpecialCartonLabelPrinted       INT = 0,
-                  @nSpecialVendorLabelPrinted       INT = 0,
-                  @nMPOCCarton               INT = 0
 
-               SELECT @nRowCount = COUNT( DISTINCT CONCAT(ORM.BillToKey, ORM.ShipperKey, ORM.MarkforKey) )
-               FROM dbo.PickDetail PKD WITH(NOLOCK)
-               INNER JOIN dbo.ORDERS ORM WITH(NOLOCK)
-                  ON PKD.StorerKey = ORM.StorerKey 
-                  AND PKD.OrderKey = ORM.OrderKey
-               WHERE PKD.StorerKey = @cStorerKey 
-                  AND PKD.CaseID <> ''
-                  AND PKD.CaseID = @cDropID
-
-               IF @nRowCount = 1
-                  SET @nMPOCCarton = 1
-               
-               SELECT @nRowCount = COUNT( DISTINCT OrderKey )
-               FROM dbo.PickDetail WITH(NOLOCK)
-               WHERE StorerKey = @cStorerKey 
-                  AND CaseID <> ''
-                  AND CaseID = @cDropID
-
-               IF @nRowCount < 2
-                  SET @nMPOCCarton = 0
-
-               SELECT @cPickSlipNo = PickSlipNo
-               FROM dbo.PackDetail WITH(NOLOCK) 
-               WHERE StorerKey = @cStorerKey 
-                  AND labelno = @cDropID
-
-               DECLARE @tCartonLabelList VariableTable
-               INSERT INTO @tCartonLabelList (Variable, Value) 
-               VALUES 
-                  ( '@cLabelNo', @cDropID)
-
-               DECLARE @tDefaultLabels TABLE
-               (
-                  id             INT IDENTITY(1,1),
-                  Code           NVARCHAR(30),
-                  code2          NVARCHAR(30),
-                  UDF01          NVARCHAR(30),
-                  Short          NVARCHAR(10)
-               )
-
-               INSERT INTO @tDefaultLabels (code2, UDF01, Short, Code)
-               SELECT code2, UDF01, Short, Code
-               FROM dbo.CODELKUP WITH(NOLOCK) 
-               WHERE StorerKey = @cStorerKey
-                  AND LISTNAME = 'LVSCARTLBL'
-                  AND ISNULL(Long, '') = 'A'
-               ORDER BY ISNULL(Short, '99999')
-
-               DECLARE @tCustWorkOrderLabels TABLE
-               (
-                  id             INT IDENTITY(1,1),
-                  Type           NVARCHAR(12),
-                  UDF01          NVARCHAR(30),
-                  code2          NVARCHAR(30),
-                  PrintSequence  INT,
-                  IgnoreFlag     INT DEFAULT 0
-               )
-
-               INSERT INTO @tCustWorkOrderLabels (Type, UDF01, code2, PrintSequence)
-               SELECT DISTINCT lk.Code, lk.UDF01, lk.code2, IIF(UPPER(LEFT(lk.code2, 4)) = 'MPOC', 1, 2)
-               FROM dbo.WorkOrder wo WITH(NOLOCK)
-               INNER JOIN dbo.WorkOrderDetail wod WITH(NOLOCK) ON wo.WorkOrderKey = wod.WorkOrderKey
-               INNER JOIN dbo.PickDetail pkd WITH(NOLOCK) ON wod.StorerKey = pkd.StorerKey AND wod.ExternWorkOrderKey = pkd.OrderKey 
-               INNER JOIN dbo.CODELKUP lk WITH(NOLOCK) ON wod.StorerKey = lk.StorerKey AND wod.Type = lk.Code AND lk.LISTNAME = 'LVSCARTLBL' AND ISNULL(wod.Remarks, '-1') = lk.code2
-               WHERE wod.StorerKey = @cStorerKey
-                  AND wod.Type <> ''
-                  AND wod.ExternLineNo = ''
-                  AND pkd.CaseID <> ''
-                  AND pkd.CaseID = @cDropID
-                  AND ISNULL(wod.Remarks, '') <> ''
-               ORDER BY IIF(UPPER(LEFT(lk.code2, 4)) = 'MPOC', 1, 2)
-
-               --Print Special Labels
-               SET @nLoopIndex = -1
-               WHILE 1 = 1
-               BEGIN
-                  SELECT TOP 1 
-                     @cVASCode = Type,
-                     @cLabelName = UDF01,
-                     @cCode2 = code2,
-                     @nLoopIndex = id
-                  FROM @tCustWorkOrderLabels
-                  WHERE id > @nLoopIndex
-                     AND IgnoreFlag = 0
-                  ORDER BY id
-
-                  IF @@ROWCOUNT = 0
-                     BREAK
-
-                  IF @nMPOCCarton = 1 AND LEFT(@cCode2, 4) = 'MPOC'
-                  BEGIN
-                     IF UPPER(LEFT(@cCode2, 11)) = 'MPOCCONTENT'
-                     BEGIN
-                        DELETE FROM @tDefaultLabels WHERE LEFT(UDF01, 3) = 'CTN'
-                        UPDATE @tCustWorkOrderLabels SET IgnoreFlag = 1 WHERE LEFT(Code2, 4) <> 'MPOC' AND LEFT(UDF01, 3) = 'CTN' AND id > @nLoopIndex
-                        SET @nSpecialCartonLabelPrinted = 1
-                     END
-                     ELSE
-                     BEGIN
-                        DELETE FROM @tDefaultLabels WHERE LEFT(UDF01, 3) <> 'CTN'
-                        UPDATE @tCustWorkOrderLabels SET IgnoreFlag = 1 WHERE LEFT(Code2, 4) <> 'MPOC' AND LEFT(UDF01, 3) <> 'CTN' AND id > @nLoopIndex
-                        SET @nSpecialVendorLabelPrinted = 1
-                     END
-                  END
-                  ELSE
-                  BEGIN
-                     IF LEFT(@cCode2, 4) = 'MPOC'
-                        CONTINUE
-                     IF LEFT(@cLabelName, 3) = 'CTN'
-                     BEGIN
-                        DELETE FROM @tDefaultLabels WHERE (Code = @cVASCode OR code2 = @cCode2) AND LEFT(UDF01, 3) = 'CTN'
-                        SET @nSpecialCartonLabelPrinted = 1
-                     END
-                     ELSE
-                     BEGIN
-                        DELETE FROM @tDefaultLabels WHERE (Code = @cVASCode OR code2 = @cCode2) AND LEFT(UDF01, 3) <> 'CTN'
-                        SET @nSpecialVendorLabelPrinted = 1
-                     END
-                  END
-
-                  -- Print label
-                  EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cLabelPrinterGroup, @cPaperPrinter,
-                     @cLabelName, -- Report type
-                     @tCartonLabelList, -- Report params
-                     'rdt_855ExtUpd13',
-                     @nErrNo  OUTPUT,
-                     @cErrMsg OUTPUT
-                     
-                  IF @nErrNo <> 0
-                  BEGIN
-                     GOTO Quit
-                  END
-               END
-
-               SELECT TOP 1 @cConsigneeKey = orm.ConsigneeKey,
-                  @cBillToKey = orm.BillToKey,
-                  @cOrderGroup = orm.OrderGroup
-               FROM dbo.PickDetail pkd WITH(NOLOCK)
-               INNER JOIN dbo.ORDERS orm WITH(NOLOCK) ON pkd.StorerKey = orm.StorerKey AND pkd.OrderKey = orm.OrderKey
-               WHERE pkd.StorerKey = @cStorerKey
-                  AND pkd.CaseID <> ''
-                  AND pkd.CaseID = @cDropID
-
-               --IF code2 equals to ConsigneeKey and BillToKey, only fetch data which code2 = @cConsigneeKey
-               IF EXISTS (SELECT 1
-                     FROM dbo.CODELKUP lk WITH(NOLOCK) 
-                     INNER JOIN dbo.CODELKUP lk1 WITH(NOLOCK) ON lk.StorerKey = lk1.StorerKey AND lk.Code2 = ISNULL(lk1.Description, '') AND lk.Code = ISNULL(lk1.Long, '') 
-                     WHERE lk.StorerKey = @cStorerKey
-                        AND lk.LISTNAME = 'LVSCARTLBL' 
-                        AND ISNULL(lk.Long, '') = ''
-                        AND lk1.LISTNAME = 'LVSCUSPREF'
-                        AND ISNULL(lk1.Description, '') <> @cOLPSDescription
-                        AND lk1.code2 = @cConsigneeKey)
-                  AND EXISTS (SELECT 1
-                     FROM dbo.CODELKUP lk WITH(NOLOCK) 
-                     INNER JOIN dbo.CODELKUP lk1 WITH(NOLOCK) ON lk.StorerKey = lk1.StorerKey AND lk.Code2 = ISNULL(lk1.Description, '') AND lk.Code = ISNULL(lk1.Long, '') 
-                     WHERE lk.StorerKey = @cStorerKey
-                        AND lk.LISTNAME = 'LVSCARTLBL' 
-                        AND ISNULL(lk.Long, '') = ''
-                        AND lk1.LISTNAME = 'LVSCUSPREF'
-                        AND ISNULL(lk1.Description, '') <> @cOLPSDescription
-                        AND lk1.code2 = @cBillToKey)
-               BEGIN
-                  DECLARE CUR_CARTONLABEL CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-                     SELECT CustLabelData.Description, CustLabels.UDF01 AS CustLabelType, ISNULL(CustLabels.Short, '99999') AS CustSequence, CustLabelData.Long
-                     FROM (SELECT StorerKey, Description, ISNULL(Long, '') AS Long FROM dbo.CODELKUP AS LK WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND LISTNAME = 'LVSCUSPREF'  AND code2 = @cConsigneeKey AND ISNULL(Description, '') <> @cOLPSDescription
-                           AND NOT EXISTS (SELECT 1 FROM @tCustWorkOrderLabels AS CWOL WHERE CWOL.Type = LK.Long OR CWOL.code2 = LK.Description)) AS CustLabelData
-                     LEFT JOIN (SELECT StorerKey, code2, Code, UDF01, Short FROM dbo.CODELKUP WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND LISTNAME = 'LVSCARTLBL'  AND ISNULL(Long, '') <> 'A'
-                           ) AS CustLabels 
-                        ON CustLabelData.StorerKey = CustLabels.StorerKey AND CustLabelData.Description = CustLabels.code2 AND CustLabelData.Long = CustLabels.Code
-                     ORDER BY ISNULL(CustLabels.Short, '99999')
-               END
-               ELSE 
-                  DECLARE CUR_CARTONLABEL CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-                     SELECT CustLabelData.Description, CustLabels.UDF01 AS CustLabelType, ISNULL(CustLabels.Short, '99999') AS CustSequence, CustLabelData.Long
-                     FROM (SELECT StorerKey, Description, ISNULL(Long, '') AS Long FROM dbo.CODELKUP LK WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND LISTNAME = 'LVSCUSPREF' AND ISNULL(Description, '') <> @cOLPSDescription AND (code2 = @cConsigneeKey OR code2 = @cBillToKey)
-                           AND NOT EXISTS (SELECT 1 FROM @tCustWorkOrderLabels AS CWOL WHERE CWOL.Type = LK.Long OR CWOL.code2 = LK.Description)) AS CustLabelData
-                     LEFT JOIN (SELECT StorerKey, code2, Code, UDF01, Short FROM dbo.CODELKUP WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND LISTNAME = 'LVSCARTLBL'  AND ISNULL(Long, '') <> 'A'
-                           ) AS CustLabels 
-                        ON CustLabelData.StorerKey = CustLabels.StorerKey AND CustLabelData.Description = CustLabels.code2 AND CustLabelData.Long = CustLabels.Code
-                     ORDER BY ISNULL(CustLabels.Short, '99999')
-
-               OPEN CUR_CARTONLABEL 
-               FETCH NEXT FROM CUR_CARTONLABEL INTO @cCustLabelDataDesc, @cCustLabelName, @cCustLblPrintSequence,@cCustomCode
-
-               WHILE @@FETCH_STATUS = 0 
-               BEGIN
-                  IF @cCustLabelName IS NOT NULL AND TRIM(@cCustLabelName) <> ''
-                     AND ( 
-                           (@nSpecialCartonLabelPrinted = 0 AND LEFT(@cCustLabelName, 3) = 'CTN' )
-                           OR 
-                           (@nSpecialVendorLabelPrinted = 0 AND LEFT(@cCustLabelName, 3) <> 'CTN') 
-                        )
-                  BEGIN
-                     DELETE FROM @tDefaultLabels WHERE code2 = @cCustLabelDataDesc
-                     SET @cLabelName = @cCustLabelName
-                     -- Print label
-                     EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cLabelPrinterGroup, @cPaperPrinter,
-                        @cLabelName, -- Report type
-                        @tCartonLabelList, -- Report params
-                        'rdt_855ExtUpd13',
-                        @nErrNo  OUTPUT,
-                        @cErrMsg OUTPUT
-
-                     IF @nErrNo <> 0
-                     BEGIN
-                        CLOSE CUR_CARTONLABEL 
-                        DEALLOCATE CUR_CARTONLABEL 
-
-                        GOTO Quit
-                     END
-                  END
-                  ELSE IF @cCustomCode = 'UNO'
-                  BEGIN
-                     DELETE FROM @tDefaultLabels WHERE code2 = @cCustLabelDataDesc
-                  END
-                  FETCH NEXT FROM CUR_CARTONLABEL INTO @cCustLabelDataDesc, @cCustLabelName, @cCustLblPrintSequence,@cCustomCode
-               END
-               CLOSE CUR_CARTONLABEL 
-               DEALLOCATE CUR_CARTONLABEL 
-
-               --Print Default Labels
-               SET @nLoopIndex = -1
-               WHILE 1 = 1
-               --AND @cOrderGroup = '10'
-               BEGIN
-                  SELECT TOP 1 
-                     @cLabelName = UDF01,
-                     @nLoopIndex = id
-                  FROM @tDefaultLabels
-                     WHERE id > @nLoopIndex
-                  ORDER BY id
-
-                  IF @@ROWCOUNT = 0
-                     BREAK
-
-                  -- Print label
-                  EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cLabelPrinterGroup, @cPaperPrinter,
-                     @cLabelName, -- Report type
-                     @tCartonLabelList, -- Report params
-                     'rdt_855ExtUpd13',
-                     @nErrNo  OUTPUT,
-                     @cErrMsg OUTPUT
-                     
-                  IF @nErrNo <> 0
-                  BEGIN
-                     GOTO Quit
-                  END
-               END
-            END
-         END
-      END
       ELSE IF @nStep = 99  --Extended Screen
       BEGIN
          IF @nScn = 6384
@@ -1157,6 +1064,156 @@ BEGIN
                         GOTO Quit
                      END
                   END
+               END
+            END
+         END
+         IF @nScn = 6464 --Print Pack List
+         BEGIN
+            IF @nInputKey = 1
+            BEGIN
+               IF @cOption = '1'
+               BEGIN
+                  --print labels
+                  EXEC rdt.rdt_LevisPrintCartonLabel
+                     @nMobile, @nFunc, @cLangCode, @cStorerKey, @nStep, @nInputKey
+                     ,@cDropID
+                     ,'BARTENDER'
+                     ,@nErrNo    OUTPUT
+                     ,@cErrMsg   OUTPUT
+
+                  IF @nErrNo <> 0
+                  BEGIN
+                     GOTO Quit
+                  END
+               END
+               ELSE IF @cOption = '5'
+               BEGIN
+                  -- print 4x2 or PL
+                  IF EXISTS (
+                     SELECT 1 FROM dbo.ORDERS ord WITH(NOLOCK)
+                                      INNER JOIN dbo.PickDetail pd WITH(NOLOCK) ON ord.OrderKey = pd.OrderKey
+                                      INNER JOIN dbo.Wave w WITH(NOLOCK) ON ord.UserDefine09 = w.WaveKey
+                     WHERE ord.StorerKey = @cStorerKey
+                       AND pd.StorerKey = @cStorerKey
+                       AND pd.CaseID = @cDropID
+                       AND w.UserDefine09 = 'Y')
+                  AND NOT EXISTS(
+                     SELECT 1 FROM dbo.codelkup cl WITH(NOLOCK)
+                        INNER JOIN dbo.ORDERS ord WITH(NOLOCK) ON ord.ShipperKey = cl.short
+                        INNER JOIN dbo.PickDetail pd WITH(NOLOCK) ON ord.OrderKey = pd.OrderKey
+                     WHERE ord.StorerKey = @cStorerKey
+                       AND pd.StorerKey = @cStorerKey
+                       AND pd.CaseID = @cDropID
+                       AND cl.listname = 'WSCourier'
+                       and cl.code = 'ECL-1' )
+                  BEGIN
+                     --print 4X2 label
+                     DECLARE @t4x2ParamList VariableTable
+                     INSERT INTO @t4x2ParamList (Variable, Value)
+                     VALUES
+                        ( '@cSSCC', @cDropID)
+
+                     EXEC rdt.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cLabelPrinterGroup, @cPaperPrinter,
+                          'GNSSCCLBL', -- Report type
+                          @t4x2ParamList, -- Report params
+                          'rdt_855ExtUpd13',
+                          @nErrNo  OUTPUT,
+                          @cErrMsg OUTPUT
+
+                     IF @nErrNo <> 0
+                     BEGIN
+                        GOTO Quit
+                     END
+                  END
+
+                  /** print ZPL */
+                  EXEC rdt.rdt_LevisPrintCartonLabel
+                       @nMobile, @nFunc, @cLangCode, @cStorerKey, @nStep, @nInputKey
+                     ,@cDropID
+                     ,'ZPL'
+                     ,@nErrNo    OUTPUT
+                     ,@cErrMsg   OUTPUT
+
+                  IF @nErrNo <> 0
+                  BEGIN
+                     GOTO Quit
+                  END
+               END
+
+               IF @cOption = '1' OR @cOption = '5'
+               BEGIN
+                  SET @nTranCount = @@TRANCOUNT
+
+                  SELECT TOP 1 @cToteID = DropID
+                  FROM dbo.PickDetail WITH(NOLOCK)
+                  WHERE StorerKey = @cStorerKey
+                    AND CaseID = @cDropID
+                    AND ShipFlag <> 'Y'
+
+                  INSERT INTO @tWaveKeys (WaveKey)
+                  SELECT DISTINCT UserDefine09
+                  FROM dbo.ORDERS ord WITH(NOLOCK)
+                          INNER JOIN dbo.PickDetail pd WITH(NOLOCK) ON ord.OrderKey = pd.OrderKey
+                  WHERE ord.StorerKey = @cStorerKey
+                    AND pd.StorerKey = @cStorerKey
+                    AND pd.CaseID = @cDropID;
+
+                  SELECT @nWaveKeyCount = COUNT(*) FROM @tWaveKeys;
+
+                  -- add record into transmitlog2
+                  BEGIN TRAN
+                     SAVE TRAN rdt_855TransLog2
+
+                     WHILE @nWaveKeyCount > 0
+                     BEGIN
+                        SELECT TOP 1 @cWaveKey = WaveKey FROM @tWaveKeys
+                        EXECUTE ispGenTransmitLog2
+                                @c_TableName      = 'WSCTNAdd',
+                                @c_Key1           = @cWaveKey,
+                                @c_Key2           = @cDropID, -- LabelNo/CaseID
+                                @c_Key3           = @cStorerkey,
+                                @c_TransmitBatch  = '',
+                                @b_Success        = @bSuccess   OUTPUT,
+                                @n_err            = @nErrNo     OUTPUT,
+                                @c_errmsg         = @cErrMsg    OUTPUT
+                        IF @nErrNo <> 0 OR @bSuccess <> 1
+                        BEGIN
+                           ROLLBACK TRAN rdt_855TransLog2
+                           GOTO Quit
+                        END
+
+                        IF @cDropIDFlag = 'Y' AND LEN(@cToteID) = 10
+                        BEGIN
+                           EXECUTE ispGenTransmitLog2
+                                   @c_TableName      = 'WSSortTotRel',
+                                   @c_Key1           = @cWaveKey,
+                                   @c_Key2           = @cToteID, -- Tote ID, dropid from pickdetail
+                                   @c_Key3           = @cStorerkey,
+                                   @c_TransmitBatch  = '',
+                                   @b_Success        = @bSuccess   OUTPUT,
+                                   @n_err            = @nErrNo     OUTPUT,
+                                   @c_errmsg         = @cErrMsg    OUTPUT
+                           IF @nErrNo <> 0 OR @bSuccess <> 1
+                           BEGIN
+                              ROLLBACK TRAN rdt_855TransLog2
+                              GOTO Quit
+                           END
+                        END
+
+                        -- renew loop controll
+                        DELETE FROM @tWaveKeys WHERE WaveKey = @cWaveKey;
+                        SELECT @nWaveKeyCount = COUNT(*) FROM @tWaveKeys;
+                     END
+                     --clear dropid to reuse
+                     IF @cDropIDFlag = 'Y'
+                     BEGIN
+                        UPDATE dbo.PackDetail WITH(ROWLOCK) SET DropID = CONCAT('ARC',DropID) WHERE DropID=@cToteID
+                        UPDATE dbo.PICKDETAIL WITH(ROWLOCK) SET DropID = CONCAT('ARC',DropID) WHERE DropID=@cToteID
+                        UPDATE RDT.RDTMOBREC WITH(ROWLOCK) SET C_STRING1 = '' WHERE Mobile = @nMobile
+                     END
+                     WHILE @@TRANCOUNT > @nTranCount
+                     COMMIT TRAN
+
                END
             END
          END

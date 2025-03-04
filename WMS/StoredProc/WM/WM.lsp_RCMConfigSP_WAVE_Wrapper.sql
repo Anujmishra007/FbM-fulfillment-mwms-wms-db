@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_RCMConfigSP_WAVE_Wrapper]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [WM].[lsp_RCMConfigSP_WAVE_Wrapper]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -29,8 +24,10 @@ GO
 /*                            Execute Login if @c_UserName<>SUSER_SNAME()*/ 
 /* 2021-07-05  Wan01    1.2   LFWM-2875 - UAT RG-Create RCM allocation   */
 /*                            feature in Adjustment Screen- SCE          */
-/*************************************************************************/   
-CREATE PROCEDURE [WM].[lsp_RCMConfigSP_WAVE_Wrapper]  
+/* 2025-02-19  SSA01    1.3   Infinity Loop in Commiting Transaction     */
+/*                            DevOps Combine Script                      */
+/*************************************************************************/
+CREATE OR ALTER PROCEDURE [WM].[lsp_RCMConfigSP_WAVE_Wrapper]
    @c_Storerkey   NVARCHAR(15)
 ,  @c_WaveKey     NVARCHAR(10) 
 ,  @b_Success     INT          = 1   OUTPUT   
@@ -131,7 +128,14 @@ BEGIN
    END CATCH
    --(mingle01) - END
    EXIT_SP:
-   
+   --(SSA01) - START
+   IF (XACT_STATE()) = -1
+   BEGIN
+      SET @n_Continue = 3
+      ROLLBACK TRAN
+   END
+   --(SSA01) - END
+
    IF @n_Continue=3  -- Error Occured - Process And Return
    BEGIN
       SET @b_Success = 0

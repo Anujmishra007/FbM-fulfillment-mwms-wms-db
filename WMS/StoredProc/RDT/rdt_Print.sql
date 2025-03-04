@@ -3,41 +3,45 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
 GO
-/******************************************************************************/
-/* Store procedure: rdt_Print                                                 */
-/* Copyright      : LF Logistics                                              */
-/*                                                                            */
-/* Date       Rev  Author      Purposes                                       */
-/* 30-05-2017 1.0  Ung         WMS-1919 Created                               */
-/* 25-10-2017 1.1  SWT01       Include IP when insert into TCP Q Task         */
-/*                             TransmitlogKey = JobID                         */
-/* 08-05-2018 1.2  Ung         WMS-4248 Migrate print command to QCommander   */
-/* 25-04-2018 1.3  Ung         WMS-4675 Use BarTender NoOfCopy                */
-/* 14-08-2018 1.4  Ung         Add TCPSocket_OutLog.MessageNum                */
-/*                             Update TCPSocket_QueueTask.Status = X          */
-/*                             Expand param value to 30 chars                 */
-/* 25-10-2018 1.5  Ung         Call isp_QCmd_UpdateQueueTaskStatus to update  */
-/*                             TCPSocket_QueueTask.Status = X                 */
-/* 30-10-2018 1.6  James       Add function id when insert printjob (james01) */
-/* 05-11-2018 1.7  James       Add to rdtprintjob_log (james02)               */
-/* 07-01-2019 1.8  Ung         Add TCPSpooler                                 */
-/* 11-02-2019 1.9  ChewKP      WMS-4692 Add new ProcessType 'BARTENDERPRTSEQ' */
-/*                             (ChewKP01)                                     */
-/* 19-06-2019 2.0  Ung         WMS-9050 Add data window to custom map         */
-/* 10-08-2021 2.1  YeeKung     WMS-17055 Add printcommand in processtype      */
-/*                             (yeekung01)                                    */
-/* 23-08-2021 2.2  YeeKung     WMS-17797 Modified new feature                 */
-/* 15-11-2021 2.3  YeeKung     WMS-18126 Add UPS support (yeekung03)          */
-/* 12-07-2022 2.4  James       WMS-20111 Add ExportFileName (james03)         */
-/* 07-07-2023 2.5  YeeKung     Support Cloud Print (yeekung04)                */
-/* 06-02-2024 2.6  Ung         WMS-24733 Fix move PrintJob to log table for   */
-/*                             QCommander with print command                  */
-/* 25-03-2024 2.7  YeeKung     WMS-25156 fix then papersize (yeekung05)       */
-/* 11-06-2024 2.8  YeeKung     UWP-19905 Fix Bartender                        */
-/*                               Support ZPL/ ITDOC                           */
-/* 04-11-2024 2.9  YeeKung     WMS-25928Correct Processtype with ITFDOC       */
-/* 2024-12-10 3.0  YeeKung     FCR-1787 Add CMDSUMATRA Processtype (yeekung01)*/
-/******************************************************************************/
+/********************************************************************************/
+/* Store procedure: rdt_Print                                                   */
+/* Copyright      : Maersk                                                      */
+/*                                                                              */
+/* Date       Rev    Author      Purposes                                       */
+/* 30-05-2017 1.0    Ung         WMS-1919 Created                               */
+/* 25-10-2017 1.1    SWT01       Include IP when insert into TCP Q Task         */
+/*                               TransmitlogKey = JobID                         */
+/* 08-05-2018 1.2    Ung         WMS-4248 Migrate print command to QCommander   */
+/* 25-04-2018 1.3    Ung         WMS-4675 Use BarTender NoOfCopy                */
+/* 14-08-2018 1.4    Ung         Add TCPSocket_OutLog.MessageNum                */
+/*                               Update TCPSocket_QueueTask.Status = X          */
+/*                               Expand param value to 30 chars                 */
+/* 25-10-2018 1.5    Ung         Call isp_QCmd_UpdateQueueTaskStatus to update  */
+/*                               TCPSocket_QueueTask.Status = X                 */
+/* 30-10-2018 1.6    James       Add function id when insert printjob (james01) */
+/* 05-11-2018 1.7    James       Add to rdtprintjob_log (james02)               */
+/* 07-01-2019 1.8    Ung         Add TCPSpooler                                 */
+/* 11-02-2019 1.9    ChewKP      WMS-4692 Add new ProcessType 'BARTENDERPRTSEQ' */
+/*                               (ChewKP01)                                     */
+/* 19-06-2019 2.0    Ung         WMS-9050 Add data window to custom map         */
+/* 10-08-2021 2.1    YeeKung     WMS-17055 Add printcommand in processtype      */
+/*                               (yeekung01)                                    */
+/* 23-08-2021 2.2    YeeKung     WMS-17797 Modified new feature                 */
+/* 15-11-2021 2.3    YeeKung     WMS-18126 Add UPS support (yeekung03)          */
+/* 12-07-2022 2.4    James       WMS-20111 Add ExportFileName (james03)         */
+/* 07-07-2023 2.5    YeeKung     Support Cloud Print (yeekung04)                */
+/* 06-02-2024 2.6    Ung         WMS-24733 Fix move PrintJob to log table for   */
+/*                               QCommander with print command                  */
+/* 25-03-2024 2.7    YeeKung     WMS-25156 fix then papersize (yeekung05)       */
+/* 11-06-2024 2.8    YeeKung     UWP-19905 Fix Bartender                        */
+/*                                 Support ZPL/ ITDOC                           */
+/* 04-11-2024 2.9    YeeKung     WMS-25928Correct Processtype with ITFDOC       */
+/* 2024-12-10 3.0    YeeKung     FCR-1787 Add CMDSUMATRA Processtype (yeekung01)*/
+/* 2024-12-23 3.1.0  JCH507      UWP-28606 Get WeServiceAPI URL from codelkup   */
+/* 2024-12-24 3.2.0  YeeKung     UWP-28450 Fix bartender duplicate record       */
+/*                               (yeekung06)                                    */
+/* 2025-02-19 3.3.0  YeeKung     UWP-30389 chaneg 1 to NoofCopy (yeekung07)      */        
+/********************************************************************************/
 
 CREATE OR ALTER  PROC rdt.rdt_Print (
    @nMobile       INT
@@ -720,6 +724,17 @@ BEGIN
          GOTO Quit
       END
 
+      IF  @b_PrintOverInternet = 1
+      BEGIN
+         EXEC [dbo].[isp_UpdateRDTPrintJobStatus]
+            @n_JobID      = @nJobID
+            ,@c_JobStatus  = @cJobStatus
+            ,@c_JobErrMsg  = ''
+            ,@b_Success    = @bSuccess OUTPUT
+            ,@n_Err        = @nErrNo   OUTPUT
+            ,@c_ErrMsg     = @cErrMsg  OUTPUT
+      END
+
       -- Call bartender
       EXECUTE dbo.isp_BT_GenBartenderCommand
          @cPrinter,     -- printer id
@@ -753,9 +768,6 @@ BEGIN
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --BarTender Fail
          GOTO Quit
       END
-
-      IF @b_PrintOverInternet = 1
-         SET @b_PrintOverInternet = 0
    END
 
    ELSE IF @cProcessType = 'TPPrint'  --(yeekung01)
@@ -829,7 +841,7 @@ BEGIN
          Parm1, Parm2, Parm3, Parm4, Parm5, Parm6, Parm7, Parm8, Parm9, Parm10, Function_ID, ExportFileName
          ,PaperSizeWxH,DCropWidth,DCropHeight,IsLandScape,IsColor,IsDuplex,IsCollate)
       VALUES(
-         @cSourceType, @cReportType, @cJobStatus, @cDataWindow, 0, @cPrinter, 1, @nMobile, DB_NAME(), @cPrintCommand, @cJobType, @cStorerKey,
+         @cSourceType, @cReportType, @cJobStatus, @cDataWindow, 0, @cPrinter, @nNoOfCopy, @nMobile, DB_NAME(), @cPrintCommand, @cJobType, @cStorerKey,
          @cValue01, @cValue02, @cValue03, @cValue04, @cValue05, @cValue06, @cValue07, @cValue08, @cValue09, @cValue10, @nFunc, @cExportFileName
          ,@cPaperSize,@cDCropWidth,@cDCropHeight,@cIsLandScape,@cIsColor,@cIsDuplex,@cIsCollate)
       SELECT @nJobID = SCOPE_IDENTITY(), @nErrNo = @@ERROR
@@ -927,12 +939,14 @@ BEGIN
                @cFileFolderURL   NVARCHAR(500),
                @cURLPath         NVARCHAR(200)     = '' ,
                @cURLQuery        NVARCHAR(200)     = '' ,
-               @cURL      	NVARCHAR(1000),
-               @cEncrypted   	NVARCHAR(500),
-               @cFileNameURL   NVARCHAR(500)     = ''  ,
+               @cURL      	      NVARCHAR(1000),
+               @cEncrypted   	   NVARCHAR(500),
+               @cFileNameURL     NVARCHAR(500)     = ''  ,
                @cNonMovetoArchive NVARCHAR(20),
                @cPrintSettings   NVARCHAR(4000),
-               @cStorerConfig    NVARCHAR(4000)
+               @cStorerConfig    NVARCHAR(4000),
+               @cCodeNotes       NVARCHAR(4000),
+               @cWebServiceCode  NVARCHAR(20) = 'UTLWebAPI' --V3.1
 
       SELECT   @cDCropWidth  = DCropWidth,
                @cDCropHeight = DCropHeight,
@@ -945,12 +959,25 @@ BEGIN
                @cPrintSettings = PrintSettings
       FROM rdt.rdtReportdetail (NOLOCK)
       Where reporttype = @cReportType
-         AND Storerkey = @cStorerKey
+         AND storerkey = @cStorerkey
+
+      --V3.1 start
+      --Get Notes from WMPrintType Codelist
+      SELECT TOP 1 
+         @cCodeNotes = Notes
+      FROM dbo.CODELKUP WITH (NOLOCK)
+      WHERE Listname = 'WMPrintTyp'
+         AND Code = @cProcessType
+         AND (Storerkey = '' OR StorerKey = @cStorerKey)
+      ORDER BY StorerKey DESC
+
+      SELECT @cWebServiceCode = dbo.fnc_GetParamValueFromString('@c_WebServiceCode', @cCodeNotes, @cWebServiceCode) 
+      --V3.1 end
 
       SELECT TOP 1 @cURLHost = ISNULL(c.Long,'')
       FROM dbo.CODELKUP AS c (NOLOCK)
       WHERE c.Listname = 'WebService' 
-         AND  c.Code = 'UTLWebAPI'
+         AND  c.Code = @cWebServiceCode --V3.1
          AND  c.Storerkey = ''
          AND  c.Code2= '' 
 
@@ -1017,7 +1044,7 @@ BEGIN
          Parm1, Parm2, Parm3, Parm4, Parm5, Parm6, Parm7, Parm8, Parm9, Parm10, Function_ID, ExportFileName
          ,PaperSizeWxH,DCropWidth,DCropHeight,IsLandScape,IsColor,IsDuplex,IsCollate)
       VALUES(
-         @cSourceType, @cReportType, @cJobStatus, @cDataWindow, 0, @cPrinter, 1, @nMobile, DB_NAME(), @cPrintData, @cProcessType, @cStorerKey,
+         @cSourceType, @cReportType, @cJobStatus, @cDataWindow, 0, @cPrinter, @nNoOfCopy, @nMobile, DB_NAME(), @cPrintData, @cProcessType, @cStorerKey,
          @cValue01, @cValue02, @cValue03, @cValue04, @cValue05, @cValue06, @cValue07, @cValue08, @cValue09, @cValue10, @nFunc, @cExportFileName
          ,@cPaperSize,@cDCropWidth,@cDCropHeight,@cIsLandScape,@cIsColor,@cIsDuplex,@cIsCollate)
       SELECT @nJobID = SCOPE_IDENTITY(), @nErrNo = @@ERROR
@@ -1261,7 +1288,8 @@ BEGIN
    END
 
    IF (@cProcessType <> 'QCOMMANDER' AND @cProcessType <> 'TCPSPOOLER') OR -- All process except QCOMMANDER, TCPSPOOLER
-      (@cProcessType = 'QCOMMANDER' AND @cPrintCommand <> '')              -- QCOMMANDER with print command, like print PDF
+      (@cProcessType = 'QCOMMANDER' AND @cPrintCommand <> '')  OR            -- QCOMMANDER with print command, like print PDF
+      (@cProcessType IN (  'BARTENDER' ,'BARTENDERPRTSEQ' ) AND @b_PrintOverInternet = 0)
    BEGIN
       -- rdtspooler will be phased out so should be only bartender & direct print
       -- will have jobstatus = 9. Thus deleted by below stored proc

@@ -4,7 +4,7 @@ SET QUOTED_IDENTIFIER OFF
 GO
 
 /************************************************************************/
-/* Store procedure: rdt_922ExtVal08_JCB                                 */
+/* Store procedure: rdt_922ExtVal08_AMZ                                 */
 /* Copyright      : Maersk                                              */
 /* Customer       : AMZ                                                 */
 /*                                                                      */
@@ -13,6 +13,7 @@ GO
 /* Date       Rev  Author     Purposes                                  */
 /* 2024-10-18 1.0  VJI011     none packing process enhancement for JCB  */
 /* 2024-12-05 1.1.0 NLT013    UWP-28007 Merge Code                      */
+/* 2024-12-20 1.1.1 JCH507    UWP-28603 Issue fix                       */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_922ExtVal08_AMZ] (
@@ -271,9 +272,9 @@ BEGIN
                SELECT MbolKey
                FROM MBOLDETAIL WITH (NOLOCK)
                WHERE (
-                        MBOLKey = @cMBOLKey
-                        OR LoadKey = @cLoadKey
-                        OR OrderKey = @cOrderKey
+                        (MBOLKey = @cMBOLKey AND @cType = 'M') --V1.1.1
+                        OR (LoadKey = @cLoadKey AND @cType = 'L')--V1.1.1
+                        OR (OrderKey = @cOrderKey AND @cType = 'O')--V1.1.1
                      )
          )
          -- Get door

@@ -29,6 +29,11 @@ GO
 /*                              after load/wave conso allocate.            */
 /* 08-Jan-2020  NJOW03    1.2   WMS-10420 add strategykey parameter        */
 /* 12-Jan-2023  NJOW04    1.3   WMS-19078 add @c_ConsoUnitByUCCNo option   */
+/* 17-APR-2024  NJOW05    1.3   WMS-25272 allow execute Pre-Run stratragy  */
+/*                              before normal strategy                     */
+/* 01-JUL-2024  NJOW06    1.4   WMS-25272 Fix to delete preallocatepickdetail*/
+/*                              if have preallocation but pre-run strategy */
+/*                              is skippreallocation.                      */
 /***************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[isp_PrePostallocate_Process] 
@@ -76,7 +81,9 @@ BEGIN
            @c_UOMOfConso                  NVARCHAR(10),
            @c_ConsolidatePieceProcess     NVARCHAR(5), 
            @c_IdentifyConsoUnitProcess    NVARCHAR(5),
-           @c_ConsoUnitByUCCNo            NVARCHAR(5)  --NJOW04
+           @c_ConsoUnitByUCCNo            NVARCHAR(5),  --NJOW04
+           @c_PreRunStrategy              NVARCHAR(10)='', --NJOW05
+           @c_SkipPreAllocation           NVARCHAR(30)=''  --NJOW06
    
    --NJOW02        
    DECLARE @c_DiscreteAllocAfterWaveConso NVARCHAR(10),
@@ -147,6 +154,18 @@ BEGIN
       SELECT @c_LoadConsoAllocB4WaveConso = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'LoadConsoAllocB4WaveConso')      	      
       SELECT @c_DiscreteAllocAfterLoadConso = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'DiscreteAllocAfterLoadConso') --NJOW02
       SELECT @c_DiscreteAllocAfterWaveConso = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'DiscreteAllocAfterWaveConso') --NJOW02
+      SELECT @c_PreRunStrategy = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'PreRunStrategy') --NJOW05
+      SELECT @c_SkipPreAllocation = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'SkipPreAllocation') --NJOW06
+      
+      IF ISNULL(@c_PreRunStrategy,'') <> '' --NJOW05 
+      BEGIN
+      	 IF NOT EXISTS(SELECT 1
+      	               FROM STRATEGY (NOLOCK)
+      	               WHERE Strategykey = @c_PreRunStrategy)
+      	 BEGIN
+      	    SET @c_PreRunStrategy = ''
+      	 END              
+      END
    END
    
    IF @n_continue IN(1,2) AND
@@ -154,9 +173,58 @@ BEGIN
         (@c_DiscreteAllocB4WaveConso = '1' AND @c_AllocationType = 'DISCRETE') OR
         (@c_LoadConsoAllocB4WaveConso = '1' AND @c_AllocationType = 'LOADCONSO') OR
         (@c_DiscreteAllocAfterLoadConso = '1' AND @c_AllocationType = 'DISCRETE') OR  --NJOW02
-        (@c_DiscreteAllocAfterWaveConso = '1' AND @c_AllocationType = 'DISCRETE')   --NJOW02      
+        (@c_DiscreteAllocAfterWaveConso = '1' AND @c_AllocationType = 'DISCRETE') OR  --NJOW02      
+        (@c_PreRunStrategy = @c_StrategyKeyParm AND ISNULL(@c_PreRunStrategy,'') <> '') --NJOW05
        ) 
    BEGIN
+   	  --NJOW06 S
+   	  IF @c_PreRunStrategy = @c_StrategyKeyParm AND ISNULL(@c_PreRunStrategy,'') <> ''  --calling for pre-run strategy
+   	     AND @c_SkipPreAllocation <> '1'
+   	  BEGIN
+         IF NOT EXISTS (SELECT 1
+                        FROM STRATEGY SGY (NOLOCK)                                                                              
+                        JOIN PREALLOCATESTRATEGY PRS (NOLOCK) ON SGY.PreallocateStrategykey = PRS.PreallocateStrategykey        
+                        JOIN PREALLOCATESTRATEGYDETAIL PRSD (NOLOCK) ON PRS.Preallocatestrategykey = PRSD.Preallocatestrategykey
+                        WHERE SGY.Strategykey = @c_StrategyKeyParm
+                        AND PRSD.PreAllocatePickCode <> '' 
+                        AND PRSD.PreAllocatePickCode IS NOT NULL)
+         BEGIN
+         	  IF ISNULL(@c_Orderkey,'') <> '' 
+         	  BEGIN
+               IF EXISTS(SELECT 1 FROM PREALLOCATEPICKDETAIL (NOLOCK) 
+                         WHERE Orderkey = @c_Orderkey)
+               BEGIN
+                  DELETE FROM PREALLOCATEPICKDETAIL WHERE Orderkey = @c_Orderkey
+               END  
+            END        
+            ELSE IF ISNULL(@c_Loadkey,'') <> ''   
+            BEGIN
+      	       IF EXISTS(SELECT 1 FROM PREALLOCATEPICKDETAIL PR (NOLOCK) 
+      	                 JOIN LOADPLANDETAIL LPD (NOLOCK) ON PR.Orderkey = LPD.Orderkey
+                         WHERE LPD.Loadkey = @c_Loadkey)
+               BEGIN
+         	        DELETE PREALLOCATEPICKDETAIL 
+         	        FROM PREALLOCATEPICKDETAIL 
+                  JOIN LOADPLANDETAIL LPD (NOLOCK) ON PREALLOCATEPICKDETAIL.Orderkey = LPD.Orderkey
+                  WHERE LPD.Loadkey = @c_Loadkey
+               END                   	  
+            END
+            ELSE IF ISNULL(@c_Wavekey,'') <> '' 
+            BEGIN
+    	         IF EXISTS(SELECT 1 FROM PREALLOCATEPICKDETAIL PR (NOLOCK)                                
+    	                   JOIN WAVEDETAIL WD (NOLOCK) ON PR.Orderkey = WD.Orderkey                       
+                         WHERE WD.Wavekey = @c_Wavekey)                                                    
+               BEGIN                                                                                    
+       	          DELETE PREALLOCATEPICKDETAIL                                                          
+       	          FROM PREALLOCATEPICKDETAIL                                                            
+                  JOIN WAVEDETAIL WD (NOLOCK) ON PREALLOCATEPICKDETAIL.Orderkey = WD.Orderkey           
+                  WHERE WD.Wavekey = @c_Wavekey                                                            
+               END                   	                                                                             	
+            END         	  
+         END                           	  	
+   	  END
+   	  --NJOW06 E
+   	  
       SELECT @n_continue = 4 --Skip if recurring call
    END    
    
@@ -183,6 +251,18 @@ BEGIN
              
          WHILE (@@FETCH_STATUS <> -1) AND @n_continue IN(1,2)
          BEGIN         	                           	
+        	  IF ISNULL(@c_PreRunStrategy,'') <> '' --NJOW05
+         	  BEGIN
+         	     EXEC nsp_orderprocessing_wrapper 
+         	        @c_OrderKey = @c_Orderkey2, 
+         	        @c_oskey = '', 
+         	        @c_docarton = 'N',
+         	        @c_doroute = 'N', 
+         	        @c_tblprefix= '', 
+         	        @c_Extendparms = @c_extendparms2,
+         	        @c_StrategykeyParm = @c_PreRunStrategy        	  	
+         	  END
+         	           	
          	  EXEC nsp_orderprocessing_wrapper 
          	     @c_OrderKey = @c_Orderkey2, 
          	     @c_oskey = '', 
@@ -216,6 +296,18 @@ BEGIN
              
          WHILE (@@FETCH_STATUS <> -1) AND @n_continue IN(1,2)
          BEGIN
+         	  IF ISNULL(@c_PreRunStrategy,'') <> '' --NJOW05
+         	  BEGIN
+         	     EXEC nsp_orderprocessing_wrapper 
+         	        @c_OrderKey = @c_Orderkey2, 
+         	        @c_oskey = '', 
+         	        @c_docarton = 'N',
+         	        @c_doroute = 'N', 
+         	        @c_tblprefix= '', 
+         	        @c_Extendparms = @c_extendparms2,
+         	        @c_StrategykeyParm = @c_PreRunStrategy        	  	
+         	  END
+         	
          	  EXEC nsp_orderprocessing_wrapper 
          	     @c_OrderKey = @c_Orderkey2, 
          	     @c_oskey = '', 
@@ -250,7 +342,19 @@ BEGIN
          FETCH NEXT FROM CUR_WAVLOAD INTO @c_Loadkey2
              
          WHILE (@@FETCH_STATUS <> -1) AND @n_continue IN(1,2)
-         BEGIN
+         BEGIN         	
+         	  IF ISNULL(@c_PreRunStrategy,'') <> '' --NJOW05
+         	  BEGIN
+         	     EXEC nsp_orderprocessing_wrapper 
+         	        @c_OrderKey = '', 
+         	        @c_oskey = @c_Loadkey2, 
+         	        @c_docarton = 'N',
+         	        @c_doroute = 'N', 
+         	        @c_tblprefix= '', 
+         	        @c_Extendparms = @c_extendparms2,
+         	        @c_StrategykeyParm = @c_PreRunStrategy        	  	
+         	  END
+         	           	
          	  EXEC nsp_orderprocessing_wrapper 
          	     @c_OrderKey = '', 
          	     @c_oskey = @c_Loadkey2, 
@@ -264,7 +368,49 @@ BEGIN
          END
          CLOSE CUR_WAVLOAD
          DEALLOCATE CUR_WAVLOAD             	      	
-      END                           
+      END       
+      
+      --NJOW05
+      IF ISNULL(@c_PreRunStrategy,'') <> ''
+      BEGIN
+         IF ISNULL(@c_Orderkey,'') <> ''
+         BEGIN
+         	  EXEC nsp_orderprocessing_wrapper 
+         	     @c_OrderKey = @c_Orderkey, 
+         	     @c_oskey = '', 
+         	     @c_docarton = 'N',
+         	     @c_doroute = 'N', 
+         	     @c_tblprefix= '', 
+         	     @c_Extendparms = @c_ExtendParms,
+         	     @c_StrategykeyParm = @c_PreRunStrategy         	
+         END
+         
+         IF ISNULL(@c_Loadkey,'') <> ''
+         BEGIN
+         	  EXEC nsp_orderprocessing_wrapper 
+         	     @c_OrderKey = '', 
+         	     @c_oskey = @c_Loadkey, 
+         	     @c_docarton = 'N',
+         	     @c_doroute = 'N', 
+         	     @c_tblprefix= '', 
+         	     @c_Extendparms = @c_ExtendParms,
+         	     @c_StrategykeyParm = @c_PreRunStrategy         	         	
+         END
+         
+         IF ISNULL(@c_Wavekey,'') <> ''
+         BEGIN
+            EXEC ispWaveProcessing
+               @c_WaveKey = @c_Wavekey,        
+               @b_Success = @b_Success  OUTPUT,        
+               @n_Err     = @n_Err      OUTPUT,        
+               @c_ErrMsg  = @c_ErrMsg   OUTPUT,        
+               @b_debug   = 0,  
+               @c_StrategykeyParm = @c_PreRunStrategy
+               
+            IF @b_Success <> 1   
+               SELECT @n_continue = 3
+         END                              
+      END  
    END 
    
    IF @n_continue IN(1,2) AND @c_Mode = 'POST' 

@@ -12,6 +12,7 @@ GO
 /*                                                                      */
 /* Date       Rev  Author     Purposes                                  */
 /* 2024-10-21 1.0  LJQ006     FCR-869 Created                           */
+/* 2025-01-22 1.1  CYU027     UWP-29471 Change type SUMATRA              */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_840ExtPrint31] (
@@ -349,7 +350,7 @@ AS
                      JobName, ReportID, JobStatus, Datawindow, Parm1, Printer, NoOfCopy, Mobile, TargetDB, PrintData, JobType, StorerKey,
                      Function_ID, PaperSizeWxH, DCropWidth, DCropHeight, IsLandScape, IsColor, IsDuplex, IsCollate)
                   VALUES(
-                     'rdt_840ExtPrint31', @cReportType, @cJobStatus, @cRptDataWindow, @cExternOrderKey, @cPrinter, @nRptNoOfCopy, @nMobile, DB_NAME(), @cPrintDataFileFull, 'LogiReport', @cStorerKey,
+                     'rdt_840ExtPrint31', @cReportType, @cJobStatus, @cRptDataWindow, @cExternOrderKey, @cPrinter, @nRptNoOfCopy, @nMobile, DB_NAME(), @cPrintDataFileFull, 'CMDSUMATRA', @cStorerKey,
                      @nFunc, @cPaperSize, @cDCropWidth, @cDCropHeight, @cIsLandScape, @cIsColor, @cIsDuplex, @cIsCollate)
 
                   SELECT @nJobID = SCOPE_IDENTITY(), @nErrNo = @@ERROR
