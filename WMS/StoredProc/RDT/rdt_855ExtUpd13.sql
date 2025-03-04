@@ -543,10 +543,10 @@ BEGIN
                         FROM
                            (SELECT 
                               wod1.StorerKey, wod1.WorkOrderKey, wod1.ExternWorkOrderKey, wod1.ExternLineNo, wod1.WorkOrderLineNumber, wod1.Type, 
-                              ROW_NUMBER()OVER(PARTITION BY WorkOrderKey, ExternWorkOrderKey, ExternLineNo ORDER BY ExternWorkOrderKey, ExternLineNo) AS ROW#
+                              ROW_NUMBER()OVER(PARTITION BY WorkOrderKey, ExternWorkOrderKey, ExternLineNo ORDER BY ExternWorkOrderKey, ExternLineNo) AS ROW# 
                               FROM dbo.WorkOrderDetail wod1 WITH(NOLOCK)
                               INNER JOIN (SELECT DISTINCT StorerKey, OrderKey
-                                          FROM dbo.PickDetail WITH(NOLOCK)
+                                          FROM dbo.PickDetail WITH(NOLOCK) 
                                           WHERE StorerKey = @cStorerKey
                                              AND CaseID <> ''
                                              AND CaseID = @cDropID) AS pkd1
