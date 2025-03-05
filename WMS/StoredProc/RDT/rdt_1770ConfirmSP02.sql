@@ -13,9 +13,9 @@ GO
 /* 2024-10-15  1.1   CheeMun   INC7331096 - Insert PalletDetail for        */
 /*                                         multiple lines of caseID        */
 /* 2024-12-09  1.2   PXL009    FCR-1124 Merged 1.0,1.1 from v0 branch      */
+/* 2025-03-05  1.3   JihHaur   INC7769658 Update UCC records(JH01)       */
 /***************************************************************************/
-
-CREATE OR ALTER PROC [rdt].[rdt_1770ConfirmSP02] (
+CREATE OR ALTER   PROC [RDT].[rdt_1770ConfirmSP02] (
    @nMobile        INT,
    @nFunc          INT,
    @cLangCode      NVARCHAR( 3),
@@ -58,7 +58,7 @@ BEGIN
    DECLARE @cPickMethod    NVARCHAR( 10)
    DECLARE @cPickConfirmStatus NVARCHAR( 1)
    DECLARE @cPalletLineNumber NVARCHAR( 5)  --INC7331096
-
+   DECLARE @cOrderKey   NVARCHAR( 10)         /* (JH01)*/
    -- Init var
    SET @nQTY_Move = 0
    SET @nErrNo = 0
@@ -334,6 +334,21 @@ BEGIN
             SET @cLOT = NULL
 
          IF @nTaskQTY = @nQTY AND @cPickMethod = 'FP'
+		BEGIN
+			IF EXISTS( SELECT 1 FROM dbo.UCC WITH (NOLOCK)         /*JH01 Start*/
+			WHERE StorerKey = @cStorerKey
+			AND OrderKey IN (SELECT Orderkey FROM dbo.PickDetail WITH (NOLOCK)
+							WHERE PickDetailKey = @cPickDetailKey)
+			AND LOC = @cFromLOC
+			AND ID = @cFromID)
+			BEGIN
+			UPDATE dbo.UCC SET STATUS = '5'
+			WHERE StorerKey = @cStorerKey
+			AND OrderKey IN (SELECT Orderkey FROM dbo.PickDetail WITH (NOLOCK)
+							WHERE PickDetailKey = @cPickDetailKey)
+			AND LOC = @cFromLOC
+			AND ID = @cFromID
+			END                                                   /*JH01 End*/
             -- Move by ID
             EXECUTE rdt.rdt_Move
                @nMobile        = @nMobile,
@@ -351,6 +366,7 @@ BEGIN
                @nQTYPick       = @nQTYPick,
                @cTaskDetailKey = @cTaskDetailKey,
                @nFunc          = @nFunc
+		 END
          ELSE
             -- Move by SKU
             EXECUTE rdt.rdt_Move
@@ -445,7 +461,7 @@ BEGIN
       DECLARE @cPickSlipNo NVARCHAR( 10)
       DECLARE @nCartonNo   INT
       DECLARE @cLabelNo    NVARCHAR( 20)
-      DECLARE @cOrderKey   NVARCHAR( 10)
+      /*DECLARE @cOrderKey   NVARCHAR( 10)          (JH01) move to top*/
       DECLARE @nPackQTY INT
 
       -- Get pallet info
