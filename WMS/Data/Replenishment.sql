@@ -1,4 +1,4 @@
-IF ( SELECT 1    
+IF EXISTS ( SELECT 1    
          FROM NSQLCONFIG WITH (NOLOCK)    
          WHERE ConfigKey = 'RepleDelLog' AND    
                NSQLValue = '1'   )
