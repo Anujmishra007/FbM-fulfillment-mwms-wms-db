@@ -1,5 +1,3 @@
-USE [GLOWMS]
-GO
 
 /****** Object:  StoredProcedure [dbo].[ispORDD02]    Script Date: 3/6/2025 2:12:24 PM ******/
 SET ANSI_NULLS ON
