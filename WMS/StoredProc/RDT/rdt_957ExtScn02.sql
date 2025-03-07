@@ -14,7 +14,7 @@ GO
 /* 2024-07-04 1.0    NLT013   FCR-454 CREATE                                 */
 /* 2024-11-07 1.1    NLT013   UWP-26694 update orderkey info for swapped UCC */
 /* 2025-02-27 1.2.0  NLT013   UWP-30644 FN957 case pick error                */
-/*                                                                           */
+/* 2025-03-07 1.2.1  Dennis   UWP-30644 FN957 case pick error                */
 /*****************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_957ExtScn02] (
@@ -669,8 +669,9 @@ BEGIN
                      AND pkh.PickHeaderKey = @cPickSlipNo
                      AND pkd.Status = @cPickConfirmStatus
                      AND ucc.Status <'5'
-                     AND pkd.CaseID = @cSSCC
-                     AND pkd.ID = @cDropID
+                     AND pkd.uom = '2'
+                     -- AND pkd.CaseID = @cSSCC
+                     -- AND pkd.ID = @cDropID
 
                   OPEN C_UCC
                   FETCH NEXT FROM C_UCC INTO @cUCCNo, @cUCCLoc, @nUCCQTY, @cSKU, @cLOT, @cPickDetailKey, @cToID
