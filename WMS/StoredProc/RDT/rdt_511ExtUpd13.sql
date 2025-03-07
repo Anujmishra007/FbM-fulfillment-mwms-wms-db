@@ -12,6 +12,7 @@ GO
 /*                                                                      */
 /* Date       Rev    Author   Purposes                                  */
 /* 2025-02-14 1.0.0  JCH507   FCR-2597. Created                         */
+/* 2025-03-07 1.0.1  CYU027   FCR-2597                                  */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_511ExtUpd13] (
@@ -52,6 +53,17 @@ BEGIN
 
          IF @nInputKey = 1
          BEGIN
+
+            IF NOT EXISTS(
+               SELECT 1 FROM codelkup (NOLOCK)
+               WHERE Listname ='CCHAINPD'
+                 AND Storerkey = @cStorerkey
+                 AND code = @cToLOC
+            )
+            BEGIN --Normal movement
+               GOTO Quit
+            END
+
             SELECT TOP 1
                @cKitkey = KIT.KITKey,
                @cKITUsrDef4 = ISNULL(KIT.USRDEF4, '')
@@ -91,6 +103,12 @@ BEGIN
             WHERE Facility = @cFacility 
                AND LOC = @cKITUsrDef4
 
+            IF @@ROWCOUNT < 1
+            BEGIN
+               SET @nErrNo = 233354
+               SET @cErrMsg = REPLACE(rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP'),'{}',@cKITUsrDef4 )-- ID not associated
+               GOTO Quit
+            END
             
             -- Get new TaskDetailKeys      
             SET @nSuccess = 1

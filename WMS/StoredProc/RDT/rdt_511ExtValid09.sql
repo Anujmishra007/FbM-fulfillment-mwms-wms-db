@@ -11,9 +11,10 @@ GO
 /*                                                                               */
 /* Date        Rev      Author     Purposes                                      */
 /* 2025-02-14  1.0.0    JCH507     FCR-2597. Created                             */
+/* 2025-03-07  1.0.1    CYU027     FCR-2597                                      */
 /*********************************************************************************/
 
-CREATE PROC rdt.rdt_511ExtValid09 (
+CREATE OR ALTER PROC rdt.rdt_511ExtValid09 (
    @nMobile          INT,
    @nFunc            INT, 
    @cLangCode        NVARCHAR( 3), 
@@ -37,6 +38,8 @@ AS
    DECLARE @cUserName      NVARCHAR( 18)
    DECLARE @cFacility      NVARCHAR( 5)
    DECLARE @cKITUsrDef4    NVARCHAR( 30)
+   DECLARE @nMaxPallet     INT
+   DECLARE @nCount         INT
    
    SELECT
       @cFacility = Facility, 
@@ -85,7 +88,60 @@ AS
             
          END --inputkey=1
       END --step=1
-   
+      IF @nStep = 3
+      BEGIN
+         IF EXISTS(
+            SELECT 1 FROM codelkup (NOLOCK)
+            WHERE Listname ='CCHAINPD'
+              AND Storerkey = @cStorerkey
+              AND code = @cToLOC
+         )
+         BEGIN -- KIT
+            GOTO Quit
+         END
+         ELSE
+         BEGIN -- Normal
+            -- To loc have inventory only check max pallet
+            IF EXISTS ( SELECT 1
+                        FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
+                                JOIN dbo.LOC LOC WITH (NOLOCK) ON (LLI.LOC = LOC.LOC)
+                        WHERE LOC.Facility = @cFacility
+                          AND   LOC.Loc = @cToLOC
+                        GROUP BY LOC.LOC
+                        -- Not Empty LOC
+                        HAVING ISNULL(SUM(LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked - LLI.PendingMoveIn), 0) > 0)
+            BEGIN
+               SELECT @nMaxPallet = MaxPallet
+               FROM dbo.LOC WITH (NOLOCK)
+               WHERE Loc = @cToLOC
+                  AND Facility = @cFacility
+
+               SELECT @nCount = COUNT(DISTINCT ID)
+               FROM dbo.RFPutaway WITH (NOLOCK)
+               WHERE SuggestedLoc = @cToLOC
+
+               SELECT @nCount = @nCount + COUNT(DISTINCT LLI.Id)
+               FROM dbo.LotxLocxID LLI WITH (NOLOCK)
+                       JOIN dbo.LOC LOC WITH (NOLOCK) ON (LLI.LOC = LOC.LOC)
+               WHERE LOC.Facility = @cFacility
+                 AND   LOC.Loc = @cToLOC
+                 AND  (LLI.Qty - LLI.QtyPicked) > 0
+                 AND   LLI.Id NOT IN (
+                  SELECT DISTINCT ID
+                  FROM dbo.RFPutaway WITH (NOLOCK)
+                  WHERE SuggestedLoc = @cToLOC)
+
+               IF @nCount >= @nMaxPallet
+               BEGIN
+                  SET @nErrNo = 145501  -- OVER MAX PALLET
+                  GOTO Quit
+               END
+            END
+
+         END
+
+
+      END
       Quit:
    END
 GO
