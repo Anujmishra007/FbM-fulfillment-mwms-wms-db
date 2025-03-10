@@ -57,6 +57,7 @@ GO
 /* 2024-10-12 4.10 LJQ006   FCR-911   use uom in receiptdetail                   */
 /* 2024-10-08 5.0  TianLei  FCR-839   Add Fully received go back to screen 1     */
 /* 2024-11-12 5.2  CYU027   FCR-759   UPDATE ID UDF01                            */
+/* 2025-03-10 5.3  YeeKung  UWP-31293 FIX SerialNo Blank (yeekung07)             */
 /*********************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_NormalReceipt_V7] (
@@ -3311,7 +3312,7 @@ BEGIN
             SET @nFromScn = @nScn
             SET @nScn = 4831
             SET @nStep = @nStep + 8 --(yeekung04)
-            SET @cInField04=''
+            SET @cMax ='' --(yeekung07)
             GOTO Quit
          END
       END
@@ -5174,7 +5175,10 @@ BEGIN
          GOTO Quit
 
      IF @nMoreSNO = 1
+     BEGIN
+         SET @cMax =  ''
          GOTO Quit
+      END
 
       -- Go to SKU QTY screen
       SET @nScn = @nFromScn +1
