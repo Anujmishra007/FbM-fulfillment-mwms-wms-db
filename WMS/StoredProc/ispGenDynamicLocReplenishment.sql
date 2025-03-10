@@ -47,6 +47,7 @@ GO
 /*                            multiple pickdetail record for same lot,  */
 /*                            loc and id                                */
 /* 2025-02-24                 - fixed incorrect pendingmovein           */
+/* 2025-03-07                 - fixed to ID                            */
 /************************************************************************/      
 CREATE OR ALTER PROC [dbo].[ispGenDynamicLocReplenishment]     
    @cWaveKey NVARCHAR(10),    
@@ -92,7 +93,8 @@ BEGIN
            ,@c_OrderKey                NVARCHAR(10) -- (ChewKP02)
            ,@b_success                 INT  -- (CheWKP02)
            ,@nPDT_TotReplenQty         INT 
-           ,@nRPL_TotReplenQty         INT     
+           ,@nRPL_TotReplenQty         INT 
+           ,@c_ToID                    NVARCHAR(18) = ''                            --(Wan01)
         
     SET @nContinue = 0    
     SET @nErrNo = 0    
@@ -794,42 +796,48 @@ BEGIN
             END    
             ELSE    
             BEGIN    
-                SELECT @cPackKey = PACK.PackKey    
-                      ,@cUOM = PACK.PackUOM3    
-                FROM   SKU WITH (NOLOCK)    
-                       JOIN PACK WITH (NOLOCK)    
-                            ON  PACK.PackKey = SKU.PackKey    
-                WHERE  SKU.StorerKey = @cStorerKey AND    
-                       SKU.SKU = @cSKU     
+               SELECT @cPackKey = PACK.PackKey    
+                     ,@cUOM = PACK.PackUOM3    
+               FROM   SKU WITH (NOLOCK)    
+                     JOIN PACK WITH (NOLOCK)    
+                           ON  PACK.PackKey = SKU.PackKey    
+               WHERE  SKU.StorerKey = @cStorerKey AND    
+                     SKU.SKU = @cSKU     
                     
-                    
-                IF @bDebug=1    
-                BEGIN    
-                    PRINT 'Insert Replenishment....'    
-                    SELECT @cReplenishmentKey '@cReplenishmentKey'    
-                          ,@cSKU '@cSKU'    
-                          ,@cLOT '@cLOT'    
-                          ,@cLOC '@cLOC'    
-                          ,@cID '@cID'    
-                          ,@cDynamicPickLoc '@cDynamicPickLoc'    
-                          ,@cPickDetailKey '@cPickDetailKey'    
+               SET @c_ToID = @cID                                                   --(Wan01) - START
+
+               SELECT @c_ToID = ''
+               FROM LOC (NOLOCK)
+               WHERE Loc = @cDynamicPickLoc
+               AND Loseid IN ('1')                                                  --(Wan01) - END    
+               
+               IF @bDebug=1    
+               BEGIN    
+                  PRINT 'Insert Replenishment....'    
+                  SELECT @cReplenishmentKey '@cReplenishmentKey'    
+                        ,@cSKU '@cSKU'    
+                        ,@cLOT '@cLOT'    
+                        ,@cLOC '@cLOC'    
+                        ,@cID '@cID'    
+                        ,@cDynamicPickLoc '@cDynamicPickLoc'    
+                        ,@cPickDetailKey '@cPickDetailKey'    
                END     
                     
-                INSERT INTO Replenishment    
-                  (    
-                    ReplenishmentKey, ReplenishmentGroup, StorerKey, SKU,     
-                    FromLOC, ToLOC, Lot, Id, Qty, UOM, PackKey, Priority,     
-                    QtyMoved, QtyInPickLOC, RefNo, Confirmed, WaveKey, Remark,     
-                    OriginalFromLoc, OriginalQty    
-                  )    
-                VALUES    
-                  (    
-                    @cReplenishmentKey, 'DYNAMIC', @cStorerKey, @cSKU, @cLOC, @cDynamicPickLoc,     
-                    @cLOT, @cID, @nQty, @cUOM, @cPackkey, '1', 0, 0, @cPickDetailKey,     
-                    'N', @cWaveKey, '', @cLOC, @nQty    
-                  )     
+               INSERT INTO Replenishment    
+               (    
+                  ReplenishmentKey, ReplenishmentGroup, StorerKey, SKU,     
+                  FromLOC, ToLOC, Lot, Id, Qty, UOM, PackKey, Priority,     
+                  QtyMoved, QtyInPickLOC, RefNo, Confirmed, WaveKey, Remark,     
+                  OriginalFromLoc, OriginalQty, ToID                                --(Wan01) 
+               )    
+               VALUES    
+               (    
+                  @cReplenishmentKey, 'DYNAMIC', @cStorerKey, @cSKU, @cLOC, @cDynamicPickLoc,     
+                  @cLOT, @cID, @nQty, @cUOM, @cPackkey, '1', 0, 0, @cPickDetailKey,     
+                  'N', @cWaveKey, '', @cLOC, @nQty, @c_ToID                         --(Wan01)
+               )     
                     
-                SET @nErr = @@ERROR    
+               SET @nErr = @@ERROR    
             END    
         END-- If Not Exists in Replen    
         ELSE    
@@ -857,32 +865,32 @@ BEGIN
             
         IF @nErr=0    
         BEGIN    
-            UPDATE LOTxLOCxID WITH (ROWLOCK)    
-            SET    QtyReplen = ISNULL(QtyReplen ,0)+@nQty    
-            WHERE  LOT = @cLOT AND    
-                   LOC = @cLOC AND    
-                   ID = @cID    
+         UPDATE LOTxLOCxID WITH (ROWLOCK)    
+         SET    QtyReplen = ISNULL(QtyReplen ,0)+@nQty    
+         WHERE  LOT = @cLOT AND    
+                  LOC = @cLOC AND    
+                  ID = @cID    
                 
-            IF @@ERROR=0    
-            BEGIN    
+         IF @@ERROR=0    
+         BEGIN
                 IF NOT EXISTS(    
                        SELECT 1    
                        FROM   LOTxLOCxID WITH (NOLOCK)    
                        WHERE  LOT = @cLOT AND    
                               LOC = @cDynamicPickLoc AND    
                               --ID = '' --NJOW01    
-                              ID = @cID --(ChewKP01)  
+                              ID = @c_ToID --(ChewKP01)                                      --(Wan01)  
                    )    
                 BEGIN    
                     INSERT INTO LOTxLOCxID    
                       (    
-                        StorerKey, SKU, LOT, LOC, ID, Qty, PendingMoveIN            --(Wan01)    
+                        StorerKey, SKU, LOT, LOC, ID, Qty, PendingMoveIN                     --(Wan01)    
                       )    
-              VALUES    
+                    VALUES    
                       (    
                         --@cStorerKey, @cSKU, @cLOT, @cDynamicPickLoc, '', 0   --NJOW01    
                         --@cStorerKey, @cSKU, @cLOT, @cDynamicPickLoc, @cID, 0   --(ChewKP01) 
-                        @cStorerKey, @cSKU, @cLOT, @cDynamicPickLoc, @cID, 0, @nQty --(Wan01)  
+                        @cStorerKey, @cSKU, @cLOT, @cDynamicPickLoc, @c_ToID, 0, @nQty       --(Wan01)  
                       )    
                     IF @@ERROR<>0    
                     BEGIN    
@@ -900,7 +908,7 @@ BEGIN
                     WHERE  LOT = @cLOT AND    
                            LOC = @cDynamicPickLoc AND    
                            --ID = ''   
-                           ID = @cID --(ChewKP01)  
+                           ID = @c_ToID --(ChewKP01)                                --(Wan01)  
     
                     IF @@ERROR<>0    
                     BEGIN    
@@ -939,7 +947,7 @@ BEGIN
                 UPDATE PickDetail WITH (ROWLOCK)    
                 SET    LOC = @cDynamicPickLoc    
                       ,PickHeaderKey = @cReplenishmentKey    
-                      --,ID = '' --NJOW01  -- (ChewKP01)  
+                      ,ID = @c_ToID                      --NJOW01  -- (ChewKP01) --(Wan01)  
                 WHERE  PickDetailKey = @cPickDetailKey    
                     
                 IF @@ERROR<>0    
