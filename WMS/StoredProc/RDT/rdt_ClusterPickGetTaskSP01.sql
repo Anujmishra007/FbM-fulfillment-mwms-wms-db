@@ -170,7 +170,7 @@ BEGIN
             @cNewTaskDetailKey = TD.TaskDetailKey  
          FROM dbo.TaskDetail TD WITH (NOLOCK)  
          JOIN dbo.LOC LOC WITH (NOLOCK) ON ( TD.FromLoc = LOC.Loc)  
-         JOIN dbo.PICKDETAIL PD WITH (NOLOCK) ON ( TD.FromLoc = PD.Loc AND TD.Sku = PD.Sku AND TD.RefTaskKey = PD.TaskDetailKey AND TD.CaseID = PD.CaseID)  
+         JOIN dbo.PICKDETAIL PD WITH (NOLOCK) ON ( TD.StorerKey = PD.StorerKey AND TD.FromLoc = PD.Loc AND TD.Sku = PD.Sku AND TD.RefTaskKey = PD.TaskDetailKey AND TD.CaseID = PD.CaseID)  
          WHERE TD.Groupkey = @cGroupKey  
          AND   TD.[Status] = '3'  
          AND   LOC.Facility = @cFacility  
@@ -194,7 +194,7 @@ BEGIN
             @cNewTaskDetailKey = TD.TaskDetailKey  
          FROM dbo.TaskDetail TD WITH (NOLOCK)  
          JOIN dbo.LOC LOC WITH (NOLOCK) ON ( TD.FromLoc = LOC.Loc)  
-         JOIN dbo.PICKDETAIL PD WITH (NOLOCK) ON ( TD.FromLoc = PD.Loc AND TD.Sku = PD.Sku AND TD.RefTaskKey = PD.TaskDetailKey AND TD.CaseID = PD.CaseID)  
+         JOIN dbo.PICKDETAIL PD WITH (NOLOCK) ON ( TD.StorerKey = PD.StorerKey AND TD.FromLoc = PD.Loc AND TD.Sku = PD.Sku AND TD.RefTaskKey = PD.TaskDetailKey AND TD.CaseID = PD.CaseID)  
          WHERE TD.Groupkey = @cGroupKey  
          AND   TD.[Status] = '3'  
          AND   TD.FromLoc = @cFromLoc  
@@ -216,7 +216,7 @@ BEGIN
             @cNewTaskDetailKey = TD.TaskDetailKey  
          FROM dbo.TaskDetail TD WITH (NOLOCK)  
          JOIN dbo.LOC LOC WITH (NOLOCK) ON ( TD.FromLoc = LOC.Loc)  
-         JOIN dbo.PICKDETAIL PD WITH (NOLOCK) ON ( TD.FromLoc = PD.Loc AND TD.Sku = PD.Sku AND TD.RefTaskKey = PD.TaskDetailKey AND TD.CaseID = PD.CaseID)  
+         JOIN dbo.PICKDETAIL PD WITH (NOLOCK) ON ( TD.StorerKey = PD.StorerKey AND TD.FromLoc = PD.Loc AND TD.Sku = PD.Sku AND TD.RefTaskKey = PD.TaskDetailKey AND TD.CaseID = PD.CaseID)  
          WHERE TD.Groupkey = @cGroupKey  
          AND   TD.[Status] = '3'  
          AND   TD.FromLoc = @cFromLoc  
