@@ -483,7 +483,7 @@ BEGIN
                      AND Lottable03 <> @cLottable03
                      AND Lottable03 <> '')
                BEGIN
-                  SET @nErrNo = 217978
+                  SET @nErrNo = 220499
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')--'Multi BU on ID'
                   GOTO Quit
                END
