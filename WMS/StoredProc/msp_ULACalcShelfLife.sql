@@ -188,6 +188,7 @@ BEGIN
               JOIN dbo.SKU SKU WITH (NOLOCK) ON SKU.StorerKey = LOT.StorerKey AND SKU.SKU = LOT.Sku
               JOIN dbo.CODELKUP WITH (NOLOCK) ON  Codelkup.ListName = 'SLSKUGROUP'  --(Wan02)
                                               AND Codelkup.Code = SKU.SKUGROUP      --(Wan02)
+                                              AND Codelkup.Storerkey = SKU.Storerkey--(Wan02)
               WHERE LOT.StorerKey = @c_StorerKey
                 AND (LOT.Qty - LOT.QtyAllocated - LOT.QtyPicked) > 0
                 AND LA.Lottable06 in ( '0' , '')
