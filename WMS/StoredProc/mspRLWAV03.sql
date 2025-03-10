@@ -61,6 +61,8 @@ GO
 /* 24-Feb-2025 WLC015    3.6 UWP-27137 Fix infinite loop when assigning */
 /*                           DropID (WL08)                              */
 /* 08-Mar-2024 SWT08     3.7 Using StdCube instead of LxWxH             */
+/* 06-Mar-2025 Wan02     3.8 UWP-31023 - FCR-3276 - LVSUSA - Automation */
+/*                           Wave Release Required Pack                 */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[mspRLWAV03]
    @c_WaveKey NVARCHAR(10)
@@ -170,7 +172,8 @@ BEGIN
          , @c_TaskStatus               NVARCHAR(10) = ''                            --(Wan01) 
          , @c_FinalLoc                 NVARCHAR(10) = ''                            --(Wan01)     
          , @c_PickMethod_TD            NVARCHAR(10) = ''                            --(Wan01)          
-         , @c_RefTaskkey               NVARCHAR(10) = ''                            --(Wan01)   
+         , @c_RefTaskkey               NVARCHAR(10) = ''                            --(Wan01)  
+         , @c_WCSPack                  NVARCHAR(10) = 'Y'                           --(Wan02)          
          
    SELECT @n_StartTCnt = @@TRANCOUNT, @n_Continue = 1, @b_Success = 1, @n_err = 0, @c_errmsg = '', @c_SourceType = 'mspRLWAV03'
     
@@ -659,19 +662,57 @@ BEGIN
 
       IF @c_Automation = 'Y'                                                       --(Wan01)                                                          
       BEGIN
-         UPDATE #ORDERSKU
-            SET WCS = 1
-         FROM #ORDERSKU os
-         JOIN SKUInfo si (NOLOCK) ON  si.Storerkey = os.Storerkey          
-                                  AND si.Sku = os.Sku 
-         WHERE si.ExtendedField06 = 'sortable' 
-         AND   si.ExtendedField07 = 'conveyable'
+         SET @c_WCSPack = ''                                                        --(Wan02) - START
 
-         UPDATE #ORDERSKU
-            SET SoftCartonization = 1
-         FROM #ORDERSKU os
-         JOIN ORDERS O (NOLOCK) ON O.Orderkey = os.Orderkey
-         WHERE O.Ordergroup = '30'
+         SELECT @c_WCSPack = ISNULL(cl.Short,'') 
+         FROM CODELKUP cl (NOLOCK)
+         WHERE cl.ListName = 'WCSCTNIZE'
+
+         IF @c_WCSPack IN ( '', 'Y' ) -- Full WCS Cartonizartion: Not Setup OR Setup with 'Y'
+         BEGIN
+            UPDATE #ORDERSKU
+               SET WCS = 1
+            FROM #ORDERSKU os
+            JOIN SKUInfo si (NOLOCK) ON  si.Storerkey = os.Storerkey          
+                                     AND si.Sku = os.Sku 
+            WHERE si.ExtendedField06 = 'sortable' 
+            AND   si.ExtendedField07 = 'conveyable'
+         END
+         ELSE IF @c_WCSPack = 'N'
+         BEGIN
+            UPDATE #ORDERSKU
+               SET WCS = 1
+            FROM #ORDERSKU os
+            JOIN SKUInfo si (NOLOCK) ON  si.Storerkey = os.Storerkey          
+                                     AND si.Sku = os.Sku 
+            WHERE si.ExtendedField06 = 'sortable' 
+            AND   si.ExtendedField07 = 'conveyable'
+            AND   NOT EXISTS (   SELECT 1 FROM dbo.WorkOrderDetail wod (NOLOCK)
+                                 WHERE wod.ExternWorkOrderKey = os.Orderkey
+                                 AND wod.Qty > 0
+                              )
+
+            -- WCSPACKREQ type need WCS but with 'WCSCTNIZE' = 'N', this type unable to do
+            -- WCS correctly. WCS cartonizaton if all workorder types are not found in 'WCSPACKREQ'
+            UPDATE #ORDERSKU
+               SET WCS = 1
+            FROM #ORDERSKU os
+            JOIN SKUInfo si (NOLOCK) ON  si.Storerkey = os.Storerkey          
+                                     AND si.Sku = os.Sku 
+            WHERE si.ExtendedField06 = 'sortable' 
+            AND   si.ExtendedField07 = 'conveyable'
+            AND   NOT EXISTS (SELECT 1 FROM dbo.WorkOrderDetail wod (NOLOCK) 
+                              JOIN CODELKUP cl (NOLOCK) ON cl.ListName = 'WCSPACKREQ'
+                                                       AND cl.Short = wod.[Type]
+                              WHERE wod.ExternWorkOrderKey = os.Orderkey
+                              AND wod.Qty > 0 ) 
+         END                                                                        
+
+         --UPDATE #ORDERSKU                                          
+         --   SET SoftCartonization = 1
+         --FROM #ORDERSKU os
+         --JOIN ORDERS O (NOLOCK) ON O.Orderkey = os.Orderkey
+         --WHERE O.Ordergroup = '30'                                                --(Wan02) - END
       END
 
       -- Assign Order Group for MPOC Orders
@@ -3427,7 +3468,7 @@ BEGIN
          BEGIN
             UPDATE TASKDETAIL
                SET Qty = @n_PickdetQty,
-			       UOMQty = @n_PickdetQty,
+                UOMQty = @n_PickdetQty,
                    Caseid = @c_DropId,
                    EditDate=GETDATE(),
                    EditWho = SUSER_SNAME()
