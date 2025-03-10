@@ -2252,10 +2252,10 @@ BEGIN
                AND CartonNo = @n_CartonNo
 
                SELECT @n_TotCartonQty  = SUM(CTD.Qty), 
-                     @n_TotCartonCube = SUM(CTD.Qty * CASE WHEN ISNULL(SKU.STDCUBE, 0) > 0 THEN  SKU.STDCUBE -- (SWT08)                              
+                      @n_TotCartonCube = SUM(CTD.Qty * CASE WHEN ISNULL(SKU.STDCUBE, 0) > 0 THEN  SKU.STDCUBE -- (SWT08)                              
                           ELSE (SKU.Length * SKU.Width * SKU.Height) 
                           END),
-                     @n_TotCartonWeight = 0 
+                     @n_TotCartonWeight = SUM(CTD.Qty * ISNULL(SKU.STDNETWGT,0)) --(SWT08)
                FROM #CARTONDETAIL CTD
                JOIN SKU WITH (NOLOCK) ON CTD.Storerkey = SKU.StorerKey AND CTD.SKU = SKU.Sku 
                JOIN #CARTON CT ON CTD.CartonNo = CT.CartonNo AND CT.Orderkey = CTD.Orderkey
@@ -2272,10 +2272,10 @@ BEGIN
                AND Orderkey=''
 
                SELECT @n_TotCartonQty  = SUM(CTD.Qty), 
-                     @n_TotCartonCube = SUM(CTD.Qty * CASE WHEN ISNULL(SKU.STDCUBE, 0) > 0 THEN  SKU.STDCUBE -- (SWT08)                              
+                      @n_TotCartonCube = SUM(CTD.Qty * CASE WHEN ISNULL(SKU.STDCUBE, 0) > 0 THEN  SKU.STDCUBE -- (SWT08)                              
                           ELSE (SKU.Length * SKU.Width * SKU.Height) 
                           END),
-                     @n_TotCartonWeight = 0 
+                     @n_TotCartonWeight = SUM(CTD.Qty * ISNULL(SKU.STDNETWGT,0)) --(SWT08) 
                FROM #CARTONDETAIL CTD
                JOIN #CARTON CT ON CTD.CartonNo = CT.CartonNo AND CT.OrderGroup = CTD.OrderGroup
                JOIN SKU WITH (NOLOCK) ON CTD.Storerkey = SKU.StorerKey AND CTD.SKU = SKU.Sku
@@ -2333,7 +2333,8 @@ BEGIN
             BEGIN
                SELECT @n_TotCartonCube = SUM(CTD.Qty * CASE WHEN ISNULL(SKU.STDCUBE, 0) > 0 THEN  SKU.STDCUBE -- (SWT08)                              
                           ELSE (SKU.Length * SKU.Width * SKU.Height) 
-                          END)
+                          END),
+                      @n_TotCartonWeight = SUM(CTD.Qty * ISNULL(SKU.STDNETWGT,0)) --(SWT08) 
                FROM #CARTONDETAIL CTD
                JOIN #CARTON CT ON CTD.CartonNo = CT.CartonNo AND CT.OrderGroup = CTD.OrderGroup
                JOIN SKU WITH (NOLOCK) ON CTD.Storerkey = SKU.StorerKey AND CTD.SKU = SKU.Sku
