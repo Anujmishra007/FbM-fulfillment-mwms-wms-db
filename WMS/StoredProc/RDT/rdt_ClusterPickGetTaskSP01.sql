@@ -3,18 +3,20 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
   
-/************************************************************************/  
-/* Store procedure: rdt_CPGetTaskSP01                                   */  
-/* Copyright      : Maersk                                              */  
-/* Customer       : Granite Levis                                       */  
-/*                                                                      */  
-/* Purpose: TM Cluster Pick Get Task SP                                 */  
-/*                                                                      */  
-/* Called from: rdtfnc_TM_Assist_ClusterPick                            */  
-/*                                                                      */  
-/* Date         Rev    Author   Purposes                                */  
-/* 2025-01-06   1.0.0  NLT013   FCR-1755 Add customize SP               */  
-/************************************************************************/  
+/***********************************************************************************/  
+/* Store procedure: rdt_CPGetTaskSP01                                              */  
+/* Copyright      : Maersk                                                         */  
+/* Customer       : Granite Levis                                                  */  
+/*                                                                                 */  
+/* Purpose: TM Cluster Pick Get Task SP                                            */  
+/*                                                                                 */  
+/* Called from: rdtfnc_TM_Assist_ClusterPick                                       */  
+/*                                                                                 */  
+/* Date         Rev    Author   Purposes                                           */  
+/* 2025-01-06   1.0.0  NLT013   FCR-1755 Add customize SP                          */  
+/* 2025-03-11   1.5.0  NLT013   UWP-31257 Unable to Pick because                   */
+/*                              PickDetail.TaskDetailKey<>TaskDetail.TaskDetaiLKey */
+/***********************************************************************************/  
   
 CREATE OR ALTER PROC [RDT].[rdt_CPGetTaskSP01] (  
    @nMobile        INT,  
@@ -168,7 +170,7 @@ BEGIN
             @cNewTaskDetailKey = TD.TaskDetailKey  
          FROM dbo.TaskDetail TD WITH (NOLOCK)  
          JOIN dbo.LOC LOC WITH (NOLOCK) ON ( TD.FromLoc = LOC.Loc)  
-         JOIN dbo.PICKDETAIL PD WITH (NOLOCK) ON ( TD.FromLoc = PD.Loc AND TD.Sku = PD.Sku AND TD.TaskDetailKey = PD.TaskDetailKey)  
+         JOIN dbo.PICKDETAIL PD WITH (NOLOCK) ON ( TD.FromLoc = PD.Loc AND TD.Sku = PD.Sku AND TD.RefTaskKey = PD.TaskDetailKey AND TD.CaseID = PD.CaseID)  
          WHERE TD.Groupkey = @cGroupKey  
          AND   TD.[Status] = '3'  
          AND   LOC.Facility = @cFacility  
@@ -192,7 +194,7 @@ BEGIN
             @cNewTaskDetailKey = TD.TaskDetailKey  
          FROM dbo.TaskDetail TD WITH (NOLOCK)  
          JOIN dbo.LOC LOC WITH (NOLOCK) ON ( TD.FromLoc = LOC.Loc)  
-         JOIN dbo.PICKDETAIL PD WITH (NOLOCK) ON ( TD.FromLoc = PD.Loc AND TD.Sku = PD.Sku AND TD.TaskDetailKey = PD.TaskDetailKey)  
+         JOIN dbo.PICKDETAIL PD WITH (NOLOCK) ON ( TD.FromLoc = PD.Loc AND TD.Sku = PD.Sku AND TD.RefTaskKey = PD.TaskDetailKey AND TD.CaseID = PD.CaseID)  
          WHERE TD.Groupkey = @cGroupKey  
          AND   TD.[Status] = '3'  
          AND   TD.FromLoc = @cFromLoc  
@@ -214,7 +216,7 @@ BEGIN
             @cNewTaskDetailKey = TD.TaskDetailKey  
          FROM dbo.TaskDetail TD WITH (NOLOCK)  
          JOIN dbo.LOC LOC WITH (NOLOCK) ON ( TD.FromLoc = LOC.Loc)  
-         JOIN dbo.PICKDETAIL PD WITH (NOLOCK) ON ( TD.FromLoc = PD.Loc AND TD.Sku = PD.Sku AND TD.TaskDetailKey = PD.TaskDetailKey)  
+         JOIN dbo.PICKDETAIL PD WITH (NOLOCK) ON ( TD.FromLoc = PD.Loc AND TD.Sku = PD.Sku AND TD.RefTaskKey = PD.TaskDetailKey AND TD.CaseID = PD.CaseID)  
          WHERE TD.Groupkey = @cGroupKey  
          AND   TD.[Status] = '3'  
          AND   TD.FromLoc = @cFromLoc  
