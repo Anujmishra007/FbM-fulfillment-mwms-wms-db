@@ -38,6 +38,7 @@ BEGIN
    DECLARE @cReceiptKey NVARCHAR( 10)
    DECLARE @cChkStatus  NVARCHAR( 10)
    DECLARE @cASNType    NVARCHAR( 1)
+   DECLARE @nRowCount   INT
 
    IF @nFunc = 600 -- Normal receiving
    BEGIN
@@ -45,14 +46,13 @@ BEGIN
       SET @cReceiptKey = @cDocNo
       SELECT @cASNType = DocType FROM Receipt WITH (NOLOCK) WHERE ReceiptKey = @cReceiptKey
       
-      -- Normal ASN
-      IF @cASNType = 'A'
+      -- Normal ASN/ Cross Dock
+      IF @cASNType IN ('A','X')
       BEGIN
          -- Check SNO received
          IF EXISTS( SELECT TOP 1 1
             FROM ReceiptSerialNo WITH (NOLOCK)
             WHERE StorerKey = @cStorerKey
-               AND SKU = @cSKU
                AND SerialNo = @cSerialNo)
          BEGIN
             SET @nErrNo = 234651
