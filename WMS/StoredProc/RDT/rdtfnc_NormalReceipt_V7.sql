@@ -4952,6 +4952,15 @@ BEGIN
          GOTO Quit
       END
 
+      DECLARE @nRDQTY INT --(yeekung07)
+      IF @nBulkSNO > 0
+         SET @nRDQTY = @nBulkSNOQTY
+      ELSE IF @cSerialNo <> ''
+         SET @nRDQTY = @nSerialQTY
+      ELSE
+         SET @nRDQTY = @nQTY
+
+
 		SELECT @cUOM = PackUOM3
       FROM dbo.SKU WITH (NOLOCK)
          JOIN dbo.Pack WITH (NOLOCK) ON (SKU.PackKey = Pack.PackKey)
@@ -5168,15 +5177,6 @@ BEGIN
 
       IF @nErrno <> 0
          GOTO Quit
-
-      DECLARE @nRDQTY INT --(yeekung07)
-      IF @nBulkSNO > 0
-         SET @nRDQTY = @nBulkSNOQTY
-      ELSE IF @cSerialNo <> ''
-         SET @nRDQTY = @nSerialQTY
-      ELSE
-         SET @nRDQTY = @nQTY
-
 
      IF @nMoreSNO = 1
      BEGIN
