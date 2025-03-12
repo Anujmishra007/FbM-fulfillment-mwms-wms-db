@@ -133,7 +133,7 @@ AS
 
                IF @nCount >= @nMaxPallet
                BEGIN
-                  SET @nErrNo = 145501  -- OVER MAX PALLET
+                  SET @nErrNo = 233304  -- OVER MAX PALLET
                   GOTO Quit
                END
             END
