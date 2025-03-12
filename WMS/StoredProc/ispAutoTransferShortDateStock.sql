@@ -1,3 +1,10 @@
+/************************************************************************/
+/* Store Procedure: ispAutoTransferShortDateStock                     */
+/* Creation Date: 2025-03-10                                          */
+/* Copyright: Maersk                                                  */
+/* Written by: Ansuman                                                */
+/* Purpose: UWP-30045 Auto Transfer functionality for Short Date products      */
+/************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[ispAutoTransferShortDateStock]
     @c_listName NVARCHAR(10),
     @c_StorerKey NVARCHAR(15)
