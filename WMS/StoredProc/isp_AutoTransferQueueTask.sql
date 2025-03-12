@@ -65,7 +65,7 @@ BEGIN
          ,  @c_TaskType        = qcfg.TaskType
          ,  @n_Priority        = qcfg.[Priority]
     FROM  dbo.QCmd_TransmitlogConfig qcfg WITH (NOLOCK)
-    WHERE qcfg.TableName      = 'BackEndProcessQueue'
+    WHERE qcfg.TableName      = 'BEAutoTransfer'
           AND   qcfg.[App_Name]     = 'WMS'
           AND   qcfg.StorerKey      IN ( @c_Storerkey, 'ALL')
           AND   qcfg.Facility       IN ( @c_Facility,  'ALL', '')
