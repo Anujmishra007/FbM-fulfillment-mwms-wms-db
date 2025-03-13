@@ -30,12 +30,19 @@ on:
       PROD-EUROPE: 
         description: "PROD Europe Environment Value"
         required: false
+      PROD-AMERICAS: 
+        description: "PROD Europe Environment Value"
+        required: false
+      PROD-ASIA: 
+        description: "PROD Asia Environment Value"
+        required: false    
 
 jobs:
   deploy-cdt:
     if: github.event.pull_request.merged == true && github.base_ref == 'main'
     runs-on: ubuntu-latest
     needs: [ Deploy-with-change-asia ]
+    environment: PROD-ASIA
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
