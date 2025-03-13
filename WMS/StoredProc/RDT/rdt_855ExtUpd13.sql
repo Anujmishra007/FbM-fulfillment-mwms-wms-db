@@ -29,6 +29,8 @@ GO
 /* 2025-01-15 1.10.1 NLT013   UWP-29176 Performance Tune version 2                 */
 /* 2025-02-05 1.11.0 CYU027   FCR-2630 Add Option=5 in step 5                      */
 /* 2025-02-11 1.12.0 Dennis   FCR-2630 Clear the dropid info to reuse              */
+/* 2025-03-13 1.13.0 NLT013   Misupdate PickDetail as 5, because not check all     */
+/*                            PickDetails are picked, some Packinfo was missing    */
 /***********************************************************************************/
 CREATE OR ALTER PROC rdt.rdt_855ExtUpd13 (
    @nMobile      INT,   
@@ -748,7 +750,7 @@ BEGIN
                      )
 
                      INSERT INTO @tPickSlipNoList (PickSlipNo)
-                     SELECT PH.PickHeaderKey
+                     SELECT DISTINCT PH.PickHeaderKey
                      FROM dbo.PickHeader PH WITH(NOLOCK) 
                      INNER JOIN dbo.PickDetail PKD WITH(NOLOCK)
                         ON PH.StorerKey = PKD.StorerKey
@@ -776,6 +778,15 @@ BEGIN
                         IF (SELECT COUNT(1) FROM dbo.PackInfo WITH(NOLOCK) WHERE PickSlipNo = @cPickSlipNo)
                            =
                            (SELECT COUNT(1) FROM dbo.PackInfo WITH(NOLOCK) WHERE PickSlipNo = @cPickSlipNo AND ISNULL(CartonStatus, '') = 'PACKED')
+                           AND NOT EXISTS (SELECT 1 
+                                          FROM dbo.PickHeader PH WITH(NOLOCK)
+                                          INNER JOIN dbo.PickDetail PD WITH(NOLOCK)
+                                             ON PH.StorerKey = PD.StorerKey
+                                             AND PH.OrderKey = PD.OrderKey
+                                          WHERE PH.StorerKey = @cStorerkey
+                                             AND PH.PickHeaderKey = @cPickSlipNo
+                                             AND PD.Status < '5'
+                                           )
                         BEGIN
                            UPDATE dbo.PackHeader WITH(ROWLOCK)
                            SET Status = '9'
