@@ -14,7 +14,7 @@ on:
         required: false
         type: string
         description: 'Enter the application name (required for prod deployment)'
-        default: 'Maersk WMS service'
+        default: 'Maersk WMS Database'
       template:
         required: true
         description: 'Enter the template name (required for prod deployment)'
@@ -39,7 +39,7 @@ on:
 
 jobs:
   deploy-cdt:
-    if: github.event.pull_request.merged == true && github.base_ref == 'main'
+    #if: github.event.pull_request.merged == true && github.base_ref == 'main'
     runs-on: ubuntu-latest
     needs: [ Deploy-with-change-asia ]
     environment: PROD-ASIA
