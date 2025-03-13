@@ -26,9 +26,9 @@ GO
 CREATE OR ALTER PROC [dbo].[isp_AutoTransferQueueTask]
 @c_Listname             NVARCHAR(10)
 ,  @c_Storerkey            NVARCHAR(15)
-,  @b_Success              INT = 1           OUTPUT
-,  @n_Err                  INT = 0           OUTPUT
-,  @c_ErrMsg               NVARCHAR(255)     OUTPUT
+,  @b_Success              INT = 1                OUTPUT
+,  @n_Err                  INT = 0                OUTPUT
+,  @c_ErrMsg               NVARCHAR(255) = ''     OUTPUT
 AS
 BEGIN
     SET NOCOUNT ON
