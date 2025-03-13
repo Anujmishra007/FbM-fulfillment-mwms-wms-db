@@ -22,6 +22,7 @@ GO
 /* 2025-01-15 1.4.2  NLT013     FCR-1755 Remove duplicate scanned tote             */
 /* 2025-03-11 1.5.0  NLT013     UWP-31257 Unable to Pick because                   */
 /*                              PickDetail.TaskDetailKey<>TaskDetail.TaskDetaiLKey */
+/* 2025-03-11 1.5.1  NLT013     UWP-31257 RPF taks is not mandatory for ASTCPK     */
 /***********************************************************************************/  
   
 CREATE OR ALTER PROC [RDT].[rdt_1855ExtScn01] (
@@ -1632,7 +1633,7 @@ BEGIN
                      ON TD.FromLoc = LOC.Loc
                   INNER JOIN dbo.PICKDETAIL PD WITH (NOLOCK) 
                      ON TD.StorerKey = PD.Storerkey
-                     AND TD.RefTaskKey = PD.TaskDetailKey
+                     AND TD.TaskDetailKey = PD.TaskDetailKey
                   WHERE TD.Storerkey = @cStorerKey
                      AND TD.TaskType = 'ASTCPK'
                      AND TD.Status = '3'
@@ -1643,6 +1644,27 @@ BEGIN
                      AND PD.Status < @cPickConfirmStatus  
                      AND PD.Status <> '4'  
                   ORDER BY LOC.LogicalLocation, LOC.Loc, TD.Caseid, TD.Sku
+
+                  IF @@ROWCOUNT = 0
+                  BEGIN
+                     SELECT TOP 1 @cTaskDetailCaseID = TD.CaseID
+                     FROM dbo.TaskDetail TD WITH(NOLOCK)
+                     INNER JOIN dbo.LOC LOC WITH (NOLOCK) 
+                        ON TD.FromLoc = LOC.Loc
+                     INNER JOIN dbo.PICKDETAIL PD WITH (NOLOCK) 
+                        ON TD.StorerKey = PD.Storerkey
+                        AND TD.RefTaskKey = PD.TaskDetailKey
+                     WHERE TD.Storerkey = @cStorerKey
+                        AND TD.TaskType = 'ASTCPK'
+                        AND TD.Status = '3'
+                        AND TD.Groupkey = @cGroupkey
+                        AND TD.UserKey = @cUserName
+                        AND TD.DeviceID = @cCartID
+                        AND TD.DropID = ''
+                        AND PD.Status < @cPickConfirmStatus  
+                        AND PD.Status <> '4'  
+                     ORDER BY LOC.LogicalLocation, LOC.Loc, TD.Caseid, TD.Sku
+                  END
 
                   UPDATE dbo.TaskDetail WITH(ROWLOCK)
                   SET DropID = @cCartonId,

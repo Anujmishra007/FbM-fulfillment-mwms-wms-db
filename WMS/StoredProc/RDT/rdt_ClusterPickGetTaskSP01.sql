@@ -16,6 +16,7 @@ GO
 /* 2025-01-06   1.0.0  NLT013   FCR-1755 Add customize SP                          */  
 /* 2025-03-11   1.5.0  NLT013   UWP-31257 Unable to Pick because                   */
 /*                              PickDetail.TaskDetailKey<>TaskDetail.TaskDetaiLKey */
+/* 2025-03-13   1.5.1  NLT013   UWP-31257 RPF taks is not mandatory for ASTCPK     */
 /***********************************************************************************/  
   
 CREATE OR ALTER PROC [RDT].[rdt_CPGetTaskSP01] (  
@@ -170,7 +171,7 @@ BEGIN
             @cNewTaskDetailKey = TD.TaskDetailKey  
          FROM dbo.TaskDetail TD WITH (NOLOCK)  
          JOIN dbo.LOC LOC WITH (NOLOCK) ON ( TD.FromLoc = LOC.Loc)  
-         JOIN dbo.PICKDETAIL PD WITH (NOLOCK) ON ( TD.StorerKey = PD.StorerKey AND TD.FromLoc = PD.Loc AND TD.Sku = PD.Sku AND TD.RefTaskKey = PD.TaskDetailKey AND TD.CaseID = PD.CaseID)  
+         JOIN dbo.PICKDETAIL PD WITH (NOLOCK) ON ( TD.FromLoc = PD.Loc AND TD.Sku = PD.Sku AND TD.TaskDetailKey = PD.TaskDetailKey)
          WHERE TD.Groupkey = @cGroupKey  
          AND   TD.[Status] = '3'  
          AND   LOC.Facility = @cFacility  
@@ -182,6 +183,31 @@ BEGIN
          ORDER BY LOC.LogicalLocation, LOC.Loc, TD.Caseid, TD.Sku  
          
          SET @nRowCount = @@ROWCOUNT  
+
+         IF @nRowCount = 0
+         BEGIN
+            SELECT TOP 1   
+               @cFromLoc = FromLoc,   
+               @cSKU = TD.Sku,   
+               @nQty = TD.Qty,  
+               @cCartonId = TD.Caseid,  
+               @cToteID = TD.DropID,  
+               @cNewTaskDetailKey = TD.TaskDetailKey  
+            FROM dbo.TaskDetail TD WITH (NOLOCK)  
+            JOIN dbo.LOC LOC WITH (NOLOCK) ON ( TD.FromLoc = LOC.Loc)  
+            JOIN dbo.PICKDETAIL PD WITH (NOLOCK) ON ( TD.StorerKey = PD.StorerKey AND TD.FromLoc = PD.Loc AND TD.Sku = PD.Sku AND TD.RefTaskKey = PD.TaskDetailKey AND TD.CaseID = PD.CaseID)  
+            WHERE TD.Groupkey = @cGroupKey  
+            AND   TD.[Status] = '3'  
+            AND   LOC.Facility = @cFacility  
+            AND   TD.DropID <> ''  
+            AND   PD.Status < @cPickConfirmStatus  
+            AND   PD.Status <> '4'  
+            AND (LOC.LogicalLocation > @cLogicalLocation    
+            OR  (LOC.LogicalLocation = @cLogicalLocation AND LOC.LOC > @cFromLoc))    
+            ORDER BY LOC.LogicalLocation, LOC.Loc, TD.Caseid, TD.Sku  
+
+            SET @nRowCount = @@ROWCOUNT  
+         END
       END  
    
       IF @cType = 'NEXTCARTON'  
@@ -194,7 +220,7 @@ BEGIN
             @cNewTaskDetailKey = TD.TaskDetailKey  
          FROM dbo.TaskDetail TD WITH (NOLOCK)  
          JOIN dbo.LOC LOC WITH (NOLOCK) ON ( TD.FromLoc = LOC.Loc)  
-         JOIN dbo.PICKDETAIL PD WITH (NOLOCK) ON ( TD.StorerKey = PD.StorerKey AND TD.FromLoc = PD.Loc AND TD.Sku = PD.Sku AND TD.RefTaskKey = PD.TaskDetailKey AND TD.CaseID = PD.CaseID)  
+         JOIN dbo.PICKDETAIL PD WITH (NOLOCK) ON ( TD.FromLoc = PD.Loc AND TD.Sku = PD.Sku AND TD.TaskDetailKey = PD.TaskDetailKey)  
          WHERE TD.Groupkey = @cGroupKey  
          AND   TD.[Status] = '3'  
          AND   TD.FromLoc = @cFromLoc  
@@ -206,6 +232,28 @@ BEGIN
          ORDER BY TD.Caseid, TD.Sku  
    
          SET @nRowCount = @@ROWCOUNT  
+
+         IF @nRowCount = 0
+         BEGIN
+            SELECT TOP 1   
+               @cSKU = TD.Sku,   
+               @nQty = TD.Qty,  
+               @cCartonId = TD.Caseid,  
+               @cToteID = TD.DropID,  
+               @cNewTaskDetailKey = TD.TaskDetailKey  
+            FROM dbo.TaskDetail TD WITH (NOLOCK)  
+            JOIN dbo.LOC LOC WITH (NOLOCK) ON ( TD.FromLoc = LOC.Loc)  
+            JOIN dbo.PICKDETAIL PD WITH (NOLOCK) ON ( TD.StorerKey = PD.StorerKey AND TD.FromLoc = PD.Loc AND TD.Sku = PD.Sku AND TD.RefTaskKey = PD.TaskDetailKey AND TD.CaseID = PD.CaseID)  
+            WHERE TD.Groupkey = @cGroupKey  
+            AND   TD.[Status] = '3'  
+            AND   TD.FromLoc = @cFromLoc  
+            AND   TD.Caseid > @cCartonId  
+            AND   TD.DropID <> ''  
+            AND   LOC.Facility = @cFacility  
+            AND   PD.Status < @cPickConfirmStatus  
+            AND   PD.Status <> '4'  
+            ORDER BY TD.Caseid, TD.Sku  
+         END
       END  
    
       IF @cType = 'NEXTSKU'  
@@ -216,7 +264,7 @@ BEGIN
             @cNewTaskDetailKey = TD.TaskDetailKey  
          FROM dbo.TaskDetail TD WITH (NOLOCK)  
          JOIN dbo.LOC LOC WITH (NOLOCK) ON ( TD.FromLoc = LOC.Loc)  
-         JOIN dbo.PICKDETAIL PD WITH (NOLOCK) ON ( TD.StorerKey = PD.StorerKey AND TD.FromLoc = PD.Loc AND TD.Sku = PD.Sku AND TD.RefTaskKey = PD.TaskDetailKey AND TD.CaseID = PD.CaseID)  
+         JOIN dbo.PICKDETAIL PD WITH (NOLOCK) ON ( TD.FromLoc = PD.Loc AND TD.Sku = PD.Sku AND TD.TaskDetailKey = PD.TaskDetailKey)  
          WHERE TD.Groupkey = @cGroupKey  
          AND   TD.[Status] = '3'  
          AND   TD.FromLoc = @cFromLoc  
@@ -229,6 +277,29 @@ BEGIN
          ORDER BY TD.Sku  
    
          SET @nRowCount = @@ROWCOUNT  
+
+         IF @nRowCount = 0
+         BEGIN
+            SELECT TOP 1   
+               @cSKU = TD.Sku,   
+               @nQty = TD.Qty,  
+               @cNewTaskDetailKey = TD.TaskDetailKey  
+            FROM dbo.TaskDetail TD WITH (NOLOCK)  
+            JOIN dbo.LOC LOC WITH (NOLOCK) ON ( TD.FromLoc = LOC.Loc)  
+            JOIN dbo.PICKDETAIL PD WITH (NOLOCK) ON ( TD.StorerKey = PD.StorerKey AND TD.FromLoc = PD.Loc AND TD.Sku = PD.Sku AND TD.RefTaskKey = PD.TaskDetailKey AND TD.CaseID = PD.CaseID)  
+            WHERE TD.Groupkey = @cGroupKey  
+            AND   TD.[Status] = '3'  
+            AND   TD.FromLoc = @cFromLoc  
+            AND   TD.Caseid = @cCartonId  
+            AND   TD.Sku > @cSKU  
+            AND   TD.DropID <> ''  
+            AND   LOC.Facility = @cFacility  
+            AND   PD.Status < @cPickConfirmStatus  
+            AND   PD.Status <> '4'  
+            ORDER BY TD.Sku  
+
+            SET @nRowCount = @@ROWCOUNT  
+         END
       END  
          
       IF @nRowCount = 0  

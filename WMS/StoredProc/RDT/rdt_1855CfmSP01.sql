@@ -13,6 +13,7 @@ GO
 /*                                                                            */
 /* Date         Rev    Author   Purposes                                      */
 /* 2025-03-10   1.0.0  NLT013   UWP-31257 Created                             */
+/* 2025-03-13   1.0.1  NLT013   UWP-31257 RPF taks is not mandatory for ASTCPK*/
 /******************************************************************************/  
   
 CREATE OR ALTER PROC rdt.rdt_1855CfmSP01 (  
@@ -59,6 +60,7 @@ BEGIN
    DECLARE @cUserName      NVARCHAR( 18)
    DECLARE @cFromLoc       NVARCHAR( 10)
    DECLARE @cPickZone      NVARCHAR( 10)
+   DECLARE @nRowCount      INT
    
    SELECT 
       @cUserName        = UserName,
@@ -110,10 +112,9 @@ BEGIN
       AND   PD.Status <> '4'
       ORDER BY 1
    ELSE
-      SET @curCfmTask = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR 
-      SELECT TD.TaskDetailKey, TD.Sku, TD.Caseid, TD.FromLoc, TD.DropID, PD.OrderKey
+      SELECT @nRowCount = COUNT(1)
       FROM dbo.TaskDetail TD WITH (NOLOCK)
-      JOIN dbo.PICKDETAIL PD WITH (NOLOCK) ON ( TD.StorerKey = PD.StorerKey AND TD.FromLoc = PD.Loc AND TD.Sku = PD.Sku AND TD.RefTaskKey = PD.TaskDetailKey AND TD.CaseID = PD.CaseID)
+      JOIN dbo.PICKDETAIL PD WITH (NOLOCK) ON ( TD.TaskDetailKey = PD.TaskDetailKey)
       WHERE TD.Storerkey = @cStorerKey
          AND TD.TaskType = 'ASTCPK'
          AND TD.[Status] = '3'
@@ -126,7 +127,47 @@ BEGIN
          AND PD.[Status] < @cPickConfirmStatus
          AND PD.QTY > 0 
          AND PD.Status <> '4'
-      ORDER BY 1
+
+      IF @nRowCount > 0
+      BEGIN
+         SET @curCfmTask = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR 
+         SELECT TD.TaskDetailKey, TD.Sku, TD.Caseid, TD.FromLoc, TD.DropID, PD.OrderKey
+         FROM dbo.TaskDetail TD WITH (NOLOCK)
+         JOIN dbo.PICKDETAIL PD WITH (NOLOCK) ON ( TD.TaskDetailKey = PD.TaskDetailKey)
+         WHERE TD.Storerkey = @cStorerKey
+            AND TD.TaskType = 'ASTCPK'
+            AND TD.[Status] = '3'
+            AND TD.Groupkey = @cGroupKey
+            AND TD.UserKey = @cUserName
+            AND TD.DeviceID = @cCartID
+            AND TD.Sku = @cSKU
+            AND TD.Caseid = @cCaseID
+            AND TD.FromLoc = @cFromLoc
+            AND PD.[Status] < @cPickConfirmStatus
+            AND PD.QTY > 0 
+            AND PD.Status <> '4'
+         ORDER BY 1
+      END
+      ELSE
+      BEGIN
+         SET @curCfmTask = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR 
+         SELECT TD.TaskDetailKey, TD.Sku, TD.Caseid, TD.FromLoc, TD.DropID, PD.OrderKey
+         FROM dbo.TaskDetail TD WITH (NOLOCK)
+         JOIN dbo.PICKDETAIL PD WITH (NOLOCK) ON ( TD.StorerKey = PD.StorerKey AND TD.FromLoc = PD.Loc AND TD.Sku = PD.Sku AND TD.RefTaskKey = PD.TaskDetailKey AND TD.CaseID = PD.CaseID)
+         WHERE TD.Storerkey = @cStorerKey
+            AND TD.TaskType = 'ASTCPK'
+            AND TD.[Status] = '3'
+            AND TD.Groupkey = @cGroupKey
+            AND TD.UserKey = @cUserName
+            AND TD.DeviceID = @cCartID
+            AND TD.Sku = @cSKU
+            AND TD.Caseid = @cCaseID
+            AND TD.FromLoc = @cFromLoc
+            AND PD.[Status] < @cPickConfirmStatus
+            AND PD.QTY > 0 
+            AND PD.Status <> '4'
+         ORDER BY 1
+      END
 
    OPEN @curCfmTask
    FETCH NEXT FROM @curCfmTask INTO @cTaskDetailKey, @cSKU, @cCaseID, @cLOC, @cDropID, @cOrderKey
@@ -196,11 +237,10 @@ BEGIN
             AND   PD.Status < @cPickConfirmStatus 
             AND   PD.TaskDetailKey = @cTaskDetailKey
          ELSE
-            SET @curPD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR   
-            SELECT PD.PickDetailKey, PD.QTY 
+         BEGIN
+            SELECT @nRowCount = COUNT(1)
             FROM dbo.PickDetail PD WITH (NOLOCK) 
-            INNER JOIN dbo.TaskDetail TD WITH (NOLOCK) ON ( TD.StorerKey = PD.StorerKey AND TD.FromLoc = PD.Loc AND TD.Sku = PD.Sku AND TD.RefTaskKey = PD.TaskDetailKey AND TD.CaseID = PD.CaseID )
-            JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC) 
+            INNER JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC) 
             WHERE PD.OrderKey = @cOrderKey 
                AND PD.LOC = @cLOC 
                AND PD.SKU = @cSKU 
@@ -208,7 +248,40 @@ BEGIN
                AND PD.QTY > 0 
                AND PD.Status <> '4' 
                AND PD.Status < @cPickConfirmStatus 
-               AND TD.TaskDetailKey = @cTaskDetailKey
+               AND PD.TaskDetailKey = @cTaskDetailKey
+
+            IF @nRowCount > 0
+            BEGIN
+               SET @curPD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR   
+               SELECT PD.PickDetailKey, PD.QTY 
+               FROM dbo.PickDetail PD WITH (NOLOCK) 
+               INNER JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC) 
+               WHERE PD.OrderKey = @cOrderKey 
+                  AND PD.LOC = @cLOC 
+                  AND PD.SKU = @cSKU 
+                  AND PD.CaseID = @cCaseID
+                  AND PD.QTY > 0 
+                  AND PD.Status <> '4' 
+                  AND PD.Status < @cPickConfirmStatus 
+                  AND PD.TaskDetailKey = @cTaskDetailKey
+            END
+            ELSE
+            BEGIN
+               SET @curPD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR   
+               SELECT PD.PickDetailKey, PD.QTY 
+               FROM dbo.PickDetail PD WITH (NOLOCK) 
+               INNER JOIN dbo.TaskDetail TD WITH (NOLOCK) ON ( TD.StorerKey = PD.StorerKey AND TD.FromLoc = PD.Loc AND TD.Sku = PD.Sku AND TD.RefTaskKey = PD.TaskDetailKey AND TD.CaseID = PD.CaseID )
+               INNER JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC) 
+               WHERE PD.OrderKey = @cOrderKey 
+                  AND PD.LOC = @cLOC 
+                  AND PD.SKU = @cSKU 
+                  AND PD.CaseID = @cCaseID
+                  AND PD.QTY > 0 
+                  AND PD.Status <> '4' 
+                  AND PD.Status < @cPickConfirmStatus 
+                  AND TD.TaskDetailKey = @cTaskDetailKey
+            END
+         END
          
       -- Conso PickSlip  
       ELSE IF @cLoadKey <> ''  
