@@ -1,4 +1,4 @@
-name: Deploy to CDT DB on PR Merge
+name: Deploy to PROD DB on PR Merge
 
 on:
   pull_request:
