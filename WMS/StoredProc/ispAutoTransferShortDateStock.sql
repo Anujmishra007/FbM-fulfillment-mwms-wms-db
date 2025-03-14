@@ -107,7 +107,6 @@ BEGIN
 
     WHILE @@FETCH_STATUS = 0
     BEGIN
-    	 BEGIN TRAN
     	 --reset variables for each storer
     	 SET @n_PrevGroupNum = -1
     	 SET @n_GroupNum = 0
@@ -264,10 +263,10 @@ BEGIN
              IF @b_Success <> 1
                SET @n_continue = 3
 
-             INSERT INTO TRANSFER (Transferkey, Type, FromStorerkey, ToStorerkey, ReasonCode, Facility, ToFacility, Remarks, CustomerRefNo)
-             VALUES (@c_TransferKey, @c_TransferType, @c_StorerKey, @c_StorerKey, @c_ReasonCode, @c_Facility, @c_Facility, @c_Remarks, @C_CustomerRefNo)
+			 INSERT INTO TRANSFER (Transferkey, Type, FromStorerkey, ToStorerkey, ReasonCode, Facility, ToFacility, Remarks, CustomerRefNo)
+			 VALUES (@c_TransferKey, @c_TransferType, @c_StorerKey, @c_StorerKey, @c_ReasonCode, @c_Facility, @c_Facility, @c_Remarks, @C_CustomerRefNo)
 
-             SELECT @n_err = @@ERROR
+			 SELECT @n_err = @@ERROR
 
              IF  @n_err <> 0
              BEGIN
@@ -345,7 +344,7 @@ BEGIN
           	                  AND Short = ''SQL'''
 
                 EXEC sp_ExecuteSQL @c_SQL,
-				N'@c_ReturnValue NVARCHAR(30) OUTPUT,
+				N'@c_ReturnSQL NVARCHAR(MAX) OUTPUT,
 				@c_Udf01 NVARCHAR(60),
 				@c_StorerKey NVARCHAR(15),
 				@c_LottableName NVARCHAR(20)'
@@ -359,7 +358,8 @@ BEGIN
                  BEGIN
                     SET @c_ReturnSQL = REPLACE (@c_ReturnSQL, 'SELECT', 'SELECT TOP 1 @c_Returnvalue = ')
 
-                    SET @c_SQLParms = N'@c_ReturnValue NVARCHAR(30) OUTPUT'
+                    SET @c_SQLParms = N'@c_ReturnSQL NVARCHAR(MAX)'
+									+',@c_ReturnValue NVARCHAR(30) OUTPUT'
                                     +',@c_Storerkey NVARCHAR(15)'
                                     +',@c_Sku NVARCHAR(20)'
                                     +',@c_Lot NVARCHAR(10)'
@@ -480,7 +480,7 @@ BEGIN
        BEGIN
           SET @b_Success = 0
 
-          IF @@TRANCOUNT > 0
+		  IF @@TRANCOUNT > 0 AND @@TRANCOUNT > @n_StartTCnt
              ROLLBACK TRAN
 
           EXECUTE nsp_logerror @n_err, @c_ErrMsg, 'ispAutoTransferShortDateStock'
