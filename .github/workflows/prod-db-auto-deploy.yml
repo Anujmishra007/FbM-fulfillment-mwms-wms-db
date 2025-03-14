@@ -183,9 +183,9 @@ jobs:
 #     secrets: inherit
 #     needs: [ PROD-EUROPE-Deployment, Deploy-with-change-europe ]
 #     with:
-#       change-number: ${{ needs.deploy-with-change.outputs.change-number }}
-#       sys-id: ${{ needs.deploy-with-change.outputs.sys-id }}
-#       change-dates: ${{ needs.deploy-with-change.outputs.change-dates }}
+#       change-number: ${{ needs.deploy-with-change-europe.outputs.change-number }}
+#       sys-id: ${{ needs.deploy-with-change-europe.outputs.sys-id }}
+#       change-dates: ${{ needs.deploy-with-change-europe.outputs.change-dates }}
 
 #   Deploy-with-change-americas:
 #     if: inputs.PROD-AMERICAS != ''
@@ -203,9 +203,9 @@ jobs:
 #     secrets: inherit
 #     needs: [ PROD-Americas-Deployment, Deploy-with-change-americas ]
 #     with:
-#       change-number: ${{ needs.deploy-with-change.outputs.change-number }}
-#       sys-id: ${{ needs.deploy-with-change.outputs.sys-id }}
-#       change-dates: ${{ needs.deploy-with-change.outputs.change-dates }}
+#       change-number: ${{ needs.deploy-with-change-americas.outputs.change-number }}
+#       sys-id: ${{ needs.deploy-with-change-americas.outputs.sys-id }}
+#       change-dates: ${{ needs.deploy-with-change-americas.outputs.change-dates }}
 
   Deploy-with-change-asia:
     if: inputs.PROD-ASIA != ''
@@ -223,6 +223,6 @@ jobs:
     secrets: inherit
     needs: [ deploy-cdt, Deploy-with-change-asia ]
     with:
-      change-number: ${{ needs.deploy-with-change.outputs.change-number }}
-      sys-id: ${{ needs.deploy-with-change.outputs.sys-id }}
-      change-dates: ${{ needs.deploy-with-change.outputs.change-dates }}
+      change-number: ${{ needs.deploy-with-change-asia.outputs.change-number }}
+      sys-id: ${{ needs.deploy-with-change-asia.outputs.sys-id }}
+      change-dates: ${{ needs.deploy-with-change-asia.outputs.change-dates }}
