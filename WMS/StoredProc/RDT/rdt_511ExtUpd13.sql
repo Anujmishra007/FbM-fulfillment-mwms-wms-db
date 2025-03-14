@@ -79,7 +79,7 @@ BEGIN
             IF @@ROWCOUNT = 0
             BEGIN
                SET @nErrNo = 233351
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- ID not associated
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- ID not allocated to Kit
                GOTO Quit
             END
 
@@ -106,7 +106,7 @@ BEGIN
             IF @@ROWCOUNT < 1
             BEGIN
                SET @nErrNo = 233354
-               SET @cErrMsg = REPLACE(rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP'),'{}',@cKITUsrDef4 )-- ID not associated
+               SET @cErrMsg = REPLACE(rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP'),'{}',@cKITUsrDef4 )-- KIT {} does not have valid production line location
                GOTO Quit
             END
             
