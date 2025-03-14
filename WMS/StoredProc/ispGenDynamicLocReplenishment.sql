@@ -47,7 +47,7 @@ GO
 /*                            multiple pickdetail record for same lot,  */
 /*                            loc and id                                */
 /* 2025-02-24                 - fixed incorrect pendingmovein           */
-/* 2025-03-07                 - fixed to ID                            */
+/* 2025-03-07                 - fixed to ID                             */
 /************************************************************************/      
 CREATE OR ALTER PROC [dbo].[ispGenDynamicLocReplenishment]     
    @cWaveKey NVARCHAR(10),    
@@ -570,25 +570,25 @@ BEGIN
               ,DynGroup    
     END    
         
-    DECLARE CUR_DynRack_DynGroup  CURSOR LOCAL FAST_FORWARD READ_ONLY     
-    FOR    
-        SELECT StorerKey    
-              ,DynGroup               
-        FROM   #DynPick    
-        WHERE  D_Pick_Loc = ''    
-        GROUP BY    
-               StorerKey    
-              ,DynGroup               
-        HAVING SUM(Qty * ISNULL(StdCube,0))<@nDynPalletCBM    
-        ORDER BY    
-               StorerKey    
-              ,DynGroup               
+   DECLARE CUR_DynRack_DynGroup  CURSOR LOCAL FAST_FORWARD READ_ONLY     
+   FOR    
+      SELECT StorerKey    
+            ,DynGroup               
+      FROM   #DynPick    
+      WHERE  D_Pick_Loc = ''    
+      GROUP BY    
+            StorerKey    
+            ,DynGroup               
+      HAVING SUM(Qty * ISNULL(StdCube,0))<@nDynPalletCBM    
+      ORDER BY    
+            StorerKey    
+            ,DynGroup               
         
-    OPEN CUR_DynRack_DynGroup     
+   OPEN CUR_DynRack_DynGroup     
         
-    FETCH NEXT FROM CUR_DynRack_DynGroup INTO @cStorerKey, @cDynGroup                                   
-    WHILE @@FETCH_STATUS<>-1    
-    BEGIN    
+   FETCH NEXT FROM CUR_DynRack_DynGroup INTO @cStorerKey, @cDynGroup                                   
+   WHILE @@FETCH_STATUS<>-1    
+   BEGIN    
         DECLARE CUR_DynGroup_PickDetail CURSOR LOCAL FAST_FORWARD READ_ONLY     
         FOR    
             SELECT DISTINCT SKU    
@@ -697,174 +697,174 @@ BEGIN
                    DynGroup = @cDynGroup     
                 
             FETCH NEXT FROM CUR_DynGroup_PickDetail INTO @cSKU    
-        END     
-        CLOSE CUR_DynGroup_PickDetail    
-        DEALLOCATE CUR_DynGroup_PickDetail    
+      END     
+      CLOSE CUR_DynGroup_PickDetail    
+      DEALLOCATE CUR_DynGroup_PickDetail    
             
-        FETCH NEXT FROM CUR_DynRack_DynGroup INTO @cStorerKey, @cDynGroup    
-    END     
-    CLOSE CUR_DynRack_DynGroup     
-    DEALLOCATE CUR_DynRack_DynGroup     
+      FETCH NEXT FROM CUR_DynRack_DynGroup INTO @cStorerKey, @cDynGroup    
+   END     
+   CLOSE CUR_DynRack_DynGroup     
+   DEALLOCATE CUR_DynRack_DynGroup     
     
-    WHILE @@TRANCOUNT>0    
-          COMMIT TRAN    
+   WHILE @@TRANCOUNT>0    
+         COMMIT TRAN    
                   
-    IF @bDebug=1    
-    BEGIN    
-        SELECT D_Pick_Loc    
-              ,DynGroup    
-              ,SKU    
-              ,SUM(Qty*StdCube)    
-        FROM   #DynPick    
-        GROUP BY    
-               D_Pick_Loc    
-              ,DynGroup    
-              ,SKU    
-    END     
+   IF @bDebug=1    
+   BEGIN    
+      SELECT D_Pick_Loc    
+            ,DynGroup    
+            ,SKU    
+            ,SUM(Qty*StdCube)    
+      FROM   #DynPick    
+      GROUP BY    
+            D_Pick_Loc    
+            ,DynGroup    
+            ,SKU    
+   END     
         
-    IF EXISTS(    
-           SELECT 1    
-           FROM   #DynPick    
-           WHERE  D_Pick_Loc = ''    
-       )    
-    BEGIN    
-        SET @nErrNo = @nErrNo+1    
-        SET @cErrMsg = 'Fail to assign Dynamic Pick Location (Pallet/Rack)'    
-        SET @nContinue = 3     
-        GOTO ErrorHandling    
-    END     
+   IF EXISTS(    
+         SELECT 1    
+         FROM   #DynPick    
+         WHERE  D_Pick_Loc = ''    
+      )    
+   BEGIN    
+      SET @nErrNo = @nErrNo+1    
+      SET @cErrMsg = 'Fail to assign Dynamic Pick Location (Pallet/Rack)'    
+      SET @nContinue = 3     
+      GOTO ErrorHandling    
+   END     
         
-    DECLARE CUR_GEN_REPLEN    CURSOR LOCAL FAST_FORWARD READ_ONLY     
-    FOR    
-        SELECT RowID    
-        FROM   #DynPick    
-        ORDER BY RowID    
+   DECLARE CUR_GEN_REPLEN    CURSOR LOCAL FAST_FORWARD READ_ONLY     
+   FOR    
+      SELECT RowID    
+      FROM   #DynPick    
+      ORDER BY RowID    
         
-    OPEN CUR_GEN_REPLEN    
+   OPEN CUR_GEN_REPLEN    
         
-    FETCH NEXT FROM CUR_GEN_REPLEN INTO @nRowID                           
+   FETCH NEXT FROM CUR_GEN_REPLEN INTO @nRowID                           
         
-    WHILE @@FETCH_STATUS<>-1    
-    BEGIN    
-       BEGIN TRAN -- tlting commit by line    
+   WHILE @@FETCH_STATUS<>-1    
+   BEGIN    
+      BEGIN TRAN -- tlting commit by line    
              
-       SET @cPickDetailKey = ''    
-       SET @cStorerKey = ''    
-       SET @cSKU = ''    
-       SET @cLOT = ''    
-       SET @cLOC = ''    
-       SET @cID  = ''    
-       SET @nQty = 0    
-       SET @cDynamicPickLoc = ''    
+      SET @cPickDetailKey = ''    
+      SET @cStorerKey = ''    
+      SET @cSKU = ''    
+      SET @cLOT = ''    
+      SET @cLOC = ''    
+      SET @cID  = ''    
+      SET @nQty = 0    
+      SET @cDynamicPickLoc = ''    
           
-       SELECT  @cPickDetailKey = PickDetailKey    
-              ,@cStorerKey = StorerKey    
-              ,@cSKU = SKU    
-              ,@cLOT = LOT    
-              ,@cLOC = LOC    
-              ,@cID  = ID    
-              ,@nQty = Qty    
-              ,@cDynamicPickLoc = D_Pick_LOC    
-        FROM   #DynPick    
-        WHERE RowID = @nRowID    
-                         
-        SET @cReplenishmentKey = ''    
-            
-        SELECT TOP 1     
-               @cReplenishmentKey = ReplenishmentKey    
-        FROM   REPLENISHMENT WITH (NOLOCK)    
-        WHERE  WaveKey = @cWaveKey AND    
-               LOT = @cLOT AND    
-               FromLOC = @cLOC AND    
-               ID = @cID AND    
-               ToLOC = @cDynamicPickLoc AND 
-               Confirmed = 'N'
-            
-        IF ISNULL(RTRIM(@cReplenishmentKey) ,'')=''    
-        BEGIN    
-            EXECUTE nspg_GetKey     
-            @keyname='REPLENISHMENT',     
-            @fieldlength=10,     
-            @keystring=@cReplenishmentKey OUTPUT,     
-            @b_success=@bSuccess OUTPUT,     
-            @n_err=@nErr OUTPUT,     
-            @c_errmsg=@cErrMsg OUTPUT      
-                
-            IF NOT @bSuccess=1    
-            BEGIN    
-                SELECT @nContinue = 3    
-            END    
-            ELSE    
-            BEGIN    
-               SELECT @cPackKey = PACK.PackKey    
-                     ,@cUOM = PACK.PackUOM3    
-               FROM   SKU WITH (NOLOCK)    
-                     JOIN PACK WITH (NOLOCK)    
-                           ON  PACK.PackKey = SKU.PackKey    
-               WHERE  SKU.StorerKey = @cStorerKey AND    
-                     SKU.SKU = @cSKU     
-                    
-               SET @c_ToID = @cID                                                   --(Wan01) - START
+      SELECT  @cPickDetailKey = PickDetailKey    
+            ,@cStorerKey = StorerKey    
+            ,@cSKU = SKU    
+            ,@cLOT = LOT    
+            ,@cLOC = LOC    
+            ,@cID  = ID    
+            ,@nQty = Qty    
+            ,@cDynamicPickLoc = D_Pick_LOC    
+      FROM   #DynPick    
+      WHERE RowID = @nRowID    
+          
+      SET @c_ToID = @cID                                                   --(Wan01) - START
 
-               SELECT @c_ToID = ''
-               FROM LOC (NOLOCK)
-               WHERE Loc = @cDynamicPickLoc
-               AND Loseid IN ('1')                                                  --(Wan01) - END    
-               
-               IF @bDebug=1    
-               BEGIN    
-                  PRINT 'Insert Replenishment....'    
-                  SELECT @cReplenishmentKey '@cReplenishmentKey'    
-                        ,@cSKU '@cSKU'    
-                        ,@cLOT '@cLOT'    
-                        ,@cLOC '@cLOC'    
-                        ,@cID '@cID'    
-                        ,@cDynamicPickLoc '@cDynamicPickLoc'    
-                        ,@cPickDetailKey '@cPickDetailKey'    
-               END     
+      SELECT @c_ToID = ''
+      FROM LOC (NOLOCK)
+      WHERE Loc = @cDynamicPickLoc
+      AND Loseid IN ('1')                                                  --(Wan01) - END              
+
+      SET @cReplenishmentKey = ''    
+            
+      SELECT TOP 1     
+            @cReplenishmentKey = ReplenishmentKey    
+      FROM   REPLENISHMENT WITH (NOLOCK)    
+      WHERE  WaveKey = @cWaveKey AND    
+            LOT = @cLOT AND    
+            FromLOC = @cLOC AND    
+            ID = @cID AND    
+            ToLOC = @cDynamicPickLoc AND 
+            Confirmed = 'N'
+            
+      IF ISNULL(RTRIM(@cReplenishmentKey) ,'')=''    
+      BEGIN    
+         EXECUTE nspg_GetKey     
+         @keyname='REPLENISHMENT',     
+         @fieldlength=10,     
+         @keystring=@cReplenishmentKey OUTPUT,     
+         @b_success=@bSuccess OUTPUT,     
+         @n_err=@nErr OUTPUT,     
+         @c_errmsg=@cErrMsg OUTPUT      
+                
+         IF NOT @bSuccess=1    
+         BEGIN    
+               SELECT @nContinue = 3    
+         END    
+         ELSE    
+         BEGIN    
+            SELECT @cPackKey = PACK.PackKey    
+                  ,@cUOM = PACK.PackUOM3    
+            FROM   SKU WITH (NOLOCK)    
+                  JOIN PACK WITH (NOLOCK)    
+                        ON  PACK.PackKey = SKU.PackKey    
+            WHERE  SKU.StorerKey = @cStorerKey AND    
+                  SKU.SKU = @cSKU     
                     
-               INSERT INTO Replenishment    
-               (    
-                  ReplenishmentKey, ReplenishmentGroup, StorerKey, SKU,     
-                  FromLOC, ToLOC, Lot, Id, Qty, UOM, PackKey, Priority,     
-                  QtyMoved, QtyInPickLOC, RefNo, Confirmed, WaveKey, Remark,     
-                  OriginalFromLoc, OriginalQty, ToID                                --(Wan01) 
-               )    
-               VALUES    
-               (    
-                  @cReplenishmentKey, 'DYNAMIC', @cStorerKey, @cSKU, @cLOC, @cDynamicPickLoc,     
-                  @cLOT, @cID, @nQty, @cUOM, @cPackkey, '1', 0, 0, @cPickDetailKey,     
-                  'N', @cWaveKey, '', @cLOC, @nQty, @c_ToID                         --(Wan01)
-               )     
-                    
-               SET @nErr = @@ERROR    
-            END    
-        END-- If Not Exists in Replen    
-        ELSE    
-        BEGIN    
             IF @bDebug=1    
             BEGIN    
-                PRINT 'Update Replenishment....'    
-                SELECT @cReplenishmentKey '@cReplenishmentKey'    
-                      ,@cSKU '@cSKU'    
-                      ,@cLOT '@cLOT'    
-                      ,@cLOC '@cLOC'    
-                      ,@cID '@cID'    
-                      ,@cDynamicPickLoc '@cDynamicPickLoc'    
-                      ,@cPickDetailKey '@cPickDetailKey'    
+               PRINT 'Insert Replenishment....'    
+               SELECT @cReplenishmentKey '@cReplenishmentKey'    
+                     ,@cSKU '@cSKU'    
+                     ,@cLOT '@cLOT'    
+                     ,@cLOC '@cLOC'    
+                     ,@cID '@cID'    
+                     ,@cDynamicPickLoc '@cDynamicPickLoc'    
+                     ,@cPickDetailKey '@cPickDetailKey'    
             END     
-                
-            UPDATE Replenishment WITH (ROWLOCK)    
-            SET    Qty = Qty+@nQty    
-                  ,OriginalQty = OriginalQty+@nQty
-                  ,ArchiveCop  = NULL                                               --Wan01
-            WHERE  ReplenishmentKey = @cReplenishmentKey     
-                
+                    
+            INSERT INTO Replenishment    
+            (    
+               ReplenishmentKey, ReplenishmentGroup, StorerKey, SKU,     
+               FromLOC, ToLOC, Lot, Id, Qty, UOM, PackKey, Priority,     
+               QtyMoved, QtyInPickLOC, RefNo, Confirmed, WaveKey, Remark,     
+               OriginalFromLoc, OriginalQty, ToID                                --(Wan01) 
+            )    
+            VALUES    
+            (    
+               @cReplenishmentKey, 'DYNAMIC', @cStorerKey, @cSKU, @cLOC, @cDynamicPickLoc,     
+               @cLOT, @cID, @nQty, @cUOM, @cPackkey, '1', 0, 0, @cPickDetailKey,     
+               'N', @cWaveKey, '', @cLOC, @nQty, @c_ToID                         --(Wan01)
+            )     
+                    
             SET @nErr = @@ERROR    
-        END     
+         END    
+      END-- If Not Exists in Replen    
+      ELSE    
+      BEGIN    
+         IF @bDebug=1    
+         BEGIN    
+               PRINT 'Update Replenishment....'    
+               SELECT @cReplenishmentKey '@cReplenishmentKey'    
+                     ,@cSKU '@cSKU'    
+                     ,@cLOT '@cLOT'    
+                     ,@cLOC '@cLOC'    
+                     ,@cID '@cID'    
+                     ,@cDynamicPickLoc '@cDynamicPickLoc'    
+                     ,@cPickDetailKey '@cPickDetailKey'    
+         END     
+                
+         UPDATE Replenishment WITH (ROWLOCK)    
+         SET    Qty = Qty+@nQty    
+               ,OriginalQty = OriginalQty+@nQty
+               ,ArchiveCop  = NULL                                               --Wan01
+         WHERE  ReplenishmentKey = @cReplenishmentKey     
+                
+         SET @nErr = @@ERROR    
+      END     
             
-        IF @nErr=0    
-        BEGIN    
+      IF @nErr=0    
+      BEGIN    
          UPDATE LOTxLOCxID WITH (ROWLOCK)    
          SET    QtyReplen = ISNULL(QtyReplen ,0)+@nQty    
          WHERE  LOT = @cLOT AND    
@@ -873,198 +873,194 @@ BEGIN
                 
          IF @@ERROR=0    
          BEGIN
-                IF NOT EXISTS(    
-                       SELECT 1    
-                       FROM   LOTxLOCxID WITH (NOLOCK)    
-                       WHERE  LOT = @cLOT AND    
-                              LOC = @cDynamicPickLoc AND    
-                              --ID = '' --NJOW01    
-                              ID = @c_ToID --(ChewKP01)                                      --(Wan01)  
-                   )    
-                BEGIN    
-                    INSERT INTO LOTxLOCxID    
-                      (    
-                        StorerKey, SKU, LOT, LOC, ID, Qty, PendingMoveIN                     --(Wan01)    
-                      )    
-                    VALUES    
-                      (    
-                        --@cStorerKey, @cSKU, @cLOT, @cDynamicPickLoc, '', 0   --NJOW01    
-                        --@cStorerKey, @cSKU, @cLOT, @cDynamicPickLoc, @cID, 0   --(ChewKP01) 
-                        @cStorerKey, @cSKU, @cLOT, @cDynamicPickLoc, @c_ToID, 0, @nQty       --(Wan01)  
-                      )    
-                    IF @@ERROR<>0    
-                    BEGIN    
-                        SET @nErrNo = @nErrNo+1    
-                        SET @cErrMsg = 'Fail to Insert LOTxLOCxID'    
-                        SET @nContinue = 3     
-                        GOTO ErrorHandling    
-                    END-- Update PickDetail Failed    
-                END    
-                ELSE     
-                BEGIN                     
-                   --NJOW01    
-                    UPDATE LOTxLOCxID WITH (ROWLOCK)    
-                    SET    PendingMoveIN = ISNULL(PendingMoveIN ,0)+@nQty                       
-                    WHERE  LOT = @cLOT AND    
-                           LOC = @cDynamicPickLoc AND    
-                           --ID = ''   
-                           ID = @c_ToID --(ChewKP01)                                --(Wan01)  
+            IF NOT EXISTS(    
+                  SELECT 1    
+                  FROM   LOTxLOCxID WITH (NOLOCK)    
+                  WHERE  LOT = @cLOT AND    
+                        LOC = @cDynamicPickLoc AND    
+                        --ID = '' --NJOW01    
+                        ID = @c_ToID --(ChewKP01)                                      --(Wan01)  
+               )    
+            BEGIN    
+               INSERT INTO LOTxLOCxID    
+                  (    
+                  StorerKey, SKU, LOT, LOC, ID, Qty, PendingMoveIN                     --(Wan01)    
+                  )    
+               VALUES    
+                  (    
+                  --@cStorerKey, @cSKU, @cLOT, @cDynamicPickLoc, '', 0   --NJOW01    
+                  --@cStorerKey, @cSKU, @cLOT, @cDynamicPickLoc, @cID, 0   --(ChewKP01) 
+                  @cStorerKey, @cSKU, @cLOT, @cDynamicPickLoc, @c_ToID, 0, @nQty       --(Wan01)  
+                  )    
+               IF @@ERROR<>0    
+               BEGIN    
+                  SET @nErrNo = @nErrNo+1    
+                  SET @cErrMsg = 'Fail to Insert LOTxLOCxID'    
+                  SET @nContinue = 3     
+                  GOTO ErrorHandling    
+               END-- Update PickDetail Failed    
+            END    
+            ELSE     
+            BEGIN                     
+               --NJOW01    
+               UPDATE LOTxLOCxID WITH (ROWLOCK)    
+               SET    PendingMoveIN = ISNULL(PendingMoveIN ,0)+@nQty                       
+               WHERE  LOT = @cLOT AND    
+                     LOC = @cDynamicPickLoc AND    
+                     --ID = ''   
+                     ID = @c_ToID --(ChewKP01)                                --(Wan01)  
     
-                    IF @@ERROR<>0    
-                    BEGIN    
-                        SET @nErrNo = @nErrNo+1    
-                        SET @cErrMsg = 'Fail to Insert LOTxLOCxID'    
-                        SET @nContinue = 3     
-                        GOTO ErrorHandling    
-                    END-- Update PickDetail Failed    
-                END    
+               IF @@ERROR<>0    
+               BEGIN    
+                  SET @nErrNo = @nErrNo+1    
+                  SET @cErrMsg = 'Fail to Insert LOTxLOCxID'    
+                  SET @nContinue = 3     
+                  GOTO ErrorHandling    
+               END-- Update PickDetail Failed    
+            END    
                     
-                IF NOT EXISTS(    
-                       SELECT 1    
-                       FROM   SKUxLOC WITH (NOLOCK)    
-                       WHERE  StorerKey = @cStorerKey AND    
-                              SKU = @cSKU AND    
-                              LOC = @cDynamicPickLoc    
-                   )    
-                BEGIN    
-                    INSERT INTO SKUxLOC    
-                      (    
-                        StorerKey, SKU, LOC, Qty    
-                      )    
-                    VALUES    
-                      (    
-                        @cStorerKey, @cSKU, @cDynamicPickLoc, 0    
-                      )    
-                    IF @@ERROR<>0    
-                    BEGIN    
-                        SET @nErrNo = @nErrNo+1    
-                        SET @cErrMsg = 'Fail to Insert LOTxLOCxID'    
-                        SET @nContinue = 3     
-                        GOTO ErrorHandling    
-                    END-- Update PickDetail Failed    
-                END     
+            IF NOT EXISTS(    
+                  SELECT 1    
+                  FROM   SKUxLOC WITH (NOLOCK)    
+                  WHERE  StorerKey = @cStorerKey AND    
+                        SKU = @cSKU AND    
+                        LOC = @cDynamicPickLoc    
+               )    
+            BEGIN    
+               INSERT INTO SKUxLOC    
+                  (    
+                  StorerKey, SKU, LOC, Qty    
+                  )    
+               VALUES    
+                  (    
+                  @cStorerKey, @cSKU, @cDynamicPickLoc, 0    
+                  )    
+               IF @@ERROR<>0    
+               BEGIN    
+                  SET @nErrNo = @nErrNo+1    
+                  SET @cErrMsg = 'Fail to Insert LOTxLOCxID'    
+                  SET @nContinue = 3     
+                  GOTO ErrorHandling    
+               END-- Update PickDetail Failed    
+            END     
                     
-                UPDATE PickDetail WITH (ROWLOCK)    
-                SET    LOC = @cDynamicPickLoc    
-                      ,PickHeaderKey = @cReplenishmentKey    
-                      ,ID = @c_ToID                      --NJOW01  -- (ChewKP01) --(Wan01)  
-                WHERE  PickDetailKey = @cPickDetailKey    
+            UPDATE PickDetail WITH (ROWLOCK)    
+            SET    LOC = @cDynamicPickLoc    
+                  ,PickHeaderKey = @cReplenishmentKey    
+                  ,ID = @c_ToID                      --NJOW01  -- (ChewKP01) --(Wan01)  
+            WHERE  PickDetailKey = @cPickDetailKey    
                     
-                IF @@ERROR<>0    
-                BEGIN    
-                    SET @nErrNo = @nErrNo+1    
-                    SET @cErrMsg = 'Fail to update Pickdetail'    
-                    SET @nContinue = 3     
-                    GOTO ErrorHandling    
-                END-- Update PickDetail Failed    
+            IF @@ERROR<>0    
+            BEGIN    
+               SET @nErrNo = @nErrNo+1    
+               SET @cErrMsg = 'Fail to update Pickdetail'    
+               SET @nContinue = 3     
+               GOTO ErrorHandling    
+            END-- Update PickDetail Failed    
                 
-                SET @nPDT_TotReplenQty = 0 
-                SET @nRPL_TotReplenQty = 0 
+            SET @nPDT_TotReplenQty = 0 
+            SET @nRPL_TotReplenQty = 0 
                 
-                SELECT  @nPDT_TotReplenQty = ISNULL(SUM(Qty),0)
-                FROM    PICKDETAIL p WITH (NOLOCK) 
-                JOIN    WAVEDETAIL w WITH (NOLOCK) ON w.OrderKey = p.OrderKey  
-                WHERE   p.PickHeaderKey = @cReplenishmentKey 
-                  AND   w.WaveKey = @cWaveKey
+            SELECT  @nPDT_TotReplenQty = ISNULL(SUM(Qty),0)
+            FROM    PICKDETAIL p WITH (NOLOCK) 
+            JOIN    WAVEDETAIL w WITH (NOLOCK) ON w.OrderKey = p.OrderKey  
+            WHERE   p.PickHeaderKey = @cReplenishmentKey 
+            AND   w.WaveKey = @cWaveKey
                  
-                SELECT @nRPL_TotReplenQty = r.OriginalQty 
-                FROM REPLENISHMENT r WITH (NOLOCK) 
-                WHERE r.Wavekey = @cWaveKey 
-                AND   r.ReplenishmentKey = @cReplenishmentKey 
+            SELECT @nRPL_TotReplenQty = r.OriginalQty 
+            FROM REPLENISHMENT r WITH (NOLOCK) 
+            WHERE r.Wavekey = @cWaveKey 
+            AND   r.ReplenishmentKey = @cReplenishmentKey 
                 
-                IF @nPDT_TotReplenQty <> @nRPL_TotReplenQty
-                BEGIN
-                    SET @nErrNo = @nErrNo+1    
-                    SET @cErrMsg = 'PickDetail Qty <> Replenishment Qty'    
-                    SET @nContinue = 3     
-                    GOTO ErrorHandling                   
-                END
-                               
-            END-- Update LOTxLOCxID Succeed    
-        END -- Insert Replen Succeed     
+            IF @nPDT_TotReplenQty <> @nRPL_TotReplenQty
+            BEGIN
+               SET @nErrNo = @nErrNo+1    
+               SET @cErrMsg = 'PickDetail Qty <> Replenishment Qty'    
+               SET @nContinue = 3     
+               GOTO ErrorHandling                   
+            END
+         END-- Update LOTxLOCxID Succeed    
+      END -- Insert Replen Succeed     
     
-        WHILE @@TRANCOUNT > 0    
-        BEGIN    
-           COMMIT TRAN    
-        END    
+      WHILE @@TRANCOUNT > 0    
+      BEGIN    
+         COMMIT TRAN    
+      END    
               
-        FETCH NEXT FROM CUR_GEN_REPLEN INTO @nRowID    
-    END     
-    CLOSE CUR_GEN_REPLEN    
-    DEALLOCATE CUR_GEN_REPLEN   
+      FETCH NEXT FROM CUR_GEN_REPLEN INTO @nRowID    
+   END     
+   CLOSE CUR_GEN_REPLEN    
+   DEALLOCATE CUR_GEN_REPLEN   
     
-    -- Start (ChewKP02)
+   -- Start (ChewKP02)
       
-    SELECT @b_success = 0          
+   SELECT @b_success = 0          
         
-    EXECUTE dbo.nspGetRight  NULL,          
-             @cStorerKey,        -- Storer          
-             '',                  -- Sku          
-             'PICKRESLOG',        -- ConfigKey          
-             @b_success              OUTPUT,          
-             @c_authority_pickreslog OUTPUT,          
-             @nErrNo                 OUTPUT,          
-             @cErrMsg                OUTPUT          
+   EXECUTE dbo.nspGetRight  NULL,          
+            @cStorerKey,        -- Storer          
+            '',                  -- Sku          
+            'PICKRESLOG',        -- ConfigKey          
+            @b_success              OUTPUT,          
+            @c_authority_pickreslog OUTPUT,          
+            @nErrNo                 OUTPUT,          
+            @cErrMsg                OUTPUT          
         
-    IF @b_success <> 1          
-    BEGIN          
-       SELECT @nContinue = 3          
-       SELECT @nErrNo = @nErrNo + 1
-       SELECT @cErrMsg = 'NSQL' + CONVERT(CHAR(5),ISNULL(@nErrNo,0))           
-                        + ': Retrieve of Right (PICKRESLOG) Failed ( '           
-                        + ' (ispGenDynamicLocReplenishment)'                        --Put correct SP name   
-    END
+   IF @b_success <> 1          
+   BEGIN          
+      SELECT @nContinue = 3          
+      SELECT @nErrNo = @nErrNo + 1
+      SELECT @cErrMsg = 'NSQL' + CONVERT(CHAR(5),ISNULL(@nErrNo,0))           
+                     + ': Retrieve of Right (PICKRESLOG) Failed ( '           
+                     + ' (ispGenDynamicLocReplenishment)'                        --Put correct SP name   
+   END
     
-    IF @c_authority_pickreslog = '1'
-    BEGIN
+   IF @c_authority_pickreslog = '1'
+   BEGIN
+      DECLARE CursorWaveDetail CURSOR LOCAL FAST_FORWARD READ_ONLY FOR      
         
-        DECLARE CursorWaveDetail CURSOR LOCAL FAST_FORWARD READ_ONLY FOR      
+      SELECT OrderKey FROM WaveDetail WITH (NOLOCK)
+      WHERE WaveKey = @cWaveKey 
         
-        SELECT OrderKey FROM WaveDetail WITH (NOLOCK)
-        WHERE WaveKey = @cWaveKey 
-        
-        OPEN CursorWaveDetail   
+      OPEN CursorWaveDetail   
    
-        FETCH NEXT FROM CursorWaveDetail INTO @c_OrderKey
+      FETCH NEXT FROM CursorWaveDetail INTO @c_OrderKey
         
-        WHILE @@FETCH_STATUS <> -1               
-        BEGIN
+      WHILE @@FETCH_STATUS <> -1               
+      BEGIN
           
-           EXEC dbo.ispGenTransmitLog3 'PICKRESLOG', @c_OrderKey, '', @cStorerKey, ''          
-                               , @b_success OUTPUT          
-                               , @nErrNo OUTPUT          
-                               , @cErrMsg OUTPUT   
+         EXEC dbo.ispGenTransmitLog3 'PICKRESLOG', @c_OrderKey, '', @cStorerKey, ''          
+                              , @b_success OUTPUT          
+                              , @nErrNo OUTPUT          
+                              , @cErrMsg OUTPUT   
                                                          
-           IF @b_success <> 1          
-           BEGIN          
-              SELECT @nContinue = 3 
-              GOTO ErrorHandling          
-           END    
+         IF @b_success <> 1          
+         BEGIN          
+            SELECT @nContinue = 3 
+            GOTO ErrorHandling          
+         END    
         
-          FETCH NEXT FROM CursorWaveDetail INTO @c_OrderKey
-        END
-        CLOSE CursorWaveDetail            
-        DEALLOCATE CursorWaveDetail  
-    END
-    
-    
-    -- End (ChewKP02) 
+         FETCH NEXT FROM CursorWaveDetail INTO @c_OrderKey
+      END
+      CLOSE CursorWaveDetail            
+      DEALLOCATE CursorWaveDetail  
+   END
+   -- End (ChewKP02) 
         
-    WHILE @@TRANCOUNT>@nStartTranCount     
-          COMMIT TRAN     
+   WHILE @@TRANCOUNT>@nStartTranCount     
+         COMMIT TRAN     
         
-    RETURN    
+   RETURN    
         
-    ErrorHandling:    
-    IF @nContinue=3    
-    BEGIN    
-        IF @@TRANCOUNT>@nStartTranCount    
-            ROLLBACK TRAN    
+   ErrorHandling:    
+   IF @nContinue=3    
+   BEGIN    
+      IF @@TRANCOUNT>@nStartTranCount    
+         ROLLBACK TRAN    
             
-        EXECUTE nsp_Logerror @nErrNo, @cErrMsg, 'ispGenDynamicLocReplenishment'    
-        RAISERROR (@cErrMsg, 16, 1) WITH SETERROR    -- SQL2012    
-        RETURN    
-    END    
+      EXECUTE nsp_Logerror @nErrNo, @cErrMsg, 'ispGenDynamicLocReplenishment'    
+      RAISERROR (@cErrMsg, 16, 1) WITH SETERROR    -- SQL2012    
+      RETURN    
+   END    
 END -- Procedure
 GO
 GRANT EXECUTE ON [dbo].[ispGenDynamicLocReplenishment] TO nSQL 
