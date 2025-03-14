@@ -1,9 +1,9 @@
 name: Deploy to PROD DB on PR Merge
 
 on:
-  pull_request:
-    types:
-      - closed
+  # pull_request:
+  #   types:
+  #     - closed
   workflow_dispatch:
     inputs:
       description:
