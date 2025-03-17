@@ -49,45 +49,45 @@ AS
 
    IF @nFunc = 511 -- Move by ID
    BEGIN
-      IF @nStep = 1 -- From Id
-      BEGIN
-         IF @nInputKey = 1 -- ENTER
-         BEGIN
-            SELECT TOP 1
-               @cKITUsrDef4 = ISNULL(KIT.USRDEF4, '')
-            FROM KIT WITH (NOLOCK)
-            JOIN KITDETAIL WITH (NOLOCK) 
-               ON KIT.KITKey = KITDETAIL.KITKey
-            WHERE KIT.Facility = @cFacility
-               AND   KIT.StorerKey = @cStorerKey
-               AND   KIT.[Status] <> '9'
-               AND   KITDETAIL.Id = @cFromID
-               AND   KITDETAIL.[Type] = 'F'
-
-            IF @@ROWCOUNT = 0
-            BEGIN
-               SET @nErrNo = 233301
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- ID not associated
-               GOTO Quit
-            END
-
-            IF @cKITUsrDef4 = ''
-            BEGIN
-               SET @nErrNo = 233302
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- No production line  
-               GOTO Quit
-            END
-
-            --Check FinalLoc is valid
-            IF NOT EXISTS (SELECT 1 FROM LOC WITH (NOLOCK) WHERE Facility = @cFacility AND LOC = @cKITUsrDef4)
-            BEGIN
-               SET @nErrNo = 233303
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- production line not exists  
-               GOTO Quit
-            END
-            
-         END --inputkey=1
-      END --step=1
+--       IF @nStep = 1 -- From Id
+--       BEGIN
+--          IF @nInputKey = 1 -- ENTER
+--          BEGIN
+--             SELECT TOP 1
+--                @cKITUsrDef4 = ISNULL(KIT.USRDEF4, '')
+--             FROM KIT WITH (NOLOCK)
+--             JOIN KITDETAIL WITH (NOLOCK)
+--                ON KIT.KITKey = KITDETAIL.KITKey
+--             WHERE KIT.Facility = @cFacility
+--                AND   KIT.StorerKey = @cStorerKey
+--                AND   KIT.[Status] <> '9'
+--                AND   KITDETAIL.Id = @cFromID
+--                AND   KITDETAIL.[Type] = 'F'
+--
+--             IF @@ROWCOUNT = 0
+--             BEGIN
+--                SET @nErrNo = 233301
+--                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- ID not associated
+--                GOTO Quit
+--             END
+--
+--             IF @cKITUsrDef4 = ''
+--             BEGIN
+--                SET @nErrNo = 233302
+--                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- No production line
+--                GOTO Quit
+--             END
+--
+--             --Check FinalLoc is valid
+--             IF NOT EXISTS (SELECT 1 FROM LOC WITH (NOLOCK) WHERE Facility = @cFacility AND LOC = @cKITUsrDef4)
+--             BEGIN
+--                SET @nErrNo = 233303
+--                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- production line not exists
+--                GOTO Quit
+--             END
+--
+--          END --inputkey=1
+--       END --step=1
       IF @nStep = 3
       BEGIN
          IF EXISTS(
