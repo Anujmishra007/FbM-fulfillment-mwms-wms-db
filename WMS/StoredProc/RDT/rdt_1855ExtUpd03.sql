@@ -212,6 +212,7 @@ BEGIN
                AND TD.Groupkey = @cGroupKey   
                AND TD.DeviceID = @cCartID   
                AND TD.Status = '9'
+               AND TD.TaskType = 'ASTCPK'
                AND PKD.Status = @cPickConfirmStatus
 
             INSERT INTO @tDropIDList(WaveKey, DropID)
@@ -230,6 +231,7 @@ BEGIN
                AND TD.Groupkey = @cGroupKey   
                AND TD.DeviceID = @cCartID   
                AND TD.Status = '9'
+               AND TD.TaskType = 'ASTCPK'
                AND PKD.Status = @cPickConfirmStatus
                AND NOT EXISTS(SELECT 1 FROM @tDropIDList DIL WHERE ISNULL(ORM.userdefine09, '') = DIL.WaveKey AND PKD.DropID = DIL.DropID)
 
@@ -252,6 +254,7 @@ BEGIN
                AND TD.Groupkey = @cGroupKey   
                AND TD.DeviceID = @cCartID   
                AND TD.Status = '9'
+               AND TD.TaskType = 'ASTCPK'
                AND PKD.Status = @cPickConfirmStatus
 
             UPDATE PKD
@@ -267,6 +270,7 @@ BEGIN
                AND TD.Groupkey = @cGroupKey   
                AND TD.DeviceID = @cCartID   
                AND TD.Status = '9'
+               AND TD.TaskType = 'ASTCPK'
                AND PKD.Status = @cPickConfirmStatus
 
             SET @nLoopIndex = -1
