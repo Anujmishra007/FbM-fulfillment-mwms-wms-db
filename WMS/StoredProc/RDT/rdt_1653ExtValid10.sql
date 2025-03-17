@@ -7,8 +7,9 @@ GO
 /* Store procedure: rdt_1653ExtValid10                                  */
 /* Copyright      : MAERSK                                              */
 /*                                                                      */
-/* Date        Rev  Author   Purposes                                   */
-/* 2024-10-08  1.0  NLT014   FCR-950 Created                            */
+/* Date        Rev    Author  Purposes                                  */
+/* 2024-10-08  1.0    NLT013  FCR-950 Created                           */
+/* 2025-02-20  1.1.0  NLT013  UWP-30312 Performance Tune                */
 /************************************************************************/
         
 CREATE OR ALTER PROC [RDT].[rdt_1653ExtValid10] (
@@ -51,7 +52,8 @@ BEGIN
             BEGIN
                SELECT @cPackStatus = CartonStatus 
                FROM dbo.PackInfo WITH(NOLOCK) 
-               WHERE ISNULL(RefNo, '') = @cLabelNo
+               WHERE RefNo IS NOT NULL
+                  AND RefNo = @cLabelNo
 
                IF @cPackStatus IS NULL OR TRIM(@cPackStatus) <> 'PACKED'
                BEGIN
