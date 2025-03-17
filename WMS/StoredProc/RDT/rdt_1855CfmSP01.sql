@@ -14,6 +14,7 @@ GO
 /* Date         Rev    Author   Purposes                                      */
 /* 2025-03-10   1.0.0  NLT013   UWP-31257 Created                             */
 /* 2025-03-13   1.0.1  NLT013   UWP-31257 RPF taks is not mandatory for ASTCPK*/
+/* 2025-03-13   1.0.2  NLT013   UWP-31257 Missing BEGIN END                   */
 /******************************************************************************/  
   
 CREATE OR ALTER PROC rdt.rdt_1855CfmSP01 (  
@@ -112,6 +113,7 @@ BEGIN
       AND   PD.Status <> '4'
       ORDER BY 1
    ELSE
+   BEGIN
       SELECT @nRowCount = COUNT(1)
       FROM dbo.TaskDetail TD WITH (NOLOCK)
       JOIN dbo.PICKDETAIL PD WITH (NOLOCK) ON ( TD.TaskDetailKey = PD.TaskDetailKey)
@@ -168,6 +170,7 @@ BEGIN
             AND PD.Status <> '4'
          ORDER BY 1
       END
+   END
 
    OPEN @curCfmTask
    FETCH NEXT FROM @curCfmTask INTO @cTaskDetailKey, @cSKU, @cCaseID, @cLOC, @cDropID, @cOrderKey
@@ -223,6 +226,7 @@ BEGIN
          
       -- Discrete PickSlip  
       ELSE IF @cOrderKey <> ''  
+      BEGIN
          IF @cPickZone = 'PICK'
             SET @curPD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR   
             SELECT PD.PickDetailKey, PD.QTY 
@@ -282,6 +286,7 @@ BEGIN
                   AND TD.TaskDetailKey = @cTaskDetailKey
             END
          END
+      END
          
       -- Conso PickSlip  
       ELSE IF @cLoadKey <> ''  
