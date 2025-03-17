@@ -13,7 +13,8 @@ GO
 /* 2024-06-13 1.0  NLT013     FCR-386. Created                          */
 /* 2024-11-15 1.1.0 LJQ006     FCR-1109. Updated                        */
 /* 2025-01-04 1.1.1 Dennis     FCR-1109. Updated                        */
-/* 2025-02-05 1.8.0 CYU027   FCR-2630 Add Option=5 in step 5            */
+/* 2025-02-05 1.2.0 CYU027     FCR-2630 Add Option=5 in step 5          */
+/* 2025-02-05 1.3.0 Dennis     Add Step_4                               */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_855ExtScn01] (
@@ -98,7 +99,8 @@ BEGIN
       @cSQLParam                 NVARCHAR( MAX),
       @nQTY                      INT,
       @nTotalCQty                INT,
-      @nTotalPQty                INT
+      @nTotalPQty                INT,
+      @nVariance                 INT
    DECLARE
       -- FCR-1109 start
       @cPPACtnIDByPDDropIDnPDLblNo NVARCHAR(1),
@@ -115,7 +117,9 @@ BEGIN
       @nRowRef                   INT,
       @cPPACartonIDByPackDetailLabelNo NVARCHAR(1),
       @cPPACartonIDByPickDetailCaseID NVARCHAR(1),
-      @cDropIDFlag               NVARCHAR(1)
+      @cDropIDFlag               NVARCHAR(1),
+      @cCaptureReasonCode        NVARCHAR(1),
+      @cPPAPromptDiscrepancy     NVARCHAR( 1)
       -- FCR-1109 end
 
    SET @nErrNo = 0
@@ -164,11 +168,13 @@ BEGIN
       SET @cPPAPrintPackListSP = ''
 
    SELECT @nStep = Step,
+      @cPPAPromptDiscrepancy = V_String21,
       @cDisableQTYField    = V_String23,
       @cPPADefaultQTY      = V_String14,
       @cTaskQty            = V_String6,
       @cTaskDefaultQty     = V_String7,
       @cDropIDFlag         = C_STRING1,
+      @cCaptureReasonCode  = V_String46,
       @nMenu               = Menu
    FROM rdt.RDTMOBREC WITH(NOLOCK)
    WHERE Mobile = @nMobile
@@ -241,10 +247,165 @@ BEGIN
       BEGIN
          IF @nScn = 818
          BEGIN
+            IF @nInputKey = 0
+            BEGIN
+               IF @cPPAPromptDiscrepancy = '1'
+               BEGIN
+                  SELECT @nVariance = 0
+                  EXECUTE rdt.rdt_PostPickAudit_GetStat @nMobile, @nFunc, @cRefNo, @cPickSlipNo, @cLoadKey,
+                     @cOrderKey, @cDropID, @cID, @cTaskDetailKey, cStorerKey, @cFacility, @cPUOM,
+                     @nVariance = @nVariance OUTPUT
+
+                  -- Discrepancy found
+                  IF @nVariance = 1
+                  BEGIN
+                     -- Extended update
+                     IF @cExtendedUpdateSP <> ''
+                     BEGIN
+                        IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')
+                        BEGIN
+                           SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +
+                              ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cRefNo, @cPickSlipNo, @cLoadKey, @cOrderKey, @cDropID, ' +
+                              ' @cSKU, @nQty, @cOption, @nErrNo OUTPUT, @cErrMsg OUTPUT, @cID, @cTaskDetailKey,@cReasonCode OUTPUT'
+                           SET @cSQLParam =
+                              '@nMobile         INT,       ' +
+                              '@nFunc           INT,       ' +
+                              '@cLangCode       NVARCHAR( 3),  ' +
+                              '@nStep           INT,           ' +
+                              '@nInputKey       INT,           ' +
+                              '@cStorerKey      NVARCHAR( 15), ' +
+                              '@cRefNo          NVARCHAR( 10), ' +
+                              '@cPickSlipNo     NVARCHAR( 10), ' +
+                              '@cLoadKey        NVARCHAR( 10), ' +
+                              '@cOrderKey       NVARCHAR( 10), ' +
+                              '@cDropID         NVARCHAR( 20), ' +
+                              '@cSKU            NVARCHAR( 20), ' +
+                              '@nQty            INT,           ' +
+                              '@cOption         NVARCHAR( 1),  ' +
+                              '@nErrNo          INT           OUTPUT, ' +
+                              '@cErrMsg         NVARCHAR( 20) OUTPUT, ' +
+                              '@cID             NVARCHAR( 18), ' +
+                              '@cTaskDetailKey  NVARCHAR( 10), ' +
+                              '@cReasonCode     NVARCHAR( 20)  OUTPUT'
+
+                           EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                              @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, cStorerKey, @cRefNo, @cPickSlipNo, @cLoadKey, @cOrderKey, @cDropID, @cSKU, @nQty, '',
+                              @nErrNo OUTPUT, @cErrMsg OUTPUT, @cID, @cTaskDetailKey,@cReasonCode OUTPUT
+
+                           IF @nErrNo <> 0
+                              GOTO Quit
+                        END
+                     END
+
+                     -- Go to discrepency screen
+                     SET @cOutField01 = '' -- Option
+                     SET @cFieldAttr02 = CASE WHEN @cCaptureReasonCode ='1' THEN '' ELSE 'o' END
+                     SET @cOutField02 = @cReasonCode
+                     SET @cInField02 = ''
+
+                     SET @nAfterScn = 820
+                     SET @nAfterStep = 4
+
+                     GOTO Quit
+                  END
+               END
+            END
             --Go to new print pack list screen
             SET @nAfterScn = 6464
             SET @nAfterStep = 99
             GOTO Quit
+         END
+      END
+      ELSE IF @nStep = 4
+      BEGIN
+         IF @nInputKey = 0 --ESC
+         BEGIN
+            IF rdt.rdtGetConfig (@nFunc, 'PPAShowSummary', @cStorerKey) = '1'
+            BEGIN
+               SELECT @nCSKU = 0, @nCQTY = 0, @nPSKU = 0, @nPQTY = 0
+               EXECUTE rdt.rdt_PostPickAudit_GetStat @nMobile, @nFunc, @cRefNo, @cPickSlipNo, @cLoadKey, @cOrderKey, @cDropID, @cID, @cTaskDetailKey, cStorerKey, @cFacility, @cPUOM,
+                  @nCSKU = @nCSKU OUTPUT,
+                  @nCQTY = @nCQTY OUTPUT,
+                  @nPSKU = @nPSKU OUTPUT,
+                  @nPQTY = @nPQTY OUTPUT
+
+               SET @cSKUStat = CAST( @nCSKU AS NVARCHAR( 10)) + '/' + CAST( @nPSKU AS NVARCHAR( 10))
+               SET @cQTYStat = CAST( @nCQTY AS NVARCHAR( 10)) + '/' + CAST( @nPQTY AS NVARCHAR( 10))
+            END
+            ELSE
+            BEGIN
+               SET @cSKUStat = ''
+               SET @cQTYStat = ''
+            END
+
+            -- Prepare next screen var
+            SET @cOutField01 = @cRefNo
+            SET @cOutField02 = @cPickSlipNo
+            SET @cOutField03 = @cLoadKey
+            SET @cOutField04 = @cOrderKey
+            SET @cOutField05 = @cDropID
+            SET @cOutField06 = @cSKUStat
+            SET @cOutField07 = @cQTYStat
+            SET @cOutField08 = '' -- @cExtendedInfo
+            SET @cOutField09 = @cID
+            SET @cOutField10 = @cTaskDetailKey
+
+            -- Enable all fields
+            SET @cFieldAttr01 = ''
+            SET @cFieldAttr02 = ''
+            SET @cFieldAttr03 = ''
+            SET @cFieldAttr04 = ''
+            SET @cFieldAttr05 = ''
+            -- Go to next screen
+            SET @nAfterScn = 815
+            SET @nAfterStep = 2
+
+            -- Extended info
+            IF @cExtendedInfoSP <> ''
+            BEGIN
+               IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')
+               BEGIN
+                  INSERT INTO @tExtInfo (Variable, Value) VALUES
+                     ('@cRefNo',       @cRefNo),
+                     ('@cPickSlipNo',  @cPickSlipNo),
+                     ('@cLoadKey',     @cLoadKey),
+                     ('@cOrderKey',    @cOrderKey),
+                     ('@cDropID',      @cDropID),
+                     ('@cID',          @cID),
+                     ('@cTaskDetailKey',  @cTaskDetailKey),
+                     ('@cSKU',         @cSKU),
+                     ('@nQTY',         CAST( @nQTY AS NVARCHAR( 10))),
+                     ('@nCSKU',        CAST( @nCSKU AS NVARCHAR( 10))),
+                     ('@nCQTY',        CAST( @nCQTY AS NVARCHAR( 10))),
+                     ('@nPSKU',        CAST( @nPSKU AS NVARCHAR( 10))),
+                     ('@nPQTY',        CAST( @nPQTY AS NVARCHAR( 10))),
+                     ('@cOption',      @cOption)
+
+                  SET @cExtendedInfo = ''
+                  SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
+                     ' @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cFacility, @cStorerKey, @tExtInfo, ' +
+                     ' @cExtendedInfo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT'
+                  SET @cSQLParam =
+                     ' @nMobile        INT,           ' +
+                     ' @nFunc          INT,           ' +
+                     ' @cLangCode      NVARCHAR( 3),  ' +
+                     ' @nStep          INT,           ' +
+                     ' @nAfterStep     INT,           ' +
+                     ' @nInputKey      INT,           ' +
+                     ' @cFacility      NVARCHAR( 5),  ' +
+                     ' @cStorerKey     NVARCHAR( 15), ' +
+                     ' @tExtInfo       VariableTable READONLY, ' +
+                     ' @cExtendedInfo  NVARCHAR( 20) OUTPUT, ' +
+                     ' @nErrNo         INT           OUTPUT, ' +
+                     ' @cErrMsg        NVARCHAR( 20) OUTPUT  '
+                  EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                     @nMobile, @nFunc, @cLangCode, 4, @nStep, @nInputKey, @cFacility, @cStorerKey, @tExtInfo,
+                     @cExtendedInfo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+                  SET @cOutField08 = @cExtendedInfo
+               END
+            END
+            GOTO QUIT
          END
       END
       ELSE IF @nStep = 99

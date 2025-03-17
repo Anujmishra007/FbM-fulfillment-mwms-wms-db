@@ -58,6 +58,18 @@ BEGIN
             GOTO Quit
          END
       END
+      IF @nStep = 4 AND @nInputKey = 0
+      BEGIN
+         -- get CartonType by CaseID 
+         SELECT TOP 1 @cCartonType = PKI.CartonType
+         FROM dbo.PackInfo PKI WITH(NOLOCK)
+         INNER JOIN dbo.PickDetail PKD WITH(NOLOCK) ON ISNULL(PKI.RefNo, '') = ISNULL(PKD.CaseID, '-1')
+         WHERE PKD.StorerKey = @cStorerKey
+            AND ISNULL(RefNo, '') = @cDropID
+
+         SET @cExtendedInfo = 'CARTON TYPE: ' + TRIM(SUBSTRING(@cCartonType, 1, 8))
+         GOTO Quit
+      END
    END
    
 Quit:

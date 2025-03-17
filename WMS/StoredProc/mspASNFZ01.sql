@@ -41,8 +41,9 @@ GO
 /*                            control                                      */
 /* 2024-08-13  SSA06    1.6   Added ORDERDETAIL.ID = RECEIPTDETAIL.TOID    */
 /*                            mapping                                      */
+/* 2025-03-03  SSA07    1.7   UWP-30752 - seller order naming convention   */
 /***************************************************************************/
-CREATE OR ALTER   PROC [dbo].[mspASNFZ01]
+CREATE OR ALTER PROC [dbo].[mspASNFZ01]
 (     @c_Receiptkey  NVARCHAR(10)
   ,   @b_Success     INT           OUTPUT
   ,   @n_Err         INT           OUTPUT
@@ -332,12 +333,8 @@ BEGIN
             IF EXISTS (SELECT 1
                      FROM #TMP_ORD WHERE Consigneekey = @c_Consigneekey and DeliveryDate = @c_DeliveryDate and Door = @c_Door)
             BEGIN
-			        SELECT @c_Orderkey = orderkey, @c_ExternOrderkey = ExternOrderkey
+			        SELECT @c_Orderkey = orderkey
 			        FROM #TMP_ORD WHERE Consigneekey = @c_Consigneekey and DeliveryDate = @c_DeliveryDate and Door = @c_Door
-              IF(@c_Receiptkey <> @c_ExternOrderkey)
-              BEGIN
-                UPDATE #TMP_ORD set ExternOrderkey = @c_Receiptkey where orderkey = @c_Orderkey
-              END
             END
             ELSE
             BEGIN
@@ -464,6 +461,14 @@ BEGIN
          END
          CLOSE CUR_RECDET
          DEALLOCATE CUR_RECDET
+         --Updating externorderkey in the orders table
+         --(SSA07) start--
+         SELECT @n_OrderCnt = COUNT(DISTINCT ExternOrderkey) FROM #TMP_ORD
+         IF @n_OrderCnt > 1
+         BEGIN
+            UPDATE #TMP_ORD set ExternOrderkey = @c_Receiptkey
+         END
+         --(SSA07) end--
          IF NOT EXISTS (SELECT 1
                      FROM #TMP_ORD)
          BEGIN

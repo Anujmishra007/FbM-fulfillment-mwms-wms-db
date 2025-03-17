@@ -45,6 +45,8 @@ GO
 /* 05-APR-2024  Wan05     2.0 UWP-17363-Fix Increase QtyOnHold if Loc   */
 /*                            Status not 'ok' or locationflag is 'damage'*/
 /*                            or 'hold'                                 */
+/* 17-JUL-2024  Wan03     1.9 LFWM-4446 - RG[GIT] Serial Number Solution*/
+/*                            - Transfer by Serial Number               */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[nspItrnAddDepositCheck]
      @c_itrnkey      NVARCHAR(10)
@@ -111,7 +113,12 @@ BEGIN
    DECLARE @c_allowoverallocations  NVARCHAR(1) -- Flag to see IF overallocations are allowed.
    DECLARE @c_allowidqtyupdate      NVARCHAR(1) -- Flag to see IF update on qty in the id table is allowed
          , @c_ChannelInventoryMgmt  NVARCHAR(10) = '0' -- (SWT02)
-         
+
+   DECLARE @c_SerialNo                 NVARCHAR(50) = ''                            --(Wan03)
+         , @c_SerialNokey              NVARCHAR(10) = ''                            --(Wan03)
+         , @c_Lot_SN                   NVARCHAR(10) = ''                            --(Wan03)
+         , @c_ASNFizUpdLotToSerialNo   NVARCHAR(10) = '0'                           --(Wan03)
+
    DECLARE @b_addid int
    SELECT @b_addid = 0
 
@@ -810,8 +817,8 @@ BEGIN
                   BEGIN
                      SELECT @n_continue = 3
                      SELECT @n_err = 61992  
-                     SELECT @c_ErrMsg="NSQL"+CONVERT(char(5),@n_err)
-                     +": Update Failed on Table ChannelInv. (nspItrnAddDepositCheck)" + " ( " + " SQLSvr MESSAGE=" + ISNULL(RTRIM(@c_ErrMsg),'') + " ) "
+                     SELECT @c_ErrMsg='NSQL'+CONVERT(char(5),@n_err)
+                     +': Update Failed on Table ChannelInv. (nspItrnAddDepositCheck)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_ErrMsg),'') + ' ) '
                   END 
                END  
                --(Wan01) - END 
@@ -1110,6 +1117,76 @@ BEGIN
          END                  
       END -- @c_SourceType LIKE 'ntrReceiptDetail%'
    END
+
+   IF @n_Continue IN (1,2)                                                          --(Wan03)-START
+   BEGIN
+      SET @c_ASNFizUpdLotToSerialNo = '0'
+      SELECT @c_ASNFizUpdLotToSerialNo = fsgr.Authority FROM dbo.fnc_SelectGetRight(@c_Facility, @c_Storerkey, '', 'ASNFizUpdLotToSerialNo')AS fsgr
+
+      IF @c_SourceType LIKE 'ntrTransferDetail%'
+      BEGIN
+         SET @c_SerialNo = ''
+         SELECT @c_SerialNo = td.FromSerialNo
+         FROM TRANSFERDETAIL AS td (NOLOCK)
+         JOIN dbo.ITRN AS i (NOLOCK) ON td.TransferKey+td.TransferLineNumber = i.SourceKey
+         JOIN dbo.SKU AS s (NOLOCK) ON s.StorerKey = td.FromStorerKey AND s.Sku = td.FromSku
+         WHERE i.ItrnKey = @c_itrnkey
+         AND td.FromSerialNo <> ''
+         AND s.SerialNoCapture IN ('1','2','3')
+      END
+
+      IF @c_SerialNo <> ''
+      BEGIN
+         SET @c_SerialNokey = ''
+         SELECT @c_SerialNoKey = sn.SerialNoKey
+               ,@c_Lot_SN = sn.Lot
+         FROM dbo.SerialNo AS sn (NOLOCK)
+         WHERE sn.SerialNo= @c_SerialNo
+         AND sn.Storerkey = @c_StorerKey
+         AND sn.Sku = @c_Sku
+
+         IF @c_SerialNokey <> ''
+         BEGIN
+            UPDATE dbo.SerialNo WITH (ROWLOCK)
+            SET Lot      = CASE WHEN @c_ASNFizUpdLotToSerialNo = '1' AND @c_Lot_SN <> @c_Lot
+                                THEN @c_Lot ELSE Lot END
+               ,ID       = CASE WHEN ID <> @c_ToID THEN @c_ToID ELSE ID END
+               ,EditWho  = SUSER_SNAME()
+               ,EditDate = GETDATE()
+            WHERE SerialNoKey = @c_SerialNoKey
+
+            SET @n_err = @@ERROR
+            IF @n_err <> 0
+            BEGIN
+               SET @n_continue = 3
+               SET @n_err = 61865
+               SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed on Table SerialNo. (nspItrnAddDepositCheck)'
+                              + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
+            END
+         END
+
+         IF @n_Continue IN (1,2)
+         BEGIN
+            EXEC dbo.ispITrnSerialNoDeposit
+              @c_TranType     = 'DP'
+            , @c_StorerKey    = @c_StorerKey
+            , @c_SKU          = @c_SKU
+            , @c_SerialNo     = @c_SerialNo
+            , @n_QTY          = @n_QTY
+            , @c_SourceKey    = @c_SourceKey
+            , @c_SourceType   = @c_SourceType
+            , @b_Success      = @b_Success     OUTPUT
+            , @n_Err          = @n_Err         OUTPUT
+            , @c_ErrMsg       = @c_ErrMsg      OUTPUT
+
+            IF @n_err <> 0
+            BEGIN
+               SET @n_continue = 3
+            END
+         END
+      END
+   END                                                                              --(Wan03)-END
+
    -- Commented by SHONG on 13-Feb-2018
    -- Added By SHONG on 05-Mar-2004
    -- Auto swap Lot
