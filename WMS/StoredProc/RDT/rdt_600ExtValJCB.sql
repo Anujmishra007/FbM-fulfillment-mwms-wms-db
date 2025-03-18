@@ -83,7 +83,7 @@ BEGIN
             --25/02/2025 Not allow diff BUs on same LPN Modify by VJI011 end
             BEGIN
                SET @nErrNo = 218045
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')--'18076^Multi BU on ID'
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')--'Multi BU on ID'
                GOTO Quit
             END
          END
