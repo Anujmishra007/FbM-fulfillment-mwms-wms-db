@@ -30,7 +30,8 @@ GO
 /* 2025-02-05 1.11.0 CYU027   FCR-2630 Add Option=5 in step 5                      */
 /* 2025-02-11 1.12.0 Dennis   FCR-2630 Clear the dropid info to reuse              */
 /* 2025-02-20 1.13.0 NLT013   UWP-30312 Performance Tune                           */
-/* 2025-03-13 1.14.0 NLT013   Misupdate PickDetail as 5, because not check all     */
+/* 2025-03-05 1.14.0 JCH507   FCR-3356 Change WSSortTotRel Transmitlog2 data       */
+/* 2025-03-13 1.15.0 NLT013   Misupdate PickDetail as 5, because not check all     */
 /*                            PickDetails are picked, some Packinfo was missing    */
 /***********************************************************************************/
 CREATE OR ALTER PROC rdt.rdt_855ExtUpd13 (
@@ -110,6 +111,7 @@ BEGIN
       @cOLPSDescription          NVARCHAR(15) = 'OlpsPlacement'
       DECLARE @tPackSlipList     VariableTable
 
+   DECLARE @bDebugFlag   BINARY = 0 --1, print log; 2, insert traceinfo
    DECLARE @cToteID      NVARCHAR(20)
    DECLARE @cWaveKey     NVARCHAR(20),
    @cDropIDFlag          NVARCHAR(1)
@@ -141,6 +143,16 @@ BEGIN
       ID                      INT IDENTITY(1,1),
       OrderKey                NVARCHAR(10)
    )
+   --v1.13.0 start
+   DECLARE @tDropID TABLE
+   (
+      RowNumber INT IDENTITY,
+      DropID NVARCHAR(20)
+   )
+   DECLARE @nDropIDMax       INT
+   DECLARE @nDropIDCounter   INT
+   DECLARE @cPackDropID      NVARCHAR(20)
+   --v1.13.0 end
 
    SET @nErrNo = 0
    SET @cErrMsg = ''
@@ -1217,58 +1229,113 @@ BEGIN
 
                   -- add record into transmitlog2
                   BEGIN TRAN
-                     SAVE TRAN rdt_855TransLog2
+                  SAVE TRAN rdt_855TransLog2
 
-                     WHILE @nWaveKeyCount > 0
+                  WHILE @nWaveKeyCount > 0
+                  BEGIN
+                     SELECT TOP 1 @cWaveKey = WaveKey FROM @tWaveKeys
+                     EXECUTE ispGenTransmitLog2
+                              @c_TableName      = 'WSCTNAdd',
+                              @c_Key1           = @cWaveKey,
+                              @c_Key2           = @cDropID, -- LabelNo/CaseID
+                              @c_Key3           = @cStorerkey,
+                              @c_TransmitBatch  = '',
+                              @b_Success        = @bSuccess   OUTPUT,
+                              @n_err            = @nErrNo     OUTPUT,
+                              @c_errmsg         = @cErrMsg    OUTPUT
+                     IF @nErrNo <> 0 OR @bSuccess <> 1
                      BEGIN
-                        SELECT TOP 1 @cWaveKey = WaveKey FROM @tWaveKeys
+                        ROLLBACK TRAN rdt_855TransLog2
+                        GOTO Quit
+                     END
+
+                     --V1.13.0 start
+                     /*
+                     IF @cDropIDFlag = 'Y' AND LEN(@cToteID) = 10
+                     BEGIN
                         EXECUTE ispGenTransmitLog2
-                                @c_TableName      = 'WSCTNAdd',
-                                @c_Key1           = @cWaveKey,
-                                @c_Key2           = @cDropID, -- LabelNo/CaseID
-                                @c_Key3           = @cStorerkey,
-                                @c_TransmitBatch  = '',
-                                @b_Success        = @bSuccess   OUTPUT,
-                                @n_err            = @nErrNo     OUTPUT,
-                                @c_errmsg         = @cErrMsg    OUTPUT
+                                 @c_TableName      = 'WSSortTotRel',
+                                 @c_Key1           = @cWaveKey,
+                                 @c_Key2           = @cToteID, -- Tote ID, dropid from pickdetail
+                                 @c_Key3           = @cStorerkey,
+                                 @c_TransmitBatch  = '',
+                                 @b_Success        = @bSuccess   OUTPUT,
+                                 @n_err            = @nErrNo     OUTPUT,
+                                 @c_errmsg         = @cErrMsg    OUTPUT
                         IF @nErrNo <> 0 OR @bSuccess <> 1
                         BEGIN
                            ROLLBACK TRAN rdt_855TransLog2
                            GOTO Quit
                         END
+                     END*/ --v1.13.0 end
 
-                        IF @cDropIDFlag = 'Y' AND LEN(@cToteID) = 10
+                     -- renew loop controll
+                     DELETE FROM @tWaveKeys WHERE WaveKey = @cWaveKey;
+                     SELECT @nWaveKeyCount = COUNT(*) FROM @tWaveKeys;
+                  END --WSCTNAdd
+
+                  --V1.13.0 start
+                  IF @cDropIDFlag = 'Y'
+                  BEGIN
+                     INSERT INTO @tDropID (DropID)
+                     SELECT DISTINCT DropID
+                     FROM dbo.PackDetail WITH(NOLOCK)
+                     WHERE StorerKey = @cStorerKey
+                     AND LabelNo = @cDropID --The scanned dropid is the label no in packdetail
+
+                     SET @nDropIDMax = @@ROWCOUNT
+                     SET @nDropIDCounter = 1
+
+                     IF @bDebugFlag = 1
+                     BEGIN
+                        SELECT 'Temp Drop ID list'
+                        SELECT * FROM @tDropID
+                     END
+
+                     IF @nDropIDCounter <= @nDropIDMax
+                     BEGIN
+                        SELECT @cPackDropID = ISNULL(DropID, '')
+                        FROM @tDropID
+                        WHERE RowNumber = @nDropIDCounter
+
+                        IF @cPackDropID <> '' AND LEN(@cPackDropID) = 10
                         BEGIN
+                           IF @bDebugFlag = 1
+                              SELECT 'Send TransmitLog2', @cPackDropID AS PackDropID, @cDropID AS PackLabelNo
                            EXECUTE ispGenTransmitLog2
-                                   @c_TableName      = 'WSSortTotRel',
-                                   @c_Key1           = @cWaveKey,
-                                   @c_Key2           = @cToteID, -- Tote ID, dropid from pickdetail
-                                   @c_Key3           = @cStorerkey,
-                                   @c_TransmitBatch  = '',
-                                   @b_Success        = @bSuccess   OUTPUT,
-                                   @n_err            = @nErrNo     OUTPUT,
-                                   @c_errmsg         = @cErrMsg    OUTPUT
+                              @c_TableName      = 'WSSortTotRel',
+                              @c_Key1           = @cPackDropID, --PackDetail DropID
+                              @c_Key2           = @cDropID, -- PackDetail LabelNo
+                              @c_Key3           = @cStorerkey,
+                              @c_TransmitBatch  = '',
+                              @b_Success        = @bSuccess   OUTPUT,
+                              @n_err            = @nErrNo     OUTPUT,
+                              @c_errmsg         = @cErrMsg    OUTPUT
                            IF @nErrNo <> 0 OR @bSuccess <> 1
                            BEGIN
                               ROLLBACK TRAN rdt_855TransLog2
                               GOTO Quit
-                           END
+                           END 
+                        END --create transmitlog2
+                        ELSE
+                        BEGIN
+                           IF @bDebugFlag = 1
+                              SELECT 'Fail to Send TransmitLog2',  @cPackDropID AS PackDropID, @cDropID AS PackLabelNo
                         END
+                        SET @nDropIDCounter = @nDropIDCounter + 1
+                     END --end while
+                  END --WSSortTotRel
+                  --V1.13.0 end
 
-                        -- renew loop controll
-                        DELETE FROM @tWaveKeys WHERE WaveKey = @cWaveKey;
-                        SELECT @nWaveKeyCount = COUNT(*) FROM @tWaveKeys;
-                     END
-                     --clear dropid to reuse
-                     IF @cDropIDFlag = 'Y'
-                     BEGIN
-                        UPDATE dbo.PackDetail WITH(ROWLOCK) SET DropID = CONCAT('ARC',DropID) WHERE DropID=@cToteID
-                        UPDATE dbo.PICKDETAIL WITH(ROWLOCK) SET DropID = CONCAT('ARC',DropID) WHERE DropID=@cToteID
-                        UPDATE RDT.RDTMOBREC WITH(ROWLOCK) SET C_STRING1 = '' WHERE Mobile = @nMobile
-                     END
-                     WHILE @@TRANCOUNT > @nTranCount
+                  --clear dropid to reuse
+                  IF @cDropIDFlag = 'Y'
+                  BEGIN
+                     UPDATE dbo.PackDetail WITH(ROWLOCK) SET DropID = CONCAT('ARC',DropID) WHERE DropID=@cToteID
+                     UPDATE dbo.PICKDETAIL WITH(ROWLOCK) SET DropID = CONCAT('ARC',DropID) WHERE DropID=@cToteID
+                     UPDATE RDT.RDTMOBREC WITH(ROWLOCK) SET C_STRING1 = '' WHERE Mobile = @nMobile
+                  END
+                  WHILE @@TRANCOUNT > @nTranCount
                      COMMIT TRAN
-
                END
             END
          END
