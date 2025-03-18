@@ -947,7 +947,7 @@ BEGIN
                        + ' AND LOC.LocationType IN (''DYNPICKP'')' 
                        + ' AND LOC.LocationFlag NOT IN (''HOLD'',''DAMAGE'')'  
                        + ' AND LOC.[Status] <> ''HOLD''' 
-                       + CASE WHEN @c_IdenticalRepl01 > ''
+                       + CASE WHEN @c_IdenticalToBulk > '' 
                               THEN ' AND ' + @c_IdenticalToBulk + ' = @c_IdenticalRepl01' 
                               ELSE '' END
                        + ' AND LOC.PutawayZone = @cDynamicP_PalletZone'     
@@ -981,7 +981,7 @@ BEGIN
                        + ' AND  LOC.LocationFlag NOT IN (''HOLD'',''DAMAGE'')'     
                        + ' AND  LOC.[Status]     <> ''HOLD'''                          
                        + ' AND  LOC.PutawayZone = @cDynamicP_PalletZone' 
-                       + CASE WHEN @c_IdenticalRepl01 > ''
+                       + CASE WHEN @c_IdenticalToBulk > ''  
                               THEN ' AND ' + @c_IdenticalToBulk + ' = @c_IdenticalRepl01' 
                               ELSE '' END                       
                        + ' AND  LOC.LOC>= @cStartDynamicP_PalletLoc'      
@@ -1233,7 +1233,7 @@ BEGIN
                            + ' AND  LOC.LocationFlag NOT IN (''HOLD'',''DAMAGE'')'     
                            + ' AND  LOC.[Status]     = ''OK'''                          
                            + ' AND  LOC.PutawayZone = @cDynamicP_RackZone' 
-                           + CASE WHEN @c_IdenticalRepl01 > ''
+                           + CASE WHEN @c_IdenticalToBulk > '' 
                                   THEN ' AND ' + @c_IdenticalToBulk + ' = @c_IdenticalRepl01' 
                                   ELSE '' END  
                                   
@@ -1253,9 +1253,6 @@ BEGIN
                               ,@c_IdenticalRepl01
                               ,@cNextDynPickLoc      OUTPUT                         --(Wan02) - END
             END    
-                
-            --select @cDynamicP_RackZone '@cDynamicP_RackZone', @cFacility '@cFacility', @cStartDynamicP_RackLoc '@cStartDynamicP_RackLoc',    
-            --@cDynGroup '@cDynGroup', @cSKU '@cSKU'    
                 
             -- If no location with same DynGroup found, then assign the empty location    
             IF ISNULL(RTRIM(@cNextDynPickLoc) ,'')=''    
@@ -1298,7 +1295,7 @@ BEGIN
                                  ,@cStartDynamicP_RackLoc
                                  ,@c_IdenticalRepl01
                                  ,@cNextDynPickLoc      OUTPUT
-       select @cNextDynPickLoc '@cNextDynPickLoc-R1'  , @n_RowID_RZ '@n_RowID_RZ'            
+        
                SET @n_LoopTrue = 0                                                        
                IF @cNextDynPickLoc = ''                                              
                BEGIN
@@ -1489,7 +1486,7 @@ BEGIN
                 
          IF NOT @bSuccess=1    
          BEGIN    
-               SELECT @nContinue = 3    
+            SELECT @nContinue = 3    
          END    
          ELSE    
          BEGIN    
