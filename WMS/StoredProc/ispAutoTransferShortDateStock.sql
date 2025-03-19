@@ -219,7 +219,7 @@ BEGIN
                              'AND LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked > 0 ' +
                              'AND LOT.Status = ''OK'' ' +
                              'AND LOC.Status = ''OK'' ' +
-                             'AND LOC.LocationFlag = ''NONE'' ' +
+                             'AND LOC.LocationFlag NOT IN ( ''HOLD'', ''DAMAGE'' ) ' +
                              'AND ID.Status = ''OK'' '+
                              'ORDER BY GroupNum, (LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked)'
 
