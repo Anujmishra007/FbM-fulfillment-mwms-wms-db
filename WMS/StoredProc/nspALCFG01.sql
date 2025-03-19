@@ -1226,7 +1226,7 @@ BEGIN
             AND LLI.ID = @c_ID
             AND LLI.Storerkey = @c_Storerkey
             AND LLI.Sku = @c_Sku
-
+            AND LLI.Qty > 0
             IF (@n_QtyLeftToFulfill - @n_PrevLotQtyAvailable) >= @n_QtyAvailable  --NJOW09
                AND @n_NoOfLot = 1 -- if multi lot per sku/loc/id then proceed to next strategy allocation by carton
             BEGIN
