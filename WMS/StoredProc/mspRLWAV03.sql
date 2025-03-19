@@ -63,6 +63,8 @@ GO
 /* 08-Mar-2024 SWT08     3.7 Using StdCube instead of LxWxH             */
 /* 06-Mar-2025 Wan02     3.8 UWP-31023 - FCR-3276 - LVSUSA - Automation */
 /*                           Wave Release Required Pack                 */
+/* 19-Mar-2025 Wan02         CR V1.2 -Gen Pick Task for Non Sortable &  */
+/*                           Conveyable for Non UCC                     */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[mspRLWAV03]
    @c_WaveKey NVARCHAR(10)
@@ -3068,9 +3070,21 @@ BEGIN
             END
             ELSE IF @c_UOM = '6'
             BEGIN
-               IF @c_PickMethod IN ('C', '3') AND @c_DropID <> '' 
+               IF @c_PickMethod IN ('C', '3') --AND @c_DropID <> ''                 --(Wan02)                
                BEGIN
-                  IF @b_WCS = 0
+                  IF @b_WCS = 0 AND @c_DropID = ''                                  --(Wan02) - START
+                  BEGIN
+                     SET @c_TaskType      = 'ASTCPK'
+                     SET @c_PickMethod_TD = 'B2B-Loose'
+
+                     SELECT TOP 1 @c_ToLoc = l.Loc
+                     FROM LOC l (NOLOCK)
+                     WHERE l.Facility = @c_Facility
+                     AND   l.LocationType = 'PackWCS'
+                     AND   l.LocationCategory = 'Stage'
+                     AND   l.PutawayZone = 'VAS'
+                  END
+                  ELSE IF @b_WCS = 0 AND @c_DropID <> ''                            --(Wan02) - END
                   BEGIN
                      SET @c_TaskType      = 'RPF'
                      SET @c_PickMethod_TD = 'PP'
@@ -3143,7 +3157,7 @@ BEGIN
                         AND   l.PutawayZone = 'VAS'
                      END
                   END
-                  ELSE
+                  ELSE IF @b_WCS = 1 AND @c_DropID <> ''                            --(Wan02) 
                   BEGIN 
                      SET @c_TaskType      = 'RPF'
                      SET @c_PickMethod_TD = 'PP'
@@ -3165,7 +3179,7 @@ BEGIN
                         AND Storerkey = @c_Storerkey
                      END
                   END
-               END    
+               END   
             END
 
             IF @n_continue = 1 AND @c_ToLoc > '' 
