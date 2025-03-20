@@ -65,6 +65,8 @@ GO
 /*                           Wave Release Required Pack                 */
 /* 19-Mar-2025 Wan02         CR V1.2 -Gen Pick Task for Non Sortable &  */
 /*                           Conveyable for Non UCC                     */
+/*                           CR V1.4 - ASTCPK Task Status as '0' if pick*/
+/*                           face                                       */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[mspRLWAV03]
    @c_WaveKey NVARCHAR(10)
@@ -2984,7 +2986,7 @@ BEGIN
                , OrderLineNumber = CASE WHEN P.UOM = '2' THEN P.OrderLineNumber ELSE '' END
                , P.Storerkey, P.Sku, P.LOT, P.LOC, P.ID
                , Qty = SUM(P.Qty)
-               , P.UOM, P.PickMethod, P.Dropid, od.WCS
+               , P.UOM, P.PickMethod, P.Dropid, p.CaseID, od.WCS                    --(Wan02) - Fixed
                , l.LogicalLocation, l.LocationType, l.PutawayZone
          FROM #PickDetail_WIP P
          JOIN #ORDERSKU od ON  od.Orderkey = p.Orderkey
@@ -3003,6 +3005,7 @@ BEGIN
                ,  P.UOM
                ,  P.PickMethod
                ,  P.Dropid
+               ,  p.CaseID                                                          --(Wan02) - Fixed
                ,  od.WCS
                ,  l.LogicalLocation
                ,  l.LocationType
@@ -3017,7 +3020,7 @@ BEGIN
       
          FETCH NEXT FROM CUR_PTASK INTO @c_WaveKey, @c_Orderkey, @c_OrderLineNumber
                                        ,@c_Storerkey, @c_Sku, @c_LOT, @c_FromLOC, @c_ID, @n_PickdetQty 
-                                       ,@c_UOM, @c_PickMethod, @c_DropId, @b_WCS 
+                                       ,@c_UOM, @c_PickMethod, @c_DropId, @c_LabelNo, @b_WCS      --(Wan02) Fixed
                                        ,@c_FromLogicalLoc, @c_FromLocType, @c_FromPAZone
       
          WHILE @@FETCH_STATUS = 0 AND @n_Continue IN (1,2)
@@ -3076,6 +3079,7 @@ BEGIN
                   BEGIN
                      SET @c_TaskType      = 'ASTCPK'
                      SET @c_PickMethod_TD = 'B2B-Loose'
+                     SET @c_TaskStatus    = '0'                                     --(Wan02) 1.4
 
                      SELECT TOP 1 @c_ToLoc = l.Loc
                      FROM LOC l (NOLOCK)
@@ -3249,7 +3253,7 @@ BEGIN
                   , @c_ID
                   , @c_SourceType
                   , '' --SourceKey
-                  , @c_DropId
+                  , CASE WHEN @c_DropId = '' THEN @c_LabelNo ELSE @c_DropId END     --(Wan02) Fixed
                   , '5' -- Priority
                   , '9' -- SourcePriority
                   , '' -- Orderkey,
@@ -3322,7 +3326,7 @@ BEGIN
             END
             FETCH NEXT FROM CUR_PTASK INTO @c_WaveKey, @c_Orderkey, @c_OrderLineNumber
                                        ,   @c_Storerkey, @c_Sku, @c_LOT, @c_FromLOC, @c_ID, @n_PickdetQty  
-                                       ,   @c_UOM, @c_PickMethod, @c_DropId, @b_WCS 
+                                       ,   @c_UOM, @c_PickMethod, @c_DropId, @c_LabelNo, @b_WCS      --(Wan02) Fixed
                                        ,   @c_FromLogicalLoc, @c_FromLocType, @c_FromPAZone 
          END
          CLOSE CUR_PTASK
