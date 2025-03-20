@@ -40,8 +40,9 @@ GO
 /*                          Add BypassScanIDSP config                        */
 /* 2023-11-17 2.9  James    WMS-23429 Sort task by logicalloc, loc (james14) */
 /* 2024-04-19 3.0  James    WMS-25276 Skip scn 3 based on Loc setup(james16) */
-/* 2024-11-27 1.0  JHU151   UWP-27583.Fn1768 St1 TTL QTY is not cleared when */
+/* 2024-11-27 3.1  JHU151   UWP-27583.Fn1768 St1 TTL QTY is not cleared when */
 /*                                       scanning a new loc                  */
+/* 2025-02-11 3.2  JCH507   FCR-1917 Add ext upd entry                       */
 /*****************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_CycleCount](
@@ -81,7 +82,7 @@ DECLARE
    @cSuggSKU            NVARCHAR(20),
    @cUCC                NVARCHAR(20),
    @cCommodity          NVARCHAR(20),
- @c_outstring         NVARCHAR(255),
+   @c_outstring         NVARCHAR(255),
    @cContinueProcess    NVARCHAR(10),
    @cReasonStatus       NVARCHAR(10),
    @cAreakey            NVARCHAR(10),
@@ -300,7 +301,7 @@ SELECT
    @cInField11 = I_Field11,   @cOutField11 = O_Field11,
    @cInField12 = I_Field12,   @cOutField12 = O_Field12,
    @cInField13 = I_Field13,   @cOutField13 = O_Field13,
-  @cInField14 = I_Field14,   @cOutField14 = O_Field14,
+   @cInField14 = I_Field14,   @cOutField14 = O_Field14,
    @cInField15 = I_Field15,   @cOutField15 = O_Field15,
 
    @cFieldAttr01  = FieldAttr01,    @cFieldAttr02   = FieldAttr02,
@@ -458,6 +459,40 @@ BEGIN
       JOIN dbo.LOC LOC WITH (NOLOCK) ON ( LLI.LOC = LOC.LOC)
       WHERE LLI.Loc = @cLoc
       AND   LOC.Facility = @cFacility
+
+      --v3.2 start
+      -- Extended update
+      IF @cExtendedUpdateSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')
+         BEGIN
+            SET @cSQL = 'EXEC rdt.' + RTRIM(@cExtendedUpdateSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cTaskdetailkey, @cFromLoc, @cID, @cPickMethod, ' +
+               ' @nErrNo OUTPUT, @cErrMsg OUTPUT '
+            SET @cSQLParam =
+               '@nMobile         INT,           ' +
+               '@nFunc           INT,           ' +
+               '@cLangCode       NVARCHAR( 3),  ' +
+               '@nStep           INT,           ' +
+               '@nInputKey       INT,           ' +
+               '@cFacility       NVARCHAR( 15), ' +
+               '@cStorerKey      NVARCHAR( 15), ' +
+               '@cTaskdetailkey  NVARCHAR( 20),  ' +
+               '@cFromLoc        NVARCHAR( 20),  ' +
+               '@cID             NVARCHAR( 20),  ' +
+               '@cPickMethod     NVARCHAR( 20),  ' +
+               '@nErrNo          INT           OUTPUT, ' +
+               '@cErrMsg         NVARCHAR( 20) OUTPUT  '
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cTaskdetailkey, @cSuggFromLoc, @cID, @cPickMethod,
+               @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+            IF @nErrNo <> 0
+               GOTO Quit
+         END
+      END
+      --V3.2 end
 
       IF @nQtyOnLoc = 0
       BEGIN
@@ -1044,7 +1079,7 @@ BEGIN
                            END
                            ELSE
                            IF @nCountLot = 3
-   BEGIN
+                           BEGIN
                               SET @cListName = 'Lottable03'
                               SET @cLottableLabel = @cLottable03_Code
                            END
@@ -1192,7 +1227,7 @@ BEGIN
                            SET @cFieldAttr10 = 'O'
                            SET @cOutField10 = ''
                         END
-                    ELSE
+                        ELSE
                         BEGIN
                            SELECT @cOutField10 = ISNULL(@cLottable03, '')
                         END
@@ -1847,7 +1882,7 @@ BEGIN
 
          IF @cTMCCSKUSkipScreen1 = '1'
          BEGIN
-      /*************************************/
+            /*************************************/
             SELECT @cPUOM = V_UOM,
                    @cStorerKey = StorerKey
             FROM RDT.RDTMOBREC WITH (NOLOCK)
@@ -2389,7 +2424,7 @@ BEGIN
             END
 
             -- Extended info
-    IF @cExtendedInfoSP <> ''
+            IF @cExtendedInfoSP <> ''
             BEGIN
                IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')
                BEGIN
@@ -2470,7 +2505,7 @@ BEGIN
             -- Set the entry point
             SET @nFunc = @nToFunc
             SET @nScn = 2941
-SET @nStep = 2
+            SET @nStep = 2
          END
          ELSE
          BEGIN
