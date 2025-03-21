@@ -89,6 +89,7 @@ BEGIN
                      EditWho  = SUSER_SNAME(),
                      TransitLoc = '',
                      ListKey = '',
+                     Priority = IIF( @cTaskStatus = 'X', 1, Priority),
                      TransitCount = 0,
                      TrafficCop = NULL
                   WHERE TaskDetailKey = @cTaskdetailKey
