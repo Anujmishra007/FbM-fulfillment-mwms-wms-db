@@ -15,6 +15,7 @@ GO
 /* 2025-03-10   1.0.0  NLT013   UWP-31257 Created                             */
 /* 2025-03-13   1.0.1  NLT013   UWP-31257 RPF taks is not mandatory for ASTCPK*/
 /* 2025-03-13   1.0.2  NLT013   UWP-31257 Missing BEGIN END                   */
+/* 2025-03-13   1.0.3  NLT013   UWP-31758 TaskDetail.Qty is 0 when partial pick*/
 /******************************************************************************/  
   
 CREATE OR ALTER PROC rdt.rdt_1855CfmSP01 (  
@@ -62,6 +63,7 @@ BEGIN
    DECLARE @cFromLoc       NVARCHAR( 10)
    DECLARE @cPickZone      NVARCHAR( 10)
    DECLARE @nRowCount      INT
+   DECLARE @nPickedQty		INT
    
    SELECT 
       @cUserName        = UserName,
@@ -387,10 +389,36 @@ BEGIN
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKDtl Fail  
                      GOTO RollBackTran  
                   END  
+
+                  SET @nPickedQty = 0
+
+                  SELECT @nPickedQty = SUM(Qty)
+                  FROM dbo.PICKDETAIL WITH(NOLOCK)
+                  WHERE TaskDetailKey = @cTaskDetailKey
+                     AND Status = @cPickConfirmStatus
+
+                  IF @@ROWCOUNT = 0
+                  BEGIN 
+                     IF @cPickZone <> 'PICK'
+                     BEGIN
+                        SELECT @nPickedQty = SUM(PD.Qty)
+                        FROM dbo.PickDetail PD WITH (NOLOCK) 
+                        INNER JOIN dbo.TaskDetail TD WITH (NOLOCK) ON ( TD.StorerKey = PD.StorerKey AND TD.FromLoc = PD.Loc AND TD.Sku = PD.Sku AND TD.RefTaskKey = PD.TaskDetailKey AND TD.CaseID = PD.CaseID )
+                        INNER JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC) 
+                        WHERE PD.OrderKey = @cOrderKey 
+                           AND PD.LOC = @cLOC 
+                           AND PD.SKU = @cSKU 
+                           AND PD.CaseID = @cCaseID
+                           AND PD.QTY > 0 
+                           AND PD.Status = @cPickConfirmStatus 
+                           AND TD.TaskDetailKey = @cTaskDetailKey
+                     END
+                  END
                   
                   UPDATE dbo.TaskDetail SET
                      SystemQty = Qty, 
-                     Qty = @nQTY_Bal,  
+                     --Qty = @nQTY_Bal,  
+                     Qty = ISNULL(@nPickedQty, 0),
                      EditDate = GETDATE(),  
                      EditWho  = SUSER_SNAME()
                   WHERE TaskDetailKey = @cTaskDetailKey
@@ -514,10 +542,36 @@ BEGIN
                      GOTO RollBackTran
                   END
 
+                  SET @nPickedQty = 0
+
+                  SELECT @nPickedQty = SUM(Qty)
+                  FROM dbo.PICKDETAIL WITH(NOLOCK)
+                  WHERE TaskDetailKey = @cTaskDetailKey
+                     AND Status = @cPickConfirmStatus
+
+                  IF @@ROWCOUNT = 0
+                  BEGIN 
+                     IF @cPickZone <> 'PICK'
+                     BEGIN
+                        SELECT @nPickedQty = SUM(PD.Qty)
+                        FROM dbo.PickDetail PD WITH (NOLOCK) 
+                        INNER JOIN dbo.TaskDetail TD WITH (NOLOCK) ON ( TD.StorerKey = PD.StorerKey AND TD.FromLoc = PD.Loc AND TD.Sku = PD.Sku AND TD.RefTaskKey = PD.TaskDetailKey AND TD.CaseID = PD.CaseID )
+                        INNER JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC) 
+                        WHERE PD.OrderKey = @cOrderKey 
+                           AND PD.LOC = @cLOC 
+                           AND PD.SKU = @cSKU 
+                           AND PD.CaseID = @cCaseID
+                           AND PD.QTY > 0 
+                           AND PD.Status = @cPickConfirmStatus 
+                           AND TD.TaskDetailKey = @cTaskDetailKey
+                     END
+                  END
+
                   UPDATE dbo.TaskDetail SET
                      SystemQty = Qty, 
                      --Qty = Qty - @nQTY_Bal, 
-                     Qty = @nQTY_Bal, -- V1.1 
+                     --Qty = @nQTY_Bal, -- V1.1 
+                     Qty = ISNULL(@nPickedQty, 0),
                      EditDate = GETDATE(),  
                      EditWho  = SUSER_SNAME()
                   WHERE TaskDetailKey = @cTaskDetailKey
