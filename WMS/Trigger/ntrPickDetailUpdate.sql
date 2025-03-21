@@ -99,7 +99,8 @@ GO
 /* 2024-11-26   Wan05   4.0   UWP-23317 - [FCR-618  819] Unpick SerialNo*/
 /* 2024-11-26   Wan06   4.1   [FCR-618] - Fixed if change on lot,id,qty &*/
 /*                            Status                                    */
-/* 20-Jan-2024  TLTIN03 4.1   Bug fix - aft ship no change avoid change */
+/* 20-Jan-2025  TLTIN03 4.1   Bug fix - aft ship no change avoid change */
+/* 17-Mar-2025  TLTIN04 4.1   Bug fix - avoid change stayus             */
 /************************************************************************/
 
 CREATE OR ALTER TRIGGER [dbo].[ntrPickDetailUpdate]
@@ -302,9 +303,13 @@ END
 IF (@n_Continue=1 or @n_Continue=2)
 BEGIN
 	-- TLTIN03
-   IF EXISTS (SELECT 1 FROM DELETED WHERE ShipFlag = 'Y' OR [Status] = '9')   
-		AND  ( UPDATE (QTY) OR UPDATE(Sku) OR UPDATE(Lot) OR UPDATE(Loc) OR UPDATE(ID) OR UPDATE(Channel_ID) 
-		OR  UPDATE (Orderkey) OR UPDATE(Orderlinenumber)  )		 
+   IF EXISTS ( SELECT 1 FROM DELETED WHERE ShipFlag = 'Y' OR [Status] = '9')   
+		AND  (  UPDATE (QTY) OR UPDATE(Sku) OR UPDATE(Lot) OR UPDATE(Loc) OR UPDATE(ID) OR UPDATE(Channel_ID) 
+		OR  UPDATE (Orderkey) OR UPDATE(Orderlinenumber)   
+		OR  EXISTS ( SELECT 1 FROM DELETED 
+						JOIN INSERTED ON INSERTED.PickDetailKey = DELETED.PickDetailKey
+						WHERE ( DELETED.ShipFlag = 'Y' OR DELETED.[Status] = '9' ) 
+						AND ( INSERTED.[Status] < DELETED.[Status] )  )	)	 
    BEGIN
       SET @c_PDKey = '' -- SOS# 264916
       
