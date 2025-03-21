@@ -32,6 +32,8 @@ GO
 /*                           Flowrack locations                            */
 /* 2024-12-10  SHONG03  1.6  When UOM=1, Qty Allocated should be zero      */
 /*                           UWP-28329                                     */
+/* 2024-03-03  Wan05    1.7  UWP-30435 - [FCR-2424] [UL-Riyadh] Allocation */
+/*                           strategy for BUD                              */
 /***************************************************************************/
 CREATE OR ALTER PROC [dbo].[mspALMLP02]
    @c_DocumentNo        NVARCHAR(10)
@@ -106,6 +108,8 @@ BEGIN
          , @c_Sortfields                     NVARCHAR(2000) = ''                    --(Wan04)   
          , @c_SortMode                       NVARCHAR(10)   = ''                    --(Wan04)
          , @c_FromPickLocFlag                NCHAR(1)       = 'N'                   --(Wan04)
+         , @c_FromBulkFlag                   NCHAR(1)       = 'N'                   --(Wan05)
+         , @c_AllocateQtyReplenFlag          NCHAR(1)       = 'N'                   --(Wan05)
            
    SET @c_Condition = ''
    SET @n_SkuOutGoingMinShelfLife = 0
@@ -244,7 +248,13 @@ BEGIN
       END
    END
 
-   SELECT TOP 1 @c_FromPickLocFlag = ISNULL(UDF01,'')                               --(Wan04) - START 
+   SELECT TOP 1 @c_FromBulkFlag =  UDF01                                            --(Wan05) - START
+   FROM @TMP_CODELKUP
+   WHERE Code = 'FROMBULKLOC' --allocation from pick location only. default is all location type.
+   AND Code2 IN (@c_UOM,'')
+   ORDER BY CASE WHEN Code2 = @c_UOM THEN 0 ELSE 1 END                              --(Wan05) - END
+
+   SELECT TOP 1 @c_FromPickLocFlag = ISNULL(UDF01,'')                               --(Wan04) - START
    FROM @TMP_CODELKUP  
    WHERE Code = 'FROMPICKLOC' --allocation from pick location only. default is all location type.  
    AND Code2 IN (@c_UOM,'') 
@@ -256,6 +266,20 @@ BEGIN
    AND Code2 IN (@c_UOM,'') 
    ORDER BY CASE WHEN Code2 = @c_UOM THEN 0 ELSE 1 END                              --(Wan04) - END
    
+   SELECT TOP 1 @c_AllocateQtyReplenFlag = ISNULL(UDF01,'')                         --(Wan05) - START
+   FROM @TMP_CODELKUP
+   WHERE Code = 'ALLOCATEQTYREPLEN' --allow allocate qtyreplen from bulk. default is not allocate from qtyreplen.
+   AND Code2 IN (@c_UOM,'')
+   ORDER BY CASE WHEN Code2 = @c_UOM THEN 0 ELSE 1 END
+
+   SELECT TOP 1 @c_FullPalletByLocFlag = UDF01
+   FROM @TMP_CODELKUP
+   WHERE Code = 'FULLPALLETBYLOC' --allow allocate qtyreplen from bulk. default is not allocate from qtyreplen.
+   AND Code2 IN (@c_UOM,'')
+   ORDER BY CASE WHEN Code2 = @c_UOM THEN 0 ELSE 1 END
+
+   IF @c_FullPalletByLocFlag = '' SET @c_FullPalletByLocFlag = 'Y'                  --(Wan05) - END
+
    SELECT TOP 1 @c_SkipLottableFilter = ISNULL(UDF01,'')
    FROM @TMP_CODELKUP
    WHERE Code = 'SKIPLOTTABLEFILTER' --Skip lottable filtering.
@@ -492,18 +516,35 @@ BEGIN
       END
    END
 
+   --MLP Default Setting
    IF @c_UOM = '1'
    BEGIN
-      SET @c_Condition = ISNULL(RTRIM(@c_Condition),'') 
-                       + ' AND SKUXLOC.LocationType NOT IN (''PICK'',''CASE'')'
-                       + ' AND LOC.LocationCategory = @c_LocationCategory'
-                       + ' AND LOTxLOCxID.QtyAllocated = 0 ' -- (SHONG03) 
+      IF @c_FromBulkFlag = 'N'                                                      --(Wan05) - START
+      BEGIN
+         SET @c_Condition = ISNULL(RTRIM(@c_Condition),'')
+                          + ' AND SKUXLOC.LocationType NOT IN (''PICK'',''CASE'')'
+                          + ' AND LOC.LocationCategory = @c_LocationCategory'
+                          + ' AND LOTxLOCxID.QtyAllocated = 0 ' -- (SHONG03)
+      END
    END
-   ELSE IF @c_FromPickLocFlag = 'Y'                                                 --(Wan04)
+   ELSE
    BEGIN
-      SET @c_Condition = ISNULL(RTRIM(@c_Condition),'') 
+      IF @c_AllocateQtyReplenFlag = 'N' AND @c_OverAllocateFlag = 'Y'
+      BEGIN
+         SET @c_AllocateQtyReplenFlag = 'Y'
+      END
+   END                                                                              --(Wan05) - END
+
+   IF @c_FromPickLocFlag = 'Y'                                                      --(Wan05) - START--(Wan04)
+   BEGIN
+      SET @c_Condition = ISNULL(RTRIM(@c_Condition),'')
                        + ' AND SKUXLOC.LocationType IN (''PICK'',''CASE'')'
    END
+   ELSE IF @c_FromBulkFlag = 'Y'
+   BEGIN
+      SET @c_Condition = ISNULL(RTRIM(@c_Condition),'')
+                       + ' AND SKUXLOC.LocationType NOT IN (''PICK'',''CASE'')'
+   END                                                                              --(Wan05) - END
 
   IF @c_SortingFlag = 'Y'                                                          --(Wan04) - START 
    BEGIN  
@@ -594,7 +635,12 @@ BEGIN
    BEGIN
       SET @c_SQL = N'DECLARE CURSOR_AVAILABLECFG CURSOR FAST_FORWARD READ_ONLY FOR'  
                  + ' SELECT LOTxLOCxID.LOT, LOTxLOCxID.LOC,LOTxLOCxID.ID'
-                 + ' ,QTYAVAILABLE = LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QTYREPLEN' 
+                 + CASE WHEN @c_AllocateQtyReplenFlag = 'Y'                         --(Wan05) - START
+                        THEN
+                   ' ,QTYAVAILABLE = LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED'
+                        ELSE
+                   ' ,QTYAVAILABLE = LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QTYREPLEN'
+                        END                                                         --(Wan05) - END
                  + ' FROM LOTxLOCxID (NOLOCK)'
                  + ' JOIN LOTATTRIBUTE (NOLOCK) ON LOTxLOCxID.Lot = LOTATTRIBUTE.Lot'
                  + ' JOIN LOT (NOLOCK) ON LOTxLOCxID.Lot = LOT.Lot'
@@ -608,7 +654,12 @@ BEGIN
                  + ' WHERE LOTxLOCxID.Storerkey = @c_Storerkey'
                  + ' AND LOTxLOCxID.Sku = @c_Sku'
                  + ' AND LOC.Facility = @c_Facility'
-                 + ' AND (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QTYREPLEN) > 0'
+                 + CASE WHEN @c_AllocateQtyReplenFlag = 'Y'                         --(Wan05) - START
+                        THEN
+                   ' AND (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED) > 0'
+                        ELSE
+                   ' AND (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QTYREPLEN) > 0'
+                        END                                                         --(Wan05) - END
                  + ' AND LOT.STATUS = ''OK'' AND LOC.STATUS = ''OK'' AND ID.STATUS = ''OK'''
                  + ' AND LOC.LocationFlag NOT IN (''HOLD'',''DAMAGE'')'
                  + ' ' +  ISNULL(RTRIM(@c_Condition),'')
@@ -670,7 +721,9 @@ BEGIN
          BEGIN
            INSERT INTO #TMP_LOT (Lot, QtyAvailable)
            SELECT LOTXLOCXID.Lot
-               , SUM(LOTXLOCXID.Qty - LOTXLOCXID.QtyAllocated - LOTXLOCXID.QtyPicked - LOTXLOCXID.QtyReplen)  
+               , SUM(LOTXLOCXID.Qty - LOTXLOCXID.QtyAllocated - LOTXLOCXID.QtyPicked -
+                     CASE WHEN @c_AllocateQtyReplenFlag = 'Y' THEN 0 ELSE LOTXLOCXID.QtyReplen END --(Wan05)
+                    )
            FROM LOTXLOCXID (NOLOCK)
            JOIN LOT (NOLOCK) ON (LOTxLOCxID.Lot = LOT.Lot)
            JOIN LOC (NOLOCK) ON (LOTxLOCxID.Loc = LOC.LOC)
@@ -773,7 +826,12 @@ BEGIN
    BEGIN
       SET @c_SQL = N'DECLARE CURSOR_CANDIDATES CURSOR FAST_FORWARD READ_ONLY FOR'
                  + ' SELECT LOTxLOCxID.LOT, LOTxLOCxID.LOC,LOTxLOCxID.ID'
-                 + ' ,QTYAVAILABLE = LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QTYREPLEN'
+                 + CASE WHEN @c_AllocateQtyReplenFlag = 'Y'                         --(Wan05) - START
+                        THEN
+                   ' ,QTYAVAILABLE = LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED'
+                        ELSE
+                   ' ,QTYAVAILABLE = LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QTYREPLEN'
+                        END                                                         --(Wan05) - END
                  + ' ,''1'''
                  + ' FROM LOTxLOCxID (NOLOCK)'
                  + ' JOIN LOTATTRIBUTE (NOLOCK) ON LOTxLOCxID.Lot = LOTATTRIBUTE.Lot'
@@ -788,7 +846,12 @@ BEGIN
                  + ' WHERE LOTxLOCxID.Storerkey = @c_Storerkey'   
                  + ' AND LOTxLOCxID.Sku = @c_Sku'
                  + ' AND LOC.Facility = @c_Facility'
-                 + ' AND (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QTYREPLEN) > 0'
+                 + CASE WHEN @c_AllocateQtyReplenFlag = 'Y'                         --(Wan05) - START
+                        THEN
+                   ' AND (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED) > 0'
+                        ELSE
+                   ' AND (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QTYREPLEN) > 0'
+                        END                                                        --(Wan05) - END
                  + ' AND LOT.STATUS = ''OK'' AND LOC.STATUS = ''OK'' AND ID.STATUS = ''OK'''
                  + ' AND LOC.LocationFlag NOT IN (''HOLD'',''DAMAGE'')'
                  + ' ' + ISNULL(RTRIM(@c_Condition),'')

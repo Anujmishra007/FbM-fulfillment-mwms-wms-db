@@ -33,6 +33,7 @@ GO
 /* 2023-05-05 2.5  YeeKung  WMS-22419 Add decodeSP and V_max (yeekung04)      */
 /* 2023-11-22 2.6  YeeKung  UWP-11213 Fix Bug   (yeekung05)                   */
 /* 2023-12-03 2.7  YeeKung  UWP-11635 Fix Bug   (yeekung06)                   */
+/* 2024-12-02 3.0.0 LJQ006  FCR-1406. Created                                 */
 /******************************************************************************/
 
 CREATE OR ALTER  PROC [RDT].[rdtfnc_Pallet_Build](
@@ -113,6 +114,26 @@ DECLARE
    @nTranCount                INT,
    @cPalletNoMixOrderKey      NVARCHAR( 1),
    @nOrdCnt                   INT = 0,
+
+   @tExtScnData               VariableTable,
+   @cExtScnSP                 NVARCHAR(20),
+   @nAction                   INT,
+
+   @cLottable01 NVARCHAR( 18),   @cChkLottable01 NVARCHAR( 18),
+   @cLottable02 NVARCHAR( 18),   @cChkLottable02 NVARCHAR( 18),
+   @cLottable03 NVARCHAR( 18),   @cChkLottable03 NVARCHAR( 18),
+   @dLottable04 DATETIME,        @dChkLottable04 DATETIME,
+   @dLottable05 DATETIME,        @dChkLottable05 DATETIME,
+   @cLottable06 NVARCHAR( 30),   @cChkLottable06 NVARCHAR( 30),
+   @cLottable07 NVARCHAR( 30),   @cChkLottable07 NVARCHAR( 30),
+   @cLottable08 NVARCHAR( 30),   @cChkLottable08 NVARCHAR( 30),
+   @cLottable09 NVARCHAR( 30),   @cChkLottable09 NVARCHAR( 30),
+   @cLottable10 NVARCHAR( 30),   @cChkLottable10 NVARCHAR( 30),
+   @cLottable11 NVARCHAR( 30),   @cChkLottable11 NVARCHAR( 30),
+   @cLottable12 NVARCHAR( 30),   @cChkLottable12 NVARCHAR( 30),
+   @dLottable13 DATETIME,        @dChkLottable13 DATETIME,
+   @dLottable14 DATETIME,        @dChkLottable14 DATETIME,
+   @dLottable15 DATETIME,        @dChkLottable15 DATETIME,
    
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),
@@ -137,7 +158,18 @@ DECLARE
    @cFieldAttr09 NVARCHAR( 1), @cFieldAttr10 NVARCHAR( 1),
    @cFieldAttr11 NVARCHAR( 1), @cFieldAttr12 NVARCHAR( 1),
    @cFieldAttr13 NVARCHAR( 1), @cFieldAttr14 NVARCHAR( 1),
-   @cFieldAttr15 NVARCHAR( 1)
+   @cFieldAttr15 NVARCHAR( 1),
+
+   @cUDF01  NVARCHAR( 250), @cUDF02 NVARCHAR( 250), @cUDF03 NVARCHAR( 250),
+   @cUDF04  NVARCHAR( 250), @cUDF05 NVARCHAR( 250), @cUDF06 NVARCHAR( 250),
+   @cUDF07  NVARCHAR( 250), @cUDF08 NVARCHAR( 250), @cUDF09 NVARCHAR( 250),
+   @cUDF10  NVARCHAR( 250), @cUDF11 NVARCHAR( 250), @cUDF12 NVARCHAR( 250),
+   @cUDF13  NVARCHAR( 250), @cUDF14 NVARCHAR( 250), @cUDF15 NVARCHAR( 250),
+   @cUDF16  NVARCHAR( 250), @cUDF17 NVARCHAR( 250), @cUDF18 NVARCHAR( 250),
+   @cUDF19  NVARCHAR( 250), @cUDF20 NVARCHAR( 250), @cUDF21 NVARCHAR( 250),
+   @cUDF22  NVARCHAR( 250), @cUDF23 NVARCHAR( 250), @cUDF24 NVARCHAR( 250),
+   @cUDF25  NVARCHAR( 250), @cUDF26 NVARCHAR( 250), @cUDF27 NVARCHAR( 250),
+   @cUDF28  NVARCHAR( 250), @cUDF29 NVARCHAR( 250), @cUDF30 NVARCHAR( 250)
 
 -- Getting Mobile information
 SELECT
@@ -186,6 +218,7 @@ SELECT
    @cAutoGenDropID            = V_String27,
    @cDecodeSP                 = V_String28,
    @cDefaultLoc               = V_String29, --(yeekung02)
+   @cExtScnSP                 = V_String30,
 
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,
@@ -266,6 +299,9 @@ BEGIN
    SET @cExtendedUpdateSP = rdt.RDTGetConfig( @nFunc, 'ExtendedUpdateSP', @cStorerKey)
    IF @cExtendedUpdateSP = '0'
       SET @cExtendedUpdateSP = ''
+   SET @cExtScnSP = rdt.RDTGetConfig( @nFunc, 'ExtScnSP', @cStorerKey)
+   IF @cExtScnSP = '0'
+      SET @cExtScnSP = ''
 
    --(yeekung02)
    SET @cDefaultLoc = rdt.RDTGetConfig( @nFunc, 'DefaultLoc', @cStorerKey)
@@ -703,6 +739,14 @@ BEGIN
       SET @nScn = @nScn - 1
       SET @nStep = @nStep - 1
    END
+
+   Step_2_Jump:
+   IF @cExtScnSP <> '' AND EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
+   BEGIN
+      SET @nAction = 0
+      GOTO Step_99
+   END
+
    GOTO Quit
 
    Step_2_Fail:
@@ -1814,6 +1858,62 @@ BEGIN
 END
 GOTO Quit
 
+Step_99:
+BEGIN
+   IF @cExtScnSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
+      BEGIN
+
+         DELETE FROM @tExtScnData
+         INSERT INTO @tExtScnData (Variable, Value) VALUES    
+         ('@cDropLOC',        @cDropLOC)
+
+         EXECUTE [RDT].[rdt_ExtScnEntry] 
+         @cExtScnSP, 
+         @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorerKey, @tExtScnData ,
+         @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01 OUTPUT,  
+         @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02 OUTPUT,  
+         @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03 OUTPUT,  
+         @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04 OUTPUT,  
+         @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  @dLottable05 OUTPUT,  
+         @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  @cLottable06 OUTPUT, 
+         @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  @cLottable07 OUTPUT, 
+         @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  @cLottable08 OUTPUT, 
+         @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  @cLottable09 OUTPUT, 
+         @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  @cLottable10 OUTPUT, 
+         @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  @cLottable11 OUTPUT,
+         @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT,  @cLottable12 OUTPUT,
+         @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  @dLottable13 OUTPUT,
+         @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT,  @dLottable14 OUTPUT,
+         @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT,  @dLottable15 OUTPUT,
+         @nAction, 
+         @nScn     OUTPUT,  @nStep OUTPUT,
+         @nErrNo   OUTPUT, 
+         @cErrMsg  OUTPUT,
+         @cUDF01   OUTPUT, @cUDF02 OUTPUT, @cUDF03 OUTPUT,
+         @cUDF04   OUTPUT, @cUDF05 OUTPUT, @cUDF06 OUTPUT,
+         @cUDF07   OUTPUT, @cUDF08 OUTPUT, @cUDF09 OUTPUT,
+         @cUDF10   OUTPUT, @cUDF11 OUTPUT, @cUDF12 OUTPUT,
+         @cUDF13   OUTPUT, @cUDF14 OUTPUT, @cUDF15 OUTPUT,
+         @cUDF16   OUTPUT, @cUDF17 OUTPUT, @cUDF18 OUTPUT,
+         @cUDF19   OUTPUT, @cUDF20 OUTPUT, @cUDF21 OUTPUT,
+         @cUDF22   OUTPUT, @cUDF23 OUTPUT, @cUDF24 OUTPUT,
+         @cUDF25   OUTPUT, @cUDF26 OUTPUT, @cUDF27 OUTPUT,
+         @cUDF28   OUTPUT, @cUDF29 OUTPUT, @cUDF30 OUTPUT
+         IF @nErrNo <> 0
+            GOTO Step_99_Fail
+      END
+   END
+
+   GOTO Quit
+
+Step_99_Fail:
+   BEGIN
+      GOTO Quit
+   END
+END
+GOTO Quit
 /********************************************************************************
 Quit. Update back to I/O table, ready to be pick up by JBOSS
 ********************************************************************************/
@@ -1862,6 +1962,7 @@ BEGIN
       V_String27    = @cAutoGenDropID,
       V_String28    = @cDecodeSP,
       V_String29    = @cDefaultLoc, --(yeekung02)
+      V_String30    = @cExtScnSP,
       
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,
