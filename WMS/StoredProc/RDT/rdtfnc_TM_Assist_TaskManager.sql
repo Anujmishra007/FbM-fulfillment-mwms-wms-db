@@ -22,7 +22,7 @@ GO
 /* 2019-08-13 1.3    Ung      WMS-10166 Add case ID                        */
 /* 2019-09-27 1.4    James    WMS-10316 Add Taskdetailkey in table         */
 /*                             RDT.RDTMOBREC (james01)                     */
-/* 2025-03-24 1.5.0  JCH507   FCR-2597 Add generic decode logic            */
+/* 2025-03-24 1.5.0  JCH507   FCR-2597 Add generic decode logic to FromID  */
 /***************************************************************************/
 
 CREATE PROC [RDT].[rdtfnc_TM_Assist_TaskManager] (
