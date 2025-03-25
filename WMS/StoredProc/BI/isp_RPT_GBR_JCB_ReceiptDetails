@@ -1,0 +1,75 @@
+SET ANSI_NULLS ON
+GO
+SET QUOTED_IDENTIFIER ON
+GO
+/***************************************************************************/
+/* Stored Procedure: isp_RPT_GBR_JCB_ReceiptDetails                        */
+/* Creation Date: 30/5/2024                                                */
+/* Copyright: Maersk CE EUR                                                */
+/* Written by: MMA982                                                      */
+/*                                                                         */
+/* Purpose:                                                                */
+/*                                                                         */
+/* GitHub Version: 1.0                                                     */
+/*                                                                         */
+/* Version: 1.0                                                            */
+/*                                                                         */
+/* Data Modifications:                                                     */
+/*                                                                         */
+/* Updates:                                                                */
+/* Date         Author  Ver   Purposes                                     */
+/* 27-09-2025   TPT001  1.0   Initial reprort                              */
+/*                                                                         */
+/***************************************************************************/
+CREATE OR ALTER     
+ PROC [BI].[isp_RPT_GBR_JCB_ReceiptDetails] 
+    @Facility		NVARCHAR (30)
+   ,@Storer         NVARCHAR (30)	
+   ,@FromRecDate			datetime
+   ,@ToRecDate             DATETIME
+   ,@Container      NVARCHAR(30)
+   ,@FromDelDate        DATETIME
+   ,@ToDelDate          Datetime		
+	
+AS
+BEGIN
+	SET NOCOUNT ON
+	SET ANSI_NULLS OFF
+	SET QUOTED_IDENTIFIER OFF
+	SET CONCAT_NULL_YIELDS_NULL OFF
+
+SELECT R.ReceiptKey as ASN#
+,RD.Lottable09 as [Invoice#]
+,R.ContainerKey as [Container#]
+,RD.Sku as [SKU]
+,RD.Lottable03 as [BU]
+,SUM(RD.QtyExpected) as [Expected Qty]
+,SUM(RD.QtyReceived) as [Received Qty]
+,RD.Lottable08 as [Supplier]
+,RD.ExternPoKey as [PO#]
+FROM V_Receipt R join V_ReceiptDetail RD on R.ReceiptKey=RD.ReceiptKey
+
+WHERE R.Facility LIKE (CASE WHEN @Facility IS NULL THEN '%' ELSE @Facility END)
+AND R.StorerKey LIKE (CASE WHEN @Storer IS NULL THEN '%' ELSE @Storer END)
+AND R.ContainerKey LIKE (CASE WHEN @Container IS NULL THEN '%' ELSE @Container END)
+AND R.ReceiptDate >= (CASE WHEN @FromRecDate IS NULL THEN getdate()-14 ELSE @FromRecDate END)
+AND R.ReceiptDate <= (CASE WHEN @ToRecDate IS NULL THEN getdate()+365 ELSE @ToRecDate END)
+AND R.EffectiveDate >= (CASE WHEN @FromDelDate IS NULL THEN getdate()-14 ELSE @FromDelDate END)
+AND R.EffectiveDate <= (CASE WHEN @ToDelDate IS NULL THEN getdate()+365 ELSE @ToDelDate END)
+AND R.[Status] <> '9'
+AND R.ExternReceiptKey not like '%XDOCK%'
+
+GROUP BY 
+R.ReceiptKey
+,RD.Lottable09
+,R.ContainerKey
+,RD.Sku
+,RD.Lottable03
+,RD.Lottable08
+,RD.ExternPoKey
+
+Order by 1,2,3,4 ASC
+
+END
+
+GO
