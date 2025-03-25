@@ -31,6 +31,7 @@ BEGIN
         @n_PrevGroupNum INT = -1,
         @c_FromID NVARCHAR(18) = '',
         @c_Remarks NVARCHAR(200) = '',
+        @c_ConditionalStatementFlag NVARCHAR(2) = '',
         @c_Lottable01 NVARCHAR(18) = '',
         @c_Lottable02 NVARCHAR(18) = '',
         @c_Lottable03 NVARCHAR(18) = '',
@@ -51,7 +52,6 @@ BEGIN
         @b_SuccessLog INT = 1,
         @c_ReasonCode NVARCHAR(10),
         @c_TransferType NVARCHAR(10),
-        @c_ToLottable02 NVARCHAR(18),
         @c_WhereConditionValue NVARCHAR(MAX)='',
         @c_GroupByValue NVARCHAR(500)='',
         @c_Udf01 NVARCHAR(60),
@@ -168,6 +168,11 @@ BEGIN
        WHERE CODE = 'REMARKS'
        AND SHORT = 'VAL'
 
+        SELECT @c_ConditionalStatementFlag = Notes
+        FROM #TMP_CODELKUP
+        WHERE CODE = 'LOTLOCIDSTATUSWITHLOCFLAG'
+        AND SHORT = 'VAL'
+
        --Set default value for tansfer header if without setting.
        IF ISNULL(@c_TransferType,'') = ''
           SET @c_TransferType = 'RELOT'
@@ -177,6 +182,9 @@ BEGIN
 
        IF ISNULL(@c_WhereConditionValue,'') = ''
           SET @c_WhereConditionValue = ' 1=1 '
+
+       IF ISNULL(@c_ConditionalStatementFlag,'') = ''
+          SET @c_ConditionalStatementFlag = 'Y'
 
        SET @c_Remarks = ISNULL(CONCAT(@c_Remarks, ' ', CONVERT(NVARCHAR, GETDATE(), 120)),'')
 
@@ -217,10 +225,12 @@ BEGIN
                                 'AND LOC.Facility =''' + @c_Facility + ''' '  --if facility is not set take all facilities
                              ELSE '' END +
                              'AND LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked > 0 ' +
-                             'AND LOT.Status = ''OK'' ' +
-                             'AND LOC.Status = ''OK'' ' +
-                             'AND LOC.LocationFlag NOT IN ( ''HOLD'', ''DAMAGE'' ) ' +
-                             'AND ID.Status = ''OK'' '+
+                            CASE WHEN @c_ConditionalStatementFlag = 'Y' THEN
+                            'AND LOT.Status = ''OK'' ' +
+                            'AND LOC.Status = ''OK'' ' +
+                            'AND LOC.LocationFlag NOT IN ( ''HOLD'', ''DAMAGE'' ) ' +
+                            'AND ID.Status = ''OK'' '
+                            ELSE '' END +
                              'ORDER BY GroupNum, (LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked)'
 
        EXEC sp_ExecuteSQL @cursorQuery
