@@ -307,7 +307,7 @@ BEGIN
                   @nMobile = @nMobile,
                   @nErrNo = @nErrNo,
                   @cErrMsg = @cErrMsg,
-                  @cLine01 = cMessage01,
+                  @cLine01 = @cMessage01,
                   @cLine02 = @cMessage02,
                   @cLine03 = '',
                   @cLine04 = '',
