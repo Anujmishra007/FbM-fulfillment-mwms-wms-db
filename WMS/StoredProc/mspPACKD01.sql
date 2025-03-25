@@ -1,4 +1,4 @@
-/****** Object:  StoredProcedure [dbo].[ispPACKD01]    Script Date: 3/24/2025 8:11:58 PM ******/
+/****** Object:  StoredProcedure [dbo].[mspPACKD01]    Script Date: 3/24/2025 8:11:58 PM ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
@@ -8,7 +8,7 @@ GO
 
 
 /************************************************************************/
-/* Stored Procedure: ispPACKD01                                         */
+/* Stored Procedure: mspPACKD01                                         */
 /* Creation Date: 21-Mar-2025                                           */
 /* Copyright: Maersk                                                    */
 /* Written by: YWA059                                                   */
@@ -28,7 +28,7 @@ GO
 /* 2025-03-21  YWA059   1.0   Clear CaseId from PICKDETAIL for hillsAU  */
 /*                            When unpack by lableNo,SKU for FCR-3752   */
 /************************************************************************/
-CREATE OR ALTER          PROC [dbo].[ispPACKD01]     
+CREATE OR ALTER          PROC [dbo].[mspPACKD01]     
    @c_Action        NVARCHAR(10),
    @c_Storerkey     NVARCHAR(15),  
    @b_Success       INT      OUTPUT,
@@ -86,7 +86,7 @@ BEGIN
 			 BEGIN      
 				SELECT @n_continue = 3      
 				SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 219955
-				SELECT @c_errmsg='NSQL'+CONVERT(CHAR(6), @n_err)+': UPDATE Failed On Table PICKDETAIL. (ispPACKD01)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg), '') + ' ) '      
+				SELECT @c_errmsg='NSQL'+CONVERT(CHAR(6), @n_err)+': UPDATE Failed On Table PICKDETAIL. (mspPACKD01)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg), '') + ' ) '      
 				BREAK
 			 END  
 			 FETCH NEXT FROM CUR_PICKDETAILKEY_DELETE INTO @n_PickDetailKey
@@ -112,7 +112,7 @@ BEGIN
             COMMIT TRAN
          END
       END      
-      EXECUTE dbo.nsp_LogError @n_Err, @c_Errmsg, 'ispPACKD01'
+      EXECUTE dbo.nsp_LogError @n_Err, @c_Errmsg, 'mspPACKD01'
       RAISERROR (@c_Errmsg, 16, 1) WITH SETERROR    
       RETURN
    END
@@ -127,4 +127,4 @@ BEGIN
    END  
 END  
 
-GRANT EXECUTE ON [dbo].[ispPACKD01] TO NSQL
+GRANT EXECUTE ON [dbo].[mspPACKD01] TO NSQL
