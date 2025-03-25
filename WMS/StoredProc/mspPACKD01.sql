@@ -63,7 +63,7 @@ BEGIN
 						 AND (D.Sku = pkd.Sku OR ISNULL(D.Sku,'')='')
 						 AND D.LabelNo = pkd.CaseId )
 	   BEGIN
-		  DECLARE @n_PickDetailKey BIGINT
+		  DECLARE @n_PickDetailKey NVARCHAR(18)
 		  DECLARE CUR_PICKDETAILKEY_DELETE CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
 			 SELECT pkd.PickDetailKey
 			 FROM #DELETED D
