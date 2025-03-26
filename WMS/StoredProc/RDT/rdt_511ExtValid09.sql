@@ -104,6 +104,7 @@ AS
                IF EXISTS (SELECT 1 FROM dbo.TaskDetail (NOLOCK) 
                            WHERE FromID = @cFromID
                               AND Status IN ('0','3')
+                              AND Storerkey = @cStorerKey
                         )
                BEGIN
                   SET @nErrNo = 233305
@@ -115,8 +116,11 @@ AS
                      FROM KIT WITH (NOLOCK)
                      INNER JOIN KITDETAIL KD (nolock)
                         ON KIT.kitkey = KD.KITKey
-                     WHERE KIT.Status <> '9'
-                        AND ID = @cFromID ) > 1
+                     WHERE KIT.Facility = @cFacility
+                        AND KIT.StorerKey = @cStorerKey
+                        AND KIT.Status <> '9'
+                        AND ID = @cFromID
+                        AND KD.[Type] = 'F' ) > 1
                BEGIN
                   SET @nErrNo = 233306
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Multiple KitKey
