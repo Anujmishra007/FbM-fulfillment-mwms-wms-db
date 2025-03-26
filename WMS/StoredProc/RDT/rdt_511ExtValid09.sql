@@ -91,82 +91,82 @@ AS
 --       END --step=1
       IF @nStep = 3
       BEGIN
-         --V1.0.2 start
-         IF EXISTS (SELECT 1 FROM dbo.TaskDetail (NOLOCK) 
-                     WHERE FromID = @cFromID
-                        AND Status IN ('0','3')
-                  )
+         IF @nInputKey = 1
          BEGIN
-            SET @nErrNo = 233305
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Open Task exists
-            GOTO Quit
-         END
-
-         IF (  SELECT DISTINCT COUNT(KIT.kitkey) 
-               FROM KIT WITH (NOLOCK)
-               INNER JOIN KITDETAIL KD (nolock)
-                  ON KIT.kitkey = KD.KITKey
-               WHERE KIT.Status <> '9'
-                  AND ID = @cFromID ) > 1
-         BEGIN
-            SET @nErrNo = 233306
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Multiple KitKey
-            GOTO Quit
-         END
-         --v1.0.2 end
-
-         IF EXISTS(
-            SELECT 1 FROM codelkup (NOLOCK)
-            WHERE Listname ='CCHAINPD'
-              AND Storerkey = @cStorerkey
-              AND code = @cToLOC
-         )
-         BEGIN -- KIT
-            GOTO Quit
-         END
-         ELSE
-         BEGIN -- Normal
-            -- To loc have inventory only check max pallet
-            IF EXISTS ( SELECT 1
-                        FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
-                                JOIN dbo.LOC LOC WITH (NOLOCK) ON (LLI.LOC = LOC.LOC)
-                        WHERE LOC.Facility = @cFacility
-                          AND   LOC.Loc = @cToLOC
-                        GROUP BY LOC.LOC
-                        -- Not Empty LOC
-                        HAVING ISNULL(SUM(LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked - LLI.PendingMoveIn), 0) > 0)
-            BEGIN
-               SELECT @nMaxPallet = MaxPallet
-               FROM dbo.LOC WITH (NOLOCK)
-               WHERE Loc = @cToLOC
-                  AND Facility = @cFacility
-
-               SELECT @nCount = COUNT(DISTINCT ID)
-               FROM dbo.RFPutaway WITH (NOLOCK)
-               WHERE SuggestedLoc = @cToLOC
-
-               SELECT @nCount = @nCount + COUNT(DISTINCT LLI.Id)
-               FROM dbo.LotxLocxID LLI WITH (NOLOCK)
-                       JOIN dbo.LOC LOC WITH (NOLOCK) ON (LLI.LOC = LOC.LOC)
-               WHERE LOC.Facility = @cFacility
-                 AND   LOC.Loc = @cToLOC
-                 AND  (LLI.Qty - LLI.QtyPicked) > 0
-                 AND   LLI.Id NOT IN (
-                  SELECT DISTINCT ID
-                  FROM dbo.RFPutaway WITH (NOLOCK)
-                  WHERE SuggestedLoc = @cToLOC)
-
-               IF @nCount >= @nMaxPallet
+            IF EXISTS(
+               SELECT 1 FROM codelkup (NOLOCK)
+               WHERE Listname ='CCHAINPD'
+               AND Storerkey = @cStorerkey
+               AND code = @cToLOC
+            )
+            BEGIN -- KIT
+               --V1.0.2 start
+               IF EXISTS (SELECT 1 FROM dbo.TaskDetail (NOLOCK) 
+                           WHERE FromID = @cFromID
+                              AND Status IN ('0','3')
+                        )
                BEGIN
-                  SET @nErrNo = 233304  -- OVER MAX PALLET
+                  SET @nErrNo = 233305
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Open Task exists
                   GOTO Quit
                END
-            END
 
-         END
+               IF (  SELECT DISTINCT COUNT(KIT.kitkey) 
+                     FROM KIT WITH (NOLOCK)
+                     INNER JOIN KITDETAIL KD (nolock)
+                        ON KIT.kitkey = KD.KITKey
+                     WHERE KIT.Status <> '9'
+                        AND ID = @cFromID ) > 1
+               BEGIN
+                  SET @nErrNo = 233306
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Multiple KitKey
+                  GOTO Quit
+               END
+               --v1.0.2 end
+               
+               GOTO Quit
+            END -- Kit
+            ELSE
+            BEGIN -- Normal
+               -- To loc have inventory only check max pallet
+               IF EXISTS ( SELECT 1
+                           FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
+                                 JOIN dbo.LOC LOC WITH (NOLOCK) ON (LLI.LOC = LOC.LOC)
+                           WHERE LOC.Facility = @cFacility
+                           AND   LOC.Loc = @cToLOC
+                           GROUP BY LOC.LOC
+                           -- Not Empty LOC
+                           HAVING ISNULL(SUM(LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked - LLI.PendingMoveIn), 0) > 0)
+               BEGIN
+                  SELECT @nMaxPallet = MaxPallet
+                  FROM dbo.LOC WITH (NOLOCK)
+                  WHERE Loc = @cToLOC
+                     AND Facility = @cFacility
 
+                  SELECT @nCount = COUNT(DISTINCT ID)
+                  FROM dbo.RFPutaway WITH (NOLOCK)
+                  WHERE SuggestedLoc = @cToLOC
 
-      END
+                  SELECT @nCount = @nCount + COUNT(DISTINCT LLI.Id)
+                  FROM dbo.LotxLocxID LLI WITH (NOLOCK)
+                        JOIN dbo.LOC LOC WITH (NOLOCK) ON (LLI.LOC = LOC.LOC)
+                  WHERE LOC.Facility = @cFacility
+                  AND   LOC.Loc = @cToLOC
+                  AND  (LLI.Qty - LLI.QtyPicked) > 0
+                  AND   LLI.Id NOT IN (
+                     SELECT DISTINCT ID
+                     FROM dbo.RFPutaway WITH (NOLOCK)
+                     WHERE SuggestedLoc = @cToLOC)
+
+                  IF @nCount >= @nMaxPallet
+                  BEGIN
+                     SET @nErrNo = 233304  -- OVER MAX PALLET
+                     GOTO Quit
+                  END
+               END
+            END -- normal movement
+         END --Inputkey = 1
+      END --step3
       Quit:
    END
 GO

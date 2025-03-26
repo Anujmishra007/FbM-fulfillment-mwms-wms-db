@@ -121,7 +121,7 @@ BEGIN
                , @cErrMsg           OUTPUT      
             IF @nSuccess <> 1      
             BEGIN      
-               SET @nErrNo = 128701      
+               SET @nErrNo = 233355      
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --nspg_getkey      
                GOTO Quit      
             END
@@ -139,7 +139,7 @@ BEGIN
                   @cPriority, NULL)
             END TRY
             BEGIN CATCH
-               SET @nErrNo = 74303
+               SET @nErrNo = 233353
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- InsTaskDetFail
                GOTO Quit
             END CATCH
