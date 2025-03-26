@@ -12,6 +12,7 @@ GO
 /* Date        Rev      Author     Purposes                                      */
 /* 2025-02-14  1.0.0    JCH507     FCR-2597. Created                             */
 /* 2025-03-07  1.0.1    CYU027     FCR-2597                                      */
+/* 2025-03-26  1.0.2    JCH507     FCR-2597  FBR V2.5 update                     */
 /*********************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_511ExtValid09 (
@@ -90,6 +91,30 @@ AS
 --       END --step=1
       IF @nStep = 3
       BEGIN
+         --V1.0.2 start
+         IF EXISTS (SELECT 1 FROM dbo.TaskDetail (NOLOCK) 
+                     WHERE FromID = @cFromID
+                        AND Status IN ('0','3')
+                  )
+         BEGIN
+            SET @nErrNo = 233305
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Open Task exists
+            GOTO Quit
+         END
+
+         IF (  SELECT DISTINCT COUNT(KIT.kitkey) 
+               FROM KIT WITH (NOLOCK)
+               INNER JOIN KITDETAIL KD (nolock)
+                  ON KIT.kitkey = KD.KITKey
+               WHERE KIT.Status <> '9'
+                  AND ID = @cFromID ) > 1
+         BEGIN
+            SET @nErrNo = 233306
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Multiple KitKey
+            GOTO Quit
+         END
+         --v1.0.2 end
+
          IF EXISTS(
             SELECT 1 FROM codelkup (NOLOCK)
             WHERE Listname ='CCHAINPD'
