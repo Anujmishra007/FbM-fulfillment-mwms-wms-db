@@ -215,15 +215,17 @@ BEGIN
                   AND (ListKey = @cListKey OR TaskDetailKey = @cPendingTaskDetailKey)
                   
                --Rollback ToLoc, FinalLoc, TransitLoc of new assigned tasks
-               IF @cToLOCCat IN ('PND', 'PND_IN', 'PND_OUT') AND @cTaskStatus IN ('0', 'X','H') AND @cFinalLOC <> '' AND @cFinalLOC <> @cToLoc
+               IF @cToLOCCat IN ('PND', 'PND_IN', 'PND_OUT') AND @cTaskStatus IN ('3','X','H') AND @cFinalLOC <> '' AND @cFinalLOC <> @cToLoc
                BEGIN
                   UPDATE dbo.TaskDetail WITH (ROWLOCK)
-                  SET ToLoc = @cFinalLOC,
-                     FinalLoc = '',
-                     EditDate = GETDATE(),
-                     EditWho  = SUSER_SNAME(),
-                     TransitLoc = '',
-                     TrafficCop = NULL
+                  SET   ToLoc = @cFinalLOC,
+                        ToID = '',
+                        Listkey = '',
+                        FinalLoc = '',
+                        EditDate = GETDATE(),
+                        EditWho  = SUSER_SNAME(),
+                        TransitLoc = '',
+                        TrafficCop = NULL
                   WHERE TaskDetailKey = @cTaskdetailKey
                      AND StorerKey = @cStorerKey
                END
