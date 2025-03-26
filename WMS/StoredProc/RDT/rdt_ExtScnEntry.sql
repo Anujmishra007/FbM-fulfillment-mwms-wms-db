@@ -44,7 +44,7 @@ CREATE OR ALTER PROC [RDT].[rdt_ExtScnEntry] (
    @nAction          INT, --0 Jump Screen, 1 Validation(pass through all input fields), 2 Update, 3 Prepare output fields .....
    @nAfterScn        INT OUTPUT, @nAfterStep    INT OUTPUT, 
    @nErrNo             INT            OUTPUT, 
-   @cErrMsg            NVARCHAR( 20)  OUTPUT,
+   @cErrMsg            NVARCHAR( 1024)  OUTPUT,
    @cUDF01  NVARCHAR( 250) OUTPUT, @cUDF02 NVARCHAR( 250) OUTPUT, @cUDF03 NVARCHAR( 250) OUTPUT,
    @cUDF04  NVARCHAR( 250) OUTPUT, @cUDF05 NVARCHAR( 250) OUTPUT, @cUDF06 NVARCHAR( 250) OUTPUT,
    @cUDF07  NVARCHAR( 250) OUTPUT, @cUDF08 NVARCHAR( 250) OUTPUT, @cUDF09 NVARCHAR( 250) OUTPUT,
@@ -129,7 +129,7 @@ BEGIN
          @nAction      INT,
          @nAfterScn    INT OUTPUT, @nAfterStep    INT OUTPUT, 
          @nErrNo             INT            OUTPUT, 
-         @cErrMsg            NVARCHAR( 20)  OUTPUT,
+         @cErrMsg            NVARCHAR( 1024)  OUTPUT,
          @cUDF01  NVARCHAR( 250) OUTPUT, @cUDF02 NVARCHAR( 250) OUTPUT, @cUDF03 NVARCHAR( 250) OUTPUT,
          @cUDF04  NVARCHAR( 250) OUTPUT, @cUDF05 NVARCHAR( 250) OUTPUT, @cUDF06 NVARCHAR( 250) OUTPUT,
          @cUDF07  NVARCHAR( 250) OUTPUT, @cUDF08 NVARCHAR( 250) OUTPUT, @cUDF09 NVARCHAR( 250) OUTPUT,

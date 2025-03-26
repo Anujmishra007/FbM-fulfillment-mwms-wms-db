@@ -103,7 +103,7 @@ GO
 CREATE OR ALTER PROC [RDT].[rdtfnc_Pack] (
    @nMobile    INT,
    @nErrNo     INT           OUTPUT,
-   @cErrMsg    NVARCHAR( 20) OUTPUT
+   @cErrMsg    NVARCHAR( 1024) OUTPUT
 )
 AS
 
@@ -6162,6 +6162,18 @@ BEGIN
    BEGIN
       SET @cExtendedScreenSP = ''
    END
+
+   IF LEFT(@cExtendedScreenSP,17) = 'rdt_838Opt5ExtScn'
+   BEGIN
+      SET @cOption = @cInField09
+      IF @nScn = 6521 AND (@nInputKey = '0' OR @cOption <> '5')
+      BEGIN
+         SET @nScn = 4651
+         SET @nStep = 2
+         GOTO STEP_2
+      END
+   END
+
    IF @cExtendedScreenSP <> ''
    BEGIN
       IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
