@@ -341,13 +341,23 @@ BEGIN
          SET @n_LoopCount = @n_LoopCount - 1
       END
 
+      --If an order contain Virtual Carton > WCSConfigWaveSize
+      IF EXISTS ( SELECT 1
+                  FROM @T_ORDERS T
+                  GROUP BY T.Orderkey
+                  HAVING SUM(VCCount) > @n_WCSConfigWaveSize )
+      BEGIN
+         SELECT @n_Continue = 3
+         SELECT @n_Err = 64006
+         SELECT @c_Errmsg = N'NSQL' + CONVERT(NVARCHAR(5), @n_Err)
+                          + N': Wave contains an order greater than the configured WCS Wave Size. (msp_RCM_WV_LEVI_SplitChildWave)'
+         GOTO EXIT_SP
+      END
+
       IF @b_debug IN (1,2)
       BEGIN
          SELECT GroupNumber
               , VCCount = SUM(VCCount)
-              , Remark = IIF(SUM(VCCount) > @n_WCSConfigWaveSize, 
-                             'Virtual Carton per Wave > WCSConfigWaveSize (' + CAST(@n_WCSConfigWaveSize AS NVARCHAR) + ')', 
-                             '')
          FROM @T_ORDERS
          GROUP BY GroupNumber
       END
@@ -397,7 +407,7 @@ BEGIN
                IF @n_Err <> 0
                BEGIN
                   SELECT @n_Continue = 3
-                  SELECT @n_Err = 64006
+                  SELECT @n_Err = 64007
                   SELECT @c_Errmsg = N'NSQL' + CONVERT(NVARCHAR(5), @n_Err)
                                    + N': Failed to exec nspg_GetKey - Wavekey. (msp_RCM_WV_LEVI_SplitChildWave)'
                   GOTO EXIT_SP
@@ -480,7 +490,7 @@ BEGIN
             IF @n_Err <> 0
             BEGIN
                SELECT @n_Continue = 3
-               SELECT @n_Err = 64007
+               SELECT @n_Err = 64008
                SELECT @c_Errmsg = N'NSQL' + CONVERT(NVARCHAR(5), @n_Err)
                                 + N': Failed to Insert Wave. (msp_RCM_WV_LEVI_SplitChildWave)'
                GOTO EXIT_SP
@@ -499,7 +509,7 @@ BEGIN
             IF @n_Err <> 0
             BEGIN  
                SELECT @n_Continue = 3
-               SELECT @n_Err = 64008
+               SELECT @n_Err = 64009
                SELECT @c_Errmsg = N'NSQL' + CONVERT(NVARCHAR(5), @n_Err)
                                 + N': Failed to remove order from master Wave. (msp_RCM_WV_LEVI_SplitChildWave)'
                GOTO EXIT_SP
@@ -518,7 +528,7 @@ BEGIN
             IF @n_Err <> 0
             BEGIN  
                SELECT @n_Continue = 3
-               SELECT @n_Err = 64009
+               SELECT @n_Err = 64010
                SELECT @c_Errmsg = N'NSQL' + CONVERT(NVARCHAR(5), @n_Err)
                                 + N': Failed to exec nspg_GetKey - WavedetailKey. (msp_RCM_WV_LEVI_SplitChildWave)'
                GOTO EXIT_SP
@@ -532,7 +542,7 @@ BEGIN
                IF @n_Err <> 0
                BEGIN  
                   SELECT @n_Continue = 3
-                  SELECT @n_Err = 64010
+                  SELECT @n_Err = 64011
                   SELECT @c_Errmsg = N'NSQL' + CONVERT(NVARCHAR(5), @n_Err)
                                    + N': Failed to insert WAVEDETAIL. (msp_RCM_WV_LEVI_SplitChildWave)'
                   GOTO EXIT_SP
@@ -560,7 +570,7 @@ BEGIN
          IF @n_Err <> 0
          BEGIN  
             SELECT @n_Continue = 3
-            SELECT @n_Err = 64011
+            SELECT @n_Err = 64012
             SELECT @c_Errmsg = N'NSQL' + CONVERT(NVARCHAR(5), @n_Err)
                              + N': Failed to delete the master Wave. (msp_RCM_WV_LEVI_SplitChildWave)'
             GOTO EXIT_SP
