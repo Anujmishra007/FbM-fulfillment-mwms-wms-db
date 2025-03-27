@@ -67,6 +67,9 @@ GO
 /*                           Conveyable for Non UCC                     */
 /*                           CR V1.4 - ASTCPK Task Status as '0' if pick*/
 /*                           face                                       */
+/* 25-Mar-2025 SSA03         UWP-31693 - updated orderinfo.referenceid  */
+/*                           with Storer.SUSR5 + RunningNumber + Mod10  */
+/*                           check digit using Luhn Algorithm           */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[mspRLWAV03]
    @c_WaveKey NVARCHAR(10)
@@ -2857,16 +2860,16 @@ BEGIN
    IF @n_continue IN(1,2) 
    BEGIN 
       DECLARE @c_BOLbyConsigneeKey NVARCHAR(20) = '', 
-              @c_FacilityPrefix NVARCHAR(60) = '', 
-              @n_FieldLength INT = 0 
+              @c_Susr5Prefix NVARCHAR(60) = '',            --(SSA03)
+              @n_FieldLength INT = 8,                      --(SSA03)
+              @n_CheckDigit INT = 0                        --(SSA03)
  
       DECLARE CUR_BOLbyConsigneekey CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
          SELECT OH.ConsigneeKey, OH.Facility, MAX(ISNULL(OI.ReferenceId,''))  
          FROM dbo.ORDERS OH WITH (NOLOCK)  
          JOIN dbo.OrderInfo OI WITH (NOLOCK) ON OH.OrderKey = OI.OrderKey 
          JOIN dbo.WAVEDETAIL WD WITH (NOLOCK) ON WD.OrderKey = OH.OrderKey 
-         WHERE WD.WaveKey = @c_WaveKey  
-         AND OH.OrderGroup='30' 
+         WHERE WD.WaveKey = @c_WaveKey
          GROUP BY OH.ConsigneeKey, OH.Facility  
        
       OPEN CUR_BOLbyConsigneekey 
@@ -2877,14 +2880,14 @@ BEGIN
       BEGIN 
           IF TRIM(@c_BOLbyConsigneeKey) = '' 
           BEGIN 
-             SET @c_FacilityPrefix = '' 
-              
-             SELECT @c_FacilityPrefix = ISNULL(TRIM(CODELKUP.UDF01),'0') 
-             FROM dbo.CODELKUP (NOLOCK) 
-             WHERE CODELKUP.LISTNAME = 'LVSFAC' 
-             AND CODELKUP.Code = @c_Facility 
- 
-             SET @n_FieldLength = 10 - LEN(@c_FacilityPrefix) 
+             --(SSA03) start---
+             SET @c_Susr5Prefix = ''
+
+             SELECT @c_Susr5Prefix = ISNULL(TRIM(Storer.SUSR5),'0')
+             FROM dbo.STORER Storer (NOLOCK)
+             WHERE Storer.StorerKey = @c_Storerkey
+             AND Storer.Facility = @c_Facility
+             --(SSA03) end---
               
              EXECUTE dbo.nspg_GetKey   
                @KeyName='BOLbyCons',   
@@ -2900,14 +2903,18 @@ BEGIN
                 BREAK   
              END     
               
-             SET @c_BOLbyConsigneeKey = RIGHT(@c_FacilityPrefix + @c_BOLbyConsigneeKey, 10)  
-             DECLARE CUR_UPDATE_BOLbyConsigneekey CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
+             --(SSA03) start---
+             SET @c_BOLbyConsigneeKey = @c_Susr5Prefix + @c_BOLbyConsigneeKey
+             SET @n_CheckDigit = dbo.fnc_CalcCheckDigitLuhn_M10(RTRIM(@c_BOLbyConsigneeKey), 0)
+             SET @c_BOLbyConsigneeKey = RIGHT(@c_BOLbyConsigneeKey + CAST(@n_CheckDigit AS NVARCHAR( 1)), 17)
+             --(SSA03) end----
+
+             DECLARE CUR_UPDATE_BOLbyConsigneekey CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
              SELECT OH.OrderKey 
              FROM dbo.ORDERS OH WITH (NOLOCK)  
              JOIN dbo.OrderInfo OI WITH (NOLOCK) ON OH.OrderKey = OI.OrderKey 
              JOIN dbo.WAVEDETAIL WD WITH (NOLOCK) ON WD.OrderKey = OH.OrderKey 
-             WHERE WD.WaveKey = @c_WaveKey  
-             AND OH.OrderGroup='30' 
+             WHERE WD.WaveKey = @c_WaveKey
              AND OH.ConsigneeKey = @c_ConsigneeKey              
              AND OH.Facility = @c_Facility 
              AND (OI.ReferenceId = '' OR OI.ReferenceId IS NULL) 
