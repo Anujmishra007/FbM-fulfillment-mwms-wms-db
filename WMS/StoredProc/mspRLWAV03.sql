@@ -12,7 +12,7 @@ GO
 /*                                                                      */
 /* Called By: Wave                                                      */
 /*                                                                      */
-/* GitHub Version: 2.9                                                  */
+/* GitHub Version: 4.0                                                  */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -70,6 +70,8 @@ GO
 /* 25-Mar-2025 SSA03         UWP-31693 - updated orderinfo.referenceid  */
 /*                           with Storer.SUSR5 + RunningNumber + Mod10  */
 /*                           check digit using Luhn Algorithm           */
+/* 26-Mar-2025 WLChooi   4.0 FCR-3115/UWP-31024 Add Loadkey Validation  */
+/*                           (WL09)                                     */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[mspRLWAV03]
    @c_WaveKey NVARCHAR(10)
@@ -264,7 +266,23 @@ BEGIN
             SET @n_Err = 82000
             SET @c_Errmsg='NSQL'+CONVERT(NVARCHAR(10),@n_Err)+': This Wave was cartonized before. (mspRLWAV03)'     
             GOTO QUIT_SP  
-      END                         
+      END
+
+      --WL09 S
+      IF EXISTS ( SELECT 1
+                  FROM WAVEDETAIL WD WITH (NOLOCK)
+                  JOIN ORDERS OH WITH (NOLOCK) ON WD.OrderKey = OH.OrderKey
+                  WHERE WD.WaveKey = @c_Wavekey
+                  AND NOT EXISTS ( SELECT 1
+                                   FROM LoadPlan LP WITH (NOLOCK)
+                                   WHERE LP.Loadkey = OH.LoadKey ) )
+      BEGIN
+         SET @n_continue = 3
+         SET @n_Err = 82021
+         SET @c_Errmsg = 'NSQL' + CONVERT(NVARCHAR(10),@n_Err) + ': Missing LoadKey: Generate Load. (mspRLWAV03)'
+         GOTO QUIT_SP
+      END
+      --WL09 E                         
 
       IF NOT EXISTS(SELECT 1
                      FROM dbo.CARTONIZATION CZ (NOLOCK)
