@@ -20,6 +20,9 @@ GO
 /* 2024-12-13 1.4.0  NLT013     FCR-1755. Change the logic for Automaticaion       */ 
 /* 2024-12-13 1.4.1  NLT013     FCR-1755. Empty REQUIRED QTY for normal Pick       */ 
 /* 2025-01-15 1.4.2  NLT013     FCR-1755 Remove duplicate scanned tote             */
+/* 2025-03-11 1.5.0  NLT013     UWP-31257 Unable to Pick because                   */
+/*                              PickDetail.TaskDetailKey<>TaskDetail.TaskDetaiLKey */
+/* 2025-03-11 1.5.1  NLT013     UWP-31257 RPF taks is not mandatory for ASTCPK     */
 /***********************************************************************************/  
   
 CREATE OR ALTER PROC [RDT].[rdt_1855ExtScn01] (
@@ -945,7 +948,9 @@ BEGIN
                      UserKey = @cUserName,
                      DeviceID = @cCartID,
                      Groupkey = @cGroupKey,
-                     Status = '3'
+                     Status = '3',
+                     EditWho = @cUserName,
+                     EditDate = GETDATE()
                   WHERE StorerKey = @cStorerKey
                      AND EXISTS(SELECT 1 FROM @tTaskDetailKeyList AS TDL WHERE TaskDetail.TaskDetailKey = TDL.TaskDetailKey)
 
@@ -1640,10 +1645,32 @@ BEGIN
                      AND PD.Status <> '4'  
                   ORDER BY LOC.LogicalLocation, LOC.Loc, TD.Caseid, TD.Sku
 
+                  IF @@ROWCOUNT = 0
+                  BEGIN
+                     SELECT TOP 1 @cTaskDetailCaseID = TD.CaseID
+                     FROM dbo.TaskDetail TD WITH(NOLOCK)
+                     INNER JOIN dbo.LOC LOC WITH (NOLOCK) 
+                        ON TD.FromLoc = LOC.Loc
+                     INNER JOIN dbo.PICKDETAIL PD WITH (NOLOCK) 
+                        ON TD.StorerKey = PD.Storerkey
+                        AND TD.RefTaskKey = PD.TaskDetailKey
+                     WHERE TD.Storerkey = @cStorerKey
+                        AND TD.TaskType = 'ASTCPK'
+                        AND TD.Status = '3'
+                        AND TD.Groupkey = @cGroupkey
+                        AND TD.UserKey = @cUserName
+                        AND TD.DeviceID = @cCartID
+                        AND TD.DropID = ''
+                        AND PD.Status < @cPickConfirmStatus  
+                        AND PD.Status <> '4'  
+                     ORDER BY LOC.LogicalLocation, LOC.Loc, TD.Caseid, TD.Sku
+                  END
+
                   UPDATE dbo.TaskDetail WITH(ROWLOCK)
                   SET DropID = @cCartonId,
                      StatusMsg = '0'
                   WHERE StorerKey = @cStorerKey
+                     AND Status = '3'
                      AND CaseID = @cTaskDetailCaseID
 
                   SET @nAssignedToteQty = @nAssignedToteQty + 1
