@@ -15,3 +15,4 @@ execute rdt.rdtAddMsg 102011, 10, '102011INSPackDtlFail', 'us_english', 830
 execute rdt.rdtAddMsg 102012, 10, '102012UPDPackDtlFail', 'us_english', 830
 execute rdt.rdtAddMsg 102013, 10, '102013INSPackInfFail', 'us_english', 830
 execute rdt.rdtAddMsg 102014, 10, '102014UPDPackInfFail', 'us_english', 830
+execute rdt.rdtAddMsg 102015, 10, '102015UPD PKDtl Fail', 'us_english', 830
