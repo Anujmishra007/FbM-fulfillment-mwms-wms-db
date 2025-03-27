@@ -1,7 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[rdt].[rdt_898RcvCfm13]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [rdt].[rdt_898RcvCfm13]
-GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -11,10 +7,12 @@ GO
 /* Store procedure: rdt_898RcvCfm13                                        */
 /* Copyright      : Maersk                                                 */
 /*                                                                         */
-/* Date       Rev  Author  Purposes                                        */
-/* 2024-10-14 1.0  CYU027  FCR-759 Created.                                */
+/* Date       Rev    Author  Purposes                                      */
+/* 2024-10-14 1.0    CYU027  FCR-759 Created.                              */
+/* 2025-03-03 1.1.0  NLT013  UWP-30537 Clear PackInfo.UCCNo                */
+/*                           if it is a returned UCC                       */
 /***************************************************************************/
-CREATE PROC [RDT].[rdt_898RcvCfm13](
+CREATE OR ALTER PROC [RDT].[rdt_898RcvCfm13](
    @nFunc          INT,
    @nMobile        INT,
    @cLangCode      NVARCHAR( 3),
@@ -192,6 +190,17 @@ BEGIN
    SELECT @nErrNo = @@ERROR, @nRowCount = @@ROWCOUNT
    IF @nErrNo <> 0 OR @nRowCount <> 1
       GOTO RollBackTran
+
+   -- UWP-30537 Clear PackInfo.UCCNo of old records if it is a returned UCC
+   UPDATE PI SET
+      UCCNo = ''
+   FROM dbo.PackInfo PI WITH (ROWLOCK)
+   INNER JOIN PackDetail PD ON PI.PickSlipNo = PD.PickSlipNo AND PI.CartonNo = PD.CartonNo
+   INNER JOIN PACKHEADER PH ON PD.PickSlipNo = PH.PickSlipNo
+   INNER JOIN dbo.ORDERS ORM ON PH.StorerKey = ORM.StorerKey AND PH.OrderKey = ORM.OrderKey
+   WHERE PH.StorerKey = @cStorerKey
+      AND PI.UCCNo = @cUCC
+      AND ORM.Status = '9'
 
    GOTO Quit
 
