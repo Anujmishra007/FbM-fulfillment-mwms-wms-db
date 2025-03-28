@@ -89,15 +89,13 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV05]
    ------Loadplan Validation
    IF  (@n_Continue = 1 OR @n_Continue = 2)
    BEGIN
-      SELECT TOP 1 @c_Loadkey  = ISNULL(lpd.Loadkey,'')
-      FROM WAVE W (NOLOCK)
-      JOIN WAVEDETAIL WD(NOLOCK) ON W.Wavekey = WD.Wavekey
-      JOIN ORDERS O (NOLOCK) ON WD.Orderkey = O.Orderkey
-      LEFT OUTER JOIN LOADPLANDETAIL lpd (NOLOCK) ON lpd.Orderkey = O.Orderkey
-      WHERE W.Wavekey = @c_Wavekey
-      AND lpd.Loadkey IS NULL
-
-      IF @c_Loadkey = ''
+      IF EXISTS ( SELECT TOP 1 lpd.Loadkey
+                  FROM WAVE W (NOLOCK)
+                  JOIN WAVEDETAIL WD(NOLOCK) ON W.Wavekey = WD.Wavekey
+                  JOIN ORDERS O (NOLOCK) ON WD.Orderkey = O.Orderkey
+                  LEFT OUTER JOIN LOADPLANDETAIL lpd (NOLOCK) ON lpd.Orderkey = O.Orderkey
+                  WHERE W.Wavekey = @c_Wavekey
+                  AND lpd.Loadkey IS NULL)
       BEGIN
         SET @n_Continue = 3
         SET @n_Err = 83010
