@@ -33,6 +33,7 @@ GO
 /* 2025-03-05 1.14.0 JCH507   FCR-3356 Change WSSortTotRel Transmitlog2 data       */
 /* 2025-03-13 1.15.0 NLT013   Misupdate PickDetail as 5, because not check all     */
 /*                            PickDetails are picked, some Packinfo was missing    */
+/* 2025-03-22 1.15.1 NLT013   UWP-31481 Need check if all packdetail are generated */
 /***********************************************************************************/
 CREATE OR ALTER PROC rdt.rdt_855ExtUpd13 (
    @nMobile      INT,   
@@ -830,7 +831,10 @@ BEGIN
                         IF @nRowCount = 0
                            BREAk
 
-                        --If all Packedinfo are marked as PACKED, mark PackHeader as 9
+                        --Meet below conditions, mark PackHeader as 9
+                        --1. all packinfo marked as 'PACKED'
+                        --2. all PickDetails are finished
+                        --3. Count(PickDetail.CaseID) = Count(PackDetail.LabelNo)
                         IF (SELECT COUNT(1) FROM dbo.PackInfo WITH(NOLOCK) WHERE PickSlipNo = @cPickSlipNo)
                            =
                            (SELECT COUNT(1) FROM dbo.PackInfo WITH(NOLOCK) WHERE PickSlipNo = @cPickSlipNo AND ISNULL(CartonStatus, '') = 'PACKED')
@@ -843,6 +847,15 @@ BEGIN
                                              AND PH.PickHeaderKey = @cPickSlipNo
                                              AND PD.Status < '5'
                                            )
+                           AND (SELECT COUNT(DISTINCT LabelNo) FROM dbo.PackDetail WITH(NOLOCK) WHERE StorerKey = @cStorerkey AND PickSlipNo = @cPickSlipNo)
+                               =
+                               (SELECT COUNT(DISTINCT CaseID)
+                                 FROM dbo.PickHeader PH WITH(NOLOCK)
+                                 INNER JOIN dbo.PickDetail PD WITH(NOLOCK)
+                                    ON PH.StorerKey = PD.StorerKey
+                                    AND PH.OrderKey = PD.OrderKey
+                                 WHERE PH.StorerKey = @cStorerkey
+                                    AND PH.PickHeaderKey = @cPickSlipNo)
                         BEGIN
                            UPDATE dbo.PackHeader WITH(ROWLOCK)
                            SET Status = '9'
