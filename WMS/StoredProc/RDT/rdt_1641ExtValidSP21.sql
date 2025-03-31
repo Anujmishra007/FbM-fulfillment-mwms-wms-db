@@ -11,6 +11,7 @@ GO
 /*                                                                      */
 /* Date       Rev    Author     Purposes                                */
 /* 2024-12-02 1.0.0  LJQ006     FCR-1406 Created                        */
+/* 2025-03-24 1.1.0  Dennis     FCR-1406 Fix Bug                        */
 /************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_1641ExtValidSP21 (
@@ -49,11 +50,18 @@ BEGIN
       BEGIN
          IF EXISTS(SELECT 1 FROM dbo.DropidDetail WITH(NOLOCK) WHERE Dropid = @cDropID)
          BEGIN
-            SELECT @cUCCWaveKey = WaveKey FROM dbo.PICKDETAIL WHERE StorerKey = @cStorerKey AND DropID = @cUCCNo
-            SELECT @cDropIDWaveKey = WaveKey 
+            SELECT TOP 1 @cUCCWaveKey = O.UserDefine09 
+            FROM dbo.PICKDETAIL pd (NOLOCK)
+            INNER JOIN dbo.Orders O WITH(NOLOCK) ON O.OrderKey = pd.OrderKey
+            WHERE pd.StorerKey = @cStorerKey AND pd.DropID = @cUCCNo
+            ORDER BY pd.ADDDATE DESC
+
+            SELECT TOP 1 @cDropIDWaveKey = O.UserDefine09 
             FROM dbo.PICKDETAIL pd WITH(NOLOCK)
-            INNER JOIN dbo.DropIDDetail did ON  did.ChildID = pd.DropID
+            INNER JOIN dbo.Orders O WITH(NOLOCK) ON O.OrderKey = pd.OrderKey
+            INNER JOIN dbo.DropIDDetail did WITH(NOLOCK) ON  did.ChildID = pd.DropID
             WHERE did.Dropid = @cDropID
+
             IF @cUCCWaveKey <> @cDropIDWaveKey
             BEGIN
                SET @nErrNo = 229952
