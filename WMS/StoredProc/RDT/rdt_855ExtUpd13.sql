@@ -855,7 +855,8 @@ BEGIN
                                     ON PH.StorerKey = PD.StorerKey
                                     AND PH.OrderKey = PD.OrderKey
                                  WHERE PH.StorerKey = @cStorerkey
-                                    AND PH.PickHeaderKey = @cPickSlipNo)
+                                    AND PH.PickHeaderKey = @cPickSlipNo
+                                    AND PD.qty > 0)
                         BEGIN
                            UPDATE dbo.PackHeader WITH(ROWLOCK)
                            SET Status = '9'
