@@ -575,7 +575,7 @@ BEGIN
                   SELECT TOP 1
                      @cPickSlipNo, @nCartonNo, @cLabelNo, LabelLine, @cStorerKey, @cSKU, @nQTY, @cBatchNo, '', '', 
                      'rdt.' + SUSER_SNAME(), GETDATE(), 'rdt.' + SUSER_SNAME(), GETDATE()
-                  FROM dbo.ackDetail (NOLOCK)
+                  FROM dbo.PackDetail (NOLOCK)
                   WHERE PickSlipNo = @cPickSlipNo AND LabelNo = @cLabelNo 
 
                   IF @@ERROR <> 0
