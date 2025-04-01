@@ -1870,7 +1870,7 @@ BEGIN
          BEGIN
             IF @nScn = 6443
             BEGIN
-               IF @cUDF01 = '1' -- Got a remaining task in the New Short Screen, store the data into the I/O table
+               IF @cUDF01 = '1' -- Got a finished task in the New Short Screen, store the data into the I/O table
                BEGIN
                   SET @cSuggLOC = @cUDF02
                   SET @cSuggSKU = @cUDF03
@@ -1878,6 +1878,8 @@ BEGIN
                   SET @nSuggQTY = CAST(@cUDF05 AS INT)
                   SET @cSuggID = @cUDF06
                   SET @nTotalQty = CAST(@cUDF07 AS INT)
+                  SET @cSKUValidated = @cUDF08
+                  SET @nActQTY = CAST(@cUDF09 AS INT)
                END
             END
          END

@@ -93,7 +93,7 @@ BEGIN
          BEGIN
             IF @nStep = 5 OR (@nStep = 99 AND @nCurrentScn = 6523) -- Close DropID or Short pick
             BEGIN
-               IF @cOption IN ('1', '3') -- ENTER and close drop ID --NLT013 option = 1 is short pick, need trigger msg to WCS
+               IF @cOption IN ('1', '3', '9') -- ENTER and close drop ID --NLT013 option = 1 is short pick, need trigger msg to WCS
                BEGIN
                   -- Using drop ID, send tote to WCS
                   IF @cBarcode <> ''
