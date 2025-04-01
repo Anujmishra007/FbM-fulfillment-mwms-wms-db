@@ -1,40 +1,40 @@
-/****** Object:  StoredProcedure [RDT].[rdt_PickReallocation01]    Script Date: 3/21/2024 10:14:40 AM ******/
+/****** Object:  StoredProcedure [RDT].[rdt_PickReallo01]    Script Date: 3/21/2024 10:14:40 AM ******/
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
 /************************************************************************/
-/* Store procedure: rdt_PickReallocation01                              */
+/* Store procedure: rdt_PickReallo01                              */
 /* Copyright      : Maersk                                              */
 /* Customer       : PUMACL                                              */
 /*                                                                      */
 /* Purpose:                                                             */
 /*                                                                      */
-/* Date       Rev  Author   Purposes                                    */
-/* 2025-03-26 1.0.0 NLT013  FCR-2704 Re-allocation if short happens     */
+/* Date       Rev    Author   Purposes                                  */
+/* 2025-03-26 1.0.0  JCH507   FCR-2704 Re-allocation if short happens   */
 /*                                                                      */
 /************************************************************************/
 
-CREATE OR ALTER  PROC [RDT].[rdt_PickReallocation01] (
-   @nMobile          INT          
-   ,@nFunc           INT          
-   ,@cLangCode       NVARCHAR( 3) 
-   ,@cFacility       NVARCHAR( 5) 
-   ,@cStorerKey      NVARCHAR( 15)
-   ,@cPickSlipNo     NVARCHAR( 10)
-   ,@tAdditionalData   VariableTable READONLY
-   ,@cType           NVARCHAR( 5) --UCC/SKU
-   ,@cLOC            NVARCHAR( 10)
-   ,@cID             NVARCHAR( 18)
-   ,@cSKU            NVARCHAR( 20)
-   ,@nQTY            INT
-   ,@cLot            NVARCHAR( 10)  OUTPUT
-   ,@cPickZone       NVARCHAR( 10)  OUTPUT
-   ,@cSuggestLOC     NVARCHAR( 10)  OUTPUT
-   ,@cSuggestID      NVARCHAR( 18)  OUTPUT
-   ,@nErrNo          INT            OUTPUT
-   ,@cErrMsg         NVARCHAR(250)  OUTPUT
+CREATE OR ALTER  PROC [RDT].[rdt_PickReallo01] (
+   @nMobile             INT          
+   ,@nFunc              INT          
+   ,@cLangCode          NVARCHAR( 3) 
+   ,@cFacility          NVARCHAR( 5) 
+   ,@cStorerKey         NVARCHAR( 15)
+   ,@cPickSlipNo        NVARCHAR( 10)  OUTPUT
+   ,@tAdditionalData    VariableTable  READONLY
+   ,@cType              NVARCHAR( 5) --UCC/SKU
+   ,@cLOC               NVARCHAR( 10)
+   ,@cID                NVARCHAR( 18) = ''
+   ,@cSKU               NVARCHAR( 20)
+   ,@nQTY               INT
+   ,@cLot               NVARCHAR( 10)  OUTPUT
+   ,@cPickZone          NVARCHAR( 10)  OUTPUT
+   ,@cSuggestLOC        NVARCHAR( 10)  OUTPUT
+   ,@cSuggestID         NVARCHAR( 18)  OUTPUT
+   ,@nErrNo             INT            OUTPUT
+   ,@cErrMsg            NVARCHAR(250)  OUTPUT
 )
 AS
 BEGIN
@@ -43,134 +43,785 @@ BEGIN
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
-   DECLARE
-      @cPickZone        NVARCHAR(10),
-      @nRowCount        INT,
-      @nLoopIndex       INT,
-      @nPickDetailQty   INT,
-      @cPickDetailKey   NVARCHAR(18),
-      @cLot             NVARCHAR(10),
-      @cUCCNo           NVARCHAR(20)
+   ----------------------------------------------------------------------------------------
+   -- Coding Convention
+   -- 1. If no loc found, set ErrNo = -1, and set all resturned values to ''
+   -- 2. Can set all output values to '' based on requirement
+   -- 3. If sql error occurs when update back to pickdetail, set to the fixed errno to indicates
+   --    re-allocation is wrong. It is the expcted error. The outer SP will handle it.
+   ----------------------------------------------------------------------------------------
+   DECLARE @nDebugFlag  INT = 0 --1 print log, 2 print log and insert trace info
 
-   DECLARE @tPickDetails TABLE
+   DECLARE
+      @cSuggestPickZone    NVARCHAR(10),
+      @cSuggestPSNO        NVARCHAR(10),
+      @cPickDetailKey      NVARCHAR(18),
+      @cNewPickDetailKey   NVARCHAR(18),
+      @cLottable01         NVARCHAR(10),
+      @nPickDetailQty      INT,
+      @cTotalShortQty      INT,
+      @cWaveKey            NVARCHAR(10),
+      @cShortUCCStatus     NVARCHAR(1),
+      
+      @nBal_Qty            INT,
+      @cAllocatedQty       INT,
+      @cAllocatedUCC       NVARCHAR(20),
+      @cAllocatedLot       NVARCHAR(10),
+
+      @bSuccess            BIT,
+      @dTraceDateTime      DATETIME,
+      @nTranCount          INT,
+      @nRowCount           INT,
+      @nLoopIndex          INT
+
+   DECLARE @tShortPickDetails TABLE
    (
-      id INT IDENTITY(1,1),
-      PickDetailKey  NVARCHAR(18),
-      Qty      INT
+      RowRef            INT IDENTITY(1,1) NOT NULL,
+      PickDetailKey     NVARCHAR( 10) NOT NULL,
+      CaseID            NVARCHAR( 20) NOT NULL,
+      PickHeaderKey     NVARCHAR( 18) NOT NULL,
+      OrderKey          NVARCHAR( 10) NOT NULL,
+      OrderLineNumber   NVARCHAR( 5)  NOT NULL,
+      SKU               NVARCHAR( 20) NOT NULL, 
+      QTY               INT           NOT NULL,
+      Lot               NVARCHAR( 10) NOT NULL,
+      StorerKey         NVARCHAR( 15) NOT NULL,
+      UOM               NVARCHAR( 10) NOT NULL,
+      UOMQty            INT           NOT NULL,
+      DropID            NVARCHAR( 20) NULL,
+      Loc               NVARCHAR( 10) NOT NULL,
+      ID                NVARCHAR( 18) NULL,
+      PackKey           NVARCHAR( 10) NOT NULL,
+      CartonGroup       NVARCHAR( 10) NULL,
+      PickMethod        NVARCHAR( 1)  NOT NULL,
+      WaveKey           NVARCHAR( 10) NULL,
+      NewFlag           NVARCHAR( 1)  NULL DEFAULT 'N',
+      OldPickDetailKey  NVARCHAR( 10) NULL
    )
 
-   SELECT @cPickZone = PickZone
-   FROM dbo.LOC with(NOLOCK)
-   WHERE Facility = @cFacility
-      AND LOC = @cLOC
+    DECLARE @tAllocation TABLE
+   (
+      PickDetailKey     NVARCHAR( 10) NOT NULL,
+      CaseID            NVARCHAR( 20) NULL,
+      PickHeaderKey     NVARCHAR( 18) NOT NULL,
+      OrderKey          NVARCHAR( 10) NOT NULL,
+      OrderLineNumber   NVARCHAR( 5)  NOT NULL,
+      SKU               NVARCHAR( 20) NOT NULL, 
+      QTY               INT           NOT NULL,
+      Lot               NVARCHAR( 10) NOT NULL,
+      StorerKey         NVARCHAR( 15) NOT NULL,
+      UOM               NVARCHAR( 10) NOT NULL,
+      UOMQty            INT           NOT NULL,
+      DropID            NVARCHAR( 20) NULL,
+      Loc               NVARCHAR( 10) NOT NULL,
+      ID                NVARCHAR( 18) NULL,
+      PackKey           NVARCHAR( 10) NOT NULL,
+      CartonGroup       NVARCHAR( 10) NULL,
+      PickMethod        NVARCHAR( 1)  NOT NULL,
+      WaveKey           NVARCHAR( 10) NULL,
+      PickSlipNo        NVARCHAR( 10) NULL,
+      NewFlag           NVARCHAR( 1)  NULL DEFAULT 'N',
+      PRIMARY KEY CLUSTERED (PickDetailKey)
+   )
+
+   DECLARE @tPickZoneCandidate TABLE
+   (
+      PickZone         NVARCHAR( 10) NOT NULL,
+      PickSlipNo       NVARCHAR( 10) NOT NULL,
+      Priority         INT           NOT NULL DEFAULT 99
+   )
+
+   IF @nDebugFlag = 1
+   BEGIN
+      SELECT 'Running rdt_PickReallo01'
+   END
+
+   --General validation
+   IF @cType NOT IN ('UCC', 'SKU')
+   BEGIN
+      SET @nErrNo = 235651
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+      GOTO Quit
+   END
+
+   IF ISNULL(@cSKU, '') = ''
+   BEGIN
+      SET @nErrNo = 235652
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+      GOTO Quit
+   END
 
    IF ISNULL(@cPickZone, '') = ''
+   BEGIN
+      SET @nErrNo = 235653
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
       GOTO Quit
+   END
+
+   IF ISNULL(@cLOC, '') = ''
+   BEGIN
+      SET @nErrNo = 235654
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+      GOTO Quit
+   END
+
+   IF ISNULL(@cPickSlipNo, '') = ''
+   BEGIN
+      SET @nErrNo = 235655
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+      GOTO Quit
+   END
+
+   IF ISNULL(@cLot, '') = ''
+   BEGIN
+      SET @nErrNo = 235656
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+      GOTO Quit
+   END
+
+   INSERT INTO @tShortPickDetails ( PickDetailKey, CaseID, PickHeaderKey, OrderKey, OrderLineNumber, SKU, QTY, 
+                                    Lot, StorerKey, UOM, UOMQty, DropID, Loc, ID, PackKey, CartonGroup, 
+                                    PickMethod, WaveKey)
+   SELECT PickDetailKey, CaseID, PickHeaderKey, OrderKey, OrderLineNumber, SKU, QTY, 
+            LOT, StorerKey, UOM, UOMQTY, DropID, Loc, ID, PackKey, CartonGroup, PickMethod, WaveKey
+   FROM dbo.PickDetail WITH (NOLOCK)
+   WHERE Storerkey = @cStorerKey
+      AND PickSlipNo = @cPickSlipNo
+      AND Status = '4'
+      AND Loc = @cLOC
+      AND ID = @cID
+      AND SKU = @cSKU
+      AND Lot = @cLot
+   ORDER BY Qty DESC
+
+   IF @@ROWCOUNT = 0
+   BEGIN
+      SET @nErrNo = 235657
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --No record found
+      GOTO Quit
+   END
+
+   SELECT 
+      @cTotalShortQty = SUM(QTY),
+      @cWaveKey = WAVEKEY,
+      @cLottable01 = MAX(LA.Lottable01)
+   FROM @tShortPickDetails t
+   JOIN dbo.LOTATTRIBUTE LA
+      ON t.LOT = LA.Lot
+      AND LA.StorerKey = @cStorerKey
+   WHERE t.SKU = @cSKU
+      AND Loc = @cLOC
+      AND ID = @cID
+      AND t.Lot = @cLot
+   GROUP BY WAVEKEY, t.SKU, Loc, ID, t.Lot
+
+   IF @nDebugFlag = 1
+   BEGIN
+      SELECT 'Get short pickdetail info'
+      SELECT * FROM @tShortPickDetails
+      SELECT @cTotalShortQty AS TotalShortQty, @cWaveKey AS WaveKey, @cLottable01 AS Lottable01
+   END
+
+   -- Get all candidate pickzone for this SKU
+   -- For PUMA one wave, one pickzone only has one pickslipno
+   INSERT INTO @tPickZoneCandidate ( PickZone, PickSlipNo, Priority)
+   SELECT @cPickZone, @cPickSlipNo, 1
+   UNION ALL
+   SELECT LOC.PickZone, PD.PickSlipNo, 99
+   FROM dbo.PickDetail PD WITH (NOLOCK)
+   INNER JOIN dbo.LOC WITH (NOLOCK) 
+      ON PD.Loc = LOC.Loc
+      AND LOC.Facility = @cFacility
+   WHERE PD.StorerKey = @cStorerKey
+      AND PD.SKU = @cSKU
+      AND PD.Status = '0'
+      AND PD.Loc <> @cLOC
+      AND LOC.PickZone <> @cPickZone
+      AND ISNULL(LOC.PickZone, '') <> ''
+      AND PD.WaveKey = @cWaveKey
+      AND LOC.Facility = @cFacility
+   GROUP BY LOC.PickZone, PD.PickSlipNo
+
+   IF @nDebugFlag = 1
+   BEGIN
+      SELECT 'Get candidate pickzone'
+      SELECT * FROM @tPickZoneCandidate ORDER BY Priority, PickZone
+   END
    
    IF @cType = 'UCC'
    BEGIN
-      SELECT TOP 1 
-         @cSuggestLOC = UCC.Loc
-        ,@cSuggestID = UCC.ID
-      FROM dbo.UCC WITH(NOLOCK)
-      INNER JOIN dbo.LOC WITH(NOLOCK) ON UCC.LOC = LOC.LOC AND LOC.PickZone = @cPickZone
-      INNER JOIN LOTATTRIBUTE LA WITH(NOLOCK) ON UCC.LOT = LA.Lot
-      WHERE UCC.StorerKey = @cStorerKey
-         AND UCC.SKU = @cSKU
-         AND UCC.QTY > 0
-         AND UCC.STATUS = '1'
-         AND LA.Lottable01 = @cLottable01
-         AND UCC.Loc <> @cLOC
-      GROUP BY UCC.Loc, UCC.ID
-      HAVING SUM(UCC.QTY) >= @nQTY
-      ORDER BY UCC.Loc
-
-      SELECT @nRowCount = @@ROWCOUNT
-
-      IF @nRowCount > 0
+      IF @nDebugFlag = 1
       BEGIN
-         INSERT INTO @tPickDetails (PickDetailKey, Qty)
-         SELECT PD.PickDetailKey, Qty
-         FROM dbo.PickDetail PD WITH(ROWLOCK)
-         INNER JOIN LOTATTRIBUTE LA WITH(NOLOCK) ON PD.LOT = LA.Lot
-         WHERE PickSlipNo = @cPickSlipNo
-            AND Status = '4'
-            AND Loc = @cLoc
-            AND ID = @cID
-            AND SKU = @cSKU
-            AND LA.Lottable01 = @cLottable01
+         SELECT 'UCC Type'
+         SELECT 'Finding suggestted loc'
+      END
+      
+      --Get Candidate LLI
+      SELECT TOP 1
+         @cSuggestLOC = LLI.Loc,
+         @cSuggestID = LLI.ID,
+         @cSuggestPickZone = PZ.PickZone,
+         @cSuggestPSNO = PZ.PickSlipNo
+      FROM dbo.lotxlocxid LLI WITH (NOLOCK)
+      JOIN dbo.UCC UCC WITH (NOLOCK)
+         ON LLI.Loc = UCC.Loc
+         AND LLI.ID = UCC.ID
+         AND LLI.Lot = UCC.Lot
+         AND LLI.SKU = UCC.SKU
+         AND LLI.StorerKey = UCC.StorerKey
+         AND UCC.Status = '1'  ---- Only available UCC
+      JOIN dbo.lotattribute LA WITH (NOLOCK) 
+         ON LLI.Lot = LA.Lot
+         AND LA.StorerKey = LLI.StorerKey
+      JOIN dbo.LOC LOC WITH (NOLOCK)
+         ON LLI.Loc = LOC.Loc
+         AND LOC.Facility = @cFacility
+      JOIN @tPickZoneCandidate PZ
+         ON LOC.PickZone = PZ.PickZone
+      WHERE LLI.StorerKey = @cStorerKey
+         AND LLI.SKU = @cSKU
+         AND LLI.Loc <> @cLOC
+         AND LOC.LocationFlag = 'None'
+         AND LOC.Status = 'OK'
+         --AND SUM(LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked - LLI.QtyReplen) >= @cTotalShortQty
+         AND LA.Lottable01 = @cLottable01
+      GROUP BY LOC.Loc, LLI.Loc, LLI.ID,  PZ.Priority, PZ.PickZone, PZ.PickSlipNo
+      HAVING COUNT(UCC.ID) >= (SELECT COUNT(DropID)
+                                 FROM @tShortPickDetails
+                                 WHERE Loc = LLI.Loc) --UCC status = 1 count >= shorted UCC count
+         AND SUM(LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked - LLI.QtyReplen) >= @cTotalShortQty
+      ORDER BY PZ.Priority, PZ.PickZone, MAX(LOC.LogicalLocation), LOC.Loc;
 
-         SET @nTranCount = @@TRANCOUNT
-
-         BEGIN TRAN  -- Begin our own transaction
-         SAVE TRAN rdt_PickReallocation01_01 -- For rollback or commit only our own transaction
-
-         SET @nLoopIndex = -1
-
-         WHILE 1 = 1
-         BEGIN
-            SELECT TOP 1
-               @cPickDetailKey = PickDetailKey,
-               @nPickDetailQty = Qty,
-               @nLoopIndex = id
-            FROM @tPickDetails
-            WHERE id > @nLoopIndex
-            ORDER BY id
-
-            SELECT @nRowCount = @@ROWCOUNT
-
-            IF @nRowCount = 0
-               BREAK
-
-            SELECT TOP 1
-               @cUCCNo = UCCNo,
-               @cLot = Lot
-            FROM dbo.UCC WITH(NOLOCK)
-            WHERE Loc = @cSuggestLOC
-               AND ID = @cSuggestID
-               AND SKU = @cSKU
-               AND QTY = @nPickDetailQty
-               AND STATUS = '1'
-               AND LA.Lottable01 = @cLottable01
-            ORDER BY UCCNo
-            
-            -- Create new a PickDetail to hold the balance
-            INSERT INTO dbo.PickDetail (
-               CaseID, PickHeaderKey, OrderKey, OrderLineNumber, LOT, StorerKey, SKU, AltSKU, UOM, 
-               UOMQTY, QTYMoved, Status, DropID, LOC, ID, PackKey, UpdateSource, CartonGroup, CartonType, 
-               ToLoc, DoReplenish, ReplenishZone, DoCartonize, PickMethod, WaveKey,
-               EffectiveDate, ArchiveCop, ShipFlag, PickSlipNo, TaskDetailKey, TaskManagerReasonKey, Notes, 
-               PickDetailKey, 
-               QTY, 
-               OptimizeCop)
-            SELECT 
-               CaseID, PickHeaderKey, OrderKey, OrderLineNumber, @cLot, StorerKey, SKU, AltSku, UOM, 
-               UOMQTY, QTYMoved, '0', @cUCCNo, LOC, ID, PackKey, UpdateSource, CartonGroup, 
-               CartonType, ToLoc, DoReplenish, ReplenishZone, DoCartonize, PickMethod, WaveKey,
-               EffectiveDate, ArchiveCop, ShipFlag, PickSlipNo, TaskDetailKey, TaskManagerReasonKey, Notes, 
-               @cNewPickDetailKey, 
-               Qty,
-               '1'
-            FROM dbo.PickDetail WITH (NOLOCK) 
-            WHERE PickDetailKey = @cPickDetailKey
-
-            DELETE PD
-            FROM dbo.PickDetail PD WITH(ROWLOCK)
-            WHERE PickSlipNo = @cPickSlipNo
-               AND Status = '4'
-               AND PickDetailKey = @cPickDetailKey
-         END
-
-         RollBackTran_01:
-            ROLLBACK TRAN rdt_PickCase_Confirm -- Only rollback change made here
-         CommitTran_01:
-            WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
-               COMMIT TRAN
+      IF @@ROWCOUNT = 0
+      BEGIN
+         SET @nErrNo = -1
+         SET @cPickSlipNo = ''
+         SET @cPickZone = ''
+         SET @cLot = ''
+         SET @cSuggestLOC = ''
+         SET @cSuggestID = ''
+         SET @cErrMsg = 'Loc not found'
+         GOTO Quit
       END
 
-   END
+      IF @nDebugFlag = 1
+      BEGIN
+         SELECT 'Find suggestted loc'
+         SELECT @cSuggestLOC AS SuggestLoc, @cSuggestID AS SuggestID, @cSuggestPickZone AS SuggestPickZone, @cSuggestPSNO AS SuggestPSNO
+      END
 
-Quit:
+      --Start re-allocation
+      SET @nLoopIndex = 1
+
+      SELECT @nRowCount = COUNT(1)
+      FROM @tShortPickDetails
+
+      SET @nTranCount = @@TRANCOUNT
+
+      BEGIN TRAN  -- Begin our own transaction
+      SAVE TRAN rdt_PickReallo01_UCC -- For rollback or commit only our own transaction
+
+      WHILE @nLoopIndex <= @nRowCount
+      BEGIN
+         SELECT TOP 1
+            @cPickDetailKey = PickDetailKey,
+            @nPickDetailQty = QTY
+         FROM @tShortPickDetails
+         WHERE RowRef = @nLoopIndex
+
+         IF @nDebugFlag = 1
+         BEGIN
+            SELECT 'Handling short Pickdetail'
+            SELECT @nLoopIndex AS LoopIndex, @nRowCount AS TotalRow, @cPickDetailKey AS PickDetailKey, @nPickDetailQty AS PickDetailQty
+         END
+         
+         SELECT TOP 1
+            @cAllocatedUCC = UCCNo,
+            @cAllocatedLot = UCC.Lot
+         FROM dbo.UCC WITH(NOLOCK)
+         JOIN dbo.LOTATTRIBUTE LA WITH(NOLOCK) 
+            ON UCC.Lot = LA.Lot
+            AND UCC.StorerKey = LA.StorerKey
+         WHERE Loc = @cSuggestLOC
+            AND ID = @cSuggestID
+            AND UCC.SKU = @cSKU
+            AND QTY = @nPickDetailQty
+            AND STATUS = '1'
+            AND LA.Lottable01 = @cLottable01
+            AND NOT EXISTS (
+               SELECT 1
+               FROM @tAllocation
+               WHERE DropID = UCCNo -- UCC not in allocation temp table
+            )
+         ORDER BY UCCNo;
+
+         IF @@ROWCOUNT = 0
+         BEGIN
+            SET @nErrNo = 235658
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --No enough UCC
+            GOTO RollBack_UCC
+         END
+
+         IF @nDebugFlag = 1
+         BEGIN
+            SELECT 'Handling short Pickdetail'
+            SELECT @nLoopIndex AS LoopIndex, @nRowCount AS TotalRow, @cPickDetailKey AS PickDetailKey, @nPickDetailQty AS PickDetailQty, 
+            @cAllocatedUCC AS AllocatedUCC, @cAllocatedLot AS AllocatedLot
+         END
+         ELSE IF @nDebugFlag = 2
+         BEGIN
+            SET @dTraceDateTime = GETDATE()
+
+            EXEC isp_InsertTraceInfo      
+            @c_TraceCode = 'RDTReallocation',      
+            @c_TraceName = 'rdt_PickRello01',      
+            @c_starttime = @dTraceDateTime,      
+            @c_endtime   = NULL,
+            @c_step1 = @nFunc,      
+            @c_step2 = 'Type UCC',      
+            @c_step3 = @nLoopIndex,      
+            @c_step4 = @nRowCount,      
+            @c_step5 = @nMobile,           
+            @c_col1 = @cPickDetailKey,      
+            @c_col2 = @cSuggestLOC,      
+            @c_col3 = @cSuggestID,    
+            @c_col4 = @cAllocatedUCC,      
+            @c_col5 = '',      
+            @b_Success = 1,      
+            @n_Err = 0,      
+            @c_ErrMsg = ''
+         END
+
+         INSERT INTO @tAllocation ( PickDetailKey, CaseID, PickHeaderKey, OrderKey, OrderLineNumber, SKU, QTY, 
+            Lot, StorerKey, UOM, UOMQty, DropID, Loc, ID, PackKey, CartonGroup, PickMethod, WaveKey, PickSlipNo)
+         SELECT PickDetailKey, CaseID, PickHeaderKey, OrderKey, OrderLineNumber, SKU, QTY, 
+            @cAllocatedLot, StorerKey, UOM, UOMQty, @cAllocatedUCC, @cSuggestLOC, @cSuggestID, PackKey, CartonGroup, PickMethod, WaveKey, @cSuggestPSNO
+         FROM @tShortPickDetails 
+         WHERE PickDetailKey = @cPickDetailKey
+
+         SET @nLoopIndex += 1
+      END -- end insert @tAllocation loop
+
+      IF @nDebugFlag = 1
+      BEGIN
+         SELECT 'Allocation finished'
+         SELECT * FROM @tAllocation
+         SELECT 'Unallocate short pickdetail, short UCC'
+      END
+
+      --Handle the pysical tables based on re-allocaton result
+      -- Get short UCC status
+      SELECT TOP 1
+         @cShortUCCStatus = UCC.Status
+      FROM dbo.UCC WITH (NOLOCK)
+      JOIN @tShortPickDetails T
+         ON UCCNo = T.DropID
+         AND UCC.Storerkey = T.StorerKey
+
+      -- Unallocate short pickdetail, short UCC
+      BEGIN TRY
+         UPDATE UCC WITH (ROWLOCK)
+         SET Status = '1'
+         FROM dbo.UCC
+         JOIN @tShortPickDetails T
+            ON UCCNo = T.DropID
+            AND UCC.Storerkey = T.StorerKey
+         WHERE UCC.Status <> '1';
+      END TRY
+      BEGIN CATCH
+         SET @nErrNo = 235659
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Update UCC failed
+         GOTO RollBack_UCC
+      END CATCH
+
+      BEGIN TRY
+         UPDATE PD WITH (ROWLOCK)
+         SET PD.Status = '0',
+             PD.Qty = 0,
+             PD.EditDate = GETDATE(),
+             PD.EditWho = SUSER_SNAME()
+         FROM dbo.PickDetail PD WITH (ROWLOCK)
+         JOIN @tShortPickDetails T
+            ON PD.PickDetailKey = T.PickDetailKey
+      END TRY
+      BEGIN CATCH
+         SET @nErrNo = 235660
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Update PKD failed
+         GOTO RollBack_UCC
+      END CATCH
+
+      --reallocate new UCC to pickdetail
+      IF @nDebugFlag = 1
+      BEGIN
+         SELECT 'Reallocate new UCC to pickdetail'
+      END
+
+      BEGIN TRY
+         UPDATE UCC WITH (ROWLOCK)
+         SET Status = @cShortUCCStatus
+         FROM dbo.UCC
+         JOIN @tAllocation T
+            ON UCCNo = T.DropID
+            AND UCC.Storerkey = T.StorerKey
+      END TRY
+      BEGIN CATCH
+         SET @nErrNo = 235661
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Update UCC failed
+         GOTO RollBack_UCC
+      END CATCH
+
+      BEGIN TRY
+         UPDATE PD WITH (ROWLOCK)
+         SET PD.Status = '0',
+             PD.Qty = T.QTY,
+             PD.DropID = T.DropID,
+             PD.Loc = T.Loc,
+             PD.ID = T.ID,
+             PD.Lot = T.Lot,
+             PD.EditDate = GETDATE(),
+             PD.EditWho = SUSER_SNAME(),
+             PD.PickSlipNo = T.PickSlipNo
+         FROM dbo.PickDetail PD WITH (ROWLOCK)
+         JOIN @tAllocation T
+            ON PD.PickDetailKey = T.PickDetailKey
+      END TRY
+      BEGIN CATCH
+         SET @nErrNo = 235662
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Update PKD failed
+         GOTO RollBack_UCC
+      END CATCH
+
+      COMMIT_UCC:
+         COMMIT TRAN rdt_PickReallo01_UCC -- Only commit change made here
+
+      SET @cPickZone = @cSuggestPickZone
+      SET @cPickSlipNo = @cSuggestPSNO
+
+      GOTO Quit
+
+   END -- UCC
+
+   ELSE IF @cType = 'SKU'
+   BEGIN
+      IF @nDebugFlag = 1
+      BEGIN
+         SELECT 'SKU Type'
+         SELECT 'Finding suggestted loc'
+      END
+
+      --Get candidate LLI
+      SELECT TOP 1
+         @cSuggestLOC = LLI.Loc,
+         @cSuggestID = LLI.ID,
+         @cSuggestPickZone = PZ.PickZone,
+         @cSuggestPSNO = PZ.PickSlipNo
+      FROM dbo.lotxlocxid LLI WITH (NOLOCK)
+      JOIN dbo.lotattribute LA WITH (NOLOCK) 
+         ON LLI.Lot = LA.Lot
+         AND LA.StorerKey = LLI.StorerKey
+      JOIN dbo.LOC LOC WITH (NOLOCK)
+         ON LLI.Loc = LOC.Loc
+         AND LOC.Facility = @cFacility
+      JOIN @tPickZoneCandidate PZ
+         ON LOC.PickZone = PZ.PickZone
+      WHERE LLI.StorerKey = @cStorerKey
+         AND LOC.LocationFlag = 'None'
+         AND LOC.Status = 'OK'
+         AND LLI.SKU = @cSKU
+         AND LLI.Loc <> @cLOC
+         --AND SUM(LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked - LLI.QtyReplen) >= @cTotalShortQty
+         AND LA.Lottable01 = @cLottable01
+      GROUP BY LOC.Loc, LLI.Loc, LLI.ID,  PZ.Priority, PZ.PickZone, PZ.PickSlipNo
+      HAVING SUM(LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked - LLI.QtyReplen) >= @cTotalShortQty
+      ORDER BY PZ.Priority, PZ.PickZone, MAX(LOC.LogicalLocation), LOC.Loc;
+
+      IF @@ROWCOUNT = 0
+      BEGIN
+         SET @nErrNo = -1
+         SET @cPickSlipNo = ''
+         SET @cPickZone = ''
+         SET @cLot = ''
+         SET @cSuggestLOC = ''
+         SET @cSuggestID = ''
+         SET @cErrMsg = 'Loc not found'
+         GOTO Quit
+      END
+
+      IF @nDebugFlag = 1
+      BEGIN
+         SELECT 'Find suggestted loc'
+         SELECT @cSuggestLOC AS SuggestLoc, @cSuggestID AS SuggestID, @cSuggestPickZone AS SuggestPickZone, @cSuggestPSNO AS SuggestPSNO
+      END
+
+      -- start re-allocation
+      SET @nLoopIndex = 1
+
+      SELECT @nRowCount = COUNT(1)
+      FROM @tShortPickDetails
+
+      SET @nTranCount = @@TRANCOUNT
+
+      BEGIN TRAN  -- Begin our own transaction
+      SAVE TRAN rdt_PickReallo01_SKU -- For rollback or commit only our own transaction
+
+      --Go through short pick details
+      WHILE @nLoopIndex <= @nRowCount
+      BEGIN
+         SELECT TOP 1
+            @cPickDetailKey = PickDetailKey,
+            @nPickDetailQty = QTY
+         FROM @tShortPickDetails
+         WHERE RowRef = @nLoopIndex
+
+         IF @nDebugFlag = 1
+         BEGIN
+            SELECT 'Handling short Pickdetail'
+            SELECT @nLoopIndex AS LoopIndex, @nRowCount AS TotalRow, @cPickDetailKey AS PickDetailKey, @nPickDetailQty AS PickDetailQty
+         END
+
+         DECLARE @tAvailableLots TABLE
+         (
+            Lot            NVARCHAR(10),
+            AvailableQty   INT,
+            AllocatedQty   INT
+         )
+
+         INSERT INTO @tAvailableLots (Lot, AvailableQty, AllocatedQty)
+         SELECT 
+            LLI.Lot,
+            SUM(LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked - LLI.QtyReplen) AS AvailableQty,
+            SUM(ISNULL(t.QTY,0)) AS AllocatedQty
+         FROM dbo.lotxlocxid LLI WITH (NOLOCK)
+         JOIN dbo.LOTATTRIBUTE LA WITH (NOLOCK)
+            ON LLI.StorerKey = LA.StorerKey
+            AND LLI.Lot = LA.Lot
+         LEFT JOIN @tAllocation t
+            ON LLI.Lot = t.Lot
+         WHERE LLI.StorerKey = @cStorerKey
+            AND LLI.SKU = @cSKU
+            AND LLI.Loc = @cSuggestLOC
+            AND LLI.ID = @cSuggestID
+            AND LA.Lottable01 = @cLottable01
+            AND LLI.Lot NOT IN (SELECT Lot FROM @tAllocation)
+         GROUP BY LLI.Lot
+         HAVING SUM(LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked - LLI.QtyReplen) - SUM(ISNULL(t.QTY,0)) > 0
+         ORDER BY LLI.Lot DESC
+
+         IF @nDebugFlag = 1
+         BEGIN
+            SELECT 'Get available Lot'
+            SELECT * FROM @tAvailableLots
+         END
+
+         DECLARE @nRemainingQty INT = @nPickDetailQty
+
+         WHILE @nRemainingQty > 0
+         BEGIN
+            SELECT TOP 1
+               @cAllocatedLot = Lot,
+               @nBal_Qty = AvailableQty - AllocatedQty
+            FROM @tAvailableLots
+            WHERE AvailableQty > AllocatedQty
+            ORDER BY AvailableQty DESC
+
+            IF @nDebugFlag = 1
+            BEGIN
+               SELECT 'Remaining PKD Qty', @nRemainingQty, 'Allocating lot:', @cAllocatedLot AS Lot, @nBal_Qty AS BalQty
+            END
+
+            IF @@ROWCOUNT = 0
+            BEGIN
+               SET @nErrNo = 235663
+               SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') -- No enough lot found
+               GOTO RollBack_SKU
+            END
+
+            IF @nBal_Qty >= @nRemainingQty
+            BEGIN
+               IF @nDebugFlag = 1
+                  SELECT 'Bal_Qty >= PickDetail Qty'
+
+               INSERT INTO @tAllocation (PickDetailKey, CaseID, PickHeaderKey, OrderKey, OrderLineNumber, SKU, QTY, 
+                           Lot, StorerKey, UOM, UOMQty, DropID, Loc, ID, PackKey, CartonGroup, PickMethod, WaveKey, 
+                           PickSlipNo, NewFlag)
+               SELECT PickDetailKey, CaseID, PickHeaderKey, OrderKey, OrderLineNumber, SKU, @nRemainingQty, 
+                     @cAllocatedLot, StorerKey, UOM, UOMQty, DropID, @cSuggestLOC, @cSuggestID, PackKey, CartonGroup, PickMethod, WaveKey, 
+                     @cSuggestPSNO, NewFlag
+               FROM @tShortPickDetails
+               WHERE PickDetailKey = @cPickDetailKey
+
+               SET @nRemainingQty = 0
+            END
+            ELSE -- BalQty < ReaminingQty
+            BEGIN
+               IF @nDebugFlag = 1
+                  SELECT 'BAL_Qty < PickDetail Qty'
+
+               INSERT INTO @tAllocation (PickDetailKey, CaseID, PickHeaderKey, OrderKey, OrderLineNumber, SKU, QTY, 
+                           Lot, StorerKey, UOM, UOMQty, DropID, Loc, ID, PackKey, CartonGroup, PickMethod, WaveKey, 
+                           PickSlipNo, NewFlag)
+               SELECT PickDetailKey, CaseID, PickHeaderKey, OrderKey, OrderLineNumber, SKU, @nBal_Qty, 
+                     @cAllocatedLot, StorerKey, UOM, UOMQty, DropID, @cSuggestLOC, @cSuggestID, PackKey, CartonGroup, PickMethod, WaveKey, 
+                     @cSuggestPSNO, NewFlag
+               FROM @tShortPickDetails
+               WHERE PickDetailKey = @cPickDetailKey
+
+               --Split the original short pick detail records
+               --Update the original shor pkd qty to the allocated qty
+               UPDATE @tShortPickDetails SET Qty = @nBal_Qty WHERE PickDetailKey = @cPickDetailKey
+
+               --Insert new record to shortPickDetail to wait for the further allocation
+               EXECUTE dbo.nspg_GetKey
+                  'PICKDETAILKEY',
+                  10 ,
+                  @cNewPickDetailKey OUTPUT,
+                  @bSuccess          OUTPUT,
+                  @nErrNo            OUTPUT,
+                  @cErrMsg           OUTPUT
+
+               IF @bSuccess <> 1
+               BEGIN
+                  SET @nErrNo = 235664
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --GetKey Fail
+                  GOTO RollBack_SKU
+               END
+
+               INSERT INTO @tShortPickDetails (PickDetailKey, CaseID, PickHeaderKey, OrderKey, OrderLineNumber, SKU, QTY, 
+                                                Lot, StorerKey, UOM, UOMQty, DropID, Loc, ID, PackKey, CartonGroup, 
+                                                PickMethod, WaveKey, NewFlag, OldPickDetailKey)
+               SELECT @cNewPickDetailKey, CaseID, PickHeaderKey, OrderKey, OrderLineNumber, SKU, @nRemainingQty-@nBal_Qty, 
+                     Lot, StorerKey, UOM, UOMQty, DropID, Loc, ID, PackKey, CartonGroup, 
+                     PickMethod, WaveKey, 'Y', PickDetailKey
+               FROM @tShortPickDetails
+               WHERE PickDetailKey = @cPickDetailKey;
+
+               SET @nRemainingQty -= @nBal_Qty
+
+               IF @nDebugFlag = 1
+                  SELECT @nRemainingQty AS RemainingQty
+
+               DELETE FROM @tAvailableLots WHERE Lot = @cAllocatedLot
+               IF @nDebugFlag = 1
+               BEGIN
+                  SELECT 'Delete lot from AvailableLots table', @cAllocatedLot AS lot
+                  SELECT 'new available Lot'
+                  SELECT * FROM @tAvailableLots
+               END
+            END -- BalQty < ReaminingQty
+
+            IF @nDebugFlag = 2
+            BEGIN
+               SET @dTraceDateTime = GETDATE()
+
+               EXEC isp_InsertTraceInfo      
+               @c_TraceCode = 'RDTReallocation',      
+               @c_TraceName = 'rdt_PickRello01',      
+               @c_starttime = @dTraceDateTime,      
+               @c_endtime   = NULL,
+               @c_step1 = @nFunc,      
+               @c_step2 = 'Type SKU',      
+               @c_step3 = @nLoopIndex,      
+               @c_step4 = @nRowCount,      
+               @c_step5 = @nMobile,           
+               @c_col1 = @cPickDetailKey,      
+               @c_col2 = @cSuggestLOC,      
+               @c_col3 = @cSuggestID,    
+               @c_col4 = @cAllocatedLot,      
+               @c_col5 = '',      
+               @b_Success = 1,      
+               @n_Err = 0,      
+               @c_ErrMsg = ''
+            END
+         END --loop lot in suggestID and Suggestloc
+
+         --Get next short pick detail
+         SET @nLoopIndex += 1
+      END -- end of short pkd loop
+
+      IF @nDebugFlag = 1
+      BEGIN
+         SELECT 'Allocation finished'
+         SELECT 'ShortPickDetail'
+         SELECT * FROM @tShortPickDetails
+         SELECT 'Allocation result'
+         SELECT * FROM @tAllocation
+         SELECT 'Unallocate short pickdetail'
+      END
+
+      --Handle the pysical tables based on re-allocaton result
+      --Unallocate the 
+      BEGIN TRY
+         UPDATE PD WITH (ROWLOCK)
+         SET PD.Status = '0',
+             PD.Qty = 0,
+             PD.EditDate = GETDATE(),
+             PD.EditWho = SUSER_SNAME()
+         FROM dbo.PickDetail PD WITH (ROWLOCK)
+         JOIN @tShortPickDetails T
+            ON PD.PickDetailKey = T.PickDetailKey
+      END TRY
+      BEGIN CATCH
+         SET @nErrNo = 235665
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Update PKD failed
+         GOTO RollBack_SKU
+      END CATCH
+
+      --Reallocate the pickdetail to new LLI
+      BEGIN TRY
+         MERGE dbo.PickDetail AS target
+         USING @tAllocation AS source
+            ON target.PickDetailKey = source.PickDetailKey
+         WHEN MATCHED THEN
+            UPDATE SET 
+               target.Qty = source.QTY,
+               target.Loc = source.Loc,
+               target.ID = source.ID,
+               target.Lot = source.Lot,
+               target.PickSlipNo = source.PickSlipNo,
+               target.EditDate = GETDATE(),
+               target.EditWho = SUSER_SNAME()
+         WHEN NOT MATCHED BY TARGET THEN
+            INSERT (PickDetailKey, CaseID, PickHeaderKey, OrderKey, OrderLineNumber, SKU, Qty, 
+                  Lot, StorerKey, UOM, UOMQty, DropID, Loc, ID, PackKey, CartonGroup, 
+                  PickMethod, WaveKey, PickSlipNo, Status, EditDate, EditWho)
+            VALUES (source.PickDetailKey, source.CaseID, source.PickHeaderKey, source.OrderKey, source.OrderLineNumber, source.SKU, source.QTY, 
+                  source.Lot, source.StorerKey, source.UOM, source.UOMQty, source.DropID, source.Loc, source.ID, source.PackKey, source.CartonGroup, 
+                  source.PickMethod, source.WaveKey, source.PickSlipNo, '0', GETDATE(), SUSER_SNAME());
+      END TRY
+      BEGIN CATCH
+         SET @nErrNo = 235666
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Update PKD failed
+         GOTO RollBack_SKU
+      END CATCH
+
+      COMMIT_SKU:
+         COMMIT TRAN rdt_PickReallo01_SKU -- Only commit change made here
+
+      SET @cPickZone = @cSuggestPickZone
+      SET @cPickSlipNo = @cSuggestPSNO
+
+      GOTO Quit
+   END -- SKU
+
+
+   ROLLBACK_UCC:
+      ROLLBACK TRAN rdt_PickReallo01_UCC -- Only rollback change made here
+      GOTO Quit
+
+   ROLLBACK_SKU:
+      ROLLBACK TRAN rdt_PickReallo01_SKU -- Only rollback change made here
+      GOTO Quit
+
+   Quit:
+      IF @nDebugFlag = 1
+      BEGIN
+         SELECT 'Quit rdt_PickReallo01'
+         SELECT @nErrNo AS ErrNo, @cErrMsg AS ErrMsg, @cPickSlipNo AS PickSlipNo, @cPickZone AS PickZone, @cLot AS Lot, 
+               @cSuggestLOC AS SuggestLoc, @cSuggestID AS SuggestID
+      END
+
+      WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
+         COMMIT TRAN
 
 END
 GO
@@ -180,7 +831,7 @@ GO
 SET ANSI_NULLS ON 
 GO
 
-GRANT EXEC ON [RDT].[rdt_PickReallocation01] TO NSQL
+GRANT EXEC ON [RDT].[rdt_PickReallo01] TO NSQL
 GO
 
 
