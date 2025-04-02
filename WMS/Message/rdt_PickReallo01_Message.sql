@@ -19,5 +19,6 @@ execute rdt.rdtAddMsg 235663, 10, '235663NoLotFound',       'us_english', 957, 0
 execute rdt.rdtAddMsg 235664, 10, '235664GetPKDKeyFail',    'us_english', 957, 0, '235664: Generate PickDetailKey failed'
 execute rdt.rdtAddMsg 235665, 10, '235665UpdPKDFail',       'us_english', 957, 0, '235665: Update PickDetail failed'
 execute rdt.rdtAddMsg 235666, 10, '235665MergePKDFail',     'us_english', 957, 0, '235666: Merge to PickDetail failed'
+execute rdt.rdtAddMsg 235667, 10, '235667GetPKDKeyFail',    'us_english', 957, 0, '235667: Generate PickDetailKey failed'
 
 select * from rdt.rdtmsg (nolock) where message_id between 235651 and 235700
