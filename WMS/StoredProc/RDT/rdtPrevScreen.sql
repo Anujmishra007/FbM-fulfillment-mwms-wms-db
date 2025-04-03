@@ -45,6 +45,7 @@ GO
 /* 18-Mar-2013  Ung           SOS271056 Add DeviceID                    */
 /* 15-Aug-2016  Ung           Update rdtMobRec with EditDate            */
 /* 05-Feb-2018  James         WMS3893-Add DefaultDeviceID (james02)     */
+/* 03-Apr-2025  NLT013        UWP-32244 Extend Menu number              */
 /************************************************************************/
 CREATE PROC [RDT].[rdtPrevScreen] (
    @nMobile int,
@@ -70,7 +71,7 @@ CREATE PROC [RDT].[rdtPrevScreen] (
    BEGIN
       SET @nScn = 1
    END
-   ELSE IF @nScn Between 6 and 499 -- Menu (Screen 5, Mainmenu, do nothing)
+   ELSE IF @nScn Between 6 and 499 OR @nScn < -101 -- Menu (Screen 5, Mainmenu, do nothing)
    BEGIN
       DECLARE @nDefaultMenu int
       
@@ -99,7 +100,7 @@ CREATE PROC [RDT].[rdtPrevScreen] (
                                       WHEN '4' THEN 'Other Unit 1'
                                       WHEN '5' THEN 'Other Unit 2'
                                       WHEN '6' THEN 'Each'
---                                      ELSE 'Each' END, -- (james01)
+        --                                      ELSE 'Each' END, -- (james01)
                                       ELSE CASE DefaultUOM WHEN '1' THEN 'Pallet'
                                                            WHEN '2' THEN 'Carton'
                                                            WHEN '3' THEN 'Inner Pack'

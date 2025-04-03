@@ -49,6 +49,7 @@ GO
 /* 25-Nov-2016  James         Add menu 7-9 (james01)                          */
 /* 01-Mar-2018  James         Support multi language (james02)                */
 /* 25-Sep-2018  Ung           WMS-6410 Add field 16-20                        */
+/* 03-Apr-2025  NLT013        UWP-32244 Extend Menu number                    */
 /******************************************************************************/
 
 CREATE PROC [RDT].[rdtProcessMenu] (
@@ -143,11 +144,11 @@ AS
               EditDate = GETDATE(), 
               Scn  = @nSubMenu,
               Func = @nFunction,
-              Menu = CASE WHEN @nSubMenu between 5 and 499
+              Menu = CASE WHEN @nSubMenu between 5 and 499 OR @nSubMenu < -101
                           THEN @nSubMenu
                           ELSE ISNULL(Menu, 0)
                      END,
-              MenuStack = CASE WHEN @nSubMenu between 5 and 499
+              MenuStack = CASE WHEN @nSubMenu between 5 and 499 OR @nSubMenu < -101
                                THEN MenuStack + RIGHT( '000' + CAST( @nMenu AS NVARCHAR( 3)), 3) -- Store current menu into menu stack
                                ELSE ISNULL(MenuStack, 0)
                           END,

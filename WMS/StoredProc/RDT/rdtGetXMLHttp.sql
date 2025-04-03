@@ -11,6 +11,7 @@ GO
 /*                                                                          */
 /* Date         Ver.  Author    Purposes                                    */
 /* 20-Sep-2023  1.0   JLC042    Created base on rdtGetXML 2.0               */
+/* 03-Apr-2025  1.1.0 NLT013    UWP-32244 Extend Menu number                */
 /****************************************************************************/
 
 CREATE OR ALTER PROC RDT.rdtGetXMLHttp(
@@ -107,9 +108,9 @@ AS
 
    -- Get screen title
    DECLARE @cScnTitle NVARCHAR( 250) = ''
-   IF @nFunc BETWEEN 5 AND 499 -- Menu
+   IF @nFunc BETWEEN 5 AND 499 OR @nFunc < -101 -- Menu
       SET @cScnTitle = rdt.rdtGetMessageLong( @nFunc, @cLangCode, 'MNU')
-   ELSE -- Function, include login, store and facility, resume session
+   ELSE IF @nFunc > 499 -- Function, include login, store and facility, resume session
       SET @cScnTitle = rdt.rdtGetMessageLong( @nFunc, @cLangCode, 'FNC')
    SET @cXMLScreen += ' title="' + @cScnTitle + '"'
 
