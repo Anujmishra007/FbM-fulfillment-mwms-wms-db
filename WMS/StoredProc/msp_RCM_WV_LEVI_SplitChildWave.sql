@@ -44,7 +44,6 @@ BEGIN
          , @c_GetWavekey            NVARCHAR(10) = ''
          , @c_Orderkey              NVARCHAR(10) = ''
          , @c_Wavedetailkey         NVARCHAR(10) = ''
-         , @c_MasterWavekey         NVARCHAR(10) = ''
          , @c_OrderkeyList          NVARCHAR(MAX)= ''
          , @n_VCCount               INT = 0
          , @n_WCSConfigWaveSize     INT = 0
@@ -459,14 +458,6 @@ BEGIN
 
       WHILE @@FETCH_STATUS <> -1
       BEGIN
-         SET @c_MasterWavekey = @c_Wavekey
-
-         --Manual Wave or MPOC Wave
-         IF ISNULL(@c_WaveUDF09, '') <> 'Y' OR @n_MPOCReqFlag = 1
-         BEGIN
-            SET @c_MasterWavekey = ''
-         END
-
          --Insert Wave header
          IF NOT EXISTS ( SELECT 1
                          FROM WAVE WITH (NOLOCK)
@@ -481,7 +472,7 @@ BEGIN
             SELECT @c_GetWavekey, WaveType, Descr, DispatchPalletPickMethod, DispatchCasePickMethod
                  , DispatchPiecePickMethod, [Status], WaveGenloadflag, GenDynamicPickSlipCode, Strategykey
                  , UserDefine01, UserDefine02, UserDefine03, UserDefine04, UserDefine05, UserDefine06, UserDefine07
-                 , @c_MasterWavekey, UserDefine09, UserDefine10, LoadplanGroup, MBOLGroupMethod, BatchNo, TMSStatus
+                 , WaveKey, UserDefine09, UserDefine10, LoadplanGroup, MBOLGroupMethod, BatchNo, TMSStatus
                  , DoorBookStatus, ReplenishStatus, TMReleaseFlag
             FROM WAVE WITH (NOLOCK)
             WHERE WaveKey = @c_Wavekey
