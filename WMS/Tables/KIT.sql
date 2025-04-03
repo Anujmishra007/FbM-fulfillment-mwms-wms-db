@@ -39,8 +39,8 @@ BEGIN
     [USRDEF11] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_KIT_USRDEF11] DEFAULT (''),
     [USRDEF12] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_KIT_USRDEF12] DEFAULT (''),
     [USRDEF13] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_KIT_USRDEF13] DEFAULT (''),
-    [USRDEF14] [datetime] NULL CONSTRAINT [DF_KIT_USRDEF14] DEFAULT (getdate()),
-    [USRDEF15] [datetime] NULL CONSTRAINT [DF_KIT_USRDEF15] DEFAULT (getdate())
+    [USRDEF14] [datetime] NULL,
+    [USRDEF15] [datetime] NULL
     ) ON [PRIMARY]
 
     ALTER TABLE [dbo].[KIT] ADD CONSTRAINT [PK_KIT] PRIMARY KEY CLUSTERED ([KITKey]) WITH (FILLFACTOR=90) ON [PRIMARY]
@@ -157,7 +157,7 @@ BEGIN
                    FROM sys.columns
                    WHERE Name = 'USRDEF14' AND Object_ID = Object_ID('KIT'))
     BEGIN
-        ALTER TABLE KIT ADD USRDEF14 DATETIME NULL CONSTRAINT [DF_KIT_USRDEF14]  DEFAULT (getdate());
+        ALTER TABLE KIT ADD USRDEF14 DATETIME;
         EXEC sp_addextendedproperty N'MS_Description', N'USRDEF14', 'SCHEMA', N'dbo', 'TABLE', N'KIT', 'COLUMN', N'USRDEF14'
     END
 
@@ -165,7 +165,7 @@ BEGIN
                    FROM sys.columns
                    WHERE Name = 'USRDEF15' AND Object_ID = Object_ID('KIT'))
     BEGIN
-        ALTER TABLE KIT ADD USRDEF15 DATETIME NULL CONSTRAINT [DF_KIT_USRDEF15]  DEFAULT (getdate());
+        ALTER TABLE KIT ADD USRDEF15 DATETIME;
         EXEC sp_addextendedproperty N'MS_Description', N'USRDEF15', 'SCHEMA', N'dbo', 'TABLE', N'KIT', 'COLUMN', N'USRDEF15'
     END
 END
