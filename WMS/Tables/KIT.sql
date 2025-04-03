@@ -39,8 +39,8 @@ BEGIN
     [USRDEF11] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_KIT_USRDEF11] DEFAULT (''),
     [USRDEF12] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_KIT_USRDEF12] DEFAULT (''),
     [USRDEF13] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_KIT_USRDEF13] DEFAULT (''),
-    [USRDEF14] [datetime] NULL CONSTRAINT [DF_KIT_USRDEF14] DEFAULT (''),
-    [USRDEF15] [datetime] NULL CONSTRAINT [DF_KIT_USRDEF15] DEFAULT ('')
+    [USRDEF14] [datetime] NULL CONSTRAINT [DF_KIT_USRDEF14] DEFAULT (getdate()),
+    [USRDEF15] [datetime] NULL CONSTRAINT [DF_KIT_USRDEF15] DEFAULT (getdate())
     ) ON [PRIMARY]
 
     ALTER TABLE [dbo].[KIT] ADD CONSTRAINT [PK_KIT] PRIMARY KEY CLUSTERED ([KITKey]) WITH (FILLFACTOR=90) ON [PRIMARY]
@@ -125,7 +125,7 @@ BEGIN
                    FROM sys.columns
                    WHERE Name = 'USRDEF10' AND Object_ID = Object_ID('KIT'))
     BEGIN
-        ALTER TABLE KIT ADD USRDEF10 NVARCHAR(30) NOT NULL CONSTRAINT [DF_KIT_USRDEF10]  DEFAULT (' ');
+        ALTER TABLE KIT ADD USRDEF10 NVARCHAR(30) NULL CONSTRAINT [DF_KIT_USRDEF10]  DEFAULT (' ');
         EXEC sp_addextendedproperty N'MS_Description', N'USRDEF10', 'SCHEMA', N'dbo', 'TABLE', N'KIT', 'COLUMN', N'USRDEF10'
     END
 
@@ -133,7 +133,7 @@ BEGIN
                    FROM sys.columns
                    WHERE Name = 'USRDEF11' AND Object_ID = Object_ID('KIT'))
     BEGIN
-        ALTER TABLE KIT ADD USRDEF11 NVARCHAR(30) NOT NULL CONSTRAINT [DF_KIT_USRDEF11]  DEFAULT (' ');
+        ALTER TABLE KIT ADD USRDEF11 NVARCHAR(30) NULL CONSTRAINT [DF_KIT_USRDEF11]  DEFAULT (' ');
         EXEC sp_addextendedproperty N'MS_Description', N'USRDEF11', 'SCHEMA', N'dbo', 'TABLE', N'KIT', 'COLUMN', N'USRDEF11'
     END
 
@@ -141,7 +141,7 @@ BEGIN
                    FROM sys.columns
                    WHERE Name = 'USRDEF12' AND Object_ID = Object_ID('KIT'))
     BEGIN
-        ALTER TABLE KIT ADD USRDEF12 NVARCHAR(30) NOT NULL CONSTRAINT [DF_KIT_USRDEF12]  DEFAULT (' ');
+        ALTER TABLE KIT ADD USRDEF12 NVARCHAR(30) NULL CONSTRAINT [DF_KIT_USRDEF12]  DEFAULT (' ');
         EXEC sp_addextendedproperty N'MS_Description', N'USRDEF12', 'SCHEMA', N'dbo', 'TABLE', N'KIT', 'COLUMN', N'USRDEF12'
     END
 
@@ -149,7 +149,7 @@ BEGIN
                    FROM sys.columns
                    WHERE Name = 'USRDEF13' AND Object_ID = Object_ID('KIT'))
     BEGIN
-        ALTER TABLE KIT ADD USRDEF13 NVARCHAR(30) NOT NULL CONSTRAINT [DF_KIT_USRDEF13]  DEFAULT (' ');
+        ALTER TABLE KIT ADD USRDEF13 NVARCHAR(30) NULL CONSTRAINT [DF_KIT_USRDEF13]  DEFAULT (' ');
         EXEC sp_addextendedproperty N'MS_Description', N'USRDEF13', 'SCHEMA', N'dbo', 'TABLE', N'KIT', 'COLUMN', N'USRDEF13'
     END
 
@@ -157,7 +157,7 @@ BEGIN
                    FROM sys.columns
                    WHERE Name = 'USRDEF14' AND Object_ID = Object_ID('KIT'))
     BEGIN
-        ALTER TABLE KIT ADD USRDEF14 NVARCHAR(30) NOT NULL CONSTRAINT [DF_KIT_USRDEF14]  DEFAULT (' ');
+        ALTER TABLE KIT ADD USRDEF14 DATETIME NULL CONSTRAINT [DF_KIT_USRDEF14]  DEFAULT (getdate());
         EXEC sp_addextendedproperty N'MS_Description', N'USRDEF14', 'SCHEMA', N'dbo', 'TABLE', N'KIT', 'COLUMN', N'USRDEF14'
     END
 
@@ -165,7 +165,7 @@ BEGIN
                    FROM sys.columns
                    WHERE Name = 'USRDEF15' AND Object_ID = Object_ID('KIT'))
     BEGIN
-        ALTER TABLE KIT ADD USRDEF15 NVARCHAR(30) NOT NULL CONSTRAINT [DF_KIT_USRDEF15]  DEFAULT (' ');
+        ALTER TABLE KIT ADD USRDEF15 DATETIME NULL CONSTRAINT [DF_KIT_USRDEF15]  DEFAULT (getdate());
         EXEC sp_addextendedproperty N'MS_Description', N'USRDEF15', 'SCHEMA', N'dbo', 'TABLE', N'KIT', 'COLUMN', N'USRDEF15'
     END
 END
