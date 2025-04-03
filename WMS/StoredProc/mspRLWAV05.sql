@@ -19,7 +19,11 @@ GO
 /* Data Modifications:                                                   */    
 /*                                                                       */    
 /* Updates:                                                              */    
-/* Date        Author   Ver   Purposes                                   */
+/* Date           Author    Ver   Purposes                               */
+/* 03-Apr-2025    SSA01     1.1   UWP-30435 - updated ToID mapping in the*/
+/*                                Replenishment cursor and  removed      */
+/*                                extrnorderkey and consigneeekey as     */
+/*                                we need only loadkey level validation  */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV05]
   @c_Wavekey      NVARCHAR(10)
@@ -102,7 +106,7 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV05]
         SET @c_Errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_Err)+': Loadplan has not generated yet. (mspRLWAV05)'
       END
    END
- 
+   --(SSA01) start -----
    IF  (@n_Continue = 1 OR @n_Continue = 2)
    BEGIN 
       IF EXISTS ( SELECT TOP 1 1
@@ -110,8 +114,6 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV05]
                   JOIN WAVEDETAIL WD(NOLOCK) ON W.Wavekey = WD.Wavekey
                   JOIN LOADPLANDETAIL lpd (NOLOCK) ON lpd.Orderkey = WD.Orderkey
                   LEFT OUTER JOIN LoadPlanLaneDetail lpld (NOLOCK) ON  lpld.LoadKey = lpd.LoadKey
-                                                                   AND lpld.ExternOrderKey = lpd.ExternOrderKey
-                                                                   AND lpld.ConsigneeKey = lpd.ConsigneeKey
                                                                    AND lpld.LP_LaneNumber > ''
                                                                    AND lpld.LocationCategory = 'STAGING'
                                                                    AND lpld.Loc> ''
@@ -125,7 +127,7 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV05]
                       +': Order has not assigned any Outbound Staging yet. (mspRLWAV05)'
       END
    END
- 
+   --(SSA01) end -----
    --Create pickdetail Work in progress temporary table
    IF @n_Continue = 1 OR @n_Continue = 2
    BEGIN
@@ -237,7 +239,7 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV05]
             ,rpl.Fromloc
             ,rpl.Toloc
             ,rpl.ID
-            ,rpl.DropID
+            ,rpl.ToId       --(SSA01)
             ,rpl.UOM
             ,rpl.Qty
       FROM REPLENISHMENT rpl (NOLOCK)
@@ -369,7 +371,6 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV05]
                                                 AND lpld.ConsigneeKey = lpd.ConsigneeKey
                                                 AND lpld.LP_LaneNumber > ''
          WHERE lpd.Loadkey = @c_Loadkey
-         --AND   lpd.Orderkey= @c_Orderkey
          AND   lpld.LocationCategory = 'STAGING'
  
          IF @c_ToLoc = ''
