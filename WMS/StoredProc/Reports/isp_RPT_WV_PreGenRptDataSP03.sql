@@ -26,7 +26,7 @@ GO
 /* 24-JAN-2025 CSCHONG 1.2   UWP-28026 sort by sku, loc (CS02)           */      
 /*************************************************************************/        
         
-CREATE     PROC [dbo].[isp_RPT_WV_PreGenRptDataSP03]        
+CREATE  OR ALTER   PROC [dbo].[isp_RPT_WV_PreGenRptDataSP03]        
 (        
    @c_Wavekey               NVARCHAR(10)          
  , @c_PickslipType          NVARCHAR(10)  = 'LB'  --Discrete('8', '3', 'D')  Conso('5','6','7','9','C')  Xdock ('XD','LB','LP')        
@@ -364,7 +364,7 @@ BEGIN
             SELECT @n_Continue = 3        
             SELECT @c_ErrMsg = CONVERT(NVARCHAR(250), @n_Err)        
                  , @n_Err = 83500 -- Should Be Set To The SQL Errmessage but I don't know how to do so.          
-            SELECT @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5), @n_Err) + ': Insert PICKHEADER Failed (isp_RPT_WV_PreGenRptDataSP01)'        
+            SELECT @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5), @n_Err) + ': Insert PICKHEADER Failed (isp_RPT_WV_PreGenRptDataSP03)'        
           + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_ErrMsg) + ' ) '        
             GOTO QUIT_SP        
          END        
@@ -381,7 +381,7 @@ BEGIN
             SET @n_continue = 3        
             SET @n_err = 83501        
             SET @c_errmsg = N'NSQL' + CONVERT(NVARCHAR(5), @n_err)        
-                            + N': Update Failed On Table Pickheader Table. (isp_RPT_WV_PreGenRptDataSP01)' + N' ( '        
+                            + N': Update Failed On Table Pickheader Table. (isp_RPT_WV_PreGenRptDataSP03)' + N' ( '        
                             + N' SQLSvr MESSAGE=' + LTRIM(RTRIM(@c_errmsg)) + N' ) '        
             GOTO QUIT_SP        
          END        
@@ -453,7 +453,7 @@ BEGIN
                SELECT @c_ErrMsg = CONVERT(NVARCHAR(250), @n_Err)        
                     , @n_Err = 83505 -- Should Be Set To The SQL Errmessage but I don't know how to do so.          
                SELECT @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5), @n_Err)        
-                                  + ': Update PICKDETAIL Failed (isp_RPT_WV_PreGenRptDataSP01)' + ' ( ' + ' SQLSvr MESSAGE='        
+                                  + ': Update PICKDETAIL Failed (isp_RPT_WV_PreGenRptDataSP03)' + ' ( ' + ' SQLSvr MESSAGE='        
                                   + RTRIM(@c_ErrMsg) + ' ) '        
                GOTO QUIT_SP        
             END        
@@ -490,7 +490,7 @@ BEGIN
                SELECT @c_ErrMsg = CONVERT(NVARCHAR(250), @n_Err)        
                     , @n_Err = 83510 -- Should Be Set To The SQL Errmessage but I don't know how to do so.          
                SELECT @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5), @n_Err)        
-                                  + ': Insert RefKeyLookUp Table Failed (isp_RPT_WV_PreGenRptDataSP01)' + ' ( ' + ' SQLSvr MESSAGE='        
+                                  + ': Insert RefKeyLookUp Table Failed (isp_RPT_WV_PreGenRptDataSP03)' + ' ( ' + ' SQLSvr MESSAGE='        
                                   + RTRIM(@c_ErrMsg) + ' ) '        
                GOTO QUIT_SP        
             END        
@@ -512,7 +512,7 @@ BEGIN
                SELECT @c_ErrMsg = CONVERT(NVARCHAR(250), @n_Err)        
                     , @n_Err = 83515 -- Should Be Set To The SQL Errmessage but I don't know how to do so.          
                SELECT @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5), @n_Err)        
-                                  + ': Update RefKeyLookUp Table Failed (isp_RPT_WV_PreGenRptDataSP01)' + ' ( ' + ' SQLSvr MESSAGE='        
+                                  + ': Update RefKeyLookUp Table Failed (isp_RPT_WV_PreGenRptDataSP03)' + ' ( ' + ' SQLSvr MESSAGE='        
                                   + RTRIM(@c_ErrMsg) + ' ) '        
                GOTO QUIT_SP        
             END        
@@ -539,7 +539,7 @@ BEGIN
                SELECT @c_ErrMsg = CONVERT(NVARCHAR(250), @n_Err)        
                     , @n_Err = 83520 -- Should Be Set To The SQL Errmessage but I don't know how to do so.          
                SELECT @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5), @n_Err)        
-                                  + ': Insert RefKeyLookUp Table Failed (isp_RPT_WV_PreGenRptDataSP01)' + ' ( ' + ' SQLSvr MESSAGE='        
+                                  + ': Insert RefKeyLookUp Table Failed (isp_RPT_WV_PreGenRptDataSP03)' + ' ( ' + ' SQLSvr MESSAGE='        
                                   + RTRIM(@c_ErrMsg) + ' ) '        
                GOTO QUIT_SP        
             END        
@@ -562,7 +562,7 @@ BEGIN
                SELECT @c_ErrMsg = CONVERT(NVARCHAR(250), @n_Err)        
                     , @n_Err = 83525 -- Should Be Set To The SQL Errmessage but I don't know how to do so.          
                SELECT @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5), @n_Err)        
-                                  + ': Update RefKeyLookUp Table Failed (isp_RPT_WV_PreGenRptDataSP01)' + ' ( ' + ' SQLSvr MESSAGE='        
+                                  + ': Update RefKeyLookUp Table Failed (isp_RPT_WV_PreGenRptDataSP03)' + ' ( ' + ' SQLSvr MESSAGE='        
                                   + RTRIM(@c_ErrMsg) + ' ) '        
                GOTO QUIT_SP        
             END        
@@ -592,7 +592,7 @@ BEGIN
                SELECT @c_ErrMsg = CONVERT(NVARCHAR(250), @n_Err)        
                     , @n_Err = 83530 -- Should Be Set To The SQL Errmessage but I don't know how to do so.          
                SELECT @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5), @n_Err)        
-                                  + ': Insert RefKeyLookUp Table Failed (isp_RPT_WV_PreGenRptDataSP01)' + ' ( ' + ' SQLSvr MESSAGE='        
+                                  + ': Insert RefKeyLookUp Table Failed (isp_RPT_WV_PreGenRptDataSP03)' + ' ( ' + ' SQLSvr MESSAGE='        
                                   + RTRIM(@c_ErrMsg) + ' ) '        
                GOTO QUIT_SP        
             END        
@@ -616,7 +616,7 @@ BEGIN
                SELECT @c_ErrMsg = CONVERT(NVARCHAR(250), @n_Err)        
                     , @n_Err = 83535 -- Should Be Set To The SQL Errmessage but I don't know how to do so.          
                SELECT @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5), @n_Err)        
-                                  + ': Update RefKeyLookUp Table Failed (isp_RPT_WV_PreGenRptDataSP01)' + ' ( ' + ' SQLSvr MESSAGE='        
+                                  + ': Update RefKeyLookUp Table Failed (isp_RPT_WV_PreGenRptDataSP03)' + ' ( ' + ' SQLSvr MESSAGE='        
                                   + RTRIM(@c_ErrMsg) + ' ) '        
                GOTO QUIT_SP        
             END        
@@ -639,7 +639,7 @@ BEGIN
                SELECT @c_ErrMsg = CONVERT(NVARCHAR(250), @n_Err)        
                     , @n_Err = 83540 -- Should Be Set To The SQL Errmessage but I don't know how to do so.          
                SELECT @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5), @n_Err)        
-                                  + ': Insert PickingInfo Table Failed (isp_RPT_WV_PreGenRptDataSP01)' + ' ( ' + ' SQLSvr MESSAGE='        
+                                  + ': Insert PickingInfo Table Failed (isp_RPT_WV_PreGenRptDataSP03)' + ' ( ' + ' SQLSvr MESSAGE='        
                                   + RTRIM(@c_ErrMsg) + ' ) '        
                GOTO QUIT_SP        
             END        
