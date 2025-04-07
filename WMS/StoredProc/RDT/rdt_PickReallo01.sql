@@ -235,19 +235,31 @@ BEGIN
    SELECT @cPickZone, @cPickSlipNo, 1
    UNION ALL
    SELECT LOC.PickZone, PD.PickSlipNo, 99
-   FROM dbo.PickDetail PD WITH (NOLOCK)
-   INNER JOIN dbo.LOC WITH (NOLOCK) 
-      ON PD.Loc = LOC.Loc
-      AND LOC.Facility = @cFacility
-   WHERE PD.StorerKey = @cStorerKey
-      AND PD.SKU = @cSKU
-      AND PD.Status = '0'
-      AND PD.Loc <> @cLOC
-      AND LOC.PickZone <> @cPickZone
-      AND ISNULL(LOC.PickZone, '') <> ''
-      AND PD.WaveKey = @cWaveKey
-      AND LOC.Facility = @cFacility
-   GROUP BY LOC.PickZone, PD.PickSlipNo
+      FROM dbo.PickDetail PD WITH (NOLOCK)
+      INNER JOIN dbo.LOC WITH (NOLOCK) 
+         ON PD.Loc = LOC.Loc
+         AND LOC.Facility = @cFacility
+      INNER JOIN dbo.PickHeader PH WITH (NOLOCK)
+         ON PD.PickSlipNo = PH.PickHeaderKey
+         AND PD.Storerkey = PH.StorerKey
+      INNER JOIN dbo.LoadPlan LP WITH (NOLOCK)
+         ON PH.LoadKey = LP.LoadKey 
+      INNER JOIN dbo.LoadPlanDetail LPD WITH (NOLOCK)
+         ON LP.LoadKey = LPD.LoadKey
+      WHERE PD.StorerKey = @cStorerKey
+         AND PD.SKU = @cSKU
+         AND PD.Status = '0'
+         AND PD.Loc <> @cLOC
+         AND LOC.PickZone <> @cPickZone
+         AND ISNULL(LOC.PickZone, '') <> ''
+         AND PD.WaveKey = @cWaveKey
+         AND LOC.Facility = @cFacility
+         AND EXISTS (
+            SELECT 1
+            FROM @tShortPickDetails TSPD
+            WHERE TSPD.OrderKey = LPD.OrderKey
+         )
+      GROUP BY LOC.PickZone, PD.PickSlipNo
 
    IF @nDebugFlag = 1
    BEGIN
