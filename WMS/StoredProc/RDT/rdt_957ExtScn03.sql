@@ -97,19 +97,24 @@ BEGIN
       @cBarcode               NVARCHAR(60),
       @cLottableCode          NVARCHAR(30),
       @cSKUDescr              NVARCHAR( 60),
+      @cUserKey               NVARCHAR( 128),
+      @cSKUValidated          NVARCHAR( 2),
       @nActQTY                INT,
       @nSuggQTY               INT,
       @cExtendedUpdateSP      NVARCHAR(20),
       @cExtendedScreenSP      NVARCHAR( 20),
       @nGetTaskSuccess        INT = 0,
-      @nTotalQty              INT
+      @nTotalQty              INT,
+      @nTranCount             INT,
+      @nInnerErrorNo          INT
 
    SET @nNextStep = @nStep
 
    SELECT 
       @nStep = Step,
       @nCurrentStep = Step,
-      @nCurrentScn = Scn
+      @nCurrentScn = Scn,
+      @cUserKey = UserName
    FROM rdt.RDTMOBREC WHERE Mobile = @nMobile  
 
    SELECT @cSuggSKU     = Value FROM @tExtScnData WHERE Variable = '@cSuggSKU'
@@ -123,6 +128,8 @@ BEGIN
    SELECT @cExtendedUpdateSP     = Value FROM @tExtScnData WHERE Variable = '@cExtendedUpdateSP'
    SELECT @nActQTY     = CAST(Value AS INT) FROM @tExtScnData WHERE Variable = '@nActQTY'
    SELECT @nSuggQTY     = CAST(Value AS INT) FROM @tExtScnData WHERE Variable = '@nSuggQTY'
+
+   SET @nTranCount = @@TRANCOUNT
 
    IF @nAction = 0
    BEGIN
@@ -292,6 +299,9 @@ BEGIN
 
                   IF @cOption IN ('1', '9')  -- Yes
                   BEGIN
+                     BEGIN TRAN  
+                     SAVE TRAN rdt_957ExtScn03_6523 
+
                      -- Confirm    
                      EXEC RDT.rdt_PickCase_Confirm @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 'SHORT'
                         ,@cPickSlipNo
@@ -305,7 +315,7 @@ BEGIN
                         ,@nErrNo       OUTPUT
                         ,@cErrMsg      OUTPUT
                      IF @nErrNo <> 0
-                        GOTO Quit
+                        GOTO ROLLBACK_rdt_957ExtScn03_6523
 
                      -- Extended update
                      IF @cExtendedUpdateSP <> ''
@@ -363,7 +373,7 @@ BEGIN
                                  @nErrNo OUTPUT, @cErrMsg OUTPUT
 
                               IF @nErrNo <> 0
-                                 GOTO Quit
+                                 GOTO ROLLBACK_rdt_957ExtScn03_6523
                         END
                      END
 
@@ -385,7 +395,7 @@ BEGIN
                               @nErrNo OUTPUT, @cErrMsg OUTPUT
 
                               IF @nErrNo <> 0
-                                 GOTO Quit
+                                 GOTO ROLLBACK_rdt_957ExtScn03_6523
                         END
                      END
                   END
@@ -413,14 +423,58 @@ BEGIN
                      GOTO NEW_SKU_QTY_SCN
                   END
 
-
                   IF @cOption = '9'
                   BEGIN
                      DECLARE 
-                        @cNewPickZone NVARCHAR(10),
-                        @cNewPickSlipNo NVARCHAR(10)
+                        @cNewPickZone           NVARCHAR(10),
+                        @cNewPickSlipNo         NVARCHAR(10),
+                        @cLot                   NVARCHAR(10),
+                        @cNewSuggestLOC         NVARCHAR(10),
+                        @cNewSuggestID          NVARCHAR(18) 
+
+                     SELECT TOP 1 @cLot = LOT
+                     FROM dbo.PickDetail WITH (NOLOCK)
+                     WHERE StorerKey = @cStorerKey
+                        AND PickSlipNo = @cPickSlipNo
+                        AND SKU = @cSuggSKU
+                        AND ID = @cSuggID
+                        AND LOC = @cSuggLOC
+                        AND Status = '4'
+                        AND EditWho = @cUserKey
+                     ORDER BY EditDate DESC
                      --Find inventory for re-allocation
                      --Reallocation, To Do
+
+                     SET @cNewPickZone = @cPickZone
+                     SET @cNewPickSlipNo = @cPickSlipNo
+
+                     EXEC [RDT].[rdt_PickReallo01]
+                        @nMobile             = @nMobile
+                        ,@nFunc              = @nFunc
+                        ,@cLangCode          = @cLangCode
+                        ,@cFacility          = @cFacility
+                        ,@cStorerKey         = @cStorerKey
+                        ,@cPickSlipNo        = @cNewPickSlipNo OUTPUT
+                        ,@cType              = 'UCC'
+                        ,@cLOC               = @cSuggLOC
+                        ,@cID                = @cSuggID
+                        ,@cSKU               = @cSuggSKU
+                        ,@nQTY               = @nActQTY
+                        ,@cLot               = @cLot
+                        ,@cPickZone          = @cNewPickZone OUTPUT
+                        ,@cSuggestLOC        = @cNewSuggestLOC OUTPUT
+                        ,@cSuggestID         = @cNewSuggestID OUTPUT
+                        ,@nErrNo             = @nErrNo OUTPUT
+                        ,@cErrMsg            = @cErrMsg OUTPUT
+
+                     IF @nErrNo = -1
+                     BEGIN
+                        SET @nInnerErrorNo = @nErrNo
+
+                        SET @nErrNo = 230604
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Reallocation Fail
+                        GOTO ROLLBACK_rdt_957ExtScn03_6523
+                     END
 
                      --1. New allocation in same zone, prompt a message, continue the picking
                      --Alternate location found and is added to current pickslip
@@ -508,6 +562,7 @@ BEGIN
                      ,@nTotalQty        OUTPUT
                      ,@nErrNo           OUTPUT
                      ,@cErrMsg          OUTPUT
+                     
                   IF @nErrNo = 0
                   BEGIN
                      -- Prepare SKU QTY screen var
@@ -575,7 +630,18 @@ BEGIN
       END
    END
 
-   Quit:
+   GOTO Quit
+
+ROLLBACK_rdt_957ExtScn03_6523:
+   ROLLBACK TRAN rdt_957ExtScn03_6523 -- Only rollback change made here
+
+   INSERT dbo.TraceInfo (TraceName, TimeIn, Step1, Step2, Step3, Step4, Step5,
+      Col1, Col2, Col3, Col4, Col5)
+   VALUES('rdt_957ExtScn03', GETDATE(), CAST(@nCurrentStep AS NVARCHAR(10)), CAST(@nCurrentScn AS NVARCHAR(10)), @cOption, CAST(@nInnerErrorNo AS NVARCHAR(10)), @cPickZone,
+      @cPickSlipNo, @cSuggLOC, @cSuggID, @cSuggSKU, @cLot + '-' + CAST(@nActQTY AS NVARCHAR(10)))
+Quit:
+   WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
+      COMMIT TRAN
 END
 GO
 
