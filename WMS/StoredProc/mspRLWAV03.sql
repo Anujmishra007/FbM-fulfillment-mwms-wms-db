@@ -68,6 +68,8 @@ GO
 /*                           face                                       */
 /* 26-Mar-2025 WLChooi   4.0 FCR-3115/UWP-31024 Add Loadkey Validation  */
 /*                           (WL09)                                     */
+/* 01-Apr-2025 SSA04     4.1 UWP-27137 Fix infinite loop when splitQty =*/
+/*                           pickdetail.Qty                             */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[mspRLWAV03]
    @c_WaveKey NVARCHAR(10)
@@ -2631,7 +2633,12 @@ BEGIN
             IF @n_TotalCube > @n_ToteSize
             BEGIN
                SET @n_SplitQty = CEILING((@n_TotalCube - @n_ToteSize)/@n_StdCube)
-               SET @n_Qty_PD   = @n_Qty_PD - @n_SplitQty
+                --(SSA04) start---
+              IF @n_SplitQty = @n_Qty_PD
+                SET @n_SplitQty = 0
+              ELSE
+                SET @n_Qty_PD = @n_Qty_PD - @n_SplitQty
+              --(SSA04)end---
             END
 
             SET @n_TotalCube = 0
