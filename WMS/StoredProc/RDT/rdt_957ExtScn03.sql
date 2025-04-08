@@ -107,7 +107,7 @@ BEGIN
       @nGetTaskSuccess        INT = 0,
       @nTotalQty              INT,
       @nTranCount             INT,
-      @nInnerErrorNo          INT
+      @nInnerErrorNo          INT = 0
 
    SET @nNextStep = @nStep
 
