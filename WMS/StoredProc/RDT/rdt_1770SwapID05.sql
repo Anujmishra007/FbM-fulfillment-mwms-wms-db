@@ -38,7 +38,11 @@ BEGIN
    DECLARE @cNewSKU        NVARCHAR( 20)
    DECLARE @cNewLOT        NVARCHAR( 10)
    DECLARE @cNewLOC        NVARCHAR( 10)
+   DECLARE @cNewTaskKey    NVARCHAR( 10)
    DECLARE @nNewQTY        INT
+
+   DECLARE @cRPFTaskFromLoc   NVARCHAR( 10)
+   DECLARE @cRPFTaskToLoc     NVARCHAR( 10)
 
    DECLARE @cPickDetailKey NVARCHAR(10)
    DECLARE @cStorerKey     NVARCHAR( 15)
@@ -51,38 +55,20 @@ BEGIN
    DECLARE @nTaskQTY       INT
    DECLARE @nQTY           INT
    DECLARE @cLottableCompare     NVARCHAR( MAX) = ''
-
-   -- Check blank
-   IF @cNewID = ''
-   BEGIN
-      SET @nErrNo = 236001
-      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Need ID
-      RETURN
-   END
+   DECLARE @cTaskLocationType    NVARCHAR( 10)
+   DECLARE @cLocationType        NVARCHAR( 10)
+   DECLARE @cLotMatch            NVARCHAR( 1) = '0'
 
    DECLARE
       @cChkL01 NVARCHAR(1) = '0', @cChkL02 NVARCHAR(1) = '0', @cChkL03 NVARCHAR(1) = '0', @cChkL04 NVARCHAR(1) = '0', @cChkL05 NVARCHAR(1) = '0', 
       @cChkL06 NVARCHAR(1) = '0', @cChkL07 NVARCHAR(1) = '0', @cChkL08 NVARCHAR(1) = '0', @cChkL09 NVARCHAR(1) = '0', @cChkL10 NVARCHAR(1) = '0', 
       @cChkL11 NVARCHAR(1) = '0', @cChkL12 NVARCHAR(1) = '0', @cChkL13 NVARCHAR(1) = '0', @cChkL14 NVARCHAR(1) = '0', @cChkL15 NVARCHAR(1) = '0'
 
-   -- Get task info
-   SELECT
-      @cStorerKey = StorerKey, 
-      @cTaskType = TaskType, 
-      @cTaskSKU = SKU, 
-      @cTaskLOT = LOT,
-      @cTaskLOC = FromLOC,
-      @cTaskID = FromID, 
-      @nTaskQTY = SystemQTY
-   FROM dbo.TaskDetail WITH (NOLOCK)
-   WHERE TaskDetailKey = @cTaskDetailKey
-
-   SET @nRowCount = @@ROWCOUNT 
-
-   IF @nRowCount = 0
+   -- Check blank
+   IF @cNewID = ''
    BEGIN
       SET @nErrNo = 236001
-      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --BadTaskDtlKey
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Need ID
       RETURN
    END
 
@@ -102,11 +88,43 @@ BEGIN
       @cChkL12 = CASE WHEN Code = 'Lottable12' THEN '1' ELSE @cChkL12 END,
       @cChkL13 = CASE WHEN Code = 'Lottable13' THEN '1' ELSE @cChkL13 END,
       @cChkL14 = CASE WHEN Code = 'Lottable14' THEN '1' ELSE @cChkL14 END,
-      @cChkL15 = CASE WHEN Code = 'Lottable15' THEN '1' ELSE @cChkL15 END
+      @cChkL15 = CASE WHEN Code = 'Lottable15' THEN '1' ELSE @cChkL15 END,
+      @cLocationType = UDF01
    FROM dbo.CodeLKUP WITH (NOLOCK)
    WHERE ListName = 'SwapID'
       AND StorerKey = @cStorerKey
       AND Code2 = @nFunc
+
+   -- Get task info
+   SELECT
+      @cStorerKey = TD.StorerKey, 
+      @cTaskType = TD.TaskType, 
+      @cTaskSKU = TD.SKU, 
+      @cTaskLOT = TD.LOT,
+      @cTaskLOC = TD.FromLOC,
+      @cTaskID = TD.FromID, 
+      @nTaskQTY = TD.SystemQTY,
+      @cTaskLocationType = LOC.LocationHandling
+   FROM dbo.TaskDetail TD WITH (NOLOCK)
+   INNER JOIN dbo.LOC LOC WITH (NOLOCK) ON TD.FromLoc = LOC.Loc
+   WHERE TD.StorerKey = @cStorerKey
+      AND TD.TaskDetailKey = @cTaskDetailKey
+
+   SET @nRowCount = @@ROWCOUNT 
+
+   IF @nRowCount = 0
+   BEGIN
+      SET @nErrNo = 236001
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --BadTaskDtlKey
+      RETURN
+   END
+
+   IF @cTaskLocationType <> ISNULL(@cLocationType, '')
+   BEGIN
+      SET @nErrNo = 236019
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Racking Type Not Match
+      RETURN
+   END
 
    -- Get new ID info
    SELECT
@@ -162,28 +180,239 @@ BEGIN
       RETURN
    END
 
-   -- Check LOT match
-   IF @cNewLOT <> @cTaskLOT
+   DECLARE @cTaskLottableField                  NVARCHAR( 50) = ''
+   DECLARE @dtTaskLottableField                 DATETIME = ''
+   DECLARE @cScannedPalletLottableField         NVARCHAR( 50) = ''
+   DECLARE @dtScannedPalletTaskLottableField    DATETIME = ''
+
+   IF @cChkL01 = '1' 
    BEGIN
-      DECLARE @cTaskL02 NVARCHAR(18)
-      DECLARE @cNewL02  NVARCHAR(18)
-      
-      -- Get L04
-      SELECT @cNewL02  = Lottable02 FROM LotAttribute WITH (NOLOCK) WHERE LOT = @cNewLOT
-      SELECT @cTaskL02 = Lottable02 FROM LotAttribute WITH (NOLOCK) WHERE LOT = @cTaskLOT
-      
-      -- Check L04 match
-      IF @cNewL02 <> @cTaskL02 OR @cNewL02 IS NULL OR @cTaskL02 IS NULL
+      SET @cTaskLottableField = ''
+      SET @cScannedPalletLottableField = ''
+      SELECT @cTaskLottableField = Lottable01 FROM dbo.LOTAttribute WITH(NOLOCK) WHERE Lot = @cTaskLOT
+      SELECT @cScannedPalletLottableField = Lottable01 FROM dbo.LOTAttribute WITH(NOLOCK) WHERE Lot = @cNewLOT
+
+      IF @cTaskLottableField <> @cScannedPalletLottableField
       BEGIN
-         SET @nErrNo = 236008
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --L04 not match
+         SET @nErrNo = 236020
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Lot01NotMatch
+         RETURN
+      END
+   END
+
+   IF @cChkL02 = '1' 
+   BEGIN
+      SET @cTaskLottableField = ''
+      SET @cScannedPalletLottableField = ''
+      SELECT @cTaskLottableField = Lottable02 FROM dbo.LOTAttribute WITH(NOLOCK) WHERE Lot = @cTaskLOT
+      SELECT @cScannedPalletLottableField = Lottable02 FROM dbo.LOTAttribute WITH(NOLOCK) WHERE Lot = @cNewLOT
+
+      IF @cTaskLottableField <> @cScannedPalletLottableField
+      BEGIN
+         SET @nErrNo = 236021
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Lot02NotMatch
+         RETURN
+      END
+   END
+
+   IF @cChkL03 = '1' 
+   BEGIN
+      SET @cTaskLottableField = ''
+      SET @cScannedPalletLottableField = ''
+      SELECT @cTaskLottableField = Lottable03 FROM dbo.LOTAttribute WITH(NOLOCK) WHERE Lot = @cTaskLOT
+      SELECT @cScannedPalletLottableField = Lottable03 FROM dbo.LOTAttribute WITH(NOLOCK) WHERE Lot = @cNewLOT
+
+      IF @cTaskLottableField <> @cScannedPalletLottableField
+      BEGIN
+         SET @nErrNo = 236022
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Lot03NotMatch
+         RETURN
+      END
+   END
+
+   IF @cChkL04 = '1' 
+   BEGIN
+      SET @dtTaskLottableField = '1990-01-01'
+      SET @dtScannedPalletTaskLottableField = '1990-01-01'
+      SELECT @dtTaskLottableField = Lottable04 FROM dbo.LOTAttribute WITH(NOLOCK) WHERE Lot = @cTaskLOT
+      SELECT @dtScannedPalletTaskLottableField = Lottable04 FROM dbo.LOTAttribute WITH(NOLOCK) WHERE Lot = @cNewLOT
+
+      IF @dtTaskLottableField <> @dtScannedPalletTaskLottableField
+      BEGIN
+         SET @nErrNo = 236023
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Lot04NotMatch
+         RETURN
+      END
+   END
+
+   IF @cChkL05 = '1' 
+   BEGIN
+      SET @dtTaskLottableField = '1990-01-01'
+      SET @dtScannedPalletTaskLottableField = '1990-01-01'
+      SELECT @dtTaskLottableField = Lottable05 FROM dbo.LOTAttribute WITH(NOLOCK) WHERE Lot = @cTaskLOT
+      SELECT @dtScannedPalletTaskLottableField = Lottable05 FROM dbo.LOTAttribute WITH(NOLOCK) WHERE Lot = @cNewLOT
+
+      IF @dtTaskLottableField <> @dtScannedPalletTaskLottableField
+      BEGIN
+         SET @nErrNo = 236024
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Lot05NotMatch
+         RETURN
+      END
+   END
+
+   IF @cChkL06 = '1' 
+   BEGIN
+      SET @cTaskLottableField = ''
+      SET @cScannedPalletLottableField = ''
+      SELECT @cTaskLottableField = Lottable06 FROM dbo.LOTAttribute WITH(NOLOCK) WHERE Lot = @cTaskLOT
+      SELECT @cScannedPalletLottableField = Lottable06 FROM dbo.LOTAttribute WITH(NOLOCK) WHERE Lot = @cNewLOT
+
+      IF @cTaskLottableField <> @cScannedPalletLottableField
+      BEGIN
+         SET @nErrNo = 236025
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Lot06NotMatch
+         RETURN
+      END
+   END
+
+   IF @cChkL07 = '1' 
+   BEGIN
+      SET @cTaskLottableField = ''
+      SET @cScannedPalletLottableField = ''
+      SELECT @cTaskLottableField = Lottable07 FROM dbo.LOTAttribute WITH(NOLOCK) WHERE Lot = @cTaskLOT
+      SELECT @cScannedPalletLottableField = Lottable07 FROM dbo.LOTAttribute WITH(NOLOCK) WHERE Lot = @cNewLOT
+
+      IF @cTaskLottableField <> @cScannedPalletLottableField
+      BEGIN
+         SET @nErrNo = 236026
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Lot07NotMatch
+         RETURN
+      END
+   END
+
+   IF @cChkL08 = '1' 
+   BEGIN
+      SET @cTaskLottableField = ''
+      SET @cScannedPalletLottableField = ''
+      SELECT @cTaskLottableField = Lottable08 FROM dbo.LOTAttribute WITH(NOLOCK) WHERE Lot = @cTaskLOT
+      SELECT @cScannedPalletLottableField = Lottable08 FROM dbo.LOTAttribute WITH(NOLOCK) WHERE Lot = @cNewLOT
+
+      IF @cTaskLottableField <> @cScannedPalletLottableField
+      BEGIN
+         SET @nErrNo = 236027
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Lot08NotMatch
+         RETURN
+      END
+   END
+
+   IF @cChkL09 = '1' 
+   BEGIN
+      SET @cTaskLottableField = ''
+      SET @cScannedPalletLottableField = ''
+      SELECT @cTaskLottableField = Lottable09 FROM dbo.LOTAttribute WITH(NOLOCK) WHERE Lot = @cTaskLOT
+      SELECT @cScannedPalletLottableField = Lottable09 FROM dbo.LOTAttribute WITH(NOLOCK) WHERE Lot = @cNewLOT
+
+      IF @cTaskLottableField <> @cScannedPalletLottableField
+      BEGIN
+         SET @nErrNo = 236028
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Lot09NotMatch
+         RETURN
+      END
+   END
+
+   IF @cChkL10 = '1' 
+   BEGIN
+      SET @cTaskLottableField = ''
+      SET @cScannedPalletLottableField = ''
+      SELECT @cTaskLottableField = Lottable10 FROM dbo.LOTAttribute WITH(NOLOCK) WHERE Lot = @cTaskLOT
+      SELECT @cScannedPalletLottableField = Lottable10 FROM dbo.LOTAttribute WITH(NOLOCK) WHERE Lot = @cNewLOT
+
+      IF @cTaskLottableField <> @cScannedPalletLottableField
+      BEGIN
+         SET @nErrNo = 236029
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Lot10NotMatch
+         RETURN
+      END
+   END
+
+   IF @cChkL11 = '1' 
+   BEGIN
+      SET @cTaskLottableField = ''
+      SET @cScannedPalletLottableField = ''
+      SELECT @cTaskLottableField = Lottable11 FROM dbo.LOTAttribute WITH(NOLOCK) WHERE Lot = @cTaskLOT
+      SELECT @cScannedPalletLottableField = Lottable11 FROM dbo.LOTAttribute WITH(NOLOCK) WHERE Lot = @cNewLOT
+
+      IF @cTaskLottableField <> @cScannedPalletLottableField
+      BEGIN
+         SET @nErrNo = 236030
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Lot11NotMatch
+         RETURN
+      END
+   END
+
+   IF @cChkL12 = '1' 
+   BEGIN
+      SET @cTaskLottableField = ''
+      SET @cScannedPalletLottableField = ''
+      SELECT @cTaskLottableField = Lottable12 FROM dbo.LOTAttribute WITH(NOLOCK) WHERE Lot = @cTaskLOT
+      SELECT @cScannedPalletLottableField = Lottable12 FROM dbo.LOTAttribute WITH(NOLOCK) WHERE Lot = @cNewLOT
+
+      IF @cTaskLottableField <> @cScannedPalletLottableField
+      BEGIN
+         SET @nErrNo = 236031
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Lot12NotMatch
+         RETURN
+      END
+   END
+
+   IF @cChkL13 = '1' 
+   BEGIN
+      SET @dtTaskLottableField = '1990-01-01'
+      SET @dtScannedPalletTaskLottableField = '1990-01-01'
+      SELECT @dtTaskLottableField = Lottable13 FROM dbo.LOTAttribute WITH(NOLOCK) WHERE Lot = @cTaskLOT
+      SELECT @dtScannedPalletTaskLottableField = Lottable13 FROM dbo.LOTAttribute WITH(NOLOCK) WHERE Lot = @cNewLOT
+
+      IF @dtTaskLottableField <> @dtScannedPalletTaskLottableField
+      BEGIN
+         SET @nErrNo = 236032
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Lot13NotMatch
+         RETURN
+      END
+   END
+
+   IF @cChkL14 = '1' 
+   BEGIN
+      SET @dtTaskLottableField = '1990-01-01'
+      SET @dtScannedPalletTaskLottableField = '1990-01-01'
+      SELECT @dtTaskLottableField = Lottable14 FROM dbo.LOTAttribute WITH(NOLOCK) WHERE Lot = @cTaskLOT
+      SELECT @dtScannedPalletTaskLottableField = Lottable14 FROM dbo.LOTAttribute WITH(NOLOCK) WHERE Lot = @cNewLOT
+
+      IF @dtTaskLottableField <> @dtScannedPalletTaskLottableField
+      BEGIN
+         SET @nErrNo = 236033
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Lot14NotMatch
+         RETURN
+      END
+   END
+
+   IF @cChkL15 = '1' 
+   BEGIN
+      SET @dtTaskLottableField = '1990-01-01'
+      SET @dtScannedPalletTaskLottableField = '1990-01-01'
+      SELECT @dtTaskLottableField = Lottable15 FROM dbo.LOTAttribute WITH(NOLOCK) WHERE Lot = @cTaskLOT
+      SELECT @dtScannedPalletTaskLottableField = Lottable15 FROM dbo.LOTAttribute WITH(NOLOCK) WHERE Lot = @cNewLOT
+
+      IF @dtTaskLottableField <> @dtScannedPalletTaskLottableField
+      BEGIN
+         SET @nErrNo = 236034
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Lot15NotMatch
          RETURN
       END
    END
 
    -- Check ID picked
    IF EXISTS( SELECT TOP 1 1
-      FROM PickDetail WITH (NOLOCK)
+      FROM dbo.PickDetail WITH (NOLOCK)
       WHERE StorerKey = @cStorerKey
          AND SKU = @cNewSKU
          AND ID = @cNewID
@@ -197,10 +426,10 @@ BEGIN
 
    -- Check task taken by other
    IF EXISTS( SELECT TOP 1 1
-      FROM TaskDetail WITH (NOLOCK)
+      FROM dbo.TaskDetail WITH (NOLOCK)
       WHERE StorerKey = @cStorerKey
-         AND TaskType = @cTaskType
          AND FromID = @cNewID
+         AND TaskDetailKey <> @cTaskDetailKey
          AND Status > '0')
    BEGIN
       SET @nErrNo = 236010
@@ -221,20 +450,25 @@ BEGIN
 
    -- Get other task info
    SET @cOtherTaskDetailKey = ''
-   SELECT @cOtherTaskDetailKey = TaskDetailKey
-   FROM TaskDetail WITH (NOLOCK)
-   WHERE StorerKey = @cStorerKey
-      AND TaskType = @cTaskType
+
+   SELECT 
+      @cOtherTaskDetailKey = TaskDetailKey,
+      @cNewTaskKey = TaskType
+   FROM dbo.TaskDetail WITH (NOLOCK)
+   WHERE StorerKey = @cStorerkey
+      AND FromLoc = @cNewLOC
       AND FromID = @cNewID
       AND Status = '0'
 
    -- Get other PickDetail info
    SET @cOtherPickDetailKey = ''
+
    SELECT @cOtherPickDetailKey = PickDetailKey
-   FROM PickDetail WITH (NOLOCK)
+   FROM dbo.PickDetail WITH (NOLOCK)
    WHERE StorerKey = @cStorerKey
       AND SKU = @cNewSKU
       AND ID = @cNewID
+      AND Loc = @cNewLOC
       AND Status = '0'
       AND QTY > 0
 
@@ -243,9 +477,52 @@ BEGIN
 
    BEGIN TRAN
    SAVE TRAN rdt_1770SwapID05
+
+   -- 1. ID is allocaed for a replenishment task, release the pallet first
+   IF @cOtherTaskDetailKey <> '' AND ISNULL(@cOtherPickDetailKey, '') = '' AND @cNewTaskKey = 'RPF'
+   BEGIN
+      SELECT 
+         @cRPFTaskFromLoc = FromLOC,
+         @cRPFTaskToLoc = ToLoc
+      FROM dbo.Task WITH(NOLOCK)
+      WHERE TaskDetailKey = @cOtherTaskDetailKey
+         AND StorerKey = @cStorerKey
+
+      -- Unlock the inventory for the RPF task
+      EXEC rdt.rdt_Putaway_PendingMoveIn '', 'UNLOCK' 
+         ,''        --@cLOC      
+         ,''        --@cID       
+         ,''        --@cSuggLOC 
+         ,''        --@cStorerKey
+         ,@nErrNo  OUTPUT
+         ,@cErrMsg OUTPUT
+         ,@cTaskDetailKey = @cOtherTaskDetailKey
+      IF @nErrNo <> 0
+      BEGIN
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UnlockRPFFail
+         GOTO RollBackTran
+      END
+
+      UPDATE TaskDetail 
+      SET
+         UserKey  = '',
+         Status   = '0',
+         EditDate = GETDATE(), 
+         EditWho = SUSER_SNAME(), 
+         TrafficCop = NULL
+      WHERE TaskDetailKey = @cOtherTaskDetailKey
+      IF @@ERROR <> 0 OR @@ROWCOUNT <> 1
+      BEGIN
+         SET @nErrNo = 236036
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPDRPFTaskFail
+         GOTO RollBackTran
+      END
+   END
    
-   -- 1. ID is not alloc
-   IF @cOtherTaskDetailKey = '' AND @cOtherPickDetailKey = ''
+   -- 2. ID is not alloc, 
+   --    or ID is allocaed for a replenishment task, but the ID is released in previous section
+   IF (@cOtherTaskDetailKey = '' AND @cOtherPickDetailKey = '')
+      OR @cOtherTaskDetailKey <> '' AND ISNULL(@cOtherPickDetailKey, '') = '' AND @cNewTaskKey = 'RPF'
    BEGIN
       -- Loop PickDetail
       DECLARE @curPD CURSOR
@@ -298,101 +575,126 @@ BEGIN
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD Task Fail
          GOTO RollBackTran
       END
+
+      -- ID was allocated for a replenishment task, it was released, and allocated for the Picking task,
+      -- need allocate the old ID to the replenishment task
+      IF @cOtherTaskDetailKey <> '' AND ISNULL(@cOtherPickDetailKey, '') = '' AND @cNewTaskKey = 'RPF'
+      BEGIN
+         EXEC rdt.rdt_Putaway_PendingMoveIn '', 'LOCK' 
+            ,@cRPFTaskFromLoc
+            ,@cTaskID
+            ,@cRPFTaskToLoc 
+            ,@cStorerKey
+            ,@nErrNo  OUTPUT
+            ,@cErrMsg OUTPUT
+            ,@cFromLOT = @cTaskLOT
+            ,@cTaskDetailKey = @cOtherTaskDetailKey
+            ,@cMoveQTYAlloc = '1' -- Just to bypass QTYReplen
+         IF @nErrNo <> 0
+         BEGIN
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD Task Fail
+            GOTO RollBackTran
+         END
+      END
+
       GOTO CommitTran
    END
 
-   -- 2. ID on other TaskDetail and PickDetail
+   -- 3. ID on other TaskDetail and PickDetail
    IF @cOtherTaskDetailKey <> '' AND @cOtherPickDetailKey <> ''
    BEGIN
-      -- Loop PickDetail
-      SET @curPD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-         SELECT PickDetailKey, TaskDetailKey, QTY
-         FROM dbo.PickDetail WITH (NOLOCK)
-         WHERE TaskDetailKey IN (@cOtherTaskDetailKey, @cTaskDetailKey)
-            AND Status = '0'
-            AND QTY > 0
-      OPEN @curPD
-      FETCH NEXT FROM @curPD INTO @cPickDetailKey, @cTaskKey, @nQTY
-      WHILE @@FETCH_STATUS = 0
+      IF @cNewTaskKey = @cTaskType 
       BEGIN
-         IF @cTaskKey = @cOtherTaskDetailKey
-         BEGIN
-            -- Update other task PickDetail
-            UPDATE PickDetail SET
-               LOT = @cTaskLOT, 
-               ID = @cTaskID, 
-               EditDate = GETDATE(), 
-               EditWho = 'rdt.' + SUSER_SNAME(), 
-               TrafficCop = NULL
-            WHERE PickDetailKey = @cPickDetailKey
-            IF @@ERROR <> 0
-            BEGIN
-               SET @nErrNo = 236013
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD Task Fail
-               GOTO RollBackTran
-            END
-            SET @nNewQTY = @nNewQTY - @nQTY
-         END
-         ELSE
-         BEGIN
-            -- Update current task PickDetail
-            UPDATE PickDetail SET
-               LOT = @cNewLOT, 
-               ID = @cNewID, 
-               EditDate = GETDATE(), 
-               EditWho = 'rdt.' + SUSER_SNAME(), 
-               TrafficCop = NULL
-            WHERE PickDetailKey = @cPickDetailKey
-            IF @@ERROR <> 0
-            BEGIN
-               SET @nErrNo = 236014
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD Task Fail
-               GOTO RollBackTran
-            END
-            SET @nTaskQTY = @nTaskQTY - @nQTY
-         END
+         -- Loop PickDetail
+         SET @curPD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+            SELECT PickDetailKey, TaskDetailKey, QTY
+            FROM dbo.PickDetail WITH (NOLOCK)
+            WHERE TaskDetailKey IN (@cOtherTaskDetailKey, @cTaskDetailKey)
+               AND Status = '0'
+               AND QTY > 0
+         OPEN @curPD
          FETCH NEXT FROM @curPD INTO @cPickDetailKey, @cTaskKey, @nQTY
-      END
-      
-      -- Check balance
-      IF @nTaskQTY <> 0 OR @nNewQTY <> 0
-      BEGIN
-         SET @nErrNo = 236015
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --TaskOffsetErr
-         GOTO RollBackTran
-      END
-      
-      -- Update other task
-      UPDATE TaskDetail SET
-         LOT = @cTaskLOT, 
-         FromID = @cTaskID, 
-         ToID = CASE WHEN ToID <> '' THEN @cTaskID ELSE ToID END, 
-         EditDate = GETDATE(), 
-         EditWho = SUSER_SNAME(), 
-         TrafficCop = NULL
-      WHERE TaskDetailKey = @cOtherTaskDetailKey
-         AND Status = '0'
-      IF @@ERROR <> 0 OR @@ROWCOUNT <> 1
-      BEGIN
-         SET @nErrNo = 236016
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD Task Fail
-         GOTO RollBackTran
-      END
+         WHILE @@FETCH_STATUS = 0
+         BEGIN
+            IF @cTaskKey = @cOtherTaskDetailKey
+            BEGIN
+               -- Update other task PickDetail
+               UPDATE PickDetail SET
+                  LOT = @cTaskLOT, 
+                  ID = @cTaskID, 
+                  EditDate = GETDATE(), 
+                  EditWho = 'rdt.' + SUSER_SNAME(), 
+                  TrafficCop = NULL
+               WHERE PickDetailKey = @cPickDetailKey
+               IF @@ERROR <> 0
+               BEGIN
+                  SET @nErrNo = 236013
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD Task Fail
+                  GOTO RollBackTran
+               END
+               SET @nNewQTY = @nNewQTY - @nQTY
+            END
+            ELSE
+            BEGIN
+               -- Update current task PickDetail
+               UPDATE PickDetail SET
+                  LOT = @cNewLOT, 
+                  ID = @cNewID, 
+                  EditDate = GETDATE(), 
+                  EditWho = 'rdt.' + SUSER_SNAME(), 
+                  TrafficCop = NULL
+               WHERE PickDetailKey = @cPickDetailKey
+               IF @@ERROR <> 0
+               BEGIN
+                  SET @nErrNo = 236014
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD Task Fail
+                  GOTO RollBackTran
+               END
+               SET @nTaskQTY = @nTaskQTY - @nQTY
+            END
+            FETCH NEXT FROM @curPD INTO @cPickDetailKey, @cTaskKey, @nQTY
+         END
+         
+         -- Check balance
+         IF @nTaskQTY <> 0 OR @nNewQTY <> 0
+         BEGIN
+            SET @nErrNo = 236015
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --TaskOffsetErr
+            GOTO RollBackTran
+         END
+         
+         -- Update other task
+         UPDATE TaskDetail SET
+            LOT = @cTaskLOT, 
+            FromID = @cTaskID, 
+            ToID = CASE WHEN ToID <> '' THEN @cTaskID ELSE ToID END, 
+            EditDate = GETDATE(), 
+            EditWho = SUSER_SNAME(), 
+            TrafficCop = NULL
+         WHERE TaskDetailKey = @cOtherTaskDetailKey
+            AND Status = '0'
+         IF @@ERROR <> 0 OR @@ROWCOUNT <> 1
+         BEGIN
+            SET @nErrNo = 236016
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD Task Fail
+            GOTO RollBackTran
+         END
 
-      -- Update current task
-      UPDATE TaskDetail SET
-         LOT = @cNewLOT, 
-         FromID = @cNewID, 
-         ToID = CASE WHEN ToID <> '' THEN @cNewID ELSE ToID END, 
-         EditDate = GETDATE(), 
-         EditWho = SUSER_SNAME(), 
-         TrafficCop = NULL
-      WHERE TaskDetailKey = @cTaskDetailKey
-      IF @@ERROR <> 0 OR @@ROWCOUNT <> 1
-      BEGIN
-         SET @nErrNo = 236017
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD Task Fail
-         GOTO RollBackTran
+         -- Update current task
+         UPDATE TaskDetail SET
+            LOT = @cNewLOT, 
+            FromID = @cNewID, 
+            ToID = CASE WHEN ToID <> '' THEN @cNewID ELSE ToID END, 
+            EditDate = GETDATE(), 
+            EditWho = SUSER_SNAME(), 
+            TrafficCop = NULL
+         WHERE TaskDetailKey = @cTaskDetailKey
+         IF @@ERROR <> 0 OR @@ROWCOUNT <> 1
+         BEGIN
+            SET @nErrNo = 236017
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD Task Fail
+            GOTO RollBackTran
+         END
       END
       GOTO CommitTran
    END
