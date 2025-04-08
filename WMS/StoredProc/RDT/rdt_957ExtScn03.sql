@@ -15,6 +15,7 @@ GO
 /* 2024-12-12 1.1.0 LJQ006   FCR-1168 Add drop id validation            */
 /*                           and new screen navigation                  */
 /* 2025-03-26 1.2.0 NLT013   FCR-2704 Re-allocation if short happens    */
+/* 2025-03-26 1.2.1 NLT013   FCR-2704 Minor change for exception happens*/
 /************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_957ExtScn03] (
@@ -467,12 +468,16 @@ BEGIN
                         ,@nErrNo             = @nErrNo OUTPUT
                         ,@cErrMsg            = @cErrMsg OUTPUT
 
-                     IF @nErrNo = -1
+                     IF @nErrNo <> 0
                      BEGIN
                         SET @nInnerErrorNo = @nErrNo
+      
+                        IF @nInnerErrorNo <> -1
+                        BEGIN
+                           SET @nErrNo = 230604
+                           SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Reallocation Fail
+                        END
 
-                        SET @nErrNo = 230604
-                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Reallocation Fail
                         GOTO ROLLBACK_rdt_957ExtScn03_6523
                      END
 
@@ -523,27 +528,6 @@ BEGIN
                                           @cLine09 = @cMsg09,
                                           @nDisplayMsg = 0
                         END
-                     END
-                     ELSE
-                     --3. Re-allocation is failed
-                     BEGIN
-                        SET @cMsg01 = 'No alternate'
-                        SET @cMsg02 = 'location found'
-                        SET @cMsg03 = ''
-                        SET @cMsg04 = ''
-                        EXEC rdt.rdtInsertMsgQueue @nMobile = @nMobile,
-                                       @nErrNo = @nErrNo,
-                                       @cErrMsg = @cErrMsg,
-                                       @cLine01 = @cMsg01,
-                                       @cLine02 = @cMsg02,
-                                       @cLine03 = @cMsg03,
-                                       @cLine04 = @cMsg04,
-                                       @cLine05 = @cMsg05,
-                                       @cLine06 = @cMsg06,
-                                       @cLine07 = @cMsg07,
-                                       @cLine08 = @cMsg08,
-                                       @cLine09 = @cMsg09,
-                                       @nDisplayMsg = 0
                      END
                   END
 
@@ -634,6 +618,29 @@ BEGIN
 
 ROLLBACK_rdt_957ExtScn03_6523:
    ROLLBACK TRAN rdt_957ExtScn03_6523 -- Only rollback change made here
+
+   IF @nInnerErrorNo = -1
+   BEGIN
+      SET @cMsg01 = 'No alternate'
+      SET @cMsg02 = 'location found'
+      SET @cMsg03 = ''
+      SET @cMsg04 = ''
+      EXEC rdt.rdtInsertMsgQueue @nMobile = @nMobile,
+                     @nErrNo = @nErrNo,
+                     @cErrMsg = @cErrMsg,
+                     @cLine01 = @cMsg01,
+                     @cLine02 = @cMsg02,
+                     @cLine03 = @cMsg03,
+                     @cLine04 = @cMsg04,
+                     @cLine05 = @cMsg05,
+                     @cLine06 = @cMsg06,
+                     @cLine07 = @cMsg07,
+                     @cLine08 = @cMsg08,
+                     @cLine09 = @cMsg09,
+                     @nDisplayMsg = 0
+      SET @nErrNo = 0
+      SET @cErrMsg = ''
+   END
 
    INSERT dbo.TraceInfo (TraceName, TimeIn, Step1, Step2, Step3, Step4, Step5,
       Col1, Col2, Col3, Col4, Col5)
