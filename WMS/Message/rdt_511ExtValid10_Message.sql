@@ -1,4 +1,4 @@
---rdt_511ExtValid09
+--rdt_511ExtValid10
 --FCR-2804
 execute rdt.rdtdropmsg 235951 , 236000
 

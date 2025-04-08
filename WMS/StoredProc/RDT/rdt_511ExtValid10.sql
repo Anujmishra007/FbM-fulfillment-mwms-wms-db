@@ -4,7 +4,7 @@ SET QUOTED_IDENTIFIER OFF
 GO
 
 /************************************************************************/
-/* Store procedure: rdt_511ExtValid09                                   */
+/* Store procedure: rdt_511ExtValid10                                   */
 /* Purpose: Move By ID Extended Validate                                */
 /*                                                                      */
 /* Called from: rdtfnc_Move_ID                                          */
@@ -15,7 +15,7 @@ GO
 /* 2025-01-20  1.0  VPA235     FCR-2804 Created                         */
 /************************************************************************/
 
-CREATE OR ALTER PROC [RDT].[rdt_511ExtValid09] (
+CREATE OR ALTER PROC [RDT].[rdt_511ExtValid10] (
    @nMobile          INT,
    @nFunc            INT, 
    @cLangCode        NVARCHAR( 3), 
@@ -133,5 +133,5 @@ GO
 SET ANSI_NULLS ON
 GO
 
-GRANT EXECUTE ON [RDT].[rdt_511ExtValid09] TO [NSQL]
+GRANT EXECUTE ON [RDT].[rdt_511ExtValid10] TO [NSQL]
 GO
