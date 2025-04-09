@@ -144,6 +144,17 @@ BEGIN
                GOTO Quit
             END CATCH
 
+            UPDATE KD SET
+               KD.Loc = @cToLOC
+            FROM KIT WITH (NOLOCK)
+                    JOIN KITDETAIL KD WITH (NOLOCK)
+                         ON KIT.KITKey = KD.KITKey
+            WHERE KIT.Facility = @cFacility
+              AND   KIT.StorerKey = @cStorerKey
+              AND   KIT.[Status] <> '9'
+              AND   KD.Id = @cFromID
+              AND   KD.[Type] = 'F'
+
          END
       END
    END
