@@ -65,28 +65,40 @@ BEGIN
    DECLARE @cSQL           NVARCHAR( MAX)
    DECLARE @cSQLParam      NVARCHAR( MAX)
    DECLARE @cLot           NVARCHAR(10)
-   DECLARE @cSuggSKU       NVARCHAR( 20),
-      @nOri_Scn               INT,
-      @nOri_Step              INT,
-      @cExtendedValidateSP    NVARCHAR( 20),
+
+   DECLARE 
+      @cSuggSKU               NVARCHAR( 20),
+      @cSuggLOC               NVARCHAR( 10),
+      @cSKU                   NVARCHAR( 20),
+      @cLOC                   NVARCHAR( 10),
+      @cID                    NVARCHAR( 20),
       @cOption                NVARCHAR( 1),
-      @nTranCount             INT,
       @nActQTY                INT,
       @cSerialNoCapture       NVARCHAR( 1),
       @cSKUSerialNoCapture    NVARCHAR( 1),
       @cPickSlipNo            NVARCHAR( 10),
       @cPickZone              NVARCHAR( 10),
       @cDropID                NVARCHAR( 20),
-      @cSuggLOC               NVARCHAR( 10),
       @cLottableCode          NVARCHAR( 30),
       @cSkipConfirmBalPick    NVARCHAR( 1),
       @cPackData1             NVARCHAR( 30),   --(yeekung04)
       @cPackData2             NVARCHAR( 30),   --(yeekung04)
       @cPackData3             NVARCHAR( 30),
-      @cSuggID                NVARCHAR(20),
+      @cSuggID                NVARCHAR( 20),
+
+      @nTranCount             INT,
+
+      --Extend Scn
+      @nOri_Scn               INT,
+      @nOri_Step              INT,
+
+      --Extended SP
+      @cExtendedValidateSP    NVARCHAR( 20),
       @cExtendedUpdateSP      NVARCHAR( 20),
       @cExtendedInfoSP        NVARCHAR( 20),
       @cExtendedInfo          NVARCHAR( 20),
+
+      --Message Queue
       @cMsg01                 NVARCHAR(20) = '',
       @cMsg02                 NVARCHAR(20) = '',
       @cMsg03                 NVARCHAR(20) = '',
@@ -135,21 +147,22 @@ BEGIN
       SELECT 'Executing rdt_839ExtScn04'
 
    SELECT 
-   @cPickZone           = V_Zone,
-   @cPickSlipNo         = V_PickSlipNo,
-   @cSuggLOC            = V_LOC,
-   @cSuggSKU            = V_SKU,
-   @nActQTY             = V_Integer1,
-   @cDropID             = V_String4,
-   @cLottableCode       = V_String6,
-   @cSkipConfirmBalPick = V_String14,
-   @cSKUSerialNoCapture = V_String15,
-   @cExtendedValidateSP = V_String21,
-   @cExtendedUpdateSP   = V_String22,
-   @cSerialNoCapture    = V_String34,
-   @cPackData1          = V_String41,  --(yeekung04)
-   @cPackData2          = V_String42,  --(yeekung04)
-   @cPackData3          = V_String43
+      @cPickZone           = V_Zone,
+      @cPickSlipNo         = V_PickSlipNo,
+      @cSuggLOC            = V_LOC,
+      @cSuggSKU            = V_SKU,
+      @nActQTY             = V_Integer1,
+      @cDropID             = V_String4,
+      @cLottableCode       = V_String6,
+      @cSkipConfirmBalPick = V_String14,
+      @cSKUSerialNoCapture = V_String15,
+      @cExtendedValidateSP = V_String21,
+      @cExtendedUpdateSP   = V_String22,
+      @cSerialNoCapture    = V_String34,
+      @cSuggID             = V_String38,
+      @cPackData1          = V_String41,  --(yeekung04)
+      @cPackData2          = V_String42,  --(yeekung04)
+      @cPackData3          = V_String43
    FROM rdt.rdtMobRec WITH (NOLOCK)
    WHERE Mobile = @nMobile
 
@@ -188,8 +201,14 @@ BEGIN
 
                IF @nInputKey = 1 -- ENTER
                BEGIN
-                  -- Screen mapping
+
+                  --screnn mapping
                   SET @cOption = @cInField01
+
+                  --Set rdtmobrec value to the local parameter
+                  SET @cSKU = @cSuggSKU
+                  SET @cLOC = @cSuggLOC
+                  SET @cID  =  @cSuggID
 
                   IF @nDebugFlag = 1
                      SELECT @cInField01 AS InField01, @cOption AS cOption
@@ -270,6 +289,10 @@ BEGIN
                   ELSE
                      SET @cConfirmType = 'CLOSE'
 
+                  SET @nTranCount = @@TRANCOUNT
+                  BEGIN TRAN
+                  SAVE TRAN rdt_839ExtScn04_6524
+
                   -- Confirm ( Balance pick later proceed only when user do picked something)
                   -- For option = 4, need confirm first if something already picked
                   -- IF @cOption IN ('1', '3', '9') OR ( @cOption IN ( 2, 4) AND @nActQTY > 0)
@@ -283,10 +306,6 @@ BEGIN
                      BEGIN
                         SELECT 'Confirm logic', @cOption AS cOption, @nActQTY AS ActQTY, @nConfirmQTY AS ConfirmQty, @cSkipConfirmBalPick AS cSkipConfirmBalPick
                      END
-
-                     SET @nTranCount = @@TRANCOUNT
-                     BEGIN TRAN
-                     SAVE TRAN rdt_839ExtScn04_6524
 
                      IF @cSKUSerialNoCapture IN ('1', '3') 
                      BEGIN
@@ -419,21 +438,21 @@ BEGIN
                         END
                      END --extupdate
                      */
-
-                     COMMIT TRAN rdt_839ExtScn04_6524 -- Only commit change made here
-                     WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
-                        COMMIT TRAN
-                  END
+                  END --Confirm logic
                   
-                  /*
                   IF @cOption = '9'
                   BEGIN
-                     DECLARE 
-                        @cNewPickZone NVARCHAR(10),
-                        @cNewPickSlipNo NVARCHAR(10)
-                     DECLARE @tAdditionalData [dbo].[VariableTable]
-                     DECLARE @cSuggestLOC nvarchar(10)
-                     DECLARE @cSuggestID nvarchar(18) 
+                     IF @nDebugFlag = 1
+                     BEGIN
+                        SELECT 'Option 9 - reallocation logic'
+                     END
+
+                     DECLARE @cRealloPickZone      NVARCHAR(10)
+                     DECLARE @cRealloPickSlipNo    NVARCHAR(10)
+                     DECLARE @cRealloLOC           NVARCHAR(10)
+                     DECLARE @cRealloID            NVARCHAR(18) 
+                     DECLARE @tAdditionalData      [dbo].[VariableTable]
+
 
                      --Find inventory for re-allocation
                      --Reallocation, To Do
@@ -447,7 +466,7 @@ BEGIN
                         @cErrMsg  OUTPUT
 
                      SET @cSQL =
-                     ' SELECT TOP 1 PD.LOT ' +
+                     ' SELECT TOP 1 @cLot = PD.LOT ' +
                      ' FROM dbo.PickDetail PD WITH (NOLOCK) ' +
                      '    JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC) ' +
                      '    JOIN LotAttribute LA WITH (NOLOCK) ON (LA.LOT = PD.LOT) ' +
@@ -488,39 +507,61 @@ BEGIN
                         @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
                         @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15
 
-                     SET @cNewPickSlipNo = @cPickSlipNo
-                     SET @CNewPickZone = @cPickZone
+                     IF @nDebugFlag = 1
+                     BEGIN
+                        SELECT 'Get lot number', @cLot AS Lot, @cSQL AS GetLotSQL
+                     END
 
+                     SET @cRealloPickSlipNo = @cPickSlipNo
+                     SET @CRealloPickZone = @cPickZone
+                     
                      EXECUTE [RDT].[rdt_PickReallo01] 
-                     @nMobile = @nMobile
-                     ,@nFunc = @nFunc
-                     ,@cLangCode = @cLangCode
-                     ,@cFacility = @cFacility
-                     ,@cStorerKey = @cStorerKey
-                     ,@cPickSlipNo = @cNewPickSlipNo OUTPUT
-                     ,@tAdditionalData = @tAdditionalData
-                     ,@cType = 'SKU'
-                     ,@cLOC = @cLOC
-                     ,@cID = @cID
-                     ,@cSKU = @cSKU
-                     ,@nQTY = @nQTY
-                     ,@cLot = @cLot OUTPUT
-                     ,@cPickZone = @cPickZone OUTPUT
-                     ,@cSuggestLOC = @cSuggestLOC OUTPUT
-                     ,@cSuggestID = @cSuggestID OUTPUT
-                     ,@nErrNo = @nErrNo OUTPUT
-                     ,@cErrMsg = @cErrMsg OUTPUT
+                        @nMobile = @nMobile
+                        ,@nFunc = @nFunc
+                        ,@cLangCode = @cLangCode
+                        ,@cFacility = @cFacility
+                        ,@cStorerKey = @cStorerKey
+                        ,@cPickSlipNo = @cRealloPickSlipNo OUTPUT
+                        ,@tAdditionalData = @tAdditionalData
+                        ,@cType = 'SKU'
+                        ,@cLOC = @cLOC
+                        ,@cID = @cID
+                        ,@cSKU = @cSKU
+                        ,@nQTY = @nActQTY
+                        ,@cLot = @cLot OUTPUT
+                        ,@cPickZone = @cRealloPickZone OUTPUT
+                        ,@cSuggestLOC = @cRealloLOC OUTPUT
+                        ,@cSuggestID = @cRealloID OUTPUT
+                        ,@nErrNo = @nErrNo OUTPUT
+                        ,@cErrMsg = @cErrMsg OUTPUT
                      
                      IF @nErrNo <> 0
                      BEGIN
-                        select 'Errno <> 0'
+                        ROLLBACK TRAN rdt_839ExtScn04_6524
+                        WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
+                           COMMIT TRAN
+                        
+                        IF @nErrNo > 0
+                        BEGIN
+                           INSERT dbo.TraceInfo (TraceName, TimeIn, Step1, Step2, 
+                              Step3, Step4, Step5,
+                              Col1, Col2, Col3, Col4, Col5)
+                           VALUES('rdt_839ExtScn04', GETDATE(), 'rdt_839ExtScn04', CAST(@nMobile AS NVARCHAR(10)), 
+                              CAST(@nScn AS NVARCHAR(10)), CAST(@nErrNo AS NVARCHAR(10)), @cPickSlipNo,
+                              @cSuggLoc, @cSuggSKU, @cSuggID, @cLot, CAST(@nActQTY AS NVARCHAR(10)))
+
+                           SET @nErrNo = 235853
+                           SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Reallocation failed
+
+                           GOTO Scn_6524_Fail
+                        END
                      END
 
                      --1. New allocation in same zone, prompt a message, continue the picking
                      --Alternate location found and is added to current pickslip
-                     IF ISNULL(@cNewPickZone, '') <> ''
+                     IF ISNULL(@cRealloLoc, '') <> ''
                      BEGIN
-                        IF ISNULL(@cNewPickZone, '') = @cPickZone AND @cNewPickSlipNo = @cPickSlipNo
+                        IF ISNULL(@cRealloPickZone, '') = @cPickZone AND @cRealloPickSlipNo = @cPickSlipNo
                         BEGIN
                            --i. Display message like "Alternate location found and is added to current pickslip"
                            SET @cMsg01 = 'Alternate location '
@@ -548,7 +589,7 @@ BEGIN
                            SET @cMsg01 = 'Alternate location '
                            SET @cMsg02 = 'found and is added '
                            SET @cMsg03 = 'to pickslip '
-                           SET @cMsg04 = @cNewPickSlipNo
+                           SET @cMsg04 = @cRealloPickSlipNo
                            EXEC rdt.rdtInsertMsgQueue @nMobile = @nMobile,
                                           @nErrNo = @nErrNo,
                                           @cErrMsg = @cErrMsg,
@@ -564,7 +605,7 @@ BEGIN
                                           @nDisplayMsg = 0
                         END
                      END
-                     ELSE
+                     ELSE -- Errno = -1
                      --3. Re-allocation is failed
                      BEGIN
                         SET @cMsg01 = 'No alternate'
@@ -584,10 +625,17 @@ BEGIN
                                        @cLine08 = @cMsg08,
                                        @cLine09 = @cMsg09,
                                        @nDisplayMsg = 0
-                     END
-                  END --Option = 9
-                  */
 
+                        SET @cOutField01 = '' --Option
+
+                        GOTO Scn_6524_Fail
+                     END --Errno = -1
+                  END --Option = 9
+
+                  COMMIT TRAN rdt_839ExtScn04_6524 -- Only commit change made here
+                  WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
+                     COMMIT TRAN
+                  
                   --Return values to main function
 
                   SET @cUDF01 = @cOption
