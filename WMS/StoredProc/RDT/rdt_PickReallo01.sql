@@ -69,7 +69,6 @@ BEGIN
       @cAllocatedLot       NVARCHAR(10),
 
       @bSuccess            BIT,
-      @dTraceDateTime      DATETIME,
       @nTranCount          INT,
       @nRowCount           INT,
       @nLoopIndex          INT
@@ -387,26 +386,12 @@ BEGIN
          END
          ELSE IF @nDebugFlag = 2
          BEGIN
-            SET @dTraceDateTime = GETDATE()
-
-            EXEC isp_InsertTraceInfo      
-            @c_TraceCode = 'RDTReallocation',      
-            @c_TraceName = 'rdt_PickRello01',      
-            @c_starttime = @dTraceDateTime,      
-            @c_endtime   = NULL,
-            @c_step1 = @nFunc,      
-            @c_step2 = 'Type UCC',      
-            @c_step3 = @nLoopIndex,      
-            @c_step4 = @nRowCount,      
-            @c_step5 = @nMobile,           
-            @c_col1 = @cPickDetailKey,      
-            @c_col2 = @cSuggestLOC,      
-            @c_col3 = @cSuggestID,    
-            @c_col4 = @cAllocatedUCC,      
-            @c_col5 = '',      
-            @b_Success = 1,      
-            @n_Err = 0,      
-            @c_ErrMsg = ''
+            INSERT dbo.TraceInfo (TraceName, TimeIn, Step1, Step2, 
+               Step3, Step4, Step5,
+               Col1, Col2, Col3, Col4, Col5)
+            VALUES('rdt_PickRello01', GETDATE(), CAST(@nFunc AS NVARCHAR(10)), 'Type UCC', 
+               CAST(@nLoopIndex AS NVARCHAR(10)), CAST(@nRowCount AS NVARCHAR(10)), CAST(@nMobile AS NVARCHAR(10)),
+               @cPickDetailKey, @cSuggestLOC, @cSuggestID, @cAllocatedUCC, '')
          END
 
          INSERT INTO @tAllocation ( PickDetailKey, CaseID, PickHeaderKey, OrderKey, OrderLineNumber, SKU, QTY, 
@@ -741,26 +726,12 @@ BEGIN
 
             IF @nDebugFlag = 2
             BEGIN
-               SET @dTraceDateTime = GETDATE()
-
-               EXEC isp_InsertTraceInfo      
-               @c_TraceCode = 'RDTReallocation',      
-               @c_TraceName = 'rdt_PickRello01',      
-               @c_starttime = @dTraceDateTime,      
-               @c_endtime   = NULL,
-               @c_step1 = @nFunc,      
-               @c_step2 = 'Type SKU',      
-               @c_step3 = @nLoopIndex,      
-               @c_step4 = @nRowCount,      
-               @c_step5 = @nMobile,           
-               @c_col1 = @cPickDetailKey,      
-               @c_col2 = @cSuggestLOC,      
-               @c_col3 = @cSuggestID,    
-               @c_col4 = @cAllocatedLot,      
-               @c_col5 = '',      
-               @b_Success = 1,      
-               @n_Err = 0,      
-               @c_ErrMsg = ''
+               INSERT dbo.TraceInfo (TraceName, TimeIn, Step1, Step2, 
+               Step3, Step4, Step5,
+               Col1, Col2, Col3, Col4, Col5)
+               VALUES('rdt_PickRello01', GETDATE(), CAST(@nFunc AS NVARCHAR(10)), 'Type SKU', 
+                  CAST(@nLoopIndex AS NVARCHAR(10)), CAST(@nRowCount AS NVARCHAR(10)), CAST(@nMobile AS NVARCHAR(10)),
+                  @cPickDetailKey, @cSuggestLOC, @cSuggestID, @cAllocatedLot, '')
             END
          END --loop lot for the short pick detail
 
