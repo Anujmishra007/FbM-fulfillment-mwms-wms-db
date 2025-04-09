@@ -71,7 +71,7 @@ CREATE PROC [RDT].[rdtPrevScreen] (
    BEGIN
       SET @nScn = 1
    END
-   ELSE IF @nScn Between 6 and 499 OR @nScn < -101 -- Menu (Screen 5, Mainmenu, do nothing)
+   ELSE IF @nScn Between 6 and 499 OR @nScn < -100 -- Menu (Screen 5, Mainmenu, do nothing)
    BEGIN
       DECLARE @nDefaultMenu int
       

@@ -105,10 +105,10 @@ AS
       END
 
       -- Menu is setup (can be blank, not setup)
-      IF @nMsgID > 0 OR @nMsgID < -101
+      IF @nMsgID > 0 OR @nMsgID < -100
       BEGIN
          -- Determine is a menu or function
-         IF @nMsgID BETWEEN 5 AND 499 OR @nMsgID < -101
+         IF @nMsgID BETWEEN 5 AND 499 OR @nMsgID < -100
             SET @cMsgType = 'MNU'
          ELSE
             SET @cMsgType = 'FNC'

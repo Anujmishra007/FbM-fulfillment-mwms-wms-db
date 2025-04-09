@@ -129,7 +129,7 @@ BEGIN
                IF @nErrNo <> 0
                   GOTO EXIT_PROCESS_MENU
             END
-            ELSE IF @nFunction > 2 OR @nFunction < -101
+            ELSE IF @nFunction > 2 OR @nFunction < -100
             BEGIN
                -- Menu
                EXEC RDT.rdtProcessMenu @InMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nFunction OUTPUT
@@ -250,7 +250,7 @@ BEGIN
                      GOTO EXIT_PROCESS_MENU
                END
             END  --IF @nFunction <= 5
-            ELSE IF @nFunction > 5 OR @nFunction < -101
+            ELSE IF @nFunction > 5 OR @nFunction < -100
             BEGIN
                -- Back to Previous Screen
                EXEC RDT.rdtPrevScreen @InMobile, @nScn OUTPUT
@@ -383,7 +383,7 @@ BEGIN
       DECLARE @cXML NVARCHAR( MAX)
       SET @cXML = ''
 
-      IF @nFunction Between 5 AND 499 OR @nFunction < -101
+      IF @nFunction Between 5 AND 499 OR @nFunction < -100
          EXEC RDT.rdtGetMenuHttp @InMobile, @cXML OUTPUT    -- Menu
       ELSE
          EXEC RDT.rdtGetScreenHttp @InMobile, @cXML OUTPUT  -- Functional
