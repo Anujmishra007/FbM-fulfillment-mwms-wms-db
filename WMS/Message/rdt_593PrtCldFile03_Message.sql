@@ -1,4 +1,5 @@
--- rdt_593PrintCldFile02_message
+-- rdt_593PrintCldFile03_message
+--UWP-32538
 execute rdt.rdtDropMsg 236101 , 236150		
 
 execute rdt.rdtAddMsg 236101, 10, '236101NeedOrderKey',              'us_english', 593, 0, '236101 Need OrderKey'
