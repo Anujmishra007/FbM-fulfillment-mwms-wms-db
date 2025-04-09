@@ -644,7 +644,7 @@ ROLLBACK_rdt_957ExtScn03_6523:
 
    INSERT dbo.TraceInfo (TraceName, TimeIn, Step1, Step2, Step3, Step4, Step5,
       Col1, Col2, Col3, Col4, Col5)
-   VALUES('rdt_957ExtScn03', GETDATE(), CAST(@nCurrentStep AS NVARCHAR(10)), CAST(@nCurrentScn AS NVARCHAR(10)), @cOption, CAST(@nInnerErrorNo AS NVARCHAR(10)), @cPickZone,
+   VALUES('rdt_957ExtScn03', GETDATE(), CAST(@nMobile AS NVARCHAR(10)), CAST(@nCurrentScn AS NVARCHAR(10)), @cOption, CAST(@nInnerErrorNo AS NVARCHAR(10)), @cPickZone,
       @cPickSlipNo, @cSuggLOC, @cSuggID, @cSuggSKU, @cLot + '-' + CAST(@nActQTY AS NVARCHAR(10)))
 Quit:
    WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
