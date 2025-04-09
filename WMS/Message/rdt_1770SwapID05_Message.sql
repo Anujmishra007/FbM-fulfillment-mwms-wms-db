@@ -1,4 +1,5 @@
---rdt.rdt_1770SwapID02
+--rdt.rdt_1770SwapID05
+--FCR-3836
 EXECUTE rdt.rdtdropmsg 236001, 236050
 
 EXECUTE rdt.rdtAddMsg 236001, 10, '236001^Need ID       ',        'us_english', 1770
@@ -37,5 +38,12 @@ EXECUTE rdt.rdtAddMsg 236033, 10, '236033^Lot14NotMatch',         'us_english', 
 EXECUTE rdt.rdtAddMsg 236034, 10, '236034^Lot15NotMatch',         'us_english', 1770
 EXECUTE rdt.rdtAddMsg 236035, 10, '236035^UnlockRPFFail',         'us_english', 1770
 EXECUTE rdt.rdtAddMsg 236036, 10, '236036^UPDRPFTaskFail',        'us_english', 1770, 0, '236036 Update RPF Task Fail'
+EXECUTE rdt.rdtAddMsg 236037, 10, '236037^SwapFPOnly',            'us_english', 1770, 0, '236037 Only allow to swap FP Pickmethod'
+EXECUTE rdt.rdtAddMsg 236038, 10, '236038^IDLocked',              'us_english', 1770, 0, '236038 ID Locked, no task was generated'
+EXECUTE rdt.rdtAddMsg 236039, 10, '236039^UpdTaskFail',           'us_english', 1770, 0, '236039 Update Task Fail'
+EXECUTE rdt.rdtAddMsg 236040, 10, '236040^OnlySwapTask',          'us_english', 1770
+EXECUTE rdt.rdtAddMsg 236041, 10, '236041^IDIsOnHold',            'us_english', 1770, 0, '236041 Scanned ID Is On Hold'
+EXECUTE rdt.rdtAddMsg 236042, 10, '236042^UPD LLI Fail',          'us_english', 1770
+EXECUTE rdt.rdtAddMsg 236043, 10, '236043^UPD LLI Fail',          'us_english', 1770
 
 SELECT * FROM rdt.rdtmsg WITH(NOLOCK) WHERE message_id BETWEEN 236001 AND 236050
