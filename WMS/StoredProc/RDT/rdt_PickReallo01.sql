@@ -186,6 +186,10 @@ BEGIN
       GOTO Quit
    END
 
+   IF @nDebugFlag = 1
+      SELECT 'Short PKD query parameters', @cStorerKey AS Storer, @cPickSlipNo AS PSNO, 
+               @cLOC AS LOC, @cID AS ID, @cSKU AS SKU, @cLot AS LOT
+
    INSERT INTO @tShortPickDetails ( PickDetailKey, CaseID, PickHeaderKey, OrderKey, OrderLineNumber, SKU, QTY, 
                                     Lot, StorerKey, UOM, UOMQty, DropID, Loc, ID, PackKey, CartonGroup, 
                                     PickMethod, WaveKey)
@@ -196,7 +200,7 @@ BEGIN
       AND PickSlipNo = @cPickSlipNo
       AND Status = '4'
       AND Loc = @cLOC
-      AND ID = @cID
+      AND (@cType = 'SKU'OR ID = @cID) -- 839 doesn't passin ID value
       AND SKU = @cSKU
       AND Lot = @cLot
    ORDER BY Qty DESC
@@ -210,17 +214,12 @@ BEGIN
 
    SELECT 
       @cTotalShortQty = SUM(QTY),
-      @cWaveKey = WAVEKEY,
+      @cWaveKey = MAX(WAVEKEY),
       @cLottable01 = MAX(LA.Lottable01)
    FROM @tShortPickDetails t
    JOIN dbo.LOTATTRIBUTE LA
       ON t.LOT = LA.Lot
       AND LA.StorerKey = @cStorerKey
-   WHERE t.SKU = @cSKU
-      AND Loc = @cLOC
-      AND ID = @cID
-      AND t.Lot = @cLot
-   GROUP BY WAVEKEY, t.SKU, Loc, ID, t.Lot
 
    IF @nDebugFlag = 1
    BEGIN
