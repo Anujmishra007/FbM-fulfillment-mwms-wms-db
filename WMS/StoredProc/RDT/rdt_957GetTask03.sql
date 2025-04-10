@@ -424,7 +424,7 @@ BEGIN
                AND PD.Status <> '4'
                AND PD.Status = '0'
                AND LOC.LOC = @cCurrLOC
-               AND PD.ID   > @cCurrID
+               --AND PD.ID   > @cCurrID
             GROUP BY PD.ID, PD.StorerKey, PD.SKU
             ORDER BY PD.ID, PD.StorerKey, PD.SKU
          ELSE
@@ -461,7 +461,7 @@ BEGIN
                AND PD.Status <> '4'
                AND PD.Status = '0'
                AND LOC.LOC = @cCurrLOC
-               AND PD.ID   > @cCurrID
+               --AND PD.ID   > @cCurrID
             GROUP BY PD.ID, PD.StorerKey, PD.SKU
             ORDER BY PD.ID, PD.StorerKey, PD.SKU
          ELSE
@@ -498,7 +498,7 @@ BEGIN
                AND PD.Status <> '4'
                AND PD.Status = '0'
                AND LOC.LOC = @cCurrLOC
-               AND PD.ID   > @cCurrID
+               --AND PD.ID   > @cCurrID
             GROUP BY PD.ID, PD.StorerKey, PD.SKU
             ORDER BY PD.ID, PD.StorerKey, PD.SKU
          ELSE
@@ -535,7 +535,7 @@ BEGIN
                AND PD.Status <> '4'
                AND PD.Status = '0'
                AND LOC.LOC = @cCurrLOC
-               AND PD.ID   > @cCurrID
+               --AND PD.ID   > @cCurrID
                GROUP BY PD.ID, PD.StorerKey, PD.SKU
                ORDER BY PD.ID, PD.StorerKey, PD.SKU
          ELSE
