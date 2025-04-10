@@ -9,7 +9,7 @@ END
 DELETE rdt.RDTScn WHERE Scn = 6260 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 6260, 'ENG',
    @cLine01 = 'PSNO: %10i01',
-   @cLine14 = '%e', 
+   @cLine14 = '%e',
    @cWebGroup = '{"1":["1"]}', 
    @nFunc = 1864
 
