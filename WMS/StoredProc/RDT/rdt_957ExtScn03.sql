@@ -431,7 +431,8 @@ BEGIN
                         @cNewPickSlipNo         NVARCHAR(10),
                         @cLot                   NVARCHAR(10),
                         @cNewSuggestLOC         NVARCHAR(10),
-                        @cNewSuggestID          NVARCHAR(18) 
+                        @cNewSuggestID          NVARCHAR(18),
+                        @cScannedPickZone       NVARCHAR(10)
 
                      SELECT TOP 1 @cLot = LOT
                      FROM dbo.PickDetail WITH (NOLOCK)
@@ -446,6 +447,17 @@ BEGIN
                      --Find inventory for re-allocation
                      --Reallocation, To Do
 
+                     SET @cScannedPickZone = @cPickZone
+
+                     --If @cPickZone is blank, get the pickzone from loc table
+                     IF @cPickZone = ''
+                     BEGIN
+                        SELECT @cPickZone = PickZone
+                        FROM dbo.Loc WITH(NOLOCK)
+                        WHERE Facility = @cFacility
+                           AND Loc = @cSuggLOC
+                     END
+                     
                      SET @cNewPickZone = @cPickZone
                      SET @cNewPickSlipNo = @cPickSlipNo
 
@@ -477,6 +489,9 @@ BEGIN
                            SET @nErrNo = 230604
                            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Reallocation Fail
                         END
+
+                        -- Set PickZone as original value
+                        SET @cPickZone = @cScannedPickZone 
 
                         GOTO ROLLBACK_rdt_957ExtScn03_6523
                      END
@@ -529,6 +544,9 @@ BEGIN
                                           @nDisplayMsg = 0
                         END
                      END
+
+                     -- Set PickZone as original value
+                     SET @cPickZone = @cScannedPickZone
                   END
 
                   SET @cSKUValidated = '0'
