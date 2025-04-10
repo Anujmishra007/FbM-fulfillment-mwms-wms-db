@@ -233,10 +233,24 @@ BEGIN
                      GOTO Scn_6524_Fail
                   END
 
+                  IF @cOption = '9'
+                  BEGIN
+                     --PickZone is not required in 839 but required in reallocation
+                     --Get pickzone from suggested loc if pickzone is empty
+                     IF @cPickZone = ''
+                        SELECT @cPickZone = PickZone FROM dbo.Loc (NOLOCK) WHERE LOC = @cLOC
+                     
+                     IF ISNULL(@cPickZone, '') = ''
+                     BEGIN
+                        SET @nErrNo = 235854
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --PickZone empty
+                        GOTO Scn_6524_Fail
+                     END
+                  END
+
                   SET @nOri_Step = @nStep
                   SET @nOri_Scn  = @nScn
 
-                  /*
                   IF @cExtendedValidateSP <> ''
                   BEGIN
                      IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedValidateSP AND type = 'P')
@@ -267,15 +281,14 @@ BEGIN
                            ' @cErrMsg      NVARCHAR(250) OUTPUT  '
 
                         EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-                           @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cType,
-                           @cPickSlipNo, @cPickZone, @cDropID, @cSuggLOC, @cSKU, @nQTY,@cPackData1, @cPackData2, @cPackData3,
+                           @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, '',
+                           @cPickSlipNo, @cPickZone, @cDropID, @cSuggLOC, @cSKU, @nActQTY,@cPackData1, @cPackData2, @cPackData3,
                            @nErrNo OUTPUT, @cErrMsg OUTPUT
 
                         IF @nErrNo <> 0
                            GOTO Scn_6524_Fail
                      END
                   END
-                  */
 
                   /*
                      Option=1 = Short pick sku
@@ -368,77 +381,75 @@ BEGIN
                            GOTO Scn_6524_Fail
                         END
                      END
-
-                     /*
-                     IF @cExtendedUpdateSP <> ''
-                     BEGIN
-                        IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')
-                        BEGIN
-                           SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +
-                              ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, ' +
-                              ' @cPickSlipNo, @cPickZone, @cDropID, @cLOC, @cSKU, @nQTY, @cOption, @cLottableCode, ' +
-                              ' @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05, ' +
-                              ' @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10, ' +
-                              ' @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, ' +
-                              ' @cPackData1,@cPackData2,@cPackData3, ' +
-                              ' @nErrNo OUTPUT, @cErrMsg OUTPUT '
-                           SET @cSQLParam =
-                              ' @nMobile         INT                      ' +
-                              ',@nFunc           INT                      ' +
-                              ',@cLangCode       NVARCHAR( 3)             ' +
-                              ',@nStep           INT                      ' +
-                              ',@nInputKey       INT                      ' +
-                              ',@cFacility       NVARCHAR( 5)             ' +
-                              ',@cStorerKey      NVARCHAR( 15)            ' +
-                              ',@cPickSlipNo     NVARCHAR( 10)            ' +
-                              ',@cPickZone       NVARCHAR( 10)            ' +
-                              ',@cDropID         NVARCHAR( 20)            ' +
-                              ',@cLOC            NVARCHAR( 10)            ' +
-                              ',@cSKU            NVARCHAR( 20)            ' +
-                              ',@nQTY            INT                      ' +
-                              ',@cOption         NVARCHAR( 1)             ' +
-                              ',@cLottableCode   NVARCHAR( 30)            ' +
-                              ',@cLottable01     NVARCHAR( 18)            ' +
-                              ',@cLottable02     NVARCHAR( 18)            ' +
-                              ',@cLottable03     NVARCHAR( 18)            ' +
-                              ',@dLottable04     DATETIME                 ' +
-                              ',@dLottable05     DATETIME                 ' +
-                              ',@cLottable06     NVARCHAR( 30)            ' +
-                              ',@cLottable07     NVARCHAR( 30)            ' +
-                              ',@cLottable08     NVARCHAR( 30)            ' +
-                              ',@cLottable09     NVARCHAR( 30)            ' +
-                              ',@cLottable10     NVARCHAR( 30)            ' +
-                              ',@cLottable11     NVARCHAR( 30)            ' +
-                              ',@cLottable12     NVARCHAR( 30)            ' +
-                              ',@dLottable13     DATETIME                 ' +
-                              ',@dLottable14     DATETIME                 ' +
-                              ',@dLottable15     DATETIME                 ' +
-                              ',@cPackData1      NVARCHAR( 30)            ' +
-                              ',@cPackData2      NVARCHAR( 30)            ' +
-                              ',@cPackData3      NVARCHAR( 30)            ' +
-                              ',@nErrNo          INT           OUTPUT     ' +
-                              ',@cErrMsg         NVARCHAR(250) OUTPUT     '
-
-                           EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-                              @nMobile, @nFunc, @cLangCode, 5, @nInputKey, @cFacility, @cStorerKey, --(yeekung08)
-                              @cPickSlipNo, @cPickZone, @cDropID, @cSuggLOC, @cSuggSKU, @nQTY, @cOption, @cLottableCode,
-                              @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
-                              @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
-                              @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,
-                              @cPackData1,@cPackData2,@cPackData3,
-                              @nErrNo OUTPUT, @cErrMsg OUTPUT
-
-                           IF @nErrNo <> 0
-                           BEGIN
-                              ROLLBACK TRAN rdt_839ExtScn04_6524
-                              WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
-                                 COMMIT TRAN
-                              GOTO Scn_6524_Fail
-                           END
-                        END
-                     END --extupdate
-                     */
                   END --Confirm logic
+
+                  IF @cExtendedUpdateSP <> ''
+                  BEGIN
+                     IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')
+                     BEGIN
+                        SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +
+                           ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, ' +
+                           ' @cPickSlipNo, @cPickZone, @cDropID, @cLOC, @cSKU, @nQTY, @cOption, @cLottableCode, ' +
+                           ' @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05, ' +
+                           ' @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10, ' +
+                           ' @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, ' +
+                           ' @cPackData1,@cPackData2,@cPackData3, ' +
+                           ' @nErrNo OUTPUT, @cErrMsg OUTPUT '
+                        SET @cSQLParam =
+                           ' @nMobile         INT                      ' +
+                           ',@nFunc           INT                      ' +
+                           ',@cLangCode       NVARCHAR( 3)             ' +
+                           ',@nStep           INT                      ' +
+                           ',@nInputKey       INT                      ' +
+                           ',@cFacility       NVARCHAR( 5)             ' +
+                           ',@cStorerKey      NVARCHAR( 15)            ' +
+                           ',@cPickSlipNo     NVARCHAR( 10)            ' +
+                           ',@cPickZone       NVARCHAR( 10)            ' +
+                           ',@cDropID         NVARCHAR( 20)            ' +
+                           ',@cLOC            NVARCHAR( 10)            ' +
+                           ',@cSKU            NVARCHAR( 20)            ' +
+                           ',@nQTY            INT                      ' +
+                           ',@cOption         NVARCHAR( 1)             ' +
+                           ',@cLottableCode   NVARCHAR( 30)            ' +
+                           ',@cLottable01     NVARCHAR( 18)            ' +
+                           ',@cLottable02     NVARCHAR( 18)            ' +
+                           ',@cLottable03     NVARCHAR( 18)            ' +
+                           ',@dLottable04     DATETIME                 ' +
+                           ',@dLottable05     DATETIME                 ' +
+                           ',@cLottable06     NVARCHAR( 30)            ' +
+                           ',@cLottable07     NVARCHAR( 30)            ' +
+                           ',@cLottable08     NVARCHAR( 30)            ' +
+                           ',@cLottable09     NVARCHAR( 30)            ' +
+                           ',@cLottable10     NVARCHAR( 30)            ' +
+                           ',@cLottable11     NVARCHAR( 30)            ' +
+                           ',@cLottable12     NVARCHAR( 30)            ' +
+                           ',@dLottable13     DATETIME                 ' +
+                           ',@dLottable14     DATETIME                 ' +
+                           ',@dLottable15     DATETIME                 ' +
+                           ',@cPackData1      NVARCHAR( 30)            ' +
+                           ',@cPackData2      NVARCHAR( 30)            ' +
+                           ',@cPackData3      NVARCHAR( 30)            ' +
+                           ',@nErrNo          INT           OUTPUT     ' +
+                           ',@cErrMsg         NVARCHAR(250) OUTPUT     '
+
+                        EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                           @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,
+                           @cPickSlipNo, @cPickZone, @cDropID, @cSuggLOC, @cSuggSKU, @nActQTY, @cOption, @cLottableCode,
+                           @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
+                           @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
+                           @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,
+                           @cPackData1,@cPackData2,@cPackData3,
+                           @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+                        IF @nErrNo <> 0
+                        BEGIN
+                           ROLLBACK TRAN rdt_839ExtScn04_6524
+                           WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
+                              COMMIT TRAN
+                           GOTO Scn_6524_Fail
+                        END
+                     END
+                  END --extupdate
                   
                   IF @cOption = '9'
                   BEGIN
@@ -625,7 +636,9 @@ BEGIN
                                        @cLine08 = @cMsg08,
                                        @cLine09 = @cMsg09,
                                        @nDisplayMsg = 0
-
+                        
+                        -- If no location found, then user has to choose short by manul
+                        -- So stay at the option screen
                         SET @cOutField01 = '' --Option
 
                         GOTO Scn_6524_Fail

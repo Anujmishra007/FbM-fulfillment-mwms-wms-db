@@ -6619,53 +6619,7 @@ BEGIN
 
    Step_99_Fail:
       GOTO Quit
-   /*
-   Quit_Step5_99:
-      IF @cExtendedInfoSP <> ''
-      BEGIN
-         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')
-         BEGIN
-            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
-               ' @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cFacility, @cStorerKey, @cType, ' +
-               ' @cPickSlipNo, @cPickZone, @cDropID, @cLOC, @cSKU, @nQTY,  @nActQty, @nSuggQTY,'+
-               ' @cPackData1 , @cPackData2,@cPackData3, ' +
-               ' @cExtendedInfo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT     '
-            SET @cSQLParam =
-               ' @nMobile      INT,           ' +
-               ' @nFunc        INT,           ' +
-               ' @cLangCode    NVARCHAR( 3),  ' +
-               ' @nStep        INT,           ' +
-               ' @nAfterStep   INT,           ' +
-               ' @nInputKey    INT,           ' +
-               ' @cFacility    NVARCHAR( 5) , ' +
-               ' @cStorerKey   NVARCHAR( 15), ' +
-               ' @cType        NVARCHAR( 10), ' +
-               ' @cPickSlipNo  NVARCHAR( 10), ' +
-               ' @cPickZone    NVARCHAR( 10), ' +
-               ' @cDropID      NVARCHAR( 20), ' +
-               ' @cLOC         NVARCHAR( 10), ' +
-               ' @cSKU         NVARCHAR( 20), ' +
-               ' @nQTY         INT,           ' +
-               ' @nActQty      INT,           ' +
-               ' @nSuggQTY     INT,           ' +
-               ' @cPackData1      NVARCHAR( 30), ' +
-               ' @cPackData2      NVARCHAR( 30), ' +
-               ' @cPackData3      NVARCHAR( 30), ' +
-               ' @cExtendedInfo NVARCHAR(20) OUTPUT,  ' +
-               ' @nErrNo       INT           OUTPUT, ' +
-               ' @cErrMsg      NVARCHAR(250) OUTPUT  '
 
-            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-               @nMobile, @nFunc, @cLangCode, 5, @nStep, @nInputKey, @cFacility, @cStorerKey, @cType,
-               @cPickSlipNo, @cPickZone, @cDropID, @cSuggLOC, @cSuggSKU, @nQTY, @nActQty, @nSuggQTY,
-               @cPackData1 , @cPackData2,@cPackData3,
-               @cExtendedInfo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
-
-            IF @nStep IN (3,9)
-               SET @cOutField12 = @cExtendedInfo
-         END
-      END
-      */
 END
 GOTO Quit
 /********************************************************************************
