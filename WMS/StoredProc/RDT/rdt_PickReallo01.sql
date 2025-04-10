@@ -50,13 +50,15 @@ BEGIN
    -- 3. If sql error occurs when update back to pickdetail, set to the fixed errno to indicates
    --    re-allocation is wrong. It is the expcted error. The outer SP will handle it.
    ----------------------------------------------------------------------------------------
-   DECLARE @nDebugFlag  INT = 0 --1 print log, 2 print log and insert trace info
+   DECLARE @nDebugFlag  INT = 0 --1 print log, 2 insert trace info
 
    DECLARE
       @cSuggestPickZone    NVARCHAR(10),
       @cSuggestPSNO        NVARCHAR(10),
       @cPickDetailKey      NVARCHAR(18),
       @cNewPickDetailKey   NVARCHAR(18),
+      @cPKDNotes           NVARCHAR(1024),
+      @cUserName           NVARCHAR(128),
       @cLottable01         NVARCHAR(10),
       @nPickDetailQty      INT,
       @cTotalShortQty      INT,
@@ -185,6 +187,8 @@ BEGIN
       GOTO Quit
    END
 
+   SELECT @cUserName = UserName FROM rdt.RDTMOBREC WITH (NOLOCK) WHERE Mobile = @nMobile
+
    IF @nDebugFlag = 1
       SELECT 'Short PKD query parameters', @cStorerKey AS Storer, @cPickSlipNo AS PSNO, 
                @cLOC AS LOC, @cID AS ID, @cSKU AS SKU, @cLot AS LOT
@@ -201,7 +205,7 @@ BEGIN
       AND Loc = @cLOC
       AND (@cType = 'SKU'OR ID = @cID) -- 839 doesn't passin ID value
       AND SKU = @cSKU
-      AND Lot = @cLot
+      --AND Lot = @cLot -- Exclude lot, because 839 will combine all lots in one pick.
    ORDER BY Qty DESC
 
    IF @@ROWCOUNT = 0
@@ -240,10 +244,10 @@ BEGIN
       INNER JOIN dbo.PickHeader PH WITH (NOLOCK)
          ON PD.PickSlipNo = PH.PickHeaderKey
          AND PD.Storerkey = PH.StorerKey
-      INNER JOIN dbo.LoadPlan LP WITH (NOLOCK)
-         ON PH.LoadKey = LP.LoadKey 
-      INNER JOIN dbo.LoadPlanDetail LPD WITH (NOLOCK)
-         ON LP.LoadKey = LPD.LoadKey
+      --INNER JOIN dbo.LoadPlan LP WITH (NOLOCK)
+      --   ON PH.LoadKey = LP.LoadKey 
+      --INNER JOIN dbo.LoadPlanDetail LPD WITH (NOLOCK)
+      --   ON LP.LoadKey = LPD.LoadKey
       WHERE PD.StorerKey = @cStorerKey
          AND PD.SKU = @cSKU
          AND PD.Status = '0'
@@ -255,7 +259,7 @@ BEGIN
          AND EXISTS (
             SELECT 1
             FROM @tShortPickDetails TSPD
-            WHERE TSPD.OrderKey = LPD.OrderKey
+            WHERE TSPD.OrderKey = PD.OrderKey
          )
       GROUP BY LOC.PickZone, PD.PickSlipNo
 
@@ -472,6 +476,14 @@ BEGIN
          GOTO RollBack_UCC
       END CATCH
 
+      --Set PKD notes
+      SET @cPKDNotes = 'Alternate allocation for short from ' + @cUserName + ' for ' + @cPickSlipNo
+
+      IF @nDebugFlag = 1
+      BEGIN
+         SELECT 'Generate PKD notes', @cPKDNotes AS PKDNotes
+      END
+
       BEGIN TRY
          UPDATE PD WITH (ROWLOCK)
          SET PD.Status = '0',
@@ -482,7 +494,8 @@ BEGIN
              PD.Lot = T.Lot,
              PD.EditDate = GETDATE(),
              PD.EditWho = SUSER_SNAME(),
-             PD.PickSlipNo = T.PickSlipNo
+             PD.PickSlipNo = T.PickSlipNo,
+             PD.Notes = @cPKDNotes
          FROM dbo.PickDetail PD WITH (ROWLOCK)
          JOIN @tAllocation T
             ON PD.PickDetailKey = T.PickDetailKey
@@ -777,8 +790,14 @@ BEGIN
          GOTO RollBack_SKU
       END CATCH
 
+      --Set PKD notes
+      SET @cPKDNotes = 'Alternate allocation for short from ' + @cUserName + ' for ' + @cPickSlipNo
+
       IF @nDebugFlag = 1
+      BEGIN
+         SELECT 'Generate PKDNotes', @cPKDNotes AS PKDNotes
          SELECT 'Update phyical PKD with reallocation result'
+      END
 
       --Reallocate the pickdetail to new LLI
       BEGIN TRY
@@ -793,14 +812,15 @@ BEGIN
                target.Lot = source.Lot,
                target.PickSlipNo = source.PickSlipNo,
                target.EditDate = GETDATE(),
-               target.EditWho = SUSER_SNAME()
+               target.EditWho = SUSER_SNAME(),
+               target.Notes = @cPKDNotes
          WHEN NOT MATCHED BY TARGET THEN
             INSERT (PickDetailKey, CaseID, PickHeaderKey, OrderKey, OrderLineNumber, SKU, Qty, 
                   Lot, StorerKey, UOM, UOMQty, DropID, Loc, ID, PackKey, CartonGroup, 
-                  PickMethod, WaveKey, PickSlipNo, Status, EditDate, EditWho)
+                  PickMethod, WaveKey, PickSlipNo, Status, EditDate, EditWho, Notes)
             VALUES (source.PickDetailKey, source.CaseID, source.PickHeaderKey, source.OrderKey, source.OrderLineNumber, source.SKU, source.QTY, 
                   source.Lot, source.StorerKey, source.UOM, source.UOMQty, source.DropID, source.Loc, source.ID, source.PackKey, source.CartonGroup, 
-                  source.PickMethod, source.WaveKey, source.PickSlipNo, '0', GETDATE(), SUSER_SNAME());
+                  source.PickMethod, source.WaveKey, source.PickSlipNo, '0', GETDATE(), SUSER_SNAME(), @cPKDNotes);
       END TRY
       BEGIN CATCH
          SET @nErrNo = 235666
