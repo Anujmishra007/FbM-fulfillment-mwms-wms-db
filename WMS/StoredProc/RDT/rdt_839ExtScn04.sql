@@ -617,7 +617,7 @@ BEGIN
                         END
                      END
                      ELSE -- Errno = -1
-                     --3. Re-allocation is failed
+                     --3. No loc found
                      BEGIN
                         SET @cMsg01 = 'No alternate'
                         SET @cMsg02 = 'location found'
