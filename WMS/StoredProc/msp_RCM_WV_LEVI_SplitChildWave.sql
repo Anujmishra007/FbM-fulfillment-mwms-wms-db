@@ -362,7 +362,7 @@ BEGIN
       END
       
       DECLARE CUR_MAIN CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-      SELECT STRING_AGG(Orderkey, ',')
+      SELECT STRING_AGG(CAST(Orderkey AS NVARCHAR(MAX)), ',')
            , SUM(VCCount)
       FROM @T_ORDERS
       GROUP BY GroupNumber, BuyerPO      
