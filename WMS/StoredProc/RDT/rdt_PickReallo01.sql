@@ -249,7 +249,6 @@ BEGIN
       --INNER JOIN dbo.LoadPlanDetail LPD WITH (NOLOCK)
       --   ON LP.LoadKey = LPD.LoadKey
       WHERE PD.StorerKey = @cStorerKey
-         AND PD.SKU = @cSKU
          AND PD.Status = '0'
          AND PD.Loc <> @cLOC
          AND LOC.PickZone <> @cPickZone
