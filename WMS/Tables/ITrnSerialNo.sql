@@ -35,7 +35,7 @@ CREATE TABLE [dbo].[ITrnSerialNo]
 [Lottable13] [datetime] NULL,
 [Lottable14] [datetime] NULL,
 [Lottable15] [datetime] NULL,
-[Channel] [nvarchar] (18) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[Channel] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
 [Channel_ID] [bigint] NULL,
 [UCCNo] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_ITrnSerialNo_UCCNo] DEFAULT (' ')
 ) ON [PRIMARY]
@@ -272,7 +272,7 @@ BEGIN
 		               FROM sys.columns
 		               WHERE Name = 'Channel' AND Object_ID = Object_ID('ITrnSerialNo'))
 				BEGIN
-					ALTER TABLE ITrnSerialNo ADD Channel nvarchar(18) NULL;
+					ALTER TABLE ITrnSerialNo ADD Channel nvarchar(20) NULL;
 					EXEC sp_addextendedproperty N'MS_Description', N'Channel', 'SCHEMA', N'dbo', 'TABLE', N'ITrnSerialNo', 'COLUMN', N'Channel'
 				END
 END
@@ -293,4 +293,127 @@ BEGIN
 					ALTER TABLE ITrnSerialNo ADD UCCNo nvarchar(20) NOT NULL CONSTRAINT [DF_ITrnSerialNo_UCCNo]  DEFAULT (' ');
 					EXEC sp_addextendedproperty N'MS_Description', N'UCCNo', 'SCHEMA', N'dbo', 'TABLE', N'ITrnSerialNo', 'COLUMN', N'UCCNo'
 				END
+
+DECLARE @CurrentLength INT;
+
+SELECT @CurrentLength = CHARACTER_MAXIMUM_LENGTH
+    FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_NAME = 'ITRNSerialNo' AND COLUMN_NAME = 'Lot';
+IF @CurrentLength <> 10
+BEGIN
+ALTER TABLE [ITRNSerialNo] ALTER COLUMN [Lot] nvarchar(10);
+END
+
+SELECT @CurrentLength = CHARACTER_MAXIMUM_LENGTH
+    FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_NAME = 'ITRNSerialNo' AND COLUMN_NAME = 'Loc';
+IF @CurrentLength <> 10
+BEGIN
+ALTER TABLE [ITRNSerialNo] ALTER COLUMN [Loc] nvarchar(10);
+END
+
+SELECT @CurrentLength = CHARACTER_MAXIMUM_LENGTH
+    FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_NAME = 'ITRNSerialNo' AND COLUMN_NAME = 'ID';
+IF @CurrentLength <> 18
+BEGIN
+ALTER TABLE [ITRNSerialNo] ALTER COLUMN [ID] nvarchar(18);
+END
+
+SELECT @CurrentLength = CHARACTER_MAXIMUM_LENGTH
+    FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_NAME = 'ITRNSerialNo' AND COLUMN_NAME = 'Lottable01';
+IF @CurrentLength <> 18
+BEGIN
+ALTER TABLE [ITRNSerialNo] ALTER COLUMN [Lottable01] nvarchar(18);
+END
+
+SELECT @CurrentLength = CHARACTER_MAXIMUM_LENGTH
+    FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_NAME = 'ITRNSerialNo' AND COLUMN_NAME = 'Lottable02';
+IF @CurrentLength <> 18
+BEGIN
+ALTER TABLE [ITRNSerialNo] ALTER COLUMN [Lottable02] nvarchar(18);
+END
+
+SELECT @CurrentLength = CHARACTER_MAXIMUM_LENGTH
+    FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_NAME = 'ITRNSerialNo' AND COLUMN_NAME = 'Lottable03';
+IF @CurrentLength <> 18
+BEGIN
+ALTER TABLE [ITRNSerialNo] ALTER COLUMN [Lottable03] nvarchar(18);
+END
+
+SELECT @CurrentLength = CHARACTER_MAXIMUM_LENGTH
+    FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_NAME = 'ITRNSerialNo' AND COLUMN_NAME = 'Lottable06';
+IF @CurrentLength <> 30
+BEGIN
+ALTER TABLE [ITRNSerialNo] ALTER COLUMN [Lottable06] nvarchar(30);
+END
+
+SELECT @CurrentLength = CHARACTER_MAXIMUM_LENGTH
+    FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_NAME = 'ITRNSerialNo' AND COLUMN_NAME = 'Lottable07';
+IF @CurrentLength <> 30
+BEGIN
+ALTER TABLE [ITRNSerialNo] ALTER COLUMN [Lottable07] nvarchar(30);
+END
+
+SELECT @CurrentLength = CHARACTER_MAXIMUM_LENGTH
+    FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_NAME = 'ITRNSerialNo' AND COLUMN_NAME = 'Lottable08';
+IF @CurrentLength <> 30
+BEGIN
+ALTER TABLE [ITRNSerialNo] ALTER COLUMN [Lottable08] nvarchar(30);
+END
+
+SELECT @CurrentLength = CHARACTER_MAXIMUM_LENGTH
+    FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_NAME = 'ITRNSerialNo' AND COLUMN_NAME = 'Lottable09';
+IF @CurrentLength <> 30
+BEGIN
+ALTER TABLE [ITRNSerialNo] ALTER COLUMN [Lottable09] nvarchar(30);
+END
+
+SELECT @CurrentLength = CHARACTER_MAXIMUM_LENGTH
+    FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_NAME = 'ITRNSerialNo' AND COLUMN_NAME = 'Lottable10';
+IF @CurrentLength <> 30
+BEGIN
+ALTER TABLE [ITRNSerialNo] ALTER COLUMN [Lottable10] nvarchar(30);
+END
+
+SELECT @CurrentLength = CHARACTER_MAXIMUM_LENGTH
+    FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_NAME = 'ITRNSerialNo' AND COLUMN_NAME = 'Lottable11';
+IF @CurrentLength <> 30
+BEGIN
+ALTER TABLE [ITRNSerialNo] ALTER COLUMN [Lottable11] nvarchar(30);
+END
+
+SELECT @CurrentLength = CHARACTER_MAXIMUM_LENGTH
+    FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_NAME = 'ITRNSerialNo' AND COLUMN_NAME = 'Lottable12';
+IF @CurrentLength <> 30
+BEGIN
+ALTER TABLE [ITRNSerialNo] ALTER COLUMN [Lottable12] nvarchar(30);
+END
+
+SELECT @CurrentLength = CHARACTER_MAXIMUM_LENGTH
+    FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_NAME = 'ITRNSerialNo' AND COLUMN_NAME = 'Channel';
+IF @CurrentLength <> 20
+BEGIN
+ALTER TABLE [ITRNSerialNo] ALTER COLUMN [Channel] nvarchar(20);
+END
+
+SELECT @CurrentLength = CHARACTER_MAXIMUM_LENGTH
+    FROM INFORMATION_SCHEMA.COLUMNS
+    WHERE TABLE_NAME = 'ITRNSerialNo' AND COLUMN_NAME = 'UCCNo';
+IF @CurrentLength <> 20
+BEGIN
+ALTER TABLE [ITRNSerialNo] ALTER COLUMN [UCCNo] nvarchar(20);
+END
+
 END
