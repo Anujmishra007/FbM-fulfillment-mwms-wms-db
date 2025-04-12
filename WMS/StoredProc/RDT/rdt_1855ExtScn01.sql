@@ -23,7 +23,8 @@ GO
 /* 2025-03-11 1.5.0  NLT013     UWP-31257 Unable to Pick because                   */
 /*                              PickDetail.TaskDetailKey<>TaskDetail.TaskDetaiLKey */
 /* 2025-03-11 1.5.1  NLT013     UWP-31257 RPF taks is not mandatory for ASTCPK     */
-/***********************************************************************************/  
+/* 2025-04-04 1.6.1  CYU027     FCR-3927 TOTE and CARTON Input Validation           */
+/***********************************************************************************/
   
 CREATE OR ALTER PROC [RDT].[rdt_1855ExtScn01] (
    @nMobile      INT,           
@@ -792,6 +793,15 @@ BEGIN
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --NeedCartID
                      EXEC rdt.rdtSetFocusField @nMobile, 2
                      GOTO Quit
+                  END
+                  ELSE
+                  BEGIN
+                     IF rdt.rdtIsValidFormat( @nFunc, @cStorerKey, 'CartID', @cCartID) = 0
+                     BEGIN
+                        SET @nErrNo = 220779
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- CartIDInvalidFormat
+                        GOTO Quit
+                     END
                   END
                      
                   -- Check cart valid
@@ -1582,6 +1592,15 @@ BEGIN
                      SET @cUDF07 = @cTaskDetailKey
 
                      GOTO Quit
+                  END
+                  ELSE
+                  BEGIN--CartonID not empty
+                     IF rdt.rdtIsValidFormat( @nFunc, @cStorerKey, 'CartonId', @cCartonId) = 0
+                     BEGIN
+                        SET @nErrNo = 220780
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Invalid format CartonId
+                        GOTO Quit
+                     END
                   END
 
                   IF EXISTS(SELECT 1 
