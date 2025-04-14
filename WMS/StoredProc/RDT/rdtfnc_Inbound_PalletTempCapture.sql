@@ -207,8 +207,7 @@ BEGIN
             GOTO Step_1_Fail
          END
 
-         SELECT @cASNStatus   = Status,
-            @cASNSCanctatus   = ASNStatus,
+         SELECT @cASNStatus   = ASNStatus,
             @cASNFacility     = ISNULL(Facility, ''),
             @cASNStorerKey    = StorerKey
          FROM dbo.Receipt WITH(NOLOCK)
@@ -248,18 +247,11 @@ BEGIN
             END
          END
 
-         IF @cASNStatus = '9'
+         IF @cASNStatus IN ('9', 'CANC') 
          BEGIN
             SET @nErrNo = 230206
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --ASNClosed
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --ASN Closed or Cancelled
             EXEC rdt.rdtSetFocusField @nMobile, 1
-            GOTO Step_1_Fail
-         END
-
-         IF @cASNSCanctatus = 'CANC'
-         BEGIN
-            SET @nErrNo = 230207
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --ASNCancelled
             GOTO Step_1_Fail
          END
 
