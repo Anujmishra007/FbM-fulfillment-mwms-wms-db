@@ -6,6 +6,7 @@ GO
 /**************************************************************************/
 /* Store procedure: rdt_840ExtInfo13                                      */
 /* Copyright: MAERSK                                                      */
+/* Customer : Kayali                                                      */
 /*                                                                        */
 /* Date       Rev    Author     Purposes                                  */
 /* 2025-04-10 1.0.0  NLT013     FCR-3728. Created                         */
@@ -37,6 +38,7 @@ AS
    DECLARE 
       @cSQL                NVARCHAR( MAX),
       @cSubQuery           NVARCHAR( MAX),
+      @cSQLParam           NVARCHAR( MAX),
       @cExtendedMsg        NVARCHAR( 20),
       @nQty                INT
 
@@ -56,6 +58,7 @@ AS
             SET @cSQL = ' SELECT @nQty = COUNT(1) FROM dbo.ORDERS WITH(NOLOCK) '       +
                         ' WHERE StorerKey = @cStorerKey '                              +
                         '    AND ORDERS.OrderKey = @cOrderKey '                        +
+                        '    AND '                        +
                         + @cSubQuery
             SET @cSQLParam =  '@cStorerKey               NVARCHAR(15), '               +
                               '@cOrderKey                NVARCHAR(15), '               +
@@ -70,6 +73,8 @@ AS
             BEGIN
                SET @cExtendedInfo = @cExtendedMsg
             END
+            ELSE
+               SET @cExtendedInfo = ''
             GOTO Quit
          END
       END

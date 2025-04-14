@@ -2997,41 +2997,6 @@ BEGIN
   
                IF @nDisAllowChangeCtnNo = 1  
                   SET @cFieldAttr03 = ''  
-
-                -- Extended info
-               SET @cExtendedInfo = ''
-               IF @cExtendedInfoSP <> ''
-               BEGIN
-                  IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')
-                  BEGIN
-                     SET @cExtendedInfo = ''
-                     SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +     
-                        ' @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cStorerkey, @cOrderKey, @cPickSlipNo, @cTrackNo, @cSKU, @nCartonNo,' + 
-                        ' @cExtendedInfo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT '    
-                     SET @cSQLParam =    
-                        '@nMobile          INT,           ' +
-                        '@nFunc            INT,           ' +
-                        '@cLangCode        NVARCHAR( 3),  ' +
-                        '@nStep            INT,           ' + 
-                        '@nAfterStep       INT,           ' + 
-                        '@nInputKey        INT,           ' +
-                        '@cStorerkey       NVARCHAR( 15), ' +
-                        '@cOrderKey        NVARCHAR( 10), ' +
-                        '@cPickSlipNo      NVARCHAR( 10), ' +
-                        '@cTrackNo         NVARCHAR( 20), ' +
-                        '@cSKU             NVARCHAR( 20), ' +
-                        '@nCartonNo        INT,           ' +
-                        '@cExtendedInfo    NVARCHAR( 20) OUTPUT, ' + 
-                        '@nErrNo           INT           OUTPUT, ' +
-                        '@cErrMsg          NVARCHAR( 20) OUTPUT  ' 
-                     
-                     EXEC sp_ExecuteSQL @cSQL, @cSQLParam,     
-                        @nMobile, @nFunc, @cLangCode, 3, @nStep, @nInputKey, @cStorerkey, @cOrderKey, @cPickSlipNo, @cTrackNo, @cSKU, @nCartonNo, 
-                        @cExtendedInfo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT     
-
-                     SET @cOutField15 = @cExtendedInfo
-                  END
-               END
   
                GOTO QUIT    
             END    
