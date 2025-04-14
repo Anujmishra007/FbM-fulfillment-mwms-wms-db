@@ -86,6 +86,20 @@ END
 
 ELSE 
 BEGIN 
+
+
+
+			IF NOT EXISTS (SELECT * FROM sys.indexes WHERE object_id = OBJECT_ID(N'[dbo].[PackSerialNo]') AND name = N'IX_PackSerialNo_LabelNo_SKU')
+			CREATE NONCLUSTERED INDEX [IX_PackSerialNo_LabelNo_SKU] ON [dbo].[PackSerialNo]
+			(
+				[LabelNo] ASC,
+				[StorerKey] ASC,
+				[SKU] ASC
+			)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, SORT_IN_TEMPDB = OFF, DROP_EXISTING = OFF, ONLINE = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, FILLFACTOR = 80, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
+
+
+
+
 		 	 IF NOT EXISTS (SELECT 1
 	               FROM sys.columns
 	               WHERE Name = 'Barcode' AND Object_ID = Object_ID('dbo.PackSerialNo'))
