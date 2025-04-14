@@ -83,7 +83,7 @@ EXECUTE rdt.rdtAddScn 3124, 'ENG',
    ,@cLine03 = '%20d02'    -- SOS300492 change to variable content
    ,@cLine05 = 'Press ENTER'
    ,@cLine06 = 'For next Pick&Pack'
-   ,@cLine13 = '%20d15'
+   ,@cLine13 = '%20d15'  -- FCR-3728
    ,@cLine14 = '%e'   
    ,@cWebGroup = '{"1":["1"],"2":["2","3"],"3":["4"],"4":["5","6"],"5":["13"]}'
    ,@nFunc = 840
