@@ -382,7 +382,7 @@ BEGIN
                               AND (
                                     (@nFunc = 839  AND PD.status = '4')
                                     OR 
-                                    (@nFunc = 957 AND PD.Status <> '4' AND PD.Status < '5')
+                                    (@nFunc = 957 AND PD.status = '4')
                                     )
                               AND PD.PickDetailKey > @cPickDetailKey
                            ORDER BY PD.PickDetailKey
@@ -403,7 +403,7 @@ BEGIN
                               AND (
                                     (@nFunc = 839  AND PD.status = '4')
                                     OR 
-                                    (@nFunc = 957 AND PD.Status <> '4' AND PD.Status < '5')
+                                    (@nFunc = 957 AND PD.status = '4')
                                     )
                               AND PD.PickDetailKey > @cPickDetailKey
                            ORDER BY PD.PickDetailKey
@@ -426,7 +426,7 @@ BEGIN
                               AND (
                                  (@nFunc = 839  AND PD.status = '4')
                                  OR 
-                                 (@nFunc = 957 AND PD.Status <> '4' AND PD.Status < '5')
+                                 (@nFunc = 957 AND PD.status = '4')
                                  )
                               AND PD.PickDetailKey > @cPickDetailKey
                            ORDER BY PD.PickDetailKey
@@ -447,7 +447,7 @@ BEGIN
                               AND (
                                  (@nFunc = 839  AND PD.status = '4')
                                  OR 
-                                 (@nFunc = 957 AND PD.Status <> '4' AND PD.Status < '5')
+                                 (@nFunc = 957 AND PD.status = '4')
                                  )
                               AND PD.PickDetailKey > @cPickDetailKey
                            ORDER BY PD.PickDetailKey
