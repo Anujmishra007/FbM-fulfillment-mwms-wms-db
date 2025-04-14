@@ -1,47 +1,42 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrKitHeaderAdd]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
-drop trigger [dbo].[ntrKitHeaderAdd]
-GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
 GO
 
-
-/************************************************************************/
-/* Trigger: ntrKitHeaderAdd                                             */
-/* Creation Date:                                                       */
-/* Copyright: IDS                                                       */
-/* Written by:                                                          */
-/*                                                                      */
-/* Purpose:  KIT Header Add Transaction                                 */
-/*                                                                      */
-/* Input Parameters:                                                    */
-/*                                                                      */
-/* Output Parameters:                                                   */
-/*                                                                      */
-/* Return Status:                                                       */
-/*                                                                      */
-/* Usage:                                                               */
-/*                                                                      */
-/* Local Variables:                                                     */
-/*                                                                      */
-/* Called By: When insert new records                                   */
-/*                                                                      */
-/* PVCS Version: 1.1                                                    */
-/*                                                                      */
-/* Version: 6.0                                                         */
-/*                                                                      */
-/* Data Modifications:                                                  */
-/*                                                                      */
-/* Updates:                                                             */
-/* Date         Author    Purposes                                      */
-/* 30-May-2007  Shong     Add Checking on TrifficCop and ArchiveCop     */
-/* 17-Mar-2009  TLTING     Change user_name() to SUSER_SNAME()          */
-/*                                                                      */
-/************************************************************************/
-CREATE TRIGGER ntrKitHeaderAdd
-ON  KIT
+/*****************************************************************************/
+/* Trigger: ntrKitHeaderAdd                                                  */
+/* Creation Date:                                                            */
+/* Copyright: IDS                                                            */
+/* Written by:                                                               */
+/*                                                                           */
+/* Purpose:  KIT Header Add Transaction                                      */
+/*                                                                           */
+/* Input Parameters:                                                         */
+/*                                                                           */
+/* Output Parameters:                                                        */
+/*                                                                           */
+/* Return Status:                                                            */
+/*                                                                           */
+/* Usage:                                                                    */
+/*                                                                           */
+/* Local Variables:                                                          */
+/*                                                                           */
+/* Called By: When insert new records                                        */
+/*                                                                           */
+/* PVCS Version: 1.2                                                         */
+/*                                                                           */
+/* Version: 6.0                                                              */
+/*                                                                           */
+/* Data Modifications:                                                       */
+/*                                                                           */
+/* Updates:                                                                  */
+/* Date         Author   Ver. Purposes                                       */
+/* 30-May-2007  Shong    1.0  Add Checking on TrifficCop and ArchiveCop      */
+/* 17-Mar-2009  TLTING   1.1  Change user_name() to SUSER_SNAME()            */
+/* 03-Apr-2025  WLChooi  1.2  UWP-32362 Log DocStatusTrack (WL01)            */
+/*****************************************************************************/
+CREATE OR ALTER TRIGGER [dbo].[ntrKitHeaderAdd]
+ON [dbo].[KIT]
 FOR INSERT
 AS
 BEGIN
@@ -50,15 +45,18 @@ BEGIN
    SET QUOTED_IDENTIFIER OFF
 	SET CONCAT_NULL_YIELDS_NULL OFF
 	
-   DECLARE   @b_Success            int       -- Populated by calls to stored procedures - was the proc successful?
-   ,         @n_err                int       -- Error number returned by stored procedure or this trigger
-   ,         @n_err2               int       -- For Additional Error Detection
+   DECLARE   @b_Success            INT       -- Populated by calls to stored procedures - was the proc successful?
+   ,         @n_err                INT       -- Error number returned by stored procedure or this trigger
+   ,         @n_err2               INT       -- For Additional Error Detection
    ,         @c_errmsg             NVARCHAR(250) -- Error message returned by stored procedure or this trigger
-   ,         @n_continue           int
-   ,         @n_starttcnt          int       -- Holds the current transaction count
+   ,         @n_continue           INT
+   ,         @n_starttcnt          INT       -- Holds the current transaction count
    ,         @c_preprocess         NVARCHAR(250) -- preprocess
    ,         @c_pstprocess         NVARCHAR(250) -- post process
-   ,         @n_cnt                int
+   ,         @n_cnt                INT
+   ,         @c_Kitkey             NVARCHAR(10)   --WL01
+   ,         @c_Storerkey          NVARCHAR(15)   --WL01
+   ,         @c_ExternStatus       NVARCHAR(10)   --WL01
    SELECT @n_continue=1, @n_starttcnt=@@TRANCOUNT
    /* #INCLUDE <TRTHA1.SQL> */
    IF EXISTS( SELECT 1 FROM INSERTED WHERE ArchiveCop = '9')
@@ -98,8 +96,61 @@ BEGIN
          SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=69601   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
          SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Insert Failed On Table KIT. (nspKitHeaderAdd)' + ' ( ' + ' SQLSvr MESSAGE=' + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + ' ) '
       END
+
+      --WL01 S
+      SELECT @b_success = 1
+
+      DECLARE CUR_DST CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      SELECT DISTINCT Kitkey, StorerKey, ISNULL(ExternStatus, '0')
+      FROM INSERTED
+
+      OPEN CUR_DST
+
+      FETCH NEXT FROM CUR_DST INTO @c_Kitkey, @c_Storerkey, @c_ExternStatus
+
+      WHILE @@FETCH_STATUS <> -1
+      BEGIN
+         IF NOT EXISTS ( SELECT 1 FROM DocStatusTrack WITH (NOLOCK)
+                         WHERE TableName = 'KITEXTNSTS'
+                         AND DocumentNo = @c_Kitkey
+                         AND Key1 = '0' )
+         BEGIN
+            BEGIN TRY
+               EXEC dbo.ispGenDocStatusLog @c_TableName = N'KITEXTNSTS'
+                                         , @c_StorerKey = @c_Storerkey
+                                         , @c_DocumentNo = @c_Kitkey
+                                         , @c_Key1 = '0'
+                                         , @c_Key2 = ''
+                                         , @c_DocStatus = @c_ExternStatus
+                                         , @b_Success = @b_Success OUTPUT
+                                         , @n_err = @n_err OUTPUT
+                                         , @c_errmsg = @c_errmsg OUTPUT
+
+            END TRY
+            BEGIN CATCH
+               SELECT @n_continue = 3
+               SELECT @n_err = 69605
+               SELECT @c_errmsg = 'NSQL' + CONVERT(NVARCHAR(5), @n_err) + ': Failed to execute ispGenDocStatusLog. (nspKitHeaderAdd)'
+                                + ' ( ' + ' SQLSvr MESSAGE=' + TRIM(@c_errmsg) + ' ) '
+            END CATCH
+         END
+
+         FETCH NEXT FROM CUR_DST INTO @c_Kitkey, @c_Storerkey, @c_ExternStatus
+      END
+      CLOSE CUR_DST
+      DEALLOCATE CUR_DST
+      --WL01 E
    END
    /* #INCLUDE <TRTHA2.SQL> */
+
+   --WL01 S
+   IF CURSOR_STATUS('LOCAL', 'CUR_DST') IN (0 , 1)
+   BEGIN
+      CLOSE CUR_DST
+      DEALLOCATE CUR_DST
+   END
+   --WL01 E
+
    IF @n_continue=3  -- Error Occured - Process And Return
    BEGIN
       IF @@TRANCOUNT = 1 and @@TRANCOUNT >= @n_starttcnt
@@ -126,11 +177,4 @@ BEGIN
       RETURN
    END
 END
-
-
 GO
-SET QUOTED_IDENTIFIER OFF
-GO
-SET ANSI_NULLS OFF
-GO
-
