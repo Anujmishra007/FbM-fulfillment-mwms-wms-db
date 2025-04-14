@@ -1019,6 +1019,19 @@ BEGIN
             SCN6416_Start:
             IF @nInputKey = 0
             BEGIN
+               IF EXISTS(SELECT 1      
+                  FROM dbo.TaskDetail WITH (NOLOCK)      
+                  WHERE Storerkey = @cStorerKey      
+                  AND   TaskType = 'ASTCPK'      
+                  AND   [Status] = '5'      
+                  AND   Groupkey = @cGroupKey      
+                  AND   UserKey = @cUserName      
+                  AND   DeviceID = @cCartID  )
+               BEGIN
+                  SET @nErrNo = 220777
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --PickNotComplete
+                  GOTO Quit
+               END
                -- Prepare next screen var        
                SET @cOutField01 = ''        
                SET @cOutField02 = ''         
