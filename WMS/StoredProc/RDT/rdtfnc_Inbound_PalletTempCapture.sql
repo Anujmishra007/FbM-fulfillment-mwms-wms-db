@@ -14,6 +14,8 @@ GO
 /* Date         Rev    Author   Purposes                                      */
 /* 2024-12-05   1.0.0  NLT013   FCR-1398 Created                              */
 /* 2025-04-01   1.1.0  NLT013   FCR-3256 Add DecodeSP                         */
+/* 2025-04-15   1.2.0  NLT013   UWP-32818 Temperature capture is not referring*/
+/*                              to ASNStatus                                  */
 /******************************************************************************/
         
 CREATE OR ALTER PROC [RDT].[rdtfnc_Inbound_PalletTempCapture](
