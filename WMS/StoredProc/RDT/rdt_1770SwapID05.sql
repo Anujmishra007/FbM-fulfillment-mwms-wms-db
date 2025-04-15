@@ -11,8 +11,8 @@ GO
 /* Purpose: Swap ID base on same LOC, SKU, QTY, Lottables                 */
 /*                                                                        */
 /* Date        Rev    Author      Purposes                                */
-/* 202504-08   1.0    NLT03       FCR-3836 Create                         */
-/* 202504-15   1.0.1  NLT03       FCR-3836 Remove useless validation      */
+/* 2025-04-08  1.0    NLT03       FCR-3836 Create                         */
+/* 2025-04-15  1.0.1  NLT03       FCR-3836 Remove useless validation      */
 /**************************************************************************/
 
 CREATE OR ALTER PROCEDURE rdt.rdt_1770SwapID05
