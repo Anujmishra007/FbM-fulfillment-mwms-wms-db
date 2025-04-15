@@ -3,16 +3,17 @@ GO
 SET ANSI_NULLS OFF
 GO
 
-/************************************************************************/
-/* Store procedure: rdt_1770SwapID05                                    */
-/* Copyright      : Maersk WMS                                          */
-/* Customer       : BRF BRASIL FOODS SA                                 */
-/*                                                                      */
-/* Purpose: Swap ID base on same LOC, SKU, QTY, Lottables               */
-/*                                                                      */
-/* Date        Rev  Author      Purposes                                */
-/* 202504-08   1.0  NLT03       FCR-3836 Create                         */
-/************************************************************************/
+/**************************************************************************/
+/* Store procedure: rdt_1770SwapID05                                      */
+/* Copyright      : Maersk WMS                                            */
+/* Customer       : BRF BRASIL FOODS SA                                   */
+/*                                                                        */
+/* Purpose: Swap ID base on same LOC, SKU, QTY, Lottables                 */
+/*                                                                        */
+/* Date        Rev    Author      Purposes                                */
+/* 202504-08   1.0    NLT03       FCR-3836 Create                         */
+/* 202504-15   1.0.1  NLT03       FCR-3836 Remove useless validation      */
+/**************************************************************************/
 
 CREATE OR ALTER PROCEDURE rdt.rdt_1770SwapID05
    @nMobile           INT,
@@ -34,6 +35,7 @@ BEGIN
 
    DECLARE @cOtherPickDetailKey NVARCHAR(10)
    DECLARE @cOtherTaskDetailKey NVARCHAR(10)
+   DECLARE @cTaskPickDetailKey  NVARCHAR(10)
    
    DECLARE @cNewSKU        NVARCHAR( 20)
    DECLARE @cNewLOT        NVARCHAR( 10)
@@ -84,7 +86,7 @@ BEGIN
    IF @cIDStatus = 'HOLD'
    BEGIN
       SET @nErrNo = 236041
-      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Need ID
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --IDIsOnHold
       RETURN
    END
 
@@ -124,6 +126,7 @@ BEGIN
       @cTaskLOC = TD.FromLOC,
       @cTaskID = TD.FromID, 
       @nTaskQTY = TD.SystemQTY,
+      @cTaskPickDetailKey = PickDetailKey,
       @cTaskLocationType = LOC.LocationHandling
    FROM dbo.TaskDetail TD WITH (NOLOCK)
    INNER JOIN dbo.LOC LOC WITH (NOLOCK) ON TD.FromLoc = LOC.Loc
@@ -143,6 +146,13 @@ BEGIN
    BEGIN
       SET @nErrNo = 236019
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Racking Type Not Match
+      RETURN
+   END
+
+   IF @cTaskType = 'FPK' AND @cTaskPickDetailKey = ''
+   BEGIN
+      SET @nErrNo = 236044
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --NoPickDetailKey
       RETURN
    END
 
@@ -516,14 +526,6 @@ BEGIN
       AND Loc = @cNewLOC
       AND Status = '0'
       AND QTY > 0
-
-   -- Only swap task
-   IF @cOtherTaskDetailKey = ''
-   BEGIN
-      SET @nErrNo = 36040
-      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --OnlySwapTask
-      RETURN
-   END
 
    -- Check pallet allocated but not yet release task
    IF @cOtherTaskDetailKey = '' AND ISNULL(@cOtherPickDetailKey, '') <> ''

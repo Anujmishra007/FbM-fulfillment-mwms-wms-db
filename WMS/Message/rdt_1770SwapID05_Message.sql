@@ -45,5 +45,6 @@ EXECUTE rdt.rdtAddMsg 236040, 10, '236040^OnlySwapTask',          'us_english', 
 EXECUTE rdt.rdtAddMsg 236041, 10, '236041^IDIsOnHold',            'us_english', 1770, 0, '236041 Scanned ID Is On Hold'
 EXECUTE rdt.rdtAddMsg 236042, 10, '236042^UPD LLI Fail',          'us_english', 1770
 EXECUTE rdt.rdtAddMsg 236043, 10, '236043^UPD LLI Fail',          'us_english', 1770
+EXECUTE rdt.rdtAddMsg 236044, 10, '236044^NoPickDetailKey',       'us_english', 1770, 0, '236044 No Pick Detail Key'
 
 SELECT * FROM rdt.rdtmsg WITH(NOLOCK) WHERE message_id BETWEEN 236001 AND 236050
