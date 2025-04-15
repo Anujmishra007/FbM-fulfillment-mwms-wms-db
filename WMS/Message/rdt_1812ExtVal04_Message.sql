@@ -1,0 +1,8 @@
+-- rdt_1812ExtVal04
+--RITM7816261
+EXECUTE rdt.rdtDropMsg 230751, 230752
+
+EXECUTE rdt.rdtAddMsg 230751, 10, '230751^Need DROPID',         'us_english', 1812, 4, '230751^Need DROPID'
+EXECUTE rdt.rdtAddMsg 230752, 10, '230752^Used DROPID',         'us_english', 1812, 4, '230752^Used DROPID'
+
+SELECT * FROM rdt.rdtMsg WITH(NOLOCK) WHERE Message_ID BETWEEN 230751 AND 230752
