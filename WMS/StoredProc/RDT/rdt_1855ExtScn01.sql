@@ -23,7 +23,8 @@ GO
 /* 2025-03-11 1.5.0  NLT013     UWP-31257 Unable to Pick because                   */
 /*                              PickDetail.TaskDetailKey<>TaskDetail.TaskDetaiLKey */
 /* 2025-03-11 1.5.1  NLT013     UWP-31257 RPF taks is not mandatory for ASTCPK     */
-/* 2025-04-04 1.6.1  CYU027     FCR-3927 TOTE and CARTON Input Validation           */
+/* 2025-04-04 1.6.1  CYU027     FCR-3927 TOTE and CARTON Input Validation          */
+/* 2025-04-11 1.6.2  DENNIS     UWP-32689 If picked then reject users back out     */
 /***********************************************************************************/
   
 CREATE OR ALTER PROC [RDT].[rdt_1855ExtScn01] (
