@@ -63,6 +63,11 @@ BEGIN
       BEGIN
          IF @nInputKey = 1 -- ENTER
          BEGIN
+            IF CHARINDEX('SKJP', @cBarcode) = 0
+            BEGIN
+               SET @cSKU = @cBarcode
+               GOTO QUIT
+            END
             SELECT @cSKU = SUBSTRING(@cBarcode, 2, CHARINDEX('SKJP', @cBarcode) - 2)
          END
       END
