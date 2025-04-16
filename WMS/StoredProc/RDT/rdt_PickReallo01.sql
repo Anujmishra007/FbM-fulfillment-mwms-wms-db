@@ -1,11 +1,6 @@
-/****** Object:  StoredProcedure [RDT].[rdt_PickReallo01]    Script Date: 3/21/2024 10:14:40 AM ******/
-SET ANSI_NULLS OFF
-GO
-SET QUOTED_IDENTIFIER OFF
-GO
 
 /************************************************************************/
-/* Store procedure: rdt_PickReallo01                              */
+/* Store procedure: rdt_PickReallo01                                    */
 /* Copyright      : Maersk                                              */
 /* Customer       : PUMACL                                              */
 /*                                                                      */
@@ -13,6 +8,7 @@ GO
 /*                                                                      */
 /* Date       Rev    Author   Purposes                                  */
 /* 2025-03-26 1.0.0  JCH507   FCR-2704 Re-allocation if short happens   */
+/* 2025-04-15 1.0.1  JCH507   FCR-2704 Support PickDetail.UOM = 7       */
 /*                                                                      */
 /************************************************************************/
 
@@ -47,8 +43,6 @@ BEGIN
    -- Coding Convention
    -- 1. If no loc found, set ErrNo = -1, and set all resturned values to ''
    -- 2. Can set all output values to '' based on requirement
-   -- 3. If sql error occurs when update back to pickdetail, set to the fixed errno to indicates
-   --    re-allocation is wrong. It is the expcted error. The outer SP will handle it.
    ----------------------------------------------------------------------------------------
    DECLARE @nDebugFlag  INT = 0 --1 print log, 2 insert trace info
 
@@ -63,6 +57,9 @@ BEGIN
       @nPickDetailQty      INT,
       @cTotalShortQty      INT,
       @cWaveKey            NVARCHAR(10),
+      @cLoadKey            NVARCHAR(10), --v1.0.1
+      @cShortUCCNo         NVARCHAR(20),
+      @nShortUCCQty        INT,
       @cShortUCCStatus     NVARCHAR(1),
       
       @nBal_Qty            INT,
@@ -73,11 +70,15 @@ BEGIN
       @bSuccess            BIT,
       @nTranCount          INT,
       @nRowCount           INT,
-      @nLoopIndex          INT
+      @nLoopIndex          INT,
+      @nPKDRowCount        INT, --V1.0.1
+      @nUCCRowCount        INT, --V1.0.1
+      @nPKDLoopIndex       INT, --V1.0.1
+      @nUCCLoopIndex       INT  --V1.0.1
 
    DECLARE @tShortPickDetails TABLE
    (
-      RowRef            INT IDENTITY(1,1) NOT NULL,
+      PKDRowRef         INT  NOT NULL, --v1.0.1
       PickDetailKey     NVARCHAR( 10) NOT NULL,
       CaseID            NVARCHAR( 20) NOT NULL,
       PickHeaderKey     NVARCHAR( 18) NOT NULL,
@@ -98,6 +99,13 @@ BEGIN
       WaveKey           NVARCHAR( 10) NULL,
       NewFlag           NVARCHAR( 1)  NULL DEFAULT 'N',
       OldPickDetailKey  NVARCHAR( 10) NULL
+   )
+
+   DECLARE @tShortUCC TABLE --V1.0.1
+   (
+      UCCRowRef        INT IDENTITY (1, 1)  NOT NULL,
+      UCCNo            NVARCHAR( 20) NOT NULL,
+      ShortQty         INT           NOT NULL DEFAULT 0
    )
 
     DECLARE @tAllocation TABLE
@@ -193,11 +201,14 @@ BEGIN
       SELECT 'Short PKD query parameters', @cStorerKey AS Storer, @cPickSlipNo AS PSNO, 
                @cLOC AS LOC, @cID AS ID, @cSKU AS SKU, @cLot AS LOT
 
-   INSERT INTO @tShortPickDetails ( PickDetailKey, CaseID, PickHeaderKey, OrderKey, OrderLineNumber, SKU, QTY, 
+   INSERT INTO @tShortPickDetails ( PKDRowRef,
+                                    PickDetailKey, CaseID, PickHeaderKey, OrderKey, OrderLineNumber, SKU, QTY, 
                                     Lot, StorerKey, UOM, UOMQty, DropID, Loc, ID, PackKey, CartonGroup, 
                                     PickMethod, WaveKey)
-   SELECT PickDetailKey, CaseID, PickHeaderKey, OrderKey, OrderLineNumber, SKU, QTY, 
-            LOT, StorerKey, UOM, UOMQTY, DropID, Loc, ID, PackKey, CartonGroup, PickMethod, WaveKey
+   SELECT  ROW_NUMBER() OVER (PARTITION BY DropID ORDER BY Qty), --V1.0.1
+         PickDetailKey, CaseID, PickHeaderKey, OrderKey, OrderLineNumber, SKU, QTY, 
+         LOT, StorerKey, UOM, UOMQTY, DropID, Loc, ID, PackKey, CartonGroup, 
+         PickMethod, WaveKey
    FROM dbo.PickDetail WITH (NOLOCK)
    WHERE Storerkey = @cStorerKey
       AND PickSlipNo = @cPickSlipNo
@@ -206,7 +217,7 @@ BEGIN
       AND (@cType = 'SKU'OR ID = @cID) -- 839 doesn't passin ID value
       AND SKU = @cSKU
       --AND Lot = @cLot -- Exclude lot, because 839 will combine all lots in one pick.
-   ORDER BY Qty DESC
+   ORDER BY DropID, Qty DESC --v1.0.1
 
    IF @@ROWCOUNT = 0
    BEGIN
@@ -218,17 +229,20 @@ BEGIN
    SELECT 
       @cTotalShortQty = SUM(QTY),
       @cWaveKey = MAX(WAVEKEY),
-      @cLottable01 = MAX(LA.Lottable01)
+      @cLottable01 = MAX(LA.Lottable01),
+      @cLoadKey = MAX(LPD.LoadKey) --v1.0.1
    FROM @tShortPickDetails t
-   JOIN dbo.LOTATTRIBUTE LA
+   JOIN dbo.LOTATTRIBUTE LA WITH (NOLOCK)
       ON t.LOT = LA.Lot
-      AND LA.StorerKey = @cStorerKey
+      AND LA.StorerKey = t.Storerkey
+   JOIN dbo.LoadPlanDetail LPD WITH (NOLOCK) --v1.0.1
+      ON LPD.OrderKey = t.OrderKey
 
    IF @nDebugFlag = 1
    BEGIN
       SELECT 'Get short pickdetail info'
       SELECT * FROM @tShortPickDetails
-      SELECT @cTotalShortQty AS TotalShortQty, @cWaveKey AS WaveKey, @cLottable01 AS Lottable01
+      SELECT @cTotalShortQty AS TotalShortQty, @cWaveKey AS WaveKey, @cLottable01 AS Lottable01, @cLoadKey AS Loadkey
    END
 
    -- Get all candidate pickzone for this SKU
@@ -244,22 +258,21 @@ BEGIN
       INNER JOIN dbo.PickHeader PH WITH (NOLOCK)
          ON PD.PickSlipNo = PH.PickHeaderKey
          AND PD.Storerkey = PH.StorerKey
-      --INNER JOIN dbo.LoadPlan LP WITH (NOLOCK)
-      --   ON PH.LoadKey = LP.LoadKey 
-      --INNER JOIN dbo.LoadPlanDetail LPD WITH (NOLOCK)
-      --   ON LP.LoadKey = LPD.LoadKey
+      INNER JOIN dbo.LoadPlanDetail LPD WITH (NOLOCK)
+         ON LPD.OrderKey = PD.OrderKey
       WHERE PD.StorerKey = @cStorerKey
          AND PD.Status = '0'
          AND PD.Loc <> @cLOC
          AND LOC.PickZone <> @cPickZone
          AND ISNULL(LOC.PickZone, '') <> ''
          AND PD.WaveKey = @cWaveKey
+         AND LPD.LoadKey = @cLoadKey --v1.0.1
          AND LOC.Facility = @cFacility
-         AND EXISTS (
-            SELECT 1
-            FROM @tShortPickDetails TSPD
-            WHERE TSPD.OrderKey = PD.OrderKey
-         )
+         --AND EXISTS ( --v1.0.1
+         --   SELECT 1
+         --   FROM @tShortPickDetails TSPD
+         --   WHERE TSPD.OrderKey = PD.OrderKey
+         --)
       GROUP BY LOC.PickZone, PD.PickSlipNo
 
    IF @nDebugFlag = 1
@@ -305,7 +318,7 @@ BEGIN
          AND LOC.Status = 'OK'
          AND LA.Lottable01 = @cLottable01
       GROUP BY LOC.Loc, LLI.Loc, LLI.ID,  PZ.Priority, PZ.PickZone, PZ.PickSlipNo
-      HAVING COUNT(UCC.ID) >= (SELECT COUNT(DropID)
+      HAVING COUNT(UCC.ID) >= (SELECT COUNT(DISTINCT DropID)
                                  FROM @tShortPickDetails
                                  WHERE Loc = LLI.Loc) --UCC status = 1 count >= shorted UCC count
          AND SUM(LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked - LLI.QtyReplen) >= @cTotalShortQty
@@ -325,35 +338,54 @@ BEGIN
 
       IF @nDebugFlag = 1
       BEGIN
-         SELECT 'Find suggestted loc'
+         SELECT 'Suggestted loc found'
          SELECT @cSuggestLOC AS SuggestLoc, @cSuggestID AS SuggestID, @cSuggestPickZone AS SuggestPickZone, @cSuggestPSNO AS SuggestPSNO
       END
 
-      --Start re-allocation
-      SET @nLoopIndex = 1
+      --V1.0.1 Fill @tShortUCC table
+      INSERT INTO @tShortUCC ( UCCNo, ShortQty)
+         SELECT DropID, SUM(QTY)
+         FROM @tShortPickDetails
+         GROUP BY DropID
+         ORDER BY DropID
 
-      SELECT @nRowCount = COUNT(1)
-      FROM @tShortPickDetails
+      IF EXISTS (SELECT 1 FROM @tShortUCC WHERE UCCNo = '')
+      BEGIN
+         SET @nErrNo = 235668
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Empty DropID in Pickdetail
+         GOTO Quit
+      END
+
+      IF @nDebugFlag = 1
+      BEGIN
+         SELECT 'Fill in short UCC data'
+         SELECT * FROM @tShortUCC
+      END
+
+      SET @nUCCLoopIndex = 1
+
+      SELECT @nUCCRowCount = COUNT(1)
+      FROM @tShortUCC
 
       SET @nTranCount = @@TRANCOUNT
 
       BEGIN TRAN  -- Begin our own transaction
       SAVE TRAN rdt_PickReallo01_UCC -- For rollback or commit only our own transaction
 
-      WHILE @nLoopIndex <= @nRowCount
+      WHILE @nUCCLoopIndex <= @nUCCRowCount
       BEGIN
-         SELECT TOP 1
-            @cPickDetailKey = PickDetailKey,
-            @nPickDetailQty = QTY
-         FROM @tShortPickDetails
-         WHERE RowRef = @nLoopIndex
+         SELECT TOP 1 
+            @cShortUCCNo = UCCNo,
+            @nShortUCCQty = ShortQty
+         FROM @tShortUCC
+         WHERE UCCRowRef = @nUCCLoopIndex
 
          IF @nDebugFlag = 1
          BEGIN
-            SELECT 'Handling short Pickdetail'
-            SELECT @nLoopIndex AS LoopIndex, @nRowCount AS TotalRow, @cPickDetailKey AS PickDetailKey, @nPickDetailQty AS PickDetailQty
+            SELECT 'Handling UCCNo'
+            SELECT @nUCCLoopIndex AS LoopIndex, @nUCCRowCount AS TotalRow, @cShortUCCNo AS ShortUCCNo, @nShortUCCQty AS ShortUCCQty
          END
-         
+
          SELECT TOP 1
             @cAllocatedUCC = UCCNo,
             @cAllocatedLot = UCC.Lot
@@ -364,7 +396,7 @@ BEGIN
          WHERE Loc = @cSuggestLOC
             AND ID = @cSuggestID
             AND UCC.SKU = @cSKU
-            AND QTY = @nPickDetailQty
+            AND QTY = @nShortUCCQty
             AND STATUS = '1'
             AND LA.Lottable01 = @cLottable01
             AND NOT EXISTS (
@@ -383,29 +415,54 @@ BEGIN
 
          IF @nDebugFlag = 1
          BEGIN
-            SELECT 'Handling short Pickdetail'
-            SELECT @nLoopIndex AS LoopIndex, @nRowCount AS TotalRow, @cPickDetailKey AS PickDetailKey, @nPickDetailQty AS PickDetailQty, 
-            @cAllocatedUCC AS AllocatedUCC, @cAllocatedLot AS AllocatedLot
+            SELECT 'Reallocate to new UCC', @cAllocatedUCC AS AllocatedUCC, @cAllocatedLot AS AllocatedLot, @cShortUCCNo AS ShortUCCNo
          END
-         ELSE IF @nDebugFlag = 2
+
+         SET @nPKDLoopIndex = 1
+
+         SELECT @nPKDRowCount = COUNT(1)
+         FROM @tShortPickDetails
+         WHERE DropID = @cShortUCCNo
+
+         WHILE @nPKDLoopIndex <= @nPKDRowCount
          BEGIN
-            INSERT dbo.TraceInfo (TraceName, TimeIn, Step1, Step2, 
-               Step3, Step4, Step5,
-               Col1, Col2, Col3, Col4, Col5)
-            VALUES('rdt_PickRello01', GETDATE(), CAST(@nFunc AS NVARCHAR(10)), 'Type UCC', 
-               CAST(@nLoopIndex AS NVARCHAR(10)), CAST(@nRowCount AS NVARCHAR(10)), CAST(@nMobile AS NVARCHAR(10)),
-               @cPickDetailKey, @cSuggestLOC, @cSuggestID, @cAllocatedUCC, '')
-         END
+            SELECT TOP 1
+               @cPickDetailKey = PickDetailKey,
+               @nPickDetailQty = QTY
+            FROM @tShortPickDetails
+            WHERE DropID = @cShortUCCNo
+               AND PKDRowRef = @nPKDLoopIndex
 
-         INSERT INTO @tAllocation ( PickDetailKey, CaseID, PickHeaderKey, OrderKey, OrderLineNumber, SKU, QTY, 
-            Lot, StorerKey, UOM, UOMQty, DropID, Loc, ID, PackKey, CartonGroup, PickMethod, WaveKey, PickSlipNo)
-         SELECT PickDetailKey, CaseID, PickHeaderKey, OrderKey, OrderLineNumber, SKU, QTY, 
-            @cAllocatedLot, StorerKey, UOM, UOMQty, @cAllocatedUCC, @cSuggestLOC, @cSuggestID, PackKey, CartonGroup, PickMethod, WaveKey, @cSuggestPSNO
-         FROM @tShortPickDetails 
-         WHERE PickDetailKey = @cPickDetailKey
+            IF @nDebugFlag = 1
+            BEGIN
+               SELECT 'Handling short Pickdetail Under UCC ' + @cShortUCCNo
+               SELECT @nPKDLoopIndex AS LoopIndex, @nPKDRowCount AS TotalRow, @cPickDetailKey AS PickDetailKey, @nPickDetailQty AS PickDetailQty, 
+               @cAllocatedUCC AS AllocatedUCC, @cAllocatedLot AS AllocatedLot
+            END
+            ELSE IF @nDebugFlag = 2
+            BEGIN
+               INSERT dbo.TraceInfo (TraceName, TimeIn, Step1, Step2, 
+                  Step3, Step4, Step5,
+                  Col1, Col2, Col3, Col4, Col5)
+               VALUES('rdt_PickRello01', GETDATE(), CAST(@nFunc AS NVARCHAR(10)), 'Type UCC', 
+                  CAST(@nPKDLoopIndex AS NVARCHAR(10)), CAST(@nPKDRowCount AS NVARCHAR(10)), CAST(@nMobile AS NVARCHAR(10)),
+                  @cPickDetailKey, @cSuggestLOC, @cSuggestID, @cAllocatedUCC, '')
+            END
 
-         SET @nLoopIndex += 1
-      END -- end insert @tAllocation loop
+            INSERT INTO @tAllocation ( PickDetailKey, CaseID, PickHeaderKey, OrderKey, OrderLineNumber, SKU, QTY, 
+               Lot, StorerKey, UOM, UOMQty, DropID, Loc, ID, PackKey, CartonGroup, PickMethod, WaveKey, PickSlipNo)
+            SELECT PickDetailKey, CaseID, PickHeaderKey, OrderKey, OrderLineNumber, SKU, QTY, 
+               @cAllocatedLot, StorerKey, UOM, UOMQty, @cAllocatedUCC, @cSuggestLOC, @cSuggestID, PackKey, CartonGroup, PickMethod, WaveKey, @cSuggestPSNO
+            FROM @tShortPickDetails 
+            WHERE PickDetailKey = @cPickDetailKey
+
+            SET @nPKDLoopIndex += 1
+         END -- end insert @tAllocation loop
+
+         SET @nUCCLoopIndex += 1
+      END -- end of loop UCC
+      --V1.0.1 end
+      
 
       IF @nDebugFlag = 1
       BEGIN
@@ -584,7 +641,7 @@ BEGIN
             @cPickDetailKey = PickDetailKey,
             @nPickDetailQty = QTY
          FROM @tShortPickDetails
-         WHERE RowRef = @nLoopIndex
+         WHERE PKDRowRef = @nLoopIndex
 
          IF @nDebugFlag = 1
          BEGIN

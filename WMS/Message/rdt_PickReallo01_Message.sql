@@ -10,7 +10,7 @@ execute rdt.rdtAddMsg 235654, 10, '235654LocRequired',      'us_english', 957, 0
 execute rdt.rdtAddMsg 235655, 10, '235655PSNORequired',     'us_english', 957, 0, '235655: PSNO Required'
 execute rdt.rdtAddMsg 235656, 10, '235656LotRequired',      'us_english', 957, 0, '235656: Lot Required'
 execute rdt.rdtAddMsg 235657, 10, '235657NoRecordFound',    'us_english', 957, 0, '235657: Not short record found'
-execute rdt.rdtAddMsg 235658, 10, '235658NoUCCFound',       'us_english', 957, 0, '235658: No enough UCC'
+execute rdt.rdtAddMsg 235658, 10, '235658NoUCCFound',       'us_english', 957, 0, '235658: No enough UCC to reallocate'
 execute rdt.rdtAddMsg 235659, 10, '235659UpdUCCFail',       'us_english', 957, 0, '235659: Update UCC failed'
 execute rdt.rdtAddMsg 235660, 10, '235660UpdPKDFail',       'us_english', 957, 0, '235660: Update PickDetail failed'
 execute rdt.rdtAddMsg 235661, 10, '235661UpdUCCFail',       'us_english', 957, 0, '235661: Update UCC failed'
@@ -20,5 +20,6 @@ execute rdt.rdtAddMsg 235664, 10, '235664GetPKDKeyFail',    'us_english', 957, 0
 execute rdt.rdtAddMsg 235665, 10, '235665UpdPKDFail',       'us_english', 957, 0, '235665: Update PickDetail failed'
 execute rdt.rdtAddMsg 235666, 10, '235665MergePKDFail',     'us_english', 957, 0, '235666: Merge to PickDetail failed'
 execute rdt.rdtAddMsg 235667, 10, '235667GetPKDKeyFail',    'us_english', 957, 0, '235667: Generate PickDetailKey failed'
+execute rdt.rdtAddMsg 235668, 10, '235668DropIDEmpty',      'us_english', 957, 0, '235668: Empty DropID in Pickdetail'
 
 select * from rdt.rdtmsg (nolock) where message_id between 235651 and 235700
