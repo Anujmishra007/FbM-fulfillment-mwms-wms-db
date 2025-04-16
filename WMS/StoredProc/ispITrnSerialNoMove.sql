@@ -4,20 +4,22 @@ SET QUOTED_IDENTIFIER OFF
 GO
 /**************************************************************************/
 /* Stored Procedure: ispITrnSerialNoMove                                  */
-/* Creation Date:                                                         */
+/* Creation Date: 2025-04-08                                              */
 /* Copyright: Mearsk Logistics                                            */
-/* Written by:                                                            */
+/* Written by: Wan                                                        */
 /*                                                                        */
-/* Purpose: Generic SerialNo Move update                                  */
+/* Purpose: INsert ItrnSerialNo Whne Move update                          */
 /*                                                                        */
 /* Called By:                                                             */
 /*                                                                        */
-/* Version: V2.0                                                          */
+/* Version: 1.0                                                           */
 /*                                                                        */
 /* Data Modifications:                                                    */
 /*                                                                        */
 /* Updates:                                                               */
-/* Date         Author    Ver. Purposes                                   */
+/* Date        Author   Ver.  Purposes                                    */
+/* 2025-04-08  Wan01    1.0   UWP-31258-FCR-822 Partial Pallet Serial No  */
+/*                            Move                                        */
 /**************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[ispITrnSerialNoMove]
   @c_ItrnKey      NVARCHAR(10)

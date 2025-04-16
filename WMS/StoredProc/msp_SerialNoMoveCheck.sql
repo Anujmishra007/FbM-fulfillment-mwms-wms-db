@@ -12,12 +12,14 @@ GO
 /*                                                                        */
 /* Called By:                                                             */
 /*                                                                        */
-/* Version: V2.0                                                          */
+/* Version: 1.1                                                           */
 /*                                                                        */
 /* Data Modifications:                                                    */
 /*                                                                        */
 /* Updates:                                                               */
-/* Date         Author    Ver. Purposes                                   */
+/* Date        Author   Ver.  Purposes                                    */
+/* 2025-04-04  Wan01    1.1   UWP-31258-FCR-822 Partial Pallet Serial No  */
+/*                            Move                                        */
 /**************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[msp_SerialNoMoveCheck]
      @c_ItrnKey      NVARCHAR(10)
