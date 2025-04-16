@@ -68,9 +68,12 @@ BEGIN
    SET CONCAT_NULL_YIELDS_NULL OFF
 
    DECLARE 
-      @c_SerialNoCapture NVARCHAR(1) = ''
-     ,@c_SerialNoKey     NVARCHAR(10) = ''
-     ,@n_Continue        INT = 1
+      @c_SerialNoCapture   NVARCHAR(1) = ''
+     ,@c_SerialNoKey       NVARCHAR(10) = ''
+     ,@n_Continue          INT = 1
+
+     ,@n_SerialQty         INT = 0                                                  --(Wan01)   
+     ,@c_SerialNo          NVARCHAR(30) = ''                                        --(Wan01)   
 
    SELECT @c_SerialNoCapture = SerialNoCapture 
    FROM dbo.SKU WITH (NOLOCK) 
@@ -89,7 +92,9 @@ BEGIN
                   AND SN.ID = @c_FromID)
          BEGIN              
             DECLARE CUR_SWAP_ID CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
-            SELECT SN.SerialNoKey 
+            SELECT SN.SerialNoKey
+                  ,SN.SerialNo                                                      --(Wan01)
+                  ,SN.Qty                                                           --(Wan01)
             FROM dbo.SerialNo SN WITH (NOLOCK) 
             WHERE SN.LOT = @c_Lot
             AND SN.ID = @c_FromID
@@ -99,7 +104,8 @@ BEGIN
               
             OPEN CUR_SWAP_ID
               
-            FETCH NEXT FROM CUR_SWAP_ID INTO @c_SerialNoKey
+            FETCH NEXT FROM CUR_SWAP_ID INTO @c_SerialNoKey, @c_SerialNo            --(Wan01)
+                                          ,  @n_SerialQty                           --(Wan01)
               
             WHILE @@FETCH_STATUS = 0
             BEGIN
@@ -115,9 +121,27 @@ BEGIN
                            + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTrim(@c_ErrMsg),'') + ' ) '
                   BREAK
                END
-      
 
-               FETCH NEXT FROM CUR_SWAP_ID INTO @c_SerialNoKey
+               IF @n_Continue = 1                                                   --(Wan01)
+               BEGIN
+                  EXEC [dbo].[ispITrnSerialNoMove]
+                    @c_ItrnKey      = @c_ItrnKey   
+                  , @c_TranType     = 'MV'   
+                  , @c_StorerKey    = @c_StorerKey 
+                  , @c_SKU          = @c_SKU       
+                  , @c_SerialNo     = @c_SerialNo  
+                  , @c_FromID       = @c_FromID    
+                  , @c_ToID         = @c_ToID      
+                  , @n_QTY          = @n_SerialQty        
+                  , @c_SourceKey    = '' 
+                  , @c_SourceType   = ''
+                  , @b_Success      = @b_Success    OUTPUT
+                  , @n_Err          = @n_Err        OUTPUT
+                  , @c_Errmsg       = @c_Errmsg     OUTPUT
+               END
+
+               FETCH NEXT FROM CUR_SWAP_ID INTO @c_SerialNoKey, @c_SerialNo         --(Wan01)
+                                             ,  @n_SerialQty                        --(Wan01)
             END
               
             CLOSE CUR_SWAP_ID
@@ -152,7 +176,7 @@ BEGIN
       END
       ELSE
       BEGIN
-         EXECUTE dbo.nsp_logerror @n_err, @c_errmsg, 'nspItrnAddMoveCheck'
+         EXECUTE dbo.nsp_logerror @n_err, @c_errmsg, 'msp_SerialNoMoveCheck'
          RAISERROR (@c_errmsg, 16, 1) WITH SETERROR    -- SQL2012
          RETURN -1
       END
