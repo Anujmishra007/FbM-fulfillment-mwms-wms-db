@@ -1,21 +1,20 @@
 /************************************************************************/
-/* Stored Procedure: lsp_Kit_ExplodeByPackKey_Wrapper                   */  
-/* Creation Date: 13-DEC-2024                                           */  
-/* Copyright: MAERSK                                                    */  
+/* Stored Procedure: lsp_Kit_ExplodeByPackKey_Wrapper                   */
+/* Creation Date: 13-DEC-2024                                           */
+/* Copyright: MAERSK                                                    */
 /* Written by: ngahjuneow                                               */
-/*                                                                      */  
-/* Purpose: UWP-32032 , LFWM-4807 Kitting item explode by packkey for KitTo*/
-/*                                                                      */  
-/* Called By: Kitting                                                   */  
-/*                                                                      */  
-/* PVCS Version: 1.2                                                    */  
-/*                                                                      */  
-/* Version: 8.0                                                         */  
-/*                                                                      */  
-/* Data Modifications:                                                  */  
-/*                                                                      */  
-/* Updates:                                                             */  
-/* Date        Author   Ver   Purposes                                  */  
+/*                                                                      */
+/* Purpose: LFWM-4807 Kitting item explode by packkey                   */
+/*                                                                      */
+/* Called By: Kitting                                                   */
+/*                                                                      */
+/* PVCS Version: 1.0                                                    */
+/*                                                                      */
+/* Version: 1.0
+*/
+/* Updates:                                                              */
+/* Date         Author   Ver.  Purposes                                  */
+/* 15-APR-2025  Ansuman  1.0   UWP-32032 Kitting item explode by Pack Key */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE [WM].[lsp_Kit_ExplodeByPackKey_Wrapper]
