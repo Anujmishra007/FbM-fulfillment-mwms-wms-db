@@ -10,6 +10,7 @@ GO
 /*                                                                        */
 /* Date       Rev    Author     Purposes                                  */
 /* 2025-04-10 1.0.0  NLT013     FCR-3728. Created                         */
+/* 2025-04-16 1.0.1  NLT013     FCR-3728 Add Catch section                */
 /**************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_840ExtInfo13] (
@@ -64,10 +65,16 @@ AS
                               '@cOrderKey                NVARCHAR(15), '               +
                               '@nQty                     INT OUTPUT'
 
-            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,    
+            BEGIN TRY
+               EXEC sp_ExecuteSQL @cSQL, @cSQLParam,    
                      @cStorerKey = @cStorerKey,
                      @cOrderKey  = @cOrderKey,
                      @nQty = @nQty OUTPUT
+            END TRY
+            BEGIN CATCH
+               SET @cExtendedInfo = 'SQL Error Happens'
+               GOTO Quit
+            END CATCH
 
             IF @nQty > 0
             BEGIN
