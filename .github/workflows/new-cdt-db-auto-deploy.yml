@@ -8,11 +8,12 @@ on:
         type: choice
         description: country 
         options: 
-        - ALL
+        - DEV
         - GLO
         - NLD
         - GBR
         - USA4DNJ
+        - ALL
       message:
         required: true
 
