@@ -18,7 +18,7 @@ GO
 /*                                                                        */
 /* Updates:                                                               */
 /* Date        Author   Ver.  Purposes                                    */
-/* 2025-04-08  Wan01    1.0   UWP-31258-FCR-822 Partial Pallet Serial No  */
+/* 2025-04-08  Wan      1.0   UWP-31258-FCR-822 Partial Pallet Serial No  */
 /*                            Move                                        */
 /**************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[ispITrnSerialNoMove]
