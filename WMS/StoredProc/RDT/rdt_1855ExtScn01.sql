@@ -23,7 +23,9 @@ GO
 /* 2025-03-11 1.5.0  NLT013     UWP-31257 Unable to Pick because                   */
 /*                              PickDetail.TaskDetailKey<>TaskDetail.TaskDetaiLKey */
 /* 2025-03-11 1.5.1  NLT013     UWP-31257 RPF taks is not mandatory for ASTCPK     */
-/***********************************************************************************/  
+/* 2025-04-04 1.6.1  CYU027     FCR-3927 TOTE and CARTON Input Validation          */
+/* 2025-04-11 1.6.2  DENNIS     UWP-32689 If picked then reject users back out     */
+/***********************************************************************************/
   
 CREATE OR ALTER PROC [RDT].[rdt_1855ExtScn01] (
    @nMobile      INT,           
@@ -793,6 +795,15 @@ BEGIN
                      EXEC rdt.rdtSetFocusField @nMobile, 2
                      GOTO Quit
                   END
+                  ELSE
+                  BEGIN
+                     IF rdt.rdtIsValidFormat( @nFunc, @cStorerKey, 'CartID', @cCartID) = 0
+                     BEGIN
+                        SET @nErrNo = 220779
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- CartIDInvalidFormat
+                        GOTO Quit
+                     END
+                  END
                      
                   -- Check cart valid
                   IF NOT EXISTS( SELECT 1 FROM dbo.DeviceProfile WITH (NOLOCK)
@@ -1009,6 +1020,19 @@ BEGIN
             SCN6416_Start:
             IF @nInputKey = 0
             BEGIN
+               IF EXISTS(SELECT 1      
+                  FROM dbo.TaskDetail WITH (NOLOCK)      
+                  WHERE Storerkey = @cStorerKey      
+                  AND   TaskType = 'ASTCPK'      
+                  AND   [Status] = '5'      
+                  AND   Groupkey = @cGroupKey      
+                  AND   UserKey = @cUserName      
+                  AND   DeviceID = @cCartID  )
+               BEGIN
+                  SET @nErrNo = 220777
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --PickNotComplete
+                  GOTO Quit
+               END
                -- Prepare next screen var        
                SET @cOutField01 = ''        
                SET @cOutField02 = ''         
@@ -1582,6 +1606,15 @@ BEGIN
                      SET @cUDF07 = @cTaskDetailKey
 
                      GOTO Quit
+                  END
+                  ELSE
+                  BEGIN--CartonID not empty
+                     IF rdt.rdtIsValidFormat( @nFunc, @cStorerKey, 'CartonId', @cCartonId) = 0
+                     BEGIN
+                        SET @nErrNo = 220780
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Invalid format CartonId
+                        GOTO Quit
+                     END
                   END
 
                   IF EXISTS(SELECT 1 

@@ -14,6 +14,7 @@ GO
 /* 17-07-2024   1.1  JACKC     UWP-21829 Error msg not visible             */
 /* 2024-09-23   1.3  CYU027    Add Type Image                              */
 /* 2025-01-09   1.4  CYU027    UWP-26488 Add Type List                     */
+/* 2025-04-14   1.5  CYU027    FCR-2729 DROPLIST Empty Values              */
 /***************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtScr2XMLHttp] (
@@ -371,6 +372,12 @@ BEGIN
       -- Footer
       SET @cXML = @cXML + '</field>'
       RETURN
+   END
+   ELSE
+   BEGIN
+      --v1.5 NO DATA, WORK AS INPUT FIELD
+      SET @cColText = ''
+      GOTO INPUT_FIELD
    END
 END
 
