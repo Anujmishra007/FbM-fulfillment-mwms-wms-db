@@ -149,13 +149,6 @@ BEGIN
       RETURN
    END
 
-   IF @cTaskType = 'FPK' AND @cTaskPickDetailKey = ''
-   BEGIN
-      SET @nErrNo = 236044
-      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --NoPickDetailKey
-      RETURN
-   END
-
    -- Get old ID Qty
    SELECT
       @nIDQTY = QTY - QTYPicked
