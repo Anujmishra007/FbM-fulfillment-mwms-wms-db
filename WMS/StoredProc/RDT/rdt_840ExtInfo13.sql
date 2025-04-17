@@ -11,6 +11,7 @@ GO
 /* Date       Rev    Author     Purposes                                  */
 /* 2025-04-10 1.0.0  NLT013     FCR-3728. Created                         */
 /* 2025-04-16 1.0.1  NLT013     FCR-3728 Add Catch section                */
+/* 2025-04-16 1.0.2  NLT013     FCR-3728 CODELKUP join ORDERS             */
 /**************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_840ExtInfo13] (
@@ -48,11 +49,13 @@ AS
       IF @nAfterStep = 5 -- Pick & Pack Completed
       BEGIN
          SELECT TOP 1
-            @cSubQuery = Notes,
-            @cExtendedMsg = Description
-         FROM dbo.CODELKUP WITH(NOLOCK)
-         WHERE StorerKey = @cStorerkey
-            AND LISTNAME = 'PACKEXTINF'
+            @cSubQuery = CL.Notes,
+            @cExtendedMsg = CL.Description
+         FROM dbo.CODELKUP CL WITH(NOLOCK)
+         INNER JOIN dbo.ORDERS ORM WITH(NOLOCK) ON CL.StorerKey = ORM.StorerKey AND CL.Code = ORM.UserDefine04
+         WHERE CL.StorerKey = @cStorerkey
+            AND CL.LISTNAME = 'PACKEXTINF'
+            AND ORM.OrderKey = @cOrderKey
 
          IF ISNULL(@cSubQuery, '') <> '' AND ISNULL(@cExtendedMsg, '') <> ''
          BEGIN
