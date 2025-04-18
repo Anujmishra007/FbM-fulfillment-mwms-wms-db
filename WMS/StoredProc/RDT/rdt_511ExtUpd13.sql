@@ -151,10 +151,11 @@ BEGIN
                     JOIN KITDETAIL KD WITH (NOLOCK)
                          ON KIT.KITKey = KD.KITKey
             WHERE KIT.Facility = @cFacility
-              AND   KIT.StorerKey = @cStorerKey
-              AND   KIT.[Status] <> '9'
-              AND   KD.Id = @cFromID
-              AND   KD.[Type] = 'F'
+               AND KIT.StorerKey = @cStorerKey
+               AND KIT.[Status] <> '9'
+               AND KD.Id = @cFromID
+               AND KD.[Type] = 'F'
+               AND KIT.KITKey = @cKitkey
 
          END
       END
