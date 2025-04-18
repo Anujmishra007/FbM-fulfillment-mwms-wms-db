@@ -13,6 +13,7 @@ GO
 /*                                                                            */
 /* Date         Rev    Author   Purposes                                      */
 /* 2024-12-05   1.0.0  NLT013   FCR-1398 Created                              */
+/* 2024-12-05   1.1.0  NLT013   UWP-32818 ASN Status refering wrong field     */
 /******************************************************************************/
         
 CREATE OR ALTER PROC [RDT].[rdtfnc_Inbound_PalletTempCapture](
@@ -196,8 +197,7 @@ BEGIN
             GOTO Step_1_Fail
          END
 
-         SELECT @cASNStatus   = Status,
-            @cASNSCanctatus   = ASNStatus,
+         SELECT @cASNStatus = ASNStatus,
             @cASNFacility     = ISNULL(Facility, ''),
             @cASNStorerKey    = StorerKey
          FROM dbo.Receipt WITH(NOLOCK)
@@ -237,18 +237,11 @@ BEGIN
             END
          END
 
-         IF @cASNStatus = '9'
+         IF @cASNStatus IN ('9', 'CANC')
          BEGIN
             SET @nErrNo = 230206
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --ASNClosed
             EXEC rdt.rdtSetFocusField @nMobile, 1
-            GOTO Step_1_Fail
-         END
-
-         IF @cASNSCanctatus = 'CANC'
-         BEGIN
-            SET @nErrNo = 230207
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --ASNCancelled
             GOTO Step_1_Fail
          END
 
