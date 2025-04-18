@@ -7,7 +7,7 @@ EXECUTE rdt.rdtAddMsg 230202, 10, '230202ASNNotExist',            'us_english', 
 EXECUTE rdt.rdtAddMsg 230203, 10, '230203DiffFacility',           'us_english', 1869
 EXECUTE rdt.rdtAddMsg 230204, 10, '230204DiffStorer',             'us_english', 1869
 EXECUTE rdt.rdtAddMsg 230205, 10, '230205NotInStorerGrp',         'us_english', 1869
-EXECUTE rdt.rdtAddMsg 230206, 10, '230206ASNClosed',              'us_english', 1869
+EXECUTE rdt.rdtAddMsg 230206, 10, '230206ASNClosed',              'us_english', 1869, 0, '230206 ASN Closed or Cancelled'  --UWP-32818
 EXECUTE rdt.rdtAddMsg 230207, 10, '230207ASNCancelled',           'us_english', 1869
 EXECUTE rdt.rdtAddMsg 230208, 10, '230208IDIsNeeded',             'us_english', 1869
 EXECUTE rdt.rdtAddMsg 230209, 10, '230209InvalidID',              'us_english', 1869, 0, '230209ID does not exist in ASN'
