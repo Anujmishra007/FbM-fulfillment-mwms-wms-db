@@ -159,7 +159,7 @@ BEGIN
             IF @nInputWeight > 0
             BEGIN
                SELECT
-                  @nMaxWeight= ISNULL( MaxWeight, 0)
+                  @nMaxWeight= CONVERT(FLOAT,ISNULL( MaxWeight, 0))/1000 --input is kg
                FROM Cartonization WITH (NOLOCK)
                        INNER JOIN Storer WITH (NOLOCK) ON (Storer.CartonGroup = Cartonization.CartonizationGroup)
                WHERE Storer.StorerKey = @cStorerKey
