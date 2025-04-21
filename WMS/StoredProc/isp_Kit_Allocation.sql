@@ -28,6 +28,7 @@ GO
 /*                            expectedqty                               */ 
 /* 15-Sep-2022  NJOW03  1.2   WMS-20808 set kit.status=1 if partial     */
 /*                            allocated                                 */
+/* 16-Apr-2025  Ansuman01 1.3 UWP-30689 Pallet Allocation for KIT       */
 /************************************************************************/
 CREATE OR ALTER PROC  isp_Kit_Allocation  
       @c_KitKey              NVARCHAR(10)
@@ -328,7 +329,7 @@ BEGIN
       JOIN  SKU (NOLOCK) ON KITDETAIL.Storerkey = SKU.StorerKey AND KITDETAIL.Sku = SKU.Sku
       JOIN  STRATEGY STGY (NOLOCK) ON SKU.Strategykey = STGY.StrategyKey
       WHERE KIT.Kitkey = @c_Kitkey
-      AND ISNULL(KITDETAIL.Lot,'') = ''
+      AND ISNULL(KITDETAIL.Lot,'') = '' OR ISNULL(KITDETAIL.Loc,'') = '' -- Ansuman01
       AND KITDETAIL.Type = 'F'
       ORDER BY KITDETAIL.SKU
       
