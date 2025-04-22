@@ -110,7 +110,7 @@ AS
    DECLARE @cScnTitle NVARCHAR( 250) = ''
    IF @nFunc BETWEEN 5 AND 499 OR @nFunc < -100 -- Menu
       SET @cScnTitle = rdt.rdtGetMessageLong( @nFunc, @cLangCode, 'MNU')
-   ELSE IF @nFunc > 499 -- Function, include login, store and facility, resume session
+   ELSE IF @nFunc BETWEEN 0 AND 4  OR @nFunc > 499 -- Function, include login, store and facility, resume session
       SET @cScnTitle = rdt.rdtGetMessageLong( @nFunc, @cLangCode, 'FNC')
    SET @cXMLScreen += ' title="' + @cScnTitle + '"'
 
