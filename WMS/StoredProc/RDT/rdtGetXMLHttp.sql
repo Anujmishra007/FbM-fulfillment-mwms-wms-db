@@ -132,13 +132,13 @@ AS
    -- XML footer
    IF @cMobileDisp = 'N'
       SET @cXMLFooter = '<field typ="output" x="01" y="6" value="' +
-         'Fn'+ CAST( @nFunc AS NVARCHAR(4)) +
+         'Fn'+ CAST( @nFunc AS NVARCHAR(11)) +
          '-St' + CAST( @nStep AS NVARCHAR(3)) +
          --'-M' + CAST( @nMobile AS NVARCHAR(3))  -- take out because screen only can display 19 chars
          + '"/>'
    ELSE
       SET @cXMLFooter = '<field typ="output" x="01" y="15" value="' +
-         'Fn'+ CAST( @nFunc AS NVARCHAR(4)) +
+         'Fn'+ CAST( @nFunc AS NVARCHAR(11)) +
          '-St' + CAST( @nStep AS NVARCHAR(3)) +
          '-M' + CAST( @nMobile AS NVARCHAR(5)) +
          '"/>'

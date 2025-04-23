@@ -81,7 +81,7 @@ BEGIN
       WHERE ListName = 'SEPPAZONE'
          AND Code = @cBUSR4
          AND StorerKey = @cStorerKey
-         AND Code2 = CAST( @nFunc AS NVARCHAR(4))
+         AND Code2 = CAST( @nFunc AS NVARCHAR(11))
 
       -- Get L2, L3, L4
       DECLARE @cLottable02 NVARCHAR( 18)
