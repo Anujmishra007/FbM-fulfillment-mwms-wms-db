@@ -34,6 +34,7 @@ GO
 /* 2025-03-13 1.15.0 NLT013   Misupdate PickDetail as 5, because not check all     */
 /*                            PickDetails are picked, some Packinfo was missing    */
 /* 2025-03-22 1.15.1 NLT013   UWP-31481 Need check if all packdetail are generated */
+/* 2025-04-08 1.15.2 Dennis   UWP-32495 FixBugs                                    */
 /***********************************************************************************/
 CREATE OR ALTER PROC rdt.rdt_855ExtUpd13 (
    @nMobile      INT,   
@@ -845,7 +846,8 @@ BEGIN
                                              AND PH.OrderKey = PD.OrderKey
                                           WHERE PH.StorerKey = @cStorerkey
                                              AND PH.PickHeaderKey = @cPickSlipNo
-                                             AND PD.Status < '5'
+                                             AND PD.Status < '4'
+                                             AND PD.QTY > 0
                                            )
                            AND (SELECT COUNT(DISTINCT LabelNo) FROM dbo.PackDetail WITH(NOLOCK) WHERE StorerKey = @cStorerkey AND PickSlipNo = @cPickSlipNo)
                                =
