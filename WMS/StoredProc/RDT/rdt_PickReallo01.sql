@@ -9,6 +9,7 @@
 /* Date       Rev    Author   Purposes                                  */
 /* 2025-03-26 1.0.0  JCH507   FCR-2704 Re-allocation if short happens   */
 /* 2025-04-15 1.0.1  JCH507   FCR-2704 Support PickDetail.UOM = 7       */
+/* 2025-04-24 1.0.2  NLT013   FCR-2704 Update RefKeyLookup              */
 /*                                                                      */
 /************************************************************************/
 
@@ -883,6 +884,28 @@ BEGIN
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Update PKD failed
          GOTO RollBack_SKU
       END CATCH
+
+      --Update RefKeyLookup
+      -- V1.0.2 Start
+      BEGIN TRY
+         MERGE dbo.RefKeyLookup AS target
+         USING @tAllocation AS source
+            ON target.PickDetailKey = source.PickDetailKey
+         WHEN MATCHED THEN
+            UPDATE SET 
+               target.PickSlipNo = source.PickSlipNo,
+               target.EditDate = GETDATE(),
+               target.EditWho = SUSER_SNAME()
+         WHEN NOT MATCHED BY TARGET THEN
+            INSERT (PickDetailKey, PickSlipNo, OrderKey, OrderLineNumber, EditDate, EditWho )
+            VALUES (source.PickDetailKey, source.PickSlipNo, source.OrderKey, source.OrderLineNumber,  GETDATE(), SUSER_SNAME());
+      END TRY
+      BEGIN CATCH
+         SET @nErrNo = 235669
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Merge to RefKeyLookup failed
+         GOTO RollBack_SKU
+      END CATCH
+      -- V1.0.2 End
 
       COMMIT_SKU:
          COMMIT TRAN rdt_PickReallo01_SKU -- Only commit change made here
