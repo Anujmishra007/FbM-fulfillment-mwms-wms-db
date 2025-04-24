@@ -60,6 +60,7 @@ jobs:
           echo "Validated successfully. Proceeding to deploy '${BRANCH}' to '${DEST}'"
 
       - name: Trigger deployment
+        if: ${{ success() }}
         run: |
           echo "Deploying branch '${{ github.event.inputs.feature_branch }}' to environment '${{ github.event.inputs.destination_env }}'"
           # Deployment logic goes here
