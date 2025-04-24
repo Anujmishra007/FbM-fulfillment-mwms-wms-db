@@ -9,6 +9,12 @@ on:
       destination_env:
         description: 'Deployment environment'
         required: true
+        type: choice
+        options:
+          - RDT
+          - Inbound
+          - Velox
+          - Inventory
 
 jobs:
   deploy:
