@@ -13,6 +13,7 @@ GO
 /* Date       Rev    Author   Purposes                                  */
 /* 2025-02-14 1.0.0  JCH507   FCR-2597. Created                         */
 /* 2025-03-07 1.0.1  CYU027   FCR-2597                                  */
+/* 2025-04-17 1.0.2  CYU027   FCR-2936                                 */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_511ExtUpd13] (
@@ -143,6 +144,18 @@ BEGIN
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- InsTaskDetFail
                GOTO Quit
             END CATCH
+
+            UPDATE KD SET
+               KD.Loc = @cToLOC
+            FROM KIT WITH (NOLOCK)
+                    JOIN KITDETAIL KD WITH (NOLOCK)
+                         ON KIT.KITKey = KD.KITKey
+            WHERE KIT.Facility = @cFacility
+               AND KIT.StorerKey = @cStorerKey
+               AND KIT.[Status] <> '9'
+               AND KD.Id = @cFromID
+               AND KD.[Type] = 'F'
+               AND KIT.KITKey = @cKitkey
 
          END
       END
