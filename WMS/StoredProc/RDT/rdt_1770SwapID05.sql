@@ -13,6 +13,7 @@ GO
 /* Date        Rev    Author      Purposes                                */
 /* 2025-04-08  1.0    NLT03       FCR-3836 Create                         */
 /* 2025-04-15  1.0.1  NLT03       FCR-3836 Remove useless validation      */
+/* 2025-04-15  1.0.2  NLT03       FCR-3836 Handle VNAOUT RPF task         */
 /**************************************************************************/
 
 CREATE OR ALTER PROCEDURE rdt.rdt_1770SwapID05
@@ -463,7 +464,7 @@ BEGIN
          AND FromID = @cNewID
          AND Lot = @cNewLOT
          AND TaskDetailKey <> @cTaskDetailKey
-         AND Status > '0')
+         AND Status IN ('3', '5', '9') )
    BEGIN
       SET @nErrNo = 236010
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --ID task taken
@@ -481,6 +482,10 @@ BEGIN
    2. ID on other PickDetail    swap
    3. ID is allocated for a replenishment task    swap
 */
+   DECLARE 
+      @cOtherTaskStatus      NVARCHAR( 10),
+      @cOtherTaskUserKey     NVARCHAR( 18),
+      @cOtherTaskMessage03   NVARCHAR( 30)
 
    -- Get other task info
    SET @cOtherTaskDetailKey = ''
@@ -488,14 +493,17 @@ BEGIN
    SELECT 
       @cOtherTaskDetailKey = TaskDetailKey,
       @cNewTaskKey = TaskType,
-      @cNewPickMethod = PickMethod
+      @cNewPickMethod = PickMethod,
+      @cOtherTaskStatus = Status,
+      @cOtherTaskUserKey = UserKey,
+      @cOtherTaskMessage03 = Message03
    FROM dbo.TaskDetail WITH (NOLOCK)
    WHERE StorerKey = @cStorerkey
       AND TaskType IN ('RPF', 'FPK')
       AND FromLoc = @cNewLOC
       AND FromID = @cNewID
       AND TaskDetailKey <> @cTaskDetailKey
-      AND Status = '0'
+      AND Status IN ( '0', 'Q' ) -- '0' = Open, 'Q' = Queued
 
    IF ISNULL(@cOtherTaskDetailKey, '') <> ''
    BEGIN
@@ -535,7 +543,7 @@ BEGIN
    SAVE TRAN rdt_1770SwapID05
 
    -- 1. Scanned ID is allocated for a replenishment task, release the pallet first
-   IF @cOtherTaskDetailKey <> '' AND ISNULL(@cOtherPickDetailKey, '') = '' AND @cNewTaskKey = 'RPF'
+   IF @cOtherTaskDetailKey <> '' AND ISNULL(@cOtherPickDetailKey, '') = '' AND ( @cNewTaskKey = 'RPF' OR (@cOtherTaskMessage03 = 'RPF' AND @cNewTaskKey = 'VNAOUT') )
    BEGIN
       SELECT 
          @cRPFTaskFromLoc = FromLOC,
@@ -594,7 +602,7 @@ BEGIN
    -- 2. ID is not alloc, 
    --    or ID is allocaed for a replenishment task, but the ID is released in previous section
    IF (@cOtherTaskDetailKey = '' AND @cOtherPickDetailKey = '')
-      OR (@cOtherTaskDetailKey <> '' AND ISNULL(@cOtherPickDetailKey, '') = '' AND @cNewTaskKey = 'RPF')
+      OR (@cOtherTaskDetailKey <> '' AND ISNULL(@cOtherPickDetailKey, '') = '' AND (@cNewTaskKey = 'RPF' OR ( @cNewTaskKey = 'RPF' OR (@cOtherTaskMessage03 = 'RPF' AND @cNewTaskKey = 'VNAOUT') )))
    BEGIN
       -- i. ID is not allocated
       -- Loop PickDetail
@@ -652,7 +660,7 @@ BEGIN
       -- ii. ID is allocated for a replenishment task, but the ID is released in previous section
       -- ID was allocated for a replenishment task, it was released, and allocated for the Picking task,
       -- need allocate the old ID to the replenishment task
-      IF @cOtherTaskDetailKey <> '' AND ISNULL(@cOtherPickDetailKey, '') = '' AND @cNewTaskKey = 'RPF'
+      IF @cOtherTaskDetailKey <> '' AND ISNULL(@cOtherPickDetailKey, '') = '' AND ( @cNewTaskKey = 'RPF' OR ( @cNewTaskKey = 'RPF' OR (@cOtherTaskMessage03 = 'RPF' AND @cNewTaskKey = 'VNAOUT') ) )
       BEGIN
          EXEC rdt.rdt_Putaway_PendingMoveIn '', 'LOCK' 
             ,@cRPFTaskFromLoc
@@ -672,6 +680,8 @@ BEGIN
          END
 
          UPDATE TaskDetail SET
+            Status = @cOtherTaskStatus,
+            UserKey = @cOtherTaskUserKey,
             LOT = @cTaskLOT, 
             FromID = @cTaskID, 
             ToID = CASE WHEN ToID <> '' THEN @cTaskID ELSE ToID END, 
@@ -679,7 +689,7 @@ BEGIN
             EditWho = SUSER_SNAME(), 
             TrafficCop = NULL
          WHERE TaskDetailKey = @cOtherTaskDetailKey
-            AND Status = '0'
+            AND Status IN ( '0', 'Q' ) -- '0' = Open, 'Q' = Queued
 
          IF @@ERROR <> 0 OR @@ROWCOUNT <> 1
          BEGIN
@@ -780,7 +790,7 @@ BEGIN
             EditWho = SUSER_SNAME(), 
             TrafficCop = NULL
          WHERE TaskDetailKey = @cOtherTaskDetailKey
-            AND Status = '0'
+            AND Status IN ( '0', 'Q' ) -- '0' = Open, 'Q' = Queued
          IF @@ERROR <> 0 OR @@ROWCOUNT <> 1
          BEGIN
             SET @nErrNo = 236016
