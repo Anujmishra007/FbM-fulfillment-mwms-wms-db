@@ -1,0 +1,66 @@
+name: Deploy Feature Branch POC
+
+on:
+  workflow_dispatch:
+    inputs:
+      feature_branch:
+        description: 'Feature branch to deploy'
+        required: true
+      destination_env:
+        description: 'Deployment environment'
+        required: true
+        type: choice
+        options:
+          - RDT
+          - Inbound
+          - Velox
+          - Inventory
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check inputs
+        run: |
+          echo "Feature branch: ${{ github.event.inputs.feature_branch }}"
+          echo "Destination env: ${{ github.event.inputs.destination_env }}"
+
+      - name: Validate environment selection
+        run: |
+          BRANCH="${{ github.event.inputs.feature_branch }}"
+          DEST="${{ github.event.inputs.destination_env }}"
+
+          # Define environments
+          ALL_ENVS=("RDT" "Inbound" "Velox" "Inventory")
+          
+          if [[ "$BRANCH" == rdt_* ]]; then
+            echo "Branch starts with 'rdt_'. Allowed environments: RDT"
+            VALID_ENVS=($(printf "%s\n" "${ALL_ENVS[@]}" | grep 'RDT'))
+          elif [[ "$BRANCH" == inbound_* ]]; then
+            echo "Branch starts with 'inbound_'. Allowed environments: Inbound"
+            VALID_ENVS=($(printf "%s\n" "${ALL_ENVS[@]}" | grep 'Inbound'))
+          elif [[ "$BRANCH" == velox_* ]]; then
+            echo "Branch starts with 'velox_'. Allowed environments: Velox"
+            VALID_ENVS=($(printf "%s\n" "${ALL_ENVS[@]}" | grep 'Velox'))
+          elif [[ "$BRANCH" == inventory_* ]]; then
+            echo "Branch starts with 'inventory_'. Allowed environments: Inventory"
+            VALID_ENVS=($(printf "%s\n" "${ALL_ENVS[@]}" | grep 'Inventory'))
+          else
+            echo "Branch does not start with a recognized prefix. Allowed environments: all"
+            VALID_ENVS=("${ALL_ENVS[@]}")
+            exit 1
+          fi
+      
+          if [[ ! " ${VALID_ENVS[@]} " =~ " ${DEST} " ]]; then
+            echo "Invalid destination environment '${DEST}' for branch '${BRANCH}'"
+            echo "Valid options: ${VALID_ENVS[@]}"
+            exit 1
+          fi
+
+          echo "Validated successfully. Proceeding to deploy '${BRANCH}' to '${DEST}'"
+
+      - name: Trigger deployment
+        if: ${{ success() }}
+        run: |
+          echo "Deploying branch '${{ github.event.inputs.feature_branch }}' to environment '${{ github.event.inputs.destination_env }}'"
+          # Deployment logic goes here

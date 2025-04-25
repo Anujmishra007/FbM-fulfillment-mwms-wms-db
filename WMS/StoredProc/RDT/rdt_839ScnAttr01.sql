@@ -59,7 +59,7 @@ BEGIN
    BEGIN
       IF @cY = 1 -- FROM LOC
       BEGIN
-         SELECT TOP 1 @cSValueSP = Descr -- colorCode
+         SELECT TOP 1 @cSValueSP = ISNULL(ColorCode,'') -- colorCode
          FROM LOC (NOLOCK ) WHERE LOC = @cLOCStep3
          GOTO QUIT
       END
@@ -78,7 +78,7 @@ BEGIN
    BEGIN
       IF @cY = 1 -- FROM LOC
       BEGIN
-         SELECT TOP 1 @cSValueSP = Descr -- colorCode
+         SELECT TOP 1 @cSValueSP = ISNULL(ColorCode,'') -- ISNULL(ColorCode,'')
          FROM LOC (NOLOCK ) WHERE LOC = @cLOCStep3
          GOTO QUIT
       END

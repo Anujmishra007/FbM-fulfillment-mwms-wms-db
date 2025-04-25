@@ -14,6 +14,7 @@ GO
 /* Date         Rev    Author   Purposes                                      */
 /* 2024-12-05   1.0.0  NLT013   FCR-1398 Created                              */
 /* 2025-04-01   1.1.0  NLT013   FCR-3256 Add DecodeSP                         */
+/* 2025-04-05   1.1.0  NLT013   UWP-32818 ASN Status refering wrong field     */
 /* 2025-04-15   1.2.0  NLT013   UWP-32818 Temperature capture is not referring*/
 /*                              to ASNStatus                                  */
 /******************************************************************************/
@@ -209,7 +210,7 @@ BEGIN
             GOTO Step_1_Fail
          END
 
-         SELECT @cASNStatus   = ASNStatus,
+         SELECT @cASNStatus = ASNStatus,
             @cASNFacility     = ISNULL(Facility, ''),
             @cASNStorerKey    = StorerKey
          FROM dbo.Receipt WITH(NOLOCK)
@@ -249,7 +250,7 @@ BEGIN
             END
          END
 
-         IF @cASNStatus IN ('9', 'CANC') 
+         IF @cASNStatus IN ('9', 'CANC')
          BEGIN
             SET @nErrNo = 230206
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --ASN Closed or Cancelled

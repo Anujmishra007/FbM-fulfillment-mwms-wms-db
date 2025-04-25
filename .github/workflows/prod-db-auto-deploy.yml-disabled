@@ -31,7 +31,7 @@ on:
         description: "PROD Europe Environment Value"
         required: false
       PROD-AMERICAS: 
-        description: "PROD Europe Environment Value"
+        description: "PROD Americas Environment Value"
         required: false
       PROD-ASIA: 
         description: "PROD Asia Environment Value"

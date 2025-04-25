@@ -56,7 +56,7 @@ BEGIN
    BEGIN
       IF @cY = 5
       BEGIN
-         SELECT TOP 1 @cSValueSP = Descr -- colorCode
+         SELECT TOP 1 @cSValueSP = ISNULL(ColorCode,'') -- colorCode
          FROM LOC (NOLOCK ) WHERE LOC = @suggestLoc
          GOTO QUIT
       END
