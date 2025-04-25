@@ -4,6 +4,7 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
+
 /*********************************************************************************/  
 /* Store Procedure:  ntrrdtPTLPieceLogDelete                                     */  
 /* Copyright: LF Logistics                                                       */  
@@ -13,7 +14,7 @@ GO
 /* Modification log:                                                             */  
 /* Date         Author     Ver   Purposes                                        */  
 /* 15-Apr-2022  yeekung    1.0   Created                                         */  
-/* 31-05-2022   kocy       1.1   restructure dellog table for DM sync            */ 
+/* 31-05-2022   kelvinong  1.1   restructure dellog table for DM sync            */ 
 /*********************************************************************************/  
 CREATE OR ALTER TRIGGER [RDT].[ntrrdtPTLPieceLogDelete]  
 ON  [RDT].[rdtPTLPieceLog]  
@@ -82,7 +83,7 @@ BEGIN
    
    IF @n_continue = 1 or @n_continue = 2
    BEGIN 
-      INSERT INTO rdt.rdtPTLPieceLog_Log (
+      INSERT INTO rdt.rdtPTLPieceLog_DEL (
       [Station],[IPAddress],[Position],[LOC],[Method],[CartonID],[OrderKey],[LoadKey],[WaveKey],[PickSlipNo],
       [BatchKey],[ConsigneeKey],[ShipTo],[StorerKey],[MaxTask],[UserDefine01],[UserDefine02],[UserDefine03],[SourceKey],[SourceType],
       [AddWho],[AddDate],[EditWho],[EditDate],[SKU],[DropID])

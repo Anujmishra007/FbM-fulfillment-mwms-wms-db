@@ -14,6 +14,8 @@ GO
 /* Date       Rev Author      Purposes                                        */
 /* 26-09-2024 1.0  yeekung    FCR-609 Created                                 */ 
 /* 30-09-2024 1.1  yeekung    FCR-772 Created                                 */ 
+/* 28-01-2025 1.2  yeekung    FCR-1442 Add format carton                      */
+/* 07-03-2025 1.3  Dennis     FCR-2636 Reuse Drop ID                          */
 /******************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_PTLStation_Confirm_ToteIDSKU07 (
@@ -73,6 +75,7 @@ BEGIN
    DECLARE @cTrackNo       NVARCHAR( 20)
    DECLARE @cNotes         NVARCHAR( 30)
    DECLARE @cUserDefine03  NVARCHAR( 20)
+   DECLARE @cPalletID      NVARCHAR( 20)
 
    DECLARE @curPTL CURSOR
    DECLARE @curLOG CURSOR
@@ -89,11 +92,13 @@ BEGIN
    DECLARE @cAutoPackConfirm  NVARCHAR(1)
    DECLARE @cUpdateTrackNo    NVARCHAR(1)
    DECLARE @cGenLabelNo_SP    NVARCHAR(20)
+   DECLARE @cReuseDropID      NVARCHAR(1)
 
    SET @cUpdatePickDetail = rdt.rdtGetConfig( @nFunc, 'UpdatePickDetail', @cStorerKey)
    SET @cUpdatePackDetail = rdt.rdtGetConfig( @nFunc, 'UpdatePackDetail', @cStorerKey)
    SET @cAutoPackConfirm = rdt.rdtGetConfig( @nFunc, 'AutoPackConfirm', @cStorerKey)
    SET @cUpdateTrackNo = rdt.rdtGetConfig( @nFunc, 'UpdateTrackNo', @cStorerKey)
+   SET @cReuseDropID = rdt.RDTGetConfig( @nFunc, 'ReuseDropID', @cStorerkey)
    SET @cGenLabelNo_SP = rdt.RDTGetConfig( @nFunc, 'GenLabelNo_SP', @cStorerkey)
    IF @cGenLabelNo_SP = '0'
       SET @cGenLabelNo_SP = ''
@@ -445,7 +450,18 @@ BEGIN
                END
             END
          END
-         
+
+         IF @cReuseDropID = '1'
+         BEGIN
+            IF NOT EXISTS(SELECT 1 FROM DBO.PICKDETAIL (NOLOCK) WHERE DROPID = @cScanID AND STATUS < '5' AND STATUS <> '4')
+            BEGIN
+               SELECT @cPalletID = DROPID FROM DBO.DROPIDDETAIL WITH (NOLOCK) WHERE CHILDID = @cScanID
+               DELETE FROM DBO.DROPIDDETAIL WITH (ROWLOCK) WHERE CHILDID = @cScanID
+               IF NOT EXISTS (SELECT 1 FROM dbo.DROPIDDETAIL WITH(NOLOCK) WHERE DROPID = @cPalletID)
+                  DELETE FROM DBO.DROPID WITH (ROWLOCK) WHERE DROPID = @cPalletID            
+            END
+         END
+
          -- Commit order level
          COMMIT TRAN rdt_PTLStation_Confirm
          WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
@@ -1041,6 +1057,17 @@ BEGIN
                END
             END
          END
+
+         IF @cReuseDropID = '1'
+         BEGIN
+            IF NOT EXISTS(SELECT 1 FROM DBO.PICKDETAIL (NOLOCK) WHERE DROPID = @cScanID AND STATUS < '5' AND STATUS <> '4')
+            BEGIN
+               SELECT @cPalletID = DROPID FROM DBO.DROPIDDETAIL WITH (NOLOCK) WHERE CHILDID = @cScanID
+               DELETE FROM DBO.DROPIDDETAIL WITH (ROWLOCK) WHERE CHILDID = @cScanID
+               IF NOT EXISTS (SELECT 1 FROM dbo.DROPIDDETAIL WITH(NOLOCK) WHERE DROPID = @cPalletID)
+                  DELETE FROM DBO.DROPID WITH (ROWLOCK) WHERE DROPID = @cPalletID  
+            END
+         END
       END
 
       -- Update new carton
@@ -1049,6 +1076,14 @@ BEGIN
 
          IF @cNewCartonID <> ''
          BEGIN   
+            -- Check barcode format
+            IF rdt.rdtIsValidFormat( @nFunc, @cStorerKey, 'CartonID', @cNewCartonID) = 0
+            BEGIN
+               SET @nErrNo = 224786
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Format     
+               GOTO Quit
+            END
+
             IF EXISTS ( SELECT 1 FROM rdt.rdtPTLStationLog  (NOLOCK)
                         WHERE StorerKey = @cStorerKey  
                            AND CartonID = @cNewCartonID )  

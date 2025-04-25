@@ -1,12 +1,3 @@
-IF EXISTS (
-       SELECT *
-       FROM   dbo.sysobjects
-       WHERE  id = OBJECT_ID(N'[dbo].[ispReverseDynamicLocReplenishment]')
-              AND OBJECTPROPERTY(id ,N'IsProcedure') = 1
-   )
-    DROP PROCEDURE [dbo].[ispReverseDynamicLocReplenishment]
-GO
-
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
@@ -14,7 +5,7 @@ GO
 /************************************************************************/  
 /* Stored Procedure: ispReverseDynamicLocReplenishment                  */  
 /* Creation Date: 30-Jun-2009                                           */  
-/* Copyright: IDS                                                       */  
+/* Copyright: Maersk Logistics                                          */  
 /* Written by: Shong                                                    */  
 /*                                                                      */  
 /* Purpose: SOS140686                                                   */  
@@ -22,18 +13,19 @@ GO
 /*                                                                      */  
 /* Called By: RCM Option From Wave maintenance Screen                   */  
 /*                                                                      */  
-/* PVCS Version: 1.0                                                    */  
-/*                                                                      */  
-/* Version: 6.0                                                         */  
+/* Version: 1.3                                                         */  
 /*                                                                      */  
 /* Data Modifications:                                                  */  
 /*                                                                      */  
 /* Updates:                                                             */  
-/* Date         Author    Ver.    Purposes                              */ 
-/* 27-May-2011  NJOW01    1.1     216932-Reverse original id            */
-/* 02-Aug-2011  TLTING    1.2     Commit by Line                        */
+/* Date         Author     Ver.  Purposes                               */ 
+/* 27-May-2011  NJOW01     1.1   216932-Reverse original id             */
+/* 02-Aug-2011  TLTING     1.2   Commit by Line                         */
+/* 07-Mar-2025  Wan01      1.3   UWP-29796 - Error on Gen Replenishment */
+/*                               for multiple pickdetail record for same*/
+/*                                lot, loc and id                       */
 /************************************************************************/ 
-CREATE PROC ispReverseDynamicLocReplenishment 
+CREATE OR ALTER PROC ispReverseDynamicLocReplenishment 
    @cWaveKey NVARCHAR(10),
    @bSuccess INT OUTPUT,
    @nErrNo   INT OUTPUT,
@@ -99,8 +91,8 @@ BEGIN
     
     WHILE @@FETCH_STATUS<>-1
     BEGIN
-    		BEGIN TRAN
-    			
+        BEGIN TRAN
+            
         DECLARE CUR_PickDetail  CURSOR LOCAL FAST_FORWARD READ_ONLY 
         FOR
             SELECT PICKDETAIL.LOT
@@ -136,7 +128,7 @@ BEGIN
             -- Reverse the Dynamic Pick Location back to the Original Pick Location (Bulk)
             UPDATE PickDetail WITH (ROWLOCK)
             SET    LOC = @cOriginalFromLoc,
-                   ID = @cOriginalFromID  --NJOW01
+                   ID  = @cOriginalFromID  --NJOW01
             WHERE  PickDetailKey = @cPickDetailKey
             
             IF @@ERROR<>0
@@ -171,9 +163,9 @@ BEGIN
                            WHEN PendingMoveIN<@nQty THEN 0
                                ELSE PendingMoveIN - @nQty
                            END
-            WHERE  LOT = @cLOT 
-            AND LOC = @cLOC
-            AND ID =''
+            WHERE LOT = @cLOT 
+            AND LOC   = @cLOC
+            AND ID    = @cID                                                        --(Wan01)
             
             IF @@ERROR<>0
             BEGIN
@@ -188,7 +180,6 @@ BEGIN
         CLOSE CUR_PickDetail
         DEALLOCATE CUR_PickDetail
         
-        
         DELETE REPLENISHMENT with (ROWLOCK)
         WHERE  ReplenishmentKey = @cReplenishmentKey
         
@@ -201,7 +192,7 @@ BEGIN
         END
 
         COMMIT TRAN 
-		                  
+                        
         FETCH NEXT FROM CUR_DELETE_REPLEN INTO @cReplenishmentKey, @cOriginalFromLoc, @cOriginalFromID --NJOW01
     END
     CLOSE CUR_DELETE_REPLEN

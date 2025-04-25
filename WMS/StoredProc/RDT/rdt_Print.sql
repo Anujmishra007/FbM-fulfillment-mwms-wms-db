@@ -40,6 +40,7 @@ GO
 /* 2024-12-23 3.1.0  JCH507      UWP-28606 Get WeServiceAPI URL from codelkup   */
 /* 2024-12-24 3.2.0  YeeKung     UWP-28450 Fix bartender duplicate record       */
 /*                               (yeekung06)                                    */
+/* 2025-02-19 3.3.0  YeeKung     UWP-30389 chaneg 1 to NoofCopy (yeekung07)      */        
 /********************************************************************************/
 
 CREATE OR ALTER  PROC rdt.rdt_Print (
@@ -840,7 +841,7 @@ BEGIN
          Parm1, Parm2, Parm3, Parm4, Parm5, Parm6, Parm7, Parm8, Parm9, Parm10, Function_ID, ExportFileName
          ,PaperSizeWxH,DCropWidth,DCropHeight,IsLandScape,IsColor,IsDuplex,IsCollate)
       VALUES(
-         @cSourceType, @cReportType, @cJobStatus, @cDataWindow, 0, @cPrinter, 1, @nMobile, DB_NAME(), @cPrintCommand, @cJobType, @cStorerKey,
+         @cSourceType, @cReportType, @cJobStatus, @cDataWindow, 0, @cPrinter, @nNoOfCopy, @nMobile, DB_NAME(), @cPrintCommand, @cJobType, @cStorerKey,
          @cValue01, @cValue02, @cValue03, @cValue04, @cValue05, @cValue06, @cValue07, @cValue08, @cValue09, @cValue10, @nFunc, @cExportFileName
          ,@cPaperSize,@cDCropWidth,@cDCropHeight,@cIsLandScape,@cIsColor,@cIsDuplex,@cIsCollate)
       SELECT @nJobID = SCOPE_IDENTITY(), @nErrNo = @@ERROR
@@ -1043,7 +1044,7 @@ BEGIN
          Parm1, Parm2, Parm3, Parm4, Parm5, Parm6, Parm7, Parm8, Parm9, Parm10, Function_ID, ExportFileName
          ,PaperSizeWxH,DCropWidth,DCropHeight,IsLandScape,IsColor,IsDuplex,IsCollate)
       VALUES(
-         @cSourceType, @cReportType, @cJobStatus, @cDataWindow, 0, @cPrinter, 1, @nMobile, DB_NAME(), @cPrintData, @cProcessType, @cStorerKey,
+         @cSourceType, @cReportType, @cJobStatus, @cDataWindow, 0, @cPrinter, @nNoOfCopy, @nMobile, DB_NAME(), @cPrintData, @cProcessType, @cStorerKey,
          @cValue01, @cValue02, @cValue03, @cValue04, @cValue05, @cValue06, @cValue07, @cValue08, @cValue09, @cValue10, @nFunc, @cExportFileName
          ,@cPaperSize,@cDCropWidth,@cDCropHeight,@cIsLandScape,@cIsColor,@cIsDuplex,@cIsCollate)
       SELECT @nJobID = SCOPE_IDENTITY(), @nErrNo = @@ERROR

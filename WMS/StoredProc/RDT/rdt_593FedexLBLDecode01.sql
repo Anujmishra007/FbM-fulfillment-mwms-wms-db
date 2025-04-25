@@ -11,6 +11,7 @@ GO
 /*                                                                            */
 /* Date       Rev  Author     Purposes                                        */
 /* 2018-02-07 1.0  NLT03      FCR-727 Create                                  */
+/* 2025-02-05 1.1  Dennis     FCR-2630 Fixbug                                 */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_593FedexLBLDecode01] (
@@ -50,11 +51,16 @@ AS
    SET @cLabelNo = @cByRef1
 
    SELECT @c_InputString = PrintData
-   FROM dbo.CartonTrack WITH (NOLOCK)
-   WHERE CarrierRef1 = @cLabelNo
+   FROM dbo.CartonTrack CT WITH (NOLOCK)
+   WHERE CT.CarrierRef1 = @cLabelNo
+   AND EXISTS(SELECT 1 FROM DBO.CODELKUP CDLP (NOLOCK) WHERE CDLP.LISTNAME='wscourier' AND CDLP.code='ECL-1' AND CDLP.Short = CT.CarrierName)
 
    EXEC master.dbo.isp_BASe64Decode 'UTF-8', @c_InputString, @c_OutputString OUTPUT,@cErrMsg OUTPUT
-
+   IF @cErrMSG <> ''
+   BEGIN
+      SET @nErrNo = 237601
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Print Data Error
+   END
    SET @cPrintData = @c_OutputString
 
 Fail:

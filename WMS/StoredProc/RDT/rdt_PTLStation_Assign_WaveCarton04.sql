@@ -12,6 +12,7 @@ GO
 /* 15-08-2024 1.0  yeekung  FCR-609 Created                                   */  
 /* 23-09-2024 1.1  yeekung  UWP-24488 Add Light on carton field (yeekung01)   */
 /* 26-10-2024 1.2  yeekung  INC7378172 Fix the Duplicate carton in same wave  */
+/* 20-12-2024 1.3  yeekung  FCR-1484 remove multi ppl scan same wave          */
 /******************************************************************************/  
   
 CREATE OR ALTER PROC [RDT].[rdt_PTLStation_Assign_WaveCarton04] (  
@@ -226,14 +227,14 @@ BEGIN
             GOTO Quit  
          END  
   
-         -- Check load assigned  
-         IF EXISTS( SELECT 1 FROM rdt.rdtPTLStationLog WITH (NOLOCK) WHERE WaveKey = @cWaveKey AND CartonID <> '' and Station NOT IN (@cStation1 ))  
-         BEGIN  
-            SET @nErrNo = 222653  
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --WaveKey Assigned
-            EXEC rdt.rdtSetFocusField @nMobile, 1 -- WaveKey  
-            GOTO Quit  
-         END 
+         ---- Check load assigned  
+         --IF EXISTS( SELECT 1 FROM rdt.rdtPTLStationLog WITH (NOLOCK) WHERE WaveKey = @cWaveKey AND CartonID <> '' and Station NOT IN (@cStation1 ))  
+         --BEGIN  
+         --   SET @nErrNo = 222653  
+         --   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --WaveKey Assigned
+         --   EXEC rdt.rdtSetFocusField @nMobile, 1 -- WaveKey  
+         --   GOTO Quit  
+         --END 
 
           
          -- Check load no task  

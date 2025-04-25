@@ -1,3 +1,6 @@
+IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[OrderInfo]') AND type in (N'U'))
+BEGIN
+
 CREATE TABLE [dbo].[OrderInfo]
 (
 [OrderKey] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
@@ -35,29 +38,52 @@ CREATE TABLE [dbo].[OrderInfo]
 [OTM_OrderOwner] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_ORDERINFO_OTM_OrderOwner] DEFAULT (''),
 [OTM_BillTo] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_ORDERINFO_OTM_BillTo] DEFAULT (''),
 [OTM_NotifyParty] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_ORDERINFO_OTM_NotifyParty] DEFAULT (''),
-[CourierTimeStamp] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_OrderInfo_CourierTimeStamp] DEFAULT ('')
+[CourierTimeStamp] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_OrderInfo_CourierTimeStamp] DEFAULT (''),
+[AutomationStatus] [nvarchar](20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_OrderInfo_AutomationStatus]  DEFAULT ('')
 ) ON [PRIMARY]
-GO
 
 ALTER TABLE [dbo].[OrderInfo] ADD CONSTRAINT [PK_OrderInfo] PRIMARY KEY CLUSTERED ([OrderKey]) WITH (FILLFACTOR=90) ON [PRIMARY]
-GO
-GRANT SELECT ON  [dbo].[OrderInfo] TO [JReportRole]
-GO
+
 GRANT DELETE ON  [dbo].[OrderInfo] TO [NSQL]
-GO
 GRANT INSERT ON  [dbo].[OrderInfo] TO [NSQL]
-GO
 GRANT SELECT ON  [dbo].[OrderInfo] TO [NSQL]
-GO
 GRANT UPDATE ON  [dbo].[OrderInfo] TO [NSQL]
-GO
-EXEC sp_addextendedproperty N'MS_Description', 'Date of the information added. (System date)', 'SCHEMA', N'dbo', 'TABLE', N'OrderInfo', 'COLUMN', N'AddDate'
-GO
-EXEC sp_addextendedproperty N'MS_Description', 'The username/login ID added the information.', 'SCHEMA', N'dbo', 'TABLE', N'OrderInfo', 'COLUMN', N'AddWho'
-GO
-EXEC sp_addextendedproperty N'MS_Description', 'Date of the information edited/modified/updated. (System date)', 'SCHEMA', N'dbo', 'TABLE', N'OrderInfo', 'COLUMN', N'EditDate'
-GO
-EXEC sp_addextendedproperty N'MS_Description', 'The username/login ID edited/modified/updated the information.', 'SCHEMA', N'dbo', 'TABLE', N'OrderInfo', 'COLUMN', N'EditWho'
-GO
-EXEC sp_addextendedproperty N'MS_Description', 'Unique code identifying Orders.', 'SCHEMA', N'dbo', 'TABLE', N'OrderInfo', 'COLUMN', N'OrderKey'
-GO
+
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'OrderInfo', N'COLUMN',N'AddDate'))
+	EXEC sp_addextendedproperty N'MS_Description', 'Date of the information added. (System date)', 'SCHEMA', N'dbo', 'TABLE', N'OrderInfo', 'COLUMN', N'AddDate'
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'OrderInfo', N'COLUMN',N'AddWho'))
+	EXEC sp_addextendedproperty N'MS_Description', 'The username/login ID added the information.', 'SCHEMA', N'dbo', 'TABLE', N'OrderInfo', 'COLUMN', N'AddWho'
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'OrderInfo', N'COLUMN',N'EditDate'))
+	EXEC sp_addextendedproperty N'MS_Description', 'Date of the information edited/modified/updated. (System date)', 'SCHEMA', N'dbo', 'TABLE', N'OrderInfo', 'COLUMN', N'EditDate'
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'OrderInfo', N'COLUMN',N'EditWho'))
+	EXEC sp_addextendedproperty N'MS_Description', 'The username/login ID edited/modified/updated the information.', 'SCHEMA', N'dbo', 'TABLE', N'OrderInfo', 'COLUMN', N'EditWho'
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'OrderInfo', N'COLUMN',N'OrderKey'))
+	EXEC sp_addextendedproperty N'MS_Description', 'Unique code identifying Orders.', 'SCHEMA', N'dbo', 'TABLE', N'OrderInfo', 'COLUMN', N'OrderKey'
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'OrderInfo', N'COLUMN',N'AutomationStatus'))
+	EXEC sp_addextendedproperty N'MS_Description', 'AutomationStatus.', 'SCHEMA', N'dbo', 'TABLE', N'OrderInfo', 'COLUMN', N'AutomationStatus'
+
+
+END
+ELSE
+BEGIN
+
+
+ 	 IF NOT EXISTS (SELECT 1
+	               FROM sys.columns
+	               WHERE Name = 'AutomationStatus' AND Object_ID = Object_ID('dbo.OrderInfo'))
+			BEGIN
+				ALTER TABLE [dbo].[OrderInfo] ADD AutomationStatus nvarchar (20) NULL CONSTRAINT [DF_OrderInfo_AutomationStatus]  DEFAULT ('');
+				
+			END
+
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'OrderInfo', N'COLUMN',N'AutomationStatus'))
+	EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'AutomationStatus' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'OrderInfo', @level2type=N'COLUMN',@level2name=N'AutomationStatus'
+
+END

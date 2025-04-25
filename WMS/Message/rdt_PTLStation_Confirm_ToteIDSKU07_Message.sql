@@ -36,3 +36,4 @@ execute rdt.rdtAddMsg 224782, 10, '224782GenLabelNoFail', 'us_english', 805
 execute rdt.rdtAddMsg 224783, 10, '224783GenLabelNoFail', 'us_english', 805
 execute rdt.rdtAddMsg 224784, 10, '224784CartonAdyUsed ', 'us_english', 805
 execute rdt.rdtAddMsg 224785, 10, '224785CartonAdyUsed ', 'us_english', 805
+execute rdt.rdtAddMsg 224786, 10, '224786InvalidFormat ', 'us_english', 805

@@ -8,8 +8,9 @@ GO
 /* Copyright      : Maersk WMS                                             */
 /* Customer       : Granite                                                */
 /*                                                                         */
-/* Date       Rev  Author     Purposes                                     */
-/* 2024-10-01 1.0  NLT013     FCR-926 Created                              */
+/* Date       Rev    Author     Purposes                                   */
+/* 2024-10-01 1.0    NLT013     FCR-926 Created                            */
+/* 2025-02-13 1.1.0  ASK138     FCR-2724                                   */
 /***************************************************************************/
 
 CREATE OR ALTER   PROCEDURE [RDT].[rdt_898ExtVal05]
@@ -55,7 +56,25 @@ BEGIN
 
    IF @nFunc = 898
    BEGIN
-   IF @nStep = 3  -- To ID
+      -- FCR-2724 - OnLOT Validation  
+      IF @nStep = 1  -- ASN 
+      BEGIN
+         IF @nInputKey = 1
+         BEGIN
+            IF EXISTS(SELECT 1
+               FROM dbo.RECEIPT WITH(NOLOCK) 
+               WHERE ReceiptKey = @cReceiptKey 
+                  AND Facility = @cFacility
+                  AND StorerKey = @cStorerKey 
+                  AND ISNULL(UserDefine06, '') = '')
+            BEGIN
+               SET @nErrNo = 225302 
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- OnLOT not triggered
+               GOTO Quit
+            END
+         END
+      END
+      ELSE IF @nStep = 3  -- To ID
       BEGIN
          IF @nInputKey = 1
          BEGIN

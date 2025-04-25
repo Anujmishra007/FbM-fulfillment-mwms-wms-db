@@ -14,7 +14,8 @@ GO
 /* Date       Rev  Author   Purposes                                    */      
 /* 02-09-2024 1.0  YeeKung  FCR-609 Created                             */ 
 /* 02-12-2024 1.1  YeeKung  UWP-27793 Solved DB Blocking (yeekung01)    */
-/* 30-09-2024 1.2  yeekung  FCR-772 Add Transmitlog2                    */      
+/* 30-09-2024 1.2  yeekung  FCR-772 Add Transmitlog2                    */
+/* 20-12-2024 1.3  yeekung  FCR-1484 light up all order in multi station*/      
 /************************************************************************/      
       
 CREATE  OR ALTER  PROC [PTL].[isp_805PTL_Confirm14] (      
@@ -798,25 +799,43 @@ BEGIN TRY
    BEGIN      
       SET @nErrNo = 0
       SET @cLightModeEnd = rdt.RDTGetConfig( @nFunc, 'LightModeEnd', @cStorerKey)      
+
+
+
+      DECLARE @curMultiStation CURSOR
+      SET @curMultiStation = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
+      SELECT Station,Position,IPAddress
+      FROM rdt.rdtPTLStationLog PTL WITH (NOLOCK)  
+      WHERE Wavekey =  @cWaveKey
+         AND Orderkey = @cOrderkey
+  
+      OPEN @curMultiStation      
+      FETCH NEXT FROM @curMultiStation INTO @cStation, @cPosition ,@cIPAddress      
+      WHILE @@FETCH_STATUS = 0      
+      BEGIN   
       
-      EXEC PTL.isp_PTL_LightUpLoc      
-         @n_Func           = @nFunc      
-         ,@n_PTLKey         = 0      
-         ,@c_DisplayValue   = 'End'      
-         ,@b_Success        = @bSuccess    OUTPUT      
-         ,@n_Err            = @nErrNo      OUTPUT      
-         ,@c_ErrMsg         = @cErrMsg     OUTPUT      
-         ,@c_DeviceID       = @cStation      
-         ,@c_DevicePos      = @cPosition      
-         ,@c_DeviceIP       = @cIPAddress      
-         ,@c_LModMode       = @cLightModeEnd      
-      
-      IF @nErrNo <> 0      
-      BEGIN      
-         SET @nErrNo = 222772      
-         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo ,@cLangCode ,'DSP') --'LightUpFail'      
-         GOTO RollBackTran      
-      END      
+         EXEC PTL.isp_PTL_LightUpLoc      
+            @n_Func           = @nFunc      
+            ,@n_PTLKey         = 0      
+            ,@c_DisplayValue   = 'End'      
+            ,@b_Success        = @bSuccess    OUTPUT      
+            ,@n_Err            = @nErrNo      OUTPUT      
+            ,@c_ErrMsg         = @cErrMsg     OUTPUT      
+            ,@c_DeviceID       = @cStation      
+            ,@c_DevicePos      = @cPosition      
+            ,@c_DeviceIP       = @cIPAddress      
+            ,@c_LModMode       = @cLightModeEnd      
+         
+         IF @nErrNo <> 0      
+         BEGIN      
+            SET @nErrNo = 222772      
+            SET @cErrMsg = rdt.rdtgetmessage(@nErrNo ,@cLangCode ,'DSP') --'LightUpFail'      
+            GOTO RollBackTran      
+         END  
+         FETCH NEXT FROM @curMultiStation INTO @cStation, @cPosition ,@cIPAddress  
+      END    
+      CLOSE @curMultiStation
+      DEALLOCATE @curMultiStation
    END     
    
    SET @nExpectedQTY = 0

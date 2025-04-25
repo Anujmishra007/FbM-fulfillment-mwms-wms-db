@@ -1,50 +1,55 @@
+
 SET ANSI_NULLS OFF
 GO
+
 SET QUOTED_IDENTIFIER OFF
 GO
 
-/*************************************************************************/    
-/* Stored Procedure: mspRLWAV01                                          */    
-/* Creation Date: 2024-04-17                                             */    
-/* Copyright: Maersk                                                     */    
-/* Written by:                                                           */    
-/*                                                                       */    
-/* Purpose: WMS-7994 - Adjusted for Mattel                               */  
-/*                                                                       */  
-/*                                                                       */    
-/* Called By: Wave Release                                               */    
-/*                                                                       */    
-/* PVCS Version: 1.9                                                     */    
-/*                                                                       */    
-/* Version: 7.0                                                          */    
-/*                                                                       */    
-/* Data Modifications:                                                   */    
-/*                                                                       */    
-/* Updates:                                                              */    
-/* Date        Author   Ver   Purposes                                   */    
-/* 2024-04-17  Wan      1.0   UWP-18534-Mettel-Add consolidated picking  */  
-/* 2024-04-26  Wan01    1.1   UWP-18534-conso picking by wave & for uom1 */ 
+
+/**************************************************************************/    
+/* Stored Procedure: mspRLWAV01                                           */    
+/* Creation Date: 2024-04-17                                              */    
+/* Copyright: Maersk                                                      */    
+/* Written by:                                                            */    
+/*                                                                        */    
+/* Purpose: WMS-7994 - Adjusted for Mattel                                */  
+/*                                                                        */  
+/*                                                                        */    
+/* Called By: Wave Release                                                */    
+/*                                                                        */    
+/* PVCS Version: 1.9                                                      */    
+/*                                                                        */    
+/* Version: 7.0                                                           */    
+/*                                                                        */    
+/* Data Modifications:                                                    */    
+/*                                                                        */    
+/* Updates:                                                               */    
+/* Date        Author   Ver   Purposes                                    */    
+/* 2024-04-17  Wan      1.0   UWP-18534-Mettel-Add consolidated picking   */  
+/* 2024-04-26  Wan01    1.1   UWP-18534-conso picking by wave & for uom1  */ 
 /* 2024-05-02  Wan02    1.1   UWP-18535-Mattel-Add OverAlloc Replenishment*/ 
-/* 2024-05-22  Wan03    1.2   UWP-18535-Fix Change logic overalloated loc*/ 
-/*                            & Lot to replen as overallocate program has*/ 
-/*                            strategy to find DPP & Pick face Location  */
-/*                            UWP-18535-Fix FCP not hold                 */ 
+/* 2024-05-22  Wan03    1.2   UWP-18535-Fix Change logic overalloated loc */ 
+/*                            & Lot to replen as overallocate program has */ 
+/*                            strategy to find DPP & Pick face Location   */
+/*                            UWP-18535-Fix FCP not hold                  */ 
 /* 2024-05-28  Wan04    1.3   UWP-18535-Hold FCP when FromLoc has RPF task*/ 
-/* 2024-07-09  Wan05    1.4   UWP-19537-Mattel Overallocation           */
-/*                            -EmptyLoc= Qty-QtyPicked. New Formula for */
-/*                            qtyexpected                               */
-/* 2024-07-18  Wan06    1.5   UWP-22202-Mattel DPP with commingleSku    */
-/*                            Prompt Error if DPP different Sku         */
-/* 2024-09-02  WLChooi  1.6   UWP-23643-Get ToLoc from LoadplanLanedetail*/
-/*                            (WL01)                                     */
-/* 2024-09-02  SSA01    1.7   UWP-23370 & 23372-query for priority value*/
-/*                            from codelkup and takeout deliverydate for*/
-/*                            consolidated pick                         */
-/* 2024-09-18  WLChooi  1.8   UWP-23368-Dispatch TM task with cube data  */
-/*                            (WL02)                                     */
-/* 2025-01-23  WLChooi  1.9   INC7625461-Review groupkey logic for UOM2  */
-/*                            (WL03)                                     */
-/*************************************************************************/     
+/* 2024-07-09  Wan05    1.4   UWP-19537-Mattel Overallocation             */
+/*                            -EmptyLoc= Qty-QtyPicked. New Formula for   */
+/*                            qtyexpected                                 */
+/* 2024-07-18  Wan06    1.5   UWP-22202-Mattel DPP with commingleSku      */
+/*                            Prompt Error if DPP different Sku           */
+/* 2024-09-02  WLChooi  1.6   UWP-23643-Get ToLoc from LoadplanLanedetail */
+/*                            (WL01)                                      */
+/* 2024-09-02  SSA01    1.7   UWP-23370 & 23372-query for priority value  */
+/*                            from codelkup and takeout deliverydate for  */
+/*                            consolidated pick                           */
+/* 2024-09-18  WLChooi  1.8   UWP-23368-Dispatch TM task with cube data   */
+/*                            (WL02)                                      */
+/* 2025-01-23  WLChooi  1.9   INC7625461-Review groupkey logic for UOM2   */
+/*                            (WL03)                                      */
+/* 2025-02-19  Calvin   2.0   FCR-3026 Mattel Allow Multiple Replen Tasks */
+/*                            per SKU (CLVN01)                            */
+/**************************************************************************/     
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV01]        
   @c_wavekey      NVARCHAR(10)    
  ,@b_Success      int            = 1   OUTPUT    
@@ -348,7 +353,8 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV01]
          --WHILE @@FETCH_STATUS = 0 AND @n_continue IN (1,2) AND @n_QtyNeed > 0
          --BEGIN                                                                    
          SET @cur_WaveReplfr = CURSOR FAST_FORWARD READ_ONLY FOR 
-         SELECT TOP 1
+         --SELECT TOP 1	  --(CLVN01)
+         SELECT           --(CLVN01)
                  FromLoc = lli.Loc
                , FromID  = lli.ID
                , QtyToReplen = lli.qty - lli.QtyPicked - lli.QtyAllocated - lli.QtyReplen
@@ -372,6 +378,7 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV01]
          AND   LOC.LocationFlag NOT IN ('DAMAGE','HOLD')
          AND   LOC.Facility = @c_Facility
          AND   LOC.LocLevel > 0
+		 ORDER BY lli.qty - lli.QtyPicked - lli.QtyAllocated - lli.QtyReplen DESC --(CLVN01)
 
          OPEN @cur_WaveReplfr
 
@@ -1050,5 +1057,5 @@ RETURN_SP:
    END        
 END
 GO
-GRANT EXECUTE ON [dbo].[mspRLWAV01] TO [NSQL]
-GO
+
+
