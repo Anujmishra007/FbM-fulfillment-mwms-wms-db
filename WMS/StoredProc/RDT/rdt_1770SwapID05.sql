@@ -41,7 +41,7 @@ BEGIN
    DECLARE @cNewSKU        NVARCHAR( 20)
    DECLARE @cNewLOT        NVARCHAR( 10)
    DECLARE @cNewLOC        NVARCHAR( 10)
-   DECLARE @cNewTaskKey    NVARCHAR( 10)
+   DECLARE @cNewTaskType    NVARCHAR( 10)
    DECLARE @cNewPickMethod NVARCHAR( 10)
    DECLARE @nNewQTY        INT
 
@@ -492,14 +492,14 @@ BEGIN
 
    SELECT 
       @cOtherTaskDetailKey = TaskDetailKey,
-      @cNewTaskKey = TaskType,
+      @cNewTaskType = TaskType,
       @cNewPickMethod = PickMethod,
       @cOtherTaskStatus = Status,
       @cOtherTaskUserKey = UserKey,
       @cOtherTaskMessage03 = Message03
    FROM dbo.TaskDetail WITH (NOLOCK)
    WHERE StorerKey = @cStorerkey
-      AND TaskType IN ('RPF', 'FPK')
+      AND TaskType IN ('RPF', 'FPK', 'VNAOUT')
       AND FromLoc = @cNewLOC
       AND FromID = @cNewID
       AND TaskDetailKey <> @cTaskDetailKey
@@ -543,7 +543,7 @@ BEGIN
    SAVE TRAN rdt_1770SwapID05
 
    -- 1. Scanned ID is allocated for a replenishment task, release the pallet first
-   IF @cOtherTaskDetailKey <> '' AND ISNULL(@cOtherPickDetailKey, '') = '' AND ( @cNewTaskKey = 'RPF' OR (@cOtherTaskMessage03 = 'RPF' AND @cNewTaskKey = 'VNAOUT') )
+   IF @cOtherTaskDetailKey <> '' AND ISNULL(@cOtherPickDetailKey, '') = '' AND ( @cNewTaskType IN ( 'RPF', 'VNAOUT') )
    BEGIN
       SELECT 
          @cRPFTaskFromLoc = FromLOC,
@@ -602,7 +602,7 @@ BEGIN
    -- 2. ID is not alloc, 
    --    or ID is allocaed for a replenishment task, but the ID is released in previous section
    IF (@cOtherTaskDetailKey = '' AND @cOtherPickDetailKey = '')
-      OR (@cOtherTaskDetailKey <> '' AND ISNULL(@cOtherPickDetailKey, '') = '' AND (@cNewTaskKey = 'RPF' OR ( @cNewTaskKey = 'RPF' OR (@cOtherTaskMessage03 = 'RPF' AND @cNewTaskKey = 'VNAOUT') )))
+      OR (@cOtherTaskDetailKey <> '' AND ISNULL(@cOtherPickDetailKey, '') = '' AND (@cNewTaskType IN ('RPF', 'VNAOUT') ))
    BEGIN
       -- i. ID is not allocated
       -- Loop PickDetail
@@ -660,7 +660,7 @@ BEGIN
       -- ii. ID is allocated for a replenishment task, but the ID is released in previous section
       -- ID was allocated for a replenishment task, it was released, and allocated for the Picking task,
       -- need allocate the old ID to the replenishment task
-      IF @cOtherTaskDetailKey <> '' AND ISNULL(@cOtherPickDetailKey, '') = '' AND ( @cNewTaskKey = 'RPF' OR ( @cNewTaskKey = 'RPF' OR (@cOtherTaskMessage03 = 'RPF' AND @cNewTaskKey = 'VNAOUT') ) )
+      IF @cOtherTaskDetailKey <> '' AND ISNULL(@cOtherPickDetailKey, '') = '' AND ( @cNewTaskType IN ( 'RPF', 'VNAOUT' )  )
       BEGIN
          EXEC rdt.rdt_Putaway_PendingMoveIn '', 'LOCK' 
             ,@cRPFTaskFromLoc
@@ -721,7 +721,7 @@ BEGIN
    -- 3. ID on other TaskDetail and PickDetail
    IF @cOtherTaskDetailKey <> '' AND @cOtherPickDetailKey <> ''
    BEGIN
-      IF @cNewTaskKey = @cTaskType 
+      IF @cNewTaskType = @cTaskType 
       BEGIN
          -- Loop PickDetail
          SET @curPD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
