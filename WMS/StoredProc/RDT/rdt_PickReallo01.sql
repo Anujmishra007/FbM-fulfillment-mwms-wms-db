@@ -563,6 +563,25 @@ BEGIN
          GOTO RollBack_UCC
       END CATCH
 
+      --Update RefKeyLookup
+      -- V1.0.2 Start
+      BEGIN TRY
+         UPDATE RKL WITH (ROWLOCK)
+         SET RKL.PickSlipNo = T.PickSlipNo,
+            RKL.EditDate = GETDATE(),
+            RKL.EditWho = SUSER_SNAME()
+         FROM dbo.RefKeyLookup RKL
+         INNER JOIN @tAllocation T
+            ON RKL.PickDetailKey = T.PickDetailKey
+      END TRY
+      BEGIN CATCH
+         SET @nErrNo = 235670
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Merge to RefKeyLookup failed
+         GOTO RollBack_UCC
+      END CATCH
+      -- V1.0.2 End
+
+
       COMMIT_UCC:
          COMMIT TRAN rdt_PickReallo01_UCC -- Only commit change made here
 
