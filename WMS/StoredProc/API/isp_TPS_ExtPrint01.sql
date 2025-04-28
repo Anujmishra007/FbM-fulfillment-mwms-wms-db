@@ -10,6 +10,7 @@ GO
 /* Date         Rev  Author     Purposes                                      */
 /* 2021-11-11   1.0  Chermaine  TPS-594 Created                               */
 /* 2023-09-12   1.1  YeeKung    TPS-773/TPS-740 New print (yeekung3)          */
+/* 2024-11-06   1.2  YeeKung    TPS-989 Add Facility (yeekung03)              */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [API].[isp_TPS_ExtPrint01] (
@@ -168,6 +169,7 @@ BEGIN
             WHERE Storerkey = @cStorerkey
                AND reporttype = 'TPSHIPPLBL'
                AND ModuleID ='TPPack'
+               AND (WMRD.Facility = '' OR WMRD.Facility = @cFacility)  
 
             EXEC  [WM].[lsp_WM_Print_Report]
                @c_ModuleID = @c_ModuleID           
@@ -216,6 +218,7 @@ BEGIN
                WHERE Storerkey = @cStorerkey
                   AND reporttype = 'TPPACKLIST'
                   AND ModuleID ='TPPack'
+                  AND (WMRD.Facility = '' OR WMRD.Facility = @cFacility)  
 
                EXEC  [WM].[lsp_WM_Print_Report]
                   @c_ModuleID = @c_ModuleID           
