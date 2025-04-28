@@ -8,10 +8,7 @@ GO
 /* Copyright      : LFLogistics                                               */
 /*                                                                            */
 /* Date         Rev  Author     Purposes                                      */
-/* 2021-09-22   1.0  Chermaine	TPS-616 Created                              */
-/* 2024-07-26   1.1  yeekung		TPS-952 Add UCC Status								*/
-/* 2024-01-03   1.2  yeekung     INC7573366 add UCC Status for qty (yeekung02)*/  
-/* 2025-02-14   1.3  yeekung     TPS-995 Change Error Message (yeekung03)     */
+/* 2021-09-22   1.0  Chermaine  TPS-616 Created                               */
 /******************************************************************************/
 
 CREATE OR ALTER  PROC [API].[isp_getUCC] (
@@ -80,7 +77,7 @@ BEGIN
       FROM UCC (NOLOCK)
       where UCCno=@cBarcode
       AND storerkey=@cStorerKey  
-      AND STATUS  IN ('1','2','3','4','5')
+      AND STATUS  IN ('1','2','3','4')
 
       IF @nSKUCnt =1
       BEGIN
@@ -88,7 +85,6 @@ BEGIN
          FROM UCC WITH (NOLOCK)
          where UCCno=@cBarcode
          AND storerkey=@cStorerKey
-         AND STATUS  IN ('1','2','3','4','5')
          FOR JSON AUTO, INCLUDE_NULL_VALUES)    
       END
 
@@ -97,8 +93,8 @@ BEGIN
    IF @nSKUCnt <>'1'
    BEGIN
       SET @b_Success = 0
-      SET @n_Err = 1001251
-	   SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP') --'SKU NOT FOUND. Function : isp_getUCC'
+      SET @n_Err = 400000
+	   SET @c_ErrMsg = 'SKUNOTFOUND'
       SET @jResult = (SELECT '' AS SKU
          FOR JSON PATH,INCLUDE_NULL_VALUES )  
    END
