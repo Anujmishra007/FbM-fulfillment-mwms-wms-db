@@ -61,22 +61,6 @@ BEGIN
       END
    END
 
-   IF @nFunc = 830
-   BEGIN
-      IF @nStep = 3  -- SKU QTY
-      BEGIN
-         IF @nInputKey = 1
-         BEGIN
-           IF CHARINDEX('SKJP', @cBarcode) = 0
-            BEGIN
-               SET @cSKU = @cBarcode
-               GOTO QUIT
-            END
-            SELECT @cSKU = SUBSTRING(@cBarcode, 2, CHARINDEX('SKJP', @cBarcode) - 2)
-         END
-      END
-   END
-
 Quit:
 
 END
