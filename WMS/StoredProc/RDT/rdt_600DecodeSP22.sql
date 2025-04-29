@@ -5,7 +5,7 @@ SET ANSI_NULLS OFF
 GO
 
 /******************************************************************************/
-/* Store procedure: rdt_600DecodeSP16                                         */
+/* Store procedure: rdt_600DecodeSP22                                         */
 /* Copyright:                                                                 */
 /*                                                                            */
 /* Purpose: For VINFAST                                                       */
@@ -14,7 +14,7 @@ GO
 /* 2025-03-06  Dennis    1.0   FCR-2992 Decode Sp                             */
 /******************************************************************************/
 
-CREATE OR ALTER PROC [RDT].[rdt_600DecodeSP16] (
+CREATE OR ALTER PROC [RDT].[rdt_600DecodeSP22] (
    @nMobile      INT,
    @nFunc        INT,
    @cLangCode    NVARCHAR( 3),
@@ -83,5 +83,5 @@ GO
 SET ANSI_NULLS ON
 GO
 
-GRANT EXECUTE ON rdt.rdt_600DecodeSP16 TO NSQL
+GRANT EXECUTE ON rdt.rdt_600DecodeSP22 TO NSQL
 GO
