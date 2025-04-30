@@ -9,7 +9,8 @@ GO
 /* Copyright      : LFLogistics                                               */
 /*                                                                            */
 /* Date         Rev  Author     Purposes                                      */
-/* 2023-09-13   1.0  yeekung   TPS-792 Created                               */
+/* 2023-09-13   1.0  yeekung   TPS-792 Created                                */
+/* 2025-01-16   1.1  yeekung   UWP-31516 Correct the QTY when cast to JSON    */ 
 /******************************************************************************/
 
 CREATE OR ALTER PROC [API].[isp_TPS_DecodeSP06] (
@@ -64,14 +65,14 @@ BEGIN
 
       SET @jResult = ( SELECT
                   @cSKU AS SKU,
-               CASE @cPackUOM
+               CAST ( CASE @cPackUOM
                   WHEN Pack.PackUOM1  THEN Pack.CaseCNT
                   WHEN Pack.PackUOM2 THEN Pack.InnerPack
                   WHEN Pack.PackUOM3 THEN Pack.QTY
                   WHEN Pack.PackUOM4 THEN Pack.Pallet
                   WHEN Pack.PackUOM8 THEN Pack.OtherUnit1
                   WHEN Pack.PackUOM9 THEN Pack.OtherUnit2
-               ELSE 1 END AS QTY
+               ELSE 1 END AS INT) AS QTY 
          FROM dbo.Pack Pack WITH (NOLOCK) 
          WHERE packkey= @cPackKey
       FOR JSON AUTO, INCLUDE_NULL_VALUES)   
