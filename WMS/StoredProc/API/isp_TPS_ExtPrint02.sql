@@ -11,6 +11,7 @@ GO
 /* Date         Rev  Author     Purposes                                      */
 /* 2022-07-18   1.0  YeeKung    WMS-20061 Created (yeekung01)                 */
 /* 2023-09-12   1.1  YeeKung    TPS-773/TPS-740 New print (yeekung3)          */
+/* 2024-11-06   1.2  YeeKung    TPS-989 Add Facility (yeekung03)              */
 /******************************************************************************/
 
 CREATE  OR ALTER PROC [API].[isp_TPS_ExtPrint02] (
@@ -189,6 +190,7 @@ BEGIN
             WHERE Storerkey = @cStorerkey
                AND reporttype = @cReportType
                AND ModuleID ='TPPack'
+               AND (WMRD.Facility = '' OR WMRD.Facility = @cFacility)  
 
             EXEC  [WM].[lsp_WM_Print_Report]
                @c_ModuleID = @c_ModuleID           
@@ -238,6 +240,7 @@ BEGIN
                   AND reporttype = 'TPPACKLIST'
                   AND ModuleID ='TPPack'
                   AND ISNULL(ComputerName,'') ='' OR ComputerName= @cWorkstation
+                  AND (WMRD.Facility = '' OR WMRD.Facility = @cFacility)  
 
                EXEC  [WM].[lsp_WM_Print_Report]
                   @c_ModuleID = @c_ModuleID           

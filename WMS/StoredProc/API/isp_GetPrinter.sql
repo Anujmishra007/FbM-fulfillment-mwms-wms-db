@@ -13,6 +13,7 @@ GO
 /* 2020-04-06   1.0  Chermaine  Created                                       */
 /* 2021-09-05   1.1  Chermaine  TPS-11 ErrMsg add to rdtmsg (cc01)            */
 /* 2022-04-15   1.2  YeeKung    Add LblPrinter/PPr Printer in web (yeekung01) */
+/* 2025-02-14   1.3  yeekung    TPS-995 Change Error Message (yeekung02)      */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [API].[isp_GetPrinter] (
@@ -80,8 +81,8 @@ BEGIN
    IF ISNULL(@cLabelPrinter,'')='' AND ISNULL(@cPaperPrinter,'')=''
    BEGIN
       SET @b_Success = 0
-      SET @n_Err = 175623
-      SET @c_ErrMsg = rdt.rdtgetmessage( @n_Err, @cLangCode, 'DSP')--'Unable to retrieve Workstation ID. Function : isp_GetPrinter'
+      SET @n_Err = 1001151
+      SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Unable to retrieve Workstation ID. Function : isp_GetPrinter'
 
       GOTO EXIT_SP
    END
