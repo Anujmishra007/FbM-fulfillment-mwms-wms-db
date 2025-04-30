@@ -25,7 +25,7 @@ GO
 /*                                                                      */  
 /* Updates:                                                             */  
 /* Date         Author   Ver  Purposes                                  */ 
-/* 2025-04-28   AYD      1.1  UWP-31046 - FCR-2403 -                    */
+/* 2025-04-30   AYD      1.1  UWP-31046 - FCR-2403 -                    */
 /*                            ASN Release Putaway Task                  */ 
 /************************************************************************/   
 CREATE OR ALTER PROCEDURE [dbo].[isp_ASNReleasePATask_Wrapper]  

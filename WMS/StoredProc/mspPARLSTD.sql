@@ -30,7 +30,7 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
-/* 2025-04-28  AYD      1.0   UWP-31046 - FCR-2403 -                    */
+/* 2025-04-30  AYD      1.0   UWP-31046 - FCR-2403 -                    */
 /*                            ASN Release Putaway Task                  */
 /************************************************************************/
 
@@ -187,7 +187,7 @@ BEGIN
             @c_FromLoc="+@c_FromLoc+", 
             @c_FromID="+@c_FromID+", 
             @n_QtyReceived="+@n_QtyReceived
-            
+
             INSERT INTO dbo.TASKDETAIL
                    (    TaskDetailKey
                      ,  TaskType
