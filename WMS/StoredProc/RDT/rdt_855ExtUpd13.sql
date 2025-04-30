@@ -684,6 +684,7 @@ BEGIN
                      (
                         CaseID            NVARCHAR(30),
                         PickSlipNo        NVARCHAR(10),
+                        CartonNo          INT,
                         Weight            FLOAT
                      )
 
@@ -694,20 +695,17 @@ BEGIN
                         AND RefNo = @cDropID
                         AND CartonStatus = 'PACKED'
 
-                     INSERT INTO @tCartonWeight (CaseID, PickSlipNo, Weight)
-                     SELECT CaseID, PickSlipNo, InvWeight + CartonWeight
+                     INSERT INTO @tCartonWeight (CaseID, PickSlipNo, CartonNo, Weight)
+                     SELECT CaseID, PickSlipNo, CartonNo, InvWeight + CartonWeight
                      FROM
-                        (SELECT PKI.RefNo AS CaseID, PKI.PickSlipNo, CART.CartonWeight / ISNULL(@nPickSlipNoQty, 1) AS CartonWeight, SUM(PKD.qty * SKU.StdGrossWgt) AS InvWeight
-                        FROM dbo.CARTONIZATION CART WITH(NOLOCK)
-                        INNER JOIN dbo.PackInfo PKI WITH(NOLOCK) ON CART.CartonType = PKI.CartonType
-                        INNER JOIN dbo.PickDetail PKD WITH(NOLOCK) ON PKI.RefNo = PKD.CaseID
-                        INNER JOIN dbo.SKU SKU WITH(NOLOCK) ON PKD.StorerKey = SKU.StorerKey AND PKD.Sku = SKU.Sku
-                        WHERE PKI.RefNo IS NOT NULL
-                           AND PKD.CaseID <> ''
-                           AND PKD.CaseID = @cDropID
-                           AND PKD.StorerKey = @cStorerKey
-                           AND PKD.Status = @cPickConfirmStatus
-                        GROUP BY PKI.RefNo, PKI.PickSlipNo, CART.CartonWeight) AS t
+                        (SELECT PH.PickSlipNo, PD.CartonNo, PD.labelno, SUM(SKU.STDNETWGT * PD.qty) AS InvWeight, CART.CartonWeight / ISNULL(@nPickSlipNoQty, 1) AS CartonWeight 
+                        FROM PACKDETAIL PD (nolock)
+                        INNER JOIN SKU (nolock) on  PD.storerkey = SKU.storerkey and PD.sku=SKU.sku
+                        INNER JOIN packheader PH (nolock) on PH.pickslipno = PD.pickslipno
+                        INNER JOIN dbo.PackInfo PKI WITH(NOLOCK) ON PD.PickSlipNo = PKI.PickSlipNo AND PD.CartonNo = PKI.CartonNo
+                        INNER JOIN dbo.CARTONIZATION CART WITH(NOLOCK) ON CART.CartonType = PKI.CartonType
+                        WHERE PD.LabelNo = @cDropID
+                           GROUP BY PD.StorerKey, PH.PickSlipNo, PD.CartonNo, PD.labelno, CART.CartonWeight) AS t
 
                      UPDATE PI WITH(ROWLOCK) 
                      SET PI.Weight = CW.Weight
