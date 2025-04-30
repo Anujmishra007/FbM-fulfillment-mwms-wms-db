@@ -28,7 +28,7 @@ GO
 /* 2025-04-28   AYD      1.1  UWP-31046 - FCR-2403 -                    */
 /*                            ASN Release Putaway Task                  */ 
 /************************************************************************/   
-CREATE PROCEDURE [dbo].[isp_ASNReleasePATask_Wrapper_AYD]  
+CREATE OR ALTER PROCEDURE [dbo].[isp_ASNReleasePATask_Wrapper]  
    @c_ReceiptKey NVARCHAR(10),    
    @b_Success    INT      OUTPUT,
    @n_Err        INT      OUTPUT, 
@@ -69,15 +69,6 @@ BEGIN
                      + ': ASN#: ' + RTRIM(@c_ReceiptKey) + ' has been cancelled. (isp_ASNReleasePATask_Wrapper)'  
        GOTO QUIT_SP
    END
-
---   IF @c_ASNStatus = '9'   
---   BEGIN
---       SET @n_continue = 3  
---       SET @n_Err = 31212 -- Should Be Set To The SQL Errmessage but I don't know how to do so.
---       SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(5), @n_Err) 
---                     + ': ASN#: ' + RTRIM(@c_ReceiptKey) + ' has been closed. (isp_ASNReleasePATask_Wrapper)'  
---       GOTO QUIT_SP
---   END
    
    IF NOT EXISTS (SELECT 1  
                   FROM RECEIPTDETAIL WITH (NOLOCK)
