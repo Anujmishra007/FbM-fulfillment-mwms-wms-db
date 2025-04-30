@@ -5,7 +5,7 @@ GO
 
 /************************************************************************/
 /* Stored Procedure: mspPARLSTD                                         */
-/* Creation Date: 2025-04-28                                            */
+/* Creation Date: 2025-04-30                                            */
 /* Copyright: Maersk Logistics                                          */
 /* Written by: AYD                                                      */
 /*                                                                      */
