@@ -1,13 +1,7 @@
-IF EXISTS (SELECT 1 FROM dbo.sysobjects WHERE id = object_id(N'[dbo].[ntrReceiptDetailDelete]') 
-              AND OBJECTPROPERTY(id, N'IsTrigger') = 1) 
-DROP trigger [dbo].[ntrReceiptDetailDelete]
-
 SET ANSI_NULLS ON
 GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
-
 
 /************************************************************************/  
 /* Trigger: ntrReceiptDetailDelete                                      */  
@@ -21,9 +15,7 @@ GO
 /*                                                                      */  
 /* Called By: When delete records in ReceiptDetail                      */  
 /*                                                                      */  
-/* PVCS Version: 1.0                                                    */  
-/*                                                                      */  
-/* Version: 5.4                                                         */  
+/* Version: 1.9                                                         */  
 /*                                                                      */  
 /* Data Modifications:                                                  */  
 /*                                                                      */  
@@ -38,8 +30,10 @@ GO
 /* 03-May-2017  NJOW01   1.6    WMS-1798 Allow config to call custom sp */
 /* 22-Oct-2019  TLTING01 1.7  Blocking tuning                           */
 /* 14-Oct-2021  KSChin   1.8  add tracker to DEL_ReceiptDetail table    */
-/************************************************************************/  
-CREATE TRIGGER [dbo].[ntrReceiptDetailDelete]
+/* 29-Apr-2025  Wan02    1.9  FCR-3576 - ReceiptSerialno Enhancement    */
+/************************************************************************/ 
+
+CREATE OR ALTER TRIGGER [dbo].[ntrReceiptDetailDelete]
 ON [dbo].[RECEIPTDETAIL]
 FOR  DELETE
 AS
@@ -57,11 +51,11 @@ BEGIN
         FROM   DELETED
     END  
 
-    DECLARE @b_Success    INT	-- Populated by calls to stored procedures - was the proc successful?
-           ,@n_err        INT	-- Error number returned by stored procedure or this trigger
-           ,@c_errmsg     NVARCHAR(250)	-- Error message returned by stored procedure or this trigger
-           ,@n_continue   INT	-- continuation flag: 1=Continue, 2=failed but continue processsing, 3=failed do not continue processing, 4=successful but skip further processing
-           ,@n_starttcnt  INT	-- Holds the current transaction count
+    DECLARE @b_Success    INT -- Populated by calls to stored procedures - was the proc successful?
+           ,@n_err        INT -- Error number returned by stored procedure or this trigger
+           ,@c_errmsg     NVARCHAR(250)   -- Error message returned by stored procedure or this trigger
+           ,@n_continue   INT -- continuation flag: 1=Continue, 2=failed but continue processsing, 3=failed do not continue processing, 4=successful but skip further processing
+           ,@n_starttcnt  INT -- Holds the current transaction count
            ,@n_cnt        INT -- Holds the number of rows affected by the DELETE statement that fired this trigger.  
            ,@c_authority  NVARCHAR(1)  -- KHLim02
     SELECT @n_continue = 1
@@ -79,6 +73,9 @@ BEGIN
          , @n_QtyReceived        INT
          , @n_UCC_RowRef         INT
    --(Wan01) - END 
+
+         , @n_ReceiptSerialNoKey BIGINT                                             --(Wan02)
+         , @cur_RD               CURSOR                                             --(Wan02)
     /* #INCLUDE <TRRDD1.SQL> */       
     IF (
            SELECT COUNT(*)
@@ -156,25 +153,25 @@ BEGIN
 
     --NJOW01
     IF @n_continue=1 or @n_continue=2          
-    BEGIN   	  
+    BEGIN        
        IF EXISTS (SELECT 1 FROM DELETED d   ----->Put INSERTED if INSERT action
                   JOIN storerconfig s WITH (NOLOCK) ON  d.storerkey = s.storerkey    
                   JOIN sys.objects sys ON sys.type = 'P' AND sys.name = s.Svalue
                   WHERE  s.configkey = 'ReceiptDetailTrigger_SP')   -----> Current table trigger storerconfig
-       BEGIN        	  
+       BEGIN           
           IF OBJECT_ID('tempdb..#INSERTED') IS NOT NULL
              DROP TABLE #INSERTED
     
-       	 SELECT * 
-       	 INTO #INSERTED
-       	 FROM INSERTED
+          SELECT * 
+          INTO #INSERTED
+          FROM INSERTED
            
           IF OBJECT_ID('tempdb..#DELETED') IS NOT NULL
              DROP TABLE #DELETED
     
-       	 SELECT * 
-       	 INTO #DELETED
-       	 FROM DELETED
+          SELECT * 
+          INTO #DELETED
+          FROM DELETED
     
           EXECUTE dbo.isp_ReceiptDetailTrigger_Wrapper ----->wrapper for current table trigger
                     'DELETE'  -----> @c_Action can be INSERT, UPDATE, DELETE
@@ -428,6 +425,51 @@ BEGIN
    CLOSE CUR_RCPT
    DEALLOCATE CUR_RCPT
    --(Wan01) - END
+ 
+   
+   IF @n_continue=1 OR @n_continue=2                                                -- (Wan02) - START
+   BEGIN
+      SET @CUR_RD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
+      SELECT deleted.ReceiptKey
+            ,deleted.ReceiptLineNumber
+            ,rsn.ReceiptSerialNoKey
+      FROM deleted 
+      JOIN ReceiptSerialNo rsn(NOLOCK) ON  rsn.ReceiptKey = deleted.ReceiptKey
+                                       AND rsn.ReceiptLineNumber = deleted.ReceiptLineNumber 
+      JOIN SKU s (NOLOCK) ON s.StorerKey = rsn.StorerKey
+                          AND s.Sku      = rsn.Sku
+      WHERE deleted.QtyReceived = 0
+      AND   s.SerialNoCapture IN ('1','2')
+      ORDER BY deleted.ReceiptKey
+            ,  deleted.ReceiptLineNumber
+
+      OPEN @CUR_RD
+
+      FETCH NEXT FROM @CUR_RD INTO @c_ReceiptKey, @c_ReceiptLineNumber, @n_ReceiptSerialNoKey
+
+      WHILE @@FETCH_STATUS <> -1  AND (@n_continue = 1 OR @n_continue = 2)
+      BEGIN
+         DELETE ReceiptSerialNo WITH (ROWLOCK)
+         WHERE ReceiptSerialNoKey = @n_ReceiptSerialNoKey 
+
+         SET @n_Err = @@ERROR
+
+         IF @n_Err <> 0
+         BEGIN
+            SET @n_continue = 3  
+            SET @c_errmsg = CONVERT(CHAR(250) ,@n_err)
+            SET @n_err = 64208  
+            SET @c_errmsg = 'NSQL'+CONVERT(CHAR(5) ,@n_err) 
+                          + ': Delete Trigger On Table ReceiptSerialNo Failed'
+                          + '. (ntrReceiptDetailDelete)' 
+                          + ' ( '+' SQLSvr MESSAGE='+LTrim(RTrim(@c_errmsg)) 
+                          + ' ) '
+         END
+         FETCH NEXT FROM @CUR_RD INTO @c_ReceiptKey, @c_ReceiptLineNumber, @n_ReceiptSerialNoKey
+      END
+      CLOSE @CUR_RD
+      DEALLOCATE @CUR_RD
+   END                                                                              --(Wan02) - END
     
     /*INSERT INTO TableDeleteLog
     (
@@ -497,8 +539,8 @@ BEGIN
             BeforeReceivedQty, PutawayLoc, ExportStatus, SplitPalletFlag, POLineNumber, LoadKey,
             ExternPoKey, UserDefine01, UserDefine02, UserDefine03, UserDefine04, UserDefine05, 
             UserDefine06, UserDefine07, UserDefine08, UserDefine09, UserDefine10, Lottable06,
-	         Lottable07, Lottable08, Lottable09, Lottable10, Lottable11, Lottable12, Lottable13,
-	         Lottable14, Lottable15, Channel, Channel_ID)
+            Lottable07, Lottable08, Lottable09, Lottable10, Lottable11, Lottable12, Lottable13,
+            Lottable14, Lottable15, Channel, Channel_ID)
       SELECT ReceiptKey, ReceiptLineNumber, ExternReceiptKey, ExternLineNo, StorerKey, POKey, 
             Sku, AltSku, Id, Status, DateReceived, QtyExpected, QtyAdjusted, QtyReceived, UOM,
             PackKey, VesselKey, VoyageKey, XdockKey, ContainerKey, ToLoc, ToLot, ToId, ConditionCode,
@@ -509,8 +551,8 @@ BEGIN
             BeforeReceivedQty, PutawayLoc, ExportStatus, SplitPalletFlag, POLineNumber, LoadKey,
             ExternPoKey, UserDefine01, UserDefine02, UserDefine03, UserDefine04, UserDefine05, 
             UserDefine06, UserDefine07, UserDefine08, UserDefine09, UserDefine10, Lottable06,
-	         Lottable07, Lottable08, Lottable09, Lottable10, Lottable11, Lottable12, Lottable13,
-	         Lottable14, Lottable15, Channel, Channel_ID FROM DELETED 
+            Lottable07, Lottable08, Lottable09, Lottable10, Lottable11, Lottable12, Lottable13,
+            Lottable14, Lottable15, Channel, Channel_ID FROM DELETED 
       SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
       IF @n_err <> 0
       BEGIN
