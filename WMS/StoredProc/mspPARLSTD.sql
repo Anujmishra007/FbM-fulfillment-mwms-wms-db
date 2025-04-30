@@ -181,12 +181,25 @@ BEGIN
             SET @n_NoOfTasks = @n_NoOfTasks + 1
 
             PRINT "Inserting TASKDETAIL: 
+            @c_TaskDetailKey="+@c_TaskDetailKey+",
+            @c_TaskType="+@c_TaskType+",
+            @c_Lot="+@c_Lot+",
+            @c_UOM="+@c_UOM+",
+            @c_FromLoc="+@c_FromLoc+",
+            @c_FromID="+@c_FromID+",
+            @c_ToLoc="+@c_ToLoc+",
+            @c_FinalLoc="+@c_FinalLoc+",
+            @c_FromLogicalLoc="+@c_FromLogicalLoc+",
+            @c_ToLogicalLoc="+@c_ToLogicalLoc+",
+            @c_Areakey="+@c_Areakey+",
+            @c_PickMethod="+@c_PickMethod+",
+            @c_SourceType="+@c_SourceType+",
             @c_ReceiptKey="+@c_ReceiptKey+", 
             @c_Storerkey="+@c_Storerkey+", 
             @c_Sku="+@c_Sku+",
             @c_FromLoc="+@c_FromLoc+", 
             @c_FromID="+@c_FromID+", 
-            @n_QtyReceived="+@n_QtyReceived
+            @n_QtyReceived="+CAST(@n_QtyReceived AS VARCHAR(10))
 
             INSERT INTO dbo.TASKDETAIL
                    (    TaskDetailKey
