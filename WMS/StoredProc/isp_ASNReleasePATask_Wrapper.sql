@@ -24,9 +24,11 @@ GO
 /* Data Modifications:                                                  */  
 /*                                                                      */  
 /* Updates:                                                             */  
-/* Date         Author   Ver  Purposes                                  */  
+/* Date         Author   Ver  Purposes                                  */ 
+/* 2025-04-28   AYD      1.1  UWP-31046 - FCR-2403 -                    */
+/*                            ASN Release Putaway Task                  */ 
 /************************************************************************/   
-CREATE PROCEDURE [dbo].[isp_ASNReleasePATask_Wrapper]  
+CREATE PROCEDURE [dbo].[isp_ASNReleasePATask_Wrapper_AYD]  
    @c_ReceiptKey NVARCHAR(10),    
    @b_Success    INT      OUTPUT,
    @n_Err        INT      OUTPUT, 
@@ -94,16 +96,12 @@ BEGIN
    WHERE  StorerKey = @c_StorerKey
    AND    ConfigKey = 'ASNReleasePATask_SP'  
 
+   -- AYD START: FCR-2403
    IF ISNULL(RTRIM(@c_SPCode),'') = ''
-   BEGIN       
-       SET @n_continue = 3  
-       SET @n_Err = 31214 -- Should Be Set To The SQL Errmessage but I don't know how to do so.
-       SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(5), @n_Err) 
-                     + ': Please Setup Stored Procedure Name into Storer Configuration(ASNReleasePATask_SP) for '
-                     + RTRIM(@c_StorerKey)+ '. (isp_ASNReleasePATask_Wrapper)'  
-       GOTO QUIT_SP
+   BEGIN
+       SET @c_SPCode = 'mspPARLSTD'
    END
-   
+
    IF NOT EXISTS (SELECT 1 FROM dbo.sysobjects WHERE name = RTRIM(@c_SPCode) AND type = 'P')
    BEGIN
        SET @n_continue = 3  
@@ -114,6 +112,8 @@ BEGIN
        GOTO QUIT_SP
    END
 
+   PRINT "StorerConfig with key 'ASNReleasePATask_SP': " + @c_SPCode    
+   -- AYD END: FCR-2403
    
    SET @c_SQL = 'EXEC ' + @c_SPCode + ' @c_ReceiptKey, @b_Success OUTPUT, @n_Err OUTPUT,' +
                 ' @c_ErrMsg OUTPUT '
