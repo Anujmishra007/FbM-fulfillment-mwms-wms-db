@@ -1,6 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[isp_ASNReleasePATask_Wrapper]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [dbo].[isp_ASNReleasePATask_Wrapper]
-GO
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
@@ -92,6 +89,7 @@ BEGIN
    BEGIN
        SET @c_SPCode = 'mspPARLSTD'
    END
+   -- AYD END: FCR-2403
 
    IF NOT EXISTS (SELECT 1 FROM dbo.sysobjects WHERE name = RTRIM(@c_SPCode) AND type = 'P')
    BEGIN
@@ -102,9 +100,6 @@ BEGIN
                      + '). (isp_ASNReleasePATask_Wrapper)'  
        GOTO QUIT_SP
    END
-
-   PRINT "StorerConfig with key 'ASNReleasePATask_SP': " + @c_SPCode    
-   -- AYD END: FCR-2403
    
    SET @c_SQL = 'EXEC ' + @c_SPCode + ' @c_ReceiptKey, @b_Success OUTPUT, @n_Err OUTPUT,' +
                 ' @c_ErrMsg OUTPUT '
