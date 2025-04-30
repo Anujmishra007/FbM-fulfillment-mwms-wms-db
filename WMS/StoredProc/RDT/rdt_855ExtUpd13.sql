@@ -703,9 +703,11 @@ BEGIN
                         INNER JOIN SKU (nolock) on  PD.storerkey = SKU.storerkey and PD.sku=SKU.sku
                         INNER JOIN packheader PH (nolock) on PH.pickslipno = PD.pickslipno
                         INNER JOIN dbo.PackInfo PKI WITH(NOLOCK) ON PD.PickSlipNo = PKI.PickSlipNo AND PD.CartonNo = PKI.CartonNo
-                        INNER JOIN Storer WITH (NOLOCK) ON PD.StorerKey = STORER.StorerKey
+                        INNER JOIN dbo.Storer STORER WITH (NOLOCK) ON PD.StorerKey = STORER.StorerKey
                         INNER JOIN dbo.CARTONIZATION CART WITH(NOLOCK) ON Storer.CartonGroup = CART.CartonizationGroup AND CART.CartonType = PKI.CartonType
                         WHERE PD.LabelNo = @cDropID
+                           AND PKI.CartonStatus = 'PACKED'
+                           AND PD.StorerKey = @cStorerKey
                            GROUP BY PD.StorerKey, PH.PickSlipNo, PD.CartonNo, PD.labelno, CART.CartonWeight) AS t
 
                      UPDATE PI WITH(ROWLOCK) 
