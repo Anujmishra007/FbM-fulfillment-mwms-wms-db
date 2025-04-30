@@ -696,9 +696,9 @@ BEGIN
                         AND CartonStatus = 'PACKED'
 
                      INSERT INTO @tCartonWeight (CaseID, PickSlipNo, CartonNo, Weight)
-                     SELECT CaseID, PickSlipNo, CartonNo, InvWeight + CartonWeight
+                     SELECT LabelNo, PickSlipNo, CartonNo, InvWeight + CartonWeight
                      FROM
-                        (SELECT PH.PickSlipNo, PD.CartonNo, PD.labelno, SUM(SKU.STDNETWGT * PD.qty) AS InvWeight, CART.CartonWeight / ISNULL(@nPickSlipNoQty, 1) AS CartonWeight 
+                        (SELECT PD.LabelNo, PH.PickSlipNo, PD.CartonNo, SUM(SKU.STDNETWGT * PD.qty) AS InvWeight, CART.CartonWeight / ISNULL(@nPickSlipNoQty, 1) AS CartonWeight 
                         FROM PACKDETAIL PD (nolock)
                         INNER JOIN SKU (nolock) on  PD.storerkey = SKU.storerkey and PD.sku=SKU.sku
                         INNER JOIN packheader PH (nolock) on PH.pickslipno = PD.pickslipno
