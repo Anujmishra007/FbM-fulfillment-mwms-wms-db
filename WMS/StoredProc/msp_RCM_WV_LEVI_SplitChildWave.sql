@@ -197,8 +197,8 @@ BEGIN
                     , CASE WHEN ISNULL(CL1.Code, '') <> '' THEN IIF(CL1.UDF01 = '1', '1', '0')   --BillToKey
                            WHEN ISNULL(CL2.Code, '') <> '' THEN IIF(CL2.UDF01 = '1', '1', '0')   --ConsigneeKey
                            ELSE '1' END   --Not set up
-                    , CASE WHEN ISNULL(CL1.Code, '') <> '' AND 1 = IIF(CL1.UDF01 = '1', 1, 0) THEN 'Y'   --BillToKey
-                           WHEN ISNULL(CL2.Code, '') <> '' AND 1 = IIF(CL2.UDF01 = '1', 1, 0) THEN 'Y'   --ConsigneeKey
+                    , CASE WHEN ISNULL(CL1.Code, '') <> '' AND 1 = IIF(CL1.UDF01 = '1', 1, 0) THEN 'Y'   --BillToKey       --WL01
+                           WHEN ISNULL(CL2.Code, '') <> '' AND 1 = IIF(CL2.UDF01 = '1', 1, 0) THEN 'Y'   --ConsigneeKey    --WL01
                            ELSE 'N' END   --Not set up
                     , 1   --1 Order 1 Virtual Carton, except some cases which will be catered below
       FROM WAVEDETAIL WD WITH (NOLOCK)
