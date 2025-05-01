@@ -13,7 +13,7 @@ GO
 /*                                                                       */
 /* Called By: Dynamic RCM                                                */
 /*                                                                       */
-/* GitHub Version: 1.0                                                   */
+/* GitHub Version: 1.1                                                   */
 /*                                                                       */
 /* Version: 7.0                                                          */
 /*                                                                       */
@@ -22,6 +22,8 @@ GO
 /* Updates:                                                              */
 /* Date         Author  Ver.  Purposes                                   */
 /* 24-Mar-2025  WLChooi 1.0   DevOps Combine Script                      */
+/* 01-May-2025  WLChooi 1.1   UWP-31640 Get TOP 1 Workorderdetail Type to*/
+/*                            calculate VCCount (WL01)                   */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[msp_RCM_WV_LEVI_SplitChildWave]
    @c_Wavekey NVARCHAR(10)
@@ -268,17 +270,22 @@ BEGIN
    IF @n_Continue IN (1,2)
    BEGIN
       --Calculate Carton for S02, S06, J05 - START
-      ;WITH CTE_VC (Orderkey, VCCount) AS ( SELECT T2.Orderkey, CEILING(COUNT(1) / CAST(MAX(T1.SKUPerVC) AS FLOAT))
-                                            FROM dbo.WorkOrderDetail WOD WITH (NOLOCK)
-                                            JOIN @T_WCSPackReq T1 ON T1.WODType = WOD.[Type]
-                                            JOIN @T_ORDERDET T2 ON WOD.ExternWorkOrderKey = T2.Orderkey AND WOD.ExternLineNo = T2.OrderLineNumber
-                                            WHERE WOD.Qty > 0
-                                            AND T1.ActiveFlag = 'Y'
-                                            GROUP BY T2.Orderkey )
+      --WL01 S
+      ;WITH CTE_VC (Orderkey, VCCount) AS ( SELECT T3.Orderkey, CEILING(COUNT(T3.OrderLineNumber) / CAST(MAX(WODT.SKUPerVC) AS FLOAT))
+                                            FROM @T_ORDERS T2
+                                            JOIN @T_ORDERDET T3 ON T2.Orderkey = T3.Orderkey
+                                            OUTER APPLY (  SELECT TOP 1 WOD.Type
+                                                                      , T1.SKUPerVC
+                                                           FROM dbo.WorkOrderDetail WOD WITH (NOLOCK)
+                                                           JOIN @T_WCSPackReq T1 ON T1.WODType = WOD.[Type]
+                                                           WHERE WOD.ExternWorkOrderKey = T3.Orderkey 
+                                                           AND T1.ActiveFlag = 'Y' ) AS WODT
+                                            GROUP BY T3.Orderkey )
       UPDATE @T_ORDERS
       SET T.VCCount = IIF(ISNULL(C.VCCount, 0) = 0, 1, C.VCCount)
       FROM @T_ORDERS T
       JOIN CTE_VC C ON C.Orderkey = T.Orderkey
+      --WL01 E
       --Calculate Carton for S02, S06, J05 - END
    END
    --Calculate Virtual Cartons for those WCSPackReq - S02, S06, J05 - END
