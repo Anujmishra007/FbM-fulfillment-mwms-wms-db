@@ -1,7 +1,6 @@
 alter table dbo.CartonTrack
 alter column LabelNo nvarchar (25)null
-ALTER TABLE dbo.KIT
-ADD ExternStatus NVARCHAR(30) NULL;
+
 
 ALTER TABLE RDT.RDTMOBREC ALTER COLUMN C_String1 NVARCHAR(250)  NULL 
 ALTER TABLE RDT.RDTMOBREC ALTER COLUMN C_String2 NVARCHAR(250)  NULL 
