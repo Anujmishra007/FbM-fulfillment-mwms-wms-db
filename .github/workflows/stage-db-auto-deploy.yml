@@ -9,7 +9,7 @@ on:
     
 jobs:
   deploy-stage:
-    if: github.base_ref == 'main'
+    # if: github.base_ref == 'main'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
