@@ -1,6 +1,6 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
 GO
 
 /*************************************************************************/
@@ -24,6 +24,8 @@ GO
 /* 24-Mar-2025  WLChooi 1.0   DevOps Combine Script                      */
 /* 01-May-2025  WLChooi 1.1   UWP-31640 Get TOP 1 Workorderdetail Type to*/
 /*                            calculate VCCount (WL01)                   */
+/* 05-May-2025  SWT01   1.2   Change UDF01 = "Y" instead of "1" FOR      */
+/*                            MPOCPERMIT                                 */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[msp_RCM_WV_LEVI_SplitChildWave]
    @c_Wavekey NVARCHAR(10)
@@ -194,11 +196,11 @@ BEGIN
       SELECT DISTINCT WD.WaveKey
                     , WD.Orderkey
                     , ISNULL(TRIM(OH.BuyerPO), '')
-                    , CASE WHEN ISNULL(CL1.Code, '') <> '' THEN IIF(CL1.UDF01 = '1', '1', '0')   --BillToKey
-                           WHEN ISNULL(CL2.Code, '') <> '' THEN IIF(CL2.UDF01 = '1', '1', '0')   --ConsigneeKey
+                    , CASE WHEN ISNULL(CL1.Code, '') <> '' THEN IIF(CL1.UDF01 = 'Y', '1', '0')   --BillToKey (SWT01)
+                           WHEN ISNULL(CL2.Code, '') <> '' THEN IIF(CL2.UDF01 = 'Y', '1', '0')   --ConsigneeKey (SWT01)
                            ELSE '1' END   --Not set up
-                    , CASE WHEN ISNULL(CL1.Code, '') <> '' AND 1 = IIF(CL1.UDF01 = '1', 1, 0) THEN 'Y'   --BillToKey       --WL01
-                           WHEN ISNULL(CL2.Code, '') <> '' AND 1 = IIF(CL2.UDF01 = '1', 1, 0) THEN 'Y'   --ConsigneeKey    --WL01
+                    , CASE WHEN ISNULL(CL1.Code, '') <> '' AND 1 = IIF(CL1.UDF01 = 'Y', 1, 0) THEN 'Y' --BillToKey    --WL01 (SWT01)
+                           WHEN ISNULL(CL2.Code, '') <> '' AND 1 = IIF(CL2.UDF01 = 'Y', 1, 0) THEN 'Y' --ConsigneeKey --WL01 (SWT01)
                            ELSE 'N' END   --Not set up
                     , 1   --1 Order 1 Virtual Carton, except some cases which will be catered below
       FROM WAVEDETAIL WD WITH (NOLOCK)
@@ -618,6 +620,4 @@ BEGIN
       RETURN
    END
 END -- End PROC  
-GO
-GRANT EXECUTE ON [dbo].[msp_RCM_WV_LEVI_SplitChildWave] TO [NSQL]
 GO
