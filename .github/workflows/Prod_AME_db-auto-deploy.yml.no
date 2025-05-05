@@ -1,27 +1,26 @@
-name: Deploy to STAGE DB
+name: Deploy to AME DB on PR Merge
 
 on:
+  pull_request:
+    types:
+      - closed
 
-    # pull_request:
-    #     types:
-    #       - closed
-    workflow_dispatch:
-    
 jobs:
   deploy-stage:
-    # if: github.base_ref == 'main'
+    if: github.event.pull_request.merged == true && github.base_ref == 'main'
     runs-on: ubuntu-latest
+    environment: PROD-AME
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          fetch-depth: 2
+          fetch-depth: 0
 
       - name: Check for modified .sql files
         id: check_sql
         shell: bash
         run: |
-          CHANGED_FILES=$(git diff --name-only origin/main~1 origin/main)
+          CHANGED_FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }} HEAD)
 
           # Separate files into WMS/Tables/*.sql and other WMS/*.sql
           WMS_TABLES_SQL=$(echo "$CHANGED_FILES" | grep '^WMS/Tables/.*\.sql' || true)
@@ -78,35 +77,32 @@ jobs:
 
           echo "bearer_token=${token}" >> $GITHUB_ENV
 
-      - name: Deploy to STAGE DB
-        id: deploy_STAGE
+      - name: Deploy to AME DB
+        id: deploy_AME
         if: env.run_sql == 'true'
         run: |
             payload='{
-              "region": "westeurope",
-              "repositoryName": "fbm-infra-automation",
-              "playbookPath": "db-auto-deploy-stage.yml",
-              "inventoryPath": "inventories/stage.yml",
-              "branchName": "main",
-              "debugFlag": true,
-              "extraVars": {
-                "ENV_CODE": "stage",
-                "ENV_TYPE": "stage",
-                "REGION": "westeurope",
-                "GEOGRAPHY": "europe",
-                "PRODUCT_CODE": "wms",
-                "PLATFORM_CODE": "fbm",
-                "HASHICORP_VAULT_URL": "https://vault.maersk-digital.net",
-                "targets": "wmsdb-a-utc-awt",
-                "country_list": "ALL",
-                "script_files": "${{ env.changed_files}}"
-              }
-            }'
-  
+                "region": "eastus",
+                "repositoryName": "fbm-infra-automation",
+                "playbookPath": "db-deploy-ame.yml",
+                "inventoryPath": "inventories/americas.yml",
+                "branchName": "main", // Change branch accordingly
+                "debugFlag": true,
+                "extraVars": {
+                  "ENV_CODE": "americas",
+                  "ENV_TYPE": "prod",
+                  "REGION": "eastus",
+                  "GEOGRAPHY": "america",
+                  "PRODUCT_CODE": "wms",
+                  "PLATFORM_CODE": "fbm",
+                  "HASHICORP_VAULT_URL": "https://vault.maersk-digital.net",
+                  "targets": "wmsdb-a-utc-3"
+                }
+              }'
   
             echo "Deploying with the following payload: $payload"
   
-            response=$(curl -s -X POST https://bffp.maersk-digital.net/v2/platforms/fbm/environments/stage/products/wms/configurations \
+            response=$(curl -s -X POST https://bffp.maersk-digital.net/v2/platforms/fbm/environments/americas/products/wms/configurations \
               -H "Authorization: Bearer $bearer_token" \
               -H "Content-Type: application/json" \
               -d "$payload")
@@ -115,7 +111,7 @@ jobs:
   
   
       - name: Deployment Request Failure Notification
-        if: steps.deploy_STAGE.outcome == 'failure'
+        if: steps.deploy_AME.outcome == 'failure'
         uses: jdcargile/ms-teams-notification@v1.3
         with:
             github-token: ${{ github.token }}
@@ -124,7 +120,7 @@ jobs:
             notification-color: D30A13
   
       - name: Deployment Request Success Notification
-        if: steps.deploy_STAGE.outcome == 'success'
+        if: steps.deploy_AME.outcome == 'success'
         uses: jdcargile/ms-teams-notification@v1.3
         with:
             github-token: ${{ github.token }}
