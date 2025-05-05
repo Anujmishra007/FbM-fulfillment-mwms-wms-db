@@ -9,7 +9,7 @@ jobs:
   deploy-AME:
     if: github.event.pull_request.merged == true && github.base_ref == 'main'
     runs-on: ubuntu-latest
-    environment: PROD-AME
+    environment: PROD-AMERICAS
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -138,7 +138,7 @@ jobs:
   deploy-EUR:
     if: github.event.pull_request.merged == true && github.base_ref == 'main'
     runs-on: ubuntu-latest
-    environment: PROD-EUR
+    environment: PROD-EUROPE
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -267,7 +267,7 @@ jobs:
   deploy-APA:
     if: github.event.pull_request.merged == true && github.base_ref == 'main'
     runs-on: ubuntu-latest
-    environment: PROD-APA
+    environment: PROD-ASIA
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
