@@ -135,9 +135,9 @@ jobs:
 
 
   deploy-stage:
-    # if: github.base_ref == 'main'
-    environment: stage
+    if: github.event.pull_request.merged == true && github.base_ref == 'main'
     runs-on: ubuntu-latest
+    environment: stage
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
