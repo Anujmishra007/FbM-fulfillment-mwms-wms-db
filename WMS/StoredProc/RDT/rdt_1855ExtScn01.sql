@@ -26,8 +26,9 @@ GO
 /* 2025-04-04 1.6.1  CYU027     FCR-3927 TOTE and CARTON Input Validation          */
 /* 2025-04-11 1.6.2  DENNIS     UWP-32689 If picked then reject users back out     */
 /* 2025-04-22 1.6.3  CYU027     FCR-4191 Add UserKeyOverRide when picking tasks    */
+/* 2025-03-11 1.6.4  Dennis     FCR-3925  Add Validation for Tote Rel              */
 /***********************************************************************************/
-  
+
 CREATE OR ALTER PROC [RDT].[rdt_1855ExtScn01] (
    @nMobile      INT,           
    @nFunc        INT,           
@@ -1035,20 +1036,20 @@ BEGIN
             SCN6416_Start:
             IF @nInputKey = 0
             BEGIN
-               IF EXISTS(SELECT 1      
-                  FROM dbo.TaskDetail WITH (NOLOCK)      
-                  WHERE Storerkey = @cStorerKey      
-                  AND   TaskType = 'ASTCPK'      
-                  AND   [Status] = '5'      
-                  AND   Groupkey = @cGroupKey      
-                  AND   UserKey = @cUserName      
+               IF EXISTS(SELECT 1
+                  FROM dbo.TaskDetail WITH (NOLOCK)
+                  WHERE Storerkey = @cStorerKey
+                  AND   TaskType = 'ASTCPK'
+                  AND   [Status] = '5'
+                  AND   Groupkey = @cGroupKey
+                  AND   UserKey = @cUserName
                   AND   DeviceID = @cCartID  )
                BEGIN
                   SET @nErrNo = 220777
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --PickNotComplete
                   GOTO Quit
                END
-               -- Prepare next screen var        
+               -- Prepare next screen var
                SET @cOutField01 = ''        
                SET @cOutField02 = ''         
                SET @cOutField03 = ''         
@@ -1655,6 +1656,18 @@ BEGIN
                   BEGIN
                      SET @nErrNo = 220775
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Tote assigned to a different cart
+                     GOTO Step_Matrix_Fail_1
+                  END
+
+                  IF EXISTS(SELECT 1
+                           FROM dbo.TaskDetail TD WITH(NOLOCK)
+                           WHERE TD.Storerkey = @cStorerKey
+                              AND TD.TaskType = 'ASTCPK'
+                              AND DropID = @cCartonId
+                              AND Status = '9' )
+                  BEGIN
+                     SET @nErrNo =  220781
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Tote Not Release
                      GOTO Step_Matrix_Fail_1
                   END
 

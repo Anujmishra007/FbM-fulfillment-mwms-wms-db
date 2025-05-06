@@ -33,5 +33,5 @@ EXECUTE rdt.rdtAddMsg 220777, 10, '220777PickNotComplete',  'us_english', 1855
 
 EXECUTE rdt.rdtAddMsg 220779, 10, '220779CartID Invalid Format',    'us_english', 1855, 0, '220779 CartID Invalid Format'
 EXECUTE rdt.rdtAddMsg 220780, 10, '220780ToteID Invalid Format',    'us_english', 1855, 0, '220780 ToteID Invalid Format'
-
+EXECUTE rdt.rdtAddMsg 220781, 10, '220781Tote Not Release', 'us_english', 1855
 select * from rdt.rdtmsg (nolock) where message_id between 220751 AND 220800
