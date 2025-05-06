@@ -59,7 +59,7 @@ BEGIN
                               AND Facility = @cFacility
                               AND Putawayzone <> @cPutawayzone)
             BEGIN
-               SET @nErrNo = 234651
+               SET @nErrNo = 237801
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- ZoneNotMatch
                GOTO Quit
             END
