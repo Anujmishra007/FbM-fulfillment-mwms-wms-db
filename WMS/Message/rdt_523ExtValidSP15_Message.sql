@@ -1,4 +1,4 @@
 --rdt_523ExtValidSP15
-execute rdt.rdtdropmsg 234651, 234700
+execute rdt.rdtdropmsg 237801, 237850
 
-execute rdt.rdtAddMsg 234651, 10, '234651ZoneNotMatch', 'us_english', 523
+execute rdt.rdtAddMsg 237801, 10, '237801ZoneNotMatch', 'us_english', 523
