@@ -61,10 +61,12 @@ BEGIN
       BEGIN
          IF @nInputKey = 1 -- ENTER
          BEGIN
-            SELECT @cPickSlipNoForSerialNo = PickSlipNo
-            FROM dbo.PackSerialNo WITH (NOLOCK)
-            WHERE StorerKey = @cStorerKey
-               AND SerialNo = @cSerialNo
+            SELECT @cPickSlipNoForSerialNo = PSN.PickSlipNo
+            FROM dbo.PackSerialNo PSN WITH (NOLOCK)
+            INNER JOIN dbo.SerialNo SN WITH(NOLOCK) ON PSN.SerialNo = SN.SerialNo
+            WHERE PSN.StorerKey = @cStorerKey
+               AND PSN.SerialNo = @cSerialNo
+               AND SN.Status = '0'
          
             SELECT @nRowCount = @@ROWCOUNT
 
