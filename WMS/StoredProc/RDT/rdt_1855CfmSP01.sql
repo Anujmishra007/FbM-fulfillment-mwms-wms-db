@@ -469,8 +469,8 @@ BEGIN
                               Status = 'X',
                               ReasonKey = 'SKIP',
                               CaseID = @cOriginDropId,
-                              Groupkey = '', --v1.1.5
-                              DeviceID = '', --v1.1.5
+                              --Groupkey = '', --revert v1.1.5
+                              --DeviceID = '', --revert v1.1.5
                               --DropID = '', --V1.1.5 Keep dropid for 1st full short. Otherwise it cannot skip the confirm tote scn
                               TransitCount = 1,
                               EditDate = GETDATE(),  
