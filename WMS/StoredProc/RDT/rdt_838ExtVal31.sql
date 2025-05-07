@@ -61,12 +61,17 @@ BEGIN
       BEGIN
          IF @nInputKey = 1 -- ENTER
          BEGIN
-            SELECT @cPickSlipNoForSerialNo = PSN.PickSlipNo
-            FROM dbo.PackSerialNo PSN WITH (NOLOCK)
-            INNER JOIN dbo.SerialNo SN WITH(NOLOCK) ON PSN.SerialNo = SN.SerialNo
-            WHERE PSN.StorerKey = @cStorerKey
-               AND PSN.SerialNo = @cSerialNo
-               AND SN.Status = '0'
+            IF NOT EXISTS (SELECT 1 FROM dbo.SerialNo WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND SerialNo = @cSerialNo AND Status = '0')
+            BEGIN
+               SET @nErrNo = 237701    --Invalid SerialNo
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') 
+               GOTO Quit
+            END
+
+            SELECT @cPickSlipNoForSerialNo = PickSlipNo
+            FROM dbo.PackSerialNo WITH (NOLOCK)
+            WHERE StorerKey = @cStorerKey
+               AND SerialNo = @cSerialNo
          
             SELECT @nRowCount = @@ROWCOUNT
 
@@ -74,11 +79,11 @@ BEGIN
             BEGIN
                IF @cPickSlipNoForSerialNo <> @cPickSlipNo
                BEGIN
-                  SET @nErrNo = 237701    --Serial No was scanned to other PickSlipNo
+                  SET @nErrNo = 237702    --SerialNo was scanned to other PickSlipNo
                END
                ELSE
                BEGIN
-                  SET @nErrNo = 237702    --Serial No was scanned to current PickSlipNo
+                  SET @nErrNo = 237703    --SerialNo was scanned to current PickSlipNo
                END
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') 
                GOTO Quit
