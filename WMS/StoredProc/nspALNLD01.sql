@@ -1,3 +1,7 @@
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
 /************************************************************************/
 /* Stored Procedure: nspALNLD01                                         */
 /* Creation Date: 28-MAR-2025                                           */
@@ -15,7 +19,7 @@
 /* Date         Author     Ver.  Purposes                               */
 /* 28-MAR-2025  Ansuman01  1.0   UWP-30689 Pallet Allocation for kitting*/
 /* 16-APR-2025  Ansuman02  1.1   UWP-30689 Extract LOT, LOC,            */
-/*                                 ID from Other Params                 */
+/*                               ID from Other Params                   */
 /************************************************************************/    
 CREATE OR ALTER PROC [dbo].[nspALNLD01]
    @c_DocumentNo NVARCHAR(10),  --kitkey
@@ -125,7 +129,6 @@ BEGIN
                   FROM KIT K (NOLOCK)
                   JOIN KITDETAIL KD (NOLOCK) ON K.Kitkey = KD.Kitkey
                   WHERE K.Status <> ''9''
-                  AND K.Kitkey <> @c_KitKey
                   AND KD.Status <> ''9''
                   AND KD.Type = ''F''
                   AND KD.STORERKEY = LOTxLOCxID.STORERKEY
@@ -155,12 +158,12 @@ BEGIN
      CASE WHEN CONVERT(NVARCHAR(8) ,@d_Lottable15 ,112) <> '19000101' AND @d_Lottable15 IS NOT NULL THEN ' AND LA.Lottable15 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable15, 106)) ' ELSE ' ' END +
      ' ORDER BY LA.Lottable05, LOC.LogicalLocation, LOC.Loc '
 
-     SET @c_SQLParm =  N'@c_Facility NVARCHAR(5),  @c_StorerKey NVARCHAR(15), @c_SKU NVARCHAR(20), @c_KitKey NVARCHAR(10), @c_LotFromKitDetail NVARCHAR(10), @c_LocFromKitDetail NVARCHAR(10), @c_IDFromKitDetail NVARCHAR(18), @n_QtyLeftToFulfill INT, @n_UOMBase INT, ' +
+     SET @c_SQLParm =  N'@c_Facility NVARCHAR(5),  @c_StorerKey NVARCHAR(15), @c_SKU NVARCHAR(20), @c_LotFromKitDetail NVARCHAR(10), @c_LocFromKitDetail NVARCHAR(10), @c_IDFromKitDetail NVARCHAR(18), @n_QtyLeftToFulfill INT, @n_UOMBase INT, ' +
                         '@c_Lottable01 NVARCHAR(18), @c_Lottable02 NVARCHAR(18), @c_Lottable03 NVARCHAR(18), @d_Lottable04 DATETIME, @d_Lottable05 DATETIME, ' +
                         '@c_Lottable06 NVARCHAR(30), @c_Lottable07 NVARCHAR(30), @c_Lottable08 NVARCHAR(30), @c_Lottable09 NVARCHAR(30), @c_Lottable10 NVARCHAR(30), ' +
                         '@c_Lottable11 NVARCHAR(30), @c_Lottable12 NVARCHAR(30), @d_Lottable13 DATETIME, @d_Lottable14 DATETIME, @d_Lottable15 DATETIME '
 
-     EXEC sp_ExecuteSQL @c_SQL, @c_SQLParm, @c_Facility, @c_StorerKey, @c_SKU, @c_KitKey, @c_LotFromKitDetail, @c_LocFromKitDetail, @c_IDFromKitDetail, @n_QtyLeftToFulfill, @n_UOMBase, @c_Lottable01, @c_Lottable02, @c_Lottable03, @d_Lottable04, @d_Lottable05, @c_Lottable06, @c_Lottable07, @c_Lottable08, @c_Lottable09, @c_Lottable10, @c_Lottable11, @c_Lottable12, @d_Lottable13, @d_Lottable14, @d_Lottable15
+     EXEC sp_ExecuteSQL @c_SQL, @c_SQLParm, @c_Facility, @c_StorerKey, @c_SKU, @c_LotFromKitDetail, @c_LocFromKitDetail, @c_IDFromKitDetail, @n_QtyLeftToFulfill, @n_UOMBase, @c_Lottable01, @c_Lottable02, @c_Lottable03, @d_Lottable04, @d_Lottable05, @c_Lottable06, @c_Lottable07, @c_Lottable08, @c_Lottable09, @c_Lottable10, @c_Lottable11, @c_Lottable12, @d_Lottable13, @d_Lottable14, @d_Lottable15
 
    SET @c_SQL = ''
    SET @n_LotQtyAvailable = 0

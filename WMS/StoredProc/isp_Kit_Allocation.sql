@@ -30,6 +30,7 @@ GO
 /*                            allocated                                 */
 /* 16-Apr-2025  Ansuman01 1.3 UWP-30689 Pallet Allocation for KIT       */
 /* 23-Apr-2025  Ansuman02 1.4 UWP-33237 PalletType addition             */
+/* 06-May-2025  Ansuman03 1.5 UWP-30689 Partial Pallet Allocation       */
 /************************************************************************/
 CREATE OR ALTER PROC  isp_Kit_Allocation
 @c_KitKey              NVARCHAR(10)
@@ -331,7 +332,7 @@ BEGIN
               JOIN  SKU (NOLOCK) ON KITDETAIL.Storerkey = SKU.StorerKey AND KITDETAIL.Sku = SKU.Sku
               JOIN  STRATEGY STGY (NOLOCK) ON SKU.Strategykey = STGY.StrategyKey
     WHERE KIT.Kitkey = @c_Kitkey
-        AND ISNULL(KITDETAIL.Lot,'') = '' OR ISNULL(KITDETAIL.Loc,'') = '' -- Ansuman01
+        AND (ISNULL(KITDETAIL.Lot,'') = '' OR ISNULL(KITDETAIL.Loc,'') = '') -- Ansuman03
         AND KITDETAIL.Type = 'F'
     ORDER BY KITDETAIL.SKU
 
@@ -1130,6 +1131,7 @@ BEGIN
                         END
 
                     SET @c_UOM = @c_EachUOM
+                    SET @c_aKitLineNumber = @c_NewKitLineNumber ---- Ansuman03
 
                     /*IF @n_PackQty > 0
                     BEGIN
