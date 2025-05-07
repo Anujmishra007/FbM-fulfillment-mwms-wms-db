@@ -23,9 +23,7 @@ GO
 /*                                                                          */ 
 /* Called By:                                                               */ 
 /*                                                                          */ 
-/* PVCS Version: 1.20                                                       */ 
-/*                                                                          */ 
-/* Version: 6.0                                                             */ 
+/* Version: 6.2                                                             */ 
 /*                                                                          */ 
 /* Data Modifications:                                                      */ 
 /*                                                                          */ 
@@ -176,6 +174,8 @@ GO
 /* 15-Mar-2024  Wan04     6.0   UWP-16968-Post PalletType to Inventory When */
 /*                              Finalize                                    */
 /* 12-Dec-2024  Wan05     6.1   UWP-28399-INC7516794 - Non Serialize process*/
+/* 05-May-2025  Wan06     6.2   FCR-4086 - CopyRecValueToLottable upon      */
+/*                              finalizing the ASN                          */
 /****************************************************************************/ 
  
 CREATE OR ALTER TRIGGER [dbo].[ntrReceiptDetailUpdate] 
@@ -281,6 +281,16 @@ DECLARE @c_PODLottable01       NVARCHAR(18)
       , @c_Userdefine10                   NVARCHAR(30) --NJOW09
       , @c_ASNFizUpdLotToSerialNo         NVARCHAR(30) --NJOW14
       , @c_PalletType                     NVARCHAR(10) = ''                         --(Wan04) 
+
+      , @c_CopyRecValueToLottable         NVARCHAR(30)  = ''                        --(Wan06)
+      , @c_CopyRecValueToLottable_opt1    NVARCHAR(50)  = ''                        --(Wan06)
+      , @c_CopyRecValueToLottable_opt2    NVARCHAR(50)  = ''                        --(Wan06)
+      , @c_CopyFromRec                    NVARCHAR(250) = ''                        --(Wan06)
+      , @c_CopyToLottable                 NVARCHAR(250) = ''                        --(Wan06)
+      , @c_CopyRecValueToLottable_opt5    NVARCHAR(1000)= ''                        --(Wan06)
+      , @c_DataType                       NVARCHAR(10)  = ''                        --(Wan06)
+
+      , @cur_RECVal                       CURSOR                                    --(Wan06)
 --NJOW11      
 DECLARE @c_AltSku                         NVARCHAR(20)
       , @c_ContainerKey                   NVARCHAR(18)
@@ -762,7 +772,7 @@ BEGIN
                      SELECT @n_err=60087 
                      SELECT @c_errmsg = 'NSQL' + CONVERT(char(5),@n_err)+':  Unable to obtain transmitlogkey (ntrReceiptDetailUpdate) ( SQLSvr MESSAGE='  
                                       + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + ' ) ' 
-      GOTO QUIT 
+                     GOTO QUIT 
                   END 
                END 
             END 
@@ -1255,6 +1265,130 @@ BEGIN
               @c_ExternLineNo
          END 
          --NJOW07 E
+
+         --Wan06 - Start
+         IF @n_continue IN (1,2)
+         BEGIN
+            SELECT @c_CopyRecValueToLottable = fgr.Authority
+                  ,@c_CopyRecValueToLottable_opt1 = fgr.Option1
+                  ,@c_CopyRecValueToLottable_opt2 = fgr.Option2
+                  ,@c_CopyRecValueToLottable_opt5 = fgr.Option5
+            FROM dbo.fnc_GetRight2 (@c_facility, @c_StorerKey, '', 'CopyRecValueToLottable') fgr
+ 
+            SET @c_CopyFromRec = ''
+            SET @c_CopyToLottable = ''
+
+            SELECT @c_CopyFromRec = dbo.fnc_GetParamValueFromString('@c_CopyFromRec'
+                                    , @c_CopyRecValueToLottable_opt5,@c_CopyFromRec)
+            SELECT @c_CopyToLottable = dbo.fnc_GetParamValueFromString('@c_CopyToLottable'
+                                    , @c_CopyRecValueToLottable_opt5,@c_CopyToLottable)
+
+            SET @c_CopyFromRec = @c_CopyRecValueToLottable_opt1 + @c_CopyFromRec  
+            SET @c_CopyToLottable = @c_CopyRecValueToLottable_opt2 + @c_CopyToLottable 
+            
+            IF @c_CopyRecValueToLottable = '1' AND 
+               @c_CopyFromRec > '' AND @c_CopyToLottable > ''
+            BEGIN
+               SET @cur_RECVAL = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+               SELECT SeqNo = ROW_NUMBER() OVER (ORDER BY (SELECT ''))
+                     ,Column_Name = CASE WHEN ss.[value] = '<Empty>' THEN ss.[value] ELSE c.Column_Name END
+                     ,c.DATA_TYPE
+               FROM STRING_SPLIT(@c_CopyFromRec, ',') ss
+               LEFT OUTER JOIN INFORMATION_SCHEMA.COLUMNS c ON  c.TABLE_SCHEMA = 'dbo'
+                                                            AND c.TABLE_NAME = 'RECEIPT'
+                                                            AND c.Column_Name = ss.[Value]
+               ORDER BY c.Column_Name DESC, SeqNo
+ 
+               OPEN @cur_RECVAL    
+         
+               FETCH NEXT FROM @cur_RECVAL INTO @n_SeqNo, @c_FromColValue, @c_DataType 
+            
+               WHILE @@FETCH_STATUS = 0 AND @n_continue IN(1,2)  
+               BEGIN 
+                  IF @c_FromColValue IS NULL OR @c_FromColValue = ''
+                  BEGIN
+                     BREAK
+                  END
+                 
+                  SET @n_cnt = 0
+                  SET @c_ToColValue = ''
+
+                  ;WITH CFG AS 
+                  (
+                   SELECT SeqNo = ROW_NUMBER() OVER (ORDER BY (SELECT ''))
+                        , ToColValue = LTRIM(RTRIM(ss.[Value]))
+                        FROM STRING_SPLIT(@c_CopyToLottable, ',') ss
+                   )
+                   SELECT @c_ToColValue = CFG.ToColValue
+                   FROM CFG 
+                   WHERE SeqNo = @n_SeqNo
+
+                  SET @n_cnt = @@ROWCOUNT
+ 
+                  IF @n_cnt = 0 OR 
+                     @c_ToColvalue NOT IN('LOTTABLE01','LOTTABLE02','LOTTABLE03','LOTTABLE06','LOTTABLE07','LOTTABLE08'
+                                         ,'LOTTABLE09','LOTTABLE10','LOTTABLE11','LOTTABLE12' 
+                                         ,'USERDEFINE01','USERDEFINE02','USERDEFINE03','USERDEFINE04','USERDEFINE05'
+                                         ,'USERDEFINE08','USERDEFINE09','USERDEFINE10')
+                  BEGIN 
+                     GOTO NEXT_SEQ_REC
+                  END
+ 
+                  SET @c_SQL = N' SELECT @c_'+ @c_ToColvalue + ' = ' 
+                             + CASE WHEN @c_FromColValue = '<Empty>' 
+                                    THEN '''''' 
+                                    WHEN @c_DataType like '%char%' 
+                                    THEN @c_FromColValue
+                                    WHEN @c_DataType = 'datetime'       
+                                    THEN 'CONVERT(NVARCHAR(30), ' + @c_FromColValue + ',121)'
+                                    WHEN @c_DataType IN ('int','float','bigint') 
+                                    THEN 'CONVERT(NVARCHAR(30), ' + @c_FromColValue + ')'
+                                    WHEN @c_DataType like 'decimal'
+                                    THEN 'CONVERT(NVARCHAR(30), ' + @c_FromColValue + ')'
+                                    ELSE @c_FromColValue END
+                             + ' FROM RECEIPT (NOLOCK)'
+                             + ' WHERE ReceiptKey = @c_Receiptkey'
+                  SET @c_SQLParam = N'@c_Lottable01 NVARCHAR(18) OUTPUT, @c_Lottable02 NVARCHAR(18) OUTPUT'
+                                  +', @c_Lottable03 NVARCHAR(18) OUTPUT, @c_Lottable06 NVARCHAR(30) OUTPUT'
+                                  +', @c_Lottable07 NVARCHAR(30) OUTPUT, @c_Lottable08 NVARCHAR(30) OUTPUT'
+                                  +', @c_Lottable09 NVARCHAR(30) OUTPUT, @c_Lottable10 NVARCHAR(30) OUTPUT'
+                                  +', @c_Lottable11 NVARCHAR(30) OUTPUT, @c_Lottable12 NVARCHAR(30) OUTPUT'
+                                  +', @c_Userdefine01 NVARCHAR(30) OUTPUT, @c_Userdefine02 NVARCHAR(30) OUTPUT'
+                                  +', @c_Userdefine03 NVARCHAR(30) OUTPUT, @c_Userdefine04 NVARCHAR(30) OUTPUT'
+                                  +', @c_Userdefine05 NVARCHAR(30) OUTPUT,@c_Userdefine08 NVARCHAR(30) OUTPUT'
+                                  +', @c_Userdefine09 NVARCHAR(30) OUTPUT, @c_Userdefine10 NVARCHAR(30) OUTPUT'
+                                  +', @c_Receiptkey NVARCHAR(10)' 
+                                 
+                  EXEC sp_executesql @c_SQL
+                                    ,@c_SQLParam
+                                    ,@c_Lottable01 OUTPUT                              
+                                    ,@c_Lottable02 OUTPUT                              
+                                    ,@c_Lottable03 OUTPUT                              
+                                    ,@c_Lottable06 OUTPUT                              
+                                    ,@c_Lottable07 OUTPUT                              
+                                    ,@c_Lottable08 OUTPUT                              
+                                    ,@c_Lottable09 OUTPUT                              
+                                    ,@c_Lottable10 OUTPUT                              
+                                    ,@c_Lottable11 OUTPUT                              
+                                    ,@c_Lottable12 OUTPUT 
+                                    ,@c_Userdefine01 OUTPUT 
+                                    ,@c_Userdefine02 OUTPUT 
+                                    ,@c_Userdefine03 OUTPUT 
+                                    ,@c_Userdefine04 OUTPUT 
+                                    ,@c_Userdefine05 OUTPUT 
+                                    ,@c_Userdefine08 OUTPUT 
+                                    ,@c_Userdefine09 OUTPUT 
+                                    ,@c_Userdefine10 OUTPUT 
+                                    ,@c_Receiptkey          
+
+                  NEXT_SEQ_REC:
+                  FETCH NEXT FROM @cur_RECVAL INTO @n_SeqNo, @c_FromColValue, @c_DataType 
+               END
+               CLOSE @cur_RECVAL
+               DEALLOCATE @cur_RECVAL
+            END
+         END
+         --Wan06 - END
           
          --NJOW09 S         
          SELECT @b_success = 0 
