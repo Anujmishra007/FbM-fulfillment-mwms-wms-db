@@ -1,5 +1,3 @@
-USE [GLOWMS]
-GO
 /****** Object:  StoredProcedure [RDT].[rdt_LottableProcess_CS_GenL2ByL13]    Script Date: 5/6/2025 4:47:15 PM ******/
 SET ANSI_NULLS OFF
 GO
@@ -16,7 +14,7 @@ GO
 /* 28-04-2025  1.0  Abarna S   FCR-4005. Created BRF: Julian Batch conv */
 /************************************************************************/
 
-ALTER PROCEDURE [RDT].[rdt_LottableProcess_CS_GenL2ByL13] 
+CREATE OR ALTER PROCEDURE [RDT].[rdt_LottableProcess_CS_GenL2ByL13] 
     @nMobile          INT
    ,@nFunc            INT
    ,@cLangCode        NVARCHAR( 3)
