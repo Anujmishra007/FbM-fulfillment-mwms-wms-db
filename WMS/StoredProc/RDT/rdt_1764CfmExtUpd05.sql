@@ -10,11 +10,13 @@ GO
 /* Modifications log:                                                      */
 /*                                                                         */
 /* Date         Author    Ver.   Purposes                                  */
-/* 2024-12-05    JCH507    1.0.0  FCR-1157 for Levis                       */
+/* 2024-12-05    JCH507   1.0.0  FCR-1157 for Levis                        */
 /*                               (Copy from 1764CfmExtUp01)                */
-/* 2025-01-07    JCH507    1.0.1  FCR-1157 Handle full ucc short since     */
+/* 2025-01-07    JCH507   1.0.1  FCR-1157 Handle full ucc short since      */
 /*                               systemQty <> PD Qty                       */
-/* 2025-02-27    JCH507    1.1.0  FCR-1157 Unlock toLoc when full short    */
+/* 2025-02-27    JCH507   1.1.0  FCR-1157 Unlock toLoc when full short     */
+/* 2025-04-09    Dennis   1.2.0  FCR-3925 Trigger Transmitlog2             */
+/* 2025-04-21    JACKC    1.2.1  FCR-3925 Add Transmitlog2 to full short   */
 /***************************************************************************/
 
 CREATE OR ALTER PROCEDURE rdt.rdt_1764CfmExtUpd05
@@ -53,6 +55,10 @@ BEGIN
    DECLARE @cLOT           NVARCHAR(10)
    DECLARE @cFromLOC       NVARCHAR(10)
    DECLARE @cFromID        NVARCHAR(18)
+   DECLARE @cOrderKey      NVARCHAR(10) -- v1.2.0
+   DECLARE @cStorerKey     NVARCHAR(15) --v1.2.0
+   DECLARE @curPD          CURSOR --v1.2.1
+
 
    -- All logics are copied from 1764CfmExtUpd01, update the rdtmobrec retrieving logic.  By JCH507
 
@@ -83,6 +89,7 @@ BEGIN
    SELECT 
       --@nQTY_RPL = V_String15, -- old logic
       --@nQTY = V_String18 -- old logic
+      @cStorerKey    = StorerKey,--V1.2 DENNIS
       @nQTY_RPL = V_Integer1, -- V1.0 JCH507
       @nQTY = V_Integer4 -- V1.0 JCH507 
    FROM rdt.rdtMobRec WITH (NOLOCK) 
@@ -181,12 +188,54 @@ BEGIN
          IF @nErrNo <> 0
             GOTO RollbackTran
          --V1.1.0 End
+         
+         --V1.2.1 Start
+         IF @bDebugFlag = 1
+            SELECT 'Send to transmitlog2'
+
+         -- Loop PickDetail for original task
+         SET @curPD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+            SELECT PD.PickDetailKey, PD.QTY, PD.DropID, PD.OrderKey
+            FROM dbo.PickDetail PD WITH (NOLOCK)
+            WHERE PD.TaskDetailKey = @cTaskDetailKey
+               AND PD.QTY > 0
+               AND PD.Status = '4'
+      
+         OPEN @curPD
+         FETCH NEXT FROM @curPD INTO @cPickDetailKey, @nQTY_PD, @cDropID, @cOrderKey
+         WHILE @@FETCH_STATUS = 0
+         BEGIN
+            IF @bDebugFlag = 1
+               SELECT 'Sending to transmitlog2', @cPickDetailKey AS cPickDetailKey, @cOrderKey AS OrderKey
+
+            EXEC ispGenTransmitLog2
+            @c_TableName        = 'WSSOAlloUpd'
+            ,@c_Key1             = @cOrderKey
+            ,@c_Key2             = @cPickDetailKey
+            ,@c_Key3             = @cStorerkey
+            ,@c_TransmitBatch    = ''
+            ,@b_Success          = @bSuccess   OUTPUT
+            ,@n_err              = @nErrNo     OUTPUT
+            ,@c_errmsg           = @cErrMsg    OUTPUT
+
+            IF @bSuccess <> 1
+            BEGIN
+               SET @nErrNo = 231258
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Generate transmitlog2 failed 
+               CLOSE @curPD
+               DEALLOCATE @curPD
+               GOTO RollBackTran
+            END
+
+            FETCH NEXT FROM @curPD INTO @cPickDetailKey, @nQTY_PD, @cDropID, @cOrderKey
+         END -- cursor end
+
          SET @nShortQTY = 0
       END --Qty=0 --V1.0.1 end
       ELSE
       BEGIN
          -- Loop PickDetail for original task
-         DECLARE @curPD CURSOR
+         -- DECLARE @curPD CURSOR --v1.2.1
          SET @curPD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
             SELECT PD.PickDetailKey, PD.QTY, PD.DropID
             FROM dbo.PickDetail PD WITH (NOLOCK)
@@ -234,6 +283,23 @@ BEGIN
                   SET @nErrNo = 231251
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD PKDtl Fail
                   GOTO RollBackTran
+               END
+               --V1.2.0 DENNIS
+               IF @cTask = 'SHT'
+               BEGIN
+                  SELECT @cOrderKey = OrderKey FROM dbo.PickDetail WITH (NOLOCK) WHERE PickDetailKey = @cPickDetailKey
+                  EXEC ispGenTransmitLog2
+                     @c_TableName        = 'WSSOAlloUpd'
+                     ,@c_Key1             = @cOrderKey
+                     ,@c_Key2             = @cPickDetailKey
+                     ,@c_Key3             = @cStorerkey
+                     ,@c_TransmitBatch    = ''
+                     ,@b_Success          = @bSuccess   OUTPUT
+                     ,@n_err              = @nErrNo     OUTPUT
+                     ,@c_errmsg           = @cErrMsg    OUTPUT
+
+                  IF @bSuccess <> 1      
+                     GOTO RollBackTran
                END
             END
       
@@ -295,6 +361,23 @@ BEGIN
                      EditDate = GETDATE(),
                      Trafficcop = NULL
                   WHERE PickDetailKey = @cPickDetailKey
+                  --V1.2.0 DENNIS
+                  IF @cTask = 'SHT'
+                  BEGIN
+                     SELECT @cOrderKey = OrderKey FROM dbo.PickDetail WITH (NOLOCK) WHERE PickDetailKey = @cPickDetailKey
+                     EXEC ispGenTransmitLog2
+                        @c_TableName        = 'WSSOAlloUpd'
+                        ,@c_Key1             = @cOrderKey
+                        ,@c_Key2             = @cPickDetailKey
+                        ,@c_Key3             = @cStorerkey
+                        ,@c_TransmitBatch    = ''
+                        ,@b_Success          = @bSuccess   OUTPUT
+                        ,@n_err              = @nErrNo     OUTPUT
+                        ,@c_errmsg           = @cErrMsg    OUTPUT
+
+                     IF @bSuccess <> 1      
+                        GOTO RollBackTran
+                  END
                END TRY
                BEGIN CATCH
                   SET @nErrNo = 231254

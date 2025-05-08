@@ -7,10 +7,11 @@ GO
 /* Store procedure: rdt_520ExtPA01                                      */
 /* Copyright      : Maersk                                              */
 /*                                                                      */
-/* Purpose: Customized PA logic for Granite                              */
+/* Purpose: Customized PA logic for Granite                             */
 /*                                                                      */
 /* Date         Rev  Author   Purposes                                  */
-/* 20-11-2024   1.0  CYU027    FCR-1205 Created                           */
+/* 20-11-2024   1.0  CYU027   FCR-1205 Created                          */
+/* 03-10-2025   1.1  Dennis   Bug Fix                                   */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_520ExtPA01] (
@@ -135,9 +136,9 @@ BEGIN
          AND LLI.StorerKey = @cStorerKey
          AND LLI.SKU = @cSKU
          GROUP BY LOC.CubicCapacity, LOC.LOC, LOC.Floor, LOC.Logicallocation
-         HAVING ISNULL(SUM((LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked) + LLI.PendingMoveIn), 0) > 0  -- Not Empty
+         HAVING ISNULL(SUM((LLI.Qty - LLI.QtyPicked) + LLI.PendingMoveIn), 0) > 0  -- Not Empty
          AND MAX( LOC.CubicCapacity) -
-             SUM( ( ISNULL(LLI.Qty, 0) - ISNULL(LLI.QtyAllocated, 0) - ISNULL( LLI.QtyPicked,0) + ISNULL( LLI.PendingMoveIn,0)) * ISNULL( SKU.STDCUBE,1)) >=
+             SUM( ( ISNULL(LLI.Qty, 0) - ISNULL( LLI.QtyPicked,0) + ISNULL( LLI.PendingMoveIn,0)) * ISNULL( SKU.STDCUBE,1)) >=
                   CAST( @n_PalletCube AS NVARCHAR( 20)) --check capacity
       ORDER BY
          LOC.Floor, LOC.Logicallocation, LOC.loc
@@ -166,10 +167,10 @@ BEGIN
                AND LLI.StorerKey = @cStorerKey
                AND LLI.SKU = @cSKU
             GROUP BY LOC.loc,LOC.PutawayZone
-            HAVING ISNULL(SUM((LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked) + LLI.PendingMoveIn), 0) > 0
+            HAVING ISNULL(SUM((LLI.Qty - LLI.QtyPicked) + LLI.PendingMoveIn), 0) > 0
          )
       GROUP BY LOC.LOC, LOC.Floor, LOC.Logicallocation
-      HAVING ISNULL(SUM((LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked) + LLI.PendingMoveIn),0) = 0 --empty location
+      HAVING ISNULL(SUM((LLI.Qty - LLI.QtyPicked) + LLI.PendingMoveIn),0) = 0 --empty location
          AND MAX( LOC.CubicCapacity) >= CAST( @n_PalletCube AS NVARCHAR( 20)) -- check capacity
       ORDER BY
          LOC.Floor, LOC.Logicallocation, LOC.loc

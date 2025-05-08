@@ -17,6 +17,8 @@ GO
 /*                                                                                  */
 /* Date       Rev    Author   Purposes                                              */
 /* 2025-02-13 1.0.0  NLT013   UWP-30204. Created                                    */
+/* 2025-02-13 1.0.1  NLT013   FCR-2519. Support Swap UCC                            */
+/* 2025-03-12 1.0.2  CYU027   UWP-30537 bug ticket                                  */
 /************************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_861PickCfm01] (
@@ -43,40 +45,47 @@ CREATE OR ALTER PROCEDURE [RDT].[rdt_861PickCfm01] (
    @cErrMsg       NVARCHAR( 20)  OUTPUT,
    @nDebug        INT = 0
 ) AS
+
 SET NOCOUNT ON
 SET QUOTED_IDENTIFIER OFF
 SET ANSI_NULLS OFF
 SET CONCAT_NULL_YIELDS_NULL OFF
+   IF @nDebug = 1
+      BEGIN TRAN DEBUG
 
-   -- (james01)
-   DECLARE @cZone          NVARCHAR( 18),
-           @cPH_OrderKey   NVARCHAR( 10),
-           @cPH_LoadKey    NVARCHAR( 10)
+   DECLARE
+      @cZone                  NVARCHAR( 18)
+      ,@cPH_OrderKey          NVARCHAR( 10)
+      ,@cPH_LoadKey           NVARCHAR( 10)
+      ,@cOrderKey             NVARCHAR(10)
+      ,@cFacility             NVARCHAR(5)
+      ,@cUserName             NVARCHAR(18)
+      ,@cNotUpdateDropID      NVARCHAR(1)
+      ,@cPDUOM                NVARCHAR(10)
+      ,@nUOMQty               INT
+      ,@cPackKey              NVARCHAR(10)
+      ,@nPDMode               INT
+      ,@cNewPickDetailKey     NVARCHAR(10)
+      ,@cNewPDUOM             NVARCHAR(10)
+      ,@nNewPDUOMQty          INT
+      ,@cSplitPDByUOM         NVARCHAR(1)
+      ,@nInnerQty             INT
+      ,@nPDMod                INT
+      ,@b_success             INT
+      ,@nValidPassed          INT
+      ,@cUCCLot               NVARCHAR(10)
+      ,@cUCCID                NVARCHAR(18)
+      ,@cUCCNo                NVARCHAR(20)
+      ,@cUCCQty               INT
+      ,@cPickDetailLOT        NVARCHAR(10)
+      ,@cSplitPickDetailKey   NVARCHAR(10)
+      ,@nSplitPickDetailQty   INT
 
    SELECT @cZone = Zone,
-          @cPH_OrderKey = OrderKey     -- (james02)
+          @cPH_OrderKey = OrderKey
    FROM dbo.PickHeader WITH (NOLOCK)
    WHERE PickHeaderKey = @cPickSlipNo
 
-   -- (ChewKP01)
-   DECLARE @cOrderKey AS NVARCHAR(10)
-   ,@cFacility AS NVARCHAR(5)
-   ,@cUserName AS NVARCHAR(18)
-   ,@cNotUpdateDropID AS NVARCHAR(1)
-   ,@cPDUOM    AS NVARCHAR(10)
-   ,@nUOMQty   AS INT
-   ,@cPackKey  AS NVARCHAR(10)
-   ,@nPDMode   AS INT
-   ,@cNewPickDetailKey AS NVARCHAR(10)
-   ,@cNewPDUOM AS NVARCHAR(10)
-   ,@nNewPDUOMQty AS INT
-   ,@cSplitPDByUOM AS NVARCHAR(1)
-   ,@nInnerQty AS INT
-   ,@nPDMod    AS INT
-   ,@b_success AS INT
-
-
-   -- (ChewKP01)
    SELECT @cFacility = Facility
          ,@cUserName = UserName
          ,@nFunc     = Func
@@ -84,6 +93,7 @@ SET CONCAT_NULL_YIELDS_NULL OFF
    WHERE Mobile = @nMobile
 
    SET @cUCCTask = 'Y'
+   SET @nValidPassed = 0
 
    --(ChewKP02)
    SET @cNotUpdateDropID = ''
@@ -97,8 +107,8 @@ SET CONCAT_NULL_YIELDS_NULL OFF
    -- Validate parameters
    IF (@nTaskQTY IS NULL OR @nTaskQTY <= 0)
    BEGIN
-      SET @nErrNo = 62576
-      SET @cErrMsg = rdt.rdtgetmessage( 62576, @cLangCode, 'DSP') --'Bad TaskQTY'
+      SET @nErrNo = 234051
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Bad TaskQTY'
       GOTO Fail
    END
 
@@ -106,23 +116,23 @@ SET CONCAT_NULL_YIELDS_NULL OFF
    BEGIN
       IF (@nPQTY IS NULL OR @nPQTY <= 0)
       BEGIN
-         SET @nErrNo = 62577
-         SET @cErrMsg = rdt.rdtgetmessage( 62577, @cLangCode, 'DSP') --'Bad ConfirmQTY'
+         SET @nErrNo = 234052
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Bad ConfirmQTY'
          GOTO Fail
       END
    END
 
    IF (@nPQTY > @nTaskQTY)
    BEGIN
-      SET @nErrNo = 62578
-      SET @cErrMsg = rdt.rdtgetmessage( 62578, @cLangCode, 'DSP') --'Over pick'
+      SET @nErrNo = 234053
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Over pick'
       GOTO Fail
    END
 
    IF @cUCCTask IS NULL OR (@cUCCTask <> 'Y' AND @cUCCTask <> 'N')
    BEGIN
-      SET @nErrNo = 62579
-      SET @cErrMsg = rdt.rdtgetmessage( 62579, @cLangCode, 'DSP') --'Bad UCC param'
+      SET @nErrNo = 234054
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Bad UCC param'
       GOTO Fail
    END
 
@@ -133,18 +143,21 @@ SET CONCAT_NULL_YIELDS_NULL OFF
       PD_QTY           INT NOT NULL DEFAULT (0),
       Final_QTY        INT NOT NULL DEFAULT (0),
       OrderKey         NVARCHAR( 10) NOT NULL, -- (ChewKP01)
-    PRIMARY KEY CLUSTERED
-    (
-     [PickDetailKey]
-    )
+      LOT              NVARCHAR( 10) NOT NULL,
+      ID               NVARCHAR( 18) NOT NULL,
+      UCCScannedQty    INT NOT NULL DEFAULT (0)
+      PRIMARY KEY CLUSTERED
+      (
+         [PickDetailKey]
+      )
    )
 
    -- conso picklist (james01)
    If ISNULL(@cZone, '') = 'XD' OR ISNULL(@cZone, '') = 'LB' OR ISNULL(@cZone, '') = 'LP' -- OR ISNULL(@cZone, '') = '7'
    BEGIN
       -- Get PickDetail in the task
-      INSERT INTO @tPD (PickDetailKey, PD_QTY, OrderKey)
-      SELECT PD.PickDetailKey, PD.QTY, PD.OrderKey
+      INSERT INTO @tPD (PickDetailKey, PD_QTY, OrderKey, LOT, ID)
+      SELECT PD.PickDetailKey, PD.QTY, PD.OrderKey, PD.LOT, PD.ID
       FROM dbo.PickHeader PH (NOLOCK)
       JOIN dbo.LoadPlanDetail LPD WITH (NOLOCK) ON (PH.ExternOrderKey = LPD.LoadKey)
       JOIN dbo.PickDetail PD (NOLOCK) ON (LPD.OrderKey = PD.OrderKey)
@@ -165,8 +178,8 @@ SET CONCAT_NULL_YIELDS_NULL OFF
       IF ISNULL(@cPH_OrderKey, '') <> ''  -- (james02)
       BEGIN
          -- Get PickDetail in the task
-         INSERT INTO @tPD (PickDetailKey, PD_QTY, OrderKey)
-         SELECT PD.PickDetailKey, PD.QTY, PD.OrderKey
+         INSERT INTO @tPD (PickDetailKey, PD_QTY, OrderKey, LOT, ID)
+         SELECT PD.PickDetailKey, PD.QTY, PD.OrderKey, PD.LOT, PD.ID
          FROM dbo.PickHeader PH (NOLOCK)
             INNER JOIN dbo.PickDetail PD (NOLOCK) ON (PH.OrderKey = PD.OrderKey)
             INNER JOIN dbo.LotAttribute LA (NOLOCK) ON (PD.LOT = LA.LOT)
@@ -184,8 +197,8 @@ SET CONCAT_NULL_YIELDS_NULL OFF
       ELSE
       BEGIN
          -- Get PickDetail in the task
-         INSERT INTO @tPD (PickDetailKey, PD_QTY, OrderKey)
-         SELECT PD.PickDetailKey, PD.QTY, PD.OrderKey
+         INSERT INTO @tPD (PickDetailKey, PD_QTY, OrderKey, LOT, ID)
+         SELECT PD.PickDetailKey, PD.QTY, PD.OrderKey, PD.LOT, PD.ID
          FROM dbo.PickHeader PH (NOLOCK)
          INNER JOIN dbo.LoadPlanDetail LPD WITH (NOLOCK) ON PH.ExternOrderKey = LPD.LoadKey
          INNER JOIN dbo.PickDetail PD (NOLOCK) ON (LPD.OrderKey = PD.OrderKey)
@@ -205,24 +218,177 @@ SET CONCAT_NULL_YIELDS_NULL OFF
 
    IF @@ERROR <> 0
    BEGIN
-      SET @nErrNo = 62580
-      SET @cErrMsg = rdt.rdtgetmessage( 62580, @cLangCode, 'DSP') --'Get PKDtl fail'
+      SET @nErrNo = 234055
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Get PKDtl fail'
       GOTO Fail
    END
+
+   BEGIN TRAN
+
+   DECLARE @curUCCTEMP CURSOR
+
+   SET @curUCCTEMP = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
+   SELECT
+      T.LOT, T.ID, UCC.Qty
+   FROM dbo.UCC UCC WITH (NOLOCK)
+      INNER JOIN RDT.RDTTempUCC T WITH (NOLOCK)
+         ON UCC.UCCNo = T.UCCNo
+         AND T.StorerKey = UCC.StorerKey
+         AND T.SKU = UCC.SKU
+         AND T.Lot = UCC.LOT
+         AND T.LOC = UCC.LOC
+         AND T.ID = UCC.ID
+   WHERE T.TaskType = 'PICK'
+     AND T.PickSlipNo = @cPickSlipNo
+     AND T.StorerKey = @cStorerKey
+     AND T.LOC = @cLOC
+     --AND T.ID = @cID
+     AND T.SKU = @cSKU
+     AND UCC.Status = '1'
+
+   OPEN @curUCCTEMP
+   FETCH NEXT FROM @curUCCTEMP INTO @cUCCLot,@cUCCID, @cUCCQty
+   WHILE @@FETCH_STATUS <> -1
+   BEGIN
+      IF @nDebug = 1
+      BEGIN
+         SELECT @cUCCLot '@cUCCLot',@cUCCQty '@cUCCQty',@cUCCID '@cUCCID'
+         SELECT * FROM @tPD
+      END
+
+      IF NOT EXISTS(
+         SELECT 1 FROM @tPD WHERE LOT = @cUCCLot and ID = @cUCCID and PD_QTY >= ( @cUCCQty+UCCScannedQty )
+      ) -- NEED SPLIT
+      BEGIN
+         --SPLIT N qty to LOT
+         SELECT TOP 1 @cSplitPickDetailKey = PickDetailKey,
+                      @nSplitPickDetailQty = PD_QTY,
+                      @cOrderKey           = OrderKey
+         FROM @tPD
+         WHERE (PD_QTY - UCCScannedQty - @cUCCQty) >= 0
+         ORDER BY (PD_QTY - UCCScannedQty - @cUCCQty) DESC
+
+         IF @nDebug = 1
+            SELECT @cSplitPickDetailKey '@cSplitPickDetailKey',
+                   @nSplitPickDetailQty '@nSplitPickDetailQty',
+                   @cUCCLot '@cUCCLot',
+                   @cUCCQty '@cUCCQty',
+                   @cUCCID '@cUCCID'
+
+         --Splited PickDetail Qty--
+
+         UPDATE PICKDETAIL WITH(ROWLOCK ) SET QTY = QTY-@cUCCQty, UOMQty = UOMQty -1
+         WHERE PickDetailKey = @cSplitPickDetailKey
+
+         UPDATE @tPD SET PD_QTY = PD_QTY-@cUCCQty
+         WHERE PickDetailKey = @cSplitPickDetailKey
+
+
+         IF EXISTS(
+            SELECT 1 FROM @tPD WHERE LOT = @cUCCLot and ID = @cUCCID
+         )
+         BEGIN
+            --Target PickDetail Qty++
+            DECLARE @cTargetPickdetailKey Nvarchar(10)
+            SELECT @cTargetPickdetailKey = PickDetailKey FROM @tPD
+               WHERE LOT = @cUCCLot and ID = @cUCCID
+
+            UPDATE PICKDETAIL WITH(ROWLOCK ) SET QTY = QTY+@cUCCQty, UOMQty = UOMQty+1
+            WHERE PickDetailKey = @cTargetPickdetailKey
+
+            UPDATE @tPD SET PD_QTY = PD_QTY+@cUCCQty, UCCScannedQty = UCCScannedQty+@cUCCQty
+            WHERE PickDetailKey = @cTargetPickdetailKey
+
+         END
+         ELSE
+         BEGIN
+            --New Pickdetial
+            -- Get new PickDetailkey
+            EXECUTE dbo.nspg_GetKey
+                    'PICKDETAILKEY',
+                    10 ,
+                    @cNewPickDetailKey OUTPUT,
+                    @bSuccess          OUTPUT,
+                    @nErrNo            OUTPUT,
+                    @cErrMsg           OUTPUT
+            IF @bSuccess <> 1
+            BEGIN
+               SET @nErrNo = 234080
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- GetDetKeyFail
+               GOTO RollBackTran
+            END
+            -- Create a new PickDetail to hold the balance
+            INSERT INTO dbo.PICKDETAIL (
+              CaseID                   ,PickHeaderKey   ,OrderKey
+            ,OrderLineNumber         ,LOT             ,StorerKey
+            ,SKU                     ,AltSKU          ,UOM
+            ,UOMQTY                  ,QTYMoved        ,STATUS
+            ,DropID                  ,LOC             ,ID
+            ,PackKey                 ,UpdateSource    ,CartonGroup
+            ,CartonType              ,ToLoc           ,DoReplenish
+            ,ReplenishZone           ,DoCartonize     ,PickMethod
+            ,WaveKey                 ,EffectiveDate   ,ArchiveCop
+            ,ShipFlag                ,PickSlipNo      ,PickDetailKey
+            ,QTY                     --,TrafficCop      ,OptimizeCop
+            ,TaskDetailkey
+            )
+            SELECT
+               CaseID                   ,PickHeaderKey     ,OrderKey
+                 ,OrderLineNumber         ,@cUCCLot        ,StorerKey
+                 ,SKU                     ,AltSKU          ,UOM
+                 ,1                       ,QTYMoved        ,'0'
+                 ,DropID                  ,LOC             ,@cUCCID
+                 ,PackKey                 ,UpdateSource    ,CartonGroup
+                 ,CartonType              ,ToLoc           ,DoReplenish
+                 ,ReplenishZone           ,DoCartonize     ,PickMethod
+                 ,WaveKey                 ,EffectiveDate   ,ArchiveCop
+                 ,ShipFlag                ,PickSlipNo      ,@cNewPickDetailKey
+                 ,@cUCCQty                -- ,NULL            ,'1'  --OptimizeCop,
+                 ,TaskDetailKey
+            FROM dbo.PickDetail WITH (NOLOCK)
+            WHERE PickDetailKey = @cSplitPickDetailKey
+
+            IF @@ERROR <> 0
+            BEGIN
+               SET @nErrNo = 234081
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- InsPDFail
+               GOTO RollBackTran
+            END
+
+            INSERT INTO @tPD(pickdetailkey, pd_qty, orderkey, lot, ID, UCCScannedQty)
+            VALUES (@cNewPickDetailKey,@cUCCQty,@cOrderKey,@cUCCLot, @cUCCID, @cUCCQty)
+
+         END
+
+      END
+      ELSE
+      BEGIN
+
+         UPDATE @tPD SET UCCScannedQty = (UCCScannedQty + @cUCCQty)
+         WHERE LOT = @cUCCLot and ID = @cUCCID and PD_QTY >= (@cUCCQty+UCCScannedQty)
+
+      END
+      FETCH NEXT FROM @curUCCTEMP INTO @cUCCLot, @cUCCID, @cUCCQty
+
+
+   END
+
+   CLOSE @curUCCTEMP
+   DEALLOCATE @curUCCTEMP
 
    -- Validate task still exists
    IF NOT EXISTS( SELECT 1 FROM @tPD)
    BEGIN
-      SET @nErrNo = 62581
-      SET @cErrMsg = rdt.rdtgetmessage( 62581, @cLangCode, 'DSP') --'Task changed'
+      SET @nErrNo = 234056
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Task changed'
       GOTO Fail
    END
 
    -- Validate task already changed by other
    IF (SELECT SUM( PD_QTY) FROM @tPD) <> @nTaskQTY
    BEGIN
-      SET @nErrNo = 62582
-      SET @cErrMsg = rdt.rdtgetmessage( 62582, @cLangCode, 'DSP') --'Task changed'
+      SET @nErrNo = 234057
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Task changed'
       GOTO Fail
    END
 
@@ -268,31 +434,31 @@ SET CONCAT_NULL_YIELDS_NULL OFF
 
          -- (ChewKP01)
          EXEC RDT.rdt_STD_EventLog
-             @cActionType   = '3', -- Picking
-             @cUserID      = @cUserName,
-             @nMobileNo     = @nMobile,
-             @nFunctionID   = @nFunc,
-             @cFacility     = @cFacility,
-             @cStorerKey    = @cStorerKey,
-             @cLocation     = @cLOC,
-             @cID           = @cID,
-             @cSKU          = @cSKU,
-             @cUOM          = @cUOM,
-             @nQTY          = @nPD_QTY,
-             @cLottable02   = @cLottable02,
-             @cLottable03   = @cLottable03,
-             @dLottable04   = @dLottable04,
-             @cRefNo1       = @cPickSlipNo,
-             @cRefNo2       = @cDropID,
-             @cRefNo3       = @cPickType,
-             @cOrderKey     = @cOrderKey,
-             @cPickSlipNo   = @cPickSlipNo,
-             @cDropID       = @cDropID
+              @cActionType   = '3', -- Picking
+              @cUserID      = @cUserName,
+              @nMobileNo     = @nMobile,
+              @nFunctionID   = @nFunc,
+              @cFacility     = @cFacility,
+              @cStorerKey    = @cStorerKey,
+              @cLocation     = @cLOC,
+              @cID           = @cID,
+              @cSKU          = @cSKU,
+              @cUOM          = @cUOM,
+              @nQTY          = @nPD_QTY,
+              @cLottable02   = @cLottable02,
+              @cLottable03   = @cLottable03,
+              @dLottable04   = @dLottable04,
+              @cRefNo1       = @cPickSlipNo,
+              @cRefNo2       = @cDropID,
+              @cRefNo3       = @cPickType,
+              @cOrderKey     = @cOrderKey,
+              @cPickSlipNo   = @cPickSlipNo,
+              @cDropID       = @cDropID
 
          BREAK -- Finish
       END
 
-      -- Over match
+         -- Over match
       ELSE IF @nTask_Bal > @nPD_QTY
       BEGIN
          UPDATE @tPD SET
@@ -303,30 +469,30 @@ SET CONCAT_NULL_YIELDS_NULL OFF
 
          -- (ChewKP01)
          EXEC RDT.rdt_STD_EventLog
-             @cActionType   = '3', -- Picking
-             @cUserID       = @cUserName,
-             @nMobileNo     = @nMobile,
-             @nFunctionID   = @nFunc,
-             @cFacility     = @cFacility,
-             @cStorerKey    = @cStorerKey,
-             @cLocation     = @cLOC,
-             @cID           = @cID,
-             @cSKU          = @cSKU,
-             @cUOM          = @cUOM,
-             @nQTY          = @nPD_QTY,
-             @cLottable02   = @cLottable02,
-             @cLottable03   = @cLottable03,
-             @dLottable04   = @dLottable04,
-             @cRefNo1       = @cPickSlipNo,
-             @cRefNo2       = @cDropID,
-             @cRefNo3       = @cPickType,
-             @cOrderKey     = @cOrderKey,
-             @cPickSlipNo   = @cPickSlipNo,
-             @cDropID       = @cDropID
+              @cActionType   = '3', -- Picking
+              @cUserID       = @cUserName,
+              @nMobileNo     = @nMobile,
+              @nFunctionID   = @nFunc,
+              @cFacility     = @cFacility,
+              @cStorerKey    = @cStorerKey,
+              @cLocation     = @cLOC,
+              @cID           = @cID,
+              @cSKU          = @cSKU,
+              @cUOM          = @cUOM,
+              @nQTY          = @nPD_QTY,
+              @cLottable02   = @cLottable02,
+              @cLottable03   = @cLottable03,
+              @dLottable04   = @dLottable04,
+              @cRefNo1       = @cPickSlipNo,
+              @cRefNo2       = @cDropID,
+              @cRefNo3       = @cPickType,
+              @cOrderKey     = @cOrderKey,
+              @cPickSlipNo   = @cPickSlipNo,
+              @cDropID       = @cDropID
 
       END
 
-      -- Under match (short pick)
+         -- Under match (short pick)
       ELSE IF @nTask_Bal < @nPD_QTY
       BEGIN
          -- Reduce PD balance
@@ -338,37 +504,38 @@ SET CONCAT_NULL_YIELDS_NULL OFF
 
          -- (ChewKP01)
          EXEC RDT.rdt_STD_EventLog
-             @cActionType   = '3', -- Picking
-             @cUserID       = @cUserName,
-             @nMobileNo     = @nMobile,
-             @nFunctionID   = @nFunc,
-             @cFacility     = @cFacility,
-             @cStorerKey    = @cStorerKey,
-             @cLocation     = @cLOC,
-             @cID           = @cID,
-             @cSKU          = @cSKU,
-             @cUOM          = @cUOM,
-             @nQTY          = @nTask_Bal,
-             @cLottable02   = @cLottable02,
-             @cLottable03   = @cLottable03,
-             @dLottable04   = @dLottable04,
-             @cRefNo1       = @cPickSlipNo,
-             @cRefNo2       = @cDropID,
-             @cRefNo3       = @cPickType,
-             @cOrderKey     = @cOrderKey,
-             @cPickSlipNo   = @cPickSlipNo,
-             @cDropID       = @cDropID
+              @cActionType   = '3', -- Picking
+              @cUserID       = @cUserName,
+              @nMobileNo     = @nMobile,
+              @nFunctionID   = @nFunc,
+              @cFacility     = @cFacility,
+              @cStorerKey    = @cStorerKey,
+              @cLocation     = @cLOC,
+              @cID           = @cID,
+              @cSKU          = @cSKU,
+              @cUOM          = @cUOM,
+              @nQTY          = @nTask_Bal,
+              @cLottable02   = @cLottable02,
+              @cLottable03   = @cLottable03,
+              @dLottable04   = @dLottable04,
+              @cRefNo1       = @cPickSlipNo,
+              @cRefNo2       = @cDropID,
+              @cRefNo3       = @cPickType,
+              @cOrderKey     = @cOrderKey,
+              @cPickSlipNo   = @cPickSlipNo,
+              @cDropID       = @cDropID
 
          BREAK  -- Finish
       END
+
       FETCH NEXT FROM @curPD INTO @cPickDetailKey, @nPD_QTY, @cOrderKey -- (ChewKP01)
    END  -- Loop PickDetail
 
    -- Still have balance, means offset has error
    IF @nTask_Bal <> 0
    BEGIN
-      SET @nErrNo = 62583
-      SET @cErrMsg = rdt.rdtgetmessage( 62583, @cLangCode, 'DSP') --'offset error'
+      SET @nErrNo = 234058
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'offset error'
       CLOSE @curPD
       DEALLOCATE @curPD
       GOTO Fail
@@ -383,31 +550,33 @@ SET CONCAT_NULL_YIELDS_NULL OFF
 
    -- Get rowcount
    SELECT @nRowCount_PD = COUNT(1) FROM @tPD
+
+   --Same LOC, Pickslip, SKU
    SELECT @nRowCount_UCC = COUNT( 1)
    FROM RDT.RDTTempUCC (NOLOCK)
    WHERE TaskType = 'PICK'
       AND PickSlipNo = @cPickSlipNo
       AND LOC = @cLOC
-      AND ID = @cID
       AND SKU = @cSKU
+      AND StorerKey = @cStorerKey
+      --AND ID = @cID
       -- AND UOM = @cUOM  -- UCC is always UOM = 2
-      AND Lottable02 = @cLottable02
-      AND Lottable03 = @cLottable03
-      AND Lottable04 = @dLottable04
+--       AND UCCLottable02 = @cLottable02
+--       AND UCCLottable03 = @cLottable03
+--       AND UCCLottable04 = @dLottable04
 
    /* Update PickDetail
       NOTE: Short pick will leave record in @tPD untouch (Final_QTY = 0)
             Those records will update PickDetail as short pick (PickDetail.QTY = 0 AND Status = 5)
    */
-   BEGIN TRAN
    IF @cPickType <> 'D'
    BEGIN
       UPDATE dbo.PickDetail WITH (ROWLOCK) SET
          DropID = CASE WHEN @cNotUpdateDropID = '1' THEN DropID ELSE @cDropID END,  -- (ChewKP02)
          QTY = Final_QTY,
          Status = 5
-      FROM dbo.PickDetail PD
-         INNER JOIN @tPD T ON (PD.PickDetailKey = T.PickDetailKey)
+      FROM dbo.PickDetail PD WITH (ROWLOCK)
+      INNER JOIN @tPD T ON (PD.PickDetailKey = T.PickDetailKey)
       -- Compare just in case PickDetail changed
       WHERE PD.Status < '5'
          AND PD.QTY = T.PD_QTY
@@ -416,7 +585,7 @@ SET CONCAT_NULL_YIELDS_NULL OFF
    IF @cPickType = 'D'
    BEGIN
       UPDATE dbo.PickDetail WITH (ROWLOCK) SET
---         DropID = @cDropID, ignore the update on dropid if pick by dropid only
+         --DropID = @cDropID, ignore the update on dropid if pick by dropid only
          QTY = Final_QTY,
          Status = 5
       FROM dbo.PickDetail PD
@@ -431,17 +600,28 @@ SET CONCAT_NULL_YIELDS_NULL OFF
    -- Check if update PickDetail fail
    IF @nErrNo <> 0
    BEGIN
-      SET @nErrNo = 62584
-      SET @cErrMsg = rdt.rdtgetmessage( 62584, @cLangCode, 'DSP') --'Upd PKDtl fail'
+      SET @nErrNo = 234059
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Upd PKDtl fail'
       GOTO RollBackTran
    END
 
    -- Check if other process had updated PickDetail
    IF @nRowCount <> @nRowCount_PD
    BEGIN
-      SET @nErrNo = 62585
-      SET @cErrMsg = rdt.rdtgetmessage( 62585, @cLangCode, 'DSP') --'Task changed'
+      SET @nErrNo = 234060
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Task changed'
       GOTO RollBackTran
+   END
+
+
+   --possible update qty = 0 after split
+   IF EXISTS( SELECT 1 FROM @tPD WHERE Final_QTY = 0)
+   BEGIN
+      DELETE PD FROM dbo.PickDetail PD WITH (ROWLOCK)
+           INNER JOIN @tPD T ON (PD.PickDetailKey = T.PickDetailKey)
+      -- Compare just in case PickDetail changed
+      WHERE PD.Status < '9'
+        AND T.Final_QTY = 0
    END
 
    IF @nFunc = 862 -- Pick pallet
@@ -463,7 +643,6 @@ SET CONCAT_NULL_YIELDS_NULL OFF
          -- Lose UCC
          IF @cLoseUCC <> '1' -- 1=On, the rest=off (default is off)
          BEGIN
-            DECLARE @cUCCNo NVARCHAR( 20)
             DECLARE @curUCC CURSOR
             SET @curUCC = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
                SELECT UCCNo
@@ -488,8 +667,8 @@ SET CONCAT_NULL_YIELDS_NULL OFF
                   AND UCCNo = @cUCCNo
                IF @@ERROR <> 0
                BEGIN
-                  SET @nErrNo = 62586
-                  SET @cErrMsg = rdt.rdtgetmessage( 62586, @cLangCode, 'DSP') --'Upd UCC fail'
+                  SET @nErrNo = 234061
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Upd UCC fail'
                   GOTO RollBackTran
                END
 
@@ -502,40 +681,32 @@ SET CONCAT_NULL_YIELDS_NULL OFF
    -- Update UCC
    IF @cUCCTask = 'Y'
    BEGIN
-      DECLARE @cPickDetailKeyTmp NVARCHAR(18)
-      SELECT TOP 1 @cPickDetailKeyTmp = PD.PickDetailKey
-      FROM dbo.PickHeader PH (NOLOCK)
-         INNER JOIN dbo.PickDetail PD (NOLOCK) ON (PH.OrderKey = PD.OrderKey)
-         INNER JOIN dbo.LotAttribute LA (NOLOCK) ON (PD.LOT = LA.LOT)
-      WHERE PH.PickHeaderKey = @cPickSlipNo
-         AND PD.Status < '9'
-         AND PD.LOC = @cLOC
-         AND PD.SKU = @cSKU
-         AND LA.Lottable01 = @cLottable01
-         AND LA.Lottable02 = @cLottable02
-         AND LA.Lottable03 = @cLottable03
-         AND IsNULL( @dLottable04, 0) = IsNULL( LA.Lottable04, 0)
+      --UWP-30537
 
       UPDATE dbo.UCC WITH (ROWLOCK) SET
          Status = '5', -- Pick / Replenish
-         PickDetailKey = @cPickDetailKeyTmp
+         PickDetailKey = PD.PickDetailKey
       FROM dbo.UCC UCC
-         INNER JOIN RDT.RDTTempUCC T ON (UCC.UCCNo = T.UCCNo)
+         INNER JOIN RDT.RDTTempUCC T WITH (NOLOCK)
+         ON ( UCC.UCCNo = T.UCCNo
+            AND T.StorerKey = UCC.StorerKey
+            AND T.SKU = UCC.SKU
+            AND T.Lot = UCC.LOT
+            AND T.LOC = UCC.LOC
+            AND T.ID = UCC.ID )
+         INNER JOIN dbo.PickDetail PD (NOLOCK)
+         ON (PD.LOC = UCC.LOC
+            AND PD.SKU = UCC.SKU
+            AND PD.LOT = UCC.LOT
+            AND PD.ID = UCC.ID
+            AND PD.Status < '9'
+            AND PD.PickslipNo = @cPickSlipNo)
       WHERE T.TaskType = 'PICK'
          AND T.PickSlipNo = @cPickSlipNo
          AND T.StorerKey = @cStorerKey
          AND T.LOC = @cLOC
-         AND T.ID = @cID
+         --AND T.ID = @cID
          AND T.SKU = @cSKU
-         AND T.Lottable02 = @cLottable02
-         AND T.Lottable03 = @cLottable03
-         AND IsNULL( T.Lottable04, 0) = IsNULL( @dLottable04, 0)
-         -- Compare just in case UCC changed
-         AND T.StorerKey = UCC.StorerKey
-         AND T.SKU = UCC.SKU
-         AND T.Lot = UCC.LOT
-         AND T.LOC = UCC.LOC
-         AND T.[ID] = UCC.[ID]
          AND UCC.Status = 1 -- Received
 
       SELECT @nErrNo = @@ERROR, @nRowCount = @@ROWCOUNT
@@ -543,21 +714,36 @@ SET CONCAT_NULL_YIELDS_NULL OFF
       -- Check if update UCC fail
       IF @nErrNo <> 0
       BEGIN
-         SET @nErrNo = 62586
-         SET @cErrMsg = rdt.rdtgetmessage( 62586, @cLangCode, 'DSP') --'Upd UCC fail'
+         SET @nErrNo = 234061
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Upd UCC fail'
          GOTO RollBackTran
+      END
+
+      IF @nDebug = 1
+      BEGIN
+         SELECT @nRowCount '@nRowCount', @nRowCount_UCC '@nRowCount_UCC'
       END
 
       -- Check if other process had updated UCC
       IF @nRowCount <> @nRowCount_UCC
       BEGIN
-         SET @nErrNo = 62587
-         SET @cErrMsg = rdt.rdtgetmessage( 62587, @cLangCode, 'DSP') --'Task changed'
+         SET @nErrNo = 234062
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Task changed'
          GOTO RollBackTran
       END
+
+      -- Delete RDTTempUCC
+      DELETE RDT.RDTTempUCC WITH (ROWLOCK)
+      WHERE TaskType = 'PICK'
+        AND PickSlipNo = @cPickSlipNo
+        AND StorerKey = @cStorerKey
+        AND SKU = @cSKU
+        AND LOC = @cLOC
+        --AND ID = @cID
+
    END
 
-      IF @cSplitPDByUOM = '1'
+   IF @cSplitPDByUOM = '1'
    BEGIN
       -- Split PickDetail If Qty > CaseCnt  * Quantity.
       If ISNULL(@cZone, '') = 'XD' OR ISNULL(@cZone, '') = 'LB' OR ISNULL(@cZone, '') = 'LP' OR ISNULL(@cZone, '') = '7'
@@ -651,13 +837,6 @@ SET CONCAT_NULL_YIELDS_NULL OFF
                        @nErrNo            OUTPUT,
                        @cErrMsg           OUTPUT
 
---              IF @b_success<>1
---              BEGIN
---                 SET @nErrNo = 91512
---                 SET @cErrMsg = 'Get PickDetailKey Fail'
---                 GOTO RollBackTran
---              END
-
               IF @nInnerQty = 0
               BEGIN
                   SET @cNewPDUOM    = '6'
@@ -698,7 +877,7 @@ SET CONCAT_NULL_YIELDS_NULL OFF
                      ,OrderLineNumber      ,Lot              ,StorerKey
                      ,SKU                  ,AltSku           ,@cNewPDUOM
                      ,@nNewPDUOMQty        ,QTYMoved         ,Status
-   ,DropID               ,LOC              ,ID
+                     ,DropID               ,LOC              ,ID
                      ,PackKey              ,UpdateSource     ,CartonGroup
                      ,CartonType           ,ToLoc            ,DoReplenish
                      ,ReplenishZone        ,DoCartonize      ,PickMethod
@@ -711,8 +890,8 @@ SET CONCAT_NULL_YIELDS_NULL OFF
 
               IF @@ERROR <> 0
               BEGIN
-                 SET @nErrNo = 62599
-                 SET @cErrMsg = 'InsPDFail'
+                 SET @nErrNo = 234074
+                 SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InsPDFail
                  GOTO RollBackTran
               END
 
@@ -727,8 +906,8 @@ SET CONCAT_NULL_YIELDS_NULL OFF
 
               IF @@ERROR <> 0
               BEGIN
-                 SET @nErrNo = 62600
-                 SET @cErrMsg = 'UpdPDFail'
+                 SET @nErrNo = 234075
+                 SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UpdPDFail
                  GOTO RollBackTran
               END
           END
@@ -742,8 +921,8 @@ SET CONCAT_NULL_YIELDS_NULL OFF
 
               IF @@ERROR <> 0
               BEGIN
-                 SET @nErrNo = 62600
-                 SET @cErrMsg = 'UpdPDFail'
+                 SET @nErrNo = 234076
+                 SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UpdPDFail
                  GOTO RollBackTran
               END
           END
@@ -777,7 +956,7 @@ SET CONCAT_NULL_YIELDS_NULL OFF
 
             IF @@ERROR <> 0
             BEGIN
-               SET @nErrNo = 62597
+               SET @nErrNo = 234072
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Scan Out Fail'
                GOTO RollBackTran
             END
@@ -802,7 +981,7 @@ SET CONCAT_NULL_YIELDS_NULL OFF
 
             IF @@ERROR <> 0
             BEGIN
-               SET @nErrNo = 62598
+               SET @nErrNo = 234073
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Scan Out Fail'
                GOTO RollBackTran
             END
@@ -818,6 +997,13 @@ RollBackTran:
    ROLLBACK TRAN
 Fail:
 Quit:
+   IF @nDebug = 1
+   BEGIN
+      SELECT * FROM PICKDETAIL with (NOLOCK) where storerkey = @cStorerKey AND PickSlipNo = @cPickSlipNo and sku = @cSKU
+      ROLLBACK TRAN DEBUG
+      SET @nErrNo = 234073
+      SET @cErrMsg ='ROLLBACK'
+   END
 GO
 
 SET QUOTED_IDENTIFIER OFF

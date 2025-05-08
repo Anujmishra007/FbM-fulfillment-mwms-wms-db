@@ -21,7 +21,8 @@ GO
 /* Updates:                                                             */
 /* Date         Rev  Author     Purposes                                */
 /* 2024-09-23   1.0  CYU027     Created                                 */
-/* 2025-01-02   1.1  CYU027    FCR-1584                                 */
+/* 2025-01-02   1.1  CYU027     FCR-1584                                */
+/* 2025-03-26   1.2  CYU027     UWP-32041                               */
 /************************************************************************/
 
 CREATE OR ALTER PROC RDT.rdtGetExtraAttribute (
@@ -119,7 +120,7 @@ CREATE OR ALTER PROC RDT.rdtGetExtraAttribute (
               @cSValueSP OUTPUT
 
 
-         SET @cAttrAndVal = @cAttrAndVal + @cAttribute + '=''' + @cSValueSP + ''' '
+         SET @cAttrAndVal = @cAttrAndVal + ' ' + @cAttribute + '=''' + @cSValueSP + ''' '
 
       END
       ELSE
@@ -129,7 +130,7 @@ CREATE OR ALTER PROC RDT.rdtGetExtraAttribute (
                                    Standard get AttrAndVal
          ***********************************************************************************************/
 
-         SET @cAttrAndVal = @cAttrAndVal + @cAttribute + '=''' + @cSValue + ''' '
+         SET @cAttrAndVal = @cAttrAndVal + ' ' + @cAttribute + '=''' + @cSValue + ''' '
 
       END
 

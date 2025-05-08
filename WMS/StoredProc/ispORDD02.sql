@@ -1,9 +1,11 @@
-/****** Object:  StoredProcedure [dbo].[ispORDD02]    Script Date: 1/14/2025 3:19:06 PM ******/
+
+/****** Object:  StoredProcedure [dbo].[ispORDD02]    Script Date: 3/6/2025 2:12:24 PM ******/
 SET ANSI_NULLS ON
 GO
 
 SET QUOTED_IDENTIFIER ON
 GO
+
 
 
 
@@ -28,7 +30,7 @@ GO
 /* Date        Author   Ver   Purposes                                  */  
 /* 2025-01-14  YWA059   1.0   FCR-2296 HILLSAU auto update order qty    */
 /************************************************************************/
-CREATE OR ALTER      PROC [dbo].[ispORDD02]     
+CREATE OR ALTER        PROC [dbo].[ispORDD02]     
    @c_Action        NVARCHAR(10),
    @c_Storerkey     NVARCHAR(15),  
    @b_Success       INT      OUTPUT,
@@ -46,7 +48,8 @@ BEGIN
            @c_OrderKey        NVARCHAR(10), 
            @c_OrderLineNumber NVARCHAR(5), 
            @n_OpenQty         INT
-         , @n_QtyAlloc        INT = 0                                               
+         , @n_QtyAlloc        INT = 0   
+         , @n_QtyRemainder    INT                                           
          , @c_OrdLineNo_Orig  NVARCHAR(5) = ''                                      
 		 , @c_sku             NVARCHAR(30)
 		 , @n_cnt             int
@@ -64,37 +67,48 @@ BEGIN
    BEGIN
 		IF EXISTS (SELECT  1
 					FROM dbo.ORDERDETAIL OD (NOLOCK)
+					INNER JOIN ORDERS O (NOLOCK) ON OD.OrderKey = O.OrderKey
+					INNER JOIN STORER S(NOLOCK) ON S.ConsigneeFor = O.StorerKey AND S.StorerKey = O.BillToKey AND S.CustomerGroupName= 'Customer' AND S.type=2
 					INNER JOIN SKU (NOLOCK) ON OD.Sku = SKU.SKU AND OD.StorerKey = SKU.StorerKey
 					INNER JOIN PACK P (NOLOCK) ON SKU.PACKKey = P.PackKey  
 					INNER JOIN #INSERTED I ON I.Orderkey = OD.Orderkey AND I.OrderLineNumber = OD.OrderLineNumber
 					WHERE OD.StorerKey = @c_Storerkey
 					AND OD.Status < '9'
+					AND P.CaseCnt <> 0
 					AND OD.OpenQty%convert(INT, P.CaseCnt) > 0
                   )             
 		BEGIN
 			DECLARE CUR_ORDERKEY_Insert CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
 			SELECT DISTINCT OD.OrderKey,OD.OrderLineNumber,OD.SKU
 			FROM dbo.ORDERDETAIL OD (NOLOCK)
+			INNER JOIN ORDERS O (NOLOCK) ON OD.OrderKey = O.OrderKey
+			INNER JOIN STORER S(NOLOCK) ON S.ConsigneeFor = O.StorerKey AND S.StorerKey = O.BillToKey AND S.CustomerGroupName= 'Customer' AND S.type=2
 			INNER JOIN SKU (NOLOCK) ON OD.Sku = SKU.SKU AND OD.StorerKey = SKU.StorerKey
 			INNER JOIN PACK P (NOLOCK) ON SKU.PACKKey = P.PackKey  
 			INNER JOIN #INSERTED I ON I.Orderkey = OD.Orderkey AND I.OrderLineNumber = OD.OrderLineNumber
 			WHERE OD.StorerKey = @c_Storerkey
 			AND OD.Status < '9'
-			AND OD.OpenQty%convert(INT, P.CaseCnt) > 0
+			AND OD.OpenQty%CONVERT(INT, P.CaseCnt) > 0
 
 			OPEN CUR_ORDERKEY_Insert
 
 			FETCH NEXT FROM CUR_ORDERKEY_Insert INTO @c_OrderKey, @c_OrderLineNumber, @c_sku
-			WHILE @@FETCH_STATUS = 0
+			WHILE @@FETCH_STATUS = 0 AND @n_continue IN (1,2)    
 			BEGIN
-				UPDATE OD WITH (ROWLOCK)
-				SET OD.OriginalQty = (OD.OpenQty - OD.OpenQty%convert(INT, P.CaseCnt))
-				  , OD.OpenQty = (OD.OpenQty - OD.OpenQty%convert(INT, P.CaseCnt))
-				FROM dbo.ORDERDETAIL AS OD 
+				SET @n_continue = 2
+				
+				SELECT @n_QtyRemainder = OD.OpenQty%CONVERT(INT, P.CaseCnt)
+				FROM dbo.ORDERDETAIL OD (NOLOCK)
 				INNER JOIN SKU (NOLOCK) ON OD.Sku = SKU.SKU AND OD.StorerKey = SKU.StorerKey
 				INNER JOIN PACK P (NOLOCK) ON SKU.PACKKey = P.PackKey
 				WHERE OD.OrderKey = @c_OrderKey
 				  AND OD.OrderLineNumber = @c_OrderLineNumber
+
+				UPDATE ORDERDETAIL WITH (ROWLOCK)
+				   SET OriginalQty = OpenQty - @n_QtyRemainder
+				     , OpenQty = OpenQty - @n_QtyRemainder
+				 WHERE OrderKey = @c_OrderKey
+				   AND OrderLineNumber = @c_OrderLineNumber
 				  --AND OD.Sku = @c_sku
            
 			   SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
@@ -106,7 +120,7 @@ BEGIN
 				   SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update Orderdetail.Qty Failed. (ispORDD02)'
 						   + '( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
 			   END
-
+			   
         		FETCH NEXT FROM CUR_ORDERKEY_Insert INTO @c_OrderKey, @c_OrderLineNumber, @c_sku
 			END
 			CLOSE CUR_ORDERKEY_Insert
@@ -118,18 +132,23 @@ BEGIN
    BEGIN
 		IF EXISTS (SELECT  1
 					FROM dbo.ORDERDETAIL OD (NOLOCK)
+					INNER JOIN ORDERS O (NOLOCK) ON OD.OrderKey = O.OrderKey
+					INNER JOIN STORER S(NOLOCK) ON S.ConsigneeFor = O.StorerKey AND S.StorerKey = O.BillToKey AND S.CustomerGroupName= 'Customer' AND S.type=2
 					INNER JOIN SKU (NOLOCK) ON OD.Sku = SKU.SKU AND OD.StorerKey = SKU.StorerKey
 					INNER JOIN PACK P (NOLOCK) ON SKU.PACKKey = P.PackKey
 					INNER JOIN #INSERTED I ON I.Orderkey = OD.Orderkey AND I.OrderLineNumber = OD.OrderLineNumber
 					INNER JOIN #DELETED D ON I.Orderkey = D.Orderkey AND I.OrderLineNumber = D.OrderLineNumber
 					WHERE OD.StorerKey = @c_Storerkey
 					  AND OD.Status < '9'
+					  AND P.CaseCnt <> 0
 					  AND OD.OpenQty%convert(INT, P.CaseCnt) > 0
                   )             
 		BEGIN
 			DECLARE CUR_ORDERKEY CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
 			SELECT DISTINCT OD.OrderKey,OD.OrderLineNumber,OD.SKU
 			FROM dbo.ORDERDETAIL OD (NOLOCK)
+			INNER JOIN ORDERS O (NOLOCK) ON OD.OrderKey = O.OrderKey
+			INNER JOIN STORER S(NOLOCK) ON S.ConsigneeFor = O.StorerKey AND S.StorerKey = O.BillToKey AND S.CustomerGroupName= 'Customer' AND S.type=2
 			INNER JOIN SKU (NOLOCK) ON OD.Sku = SKU.SKU AND OD.StorerKey = SKU.StorerKey
 			INNER JOIN PACK P (NOLOCK) ON SKU.PACKKey = P.PackKey
 			INNER JOIN #INSERTED I ON I.Orderkey = OD.Orderkey AND I.OrderLineNumber = OD.OrderLineNumber
@@ -141,17 +160,22 @@ BEGIN
 			OPEN CUR_ORDERKEY
 	
 			FETCH NEXT FROM CUR_ORDERKEY INTO @c_OrderKey, @c_OrderLineNumber, @c_sku
-			WHILE @@FETCH_STATUS = 0
+			WHILE @@FETCH_STATUS = 0 AND @n_continue IN (1,2)    
 			BEGIN
-			   UPDATE OD WITH (ROWLOCK)
-				SET OD.OriginalQty = (OD.OpenQty - OD.OpenQty%convert(INT, P.CaseCnt))
-				  , OD.OpenQty = (OD.OpenQty - OD.OpenQty%convert(INT, P.CaseCnt))
-				FROM dbo.ORDERDETAIL AS OD 
+				SET @n_continue = 2
+
+			   SELECT @n_QtyRemainder = OD.OpenQty%CONVERT(INT, P.CaseCnt)
+				FROM dbo.ORDERDETAIL OD (NOLOCK)
 				INNER JOIN SKU (NOLOCK) ON OD.Sku = SKU.SKU AND OD.StorerKey = SKU.StorerKey
 				INNER JOIN PACK P (NOLOCK) ON SKU.PACKKey = P.PackKey
-			   WHERE OD.OrderKey = @c_OrderKey
-				 AND OD.OrderLineNumber = @c_OrderLineNumber
-				 --AND OD.Sku = @c_sku
+				WHERE OD.OrderKey = @c_OrderKey
+				  AND OD.OrderLineNumber = @c_OrderLineNumber
+
+				UPDATE ORDERDETAIL WITH (ROWLOCK)
+				   SET OriginalQty = OpenQty - @n_QtyRemainder
+				     , OpenQty = OpenQty - @n_QtyRemainder
+				 WHERE OrderKey = @c_OrderKey
+				   AND OrderLineNumber = @c_OrderLineNumber
 
 				SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
 				IF @n_err <> 0
@@ -162,6 +186,26 @@ BEGIN
 				   SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update Orderdetail.Qty Failed. (ispORDD02)'
 						   + '( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
 				END
+
+				IF @n_continue IN (1,2)                                                 --(Wan01)
+				BEGIN 
+				    UPDATE ORDERS WITH (ROWLOCK)
+				   SET OpenQty = OpenQty - @n_QtyRemainder
+					  ,Trafficcop = NULL
+				   WHERE Orderkey = @c_Orderkey
+            
+				   SET @n_err = @@ERROR
+               
+				   IF @n_err <> 0
+				   BEGIN
+					  SET @n_continue = 3
+					  SET @c_errmsg = CONVERT(NVARCHAR(250),@n_err)
+					  SET @n_err = 81020  -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+					  SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update Orders Failed. (ispORDD02)'
+								  + '( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '                                                            
+				   END         
+				END 
+
         		FETCH NEXT FROM CUR_ORDERKEY INTO @c_OrderKey, @c_OrderLineNumber, @c_sku
 			END
 			CLOSE CUR_ORDERKEY
@@ -169,7 +213,6 @@ BEGIN
 		END
    END
 
- 
 
    QUIT_SP:
    
@@ -205,3 +248,4 @@ END
 GO
 
 
+GRANT EXECUTE ON [dbo].[ispORDD02] TO NSQL

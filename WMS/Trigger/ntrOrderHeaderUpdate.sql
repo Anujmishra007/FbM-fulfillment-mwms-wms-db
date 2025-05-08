@@ -267,6 +267,8 @@ GO
 /*                             (WL03)                                    */
 /* 21-Jun-2022  TLTING13  4.11 Update Status 9 data - skip trigger script*/
 /* 06-Sep-2024   PPA371    4.12 Validate if status is cancel             */
+/* 26-Feb-2025  USH022-01 4.12 FCR-2177-To Update UCC.ArchiveCop=9       */
+/*                             When Orders.Status =9                     */
 /*************************************************************************/
 
 CREATE OR ALTER TRIGGER [dbo].[ntrOrderHeaderUpdate]
@@ -3471,6 +3473,101 @@ BEGIN
    DEALLOCATE @CUR_WAVE_UPDATE
 END -- IF @n_continue = 1 or @n_continue=2
 --(Wan07) - END
+
+-- Start Archiving UCCs When Order Status 9
+IF @n_continue = 1 OR @n_continue = 2  -- USH022-01
+BEGIN
+    DECLARE @c_AllowInstantUCCArchive NVARCHAR(1);
+    DECLARE @c_AllowInstantUCCArchive_Opt5 NVARCHAR(1000);
+    DECLARE @c_LinkQuery NVARCHAR(1000);
+    DECLARE @c_SQL NVARCHAR(MAX);
+    DECLARE @c_UCCRowRef INT;
+
+    SET @c_Facility = '';
+
+    DECLARE UCC_ARCHIVE_ALLOWED_STORER_CUR CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
+    SELECT
+        fgr.Authority,
+        fgr.Option5,
+        I.StorerKey,
+        I.Facility
+    FROM INSERTED I (NOLOCK)
+    CROSS APPLY dbo.fnc_GetRight2(I.Facility, I.StorerKey, '', 'AllowInstantUCCArchive') AS fgr
+    WHERE fgr.Authority = '1';
+
+    OPEN UCC_ARCHIVE_ALLOWED_STORER_CUR;
+    FETCH NEXT FROM UCC_ARCHIVE_ALLOWED_STORER_CUR INTO
+        @c_AllowInstantUCCArchive, @c_AllowInstantUCCArchive_Opt5, @c_StorerKey, @c_Facility;
+
+    WHILE @@FETCH_STATUS = 0 AND @n_continue = 1
+    BEGIN
+        -- Generate the Link Query
+        SET @c_LinkQuery = '';
+        SELECT @c_LinkQuery = dbo.fnc_GetParamValueFromString('@c_PickDetailAndUccLink', @c_AllowInstantUCCArchive_Opt5, @c_LinkQuery);
+
+        IF @c_LinkQuery = ''
+            SET @c_LinkQuery = 'PICKDETAIL.PickDetailKey = UCC.PickDetailKey';
+
+        -- Process Orders
+        SET @c_OrderKey = '';
+
+        DECLARE ORDERSKEYS_CUR CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
+        SELECT I.ORDERKEY
+        FROM INSERTED I (NOLOCK)
+        JOIN ORDERS O (NOLOCK) ON O.OrderKey = I.OrderKey
+        WHERE I.StorerKey = @c_StorerKey
+        AND I.Facility = @c_Facility
+        AND I.[Status] = '9';
+
+        OPEN ORDERSKEYS_CUR;
+        FETCH NEXT FROM ORDERSKEYS_CUR INTO @c_OrderKey;
+
+        WHILE @@FETCH_STATUS = 0
+        BEGIN
+            -- Construct the dynamic cursor declaration
+            SET @c_SQL = N'
+            DECLARE CUR_ARCHIVEUCC CURSOR FAST_FORWARD FOR
+            SELECT ucc.UCC_RowRef
+            FROM UCC ucc (NOLOCK)
+            JOIN PickDetail (NOLOCK) ON ' + @c_LinkQuery + '
+            WHERE PickDetail.OrderKey = @c_OrderKey AND PickDetail.StorerKey = @c_StorerKey;';
+
+            -- Execute the dynamic SQL to declare the cursor
+            EXEC sp_executesql @c_SQL,
+                N'@c_StorerKey NVARCHAR(50), @c_OrderKey NVARCHAR(20)',
+                @c_StorerKey = @c_StorerKey,
+                @c_OrderKey = @c_OrderKey;
+            -- Cursor declaration now exists in the main execution scope
+            OPEN CUR_ARCHIVEUCC;
+            -- Fetch from the pre-declared cursor
+            FETCH NEXT FROM CUR_ARCHIVEUCC INTO @c_UCCRowRef;
+
+            WHILE @@FETCH_STATUS = 0
+            BEGIN
+                UPDATE UCC WITH (ROWLOCK)
+                SET UCC.ArchiveCop = '9'
+                WHERE UCC.UCC_RowRef = @c_UCCRowRef;
+
+                FETCH NEXT FROM CUR_ARCHIVEUCC INTO @c_UCCRowRef;
+            END;
+
+            FETCH NEXT FROM ORDERSKEYS_CUR INTO @c_OrderKey;
+
+            CLOSE CUR_ARCHIVEUCC;
+            DEALLOCATE CUR_ARCHIVEUCC;
+        END;
+
+        -- Cleanup
+        CLOSE ORDERSKEYS_CUR;
+        DEALLOCATE ORDERSKEYS_CUR;
+
+        FETCH NEXT FROM UCC_ARCHIVE_ALLOWED_STORER_CUR INTO
+            @c_AllowInstantUCCArchive, @c_AllowInstantUCCArchive_Opt5, @c_StorerKey, @c_Facility;
+    END;
+
+    CLOSE UCC_ARCHIVE_ALLOWED_STORER_CUR;
+    DEALLOCATE UCC_ARCHIVE_ALLOWED_STORER_CUR;
+END; -- USH022-01 - END
 
 --NJOW02 --NJOW03 move from Top
 IF @n_continue=1 or @n_continue=2
