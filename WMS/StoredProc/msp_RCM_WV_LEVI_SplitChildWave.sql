@@ -1,6 +1,6 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
 GO
 
 /*************************************************************************/
@@ -13,7 +13,7 @@ GO
 /*                                                                       */
 /* Called By: Dynamic RCM                                                */
 /*                                                                       */
-/* GitHub Version: 1.0                                                   */
+/* GitHub Version: 1.1                                                   */
 /*                                                                       */
 /* Version: 7.0                                                          */
 /*                                                                       */
@@ -22,6 +22,10 @@ GO
 /* Updates:                                                              */
 /* Date         Author  Ver.  Purposes                                   */
 /* 24-Mar-2025  WLChooi 1.0   DevOps Combine Script                      */
+/* 01-May-2025  WLChooi 1.1   UWP-31640 Get TOP 1 Workorderdetail Type to*/
+/*                            calculate VCCount (WL01)                   */
+/* 05-May-2025  SWT01   1.2   Change UDF01 = "Y" instead of "1" FOR      */
+/*                            MPOCPERMIT                                 */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[msp_RCM_WV_LEVI_SplitChildWave]
    @c_Wavekey NVARCHAR(10)
@@ -192,11 +196,11 @@ BEGIN
       SELECT DISTINCT WD.WaveKey
                     , WD.Orderkey
                     , ISNULL(TRIM(OH.BuyerPO), '')
-                    , CASE WHEN ISNULL(CL1.Code, '') <> '' THEN IIF(CL1.UDF01 = '1', '1', '0')   --BillToKey
-                           WHEN ISNULL(CL2.Code, '') <> '' THEN IIF(CL2.UDF01 = '1', '1', '0')   --ConsigneeKey
+                    , CASE WHEN ISNULL(CL1.Code, '') <> '' THEN IIF(CL1.UDF01 = 'Y', '1', '0')   --BillToKey (SWT01)
+                           WHEN ISNULL(CL2.Code, '') <> '' THEN IIF(CL2.UDF01 = 'Y', '1', '0')   --ConsigneeKey (SWT01)
                            ELSE '1' END   --Not set up
-                    , CASE WHEN ISNULL(CL1.Code, '') <> '' THEN 'Y'   --BillToKey
-                           WHEN ISNULL(CL2.Code, '') <> '' THEN 'Y'   --ConsigneeKey
+                    , CASE WHEN ISNULL(CL1.Code, '') <> '' AND 1 = IIF(CL1.UDF01 = 'Y', 1, 0) THEN 'Y' --BillToKey    --WL01 (SWT01)
+                           WHEN ISNULL(CL2.Code, '') <> '' AND 1 = IIF(CL2.UDF01 = 'Y', 1, 0) THEN 'Y' --ConsigneeKey --WL01 (SWT01)
                            ELSE 'N' END   --Not set up
                     , 1   --1 Order 1 Virtual Carton, except some cases which will be catered below
       FROM WAVEDETAIL WD WITH (NOLOCK)
@@ -268,17 +272,22 @@ BEGIN
    IF @n_Continue IN (1,2)
    BEGIN
       --Calculate Carton for S02, S06, J05 - START
-      ;WITH CTE_VC (Orderkey, VCCount) AS ( SELECT T2.Orderkey, CEILING(COUNT(1) / CAST(MAX(T1.SKUPerVC) AS FLOAT))
-                                            FROM dbo.WorkOrderDetail WOD WITH (NOLOCK)
-                                            JOIN @T_WCSPackReq T1 ON T1.WODType = WOD.[Type]
-                                            JOIN @T_ORDERDET T2 ON WOD.ExternWorkOrderKey = T2.Orderkey AND WOD.ExternLineNo = T2.OrderLineNumber
-                                            WHERE WOD.Qty > 0
-                                            AND T1.ActiveFlag = 'Y'
-                                            GROUP BY T2.Orderkey )
+      --WL01 S
+      ;WITH CTE_VC (Orderkey, VCCount) AS ( SELECT T3.Orderkey, CEILING(COUNT(T3.OrderLineNumber) / CAST(MAX(WODT.SKUPerVC) AS FLOAT))
+                                            FROM @T_ORDERS T2
+                                            JOIN @T_ORDERDET T3 ON T2.Orderkey = T3.Orderkey
+                                            OUTER APPLY (  SELECT TOP 1 WOD.Type
+                                                                      , T1.SKUPerVC
+                                                           FROM dbo.WorkOrderDetail WOD WITH (NOLOCK)
+                                                           JOIN @T_WCSPackReq T1 ON T1.WODType = WOD.[Type]
+                                                           WHERE WOD.ExternWorkOrderKey = T3.Orderkey 
+                                                           AND T1.ActiveFlag = 'Y' ) AS WODT
+                                            GROUP BY T3.Orderkey )
       UPDATE @T_ORDERS
       SET T.VCCount = IIF(ISNULL(C.VCCount, 0) = 0, 1, C.VCCount)
       FROM @T_ORDERS T
       JOIN CTE_VC C ON C.Orderkey = T.Orderkey
+      --WL01 E
       --Calculate Carton for S02, S06, J05 - END
    END
    --Calculate Virtual Cartons for those WCSPackReq - S02, S06, J05 - END
@@ -611,6 +620,4 @@ BEGIN
       RETURN
    END
 END -- End PROC  
-GO
-GRANT EXECUTE ON [dbo].[msp_RCM_WV_LEVI_SplitChildWave] TO [NSQL]
 GO

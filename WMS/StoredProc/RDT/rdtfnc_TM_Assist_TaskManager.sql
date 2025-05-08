@@ -7,22 +7,23 @@ GO
 SET ANSI_NULLS OFF
 GO
 
-/************************************************************************/
-/* Store procedure: rdtfnc_TM_Assist_TaskManager                        */
-/* Copyright      : LF Logistics                                        */
-/*                                                                      */
-/* Purpose: Assisted Task Manager for ASRS                              */
-/*                                                                      */
-/* Modifications log:                                                   */
-/*                                                                      */
-/* Date       Rev  Author   Purposes                                    */
-/* 2015-03-04 1.0  Ung      SOS332780 Created                           */
-/* 2016-09-30 1.1  Ung      Performance tuning                          */
-/* 2018-10-25 1.2  Gan      Performance tuning                          */
-/* 2019-08-13 1.3  Ung      WMS-10166 Add case ID                       */
-/* 2019-09-27 1.4  James    WMS-10316 Add Taskdetailkey in table        */
-/*                          RDT.RDTMOBREC (james01)                     */
-/************************************************************************/
+/***************************************************************************/
+/* Store procedure: rdtfnc_TM_Assist_TaskManager                           */
+/* Copyright      : Maersk                                                 */
+/*                                                                         */
+/* Purpose: Assisted Task Manager for ASRS                                 */
+/*                                                                         */
+/* Modifications log:                                                      */
+/*                                                                         */
+/* Date       Rev    Author   Purposes                                     */
+/* 2015-03-04 1.0    Ung      SOS332780 Created                            */
+/* 2016-09-30 1.1    Ung      Performance tuning                           */
+/* 2018-10-25 1.2    Gan      Performance tuning                           */
+/* 2019-08-13 1.3    Ung      WMS-10166 Add case ID                        */
+/* 2019-09-27 1.4    James    WMS-10316 Add Taskdetailkey in table         */
+/*                             RDT.RDTMOBREC (james01)                     */
+/* 2025-03-24 1.5.0  JCH507   FCR-2597 Add generic decode logic to FromID  */
+/***************************************************************************/
 
 CREATE PROC [RDT].[rdtfnc_TM_Assist_TaskManager] (
    @nMobile    INT,
@@ -46,9 +47,17 @@ DECLARE
    @nToStep          INT, 
    @nToScn           INT, 
    @cPutawayZone     NVARCHAR(10), 
-   @cFromLOC         NVARCHAR(10), 
+   @cFromLOC         NVARCHAR(10),
    @cFromID          NVARCHAR(18), 
-   @cCaseID          NVARCHAR(20) 
+   @cCaseID          NVARCHAR(20),
+
+   --V1.5.0 start
+   @cToLOC           NVARCHAR(10), 
+   @cDecodeSP        NVARCHAR(20),
+   @cBarcode         NVARCHAR(60),
+   @cSQL             NVARCHAR( MAX), 
+   @cSQLParam        NVARCHAR( MAX)
+   --V1.5.0 end
       
 -- RDT.RDTMobRec variable
 DECLARE
@@ -196,9 +205,60 @@ BEGIN
          GOTO Step_1_Fail
       END
 
+      --V1.5.0 start
+      SET @cDecodeSP = rdt.RDTGetConfig( @nFunc, 'DecodeSP', @cStorerKey)
+      IF @cDecodeSP = '0'
+         SET @cDecodeSP = ''
+      --V1.5.0 end
+
       -- From ID
       IF @cFromID <> ''
       BEGIN
+         --V1.5.0 start
+         SET @cBarcode = @cInField01
+         -- Decode
+         IF @cDecodeSP <> ''
+         BEGIN
+            -- Standard decode
+            IF @cDecodeSP = '1'
+            BEGIN
+               EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cBarcode, 
+                  @cID     = @cFromID OUTPUT, 
+                  @nErrNo  = @nErrNo  OUTPUT, 
+                  @cErrMsg = @cErrMsg OUTPUT,
+                  @cType   = 'ID'
+            END
+
+            -- Customize decode
+            ELSE IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cDecodeSP AND type = 'P')
+            BEGIN
+               SET @cSQL = 'EXEC rdt.' + RTRIM( @cDecodeSP) +
+                  ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cBarcode, ' +
+                  ' @cID   OUTPUT, @cLOC OUTPUT, @nErrNo OUTPUT, @cErrMsg  OUTPUT'
+               SET @cSQLParam =
+                  ' @nMobile      INT,           ' +
+                  ' @nFunc        INT,           ' +
+                  ' @cLangCode    NVARCHAR( 3),  ' +
+                  ' @nStep        INT,           ' +
+                  ' @nInputKey    INT,           ' +
+                  ' @cFacility    NVARCHAR( 5),  ' +
+                  ' @cStorerKey   NVARCHAR( 15), ' +
+                  ' @cBarcode     NVARCHAR( 60), ' +
+                  ' @cID          NVARCHAR( 18)  OUTPUT, ' +
+                  ' @cLOC         NVARCHAR( 10)  OUTPUT, ' +
+                  ' @nErrNo       INT            OUTPUT, ' +
+                  ' @cErrMsg      NVARCHAR( 20)  OUTPUT'
+
+               EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                  @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cBarcode, 
+                  @cFromID OUTPUT, @cToLOC   OUTPUT, @nErrNo   OUTPUT, @cErrMsg  OUTPUT
+            END
+
+            IF @nErrNo <> 0
+               GOTO Step_1_Fail
+         END --DecodeSP <>''
+         --V1.5.0 end
+
          -- Check ID valid
          IF NOT EXISTS ( SELECT 1 FROM dbo.ID WITH (NOLOCK) WHERE ID = @cFromID)
          BEGIN

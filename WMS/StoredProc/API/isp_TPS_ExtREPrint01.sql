@@ -9,8 +9,11 @@ GO
 /*                                                                            */
 /* Date         Rev  Author     Purposes                                      */
 /* 2023-06-23   1.0  yeekung    TPS-690 Created                               */
-/* 2023-09-12   1.1  YeeKung    TPS-773/TPS-740 New print (yeekung3)          */
-/* 2023-12-11   1.3  YeeKung    TPS-826 Add params for paper (yeekung2)       */
+/* 2023-09-12   1.1  YeeKung    TPS-773/TPS-740 New print (yeekung01)          */
+/* 2023-12-11   1.3  YeeKung    TPS-826 Add params for paper (yeekung02)       */
+/* 2024-02-09   1.4  YeeKung    TPS-821 Add reporttpe (yeekung03)             */ 
+/* 2024-11-06   1.5  YeeKung    TPS-989 Add Facility (yeekung04)              */
+/* 2025-02-18   1.6  YeeKung    FCR-1540 Fix Reporttype (yeekung05)				*/
 /******************************************************************************/
 
 CREATE OR ALTER PROC [API].[isp_TPS_ExtREPrint01] (
@@ -29,6 +32,7 @@ CREATE OR ALTER PROC [API].[isp_TPS_ExtREPrint01] (
    @PrinterType     NVARCHAR( 20), 
    @cPrintAllLbl    NVARCHAR (20), 
    @nPrintPackList  NVARCHAR (1),
+   @cReporttype     NVARCHAR (20),
    @cLabelJobID     NVARCHAR ( 30) OUTPUT,
    @cPackingJobID   NVARCHAR ( 30) OUTPUT,
    @b_Success       INT            OUTPUT,
@@ -46,7 +50,6 @@ AS
    DECLARE @tCtnLabel AS VariableTable
    DECLARE @tPackList AS VariableTable
    DECLARE @cConsignee     NVARCHAR(15)
-   DECLARE @cReportType    nvarchar(20)
    DECLARE @cLabelPrinter  NVARCHAR ( 30)
    DECLARE @cPaperPrinter  NVARCHAR ( 30)
    DECLARE @cTCPPrinter    NVARCHAR ( 30)
@@ -99,7 +102,9 @@ AS
          WHERE  Storerkey = @cStorerkey
                AND ispaperprinter <> 'Y'
                AND WMR.moduleid = @c_ModuleID
+               AND Reporttype =  CASE WHEN ISNULL(@cReporttype,'') <> '' THEN  @cReporttype ELSE   Reporttype END
                AND (ISNULL(ComputerName,'') ='' OR ComputerName = @cWorkstation)
+               AND (WMRD.Facility = '' OR WMRD.Facility = @cFacility)  
          ORDER BY WMR.reportid
          OPEN @cCurLabel
          FETCH NEXT FROM @cCurLabel INTO @cReportType
@@ -121,6 +126,7 @@ AS
                AND ispaperprinter <> 'Y'
                and (WMRD.username = '' OR WMRD.username = @cUsername)
                AND (ISNULL(ComputerName,'') ='' OR ComputerName= @cWorkstation)
+               AND (WMRD.Facility = '' OR WMRD.Facility = @cFacility)  
 
             SET  @cSQL =
             '
@@ -132,6 +138,7 @@ AS
                WHERE Storerkey = @cstorerkey
                   AND Pickslipno = @cPickslipno
                   AND CartonNO = @nCartonno'
+
 
             SET @cSQLParam = 
             ' @cFieldName1 NVARCHAR(max),
@@ -201,7 +208,9 @@ AS
          WHERE  Storerkey = @cStorerkey
                AND ispaperprinter = 'Y'
                AND WMR.moduleid = @c_ModuleID
+               AND Reporttype =  CASE WHEN ISNULL(@cReporttype,'') <> '' THEN  @cReporttype ELSE   Reporttype END
                AND (ISNULL(ComputerName,'') = '' OR ComputerName = @cWorkstation)
+               AND (WMRD.Facility = '' OR WMRD.Facility = @cFacility)  
          OPEN @cCurPaper
          FETCH NEXT FROM @cCurPaper INTO @cReportType
          WHILE @@FETCH_STATUS = 0
@@ -218,12 +227,12 @@ AS
             FROM WMReport WMR (NOLOCK)
             JOIN WMReportdetail WMRD (NOLOCK) ON WMR.reportid =WMRD.reportid
             WHERE Storerkey = @cStorerkey
-               AND reporttype = 'TPPACKLIST'
+               AND reporttype = @cReportType
                AND ModuleID ='TPPack'
                AND ispaperprinter = 'Y'
                and (WMRD.username = '' OR WMRD.username = @cUsername)
                AND (ISNULL(ComputerName,'') = '' OR ComputerName = @cWorkstation)
-
+               AND (WMRD.Facility = '' OR WMRD.Facility = @cFacility)  
 
             SET @cSQL = ''
             SET @cSQLParam = ''
@@ -238,7 +247,6 @@ AS
                   AND Pickslipno = @cPickslipno
                   AND CartonNO = @nCartonno
                   '
-
 
                SET @cSQLParam = 
                ' @cFieldName1 NVARCHAR(max),
