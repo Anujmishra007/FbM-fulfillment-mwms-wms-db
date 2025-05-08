@@ -247,7 +247,7 @@ BEGIN
                      ,  @c_FromID
                      ,  @c_ToLoc
                      ,  @c_ToLoc
-                     ,  @c_FromID
+                     ,  ''
                      ,  @c_FinalLoc
                      ,  ''
                      ,  @c_PickMethod
