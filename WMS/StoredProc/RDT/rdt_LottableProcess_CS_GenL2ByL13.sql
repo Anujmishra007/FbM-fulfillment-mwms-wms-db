@@ -1,16 +1,15 @@
-/****** Object:  StoredProcedure [RDT].[rdt_LottableProcess_CS_GenL2ByL13]    Script Date: 5/6/2025 4:47:15 PM ******/
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
 /************************************************************************/
-/* Store procedure: rdt_LottableProcess_CS_GenL2ByL13			            */
+/* Store procedure: rdt_LottableProcess_CS_GenL2ByL13                   */
 /* Copyright      : MWMS                                                */
 /*                                                                      */
-/* Purpose: Key in L13 (Production date) and populate L2 (Batch)		   */
-/*																		                  */                                                               
-/* Date        Rev  Author      Purposes                                */
+/* Purpose: Key in L13 (Production date) and populate L2 (Batch)        */
+/*                                                                      */
+/* Date        Rev  Author     Purposes                                 */
 /* 28-04-2025  1.0  Abarna S   FCR-4005. Created BRF: Julian Batch conv */
 /************************************************************************/
 
@@ -81,29 +80,39 @@ BEGIN
       GOTO Fail
 
    -- Get SKUgroup  info to validate Julian Batch or not
-   SELECT @cSKUgroup = skugroup from sku where StorerKey = @cStorerKey AND sku= @cSKU
+   SELECT @cSKUgroup = skugroup 
+   FROM dbo.SKU WITH(NOLOCK) 
+   WHERE StorerKey = @cStorerKey 
+      AND sku= @cSKU
 
-   
    --AddJuliandate
-   IF @cSKUgroup='Julian'
-		SET @cLottable02 = '999' + RIGHT(CAST(YEAR(@dLottable13) AS VARCHAR), 1) + RIGHT('000' + CAST(DATEPART(DAYOFYEAR, @dLottable13) AS VARCHAR), 3) 
-   -- Non-Julian
-		--ELSE IF @cSKUgroup <> 'Julian'
-		--SET @cLottable02 = '999' +  RIGHT(CONCAT('0', MONTH(@dLottable04)), 2) + RIGHT(CAST(YEAR(@dLottable04) AS VARCHAR), 2)
-		ELSE GOTO Quit
-      
+   IF @cSKUgroup = 'Julian'
+      SET @cLottable02 = '999' + RIGHT(CAST(YEAR(@dLottable13) AS VARCHAR), 1) + RIGHT('000' + CAST(DATEPART(DAYOFYEAR, @dLottable13) AS VARCHAR), 3) 
+      -- Non-Julian
+      --ELSE IF @cSKUgroup <> 'Julian'
+      --SET @cLottable02 = '999' +  RIGHT(CONCAT('0', MONTH(@dLottable04)), 2) + RIGHT(CAST(YEAR(@dLottable04) AS VARCHAR), 2)
+   ELSE 
+      GOTO Quit
+
 Fail:
    -- Setup error, or L02/L13 empty
    IF (@cLottable02 = 0 OR @cLottable02 IS NULL) OR (@dLottable13 = 0 OR @dLottable13 IS NULL) 
    BEGIN
       -- Remain in current screen
-	  SET @nErrNo = -1 
-	GOTO Quit
+      SET @nErrNo = -1 
+      GOTO Quit
    END
-
-   
 Quit:
 
 END -- End Procedure
+GO
+
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS OFF
+GO
+
+GRANT EXECUTE ON rdt.rdt_LottableProcess_CS_GenL2ByL13 TO NSQL
+GO
 
 
