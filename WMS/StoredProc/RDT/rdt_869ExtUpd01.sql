@@ -10,6 +10,7 @@ GO
 /*                                                                      */
 /* Date         VER    Author   Purpose                                 */
 /* 2024-11-21   1.0.0  Dennis   FCR-1349 Created                        */
+/* 2025-04-09   1.1.0  Dennis   FCR-3925 Remove Trigger For Transmitlog2*/
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_869ExtUpd01] (
@@ -109,19 +110,6 @@ BEGIN
                SELECT @nQTY = SUM(QTY) FROM dbo.PickDetail WITH(NOLOCK) WHERE CaseID = @cCaseID AND StorerKey = @cStorerKey AND SKU = @cSKU
                UPDATE dbo.PackDetail WITH(ROWLOCK) SET QTY = @nQTY WHERE LABELNO = @cCaseID AND StorerKey = @cStorerKey AND SKU = @cSKU
             END
-
-            EXEC ispGenTransmitLog2
-               @c_TableName        = 'WSSOAlloUpd'
-               ,@c_Key1             = @cOrderKey
-               ,@c_Key2             = ''
-               ,@c_Key3             = @cStorerkey
-               ,@c_TransmitBatch    = ''
-               ,@b_Success          = @bSuccess   OUTPUT
-               ,@n_err              = @nErrNo     OUTPUT
-               ,@c_errmsg           = @cErrMsg    OUTPUT
-
-            IF @bSuccess <> 1      
-               GOTO RollBackTran
          END
 
          WHILE @@TRANCOUNT > @nTranCount

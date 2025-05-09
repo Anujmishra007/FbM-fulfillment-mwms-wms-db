@@ -3,9 +3,6 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-
-
-
 /******************************************************************************/
 /* Store procedure: isp_GetWorkstation                                        */
 /* Copyright      : LFLogistics                                               */
@@ -13,6 +10,7 @@ GO
 /* Date         Rev  Author     Purposes                                      */
 /* 2020-05-05   1.0  Chermaine  Created                                       */
 /* 2021-09-05   1.1  Chermaine  TPS-11 ErrMsg add to rdtmsg (cc01)            */
+/* 2025-02-14   1.2  yeekung    TPS-995 Change Error Message (yeekung01)      */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [API].[isp_GetWorkstation] (
@@ -79,9 +77,8 @@ BEGIN
 		IF NOT EXISTS (SELECT TOP 1 1 FROM Api.AppWorkstation WITH (NOLOCK) WHERE deviceID ='')
 	   BEGIN
 		   SET @b_Success = 0
-         SET @n_Err = 175627
-         SET @c_ErrMsg = rdt.rdtgetmessage( @n_Err, @cLangCode, 'DSP')--'No workstation available for device setup. Please ensure workstation has been setup. Funtion : isp_GetWorkstation'
-
+         SET @n_Err = 1001301
+         SET @c_ErrMsg =  API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'No workstation available for device setup. Please ensure workstation has been setup. Funtion : isp_GetWorkstation'
          GOTO EXIT_SP
 	   END
 	END
@@ -89,8 +86,8 @@ END
 ELSE
 BEGIN
 	SET @b_Success = 0
-   SET @n_Err = 175628
-   SET @c_ErrMsg = rdt.rdtgetmessage( @n_Err, @cLangCode, 'DSP')--'Device ID setup not done. Please setup the Device ID. Funtion : isp_GetWorkstation'
+   SET @n_Err = 1001302
+   SET @c_ErrMsg =  API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Device ID setup not done. Please setup the Device ID. Funtion : isp_GetWorkstation'
 
    GOTO EXIT_SP
 END

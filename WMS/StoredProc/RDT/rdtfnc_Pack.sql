@@ -3575,7 +3575,7 @@ BEGIN
                '@cPackData2      NVARCHAR( 30), ' +
                '@cPackData3      NVARCHAR( 30), ' +
                '@nErrNo          INT            OUTPUT, ' +
-               '@cErrMsg         NVARCHAR( 20)  OUTPUT'
+               '@cErrMsg         NVARCHAR( 1024)  OUTPUT'
 
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
                @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cPickSlipNo, @cFromDropID,

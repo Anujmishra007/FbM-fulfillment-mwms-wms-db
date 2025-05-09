@@ -32,6 +32,7 @@ GO
 /* 26-JUN-2024  SSA04    1.4  Updated transfer detail update dynamic    */
 /*                            query                                     */
 /* 27-JUN-2024  SSA05    1.5  Updated to address cursor fix             */
+/* 27-JUN-2024  SSA06    1.6  Updated to to handle FG consignment       */
 /************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[ispREC10]
    @c_Action    NVARCHAR(10)
@@ -66,6 +67,8 @@ BEGIN
          , @c_Type               NVARCHAR(20)                    --(SSA01)
          , @c_Condition          NVARCHAR(MAX)                   --(SSA01)
          , @c_SQL                NVARCHAR(MAX)                   --(SSA01)
+         , @c_Lottable01         NVARCHAR(18)                    --(SSA06)
+         , @c_Lottable02         NVARCHAR(18)                    --(SSA06)
 
    SELECT @n_Continue = 1
         , @n_StartTCnt = @@TRANCOUNT
@@ -124,10 +127,14 @@ BEGIN
                BEGIN
                   SET @c_Condition = ' AND RD.Lottable02 = ''DAMAGE'''
                END
-
+               ELSE IF(@c_Type = 'FG')    --(SSA06)
+               BEGIN
+                  SET @c_Condition = ' AND RD.Lottable02 = ''GOOD'''
+               END
+            --(SSA06) added lottable01 and lottable02 to cursor
             SELECT @c_SQL = 'DECLARE CUR_TRF CURSOR FAST_FORWARD READ_ONLY FOR'
                +' SELECT R.Facility,R.Storerkey, RD.Sku, I.Lot, SUM(RD.QtyReceived) AS Qty,'
-               +' RD.UOM, RD.ToLoc, RD.ToID, R.ExternReceiptkey, I.Itrnkey'
+               +' RD.UOM, RD.ToLoc, RD.ToID, R.ExternReceiptkey, I.Itrnkey, RD.lottable01, RD.lottable02'
                +' FROM RECEIPT R (NOLOCK)'
                +' JOIN RECEIPTDETAIL RD (NOLOCK) ON R.Receiptkey = RD.Receiptkey'
                +' JOIN ITRN I (NOLOCK) ON RD.Storerkey = I.Storerkey AND RD.Sku = I.Sku AND I.TranType = ''DP'''
@@ -135,7 +142,8 @@ BEGIN
                +' WHERE R.Receiptkey = @c_Receiptkey'+ @c_Condition
                +' AND RD.FinalizeFlag = ''Y'''
                +' AND RD.QtyReceived > 0'
-               +' GROUP BY R.Facility, R.Storerkey, RD.Sku, I.Lot, RD.UOM, RD.ToLoc, RD.ToID, R.ExternReceiptkey, I.Itrnkey'
+               +' GROUP BY R.Facility, R.Storerkey, RD.Sku, I.Lot, RD.UOM, RD.ToLoc, RD.ToID, R.ExternReceiptkey, I.Itrnkey,'
+               +' RD.lottable01, RD.lottable02'
 
             EXEC sp_executesql @c_SQL
             , N'@c_Receiptkey     NVARCHAR(15)'
@@ -145,7 +153,8 @@ BEGIN
             ----(SSA01) end----
             OPEN CUR_TRF
             
-            FETCH NEXT FROM CUR_TRF INTO @c_Facility, @c_Storerkey, @c_Sku, @c_Lot, @n_QtyReceived, @c_UOM, @c_Loc, @c_ID, @c_ExternReceiptkey, @c_Itrnkey
+            FETCH NEXT FROM CUR_TRF INTO @c_Facility, @c_Storerkey, @c_Sku, @c_Lot, @n_QtyReceived, @c_UOM, @c_Loc, @c_ID, @c_ExternReceiptkey
+            , @c_Itrnkey, @c_Lottable01 , @c_Lottable02
             
             WHILE @@FETCH_STATUS <> -1  AND @n_continue IN(1,2)
             BEGIN      	                       	        	   
@@ -176,8 +185,8 @@ BEGIN
                   @c_FromLoc = @c_Loc,
                   @c_FromID  = @c_ID,
             	    @n_FromQty = @n_QtyReceived,
-            	    @c_ToLottable01 = '',
-            	    @c_ToLottable02 = '',
+            	    @c_ToLottable01 = @c_Lottable01,
+            	    @c_ToLottable02 = @c_Lottable02,
             	    @c_ToLottable03 = '',
             	    @dt_ToLottable04 = NULL,
             	    @dt_ToLottable05 = NULL,
@@ -194,7 +203,7 @@ BEGIN
             	    @c_CopyLottable = 'Y',
             	    @c_Finalize = 'N',
             	    @c_Type = 'AD',
-            	    @c_ReasonCode = 'SSC',
+            	    @c_ReasonCode = 'AD',
             	    @c_CustomerRefNo = '',
             	    @b_Success = @b_Success OUTPUT,
             	    @n_Err = @n_Err OUTPUT,
@@ -206,7 +215,8 @@ BEGIN
    	              SELECT @c_errmsg = RTRIM(@c_Errmsg) +  ' (ispREC10)'
                END
             
-               FETCH NEXT FROM CUR_TRF INTO @c_Facility, @c_Storerkey, @c_Sku, @c_Lot, @n_QtyReceived, @c_UOM, @c_Loc, @c_ID, @c_ExternReceiptkey, @c_Itrnkey
+               FETCH NEXT FROM CUR_TRF INTO @c_Facility, @c_Storerkey, @c_Sku, @c_Lot, @n_QtyReceived, @c_UOM, @c_Loc, @c_ID, @c_ExternReceiptkey
+               , @c_Itrnkey , @c_Lottable01 , @c_Lottable02
             END
    	        CLOSE CUR_TRF
    	        DEALLOCATE CUR_TRF
@@ -267,7 +277,7 @@ BEGIN
 
                   SELECT @c_SQL = 'UPDATE TRANSFERDETAIL WITH (ROWLOCK)'
                             +' SET Lottable01 = ''A'''
-                            +',Lottable02 = IIF(@c_Type = ''NORMAL'',''GOOD'',''RETURN'')'
+                            +',Lottable02 = CASE WHEN @c_Type = ''NORMAL'' THEN ''GOOD'' WHEN @c_Type = ''RETURN'' THEN ''RETURN'' ELSE ''FG'' END'  --(SSA06)
                             +',Status = ''9'''
                             +',Userdefine01 = CASE WHEN RDET.ReceiptLineNumber IS NOT NULL THEN RDET.ReceiptLineNumber ELSE Userdefine01 END'      --(SSA03)
                             +' FROM TRANSFERDETAIL'
