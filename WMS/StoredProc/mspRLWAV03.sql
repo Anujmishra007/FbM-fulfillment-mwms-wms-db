@@ -675,23 +675,26 @@ BEGIN
          --WHERE O.Ordergroup = '30'                                                --(Wan02) - END
       END
       
-      SELECT TOP 1 @c_Sku = RTRIM(PD.Sku)
-      FROM dbo.WAVEDETAIL WD (NOLOCK)
-      JOIN dbo.PICKDETAIL PD (NOLOCK) ON WD.Orderkey = PD.Orderkey
-      JOIN #ORDERSKU OS ON OS.Orderkey = PD.Orderkey AND OS.Sku = PD.Sku --UWP-32643
-      LEFT OUTER JOIN dbo.SKUxLOC sl (NOLOCK) 
-         ON sl.Storerkey = PD.Storerkey AND sl.Sku = PD.Sku AND sl.LocationType IN ('CASE', 'PICK')
-      WHERE WD.WaveKey = @c_WaveKey 
-      AND sl.Loc IS NULL
-      AND OS.WCS = 0 --UWP-32643
-      ORDER BY PD.Sku
+      IF @c_Automation = 'Y'  -- Checking PickFace setup for non-sortable and non-conveyerable SKU(WCS=0)
+      BEGIN
+         SELECT TOP 1 @c_Sku = RTRIM(PD.Sku)
+         FROM dbo.WAVEDETAIL WD (NOLOCK)
+         JOIN dbo.PICKDETAIL PD (NOLOCK) ON WD.Orderkey = PD.Orderkey
+         JOIN #ORDERSKU OS ON OS.Orderkey = PD.Orderkey AND OS.Sku = PD.Sku --UWP-32643
+         LEFT OUTER JOIN dbo.SKUxLOC sl (NOLOCK) 
+            ON sl.Storerkey = PD.Storerkey AND sl.Sku = PD.Sku AND sl.LocationType IN ('CASE', 'PICK')
+         WHERE WD.WaveKey = @c_WaveKey 
+         AND sl.Loc IS NULL
+         AND OS.WCS = 0 --UWP-32643
+         ORDER BY PD.Sku
 
-      IF @c_Sku <> ''
-      BEGIN 
-         SET @n_continue = 3            
-         SET @n_Err = 82013
-         SET @c_Errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_Err)+': PickFace must setup for sku: ' + @c_Sku + '. (mspRLWAV03)'     
-         GOTO QUIT_SP             
+         IF @c_Sku <> ''
+         BEGIN 
+            SET @n_continue = 3            
+            SET @n_Err = 82013
+            SET @c_Errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_Err)+': PickFace must setup for sku: ' + @c_Sku + '. (mspRLWAV03)'     
+            GOTO QUIT_SP             
+         END
       END
       --AYD01 UWP-32643 END
 
