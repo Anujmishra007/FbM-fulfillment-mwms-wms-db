@@ -75,7 +75,7 @@ GO
 /* 01-Apr-2025 SSA04     4.1 UWP-27137 Fix infinite loop when splitQty =*/
 /*                           pickdetail.Qty                             */
 /* 02-Apr-2025 SWT09     4.2 Revise PackInfo Weight and Cube calculation*/
-/* 09-May-2025 AYD       4.3 UWP-32643: Fix PickFace checking           */
+/* 09-May-2025 AYD01     4.3 UWP-32643: Fix PickFace checking           */
 /************************************************************************/
 CREATE  OR ALTER  PROC [dbo].[mspRLWAV03]
    @c_WaveKey NVARCHAR(10)
@@ -591,7 +591,7 @@ BEGIN
          DEALLOCATE CUR_MPOCFLAG
       END -- IF @n_continue IN(1,2)
 
-      --AYD UWP-32643 START
+      --AYD01 UWP-32643 START
       --Order sku info
       INSERT INTO #ORDERSKU (Orderkey, Storerkey, Sku, TotalQty, TotalCube, TotalQtyPacked, TotalCubePacked, StdCube, Length, Width, Height, OrderGroup, MasterShipmentID)
       SELECT PD.OrderKey, PD.Storerkey, PD.Sku, 
@@ -693,7 +693,7 @@ BEGIN
          SET @c_Errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_Err)+': PickFace must setup for sku: ' + @c_Sku + '. (mspRLWAV03)'     
          GOTO QUIT_SP             
       END
-      --AYD UWP-32643 END
+      --AYD01 UWP-32643 END
 
       --Cartonization info
       INSERT INTO #CARTONIZATION (CartonizationGroup,
