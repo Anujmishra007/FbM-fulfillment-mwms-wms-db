@@ -31,6 +31,7 @@ GO
 /* 22-Oct-2019  TLTING01 1.7  Blocking tuning                           */
 /* 14-Oct-2021  KSChin   1.8  add tracker to DEL_ReceiptDetail table    */
 /* 29-Apr-2025  Wan02    1.9  FCR-3576 - ReceiptSerialno Enhancement    */
+/* 08-05-2025	PPA371     2.0  Add total expected qty and received qty   */
 /************************************************************************/ 
 
 CREATE OR ALTER TRIGGER [dbo].[ntrReceiptDetailDelete]
@@ -204,7 +205,9 @@ BEGIN
         IF @n_deletedcount=1
         BEGIN
             UPDATE RECEIPT
-            SET    OpenQty = RECEIPT.OpenQty-(DELETED.QtyExpected- DELETED.QtyReceived)
+            SET    OpenQty = RECEIPT.OpenQty-(DELETED.QtyExpected- DELETED.QtyReceived),
+                   TotalExpectedQty=RECEIPT.TotalExpectedQty-deleted.QtyExpected,                                  --PPA371
+                   TotalReceivedQty=RECEIPT.TotalReceivedQty-(deleted.QtyReceived+deleted.BeforeReceivedQty)       --PPA371
             FROM   RECEIPT
                   ,DELETED
             WHERE  RECEIPT.ReceiptKey = DELETED.ReceiptKey
@@ -213,9 +216,25 @@ BEGIN
         BEGIN
             UPDATE RECEIPT
             SET    RECEIPT.OpenQty = (
-                       RECEIPT.Openqty 
+                       RECEIPT.Openqty
                       -(
                            SELECT SUM(DELETED.QtyExpected- DELETED.QtyReceived)
+                           FROM   DELETED
+                           WHERE  DELETED.Receiptkey = RECEIPT.Receiptkey
+                       )
+                   ),
+                   RECEIPT.TotalExpectedQty = (																		--PPA371
+                       RECEIPT.TotalExpectedQty
+                      -(
+                           SELECT SUM(DELETED.QtyExpected)
+                           FROM   DELETED
+                           WHERE  DELETED.Receiptkey = RECEIPT.Receiptkey
+                       )
+                   ),
+                   RECEIPT.TotalReceivedQty = (																			--PPA371
+                       RECEIPT.TotalReceivedQty
+                      -(
+                           SELECT SUM(DELETED.BeforeReceivedQty+ DELETED.QtyReceived)
                            FROM   DELETED
                            WHERE  DELETED.Receiptkey = RECEIPT.Receiptkey
                        )

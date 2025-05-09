@@ -176,6 +176,7 @@ GO
 /* 12-Dec-2024  Wan05     6.1   UWP-28399-INC7516794 - Non Serialize process*/
 /* 05-May-2025  Wan06     6.2   FCR-4086 - CopyRecValueToLottable upon      */
 /*                              finalizing the ASN                          */
+/* 08-05-2025	  PPA371    6.3  Add total expected qty and received qty   	  */
 /****************************************************************************/ 
  
 CREATE OR ALTER TRIGGER [dbo].[ntrReceiptDetailUpdate] 
@@ -2881,39 +2882,54 @@ BEGIN
       DECLARE @n_deletedcount int 
       SELECT @n_deletedcount = (SELECT count(1) FROM DELETED) 
  
-      IF @n_deletedcount = 1 
-      BEGIN 
-         UPDATE RECEIPT 
-         SET  OpenQty = RECEIPT.OpenQty - (DELETED.QtyExpected - DELETED.QtyReceived) + (INSERTED.QtyExpected - INSERTED.QtyReceived), 
-              EditDate = GETDATE(),   --tlting 
-              EditWho = SUSER_SNAME() 
-         FROM RECEIPT, 
-              INSERTED, 
-              DELETED 
-         WHERE RECEIPT.ReceiptKey  = INSERTED.ReceiptKey 
-         AND INSERTED.ReceiptKey  = DELETED.ReceiptKey 
- 
-         SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT 
-      END 
-      ELSE 
-      BEGIN 
-         UPDATE RECEIPT SET RECEIPT.OpenQty 
-             = (RECEIPT.Openqty 
-             - 
-             (SELECT Sum(DELETED.QtyExpected - DELETED.QtyReceived) FROM DELETED 
-              WHERE DELETED.ReceiptKey  = RECEIPT.ReceiptKey ) 
-             + 
-             (SELECT Sum(INSERTED.QtyExpected - INSERTED.QtyReceived) FROM INSERTED 
-              WHERE INSERTED.ReceiptKey  = RECEIPT.ReceiptKey ) 
-             ), 
-             EditDate = GETDATE(),   --tlting 
-             EditWho = SUSER_SNAME() 
-         FROM RECEIPT,DELETED,INSERTED 
-         WHERE RECEIPT.ReceiptKey  IN (SELECT DISTINCT ReceiptKey FROM DELETED) 
-         AND RECEIPT.ReceiptKey  = DELETED.ReceiptKey 
-         AND RECEIPT.ReceiptKey  = INSERTED.ReceiptKey 
-         AND INSERTED.ReceiptKey  = DELETED.ReceiptKey 
-         AND INSERTED.RECEIPTLineNumber = DELETED.RECEIPTLineNumber 
+      IF @n_deletedcount = 1
+      BEGIN
+         UPDATE RECEIPT
+         SET  OpenQty = RECEIPT.OpenQty - (DELETED.QtyExpected - DELETED.QtyReceived) + (INSERTED.QtyExpected - INSERTED.QtyReceived),
+
+              TotalExpectedQty= RECEIPT.TotalExpectedQty+INSERTED.QtyExpected-deleted.QtyExpected,												--PPA371
+
+              TotalReceivedQty=RECEIPT.TotalReceivedQty + inserted.QtyReceived+inserted.BeforeReceivedQty-deleted.QtyReceived-deleted.BeforeReceivedQty,    --PPA371
+
+              EditDate = GETDATE(),   --tlting
+              EditWho = SUSER_SNAME()
+         FROM RECEIPT,
+              INSERTED,
+              DELETED
+         WHERE RECEIPT.ReceiptKey  = INSERTED.ReceiptKey
+         AND INSERTED.ReceiptKey  = DELETED.ReceiptKey
+
+         SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
+      END
+      ELSE
+      BEGIN
+         UPDATE RECEIPT SET RECEIPT.OpenQty
+             = (RECEIPT.Openqty
+             -
+             (SELECT Sum(DELETED.QtyExpected - DELETED.QtyReceived) FROM DELETED
+              WHERE DELETED.ReceiptKey  = RECEIPT.ReceiptKey )
+             +
+             (SELECT Sum(INSERTED.QtyExpected - INSERTED.QtyReceived) FROM INSERTED
+              WHERE INSERTED.ReceiptKey  = RECEIPT.ReceiptKey )
+             ),
+             RECEIPT.TotalExpectedQty= 																													--PPA371
+             (RECEIPT.TotalExpectedQty
+                  +  (select SUM(inserted.QtyExpected) from inserted where inserted.ReceiptKey=RECEIPT.ReceiptKey)
+                   - (select SUM(deleted.QtyExpected) from deleted where deleted.ReceiptKey=RECEIPT.ReceiptKey)
+                  )
+                  ,
+             RECEIPT.TotalReceivedQty=(RECEIPT.TotalReceivedQty 																							--PPA371
+                  +(select sum(inserted.QtyReceived+inserted.BeforeReceivedQty) from inserted where inserted.ReceiptKey=RECEIPT.ReceiptKey)
+                  - (select sum(deleted.QtyReceived+deleted.BeforeReceivedQty) from deleted where deleted.ReceiptKey=RECEIPT.ReceiptKey)
+                  ),
+             EditDate = GETDATE(),   --tlting
+             EditWho = SUSER_SNAME()
+         FROM RECEIPT,DELETED,INSERTED
+         WHERE RECEIPT.ReceiptKey  IN (SELECT DISTINCT ReceiptKey FROM DELETED)
+         AND RECEIPT.ReceiptKey  = DELETED.ReceiptKey
+         AND RECEIPT.ReceiptKey  = INSERTED.ReceiptKey
+         AND INSERTED.ReceiptKey  = DELETED.ReceiptKey
+         AND INSERTED.RECEIPTLineNumber = DELETED.RECEIPTLineNumber
  
          SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT 
       END 
