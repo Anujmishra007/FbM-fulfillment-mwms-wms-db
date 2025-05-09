@@ -10,5 +10,6 @@ execute rdt.rdtAddMsg 227205, 10, '227205^InsPackDtlFail', 'us_english', 1867
 execute rdt.rdtAddMsg 227206, 10, '227206^GetKey TransmitLogKey2 Fail.', 'us_english', 1867
 execute rdt.rdtAddMsg 227207, 10, '227207^INSERT TRANSMITLOG2 Fail', 'us_english', 1867
 
-
-
+--FCR-1872
+execute rdt.rdtAddMsg 227208, 10, '227208^GetKeyFailed',    'us_english', 1867
+execute rdt.rdtAddMsg 227209, 10, '227209^InsTaskFailed',   'us_english', 1867

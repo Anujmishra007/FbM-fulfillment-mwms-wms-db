@@ -41,7 +41,7 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV06]
    DECLARE @n_UCC_RowRef               INT            = 0
          , @c_Storerkey                NVARCHAR(15)   = ''
          , @c_Facility                 NVARCHAR(5)    = ''
-         , @c_Loadkey                  NVARCHAR(10)   = ''
+         , @c_Orderkey                 NVARCHAR(10)   = ''
 
          , @c_Replenishmentkey         NVARCHAR(10)   = ''
          , @c_ReplenishmentGroup       NVARCHAR(30)   = 'mspRLWAV06'
@@ -72,15 +72,15 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV06]
    ------Loadplan Validation
    IF  (@n_Continue = 1 OR @n_Continue = 2)
    BEGIN
-      SELECT TOP 1 @c_Loadkey  = ISNULL(lpd.Loadkey,'')
-      FROM WAVE W (NOLOCK)
-      JOIN WAVEDETAIL WD(NOLOCK) ON W.Wavekey = WD.Wavekey
-      JOIN ORDERS O (NOLOCK) ON WD.Orderkey = O.Orderkey
-      LEFT OUTER JOIN LOADPLANDETAIL lpd (NOLOCK) ON lpd.Orderkey = O.Orderkey
-      WHERE W.Wavekey = @c_Wavekey
-      AND lpd.Loadkey IS NULL
-
-      IF @c_Loadkey = ''
+      IF EXISTS (
+                  SELECT TOP 1 O.Orderkey
+                  FROM WAVE W (NOLOCK)
+                  JOIN WAVEDETAIL WD(NOLOCK) ON W.Wavekey = WD.Wavekey
+                  JOIN ORDERS O (NOLOCK) ON WD.Orderkey = O.Orderkey
+                  LEFT OUTER JOIN LOADPLANDETAIL lpd (NOLOCK) ON lpd.Orderkey = O.Orderkey
+                  WHERE W.Wavekey = @c_Wavekey
+                  AND lpd.Loadkey IS NULL
+                )
       BEGIN
          SET @n_Continue = 3
          SET @n_Err = 83010

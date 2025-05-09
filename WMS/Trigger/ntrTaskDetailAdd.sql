@@ -2,19 +2,18 @@ SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
+
 /************************************************************************/
 /* Trigger: ntrTaskDetailAdd                                            */
 /* Creation Date:                                                       */
-/* Copyright: IDS                                                       */
+/* Copyright: MAersk Logistics                                          */
 /* Written by:                                                          */
 /*                                                                      */
 /* Purpose:                                                             */
 /*                                                                      */
 /* Called By:                                                           */
 /*                                                                      */
-/* PVCS Version: 1.3                                                    */
-/*                                                                      */
-/* Version: 5.4                                                         */
+/* Version: 2.3                                                         */
 /*                                                                      */
 /* Data Modifications:                                                  */
 /*                                                                      */
@@ -41,6 +40,8 @@ GO
 /* 13-Jan-2020  2.1     NJOW03   WMS-11388 call custom stored proc      */ 
 /* 27-Jul-2022  2.1     Wan03    Fix to set @n_err = 0 as Output blank  */ 
 /*                               and caused Prompt error 67994          */
+/* 17-Apl-2025  2.2     Wan04    UWP-32707 - FCR-3957 - JCB Putaway Using*/
+/*                               TM SCE                                 */
 /************************************************************************/
 
 CREATE OR ALTER TRIGGER [dbo].[ntrTaskDetailAdd]
@@ -53,19 +54,22 @@ BEGIN
     SET QUOTED_IDENTIFIER OFF
     SET CONCAT_NULL_YIELDS_NULL OFF
 
-    DECLARE @b_Success       INT -- Populated by calls to stored procedures - was the proc successful?
-           ,@n_err           INT -- Error number returned by stored procedure or this trigger
-           ,@n_err2          INT -- For Additional Error Detection
-           ,@c_errmsg        NVARCHAR(250) -- Error message returned by stored procedure or this trigger
-           ,@n_continue      INT
-           ,@n_starttcnt     INT -- Holds the current transaction count
-           ,@c_preprocess    NVARCHAR(250) -- preprocess
-           ,@c_pstprocess    NVARCHAR(250) -- post process
-           ,@n_cnt           INT
-           ,@b_isDiffFloor   INT -- added by mmlee , 07/08/2001 for fbr28c - Pallet move for different floor
-           ,@c_fromoutloc    NVARCHAR(10) -- added by mmlee , 07/08/2001 for fbr28c - Pallet move for different floor
-           ,@n_PendingMoveIn INT --NJOW01
-           ,@n_QtyReplen     INT --NJOW01
+    DECLARE @b_Success           INT -- Populated by calls to stored procedures - was the proc successful?
+           ,@n_err               INT -- Error number returned by stored procedure or this trigger
+           ,@n_err2              INT -- For Additional Error Detection
+           ,@c_errmsg            NVARCHAR(250) -- Error message returned by stored procedure or this trigger
+           ,@n_continue          INT
+           ,@n_starttcnt         INT -- Holds the current transaction count
+           ,@c_preprocess        NVARCHAR(250) -- preprocess
+           ,@c_pstprocess        NVARCHAR(250) -- post process
+           ,@n_cnt               INT
+           ,@b_isDiffFloor       INT -- added by mmlee , 07/08/2001 for fbr28c - Pallet move for different floor
+           ,@c_fromoutloc        NVARCHAR(10) -- added by mmlee , 07/08/2001 for fbr28c - Pallet move for different floor
+           ,@n_PendingMoveIn     INT --NJOW01
+           ,@n_QtyReplen         INT --NJOW01
+
+           ,@c_Facility                   NVARCHAR(5)  = ''                         --(Wan04)
+           ,@c_TaskMultiLotLPNLockPMI     NVARCHAR(10) = '0'                        --(Wan04)
 
    --(Wan01) - START
    DECLARE @c_SourceType     NVARCHAR(10)
@@ -236,9 +240,9 @@ BEGIN
             END
 
             SELECT @c_LocationCategy = LocationCategory
+                  ,@c_Facility       = Facility                                     --(Wan04)
             FROM   LOC l WITH (NOLOCK)
             WHERE  l.Loc = @c_toloc
-
 
             --(Wan01) - START
             IF @c_SourceType = 'VAS' 
@@ -550,8 +554,15 @@ BEGIN
             
             IF @n_continue IN(1,2)  --NJOW01
             BEGIN
-                IF @n_PendingMoveIn > 0 AND ISNULL(@c_Lot,'') <> '' AND ISNULL(@c_FromLoc,'') <> '' AND ISNULL(@c_ToLoc,'') <> '' 
-                BEGIN
+               SET @c_TaskMultiLotLPNLockPMI = '0'                                                 --(Wan04)
+               SET @c_TaskMultiLotLPNLockPMI = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, ''      --(Wan04)    
+                                                , 'TaskMultiLotLPNLockPMI')   
+ 
+               IF   @n_PendingMoveIn > 0 --AND ISNULL(@c_Lot,'') <> ''                             --(Wan04)
+               AND  ((@c_Lot > '') OR                                                              --(Wan04)
+                     (@c_TaskMultiLotLPNLockPMI = '1' AND @c_FromID > '' AND @c_Lot = ''))         --(Wan04)
+               AND  ISNULL(@c_FromLoc,'') <> '' AND ISNULL(@c_ToLoc,'') <> ''                      
+               BEGIN
                   SET @n_Err = 0             --Wan03
                   EXEC rdt.rdt_Putaway_PendingMoveIn 
                        @cUserName = ''

@@ -14,7 +14,7 @@ GO
 /*                                                                         */
 /* Called By: nspOrderProcessing                                           */
 /*                                                                         */
-/* PVCS Version: 1.4                                                       */
+/* PVCS Version: 2.4                                                       */
 /*                                                                         */
 /* Version: 8.0                                                            */
 /*                                                                         */
@@ -41,7 +41,8 @@ GO
 /*                           step by discrete or conso                     */
 /* 12-Mar-2024 NJOW10   2.1  WMS-24736 Fix FIFO by UOM cater for UCC       */
 /* 24-Jan-2024 NJOW11   2.2  Fix FULLPALLETBYLOC logic                     */
-/* 17-Mar-2025 Wan02    2.3  PUMACL - Allocate from Allocated UCC          */
+/* 25-Mar-2025 USH022-01 2.3 Added Filter LOTxLOCxID.qty >0                */
+/* 17-Mar-2025 Wan02    2.4  PUMACL - Allocate from Allocated UCC          */
 /***************************************************************************/
 
 CREATE OR ALTER   PROC [dbo].[nspALCFG03]
@@ -1279,6 +1280,7 @@ BEGIN
             AND LLI.ID = @c_ID
             AND LLI.Storerkey = @c_Storerkey
             AND LLI.Sku = @c_Sku
+            AND LLI.Qty > 0
 
             IF (@n_QtyLeftToFulfill - @n_PrevLotQtyAvailable) >= @n_QtyAvailable  --NJOW09
                AND @n_NoOfLot = 1 -- if multi lot per sku/loc/id then proceed to next strategy allocation by carton

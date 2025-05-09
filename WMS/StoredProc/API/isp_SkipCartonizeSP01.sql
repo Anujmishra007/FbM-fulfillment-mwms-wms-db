@@ -11,6 +11,7 @@ GO
 /*                                                                            */
 /* Date         Rev  Author     Purposes                                      */
 /* 2021-08-28   1.0  Chermaine  Created                                       */
+/* 2024-02-12   1.1  YeeKung    FCR-1515  Add Option2 (yeekung01)             */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [API].[isp_SkipCartonizeSP01] (
@@ -36,7 +37,16 @@ SET CONCAT_NULL_YIELDS_NULL OFF
 BEGIN
 	IF @cOrderKey <> ''
 	BEGIN
-		IF EXISTS (SELECT 1 FROM Orders WITH (NOLOCK) WHERE storerKey = @cStorerKey AND Orderkey = @cOrderKey AND TYPE = 'ECOM')
+      DECLARE @cUDF02 NVARCHAR(20)
+
+      SELECT @cUDF02 = Option2
+      FROM StorerConfig (NOLOCK)
+      WHERE Storerkey = @cStorerkey
+         AND (Facility = @cFacility OR Facility = '')
+         AND Configkey = 'TPS-skipCartonize'
+
+
+		IF EXISTS (SELECT 1 FROM Orders WITH (NOLOCK) WHERE storerKey = @cStorerKey AND Orderkey = @cOrderKey AND TYPE = @cUDF02)
 	   BEGIN
 		   SET @skipCartonize = '0'
 	   END

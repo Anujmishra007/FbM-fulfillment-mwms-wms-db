@@ -13,6 +13,7 @@ GO
 /* Date         Author   Ver.    Purposes                                  */
 /* 2025-02-21   NLT013   1.0.0   UWP-30476 Create Intial Version           */
 /* 2025-02-25   JCH507   1.0.1   UWP-30476 Clear Final loc when status = H */
+/* 2025-03-22   NLT013   1.1.0   UWP-31321 Clear ListKey while cancel task */
 /***************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_1764ExtUpd21]
@@ -79,7 +80,7 @@ BEGIN
             SAVE TRAN rdt_1764ExtUpd21
 
             BEGIN TRY
-               IF @cToLOCCat IN ('PND', 'PND_IN', 'PND_OUT') AND @cTaskStatus IN ('0', 'X','H') AND @cFinalLOC <> '' AND @cFinalLOC <> @cToLoc
+               IF @cToLOCCat IN ('PND', 'PND_IN', 'PND_OUT') AND @cTaskStatus IN ('0', 'X','H') AND @cFinalLOC <> '' 
                BEGIN
                   UPDATE dbo.TaskDetail WITH (ROWLOCK)
                   SET ToLoc = @cFinalLOC,
@@ -87,6 +88,9 @@ BEGIN
                      EditDate = GETDATE(),
                      EditWho  = SUSER_SNAME(),
                      TransitLoc = '',
+                     ListKey = '',
+                     Priority = IIF( @cTaskStatus = 'X', 1, Priority),
+                     TransitCount = 0,
                      TrafficCop = NULL
                   WHERE TaskDetailKey = @cTaskdetailKey
                      AND StorerKey = @cStorerKey

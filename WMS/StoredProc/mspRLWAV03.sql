@@ -67,8 +67,16 @@ GO
 /*                           Conveyable for Non UCC                     */
 /*                           CR V1.4 - ASTCPK Task Status as '0' if pick*/
 /*                           face                                       */
+/* 25-Mar-2025 SSA03         UWP-31693 - updated orderinfo.referenceid  */
+/*                           with Storer.SUSR5 + RunningNumber + Mod10  */
+/*                           check digit using Luhn Algorithm           */
+/* 26-Mar-2025 WLChooi   4.0 FCR-3115/UWP-31024 Add Loadkey Validation  */
+/*                           (WL09)                                     */
+/* 01-Apr-2025 SSA04     4.1 UWP-27137 Fix infinite loop when splitQty =*/
+/*                           pickdetail.Qty                             */
+/* 02-Apr-2025 SWT09     4.2 Revise PackInfo Weight and Cube calculation*/
 /************************************************************************/
-CREATE OR ALTER PROC [dbo].[mspRLWAV03]
+CREATE  OR ALTER  PROC [dbo].[mspRLWAV03]
    @c_WaveKey NVARCHAR(10)
  , @b_Success INT           OUTPUT
  , @n_Err     INT           OUTPUT
@@ -141,7 +149,8 @@ BEGIN
           ,@c_Replenishmentkey        NVARCHAR(10)
           ,@b_OneSKUPerCarton         BIT = 0 
           ,@b_MDS_Flag                BIT = 0 --SWT03
-          ,@c_LabelLine               NVARCHAR(10)   --WL07           
+          ,@c_LabelLine               NVARCHAR(10)   --WL07   
+		  ,@c_DefaultPackInfoFlag     NVARCHAR(1) = '0' --SWT08
 
    DECLARE @n_VAS_LineCount INT = 0,
            @n_VAS_QtyCanPack INT = 0,
@@ -263,6 +272,22 @@ BEGIN
             GOTO QUIT_SP  
       END                         
 
+      --WL09 S
+      IF EXISTS ( SELECT 1
+                  FROM WAVEDETAIL WD WITH (NOLOCK)
+                  JOIN ORDERS OH WITH (NOLOCK) ON WD.OrderKey = OH.OrderKey
+                  WHERE WD.WaveKey = @c_Wavekey
+                  AND NOT EXISTS ( SELECT 1
+                                   FROM LoadPlan LP WITH (NOLOCK)
+                                   WHERE LP.Loadkey = OH.LoadKey ) )
+      BEGIN
+         SET @n_continue = 3
+         SET @n_Err = 82021
+         SET @c_Errmsg = 'NSQL' + CONVERT(NVARCHAR(10),@n_Err) + ': Missing LoadKey: Generate Load. (mspRLWAV03)'
+         GOTO QUIT_SP
+      END
+      --WL09 E 
+      
       IF NOT EXISTS(SELECT 1
                      FROM dbo.CARTONIZATION CZ (NOLOCK)
                      WHERE CZ.CartonizationGroup = @c_CartonGroup)
@@ -2169,6 +2194,8 @@ BEGIN
    END
       
    --Create packing records For None MPOC Orders
+   DECLARE @n_NoOfOrders INT = 0 
+
    IF @n_continue IN(1,2) 
    BEGIN    
       IF @b_debug <> 0 
@@ -2190,8 +2217,10 @@ BEGIN
                  
       WHILE @@FETCH_STATUS <> -1 AND @n_continue IN(1,2)  --get order       
       BEGIN         
+
          IF @b_debug <> 0 
-            PRINT '@c_OrderGroup: ' + @c_OrderGroup + ' @c_Orderkey:' + @c_Orderkey + ' @c_Pickslipno: ' + @c_Pickslipno
+            PRINT '@c_OrderGroup: ' + @c_OrderGroup + ' @c_Orderkey:' + @c_Orderkey + ' @c_Pickslipno: ' + @c_Pickslipno 
+				
 
          --Create packheader
          IF NOT EXISTS (SELECT 1 FROM dbo.PackHeader (NOLOCK) WHERE Pickslipno = @c_Pickslipno)
@@ -2242,18 +2271,20 @@ BEGIN
          BEGIN   
             IF @b_debug <> 0 
               PRINT  '@n_CartonNo: ' + CAST(@n_CartonNo AS VARCHAR(5)) + ' @c_CartonType: ' + @c_CartonType + ' @c_PreOrderGroup: ' + @c_PreOrderGroup
-          
-      -- Relabel All Carton Even with UCC 
-          --IF ISNULL(@c_UCCNo,'') <> ''
-          --BEGIN
-          --    SET @c_LabelNo = @c_UCCNo
-          --END
-          --ELSE
-          --BEGIN
+
+			 -- Get total number of orders in 1 order group
+			 SET @n_NoOfOrders = 0 
+			 IF @c_OrderGroup <> ''
+			 BEGIN
+				SELECT @n_NoOfOrders = COUNT(DISTINCT OrderKey)
+				FROM #CARTONDETAIL
+				WHERE OrderGroup = @c_OrderGroup
+				AND CartonNo = @n_CartonNo
+
+			 END 
+		 
             IF @c_LabelNo = ''   --WL07
             BEGIN
-               --IF @c_OrderGroup <> @c_PreOrderGroup OR @c_OrderGroup = ''
-               --BEGIN
                EXEC dbo.isp_GenUCCLabelNo_Std
                @cPickslipNo = @c_Pickslipno,
                @nCartonNo   = @n_CartonNo,
@@ -2362,6 +2393,7 @@ BEGIN
 
                      SET @n_TotCartonCube = @n_NewCartonMaxCube
                      SET @c_CartonType = @c_NewCartonType
+                     SET @n_CartonMaxCube = @n_NewCartonMaxCube
 
                      IF @b_debug=2
                      BEGIN
@@ -2391,17 +2423,38 @@ BEGIN
             --Get packed carton cube,qty,weight            
             --Create packinfo            
             IF EXISTS (SELECT 1 FROM dbo.PackInfo (NOLOCK) WHERE Pickslipno = @c_PickslipNo
-                           AND CartonNo = @n_CartonNo)
+                       AND CartonNo = @n_CartonNo)
             BEGIN
                DELETE FROM dbo.PackInfo WHERE Pickslipno = @c_PickslipNo AND CartonNo = @n_CartonNo
             END                 
 
-            INSERT INTO dbo.PackInfo (Pickslipno, CartonNo, CartonType, Cube, Weight, Qty, Length, Width, Height, RefNo) --(SWT01)
-            VALUES (@c_PickslipNo, @n_CartonNo, @c_CartonType, 
-                    @n_CartonMaxCube, --SWT08)
-                    --@n_TotCartonCube, 
-                    @n_TotCartonWeight + @n_CartonWeight, --(SWT08)
-                    0, @n_CartonLength, @n_CartonWidth, @n_CartonHeight, @c_LabelNo)
+			   SET @c_DefaultPackInfoFlag = '0'
+			   SELECT @c_DefaultPackInfoFlag = dbo.fnc_GetRight('', 'LVSUSA', '', 'DEFAULT_PACKINFO')
+
+
+            IF @c_OrderGroup <> '' AND @n_NoOfOrders > 1 
+            BEGIN
+
+               INSERT INTO dbo.PackInfo (Pickslipno, CartonNo, CartonType, Cube, Weight, Qty, Length, Width, Height, RefNo) --(SWT01)
+               VALUES (@c_PickslipNo, @n_CartonNo, @c_CartonType, 
+                       CASE WHEN @n_NoOfOrders > 0 THEN @n_CartonMaxCube / @n_NoOfOrders 
+                            ELSE @n_CartonMaxCube 
+                       END, --Cube (SWT08)
+                       CASE WHEN @c_DefaultPackInfoFlag = '1' THEN (@n_CartonWeight / @n_NoOfOrders) 
+                            ELSE (@n_CartonWeight / @n_NoOfOrders) + @n_TotCartonWeight 
+                       END, --Weight (SWT08)
+                       0, @n_CartonLength, @n_CartonWidth, @n_CartonHeight, @c_LabelNo)
+            END
+            ELSE 
+            BEGIN
+               INSERT INTO dbo.PackInfo (Pickslipno, CartonNo, CartonType, Cube, Weight, Qty, Length, Width, Height, RefNo) --(SWT01)
+               VALUES (@c_PickslipNo, @n_CartonNo, @c_CartonType, 
+                       @n_CartonMaxCube, --SWT08)
+                       CASE WHEN @c_DefaultPackInfoFlag = '1' THEN @n_CartonWeight ELSE @n_CartonWeight + @n_TotCartonWeight END, --(SWT08)
+                       0, @n_CartonLength, @n_CartonWidth, @n_CartonHeight, @c_LabelNo)
+
+            END
+
             
             SET @n_Err = @@ERROR
             IF @n_Err <> 0
@@ -2453,7 +2506,7 @@ BEGIN
             DEALLOCATE CUR_PACKSKU
                                                       
             FETCH NEXT FROM CUR_PACKCARTON INTO @n_CartonNo, @c_CartonType, @c_UCCNo, @n_CartonLength, @n_CartonWidth, @n_CartonHeight, @c_VAS_CartonType 
-                                             ,  @c_LabelNo   --WL07 
+                                             , @c_LabelNo   --WL07 
                                              , @n_CartonWeight --(SWT08)
          END
          CLOSE CUR_PACKCARTON
@@ -2648,7 +2701,12 @@ BEGIN
             IF @n_TotalCube > @n_ToteSize
             BEGIN
                SET @n_SplitQty = CEILING((@n_TotalCube - @n_ToteSize)/@n_StdCube)
-               SET @n_Qty_PD   = @n_Qty_PD - @n_SplitQty
+                --(SSA04) start---
+              IF @n_SplitQty = @n_Qty_PD
+                SET @n_SplitQty = 0
+              ELSE
+                SET @n_Qty_PD = @n_Qty_PD - @n_SplitQty
+              --(SSA04)end---
             END
 
             SET @n_TotalCube = 0
@@ -2710,7 +2768,7 @@ BEGIN
             END 
          END
 
-         FETCH NEXT FROM CUR_UPDATEDROPID INTO @c_PickDetailKey, @c_Sku, @c_Loc, @c_FromPAZone
+      FETCH NEXT FROM CUR_UPDATEDROPID INTO @c_PickDetailKey, @c_Sku, @c_Loc, @c_FromPAZone
                                              , @n_Qty_PD, @n_StdCube
       END
       CLOSE CUR_UPDATEDROPID
@@ -2857,8 +2915,9 @@ BEGIN
    IF @n_continue IN(1,2) 
    BEGIN 
       DECLARE @c_BOLbyConsigneeKey NVARCHAR(20) = '', 
-              @c_FacilityPrefix NVARCHAR(60) = '', 
-              @n_FieldLength INT = 0 
+              @c_Susr5Prefix NVARCHAR(60) = '',            --(SSA03)
+              @n_FieldLength INT = 8,                      --(SSA03)
+              @n_CheckDigit INT = 0                        --(SSA03)
  
       DECLARE CUR_BOLbyConsigneekey CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
          SELECT OH.ConsigneeKey, OH.Facility, MAX(ISNULL(OI.ReferenceId,''))  
@@ -2866,7 +2925,6 @@ BEGIN
          JOIN dbo.OrderInfo OI WITH (NOLOCK) ON OH.OrderKey = OI.OrderKey 
          JOIN dbo.WAVEDETAIL WD WITH (NOLOCK) ON WD.OrderKey = OH.OrderKey 
          WHERE WD.WaveKey = @c_WaveKey  
-         AND OH.OrderGroup='30' 
          GROUP BY OH.ConsigneeKey, OH.Facility  
        
       OPEN CUR_BOLbyConsigneekey 
@@ -2877,14 +2935,14 @@ BEGIN
       BEGIN 
           IF TRIM(@c_BOLbyConsigneeKey) = '' 
           BEGIN 
-             SET @c_FacilityPrefix = '' 
+             --(SSA03) start---
+             SET @c_Susr5Prefix = ''
               
-             SELECT @c_FacilityPrefix = ISNULL(TRIM(CODELKUP.UDF01),'0') 
-             FROM dbo.CODELKUP (NOLOCK) 
-             WHERE CODELKUP.LISTNAME = 'LVSFAC' 
-             AND CODELKUP.Code = @c_Facility 
- 
-             SET @n_FieldLength = 10 - LEN(@c_FacilityPrefix) 
+             SELECT @c_Susr5Prefix = ISNULL(TRIM(Storer.SUSR5),'0')
+             FROM dbo.STORER Storer (NOLOCK)
+             WHERE Storer.StorerKey = @c_Storerkey
+             AND Storer.Facility = @c_Facility
+             --(SSA03) end---
               
              EXECUTE dbo.nspg_GetKey   
                @KeyName='BOLbyCons',   
@@ -2900,14 +2958,17 @@ BEGIN
                 BREAK   
              END     
               
-             SET @c_BOLbyConsigneeKey = RIGHT(@c_FacilityPrefix + @c_BOLbyConsigneeKey, 10)  
+             --(SSA03) start---
+             SET @c_BOLbyConsigneeKey = @c_Susr5Prefix + @c_BOLbyConsigneeKey
+             SET @n_CheckDigit = dbo.fnc_CalcCheckDigitLuhn_M10(RTRIM(@c_BOLbyConsigneeKey), 0)
+             SET @c_BOLbyConsigneeKey = RIGHT(@c_BOLbyConsigneeKey + CAST(@n_CheckDigit AS NVARCHAR( 1)), 17)
+             --(SSA03) end----
              DECLARE CUR_UPDATE_BOLbyConsigneekey CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
              SELECT OH.OrderKey 
              FROM dbo.ORDERS OH WITH (NOLOCK)  
              JOIN dbo.OrderInfo OI WITH (NOLOCK) ON OH.OrderKey = OI.OrderKey 
              JOIN dbo.WAVEDETAIL WD WITH (NOLOCK) ON WD.OrderKey = OH.OrderKey 
              WHERE WD.WaveKey = @c_WaveKey  
-             AND OH.OrderGroup='30' 
              AND OH.ConsigneeKey = @c_ConsigneeKey              
              AND OH.Facility = @c_Facility 
              AND (OI.ReferenceId = '' OR OI.ReferenceId IS NULL) 
@@ -3584,3 +3645,4 @@ BEGIN
       RETURN
    END
 END
+GO

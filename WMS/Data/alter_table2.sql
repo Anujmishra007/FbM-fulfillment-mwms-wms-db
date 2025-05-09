@@ -1,0 +1,4 @@
+ALTER TABLE dbo.KIT
+ADD ExternStatus NVARCHAR(30) NULL;
+
+
