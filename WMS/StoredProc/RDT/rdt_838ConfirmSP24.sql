@@ -12,6 +12,7 @@ GO
 /*                                                                      */
 /* Date       Rev  Author      Purposes                                 */
 /* 2025-03-17 1.0  Dennis      FCR-2814 Created                         */
+/* 2025-05-12 1.1  Dennis      UWP-34249 Performance Tune               */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_838ConfirmSP24] (
@@ -358,10 +359,12 @@ BEGIN
             SELECT TOP 1 @cPickDetailKey = pkd.PickDetailKey
             FROM dbo.PickDetail pkd (NOLOCK)
             INNER JOIN dbo.PickHeader pkh (NOLOCK) ON pkh.OrderKey = pkd.OrderKey AND pkh.StorerKey = pkd.StorerKey
+            LEFT JOIN dbo.PackSerialNo psn (NOLOCK) ON psn.PickDetailKey = pkd.PickDetailKey
             WHERE pkd.StorerKey = @cStorerKey
             AND pkh.PickHeaderKey = @cPickSlipNo
             AND pkd.SKU = @cSKU
-            AND NOT EXISTS(SELECT 1 FROM dbo.PackSerialNo psn (NOLOCK) WHERE psn.PickDetailKey = pkd.PickDetailKey AND psn.PickSlipNo = @cPickSlipNo)
+            AND psn.PackSerialNoKey IS NULL
+            
             IF ISNULL(@cPickDetailKey,'')=''
             BEGIN
                SET @nErrNo = 208327
@@ -443,10 +446,12 @@ BEGIN
          SELECT TOP 1 @cPickDetailKey = pkd.PickDetailKey
          FROM dbo.PickDetail pkd (NOLOCK)
          INNER JOIN dbo.PickHeader pkh (NOLOCK) ON pkh.OrderKey = pkd.OrderKey AND pkh.StorerKey = pkd.StorerKey
+         LEFT JOIN dbo.PackSerialNo psn (NOLOCK) ON psn.PickDetailKey = pkd.PickDetailKey
          WHERE pkd.StorerKey = @cStorerKey
          AND pkh.PickHeaderKey = @cPickSlipNo
          AND pkd.SKU = @cSKU
-         AND NOT EXISTS(SELECT 1 FROM dbo.PackSerialNo psn (NOLOCK) WHERE psn.PickDetailKey = pkd.PickDetailKey AND psn.PickSlipNo = @cPickSlipNo)
+         AND psn.PackSerialNoKey IS NULL
+
          IF ISNULL(@cPickDetailKey,'')=''
          BEGIN
             SET @nErrNo = 208327
