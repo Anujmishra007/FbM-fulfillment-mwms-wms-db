@@ -355,4 +355,25 @@ BEGIN
 IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'orderslog', N'COLUMN',N'CancelReasonCode'))
 	EXEC sys.sp_addextendedproperty @name=N'MS_Description', @value=N'The reason why an order is cancelled' , @level0type=N'SCHEMA',@level0name=N'dbo', @level1type=N'TABLE',@level1name=N'orderslog', @level2type=N'COLUMN',@level2name=N'CancelReasonCode'
 
+
+
+--ALTER COLUMN 
+ IF  EXISTS (SELECT 1
+	               FROM sys.columns
+	               WHERE Name = 'delwho' AND Object_ID = Object_ID('dbo.orderslog') and max_length < 500)
+			BEGIN
+				ALTER TABLE dbo.orderslog 
+				ALTER COLUMN [delWho] [nvarchar] (128) NOT NULL ;
+				
+			END
+
+ IF  EXISTS (SELECT 1
+	               FROM sys.columns
+	               WHERE Name = 'ECOM_OAID' AND Object_ID = Object_ID('dbo.orderslog') and max_length < 500)
+			BEGIN
+				ALTER TABLE dbo.orderslog 
+				ALTER COLUMN [ECOM_OAID]  [nvarchar] (256) NULL;
+
+			END
+
 END
