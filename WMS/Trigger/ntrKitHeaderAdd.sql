@@ -57,6 +57,7 @@ BEGIN
    ,         @c_Kitkey             NVARCHAR(10)   --WL01
    ,         @c_Storerkey          NVARCHAR(15)   --WL01
    ,         @c_ExternStatus       NVARCHAR(10)   --WL01
+   ,         @c_NamedUser          NVARCHAR(30)
    SELECT @n_continue=1, @n_starttcnt=@@TRANCOUNT
    /* #INCLUDE <TRTHA1.SQL> */
    IF EXISTS( SELECT 1 FROM INSERTED WHERE ArchiveCop = '9')
@@ -84,9 +85,7 @@ BEGIN
       UPDATE KIT
       SET TrafficCop = NULL,
           AddDate  = GETDATE(),
-          AddWho   = SUSER_SNAME(),
-          EditDate = GETDATE(),
-          EditWho  = SUSER_SNAME()
+          EditDate = GETDATE()
       FROM KIT
       JOIN INSERTED ON KIT.KitKey = INSERTED.KitKey
       SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
@@ -101,12 +100,12 @@ BEGIN
       SELECT @b_success = 1
 
       DECLARE CUR_DST CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-      SELECT DISTINCT Kitkey, StorerKey, ISNULL(ExternStatus, '0')
+      SELECT DISTINCT Kitkey, StorerKey, ISNULL(ExternStatus, '0'), EditWho
       FROM INSERTED
 
       OPEN CUR_DST
 
-      FETCH NEXT FROM CUR_DST INTO @c_Kitkey, @c_Storerkey, @c_ExternStatus
+      FETCH NEXT FROM CUR_DST INTO @c_Kitkey, @c_Storerkey, @c_ExternStatus, @c_NamedUser
 
       WHILE @@FETCH_STATUS <> -1
       BEGIN
@@ -122,6 +121,7 @@ BEGIN
                                          , @c_Key1 = '0'
                                          , @c_Key2 = ''
                                          , @c_DocStatus = @c_ExternStatus
+                                         , @c_NamedUser = @c_NamedUser
                                          , @b_Success = @b_Success OUTPUT
                                          , @n_err = @n_err OUTPUT
                                          , @c_errmsg = @c_errmsg OUTPUT
@@ -135,7 +135,7 @@ BEGIN
             END CATCH
          END
 
-         FETCH NEXT FROM CUR_DST INTO @c_Kitkey, @c_Storerkey, @c_ExternStatus
+         FETCH NEXT FROM CUR_DST INTO @c_Kitkey, @c_Storerkey, @c_ExternStatus, @c_NamedUser
       END
       CLOSE CUR_DST
       DEALLOCATE CUR_DST

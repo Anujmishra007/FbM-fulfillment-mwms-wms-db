@@ -34,7 +34,8 @@ CREATE  PROC   ispGenDocStatusLog
 ,              @c_DocumentNo   NVARCHAR(20)  
 ,              @c_Key1         NVARCHAR(20)  
 ,              @c_Key2         NVARCHAR(20)  
-,              @c_DocStatus    NVARCHAR(10)   
+,              @c_DocStatus    NVARCHAR(10)
+,              @c_NamedUser    NVARCHAR(30)
 --,              @d_TransDate    Datetime
 ,              @b_Success      INT        OUTPUT  
 ,              @n_err          INT        OUTPUT  
@@ -75,9 +76,10 @@ BEGIN
    SELECT @c_Key1 = ISNULL(RTrim(@c_Key1) ,'')  
    SELECT @c_Key2 = ISNULL(RTrim(@c_Key2) ,'')  
    SELECT @c_DocStatus = ISNULL(RTrim(@c_DocStatus) ,'')  
-   SELECT @c_StorerKey = ISNULL(RTrim(@c_StorerKey) ,'')    
-   
-   --NJOW01  ORDERS = STSORDERS
+   SELECT @c_StorerKey = ISNULL(RTrim(@c_StorerKey) ,'')
+   SELECT @c_NamedUser = ISNULL(RTrim(@c_NamedUser) ,'')
+
+           --NJOW01  ORDERS = STSORDERS
    IF EXISTS(SELECT 1 FROM STORERCONFIG(NOLOCK) WHERE Storerkey = @c_Storerkey 
              AND Configkey = 'DisableDocStatusLog' AND Svalue = '1' AND 
              (Option1 = @c_TableName OR Option2 = @c_TableName OR Option3 = @c_TableName
@@ -110,6 +112,8 @@ BEGIN
                   ,key2
                   ,DocStatus
                   ,TransDate
+                  ,AddWho
+                  ,EditWho
                  )
                VALUES
                  (
@@ -120,6 +124,8 @@ BEGIN
                   ,@c_Key2
                   ,@c_DocStatus
                   ,getdate()
+                  , @c_NamedUser
+                  , @c_NamedUser
                  )
            
          SET @n_err = @@ERROR  
