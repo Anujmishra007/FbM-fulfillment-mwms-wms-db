@@ -26,20 +26,21 @@ GO
 /* Date         Author   Ver  Purposes                                  */  
 /* 02/05/2017   NJOW01   1.0  WMS-1742 allow config to disable logging  */
 /*                            by tablename.                             */
+/* 14/05/2025   WLChooi  1.1  UWP-33751 add some changes (WL01)         */
 /************************************************************************/
 
-CREATE  PROC   ispGenDocStatusLog  
+CREATE OR ALTER PROC ispGenDocStatusLog
                @c_TableName    NVARCHAR(30)  
 ,              @c_StorerKey    NVARCHAR(15)
 ,              @c_DocumentNo   NVARCHAR(20)  
 ,              @c_Key1         NVARCHAR(20)  
 ,              @c_Key2         NVARCHAR(20)  
 ,              @c_DocStatus    NVARCHAR(10)
-,              @c_NamedUser    NVARCHAR(30)
 --,              @d_TransDate    Datetime
 ,              @b_Success      INT        OUTPUT  
 ,              @n_err          INT        OUTPUT  
-,              @c_errmsg       NVARCHAR(250)  OUTPUT  
+,              @c_errmsg       NVARCHAR(250)  OUTPUT
+,              @c_NamedUser    NVARCHAR(128) = ''   --WL01
 AS  
 BEGIN
    SET NOCOUNT ON   
@@ -77,7 +78,7 @@ BEGIN
    SELECT @c_Key2 = ISNULL(RTrim(@c_Key2) ,'')  
    SELECT @c_DocStatus = ISNULL(RTrim(@c_DocStatus) ,'')  
    SELECT @c_StorerKey = ISNULL(RTrim(@c_StorerKey) ,'')
-   SELECT @c_NamedUser = ISNULL(RTrim(@c_NamedUser) ,'')
+   SELECT @c_NamedUser = IIF(ISNULL(@c_NamedUser, '') = '', SUSER_SNAME(), TRIM(@c_NamedUser)) --WL01
 
            --NJOW01  ORDERS = STSORDERS
    IF EXISTS(SELECT 1 FROM STORERCONFIG(NOLOCK) WHERE Storerkey = @c_Storerkey 

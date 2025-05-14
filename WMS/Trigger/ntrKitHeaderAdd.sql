@@ -57,7 +57,7 @@ BEGIN
    ,         @c_Kitkey             NVARCHAR(10)   --WL01
    ,         @c_Storerkey          NVARCHAR(15)   --WL01
    ,         @c_ExternStatus       NVARCHAR(10)   --WL01
-   ,         @c_NamedUser          NVARCHAR(30)
+   ,         @c_NamedUser          NVARCHAR(128)
    SELECT @n_continue=1, @n_starttcnt=@@TRANCOUNT
    /* #INCLUDE <TRTHA1.SQL> */
    IF EXISTS( SELECT 1 FROM INSERTED WHERE ArchiveCop = '9')
@@ -85,7 +85,9 @@ BEGIN
       UPDATE KIT
       SET TrafficCop = NULL,
           AddDate  = GETDATE(),
-          EditDate = GETDATE()
+          AddWho   = IIF(INSERTED.AddWho = '', SUSER_SNAME(), INSERTED.AddWho),   --To cater for the case when the user explicitly set the Addwho to blank
+          EditDate = GETDATE(),
+          EditWho  = IIF(INSERTED.EditWho = '', SUSER_SNAME(), INSERTED.EditWho)   --To cater for the case when the user explicitly set the EditWho to blank
       FROM KIT
       JOIN INSERTED ON KIT.KitKey = INSERTED.KitKey
       SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
@@ -100,7 +102,8 @@ BEGIN
       SELECT @b_success = 1
 
       DECLARE CUR_DST CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-      SELECT DISTINCT Kitkey, StorerKey, ISNULL(ExternStatus, '0'), EditWho
+      SELECT DISTINCT Kitkey, StorerKey, ISNULL(ExternStatus, '0')
+                    , IIF(EditWho = '', SUSER_SNAME(), EditWho)  --To cater for the case when the user explicitly set the EditWho to blank
       FROM INSERTED
 
       OPEN CUR_DST
