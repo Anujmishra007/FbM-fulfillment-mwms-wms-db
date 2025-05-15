@@ -17,6 +17,7 @@
 /* Updates:                                                             */
 /* Date           Author   Purposes                                     */
 /* 08-MAR-2023    Alex     #JIRA PAC-4 Initial                          */
+/* 07-MAY-2025    Alex01   #UWP-33988 Bug fixes                         */
 /************************************************************************/    
 CREATE OR ALTER PROC [API].[isp_ECOMP_API_PackConfirm](
      @b_Debug           INT            = 0
@@ -149,6 +150,7 @@ BEGIN
       [Weight]          FLOAT              '$.Weight'
    )
 
+
    IF @c_PickSlipNo <> ''
    BEGIN
       SELECT @c_PH_TaskBatchID   = ISNULL(RTRIM(TaskBatchNo), '')
@@ -257,6 +259,8 @@ BEGIN
          SET @c_sp_errmsg  = ''
          SET @c_NewPickSlipNo = @c_PickSlipNo
 
+
+
          EXEC [API].[isp_ECOMP_PackConfirm]
                @c_PickSlipNo     = @c_NewPickSlipNo   OUTPUT        
             ,  @b_Success        = @b_sp_Success      OUTPUT   
@@ -333,20 +337,38 @@ BEGIN
          SET @c_sp_errmsg  = ''
          SET @c_NewPickSlipNo = @c_PickSlipNo
 
-         EXEC [API].[isp_ECOMP_PackConfirm]
-               @c_PickSlipNo     = @c_NewPickSlipNo   OUTPUT        
-            ,  @b_Success        = @b_sp_Success      OUTPUT   
-            ,  @n_err            = @n_sp_err          OUTPUT   
-            ,  @c_errmsg         = @c_sp_errmsg       OUTPUT  
+         --(Alex01) START
+         BEGIN TRAN
 
-         IF @b_sp_Success <> 1
-         BEGIN
-            SET @n_Continue = 3      
-            SET @n_ErrNo = 51912      
-            SET @c_ErrMsg = CONVERT(char(5),@n_ErrNo)+': ' 
-                          + CONVERT(char(5),@n_sp_err) + ' - ' + @c_sp_errmsg     
-            GOTO QUIT  
-         END
+         BEGIN TRY
+            EXEC [API].[isp_ECOMP_PackConfirm]
+                  @c_PickSlipNo     = @c_NewPickSlipNo   OUTPUT        
+               ,  @b_Success        = @b_sp_Success      OUTPUT   
+               ,  @n_err            = @n_sp_err          OUTPUT   
+               ,  @c_errmsg         = @c_sp_errmsg       OUTPUT  
+
+            IF @b_sp_Success <> 1
+            BEGIN
+               SET @n_Continue = 3      
+               SET @n_ErrNo = 51912      
+               SET @c_ErrMsg = CONVERT(char(5),@n_ErrNo)+': ' 
+                             + CONVERT(char(5),@n_sp_err) + ' - ' + @c_sp_errmsg     
+               GOTO QUIT  
+            END
+
+            WHILE @@TRANCOUNT > @n_StartCnt      
+            BEGIN      
+               COMMIT TRAN      
+            END      
+
+         END TRY
+         BEGIN CATCH
+            SET @n_Continue = 3        
+            SET @n_ErrNo = 51913
+            SET @c_ErrMsg = ERROR_MESSAGE()
+            GOTO QUIT
+         END CATCH
+        --(Alex01) END
 
          SET @c_PackUpdateEstTotalCtn = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'PackUpdateEstTotalCtn')
 
@@ -398,15 +420,18 @@ BEGIN
    END
 
 
-   
-
    QUIT:
    IF @n_Continue= 3  -- Error Occured - Process And Return      
    BEGIN      
       SET @b_Success = 0      
       IF @@TRANCOUNT > @n_StartCnt AND @@TRANCOUNT = 1 
       BEGIN               
-         ROLLBACK TRAN      
+         ROLLBACK TRAN     
+          IF @b_Debug = 1
+          BEGIN
+             PRINT 'API.ECOMP_API_PackConfirm - ROLLBACK TRAN'
+          END
+
       END      
       ELSE      
       BEGIN      

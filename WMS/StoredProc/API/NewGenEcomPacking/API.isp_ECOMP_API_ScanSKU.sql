@@ -22,6 +22,8 @@
 /*                         variable to 60                               */
 /* 29-Jan-2024    Alex02   #PAC-322 - Scan QRCode in Serial# insert     */
 /*                         PackSerialNo                                 */
+/* 25-Feb-2025    CSC166   #FCR-3165 - Save UserID Into                 */
+/*                         PackHeader.AddWho                            */
 /************************************************************************/    
 CREATE OR ALTER PROC [API].[isp_ECOMP_API_ScanSKU](
      @b_Debug           INT            = 0
@@ -145,11 +147,20 @@ BEGIN
       ,  [Value]           NVARCHAR(120)  NULL
    )
 
+   DECLARE @DBUserName NVARCHAR(100)	--#FCR-3165
+   SET @DBUserName = @c_UserID			--#FCR-3165
+
    --Change Login User
    SET @n_sp_err = 0     
-   EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserID OUTPUT, @n_Err = @n_sp_err OUTPUT, @c_ErrMsg = @c_sp_errmsg OUTPUT    
-       
-   EXECUTE AS LOGIN = @c_UserID    
+   EXEC [WM].[lsp_SetUser] @c_UserName = @DBUserName OUTPUT, @n_Err = @n_sp_err OUTPUT, @c_ErrMsg = @c_sp_errmsg OUTPUT    
+
+   --#FCR-3165
+   IF @DBUserName LIKE '%' + @c_UserID + '%'
+   BEGIN
+    EXECUTE AS LOGIN = @DBUserName    --@c_UserID 
+    SET @c_UserID = @DBUserName
+   END
+   
        
    IF @n_sp_err <> 0     
    BEGIN      
@@ -324,8 +335,8 @@ BEGIN
       WHERE StorerKey = @c_StorerKey
 
       --Insert Pack Header & Detail
-      INSERT INTO [dbo].[PackHeader] (PickSlipNo, StorerKey, [Route], OrderKey, OrderRefNo, LoadKey, ConsigneeKey, [Status], CartonGroup, TaskBatchNo, ComputerName, PackStatus, EstimateTotalCtn)
-      VALUES(@c_PickSlipNo, @c_StorerKey, @c_Route, '', @c_OrderRefNo, @c_LoadKey, @c_ConsigneeKey, '0', @c_CartonGroup, @c_TaskBatchID, @c_ComputerName, '0', 0)
+      INSERT INTO [dbo].[PackHeader] (PickSlipNo, StorerKey, [Route], OrderKey, OrderRefNo, LoadKey, ConsigneeKey, [Status], CartonGroup, TaskBatchNo, ComputerName, PackStatus, EstimateTotalCtn, AddWho)
+      VALUES(@c_PickSlipNo, @c_StorerKey, @c_Route, '', @c_OrderRefNo, @c_LoadKey, @c_ConsigneeKey, '0', @c_CartonGroup, @c_TaskBatchID, @c_ComputerName, '0', 0, @c_UserID)
    END
    
    INSERT INTO @t_PackingRules
