@@ -24,6 +24,7 @@ GO
 /*                            Code Calculation Function                          */
 /* 2025-02-27  Wan02    1.2   UWP-30082[FCR-2681] - ShelfLife Code Base on       */
 /*                            Configurable SkuGroup                              */
+/* 2025-05-06  VIBIN01   1.3  FCR - 4255 - Exclude the SLCODE ML14 and ML46      */
 /*********************************************************************************/
 
 CREATE OR ALTER PROC msp_ULACalcShelfLife (
@@ -178,6 +179,15 @@ BEGIN
      IF @n_continue = 1 OR @n_continue = 2
       BEGIN
           SET @c_Facility   = '';
+    -- Step 1: Load excluded SLCODEs from CODELKUP.code into a table variable
+    DECLARE @ExcludeList TABLE (SLCODE VARCHAR(50)); --(VIBIN01)
+
+ INSERT INTO @ExcludeList (SLCODE) --(VIBIN01)
+    SELECT LTRIM(RTRIM(code)) --(VIBIN01)
+    FROM dbo.CODELKUP WITH (NOLOCK) --(VIBIN01)
+  WHERE CODELKUP.ListName = 'EXCLUDESL'  --(VIBIN01)
+	AND CODELKUP.STORERKEY = @c_StorerKey;  --(VIBIN01)
+
           -- Retrieve related info from inventory table into a cursor
           DECLARE CUR_TRANSFER CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
               SELECT DISTINCT LOC.Facility, LA.Sku, LA.Lottable04, LA.Lottable07, LA.Lottable13
@@ -192,7 +202,8 @@ BEGIN
               WHERE LOT.StorerKey = @c_StorerKey
                 AND (LOT.Qty - LOT.QtyAllocated - LOT.QtyPicked) > 0
                 AND LA.Lottable06 in ( '0' , '')
-                --AND SKU.SKUGROUP IN ('FG', 'RM', 'PC');                           --(Wan02)            
+                --AND SKU.SKUGROUP IN ('FG', 'RM', 'PC');                           --(Wan02)  
+                AND LA.Lottable07 NOT IN (SELECT SLCODE FROM @ExcludeList) --(VIBIN01)          
           OPEN CUR_TRANSFER;
           FETCH NEXT FROM CUR_TRANSFER INTO @c_Facility, @c_SKU, @d_Lottable04, @c_Lottable07, @d_Lottable13;
           WHILE @@FETCH_STATUS <> -1
