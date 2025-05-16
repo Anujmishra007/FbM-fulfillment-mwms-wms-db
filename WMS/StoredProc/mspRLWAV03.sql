@@ -76,8 +76,10 @@ GO
 /*                           pickdetail.Qty                             */
 /* 02-Apr-2025 SWT09     4.2 Revise PackInfo Weight and Cube calculation*/
 /* 09-May-2025 AYD01     4.3 UWP-32643: Fix PickFace checking           */
+/* 15-May-2025 WLC015    4.4 FCR-4480 Change to get PND Location from   */ 
+/*                           LocationGroup=DispatchCasePickMethod (WL10)*/
 /************************************************************************/
-CREATE  OR ALTER  PROC [dbo].[mspRLWAV03]
+CREATE OR ALTER PROC [dbo].[mspRLWAV03]
    @c_WaveKey NVARCHAR(10)
  , @b_Success INT           OUTPUT
  , @n_Err     INT           OUTPUT
@@ -348,6 +350,15 @@ BEGIN
                          +': Release Task found. (mspRLWAV03)'     
             GOTO QUIT_SP    
          END
+
+         --WL10 S
+         SET @c_Loc = @c_PNDLoc
+         SET @c_PNDLoc = ''
+   
+         SELECT TOP 1 @c_PNDLoc = L.Loc
+         FROM LOC L WITH (NOLOCK)
+         WHERE L.LocationGroup = @c_Loc
+         --WL10 E
 
          IF @c_PNDLoc = ''
          BEGIN
