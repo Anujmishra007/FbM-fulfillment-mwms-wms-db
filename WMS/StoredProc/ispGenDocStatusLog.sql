@@ -1,44 +1,43 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ispGenDocStatusLog]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [dbo].[ispGenDocStatusLog]
-GO
-SET QUOTED_IDENTIFIER OFF 
+SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF 
 GO
 
-/************************************************************************/
-/* Stored Procedure: ispGenDocStatusLog                                 */
-/* Creation Date:                                                       */
-/* Copyright: LFL                                                       */
-/* Written by:                                                          */
-/*                                                                      */
-/* Purpose: Generate Orders Status, Receipt Status                      */   
-/*                                                                      */
-/* Called By:                                                           */
-/*                                                                      */
-/* PVCS Version: 1.0                                                    */
-/*                                                                      */
-/* Version: 6.0                                                         */
-/*                                                                      */
-/* Data Modifications:                                                  */
-/*                                                                      */
-/* Updates:                                                             */  
-/* Date         Author   Ver  Purposes                                  */  
-/* 02/05/2017   NJOW01   1.0  WMS-1742 allow config to disable logging  */
-/*                            by tablename.                             */
-/************************************************************************/
+/******************************************************************************/
+/* Stored Procedure: ispGenDocStatusLog                                       */
+/* Creation Date:                                                             */
+/* Copyright: LFL                                                             */
+/* Written by:                                                                */
+/*                                                                            */
+/* Purpose: Generate Orders Status, Receipt Status                            */
+/*                                                                            */
+/* Called By:                                                                 */
+/*                                                                            */
+/* PVCS Version: 1.1                                                          */
+/*                                                                            */
+/* Version: 6.0                                                               */
+/*                                                                            */
+/* Data Modifications:                                                        */
+/*                                                                            */
+/* Updates:                                                                   */
+/* Date         Author      Ver  Purposes                                     */
+/* 02/05/2017   NJOW01      1.0  WMS-1742 allow config to disable logging     */
+/*                               by tablename.                                */
+/* 14/05/2025   Shreekanth  1.1  UWP-33751 AddWho & EditWho Nameduser (SG01)  */
+/******************************************************************************/
 
-CREATE  PROC   ispGenDocStatusLog  
+CREATE OR ALTER PROC ispGenDocStatusLog
                @c_TableName    NVARCHAR(30)  
 ,              @c_StorerKey    NVARCHAR(15)
 ,              @c_DocumentNo   NVARCHAR(20)  
 ,              @c_Key1         NVARCHAR(20)  
 ,              @c_Key2         NVARCHAR(20)  
-,              @c_DocStatus    NVARCHAR(10)   
+,              @c_DocStatus    NVARCHAR(10)
 --,              @d_TransDate    Datetime
 ,              @b_Success      INT        OUTPUT  
 ,              @n_err          INT        OUTPUT  
-,              @c_errmsg       NVARCHAR(250)  OUTPUT  
+,              @c_errmsg       NVARCHAR(250)  OUTPUT
+,              @c_NamedUser    NVARCHAR(128) = ''   --SG01
 AS  
 BEGIN
    SET NOCOUNT ON   
@@ -75,9 +74,10 @@ BEGIN
    SELECT @c_Key1 = ISNULL(RTrim(@c_Key1) ,'')  
    SELECT @c_Key2 = ISNULL(RTrim(@c_Key2) ,'')  
    SELECT @c_DocStatus = ISNULL(RTrim(@c_DocStatus) ,'')  
-   SELECT @c_StorerKey = ISNULL(RTrim(@c_StorerKey) ,'')    
-   
-   --NJOW01  ORDERS = STSORDERS
+   SELECT @c_StorerKey = ISNULL(RTrim(@c_StorerKey) ,'')
+   SELECT @c_NamedUser = IIF(ISNULL(@c_NamedUser, '') = '', SUSER_SNAME(), TRIM(@c_NamedUser)) --SG01
+
+           --NJOW01  ORDERS = STSORDERS
    IF EXISTS(SELECT 1 FROM STORERCONFIG(NOLOCK) WHERE Storerkey = @c_Storerkey 
              AND Configkey = 'DisableDocStatusLog' AND Svalue = '1' AND 
              (Option1 = @c_TableName OR Option2 = @c_TableName OR Option3 = @c_TableName
@@ -110,6 +110,8 @@ BEGIN
                   ,key2
                   ,DocStatus
                   ,TransDate
+                  ,AddWho                           --SG01
+                  ,EditWho                          --SG01
                  )
                VALUES
                  (
@@ -120,6 +122,8 @@ BEGIN
                   ,@c_Key2
                   ,@c_DocStatus
                   ,getdate()
+                  , @c_NamedUser             --SG01
+                  , @c_NamedUser             --SG01
                  )
            
          SET @n_err = @@ERROR  
