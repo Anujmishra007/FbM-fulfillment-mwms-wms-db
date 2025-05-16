@@ -209,9 +209,9 @@ EXECUTE rdt.rdtAddScn 6522, 'ENG'
    ,@cWebGroup = '{"1":["3","4"],"2":["5","6"],"3":["7","8"],"4":["9","10"],"5":["11","12"]}'
    ,@nFunc = 838
 
---6523 FCR-2495 Confirm Scn
-DELETE rdt.RDTScn WHERE Scn = 6523 AND Lang_Code = 'ENG'
-EXECUTE rdt.rdtAddScn 6523, 'ENG',
+--6525 FCR-2495 Confirm Scn
+DELETE rdt.RDTScn WHERE Scn = 6525 AND Lang_Code = 'ENG'
+EXECUTE rdt.rdtAddScn 6525, 'ENG',
      @cLine01 = 'Packing complete',
      @cLine02 = '',
      @cLine04 = 'Press ENTER or ESC',

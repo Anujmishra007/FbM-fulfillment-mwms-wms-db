@@ -37,6 +37,7 @@ GO
 /* 20-OCT-2022  NJOW01     1.2  WMS-21042 call custom stored proc       */
 /* 20-OCT-2022  NJOW01     1.2  DEVOPS Combine Script                   */
 /* 10-JAN-2025  YT01       1.3  Add Generic Interface Trigger           */
+/* 26-MAR-2025  YT02       1.4  Add TrafficCop allow ITFTriggerConfig   */  
 /************************************************************************/
 
 CREATE OR ALTER TRIGGER [dbo].[ntrWaveHeaderUpdate]
@@ -52,15 +53,16 @@ BEGIN
    SET QUOTED_IDENTIFIER OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
-	DECLARE @b_Success    int       -- Populated by calls to stored procedures - was the proc successful?
-			, @n_err        int       -- Error number returned by stored procedure or this trigger
-			, @n_err2       int       -- For Additional Error Detection
-			, @c_errmsg     NVARCHAR(250) -- Error message returned by stored procedure or this trigger
-			, @n_continue   int                 
-			, @n_starttcnt  int       -- Holds the current transaction count
-			, @c_preprocess NVARCHAR(250) -- preprocess
-			, @c_pstprocess NVARCHAR(250) -- post process
-			, @n_cnt        int                  
+	DECLARE @b_Success                       int       -- Populated by calls to stored procedures - was the proc successful?
+			, @n_err                           int       -- Error number returned by stored procedure or this trigger
+			, @n_err2                          int       -- For Additional Error Detection
+			, @c_errmsg                        NVARCHAR(250) -- Error message returned by stored procedure or this trigger
+			, @n_continue                      int                 
+			, @n_starttcnt                     int       -- Holds the current transaction count
+			, @c_preprocess                    NVARCHAR(250) -- preprocess
+			, @c_pstprocess                    NVARCHAR(250) -- post process
+			, @n_cnt                           int      
+         , @c_TrafficCopAllowITFTriggerCfg  NVARCHAR(10)  --(YT02)                 
 
 	SELECT @n_continue=1, @n_starttcnt=@@TRANCOUNT
 	
@@ -91,6 +93,18 @@ BEGIN
 	BEGIN
 		SELECT @n_continue = 4 
 	END
+
+   --(YT02)-S  
+   IF EXISTS (SELECT 1 FROM INSERTED I  
+               JOIN WAVEDETAIL WD WITH (NOLOCK) ON I.WaveKey = WD.WaveKey  
+               JOIN ORDERS OH WITH (NOLOCK) ON WD.OrderKey = OH.OrderKey  
+               JOIN StorerConfig S WITH (NOLOCK) ON S.Storerkey = OH.Storerkey  
+               WHERE S.Configkey = 'TrafficCopAllowITFTriggerCfg' AND I.TrafficCop IS NULL  
+               AND S.SValue = '1')  
+   BEGIN  
+      SET @c_TrafficCopAllowITFTriggerCfg = 'Y'  
+   END  
+   --(YT02)-E 
 
    --(YT01)-S
    DECLARE @b_ColumnsUpdated VARBINARY(1000)  
@@ -148,7 +162,7 @@ BEGIN
    /********************************************************/
    /* Interface Trigger Points Calling Process - (Start)   */
    /********************************************************/
-   IF @n_continue = 1 OR @n_continue = 2
+   IF @n_continue = 1 OR @n_continue = 2 OR (@c_TrafficCopAllowITFTriggerCfg = 'Y' AND @n_continue <> 3)   --(YT02)  
    BEGIN
       DECLARE Cur_TriggerPoints CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
       SELECT DISTINCT INS.WaveKey, OH.StorerKey

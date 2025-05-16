@@ -58,6 +58,7 @@ GO
 /* 2024-10-08 5.0  TianLei  FCR-839   Add Fully received go back to screen 1     */
 /* 2024-11-12 5.2  CYU027   FCR-759   UPDATE ID UDF01                            */
 /* 2025-03-10 5.3  YeeKung  UWP-31293 FIX SerialNo Blank (yeekung07)             */
+/* 2025-03-12 5.4  CYU027   UWP-26488&FCR-2729 DropListSp                        */
 /*********************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_NormalReceipt_V7] (
@@ -150,6 +151,7 @@ DECLARE
 
    @cExtendedScreenSP   NVARCHAR( 20),
    @cExtScnSP           NVARCHAR( 20),
+   @cDropListSP         NVARCHAR( 20),
 
    @cSuggLOC    NVARCHAR( 20),
    @nAction     INT,
@@ -282,6 +284,7 @@ SELECT
    @cMUOM_Desc          = V_String10,
    @cPUOM_Desc          = V_String11,
    @cUserDefine01       = V_String12,
+   @cDropListSP         = V_String13,
 
    @nPUOM_Div           = V_PUOM_Div,
    @nPQTY               = V_PQTY,
@@ -380,6 +383,10 @@ BEGIN
    SET @cPOKeyDefaultValue = rdt.RDTGetConfig( @nFunc, 'ReceivingPOKeyDefaultValue', @cStorerKey)
    IF @cPOKeyDefaultValue = '0'
       SET @cPOKeyDefaultValue = ''
+
+   SET @cDropListSP = rdt.RDTGetConfig( @nFunc, 'DropListSP', @cStorerKey)
+   IF @cDropListSP = '0'
+      SET @cDropListSP = ''
 
    -- EventLog
    EXEC RDT.rdt_STD_EventLog
@@ -1386,7 +1393,7 @@ BEGIN
          IF @nRowCount > 1
          BEGIN
             SET @cFieldAttr01='1'
-            SET @cOutField01 = ''
+            SET @cOutField01 = @cDropListSP
             -- Go to next screen
             SET @nScn = 6382
             SET @nStep = 99
@@ -2198,7 +2205,7 @@ BEGIN
          SET @cOutField07 = rdt.rdtRightAlign( @cMUOM_Desc, 5)
          SET @cOutField08 = CASE WHEN @nPQTY = 0 OR @cFieldAttr08 = 'O' THEN '' ELSE CAST( @nPQTY AS NVARCHAR( 7)) END -- PQTY
          SET @cOutField09 = CASE WHEN @nMQTY = 0 THEN '' ELSE CAST( @nMQTY AS NVARCHAR( 7)) END -- MQTY
-         SET @cOutField10 = '' -- Reason
+         SET @cOutField10 = @cDropListSP -- Reason List
          SET @cOutField15 = '' -- ExtendedInfo
 
          SET @cExtendedScreenSP =  ISNULL(rdt.RDTGetConfig( @nFunc, 'ExtendedScreenSP', @cStorerKey), '')
@@ -2406,7 +2413,7 @@ BEGIN
          IF @nRowCount > 1
          BEGIN
             SET @cFieldAttr01='1'
-            SET @cOutField01 = ''
+            SET @cOutField01 = @cDropListSP
             -- Go to next screen
             SET @nScn = 6382
             SET @nStep = 99
@@ -2800,7 +2807,7 @@ BEGIN
       SET @cOutField07 = rdt.rdtRightAlign( @cMUOM_Desc, 5)
       SET @cOutField08 = CASE WHEN @nPQTY = 0 OR @cFieldAttr08 = 'O' THEN '' ELSE CAST( @nPQTY AS NVARCHAR( 7)) END -- PQTY
       SET @cOutField09 = CASE WHEN @nMQTY = 0 THEN '' ELSE CAST( @nMQTY AS NVARCHAR( 7)) END -- MQTY
-      SET @cOutField10 = '' -- Reason
+      SET @cOutField10 = @cDropListSP -- Reason
       SET @cOutField15 = '' -- ExtendedInfo
       
       SET @cExtendedScreenSP =  ISNULL(rdt.RDTGetConfig( @nFunc, 'ExtendedScreenSP', @cStorerKey), '')
@@ -4147,7 +4154,7 @@ BEGIN
             SET @cOutField07 = rdt.rdtRightAlign( @cMUOM_Desc, 5)
             SET @cOutField08 = CASE WHEN @nPQTY = 0 OR @cFieldAttr08 = 'O' THEN '' ELSE CAST( @nPQTY AS NVARCHAR( 7)) END -- PQTY
             SET @cOutField09 = CASE WHEN @nMQTY = 0 THEN '' ELSE CAST( @nMQTY AS NVARCHAR( 7)) END -- MQTY
-            SET @cOutField10 = '' -- Reason
+            SET @cOutField10 = @cDropListSP -- Reason
 
             SET @cExtendedScreenSP =  ISNULL(rdt.RDTGetConfig( @nFunc, 'ExtendedScreenSP', @cStorerKey), '')
             SET @nAction = 3
@@ -4381,8 +4388,7 @@ BEGIN
             SET @nRowCount = @@ROWCOUNT
             IF @nRowCount > 1
             BEGIN
-               SET @cFieldAttr01='1'
-               SET @cOutField01 = ''
+               SET @cOutField01 = @cDropListSP
                -- Go to next screen
                SET @nScn = 6382
                SET @nStep = 99
@@ -5252,7 +5258,7 @@ BEGIN
       SET @cOutField07 = rdt.rdtRightAlign( @cMUOM_Desc, 5)
       SET @cOutField08 = CASE WHEN @nPQTY = 0 OR @cFieldAttr08 = 'O' THEN '' ELSE CAST( @nPQTY AS NVARCHAR( 7)) END -- PQTY
       SET @cOutField09 = CASE WHEN @nMQTY = 0 THEN '' ELSE CAST( @nMQTY AS NVARCHAR( 7)) END -- MQTY
-      SET @cOutField10 = '' -- Reason
+      SET @cOutField10 = @cDropListSP -- Reason
       SET @cOutField15 = '' -- ExtendedInfo
       
       SET @cExtendedScreenSP =  ISNULL(rdt.RDTGetConfig( @nFunc, 'ExtendedScreenSP', @cStorerKey), '')
@@ -5647,6 +5653,7 @@ BEGIN
       V_String10   = @cMUOM_Desc,
       V_String11   = @cPUOM_Desc,
       V_String12   = @cUserDefine01,
+      V_String13   = @cDropListSP,
 
       V_PUOM_Div   = @nPUOM_Div ,
       V_PQTY       = @nPQTY,

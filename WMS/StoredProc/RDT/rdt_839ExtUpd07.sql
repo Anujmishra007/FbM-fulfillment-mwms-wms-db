@@ -6,16 +6,17 @@ GO
 
 
 
-/******************************************************************************/
-/* Store procedure: rdt_839ExtUpd07                                           */
-/* Copyright      : Maersk                                                    */ 
-/* Purpose:Extended Puma                                                      */
-/*                                                                            */
-/* Modifications log:                                                         */
-/*                                                                            */
-/* Date         Author    Ver.  Purposes                                      */
-/* 2024-07-16   JHU151    1.0   FCR-428 Created                               */
-/******************************************************************************/
+/*******************************************************************************/
+/* Store procedure: rdt_839ExtUpd07                                            */
+/* Copyright      : Maersk                                                     */ 
+/* Purpose:Extended Puma                                                       */
+/*                                                                             */
+/* Modifications log:                                                          */
+/*                                                                             */
+/* Date         Author    Ver.   Purposes                                      */
+/* 2024-07-16   JHU151    1.0    FCR-428 Created                               */
+/* 2025-04-11   JCH507    1.1.0  FCR-2705 Support new screen                   */
+/*******************************************************************************/
 
 CREATE OR ALTER     PROCEDURE [RDT].[rdt_839ExtUpd07]
     @nMobile         INT                   
@@ -63,6 +64,7 @@ BEGIN
    DECLARE @bSuccess INT   
    DECLARE @nExists  INT
    DECLARE @cShort   NVARCHAR(20)
+   DECLARE @nScn     INT
    
    DECLARE
       @cStoredProcedure  NVARCHAR(50),
@@ -86,6 +88,9 @@ BEGIN
 
    IF @nFunc = 839
    BEGIN
+
+      SELECT @nScn = scn FROM rdt.rdtMobRec WITH (NOLOCK) WHERE Mobile = @nMobile
+
       IF @nStep = 1
       BEGIN
          BEGIN
@@ -172,7 +177,7 @@ BEGIN
       END
 
     
-      IF @nStep = 5 -- Close DropID or Short pick
+      IF @nStep = 5 OR (@nStep = 99 AND @nScn = 6524) -- Close DropID or Short pick
       BEGIN
          IF @nInputKey = 1 AND @cOption IN ('1', '3') -- ENTER and close drop ID --NLT013 option = 1 is short pick, need trigger msg to WCS
          BEGIN
@@ -190,7 +195,7 @@ BEGIN
             END
          END
 
-         IF @nInputKey = 1 AND @cOption = '1'
+         IF @nInputKey = 1 AND @cOption IN ('1', '9') --V1.1
          BEGIN
             SELECT 
                   @cReasonCode = code2,

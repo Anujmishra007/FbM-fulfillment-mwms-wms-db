@@ -15,6 +15,7 @@ GO
 /*                                                                            */
 /* Date       Rev    Author     Purposes                                      */
 /* 2024-12-26 1.0.1  BDH028     Print PDF file                                */
+/* 2025-04-09 1.1.0  YWA059     Fix issue: endless loop in a scenario         */
 /******************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdt_593PrtCldFile03] (
    @nMobile    INT,
@@ -79,62 +80,82 @@ BEGIN
       @c_VbErrMsg             NVARCHAR( MAX),
       @MbolKey                NVARCHAR(10),
       @loop_OrderKey          NVARCHAR(10),
-      @end_loop_flag         INT,
-      @nRtnCnt                INT
+      @end_loop_flag          INT,
+      @nRtnCnt                INT,
+      @loop_qty               INT
+
    -- fetch printer
    SELECT @cLabelPrinter = Printer
         , @cPaperPrinter = Printer_Paper
    FROM rdt.rdtMobRec WITH (NOLOCK)
    WHERE Mobile = @nMobile
+
    SET @MbolKey = @cParam1
    SET @loop_OrderKey = ''
    SET @end_loop_flag = 0
+   SET @loop_qty = 1
+
    -- fetch extern order key
-   WHILE(1=1)
+   WHILE(@loop_qty < 20)
    BEGIN
+     SET @loop_qty = @loop_qty + 1
       IF ISNULL(@cParam2,'') <> ''
       BEGIN
          SET @cOrderKey = @cParam2
          IF ISNULL(@cOrderKey, '') = ''
          BEGIN
-            SET @nErrno = 228511
+            SET @nErrno = 236101
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- NeedOrderKey
+            GOTO Quit
          END
       END
       ELSE 
       BEGIN
-         IF EXISTS (SELECT 1 FROM dbo.MBOLDETAIL WHERE MbolKey = @MbolKey)
+         IF EXISTS (SELECT 1 FROM dbo.MBOLDETAIL WITH(NOLOCK) WHERE MbolKey = @MbolKey)
          BEGIN
                SELECT TOP 1 @loop_OrderKey = OrderKey 
                FROM dbo.MBOLDETAIL WITH(NOLOCK) 
                WHERE MbolKey = @MbolKey
                AND OrderKey > @loop_OrderKey
                ORDER BY OrderKey
+
                IF @@ROWCOUNT = 0
                BEGIN
                   SET @end_loop_flag = 1
                END
+
                SET @cOrderKey = @loop_OrderKey
          END
+         ELSE
+         BEGIN
+            SET @nErrNo = 236102
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- InvalidMBOLKEY
+            GOTO Quit
+         END
       END
+
       IF (@end_loop_flag = 1)
-         BEGIN
-               BREAK;
-         END
+      BEGIN
+         BREAK
+      END
+
       IF (@cOrderKey = @cParam2)
-         BEGIN
-               SET @end_loop_flag = 1
-         END
+      BEGIN
+         SET @end_loop_flag = 1
+      END
+
       SELECT TOP 1 @cExternOrderKey = ExternOrderKey 
       FROM dbo.ORDERS WITH(NOLOCK) 
       WHERE OrderKey = @cOrderKey
          AND StorerKey = @cStorerKey
+
       IF ISNULL(@cExternOrderKey, '') = ''
       BEGIN
-         SET @nErrNo = 228510
+         SET @nErrNo = 236103
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- NeedExtOrderKey
          GOTO Quit
       END
+
       -- fetch print code data
       SELECT 
          @cLabelName = c1.Code, 
@@ -155,22 +176,28 @@ BEGIN
          AND c2.StorerKey = @cStorerKey
          AND ISNULL(c2.code2, '') <> ''
          AND c2.Long = 'rdt_593PrtCldFile03'
-         AND c2.Code = @cOption;
+         AND c2.Code = @cOption
+
       SELECT @nRowCount = @@ROWCOUNT
+
       IF @nRowCount = 0
       BEGIN
-         SET @nErrNo = 228501
+         SET @nErrNo = 236104
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- FETCH CODE FAILED
+         GOTO Quit
       END
+
       SELECT @cReportType = @cLabelName
       IF ISNULL(@cCondition,'') = '' OR CHARINDEX('all',@cCondition) > 0
       BEGIN
          SET @cCondition = ''
       END
+
       -- build sql
       SET @cSQL = 'SELECT @nRtnCnt = COUNT(1) FROM dbo.ORDERS orders WITH (NOLOCK) WHERE orders.OrderKey = @cOrderKey '
          + CASE WHEN @cCondition <> '' THEN 'AND ' + @cCondition ELSE '' END
       SET @cSQLParam = '@nRtnCnt INT OUTPUT, @cOrderKey NVARCHAR(10)'
+
       BEGIN TRY
          EXEC sp_ExecuteSQL @cSQL, @cSQLParam, 
             @nRtnCnt = @nRtnCnt OUTPUT,
@@ -179,23 +206,26 @@ BEGIN
       BEGIN CATCH
          DECLARE @cSQLErrorMessage NVARCHAR(MAX)
          SELECT @cSQLErrorMessage = ERROR_MESSAGE()
-         SET @nErrNo = 228502
+         SET @nErrNo = 236105
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP')      -- Invalid Condition
          EXEC rdt.rdtInsertMsgQueue @nMobile, 0, '', '', @cErrMsg, @cLabelName, @cCondition, @cSQLErrorMessage
          GOTO Quit
       END CATCH
+
       -- check url prefix cfg
       SELECT @cWebRequestURL = WebRequestURL
       FROM dbo.WebServiceCfg WITH (NOLOCK)
       WHERE DataProcess = 'FNGETFILE'
          AND ActiveFlag = 1
+
       -- URL prifix verify
       IF ISNULL(@cWebRequestURL, '') = ''
       BEGIN
-         SET @nErrNo = 228503
+         SET @nErrNo = 236106
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- MissWebSrvc
          GOTO Quit
       END
+
       -- build file path
       SET @cExternOrderKey = RIGHT(CONCAT('0000000000',@cExternOrderKey),10)
       SELECT @cFilePath = LTRIM(RTRIM(@cFilePath))
@@ -208,30 +238,36 @@ BEGIN
          SELECT @cPrintDataFile = @cFilePath 
             + '/' + REPLACE(REPLACE(@cFileName,'<code>',@cLabelName),'<ExternOrderKey>',@cExternOrderKey)
       END
+
       -- override file path in debug
       IF @bDebugFlag = 1
       BEGIN
          SELECT @cPrintDataFile = 'C:\\targetdir\\filename.PDF'
       END
+
       -- encrypt file path
       BEGIN TRY
          SELECT @cPrintDataFileEncrypt = MASTER.DBO.fnc_CryptoEncrypt(@cPrintDataFile, '')
       END TRY
       BEGIN CATCH
-         SET @nErrNo = 228504
+         SET @nErrNo = 236107
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Failed to encrypt file path
+         GOTO Quit
       END CATCH
       IF @nErrNo <> 0
       BEGIN
          GOTO Quit
       END
+
       -- encode url
       EXEC MASTER.DBO.isp_URLEncode
          @c_InputString = @cPrintDataFileEncrypt,
          @c_OutputString = @cPrintDataFileEncode OUTPUT,
          @c_VbErrMsg = @c_VbErrMsg OUTPUT
+
       -- build whole uri
       SET @cPrintDataFileFull = @cWebRequestURL + @cPrintDataFileEncode
+
       SELECT TOP 1
          @cRptDataWindow = DataWindow,                
          @cRptPaperType = PaperType,
@@ -241,33 +277,39 @@ BEGIN
          AND ReportTYpe = @cReportType
          AND (Function_ID = @nFunc OR Function_ID = 0)
       ORDER BY Function_ID DESC
+
       IF @@ROWCOUNT = 0
       BEGIN
-         SET @nErrNo = 228505
+         SET @nErrNo = 236108
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Report Not Exist
          --EXEC rdt.rdtInsertMsgQueue @nMobile, 0, '', '', @cErrMsg, @cReportType
          GOTO Quit
       END
+
       IF @cRptPaperType = 'LABEL'
          SET @cPrinter = @cLabelPrinter
       ELSE
-         SET @cPrinter = @cPaperPrinter                  
+         SET @cPrinter = @cPaperPrinter
+
       --Verify printer
       SELECT @cCloudClientPrinterID= CloudPrintClientID
          FROM rdt.rdtprinter WITH (NOLOCK) 
          WHERE PrinterID = @cPrinter
+         
       IF @@ROWCOUNT = 0
       BEGIN
-         SET @nErrNo = 228506
+         SET @nErrNo = 236109
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- PrinterNotExists
          GOTO Quit
       END
+
       IF ISNULL(@cCloudClientPrinterID, '') = ''
       BEGIN
-         SET @nErrNo = 228507
+         SET @nErrNo = 236110
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- MissCldPrntID
          GOTO Quit
       END
+
       --Prepare print job data
       SELECT   @cDCropWidth  =  DCropWidth
                ,@cDCropHeight = DCropHeight
@@ -280,6 +322,7 @@ BEGIN
       WHERE reporttype = @cReportType
          AND Storerkey = @cStorerKey
          AND Function_ID = @nFunc
+
       SET @cDCropWidth    = CASE WHEN ISNULL(@cDCropWidth , '') = '' THEN '' ELSE @cDCropWidth  END
       SET @cDCropHeight   = CASE WHEN ISNULL(@cDCropHeight, '') = '' THEN '' ELSE @cDCropHeight END
       SET @cIsLandScape   = CASE WHEN ISNULL(@cIsLandScape, '') = '' THEN '' ELSE @cIsLandScape END
@@ -288,19 +331,22 @@ BEGIN
       SET @cIsCollate     = CASE WHEN ISNULL(@cIsCollate  , '') = '' THEN '' ELSE @cIsCollate   END
       SET @cPaperSize     = CASE WHEN ISNULL(@cPaperSize  , '') = '' THEN '' ELSE @cPaperSize   END
       SET @cCloudClientPrinterID = CASE WHEN ISNULL(@cCloudClientPrinterID  , '') = '' THEN '' ELSE @cCloudClientPrinterID   END
+
       INSERT INTO rdt.rdtPrintJob (
          JobName, ReportID, JobStatus, Datawindow, Parm1, Printer, NoOfCopy, Mobile, TargetDB, PrintData, JobType, StorerKey,
          Function_ID, PaperSizeWxH, DCropWidth, DCropHeight, IsLandScape, IsColor, IsDuplex, IsCollate)
       VALUES(
          'rdt_593PrtCldFile03', @cReportType, @cJobStatus, @cRptDataWindow, @cExternOrderKey, @cPrinter, @nRptNoOfCopy, @nMobile, DB_NAME(), @cPrintDataFileFull, 'LogiReport', @cStorerKey,
          @nFunc, @cPaperSize, @cDCropWidth, @cDCropHeight, @cIsLandScape, @cIsColor, @cIsDuplex, @cIsCollate)
+
       SELECT @nJobID = SCOPE_IDENTITY(), @nErrNo = @@ERROR
       IF @nErrNo <> 0
       BEGIN
-         SET @nErrNo = 228508
+         SET @nErrNo = 236111
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INS PrnJobFail
          GOTO Quit
       END
+
       --Submit to cloud print task
       EXEC isp_UpdateRDTPrintJobStatus
             @n_JobID = @nJobID,
@@ -312,7 +358,7 @@ BEGIN
             @c_PrintData = @cPrintDataFileFull
       IF @b_Success <> 1
       BEGIN
-         SET @nErrNo = 228509
+         SET @nErrNo = 236112
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SubCldPrtFail
          GOTO Quit
       END
