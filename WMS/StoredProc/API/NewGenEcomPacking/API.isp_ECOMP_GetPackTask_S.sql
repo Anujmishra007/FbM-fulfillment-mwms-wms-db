@@ -19,6 +19,7 @@
 /* Date           Author   Purposes	                                    */
 /* 15-Feb-2023    Alex     #JIRA PAC-4 Initial                          */
 /* 15-Nov-2023    Alex02   #JIRA PAC-140 Gift Wrapping                  */
+/* 10-Oct-2024    Alex03   #JIRA PAC-355 CCTV Integration               */
 /************************************************************************/    
 CREATE OR ALTER PROC [API].[isp_ECOMP_GetPackTask_S](
      @b_Debug            INT            = 0
@@ -80,7 +81,7 @@ BEGIN
 
    DECLARE @c_InnerJson                   NVARCHAR(MAX)  = NULL
          , @c_OrderStatusJson             NVARCHAR(MAX)  = NULL
-         
+         , @c_EPACKConfigJSON             NVARCHAR(4000) = ''        --Alex03
          , @c_DefaultCartonType           NVARCHAR(10)   = ''
          , @c_DefaultCartonGroup          NVARCHAR(10)   = ''
          , @b_AutoCloseCarton             INT            = 0
@@ -666,6 +667,19 @@ BEGIN
    ,  @c_PackByLA05     = ''
    ,  @c_SourceApp      = 'SCE'
 
+   --Alex03 Begin
+   EXEC [API].[isp_ECOMP_GetEPackConfigs]
+     @c_StorerKey       = @c_StorerKey   
+   , @c_Facility        = @c_Facility    
+   , @c_UserId          = @c_UserId      
+   , @c_ComputerName    = @c_ComputerName
+   , @c_PackMode        = @c_OrderMode    
+   , @c_TaskBatchID     = @c_TaskBatchID 
+   , @c_OrderKey        = @c_OrderKey    
+   , @c_DropID          = @c_DropID      
+   , @c_EPACKConfigJSON = @c_EPACKConfigJSON OUTPUT
+   --Alex03 End
+
    SET @c_ResponseString = ISNULL(( 
                               SELECT TOP 1
                                      @c_PackNotes As 'PackNotes'
@@ -688,6 +702,9 @@ BEGIN
                                     ,(
                                        JSON_QUERY(@c_InnerJson)
                                      ) As 'PackTask'
+                                    ,(
+                                       JSON_QUERY(@c_EPACKConfigJSON)
+                                     ) As 'EPACKConfig'
                               FROM @t_PackTaskOrderSts
                               FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
                            ), '')

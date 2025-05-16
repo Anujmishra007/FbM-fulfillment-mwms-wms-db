@@ -19,6 +19,7 @@
 /* Date           Author   Purposes                                     */
 /* 03-Jul-2023    Allen    #JIRA PAC-4 Initial                          */
 /* 20-Jul-2023    Alex01   removed hardcoded GiftWrapping SP            */
+/* 10-Oct-2024    Alex02   #JIRA PAC-358 CCTV Integration               */
 /************************************************************************/    
 CREATE OR ALTER PROC [API].[isp_ECOMP_GetPackTask_M](
      @b_Debug            INT            = 0
@@ -92,6 +93,8 @@ BEGIN
          , @b_IsWhereClauseExists         INT            = 0
 
          , @b_SearchBatchIDOnly           INT            = 0
+
+         , @c_EPACKConfigJSON             NVARCHAR(4000) = ''        --Alex02
 
    DECLARE @c_MultiPackResponse           NVARCHAR(MAX)  = NULL
          , @c_DefaultCartonType           NVARCHAR(10)   = ''
@@ -399,6 +402,19 @@ BEGIN
       , @c_MultiPackResponse     = @c_MultiPackResponse     OUTPUT
       , @c_InProgOrderKey        = @c_InProgOrderKey        OUTPUT
 
+   --Alex02 Begin
+   EXEC [API].[isp_ECOMP_GetEPackConfigs]
+     @c_StorerKey       = @c_StorerKey   
+   , @c_Facility        = @c_Facility    
+   , @c_UserId          = @c_UserId      
+   , @c_ComputerName    = @c_ComputerName
+   , @c_PackMode        = @c_OrderMode    
+   , @c_TaskBatchID     = @c_TaskBatchID 
+   , @c_OrderKey        = @c_OrderKey    
+   , @c_DropID          = @c_DropID      
+   , @c_EPACKConfigJSON = @c_EPACKConfigJSON OUTPUT
+   --Alex02 End
+
    SET @c_ResponseString = ISNULL(( 
                               SELECT TOP 1
                                      @c_PackNotes              As 'PackNotes'
@@ -420,6 +436,9 @@ BEGIN
                                        FROM @t_PackingRules
                                        FOR JSON PATH
                                      ) As 'PackingRules'
+                                    ,(
+                                       JSON_QUERY(@c_EPACKConfigJSON)
+                                     ) As 'EPACKConfig'
                               FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
                            ), '')
 

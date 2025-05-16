@@ -20,6 +20,7 @@
 /* 12-May-2023    Allen     #JIRA PAC-65 Initial                        */
 /* 22-May-2023    Alex     Rename sp name to isp_ECOMP_API_GetReports   */
 /* 05-Sep-2023    Allen    Change default return string  (AL01)         */
+/* 08-May-2025    Alex01   #FCR-3165 - Skip changing  @c_UserID         */
 /************************************************************************/
 
 CREATE OR ALTER PROC [API].[isp_ECOMP_API_GetReports] (  
@@ -80,13 +81,20 @@ BEGIN
    SET @c_ErrMsg                          = ''  
    SET @c_ResponseString                  = ''  
   
-   --Change Login User  
-   SET @n_sp_err = 0       
-   EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserID OUTPUT, @n_Err = @n_sp_err OUTPUT, @c_ErrMsg = @c_sp_errmsg OUTPUT      
-         
-   EXECUTE AS LOGIN = @c_UserID      
-         
-   SELECT @c_UserID
+   DECLARE @DBUserName NVARCHAR(100)	--#FCR-3165
+   SET @DBUserName = @c_UserID			--#FCR-3165
+
+  --Change Login User
+   SET @n_sp_err = 0     
+   EXEC [WM].[lsp_SetUser] @c_UserName = @DBUserName OUTPUT, @n_Err = @n_sp_err OUTPUT, @c_ErrMsg = @c_sp_errmsg OUTPUT    
+
+   --#FCR-3165
+   IF @DBUserName LIKE '%' + @c_UserID + '%'
+   BEGIN
+    EXECUTE AS LOGIN = @DBUserName    --@c_UserID 
+    SET @c_UserID = @DBUserName
+   END
+
    IF @n_sp_err <> 0       
    BEGIN        
       SET @n_Continue = 3        

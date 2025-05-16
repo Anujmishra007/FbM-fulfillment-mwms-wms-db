@@ -32,6 +32,7 @@ GO
 /* 16-FEB-2023 Wan05    1.5   PAC-4 NextGen Ecom Packing - Single       */  
 /* 05-MAY-2023 Alex     2.0   Clone from EXCEED WMS                     */
 /* 27-JUL-2024 Alex01   2.1   PAC-347 Extend to display 30 carton type  */
+/* 07-Aug-2024 Alex02   2.2   #JIRA PAC-352 Bug fixes                   */
 /************************************************************************/      
 CREATE OR ALTER PROC [API].[isp_ECOMP_GetPackCartonType]      
    @c_Facility    NVARCHAR(5)      
@@ -240,7 +241,7 @@ BEGIN
            ,  CartonType        NVARCHAR(10)   NOT NULL DEFAULT('')        
            ,  Cube              FLOAT          NOT NULL DEFAULT(0.00)      
            ,  MaxWeight         FLOAT          NOT NULL DEFAULT(0.00)      
-           ,  MaxCount          FLOAT          NOT NULL DEFAULT(0.00)      
+           ,  MaxCount          INT            NOT NULL DEFAULT(0)         --Alex02 Change datatype from int to float.
            ,  CartonWeight      FLOAT          NOT NULL DEFAULT(0.00)      
            ,  CartonLength      FLOAT          NOT NULL DEFAULT(0.00)      
            ,  CartonWidth       FLOAT          NOT NULL DEFAULT(0.00)      

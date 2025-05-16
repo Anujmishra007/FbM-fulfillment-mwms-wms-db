@@ -19,6 +19,8 @@
 /* 11-Apr-2023    Allen       #JIRA PAC-4 Initial                       */ 
 /* 22-May-2024    Alex01      #PAC-343 bug fixed - missing pick header  */
 /* 10-Sep-2024    Alex03      #PAC-353 - Bundle Packing validation      */
+/* 07-May-2025    Alex04      #UWP-33988 - Swap the logic sequence of   */
+/*                                PackConfirmSerialNo & ScanOutPickSlip */
 /************************************************************************/  
 CREATE OR ALTER PROC [API].[isp_ECOMP_PackConfirm] 
             @c_PickSlipNo  NVARCHAR(10)      OUTPUT   -- 2019-05-23 Performance Tune to return PickSlipNo to PB to retrieve packheader by pickslipno(refresh)                    
@@ -699,23 +701,8 @@ BEGIN
    END  
    --(Wan06) Update PackHeader status to '9' before call ScanOutPickSlip - END  
   
-
-   EXEC isp_ScanOutPickSlip    
-               @c_PickSlipNo  = @c_PickSlipNo  
-            ,  @n_err         = @n_err       OUTPUT  
-            ,  @c_errmsg      = @c_errmsg    OUTPUT  
-  
-   IF @n_err <> 0  
-   BEGIN  
-      SET @n_continue = 3  
-      SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+':' + @c_errmsg  
-      SET @n_err = 60073   
-      SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Error Executing isp_ScanOutPickSlip. (isp_ECOMP_PackConfirm)'   
-                     + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '   
-      GOTO QUIT  
-   END  
-  
-   --(Wan03) - START  
+  --(Alex04) - START
+  --(Wan03) - START  
    SET @b_Success = 0      
    EXECUTE dbo.ispPackConfirmSerialNo     
            @c_PickSlipNo= @c_PickSlipNo    
@@ -732,6 +719,22 @@ BEGIN
                      + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg), '') + ' ) '    
       GOTO QUIT                          
    END   
+
+   EXEC isp_ScanOutPickSlip    
+               @c_PickSlipNo  = @c_PickSlipNo  
+            ,  @n_err         = @n_err       OUTPUT  
+            ,  @c_errmsg      = @c_errmsg    OUTPUT  
+  
+   IF @n_err <> 0  
+   BEGIN  
+      SET @n_continue = 3  
+      SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+':' + @c_errmsg  
+      SET @n_err = 60073   
+      SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Error Executing isp_ScanOutPickSlip. (isp_ECOMP_PackConfirm)'   
+                     + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '   
+      GOTO QUIT  
+   END  
+   --(Alex04) - END
   
    --(Wan05) - START      
    SET @b_Success = 0          

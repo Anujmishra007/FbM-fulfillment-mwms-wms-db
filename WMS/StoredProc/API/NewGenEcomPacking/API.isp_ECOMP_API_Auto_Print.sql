@@ -22,6 +22,7 @@
 /* 04-Sep-2023    Allen    #JIRA PAC-155 replace | to ,        --(AL03) */
 /* 03-JAN-2024    Alex01   #JIRA PAC-176 Pass ComputerName to Print SP  */
 /* 14-MAY-2024    Alex02   #JIRA PAC-341 LogiReport Printing            */
+/* 08-May-2025    Alex03   #FCR-3165 - Skip changing  @c_UserID         */
 /************************************************************************/    
 CREATE OR ALTER PROC [API].[isp_ECOMP_API_Auto_Print](
      @b_Debug           INT            = 0
@@ -119,19 +120,19 @@ BEGIN
       DEALLOCATE C_Pack_AutoPrint 
    END
 
-   --Change Login User
+   DECLARE @DBUserName NVARCHAR(100)	--#FCR-3165
+   SET @DBUserName = @c_UserID			--#FCR-3165
+
+  --Change Login User
    SET @n_sp_err = 0     
-   EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserID OUTPUT, @n_Err = @n_sp_err OUTPUT, @c_ErrMsg = @c_sp_errmsg OUTPUT    
-       
-   EXECUTE AS LOGIN = @c_UserID    
-       
-   IF @n_sp_err <> 0     
-   BEGIN      
-      SET @n_Continue = 3      
-      SET @n_ErrNo = @n_sp_err      
-      SET @c_ErrMsg = @c_sp_errmsg     
-      GOTO QUIT      
-   END  
+   EXEC [WM].[lsp_SetUser] @c_UserName = @DBUserName OUTPUT, @n_Err = @n_sp_err OUTPUT, @c_ErrMsg = @c_sp_errmsg OUTPUT    
+
+   --#FCR-3165
+   IF @DBUserName LIKE '%' + @c_UserID + '%'
+   BEGIN
+    EXECUTE AS LOGIN = @DBUserName    --@c_UserID 
+    SET @c_UserID = @DBUserName
+   END
 
    SELECT @c_StorerKey        = ISNULL(RTRIM(StorerKey   ), '')
          ,@c_Facility         = ISNULL(RTRIM(Facility    ), '')
