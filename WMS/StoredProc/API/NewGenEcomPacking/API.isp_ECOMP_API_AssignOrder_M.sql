@@ -19,6 +19,9 @@
 /* Date           Author   Purposes                                     */
 /* 05-Jul-2023    Allen    #JIRA PAC-7 Initial                          */
 /* 09-Jul-2024    Alex01   #PAC-353 Bundle Packing Validation           */
+/* 07-May-2025    Alex02   #FCR-3165 - Save UserID Into                 */
+/*                         PackHeader.AddWho                            */
+/* 07-May-2025    Alex03   #UWP-34051 - Bug Fixes                       */
 /************************************************************************/
 CREATE OR ALTER PROC [API].[isp_ECOMP_API_AssignOrder_M](
      @b_Debug           INT            = 0
@@ -110,12 +113,21 @@ BEGIN
    SET @c_ErrMsg                          = ''
    SET @c_ResponseString                  = ''
    
-   --Change Login User
+   --Alex02 S
+   DECLARE @DBUserName NVARCHAR(100)	--#FCR-3165
+   SET @DBUserName = @c_UserID			--#FCR-3165
+
+  --Change Login User
    SET @n_sp_err = 0     
-   EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserID OUTPUT, @n_Err = @n_sp_err OUTPUT, @c_ErrMsg = @c_sp_errmsg OUTPUT    
-       
-   EXECUTE AS LOGIN = @c_UserID    
-       
+   EXEC [WM].[lsp_SetUser] @c_UserName = @DBUserName OUTPUT, @n_Err = @n_sp_err OUTPUT, @c_ErrMsg = @c_sp_errmsg OUTPUT    
+
+   IF @DBUserName LIKE '%' + @c_UserID + '%'
+   BEGIN
+    EXECUTE AS LOGIN = @DBUserName    --@c_UserID 
+    SET @c_UserID = @DBUserName
+   END  
+   --Alex02 E
+
    IF @n_sp_err <> 0     
    BEGIN      
       SET @b_Success = 0      
@@ -187,6 +199,25 @@ BEGIN
                ,@c_ExistingTaskBatchID = ISNULL(RTRIM(TaskBatchNo), '')
          FROM [dbo].[PackHeader] WITH (NOLOCK)
          WHERE PickSlipNo = @c_PickSlipNo
+
+         --Alex03 S (Basic Checking - make sure user can access this order)
+         EXEC [API].[isp_ECOMP_QueryRules]   
+            @c_TaskID         = @c_ExistingTaskBatchID   OUTPUT 
+         ,  @c_PickSlipNo     = ''  
+         ,  @c_Orderkey       = @c_NewOrderKey           OUTPUT 
+         ,  @c_UserID         = @c_UserID
+         ,  @c_ComputerName   = @c_ComputerName
+         ,  @b_Success        = @b_sp_Success            OUTPUT -- -1:Fail, 0:No Work, 1:Perform Search/addnew, 2:Set Orderkey  
+         ,  @c_ErrMsg         = @c_sp_errmsg             OUTPUT  
+         
+         IF ISNULL(RTRIM(@c_sp_errmsg), '') <> ''
+         BEGIN
+            SET @n_Continue = 3 
+            SET @n_ErrNo = 51810
+            SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(5),@n_ErrNo) + ' : Failed to get validate query rules (isp_ECOMP_API_AssignOrder_M) ( SQLSvr MESSAGE = ' + @c_sp_errmsg + ' ) '
+            GOTO QUIT
+         END
+         --Alex03 E
       END
    END
 
