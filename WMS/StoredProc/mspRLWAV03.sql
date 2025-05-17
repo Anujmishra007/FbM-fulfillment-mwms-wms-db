@@ -352,22 +352,32 @@ BEGIN
          END
 
          --WL10 S
+         IF @c_PNDLoc = ''
+         BEGIN
+            SET @n_continue = 3
+            SET @n_Err = 82018
+            SET @c_Errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_Err)
+                         +': Replenishment PND Location Group cannot be BLANK. (mspRLWAV03)'     
+            GOTO QUIT_SP   
+         END
+
          SET @c_Loc = @c_PNDLoc
          SET @c_PNDLoc = ''
    
          SELECT TOP 1 @c_PNDLoc = L.Loc
          FROM LOC L WITH (NOLOCK)
          WHERE L.LocationGroup = @c_Loc
-         --WL10 E
 
+         -- Replenishment PND Lane or loc.locationgroup setup are missing
          IF @c_PNDLoc = ''
          BEGIN
             SET @n_continue = 3
-            SET @n_Err = 82018
+            SET @n_Err = 82019
             SET @c_Errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_Err)
-                         +': Replenishment PND Lane Assignment is missing. (mspRLWAV03)'     
+                         +': Missing PND Location setup for Location Group "'+ @c_Loc + '". (mspRLWAV03)'     
             GOTO QUIT_SP   
          END
+         --WL10 E
          
          SELECT @c_LocType_PND = l.Locationtype
                ,@c_LocFac_PND  = l.Facility 
