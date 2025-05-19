@@ -49,6 +49,7 @@ GO
 /*                                             (PY01)                                           */
 /* 2025-02-04         TAK047      V.7         FCR-2650 Check Replen Task existence (CLVN02)     */
 /* 2025-05-15         SWT02       V.8         Correct Wrong PackUOM3 Value                      */
+/* 2025-05-19         ALT028      V.9         Filter out CommingleSku=0 distinct sku>1          */
 /************************************************************************************************/ 
 CREATE OR ALTER PROCEDURE [dbo].[isp_DynamicReplenishment_Granite]	 
       @c_WaveKey NVARCHAR(10), 
@@ -95,7 +96,7 @@ BEGIN
 		@n_UCC_RowRef       INT, 
 		@n_qtytoReplen      INT , 
 		@c_SuccessFlag		  NVARCHAR(1), 
-      @c_LocAisle         NVARCHAR(10) = '' 
+      		@c_LocAisle         NVARCHAR(10) = '' 
  
 		-- Error check for WaveKey existence 
 		IF NOT EXISTS(SELECT 1 FROM WaveDetail WITH (NOLOCK) WHERE WaveKey = @c_WaveKey) 
@@ -241,7 +242,14 @@ BEGIN
 					AND loc.Facility = @c_Facility
 					AND loc.LocationFlag not in ('DAMAGE','HOLD') -- PY01
 					AND  loc.MaxCarton > 0 
-					AND (LLI.Qty - LLI.QtyPicked + LLI.PendingMoveIn) > 0   --WLC01  
+					AND (LLI.Qty - LLI.QtyPicked + LLI.PendingMoveIn) > 0   --WLC01
+ 					AND NOT EXISTS (  --ALT028 Start
+					SELECT 1 
+					FROM LOTxLOCxID LLI_Sub
+					WHERE LLI_Sub.Loc = LOC.Loc
+					AND loc.CommingleSku = '0'
+					GROUP BY LLI_Sub.Loc
+					HAVING COUNT(DISTINCT LLI_Sub.SKU) > 1)  --ALT028 End
 					GROUP BY loc.Loc, loc.MaxCarton, loc.LogicalLocation, LOC.LocAisle 
 					HAVING (CEILING(SUM(lli.Qty - lli.QtyPicked + lli.PendingMoveIn)/@n_UCCQty) < LOC.MaxCarton) 
 					ORDER BY loc.LogicalLocation 
@@ -249,8 +257,7 @@ BEGIN
 				-- Find Empty in DP loc can fit in 
 				IF @c_ToLoc = '' 
 				BEGIN 
-					SELECT TOP 1  
-                  @c_ToLoc = loc.Loc  
+					SELECT TOP 1 @c_ToLoc = loc.Loc  
 					FROM LOC loc (NOLOCK) 
 					LEFT OUTER JOIN LOTxLOCxID lli (NOLOCK)  ON  loc.loc = lli.loc 
 					WHERE loc.LocationType = 'DYNAMICPK' 
@@ -297,7 +304,7 @@ BEGIN
 				IF @@ERROR <> 0 
 				BEGIN 
 					SET @n_continue  = 3 
-               SELECT @n_err = 562804 
+               				SELECT @n_err = 562804 
 					SET  @c_ErrMsg =  'NSQL' + CONVERT(char(6), @n_err) + 'Replenishement data inserting failed' 
 					GOTO RETURN_SP; 
 				END 
@@ -305,7 +312,7 @@ BEGIN
 				DECLARE updateMoveRefKeyCursor CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
 				SELECT PickDetailKey 
 				FROM PICKDETAIL (NOLOCK) PD 
-               	JOIN dbo.WAVEDETAIL WD (NOLOCK) ON WD.OrderKey = PD.OrderKey -- SWT01 
+               			JOIN dbo.WAVEDETAIL WD (NOLOCK) ON WD.OrderKey = PD.OrderKey -- SWT01 
 				WHERE PD.Storerkey = @c_StorerKey  
 				AND PD.DropID = @c_DropId 
 				AND WD.WaveKey = @c_WaveKey -- SWT01 
@@ -355,11 +362,11 @@ BEGIN
 		END 
 		ELSE 
 		BEGIN 
-         SET @n_err = 562805 
+         		SET @n_err = 562805 
 			SELECT @c_errmsg = 'NSQL' + CONVERT(char(6), @n_err) + 'Replenishment not done, Something went wrong in current transaction' 
 		END 
  
-	RETURN_SP: 
+		RETURN_SP: 
 		IF CURSOR_STATUS('LOCAL', 'cur_repleinshment') IN (0, 1) 
 		BEGIN 
 			CLOSE cur_repleinshment; 
