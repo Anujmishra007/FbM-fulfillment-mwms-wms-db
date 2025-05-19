@@ -60,6 +60,7 @@ BEGIN
            , @cEquipmentID NVARCHAR( 50)
            , @cDriverName NVARCHAR( 100)
            , @cRoute NVARCHAR( 150)
+           , @cAppointmentID NVARCHAR( 20)
 
            SET @c_ASNCustomFieldsSP = ''
            SET @c_StorerKey = ''
@@ -134,6 +135,7 @@ BEGIN
           SET @cEquipmentID = ''
           SET @cDriverName = ''
           SET @cRoute = ''
+          SET @cAppointmentID = ''
       END
 
       IF @c_ASNCustomFieldsSP <> ''
@@ -144,12 +146,14 @@ BEGIN
                SET @c_SQL = N'EXEC dbo.' + RTRIM( @c_ASNCustomFieldsSP) +
                ' @c_Receiptkey = @c_Receiptkey, @cEquipmentID = @cEquipmentID OUTPUT,'+
                ' @cDriverName = @cDriverName OUTPUT, @cRoute = @cRoute OUTPUT,'+
+               ' @cAppointmentID = @cAppointmentID OUTPUT,' +
                ' @n_err = @n_err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT'
 
                SET @c_SQLParam = N'@c_Receiptkey NVARCHAR(10),'+
                '@cEquipmentID NVARCHAR(50) OUTPUT,'+
 			         '@cDriverName NVARCHAR(100) OUTPUT,'+
 			         '@cRoute NVARCHAR(150) OUTPUT,'+
+			         '@cAppointmentID NVARCHAR(20) OUTPUT,'+
                '@n_err INT OUTPUT,'+
                '@c_ErrMsg NVARCHAR(255) OUTPUT'
 
@@ -158,6 +162,7 @@ BEGIN
                , @cEquipmentID OUTPUT
                , @cDriverName OUTPUT
                , @cRoute OUTPUT
+               , @cAppointmentID OUTPUT
                , @n_err OUTPUT
                , @c_ErrMsg OUTPUT
 
@@ -169,6 +174,7 @@ BEGIN
             SET @cEquipmentID = ''
 		        SET @cDriverName = ''
 		        SET @cRoute = ''
+		        SET @cAppointmentID = ''
          END
       END
      -- (SSA01) End --
@@ -203,6 +209,7 @@ BEGIN
           ,  ShipmentCartonCount =  0       
           ,  ShipmentPalletCount =  0 
           ,  OTMShipmentStatus   = ''
+          ,  AppointmentID   = @cAppointmentID      --(SSA01)
       FROM dbo.RECEIPT AS r WITH (NOLOCK)
       WHERE r.ReceiptKey = @c_ReceiptKey;
    

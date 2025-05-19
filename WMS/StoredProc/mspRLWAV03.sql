@@ -76,8 +76,10 @@ GO
 /*                           pickdetail.Qty                             */
 /* 02-Apr-2025 SWT09     4.2 Revise PackInfo Weight and Cube calculation*/
 /* 09-May-2025 AYD01     4.3 UWP-32643: Fix PickFace checking           */
+/* 15-May-2025 WLC015    4.4 FCR-4480 Change to get PND Location from   */ 
+/*                           LocationGroup=DispatchCasePickMethod (WL10)*/
 /************************************************************************/
-CREATE  OR ALTER  PROC [dbo].[mspRLWAV03]
+CREATE OR ALTER PROC [dbo].[mspRLWAV03]
    @c_WaveKey NVARCHAR(10)
  , @b_Success INT           OUTPUT
  , @n_Err     INT           OUTPUT
@@ -349,14 +351,33 @@ BEGIN
             GOTO QUIT_SP    
          END
 
+         --WL10 S
          IF @c_PNDLoc = ''
          BEGIN
             SET @n_continue = 3
             SET @n_Err = 82018
             SET @c_Errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_Err)
-                         +': Replenishment PND Lane Assignment is missing. (mspRLWAV03)'     
+                         +': Replenishment PND Location Group cannot be BLANK. (mspRLWAV03)'     
             GOTO QUIT_SP   
          END
+
+         SET @c_Loc = @c_PNDLoc
+         SET @c_PNDLoc = ''
+   
+         SELECT TOP 1 @c_PNDLoc = L.Loc
+         FROM LOC L WITH (NOLOCK)
+         WHERE L.LocationGroup = @c_Loc
+
+         -- Replenishment PND Lane or loc.locationgroup setup are missing
+         IF @c_PNDLoc = ''
+         BEGIN
+            SET @n_continue = 3
+            SET @n_Err = 82019
+            SET @c_Errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_Err)
+                         +': Missing PND Location setup for Location Group "'+ @c_Loc + '". (mspRLWAV03)'     
+            GOTO QUIT_SP   
+         END
+         --WL10 E
          
          SELECT @c_LocType_PND = l.Locationtype
                ,@c_LocFac_PND  = l.Facility 
