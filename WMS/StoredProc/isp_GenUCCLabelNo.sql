@@ -87,7 +87,7 @@ BEGIN
      --NJOW01 E     
 
      SELECT @cPacktype = dbo.fnc_GetParamValueFromString ('@cPacktype', @c_option5, @cPacktype)    --ML01
-     IF ISNULL(@cPacktype,'') NOT LIKE '[0-9]' THEN SET @cPacktype = '0'                           --ML01
+     IF ISNULL(@cPacktype,'') NOT LIKE '[0-9]' SET @cPacktype = '0'                                --ML01
 
 	   IF LEN(@cSUSR1) >= 9 AND @c_SSCCDynSerialByCompPrefix <> 'Y' --NJOW01
      BEGIN

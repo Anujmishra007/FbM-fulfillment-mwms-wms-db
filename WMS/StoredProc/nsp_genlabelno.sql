@@ -161,7 +161,7 @@ BEGIN
             SET @c_LabelNo = ''
 
             SELECT @cPacktype = dbo.fnc_GetParamValueFromString ('@cPacktype', @c_option5, @cPacktype)    --ML01
-            IF ISNULL(@cPacktype,'') NOT LIKE '[0-9]' THEN SET @cPacktype = '0'                           --ML01
+            IF ISNULL(@cPacktype,'') NOT LIKE '[0-9]' SET @cPacktype = '0'                                --ML01
 
             SELECT @cSUSR1 = ISNULL(SUSR1, '0')
             FROM dbo.Storer WITH (NOLOCK)
