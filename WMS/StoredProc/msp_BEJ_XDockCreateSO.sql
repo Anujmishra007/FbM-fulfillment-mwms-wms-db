@@ -850,16 +850,15 @@ BEGIN
                         Address1     = @c_C_Address1,
                         Address2     = @c_C_Address2,
                         Address3     = @c_C_Address3,
-                        ConsigneeFor = @c_StorerKey,
-                        address4 = 'msp_BEJ_XDockCreateSO'
+                        ConsigneeFor = @c_StorerKey
                         WHERE StorerKey = @c_ConsigneeKey AND [Type] = '2'
                     END
                     ELSE 
                     BEGIN
                         INSERT INTO STORER 
-                        (Storerkey, Type, Company, Address1, Address2, Address3, ConsigneeFor, Address4) 
+                        (Storerkey, Type, Company, Address1, Address2, Address3, ConsigneeFor) 
                         VALUES 
-                        (@c_ConsigneeKey, '2', @c_C_Contact1,  @c_C_Address1,  @c_C_Address2, @c_C_Address3, @c_StorerKey, 'msp_BEJ_XDockCreateSO') 
+                        (@c_ConsigneeKey, '2', @c_C_Contact1,  @c_C_Address1,  @c_C_Address2, @c_C_Address3, @c_StorerKey) 
                     END
                     IF @@ERROR <> 0 
                     BEGIN
