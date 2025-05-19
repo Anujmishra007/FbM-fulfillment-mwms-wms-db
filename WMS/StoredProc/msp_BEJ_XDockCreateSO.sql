@@ -4,7 +4,7 @@ SET QUOTED_IDENTIFIER OFF
 GO
 /************************************************************************/  
 /* Stored Procedure: msp_BEJ_XDockCreateSO                              */
-/* Creation Date: 15-May-2025                                           */
+/* Creation Date: 19-May-2025                                           */
 /* Copyright: Maersk                                                    */
 /* Written by: AYD                                                      */  
 /*                                                                      */  
