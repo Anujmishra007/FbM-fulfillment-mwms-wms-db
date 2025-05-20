@@ -366,8 +366,7 @@ BEGIN
                                 DEALLOCATE CUR_RECDET
                                 GOTO QUIT_SP
                             END
-                            PRINT 'ORDERKEY: '
-                            PRINT @c_Orderkey
+
                             IF @c_Orderkey <> ''
                             BEGIN
                                 INSERT INTO #TMP_ORD
