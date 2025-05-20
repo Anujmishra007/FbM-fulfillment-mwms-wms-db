@@ -79,25 +79,26 @@ BEGIN
          , @c_OHUD02             NVARCHAR(50)  = ''
          , @c_OHUD06             NVARCHAR(50)  = ''
          , @c_OHUD07             NVARCHAR(50)  = ''
-         , @CUR_RECDET           CURSOR
          , @n_ToDo               INT           = 0
          --AYD END
+    IF OBJECT_ID('tempdb..#TMP_ORD') IS NOT NULL DROP TABLE #TMP_ORD
+    IF OBJECT_ID('tempdb..#TMP_ORDDTL') IS NOT NULL DROP TABLE #TMP_ORDDTL
 
     SELECT @n_ToDo = COUNT(1) FROM RECEIPT r WITH (nolock)
     INNER JOIN RECEIPTDETAIL rd WITH (nolock) ON r.ReceiptKey = rd.ReceiptKey
     WHERE NOT EXISTS (SELECT 1 FROM ORDERS o WITH (nolock) WHERE r.ExternReceiptKey = o.ExternOrderKey AND r.StorerKey = o.StorerKey)
-    AND r.RECType='XDOCK' AND rd.[Status] = '0' AND rd.QtyExpected > 0 AND RTRIM(rd.ExternReceiptKey) <> ''
+    AND r.RECType='XDOCK' AND r.[Status] = '0' AND r.ASNStatus='0' AND rd.QtyExpected > 0 AND RTRIM(rd.ExternReceiptKey) <> ''
 
     IF @n_ToDo = 0
     BEGIN
         GOTO QUIT_SP
     END    
 
+
+
     /* PREPARE_TMP_TABLES START (AYD) */
         IF @n_continue IN(1, 2)
         BEGIN
-            DROP TABLE IF EXISTS #TMP_ORD
-            DROP TABLE IF EXISTS #TMP_ORDDTL
             CREATE TABLE #TMP_ORD
             (  RowID              INT            NOT NULL IDENTITY(1,1) PRIMARY KEY
             ,  Orderkey           NVARCHAR(10)   NOT NULL   DEFAULT('')
@@ -235,7 +236,7 @@ BEGIN
 
             CREATE TABLE #TMP_ORDDTL
             (  Orderkey          NVARCHAR(10)   NOT NULL   DEFAULT('')     
-                ,  Receiptkey        NVARCHAR(10)   NOT NULL
+            ,  Receiptkey        NVARCHAR(10)   NOT NULL
             ,  POkey             NVARCHAR(10)   NULL
             ,  POLineNumber      NVARCHAR(10)   NULL
             ,  ExternOrderkey    NVARCHAR(50)   NULL
@@ -314,7 +315,7 @@ BEGIN
                     FROM RECEIPT r WITH (nolock) 
                     INNER JOIN RECEIPTDETAIL rd WITH (nolock) ON r.ReceiptKey = rd.ReceiptKey
                     WHERE NOT EXISTS (SELECT 1 FROM ORDERS o WITH (nolock) WHERE r.ExternReceiptKey=o.ExternOrderKey AND r.StorerKey=o.StorerKey)
-                    AND r.RECType='XDOCK' AND rd.[Status]='0' AND rd.QtyExpected > 0 AND RTRIM(rd.ExternReceiptKey) <> ''
+                    AND r.RECType='XDOCK' AND rd.[Status]='0' AND r.ASNStatus='0' AND rd.QtyExpected > 0 AND RTRIM(rd.ExternReceiptKey) <> ''
                     ORDER BY ISNULL(rd.Userdefine02,''), ISNULL(rd.UserDefine06,'1900-01-01'), ISNULL(rd.PutawayLoc  ,''), rd.ReceiptLineNumber
 
                     OPEN CUR_RECDET
@@ -340,106 +341,116 @@ BEGIN
 
                     WHILE @@FETCH_STATUS <> -1 AND @n_continue IN(1, 2)
                     BEGIN
-                        -- Get OrderKey
-                        SET @c_Orderkey = ''
-                        EXECUTE nspg_GetKey
-                              @KeyName = 'ORDER'
-                            , @fieldlength = 10
-                            , @keystring = @c_Orderkey   OUTPUT
-                            , @b_Success = @b_Success    OUTPUT
-                            , @n_Err     = @n_Err        OUTPUT
-                            , @c_ErrMsg  = @c_ErrMsg     OUTPUT
-                            , @n_Batch   = 1                                  
-                        IF @b_Success = 0
+                        IF EXISTS (SELECT 1 FROM #TMP_ORD WHERE Consigneekey = @c_Consigneekey and DeliveryDate = @c_DeliveryDate and Door = @c_Door)
                         BEGIN
-                            SET @n_Continue = 3
-                            SET @n_Err = 68013
-                            SET @c_ErrMsg = 'NSQL' + CONVERT(NCHAR(5),@n_Err)
-                                            + ': nspg_GetKey Failed. (msp_BEJ_XDockCreateSO)'
-                            GOTO QUIT_SP
+                            SELECT @c_Orderkey = Orderkey FROM #TMP_ORD WHERE Consigneekey = @c_Consigneekey and DeliveryDate = @c_DeliveryDate and Door = @c_Door
                         END
 
-                        IF @c_Orderkey <> ''
+                        ELSE
                         BEGIN
-                            INSERT INTO #TMP_ORD
-                            (  OrderKey
-                            ,  Storerkey
-                            ,  Type
-                            ,  Door
-                            ,  DeliveryDate
-                            ,  ExternOrderkey
-                            ,  Consigneekey
-                            ,  C_Contact1
-                            ,  C_Contact2
-                            ,  C_Company
-                            ,  C_Address1
-                            ,  C_Address2
-                            ,  C_Address3
-                            ,  C_Address4
-                            ,  C_City
-                            ,  C_State
-                            ,  C_Zip
-                            ,  C_Country
-                            ,  C_ISOCntryCode
-                            ,  C_Phone1
-                            ,  C_Phone2
-                            ,  C_Fax1
-                            ,  C_Fax2
-                            ,  C_Vat
-                            ,  Facility
-                            ,  Billtokey
-                            ,  B_Contact1
-                            ,  B_Company
-                            ,  B_Address1
-                            ,  Userdefine01
-                            ,  UserDefine02
-                            ,  Userdefine06
-                            ,  Userdefine07
-                            ,  ExternPOKey
-                            ) VALUES 
-                            (  @c_Orderkey
-                            ,  @c_Storerkey
-                            ,  'XDOCK'
-                            ,  @c_Door
-                            ,  @c_DeliveryDate
-                            ,  @c_ExternReceiptkey
-                            ,  @c_Consigneekey
-                            ,  @c_C_Contact1 --AYD
-                            ,  ''
-                            ,  ''
-                            ,  @c_C_Address1 --AYD
-                            ,  @c_C_Address2 --AYD
-                            ,  @c_C_Address3 --AYD
-                            ,  'msp_BEJ_XDockCreateSO'
-                            ,  ''
-                            ,  ''
-                            ,  ''
-                            ,  ''
-                            ,  ''
-                            ,  ''
-                            ,  ''
-                            ,  ''
-                            ,  ''
-                            ,  ''
-                            ,  @c_Facility
-                            ,  @c_BillToKey    --AYD
-                            ,  @c_B_Contact1   --AYD
-                            ,  @c_B_Company    --AYD
-                            ,  @c_B_Address1   --AYD
-                            ,  @c_OHUD01 --AYD
-                            ,  @c_OHUD02 --AYD
-                            ,  @c_OHUD06 --AYD
-                            ,  @c_OHUD07 --AYD
-                            ,  @c_ExternPOKey
-                            )   
-                            IF @@ERROR <> 0
+                            EXECUTE nspg_GetKey
+                                @KeyName = 'ORDER'
+                                , @fieldlength = 10
+                                , @keystring = @c_Orderkey   OUTPUT
+                                , @b_Success = @b_Success    OUTPUT
+                                , @n_Err     = @n_Err        OUTPUT
+                                , @c_ErrMsg  = @c_ErrMsg     OUTPUT
+                                , @n_Batch   = 1                                  
+                            IF @b_Success = 0
                             BEGIN
                                 SET @n_Continue = 3
-                                SET @n_Err = 68014
+                                SET @n_Err = 68013
                                 SET @c_ErrMsg = 'NSQL' + CONVERT(NCHAR(5),@n_Err)
-                                            + ': INSERT INTO #TMP_ORD Table Failed. (msp_BEJ_XDockCreateSO)'
-                                
+                                                + ': nspg_GetKey Failed. (msp_BEJ_XDockCreateSO)'
+                                CLOSE CUR_RECDET
+                                DEALLOCATE CUR_RECDET
                                 GOTO QUIT_SP
+                            END
+                            PRINT 'ORDERKEY: '
+                            PRINT @c_Orderkey
+                            IF @c_Orderkey <> ''
+                            BEGIN
+                                INSERT INTO #TMP_ORD
+                                (  OrderKey
+                                ,  Storerkey
+                                ,  Type
+                                ,  Door
+                                ,  DeliveryDate
+                                ,  ExternOrderkey
+                                ,  Consigneekey
+                                ,  C_Contact1
+                                ,  C_Contact2
+                                ,  C_Company
+                                ,  C_Address1
+                                ,  C_Address2
+                                ,  C_Address3
+                                ,  C_Address4
+                                ,  C_City
+                                ,  C_State
+                                ,  C_Zip
+                                ,  C_Country
+                                ,  C_ISOCntryCode
+                                ,  C_Phone1
+                                ,  C_Phone2
+                                ,  C_Fax1
+                                ,  C_Fax2
+                                ,  C_Vat
+                                ,  Facility
+                                ,  Billtokey
+                                ,  B_Contact1
+                                ,  B_Company
+                                ,  B_Address1
+                                ,  Userdefine01
+                                ,  UserDefine02
+                                ,  Userdefine06
+                                ,  Userdefine07
+                                ,  ExternPOKey
+                                ) VALUES 
+                                (  @c_Orderkey
+                                ,  @c_Storerkey
+                                ,  'XDOCK'
+                                ,  @c_Door
+                                ,  @c_DeliveryDate
+                                ,  @c_ExternReceiptkey
+                                ,  @c_Consigneekey
+                                ,  @c_C_Contact1 --AYD
+                                ,  ''
+                                ,  ''
+                                ,  @c_C_Address1 --AYD
+                                ,  @c_C_Address2 --AYD
+                                ,  @c_C_Address3 --AYD
+                                ,  ''
+                                ,  ''
+                                ,  ''
+                                ,  ''
+                                ,  ''
+                                ,  ''
+                                ,  ''
+                                ,  ''
+                                ,  ''
+                                ,  ''
+                                ,  ''
+                                ,  @c_Facility
+                                ,  @c_BillToKey    --AYD
+                                ,  @c_B_Contact1   --AYD
+                                ,  @c_B_Company    --AYD
+                                ,  @c_B_Address1   --AYD
+                                ,  @c_OHUD01 --AYD
+                                ,  @c_OHUD02 --AYD
+                                ,  @c_OHUD06 --AYD
+                                ,  @c_OHUD07 --AYD
+                                ,  @c_ExternPOKey
+                                )   
+                                IF @@ERROR <> 0
+                                BEGIN
+                                    SET @n_Continue = 3
+                                    SET @n_Err = 68014
+                                    SET @c_ErrMsg = 'NSQL' + CONVERT(NCHAR(5),@n_Err)
+                                                + ': INSERT INTO #TMP_ORD Table Failed. (msp_BEJ_XDockCreateSO)'
+                                    CLOSE CUR_RECDET
+                                    DEALLOCATE CUR_RECDET
+                                    GOTO QUIT_SP
+                                END
                             END
                         END
 
@@ -475,7 +486,8 @@ BEGIN
                             SET @n_Err = 68015
                             SET @c_ErrMsg = 'NSQL' + CONVERT(NCHAR(5),@n_Err)
                                         + ': INSERT INTO #TMP_ORDDTL Table Failed. (msp_BEJ_XDockCreateSO)'
-                            
+                            CLOSE CUR_RECDET
+                            DEALLOCATE CUR_RECDET
                             GOTO QUIT_SP
                         END                                                                    
 
@@ -845,7 +857,7 @@ BEGIN
                 BEGIN
                     IF EXISTS (SELECT 1 FROM Storer s WITH(NOLOCK) WHERE s.StorerKey = @c_ConsigneeKey AND s.[Type] = '2')
                     BEGIN
-                        UPDATE Storer SET 
+                        UPDATE Storer WITH(ROWLOCK) SET 
                         Company      = @c_C_Contact1,
                         Address1     = @c_C_Address1,
                         Address2     = @c_C_Address2,
@@ -856,9 +868,11 @@ BEGIN
                     ELSE 
                     BEGIN
                         INSERT INTO STORER 
-                        (Storerkey, Type, Company, Address1, Address2, Address3, ConsigneeFor) 
+                        (Storerkey, Type, Company, 
+                        Address1, Address2, Address3, ConsigneeFor) 
                         VALUES 
-                        (@c_ConsigneeKey, '2', @c_C_Contact1,  @c_C_Address1,  @c_C_Address2, @c_C_Address3, @c_StorerKey) 
+                        (@c_ConsigneeKey, '2', @c_C_Contact1,  
+                        @c_C_Address1,  @c_C_Address2, @c_C_Address3, @c_StorerKey) 
                     END
                     IF @@ERROR <> 0 
                     BEGIN
@@ -866,7 +880,8 @@ BEGIN
                         SET @n_Err = 68030
                         SET @c_ErrMsg = 'NSQL' + CONVERT(NCHAR(5),@n_Err)
                                     + ': UPDATE Storer Table Failed. (msp_BEJ_XDockCreateSO)'
-                        
+                        CLOSE CUR_ORD
+                        DEALLOCATE CUR_ORD 
                         GOTO QUIT_SP
                     END
                 END   
@@ -877,43 +892,10 @@ BEGIN
             DEALLOCATE CUR_ORD               	
         END
     /* UPDATE_CONSIGNEE: Updating the Consignee table END (AYD) */
-    /* XDOCK_ALLOCATION: START (AYD) */
-        IF @n_continue IN (1,2) 
-        BEGIN
-            DECLARE CUR_ORD CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-            SELECT Receiptkey, UserDefine02 FROM #TMP_ORD ORDER BY RowID
-        
-            OPEN CUR_ORD
-        
-            FETCH NEXT FROM CUR_ORD INTO @c_Receiptkey, @c_RecType
-        
-            WHILE @@FETCH_STATUS <> -1 AND @n_continue IN(1,2) AND @c_RecType <> 'XDELAY' 
-            BEGIN      	
-                EXEC [WM].[lsp_XDockAllocation_Wrapper]
-                @c_ReceiptKey = @c_ReceiptKey,
-                @b_Success    = @b_Success   OUTPUT,
-                @n_Err        = @n_err       OUTPUT,
-                @c_ErrMsg     = @c_errmsg  OUTPUT,
-                @c_UserName   = ''
-
-                IF @@ERROR <> 0
-                BEGIN
-                    SET @n_Continue = 3
-                    SET @n_Err = 68021
-                    SET @c_ErrMsg = 'NSQL' + CONVERT(NCHAR(5),@n_Err)
-                                + ': XDOCK ASN Allocation Failed. (msp_BEJ_XDockCreateSO)'
-                    
-                    GOTO QUIT_SP
-                END
-                FETCH NEXT FROM CUR_ORD INTO @c_Receiptkey, @c_RecType
-            END
-            CLOSE CUR_ORD
-            DEALLOCATE CUR_ORD               	
-        END
-    /* XDOCK_ALLOCATION: END (AYD) */
-    DROP TABLE IF EXISTS #TMP_ORD
-    DROP TABLE IF EXISTS #TMP_ORDDTL
+    
     QUIT_SP:
+        IF OBJECT_ID('tempdb..#TMP_ORD') IS NOT NULL DROP TABLE #TMP_ORD
+        IF OBJECT_ID('tempdb..#TMP_ORDDTL') IS NOT NULL DROP TABLE #TMP_ORDDTL
         IF @n_continue = 3
         BEGIN
             SET @b_Success = 0
