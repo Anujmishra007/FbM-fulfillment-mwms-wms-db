@@ -245,7 +245,7 @@ BEGIN
 					AND (LLI.Qty - LLI.QtyPicked + LLI.PendingMoveIn) > 0   --WLC01
  					AND NOT EXISTS (  --ALT028 Start
 					SELECT 1 
-					FROM LOTxLOCxID LLI_Sub
+					FROM LOTxLOCxID LLI_Sub (NOLOCK)
 					WHERE LLI_Sub.Loc = LOC.Loc
 					AND loc.CommingleSku = '0'
 					GROUP BY LLI_Sub.Loc
