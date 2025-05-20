@@ -75,8 +75,10 @@ GO
 /* 01-Apr-2025 SSA04     4.1 UWP-27137 Fix infinite loop when splitQty =*/
 /*                           pickdetail.Qty                             */
 /* 02-Apr-2025 SWT09     4.2 Revise PackInfo Weight and Cube calculation*/
-/* 09-May-2025 AYD01     4.3 UWP-32643: Fix PickFace checking           */
-/* 15-May-2025 WLC015    4.4 FCR-4480 Change to get PND Location from   */ 
+/* 05-May-2025 SWT10     4.3 FCR-4389 revise Automation Carton Estimation*/
+/*                           Calculation                                */
+/* 09-May-2025 AYD01     4.4 UWP-32643: Fix PickFace checking           */
+/* 15-May-2025 WLC015    4.5 FCR-4480 Change to get PND Location from   */ 
 /*                           LocationGroup=DispatchCasePickMethod (WL10)*/
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[mspRLWAV03]
@@ -407,7 +409,24 @@ BEGIN
             GOTO QUIT_SP             
          END
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
       END
+
       ELSE
       BEGIN
          SET @C_Replenishmentkey ='' --Yung
@@ -611,6 +630,60 @@ BEGIN
          CLOSE CUR_MPOCFLAG
          DEALLOCATE CUR_MPOCFLAG
       END -- IF @n_continue IN(1,2)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
       --AYD01 UWP-32643 START
       --Order sku info
@@ -944,9 +1017,12 @@ BEGIN
 
             IF EXISTS( SELECT 1 FROM #ORDERSKU OS WHERE OS.Orderkey = @c_Orderkey AND OS.StdCube > @n_CartonMaxCube )
             BEGIN
+               SELECT TOP 1 @c_SKU = OS.SKU
+               FROM #ORDERSKU OS WHERE OS.Orderkey = @c_Orderkey AND OS.StdCube > @n_CartonMaxCube
+
                SET @n_continue = 3
-               SET @n_Err = 562204
-               SET @c_Errmsg='NSQL'+CONVERT(NVARCHAR(10),@n_Err)+': SKU(s) Standard Cube cannot fit into carton type ' + RTRIM(@c_VAS_CartonType) + '. (mspRLWAV03)'     
+               SET @n_Err = 82012
+               SET @c_Errmsg='NSQL'+CONVERT(NVARCHAR(10),@n_Err)+': SKU(s) '+ @c_SKU + ' Standard Cube cannot fit into carton type ' + RTRIM(@c_VAS_CartonType) + '. (mspRLWAV03)'     
                GOTO QUIT_SP  
             END
          END -- IF @c_VAS_CartonType <> ''      
@@ -1179,9 +1255,9 @@ BEGIN
                      IF dbo.fnc_CartonCanFit(@n_SKULength, @n_SKUWidth, @n_SKUHeight, @n_CartonLength, @n_CartonWidth, @n_CartonHeight) = 0
                      BEGIN
                         SET @n_continue = 3
-                        SET @n_Err = 562204
-                        SET @c_Errmsg='NSQL'+CONVERT(NVARCHAR(10),@n_Err)+': SKU(s) LxWxH cannot fit into carton type ' + RTRIM(@c_VAS_CartonType) + '. (mspRLWAV03)'     
-                        GOTO QUIT_SP
+                        SET @n_Err = 82013
+                        SET @c_Errmsg='NSQL'+CONVERT(NVARCHAR(10),@n_Err)+': SKU(s) ' + @c_Sku + ' LxWxH cannot fit into carton type ' + RTRIM(@c_VAS_CartonType) + '. (mspRLWAV03)'     
+                         GOTO QUIT_SP
                      END;
                   END
                   IF @c_CartonType = N''
@@ -1624,7 +1700,7 @@ BEGIN
             BEGIN
                SET @n_continue = 3
                SET @n_Err = 562204
-               SET @c_Errmsg='NSQL'+CONVERT(NVARCHAR(10),@n_Err)+': SKU(s) Standard Cube cannot fit into carton type ' + RTRIM(@c_VAS_CartonType) + '. (mspRLWAV03)'     
+               SET @c_Errmsg='NSQL'+CONVERT(NVARCHAR(10),@n_Err)+': SKU(s) ' + @c_SKU + ' Standard Cube cannot fit into carton type ' + RTRIM(@c_VAS_CartonType) + '. (mspRLWAV03)'     
                GOTO QUIT_SP  
             END
          END -- IF @c_VAS_CartonType <> ''  
@@ -3029,7 +3105,8 @@ BEGIN
    -------------------------------------------------- 
    -- Automation Release Tasks 
    --------------------------------------------------  
-   IF @n_Continue IN (1,2)  AND @c_Automation = 'Y'                                 --(Wan01)                    
+   -- (SWT10) Start
+   IF @n_Continue IN (1,2)                  
    BEGIN
       DECLARE CUR_UPDATEORD CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
       SELECT OG.OrderKey
@@ -3042,9 +3119,41 @@ BEGIN
       
       WHILE @@FETCH_STATUS = 0 AND @n_Continue IN (1,2)
       BEGIN
-         SELECT @n_NoOfCarton = COUNT(DISTINCT pd.CaseID)
-         FROM  PICKDETAIL pd (NOLOCK)
-         WHERE pd.Orderkey = @c_OrderKey
+         IF @c_Automation = 'Y'
+         BEGIN
+            SET @n_TotalCube = 0
+            SET @n_CartonMaxCube = 0
+
+            SELECT @n_TotalCube = (PD.Qty * CASE WHEN ISNULL(SKU.STDCUBE, 0) > 0 THEN SKU.STDCUBE                             
+                              ELSE (SKU.Length * SKU.Width * SKU.Height) 
+                           END)
+            FROM  PICKDETAIL pd (NOLOCK)
+            JOIN SKU (NOLOCK) ON SKU.StorerKey = PD.Storerkey AND SKU.SKU = PD.SKU
+            WHERE pd.Orderkey = @c_OrderKey
+
+            SELECT TOP 1 @n_CartonMaxCube = 
+                     CASE WHEN ISNULL(CZ.Cube,0) = 0 
+                        THEN ISNULL(CZ.CartonLength,0) * ISNULL(CZ.CartonWidth,0) * ISNULL(CZ.CartonHeight,0)  
+                        ELSE CZ.Cube 
+                     END
+            FROM dbo.CARTONIZATION CZ (NOLOCK) 
+            WHERE CartonizationGroup = @c_CartonGroup 
+            AND CartonType <> '9999'
+            ORDER BY  
+            CASE 
+               WHEN ISNULL(CZ.Cube,0) = 0 
+                  THEN ISNULL(CZ.CartonLength,0) * ISNULL(CZ.CartonWidth,0) * ISNULL(CZ.CartonHeight,0)  
+               ELSE CZ.Cube 
+            END DESC
+
+            SELECT @n_NoOfCarton = CEILING( @n_TotalCube / @n_CartonMaxCube)           
+         END
+         ELSE 
+         BEGIN
+            SELECT @n_NoOfCarton = COUNT(DISTINCT pd.CaseID)
+            FROM  #PickDetail_WIP pd (NOLOCK)
+            WHERE pd.Orderkey = @c_OrderKey         
+         END
 
          UPDATE ORDERS WITH (ROWLOCK)
             SET ContainerQty = @n_NoOfCarton
@@ -3055,7 +3164,7 @@ BEGIN
          IF @@ERROR <> 0
          BEGIN
             SET @n_Continue = 3
-            Set @n_Err = 82014
+            Set @n_Err = 82025
             SET @c_ErrMsg = 'NSQL'+CONVERT(CHAR(5) ,@n_err) + ': Updating Orders Failed (mspRLWAV03)'  
                           + ' ( '+' SQLSvr MESSAGE= ' + @c_ErrMsg + ' ) '
          END
@@ -3063,7 +3172,11 @@ BEGIN
          FETCH NEXT FROM CUR_UPDATEORD INTO @c_OrderKey
       END
       CLOSE CUR_UPDATEORD
-      DEALLOCATE CUR_UPDATEORD
+      DEALLOCATE CUR_UPDATEORD   
+   END -- (SWT10) END 
+
+   IF @n_Continue IN (1,2) AND @c_Automation = 'Y'  --(Wan01)                    
+   BEGIN
 
       --------------------------------------
       -- GEN PICK OR REPL TASK 
