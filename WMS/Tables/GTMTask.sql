@@ -1,3 +1,5 @@
+IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[GTMTask]') AND type in (N'U'))
+BEGIN
 CREATE TABLE [dbo].[GTMTask]
 (
 [SeqNo] [int] NOT NULL,
@@ -17,16 +19,35 @@ CREATE TABLE [dbo].[GTMTask]
 [AddDate] [datetime] NOT NULL CONSTRAINT [DF_GTMTask_AddDate] DEFAULT (getdate()),
 [AddWho] [nvarchar] (128) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_GTMTask_AddWho] DEFAULT (suser_sname()),
 [EditDate] [datetime] NOT NULL CONSTRAINT [DF_GTMTask_EditDate] DEFAULT (getdate()),
-[EditWho] [nvarchar] (128) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_GTMTask_EditWho] DEFAULT (suser_sname())
+[EditWho] [nvarchar] (128) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_GTMTask_EditWho] DEFAULT (suser_sname()),
+[Facility] [nvarchar](50) COLLATE SQL_Latin1_General_CP1_CI_AS NULL constraint [DF_GTMTask_Facility] default ('')
+
 ) ON [PRIMARY]
-GO
+
 ALTER TABLE [dbo].[GTMTask] ADD CONSTRAINT [PK_GTMTask] PRIMARY KEY CLUSTERED ([TaskDetailKey]) ON [PRIMARY]
-GO
+
 GRANT DELETE ON  [dbo].[GTMTask] TO [NSQL]
-GO
+
 GRANT INSERT ON  [dbo].[GTMTask] TO [NSQL]
-GO
+
 GRANT SELECT ON  [dbo].[GTMTask] TO [NSQL]
-GO
+
 GRANT UPDATE ON  [dbo].[GTMTask] TO [NSQL]
-GO
+
+END
+
+ELSE
+BEGIN
+
+   IF NOT EXISTS (SELECT *
+                   FROM sys.columns
+                   WHERE Name = 'Facility'
+                     AND Object_ID = Object_ID('GTMTask'))
+        BEGIN
+            Alter table dbo.GTMTask 
+			Add Facility nvarchar(50) NULL constraint [DF_GTMTask_Facility] default ('')
+
+            EXEC sp_addextendedproperty N'MS_Description', 'Warehouse Facility code', 'SCHEMA', N'dbo', 'TABLE', N'GTMTask', 'COLUMN', N'Facility'
+        END
+        	
+END
