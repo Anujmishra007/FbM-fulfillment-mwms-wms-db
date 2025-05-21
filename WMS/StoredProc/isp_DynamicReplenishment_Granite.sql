@@ -50,6 +50,7 @@ GO
 /* 2025-02-04         TAK047      V.7         FCR-2650 Check Replen Task existence (CLVN02)     */
 /* 2025-05-15         SWT02       V.8         Correct Wrong PackUOM3 Value                      */
 /* 2025-05-19         ALT028      V.9         Filter out CommingleSku=0 distinct sku>1          */
+/* 2025-05-19	      ALT028	  V.10	      Remove FCR-2650					*/
 /************************************************************************************************/ 
 CREATE OR ALTER PROCEDURE [dbo].[isp_DynamicReplenishment_Granite]	 
       @c_WaveKey NVARCHAR(10), 
@@ -106,7 +107,7 @@ BEGIN
 			SELECT @c_errmsg='NSQL' + CONVERT(char(6), @n_err) + ': No Orders is being populated into WaveDetail. (isp_DynamicReplenishment)'; 
 			GOTO RETURN_SP; 
 		END; 
-		--(CLVN02) START--
+		/*--(CLVN02) START--
 		-- Error check for Replenishment existence
 		IF EXISTS(SELECT 1 FROM Replenishment WITH (NOLOCK) WHERE WaveKey = @c_WaveKey) 
 		BEGIN 
@@ -115,7 +116,7 @@ BEGIN
 			SELECT @c_errmsg='NSQL' + CONVERT(char(6), @n_err) + ': Replenishment Tasks exist for the Wave. (isp_DynamicReplenishment)'; 
 			GOTO RETURN_SP; 
 		END; 
-		--(CLVN02) END--
+		--(CLVN02) END-- */
 		-- Begin Transaction 
 		SET @n_continue = 1; 
 		SET @c_SuccessFlag = 'N'; 
