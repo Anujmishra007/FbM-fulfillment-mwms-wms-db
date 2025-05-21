@@ -90,15 +90,18 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV07]
        IF NOT EXISTS (SELECT 1
                       FROM WAVEDETAIL WD (NOLOCK)
                       JOIN PICKDETAIL PD (NOLOCK) ON WD.Orderkey = PD.Orderkey
+                      JOIN LOC (NOLOCK) ON PD.LOC = LOC.Loc
                       LEFT JOIN TASKDETAIL TD (NOLOCK) ON PD.Taskdetailkey = TD.Taskdetailkey AND TD.Sourcetype = @c_SourceType AND TD.Tasktype IN('FCP','RPF')
                       WHERE WD.Wavekey = @c_Wavekey
                       AND PD.Status = '0'
+                      AND PD.UOM IN('2','7')
+                      AND LOC.LocationType = 'BULK'
                       AND TD.Taskdetailkey IS NULL
                      )
        BEGIN
           SELECT @n_continue = 3
           SELECT @n_err = 83000
-          SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Nothing to release. (mspRLWAV07)'
+          SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Nothing to release from bulk (UOM 2 or 7). (mspRLWAV07)'
        END
     END
 
@@ -348,7 +351,7 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV07]
                
            IF @c_FinalLoc = ''
            BEGIN              	           	               
-           	  SELECT TOP 1 @c_FinalLoc = LOC.Loc 
+           	  SELECT TOP 1 @c_FinalLoc = I.Loc 
            	  FROM #TMP_INV I
            	  JOIN LOTATTRIBUTE LA (NOLOCK) ON I.Lot = LA.Lot
            	  WHERE I.Sku = @c_Sku
