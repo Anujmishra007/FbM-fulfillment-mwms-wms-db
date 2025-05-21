@@ -360,7 +360,7 @@ IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'S
 --ALTER COLUMN 
  IF  EXISTS (SELECT 1
 	               FROM sys.columns
-	               WHERE Name = 'delwho' AND Object_ID = Object_ID('dbo.orderslog') and max_length < 500)
+	               WHERE Name = 'delwho' AND Object_ID = Object_ID('dbo.orderslog') and max_length <> 256)
 			BEGIN
 				ALTER TABLE dbo.orderslog 
 				ALTER COLUMN [delWho] [nvarchar] (128) NOT NULL ;
@@ -369,7 +369,7 @@ IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'S
 
  IF  EXISTS (SELECT 1
 	               FROM sys.columns
-	               WHERE Name = 'ECOM_OAID' AND Object_ID = Object_ID('dbo.orderslog') and max_length < 500)
+	               WHERE Name = 'ECOM_OAID' AND Object_ID = Object_ID('dbo.orderslog') and max_length <>512)
 			BEGIN
 				ALTER TABLE dbo.orderslog 
 				ALTER COLUMN [ECOM_OAID]  [nvarchar] (256) NULL;
