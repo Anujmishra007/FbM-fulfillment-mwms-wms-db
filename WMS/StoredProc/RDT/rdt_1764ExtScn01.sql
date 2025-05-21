@@ -12,6 +12,7 @@ GO
 /*                                                                          */
 /* Date       Rev    Author   Purposes                                      */
 /* 2025-03-11 1.0    NLT013   UWP-31321 Create                              */
+/* 2025-05-21 1.1    NLT013   UWP-34785 Add new Exit Screen                 */
 /****************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_1764ExtScn01] (
@@ -69,6 +70,10 @@ BEGIN
       @cPendingTaskDetailKey    NVARCHAR(10) = '',
       @nStep_ToLOC            INT         = 6,  
       @nScn_ToLOC             INT         = 2685,
+      @nStep_Exit             INT         = 7,  
+      @nScn_Exit              INT         = 2686,
+      @nStep_99               INT         = 99,  
+      @nScn_NewExit           INT         = 6527,
 
       @cTTMTaskType           NVARCHAR(10),
       @cSuggID                NVARCHAR(18),
@@ -332,14 +337,70 @@ BEGIN
             END
          END
       END
+      ELSE IF @nCurrentStep = @nStep_99 -- New Exit
+      BEGIN
+         /********************************************************************************
+         Step 99. screen = 6527. Message screen
+            Pallet is Close
+            1   = Next Task
+            9   = Exit TM
+            LAST LOC (Field01)
+            EXTINFO  (Field10)
+         ********************************************************************************/
+         IF @nCurrentScn = @nScn_NewExit
+         BEGIN
+            IF @nInputKey = 1 -- ENTER
+            BEGIN
+               DECLARE @cOption  NVARCHAR(1)
+
+               -- Screen mapping
+               SET @cOption = @cInField02
+
+               -- Check blank option
+               IF @cOption = ''
+               BEGIN
+                  SET @nErrNo = 234852
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --OptionNeeded
+                  GOTO Fail
+               END
+               -- Check option is valid
+               IF @cOption NOT IN ('1', '9')
+               BEGIN
+                  SET @nErrNo = 234853
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InvalidOption
+                  GOTO Fail
+               END
+
+               IF @cOption = '1'
+               BEGIN
+                  SET @cUDF01 = '1'
+               END
+               ELSE 
+                  SET @cUDF01 = '0'
+            END
+
+            IF @nInputKey = 0 -- ESC
+               SET @cUDF01 = '0'
+         END
+      END
+
+      -- If next step is EXIT, jump to new Exit screen
+      IF @nStep = @nStep_Exit 
+      BEGIN
+         SET @cOutField02 = '' --Option
+
+         SET @nAfterScn = @nScn_NewExit
+         SET @nAfterStep = @nStep_99
+      END 
    END
+
    GOTO Quit
 RollBack_rdt_1764ExtScn01:
    ROLLBACK TRAN rdt_1764ExtScn01
    GOTO Fail
 Fail:
-   SET @nAfterScn = @nCurrentStep
-   SET @nAfterStep = @nCurrentScn
+   SET @nAfterScn = @nCurrentScn 
+   SET @nAfterStep = @nCurrentStep
 
 Quit:
 

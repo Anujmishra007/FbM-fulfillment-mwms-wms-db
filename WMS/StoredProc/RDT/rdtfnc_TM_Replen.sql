@@ -57,6 +57,7 @@ GO
 /* 2023-04-05 4.0  Ung        WMS-22053 Revise ExtendedInfo                   */
 /* 2024-06-14 4.1  Dennis     UWP-20813 Check Digit                           */
 /* 2025-03-13 4.2  NLT013     UWP-31321 Be able to close pending pallet       */
+/* 2025-05-21 1.1  NLT013     UWP-34785 Add new Exit Screen for Levis         */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_Replen](
@@ -367,6 +368,8 @@ BEGIN
    IF @nStep = 7 GOTO Step_Exit        -- Scn = 2686 Pallet is close. Next task / Exit
    IF @nStep = 8 GOTO Step_ShortPick   -- Scn = 2687 Short pick / Close pallet
    IF @nStep = 9 GOTO Step_Reason      -- Scn = 2109 Reason code
+   IF @nStep = 9 GOTO Step_Reason      -- Scn = 2109 Reason code
+   IF @nStep = 99 GOTO Step_99         -- Step 99 
 END
 RETURN -- Do nothing if incorrect step
 
@@ -753,35 +756,35 @@ BEGIN
          GOTO Step_DropID_Fail
       END
 
-/*
-      BEGIN TRAN
+      /*
+            BEGIN TRAN
 
-      -- Delete used DropID
-      IF EXISTS( SELECT 1 FROM dbo.DropID WITH (NOLOCK) WHERE DropID = @cDropID AND Status = '9')
-      BEGIN
-         -- Delete DropIDDetail
-         DELETE dbo.DropIDDetail WHERE DropID = @cDropID
-         IF @@ERROR <> 0
-         BEGIN
-            ROLLBACK TRAN
-            SET @nErrNo = 72270
-        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --DelDropIDFail
-            GOTO Step_DropID_Fail
-         END
-
-         -- Delete used DropID
-         DELETE dbo.DropID WHERE DropID = @cDropID AND Status = '9'
-         IF @@ERROR <> 0
-         BEGIN
-            ROLLBACK TRAN
-            SET @nErrNo = 72271
+            -- Delete used DropID
+            IF EXISTS( SELECT 1 FROM dbo.DropID WITH (NOLOCK) WHERE DropID = @cDropID AND Status = '9')
+            BEGIN
+               -- Delete DropIDDetail
+               DELETE dbo.DropIDDetail WHERE DropID = @cDropID
+               IF @@ERROR <> 0
+               BEGIN
+                  ROLLBACK TRAN
+                  SET @nErrNo = 72270
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --DelDropIDFail
-            GOTO Step_DropID_Fail
-         END
-      END
+                  GOTO Step_DropID_Fail
+               END
 
-      COMMIT TRAN
-*/
+               -- Delete used DropID
+               DELETE dbo.DropID WHERE DropID = @cDropID AND Status = '9'
+               IF @@ERROR <> 0
+               BEGIN
+                  ROLLBACK TRAN
+                  SET @nErrNo = 72271
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --DelDropIDFail
+                  GOTO Step_DropID_Fail
+               END
+            END
+
+            COMMIT TRAN
+      */
       -- Extended update
       IF @cExtendedUpdateSP <> ''
       BEGIN
@@ -1165,15 +1168,15 @@ BEGIN
       SET @cFromID  = @cInField05
       SET @cBarcode = @cInField05
 
-/*
-      -- Check blank FromID
-      IF @cFromID = ''
-      BEGIN
-         SET @nErrNo = 72274
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --FROM ID needed
-         GOTO Step_FromID_Fail
-      END
-*/
+      /*
+            -- Check blank FromID
+            IF @cFromID = ''
+            BEGIN
+               SET @nErrNo = 72274
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --FROM ID needed
+               GOTO Step_FromID_Fail
+            END
+      */
 
       -- Decode
       IF @cDecodeSP <> ''
@@ -2211,18 +2214,18 @@ BEGIN
             GOTO Step_NextTask_Fail
 
          SET @cTaskDetailKey = @cNextTaskDetailKey
-/*
-         EXEC rdt.rdt_TM_Replen_GetNextTask @nMobile, @nFunc, @cLangCode,
-            @cUserName,
-            @cAreaKey,
-            @cListKey,
-            @cDropID,
-            @cNextTaskDetailKey OUTPUT,
-            @nErrNo             OUTPUT,
-            @cErrMsg            OUTPUT
-         IF @nErrNo <> 0
-            GOTO Step_NextTask_Fail
-*/
+         /*
+                  EXEC rdt.rdt_TM_Replen_GetNextTask @nMobile, @nFunc, @cLangCode,
+                     @cUserName,
+                     @cAreaKey,
+                     @cListKey,
+                     @cDropID,
+                     @cNextTaskDetailKey OUTPUT,
+                     @nErrNo             OUTPUT,
+                     @cErrMsg            OUTPUT
+                  IF @nErrNo <> 0
+                     GOTO Step_NextTask_Fail
+         */
 
          -- Disable QTY field
          IF @cDisableQTYFieldSP <> ''
@@ -3505,6 +3508,15 @@ BEGIN
          SET @cOutField10 = @cExtendedInfo1
       END
    END
+
+   IF @cExtScnSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
+      BEGIN
+         GOTO Step_99
+      END
+   END
+
    GOTO Quit
 
    Step_Reason_Fail:
@@ -3523,6 +3535,9 @@ BEGIN
    BEGIN
       IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
       BEGIN
+         DECLARE 
+            @nCurrentScn      INT = @nScn,
+            @nCurrentStep     INT = @nStep
          DELETE FROM @tExtScnData
 
          INSERT INTO @tExtScnData (Variable, Value) 
@@ -3594,10 +3609,17 @@ BEGIN
                   SET @cAreaKey = ''
                   SET @cOutField01 = ''  -- Area
                END
+
+               IF @nCurrentScn = 6527 -- if current screen is New Exit Screen
+               BEGIN
+                  -- 1. Pick next task
+                  -- 9. Go Back to Task Manager Main Screen
+                  SET @nInputKey = IIF(@cUDF01 = '1', 1, 0)
+
+                  GOTO Step_Exit
+               END
             END  
          END
-
-         
       END
    END
    GOTO Quit
