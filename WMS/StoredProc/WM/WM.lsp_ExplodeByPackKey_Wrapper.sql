@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_ExplodeByPackKey_Wrapper]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [WM].[lsp_ExplodeByPackKey_Wrapper]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -34,7 +29,7 @@ GO
 /*                            ASNExplodeByPackkeySP and using Svalue    */
 /*                            to call sub-script and get a customized ID*/
 /************************************************************************/
-CREATE PROCEDURE [WM].[lsp_ExplodeByPackKey_Wrapper]
+CREATE OR ALTER PROCEDURE [WM].[lsp_ExplodeByPackKey_Wrapper]
     @c_ReceiptKey NVARCHAR(10) 
    ,@c_ReceiptLineNumber NVARCHAR(5)=''  
    ,@b_Success INT=1 OUTPUT 
@@ -85,9 +80,9 @@ BEGIN
                ,@c_GenID                      NVARCHAR(10) = ''
                ,@C_GEN_ID_DURING_EXPLODE_PACK NVARCHAR(10) = ''
                ,@c_ToID                       NVARCHAR(10) = ''
-               ,@cSQL                         NVARCHAR( MAX)       --AYD01
-               ,@cSQLParam                    NVARCHAR( MAX)       --AYD01
-               ,@c_GenIdSP                    NVARCHAR(30) = ''    --AYD01
+               ,@cSQL                         NVARCHAR(MAX)       --AYD01
+               ,@cSQLParam                    NVARCHAR(MAX)       --AYD01
+               ,@c_GenIdSP                    NVARCHAR(30) = ''   --AYD01
     
       SET @b_Success = 1
       SET @c_ErrMsg =''
@@ -514,25 +509,39 @@ BEGIN
                --AYD01 START
                IF @c_GenIdSP <> '0'
                BEGIN    
-                  SET @cSQL = N'EXEC dbo.' + RTRIM( @c_GenIdSP)   
-                            + ' @c_StorerKey, '      
-                            + ' @c_ToID        OUTPUT,'     
-                            + ' @n_Err         OUTPUT,'      
-                            + ' @c_ErrMsg      OUTPUT'      
+                  IF NOT EXISTS(SELECT 1 FROM dbo.SYSOBJECTS WHERE NAME = RTRIM(@c_GenIdSP) AND [TYPE] = 'P') 
+                  BEGIN                                                                                                                                                                                                                                  
+                     SELECT @c_ErrMsg = CONVERT(CHAR(250), @n_Err),                                                                                                                                                                                     
+                            @n_Err = 31012 -- Should Be Set To The SQL Errmessage but I don't know how to do so.                                                                                                                                        
+                     SELECT @c_ErrMsg = 'NSQL' + CONVERT(CHAR(5), @n_Err) +                                                                                                                                                                             
+                            ': Stored Proc name invalid ('+RTRIM(ISNULL(@c_GenIdSP,'')) + ') (lsp_ExplodeByPackKey_Wrapper)'                                                                                  
+                     GOTO EXIT_SP                                                                                                                                                                                                                       
+                  END   
 
-                  SET @cSQLParam = N'@c_StorerKey NVARCHAR(15),'
-                                 + ' @c_ToID      NVARCHAR(20)    OUTPUT,'
-                                 + ' @n_Err       INT             OUTPUT,'
-                                 + ' @c_ErrMsg    NVARCHAR(250)   OUTPUT'         
+                  SET @cSQL = N'EXEC dbo.' + RTRIM(@c_GenIdSP)   
+                            + ' @c_StorerKey = @c_StorerKey,          '      
+                            + ' @c_IDKey     = @c_IDKey        OUTPUT,'   
+                            + ' @b_Success   = @b_Success      OUTPUT,'  
+                            + ' @n_ErrNo     = @n_ErrNo        OUTPUT,'      
+                            + ' @c_ErrMsg    = @c_ErrMsg       OUTPUT'     
+
+                  SET @cSQLParam = N'@c_StorerKey  NVARCHAR(15),'
+                                 + ' @c_IDKey      NVARCHAR(20)    OUTPUT,'
+                                 + ' @b_Success    INT             OUTPUT,'
+                                 + ' @n_ErrNo      INT             OUTPUT,'
+                                 + ' @c_ErrMsg     NVARCHAR(250)   OUTPUT'    
+                                      
                   EXEC sp_ExecuteSQL @cSQL, @cSQLParam, 
                         @c_StorerKey, 
                         @c_ToID        OUTPUT, 
+                        @b_Success     OUTPUT,
                         @n_Err         OUTPUT, 
                         @c_ErrMsg      OUTPUT  
+
                   IF @n_Err <> 0  
                   BEGIN
                      SET @b_Success = 0
-                     SET @c_ErrMsg = 'Error in Execute SQL' + @c_GenIdSP +' (lsp_ExplodeByPackKey_Wrapper).'
+                     SET @c_ErrMsg = 'Error in Execute SQL: ' + @c_GenIdSP + ' (lsp_ExplodeByPackKey_Wrapper).'
                      GOTO EXIT_SP
                   END  
                END   

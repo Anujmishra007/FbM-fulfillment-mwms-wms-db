@@ -21,6 +21,7 @@ GO
 CREATE OR ALTER PROC [dbo].[mspRLWAVGenID01] (
    @c_StorerKey   NVARCHAR(15),
    @c_IDKey       NVARCHAR(20)    OUTPUT,
+   @b_Success     INT = 1         OUTPUT,
    @n_ErrNo       INT             OUTPUT,
    @c_ErrMsg      NVARCHAR(250)   OUTPUT
 )
@@ -31,13 +32,11 @@ AS
    SET CONCAT_NULL_YIELDS_NULL OFF  
 
 DECLARE
-   @n_Continue      INT                      = 1,
+   @n_Continue      INT            = 1,
    @c_Identifier    NVARCHAR( 2),
    @c_Packtype      NVARCHAR( 1),
    @c_SUSR1         NVARCHAR( 20),
    @c_nCounter      NVARCHAR( 25),
-   @b_success       INT,
-   @n_err           INT,
    @n_CheckDigit    INT,
    @n_TotalCnt      INT,
    @n_TotalOddCnt   INT,
@@ -50,11 +49,6 @@ DECLARE
    @n_Even          INT
 
 BEGIN
-   IF EXISTS (SELECT 1 FROM dbo.StorerConfig WITH (NOLOCK)
-      WHERE StorerKey = @c_StorerKey
-         AND ConfigKey = 'GenUCCLabelNoConfig'
-         AND SValue = '1')
-   BEGIN
       SET @c_Identifier = '00'
       SET @c_Packtype = '0'
       SET @c_IDKey = ''
@@ -66,6 +60,7 @@ BEGIN
 
     IF LEN(@c_SUSR1) >= 9
       BEGIN
+         SET @b_Success = 0
          SET @n_ErrNo = 99001
          SET @c_ErrMsg = 'Invld Barcode(mspRLWAVGenID01)'
          GOTO QUIT_SP
@@ -76,13 +71,14 @@ BEGIN
             9,
             @c_nCounter OUTPUT ,
             @b_success  OUTPUT,
-            @n_err      OUTPUT,
-            @c_errmsg   OUTPUT,
+            @n_ErrNo      OUTPUT,
+            @c_ErrMsg   OUTPUT,
             0,
             1
 
       IF @b_success <> 1
       BEGIN
+         SET @b_Success = 0
          SET @n_ErrNo = 99002
          SET @c_ErrMsg = 'GenUCCKeyFail(mspRLWAVGenID01)'
          GOTO QUIT_SP
@@ -127,23 +123,6 @@ BEGIN
       IF @n_CheckDigit = 10
          SET @n_CheckDigit = 0
       SET @c_IDKey = ISNULL(RTRIM(@c_IDKey), '') + CAST(@n_CheckDigit AS NVARCHAR( 1))
-   END 
-   ELSE
-   BEGIN
-      EXECUTE dbo.nspg_GetKey
-         'PACKNO',
-         10 ,
-         @c_IDKey   OUTPUT,
-         @b_success  OUTPUT,
-         @n_err      OUTPUT,
-         @c_errmsg   OUTPUT
-      IF @b_success <> 1
-      BEGIN
-         SET @n_ErrNo = 99003
-         SET @c_ErrMsg = 'GetLBLNoFail(mspRLWAVGenID01)'
-         GOTO QUIT_SP
-      END
-   END
 
    QUIT_SP:
 END
