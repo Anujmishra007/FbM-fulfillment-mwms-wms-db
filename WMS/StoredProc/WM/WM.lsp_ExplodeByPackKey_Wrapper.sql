@@ -490,7 +490,17 @@ BEGIN
          
          IF @c_GEN_ID_DURING_EXPLODE_PACK = '1'
          BEGIN
-            SELECT @c_GenIdSP = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'ASNExplodeByPackkeySP') --AYD01
+            --AYD01 START
+            SELECT @c_GenIdSP = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'ASNExplodeByPackkeySP') 
+            IF @c_GenIdSP <> '0' AND NOT EXISTS(SELECT 1 FROM dbo.SYSOBJECTS WHERE NAME = RTRIM(@c_GenIdSP) AND [TYPE] = 'P') 
+            BEGIN                                                                                                                                                                                                                                  
+               SELECT @c_ErrMsg = CONVERT(CHAR(250), @n_Err),                                                                                                                                                                                     
+                      @n_Err = 31012 -- Should Be Set To The SQL Errmessage but I don't know how to do so.                                                                                                                                        
+               SELECT @c_ErrMsg = 'NSQL' + CONVERT(CHAR(5), @n_Err) +                                                                                                                                                                             
+                         ': Stored Proc name invalid ('+RTRIM(ISNULL(@c_GenIdSP,'')) + ') (lsp_ExplodeByPackKey_Wrapper)'                                                                                  
+               GOTO EXIT_SP                                                                                                                                                                                                                       
+            END   
+            --AYD01 END
             DECLARE CUR_RECEIPTDETAIL CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
                SELECT RD.ReceiptLineNumber
                FROM   RECEIPTDETAIL RD WITH (NOLOCK) 
@@ -509,15 +519,6 @@ BEGIN
                --AYD01 START
                IF @c_GenIdSP <> '0'
                BEGIN    
-                  IF NOT EXISTS(SELECT 1 FROM dbo.SYSOBJECTS WHERE NAME = RTRIM(@c_GenIdSP) AND [TYPE] = 'P') 
-                  BEGIN                                                                                                                                                                                                                                  
-                     SELECT @c_ErrMsg = CONVERT(CHAR(250), @n_Err),                                                                                                                                                                                     
-                            @n_Err = 31012 -- Should Be Set To The SQL Errmessage but I don't know how to do so.                                                                                                                                        
-                     SELECT @c_ErrMsg = 'NSQL' + CONVERT(CHAR(5), @n_Err) +                                                                                                                                                                             
-                            ': Stored Proc name invalid ('+RTRIM(ISNULL(@c_GenIdSP,'')) + ') (lsp_ExplodeByPackKey_Wrapper)'                                                                                  
-                     GOTO EXIT_SP                                                                                                                                                                                                                       
-                  END   
-
                   SET @cSQL = N'EXEC dbo.' + RTRIM(@c_GenIdSP)   
                             + ' @c_StorerKey = @c_StorerKey,          '      
                             + ' @c_IDKey     = @c_IDKey        OUTPUT,'   
