@@ -27,6 +27,7 @@ GO
 /* 09-Aug-2016  TLTING        Change Set ROWCOUNT 1 to Top 1            */
 /* 09-May-2025  SSA01         FCR-3392- Modified to enable storer level */
 /*                            config                                    */
+/* 22-May-2025  SSA02         FCR-3392- Updated key2 and Key3 values    */
 /************************************************************************/
 
 CREATE OR ALTER TRIGGER [dbo].[ntrInventoryHoldAdd]
@@ -64,7 +65,8 @@ BEGIN
          @c_SKU              NVARCHAR(20),
          @n_Qty              float,
          @c_WorkOrderNo      NVARCHAR(18),
-         @c_BatchNo          NVARCHAR(18)
+         @c_BatchNo          NVARCHAR(18),
+         @c_Status           NVARCHAR(10)    -- (SSA02)
 
    /* IDSV5 - Leo */
    Declare @c_primarykey NVARCHAR(10), @b_interface NVARCHAR(1), @c_transmitlogkey NVARCHAR(10), @c_authority NVARCHAR(1)
@@ -75,7 +77,8 @@ BEGIN
       Select TOP 1 @c_primarykey = InventoryHoldKey, 
       @c_hold = ISNULL(INSERTED.Hold, ''),  --(SSA01)
       @c_loc = ISNULL(INSERTED.Loc, ''),    --(SSA01)
-      @c_StorerKey = ISNULL(INSERTED.Storerkey, '') --(SSA01)
+      @c_StorerKey = ISNULL(INSERTED.Storerkey, ''), --(SSA01)
+      @c_Status = ISNULL(INSERTED.Status, '')  --(SSA02)
       From INSERTED
       Where INSERTED.InventoryHoldKey > @c_primarykey
       Order by INSERTED.InventoryHoldKey
@@ -129,7 +132,7 @@ BEGIN
             BEGIN
                --(SSA01)
                INSERT TRANSMITLOG2  (Transmitlogkey, tablename, key1, key2, key3,  transmitflag)
-               VALUES  (@c_transmitlogkey, "InventoryHold", @c_primarykey, '', 'HOLD','0')
+               VALUES  (@c_transmitlogkey, "InventoryHold", @c_primarykey, @c_Status, @c_StorerKey,'0')
                SELECT @n_err= @@Error
                IF NOT @n_err=0
                BEGIN
