@@ -2,85 +2,86 @@ SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
-/************************************************************************/
-/* Stored Procedure: mspRLWAV03                                         */
-/* Creation Date: 08-MAY-2024                                           */
-/* Copyright: MAERSK                                                    */
-/* Written by:                                                          */
-/*                                                                      */
-/* Purpose: UWP-18747 - Levis US MPOC and Cartonization                 */
-/*                                                                      */
-/* Called By: Wave                                                      */
-/*                                                                      */
-/* GitHub Version: 2.9                                                  */
-/*                                                                      */
-/* Version: 7.0                                                         */
-/*                                                                      */
-/* Data Modifications:                                                  */
-/*                                                                      */
-/* Updates:                                                             */
-/* Date         Author   Ver  Purposes                                  */
-/* 13-Aug-2024  SHONG    1.0  Bug Fixing                                */
-/* 20-Aug-2024  SHONG    1.1  Chane Mapping in PackInfo Insert          */
-/* 22-Aug-2024  SHONG    1.2 FCR-243 Not mix SKUGroup and Item Class    */
-/* 09-Sep-2024  SHONG    1.3 Group by Item Group and Class, not checking*/
-/*                           LxWxH for SKU                              */
-/* 09-Sep-2024  Yung     1.4 Block Releave wave if replenishment        */
-/*                           incomplete                                 */
-/* 11-Sep-2024  Shong    1.5 Fixing VAS Order Issues                    */
-/* 12-Sep-2024  Shong    1.6 If OrderInfo03 = J05, set Carton Max SKU=5 */
-/* 15-Sep-2024  Shong    1.7 VAS LPN_SIZE - No Volume restriction       */
-/*                       (SWT01)                                        */
-/* 17-Sep-2024  WLChooi  1.8 Bug Fix + FCR version v2.1 (WL01)          */
-/* 18-Sep-2024  WLChooi  1.9 Map Workorderdetail.Type instead of Order  */
-/*                           info - FCR V2.2 (WL02)                     */
-/* 20-Sep-2024  WLChooi  2.0 Merge with ALiang01 changes from PROD      */
-/* 01-Oct-2024  Shong    2.1 Need to check Carton size for VAS Carton   */
-/*                           specified. Adding checking to reject when  */
-/*                           SKU Cube or LxWxH can't fit                */
-/* 03-Oct-2024 Shong     2.2 Fixing VAS Carton Size issue  (SWT03)      */
-/* 16-Oct-2024 Shong     2.2.1 Hot Fix for Carton Type Override (SWT04) */
-/* 10-Oct-2024 Shong     2.3 Force Generate Replenishment before Release*/
-/*                           Wave (SWT04)-> tmep remove                 */
-/* 21-Oct-2024 WLChooi   2.4 Stamp Packheader.ConsoOrderkey = Ordergroup*/
-/*                           for MPOC order (WL03)                      */
-/* 23-Oct-2024 WLChooi   2.5 Remove TL2 Insertion (WL04)                */
-/* 25-Oct-2024 WLChooi   2.6 Bug Fix for MPOC Flag (WL05)               */
-/* 31-Oct-2024 WLChooi   2.8 Fix MPOC multiple orders in 1 ctn (WL07)   */
-/* 11-Nov-2024 Shong     2.9 FCR-1132 Wave Release SCE Trigger for      */ 
-/*                           BOLbyConsignee (SWT05)                     */ 
-/* 20-Nov-2024 Wan01     3.0 UWP-27137 - [FCR-1348] [Levi's] Wave Release*/
-/*                           (Automation and Manual Operations)         */
-/* 30-Jan-2025 SSA01     3.1 UWP-27137 - [FCR-1348] Single tote for     */
-/*                           Single Sku                                 */
-/* 30-Jan-2025 SSA02     3.2 UWP-27137 -NonSortable and Nonconveyable   */
-/*                             cartonization fix                        */
-/* 11-Feb-2025 SWT06     3.3 Performance Tuning                         */
-/* 14-Feb-2025 Shong     3.4 UWP-27137 Fixing Case ID issues (SWT07)    */
-/* 19-Feb-2025 SSA03     3.5 UWP-27137 added condition #ORDERSKU.wcs=0  */
-/* 24-Feb-2025 WLC015    3.6 UWP-27137 Fix infinite loop when assigning */
-/*                           DropID (WL08)                              */
-/* 08-Mar-2024 SWT08     3.7 Using StdCube instead of LxWxH             */
-/* 06-Mar-2025 Wan02     3.8 UWP-31023 - FCR-3276 - LVSUSA - Automation */
-/*                           Wave Release Required Pack                 */
-/* 19-Mar-2025 Wan02         CR V1.2 -Gen Pick Task for Non Sortable &  */
-/*                           Conveyable for Non UCC                     */
-/*                           CR V1.4 - ASTCPK Task Status as '0' if pick*/
-/*                           face                                       */
-/* 25-Mar-2025 SSA03         UWP-31693 - updated orderinfo.referenceid  */
-/*                           with Storer.SUSR5 + RunningNumber + Mod10  */
-/*                           check digit using Luhn Algorithm           */
-/* 26-Mar-2025 WLChooi   4.0 FCR-3115/UWP-31024 Add Loadkey Validation  */
-/*                           (WL09)                                     */
-/* 01-Apr-2025 SSA04     4.1 UWP-27137 Fix infinite loop when splitQty =*/
-/*                           pickdetail.Qty                             */
-/* 02-Apr-2025 SWT09     4.2 Revise PackInfo Weight and Cube calculation*/
-/* 05-May-2025 SWT10     4.3 FCR-4389 revise Automation Carton Estimation*/
-/*                           Calculation                                */
-/* 09-May-2025 AYD01     4.4 UWP-32643: Fix PickFace checking           */
-/* 15-May-2025 WLC015    4.5 FCR-4480 Change to get PND Location from   */ 
-/*                           LocationGroup=DispatchCasePickMethod (WL10)*/
-/************************************************************************/
+/****************************************************************************/
+/* Stored Procedure: mspRLWAV03                                             */
+/* Creation Date: 08-MAY-2024                                               */
+/* Copyright: MAERSK                                                        */
+/* Written by:                                                              */
+/*                                                                          */
+/* Purpose: UWP-18747 - Levis US MPOC and Cartonization                     */
+/*                                                                          */
+/* Called By: Wave                                                          */
+/*                                                                          */
+/* GitHub Version: 2.9                                                      */
+/*                                                                          */
+/* Version: 7.0                                                             */
+/*                                                                          */
+/* Data Modifications:                                                      */
+/*                                                                          */
+/* Updates:                                                                 */
+/* Date         Author   Ver  Purposes                                      */
+/* 13-Aug-2024  SHONG    1.0  Bug Fixing                                    */
+/* 20-Aug-2024  SHONG    1.1  Chane Mapping in PackInfo Insert              */
+/* 22-Aug-2024  SHONG    1.2 FCR-243 Not mix SKUGroup and Item Class        */
+/* 09-Sep-2024  SHONG    1.3 Group by Item Group and Class, not checking    */
+/*                           LxWxH for SKU                                  */
+/* 09-Sep-2024  Yung     1.4 Block Releave wave if replenishment            */
+/*                           incomplete                                     */
+/* 11-Sep-2024  Shong    1.5 Fixing VAS Order Issues                        */
+/* 12-Sep-2024  Shong    1.6 If OrderInfo03 = J05, set Carton Max SKU=5     */
+/* 15-Sep-2024  Shong    1.7 VAS LPN_SIZE - No Volume restriction           */
+/*                       (SWT01)                                            */
+/* 17-Sep-2024  WLChooi  1.8 Bug Fix + FCR version v2.1 (WL01)              */
+/* 18-Sep-2024  WLChooi  1.9 Map Workorderdetail.Type instead of Order      */
+/*                           info - FCR V2.2 (WL02)                         */
+/* 20-Sep-2024  WLChooi  2.0 Merge with ALiang01 changes from PROD          */
+/* 01-Oct-2024  Shong    2.1 Need to check Carton size for VAS Carton       */
+/*                           specified. Adding checking to reject when      */
+/*                           SKU Cube or LxWxH can't fit                    */
+/* 03-Oct-2024 Shong     2.2 Fixing VAS Carton Size issue  (SWT03)          */
+/* 16-Oct-2024 Shong     2.2.1 Hot Fix for Carton Type Override (SWT04)     */
+/* 10-Oct-2024 Shong     2.3 Force Generate Replenishment before Release    */
+/*                           Wave (SWT04)-> tmep remove                     */
+/* 21-Oct-2024 WLChooi   2.4 Stamp Packheader.ConsoOrderkey = Ordergroup    */
+/*                           for MPOC order (WL03)                          */
+/* 23-Oct-2024 WLChooi   2.5 Remove TL2 Insertion (WL04)                    */
+/* 25-Oct-2024 WLChooi   2.6 Bug Fix for MPOC Flag (WL05)                   */
+/* 31-Oct-2024 WLChooi   2.8 Fix MPOC multiple orders in 1 ctn (WL07)       */
+/* 11-Nov-2024 Shong     2.9 FCR-1132 Wave Release SCE Trigger for          */ 
+/*                           BOLbyConsignee (SWT05)                         */ 
+/* 20-Nov-2024 Wan01     3.0 UWP-27137 - [FCR-1348] [Levi's] Wave Release   */
+/*                           (Automation and Manual Operations)             */
+/* 30-Jan-2025 SSA01     3.1 UWP-27137 - [FCR-1348] Single tote for         */
+/*                           Single Sku                                     */
+/* 30-Jan-2025 SSA02     3.2 UWP-27137 -NonSortable and Nonconveyable       */
+/*                             cartonization fix                            */
+/* 11-Feb-2025 SWT06     3.3 Performance Tuning                             */
+/* 14-Feb-2025 Shong     3.4 UWP-27137 Fixing Case ID issues (SWT07)        */
+/* 19-Feb-2025 SSA03     3.5 UWP-27137 added condition #ORDERSKU.wcs=0      */
+/* 24-Feb-2025 WLC015    3.6 UWP-27137 Fix infinite loop when assigning     */
+/*                           DropID (WL08)                                  */
+/* 08-Mar-2024 SWT08     3.7 Using StdCube instead of LxWxH                 */
+/* 06-Mar-2025 Wan02     3.8 UWP-31023 - FCR-3276 - LVSUSA - Automation     */
+/*                           Wave Release Required Pack                     */
+/* 19-Mar-2025 Wan02         CR V1.2 -Gen Pick Task for Non Sortable &      */
+/*                           Conveyable for Non UCC                         */
+/*                           CR V1.4 - ASTCPK Task Status as '0' if pick    */
+/*                           face                                           */
+/* 25-Mar-2025 SSA03         UWP-31693 - updated orderinfo.referenceid      */
+/*                           with Storer.SUSR5 + RunningNumber + Mod10      */
+/*                           check digit using Luhn Algorithm               */
+/* 26-Mar-2025 WLChooi   4.0 FCR-3115/UWP-31024 Add Loadkey Validation      */
+/*                           (WL09)                                         */
+/* 01-Apr-2025 SSA04     4.1 UWP-27137 Fix infinite loop when splitQty =    */
+/*                           pickdetail.Qty                                 */
+/* 02-Apr-2025 SWT09     4.2 Revise PackInfo Weight and Cube calculation    */
+/* 05-May-2025 SWT10     4.3 FCR-4389 revise Automation Carton Estimation   */
+/*                           Calculation                                    */
+/* 09-May-2025 AYD01     4.4 UWP-32643: Fix PickFace checking               */
+/* 15-May-2025 WLC015    4.5 FCR-4480 Change to get PND Location from       */ 
+/*                           LocationGroup=DispatchCasePickMethod (WL10)    */
+/* 21-May-2025 Calvin    4.6 INC8034229 Check duplicated RPF Tasks (CLVN01) */ 
+/****************************************************************************/
 CREATE OR ALTER PROC [dbo].[mspRLWAV03]
    @c_WaveKey NVARCHAR(10)
  , @b_Success INT           OUTPUT
@@ -191,7 +192,8 @@ BEGIN
          , @c_FinalLoc                 NVARCHAR(10) = ''                            --(Wan01)     
          , @c_PickMethod_TD            NVARCHAR(10) = ''                            --(Wan01)          
          , @c_RefTaskkey               NVARCHAR(10) = ''                            --(Wan01)  
-         , @c_WCSPack                  NVARCHAR(10) = 'Y'                           --(Wan02)          
+         , @c_WCSPack                  NVARCHAR(10) = 'Y'                           --(Wan02)     
+         , @c_InsertTask               NVARCHAR(1)  = 'Y'                           --(CLVN01)		 
          
    SELECT @n_StartTCnt = @@TRANCOUNT, @n_Continue = 1, @b_Success = 1, @n_err = 0, @c_errmsg = '', @c_SourceType = 'mspRLWAV03'
     
@@ -3234,6 +3236,7 @@ BEGIN
             SET @c_ToLocCategory = ''
             SET @c_ToPAZone      = ''  
             SET @c_FinalLoc      = ''
+			SET @c_InsertTask    = 'Y' --(CLVN01)			
                                   
             IF @c_UOM = '2'
             BEGIN
@@ -3403,6 +3406,22 @@ BEGIN
                   AND   UCC.UCCNo = @c_DropID
                   AND   UCC.[Status] = '3'
                END
+			   
+			   --(CLVN01) START--
+			   IF @c_TaskType = 'RPF'
+			   BEGIN
+			      IF EXISTS (SELECT 1 FROM TASKDETAIL WITH (NOLOCK)
+				             WHERE STORERKEY = @c_Storerkey  
+							 AND TASKTYPE = 'RPF' 
+							 AND CASEID = @c_DropID
+							 AND WAVEKEY = @c_WaveKey
+							 AND STATUS = '0'
+							 AND SOURCETYPE = @c_SourceType)
+				  BEGIN
+				     SET @c_InsertTask = 'N'
+				  END			 
+			   END
+               --(CLVN01) END--			   
 
                SET @b_success = 1
                EXECUTE dbo.nspg_Getkey
@@ -3418,7 +3437,7 @@ BEGIN
                   SET @n_continue = 3
                END  
                
-               IF @n_continue = 1
+               IF @n_continue = 1 AND @c_InsertTask = 'Y' --(CLVN01)
                BEGIN
                   SET @c_RefTaskkey = ''
                   IF @c_ToLoc <> @c_FinalLoc AND @c_FinalLoc > ''
