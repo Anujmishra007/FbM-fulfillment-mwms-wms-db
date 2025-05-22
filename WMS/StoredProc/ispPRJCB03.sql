@@ -18,7 +18,7 @@ GO
 /*                                                                      */
 /* Called By:                                                           */
 /*                                                                      */
-/* Github Version: 1.0                                                  */
+/* Github Version: 1.2                                                  */
 /*                                                                      */
 /* Version: V2                                                          */
 /*                                                                      */
@@ -28,6 +28,8 @@ GO
 /* Date        Author  Rev   Purposes                                   */
 /* 2024-10-09  SSA01    1.1   UWP-24678-JCB- Allocation for Kitting and */
 /*                                    Decanting                         */
+/* 2025-05-19  Wan01    1.2   FCR-4962 - JCB - Kitting Allocation       */
+/*                            - Adding OD.Lottable03 <> '' filtering    */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[ispPRJCB03] (
      @c_OrderKey        NVARCHAR(10)
@@ -82,10 +84,10 @@ BEGIN
           ,@c_SQLParm                NVARCHAR(MAX) = ''
           ,@c_Conditions             NVARCHAR(MAX) = ''
           ,@n_OpenQty                INT = 0
-   	      ,@n_PickQty                INT = 0
-   	      ,@n_IDQtyAvai              INT = 0
-   	      ,@n_LotQtyAvai             INT = 0
-   	      ,@n_ExtraQty               INT = 0
+            ,@n_PickQty                INT = 0
+            ,@n_IDQtyAvai              INT = 0
+            ,@n_LotQtyAvai             INT = 0
+            ,@n_ExtraQty               INT = 0
           ,@n_QtyLeftToFulfill       INT
           ,@c_PickDetailKey          NVARCHAR(10)          
           ,@c_Type                   NVARCHAR(10)
@@ -138,6 +140,7 @@ BEGIN
          AND o.Status < '9'            
          AND O.Type = @c_Type
          AND SKU.BUSR7 <> '1'                                  --(SSA01)
+         AND od.Lottable03 <> ''                                                    --(Wan01)
          ORDER BY OD.Orderkey, OD.OrderLineNumber
       END
       ELSE IF ISNULL(@c_Loadkey,'') <> ''
@@ -172,6 +175,7 @@ BEGIN
          AND o.Status < '9'                     
          AND O.Type = @c_Type
          AND SKU.BUSR7 <> '1'                                                  --(SSA01)
+         AND od.Lottable03 <> ''                                                    --(Wan01)
          ORDER BY OD.Orderkey, OD.OrderLineNumber
       END
       ELSE IF ISNULL(@c_Wavekey,'') <> ''
@@ -206,6 +210,7 @@ BEGIN
          AND o.Status < '9'                     
          AND O.Type = @c_Type
          AND SKU.BUSR7 <> '1'                                             --(SSA01)
+         AND od.Lottable03 <> ''                                                    --(Wan01)
          ORDER BY OD.Orderkey, OD.OrderLineNumber
       END
       
@@ -217,26 +222,26 @@ BEGIN
                                    
       WHILE @@FETCH_STATUS = 0 AND @n_Continue IN(1,2)
       BEGIN
-      	 SET @n_QtyLeftToFulfill = @n_OpenQty
-      	 
-      	 IF @b_debug = 1
-      	 BEGIN
-      	    SELECT @c_OrderKey as orderkey, @c_OrderLineNumber as orderlinenumber, @c_SKU as sku, @n_OpenQty as openqty
-      	 END          	 
-      	 
-      	 IF NOT EXISTS(SELECT 1 FROM ORDERDETAIL (NOLOCK)
-      	               WHERE Orderkey = @c_Orderkey
-      	               AND OrderLineNumber = @c_OrderLineNumber
-      	               AND ISNUMERIC(UserDefine01) = 1)
-      	 BEGIN
-      	    UPDATE ORDERDETAIL WITH (ROWLOCK)
-      	    SET Userdefine01 = CAST(OpenQty AS NVARCHAR)
-      	       ,Trafficcop = NULL
-      	    WHERE Orderkey = @c_Orderkey
-      	    AND OrderLineNumber = @c_OrderLineNumber
+          SET @n_QtyLeftToFulfill = @n_OpenQty
+          
+          IF @b_debug = 1
+          BEGIN
+             SELECT @c_OrderKey as orderkey, @c_OrderLineNumber as orderlinenumber, @c_SKU as sku, @n_OpenQty as openqty
+          END            
+          
+          IF NOT EXISTS(SELECT 1 FROM ORDERDETAIL (NOLOCK)
+                        WHERE Orderkey = @c_Orderkey
+                        AND OrderLineNumber = @c_OrderLineNumber
+                        AND ISNUMERIC(UserDefine01) = 1)
+          BEGIN
+             UPDATE ORDERDETAIL WITH (ROWLOCK)
+             SET Userdefine01 = CAST(OpenQty AS NVARCHAR)
+                ,Trafficcop = NULL
+             WHERE Orderkey = @c_Orderkey
+             AND OrderLineNumber = @c_OrderLineNumber
 
-   		      SET @n_err = @@ERROR
-   		      
+               SET @n_err = @@ERROR
+               
             IF @n_err <> 0
             BEGIN
                SET @n_continue = 3
@@ -244,10 +249,10 @@ BEGIN
                SET @n_err = 81010  -- Should Be Set To The SQL Errmessage but I don't know how to do so.
                SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update Orderdetail Failed. (ispPRJCB03)'
                            + '( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '                                                            
-            END   		      	    		      	    		      	    		      	                      	          	    
-      	 END              
-      	  --Joined  PUTAWAYZONE (SSA01)
-         SET @c_SQL = ' DECLARE CUR_INV CURSOR FAST_FORWARD READ_ONLY FOR  	 
+            END                                                                                                                
+          END              
+           --Joined  PUTAWAYZONE (SSA01)
+         SET @c_SQL = ' DECLARE CUR_INV CURSOR FAST_FORWARD READ_ONLY FOR      
             SELECT LLI.Loc, LLI.ID, 
                    SUM(LLI.QTY - LLI.QTYALLOCATED - LLI.QTYPICKED - LLI.QtyReplen)
             FROM LOTxLOCxID LLI (NOLOCK)
@@ -301,16 +306,16 @@ BEGIN
          FETCH FROM CUR_INV INTO @c_Loc, @c_ID, @n_IDQtyAvai
                                        
          WHILE @@FETCH_STATUS = 0 AND @n_Continue IN(1,2) AND @n_QtyLeftToFulFill > 0 --get pallet of the sku
-      	 BEGIN       
-      	 	  IF @b_debug = 1
-      	 	  BEGIN
-      	 	  	SELECT @c_Loc as loc, @c_ID as id, @n_IDQtyAvai as idqtyavai, @n_QtyLeftToFulFill as qtylefttofulfill
-      	 	  END
-      	 	        	 	
-      	 	  IF @n_IDQtyAvai > @n_QtyLeftToFulFill
-      	 	     GOTO NEXT_LI
-      	 	
-      	 	  DECLARE CUR_LOT CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
+          BEGIN       
+              IF @b_debug = 1
+              BEGIN
+               SELECT @c_Loc as loc, @c_ID as id, @n_IDQtyAvai as idqtyavai, @n_QtyLeftToFulFill as qtylefttofulfill
+              END
+                        
+              IF @n_IDQtyAvai > @n_QtyLeftToFulFill
+                 GOTO NEXT_LI
+            
+              DECLARE CUR_LOT CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
                SELECT LLI.Lot, LLI.QTY - LLI.QTYALLOCATED - LLI.QTYPICKED - LLI.QtyReplen
                FROM LOTXLOCXID LLI (NOLOCK)
                JOIN LOT (NOLOCK) ON LLI.Lot = LOT.Lot
@@ -326,59 +331,59 @@ BEGIN
             FETCH FROM CUR_LOT INTO @c_Lot, @n_LotQtyAvai
                                        
             WHILE @@FETCH_STATUS = 0 AND @n_Continue IN(1,2) --get all the sku lots of the pallet 
-      	    BEGIN                      	 	           
-   		         SET @n_PickQty = @n_LotQtyAvai
-   		         
-   		         IF @b_debug = 1
-      	 	     BEGIN
-      	 	  	    SELECT @c_Lot as lot, @n_LotQtyAvai as lotqtyavai, @n_PickQty as pickqty
-      	 	     END   		         
-   		            		            		           		            		            	    	   
-      	    	 IF @n_PickQty > 0
-      	    	 BEGIN                                   	 	
-      	          SET @b_Success = 0
-   		            SET @c_PickDetailKey = ''
-   		            
-   		            EXEC nspg_GetKey
-   		               @KeyName = 'PickdetailKey',
-   		               @fieldlength = 10,
-   		               @keystring = @c_PickDetailKey OUTPUT,
-   		               @b_Success = @b_Success OUTPUT,
-   		               @n_err = @n_Err OUTPUT,
-   		               @c_errmsg = @c_ErrMsg OUTPUT,
-   		               @b_resultset = 1,
-   		               @n_batch = 1
+             BEGIN                                      
+                  SET @n_PickQty = @n_LotQtyAvai
+                  
+                  IF @b_debug = 1
+                 BEGIN
+                   SELECT @c_Lot as lot, @n_LotQtyAvai as lotqtyavai, @n_PickQty as pickqty
+                 END                
+                                                                                                      
+                IF @n_PickQty > 0
+                BEGIN                                       
+                   SET @b_Success = 0
+                     SET @c_PickDetailKey = ''
+                     
+                     EXEC nspg_GetKey
+                        @KeyName = 'PickdetailKey',
+                        @fieldlength = 10,
+                        @keystring = @c_PickDetailKey OUTPUT,
+                        @b_Success = @b_Success OUTPUT,
+                        @n_err = @n_Err OUTPUT,
+                        @c_errmsg = @c_ErrMsg OUTPUT,
+                        @b_resultset = 1,
+                        @n_batch = 1
                    
                   IF @b_Success = 1
                   BEGIN
                      INSERT INTO PICKDETAIL
                      (
-                     	PickDetailKey,          CaseID,            	 PickHeaderKey,
-                     	OrderKey,               OrderLineNumber,     Lot,
-                     	Storerkey,              Sku,            	 	 AltSku,
-                     	UOM,           		      UOMQty,            	 Qty,
-                     	QtyMoved,               [Status],            DropID,
-                     	Loc,            		    ID,            	     PackKey,
-                     	UpdateSource,           CartonGroup,         CartonType,
-                     	ToLoc,            	    DoReplenish,         ReplenishZone,
-                     	DoCartonize,            PickMethod,          WaveKey,
-                     	ShipFlag,               PickSlipNo,          TaskDetailKey,
-                     	TaskManagerReasonKey,   Notes,            	 MoveRefKey, 	
-                     	Trafficcop)
+                        PickDetailKey,          CaseID,               PickHeaderKey,
+                        OrderKey,               OrderLineNumber,     Lot,
+                        Storerkey,              Sku,                  AltSku,
+                        UOM,                       UOMQty,               Qty,
+                        QtyMoved,               [Status],            DropID,
+                        Loc,                     ID,                   PackKey,
+                        UpdateSource,           CartonGroup,         CartonType,
+                        ToLoc,                   DoReplenish,         ReplenishZone,
+                        DoCartonize,            PickMethod,          WaveKey,
+                        ShipFlag,               PickSlipNo,          TaskDetailKey,
+                        TaskManagerReasonKey,   Notes,                MoveRefKey,   
+                        Trafficcop)
                      VALUES 
-                      (@c_PickDetailKey,       '',            		   '',
-                     	@c_OrderKey,            @c_OrderLineNumber,  @c_LOT,
-                     	@c_StorerKey,           @c_SKU,            	 '',
-                     	@c_UOM,             	  @n_PickQty,              @n_PickQty,
-                     	0,            		      '0',            		 '',
-                     	@c_LOC,                 @c_ID,            	 @c_PackKey,
-                     	'0',            		    'STD',            	 '',
-                     	'',            		      'N',            		 '',
-                     	'N',            		    '',            		   '',
-                     	'N',            		    '',            		   '',
-                     	'',            		      '',            		   '',
-                     	'U')
-                    	
+                      (@c_PickDetailKey,       '',                   '',
+                        @c_OrderKey,            @c_OrderLineNumber,  @c_LOT,
+                        @c_StorerKey,           @c_SKU,               '',
+                        @c_UOM,                @n_PickQty,              @n_PickQty,
+                        0,                      '0',                  '',
+                        @c_LOC,                 @c_ID,                @c_PackKey,
+                        '0',                     'STD',               '',
+                        '',                        'N',                  '',
+                        'N',                     '',                    '',
+                        'N',                     '',                    '',
+                        '',                        '',                     '',
+                        'U')
+                     
                      SET @n_err = @@ERROR
                      
                      IF @n_err <> 0
@@ -405,7 +410,7 @@ BEGIN
          END
          CLOSE CUR_INV
          DEALLOCATE CUR_INV
-      	  
+           
          FETCH FROM CUR_ORDER_LINES INTO @c_StorerKey, @c_OrderKey, @c_OrderLineNumber, @c_SKU, @n_OpenQty, @c_Packkey, 
                                          @c_Lottable01, @c_Lottable02, @c_Lottable03, @d_Lottable04, @d_Lottable05, @c_Lottable06, @c_Lottable07, @c_Lottable08,
                                          @c_Lottable09, @c_Lottable10, @c_Lottable11, @c_Lottable12, @d_Lottable13, @d_Lottable14, @d_Lottable15, @c_Facility

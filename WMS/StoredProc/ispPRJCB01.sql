@@ -18,7 +18,7 @@ GO
 /*                                                                      */
 /* Called By:                                                           */
 /*                                                                      */
-/* Github Version: 1.1                                                  */
+/* Github Version: 1.4                                                  */
 /*                                                                      */
 /* Version: V2                                                          */
 /*                                                                      */
@@ -29,6 +29,7 @@ GO
 /* 2024-10-09  SSA01    1.2   UWP-24678-JCB- Allocation for Kitting and */
 /*                                    Decanting                         */
 /* 2024-11-13  SOMA01   1.3  Hot fix to populate lottable03 in orderdetail*/
+/* 2025-05-19  Wan02    1.4   FCR-4962 - JCB - Kitting Allocation       */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[ispPRJCB01] (
      @c_OrderKey        NVARCHAR(10)
@@ -95,14 +96,18 @@ BEGIN
           , @c_IDSku                NVARCHAR(20) =''                                --(Wan01)
           , @c_IDLottable03         NVARCHAR(18)                                    --(SOMA01)
           , @c_OrderLineNoAlloc     NVARCHAR(5) =''                                 --(Wan01)
+          , @c_IDLottable11         NVARCHAR(30)=''                                 --(Wan02)
    
    SET @c_UOM = '1'
    --Added PA.Zonecategory (SSA01)
-   SET @c_Conditions = ' AND LOC.LocationType = ''BULK''
-                         AND PA.ZoneCategory  = ''EMG''
-                         AND NOT EXISTS(SELECT 1 FROM LOTXLOCXID L (NOLOCK) WHERE L.Storerkey = LLI.Storerkey
-                                        AND L.Sku = LLI.Sku AND L.Id = LLI.Id AND L.Loc = LLI.Loc
-                                        AND (L.QtyAllocated + L.QtyPicked + L.QtyReplen) > 0) '
+   SET @c_Conditions = ' AND LOC.LocationType = ''BULK'''
+                     + ' AND PA.ZoneCategory  = ''EMG'''
+                     + ' AND NOT EXISTS(SELECT 1 FROM LOTXLOCXID L (NOLOCK)'
+                     +                ' JOIN LOTATTRIBUTE la (NOLOCK) ON la.Lot = l.Lot'           --(Wan02)
+                     +                ' WHERE L.Storerkey = LLI.Storerkey'
+                     +                ' AND L.Sku = LLI.Sku AND L.Id = LLI.Id AND L.Loc = LLI.Loc'
+                     +                ' AND (L.QtyAllocated + L.QtyPicked + L.QtyReplen) > 0'
+                     +                ' AND la.Lottable11 = '''') '                                --(Wan02)
                          --(Wan01) - START
                          --AND NOT EXISTS(SELECT 1 FROM LOTXLOCXID L (NOLOCK) WHERE L.Storerkey = LLI.Storerkey      
                          --               AND L.Sku <> LLI.Sku AND L.Id = LLI.Id AND L.Loc = LLI.Loc AND L.Qty > 0) ' 
@@ -144,6 +149,7 @@ BEGIN
          AND o.SOStatus <> 'CANC' 
          AND o.Status < '9'            
          AND O.Type = @c_Type
+         AND od.Lottable03 <> ''                                              --(Wan02)
          AND SKU.BUSR7 <> '1'                                                 --(SSA01)
          ORDER BY OD.Orderkey, OD.OrderLineNumber
       END
@@ -178,7 +184,8 @@ BEGIN
          AND o.SOStatus <> 'CANC' 
          AND o.Status < '9'                     
          AND O.Type = @c_Type
-         AND SKU.BUSR7 <> '1'                                               --(SSA01)
+         AND od.Lottable03 <> ''                                              --(Wan02)
+         AND SKU.BUSR7 <> '1'                                                 --(SSA01)
          ORDER BY OD.Orderkey, OD.OrderLineNumber
       END
       ELSE IF ISNULL(@c_Wavekey,'') <> ''
@@ -212,7 +219,8 @@ BEGIN
          AND o.SOStatus <> 'CANC' 
          AND o.Status < '9'                     
          AND O.Type = @c_Type
-         AND SKU.BUSR7 <> '1'                                                          --(SSA01)
+         AND od.Lottable03 <> ''                                                    --(Wan02)
+         AND SKU.BUSR7 <> '1'                                                       --(SSA01)
          ORDER BY OD.Orderkey, OD.OrderLineNumber
       END
       
@@ -351,6 +359,7 @@ BEGIN
             DECLARE CUR_LOT CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
             SELECT LLI.Lot, LLI.QTY - LLI.QTYALLOCATED - LLI.QTYPICKED - LLI.QtyReplen
                   ,LLI.Sku , LA.LOTTABLE03                                          --(Wan01)(SOMA01)
+                  ,LA.Lottable11                                                    --(Wan02)
             FROM LOTXLOCXID LLI (NOLOCK)
             JOIN LOT (NOLOCK) ON LLI.Lot = LOT.Lot
             JOIN LOTATTRIBUTE LA (NOLOCK) ON LA.Lot = LOT.Lot                       --(SOMA01)
@@ -364,7 +373,8 @@ BEGIN
 
             OPEN CUR_LOT
                                                                
-            FETCH FROM CUR_LOT INTO @c_Lot, @n_LotQtyAvai, @c_IDSku , @c_IDLottable03               --(Wan01)(SOMA01)
+            FETCH FROM CUR_LOT INTO @c_Lot, @n_LotQtyAvai, @c_IDSku , @c_IDLottable03  --(Wan01)(SOMA01)
+                                 ,  @c_IDLottable11                                    --(Wan02)
                                        
             WHILE @@FETCH_STATUS = 0 AND @n_Continue IN(1,2) --get all the sku lots of the pallet 
             BEGIN                                                
@@ -410,7 +420,7 @@ BEGIN
                   SET @n_PickQty = @n_LotQtyAvai
                END
                                  
-               IF @c_Sku <> @c_IDSku                                                --(Wan01) - START      
+               IF @c_Sku <> @c_IDSku AND @c_IDLottable11 = ''                       --(Wan01) - START      
                BEGIN
                   IF NOT EXISTS (SELECT 1 FROM ORDERDETAIL (NOLOCK)
                                  WHERE Orderkey = @c_Orderkey
@@ -448,7 +458,7 @@ BEGIN
                            ,ExternOrderkey, ExternLineNo, '', '','' 
                            ,@c_Packkey, @c_PackUOM3, @n_PickQty, @n_PickQty, @n_PickQty
                            ,Loadkey, MBOLKey
-                           ,'', '', @c_IDLottable03, NULL, NULL                     --(SOMA01)
+                           ,'', '', @c_IDLottable03, NULL, NULL                    --(SOMA01)
                            ,'', '', '', '', '' 
                            ,'', '', NULL,  NULL, NULL                                                
                            ,'0', @c_OrderLineNumber,'','',''
@@ -464,7 +474,7 @@ BEGIN
                   SELECT @c_Lot as lot, @n_LotQtyAvai as lotqtyavai, @n_ExtraQty as extraqty, @n_PickQty as pickqty
                END
                                 
-               IF @n_PickQty > 0
+               IF @n_PickQty > 0 AND @c_OrderLineNoAlloc > ''                       --(Wan01) 
                BEGIN                                        
                   SET @b_Success = 0
                   SET @c_PickDetailKey = ''
@@ -526,7 +536,8 @@ BEGIN
                   END                                                               --(Wan01)
                END               
                
-               FETCH FROM CUR_LOT INTO @c_Lot, @n_LotQtyAvai, @c_IDSku ,@c_IDLottable03              --(Wan01)(SOMA01)
+               FETCH FROM CUR_LOT INTO @c_Lot, @n_LotQtyAvai, @c_IDSku ,@c_IDLottable03--(Wan01)(SOMA01)
+                                    ,  @c_IDLottable11                              --(Wan02)
             END
             CLOSE CUR_LOT
             DEALLOCATE CUR_LOT

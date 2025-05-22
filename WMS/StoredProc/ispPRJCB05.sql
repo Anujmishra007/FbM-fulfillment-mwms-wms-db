@@ -28,6 +28,7 @@ GO
 /* 2024-11-07  SSA02    1.2   Updated DropId with ID for K4 Kitting order*/
 /* 2025-02-05  SKE140   1.3   UWP-29250 Updated condtion to exclude the */
 /*                              JCB-ALLOC                               */
+/* 2025-05-19  Wan01    1.4   FCR-4962 - JCB - Kitting Allocation       */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[ispPRJCB05] (
      @c_OrderKey        NVARCHAR(10)
@@ -86,7 +87,7 @@ BEGIN
           ,@n_QtyToAlloc            INT            = 0
           ,@n_QtyLeftToFulfill      INT
           ,@c_PickDetailKey         NVARCHAR(10)   = ''          
-          ,@c_Type                  NVARCHAR(10)   = ''
+          ,@c_Type                  NVARCHAR(30)   = ''                             --(Wan01)
 
           ,@CUR_ORDER_LINES         CURSOR
           ,@CUR_INV                 CURSOR
@@ -97,7 +98,7 @@ BEGIN
    SET @n_Err     = 0
    SET @c_ErrMsg  = ''
    SET @c_UOM     = '1'   
-   SET @c_Type = '6'
+   SET @c_Type    = '6'
    SET @c_Conditions = ' AND LOC.LocationType = ''BULK''
                          AND PA.ZoneCategory  = ''EMG'' 
                          AND NOT EXISTS(SELECT 1 FROM LOTXLOCXID L (NOLOCK) WHERE L.Storerkey = LLI.Storerkey
@@ -105,23 +106,29 @@ BEGIN
                                         AND (L.QtyAllocated + L.QtyPicked + L.QtyReplen) > 0) 
                          AND NOT EXISTS(SELECT 1 FROM LOTXLOCXID L (NOLOCK) WHERE L.Storerkey = LLI.Storerkey      
                                         AND L.Sku <> LLI.Sku AND L.Id = LLI.Id AND L.Loc = LLI.Loc AND L.Qty > 0)  
-                         AND NOT EXISTS(SELECT 1 FROM PICKDETAIL PD (NOLOCK) WHERE PD.Storerkey = LLI.Storerkey
-                                        AND PD.Sku = LLI.Sku AND PD.Lot = LLI.Lot AND PD.ToLoc = LLI.Loc
-                                        AND PD.CaseID = LLI.Id AND PD.Status = ''0'') 
-                         AND NOT EXISTS (SELECT 1 FROM CODELKUP (NOLOCK) WHERE LISTNAME = ''JCBEXALLOC''  AND CODE = @c_Type AND UDF01 = ''1'' AND LONG = LOC.Loc AND LONG IS NOT NULL)  '  --UWP-29250
-    
-     
+                         AND LLI.QtyAllocated + LLI.QtyPicked + LLI.QtyReplen = 0                                   --(Wan01)
+                         AND NOT EXISTS(SELECT 1 FROM PICKDETAIL PD (NOLOCK) WHERE PD.Storerkey = LLI.Storerkey  
+                                        AND PD.Sku = LLI.Sku AND PD.Lot = LLI.Lot AND PD.ToLoc = LLI.Loc         
+                                        AND PD.CaseID = LLI.Id AND PD.Status = ''0'')                            
+                         AND NOT EXISTS (SELECT 1 FROM CODELKUP (NOLOCK) WHERE LISTNAME = ''JCBEXALLOC'' 
+                         AND CODE = @c_Type AND UDF01 = ''1'' AND LONG = LOC.Loc AND LONG IS NOT NULL)  '  --UWP-29250
+
    IF @n_continue IN(1,2)
    BEGIN
+      SELECT @c_Type = cl.UDF01                                                     --(Wan01)- START
+      FROM CODELKUP cl (NOLOCK)
+      WHERE cl.ListName = 'ispPRJCB05'
+      AND   cl.Code = 'OrderType'
+
+      IF @c_Type = '' SET @c_Type = '6'                                             --(Wan01) - END
+
       IF ISNULL(@c_Orderkey,'') <> ''
       BEGIN
          SET @n_Continue = 4
-         
       END
-      
       ELSE IF ISNULL(@c_Loadkey,'') <> ''
-      
       BEGIN
+
          SET @CUR_ORDER_LINES = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
          SELECT DISTINCT OD.StorerKey, OD.Sku
                         ,Openqty = SUM(OD.OpenQty - (OD.QtyAllocated + OD.QtyPicked))
@@ -142,17 +149,19 @@ BEGIN
                         ,LOTTABLE14 = ISNULL(OD.LOTTABLE14,'19000101')
                         ,LOTTABLE15 = ISNULL(OD.LOTTABLE15,'19000101')
                         ,O.Facility
-
+                        ,o.Type                                                     --(Wan01)
          FROM ORDERS AS o WITH (NOLOCK)
          JOIN ORDERDETAIL AS OD WITH (NOLOCK) ON OD.OrderKey = o.OrderKey
          JOIN SKU WITH (NOLOCK) ON OD.Storerkey = SKU.Storerkey AND OD.Sku = SKU.Sku
          JOIN PACK WITH (NOLOCK) ON SKU.Packkey = PACK.Packkey
          JOIN LoadPlanDetail LPD WITH (NOLOCK) ON o.OrderKey = LPD.OrderKey
+         JOIN string_split (@c_Type, ',') ss ON ss.[value] = o.Type                 --(Wan01)
          WHERE LPD.LoadKey = @c_Loadkey
          AND (OD.OpenQty - (OD.QtyAllocated + OD.QtyPicked)) > 0
          AND o.SOStatus <> 'CANC' 
          AND o.Status < '9'                     
-         AND O.Type = @c_Type 
+         --AND O.Type = @c_Type                                                     --(Wan01)   
+         AND od.Lottable03 <> ''                                                    --(Wan01)
          AND SKU.BUSR7 <> '1'
          GROUP BY OD.StorerKey, OD.Sku
                ,  SKU.Packkey
@@ -172,6 +181,7 @@ BEGIN
                ,  ISNULL(OD.LOTTABLE14,'19000101')
                ,  ISNULL(OD.LOTTABLE15,'19000101')
                ,  O.Facility
+               ,  o.Type                                                            --(Wan01)
          ORDER BY OD.Storerkey, OD.Sku
       END
       ELSE IF ISNULL(@c_Wavekey,'') <> ''
@@ -196,16 +206,19 @@ BEGIN
                         ,LOTTABLE14 = ISNULL(OD.LOTTABLE14,'19000101')
                         ,LOTTABLE15 = ISNULL(OD.LOTTABLE15,'19000101')
                         ,O.Facility
+                        ,o.Type                                                     --(Wan01)   
          FROM ORDERS AS o WITH (NOLOCK)
          JOIN ORDERDETAIL AS OD WITH (NOLOCK) ON OD.OrderKey = o.OrderKey
          JOIN SKU WITH (NOLOCK) ON OD.Storerkey = SKU.Storerkey AND OD.Sku = SKU.Sku
          JOIN PACK WITH (NOLOCK) ON SKU.Packkey = PACK.Packkey
          JOIN WaveDetail WD WITH (NOLOCK) ON o.OrderKey = WD.OrderKey
+         JOIN string_split (@c_Type, ',') ss ON ss.[value] = o.Type                 --(Wan01)
          WHERE WD.Wavekey = @c_Wavekey
          AND (OD.OpenQty - (OD.QtyAllocated + OD.QtyPicked)) > 0
          AND o.SOStatus <> 'CANC' 
          AND o.Status < '9'                     
-         AND o.Type = @c_Type 
+         --AND o.Type = @c_Type                                                     --(Wan01)   
+         AND od.Lottable03 <> ''                                                    --(Wan01)         
          AND SKU.BUSR7 <> '1'
          GROUP BY OD.StorerKey, OD.Sku
                ,  SKU.Packkey
@@ -225,18 +238,19 @@ BEGIN
                ,  ISNULL(OD.LOTTABLE14,'19000101')
                ,  ISNULL(OD.LOTTABLE15,'19000101')
                ,  O.Facility
+               ,  o.Type                                                            --(Wan01)
          ORDER BY OD.Storerkey, OD.Sku
       END
      
       IF @n_continue IN(1,2)
-        BEGIN
+      BEGIN
         OPEN @CUR_ORDER_LINES
 
         FETCH FROM @CUR_ORDER_LINES INTO @c_StorerKey, @c_SKU, @n_OpenQty, @c_Packkey
                                       , @c_Lottable01, @c_Lottable02, @c_Lottable03, @d_Lottable04, @d_Lottable05
                                       , @c_Lottable06, @c_Lottable07, @c_Lottable08, @c_Lottable09, @c_Lottable10
                                       , @c_Lottable11, @c_Lottable12, @d_Lottable13, @d_Lottable14, @d_Lottable15
-                                      , @c_Facility
+                                      , @c_Facility,   @c_Type                      --(Wan01)
 
         WHILE @@FETCH_STATUS = 0 AND @n_Continue IN(1,2)
         BEGIN
@@ -263,7 +277,7 @@ BEGIN
                  AND LOT.Status = ''OK''
                  AND ID.Status = ''OK''
                  AND LOC.Facility = @c_Facility
-                 AND (LLI.QTY - LLI.QTYALLOCATED - LLI.QTYPICKED - LLI.QtyReplen) >  0
+                 AND (LLI.QTY - LLI.QTYALLOCATED - LLI.QTYPICKED - LLI.QtyReplen) > 0
                  AND LLI.STORERKEY = @c_StorerKey
                  AND LLI.SKU = @c_SKU ' +
                  RTRIM(@c_Conditions) + ' ' +
@@ -288,12 +302,12 @@ BEGIN
                  CASE WHEN CONVERT(NVARCHAR(8) ,@d_Lottable15 ,112) <> '19000101'
                       THEN ' AND LA.Lottable15 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable15, 106)) ' ELSE ' ' END +
             ' GROUP BY lli.Loc, loc.LogicalLocation, LLI.ID
+              HAVING SUM(LLI.QTY - LLI.QTYALLOCATED - LLI.QTYPICKED - LLI.QtyReplen) <= @n_QtyLeftToFulfill 
               ORDER BY MIN(la.Lottable05), loc.LogicalLocation, lli.Loc
                       ,CASE WHEN SUM(LLI.QTY - LLI.QTYALLOCATED - LLI.QTYPICKED - LLI.QtyReplen) <= @n_QtyLeftToFulfill
                             THEN 0
                             ELSE 5
                             END; OPEN @CUR_INV'
-                            
 
            SET @c_SQLParm = N'@c_StorerKey NVARCHAR(15), @c_SKU NVARCHAR(20), @c_Facility NVARCHAR(5), @c_Type NVARCHAR(10)'
                           +' ,@c_Lottable01 NVARCHAR(18), @c_Lottable02 NVARCHAR(18), @c_Lottable03 NVARCHAR(18), @d_Lottable04 DATETIME, @d_Lottable05 DATETIME'
@@ -316,6 +330,11 @@ BEGIN
               BEGIN
                  SELECT @c_Loc as loc, @c_ID as id, @n_IDQtyAvai as idqtyavai, @n_QtyLeftToFulFill as qtylefttofulfill
               END
+              
+              IF @n_IDQtyAvai > @n_QtyLeftToFulFill                                 --(Wan01) - START
+              BEGIN
+                  GOTO NEXT_LI
+              END                                                                   --(Wan01) - END
 
               SET @CUR_LOT = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
               SELECT LLI.Lot, LLI.QTY - LLI.QTYALLOCATED - LLI.QTYPICKED - LLI.QtyReplen
@@ -489,7 +508,7 @@ BEGIN
               END
               CLOSE @CUR_LOT
               DEALLOCATE @CUR_LOT
-
+              NEXT_LI:                                                              --(Wan01)
               FETCH FROM @CUR_INV INTO @c_Loc, @c_ID, @n_IDQtyAvai
            END
            CLOSE @CUR_INV
@@ -499,7 +518,7 @@ BEGIN
                                          ,  @c_Lottable01, @c_Lottable02, @c_Lottable03, @d_Lottable04, @d_Lottable05
                                          ,  @c_Lottable06, @c_Lottable07, @c_Lottable08, @c_Lottable09, @c_Lottable10
                                          ,  @c_Lottable11, @c_Lottable12, @d_Lottable13, @d_Lottable14, @d_Lottable15
-                                         ,  @c_Facility
+                                         ,  @c_Facility,   @c_Type                  --(Wan01)
         END
         CLOSE @CUR_ORDER_LINES
         DEALLOCATE @CUR_ORDER_LINES
