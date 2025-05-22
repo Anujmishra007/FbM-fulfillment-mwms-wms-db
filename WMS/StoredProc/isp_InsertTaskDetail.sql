@@ -47,7 +47,9 @@ GO
 /* 04-03-2021   WLChooi  2.5  Fixes - Insert Channel_ID into Pickdetail */
 /*                            Table (WL01)                              */
 /* 14-12-2021   NJOW14   2.6  WMS-18495 if qty 0 still allow insert     */
-/* 14-14-2021   NJOW14   2.6  DEVOPS combine script                     */
+/* 14-12-2021   NJOW14   2.6  DEVOPS combine script                     */
+/* 07-02-2024   NJOW15   2.7  WMS-24645 Link task to pickdetail allow   */
+/*                            by caseid.                                */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[isp_InsertTaskDetail]   
@@ -1003,6 +1005,44 @@ BEGIN
       BEGIN
          IF EXISTS(SELECT 1 FROM REPLENISHMENT (NOLOCK) WHERE Replenishmentkey = @c_Sourcekey AND Storerkey = @c_Storerkey)
          BEGIN
+         	  --NJOW15 S
+         	  IF @n_QtyReplen > 0
+         	  BEGIN 
+               UPDATE REPLENISHMENT WITH (ROWLOCK)
+               SET QtyReplen = 0
+               WHERE Replenishmentkey = @c_Sourcekey
+               AND Storerkey = @c_Storerkey
+               AND QtyReplen > 0
+               
+               SELECT @n_err = @@ERROR
+            
+               IF @n_err <> 0 
+               BEGIN
+                  SELECT @n_continue = 3
+                  SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 81018   
+                  SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update REPLENISHMENT Table Failed. (isp_InsertTaskDetail)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
+               END                
+            END
+
+         	  IF @n_PendingMoveIn > 0
+         	  BEGIN 
+               UPDATE REPLENISHMENT WITH (ROWLOCK)
+               SET PendingMoveIn = 0
+               WHERE Replenishmentkey = @c_Sourcekey
+               AND Storerkey = @c_Storerkey
+               AND PendingMoveIn > 0
+
+               SELECT @n_err = @@ERROR
+            
+               IF @n_err <> 0 
+               BEGIN
+                  SELECT @n_continue = 3
+                  SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 81019   
+                  SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update REPLENISHMENT Table Failed. (isp_InsertTaskDetail)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
+               END                
+            END
+            --NJOW15 E
+                     	
             UPDATE REPLENISHMENT WITH (ROWLOCK)
             SET ReplenNo = @c_Taskdetailkey,
                 Confirmed = 'Y',
@@ -1069,7 +1109,8 @@ BEGIN
                         
           EXEC sp_executesql @c_SQL,
                N'@c_Storerkey NVARCHAR(15), @c_Sku NVARCHAR(20), @c_Lot NVARCHAR(10), @c_FromLoc NVARCHAR(10), 
-                 @c_FromID NVARCHAR(18), @c_UOM NVARCHAR(10), @c_Wavekey NVARCHAR(10), @c_Loadkey NVARCHAR(10), @c_DropID NVARCHAR(20), @c_Orderkey NVARCHAR(10), @c_WIP_RefNo NVARCHAR(30)', 
+                 @c_FromID NVARCHAR(18), @c_UOM NVARCHAR(10), @c_Wavekey NVARCHAR(10), @c_Loadkey NVARCHAR(10), @c_DropID NVARCHAR(20), @c_Orderkey NVARCHAR(10), @c_WIP_RefNo NVARCHAR(30),
+                 @c_Caseid NVARCHAR(20)', 
                @c_Storerkey,
                @c_Sku,
                @c_Lot,
@@ -1080,7 +1121,8 @@ BEGIN
                @c_Loadkey,
                @c_DropID, --NJOW01
                @c_Orderkey, --NJOW02
-               @c_WIP_RefNo --NJOW03
+               @c_WIP_RefNo, --NJOW03
+               @c_CaseID --NJOW15
                
           DECLARE CUR_Pick CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
              SELECT Pickdetailkey, Qty
