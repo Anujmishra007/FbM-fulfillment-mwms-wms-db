@@ -3,38 +3,39 @@ GO
 SET ANSI_NULLS OFF
 GO
 
-/*****************************************************************************/
-/* Trigger: ntrKitHeaderAdd                                                  */
-/* Creation Date:                                                            */
-/* Copyright: IDS                                                            */
-/* Written by:                                                               */
-/*                                                                           */
-/* Purpose:  KIT Header Add Transaction                                      */
-/*                                                                           */
-/* Input Parameters:                                                         */
-/*                                                                           */
-/* Output Parameters:                                                        */
-/*                                                                           */
-/* Return Status:                                                            */
-/*                                                                           */
-/* Usage:                                                                    */
-/*                                                                           */
-/* Local Variables:                                                          */
-/*                                                                           */
-/* Called By: When insert new records                                        */
-/*                                                                           */
-/* PVCS Version: 1.2                                                         */
-/*                                                                           */
-/* Version: 6.0                                                              */
-/*                                                                           */
-/* Data Modifications:                                                       */
-/*                                                                           */
-/* Updates:                                                                  */
-/* Date         Author   Ver. Purposes                                       */
-/* 30-May-2007  Shong    1.0  Add Checking on TrifficCop and ArchiveCop      */
-/* 17-Mar-2009  TLTING   1.1  Change user_name() to SUSER_SNAME()            */
-/* 03-Apr-2025  WLChooi  1.2  UWP-32362 Log DocStatusTrack (WL01)            */
-/*****************************************************************************/
+/********************************************************************************/
+/* Trigger: ntrKitHeaderAdd                                                     */
+/* Creation Date:                                                               */
+/* Copyright: IDS                                                               */
+/* Written by:                                                                  */
+/*                                                                              */
+/* Purpose:  KIT Header Add Transaction                                         */
+/*                                                                              */
+/* Input Parameters:                                                            */
+/*                                                                              */
+/* Output Parameters:                                                           */
+/*                                                                              */
+/* Return Status:                                                               */
+/*                                                                              */
+/* Usage:                                                                       */
+/*                                                                              */
+/* Local Variables:                                                             */
+/*                                                                              */
+/* Called By: When insert new records                                           */
+/*                                                                              */
+/* PVCS Version: 1.3                                                            */
+/*                                                                              */
+/* Version: 6.0                                                                 */
+/*                                                                              */
+/* Data Modifications:                                                          */
+/*                                                                              */
+/* Updates:                                                                     */
+/* Date         Author      Ver. Purposes                                       */
+/* 30-May-2007  Shong       1.0  Add Checking on TrifficCop and ArchiveCop      */
+/* 17-Mar-2009  TLTING      1.1  Change user_name() to SUSER_SNAME()            */
+/* 03-Apr-2025  WLChooi     1.2  UWP-32362 Log DocStatusTrack (WL01)            */
+/* 15-May-2025  Shreekanth  1.3  UWP-33751 AddWho & EditWho Nameduser (SG01)    */
+/********************************************************************************/
 CREATE OR ALTER TRIGGER [dbo].[ntrKitHeaderAdd]
 ON [dbo].[KIT]
 FOR INSERT
@@ -57,6 +58,7 @@ BEGIN
    ,         @c_Kitkey             NVARCHAR(10)   --WL01
    ,         @c_Storerkey          NVARCHAR(15)   --WL01
    ,         @c_ExternStatus       NVARCHAR(10)   --WL01
+   ,         @c_NamedUser          NVARCHAR(128)  --SG01
    SELECT @n_continue=1, @n_starttcnt=@@TRANCOUNT
    /* #INCLUDE <TRTHA1.SQL> */
    IF EXISTS( SELECT 1 FROM INSERTED WHERE ArchiveCop = '9')
@@ -84,9 +86,9 @@ BEGIN
       UPDATE KIT
       SET TrafficCop = NULL,
           AddDate  = GETDATE(),
-          AddWho   = SUSER_SNAME(),
+          AddWho   = IIF(INSERTED.AddWho = '', SUSER_SNAME(), INSERTED.AddWho),   --To cater for the case when the user explicitly set the Addwho to blank --SG01
           EditDate = GETDATE(),
-          EditWho  = SUSER_SNAME()
+          EditWho  = IIF(INSERTED.EditWho = '', SUSER_SNAME(), INSERTED.EditWho)   --To cater for the case when the user explicitly set the EditWho to blank --SG01
       FROM KIT
       JOIN INSERTED ON KIT.KitKey = INSERTED.KitKey
       SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
@@ -102,11 +104,12 @@ BEGIN
 
       DECLARE CUR_DST CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
       SELECT DISTINCT Kitkey, StorerKey, ISNULL(ExternStatus, '0')
+                    , IIF(EditWho = '', SUSER_SNAME(), EditWho)  --To cater for the case when the user explicitly set the EditWho to blank --SG01
       FROM INSERTED
 
       OPEN CUR_DST
 
-      FETCH NEXT FROM CUR_DST INTO @c_Kitkey, @c_Storerkey, @c_ExternStatus
+      FETCH NEXT FROM CUR_DST INTO @c_Kitkey, @c_Storerkey, @c_ExternStatus, @c_NamedUser       --SG01
 
       WHILE @@FETCH_STATUS <> -1
       BEGIN
@@ -122,6 +125,7 @@ BEGIN
                                          , @c_Key1 = '0'
                                          , @c_Key2 = ''
                                          , @c_DocStatus = @c_ExternStatus
+                                         , @c_NamedUser = @c_NamedUser                  --SG01
                                          , @b_Success = @b_Success OUTPUT
                                          , @n_err = @n_err OUTPUT
                                          , @c_errmsg = @c_errmsg OUTPUT
@@ -135,7 +139,7 @@ BEGIN
             END CATCH
          END
 
-         FETCH NEXT FROM CUR_DST INTO @c_Kitkey, @c_Storerkey, @c_ExternStatus
+         FETCH NEXT FROM CUR_DST INTO @c_Kitkey, @c_Storerkey, @c_ExternStatus, @c_NamedUser            --SG01
       END
       CLOSE CUR_DST
       DEALLOCATE CUR_DST
