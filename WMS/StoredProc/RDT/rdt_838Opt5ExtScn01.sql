@@ -12,6 +12,7 @@ GO
 /* Date       Rev  Author     Purposes                                  */  
 /* 2025-03-10 1.0  CYU027    FCR-2495. Created                          */
 /* 2025-04-01 1.1.0 YWA059   UWP-32214 Merge Code                       */
+/* 2025-05-14 1.1.1 Dennis    UWP-34382 Fix Bug                         */
 /************************************************************************/  
   
 CREATE OR ALTER   PROC [RDT].[rdt_838Opt5ExtScn01] (
@@ -1037,7 +1038,7 @@ BEGIN
 
                --GOTO confirm scn
                SET @nAfterStep = 99
-               SET @nAfterScn = 6523
+               SET @nAfterScn = 6525
 
                GOTO Quit
             END
@@ -1092,10 +1093,10 @@ BEGIN
 
          End -- Scn6522 END
 
-         IF @nScn = 6523
+         IF @nScn = 6525
          BEGIN
             /********************************************************************************
-            Step 99. scn = 6523. Message screen
+            Step 99. scn = 6525. Message screen
                Message
             ********************************************************************************/
 

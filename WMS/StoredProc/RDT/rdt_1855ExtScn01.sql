@@ -27,6 +27,7 @@ GO
 /* 2025-04-11 1.6.2  DENNIS     UWP-32689 If picked then reject users back out     */
 /* 2025-04-22 1.6.3  CYU027     FCR-4191 Add UserKeyOverRide when picking tasks    */
 /* 2025-03-11 1.6.4  Dennis     FCR-3925  Add Validation for Tote Rel              */
+/* 2025-04-11 1.6.5  Dennis     UWP-31758 Skip Confirm Tote after Short pick       */
 /***********************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1855ExtScn01] (
@@ -142,6 +143,7 @@ BEGIN
       @cLockCaseID         NVARCHAR( 20),
       @cTotalToteQty       NVARCHAR( 5),
       @nAssignedToteQty    INT,
+      @nActQTY             INT,
 
 
       -- 1855 new step1 variables
@@ -180,7 +182,8 @@ BEGIN
          @cTaskDetailKey               = V_TaskDetailKey,
          @cPickSlipNo                  = V_PickSlipNo,
          @cWaveKey                     = V_WaveKey,
-         @nSuggQty                    = V_Integer1, 
+         @nSuggQty                     = V_Integer1,
+         @nActQTY                      = V_Integer3,
          @cCartID                      = V_String8,
          @cSuggFromLOC                 = V_String9,
          @cSuggCartonID                = V_String10,
@@ -1764,6 +1767,17 @@ BEGIN
                WHERE Variable = '@cGroupKey'
                --V1.1 JACKC END
                GOTO SCN6416_Start
+            END -- option 1
+
+         END -- step 10
+      END -- scn 5929
+      ELSE IF @nMOBRECStep = 6 --SHORT PICK CONFIRM
+      BEGIN
+         IF @nMOBRECScn = 5925
+         BEGIN
+            IF @cOption = '1' AND @nActQTY = 0
+            BEGIN
+               SET @cUDF01 = 'Y'
             END -- option 1
 
          END -- step 10

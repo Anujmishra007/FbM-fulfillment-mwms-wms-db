@@ -21,6 +21,7 @@
 /* 02-OCT-2023    Alex01   #JIRA PAC-142 Single - Lottable Function     */
 /* 02-APR-2023    Alex02   #JIRA PAC-182 Display SKU Images             */
 /* 12-AUG-2024    Alex03   #JIRA PAC-351 Regular exp to validate Serial#*/
+/* 14-NOV-2024    Alex04   #JIRA PAC-363 New Rules for IsSysSuggCtnType */
 /************************************************************************/
 CREATE OR ALTER PROC [API].[isp_ECOMP_GetPackingRules](
      @c_StorerKey                NVARCHAR(15)   = ''
@@ -123,6 +124,7 @@ BEGIN
          , @c_ECOMPNoOfIMG                NVARCHAR(3)    = ''
 
          , @c_SerialNo_Regex              NVARCHAR(200)  = ''  --Alex03
+         , @c_IsSystemSugCartonType       NVARCHAR(1)    = ''  --Alex04
 
    SET @b_Success                         = 0
    SET @n_ErrNo                           = 0
@@ -503,6 +505,8 @@ BEGIN
          GOTO QUIT
       END
 
+      SET @c_IsSystemSugCartonType = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'EPACKSuggestCartonType') -- Alex04
+
       SELECT 'IsSerialNoMandatory'     , @c_IsSerialNoMandatory         UNION ALL
       SELECT 'IsPackQRFMandatory'      , @c_IsPackQRFMandatory          UNION ALL
       SELECT 'PackQRF_RegEx'           , @c_PackQRF_RegEx               UNION ALL
@@ -521,7 +525,8 @@ BEGIN
       --Alex01 End
       SELECT 'ECOMPShowSKUIMG'         , @c_ECOMPShowSKUIMG             UNION ALL
       SELECT 'ECOMPNoOfIMG'            , @c_ECOMPNoOfIMG                UNION ALL
-      SELECT 'SerialNo_RegEx'          , @c_SerialNo_Regex                            --Alex03 
+      SELECT 'SerialNo_RegEx'          , @c_SerialNo_Regex              UNION ALL      --Alex03 
+      SELECT 'IsSystemSugCartonType'   , @c_IsSystemSugCartonType                      --Alex04
 
 
    END
@@ -852,6 +857,8 @@ BEGIN
             GOTO QUIT
          END         
 
+         SET @c_IsSystemSugCartonType = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'EPACKSuggestCartonType') -- Alex04
+
          SELECT 'EpackForceMultiPackByOrd', @c_EpackForceMultiPackByOrd    UNION ALL
          SELECT 'EPACKCloseCartonPrint '  , @c_EPACKCloseCartonPrint       UNION ALL
          SELECT 'EPACKNewCartonSkipPrint' , @c_EPACKNewCartonSkipPrint     UNION ALL
@@ -867,7 +874,8 @@ BEGIN
          SELECT 'IsVASMandatory'          , @c_IsVASMandatory              UNION ALL 
          SELECT 'PackChkCartonWeight'     , @c_PackChkCartonWeightValue    UNION ALL
          SELECT 'ECOMPShowSKUIMG'         , @c_ECOMPShowSKUIMG             UNION ALL
-         SELECT 'ECOMPNoOfIMG'            , @c_ECOMPNoOfIMG
+         SELECT 'ECOMPNoOfIMG'            , @c_ECOMPNoOfIMG                UNION ALL
+         SELECT 'IsSystemSugCartonType'   , @c_IsSystemSugCartonType                      --Alex04
       END
       --PAC-7 Get Packing Rules After SKU Validation
       ELSE

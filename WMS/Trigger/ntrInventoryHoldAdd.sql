@@ -1,8 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrInventoryHoldAdd]') 
-              and OBJECTPROPERTY(id, N'IsTrigger') = 1) 
-drop trigger [dbo].[ntrInventoryHoldAdd]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -30,9 +25,12 @@ GO
 /* Date         Author        Purposes                                  */
 /* 07-Sep-2006  MaryVong      Add in RDT compatible error messages      */
 /* 09-Aug-2016  TLTING        Change Set ROWCOUNT 1 to Top 1            */
+/* 09-May-2025  SSA01         FCR-3392- Modified to enable storer level */
+/*                            config                                    */
+/* 22-May-2025  SSA02         FCR-3392- Updated key2 and Key3 values    */
 /************************************************************************/
 
-CREATE TRIGGER [dbo].[ntrInventoryHoldAdd]
+CREATE OR ALTER TRIGGER [dbo].[ntrInventoryHoldAdd]
 ON  [dbo].[INVENTORYHOLD]
 FOR INSERT
 AS
@@ -67,7 +65,8 @@ BEGIN
          @c_SKU              NVARCHAR(20),
          @n_Qty              float,
          @c_WorkOrderNo      NVARCHAR(18),
-         @c_BatchNo          NVARCHAR(18)
+         @c_BatchNo          NVARCHAR(18),
+         @c_Status           NVARCHAR(10)    -- (SSA02)
 
    /* IDSV5 - Leo */
    Declare @c_primarykey NVARCHAR(10), @b_interface NVARCHAR(1), @c_transmitlogkey NVARCHAR(10), @c_authority NVARCHAR(1)
@@ -76,8 +75,10 @@ BEGIN
    Begin
      -- Set rowcount 1
       Select TOP 1 @c_primarykey = InventoryHoldKey, 
-      @c_hold = Hold, 
-      @c_loc = Loc
+      @c_hold = ISNULL(INSERTED.Hold, ''),  --(SSA01)
+      @c_loc = ISNULL(INSERTED.Loc, ''),    --(SSA01)
+      @c_StorerKey = ISNULL(INSERTED.Storerkey, ''), --(SSA01)
+      @c_Status = ISNULL(INSERTED.Status, '')  --(SSA02)
       From INSERTED
       Where INSERTED.InventoryHoldKey > @c_primarykey
       Order by INSERTED.InventoryHoldKey
@@ -87,9 +88,9 @@ BEGIN
          break
       End
       Execute nspGetRight null,  -- Facility
-         null,  -- Storer
+         @c_StorerKey,  -- Storer     --(SSA01)
          null,  -- Sku
-         'INVENTORY HOLD - INTERFACE',      -- ConfigKey
+         'INVENTORY HOLD - INTERFACE2',      -- ConfigKey
          @b_success    output, 
          @c_authority  output, 
          @n_err        output, 
@@ -113,36 +114,99 @@ BEGIN
       BEGIN
          If dbo.fnc_RTrim(@c_loc) is not null and @c_hold = '1' 
          Begin
-   	      EXECUTE nspg_getkey
-   	         'TransmitlogKey'
-   	         ,10
-   	         , @c_transmitlogkey OUTPUT
-   	         , @b_success OUTPUT
-   	         , @n_err OUTPUT
-   	         , @c_errmsg OUTPUT
-   	      IF NOT @b_success=1
-   	      BEGIN
-   	         SELECT @n_continue=3
-   	         SELECT @n_err = 62477
-   	         SELECT @c_errmsg = 'ntrInventoryHoldAdd: ' + dbo.fnc_RTrim(@c_errmsg)
-   	      END
-   	
-   	      IF ( @n_continue = 1 or @n_continue = 2 ) 
-   	      BEGIN
-   	         INSERT TRANSMITLOG  (Transmitlogkey, tablename, key1, key2, key3,  transmitflag)
-   	         VALUES  (@c_transmitlogkey, "InventoryHold", @c_primarykey, '', 'HOLD','0')
-   	         SELECT @n_err= @@Error
-   	         IF NOT @n_err=0
-   	         BEGIN
-   	            SELECT @n_continue=3 
-   	            /* Trap SQL Server Error */
-   	            Select @n_err = 62478 -- 99701
-   	            Select @c_errmsg= 'NSQL'+CONVERT(char(5), @n_err)+':Insert Into TransmitLog Table (InventoryHold) Failed. (ntrInventoryHoldAdd)'+'('+'SQLSvr MESSAGE='+dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg))+')' 
-   	         /* End Trap SQL Server Error */
-               END
-   	      END   
-   	   End
+            EXECUTE nspg_getkey
+               'TransmitlogKey2'              --(SSA01)
+               ,10
+               , @c_transmitlogkey OUTPUT
+               , @b_success OUTPUT
+               , @n_err OUTPUT
+               , @c_errmsg OUTPUT
+            IF NOT @b_success=1
+            BEGIN
+               SELECT @n_continue=3
+               SELECT @n_err = 62477
+               SELECT @c_errmsg = 'ntrInventoryHoldAdd: ' + dbo.fnc_RTrim(@c_errmsg)
+            END
+
+            IF ( @n_continue = 1 or @n_continue = 2 )
+            BEGIN
+               --(SSA01)
+               INSERT TRANSMITLOG2  (Transmitlogkey, tablename, key1, key2, key3,  transmitflag)
+               VALUES  (@c_transmitlogkey, "InventoryHold", @c_primarykey, @c_Status, @c_StorerKey,'0')
+               SELECT @n_err= @@Error
+               IF NOT @n_err=0
+               BEGIN
+                  SELECT @n_continue=3
+                  /* Trap SQL Server Error */
+                  Select @n_err = 62478 -- 99701
+                  Select @c_errmsg= 'NSQL'+CONVERT(char(5), @n_err)+':Insert Into TransmitLog2 Table (InventoryHold) Failed. (ntrInventoryHoldAdd)'+'('+'SQLSvr MESSAGE='+dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg))+')'
+               /* End Trap SQL Server Error */
+                 END
+            END
+   	    End
 	   End
+	   ELSE --(SSA01)
+     BEGIN
+        IF dbo.fnc_RTrim(@c_loc) is not null and @c_hold = '1'
+         BEGIN
+             Execute nspGetRight null,  -- Facility
+                    null, --StorerKey
+                    null,  -- Sku
+                    'INVENTORY HOLD - INTERFACE',      -- ConfigKey
+                    @b_success    output,
+                    @c_authority  output,
+                    @n_err        output,
+                    @c_errmsg     output
+                    If @b_success <> 1
+                    Begin
+                        SELECT @n_continue = 3
+                        SELECT @n_err = 62479
+                        Select @c_errmsg = 'ntrInventoryHoldAdd: ' + dbo.fnc_RTrim(@c_errmsg)
+                        Break
+                    End
+                    ELSE
+                    BEGIN
+                        IF @c_authority = '1'
+                        Select @b_interface = '1'
+                        ELSE
+                        Select @b_interface = '0'
+                    END
+             IF @b_interface = '1'
+               BEGIN
+                   IF dbo.fnc_RTrim(@c_loc) is not null and @c_hold = '1'
+                    BEGIN
+                         EXECUTE nspg_getkey
+                                    'TransmitlogKey'              --(SSA01)
+                                    ,10
+                                    , @c_transmitlogkey OUTPUT
+                                    , @b_success OUTPUT
+                                    , @n_err OUTPUT
+                                    , @c_errmsg OUTPUT
+                         IF NOT @b_success=1
+                           BEGIN
+                                    SELECT @n_continue=3
+                                    SELECT @n_err = 62480
+                                    SELECT @c_errmsg = 'ntrInventoryHoldAdd: ' + dbo.fnc_RTrim(@c_errmsg)
+                           END
+
+                           IF ( @n_continue = 1 or @n_continue = 2 )
+                            BEGIN
+                                    INSERT TRANSMITLOG  (Transmitlogkey, tablename, key1, key2, key3,  transmitflag)
+                                    VALUES  (@c_transmitlogkey, "InventoryHold", @c_primarykey, '', 'HOLD','0')
+                                    SELECT @n_err= @@Error
+                                    IF NOT @n_err=0
+                                    BEGIN
+                                        SELECT @n_continue=3
+                                        /* Trap SQL Server Error */
+                                        Select @n_err = 62481 -- 99701
+                                        Select @c_errmsg= 'NSQL'+CONVERT(char(5), @n_err)+':Insert Into TransmitLog Table (InventoryHold) Failed. (ntrInventoryHoldAdd)'+'('+'SQLSvr MESSAGE='+dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg))+')'
+                                    /* End Trap SQL Server Error */
+                                    END
+                            END
+                         END
+                    END
+               END
+         END
     End
    /* IDSV5 - Leo */
 

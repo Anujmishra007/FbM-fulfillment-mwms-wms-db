@@ -30,7 +30,7 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
-/* 2025-04-16  Wan      1.0   UWP-32707 - FCR-3957 - JCB Putaway Using  */
+/* 2025-05-20  Wan      1.0   UWP-32707 - FCR-3957 - JCB Putaway Using  */
 /*                            TM SCE                                    */
 /************************************************************************/
 
@@ -629,7 +629,6 @@ BEGIN
                                          AND pnd.LocationCategory = 'PNDIN'
                                          AND pnd.LocAisle = l.LocAisle
                                          AND pnd.[Floor]  = l.[Floor]
-                                         AND pnd.LocLevel = l.LocLevel
          WHERE og.RowID IS NULL
          AND   NOT EXISTS (SELECT 1 FROM LotxLocxID lli (NOLOCK)
                            WHERE lli.Storerkey =  @c_Storerkey

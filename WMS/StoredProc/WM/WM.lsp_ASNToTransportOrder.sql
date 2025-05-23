@@ -85,11 +85,11 @@ BEGIN
       )
       BEGIN
          SET @n_Continue = 3
-         SET @n_Err = 66110
+         SET @n_Err = 66111
          SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(5),@n_Err) + ': ASN found in TMS_TransportOrder. (lsp_ASNToTransportOrder) '
          GOTO EXIT_SP
-      END   
-    
+      END
+
       INSERT INTO dbo.TMS_Shipment
           (
              ShipmentGID
@@ -110,8 +110,8 @@ BEGIN
       SELECT
              ShipmentGID = CASE WHEN r.ExternReceiptKey <> '' THEN r.ExternReceiptKey ELSE r.ReceiptKey END         
           ,  VehicleLPN  = r.VehicleNumber         
-          ,  EquipmentID = ''          
-          ,  DriveName   = '' 
+          ,  EquipmentID = ''
+          ,  DriveName   = ''
           ,  ShipmentPlannedStartDate =  r.ReceiptDate 
           ,  ShipmentPlannedEndDate   =  '1900-01-01'         
           ,  [Route]     =  ''
@@ -127,7 +127,7 @@ BEGIN
       IF @@ERROR <> 0
       BEGIN
          SET @n_Continue = 3
-         SET @n_Err = 66110
+         SET @n_Err = 66113
          SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(5),@n_Err) + ': Error Inserting Data into TMS_Shipment. (lsp_ASNToTransportOrder) '
                        + ' ( SQLSvr MESSAGE = ' + ERROR_MESSAGE() + ')'
          GOTO EXIT_SP

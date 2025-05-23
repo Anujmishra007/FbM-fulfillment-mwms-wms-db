@@ -24,6 +24,8 @@ GO
 /* Date        Author   Ver   Purposes                                   */
 /* 2024-11-25  Wan01    1.1   UWP-27137 - [FCR-1348] [Levi's] Levi's Wave*/
 /*                            Release (Automation and Manual Operations) */
+/* 2025-05-16  SWT01    1.2   If No Task Created, then if all PikDetail  */
+/*                            UOM = 2 (Full Carton). Then allow reverse  */
 /*************************************************************************/     
 CREATE OR ALTER PROCEDURE [dbo].[mspRVWAV03]        
  @c_wavekey      NVARCHAR(10) 
@@ -53,6 +55,7 @@ BEGIN
          , @c_authority      NVARCHAR(10) = '' 
          , @c_SourceType     NVARCHAR(30) = 'mspRLWAV03'
          , @c_Automation     NVARCHAR(10) = ''                                   --(Wan01)
+         , @c_SingleUOM      NVARCHAR(10) = '' -- SWT01         
 
          , @CUR_DELTASK      CURSOR
          , @CUR_DELPICK      CURSOR
@@ -81,10 +84,21 @@ BEGIN
       IF NOT EXISTS (SELECT 1 FROM TASKDETAIL TD (NOLOCK)   
                      WHERE TD.Wavekey = @c_Wavekey AND TD.SourceType = @c_SourceType
                      AND TD.TaskType IN ('ASTCPK','FCP', 'RPF'))                    --(Wan01)  
-      BEGIN                                            
-         SET @n_continue = 3    
-         SET @n_err = 81010    
-         SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': This Wave has not been released. (mspRVWAV03)'           
+      BEGIN        
+         -- SWT01 Only ignore when the entire Wave Pick task is full carton (UOM=2)
+         SET @c_SingleUOM = ''              
+         SELECT @c_SingleUOM = MAX(PD.UOM) 
+         FROM PICKDETAIL PD (NOLOCK)   
+         JOIN WAVEDETAIL WD (NOLOCK) ON PD.OrderKey = WD.OrderKey
+         WHERE WD.Wavekey = @c_Wavekey
+         HAVING COUNT(DISTINCT UOM) = 1
+
+         IF @c_SingleUOM <> '2' 
+         BEGIN
+            SET @n_continue = 3    
+            SET @n_err = 81010    
+            SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': This Wave has not been released. (mspRVWAV03)'    
+         END        
       END                   
    END  
  
