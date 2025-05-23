@@ -192,7 +192,7 @@ BEGIN
             BEGIN
                IF @c_TargetTable = 'TRANSMITLOG3'   
                BEGIN  
-                  EXEC ispGenTransmitLog3 @c_Tablename, @c_WaveKey, '', @c_StorerKey, ''  
+                  EXEC ispGenTransmitLog3 @c_Tablename, @c_WaveKey, @c_Status, @c_StorerKey, ''  
                                           , @b_success OUTPUT  
                                           , @n_Err OUTPUT  
                                           , @c_ErrMsg OUTPUT  
@@ -210,7 +210,7 @@ BEGIN
 
                IF @c_TargetTable = 'TRANSMITLOG2'   
                BEGIN  
-                  EXEC ispGenTransmitLog2 @c_Tablename, @c_WaveKey, '', @c_StorerKey, '' 
+                  EXEC ispGenTransmitLog2 @c_Tablename, @c_WaveKey, @c_Status, @c_StorerKey, '' 
                                           , @b_success OUTPUT  
                                           , @n_Err OUTPUT  
                                           , @c_ErrMsg OUTPUT  

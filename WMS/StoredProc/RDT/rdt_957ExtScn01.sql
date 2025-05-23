@@ -12,6 +12,7 @@ GO
 /*                                                                      */
 /* Date       Rev  Author   Purposes                                    */
 /* 2024-02-26 1.0  Dennis   Draft                                       */
+/* 2025-03-26 1.1.0 NLT013  FCR-2704 Re-allocation if short happens     */
 /*                                                                      */
 /************************************************************************/
 
@@ -77,14 +78,12 @@ BEGIN
    @cActLoc              NVARCHAR( 20),
    @cPalletTypeInUse     NVARCHAR( 5),
    @cPalletTypeSave      NVARCHAR( 10),
-   @cLott10              NVARCHAR( 30)
+   @cLott10              NVARCHAR( 30),
+   @nCurrentScn          INT
 
-/*   SELECT
-   @cLott10 = C_String1,
-   @cPalletTypeSave = C_String2
-   FROM RDT.RDTMOBREC WITH (NOLOCK)
+   SELECT @nCurrentScn = Scn
+   FROM rdt.RDTMOBREC WITH(NOLOCK)
    WHERE Mobile = @nMobile
-*/
 
    IF @nAction = 1 --Validation
    BEGIN
@@ -92,9 +91,9 @@ BEGIN
 	   BEGIN
          IF @nInputKey = 1
          BEGIN
-            IF @nStep = 5 -- Close DropID or Short pick
+            IF @nStep = 5 OR (@nStep = 99 AND @nCurrentScn = 6523) -- Close DropID or Short pick
             BEGIN
-               IF @cOption IN ('1', '3') -- ENTER and close drop ID --NLT013 option = 1 is short pick, need trigger msg to WCS
+               IF @cOption IN ('1', '3', '9') -- ENTER and close drop ID --NLT013 option = 1 is short pick, need trigger msg to WCS
                BEGIN
                   -- Using drop ID, send tote to WCS
                   IF @cBarcode <> ''
@@ -144,8 +143,12 @@ UPDATE RDT.RDTMOBREC SET
    WHERE Mobile = @nMobile
 */
 
-END; 
+END
+GO
 
+SET QUOTED_IDENTIFIER OFF 
+GO
+SET ANSI_NULLS ON 
 GO
 
 GRANT EXEC ON [RDT].[rdt_957ExtScn01] TO NSQL

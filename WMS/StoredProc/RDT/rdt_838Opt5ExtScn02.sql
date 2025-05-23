@@ -13,6 +13,7 @@ GO
 /* 2025-03-10 1.0  YWA059     FCR-2495. modify for pack carton per pallet  */
 /*                                     or pack 1 SSCC for multiple cases   */
 /* 2025-04-01 1.1.0 YWA059    UWP-32214 Merge Code                         */
+/* 2025-05-14 1.1.1 Dennis    UWP-34382 Fix Bug                            */
 /***************************************************************************/  
   
 CREATE OR ALTER      PROC [RDT].[rdt_838Opt5ExtScn02] (
@@ -1067,7 +1068,7 @@ BEGIN
 
                --GOTO confirm scn
                SET @nAfterStep = 99
-               SET @nAfterScn = 6523
+               SET @nAfterScn = 6525
 
                GOTO Quit
             END
@@ -1119,10 +1120,10 @@ BEGIN
             END
          End -- Scn6522 END
 
-         IF @nScn = 6523
+         IF @nScn = 6525
          BEGIN
             /********************************************************************************
-            Step 99. scn = 6523. Message screen
+            Step 99. scn = 6525. Message screen
                Message
             ********************************************************************************/
             SELECT

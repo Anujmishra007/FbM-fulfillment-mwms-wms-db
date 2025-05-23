@@ -6,74 +6,75 @@ GO
 
 
 
-/******************************************************************************/
-/* Store procedure: rdtfnc_PickPiece                                          */
-/* Copyright      : Maersk                                                    */
-/*                                                                            */
-/* Date         Rev  Author      Purposes                                     */
-/* 2016-11-09   1.0  Ung         SOS368792 Created                            */
-/* 2016-07-26   1.1  Ung         SOS374283 Add DropID, confirm LOC            */
-/*                               Remove message screen                        */
-/* 2018-03-06   1.2  ChewKP      WMS-4093 Add Close DropID Option (ChewKP01)  */
-/* 2018-06-14   1.3  James       WMS-5407 Modify rdt_decode (james02)         */
-/* 2018-08-28   1.4  ChewKP      Bug Fixes (ChewKP02)                         */
-/* 2018-09-06   1.5  Ung         WMS-6238 Further fixes for ver 1.4           */
-/* 2018-10-29   1.6  Gan         Performance tuning                           */
-/* 2018-05-21   1.7  James       WMS-5057 Add dynamic lottable (james01)      */
-/* 2018-09-06   1.8  ChewKP      WMS-4542 Add Default PickZone, ExtendInfoSP  */
-/*                               config, Implement ExtendedValidateSP         */
-/*                               on Step 2 (ChewKP04)                         */
-/* 2018-10-11   1.9  ChewKP      WMS-5156 Add ExtendedUpdateSP Scn2 (ChewKP05)*/
-/* 2019-06-14   2.0  James       WMS9209 Rearrange display @ scn3 (james02)   */
-/*                               Extend @cPickZone variable                   */
-/*                               Add ABORT screen                             */
-/* 2019-07-10   2.1  James       INC0764433 - Add missing lottable display    */
-/*                               Bug fix on @cSuggSKU usage for ExtSP(james03)*/
-/* 2019-08-21   2.2  James       WMS-10241 Add ExtendedInfoSP @step3 (james04)*/
-/* 2019-09-04   2.3  YeeKung     WMS-10357 Add Balance SKU qty (yeekung01)    */
-/* 2020-01-02   2.4  YeeKung     Fix Bugs (yeekung02)                         */
-/* 2020-01-21   2.5  James       WMS-11654 Revamp short pick option (james05) */
-/* 2020-03-31   2.6  James       WMS-12707 Add config determine Pickzone      */
-/*                               is mandatory (james06)                       */
-/* 2020-08-13   2.7  YeeKung     WMS-14630 Add CartonID screen (yeekung03)    */
-/* 2020-09-10   2.8  Pakyuen     INC1286925 - Changed to nvarchar(6)          */
-/* 2021-01-08   2.9  James       WMS-15993 Enhance BalPickLater (james07)     */
-/* 2021-01-20   3.0  James       WMS-15754 Add Option Skip Loc (james08)      */
-/*                               Add config to remove usage of keyword 99     */
-/* 2021-03-30   3.1  LZG         INC1461882 - Reduced Qty when scan (ZG01)    */
-/* 2020-10-12   3.2  James       WMS-14522 Add ExtendedSKUInfo (james08)      */
-/* 2021-04-30   3.3  Chermaine   WMS-16868 Add Config to skip confirm op2 (cc01)*/
-/* 2021-11-09   3.4  James       WMS-18174 Clear variable b4 gettask (james09)*/
-/* 2021-11-09   3.5  James       WMS-18293 Allow MultiSKUBarcode (james10)    */
-/* 2022-03-07   3.6  YeeKung     WMS-19062 Add extendedinfo step 1(yeekung04) */
-/* 2022-03-21   3.7  YeeKung     WMS-19113 Fix step5 (yeekung03)              */
-/* 2022-07-21   3.8  Ung         Fix scan wrong SKU but clear lottable field  */
-/* 2022-09-20   3.9  James       WMS-20756 Change rdt_GetSKU output           */
-/*                               UPC Qty (james24)                            */
-/* 2022-10-20   4.0  YeeKung     WMS-21027 Add eventlog (yeekung05)           */
-/* 2021-03-30   4.1  James       WMS-16553 Add ExtValidSP in step 1 (james09) */
-/* 2022-04-16   4.2  YeeKung     WMS-19311 Add Data capture (yeekung04)       */
-/* 2023-02-20   4.3  YeeKung     JSM-131064 Bug fix for -1 qty (yeekung06)    */
-/* 2021-09-23   4.4  James       WMS-18004 Add ExtendedInfoSP to step 1       */
-/*                               Add ExtendedValidateSP to step 5 (james09)   */
-/* 2023-04-17   4.5  James       Fix missing Packdata param (james10)         */
-/*                               Removed duplicate ExtendedInfosp @ step1     */
-/* 2022-12-09   4.6  Ung         WMS-21244 Add ExtendedInfoSP step2 ESC       */
-/* 2023-04-04   4.7  YeeKung     JSM-140598 bal pick later swap  (yeekun07)   */
-/* 2023-05-17   4.8  YeeKung     Fix Extended sp Step (yeekung08)             */
-/* 2023-04-10   4.9  James       WMS-22147 Add V_Barcode to sku step for      */
-/*                               sku input (james11)                          */
-/* 2023-06-19   5.0  YeeKung     WMS-22439 Add Extendedinfo to Scereen 1      */
-/*                               (yeekung08)                                  */
-/* 2023-05-22   5.1  Ung         WMS-22578 Remove rdt_Decode error for SKU    */
-/* 2023-07-25   5.2  Ung         WMS-23002 Add serial no                      */
-/* 2023-10-23   5.3  Ung         WMS-23569 Fix VerifyID screen ESC            */
-/*                               Allow blank if no suggest ID                 */
-/* 2023-12-07   5.4  Tony        WMS-24315 Trigger msg to WCS                 */
-/* 2024-04-28   5.5  Dennis      UWP-18232 Dropid Restriction                 */
-/* 2024-08-14   5.6  Dennis      FCR-540 TO LOC Scn                           */
-/* 2024-09-23   5.7  CYU027      FCR-809 PUMA SKU IMAGE widget                */
-/******************************************************************************/
+/*********************************************************************************/
+/* Store procedure: rdtfnc_PickPiece                                             */
+/* Copyright      : Maersk                                                       */
+/*                                                                               */
+/* Date         Rev     Author      Purposes                                     */
+/* 2016-11-09   1.0     Ung         SOS368792 Created                            */
+/* 2016-07-26   1.1     Ung         SOS374283 Add DropID, confirm LOC            */
+/*                                  Remove message screen                        */
+/* 2018-03-06   1.2     ChewKP      WMS-4093 Add Close DropID Option (ChewKP01)  */
+/* 2018-06-14   1.3     James       WMS-5407 Modify rdt_decode (james02)         */
+/* 2018-08-28   1.4     ChewKP      Bug Fixes (ChewKP02)                         */
+/* 2018-09-06   1.5     Ung         WMS-6238 Further fixes for ver 1.4           */
+/* 2018-10-29   1.6     Gan         Performance tuning                           */
+/* 2018-05-21   1.7     James       WMS-5057 Add dynamic lottable (james01)      */
+/* 2018-09-06   1.8     ChewKP      WMS-4542 Add Default PickZone, ExtendInfoSP  */
+/*                                  config, Implement ExtendedValidateSP         */
+/*                                  on Step 2 (ChewKP04)                         */
+/* 2018-10-11   1.9     ChewKP      WMS-5156 Add ExtendedUpdateSP Scn2 (ChewKP05)*/
+/* 2019-06-14   2.0     James       WMS9209 Rearrange display @ scn3 (james02)   */
+/*                                  Extend @cPickZone variable                   */
+/*                                  Add ABORT screen                             */
+/* 2019-07-10   2.1     James       INC0764433 - Add missing lottable display    */
+/*                                  Bug fix on @cSuggSKU usage for ExtSP(james03)*/
+/* 2019-08-21   2.2     James       WMS-10241 Add ExtendedInfoSP @step3 (james04)*/
+/* 2019-09-04   2.3     YeeKung     WMS-10357 Add Balance SKU qty (yeekung01)    */
+/* 2020-01-02   2.4     YeeKung     Fix Bugs (yeekung02)                         */
+/* 2020-01-21   2.5     James       WMS-11654 Revamp short pick option (james05) */
+/* 2020-03-31   2.6     James       WMS-12707 Add config determine Pickzone      */
+/*                                  is mandatory (james06)                       */
+/* 2020-08-13   2.7     YeeKung     WMS-14630 Add CartonID screen (yeekung03)    */
+/* 2020-09-10   2.8     Pakyuen     INC1286925 - Changed to nvarchar(6)          */
+/* 2021-01-08   2.9     James       WMS-15993 Enhance BalPickLater (james07)     */
+/* 2021-01-20   3.0     James       WMS-15754 Add Option Skip Loc (james08)      */
+/*                                  Add config to remove usage of keyword 99     */
+/* 2021-03-30   3.1     LZG         INC1461882 - Reduced Qty when scan (ZG01)    */
+/* 2020-10-12   3.2     James       WMS-14522 Add ExtendedSKUInfo (james08)      */
+/* 2021-04-30   3.3     Chermaine   WMS-16868 Add Config to skip confirm op2 (cc01)*/
+/* 2021-11-09   3.4     James       WMS-18174 Clear variable b4 gettask (james09)*/
+/* 2021-11-09   3.5     James       WMS-18293 Allow MultiSKUBarcode (james10)    */
+/* 2022-03-07   3.6     YeeKung     WMS-19062 Add extendedinfo step 1(yeekung04) */
+/* 2022-03-21   3.7     YeeKung     WMS-19113 Fix step5 (yeekung03)              */
+/* 2022-07-21   3.8     Ung         Fix scan wrong SKU but clear lottable field  */
+/* 2022-09-20   3.9     James       WMS-20756 Change rdt_GetSKU output           */
+/*                                  UPC Qty (james24)                            */
+/* 2022-10-20   4.0     YeeKung     WMS-21027 Add eventlog (yeekung05)           */
+/* 2021-03-30   4.1     James       WMS-16553 Add ExtValidSP in step 1 (james09) */
+/* 2022-04-16   4.2     YeeKung     WMS-19311 Add Data capture (yeekung04)       */
+/* 2023-02-20   4.3     YeeKung     JSM-131064 Bug fix for -1 qty (yeekung06)    */
+/* 2021-09-23   4.4     James       WMS-18004 Add ExtendedInfoSP to step 1       */
+/*                                  Add ExtendedValidateSP to step 5 (james09)   */
+/* 2023-04-17   4.5     James       Fix missing Packdata param (james10)         */
+/*                                  Removed duplicate ExtendedInfosp @ step1     */
+/* 2022-12-09   4.6     Ung         WMS-21244 Add ExtendedInfoSP step2 ESC       */
+/* 2023-04-04   4.7     YeeKung     JSM-140598 bal pick later swap  (yeekun07)   */
+/* 2023-05-17   4.8     YeeKung     Fix Extended sp Step (yeekung08)             */
+/* 2023-04-10   4.9     James       WMS-22147 Add V_Barcode to sku step for      */
+/*                                  sku input (james11)                          */
+/* 2023-06-19   5.0     YeeKung     WMS-22439 Add Extendedinfo to Scereen 1      */
+/*                                  (yeekung08)                                  */
+/* 2023-05-22   5.1     Ung         WMS-22578 Remove rdt_Decode error for SKU    */
+/* 2023-07-25   5.2     Ung         WMS-23002 Add serial no                      */
+/* 2023-10-23   5.3     Ung         WMS-23569 Fix VerifyID screen ESC            */
+/*                                  Allow blank if no suggest ID                 */
+/* 2023-12-07   5.4     Tony        WMS-24315 Trigger msg to WCS                 */
+/* 2024-04-28   5.5     Dennis      UWP-18232 Dropid Restriction                 */
+/* 2024-08-14   5.6     Dennis      FCR-540 TO LOC Scn                           */
+/* 2024-09-23   5.7     CYU027      FCR-809 PUMA SKU IMAGE widget                */
+/* 2025-03-31   5.8.0   Dennis      FCR-2705 ExtScn04                            */
+/*********************************************************************************/
 
 CREATE OR ALTER   PROC [RDT].[rdtfnc_PickPiece] (
    @nMobile    INT,
@@ -2065,6 +2066,11 @@ BEGIN
 
          SET @nScn = @nScn_ShortPick
          SET @nStep = @nStep_ShortPick
+         
+         IF @cExtScnSP <> '' 
+         BEGIN
+            GOTO STEP_99
+         END
          GOTO QUIT
       END
 
@@ -3255,9 +3261,11 @@ BEGIN
       WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
          COMMIT TRAN
 
-      IF @cOption = '1'  -- Short
+      STEP_5_NextTask: --v5.8.0
+      IF @cOption = '1' -- Short
       BEGIN
-        -- Get task in current LOC
+         STEP_5_Short: -- v5.8.0
+         -- Get task in current LOC
          SET @cSKUValidated = '0'
          SET @nActQTY = 0
          EXEC rdt.rdt_PickPiece_GetTask @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 'NEXTSKU'
@@ -3742,7 +3750,12 @@ BEGIN
          --Extended Screen
          IF @cExtScnSP <> ''
          BEGIN
-            IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
+            --Skip extscn logic because it jump back to step5_nexttask or step5_shortextscn04 labels
+            -- after execut rdt_839ExtScn04. There is new option screen replace the this one.
+
+            --IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P') --V5.8.0
+            IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P') 
+               AND @cExtScnSP NOT IN ('rdt_839ExtScn04') --V5.8.0
             BEGIN
                DELETE FROM @tExtScnData
 
@@ -3752,6 +3765,10 @@ BEGIN
                   ('@cPickSlipNo',     @cPickSlipNo),
                   ('@cOption',     @cOption)
                   SET @nPre_Step = 5
+                  SET @nAction = 0
+               END
+               IF @cExtScnSP = 'rdt_839ExtScn03'
+               BEGIN
                   SET @nAction = 0
                END
                
@@ -4107,6 +4124,16 @@ BEGIN
 
    IF @cExtScnSP <> '' AND EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
    BEGIN
+      IF @cExtScnSP = 'rdt_839ExtScn03'
+      BEGIN
+         SET @nAction = 0
+      END
+      ELSE IF @cExtScnSP = 'rdt_839ExtScn04' --V5.8.0
+      BEGIN
+         --Skip extscn logic because it jump back to step5_nexttask or step5_shortextscn04 labels
+         -- after execut rdt_839ExtScn04. There is new option screen replace the this one.
+         GOTO Quit 
+      END
       GOTO Step_99
    END
 
@@ -6494,6 +6521,8 @@ BEGIN
       IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
       BEGIN
          SET @nAction = 1
+         SET @nOri_Scn = @nScn
+         SET @nOri_Step = @nStep
          DELETE FROM @tExtScnData
          INSERT INTO @tExtScnData (Variable, Value) VALUES
           ('@cSuggSKU',     @cSuggSKU)
@@ -6572,12 +6601,25 @@ BEGIN
             END
          END
          
+         IF @cExtScnSP = 'rdt_839ExtScn04' --v5.8.0
+         BEGIN
+            IF @nOri_Scn = 6524 AND @nOri_Step = 99
+            BEGIN
+               SET @cOption = @cUDF01
+
+               IF @cOption <> '9'
+                  GOTO STEP_5_NextTask
+               ELSE
+                  GOTO STEP_5_Short
+            END
+         END
          GOTO Quit
       END
    END -- Ext scn sp <> ''
 
    Step_99_Fail:
       GOTO Quit
+
 END
 GOTO Quit
 /********************************************************************************
@@ -6691,6 +6733,14 @@ BEGIN
 
    WHERE Mobile = @nMobile
 END
+GO
+
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS ON
+GO
+
+GRANT EXECUTE ON RDT.rdtfnc_PickPiece TO NSQL
 GO
 
 

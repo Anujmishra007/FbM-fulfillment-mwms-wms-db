@@ -19,6 +19,8 @@
 /* Date           Author   Purposes                                     */
 /* 15-Feb-2023    Alex     #JIRA PAC-4 Initial                          */
 /* 26-Dec-2023    Alex01   #PAC-308                                     */  
+/* 17-Mar-2025    Alex02   #FCR-3165 - Save UserID Into                 */
+/*                         PackHeader.AddWho                            */
 /************************************************************************/    
 CREATE OR ALTER PROC [API].[isp_ECOMP_API_GetPackTask](
      @b_Debug           INT            = 0
@@ -194,10 +196,20 @@ BEGIN
          PickSlipNo                  NVARCHAR(10)   NULL
    )
 
+   DECLARE @DBUserName NVARCHAR(100)	--#FCR-3165
+   SET @DBUserName = @c_UserID			--#FCR-3165
+
+  --Change Login User
    SET @n_sp_err = 0     
-   EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserID OUTPUT, @n_Err = @n_sp_err OUTPUT, @c_ErrMsg = @c_sp_errmsg OUTPUT    
-       
-   EXECUTE AS LOGIN = @c_UserID 
+   EXEC [WM].[lsp_SetUser] @c_UserName = @DBUserName OUTPUT, @n_Err = @n_sp_err OUTPUT, @c_ErrMsg = @c_sp_errmsg OUTPUT    
+
+   --#FCR-3165
+   IF @DBUserName LIKE '%' + @c_UserID + '%'
+   BEGIN
+    EXECUTE AS LOGIN = @DBUserName    --@c_UserID 
+    SET @c_UserID = @DBUserName
+   END
+   
    IF @n_sp_err <> 0     
    BEGIN      
       SET @b_Success = 0      
