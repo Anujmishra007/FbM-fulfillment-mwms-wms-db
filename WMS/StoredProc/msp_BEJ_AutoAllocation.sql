@@ -60,6 +60,7 @@ BEGIN
             , @c_Priority NVARCHAR(1)
             , @c_Status NVARCHAR(10)
             , @c_PostAllocationSP NVARCHAR(200)
+            , @c_Type NVARCHAR(10)
 
     SELECT @c_APP_DB_Name           = qcfg.APP_DB_Name
            , @c_DataStream          = qcfg.DataStream
@@ -102,7 +103,7 @@ BEGIN
         JOIN ORDERDETAIL od ON o.OrderKey = od.OrderKey
         WHERE o.StorerKey = @c_StorerKey
         AND o.Facility = @c_Facility
-        AND o.Type IN ('0','1','2')
+        AND o.Type IN ('0','1','2','6','8')
         AND o.Status < 2
         AND o.OrderGroup <> 'XDOCK'
         AND o.Priority = '1'
@@ -183,7 +184,7 @@ BEGIN
                       GOTO EXIT_SP
           END CATCH
 
-          FETCH NEXT FROM CUR_EMG_ORDERKEY INTO @c_OrderKey
+          FETCH NEXT FROM CUR_EMG_ORDERKEY INTO @c_OrderKey,@n_Qty
        END
 
        CLOSE CUR_EMG_ORDERKEY
@@ -196,12 +197,12 @@ BEGIN
        IF @n_Continue=1 OR @n_Continue=2
        BEGIN
           DECLARE CUR_NORMAL_ORDERKEY CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-          SELECT o.OrderKey,sum(od.openqty) as qty
+          SELECT o.OrderKey,sum(od.openqty) as qty,o.Type
           FROM ORDERS o WITH (NOLOCK)
           JOIN ORDERDETAIL od ON o.OrderKey = od.OrderKey
           WHERE o.StorerKey = @c_StorerKey
           AND o.Facility = @c_Facility
-          AND o.Type IN ('0','1','2')
+          AND o.Type IN ('0','1','2','6','8')
           AND o.Status = '0'
           AND o.OrderGroup <> 'XDOCK'
           AND o.DeliveryDate <= dateadd(hh,48,getdate())
@@ -210,13 +211,13 @@ BEGIN
           AND (o.UserDefine09 is NULL OR o.UserDefine09 = '')
           AND (CASE WHEN ISNULL(SequenceNo,0) = 0 OR (SequenceNo = 99999999) THEN 0 ELSE SequenceNo END) < 24
           AND ISNULL(o.Ecom_Platform,'') <> '3RDParty'
-          group by o.orderkey
+          group by o.orderkey,o.Type
           HAVING sum(od.openqty) > 0
 
 
          OPEN CUR_NORMAL_ORDERKEY
 
-         FETCH NEXT FROM CUR_NORMAL_ORDERKEY INTO @c_OrderKey,@n_Qty
+         FETCH NEXT FROM CUR_NORMAL_ORDERKEY INTO @c_OrderKey,@n_Qty,@c_Type
          WHILE @@FETCH_STATUS <> -1
          BEGIN
          IF @b_debug = 1
@@ -250,7 +251,7 @@ BEGIN
 
             SELECT @c_Status = ISNULL(Status,'0') from ORDERS WITH (NOLOCK) where Orderkey = @c_Orderkey
 
-             IF @c_Status = '1'
+             IF @c_Status = '1' AND @c_Type NOT IN ('2','6','8')
              BEGIN
                  EXEC isp_SplitNotFullAllocOrder
                     @c_OrderKey ,
@@ -270,14 +271,14 @@ BEGIN
                        BEGIN
                        UPDATE ORDERS WITH (ROWLOCK)
                         SET Ecom_Platform = 'EMG'
-                        ,SequenceNo = CASE WHEN ISNULL(Orders.SequenceNo,0) = 0 OR (Orders.SequenceNo = 99999999)
+                        ,SequenceNo = CASE WHEN ISNULL(Orders.SequenceNo,0) = 0 OR (Orders.SequenceNo = 99999999) OR (Cast(Orders.SequenceNo as Int) = 1)
                         THEN 1 ELSE Cast(Orders.SequenceNo as Int)-1 END
                         ,TrafficCop = NULL
                         WHERE Orderkey = @c_Orderkey
                        END
              END
 
-            FETCH NEXT FROM CUR_NORMAL_ORDERKEY INTO @c_OrderKey,@n_Qty
+            FETCH NEXT FROM CUR_NORMAL_ORDERKEY INTO @c_OrderKey,@n_Qty,@c_Type
          END
 
          CLOSE CUR_NORMAL_ORDERKEY

@@ -23,6 +23,8 @@ GO
 /* 2023-12-19  Wan01-v0 1.0   Created.                                  */
 /* 2023-12-19  Wan01-v0 1.0   DevOps Combine Script.                    */
 /* 2024-07-02  Inv Team 1.1   UWP-17135 - Migrate Inbound Door booking  */
+/* 2025-05-21  SSA01    1.2   FCR-3921 - Upadated ASN Custom Fields     */
+/* 2025-05-26  SSA02    1.3   FCR-3921 -Added extrenReceiptkey condition*/
 /************************************************************************/                                                                                  
 CREATE OR ALTER PROC [WM].[lsp_BookingInAddShipment_Wrapper]                                                                                                                     
       @n_BookingNo            INT                           --Booking In's Booking No
@@ -96,6 +98,70 @@ BEGIN
          SET @c_ErrMsg = 'MSQL' + CONVERT(CHAR(6),@n_Err) + ': Update TMS_Shipment fail. (lsp_BookingInAddShipment_Wrapper)'
          GOTO EXIT_SP
       END
+
+      -- (SSA01) start --
+      DECLARE @c_ASNCustomFieldsSP NVARCHAR(30)
+           , @c_SQL NVARCHAR( MAX)
+           , @c_SQLParam NVARCHAR( MAX)
+           , @c_StorerKey NVARCHAR(30)
+           , @c_Facility NVARCHAR(15)
+           , @c_ShipmentGID NVARCHAR(50) --(SSA02)
+
+           SET @c_ASNCustomFieldsSP = ''
+           SET @c_StorerKey = ''
+           SET @c_Facility  = ''
+           SET @c_ShipmentGID = ''  --(SSA02)
+      --(SSA02)
+      SELECT TOP 1 @c_ShipmentGID = ShipmentGID
+      FROM TMS_Shipment WITH(NOLOCK)
+      WHERE BookingNo = @n_BookingNo
+
+      SELECT TOP 1 @c_StorerKey = R.Storerkey, @c_Facility = R.Facility
+      FROM RECEIPT R WITH (NOLOCK)
+      WHERE (ReceiptKey = @c_ShipmentGID  --(SSA02)
+      OR ExternReceiptKey = @c_ShipmentGID) --(SSA02)
+      AND ISNULL(@c_ShipmentGID, '') <> ''
+
+	   EXECUTE nspGetRight
+         @c_Facility,
+         @c_StorerKey,
+         '',  --Sku
+         'ASNCustomFieldsSP', -- Configkey
+         @b_success    OUTPUT,
+         @c_ASNCustomFieldsSP     OUTPUT,
+         @n_err        OUTPUT,
+         @c_errmsg     OUTPUT
+
+      IF @b_success <> 1
+      BEGIN
+          SET @n_continue = 3
+          SET @n_Err = 562002
+          SET @c_ErrMsg = RTRIM(ISNULL(@c_Errmsg,'')) + ' (lsp_BookingInAddShipment_Wrapper)'
+          GOTO EXIT_SP
+      END
+
+      IF ISNULL(RTRIM(@c_ASNCustomFieldsSP),'') IN ('','0','1')
+      BEGIN
+          SET @c_ASNCustomFieldsSP = ''
+      END
+
+      IF @c_ASNCustomFieldsSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @c_ASNCustomFieldsSP AND type = 'P')
+            BEGIN
+
+               SET @c_SQL = N'EXEC dbo.' + RTRIM( @c_ASNCustomFieldsSP) +
+               ' @n_BookingNo = @n_BookingNo'
+
+               SET @c_SQLParam = N'@n_BookingNo INT'
+
+               EXEC sp_ExecuteSQL @c_SQL, @c_SQLParam, @n_BookingNo
+
+               IF @@ERROR <> 0
+               GOTO EXIT_SP
+            END
+      END
+     -- (SSA01) End --
    END TRY
    
    BEGIN CATCH

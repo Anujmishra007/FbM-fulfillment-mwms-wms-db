@@ -4,46 +4,48 @@ SET QUOTED_IDENTIFIER OFF
 GO
 
 
-/*****************************************************************************/
-/* Store procedure: rdtfnc_TM_CycleCount                                     */
-/* Copyright      : MAERSK                                                   */
-/*                                                                           */
-/* Purpose: SOS#227151  -TM Cycle Count                                      */
-/*                     - Called By rdtfnc_TaskManager                        */
-/*                                                                           */
-/* Modifications log:                                                        */
-/*                                                                           */
-/* Date       Rev  Author   Purposes                                         */
-/* 2011-11-08 1.0  ChewKP   Created                                          */
-/* 2012-10-30 1.1  James    SOS257258 - Indicate a TM CC supervisor count by */
-/*                          putting '(s)' besides suggested loc (james01)    */
-/* 2013-09-26 1.2  James    Pallet ID is required for LOC with loseid = 0    */
-/*                          Put pallet ID check SP (james02)                 */
-/* 2015-04-06 1.3  ChewKP   SOS#333693 - After Input Reason Code Goto Step 6 */
-/*                          (ChewKP01)                                       */
-/* 2014-06-25 1.4  James    Bug fix (james03)                                */
-/* 2015-05-25 1.5  James    SOS316401 - Add PI pickmethod (james04)          */
-/* 2015-06-09 1.6  James    If UCC config not turn on then bypass option     */
-/*                          screen and goto count by sku (james05)           */
-/* 2016-09-30 1.7  Ung      Performance tuning                               */
-/* 2018-04-25 1.8  James    WMS4083-Add ExtendedUpdateSP (james06)           */
-/* 2018-10-19 1.9  TungGH   Performance                                      */
-/* 2019-04-29 2.0  TungGH   WMS8136-Add ExtendedUpdateSP @ STEP 4 (james07)  */
-/* 2019-06-13 2.1  Shong    Performance Tuning (SWT01)                       */
-/* 2019-06-14 2.2  James    Performance Tuning (james08)                     */
-/* 2019-12-03 2.3  James    WMS-11350 Add output areakey nsptmtm01 (james09) */
-/* 2020-01-06 2.4  James    WMS-11550 Add ExtendedInfoSP (james10)           */
-/* 2021-04-26 2.5  James    WMS-16634 Direct Go screen 2 TMCC SKU (james11)  */
-/* 2021-05-07 2.6  James    WMS-16965 Add empty loc default opt (james12)    */
-/* 2021-06-02 2.7  James    WMS-16634 Add update loc.lastcyclecount (james13)*/
-/* 2023-09-09 2.8  James    WMS-23249 Add ID count (james14)                 */
-/*                          Add BypassScanIDSP config                        */
-/* 2023-11-17 2.9  James    WMS-23429 Sort task by logicalloc, loc (james14) */
-/* 2024-04-19 3.0  James    WMS-25276 Skip scn 3 based on Loc setup(james16) */
-/* 2024-11-27 3.1  JHU151   UWP-27583.Fn1768 St1 TTL QTY is not cleared when */
-/*                                       scanning a new loc                  */
-/* 2025-02-11 3.2  JCH507   FCR-1917 Add ext upd entry                       */
-/*****************************************************************************/
+/*********************************************************************************/
+/* Store procedure: rdtfnc_TM_CycleCount                                         */
+/* Copyright      : MAERSK                                                       */
+/*                                                                               */
+/* Purpose: SOS#227151  -TM Cycle Count                                          */
+/*                     - Called By rdtfnc_TaskManager                            */
+/*                                                                               */
+/* Modifications log:                                                            */
+/*                                                                               */
+/* Date       Rev    Author   Purposes                                           */
+/* 2011-11-08 1.0    ChewKP   Created                                            */
+/* 2012-10-30 1.1    James    SOS257258 - Indicate a TM CC supervisor count by   */
+/*                            putting '(s)' besides suggested loc (james01)      */
+/* 2013-09-26 1.2    James    Pallet ID is required for LOC with loseid = 0      */
+/*                            Put pallet ID check SP (james02)                   */
+/* 2015-04-06 1.3    ChewKP   SOS#333693 - After Input Reason Code Goto Step 6   */
+/*                            (ChewKP01)                                         */
+/* 2014-06-25 1.4    James    Bug fix (james03)                                  */
+/* 2015-05-25 1.5    James    SOS316401 - Add PI pickmethod (james04)            */
+/* 2015-06-09 1.6    James    If UCC config not turn on then bypass option       */
+/*                            screen and goto count by sku (james05)             */
+/* 2016-09-30 1.7    Ung      Performance tuning                                 */
+/* 2018-04-25 1.8    James    WMS4083-Add ExtendedUpdateSP (james06)             */
+/* 2018-10-19 1.9    TungGH   Performance                                        */
+/* 2019-04-29 2.0    TungGH   WMS8136-Add ExtendedUpdateSP @ STEP 4 (james07)    */
+/* 2019-06-13 2.1    Shong    Performance Tuning (SWT01)                         */
+/* 2019-06-14 2.2    James    Performance Tuning (james08)                       */
+/* 2019-12-03 2.3    James    WMS-11350 Add output areakey nsptmtm01 (james09)   */
+/* 2020-01-06 2.4    James    WMS-11550 Add ExtendedInfoSP (james10)             */
+/* 2021-04-26 2.5    James    WMS-16634 Direct Go screen 2 TMCC SKU (james11)    */
+/* 2021-05-07 2.6    James    WMS-16965 Add empty loc default opt (james12)      */
+/* 2021-06-02 2.7    James    WMS-16634 Add update loc.lastcyclecount (james13   */
+/* 2023-09-09 2.8    James    WMS-23249 Add ID count (james14)                   */
+/*                            Add BypassScanIDSP config                          */
+/* 2023-11-17 2.9    James    WMS-23429 Sort task by logicalloc, loc (james14)   */
+/* 2024-04-19 3.0    James    WMS-25276 Skip scn 3 based on Loc setup(james16)   */
+/* 2024-11-27 3.1    JHU151   UWP-27583.Fn1768 St1 TTL QTY is not cleared when   */
+/*                                         scanning a new loc                    */
+/* 2025-02-11 3.2    JCH507   FCR-1917 Add ext upd entry                         */
+/* 2025-05-19 4.2.0  JACKC      UWP-34563 Count SKU task genrerates cc detaill   */ 
+/*                               for all SKUs on the loc                         */
+/*********************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_CycleCount](
    @nMobile    INT,
@@ -595,6 +597,7 @@ BEGIN
               ,@c_Loc            = @cSuggFromLoc
               ,@c_Facility       = @cFacility
               ,@c_PickMethod     = @cPickMethod
+              ,@c_SKU            = @cSuggSKU --V4.2.0
               ,@c_CCOptions      = '2'
               ,@c_SourceKey      = @cCCKey
 
@@ -644,7 +647,7 @@ BEGIN
             SET @cOutField02 = @cID
             SET @cOutField03 = ''
 
-      SET @cOutField04 = ''
+            SET @cOutField04 = ''
             SET @cOutField05 = ''
 
             SET @cFieldAttr04 = 'O'
@@ -1544,6 +1547,7 @@ BEGIN
            ,@c_Loc            = @cSuggFromLoc
            ,@c_Facility       = @cFacility
            ,@c_PickMethod     = @cPickMethod
+           ,@c_SKU            = @cSuggSKU --V4.2.0
            ,@c_CCOptions      = '2'
            ,@c_SourceKey      = @cCCKey
 
@@ -1839,6 +1843,7 @@ BEGIN
            ,@c_Loc            = @cSuggFromLoc
            ,@c_Facility       = @cFacility
            ,@c_PickMethod     = @cPickMethod
+           ,@c_SKU            = @cSuggSKU  --V4.2.0
            ,@c_CCOptions      = '2'
            ,@c_SourceKey      = @cCCKey
 

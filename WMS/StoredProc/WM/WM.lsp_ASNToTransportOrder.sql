@@ -22,7 +22,6 @@ GO
 /* Date        Author   Ver   Purposes                                  */
 /* 2021-12-13  Wan-v0   1.0   Created & DevOps Combine Script.          */
 /* 2024-07-02  Inv Team 1.1   UWP-17135 - Migrate Inbound Door booking  */
-/* 2025-05-08  SSA01    1.2   FCR-3921 - Upadated ASN Custom Fields     */
 /************************************************************************/
 CREATE OR ALTER PROC WM.lsp_ASNToTransportOrder
   @c_Receiptkey         NVARCHAR(10) = ''
@@ -50,23 +49,6 @@ BEGIN
    SET @n_Continue = 1
    SET @n_err      = 0
    SET @c_errmsg   = ''
-
-  -- (SSA01) start --
-   DECLARE @c_ASNCustomFieldsSP NVARCHAR(30)
-           , @c_SQL NVARCHAR( MAX)
-           , @c_SQLParam NVARCHAR( MAX)
-           , @c_StorerKey NVARCHAR(30)
-           , @c_Facility NVARCHAR(15)
-           , @cEquipmentID NVARCHAR( 50)
-           , @cDriverName NVARCHAR( 100)
-           , @cRoute NVARCHAR( 150)
-           , @cAppointmentID NVARCHAR( 20)
-
-           SET @c_ASNCustomFieldsSP = ''
-           SET @c_StorerKey = ''
-           SET @c_Facility  = ''
-
-  -- (SSA01) End --
    
    BEGIN TRY
       IF SUSER_SNAME() <> @c_UserName AND @c_UserName <> ''
@@ -107,77 +89,7 @@ BEGIN
          SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(5),@n_Err) + ': ASN found in TMS_TransportOrder. (lsp_ASNToTransportOrder) '
          GOTO EXIT_SP
       END
-       -- (SSA01) start --
-      SELECT TOP 1 @c_StorerKey = R.Storerkey, @c_Facility = R.Facility
-      FROM RECEIPT R WITH (NOLOCK)
-      WHERE ReceiptKey = @c_Receiptkey
 
-	   EXECUTE nspGetRight
-         @c_Facility,
-         @c_StorerKey,
-         '',  --Sku
-         'ASNCustomFieldsSP', -- Configkey
-         @b_success    OUTPUT,
-         @c_ASNCustomFieldsSP     OUTPUT,
-         @n_err        OUTPUT,
-         @c_errmsg     OUTPUT
-
-      IF @b_success <> 1
-      BEGIN
-          SET @n_continue = 3
-          SET @n_Err = 66112
-          SET @c_ErrMsg = RTRIM(ISNULL(@c_Errmsg,'')) + ' (lsp_ASNToTransportOrder)'
-      END
-
-      IF ISNULL(RTRIM(@c_ASNCustomFieldsSP),'') IN ('','0','1')
-      BEGIN
-          SET @c_ASNCustomFieldsSP = ''
-          SET @cEquipmentID = ''
-          SET @cDriverName = ''
-          SET @cRoute = ''
-          SET @cAppointmentID = ''
-      END
-
-      IF @c_ASNCustomFieldsSP <> ''
-      BEGIN
-         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @c_ASNCustomFieldsSP AND type = 'P')
-            BEGIN
-
-               SET @c_SQL = N'EXEC dbo.' + RTRIM( @c_ASNCustomFieldsSP) +
-               ' @c_Receiptkey = @c_Receiptkey, @cEquipmentID = @cEquipmentID OUTPUT,'+
-               ' @cDriverName = @cDriverName OUTPUT, @cRoute = @cRoute OUTPUT,'+
-               ' @cAppointmentID = @cAppointmentID OUTPUT,' +
-               ' @n_err = @n_err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT'
-
-               SET @c_SQLParam = N'@c_Receiptkey NVARCHAR(10),'+
-               '@cEquipmentID NVARCHAR(50) OUTPUT,'+
-			         '@cDriverName NVARCHAR(100) OUTPUT,'+
-			         '@cRoute NVARCHAR(150) OUTPUT,'+
-			         '@cAppointmentID NVARCHAR(20) OUTPUT,'+
-               '@n_err INT OUTPUT,'+
-               '@c_ErrMsg NVARCHAR(255) OUTPUT'
-
-               EXEC sp_ExecuteSQL @c_SQL, @c_SQLParam,
-               @c_Receiptkey
-               , @cEquipmentID OUTPUT
-               , @cDriverName OUTPUT
-               , @cRoute OUTPUT
-               , @cAppointmentID OUTPUT
-               , @n_err OUTPUT
-               , @c_ErrMsg OUTPUT
-
-			         IF @n_Err <> 0
-               GOTO EXIT_SP
-            END
-         ELSE
-         BEGIN
-            SET @cEquipmentID = ''
-		        SET @cDriverName = ''
-		        SET @cRoute = ''
-		        SET @cAppointmentID = ''
-         END
-      END
-     -- (SSA01) End --
       INSERT INTO dbo.TMS_Shipment
           (
              ShipmentGID
@@ -198,18 +110,17 @@ BEGIN
       SELECT
              ShipmentGID = CASE WHEN r.ExternReceiptKey <> '' THEN r.ExternReceiptKey ELSE r.ReceiptKey END         
           ,  VehicleLPN  = r.VehicleNumber         
-          ,  EquipmentID = @cEquipmentID                  --(SSA01)
-          ,  DriveName   = @cDriverName                   --(SSA01)
+          ,  EquipmentID = ''
+          ,  DriveName   = ''
           ,  ShipmentPlannedStartDate =  r.ReceiptDate 
           ,  ShipmentPlannedEndDate   =  '1900-01-01'         
-          ,  [Route]     =  @cRoute                       --(SSA01)
+          ,  [Route]     =  ''
           ,  ServiceProviderID   =  ISNULL(r.Carrierkey,'')                  
           ,  ShipmentVolume      =  ISNULL(r.[Cube],0.00)         
           ,  ShipmentWeight      =  ISNULL(r.[Weight],0.00)          
           ,  ShipmentCartonCount =  0       
           ,  ShipmentPalletCount =  0 
           ,  OTMShipmentStatus   = ''
-          ,  AppointmentID   = @cAppointmentID      --(SSA01)
       FROM dbo.RECEIPT AS r WITH (NOLOCK)
       WHERE r.ReceiptKey = @c_ReceiptKey;
    

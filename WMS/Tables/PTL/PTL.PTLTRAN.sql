@@ -110,6 +110,20 @@ BEGIN
 END
 ELSE
 BEGIN
+
+	IF NOT EXISTS (SELECT *
+                     FROM sys.columns
+                     WHERE Name = 'ID'
+                     AND Object_ID = Object_ID('PTL.PTLTRAN'))
+   BEGIN
+      ALTER TABLE [PTL].[PTLTRAN]
+      ADD [ID] [nvarchar] (18) NULL CONSTRAINT [DF_PTLTran_ID] DEFAULT ('');
+
+		EXEC sp_addextendedproperty N'MS_Description', N'ID', 'SCHEMA', N'PTL', 'TABLE', N'PTLTRAN', 'COLUMN', N'ID'
+   END
+
+
+
 	IF NOT EXISTS (SELECT *
                      FROM sys.columns
                      WHERE Name = 'Facility'
