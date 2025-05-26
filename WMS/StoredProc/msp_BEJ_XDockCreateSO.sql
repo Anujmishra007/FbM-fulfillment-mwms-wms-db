@@ -21,11 +21,10 @@ GO
 /* Date         Author  Rev   Purposes                                  */  
 /************************************************************************/ 
 CREATE OR ALTER PROC [dbo].[msp_BEJ_XDockCreateSO]
-(     @b_Success     INT           = 1  OUTPUT
-  ,   @n_Err         INT           = '' OUTPUT
-  ,   @c_ErrMsg      NVARCHAR(255) = '' OUTPUT
-  ,   @b_Debug       INT           = 0
-)
+     @c_StorerKey   NVARCHAR(15)   = ''
+   , @c_Facility    NVARCHAR(5)    = ''
+   , @c_OtherConfig NVARCHAR(4000)  = ''
+
 AS
 BEGIN
    SET NOCOUNT ON
@@ -34,7 +33,10 @@ BEGIN
    SET CONCAT_NULL_YIELDS_NULL OFF
 
    DECLARE 
-           @n_Cnt                INT            = 0
+            @b_Success           INT            = 1  
+         , @n_Err                INT            = '' 
+         , @c_ErrMsg             NVARCHAR(255)  = '' 
+         , @n_Cnt                INT            = 0
          , @n_Continue           INT            = 1
          , @n_StartTranCount     INT            = @@TRANCOUNT
          , @n_OrderCnt           INT            = 0
@@ -42,8 +44,6 @@ BEGIN
          , @c_ASNStatus          NVARCHAR(10)   = '0'
          , @c_DocType            NVARCHAR(1)    = ''
          , @c_OrderKey           NVARCHAR(10)   = ''
-         , @c_StorerKey          NVARCHAR(15)   = ''
-         , @c_Facility           NVARCHAR(10)   = ''
          , @c_ExternOrderkey     NVARCHAR(50)   = ''
          , @c_RecType            NVARCHAR(10)   = ''                      
          , @c_OrderLineNumber    NVARCHAR(5)    = ''
@@ -86,8 +86,12 @@ BEGIN
 
     SELECT @n_ToDo = COUNT(1) FROM RECEIPT r WITH (nolock)
     INNER JOIN RECEIPTDETAIL rd WITH (nolock) ON r.ReceiptKey = rd.ReceiptKey
-    WHERE NOT EXISTS (SELECT 1 FROM ORDERS o WITH (nolock) WHERE r.ExternReceiptKey = o.ExternOrderKey AND r.StorerKey = o.StorerKey)
+    WHERE 
+    r.StorerKey = @c_StorerKey
+    AND r.Facility = @c_Facility 
+    AND NOT EXISTS (SELECT 1 FROM ORDERS o WITH (nolock) WHERE r.ExternReceiptKey = o.ExternOrderKey AND r.StorerKey = o.StorerKey)
     AND r.RECType='XDOCK' AND r.[Status] = '0' AND r.ASNStatus='0' AND rd.QtyExpected > 0 AND RTRIM(rd.ExternReceiptKey) <> ''
+    
 
     IF @n_ToDo = 0
     BEGIN
@@ -314,7 +318,10 @@ BEGIN
                     ---AYD END
                     FROM RECEIPT r WITH (nolock) 
                     INNER JOIN RECEIPTDETAIL rd WITH (nolock) ON r.ReceiptKey = rd.ReceiptKey
-                    WHERE NOT EXISTS (SELECT 1 FROM ORDERS o WITH (nolock) WHERE r.ExternReceiptKey=o.ExternOrderKey AND r.StorerKey=o.StorerKey)
+                    WHERE  
+                    r.StorerKey = @c_StorerKey
+                    AND r.Facility = @c_Facility 
+                    AND NOT EXISTS (SELECT 1 FROM ORDERS o WITH (nolock) WHERE r.ExternReceiptKey=o.ExternOrderKey AND r.StorerKey=o.StorerKey)
                     AND r.RECType='XDOCK' AND rd.[Status]='0' AND r.ASNStatus='0' AND rd.QtyExpected > 0 AND RTRIM(rd.ExternReceiptKey) <> ''
                     ORDER BY ISNULL(rd.Userdefine02,''), ISNULL(rd.UserDefine06,'1900-01-01'), ISNULL(rd.PutawayLoc  ,''), rd.ReceiptLineNumber
 
