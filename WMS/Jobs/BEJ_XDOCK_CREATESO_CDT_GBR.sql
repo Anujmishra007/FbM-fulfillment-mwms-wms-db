@@ -28,7 +28,7 @@ BEGIN
    IF (@@ERROR <> 0 OR @ReturnCode <> 0) GOTO QuitWithRollback
 END
 
-/****** Object:  Step [Backend Build Wave]    Script Date: 5/14/2024 9:35:34 AM ******/
+/****** Object:  Step [XDOCK CREATE SO]    Script Date: 5/26/2025 ******/
 IF NOT EXISTS (SELECT 1 from msdb..sysjobsteps js
                JOIN msdb..sysjobs j on j.job_id = js.job_id
                WHERE js.command LIKE '%msp_BEJ%''BEJ-XDockCreateSO''%'
