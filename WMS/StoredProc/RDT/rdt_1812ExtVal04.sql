@@ -43,7 +43,7 @@ BEGIN
             -- Check DropID
             IF @cDropID = ''
             BEGIN
-               SET @nErrNo = 230751
+               SET @nErrNo = 239051
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Need DropID
                EXEC rdt.rdtSetFocusField @nMobile, 4 -- DropID
                GOTO Quit
@@ -54,9 +54,9 @@ BEGIN
             SELECT @cStorerKey = StorerKey FROM TaskDetail WITH (NOLOCK) WHERE TaskDetailKey = @cTaskDetailKey
             
             -- Check duplicate
-            IF EXISTS( SELECT 1 FROM PickDetail WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND DropID = @cDropID ) --PSJ036 Removed Status < 9
+            IF EXISTS( SELECT 1 FROM dbo.PickDetail WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND DropID = @cDropID ) --PSJ036 Removed Status < 9
             BEGIN
-               SET @nErrNo = 230752
+               SET @nErrNo = 239052
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- DropID used
                EXEC rdt.rdtSetFocusField @nMobile, 4 -- DropID
                GOTO Quit
