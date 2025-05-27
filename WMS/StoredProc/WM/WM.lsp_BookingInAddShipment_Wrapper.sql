@@ -24,6 +24,7 @@ GO
 /* 2023-12-19  Wan01-v0 1.0   DevOps Combine Script.                    */
 /* 2024-07-02  Inv Team 1.1   UWP-17135 - Migrate Inbound Door booking  */
 /* 2025-05-21  SSA01    1.2   FCR-3921 - Upadated ASN Custom Fields     */
+/* 2025-05-26  SSA02    1.3   FCR-3921 -Added extrenReceiptkey condition*/
 /************************************************************************/                                                                                  
 CREATE OR ALTER PROC [WM].[lsp_BookingInAddShipment_Wrapper]                                                                                                                     
       @n_BookingNo            INT                           --Booking In's Booking No
@@ -104,17 +105,22 @@ BEGIN
            , @c_SQLParam NVARCHAR( MAX)
            , @c_StorerKey NVARCHAR(30)
            , @c_Facility NVARCHAR(15)
+           , @c_ShipmentGID NVARCHAR(50) --(SSA02)
 
            SET @c_ASNCustomFieldsSP = ''
            SET @c_StorerKey = ''
            SET @c_Facility  = ''
+           SET @c_ShipmentGID = ''  --(SSA02)
+      --(SSA02)
+      SELECT TOP 1 @c_ShipmentGID = ShipmentGID
+      FROM TMS_Shipment WITH(NOLOCK)
+      WHERE BookingNo = @n_BookingNo
 
       SELECT TOP 1 @c_StorerKey = R.Storerkey, @c_Facility = R.Facility
       FROM RECEIPT R WITH (NOLOCK)
-      WHERE ReceiptKey = (
-      SELECT TOP 1 ShipmentGID
-      FROM TMS_Shipment WITH(NOLOCK)
-      WHERE BookingNo = @n_BookingNo)
+      WHERE (ReceiptKey = @c_ShipmentGID  --(SSA02)
+      OR ExternReceiptKey = @c_ShipmentGID) --(SSA02)
+      AND ISNULL(@c_ShipmentGID, '') <> ''
 
 	   EXECUTE nspGetRight
          @c_Facility,
