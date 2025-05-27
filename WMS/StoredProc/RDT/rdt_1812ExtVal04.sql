@@ -51,7 +51,7 @@ BEGIN
             
             -- Get storer
             DECLARE @cStorerKey NVARCHAR(15)
-            SELECT @cStorerKey = StorerKey FROM TaskDetail WITH (NOLOCK) WHERE TaskDetailKey = @cTaskDetailKey
+            SELECT @cStorerKey = StorerKey FROM dbo.TaskDetail WITH (NOLOCK) WHERE TaskDetailKey = @cTaskDetailKey
             
             -- Check duplicate
             IF EXISTS( SELECT 1 FROM dbo.PickDetail WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND DropID = @cDropID ) --PSJ036 Removed Status < 9
