@@ -11,7 +11,7 @@ GO
 /*                                                                      	  */
 /* Date         Author    Ver.  Purposes                               		  */
 /* 2014-07-08   Ung       1.0   SOS327467 Created                             */
-/* 2025-04-11   PSJ036    1.0   Copy from SP rdt_1812ExtVal01 CR RITM7816261  */
+/* 2025-04-11   PSJ036    1.1   Copy from SP rdt_1812ExtVal01 CR RITM7816261  */
 /******************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_1812ExtVal04]
