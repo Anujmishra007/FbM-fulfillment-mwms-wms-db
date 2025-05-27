@@ -7,7 +7,8 @@ CREATE OR ALTER VIEW dbo.V_ASN_Total_Expected_Received_Qty AS
 SELECT
     ReceiptKey,
     SUM(QtyExpected) AS TotalExpectedQty,
-    SUM(QtyReceived+BeforeReceivedQty)  AS TotalReceivedQty
+    Sum(case when ReceiptDetail.QtyReceived = 0 then ReceiptDetail.BeforeReceivedQty else ReceiptDetail.QtyReceived end) AS TotalReceivedQty
+
 FROM
     RECEIPTDETAIL WITH (NOLOCK)
 GROUP BY
