@@ -1,6 +1,3 @@
-IF  EXISTS (SELECT * FROM dbo.sysobjects WHERE id = OBJECT_ID(N'[RDT].[rdtSetMobile]') AND OBJECTPROPERTY(id,N'IsProcedure') = 1)
-   DROP PROCEDURE [RDT].[rdtSetMobile]
-GO
 
 SET ANSI_NULLS OFF
 GO
@@ -31,7 +28,7 @@ GO
 /* 24-May-2024 1.6  NLT013   Add session id to get unique mobile        */
 /************************************************************************/  
   
-CREATE PROC [RDT].[rdtSetMobile] (  
+CREATE OR ALTER PROC [RDT].[rdtSetMobile] (  
    @nMobile     int  OUTPUT,  
    @cInMessage  NVARCHAR(1024),  
    @nFunction   int  OUTPUT,  
