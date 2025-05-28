@@ -89,8 +89,11 @@ BEGIN
     WHERE 
     r.StorerKey = @c_StorerKey
     AND r.Facility = @c_Facility 
-    AND NOT EXISTS (SELECT 1 FROM ORDERS o WITH (nolock) WHERE r.ExternReceiptKey = o.ExternOrderKey AND r.StorerKey = o.StorerKey)
-    AND r.RECType='XDOCK' AND r.[Status] = '0' AND r.ASNStatus='0' AND rd.QtyExpected > 0 AND RTRIM(rd.ExternReceiptKey) <> ''
+    AND r.RECType='XDOCK' AND r.[Status] = '0' AND r.ASNStatus='0' AND RTRIM(r.ExternReceiptKey) <> ''
+    AND rd.QtyExpected > 0 AND RTRIM(rd.ExternReceiptKey) <> ''
+    AND NOT EXISTS (SELECT 1 FROM ORDERS o WITH (nolock) 
+        WHERE r.ExternReceiptKey = o.ExternOrderKey AND r.StorerKey = o.StorerKey
+        AND r.RECType='XDOCK' AND r.[Status] = '0' AND r.ASNStatus='0' AND rd.QtyExpected > 0 AND RTRIM(r.ExternReceiptKey) <> '')
     
 
     IF @n_ToDo = 0
@@ -318,11 +321,14 @@ BEGIN
                     ---AYD END
                     FROM RECEIPT r WITH (nolock) 
                     INNER JOIN RECEIPTDETAIL rd WITH (nolock) ON r.ReceiptKey = rd.ReceiptKey
-                    WHERE  
+                    WHERE 
                     r.StorerKey = @c_StorerKey
                     AND r.Facility = @c_Facility 
-                    AND NOT EXISTS (SELECT 1 FROM ORDERS o WITH (nolock) WHERE r.ExternReceiptKey=o.ExternOrderKey AND r.StorerKey=o.StorerKey)
-                    AND r.RECType='XDOCK' AND rd.[Status]='0' AND r.ASNStatus='0' AND rd.QtyExpected > 0 AND RTRIM(rd.ExternReceiptKey) <> ''
+                    AND r.RECType='XDOCK' AND r.[Status] = '0' AND r.ASNStatus='0' AND RTRIM(r.ExternReceiptKey) <> ''
+                    AND rd.QtyExpected > 0 AND RTRIM(rd.ExternReceiptKey) <> ''
+                    AND NOT EXISTS (SELECT 1 FROM ORDERS o WITH (nolock) 
+                        WHERE r.ExternReceiptKey = o.ExternOrderKey AND r.StorerKey = o.StorerKey
+                        AND r.RECType='XDOCK' AND r.[Status] = '0' AND r.ASNStatus='0' AND rd.QtyExpected > 0 AND RTRIM(r.ExternReceiptKey) <> '')
                     ORDER BY ISNULL(rd.Userdefine02,''), ISNULL(rd.UserDefine06,'1900-01-01'), ISNULL(rd.PutawayLoc  ,''), rd.ReceiptLineNumber
 
                     OPEN CUR_RECDET
