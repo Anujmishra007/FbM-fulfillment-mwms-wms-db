@@ -40,8 +40,8 @@ CREATE PROCEDURE [WM].[lsp_FinalizeKit_Wrapper]
 ,  @n_WarningNo            INT          = 0  OUTPUT
 ,  @c_ProceedWithWarning   CHAR(1)      = 'N' 
 ,  @c_UserName             NVARCHAR(128)= ''
-,  @c_NamedUser            NVARCHAR(128)= ''                        --SG01
 ,  @n_ErrGroupKey          INT = 0           OUTPUT
+,  @c_NamedUser            NVARCHAR(128)= ''                        --SG01
 AS  
 BEGIN
    SET NOCOUNT ON                   -- (Wan02) - START                                     
