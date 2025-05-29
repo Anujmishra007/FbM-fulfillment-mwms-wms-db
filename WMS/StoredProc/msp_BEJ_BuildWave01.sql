@@ -76,7 +76,7 @@ BEGIN
          , @c_SQLParms           NVARCHAR(500)  = ''
          , @c_SQLMaxOrd          NVARCHAR(500)  = ''
          , @c_SQLCondAddToWave   NVARCHAR(MAX)  = ''
-         , @b_Debug              INT            = 1
+         , @b_Debug              INT            = 0
          , @CUR_ORD              CURSOR
          , @c_code               NVARCHAR(30) = ''
          , @c_Lottable03         NVARCHAR(100)= ''
@@ -160,10 +160,10 @@ BEGIN
         OrderKey        NVARCHAR(10)   NOT NULL DEFAULT ('')   PRIMARY KEY
       , WaveKey         NVARCHAR(10)   NOT NULL DEFAULT ('')
       , Lottable03      NVARCHAR(100)  NULL DEFAULT ('')
-      , C_Zip           NVARCHAR(36)
-      , [TYPE]          NVARCHAR(20)
-      , OrderGroup      NVARCHAR(100)
-      , C_Company       NVARCHAR(100)
+      , C_Zip           NVARCHAR(36)   NULL DEFAULT ('')
+      , [TYPE]          NVARCHAR(20)   NULL DEFAULT ('')
+      , OrderGroup      NVARCHAR(100)  NULL DEFAULT ('')
+      , C_Company       NVARCHAR(100)  NULL DEFAULT ('')
       , DeliveryDate    DATETIME       NULL
       )
 
@@ -269,7 +269,7 @@ BEGIN
 
          SET @c_SQL  = N'SELECT ORDERS.OrderKey'
                      + ' ' + CHAR(13) + SUBSTRING(@c_SQLBuildWave, @n_FromPos, @n_ToPos)
-         PRINT @c_SQL;
+
          SET @c_SQLParms = N'@c_Facility     NVARCHAR(5)'
                          + ',@c_StorerKey    NVARCHAR(15)'
                          + ',@n_MaxOpenQty   INT'
@@ -284,30 +284,27 @@ BEGIN
             ,  @n_MaxOpenQty
 
          ;WITH ord AS
-         (  SELECT TOP 1 WITH TIES
-               o.Orderkey
-             , o.C_Zip
-             , o.[TYPE]
-             , o.OrderGroup
-             , o.C_Company
-             , o.DeliveryDate
-             , od.Lottable03
-            FROM #TMP_ORD t
-            JOIN ORDERS o (NOLOCK) ON o.Orderkey  = t.Orderkey
-            JOIN ORDERDETAIL od (NOLOCK) ON od.OrderKey = o.Orderkey
-            ORDER BY ROW_NUMBER() OVER (ORDER BY od.Orderkey
-                                                ,od.OrderLineNumber
-                                       )
-         )
+               (  SELECT o.Orderkey
+               , MAX(o.C_Zip)        AS C_Zip
+               , MAX(o.[TYPE])       AS [TYPE]
+               , MAX(o.OrderGroup)   AS OrderGroup
+               , MAX(o.C_Company)    AS C_Company
+               , MAX(o.DeliveryDate) AS DeliveryDate
+               , MAX(od.Lottable03)  AS Lottable03
+               FROM #TMP_ORD t
+               JOIN ORDERS o (NOLOCK) ON o.Orderkey  = t.Orderkey
+               JOIN ORDERDETAIL od (NOLOCK) ON od.OrderKey = o.Orderkey
+                     GROUP BY o.Orderkey
+               )
          UPDATE t
-            SET c_Zip        = o.C_Zip
-             ,  type         = o.[TYPE]
-             ,  OrderGroup   = o.OrderGroup
-             ,  C_Company    = o.C_Company
-             ,  DeliveryDate = o.DeliveryDate
-             ,  Lottable03   = o.Lottable03
-         FROM ord o
-         JOIN #TMP_ORD t ON o.orderkey = t.orderkey
+               SET c_Zip        = o.C_Zip
+               ,  type         = o.[TYPE]
+               ,  OrderGroup   = o.OrderGroup
+               ,  C_Company    = o.C_Company
+               ,  DeliveryDate = o.DeliveryDate
+               ,  Lottable03   = o.Lottable03
+               FROM ord o
+               JOIN #TMP_ORD t ON o.orderkey = t.orderkey
       END
 
       DECLARE @n_Cnt INT = 1;
@@ -345,24 +342,18 @@ BEGIN
                BREAK
             END
 
-            -- SET @c_SQLCondAddToWave = N' AND ORDERDETAIL.Lottable03 = ''' + @c_Lottable03 + ''''
-            --                         +  ' AND ORDERS.C_Company = ''' + @c_C_Company + ''''
-            --                         +  ' AND ORDERS.Type = ''' + @c_Type + ''''
-            --                         +  ' AND ORDERS.OrderGroup = ''' + @c_OrderGroup + ''''
-            --                         +  ' CAST(ORDERS.DeliveryDate AS DATE) '
-            --                         +  ' = CAST(' + CONVERT(NVARCHAR(10),@d_DeliveryDate,121) + ' AS DATE)'
                SET @c_SQLCondAddToWave = N''
 
-                  SET @c_SQLCondAddToWave += N' AND ORDERDETAIL.Lottable03 = ''' + @c_Lottable03 + ''''
+               SET @c_SQLCondAddToWave += N' AND ORDERDETAIL.Lottable03 = ''' + @c_Lottable03 + ''''
 
-                  SET @c_SQLCondAddToWave += N' AND ORDERS.C_Company = ''' + @c_C_Company + ''''
+               SET @c_SQLCondAddToWave += N' AND ORDERS.C_Company = ''' + @c_C_Company + ''''
 
-                  SET @c_SQLCondAddToWave += N' AND ORDERS.Type = ''' + @c_Type + ''''
+               SET @c_SQLCondAddToWave += N' AND ORDERS.Type = ''' + @c_Type + ''''
 
-                  SET @c_SQLCondAddToWave += N' AND ORDERS.OrderGroup = ''' + @c_OrderGroup + ''''
+               SET @c_SQLCondAddToWave += N' AND ORDERS.OrderGroup = ''' + @c_OrderGroup + ''''
 
-                  SET @c_SQLCondAddToWave += N' AND CAST(ORDERS.DeliveryDate AS DATE) = CAST('''
-                                 + CONVERT(NVARCHAR(10), @d_DeliveryDate, 121) + ''' AS DATE)'
+               SET @c_SQLCondAddToWave += N' AND CAST(ORDERS.DeliveryDate AS DATE) = CAST('''
+                              + CONVERT(NVARCHAR(10), @d_DeliveryDate, 121) + ''' AS DATE)'
 
             IF @n_Continue = 1
             BEGIN
@@ -371,7 +362,7 @@ BEGIN
                  @c_BuildParmKey   = @c_BuildParmKey
                , @c_Facility       = @c_Facility
                , @c_StorerKey      = @c_StorerKey
-               , @c_BuildWaveType  = ''
+               , @c_BuildWaveType  = 'BuildWave'
                , @c_GenByBuildValue= @c_GenByBuildValue
                , @c_SQLBuildWave   = @c_SQLBuildWave OUTPUT
                , @n_BatchNo        = 0
@@ -414,26 +405,8 @@ BEGIN
                                          = CAST(@d_DeliveryDate AS DATE)
                                        AND ISNULL(O.ECOM_Platform, '') <> ''
                                        THEN 1 ELSE 0 END)
-            AND COUNT(1) < @n_MaxOrdPerBld
+            AND COUNT(1) <= @n_MaxOrdPerBld
             ORDER BY WD.WaveKey;
-
-
-            IF @c_WaveKey IS NULL OR @c_WaveKey = ''
-            BEGIN
-               SET @c_WaveKey = '';
-               EXECUTE nspg_GetKey
-                     'WaveKey',
-                     10,
-                     @c_WaveKey OUTPUT,
-                     @b_success OUTPUT,
-                     @n_err OUTPUT,
-                     @c_ErrMsg OUTPUT;
-
-               IF @b_success = 0
-               BEGIN
-                  SET @n_Continue = 3
-               END
-            END
 
             IF @n_Continue = 1
             BEGIN
@@ -459,7 +432,7 @@ BEGIN
                   ,  @c_UserName        = @c_UserName
                   ,  @b_PopupWindow     = @b_PopupWindow     OUTPUT
                   ,  @n_NoOfOrderNoLoad = @n_NoOfOrderNoLoad OUTPUT
-                  ,  @c_BuildParmKeys   = ''
+                  ,  @c_BuildParmKeys   = 'DEVEM_LP'
 
                IF @b_Success = 0
                BEGIN
@@ -468,7 +441,6 @@ BEGIN
 
                IF @n_Continue = 1
                BEGIN
-                  -- Load Generation
                   EXEC [WM].[lsp_WaveGenMBOL]
                      @c_WaveKey  = @c_WaveKey
                   ,  @b_Success  = @b_Success  OUTPUT
@@ -509,7 +481,7 @@ BEGIN
            @c_BuildParmKey   = @c_BuildParmKey
          , @c_Facility       = @c_Facility
          , @c_StorerKey      = @c_StorerKey
-         , @c_BuildWaveType  = ''
+         , @c_BuildWaveType  = 'BuildWave'
          , @c_GenByBuildValue= @c_GenByBuildValue
          , @c_SQLBuildWave   = @c_SQLBuildWave OUTPUT
          , @n_BatchNo        = 0
@@ -526,6 +498,7 @@ BEGIN
             SET @n_Continue = 3
          END
 
+
          IF @n_Continue = 1
          BEGIN
             UPDATE #TMP_ORD
@@ -540,7 +513,7 @@ BEGIN
             SELECT TOP 1
                   @c_Wavekey = T.Wavekey
             FROM #TMP_ORD T
-            WHERE T.WaveKey > ''
+            WHERE T.WaveKey > @c_Wavekey
             ORDER BY T.Wavekey
 
             SET @n_Cnt = @@ROWCOUNT
@@ -558,7 +531,7 @@ BEGIN
                ,  @c_UserName          = @c_UserName
                ,  @b_PopupWindow       = @b_PopupWindow     OUTPUT
                ,  @n_NoOfOrderNoLoad   = @n_NoOfOrderNoLoad OUTPUT
-               ,  @c_BuildParmKeys     = ''
+               ,  @c_BuildParmKeys     = 'DEVEM_LP'
 
             IF @b_Success = 0
             BEGIN
@@ -567,7 +540,6 @@ BEGIN
 
             IF @n_Continue = 1
             BEGIN
-               -- Load Generation
                EXEC [WM].[lsp_WaveGenMBOL]
                   @c_WaveKey  = @c_WaveKey
                ,  @b_Success  = @b_Success  OUTPUT
@@ -625,3 +597,4 @@ BEGIN
          END
       END
    END
+GO
