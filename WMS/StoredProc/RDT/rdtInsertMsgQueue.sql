@@ -24,6 +24,7 @@ GO
 /* 2020-Jun-24 1.1  YeeKung  Add Input Username and pasword (yeekung01) */
 /* 2022-Oct-03 1.2  YeeKung  Fix length params (yeekung02)              */
 /* 2024-Sep-26 1.3  NLT013   UWP-24932 Error message UI issue           */
+/* 2025-05-29  0.0  JACKC    !!!Cutover. Use V0 for development!!!      */
 /************************************************************************/  
   
 CREATE  or ALTER  PROC rdt.rdtInsertMsgQueue (  
