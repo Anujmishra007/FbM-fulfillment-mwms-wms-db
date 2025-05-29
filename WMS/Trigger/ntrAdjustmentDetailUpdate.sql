@@ -467,23 +467,19 @@ BEGIN
                                 END
 
                             /* (Ansuman01) - START */
-                            IF NOT (ISNULL(@c_ADJ_Loc, '') = '' AND ISNULL(@c_ADJ_Lot, '') = '')
-                            BEGIN
-                                 IF EXISTS (
-                                    SELECT 1
-                                    FROM INSERTED I
-                                             JOIN UCC U WITH (NOLOCK)
-                                                  ON I.StorerKey = U.StorerKey
-                                                      AND I.Sku = U.Sku
-                                                      AND I.UCCNo = U.UCCNo
-                                    WHERE (I.Lot <> U.Lot OR I.Loc <> U.Loc OR I.Id <> U.Id)
-                                )
-                                    BEGIN
-                                        SET @n_continue = 3
-                                        SET @n_err = 62760
-                                        SET @c_errmsg = "NSQL" + CONVERT(CHAR(5), @n_err) + ': LOT, LOC, ID mismatch for UCCNo. (ntrAdjustmentDetailUpdate)'
-                                        BREAK
-                                    END
+                            IF EXISTS (SELECT 1 FROM ADJUSTMENTDETAIL AD WITH (NOLOCK)
+                                       JOIN UCC U WITH (NOLOCK) ON AD.StorerKey = U.StorerKey
+                                       AND AD.Sku = U.Sku AND AD.UCCNo = U.UCCNo
+                                       WHERE (AD.Lot <> U.Lot OR AD.Loc <> U.Loc OR AD.Id <> U.Id)
+                                       AND AD.Adjustmentkey = @c_ADJ_AdjustmentKey
+                                       AND AD.AdjustmentLineNumber = @c_ADJ_AdjustmentLineNumber
+                                       AND ISNULL(U.Lot,'') <> '' AND ISNULL(U.Loc,'') <> ''
+                                      )
+                             BEGIN
+                                SET @n_continue = 3
+                                SET @n_err = 62760
+                                SET @c_errmsg = "NSQL" + CONVERT(CHAR(5), @n_err) + ': LOT, LOC, ID mismatch for UCCNo. (ntrAdjustmentDetailUpdate)'
+                                BREAK
                             END
                             /* (Ansuman01) - END */
 

@@ -17,6 +17,7 @@ GO
 /* 2021-08-24 1.4  James    Add Suggest Qty (james02)                   */
 /* 2025-01-25 1.5.0Dennis   FCR-2517 Extend Error message length        */
 /* 2024-12-04 1.6.0YYS027   FCR-1489 Fn1836 TM Assist Replen To         */
+/* 2025-05-29 0.0  JACKC    !!!Cutover. Use V0 for development !!!      */
 /************************************************************************/
     
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_Assist_ReplenTo] (
