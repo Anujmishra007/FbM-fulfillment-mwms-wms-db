@@ -295,7 +295,7 @@ BEGIN
                     ,RD.Packkey
                     ,RD.UOM
                     ,RD.QtyReceived
-                    ,RD.QtyReceived
+                    ,RD.QtyExpected
                     ,RD.Lottable03                                   
                     ,RD.Lottable02
                     ,RD.Lottable08
