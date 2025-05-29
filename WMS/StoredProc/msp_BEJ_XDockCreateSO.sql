@@ -865,7 +865,7 @@ BEGIN
         
             WHILE @@FETCH_STATUS <> -1 AND @n_continue IN(1,2)
             BEGIN      	
-                IF EXISTS (SELECT 1 FROM StorerConfig sc WITH(NOLOCK) WHERE sc.StorerKey = @c_ConsigneeKey AND sc.ConfigKey = 'UpdStorer4Xdock' AND sc.SValue = '1')
+                IF EXISTS (SELECT 1 FROM StorerConfig sc WITH(NOLOCK) WHERE sc.StorerKey = @c_StorerKey AND sc.ConfigKey = 'UpdStorer4Xdock' AND sc.SValue = '1')
                 BEGIN
                     IF EXISTS (SELECT 1 FROM Storer s WITH(NOLOCK) WHERE s.StorerKey = @c_ConsigneeKey AND s.[Type] = '2')
                     BEGIN
