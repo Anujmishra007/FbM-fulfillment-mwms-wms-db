@@ -109,6 +109,13 @@ BEGIN
       END
    END
 
+   IF @n_continue IN(1,2) AND ISNULL(@n_TotalNetWgt_From,0) = 0
+   BEGIN
+      SELECT @n_continue = 3
+      SELECT @n_err = 63305
+      SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Divide by zero error encountered (isp_RCM_KIT_NLGrape_CalcWaste)'
+   END
+
    IF @n_continue IN(1,2)
    BEGIN
       BEGIN TRY
