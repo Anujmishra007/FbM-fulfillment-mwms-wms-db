@@ -104,3 +104,9 @@ BEGIN
 			END
 
 END
+--FCR-3926
+IF NOT EXISTS (SELECT 1 FROM sys.columns 
+            WHERE object_id = OBJECT_ID('RDT.RDTUser') AND name = 'DisableResumePrompt')
+BEGIN
+   ALTER TABLE RDT.RDTUser ADD DisableResumePrompt NVARCHAR(1) NULL
+END

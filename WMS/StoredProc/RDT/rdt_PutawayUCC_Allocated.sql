@@ -16,6 +16,8 @@ GO
 /*                                                                      */
 /* Date       Rev    Author   Purposes                                  */
 /* 2025-03-14 1.0.0  Dennis   FCR-3449 Created                          */
+/* 2025-05-28 1.1.0  Dennis   UWP-35136 Fix Bug                         */
+/* 2025-03-14 1.2.0  Dennis   UWP-35136 Fix Bugs (de01)                 */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE rdt.rdt_PutawayUCC_Allocated (
@@ -102,11 +104,12 @@ CREATE OR ALTER PROCEDURE rdt.rdt_PutawayUCC_Allocated (
          @cToLOC      = @cFinalLOC, 
          @cFromID     = @cID,       -- NULL means not filter by ID. Blank is a valid ID
          @cToID       = @cID,       -- NULL means not changing ID. Blank consider a valid ID
-         @cSKU        = @cPA_SKU, 
+         --@cSKU      = @cPA_SKU, --(de01)
+         @cUCC        = @cUCC, --(de01)
          @nQTY        = @nPA_QTY, 
          @cFromLOT    = @cPA_LOT,
-         @nQTYAlloc   = @nPA_QTY,
-         @cOrderKey   = @cOrderKey
+         @nQTYAlloc   = @nPA_ALLOC_QTY
+         --@cOrderKey   = @cOrderKey --(de01)
 
       IF @nErrNo <> 0
          GOTO RollBackTran

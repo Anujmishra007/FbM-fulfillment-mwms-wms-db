@@ -29,7 +29,7 @@ GO
 /*                                      Kitting                         */
 /* 2025-02-05  SKE140   1.3   UWP-29250 Updated condtion to exclude the */
 /*                              JCB-ALLOC                               */
-/* 2025-05-19  Wan01    1.4   FCR-4962 - JCB - Kitting Allocation       */
+/* 2025-05-29  Wan01    1.4   FCR-4962 - JCB - Kitting Allocation       */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[ispPRJCB08] (
      @c_OrderKey        NVARCHAR(10)
@@ -102,11 +102,18 @@ BEGIN
    SET @c_ErrMsg  = ''
    SET @c_UOM     = '7'
     --(SSA02) - Added condition to exclude pallet which used for K4 Kitting
-   SET @c_Type = '2'                                                      
+   SET @c_Type = '2' 
+   --Allocate LPN/Mini LPN with Single Sku
+   --Allocate Partial LPN/Mini LPN(Carton) that overallocate and Replen to Pick Face
    SET @c_Conditions = ' AND LOC.LocationType = ''BULK'''
                      + ' AND PA.ZoneCategory  = ''EMG''' 
-                     + ' AND NOT EXISTS(SELECT 1 FROM LOTXLOCXID L (NOLOCK) WHERE L.Storerkey = LLI.Storerkey      
-                         AND L.Sku <> LLI.Sku AND L.Loc = LLI.Loc AND L.Id = LLI.Id AND L.Qty > 0) '
+                     + ' AND NOT EXISTS(SELECT 1 FROM LOTXLOCXID L (NOLOCK) 
+                                        JOIN LOTATTRIBUTE la1 (NOLOCK) ON la1.Lot = L.Lot          --(Wan01)
+                                        WHERE L.Storerkey = LLI.Storerkey      
+                                        AND L.Sku <> LLI.Sku AND L.Loc = LLI.Loc 
+                                        AND L.Id = LLI.Id AND L.Qty > 0
+                                        AND la1.Lottable11 = la.Lottable11                         --(Wan01)   
+                                        )'           
                      --(Wan01) - START
                      + ' AND LLI.QtyAllocated + LLI.QtyPicked + LLI.QtyReplen = 0'
                      --+'  AND NOT EXISTS(SELECT 1 FROM PICKDETAIL PD (NOLOCK)
