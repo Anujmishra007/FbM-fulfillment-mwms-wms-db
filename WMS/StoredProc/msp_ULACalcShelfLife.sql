@@ -1,6 +1,6 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
 GO
 
 /*********************************************************************************/
@@ -25,9 +25,10 @@ GO
 /* 2025-02-27  Wan02    1.2   UWP-30082[FCR-2681] - ShelfLife Code Base on       */
 /*                            Configurable SkuGroup                              */
 /* 2025-05-06  VIBIN01   1.3  FCR - 4255 - Exclude the SLCODE ML14 and ML46      */
+/* 2025-05-27  PPA371   1.4  FCR - 4006 - Added check if storer config is enabled */
 /*********************************************************************************/
 
-CREATE OR ALTER PROC msp_ULACalcShelfLife (
+CREATE OR ALTER PROC [dbo].[msp_ULACalcShelfLife] (
   @c_StorerKey     NVARCHAR(15)
 , @c_TranType      NVARCHAR(12) = ''
 , @b_debug         int      = 0
@@ -47,7 +48,8 @@ BEGIN
     /*********************************************/
     DECLARE
         @n_continue  int
-        , @n_StartTCnt int;
+        , @n_StartTCnt int
+		, @c_CustomField NVARCHAR(30)=''
 
     SET @n_continue = 1;
     SET @n_StartTCnt = @@TRANCOUNT;
@@ -116,7 +118,7 @@ BEGIN
      BEGIN
          SET @n_continue = 3
          SET @n_Err = 562551
-         SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(5), @n_Err) 
+         SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(5), @n_Err)
                        + ': Transfer Type Parameter is Required. (msp_ULACalcShelfLife)'
          GOTO QUIT
      END
@@ -132,7 +134,7 @@ BEGIN
          SET @n_continue = 3
          SET @n_Err = 562552
          SET @c_errmsg = 'NSQL' + CONVERT(varchar(5),ISNULL(@n_err,0)) +
-                         ': CODELKUP Setup not exists(For Type). Listname:' + ISNULL(RTRIM(@c_Listname), '') 
+                         ': CODELKUP Setup not exists(For Type). Listname:' + ISNULL(RTRIM(@c_Listname), '')
                        + ' , Code:' + ISNULL(RTRIM(@c_TranType), '') + ' (msp_ULACalcShelfLife)'
          GOTO QUIT
      END
@@ -150,7 +152,7 @@ BEGIN
          SET @n_continue = 3;
          SET @n_err = 68003;
          SET @c_errmsg = 'NSQL' + CONVERT(varchar(5),ISNULL(@n_err,0)) +
-                         ': CODELKUP.Short Setup not exists(For Reason Code). Listname:' + ISNULL(RTRIM(@c_Listname), '') 
+                         ': CODELKUP.Short Setup not exists(For Reason Code). Listname:' + ISNULL(RTRIM(@c_Listname), '')
                        + ', Code:' + ISNULL(RTRIM(@c_ReasonCode), '') + ' (msp_ULACalcShelfLife)';
          GOTO QUIT;
      END;
@@ -163,8 +165,8 @@ BEGIN
          SET @n_continue = 3;
          SET @n_err = 68003;
          SET @c_errmsg = 'NSQL' + CONVERT(varchar(5),ISNULL(@n_err,0)) +
-                         ': StorerConfig.SValue does not exist. For ConfigKey:' 
-                       + ISNULL(RTRIM(@c_ConfigKey), '') + ', Storerkey:' + ISNULL(RTRIM(@c_StorerKey), '') 
+                         ': StorerConfig.SValue does not exist. For ConfigKey:'
+                       + ISNULL(RTRIM(@c_ConfigKey), '') + ', Storerkey:' + ISNULL(RTRIM(@c_StorerKey), '')
                        + ' (msp_ULACalcShelfLife)';
          GOTO QUIT;
      END;
@@ -202,8 +204,8 @@ BEGIN
               WHERE LOT.StorerKey = @c_StorerKey
                 AND (LOT.Qty - LOT.QtyAllocated - LOT.QtyPicked) > 0
                 AND LA.Lottable06 in ( '0' , '')
-                --AND SKU.SKUGROUP IN ('FG', 'RM', 'PC');                           --(Wan02)  
-                AND LA.Lottable07 NOT IN (SELECT SLCODE FROM @ExcludeList) --(VIBIN01)          
+                --AND SKU.SKUGROUP IN ('FG', 'RM', 'PC');                           --(Wan02)
+                AND LA.Lottable07 NOT IN (SELECT SLCODE FROM @ExcludeList) --(VIBIN01)
           OPEN CUR_TRANSFER;
           FETCH NEXT FROM CUR_TRANSFER INTO @c_Facility, @c_SKU, @d_Lottable04, @c_Lottable07, @d_Lottable13;
           WHILE @@FETCH_STATUS <> -1
@@ -307,7 +309,7 @@ BEGIN
                     SET @c_Lottable02          = '';
                     SET @d_Lottable05          = '';
                     SET @c_Lottable06          = '';
-                    SET @c_ToLottable06        = '';  
+                    SET @c_ToLottable06        = '';
                     SET @c_Lottable08          = '';
                     SET @c_Lottable09          = '';
                     SET @c_Lottable10          = '';
@@ -319,7 +321,7 @@ BEGIN
 
                     -- Retrieve related info from inventory table into a cursor
                     DECLARE CUR_TRANSFERDETAIL CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-                        SELECT 
+                        SELECT
                             LLI.SKU,
                             LLI.Loc,
                             LLI.Lot,
@@ -358,7 +360,7 @@ BEGIN
 
                     OPEN CUR_TRANSFERDETAIL;
 
-                    FETCH NEXT FROM CUR_TRANSFERDETAIL INTO  
+                    FETCH NEXT FROM CUR_TRANSFERDETAIL INTO
                         @c_SKU,        @c_Loc,        @c_Lot,        @c_ID,         @n_Qty,        @c_PACKKey,
                         @c_UOM,        @c_Lottable01, @c_Lottable02, @c_Lottable03, @d_Lottable04, @d_Lottable05,
                         @c_Lottable06, @c_Lottable07, @c_Lottable08, @c_Lottable09, @c_Lottable10,
@@ -369,13 +371,22 @@ BEGIN
                         FROM dbo.TransferDetail WITH (NOLOCK)
                         WHERE TransferKey = @c_TransferKey;
 
-                        SET @c_TransferLineNumber = RIGHT('0000' + RTRIM(CAST(CAST(ISNULL(@c_TransferLineNumber,0) AS int) 
+                        SET @c_TransferLineNumber = RIGHT('0000' + RTRIM(CAST(CAST(ISNULL(@c_TransferLineNumber,0) AS int)
                                                                  + 1 AS NVARCHAR(5))),5);
 
-                        IF @c_ShelfLife = 'ML51' or @c_ShelfLife = 'ML49' --or @c_ShelfLife = 'ML13' or @c_ShelfLife = 'ML18'   --(Wan01)
+						select @c_CustomField=ISNULL(SValue ,0) from StorerConfig with (nolock)   --(PPA371)
+						where StorerKey =@c_StorerKey and ConfigKey='NewShelfLifeCalcBUD'         --(PPA371)
+
+						IF @c_ShelfLife = 'ML51' or @c_ShelfLife = 'ML49' --or @c_ShelfLife = 'ML13' or @c_ShelfLife = 'ML18'   --(Wan01)
                           SET @c_ToLottable06 = '1'
                         ELSE
                           SET @c_ToLottable06 = @c_Lottable06
+
+
+						IF (@c_CustomField <> '1' AND @c_ShelfLife IN ('ML13', 'ML18'))  --(PPA371) begin
+						BEGIN
+							SET @c_ToLottable06 = '1'
+						END										                         --(PPA371) end
 
                          BEGIN TRAN;
                           INSERT INTO TransferDetail (
@@ -501,9 +512,9 @@ BEGIN
 
                          SET @n_TotalLines = @n_TotalLines + 1;
 
-                         FETCH NEXT FROM CUR_TRANSFERDETAIL INTO  
+                         FETCH NEXT FROM CUR_TRANSFERDETAIL INTO
                              @c_SKU,        @c_Loc,        @c_Lot,        @c_ID,         @n_Qty,        @c_PACKKey,
-                             @c_UOM,        @c_Lottable01, @c_Lottable02, @c_Lottable03, @d_Lottable04, @d_Lottable05, 
+                             @c_UOM,        @c_Lottable01, @c_Lottable02, @c_Lottable03, @d_Lottable04, @d_Lottable05,
                              @c_Lottable06, @c_Lottable07, @c_Lottable08, @c_Lottable09, @c_Lottable10,
                              @c_Lottable11, @c_Lottable12, @d_Lottable13, @d_Lottable14, @d_Lottable15;
                      END; -- WHILE @@FETCH_STATUS <> -1
@@ -606,15 +617,3 @@ BEGIN
 /* Std - Error Handling (End)                  */
 /***********************************************/
 END; -- End Procedure
-
-GO
-
-
-GRANT EXECUTE ON msp_ULACalcShelfLife TO NSQL
-GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
-SET ANSI_NULLS ON
-GO
-

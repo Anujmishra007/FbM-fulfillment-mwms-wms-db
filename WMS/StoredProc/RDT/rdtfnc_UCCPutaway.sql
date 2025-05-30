@@ -51,6 +51,7 @@ GO
 /* 17-Oct-2024 2.7      ShaoAn   FCR-759-1000 ID and UCC Length Issue        */
 /* 24-Oct-2024 2.7.1             Remove Customer Recode                      */
 /* 14-Mar-2025 2.8.0    Dennis   FCR-3449 Extended Screen                    */
+/* 29-May-2025 2.9.0    Dennis   UWP-35136 Fix Bug (de01)                    */
 /*****************************************************************************/  
   
 CREATE PROCEDURE [RDT].[rdtfnc_UCCPutaway] (  
@@ -1202,7 +1203,7 @@ BEGIN
          @cUDF25   OUTPUT, @cUDF26 OUTPUT, @cUDF27 OUTPUT,
          @cUDF28   OUTPUT, @cUDF29 OUTPUT, @cUDF30 OUTPUT
 
-         IF @nErrNo <> 0
+         IF @nErrNo <> 0 AND @nErrNo <> 50016 --de01
             GOTO Step_99_Fail
          IF @nStepBak = 99 AND @nStep = 0
             SET @nFunc = @nMenu
