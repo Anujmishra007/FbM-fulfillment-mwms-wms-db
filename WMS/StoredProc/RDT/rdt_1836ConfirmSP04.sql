@@ -1,5 +1,5 @@
 /****************************************************************************/  
-/* Store procedure: rdt_1836ConfirmSP04                                        */  
+/* Store procedure: rdt_1836ConfirmSP04                                     */  
 /* Copyright      : Maersk                                                  */    
 /* Client         : Levis USA                                               */    
 /* Purpose        : update location                                         */
@@ -9,6 +9,7 @@
 /*                                                                          */  
 /* Date         Author    Ver.    Purposes                                  */  
 /* 2024-12-04   YYS027    1.0.0   FCR-1489 Created,Configkey=ConfirmSP      */  
+/* 2025-05-24   NickT     1.1.0   UWP-34990 PickDetail.Loc is not updated   */
 /****************************************************************************/  
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_1836ConfirmSP04]  
@@ -135,9 +136,19 @@ BEGIN
 
 
                --Object 2: Update the pickdetail.Loc with the new ßoverridden location where Taskdetail.PickDetailKey for ASTCPK task will hold Pickdetail.PickDetailKey.
-               UPDATE dbo.pickdetail WITH (ROWLOCK) SET Loc=@cFinalLOC 
-                  FROM dbo.pickdetail pd WITH (ROWLOCK) INNER JOIN dbo.TaskDetail td WITH (ROWLOCK) on pd.PickDetailKey=td.PickDetailKey
-                  WHERE td.StorerKey=@cStorerKey AND td.RefTaskKey=@cRefTaskKey AND td.TaskType='ASTCPK'
+               UPDATE dbo.pickdetail WITH (ROWLOCK) 
+               SET Loc = @cFinalLOC 
+               FROM dbo.pickdetail pd WITH (ROWLOCK) 
+               INNER JOIN dbo.TaskDetail td WITH (ROWLOCK) 
+                  ON pd.TaskDetailKey = td.RefTaskKey
+                  AND PD.StorerKey = TD.StorerKey
+                  AND PD.CaseID = TD.CaseID
+                  AND PD.Sku = TD.Sku
+                  AND PD.Lot = TD.Lot
+                  AND PD.Qty = TD.Qty
+               WHERE td.StorerKey = @cStorerKey 
+                  AND td.RefTaskKey = @cRefTaskKey 
+                  AND td.TaskType='ASTCPK'
                   
                --object 2: Update the Taskdetail.FromLoc for the ASTCPK task and TaskDetail.ToLoc for the ASTRPT task.
                UPDATE dbo.TaskDetail WITH (ROWLOCK) SET FromLoc = @cFinalLOC, LogicalFromLoc =@cFinalLOC  WHERE StorerKey=@cStorerKey AND  RefTaskKey=@cRefTaskKey AND TaskType = 'ASTCPK'
