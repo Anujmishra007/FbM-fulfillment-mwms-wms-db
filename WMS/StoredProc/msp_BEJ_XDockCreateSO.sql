@@ -19,6 +19,9 @@ GO
 /*                                                                      */  
 /* Updates:                                                             */  
 /* Date         Author  Rev   Purposes                                  */  
+/* 2025-05-28   AYD01   1.1   Change mapping for OD.OpenQty:            */
+/*                            RD.QtyReceived -> RD.QtyExpected          */
+/* 2025-05-30   AYD02   1.2   Check ExternOrderKey when inserting OD    */
 /************************************************************************/ 
 CREATE OR ALTER PROC [dbo].[msp_BEJ_XDockCreateSO]
      @c_StorerKey   NVARCHAR(15)   = ''
@@ -295,7 +298,7 @@ BEGIN
                     ,RD.Packkey
                     ,RD.UOM
                     ,RD.QtyReceived
-                    ,RD.QtyExpected
+                    ,RD.QtyExpected --AYD01
                     ,RD.Lottable03                                   
                     ,RD.Lottable02
                     ,RD.Lottable08
@@ -354,10 +357,10 @@ BEGIN
 
                     WHILE @@FETCH_STATUS <> -1 AND @n_continue IN(1, 2)
                     BEGIN
-                        IF EXISTS (SELECT 1 FROM #TMP_ORD WHERE ExternOrderKey = @c_ExternReceiptkey 
+                        IF EXISTS (SELECT 1 FROM #TMP_ORD WHERE ExternOrderKey = @c_ExternReceiptkey    --AYD02
                         and Consigneekey = @c_Consigneekey and DeliveryDate = @c_DeliveryDate and Door = @c_Door)
                         BEGIN
-                            SELECT @c_Orderkey = Orderkey FROM #TMP_ORD WHERE ExternOrderKey = @c_ExternReceiptkey
+                            SELECT @c_Orderkey = Orderkey FROM #TMP_ORD WHERE ExternOrderKey = @c_ExternReceiptkey  --AYD02
                             and Consigneekey = @c_Consigneekey and DeliveryDate = @c_DeliveryDate and Door = @c_Door
                         END
 
