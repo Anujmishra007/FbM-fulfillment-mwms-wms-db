@@ -15,6 +15,7 @@ GO
 /* 2020-07-13 1.1  Ung        WMS-13555 Change params                   */
 /* 2020-08-26 1.2  Ung        WMS-13962 Fix option changed              */
 /* 2022-09-23 1.3  YeeKung    WMS-20820 Extended refno length (yeekung02)*/
+/* 2021-03-19 1.4  YeeKung    WMS-16484 Change the step (yeekung01)     */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_638ExtUpd02] (
@@ -73,79 +74,80 @@ AS
 
    IF @nFunc = 638 -- ECOM return
    BEGIN
-      IF @nStep = 1 -- RefNo, ASN
-      BEGIN
-         IF @nInputKey = 1
-         BEGIN
+      --IF @nStep = 1 -- RefNo, ASN
+      --BEGIN
+      --   IF @nInputKey = 1
+      --   BEGIN
 
-            SET @cEcomLabel = rdt.rdtGetConfig( @nFunc, 'EcomLabel', @cStorerKey)
-            IF @cEcomLabel = '0'
-               SET @cEcomLabel = ''
-            IF (@cEcomLabel<>'')
-            BEGIN
-               DECLARE @cLabelPrinter NVARCHAR(10)
-               SELECT @cLabelPrinter = Printer FROM rdt.rdtMobRec WITH (NOLOCK) WHERE Mobile = @nMobile
+      --      SET @cEcomLabel = rdt.rdtGetConfig( @nFunc, 'EcomLabel', @cStorerKey)
+      --      IF @cEcomLabel = '0'
+      --         SET @cEcomLabel = ''
+      --      IF (@cEcomLabel<>'')
+      --      BEGIN
+      --         DECLARE @cLabelPrinter NVARCHAR(10)
+      --         SELECT @cLabelPrinter = Printer FROM rdt.rdtMobRec WITH (NOLOCK) WHERE Mobile = @nMobile
+               
+      --         -- Common params
+      --         DECLARE @tIT69 AS VariableTable
 
-               -- Common params
-               DECLARE @tIT69 AS VariableTable
-
-               DECLARE @cCursor_ReceiptLineNo NVARCHAR(20),
-                       @nCursor_Qty INT
+      --         DECLARE @cCursor_ReceiptLineNo NVARCHAR(20),
+      --                 @nCursor_Qty INT
 
 
-               DECLARE Receipt_cursor CURSOR FOR
-               SELECT RECEIPTLINENUMBER,QtyExpected
-               FROM RECEIPTDETAIL (NOLOCK)
-               WHERE receiptkey=@cReceiptKey
+      --         DECLARE Receipt_cursor CURSOR FOR
+      --         SELECT RECEIPTLINENUMBER,BeforeReceivedQty
+      --         FROM RECEIPTDETAIL (NOLOCK)
+      --         WHERE receiptkey=@cReceiptKey
+      --         and sku=@cSKU
 
-               OPEN Receipt_cursor;
-               FETCH NEXT FROM Receipt_cursor
-               INTO @cCursor_ReceiptLineNo,@nCursor_Qty;
-               WHILE @@FETCH_STATUS = 0
-               BEGIN
+      --         OPEN Receipt_cursor;
+      --         FETCH NEXT FROM Receipt_cursor
+      --         INTO @cCursor_ReceiptLineNo,@nCursor_Qty;
+      --         WHILE @@FETCH_STATUS = 0
+      --         BEGIN
 
-                  INSERT INTO  @tIT69 (Variable, Value) VALUES ( '@cParam1', @cReceiptKey)
-                  INSERT INTO  @tIT69 (Variable, Value) VALUES ( '@cParam2', @cCursor_ReceiptLineNo)
-                  INSERT INTO  @tIT69 (Variable, Value) VALUES ( '@cParam3', '')
-                  INSERT INTO  @tIT69 (Variable, Value) VALUES ( '@cParam4',CASE WHEN ISNULL(@nCursor_Qty,'')='' THEN 0 ELSE @nCursor_Qty END )
-                  INSERT INTO  @tIT69 (Variable, Value) VALUES ( '@cParam5', '1')
+      --            INSERT INTO  @tIT69 (Variable, Value) VALUES ( '@cParam1', @cReceiptKey)
+      --            INSERT INTO  @tIT69 (Variable, Value) VALUES ( '@cParam2', @cCursor_ReceiptLineNo)
+      --            INSERT INTO  @tIT69 (Variable, Value) VALUES ( '@cParam3', '')
+      --            INSERT INTO  @tIT69 (Variable, Value) VALUES ( '@cParam4',CASE WHEN ISNULL(@nCursor_Qty,'')='' THEN 0 ELSE @nCursor_Qty END )
+      --            INSERT INTO  @tIT69 (Variable, Value) VALUES ( '@cParam5', '1')
 
-                  -- Print label
-                  EXEC RDT.rdt_Print
-                        @nMobile      = @nMobile
-                     , @nFunc         = @nFunc
-                     , @cLangCode     = @cLangCode
-                     , @nStep         = 0
-                     , @nInputKey     = 1
-                     , @cFacility     = @cFacility
-                     , @cStorerKey    = @cStorerKey
-                     , @cLabelPrinter = @cLabelPrinter
-                     , @cPaperPrinter = ''
-                     , @cReportType   = @cEcomLabel
-                     , @tReportParam  = @tIT69
-                     , @cSourceType   = 'rdt_638ExtUpd02'
-                     , @nErrNo        = @nErrNo  OUTPUT
-                     , @cErrMsg       = @cErrMsg OUTPUT
+      --            -- Print label
+      --            EXEC RDT.rdt_Print
+      --                  @nMobile      = @nMobile
+      --               , @nFunc         = @nFunc
+      --               , @cLangCode     = @cLangCode
+      --               , @nStep         = 0
+      --               , @nInputKey     = 1
+      --               , @cFacility     = @cFacility
+      --               , @cStorerKey    = @cStorerKey
+      --               , @cLabelPrinter = @cLabelPrinter
+      --               , @cPaperPrinter = ''
+      --               , @cReportType   = @cEcomLabel
+      --               , @tReportParam  = @tIT69
+      --               , @cSourceType   = 'rdt_638ExtUpd02'
+      --               , @nErrNo        = @nErrNo  OUTPUT
+      --               , @cErrMsg       = @cErrMsg OUTPUT
 
-                  IF (@nErrNo <>'')
-                  BEGIN
-                     CLOSE Receipt_cursor;
-                     DEALLOCATE Receipt_cursor;
-                     GOTO Quit
-                  END
+      --            IF (@nErrNo <>'')
+      --            BEGIN
+      --               CLOSE Receipt_cursor;
+      --               DEALLOCATE Receipt_cursor;
+      --               GOTO Quit
+      --            END
 
-                  DELETE @tIT69
+      --            DELETE @tIT69
 
-                  FETCH NEXT FROM Receipt_cursor
-                  INTO @cCursor_ReceiptLineNo,@nCursor_Qty;
-               END
+      --            FETCH NEXT FROM Receipt_cursor
+      --            INTO @cCursor_ReceiptLineNo,@nCursor_Qty;
+      --         END
 
-               CLOSE Receipt_cursor;
-               DEALLOCATE Receipt_cursor;
-            END
+      --         CLOSE Receipt_cursor;
+      --         DEALLOCATE Receipt_cursor;
+      --      END
 
-         END
-      END
+      --   END
+      --END
 
       IF @nStep = 8 -- Finalize ASN?
       BEGIN
