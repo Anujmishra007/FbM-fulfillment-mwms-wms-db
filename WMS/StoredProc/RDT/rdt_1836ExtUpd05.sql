@@ -118,6 +118,7 @@ BEGIN
                      AND PD.Sku = TD.Sku
                      AND PD.Lot = TD.Lot
                      AND PD.Loc = TD.FromLoc
+                     AND PD.Qty = TD.Qty
                   WHERE TD.StorerKey = @cStorerKey 
                      AND TD.RefTaskKey = @cRefTaskKey 
                      AND TD.TaskType ='ASTCPK'
