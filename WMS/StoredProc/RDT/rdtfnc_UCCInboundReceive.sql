@@ -58,6 +58,7 @@ GO
 /* 2023-07-26 3.9  YeeKung    WMS-23108 Add DefaultToLOCSP (yeekung02)  */
 /* 2023-10-03 4.0  JihHaur    JSM-181441 reset @cTrackCartonType (JH01) */
 /* 2025-04-07 4.1  NLT013     UWP-32374 Add ExtValidSP in step 2, 3     */
+/* 2025-05-30 0.0  JACKC      !!!Cutover. Use v0 for development!!!     */
 /************************************************************************/
 CREATE OR ALTER PROC rdt.rdtfnc_UCCInboundReceive (
    @nMobile    INT,
