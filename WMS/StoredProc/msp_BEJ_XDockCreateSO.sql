@@ -354,9 +354,11 @@ BEGIN
 
                     WHILE @@FETCH_STATUS <> -1 AND @n_continue IN(1, 2)
                     BEGIN
-                        IF EXISTS (SELECT 1 FROM #TMP_ORD WHERE Consigneekey = @c_Consigneekey and DeliveryDate = @c_DeliveryDate and Door = @c_Door)
+                        IF EXISTS (SELECT 1 FROM #TMP_ORD WHERE ExternOrderKey = @c_ExternReceiptkey 
+                        and Consigneekey = @c_Consigneekey and DeliveryDate = @c_DeliveryDate and Door = @c_Door)
                         BEGIN
-                            SELECT @c_Orderkey = Orderkey FROM #TMP_ORD WHERE Consigneekey = @c_Consigneekey and DeliveryDate = @c_DeliveryDate and Door = @c_Door
+                            SELECT @c_Orderkey = Orderkey FROM #TMP_ORD WHERE ExternOrderKey = @c_ExternReceiptkey
+                            and Consigneekey = @c_Consigneekey and DeliveryDate = @c_DeliveryDate and Door = @c_Door
                         END
 
                         ELSE
