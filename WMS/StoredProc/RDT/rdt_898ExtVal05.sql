@@ -12,6 +12,7 @@ GO
 /* 2024-10-01 1.0    NLT013     FCR-926 Created                            */
 /* 2025-02-13 1.1.0  ASK138     FCR-2724                                   */
 /* 2025-05-19 1.2.0  Dennis     FCR-4531                                   */
+/* 2025-05-31 1.3.0  NickT      UWP-35355 Add additional validation        */
 /***************************************************************************/
 
 CREATE OR ALTER   PROCEDURE [RDT].[rdt_898ExtVal05]
@@ -71,6 +72,22 @@ BEGIN
             BEGIN
                SET @nErrNo = 225302 
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- OnLOT not triggered
+               GOTO Quit
+            END
+
+            IF EXISTS(SELECT 1
+               FROM dbo.RECEIPT RT WITH(NOLOCK) 
+               INNER JOIN dbo.RECEIPTDETAIL RTD WITH(NOLOCK) 
+                  ON RT.StorerKey = RTD.StorerKey AND RT.ReceiptKey = RTD.ReceiptKey
+               INNER JOIN dbo.PO WITH(NOLOCK)
+                  ON RTD.StorerKey = PO.StorerKey AND RTD.ExternPoKey = PO.ExternPoKey
+               WHERE RT.ReceiptKey = @cReceiptKey 
+                  AND RT.Facility = @cFacility
+                  AND RT.StorerKey = @cStorerKey 
+                  AND po.externstatus = '9')
+            BEGIN
+               SET @nErrNo = 225304 
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- POClosed
                GOTO Quit
             END
          END
