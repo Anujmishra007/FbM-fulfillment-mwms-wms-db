@@ -49,6 +49,7 @@ GO
 /* 2022-07-05 3.8  Calvin	Fixed Cursor variable (CLVN01)              */
 /* 2024-03-06 3.9  CYU027   UWP-15739 Created, for Unilever            */
 /* 2024-05-21 4.0  Dennis   FCR-336 Check Digit                         */
+/* 2025-05-30 0.0  JACKC    !!!Cutover. Use V0 for development!!!       */
 /************************************************************************/
 
 CREATE OR ALTER   PROCEDURE [RDT].[rdtfnc_Move_ID] (
