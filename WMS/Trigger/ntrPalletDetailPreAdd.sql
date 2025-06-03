@@ -42,6 +42,7 @@ GO
 /* 05-May-2022  TLTING02  1.5   variable extend field length            */
 /* 17-Jul-2024  PPA371    1.6   UWP-22044: Added OrderKey and           */
 /*                                TrackingNo columns                    */
+/* 29-May-2025  NJOW01    1.7   FCR-4600 add new fields                 */
 /************************************************************************/
 CREATE OR ALTER   TRIGGER [dbo].[ntrPalletDetailPreAdd]
 ON  [dbo].[PALLETDETAIL]
@@ -97,7 +98,12 @@ BEGIN
 	[UserDefine04] [nvarchar](30) NULL,
 	[UserDefine05] [nvarchar](30) NULL ,
 	[OrderKey] [nvarchar](10) NULL,
-	[TrackingNo] [nvarchar](40) NULL
+	[TrackingNo] [nvarchar](40) NULL,
+  [SourceType] [nvarchar] (30) NULL DEFAULT (''), --NJOW01
+  [SourceKey] [nvarchar] (20)  NULL DEFAULT (''), --NJOW01
+  [Receiptkey] [nvarchar] (10) NULL DEFAULT (''), --NJOW01
+  [ReceiptLineNumber] [nvarchar] (5) NULL DEFAULT (''), --NJOW01
+  [OrderLineNumber] [nvarchar] (5) NULL DEFAULT ('') --NJOW01     	
 	)
 
    INSERT INTO @t_PalletDetail
@@ -107,7 +113,8 @@ BEGIN
       AddDate,       AddWho,           EditDate,      EditWho,
       TrafficCop,    ArchiveCop,       [TimeStamp],   UserDefine01,
       UserDefine02,  UserDefine03,     UserDefine04,  UserDefine05,
-	   OrderKey , TrackingNo
+	    OrderKey , TrackingNo,
+      SourceType, SourceKey, Receiptkey, ReceiptLineNumber, OrderLineNumber  --NJOW01	   
    )
    SELECT
       PalletKey,     PalletLineNumber, CaseId,        StorerKey,
@@ -115,7 +122,8 @@ BEGIN
       AddDate,       AddWho,           EditDate,      EditWho,
       TrafficCop,    ArchiveCop,       [TimeStamp],   UserDefine01,
       UserDefine02,  UserDefine03,     UserDefine04,  UserDefine05,
-	    OrderKey , TrackingNo
+	    OrderKey , TrackingNo, 
+      SourceType, SourceKey, Receiptkey, ReceiptLineNumber, OrderLineNumber  --NJOW01	    
    FROM INSERTED
 
    IF EXISTS( SELECT 1 FROM @t_PalletDetail WHERE ArchiveCop = '9')
@@ -265,7 +273,8 @@ BEGIN
          AddDate,       AddWho,           EditDate,      EditWho,
          TrafficCop,    ArchiveCop,       [TimeStamp],   UserDefine01,
          UserDefine02,  UserDefine03,     UserDefine04,  UserDefine05,
-		     OrderKey , TrackingNo
+		     OrderKey , TrackingNo, 
+		     SourceType, SourceKey, Receiptkey, ReceiptLineNumber, OrderLineNumber  --NJOW01
       )
          SELECT
          PalletKey,     PalletLineNumber, CaseId,        StorerKey,
@@ -273,7 +282,8 @@ BEGIN
          AddDate,       AddWho,           EditDate,      EditWho,
          TrafficCop,    ArchiveCop,       [TimeStamp],   UserDefine01,
          UserDefine02,  UserDefine03,     UserDefine04,  UserDefine05,
-		   OrderKey , TrackingNo
+		     OrderKey , TrackingNo,
+		     SourceType, SourceKey, Receiptkey, ReceiptLineNumber, OrderLineNumber  --NJOW01
       FROM @t_PalletDetail
    END
 
