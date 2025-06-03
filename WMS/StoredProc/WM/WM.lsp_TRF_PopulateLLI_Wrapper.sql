@@ -23,6 +23,7 @@ GO
 /* 2023-03-23  Wan      1.0   Created & DevOps Combine Script           */
 /* 2024-09-25  Wan01    1.1   LFWM-4446 - RG[GIT] Serial Number Solution*/
 /*                            - Transfer by Serial Number               */
+/*2025-05-26   SSA01    1.2   UWP-3982- Added PalletType                */
 /************************************************************************/
 CREATE OR ALTER PROC [WM].[lsp_TRF_PopulateLLI_Wrapper]                                                                                                                     
    @c_TransferKey          NVARCHAR(10)         
@@ -126,7 +127,8 @@ BEGIN
          ,  @c_Refkey3        NVARCHAR(20)   = ''
          ,  @c_WriteType      NVARCHAR(50)   = ''
          ,  @n_LogWarningNo   INT            = 0
-
+         ,  @c_FromPalletType NVARCHAR(10)   = ''   --(SSA01)
+         ,  @c_ToPalletType   NVARCHAR(10)   = ''   --(SSA01)
          ,  @CUR_ERRLIST      CURSOR        
          
    DECLARE  @t_WMSErrorList   TABLE
@@ -290,7 +292,8 @@ BEGIN
             ,@c_FromLoc    = ltlci.Loc  
             ,@c_FromID     = ltlci.ID 
             ,@n_FromQty    = ltlci.Qty - ltlci.QtyAllocated - ltlci.QtyPicked
-            ,@c_ToSku      = ltlci.Sku                          
+            ,@c_ToSku      = ltlci.Sku
+            ,@c_FromPalletType = ltlci.PalletType
          FROM #tLLI AS tl
          JOIN dbo.LOTxLOCxID AS ltlci WITH (NOLOCK) ON  ltlci.Lot = tl.Lot 
                                                     AND ltlci.Loc = tl.Loc 
@@ -328,6 +331,7 @@ BEGIN
          SET @c_ToLoc    = @c_FromLoc
          SET @c_ToID     = @c_FromID
          SET @n_ToQty    = @n_FromQty
+         SET @c_ToPalletType = @c_FromPalletType      --(SSA01)
          
          SET @c_FromLottable01 = ''  
          SET @c_FromLottable02 = ''  
@@ -454,7 +458,9 @@ BEGIN
                ,  ToLottable14
                ,  ToLottable15
                ,  FromChannel                                                     
-               ,  ToChannel                                                       
+               ,  ToChannel
+               ,  FromPalletType                             --(SSA01)
+               ,  ToPalletType                               --(SSA01)
                )
          VALUES(  @c_TransferKey
                ,  @c_TransferLineNumber
@@ -505,7 +511,9 @@ BEGIN
                ,  @dt_ToLottable14
                ,  @dt_ToLottable15
                ,  @c_Channel_From                                                 
-               ,  @c_Channel_To                                                   
+               ,  @c_Channel_To
+               ,  @c_FromPalletType                           --(SSA01)
+               ,  @c_ToPalletType                             --(SSA01)
                )
 
          IF @@ERROR <> 0

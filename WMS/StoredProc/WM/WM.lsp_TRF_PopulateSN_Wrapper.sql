@@ -20,6 +20,7 @@ GO
 /*                                                                      */                                                                                  
 /* Updates:                                                             */                                                                                  
 /* Date        Author   Ver.  Purposes                                  */
+/*2025-05-26   SSA01    1.1   UWP-3982- Added PalletType                */
 /************************************************************************/                                                                                  
 CREATE OR ALTER PROC [WM].[lsp_TRF_PopulateSN_Wrapper]                                                                                                                     
    @c_TransferKey          NVARCHAR(10)         
@@ -109,6 +110,8 @@ BEGIN
          ,  @c_Refkey3                    NVARCHAR(20)   = ''
          ,  @c_WriteType                  NVARCHAR(50)   = ''
          ,  @n_LogWarningNo               INT            = 0
+         ,  @c_FromPalletType             NVARCHAR(10)   = ''           --(SSA01)
+         ,  @c_ToPalletType               NVARCHAR(10)   = ''           --(SSA01)
          
          ,  @CUR_LLI                      CURSOR
          ,  @CUR_ERRLIST                  CURSOR   
@@ -244,6 +247,7 @@ BEGIN
             ,l.Lottable14
             ,l.Lottable15
             ,sn.SerialNo
+            ,ltlci.PalletType                     --(SSA01)
       FROM #tSN AS ts 
       JOIN dbo.SerialNo AS sn (NOLOCK) ON sn.SerialNoKey = ts.SerialNoKey
       JOIN dbo.LOTxLOCxID AS ltlci (NOLOCK) ON  ltlci.Storerkey = sn.Storerkey
@@ -283,7 +287,8 @@ BEGIN
                                     ,@dt_FromLottable13  
                                     ,@dt_FromLottable14  
                                     ,@dt_FromLottable15
-                                    ,@c_FromSerialNo  
+                                    ,@c_FromSerialNo
+                                    ,@c_FromPallettype                  --(SSA01)
 
       WHILE @@FETCH_STATUS <> -1 AND @n_Continue = 1
       BEGIN
@@ -310,6 +315,7 @@ BEGIN
          SET @dt_ToLottable14 = @dt_FromLottable14
          SET @dt_ToLottable15 = @dt_FromLottable15
          SET @c_ToSerialNo    = @c_FromSerialNo
+         SET @c_ToPallettype = @c_FromPallettype
          
          IF @c_ChannelInventoryMgmt_From = '1'
          BEGIN
@@ -385,6 +391,8 @@ BEGIN
                ,  ToChannel   
                ,  FromSerialNo
                ,  ToSerialNo
+               ,  FromPalletType
+               ,  ToPalletType
                )
          VALUES(  @c_TransferKey
                ,  @c_TransferLineNumber
@@ -438,6 +446,8 @@ BEGIN
                ,  @c_Channel_To  
                ,  @c_FromSerialNo
                ,  @c_ToSerialNo
+               ,  @c_FromPalletType                  --(SSA01)
+               ,  @c_ToPalletType                    --(SSA01)
                )
  
          IF @@ERROR <> 0
@@ -477,7 +487,8 @@ BEGIN
                                        ,@dt_FromLottable13  
                                        ,@dt_FromLottable14  
                                        ,@dt_FromLottable15
-                                       ,@c_FromSerialNo  
+                                       ,@c_FromSerialNo
+                                       ,@c_FromPallettype
       END
       CLOSE @CUR_LLI
       DEALLOCATE @CUR_LLI

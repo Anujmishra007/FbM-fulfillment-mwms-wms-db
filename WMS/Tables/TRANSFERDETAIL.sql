@@ -76,7 +76,9 @@ CREATE TABLE [dbo].[TRANSFERDETAIL]
 [FromChannel_ID] [bigint] NULL CONSTRAINT [DF_TRANSFERDETAIL_FromChannel_ID] DEFAULT ((0)),
 [ToChannel_ID] [bigint] NULL CONSTRAINT [DF_TRANSFERDETAIL_ToChannel_ID] DEFAULT ((0)),
 [FromSerialNo] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_TRANSFERDETAIL_FromSerialNo] DEFAULT (''),
-[ToSerialNo] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_TRANSFERDETAIL_ToSerialNo] DEFAULT ('')
+[ToSerialNo] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_TRANSFERDETAIL_ToSerialNo] DEFAULT (''),
+[FromPalletType] [nvarchar] (10) NOT NULL CONSTRAINT [DF_TRANSFERDETAIL_FromPalletType] DEFAULT (''),
+[ToPalletType] [nvarchar] (10) NOT NULL CONSTRAINT [DF_TRANSFERDETAIL_ToPalletType] DEFAULT ('')
 ) ON [PRIMARY]
 
 GRANT SELECT ON  [dbo].[TRANSFERDETAIL] TO [JReportRole]
@@ -238,23 +240,49 @@ EXEC sp_addextendedproperty N'MS_Description', 'TFDL_Userdefine10', 'SCHEMA', N'
 EXEC sp_addextendedproperty N'MS_Description', N'FromSerialNo', 'SCHEMA', N'dbo', 'TABLE', N'TRANSFERDETAIL', 'COLUMN', N'FromSerialNo'
 
 EXEC sp_addextendedproperty N'MS_Description', N'ToSerialNo', 'SCHEMA', N'dbo', 'TABLE', N'TRANSFERDETAIL', 'COLUMN', N'ToSerialNo'
+
+EXEC sp_addextendedproperty N'MS_Description', N'FromPalletType' , 'SCHEMA', N'dbo', 'TABLE', N'TRANSFERDETAIL', 'COLUMN',N'FromPalletType'
+
+EXEC sp_addextendedproperty N'MS_Description', N'ToPalletType' , 'SCHEMA', N'dbo', 'TABLE', N'TRANSFERDETAIL', 'COLUMN',N'ToPalletType'
+
 END
 ELSE
 BEGIN
- 		IF NOT EXISTS (SELECT 1
+IF NOT EXISTS (SELECT 1
  		               FROM sys.columns
  		               WHERE Name = 'FromSerialNo' AND Object_ID = Object_ID('TRANSFERDETAIL'))
 BEGIN
 ALTER TABLE TRANSFERDETAIL ADD FromSerialNo NVARCHAR(30) NOT NULL CONSTRAINT [DF_TRANSFERDETAIL_FromSerialNo]  DEFAULT (' ');
 EXEC sp_addextendedproperty N'MS_Description', N'FromSerialNo', 'SCHEMA', N'dbo', 'TABLE', N'TRANSFERDETAIL', 'COLUMN', N'FromSerialNo'
 END
-END
-BEGIN
- 		IF NOT EXISTS (SELECT 1
+
+IF NOT EXISTS (SELECT 1
  		               FROM sys.columns
  		               WHERE Name = 'ToSerialNo' AND Object_ID = Object_ID('TRANSFERDETAIL'))
 BEGIN
 ALTER TABLE TRANSFERDETAIL ADD ToSerialNo NVARCHAR(30) NOT NULL CONSTRAINT [DF_TRANSFERDETAIL_ToSerialNo]  DEFAULT (' ');
 EXEC sp_addextendedproperty N'MS_Description', N'ToSerialNo', 'SCHEMA', N'dbo', 'TABLE', N'TRANSFERDETAIL', 'COLUMN', N'ToSerialNo'
 END
+
+IF NOT EXISTS (SELECT *
+                       FROM sys.columns
+                       WHERE Name = 'FromPalletType'
+                         AND Object_ID = Object_ID('TRANSFERDETAIL'))
+            BEGIN
+                ALTER TABLE TRANSFERDETAIL
+                    ADD FromPalletType NVARCHAR(10) NOT NULL CONSTRAINT [DF_TRANSFERDETAIL_FromPalletType] DEFAULT ('');
+                EXEC sp_addextendedproperty N'MS_Description', N'FromPalletType', 'SCHEMA', N'dbo', 'TABLE',
+                     N'TRANSFERDETAIL', 'COLUMN', N'FromPalletType'
+            END
+
+IF NOT EXISTS (SELECT *
+                       FROM sys.columns
+                       WHERE Name = 'ToPalletType'
+                         AND Object_ID = Object_ID('TRANSFERDETAIL'))
+            BEGIN
+                ALTER TABLE TRANSFERDETAIL
+                    ADD ToPalletType NVARCHAR(10) NOT NULL CONSTRAINT [DF_TRANSFERDETAIL_ToPalletType] DEFAULT ('');
+                EXEC sp_addextendedproperty N'MS_Description', N'ToPalletType', 'SCHEMA', N'dbo', 'TABLE',
+                     N'TRANSFERDETAIL', 'COLUMN', N'ToPalletType'
+            END
 END
