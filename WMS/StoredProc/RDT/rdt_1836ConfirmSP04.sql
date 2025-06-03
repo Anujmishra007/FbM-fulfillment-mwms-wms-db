@@ -10,6 +10,8 @@
 /* Date         Author    Ver.    Purposes                                  */  
 /* 2024-12-04   YYS027    1.0.0   FCR-1489 Created,Configkey=ConfirmSP      */  
 /* 2025-05-24   NickT     1.1.0   UWP-34990 PickDetail.Loc is not updated   */
+/* 2025-06-03   NickT     1.2.0   UWP-34990 UWP-35377 Exception happens when*/
+/*                                update PickDetail.Loc                     */
 /****************************************************************************/  
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_1836ConfirmSP04]  
@@ -134,21 +136,6 @@ BEGIN
                      LEFT JOIN dbo.LotxLocxID inv WITH (NOLOCK) ON inv.Lot=pd.Lot AND inv.ID=pd.ID AND  inv.Loc=@cFinalLOC
                   WHERE td.StorerKey=@cStorerKey AND td.RefTaskKey=@cRefTaskKey AND td.TaskType='ASTCPK' AND inv.Loc IS NULL
 
-
-               --Object 2: Update the pickdetail.Loc with the new ßoverridden location where Taskdetail.PickDetailKey for ASTCPK task will hold Pickdetail.PickDetailKey.
-               UPDATE dbo.pickdetail WITH (ROWLOCK) 
-               SET Loc = @cFinalLOC 
-               FROM dbo.pickdetail pd WITH (ROWLOCK) 
-               INNER JOIN dbo.TaskDetail td WITH (ROWLOCK) 
-                  ON pd.TaskDetailKey = td.RefTaskKey
-                  AND PD.StorerKey = TD.StorerKey
-                  AND PD.CaseID = TD.CaseID
-                  AND PD.Sku = TD.Sku
-                  AND PD.Lot = TD.Lot
-                  AND PD.Qty = TD.Qty
-               WHERE td.StorerKey = @cStorerKey 
-                  AND td.RefTaskKey = @cRefTaskKey 
-                  AND td.TaskType='ASTCPK'
                   
                --object 2: Update the Taskdetail.FromLoc for the ASTCPK task and TaskDetail.ToLoc for the ASTRPT task.
                UPDATE dbo.TaskDetail WITH (ROWLOCK) SET FromLoc = @cFinalLOC, LogicalFromLoc =@cFinalLOC  WHERE StorerKey=@cStorerKey AND  RefTaskKey=@cRefTaskKey AND TaskType = 'ASTCPK'
@@ -241,6 +228,21 @@ BEGIN
                ,@cTaskDetailKey   = @cpTaskDetailKey
             IF @nErrNo <> 0
                GOTO RollbackTran
+
+            --Update the pickdetail.Loc with the new overridden location where Taskdetail.PickDetailKey for ASTCPK task will hold Pickdetail.PickDetailKey.
+            UPDATE dbo.pickdetail WITH (ROWLOCK) 
+            SET Loc = @cFinalLOC 
+            FROM dbo.pickdetail pd WITH (ROWLOCK) 
+            INNER JOIN dbo.TaskDetail td WITH (ROWLOCK) 
+               ON pd.TaskDetailKey = td.RefTaskKey
+               AND PD.StorerKey = TD.StorerKey
+               AND PD.CaseID = TD.CaseID
+               AND PD.Sku = TD.Sku
+               AND PD.Lot = TD.Lot
+               AND PD.Qty = TD.Qty
+            WHERE td.StorerKey = @cStorerKey 
+               AND td.RefTaskKey = @cRefTaskKey 
+               AND td.TaskType = 'ASTCPK'
             
             -- Update task
             UPDATE dbo.TaskDetail SET
