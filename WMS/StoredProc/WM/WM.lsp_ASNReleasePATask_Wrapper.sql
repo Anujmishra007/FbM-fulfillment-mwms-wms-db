@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_ASNReleasePATask_Wrapper]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [WM].[lsp_ASNReleasePATask_Wrapper]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -19,9 +14,7 @@ GO
 /*                                                                      */  
 /* Called By: ASN RCM Release Putaway Tasks                             */  
 /*                                                                      */  
-/* PVCS Version: 1.1                                                    */  
-/*                                                                      */  
-/* Version: 5.4                                                         */  
+/* Version: 1.3                                                         */  
 /*                                                                      */  
 /* Data Modifications:                                                  */  
 /*                                                                      */  
@@ -29,8 +22,10 @@ GO
 /* Date         Author   Ver  Purposes                                  */  
 /* 28-Dec-2020 SWT01    1.0   Adding Begin Try/Catch                    */
 /* 15-JAN-2021 Wan01    1.1   Execute Login if @c_UserName<>SUSER_SNAME()*/
+/* 03-JUN-2025 Wan02    1.3   UWP-32707 - FCR-3957 - JCB Putaway Using  */
+/*                            TM SCE. Handle Sub SP Uncommit Transaction*/
 /************************************************************************/ 
-CREATE PROCEDURE [WM].[lsp_ASNReleasePATask_Wrapper]
+CREATE OR ALTER PROCEDURE [WM].[lsp_ASNReleasePATask_Wrapper]
    @c_ReceiptKey NVARCHAR(10),    
    @b_Success    INT   OUTPUT,
    @n_Err        INT   OUTPUT, 
@@ -72,7 +67,13 @@ BEGIN
       SET @c_ErrMsg = 'ASN Release Putaway Task Failed. (lsp_ASNReleasePATask_Wrapper) ( SQLSvr MESSAGE=' + ERROR_MESSAGE() + ' ) '    --(Wan01)  
       GOTO EXIT_SP  
    END CATCH -- (SWT01) - End Big Outer Begin try.. end Try Begin Catch.. End Catch 
-   EXIT_SP:       
+   EXIT_SP:
+
+   IF (XACT_STATE()) = -1                                                           --(Wan02) - START  
+   BEGIN
+      ROLLBACK TRAN
+   END                                                                              --(Wan02) - END  
+
    REVERT  
 END
 GO
