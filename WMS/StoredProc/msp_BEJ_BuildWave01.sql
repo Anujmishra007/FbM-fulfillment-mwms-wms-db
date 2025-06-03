@@ -315,13 +315,12 @@ BEGIN
 
       SELECT @c_Priority = dbO.fnc_GetParamValueFromString ('@c_Priority',@c_OtherConfig, @c_Priority)
 
-      IF (@c_Priority <> 1) AND @n_Continue = 1
+      IF (@c_Priority <> 1 AND 1 = 2 ) AND @n_Continue = 1
       BEGIN
          WHILE @n_Continue = 1
          BEGIN
             SELECT TOP 1
                     @c_Lottable03 = T.Lottable03
-                  , @c_C_Zip      = T.C_Zip
                   , @c_Type       = T.[Type]
                   , @d_DeliveryDate = T.DeliveryDate
                   , @c_OrderGroup   = T.OrderGroup
@@ -384,26 +383,28 @@ BEGIN
             SET @c_WaveKey = ''
             SELECT TOP 1 @c_WaveKey = WD.WaveKey
             FROM WaveDetail WD
-            JOIN Orders O ON WD.OrderKey = O.OrderKey
-            JOIN OrderDetail OD ON O.OrderKey = OD.OrderKey
+            JOIN Orders O (NOLOCK) ON WD.OrderKey = O.OrderKey
+            JOIN OrderDetail OD (NOLOCK) ON O.OrderKey = OD.OrderKey
+            LEFT JOIN LoadPlanDetail LPD (NOLOCK) ON WD.OrderKey = LPD.OrderKey
             WHERE O.Storerkey = @c_StorerKey
             AND O.Facility = @c_Facility
-            AND O.[Status] = '2'
             AND OD.Lottable03 = @c_Lottable03
             AND O.C_Company = @c_C_Company
             AND O.Type = @c_Type
             AND O.OrderGroup = @c_OrderGroup
             AND CAST(O.DeliveryDate AS DATE) = CAST(@d_DeliveryDate AS DATE)
             AND ISNULL(O.ECOM_Platform, '') <> ''
+            AND LPD.LoadKey IS NULL
             GROUP BY WD.WaveKey
-            HAVING COUNT(1) = SUM(CASE WHEN O.[Status] = '2'
-                                       AND OD.Lottable03 = @c_Lottable03
+            HAVING COUNT(1) = SUM(CASE WHEN
+                                       OD.Lottable03 = @c_Lottable03
                                        AND O.C_Company = @c_C_Company
                                        AND O.Type = @c_Type
                                        AND O.OrderGroup = @c_OrderGroup
                                        AND CAST(O.DeliveryDate AS DATE)
                                          = CAST(@d_DeliveryDate AS DATE)
                                        AND ISNULL(O.ECOM_Platform, '') <> ''
+                                       AND LPD.LoadKey IS NULL
                                        THEN 1 ELSE 0 END)
             AND COUNT(1) <= @n_MaxOrdPerBld
             ORDER BY WD.WaveKey;
@@ -416,12 +417,21 @@ BEGIN
                JOIN WAVEDETAIL WD WITH (NOLOCK) ON WD.Orderkey = T.Orderkey
             END
 
+            IF EXISTS(SELECT 1
+                        FROM WAVEDETAIL WD (NOLOCK)
+                        JOIN ORDERS O (NOLOCK) ON O.OrderKey = WD.OrderKey
+                        WHERE O.UserDefine09 = @c_WaveKey
+                        HAVING (COUNT(1) >= @n_MaxOrdPerBld) AND @n_debug = 1)
+            BEGIN
+               PRINT 'Condition is true Load can be generated for the Wave : ' +@c_WaveKey;
+            END ELSE PRINT 'Condition false unable to generate load for the wave : ' + @c_WaveKey
+
             IF @n_Continue = 1 AND
                EXISTS ( SELECT 1
                         FROM WAVEDETAIL WD (NOLOCK)
                         JOIN ORDERS O (NOLOCK) ON O.OrderKey = WD.OrderKey
                         WHERE O.UserDefine09 = @c_WaveKey
-                        HAVING (COUNT(1) >= @n_MaxOrdPerBld)
+                        HAVING (COUNT(1) <= @n_MaxOrdPerBld)
                       )
             BEGIN
                EXEC [WM].[lsp_WaveGenLoadPlan]
