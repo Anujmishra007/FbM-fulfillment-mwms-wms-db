@@ -8,8 +8,9 @@ GO
 /* Copyright      : Maersk WMS                                          */
 /* Customer       : REDBULL                                             */
 /*                                                                      */
-/* Date       Rev  Author      Purposes                                 */
-/* 2025-05-06 1.0  NLT013      UWP-33515 Created                        */
+/* Date       Rev    Author      Purposes                               */
+/* 2025-05-06 1.0    NLT013      UWP-33515 Created                      */
+/* 2025-06-03 1.1.0  NLT013      UWP-33515 Rollback to first version    */
 /************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_838ExtVal31 (
@@ -61,13 +62,6 @@ BEGIN
       BEGIN
          IF @nInputKey = 1 -- ENTER
          BEGIN
-            IF NOT EXISTS (SELECT 1 FROM dbo.SerialNo WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND SerialNo = @cSerialNo AND Status = '0')
-            BEGIN
-               SET @nErrNo = 237701    --Invalid SerialNo
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') 
-               GOTO Quit
-            END
-
             SELECT @cPickSlipNoForSerialNo = PickSlipNo
             FROM dbo.PackSerialNo WITH (NOLOCK)
             WHERE StorerKey = @cStorerKey
