@@ -20,6 +20,9 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 2024-10-08  Wan      1.0   Created.                                  */
+/* 2025-05-09  Wan01    1.1   FCR-3958 - JCB Picking Task               */
+/*                            Fix Error add default debug parameter at  */
+/*                            Sub SP                                    */
 /************************************************************************/
 CREATE OR ALTER PROC msp_BEJ
    @c_jobname   NVARCHAR(30) = 'BEJ-STD-01'
@@ -115,40 +118,50 @@ BEGIN
       END
 
       BEGIN TRY
-        SET @c_SQL = 'EXEC '  + @c_StoredProc
+        --SET @c_SQL = 'EXEC '  + @c_StoredProc                                     --(Wan01) - START
 
-         SET @CUR_PARMS = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR    
-         SELECT PARAMETER_NAME   
-         FROM [INFORMATION_SCHEMA].[PARAMETERS]     
-         WHERE SPECIFIC_NAME = @c_StoredProc     
-         ORDER BY ORDINAL_POSITION    
+        -- SET @CUR_PARMS = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR    
+        -- SELECT PARAMETER_NAME   
+        -- FROM [INFORMATION_SCHEMA].[PARAMETERS]     
+        -- WHERE SPECIFIC_NAME = @c_StoredProc     
+        -- ORDER BY ORDINAL_POSITION    
     
-         OPEN @CUR_PARMS    
-         FETCH NEXT FROM @CUR_PARMS INTO @c_PName 
-         WHILE @@FETCH_STATUS <> -1    
-         BEGIN 
-            IF @c_SQL <> 'EXEC ' + @c_StoredProc 
-            BEGIN
-               SET @c_SQL = @c_SQL + ','
-            END
+        -- OPEN @CUR_PARMS    
+        -- FETCH NEXT FROM @CUR_PARMS INTO @c_PName 
+        -- WHILE @@FETCH_STATUS <> -1    
+        -- BEGIN 
+        --    IF @c_SQL <> 'EXEC ' + @c_StoredProc 
+        --    BEGIN
+        --       SET @c_SQL = @c_SQL + ','
+        --    END
 
+        --    SET @c_SQL = @c_SQL + ' '      
+        --               + CASE WHEN @c_PName IN ('@c_Facility', '@c_StorerKey', '@c_OtherConfig')   
+        --                      THEN @c_PName + '=' + @c_PName    
+        --                      END
+        --    FETCH NEXT FROM @CUR_PARMS INTO @c_PName                              
+        -- END
+        -- CLOSE @CUR_PARMS
+        -- DEALLOCATE @CUR_PARMS
 
-            SET @c_SQL = @c_SQL + ' '      
-                       + CASE WHEN @c_PName IN ('@c_Facility', '@c_StorerKey', '@c_OtherConfig')   
-                              THEN @c_PName + '=' + @c_PName    
-                              END
-            FETCH NEXT FROM @CUR_PARMS INTO @c_PName                              
-         END
-         CLOSE @CUR_PARMS
-         DEALLOCATE @CUR_PARMS
+         SELECT @c_SQL = STRING_AGG (p.PARAMETER_NAME  + '=' + p.PARAMETER_NAME,',')
+         WITHIN GROUP (ORDER BY p.ORDINAL_POSITION ASC)
+         FROM [INFORMATION_SCHEMA].[PARAMETERS] p  
+         WHERE p.SPECIFIC_NAME = @c_StoredProc  
+         AND p.PARAMETER_NAME IN ('@c_Facility', '@c_StorerKey', '@c_OtherConfig')
 
-         EXEC sp_ExecuteSQL @c_SQL
-                           ,N'@c_Storerkey   NVARCHAR(15)
-                             ,@c_Facility    NVARCHAR(30)
-                             ,@c_OtherConfig NVARCHAR(4000)'
-                           ,@c_Storerkey
-                           ,@c_Facility
-                           ,@c_OtherConfig    
+         IF @c_SQL IS NOT NULL
+         BEGIN
+            SET @c_SQL = 'EXEC '  + @c_StoredProc + ' ' + @c_SQL
+
+            EXEC sp_ExecuteSQL @c_SQL
+                              ,N'@c_Storerkey   NVARCHAR(15)
+                              ,@c_Facility    NVARCHAR(30)
+                              ,@c_OtherConfig NVARCHAR(4000)'
+                              ,@c_Storerkey
+                              ,@c_Facility
+                              ,@c_OtherConfig  
+         END                                                                        --(Wan01) - END                
       END TRY
       BEGIN CATCH
          SET @n_Continue = 3
