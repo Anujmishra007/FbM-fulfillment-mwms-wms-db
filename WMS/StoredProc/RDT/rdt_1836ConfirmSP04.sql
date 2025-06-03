@@ -121,24 +121,36 @@ BEGIN
                   GOTO RollbackTran
                END
                --to void issue of FK 
-               INSERT INTO dbo.LotxLocxID(Lot,Loc,Id,StorerKey,Sku,Qty,PendingMoveIN)
-                  SELECT td.lot,@cFinalLOC,td.FromID,td.StorerKey,td.Sku,0,0
-                  FROM
-                     dbo.TaskDetail td WITH (NOLOCK) 
-                     LEFT JOIN dbo.LotxLocxID inv WITH (NOLOCK) ON inv.Lot=td.Lot AND inv.ID=td.FromID AND  inv.Loc=@cFinalLOC
-                  WHERE td.StorerKey=@cStorerKey AND td.RefTaskKey=@cRefTaskKey AND td.TaskType='ASTCPK' AND inv.Loc IS NULL
+               INSERT INTO dbo.LotxLocxID(Lot, Loc, Id, StorerKey, Sku, Qty, PendingMoveIN, AddDate, AddWho)
+               SELECT td.lot, @cFinalLOC, td.FromID, td.StorerKey, td.Sku, 0, 0, GetDate(), SUSER_NAME()
+               FROM dbo.TaskDetail td WITH (NOLOCK) 
+               LEFT JOIN dbo.LotxLocxID inv WITH (NOLOCK) ON inv.Lot = td.Lot AND inv.ID = td.FromID AND inv.Loc = @cFinalLOC
+               WHERE td.StorerKey = @cStorerKey 
+                  AND td.RefTaskKey = @cRefTaskKey 
+                  AND td.TaskType = 'ASTCPK' 
+                  AND inv.Loc IS NULL
 
-               INSERT INTO dbo.LotxLocxID(Lot,Loc,Id,StorerKey,Sku,Qty,PendingMoveIN)
-                  SELECT pd.lot,@cFinalLOC,pd.ID,td.StorerKey,pd.Sku,0,0
-                  FROM
-                     dbo.pickdetail pd WITH (NOLOCK)
-                     INNER JOIN dbo.TaskDetail td WITH (NOLOCK) ON pd.PickDetailKey=td.PickDetailKey
-                     LEFT JOIN dbo.LotxLocxID inv WITH (NOLOCK) ON inv.Lot=pd.Lot AND inv.ID=pd.ID AND  inv.Loc=@cFinalLOC
-                  WHERE td.StorerKey=@cStorerKey AND td.RefTaskKey=@cRefTaskKey AND td.TaskType='ASTCPK' AND inv.Loc IS NULL
+               INSERT INTO dbo.LotxLocxID(Lot, Loc, Id, StorerKey, Sku, Qty, PendingMoveIN, AddDate, AddWho)
+               SELECT pd.lot, @cFinalLOC, pd.ID, td.StorerKey, pd.Sku, 0, 0, GetDate(), SUSER_NAME()
+               FROM dbo.pickdetail pd WITH (NOLOCK)
+               INNER JOIN dbo.TaskDetail td WITH (NOLOCK) ON pd.PickDetailKey=td.PickDetailKey
+               LEFT JOIN dbo.LotxLocxID inv WITH (NOLOCK) ON inv.Lot = pd.Lot AND inv.ID = pd.ID AND  inv.Loc = @cFinalLOC
+               WHERE td.StorerKey = @cStorerKey 
+                  AND td.RefTaskKey = @cRefTaskKey 
+                  AND td.TaskType = 'ASTCPK' 
+                  AND inv.Loc IS NULL
 
                   
                --object 2: Update the Taskdetail.FromLoc for the ASTCPK task and TaskDetail.ToLoc for the ASTRPT task.
-               UPDATE dbo.TaskDetail WITH (ROWLOCK) SET FromLoc = @cFinalLOC, LogicalFromLoc =@cFinalLOC  WHERE StorerKey=@cStorerKey AND  RefTaskKey=@cRefTaskKey AND TaskType = 'ASTCPK'
+               UPDATE dbo.TaskDetail WITH (ROWLOCK) 
+               SET 
+                  FromLoc = @cFinalLOC, 
+                  LogicalFromLoc =@cFinalLOC,
+                  EditWho = SUSER_SNAME(),
+                  EditDate = GETDATE()
+               WHERE StorerKey=@cStorerKey 
+                  AND RefTaskKey=@cRefTaskKey 
+                  AND TaskType = 'ASTCPK'
 
 --due confirmation will be called immediately ('Create a record for (scanned loc)  in lotxloxlocid' is also removed in technical solution section of confluence), 
 --      so lock-operation can be ignored. 
@@ -150,7 +162,11 @@ BEGIN
                -- for update dbo.TaskDetail, database will updated the LotxLocxID.PendingMoveIn, but the pre-condition is to exist the record in LotxLocxID
 ----or use following block to update  LotxLocxID.PendingMoveIn 
                --Change location, and No PendingMoveIn will be changed in to LotxLocxID via trigger
-               UPDATE dbo.TaskDetail WITH (ROWLOCK) SET ToLoc = @cFinalLOC, LogicalToLoc = @cFinalLOC WHERE TaskdetailKey = @cTaskdetailKey
+               UPDATE dbo.TaskDetail WITH (ROWLOCK) 
+               SET ToLoc = @cFinalLOC, LogicalToLoc = @cFinalLOC,
+                     EditWho = SUSER_SNAME(),
+                     EditDate = GETDATE()
+               WHERE TaskdetailKey = @cTaskdetailKey
                --Object 2 : Create a record for (scanned loc)  in lotxloxlocid.
                --EXEC rdt.rdt_Putaway_PendingMoveIn '', 'LOCK'  
                --   ,@cFromLOC      = @cFromLOC  
@@ -230,11 +246,15 @@ BEGIN
                GOTO RollbackTran
 
             --Update the pickdetail.Loc with the new overridden location where Taskdetail.PickDetailKey for ASTCPK task will hold Pickdetail.PickDetailKey.
-            UPDATE dbo.pickdetail WITH (ROWLOCK) 
-            SET Loc = @cFinalLOC 
-            FROM dbo.pickdetail pd WITH (ROWLOCK) 
-            INNER JOIN dbo.TaskDetail td WITH (ROWLOCK) 
-               ON pd.TaskDetailKey = td.RefTaskKey
+            UPDATE PD WITH (ROWLOCK) 
+            SET 
+               PD.Loc = @cFinalLOC,
+               PD.EditWho = SUSER_SNAME(),
+               PD.EditDate = GETDATE(),
+               PD.Trafficcop = NULL
+            FROM dbo.PickDetail PD WITH (ROWLOCK) 
+            INNER JOIN dbo.TaskDetail td WITH (NOLOCK) 
+               ON PD.TaskDetailKey = td.RefTaskKey
                AND PD.StorerKey = TD.StorerKey
                AND PD.CaseID = TD.CaseID
                AND PD.Sku = TD.Sku

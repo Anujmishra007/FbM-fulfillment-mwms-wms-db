@@ -110,7 +110,10 @@ BEGIN
                   -- V1.1.0 BEGIN
                   -- Update the PickDetail.TaskDetailKey for the ASTCPK, makes it match to the ASTCPK task
                   UPDATE PD
-                  SET PD.TaskDetailKey = TD.TaskDetailKey
+                  SET 
+                     PD.TaskDetailKey = TD.TaskDetailKey,
+                     PD.EditWho = SUSER_SNAME(),
+                     PD.EditDate = GETDATE()
                   FROM dbo.Pickdetail PD WITH (ROWLOCK) 
                   INNER JOIN dbo.TaskDetail TD WITH (ROWLOCK) 
                      ON PD.StorerKey = TD.StorerKey
@@ -121,7 +124,7 @@ BEGIN
                      AND PD.Qty = TD.Qty
                   WHERE TD.StorerKey = @cStorerKey 
                      AND TD.RefTaskKey = @cRefTaskKey 
-                     AND TD.TaskType ='ASTCPK'
+                     AND TD.TaskType = 'ASTCPK'
                      AND TD.[status] = '0' 
                   --V1.1.0 END
                END TRY
