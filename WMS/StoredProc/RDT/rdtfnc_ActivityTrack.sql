@@ -14,6 +14,7 @@ GO
 /* Date         Rev  Author     Purposes                                */
 /* 2022-03-25   1.0  yeekung    WMS-18920 Created                       */
 /* 2024-05-27   1.1  Cuize      FCR-242                                 */
+/* 2025-06-04   0.0  JACKC      !!!Cutover. Use V0 for development!!!   */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_ActivityTrack] (
