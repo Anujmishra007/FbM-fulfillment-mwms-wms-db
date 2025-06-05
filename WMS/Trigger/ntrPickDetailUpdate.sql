@@ -101,6 +101,8 @@ GO
 /*                            Status                                    */
 /* 20-Jan-2025  TLTIN03 4.1   Bug fix - aft ship no change avoid change */
 /* 17-Mar-2025  TLTIN04 4.1   Bug fix - avoid change stayus             */
+/* 04-Jun-2025  AYD01   4.2   UWP-32128: Allow RDT pick/move            */
+/*                            with MoveRefKey                           */
 /************************************************************************/
 
 CREATE OR ALTER TRIGGER [dbo].[ntrPickDetailUpdate]
@@ -693,6 +695,8 @@ BEGIN
                         WHEN d.Lot <> i.Lot AND i.[Status] = '5' AND sc.Authority ='1' THEN 1      --(Wan06) 
                         WHEN d.ID  <> i.ID  AND i.ID <> sn.ID AND i.[Status] = '5' AND             --(Wan06)    
                              sc.Authority ='1' THEN 1                                              --(Wan06) 
+                        WHEN d.ID <> i.ID  AND i.[Status] = '5'                                    --(AYD01)
+                             AND RTRIM(ISNULL(i.MoveRefKey, '')) <> '' THEN 1                      --(AYD01)
                         ELSE 0                                                                     --(Wan06) 
                         END )                                                                      --(Wan06)
                FROM INSERTED i   
