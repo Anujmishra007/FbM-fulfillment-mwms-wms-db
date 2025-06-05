@@ -691,7 +691,8 @@ BEGIN
    --Allow to update if update from ntrpackserialnodelete trigger. direct update not allow if serialno is picked
   SET @n_Cnt = 0
   SELECT @n_Cnt = SUM(  CASE WHEN d.[Status] <> i.[Status] THEN 1                                  --(Wan06) 
-                        WHEN d.qty <> i.qty AND i.[Status] = '5' THEN 1                            --(Wan06) 
+                        WHEN d.qty <> i.qty AND i.[Status] = '5'                                   --(Wan06) 
+                             AND RTRIM(ISNULL(i.MoveRefKey, '')) = '' AND sc.Authority ='1' THEN 1 --(AYD01)
                         WHEN d.Lot <> i.Lot AND i.[Status] = '5' AND sc.Authority ='1' THEN 1      --(Wan06) 
                         WHEN d.ID  <> i.ID  AND i.ID <> sn.ID AND i.[Status] = '5' AND             --(Wan06)    
                              RTRIM(ISNULL(i.MoveRefKey, '')) = '' AND                              --(AYD01)
