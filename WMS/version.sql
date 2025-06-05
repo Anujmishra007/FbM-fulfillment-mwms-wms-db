@@ -1,3 +1,3 @@
-SELECT @@VERSION;
+SELECT 
 
--- test run 3
+-- test f run 1
