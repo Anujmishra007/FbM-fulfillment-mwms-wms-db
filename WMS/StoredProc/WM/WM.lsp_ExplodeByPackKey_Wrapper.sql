@@ -28,6 +28,7 @@ GO
 /* 21-May-2025 AYD01    1.3   UWP-30411: add new storerconfig           */
 /*                            ASNExplodeByPackkeySP and using Svalue    */
 /*                            to call sub-script and get a customized ID*/
+/* 05-Jun-2025 AYD02    1.4   Fix: Increase length of @c_ToID to 25     */
 /************************************************************************/
 CREATE OR ALTER PROCEDURE [WM].[lsp_ExplodeByPackKey_Wrapper]
     @c_ReceiptKey NVARCHAR(10) 
@@ -79,7 +80,7 @@ BEGIN
                ,@n_InsertQtyExpected          INT = 0 
                ,@c_GenID                      NVARCHAR(10) = ''
                ,@C_GEN_ID_DURING_EXPLODE_PACK NVARCHAR(10) = ''
-               ,@c_ToID                       NVARCHAR(10) = ''
+               ,@c_ToID                       NVARCHAR(25) = ''
                ,@cSQL                         NVARCHAR(MAX)       --AYD01
                ,@cSQLParam                    NVARCHAR(MAX)       --AYD01
                ,@c_GenIdSP                    NVARCHAR(30) = ''   --AYD01

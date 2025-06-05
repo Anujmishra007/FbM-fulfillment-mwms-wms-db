@@ -16,11 +16,12 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date         Author   Ver  Purposes                                  */
+/* 05-Jun-2025   AYD01    1.1  Fix: Increase length of @c_IDKey to 25   */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[mspRLWAVGenID01] (
    @c_StorerKey   NVARCHAR(15),
-   @c_IDKey       NVARCHAR(20)    OUTPUT,
+   @c_IDKey       NVARCHAR(25)    OUTPUT,    --AYD(01)
    @b_Success     INT = 1         OUTPUT,
    @n_ErrNo       INT             OUTPUT,
    @c_ErrMsg      NVARCHAR(250)   OUTPUT
