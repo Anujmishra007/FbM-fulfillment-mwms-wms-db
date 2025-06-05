@@ -12,6 +12,7 @@ GO
 /*                                                                            */
 /* Date       Ver.   Author   Purposes                                        */
 /* 2025-03-25 1.0.0  JCH507   FCR-2728                                        */
+/* 2025-06-03 1.0.1  JCH507   FCR-2728 Miss kit.externstatus update           */
 /******************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_663ExtUpd01 (
@@ -55,8 +56,9 @@ BEGIN
    SET QUOTED_IDENTIFIER OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
-   DECLARE @bDebugFlag  BINARY = 0
-   DECLARE @dUSRDEF6    DATETIME
+   DECLARE @bDebugFlag     BINARY = 0
+   DECLARE @dUSRDEF6       DATETIME
+   DECLARE @cExternStatus  NVARCHAR( 30)
 
    IF @nFunc = 663
    BEGIN
@@ -64,9 +66,24 @@ BEGIN
       BEGIN
          IF @nInputKey = 1
          BEGIN
-            SELECT @dUSRDEF6 = USRDEF6
+            SELECT @dUSRDEF6 = USRDEF6,
+                   @cExternStatus = ExternStatus
             FROM dbo.KIT (NOLOCK)
             WHERE KITKey = @cKitKey
+
+            IF ISNULL(@cExternStatus,'') <> '3'
+            BEGIN
+               BEGIN TRY
+                  UPDATE dbo.KIT WITH (ROWLOCK)
+                  SET ExternStatus = '3'
+                  WHERE KITKEY = @cKitKey
+               END TRY
+               BEGIN CATCH
+                  SET @nErrNo = 235600
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Update Kit failed'
+                  GOTO Quit
+               END CATCH
+            END
 
             IF ISNULL(@dUSRDEF6, '1900-01-01 00:00:00.000' ) = '1900-01-01 00:00:00.000'
             BEGIN
@@ -76,7 +93,7 @@ BEGIN
                   WHERE KITKEY = @cKitKey
                END TRY
                BEGIN CATCH
-                  SET @nErrNo = 235601
+                  SET @nErrNo = 235603
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Update Kit failed'
                   GOTO Quit
                END CATCH
