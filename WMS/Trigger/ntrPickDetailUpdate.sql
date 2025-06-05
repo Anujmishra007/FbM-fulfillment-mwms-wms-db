@@ -696,7 +696,7 @@ BEGIN
                         WHEN d.ID  <> i.ID  AND i.ID <> sn.ID AND i.[Status] = '5' AND             --(Wan06)    
                              sc.Authority ='1' THEN 1                                              --(Wan06) 
                         WHEN d.ID <> i.ID  AND i.[Status] = '5'                                    --(AYD01)
-                             AND RTRIM(ISNULL(i.MoveRefKey, '')) <> '' THEN 1                      --(AYD01)
+                             AND RTRIM(ISNULL(i.MoveRefKey, '')) = '' THEN 1                       --(AYD01)
                         ELSE 0                                                                     --(Wan06) 
                         END )                                                                      --(Wan06)
                FROM INSERTED i   
