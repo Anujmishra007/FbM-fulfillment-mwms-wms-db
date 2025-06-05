@@ -101,6 +101,8 @@ GO
 /*                            Status                                    */
 /* 20-Jan-2025  TLTIN03 4.1   Bug fix - aft ship no change avoid change */
 /* 17-Mar-2025  TLTIN04 4.1   Bug fix - avoid change stayus             */
+/* 04-Jun-2025  AYD01   4.2   UWP-32128: Allow RDT pick/move            */
+/*                            with MoveRefKey                           */
 /************************************************************************/
 
 CREATE OR ALTER TRIGGER [dbo].[ntrPickDetailUpdate]
@@ -689,10 +691,14 @@ BEGIN
    --Allow to update if update from ntrpackserialnodelete trigger. direct update not allow if serialno is picked
   SET @n_Cnt = 0
   SELECT @n_Cnt = SUM(  CASE WHEN d.[Status] <> i.[Status] THEN 1                                  --(Wan06) 
-                        WHEN d.qty <> i.qty AND i.[Status] = '5' THEN 1                            --(Wan06) 
+                        WHEN d.qty <> i.qty AND i.[Status] = '5'                                   --(Wan06) 
+                             AND RTRIM(ISNULL(i.MoveRefKey, '')) = '' AND sc.Authority ='1' THEN 1 --(AYD01)
                         WHEN d.Lot <> i.Lot AND i.[Status] = '5' AND sc.Authority ='1' THEN 1      --(Wan06) 
                         WHEN d.ID  <> i.ID  AND i.ID <> sn.ID AND i.[Status] = '5' AND             --(Wan06)    
+                             RTRIM(ISNULL(i.MoveRefKey, '')) = '' AND                              --(AYD01)
                              sc.Authority ='1' THEN 1                                              --(Wan06) 
+                        WHEN d.ID <> i.ID  AND i.[Status] = '5' AND sc.Authority ='1'              --(AYD01)
+                             AND RTRIM(ISNULL(i.MoveRefKey, '')) = '' THEN 1                       --(AYD01)
                         ELSE 0                                                                     --(Wan06) 
                         END )                                                                      --(Wan06)
                FROM INSERTED i   
