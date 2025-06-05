@@ -13,6 +13,7 @@ GO
 /* 2020-06-24   YeeKung  1.0  Created                                         */
 /* 2022-11-10   yeekung  1.1  WMS-21053. Add dynamic screen(yeekung01)        */
 /* 2024-07-26   Jackc    1.2  UWP-21905 Encrypt password                      */
+/* 2025-05-29   JacKc    0.0  !!!Cutover. Use V0 Repository for development.  */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtHandleMsgQueue] (

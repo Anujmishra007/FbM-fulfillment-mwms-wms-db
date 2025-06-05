@@ -5,6 +5,7 @@ on:
     types:
       - closed
 
+      
 jobs:
   deploy-cdt:
     if: github.event.pull_request.merged == true && github.base_ref == 'main'
@@ -132,3 +133,4 @@ jobs:
       - name: Print Grafana URL
         if: env.run_sql == 'true'
         run: echo "::notice title=Grafana Link::https://grafana.maersk.io/goto/F49pfjONR?orgId=1"
+

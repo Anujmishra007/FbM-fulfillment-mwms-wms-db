@@ -11,7 +11,8 @@ GO
 /* 2020-04-20   1.0  Chermaine  Created                                         */
 /* 2021-08-28   1.1  Chermaine  TPS-575 exclude Ecom sostatus by codelkup (cc01)*/
 /* 2021-09-05   1.2  Chermaine  TPS-11 ErrMsg add to rdtmsg (cc02)              */
-/* 2022-06-24   1.3  YeeKung    TPS-646 remove status (yeekung01)              */
+/* 2022-06-24   1.3  YeeKung    TPS-646 remove status (yeekung01)               */
+/* 2025-02-14   1.4  yeekung    TPS-995 Change Error Message (yeekung03)        */
 /********************************************************************************/
 
 CREATE OR ALTER PROC [API].[isp_GetEcomPicklsipNo] (
@@ -95,8 +96,8 @@ END
 IF NOT EXISTS (SELECT TOP 1 1 FROM pickDetail WITH (NOLOCK) WHERE storerKey = @cStorerKey AND dropID = @cDropID)
 BEGIN
 	SET @b_Success = 0
-   SET @n_Err = 175675
-   SET @c_ErrMsg = rdt.rdtgetmessage( @n_Err, @cLangCode, 'DSP')--'ToteID is from a different Storrer. Please use valid ToteID.'
+   SET @n_Err = 1001106
+   SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'ToteID is from a different Storrer. Please use valid ToteID.: isp_GetEcomPicklsipNo'
    GOTO EXIT_SP
 END
 
@@ -302,8 +303,8 @@ END
 IF (@EcomSingle = 0) AND ((SELECT COUNT(DISTINCT pickslipNo) FROM @pickSKUDetail) >1) AND @cSelectAll = '0'
 BEGIN
 	SET @b_Success = 0
-   SET @n_Err = 175676
-   SET @c_ErrMsg = rdt.rdtgetmessage( @n_Err, @cLangCode, 'DSP')--'Scanned ToteID is not valid to be reuse. Function : isp_GetEcomPicklsipNo'
+   SET @n_Err = 1001052
+   SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Scanned ToteID is not valid to be reuse. Function : isp_GetEcomPicklsipNo'
    GOTO EXIT_SP
 END
 
@@ -312,8 +313,8 @@ BEGIN
 	IF NOT EXISTS (SELECT TOP 1 1 FROM @pickSKUDetail)
    BEGIN
 	   SET @b_Success = 0
-      SET @n_Err = 175677
-      SET @c_ErrMsg = rdt.rdtgetmessage( @n_Err, @cLangCode, 'DSP')--'Packing Document No has completed packing.Please enter valid Packing Document No. Function : isp_GetEcomPicklsipNo'
+      SET @n_Err = 1001053
+      SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Packing Document No has completed packing.Please enter valid Packing Document No. Function : isp_GetEcomPicklsipNo'
       GOTO EXIT_SP
    END
 END
@@ -324,8 +325,8 @@ BEGIN
    IF EXISTS (SELECT TOP 1 * FROM packHeader WITH (NOLOCK) WHERE pickslipNo = @cPickSlipNo AND STATUS = 9)
    BEGIN
    	SET @b_Success = 0
-      SET @n_Err = 175678
-      SET @c_ErrMsg = rdt.rdtgetmessage( @n_Err, @cLangCode, 'DSP')--'Packing Document No has completed packing.Please enter valid Packing Document No. Function : isp_GetEcomPicklsipNo'
+      SET @n_Err = 1001054
+      SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Packing Document No has completed packing.Please enter valid Packing Document No. Function : isp_GetEcomPicklsipNo'
       GOTO EXIT_SP
    END
 END

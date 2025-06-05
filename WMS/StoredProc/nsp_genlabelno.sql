@@ -1,27 +1,27 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[nsp_GenLabelNo]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [dbo].[nsp_GenLabelNo]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
-/************************************************************************/
-/* Copyright: IDS                                                       */
-/* Purpose: Generate Label No                                           */
-/*                                                                      */
-/* Called from Packing script                                           */
-/*                                                                      */
-/* Modifications log:                                                   */
-/*                                                                      */
-/* Date       Rev  Author     Purposes                                  */
-/* 12-08-2011 1.0  James      Add new config GenGenericUCCLabelNo to    */
-/*                            segregate TBL model and generic (james01) */
-/* 30-06-2015 1.1  NJOW01     340638-Fix incorrect carton# at PODUser   */
-/* 24-06-2018 1.2  NJOW02     WMS-4808 HKGBG bebe configure custom sp to*/
-/*                            generate label no                         */
-/************************************************************************/
-CREATE PROC [dbo].[nsp_GenLabelNo] (
+/**************************************************************************/
+/* Copyright: IDS                                                         */
+/* Purpose: Generate Label No                                             */
+/*                                                                        */
+/* Called from Packing script                                             */
+/*                                                                        */
+/* Modifications log:                                                     */
+/*                                                                        */
+/* Date       Rev  Author     Purposes                                    */
+/* 12-08-2011 1.0  James      Add new config GenGenericUCCLabelNo to      */
+/*                            segregate TBL model and generic (james01)   */
+/* 30-06-2015 1.1  NJOW01     340638-Fix incorrect carton# at PODUser     */
+/* 24-06-2018 1.2  NJOW02     WMS-4808 HKGBG bebe configure custom sp to  */
+/*                            generate label no                           */
+/* 04-06-2024 1.3  NJOW03     WMS-25578 When susr1 len is 7-9 adjust the  */
+/*                            running# len to for making the labelno      */
+/*                            len to 19 plus check digit become len 20    */
+/* 14-05-2025 1.4  Michael    FCR-2087 get @cPacktype from OPTION5(ML01)  */
+/**************************************************************************/
+CREATE OR ALTER PROC [dbo].[nsp_GenLabelNo] (
 	@c_orderkey	   NVARCHAR(10),
 	@c_storerkey   NVARCHAR(15),
 	@c_labelno	   NVARCHAR(20) OUTPUT,
@@ -53,7 +53,10 @@ BEGIN
 		@b_resultset		      int,
 		@n_batch		            int,
 		@c_SQL                NVARCHAR(2000), --NJOW02
-		@c_PickSlipNo         NVARCHAR(10) --NJOW02
+		@c_PickSlipNo         NVARCHAR(10), --NJOW02
+    @n_RunNoLen           INT = 9,  --NJOW03		
+    @c_SSCCDynSerialByCompPrefix NVARCHAR(10) = 'N',  --NJOW03
+    @c_Option5      NVARCHAR(1000) --NJOW03    
 		
    DECLARE
       @cIdentifier            NVARCHAR( 2),
@@ -129,41 +132,69 @@ BEGIN
 		IF (@n_continue = 1 OR @n_continue = 2) 
 		BEGIN	
 			IF  @c_authority = '1'
-			BEGIN
-         	EXECUTE nspGetRight null,	
-      	    @c_StorerKey, 		      -- Storerkey
-      	    '',				            -- Sku
-      	    'GenGenericUCCLabelNo', 	-- Configkey
-      	    @b_success		OUTPUT,
-      	    @c_authority	OUTPUT, 
-      	    @n_err		   OUTPUT,
-      		 @c_errmsg		OUTPUT
-      
-      		IF @b_success <> 1
-      		BEGIN
-      			SELECT @n_continue = 3, @c_errmsg = 'nsp_GenLabelNo' + dbo.fnc_RTrim(@c_errmsg)
-      		END
+			BEGIN         
+         EXECUTE nspGetRight null,	
+           @c_StorerKey, 		      -- Storerkey
+           '',				            -- Sku
+           'GenGenericUCCLabelNo', 	-- Configkey
+           @b_success		OUTPUT,
+           @c_authority	OUTPUT, 
+           @n_err		   OUTPUT,
+          @c_errmsg		OUTPUT
+         
+         IF @b_success <> 1
+         BEGIN
+         	  SELECT @n_continue = 3, @c_errmsg = 'nsp_GenLabelNo' + dbo.fnc_RTrim(@c_errmsg)
+         END
+         
+         IF (@n_continue = 1 OR @n_continue = 2) AND @c_authority = '1'
+         BEGIN
+	          --NJOW03 S
+            SELECT @c_Option5 = SC.Option5
+            FROM dbo.fnc_GetRight2('', @c_Storerkey,'','GenUCCLabelNoConfig') AS SC	   
+            
+            SELECT @c_SSCCDynSerialByCompPrefix = dbo.fnc_GetParamValueFromString ('@c_SSCCDynSerialByCompPrefix', @c_option5, @c_SSCCDynSerialByCompPrefix)
+            --NJOW03 E     
+         	
+            SET @cIdentifier = '00'
+            SET @cPacktype = '0'
+            SET @c_LabelNo = ''
 
-            IF (@n_continue = 1 OR @n_continue = 2) AND @c_authority = '1'
+            SELECT @cPacktype = dbo.fnc_GetParamValueFromString ('@cPacktype', @c_option5, @cPacktype)    --ML01
+            IF ISNULL(@cPacktype,'') NOT LIKE '[0-9]' SET @cPacktype = '0'                                --ML01
+
+            SELECT @cSUSR1 = ISNULL(SUSR1, '0')
+            FROM dbo.Storer WITH (NOLOCK)
+            WHERE Storerkey = @c_StorerKey
+            AND Type = '1'
+         
+            IF LEN(@cSUSR1) >= 9 AND @c_SSCCDynSerialByCompPrefix <> 'Y' --NJOW03        
             BEGIN
-               SET @cIdentifier = '00'
-               SET @cPacktype = '0'
-               SET @c_LabelNo = ''
+               SET @n_continue = 3
+               SET @n_Err = 99999
+               SET @c_ErrMsg = 'Invld Barcode'
+            END   -- IF LEN(@cSUSR1) >= 9
          
-               SELECT @cSUSR1 = ISNULL(SUSR1, '0')
-               FROM dbo.Storer WITH (NOLOCK)
-               WHERE Storerkey = @c_StorerKey
-               AND Type = '1'
-         
-               IF LEN(@cSUSR1) >= 9
+            IF (@n_continue = 1 OR @n_continue = 2)
+            BEGIN
+               --NJOW03 S
+               IF LEN(@cSUSR1) IN(7,8,9) AND @c_SSCCDynSerialByCompPrefix = 'Y'       
                BEGIN
-                  SET @n_continue = 3
-                  SET @n_Err = 99999
-                  SET @c_ErrMsg = 'Invld Barcode'
-               END   -- IF LEN(@cSUSR1) >= 9
-
-               IF (@n_continue = 1 OR @n_continue = 2)
-               BEGIN
+               	  SET @n_RunNoLen = 9 - (LEN(@cSUSR1) - 7)
+               
+	                EXEC isp_getucckey
+			              @c_StorerKey,
+			              @n_RunNoLen,     --SSCC serial reference (running number)
+			              @c_nCounter OUTPUT ,
+			              @b_success  OUTPUT,
+			              @n_err      OUTPUT,
+			              @c_errmsg   OUTPUT,
+			              0,
+			              1        	
+               END --NJOW03 E    
+               ELSE         
+               BEGIN  	               	               	
+                  --Original logic
                   EXEC dbo.isp_getucckey
                         @c_StorerKey,
                         9,
@@ -173,130 +204,136 @@ BEGIN
                         @c_errmsg   OUTPUT,
                         0,
                         1
-            
-                  IF @b_success <> 1
-                  BEGIN
-                     SET @n_continue = 3
-                     SET @n_Err = 99999
-                     SET @c_ErrMsg = 'GenUCCKeyFail'
-                  END
-
-                  IF (@n_continue = 1 OR @n_continue = 2)
-                  BEGIN
-                     IF LEN(@cSUSR1) <> 8
-                        SELECT @cSUSR1 = RIGHT('0000000' + CAST(@cSUSR1 AS VARCHAR( 7)), 7)
-               
-                     SET @c_LabelNo = @cIdentifier + @cPacktype + RTRIM(@cSUSR1) + RTRIM(@c_nCounter) --+ @nCheckDigit
-               
-                     SET @nOdd = 1
-                     SET @nOddCnt = 0
-                     SET @nTotalOddCnt = 0
-                     SET @nTotalCnt = 0
          
-                     WHILE @nOdd <= 20
-                     BEGIN
-                        SET @nOddCnt = CAST(SUBSTRING(@c_LabelNo, @nOdd, 1) AS INT)
-                        SET @nTotalOddCnt = @nTotalOddCnt + @nOddCnt
-                        SET @nOdd = @nOdd + 2
-                     END
-               
-                     SET @nTotalCnt = (@nTotalOddCnt * 3)
-               
-                     SET @nEven = 2
-                     SET @nEvenCnt = 0
-                     SET @nTotalEvenCnt = 0
-
-                     WHILE @nEven <= 20
-                     BEGIN
-                        SET @nEvenCnt = CAST(SUBSTRING(@c_LabelNo, @nEven, 1) AS INT)
-                        SET @nTotalEvenCnt = @nTotalEvenCnt + @nEvenCnt
-                        SET @nEven = @nEven + 2
-                     END
+                  IF LEN(@cSUSR1) <> 8    --NJOW03 move up
+                     SELECT @cSUSR1 = RIGHT('0000000' + CAST(@cSUSR1 AS VARCHAR( 7)), 7) 
+               END      
          
-                     SET @nAdd = 0
-                     SET @nRemain = 0
-                     SET @nCheckDigit = 0
-               
-                     SET @nAdd = @nTotalCnt + @nTotalEvenCnt
-                     SET @nRemain = @nAdd % 10
-                     SET @nCheckDigit = 10 - @nRemain
-               
-                     IF @nCheckDigit = 10
-                        SET @nCheckDigit = 0
-               
-                     SET @c_LabelNo = ISNULL(RTRIM(@c_LabelNo), '') + CAST(@nCheckDigit AS NVARCHAR( 1))
-                  END
+               IF @b_success <> 1
+               BEGIN
+                  SET @n_continue = 3
+                  SET @n_Err = 99999
+                  SET @c_ErrMsg = 'GenUCCKeyFail'
                END
-            END -- GenUCCLabelNoConfig
-            ELSE
-            BEGIN
-   				SELECT @c_vat = Vat
-   				FROM STORER (NOLOCK)
-   				WHERE STORERKEY = @c_storerkey
-   
-   				IF dbo.fnc_RTrim(@c_vat) IS NULL OR dbo.fnc_RTrim(@c_vat) = ''
-   					SELECT @c_vat = '000000000'
-   				
-   				EXECUTE nspg_getkey
-   					"TBLPackNo" ,
-   					7 ,
-   					@c_labelno   	OUTPUT ,
-   					@b_success      = @b_success OUTPUT,
-   					@n_err          = @n_err OUTPUT,
-   					@c_errmsg       = @c_errmsg OUTPUT,
-   					@b_resultset    = 0,
-   					@n_batch        = 1
-   				IF @b_success <> 1
-   				BEGIN
-   					SELECT @n_continue = 3, @c_errmsg = 'nsp_GenLabelNo' + dbo.fnc_RTrim(@c_errmsg)
-   				END
-   
-   				IF (@n_continue = 1 OR @n_continue = 2) 
-   				BEGIN	
-   					SELECT @c_labelno = '00' + '0' + dbo.fnc_RTrim(@c_vat) + @c_labelno 
-   					SELECT @n_odd = 1
-   					SELECT @n_totalodd = 0, @n_totaleven = 0
-   					
-   					WHILE @n_odd <= 20
-   					BEGIN
-   						SELECT @n_totalodd = @n_totalodd + CONVERT(int, ISNULL(SUBSTRING(@c_labelno,@n_odd,1),0))
-   						SELECT @n_odd = @n_odd + 2
-   					END
-   					
-   					SELECT @n_totalodd = @n_totalodd * 3
-   
-   					SELECT @n_even = 2
-   
-   					WHILE @n_even <= 20
-   					BEGIN
-   						SELECT @n_totaleven = @n_totaleven + CONVERT(int, ISNULL(SUBSTRING(@c_labelno,@n_even,1),0))
-   						SELECT @n_even = @n_even + 2
-   					END
-   
-   					SELECT @n_checkdigit = 10 - ((@n_totalodd + @n_totaleven) % 10)
-   					IF @n_checkdigit = 10 
-   						SELECT @n_checkdigit = 0
-   
-   					SELECT @c_labelno = dbo.fnc_RTrim(@c_labelno) + dbo.fnc_LTrim(dbo.fnc_RTrim(STR(@n_checkdigit)))
-   				END				
-   			END
+         
+               IF (@n_continue = 1 OR @n_continue = 2)
+               BEGIN
+                  --IF LEN(@cSUSR1) <> 8   
+                  --   SELECT @cSUSR1 = RIGHT('0000000' + CAST(@cSUSR1 AS VARCHAR( 7)), 7)
+            
+                  SET @c_LabelNo = @cIdentifier + @cPacktype + RTRIM(@cSUSR1) + RTRIM(@c_nCounter) --+ @nCheckDigit
+            
+                  SET @nOdd = 1
+                  SET @nOddCnt = 0
+                  SET @nTotalOddCnt = 0
+                  SET @nTotalCnt = 0
+         
+                  WHILE @nOdd <= 20
+                  BEGIN
+                     SET @nOddCnt = CAST(SUBSTRING(@c_LabelNo, @nOdd, 1) AS INT)
+                     SET @nTotalOddCnt = @nTotalOddCnt + @nOddCnt
+                     SET @nOdd = @nOdd + 2
+                  END
+            
+                  SET @nTotalCnt = (@nTotalOddCnt * 3)
+            
+                  SET @nEven = 2
+                  SET @nEvenCnt = 0
+                  SET @nTotalEvenCnt = 0
+         
+                  WHILE @nEven <= 20
+                  BEGIN
+                     SET @nEvenCnt = CAST(SUBSTRING(@c_LabelNo, @nEven, 1) AS INT)
+                     SET @nTotalEvenCnt = @nTotalEvenCnt + @nEvenCnt
+                     SET @nEven = @nEven + 2
+                  END
+         
+                  SET @nAdd = 0
+                  SET @nRemain = 0
+                  SET @nCheckDigit = 0
+            
+                  SET @nAdd = @nTotalCnt + @nTotalEvenCnt
+                  SET @nRemain = @nAdd % 10
+                  SET @nCheckDigit = 10 - @nRemain
+            
+                  IF @nCheckDigit = 10
+                     SET @nCheckDigit = 0
+            
+                  SET @c_LabelNo = ISNULL(RTRIM(@c_LabelNo), '') + CAST(@nCheckDigit AS NVARCHAR( 1))
+               END
+            END
+         END -- GenUCCLabelNoConfig
+         ELSE
+         BEGIN
+   		      SELECT @c_vat = Vat
+   		      FROM STORER (NOLOCK)
+   		      WHERE STORERKEY = @c_storerkey
+            
+   		      IF dbo.fnc_RTrim(@c_vat) IS NULL OR dbo.fnc_RTrim(@c_vat) = ''
+   		      	  SELECT @c_vat = '000000000'
+   		      
+   		      EXECUTE nspg_getkey
+   		      	"TBLPackNo" ,
+   		      	7 ,
+   		      	@c_labelno   	OUTPUT ,
+   		      	@b_success      = @b_success OUTPUT,
+   		      	@n_err          = @n_err OUTPUT,
+   		      	@c_errmsg       = @c_errmsg OUTPUT,
+   		      	@b_resultset    = 0,
+   		      	@n_batch        = 1
+   		        	
+   		      IF @b_success <> 1
+   		      BEGIN
+   		      	SELECT @n_continue = 3, @c_errmsg = 'nsp_GenLabelNo' + dbo.fnc_RTrim(@c_errmsg)
+   		      END
+            
+   		      IF (@n_continue = 1 OR @n_continue = 2) 
+   		      BEGIN	
+   		         SELECT @c_labelno = '00' + '0' + dbo.fnc_RTrim(@c_vat) + @c_labelno 
+   		         SELECT @n_odd = 1
+   		         SELECT @n_totalodd = 0, @n_totaleven = 0
+   		         
+   		         WHILE @n_odd <= 20
+   		         BEGIN
+   		         	 SELECT @n_totalodd = @n_totalodd + CONVERT(int, ISNULL(SUBSTRING(@c_labelno,@n_odd,1),0))
+   		         	 SELECT @n_odd = @n_odd + 2
+   		         END
+   		         
+   		         SELECT @n_totalodd = @n_totalodd * 3
+             
+   		         SELECT @n_even = 2
+             
+   		         WHILE @n_even <= 20
+   		         BEGIN
+   		         	  SELECT @n_totaleven = @n_totaleven + CONVERT(int, ISNULL(SUBSTRING(@c_labelno,@n_even,1),0))
+   		         	  SELECT @n_even = @n_even + 2
+   		         END
+             
+   		         SELECT @n_checkdigit = 10 - ((@n_totalodd + @n_totaleven) % 10)
+   		         
+   		         IF @n_checkdigit = 10 
+   		         	  SELECT @n_checkdigit = 0
+             
+   		         SELECT @c_labelno = dbo.fnc_RTrim(@c_labelno) + dbo.fnc_LTrim(dbo.fnc_RTrim(STR(@n_checkdigit)))
+   		      END				
+   		   END
    		END
 			ELSE
 			BEGIN	
-				EXECUTE nspg_getkey
-					"PackNo" ,
-					10 ,
-					@c_labelno   	OUTPUT ,
-					@b_success      = @b_success OUTPUT,
-					@n_err          = @n_err OUTPUT,
-					@c_errmsg       = @c_errmsg OUTPUT,
-					@b_resultset    = 0,
-					@n_batch        = 1
-
-				IF @b_success <> 1
-				BEGIN
-					SELECT @n_continue = 3, @c_errmsg = 'nsp_GenLabelNo' + dbo.fnc_RTrim(@c_errmsg)
-				END
+				 EXECUTE nspg_getkey
+				 	"PackNo" ,
+				 	10 ,
+				 	@c_labelno   	OUTPUT ,
+				 	@b_success      = @b_success OUTPUT,
+				 	@n_err          = @n_err OUTPUT,
+				 	@c_errmsg       = @c_errmsg OUTPUT,
+				 	@b_resultset    = 0,
+				 	@n_batch        = 1
+         
+				 IF @b_success <> 1
+				 BEGIN
+				    SELECT @n_continue = 3, @c_errmsg = 'nsp_GenLabelNo' + dbo.fnc_RTrim(@c_errmsg)
+				 END
 			END 
 		END
 	END 

@@ -17,6 +17,11 @@ GO
 /* 2023-06-23   1.5  yeekung    TPS-690 Add Reprint SP (yeekung02)            */
 /* 2023-09-12   1.6  YeeKung    TPS-773/TPS-740 New print (yeekung3)          */
 /* 2023-12-11   1.7  YeeKung    TPS-826 Add params for paper (yeekung12)      */
+/* 2024-01-18   1.8  YeeKung    Add group by labelno (yeekung4)               */
+/* 2024-02-09   1.9  YeeKung    TPS-821 Add reporttpe (yeekung05)             */  
+/* 2024-12-12   2.0  YeeKung    TPS-895 Add Support reprint Orderkey (yeekung06)*/
+/* 2025-02-14   2.1  yeekung    TPS-995 Change Error Message (yeekung07)      */
+/* 2025-02-25   2.2  YeeKung    TPS-970 Fix Orderkey reprint (yeekung08)      */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [API].[isp_rePrint] (
@@ -34,7 +39,6 @@ SET ANSI_NULLS OFF
 SET CONCAT_NULL_YIELDS_NULL OFF
 
    DECLARE
-
       @nMobile          INT,
       @nStep            INT,
       @cLangCode        NVARCHAR( 3),
@@ -44,12 +48,13 @@ SET CONCAT_NULL_YIELDS_NULL OFF
       @CalOrderSKU      NVARCHAR( 1),
       @cDynamicRightName1  NVARCHAR( 30),
       @cDynamicRightValue1 NVARCHAR( 30),
+      @cReporttype      NVARCHAR(20),
 
       @cStorerKey       NVARCHAR( 15),
-	   @cFacility        NVARCHAR( 5),
-	   @nFunc            NVARCHAR( 5),
-	   @cUserName        NVARCHAR( 128),
-	   @cOriUserName     NVARCHAR( 128),
+      @cFacility        NVARCHAR( 5),
+      @nFunc            NVARCHAR( 5),
+      @cUserName        NVARCHAR( 128),
+      @cOriUserName     NVARCHAR( 128),
       @cScanNo          NVARCHAR( 50),
       @cDropID          NVARCHAR( 50),
       @cPickSlipNo      NVARCHAR( 30),
@@ -90,11 +95,11 @@ SET CONCAT_NULL_YIELDS_NULL OFF
    --decode json
    select @cStorerKey = StorerKey, @cFacility = Facility,@nFunc = Func,@cUserName = UserName,@cLangCode = LangCode
    ,@cScanNo = ScanNo,@nCartonNo = CartonNo, @cType = ctype,  @cWorkstation = Workstation, @cOrderKeyPrint = OrderKey
-   ,@PrinterType = PrinterType  --(cc03)
+   ,@PrinterType = PrinterType,@cReporttype = ReportType  --(cc03)
       FROM OPENJSON(@json)
       WITH (
-	      StorerKey      NVARCHAR( 30),
-	      Facility       NVARCHAR( 30),
+         StorerKey      NVARCHAR( 30),
+         Facility       NVARCHAR( 30),
          Func           NVARCHAR( 5),
          UserName       NVARCHAR( 128),
          LangCode       NVARCHAR( 3),
@@ -103,7 +108,8 @@ SET CONCAT_NULL_YIELDS_NULL OFF
          cType          NVARCHAR( 30),
          Workstation    NVARCHAR( 30),
          OrderKey       NVARCHAR( 10),
-         PrinterType    NVARCHAR( 10)
+         PrinterType    NVARCHAR( 10),
+         ReportType     NVARCHAR( 20)
       )
 
       --SELECT @cUserName AS cUserNameb4
@@ -128,31 +134,38 @@ SET CONCAT_NULL_YIELDS_NULL OFF
 
    --SELECT @cUserName AS cUserName, @cScanNo AS cScanNo, @c_OriUserName AS c_UserName
    --search pickslipNo
+   --search pickslipNo
    IF ISNULL(@cOrderKeyPrint,'') = ''
    BEGIN
-	   --b2b
-	   IF @cType <> 'pickslip' --(cc01)
-	   BEGIN
-		   SELECT @cPickSlipNo = PickSlipNo FROM api.appSection WITH (NOLOCK) WHERE userID = @cOriUserName AND scanNo = @cScanNo
-	   END
-	   ELSE
-	   BEGIN
-		   SET @cPickSlipNo = @cScanNo
-	   END
 
-	   IF EXISTS (SELECT TOP 1 1 FROM packHeader WHERE pickslipNo = @cPickSlipNo AND STATUS = 9)
-	   BEGIN
-		   SET @nPrintPackList = 'Y'
-	   END
+      --b2b
+      IF @cType <> 'pickslip' --(cc01)
+      BEGIN
+         SELECT @cPickSlipNo = PickSlipNo FROM api.appSection WITH (NOLOCK) WHERE userID = @cOriUserName AND scanNo = @cScanNo
+      END
+      ELSE IF LEFT (@cScanNo,1) <>'P'
+      BEGIN
+         SELECT @cPickSlipNo = PickSlipNo FROM packHeader WITH (NOLOCK) WHERE orderkey = @cScanNo AND storerKey = @cStorerKey
+         SET @cScanNo = @cPickSlipNo
+      END
+      ELSE
+      BEGIN
+         SET @cPickSlipNo = @cScanNo
+      END
+
+      IF EXISTS (SELECT TOP 1 1 FROM packHeader WHERE pickslipNo = @cPickSlipNo AND STATUS = 9)
+      BEGIN
+         SET @nPrintPackList = 'Y'
+      END
    END
    ELSE
    BEGIN
-	   --b2c
-	   SELECT @cPickSlipNo = PickSlipNo FROM packHeader WITH (NOLOCK) WHERE orderkey = @cOrderKeyPrint AND storerKey = @cStorerKey
-	   IF EXISTS (SELECT TOP 1 1 FROM packHeader WHERE pickslipNo = @cPickSlipNo AND orderKey = @cOrderKeyPrint AND STATUS = 9)
-	   BEGIN
-		   SET @nPrintPackList = 'Y'
-	   END
+      --b2c
+      SELECT @cPickSlipNo = PickSlipNo FROM packHeader WITH (NOLOCK) WHERE orderkey = @cOrderKeyPrint AND storerKey = @cStorerKey
+      IF EXISTS (SELECT TOP 1 1 FROM packHeader WHERE pickslipNo = @cPickSlipNo AND orderKey = @cOrderKeyPrint AND STATUS = 9)
+      BEGIN
+         SET @nPrintPackList = 'Y'
+      END
    END
 
    SELECT @cPickSlipNo AS picksliNo, @nPrintPackList '@nPrintPackList'
@@ -170,11 +183,11 @@ SET CONCAT_NULL_YIELDS_NULL OFF
    DECLARE @tShipLabel AS VariableTable
 
    DECLARE   @c_ModuleID           NVARCHAR(30) ='TPPack'
-         , @c_ReportID           NVARCHAR(10) 
-         , @c_PrinterID          NVARCHAR(30)  
-         , @c_JobIDs             NVARCHAR(50)   = ''         --(Wan03) -- May return multiple jobs ID.JobID seperate by '|'
-         , @c_PrintSource        NVARCHAR(20)
-         , @c_AutoPrint          NVARCHAR(1)    = 'N'        --(Wan07)
+            , @c_ReportID           NVARCHAR(10) 
+            , @c_PrinterID          NVARCHAR(30)  
+            , @c_JobIDs             NVARCHAR(50)   = ''         --(Wan03) -- May return multiple jobs ID.JobID seperate by '|'
+            , @c_PrintSource        NVARCHAR(20)
+            , @c_AutoPrint          NVARCHAR(1)    = 'N'        --(Wan07)
 
    DECLARE @cFieldName1 NVARCHAR(max),
            @cFieldName2 NVARCHAR(max),
@@ -193,8 +206,7 @@ SET CONCAT_NULL_YIELDS_NULL OFF
    SELECT @cPaperPrinter = PrinterID FROM api.AppPrinter WITH (NOLOCK) WHERE Workstation = @cWorkstation AND printerType = 'Paper'
    SELECT @cLabelPrinter = PrinterID FROM api.AppPrinter WITH (NOLOCK) WHERE Workstation = @cWorkstation AND printerType = 'Label'
 
-   SELECT @cPrintAllLbl=1 FROM storerConfig WITH (NOLOCK) WHERE storerKey = @cStorerKey AND configKey = 'TPS-PrintAllLbl' AND sValue = '1'
-
+   SELECT @cPrintAllLbl = 1 FROM storerConfig WITH (NOLOCK) WHERE storerKey = @cStorerKey AND configKey = 'TPS-PrintAllLbl' AND sValue = '1'
 
    -- Extended Print  --(cc10)  
    SELECT @cExtendedRePrintSP = svalue FROM storerConfig WITH (NOLOCK) WHERE storerKey = @cStorerKey AND configKey = 'TPSExtRePrintSP'  
@@ -205,7 +217,7 @@ SET CONCAT_NULL_YIELDS_NULL OFF
          SET @cSQL = 'EXEC API.' + RTRIM( @cExtendedRePrintSP) +  
             ' @cStorerKey, @cFacility, @nFunc, @cUserName, @cLangCode, @cScanNo, ' +   
             ' @cpickslipNo, @cDropID, @cOrderKey,  ' +  
-            ' @nCartonNO, @cType, @cWorkstation, @PrinterType,@cPrintAllLbl,@nPrintPackList,'+
+            ' @nCartonNO, @cType, @cWorkstation, @PrinterType,@cPrintAllLbl,@nPrintPackList,@cReporttype,'+
             ' @cLabelJobID OUTPUT, @cPackingJobID OUTPUT, @b_Success OUTPUT, @n_Err OUTPUT, @c_ErrMsg OUTPUT ' 
          SET @cSQLParam =     
             '@cStorerKey      NVARCHAR( 15), ' +  
@@ -223,6 +235,7 @@ SET CONCAT_NULL_YIELDS_NULL OFF
             '@PrinterType     NVARCHAR( 20),  ' +  
             '@cPrintAllLbl   NVARCHAR (20),   ' +
             '@nPrintPackList  NVARCHAR (1),  ' +
+            '@cReporttype     NVARCHAR (20),  ' +
             '@cLabelJobID     NVARCHAR ( 30) OUTPUT,  ' +
             '@cPackingJobID   NVARCHAR ( 30) OUTPUT,  ' +
             '@b_Success       INT            OUTPUT, ' +
@@ -232,7 +245,7 @@ SET CONCAT_NULL_YIELDS_NULL OFF
          EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
             @cStorerKey, @cFacility, @nFunc, @cUserName, @cLangCode, @cScanNo,
             @cpickslipNo, @cDropID, @cOrderKeyPrint, 
-            @nCartonNo, @cType, @cWorkstation, @PrinterType,@cPrintAllLbl,@nPrintPackList, 
+            @nCartonNo, @cType, @cWorkstation, @PrinterType,@cPrintAllLbl,@nPrintPackList,@cReporttype, 
             @cLabelJobID OUTPUT,@cPackingJobID OUTPUT, @b_Success OUTPUT, @n_Err OUTPUT, @c_ErrMsg OUTPUT
     
          IF @b_Success <> 1  
@@ -275,21 +288,20 @@ SET CONCAT_NULL_YIELDS_NULL OFF
             BEGIN
                -- Print label
                IF EXISTS (SELECT  TOP 1 1 FROM dbo.WMReport WMR WITH (NOLOCK) 
-                           JOIN WMReportdetail WMRD (NOLOCK) ON WMR.reportid =WMRD.reportid
+                           JOIN WMReportdetail WMRD (NOLOCK) ON WMR.reportid = WMRD.reportid
                            WHERE Storerkey = @cStorerKey 
-                              AND reporttype ='TPSHIPPLBL')  
+                              AND (reporttype = @cReporttype OR reporttype ='TPSHIPPLBL'))  
                BEGIN
-	               IF ISNULL(@cLabelPrinter,'') = ''
-	               BEGIN
-		               SET @b_Success = 0
-                        SET @n_Err = 175625
-                        SET @c_ErrMsg = rdt.rdtgetmessage( @n_Err, @cLangCode, 'DSP')--'Label Printer setup not done. Please setup the Label Printer. Function : isp_rePrint'
-
-                        GOTO EXIT_SP
-	               END
-	               ELSE
-	               BEGIN
-		               --EXEC API.isp_Print @cLangCode, @cFacility, @cStorerKey, @cLabelPrinter, @cPaperPrinter,
+                  IF ISNULL(@cLabelPrinter,'') = ''
+                  BEGIN
+                     SET @b_Success = 0
+                     SET @n_Err = 1001451
+                     SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Label Printer setup not done. Please setup the Label Printer. Function : isp_rePrint'
+                     GOTO EXIT_SP
+                  END
+                  ELSE
+                  BEGIN
+                     --EXEC API.isp_Print @cLangCode, @cFacility, @cStorerKey, @cLabelPrinter, @cPaperPrinter,
                  --    'TPSHIPPLBL', -- Report type
                  --    @tShipLabel, -- Report params
                  --    'API.isp_RePrint', --source Type
@@ -307,25 +319,25 @@ SET CONCAT_NULL_YIELDS_NULL OFF
                         @cFieldName3  = keyFieldname3,
                         @cFieldName4  = keyFieldname4
                      FROM WMReport WMR (NOLOCK)
-                     JOIN WMReportdetail WMRD (NOLOCK) ON WMR.reportid =WMRD.reportid
+                     JOIN WMReportdetail WMRD (NOLOCK) ON WMR.reportid = WMRD.reportid
                      WHERE Storerkey = @cStorerkey
-                        AND reporttype = 'TPSHIPPLBL'
+                        AND Reporttype =  CASE WHEN ISNULL(@cReporttype,'') <> '' THEN  @cReporttype ELSE   'TPSHIPPLBL' END
                         AND ModuleID ='TPPack'
                         AND ispaperprinter <> 'Y'
                         and (WMRD.username = '' OR WMRD.username = @cUsername)
-                        AND (ISNULL(ComputerName,'') ='' OR ComputerName= @cWorkstation)
+                        AND (ISNULL(ComputerName,'') ='' OR ComputerName = @cWorkstation)
 
 
                     SET  @cSQL =
                      'SELECT  @cParams1='+ @cFieldName1  
-                              SELECT @cSQL= CASE  WHEN ISNULL(@cFieldName2,'')<>''THEN @cSQL +',@cParams2=' + @cFieldName2  ELSE  @cSQL END 
-                              SELECT @cSQL= CASE WHEN ISNULL(@cFieldName3,'')<>''THEN @cSQL +',@cParams3='  + @cFieldName3  ELSE  @cSQL END
-                              SELECT @cSQL= CASE WHEN ISNULL(@cFieldName4,'')<>''THEN @cSQL +',@cParams4='  + @cFieldName4  ELSE  @cSQL END
+                              SELECT @cSQL= CASE WHEN ISNULL(@cFieldName2,'') <> '' THEN @cSQL +',@cParams2='  + @cFieldName2  ELSE  @cSQL END 
+                              SELECT @cSQL= CASE WHEN ISNULL(@cFieldName3,'') <> '' THEN @cSQL +',@cParams3='  + @cFieldName3  ELSE  @cSQL END
+                              SELECT @cSQL= CASE WHEN ISNULL(@cFieldName4,'') <> '' THEN @cSQL +',@cParams4='  + @cFieldName4  ELSE  @cSQL END
                      SET @cSQL = @cSQL +' FROM Packdetail (NOLOCK)
                         WHERE Storerkey = @cstorerkey
                            AND Pickslipno = @cPickslipno
                            AND CartonNO = @nCartonno
-                        GROUP BY Pickslipno,storerkey,cartonno
+                        GROUP BY Pickslipno,storerkey,cartonno,labelno
                         '
 
                      SET @cSQLParam = 
@@ -344,7 +356,7 @@ SET CONCAT_NULL_YIELDS_NULL OFF
                      EXEC sp_ExecuteSQL @cSQL,@cSQLParam,@cFieldName1,@cFieldName2,@cFieldName3,@cFieldName4,
                         @cParams1 OUTPUT,@cParams2 OUTPUT,@cParams3 OUTPUT,@cParams4 OUTPUT,@cstorerkey,@cPickslipno,@nCartonno 
 
-                     IF ISNULL(@cNewLabelPrinter,'')= ''
+                     IF ISNULL(@cNewLabelPrinter,'') = ''
                         SET @cNewLabelPrinter = @cLabelPrinter
 
                     EXEC  [WM].[lsp_WM_Print_Report]
@@ -378,7 +390,7 @@ SET CONCAT_NULL_YIELDS_NULL OFF
                         SET @c_ErrMsg = @c_ErrMsg
                         GOTO EXIT_SP
                      END
-	               END
+                  END
                END
             END
 
@@ -393,29 +405,29 @@ SET CONCAT_NULL_YIELDS_NULL OFF
       BEGIN
          IF ISNULL(@cOrderKeyPrint,'') = ''
          BEGIN
-	         --b2b
-	         IF @cType <> 'pickslip' --(cc01)
-	         BEGIN
-		         SELECT @cPickSlipNo = PickSlipNo FROM api.appSection WITH (NOLOCK) WHERE userID = @cOriUserName AND scanNo = @cScanNo
-	         END
-	         ELSE
-	         BEGIN
-		         SET @cPickSlipNo = @cScanNo
-	         END
+            --b2b
+            IF @cType <> 'pickslip' --(cc01)
+            BEGIN
+               SELECT @cPickSlipNo = PickSlipNo FROM api.appSection WITH (NOLOCK) WHERE userID = @cOriUserName AND scanNo = @cScanNo
+            END
+            ELSE
+            BEGIN
+               SET @cPickSlipNo = @cScanNo
+            END
 
-	         IF EXISTS (SELECT TOP 1 1 FROM packHeader WHERE pickslipNo = @cPickSlipNo AND STATUS = 9)
-	         BEGIN
-		         SET @nPrintPackList = 'Y'
-	         END
+            IF EXISTS (SELECT TOP 1 1 FROM packHeader WHERE pickslipNo = @cPickSlipNo AND STATUS = 9)
+            BEGIN
+               SET @nPrintPackList = 'Y'
+            END
          END
          ELSE
          BEGIN
-	         --b2c
-	         SELECT @cPickSlipNo = PickSlipNo FROM packHeader WITH (NOLOCK) WHERE orderkey = @cOrderKeyPrint AND storerKey = @cStorerKey
-	         IF EXISTS (SELECT TOP 1 1 FROM packHeader WHERE pickslipNo = @cPickSlipNo AND orderKey = @cOrderKeyPrint AND STATUS = 9)
-	         BEGIN
-		         SET @nPrintPackList = 'Y'
-	         END
+            --b2c
+            SELECT @cPickSlipNo = PickSlipNo FROM packHeader WITH (NOLOCK) WHERE orderkey = @cOrderKeyPrint AND StorerKey = @cStorerKey
+            IF EXISTS (SELECT TOP 1 1 FROM packHeader WHERE pickslipNo = @cPickSlipNo AND OrderKey = @cOrderKeyPrint AND STATUS = 9)
+            BEGIN
+               SET @nPrintPackList = 'Y'
+            END
          END
 
          SELECT @cPickSlipNo AS picksliNo, @nPrintPackList '@nPrintPackList'
@@ -437,51 +449,51 @@ SET CONCAT_NULL_YIELDS_NULL OFF
             -- Print label
                -- Print label
             IF EXISTS (SELECT  TOP 1 1 FROM dbo.WMReport WMR WITH (NOLOCK) 
-                        JOIN WMReportdetail WMRD (NOLOCK) ON WMR.reportid =WMRD.reportid
+                        JOIN WMReportdetail WMRD (NOLOCK) ON WMR.reportid = WMRD.reportid
                         WHERE Storerkey = @cStorerKey 
-                           AND reporttype ='TPSHIPPLBL')  
+                           AND (reporttype = @cReporttype OR reporttype ='TPSHIPPLBL'))  
             BEGIN
-	            IF ISNULL(@cLabelPrinter,'') = ''
-	            BEGIN
-		            SET @b_Success = 0
-                     SET @n_Err = 175625
-                     SET @c_ErrMsg = rdt.rdtgetmessage( @n_Err, @cLangCode, 'DSP')--'Label Printer setup not done. Please setup the Label Printer. Function : isp_rePrint'
+               IF ISNULL(@cLabelPrinter,'') = ''
+               BEGIN
+                  SET @b_Success = 0
+                  SET @n_Err = 1001452
+                  SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Label Printer setup not done. Please setup the Label Printer. Function : isp_rePrint'
 
-                     GOTO EXIT_SP
-	            END
-	            ELSE
-	            BEGIN
+                  GOTO EXIT_SP
+               END
+               ELSE
+               BEGIN
                   SELECT   @c_ReportID = WMR.reportid,
-                        @c_PrintSource = CASE WHEN printtype='LOGIREPORT' THEN 'JReport' ELSE 'WMReport' END,
+                        @c_PrintSource = CASE WHEN printtype = 'LOGIREPORT' THEN 'JReport' ELSE 'WMReport' END,
                         @cNewLabelPrinter = Defaultprinterid,
                         @cFieldName1  = keyFieldname1,
                         @cFieldName2  = keyFieldname2,
                         @cFieldName3  = keyFieldname3,
                         @cFieldName4  = keyFieldname4
                      FROM WMReport WMR (NOLOCK)
-                     JOIN WMReportdetail WMRD (NOLOCK) ON WMR.reportid =WMRD.reportid
+                     JOIN WMReportdetail WMRD (NOLOCK) ON WMR.reportid = WMRD.reportid
                      WHERE Storerkey = @cStorerkey
-                        AND reporttype = 'TPSHIPPLBL'
+                        AND Reporttype =  CASE WHEN ISNULL(@cReporttype,'') <> '' THEN  @cReporttype ELSE   'TPSHIPPLBL' END
                         AND ModuleID ='TPPack'
                         AND ispaperprinter <> 'Y'
                         and (WMRD.username = '' OR WMRD.username = @cUsername)
-                        AND (ISNULL(ComputerName,'') ='' OR ComputerName= @cWorkstation)
+                        AND (ISNULL(ComputerName,'') ='' OR ComputerName = @cWorkstation)
 
 
                     SET  @cSQL =
                      'SELECT  @cParams1='+ @cFieldName1  
-                              SELECT @cSQL= CASE  WHEN ISNULL(@cFieldName2,'')<>''THEN @cSQL +',@cParams2=' + @cFieldName2  ELSE  @cSQL END 
-                              SELECT @cSQL= CASE WHEN ISNULL(@cFieldName3,'')<>''THEN @cSQL +',@cParams3='  + @cFieldName3  ELSE  @cSQL END
-                              SELECT @cSQL= CASE WHEN ISNULL(@cFieldName4,'')<>''THEN @cSQL +',@cParams4='  + @cFieldName4  ELSE  @cSQL END
+                              SELECT @cSQL= CASE WHEN ISNULL(@cFieldName2,'') <> ''THEN @cSQL +',@cParams2='  + @cFieldName2  ELSE  @cSQL END 
+                              SELECT @cSQL= CASE WHEN ISNULL(@cFieldName3,'') <> ''THEN @cSQL +',@cParams3='  + @cFieldName3  ELSE  @cSQL END
+                              SELECT @cSQL= CASE WHEN ISNULL(@cFieldName4,'') <> ''THEN @cSQL +',@cParams4='  + @cFieldName4  ELSE  @cSQL END
                      SET @cSQL = @cSQL +' FROM Packdetail (NOLOCK)
                         WHERE Storerkey = @cstorerkey
                            AND Pickslipno = @cPickslipno
                            AND CartonNO = @nCartonno
-                        GROUP BY Pickslipno,storerkey,cartonno
+                        GROUP BY Pickslipno,storerkey,cartonno,labelno
                         '
 
                      SET @cSQLParam = 
-                     ' @cFieldName1 NVARCHAR(max),
+                     '  @cFieldName1 NVARCHAR(max),
                         @cFieldName2 NVARCHAR(max),
                         @cFieldName3 NVARCHAR(max),
                         @cFieldName4 NVARCHAR(max),
@@ -496,7 +508,7 @@ SET CONCAT_NULL_YIELDS_NULL OFF
                      EXEC sp_ExecuteSQL @cSQL,@cSQLParam,@cFieldName1,@cFieldName2,@cFieldName3,@cFieldName4,
                         @cParams1 OUTPUT,@cParams2 OUTPUT,@cParams3 OUTPUT,@cParams4 OUTPUT,@cstorerkey,@cPickslipno,@nCartonno 
 
-                     IF ISNULL(@cNewLabelPrinter,'')= ''
+                     IF ISNULL(@cNewLabelPrinter,'') = ''
                         SET @cNewLabelPrinter = @cLabelPrinter
 
                     EXEC  [WM].[lsp_WM_Print_Report]
@@ -530,7 +542,7 @@ SET CONCAT_NULL_YIELDS_NULL OFF
                      SET @c_ErrMsg = @c_ErrMsg
                      GOTO EXIT_SP
                   END
-	            END
+               END
             END
          END
       END
@@ -545,23 +557,23 @@ SET CONCAT_NULL_YIELDS_NULL OFF
 
       IF @PrinterType = 'Paper' --(cc03)
       BEGIN
-	      IF @nPrintPackList = 'Y'
+         IF @nPrintPackList = 'Y'
          BEGIN
             IF EXISTS (SELECT  TOP 1 1 FROM dbo.WMReport WMR WITH (NOLOCK) 
-                        JOIN WMReportdetail WMRD (NOLOCK) ON WMR.reportid =WMRD.reportid
+                        JOIN WMReportdetail WMRD (NOLOCK) ON WMR.reportid = WMRD.reportid
                         WHERE Storerkey = @cStorerKey 
-                        AND reportType ='TPPACKLIST')  
+                        AND (reporttype = @cReporttype OR reporttype ='TPPACKLIST'))  
             BEGIN
-	            IF ISNULL(@cPaperPrinter,'') = ''
-	            BEGIN
-		            SET @b_Success = 0
-                  SET @n_Err = 175626
-                  SET @c_ErrMsg = rdt.rdtgetmessage( @n_Err, @cLangCode, 'DSP')--'Paper Printer setup not done. Please setup the Paper Printer. Function : isp_rePrint'
+               IF ISNULL(@cPaperPrinter,'') = ''
+               BEGIN
+                  SET @b_Success = 0
+                  SET @n_Err = 1001453
+                  SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Paper Printer setup not done. Please setup the Paper Printer. Function : isp_rePrint'
 
                   GOTO EXIT_SP
-	            END
-	            ELSE
-	            BEGIN
+               END
+               ELSE
+               BEGIN
                   SELECT   @c_ReportID = WMR.reportid,
                      @c_PrintSource = CASE WHEN printtype='LOGIREPORT' THEN 'JReport' ELSE 'WMReport' END,
                      @cNewPaperPrinter = Defaultprinterid,
@@ -570,9 +582,9 @@ SET CONCAT_NULL_YIELDS_NULL OFF
                      @cFieldName3  = keyFieldname3,
                      @cFieldName4  = keyFieldname4
                   FROM WMReport WMR (NOLOCK)
-                  JOIN WMReportdetail WMRD (NOLOCK) ON WMR.reportid =WMRD.reportid
+                  JOIN WMReportdetail WMRD (NOLOCK) ON WMR.reportid = WMRD.reportid
                   WHERE Storerkey = @cStorerkey
-                     AND reporttype = 'TPPACKLIST'
+                     AND Reporttype =  CASE WHEN ISNULL(@cReporttype,'') <> '' THEN  @cReporttype ELSE   'TPPACKLIST' END
                      AND ModuleID ='TPPack'
                      AND ispaperprinter = 'Y'
                      and (WMRD.username = '' OR WMRD.username = @cUsername)
@@ -581,18 +593,18 @@ SET CONCAT_NULL_YIELDS_NULL OFF
 
                     SET  @cSQL =
                      'SELECT  @cParams1='+ @cFieldName1  
-                              SELECT @cSQL= CASE  WHEN ISNULL(@cFieldName2,'')<>''THEN @cSQL +',@cParams2=' + @cFieldName2  ELSE  @cSQL END 
+                              SELECT @cSQL= CASE WHEN ISNULL(@cFieldName2,'')<>''THEN @cSQL +',@cParams2='  + @cFieldName2  ELSE  @cSQL END 
                               SELECT @cSQL= CASE WHEN ISNULL(@cFieldName3,'')<>''THEN @cSQL +',@cParams3='  + @cFieldName3  ELSE  @cSQL END
                               SELECT @cSQL= CASE WHEN ISNULL(@cFieldName4,'')<>''THEN @cSQL +',@cParams4='  + @cFieldName4  ELSE  @cSQL END
                      SET @cSQL = @cSQL +' FROM Packdetail (NOLOCK)
                         WHERE Storerkey = @cstorerkey
                            AND Pickslipno = @cPickslipno
                            AND CartonNO = @nCartonno
-                        GROUP BY Pickslipno,storerkey,cartonno
+                        GROUP BY Pickslipno,storerkey,cartonno,labelno
                         '
                   
                   SET @cSQLParam = 
-                     ' @cFieldName1 NVARCHAR(max),
+                     '  @cFieldName1 NVARCHAR(max),
                         @cFieldName2 NVARCHAR(max),
                         @cFieldName3 NVARCHAR(max),
                         @cFieldName4 NVARCHAR(max),
@@ -612,7 +624,7 @@ SET CONCAT_NULL_YIELDS_NULL OFF
 
 
                   EXEC  [WM].[lsp_WM_Print_Report]
-                     @c_ModuleID = @c_ModuleID           
+                    @c_ModuleID = @c_ModuleID           
                   , @c_ReportID = @c_ReportID         
                   , @c_Storerkey = @cStorerkey         
                   , @c_Facility  = @cFacility        
@@ -641,7 +653,7 @@ SET CONCAT_NULL_YIELDS_NULL OFF
                      SET @c_ErrMsg = @c_ErrMsg
                      GOTO EXIT_SP
                   END
-	            END
+               END
             END
          END
       END

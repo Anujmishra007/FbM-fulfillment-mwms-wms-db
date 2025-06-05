@@ -7,8 +7,9 @@ GO
 /* Store procedure: rdtfnc_Outbound_PalletTempCapture                                           */
 /* Copyright      : Maersk                                                                      */
 /*                                                                                              */
-/* Date        Rev   Author         Purposes                                                    */
-/* 2024-12-05  1.0.0 PXL009         FCR-1398 Temp Capture                                       */
+/* Date        Rev    Author         Purposes                                                   */
+/* 2024-12-05  1.0.0  PXL009         FCR-1398 Temp Capture                                      */
+/* 2025-04-01  1.1.0  NLT013         FCR-3256 Add DecodeSP                                      */
 /************************************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_Outbound_PalletTempCapture] (
@@ -55,6 +56,8 @@ DECLARE
    @nTemperatureMax     DECIMAL(5 ,2),
    @cTempCheckPoint     NVARCHAR( 20),
    @cOption             NVARCHAR( 1),
+   @cDecodeSP           NVARCHAR(20),
+   @cBarcode            NVARCHAR(60),
 
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),   @cFieldAttr01 NVARCHAR( 1), @cLottable01  NVARCHAR( 18),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),   @cFieldAttr02 NVARCHAR( 1), @cLottable02  NVARCHAR( 18),
@@ -106,6 +109,7 @@ SELECT
    @cTemperatureMax  = [V_String8],
    @cTemperatureUnit = [V_String9],
    @cTempCheckPoint  = [V_String10],
+   @cDecodeSP        = [V_String11],
 
    @cInField01 = [I_Field01],   @cOutField01 = [O_Field01],  @cFieldAttr01 = [FieldAttr01],
    @cInField02 = [I_Field02],   @cOutField02 = [O_Field02],  @cFieldAttr02 = [FieldAttr02],
@@ -142,6 +146,11 @@ Step 0. func = 1870. Menu
 ********************************************************************************/
 Step_0:
 BEGIN
+   -- Get storer config
+   SET @cDecodeSP = rdt.RDTGetConfig( @nFunc, 'DecodeSP', @cStorerKey)
+   IF @cDecodeSP = '0'
+      SET @cDecodeSP = ''
+
      -- EventLog
    EXEC [RDT].[rdt_STD_EventLog]
       @cActionType = N'1', -- Sign-in
@@ -257,6 +266,51 @@ BEGIN
       END
 
       SET @cPalletID = @cInField02
+      SET @cBarcode = @cInField02
+
+      -- Decode
+      IF @cDecodeSP <> ''
+      BEGIN
+         -- Standard decode
+         IF @cDecodeSP = '1'
+         BEGIN
+            EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cBarcode, 
+               @cType   = 'ID',
+               @cID     = @cPalletID     OUTPUT, 
+               @nErrNo  = @nErrNo   OUTPUT, 
+               @cErrMsg = @cErrMsg  OUTPUT
+
+            IF @nErrNo <> 0
+               GOTO Step_2_QUIT
+         END
+         
+         -- Customize decode
+         ELSE IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cDecodeSP AND type = 'P')
+         BEGIN
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cDecodeSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cBarcode, ' +
+               ' @cUPC OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT'
+            SET @cSQLParam =
+               ' @nMobile      INT,           ' +
+               ' @nFunc        INT,           ' +
+               ' @cLangCode    NVARCHAR( 3),  ' +
+               ' @nStep        INT,           ' +
+               ' @nInputKey    INT,           ' +
+               ' @cFacility    NVARCHAR( 5),  ' +
+               ' @cStorerKey   NVARCHAR( 15), ' +
+               ' @cBarcode     NVARCHAR( 60), ' +
+               ' @cID          NVARCHAR( 18)  OUTPUT, ' +
+               ' @nErrNo       INT            OUTPUT, ' +
+               ' @cErrMsg      NVARCHAR( 20)  OUTPUT'
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cBarcode, 
+               @cPalletID OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+            IF @nErrNo <> 0
+               GOTO Step_2_QUIT
+         END
+      END
 
       IF NOT EXISTS(
          SELECT 1
@@ -563,6 +617,7 @@ BEGIN
       [V_String8]       = @cTemperatureMax,
       [V_String9]       = @cTemperatureUnit,
       [V_String10]      = @cTempCheckPoint,
+      [V_String11]      = @cDecodeSP,
 
       [I_Field01] = @cInField01,  [O_Field01] = @cOutField01,   [FieldAttr01]  = @cFieldAttr01,
       [I_Field02] = @cInField02,  [O_Field02] = @cOutField02,   [FieldAttr02]  = @cFieldAttr02,

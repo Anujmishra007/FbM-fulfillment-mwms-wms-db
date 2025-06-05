@@ -1,4 +1,3 @@
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -34,6 +33,8 @@ GO
 /* 2025-03-13 1.15.0 NLT013   Misupdate PickDetail as 5, because not check all     */
 /*                            PickDetails are picked, some Packinfo was missing    */
 /* 2025-03-22 1.15.1 NLT013   UWP-31481 Need check if all packdetail are generated */
+/* 2025-04-08 1.15.2 Dennis   UWP-32495 FixBugs                                    */
+/* 2025-04-29 1.16.2 NickT    UWP-33521 Carton weight is not corret for MPOC       */
 /***********************************************************************************/
 CREATE OR ALTER PROC rdt.rdt_855ExtUpd13 (
    @nMobile      INT,   
@@ -682,28 +683,37 @@ BEGIN
                      DECLARE @tCartonWeight TABLE
                      (
                         CaseID            NVARCHAR(30),
+                        PickSlipNo        NVARCHAR(10),
+                        CartonNo          INT,
                         Weight            FLOAT
                      )
 
-                     INSERT INTO @tCartonWeight (CaseID, Weight)
-                     SELECT CaseID, InvWeight + CartonWeight
+                     DECLARE @nPickSlipNoQty    INT = 1
+                     SELECT @nPickSlipNoQty = COUNT(DISTINCT PickSlipNo)
+                     FROM dbo.PackInfo WITH(NOLOCK)
+                     WHERE RefNo IS NOT NULL
+                        AND RefNo = @cDropID
+                        AND CartonStatus = 'PACKED'
+
+                     INSERT INTO @tCartonWeight (CaseID, PickSlipNo, CartonNo, Weight)
+                     SELECT LabelNo, PickSlipNo, CartonNo, InvWeight + CartonWeight
                      FROM
-                        (SELECT PKD.CaseID, CART.CartonWeight, SUM(PKD.qty * SKU.StdGrossWgt) AS InvWeight
-                        FROM dbo.CARTONIZATION CART WITH(NOLOCK)
-                        INNER JOIN dbo.PackInfo PKI WITH(NOLOCK) ON CART.CartonType = ISNULL(PKI.CartonType, '')
-                        INNER JOIN dbo.PickDetail PKD WITH(NOLOCK) ON PKI.RefNo = PKD.CaseID
-                        INNER JOIN dbo.SKU SKU WITH(NOLOCK) ON PKD.StorerKey = SKU.StorerKey AND PKD.Sku = SKU.Sku
-                        WHERE PKI.RefNo IS NOT NULL
-                           AND PKD.CaseID <> ''
-                           AND PKD.CaseID = @cDropID
-                           AND PKD.StorerKey = @cStorerKey
-                           AND PKD.Status = @cPickConfirmStatus
-                        GROUP BY PKD.CaseID, CART.CartonWeight) AS t
+                        (SELECT PD.LabelNo, PH.PickSlipNo, PD.CartonNo, SUM(SKU.STDNETWGT * PD.qty) AS InvWeight, CART.CartonWeight / ISNULL(@nPickSlipNoQty, 1) AS CartonWeight 
+                        FROM PACKDETAIL PD (nolock)
+                        INNER JOIN SKU (nolock) on  PD.storerkey = SKU.storerkey and PD.sku=SKU.sku
+                        INNER JOIN packheader PH (nolock) on PH.pickslipno = PD.pickslipno
+                        INNER JOIN dbo.PackInfo PKI WITH(NOLOCK) ON PD.PickSlipNo = PKI.PickSlipNo AND PD.CartonNo = PKI.CartonNo
+                        INNER JOIN dbo.Storer STORER WITH (NOLOCK) ON PD.StorerKey = STORER.StorerKey
+                        INNER JOIN dbo.CARTONIZATION CART WITH(NOLOCK) ON Storer.CartonGroup = CART.CartonizationGroup AND CART.CartonType = PKI.CartonType
+                        WHERE PD.LabelNo = @cDropID
+                           AND PKI.CartonStatus = 'PACKED'
+                           AND PD.StorerKey = @cStorerKey
+                           GROUP BY PD.StorerKey, PH.PickSlipNo, PD.CartonNo, PD.labelno, CART.CartonWeight) AS t
 
                      UPDATE PI WITH(ROWLOCK) 
                      SET PI.Weight = CW.Weight
                      FROM dbo.PackInfo PI
-                     INNER JOIN @tCartonWeight CW ON PI.RefNo = CW.CaseID
+                     INNER JOIN @tCartonWeight CW ON PI.RefNo = CW.CaseID AND PI.PickSlipNo = CW.PickSlipNo
                      WHERE
                         PI.RefNo IS NOT NULL
                         AND PI.RefNo = @cDropID
@@ -845,7 +855,8 @@ BEGIN
                                              AND PH.OrderKey = PD.OrderKey
                                           WHERE PH.StorerKey = @cStorerkey
                                              AND PH.PickHeaderKey = @cPickSlipNo
-                                             AND PD.Status < '5'
+                                             AND PD.Status < '4'
+                                             AND PD.QTY > 0
                                            )
                            AND (SELECT COUNT(DISTINCT LabelNo) FROM dbo.PackDetail WITH(NOLOCK) WHERE StorerKey = @cStorerkey AND PickSlipNo = @cPickSlipNo)
                                =

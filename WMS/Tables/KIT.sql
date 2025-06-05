@@ -40,7 +40,8 @@ BEGIN
     [USRDEF12] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_KIT_USRDEF12] DEFAULT (''),
     [USRDEF13] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_KIT_USRDEF13] DEFAULT (''),
     [USRDEF14] [datetime] NULL,
-    [USRDEF15] [datetime] NULL
+    [USRDEF15] [datetime] NULL,
+    [ExternStatus] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_KIT_ExternStatus] DEFAULT (''),
     ) ON [PRIMARY]
 
     ALTER TABLE [dbo].[KIT] ADD CONSTRAINT [PK_KIT] PRIMARY KEY CLUSTERED ([KITKey]) WITH (FILLFACTOR=90) ON [PRIMARY]
@@ -118,6 +119,8 @@ BEGIN
     EXEC sp_addextendedproperty N'MS_Description', 'User defined field 14', 'SCHEMA', N'dbo', 'TABLE', N'KIT', 'COLUMN', N'USRDEF14'
 
     EXEC sp_addextendedproperty N'MS_Description', 'User defined field 15', 'SCHEMA', N'dbo', 'TABLE', N'KIT', 'COLUMN', N'USRDEF15'
+
+    EXEC sp_addextendedproperty N'MS_Description', 'Extern Status', 'SCHEMA', N'dbo', 'TABLE', N'KIT', 'COLUMN', N'ExternStatus'
 END
 ELSE
 BEGIN
@@ -167,5 +170,13 @@ BEGIN
     BEGIN
         ALTER TABLE KIT ADD USRDEF15 DATETIME;
         EXEC sp_addextendedproperty N'MS_Description', N'USRDEF15', 'SCHEMA', N'dbo', 'TABLE', N'KIT', 'COLUMN', N'USRDEF15'
+    END
+
+    IF NOT EXISTS (SELECT 1
+                   FROM sys.columns
+                   WHERE Name = 'ExternStatus' AND Object_ID = Object_ID('KIT'))
+    BEGIN
+        ALTER TABLE KIT ADD ExternStatus NVARCHAR(30) NULL CONSTRAINT [DF_KIT_ExternStatus]  DEFAULT (' ');
+        EXEC sp_addextendedproperty N'MS_Description', N'ExternStatus', 'SCHEMA', N'dbo', 'TABLE', N'KIT', 'COLUMN', N'ExternStatus'
     END
 END

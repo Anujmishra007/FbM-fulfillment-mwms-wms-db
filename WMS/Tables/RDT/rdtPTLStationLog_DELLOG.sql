@@ -3,34 +3,88 @@ GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
-IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[rdtPTLStationLog_DELLOG]') AND type in (N'U'))
+IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[RDT].[rdtPTLStationLog_DELLOG]') AND type in (N'U'))
 BEGIN
 CREATE TABLE [RDT].[rdtPTLStationLog_DELLOG](
 	[Rowref] [int] IDENTITY(1,1) NOT NULL,
 	[RowRefSource] [int] NOT NULL,
-	[Status] [nvarchar](1) NOT NULL,
-	[AddDate] [datetime] NOT NULL,
-	[AddWho] [nvarchar](128) NOT NULL,
-	[ArchiveCop] [nvarchar](1) NULL,
+	[Status] [nvarchar](1) NOT NULL  CONSTRAINT [DF_rdtPTLStationLog_DELLOG_Status]  DEFAULT ('0'),
+	[AddDate] [datetime] NOT NULL CONSTRAINT [DF_rdtPTLStationLog_DELLOG_AddDate]  DEFAULT (getdate()),
+	[AddWho] [nvarchar](128) NOT NULL CONSTRAINT [DF_rdtPTLStationLog_DELLOG_AddWho]  DEFAULT (suser_sname()),
+	[ArchiveCop] [nvarchar](1) NULL
  CONSTRAINT [PK_rdtPTLStationLog_DELLOG] PRIMARY KEY CLUSTERED 
 (
 	[Rowref] ASC
 )WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, FILLFACTOR = 80, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 ) ON [PRIMARY]
-END
-GO
-IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[rdt].[DF_rdtPTLStationLog_DELLOG_Status]') AND type = 'D')
+
+
+
+END 
+
+ELSE 
 BEGIN
-ALTER TABLE [RDT].[rdtPTLStationLog_DELLOG] ADD  CONSTRAINT [DF_rdtPTLStationLog_DELLOG_Status]  DEFAULT ('0') FOR [Status]
-END
-GO
-IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[rdt].[DF_rdtPTLStationLog_DELLOG_AddDate]') AND type = 'D')
-BEGIN
-ALTER TABLE [RDT].[rdtPTLStationLog_DELLOG] ADD  CONSTRAINT [DF_rdtPTLStationLog_DELLOG_AddDate]  DEFAULT (getdate()) FOR [AddDate]
-END
-GO
-IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[rdt].[DF_rdtPTLStationLog_DELLOG_AddWho]') AND type = 'D')
-BEGIN
-ALTER TABLE [RDT].[rdtPTLStationLog_DELLOG] ADD  CONSTRAINT [DF_rdtPTLStationLog_DELLOG_AddWho]  DEFAULT (suser_sname()) FOR [AddWho]
-END
-GO
+
+			 IF NOT EXISTS (SELECT 1
+	               FROM sys.columns
+	               WHERE Name = 'AddWho' AND Object_ID = Object_ID('RDT.rdtPTLStationLog_DELLOG'))
+			BEGIN
+
+				ALTER TABLE [RDT].[rdtPTLStationLog_DELLOG] ADD AddWho [int] NOT NULL ;
+				EXEC sp_addextendedproperty N'MS_Description', 'RowRefSource', 'SCHEMA', N'RDT', 'TABLE', N'rdtPTLStationLog_DELLOG', 'COLUMN', N'RowRefSource'
+				
+			END
+
+
+
+			 IF NOT EXISTS (SELECT 1
+	               FROM sys.columns
+	               WHERE Name = 'Status' AND Object_ID = Object_ID('RDT.rdtPTLStationLog_DELLOG'))
+			BEGIN
+
+				ALTER TABLE [RDT].[rdtPTLStationLog_DELLOG] ADD Status [nvarchar](1) NOT NULL  CONSTRAINT [DF_rdtPTLStationLog_DELLOG_Status]  DEFAULT ('0') ;
+				EXEC sp_addextendedproperty N'MS_Description', 'Status', 'SCHEMA', N'RDT', 'TABLE', N'rdtPTLStationLog_DELLOG', 'COLUMN', N'Status'
+				
+			END
+
+
+
+
+			 IF NOT EXISTS (SELECT 1
+	               FROM sys.columns
+	               WHERE Name = 'AddDate' AND Object_ID = Object_ID('RDT.rdtPTLStationLog_DELLOG'))
+			BEGIN
+
+				ALTER TABLE [RDT].[rdtPTLStationLog_DELLOG] ADD AddDate  [datetime] NOT NULL CONSTRAINT [DF_rdtPTLStationLog_DELLOG_AddDate]  DEFAULT (getdate()) ;
+				EXEC sp_addextendedproperty N'MS_Description', 'AddDate', 'SCHEMA', N'RDT', 'TABLE', N'rdtPTLStationLog_DELLOG', 'COLUMN', N'AddDate'
+				
+			END
+
+
+
+
+			 IF NOT EXISTS (SELECT 1
+	               FROM sys.columns
+	               WHERE Name = 'AddWho' AND Object_ID = Object_ID('RDT.rdtPTLStationLog_DELLOG'))
+			BEGIN
+
+				ALTER TABLE [RDT].[rdtPTLStationLog_DELLOG] ADD AddWho [nvarchar](128) NOT NULL CONSTRAINT [DF_rdtPTLStationLog_DELLOG_AddWho]  DEFAULT (suser_sname());
+				EXEC sp_addextendedproperty N'MS_Description', 'AddWho', 'SCHEMA', N'RDT', 'TABLE', N'rdtPTLStationLog_DELLOG', 'COLUMN', N'AddWho'
+				
+			END
+
+
+
+
+
+			 IF NOT EXISTS (SELECT 1
+	               FROM sys.columns
+	               WHERE Name = 'ArchiveCop' AND Object_ID = Object_ID('RDT.rdtPTLStationLog_DELLOG'))
+			BEGIN
+
+				ALTER TABLE [RDT].[rdtPTLStationLog_DELLOG] ADD ArchiveCop [nvarchar](1) NULL;
+				EXEC sp_addextendedproperty N'MS_Description', 'ArchiveCop', 'SCHEMA', N'RDT', 'TABLE', N'rdtPTLStationLog_DELLOG', 'COLUMN', N'ArchiveCop'
+				
+			END
+END 
+

@@ -10,7 +10,7 @@ GO
 /*                                                                      */
 /* Purpose: UWP-18747 - Levis US MPOC and Cartonization                 */
 /*        :                                                             */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 1.2                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -19,8 +19,10 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 28-May-2024 Shong    1.1   Create                                    */
+/* 25-Oct-2024 WLChooi  1.2   Fix Listname & remove conditions (WL01)   */
+/* 06-May-2025 SWT01    1.3   Add Condition Group UWP-34063             */         
 /************************************************************************/
-CREATE OR ALTER PROC msp_GetMPOCRequired
+CREATE OR ALTER PROC [dbo].[msp_GetMPOCRequired]
 (
     @c_OrderKey NVARCHAR(10),
     @n_MPOCFlag   INT = 0 OUTPUT,
@@ -40,7 +42,10 @@ BEGIN
            @c_Operator   NVARCHAR(10) = N'', 
            @b_CheckFlag  BIT = 0,
            @n_Counts     INT = 0,
-           @c_ColumnName NVARCHAR(60) = N''; 
+           @c_ColumnName NVARCHAR(60) = N'',
+           @n_AndFlagCtn INT = 0, 
+           @c_AndOrCond  NVARCHAR(10) = '',
+           @c_CondGroup  NVARCHAR(250) = '';
 
    SELECT @c_StorerKey = StorerKey
    FROM ORDERS WITH (NOLOCK)
@@ -52,87 +57,77 @@ BEGIN
 	   WHERE LISTNAME = 'MPOCEXCEMP'   
 	   AND Storerkey = @c_StorerKey )
    BEGIN
-      DECLARE CUR_MPOCEXCEMP CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-      SELECT C.UDF02, C.Short, COUNT(1) AS [RowCount], MAX(Code) AS KeyValue
+      
+      DECLARE CUR_ConditionGroup CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      SELECT CASE WHEN ISNULL(C.Long, '') = '' THEN '0' ELSE C.Long END, 
+             SUM(CASE WHEN Notes = 'AND' THEN 1 ELSE 0 END) AS AndFlagCtn
       FROM dbo.CODELKUP C WITH (NOLOCK)
       WHERE LISTNAME = 'MPOCEXCEMP'   
       AND Storerkey = @c_StorerKey 
-      GROUP BY C.Short, C.UDF02
-      --ORDER BY [RowCount] 
-
-      OPEN CUR_MPOCEXCEMP;
-      FETCH NEXT FROM CUR_MPOCEXCEMP INTO @c_ColumnName, @c_Operator, @n_Counts, @c_KeyValue; 
-      WHILE @@FETCH_STATUS <> -1
-      BEGIN 
+      GROUP BY CASE WHEN ISNULL(C.Long, '') = '' THEN '0' ELSE C.Long END
+      Order By 1
+      
+      OPEN CUR_ConditionGroup
+      FETCH NEXT FROM CUR_ConditionGroup INTO @c_CondGroup, @n_AndFlagCtn
+      
+      WHILE @@FETCH_STATUS = 0
+      BEGIN
          SET @c_SQLCond = ''
-         IF @n_Counts > 1
-         BEGIN
-            DECLARE CUR_IN_SELECT CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
-            SELECT Code
-            FROM dbo.CODELKUP C WITH (NOLOCK)
-            WHERE LISTNAME = 'MPOCEXCEMP'   
-            AND Storerkey = @c_StorerKey 
-            AND C.Short = @c_Operator 
-            AND C.UDF02 = @c_ColumnName 
 
-            OPEN CUR_IN_SELECT
+         DECLARE CUR_MPOCEXCEMP CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+         SELECT C.UDF02, C.Short, Code AS KeyValue, Notes
+         FROM dbo.CODELKUP C WITH (NOLOCK)
+         WHERE LISTNAME = 'MPOCEXCEMP'   
+         AND Storerkey = @c_StorerKey 
+         AND Long = @c_CondGroup 
+         ORDER BY C.UDF02, CASE WHEN Notes='OR' THEN 1 ELSE 9 END
          
-            FETCH NEXT FROM CUR_IN_SELECT INTO @c_KeyValue
-         
-            WHILE @@FETCH_STATUS = 0
-            BEGIN
-                IF @c_SQLCond = ''  
-                BEGIN
-                   SET @c_SQLCond = @c_SQLCond + @c_ColumnName + ' IN (''' + @c_KeyValue + ''''
-                END
-                ELSE
-                BEGIN
-                    SET @c_SQLCond = @c_SQLCond + ',''' + @c_KeyValue + ''''
-                END
 
-                FETCH NEXT FROM CUR_IN_SELECT INTO @c_KeyValue
-            END         
-            CLOSE CUR_IN_SELECT
-            DEALLOCATE CUR_IN_SELECT
-            SET @c_SQLCond = @c_SQLCond + ')'
-         END 
-         ELSE 
-         BEGIN
+         OPEN CUR_MPOCEXCEMP;
+         FETCH NEXT FROM CUR_MPOCEXCEMP INTO @c_ColumnName, @c_Operator, @c_KeyValue, @c_AndOrCond
+         WHILE @@FETCH_STATUS <> -1
+         BEGIN 
             IF @c_SQLCond = ''  
             BEGIN
-                SET @c_SQLCond = @c_SQLCond + @c_ColumnName + ' ' + @c_Operator + '''' + @c_KeyValue + ''''
+               SET @c_SQLCond = @c_SQLCond + ' ' +  @c_ColumnName + ' ' + @c_Operator + '''' + @c_KeyValue + ''''
             END
-            ELSE 
+            ELSE
             BEGIN
-                SET @c_SQLCond = @c_SQLCond + ' OR ' + @c_ColumnName + ' ' + @c_Operator + '''' + @c_KeyValue + ''''
+               SET @c_SQLCond = @c_SQLCond + ' ' + @c_AndOrCond + ' ' + @c_ColumnName + ' ' + @c_Operator + '''' + @c_KeyValue + ''''
             END
-         END 
 
-         --IF @b_debug = 1
-         --   PRINT 'COND >>' + @c_SQLCond
+            --IF @b_debug = 1
+            --   PRINT 'COND >>' + @c_SQLCond
+
+            FETCH NEXT FROM CUR_MPOCEXCEMP INTO @c_ColumnName, @c_Operator, @c_KeyValue, @c_AndOrCond
+         END;
+         CLOSE CUR_MPOCEXCEMP;
+         DEALLOCATE CUR_MPOCEXCEMP; 
 
          IF @c_SQLWhere = ''
          BEGIN
-            SET @c_SQLWhere = 'AND (' + @c_SQLCond
+            SET @c_SQLWhere = 'AND ( (' + @c_SQLCond + ') '
          END 
          ELSE 
          BEGIN
-             SET @c_SQLWhere = @c_SQLWhere + ' OR ' + @c_SQLCond
+            SET @c_SQLWhere = @c_SQLWhere + ' OR (' + @c_SQLCond + ')'
          END
 
-         FETCH NEXT FROM CUR_MPOCEXCEMP INTO @c_ColumnName, @c_Operator, @n_Counts, @c_KeyValue; 
-      END;
-      CLOSE CUR_MPOCEXCEMP;
-      DEALLOCATE CUR_MPOCEXCEMP; 
-
+         FETCH NEXT FROM CUR_ConditionGroup INTO @c_CondGroup, @n_AndFlagCtn
+      END
+      
+      CLOSE CUR_ConditionGroup
+      DEALLOCATE CUR_ConditionGroup
+      
       SET @c_SQLWhere = @c_SQLWhere + ')'
 
       SET @c_SQL = N'SELECT @n_Count = COUNT(1) 
       FROM dbo.ORDERS WITH (NOLOCK)
       WHERE OrderKey = @c_OrderKey ' + @c_SQLWhere;
 
-      --IF @b_Debug=1
-      --   PRINT @c_SQL
+      IF @b_Debug=1
+        PRINT @c_SQL
+
       BEGIN TRY
          EXEC sp_executesql @c_SQL, N'@c_OrderKey NVARCHAR(10), @n_Count INT OUTPUT', @c_OrderKey, @n_RowCount OUTPUT; 
           
@@ -158,9 +153,7 @@ BEGIN
                 JOIN dbo.ORDERDETAIL AS OD WITH (NOLOCK) ON O.OrderKey = OD.OrderKey
                 JOIN dbo.SKU AS S WITH (NOLOCK) ON S.StorerKey = OD.StorerKey AND S.SKU = OD.Sku
                 WHERE O.OrderKey = @c_OrderKey
-                AND (( S.Size IS NULL OR S.Size = '' ) 
-                       OR ( S.Measurement IS NULL OR S.Measurement = '' )
-                       OR ( S.PrepackIndicator IS NOT NULL AND S.PrepackIndicator <> ''))
+                AND (S.PrepackIndicator IS NOT NULL AND S.PrepackIndicator <> '')   --WL01
                 )
       BEGIN 
          SET @n_MPOCFlag = 0; 
@@ -178,7 +171,7 @@ BEGIN
                    ELSE 1 
                 END
           FROM dbo.ORDERS AS O WITH (NOLOCK)
-          JOIN dbo.CODELKUP AS C WITH (NOLOCK) ON LISTNAME = 'MPOC_PERMITTED'
+          JOIN dbo.CODELKUP AS C WITH (NOLOCK) ON LISTNAME = 'MPOCPERMIT'   --WL01
                              AND ( C.Code = O.BillToKey OR C.Code = O.ConsigneeKey )
                              AND C.Storerkey = O.StorerKey
           WHERE O.OrderKey = @c_OrderKey;

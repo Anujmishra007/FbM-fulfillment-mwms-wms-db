@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_ExplodeByPackKey_Wrapper]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [WM].[lsp_ExplodeByPackKey_Wrapper]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -30,14 +25,18 @@ GO
 /* 09-Feb-2021 Wan02    1.2   LFWM-2467 - UAT - TW  Duplicated Moveable */
 /*                            Unit populated when Explode by Packkey in */
 /*                            ASNReceipt Module                         */
+/* 21-May-2025 AYD01    1.3   UWP-30411: add new storerconfig           */
+/*                            ASNExplodeByPackkeySP and using Svalue    */
+/*                            to call sub-script and get a customized ID*/
 /************************************************************************/
-CREATE PROCEDURE [WM].[lsp_ExplodeByPackKey_Wrapper]
+CREATE OR ALTER PROCEDURE [WM].[lsp_ExplodeByPackKey_Wrapper]
     @c_ReceiptKey NVARCHAR(10) 
    ,@c_ReceiptLineNumber NVARCHAR(5)=''  
    ,@b_Success INT=1 OUTPUT 
    ,@n_Err INT=0 OUTPUT
    ,@c_ErrMsg NVARCHAR(250)='' OUTPUT
    ,@c_UserName NVARCHAR(128)=''
+   
 AS
 BEGIN
    SET NOCOUNT ON
@@ -59,7 +58,7 @@ BEGIN
    END                                    --(Wan01) - END
     
    BEGIN TRY -- SWT01 - Begin Outer Begin Try
-      DECLARE @c_StorerKey                  NVARCHAR(15) = ''
+      DECLARE @c_StorerKey                    NVARCHAR(15) = ''
                ,@c_Sku                        NVARCHAR(20) = ''
                ,@c_UOM                        NVARCHAR(10) = ''
                ,@c_PackKey                    NVARCHAR(10) = ''
@@ -78,9 +77,12 @@ BEGIN
                ,@n_RemainQtyReceived          INT = 0 
                ,@n_InsertBeforeReceivedQty    INT = 0 
                ,@n_InsertQtyExpected          INT = 0 
-               ,@c_GenID                      NVARCHAR(10) =''
+               ,@c_GenID                      NVARCHAR(10) = ''
                ,@C_GEN_ID_DURING_EXPLODE_PACK NVARCHAR(10) = ''
                ,@c_ToID                       NVARCHAR(10) = ''
+               ,@cSQL                         NVARCHAR(MAX)       --AYD01
+               ,@cSQLParam                    NVARCHAR(MAX)       --AYD01
+               ,@c_GenIdSP                    NVARCHAR(30) = ''   --AYD01
     
       SET @b_Success = 1
       SET @c_ErrMsg =''
@@ -485,9 +487,20 @@ BEGIN
       IF @c_GenID = '1'
       BEGIN
          SELECT @c_GEN_ID_DURING_EXPLODE_PACK = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'GEN_ID_DURING_EXPLODE_PACK') --Get from NSQLConfig
-       
+         
          IF @c_GEN_ID_DURING_EXPLODE_PACK = '1'
          BEGIN
+            --AYD01 START
+            SELECT @c_GenIdSP = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'ASNExplodeByPackkeySP') 
+            IF @c_GenIdSP <> '0' AND NOT EXISTS(SELECT 1 FROM dbo.SYSOBJECTS WHERE NAME = RTRIM(@c_GenIdSP) AND [TYPE] = 'P') 
+            BEGIN                                                                                                                                                                                                                                  
+               SELECT @c_ErrMsg = CONVERT(CHAR(250), @n_Err),                                                                                                                                                                                     
+                      @n_Err = 31012 -- Should Be Set To The SQL Errmessage but I don't know how to do so.                                                                                                                                        
+               SELECT @c_ErrMsg = 'NSQL' + CONVERT(CHAR(5), @n_Err) +                                                                                                                                                                             
+                         ': Stored Proc name invalid ('+RTRIM(ISNULL(@c_GenIdSP,'')) + ') (lsp_ExplodeByPackKey_Wrapper)'                                                                                  
+               GOTO EXIT_SP                                                                                                                                                                                                                       
+            END   
+            --AYD01 END
             DECLARE CUR_RECEIPTDETAIL CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
                SELECT RD.ReceiptLineNumber
                FROM   RECEIPTDETAIL RD WITH (NOLOCK) 
@@ -501,16 +514,49 @@ BEGIN
             FETCH FROM CUR_RECEIPTDETAIL INTO @c_ReceiptLineNumber
           
             WHILE @@FETCH_STATUS = 0
-            BEGIN
             
-               EXEC dbo.nspg_GetKey               
-                  @KeyName = 'ID'    
-               ,@fieldlength = 10
-               ,@keystring = @c_ToID OUTPUT    
-               ,@b_Success = @b_Success OUTPUT    
-               ,@n_err     = @n_err OUTPUT    
-               ,@c_errmsg  = @c_errmsg OUTPUT                     
+            BEGIN
+               --AYD01 START
+               IF @c_GenIdSP <> '0'
+               BEGIN    
+                  SET @cSQL = N'EXEC dbo.' + RTRIM(@c_GenIdSP)   
+                            + ' @c_StorerKey = @c_StorerKey,          '      
+                            + ' @c_IDKey     = @c_IDKey        OUTPUT,'   
+                            + ' @b_Success   = @b_Success      OUTPUT,'  
+                            + ' @n_ErrNo     = @n_ErrNo        OUTPUT,'      
+                            + ' @c_ErrMsg    = @c_ErrMsg       OUTPUT'     
 
+                  SET @cSQLParam = N'@c_StorerKey  NVARCHAR(15),'
+                                 + ' @c_IDKey      NVARCHAR(20)    OUTPUT,'
+                                 + ' @b_Success    INT             OUTPUT,'
+                                 + ' @n_ErrNo      INT             OUTPUT,'
+                                 + ' @c_ErrMsg     NVARCHAR(250)   OUTPUT'    
+                                      
+                  EXEC sp_ExecuteSQL @cSQL, @cSQLParam, 
+                        @c_StorerKey, 
+                        @c_ToID        OUTPUT, 
+                        @b_Success     OUTPUT,
+                        @n_Err         OUTPUT, 
+                        @c_ErrMsg      OUTPUT  
+
+                  IF @n_Err <> 0  
+                  BEGIN
+                     SET @b_Success = 0
+                     SET @c_ErrMsg = 'Error in Execute SQL: ' + @c_GenIdSP + ' (lsp_ExplodeByPackKey_Wrapper).'
+                     GOTO EXIT_SP
+                  END  
+               END   
+               --AYD01 END
+               ELSE
+               BEGIN
+                  EXEC dbo.nspg_GetKey               
+                     @KeyName = 'ID'    
+                  ,@fieldlength = 10
+                  ,@keystring = @c_ToID OUTPUT    
+                  ,@b_Success = @b_Success OUTPUT    
+                  ,@n_err     = @n_err OUTPUT    
+                  ,@c_errmsg  = @c_errmsg OUTPUT                     
+               END
                UPDATE RECEIPTDETAIL 
                   SET ToId = @c_ToID ,
                      EditDate = GETDATE(), 

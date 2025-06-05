@@ -69,6 +69,7 @@ GO
 /* 21-Nov-2024  SWT04     FCR-822 - Merge Pallets with Serial Numbers     */
 /* 22-Jan-2025  Wan11     UWP-23317 - Unpick Serial if change on id.      */
 /*                        Fixed RDT move issue(FCR-540)                   */
+/* 04-Apr-2025  Wan12     UWP-31258-FCR-822 Partial Pallet Serial No Move */
 /**************************************************************************/
 
 CREATE OR ALTER PROCEDURE [dbo].[nspItrnAddMoveCheck]
@@ -183,7 +184,9 @@ BEGIN
                                      
       , @c_FromLocTypeSkipChannel    CHAR(1)           --NJOW01
       , @c_ToLocTypeSkipChannel      CHAR(1)           --NJOW01
-      , @c_ChkNoMixLottableForAllSku NVARCHAR(30) = '' --NJOW04      
+      , @c_ChkNoMixLottableForAllSku NVARCHAR(30) = '' --NJOW04  
+      
+      , @n_Qty_ID                   INT = 0              --(Wan12)
 
    SET @c_IDLottable01     = ''
    SET @c_IDLottable02     = ''
@@ -768,7 +771,7 @@ BEGIN
              ,@c_Work_toid        NVARCHAR(18)
              ,@b_addid            INT
              ,@c_InitialID        NVARCHAR(18)
-
+ 
       IF ISNULL(RTRIM(@c_LOT),'') <> '' AND ISNULL(RTRIM(@c_FromLOC),'') <> '' AND
          ISNULL(RTRIM(@c_StorerKey),'') <> '' AND ISNULL(RTRIM(@c_SKU),'') <> '' AND
          @n_Qty > 0
@@ -781,7 +784,7 @@ BEGIN
            AND ID = @c_FromID
            AND Qty >= @n_Qty
            SELECT @n_cnt = @@ROWCOUNT
-
+ 
          IF @n_cnt <> 1
          BEGIN
             /* Out Of Luck - Cannot Continue Because Unique FROM Row Not Found */
@@ -799,10 +802,11 @@ BEGIN
             GOTO FINDTOLOCATION
          END
       END
-
+ 
       /* Search By ID,LOC,QTY */
       IF ISNULL(RTRIM(@c_FromID),'') <> ''
       BEGIN
+
          SELECT @c_Work_FromLoc = Loc,
                 @c_Work_Fromid = id,
                 @c_Work_lot = lot,
@@ -1290,6 +1294,12 @@ BEGIN
 END
 IF @n_continue=1 or @n_continue=2
 BEGIN
+   SELECT @n_Qty_ID = SUM(lli.Qty) FROM LOTxLOCxID lli (NOLOCK)               --(Wan12)
+   WHERE lli.Storerkey = @c_Storerkey
+   AND   lli.Loc       = @c_FromLoc
+   AND   lli.ID        = @c_FromID  
+   GROUP BY lli.Storerkey, lli.Loc, lli.ID 
+
    /* Default TOID and TOLOC IF Necessary */
    IF (ISNULL(RTrim(@c_ToID), '') ='')
    BEGIN
@@ -2543,56 +2553,58 @@ BEGIN
                 AND StorerKey = @c_StorerKey 
                 AND SerialNoCapture IN ('1','3'))
       BEGIN
-         BEGIN TRY
-            EXEC dbo.msp_SerialNoMoveCheck 
-                  @c_itrnkey    = @c_itrnkey   
-                , @c_StorerKey  = @c_StorerKey 
-                , @c_Sku        = @c_Sku       
-                , @c_Lot        = @c_Lot       
-                , @c_fromloc    = @c_fromloc   
-                , @c_fromid     = @c_fromid    
-                , @c_ToLoc      = @c_ToLoc     
-                , @c_ToID       = @c_ToID      
-                , @c_packkey    = @c_packkey   
-                , @c_Status     = @c_Status    
-                , @n_casecnt    = @n_casecnt   
-                , @n_innerpack  = @n_innerpack 
-                , @n_Qty        = @n_Qty       
-                , @n_pallet     = @n_pallet    
-                , @f_cube       = @f_cube      
-                , @f_grosswgt   = @f_grosswgt  
-                , @f_netwgt     = @f_netwgt    
-                , @f_otherunit1 = @f_otherunit1
-                , @f_otherunit2 = @f_otherunit2
-                , @c_lottable01 = @c_lottable01
-                , @c_lottable02 = @c_lottable02
-                , @c_lottable03 = @c_lottable03
-                , @d_lottable04 = @d_lottable04
-                , @d_lottable05 = @d_lottable05
-                , @c_lottable06 = @c_lottable06
-                , @c_lottable07 = @c_lottable07
-                , @c_lottable08 = @c_lottable08
-                , @c_lottable09 = @c_lottable09
-                , @c_lottable10 = @c_lottable10
-                , @c_lottable11 = @c_lottable11
-                , @c_lottable12 = @c_lottable12
-                , @d_lottable13 = @d_lottable13
-                , @d_lottable14 = @d_lottable14
-                , @d_lottable15 = @d_lottable15
-                , @b_Success    = @b_Success OUTPUT  
-                , @n_err        = @n_err     OUTPUT  
-                , @c_errmsg     = @c_errmsg  OUTPUT  
-                , @c_MoveRefKey = @c_MoveRefKey
-                , @c_Channel    = @c_Channel   
-                , @n_Channel_ID = @n_Channel_ID OUTPUT
-         END TRY
-         BEGIN CATCH
-               SET @n_err = ERROR_NUMBER()
-               SET @c_ErrMsg = ERROR_MESSAGE()
-                               
-               SET @n_continue = 3
-               SET @c_ErrMsg = RTRIM(@c_ErrMsg) + '. (nspItrnAddMoveCheck)' 
-         END CATCH                                          
+         IF @n_Qty > 0 AND @n_Qty = @n_Qty_ID                                       --(Wan12)
+         BEGIN
+            BEGIN TRY
+               EXEC dbo.msp_SerialNoMoveCheck 
+                     @c_itrnkey    = @c_itrnkey   
+                   , @c_StorerKey  = @c_StorerKey 
+                   , @c_Sku        = @c_Sku       
+                   , @c_Lot        = @c_Lot       
+                   , @c_fromloc    = @c_fromloc   
+                   , @c_fromid     = @c_fromid    
+                   , @c_ToLoc      = @c_ToLoc     
+                   , @c_ToID       = @c_ToID      
+                   , @c_packkey    = @c_packkey   
+                   , @c_Status     = @c_Status    
+                   , @n_casecnt    = @n_casecnt   
+                   , @n_innerpack  = @n_innerpack 
+                   , @n_Qty        = @n_Qty       
+                   , @n_pallet     = @n_pallet    
+                   , @f_cube       = @f_cube      
+                   , @f_grosswgt   = @f_grosswgt  
+                   , @f_netwgt     = @f_netwgt    
+                   , @f_otherunit1 = @f_otherunit1
+                   , @f_otherunit2 = @f_otherunit2
+                   , @c_lottable01 = @c_lottable01
+                   , @c_lottable02 = @c_lottable02
+                   , @c_lottable03 = @c_lottable03
+                   , @d_lottable04 = @d_lottable04
+                   , @d_lottable05 = @d_lottable05
+                   , @c_lottable06 = @c_lottable06
+                   , @c_lottable07 = @c_lottable07
+                   , @c_lottable08 = @c_lottable08
+                   , @c_lottable09 = @c_lottable09
+                   , @c_lottable10 = @c_lottable10
+                   , @c_lottable11 = @c_lottable11
+                   , @c_lottable12 = @c_lottable12
+                   , @d_lottable13 = @d_lottable13
+                   , @d_lottable14 = @d_lottable14
+                   , @d_lottable15 = @d_lottable15
+                   , @b_Success    = @b_Success OUTPUT  
+                   , @n_err        = @n_err     OUTPUT  
+                   , @c_errmsg     = @c_errmsg  OUTPUT  
+                   , @c_MoveRefKey = @c_MoveRefKey
+                   , @c_Channel    = @c_Channel   
+                   , @n_Channel_ID = @n_Channel_ID OUTPUT
+            END TRY
+            BEGIN CATCH
+                  SET @n_err = ERROR_NUMBER()
+                  SET @c_ErrMsg = ERROR_MESSAGE()
+                  SET @n_continue = 3
+                  SET @c_ErrMsg = RTRIM(@c_ErrMsg) + '. (nspItrnAddMoveCheck)' 
+            END CATCH   
+         END
       END
    END
    /* SWT04 FCR-822 END */

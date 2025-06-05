@@ -29,6 +29,8 @@ GO
 /*                            Releasing to WCS                           */
 /* 2025-02-12   SSA06   1.6   UWP-30025- Updated orderinfo.orderinfo09 to*/
 /*                            orderinfo.orderinfo06 as per v2.1          */
+/* 2025-04-23   WAN01   1.7   UWP-33280 - [FCR-4179] [LEVI's] Release    */
+/*                            to WCS Update SO DischargePlace            */
 /*************************************************************************/   
 CREATE OR ALTER PROCEDURE [dbo].[mspWaveReleaseWCS01]
   @c_Wavekey      NVARCHAR(10)  
@@ -65,171 +67,198 @@ CREATE OR ALTER PROCEDURE [dbo].[mspWaveReleaseWCS01]
           , @c_ShipperKey        NVARCHAR(15)  --(SSA05)
           , @c_ConsigneeKey      NVARCHAR(15)  --(SSA05)
           , @b_IsParcel          int = 1    --(SSA05)
-          , @c_DestIdListName          NVARCHAR(10) = 'WCSDESTID' --(SSA05)
-          , @c_DestIdStorerType        NVARCHAR(30) = '2'  --(SSA05)
+          , @c_DestIdListName    NVARCHAR(10) = 'WCSDESTID' --(SSA05)
+          , @c_DestIdStorerType  NVARCHAR(30) = '2'  --(SSA05)
+          , @c_Orderkeys         NVARCHAR(100)= ''                                  --(Wan01)
+
           , @CUR_ORDERS          CURSOR --(SSA05)
           , @CUR_TASKDETAIL      CURSOR --(SSA04)
 
+   SELECT TOP 1
+               @c_Facility  = O.Facility
+            ,  @c_Storerkey = O.StorerKey
+   FROM dbo.WAVEDETAIL WD(NOLOCK)
+   JOIN dbo.ORDERS O (NOLOCK) ON O.OrderKey = WD.OrderKey
+   WHERE WD.WaveKey = @c_Wavekey
 
-    SELECT TOP 1
-             @c_Facility  = O.Facility
-           , @c_Storerkey = O.StorerKey
-     FROM dbo.WAVEDETAIL WD(NOLOCK)
-     JOIN dbo.ORDERS O (NOLOCK) ON O.OrderKey = WD.OrderKey
-     WHERE WD.WaveKey = @c_Wavekey
+   SELECT @c_TMReleaseFlag = WAVE.TMReleaseFlag, @c_UserDefine09 = WAVE.UserDefine09
+   FROM dbo.WAVE WAVE (NOLOCK)
+   WHERE WAVE.WaveKey = @c_Wavekey
 
-    SELECT @c_TMReleaseFlag = WAVE.TMReleaseFlag, @c_UserDefine09 = WAVE.UserDefine09
-                FROM dbo.WAVE WAVE (NOLOCK)
-                WHERE WAVE.WaveKey = @c_Wavekey
+   IF @c_TMReleaseFlag = 'N'
+   BEGIN
+      SET @n_continue = 3
+      SET @c_errmsg = CONVERT(NVARCHAR(250),@n_err)
+      SET @n_err = 81010
+      SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Wave has not been Released.  (mspWaveReleaseWCS01) '
+   END
 
-    IF @c_TMReleaseFlag = 'N'
-     BEGIN
+   --(SSA02) start ---
+   IF @c_UserDefine09 <> 'Y'
+   BEGIN
+      SET @n_continue = 3
+      SET @c_errmsg = CONVERT(NVARCHAR(250),@n_err)
+      SET @n_err = 81030
+      SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Wave is not Automation.  (mspWaveReleaseWCS01) '
+   END
+   --(SSA02) end----
+   IF @n_Continue IN (1,2)
+   BEGIN
+      SET @c_TableName = 'WSWAVELOG'
+            SET @c_Key1 = @c_Wavekey
+            SET @c_Key2 = ''
+            SET @c_Key3 = @c_Storerkey
+
+      IF EXISTS ( SELECT 1 FROM TransmitLog2 (NOLOCK) WHERE TableName = @c_TableName
+                  AND Key1 = @c_Key1 AND Key2 = @c_Key2 AND Key3 = @c_Key3)
+      BEGIN
          SET @n_continue = 3
          SET @c_errmsg = CONVERT(NVARCHAR(250),@n_err)
-         SET @n_err = 81010
-         SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Wave has not been Released.  (mspWaveReleaseWCS01) '
-     END
-     --(SSA02) start ---
-     IF @c_UserDefine09 <> 'Y'
-     BEGIN
-         SET @n_continue = 3
-         SET @c_errmsg = CONVERT(NVARCHAR(250),@n_err)
-         SET @n_err = 81030
-         SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Wave is not Automation.  (mspWaveReleaseWCS01) '
-     END
-     --(SSA02) end----
-     IF @n_Continue IN (1,2)
-     BEGIN
-        SET @c_TableName = 'WSWAVELOG'
-             SET @c_Key1 = @c_Wavekey
-             SET @c_Key2 = ''
-             SET @c_Key3 = @c_Storerkey
+         SET @n_err = 81020
+         SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Wave already released to WCS. (mspWaveReleaseWCS01) '
+      END
+      ----(SSA05) start-----
+      IF @n_Continue IN (1,2)
+      BEGIN
+         SELECT TOP 5 @c_Orderkeys = STRING_AGG(o.Orderkey,', ')                    --(Wan01) - START                                                                 
+            WITHIN GROUP (ORDER BY o.dischargeplace ASC)
+         FROM ORDERS o(NOLOCK)  
+         JOIN WAVEDETAIL(NOLOCK) wd ON wd.ORDERKEY = o.ORDERKEY
+         WHERE wd.WAVEKEY = @c_Wavekey
+         AND o.DischargePlace IS NOT NULL AND o.DischargePlace <> ''
 
-        IF EXISTS ( SELECT 1 FROM TransmitLog2 (NOLOCK) WHERE TableName = @c_TableName
-						 AND Key1 = @c_Key1 AND Key2 = @c_Key2 AND Key3 = @c_Key3)
-          BEGIN
-		          SET @n_continue = 3
-              SET @c_errmsg = CONVERT(NVARCHAR(250),@n_err)
-              SET @n_err = 81020
-              SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Wave already released to WCS. (mspWaveReleaseWCS01) '
-           END
-           ----(SSA05) start-----
-           IF @n_Continue IN (1,2)
+         IF @c_Orderkeys > ''
+         BEGIN
+            SET @n_continue = 3
+            SET @n_err = 81021
+            SET @c_errmsg = 'NSQL'+CONVERT(NVARCHAR(5),@n_err)
+                          + ': Remove Place of Discharge from Shipment Order(s): ' + @c_Orderkeys
+                          + ' before Releasing wave to WCS'
+                          + '. (mspWaveReleaseWCS01) '
+         END
+         --IF NOT EXISTS (SELECT 1 FROM ORDERINFO(NOLOCK) oi
+         --               JOIN ORDERS(NOLOCK) o ON o.ORDERKEY = oi.ORDERKEY
+         --               JOIN WAVEDETAIL(NOLOCK) wd ON wd.ORDERKEY = o.ORDERKEY
+         --               WHERE wd.WAVEKEY = @c_Wavekey
+         --               AND (oi.ORDERINFO06 IS NULL OR oi.ORDERINFO06 = ''))     --(SSA06)
+         --BEGIN
+         --   SET @n_continue = 3
+         --   SET @c_errmsg = CONVERT(NVARCHAR(250),@n_err)
+         --   SET @n_err = 81021
+         --   SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Cannot Re-release to WCS. (mspWaveReleaseWCS01) '
+         --END                                                                      --(Wan01) - END
+
+      END
+  
+      ----(SSA05) end -----
+      IF @n_Continue IN (1,2)
+      BEGIN
+         ----(SSA05) start-----
+         SET @CUR_ORDERS = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+         SELECT o.OrderKey,o.ShipperKey,o.ConsigneeKey
+         FROM ORDERS(NOLOCK) o
+         --JOIN ORDERINFO(NOLOCK) oi ON o.Orderkey = oi.OrderKey                    --(Wan01)
+         JOIN WAVEDETAIL(NOLOCK) wd ON wd.OrderKey = o.OrderKey
+         WHERE wd.WaveKey = @c_Wavekey
+         AND o.Storerkey = @c_Storerkey
+         --AND o.userdefine09 = @c_Wavekey                                          --(Wan01)
+         ORDER BY wd.WaveDetailKey                                                  --(Wan01)
+
+         OPEN @CUR_ORDERS
+         FETCH NEXT FROM @CUR_ORDERS INTO @c_OrderKey,@c_ShipperKey,@c_ConsigneeKey
+
+         WHILE @@FETCH_STATUS <> -1
+         BEGIN
+            SET @b_IsParcel = 0
+            SET @c_WCSCode = ''                                                     --(Wan01)
+
+            IF EXISTS(  SELECT 1 FROM CODELKUP clu (NOLOCK)
+                        JOIN STORER s (NOLOCK) ON s.StorerKey = clu.Short
+                        WHERE s.StorerKey = @c_ShipperKey AND clu.listname = 'WSCourier'
+                        AND clu.code = 'ECL-1' AND s.type = '7'
+                        )
             BEGIN
-              IF NOT EXISTS (SELECT 1 FROM ORDERINFO(NOLOCK) oi
-               JOIN ORDERS(NOLOCK) o ON o.ORDERKEY = oi.ORDERKEY
-               JOIN WAVEDETAIL(NOLOCK) wd ON wd.ORDERKEY = o.ORDERKEY
-               WHERE wd.WAVEKEY = @c_Wavekey
-						   AND (oi.ORDERINFO06 IS NULL OR oi.ORDERINFO06 = ''))     --(SSA06)
-                BEGIN
-                  SET @n_continue = 3
-                  SET @c_errmsg = CONVERT(NVARCHAR(250),@n_err)
-                  SET @n_err = 81021
-                  SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Cannot Re-release to WCS. (mspWaveReleaseWCS01) '
-                END
+               SET @b_IsParcel = 1
             END
-            ----(SSA05) end -----
-           IF @n_Continue IN (1,2)
+
+            IF @b_IsParcel = 1
             BEGIN
-               ----(SSA05) start-----
-                SET @CUR_ORDERS = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-                SELECT o.OrderKey,o.ShipperKey,o.ConsigneeKey
-                FROM ORDERS(NOLOCK) o
-                JOIN ORDERINFO(NOLOCK) oi ON o.Orderkey = oi.OrderKey
-                JOIN WAVEDETAIL(NOLOCK) wd ON wd.OrderKey = o.OrderKey
-                WHERE wd.WaveKey = @c_Wavekey
-                AND o.Storerkey = @c_Storerkey
-                AND o.userdefine09 = @c_Wavekey
-
-                OPEN @CUR_ORDERS
-                FETCH NEXT FROM @CUR_ORDERS INTO @c_OrderKey,@c_ShipperKey,@c_ConsigneeKey
-
-                WHILE @@FETCH_STATUS <> -1
-                BEGIN
-                SET  @b_IsParcel = 0
-
-                IF EXISTS(SELECT 1 FROM CODELKUP clu (NOLOCK)
-                JOIN STORER s (NOLOCK) ON s.StorerKey = clu.Short
-                WHERE s.StorerKey = @c_ShipperKey AND clu.listname = 'WSCourier'
-                AND clu.code = 'ECL-1' AND s.type = '7'
-                )
-                BEGIN
-                  SET @b_IsParcel = 1
-                END
-
-                IF @b_IsParcel = 1
-                BEGIN
-                  SELECT @c_WCSCode = clu.Code FROM CODELKUP clu (NOLOCK)
-                  JOIN storer s (NOLOCK) ON s.SUSR5 = clu.Short
-                  WHERE s.StorerKey = @c_ConsigneeKey AND s.type = @c_DestIdStorerType
-                  AND clu.StorerKey = @c_Storerkey AND clu.Code2 = @c_ShipperKey
-                  AND clu.LISTNAME = @c_DestIdListName
-                END
-                ELSE
-                BEGIN
-                  SELECT @c_WCSCode = clu.Code FROM CODELKUP clu (NOLOCK)
-                  JOIN storer s (NOLOCK) ON s.SUSR5 = clu.Short
-                  WHERE s.StorerKey = @c_ConsigneeKey AND s.type = @c_DestIdStorerType
-                  AND clu.StorerKey = @c_Storerkey
-                  AND clu.LISTNAME = @c_DestIdListName
-                  AND ISNULL(clu.Code2, '') = ''
-                END
-                IF (ISNULL(@c_WCSCode, '') = '')
-                BEGIN
-                  SELECT @c_WCSCode = clu.Code FROM CODELKUP (NOLOCK) clu
-                  WHERE clu.LISTNAME = @c_DestIdListName AND clu.Code = 'Default' AND clu.StorerKey = @c_Storerkey
-                END
-
-                UPDATE ORDERINFO WITH (ROWLOCK) SET ORDERINFO06 = @c_WCSCode  WHERE ORDERKEY = @c_OrderKey  --(SSA06)
-
-                FETCH NEXT FROM @CUR_ORDERS INTO @c_OrderKey,@c_ShipperKey,@c_ConsigneeKey
-                END
-                CLOSE @CUR_ORDERS
-                DEALLOCATE @CUR_ORDERS
-
-                ----(SSA05) end -----
-                ----(SSA02),(SSA03),(SSA04)start-----
-                SET @CUR_TASKDETAIL = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-                SELECT td.TASKDETAILKEY,loc.LOCATIONTYPE,td.TASKTYPE FROM TASKDETAIL(NOLOCK) td
-                JOIN LOC(NOLOCK) loc on td.FROMLOC = loc.LOC
-                WHERE td.WAVEKEY = @c_Wavekey AND td.STATUS = 'H'
-
-                OPEN @CUR_TASKDETAIL
-                FETCH NEXT FROM @CUR_TASKDETAIL INTO @c_TaskDetailKey,@c_LocationType,@c_TaskType
-
-                WHILE @@FETCH_STATUS <> -1
-                BEGIN
-                  SET @b_IsUpdate = 1
-
-                  IF('ASTCPK' = @c_TaskType AND 'PICKWCS' <> @c_LocationType)
-                  SET @b_IsUpdate = 0
-
-                  IF(@b_IsUpdate = 1)
-                  UPDATE TASKDETAIL WITH (ROWLOCK) SET STATUS = '0' WHERE TASKDETAILKEY = @c_TaskDetailKey
-
-                FETCH NEXT FROM @CUR_TASKDETAIL INTO @c_TaskDetailKey,@c_LocationType,@c_TaskType
-                END
-                CLOSE @CUR_TASKDETAIL
-                DEALLOCATE @CUR_TASKDETAIL
-
-               ----(SSA02),(SSA03),(SSA04) end-----
-               SET @b_Success = 1
-               EXEC dbo.ispGenTransmitLog2
-                     @c_TableName   = @c_TableName
-                  ,  @c_Key1        = @c_Key1
-                  ,  @c_Key2        = @c_Key2
-                  ,  @c_Key3        = @c_Key3
-                  ,  @c_TransmitBatch = @c_TransmitBatch
-                  ,  @b_Success     = @b_Success OUTPUT
-                  ,  @n_err         = @n_err OUTPUT
-                  ,  @c_errmsg      = @c_errmsg OUTPUT
-
-               IF @b_Success = 0
-               BEGIN
-                  SET @n_Continue = 3
-               END
+               SELECT @c_WCSCode = clu.Code FROM CODELKUP clu (NOLOCK)
+               JOIN storer s (NOLOCK) ON s.SUSR5 = clu.Short
+               WHERE s.StorerKey = @c_ConsigneeKey AND s.type = @c_DestIdStorerType
+               AND clu.StorerKey = @c_Storerkey AND clu.Code2 = @c_ShipperKey
+               AND clu.LISTNAME = @c_DestIdListName
             END
-     END
+            ELSE
+            BEGIN
+               SELECT @c_WCSCode = clu.Code FROM CODELKUP clu (NOLOCK)
+               JOIN storer s (NOLOCK) ON s.SUSR5 = clu.Short
+               WHERE s.StorerKey = @c_ConsigneeKey AND s.type = @c_DestIdStorerType
+               AND clu.StorerKey = @c_Storerkey
+               AND clu.LISTNAME = @c_DestIdListName
+               AND clu.Code2    = ''                                                --(Wan01) 
+            END
+            IF (ISNULL(@c_WCSCode, '') = '')
+            BEGIN
+               SELECT @c_WCSCode = clu.Code FROM CODELKUP (NOLOCK) clu
+               WHERE clu.LISTNAME = @c_DestIdListName AND clu.Code = 'Default' AND clu.StorerKey = @c_Storerkey
+            END
+
+            --UPDATE ORDERINFO WITH (ROWLOCK) SET ORDERINFO06 = @c_WCSCode          --(Wan01)--(SSA06)
+            --WHERE ORDERKEY = @c_OrderKey                                          --(Wan01) 
+            UPDATE ORDERS WITH (ROWLOCK)                                            --(Wan01)
+            SET DischargePlace = @c_WCSCode 
+               ,TrafficCop = NULL                                    
+            WHERE ORDERKEY = @c_OrderKey  
+
+            FETCH NEXT FROM @CUR_ORDERS INTO @c_OrderKey,@c_ShipperKey,@c_ConsigneeKey
+         END
+         CLOSE @CUR_ORDERS
+         DEALLOCATE @CUR_ORDERS
+
+         ----(SSA05) end -----
+         ----(SSA02),(SSA03),(SSA04)start-----
+         SET @CUR_TASKDETAIL = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+         SELECT td.TASKDETAILKEY,loc.LOCATIONTYPE,td.TASKTYPE FROM TASKDETAIL(NOLOCK) td
+         JOIN LOC(NOLOCK) loc on td.FROMLOC = loc.LOC
+         WHERE td.WAVEKEY = @c_Wavekey AND td.STATUS = 'H'
+
+         OPEN @CUR_TASKDETAIL
+         FETCH NEXT FROM @CUR_TASKDETAIL INTO @c_TaskDetailKey,@c_LocationType,@c_TaskType
+
+         WHILE @@FETCH_STATUS <> -1
+         BEGIN
+            SET @b_IsUpdate = 1
+
+            IF('ASTCPK' = @c_TaskType AND 'PICKWCS' <> @c_LocationType)
+               SET @b_IsUpdate = 0
+
+            IF(@b_IsUpdate = 1)
+               UPDATE TASKDETAIL WITH (ROWLOCK) SET STATUS = '0' WHERE TASKDETAILKEY = @c_TaskDetailKey
+
+            FETCH NEXT FROM @CUR_TASKDETAIL INTO @c_TaskDetailKey,@c_LocationType,@c_TaskType
+         END
+         CLOSE @CUR_TASKDETAIL
+         DEALLOCATE @CUR_TASKDETAIL
+
+         ----(SSA02),(SSA03),(SSA04) end-----
+         SET @b_Success = 1
+         EXEC dbo.ispGenTransmitLog2
+               @c_TableName   = @c_TableName
+            ,  @c_Key1        = @c_Key1
+            ,  @c_Key2        = @c_Key2
+            ,  @c_Key3        = @c_Key3
+            ,  @c_TransmitBatch = @c_TransmitBatch
+            ,  @b_Success     = @b_Success OUTPUT
+            ,  @n_err         = @n_err OUTPUT
+            ,  @c_errmsg      = @c_errmsg OUTPUT
+
+         IF @b_Success = 0
+         BEGIN
+            SET @n_Continue = 3
+         END
+      END
+   END
 EXIT_SP:
 
    IF @n_Continue=3  -- Error Occured - Process And Return  

@@ -1,3 +1,5 @@
+IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[RDT].[rdtPTLPieceLog]') AND type in (N'U'))
+BEGIN
 CREATE TABLE [RDT].[rdtPTLPieceLog]
 (
 [RowRef] [int] NOT NULL IDENTITY(1, 1),
@@ -26,16 +28,36 @@ CREATE TABLE [RDT].[rdtPTLPieceLog]
 [EditWho] [nvarchar] (128) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtPTLPieceLog_EditWho] DEFAULT (suser_sname()),
 [EditDate] [datetime] NOT NULL CONSTRAINT [DF_rdtPTLPieceLog_EditDate] DEFAULT (getdate()),
 [SKU] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtPTLPieceLog_SKU] DEFAULT (''),
-[DropID] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtPTLPieceLog_DropID] DEFAULT ('')
+[DropID] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtPTLPieceLog_DropID] DEFAULT (''),
+[Style] [nvarchar](20) NOT NULL CONSTRAINT [DF_rdtPTLPieceLog_Style]  DEFAULT (''),
 ) ON [PRIMARY]
-GO
+
+
 ALTER TABLE [RDT].[rdtPTLPieceLog] ADD CONSTRAINT [PK_rdtPTLPieceLog] PRIMARY KEY CLUSTERED ([RowRef]) WITH (FILLFACTOR=80) ON [PRIMARY]
-GO
+
 GRANT DELETE ON  [RDT].[rdtPTLPieceLog] TO [NSQL]
-GO
+
 GRANT INSERT ON  [RDT].[rdtPTLPieceLog] TO [NSQL]
-GO
+
 GRANT SELECT ON  [RDT].[rdtPTLPieceLog] TO [NSQL]
-GO
+
 GRANT UPDATE ON  [RDT].[rdtPTLPieceLog] TO [NSQL]
-GO
+
+
+END 
+
+ELSE 
+BEGIN
+
+			 IF NOT EXISTS (SELECT 1
+	               FROM sys.columns
+	               WHERE Name = 'Style' AND Object_ID = Object_ID('RDT.rdtPTLPieceLog'))
+			BEGIN
+
+				ALTER TABLE [RDT].[rdtPTLPieceLog] ADD Style [nvarchar](20) NOT NULL CONSTRAINT [DF_rdtPTLPieceLog_Style]  DEFAULT ('') ;
+				EXEC sp_addextendedproperty N'MS_Description', 'Style', 'SCHEMA', N'RDT', 'TABLE', N'rdtPTLPieceLog', 'COLUMN', N'Style'
+				
+			END
+END
+
+

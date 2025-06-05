@@ -144,6 +144,7 @@ GO
 /* 01-Aug-2024 5.7  NLT013   UWP-22515 Fix the issue:Keep Lottables     */
 /*                           does not work                              */
 /* 19-Nov-2024 5.8.0 NLT013  UWP-27188 Merge code, map @v_Barcode to @cUCC  */
+/* 03-Apr-2025 6.4  WinSern  INC7862618 clear @cBarcode value (ws01)    */
 /************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdtfnc_CycleCount] (
    @nMobile    INT,
@@ -4220,6 +4221,7 @@ IF @cDefaultCCOption = '4'
             @nCountNo      = @nCCCountNo     --(cc01)
 
          -- Prepare current (UCC) screen var
+         SET @cBarcode = ''         --(ws01)
          SET @cOutField01 = ''      -- UCC
          SET @cOutField02 = CASE WHEN @cBlindCount = '1' THEN '' ELSE @cSKU END
          SET @cOutField03 = CASE WHEN @cBlindCount = '1' THEN '' ELSE SUBSTRING( @cSKUDescr, 1, 20) END

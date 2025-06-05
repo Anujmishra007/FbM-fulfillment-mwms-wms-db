@@ -1,0 +1,20 @@
+--isp_UCCPackConfirm
+exec rdt.rdtDropMsg 1000051 , 1000100
+
+execute rdt.rdtAddMsg 1000051, 10, 'Invalid SKU. Scanned SKU not found in SKU table. Function : isp_UCCPackConfirm',    'us_english'
+execute rdt.rdtAddMsg 1000052, 10, 'Carton No in On-Hold Status. Unable to proceed to Closed Carton. Please Unhold this Carton. Function : isp_UCCPackConfirm',    'us_english'
+execute rdt.rdtAddMsg 1000053, 10, 'Pickslip No is already Closed/Packed. Function : isp_UCCPackConfirm',    'us_english'
+execute rdt.rdtAddMsg 1000054, 10, 'Carton No is already Closed/Packed. Function : isp_UCCPackConfirm',    'us_english'
+execute rdt.rdtAddMsg 1000055, 10, 'Incorrect dynamic E-Comm Carton Weight column setup. Function : isp_UCCPackConfirm',    'us_english'
+execute rdt.rdtAddMsg 1000056, 10, 'Fail to insert into PackHeader. Function : isp_UCCPackConfirm',    'us_english'
+execute rdt.rdtAddMsg 1000057, 10, 'No SKU entered. Please enter or scan valid SKU. Function : isp_UCCPackConfirm',    'us_english'
+execute rdt.rdtAddMsg 1000058, 10, 'No Quantity entered. Please enter valid Quantity. Function : isp_UCCPackConfirm',    'us_english'
+execute rdt.rdtAddMsg 1000059, 10, 'Invalid Quantity entered. Please enter valid Quantity. Function : isp_UCCPackConfirm',    'us_english'
+execute rdt.rdtAddMsg 1000060, 10, 'Fail to insert into PackDetail. Function : isp_UCCPackConfirm',    'us_english'
+execute rdt.rdtAddMsg 1000061, 10, 'Fail to update into PackDetail. Function : isp_UCCPackConfirm',    'us_english'
+execute rdt.rdtAddMsg 1000062, 10, 'Fail to Insert into PackInfo. Function : isp_UCCPackConfirm',    'us_english'
+execute rdt.rdtAddMsg 1000063, 10, 'Fail to UPDATE into PackInfo. Function : isp_UCCPackConfirm',    'us_english'
+execute rdt.rdtAddMsg 1000064, 10, 'Fail to UPDATE into UCCNO Function : isp_UCCPackConfirm',    'us_english'
+execute rdt.rdtAddMsg 1000065, 10, 'INS QTask Fail. Function : isp_UCCPackConfirm',    'us_english'
+execute rdt.rdtAddMsg 1000066, 10, 'UPD QTask Fail : isp_UCCPackConfirm',    'us_english'
+execute rdt.rdtAddMsg 1000067, 10, 'Fail to update into PackHeader. Function : isp_UCCPackConfirm',    'us_english'

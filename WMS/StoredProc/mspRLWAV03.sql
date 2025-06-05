@@ -12,7 +12,7 @@ GO
 /*                                                                      */
 /* Called By: Wave                                                      */
 /*                                                                      */
-/* GitHub Version: 4.0                                                  */
+/* GitHub Version: 2.9                                                  */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -74,6 +74,15 @@ GO
 /*                           (WL09)                                     */
 /* 01-Apr-2025 SSA04     4.1 UWP-27137 Fix infinite loop when splitQty =*/
 /*                           pickdetail.Qty                             */
+/* 02-Apr-2025 SWT09     4.2 Revise PackInfo Weight and Cube calculation*/
+/* 05-May-2025 SWT10     4.3 FCR-4389 revise Automation Carton Estimation*/
+/*                           Calculation                                */
+/* 09-May-2025 AYD01     4.4 UWP-32643: Fix PickFace checking           */
+/* 15-May-2025 WLC015    4.5 FCR-4480 Change to get PND Location from   */ 
+/*                           LocationGroup=DispatchCasePickMethod (WL10)*/
+/* 26-May-2025 SWT11     4.6 Do not insert RPF Task when Drop ID Exists */
+/* 29-May-2025 SWT12     4.7 UWP-35196 Change CheckDigit from MOD10 to  */
+/*                           GS1                                        */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[mspRLWAV03]
    @c_WaveKey NVARCHAR(10)
@@ -148,7 +157,9 @@ BEGIN
           ,@c_Replenishmentkey        NVARCHAR(10)
           ,@b_OneSKUPerCarton         BIT = 0 
           ,@b_MDS_Flag                BIT = 0 --SWT03
-          ,@c_LabelLine               NVARCHAR(10)   --WL07           
+          ,@c_LabelLine               NVARCHAR(10)   --WL07   
+		  	  ,@c_DefaultPackInfoFlag     NVARCHAR(1) = '0' --SWT08
+		  	  ,@b_InsertTask              BIT = 1           --SWT11
 
    DECLARE @n_VAS_LineCount INT = 0,
            @n_VAS_QtyCanPack INT = 0,
@@ -268,7 +279,7 @@ BEGIN
             SET @n_Err = 82000
             SET @c_Errmsg='NSQL'+CONVERT(NVARCHAR(10),@n_Err)+': This Wave was cartonized before. (mspRLWAV03)'     
             GOTO QUIT_SP  
-      END
+      END                         
 
       --WL09 S
       IF EXISTS ( SELECT 1
@@ -284,8 +295,8 @@ BEGIN
          SET @c_Errmsg = 'NSQL' + CONVERT(NVARCHAR(10),@n_Err) + ': Missing LoadKey: Generate Load. (mspRLWAV03)'
          GOTO QUIT_SP
       END
-      --WL09 E                         
-
+      --WL09 E 
+      
       IF NOT EXISTS(SELECT 1
                      FROM dbo.CARTONIZATION CZ (NOLOCK)
                      WHERE CZ.CartonizationGroup = @c_CartonGroup)
@@ -346,14 +357,33 @@ BEGIN
             GOTO QUIT_SP    
          END
 
+         --WL10 S
          IF @c_PNDLoc = ''
          BEGIN
             SET @n_continue = 3
             SET @n_Err = 82018
             SET @c_Errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_Err)
-                         +': Replenishment PND Lane Assignment is missing. (mspRLWAV03)'     
+                         +': Replenishment PND Location Group cannot be BLANK. (mspRLWAV03)'     
             GOTO QUIT_SP   
          END
+
+         SET @c_Loc = @c_PNDLoc
+         SET @c_PNDLoc = ''
+   
+         SELECT TOP 1 @c_PNDLoc = L.Loc
+         FROM LOC L WITH (NOLOCK)
+         WHERE L.LocationGroup = @c_Loc
+
+         -- Replenishment PND Lane or loc.locationgroup setup are missing
+         IF @c_PNDLoc = ''
+         BEGIN
+            SET @n_continue = 3
+            SET @n_Err = 82019
+            SET @c_Errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_Err)
+                         +': Missing PND Location setup for Location Group "'+ @c_Loc + '". (mspRLWAV03)'     
+            GOTO QUIT_SP   
+         END
+         --WL10 E
          
          SELECT @c_LocType_PND = l.Locationtype
                ,@c_LocFac_PND  = l.Facility 
@@ -383,24 +413,24 @@ BEGIN
             GOTO QUIT_SP             
          END
 
-         SELECT TOP 1 @c_Sku = RTRIM(PD.Sku)
-         FROM dbo.WAVEDETAIL WD (NOLOCK)
-         JOIN dbo.PICKDETAIL PD (NOLOCK) ON WD.Orderkey = PD.Orderkey
-         LEFT OUTER JOIN dbo.SKUxLOC sl (NOLOCK) ON  sl.Storerkey = PD.Storerkey AND sl.Sku = PD.Sku
-                                                 AND sl.LocationType IN ('CASE', 'PICK')
-         WHERE WD.WaveKey = @c_WaveKey 
-         AND sl.Loc IS NULL
-         ORDER BY PD.Sku
-         
-         IF @c_Sku <> ''
-         BEGIN 
-            SET @n_continue = 3
-            SET @n_Err = 82013
-            SET @c_Errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_Err)
-                         +': PickFace must setup for sku: ' + @c_Sku + '. (mspRLWAV03)'     
-            GOTO QUIT_SP             
-         END
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
       END
+
       ELSE
       BEGIN
          SET @C_Replenishmentkey ='' --Yung
@@ -605,60 +635,61 @@ BEGIN
          DEALLOCATE CUR_MPOCFLAG
       END -- IF @n_continue IN(1,2)
 
-      --Cartonization info
-      INSERT INTO #CARTONIZATION (CartonizationGroup,
-                                  CartonType,
-                                  UseSequence,
-                                  Cube,
-                                  MaxWeight,
-                                  MaxCount,
-                                  MaxSku,
-                                  CartonLength,
-                                  CartonWidth,
-                                  CartonHeight,
-                                  IsGeneric,   --WL01
-                                  CartonWeight)
-      SELECT CZ.CartonizationGroup, CZ.CartonType, CZ.UseSequence,
-             CASE WHEN ISNULL(CZ.Cube,0) = 0 THEN ISNULL(CZ.CartonLength,0) * ISNULL(CZ.CartonWidth,0) * ISNULL(CZ.CartonHeight,0) --(SWT08)
-                  ELSE CZ.Cube END 
-                  * (CASE WHEN ISNULL(CZ.FillTolerance,0) = 0 THEN 1 ELSE CZ.FillTolerance * 0.01 END ) AS  [Cube],
-             CZ.MaxWeight,
-             CASE WHEN CZ.MaxCount = 0 THEN 9999999 ELSE CZ.MaxCount END AS [MaxCount],
-             9999999 AS[MaxSku],
-             ISNULL(CZ.CartonLength,0), ISNULL(CZ.CartonWidth,0), ISNULL(CZ.CartonHeight,0), 1   --WL01
-             , ISNULL(CZ.CartonWeight,0) --(SWT08)
-      FROM dbo.CARTONIZATION CZ (NOLOCK)                                                                       
-      WHERE CZ.CartonizationGroup = @c_CartonGroup         
-      
-      IF @b_debug = 1
-        SELECT * FROM #CARTONIZATION    
 
-      --WL01 S
-      --For VAS CartonType
-      INSERT INTO #CARTONIZATION (CartonizationGroup,
-                                  CartonType,
-                                  UseSequence,
-                                  Cube,
-                                  MaxWeight,
-                                  MaxCount,
-                                  MaxSku,
-                                  CartonLength,
-                                  CartonWidth,
-                                  CartonHeight,
-                                  IsGeneric,
-                                  CartonWeight)
-      SELECT CZ.CartonizationGroup, CZ.CartonType, CZ.UseSequence,
-             CASE WHEN ISNULL(CZ.Cube,0) = 0 THEN ISNULL(CZ.CartonLength,0) * ISNULL(CZ.CartonWidth,0) * ISNULL(CZ.CartonHeight,0) --(SWT08)
-             ELSE CZ.Cube END
-             * (CASE WHEN ISNULL(CZ.FillTolerance,0) = 0 THEN 1 ELSE CZ.FillTolerance * 0.01 END ) AS  [Cube],
-             CZ.MaxWeight,
-             CASE WHEN CZ.MaxCount = 0 THEN 9999999 ELSE CZ.MaxCount END AS [MaxCount],
-             9999999 AS[MaxSku],
-             ISNULL(CZ.CartonLength,0), ISNULL(CZ.CartonWidth,0), ISNULL(CZ.CartonHeight,0), 0, ISNULL(CZ.CartonWeight,0)
-      FROM dbo.CARTONIZATION CZ (NOLOCK)                                                                       
-      WHERE CZ.CartonizationGroup = TRIM(@c_CartonGroup) + 'CUST'
-      --WL01 E                                                                                       
-                                            
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+      --AYD01 UWP-32643 START
       --Order sku info
       INSERT INTO #ORDERSKU (Orderkey, Storerkey, Sku, TotalQty, TotalCube, TotalQtyPacked, TotalCubePacked, StdCube, Length, Width, Height, OrderGroup, MasterShipmentID)
       SELECT PD.OrderKey, PD.Storerkey, PD.Sku, 
@@ -741,6 +772,83 @@ BEGIN
          --JOIN ORDERS O (NOLOCK) ON O.Orderkey = os.Orderkey
          --WHERE O.Ordergroup = '30'                                                --(Wan02) - END
       END
+      
+      IF @c_Automation = 'Y'  -- Checking PickFace setup for non-sortable and non-conveyerable SKU(WCS=0)
+      BEGIN
+         SELECT TOP 1 @c_Sku = RTRIM(PD.Sku)
+         FROM dbo.WAVEDETAIL WD (NOLOCK)
+         JOIN dbo.PICKDETAIL PD (NOLOCK) ON WD.Orderkey = PD.Orderkey
+         JOIN #ORDERSKU OS ON OS.Orderkey = PD.Orderkey AND OS.Sku = PD.Sku --UWP-32643
+         LEFT OUTER JOIN dbo.SKUxLOC sl (NOLOCK) 
+            ON sl.Storerkey = PD.Storerkey AND sl.Sku = PD.Sku AND sl.LocationType IN ('CASE', 'PICK')
+         WHERE WD.WaveKey = @c_WaveKey 
+         AND sl.Loc IS NULL
+         AND OS.WCS = 0 --UWP-32643
+         ORDER BY PD.Sku
+
+         IF @c_Sku <> ''
+         BEGIN 
+            SET @n_continue = 3            
+            SET @n_Err = 82013
+            SET @c_Errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_Err)+': PickFace must setup for sku: ' + @c_Sku + '. (mspRLWAV03)'     
+            GOTO QUIT_SP             
+         END
+      END
+      --AYD01 UWP-32643 END
+
+      --Cartonization info
+      INSERT INTO #CARTONIZATION (CartonizationGroup,
+                                  CartonType,
+                                  UseSequence,
+                                  Cube,
+                                  MaxWeight,
+                                  MaxCount,
+                                  MaxSku,
+                                  CartonLength,
+                                  CartonWidth,
+                                  CartonHeight,
+                                  IsGeneric,   --WL01
+                                  CartonWeight)
+      SELECT CZ.CartonizationGroup, CZ.CartonType, CZ.UseSequence,
+             CASE WHEN ISNULL(CZ.Cube,0) = 0 THEN ISNULL(CZ.CartonLength,0) * ISNULL(CZ.CartonWidth,0) * ISNULL(CZ.CartonHeight,0) --(SWT08)
+                  ELSE CZ.Cube END 
+                  * (CASE WHEN ISNULL(CZ.FillTolerance,0) = 0 THEN 1 ELSE CZ.FillTolerance * 0.01 END ) AS  [Cube],
+             CZ.MaxWeight,
+             CASE WHEN CZ.MaxCount = 0 THEN 9999999 ELSE CZ.MaxCount END AS [MaxCount],
+             9999999 AS[MaxSku],
+             ISNULL(CZ.CartonLength,0), ISNULL(CZ.CartonWidth,0), ISNULL(CZ.CartonHeight,0), 1   --WL01
+             , ISNULL(CZ.CartonWeight,0) --(SWT08)
+      FROM dbo.CARTONIZATION CZ (NOLOCK)                                                                       
+      WHERE CZ.CartonizationGroup = @c_CartonGroup         
+      
+      IF @b_debug = 1
+        SELECT * FROM #CARTONIZATION    
+
+      --WL01 S
+      --For VAS CartonType
+      INSERT INTO #CARTONIZATION (CartonizationGroup,
+                                  CartonType,
+                                  UseSequence,
+                                  Cube,
+                                  MaxWeight,
+                                  MaxCount,
+                                  MaxSku,
+                                  CartonLength,
+                                  CartonWidth,
+                                  CartonHeight,
+                                  IsGeneric,
+                                  CartonWeight)
+      SELECT CZ.CartonizationGroup, CZ.CartonType, CZ.UseSequence,
+             CASE WHEN ISNULL(CZ.Cube,0) = 0 THEN ISNULL(CZ.CartonLength,0) * ISNULL(CZ.CartonWidth,0) * ISNULL(CZ.CartonHeight,0) --(SWT08)
+             ELSE CZ.Cube END
+             * (CASE WHEN ISNULL(CZ.FillTolerance,0) = 0 THEN 1 ELSE CZ.FillTolerance * 0.01 END ) AS  [Cube],
+             CZ.MaxWeight,
+             CASE WHEN CZ.MaxCount = 0 THEN 9999999 ELSE CZ.MaxCount END AS [MaxCount],
+             9999999 AS[MaxSku],
+             ISNULL(CZ.CartonLength,0), ISNULL(CZ.CartonWidth,0), ISNULL(CZ.CartonHeight,0), 0, ISNULL(CZ.CartonWeight,0)
+      FROM dbo.CARTONIZATION CZ (NOLOCK)                                                                       
+      WHERE CZ.CartonizationGroup = TRIM(@c_CartonGroup) + 'CUST'
+      --WL01 E                                                                                       
 
       -- Assign Order Group for MPOC Orders
       -- Group by Orders.Consigneekey, Orders.Billtokey, Orders.Markforkey 
@@ -913,9 +1021,12 @@ BEGIN
 
             IF EXISTS( SELECT 1 FROM #ORDERSKU OS WHERE OS.Orderkey = @c_Orderkey AND OS.StdCube > @n_CartonMaxCube )
             BEGIN
+               SELECT TOP 1 @c_SKU = OS.SKU
+               FROM #ORDERSKU OS WHERE OS.Orderkey = @c_Orderkey AND OS.StdCube > @n_CartonMaxCube
+
                SET @n_continue = 3
-               SET @n_Err = 562204
-               SET @c_Errmsg='NSQL'+CONVERT(NVARCHAR(10),@n_Err)+': SKU(s) Standard Cube cannot fit into carton type ' + RTRIM(@c_VAS_CartonType) + '. (mspRLWAV03)'     
+               SET @n_Err = 82012
+               SET @c_Errmsg='NSQL'+CONVERT(NVARCHAR(10),@n_Err)+': SKU(s) '+ @c_SKU + ' Standard Cube cannot fit into carton type ' + RTRIM(@c_VAS_CartonType) + '. (mspRLWAV03)'     
                GOTO QUIT_SP  
             END
          END -- IF @c_VAS_CartonType <> ''      
@@ -1148,9 +1259,9 @@ BEGIN
                      IF dbo.fnc_CartonCanFit(@n_SKULength, @n_SKUWidth, @n_SKUHeight, @n_CartonLength, @n_CartonWidth, @n_CartonHeight) = 0
                      BEGIN
                         SET @n_continue = 3
-                        SET @n_Err = 562204
-                        SET @c_Errmsg='NSQL'+CONVERT(NVARCHAR(10),@n_Err)+': SKU(s) LxWxH cannot fit into carton type ' + RTRIM(@c_VAS_CartonType) + '. (mspRLWAV03)'     
-                        GOTO QUIT_SP
+                        SET @n_Err = 82013
+                        SET @c_Errmsg='NSQL'+CONVERT(NVARCHAR(10),@n_Err)+': SKU(s) ' + @c_Sku + ' LxWxH cannot fit into carton type ' + RTRIM(@c_VAS_CartonType) + '. (mspRLWAV03)'     
+                         GOTO QUIT_SP
                      END;
                   END
                   IF @c_CartonType = N''
@@ -1593,7 +1704,7 @@ BEGIN
             BEGIN
                SET @n_continue = 3
                SET @n_Err = 562204
-               SET @c_Errmsg='NSQL'+CONVERT(NVARCHAR(10),@n_Err)+': SKU(s) Standard Cube cannot fit into carton type ' + RTRIM(@c_VAS_CartonType) + '. (mspRLWAV03)'     
+               SET @c_Errmsg='NSQL'+CONVERT(NVARCHAR(10),@n_Err)+': SKU(s) ' + @c_SKU + ' Standard Cube cannot fit into carton type ' + RTRIM(@c_VAS_CartonType) + '. (mspRLWAV03)'     
                GOTO QUIT_SP  
             END
          END -- IF @c_VAS_CartonType <> ''  
@@ -2192,6 +2303,8 @@ BEGIN
    END
       
    --Create packing records For None MPOC Orders
+   DECLARE @n_NoOfOrders INT = 0 
+
    IF @n_continue IN(1,2) 
    BEGIN    
       IF @b_debug <> 0 
@@ -2213,8 +2326,10 @@ BEGIN
                  
       WHILE @@FETCH_STATUS <> -1 AND @n_continue IN(1,2)  --get order       
       BEGIN         
+
          IF @b_debug <> 0 
-            PRINT '@c_OrderGroup: ' + @c_OrderGroup + ' @c_Orderkey:' + @c_Orderkey + ' @c_Pickslipno: ' + @c_Pickslipno
+            PRINT '@c_OrderGroup: ' + @c_OrderGroup + ' @c_Orderkey:' + @c_Orderkey + ' @c_Pickslipno: ' + @c_Pickslipno 
+				
 
          --Create packheader
          IF NOT EXISTS (SELECT 1 FROM dbo.PackHeader (NOLOCK) WHERE Pickslipno = @c_Pickslipno)
@@ -2265,18 +2380,20 @@ BEGIN
          BEGIN   
             IF @b_debug <> 0 
               PRINT  '@n_CartonNo: ' + CAST(@n_CartonNo AS VARCHAR(5)) + ' @c_CartonType: ' + @c_CartonType + ' @c_PreOrderGroup: ' + @c_PreOrderGroup
-          
-      -- Relabel All Carton Even with UCC 
-          --IF ISNULL(@c_UCCNo,'') <> ''
-          --BEGIN
-          --    SET @c_LabelNo = @c_UCCNo
-          --END
-          --ELSE
-          --BEGIN
+
+			 -- Get total number of orders in 1 order group
+			 SET @n_NoOfOrders = 0 
+			 IF @c_OrderGroup <> ''
+			 BEGIN
+				SELECT @n_NoOfOrders = COUNT(DISTINCT OrderKey)
+				FROM #CARTONDETAIL
+				WHERE OrderGroup = @c_OrderGroup
+				AND CartonNo = @n_CartonNo
+
+			 END 
+		 
             IF @c_LabelNo = ''   --WL07
             BEGIN
-               --IF @c_OrderGroup <> @c_PreOrderGroup OR @c_OrderGroup = ''
-               --BEGIN
                EXEC dbo.isp_GenUCCLabelNo_Std
                @cPickslipNo = @c_Pickslipno,
                @nCartonNo   = @n_CartonNo,
@@ -2385,6 +2502,7 @@ BEGIN
 
                      SET @n_TotCartonCube = @n_NewCartonMaxCube
                      SET @c_CartonType = @c_NewCartonType
+                     SET @n_CartonMaxCube = @n_NewCartonMaxCube
 
                      IF @b_debug=2
                      BEGIN
@@ -2414,17 +2532,38 @@ BEGIN
             --Get packed carton cube,qty,weight            
             --Create packinfo            
             IF EXISTS (SELECT 1 FROM dbo.PackInfo (NOLOCK) WHERE Pickslipno = @c_PickslipNo
-                           AND CartonNo = @n_CartonNo)
+                       AND CartonNo = @n_CartonNo)
             BEGIN
                DELETE FROM dbo.PackInfo WHERE Pickslipno = @c_PickslipNo AND CartonNo = @n_CartonNo
             END                 
 
-            INSERT INTO dbo.PackInfo (Pickslipno, CartonNo, CartonType, Cube, Weight, Qty, Length, Width, Height, RefNo) --(SWT01)
-            VALUES (@c_PickslipNo, @n_CartonNo, @c_CartonType, 
-                    @n_CartonMaxCube, --SWT08)
-                    --@n_TotCartonCube, 
-                    @n_TotCartonWeight + @n_CartonWeight, --(SWT08)
-                    0, @n_CartonLength, @n_CartonWidth, @n_CartonHeight, @c_LabelNo)
+			   SET @c_DefaultPackInfoFlag = '0'
+			   SELECT @c_DefaultPackInfoFlag = dbo.fnc_GetRight('', 'LVSUSA', '', 'DEFAULT_PACKINFO')
+
+
+            IF @c_OrderGroup <> '' AND @n_NoOfOrders > 1 
+            BEGIN
+
+               INSERT INTO dbo.PackInfo (Pickslipno, CartonNo, CartonType, Cube, Weight, Qty, Length, Width, Height, RefNo) --(SWT01)
+               VALUES (@c_PickslipNo, @n_CartonNo, @c_CartonType, 
+                       CASE WHEN @n_NoOfOrders > 0 THEN @n_CartonMaxCube / @n_NoOfOrders 
+                            ELSE @n_CartonMaxCube 
+                       END, --Cube (SWT08)
+                       CASE WHEN @c_DefaultPackInfoFlag = '1' THEN (@n_CartonWeight / @n_NoOfOrders) 
+                            ELSE (@n_CartonWeight / @n_NoOfOrders) + @n_TotCartonWeight 
+                       END, --Weight (SWT08)
+                       0, @n_CartonLength, @n_CartonWidth, @n_CartonHeight, @c_LabelNo)
+            END
+            ELSE 
+            BEGIN
+               INSERT INTO dbo.PackInfo (Pickslipno, CartonNo, CartonType, Cube, Weight, Qty, Length, Width, Height, RefNo) --(SWT01)
+               VALUES (@c_PickslipNo, @n_CartonNo, @c_CartonType, 
+                       @n_CartonMaxCube, --SWT08)
+                       CASE WHEN @c_DefaultPackInfoFlag = '1' THEN @n_CartonWeight ELSE @n_CartonWeight + @n_TotCartonWeight END, --(SWT08)
+                       0, @n_CartonLength, @n_CartonWidth, @n_CartonHeight, @c_LabelNo)
+
+            END
+
             
             SET @n_Err = @@ERROR
             IF @n_Err <> 0
@@ -2476,7 +2615,7 @@ BEGIN
             DEALLOCATE CUR_PACKSKU
                                                       
             FETCH NEXT FROM CUR_PACKCARTON INTO @n_CartonNo, @c_CartonType, @c_UCCNo, @n_CartonLength, @n_CartonWidth, @n_CartonHeight, @c_VAS_CartonType 
-                                             ,  @c_LabelNo   --WL07 
+                                             , @c_LabelNo   --WL07 
                                              , @n_CartonWeight --(SWT08)
          END
          CLOSE CUR_PACKCARTON
@@ -2738,7 +2877,7 @@ BEGIN
             END 
          END
 
-         FETCH NEXT FROM CUR_UPDATEDROPID INTO @c_PickDetailKey, @c_Sku, @c_Loc, @c_FromPAZone
+      FETCH NEXT FROM CUR_UPDATEDROPID INTO @c_PickDetailKey, @c_Sku, @c_Loc, @c_FromPAZone
                                              , @n_Qty_PD, @n_StdCube
       END
       CLOSE CUR_UPDATEDROPID
@@ -2887,14 +3026,15 @@ BEGIN
       DECLARE @c_BOLbyConsigneeKey NVARCHAR(20) = '', 
               @c_Susr5Prefix NVARCHAR(60) = '',            --(SSA03)
               @n_FieldLength INT = 8,                      --(SSA03)
-              @n_CheckDigit INT = 0                        --(SSA03)
+              --@n_CheckDigit INT                          --(SSA03)
+              @c_CheckDigit  CHAR(1) --(SWT01)
  
       DECLARE CUR_BOLbyConsigneekey CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
          SELECT OH.ConsigneeKey, OH.Facility, MAX(ISNULL(OI.ReferenceId,''))  
          FROM dbo.ORDERS OH WITH (NOLOCK)  
          JOIN dbo.OrderInfo OI WITH (NOLOCK) ON OH.OrderKey = OI.OrderKey 
          JOIN dbo.WAVEDETAIL WD WITH (NOLOCK) ON WD.OrderKey = OH.OrderKey 
-         WHERE WD.WaveKey = @c_WaveKey
+         WHERE WD.WaveKey = @c_WaveKey  
          GROUP BY OH.ConsigneeKey, OH.Facility  
        
       OPEN CUR_BOLbyConsigneekey 
@@ -2907,7 +3047,7 @@ BEGIN
           BEGIN 
              --(SSA03) start---
              SET @c_Susr5Prefix = ''
-
+              
              SELECT @c_Susr5Prefix = ISNULL(TRIM(Storer.SUSR5),'0')
              FROM dbo.STORER Storer (NOLOCK)
              WHERE Storer.StorerKey = @c_Storerkey
@@ -2930,16 +3070,17 @@ BEGIN
               
              --(SSA03) start---
              SET @c_BOLbyConsigneeKey = @c_Susr5Prefix + @c_BOLbyConsigneeKey
-             SET @n_CheckDigit = dbo.fnc_CalcCheckDigitLuhn_M10(RTRIM(@c_BOLbyConsigneeKey), 0)
-             SET @c_BOLbyConsigneeKey = RIGHT(@c_BOLbyConsigneeKey + CAST(@n_CheckDigit AS NVARCHAR( 1)), 17)
+             --SET @n_CheckDigit = dbo.fnc_CalcCheckDigitLuhn_M10(RTRIM(@c_BOLbyConsigneeKey), 0)
+             SELECT @c_CheckDigit = dbo.fnc_CalcGS1CheckDigit(RTRIM(@c_BOLbyConsigneeKey)) -- (SWT12)
+             --SET @c_BOLbyConsigneeKey = RIGHT(@c_BOLbyConsigneeKey + CAST(@n_CheckDigit AS NVARCHAR( 1)), 17)
+             SET @c_BOLbyConsigneeKey = RIGHT(@c_BOLbyConsigneeKey + @c_CheckDigit, 17) -- (SWT12)
              --(SSA03) end----
-
-             DECLARE CUR_UPDATE_BOLbyConsigneekey CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+             DECLARE CUR_UPDATE_BOLbyConsigneekey CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
              SELECT OH.OrderKey 
              FROM dbo.ORDERS OH WITH (NOLOCK)  
              JOIN dbo.OrderInfo OI WITH (NOLOCK) ON OH.OrderKey = OI.OrderKey 
              JOIN dbo.WAVEDETAIL WD WITH (NOLOCK) ON WD.OrderKey = OH.OrderKey 
-             WHERE WD.WaveKey = @c_WaveKey
+             WHERE WD.WaveKey = @c_WaveKey  
              AND OH.ConsigneeKey = @c_ConsigneeKey              
              AND OH.Facility = @c_Facility 
              AND (OI.ReferenceId = '' OR OI.ReferenceId IS NULL) 
@@ -2971,7 +3112,8 @@ BEGIN
    -------------------------------------------------- 
    -- Automation Release Tasks 
    --------------------------------------------------  
-   IF @n_Continue IN (1,2)  AND @c_Automation = 'Y'                                 --(Wan01)                    
+   -- (SWT10) Start
+   IF @n_Continue IN (1,2)                  
    BEGIN
       DECLARE CUR_UPDATEORD CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
       SELECT OG.OrderKey
@@ -2984,9 +3126,41 @@ BEGIN
       
       WHILE @@FETCH_STATUS = 0 AND @n_Continue IN (1,2)
       BEGIN
-         SELECT @n_NoOfCarton = COUNT(DISTINCT pd.CaseID)
-         FROM  PICKDETAIL pd (NOLOCK)
-         WHERE pd.Orderkey = @c_OrderKey
+         IF @c_Automation = 'Y'
+         BEGIN
+            SET @n_TotalCube = 0
+            SET @n_CartonMaxCube = 0
+
+            SELECT @n_TotalCube = (PD.Qty * CASE WHEN ISNULL(SKU.STDCUBE, 0) > 0 THEN SKU.STDCUBE                             
+                              ELSE (SKU.Length * SKU.Width * SKU.Height) 
+                           END)
+            FROM  PICKDETAIL pd (NOLOCK)
+            JOIN SKU (NOLOCK) ON SKU.StorerKey = PD.Storerkey AND SKU.SKU = PD.SKU
+            WHERE pd.Orderkey = @c_OrderKey
+
+            SELECT TOP 1 @n_CartonMaxCube = 
+                     CASE WHEN ISNULL(CZ.Cube,0) = 0 
+                        THEN ISNULL(CZ.CartonLength,0) * ISNULL(CZ.CartonWidth,0) * ISNULL(CZ.CartonHeight,0)  
+                        ELSE CZ.Cube 
+                     END
+            FROM dbo.CARTONIZATION CZ (NOLOCK) 
+            WHERE CartonizationGroup = @c_CartonGroup 
+            AND CartonType <> '9999'
+            ORDER BY  
+            CASE 
+               WHEN ISNULL(CZ.Cube,0) = 0 
+                  THEN ISNULL(CZ.CartonLength,0) * ISNULL(CZ.CartonWidth,0) * ISNULL(CZ.CartonHeight,0)  
+               ELSE CZ.Cube 
+            END DESC
+
+            SELECT @n_NoOfCarton = CEILING( @n_TotalCube / @n_CartonMaxCube)           
+         END
+         ELSE 
+         BEGIN
+            SELECT @n_NoOfCarton = COUNT(DISTINCT pd.CaseID)
+            FROM  #PickDetail_WIP pd (NOLOCK)
+            WHERE pd.Orderkey = @c_OrderKey         
+         END
 
          UPDATE ORDERS WITH (ROWLOCK)
             SET ContainerQty = @n_NoOfCarton
@@ -2997,7 +3171,7 @@ BEGIN
          IF @@ERROR <> 0
          BEGIN
             SET @n_Continue = 3
-            Set @n_Err = 82014
+            Set @n_Err = 82025
             SET @c_ErrMsg = 'NSQL'+CONVERT(CHAR(5) ,@n_err) + ': Updating Orders Failed (mspRLWAV03)'  
                           + ' ( '+' SQLSvr MESSAGE= ' + @c_ErrMsg + ' ) '
          END
@@ -3005,7 +3179,11 @@ BEGIN
          FETCH NEXT FROM CUR_UPDATEORD INTO @c_OrderKey
       END
       CLOSE CUR_UPDATEORD
-      DEALLOCATE CUR_UPDATEORD
+      DEALLOCATE CUR_UPDATEORD   
+   END -- (SWT10) END 
+
+   IF @n_Continue IN (1,2) AND @c_Automation = 'Y'  --(Wan01)                    
+   BEGIN
 
       --------------------------------------
       -- GEN PICK OR REPL TASK 
@@ -3226,6 +3404,20 @@ BEGIN
                
                IF @c_TaskType = 'RPF'
                BEGIN 
+                  -- (SWT11) 
+                  SET @b_InsertTask = 1
+
+                  IF EXISTS(SELECT 1 FROM TASKDETAIL TD (NOLOCK)
+                            WHERE WaveKey = @c_WaveKey
+                            AND TaskType = 'RPF'
+                            AND Caseid = CASE WHEN @c_DropId = '' THEN @c_LabelNo ELSE @c_DropId END
+                            AND FromLoc = @c_FromLoc)
+                  BEGIN
+                     SET @b_InsertTask = 0
+                     SELECT @b_InsertTask [InsertTaskFlag]
+                  END                             
+                     
+                            
                   SELECT @n_PickdetQty = SUM(UCC.Qty) 
                   FROM UCC (NOLOCK)
                   WHERE UCC.Storerkey = @c_Storerkey
@@ -3233,6 +3425,9 @@ BEGIN
                   AND   UCC.[Status] = '3'
                END
 
+               -- (SWT11) 
+               IF @b_InsertTask= 1
+               BEGIN
                SET @b_success = 1
                EXECUTE dbo.nspg_Getkey
                   @KeyName       = 'TaskDetailKey'
@@ -3313,6 +3508,7 @@ BEGIN
                                     +    ' ( '+' SQLSvr MESSAGE= ' + @c_ErrMsg + ' ) '
                   END
                END
+						END
 
                IF @n_Continue IN (1, 2)
                BEGIN
@@ -3371,6 +3567,11 @@ BEGIN
    --------------------------------------
    IF @n_Continue IN (1,2)                                                                            
    BEGIN
+      -- (SWT11) 
+      DECLARE @n_SerialNo          INT = 0,
+            @c_NewTaskDetailKey  NVARCHAR(10) = N'',
+            @c_MainRefTaskkey    NVARCHAR(10) = '' 
+            
       DECLARE CUR_PNPTASK CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
       SELECT td.WaveKey
             , td.Storerkey, td.Sku, td.LOT, td.ToLoc, td.ToID, td.FinalLoc 
@@ -3493,8 +3694,6 @@ BEGIN
       DEALLOCATE CUR_PNPTASK
       -- (SWT07)
       -- Split 'ASTCPK' Task Type to PickDetail.CaseID instead of PickDetail.DropID
-      DECLARE @n_SerialNo          INT = 0,
-              @c_NewTaskDetailKey  NVARCHAR(10) = N''
 
       DECLARE CUR_ASTCPK_TASK CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
          SELECT TD.TaskDetailKey, PD.CaseID, PD.Qty,
@@ -3616,3 +3815,4 @@ BEGIN
       RETURN
    END
 END
+GO

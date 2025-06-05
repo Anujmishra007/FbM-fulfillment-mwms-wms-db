@@ -22,6 +22,7 @@ GO
 /* 2024-09-09   2.0  PXL009      FCR-770 Tote closure                         */
 /* 2024-09-23   2.1  CYU027      FCR-808 PUMA SKU IMAGE widget                */
 /* 2024-12-13   2.2  LJQ006      FCR-1168 Add extend screen                   */
+/* 2025-03-26   2.3.0 NLT013     FCR-2704 Remove useless code and extend ExtScn data*/
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_PickCase] (
@@ -386,19 +387,7 @@ BEGIN
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid PSNO
             GOTO Step_1_Fail
          END
-/*
-         -- Check order shipped
-         IF EXISTS( SELECT TOP 1 1
-            FROM dbo.LoadPlanDetail LPD WITH (NOLOCK)
-               JOIN dbo.Orders O (NOLOCK) ON (LPD.OrderKey = O.OrderKey)
-            WHERE LPD.LoadKey = @cLoadKey
-               AND O.Status >= '5')
-         BEGIN
-            SET @nErrNo = 130558
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Order picked
-            GOTO Step_1_Fail
-         END
-*/
+
          -- Check diff storer
          IF EXISTS( SELECT TOP 1 1
             FROM dbo.LoadPlanDetail LPD WITH (NOLOCK)
@@ -422,19 +411,7 @@ BEGIN
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid PSNO
             GOTO Step_1_Fail
          END
-/*
-         -- Check order picked
-         IF EXISTS( SELECT 1
-            FROM Orders O WITH (NOLOCK)
-               JOIN PickDetail PD WITH (NOLOCK) ON (O.OrderKey = PD.OrderKey)
-            WHERE PD.PickSlipNo = @cPickSlipNo
-               AND O.Status >= '5')
-         BEGIN
-            SET @nErrNo = 130561
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Order picked
-            GOTO Step_1_Fail
-         END
-*/
+
          -- Check diff storer
          IF EXISTS( SELECT 1 FROM PickDetail WITH (NOLOCK) WHERE PickSlipNo = @cPickSlipNo AND StorerKey <> @cStorerKey)
          BEGIN
@@ -795,10 +772,6 @@ BEGIN
       -- Screen mapping
       SET @cBarcode = @cInField05 -- SKU
       SET @cUPC = LEFT( @cInField05, 30)
-      --SET @cQTY = CASE WHEN @cFieldAttr07 = 'O' THEN @cOutField07 ELSE @cInField07 END
-
-      -- Retain value
-      --SET @cOutField07 = CASE WHEN @cFieldAttr07 = 'O' THEN @cOutField07 ELSE @cInField07 END -- MQTY
 
       SET @cSKU = ''
       SET @nQTY = 0
@@ -858,10 +831,7 @@ BEGIN
             SET @nStep = 5
             SET @nScn = 5294
 
-
-            GOTO QUIT
-
-
+            GOTO Step_3_ExtScn
          END
          ELSE
          BEGIN
@@ -998,15 +968,6 @@ BEGIN
 
             SET @cSKU = @cUPC
 
-            -- Validate SKU
---            IF @cSKU <> @cSuggSKU
---            BEGIN
---               SET @nErrNo = 130572
---               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Wrong SKU
---               EXEC rdt.rdtSetFocusField @nMobile, 11  -- SKU
---               GOTO Step_3_Fail
---            END
-
             -- Mark SKU as validated
             SET @cSKUValidated = '1'
          END
@@ -1041,56 +1002,9 @@ BEGIN
          ELSE
             SET @nQTY = CAST( @cQTY AS INT)
 
-      -- Check over pick
---      IF @nQTY > @nSuggQTY
---      BEGIN
---         SET @nErrNo = 130574
---         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Over pick
---         EXEC rdt.rdtSetFocusField @nMobile, 7 -- PQTY
---         GOTO Step_3_Fail
---      END
-
       -- Save to ActQTY
       SET @nActQTY = @nQTY
-      --SET @cOutField07 = CAST( @nQTY AS NVARCHAR(5))
 
-      -- SKU scanned, remain in current screen
-      --IF @cBarcode <> ''
-      --BEGIN
-      --   SET @cOutField05 = '' -- SKU
-
-      --   IF @nTotalQty = '1'
-      --   BEGIN
-      --      EXEC rdt.rdtSetFocusField @nMobile, 5 -- SKU
-      --      IF @nActQTY <> @nSuggQTY
-      --         GOTO Quit
-      --   END
-      --   ELSE
-      --   BEGIN
-      --      EXEC rdt.rdtSetFocusField @nMobile, 7 -- MQTY
-      --      GOTO Quit
-      --   END
-      --END
-
-      -- QTY short
-      --SELECT @nActQTY '@nActQTY' , @nSuggQTY '@nSuggQTY' 
-
---      IF @nActQTY < @nSuggQTY
---      BEGIN
---         -- Prepare next screen var
---         SET @cOption = ''
---         SET @cOutField01 = '' -- Option
---
---         -- Enable field
---         SET @cFieldAttr07 = '' -- QTY
---
---         SET @nScn = @nScn + 2
---         SET @nStep = @nStep + 2
---      END
-
-      -- QTY fulfill
-      --IF @nActQTY = @nSuggQTY
-      --BEGIN
       -- Confirm
       EXEC RDT.rdt_PickCase_Confirm @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 'CONFIRM'
          ,@cPickSlipNo
@@ -1237,15 +1151,6 @@ BEGIN
          END
          ELSE
          BEGIN
-            /*
-            -- Enable field
-            SET @cFieldAttr07 = '' -- QTY
-
-            -- Goto no more task in loc screen
-            SET @nScn = @nScn + 1
-            SET @nStep = @nStep + 1
-            */
-
             -- Get task in next loc
             SET @cSKUValidated = '0'
             SET @nActQTY = 0
@@ -1328,6 +1233,7 @@ BEGIN
       SET @nStep = @nStep - 1
    END
 
+   Step_3_ExtScn:
    IF @cExtScnSP <> '' AND EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
    BEGIN
       SET @nAction = 0
@@ -1392,9 +1298,6 @@ BEGIN
 
          EXEC rdt.rdtSetFocusField @nMobile, 5 -- SKU
 
-         -- Disable QTY field
-         --SET @cFieldAttr07 = CASE WHEN @nTotalQty = '1' THEN 'O' ELSE '' END
-
          -- Go to SKU QTY screen
          SET @nScn = 5292
          SET @nStep = @nStep - 1
@@ -1418,14 +1321,13 @@ BEGIN
       SET @nScn = @nScn - 3
       SET @nStep = @nStep - 3
    END
-END
 
-IF @cExtScnSP <> '' AND EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
-BEGIN
-   SET @nAction = 0
-   GOTO Step_99
+   IF @cExtScnSP <> '' AND EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
+   BEGIN
+      SET @nAction = 0
+      GOTO Step_99
+   END
 END
-
 GOTO Quit
 
 
@@ -1449,7 +1351,6 @@ BEGIN
       END
 
       -- Validate option
---       IF @cOption <> '1' AND @cOption <> '2' AND @cOption <> '3' -- (ChewKP01)
       IF @cOption <> '1' AND @cOption <> '0'
       BEGIN
          SET @nErrNo = 130576
@@ -1611,62 +1512,6 @@ BEGIN
 
          GOTO Quit
       END
-
--- CYU027 UWP-18306
---       ELSE IF @cOption = '3' -- (ChewKP01)
---       BEGIN
---          -- Confirm
---          EXEC RDT.rdt_PickCase_Confirm @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 'CONFIRM'
---             ,@cPickSlipNo
---             ,@cPickZone
---             ,@cDropID
---             ,@cSuggLOC
---             ,@cSuggID
---             ,@cBarcode
---             ,@cSuggSKU
---             ,@nActQTY
---             ,@nErrNo       OUTPUT
---             ,@cErrMsg      OUTPUT
---          IF @nErrNo <> 0
---             GOTO Quit
---
---          SET @cExtendedScreenSP =  ISNULL(rdt.RDTGetConfig( @nFunc, '957ExtendedScreenSP', @cStorerKey), '')
---          SET @nAction = 1
---          IF @cExtendedScreenSP <> ''
---          BEGIN
---             IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
---             BEGIN
---                EXECUTE [RDT].[rdt_957ExtScnEntry]
---                   @cExtendedScreenSP,
---                   @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,
---                   @cPickSlipNo, @cPickZone, @cDropID, @cSuggLOC, @cSuggID, @cSuggSKU, @nSuggQTY, @cOption, @cLottableCode,
---                   @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
---                   @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
---                   @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,
---                   @nAction,
---                   @nAfterScn OUTPUT,  @nAfterStep OUTPUT,
---                   @nErrNo OUTPUT, @cErrMsg OUTPUT
---
---                   IF @nErrNo <> 0
---                      GOTO Step_5_Fail
---             END
---          END
---          -- Get task in current LOC
---          SET @cSKUValidated = '0'
---          SET @nTotalQty = @nTotalQty + 1
---          SET @nActQTY = 0
---
---          -- Goto PickZone Screen
---          SET @cOutField01 = @cPickSlipNo
---          SET @cOutField02 = ''
---          SET @cOutField03 = ''
---
---          SET @nScn = @nScn - 3
---          SET @nStep = @nStep - 3
---
---          EXEC rdt.rdtSetFocusField @nMobile, 3 -- DropID
---          GOTO Quit
---       END
    END
 
    -- Prepare SKU QTY screen var
@@ -1679,9 +1524,6 @@ BEGIN
    SET @cOutField07 = CAST( @nTotalQty AS NVARCHAR(5))
    SET @cOutField08 = @cSuggID 
    SET @cOutField09 = ''
-
-   -- Disable QTY field
-   --SET @cFieldAttr07 = CASE WHEN @nTotalQty = '1' THEN 'O' ELSE '' END -- QTY
 
    IF @cFieldAttr07 = 'O'
       EXEC rdt.rdtSetFocusField @nMobile, 5 -- SKU
@@ -1781,9 +1623,6 @@ BEGIN
 
                EXEC rdt.rdtSetFocusField @nMobile, 5 -- SKU
 
-               -- Disable QTY field
-               --SET @cFieldAttr07 = CASE WHEN @nTotalQty = '1' THEN 'O' ELSE '' END
-
                -- Go to SKU QTY screen
                SET @nScn = 5292
                SET @nStep = @nStep - 3
@@ -1811,9 +1650,6 @@ BEGIN
       SET @cOutField07 = CAST (@nTotalQty AS NVARCHAR(5)) -- QTY
       SET @cOutField08 = @cSuggID 
       SET @cOutField09 = ''
-
-      -- Disable QTY field
-      --SET @cFieldAttr07 = CASE WHEN @nTotalQty = '1' THEN 'O' ELSE '' END -- QTY
 
       EXEC rdt.rdtSetFocusField @nMobile, 5 -- SKU
 
@@ -1904,9 +1740,6 @@ BEGIN
 
       EXEC rdt.rdtSetFocusField @nMobile, 5 -- SKU
 
-      -- Disable QTY field
-      --SET @cFieldAttr07 = CASE WHEN @nTotalQty = '1' THEN 'O' ELSE '' END
-
       -- Go to SKU QTY screen
       SET @nScn = 5292
       SET @nStep = @nStep - 4
@@ -1975,11 +1808,20 @@ BEGIN
 
          DELETE FROM @tExtScnData
          INSERT INTO @tExtScnData (Variable, Value) VALUES    
-         ('@nMenu',        CONVERT(Nvarchar(20),@nMenu)),
-         ('@cUserName',    @cUserName),
-         ('@cSuggSKU',     @cSuggSKU),
-         ('@cDropID',     @cDropID),
-         ('@cPickSlipNo', @cPickSlipNo)
+         ('@nMenu',              CONVERT(Nvarchar(20),@nMenu)),
+         ('@cUserName',          @cUserName),
+         ('@cSuggSKU',           @cSuggSKU),
+         ('@cDropID',            @cDropID),
+         ('@cPickSlipNo',        @cPickSlipNo),
+         ('@cPickZone',          @cPickZone),
+         ('@cSuggLOC',           @cSuggLOC),
+         ('@cSuggID',            @cSuggID),
+         ('@cBarcode',           @cBarcode),
+         ('@cLottableCode',      @cLottableCode),
+         ('@nActQTY',            CAST(@nActQTY AS NVARCHAR(5)) ),
+         ('@nSuggQTY',           CAST(@nSuggQTY AS NVARCHAR(5)) ),
+         ('@cExtendedUpdateSP',  @cExtendedUpdateSP)
+
          EXECUTE [RDT].[rdt_ExtScnEntry] 
          @cExtScnSP, 
          @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorerKey, @tExtScnData ,
@@ -2021,6 +1863,24 @@ BEGIN
             IF ISNULL(@cUDF01, '') = 'SWAPUCC' AND ISNULL(@cUDF02, '') <> ''
             BEGIN
                SET @cDropID = @cUDF02
+            END
+         END
+
+         IF @cExtScnSP = 'rdt_957ExtScn03'
+         BEGIN
+            IF @nScn = 6443
+            BEGIN
+               IF @cUDF01 = '1' -- Got a finished task in the New Short Screen, store the data into the I/O table
+               BEGIN
+                  SET @cSuggLOC = @cUDF02
+                  SET @cSuggSKU = @cUDF03
+                  SET @cSKUDescr = @cUDF04
+                  SET @nSuggQTY = CAST(@cUDF05 AS INT)
+                  SET @cSuggID = @cUDF06
+                  SET @nTotalQty = CAST(@cUDF07 AS INT)
+                  SET @cSKUValidated = @cUDF08
+                  SET @nActQTY = CAST(@cUDF09 AS INT)
+               END
             END
          END
       END

@@ -41,6 +41,8 @@ GO
 /* 2023-02-22 3.1  YeeKung   WMS-21820 Add rdtformat toid (yeekung03)   */
 /* 2024-08-28 3.2  JHU151    FCR-650.   default to id                   */
 /* 2024-10-25 3.3  XLL045    FCR-759-1002 ID  Length Issue              */
+/* 2025-06-04 0.0  JACKC     !!!Cutover. Use V2 verion in V0 Repo for   */ 
+/*                            development!!!              */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_Move_LOC] (

@@ -7,30 +7,31 @@ SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
-/*************************************************************************/  
-/* Stored Procedure: WM.lsp_FinalizeKit_Wrapper                          */  
-/* Creation Date: 09-OCT-2018                                            */  
-/* Copyright: LFL                                                        */  
-/* Written by: Wan                                                       */  
-/*                                                                       */  
-/* Purpose: LFWM-1281 - Stored Procedures for Kitting functionalities    */
-/*        :                                                              */  
-/* Called By:                                                            */  
-/*                                                                       */  
-/*                                                                       */  
-/* Version: 1.2                                                          */  
-/*                                                                       */  
-/* Data Modifications:                                                   */  
-/*                                                                       */  
-/* Updates:                                                              */  
-/* Date        Author   Ver   Purposes                                   */ 
-/* 2020-08-26  Wan01    1.1   LFWM-2153 - UAT CNKitting Module shows     */
-/*                            lottable is required                       */
-/* 2020-12-10  Wan02    1.1   Add Big Outer Begin Try..End Try to enable */
-/*                            Revert when SP Raise error                 */
-/*                      1.1   Fixed Uncommitable Transaction             */
-/* 2021-01-15  Wan03    1.2   Execute Login if @c_UserName<>SUSER_SNAME()*/
-/*************************************************************************/   
+/*******************************************************************************/
+/* Stored Procedure: WM.lsp_FinalizeKit_Wrapper                                */
+/* Creation Date: 09-OCT-2018                                                  */
+/* Copyright: LFL                                                              */
+/* Written by: Wan                                                             */
+/*                                                                             */
+/* Purpose: LFWM-1281 - Stored Procedures for Kitting functionalities          */
+/*        :                                                                    */
+/* Called By:                                                                  */
+/*                                                                             */
+/*                                                                             */
+/* Version: 1.2                                                                */
+/*                                                                             */
+/* Data Modifications:                                                         */
+/*                                                                             */
+/* Updates:                                                                    */
+/* Date        Author        Ver   Purposes                                    */
+/* 2020-08-26  Wan01         1.1   LFWM-2153 - UAT CNKitting Module shows      */
+/*                                 lottable is required                        */
+/* 2020-12-10  Wan02         1.1   Add Big Outer Begin Try..End Try to enable  */
+/*                                 Revert when SP Raise error                  */
+/*                           1.1   Fixed Uncommitable Transaction              */
+/* 2021-01-15  Wan03         1.2   Execute Login if @c_UserName<>SUSER_SNAME() */
+/* 2025-05-28  Shreekanth    1.3   Updating Editwho in KIT to Namedser (SG01)  */
+/*******************************************************************************/
 CREATE PROCEDURE [WM].[lsp_FinalizeKit_Wrapper]  
    @c_KITKey               NVARCHAR(10)
 ,  @b_Success              INT          = 1  OUTPUT   
@@ -40,6 +41,7 @@ CREATE PROCEDURE [WM].[lsp_FinalizeKit_Wrapper]
 ,  @c_ProceedWithWarning   CHAR(1)      = 'N' 
 ,  @c_UserName             NVARCHAR(128)= ''
 ,  @n_ErrGroupKey          INT = 0           OUTPUT
+,  @c_NamedUser            NVARCHAR(128)= ''                        --SG01
 AS  
 BEGIN
    SET NOCOUNT ON                   -- (Wan02) - START                                     
@@ -773,7 +775,7 @@ BEGIN
       BEGIN TRY
          UPDATE KIT WITH (ROWLOCK)
          SET [Status] = '9'
-            ,EditWho = @c_UserName
+            ,EditWho = @c_NamedUser                                     --SG01
             ,EditDate= GETDATE()
          WHERE KitKey = @c_KitKey
       END TRY

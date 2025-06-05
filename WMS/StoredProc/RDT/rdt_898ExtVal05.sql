@@ -11,6 +11,7 @@ GO
 /* Date       Rev    Author     Purposes                                   */
 /* 2024-10-01 1.0    NLT013     FCR-926 Created                            */
 /* 2025-02-13 1.1.0  ASK138     FCR-2724                                   */
+/* 2025-05-19 1.2.0  Dennis     FCR-4531                                   */
 /***************************************************************************/
 
 CREATE OR ALTER   PROCEDURE [RDT].[rdt_898ExtVal05]
@@ -70,6 +71,22 @@ BEGIN
             BEGIN
                SET @nErrNo = 225302 
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- OnLOT not triggered
+               GOTO Quit
+            END
+         END
+      END
+      ELSE IF @nStep = 2  -- To loc
+      BEGIN
+         IF @nInputKey = 1
+         BEGIN
+            IF NOT EXISTS(SELECT 1
+               FROM dbo.LOC WITH(NOLOCK) 
+               WHERE Loc = @cLOC 
+                  AND PutAwayZone = 'IBDOOR'
+                  AND HOSTWHCODE = 'QI')
+            BEGIN
+               SET @nErrNo = 225303 
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Loc
                GOTO Quit
             END
          END

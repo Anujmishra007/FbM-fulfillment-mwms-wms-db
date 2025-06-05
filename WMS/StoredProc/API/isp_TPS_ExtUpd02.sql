@@ -3,15 +3,13 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-/****** Object:  StoredProcedure [API].[isp_TPS_ExtUpd02]    Script Date: 6/3/2020 4:50:51 PM ******/
-
-
 /******************************************************************************/
 /* Store procedure: isp_TPS_ExtUpd02                                          */
 /* Copyright      : LFLogistics                                               */
 /*                                                                            */
 /* Date         Rev  Author     Purposes                                      */
 /* 2021-10-25   1.0  Chermaine  TPS-597 Created                               */
+/* 2025-01-22   1.1  YeeKung    TPS-970 Add New Params (yeekung04)            */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [API].[isp_TPS_ExtUpd02] (
@@ -35,6 +33,7 @@ CREATE OR ALTER PROC [API].[isp_TPS_ExtUpd02] (
    @cWorkstation    NVARCHAR( 30),
    @cLabelNo        NVARCHAR( 20),
    @cCloseCartonJson   NVARCHAR (MAX),
+   @pickSkuDetailJson  NVARCHAR (MAX),
    @b_Success       INT = 1        OUTPUT,
    @n_Err           INT = 0        OUTPUT,
    @c_ErrMsg        NVARCHAR( 255) = ''  OUTPUT

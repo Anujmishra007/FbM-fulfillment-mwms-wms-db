@@ -69,6 +69,8 @@ GO
 /* 2024-04-17  WLChooi  3.3   LFWM-4863 - Initialize @c_Wavekey to blank*/
 /*                            for non TopUpWave (WL02)                  */
 /* 2024-05-21  Wan20    3.4   Fixed missing @n_MaxOpenQty Parameter     */
+/* 2025-05-16  USH022-01   3.5   FCR-3956 ORDERDETAIL added dynamic query  */
+/*                            for group by logic                        */
 /************************************************************************/
 CREATE OR ALTER PROC [WM].[lsp_Build_Wave]
       @c_BuildParmKey      NVARCHAR(10)
@@ -87,6 +89,7 @@ CREATE OR ALTER PROC [WM].[lsp_Build_Wave]
    ,  @dt_Date_Fr          DATETIME       = NULL               --(Wan10)
    ,  @dt_Date_To          DATETIME       = NULL               --(Wan10)
    ,  @c_Wavekey           NVARCHAR(10)   = ''   --WL01
+   ,  @c_SQLAddToWaveCond  NVARCHAR(MAX)  = ''   --USH022-01 2025-05-16
 AS
    SET NOCOUNT ON
    SET ANSI_NULLS OFF
@@ -583,12 +586,12 @@ AS
          IF @c_ParmBuildType = 'GROUP' AND @c_BuildWaveType NOT IN ( 'ANALYSIS' )         --Wan03
          BEGIN
             SET @n_BuildGroupCnt = @n_BuildGroupCnt + 1                      --Fixed counter increase for 'GROUP' only
-            IF ISNULL(RTRIM(@c_TableName), '') NOT IN('ORDERS','ORDERINFO','SKU','PICKDETAIL','LOC')
+            IF ISNULL(RTRIM(@c_TableName), '') NOT IN('ORDERS','ORDERINFO','SKU','PICKDETAIL','LOC','ORDERDETAIL') --USH022-01
             BEGIN
                SET @n_Continue = 3
                SET @n_Err    = 555516
                SET @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(6), @n_Err)
-                             + ': Grouping Only Allow Refer To Orders/Orderinfo/Sku/Pickdetail/Loc Table''s Fields. Invalid Table: ' + RTRIM(@c_FieldName)
+                             + ': Grouping Only Allow Refer To Orders/Orderinfo/Sku/Pickdetail/Loc/ORDERDETAIL Table''s Fields. Invalid Table: ' + RTRIM(@c_FieldName)--USH022-01
                              + '. (lsp_Build_Wave)'
                              + '|' + RTRIM(@c_FieldName)
                GOTO EXIT_SP
@@ -845,6 +848,17 @@ AS
          SET @n_PreCondLevel = @n_PreCondLevel - 1
       END
 
+      --USH022-01 - START
+      IF @c_Wavekey > '' AND @c_SQLAddToWaveCond > ''
+      BEGIN
+         IF LEFT(LTRIM(@c_SQLAddToWaveCond),3) <> 'AND'
+         BEGIN
+            SET @c_SQLAddToWaveCond = ' AND' + @c_SQLAddToWaveCond
+         END
+
+         SET @c_SQLCond = @c_SQLCond + @c_SQLAddToWaveCond
+      END
+      --USH022-01 - END
       ------------------------------------------------------
       -- Get Build Wave Custom SP
       ------------------------------------------------------
@@ -1032,7 +1046,6 @@ AS
                         + CHAR(13) + ',ORDERS.DeliveryDate'
                         + CHAR(13) + ',ORDERS.DeliveryPlace'
                         + CHAR(13) + ',ORDERS.[Status]'
-
 
       IF @c_GroupBySortField <> ''
       BEGIN
