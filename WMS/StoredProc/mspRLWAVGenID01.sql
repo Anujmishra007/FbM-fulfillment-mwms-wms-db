@@ -50,7 +50,7 @@ DECLARE
    @n_Even          INT
 
 BEGIN
-      SET @c_Identifier = '00'
+      SET @c_Identifier = ''
       SET @c_Packtype = '0'
       SET @c_IDKey = ''
 
