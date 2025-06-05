@@ -12,7 +12,9 @@
 /* 2025-05-24   NickT     1.1.0   UWP-34990 PickDetail.Loc is not updated   */
 /* 2025-06-03   NickT     1.2.0   UWP-34990 UWP-35377 Exception happens when*/
 /*                                update PickDetail.Loc                     */
-/****************************************************************************/  
+/* 2025-06-05   NickT     1.3.0   UWP-34990 UWP-35377 No need to insert data*/
+/*                                into LOTXLOCXID manually                  */
+/****************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_1836ConfirmSP04]  
    @nMobile         INT,  
@@ -120,26 +122,6 @@ BEGIN
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Fail UNLOCK
                   GOTO RollbackTran
                END
-               --to void issue of FK 
-               INSERT INTO dbo.LotxLocxID(Lot, Loc, Id, StorerKey, Sku, Qty, PendingMoveIN, EditDate, EditWho)
-               SELECT td.lot, @cFinalLOC, td.FromID, td.StorerKey, td.Sku, 0, 0, GetDate(), SUSER_NAME()
-               FROM dbo.TaskDetail td WITH (NOLOCK) 
-               LEFT JOIN dbo.LotxLocxID inv WITH (NOLOCK) ON inv.Lot = td.Lot AND inv.ID = td.FromID AND inv.Loc = @cFinalLOC
-               WHERE td.StorerKey = @cStorerKey 
-                  AND td.RefTaskKey = @cRefTaskKey 
-                  AND td.TaskType = 'ASTCPK' 
-                  AND inv.Loc IS NULL
-
-               INSERT INTO dbo.LotxLocxID(Lot, Loc, Id, StorerKey, Sku, Qty, PendingMoveIN, EditDate, EditWho)
-               SELECT pd.lot, @cFinalLOC, pd.ID, td.StorerKey, pd.Sku, 0, 0, GetDate(), SUSER_NAME()
-               FROM dbo.pickdetail pd WITH (NOLOCK)
-               INNER JOIN dbo.TaskDetail td WITH (NOLOCK) ON pd.PickDetailKey=td.PickDetailKey
-               LEFT JOIN dbo.LotxLocxID inv WITH (NOLOCK) ON inv.Lot = pd.Lot AND inv.ID = pd.ID AND  inv.Loc = @cFinalLOC
-               WHERE td.StorerKey = @cStorerKey 
-                  AND td.RefTaskKey = @cRefTaskKey 
-                  AND td.TaskType = 'ASTCPK' 
-                  AND inv.Loc IS NULL
-
                   
                --object 2: Update the Taskdetail.FromLoc for the ASTCPK task and TaskDetail.ToLoc for the ASTRPT task.
                UPDATE dbo.TaskDetail WITH (ROWLOCK) 
