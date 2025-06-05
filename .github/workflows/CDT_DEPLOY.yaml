@@ -344,7 +344,7 @@ jobs:
         if: always()
         run: |
           echo "Downloading logs from Azure File Share"
-          azcopy copy '${{ env.STORAGE_ACCOUNT_URL }}/${{ env.WORKFLOW_RUN_ID }}-${{ matrix.data.DATBASE_NAME }}.txt/${{ secrets.CDT_AZURE_FILE_SHARE_SAS_TOKEN }}' ./${{ env.WORKFLOW_RUN_ID }}-${{ matrix.data.DATBASE_NAME }}.txt --overwrite=true --check-md5 FailIfDifferent --recursive --log-level=INFO --trailing-dot=Enable;
+          azcopy copy '${{ env.STORAGE_ACCOUNT_URL }}/${{ env.WORKFLOW_RUN_ID }}-${{ matrix.data.DATBASE_NAME }}.txt${{ secrets.CDT_AZURE_FILE_SHARE_SAS_TOKEN }}' ./${{ env.WORKFLOW_RUN_ID }}-${{ matrix.data.DATBASE_NAME }}.txt --overwrite=true --check-md5 FailIfDifferent --recursive --log-level=INFO --trailing-dot=Enable;
       - name: Upload logs to GitHub
         if: always() && steps.azcopy-logs.outcome == 'success'
         uses: actions/upload-artifact@v4
