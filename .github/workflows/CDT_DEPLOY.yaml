@@ -16,6 +16,36 @@ on:
           - INVWMS
           - IOBWMS
           - SDRWMS
+      description:
+        required: false
+        type: string
+        description: 'Enter the description for the change (required for prod deployment)'
+      app-name:
+        required: false
+        type: string
+        description: 'Enter the application name (required for prod deployment)'
+        default: 'Maersk WMS Database'
+      template:
+        required: true
+        description: 'Enter the template name (required for prod deployment)'
+        type: choice
+        options: 
+          - 'FbM MWMS EUR - WMS DB Deployment'
+          - 'FbM MWMS LAM - WMS DB Deployment'
+          - 'FbM MWMS APA - WMS DB Deployment'
+      notify-email:
+        required: false
+        type: string
+        description: 'FbMDevOps@maersk.com'
+      PROD-EUROPE: 
+        description: "PROD Europe Environment Value"
+        required: false
+      PROD-AMERICAS: 
+        description: "PROD Americas Environment Value"
+        required: false
+      PROD-ASIA: 
+        description: "PROD Asia Environment Value"
+        required: false    
 
 permissions: write-all
 
@@ -232,7 +262,7 @@ jobs:
   DEPLOY:
     runs-on: ubuntu-latest
     if: ${{ needs.INIT_DEPLOY.outputs.MATRIX_OUTPUT != '' }}
-    needs: [INIT_DEPLOY]
+    needs: [INIT_DEPLOY, Deploy-with-change-europe]
     concurrency:
       group: cdt-${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.WMSDB) || (github.event_name == 'push' && 'DEVWMS') }}
       cancel-in-progress: false
@@ -368,3 +398,63 @@ jobs:
           ms-teams-webhook-uri: ${{ secrets.MSTEAMS_NOTIFY_WEBHOOK }}
           notification-summary: CDT - ${{ matrix.data.DATBASE_NAME }} - new version ${{ matrix.data.DB_DEPLOY_VERSION }} - Deployment failure &#x1F6A2
           notification-color: 09ACF3
+
+  Deploy-with-change-europe:
+    if: inputs.PROD-EUROPE != ''
+    uses: Maersk-Global/Athena-Automations/.github/workflows/deploy-with-change.yml@main
+    secrets: inherit
+    with:
+      description: ${{ inputs.description }}
+      notify-email: ${{ inputs.notify-email }}
+      app-name: ${{ inputs.app-name }}
+      change-template: ${{ inputs.template }}
+
+  Close-change-europe:
+    if: inputs.PROD-EUROPE != ''
+    uses: Maersk-Global/Athena-Automations/.github/workflows/Close-change-request.yml@main
+    secrets: inherit
+    needs: [ DEPLOY, Deploy-with-change-europe ]
+    with:
+      change-number: ${{ needs.deploy-with-change-europe.outputs.change-number }}
+      sys-id: ${{ needs.deploy-with-change-europe.outputs.sys-id }}
+      change-dates: ${{ needs.deploy-with-change-europe.outputs.change-dates }}
+
+#   Deploy-with-change-americas:
+#     if: inputs.PROD-AMERICAS != ''
+#     uses: Maersk-Global/Athena-Automations/.github/workflows/deploy-with-change.yml@main
+#     secrets: inherit
+#     with:
+#       description: ${{ inputs.description }}
+#       notify-email: ${{ inputs.notify-email }}
+#       app-name: ${{ inputs.app-name }}
+#       change-template: ${{ inputs.template }}
+
+#   Close-change-americas:
+#     if: inputs.PROD-AMERICAS != ''
+#     uses: Maersk-Global/Athena-Automations/.github/workflows/Close-change-request.yml@main
+#     secrets: inherit
+#     needs: [ DEPLOY, Deploy-with-change-americas ]
+#     with:
+#       change-number: ${{ needs.deploy-with-change-americas.outputs.change-number }}
+#       sys-id: ${{ needs.deploy-with-change-americas.outputs.sys-id }}
+#       change-dates: ${{ needs.deploy-with-change-americas.outputs.change-dates }}
+
+  # Deploy-with-change-asia:
+  #   if: inputs.PROD-ASIA != ''
+  #   uses: Maersk-Global/Athena-Automations/.github/workflows/deploy-with-change.yml@main
+  #   secrets: inherit
+  #   with:
+  #     description: ${{ inputs.description }}
+  #     notify-email: ${{ inputs.notify-email }}
+  #     app-name: ${{ inputs.app-name }}
+  #     change-template: ${{ inputs.template }}
+
+  # Close-change-asia:
+  #   if: inputs.PROD-ASIA != ''
+  #   uses: Maersk-Global/Athena-Automations/.github/workflows/Close-change-request.yml@main
+  #   secrets: inherit
+  #   needs: [ DEPLOY, Deploy-with-change-asia ]
+  #   with:
+  #     change-number: ${{ needs.deploy-with-change-asia.outputs.change-number }}
+  #     sys-id: ${{ needs.deploy-with-change-asia.outputs.sys-id }}
+  #     change-dates: ${{ needs.deploy-with-change-asia.outputs.change-dates }}
