@@ -260,24 +260,24 @@ jobs:
           echo "deploy version : ${{ matrix.data.DB_DEPLOY_VERSION }}"
           echo "server name : ${{ matrix.data.DB_SERVER_NAME }}"
           echo "changed files : ${{ matrix.data.CHANGED_FILES_STRING }}"
-      - name: Create change
-        id: create-change
-        uses: Maersk-Global/Athena-Automations/.github/Actions/openChangeRequest@main
-        env:
-          CLIENT_ID: ${{ secrets.CLIENT_ID }}
-          CLIENT_SECRET: ${{ secrets.CLIENT_SECRET }}
-          USERNAME: ${{ secrets.CR_USERNAME }}
-          PASSWORD: ${{ secrets.CR_PASSWORD }}
-          APP_NAME: 'Maersk WMS Database'
-          CHANGE_TEMPLATE: 'FbM MWMS EUR - WMS DB Deployment'
-        with:
-          username: ${{ secrets.CR_USERNAME }}
-          password: ${{ secrets.CR_PASSWORD }}
-          clientId:  ${{ secrets.CLIENT_ID }}
-          clientSecret:  ${{ secrets.CLIENT_SECRET }}
-          description: 'FbM MWMS EUR - WMS DB Deployment'
-          appName: 'Maersk WMS Database'
-          changeTemplate: 'FbM MWMS EUR - WMS DB Deployment'
+      # - name: Create change
+      #   id: create-change
+      #   uses: Maersk-Global/Athena-Automations/.github/Actions/openChangeRequest@main
+      #   env:
+      #     CLIENT_ID: ${{ secrets.CLIENT_ID }}
+      #     CLIENT_SECRET: ${{ secrets.CLIENT_SECRET }}
+      #     USERNAME: ${{ secrets.CR_USERNAME }}
+      #     PASSWORD: ${{ secrets.CR_PASSWORD }}
+      #     APP_NAME: 'Maersk WMS Database'
+      #     CHANGE_TEMPLATE: 'FbM MWMS EUR - WMS DB Deployment'
+      #   with:
+      #     username: ${{ secrets.CR_USERNAME }}
+      #     password: ${{ secrets.CR_PASSWORD }}
+      #     clientId:  ${{ secrets.CLIENT_ID }}
+      #     clientSecret:  ${{ secrets.CLIENT_SECRET }}
+      #     description: 'FbM MWMS EUR - WMS DB Deployment'
+      #     appName: 'Maersk WMS Database'
+      #     changeTemplate: 'FbM MWMS EUR - WMS DB Deployment'
       - name: Deployment Started Notification
         uses: Maersk-Global/fbm-github-actions/ms-teams-notification@v3
         with:
@@ -369,16 +369,16 @@ jobs:
         with:
           name: ${{ matrix.data.DATBASE_NAME }}-sql-scripts-logs
           path: ./${{ env.WORKFLOW_RUN_ID }}-${{ matrix.data.DATBASE_NAME }}.txt
-      - name: Close CR
-        uses: "Maersk-Global/Athena-Automations/.github/Actions/closeChangeRequest@main"
-        with:
-          change-number: ${{ steps.create-change.outputs.change-number }}
-          sys-id: ${{ steps.create-change.outputs.sys-id }}
-          change-dates: ${{ steps.create-change.outputs.change-dates }}
-          username: ${{ secrets.CR_USERNAME }}
-          password: ${{ secrets.CR_PASSWORD }}
-          clientId: ${{ secrets.CLIENT_ID }}
-          clientSecret: ${{ secrets.CLIENT_SECRET }}
+      # - name: Close CR
+      #   uses: "Maersk-Global/Athena-Automations/.github/Actions/closeChangeRequest@main"
+      #   with:
+      #     change-number: ${{ steps.create-change.outputs.change-number }}
+      #     sys-id: ${{ steps.create-change.outputs.sys-id }}
+      #     change-dates: ${{ steps.create-change.outputs.change-dates }}
+      #     username: ${{ secrets.CR_USERNAME }}
+      #     password: ${{ secrets.CR_PASSWORD }}
+      #     clientId: ${{ secrets.CLIENT_ID }}
+      #     clientSecret: ${{ secrets.CLIENT_SECRET }}
       - name: Deployment Started Notification
         if: steps.validate.outcome == 'success'
         uses: Maersk-Global/fbm-github-actions/ms-teams-notification@v3
@@ -396,3 +396,12 @@ jobs:
           ms-teams-webhook-uri: ${{ secrets.MSTEAMS_NOTIFY_WEBHOOK }}
           notification-summary: CDT - ${{ matrix.data.DATBASE_NAME }} - new version ${{ matrix.data.DB_DEPLOY_VERSION }} - Deployment failure &#x1F6A2
           notification-color: 09ACF3
+  Deploy-with-change-europe:
+
+    uses: Maersk-Global/Athena-Automations/.github/workflows/deploy-with-change.yml@main
+    secrets: inherit
+    with:
+      description: 'FbM MWMS EUR - WMS DB Deployment'
+      notify-email: FbMDevOps@maersk.com
+      app-name: 'Maersk WMS Database'
+      change-template: 'FbM MWMS EUR - WMS DB Deployment'
