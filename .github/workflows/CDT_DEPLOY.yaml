@@ -396,12 +396,12 @@ jobs:
           ms-teams-webhook-uri: ${{ secrets.MSTEAMS_NOTIFY_WEBHOOK }}
           notification-summary: CDT - ${{ matrix.data.DATBASE_NAME }} - new version ${{ matrix.data.DB_DEPLOY_VERSION }} - Deployment failure &#x1F6A2
           notification-color: 09ACF3
-  Deploy-with-change-europe:
+  # Deploy-with-change-europe:
 
-    uses: Maersk-Global/Athena-Automations/.github/workflows/deploy-with-change.yml@main
-    secrets: inherit
-    with:
-      description: 'FbM MWMS APA - WMS DB Deployment'
-      notify-email: FbMDevOps@maersk.com
-      app-name: 'Maersk WMS Database'
-      change-template: 'FbM MWMS APA - WMS DB Deployment'
+  #   uses: Maersk-Global/Athena-Automations/.github/workflows/deploy-with-change.yml@main
+  #   secrets: inherit
+  #   with:
+  #     description: 'FbM MWMS APA - WMS DB Deployment'
+  #     notify-email: FbMDevOps@maersk.com
+  #     app-name: 'Maersk WMS Database'
+  #     change-template: 'FbM MWMS APA - WMS DB Deployment'
