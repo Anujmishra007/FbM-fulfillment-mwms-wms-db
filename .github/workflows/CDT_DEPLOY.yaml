@@ -16,36 +16,7 @@ on:
           - INVWMS
           - IOBWMS
           - SDRWMS
-      description:
-        required: false
-        type: string
-        description: 'Enter the description for the change (required for prod deployment)'
-      app-name:
-        required: false
-        type: string
-        description: 'Enter the application name (required for prod deployment)'
-        default: 'Maersk WMS Database'
-      template:
-        required: true
-        description: 'Enter the template name (required for prod deployment)'
-        type: choice
-        options: 
-          - 'FbM MWMS EUR - WMS DB Deployment'
-          - 'FbM MWMS LAM - WMS DB Deployment'
-          - 'FbM MWMS APA - WMS DB Deployment'
-      notify-email:
-        required: false
-        type: string
-        description: 'FbMDevOps@maersk.com'
-      PROD-EUROPE: 
-        description: "PROD Europe Environment Value"
-        required: false
-      PROD-AMERICAS: 
-        description: "PROD Americas Environment Value"
-        required: false
-      PROD-ASIA: 
-        description: "PROD Asia Environment Value"
-        required: false    
+  
 
 permissions: write-all
 
