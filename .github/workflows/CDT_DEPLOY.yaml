@@ -268,7 +268,7 @@ jobs:
           password: ${{ secrets.CR_PASSWORD }}
           clientId:  ${{ secrets.CLIENT_ID }}
           clientSecret:  ${{ secrets.CLIENT_SECRET }}
-          description: ' Change for CDT WMSDB Deployment for DB ${{ matrix.data.DATBASE_NAME }} to version ${{ matrix.data.DB_DEPLOY_VERSION }}'
+          description: 'FbM MWMS EUR - WMS DB Deployment'
           appName: 'Maersk WMS Database'
           changeTemplate: 'FbM MWMS EUR - WMS DB Deployment'
       - name: Deployment Started Notification
