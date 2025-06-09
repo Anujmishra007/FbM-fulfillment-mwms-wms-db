@@ -1,7 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrBooking_InDelete]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
-drop trigger [dbo].[ntrBooking_InDelete]
-GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -34,10 +30,12 @@ GO
 /* Data Modifications:                                                  */
 /*                                                                      */
 /* Updates:                                                             */
-/* Date       Author    Ver.    Purposes                                */
+/* Date        Author     Ver.    Purposes                              */
+/* 09-Jun-2025 AYD01      1.1     Fix: Update TMS_Shipment.BookingNo to */
+/*                                '0' after deleting Booking            */
 /************************************************************************/
 
-CREATE TRIGGER ntrBooking_InDelete
+CREATE OR ALTER TRIGGER ntrBooking_InDelete
 ON  Booking_In
 FOR DELETE
 AS
@@ -62,6 +60,12 @@ BEGIN
    ,         @c_Storerkey  NVARCHAR(15)
    ,         @c_Configkey  NVARCHAR(30)
    ,         @c_SValue     NVARCHAR(10)
+
+   ,         @n_BookingNo     INT = 0              --2025-06-09
+   ,         @n_RowRef_SHPM   INT = 0              --2025-06-09 
+   ,         @c_ShipmentGID   NVARCHAR(50) = ''    --2025-06-09
+   ,         @CUR_SHPM        CURSOR               --2025-06-09
+
    
    SELECT @n_continue=1, @n_starttcnt=@@TRANCOUNT
    SET @c_Storerkey = ''
@@ -73,7 +77,21 @@ BEGIN
    BEGIN
       SELECT @n_continue = 4
    END
- 
+   
+   IF @n_Continue = 1 
+   BEGIN
+      IF EXISTS (SELECT 1
+                 FROM DELETED d
+                 WHERE d.Status = '9')
+      BEGIN
+         SET @n_Continue = 3
+         SET @n_err=74905   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+         SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)
+                      +': Not allow to delete closed booking. (ntrBooking_InDelete)'
+         GOTO QUIT_TR
+      END
+   END
+
    IF (@n_continue=1 OR @n_continue=2) 
    BEGIN
       SELECT @c_receiptkey = ISNULL(DELETED.Receiptkey,''), 
@@ -121,32 +139,70 @@ BEGIN
       END 
    END
 
+   -- Update TMS_Shipment BookingNo to 0 after deleting Booking (AYD01 START)
+   SET @CUR_SHPM = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+   SELECT ts.RowRef
+         ,ts.ShipmentGID
+   FROM deleted d  
+   JOIN dbo.TMS_Shipment AS ts WITH (NOLOCK) ON ts.BookingNo = d.BookingNo 
+   ORDER BY d.BookingNo
+      
+   OPEN @CUR_SHPM
+      
+   FETCH NEXT FROM @CUR_SHPM INTO @n_RowRef_SHPM
+                                 ,@c_ShipmentGID
+      
+   WHILE @@FETCH_STATUS <> -1 AND @n_Continue IN (1,2)
+   BEGIN
+             
+      UPDATE dbo.TMS_Shipment WITH (ROWLOCK)
+      SET BookingNo = 0                      -- (Wan03)
+         ,Editwho = SUSER_NAME()
+         ,EditDate= GETDATE()
+      WHERE Rowref = @n_RowRef_SHPM
+            
+      IF @@ERROR <> 0
+      BEGIN
+         SET @n_Continue = 3
+         SET @c_errmsg = CONVERT(CHAR(250),@n_err)
+         SET @n_err=74910   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+         SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update TMS_Shipment Fail. (ntrBooking_InDelete)'
+         GOTO QUIT_TR 
+      END
+            
+      FETCH NEXT FROM @CUR_SHPM INTO @n_RowRef_SHPM
+                                    ,@c_ShipmentGID
+   END
+   CLOSE @CUR_SHPM
+   DEALLOCATE @CUR_SHPM 
+   -- Update TMS_Shipment BookingNo to 0 after deleting Booking (AYD01 END)
+   
    QUIT_TR:
    IF @n_continue=3  -- Error Occured - Process And Return
    BEGIN
-	   IF @@TRANCOUNT = 1 and @@TRANCOUNT >= @n_starttcnt
-	   BEGIN
-	  	 ROLLBACK TRAN
-	   END
-	   ELSE
-	   BEGIN
-	  	 WHILE @@TRANCOUNT > @n_starttcnt
-	  	 BEGIN
-	  		 COMMIT TRAN
-	  	 END
-	   END
+      IF @@TRANCOUNT = 1 and @@TRANCOUNT >= @n_starttcnt
+      BEGIN
+       ROLLBACK TRAN
+      END
+      ELSE
+      BEGIN
+       WHILE @@TRANCOUNT > @n_starttcnt
+       BEGIN
+          COMMIT TRAN
+       END
+      END
    
-	   EXECUTE nsp_logerror @n_err, @c_errmsg, "ntrBooking_InDelete"
-	   RAISERROR (@c_errmsg, 16, 1) WITH SETERROR    -- SQL2012
-	   RETURN
+      EXECUTE nsp_logerror @n_err, @c_errmsg, "ntrBooking_InDelete"
+      RAISERROR (@c_errmsg, 16, 1) WITH SETERROR    -- SQL2012
+      RETURN
    END
    ELSE
    BEGIN
-	   WHILE @@TRANCOUNT > @n_starttcnt
-	   BEGIN
-	  	 COMMIT TRAN
-	   END
-	   RETURN
+      WHILE @@TRANCOUNT > @n_starttcnt
+      BEGIN
+       COMMIT TRAN
+      END
+      RETURN
    END
 END
 GO
