@@ -263,6 +263,13 @@ jobs:
       - name: Create change
         id: create-change
         uses: Maersk-Global/Athena-Automations/.github/Actions/openChangeRequest@main
+        env:
+          CLIENT_ID: ${{ secrets.CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.CLIENT_SECRET }}
+          USERNAME: ${{ secrets.CR_USERNAME }}
+          PASSWORD: ${{ secrets.CR_PASSWORD }}
+          APP_NAME: 'Maersk WMS Database'
+          CHANGE_TEMPLATE: 'FbM MWMS EUR - WMS DB Deployment'
         with:
           username: ${{ secrets.CR_USERNAME }}
           password: ${{ secrets.CR_PASSWORD }}
