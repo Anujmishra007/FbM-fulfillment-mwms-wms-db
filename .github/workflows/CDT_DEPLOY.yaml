@@ -401,7 +401,7 @@ jobs:
     uses: Maersk-Global/Athena-Automations/.github/workflows/deploy-with-change.yml@main
     secrets: inherit
     with:
-      description: 'FbM MWMS EUR - WMS DB Deployment'
+      description: 'FbM MWMS APA - WMS DB Deployment'
       notify-email: FbMDevOps@maersk.com
       app-name: 'Maersk WMS Database'
-      change-template: 'FbM MWMS EUR - WMS DB Deployment'
+      change-template: 'FbM MWMS APA - WMS DB Deployment'
