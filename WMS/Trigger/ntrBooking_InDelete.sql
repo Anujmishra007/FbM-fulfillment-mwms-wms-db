@@ -60,11 +60,10 @@ BEGIN
    ,         @c_Storerkey  NVARCHAR(15)
    ,         @c_Configkey  NVARCHAR(30)
    ,         @c_SValue     NVARCHAR(10)
-
-   ,         @n_BookingNo     INT = 0              --2025-06-09
-   ,         @n_RowRef_SHPM   INT = 0              --2025-06-09 
-   ,         @c_ShipmentGID   NVARCHAR(50) = ''    --2025-06-09
-   ,         @CUR_SHPM        CURSOR               --2025-06-09
+   ,         @n_BookingNo     INT = 0              --AYD01
+   ,         @n_RowRef_SHPM   INT = 0              --AYD01
+   ,         @c_ShipmentGID   NVARCHAR(50) = ''    --AYD01
+   ,         @CUR_SHPM        CURSOR               --AYD01
 
    
    SELECT @n_continue=1, @n_starttcnt=@@TRANCOUNT
@@ -77,7 +76,7 @@ BEGIN
    BEGIN
       SELECT @n_continue = 4
    END
-   
+   -- Status checking for deleting Booking_In (AYD01 START)
    IF @n_Continue = 1 
    BEGIN
       IF EXISTS (SELECT 1
@@ -91,7 +90,7 @@ BEGIN
          GOTO QUIT_TR
       END
    END
-
+   -- Status checking for deleting Booking_In (AYD01 END)
    IF (@n_continue=1 OR @n_continue=2) 
    BEGIN
       SELECT @c_receiptkey = ISNULL(DELETED.Receiptkey,''), 
@@ -176,7 +175,7 @@ BEGIN
    CLOSE @CUR_SHPM
    DEALLOCATE @CUR_SHPM 
    -- Update TMS_Shipment BookingNo to 0 after deleting Booking (AYD01 END)
-   
+
    QUIT_TR:
    IF @n_continue=3  -- Error Occured - Process And Return
    BEGIN
