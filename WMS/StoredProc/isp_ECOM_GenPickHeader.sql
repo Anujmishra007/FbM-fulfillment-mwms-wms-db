@@ -21,6 +21,7 @@ GO
 /*                                                                      */  
 /* Updates:                                                             */  
 /* Date           Author      Purposes                                  */  
+/* 21-Mar-2025    Alex01      #FCR-3671 bug fixed - deadlock            */
 /************************************************************************/  
 CREATE OR ALTER PROC [dbo].[isp_ECOM_GenPickHeader]
    @c_OrderKey       NVARCHAR(10),
@@ -90,10 +91,21 @@ BEGIN
          AND EXISTS (SELECT 1 FROM [dbo].[PickHeader] WITH (NOLOCK) 
             WHERE [PickHeaderKey] = @c_TempPickSlipNo)
       BEGIN
-         UPDATE PICKHEADER WITH (ROWLOCK)
-         SET [PickHeaderKey] = @c_NewPickSlipNo
-         WHERE [PickHeaderKey] = @c_TempPickSlipNo
+         --Alex01 S
+         IF NOT EXISTS ( SELECT 1 FROM PICKHEADER (NOLOCK) WHERE PickHeaderKey = @c_NewPickSlipNo )
+         BEGIN
+            INSERT INTO PICKHEADER ( PickHeaderKey, WaveKey, OrderKey, ExternOrderKey, StorerKey, ConsigneeKey, Priority, Type, Zone, Status, PickType, EffectiveDate, ConsoOrderKey, LoadKey )
+            SELECT @c_NewPickSlipNo, WaveKey, OrderKey, ExternOrderKey, StorerKey, ConsigneeKey, Priority, Type, Zone, Status, PickType, EffectiveDate, ConsoOrderKey, LoadKey
+            FROM PICKHEADER WITH (NOLOCK) 
+            WHERE PickHeaderKey = @c_TempPickSlipNo
+         END
+
+         DELETE FROM PICKHEADER WHERE PickHeaderKey = @c_TempPickSlipNo
+         --UPDATE PICKHEADER WITH (ROWLOCK)
+         --SET [PickHeaderKey] = @c_NewPickSlipNo
+         --WHERE [PickHeaderKey] = @c_TempPickSlipNo
          
+         --Alex01 E
          IF @@ERROR <> 0
          BEGIN
             SET @n_Continue = 3
