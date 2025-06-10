@@ -44,7 +44,7 @@ GO
 /* 2025-03-03  SSA07    1.7   UWP-30752 - seller order naming convention   */
 /* 2025-05-14  JH01     1.8   UWP-31657 - Change to map Receipt/ReceiptDetail*/
 /***************************************************************************/
-CREATE OR ALTER PROC [dbo].[mspASNFZ01_Test]
+CREATE OR ALTER PROC [dbo].[mspASNFZ01]
 (     @c_Receiptkey  NVARCHAR(10)
   ,   @b_Success     INT           OUTPUT
   ,   @n_Err         INT           OUTPUT
@@ -67,7 +67,6 @@ BEGIN
          , @c_ASNStatus          NVARCHAR(10)   = '0'
          , @c_ExistingOrderKey             NVARCHAR(10)   = ''              /*JH01*/
          , @c_ExistingOrderStatus          NVARCHAR(10)   = '0'             /*JH01*/
-         , @c_STDXDFinalizeAutoAllocate    NVARCHAR(10)   = ''              /*JH01*/
          , @c_DocType            NVARCHAR(1)    = ''
          , @c_OrderKey           NVARCHAR(10)   = ''
          , @c_StorerKey          NVARCHAR(15)   = ''
@@ -279,9 +278,7 @@ BEGIN
    BEGIN
       GOTO QUIT_SP
    END
-
-   SELECT @c_STDXDFinalizeAutoAllocate = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'STDXDFinalizeAutoAllocate')    /*JH01*/
-         set @c_STDXDFinalizeAutoAllocate = '1' --TEMP
+       
    -- IF NOT EXISTS( SELECT 1
    --               FROM RECEIPTDETAIL RD (NOLOCK)
    --               JOIN PODETAIL POD (NOLOCK) ON RD.Pokey = POD.POKey AND RD.POLineNumber = POD.POLineNumber
@@ -290,8 +287,7 @@ BEGIN
    --BEGIN
    --   GOTO QUIT_SP
    --END  /*JH01*/
-
-
+   
    --Construct order records
    IF @n_continue IN(1,2)
    BEGIN
@@ -511,13 +507,13 @@ BEGIN
          CLOSE CUR_RECDET
          DEALLOCATE CUR_RECDET
          --Updating externorderkey in the orders table
-         --(SSA07) start--
+        /* --(SSA07) start--
          SELECT @n_OrderCnt = COUNT(DISTINCT ExternOrderkey) FROM #TMP_ORD
-         IF @n_OrderCnt > 1 AND @c_STDXDFinalizeAutoAllocate <> '1'
+         IF @n_OrderCnt > 1
          BEGIN
             UPDATE #TMP_ORD set ExternOrderkey = @c_Receiptkey
          END
-         --(SSA07) end--
+         --(SSA07) end-- comment out by JH01*/
          IF NOT EXISTS (SELECT 1
                      FROM #TMP_ORDDTL)   /*JH01 #TMP_ORD*/
          BEGIN
@@ -529,7 +525,7 @@ BEGIN
    --Insert order to DB
    IF @n_continue IN(1,2)   
    BEGIN
-   select * from #TMP_ORD
+
       INSERT INTO ORDERS
       (  OrderKey
       ,  StorerKey
@@ -850,7 +846,7 @@ BEGIN
          GOTO QUIT_SP
       END                                                                           --(Wan01) - END
       -- Adding for XDOCK ASN allocation     (SSA03)
-       EXEC [WM].[lsp_XDockAllocation_Wrapper_Test]  --TEMP
+       EXEC [WM].[lsp_XDockAllocation_Wrapper]
        @c_ReceiptKey = @c_ReceiptKey,
        @b_Success    = @b_Success   OUTPUT,
        @n_Err        = @n_err       OUTPUT,
@@ -864,20 +860,7 @@ BEGIN
          SET @c_ErrMsg = 'NSQL' + CONVERT(NCHAR(5),@n_Err)
                        + ': XDOCK ASN Allocation Failed. (mspASNFZ01)'
          GOTO QUIT_SP
-      END
-      --ELSE
-      --BEGIN /*JH01 Start*/
-      --   UPDATE PICKDETAIL PD WITH (ROWLOCK) 
-      --   JOIN #TMP_ORDDTL TD ON TD.Orderkey = PD.Orderkey AND TD.ExternOrderkey = PD.ExternOrderkey AND TD.OrderLineNumber = PD.OrderLineNumber AND TD.Sku = PD.Sku
-      --   JOIN RECEIPTDETAIL RD WITH (NOLOCK) ON RD.Storerkey = TD.Storerkey AND RD.ExternReceiptkey = TD.ExternOrderkey AND RD.ToID = OD.ID
-      --   SET PD.DropID = OD.ID
-      --   WHERE RD.Receiptkey = @c_ReceiptKey
-      --END /*JH01 End*/
-
-      
-      
-   
-      
+      END  
    END
 
    QUIT_SP:
@@ -898,7 +881,7 @@ BEGIN
    RETURN
 END
 GO
-GRANT EXECUTE ON [dbo].[mspASNFZ01_Test] TO nSQL
+GRANT EXECUTE ON [dbo].[mspASNFZ01] TO nSQL
 GO
 
 
