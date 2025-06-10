@@ -1,0 +1,404 @@
+name: Stage EUR DEPLOY
+
+on:
+  workflow_dispatch:
+    inputs:
+      WMSDB:
+        description: "Kindly choose a Tag from the options above and a WMSDB Name from the list below for deployment. To deploy all WMSDBs in the stage, select ALL."
+        required: true
+        type: choice
+        options:
+          - ALL
+          - USALEV4DWMS
+          - USA4DNJWMS
+          - USAMAT4DWMS
+          - PTWWMS
+          - GBREMGWMS
+          - SBXWMS
+          - NLDWMS
+          - USALEVISWMS
+          - GBRWMS
+          - IRLWMS
+          - SAUWMS
+          - AREWMS
+          - DNKWMS
+          - HRVWMS
+          - KENWMS
+          - ESPWMS
+          - DEUWMS
+          - ZAFWMS
+          - CMRWMS
+          - SENWMS
+          - TGOWMS
+
+permissions: write-all
+
+env:
+  GRAFANA_LINK: https://grafana.maersk.io/goto/85u_FtfNg?orgId=1
+  DEPLOYMENT_STATUS_PAGE: https://mwmsdb-status.fulfillment.maersk.com/
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+  OWNER: ${{ github.repository_owner }}
+  WORKFLOW_RUN_ID: ${{ github.event.repository.name }}-${{ github.ref_name }}-${{ github.run_id }}-${{ github.run_attempt }}
+  REPO: ${{ github.event.repository.name }}
+  ENV_CODE: stage
+  WMSDB_NAME: ${{ github.event.inputs.WMSDB }}
+  WMSDB_METADATA_REPO: FbM-fulfillment-mwms-wms-db-metadata
+  STORAGE_ACCOUNT_URL: https://azewfbmdevopsstr001.file.core.windows.net/fbmdevopspoc
+
+concurrency:
+  group: stage-${{ github.event.inputs.WMSDB }}
+  cancel-in-progress: false
+jobs:
+  INIT_DEPLOY:
+    runs-on: ubuntu-latest
+    name: Preparing the deployment
+    outputs:
+      MATRIX_OUTPUT: ${{ env.MATRIX_OUTPUT }}
+    steps:
+      - name: print Inputs
+        run: echo "${{ toJSON(inputs) }}"
+      - name: Dump GitHub context
+        env:
+          GITHUB_CONTEXT: ${{ toJson(github) }}
+        run: echo "$GITHUB_CONTEXT"
+      - name: checking stage deployment conditions
+        shell: pwsh
+        run: |
+          if('${{ github.ref }}' -like "refs/tags/*")
+           {
+            write-host "This is a tag deployment"
+           }else{
+            write-output '# ERROR : Deployment was initiated using a branch(${{ github.ref_name }}) instead of a tag.' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+            write-output '```markdown' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+            write-output '❌ **Error:**  stage deployment can only be initiated using a tag and not directly from any branch. Please choose the appropriate tag for deployment.' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+            throw "tage deployment can only be initiated using a tag and not directly from any branch. Please choose the appropriate tag for deployment."
+           }
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.ref_name }}
+      - name: Dump GitHub context
+        env:
+          GITHUB_CONTEXT: ${{ toJson(github) }}
+        run: echo "$GITHUB_CONTEXT"
+      - name: Parse json data
+        shell: pwsh
+        run: |
+          [regex]$pattern = '(?i)^V(?<year>\d{2})\.(?<month>\d{1,2})\.(?<tagnumber>\d{3})'
+          $json_metadata = curl -L -s -H "Accept: application/vnd.github+json" -H "Authorization: Bearer ${{ secrets.PERSONAL_ACCESS_TOKEN }}" -H "X-GitHub-Api-Version: 2022-11-28"  https://api.github.com/repos/Maersk-Global/${{ env.WMSDB_METADATA_REPO}}/contents/metadata/wms/databases/v2/${{ env.ENV_CODE }}.json?ref=main | jq -r '.content' | base64 -d | ConvertFrom-Json
+          write-host "$($json_metadata | ConvertTo-Json -Depth 10)"
+          if ($env:WMSDB_NAME -eq 'ALL')
+            {
+             write-output "## All WMSDBs are selected for deployment" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+             write-output '' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+             write-output '| DATBASE_NAME |DB_SERVER_NAME |CURRENT_VERSION |DEPLOY_VERSION |DEPLOYMENT_STATUS |COMMENTS |'| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+             write-output '| :-------------: |:-------------: |:-------------: |:-------------: |:-------------: |:------------- |'| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+             $matrixtable = @()
+             foreach ($wmsdb in $json_metadata.databases.PSObject.Properties)
+               {
+                $DB_CURRENT_VERSION = $wmsdb.Value.Database_Version
+                $DB_DEPLOY_VERSION = '${{ github.ref_name }}'
+                $DB_SERVER_NAME = $wmsdb.Value.Server_name
+                $DATBASE_NAME = $wmsdb.name
+                write-host "Parsing DB name : $($wmsdb.name), current version $($DB_CURRENT_VERSION), Deploy version $($DB_DEPLOY_VERSION), Server name $($DB_SERVER_NAME)  "
+                ####################### Checking Currrent Version and Deploy Version Format ########################
+                if($DB_CURRENT_VERSION -match $pattern)
+                 {
+                  $DB_CURRENT_VERSION = $Matches.0
+                  $DB_CURRENT_VERSION_YEAR = $Matches.year
+                  $DB_CURRENT_VERSION_MONTH = $Matches.month
+                  $DB_CURRENT_VERSION_TAGNUMBER = $Matches.tagnumber
+                  write-host "Current version: $($DB_CURRENT_VERSION), Year : $($DB_CURRENT_VERSION_YEAR), Month: $($DB_CURRENT_VERSION_MONTH), Tag Number: $($DB_CURRENT_VERSION_TAGNUMBER)" 
+                 }else{
+                  write-output "| $($DATBASE_NAME) |$($DB_SERVER_NAME) |$($DB_CURRENT_VERSION) |$($DB_DEPLOY_VERSION) | **SKIPPED :heavy_exclamation_mark:** | $($DATBASE_NAME): ⚠️ ERROR : Current version is not in the correct format, skipping deployment for this database. |"| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+                  continue
+                 }
+                 ####################### Checking Deployment Version and Deploy Version Format ########################
+                 if($DB_DEPLOY_VERSION -match $pattern)
+                 {
+                  $DB_DEPLOY_VERSION = $Matches.0
+                  $DB_DEPLOY_VERSION_YEAR = $Matches.year
+                  $DB_DEPLOY_VERSION_MONTH = $Matches.month
+                  $DB_DEPLOY_VERSION_TAGNUMBER = $Matches.tagnumber
+                  write-host "Current version: $($DB_DEPLOY_VERSION), Year : $($DB_DEPLOY_VERSION_YEAR), Month: $($DB_DEPLOY_VERSION_MONTH), Tag Number: $($DB_DEPLOY_VERSION_TAGNUMBER)"
+                 }else{
+                  write-output "| $($DATBASE_NAME) |$($DB_SERVER_NAME) |$($DB_CURRENT_VERSION) |$($DB_DEPLOY_VERSION) | **SKIPPED :heavy_exclamation_mark:** | $($DATBASE_NAME): ⚠️ ERROR : Current version is not in the correct format, skipping deployment for this database. |"| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+                  continue
+                 }
+                ####################### Deployment version is higher than Current version ########################
+                if($DB_DEPLOY_VERSION -eq $DB_CURRENT_VERSION)
+                 {
+                  write-output "| $($DATBASE_NAME) |$($DB_SERVER_NAME) |$($DB_CURRENT_VERSION) |$($DB_DEPLOY_VERSION) | **SKIPPED :heavy_exclamation_mark:** | $($DATBASE_NAME): ⚠️ is already on the $($DB_DEPLOY_VERSION) |"| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+                  continue
+                 }elseif($DB_DEPLOY_VERSION_YEAR -lt $DB_CURRENT_VERSION_YEAR)
+                 {
+                  write-output "| $($DATBASE_NAME) |$($DB_SERVER_NAME) |$($DB_CURRENT_VERSION) |$($DB_DEPLOY_VERSION) | **SKIPPED :heavy_exclamation_mark:** | $($DATBASE_NAME): ⚠️ version is on higher version $($DB_CURRENT_VERSION), cannot be downgraded. |"| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+                  continue
+                 }elseif(($DB_DEPLOY_VERSION_YEAR -eq $DB_CURRENT_VERSION_YEAR) -and ($DB_DEPLOY_VERSION_MONTH -lt $DB_CURRENT_VERSION_MONTH))
+                 {
+                  write-output "| $($DATBASE_NAME) |$($DB_SERVER_NAME) |$($DB_CURRENT_VERSION) |$($DB_DEPLOY_VERSION) | **SKIPPED :heavy_exclamation_mark:** | $($DATBASE_NAME): ⚠️ version is on higher version $($DB_CURRENT_VERSION), cannot be downgraded. |"| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+                  continue
+                 }elseif(($DB_DEPLOY_VERSION_YEAR -eq $DB_CURRENT_VERSION_YEAR) -and ($DB_DEPLOY_VERSION_MONTH -eq $DB_CURRENT_VERSION_MONTH) -and ($DB_DEPLOY_VERSION_TAGNUMBER -lt $DB_CURRENT_VERSION_TAGNUMBER))
+                 {
+                  write-output "| $($DATBASE_NAME) |$($DB_SERVER_NAME) |$($DB_CURRENT_VERSION) |$($DB_DEPLOY_VERSION) | **SKIPPED :heavy_exclamation_mark:** | $($DATBASE_NAME): ⚠️ version is on higher version $($DB_CURRENT_VERSION), cannot be downgraded. |"| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+                  continue
+                 }
+
+
+                $changed_files = git diff --name-only  $DB_CURRENT_VERSION ${{ github.ref_name }}  -- ':*.sql' | out-string
+                $changed_files_list = $changed_files -split '\r?\n' | where-object { $_ -ne ''}
+                $changed_files_string = $changed_files_list -join ","
+                if($changed_files_string -ne '')
+                 {
+                  $obj = New-Object -TypeName PSObject
+                  $obj | Add-Member -MemberType NoteProperty -Name DATBASE_NAME -Value $($DATBASE_NAME)
+                  $obj | Add-Member -MemberType NoteProperty -Name DB_SERVER_NAME -Value $($DB_SERVER_NAME)
+                  $obj | Add-Member -MemberType NoteProperty -Name DB_CURRENT_VERSION -Value $($DB_CURRENT_VERSION)
+                  $obj | Add-Member -MemberType NoteProperty -Name DB_DEPLOY_VERSION -Value $($DB_DEPLOY_VERSION)
+                  $obj | Add-Member -MemberType NoteProperty -Name CHANGED_FILES_LIST -Value $($changed_files_list)
+                  $obj | Add-Member -MemberType NoteProperty -Name CHANGED_FILES_STRING -Value $($changed_files_string)
+                  $matrixtable += $obj
+                  write-output "| $($DATBASE_NAME) |$($DB_SERVER_NAME) |$($DB_CURRENT_VERSION) |$($DB_DEPLOY_VERSION) | **READY :white_check_mark:** |Files changed : $($changed_files_string) |"| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+                  }elseif($changed_files_string -eq '')
+                  {
+                  write-output "| $($DATBASE_NAME) |$($DB_SERVER_NAME) |$($DB_CURRENT_VERSION) |$($DB_DEPLOY_VERSION) | **SKIPPED :heavy_exclamation_mark:** | $($DATBASE_NAME): ⚠️ there are no *.sql files between version $($DB_CURRENT_VERSION) to  $($DB_DEPLOY_VERSION) |"| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+                  }
+
+            write-output "MATRIX_OUTPUT=$($matrixtable | ConvertTo-JSON -Compress)" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+            write-output "MATRIX_OUTPUT=$($matrixtable | ConvertTo-JSON -Compress)"
+            write-output "MATRIX_OUTPUT=$($matrixtable | ConvertTo-JSON -Compress)" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+            write-output "MATRIX_OUTPUT=$($matrixtable | ConvertTo-JSON -Compress)"
+            }
+          }else{
+              if ('${{ github.event.inputs.WMSDB }}' -in $json_metadata.databases.PSObject.Properties.name){write-host "WMSDB:: ${{ github.event.inputs.WMSDB }} exists in stage.json"}else{throw "WMSDB does not exist in stage.json"}
+              
+              write-output "## $($DATBASE_NAME) database deployment status" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+              write-output '' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+              write-output '| DATBASE_NAME |DB_SERVER_NAME |CURRENT_VERSION |DEPLOY_VERSION |DEPLOYMENT_STATUS |COMMENTS |'| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+              write-output '| :-------------: |:-------------: |:-------------: |:-------------: |:-------------: |:------------- |'| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+
+              $matrixtable = @()
+              $DB_CURRENT_VERSION = $json_metadata.databases.$($env:WMSDB_NAME).Database_Version
+              $DB_DEPLOY_VERSION = '${{ github.ref_name }}'
+              $DB_SERVER_NAME = $json_metadata.databases.$($env:WMSDB_NAME).Server_name
+              $DATBASE_NAME = $env:WMSDB_NAME
+              write-host "Parsing DB name : $($env:WMSDB_NAME), current version $($DB_CURRENT_VERSION), Deploy version $($DB_DEPLOY_VERSION), Server name $($DB_SERVER_NAME)  "
+
+              ####################### Checking Currrent Version and Deploy Version Format ########################
+              if($DB_CURRENT_VERSION -match $pattern)
+                {
+                $DB_CURRENT_VERSION = $Matches.0
+                $DB_CURRENT_VERSION_YEAR = $Matches.year
+                $DB_CURRENT_VERSION_MONTH = $Matches.month
+                $DB_CURRENT_VERSION_TAGNUMBER = $Matches.tagnumber
+                write-host "Current version: $($DB_CURRENT_VERSION), Year : $($DB_CURRENT_VERSION_YEAR), Month: $($DB_CURRENT_VERSION_MONTH), Tag Number: $($DB_CURRENT_VERSION_TAGNUMBER)" 
+                }else{
+                write-output "| $($DATBASE_NAME) |$($DB_SERVER_NAME) |$($DB_CURRENT_VERSION) |$($DB_DEPLOY_VERSION) | **SKIPPED :heavy_exclamation_mark:** | $($DATBASE_NAME): ⚠️ ERROR : Current version  is not in the correct format, skipping deployment for this database. |"| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+                throw "$($DATBASE_NAME): ⚠️ ERROR : Current version $($DB_CURRENT_VERSION) is not in the correct format, skipping deployment for this database."
+                }
+                ####################### Checking Deployment Version and Deploy Version Format ########################
+                if($DB_DEPLOY_VERSION -match $pattern)
+                {
+                $DB_DEPLOY_VERSION = $Matches.0
+                $DB_DEPLOY_VERSION_YEAR = $Matches.year
+                $DB_DEPLOY_VERSION_MONTH = $Matches.month
+                $DB_DEPLOY_VERSION_TAGNUMBER = $Matches.tagnumber
+                write-host "Current version: $($DB_DEPLOY_VERSION), Year : $($DB_DEPLOY_VERSION_YEAR), Month: $($DB_DEPLOY_VERSION_MONTH), Tag Number: $($DB_DEPLOY_VERSION_TAGNUMBER)"
+                }else{
+                write-output "| $($DATBASE_NAME) |$($DB_SERVER_NAME) |$($DB_CURRENT_VERSION) |$($DB_DEPLOY_VERSION) | **SKIPPED :heavy_exclamation_mark:** | $($DATBASE_NAME): ⚠️ ERROR : Current version is not in the correct format, skipping deployment for this database. |"| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+                throw "$($DATBASE_NAME): ⚠️ ERROR : Deploy version $($DB_DEPLOY_VERSION) is not in the correct format, skipping deployment for this database."
+                }
+              ####################### Deployment version is higher than Current version condition ########################
+              if($DB_DEPLOY_VERSION -eq $DB_CURRENT_VERSION)
+                {
+                write-output "| $($DATBASE_NAME) |$($DB_SERVER_NAME) |$($DB_CURRENT_VERSION) |$($DB_DEPLOY_VERSION) | **SKIPPED :heavy_exclamation_mark:** | $($DATBASE_NAME): ⚠️ is already on the $($DB_DEPLOY_VERSION) |"| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+                throw "$($DATBASE_NAME): ⚠️ is already on the $($DB_DEPLOY_VERSION) version, skipping deployment for this database."
+                }elseif($DB_DEPLOY_VERSION_YEAR -lt $DB_CURRENT_VERSION_YEAR)
+                {
+                write-output "| $($DATBASE_NAME) |$($DB_SERVER_NAME) |$($DB_CURRENT_VERSION) |$($DB_DEPLOY_VERSION) | **SKIPPED :heavy_exclamation_mark:** | $($DATBASE_NAME): ⚠️ version is on higher version $($DB_CURRENT_VERSION), cannot be downgraded. |"| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+                throw "$($DATBASE_NAME): ⚠️ version is on higher version $($DB_CURRENT_VERSION), cannot be downgraded."
+                }elseif(($DB_DEPLOY_VERSION_YEAR -eq $DB_CURRENT_VERSION_YEAR) -and ($DB_DEPLOY_VERSION_MONTH -lt $DB_CURRENT_VERSION_MONTH))
+                {
+                write-output "| $($DATBASE_NAME) |$($DB_SERVER_NAME) |$($DB_CURRENT_VERSION) |$($DB_DEPLOY_VERSION) | **SKIPPED :heavy_exclamation_mark:** | $($DATBASE_NAME): ⚠️ version is on higher version $($DB_CURRENT_VERSION), cannot be downgraded. |"| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+                throw "$($DATBASE_NAME): ⚠️ version is on higher version $($DB_CURRENT_VERSION), cannot be downgraded."
+                }elseif(($DB_DEPLOY_VERSION_YEAR -eq $DB_CURRENT_VERSION_YEAR) -and ($DB_DEPLOY_VERSION_MONTH -eq $DB_CURRENT_VERSION_MONTH) -and ($DB_DEPLOY_VERSION_TAGNUMBER -lt $DB_CURRENT_VERSION_TAGNUMBER))
+                {
+                write-output "| $($DATBASE_NAME) |$($DB_SERVER_NAME) |$($DB_CURRENT_VERSION) |$($DB_DEPLOY_VERSION) | **SKIPPED :heavy_exclamation_mark:** | $($DATBASE_NAME): ⚠️ version is on higher version $($DB_CURRENT_VERSION), cannot be downgraded. |"| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+                throw "$($DATBASE_NAME): ⚠️ version is on higher version $($DB_CURRENT_VERSION), cannot be downgraded."
+                }
+              ################### Checking for changed files between current version and deploy version ########################
+              $changed_files = git diff --name-only $DB_CURRENT_VERSION ${{ github.ref_name }}  -- ':*.sql' | out-string
+              $changed_files_list = $changed_files -split '\r?\n' | where-object { $_ -ne ''}
+              $changed_files_string = $changed_files_list -join ","
+              if($changed_files_string -ne '')
+                {
+                $obj = New-Object -TypeName PSObject
+                $obj | Add-Member -MemberType NoteProperty -Name DATBASE_NAME -Value $($DATBASE_NAME)
+                $obj | Add-Member -MemberType NoteProperty -Name DB_SERVER_NAME -Value $($DB_SERVER_NAME)
+                $obj | Add-Member -MemberType NoteProperty -Name DB_CURRENT_VERSION -Value $($DB_CURRENT_VERSION)
+                $obj | Add-Member -MemberType NoteProperty -Name DB_DEPLOY_VERSION -Value $($DB_DEPLOY_VERSION)
+                $obj | Add-Member -MemberType NoteProperty -Name CHANGED_FILES_LIST -Value $($changed_files_list)
+                $obj | Add-Member -MemberType NoteProperty -Name CHANGED_FILES_STRING -Value $($changed_files_string)
+                $matrixtable += $obj
+
+                write-output "| $($DATBASE_NAME) |$($DB_SERVER_NAME) |$($DB_CURRENT_VERSION) |$($DB_DEPLOY_VERSION) | **READY :white_check_mark:** |Files changed : $($changed_files_string) |"| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+                write-output '' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+                write-output "MATRIX_OUTPUT=[$($matrixtable | ConvertTo-JSON -Compress)]" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+                write-output "MATRIX_OUTPUT=[$($matrixtable | ConvertTo-JSON -Compress)]"
+                write-output "MATRIX_OUTPUT=[$($matrixtable | ConvertTo-JSON -Compress)]" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+                write-output "MATRIX_OUTPUT=[$($matrixtable | ConvertTo-JSON -Compress)]"
+                }elseif($changed_files_string -eq '')
+                {
+                write-output "| $($DATBASE_NAME) |$($DB_SERVER_NAME) |$($DB_CURRENT_VERSION) |$($DB_DEPLOY_VERSION) | **SKIPPED :heavy_exclamation_mark:** | $($DATBASE_NAME): ⚠️ there are no *.sql files between version $($DB_CURRENT_VERSION) to  $($DB_DEPLOY_VERSION)|"| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+                write-output '' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+                throw " ⚠️ there are no *.sql files for deployment"
+                }
+              }
+
+      - name: print METRIX_OUTPUT
+        shell: pwsh
+        run: |
+          ######### Printing final Summary Output #########
+          write-output "---------------------------- METRIX_OUTPUT ----------------------------"
+          write-output "$($env:MATRIX_OUTPUT)"
+          write-output "---------------------------- ADDING link Summery----------------------------"
+          write-output '' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+          write-output "#### Please check the SQL Script deployment progress here in Grafana :point_right: [click here](${{ env.GRAFANA_LINK }})" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+          write-output "#### Once deployed, please check the Deployment version status here :point_right: [click here](${{ env.DEPLOYMENT_STATUS_PAGE }})" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+          write-output "#### Note: Once the pipeline has finished running, refresh the page to view the latest status updates and artifact logs." | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+  DEPLOY:
+    runs-on: ubuntu-latest
+    needs: [INIT_DEPLOY]
+    if: ${{ needs.INIT_DEPLOY.outputs.MATRIX_OUTPUT != '' }}
+    environment:
+      name: stage-eur
+      url: https://fbm-sre-poc-db-metadata.fbm.maersk.com/
+    strategy:
+      max-parallel: 1
+      fail-fast: false
+      matrix:
+        data: ${{ fromJson(needs.INIT_DEPLOY.outputs.MATRIX_OUTPUT) }}
+    name: "${{ matrix.data.DATBASE_NAME }}-${{ matrix.data.DB_DEPLOY_VERSION }}"
+    env:
+      DATBASE_NAME: ${{ matrix.data.DATBASE_NAME }}
+      DB_CURRENT_VERSION: ${{ matrix.data.DB_CURRENT_VERSION }}
+      DB_DEPLOY_VERSION: ${{ matrix.data.DB_DEPLOY_VERSION }}
+      DB_SERVER_NAME: ${{ matrix.data.DB_SERVER_NAME }}
+
+    steps:
+      - name: print matrix values for testing test
+        run: |
+          echo "database name : ${{ matrix.data.DATBASE_NAME }}"
+          echo "current version : ${{ matrix.data.DB_CURRENT_VERSION }}"
+          echo "deploy version : ${{ matrix.data.DB_DEPLOY_VERSION }}"
+          echo "server name : ${{ matrix.data.DB_SERVER_NAME }}"
+          echo "changed files : ${{ matrix.data.CHANGED_FILES_STRING }}"
+      - name: Deployment Started Notification
+        uses: Maersk-Global/fbm-github-actions/ms-teams-notification@v3
+        with:
+          github-token: ${{ github.token }}
+          ms-teams-webhook-uri: ${{ secrets.MSTEAMS_NOTIFY_WEBHOOK }}
+          notification-summary: Stage EUR - ${{ matrix.data.DATBASE_NAME }} - new version ${{ matrix.data.DB_DEPLOY_VERSION }} - Deployment STARTED &#x1F6A2
+          notification-color: 09ACF3
+      - name: Issue token
+        id: issue-token
+        run: |
+          response=$(curl -s -X POST -H "Content-Type: application/x-www-form-urlencoded" \
+            -d "grant_type=client_credentials&client_id=${{ secrets.WMS_COUNTRY_SETUP_SPN_CLIENT_ID }}&client_secret=${{ secrets.WMS_COUNTRY_SETUP_SPN_CLIENT_SECRET }}&resource=api://b506118d-67ee-44d4-9bee-61bf30f7866d/" \
+            "https://login.microsoftonline.com/05d75c05-fa1a-42e7-9cf1-eb416c396f2d/oauth2/token")
+
+          token=$(echo "$response" | jq -r .access_token)
+
+          if [[ -z "$token" ]]; then
+            echo "Error issuing token"
+            exit 1
+          fi
+
+          echo "bearer_token=${token}" >> $GITHUB_ENV
+
+      - name: Deploy to Stage DB
+        id: deploy_STG
+        run: |
+          payload='{
+            "region": "westeurope",
+            "repositoryName": "fbm-infra-automation",
+            "playbookPath": "wms-db-auto-deploy.yml",
+            "inventoryPath": "inventories/stage.yml",
+            "branchName": "main",
+            "debugFlag": true,
+            "extraVars": {
+              "ENV_CODE": "stage",
+              "ENV_TYPE": "stage",
+              "REGION": "westeurope",
+              "GEOGRAPHY": "europe",
+              "PRODUCT_CODE": "wms",
+              "PLATFORM_CODE": "fbm",
+              "HASHICORP_VAULT_URL": "https://vault.maersk-digital.net",
+              "WORKFLOW_RUN_ID": "${{ env.WORKFLOW_RUN_ID }}",
+              "targets": "${{ matrix.data.DB_SERVER_NAME }}",
+              "WMSDB_REPO_NAME": "${{ github.event.repository.name }}",
+              "WMSDB_NAME": "${{ matrix.data.DATBASE_NAME }}",
+              "WMSDB_DB_SERVER_NAME": "${{ matrix.data.DB_SERVER_NAME }}",
+              "WMSDB_DEPLOY_VERSION": "${{ matrix.data.DB_DEPLOY_VERSION }}",
+              "TRIGGERING_ACTOR": "${{ github.triggering_actor}}", 
+              "WMSDB_METADATA_REPO": "${{ env.WMSDB_METADATA_REPO }}",
+              "SQL_SCRIPT_FILES": "${{ matrix.data.CHANGED_FILES_STRING }}"
+            }
+          }'
+
+          echo "Deploying with the following payload: $payload"
+
+
+          response=$(curl -s -X POST https://bffp.maersk-digital.net/v2/platforms/fbm/environments/stage/products/wms/configurations \
+            -H "Authorization: Bearer $bearer_token" \
+            -H "Content-Type: application/json" \
+            -d "$payload")
+
+          echo "Response from API: $response"
+      - name: Validate the deployment
+        id: validate
+        timeout-minutes: 10
+        shell: pwsh
+        run: |
+          $retry_count = 0
+          do{
+           sleep 5
+           $retry_count = $retry_count + 1
+           $json_metadata = curl -L -s -H "Accept: application/vnd.github+json" -H "Authorization: Bearer ${{ secrets.PERSONAL_ACCESS_TOKEN }}" -H "X-GitHub-Api-Version: 2022-11-28"  https://api.github.com/repos/Maersk-Global/${{ env.WMSDB_METADATA_REPO}}/contents/metadata/wms/databases/v2/${{ env.ENV_CODE }}.json?ref=main | jq -r '.content' | base64 -d | ConvertFrom-Json
+           write-output "Attempt : $($retry_count) - $($env:DATBASE_NAME) :: Metadata Version is $($json_metadata.databases.$($env:DATBASE_NAME).Database_Version), workflow failed.? : $($json_metadata.databases.$($env:DATBASE_NAME).workflow_run_failed)"
+          }until(($json_metadata.databases.$($env:DATBASE_NAME).Database_Version -eq $($env:DB_DEPLOY_VERSION)) -or ($json_metadata.databases.$($env:DATBASE_NAME).workflow_run_failed -eq $env:WORKFLOW_RUN_ID))
+
+          if($json_metadata.databases.$($env:DATBASE_NAME).workflow_run_failed -eq $env:WORKFLOW_RUN_ID)
+          {
+           throw "Workflow run failed for $($env:DATBASE_NAME), one or more sql scripts failed. Please check the logs for more details."
+          }
+      - name: download logs from azure file share
+        id: azcopy-logs
+        if: always()
+        run: |
+          echo "Downloading logs from Azure File Share"
+          azcopy copy '${{ env.STORAGE_ACCOUNT_URL }}/${{ env.WORKFLOW_RUN_ID }}-${{ matrix.data.DATBASE_NAME }}.txt${{ secrets.CDT_AZURE_FILE_SHARE_SAS_TOKEN }}' ./${{ env.WORKFLOW_RUN_ID }}-${{ matrix.data.DATBASE_NAME }}.txt --overwrite=true --check-md5 FailIfDifferent --recursive --log-level=INFO --trailing-dot=Enable;
+      - name: Upload logs to GitHub
+        if: always() && steps.azcopy-logs.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.data.DATBASE_NAME }}-sql-scripts-logs
+          path: ./${{ env.WORKFLOW_RUN_ID }}-${{ matrix.data.DATBASE_NAME }}.txt
+      - name: Deployment Started Notification
+        if: steps.validate.outcome == 'success'
+        uses: Maersk-Global/fbm-github-actions/ms-teams-notification@v3
+        with:
+          github-token: ${{ github.token }}
+          ms-teams-webhook-uri: ${{ secrets.MSTEAMS_NOTIFY_WEBHOOK }}
+          notification-summary: Stage EUR - ${{ matrix.data.DATBASE_NAME }} - new version ${{ matrix.data.DB_DEPLOY_VERSION }} - Deployment Successful &#x1F6A2
+          notification-color: 09ACF3
+
+      - name: Deployment Started Notification
+        if: steps.validate.outcome == 'failure'
+        uses: Maersk-Global/fbm-github-actions/ms-teams-notification@v3
+        with:
+          github-token: ${{ github.token }}
+          ms-teams-webhook-uri: ${{ secrets.MSTEAMS_NOTIFY_WEBHOOK }}
+          notification-summary: Stage EUR - ${{ matrix.data.DATBASE_NAME }} - new version ${{ matrix.data.DB_DEPLOY_VERSION }} - Deployment failure &#x1F6A2
+          notification-color: 09ACF3
