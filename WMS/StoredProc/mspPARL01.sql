@@ -31,7 +31,7 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 2025-05-20  Wan      1.0   UWP-32707 - FCR-3957 - JCB Putaway Using  */
-/* 2025-06-03                 TM SCE                                    */
+/* 2025-06-11                 TM SCE                                    */
 /************************************************************************/
 
 CREATE OR ALTER PROC dbo.mspPARL01
@@ -195,6 +195,14 @@ BEGIN
       GOTO QUIT_SP
    END
   
+   IF EXISTS ( SELECT 1 FROM RECEIPTDETAIL rd (NOLOCK)                              --2025-06-11  
+               WHERE rd.ReceiptKey = @c_ReceiptKey  
+               AND   rd.PutawayLoc = 'WIP'
+              )  
+   BEGIN  
+       GOTO QUIT_SP 
+   END
+   
    WHILE @@TRANCOUNT > 0
    BEGIN
       COMMIT TRAN
@@ -309,7 +317,7 @@ BEGIN
    AND   CODELKUP.Storerkey = @c_Storerkey
    ORDER BY CODELKUP.Code 
 
-      INSERT INTO @TMP_PA_CL (Listname, Code, Description, Short, Long, Notes, Notes2, Storerkey, UDF01, UDF02, UDF03, UDF04, UDF05, Code2)  
+   INSERT INTO @TMP_PA_CL (Listname, Code, Description, Short, Long, Notes, Notes2, Storerkey, UDF01, UDF02, UDF03, UDF04, UDF05, Code2)  
    SELECT CODELKUP.Listname   
         , CODELKUP.Code   
         , [Description] = ISNULL(CODELKUP.[Description],'')   
@@ -420,27 +428,45 @@ BEGIN
       SET @c_ToLoc = ''
       SET @c_FinalLoc = ''
       SET @c_LocationCategory_F = ''
+      
+      BEGIN TRAN                                                                    --2025-06-11
+      UPDATE RECEIPTDETAIL WITH (ROWLOCK)
+      SET PutawayLoc = 'WIP'
+         ,TrafficCop = NULL
+      WHERE Receiptkey = @c_Receiptkey
+      AND ToLoc = @c_FromLoc 
+      AND ToID  = @c_FromID
 
+      IF @@ERROR <> 0  
+      BEGIN  
+         SET @n_Continue = 3  
+         SET @n_Err = 60122 
+         SET @c_Errmsg = 'NSQL'+CONVERT(CHAR(5),@n_err)+': Set PutawayLoc to ''WIP''. (mspPARL01)'  
+      END  
+      
       IF @b_Debug = 1
       BEGIN
          PRINT ' @c_FromLoc: '+ @c_FromLoc
               +',@c_FromID: '+ @c_FromID
       END
       
-      IF @c_PalletKey = ''
+      IF @n_Continue = 1
       BEGIN
-         SET @n_Continue = 3
-         SET @n_Err = 60130
-         SET @c_Errmsg = 'NSQL'+CONVERT(CHAR(5),@n_err)
-                       + ': Pallet Key not Found. LPN: ' + @c_FromID
-                       + ' (mspPARL01)'
-         IF @n_Err_rv = 0 
+         IF @c_PalletKey = ''
          BEGIN
-            SET @n_Err_rv = @n_Err
-            SET @c_Errmsg_rv = @c_Errmsg
+            SET @n_Continue = 3
+            SET @n_Err = 60130
+            SET @c_Errmsg = 'NSQL'+CONVERT(CHAR(5),@n_err)
+                          + ': Pallet Key not Found. LPN: ' + @c_FromID
+                          + ' (mspPARL01)'
+            IF @n_Err_rv = 0 
+            BEGIN
+               SET @n_Err_rv = @n_Err
+               SET @c_Errmsg_rv = @c_Errmsg
+            END
          END
       END
-
+      
       IF @n_Continue = 1
       BEGIN
          IF @n_Length_P = 0.00 OR @n_Width_P = 0.00 OR @n_Height_P = 0.00 OR  
@@ -640,6 +666,7 @@ BEGIN
                            AND   lli.Loc = pnd.Loc
                            AND   lli.Loc > ''
                            AND   lli.ID  > ''
+                           AND   lli.Qty + lli.PendingMoveIn > 0                    --2025-06-11
                            GROUP BY lli.Loc
                            HAVING COUNT(DISTINCT lli.ID) >= pnd.MaxPallet           --2025-06-03
                            )
@@ -681,8 +708,6 @@ BEGIN
                                        ,  @n_LocLevel) bl 
                   JOIN LOC l (NOLOCK) ON l.Loc = bl.StartLoc
                   WHERE bl.TotalPalletWeights + @n_GrossWgt_P <= @n_WeightLimit
-                  --AND   bl.LocCount >= @n_NoOfLoc
-                  --AND   bl.EmptyLPNCount >= @n_NoOfLoc
                   ORDER BY l.LogicalLocation
                END
                
@@ -696,24 +721,24 @@ BEGIN
                AND   bl.EmptyLPNCount >= @n_NoOfLoc
                ORDER BY l.LogicalLocation
             END
-
-            IF @c_LocationRoom = '' AND @c_FinalLoc > ''
-            BEGIN 
-               IF EXISTS ( SELECT 1
-                           FROM LotxLocxid lli (NOLOCK)  
-                           LEFT OUTER JOIN Pallet pm (NOLOCK) ON pm.PalletKey = lli.ID
-                           WHERE lli.Storerkey = @c_Storerkey
-                           AND   lli.loc = @c_ToLoc
-                           AND   lli.id > ''
-                           GROUP BY lli.Loc
-                           HAVING SUM(CASE WHEN ISNULL(lli.Qty+lli.PendingMoveIN,0)=0 THEN 0 ELSE ISNULL(pm.GrossWgt,0.00) END) 
-                                    + @n_GrossWgt_P > @n_WeightLimit
-                           AND  COUNT(DISTINCT lli.id) >= @n_MaxPallet 
-                           )
-               BEGIN
-                  SET @c_FinalLoc = ''
-               END
-            END
+            
+            IF @c_LocationRoom = '' AND @c_FinalLoc > ''  
+            BEGIN   
+               IF EXISTS ( SELECT 1  
+                           FROM LotxLocxid lli (NOLOCK)    
+                           LEFT OUTER JOIN Pallet pm (NOLOCK) ON pm.PalletKey = lli.ID  
+                           WHERE lli.Storerkey = @c_Storerkey  
+                           AND   lli.loc = @c_FinalLoc                              --2025-06-11 - (Start)
+                           AND   lli.id > ''  
+                           AND   lli.Qty + lli.PendingMoveIn > 0                    
+                           GROUP BY lli.Loc  
+                           HAVING SUM(ISNULL(pm.GrossWgt,0.00)) + @n_GrossWgt_P > @n_WeightLimit  
+                           OR  COUNT(DISTINCT lli.id) >= @n_MaxPallet               --2025-06-11 - (END)   
+                           )  
+               BEGIN  
+                  SET @c_FinalLoc = ''  
+               END  
+            END 
             
             IF @c_FinalLoc = '' 
             BEGIN
@@ -773,8 +798,6 @@ BEGIN
 
       IF @n_Continue = 1
       BEGIN
-         BEGIN TRAN
-
          EXECUTE nspg_GetKey
            @KeyName     = 'TaskDetailKey'
          , @fieldlength = 10
@@ -911,7 +934,7 @@ BEGIN
                   WHERE rd.ReceiptKey = @c_ReceiptKey
                   AND   rd.ToLoc= @c_FromLoc
                   AND   rd.ToID = @c_FromID
-                  AND   rd.PutawayLoc = ''
+                  AND   rd.PutawayLoc = 'WIP'
                   ORDER BY rd.ReceiptKey
                         ,  rd.ReceiptLineNumber
 
@@ -965,25 +988,25 @@ BEGIN
                   ROLLBACK TRAN
                END                 
             END CATCH                                                                
-               
-            IF @n_Continue = 3 
-            BEGIN
-               IF @@ROWCOUNT > 0
-               BEGIN
-                  ROLLBACK TRAN
-               END
-            END
-            ELSE IF @n_Continue = 1 
-            BEGIN
-               SET @n_NoOfTasks = @n_NoOfTasks + 1                                  --2025-06-03
-               IF @@ROWCOUNT > 0
-               BEGIN
-                  COMMIT TRAN
-               END
-            END
          END
       END
 
+      IF @n_Continue = 3                                                      --2025-06-11
+      BEGIN
+         IF @@TRANCOUNT > 0                                                   
+         BEGIN
+            ROLLBACK TRAN
+         END
+      END
+      ELSE IF @n_Continue = 1 
+      BEGIN
+         SET @n_NoOfTasks = @n_NoOfTasks + 1                                  --2025-06-03
+         IF @@TRANCOUNT > 0                                                   
+         BEGIN
+            COMMIT TRAN
+         END
+      END                                                                     --2025-06-11
+            
       FETCH NEXT FROM @CUR_PAID INTO @c_ReceiptKey, @c_Storerkey, @c_Sku 
                                     ,@c_FromLoc, @c_FromID, @c_PalletKey, @c_PalletType, @n_Qty_ID
                                     ,@n_Length_P, @n_Width_P, @n_Height_P, @n_GrossWgt_P
