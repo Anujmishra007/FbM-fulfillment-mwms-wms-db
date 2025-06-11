@@ -23,6 +23,7 @@ GO
 /* 2023-07-05  Wan      1.0   Created & DevOps Combine Script           */
 /* 2024-08-03  Wan01    1.1   LFWM-4397 - RG [GIT] Serial Number Solution*/
 /*                            - Adjustment by Serial Number             */
+/* 2024-06-13  SSA01    1.2   FCR-3982 - Added Pallettype to Adjustment */
 /************************************************************************/                                                                                  
 CREATE OR ALTER PROC [WM].[lsp_ADJ_PopulateLLI_Wrapper]                                                                                                                     
    @c_AdjustmentKey        NVARCHAR(10)         
@@ -90,6 +91,7 @@ BEGIN
          ,  @c_Refkey3                    NVARCHAR(20)   = ''
          ,  @c_WriteType                  NVARCHAR(50)   = ''
          ,  @n_LogWarningNo               INT            = 0
+         ,  @c_PalletType                 NVARCHAR(10)   = ''                      --(SSA01)
          
          ,  @CUR_LLI                      CURSOR
          ,  @CUR_ERRLIST                  CURSOR   
@@ -236,7 +238,8 @@ BEGIN
             ,l.Lottable14
             ,l.Lottable15
             ,s.SerialNoCapture                                                      --(Wan01)
-      FROM #tLLI AS tl (NOLOCK) 
+            ,ltlci.PalletType                                                       --(SSA01)
+      FROM #tLLI AS tl (NOLOCK)
       JOIN dbo.LOTxLOCxID AS ltlci (NOLOCK) ON  ltlci.Lot = tl.Lot 
                                             AND ltlci.Loc = tl.Loc 
                                             AND ltlci.Id = tl.ID
@@ -270,6 +273,7 @@ BEGIN
                                     ,@dt_Lottable14  
                                     ,@dt_Lottable15 
                                     ,@c_SerialNoCapture                             --(Wan01)
+                                    ,@c_PalletType                                  --(SSA01)
       WHILE @@FETCH_STATUS <> -1 
       BEGIN
          IF @c_ChannelInventoryMgmt = '1'
@@ -424,6 +428,7 @@ BEGIN
                 ,   Channel 
                 ,   Channel_ID
                 ,   SerialNo                                                        --(Wan01)
+                ,   PalletType                                                      --(SSA01)
                 )
             VALUES 
                 (   @c_AdjustmentKey
@@ -477,6 +482,7 @@ BEGIN
                 ,   @c_Channel                  --Channel  
                 ,   0                           --Channel_ID 
                 ,   @c_SerialNo                                                     --(Wan01)
+                ,   @c_PalletType                                                   --(SSA01)
                 )
          END                                                                        --(Wan01) - END
 
@@ -504,6 +510,7 @@ BEGIN
                                      ,  @dt_Lottable14  
                                      ,  @dt_Lottable15
                                      ,  @c_SerialNoCapture                          --(Wan01)
+                                     ,  @c_PalletType                               --(SSA01)
       END
       CLOSE @CUR_LLI
       DEALLOCATE @CUR_LLI
