@@ -29,7 +29,6 @@ CREATE OR ALTER PROC [dbo].[nspAL18896]
    @c_StorerKey  NVARCHAR(15),     
    @c_SKU        NVARCHAR(20),    
    @c_Lottable01 NVARCHAR(18),    
-   @c_Lottable02 NVARCHAR(18),    
    @c_Lottable03 NVARCHAR(18),    
    @d_Lottable04 DATETIME,    
    @d_Lottable05 DATETIME,    
@@ -136,7 +135,6 @@ BEGIN
       AND LOC.LocationFlag = ''NONE'' ' +        
       CASE WHEN @c_ShelfLifeRange = 'Y' THEN ' AND DATEDIFF(day, GETDATE(), LA.Lottable04) >= ' + @c_FromDay + ' AND DATEDIFF(day, GETDATE(), LA.Lottable04) <= ' + @c_ToDay + ' '  ELSE ' ' END +
       CASE WHEN ISNULL(RTRIM(@c_Lottable01),'') = '' THEN '' ELSE ' AND LA.Lottable01 = @c_Lottable01 ' END +
-      CASE WHEN ISNULL(RTRIM(@c_Lottable02),'') = '' THEN '' ELSE ' AND LA.Lottable02 = @c_Lottable02 ' END +
       CASE WHEN ISNULL(RTRIM(@c_Lottable03),'') = '' THEN '' ELSE ' AND LA.Lottable03 = @c_Lottable03 ' END +
       CASE WHEN CONVERT(NVARCHAR(8) ,@d_Lottable04 ,112) <> '19000101' AND @d_Lottable04 IS NOT NULL THEN ' AND LA.Lottable04 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable04, 106)) ' ELSE ' ' END +
       CASE WHEN @n_StorerMinShelfLife <> 0 THEN ' AND DateAdd(Day, ' + CAST(@n_StorerMinShelfLife AS NVARCHAR(10)) + ', LA.Lottable04) > GetDate() ' ELSE ' ' END + 
