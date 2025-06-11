@@ -2944,7 +2944,7 @@ BEGIN
                , '' -- OrderLineNumber
                ,  @c_PickDetailKey -- PickDetailKey
                , 'B2B-Loose'
-               , 'H'  --Status (SWT13) 
+               , '0'  --Status
                , @c_WaveKey
                , @c_AreaKey
                , ''
