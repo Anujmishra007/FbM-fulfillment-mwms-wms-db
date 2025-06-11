@@ -55,11 +55,7 @@ BEGIN
    SET ANSI_NULLS OFF    
       
    DECLARE @c_SQL                NVARCHAR(MAX),    
-           @c_SQLParm            NVARCHAR(MAX),                                   
-           --@c_key1               NVARCHAR(10),    
-           --@c_key2               NVARCHAR(5),    
-           --@c_key3               NCHAR(1),
-           --@c_Orderkey           NVARCHAR(10),     
+           @c_SQLParm            NVARCHAR(MAX),                                     
            @n_QtyAvailable       INT,  
            @c_LOT                NVARCHAR(10),
            @c_LOC                NVARCHAR(10),
@@ -155,10 +151,10 @@ BEGIN
       CASE WHEN CONVERT(NVARCHAR(8) ,@d_Lottable14 ,112) <> '19000101' AND @d_Lottable14 IS NOT NULL THEN ' AND LA.Lottable14 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable14, 106)) ' ELSE ' ' END +
       CASE WHEN CONVERT(NVARCHAR(8) ,@d_Lottable15 ,112) <> '19000101' AND @d_Lottable15 IS NOT NULL THEN ' AND LA.Lottable15 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable15, 106)) ' ELSE ' ' END +
       CASE WHEN @c_UOM = '2' THEN 
-      --AYD01: Full case allocation, loc.loclevel=2>other
+      --AYD01: Sort by lottable04 DESC, LEFO. Full case allocation: loc.loclevel=2 > other
          ' ORDER BY LA.Lottable04, CASE WHEN LOC.LocLevel = 2 THEN 1 ELSE 2 END, LOC.LogicalLocation, LOC.LOC, QTYAVAILABLE '
       ELSE 
-      --AYD01: Piece allocation, loc.loclevel = 1> loc.loclevel=2>other
+      --AYD01: Sort by lottable04 DESC, LEFO. Piece allocation: loc.loclevel = 1 > loc.loclevel=2 > other
          ' ORDER BY LA.Lottable04, CASE WHEN LOC.LocLevel = 1 THEN 1 WHEN LOC.LocLevel = 2 THEN 2 ELSE 3 END, LOC.LogicalLocation, LOC.LOC, QTYAVAILABLE '
       END      
 
