@@ -12,7 +12,7 @@ GO
 /*                                                                      */
 /* Called By: Wave                                                      */
 /*                                                                      */
-/* GitHub Version: 2.9                                                  */
+/* GitHub Version: 4.8                                                  */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -83,6 +83,7 @@ GO
 /* 26-May-2025 SWT11     4.6 Do not insert RPF Task when Drop ID Exists */
 /* 29-May-2025 SWT12     4.7 UWP-35196 Change CheckDigit from MOD10 to  */
 /*                           GS1                                        */
+/* 11-Jun-2025 WLC015    4.8 UWP-35878 Validate UCC Qty (WL11)          */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[mspRLWAV03]
    @c_WaveKey NVARCHAR(10)
@@ -3415,14 +3416,25 @@ BEGIN
                   BEGIN
                      SET @b_InsertTask = 0
                      SELECT @b_InsertTask [InsertTaskFlag]
-                  END                             
-                     
-                            
+                  END
+
                   SELECT @n_PickdetQty = SUM(UCC.Qty) 
                   FROM UCC (NOLOCK)
                   WHERE UCC.Storerkey = @c_Storerkey
                   AND   UCC.UCCNo = @c_DropID
                   AND   UCC.[Status] = '3'
+
+                  --WL11 S
+                  IF ISNULL(@n_PickdetQty, 0) = 0
+                  BEGIN
+                     SET @n_continue = 3
+                     SET @n_err = 82035
+                     SET @c_errmsg = 'NSQL' + CONVERT(char(6), @n_err) 
+                                    + ': Cannot get UCC qty for RPF task.'
+                                    + ' Please check if UCC# ' + TRIM(@c_DropID) + ' exists. (mspRLWAV03)'
+                     GOTO QUIT_SP
+                  END
+                  --WL11 E
                END
 
                -- (SWT11) 
