@@ -3399,9 +3399,7 @@ BEGIN
                             AND FromLoc = @c_FromLoc)
                   BEGIN
                      SET @b_InsertTask = 0
-                     SELECT @b_InsertTask [InsertTaskFlag]
-                  END                             
-                     
+                  END
                             
                   SELECT @n_PickdetQty = SUM(UCC.Qty) 
                   FROM UCC (NOLOCK)
