@@ -1,0 +1,271 @@
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS OFF
+GO
+
+/************************************************************************/    
+/* Stored Procedure: nspAL_CH05                                         */    
+/* Creation Date: 09-Jun-2025                                           */    
+/* Copyright: Maersk                                                    */    
+/* Written by: AYD                                                      */    
+/*                                                                      */    
+/* Purpose: FCR-4651                                                    */
+/*                                                                      */
+/* Called By: Wave                                                      */    
+/*                                                                      */    
+/* PVCS Version: 1.0                                                    */    
+/*                                                                      */    
+/* Version: 1.0                                                         */    
+/*                                                                      */    
+/* Data Modifications:                                                  */    
+/*                                                                      */    
+/* Updates:                                                             */  
+/* Date         Author  Ver.  Purposes                                  */    
+/* 09-Jun-2025  AYD01   1.0   FCR-4651                                  */  
+/************************************************************************/    
+CREATE OR ALTER PROC [dbo].[nspAL_CH05]        
+   @c_DocumentNo NVARCHAR(10),  
+   @c_Facility   NVARCHAR(5),     
+   @c_StorerKey  NVARCHAR(15),     
+   @c_SKU        NVARCHAR(20),    
+   @c_Lottable01 NVARCHAR(18),    
+   @c_Lottable02 NVARCHAR(18),    
+   @c_Lottable03 NVARCHAR(18),    
+   @d_Lottable04 DATETIME,    
+   @d_Lottable05 DATETIME,    
+   @c_Lottable06 NVARCHAR(30),    
+   @c_Lottable07 NVARCHAR(30),    
+   @c_Lottable08 NVARCHAR(30),    
+   @c_Lottable09 NVARCHAR(30),    
+   @c_Lottable10 NVARCHAR(30),    
+   @c_Lottable11 NVARCHAR(30),    
+   @c_Lottable12 NVARCHAR(30),    
+   @d_Lottable13 DATETIME,    
+   @d_Lottable14 DATETIME,    
+   @d_Lottable15 DATETIME,    
+   @c_UOM        NVARCHAR(10),    
+   @c_HostWHCode NVARCHAR(10),    
+   @n_UOMBase    INT,    
+   @n_QtyLeftToFulfill INT,
+   @c_OtherParms NVARCHAR(200)=''
+AS    
+BEGIN    
+   SET NOCOUNT ON 
+   SET QUOTED_IDENTIFIER OFF 
+   SET ANSI_NULLS OFF    
+      
+   DECLARE @c_SQL                NVARCHAR(MAX),    
+           @c_SQLParm            NVARCHAR(MAX),                                     
+           @n_QtyAvailable       INT,  
+           @c_LOT                NVARCHAR(10),
+           @c_LOC                NVARCHAR(10),
+           @c_ID                 NVARCHAR(18), 
+           @c_OtherValue         NVARCHAR(20),
+           @n_QtyToTake          INT,
+           @n_StorerMinShelfLife INT,
+           @n_LotQtyAvailable    INT,
+           @c_ExpireCode         NVARCHAR(30),
+           @c_FromDay            NVARCHAR(10),           
+           @c_ToDay              NVARCHAR(10),
+           @c_ShelfLifeRange     NCHAR(1),
+           @c_ShelfLifeRange2    NCHAR(1),
+           @c_Orderkey           NVARCHAR(10),
+           @c_Company            NVARCHAR(100)  =  '',       
+           @c_FromDay2           NVARCHAR(10),           
+           @c_ToDay2             NVARCHAR(10)           
+
+   SET @n_QtyAvailable = 0          
+   SET @c_OtherValue = '1' 
+   SET @n_QtyToTake = 0
+   
+   IF @n_UOMBase = 0
+     SET @n_UOMBase = 1
+
+   EXEC isp_Init_Allocate_Candidates       
+
+   IF OBJECT_ID('tempdb..#TMP_LOT') IS NOT NULL DROP TABLE #TMP_LOT
+   CREATE TABLE #TMP_LOT (LOT NVARCHAR(10) NULL,
+                          QtyAvailable INT NULL DEFAULT(0))
+                          
+   IF LEN(@c_OtherParms) > 0
+   BEGIN
+      SET @c_OrderKey = LEFT(@c_OtherParms,10) 
+      
+      SELECT @c_Company = C_Company
+      FROM ORDERS (NOLOCK)
+      WHERE Orderkey = @c_Orderkey
+   END    
+
+   SELECT @n_StorerMinShelfLife = ((Sku.Shelflife * Storer.MinShelflife/100) * -1)
+   FROM Sku (nolock)
+   JOIN Storer (nolock) ON Sku.Storerkey = Storer.Storerkey
+   WHERE Sku.Sku = @c_sku
+   AND Sku.Storerkey = @c_storerkey   
+   
+   IF @n_StorerMinShelfLife IS NULL
+      SELECT @n_StorerMinShelfLife = 0
+   
+   SET @c_ExpireCode = @c_Lottable12
+   SET @c_FromDay = ''
+   SET @c_ToDay = ''
+   SET @c_FromDay2 = ''
+   SET @c_ToDay2 = ''
+   SET @c_ShelfLifeRange = 'N'
+   SET @c_ShelfLifeRange2 = 'N'  
+   
+   IF ISNULL(@c_ExpireCode,'') <> '' AND ISNULL(@c_Lottable02,'') = ''
+   BEGIN
+   	  SELECT @c_FromDay = RTRIM(Short), @c_ToDay = RTRIM(Long)
+   	  FROM CODELKUP (NOLOCK)
+   	  WHERE Listname = 'NBEXPIRE'
+   	  AND Code = @c_Expirecode
+   	  
+   	  IF ISNUMERIC(@c_FromDay) = 1 AND ISNUMERIC(@c_ToDay) = 1
+   	  BEGIN
+   	  	SET @c_ShelfLifeRange = 'Y'
+   	  END
+   END 
+   --AYD01: FCR-4651 START
+   IF ISNULL(@c_ExpireCode,'') <> '' AND ISNULL(@c_Company,'') <> ''
+   BEGIN
+   	  SELECT @c_FromDay2 = RTRIM(Short), @c_ToDay2 = RTRIM(Long)
+   	  FROM CODELKUP (NOLOCK)
+   	  WHERE Listname = 'NBEXPIREST'
+   	  AND Code2 = @c_Expirecode
+   	  AND Code = @c_Company
+   	  
+   	  IF ISNUMERIC(@c_FromDay2) = 1 AND ISNUMERIC(@c_ToDay2) = 1
+   	  BEGIN
+   	  	SET @c_ShelfLifeRange2 = 'Y'
+   	  END
+   END     
+   --AYD01: FCR-4651 END        
+   SET @c_SQL = N'   
+      DECLARE CURSOR_AVAILABLE CURSOR FAST_FORWARD READ_ONLY FOR
+      SELECT LOTxLOCxID.LOT,
+             LOTxLOCxID.LOC,
+             LOTxLOCxID.ID,
+             QTYAVAILABLE = (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QtyReplen)
+      FROM LOTxLOCxID (NOLOCK)
+      JOIN LOC (NOLOCK) ON (LOTxLOCxID.Loc = LOC.LOC)
+      JOIN ID (NOLOCK) ON (LOTxLOCxID.Id = ID.ID)
+      JOIN LOT (NOLOCK) ON (LOTXLOCXID.LOT = LOT.LOT)
+      JOIN LOTATTRIBUTE LA (NOLOCK) ON LOT.LOT = LA.LOT
+      JOIN SKUXLOC SL (NOLOCK) ON (LOTxLOCxID.Storerkey = SL.Storerkey AND LOTxLOCxID.Sku = SL.Sku AND LOTxLOCxID.Loc = SL.Loc)
+      WHERE LOC.Status <> ''HOLD''
+      AND LOT.Status <> ''HOLD''
+      AND ID.Status <> ''HOLD''
+      AND LOC.Facility = @c_Facility
+      AND (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QtyReplen) >= @n_UOMBase
+      AND LOTxLOCxID.STORERKEY = @c_StorerKey
+      AND LOTxLOCxID.SKU = @c_SKU       
+      AND LOC.LocationFlag = ''NONE'' ' +        
+      CASE WHEN @c_ShelfLifeRange = 'Y' THEN ' AND DATEDIFF(day, GETDATE(), LA.Lottable04) >= ' + @c_FromDay + ' AND DATEDIFF(day, GETDATE(), LA.Lottable04) <= ' + @c_ToDay + ' '  ELSE ' ' END +
+      CASE WHEN @c_ShelfLifeRange2 = 'Y' THEN ' AND DATEDIFF(day, GETDATE(), LA.Lottable04) >= ' + @c_FromDay2 + ' AND DATEDIFF(day, GETDATE(), LA.Lottable04) <= ' + @c_ToDay2 + ' '  ELSE ' ' END +
+      CASE WHEN ISNULL(RTRIM(@c_Lottable01),'') = '' THEN '' ELSE ' AND LA.Lottable01 = @c_Lottable01 ' END +
+      CASE WHEN ISNULL(RTRIM(@c_Lottable02),'') = '' THEN '' ELSE ' AND LA.Lottable02 = @c_Lottable02 ' END +
+      CASE WHEN ISNULL(RTRIM(@c_Lottable03),'') = '' THEN '' ELSE ' AND LA.Lottable03 = @c_Lottable03 ' END +
+      CASE WHEN CONVERT(NVARCHAR(8) ,@d_Lottable04 ,112) <> '19000101' AND @d_Lottable04 IS NOT NULL THEN ' AND LA.Lottable04 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable04, 106)) ' ELSE ' ' END +
+      CASE WHEN @n_StorerMinShelfLife <> 0 THEN ' AND DateAdd(Day, ' + CAST(@n_StorerMinShelfLife AS NVARCHAR(10)) + ', LA.Lottable04) > GetDate() ' ELSE ' ' END + 
+      CASE WHEN CONVERT(NVARCHAR(8) ,@d_Lottable05 ,112) <> '19000101' AND @d_Lottable05 IS NOT NULL THEN ' AND LA.Lottable05 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable05, 106)) ' ELSE ' ' END +
+      CASE WHEN ISNULL(RTRIM(@c_Lottable06),'') = '' THEN '' ELSE ' AND LA.Lottable06 = @c_Lottable06 ' END +
+      CASE WHEN ISNULL(RTRIM(@c_Lottable07),'') = '' THEN '' ELSE ' AND LA.Lottable07 = @c_Lottable07 ' END +
+      CASE WHEN ISNULL(RTRIM(@c_Lottable08),'') = '' THEN '' ELSE ' AND LA.Lottable08 = @c_Lottable08 ' END +
+      CASE WHEN ISNULL(RTRIM(@c_Lottable09),'') = '' THEN '' ELSE ' AND LA.Lottable09 = @c_Lottable09 ' END +
+      CASE WHEN ISNULL(RTRIM(@c_Lottable10),'') = '' THEN '' ELSE ' AND LA.Lottable10 = @c_Lottable10 ' END +
+      CASE WHEN ISNULL(RTRIM(@c_Lottable11),'') = '' THEN '' ELSE ' AND LA.Lottable11 = @c_Lottable11 ' END +
+      CASE WHEN CONVERT(NVARCHAR(8) ,@d_Lottable13 ,112) <> '19000101' AND @d_Lottable13 IS NOT NULL THEN ' AND LA.Lottable13 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable13, 106)) ' ELSE ' ' END +
+      CASE WHEN CONVERT(NVARCHAR(8) ,@d_Lottable14 ,112) <> '19000101' AND @d_Lottable14 IS NOT NULL THEN ' AND LA.Lottable14 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable14, 106)) ' ELSE ' ' END +
+      CASE WHEN CONVERT(NVARCHAR(8) ,@d_Lottable15 ,112) <> '19000101' AND @d_Lottable15 IS NOT NULL THEN ' AND LA.Lottable15 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable15, 106)) ' ELSE ' ' END +
+      CASE WHEN @c_UOM = '2' THEN 
+      --AYD01: Sort by lottable04 DESC, LEFO. Full case allocation: loc.loclevel=2 > other
+         ' ORDER BY LA.Lottable04, CASE WHEN LOC.LocLevel = 2 THEN 1 ELSE 2 END, LOC.LogicalLocation, LOC.LOC, QTYAVAILABLE '
+      ELSE 
+      --AYD01: Sort by lottable04 DESC, LEFO. Piece allocation: loc.loclevel = 1 > loc.loclevel=2 > other
+         ' ORDER BY LA.Lottable04, CASE WHEN LOC.LocLevel = 1 THEN 1 WHEN LOC.LocLevel = 2 THEN 2 ELSE 3 END, LOC.LogicalLocation, LOC.LOC, QTYAVAILABLE '
+      END      
+
+   SET @c_SQLParm =  N'@c_Facility   NVARCHAR(5),  @c_StorerKey  NVARCHAR(15), @c_SKU NVARCHAR(20), @n_QtyLeftToFulfill INT, @n_UOMBase INT, ' +
+                      '@c_Lottable01 NVARCHAR(18), @c_Lottable02 NVARCHAR(18), @c_Lottable03 NVARCHAR(18), @d_Lottable04 DATETIME, @d_Lottable05 DATETIME, ' +
+                      '@c_Lottable06 NVARCHAR(30), @c_Lottable07 NVARCHAR(30), @c_Lottable08 NVARCHAR(30), @c_Lottable09 NVARCHAR(30), @c_Lottable10 NVARCHAR(30), ' +
+                      '@c_Lottable11 NVARCHAR(30), @c_Lottable12 NVARCHAR(30), @d_Lottable13 DATETIME, @d_Lottable14 DATETIME, @d_Lottable15 DATETIME ' 
+
+   EXEC sp_ExecuteSQL @c_SQL, @c_SQLParm, @c_Facility, @c_StorerKey, @c_SKU, @n_QtyLeftToFulfill, @n_UOMBase, @c_Lottable01, @c_Lottable02, @c_Lottable03,
+                      @d_Lottable04, @d_Lottable05, @c_Lottable06, @c_Lottable07, @c_Lottable08, @c_Lottable09, @c_Lottable10, @c_Lottable11, @c_Lottable12,
+                      @d_Lottable13, @d_Lottable14, @d_Lottable15
+
+   SET @c_SQL = ''
+   SET @n_LotQtyAvailable = 0
+
+   OPEN CURSOR_AVAILABLE                    
+   FETCH NEXT FROM CURSOR_AVAILABLE INTO @c_LOT, @c_LOC, @c_ID, @n_QtyAvailable   
+          
+   WHILE (@@FETCH_STATUS <> -1) AND (@n_QtyLeftToFulfill > 0)          
+   BEGIN    
+
+   	  IF NOT EXISTS(SELECT 1 FROM #TMP_LOT WHERE Lot = @c_Lot)
+   	  BEGIN
+   	  	 INSERT INTO #TMP_LOT (Lot, QtyAvailable)
+   	  	 SELECT Lot, Qty - QtyAllocated - QtyPicked
+      	 FROM LOT (NOLOCK)
+      	 WHERE LOT = @c_LOT       	 
+   	  END
+      SET @n_LotQtyAvailable = 0
+
+      SELECT @n_LotQtyAvailable = QtyAvailable
+      FROM #TMP_LOT 
+      WHERE Lot = @c_Lot   	  
+      
+      IF @n_LotQtyAvailable < @n_QtyAvailable 
+      BEGIN
+      	 IF @c_UOM = '1' 
+      	    SET @n_QtyAvailable = 0
+      	 ELSE
+            SET @n_QtyAvailable = @n_LotQtyAvailable
+      END
+               	                  
+      IF @n_QtyLeftToFulfill >= @n_QtyAvailable
+      BEGIN
+      		 SET @n_QtyToTake = Floor(@n_QtyAvailable / @n_UOMBase) * @n_UOMBase
+      END
+      ELSE
+      BEGIN
+      	  SET @n_QtyToTake = Floor(@n_QtyLeftToFulfill / @n_UOMBase) * @n_UOMBase
+      END      	 
+      
+      IF @n_QtyToTake > 0
+      BEGIN
+   	  	UPDATE #TMP_LOT
+   	  	SET QtyAvailable = QtyAvailable - @n_QtyToTake 
+   	   WHERE Lot = @c_Lot
+
+         SET @c_Lot       = RTRIM(@c_Lot)             
+         SET @c_Loc       = RTRIM(@c_Loc)
+         SET @c_ID        = RTRIM(@c_ID)
+         
+         EXEC isp_Insert_Allocate_Candidates
+            @c_Lot = @c_Lot
+         ,  @c_Loc = @c_Loc
+         ,  @c_ID  = @c_ID
+         ,  @n_QtyAvailable = @n_QtyToTake
+         ,  @c_OtherValue = @c_OtherValue
+                  
+         SET @n_QtyLeftToFulfill = @n_QtyLeftToFulfill - @n_QtyToTake       
+      END
+            
+      FETCH NEXT FROM CURSOR_AVAILABLE INTO @c_LOT, @c_LOC, @c_ID, @n_QtyAvailable  
+   END -- END WHILE FOR CURSOR_AVAILABLE          
+
+   EXIT_SP:
+   IF OBJECT_ID('tempdb..#TMP_LOT') IS NOT NULL DROP TABLE #TMP_LOT
+   IF CURSOR_STATUS('GLOBAL' , 'CURSOR_AVAILABLE') in (0 , 1)          
+   BEGIN          
+      CLOSE CURSOR_AVAILABLE          
+      DEALLOCATE CURSOR_AVAILABLE          
+   END    
+
+   EXEC isp_Cursor_Allocate_Candidates   
+         @n_SkipPreAllocationFlag = 1
+
+END 
+
