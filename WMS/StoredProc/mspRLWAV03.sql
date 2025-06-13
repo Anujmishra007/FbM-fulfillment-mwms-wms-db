@@ -12,7 +12,7 @@ GO
 /*                                                                      */
 /* Called By: Wave                                                      */
 /*                                                                      */
-/* GitHub Version: 4.9                                                  */
+/* GitHub Version: 2.9                                                  */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -83,7 +83,6 @@ GO
 /* 26-May-2025 SWT11     4.6 Do not insert RPF Task when Drop ID Exists */
 /* 29-May-2025 SWT12     4.7 UWP-35196 Change CheckDigit from MOD10 to  */
 /*                           GS1                                        */
-/* 30-May-2025 SWT13     4.8 Update RPF Task FinalLoc to Blank          */
 /* 11-Jun-2025 WLC015    4.9 UWP-35878 Validate UCC Qty (WL11)          */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[mspRLWAV03]
@@ -414,7 +413,25 @@ BEGIN
                          +': PND Location is currently being used by another Wave. (mspRLWAV03)'     
             GOTO QUIT_SP             
          END
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
       END
+
       ELSE
       BEGIN
          SET @C_Replenishmentkey ='' --Yung
@@ -3273,7 +3290,7 @@ BEGIN
                   BEGIN
                      SET @c_TaskType      = 'ASTCPK'
                      SET @c_PickMethod_TD = 'B2B-Loose'
-                     SET @c_TaskStatus    = 'H'                                     --(Wan02) 1.4 (SWT13) 
+                     SET @c_TaskStatus    = '0'                                     --(Wan02) 1.4
 
                      SELECT TOP 1 @c_ToLoc = l.Loc
                      FROM LOC l (NOLOCK)
@@ -3368,7 +3385,6 @@ BEGIN
                      BEGIN
                         SET @c_TaskType      = 'ASTCPK'
                         SET @c_PickMethod_TD = 'B2B-Loose'
-                        SET @c_TaskStatus = 'H' -- (SWT13) 
 
                         SELECT TOP 1 @c_ToLoc = ISNULL(cl.long,'')
                         FROM CODELKUP cl (NOLOCK)
@@ -3400,7 +3416,7 @@ BEGIN
                   BEGIN
                      SET @b_InsertTask = 0
                   END
-                            
+
                   SELECT @n_PickdetQty = SUM(UCC.Qty) 
                   FROM UCC (NOLOCK)
                   WHERE UCC.Storerkey = @c_Storerkey
@@ -3715,8 +3731,7 @@ BEGIN
                 UOMQty = @n_PickdetQty,
                    Caseid = @c_DropId,
                    EditDate=GETDATE(),
-                   EditWho = SUSER_SNAME(),  
-                   FinalLOC = '' -- SWT13 
+                   EditWho = SUSER_SNAME()
             WHERE TaskDetailKey = @c_TaskdetailKey
          END
          ELSE
@@ -3760,19 +3775,6 @@ BEGIN
       DEALLOCATE CUR_ASTCPK_TASK
    END
 
- 
-   -- Update other RPF TaskDetail Final Location to Blank 
-   IF EXISTS(SELECT 1 FROM TASKDETAIL TD (NOLOCK) 
-             WHERE td.TaskType = 'RPF' 
-             AND td.FinalLOC > '' 
-             AND TD.WaveKey = @c_Wavekey) 
-   BEGIN 
-      UPDATE TASKDETAIL WITH (ROWLOCK) 
-         SET FinalLoc = '', TrafficCop='' 
-       WHERE TaskType = 'RPF' 
-             AND FinalLOC > '' 
-             AND WaveKey = @c_Wavekey   
-   END  
 
    -----Update pickdetail_WIP work in progress staging table back to pickdetail    
    IF @n_continue IN(1,2)
