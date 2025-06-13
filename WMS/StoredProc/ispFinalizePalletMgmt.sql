@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[ispFinalizePalletMgmt]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[ispFinalizePalletMgmt]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -17,7 +12,7 @@ GO
 /*                                                                      */
 /* Called By: n_cst_palletmgmt.Event ue_finalize                        */
 /*                                                                      */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 1.1                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -26,13 +21,20 @@ GO
 /* Updates:                                                             */
 /* Date         Author  Ver   Purposes                                  */
 /* 22-APR-2021  NJOW01  1.0   WMS-16767 TH check to storer restiction   */  
+/* 10-Sep-2024  WLChooi 1.1   LFWM-5008 TH-SCE All Account - Pallet     */
+/*                            Management - Change Request for validate  */
+/*                            UID login (WL01)                          */
+/* 10-Sep-2024  WLChooi 1.1   DevOps Combine Script                     */
 /************************************************************************/
-CREATE PROC dbo.ispFinalizePalletMgmt 
+CREATE OR ALTER PROC dbo.ispFinalizePalletMgmt 
             @c_PMkey            NVARCHAR(10) 
          ,  @b_Success          INT = 0  OUTPUT 
          ,  @n_err              INT = 0  OUTPUT 
          ,  @c_errmsg           NVARCHAR(215) = '' OUTPUT
          ,  @c_BackEndFinalize  NVARCHAR (10) = ''
+         ,  @c_SourceApp        NVARCHAR(10)  = '' --Default Blank = 'Exceed', SCE - 'WM'                                  --WL01
+         ,  @c_StorerRestrict   NVARCHAR(250) = '' --Default Blank if from Exceed, SCE will pass restrict storers list     --WL01
+         ,  @c_FacilityRestrict NVARCHAR(250) = '' --Default Blank if from Exceed, SCE will pass restrict facilities list  --WL01
 AS
 BEGIN
    SET NOCOUNT ON
@@ -55,8 +57,8 @@ BEGIN
    --NJOW01
    DECLARE @c_Country            NVARCHAR(30)  
          , @c_username           NVARCHAR(128) 
-         , @c_StorerRestrict     NVARCHAR(250) 
-         , @c_FacilityRestrict   NVARCHAR(250) 
+         --, @c_StorerRestrict     NVARCHAR(250)   --WL01 
+         --, @c_FacilityRestrict   NVARCHAR(250)   --WL01 
 
    SET @n_StartTCnt = @@TRANCOUNT
    SET @n_Continue = 1
@@ -229,21 +231,26 @@ BEGIN
             GOTO QUIT_SP         
          END           
 
-         SET ANSI_NULLS ON
-         SET ANSI_WARNINGS ON
-               
-         SET @c_username = SUSER_SNAME()
-               
-         EXEC isp_GetUserRestriction
-            @c_username = @c_username  
-           ,@c_StorerRestrict = @c_StorerRestrict OUTPUT  
-           ,@c_FacilityRestrict = @c_FacilityRestrict OUTPUT  
-           ,@b_Success = @b_Success OUTPUT    
-           ,@n_Err = @n_Err OUTPUT    
-           ,@c_ErrMsg = @c_ErrMsg OUTPUT        
-                           
-         SET ANSI_NULLS OFF
-         SET ANSI_WARNINGS OFF
+         --WL01 S
+         IF @c_SourceApp = ''             --If from Exceed
+         BEGIN 
+            SET ANSI_NULLS ON
+            SET ANSI_WARNINGS ON
+                  
+            SET @c_username = SUSER_SNAME()
+                  
+            EXEC isp_GetUserRestriction
+               @c_username = @c_username  
+              ,@c_StorerRestrict = @c_StorerRestrict OUTPUT  
+              ,@c_FacilityRestrict = @c_FacilityRestrict OUTPUT  
+              ,@b_Success = @b_Success OUTPUT    
+              ,@n_Err = @n_Err OUTPUT    
+              ,@c_ErrMsg = @c_ErrMsg OUTPUT        
+                              
+            SET ANSI_NULLS OFF
+            SET ANSI_WARNINGS OFF
+         END
+         --WL01 E
          
          SET @c_ToStorerkey = ''
          SELECT TOP 1 @c_ToStorerkey = PMD.ToStorerkey
