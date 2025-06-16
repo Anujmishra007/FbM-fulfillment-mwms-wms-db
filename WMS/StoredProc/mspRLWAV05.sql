@@ -24,6 +24,7 @@ GO
 /*                                Replenishment cursor and  removed      */
 /*                                extrnorderkey and consigneeekey as     */
 /*                                we need only loadkey level validation  */
+/* 16-Jun-2025    AYD01     1.2   UWP-35347: Added support for UOM 6     */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV05]
   @c_Wavekey      NVARCHAR(10)
@@ -319,7 +320,7 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV05]
       LEFT OUTER JOIN LOADPLANDETAIL lpd (NOLOCK) ON lpd.orderkey = p.orderkey
       WHERE p.WaveKey = @c_Wavekey
       AND   p.[Status] = '0'
-      AND   p.UOM IN ('1','2','3')
+      AND   p.UOM IN ('1','2','3','6') --AYD01
       GROUP BY p.Orderkey
             ,  ISNULL(lpd.Loadkey,'')
             ,  p.Storerkey
