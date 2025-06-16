@@ -6,11 +6,13 @@ GO
 
 
 /******************************************************************************/
-/* Store procedure: isp_TPS_ResetCtnP01                                        */
-/* Copyright      : LFLogistics                                               */
+/* Store procedure: isp_TPS_ResetCtnP01                                       */
+/* Copyright      : Maersk                                                    */
 /*                                                                            */
 /* Date         Rev  Author     Purposes                                      */
 /* 2022-07-01   1.0  YeeKung  TPS-657 Created                                 */
+/* 2025-01-28   1.1  YeeKung    UWP-29489 Change API Username (yeekung01)     */
+/* 2025-04-24   1.2  YeeKung    UWP-31100 Fix UCC Status not reset (yeekung02)*/
 /******************************************************************************/
 
 CREATE  OR ALTER PROC [API].[isp_TPS_ResetCtnP01] (
@@ -61,7 +63,9 @@ BEGIN
    @cUCCNo           NVARCHAR( 20),
    @cExtResetCartonSP   NVARCHAR(20),
    @cSQL             NVARCHAR(4000),
-   @cSQLParam        NVARCHAR(4000)
+   @cSQLParam        NVARCHAR(4000),
+   @cUCCtoUPC           NVARCHAR( 20),
+   @cUCCtoDropID        NVARCHAR( 20)
 
    --CREATE TABLE #ResetCartonList (  
    DECLARE @ResetCartonList TABLE (  
@@ -112,8 +116,10 @@ BEGIN
       --   SET @c_ErrMsg = @c_ErrMsg  
          GOTO ROLLBACKTRAN  
       END  
-  
-  
+
+      SELECT @cUCCtoUPC =Svalue FROM storerConfig WITH (NOLOCK) WHERE storerKey = @cStorerKey AND configKey = 'PACKUPD_UCCTOUPC' 
+      SELECT @cUCCtoDropID =SValue FROM storerConfig WITH (NOLOCK) WHERE storerKey = @cStorerKey AND configKey = 'PACKUPD_UCCTODROPID' 
+
       --check pickslipNo  
       EXEC [API].[isp_GetPicklsipNo] @cStorerKey,@cFacility,@nFunc,@cLangCode,@cScanNo,@cType,@cUserName, @jResult OUTPUT,@b_Success OUTPUT,@n_Err OUTPUT,@c_ErrMsg OUTPUT  
   
@@ -191,8 +197,8 @@ BEGIN
                   IF @@ERROR <> 0  
                   BEGIN  
                      SET @b_Success = 0  
-                     SET @n_Err = 175629  
-                     SET @c_ErrMsg = rdt.rdtgetmessage( @n_Err, @cLangCode, 'DSP')--'Unable to delete PackDetail. Function : isp_ResetCarton'  
+                     SET @n_Err = 1001951  
+                     SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Unable to delete PackDetail. Function : isp_TPS_ResetCtnP01'  
   
                      GOTO RollBackTran  
                   END  
@@ -206,20 +212,20 @@ BEGIN
                      WHERE cartonNo = @nCartonNo AND PickSlipNo = @cPickSlipNo AND PD.StorerKey = @cStorerKey  
   
                      UPDATE packInfo WITH (ROWLOCK)  
-                     SET Qty = @nQty,  
-                     WEIGHT = @nWeight,  
-                     CUBE = @nCube,  
-                     EditDate = GETDATE(),  
-                     EditWho = SUSER_NAME(),  
-                     TrafficCop = NULL  
+                     SET   Qty = @nQty,  
+                           WEIGHT = @nWeight,  
+                           CUBE = @nCube,  
+                           EditDate = GETDATE(),  
+                           EditWho = @cUserName,  
+                           TrafficCop = NULL  
                      WHERE cartonNo = @nCartonNo  
                      AND PickSlipNo = @cPickSlipNo  
   
                      IF @@ERROR <> 0  
                      BEGIN  
                         SET @b_Success = 0  
-                        SET @n_Err = 175630  
-                        SET @c_ErrMsg = rdt.rdtgetmessage( @n_Err, @cLangCode, 'DSP')--'Unable to update PackInfo. Function : isp_ResetCarton'  
+                        SET @n_Err = 1001952  
+                        SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Unable to update PackInfo. Function : isp_TPS_ResetCtnP01'  
   
                         GOTO RollBackTran  
                      END  
@@ -228,22 +234,27 @@ BEGIN
                   --delete packInfo  
                   ELSE IF @nSkuToReset = @nSkuCount  
                   BEGIN  
-                     SELECT @cUCCNo =UCCNO FROM PackInfo WHERE cartonNo = @nCartonNo AND PickSlipNo = @cPickSlipNo  
+                     SELECT @cUCCNo = CASE  WHEN @cUCCtoUPC = 1 then UPC
+                                          WHEN @cUCCtoDropID = 1 then  ISNULL(@cDropID,'')  
+                                    END
+                     FROM PackDetail  (NOLOCK)
+                     WHERE cartonNo = @nCartonNo 
+                        AND PickSlipNo = @cPickSlipNo  
 
                      DELETE PackInfo WHERE cartonNo = @nCartonNo AND PickSlipNo = @cPickSlipNo 
                   
                      UPDATE UCC
-                     SET status='3'
+                     SET   status='3',  
+                           EditDate = GETDATE(),  
+                           EditWho = @cUserName
                      WHERE UCCNO = @cUCCNo
                         AND Status in ('1','2','3','4','6')
 
-
-  
                      IF @@ERROR <> 0  
                      BEGIN  
                         SET @b_Success = 0  
-                        SET @n_Err = 175631  
-                        SET @c_ErrMsg = rdt.rdtgetmessage( @n_Err, @cLangCode, 'DSP')--'Unable to delete PackInfo. Function : isp_ResetCarton'  
+                        SET @n_Err = 1001953  
+                        SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Unable to delete PackInfo. Function : isp_TPS_ResetCtnP01'  
   
                         GOTO RollBackTran  
                      END  
@@ -276,7 +287,9 @@ BEGIN
                            OrderLineNumber='',
                            LabelLine = '',
                            CartonNo = '',
-                           pickslipno = ''
+                           pickslipno = '',  
+                           EditDate = GETDATE(),  
+                           EditWho = @cUserName
                      WHERE Storerkey = @cStorerKey    
                      AND SerialNo = @cSerialno   
 
@@ -284,8 +297,8 @@ BEGIN
                      IF @@ERROR <> 0  
                      BEGIN  
                         SET @b_Success = 0  
-                        SET @n_Err = 175629  
-                        SET @c_ErrMsg = rdt.rdtgetmessage( @n_Err, @cLangCode, 'DSP')--'Unable to delete PackDetail. Function : isp_ResetCarton'  
+                        SET @n_Err = 1001954  
+                        SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Unable to Update SerialNo. Function : isp_TPS_ResetCtnP01'  
   
                         GOTO RollBackTran  
                      END 
@@ -332,7 +345,9 @@ BEGIN
                         OrderLineNumber='',
                         LabelLine = '',
                         CartonNo = '',
-                        pickslipno = ''
+                        pickslipno = '',  
+                        EditDate = GETDATE(),  
+                        EditWho = @cUserName
                   WHERE Storerkey = @cStorerKey    
                   AND SerialNo = @cSerialno   
 
@@ -340,8 +355,8 @@ BEGIN
                   IF @@ERROR <> 0  
                   BEGIN  
                      SET @b_Success = 0  
-                     SET @n_Err = 175629  
-                     SET @c_ErrMsg = rdt.rdtgetmessage( @n_Err, @cLangCode, 'DSP')--'Unable to delete PackDetail. Function : isp_ResetCarton'  
+                     SET @n_Err = 1001955  
+                     SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Unable to Update SerialNo. Function : isp_TPS_ResetCtnP01
   
                      GOTO RollBackTran  
                   END  
@@ -387,7 +402,9 @@ BEGIN
                               OrderLineNumber='',
                               LabelLine = '',
                               CartonNo = '',
-                              pickslipno = ''
+                              pickslipno = '',  
+                              EditDate = GETDATE(),  
+                              EditWho = @cUserName
                         WHERE storerkey = @cstorerkey    
                            AND SerialNo = @cSerialno   
                            AND STATUS IN( '1',  '6') 
@@ -396,8 +413,8 @@ BEGIN
                         IF @@ERROR <> 0  
                         BEGIN  
                            SET @b_Success = 0  
-                           SET @n_Err = 175629  
-                           SET @c_ErrMsg = rdt.rdtgetmessage( @n_Err, @cLangCode, 'DSP')--'Unable to delete PackDetail. Function : isp_ResetCarton'  
+                           SET @n_Err = 1001956  
+                           SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Unable to Update SerialNo. Function : isp_TPS_ResetCtnP01
   
                            GOTO RollBackTran  
                         END  
@@ -417,28 +434,35 @@ BEGIN
             IF @@ERROR <> 0  
             BEGIN  
                SET @b_Success = 0  
-               SET @n_Err = 175632  
-               SET @c_ErrMsg = rdt.rdtgetmessage( @n_Err, @cLangCode, 'DSP')--'Unable to delete PackDetail. Function : isp_ResetCarton'  
+               SET @n_Err = 1001957  
+               SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Unable to Delete PackDetail. Function : isp_TPS_ResetCtnP01  
   
                GOTO RollBackTran  
             END  
 
-            SELECT @cUCCNo =UCCNO FROM PackInfo WHERE cartonNo = @nCartonNo AND PickSlipNo = @cPickSlipNo  
+            SELECT @cUCCNo = CASE  WHEN @cUCCtoUPC = 1 then UPC
+                                 WHEN @cUCCtoDropID = 1 then  ISNULL(@cDropID,'')  
+                           END
+            FROM PackDetail  (NOLOCK)
+            WHERE cartonNo = @nCartonNo 
+               AND PickSlipNo = @cPickSlipNo  
 
             DELETE PackInfo WHERE cartonNo = @nCartonNo AND PickSlipNo = @cPickSlipNo 
             
             IF ISNULL(@cUCCNo,'') <>''
             BEGIN
                UPDATE UCC
-               SET status='3'
+               SET   status='3',  
+                     EditDate = GETDATE(),  
+                     EditWho = @cUserName
                WHERE UCCNO = @cUCCNo
                   AND Status in ('1','2','3','4','6')
   
                IF @@ERROR <> 0  
                BEGIN  
                   SET @b_Success = 0  
-                  SET @n_Err = 175633  
-                  SET @c_ErrMsg = rdt.rdtgetmessage( @n_Err, @cLangCode, 'DSP')--'Unable to update PackInfo. Function : isp_ResetCarton'  
+                  SET @n_Err = 1001958  
+                  SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Unable to Update UCC. Function : isp_TPS_ResetCtnP01'  
   
                   GOTO RollBackTran  
                END  
@@ -452,8 +476,8 @@ BEGIN
          IF EXISTS (SELECT 1 FROM packHeader WITH (NOLOCK) WHERE pickslipNo = @cPickSlipNo AND storerKey = @cStorerKey AND STATUS = '9')  
          BEGIN  
          SET @b_Success = 0  
-            SET @n_Err = 175634  
-            SET @c_ErrMsg = rdt.rdtgetmessage( @n_Err, @cLangCode, 'DSP')--'Packed Pickslip not able to reset. Function : isp_ResetCarton'  
+            SET @n_Err = 1001959  
+            SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Packed Pickslip not able to reset. Function : isp_TPS_ResetCtnP01'  
   
             GOTO RollBackTran  
          END  
@@ -478,15 +502,17 @@ BEGIN
                      OrderLineNumber='',
                      LabelLine = '',
                      CartonNo = '',
-                     pickslipno = ''
+                     pickslipno = '',  
+                     EditDate = GETDATE(),  
+                     EditWho = @cUserName
                WHERE Storerkey = @cStorerKey    
                AND SerialNo = @cSerialno   
 
                IF @@ERROR <> 0  
                BEGIN  
                   SET @b_Success = 0  
-                  SET @n_Err = 175629  
-                  SET @c_ErrMsg = rdt.rdtgetmessage( @n_Err, @cLangCode, 'DSP')--'Unable to delete PackDetail. Function : isp_ResetCarton'  
+                  SET @n_Err = 1001960  
+                  SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Unable to Update SerialNo. Function : isp_TPS_ResetCtnP01
   
                   GOTO RollBackTran  
                END  
@@ -516,28 +542,30 @@ BEGIN
                WHILE @@FETCH_STATUS = 0  
                BEGIN 
                   IF EXISTS(SELECT 1 FROM SerialNo WITH (NOLOCK)      
-                     WHERE StorerKey = @cStorerKey              
-                     AND SerialNo = @cSerialno
-                     AND ISNULL(ORDERKEY,'')<>''
-                     AND STATUS IN( '1','6'))
+                           WHERE StorerKey = @cStorerKey              
+                              AND SerialNo = @cSerialno
+                              AND ISNULL(ORDERKEY,'') <> ''
+                              AND STATUS IN ( '1','6'))
                   BEGIN    
                      UPDATE SerialNo WITH (ROWLOCK)  
-                     SET   STATUS='1',  
-                           ORDERKEY='',
-                           OrderLineNumber='',
+                     SET   STATUS = '1',  
+                           ORDERKEY = '',
+                           OrderLineNumber = '',
                            LabelLine = '',
                            CartonNo = '',
-                           pickslipno = ''
+                           pickslipno = '', 
+                           EditDate = GETDATE(),  
+                           EditWho = @cUserName
                      WHERE storerkey = @cstorerkey    
                         AND SerialNo = @cSerialno   
                         AND STATUS IN( '1',  '6') 
-                        AND ISNULL(ORDERKEY,'')<>''
+                        AND ISNULL(ORDERKEY,'') <> ''
                  
                      IF @@ERROR <> 0  
                      BEGIN  
                         SET @b_Success = 0  
-                        SET @n_Err = 175629  
-                        SET @c_ErrMsg = rdt.rdtgetmessage( @n_Err, @cLangCode, 'DSP')--'Unable to delete PackDetail. Function : isp_ResetCarton'  
+                        SET @n_Err = 1001961  
+                        SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Unable to Update SerialNo. Function : isp_TPS_ResetCtnP01
   
                         GOTO RollBackTran  
                      END  
@@ -556,26 +584,33 @@ BEGIN
             IF @@ERROR <> 0  
             BEGIN  
                SET @b_Success = 0  
-               SET @n_Err = 175635  
-               SET @c_ErrMsg = rdt.rdtgetmessage( @n_Err, @cLangCode, 'DSP')--'Unable to delete PackDetail. Function : isp_ResetCarton'  
+               SET @n_Err = 1001962  
+               SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Unable to Delete PackDetail. Function : isp_TPS_ResetCtnP01  
   
                GOTO RollBackTran  
             END  
   
-            SELECT @cUCCNo =UCCNO FROM PackInfo WHERE cartonNo = @nCartonNo AND PickSlipNo = @cPickSlipNo  
+            SELECT @cUCCNo = CASE  WHEN @cUCCtoUPC = 1 then UPC
+                                 WHEN @cUCCtoDropID = 1 then  ISNULL(@cDropID,'')  
+                           END
+            FROM PackDetail  (NOLOCK)
+            WHERE cartonNo = @nCartonNo 
+               AND PickSlipNo = @cPickSlipNo  
 
             DELETE PackInfo WHERE cartonNo = @nCartonNo AND PickSlipNo = @cPickSlipNo 
                   
             UPDATE UCC
-            SET status='3'
+            SET   status='3',  
+                  EditDate = GETDATE(),  
+                  EditWho = @cUserName
             WHERE UCCNO = @cUCCNo
                AND Status in ('1','2','3','4','6')
   
             IF @@ERROR <> 0  
             BEGIN  
                SET @b_Success = 0  
-               SET @n_Err = 175636  
-               SET @c_ErrMsg = rdt.rdtgetmessage( @n_Err, @cLangCode, 'DSP')--'Unable to update PackInfo. Function : isp_ResetCarton'  
+               SET @n_Err = 1001963  
+               SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Unable to Update UCC. Function : isp_TPS_ResetCtnP01'  
   
                GOTO RollBackTran  
             END  
@@ -583,7 +618,7 @@ BEGIN
          END  
   
       END  
-      --COMMIT TRAN isp_ResetCarton  
+      --COMMIT TRAN isp_TPS_ResetCtnP01  
       SET @b_Success = 1  
       SET @jResult = '[{Success}]'  
       GOTO Quit  

@@ -161,8 +161,8 @@ BEGIN
                      
                   IF @bsuccess <> 1      
                   BEGIN      
-                     SET @n_Err = 175737      
-                     SET @c_ErrMsg = rdt.rdtgetmessage(@n_Err ,@cLangCode ,'DSP') -- 'Fail to get SerialNo Key. Function : isp_TPS_ExtUpd01'      
+                     SET @n_Err = 1002601      
+                     SET @c_ErrMsg = API.TouchPadGetMessage(@n_Err ,@cLangCode ,'DSP') -- 'Fail to get SerialNo Key. Function : isp_TPS_ExtUpd01'      
                      GOTO RollBackTran      
                   END      
                       
@@ -209,8 +209,8 @@ BEGIN
     
                   IF @@ERROR <> 0       
                   BEGIN       
-                     SET @n_Err = 175738      
-                     SET @c_ErrMsg = rdt.rdtgetmessage(@n_Err ,@cLangCode ,'DSP') -- 'Fail to Insert SerialNo table. Function : isp_TPS_ExtUpd01'      
+                     SET @n_Err = 1002602      
+                     SET @c_ErrMsg = API.TouchPadGetMessage(@n_Err ,@cLangCode ,'DSP') -- 'Fail to Insert PackSerialNo table. Function : isp_TPS_ExtUpd01'      
                      GOTO RollBackTran      
                   END      
                   
@@ -219,8 +219,8 @@ BEGIN
 
                   IF @@ERROR <> 0       
                   BEGIN       
-                     SET @n_Err = 175738      
-                     SET @c_ErrMsg = rdt.rdtgetmessage(@n_Err ,@cLangCode ,'DSP') -- 'Fail to Insert SerialNo table. Function : isp_TPS_ExtUpd01'      
+                     SET @n_Err = 1002603      
+                     SET @c_ErrMsg = API.TouchPadGetMessage(@n_Err ,@cLangCode ,'DSP') -- 'Fail to Insert SerialNo table. Function : isp_TPS_ExtUpd01'      
                      GOTO RollBackTran      
                   END      
                END      
@@ -270,8 +270,8 @@ BEGIN
     
                      IF @@ERROR <> 0       
                      BEGIN       
-                        SET @n_Err = 175738      
-                        SET @c_ErrMsg = rdt.rdtgetmessage(@n_Err ,@cLangCode ,'DSP') -- 'Fail to Insert SerialNo table. Function : isp_TPS_ExtUpd01'      
+                        SET @n_Err = 1002604      
+                        SET @c_ErrMsg = API.TouchPadGetMessage(@n_Err ,@cLangCode ,'DSP') -- 'Fail to Insert SerialNo table. Function : isp_TPS_ExtUpd01'      
                         GOTO RollBackTran      
                      END      
                   END    
@@ -287,8 +287,8 @@ BEGIN
                       
                   IF @@ERROR <> 0       
                   BEGIN       
-                     SET @n_Err = 175739      
-                     SET @c_ErrMsg = rdt.rdtgetmessage(@n_Err ,@cLangCode ,'DSP') -- 'Fail to Update SerialNo table. Function : isp_TPS_ExtUpd01'      
+                     SET @n_Err = 1002605      
+                     SET @c_ErrMsg = API.TouchPadGetMessage(@n_Err ,@cLangCode ,'DSP') -- 'Fail to Update SerialNo table. Function : isp_TPS_ExtUpd01'      
                      GOTO RollBackTran      
                   END      
                END    

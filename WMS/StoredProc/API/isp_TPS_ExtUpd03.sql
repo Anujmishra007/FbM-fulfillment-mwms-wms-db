@@ -57,14 +57,11 @@ DECLARE
    @cWeight          NVARCHAR(10),      
    @cCube            NVARCHAR(10),      
    @cLottableVal     NVARCHAR(20),      
-   @cSerialNoKey     NVARCHAR(60),      
-   @cErrMsg          NVARCHAR(128),      
+   @cSerialNoKey     NVARCHAR(60),       
    @cSerialNo        NVARCHAR(60),      
    @cADCode          NVARCHAR(60),      
    @nQty             INT,    
-   @nSNQTY           INT,  
-   @bsuccess         INT,      
-   @nErrNo           INT,      
+   @nSNQTY           INT,      
    @nTranCount       INT,  
    @cUCCNo           NVARCHAR(30),  
    @cCurOrderkey        NVARCHAR(20)  
@@ -151,13 +148,14 @@ BEGIN
   
   
       SET @curAD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR      
-      SELECT serialnokey,qty  
+      SELECT serialnokey,SUM(qty) 
       FROM serialno (NOLOCK)      
       WHERE SKU = @cSKU  
          AND Userdefine01 = @cUCCNo  
          AND Storerkey = @cStorerKey  
-         AND Status in ('0','1')  
-      ORDER BY serialno  
+         AND Status in ('0','1') 
+      GROUP BY serialnokey
+      ORDER BY serialnokey  
   
       OPEN @curAD      
       FETCH NEXT FROM @curAD INTO @cSerialNoKey, @nSNQTY    
@@ -171,7 +169,8 @@ BEGIN
          WHERE PD.StorerKey = @cStorerKey        
             AND PH.OrderKey = @cOrderKey        
             AND PD.SKU = @cSKU   
-            AND Cartonno = @nCartonNo  
+            AND Cartonno = @nCartonNo 
+
            
          --INSERT INTO PackSerialNo(pickslipno,cartonno,labelno,labelline,storerkey,sku,serialno,qty)      
          --values(@cpickslipNo,@nCartonNo,@cLabelNo,@cLblLineNumber,@cStorerKey,@csku,@cSerialNoKey,@nSNQTY)     
@@ -218,17 +217,17 @@ BEGIN
          WHERE SerialNokey = @cSerialNokey  
   
          SET @nQTY = @nQTY - @nSNQTY  
-  
+
          IF @nQTY = 0   
             BREAK;  
   
-         FETCH NEXT FROM @curAD INTO @cSerialNoKey, @nSNQTY  
+         FETCH NEXT FROM @curAD INTO @cSerialNoKey, @nSNQTY 
       END  
   
       IF @nQTY<>0  
       BEGIN        
-         SET @n_Err = 175737        
-         SET @c_ErrMsg ='QTYnot Match'      
+         SET @n_Err = 1002701        
+         SET @c_ErrMsg =API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP') -- 'Quantity Not Match. Function : isp_TPS_ExtUpd03'        
          GOTO RollBackTran        
       END     
   
@@ -270,14 +269,14 @@ BEGIN
                               'SerialNo',        
                               10 ,        
                               @cSerialNoKey      OUTPUT,        
-                              @bsuccess          OUTPUT,        
-                              @nErrNo            OUTPUT,        
-                              @cErrMsg           OUTPUT        
+                              @b_Success          OUTPUT,        
+                              @n_Err            OUTPUT,        
+                              @c_ErrMsg           OUTPUT        
                        
-                     IF @bsuccess <> 1        
+                     IF @b_Success <> 1        
                      BEGIN        
-                        SET @n_Err = 175737        
-                        SET @c_ErrMsg = rdt.rdtgetmessage(@n_Err ,@cLangCode ,'DSP') -- 'Fail to get SerialNo Key. Function : isp_TPS_ExtUpd03'        
+                        SET @n_Err = 1002702        
+                        SET @c_ErrMsg = API.TouchPadGetMessage(@n_Err ,@cLangCode ,'DSP') -- 'Fail to get SerialNo Key. Function : isp_TPS_ExtUpd03'        
                         GOTO RollBackTran        
                      END        
                         
@@ -320,8 +319,8 @@ BEGIN
       
                      IF @@ERROR <> 0         
                      BEGIN         
-                        SET @n_Err = 175738        
-                        SET @c_ErrMsg = rdt.rdtgetmessage(@n_Err ,@cLangCode ,'DSP') -- 'Fail to Insert SerialNo table. Function : isp_TPS_ExtUpd03'        
+                        SET @n_Err = 1002703        
+                        SET @c_ErrMsg = API.TouchPadGetMessage(@n_Err ,@cLangCode ,'DSP') -- 'Fail to Insert SerialNo table. Function : isp_TPS_ExtUpd03'        
                         GOTO RollBackTran        
                      END        
                     
@@ -330,8 +329,8 @@ BEGIN
   
                      IF @@ERROR <> 0         
                      BEGIN         
-                        SET @n_Err = 175738        
-                        SET @c_ErrMsg = rdt.rdtgetmessage(@n_Err ,@cLangCode ,'DSP') -- 'Fail to Insert SerialNo table. Function : isp_TPS_ExtUpd03'        
+                        SET @n_Err = 1002708        
+                        SET @c_ErrMsg = API.TouchPadGetMessage(@n_Err ,@cLangCode ,'DSP') -- 'Fail to Insert SerialNo table. Function : isp_TPS_ExtUpd03'        
                         GOTO RollBackTran        
                      END        
                   END        
@@ -387,8 +386,8 @@ BEGIN
       
                         IF @@ERROR <> 0         
                         BEGIN         
-                           SET @n_Err = 175738        
-                           SET @c_ErrMsg = rdt.rdtgetmessage(@n_Err ,@cLangCode ,'DSP') -- 'Fail to Insert SerialNo table. Function : isp_TPS_ExtUpd03'        
+                           SET @n_Err = 1002704        
+                           SET @c_ErrMsg = API.TouchPadGetMessage(@n_Err ,@cLangCode ,'DSP') -- 'Fail to Insert PackSerialNo table. Function : isp_TPS_ExtUpd03'        
                            GOTO RollBackTran        
                         END        
                      END      
@@ -413,8 +412,8 @@ BEGIN
                         
                      IF @@ERROR <> 0         
                      BEGIN         
-                        SET @n_Err = 175739        
-                        SET @c_ErrMsg = rdt.rdtgetmessage(@n_Err ,@cLangCode ,'DSP') -- 'Fail to Update SerialNo table. Function : isp_TPS_ExtUpd03'        
+                        SET @n_Err = 1002705        
+                        SET @c_ErrMsg = API.TouchPadGetMessage(@n_Err ,@cLangCode ,'DSP') -- 'Fail to Update SerialNo table. Function : isp_TPS_ExtUpd03'        
                         GOTO RollBackTran        
                      END        
                   END    
@@ -486,8 +485,8 @@ BEGIN
       
                         IF @@ERROR <> 0         
                         BEGIN         
-                           SET @n_Err = 175738        
-                           SET @c_ErrMsg = rdt.rdtgetmessage(@n_Err ,@cLangCode ,'DSP') -- 'Fail to Insert SerialNo table. Function : isp_TPS_ExtUpd03'        
+                           SET @n_Err = 1002706        
+                           SET @c_ErrMsg = API.TouchPadGetMessage(@n_Err ,@cLangCode ,'DSP') -- 'Fail to Insert SerialNo table. Function : isp_TPS_ExtUpd03'        
                            GOTO RollBackTran        
                         END        
                      END      
@@ -513,8 +512,8 @@ BEGIN
   
                      IF @@ERROR <> 0         
                      BEGIN         
-                        SET @n_Err = 175739        
-                        SET @c_ErrMsg = rdt.rdtgetmessage(@n_Err ,@cLangCode ,'DSP') -- 'Fail to Update SerialNo table. Function : isp_TPS_ExtUpd03'        
+                        SET @n_Err = 1002707        
+                        SET @c_ErrMsg = API.TouchPadGetMessage(@n_Err ,@cLangCode ,'DSP') -- 'Fail to Update SerialNo table. Function : isp_TPS_ExtUpd03'        
                         GOTO RollBackTran        
                      END        
                   END    

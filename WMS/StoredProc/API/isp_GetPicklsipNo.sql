@@ -23,6 +23,7 @@ GO
 /* 2024-12-31   2.0  YeeKung    UWP-28420 Fix tote status 5 (yeekung06)        */
 /* 2025-02-14   2.1  yeekung    TPS-995 Change Error Message (yeekung03)       */
 /* 2025-02-15   2.2  YeeKung    TPS-956 Add Status (yeekung04)                 */
+/* 2025-04-10   2.3  GhChan     FCR-3471 Update Status to 9 (Gh01)             */
 /*******************************************************************************/
 
 CREATE OR ALTER PROC [API].[isp_GetPicklsipNo] (
@@ -148,7 +149,7 @@ AS
             LEFT JOIN orders O WITH (NOLOCK) ON (PD.orderKey = O.OrderKey) --(cc02)
             --LEFT JOIN UCC UCC WITH (NOLOCK) ON (PD.SKU=UCC.SKU AND PD.storerkey=UCC.storerkey AND PD.Lot=UCC.lot AND PD.LOC=UCC.LOC)
             WHERE PD.OrderKey = @cOrderKey
-               AND PD.Status <= '5'
+               AND PD.Status <= '9'--Gh01
               -- AND PD.Status NOT IN  ('4')
                AND O.SOStatus NOT IN (SELECT code FROM @tSostatusList)  --(cc02)
             GROUP BY PD.SKU,PD.OrderKey,PD.Status--,UCC.UCCNo--,PD.Status (yeekung)
@@ -184,7 +185,7 @@ AS
                JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)
                --LEFT JOIN UCC UCC WITH (NOLOCK) ON (PD.SKU=UCC.SKU AND PD.storerkey=UCC.storerkey AND PD.Lot=UCC.lot AND PD.LOC=UCC.LOC)
             WHERE LPD.LoadKey = @cLoadKey
-               AND PD.Status <= '5'
+               AND PD.Status <= '9'--Gh01
                --AND PD.Status NOT IN  ('4')
               -- AND O.SOStatus NOT IN (SELECT code FROM @tSostatusList)  --(cc02)
             GROUP BY PD.SKU,PD.Status --(yeekung03)
@@ -201,7 +202,7 @@ AS
             FROM dbo.PickDetail PD WITH (NOLOCK)
               --    LEFT JOIN UCC UCC WITH (NOLOCK) ON (PD.SKU=UCC.SKU AND PD.storerkey=UCC.storerkey AND PD.Lot=UCC.lot AND PD.LOC=UCC.LOC)
             WHERE PD.PickSlipNo = @cPickSlipNo
-               AND PD.Status <= '5'
+               AND PD.Status <= '9'--Gh01
              --  AND PD.Status NOT IN  ('4')
             GROUP BY PD.SKU,PD.OrderKey,PD.Status--,UCC.UCCNo--,PD.Status
 
@@ -224,7 +225,7 @@ AS
          LEFT JOIN orders O WITH (NOLOCK) ON (PD.orderKey = O.OrderKey) --(cc02)
          --LEFT JOIN UCC UCC WITH (NOLOCK) ON (PD.SKU=UCC.SKU AND PD.storerkey=UCC.storerkey AND PD.Lot=UCC.lot AND PD.LOC=UCC.LOC)
          WHERE PD.OrderKey = @cOrderKey
-            AND PD.Status <= '5'
+            AND PD.Status <= '9'--Gh01
           --  AND PD.Status NOT IN  ('4')
             AND O.SOStatus NOT IN (SELECT code FROM @tSostatusList)  --(cc02)
          GROUP BY PD.SKU,PD.OrderKey,PD.Status--,UCC.UCCNo--,PD.Status (yeekung)
@@ -258,7 +259,7 @@ AS
          LEFT JOIN orders O WITH (NOLOCK) ON (PD.orderKey = O.OrderKey) --(cc02)
          --LEFT JOIN UCC UCC WITH (NOLOCK) ON (PD.SKU=UCC.SKU AND PD.storerkey=UCC.storerkey AND PD.Lot=UCC.lot AND PD.LOC=UCC.LOC)
          WHERE PD.OrderKey = @cOrderKey
-            AND PD.Status <= '5'
+            AND PD.Status <= '9'--Gh01
           --  AND PD.Status NOT IN  ('4')
             AND O.SOStatus NOT IN (SELECT code FROM @tSostatusList)  --(cc02)
          GROUP BY PD.SKU,PD.OrderKey,PD.Status--,UCC.UCCNo--,PD.Status (yeekung)
@@ -576,7 +577,7 @@ AS
                JOIN dbo.PickHeader PH WITH (NOLOCK) ON PD.orderKey = PH.OrderKey
                     -- LEFT JOIN UCC UCC WITH (NOLOCK) ON (PD.SKU=UCC.SKU AND PD.storerkey=UCC.storerkey AND PD.Lot=UCC.lot AND PD.LOC=UCC.LOC)
                WHERE PD.dropID = @cDropID
-                  AND PD.Status <= '5'
+                  AND PD.Status <= '9'--Gh01
                   --AND PD.Status NOT IN  ('4')
                GROUP BY PD.SKU,PD.OrderKey,PH.PickHeaderKey,PH.ExternOrderKey,PD.Status--,UCC.UCCNo--,PD.status
 
@@ -612,7 +613,7 @@ AS
                         JOIN dbo.PICKHEADER PH WITH (NOLOCK) ON (LPD.loadkey = PH.ExternOrderKey)
                       --  LEFT JOIN UCC UCC WITH (NOLOCK) ON (PD.SKU=UCC.SKU AND PD.storerkey=UCC.storerkey AND PD.Lot=UCC.lot AND PD.LOC=UCC.LOC)
                      WHERE PD.dropID = @cDropID
-                        AND PD.Status <= '5'
+                        AND PD.Status <= '9'--Gh01
                        -- AND PD.Status NOT IN  ('4')
                      GROUP BY PD.SKU,PH.PickHeaderKey,PH.ExternOrderKey,PD.OrderKey,PD.Status--,UCC.UCCNo--,PD.Status
 
@@ -636,7 +637,7 @@ AS
                SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Packing Document No required. Please enter valid Packing Document No. Function : isp_GetPickslipNo'
                GOTO EXIT_SP
             END
-            SELECT * FROM @pickSKUDetail
+            --SELECT * FROM @pickSKUDetail
             --SELECT @cPickSlipNo AS pickslipNo
 
             IF (SELECT COUNT(DISTINCT pickslipNo)  FROM @pickSKUDetail WHERE pickDetailStatus < 5 )>1
@@ -665,6 +666,14 @@ AS
       SET @b_Success = 0
       SET @n_Err = 1001114
       SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Invalid Pickslip No. Please use other Pickslip No. Function : isp_GetPickslipNo'
+      GOTO EXIT_SP
+   END
+
+   IF NOT EXISTS (SELECT 1 FROM @pickSKUDetail)
+   BEGIN
+      SET @b_Success = 0
+      SET @n_Err = 1001106
+      SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'No PickSKUDetail found. Function : isp_GetPickslipNo'
       GOTO EXIT_SP
    END
 

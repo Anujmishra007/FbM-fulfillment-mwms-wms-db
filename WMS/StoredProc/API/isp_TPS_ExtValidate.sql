@@ -41,7 +41,7 @@ BEGIN
    )
 
    EXEC nspGetRight    
-         @c_Facility   = @cFacility
+         @c_Facility   = @cFacility    
       ,  @c_StorerKey  = @cStorerKey   
       ,  @c_sku        = ''    
       ,  @c_ConfigKey  = 'TPS-ExtValidSP'    

@@ -218,7 +218,7 @@ BEGIN
             EXECUTE isp_TP_GenSSCCLabel_Wrapper
             @c_PickSlipNo = @cPickSlipno,
             @n_CartonNo   = 0,
-            @cLabelNo    = @cLabelNo   OUTPUT
+            @c_SSCC_LabelNo    = @cLabelNo   OUTPUT
 
             IF @cLabelNo <> ''
             BEGIN
@@ -270,7 +270,7 @@ BEGIN
                IF ISNUMERIC(@c_VAT) = 0
                BEGIN
                   SET @n_Err = 1001555
-                  SET @c_errmsg = rdt.rdtgetmessage( @n_Err, @cLangCode, 'DSP')--'Execution Error : Vat is not a numeric value. Function : isp_TPS_ExtGenLBL02'
+                  SET @c_errmsg = api.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Execution Error : Vat is not a numeric value. Function : isp_TPS_ExtGenLBL02'
                   SET @b_Success = 0
                   GOTO RollbackTran
                END
