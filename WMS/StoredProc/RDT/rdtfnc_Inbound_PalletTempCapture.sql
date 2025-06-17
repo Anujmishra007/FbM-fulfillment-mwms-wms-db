@@ -17,6 +17,7 @@ GO
 /* 2025-04-05   1.1.0  NLT013   UWP-32818 ASN Status refering wrong field     */
 /* 2025-04-15   1.2.0  NLT013   UWP-32818 Temperature capture is not referring*/
 /*                              to ASNStatus                                  */
+/* 2025-06-17   0.0.0  Jackc    !!!Cutover. Use V0 repo for work!!!           */
 /******************************************************************************/
         
 CREATE OR ALTER PROC [RDT].[rdtfnc_Inbound_PalletTempCapture](
