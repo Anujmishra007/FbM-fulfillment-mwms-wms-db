@@ -34,7 +34,7 @@ GO
 /* 2024-11-12  SSA07    1.7   Updating to add two step replenishment for */
 /*                            type 1 with UOM7                           */
 /* 2025-05-09  Wan01    1.8   FCR-3958 - JCB Picking Task                */
-/*                            Overwrite the whole logic as implement new */
+/* 2025-06-17                 Overwrite the whole logic as implement new */
 /*                            process. Use back same SP                  */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV02]
@@ -727,7 +727,7 @@ BEGIN
          ,  @c_ToLoc                 = @c_ToLoc
          ,  @c_LogicalToLoc          = @c_ToLoc
          ,  @c_ToID                  = @c_ToID 
-         ,  @c_DropID                = @c_CaseID
+         ,  @c_CaseID                = @c_CaseID                                    --2025-06-17
          ,  @c_PickMethod            = @c_PickMethod
          ,  @c_Priority              = @c_Priority
          ,  @c_SourcePriority        = '9'
@@ -831,7 +831,8 @@ BEGIN
          SET @c_FinalLoc      = ''
          SET @c_ToID          = @c_FromID
          SET @c_FinalID       = @c_ToID
-         SET @c_PickMethod    = CASE WHEN @c_CaseID = '' THEN 'FP' ELSE 'PP' END
+         SET @c_PickMethod    = CASE WHEN @c_CaseID = '' AND @c_UOM NOT IN ('6','7')--2025-06-17
+                                     THEN 'FP' ELSE 'PP' END
          SET @c_TaskStatus    = '0'
          SET @c_LinkTaskToPick_SQL = 'PICKDETAIL.Orderkey= @c_Orderkey'
                                    +' AND PICKDETAIL.Loc = @c_FromLoc'
