@@ -27,6 +27,7 @@ GO
 /* 2024-12-18   1.9     Jackc    UWP-28528 ActQty is reset to 0 when partial short*/
 /* 2025-04-27   2.0.0   Dennis   UWP-31758 Skip confirm tote if full short       */
 /* 2025-04-27   2.0.1   Dennis   FCR-4243 Resume task                            */
+/* 2025-06-17   0.0.0   JACKC    !!!Cutover. Use V2 file in V0 for work!!!       */
 /*********************************************************************************/
         
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_Assist_ClusterPick](        
