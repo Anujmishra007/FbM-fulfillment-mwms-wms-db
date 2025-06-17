@@ -18,6 +18,7 @@ GO
 /* 2024-09-23   1.7  YeeKung    TPS-966 Add Facility on Storerconfig          */
 /*                               Control (yeekung04)                          */
 /* 2025-01-04   1.8  YeeKung    UWP-28816 Fix facility (yeekung05)            */      
+/* 2025-05-06   1.9  GhChan     Bug fix for @cCartonNo (Gh01)                 */ 
 /******************************************************************************/
 
 CREATE OR ALTER PROC [API].[isp_GetPackCartonID] (
@@ -60,7 +61,7 @@ DECLARE
    @c_LabelNo        NVARCHAR( 20) = '',
    @cUCCNo           NVARCHAR( 20),
    @nCartonNo        INT,
-   @cCartonNo        NVARCHAR(3), --(cc02)
+   @cCartonNo        NVARCHAR(5), --(cc02)
    @c_Option1        NVARCHAR(50),  --(cc01)
    @c_Option2        NVARCHAR(50),  --(cc01)
    @cOldUCCLabelNo   NVARCHAR( 20),
@@ -142,7 +143,7 @@ BEGIN
          @c_StorerKey, @cFacility, @nFunc, @cLangCode,@cPickSlipNo, @cCartonNo,   
          @c_LabelNo OUTPUT,@b_Success OUTPUT, @n_Err OUTPUT, @c_ErrMsg OUTPUT 
 
-      IF @n_Err <> 0
+      IF @n_Err <> 0 OR @b_Success = 0
          GOTO EXIT_SP
    END
 END
@@ -366,7 +367,7 @@ BEGIN
    END
 END
 
-
+EXIT_SP:
 IF @c_LabelNo <> ''
 BEGIN
       SET @b_Success = 1
@@ -380,12 +381,12 @@ BEGIN
    SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Fail to retrieve LableNo. Function : isp_GetPackCartonID'
 END
 
-EXIT_SP:
-IF @c_LabelNo <> ''
-BEGIN
-      SET @b_Success = 1
-      SET @jResult = '[{'+@c_LabelNo+'}]'
-END
+
+--IF @c_LabelNo <> ''
+--BEGIN
+--      SET @b_Success = 1
+--      SET @jResult = '[{'+@c_LabelNo+'}]'
+--END
 
 
 SET QUOTED_IDENTIFIER OFF

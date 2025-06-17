@@ -96,7 +96,7 @@ END
 IF NOT EXISTS (SELECT TOP 1 1 FROM pickDetail WITH (NOLOCK) WHERE storerKey = @cStorerKey AND dropID = @cDropID)
 BEGIN
 	SET @b_Success = 0
-   SET @n_Err = 1001106
+   SET @n_Err = 1001051
    SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'ToteID is from a different Storrer. Please use valid ToteID.: isp_GetEcomPicklsipNo'
    GOTO EXIT_SP
 END

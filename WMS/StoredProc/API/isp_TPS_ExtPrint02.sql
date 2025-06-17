@@ -58,10 +58,8 @@ DECLARE
    @cCube            NVARCHAR(10),
    @cLottableVal     NVARCHAR(20),
    @cSerialNoKey     NVARCHAR(60),
-   @cErrMsg          NVARCHAR(128),
    @nQty             INT,
    @bsuccess         INT,
-   @nErrNo           INT,
    @nTranCount       INT
 
 DECLARE @CloseCtnList TABLE (
@@ -156,8 +154,8 @@ BEGIN
          IF ISNULL(@cLabelPrinter,'') = ''
          BEGIN
             SET @b_Success = 0
-            SET @n_Err = 175743
-            SET @c_ErrMsg = rdt.rdtgetmessage( @n_Err, @cLangCode, 'DSP')--'Label Printer setup not done. Please setup the Label Printer. Function : isp_TPS_ExtPrint02'
+            SET @n_Err = 1002301
+            SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Label Printer setup not done. Please setup the Label Printer. Function : isp_TPS_ExtPrint02'
             GOTO Quit
          END
          ELSE
@@ -226,8 +224,8 @@ BEGIN
             IF ISNULL(@cPaperPrinter,'') = ''
             BEGIN
                SET @b_Success = 0
-               SET @n_Err = 175744
-               SET @c_ErrMsg = rdt.rdtgetmessage( @n_Err, @cLangCode, 'DSP')--'Paper Printer setup not done. Please setup the Paper Printer. Function : isp_TPS_ExtPrint02'
+               SET @n_Err = 1002302
+               SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Paper Printer setup not done. Please setup the Paper Printer. Function : isp_TPS_ExtPrint02'
                GOTO Quit
             END
             ELSE

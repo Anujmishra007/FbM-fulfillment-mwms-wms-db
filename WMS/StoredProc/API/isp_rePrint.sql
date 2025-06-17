@@ -19,9 +19,10 @@ GO
 /* 2023-12-11   1.7  YeeKung    TPS-826 Add params for paper (yeekung12)      */
 /* 2024-01-18   1.8  YeeKung    Add group by labelno (yeekung4)               */
 /* 2024-02-09   1.9  YeeKung    TPS-821 Add reporttpe (yeekung05)             */  
-/* 2024-12-12   2.0  YeeKung    TPS-895 Add Support reprint Orderkey (yeekung06)*/
-/* 2025-02-14   2.1  yeekung    TPS-995 Change Error Message (yeekung07)      */
-/* 2025-02-25   2.2  YeeKung    TPS-970 Fix Orderkey reprint (yeekung08)      */
+/* 2025-02-14   2.0  yeekung    TPS-995 Change Error Message (yeekung06)      */
+/* 2025-02-25   2.1  YeeKung    TPS-970 Fix Orderkey reprint (yeekung07)      */
+/* 2025-04-22   2.2  GhChan     UWP-33066 FCR-4039 Fix Group By (Gh01)        */
+/* 2025-04-23   2.2  GhChan     FCR-4207 Fix DynamicPrinter (Gh02)            */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [API].[isp_rePrint] (
@@ -51,10 +52,10 @@ SET CONCAT_NULL_YIELDS_NULL OFF
       @cReporttype      NVARCHAR(20),
 
       @cStorerKey       NVARCHAR( 15),
-      @cFacility        NVARCHAR( 5),
-      @nFunc            NVARCHAR( 5),
-      @cUserName        NVARCHAR( 128),
-      @cOriUserName     NVARCHAR( 128),
+	   @cFacility        NVARCHAR( 5),
+	   @nFunc            NVARCHAR( 5),
+	   @cUserName        NVARCHAR( 128),
+	   @cOriUserName     NVARCHAR( 128),
       @cScanNo          NVARCHAR( 50),
       @cDropID          NVARCHAR( 50),
       @cPickSlipNo      NVARCHAR( 30),
@@ -98,8 +99,8 @@ SET CONCAT_NULL_YIELDS_NULL OFF
    ,@PrinterType = PrinterType,@cReporttype = ReportType  --(cc03)
       FROM OPENJSON(@json)
       WITH (
-         StorerKey      NVARCHAR( 30),
-         Facility       NVARCHAR( 30),
+	      StorerKey      NVARCHAR( 30),
+	      Facility       NVARCHAR( 30),
          Func           NVARCHAR( 5),
          UserName       NVARCHAR( 128),
          LangCode       NVARCHAR( 3),
@@ -134,11 +135,10 @@ SET CONCAT_NULL_YIELDS_NULL OFF
 
    --SELECT @cUserName AS cUserName, @cScanNo AS cScanNo, @c_OriUserName AS c_UserName
    --search pickslipNo
-   --search pickslipNo
    IF ISNULL(@cOrderKeyPrint,'') = ''
    BEGIN
 
-      --b2b
+	   --b2b
       IF @cType <> 'pickslip' --(cc01)
       BEGIN
          SELECT @cPickSlipNo = PickSlipNo FROM api.appSection WITH (NOLOCK) WHERE userID = @cOriUserName AND scanNo = @cScanNo
@@ -153,19 +153,19 @@ SET CONCAT_NULL_YIELDS_NULL OFF
          SET @cPickSlipNo = @cScanNo
       END
 
-      IF EXISTS (SELECT TOP 1 1 FROM packHeader WHERE pickslipNo = @cPickSlipNo AND STATUS = 9)
-      BEGIN
-         SET @nPrintPackList = 'Y'
-      END
+	   IF EXISTS (SELECT TOP 1 1 FROM packHeader WHERE pickslipNo = @cPickSlipNo AND STATUS = 9)
+	   BEGIN
+		   SET @nPrintPackList = 'Y'
+	   END
    END
    ELSE
    BEGIN
-      --b2c
-      SELECT @cPickSlipNo = PickSlipNo FROM packHeader WITH (NOLOCK) WHERE orderkey = @cOrderKeyPrint AND storerKey = @cStorerKey
-      IF EXISTS (SELECT TOP 1 1 FROM packHeader WHERE pickslipNo = @cPickSlipNo AND orderKey = @cOrderKeyPrint AND STATUS = 9)
-      BEGIN
-         SET @nPrintPackList = 'Y'
-      END
+	   --b2c
+	   SELECT @cPickSlipNo = PickSlipNo FROM packHeader WITH (NOLOCK) WHERE orderkey = @cOrderKeyPrint AND storerKey = @cStorerKey
+	   IF EXISTS (SELECT TOP 1 1 FROM packHeader WHERE pickslipNo = @cPickSlipNo AND orderKey = @cOrderKeyPrint AND STATUS = 9)
+	   BEGIN
+		   SET @nPrintPackList = 'Y'
+	   END
    END
 
    SELECT @cPickSlipNo AS picksliNo, @nPrintPackList '@nPrintPackList'
@@ -179,6 +179,9 @@ SET CONCAT_NULL_YIELDS_NULL OFF
    DECLARE @cExtendedRePrintSP NVARCHAR ( 30)
    DECLARE @curPrint      CURSOR
    DECLARE @cPrintAllLbl  NVARCHAR( 30)
+   DECLARE @cPrinterInGroup NVARCHAR(10) 
+   DECLARE @groupByFields NVARCHAR(MAX) = ''
+
    -- Common params ofr printing
    DECLARE @tShipLabel AS VariableTable
 
@@ -196,7 +199,11 @@ SET CONCAT_NULL_YIELDS_NULL OFF
            @cParams1    NVARCHAR(max),
            @cParams2    NVARCHAR(max),
            @cParams3    NVARCHAR(max),
-           @cParams4    NVARCHAR(max)
+           @cParams4    NVARCHAR(max),
+           @IsAggregate1 BIT = 0,
+           @IsAggregate2 BIT = 0,
+           @IsAggregate3 BIT = 0,
+           @IsAggregate4 BIT = 0
 
    DECLARE @cNewPaperPrinter NVARCHAR(20)
    DECLARE @cNewLabelPrinter NVARCHAR(20)
@@ -240,7 +247,7 @@ SET CONCAT_NULL_YIELDS_NULL OFF
             '@cPackingJobID   NVARCHAR ( 30) OUTPUT,  ' +
             '@b_Success       INT            OUTPUT, ' +
             '@n_Err           INT            OUTPUT, ' +
-            '@c_ErrMsg        NVARCHAR( 20)  OUTPUT'
+            '@c_ErrMsg        NVARCHAR(255)  OUTPUT'
 
          EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
             @cStorerKey, @cFacility, @nFunc, @cUserName, @cLangCode, @cScanNo,
@@ -292,16 +299,16 @@ SET CONCAT_NULL_YIELDS_NULL OFF
                            WHERE Storerkey = @cStorerKey 
                               AND (reporttype = @cReporttype OR reporttype ='TPSHIPPLBL'))  
                BEGIN
-                  IF ISNULL(@cLabelPrinter,'') = ''
-                  BEGIN
-                     SET @b_Success = 0
+	               IF ISNULL(@cLabelPrinter,'') = ''
+	               BEGIN
+		               SET @b_Success = 0
                      SET @n_Err = 1001451
                      SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Label Printer setup not done. Please setup the Label Printer. Function : isp_rePrint'
                      GOTO EXIT_SP
-                  END
-                  ELSE
-                  BEGIN
-                     --EXEC API.isp_Print @cLangCode, @cFacility, @cStorerKey, @cLabelPrinter, @cPaperPrinter,
+	               END
+	               ELSE
+	               BEGIN
+		               --EXEC API.isp_Print @cLangCode, @cFacility, @cStorerKey, @cLabelPrinter, @cPaperPrinter,
                  --    'TPSHIPPLBL', -- Report type
                  --    @tShipLabel, -- Report params
                  --    'API.isp_RePrint', --source Type
@@ -327,8 +334,57 @@ SET CONCAT_NULL_YIELDS_NULL OFF
                         and (WMRD.username = '' OR WMRD.username = @cUsername)
                         AND (ISNULL(ComputerName,'') ='' OR ComputerName = @cWorkstation)
 
+                  IF @@ROWCOUNT = 0
+                  BEGIN
+                     SET @b_Success = 0
+                     SET @n_Err = 1001452
+                     SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'No records found in WMReport. Function : isp_rePrint'
+                     GOTO EXIT_SP
+                  END
 
-                    SET  @cSQL =
+                  IF ISNULL(@cFieldName1,'') = ''
+                  BEGIN
+                     SET @b_Success = 0
+                     SET @n_Err = 1001453
+                     SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'No value found in table(WMReport); column(keyFieldname1), this column cannot be empty or null. Function : isp_rePrint'
+                     GOTO EXIT_SP
+                  END
+
+                     --Start Gh01
+                  SET @IsAggregate1 = CASE WHEN ISNULL(@cFieldName1,'') <> '' AND (
+                                      UPPER(@cFieldName1) LIKE '%SUM(%' OR 
+                                      UPPER(@cFieldName1) LIKE '%AVG(%' OR
+                                      UPPER(@cFieldName1) LIKE '%COUNT(%' OR
+                                      UPPER(@cFieldName1) LIKE '%MIN(%' OR
+                                      UPPER(@cFieldName1) LIKE '%MAX(%' COLLATE SQL_Latin1_General_CP1_CS_AS
+                                  ) THEN 1 ELSE 0 END
+
+                  SET @IsAggregate2 = CASE WHEN ISNULL(@cFieldName2,'') <> '' AND (
+                                      UPPER(@cFieldName2) LIKE '%SUM(%' OR 
+                                      UPPER(@cFieldName2) LIKE '%AVG(%' OR
+                                      UPPER(@cFieldName2) LIKE '%COUNT(%' OR
+                                      UPPER(@cFieldName2) LIKE '%MIN(%' OR
+                                      UPPER(@cFieldName2) LIKE '%MAX(%' COLLATE SQL_Latin1_General_CP1_CS_AS
+                                  ) THEN 1 ELSE 0 END
+
+                  SET @IsAggregate3 = CASE WHEN ISNULL(@cFieldName3,'') <> '' AND (
+                                      UPPER(@cFieldName3) LIKE '%SUM(%' OR 
+                                      UPPER(@cFieldName3) LIKE '%AVG(%' OR
+                                      UPPER(@cFieldName3) LIKE '%COUNT(%' OR
+                                      UPPER(@cFieldName3) LIKE '%MIN(%' OR
+                                      UPPER(@cFieldName3) LIKE '%MAX(%' COLLATE SQL_Latin1_General_CP1_CS_AS
+                                  ) THEN 1 ELSE 0 END
+
+                  SET @IsAggregate4 = CASE WHEN ISNULL(@cFieldName4,'') <> '' AND (
+                                      UPPER(@cFieldName4) LIKE '%SUM(%' OR 
+                                      UPPER(@cFieldName4) LIKE '%AVG(%' OR
+                                      UPPER(@cFieldName4) LIKE '%COUNT(%' OR
+                                      UPPER(@cFieldName4) LIKE '%MIN(%' OR
+                                      UPPER(@cFieldName4) LIKE '%MAX(%' COLLATE SQL_Latin1_General_CP1_CS_AS
+                                  ) THEN 1 ELSE 0 END
+
+ 
+                     SET  @cSQL =
                      'SELECT  @cParams1='+ @cFieldName1  
                               SELECT @cSQL= CASE WHEN ISNULL(@cFieldName2,'') <> '' THEN @cSQL +',@cParams2='  + @cFieldName2  ELSE  @cSQL END 
                               SELECT @cSQL= CASE WHEN ISNULL(@cFieldName3,'') <> '' THEN @cSQL +',@cParams3='  + @cFieldName3  ELSE  @cSQL END
@@ -336,9 +392,26 @@ SET CONCAT_NULL_YIELDS_NULL OFF
                      SET @cSQL = @cSQL +' FROM Packdetail (NOLOCK)
                         WHERE Storerkey = @cstorerkey
                            AND Pickslipno = @cPickslipno
-                           AND CartonNO = @nCartonno
-                        GROUP BY Pickslipno,storerkey,cartonno,labelno
-                        '
+                           AND CartonNo = @nCartonno '
+
+                     SET @groupByFields = ''
+
+                     IF ISNULL(@cFieldName1, '') <> '' AND @IsAggregate1 = 0 AND ISNUMERIC(@cFieldName1) = 0
+                        SET @groupByFields = @groupByFields + CASE WHEN LEN(@groupByFields) > 0 THEN ', ' ELSE '' END + @cFieldName1
+
+                     IF ISNULL(@cFieldName2, '') <> '' AND @IsAggregate2 = 0 AND ISNUMERIC(@cFieldName2) = 0
+                        SET @groupByFields = @groupByFields + CASE WHEN LEN(@groupByFields) > 0 THEN ', ' ELSE '' END + @cFieldName2
+
+                     IF ISNULL(@cFieldName3, '') <> '' AND @IsAggregate3 = 0 AND ISNUMERIC(@cFieldName3) = 0
+                         SET @groupByFields = @groupByFields + CASE WHEN LEN(@groupByFields) > 0 THEN ', ' ELSE '' END + @cFieldName3
+
+                     IF ISNULL(@cFieldName4, '') <> '' AND @IsAggregate4 = 0 AND ISNUMERIC(@cFieldName4) = 0
+                         SET @groupByFields = @groupByFields + CASE WHEN LEN(@groupByFields) > 0 THEN ', ' ELSE '' END + @cFieldName4
+
+                     -- If any valid fields found, append GROUP BY
+                     IF LEN(@groupByFields) > 0
+                         SET @cSQL = @cSQL + ' GROUP BY ' + @groupByFields
+                     --End Gh01
 
                      SET @cSQLParam = 
                      ' @cFieldName1 NVARCHAR(max),
@@ -356,8 +429,41 @@ SET CONCAT_NULL_YIELDS_NULL OFF
                      EXEC sp_ExecuteSQL @cSQL,@cSQLParam,@cFieldName1,@cFieldName2,@cFieldName3,@cFieldName4,
                         @cParams1 OUTPUT,@cParams2 OUTPUT,@cParams3 OUTPUT,@cParams4 OUTPUT,@cstorerkey,@cPickslipno,@nCartonno 
 
-                     IF ISNULL(@cNewLabelPrinter,'') = ''
-                        SET @cNewLabelPrinter = @cLabelPrinter
+                     IF ISNULL(@cNewLabelPrinter,'')= ''
+                     BEGIN
+                         SET @cNewLabelPrinter = @cLabelPrinter
+                        -- Check if printer is a group  
+                        IF EXISTS( SELECT TOP 1 1 FROM rdt.rdtPrinterGroup WITH (NOLOCK) WHERE PrinterGroup = @cLabelPrinter)  
+                        BEGIN  
+                           SET @cPrinterInGroup = ''  
+  
+                           -- Check if report print to a specific printer in group  
+                           SELECT @cPrinterInGroup = PrinterID  
+                           FROM rdt.rdtReportToPrinter WITH (NOLOCK)  
+                           WHERE Function_ID = @nFunc  
+                              AND StorerKey = @cStorerKey  
+                              AND ReportType = @cReportType  
+                              AND PrinterGroup = @cLabelPrinter  
+  
+                           IF @cPrinterInGroup = ''  
+                           BEGIN  
+                              -- Get default printer in the group  
+                              SELECT @cPrinterInGroup = PrinterID  
+                              FROM rdt.rdtPrinterGroup WITH (NOLOCK)  
+                              WHERE PrinterGroup = @cLabelPrinter  
+                                 AND DefaultPrinter = 1  
+  
+                              -- Check no default printer  
+                              IF @cPrinterInGroup = ''  
+                              BEGIN  
+                                 SET @n_Err = 1001454  
+                                 SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP') --Label Printer setup not done. Please setup the Label Printer. Function : isp_rePrint
+                                 GOTO EXIT_SP  
+                              END  
+                           END  
+                           SET @cNewLabelPrinter = @cPrinterInGroup
+                        END 
+                     END
 
                     EXEC  [WM].[lsp_WM_Print_Report]
                        @c_ModuleID = @c_ModuleID           
@@ -390,7 +496,7 @@ SET CONCAT_NULL_YIELDS_NULL OFF
                         SET @c_ErrMsg = @c_ErrMsg
                         GOTO EXIT_SP
                      END
-                  END
+	               END
                END
             END
 
@@ -405,29 +511,29 @@ SET CONCAT_NULL_YIELDS_NULL OFF
       BEGIN
          IF ISNULL(@cOrderKeyPrint,'') = ''
          BEGIN
-            --b2b
-            IF @cType <> 'pickslip' --(cc01)
-            BEGIN
-               SELECT @cPickSlipNo = PickSlipNo FROM api.appSection WITH (NOLOCK) WHERE userID = @cOriUserName AND scanNo = @cScanNo
-            END
-            ELSE
-            BEGIN
-               SET @cPickSlipNo = @cScanNo
-            END
+	         --b2b
+	         IF @cType <> 'pickslip' --(cc01)
+	         BEGIN
+		         SELECT @cPickSlipNo = PickSlipNo FROM api.appSection WITH (NOLOCK) WHERE userID = @cOriUserName AND scanNo = @cScanNo
+	         END
+	         ELSE
+	         BEGIN
+		         SET @cPickSlipNo = @cScanNo
+	         END
 
-            IF EXISTS (SELECT TOP 1 1 FROM packHeader WHERE pickslipNo = @cPickSlipNo AND STATUS = 9)
-            BEGIN
-               SET @nPrintPackList = 'Y'
-            END
+	         IF EXISTS (SELECT TOP 1 1 FROM packHeader WHERE pickslipNo = @cPickSlipNo AND STATUS = 9)
+	         BEGIN
+		         SET @nPrintPackList = 'Y'
+	         END
          END
          ELSE
          BEGIN
-            --b2c
-            SELECT @cPickSlipNo = PickSlipNo FROM packHeader WITH (NOLOCK) WHERE orderkey = @cOrderKeyPrint AND StorerKey = @cStorerKey
-            IF EXISTS (SELECT TOP 1 1 FROM packHeader WHERE pickslipNo = @cPickSlipNo AND OrderKey = @cOrderKeyPrint AND STATUS = 9)
-            BEGIN
-               SET @nPrintPackList = 'Y'
-            END
+	         --b2c
+	         SELECT @cPickSlipNo = PickSlipNo FROM packHeader WITH (NOLOCK) WHERE orderkey = @cOrderKeyPrint AND StorerKey = @cStorerKey
+	         IF EXISTS (SELECT TOP 1 1 FROM packHeader WHERE pickslipNo = @cPickSlipNo AND OrderKey = @cOrderKeyPrint AND STATUS = 9)
+	         BEGIN
+		         SET @nPrintPackList = 'Y'
+	         END
          END
 
          SELECT @cPickSlipNo AS picksliNo, @nPrintPackList '@nPrintPackList'
@@ -453,16 +559,16 @@ SET CONCAT_NULL_YIELDS_NULL OFF
                         WHERE Storerkey = @cStorerKey 
                            AND (reporttype = @cReporttype OR reporttype ='TPSHIPPLBL'))  
             BEGIN
-               IF ISNULL(@cLabelPrinter,'') = ''
-               BEGIN
+	            IF ISNULL(@cLabelPrinter,'') = ''
+	            BEGIN
                   SET @b_Success = 0
-                  SET @n_Err = 1001452
+                  SET @n_Err = 1001455
                   SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Label Printer setup not done. Please setup the Label Printer. Function : isp_rePrint'
 
                   GOTO EXIT_SP
-               END
-               ELSE
-               BEGIN
+	            END
+	            ELSE
+	            BEGIN
                   SELECT   @c_ReportID = WMR.reportid,
                         @c_PrintSource = CASE WHEN printtype = 'LOGIREPORT' THEN 'JReport' ELSE 'WMReport' END,
                         @cNewLabelPrinter = Defaultprinterid,
@@ -479,18 +585,81 @@ SET CONCAT_NULL_YIELDS_NULL OFF
                         and (WMRD.username = '' OR WMRD.username = @cUsername)
                         AND (ISNULL(ComputerName,'') ='' OR ComputerName = @cWorkstation)
 
+                  IF @@ROWCOUNT = 0
+                  BEGIN
+                     SET @b_Success = 0
+                     SET @n_Err = 1001456
+                     SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'No records found in WMReport. Function : isp_rePrint'
+                     GOTO EXIT_SP
+                  END
 
-                    SET  @cSQL =
-                     'SELECT  @cParams1='+ @cFieldName1  
-                              SELECT @cSQL= CASE WHEN ISNULL(@cFieldName2,'') <> ''THEN @cSQL +',@cParams2='  + @cFieldName2  ELSE  @cSQL END 
-                              SELECT @cSQL= CASE WHEN ISNULL(@cFieldName3,'') <> ''THEN @cSQL +',@cParams3='  + @cFieldName3  ELSE  @cSQL END
-                              SELECT @cSQL= CASE WHEN ISNULL(@cFieldName4,'') <> ''THEN @cSQL +',@cParams4='  + @cFieldName4  ELSE  @cSQL END
-                     SET @cSQL = @cSQL +' FROM Packdetail (NOLOCK)
-                        WHERE Storerkey = @cstorerkey
-                           AND Pickslipno = @cPickslipno
-                           AND CartonNO = @nCartonno
-                        GROUP BY Pickslipno,storerkey,cartonno,labelno
-                        '
+                  IF ISNULL(@cFieldName1,'') = ''
+                  BEGIN
+                     SET @b_Success = 0
+                     SET @n_Err = 1001457
+                     SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'No value found in table(WMReport); column(keyFieldname1), this column cannot be empty or null. Function : isp_rePrint'
+                     GOTO EXIT_SP
+                  END
+                  
+                  SET @IsAggregate1 = CASE WHEN ISNULL(@cFieldName1,'') <> '' AND (
+                                      UPPER(@cFieldName1) LIKE '%SUM(%' OR 
+                                      UPPER(@cFieldName1) LIKE '%AVG(%' OR
+                                      UPPER(@cFieldName1) LIKE '%COUNT(%' OR
+                                      UPPER(@cFieldName1) LIKE '%MIN(%' OR
+                                      UPPER(@cFieldName1) LIKE '%MAX(%' COLLATE SQL_Latin1_General_CP1_CS_AS
+                                  ) THEN 1 ELSE 0 END
+
+                  SET @IsAggregate2 = CASE WHEN ISNULL(@cFieldName2,'') <> '' AND (
+                                      UPPER(@cFieldName2) LIKE '%SUM(%' OR 
+                                      UPPER(@cFieldName2) LIKE '%AVG(%' OR
+                                      UPPER(@cFieldName2) LIKE '%COUNT(%' OR
+                                      UPPER(@cFieldName2) LIKE '%MIN(%' OR
+                                      UPPER(@cFieldName2) LIKE '%MAX(%' COLLATE SQL_Latin1_General_CP1_CS_AS
+                                  ) THEN 1 ELSE 0 END
+
+                  SET @IsAggregate3 = CASE WHEN ISNULL(@cFieldName3,'') <> '' AND (
+                                      UPPER(@cFieldName3) LIKE '%SUM(%' OR 
+                                      UPPER(@cFieldName3) LIKE '%AVG(%' OR
+                                      UPPER(@cFieldName3) LIKE '%COUNT(%' OR
+                                      UPPER(@cFieldName3) LIKE '%MIN(%' OR
+                                      UPPER(@cFieldName3) LIKE '%MAX(%' COLLATE SQL_Latin1_General_CP1_CS_AS
+                                  ) THEN 1 ELSE 0 END
+
+                  SET @IsAggregate4 = CASE WHEN ISNULL(@cFieldName4,'') <> '' AND (
+                                      UPPER(@cFieldName4) LIKE '%SUM(%' OR 
+                                      UPPER(@cFieldName4) LIKE '%AVG(%' OR
+                                      UPPER(@cFieldName4) LIKE '%COUNT(%' OR
+                                      UPPER(@cFieldName4) LIKE '%MIN(%' OR
+                                      UPPER(@cFieldName4) LIKE '%MAX(%' COLLATE SQL_Latin1_General_CP1_CS_AS
+                                  ) THEN 1 ELSE 0 END
+
+                  SET  @cSQL =
+                  'SELECT  @cParams1='+ @cFieldName1  
+                           SELECT @cSQL= CASE WHEN ISNULL(@cFieldName2,'') <> ''THEN @cSQL +',@cParams2='  + @cFieldName2  ELSE  @cSQL END 
+                           SELECT @cSQL= CASE WHEN ISNULL(@cFieldName3,'') <> ''THEN @cSQL +',@cParams3='  + @cFieldName3  ELSE  @cSQL END
+                           SELECT @cSQL= CASE WHEN ISNULL(@cFieldName4,'') <> ''THEN @cSQL +',@cParams4='  + @cFieldName4  ELSE  @cSQL END
+                  SET @cSQL = @cSQL +' FROM Packdetail (NOLOCK)
+                     WHERE Storerkey = @cstorerkey
+                        AND Pickslipno = @cPickslipno
+                        AND CartonNo = @nCartonno '
+
+                  SET @groupByFields = ''
+
+                  IF ISNULL(@cFieldName1, '') <> '' AND @IsAggregate1 = 0 AND ISNUMERIC(@cFieldName1) = 0
+                     SET @groupByFields = @groupByFields + CASE WHEN LEN(@groupByFields) > 0 THEN ', ' ELSE '' END + @cFieldName1
+
+                  IF ISNULL(@cFieldName2, '') <> '' AND @IsAggregate2 = 0 AND ISNUMERIC(@cFieldName2) = 0
+                     SET @groupByFields = @groupByFields + CASE WHEN LEN(@groupByFields) > 0 THEN ', ' ELSE '' END + @cFieldName2
+
+                  IF ISNULL(@cFieldName3, '') <> '' AND @IsAggregate3 = 0 AND ISNUMERIC(@cFieldName3) = 0
+                        SET @groupByFields = @groupByFields + CASE WHEN LEN(@groupByFields) > 0 THEN ', ' ELSE '' END + @cFieldName3
+
+                  IF ISNULL(@cFieldName4, '') <> '' AND @IsAggregate4 = 0 AND ISNUMERIC(@cFieldName4) = 0
+                        SET @groupByFields = @groupByFields + CASE WHEN LEN(@groupByFields) > 0 THEN ', ' ELSE '' END + @cFieldName4
+
+                  -- If any valid fields found, append GROUP BY
+                  IF LEN(@groupByFields) > 0
+                        SET @cSQL = @cSQL + ' GROUP BY ' + @groupByFields
 
                      SET @cSQLParam = 
                      '  @cFieldName1 NVARCHAR(max),
@@ -508,10 +677,43 @@ SET CONCAT_NULL_YIELDS_NULL OFF
                      EXEC sp_ExecuteSQL @cSQL,@cSQLParam,@cFieldName1,@cFieldName2,@cFieldName3,@cFieldName4,
                         @cParams1 OUTPUT,@cParams2 OUTPUT,@cParams3 OUTPUT,@cParams4 OUTPUT,@cstorerkey,@cPickslipno,@nCartonno 
 
-                     IF ISNULL(@cNewLabelPrinter,'') = ''
-                        SET @cNewLabelPrinter = @cLabelPrinter
+                     IF ISNULL(@cNewLabelPrinter,'')= ''
+                     BEGIN
+                         SET @cNewLabelPrinter = @cLabelPrinter
+                        -- Check if printer is a group  
+                        IF EXISTS( SELECT TOP 1 1 FROM rdt.rdtPrinterGroup WITH (NOLOCK) WHERE PrinterGroup = @cLabelPrinter)  
+                        BEGIN  
+                           SET @cPrinterInGroup = ''  
+  
+                           -- Check if report print to a specific printer in group  
+                           SELECT @cPrinterInGroup = PrinterID  
+                           FROM rdt.rdtReportToPrinter WITH (NOLOCK)  
+                           WHERE Function_ID = @nFunc  
+                              AND StorerKey = @cStorerKey  
+                              AND ReportType = @cReportType  
+                              AND PrinterGroup = @cLabelPrinter  
+  
+                           IF @cPrinterInGroup = ''  
+                           BEGIN  
+                              -- Get default printer in the group  
+                              SELECT @cPrinterInGroup = PrinterID  
+                              FROM rdt.rdtPrinterGroup WITH (NOLOCK)  
+                              WHERE PrinterGroup = @cLabelPrinter  
+                                 AND DefaultPrinter = 1  
+  
+                              -- Check no default printer  
+                              IF @cPrinterInGroup = ''  
+                              BEGIN  
+                                 SET @n_Err = 1001458  
+                                 SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP') --Label Printer setup not done. Please setup the Label Printer. Function : isp_rePrint
+                                 GOTO EXIT_SP  
+                              END  
+                           END  
+                           SET @cNewLabelPrinter = @cPrinterInGroup
+                        END 
+                     END
 
-                    EXEC  [WM].[lsp_WM_Print_Report]
+                     EXEC  [WM].[lsp_WM_Print_Report]
                        @c_ModuleID = @c_ModuleID           
                      , @c_ReportID = @c_ReportID         
                      , @c_Storerkey = @cStorerkey         
@@ -542,7 +744,7 @@ SET CONCAT_NULL_YIELDS_NULL OFF
                      SET @c_ErrMsg = @c_ErrMsg
                      GOTO EXIT_SP
                   END
-               END
+	            END
             END
          END
       END
@@ -557,23 +759,23 @@ SET CONCAT_NULL_YIELDS_NULL OFF
 
       IF @PrinterType = 'Paper' --(cc03)
       BEGIN
-         IF @nPrintPackList = 'Y'
+	      IF @nPrintPackList = 'Y'
          BEGIN
             IF EXISTS (SELECT  TOP 1 1 FROM dbo.WMReport WMR WITH (NOLOCK) 
                         JOIN WMReportdetail WMRD (NOLOCK) ON WMR.reportid = WMRD.reportid
                         WHERE Storerkey = @cStorerKey 
                         AND (reporttype = @cReporttype OR reporttype ='TPPACKLIST'))  
             BEGIN
-               IF ISNULL(@cPaperPrinter,'') = ''
-               BEGIN
-                  SET @b_Success = 0
-                  SET @n_Err = 1001453
+	            IF ISNULL(@cPaperPrinter,'') = ''
+	            BEGIN
+		            SET @b_Success = 0
+                  SET @n_Err = 1001459
                   SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Paper Printer setup not done. Please setup the Paper Printer. Function : isp_rePrint'
 
                   GOTO EXIT_SP
-               END
-               ELSE
-               BEGIN
+	            END
+	            ELSE
+	            BEGIN
                   SELECT   @c_ReportID = WMR.reportid,
                      @c_PrintSource = CASE WHEN printtype='LOGIREPORT' THEN 'JReport' ELSE 'WMReport' END,
                      @cNewPaperPrinter = Defaultprinterid,
@@ -590,19 +792,82 @@ SET CONCAT_NULL_YIELDS_NULL OFF
                      and (WMRD.username = '' OR WMRD.username = @cUsername)
                      AND (ISNULL(ComputerName,'') ='' OR ComputerName= @cWorkstation)
 
+                  IF @@ROWCOUNT = 0
+                  BEGIN
+                     SET @b_Success = 0
+                     SET @n_Err = 1001460
+                     SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'No records found in WMReport. Function : isp_rePrint'
+                     GOTO EXIT_SP
+                  END
 
-                    SET  @cSQL =
-                     'SELECT  @cParams1='+ @cFieldName1  
-                              SELECT @cSQL= CASE WHEN ISNULL(@cFieldName2,'')<>''THEN @cSQL +',@cParams2='  + @cFieldName2  ELSE  @cSQL END 
-                              SELECT @cSQL= CASE WHEN ISNULL(@cFieldName3,'')<>''THEN @cSQL +',@cParams3='  + @cFieldName3  ELSE  @cSQL END
-                              SELECT @cSQL= CASE WHEN ISNULL(@cFieldName4,'')<>''THEN @cSQL +',@cParams4='  + @cFieldName4  ELSE  @cSQL END
-                     SET @cSQL = @cSQL +' FROM Packdetail (NOLOCK)
-                        WHERE Storerkey = @cstorerkey
-                           AND Pickslipno = @cPickslipno
-                           AND CartonNO = @nCartonno
-                        GROUP BY Pickslipno,storerkey,cartonno,labelno
-                        '
-                  
+                  IF ISNULL(@cFieldName1,'') = ''
+                  BEGIN
+                     SET @b_Success = 0
+                     SET @n_Err = 1001461
+                     SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'No value found in table(WMReport); column(keyFieldname1), this column cannot be empty or null. Function : isp_rePrint'
+                     GOTO EXIT_SP
+                  END
+
+                  SET @IsAggregate1 = CASE WHEN ISNULL(@cFieldName1,'') <> '' AND (
+                                      UPPER(@cFieldName1) LIKE '%SUM(%' OR 
+                                      UPPER(@cFieldName1) LIKE '%AVG(%' OR
+                                      UPPER(@cFieldName1) LIKE '%COUNT(%' OR
+                                      UPPER(@cFieldName1) LIKE '%MIN(%' OR
+                                      UPPER(@cFieldName1) LIKE '%MAX(%' COLLATE SQL_Latin1_General_CP1_CS_AS
+                                  ) THEN 1 ELSE 0 END
+
+                  SET @IsAggregate2 = CASE WHEN ISNULL(@cFieldName2,'') <> '' AND (
+                                      UPPER(@cFieldName2) LIKE '%SUM(%' OR 
+                                      UPPER(@cFieldName2) LIKE '%AVG(%' OR
+                                      UPPER(@cFieldName2) LIKE '%COUNT(%' OR
+                                      UPPER(@cFieldName2) LIKE '%MIN(%' OR
+                                      UPPER(@cFieldName2) LIKE '%MAX(%' COLLATE SQL_Latin1_General_CP1_CS_AS
+                                  ) THEN 1 ELSE 0 END
+
+                  SET @IsAggregate3 = CASE WHEN ISNULL(@cFieldName3,'') <> '' AND (
+                                      UPPER(@cFieldName3) LIKE '%SUM(%' OR 
+                                      UPPER(@cFieldName3) LIKE '%AVG(%' OR
+                                      UPPER(@cFieldName3) LIKE '%COUNT(%' OR
+                                      UPPER(@cFieldName3) LIKE '%MIN(%' OR
+                                      UPPER(@cFieldName3) LIKE '%MAX(%' COLLATE SQL_Latin1_General_CP1_CS_AS
+                                  ) THEN 1 ELSE 0 END
+
+                  SET @IsAggregate4 = CASE WHEN ISNULL(@cFieldName4,'') <> '' AND (
+                                      UPPER(@cFieldName4) LIKE '%SUM(%' OR 
+                                      UPPER(@cFieldName4) LIKE '%AVG(%' OR
+                                      UPPER(@cFieldName4) LIKE '%COUNT(%' OR
+                                      UPPER(@cFieldName4) LIKE '%MIN(%' OR
+                                      UPPER(@cFieldName4) LIKE '%MAX(%' COLLATE SQL_Latin1_General_CP1_CS_AS
+                                  ) THEN 1 ELSE 0 END
+ 
+                  SET  @cSQL =
+                  'SELECT  @cParams1='+ @cFieldName1  
+                           SELECT @cSQL= CASE WHEN ISNULL(@cFieldName2,'')<>''THEN @cSQL +',@cParams2='  + @cFieldName2  ELSE  @cSQL END 
+                           SELECT @cSQL= CASE WHEN ISNULL(@cFieldName3,'')<>''THEN @cSQL +',@cParams3='  + @cFieldName3  ELSE  @cSQL END
+                           SELECT @cSQL= CASE WHEN ISNULL(@cFieldName4,'')<>''THEN @cSQL +',@cParams4='  + @cFieldName4  ELSE  @cSQL END
+                  SET @cSQL = @cSQL +' FROM Packdetail (NOLOCK)
+                     WHERE Storerkey = @cstorerkey
+                        AND Pickslipno = @cPickslipno
+                        AND CartonNo = @nCartonno '
+
+                  SET @groupByFields = ''
+
+                  IF ISNULL(@cFieldName1, '') <> '' AND @IsAggregate1 = 0 AND ISNUMERIC(@cFieldName1) = 0
+                     SET @groupByFields = @groupByFields + CASE WHEN LEN(@groupByFields) > 0 THEN ', ' ELSE '' END + @cFieldName1
+
+                  IF ISNULL(@cFieldName2, '') <> '' AND @IsAggregate2 = 0 AND ISNUMERIC(@cFieldName2) = 0
+                     SET @groupByFields = @groupByFields + CASE WHEN LEN(@groupByFields) > 0 THEN ', ' ELSE '' END + @cFieldName2
+
+                  IF ISNULL(@cFieldName3, '') <> '' AND @IsAggregate3 = 0 AND ISNUMERIC(@cFieldName3) = 0
+                        SET @groupByFields = @groupByFields + CASE WHEN LEN(@groupByFields) > 0 THEN ', ' ELSE '' END + @cFieldName3
+
+                  IF ISNULL(@cFieldName4, '') <> '' AND @IsAggregate4 = 0 AND ISNUMERIC(@cFieldName4) = 0
+                        SET @groupByFields = @groupByFields + CASE WHEN LEN(@groupByFields) > 0 THEN ', ' ELSE '' END + @cFieldName4
+
+                  -- If any valid fields found, append GROUP BY
+                  IF LEN(@groupByFields) > 0
+                        SET @cSQL = @cSQL + ' GROUP BY ' + @groupByFields
+
                   SET @cSQLParam = 
                      '  @cFieldName1 NVARCHAR(max),
                         @cFieldName2 NVARCHAR(max),
@@ -619,8 +884,41 @@ SET CONCAT_NULL_YIELDS_NULL OFF
                      EXEC sp_ExecuteSQL @cSQL,@cSQLParam,@cFieldName1,@cFieldName2,@cFieldName3,@cFieldName4,
                         @cParams1 OUTPUT,@cParams2 OUTPUT,@cParams3 OUTPUT,@cParams4 OUTPUT,@cstorerkey,@cPickslipno,@nCartonno 
 
-                 IF ISNULL(@cNewPaperPrinter,'')= ''
+                  IF ISNULL(@cNewPaperPrinter,'')= ''
+                  BEGIN
                      SET @cNewPaperPrinter = @cPaperPrinter
+                     -- Check if printer is a group  
+                     IF EXISTS( SELECT TOP 1 1 FROM rdt.rdtPrinterGroup WITH (NOLOCK) WHERE PrinterGroup = @cPaperPrinter)  
+                     BEGIN  
+                        SET @cPrinterInGroup = ''  
+  
+                        -- Check if report print to a specific printer in group  
+                        SELECT @cPrinterInGroup = PrinterID  
+                        FROM rdt.rdtReportToPrinter WITH (NOLOCK)  
+                        WHERE Function_ID = @nFunc  
+                           AND StorerKey = @cStorerKey  
+                           AND ReportType = @cReportType  
+                           AND PrinterGroup = @cPaperPrinter  
+  
+                        IF @cPrinterInGroup = ''  
+                        BEGIN  
+                           -- Get default printer in the group  
+                           SELECT @cPrinterInGroup = PrinterID  
+                           FROM rdt.rdtPrinterGroup WITH (NOLOCK)  
+                           WHERE PrinterGroup = @cPaperPrinter  
+                              AND DefaultPrinter = 1  
+  
+                           -- Check no default printer  
+                           IF @cPrinterInGroup = ''  
+                           BEGIN  
+                              SET @n_Err = 1001462  
+                              SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP') --Paper Printer setup not done. Please setup the Paper Printer. Function : isp_rePrint  
+                              GOTO EXIT_SP
+                           END  
+                        END  
+                        SET @cNewPaperPrinter = @cPrinterInGroup
+                     END
+                  END
 
 
                   EXEC  [WM].[lsp_WM_Print_Report]
@@ -653,7 +951,7 @@ SET CONCAT_NULL_YIELDS_NULL OFF
                      SET @c_ErrMsg = @c_ErrMsg
                      GOTO EXIT_SP
                   END
-               END
+	            END
             END
          END
       END
@@ -679,4 +977,3 @@ SET ANSI_NULLS ON
 GO
 GRANT EXECUTE ON api.isp_rePrint TO NSQL
 GO
-

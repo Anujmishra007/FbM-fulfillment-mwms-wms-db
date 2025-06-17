@@ -9,7 +9,7 @@ GO
 /* Copyright      : Maersk                                                    */
 /*                                                                            */
 /* Date         Rev  Author     Purposes                                      */
-/* 2024-12-23    1.0  yeekung   FCR_1822 Created                              */
+/* 2023-05-17   1.0  yeekung   FCR_1822 Created                               */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [API].[isp_TPS_DecodeSP07] (
@@ -91,8 +91,8 @@ BEGIN
 
       IF SUBSTRING(@cBarcode,1,1) NOT IN ('Y','y') OR LEN(@cBarcode) <> 18
       BEGIN
-         SET @n_Err = 1009999
-         SET @c_ErrMsg = CAST(@n_Err AS NVARCHAR(20))+'Err SerialNO format'
+         SET @n_Err = 1000651
+         SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP') -- 'Error SerialNo format. Function : isp_TPS_DecodeSP07'
 
          SET @jResult = (SELECT '' AS SKU
          FOR JSON PATH,INCLUDE_NULL_VALUES )    
@@ -119,8 +119,8 @@ BEGIN
                      AND ISNULL(orderkey,'')=''
                      AND status='1')
          BEGIN
-            SET @n_Err = 1000101
-	         SET @c_ErrMsg = CAST(@n_Err AS NVARCHAR(20))+'Err Insert Duplicate SerialNO'
+            SET @n_Err = 1000652
+	         SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP') -- 'Error Insert Duplicate SerialNo. Function : isp_TPS_DecodeSP07'
 
             SET @jResult = (SELECT '' AS SKU
             FOR JSON PATH,INCLUDE_NULL_VALUES )    
@@ -167,8 +167,8 @@ BEGIN
                WHERE SerialNo = @cBarcode
                AND storerKey = @cStorerKey )
          BEGIN
-            SET @n_Err = 1000101
-	         SET @c_ErrMsg = CAST(@n_Err AS NVARCHAR(20))+'Err Insert Duplicate SerialNO'
+            SET @n_Err = 1000653
+	         SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP') -- 'Error Insert Duplicate SerialNo. Function : isp_TPS_DecodeSP07'
 
             SET @jResult = (SELECT '' AS SKU
             FOR JSON PATH,INCLUDE_NULL_VALUES )    

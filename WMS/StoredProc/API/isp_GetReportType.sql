@@ -5,10 +5,12 @@ GO
 
 /******************************************************************************/
 /* Store procedure: isp_GetReportType                                         */
-/* Copyright      : LFLogistics                                               */
+/* Copyright      : Maersk                                                    */
 /*                                                                            */
 /* Date         Rev  Author     Purposes                                      */
 /* 2024-02-09   1.0  YeeKung    TPS-821 Created                               */
+/* 2024-11-06   1.1  YeeKung    TPS-969 Add Facility (yeekung01)              */
+/* 2025-02-14   1.2  yeekung    TPS-995 Change Error Message (yeekung02)      */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [API].[isp_GetReportType] (
@@ -31,7 +33,6 @@ BEGIN
       @cLangCode        NVARCHAR( 3),
       @nInputKey        INT,
       @cScanNoType      NVARCHAR( 30),
-
       @cStorerKey       NVARCHAR( 15),
 	   @cFacility        NVARCHAR( 5),
 	   @nFunc            NVARCHAR( 5),
@@ -70,51 +71,54 @@ BEGIN
    IF @PrinterType = 'Label'
    BEGIN
 	   IF NOT EXISTS( SELECT  1 FROM dbo.WMReport WMR WITH (NOLOCK) 
-                     JOIN WMReportdetail WMRD (NOLOCK) ON WMR.reportid = WMRD.reportid
+                     JOIN WMReportdetail WMRD (NOLOCK) ON WMR.ReportID = WMRD.ReportID
                      WHERE Storerkey = @cStorerKey 
                         AND ModuleID ='TPPack'
-                        AND ispaperprinter <> 'Y')  
+                        AND IsPaperPrinter <> 'Y')  
       BEGIN
          SET @b_Success = 0
-         SET @n_Err = 175628
-         SET @c_ErrMsg = rdt.rdtgetmessage( @n_Err, @cLangCode, 'DSP')--'Device ID setup not done. Please setup the Device ID. Funtion : isp_GetReportType'
-	   END
+         SET @n_Err = 1001201
+         SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'no LabelReport on this storer : isp_GetReportType'
+         GOTO EXIT_SP  
+      END
       ELSE
       BEGIN
          SET @jResult =(SELECT reporttype
-                     FROM dbo.WMReport WMR WITH (NOLOCK) 
-                     JOIN WMReportdetail WMRD (NOLOCK) ON WMR.reportid = WMRD.reportid
-                     WHERE Storerkey = @cStorerKey 
-                     AND ModuleID ='TPPack'
-                     AND ispaperprinter <> 'Y' 
-                     group by reporttype
-         FOR JSON AUTO , INCLUDE_NULL_VALUES)
+                        FROM dbo.WMReport WMR WITH (NOLOCK) 
+                        JOIN WMReportdetail WMRD (NOLOCK) ON WMR.ReportID = WMRD.ReportID
+                        WHERE Storerkey = @cStorerKey 
+                           AND ModuleID ='TPPack'
+                           AND IsPaperPrinter <> 'Y' 
+                           AND (WMRD.Facility = '' OR WMRD.Facility = @cFacility) 
+                        GROUP BY reporttype
+                        FOR JSON AUTO , INCLUDE_NULL_VALUES)
       END
    END
 
    IF @PrinterType = 'Paper'
    BEGIN
 	   IF NOT EXISTS( SELECT  1 FROM dbo.WMReport WMR WITH (NOLOCK) 
-                     JOIN WMReportdetail WMRD (NOLOCK) ON WMR.reportid = WMRD.reportid
+                     JOIN WMReportdetail WMRD (NOLOCK)  ON WMR.ReportID = WMRD.ReportID
                      WHERE Storerkey = @cStorerKey 
                         AND ModuleID ='TPPack'
-                        AND ispaperprinter = 'Y')  
+                        AND IsPaperPrinter = 'Y')  
       BEGIN
          SET @b_Success = 0
-         SET @n_Err = 175628
-         SET @c_ErrMsg = rdt.rdtgetmessage( @n_Err, @cLangCode, 'DSP')--'Device ID setup not done. Please setup the Device ID. Funtion : isp_GetReportType'
-	   END
+         SET @n_Err = 1001202
+         SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'no PaperReport on this storer : isp_GetReportType'
+         GOTO EXIT_SP    
+      END
       ELSE
       BEGIN
          SET @jResult =(SELECT reporttype
-                     FROM dbo.WMReport WMR WITH (NOLOCK) 
-                     JOIN WMReportdetail WMRD (NOLOCK) ON WMR.reportid = WMRD.reportid
-                     WHERE Storerkey = @cStorerKey 
-                     AND ModuleID ='TPPack'
-                     AND ispaperprinter = 'Y' 
-                     group by reporttype
-         
-         FOR JSON AUTO , INCLUDE_NULL_VALUES)
+                        FROM dbo.WMReport WMR WITH (NOLOCK) 
+                        JOIN WMReportdetail WMRD (NOLOCK) ON WMR.ReportID = WMRD.ReportID
+                        WHERE Storerkey = @cStorerKey 
+                           AND ModuleID ='TPPack'
+                           AND IsPaperPrinter = 'Y' 
+                           AND (WMRD.Facility = '' OR WMRD.Facility = @cFacility) 
+                        GROUP BY reporttype
+                        FOR JSON AUTO , INCLUDE_NULL_VALUES)
       END
    END
 
@@ -136,7 +140,7 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS ON
 GO
-GRANT EXECUTE ON api.isp_GetReportType TO NSQL
+GRANT EXECUTE ON API.isp_GetReportType TO NSQL
 GO
 
 

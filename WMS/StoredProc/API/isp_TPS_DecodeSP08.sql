@@ -63,8 +63,8 @@ BEGIN
    BEGIN
       IF LEFT(@cBarcode,2) <> '69'
       BEGIN
-         SET @n_Err = 1000651
-	      SET @c_ErrMsg =  API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'1000651 Err Scan UPC Barcode : isp_TPS_DecodeSP08'  
+         SET @n_Err = 1001501
+	      SET @c_ErrMsg =  API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Invalid Barcode Format Prefix (69) not found. Function : isp_TPS_DecodeSP08'  
 
          SET @jResult = (SELECT '' AS SKU
          FOR JSON PATH,INCLUDE_NULL_VALUES )    
@@ -82,8 +82,8 @@ BEGIN
    END
    ELSE
    BEGIN
-      SET @n_Err = 1000652
-	   SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'1000652 Err Must Scan UPC Barcode : isp_TPS_DecodeSP08'  
+      SET @n_Err = 1001502
+	   SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Invalid Barcode. Record not found. Function : isp_TPS_DecodeSP08'  
 
       SET @jResult = (SELECT '' AS SKU
       FOR JSON PATH,INCLUDE_NULL_VALUES )    
