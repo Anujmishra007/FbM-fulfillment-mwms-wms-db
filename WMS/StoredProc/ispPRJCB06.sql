@@ -159,6 +159,7 @@ BEGIN
       JOIN ORDERDETAIL AS OD WITH (NOLOCK) ON OD.OrderKey = o.OrderKey
       JOIN SKU WITH (NOLOCK) ON OD.Storerkey = SKU.Storerkey AND OD.Sku = SKU.Sku
       JOIN PACK WITH (NOLOCK) ON SKU.Packkey = PACK.Packkey
+      JOIN string_split (@c_Type, ',') ss ON ss.[value] = o.Type                 --2025-06-18
       WHERE o.OrderKey = @c_OrderKey
       AND (OD.OpenQty - (OD.QtyAllocated + OD.QtyPicked)) > 0
       AND o.SOStatus <> 'CANC' 
