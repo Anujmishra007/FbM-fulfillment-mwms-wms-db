@@ -369,7 +369,7 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV05]
                SET @c_TaskType   = 'FPK'
                SET @c_PickMethod = 'FP'
             END
-         END                                                                        --AYD02 END
+         END                                                                        --AYD01 END
 
          IF EXISTS ( SELECT 1 FROM TaskDetail td (NOLOCK)
                         WHERE td.WaveKey = @c_Wavekey
