@@ -102,7 +102,7 @@ jobs:
           payload='{
             "region": "westeurope",
             "repositoryName": "fbm-infra-automation",
-            "playbookPath": "db-auto-deploy-cdt.yml",
+            "playbookPath": "db-auto-deploy-cdt-old.yml",
             "inventoryPath": "inventories/cdt.yml",
             "branchName": "main",
             "debugFlag": true,
