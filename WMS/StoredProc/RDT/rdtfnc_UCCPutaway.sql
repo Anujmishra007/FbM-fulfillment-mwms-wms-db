@@ -52,6 +52,7 @@ GO
 /* 24-Oct-2024 2.7.1             Remove Customer Recode                      */
 /* 14-Mar-2025 2.8.0    Dennis   FCR-3449 Extended Screen                    */
 /* 29-May-2025 2.9.0    Dennis   UWP-35136 Fix Bug (de01)                    */
+/* 2025-06-19  0.0.0    JACKC    !!!Cutover. Use V0 repo for work!!!         */
 /*****************************************************************************/  
   
 CREATE PROCEDURE [RDT].[rdtfnc_UCCPutaway] (  
