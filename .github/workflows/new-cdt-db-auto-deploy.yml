@@ -1,26 +1,14 @@
-name: NEW Deploy to CDT DB Via TAGs
+name: Auto Deploy to all CDT DBs
 
 on:
-  
-  workflow_dispatch:
-    inputs:
-      name:
-        type: choice
-        description: country 
-        options: 
-        - DEV
-        - GLO
-        - NLD
-        - GBR
-        - USA4DNJ
-        - ALL
-      message:
-        required: true
+  pull_request:
+    types:
+      - closed
 
 
 jobs:
   deploy-cdt:
-    #if: github.event.pull_request.merged == true && github.base_ref == 'main'
+    if: github.event.pull_request.merged == true && github.base_ref == 'main'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
