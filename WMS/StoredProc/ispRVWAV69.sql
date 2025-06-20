@@ -14,7 +14,7 @@ GO
 /*                                                                       */
 /* Called By:                                                            */
 /*                                                                       */
-/* Version: 1.1                                                          */
+/* Version: 1.2                                                          */
 /*                                                                       */
 /* Data Modifications:                                                   */
 /*                                                                       */
@@ -24,6 +24,8 @@ GO
 /* 11-Jun-2025  Wan01   1.1   FCR-2902 - MLP Enhancement - Allocate      */
 /*                            Case/Shrink at BULK, Demand Replenishment  */
 /*                            to DPP.                                    */
+/* 20-Jun-2025  Wan02   1.2   UWP-36410 -MLP Link Repln Task ID in       */
+/*                            pickDetail for FCR-2902                    */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[ispRVWAV69]
    @c_Wavekey  NVARCHAR(10)
@@ -61,7 +63,10 @@ BEGIN
          , @c_GetOrderkey   NVARCHAR(10)
          , @c_GetStorerkey  NVARCHAR(15)
          , @c_PickdetailKey   NVARCHAR(10) = ''                                     --(Wan01)
-
+         , @c_TaskType        NVARCHAR(10) = ''                                     --(Wan01)
+         , @c_Message03       NVARCHAR(10) = ''                                     --(Wan01)
+         , @c_FromLoc         NVARCHAR(10) = ''                                     --(Wan01)
+         , @c_FromID          NVARCHAR(10) = ''                                     --(Wan01)
          , @cur_DelPick       CURSOR                                                --(Wan01)
          , @cur_DelTask       CURSOR                                                --(Wan01)
 
@@ -69,10 +74,10 @@ BEGIN
    IF @n_continue = 1 OR @n_continue = 2
    BEGIN
       IF NOT EXISTS (  SELECT 1
-                       FROM TaskDetail TD (NOLOCK)
+                       FROM  TaskDetail TD (NOLOCK)
                        WHERE TD.WaveKey = @c_Wavekey
                        AND   TD.SourceType IN ( 'ispRLWAV69' )
-                       AND   TD.TaskType IN ( 'VNAOUT', 'FCP', 'FPK' )              --(Wan01)
+                       AND   TD.TaskType IN ( 'VNAOUT', 'FCP', 'FPK' )              --(Wan01)  
                        AND   TD.[Status] NOT IN ('X','9')                           --(Wan01)
                     )  
       BEGIN
@@ -151,18 +156,6 @@ BEGIN
    --Remove taskdetailkey from pickdetail of the wave
    IF @n_continue = 1 OR @n_continue = 2                                            --(Wan01) - START
    BEGIN
-      SELECT pd.Pickdetailkey 
-      FROM  Pickdetail pd (NOLOCK)
-      JOIN  WaveDetail wd (NOLOCK) ON wd.Orderkey = pd.Orderkey
-      JOIN  TaskDetail td (NOLOCK) ON  td.TaskDetailKey = pd.TaskDetailkey
-                                   AND td.Wavekey = wd.Wavekey
-                                   AND td.Orderkey= pd.Orderkey
-      WHERE wd.WaveKey = @c_Wavekey
-      AND   td.SourceType IN ( 'ispRLWAV69' )
-      AND   td.TaskType IN ( 'VNAOUT', 'FCP', 'FPK' )
-      AND   td.[Status] IN ('Q', '0', 'H')
-      ORDER BY pd.Pickdetailkey 
-
       SET @cur_DelPick = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
       SELECT pd.Pickdetailkey 
       FROM  Pickdetail pd (NOLOCK)
@@ -212,20 +205,45 @@ BEGIN
    IF @n_continue = 1 OR @n_continue = 2
    BEGIN
       SET @cur_DelTask = CURSOR FAST_FORWARD READ_ONLY FOR
-      SELECT td.Taskdetailkey 
+      SELECT td.Taskdetailkey
+            ,td.TaskType
+            ,td.Storerkey
+            ,td.Message03
+            ,td.FromLoc
+            ,td.FromID
       FROM TaskDetail td (NOLOCK)
       WHERE td.WaveKey = @c_Wavekey
       AND   td.SourceType IN ( 'ispRLWAV69' )
       AND   td.TaskType IN ( 'VNAOUT', 'FCP', 'FPK' )
       AND   td.[Status] IN ('Q', '0', 'H')
-      ORDER BY td.Taskdetailkey 
+      ORDER BY td.Taskdetailkey DESC                                                --(Wan02)  
 
       OPEN @cur_DelTask
 
       FETCH NEXT FROM @cur_DelTask INTO @c_TaskdetailKey
+                                       ,@c_TaskType
+                                       ,@c_Storerkey
+                                       ,@c_Message03
+                                       ,@c_FromLoc
+                                       ,@c_FromID
 
       WHILE @@FETCH_STATUS <> -1 AND @n_Continue = 1
-      BEGIN 
+      BEGIN  
+         IF @c_TaskType IN ('VNAOUT', 'FPK') AND @c_Message03 = 'RPF'               --(Wan02) - START 
+         BEGIN
+            IF EXISTS ( SELECT 1 FROM TASKDETAIL td (NOLOCK) 
+                        WHERE td.Storerkey = @c_Storerkey
+                        AND   td.TaskType = 'FCP'
+                        AND   td.UOM IN ('2','3')
+                        AND   td.SourceType = 'ispRLWAV69'
+                        AND   td.RefTaskKey = @c_Taskdetailkey
+                        AND   td.[Status] NOT IN ('X','9')
+                      )
+            BEGIN
+               GOTO NEXT_TASK
+            END
+         END                                                                        --(Wan02) - END 
+
          DELETE TaskDetail WITH (ROWLOCK)
          WHERE TaskDetail.WaveKey = @c_Wavekey
          --AND   TaskDetail.SourceType IN ( 'ispRLWAV69' )                             
@@ -244,7 +262,13 @@ BEGIN
                              + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
          END
 
+         NEXT_TASK:                                                                 --(Wan02)  
          FETCH NEXT FROM @cur_DelTask INTO @c_TaskdetailKey
+                                          ,@c_TaskType
+                                          ,@c_Storerkey
+                                          ,@c_Message03
+                                          ,@c_FromLoc
+                                          ,@c_FromID
       END
       CLOSE @cur_DelTask
       DEALLOCATE @cur_DelTask
