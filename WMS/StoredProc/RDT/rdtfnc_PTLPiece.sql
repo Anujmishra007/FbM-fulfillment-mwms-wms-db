@@ -24,6 +24,7 @@ GO
 /* 2022-12-15 1.9  Ung        WMS-21056 Allow multi sorter, if not use light  */
 /* 2022-11-30 2.0  Ung        WMS-21170 Add DynamicSlot that need carton ID   */
 /* 2024-11-01 2.1  JHU151     FCR-650 sorting for inbound                     */
+/* 2025-06-23 0.0  JackC      !!!Cutover. Use V0 repo for work!!!             */
 /******************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdtfnc_PTLPiece (
