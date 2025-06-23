@@ -1,5 +1,3 @@
-# FbM Devops autoImporter job CODEOWNERS-FbM-4119
-#* @Maersk-Global/fbm-production-team-fbmbackendcommitters
-** @Maersk-Global/FbM-CoreWMS-codeowners @Maersk-Global/fbm-rdt-backend @Maersk-Global/FbM-ReportnLabel @Cap-CJ
+** @Maersk-Global/FbM-CoreWMS-codeowners @Maersk-Global/fbm-rdt-backend @Maersk-Global/FbM-ReportnLabel @Cap-CJ @Maersk-Global/fbm-wms-dba @Maersk-Global/FbM-MWMS-IO
 .github/** @Maersk-Global/fbm-sre
 k8s_manifests/** @Maersk-Global/fbm-sre
