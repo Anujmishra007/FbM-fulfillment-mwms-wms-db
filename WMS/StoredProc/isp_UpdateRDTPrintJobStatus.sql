@@ -33,7 +33,8 @@ GO
 /*                            DevOps combine Script                     */
 /* 2023-07-07  Wan05    1.6   PAC-15:Ecom Packing | Print Packing Report*/
 /*                            - Backend                                 */
-/* 2023-10-23  Wan06    1.7   Get Print Over Internet Printing          */ 
+/* 2023-10-23  Wan06    1.7   Get Print Over Internet Printing          */
+/* 2025-06-03  YLI237   1.8   UWP-35459 GLOWMS Bartender CloudPrint     */ 
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_UpdateRDTPrintJobStatus]
       @n_JobID          BIGINT
@@ -64,6 +65,13 @@ BEGIN
          , @c_CloudClientPrinterID     NVARCHAR(30)   = ''              --(Wan04)
          , @c_CloudClientPrinterName   NVARCHAR(128)  = ''              --(Wan04)
          , @c_PrintBy                  NVARCHAR(128)  = ''              --(Wan04)
+		   ,   @c_IniFilePath			   NVARCHAR(100)  = ''  
+         ,@c_RemoteEndPoint            NVARCHAR(50)   = ''   
+		   , @c_IP					   NVARCHAR(20)  = ''        
+		   , @c_PORT                     NVARCHAR(5)   = ''   
+		   , @n_POS                       INT            = 0 
+
+
 
    SET @n_StartTCnt = @@TRANCOUNT
    SET @n_Continue = 1
@@ -144,6 +152,7 @@ BEGIN
                DROP TABLE #PreviewPDF
             END
          END
+
  
          INSERT INTO RDT.RDTPRINTJOB_LOG
          (  [JobId]         
@@ -285,20 +294,71 @@ BEGIN
 
       IF @n_PrintOverInternet = 1
       BEGIN
-         EXEC dbo.isp_SubmitPrintJobToCloudPrint
-            @c_DataProcess    = 'CloudPrint'
-         ,  @c_Storerkey      = @c_Storerkey   
-         ,  @c_PrintType      = @c_JobType
-         ,  @c_PrinterName    = @c_CloudClientPrinterName
-         ,  @c_IP             = N''
-         ,  @c_Port           = N''
-         ,  @c_DocumentType   = ''
-         ,  @c_DocumentId     = N''            
-         ,  @c_JobID          = @n_JobID
-         ,  @c_Data           = @c_PrintData
-         ,  @b_Success        = @b_Success      OUTPUT  
-         ,  @n_Err            = @n_Err          OUTPUT  
-         ,  @c_ErrMsg         = @c_ErrMsg       OUTPUT  
+         -- UPDATE Start
+         IF @c_JobType = 'BARTENDER'  
+	      BEGIN
+               SELECT TOP 1  
+               @c_IniFilePath = c.UDF01          
+               , @c_RemoteEndPoint = c.Long  
+            FROM CODELKUP c WITH (NOLOCK)  
+               JOIN rdt.RDTPrinter prt WITH (NOLOCK) ON prt.PrinterGroup = C.StorerKey  
+            WHERE  ListName = 'TCPClient'  
+               AND c.Short = 'BARTENDER'  
+			   and c.code = 'BAR'
+			   and prt.CloudPrintClientID = @c_CloudClientPrinterID
+               AND c.Storerkey IN ( @c_Storerkey)  
+            IF ISNULL(RTRIM(@c_RemoteEndPoint), '') = ''          
+        BEGIN  
+               SELECT TOP 1  
+                  @c_IniFilePath = c.UDF01          
+                  , @c_RemoteEndPoint = c.Long  
+               FROM CODELKUP c WITH (NOLOCK)  
+               WHERE  ListName = 'TCPClient'  
+                  AND c.Short = 'BARTENDER' 
+				  and c.code = 'BAR'
+                  AND c.Storerkey IN ( @c_Storerkey,'')  
+            END
+
+            SET @n_POS = CHARINDEX(':', @c_RemoteEndPoint,1)
+
+            IF @n_POS > 0
+            BEGIN
+               SET @c_IP   = RTRIM(SUBSTRING(@c_RemoteEndPoint, 1, @n_POS - 1))
+               SET @c_Port = LTRIM(SUBSTRING(@c_RemoteEndPoint, @n_POS + 1, LEN(@c_RemoteEndPoint)- @n_POS))
+            END
+            EXEC dbo.isp_SubmitPrintJobToCloudPrint
+               @c_DataProcess    = 'CloudPrint'
+            ,  @c_Storerkey      = @c_Storerkey   
+            ,  @c_PrintType      = @c_JobType
+            ,  @c_PrinterName    = @c_CloudClientPrinterName
+            ,  @c_IP             = @c_IP
+            ,  @c_Port           = @c_Port
+            ,  @c_DocumentType   = ''
+            ,  @c_DocumentId     = N''            
+            ,  @c_JobID          = @n_JobID
+            ,  @c_Data           = @c_PrintData
+            ,  @b_Success        = @b_Success      OUTPUT  
+            ,  @n_Err            = @n_Err          OUTPUT  
+            ,  @c_ErrMsg         = @c_ErrMsg       OUTPUT
+         END
+         ELSE
+         -- update end  
+         BEGIN
+            EXEC dbo.isp_SubmitPrintJobToCloudPrint
+               @c_DataProcess    = 'CloudPrint'
+            ,  @c_Storerkey      = @c_Storerkey   
+            ,  @c_PrintType      = @c_JobType
+            ,  @c_PrinterName    = @c_CloudClientPrinterName
+            ,  @c_IP             = N''
+            ,  @c_Port           = N''
+            ,  @c_DocumentType   = ''
+            ,  @c_DocumentId     = N''            
+            ,  @c_JobID          = @n_JobID
+            ,  @c_Data           = @c_PrintData
+            ,  @b_Success        = @b_Success      OUTPUT  
+            ,  @n_Err            = @n_Err          OUTPUT  
+            ,  @c_ErrMsg         = @c_ErrMsg       OUTPUT
+         END
       END
 
       --(Wan04) - END
@@ -333,6 +393,4 @@ QUIT_SP:
       BEGIN TRAN
    END
 END -- procedure
-GO
-GRANT EXECUTE ON [dbo].[isp_UpdateRDTPrintJobStatus] TO nSQL 
-GO
+
