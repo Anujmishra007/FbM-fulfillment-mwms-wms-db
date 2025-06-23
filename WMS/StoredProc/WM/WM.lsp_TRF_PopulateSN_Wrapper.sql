@@ -247,7 +247,7 @@ BEGIN
             ,l.Lottable14
             ,l.Lottable15
             ,sn.SerialNo
-            ,ltlci.PalletType                     --(SSA01)
+            ,i.PalletType                     --(SSA01)
       FROM #tSN AS ts 
       JOIN dbo.SerialNo AS sn (NOLOCK) ON sn.SerialNoKey = ts.SerialNoKey
       JOIN dbo.LOTxLOCxID AS ltlci (NOLOCK) ON  ltlci.Storerkey = sn.Storerkey
@@ -256,7 +256,8 @@ BEGIN
                                             AND ltlci.Lot = ts.Lot 
       JOIN dbo.LOTATTRIBUTE AS l (NOLOCK) ON l.Lot = ltlci.Lot                                    
       JOIN dbo.SKU AS s (NOLOCK) ON s.StorerKey = l.StorerKey AND s.Sku = l.Sku
-      JOIN dbo.PACK AS p (NOLOCK) ON p.PackKey= s.PACKKey 
+      JOIN dbo.PACK AS p (NOLOCK) ON p.PackKey= s.PACKKey
+      JOIN dbo.ID As i (NOLOCK) ON i.id = ltlci.ID
       WHERE ltlci.Qty - ltlci.Qtyallocated - ltlci.QtyPicked >= sn.qty
       AND s.SerialNoCapture IN ('1','2', '3')
       AND sn.[Status] = '1'
