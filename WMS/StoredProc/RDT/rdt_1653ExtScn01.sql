@@ -18,8 +18,13 @@ GO
 /*                            location and pallet id                        */
 /* 2024-10-25 1.3.1  JCH507   FCR-1084, add status when check label exists  */
 /*                            in pallet id                                  */
-/*                                                                          */
-/*                                                                          */
+/* 2024-10-25 1.4.0  Dennis   FCR-1316 Last Carton                          */
+/* 2024-12-19 1.4.1  NLT013   FCR-1316 Valid location is needed for new ID  */
+/* 2025-02-06 1.4.2  CYU027   UWP-30023 Hotfix add trim avoid spaces        */
+/* 2025-01-10 1.4.3  Dennis   FCR-1316 Performance Issue                    */
+/* 2025-02-20 1.5.0  NLT013   UWP-30312 Performance Tune                    */
+/* 2024-10-31 1.6.0  NLT013   UWP-26400 The validation for new pallet       */
+/*                            does not work in some scenarios               */
 /****************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_1653ExtScn01] (
@@ -341,7 +346,7 @@ BEGIN
                      LOC/LANE:         (field05, input)
                ********************************************************************************/
                -- Initialize value
-               SET @cSuggPalletKey = @cOutField03
+               --SET @cSuggPalletKey = @cOutField03
                SET @cPalletKey = @cInField04
 
                IF ISNULL(@cOverrideLoc,'0') <> '1' AND @cLane <> @cInField05 AND ISNULL(@cLane,'') <> ''
