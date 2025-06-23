@@ -43,6 +43,7 @@ GO
 /*                            mapping                                      */
 /* 2025-03-03  SSA07    1.7   UWP-30752 - seller order naming convention   */
 /* 2025-05-14  JH01     1.8   UWP-31657 - Change to map Receipt/ReceiptDetail*/
+/* 2025-06-19  JH02     1.9   UWP-36358 - Enhanced the error message show  */
 /***************************************************************************/
 CREATE OR ALTER PROC [dbo].[mspASNFZ01]
 (     @c_Receiptkey  NVARCHAR(10)
@@ -856,9 +857,9 @@ BEGIN
       IF @@ERROR <> 0
       BEGIN
          SET @n_Continue = 3
-         SET @n_Err = 68021
+         /*SET @n_Err = 68021                                                                   JH02*/
          SET @c_ErrMsg = 'NSQL' + CONVERT(NCHAR(5),@n_Err)
-                       + ': XDOCK ASN Allocation Failed. (mspASNFZ01)'
+                       + ': XDOCK ASN Allocation Failed. (mspASNFZ01). ' + RTRIM(@c_ErrMsg)   /*JH02*/
          GOTO QUIT_SP
       END  
    END
