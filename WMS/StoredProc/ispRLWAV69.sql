@@ -14,9 +14,7 @@ GO
 /*                                                                       */
 /* Called By:                                                            */
 /*                                                                       */
-/* GitHub Version: 1.0                                                   */
-/*                                                                       */
-/* Version: 7.0                                                          */
+/* Version: 1.6                                                          */
 /*                                                                       */
 /* Data Modifications:                                                   */
 /*                                                                       */
@@ -30,6 +28,8 @@ GO
 /* 22-Apr-2025  Wan03   1.5   FCR-2902 - MLP Enhancement - Allocate      */
 /*                            Case/Shrink at BULK, Demand Replenishment  */
 /*                            to DPP.                                    */
+/* 20-Jun-2025  Wan04   1.6   UWP-36410 -MLP Link Repln Task ID in       */
+/*                            pickDetail for FCR-2902                    */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]        
     @c_Wavekey      NVARCHAR(10)    
@@ -103,6 +103,9 @@ CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]
          , @c_Batch4                   NVARCHAR(50)   = ''                          --(Wan03) 
          , @c_Batch5                   NVARCHAR(50)   = ''                          --(Wan03)
          , @c_PutawayZone              NVARCHAR(10)   = ''                          --(Wan03)
+         , @c_ReplFromLoc              NVARCHAR(10)   = ''                          --(Wan03)
+         , @c_ReplFromID               NVARCHAR(18)   = ''                          --(Wan03)
+         , @c_ReplTaskKey              NVARCHAR(10)   = ''                          --(Wan04)
          , @c_FromID                   NVARCHAR(18)   = ''                          --(Wan03)
          , @c_ToID                     NVARCHAR(18)   = ''                          --(Wan03)
          , @c_FinalID                  NVARCHAR(18)   = ''                          --(Wan03)
@@ -169,7 +172,8 @@ CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]
       IF EXISTS (SELECT 1 FROM TASKDETAIL TD (NOLOCK)   
                  WHERE TD.Wavekey = @c_Wavekey  
                  AND TD.Sourcetype = @c_SourceType
-                 AND TD.Tasktype IN ( 'VNAOUT', 'FCP', 'FPK' )                      --(Wan03) 
+                 AND TD.Tasktype IN ( 'VNAOUT', 'FCP', 'FPK' )                      --(Wan03)
+                 AND TD.Message03 <> 'RPF'                                          --(Wan04)
                  AND TD.[Status] <> 'X'                                             --(Wan03)  
                 )   
       BEGIN  
@@ -852,6 +856,9 @@ CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]
                , SUM(PICKDETAIL.Qty) AS Qty 
                , ORDERS.LoadKey
                , ORDERS.OrderKey
+               , ReplFromLoc = ''                                                   --(Wan03)
+               , ReplFromID  = ''                                                   --(Wan03)
+               , ReplTaskKey = ''                                                   --(Wan04)                     
           FROM WAVEDETAIL (NOLOCK) 
           JOIN WAVE (NOLOCK) ON WAVEDETAIL.WaveKey = WAVE.WaveKey 
           JOIN ORDERS (NOLOCK) ON WAVEDETAIL.OrderKey = ORDERS.OrderKey 
@@ -872,6 +879,7 @@ CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]
       END
       ELSE
       BEGIN
+         --ML11 with Replenishment
          DECLARE CUR_PICK_FCP CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
          SELECT PICKDETAIL.Storerkey 
             , PICKDETAIL.Sku 
@@ -883,13 +891,16 @@ CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]
             , SUM(PICKDETAIL.Qty) AS Qty 
             , ORDERS.LoadKey
             , ORDERS.OrderKey
+            , ReplFromLoc = TaskDetail.FromLoc                                      --(Wan03)
+            , ReplFromID  = TaskDetail.FromID                                       --(Wan03)
+            , ReplTaskKey = TaskDetail.TaskDetailKey                                --(Wan04)            
          FROM WAVEDETAIL (NOLOCK) 
          JOIN WAVE (NOLOCK) ON WAVEDETAIL.WaveKey = WAVE.WaveKey 
          JOIN ORDERS (NOLOCK) ON WAVEDETAIL.OrderKey = ORDERS.OrderKey 
          JOIN #PickDetail_WIP PICKDETAIL ON ORDERS.OrderKey = PICKDETAIL.OrderKey 
          JOIN LOC (NOLOCK) ON LOC.LOC = PICKDETAIL.LOC
          JOIN TaskDetail (NOLOCK) ON  TaskDetail.Storerkey = PICKDETAIL.Storerkey
-                                  AND TaskDetail.TaskType = 'VNAOUT'
+                                  AND TaskDetail.TaskType IN ( 'VNAOUT', 'FPK' )    --(Wan03)
                                   AND TaskDetail.FromLoc  = PICKDETAIL.Loc
                                   AND TaskDetail.FromID   = PICKDETAIL.ID
                                   AND TaskDetail.[Status] NOT IN ('9','X')
@@ -906,12 +917,16 @@ CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]
             , TaskDetail.FinalID
             , ORDERS.LoadKey
             , ORDERS.OrderKey
+            , TaskDetail.FromLoc                                                    --(Wan03)
+            , TaskDetail.FromID                                                     --(Wan03)
+            , TaskDetail.TaskDetailKey                                              --(Wan04)            
       END
 
       OPEN CUR_PICK_FCP
 
       FETCH NEXT FROM CUR_PICK_FCP INTO @c_Storerkey, @c_SKU, @c_Lot, @c_FromLoc, @c_ID
                                        ,@c_UOM, @n_UOMQty, @n_Qty, @c_Loadkey, @c_Orderkey
+                                       ,@c_ReplFromLoc, @c_ReplFromID, @c_ReplTaskKey              --(Wan04)                                       
 
       WHILE @@FETCH_STATUS <> -1
       BEGIN
@@ -925,7 +940,8 @@ CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]
                                 THEN '9' 
                                 ELSE @c_Priority_PICK 
                                 END 
-         SET @c_LinkTaskToPick_SQL = 'PICKDETAIL.UOM = @c_UOM AND LOC.LocationType = ''VNA'' '
+         SET @c_LinkTaskToPick_SQL = 'PICKDETAIL.UOM IN (''2'',''3'') AND '         --(Wan03)
+                                   + 'LOC.LocationType = ''VNA'''
          SET @c_TaskStatus = CASE WHEN @c_ShelfLifeCode = 'ML11'                    --(Wan03)
                                   THEN 'H' 
                                   ELSE '0' 
@@ -1047,6 +1063,7 @@ CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]
                                        , @c_LinkTaskToPick = 'WIP' -- WIP=Update taskdetailkey to pickdetail_wip  
                                        , @c_LinkTaskToPick_SQL = @c_LinkTaskToPick_SQL
                                        , @c_WIP_RefNo = @c_SourceType
+                                       , @c_RefTaskKey= @c_ReplTaskKey              --(Wan04)
                                        , @b_Success = @b_Success OUTPUT
                                        , @n_Err = @n_err OUTPUT
                                        , @c_ErrMsg = @c_errmsg OUTPUT
@@ -1077,11 +1094,22 @@ CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]
                      SET @n_continue = 3
                   END
                END
+               
+               IF @n_continue = 1 AND @c_ReplFromLoc > ''            --(Wan03) - START
+               BEGIN
+                  UPDATE #PickDetail_WIP
+                     SET TaskDetailKey = @c_TaskDetailKey
+                  WHERE Lot = @c_Lot
+                  AND   Loc = @c_ReplFromLoc
+                  AND   ID  = @c_ReplFromID
+                  AND   UOM IN ('2','3')
+               END                                                   --(Wan03) - END
             END                                                      --(Wan02) - END
          END
 
          FETCH NEXT FROM CUR_PICK_FCP INTO @c_Storerkey, @c_SKU, @c_Lot, @c_FromLoc, @c_ID
                                           ,@c_UOM, @n_UOMQty, @n_Qty, @c_Loadkey, @c_Orderkey
+                                          ,@c_ReplFromLoc, @c_ReplFromID, @c_ReplTaskKey           --(Wan04)                                          
       END
       CLOSE CUR_PICK_FCP
       DEALLOCATE CUR_PICK_FCP
@@ -1139,7 +1167,8 @@ CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]
                                 END 
          SET @c_TaskStatus = '0'                                                    --(Wan03)
 
-         SET @c_LinkTaskToPick_SQL = 'PICKDETAIL.UOM = @c_UOM AND LOC.LocationType <> ''VNA'' '
+         SET @c_LinkTaskToPick_SQL = 'PICKDETAIL.UOM IN (''2'',''3'') AND '         --(Wan03) -- 2025-06-20
+                                   + 'LOC.LocationType <> ''VNA'''
 
          --(Wan01) - START
          IF @c_LoadAssignLane = 'Y'  
@@ -1185,9 +1214,9 @@ CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]
             SET @n_Qty_Avail = 0
             SET @n_Qty_Task  = 0
 
-            IF @c_UOM IN ('2','3') AND @c_AllowOverAllocations = '1'                --(Wan03) - START
+            IF @c_UOM IN ('2','3') AND @c_AllowOverAllocations = '0'                --(Wan03) - START
             BEGIN
-               IF EXISTS ( SELECT 1 FROM LOC l (NOLOCK)
+               IF EXISTS ( SELECT 1 FROM LOC l (NOLOCK)    --If from manual allocation
                            WHERE l.Loc = @c_FromLoc
                            AND l.LocationType IN ('PND')
                          )
@@ -1195,7 +1224,7 @@ CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]
                   SET @c_TaskStatus = 'H'
                END
             END
-            ELSE IF @c_UOM IN ('2','3') AND @c_AllowOverAllocations = '0'           --(Wan03) - END
+            ELSE IF @c_UOM IN ('2','3') AND @c_AllowOverAllocations = '1'           --(Wan03) - END
             BEGIN
                SELECT @n_Qty_Avail = lli.Qty - lli.Qtypicked
                FROM LOTxLOCxID lli (NOLOCK)
