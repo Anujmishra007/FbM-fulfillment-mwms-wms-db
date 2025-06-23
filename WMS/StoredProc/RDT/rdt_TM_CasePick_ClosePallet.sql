@@ -1,28 +1,24 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[rdt].[rdt_TM_CasePick_ClosePallet]') and objectproperty(id, N'IsProcedure') = 1)
-   DROP PROC [rdt].[rdt_TM_CasePick_ClosePallet]
-GO
 
-SET QUOTED_IDENTIFIER OFF
-GO
-SET ANSI_NULLS OFF
-GO
-
-/************************************************************************/
-/* Store procedure: rdt_TM_CasePick_ClosePallet                         */
-/* Copyright      : LF Logistics                                        */
-/*                                                                      */
-/* Purpose: Confirm pick                                                */
-/*                                                                      */
-/* Date        Rev  Author    Purposes                                  */
-/* 17-Dec-2014 1.0  Ung       SOS327467 Created                         */
-/* 17-Apr-2018 1.1  Ung       WMS-3273                                  */
-/*                            Add MoveQTYAlloc, MoveQTYPick             */
-/*                            Add PickConfirmStatus                     */
-/*                            Add ClosePalletSP                         */
-/* 03-Jan-2019 1.2  Ung       WMS-3273 Fix full short                   */
-/* 07-Mar-2019 1.3  Ung       WMS-8058 Fix move UCC                     */
-/* 01-Apr-2024 1.4  CYU027    UWP-17449 Create Replen task              */
-/************************************************************************/
+/***************************************************************************/
+/* Store procedure: rdt_TM_CasePick_ClosePallet                            */
+/* Copyright      : Maersk                                                 */
+/*                                                                         */
+/* Purpose: Confirm pick                                                   */
+/*                                                                         */
+/* Date        Rev     Author    Purposes                                  */
+/* 17-Dec-2014 1.0     Ung       SOS327467 Created                         */
+/* 17-Apr-2018 1.1     Ung       WMS-3273                                  */
+/*                               Add MoveQTYAlloc, MoveQTYPick             */
+/*                               Add PickConfirmStatus                     */
+/*                               Add ClosePalletSP                         */
+/* 03-Jan-2019 1.2     Ung       WMS-3273 Fix full short                   */
+/* 07-Mar-2019 1.3     Ung       WMS-8058 Fix move UCC                     */
+/* 01-Apr-2024 1.4     CYU027    UWP-17449 Create Replen task              */
+/* 29-Oct-2024 1.5.0   YYS027    FCR-989 add ReplenTaskSP                  */
+/* 01-Oct-2024 1.6     James     WMS-26122 Stamp TaskDetail.ToLoc (james01)*/
+/* 12-Nov-2024 1.7     PXL009    FCR-1125 Merged 1.4->1.6 from v0 branch   */
+/* 27-Nov-2024 1.8     Dennis    FCR-1483 Remove ReplenTask                */
+/***************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_TM_CasePick_ClosePallet] (
    @nMobile        INT,
@@ -44,12 +40,26 @@ BEGIN
    DECLARE @cSQLParam      NVARCHAR(MAX)
 
    DECLARE @cClosePalletSP NVARCHAR(20)
+   DECLARE @cReplenTaskSP  NVARCHAR(20)
    DECLARE @cReplenFlag    NVARCHAR(20)
    DECLARE @cStorerKey     NVARCHAR( 15)
    DECLARE @cSKU           NVARCHAR( 20)
    DECLARE @cFromLOC       NVARCHAR( 10)
    DECLARE @cFacility      NVARCHAR( 5)
    DECLARE @b_Success      INT
+   DECLARE @nInputKey      INT
+   DECLARE @nStep          INT
+   DECLARE @cSuggToLOC     NVARCHAR( 10)
+   DECLARE @cInToLOC       NVARCHAR( 10)
+   DECLARE @nDebugMode     INT = 0
+
+   SELECT 
+      @nInputKey = InputKey,
+      @nStep = Step,
+      @cSuggToLOC = V_String5,
+      @cInToLOC = I_Field03   -- Input ToLoc from user
+   FROM RDT.RDTMOBREC WITH (NOLOCK)
+   WHERE Mobile = @nMobile
 
    -- Get storer
    SELECT TOP 1 
@@ -69,6 +79,11 @@ BEGIN
    SET @cReplenFlag = rdt.rdtGetConfig( @nFunc, 'ReplenFlag', @cStorerKey)
    IF @cReplenFlag = '0'
       SET @cReplenFlag = ''
+
+   -- Get storer config
+   SET @cReplenTaskSP = rdt.rdtGetConfig( @nFunc, 'ReplenTaskSP', @cStorerKey)
+   IF @cReplenTaskSP = '0'
+      SET @cReplenTaskSP = ''
 
    SET @nTranCount = @@TRANCOUNT
    
@@ -103,19 +118,28 @@ BEGIN
    DECLARE @cTaskDetailKey NVARCHAR( 10)
    DECLARE @cPickMethod    NVARCHAR( 10)
    DECLARE @cWaveKey       NVARCHAR( 10)
-   DECLARE @cToLOC         NVARCHAR( 10)
    DECLARE @cFromID        NVARCHAR( 18)
+   DECLARE @cToLOC         NVARCHAR( 10)
    DECLARE @cToID          NVARCHAR( 18)
    DECLARE @cLOT           NVARCHAR( 10)
    DECLARE @cUCCNo         NVARCHAR( 20)
    DECLARE @cPickConfirmStatus NVARCHAR( 1)
    DECLARE @cMoveQTYAlloc  NVARCHAR( 1)
    DECLARE @cMoveQTYPick   NVARCHAR( 1)
+   DECLARE @cMoveSKU       NVARCHAR( 20)
+   DECLARE @cMoveLOT       NVARCHAR( 10)
    DECLARE @nQTYAlloc      INT
    DECLARE @nQTYPick       INT
    DECLARE @nQTY           INT
    DECLARE @nSystemQTY     INT
    DECLARE @nUCCQTY        INT
+   DECLARE @nMoveQTY       INT
+   DECLARE @nIsToLOCDiff   INT = 0
+   DECLARE @nRowCount      INT = 0
+   DECLARE @cUCCWithMultiSKU  NVARCHAR( 1)
+   DECLARE @cUCCStatus        NVARCHAR( 10) = '5'  -- Default picked status for ucc
+
+   SET @cUCCWithMultiSKU = rdt.RDTGetConfig( @nFunc, 'UCCWithMultiSKU', @cStorerKey)
 
    -- Init var
    SET @nErrNo = 0
@@ -143,6 +167,15 @@ BEGIN
       SET @cPickConfirmStatus = rdt.RDTGetConfig( @nFunc, 'PickConfirmStatus', @cStorerKey)
       IF @cPickConfirmStatus = '0'
          SET @cPickConfirmStatus = '5'
+      
+      -- (james02)
+      IF ISNULL( @cInToLOC, '') <> '' AND ( @cInToLOC <> @cToLOC)
+      BEGIN
+         SET @cToLOC = @cInToLOC
+         SET @nIsToLOCDiff = 1
+      END
+      ELSE
+         SET @nIsToLOCDiff = 0
    
       -- Check move alloc, but picked
       IF @cMoveQTYAlloc = '1' AND @cPickConfirmStatus = '5'
@@ -192,45 +225,119 @@ BEGIN
             FETCH NEXT FROM @curUCC INTO @cUCCNo, @nUCCQTY
             WHILE @@FETCH_STATUS = 0
             BEGIN
-               IF @cMoveQTYAlloc = '1' OR @cMoveQTYPick = '1'
-               BEGIN
-                  -- Calc QTY to move
-                  IF @cMoveQTYAlloc = '1'
-                  BEGIN
-                     SET @nQTYAlloc = @nUCCQTY
-                     SET @nQTYPick = 0
-                  END
-                  ELSE IF @cMoveQTYPick = '1'
-                  BEGIN
-                     SET @nQTYAlloc = 0
-                     SET @nQTYPick = @nUCCQTY
-                  END
-                  ELSE
-                  BEGIN
-                     SET @nQTYAlloc = 0
-                     SET @nQTYPick = 0
-                  END
+               SET @nRowCount = 0
+               SELECT @nRowCount = COUNT( 1)
+               FROM dbo.UCC WITH (NOLOCK)
+               WHERE Storerkey = @cStorerKey
+               AND   UCCNo = @cUCCNo
+               AND   Status = @cUCCStatus
+               GROUP BY UCCNO
 
-                  -- Move by UCC
-                  EXECUTE rdt.rdt_Move
-                     @nMobile     = @nMobile,
-                     @cLangCode   = @cLangCode,
-                     @nErrNo      = @nErrNo  OUTPUT,
-                     @cErrMsg     = @cErrMsg OUTPUT,
-                     @cSourceType = 'rdt_TM_CasePick_ClosePallet',
-                     @cStorerKey  = @cStorerKey,
-                     @cFacility   = @cFacility,
-                     @cFromLOC    = @cFromLOC,
-                     @cToLOC      = @cToLOC,
-                     @cFromID     = @cFromID,
-                     @cToID       = @cToID,
-                     @cUCC        = @cUCCNo,
-                     @nQTYAlloc   = @nQTYAlloc,
-                     @nQTYPick    = @nQTYPick,
-                     @nFunc       = @nFunc,
-                     @cDropID     = @cUCCNo
-                  IF @nErrNo <> 0
-                     GOTO RollBackTran
+               SET @cMoveSKU = ''
+               SET @nMoveQTY = 0
+               SET @cMoveLOT = ''
+
+               -- Multi SKU UCC
+               IF @cUCCWithMultiSKU = '1' AND @nRowCount > 1
+               BEGIN
+                  -- Loop SKU
+                  DECLARE @curSKU CURSOR
+                  SET @curSKU = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
+                  SELECT SKU, QTY, LOT
+                  FROM dbo.UCC (NOLOCK)
+                  WHERE StorerKey = @cStorerKey
+                  AND   UCCNo = @cUCCNo
+                  AND   Status = @cUCCStatus
+                  ORDER BY SKU
+                  OPEN @curSKU
+                  FETCH NEXT FROM @curSKU INTO @cMoveSKU, @nMoveQTY, @cMoveLOT
+                  WHILE @@FETCH_STATUS = 0
+                  BEGIN
+                     -- Calc QTY to move
+                     IF @cMoveQTYAlloc = '1'
+                     BEGIN
+                        SET @nQTYAlloc = @nMoveQTY
+                        SET @nQTYPick = 0
+                     END
+                     ELSE IF @cMoveQTYPick = '1'
+                     BEGIN
+                        SET @nQTYAlloc = 0
+                        SET @nQTYPick = @nMoveQTY
+                     END
+                     ELSE
+                     BEGIN
+                        SET @nQTYAlloc = 0
+                        SET @nQTYPick = 0
+                     END
+
+                     -- Move by SKU (Multi sku ucc)
+                     EXEC RDT.rdt_Move
+                        @nMobile     = @nMobile,
+                        @cLangCode   = @cLangCode, 
+                        @nErrNo      = @nErrNo  OUTPUT,
+                        @cErrMsg     = @cErrMsg OUTPUT, 
+                        @cSourceType = 'rdt_TM_CasePick_ClosePallet', 
+                        @cStorerKey  = @cStorerKey,
+                        @cFacility   = @cFacility, 
+                        @cFromLOC    = @cFromLOC, 
+                        @cToLOC      = @cToLOC, 
+                        @cFromID     = @cFromID,
+                        @cToID       = @cToID,
+                        @cSKU        = @cMoveSKU, 
+                        @nQTY        = @nMoveQTY,
+                        @nFunc       = @nFunc, 
+                        @nQTYAlloc   = @nQTYAlloc,
+                        @nQTYPick    = @nQTYPick,
+                        @cDropID     = @cUCCNo, 
+                        @cFromLOT    = @cMoveLOT 
+                     IF @nErrNo <> 0
+                        GOTO RollBackTran
+         
+                     FETCH NEXT FROM @curSKU INTO @cMoveSKU, @nMoveQTY, @cMoveLOT
+                  END
+               END
+               ELSE  --Single sku ucc
+               BEGIN
+                  IF @cMoveQTYAlloc = '1' OR @cMoveQTYPick = '1'
+                  BEGIN
+                     -- Calc QTY to move
+                     IF @cMoveQTYAlloc = '1'
+                     BEGIN
+                        SET @nQTYAlloc = @nUCCQTY
+                        SET @nQTYPick = 0
+                     END
+                     ELSE IF @cMoveQTYPick = '1'
+                     BEGIN
+                        SET @nQTYAlloc = 0
+                        SET @nQTYPick = @nUCCQTY
+                     END
+                     ELSE
+                     BEGIN
+                        SET @nQTYAlloc = 0
+                        SET @nQTYPick = 0
+                     END
+
+                     -- Move by UCC
+                     EXECUTE rdt.rdt_Move
+                        @nMobile     = @nMobile,
+                        @cLangCode   = @cLangCode,
+                        @nErrNo      = @nErrNo  OUTPUT,
+                        @cErrMsg     = @cErrMsg OUTPUT,
+                        @cSourceType = 'rdt_TM_CasePick_ClosePallet',
+                        @cStorerKey  = @cStorerKey,
+                        @cFacility   = @cFacility,
+                        @cFromLOC    = @cFromLOC,
+                        @cToLOC      = @cToLOC,
+                        @cFromID     = @cFromID,
+                        @cToID       = @cToID,
+                        @cUCC        = @cUCCNo,
+                        @nQTYAlloc   = @nQTYAlloc,
+                        @nQTYPick    = @nQTYPick,
+                        @nFunc       = @nFunc,
+                        @cDropID     = @cUCCNo
+                     IF @nErrNo <> 0
+                        GOTO RollBackTran
+                  END
                END
                
                -- Clear rdtFCPLog
@@ -378,49 +485,7 @@ RollBackTran:
 Fail:
 
 REPLEN_TASK:
-   IF @cReplenFlag = '1'
-   BEGIN
 
-      -- Get storer
-      SELECT TOP 1
-            @cStorerKey = StorerKey,
-            @cSKU       = Sku,
-            @cFromLOC     = FromLoc
-      FROM dbo.TaskDetail WITH (NOLOCK)
-      WHERE ListKey = @cListKey
-        AND UserKey = @cUserName
-      ORDER BY TaskDetailKey
-
-      SELECT @cFacility = Facility FROM LOC WITH (NOLOCK) WHERE LOC = @cFromLOC
-
-      --qty hits min threshold
-      IF EXISTS(
-         SELECT 1 FROM SKUXLOC SL(NOLOCK)
-                          JOIN LOTxLOCxID LLI WITH (NOLOCK) ON SL.StorerKey = LLI.StorerKey AND SL.SKU = LLI.SKU AND SL.LOC = LLI.LOC
-         WHERE SL.StorerKey = @cStorerKey
-           AND SL.SKU = @cSKU
-           AND SL.LOC = @cFromLOC
-           AND SL.LocationType IN ( 'CASE','PALLET','PICK')
-         GROUP BY
-            SL.StorerKey,
-            SL.SKU,
-            SL.LOC,
-            SL.QtyLocationMinimum
-         HAVING (SUM(LLI.Qty) - SUM(LLI.QtyPicked) + SUM(LLI.PendingMoveIn)) <= SL.QtyLocationMinimum
-      )
-         BEGIN
-            EXEC isp_ODMRPL01
-                 @c_Facility = @cFacility,
-                 @c_Storerkey = @cStorerKey,
-                 @c_SKU = @cSKU,
-                 @c_LOC = @cFromLOC,
-                 @c_ReplenType = N'T',
-                 @b_Success = @b_Success OUTPUT,
-                 @n_Err = @nErrNo OUTPUT,
-                 @c_ErrMsg = @cErrMsg OUTPUT,
-                 @b_Debug = 0
-         END
-   END
    GOTO Quit
 
 Quit:

@@ -1,7 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[nspTMTM01]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [dbo].[nspTMTM01]
-GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -86,8 +82,9 @@ GO
 /*                               task (james06)                         */
 /* 17-04-2024   4.4   NLT013     UWP-18215 Catch SQL Server exception   */
 /*                               for PA tasks                           */
+/* 18-10-2024   4.5   Dennis     FCR-775 Custom Logic                   */
 /************************************************************************/
-CREATE  PROC    [dbo].[nspTMTM01]
+CREATE OR ALTER PROC    [dbo].[nspTMTM01]
                @c_sendDelimiter    NVARCHAR(1)
 ,              @c_ptcid            NVARCHAR(5)
 ,              @c_userid           NVARCHAR(18)
@@ -133,7 +130,127 @@ BEGIN
     BEGIN
        SET @b_debug = 1
     END
+    
+   DECLARE @cSQL           NVARCHAR(MAX)
+   DECLARE @cSQLParam      NVARCHAR(MAX)
+   DECLARE @cCustomSP      NVARCHAR(20)
+   -- Get storer configure
+   SET @cCustomSP = rdt.RDTGetConfig( @n_Func , 'CustomTMTM', @c_StorerKey)
+   IF @cCustomSP = '0'
+      SET @cCustomSP = ''
 
+   /***********************************************************************************************
+                                              Custom 
+   ***********************************************************************************************/
+   -- Custom logic
+   IF @cCustomSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cCustomSP AND type = 'P')
+      BEGIN
+         SET @cSQL = 'EXEC rdt.' + RTRIM( @cCustomSP) +
+                        '   @c_sendDelimiter    
+                           ,@c_ptcid            
+                           ,@c_userid
+                           ,@c_taskId
+                           ,@c_databasename     
+                           ,@c_appflag          
+                           ,@c_recordType       
+                           ,@c_server           
+                           ,@c_ttm
+                           ,@c_AreaKey01            OUTPUT 
+                           ,@c_AreaKey02        
+                           ,@c_AreaKey03        
+                           ,@c_AreaKey04        
+                           ,@c_AreaKey05        
+                           ,@c_LastLOC          
+                           ,@c_LastTaskType     
+                           ,@c_outstring  OUTPUT
+                           ,@b_Success    OUTPUT
+                           ,@n_err        OUTPUT
+                           ,@c_errmsg     OUTPUT
+                           ,@c_TaskDetailKey       OUTPUT 
+                           ,@c_TTMTaskType         OUTPUT 
+                           ,@c_RefKey01            OUTPUT 
+                           ,@c_RefKey02            OUTPUT 
+                           ,@c_RefKey03            OUTPUT 
+                           ,@c_RefKey04            OUTPUT 
+                           ,@c_RefKey05            OUTPUT 
+                           ,@n_Mobile           
+                           ,@n_Func             
+                           ,@c_StorerKey       ' 
+
+
+         SET @cSQLParam =
+                           '@c_sendDelimiter    NVARCHAR(1)
+                           ,@c_ptcid            NVARCHAR(5)
+                           ,@c_userid           NVARCHAR(18)
+                           ,@c_taskId           NVARCHAR(10)
+                           ,@c_databasename     NVARCHAR(30)
+                           ,@c_appflag          NVARCHAR(5)
+                           ,@c_recordType       NVARCHAR(2)
+                           ,@c_server           NVARCHAR(30)
+                           ,@c_ttm              NVARCHAR(5)
+                           ,@c_AreaKey01        NVARCHAR(10)    OUTPUT 
+                           ,@c_AreaKey02        NVARCHAR(10)
+                           ,@c_AreaKey03        NVARCHAR(10)
+                           ,@c_AreaKey04        NVARCHAR(10)
+                           ,@c_AreaKey05        NVARCHAR(10)
+                           ,@c_LastLOC          NVARCHAR(10)
+                           ,@c_LastTaskType     NVARCHAR(10)
+                           ,@c_outstring        NVARCHAR(255)  OUTPUT
+                           ,@b_Success          INT        OUTPUT
+                           ,@n_err              INT        OUTPUT
+                           ,@c_errmsg           NVARCHAR(250)  OUTPUT
+                           ,@c_TaskDetailKey    NVARCHAR(20)   OUTPUT 
+                           ,@c_TTMTaskType      NVARCHAR(20)   OUTPUT 
+                           ,@c_RefKey01         NVARCHAR(20)   OUTPUT 
+                           ,@c_RefKey02         NVARCHAR(20)   OUTPUT 
+                           ,@c_RefKey03         NVARCHAR(20)   OUTPUT 
+                           ,@c_RefKey04         NVARCHAR(20)   OUTPUT 
+                           ,@c_RefKey05         NVARCHAR(20)   OUTPUT 
+                           ,@n_Mobile           INT = 0
+                           ,@n_Func             INT = 0 
+                           ,@c_StorerKey        NVARCHAR( 15) ' 
+            
+         EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+            @c_senddelimiter
+            ,@c_ptcid            
+            ,@c_userid         
+            ,@c_taskId           
+            ,@c_databasename     
+            ,@c_appflag        
+            ,@c_recordType     
+            ,@c_server         
+            ,@c_ttm           
+            ,@c_AreaKey01           OUTPUT
+            ,@c_AreaKey02       
+            ,@c_AreaKey03       
+            ,@c_AreaKey04        
+            ,@c_AreaKey05        
+            ,@c_LastLOC          
+            ,@c_LastTaskType     
+            ,@c_outstring           OUTPUT
+            ,@b_Success             OUTPUT
+            ,@n_err                 OUTPUT
+            ,@c_errmsg              OUTPUT
+            ,@c_TaskDetailKey       OUTPUT 
+            ,@c_TTMTaskType         OUTPUT 
+            ,@c_RefKey01            OUTPUT 
+            ,@c_RefKey02            OUTPUT 
+            ,@c_RefKey03            OUTPUT 
+            ,@c_RefKey04            OUTPUT 
+            ,@c_RefKey05            OUTPUT 
+            ,@n_Mobile
+            ,@n_Func   
+            ,@c_StorerKey       
+
+         RETURN
+      END
+   END
+
+   /***********************************************************************************************
+                                             Standard
+   ***********************************************************************************************/
     DECLARE @n_continue       INT
            ,@n_starttcnt      INT -- Holds the current transaction count
            ,@n_cnt            INT -- Holds @@ROWCOUNT after certain operations

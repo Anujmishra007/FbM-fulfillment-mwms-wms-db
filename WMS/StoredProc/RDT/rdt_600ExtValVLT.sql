@@ -110,8 +110,8 @@ BEGIN
             @nWeight float = 0
        
             SELECT 
-               @nCubic = cast(SUBSTRING(CAST(P.LengthUOM3 * P.WidthUOM3 * P.HeightUOM3 * @nQTY AS VARCHAR(50)), 1, 9)AS INT),
-               @nWeight = cast(SUBSTRING(CAST(SKU.STDGROSSWGT * @nQTY AS VARCHAR(50)), 1, 9) AS FLOAT)
+               @nCubic = P.LengthUOM3 * P.WidthUOM3 * P.HeightUOM3 * @nQTY,
+               @nWeight = SKU.STDGROSSWGT * @nQTY
             FROM dbo.SKU WITH (NOLOCK) 
             LEFT JOIN dbo.PACK P WITH (NOLOCK) ON SKU.PACKKey = P.PackKey
             WHERE SKU.SKU = @cSKU
@@ -131,9 +131,10 @@ BEGIN
                   AND SL.Sku = @cSKU
                   AND SL.LocationType = 'PICK'
                GROUP BY LOC.LOC
-               HAVING SUM(ISNULL((LLI.qty-LLI.QtyPicked+PendingMoveIn),0) * ISNULL(P.CubeUOM3,0)) + @nCubic <= MAX(LOC.CubicCapacity)
-                  AND SUM(ISNULL((LLI.qty-LLI.QtyPicked+PendingMoveIn),0) * ISNULL(SKU.STDGROSSWGT,0)) + @nWeight <= MAX(LOC.WeightCapacity))
-            BEGIN
+               HAVING SUM(ISNULL((LLI.qty-LLI.QtyPicked+PendingMoveIn),0) * ISNULL(P.LengthUOM3,0) * ISNULL(P.WidthUOM3,0) * ISNULL(P.HeightUOM3,0)) + @nCubic <= MAX(LOC.CubicCapacity)
+               AND SUM(ISNULL((LLI.qty-LLI.QtyPicked+PendingMoveIn),0) * ISNULL(SKU.STDGROSSWGT,0)) + @nWeight <= MAX(LOC.WeightCapacity))
+
+               BEGIN
                SET @nErrNo = 218038
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')--'No loc OR big/heavy'
                GOTO Quit

@@ -9,6 +9,8 @@ GO
 /*                                                                      */
 /* Date       Rev  Author     Purposes                                  */
 /* 2024-08-06 1.0  JHU151    FCR-631 Created                            */
+/* 2024-11-25 1.1  TLE109    FCR-1378 Change in report PackInfLE        */
+/* 2025-11-25 1.2  Dennis    FCR-2636 Delete Dropid                     */
 /************************************************************************/
 CREATE OR ALTER PROC [rdt].[rdt_921ExtPrint01] (
    @nMobile    INT,
@@ -32,7 +34,7 @@ BEGIN
    SET CONCAT_NULL_YIELDS_NULL OFF
 
    DECLARE @cOrderKey      NVARCHAR( 10),
-           @cCartonNo      NVARCHAR( 5),
+           @nCartonNo      INT,
            @cPickSlipNo    NVARCHAR( 10),
            @cReportType    NVARCHAR( 10),
            @cFacility      NVARCHAR( 5),
@@ -40,7 +42,11 @@ BEGIN
            @cPrinter       NVARCHAR( 10),
            @nInputKey      INT,
            @nTotalCQty     INT,
-           @nTotalPackQty  INT
+           @nTotalPackQty  INT,
+           @cReuseDropID   NVARCHAR(1),
+           @cPalletID      NVARCHAR(20)
+   
+   SET @cReuseDropID = rdt.RDTGetConfig( @nFunc, 'ReuseDropID', @cStorerKey)
 
    -- Get Default Printer
    SELECT   @cPrinter = ISNULL(Printer,'')
@@ -53,7 +59,7 @@ BEGIN
 
    SELECT TOP 1
       @cPickSlipNo = PickSlipNo,
-      @cCartonNo = CartonNo
+      @nCartonNo = CartonNo
    FROM dbo.PackDetail WITH (NOLOCK)
    WHERE StorerKey = @cStorerKey
       AND DropID = @cParam1
@@ -69,7 +75,7 @@ BEGIN
    FROM PackDetail WIHT(NOLOCK)
    WHERE storerkey = @cStorerKey
       AND PickslipNo = @cPickSlipNo
-      AND CartonNo = @cCartonNo
+      AND CartonNo = @nCartonNo
    
    SELECT
       @nTotalCQty = SUM(CQTY)
@@ -92,7 +98,7 @@ BEGIN
       INSERT INTO @tShipLabel (Variable, Value) VALUES 
       ( '@cStorerKey',  @cStorerKey), 
       ( '@cPickSlipNo', @cPickSlipNo), 
-      ( '@nCartonNo',   CAST( @cCartonNo AS NVARCHAR(10)))
+      ( '@nCartonNo',   CAST( @nCartonNo AS NVARCHAR(10)))
    END
    ELSE IF @nTotalPackQty = @nTotalCQty
       AND EXISTS(SELECT 1
@@ -114,23 +120,29 @@ BEGIN
       INSERT INTO @tShipLabel (Variable, Value) VALUES 
       ( '@cStorerKey',  @cStorerKey), 
       ( '@cPickSlipNo', @cPickSlipNo), 
-      ( '@nCartonNo',   CAST( @cCartonNo AS NVARCHAR(10)))
+      ( '@nCartonNo',   CAST( @nCartonNo AS NVARCHAR(10)))
    END
    ELSE IF @nTotalPackQty <> @nTotalCQty
    BEGIN
       SET @cReportType = 'PackInfLE'
 
       INSERT INTO @tShipLabel (Variable, Value) VALUES 
-      ( '@DropID',   CAST( @cParam1 AS NVARCHAR(20))),
       ( '@cStorerKey',  @cStorerKey), 
-      ( '@cPickSlipNo', @cPickSlipNo)
+      ( '@cPickSlipNo', @cPickSlipNo),
+      ( '@nCartonNo',   CAST( @nCartonNo AS NVARCHAR(10)))
    END
    ELSE
    BEGIN
       GOTO QUIT
    END
 
-   
+   IF @cReuseDropID = '1'
+   BEGIN
+      SELECT @cPalletID = DROPID FROM DBO.DROPIDDETAIL WITH (NOLOCK) WHERE CHILDID = @cParam1
+      DELETE FROM DBO.DROPIDDETAIL WITH (ROWLOCK) WHERE CHILDID = @cParam1
+      IF NOT EXISTS (SELECT 1 FROM dbo.DROPIDDETAIL WITH(NOLOCK) WHERE DROPID = @cPalletID)
+         DELETE FROM DBO.DROPID WITH (ROWLOCK) WHERE DROPID = @cPalletID
+   END
 
    -- Print label
    EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cPrinter, @cPaperPrinter, 

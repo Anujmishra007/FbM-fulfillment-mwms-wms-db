@@ -4,43 +4,48 @@ SET QUOTED_IDENTIFIER OFF
 GO
 
 
-/*****************************************************************************/
-/* Store procedure: rdtfnc_TM_CycleCount                                     */
-/* Copyright      : MAERSK                                                   */
-/*                                                                           */
-/* Purpose: SOS#227151  -TM Cycle Count                                      */
-/*                     - Called By rdtfnc_TaskManager                        */
-/*                                                                           */
-/* Modifications log:                                                        */
-/*                                                                           */
-/* Date       Rev  Author   Purposes                                         */
-/* 2011-11-08 1.0  ChewKP   Created                                          */
-/* 2012-10-30 1.1  James    SOS257258 - Indicate a TM CC supervisor count by */
-/*                          putting '(s)' besides suggested loc (james01)    */
-/* 2013-09-26 1.2  James    Pallet ID is required for LOC with loseid = 0    */
-/*                          Put pallet ID check SP (james02)                 */
-/* 2015-04-06 1.3  ChewKP   SOS#333693 - After Input Reason Code Goto Step 6 */
-/*                          (ChewKP01)                                       */
-/* 2014-06-25 1.4  James    Bug fix (james03)                                */
-/* 2015-05-25 1.5  James    SOS316401 - Add PI pickmethod (james04)          */
-/* 2015-06-09 1.6  James    If UCC config not turn on then bypass option     */
-/*                          screen and goto count by sku (james05)           */
-/* 2016-09-30 1.7  Ung      Performance tuning                               */
-/* 2018-04-25 1.8  James    WMS4083-Add ExtendedUpdateSP (james06)           */
-/* 2018-10-19 1.9  TungGH   Performance                                      */
-/* 2019-04-29 2.0  TungGH   WMS8136-Add ExtendedUpdateSP @ STEP 4 (james07)  */
-/* 2019-06-13 2.1  Shong    Performance Tuning (SWT01)                       */
-/* 2019-06-14 2.2  James    Performance Tuning (james08)                     */
-/* 2019-12-03 2.3  James    WMS-11350 Add output areakey nsptmtm01 (james09) */
-/* 2020-01-06 2.4  James    WMS-11550 Add ExtendedInfoSP (james10)           */
-/* 2021-04-26 2.5  James    WMS-16634 Direct Go screen 2 TMCC SKU (james11)  */
-/* 2021-05-07 2.6  James    WMS-16965 Add empty loc default opt (james12)    */
-/* 2021-06-02 2.7  James    WMS-16634 Add update loc.lastcyclecount (james13)*/
-/* 2023-09-09 2.8  James    WMS-23249 Add ID count (james14)                 */
-/*                          Add BypassScanIDSP config                        */
-/* 2023-11-17 2.9  James    WMS-23429 Sort task by logicalloc, loc (james14) */
-/* 2024-04-19 3.0  James    WMS-25276 Skip scn 3 based on Loc setup(james16) */
-/*****************************************************************************/
+/*********************************************************************************/
+/* Store procedure: rdtfnc_TM_CycleCount                                         */
+/* Copyright      : MAERSK                                                       */
+/*                                                                               */
+/* Purpose: SOS#227151  -TM Cycle Count                                          */
+/*                     - Called By rdtfnc_TaskManager                            */
+/*                                                                               */
+/* Modifications log:                                                            */
+/*                                                                               */
+/* Date       Rev    Author   Purposes                                           */
+/* 2011-11-08 1.0    ChewKP   Created                                            */
+/* 2012-10-30 1.1    James    SOS257258 - Indicate a TM CC supervisor count by   */
+/*                            putting '(s)' besides suggested loc (james01)      */
+/* 2013-09-26 1.2    James    Pallet ID is required for LOC with loseid = 0      */
+/*                            Put pallet ID check SP (james02)                   */
+/* 2015-04-06 1.3    ChewKP   SOS#333693 - After Input Reason Code Goto Step 6   */
+/*                            (ChewKP01)                                         */
+/* 2014-06-25 1.4    James    Bug fix (james03)                                  */
+/* 2015-05-25 1.5    James    SOS316401 - Add PI pickmethod (james04)            */
+/* 2015-06-09 1.6    James    If UCC config not turn on then bypass option       */
+/*                            screen and goto count by sku (james05)             */
+/* 2016-09-30 1.7    Ung      Performance tuning                                 */
+/* 2018-04-25 1.8    James    WMS4083-Add ExtendedUpdateSP (james06)             */
+/* 2018-10-19 1.9    TungGH   Performance                                        */
+/* 2019-04-29 2.0    TungGH   WMS8136-Add ExtendedUpdateSP @ STEP 4 (james07)    */
+/* 2019-06-13 2.1    Shong    Performance Tuning (SWT01)                         */
+/* 2019-06-14 2.2    James    Performance Tuning (james08)                       */
+/* 2019-12-03 2.3    James    WMS-11350 Add output areakey nsptmtm01 (james09)   */
+/* 2020-01-06 2.4    James    WMS-11550 Add ExtendedInfoSP (james10)             */
+/* 2021-04-26 2.5    James    WMS-16634 Direct Go screen 2 TMCC SKU (james11)    */
+/* 2021-05-07 2.6    James    WMS-16965 Add empty loc default opt (james12)      */
+/* 2021-06-02 2.7    James    WMS-16634 Add update loc.lastcyclecount (james13   */
+/* 2023-09-09 2.8    James    WMS-23249 Add ID count (james14)                   */
+/*                            Add BypassScanIDSP config                          */
+/* 2023-11-17 2.9    James    WMS-23429 Sort task by logicalloc, loc (james14)   */
+/* 2024-04-19 3.0    James    WMS-25276 Skip scn 3 based on Loc setup(james16)   */
+/* 2024-11-27 3.1    JHU151   UWP-27583.Fn1768 St1 TTL QTY is not cleared when   */
+/*                                         scanning a new loc                    */
+/* 2025-02-11 3.2    JCH507   FCR-1917 Add ext upd entry                         */
+/* 2025-05-19 4.2.0  JACKC      UWP-34563 Count SKU task genrerates cc detaill   */ 
+/*                               for all SKUs on the loc                         */
+/*********************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_CycleCount](
    @nMobile    INT,
@@ -79,7 +84,7 @@ DECLARE
    @cSuggSKU            NVARCHAR(20),
    @cUCC                NVARCHAR(20),
    @cCommodity          NVARCHAR(20),
- @c_outstring         NVARCHAR(255),
+   @c_outstring         NVARCHAR(255),
    @cContinueProcess    NVARCHAR(10),
    @cReasonStatus       NVARCHAR(10),
    @cAreakey            NVARCHAR(10),
@@ -156,6 +161,10 @@ DECLARE
    @cOtherPickMethod    NVARCHAR( 10),    -- (james04)
    @cTaskStorer         NVARCHAR( 15),
    @cExtendedUpdateSP   NVARCHAR( 20),
+   
+   @nAction             INT,
+   @cExtendedScreenSP   NVARCHAR( 20), --(JHU151)
+   @tExtScnData			VariableTable, --(JHU151)
 
    @cRemoveTaskFromUserQueue  NVARCHAR( 10),
    @cTaskStatus               NVARCHAR( 10),
@@ -195,7 +204,18 @@ DECLARE
    @cFieldAttr09 NVARCHAR( 1), @cFieldAttr10 NVARCHAR( 1),
    @cFieldAttr11 NVARCHAR( 1), @cFieldAttr12 NVARCHAR( 1),
    @cFieldAttr13 NVARCHAR( 1), @cFieldAttr14 NVARCHAR( 1),
-   @cFieldAttr15 NVARCHAR( 1)
+   @cFieldAttr15 NVARCHAR( 1),
+
+   @cUDF01  NVARCHAR( 250), @cUDF02 NVARCHAR( 250), @cUDF03 NVARCHAR( 250),
+   @cUDF04  NVARCHAR( 250), @cUDF05 NVARCHAR( 250), @cUDF06 NVARCHAR( 250),
+   @cUDF07  NVARCHAR( 250), @cUDF08 NVARCHAR( 250), @cUDF09 NVARCHAR( 250),
+   @cUDF10  NVARCHAR( 250), @cUDF11 NVARCHAR( 250), @cUDF12 NVARCHAR( 250),
+   @cUDF13  NVARCHAR( 250), @cUDF14 NVARCHAR( 250), @cUDF15 NVARCHAR( 250),
+   @cUDF16  NVARCHAR( 250), @cUDF17 NVARCHAR( 250), @cUDF18 NVARCHAR( 250),
+   @cUDF19  NVARCHAR( 250), @cUDF20 NVARCHAR( 250), @cUDF21 NVARCHAR( 250),
+   @cUDF22  NVARCHAR( 250), @cUDF23 NVARCHAR( 250), @cUDF24 NVARCHAR( 250),
+   @cUDF25  NVARCHAR( 250), @cUDF26 NVARCHAR( 250), @cUDF27 NVARCHAR( 250),
+   @cUDF28  NVARCHAR( 250), @cUDF29 NVARCHAR( 250), @cUDF30 NVARCHAR( 250)
 
 DECLARE @cStorerConfig_UCC  NVARCHAR( 1)     -- (james05)
 
@@ -283,7 +303,7 @@ SELECT
    @cInField11 = I_Field11,   @cOutField11 = O_Field11,
    @cInField12 = I_Field12,   @cOutField12 = O_Field12,
    @cInField13 = I_Field13,   @cOutField13 = O_Field13,
-  @cInField14 = I_Field14,   @cOutField14 = O_Field14,
+   @cInField14 = I_Field14,   @cOutField14 = O_Field14,
    @cInField15 = I_Field15,   @cOutField15 = O_Field15,
 
    @cFieldAttr01  = FieldAttr01,    @cFieldAttr02   = FieldAttr02,
@@ -442,6 +462,40 @@ BEGIN
       WHERE LLI.Loc = @cLoc
       AND   LOC.Facility = @cFacility
 
+      --v3.2 start
+      -- Extended update
+      IF @cExtendedUpdateSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')
+         BEGIN
+            SET @cSQL = 'EXEC rdt.' + RTRIM(@cExtendedUpdateSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cTaskdetailkey, @cFromLoc, @cID, @cPickMethod, ' +
+               ' @nErrNo OUTPUT, @cErrMsg OUTPUT '
+            SET @cSQLParam =
+               '@nMobile         INT,           ' +
+               '@nFunc           INT,           ' +
+               '@cLangCode       NVARCHAR( 3),  ' +
+               '@nStep           INT,           ' +
+               '@nInputKey       INT,           ' +
+               '@cFacility       NVARCHAR( 15), ' +
+               '@cStorerKey      NVARCHAR( 15), ' +
+               '@cTaskdetailkey  NVARCHAR( 20),  ' +
+               '@cFromLoc        NVARCHAR( 20),  ' +
+               '@cID             NVARCHAR( 20),  ' +
+               '@cPickMethod     NVARCHAR( 20),  ' +
+               '@nErrNo          INT           OUTPUT, ' +
+               '@cErrMsg         NVARCHAR( 20) OUTPUT  '
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cTaskdetailkey, @cSuggFromLoc, @cID, @cPickMethod,
+               @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+            IF @nErrNo <> 0
+               GOTO Quit
+         END
+      END
+      --V3.2 end
+
       IF @nQtyOnLoc = 0
       BEGIN
          -- (james12)
@@ -543,6 +597,7 @@ BEGIN
               ,@c_Loc            = @cSuggFromLoc
               ,@c_Facility       = @cFacility
               ,@c_PickMethod     = @cPickMethod
+              ,@c_SKU            = @cSuggSKU --V4.2.0
               ,@c_CCOptions      = '2'
               ,@c_SourceKey      = @cCCKey
 
@@ -592,7 +647,7 @@ BEGIN
             SET @cOutField02 = @cID
             SET @cOutField03 = ''
 
-      SET @cOutField04 = ''
+            SET @cOutField04 = ''
             SET @cOutField05 = ''
 
             SET @cFieldAttr04 = 'O'
@@ -1027,7 +1082,7 @@ BEGIN
                            END
                            ELSE
                            IF @nCountLot = 3
-   BEGIN
+                           BEGIN
                               SET @cListName = 'Lottable03'
                               SET @cLottableLabel = @cLottable03_Code
                            END
@@ -1175,7 +1230,7 @@ BEGIN
                            SET @cFieldAttr10 = 'O'
                            SET @cOutField10 = ''
                         END
-                    ELSE
+                        ELSE
                         BEGIN
                            SELECT @cOutField10 = ISNULL(@cLottable03, '')
                         END
@@ -1492,6 +1547,7 @@ BEGIN
            ,@c_Loc            = @cSuggFromLoc
            ,@c_Facility       = @cFacility
            ,@c_PickMethod     = @cPickMethod
+           ,@c_SKU            = @cSuggSKU --V4.2.0
            ,@c_CCOptions      = '2'
            ,@c_SourceKey      = @cCCKey
 
@@ -1787,6 +1843,7 @@ BEGIN
            ,@c_Loc            = @cSuggFromLoc
            ,@c_Facility       = @cFacility
            ,@c_PickMethod     = @cPickMethod
+           ,@c_SKU            = @cSuggSKU  --V4.2.0
            ,@c_CCOptions      = '2'
            ,@c_SourceKey      = @cCCKey
 
@@ -1830,7 +1887,7 @@ BEGIN
 
          IF @cTMCCSKUSkipScreen1 = '1'
          BEGIN
-      /*************************************/
+            /*************************************/
             SELECT @cPUOM = V_UOM,
                    @cStorerKey = StorerKey
             FROM RDT.RDTMOBREC WITH (NOLOCK)
@@ -2372,7 +2429,7 @@ BEGIN
             END
 
             -- Extended info
-    IF @cExtendedInfoSP <> ''
+            IF @cExtendedInfoSP <> ''
             BEGIN
                IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')
                BEGIN
@@ -2453,7 +2510,7 @@ BEGIN
             -- Set the entry point
             SET @nFunc = @nToFunc
             SET @nScn = 2941
-SET @nStep = 2
+            SET @nStep = 2
          END
          ELSE
          BEGIN
@@ -2552,6 +2609,19 @@ SET @nStep = 2
       SET @nScn = @nScn - 1
       SET @nStep = @nStep - 1
    END
+
+   SET @nAction = 3 --Prepare output fields
+   SET @cExtendedScreenSP = rdt.RDTGetConfig( @nFunc, 'ExtScnSP', @cStorerKey)
+   IF @cExtendedScreenSP = '0'
+   BEGIN
+      SET @cExtendedScreenSP = ''
+   END
+   
+   IF @cExtendedScreenSP <> ''
+   Begin
+      GOTO Step_99
+   END
+
    GOTO Quit
 
    Step_3_Fail:
@@ -3506,6 +3576,64 @@ BEGIN
    END
 END
 GOTO Quit
+
+
+
+Step_99:
+BEGIN
+   SET @cExtendedScreenSP = rdt.RDTGetConfig( @nFunc, 'ExtScnSP', @cStorerKey)
+   IF @cExtendedScreenSP = '0'
+   BEGIN
+      SET @cExtendedScreenSP = ''
+   END
+   IF @cExtendedScreenSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
+      BEGIN
+         
+         EXECUTE [RDT].[rdt_ExtScnEntry] 
+            @cExtendedScreenSP, 
+            @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorerKey, @tExtScnData,
+            @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT, @cLottable01 OUTPUT,
+            @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT, @cLottable02 OUTPUT,
+            @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT, @cLottable03 OUTPUT,
+            @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT, @dLottable04 OUTPUT,
+            @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT, @dLottable05 OUTPUT,
+            @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT, @cLottable06 OUTPUT,
+            @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT, @cLottable07 OUTPUT,
+            @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT, @cLottable08 OUTPUT,
+            @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT, @cLottable09 OUTPUT,
+            @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT, @cLottable10 OUTPUT,
+            @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT, @cLottable11 OUTPUT,
+            @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT, @cLottable12 OUTPUT,
+            @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT, @dLottable13 OUTPUT,
+            @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT, @dLottable14 OUTPUT,
+            @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT, @dLottable15 OUTPUT,
+            @nAction, 
+            @nScn OUTPUT,  @nStep OUTPUT,
+            @nErrNo   OUTPUT, 
+            @cErrMsg  OUTPUT,
+            @cUDF01 OUTPUT, @cUDF02 OUTPUT, @cUDF03 OUTPUT,
+            @cUDF04 OUTPUT, @cUDF05 OUTPUT, @cUDF06 OUTPUT,
+            @cUDF07 OUTPUT, @cUDF08 OUTPUT, @cUDF09 OUTPUT,
+            @cUDF10 OUTPUT, @cUDF11 OUTPUT, @cUDF12 OUTPUT,
+            @cUDF13 OUTPUT, @cUDF14 OUTPUT, @cUDF15 OUTPUT,
+            @cUDF16 OUTPUT, @cUDF17 OUTPUT, @cUDF18 OUTPUT,
+            @cUDF19 OUTPUT, @cUDF20 OUTPUT, @cUDF21 OUTPUT,
+            @cUDF22 OUTPUT, @cUDF23 OUTPUT, @cUDF24 OUTPUT,
+            @cUDF25 OUTPUT, @cUDF26 OUTPUT, @cUDF27 OUTPUT,
+            @cUDF28 OUTPUT, @cUDF29 OUTPUT, @cUDF30 OUTPUT
+
+         IF @nErrNo <> 0
+            GOTO Step_99_Fail
+
+         GOTO Quit
+      END
+   END -- Ext scn sp <> ''
+
+   Step_99_Fail:
+      GOTO Quit
+END
 
 /********************************************************************************
 Quit. Update back to I/O table, ready to be pick up by JBOSS

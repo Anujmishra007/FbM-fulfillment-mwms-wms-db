@@ -29,6 +29,7 @@ GO
 /*                            qty text box to 7 digit                         */
 /* 2024-05-30 2.2 NLT03       UWP-20091 Exception happens while shor pick     */
 /* 2024-07-08 2.3 JHU151      FCR-330 SSCC code generator                     */
+/* 2024-10-12 2.4 Dennis      FCR-775 For VLT (DE01)                          */
 /******************************************************************************/    
     
 CREATE PROC [RDT].[rdtfnc_TM_PalletPick](    
@@ -143,6 +144,7 @@ DECLARE
    @cLOCLookupSP        NVARCHAR(20),  --(yeekung01)    
    @cSkuInfoFromLLI     NVARCHAR(1),  --(cc01)    
    @tExtScnData			VariableTable, --(JHU151)
+   @cHUSQGRPPICK        NVARCHAR(1), --(DE01)
 
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),    
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),    
@@ -249,7 +251,8 @@ SELECT
    @cLOCLookupSP       = V_String41, --(yeekung01)    
    @cSkuInfoFromLLI    = V_String42, --(cc01)
    @cExtScnSP          = V_string43,
-    
+   @cHUSQGRPPICK       = V_String44,
+
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,    
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,    
    @cInField03 = I_Field03,   @cOutField03 = O_Field03,    
@@ -335,7 +338,9 @@ BEGIN
    SET @cEnableField = rdt.RDTGetConfig( @nFunc, 'EnableField', @cStorerKey)    
    SET @cLOCLookupSP = rdt.rdtGetConfig(@nFunc,'LOCLookupSP',@cStorerKey)     --(yeekung01)    
    SET @cSkuInfoFromLLI = rdt.rdtGetConfig(@nFunc,'SkuInfoFromLLI',@cStorerKey) --(cc01) 
-    
+   SET @cHUSQGRPPICK = rdt.rdtGetConfig(@nFunc,'HUSQGRPPICK',@cStorerKey) --(DE01) 
+   IF @cHUSQGRPPICK = '1'
+      SET @cOverwriteToLOC = '1'
    SET @cCustomLottableSP = rdt.RDTGetConfig( @nFunc, 'CustomLottableSP', @cStorerKey)    
    IF @cCustomLottableSP = '0'    
       SET @cCustomLottableSP = ''    
@@ -1601,7 +1606,7 @@ BEGIN
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,    
                @nMobile, @nFunc, @cLangCode, 4, @nInputKey, @cTaskdetailKey, @cExtendedInfo1 OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nStep    
     
-  SET @cOutField10 = @cExtendedInfo1    
+            SET @cOutField10 = @cExtendedInfo1    
          END    
       END    
    END    
@@ -1719,14 +1724,14 @@ BEGIN
          ,@c_RefKey03      = @cRefKey03      OUTPUT -- this is the field value to parse to 1st Scn in func    
          ,@c_RefKey04      = @cRefKey04      OUTPUT -- this is the field value to parse to 1st Scn in func    
          ,@c_RefKey05      = @cRefKey05      OUTPUT -- this is the field value to parse to 1st Scn in func    
-    
+         ,@c_StorerKey     = @cStorerkey
       IF @b_Success = 0 OR @nErrNo <> 0    
          GOTO Step_5_Fail    
     
       -- No task    
       IF @cNextTaskDetailKey = ''    
       BEGIN    
-   -- Logging    
+         -- Logging    
          EXEC RDT.rdt_STD_EventLog    
              @cActionType = '9', -- Sign out function    
              @cUserID     = @cUserName,    
@@ -1831,7 +1836,35 @@ BEGIN
        @nFunctionID = @nFunc,    
        @cFacility  = @cFacility,    
        @cStorerKey  = @cStorerKey    
+
+      -- Extended update    
+      IF @cExtendedUpdateSP <> ''    
+      BEGIN    
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')    
+         BEGIN    
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +    
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cTaskdetailKey, @nQTY, @cToLOC, @cDropID, @nErrNo OUTPUT, @cErrMsg OUTPUT'    
+            SET @cSQLParam =    
+               '@nMobile         INT,           ' +    
+               '@nFunc           INT,           ' +    
+               '@cLangCode       NVARCHAR( 3),  ' +    
+               '@nStep           INT,           ' +    
+               '@nInputKey       INT,           ' +    
+               '@cTaskdetailKey  NVARCHAR( 10), ' +    
+               '@nQTY            INT,           ' +    
+               '@cToLOC          NVARCHAR( 10), ' +    
+               '@cDropID         NVARCHAR( 20), ' +    
+               '@nErrNo          INT OUTPUT,    ' +    
+               '@cErrMsg         NVARCHAR( 20) OUTPUT '    
     
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,    
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cTaskdetailKey, @nQTY, @cToLOC, @cDropID, @nErrNo OUTPUT, @cErrMsg OUTPUT    
+    
+            IF @nErrNo <> 0    
+               GOTO Quit    
+         END    
+      END 
+
       -- Enable field    
       SET @cFieldAttr04 = '' -- @cDropID    
       SET @cFieldAttr08 = '' -- @nSKU    
@@ -2076,7 +2109,7 @@ BEGIN
       IF @nFromStep = 1    
       BEGIN    
          -- Prepare next screen variable    
- SET @cFromLOC = ''    
+      SET @cFromLOC = ''    
          SET @cOutField01 = @cSuggFromLOC    
          SET @cOutField02 = CASE WHEN @cDefaultFromLOC = '1' THEN @cSuggFromLOC ELSE '' END -- FromLOC    
       END    
@@ -2238,8 +2271,7 @@ BEGIN
       V_String28   = @cExtendedInfo1,    
       V_String29   = @cSwapTaskSP,    
       V_String30   = @cDefaultDropID,    
-      V_String31   = @cExtendedValidateSP,          V_String40   = @cOverwriteToLOC,    
-    
+      V_String31   = @cExtendedValidateSP,
       V_String32   = @cAreakey,    
       V_String33   = @cTTMStrategykey,    
       V_String34   = @cTTMTaskType,    
@@ -2248,10 +2280,12 @@ BEGIN
       V_String37   = @cRefKey03,    
       V_String38   = @cRefKey04,    
       V_String39   = @cRefKey05,    
+      V_String40   = @cOverwriteToLOC,
       V_String41   = @cLOCLookupSP,  --(yeekung01)    
       V_String42   = @cSkuInfoFromLLI,  --(cc01)
       V_String43   = @cExtScnSP,
-    
+      V_String44   = @cHUSQGRPPICK,
+
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,    
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,    
       I_Field03 = @cInField03,  O_Field03 = @cOutField03,    

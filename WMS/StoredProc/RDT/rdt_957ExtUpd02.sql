@@ -13,9 +13,12 @@ GO
 /*                                                                            */
 /* Modifications log:                                                         */
 /*                                                                            */
-/* Date         Author    Ver.  Purposes                                      */
-/* 2024-07-16   JHU151    1.0   FCR-428 Created                               */
-/* 2024-09-09   PXL009    1.1   FCR-770 Tote closure                          */
+/* Date         Author    Ver.   Purposes                                     */
+/* 2024-07-16   JHU151    1.0    FCR-428 Created                              */
+/* 2024-09-09   PXL009    1.1    FCR-770 Tote closure                         */
+/* 2024-10-24   PXL009    1.1.1  FCR-770 UOM = 7 requested to be added        */
+/*                                  when inserting the value WSTOTECFMlb.     */
+/* 2025-03-26   NLT013    1.2.0  FCR-2704 Re-allocation if short happens      */
 /******************************************************************************/
 
 CREATE OR ALTER     PROCEDURE [RDT].[rdt_957ExtUpd02]
@@ -63,14 +66,16 @@ BEGIN
    DECLARE @nExists  INT
    DECLARE @cShort   NVARCHAR(20)
 
-   DECLARE @cLoadKey    NVARCHAR( 10) = ''
-   DECLARE @cOrderKey   NVARCHAR( 10) = ''
-   DECLARE @cZone       NVARCHAR( 18) = ''
-   DECLARE @curOrder    CURSOR
-   DECLARE @cActUCCNo   NVARCHAR( 40) = ''
-   DECLARE @cActDropID  NVARCHAR( 40) = ''
-   DECLARE @cActCaseID  NVARCHAR( 40) = ''
-   
+   DECLARE @cLoadKey       NVARCHAR( 10) = ''
+   DECLARE @cOrderKey      NVARCHAR( 10) = ''
+   DECLARE @cZone          NVARCHAR( 18) = ''
+   DECLARE @curOrder       CURSOR
+   DECLARE @cActUCCNo      NVARCHAR( 40) = ''
+   DECLARE @cActDropID     NVARCHAR( 40) = ''
+   DECLARE @cActCaseID     NVARCHAR( 40) = ''
+   DECLARE @curPickDetail  CURSOR
+   DECLARE @cUOM           NVARCHAR( 10) = ''
+
    DECLARE
       @cStoredProcedure  NVARCHAR(50),
       @cCCTaskType       NVARCHAR(60),
@@ -85,11 +90,15 @@ BEGIN
       @b_Success         INT,
       @n_err             INT,
       @cPickDetailKey    NVARCHAR(50) = '',
-      @c_errmsg          NVARCHAR(250)
+      @c_errmsg          NVARCHAR(250),
+      @nCurrentScn       INT
          
    SET @nErrNo          = 0
    SET @cErrMSG         = ''
    
+   SELECT @nCurrentScn = Scn
+   FROM rdt.RDTMOBREC WITH(NOLOCK)
+   WHERE Mobile = @nMobile
    
    IF @nFunc = 957
    BEGIN
@@ -198,80 +207,117 @@ BEGIN
                FROM rdt.rdtMobRec WITH (NOLOCK)
                WHERE Mobile = @nMobile
 
+               -- Get PickHeader info
                SELECT TOP 1
-                     @cOrderKey = OrderKey
+                  @cOrderKey = OrderKey,
+                  @cLoadKey = ExternOrderKey,
+                  @cZone = Zone
                FROM dbo.PickHeader WITH (NOLOCK)
                WHERE PickHeaderKey = @cPickSlipNo
-
-               SELECT TOP 1
-                  @cActDropID = DropID
-               FROM dbo.PickDetail PD WITH (NOLOCK)
-               WHERE PD.OrderKey = @cOrderKey
-                  AND PD.DropID = @cActUCCNo
-                  AND PD.LOC = @cLOC
-                  AND PD.SKU = @cSKU
-                  AND PD.ID = @cID
-                  AND (PD.Status = '3' OR PD.Status = '5')
-
-               IF @@ROWCOUNT > 0 AND @cActDropID <> ''
+         
+               -- Cross dock PickSlip
+               IF @cZone IN ('XD', 'LB', 'LP')
+                  SET @curPickDetail = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR 
+                     SELECT DISTINCT PD.OrderKey,PD.DropID,PD.CaseID,PD.UOM
+                     FROM dbo.RefKeyLookup RKL WITH (NOLOCK)
+                        JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
+                     WHERE RKL.PickSlipNo = @cPickSlipNo
+                        AND PD.LOC = @cLOC
+                        AND PD.SKU = @cSKU
+                        AND PD.ID = @cID
+                        AND PD.QTY > 0
+                        AND (PD.Status = '3' OR PD.Status = '5')
+               -- Discrete PickSlip
+               ELSE IF @cOrderKey <> ''
+                  SET @curPickDetail = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR 
+                     SELECT DISTINCT PD.OrderKey,PD.DropID,PD.CaseID,PD.UOM
+                     FROM dbo.PickDetail PD WITH (NOLOCK)
+                     WHERE PD.OrderKey = @cOrderKey
+                        AND PD.LOC = @cLOC
+                        AND PD.SKU = @cSKU
+                        AND PD.ID = @cID
+                        AND PD.Qty > 0
+                        AND (PD.Status = '3' OR PD.Status = '5')
+               -- Conso PickSlip
+               ELSE IF @cLoadKey <> ''
+                  SET @curPickDetail = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR 
+                     SELECT DISTINCT PD.OrderKey,PD.DropID,PD.CaseID,PD.UOM
+                     FROM dbo.LoadPlanDetail LPD WITH (NOLOCK)
+                        JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)
+                     WHERE LPD.LoadKey = @cLoadKey
+                        AND PD.LOC = @cLOC
+                        AND PD.SKU = @cSKU
+                        AND PD.ID = @cID
+                        AND PD.Qty > 0
+                        AND (PD.Status = '3' OR PD.Status = '5')
+               -- Custom PickSlip
+               ELSE
+                  SET @curPickDetail = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR 
+                     SELECT DISTINCT PD.OrderKey,PD.DropID,PD.CaseID,PD.UOM
+                     FROM dbo.PickDetail PD WITH (NOLOCK)
+                     WHERE PD.PickSlipNo = @cPickSlipNo
+                        AND PD.LOC = @cLOC
+                        AND PD.SKU = @cSKU
+                        AND PD.ID = @cID
+                        AND PD.Qty > 0
+                        AND (PD.Status = '3' OR PD.Status = '5')
+               
+               -- Loop Pick Detail
+               OPEN @curPickDetail
+               FETCH NEXT FROM @curPickDetail INTO @cOrderKey,@cActDropID,@cActCaseID,@cUOM
+               WHILE @@FETCH_STATUS = 0
                BEGIN
-                  EXEC dbo.ispGenTransmitLog2
-                     @c_TableName      = 'WSTOTECFMlb',
-                     @c_Key1           = @cOrderKey,
-                     @c_Key2           = @cActDropID,
-                     @c_Key3           = @cStorerKey,
-                     @c_TransmitBatch  = '',
-                     @b_success        = @bSuccess    OUTPUT,
-                     @n_err            = @nErrNo      OUTPUT,
-                     @c_errmsg         = @cErrMsg     OUTPUT
-                  IF @bSuccess <> 1
+                  IF @cUOM = '7' AND @cActDropID <> ''
                   BEGIN
-                     SET @nErrNo = 223451
-                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INS TLog2 Fail
-                     GOTO Quit
+                     EXEC dbo.ispGenTransmitLog2
+                        @c_TableName      = 'WSTOTECFMlb',
+                        @c_Key1           = @cOrderKey,
+                        @c_Key2           = @cActDropID,
+                        @c_Key3           = @cStorerKey,
+                        @c_TransmitBatch  = '',
+                        @b_success        = @bSuccess    OUTPUT,
+                        @n_err            = @nErrNo      OUTPUT,
+                        @c_errmsg         = @cErrMsg     OUTPUT
+                     IF @bSuccess <> 1
+                     BEGIN
+                        SET @nErrNo = 223451
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INS TLog2 Fail
+                        GOTO Quit
+                     END
                   END
-               END
 
-               SELECT TOP 1
-                  @cActCaseID = CaseID
-               FROM dbo.PickDetail PD WITH (NOLOCK)
-               WHERE PD.OrderKey = @cOrderKey
-                  AND PD.DropID = @cActUCCNo
-                  AND PD.LOC = @cLOC
-                  AND PD.SKU = @cSKU
-                  AND PD.ID = @cID
-                  AND (PD.Status = '3' OR PD.Status = '5')
-                  AND UOM = '2'
-
-               IF @@ROWCOUNT > 0 AND @cActCaseID <> ''
-               BEGIN
-                  EXEC dbo.ispGenTransmitLog2
-                     @c_TableName      = 'WSBOXCFMlb',
-                     @c_Key1           = @cOrderKey,
-                     @c_Key2           = @cActCaseID,
-                     @c_Key3           = @cStorerKey,
-                     @c_TransmitBatch  = '',
-                     @b_success        = @bSuccess    OUTPUT,
-                     @n_err            = @nErrNo      OUTPUT,
-                     @c_errmsg         = @cErrMsg     OUTPUT
-                  IF @bSuccess <> 1
+                  IF @cUOM = '2' AND @cActCaseID <> ''
                   BEGIN
-                     SET @nErrNo = 223452
-                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INS TLog2 Fail
-                     GOTO Quit
+                     EXEC dbo.ispGenTransmitLog2
+                        @c_TableName      = 'WSBOXCFMlb',
+                        @c_Key1           = @cOrderKey,
+                        @c_Key2           = @cActCaseID,
+                        @c_Key3           = @cStorerKey,
+                        @c_TransmitBatch  = '',
+                        @b_success        = @bSuccess    OUTPUT,
+                        @n_err            = @nErrNo      OUTPUT,
+                        @c_errmsg         = @cErrMsg     OUTPUT
+                     IF @bSuccess <> 1
+                     BEGIN
+                        SET @nErrNo = 223452
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INS TLog2 Fail
+                        GOTO Quit
+                     END
                   END
+
+                  FETCH NEXT FROM @curPickDetail INTO @cOrderKey,@cActDropID,@cActCaseID,@cUOM
                END
             END
          END
       END
 
-      IF @nStep = 5
+      IF @nStep = 5 OR (@nStep = 99 AND @nCurrentScn = 6523)
       BEGIN
          -- Short pick
          IF @nInputKey = 1
          BEGIN                     
             -- Short
-            IF @cOption = '1'
+            IF @cOption IN ('1', '9')
             BEGIN
                SELECT 
                   @cReasonCode = Code2,
@@ -336,7 +382,7 @@ BEGIN
                               AND (
                                     (@nFunc = 839  AND PD.status = '4')
                                     OR 
-                                    (@nFunc = 957 AND PD.Status <> '4' AND PD.Status < '5')
+                                    (@nFunc = 957 AND PD.status = '4')
                                     )
                               AND PD.PickDetailKey > @cPickDetailKey
                            ORDER BY PD.PickDetailKey
@@ -357,7 +403,7 @@ BEGIN
                               AND (
                                     (@nFunc = 839  AND PD.status = '4')
                                     OR 
-                                    (@nFunc = 957 AND PD.Status <> '4' AND PD.Status < '5')
+                                    (@nFunc = 957 AND PD.status = '4')
                                     )
                               AND PD.PickDetailKey > @cPickDetailKey
                            ORDER BY PD.PickDetailKey
@@ -380,7 +426,7 @@ BEGIN
                               AND (
                                  (@nFunc = 839  AND PD.status = '4')
                                  OR 
-                                 (@nFunc = 957 AND PD.Status <> '4' AND PD.Status < '5')
+                                 (@nFunc = 957 AND PD.status = '4')
                                  )
                               AND PD.PickDetailKey > @cPickDetailKey
                            ORDER BY PD.PickDetailKey
@@ -401,7 +447,7 @@ BEGIN
                               AND (
                                  (@nFunc = 839  AND PD.status = '4')
                                  OR 
-                                 (@nFunc = 957 AND PD.Status <> '4' AND PD.Status < '5')
+                                 (@nFunc = 957 AND PD.status = '4')
                                  )
                               AND PD.PickDetailKey > @cPickDetailKey
                            ORDER BY PD.PickDetailKey

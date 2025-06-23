@@ -5,13 +5,16 @@ GO
   
 /***************************************************************************/  
 /* Store procedure: rdt_840CaptureInfo01                                   */  
-/* Copyright      : LF Logistics                                           */  
+/* Copyright      : Maersk                                                 */
 /*                                                                         */  
 /* Date       Rev  Author  Purposes                                        */  
 /* 2023-03-31 1.0  James   WMS-22084. Created                              */  
 /* 2023-09-06 1.1  James   WMS-23401 Extra validation to determine whether */  
 /*                         need capture coo (james01)                      */  
 /* 2023-11-16 1.2  James   WMS-24181 Bug fix on coo default value (james02)*/
+/* 2024-08-08 1.3  James   WMS-24295 Check whether sku has unique          */
+/*                         lottable01 then flow thru data capture(james03) */
+/* 2024-11-08 1.4  PXL009  FCR-1118 Merged 1.3 from v0 branch              */
 /***************************************************************************/  
   
 CREATE OR ALTER PROC [RDT].[rdt_840CaptureInfo01](  
@@ -206,7 +209,14 @@ BEGIN
                              AND   Code = @cLottable01  
                              AND   Storerkey = @cStorerKey   
                              AND   LEN( Code) = 2)  
+                  BEGIN
                      SET @cData = @cLottable01  
+
+                     -- The SKU only contain 1 distinct lottable01
+                     -- auto flow to data capture screen
+                     SET @cDataCaptureInfo = 2
+                     SET @cInField02 = @cLottable01
+                  END
                END  
                  
                -- Set default value  

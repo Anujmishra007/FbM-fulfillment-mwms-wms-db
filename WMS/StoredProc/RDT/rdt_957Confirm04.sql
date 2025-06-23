@@ -16,11 +16,13 @@ GO
 /*          Conso carton (UOM = 7)                                                                 */
 /*             PackDetail.Status = 3                                                               */
 /*                                                                                                 */
-/* Date       Rev  Author     Purposes                                                             */
-/* 07-12-2023 1.0  Ung        WMS-24353 base on rdt_957Confirm02, 03                               */
-/* 04-29-2024 1.1  CYU027     UWP-18306 Short Pick                                                 */
-/* 06-05-2024 1.2  Dennis     FCR-133   Trigger only uom =7                                        */
-/* 08-05-2024 1.3  JHU151     FCR-330   No Pack Confirm                                            */
+/* Date       Rev   Author     Purposes                                                            */
+/* 07-12-2023 1.0   Ung        WMS-24353 base on rdt_957Confirm02, 03                              */
+/* 04-29-2024 1.1   CYU027     UWP-18306 Short Pick                                                */
+/* 06-05-2024 1.2   Dennis     FCR-133   Trigger only uom =7                                       */
+/* 08-05-2024 1.3   JHU151     FCR-330   No Pack Confirm                                           */
+/* 12-10-2024 1.4.0 LJQ006     FCR-1168  Adjust from WMS-24353, FCR-630                            */
+/* 12-16-2024 1.4.1 JCH507     FCR-1168  Store DropID to UCC.UDF03 instead of UDF01                */
 /***************************************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_957Confirm04] (
@@ -364,9 +366,12 @@ BEGIN
       WHILE @@FETCH_STATUS = 0
       BEGIN
          -- Update PickDetail
-         UPDATE dbo.PickDetail SET
+         UPDATE dbo.PickDetail WITH(ROWLOCK) SET
             Status = CASE WHEN UOM = '2' THEN '5' ELSE '3' END,
-            CaseID = CASE WHEN UOM = '2' THEN @cActUCCNo ELSE CaseID END,
+            --CaseID = CASE WHEN UOM = '2' THEN @cActUCCNo ELSE CaseID END,
+            CaseID = CASE WHEN UOM = '2' THEN @cDropID ELSE CaseID END,
+            Notes = @cActUCCNo,
+            DropID = @cDropID,
             EditDate = GETDATE(),
             EditWho = SUSER_SNAME()
          WHERE PickDetailKey = @cPickDetailKey
@@ -380,8 +385,10 @@ BEGIN
       END
 
       -- Actual
-      UPDATE dbo.UCC SET
+      UPDATE dbo.UCC WITH(ROWLOCK) SET
          Status = '5', -- 5=Picked
+         --UserDefined01 = @cDropID, --v1.4.1
+         UserDefined03 = @cDropID, --v1.4.1
          EditDate = GETDATE(),
          EditWho = SUSER_SNAME()
       WHERE StorerKey = @cStorerkey
@@ -482,10 +489,13 @@ BEGIN
          WHILE @@FETCH_STATUS = 0
          BEGIN
             -- Update PickDetail
-            UPDATE dbo.PickDetail SET
-               DropID = @cActUCCNo,
-               CaseID = CASE WHEN UOM = '2' THEN @cActUCCNo ELSE CaseID END,
+            UPDATE dbo.PickDetail WITH(ROWLOCK) SET
+               --DropID = @cActUCCNo,
+               DropID = @cDropID,
+               -- CaseID = CASE WHEN UOM = '2' THEN @cActUCCNo ELSE CaseID END,
+               CaseID = CASE WHEN UOM = '2' THEN @cDropID ELSE CaseID END,
                Status = @cPickConfirmStatus,
+               Notes = @cActUCCNo,
                EditDate = GETDATE(),
                EditWho = SUSER_SNAME()
             WHERE PickDetailKey = @cPickDetailKey
@@ -508,7 +518,7 @@ BEGIN
          FETCH NEXT FROM @curPD INTO @cPickDetailKey
          WHILE @@FETCH_STATUS = 0
          BEGIN
-            UPDATE dbo.PickDetail SET
+            UPDATE dbo.PickDetail WITH(ROWLOCK) SET
                QTY = 0,
                EditDate = GETDATE(),
                EditWho = SUSER_SNAME()
@@ -529,11 +539,14 @@ BEGIN
          FETCH NEXT FROM @curPD INTO @cPickDetailKey, @nQTY
          WHILE @@FETCH_STATUS = 0
          BEGIN
-            UPDATE dbo.PickDetail SET
+            UPDATE dbo.PickDetail WITH(ROWLOCK) SET
                Status = @cPickConfirmStatus,
                LOT = @cActUCCLOT,
-               DropID = @cActUCCNo,
-               CaseID = CASE WHEN UOM = '2' THEN @cActUCCNo ELSE CaseID END,
+               --DropID = @cActUCCNo,
+               DropID = @cDropID,
+               Notes = @cActUCCNo,
+               --CaseID = CASE WHEN UOM = '2' THEN @cActUCCNo ELSE CaseID END,
+               CaseID = CASE WHEN UOM = '2' THEN @cDropID ELSE CaseID END,
                QTY = @nQTY,
                EditDate = GETDATE(),
                EditWho = SUSER_SNAME()
@@ -549,7 +562,7 @@ BEGIN
       END
 
       -- Task
-      UPDATE dbo.UCC SET
+      UPDATE dbo.UCC WITH(ROWLOCK) SET
          Status = '1', -- 1=Received
          EditDate = GETDATE(),
          EditWho = SUSER_SNAME()
@@ -563,8 +576,10 @@ BEGIN
       END
 
       -- Actual
-      UPDATE dbo.UCC SET
+      UPDATE dbo.UCC WITH(ROWLOCK) SET
          Status = '5', -- 5=Picked
+         --UserDefined01 = @cDropID, --v1.4.1
+         UserDefined03 = @cDropID, --v1.4.1
          EditDate = GETDATE(),
          EditWho = SUSER_SNAME()
       WHERE StorerKey = @cStorerkey
@@ -630,9 +645,12 @@ BEGIN
          WHILE @@FETCH_STATUS = 0
          BEGIN
             -- Update PickDetail
-            UPDATE dbo.PickDetail SET
-               DropID = @cActUCCNo,
-               CaseID = CASE WHEN UOM = '2' THEN @cActUCCNo ELSE CaseID END,
+            UPDATE dbo.PickDetail WITH(ROWLOCK) SET
+               -- DropID = @cActUCCNo,
+               DropID = @cDropID,
+               -- CaseID = CASE WHEN UOM = '2' THEN @cActUCCNo ELSE CaseID END,
+               CaseID = CASE WHEN UOM = '2' THEN @cDropID ELSE CaseID END,
+               Notes = @cActUCCNo,
                Status = @cPickConfirmStatus,
                EditDate = GETDATE(),
                EditWho = SUSER_SNAME()
@@ -654,7 +672,7 @@ BEGIN
          WHILE @@FETCH_STATUS = 0
          BEGIN
             -- Update PickDetail
-            UPDATE dbo.PickDetail SET
+            UPDATE dbo.PickDetail WITH(ROWLOCK) SET
                DropID = @cTaskUCCNo,
                -- Status = @cPickConfirmStatus,
                EditDate = GETDATE(),
@@ -679,7 +697,7 @@ BEGIN
          FETCH NEXT FROM @curPD INTO @cPickDetailKey
          WHILE @@FETCH_STATUS = 0
          BEGIN
-            UPDATE dbo.PickDetail SET
+            UPDATE dbo.PickDetail WITH(ROWLOCK) SET
                QTY = 0,
                EditDate = GETDATE(),
                EditWho = SUSER_SNAME()
@@ -700,7 +718,7 @@ BEGIN
          FETCH NEXT FROM @curPD INTO @cPickDetailKey
          WHILE @@FETCH_STATUS = 0
          BEGIN
-            UPDATE dbo.PickDetail SET
+            UPDATE dbo.PickDetail WITH(ROWLOCK) SET
                QTY = 0,
                EditDate = GETDATE(),
                EditWho = SUSER_SNAME()
@@ -722,11 +740,14 @@ BEGIN
          FETCH NEXT FROM @curPD INTO @cPickDetailKey, @nQTY
          WHILE @@FETCH_STATUS = 0
          BEGIN
-            UPDATE dbo.PickDetail SET
+            UPDATE dbo.PickDetail WITH(ROWLOCK) SET
                Status = @cPickConfirmStatus,
                LOT = @cActUCCLOT,
-               DropID = @cActUCCNo,
-               CaseID = CASE WHEN UOM = '2' THEN @cActUCCNo ELSE CaseID END,
+               -- DropID = @cActUCCNo,
+               DropID = @cDropID,
+               --CaseID = CASE WHEN UOM = '2' THEN @cActUCCNo ELSE CaseID END,
+               CaseID = CASE WHEN UOM = '2' THEN @cDropID ELSE CaseID END,
+               Notes = @cActUCCNo,
                QTY = @nQTY,
                EditDate = GETDATE(),
                EditWho = SUSER_SNAME()
@@ -747,7 +768,7 @@ BEGIN
          FETCH NEXT FROM @curPD INTO @cPickDetailKey, @nQTY
          WHILE @@FETCH_STATUS = 0
          BEGIN
-            UPDATE dbo.PickDetail SET
+            UPDATE dbo.PickDetail WITH(ROWLOCK) SET
                -- Status = @cPickConfirmStatus,
                LOT = @cTaskLOT,
                DropID = @cTaskUCCNo,
@@ -766,8 +787,10 @@ BEGIN
       END
 
       -- Actual
-      UPDATE dbo.UCC SET
+      UPDATE dbo.UCC WITH(ROWLOCK) SET
          Status = '5', -- 5=Picked
+         --UserDefined01 = @cDropID, --v1.4.1
+         UserDefined03 = @cDropID, --v1.4.1
          EditDate = GETDATE(),
          EditWho = SUSER_SNAME()
       WHERE StorerKey = @cStorerkey
@@ -948,9 +971,12 @@ BEGIN
          WHILE @@FETCH_STATUS = 0
          BEGIN
             -- Update PickDetail
-            UPDATE dbo.PickDetail SET
-               DropID = @cActUCCNo,
-               CaseID = CASE WHEN UOM = '2' THEN @cActUCCNo ELSE CaseID END,
+            UPDATE dbo.PickDetail WITH(ROWLOCK) SET
+               -- DropID = @cActUCCNo,
+               DropID = @cDropID,
+               -- CaseID = CASE WHEN UOM = '2' THEN @cActUCCNo ELSE CaseID END,
+               CaseID = CASE WHEN UOM = '2' THEN @cDropID ELSE CaseID END,
+               Notes = @cActUCCNo,
                Status = @cPickConfirmStatus,
                EditDate = GETDATE(),
                EditWho = SUSER_SNAME()
@@ -965,7 +991,7 @@ BEGIN
          END
 
          -- Actual
-         UPDATE dbo.Replenishment SET
+         UPDATE dbo.Replenishment WITH(ROWLOCK) SET
             RefNo = @cTaskUCCNo,
             EditDate = GETDATE(),
             EditWho = SUSER_SNAME(),
@@ -987,7 +1013,7 @@ BEGIN
          FETCH NEXT FROM @curPD INTO @cPickDetailKey
          WHILE @@FETCH_STATUS = 0
          BEGIN
-            UPDATE dbo.PickDetail SET
+            UPDATE dbo.PickDetail WITH(ROWLOCK) SET
                QTY = 0,
                EditDate = GETDATE(),
                EditWho = SUSER_SNAME()
@@ -1008,7 +1034,7 @@ BEGIN
          FETCH NEXT FROM @curPD INTO @cPickDetailKey
          WHILE @@FETCH_STATUS = 0
          BEGIN
-            UPDATE dbo.PickDetail SET
+            UPDATE dbo.PickDetail WITH(ROWLOCK) SET
                QTY = 0,
                EditDate = GETDATE(),
                EditWho = SUSER_SNAME()
@@ -1029,10 +1055,13 @@ BEGIN
          FETCH NEXT FROM @curPD INTO @cPickDetailKey, @nQTY
          WHILE @@FETCH_STATUS = 0
          BEGIN
-            UPDATE dbo.PickDetail SET
+            UPDATE dbo.PickDetail WITH(ROWLOCK) SET
                LOT = @cActUCCLOT,
-               DropID = @cActUCCNo,
-               CaseID = CASE WHEN UOM = '2' THEN @cActUCCNo ELSE CaseID END,
+               --DropID = @cActUCCNo,
+               DropID = @cDropID,
+               -- CaseID = CASE WHEN UOM = '2' THEN @cActUCCNo ELSE CaseID END,
+               CaseID = CASE WHEN UOM = '2' THEN @cDropID ELSE CaseID END,
+               Notes = @cActUCCNo,
                QTY = @nQTY,
                Status = @cPickConfirmStatus,
                EditDate = GETDATE(),
@@ -1054,7 +1083,7 @@ BEGIN
          FETCH NEXT FROM @curPD INTO @cPickDetailKey, @nQTY
          WHILE @@FETCH_STATUS = 0
          BEGIN
-            UPDATE dbo.PickDetail SET
+            UPDATE dbo.PickDetail WITH(ROWLOCK) SET
                LOT = @cTaskLOT,
                -- DropID = @cTaskUCCNo,
                QTY = @nQTY,
@@ -1071,7 +1100,7 @@ BEGIN
          END
 
          -- Actual
-         UPDATE dbo.Replenishment SET
+         UPDATE dbo.Replenishment WITH(ROWLOCK) SET
             LOT = @cTaskLOT,
             RefNo = @cTaskUCCNo,
             EditDate = GETDATE(),
@@ -1089,7 +1118,7 @@ BEGIN
          IF @nActQTYReplen > 0
          BEGIN
             -- Task
-            UPDATE dbo.LOTxLOCxID SET
+            UPDATE dbo.LOTxLOCxID WITH(ROWLOCK) SET
                QTYReplen = QTYReplen + @nActQTYReplen,
                EditDate = GETDATE(),
                EditWho = SUSER_SNAME()
@@ -1104,7 +1133,7 @@ BEGIN
             END
 
             -- Actual
-            UPDATE dbo.LOTxLOCxID SET
+            UPDATE dbo.LOTxLOCxID WITH(ROWLOCK) SET
                QTYReplen = QTYReplen - @nActQTYReplen,
                EditDate = GETDATE(),
                EditWho = SUSER_SNAME()
@@ -1152,7 +1181,7 @@ BEGIN
       END
 
       -- Task
-      UPDATE dbo.UCC SET
+      UPDATE dbo.UCC WITH(ROWLOCK) SET
          Status = '4', -- 4=Replen
          EditDate = GETDATE(),
          EditWho = SUSER_SNAME()
@@ -1166,8 +1195,10 @@ BEGIN
       END
 
       -- Actual
-      UPDATE dbo.UCC SET
+      UPDATE dbo.UCC WITH(ROWLOCK) SET
          Status = '5', -- 5=Picked
+         --UserDefined01 = @cDropID, --v1.4.1
+         UserDefined03 = @cDropID, --v1.4.1
          EditDate = GETDATE(),
          EditWho = SUSER_SNAME()
       WHERE StorerKey = @cStorerkey
@@ -1203,7 +1234,7 @@ BEGIN
       FROM dbo.Orders O WITH (NOLOCK)
          JOIN dbo.PickDetail PD WITH (NOLOCK) ON (O.OrderKey = PD.OrderKey)
       WHERE O.StorerKey = @cStorerKey
-         AND PD.DropID = @cActUCCNo
+         AND PD.Notes = @cActUCCNo
          AND PD.Status <> '4'
          AND PD.QTY > 0
 
@@ -1304,7 +1335,8 @@ BEGIN
             ,@cPackDtlRefNo  = '' -- @cPackDtlRefNo
             ,@cPackDtlRefNo2 = '' -- @cPackDtlRefNo2
             ,@cPackDtlUPC    = '' -- @cPackDtlUPC
-            ,@cPackDtlDropID = @cActUCCNo -- @cPackDtlDropID
+            --,@cPackDtlDropID = @cActUCCNo -- @cPackDtlDropID
+            ,@cPackDtlDropID = @cDropID
             ,@nCartonNo      = @nCartonNo    OUTPUT
             ,@cLabelNo       = @cLabelNo     OUTPUT
             ,@nErrNo         = @nErrNo       OUTPUT
@@ -1345,7 +1377,8 @@ BEGIN
                ,@cPackDtlRefNo  = '' -- @cPackDtlRefNo
                ,@cPackDtlRefNo2 = '' -- @cPackDtlRefNo2
                ,@cPackDtlUPC    = '' -- @cPackDtlUPC
-               ,@cPackDtlDropID = @cActUCCNo -- @cPackDtlDropID
+               -- ,@cPackDtlDropID = @cActUCCNo -- @cPackDtlDropID
+               ,@cPackDtlDropID = @cDropID
                ,@nCartonNo      = @nCartonNo    OUTPUT
                ,@cLabelNo       = @cLabelNo     OUTPUT
                ,@nErrNo         = @nErrNo       OUTPUT
@@ -1437,7 +1470,7 @@ BEGIN
          IF @cPackConfirm = 'Y'
          BEGIN
             -- Pack confirm
-            UPDATE PackHeader SET
+            UPDATE PackHeader WITH(ROWLOCK) SET
                Status = '9'
             WHERE PickSlipNo = @cPackPickSlipNo
                AND Status <> '9'
@@ -1469,7 +1502,8 @@ BEGIN
       IF @cPickUOM = '7'
       BEGIN
          DECLARE @cKey NVARCHAR( 20)
-         SET @cKey =  @cActUCCNo
+         -- SET @cKey =  @cActUCCNo
+         SET @cKey = @cDropID
 
          EXEC dbo.ispGenTransmitLog2
             @c_TableName      = 'WSRDTTOTECFM',

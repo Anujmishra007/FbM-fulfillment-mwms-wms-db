@@ -8,9 +8,7 @@ IF NOT EXISTS ( SELECT 1 FROM RDT.RDTMSG (NOLOCK) WHERE MESSAGE_ID = 1653 AND Me
 -- 5800 = Scan Track No screen
 DELETE rdt.RDTScn WHERE Scn = 5800 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 5800, 'ENG',
-    @cLine01 = 'TRACKNO SORTTOPALLET'
-   ,@cLine02 = ''
-   ,@cLine03 = 'TRACK NO:'
+   @cLine03 = 'TRACK NO:'
    ,@cLine04 = '%100i01'
    ,@cLine05 = ''
    ,@cLine06 = ''
@@ -27,9 +25,7 @@ EXECUTE rdt.rdtAddScn 5800, 'ENG',
 -- 5801 = Scan Pallet ID screen
 DELETE rdt.RDTScn WHERE Scn = 5801 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 5801, 'ENG',
-    @cLine01 = 'TRACKNO SORTTOPALLET'
-   ,@cLine02 = ''
-   ,@cLine03 = 'TRACK NO:'
+   @cLine03 = 'TRACK NO:'
    ,@cLine04 = '%40d01'
    ,@cLine05 = 'ORDERKEY: %10d02'
    ,@cLine06 = 'SCAN PALLET:'
@@ -46,9 +42,7 @@ EXECUTE rdt.rdtAddScn 5801, 'ENG',
 -- 5802 = Confirm Pallet ID screen
 DELETE rdt.RDTScn WHERE Scn = 5802 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 5802, 'ENG',
-    @cLine01 = 'TRACKNO SORTTOPALLET'
-   ,@cLine02 = ''
-   ,@cLine03 = 'TRACK NO:'
+   @cLine03 = 'TRACK NO:'
    ,@cLine04 = '%40d01'
    ,@cLine05 = 'ORDERKEY: %10d02'
    ,@cLine06 = 'PLEASE PUT INTO'
@@ -65,9 +59,7 @@ EXECUTE rdt.rdtAddScn 5802, 'ENG',
 -- 5803 = Close Pallet ID screen
 DELETE rdt.RDTScn WHERE Scn = 5803 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 5803, 'ENG',
-    @cLine01 = 'TRACKNO SORTTOPALLET'
-   ,@cLine02 = ''
-   ,@cLine03 = 'PALLETKEY:'
+   @cLine03 = 'PALLETKEY:'
    ,@cLine04 = '%20i01'
    ,@cLine05 = ''
    ,@cLine06 = ''
@@ -85,9 +77,7 @@ EXECUTE rdt.rdtAddScn 5803, 'ENG',
 -- 5804 = Confirm Scan To Different Pallet ID screen
 DELETE rdt.RDTScn WHERE Scn = 5804 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 5804, 'ENG',
-    @cLine01 = 'TRACKNO SORTTOPALLET'
-   ,@cLine02 = ''
-   ,@cLine03 = 'SUGGESTED PALLETKEY:'
+   @cLine03 = 'SUGGESTED PALLETKEY:'
    ,@cLine04 = '%20d01'
    ,@cLine05 = ''
    ,@cLine06 = 'SCANNED PALLETKEY'
@@ -119,7 +109,7 @@ EXECUTE rdt.rdtAddScn 5805, 'ENG'
 -- 5806 = Confirm Scan new Lane screen
 DELETE rdt.RDTScn WHERE Scn = 5806 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 5806, 'ENG',
-        @cLine01 = 'PALLETKEY:'
+   @cLine01 = 'PALLETKEY:'
    ,@cLine02 = '%20d01'
    ,@cLine03 = ''
    ,@cLine04 = 'NEW LANE:'
@@ -139,20 +129,20 @@ EXECUTE rdt.rdtAddScn 5806, 'ENG',
 -- 5807 = SCAN TO LOC/LANE
 DELETE rdt.RDTScn WHERE Scn = 5807 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 5807, 'ENG',
-    @cLine01 = 'TRACKNO SORTTOPALLET'
-   ,@cLine02 = ''
-   ,@cLine03 = 'TRACK NO:'
-   ,@cLine04 = '%40d01'
-   ,@cLine05 = 'ORDERKEY: %10d02'
-   ,@cLine06 = 'SCAN PALLET: %20d03'
-   ,@cLine07 = ''
-   ,@cLine08 = 'SCAN TO PALLET:'
-   ,@cLine09 = '%20i04'
-   ,@cLine10 = ''
-   ,@cLine11 = 'LOC/LANE:'  -- WMS-20667
-   ,@cLine12 = '%20i05' -- WMS-20667
-   ,@cLine13 = '%20d15'
+   @cLine01 = 'TRACK NO:'
+   ,@cLine02 = '%40d01'
+   ,@cLine03 = 'ORDERKEY: %10d02'
+   ,@cLine04 = 'SCAN PALLET: %20d03'
+   ,@cLine05 = ''
+   ,@cLine06 = 'SCAN TO PALLET:'
+   ,@cLine07 = '%20i04'
+   ,@cLine08 = '%20d14'
+   ,@cLine09 = 'LOC/LANE:'  -- WMS-20667
+   ,@cLine10 = '%20i05' -- WMS-20667
+   ,@cLine11 = '%20d15'
+   ,@cLine12 = ''
    ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2"],"2":["6","7"],"3":["9","10"],"4":["11","12"]}'
    ,@nFunc = 1653
 
 -- FCR-950

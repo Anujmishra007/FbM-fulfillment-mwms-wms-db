@@ -1,10 +1,12 @@
 
 /******************************************************************************/  
 /* Store procedure: rdt_838ExtSNUpdVLT                                        */    
+/* Copyright      : Maersk                                                    */
 /*                                                                            */  
-/* Date         Author   Purposes                                             */  
-/* 22/05/2024   PPA374   Insert SN data in the Serial Number table            */  
-/* 08/08/2024   PPA374   Amended as per review comments                       */
+/* Date        Rev   Author   Purposes                                        */  
+/* 22/05/2024  1.0.0 PPA374   Insert SN data in the Serial Number table       */  
+/* 08/08/2024  1.1.0 PPA374   Amended as per review comments                  */
+/* 2024-12-04  1.2.0 PXL009   FCR-778 Violet Pack Changes                     */
 /******************************************************************************/  
   
 CREATE OR ALTER PROCEDURE [RDT].[rdt_838ExtSNUpdVLT]  
@@ -33,30 +35,38 @@ BEGIN
    DECLARE @nRowCount  INT  
    DECLARE @cChkStatus NVARCHAR(10)  
    DECLARE @cChkExternStatus NVARCHAR(10)  
-  
-   IF @nFunc = 838 and @nStep = 9 and @nInputKey = 1 --Pack, Serial number screen
-   BEGIN  
-      IF exists (select 1 from SerialNo (NOLOCK) where StorerKey = @cStorerKey and SerialNo = @cSerialNo)
-      BEGIN
-         SET @nErrNo = 218003
-         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo ,@cLangCode ,'DSP') -- 'SN is already used' 
-         GOTO quit
-      END
-      
-      DECLARE 
+   DECLARE 
       @cSerialNoKey NVARCHAR(20),
       @cOrderLineNumber NVARCHAR(5),
       @bsuccess INT =0,
       @cOrderkey NVARCHAR(20)
+  
+   IF @nFunc = 838 AND @nStep = 9 AND @nInputKey = 1 --Pack, Serial number screen
+   BEGIN
+      SELECT TOP 1 @cOrderkey = PD.Orderkey 
+      FROM dbo.PickDetail PD WITH (NOLOCK)  
+         JOIN dbo.PICKHEADER PH (NOLOCK)
+      ON PH.OrderKey = PD.OrderKey
+         WHERE PD.StorerKey = @cStorerKey  
+         AND PH.PickHeaderKey = @cDocNo  
+         AND PD.SKU = @cSKU  
 
+      IF EXISTS (SELECT 1 FROM dbo.SerialNo (NOLOCK) WHERE StorerKey = @cStorerKey AND SerialNo = @cSerialNo AND (OrderKey <> @cOrderkey OR SKU <> @cSKU))
+      BEGIN
+         SET @nErrNo = 230001
+         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo ,@cLangCode ,'DSP') -- 'SN is already used' 
+         GOTO quit
+      END
+      
       -- Get serial no info  
       SELECT TOP 1  
       @cChkStatus = Status,   
       @cChkExternStatus = ExternStatus  
-      FROM SerialNo WITH (NOLOCK)  
+      FROM dbo.SerialNo WITH (NOLOCK)  
       WHERE StorerKey = @cStorerKey  
-      AND SKU = @cSKU  
-      AND SerialNo = @cSerialNo  
+         AND OrderKey = @cOrderkey
+         AND SKU = @cSKU  
+         AND SerialNo = @cSerialNo
       SET @nRowCount = @@ROWCOUNT  
   
       -- Check SNO in ASN  
@@ -73,34 +83,26 @@ BEGIN
                  
          IF @bsuccess <> 1  
          BEGIN  
-            SET @nErrNo = 151351   
+            SET @nErrNo = 230002   
             SET @cErrMsg = rdt.rdtgetmessage(@nErrNo ,@cLangCode ,'DSP') -- 'GetKeyFail'  
             GOTO Quit
          END  
 
-      select top 1 @cOrderkey = PD.Orderkey 
-      FROM dbo.PickDetail PD WITH (NOLOCK)  
-         JOIN PICKHEADER PH (NOLOCK)
-      ON PH.OrderKey = PD.OrderKey
-         WHERE PD.StorerKey = @cStorerKey  
-         AND PH.PickHeaderKey = @cDocNo  
-         AND PD.SKU = @cSKU  
-
-      select top 1 @cOrderLineNumber = OrderLineNumber
-      from PICKDETAIL PD (NOLOCK)
-      where orderkey = @cOrderkey
-      and storerkey = @cStorerKey
-      and sku = @cSKU
-      and (select sum(qty) from PICKDETAIL (NOLOCK) where orderkey = @cOrderkey and storerkey = @cStorerKey and sku = @cSKU) 
-      - (select isnull(sum(qty),0) from SerialNo SN (NOLOCK) where SN.OrderKey = PD.OrderKey and SN.OrderLineNumber = PD.OrderLineNumber and Storerkey = @cStorerKey) > 0
-      order by OrderLineNumber
+         SELECT TOP 1 @cOrderLineNumber = OrderLineNumber
+         FROM dbo.PICKDETAIL PD (NOLOCK)
+         WHERE OrderKey = @cOrderkey
+         AND StorerKey = @cStorerKey
+         AND Sku = @cSKU
+         AND (SELECT SUM(qty) FROM dbo.PICKDETAIL (NOLOCK) WHERE OrderKey = @cOrderkey AND StorerKey = @cStorerKey AND Sku = @cSKU) 
+            - (SELECT ISNULL(SUM(qty),0) FROM dbo.SerialNo SN (NOLOCK) WHERE SN.OrderKey = PD.OrderKey AND SN.OrderLineNumber = PD.OrderLineNumber AND Storerkey = @cStorerKey) > 0
+         ORDER BY OrderLineNumber
             
          INSERT INTO SerialNo (SerialNoKey, OrderKey, OrderLineNumber, StorerKey, SKU, SerialNo, Qty)   
          VALUES (@cSerialNoKey, @cOrderkey,@cOrderLineNumber, @cStorerKey, @cSKU , @cSerialNo , 1)
               
          IF @@ERROR <> 0   
          BEGIN   
-            SET @nErrNo = 151352  
+            SET @nErrNo = 230003  
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- InsSerialNoFail  
             GOTO Quit    
          END
@@ -111,4 +113,6 @@ Quit:
   
 END  
 GO
+
 GRANT EXECUTE ON [RDT].[rdt_838ExtSNUpdVLT] TO [NSQL]
+GO

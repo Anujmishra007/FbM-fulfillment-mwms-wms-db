@@ -59,15 +59,17 @@ BEGIN
    BEGIN
       IF @nStep = 3
       BEGIN
-         BEGIN
-            UPDATE dbo.SKU WITH(ROWLOCK)
-               SET LottableCode = 'HUSQBATTERY'
-            WHERE Style = 'B' AND StorerKey = @cStorerKey AND LottableCode <> 'HUSQBATTERY'
-         
-            UPDATE dbo.SKU WITH(ROWLOCK)
-               SET LottableCode = 'HUSQSHELF'
-            WHERE Style = 'SHLV' AND StorerKey = @cStorerKey AND LottableCode <> 'HUSQSHELF'          
-         END
+	     UPDATE dbo.SKU WITH(ROWLOCK)
+         SET LottableCode = 'HUSQBATTERY'
+         WHERE Style = 'B' AND StorerKey = @cStorerKey AND LottableCode <> 'HUSQBATTERY'    
+      
+         UPDATE dbo.SKU WITH(ROWLOCK)
+         SET LottableCode = 'HUSQSHELF'
+         WHERE Style = 'SHLV' AND StorerKey = @cStorerKey AND LottableCode <> 'HUSQSHELF'   
+
+	     UPDATE dbo.SKU WITH(ROWLOCK)
+         SET LottableCode = 'HUSQSTD'
+         WHERE Style NOT IN ('SHLV','B') AND StorerKey = @cStorerKey AND LottableCode <> 'HUSQSTD'
       END
 
       IF @nStep = 6

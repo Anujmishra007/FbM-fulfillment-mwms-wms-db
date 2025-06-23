@@ -18,8 +18,6 @@ GO
 /*                            location and pallet id                        */
 /* 2024-10-25 1.3.1  JCH507   FCR-1084, add status when check label exists  */
 /*                            in pallet id                                  */
-/* 2024-10-31 1.4.0  NLT013   UWP-26400 The validation for new pallet       */
-/*                            does not work in some scenarios               */
 /*                                                                          */
 /*                                                                          */
 /****************************************************************************/
@@ -86,7 +84,34 @@ BEGIN
       @tCreateMBOLVar         VARIABLETABLE,
       @nRowCount              INT,
       @cNewPalletKeyPrefix    NVARCHAR(30),
-      @nCurrentScn            INT
+      @nCurrentScn            INT,
+      @cCaseID                NVARCHAR(20),
+      @cWaveType              NVARCHAR(18),
+      @cCODELKUPUdf01         NVARCHAR(60)='',
+      @cCODELKUPUdf02         NVARCHAR(60)='',
+      @cCODELKUPUdf03         NVARCHAR(60)='',
+      @cCODELKUPUdf04         NVARCHAR(60)='',
+      @cCODELKUPUdf05         NVARCHAR(60)='',
+      @cSQLString             NVARCHAR(MAX),
+      @cSQLParam              NVARCHAR(MAX)
+   -- Screen constant  
+   DECLARE  
+      @nStep_TrackNo          INT,  @nScn_TrackNo           INT,  
+      @nStep_ScanPalletID     INT,  @nScn_ScanPalletID      INT,  
+      @nStep_ShowPalletID     INT,  @nScn_ShowPalletID      INT,  
+      @nStep_ClosePallet      INT,  @nScn_ClosePallet       INT,  
+      @nStep_ScanDiffPallet   INT,  @nScn_ScanDiffPallet    INT,  
+      @nStep_PalletDimension  INT,  @nScn_PalletDimension   INT,  
+      @nStep_ConfirmNewLane   INT,  @nScn_ConfirmNewLane    INT  
+   
+   SELECT  
+      @nStep_TrackNo          = 1,   @nScn_TrackNo          = 5800,  
+      @nStep_ScanPalletID     = 2,   @nScn_ScanPalletID     = 5801,  
+      @nStep_ShowPalletID     = 3,   @nScn_ShowPalletID     = 5802,  
+      @nStep_ClosePallet      = 4,   @nScn_ClosePallet      = 5803,  
+      @nStep_ScanDiffPallet   = 5,   @nScn_ScanDiffPallet   = 5804,  
+      @nStep_PalletDimension  = 6,   @nScn_PalletDimension  = 5805,  
+      @nStep_ConfirmNewLane   = 7,   @nScn_ConfirmNewLane   = 5806  
 
    SELECT
       @cLabelNo               = V_String1,
@@ -115,9 +140,8 @@ BEGIN
 
             SELECT @cLabelNo = Value FROM @tExtScnData WHERE Variable = '@cLabelNo'
 
-            IF ISNULL( @cLabelNo, '' ) <> '' AND EXISTS (SELECT 1 FROM dbo.PalletDetail WITH(NOLOCK) 
-                                                            WHERE CaseID = @cLabelNo 
-                                                            AND Status <> '9' ) --V1.3.1
+            IF ISNULL( @cLabelNo, '' ) <> ''
+            AND EXISTS (SELECT 1 FROM dbo.PalletDetail WITH(NOLOCK) WHERE CaseID IS NOT NULL AND CaseID = @cLabelNo AND StorerKey = @cStorerKey AND Status <> '9' ) --V1.3.1
             BEGIN
                SET @cOutField01 = '' 
                SET @cOutField02 = @cPalletKey
@@ -125,13 +149,93 @@ BEGIN
                SET @nAfterScn = 6447
                GOTO Quit
             END
-            
+            SET @cOutField14 = ''
+            SELECT TOP 1 @cWaveType = W.WaveType
+            FROM dbo.PackDetail PD WITH (NOLOCK)  
+            JOIN dbo.PackHeader PH WITH (NOLOCK) ON ( PD.PickSlipNo = PH.PickSlipNo)  
+            JOIN dbo.ORDERS     O  WITH (NOLOCK) ON ( PH.OrderKey = O.OrderKey)
+            JOIN dbo.Wave       W  WITH (NOLOCK) ON ( W.WaveKey = O.UserDefine09)
+            WHERE PD.StorerKey = @cStorerKey
+               AND   PD.LabelNo = @cLabelNo
+            ORDER BY 1
+
+            IF TRIM(@cWaveType) NOT IN('', '0')
+               SELECT TOP 1
+                  @cCODELKUPUdf01 = SUBSTRING(TRIM(UDF01), CHARINDEX('.',TRIM(UDF01)) + 1, LEN(TRIM(UDF01))),
+                  @cCODELKUPUdf02 = SUBSTRING(TRIM(UDF02), CHARINDEX('.',TRIM(UDF02)) + 1, LEN(TRIM(UDF02))),
+                  @cCODELKUPUdf03 = SUBSTRING(TRIM(UDF03), CHARINDEX('.',TRIM(UDF03)) + 1, LEN(TRIM(UDF03))),
+                  @cCODELKUPUdf04 = SUBSTRING(TRIM(UDF04), CHARINDEX('.',TRIM(UDF04)) + 1, LEN(TRIM(UDF04))),
+                  @cCODELKUPUdf05 = SUBSTRING(TRIM(UDF05), CHARINDEX('.',TRIM(UDF05)) + 1, LEN(TRIM(UDF05)))
+               FROM dbo.CODELKUP WITH(NOLOCK)
+               WHERE LISTNAME = 'WAVETYPE'
+                  AND StorerKey = @cStorerKey 
+                  AND Code = @cWaveType
+            ELSE
+               SET @cCODELKUPUdf01 = 'MBOLKey'
+
+            SET @cCODELKUPUdf01 = ISNULL(@cCODELKUPUdf01, '')
+            SET @cCODELKUPUdf02 = ISNULL(@cCODELKUPUdf02, '')
+            SET @cCODELKUPUdf03 = ISNULL(@cCODELKUPUdf03, '')
+            SET @cCODELKUPUdf04 = ISNULL(@cCODELKUPUdf04, '')
+            SET @cCODELKUPUdf05 = ISNULL(@cCODELKUPUdf05, '')
+
+            SET @cTrackNo = @cOutField01
             --FCR-539 Pallet Found, loc uneditable
             IF @cPalletKey <> 'NEW PALLET' AND ISNULL(@cPalletKey,'') <> ''
             BEGIN
                SET @cFieldAttr05 = 'O'
+               BEGIN TRY
+                  SET @cSQLString =
+                  'WITH FilteredPalletDetail AS (
+                     SELECT
+                        UserDefine01,
+                        UserDefine02,
+                        UserDefine03,
+                        UserDefine04,
+                        UserDefine05,
+                        CaseID
+                     FROM
+                        dbo.PalletDetail PD2 WITH (NOLOCK)
+                     WHERE
+                        PD2.palletkey = @cPalletKey
+                        AND PD2.StorerKey = @cStorerKey
+                  )
+                  SELECT distinct
+                     @cCaseID = PD.caseid
+                  FROM dbo.PickDetail PD WITH (NOLOCK)
+                  INNER JOIN dbo.Orders O WITH (NOLOCK) ON PD.orderkey = O.orderkey AND PD.StorerKey = O.StorerKey
+                  INNER JOIN dbo.PackInfo PI WITH(NOLOCK) ON PI.RefNo IS NOT NULL AND PD.CaseID = PI.RefNo AND PI.CartonStatus = ''PACKED''
+                  WHERE
+                     PD.StorerKey = @cStorerKey
+                     AND PD.Status = ''5''
+                     AND NOT EXISTS ( SELECT 1 FROM FilteredPalletDetail FPD WHERE FPD.CaseID = PD.CaseID AND EXISTS ( SELECT 1 FROM FilteredPalletDetail FPD2 WHERE FPD2.UserDefine01 = FPD.UserDefine01))'
+                     +IIF(@cCODELKUPUdf01 <> '',   ' AND EXISTS(SELECT 1 FROM FilteredPalletDetail FPD WHERE ISNULL(FPD.UserDefine01,'''') = O.' + @cCODELKUPUdf01 + ') ', '')
+                     +IIF(@cCODELKUPUdf02 <> '',   ' AND EXISTS(SELECT 1 FROM FilteredPalletDetail FPD WHERE ISNULL(FPD.UserDefine02,'''') = O.' + @cCODELKUPUdf02 + ') ', '')
+                     +IIF(@cCODELKUPUdf03 <> '',   ' AND EXISTS(SELECT 1 FROM FilteredPalletDetail FPD WHERE ISNULL(FPD.UserDefine03,'''') = O.' + @cCODELKUPUdf03 + ') ', '')
+                     +IIF(@cCODELKUPUdf04 <> '',   ' AND EXISTS(SELECT 1 FROM FilteredPalletDetail FPD WHERE ISNULL(FPD.UserDefine04,'''') = O.' + @cCODELKUPUdf04 + ') ', '')
+                     +IIF(@cCODELKUPUdf05 <> '',   ' AND EXISTS(SELECT 1 FROM FilteredPalletDetail FPD WHERE ISNULL(FPD.UserDefine05,'''') = O.' + @cCODELKUPUdf05 + ') ', '')
 
-               SELECT @nRowCount = COUNT(DISTINCT CaseID) FROM dbo.PalletDetail WITH(NOLOCK) WHERE PalletKey = @cPalletKey AND ISNULL(CaseID, '') <> ''
+                  SET @cSQLParam =  '@cStorerKey NVARCHAR( 15), @cPalletKey NVARCHAR(20), @cCaseID NVARCHAR(20) OUTPUT'
+                  EXEC sp_executesql @cSQLString, @cSQLParam, 
+                     @cStorerKey = @cStorerKey, @cPalletKey = @cPalletKey, @cCaseID = @cCaseID OUTPUT
+                  SET @nRowCount = @@ROWCOUNT
+                  IF @nRowCount = 1 AND @cCaseID = @cTrackNo
+                     SET @cOutField14 = 'LAST CARTON'
+                  
+                  SELECT @nRowCount = COUNT(DISTINCT CaseID) FROM dbo.PalletDetail WITH(NOLOCK) WHERE PalletKey = @cPalletKey AND CaseID IS NOT NULL AND CaseID <> '' AND StorerKey = @cStorerKey
+               END TRY
+               BEGIN CATCH
+                  SET @nErrNo = 219109
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Execute SQL Statement Fail
+                  
+                  -- Prep next screen var  
+                  SET @cOutField01 = '' -- Track No  
+                  SET @cOutField02 = '' -- Option  
+               
+                  SET @nAfterScn = @nScn_TrackNo  
+                  SET @nAfterStep = @nStep_TrackNo  
+                  GOTO Quit
+               END CATCH
             END
             ELSE
             --FCR-539 Pallet not Found, loc found, uneditable
@@ -142,8 +246,73 @@ BEGIN
                --Do not override LOC
                IF @cOverrideLoc = '0' AND @cLane <> ''
                   SET @cFieldAttr05 = 'O'
+               BEGIN TRY
+                  SET @cSQLString =
+                     'WITH FilteredOrders AS (
+                        SELECT '
+                        +IIF(@cCODELKUPUdf01 <> '',   'O2.'+@cCODELKUPUdf01+', ','')
+                        +IIF(@cCODELKUPUdf02 <> '',   'O2.'+@cCODELKUPUdf02+', ','')
+                        +IIF(@cCODELKUPUdf03 <> '',   'O2.'+@cCODELKUPUdf03+', ','')
+                        +IIF(@cCODELKUPUdf04 <> '',   'O2.'+@cCODELKUPUdf04+', ','')
+                        +IIF(@cCODELKUPUdf05 <> '',   'O2.'+@cCODELKUPUdf05+', ','')
+                     +' O2.ORDERKEY
+                        FROM dbo.Orders O2 WITH (NOLOCK)
+                        INNER JOIN dbo.PickDetail PD2 WITH (NOLOCK) ON PD2.ORDERKEY = O2.ORDERKEY AND O2.StorerKey = PD2.StorerKey
+                        WHERE
+                           PD2.CaseID = @cTrackNo
+                           AND O2.StorerKey = @cStorerKey
+                     ),
+                     FilteredPalletDetail AS (
+                        SELECT
+                           PD2.CaseID,
+                           PD2.UserDefine01
+                        FROM dbo.PalletDetail PD2 WITH (NOLOCK)
+                        WHERE
+                           EXISTS (
+                                 SELECT 1
+                                 FROM dbo.Orders O2 WITH (NOLOCK)
+                                 INNER JOIN dbo.PickDetail PD3 WITH (NOLOCK) ON PD3.ORDERKEY = O2.ORDERKEY AND O2.StorerKey = PD3.StorerKey
+                                 WHERE
+                                    PD3.CaseID = @cTrackNo
+                                    AND O2.MBOLKey = PD2.UserDefine01
+                                    AND O2.StorerKey = @cStorerKey
+                           )
+                           AND PD2.StorerKey = @cStorerKey
+                     )
+                     SELECT DISTINCT
+                        @cCaseID = PD.caseid
+                     FROM dbo.PickDetail PD WITH (NOLOCK)
+                     INNER JOIN dbo.Orders O WITH (NOLOCK) ON PD.orderkey = O.orderkey AND PD.StorerKey = O.StorerKey
+                     INNER JOIN dbo.PackInfo PI WITH(NOLOCK) ON PI.RefNo IS NOT NULL AND PD.CaseID = PI.RefNo AND PI.CartonStatus = ''PACKED''
+                     WHERE
+                        PD.StorerKey = @cStorerKey
+                        AND PD.Status = ''5''
+                        AND NOT EXISTS ( SELECT 1 FROM FilteredPalletDetail FPD WHERE FPD.CaseID = PD.CaseID ) '
+                        +IIF(@cCODELKUPUdf01 <> '',   ' AND EXISTS ( SELECT 1 FROM FilteredOrders FO WHERE (FO.' + @cCODELKUPUdf01 + ' IS NULL AND O.' + @cCODELKUPUdf01 + ' IS NULL) OR (FO.'+ @cCODELKUPUdf01 + ' IS NOT NULL AND O.' + @cCODELKUPUdf01 + ' IS NOT NULL AND FO.'+ @cCODELKUPUdf01 + ' = O.' + @cCODELKUPUdf01 + '))', '')
+                        +IIF(@cCODELKUPUdf02 <> '',   ' AND EXISTS ( SELECT 1 FROM FilteredOrders FO WHERE (FO.' + @cCODELKUPUdf02 + ' IS NULL AND O.' + @cCODELKUPUdf02 + ' IS NULL) OR (FO.'+ @cCODELKUPUdf02 + ' IS NOT NULL AND O.' + @cCODELKUPUdf02 + ' IS NOT NULL AND FO.'+ @cCODELKUPUdf02 + ' = O.' + @cCODELKUPUdf02 + '))', '')
+                        +IIF(@cCODELKUPUdf03 <> '',   ' AND EXISTS ( SELECT 1 FROM FilteredOrders FO WHERE (FO.' + @cCODELKUPUdf03 + ' IS NULL AND O.' + @cCODELKUPUdf03 + ' IS NULL) OR (FO.'+ @cCODELKUPUdf03 + ' IS NOT NULL AND O.' + @cCODELKUPUdf03 + ' IS NOT NULL AND FO.'+ @cCODELKUPUdf03 + ' = O.' + @cCODELKUPUdf03 + '))', '')
+                        +IIF(@cCODELKUPUdf04 <> '',   ' AND EXISTS ( SELECT 1 FROM FilteredOrders FO WHERE (FO.' + @cCODELKUPUdf04 + ' IS NULL AND O.' + @cCODELKUPUdf04 + ' IS NULL) OR (FO.'+ @cCODELKUPUdf04 + ' IS NOT NULL AND O.' + @cCODELKUPUdf04 + ' IS NOT NULL AND FO.'+ @cCODELKUPUdf04 + ' = O.' + @cCODELKUPUdf04 + '))', '')
+                        +IIF(@cCODELKUPUdf05 <> '',   ' AND EXISTS ( SELECT 1 FROM FilteredOrders FO WHERE (FO.' + @cCODELKUPUdf05 + ' IS NULL AND O.' + @cCODELKUPUdf05 + ' IS NULL) OR (FO.'+ @cCODELKUPUdf05 + ' IS NOT NULL AND O.' + @cCODELKUPUdf05 + ' IS NOT NULL AND FO.'+ @cCODELKUPUdf05 + ' = O.' + @cCODELKUPUdf05 + '))', '')
 
-               SET @nRowCount = 0
+                  SET @cSQLParam =  '@cStorerKey NVARCHAR( 15), @cTrackNo NVARCHAR(40), @cCaseID NVARCHAR(20) OUTPUT'
+                  EXEC sp_executesql @cSQLString, @cSQLParam, 
+                     @cStorerKey = @cStorerKey, @cTrackNo = @cTrackNo, @cCaseID = @cCaseID OUTPUT
+                  SET @nRowCount = @@ROWCOUNT
+                  IF @nRowCount = 1 AND @cCaseID = @cTrackNo
+                     SET @cOutField14 = 'LAST CARTON'
+                  SET @nRowCount = 0
+               END TRY
+               BEGIN CATCH
+                  SET @nErrNo = 219109
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Execute SQL Statement Fail
+                  -- Prep next screen var  
+                  SET @cOutField01 = '' -- Track No  
+                  SET @cOutField02 = '' -- Option  
+               
+                  SET @nAfterScn = @nScn_TrackNo  
+                  SET @nAfterStep = @nStep_TrackNo  
+                  GOTO Quit
+               END CATCH
             END
 
             SET @cInField05 = @cLane
@@ -172,7 +341,7 @@ BEGIN
                      LOC/LANE:         (field05, input)
                ********************************************************************************/
                -- Initialize value
-               --SET @cSuggPalletKey = @cOutField03
+               SET @cSuggPalletKey = @cOutField03
                SET @cPalletKey = @cInField04
 
                IF ISNULL(@cOverrideLoc,'0') <> '1' AND @cLane <> @cInField05 AND ISNULL(@cLane,'') <> ''
@@ -234,46 +403,46 @@ BEGIN
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --PalletExists
                      GOTO Step_ShowPalletID_Fail
                   END
-               END
 
-               IF ISNULL(@cInField05,'') = ''
-               BEGIN
-                  SET @nErrNo = 219156
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Location is required
-                  GOTO Step_ShowPalletID_Fail
-               END
+                  IF ISNULL(@cInField05,'') = ''
+                  BEGIN
+                     SET @nErrNo = 219156
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Location is required
+                     GOTO Step_ShowPalletID_Fail
+                  END
 
-               IF NOT EXISTS ( SELECT 1
-                              FROM dbo.LOC WITH (NOLOCK)
-                              WHERE LOC = @cInField05
-                              AND Facility = @cFacility)
-               BEGIN
-                  SET @nErrNo = 219155
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --LOC NOT FOUND
-                  GOTO Step_ShowPalletID_Fail
-               END
+                  IF NOT EXISTS ( SELECT 1
+                                 FROM dbo.LOC WITH (NOLOCK)
+                                 WHERE LOC = @cInField05
+                                 AND Facility = @cFacility)
+                  BEGIN
+                     SET @nErrNo = 219155
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --LOC NOT FOUND
+                     GOTO Step_ShowPalletID_Fail
+                  END
 
-               SELECT @nRowCount = COUNT(1)
-               FROM dbo.CODELKUP WITH(NOLOCK)
-               WHERE LISTNAME = 'LVSPLTLOC'
-                  AND StorerKey = @cStorerKey
+                  SELECT @nRowCount = COUNT(1)
+                  FROM dbo.CODELKUP WITH(NOLOCK)
+                  WHERE LISTNAME = 'LVSPLTLOC'
+                     AND StorerKey = @cStorerKey
 
-               IF @nRowCount = 0
-               BEGIN
-                  SET @nErrNo = 219163
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --NoLocPre
-                  GOTO Step_ShowPalletID_Fail
-               END
+                  IF @nRowCount = 0
+                  BEGIN
+                     SET @nErrNo = 219163
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --NoLocPre
+                     GOTO Step_ShowPalletID_Fail
+                  END
 
-               IF NOT EXISTS ( SELECT 1
-                              FROM dbo.CODELKUP WITH (NOLOCK)
-                              WHERE StorerKey = @cStorerKey
-                                 AND ListName = 'LVSPLTLOC'
-                                 AND Code = LEFT(@cInField05, LEN(Code)) )
-               BEGIN
-                  SET @nErrNo = 219164
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InvalidLoc
-                  GOTO Step_ShowPalletID_Fail
+                  IF NOT EXISTS ( SELECT 1
+                                 FROM dbo.CODELKUP WITH (NOLOCK)
+                                 WHERE StorerKey = @cStorerKey
+                                    AND ListName = 'LVSPLTLOC'
+                                    AND Code = LEFT(@cInField05, LEN(Code)) )
+                  BEGIN
+                     SET @nErrNo = 219164
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InvalidLoc
+                     GOTO Step_ShowPalletID_Fail
+                  END
                END
 
                IF EXISTS(SELECT 1
@@ -348,6 +517,7 @@ BEGIN
                -- Prep next screen var
                SET @cOutField01 = '' -- Track No
                SET @cOutField02 = ''
+               SET @cOutField15 = ''
 
                SET @nAfterScn = 5800
                SET @nAfterStep = 1
@@ -384,7 +554,9 @@ BEGIN
 
                   SELECT TOP 1 @cPalletKey = PalletKey 
                   FROM dbo.PalletDetail WITH(NOLOCK)
-                  WHERE ISNULL(CaseID, '') = @cLabelNo
+                  WHERE CaseID IS NOT NULL
+                     AND CaseID = @cLabelNo
+                     AND StorerKey = @cStorerKey
 
                   IF @nTranCount = 0
                   BEGIN
@@ -399,11 +571,14 @@ BEGIN
                      --Remove PalletDetails
                      DELETE FROM dbo.PalletDetail
                      WHERE PalletKey = @cPalletKey
-                        AND ISNULL(CaseID, '') = @cLabelNo
+                     AND CaseID IS NOT NULL
+                     AND CaseID = @cLabelNo
+                     AND StorerKey = @cStorerKey
 
                      SELECT @nRowCount = COUNT(1) 
                      FROM dbo.PalletDetail WITH(NOLOCK)
                      WHERE PalletKey = @cPalletKey
+                     AND StorerKey = @cStorerKey
 
                      --If no detail, need remove the Pallet Header
                      IF @nRowCount = 0
@@ -473,7 +648,7 @@ BEGIN
    END
 Quit:
 END
-GO
+
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS ON

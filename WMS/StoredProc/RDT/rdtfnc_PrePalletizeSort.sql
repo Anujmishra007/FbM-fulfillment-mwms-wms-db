@@ -31,6 +31,10 @@ GO
 /*                            sku (james04)                             */
 /* 2023-08-16   1.9  James    WMS-23334 Add UCC format check (james05)  */
 /* 2023-10-27   2.0  James    WMS-23878 Add packinfo entry (james06)    */
+/* 2024-11-06   2.1.0 XLL045  FCR-1066  Add cPosition                   */
+/*                            Check UserDefine02 in UCC                 */
+/*                            Upd beforereceivedqty                     */
+/* 2025-06-18   0.0.0 Jackc   !!!Cutover. Use V0 repor for work!!!      */
 /************************************************************************/    
     
 CREATE OR ALTER PROC [RDT].[rdtfnc_PrePalletizeSort] (    
@@ -88,7 +92,7 @@ DECLARE
    @cExtendedInfo       NVARCHAR( 20),    
    @cExtendedInfoSP     NVARCHAR( 20),    
    @cExtendedValidateSP NVARCHAR( 20),    
-   @cExtendedUpdateSP   NVARCHAR( 20),    
+   @cExtendedUpdateSP   NVARCHAR( 20),   
    @tExtValidVar        VariableTable,    
    @tExtUpdateVar       VariableTable,    
    @tExtInfoVar         VariableTable,          
@@ -383,6 +387,7 @@ BEGIN
    SET @cExtendedUpdateSP = rdt.RDTGetConfig( @nFunc, 'ExtendedUpdateSP', @cStorerkey)    
    IF @cExtendedUpdateSP IN ('0', '')    
       SET @cExtendedUpdateSP = ''    
+ 
     
    SET @cPalletizeAllowAddNewUCC = rdt.RDTGetConfig( @nFunc, 'PalletizeAllowAddNewUCC', @cStorerkey)    
    SET @cAllowOverrideSuggID = rdt.RDTGetConfig( @nFunc, 'AllowOverrideSuggID', @cStorerkey)    
@@ -1071,6 +1076,46 @@ BEGIN
          GOTO Step_TOID_Fail          
       END      
           
+      -- Extended validate
+      IF @cExtendedValidateSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedValidateSP AND type = 'P')
+         BEGIN
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cFacility, @cStorerKey, ' +
+               ' @cReceiptKey, @cLane, @cUCC, @cToID, @cSKU, @nQty, @cOption, @cPosition, @tExtValidVar, ' +
+               ' @nErrNo OUTPUT, @cErrMsg OUTPUT '
+            SET @cSQLParam =
+               ' @nMobile        INT,           ' +
+               ' @nFunc          INT,           ' +
+               ' @cLangCode      NVARCHAR( 3),  ' +
+               ' @nStep          INT,           ' +
+               ' @nAfterStep     INT,           ' +
+               ' @nInputKey      INT,           ' +
+               ' @cFacility      NVARCHAR( 5),  ' +
+               ' @cStorerKey     NVARCHAR( 15), ' +
+               ' @cReceiptKey    NVARCHAR( 10), ' +
+               ' @cLane          NVARCHAR( 10), ' +
+               ' @cUCC           NVARCHAR( 20), ' +
+               ' @cToID          NVARCHAR( 18), ' +
+               ' @cSKU           NVARCHAR( 20), ' +
+               ' @nQty           INT,           ' +
+               ' @cOption        NVARCHAR( 1),  ' +
+               ' @cPosition      NVARCHAR( 20), ' +
+               ' @tExtValidVar   VariableTable READONLY, ' +
+               ' @nErrNo         INT           OUTPUT,   ' +
+               ' @cErrMsg        NVARCHAR( 20) OUTPUT    '
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cFacility, @cStorerKey,
+               @cReceiptKey, @cLane, @cUCC, @cToID, @cSKU, @nQty, @cOption, @cPosition, @tExtValidVar,
+               @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+            IF @nErrNo <> 0
+               GOTO Step_TOID_Fail
+         END
+      END
+      
       IF @cSuggID <> '' AND ( @cSuggID <> @cToID)    
       BEGIN    
          IF EXISTS( SELECT 1 FROM dbo.sysobjects WITH (NOLOCK) WHERE name = @cAllowOverrideSuggID AND type = 'P')    
@@ -1165,6 +1210,49 @@ BEGIN
     
       IF @nErrNo <> 0    
          GOTO Step_TOID_Fail    
+      
+      -- Extended validate    
+      IF @cExtendedUpdateSP <> ''    
+      BEGIN
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedUpdateSP AND type = 'P')    
+         BEGIN    
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +    
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cFacility, @cStorerKey, ' +    
+               ' @cReceiptKey, @cLane, @cUCC, @cToID, @cSKU, @nQty, @cOption, @cPosition, @tExtUpdateVar, ' +    
+               ' @nErrNo OUTPUT, @cErrMsg OUTPUT '    
+            SET @cSQLParam =    
+               ' @nMobile        INT,           ' +    
+               ' @nFunc          INT,           ' +    
+               ' @cLangCode      NVARCHAR( 3),  ' +    
+               ' @nStep          INT,           ' +    
+               ' @nAfterStep     INT,           ' +    
+               ' @nInputKey      INT,           ' +    
+               ' @cFacility      NVARCHAR( 5),  ' +     
+               ' @cStorerKey     NVARCHAR( 15), ' +    
+               ' @cReceiptKey    NVARCHAR( 10), ' +    
+               ' @cLane          NVARCHAR( 10), ' +    
+               ' @cUCC           NVARCHAR( 20), ' +    
+               ' @cToID          NVARCHAR( 18), ' +    
+               ' @cSKU           NVARCHAR( 20), ' +    
+               ' @nQty           INT,           ' +    
+               ' @cOption        NVARCHAR( 1),  ' +                   
+               ' @cPosition      NVARCHAR( 20), ' +    
+               ' @tExtUpdateVar  VariableTable READONLY, ' +     
+               ' @nErrNo         INT           OUTPUT,   ' +    
+               ' @cErrMsg        NVARCHAR( 20) OUTPUT    '    
+         
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,    
+               @nMobile, @nFunc, @cLangCode, @nStep, @nAfterStep, @nInputKey, @cFacility, @cStorerKey,      
+               @cReceiptKey, @cLane, @cUCC, @cToID, @cSKU, @nQty, @cOption, @cPosition, @tExtUpdateVar,    
+               @nErrNo OUTPUT, @cErrMsg OUTPUT    
+         
+            IF @nErrNo <> 0    
+            BEGIN     
+               GOTO Step_TOID_Fail    
+            END                
+         END    
+         
+      END
 
       IF @cClosePallet = '1'    
       BEGIN    
@@ -1411,7 +1499,7 @@ BEGIN
                 
          IF @nErrNo <> 0    
             GOTO Step_ClosePallet_Fail     
-    
+
          SET @cOutField01 = ''    
          SET @cOutField02 = 'PA TASK CREATED'    
                 
@@ -1433,7 +1521,7 @@ BEGIN
          SET @nStep = @nStep_UCC     
          GOTO Quit    
       END    
-    
+
    END    
        
    IF @nInputKey = 0 -- Esc or No    

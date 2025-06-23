@@ -4,12 +4,13 @@ SET ANSI_NULLS OFF
 GO
 
 /************************************************************************/  
-/* Store procedure: rdt_ActionByReason                                     */  
+/* Store procedure: rdt_ActionByReason                                  */  
 /*                                                                      */  
 /* Purpose: Puma                                                        */  
 /*                                                                      */  
 /* Date       Rev  Author     Purposes                                  */  
-/* 2024-07-14 1.0  JHU151     FCR-428. Created                          */  
+/* 2024-07-14 1.0    JHU151   FCR-428. Created                          */  
+/* 2024-11-08 1.1    YYS027   FCR-989 use @cFunc instead of @nFunc      */
 /************************************************************************/  
 CREATE OR ALTER PROC [RDT].[rdt_ActionByReason] (
    @nMobile          INT,           
@@ -44,14 +45,17 @@ BEGIN
       @cOrderKey         NVARCHAR(10) = '',
       @cLoadKey          NVARCHAR(10) = '',
       @cZone             NVARCHAR(18) = ''
+   DECLARE 
+      @cFunc             NVARCHAR(20)      
          
+   SELECT @cFunc = CONVERT(NVARCHAR(20),@nFunc)
    SELECT 
       @cCCTaskType = UDF01,-- CC task type
       @cHoldType = UDF02, -- Hold type
       @cHoldCheckFlg = CASE WHEN ISNULL(UDF03,'') = 'X' THEN '1' ELSE '0' END
    FROM codelkup 
    WHERE listname = 'RDTREASON'
-   AND code = @nFunc
+   AND code = @cFunc
    AND code2 = @cReasonCode
    AND storerkey = @cStorerKey
 

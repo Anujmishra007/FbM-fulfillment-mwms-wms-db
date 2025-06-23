@@ -24,6 +24,8 @@ GO
 /* 24-08-2020  Ung       2.0   WMS-13505 Add UCCNo                            */
 /* 20-03-2023  Ung       2.1   WMS-21946 Add SerialNo                         */
 /* 27-09-2023  Ung       2.2   WMS-23678 Fix UPC and ID co exist at same time */
+/* 25-11-2024  YYS027    2.3   v0 migrate to v2: to void error when           */
+/*                             no matched records for all fixed case          */
 /******************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_Decode (
@@ -194,18 +196,22 @@ BEGIN
       -- All fields are fix length
       IF NOT EXISTS( SELECT 1 FROM BarcodeConfigDetail WITH (NOLOCK) WHERE DecodeCode = @cDecodeCode AND LengthType = 'VARIABLE')
       BEGIN
+         DECLARE @nCount INT
          -- Calc total lenght
-         SELECT @nPatternLen = ISNULL( SUM( MaxLength + DATALENGTH( FieldIdentifier)/2), 0)
+         SELECT @nCount = COUNT(1), @nPatternLen = ISNULL( SUM( MaxLength + DATALENGTH( FieldIdentifier)/2), 0)
          FROM BarcodeConfigDetail WITH (NOLOCK) 
          WHERE DecodeCode = @cDecodeCode
             AND ((@cType = 'UPC' AND Type IN ( '', 'UPC')) 
              OR Type = @cType)
 
-         -- Check length
-         IF @nPatternLen <> DATALENGTH( @cBarcode)/2
+         IF(@nCount>0)     -- to void error when no matched records for all fixed case (yys027)
          BEGIN
-            SET @nErrNo = 98905
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid length
+            -- Check length
+            IF @nPatternLen <> DATALENGTH( @cBarcode)/2
+            BEGIN
+               SET @nErrNo = 98905
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid length
+            END
          END
       END
 

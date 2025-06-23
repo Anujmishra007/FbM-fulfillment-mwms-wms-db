@@ -1,8 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrTaskDetailUpdate]') 
-              and OBJECTPROPERTY(id, N'IsTrigger') = 1) 
-drop trigger [dbo].[ntrTaskDetailUpdate]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -11,16 +6,14 @@ GO
 /************************************************************************/        
 /* Trigger: ntrTaskDetailUpdate                                         */        
 /* Creation Date:                                                       */        
-/* Copyright: IDS                                                       */        
+/* Copyright: MAersk Logistics                                          */     
 /* Written by:                                                          */        
 /*                                                                      */        
 /* Purpose:                                                             */        
 /*                                                                      */        
-/* Called By:                                                           */        
-/*                                                                      */        
-/* PVCS Version: 1.3                                                    */        
-/*                                                                      */        
-/* Version: 5.4                                                         */        
+/* Called By:                                                           */   
+/*                                                                      */ 
+/* Version: 3.7                                                         */       
 /*                                                                      */        
 /* Data Modifications:                                                  */        
 /*                                                                      */        
@@ -75,8 +68,11 @@ GO
 /*                               PendingMoveIn to LotXLocXId            */ 
 /* 30-Aug-2017  3.6     NJOW04   WMS-1965 support change Pendingmovein  */
 /*                               and QtyReplen                          */
-/************************************************************************/        
-CREATE TRIGGER [dbo].[ntrTaskDetailUpdate]        
+/* 17-Apl-2025  3.7     Wan03    UWP-32707 - FCR-3957 - JCB Putaway Using*/
+/*                               TM SCE                                 */
+/************************************************************************/ 
+       
+CREATE OR ALTER TRIGGER [dbo].[ntrTaskDetailUpdate]        
 ON  [dbo].[TaskDetail]        
 FOR UPDATE        
 AS        
@@ -92,19 +88,21 @@ BEGIN
    SET CONCAT_NULL_YIELDS_NULL OFF        
         
    DECLARE        
-   @b_Success            int       -- Populated by calls to stored procedures - was the proc successful?        
-   ,         @n_err                int       -- Error number returned by stored procedure or this trigger        
-   ,         @n_err2 int              -- For Additional Error Detection        
-   ,         @c_errmsg             NVARCHAR(250) -- Error message returned by stored procedure or this trigger        
-   ,         @n_continue     int        
-   ,         @n_starttcnt    int              -- Holds the current transaction count        
-   ,         @c_preprocess   NVARCHAR(250)         -- preprocess        
-   ,         @c_pstprocess   NVARCHAR(250)         -- post process        
-   ,         @n_cnt          int        
-   ,         @c_logicaltoloc NVARCHAR(10)  -- fbr028c        
-   ,         @n_QtyToMove    INT    
-   ,         @n_LotQty       INT    
-   ,         @c_ReservedID   NVARCHAR(18) --NJOW04
+      @b_Success        int            -- Populated by calls to stored procedures - was the proc successful?        
+   ,  @n_err            int            -- Error number returned by stored procedure or this trigger        
+   ,  @n_err2           int            -- For Additional Error Detection        
+   ,  @c_errmsg         NVARCHAR(250)  -- Error message returned by stored procedure or this trigger        
+   ,  @n_continue       int        
+   ,  @n_starttcnt      int            -- Holds the current transaction count        
+   ,  @c_preprocess     NVARCHAR(250)  -- preprocess        
+   ,  @c_pstprocess     NVARCHAR(250)  -- post process        
+   ,  @n_cnt            int        
+   ,  @c_logicaltoloc   NVARCHAR(10)   -- fbr028c        
+   ,  @n_QtyToMove      INT    
+   ,  @n_LotQty         INT    
+   ,  @c_ReservedID     NVARCHAR(18) --NJOW04
+   ,  @c_Facility                   NVARCHAR(5)  = ''                         --(Wan03)
+   ,  @c_TaskMultiLotLPNLockPMI     NVARCHAR(10) = '0'                        --(Wan03)
        
    DECLARE @c_LocationCategy NVARCHAR(10) -- (Vicky02)        
         
@@ -158,20 +156,20 @@ BEGIN
                  JOIN storerconfig s WITH (NOLOCK) ON  d.storerkey = s.storerkey    
                  JOIN sys.objects sys ON sys.type = 'P' AND sys.name = s.Svalue
                  WHERE  s.configkey = 'TaskDetailTrigger_SP')  
-      BEGIN        	  
+      BEGIN            
          IF OBJECT_ID('tempdb..#INSERTED') IS NOT NULL
             DROP TABLE #INSERTED
 
-      	 SELECT * 
-      	 INTO #INSERTED
-      	 FROM INSERTED
+          SELECT * 
+          INTO #INSERTED
+          FROM INSERTED
             
          IF OBJECT_ID('tempdb..#DELETED') IS NOT NULL
             DROP TABLE #DELETED
 
-      	 SELECT * 
-      	 INTO #DELETED
-      	 FROM DELETED
+          SELECT * 
+          INTO #DELETED
+          FROM DELETED
 
          EXECUTE dbo.isp_TaskDetailTrigger_Wrapper
                    'UPDATE'  --@c_Action
@@ -229,16 +227,16 @@ BEGIN
                @d_lottable04        datetime,        
                @d_lottable05        datetime        
       -- (Vicky04) - End   
-		
-		 -- (CS01) - Start        
+      
+       -- (CS01) - Start        
       DECLARE  @c_lottable06        NVARCHAR(30),        
                @c_lottable07        NVARCHAR(30),        
                @c_lottable08        NVARCHAR(30), 
-					@c_lottable09        NVARCHAR(30),        
+               @c_lottable09        NVARCHAR(30),        
                @c_lottable10        NVARCHAR(30),        
                @c_lottable11        NVARCHAR(30), 
-					@c_lottable12        NVARCHAR(30),
-					@d_lottable13        datetime,       
+               @c_lottable12        NVARCHAR(30),
+               @d_lottable13        datetime,       
                @d_lottable14        datetime,        
                @d_lottable15        datetime        
       -- (CS01) - End         
@@ -312,7 +310,8 @@ BEGIN
          /*CS01 End*/           
         
          -- (Vicky02) - Start        
-         SELECT @c_LocationCategy = LocationCategory         
+         SELECT @c_LocationCategy = LocationCategory
+               ,@c_Facility       = Facility                                        --(Wan03)
          FROM   LOC l WITH (NOLOCK)        
          WHERE  l.Loc = @c_toloc        
          -- (Vicky02) - End        
@@ -1346,14 +1345,14 @@ BEGIN
                                      @c_lottable03 = Lottable03,        
                                      @d_lottable04 = Lottable04,        
                                      @d_lottable05 = Lottable05,
-												 @c_lottable06 = Lottable06,		--CS01        
+                                     @c_lottable06 = Lottable06,     --CS01        
                                      @c_lottable07 = Lottable07,     --CS01   
                                      @c_lottable08 = Lottable08,     --CS01
-												 @c_lottable09 = Lottable09,     --CS01   
+                                     @c_lottable09 = Lottable09,     --CS01   
                                      @c_lottable10 = Lottable10,     --CS01   
-                                     @c_lottable11 = Lottable11,		--CS01
-												 @c_lottable12 = Lottable12,		--CS01
-												 @d_lottable13 = Lottable13,     --CS01
+                                     @c_lottable11 = Lottable11,     --CS01
+                                     @c_lottable12 = Lottable12,     --CS01
+                                     @d_lottable13 = Lottable13,     --CS01
                                      @d_lottable14 = Lottable14,     --CS01   
                                      @d_lottable15 = Lottable15      --CS01   
                               FROM LotAttribute WITH (NOLOCK)        
@@ -1381,14 +1380,14 @@ BEGIN
                                  @c_lottable03   = @c_lottable03, -- (Vicky04)        
                                  @d_lottable04   = @d_lottable04, -- (Vicky04)        
                                  @d_lottable05   = @d_lottable05, -- (Vicky04)  
-											@c_lottable06   = @c_lottable06, -- (CS01)        
+                                 @c_lottable06   = @c_lottable06, -- (CS01)        
                                  @c_lottable07   = @c_lottable07, -- (CS01)        
                                  @c_lottable08   = @c_lottable08, -- (CS01)
-											@c_lottable09   = @c_lottable09, -- (CS01)        
+                                 @c_lottable09   = @c_lottable09, -- (CS01)        
                                  @c_lottable10   = @c_lottable10, -- (CS01)        
                                  @c_lottable11   = @c_lottable11, -- (CS01)
-											@c_lottable12   = @c_lottable12, -- (CS01)
-											@d_lottable13   = @d_lottable13, -- (CS01)        
+                                 @c_lottable12   = @c_lottable12, -- (CS01)
+                                 @d_lottable13   = @d_lottable13, -- (CS01)        
                                  @d_lottable14   = @d_lottable14, -- (CS01)        
                                  @d_lottable15   = @d_lottable15, -- (CS01)      
                                  @n_casecnt      = 0,        
@@ -1470,14 +1469,14 @@ BEGIN
                                      @c_lottable03 = Lottable03,        
                                      @d_lottable04 = Lottable04,        
                                      @d_lottable05 = Lottable05,
-												 @c_lottable06 = Lottable06,		--CS01        
+                                     @c_lottable06 = Lottable06,     --CS01        
                                      @c_lottable07 = Lottable07,     --CS01   
                                      @c_lottable08 = Lottable08,     --CS01
-												 @c_lottable09 = Lottable09,     --CS01   
+                                     @c_lottable09 = Lottable09,     --CS01   
                                      @c_lottable10 = Lottable10,     --CS01   
-                                     @c_lottable11 = Lottable11,		--CS01
-												 @c_lottable12 = Lottable12,		--CS01
-												 @d_lottable13 = Lottable13,     --CS01
+                                     @c_lottable11 = Lottable11,     --CS01
+                                     @c_lottable12 = Lottable12,     --CS01
+                                     @d_lottable13 = Lottable13,     --CS01
                                      @d_lottable14 = Lottable14,     --CS01   
                                      @d_lottable15 = Lottable15      --CS01         
                               FROM LotAttribute WITH (NOLOCK)        
@@ -1508,14 +1507,14 @@ BEGIN
                                  @c_lottable03   = @c_lottable03, -- (Vicky04)        
                                  @d_lottable04   = @d_lottable04, -- (Vicky04)        
                                  @d_lottable05   = @d_lottable05, -- (Vicky04) 
-											@c_lottable06   = @c_lottable06, -- (CS01)        
+                                 @c_lottable06   = @c_lottable06, -- (CS01)        
                                  @c_lottable07   = @c_lottable07, -- (CS01)        
                                  @c_lottable08   = @c_lottable08, -- (CS01)
-											@c_lottable09   = @c_lottable09, -- (CS01)        
+                                 @c_lottable09   = @c_lottable09, -- (CS01)        
                                  @c_lottable10   = @c_lottable10, -- (CS01)        
                                  @c_lottable11   = @c_lottable11, -- (CS01)
-											@c_lottable12   = @c_lottable12, -- (CS01)
-											@d_lottable13   = @d_lottable13, -- (CS01)        
+                                 @c_lottable12   = @c_lottable12, -- (CS01)
+                                 @d_lottable13   = @d_lottable13, -- (CS01)        
                                  @d_lottable14   = @d_lottable14, -- (CS01)        
                                  @d_lottable15   = @d_lottable15, -- (CS01)          
                                  @n_casecnt      = 0,        
@@ -1558,14 +1557,14 @@ BEGIN
                                   @c_lottable03 = Lottable03,        
                                   @d_lottable04 = Lottable04,        
                                   @d_lottable05 = Lottable05,
-											 @c_lottable06 = Lottable06,		--CS01        
+                                  @c_lottable06 = Lottable06,     --CS01        
                                   @c_lottable07 = Lottable07,     --CS01   
                                   @c_lottable08 = Lottable08,     --CS01
-											 @c_lottable09 = Lottable09,     --CS01   
+                                  @c_lottable09 = Lottable09,     --CS01   
                                   @c_lottable10 = Lottable10,     --CS01   
-                                  @c_lottable11 = Lottable11,		--CS01
-										 	 @c_lottable12 = Lottable12,		--CS01
-										 	 @d_lottable13 = Lottable13,     --CS01
+                                  @c_lottable11 = Lottable11,     --CS01
+                                  @c_lottable12 = Lottable12,     --CS01
+                                  @d_lottable13 = Lottable13,     --CS01
                                   @d_lottable14 = Lottable14,     --CS01   
                                   @d_lottable15 = Lottable15      --CS01        
                            FROM LotAttribute WITH (NOLOCK)        
@@ -1610,14 +1609,14 @@ BEGIN
                            @c_lottable03   = @c_lottable03, -- (Vicky04)        
                            @d_lottable04   = @d_lottable04, -- (Vicky04)        
                            @d_lottable05   = @d_lottable05, -- (Vicky04)  
-									@c_lottable06   = @c_lottable06, -- (CS01)        
+                           @c_lottable06   = @c_lottable06, -- (CS01)        
                            @c_lottable07   = @c_lottable07, -- (CS01)        
                            @c_lottable08   = @c_lottable08, -- (CS01)
-									@c_lottable09   = @c_lottable09, -- (CS01)        
+                           @c_lottable09   = @c_lottable09, -- (CS01)        
                            @c_lottable10   = @c_lottable10, -- (CS01)        
                            @c_lottable11   = @c_lottable11, -- (CS01)
-									@c_lottable12   = @c_lottable12, -- (CS01)
-									@d_lottable13   = @d_lottable13, -- (CS01)        
+                           @c_lottable12   = @c_lottable12, -- (CS01)
+                           @d_lottable13   = @d_lottable13, -- (CS01)        
                            @d_lottable14   = @d_lottable14, -- (CS01)        
                            @d_lottable15   = @d_lottable15, -- (CS01)         
                            @n_casecnt      = 0,        
@@ -1694,16 +1693,16 @@ BEGIN
                                  @c_lottable03 = Lottable03,        
                                  @d_lottable04 = Lottable04,        
                                  @d_lottable05 = Lottable05,
-										   @c_lottable06 = Lottable06,		--CS01        
+                                 @c_lottable06 = Lottable06,      --CS01        
                                  @c_lottable07 = Lottable07,     --CS01   
                                  @c_lottable08 = Lottable08,     --CS01
-											@c_lottable09 = Lottable09,     --CS01   
+                                 @c_lottable09 = Lottable09,     --CS01   
                                  @c_lottable10 = Lottable10,     --CS01   
-                                 @c_lottable11 = Lottable11,		--CS01
-											@c_lottable12 = Lottable12,		--CS01
-											@d_lottable13 = Lottable13,     --CS01
+                                 @c_lottable11 = Lottable11,      --CS01
+                                 @c_lottable12 = Lottable12,      --CS01
+                                 @d_lottable13 = Lottable13,     --CS01
                                  @d_lottable14 = Lottable14,     --CS01   
-                                 @d_lottable15 = Lottable15      --CS01  	        
+                                 @d_lottable15 = Lottable15      --CS01            
                           FROM LotAttribute WITH (NOLOCK)        
                           WHERE Lot = @c_lot        
                           AND   StorerKey = @c_storerkey        
@@ -1729,14 +1728,14 @@ BEGIN
                            @c_lottable03   = @c_lottable03, -- (Vicky04)        
                            @d_lottable04   = @d_lottable04, -- (Vicky04)       
                            @d_lottable05   = @d_lottable05, -- (Vicky04)    
-									@c_lottable06   = @c_lottable06, -- (CS01)        
+                           @c_lottable06   = @c_lottable06, -- (CS01)        
                            @c_lottable07   = @c_lottable07, -- (CS01)        
                            @c_lottable08   = @c_lottable08, -- (CS01)
-									@c_lottable09   = @c_lottable09, -- (CS01)        
+                           @c_lottable09   = @c_lottable09, -- (CS01)        
                            @c_lottable10   = @c_lottable10, -- (CS01)        
                            @c_lottable11   = @c_lottable11, -- (CS01)
-									@c_lottable12   = @c_lottable12, -- (CS01)
-									@d_lottable13   = @d_lottable13, -- (CS01)        
+                           @c_lottable12   = @c_lottable12, -- (CS01)
+                           @d_lottable13   = @d_lottable13, -- (CS01)        
                            @d_lottable14   = @d_lottable14, -- (CS01)        
                            @d_lottable15   = @d_lottable15, -- (CS01)    
                            @n_casecnt      = 0,        
@@ -1852,15 +1851,15 @@ BEGIN
          END  
          
          IF @n_continue IN(1,2)  --NJOW03 Update status to close or cancel
-         BEGIN         	 
-         	 IF @n_QtyReplen2 > 0 AND ISNULL(@c_Lot,'') <> '' AND ISNULL(@c_FromLoc,'') <> '' AND @c_Status IN ('X','9') AND @c_deletedStatus NOT IN('X','9')
-         	 BEGIN
+         BEGIN           
+             IF @n_QtyReplen2 > 0 AND ISNULL(@c_Lot,'') <> '' AND ISNULL(@c_FromLoc,'') <> '' AND @c_Status IN ('X','9') AND @c_deletedStatus NOT IN('X','9')
+             BEGIN
                IF EXISTS(SELECT 1 FROM LOTXLOCXID (NOLOCK)                                                         
                          WHERE Lot = @c_Lot                                                                        
                          AND Loc = @c_FromLoc                                                                      
                          AND ID = @c_FromID)                                                                       
                BEGIN                                                                                               
-               	 UPDATE LOTXLOCXID WITH (ROWLOCK)                                                                 
+                   UPDATE LOTXLOCXID WITH (ROWLOCK)                                                                 
                   SET QtyReplen = CASE WHEN (ISNULL(QtyReplen,0) - @n_QtyReplen2) < 0 THEN 0 ELSE ISNULL(QtyReplen,0) - @n_QtyReplen2 END                                                   
                   WHERE Lot = @c_Lot                                                                               
                   AND Loc = @c_FromLoc                                                                             
@@ -1891,25 +1890,49 @@ BEGIN
                             ':  Update TASKDETAIL Failed! (ntrTaskDetailUpdate)'
                   END          
                END                                                                                                 
-         	 END
+            END
 
-         	 IF @n_PendingMoveIn > 0 AND ISNULL(@c_Lot,'') <> '' AND ISNULL(@c_FromLoc,'') <> '' AND ISNULL(@c_ToLoc,'') <> '' AND @c_Status IN ('X','9') AND @c_deletedStatus NOT IN('X','9') 
-         	 BEGIN
-         	 	  SET @c_ReservedID = ''
-         	 	  
-              SELECT @c_ReservedID = ID
-         	 	  FROM dbo.RFPutaway (NOLOCK)
-         	 	  WHERE Taskdetailkey = @c_TaskdetailKey
-         	 	  
-         	 	  SET @n_cnt = @@ROWCOUNT
-         	 	  
-         	 	  IF @n_cnt = 0
-         	 	     SET @c_ReservedID = @c_ToID
+            SET @c_TaskMultiLotLPNLockPMI = '0'                                                 --(Wan03)
+            SET @c_TaskMultiLotLPNLockPMI = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, ''      --(Wan03)
+                                             , 'TaskMultiLotLPNLockPMI')    
+            IF @n_PendingMoveIn > 0 --AND ISNULL(@c_Lot,'') <> ''                               --(Wan03)
+            AND ((@c_Lot > '') OR                                                               --(Wan03)
+                 (@c_TaskMultiLotLPNLockPMI = '1' AND @c_FromID > '' AND @c_Lot = ''))          --(Wan03)                                
+            AND ISNULL(@c_FromLoc,'') <> '' AND ISNULL(@c_ToLoc,'') <> '' 
+            AND @c_Status IN ('X','9') AND @c_deletedStatus NOT IN('X','9') 
+            BEGIN
+               SET @c_ReservedID = ''
+                 
+               SELECT @c_ReservedID = ID
+               FROM dbo.RFPutaway (NOLOCK)
+               WHERE Taskdetailkey = @c_TaskdetailKey
+                 
+               SET @n_cnt = @@ROWCOUNT
+                 
+               IF @n_cnt = 0
+                  SET @c_ReservedID = @c_ToID
 
-               IF EXISTS(SELECT 1 FROM LOTXLOCXID (NOLOCK)                                                         
-                         WHERE Lot = @c_Lot                                                                        
-                         AND Loc = @c_ToLoc                                                                      
-                         AND ID = @c_ReservedID)                                                                       
+               SET @n_cnt = 0                                                                      --(Wan03) - START   
+               IF @c_Lot = '' AND @c_ReservedID > ''                                                   
+               BEGIN
+                  SELECT @n_Cnt = 1 
+                  FROM LOTXLOCXID (NOLOCK)                                                         
+                  WHERE Loc = @c_ToLoc                                                                      
+                  AND   ID  = @c_ReservedID
+               END
+               ELSE
+               BEGIN
+                  SELECT @n_Cnt = 1 
+                  FROM LOTXLOCXID (NOLOCK)                                                         
+                  WHERE Lot = @c_Lot                                                                        
+                  AND   Loc = @c_ToLoc                                                                      
+                  AND   ID  = @c_ReservedID
+               END
+               --IF EXISTS(SELECT 1 FROM LOTXLOCXID (NOLOCK)                                                         
+               --          WHERE Lot = @c_Lot                                                                        
+               --          AND Loc = @c_ToLoc                                                                      
+               --          AND ID = @c_ReservedID)  
+               IF @n_Cnt > 0                                                                       --(Wan03) - END
                BEGIN                                                                                               
                   EXEC rdt.rdt_Putaway_PendingMoveIn 
                        @cUserName = ''
@@ -1952,104 +1975,289 @@ BEGIN
                             ':  Update TASKDETAIL Failed! (ntrTaskDetailUpdate)'
                   END          
                END                                                                                                 
-         	 END            	 
+            END               
          END           
 
          IF @n_continue IN(1,2)  --NJOW04 change qtyreplen or pendingmoveid but not cancel or close
          BEGIN
-         	 --update qtyreplen
-         	 IF @n_QtyReplen2 <> @n_deletedQtyReplen AND ISNULL(@c_Lot,'') <> '' AND ISNULL(@c_FromLoc,'') <> '' AND @c_Status NOT IN ('X','9')
-         	 BEGIN
-              IF EXISTS(SELECT 1 FROM LOTXLOCXID (NOLOCK)                                                         
+            --update qtyreplen
+            IF @n_QtyReplen2 <> @n_deletedQtyReplen AND ISNULL(@c_Lot,'') <> '' AND ISNULL(@c_FromLoc,'') <> '' AND @c_Status NOT IN ('X','9')
+            BEGIN
+               IF EXISTS(SELECT 1 FROM LOTXLOCXID (NOLOCK)                                                         
                         WHERE Lot = @c_Lot                                                                        
                         AND Loc = @c_FromLoc                                                                      
                         AND ID = @c_FromID)                                                                       
-              BEGIN                                      
-              	 UPDATE LOTXLOCXID WITH (ROWLOCK)                                                                 
-                 SET QtyReplen = CASE WHEN (ISNULL(QtyReplen,0) + (@n_QtyReplen2 - @n_deletedQtyReplen)) < 0 THEN 0 ELSE ISNULL(QtyReplen,0) + (@n_QtyReplen2 - @n_deletedQtyReplen) END                                                   
-                 WHERE Lot = @c_Lot                                                                               
-                 AND Loc = @c_FromLoc                                                                             
-                 AND ID = @c_FromID                                                                               
+               BEGIN                                      
+                  UPDATE LOTXLOCXID WITH (ROWLOCK)                                                                 
+                  SET QtyReplen = CASE WHEN (ISNULL(QtyReplen,0) + (@n_QtyReplen2 - @n_deletedQtyReplen)) < 0 THEN 0 ELSE ISNULL(QtyReplen,0) + (@n_QtyReplen2 - @n_deletedQtyReplen) END                                                   
+                  WHERE Lot = @c_Lot                                                                               
+                  AND Loc = @c_FromLoc                                                                             
+                  AND ID = @c_FromID                                                                               
                                                                                                                   
-                 SET @n_err = @@ERROR                                                                             
+                  SET @n_err = @@ERROR                                                                             
                                                                                                                   
-                 IF @n_err <> 0                                                                                   
-                 BEGIN                                                                                            
-                    SELECT @n_continue = 3
-                          ,@n_err = 67839 
-                    SELECT @c_errmsg = 'NSQL'+CONVERT(CHAR(5) ,@n_err)+
+                  IF @n_err <> 0                                                                                   
+                  BEGIN                                                                                            
+                     SELECT @n_continue = 3
+                           ,@n_err = 67839 
+                     SELECT @c_errmsg = 'NSQL'+CONVERT(CHAR(5) ,@n_err)+
                            ':  Update LOTXLOCXID Failed! (ntrTaskDetailUpdate)'
-                 END    
-              END     
-           END     
+                  END    
+               END     
+            END     
            
-           --update pendingmovein   
-         	 IF @n_PendingMoveIn <> @n_deletedPendingMoveIn AND ISNULL(@c_Lot,'') <> '' AND ISNULL(@c_FromLoc,'') <> '' AND ISNULL(@c_ToLoc,'') <> '' AND @c_Status NOT IN ('X','9')
-         	 BEGIN         	 	  
-
-         	 	  SET @c_ReservedID = ''
-         	 	  
-              SELECT @c_ReservedID = ID
-         	 	  FROM dbo.RFPutaway (NOLOCK)
-         	 	  WHERE Taskdetailkey = @c_TaskdetailKey
-         	 	  
-         	 	  SET @n_cnt = @@ROWCOUNT
-         	 	  
-         	 	  IF @n_cnt = 0
-         	 	     SET @c_ReservedID = @c_ToID
-
-         	 	  --amend qty
-         	 	  IF @n_PendingMoveIn > 0 AND @n_deletedPendingMoveIn > 0
-         	 	  BEGIN         	 	     
-         	 	     IF @n_cnt > 0
-         	 	     BEGIN
-         	 	        UPDATE dbo.RFPutaway WITH (ROWLOCK)
-         	 	        SET Qty = CASE WHEN (Qty + (@n_PendingMoveIn - @n_deletedPendingMoveIn)) < 0 THEN 0 ELSE Qty + (@n_PendingMoveIn - @n_deletedPendingMoveIn) END  
-         	 	     	  WHERE Taskdetailkey = @c_Taskdetailkey         	    	  	  
+            --update pendingmovein   
+            IF @n_PendingMoveIn <> @n_deletedPendingMoveIn 
+            -- AND ISNULL(@c_Lot,'') <> ''                                                         --(Wan03)
+            AND ((@c_Lot > '') OR                                                                  --(Wan03)
+                 (@c_TaskMultiLotLPNLockPMI = '1' AND @c_FromID > '' AND @c_Lot = ''))             --(Wan03)     
+            AND ISNULL(@c_FromLoc,'') <> '' AND ISNULL(@c_ToLoc,'') <> '' 
+            AND @c_Status NOT IN ('X','9')
+            BEGIN                 
+               SET @c_ReservedID = ''
                  
-                    SET @n_err = @@ERROR                                                                             
+               SELECT @c_ReservedID = ID
+               FROM dbo.RFPutaway (NOLOCK)
+               WHERE Taskdetailkey = @c_TaskdetailKey
+                 
+               SET @n_cnt = @@ROWCOUNT
+                 
+               IF @n_cnt = 0
+                  SET @c_ReservedID = @c_ToID
+
+               --amend qty
+               IF @n_PendingMoveIn > 0 AND @n_deletedPendingMoveIn > 0  
+               BEGIN 
+                  IF @c_ReservedID > '' AND @c_Lot = ''                             --(Wan03) - START
+                  BEGIN
+                     IF EXISTS ( SELECT 1 FROM LotxLocxID lli (NOLOCK)
+                                 WHERE lli.Loc = @c_fromloc
+                                 AND   lli.ID  = @c_ReservedID 
+                                 GROUP BY lli.Loc, lli.ID
+                                 HAVING SUM(lli.QTY) < @n_PendingMoveIn
+                               )
+                     BEGIN
+                        SET @n_continue = 3
+                        SET @n_err = 67844 
+                        SET @c_errmsg = 'NSQL'+CONVERT(CHAR(5) ,@n_err)+
+                              ': PendingMoveIn Qty > LPN Qty (ntrTaskDetailUpdate)'                        
+                     END
+
+                     IF @n_continue = 1
+                     BEGIN 
+                        DECLARE @n_RowRef             INT = 0      
+                              , @n_PendingMoveInDiff  INT = 0
+                              , @n_QtyPendingMoveIn   INT = 0
+                              , @n_QtyToUpd           INT = 0
+                              , @n_PlusMinus          INT = 1
+                        DECLARE @CUR_PMI CURSOR
+
+                        SET @n_PendingMoveInDiff = @n_PendingMoveIn - @n_deletedPendingMoveIn
+                        
+                        IF @n_PendingMoveInDiff > 0 
+                        BEGIN
+                           SET @n_PlusMinus = 1
+                           SET @n_PendingMoveInDiff = @n_PendingMoveInDiff * @n_PlusMinus
+
+                           SET @CUR_PMI = CURSOR LOCAL FAST_FORWARD FOR
+                           SELECT lli.Lot, QtyPendingMoveIn = lli.Qty - ISNULL(rf.Qty,0), rf.RowRef
+                           FROM LOTXLOCxID lli (NOLOCK)
+                           LEFT OUTER JOIN RFPUTAWAY rf (NOLOCK) ON  rf.Lot     = lli.Lot
+                                                                 AND rf.FromLoc = lli.Loc
+                                                                 AND rf.FromID  = lli.ID
+                                                                 AND rf.Sku     = lli.Sku
+                           WHERE lli.Loc = @c_fromloc
+                           AND   lli.ID  = @c_ReservedID
+                           AND   lli.Qty > ISNULL(rf.Qty,0) 
+                           ORDER BY lli.Qty - ISNULL(rf.Qty,0) ASC   
+                                  , lli.Lot
+                        END
+                        ELSE
+                        BEGIN
+                           SET @n_PlusMinus = -1
+                           SET @n_PendingMoveInDiff = @n_PendingMoveInDiff * @n_PlusMinus
+
+                           SET @CUR_PMI = CURSOR LOCAL FAST_FORWARD FOR
+                           SELECT lli.Lot, lli.Qty, rf.RowRef
+                           FROM LOTXLOCxID lli (NOLOCK)
+                           JOIN RFPUTAWAY rf (NOLOCK) ON  rf.Lot     = lli.Lot
+                                                      AND rf.FromLoc = lli.Loc
+                                                      AND rf.FromID  = lli.ID
+                                                      AND rf.Sku     = lli.Sku
+                           WHERE lli.Loc = @c_fromloc
+                           AND   lli.ID  = @c_ReservedID
+                           AND   rf.Qty  > 0
+                           AND   rf.Qty  > 0
+                           ORDER BY CASE WHEN rf.Qty = @n_PendingMoveInDiff THEN 1 
+                                         WHEN rf.Qty = @n_PendingMoveInDiff THEN 2
+                                         ELSE 3
+                                         END
+                        END
+
+                        OPEN @CUR_PMI
+
+                        FETCH NEXT FROM @CUR_PMI INTO @c_Lot, @n_QtyPendingMoveIn, @n_RowRef
+
+                        WHILE @@FETCH_STATUS <> -1 AND @n_PendingMoveInDiff > 0 AND @n_continue = 1
+                        BEGIN
+                           IF @n_PendingMoveInDiff > @n_QtyPendingMoveIn
+                           BEGIN
+                              SET @n_QtyToUpd = @n_QtyPendingMoveIn
+                           END
+                           ELSE
+                           BEGIN
+                              SET @n_QtyToUpd = @n_PendingMoveInDiff
+                           END
+
+                           SET @n_PendingMoveInDiff = @n_PendingMoveInDiff - @n_QtyToUpd
+
+                           SET @n_QtyToUpd = @n_QtyToUpd * @n_PlusMinus
+ 
+                           IF @n_RowRef IS NULL
+                           BEGIN
+                              EXEC rdt.rdt_Putaway_PendingMoveIn 
+                                  @cUserName       = ''
+                                 ,@cType           = 'LOCK'
+                                 ,@cFromLoc        = @c_FromLoc
+                                 ,@cFromID         = @c_FromID
+                                 ,@cSuggestedLOC   = @c_ToLoc
+                                 ,@cStorerKey      = @c_Storerkey
+                                 ,@nErrNo          = @n_Err    OUTPUT
+                                 ,@cErrMsg         = @c_Errmsg OUTPUT
+                                 ,@cSKU            = @c_Sku
+                                 ,@nPutawayQTY     = @n_QtyToUpd
+                                 ,@cFromLOT        = @c_LOT
+                                 ,@cTaskDetailKey  = @c_TaskdetailKey
+                                 ,@nFunc           = 0
+                                 ,@nPABookingKey   = 0
+                 
+                              SET @n_err = @@ERROR                                                                             
+                                                                                                                  
+                              IF @n_err <> 0                                                                                   
+                              BEGIN                                                                                            
+                                 SET @n_continue = 3
+                                 SET @n_err = 67845
+                                 SET @c_errmsg = 'NSQL'+CONVERT(CHAR(5) ,@n_err) 
+                                      + ':  Execute rdt.rdt_Putaway_PendingMoveIn Failed! (ntrTaskDetailUpdate)'
+                              END   
+                           END
+                           ELSE
+                           BEGIN
+                              UPDATE RFPUTAWAY WITH (ROWLOCK)
+                                 SET Qty = Qty + @n_QtyToUpd
+                              WHERE RowRef = @n_RowRef
+
+                              SET @n_err = @@ERROR                                                                             
                                                                                                                      
-                    IF @n_err <> 0                                                                                   
-                    BEGIN                                                                                            
-                       SELECT @n_continue = 3
-                             ,@n_err = 67840 
-                       SELECT @c_errmsg = 'NSQL'+CONVERT(CHAR(5) ,@n_err)+
-                              ':  Update RFPutaway Failed! (ntrTaskDetailUpdate)'
-                    END    
-         	 	     END
-         	 	  
-                 IF EXISTS(SELECT 1 FROM LOTXLOCXID (NOLOCK)                                                         
-                           WHERE Lot = @c_Lot                                                                        
-                           AND Loc = @c_ToLoc                                                                      
-                           AND ID = @c_ReservedID)                                                                       
-                 BEGIN
-           	       UPDATE LOTXLOCXID WITH (ROWLOCK)                                                                 
-                    SET PendingMoveIn = CASE WHEN (ISNULL(PendingMoveIn,0) + (@n_PendingMoveIn - @n_deletedPendingMoveIn)) < 0 THEN 0 ELSE ISNULL(PendingMoveIn,0) + (@n_PendingMoveIn - @n_deletedPendingMoveIn) END
-                    WHERE Lot = @c_Lot                                                                               
-                    AND Loc = @c_ToLoc                                                                             
-                    AND ID = @c_ReservedID                                              
+                              IF @n_err <> 0                                                                                   
+                              BEGIN                                                                                            
+                                 SET @n_continue = 3
+                                 SET @n_err = 67846 
+                                 SET @c_errmsg = 'NSQL'+CONVERT(CHAR(5) ,@n_err) 
+                                      + ':  Update RFPUTAWAY Failed! (ntrTaskDetailUpdate)'
+                              END                              
+                           END
+                           
+                           IF @n_continue = 1
+                           BEGIN
+                              UPDATE LOTXLOCXID WITH (ROWLOCK)                                                                 
+                              SET PendingMoveIn = PendingMoveIn + @n_QtyToUpd
+                              WHERE Lot = @c_Lot                                                                               
+                              AND Loc = @c_ToLoc                                                                             
+                              AND ID = @c_ReservedID                                              
                                      
-                    SET @n_err = @@ERROR                                                                             
+                              SET @n_err = @@ERROR                                                                             
                                                                                                                      
-                    IF @n_err <> 0                                                                                   
-                    BEGIN                                                                                            
-                       SELECT @n_continue = 3
-                             ,@n_err = 67841 
-                       SELECT @c_errmsg = 'NSQL'+CONVERT(CHAR(5) ,@n_err)+
-                              ':  Update LOTXLOCXID Failed! (ntrTaskDetailUpdate)'
-                    END
-                 END          
-              END
-              
+                              IF @n_err <> 0                                                                                   
+                              BEGIN                                                                                            
+                                 SET @n_continue = 3
+                                 SET @n_err = 67847 
+                                 SET @c_errmsg = 'NSQL'+CONVERT(CHAR(5) ,@n_err) 
+                                      + ':  Update LOTXLOCXID Failed! (ntrTaskDetailUpdate)'
+                              END
+                           END
+                           FETCH NEXT FROM @CUR_PMI INTO @c_Lot, @n_QtyPendingMoveIn, @n_RowRef
+                        END
+                        CLOSE @CUR_PMI
+                        DEALLOCATE @CUR_PMI
+                     END
+                  END
+                  ELSE                                                              --(Wan03) - END
+                  BEGIN
+                     IF @n_cnt > 0
+                     BEGIN
+                        UPDATE dbo.RFPutaway WITH (ROWLOCK)
+                        SET Qty = CASE WHEN (Qty + (@n_PendingMoveIn - @n_deletedPendingMoveIn)) < 0 
+                                       THEN 0 
+                                       ELSE Qty + (@n_PendingMoveIn - @n_deletedPendingMoveIn) 
+                                       END  
+                        WHERE Taskdetailkey = @c_Taskdetailkey                      
+                 
+                        SET @n_err = @@ERROR                                                                             
+                                                                                                                     
+                        IF @n_err <> 0                                                                                   
+                        BEGIN                                                                                            
+                           SELECT @n_continue = 3
+                                 ,@n_err = 67840 
+                           SELECT @c_errmsg = 'NSQL'+CONVERT(CHAR(5) ,@n_err)+
+                                 ':  Update RFPutaway Failed! (ntrTaskDetailUpdate)'
+                        END    
+                     END
+                 
+                     IF EXISTS(SELECT 1 FROM LOTXLOCXID (NOLOCK)                                                         
+                              WHERE Lot = @c_Lot                                                                        
+                              AND Loc = @c_ToLoc                                                                      
+                              AND ID = @c_ReservedID)                                                                       
+                     BEGIN
+                        UPDATE LOTXLOCXID WITH (ROWLOCK)                                                                 
+                        SET PendingMoveIn = CASE WHEN (ISNULL(PendingMoveIn,0) + (@n_PendingMoveIn - @n_deletedPendingMoveIn)) < 0 
+                                                THEN 0 
+                                                ELSE ISNULL(PendingMoveIn,0) + (@n_PendingMoveIn - @n_deletedPendingMoveIn) 
+                                                END
+                        WHERE Lot = @c_Lot                                                                               
+                        AND Loc = @c_ToLoc                                                                             
+                        AND ID = @c_ReservedID                                              
+                                     
+                        SET @n_err = @@ERROR                                                                             
+                                                                                                                     
+                        IF @n_err <> 0                                                                                   
+                        BEGIN                                                                                            
+                           SELECT @n_continue = 3
+                                 ,@n_err = 67841 
+                           SELECT @c_errmsg = 'NSQL'+CONVERT(CHAR(5) ,@n_err)+
+                                 ':  Update LOTXLOCXID Failed! (ntrTaskDetailUpdate)'
+                        END
+                     END  
+                  END
+               END
+
               --remove pendingmovein
-         	 	  IF @n_PendingMoveIn = 0 AND @n_deletedPendingMoveIn > 0
-         	 	  BEGIN         
-                 IF EXISTS(SELECT 1 FROM LOTXLOCXID (NOLOCK)                                                         
-                           WHERE Lot = @c_Lot                                                                        
-                           AND Loc = @c_ToLoc                                                                      
-                           AND ID = @c_ReservedID)                                                                       
-                 BEGIN                                                                                               
-                    EXEC rdt.rdt_Putaway_PendingMoveIn 
+               IF @n_PendingMoveIn = 0 AND @n_deletedPendingMoveIn > 0
+               BEGIN  
+                  SET @n_cnt = 0                                                                   --(Wan03) - START
+                  IF @c_Lot = '' AND @c_ReservedID > ''                                                  
+                  BEGIN
+                     SELECT @n_Cnt = 1 
+                     FROM LOTXLOCXID (NOLOCK)                                                         
+                     WHERE Loc = @c_ToLoc                                                                      
+                     AND   ID  = @c_ReservedID
+                  END
+                  ELSE
+                  BEGIN
+                     SELECT @n_Cnt = 1 
+                     FROM LOTXLOCXID (NOLOCK)                                                         
+                     WHERE Lot = @c_Lot                                                                        
+                     AND   Loc = @c_ToLoc                                                                      
+                     AND   ID  = @c_ReservedID
+                  END
+
+                  --IF EXISTS(SELECT 1 FROM LOTXLOCXID (NOLOCK)                                                         
+                  --          WHERE Lot = @c_Lot                                                                        
+                  --          AND Loc = @c_ToLoc                                                                      
+                  --          AND ID = @c_ReservedID)   
+                  IF @n_Cnt > 0                                                                    --(Wan03) - END
+                  BEGIN                                                                                               
+                     EXEC rdt.rdt_Putaway_PendingMoveIn 
                          @cUserName = ''
                         ,@cType = 'UNLOCK'
                         ,@cFromLoc = ''
@@ -2065,22 +2273,22 @@ BEGIN
                         ,@nFunc = 0
                         ,@nPABookingKey = 0
                                                                                                                      
-                    SET @n_err = @@ERROR                                                                             
+                     SET @n_err = @@ERROR                                                                             
                                                                                                                      
-                    IF @n_err <> 0                                                                                   
-                    BEGIN                                                                                            
-                       SELECT @n_continue = 3
-                             ,@n_err = 67842 
-                       SELECT @c_errmsg = 'NSQL'+CONVERT(CHAR(5) ,@n_err)+
+                     IF @n_err <> 0                                                                                   
+                     BEGIN                                                                                            
+                        SELECT @n_continue = 3
+                              ,@n_err = 67842 
+                        SELECT @c_errmsg = 'NSQL'+CONVERT(CHAR(5) ,@n_err)+
                               ':  Execute rdt.rdt_Putaway_PendingMoveIn Failed! (ntrTaskDetailUpdate)'
-                    END                                                                                                            
-                 END                                                       
-              END                                                                                              
+                     END                                                                                                            
+                  END                                                       
+               END                                                                                              
 
               --create new pendingmovein
-         	 	  IF @n_deletedPendingMoveIn = 0 AND @n_PendingMoveIn > 0
-         	 	  BEGIN
-                 EXEC rdt.rdt_Putaway_PendingMoveIn 
+               IF @n_deletedPendingMoveIn = 0 AND @n_PendingMoveIn > 0
+               BEGIN
+                  EXEC rdt.rdt_Putaway_PendingMoveIn 
                       @cUserName = ''
                      ,@cType = 'LOCK'
                      ,@cFromLoc = @c_FromLoc
@@ -2095,20 +2303,19 @@ BEGIN
                      ,@cTaskDetailKey = @c_TaskdetailKey
                      ,@nFunc = 0
                      ,@nPABookingKey = 0
-                     ,@cMoveQTYAlloc = '1'         	 	  	
+                     ,@cMoveQTYAlloc = '1'                  
                  
-                 SET @n_err = @@ERROR                                                                             
+                    SET @n_err = @@ERROR                                                                             
                                                                                                                   
-                 IF @n_err <> 0                                                                                   
-                 BEGIN                                                                                            
-                    SELECT @n_continue = 3
-                          ,@n_err = 67843
-                    SELECT @c_errmsg = 'NSQL'+CONVERT(CHAR(5) ,@n_err)+
-                           ':  Execute rdt.rdt_Putaway_PendingMoveIn Failed! (ntrTaskDetailUpdate)'
-                 END                                                                                                                                  
-         	 	  END
-
-         	 END            	                       	 	         	
+                    IF @n_err <> 0                                                                                   
+                    BEGIN                                                                                            
+                       SELECT @n_continue = 3
+                             ,@n_err = 67843
+                       SELECT @c_errmsg = 'NSQL'+CONVERT(CHAR(5) ,@n_err)+
+                              ':  Execute rdt.rdt_Putaway_PendingMoveIn Failed! (ntrTaskDetailUpdate)'
+                    END                                                                                                                                  
+                 END
+             END                                                     
          END                                     
       END -- WHILE 1=1        
    END        

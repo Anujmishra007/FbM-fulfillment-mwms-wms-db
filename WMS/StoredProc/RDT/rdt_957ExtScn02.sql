@@ -3,16 +3,17 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-/************************************************************************/
-/* Store procedure: rdt_957ExtScn02                                     */
-/* Copyright: Maersk WMS                                                */
-/*                                                                      */
-/* Purpose:                                                             */
-/*                                                                      */
-/* Date       Rev  Author   Purposes                                    */
-/* 2024-07-04 1.0  NLT013   FCR-454 CREATE                              */
-/*                                                                      */
-/************************************************************************/
+/*****************************************************************************/
+/* Store procedure: rdt_957ExtScn02                                          */
+/* Copyright: Maersk WMS                                                     */
+/*                                                                           */
+/* Purpose:                                                                  */
+/*                                                                           */
+/* Date       Rev  Author   Purposes                                         */
+/* 2024-07-04 1.0  NLT013   FCR-454 CREATE                                   */
+/* 2024-11-07 1.0  NLT013   UWP-26694 update orderkey info for swapped UCC   */
+/*                                                                           */
+/*****************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_957ExtScn02] (
    @nMobile          INT,           
@@ -94,6 +95,8 @@ BEGIN
       @cUCCPicked          NVARCHAR( 10),
       @cToID               NVARCHAR( 20),
       @cPickZone           NVARCHAR( 10),
+      @cOrderKey           NVARCHAR( 10),
+      @cOrderLineNumber    NVARCHAR( 5),
 
       @nUCCQTY             INT,
       @nSSCCTotalQty       INT,
@@ -378,6 +381,8 @@ BEGIN
                      @cUCCLoc       = ucc1.Loc,
                      @cSKU          = ucc1.Sku,
                      @nUCCQTY       = ucc1.Qty,
+                     @cOrderKey     = ISNULL(ucc1.OrderKey, ''),
+                     @cOrderLineNumber = ISNULL(ucc1.OrderLineNumber, ''),
                      @cSwapUCCID    = ucc2.Id,
                      @cSwapUCCLot   = ucc2.LOT,
                      @cPickDetailKey = pkd.PickDetailKey
@@ -470,12 +475,16 @@ BEGIN
 
                      UPDATE dbo.UCC WITH(ROWLOCK)
                      SET Status = '3',
-                        Userdefined08 = '1'
+                        Userdefined08 = '1',
+                        OrderKey = @cOrderKey,
+                        OrderLineNumber = @cOrderLineNumber
                      WHERE StorerKey = @cStorerKey
                         AND UCCNo = @cUCCNo
 
                      UPDATE dbo.UCC WITH(ROWLOCK)
-                     SET Status = '1'
+                     SET Status = '1',
+                        OrderKey = '',
+                        OrderLineNumber = ''
                      WHERE StorerKey = @cStorerKey
                         AND UCCNo = @cUCCAllocated
                   END

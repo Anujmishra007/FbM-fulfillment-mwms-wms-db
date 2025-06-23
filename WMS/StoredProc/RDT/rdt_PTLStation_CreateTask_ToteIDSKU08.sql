@@ -10,6 +10,7 @@ GO
 /*                                                                      */  
 /* Date       Rev Author      Purposes                                  */  
 /* 15-08-2024 1.0  yeekung    FCR-609 Created                           */   
+/* 01-02-2024 1.1  yeekung    FCR-1484 Add Validation (yeekung01)       */
 /************************************************************************/  
   
 CREATE OR ALTER PROC [RDT].[rdt_PTLStation_CreateTask_ToteIDSKU08] (  
@@ -112,6 +113,24 @@ BEGIN
    BEGIN  
       SET @nErrNo = 222702  
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --No task  
+      EXEC rdt.rdtSetFocusField @nMobile, 1 -- UCC/ID  
+      SET @nErrNo = -1 -- Remain in current screen  
+      SET @cScanID = ''  
+      SET @cScanSKU = ''  
+      GOTO Quit  
+   END  
+
+   IF EXISTS ( SELECT 1 
+               FROM PTL.PTLTran (NOLOCK)
+               WHERE Status IN ( '0', '1')
+                  AND DeviceID NOT IN (@cStation1, @cStation2, @cStation3, @cStation4, @cStation5)
+                  AND DropID = @cScanID  
+                  AND Storerkey = @cStorerKey
+                  AND Facility = @cFacility
+               )
+   BEGIN  
+      SET @nErrNo = 222704  
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --DropIDInUsed 
       EXEC rdt.rdtSetFocusField @nMobile, 1 -- UCC/ID  
       SET @nErrNo = -1 -- Remain in current screen  
       SET @cScanID = ''  

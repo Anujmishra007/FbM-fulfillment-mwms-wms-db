@@ -13,6 +13,8 @@ GO
 /* 26-Sep-2023  1.0  YZH230    Created base on rdtScr2XMLHttp 2019-06-03   */
 /* 17-07-2024   1.1  JACKC     UWP-21829 Error msg not visible             */
 /* 2024-09-23   1.3  CYU027    Add Type Image                              */
+/* 2025-01-09   1.4  CYU027    UWP-26488 Add Type List                     */
+/* 2025-04-14   1.5  CYU027    FCR-2729 DROPLIST Empty Values              */
 /***************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtScr2XMLHttp] (
@@ -35,6 +37,7 @@ DECLARE @cTxtColor      NVARCHAR(20)
 DECLARE @cColType       NVARCHAR(20)
 DECLARE @cColMatch      NVARCHAR(255)
 DECLARE @cColVal        NVARCHAR(50)
+DECLARE @bSelected      BIT
 DECLARE @cColLength     NVARCHAR(10)
 DECLARE @cColLookUpView NVARCHAR(200)
 DECLARE @cFieldID       NVARCHAR(20)
@@ -43,6 +46,16 @@ DECLARE @cDataType      NVARCHAR(15)
 DECLARE @cWebGroup      NVARCHAR(20)
 DECLARE @cMsgLong       NVARCHAR(250)
 DECLARE @cAttrAndVal    NVARCHAR(MAX) = ''
+
+DECLARE @cSQL NVARCHAR(MAX)
+DECLARE @nRowCount INT
+DECLARE @tDropDown TABLE
+    (
+       RowRef INT IDENTITY(1,1),
+       ColText   NVARCHAR (125) NULL,
+       ColValue  NVARCHAR (125) NULL,
+       SELECTED  BIT
+    )
 
 -- Custom messages
 IF @nScnKey IS NULL
@@ -198,7 +211,8 @@ BEGIN
 
    IF @cColText <> ''
       SET @cColText = rdt.rdtReplaceSpecialCharInXMLData( @cColText)
-  
+
+   INPUT_FIELD:
    -- Get field attribute
    DECLARE @cFieldAttr NVARCHAR(1)
    IF ISNUMERIC( @cFieldNo) = 1
@@ -241,15 +255,7 @@ END
 --- Combobox
 ELSE IF @cColType = 'ddlb'
 BEGIN
-   DECLARE @tDropDown TABLE 
-   (
-      RowRef INT IDENTITY(1,1),
-      ColText   NVARCHAR (125) NULL, 
-      ColValue  NVARCHAR (125) NULL
-   )
-
    -- Decide view or SP
-   DECLARE @cSQL NVARCHAR(MAX)
    IF CHARINDEX('RDT.V_', @cColLookUpView) > 0
       SET @cSQL = 'SELECT * FROM ' + @cColLookUpView
    ELSE
@@ -260,7 +266,6 @@ BEGIN
    EXEC (@cSQL)
 
    -- Get row count
-   DECLARE @nRowCount INT
    SELECT @nRowCount = COUNT( 1) FROM @tDropDown
 
    -- Drop down with data 
@@ -303,6 +308,76 @@ BEGIN
       -- Footer
       SET @cXML = @cXML + '</field>'
       RETURN
+   END
+END
+
+ELSE IF @cColType = 'l'
+BEGIN
+
+   DECLARE @cListTitle NVARCHAR (20) = ''
+   SET @cListTitle = @cColText
+   -- Get display field value
+   IF ISNUMERIC( @cFieldNo) = 1
+      SET @cMobRecColName = 'O_Field' + @cFieldNo
+   ELSE
+      SET @cMobRecColName = @cFieldNo
+   EXEC rdt.rdtGetColumnValue @nMobile, @cMobRecColName, @cColText OUTPUT
+
+   --LIST SP NOT EXISTS, treat as normal output field
+   IF NOT EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = RTRIM( @cColText) AND type = 'P')
+      GOTO INPUT_FIELD
+   -- SP in @cColText
+   SET @cSQL = 'rdt.' + RTRIM( @cColText)
+                  + ' @nMobile = ' + CAST( @nMobile AS NVARCHAR( 10))
+
+   -- Get data
+   INSERT INTO @tDropDown( ColText, ColValue, SELECTED)
+      EXEC (@cSQL)
+
+   -- Get row count
+   SELECT @nRowCount = COUNT( 1) FROM @tDropDown
+
+   -- Drop down with data
+   IF @nRowCount > 0
+   BEGIN
+      -- Header
+      SET @cXML = @cXML + '<field typ="select" x="' + @cX + '" y="' + @cY +
+                  '" id="' + @cFieldID +
+                  '" color="' + @cTxtColor +
+                  '" title-label="' + @cListTitle +
+                  '" webgroup="' + @cWebGroup + '">'
+
+      -- Loop detail
+      DECLARE @curList CURSOR
+      SET @curList = CURSOR FAST_FORWARD READ_ONLY FOR
+         SELECT ColText, ColValue, SELECTED
+         FROM @tDropDown
+
+      OPEN @curList
+      FETCH NEXT FROM @curList INTO @cColText, @cColVal, @bSelected
+      WHILE @@FETCH_STATUS = 0
+         BEGIN
+            IF @cColText <> ''
+               SET @cColText = rdt.rdtReplaceSpecialCharInXMLData( @cColText)
+            IF @cColVal <> ''
+               SET @cColVal = rdt.rdtReplaceSpecialCharInXMLData( @cColVal)
+
+            SET @cXML = @cXML + '<option text="' + @cColText
+                           + '" value="' + @cColVal
+                           + IIF(@bSelected = 1,'" selected="TRUE', '')
+                           + '"/>'
+            FETCH NEXT FROM @curList INTO @cColText, @cColVal, @bSelected
+         END
+
+      -- Footer
+      SET @cXML = @cXML + '</field>'
+      RETURN
+   END
+   ELSE
+   BEGIN
+      --v1.5 NO DATA, WORK AS INPUT FIELD
+      SET @cColText = ''
+      GOTO INPUT_FIELD
    END
 END
 

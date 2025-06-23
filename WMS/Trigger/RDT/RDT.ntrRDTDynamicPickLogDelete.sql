@@ -1,6 +1,7 @@
-SET QUOTED_IDENTIFIER ON
+SET ANSI_NULLS OFF
 GO
-SET ANSI_NULLS ON
+
+SET QUOTED_IDENTIFIER OFF
 GO
 
 /******************************************************************************/  
@@ -12,10 +13,12 @@ GO
 /* Modification log:                                                          */  
 /* Date         Author     Ver   Purposes                                     */  
 /* 22-May-2014  Ung        1.0   Add DELLOG for troubleshoot                  */
-/* 16-JUN-2016  JayLim      1.1  SQL2012 compatibility modification (Jay01)   */
+/* 16-JUN-2016  JayLim     1.1  SQL2012 compatibility modification (Jay01)    */
+/* 03-Feb-2025  kelvinong  1.2  restructure RDTDynamicPickLog_dellog to       */
+/*                              RDTDynamicPickLog_DEL table (kocy01)          */
 /******************************************************************************/  
---DROP TRIGGER ntrRDTDynamicPickLogDelete  
-CREATE TRIGGER [RDT].[ntrRDTDynamicPickLogDelete]  
+
+CREATE OR ALTER TRIGGER [RDT].[ntrRDTDynamicPickLogDelete]  
 ON  [RDT].[RDTDynamicPickLog]  
 FOR DELETE  
 AS  
@@ -25,17 +28,67 @@ BEGIN
    SET QUOTED_IDENTIFIER OFF  
    SET CONCAT_NULL_YIELDS_NULL OFF  
   
-   DECLARE
-      @n_continue    INT
-     ,@n_starttcnt   INT
-     ,@n_err         INT
-     ,@c_errmsg      NVARCHAR( 20)
+   DECLARE  
+      @b_Success            int           -- Populated by calls to stored procedures - was the proc successful?  
+     ,@n_err                int           -- Error number returned by stored procedure or this trigger  
+     ,@n_err2               int           -- For Additional Error Detection  
+     ,@c_errmsg             NVARCHAR(250) -- Error message returned by stored procedure or this trigger  
+     ,@n_continue           int  
+     ,@n_starttcnt          int           -- Holds the current transaction count  
+     ,@c_preprocess         NVARCHAR(250) -- preprocess  
+     ,@c_pstprocess         NVARCHAR(250) -- post process  
+     ,@profiler             NVARCHAR(80)  
+     ,@n_cnt                int
+     ,@c_authority          NVARCHAR(1)  
 
    SELECT @n_continue=1, @n_starttcnt=@@TRANCOUNT
+
+   IF @n_continue = 1 OR @n_continue=2      
+   BEGIN    
+      SELECT @b_success = 0         --    Start  
+      EXECUTE nspGetRight  NULL,             -- facility    
+                           NULL,             -- Storerkey    
+                           NULL,             -- Sku    
+                           'DataMartDELLOG', -- Configkey    
+                           @b_success     OUTPUT,   
+                           @c_authority   OUTPUT,   
+                           @n_err         OUTPUT,   
+                           @c_errmsg      OUTPUT    
+      IF @b_success <> 1  
+      BEGIN  
+         SELECT @n_continue = 3  
+               ,@c_errmsg = 'ntrrdtDynamicPickLogDelete' + RTrim(@c_errmsg)  
+      END  
+      ELSE   
+      IF @c_authority = '1'         
+      BEGIN  
+         INSERT INTO RDT.rdtDynamicPickLog_DELLOG ( [RowRefSource])
+         SELECT RowRef FROM DELETED WITH (NOLOCK)
   
-   INSERT INTO rdt.RDTDynamicPickLog_DELLOG (Zone, LOC, PickSlipNo, CartonNo, LabelNo, AddWho, AddDate)
-   SELECT Zone, LOC, PickSlipNo, CartonNo, LabelNo, AddWho, AddDate
-   FROM DELETED
+         SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT  
+         IF @n_err <> 0  
+         BEGIN  
+            SELECT @n_continue = 3  
+            SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 68101   -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
+            SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Delete Trigger On Table rdtDynamicPickLog Failed. (ntrrdtDynamicPickLogDelete)' + ' ( ' + ' SQLSvr MESSAGE=' + LTrim(RTrim(@c_errmsg)) + ' ) '  
+         END                    
+      END  
+   END 
+  
+   IF @n_continue = 1 OR @n_continue=2      
+   BEGIN 
+      INSERT INTO rdt.RDTDynamicPickLog_DEL (Zone, LOC, PickSlipNo, CartonNo, LabelNo, AddWho, AddDate)
+      SELECT Zone, LOC, PickSlipNo, CartonNo, LabelNo, AddWho, AddDate
+      FROM DELETED
+
+	  SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT  
+      IF @n_err <> 0  
+      BEGIN  
+         SELECT @n_continue = 3  
+         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 68102   -- Should Be Set To The SQL Errmessage but I don't know how to do so.  
+         SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Delete Trigger On Table rdtDynamicPickLog Failed. (ntrrdtDynamicPickLogDelete)' + ' ( ' + ' SQLSvr MESSAGE=' + LTrim(RTrim(@c_errmsg)) + ' ) '  
+      END 
+   END
   
 QUIT:  
   
@@ -87,3 +140,8 @@ QUIT:
    END  
 END
 GO
+
+ALTER TABLE [RDT].[RDTDynamicPickLog] ENABLE TRIGGER [ntrRDTDynamicPickLogDelete]
+GO
+
+

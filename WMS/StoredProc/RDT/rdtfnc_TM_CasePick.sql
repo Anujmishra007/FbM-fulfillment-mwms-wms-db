@@ -4,37 +4,47 @@ SET QUOTED_IDENTIFIER OFF
 GO
 
 
-/******************************************************************************/
-/* Store procedure: rdtfnc_TM_CasePick                                        */
-/* Copyright      : LFLogistics                                               */
-/*                                                                            */
-/* Purpose: case pick                                                         */
-/*                                                                            */
-/* Modifications log:                                                         */
-/*                                                                            */
-/* Date       Rev  Author     Purposes                                        */
-/* 2014-12-17 1.0  Ung        SOS327467 Created                               */
-/* 2016-09-30 1.1  Ung        Performance tuning                              */
-/* 2017-07-31 1.2  Ung        WMS-2475 DropID add RDTFormat                   */
-/* 2018-07-10 1.3  Ung        WMS-4221 Fix ExtendedUpdateSP param             */
-/* 2018-08-31 1.4  Ung        WMS-5943 Add ExtendedInfo at screen 1, 2        */
-/* 2018-11-21 1.5  Ung        WMS-3273 Add fully short                        */
-/* 2019-02-27 1.6  Ung        WMS-8058 Add SwapUCCSP, LOCLookupSP             */
-/*                            Fix PQTY not shown if DisableQTYField           */
-/* 2020-02-21 1.7  YeeKung    WMS-12082 Add ExtendedValidate(yeekung01)       */
-/* 2019-05-14 1.8  James      WMS-9920 Add MultiSKUBarcode (james01)          */
-/* 2022-09-09 1.9  YeeKung    WMS-20712 Add overwritetoloc (Yeekung02)        */
-/* 2023-03-24 2.0  Ung        WMS-22020 Add dynamic lottable                  */
-/* 2023-05-16 2.1  Ung        WMS-22435 Add DecodeSP                          */
-/*                            Expand SKU field to max                         */
-/* 2023-06-20 2.2  Ung        WMS-22834 Add DispStyleColorSize                */
-/* 2024-03-12 2.3  CYU027     UWP-15734 Add Extended Print SP				      */
-/* 2024-04-10 2.4  Dennis     UWP-16909 Check Digit            			      */
-/* 2024-07-08 2.5  JHU151     FCR-330 SSCC code generator                     */
-/* 2024-10-08 2.6  PXL009     FCR-872 Auto Generated Dropid                   */
-/******************************************************************************/
+/********************************************************************************/
+/* Store procedure: rdtfnc_TM_CasePick                                          */
+/* Copyright      : Maersk                                                      */
+/*                                                                              */
+/* Purpose: case pick                                                           */
+/*                                                                              */
+/* Modifications log:                                                           */
+/*                                                                              */
+/* Date       Rev    Author     Purposes                                        */
+/* 2014-12-17 1.0    Ung        SOS327467 Created                               */
+/* 2016-09-30 1.1    Ung        Performance tuning                              */
+/* 2017-07-31 1.2    Ung        WMS-2475 DropID add RDTFormat                   */
+/* 2018-07-10 1.3    Ung        WMS-4221 Fix ExtendedUpdateSP param             */
+/* 2018-08-31 1.4    Ung        WMS-5943 Add ExtendedInfo at screen 1, 2        */
+/* 2018-11-21 1.5    Ung        WMS-3273 Add fully short                        */
+/* 2019-02-27 1.6    Ung        WMS-8058 Add SwapUCCSP, LOCLookupSP             */
+/*                              Fix PQTY not shown if DisableQTYField           */
+/* 2020-02-21 1.7    YeeKung    WMS-12082 Add ExtendedValidate(yeekung01)       */
+/* 2019-05-14 1.8    James      WMS-9920 Add MultiSKUBarcode (james01)          */
+/* 2022-09-09 1.9    YeeKung    WMS-20712 Add overwritetoloc (Yeekung02)        */
+/* 2023-03-24 2.0    Ung        WMS-22020 Add dynamic lottable                  */
+/* 2023-05-16 2.1    Ung        WMS-22435 Add DecodeSP                          */
+/*                              Expand SKU field to max                         */
+/* 2023-06-20 2.2    Ung        WMS-22834 Add DispStyleColorSize                */
+/* 2024-03-12 2.3    CYU027     UWP-15734 Add Extended Print SP                 */
+/* 2024-04-10 2.4    Dennis     UWP-16909 Check Digit                           */
+/* 2024-07-08 2.5    JHU151     FCR-330 SSCC code generator                     */
+/* 2024-10-08 2.6    PXL009     FCR-872 Auto Generated Dropid                   */
+/* 2024-10-24 2.7    YYS027     FCR-989 Min Max Replenishment                   */
+/*            2.7.1  YYS027     move new screen to rdt_1812ExtScn04             */
+/* 2024-10-31 2.8    PXL009     FCR-1079 UOMs in term of Task Detail UoM        */
+/* 2024-10-31 2.8.1  PXL009              Restore preferred UOM when exit        */
+/* 2024-09-23 2.9    James      WMS-26122 Add ExtendedScreenSP (james02)        */
+/* 2024-11-12 3.0    PXL009     FCR-1125 Merged 2.2, 2.3->2.9 from v0 branch    */
+/* 2024-11-29 3.0.1  PXL009             change the ExtScn call point in step 4  */
+/* 2024-12-02 3.0.2  PXL009             change the ExtScn call point in step 6  */
+/* 2024-12-02 3.0.3  PXL009             Save/restore @cToLoc                    */
+/* 2024-11-28 3.1    JCH507     UWP-27664 Throw printing error from st6 to st7  */
+/*********************************************************************************/
 
-CREATE OR ALTER PROC [RDT].[rdtfnc_TM_CasePick](
+CREATE OR ALTER  PROC [RDT].[rdtfnc_TM_CasePick](
    @nMobile    INT,
    @nErrNo     INT  OUTPUT,
    @cErrMsg    NVARCHAR(1024) OUTPUT -- screen limitation, 20 char max
@@ -44,6 +54,7 @@ SET NOCOUNT ON
 SET QUOTED_IDENTIFIER OFF
 SET ANSI_NULLS OFF
 SET CONCAT_NULL_YIELDS_NULL OFF
+DECLARE @cReplenFlag    NVARCHAR(20)
 
 -- Misc variable
 DECLARE
@@ -151,6 +162,8 @@ DECLARE
    @cAutoGenDROPIDSP    NVARCHAR(20),
    @tExtData            VariableTable,
    @cAutoID             NVARCHAR( 18),
+   @cTaskDetailUOM      NVARCHAR( 5),
+   @cTaskDetailPUOM     NVARCHAR(20),
 
    @cAreaKey            NVARCHAR(10),
    @cTTMStrategykey     NVARCHAR(10),
@@ -161,7 +174,7 @@ DECLARE
    @cRefKey04           NVARCHAR(20),
    @cRefKey05           NVARCHAR(20),
    @cMultiSKUBarcode    NVARCHAR( 1),  -- (james01)
-   @tExtScnData			VariableTable, --(JHU151)
+   @tExtScnData         VariableTable, --(JHU151)
 
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),    @cFieldAttr01 NVARCHAR( 1),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),    @cFieldAttr02 NVARCHAR( 1),
@@ -188,7 +201,7 @@ DECLARE
    @cUDF19  NVARCHAR( 250), @cUDF20 NVARCHAR( 250), @cUDF21 NVARCHAR( 250),
    @cUDF22  NVARCHAR( 250), @cUDF23 NVARCHAR( 250), @cUDF24 NVARCHAR( 250),
    @cUDF25  NVARCHAR( 250), @cUDF26 NVARCHAR( 250), @cUDF27 NVARCHAR( 250),
-   @cUDF28  NVARCHAR( 250), @cUDF29 NVARCHAR( 250), @cUDF30 NVARCHAR( 250)
+   @cUDF28  NVARCHAR( 250), @cUDF29 NVARCHAR( 250), @cUDF30 NVARCHAR( MAX)
 
 -- Getting Mobile information
 SELECT
@@ -250,6 +263,8 @@ SELECT
    @cPUOM_Desc         = V_String11,
    @cMultiSKUBarcode   = V_String12,
    @cLottableCode      = V_String13,
+   @cTaskDetailUOM     = V_String14,
+   @cTaskDetailPUOM    = V_String15,
 
    @cDispStyleColorSize= V_String17,
    @cDecodeSP          = V_String18,
@@ -279,6 +294,8 @@ SELECT
    @cOverwriteToLOC    = V_String40,
    @cExtScnSP          = V_String42,
    @cAutoGenDROPIDSP   = V_String43,
+   @cToLOC             = V_String44,
+   
 
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,  @cFieldAttr01  = FieldAttr01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,  @cFieldAttr02  = FieldAttr02,
@@ -298,7 +315,7 @@ SELECT
 
 FROM   RDT.RDTMOBREC WITH (NOLOCK)
 WHERE  Mobile = @nMobile
-
+SET @nAction = 0
 -- Redirect to respective screen
 IF @nFunc = 1812
 BEGIN
@@ -312,6 +329,7 @@ BEGIN
    IF @nStep = 7 GOTO Step_7   -- Scn = 4026 Pallet is close. Next task / Exit
    IF @nStep = 8 GOTO Step_8   -- Scn = 4027 Short pick / Close pallet
    IF @nStep = 9 GOTO Step_9   -- Scn = 2100 Reason code
+   IF @nStep = 99  GOTO Step_99  -- Scn = Extended Screen   -- Scn = 4028 Is the location completely empty?
 END
 
 RETURN -- Do nothing if incorrect step
@@ -341,7 +359,8 @@ BEGIN
       @cPickMethod  = PickMethod,
       @nTransit     = TransitCount,
       @cDropID      = DropID,
-      @cListKey     = ListKey
+      @cListKey     = ListKey,
+      @cTaskDetailUOM = UOM
    FROM dbo.TaskDetail WITH (NOLOCK)
    WHERE TaskDetailKey = @cTaskDetailKey
 
@@ -351,8 +370,8 @@ BEGIN
    SET @cReasonCode = ''
    SET @cDisableQTYField = ''
 
-   -- Get preferred UOM
-   SELECT @cPUOM = DefaultUOM FROM rdt.rdtUser WITH (NOLOCK) WHERE UserName = @cUserName
+   -- -- Get preferred UOM
+   -- SELECT @cPUOM = DefaultUOM FROM rdt.rdtUser WITH (NOLOCK) WHERE UserName = @cUserName
 
    -- Get storer configure
    SET @cDefaultFromID = rdt.rdtGetConfig( @nFunc, 'DefaultFromID', @cStorerKey)
@@ -404,6 +423,19 @@ BEGIN
    SET @cAutoGenDROPIDSP = [rdt].[RDTGetConfig]( @nFunc, 'AutoGenDropID', @cStorerKey)
    IF @cAutoGenDROPIDSP = '0'
       SET @cAutoGenDROPIDSP = ''
+
+   SET @cTaskDetailPUOM = [rdt].[RDTGetConfig]( @nFunc, 'TASKDETAILPUOM', @cStorerKey)
+
+   IF @cTaskDetailPUOM = '1'
+   BEGIN
+      -- Task Detail UoM as preferred UOM
+      SET @cPUOM = @cTaskDetailUOM
+   END
+   ELSE
+   BEGIN
+      -- Get preferred UOM
+      SELECT @cPUOM = DefaultUOM FROM rdt.rdtUser WITH (NOLOCK) WHERE UserName = @cUserName
+   END
 
    -- Disable QTY field
    IF @cDisableQTYFieldSP <> ''
@@ -1074,9 +1106,21 @@ BEGIN
                @cPickMethod  = PickMethod,
                @nTransit     = TransitCount,
                @cDropID      = CASE WHEN ISNULL(DROPID,'')='' THEN @cDropID ELSE DROPID END , --(yeekung02)
-               @cListKey     = ListKey
+               @cListKey     = ListKey,
+               @cTaskDetailUOM = UOM
             FROM dbo.TaskDetail WITH (NOLOCK)
             WHERE TaskDetailKey = @cTaskDetailKey
+
+            IF @cTaskDetailPUOM = '1'
+            BEGIN
+               -- Task Detail UoM as preferred UOM
+               SET @cPUOM = @cTaskDetailUOM
+            END
+            ELSE
+            BEGIN
+               -- Get preferred UOM
+               SELECT @cPUOM = DefaultUOM FROM rdt.rdtUser WITH (NOLOCK) WHERE UserName = @cUserName
+            END
 
          END
       END
@@ -1387,6 +1431,7 @@ BEGIN
       DECLARE @cLabelNo NVARCHAR( 60)
       DECLARE @nUCCQTY  INT
 
+      SET @cUCC = ''
       SET @nUCCQTY = 0
 
       -- Screen mapping
@@ -1433,6 +1478,7 @@ BEGIN
                EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cBarcode,
                   @cUPC    = @cDecodeSKU  OUTPUT,
                   @nQTY    = @nDecodeQTY  OUTPUT,
+                  @cUCCNo  = @cUCC        OUTPUT,
                   @nErrNo  = @nErrNo      OUTPUT,
                   @cErrMsg = @cErrMsg     OUTPUT,
                   @cType   = 'UPC'
@@ -1886,6 +1932,15 @@ BEGIN
          END
       END
    END
+
+   --A new screen will  require the user to confirm the option . This will be prompted immediately after the user has entered the SKU Quantity on Step 4.
+    --   If the user presses escape then he can be taken to quantity entry screen. Act as a popup Window
+    IF ISNULL(@cExtScnSP,'')<>'' AND EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
+    BEGIN
+        -- @cExtScnSP is ready, Goto 99 to call @cExtScnSP, and @cReplenFlag=1 will be check in @cExtScnSP
+        SET @nAction =0
+        Goto Step_99
+    END
    GOTO Quit
 
    Step_4_Fail:
@@ -2026,11 +2081,23 @@ BEGIN
             @cSuggToloc   = ToLoc,
             @cSuggSKU     = SKU,
             @nQTY_RPL     = QTY,
-            @cReasonCode  = ''
+            @cReasonCode  = '',
+            @cTaskDetailUOM = UOM
             -- @cListKey     = ListKey,
             -- @nTransit     = TransitCount,
          FROM dbo.TaskDetail WITH (NOLOCK)
          WHERE TaskDetailKey = @cTaskDetailKey
+
+         IF @cTaskDetailPUOM = '1'
+         BEGIN
+            -- Task Detail UoM as preferred UOM
+            SET @cPUOM = @cTaskDetailUOM
+         END
+         ELSE
+         BEGIN
+            -- Get preferred UOM
+            SELECT @cPUOM = DefaultUOM FROM rdt.rdtUser WITH (NOLOCK) WHERE UserName = @cUserName
+         END
 
          -- Go to DropID screen
          IF @cDropID = '' -- 1st PP task ESC from DropID screen that clear DropID
@@ -2038,7 +2105,7 @@ BEGIN
             -- Prepare next screen var
             SET @cDropID = ''
             SET @cOutField01 = '' -- @cDropID
-            
+
             IF @cAutoGenDROPIDSP <> ''
             BEGIN
                -- Auto generate DROPID
@@ -2432,6 +2499,34 @@ BEGIN
          END   
       END
 
+      -- Extended validate
+      IF @cExtendedValidateSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedValidateSP AND type = 'P')
+         BEGIN
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cTaskdetailKey, @cDropID, @nQTY, @cToLOC, @nErrNo OUTPUT, @cErrMsg OUTPUT'
+            SET @cSQLParam =
+               '@nMobile         INT,           ' +
+               '@nFunc           INT,           ' +
+               '@cLangCode       NVARCHAR( 3),  ' +
+               '@nStep           INT,           ' +
+               '@nInputKey       INT,           ' +
+               '@cTaskdetailKey  NVARCHAR( 10), ' +
+               '@cDropID         NVARCHAR( 20), ' +
+               '@nQTY            INT,           ' +
+               '@cToLOC          NVARCHAR( 10), ' +
+               '@nErrNo          INT OUTPUT,    ' +
+               '@cErrMsg         NVARCHAR( 20) OUTPUT '
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cTaskdetailKey, @cDropID, @nQTY, @cToLOC, @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+            IF @nErrNo <> 0
+               GOTO Quit
+         END
+      END
+
       -- Confirm (TaskDetail to status 5, PickDetail to status 5)
       EXEC rdt.rdt_TM_CasePick_Confirm @nMobile, @nFunc, @cLangCode, @cUserName, @cFacility, @cStorerKey,
          @cTaskDetailKey,
@@ -2516,7 +2611,7 @@ BEGIN
             IF @nErrNo <> 0
                BEGIN
                   EXEC rdt.rdtSetFocusField @nMobile, 4
-                  GOTO Quit
+                  --GOTO Quit --V3.1 JCH507 
                END
          END
       END
@@ -2552,7 +2647,8 @@ BEGIN
             SET @cOutField10 = @cExtendedInfo1
          END
       END
-   END
+
+   END --Inputkey=1
 
    IF @nInputKey = 0 -- ESC
    BEGIN
@@ -2588,12 +2684,22 @@ BEGIN
       SET @nScn = @nFromScn
       SET @nStep = @nFromStep
    END
+
+   -- call extended screen 
+   IF @cExtScnSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
+      BEGIN      
+         Goto Step_99
+      END
+   END
    GOTO Quit
 
    Step_6_Fail:
    BEGIN
       SET @cToLOC = ''
       SET @cOutField03 = '' -- To LOC
+      EXEC rdt.rdtSetFocusField @nMobile, 3  -- ToLOC
    END
 END
 GOTO Quit
@@ -2711,6 +2817,7 @@ BEGIN
          @nToStep = Step
       FROM rdt.rdtTaskManagerConfig WITH (NOLOCK)
       WHERE TaskType = @cTTMTaskType
+
       IF @nToFunc = 0
       BEGIN
          SET @nErrNo = 51373
@@ -2753,6 +2860,12 @@ BEGIN
        @nFunctionID = @nFunc,
        @cFacility   = @cFacility,
        @cStorerKey  = @cStorerKey
+
+      IF @cTaskDetailPUOM = '1'
+      BEGIN
+         -- restore preferred UOM
+         SELECT @cPUOM = DefaultUOM FROM rdt.rdtUser WITH (NOLOCK) WHERE UserName = @cUserName
+      END
 
       -- Enable field
       SET @cFieldAttr14 = '' -- @nPQTY
@@ -3245,13 +3358,38 @@ BEGIN
 END
 GOTO Quit
 
-   
 Step_99:
 BEGIN
    IF @cExtScnSP <> ''
    BEGIN
       IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
       BEGIN      
+         DECLARE @nStepBak INT
+         DECLARE @nScnBak INT
+         SELECT @nStepBak = @nStep, @nScnBak = @nScn, @nErrNo=0, @cErrMsg=''
+         DELETE FROM @tExtScnData
+         INSERT INTO @tExtScnData (Variable, Value) VALUES
+         ('@cTaskDetailKey',  @cTaskDetailKey),
+         ('@cListKey',        @cListKey),
+         ('@cDropID',         @cDropID),
+         ('@cSuggSKU',        @cSuggSKU),
+         ('@cSuggFromLOC',    @cSuggFromLOC),
+         ('@cSuggLOT',        @cSuggLOT),
+         ('@cSuggID',         @cSuggID),
+         ('@cQTY',            CONVERT(NVARCHAR(20), @nQTY)),
+         ('@cQTY_RPL',        CONVERT(NVARCHAR(20), @nQTY_RPL)),
+         ('@cLottableCode',   @cLottableCode),
+         ('@cSKUDesc',        @cSKUDesc),
+         ('@cExtendedInfo1',  @cExtendedInfo1),
+         ('@cPUOM',           @cPUOM),
+         ('@cPUOM_Desc',      @cPUOM_Desc),
+         ('@cMUOM_Desc',      @cMUOM_Desc),
+         ('@cPUOM_Div',       CONVERT(NVARCHAR(20), @nPUOM_Div)),
+         ('@cPQTY_RPL',       CONVERT(NVARCHAR(20), @nPQTY_RPL)),
+         ('@cMQTY_RPL',       CONVERT(NVARCHAR(20), @nMQTY_RPL)),
+         ('@cPQTY',           CONVERT(NVARCHAR(20), @nPQTY)),
+         ('@cMQTY',           CONVERT(NVARCHAR(20), @nMQTY)),
+         ('@cToLOC',          @cToLOC)
 
          EXECUTE [RDT].[rdt_ExtScnEntry] 
          @cExtScnSP, 
@@ -3288,6 +3426,37 @@ BEGIN
 
          IF @nErrNo <> 0
             GOTO Step_99_Fail
+
+         IF @nStepBak = 99 AND @nScnBak = 4028 AND @nInputKey=0
+         BEGIN
+            SET @cBarcode = @cUDF30
+         END
+      END
+   END
+
+   -- Extended info
+   IF @cExtendedInfoSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')
+      BEGIN
+         SET @cExtendedInfo1 = ''
+         SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
+            ' @nMobile, @nFunc, @cLangCode, @nStep, @cTaskdetailKey, @cExtendedInfo1 OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nAfterStep'
+         SET @cSQLParam =
+            '@nMobile         INT,           ' +
+            '@nFunc           INT,           ' +
+            '@cLangCode       NVARCHAR( 3),  ' +
+            '@nStep           INT,           ' +
+            '@cTaskdetailKey  NVARCHAR( 10), ' +
+            '@cExtendedInfo1  NVARCHAR( 20) OUTPUT, ' +
+            '@nErrNo          INT           OUTPUT, ' +
+            '@cErrMsg         NVARCHAR( 20) OUTPUT, ' +
+            '@nAfterStep      INT '
+
+         EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+            @nMobile, @nFunc, @cLangCode, 99, @cTaskdetailKey, @cExtendedInfo1 OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nStep
+
+         SET @cOutField10 = @cExtendedInfo1
       END
    END
 
@@ -3364,6 +3533,8 @@ BEGIN
       V_String11   = @cPUOM_Desc,
       V_String12   = @cMultiSKUBarcode,
       V_String13   = @cLottableCode,
+      V_String14   = @cTaskDetailUOM,
+      V_String15   = @cTaskDetailPUOM,
 
       V_String17   = @cDispStyleColorSize,
       V_String18   = @cDecodeSP, 
@@ -3393,6 +3564,7 @@ BEGIN
       V_String40   = @cOverwriteToLOC,   
       V_String42   = @cExtScnSP,
       V_String43   = @cAutoGenDROPIDSP,
+      V_String44   = @cToLoc,
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,   FieldAttr01  = @cFieldAttr01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,   FieldAttr02  = @cFieldAttr02,

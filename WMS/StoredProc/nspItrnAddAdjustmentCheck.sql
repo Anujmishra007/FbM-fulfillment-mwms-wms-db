@@ -30,7 +30,7 @@ GO
 /* 18-MAY-2015  YTWan     1.4 SOS#341733 - ToryBurch HK SAP - Allow      */
 /*                            CommingleSKU with NoMixLottablevalidation  */
 /*                            to Exceed and RDT (Wan02)                  */
-/* 01-JUN-2015  YTWan     1.5 SOS#343525 - UA �C NoMixLottable validation*/
+/* 01-JUN-2015  YTWan     1.5 SOS#343525 - UA  C NoMixLottable validation*/
 /*                            CR(Wan03)                                  */
 /* 06-Feb-2018  SWT02     1.6 Added Channel Management Logic             */
 /*                        1.6.1 Handle QtyOnHold For Channel Mgmt        */
@@ -39,6 +39,11 @@ GO
 /* 10-Feb-2023  NJOW01    1.8 WMS-21722 Allow check nomixlottable for all*/
 /*                            commingle sku in a loc.                    */
 /* 10-Feb-2023  NJOW01    1.8 DEVOPS Combine Script                      */
+/* 09-AUG-2023  Wan05     1.9 LFWM-4397 - RG [GIT] Serial Number Solution*/
+/*                            -  Adjustment by Serial Number             */
+/* 03-JAN-2024  Wan06     2.6 LFWM-4405 - [GIT] Serial Number Solution-Post*/
+/*                            Cycle Count by Adjustment Serialnon - Fix  */
+/*                            sourcetype truncate issue                  */
 /*************************************************************************/
 CREATE OR ALTER PROC  [dbo].[nspItrnAddAdjustmentCheck]
                @c_itrnkey      NVARCHAR(10)
@@ -85,7 +90,7 @@ BEGIN
    SET QUOTED_IDENTIFIER OFF 
    SET CONCAT_NULL_YIELDS_NULL OFF
 
-   DECLARE   @c_skudefallowed NVARCHAR(18)
+   DECLARE  @c_skudefallowed NVARCHAR(18)
    ,      @n_continue int
    ,      @n_err2 int              -- For Additional Error Detection
    ,      @c_preprocess NVARCHAR(250)  -- preprocess
@@ -127,7 +132,15 @@ BEGIN
       , @c_CommingleSku       NVARCHAR(1)              --(Wan02)  
       , @c_ChkLocByCommingleSkuFlag  NVARCHAR(10)      --(Wan02)
       , @c_ChannelInventoryMgmt      NVARCHAR(10) = '0' -- (SWT02)
-      , @c_ChkNoMixLottableForAllSku NVARCHAR(30) = ''  -- NJOW01      
+      , @c_ChkNoMixLottableForAllSku NVARCHAR(30) = ''  -- NJOW01   
+                                                        -- 
+      , @c_SerialNo                 NVARCHAR(50) = ''    --(Wan05)
+      , @c_SerialNokey              NVARCHAR(10) = ''    --(Wan05)
+      , @c_Status_SN                NVARCHAR(10) = '1'   --(Wan05)
+      , @c_SourceKey                NVARCHAR(20) = ''    --(Wan05)
+      , @c_SourceType               NVARCHAR(30) = ''    --(Wan06)(Wan05)
+      , @c_TranType                 NVARCHAR(10) = ''    --(Wan05)
+      , @c_ASNFizUpdLotToSerialNo   NVARCHAR(30) = ''    --(Wan05)
       
    SET @c_IDLottable01     = ''
    SET @c_IDLottable02     = ''
@@ -160,16 +173,16 @@ BEGIN
 
    IF @n_continue=1 or @n_continue=2
    BEGIN
-      IF @d_lottable04 = ""
+      IF @d_lottable04 = ''
       BEGIN
          SELECT @d_lottable04 = NULL
       END
-      IF @d_lottable05 = ""
+      IF @d_lottable05 = ''
       BEGIN
          SELECT @d_lottable05 = NULL
       END
    END
-   SELECT @n_continue=1, @b_success=0, @n_err = 1,@c_errmsg=""
+   SELECT @n_continue=1, @b_success=0, @n_err = 1,@c_errmsg=''
    DECLARE @c_allowoverallocations NVARCHAR(1) -- Flag to see if overallocations are allowed.
    DECLARE @c_allowidqtyupdate NVARCHAR(1) --- Flag to see if update on the qty in the id table is allowed
    /* #INCLUDE <SPIAAC1.SQL> */
@@ -200,7 +213,7 @@ BEGIN
       End
       IF @c_allowoverallocations is null
       BEGIN
-         SELECT @c_allowoverallocations = "0"
+         SELECT @c_allowoverallocations = '0'
       END                
    END
 
@@ -227,10 +240,10 @@ BEGIN
    BEGIN
       SELECT @c_allowidqtyupdate = NSQLValue
       FROM NSQLCONFIG (NOLOCK)
-      WHERE CONFIGKEY = "ALLOWIDQTYUPDATE"
+      WHERE CONFIGKEY = 'ALLOWIDQTYUPDATE'
       IF @c_allowidqtyupdate is null
       BEGIN
-         SELECT @c_allowidqtyupdate = "0"
+         SELECT @c_allowidqtyupdate = '0'
       END
    END
 
@@ -238,15 +251,15 @@ BEGIN
    BEGIN
       IF @n_continue=1 or @n_continue=2
       BEGIN
-         IF (@c_StorerKey = "") OR (@c_StorerKey IS NULL)
+         IF (@c_StorerKey = '') OR (@c_StorerKey IS NULL)
          BEGIN
             SELECT @c_storerkey=( SELECT dbo.fnc_LTrim(dbo.fnc_RTrim(NSQLValue))
             FROM NSQLCONFIG (NOLOCK)
-            WHERE NSQLCONFIG.ConfigKey = "gc_storerdef")
+            WHERE NSQLCONFIG.ConfigKey = 'gc_storerdef')
             IF @c_storerkey IS NULL
             BEGIN
                SELECT @n_continue = 3 , @n_err = 61962 --61700
-               SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": Storerkey is blank or null - not allowed! (nspItrnAddAdjustmentCheck)"
+               SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Storerkey is blank or null - not allowed! (nspItrnAddAdjustmentCheck)'
             END
             ELSE
             BEGIN
@@ -257,13 +270,13 @@ BEGIN
                BEGIN
                   SELECT @n_continue = 3
                   SELECT @n_err = 61963 --61701   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
-                  SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": Insert Trigger On ITRN Failed Because An Attempt To Update StorerKey Failed. (nspItrnAddAdjustmentCheck)" + " ( " + " SQLSvr MESSAGE=" + ISNULL(RTRIM(@c_errmsg),'') + " ) "
+                  SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Insert Trigger On ITRN Failed Because An Attempt To Update StorerKey Failed. (nspItrnAddAdjustmentCheck)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
                END
                ELSE IF @n_cnt = 0
                BEGIN
                   SELECT @n_continue = 3
                   SELECT @n_err = 61964 --61725
-                  SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": Update To Table ITRN Returned Zero Rows Affected. (nspItrnAddAdjustmentCheck)"
+                  SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update To Table ITRN Returned Zero Rows Affected. (nspItrnAddAdjustmentCheck)'
                END
             END
          END
@@ -275,14 +288,14 @@ BEGIN
          BEGIN
             SELECT @c_SkuDefAllowed =( SELECT dbo.fnc_LTrim(dbo.fnc_RTrim(NSQLValue))
             FROM NSQLCONFIG (NOLOCK)
-            WHERE ConfigKey = "gb_skudefallowed" )
-            IF @c_SkuDefAllowed = "TRUE"
+            WHERE ConfigKey = 'gb_skudefallowed' )
+            IF @c_SkuDefAllowed = 'TRUE'
             BEGIN
-               SELECT @c_sku=(SELECT NSQLVALUE FROM NSQLCONFIG (NOLOCK) WHERE NSQLCONFIG.Configkey="gc_skudef")
+               SELECT @c_sku=(SELECT NSQLVALUE FROM NSQLCONFIG (NOLOCK) WHERE NSQLCONFIG.Configkey='gc_skudef')
                IF @c_sku IS NULL
                BEGIN
                   SELECT @n_continue = 3 , @n_err = 61965 --61702
-                  SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": Storerkey is blank or null - not allowed! (nspItrnAddAdjustmentCheck)"
+                  SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Storerkey is blank or null - not allowed! (nspItrnAddAdjustmentCheck)'
                END
                ELSE
                BEGIN
@@ -293,20 +306,20 @@ BEGIN
                   BEGIN
                      SELECT @n_continue = 3
                      SELECT @n_err = 61966 --61703   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
-                     SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": Insert Trigger On ITRN Failed Because An Attempt To Update SKU Failed. (nspItrnAddAdjustmentCheck)" + " ( " + " SQLSvr MESSAGE=" + ISNULL(RTRIM(@c_errmsg),'') + " ) "
+                     SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Insert Trigger On ITRN Failed Because An Attempt To Update SKU Failed. (nspItrnAddAdjustmentCheck)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
                   END
                   ELSE IF @n_cnt = 0
                   BEGIN
                      SELECT @n_continue = 3
                      SELECT @n_err = 61967 --61726
-                     SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": Update To Table ITRN Returned Zero Rows Affected. (nspItrnAddAdjustmentCheck)"
+                     SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update To Table ITRN Returned Zero Rows Affected. (nspItrnAddAdjustmentCheck)'
                   END
                END
             END
             ELSE
             BEGIN
                SELECT @n_continue = 3 , @n_err = 61968 --61704
-               SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": Default SKU Is Not Allowed And SKU Passed Is Blank! (nspItrnAddAdjustmentCheck)"
+               SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Default SKU Is Not Allowed And SKU Passed Is Blank! (nspItrnAddAdjustmentCheck)'
             END
          END
       END
@@ -344,7 +357,7 @@ BEGIN
                IF ISNULL(RTRIM(@c_LOT), '') = ''
                BEGIN
                   SELECT @n_continue = 3 , @n_err = 61969 --61705
-                  SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": Lot Number Does Not Exist In The LOTATTRIBUTE Table! (nspItrnAddAdjustmentCheck)"
+                  SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Lot Number Does Not Exist In The LOTATTRIBUTE Table! (nspItrnAddAdjustmentCheck)'
                END
             END
             ELSE
@@ -361,14 +374,14 @@ BEGIN
             IF @@rowcount <> 1
             BEGIN
                SELECT @n_continue = 3 , @n_err = 61971 --61706
-               SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": Lot Number Is Not Unique Or Does Not Exist In The LOTATTRIBUTE Table! (nspItrnAddAdjustmentCheck)"
+               SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Lot Number Is Not Unique Or Does Not Exist In The LOTATTRIBUTE Table! (nspItrnAddAdjustmentCheck)'
             END
             ELSE
             BEGIN
                IF @c_sku <> @c_verifysku
                BEGIN
                   SELECT @n_continue = 3 , @n_err = 61972 --61708
-                  SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": Lot Number and SKU Passed Do Not Match The Definition In The LOTATTRIBUTE Table! (nspItrnAddAdjustmentCheck)"
+                  SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Lot Number and SKU Passed Do Not Match The Definition In The LOTATTRIBUTE Table! (nspItrnAddAdjustmentCheck)'
                END
             END
          END -- IF ISNULL(RTRIM(@c_LOT), '') = ''
@@ -749,7 +762,7 @@ BEGIN
             BEGIN
                SELECT @n_continue = 3
                SELECT @n_err = 61973 --61738   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
-               SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": Insert Failed On Table Itrn. (nspItrnAddAdjustmentCheck)" + " ( " + " SQLSvr MESSAGE=" + ISNULL(RTRIM(@c_errmsg),'') + " ) "
+               SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Insert Failed On Table Itrn. (nspItrnAddAdjustmentCheck)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
             END
          END
          ELSE IF @n_rcnt=1
@@ -770,19 +783,19 @@ BEGIN
             BEGIN
                SELECT @n_continue = 3
                SELECT @n_err = 61974 --61709   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
-               SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": Update Failed On Table LOT. (nspItrnAddAjustmentCheck)" + " ( " + " SQLSvr MESSAGE=" + ISNULL(RTRIM(@c_errmsg),'') + " ) "
+               SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed On Table LOT. (nspItrnAddAjustmentCheck)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
             END
             ELSE IF @n_cnt = 0
             BEGIN
                SELECT @n_continue = 3
                SELECT @n_err = 61975 --61727
-               SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": Update To Table LOT Returned Zero Rows Affected. (nspItrnAddAdjustmentCheck)"
+               SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update To Table LOT Returned Zero Rows Affected. (nspItrnAddAdjustmentCheck)'
             END
          END
          ELSE
          BEGIN
             SELECT @n_continue = 3 , @n_err = 61976 --61710
-            SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": Lot Table Did Not Return Expected Unique Row In Response To Query. (nspItrnAddAdjustmentCheck)"
+            SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Lot Table Did Not Return Expected Unique Row In Response To Query. (nspItrnAddAdjustmentCheck)'
          END
       END
       IF @n_continue=1 or @n_continue=2
@@ -794,9 +807,9 @@ BEGIN
          BEGIN
             IF (dbo.fnc_LTrim(dbo.fnc_RTrim(@c_Status)) IS NULL)
             BEGIN
-               SELECT @c_Status = "OK"
+               SELECT @c_Status = 'OK'
             END
-            IF @c_allowidqtyupdate = "1"
+            IF @c_allowidqtyupdate = '1'
             BEGIN
                INSERT INTO ID (ID, QTY, STATUS,PACKKEY) VALUES (@c_toid, @n_qty, @c_status, @c_packkey)
             END
@@ -809,7 +822,7 @@ BEGIN
             BEGIN
                SELECT @n_continue = 3
                SELECT @n_err = 61977 --61739   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
-               SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": Insert Failed On Table ID. (nspItrnAddAdjustmentCheck)" + " ( " + " SQLSvr MESSAGE=" + ISNULL(RTRIM(@c_errmsg),'') + " ) "
+               SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Insert Failed On Table ID. (nspItrnAddAdjustmentCheck)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
             END
          END
          ELSE IF @n_rcnt=1
@@ -818,10 +831,10 @@ BEGIN
             BEGIN
                SELECT @c_Status = @c_curstatus
             END
-            IF @c_allowidqtyupdate = "1"
+            IF @c_allowidqtyupdate = '1'
             BEGIN
                -- Added By SHONG 04-07-2002
-               -- To prevent the Qty in the ID to become too large until datatype "int" cannot handle
+               -- To prevent the Qty in the ID to become too large until datatype 'int' cannot handle
                IF dbo.fnc_RTrim(@c_toid) IS NOT NULL AND dbo.fnc_RTrim(@c_toid) <> ''
                BEGIN
                   UPDATE ID WITH (ROWLOCK) 
@@ -850,20 +863,20 @@ BEGIN
             BEGIN
                SELECT @n_continue = 3
                SELECT @n_err = 61978 --61713   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
-               SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": Update Failed On Table ID. (nspItrnAddAdjustmentCheck)" + " ( " + " SQLSvr MESSAGE=" + ISNULL(RTRIM(@c_errmsg),'') + " ) "
+               SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed On Table ID. (nspItrnAddAdjustmentCheck)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
             END
          -- ELSE IF @n_cnt = 0
             IF @n_cnt = 0
             BEGIN
                SELECT @n_continue = 3
                SELECT @n_err = 61979 --61729
-               SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": Update To Table ID Returned Zero Rows Affected. (nspItrnAddAdjustmentCheck)"
+               SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update To Table ID Returned Zero Rows Affected. (nspItrnAddAdjustmentCheck)'
             END
          END
          ELSE
          BEGIN
             SELECT @n_continue = 3 , @n_err = 61980 --61714
-            SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": ID Table Did Not Return Expected Unique Row In Response To Query. (nspItrnAddAdjustmentCheck)"
+            SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': ID Table Did Not Return Expected Unique Row In Response To Query. (nspItrnAddAdjustmentCheck)'
          END
          IF (@n_rcnt = 1 or @n_rcnt = 0) and (@n_continue =1 or @n_continue=2)
          BEGIN
@@ -889,7 +902,7 @@ BEGIN
                      BEGIN
                         SELECT @n_continue = 3
                         SELECT @n_err = 61981 --61749   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
-                        SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": Update Failed On Table ID. (nspItrnAddAdjustmentCheck)" + " ( " + " SQLSvr MESSAGE=" + ISNULL(RTRIM(@c_errmsg),'') + " ) "
+                        SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed On Table ID. (nspItrnAddAdjustmentCheck)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
                      END
                   END
                END
@@ -909,19 +922,19 @@ BEGIN
             BEGIN
                SELECT @n_continue = 3
                SELECT @n_err = 61982 --61741   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
-               SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": Insert Failed On Table SKUxLOC. (nspItrnAddAdjustmentCheck)" + " ( " + " SQLSvr MESSAGE=" + ISNULL(RTRIM(@c_errmsg),'') + " ) "
+               SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Insert Failed On Table SKUxLOC. (nspItrnAddAdjustmentCheck)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
             END
          END
          ELSE IF @n_rcnt=1
          BEGIN
             UPDATE SKUxLOC with (ROWLOCK)
             SET QTYEXPECTED = CASE
-            WHEN @c_allowoverallocations = "0"
+            WHEN @c_allowoverallocations = '0'
             THEN 0
-            WHEN SKUxLOC.Locationtype <> "PICK" and SKUxLOC.Locationtype <> "CASE"
+            WHEN SKUxLOC.Locationtype <> 'PICK' and SKUxLOC.Locationtype <> 'CASE'
             THEN 0
             WHEN  ( (SKUxLOC.QtyAllocated  + SKUxLOC.QtyPicked)
-            - (SKUxLOC.Qty + @n_qty) ) >= 0 and @c_allowoverallocations = "1" and (SKUxLOC.locationtype = "PICK" or SKUxLOC.locationtype = "CASE")
+            - (SKUxLOC.Qty + @n_qty) ) >= 0 and @c_allowoverallocations = '1' and (SKUxLOC.locationtype = 'PICK' or SKUxLOC.locationtype = 'CASE')
             THEN ( (SKUxLOC.QtyAllocated  + SKUxLOC.QtyPicked)
             - (SKUxLOC.Qty + @n_qty) )
             ELSE 0
@@ -941,19 +954,19 @@ BEGIN
             BEGIN
                SELECT @n_continue = 3
                SELECT @n_err = 61983 --61735   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
-               SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": Update Failed On Table SKUxLOC. (nspItrnAddAdjustmentCheck)" + " ( " + " SQLSvr MESSAGE=" + ISNULL(RTRIM(@c_errmsg),'') + " ) "
+               SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed On Table SKUxLOC. (nspItrnAddAdjustmentCheck)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
             END
             ELSE IF @n_cnt = 0
             BEGIN
                SELECT @n_continue = 3
                SELECT @n_err = 61984 --61736
-               SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": Update To Table SKUxLOC Returned Zero Rows Affected. (nspItrnAddAdjustmentCheck)"
+               SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update To Table SKUxLOC Returned Zero Rows Affected. (nspItrnAddAdjustmentCheck)'
             END
          END
          ELSE
          BEGIN
             SELECT @n_continue = 3 , @n_err = 61985 --61737
-            SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": SKUxLOC Table Did Not Return Expected Unique Row In Response To Query. (nspItrnAddAdjustmentCheck)"
+            SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': SKUxLOC Table Did Not Return Expected Unique Row In Response To Query. (nspItrnAddAdjustmentCheck)'
          END
       END
       IF @n_continue=1 or @n_continue=2
@@ -969,7 +982,7 @@ BEGIN
             BEGIN
                SELECT @n_continue = 3
                SELECT @n_err = 61986 --61744   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
-               SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": Insert Failed On Table LOTxLOCxID. (nspItrnAddAdjustmentCheck)" + " ( " + " SQLSvr MESSAGE=" + ISNULL(RTRIM(@c_errmsg),'') + " ) "
+               SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Insert Failed On Table LOTxLOCxID. (nspItrnAddAdjustmentCheck)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
             END
          END
          ELSE IF @n_rcnt=1
@@ -990,27 +1003,27 @@ BEGIN
             BEGIN
                SELECT @n_continue = 3
                SELECT @n_err = 61987 --61721   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
-               SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": Update Failed On Table LOTxLOCxID. (nspItrnAddAdustmentCheck)" + " ( " + " SQLSvr MESSAGE=" + ISNULL(RTRIM(@c_errmsg),'') + " ) "
+               SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed On Table LOTxLOCxID. (nspItrnAddAdustmentCheck)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
             END
             ELSE IF @n_cnt = 0
             BEGIN
                SELECT @n_continue = 3
                SELECT @n_err = 61988 --61733
-               SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": Update To Table LOTxLOCxID Returned Zero Rows Affected. (nspItrnAddAdjustmentCheck)"
+               SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update To Table LOTxLOCxID Returned Zero Rows Affected. (nspItrnAddAdjustmentCheck)'
             END
          END
          ELSE
          BEGIN
             SELECT @n_continue = 3 , @n_err = 61989 --61722
-            SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": LOTxLOCxID Table Did Not Return Expected Unique Row In Response To Query. (nspItrnAddAdjustmentCheck)"
+            SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': LOTxLOCxID Table Did Not Return Expected Unique Row In Response To Query. (nspItrnAddAdjustmentCheck)'
          END
       END
 
       IF @n_continue = 1 or @n_continue = 2
       BEGIN
-         IF EXISTS(SELECT * FROM ID (NOLOCK) WHERE ID = @c_toid and STATUS <> "OK")
+         IF EXISTS(SELECT * FROM ID (NOLOCK) WHERE ID = @c_toid and STATUS <> 'OK')
          OR EXISTS (SELECT * FROM LOC (NOLOCK) WHERE LOC = @c_toloc and
-         (STATUS <> "OK" OR LOCATIONFLAG = "HOLD" or LOCATIONFLAG = "DAMAGE")
+         (STATUS <> 'OK' OR LOCATIONFLAG = 'HOLD' or LOCATIONFLAG = 'DAMAGE')
          )
          BEGIN
             UPDATE LOT with (ROWLOCK)
@@ -1021,8 +1034,8 @@ BEGIN
             BEGIN
                SELECT @n_continue = 3
                SELECT @n_err = 61990 --61745   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
-               SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)
-               +": Update Failed on Table LOT. (nspItrnAddAdjustmentCheck)" + " ( " + " SQLSvr MESSAGE=" + ISNULL(RTRIM(@c_errmsg),'') + " ) "
+               SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)
+               +': Update Failed on Table LOT. (nspItrnAddAdjustmentCheck)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
             END
          END
       END            
@@ -1085,14 +1098,171 @@ BEGIN
                BEGIN
                   SELECT @n_continue = 3
                   SELECT @n_err = 61992  
-                  SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)
-                  +": Update Failed on Table ChannelInv. (nspItrnAddAdjustmentCheck)" + " ( " + " SQLSvr MESSAGE=" + ISNULL(RTRIM(@c_errmsg),'') + " ) "
+                  SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)
+                  +': Update Failed on Table ChannelInv. (nspItrnAddAdjustmentCheck)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
                END                           
             END            
          END             
       END
       -- End (SWT02)
-      --       
+      -- (Wan05) - START     
+      IF @n_continue=1 or @n_continue=2
+      BEGIN 
+         SET @c_SerialNo = '' 
+         SELECT @c_SerialNo  = a.SerialNo
+              , @c_SourceKey = i.SourceKey
+              , @c_SourceType= i.SourceType
+              , @c_TranType  = i.TranType
+         FROM ADJUSTMENTDETAIL AS a (NOLOCK)
+         JOIN dbo.ITRN AS i (NOLOCK) ON a.AdjustmentKey+a.AdjustmentLineNumber = i.SourceKey
+         JOIN dbo.SKU AS s (NOLOCK) ON s.StorerKey = a.StorerKey AND s.Sku = a.Sku
+         WHERE i.ItrnKey = @c_itrnkey
+         AND a.SerialNo <> ''
+         AND s.SerialNoCapture IN ('1','2','3')
+         
+         IF @c_SerialNo <> ''
+         BEGIN
+            SELECT @c_ASNFizUpdLotToSerialNo = fsgr.Authority FROM dbo.fnc_SelectGetRight(@c_Facility, @c_Storerkey, '', 'ASNFizUpdLotToSerialNo')AS fsgr
+            SET @c_Status_SN = '1'
+            
+            SET @c_SerialNokey = ''
+            SELECT @c_SerialNoKey = sn.SerialNoKey
+            FROM dbo.SerialNo AS sn (NOLOCK)
+            WHERE sn.SerialNo = @c_SerialNo
+            AND sn.Storerkey = @c_StorerKey
+ 
+            IF @c_SerialNoKey <> ''
+            BEGIN
+               SET @c_Status_SN = '1'
+
+               IF @n_Qty < 0 
+               BEGIN 
+                  SET @c_Status_SN = 'CANC'
+               END
+
+               UPDATE dbo.SerialNo WITH (ROWLOCK)
+               SET [STATUS] = @c_Status_SN
+                  ,Lot   = CASE WHEN @c_ASNFizUpdLotToSerialNo = '1' THEN @c_Lot ELSE Lot END
+                  ,ID    = CASE WHEN ID <> @c_ToID THEN @c_ToID ELSE ID END
+                  ,EditWho  = SUSER_SNAME()
+                  ,EditDate = GETDATE()
+               WHERE SerialNoKey = @c_SerialNoKey
+               
+               SET @n_err = @@ERROR
+               IF @n_err <> 0
+               BEGIN
+                  SET @n_continue = 3
+                  SET @n_err = 62007
+                  SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed on Table SerialNo. (nspItrnAddAdjustmentCheck)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
+               END
+            END
+            
+            IF @c_SerialNoKey = '' AND @n_Continue IN (1,2)  
+            BEGIN
+               EXECUTE nspg_GetKey   
+                    @KeyName     = 'SERIALNO'  
+                  , @fieldlength = 10  
+                  , @keystring   = @c_SerialNoKey OUTPUT  
+                  , @b_success   = @b_success     OUTPUT  
+                  , @n_err       = @n_err         OUTPUT  
+                  , @c_errmsg    = @c_errmsg      OUTPUT  
+                  , @b_resultset = 0  
+                  , @n_batch     = 1  
+        
+               IF @b_success <> 1  
+               BEGIN  
+                  SET @n_continue = 3                                                                                                
+                  SET @n_err = 62008                                                                                           
+                  SET @c_errmsg='NSQL'+ CONVERT(CHAR(5),@n_err)+': Error Executing nspg_GetKey. (nspItrnAddAdjustmentCheck)'   
+                                 + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ).'                                    
+               END  
+               
+               IF @n_Continue IN (1,2)  
+               BEGIN 
+                  INSERT INTO dbo.SerialNo
+                      (
+                          SerialNoKey
+                      ,   OrderKey
+                      ,   OrderLineNumber
+                      ,   StorerKey
+                      ,   SKU
+                      ,   SerialNo
+                      ,   Qty
+                      ,   [Status]
+                      ,   LotNo
+                      ,   ID
+                      ,   ExternStatus
+                      ,   PickSlipNo
+                      ,   CartonNo
+                      ,   UserDefine01
+                      ,   UserDefine02
+                      ,   UserDefine03
+                      ,   UserDefine04
+                      ,   UserDefine05
+                      ,   LabelLine
+                      ,   UCCNo
+                      ,   Lot
+                      )
+                  VALUES
+                      (
+                          @c_SerialNoKey                                         -- SerialNoKey - nvarchar(10)
+                      ,   N''                                                    -- OrderKey - nvarchar(10)
+                      ,   N''                                                    -- OrderLineNumber - nvarchar(5)
+                      ,   @c_StorerKey                                           -- StorerKey - nvarchar(15)
+                      ,   @c_Sku                                                 -- SKU - nvarchar(20)
+                      ,   @c_SerialNo                                            -- SerialNo - nvarchar(50)
+                      ,   @n_Qty                                                 -- Qty - int
+                      ,   @c_Status_SN                                           -- Status - nvarchar(10)
+                      ,   ''                                                     -- LotNo - nvarchar(20)
+                      ,   @c_ToID                                                -- ID - nvarchar(18)
+                      ,   N'0'                                                   -- ExternStatus - nvarchar(10)
+                      ,   N''                                                    -- PickSlipNo - nvarchar(10)
+                      ,   0                                                      -- CartonNo - int
+                      ,   N''                                                    -- UserDefine01 - nvarchar(30)
+                      ,   N''                                                    -- UserDefine02 - nvarchar(30)
+                      ,   N''                                                    -- UserDefine03 - nvarchar(30)
+                      ,   N''                                                    -- UserDefine04 - nvarchar(30)
+                      ,   N''                                                    -- UserDefine05 - nvarchar(30)
+                      ,   N''                                                    -- LabelLine - nvarchar(5)
+                      ,   N''                                                    -- UCCNo - nvarchar(20)
+                      ,   IIF(@c_ASNFizUpdLotToSerialNo='1',@c_Lot,'')           -- Lot - nvarchar(10)
+                      )
+                   
+                  SET @n_err = @@ERROR  
+                  IF @n_err <> 0  
+                  BEGIN  
+                     SET @n_continue = 3  
+                     SET @n_err = 62008    
+                     SET @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Error Insert into SERIALNO Table. (nspItrnAddAdjustmentCheck)'   
+                                    + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '   
+                  END  
+               END    
+            END
+            
+            IF @n_Continue IN (1, 2)   
+            BEGIN
+               EXEC dbo.ispITrnSerialNoAdjustment 
+                 @c_ItrnKey      = @c_ItrnKey
+               , @c_TranType     = @c_TranType
+               , @c_StorerKey    = @c_StorerKey
+               , @c_SKU          = @c_SKU
+               , @c_SerialNo     = @c_SerialNo 
+               , @n_QTY          = @n_QTY 
+               , @c_SourceKey    = @c_SourceKey 
+               , @c_SourceType   = @c_SourceType
+               , @b_Success      = @b_Success  OUTPUT  
+               , @n_Err          = @n_Err      OUTPUT  
+               , @c_ErrMsg       = @c_ErrMsg   OUTPUT
+
+               IF @n_err <> 0
+               BEGIN
+                  SET @n_continue = 3
+               END
+            END 
+         END
+      END  
+      -- (Wan05) - END      
+  
       IF @n_continue=1 or @n_continue=2
       BEGIN
          UPDATE Itrn with (ROWLOCK)
@@ -1115,7 +1285,7 @@ BEGIN
          BEGIN
             SELECT @n_continue = 3
             SELECT @n_err = 61991 
-            SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": Update Failed on Table Itrn. (nspItrnAddAdjustmentCheck)" + " ( " + " SQLSvr MESSAGE=" + ISNULL(RTRIM(@c_errmsg),'') + " ) "
+            SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed on Table Itrn. (nspItrnAddAdjustmentCheck)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
          END
       END
    END -- @n_continue=1 or @n_continue=2
@@ -1145,7 +1315,7 @@ BEGIN
       END
       ELSE
       BEGIN
-         EXECUTE nsp_logerror @n_err, @c_errmsg, "nspItrnAddAdjustmentCheck"
+         EXECUTE nsp_logerror @n_err, @c_errmsg, 'nspItrnAddAdjustmentCheck'
          RAISERROR (@c_errmsg, 16, 1) WITH SETERROR    -- SQL2012
          RETURN
       END

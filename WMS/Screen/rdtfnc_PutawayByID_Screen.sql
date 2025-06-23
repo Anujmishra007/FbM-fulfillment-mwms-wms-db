@@ -82,3 +82,20 @@ EXECUTE rdt.rdtAddScn 4115, 'ENG'
    ,@cLine06 = ''
    ,@cLine14 = '%e'
    ,@nFunc = 1819
+
+-- (FCR-2598)
+-- 4116 = ExtScreen overwrite suggested loc
+DELETE rdt.RDTScn WHERE Scn = 4116 AND Lang_Code = 'ENG'
+EXECUTE rdt.rdtAddScn 4116, 'ENG',
+        @cLine01 = '',
+        @cLine02 = 'LOC NOT MATCH.',
+        @cLine03 = 'Scanned LOC: %20d02',
+        @cLine04 = 'Suggested LOC: %20d03',
+        @cLine05 = 'PROCEED?',
+        @cLine06 = '',
+        @cLine07 = '1 = YES',
+        @cLine08 = '2 = NO',
+        @cLine09 = '',
+        @cLine10 = 'OPTION: %01i01',
+        @cLine14 = '%e',
+        @nFunc   = 1819

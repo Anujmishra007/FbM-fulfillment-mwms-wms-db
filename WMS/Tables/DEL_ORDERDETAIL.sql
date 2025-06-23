@@ -1,5 +1,7 @@
-CREATE TABLE [dbo].[DEL_ORDERDETAIL]
-(
+IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[DEL_ORDERDETAIL]') AND type in (N'U'))
+BEGIN
+
+CREATE TABLE [dbo].[DEL_ORDERDETAIL](
 [OrderKey] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
 [OrderLineNumber] [nvarchar] (5) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
 [OrderDetailSysId] [int] NULL CONSTRAINT [DF_DEL_ORDERDETAIL_OrderDetailSysId] DEFAULT (rand()*(2147483647)),
@@ -78,92 +80,167 @@ CREATE TABLE [dbo].[DEL_ORDERDETAIL]
 [ConsoOrderLineNo] [nvarchar] (5) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_Del_OrderDetail_ConsoOrderLineNo] DEFAULT (''),
 [Notes] [nvarchar] (500) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_Del_OrderDetail_Notes] DEFAULT (''),
 [Notes2] [nvarchar] (500) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_Del_OrderDetail_Notes2] DEFAULT (''),
-[Channel] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL
+[Channel] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[SalesChannel] [nvarchar](50) NULL ,
+[CancelReasonCode] [nvarchar](60) NULL 
 ) ON [PRIMARY]
-GO
+
 ALTER TABLE [dbo].[DEL_ORDERDETAIL] ADD CONSTRAINT [DEL_PKOrderDetail] PRIMARY KEY CLUSTERED ([OrderKey], [OrderLineNumber]) WITH (FILLFACTOR=90) ON [PRIMARY]
-GO
+
 GRANT DELETE ON  [dbo].[DEL_ORDERDETAIL] TO [NSQL]
-GO
+
 GRANT INSERT ON  [dbo].[DEL_ORDERDETAIL] TO [NSQL]
-GO
+
 GRANT SELECT ON  [dbo].[DEL_ORDERDETAIL] TO [NSQL]
-GO
+
 GRANT UPDATE ON  [dbo].[DEL_ORDERDETAIL] TO [NSQL]
-GO
-EXEC sp_addextendedproperty N'MS_Description', 'Date of the information added. (System date)', 'SCHEMA', N'dbo', 'TABLE', N'DEL_ORDERDETAIL', 'COLUMN', N'AddDate'
-GO
-EXEC sp_addextendedproperty N'MS_Description', 'The username/login ID added the information. ', 'SCHEMA', N'dbo', 'TABLE', N'DEL_ORDERDETAIL', 'COLUMN', N'AddWho'
-GO
-EXEC sp_addextendedproperty N'MS_Description', 'Quantity of the Commodity after adjustment.', 'SCHEMA', N'dbo', 'TABLE', N'DEL_ORDERDETAIL', 'COLUMN', N'AdjustedQty'
-GO
-EXEC sp_addextendedproperty N'MS_Description', 'Alternate Commodity ID to be linked to the Master Commodity.', 'SCHEMA', N'dbo', 'TABLE', N'DEL_ORDERDETAIL', 'COLUMN', N'AltSku'
-GO
-EXEC sp_addextendedproperty N'MS_Description', 'Code used to identify the family of cartons used during cartonization.  ', 'SCHEMA', N'dbo', 'TABLE', N'DEL_ORDERDETAIL', 'COLUMN', N'CartonGroup'
-GO
-EXEC sp_addextendedproperty N'MS_Description', 'Date of the information edited/modified/updated. (System date)', 'SCHEMA', N'dbo', 'TABLE', N'DEL_ORDERDETAIL', 'COLUMN', N'EditDate'
-GO
-EXEC sp_addextendedproperty N'MS_Description', 'The username/login ID edited/modified/updated the information.', 'SCHEMA', N'dbo', 'TABLE', N'DEL_ORDERDETAIL', 'COLUMN', N'EditWho'
-GO
-EXEC sp_addextendedproperty N'MS_Description', 'Unique code identifying Orders used by the Storer.', 'SCHEMA', N'dbo', 'TABLE', N'DEL_ORDERDETAIL', 'COLUMN', N'ExternOrderKey'
-GO
-EXEC sp_addextendedproperty N'MS_Description', 'Unique code identifying the Purchase Order used by the Storer.', 'SCHEMA', N'dbo', 'TABLE', N'DEL_ORDERDETAIL', 'COLUMN', N'ExternPOKey'
-GO
-EXEC sp_addextendedproperty N'MS_Description', 'A building or place that provide services for effective warehouse management. Identified by unique code.', 'SCHEMA', N'dbo', 'TABLE', N'DEL_ORDERDETAIL', 'COLUMN', N'Facility'
-GO
-EXEC sp_addextendedproperty N'MS_Description', 'Movable unit /pallet ID. An MUID needs to be applied during receiving, picking or shipping of product. It provides a reference number that facilitates movement of product throughout the facility.', 'SCHEMA', N'dbo', 'TABLE', N'DEL_ORDERDETAIL', 'COLUMN', N'ID'
-GO
-EXEC sp_addextendedproperty N'MS_Description', 'Unique code identifying loading.', 'SCHEMA', N'dbo', 'TABLE', N'DEL_ORDERDETAIL', 'COLUMN', N'LoadKey'
-GO
-EXEC sp_addextendedproperty N'MS_Description', 'Unique pre-populated numeric value associated with a specific product. A unique combination.', 'SCHEMA', N'dbo', 'TABLE', N'DEL_ORDERDETAIL', 'COLUMN', N'Lot'
-GO
-EXEC sp_addextendedproperty N'MS_Description', 'Unique code identifying Master Bill of Lading.', 'SCHEMA', N'dbo', 'TABLE', N'DEL_ORDERDETAIL', 'COLUMN', N'MBOLKey'
-GO
-EXEC sp_addextendedproperty N'MS_Description', 'Minimum number of days that the customer allows between the current date and either the expiration date or the manufacturing date for the item being shipped. ', 'SCHEMA', N'dbo', 'TABLE', N'DEL_ORDERDETAIL', 'COLUMN', N'MinShelfLife'
-GO
-EXEC sp_addextendedproperty N'MS_Description', 'Unique code identifying Orders.', 'SCHEMA', N'dbo', 'TABLE', N'DEL_ORDERDETAIL', 'COLUMN', N'OrderKey'
-GO
-EXEC sp_addextendedproperty N'MS_Description', 'Name of pack code.', 'SCHEMA', N'dbo', 'TABLE', N'DEL_ORDERDETAIL', 'COLUMN', N'PackKey'
-GO
-EXEC sp_addextendedproperty N'MS_Description', 'Unique code identifying Picking.', 'SCHEMA', N'dbo', 'TABLE', N'DEL_ORDERDETAIL', 'COLUMN', N'PickCode'
-GO
-EXEC sp_addextendedproperty N'MS_Description', 'Unique code identifying the Purchase Order.', 'SCHEMA', N'dbo', 'TABLE', N'DEL_ORDERDETAIL', 'COLUMN', N'POKey'
-GO
-EXEC sp_addextendedproperty N'MS_Description', 'Quantity of the Commodity currently allocated in the Location.', 'SCHEMA', N'dbo', 'TABLE', N'DEL_ORDERDETAIL', 'COLUMN', N'QtyAllocated'
-GO
-EXEC sp_addextendedproperty N'MS_Description', 'Quantity of the Commodity currently picked in the Location.', 'SCHEMA', N'dbo', 'TABLE', N'DEL_ORDERDETAIL', 'COLUMN', N'QtyPicked'
-GO
-EXEC sp_addextendedproperty N'MS_Description', 'Quantity of product that has been pre-allocated from the lot associated to the product.', 'SCHEMA', N'dbo', 'TABLE', N'DEL_ORDERDETAIL', 'COLUMN', N'QtyPreAllocated'
-GO
-EXEC sp_addextendedproperty N'MS_Description', 'Quantity of the product being shipped.', 'SCHEMA', N'dbo', 'TABLE', N'DEL_ORDERDETAIL', 'COLUMN', N'ShippedQty'
-GO
-EXEC sp_addextendedproperty N'MS_Description', 'Unique code identifying the product.', 'SCHEMA', N'dbo', 'TABLE', N'DEL_ORDERDETAIL', 'COLUMN', N'Sku'
-GO
-EXEC sp_addextendedproperty N'MS_Description', 'Unique key to the Storer record.', 'SCHEMA', N'dbo', 'TABLE', N'DEL_ORDERDETAIL', 'COLUMN', N'StorerKey'
-GO
-EXEC sp_addextendedproperty N'MS_Description', 'Type of tariff assigned to the Commodity.', 'SCHEMA', N'dbo', 'TABLE', N'DEL_ORDERDETAIL', 'COLUMN', N'TariffKey'
-GO
-EXEC sp_addextendedproperty N'MS_Description', 'When checked, fields updated in this table will not trigger to update other tables that are linked with this table.', 'SCHEMA', N'dbo', 'TABLE', N'DEL_ORDERDETAIL', 'COLUMN', N'TrafficCop'
-GO
-EXEC sp_addextendedproperty N'MS_Description', 'Unit of measure for the product.', 'SCHEMA', N'dbo', 'TABLE', N'DEL_ORDERDETAIL', 'COLUMN', N'UOM'
-GO
-EXEC sp_addextendedproperty N'MS_Description', 'Track additional static information.', 'SCHEMA', N'dbo', 'TABLE', N'DEL_ORDERDETAIL', 'COLUMN', N'UserDefine01'
-GO
-EXEC sp_addextendedproperty N'MS_Description', 'Track additional static information.', 'SCHEMA', N'dbo', 'TABLE', N'DEL_ORDERDETAIL', 'COLUMN', N'UserDefine02'
-GO
-EXEC sp_addextendedproperty N'MS_Description', 'Track additional static information.', 'SCHEMA', N'dbo', 'TABLE', N'DEL_ORDERDETAIL', 'COLUMN', N'UserDefine03'
-GO
-EXEC sp_addextendedproperty N'MS_Description', 'Track additional static information.', 'SCHEMA', N'dbo', 'TABLE', N'DEL_ORDERDETAIL', 'COLUMN', N'UserDefine04'
-GO
-EXEC sp_addextendedproperty N'MS_Description', 'Track additional static information.', 'SCHEMA', N'dbo', 'TABLE', N'DEL_ORDERDETAIL', 'COLUMN', N'UserDefine05'
-GO
-EXEC sp_addextendedproperty N'MS_Description', 'Track additional static information.', 'SCHEMA', N'dbo', 'TABLE', N'DEL_ORDERDETAIL', 'COLUMN', N'UserDefine06'
-GO
-EXEC sp_addextendedproperty N'MS_Description', 'Track additional static information.', 'SCHEMA', N'dbo', 'TABLE', N'DEL_ORDERDETAIL', 'COLUMN', N'UserDefine07'
-GO
-EXEC sp_addextendedproperty N'MS_Description', 'Track additional static information.', 'SCHEMA', N'dbo', 'TABLE', N'DEL_ORDERDETAIL', 'COLUMN', N'UserDefine08'
-GO
-EXEC sp_addextendedproperty N'MS_Description', 'Track additional static information.', 'SCHEMA', N'dbo', 'TABLE', N'DEL_ORDERDETAIL', 'COLUMN', N'UserDefine09'
-GO
-EXEC sp_addextendedproperty N'MS_Description', 'Track additional static information.', 'SCHEMA', N'dbo', 'TABLE', N'DEL_ORDERDETAIL', 'COLUMN', N'UserDefine10'
-GO
+
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'DEL_ORDERDETAIL', N'COLUMN',N'AddDate'))
+	EXEC sp_addextendedproperty N'MS_Description', 'Date of the information added. (System date)', 'SCHEMA', N'dbo', 'TABLE', N'DEL_ORDERDETAIL', 'COLUMN', N'AddDate'
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'DEL_ORDERDETAIL', N'COLUMN',N'AddWho'))	
+	EXEC sp_addextendedproperty N'MS_Description', 'The username/login ID added the information. ', 'SCHEMA', N'dbo', 'TABLE', N'DEL_ORDERDETAIL', 'COLUMN', N'AddWho'
+	
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'DEL_ORDERDETAIL', N'COLUMN',N'AdjustedQty'))	
+	EXEC sp_addextendedproperty N'MS_Description', 'Quantity of the Commodity after adjustment.', 'SCHEMA', N'dbo', 'TABLE', N'DEL_ORDERDETAIL', 'COLUMN', N'AdjustedQty'
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'DEL_ORDERDETAIL', N'COLUMN',N'AltSku'))	
+	EXEC sp_addextendedproperty N'MS_Description', 'Alternate Commodity ID to be linked to the Master Commodity.', 'SCHEMA', N'dbo', 'TABLE', N'DEL_ORDERDETAIL', 'COLUMN', N'AltSku'
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'DEL_ORDERDETAIL', N'COLUMN',N'CartonGroup'))	
+	EXEC sp_addextendedproperty N'MS_Description', 'Code used to identify the family of cartons used during cartonization.  ', 'SCHEMA', N'dbo', 'TABLE', N'DEL_ORDERDETAIL', 'COLUMN', N'CartonGroup'
+	
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'DEL_ORDERDETAIL', N'COLUMN',N'EditDate'))	
+	EXEC sp_addextendedproperty N'MS_Description', 'Date of the information edited/modified/updated. (System date)', 'SCHEMA', N'dbo', 'TABLE', N'DEL_ORDERDETAIL', 'COLUMN', N'EditDate'
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'DEL_ORDERDETAIL', N'COLUMN',N'EditWho'))		
+	EXEC sp_addextendedproperty N'MS_Description', 'The username/login ID edited/modified/updated the information.', 'SCHEMA', N'dbo', 'TABLE', N'DEL_ORDERDETAIL', 'COLUMN', N'EditWho'
+
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'DEL_ORDERDETAIL', N'COLUMN',N'ExternOrderKey'))		
+	EXEC sp_addextendedproperty N'MS_Description', 'Unique code identifying Orders used by the Storer.', 'SCHEMA', N'dbo', 'TABLE', N'DEL_ORDERDETAIL', 'COLUMN', N'ExternOrderKey'
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'DEL_ORDERDETAIL', N'COLUMN',N'ExternPOKey'))		
+	EXEC sp_addextendedproperty N'MS_Description', 'Unique code identifying the Purchase Order used by the Storer.', 'SCHEMA', N'dbo', 'TABLE', N'DEL_ORDERDETAIL', 'COLUMN', N'ExternPOKey'
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'DEL_ORDERDETAIL', N'COLUMN',N'Facility'))		
+	EXEC sp_addextendedproperty N'MS_Description', 'A building or place that provide services for effective warehouse management. Identified by unique code.', 'SCHEMA', N'dbo', 'TABLE', N'DEL_ORDERDETAIL', 'COLUMN', N'Facility'
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'DEL_ORDERDETAIL', N'COLUMN',N'ID'))		
+	EXEC sp_addextendedproperty N'MS_Description', 'Movable unit /pallet ID. An MUID needs to be applied during receiving, picking or shipping of product. It provides a reference number that facilitates movement of product throughout the facility.', 'SCHEMA', N'dbo', 'TABLE', N'DEL_ORDERDETAIL', 'COLUMN', N'ID'
+	
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'DEL_ORDERDETAIL', N'COLUMN',N'LoadKey'))		
+	EXEC sp_addextendedproperty N'MS_Description', 'Unique code identifying loading.', 'SCHEMA', N'dbo', 'TABLE', N'DEL_ORDERDETAIL', 'COLUMN', N'LoadKey'
+	
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'DEL_ORDERDETAIL', N'COLUMN',N'Lot'))		
+	EXEC sp_addextendedproperty N'MS_Description', 'Unique pre-populated numeric value associated with a specific product. A unique combination.', 'SCHEMA', N'dbo', 'TABLE', N'DEL_ORDERDETAIL', 'COLUMN', N'Lot'
+	
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'DEL_ORDERDETAIL', N'COLUMN',N'MBOLKey'))		
+	EXEC sp_addextendedproperty N'MS_Description', 'Unique code identifying Master Bill of Lading.', 'SCHEMA', N'dbo', 'TABLE', N'DEL_ORDERDETAIL', 'COLUMN', N'MBOLKey'
+	
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'DEL_ORDERDETAIL', N'COLUMN',N'MinShelfLife'))		
+	EXEC sp_addextendedproperty N'MS_Description', 'Minimum number of days that the customer allows between the current date and either the expiration date or the manufacturing date for the item being shipped. ', 'SCHEMA', N'dbo', 'TABLE', N'DEL_ORDERDETAIL', 'COLUMN', N'MinShelfLife'
+	
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'DEL_ORDERDETAIL', N'COLUMN',N'OrderKey'))		
+	EXEC sp_addextendedproperty N'MS_Description', 'Unique code identifying Orders.', 'SCHEMA', N'dbo', 'TABLE', N'DEL_ORDERDETAIL', 'COLUMN', N'OrderKey'
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'DEL_ORDERDETAIL', N'COLUMN',N'PackKey'))		
+	EXEC sp_addextendedproperty N'MS_Description', 'Name of pack code.', 'SCHEMA', N'dbo', 'TABLE', N'DEL_ORDERDETAIL', 'COLUMN', N'PackKey'
+	
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'DEL_ORDERDETAIL', N'COLUMN',N'PickCode'))		
+	EXEC sp_addextendedproperty N'MS_Description', 'Unique code identifying Picking.', 'SCHEMA', N'dbo', 'TABLE', N'DEL_ORDERDETAIL', 'COLUMN', N'PickCode'
+	
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'DEL_ORDERDETAIL', N'COLUMN',N'POKey'))		
+	EXEC sp_addextendedproperty N'MS_Description', 'Unique code identifying the Purchase Order.', 'SCHEMA', N'dbo', 'TABLE', N'DEL_ORDERDETAIL', 'COLUMN', N'POKey'
+	
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'DEL_ORDERDETAIL', N'COLUMN',N'QtyAllocated'))		
+	EXEC sp_addextendedproperty N'MS_Description', 'Quantity of the Commodity currently allocated in the Location.', 'SCHEMA', N'dbo', 'TABLE', N'DEL_ORDERDETAIL', 'COLUMN', N'QtyAllocated'
+	
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'DEL_ORDERDETAIL', N'COLUMN',N'QtyPicked'))		
+	EXEC sp_addextendedproperty N'MS_Description', 'Quantity of the Commodity currently picked in the Location.', 'SCHEMA', N'dbo', 'TABLE', N'DEL_ORDERDETAIL', 'COLUMN', N'QtyPicked'
+	
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'DEL_ORDERDETAIL', N'COLUMN',N'QtyPreAllocated'))		
+	EXEC sp_addextendedproperty N'MS_Description', 'Quantity of product that has been pre-allocated from the lot associated to the product.', 'SCHEMA', N'dbo', 'TABLE', N'DEL_ORDERDETAIL', 'COLUMN', N'QtyPreAllocated'
+	
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'DEL_ORDERDETAIL', N'COLUMN',N'ShippedQty'))		
+	EXEC sp_addextendedproperty N'MS_Description', 'Quantity of the product being shipped.', 'SCHEMA', N'dbo', 'TABLE', N'DEL_ORDERDETAIL', 'COLUMN', N'ShippedQty'
+	
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'DEL_ORDERDETAIL', N'COLUMN',N'Sku'))		
+	EXEC sp_addextendedproperty N'MS_Description', 'Unique code identifying the product.', 'SCHEMA', N'dbo', 'TABLE', N'DEL_ORDERDETAIL', 'COLUMN', N'Sku'
+	
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'DEL_ORDERDETAIL', N'COLUMN',N'StorerKey'))		
+	EXEC sp_addextendedproperty N'MS_Description', 'Unique key to the Storer record.', 'SCHEMA', N'dbo', 'TABLE', N'DEL_ORDERDETAIL', 'COLUMN', N'StorerKey'
+	
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'DEL_ORDERDETAIL', N'COLUMN',N'TariffKey'))		
+	EXEC sp_addextendedproperty N'MS_Description', 'Type of tariff assigned to the Commodity.', 'SCHEMA', N'dbo', 'TABLE', N'DEL_ORDERDETAIL', 'COLUMN', N'TariffKey'
+	
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'DEL_ORDERDETAIL', N'COLUMN',N'TrafficCop'))		
+	EXEC sp_addextendedproperty N'MS_Description', 'When checked, fields updated in this table will not trigger to update other tables that are linked with this table.', 'SCHEMA', N'dbo', 'TABLE', N'DEL_ORDERDETAIL', 'COLUMN', N'TrafficCop'
+	
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'DEL_ORDERDETAIL', N'COLUMN',N'UOM'))		
+	EXEC sp_addextendedproperty N'MS_Description', 'Unit of measure for the product.', 'SCHEMA', N'dbo', 'TABLE', N'DEL_ORDERDETAIL', 'COLUMN', N'UOM'
+	
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'DEL_ORDERDETAIL', N'COLUMN',N'UserDefine01'))		
+	EXEC sp_addextendedproperty N'MS_Description', 'Track additional static information.', 'SCHEMA', N'dbo', 'TABLE', N'DEL_ORDERDETAIL', 'COLUMN', N'UserDefine01'
+	
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'DEL_ORDERDETAIL', N'COLUMN',N'UserDefine02'))		
+	EXEC sp_addextendedproperty N'MS_Description', 'Track additional static information.', 'SCHEMA', N'dbo', 'TABLE', N'DEL_ORDERDETAIL', 'COLUMN', N'UserDefine02'
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'DEL_ORDERDETAIL', N'COLUMN',N'UserDefine03'))			
+	EXEC sp_addextendedproperty N'MS_Description', 'Track additional static information.', 'SCHEMA', N'dbo', 'TABLE', N'DEL_ORDERDETAIL', 'COLUMN', N'UserDefine03'
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'DEL_ORDERDETAIL', N'COLUMN',N'UserDefine04'))			
+	EXEC sp_addextendedproperty N'MS_Description', 'Track additional static information.', 'SCHEMA', N'dbo', 'TABLE', N'DEL_ORDERDETAIL', 'COLUMN', N'UserDefine04'
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'DEL_ORDERDETAIL', N'COLUMN',N'UserDefine05'))			
+	EXEC sp_addextendedproperty N'MS_Description', 'Track additional static information.', 'SCHEMA', N'dbo', 'TABLE', N'DEL_ORDERDETAIL', 'COLUMN', N'UserDefine05'
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'DEL_ORDERDETAIL', N'COLUMN',N'UserDefine06'))			
+	EXEC sp_addextendedproperty N'MS_Description', 'Track additional static information.', 'SCHEMA', N'dbo', 'TABLE', N'DEL_ORDERDETAIL', 'COLUMN', N'UserDefine06'
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'DEL_ORDERDETAIL', N'COLUMN',N'UserDefine07'))			
+	EXEC sp_addextendedproperty N'MS_Description', 'Track additional static information.', 'SCHEMA', N'dbo', 'TABLE', N'DEL_ORDERDETAIL', 'COLUMN', N'UserDefine07'
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'DEL_ORDERDETAIL', N'COLUMN',N'UserDefine08'))			
+	EXEC sp_addextendedproperty N'MS_Description', 'Track additional static information.', 'SCHEMA', N'dbo', 'TABLE', N'DEL_ORDERDETAIL', 'COLUMN', N'UserDefine08'
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'DEL_ORDERDETAIL', N'COLUMN',N'UserDefine09'))			
+	EXEC sp_addextendedproperty N'MS_Description', 'Track additional static information.', 'SCHEMA', N'dbo', 'TABLE', N'DEL_ORDERDETAIL', 'COLUMN', N'UserDefine09'
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'DEL_ORDERDETAIL', N'COLUMN',N'UserDefine10'))			
+	EXEC sp_addextendedproperty N'MS_Description', 'Track additional static information.', 'SCHEMA', N'dbo', 'TABLE', N'DEL_ORDERDETAIL', 'COLUMN', N'UserDefine10'
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'DEL_ORDERDETAIL', N'COLUMN',N'SalesChannel'))			
+	EXEC sp_addextendedproperty N'MS_Description', 'Distribution channels like wholesalers, retailers, distributors along with Orders.', 'SCHEMA', N'dbo', 'TABLE', N'DEL_ORDERDETAIL', 'COLUMN', N'SalesChannel'
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'DEL_ORDERDETAIL', N'COLUMN',N'CancelReasonCode'))			
+	EXEC sp_addextendedproperty N'MS_Description', 'The reason why an order detail is cancelled.', 'SCHEMA', N'dbo', 'TABLE', N'DEL_ORDERDETAIL', 'COLUMN', N'CancelReasonCode'
+
+
+END
+ELSE
+BEGIN
+
+
+ 	 IF NOT EXISTS (SELECT 1
+	               FROM sys.columns
+	               WHERE Name = 'SalesChannel' AND Object_ID = Object_ID('dbo.DEL_ORDERDETAIL'))
+			BEGIN
+				ALTER TABLE dbo.DEL_ORDERDETAIL ADD SalesChannel [nvarchar](50) NULL ;
+				EXEC sp_addextendedproperty N'MS_Description', 'Distribution channels like wholesalers, retailers, distributors along with Orders.', 'SCHEMA', N'dbo', 'TABLE', N'DEL_ORDERDETAIL', 'COLUMN', N'SalesChannel'
+
+				
+			END
+			
+			IF NOT EXISTS (SELECT 1
+	               FROM sys.columns
+	               WHERE Name = 'CancelReasonCode' AND Object_ID = Object_ID('dbo.DEL_ORDERDETAIL'))
+			BEGIN
+				ALTER TABLE dbo.DEL_ORDERDETAIL ADD CancelReasonCode [nvarchar](60) NULL ;
+				EXEC sp_addextendedproperty N'MS_Description', 'The reason why an order detail is cancelled.', 'SCHEMA', N'dbo', 'TABLE', N'DEL_ORDERDETAIL', 'COLUMN', N'CancelReasonCode'
+				
+			END
+
+
+END

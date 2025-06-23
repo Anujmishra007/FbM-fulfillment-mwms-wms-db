@@ -3,26 +3,32 @@ GO
 SET ANSI_NULLS OFF 
 GO
   
-/******************************************************************************/        
-/* Store procedure: rdtfnc_TM_Assist_ClusterPick                              */        
-/* Copyright      : LF Logistics                                              */        
-/*                                                                            */        
-/* Purpose: TM Assisted Cluster Pick                                          */        
-/*                                                                            */        
-/* Modifications log:                                                         */        
-/*                                                                            */        
-/* Date         Rev  Author   Purposes                                        */        
-/* 2021-05-26   1.0  James    WMS-17335 Created                               */       
-/* 2022-02-10   1.1  Ung      WMS-18884 Add ExtendedInfoSP for SKU QTY screen */      
-/* 2022-02-28   1.2  James    Enhance assign tote logic (james01)             */      
-/* 2022-03-28   1.3  James    WMS-19202 Allow cart with assigned task continue*/      
-/*                            to pick (james02)                               */      
-/* 2023-05-03   1.4  James    WMS-22330 Add config to control whether allow   */
-/*                            pick with mix wavekey (james03)                 */
-/* 2024-07-31   1.5  Jackc    FCR-652 Add ext scn entry                       */
-/* 2024-09-13   1.6  Jackc    FCR-652 Fix bug when continue task              */
-/* 2024-09-14   1.7  Jackc    FCR-856 Lock Tasks on carton level              */
-/******************************************************************************/        
+/*********************************************************************************/
+/* Store procedure: rdtfnc_TM_Assist_ClusterPick                                 */
+/* Copyright      : LF Logistics                                                 */
+/*                                                                               */
+/* Purpose: TM Assisted Cluster Pick                                             */
+/*                                                                               */
+/* Modifications log:                                                            */
+/*                                                                               */
+/* Date         Rev     Author   Purposes                                        */
+/* 2021-05-26   1.0     James    WMS-17335 Created                               */
+/* 2022-02-10   1.1     Ung      WMS-18884 Add ExtendedInfoSP for SKU QTY screen */
+/* 2022-02-28   1.2     James    Enhance assign tote logic (james01)             */
+/* 2022-03-28   1.3     James    WMS-19202 Allow cart with assigned task continue*/
+/*                               to pick (james02)                               */
+/* 2023-05-03   1.4     James    WMS-22330 Add config to control whether allow   */
+/*                               pick with mix wavekey (james03)                 */
+/* 2024-07-31   1.5     Jackc    FCR-652 Add ext scn entry                       */
+/* 2024-09-13   1.6     Jackc    FCR-652 Fix bug when continue task              */
+/* 2024-09-14   1.7     Jackc    FCR-856 Lock Tasks on carton level              */
+/* 2024-12-16   1.8     NLT013   FCR-1755 Add Extended validation                */
+/* 2024-12-26   1.8.1   JCH507   FCR-1755 Go to wrong label when extvail fail    */
+/* 2024-12-18   1.9     Jackc    UWP-28528 ActQty is reset to 0 when partial short*/
+/* 2025-04-27   2.0.0   Dennis   UWP-31758 Skip confirm tote if full short       */
+/* 2025-04-27   2.0.1   Dennis   FCR-4243 Resume task                            */
+/* 2025-06-17   0.0.0   JACKC    !!!Cutover. Use V2 file in V0 for work!!!       */
+/*********************************************************************************/
         
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_Assist_ClusterPick](        
    @nMobile    int,        
@@ -309,7 +315,7 @@ BEGIN
    IF @nStep = 8  GOTO Step_UnAssign         -- Scn = 5927. Unassign Cart        
    IF @nStep = 9  GOTO Step_NextTask         -- Scn = 5928. End Task/Exit TM        
    IF @nStep = 10 GOTO Step_ContTask         -- Scn = 5929. Task exists, continue
-   IF @nStep = 99 GOTO Step_99              -- Ext Scn Jackc       
+   IF @nStep = 99 GOTO Step_99               -- Ext Scn Jackc
          
 END        
         
@@ -1716,7 +1722,7 @@ BEGIN
             IF @cDecodeSP <> ''          
             BEGIN          
                -- Standard decode          
-  IF @cDecodeSP = '1'          
+               IF @cDecodeSP = '1'
                BEGIN          
                   EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cBarcode,          
                      @cUPC        = @cUPC           OUTPUT,          
@@ -1889,7 +1895,7 @@ BEGIN
                @cSKU, @nQty, @cOption, @cToLoc, @tExtValidate, @nErrNo OUTPUT, @cErrMsg OUTPUT        
         
             IF @nErrNo <> 0         
-               GOTO Step_Matrix_Fail        
+               GOTO Step_SKUQTY_Fail --v1.8.1
          END        
       END        
         
@@ -1897,7 +1903,7 @@ BEGIN
       SET @nActQTY = @nActQTY + @nQTY          
           
       -- SKU scanned, remain in current screen          
-      IF @cBarcode <> ''  AND @cBarcode <> '99'        
+      IF (@cBarcode <> ''  AND @cBarcode <> '99') OR (@cSKUValidated = '1' AND @nQTY > 0)  --v1.8
       BEGIN          
          SET @cOutField06 = '' -- SKU          
          SET @cOutField07 = CASE WHEN @cDefaultQTY = '0' THEN '' ELSE @cDefaultQTY END -- QTY        
@@ -1926,7 +1932,7 @@ BEGIN
       -- QTY short          
       IF @nActQTY < @nSuggQTY          
       BEGIN          
-         SET @nActQTY = @nActQTY - @nQTY        
+         --SET @nActQTY = @nActQTY - @nQTY --v1.8
         
          -- Prepare next screen var          
          SET @cOption = ''          
@@ -2321,7 +2327,7 @@ BEGIN
             ELSE        
             BEGIN        
                -- Scan out          
-    SET @nErrNo = 0          
+               SET @nErrNo = 0
                EXEC rdt.rdt_TM_Assist_ClusterPick_ScanOut @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey          
                   ,@cTaskDetailKey          
                   ,@nErrNo       OUTPUT          
@@ -2352,7 +2358,7 @@ BEGIN
                BEGIN      
                   SET @cOutField01 = @cCartPickMethod      
                   SET @cOutField02 = @cSuggToLOC -- To LOC          
-   SET @cInField03 = @cSuggToLOC        
+                  SET @cInField03 = @cSuggToLOC
                         
                   -- Go to To LOC screen          
                   SET @nScn = @nScn_ToLoc          
@@ -2585,7 +2591,7 @@ BEGIN
             IF @nErrNo <> 0                  
             BEGIN                  
                ROLLBACK TRAN Step_Option                  
-  WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started                  
+               WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
                   COMMIT TRAN                  
                GOTO Step_Option_Fail                  
             END          
@@ -2632,7 +2638,7 @@ BEGIN
          SET @cOutField04 = SUBSTRING( @cSKUDescr, 1, 20)        
          SET @cOutField04 = SUBSTRING( @cSKUDescr, 21, 20)        
          SET @cOutField06 = ''   -- SKU/UPC        
-    SET @cOutField07 = CASE WHEN @cDefaultQTY = '0' THEN '' ELSE @cDefaultQTY END -- QTY        
+         SET @cOutField07 = CASE WHEN @cDefaultQTY = '0' THEN '' ELSE @cDefaultQTY END -- QTY
          SET @cOutField08 = @nActQTY--@nPickedQty        
          SET @cOutField09 = @nSuggQty        
          SET @cOutField15 = '' -- ExtendedInfo      
@@ -2726,12 +2732,18 @@ BEGIN
             @tExtInfo, @cExtendedInfo OUTPUT        
       
          IF @nErrNo <> 0         
-GOTO Quit      
+            GOTO Quit
                   
          IF @nStep = @nStep_SKUQTY      
             SET @cOutField15 = @cExtendedInfo      
       END        
-   END        
+   END
+
+   IF @cExtendedScnSP <> ''
+   BEGIN
+      SET @nAction = 0
+      GOTO Step_99
+   END -- ExtendedScreenSP <> ''
    GOTO Quit                  
                   
    Step_Option_Fail:                  
@@ -2780,7 +2792,49 @@ BEGIN
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid LOC          
             GOTO Step_ToLoc_Fail          
          END          
-      END          
+      END
+
+      -- Extended validate
+      IF @cExtendedValidateSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedValidateSP AND type = 'P')
+         BEGIN
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, ' +
+               ' @cGroupKey, @cTaskDetailKey, @cPickZone, @cCartId, @cMethod, @cFromLoc, @cCartonId, ' +
+               ' @cSKU, @nQty, @cOption, @cToLOC, @tExtValidate, @nErrNo OUTPUT, @cErrMsg OUTPUT '
+
+            SET @cSQLParam =
+               ' @nMobile        INT,           ' +
+               ' @nFunc          INT,           ' +
+               ' @cLangCode      NVARCHAR( 3),  ' +
+               ' @nStep          INT,           ' +
+               ' @nInputKey      INT,           ' +
+               ' @cFacility      NVARCHAR( 5),  ' +
+               ' @cStorerKey     NVARCHAR( 15), ' +
+               ' @cGroupKey      NVARCHAR( 10), ' +
+               ' @cTaskDetailKey NVARCHAR( 10), ' +
+               ' @cPickZone      NVARCHAR( 10), ' +
+               ' @cCartId        NVARCHAR( 10), ' +
+               ' @cMethod        NVARCHAR( 1),  ' +
+               ' @cFromLoc       NVARCHAR( 10), ' +
+               ' @cCartonId      NVARCHAR( 20), ' +
+               ' @cSKU           NVARCHAR( 20), ' +
+               ' @nQty           INT,           ' +
+               ' @cOption        NVARCHAR( 1), ' +
+               ' @cToLOC         NVARCHAR( 10), ' +
+               ' @tExtValidate   VariableTable READONLY, ' +
+               ' @nErrNo         INT           OUTPUT, ' +
+               ' @cErrMsg        NVARCHAR( 20) OUTPUT  '
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey,
+               @cGroupKey, @cTaskDetailKey, @cPickZone, @cCartId, @cMethod, @cFromLoc, @cCartonId,
+               @cSKU, @nQty, @cOption, @cToLoc, @tExtValidate, @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+            IF @nErrNo <> 0
+               GOTO Step_ToLoc_Fail --V1.8.1
+         END
+      END
       
       -- Handling transaction                  
       SET @nTranCount = @@TRANCOUNT                  
@@ -3460,6 +3514,7 @@ BEGIN
                SET  @cResult05         = ISNULL(@cExtScnUDF14,'')
                SET  @cMethod           = ISNULL(@cExtScnUDF15,'')
                SET  @cPickSlipNo       = ISNULL(@cExtScnUDF16,'')
+               SET  @cSuggToLOC        = ISNULL(@cExtScnUDF17,'')
             END -- SCN 6414  new scn 1 Enter
             ELSE IF @nPreSCn = '6416' AND @nPreInputKey = 1
             BEGIN
@@ -3490,6 +3545,11 @@ BEGIN
                SET @cGroupKey = '' -- clear groupkey, cart id when back to 1 step
                SET @cCartID = ''
                --V1.7 end
+            END
+            ELSE IF @nScn = @nScn_ConfirmTote AND @nStep = @nStep_ConfirmTote AND @cExtScnUDF01 = 'Y'
+            BEGIN
+               SET @cInField04 = @cOutField03
+               GOTO Step_ConfirmTote
             END
          END -- rdt_1855ExtScn01
 

@@ -17,6 +17,8 @@ GO
 /* 2018-08-20 1.4  CheeMUN    SCTASK0183384 - Extend Parms Length             */
 /* 2019-05-20 1.5  ML         WMS-8878:Handle NoOfCopy,PrintCmd@ParmList(ML01)*/
 /* 2022-12-22 1.6  YeeKung    WMS-21359 Extend option length (yeekung01)      */
+/* 2024-03-01 1.7  XuLu       INC2257104 Extend option length (XuLu01)        */ 
+/* 2024-12-10 1.8  YeeKung    FCR-1787 Support FileName        (yeekung02)    */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_593PrintHK01] (
@@ -99,6 +101,8 @@ AS
          , @c_p_Param10      NVARCHAR(60)
          , @n_p_NoOfCopy     INT           -- ML01
          , @c_p_PrintCmd     NVARCHAR(MAX) -- ML01
+         , @c_p_FileName     NVARCHAR(MAX) -- ML01
+         , @c_FileName       NVARCHAR( 50)
 
    SELECT @cReportType1     = ''
         , @cJobName         = ''
@@ -129,6 +133,7 @@ AS
         , @c_Param10        = ''
         , @cWarningMsg      = ''
         , @nNoOfCopy        = NULL
+        , @c_FileName       = ''
 
    -- Get Codelkup RDTLBLRPT values
    SELECT @cUDF01         = ISNULL(UDF01,'')
@@ -232,7 +237,7 @@ AS
                      +',@cParam9    NVARCHAR(60) OUTPUT'
                      +',@cParam10   NVARCHAR(60) OUTPUT'
                      +',@nNoOfCopy  INT OUTPUT'
-                     +',@cOption    NVARCHAR(1)'
+                     +',@cOption    NVARCHAR(2)'      -- XuLu01
                      +',@cCode2     NVARCHAR(30)'
                      +',@cValidateAction NVARCHAR(60)'
                      +',@cPrintCmdExp NVARCHAR(MAX)'      -- ML01
@@ -287,7 +292,7 @@ AS
                , @cLabelPrinter      -- ML01
                , @cPaperPrinter      -- ML01
                , @cLabelWinPrinter   -- ML01
-    , @cPaperWinPrinter   -- ML01
+               , @cPaperWinPrinter   -- ML01
                , @cReportType        -- ML01
                , @nMobile            -- ML01
                , @nFunc              -- ML01
@@ -356,7 +361,7 @@ AS
                   +',@cParam9 NVARCHAR(60)'
                   +',@cParam10 NVARCHAR(60)'
                   +',@nNoOfCopy INT'
-                  +',@cOption NVARCHAR(1)'
+                  +',@cOption    NVARCHAR(2)'      -- XuLu01
                   +',@cPrintCmdExp NVARCHAR(MAX)'     -- ML01
                   +',@cPrintCmd NVARCHAR(MAX)'        -- ML01
                   +',@cLabelPrinter NVARCHAR(10)'     -- ML01
@@ -368,6 +373,7 @@ AS
                   +',@nFunc INT'                      -- ML01
                   +',@nStep INT'                      -- ML01
                   +',@cLangCode NVARCHAR(3)'          -- ML01
+                  +',@cFileName NVARCHAR(50)'
 
    BEGIN TRY
       EXEC sp_ExecuteSQL @cSQL, @cSQLParam
@@ -397,6 +403,7 @@ AS
          , @nFunc            -- ML01
          , @nStep            -- ML01
          , @cLangCode        -- ML01
+         , @c_FileName
    END TRY
    BEGIN CATCH
    SET @nErrNo = 119905
@@ -458,6 +465,8 @@ AS
          INSERT INTO @tReportParam (Variable, Value)  VALUES  ('@nNoOfCopy' , @nNoOfCopy  )   -- ML01
       IF NOT EXISTS(SELECT 1 FROM @tReportParam WHERE Variable='@cPrintCmd')                  -- ML01
          INSERT INTO @tReportParam (Variable, Value)  VALUES  ('@cPrintCmd' , @cPrintCmd  )   -- ML01
+      IF NOT EXISTS(SELECT 1 FROM @tReportParam WHERE Variable='@cFileName')                  -- ML01
+         INSERT INTO @tReportParam (Variable, Value)  VALUES  ('@cFileName' , @c_FileName  )   -- ML01
 
       SELECT @c_p_StorerKey = (SELECT Value FROM @tReportParam WHERE Variable='@cStorerKey')
            , @c_p_Facility  = (SELECT Value FROM @tReportParam WHERE Variable='@cFacility' )
@@ -473,7 +482,8 @@ AS
            , @c_p_Param9    = (SELECT Value FROM @tReportParam WHERE Variable='@cParam9'   )
            , @c_p_Param10   = (SELECT Value FROM @tReportParam WHERE Variable='@cParam10'  )
            , @n_p_NoOfCopy  = TRY_PARSE(ISNULL((SELECT Value FROM @tReportParam WHERE Variable='@nNoOfCopy' ),'') AS INT) -- ML01
-           , @c_p_PrintCmd  = (SELECT Value FROM @tReportParam WHERE Variable='@cPrintCmd' )                              -- ML01
+           , @c_p_PrintCmd  = (SELECT Value FROM @tReportParam WHERE Variable='@cPrintCmd' )             
+           , @c_p_FileName  = (SELECT Value FROM @tReportParam WHERE Variable='@cFileName' )                  -- ML01
 
       -- Get Report Info
       SET @cJobName = 'rdt_593PrintHK01(' + ISNULL(@cOption,'') + '): '
@@ -524,7 +534,8 @@ AS
                         +',@nFunc INT'
                         +',@nStep INT'
                         +',@cLangCode NVARCHAR(3)'
-                        +',@cOption NVARCHAR(1)'
+                        +',@cOption    NVARCHAR(2)'      -- XuLu01
+                        +',@cFileName NVARCHAR(50)'
 
          BEGIN TRY
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam
@@ -553,6 +564,7 @@ AS
                , @nStep
                , @cLangCode
                , @cOption
+               , @c_p_FileName
          END TRY
          BEGIN CATCH
             SET @nErrNo = 119907
@@ -579,6 +591,7 @@ AS
          , @cErrMsg       = @cErrMsg OUTPUT
          , @nNoOfCopy     = @n_p_NoOfCopy
          , @cPrintCommand = @c_p_PrintCmd
+         , @cExportFileName = @c_p_FileName
 
    END
    CLOSE C_REPORTTYPE

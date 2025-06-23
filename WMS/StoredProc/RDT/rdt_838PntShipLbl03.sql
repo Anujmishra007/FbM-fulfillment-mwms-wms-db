@@ -99,6 +99,7 @@ BEGIN
             INNER JOIN ORDERS OM WITH(NOLOCK) ON OM.StorerKey = PH.StorerKey and OM.OrderKey = PH.OrderKey
             WHERE ph.StorerKey = @cStorerKey
                AND ph.OrderKey =  @cOrderKey
+			   AND pd.DropID = @cPackDtlDropID --To filter for DropID in case in same SO there are pack DropID multi and LPn monoref
                AND (OM.ConsigneeKey ='H25800830' OR OM.ConsigneeKey ='H25800856' OR OM.ConsigneeKey ='H25800615') --WSE016: this is Wickes and Screwfix ConsigneeKey
                GROUP BY pd.DropID
             /*

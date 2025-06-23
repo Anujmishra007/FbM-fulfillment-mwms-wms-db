@@ -3,20 +3,21 @@ GO
 SET ANSI_NULLS OFF
 GO
 
-/************************************************************************/
-/* Store procedure: rdt_1653CreateMbol04                                */
-/* Copyright      : Maersk                                              */
-/*                                                                      */
-/* Called from: rdt_TrackNo_SortToLane_CreateMbol                       */
-/*                                                                      */
-/* Purpose: Create PalletDetail record                                  */
-/*                                                                      */
-/* Modifications log:                                                   */
-/* Date        Rev  Author   Purposes                                   */
-/* 2024-07-05  1.0  CYU027   FCR 539. Created                           */
-/* 2024-10-03  1.1  NLT013   UWP-25272 Fix issue: move wrong qty to pallet */
-/* 2024-10-08  1.2  NLT013   FCR-950 New Logic for create Pallet Detail */
-/************************************************************************/
+/***********************************************************************************/
+/* Store procedure: rdt_1653CreateMbol04                                           */
+/* Copyright      : Maersk                                                         */
+/*                                                                                 */
+/* Called from: rdt_TrackNo_SortToLane_CreateMbol                                  */
+/*                                                                                 */
+/* Purpose: Create PalletDetail record                                             */
+/*                                                                                 */
+/* Modifications log:                                                              */
+/* Date        Rev   Author   Purposes                                             */
+/* 2024-07-05  1.0   CYU027   FCR 539. Created                                     */
+/* 2024-10-03  1.1   NLT013   UWP-25272 Fix issue: move wrong qty to pallet        */
+/* 2024-10-08  1.2   NLT013   FCR-950 New Logic for create Pallet Detail           */
+/* 2025-02-25  1.3.0 NLT013   UWP-30546 Move inventory by CaseID                   */
+/***********************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1653CreateMbol04] (
    @nMobile        INT,
@@ -58,6 +59,8 @@ BEGIN
    Declare @cCursorPalletDetail        CURSOR
    DECLARE @cPickConfirmStatus         NVARCHAR( 1)
    DECLARE @cPDOrderKey                NVARCHAR( 20)
+   DECLARE @cPDCaseID                  NVARCHAR( 20)
+
    DECLARE 
       @cWaveKey                           NVARCHAR(10),
       @cCODELKUPUdf01                     NVARCHAR(60),
@@ -252,7 +255,7 @@ BEGIN
 
       ----Loop LOTxLOCxID, possible 1 PICKDETAIL to N LOCxLOTxID
       SET @cCursorPickDetail = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-         SELECT PD.Loc, PD.Lot, PD.Qty, PD.ID, PD.SKU, PD.OrderKey
+         SELECT PD.Loc, PD.Lot, PD.Qty, PD.ID, PD.SKU, PD.OrderKey,PD.CaseID
          FROM PICKDETAIL PD WITH (NOLOCK)
          INNER JOIN LOTxLOCxID LLI WITH (NOLOCK)
             ON (LLI.Loc = PD.Loc AND LLI.LOT = PD.LOT AND LLI.Id = PD.ID AND PD.Sku = LLI.Sku)
@@ -261,7 +264,7 @@ BEGIN
             AND PD.Status = @cPickConfirmStatus
 
       OPEN @cCursorPickDetail
-      FETCH NEXT FROM @cCursorPickDetail INTO @cFromLoc, @cFromLot, @nQtyPicked, @cPDID, @cSKU, @cPDOrderKey
+      FETCH NEXT FROM @cCursorPickDetail INTO @cFromLoc, @cFromLot, @nQtyPicked, @cPDID, @cSKU, @cPDOrderKey,@cPDCaseID
       WHILE (@@FETCH_STATUS <> -1)
       BEGIN
          --    Create LOTxLOCxID record
@@ -281,13 +284,14 @@ BEGIN
                @nQTY        = @nQtyPicked,
                @nQTYPick    = @nQtyPicked,
                @cFromLOT    = @cFromLot,
-               @cOrderKey   = @cPDOrderKey,
+               --@cOrderKey   = @cPDOrderKey,
+               @cCaseID     = @cPDCaseID,
                @nFunc       = @nFunc
          IF @nErrNo > 0
             GOTO Quit
 
 
-         FETCH NEXT FROM @cCursorPickDetail INTO @cFromLoc, @cFromLot, @nQtyPicked, @cPDID, @cSKU, @cPDOrderKey
+         FETCH NEXT FROM @cCursorPickDetail INTO @cFromLoc, @cFromLot, @nQtyPicked, @cPDID, @cSKU, @cPDOrderKey,@cPDCaseID
       END
 
       CLOSE @cCursorPickDetail

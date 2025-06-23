@@ -17,6 +17,7 @@ GO
 /* 2022-09-22 1.1  James    Bug fix on input field not matching on      */
 /*                          step to loc (james01)                       */
 /* 2022-08-23 1.2  Ung      WMS-20562 Add UCC                           */
+/* 2024-10-17 1.3  PXL009   FCR-759 ID and UCC Length Issue             */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_Replenish_V7] (
@@ -302,6 +303,7 @@ BEGIN
       -- Screen mapping
       SET @cFromLoc = @cInField01
       SET @cFromID = @cInField02
+      SET @cBarcode = @cInField02
       SET @cRPLKey = @cInField03
 
       -- Check blank
@@ -328,7 +330,7 @@ BEGIN
          -- Standard decode
          IF @cDecodeSP = '1'
          BEGIN
-            EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cFromID,
+            EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cBarcode,
                @cID         = @cFromID      OUTPUT,
                @cUPC        = @cSKU         OUTPUT,
                @nQTY        = @nQTY         OUTPUT,
@@ -395,7 +397,7 @@ BEGIN
                ' @cErrMsg      NVARCHAR( 20)  OUTPUT'
 
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cFromID,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cBarcode,
                @cFromID     OUTPUT, @cFromLoc     OUTPUT, @cToID       OUTPUT,
                @cToLOC      OUTPUT, @cSKU         OUTPUT, @nQty        OUTPUT,
                @cLottable01 OUTPUT, @cLottable02  OUTPUT, @cLottable03 OUTPUT, @dLottable04 OUTPUT, @dLottable05 OUTPUT,
@@ -1986,6 +1988,7 @@ BEGIN
    BEGIN
       -- Screen mapping
       SET @cUCCNo = @cInField03
+      SET @cBarcode = @cInField03
 
       -- Check blank
       IF @cUCCNo = ''
@@ -1993,6 +1996,80 @@ BEGIN
          SET @nErrNo = 136678
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UCC needed
          GOTO Quit
+      END
+
+      -- Decode
+      IF @cDecodeSP <> ''
+      BEGIN
+         -- Standard decode
+         IF @cDecodeSP = '1'
+         BEGIN
+            EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cBarcode,
+               @cUCCNo  = @cUCCNo      OUTPUT,
+               @nErrNo  = @nErrNo      OUTPUT,
+               @cErrMsg = @cErrMsg     OUTPUT,
+               @cType   = 'UCCNo'
+
+               IF @nErrNo <> 0
+                  GOTO Step_7_Fail
+         END
+
+         -- Customize decode
+         ELSE IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cDecodeSP AND type = 'P')
+         BEGIN
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cDecodeSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cBarcode, ' +
+               ' @cFromID     OUTPUT, @cFromLOC    OUTPUT, @cToID       OUTPUT, ' +
+               ' @cToLOC      OUTPUT, @cSKU        OUTPUT, @nQty        OUTPUT, ' +
+               ' @cLottable01 OUTPUT, @cLottable02 OUTPUT, @cLottable03 OUTPUT, @dLottable04 OUTPUT, @dLottable05 OUTPUT, ' +
+               ' @cLottable06 OUTPUT, @cLottable07 OUTPUT, @cLottable08 OUTPUT, @cLottable09 OUTPUT, @cLottable10 OUTPUT, ' +
+               ' @cLottable11 OUTPUT, @cLottable12 OUTPUT, @dLottable13 OUTPUT, @dLottable14 OUTPUT, @dLottable15 OUTPUT, ' +
+               ' @nErrNo      OUTPUT, @cErrMsg     OUTPUT'
+            SET @cSQLParam =
+               ' @nMobile      INT,             ' +
+               ' @nFunc        INT,             ' +
+               ' @cLangCode    NVARCHAR( 3),    ' +
+               ' @nStep        INT,             ' +
+               ' @nInputKey    INT,             ' +
+               ' @cStorerKey   NVARCHAR( 15),   ' +
+               ' @cFacility    NVARCHAR( 5),    ' +
+               ' @cBarcode     NVARCHAR( 2000), ' +
+               ' @cFromID      NVARCHAR( 18)  OUTPUT, ' +
+               ' @cFromLOC     NVARCHAR( 10)  OUTPUT, ' +
+               ' @cToID        NVARCHAR( 18)  OUTPUT, ' +
+               ' @cToLOC       NVARCHAR( 10)  OUTPUT, ' +
+               ' @cSKU         NVARCHAR( 20)  OUTPUT, ' +
+               ' @nQty         INT            OUTPUT, ' +
+               ' @cLottable01  NVARCHAR( 18)  OUTPUT, ' +
+               ' @cLottable02  NVARCHAR( 18)  OUTPUT, ' +
+               ' @cLottable03  NVARCHAR( 18)  OUTPUT, ' +
+               ' @dLottable04  DATETIME       OUTPUT, ' +
+               ' @dLottable05  DATETIME       OUTPUT, ' +
+               ' @cLottable06  NVARCHAR( 30)  OUTPUT, ' +
+               ' @cLottable07  NVARCHAR( 30)  OUTPUT, ' +
+               ' @cLottable08  NVARCHAR( 30)  OUTPUT, ' +
+               ' @cLottable09  NVARCHAR( 30)  OUTPUT, ' +
+               ' @cLottable10  NVARCHAR( 30)  OUTPUT, ' +
+               ' @cLottable11  NVARCHAR( 30)  OUTPUT, ' +
+               ' @cLottable12  NVARCHAR( 30)  OUTPUT, ' +
+               ' @dLottable13  DATETIME       OUTPUT, ' +
+               ' @dLottable14  DATETIME       OUTPUT, ' +
+               ' @dLottable15  DATETIME       OUTPUT, ' +
+               ' @nErrNo       INT            OUTPUT, ' +
+               ' @cErrMsg      NVARCHAR( 20)  OUTPUT'
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cBarcode,
+               @cUCCNo      OUTPUT, @cFromLoc     OUTPUT, @cToID       OUTPUT,
+               @cToLOC      OUTPUT, @cSKU         OUTPUT, @nQty        OUTPUT,
+               @cLottable01 OUTPUT, @cLottable02  OUTPUT, @cLottable03 OUTPUT, @dLottable04 OUTPUT, @dLottable05 OUTPUT,
+               @cLottable06 OUTPUT, @cLottable07  OUTPUT, @cLottable08 OUTPUT, @cLottable09 OUTPUT, @cLottable10 OUTPUT,
+               @cLottable11 OUTPUT, @cLottable12  OUTPUT, @dLottable13 OUTPUT, @dLottable14 OUTPUT, @dLottable15 OUTPUT,
+               @nErrNo      OUTPUT, @cErrMsg      OUTPUT
+
+            IF @nErrNo <> 0
+               GOTO Step_7_Fail
+         END
       END
 
       -- Check UCC valid

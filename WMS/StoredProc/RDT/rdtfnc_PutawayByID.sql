@@ -670,6 +670,12 @@ BEGIN
 
       SET @cOutField01 = ''
    END
+
+   IF @cExtScnSP <> ''
+   BEGIN
+      GOTO Step_ExtScn
+   END
+
    GOTO Quit
 
    Step_1_Fail:
@@ -1389,6 +1395,9 @@ BEGIN
                  @cUDF22   OUTPUT, @cUDF23 OUTPUT, @cUDF24 OUTPUT,
                  @cUDF25   OUTPUT, @cUDF26 OUTPUT, @cUDF27 OUTPUT,
                  @cUDF28   OUTPUT, @cUDF29 OUTPUT, @cUDF30 OUTPUT
+
+         IF @cUDF01 <> ''
+            SET @cToLOC = @cUDF01
 
          IF @nErrNo <> 0
             GOTO Step_99_Fail

@@ -15,6 +15,7 @@ GO
 /* Date       Rev    Author     Purposes                                      */
 /* 2024-03-13 1.0    Vikas      UWP-15734 Created                             */
 /* 2024-10-28 1.1.0  Vikas      UWP-26275 Added UOM display                   */
+/* 2024-11-28 1.2.0  JCH507     UWP-27664 Throw printing error from st6 to st7*/
 /******************************************************************************/
 CREATE OR ALTER   PROC [RDT].[rdt_593ShipLabel20] (
    @nMobile    INT,
@@ -177,7 +178,23 @@ BEGIN
            @cErrMsg OUTPUT
       DELETE from @tShipLabel
       IF @nErrNo <> 0
+      BEGIN
+         EXEC rdt.rdtInsertMsgQueue
+                  @nMobile = @nMobile,
+                  @nErrNo = @nErrNo,
+                  @cErrMsg = @cErrMsg,
+                  @cLine01 = @nErrNo,
+                  @cLine02 = @cErrMsg,
+                  @cLine03 = '',
+                  @cLine04 = '',
+                  @cLine05 = '',
+                  @cLine06 = '',
+                  @cLine07 = '',
+                  @cLine08 = '',
+                  @cLine09 = '',
+                  @nDisplayMsg = 0
          GOTO Quit
+      END
       FETCH NEXT FROM cursor_product INTO
          @cOrderKey,
          @cLoc,

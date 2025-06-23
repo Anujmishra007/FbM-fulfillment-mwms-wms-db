@@ -1,0 +1,386 @@
+
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+/*************************************************************************/
+/* Stored Procedure: isp_VNABackendUnlockQty                             */
+/* Creation Date: 11-Sep-2024                                            */
+/* Copyright: MAERSK                                                     */
+/* Written by: WFA015                                                    */
+/*                                                                       */
+/* Purpose: Backend job to unlock invalid qty for VNAIN & VNAOUT tasks   */
+/*          (MWMS V2 Unilever - StorerKey 'SABULFG','SABULRPM')          */
+/*                                                                       */
+/* GitHub Version: 1.0                                                   */
+/*                                                                       */
+/* Version: 7.0                                                          */
+/*                                                                       */
+/* Data Modifications:                                                   */
+/*                                                                       */
+/* Updates:                                                              */
+/* Date         Author  Ver.  Purposes                                   */
+/* 11-Sep-2024  WFA015  1.0   INC7225378 Created.                        */
+/*************************************************************************/
+
+CREATE OR ALTER PROCEDURE [dbo].[isp_VNABackendUnlockQty]
+     @c_Storerkey NVARCHAR(15)
+   , @c_Facility  NVARCHAR(5) = 'SAMLP'
+   , @b_Debug    INT = '0'
+AS
+BEGIN
+   SET NOCOUNT ON
+   SET QUOTED_IDENTIFIER OFF
+   SET ANSI_NULLS OFF
+   SET CONCAT_NULL_YIELDS_NULL OFF
+
+   DECLARE @n_Continue  INT
+         , @n_StartTCnt INT
+         , @b_Success   INT
+         , @n_Err       INT
+
+   SELECT @n_Continue  = 1
+        , @n_StartTCnt = @@TRANCOUNT
+        , @b_Success   = 0
+        , @n_Err       = 0
+
+   DECLARE @c_SuggestedLoc      NVARCHAR(10) = ''
+         , @c_FromID            NVARCHAR(18) = ''
+         , @n_PABookingKey      INT = 0
+         , @n_ErrNo             INT = 0
+         , @c_ErrMsg            NVARCHAR(255) = ''
+         , @n_TotalErrNo        BIGINT = 0
+         , @c_CheckTaskKey      NVARCHAR(10) = ''
+         , @c_CheckSourceKey    NVARCHAR(30) = ''
+         , @c_CKheckTaskType    NVARCHAR(10) = ''
+         , @c_CheckTaskStatus   NVARCHAR(10) = ''
+         , @d_CheckTaskDate     DATETIME
+         , @c_ManualMove        NVARCHAR(1)  = 'N'
+         , @n_CheckPendingQty   INT = 0
+         , @c_CheckLot          NVARCHAR(10) = ''
+         , @c_CheckLoc          NVARCHAR(10) = ''
+         , @c_CheckId           NVARCHAR(18) = ''
+         , @c_CheckStorerKey    NVARCHAR(15) = ''
+         , @c_CheckSku          NVARCHAR(20) = ''
+         , @c_CheckFlag         NVARCHAR(1)  = '0'
+         , @n_Interval01        INT = 60 -- Default n Minute rfPutaway
+         , @n_Interval02        INT = 90 -- Default n Minute LotxLocxId
+
+   SELECT @c_CheckFlag  = ISNULL(TRIM(Short),'')
+        , @n_Interval01 = IIF(ISNUMERIC(ISNULL(TRIM(UDF01),'')) = '1', CAST(ISNULL(TRIM(UDF01),'') AS FLOAT), @n_Interval01)
+        , @n_Interval02 = IIF(ISNUMERIC(ISNULL(TRIM(UDF02),'')) = '1', CAST(ISNULL(TRIM(UDF02),'') AS FLOAT), @n_Interval02)
+   FROM CodeLkUp WITH (NOLOCK)
+   WHERE ListName = 'BackendJob'
+   AND Code       = 'VNA'
+   AND Code2      = @c_Facility
+   AND StorerKey  = @c_Storerkey
+
+   IF @c_CheckFlag <> '1'
+   BEGIN
+      SET @n_Continue = 3
+      SET @n_Err      = 99
+      SET @c_ErrMsg   = 'NSQL' + CONVERT(VARCHAR(10),@n_Err) + ': Nothing to check (isp_VNABackendUnlockQty).'
+      GOTO RollbackTran
+   END
+
+   IF @n_Continue = 1 OR @n_Continue = 2
+   BEGIN
+      DECLARE CUR_UNLOCK_TASK CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
+         SELECT R.PABookingKey
+               , R.FromId
+               , ISNULL(TRIM(TD.TaskDetailKey),'') TaskKey
+               , ISNULL(TRIM(TD.SourceKey),'') SourceKey
+               , ISNULL(TRIM(TD.TaskType),'') TaskType
+               , ISNULL(TRIM(TD.Status),'') TaskStatus
+               , ISNULL(TD.EditDate,R.AddDate) TaskDate
+			   , ISNULL(R.SUGGESTEDLOC,'') SUGGESTEDLOC       --VPA235
+         FROM rfPutaway R WITH (NOLOCK)
+         JOIN LOC L WITH (NOLOCK)
+         ON ( R.SuggestedLoc = L.Loc )
+         LEFT JOIN TaskDetail TD WITH (NOLOCK)
+         ON ( TD.StorerKey = R.StorerKey
+               AND TD.FromId = R.FromId
+               AND ( TD.TaskType IN ('VNAIN','PA1')
+                     AND TD.ToLoc = R.SuggestedLoc
+                     AND TD.SourceKey = R.PABookingKey )
+               OR ( TD.TaskType IN ('VNAOUT','FPK','FPK1','FCP')
+                     AND TD.Lot = R.Lot
+                     AND TD.Sku = R.Sku
+                     AND TD.TaskDetailKey = R.TaskDetailKey )
+             )
+         WHERE R.StorerKey = @c_Storerkey
+         AND ISNULL(TRIM(TD.Status),'') NOT IN ('Q','0')
+         AND L.Facility  = @c_Facility
+         AND R.PABookingKey <> 0
+         --AND DATEDIFF(MINUTE, R.AddDate, GETDATE()) > @n_Interval01
+         --ORDER BY R.PABookingKey, R.FromId
+		 -- check only for PND          VPA235
+		 AND DATEDIFF(MINUTE, R.AddDate, GETDATE()) > @n_Interval01
+		 AND L.LocationType ='PND'
+         ORDER BY R.PABookingKey, R.FromId
+
+
+
+     --ADDED @c_SuggestedLoc parameter
+      OPEN CUR_UNLOCK_TASK
+      FETCH NEXT FROM CUR_UNLOCK_TASK INTO @n_PABookingKey, @c_FromID, @c_CheckTaskKey, @c_CheckSourceKey, @c_CKheckTaskType, @c_CheckTaskStatus, @d_CheckTaskDate, @c_SuggestedLoc
+      WHILE @@FETCH_STATUS <> -1
+      BEGIN
+         IF @c_CheckTaskStatus = '3'
+         BEGIN
+            SET @c_ManualMove = 'N'
+            IF @c_CKheckTaskType IN ('VNAOUT','FPK','FPK1','FCP')
+               AND ( EXISTS ( SELECT TOP 1 1 FROM PickDetail WITH (NOLOCK)
+                              WHERE TaskDetailKey = @c_CheckTaskKey
+                              AND Status >= '5'
+                              AND StorerKey = @c_Storerkey )
+                     OR EXISTS ( SELECT TOP 1 1
+                                 FROM ITRN I WITH (NOLOCK)
+                                 JOIN LOC FLoc WITH (NOLOCK)
+                                 ON (I.FromLoc = FLoc.Loc AND FLoc.LocationType IN ('VNA','PND'))
+                                 JOIN LOC TLoc WITH (NOLOCK)
+                                 ON (I.ToLoc = TLoc.Loc AND TLoc.LocationType = 'Staging')
+                                 WHERE I.StorerKey = @c_Storerkey
+                                 AND I.TranType = 'MV'
+                                 AND ( I.FromId = @c_FromID OR I.ToId = @c_FromID )
+                                 AND I.AddDate >= @d_CheckTaskDate )
+                    )
+            BEGIN
+               SET @c_ManualMove = 'Y'
+
+               UPDATE TaskDetail WITH (ROWLOCK)
+               SET TrafficCop = NULL
+                 , Status = '9'
+                 , StatusMsg = ISNULL(TRIM(StatusMsg),'') + '[' + @c_CheckTaskStatus + ']'
+                 , EditDate = GETDATE()
+     --          , EditWho  = SUSER_SNAME()            --VPA235
+			     , EditWho  = 'UNLKCJB'
+               WHERE StorerKey = @c_Storerkey
+               AND TaskDetailKey = @c_CheckTaskKey
+               AND Status NOT IN ('9','F','Q','0','X')
+
+               IF @@ERROR <> 0
+               BEGIN
+                  SET @n_Continue = 3
+                  SET @n_Err      = @@ERROR
+                  SET @c_ErrMsg   = 'NSQL' + CONVERT(VARCHAR(10),@n_Err) + ': Update TaskDetail failed (isp_VNABackendUnlockQty).'
+                  GOTO RollbackTran
+               END
+
+               IF @b_Debug = 1
+               BEGIN
+                  PRINT 'Update Outbound TaskKey: ' + @c_CheckTaskKey + ', TaskType: ' + @c_CKheckTaskType + ', MoveByUser: ' + @c_ManualMove
+               END
+
+               IF @c_ManualMove = 'Y'
+               BEGIN
+                  GOTO UNLOCKQty
+               END
+            END -- @c_CKheckTaskType IN ('VNAOUT','FPK','FPK1','FCP')
+
+            IF @c_CKheckTaskType IN ('VNAIN','PA1')
+            BEGIN
+               SET @c_ManualMove = 'N'
+               SELECT @c_ManualMove = 'Y' -- Manual Move From PND to VNA
+               FROM ITRN I WITH (NOLOCK)
+               JOIN LOC L WITH (NOLOCK)
+               ON (I.ToLoc = L.Loc)
+               WHERE I.StorerKey = @c_Storerkey
+               AND I.TranType = 'MV'
+               AND ( I.FromId = @c_FromID OR I.ToId = @c_FromID )
+               AND I.SourceType = 'rdtfnc_Move_ID'
+               AND L.LocationType = 'VNA'
+               AND EXISTS ( SELECT I2.ItrnKey FROM ITRN I2 WITH (NOLOCK)
+                            JOIN LOC L2 WITH (NOLOCK)
+                            ON (I2.ToLoc = L2.Loc)
+                            WHERE I.StorerKey = I2.StorerKey
+                            AND I.Sku = I2.Sku
+                            AND I.Lot = I2.Lot
+                            AND I.FromId = I2.FromId
+                            AND I.Qty = I2.Qty
+                            AND I.TranType = I2.TranType
+                            AND I2.SourceType = 'rdt_PutawayByID_Confirm'
+                            AND L2.LocationType = 'PND'
+                            AND I2.ToLoc = I.FromLoc
+                            AND L2.Facility = L.Facility
+                            AND I.ItrnKey <> I2.ItrnKey )
+
+               IF @c_ManualMove = 'Y'
+               BEGIN
+                  IF @b_Debug = 1
+                  BEGIN
+                     PRINT 'Update Inbound PA TaskKey: ' + @c_CheckTaskKey + ', TaskType: ' + @c_CKheckTaskType + ', MoveByUser: ' + @c_ManualMove
+                  END
+                  UPDATE TaskDetail WITH (ROWLOCK)
+                  SET TrafficCop = NULL
+                    , Status = '9'
+                    , StatusMsg = ISNULL(TRIM(StatusMsg),'') + '[' + @c_CheckTaskStatus + ']'
+                    , EditDate = GETDATE()
+        --          , EditWho  = SUSER_SNAME()            --VPA235
+					, EditWho  = 'UNLKCJB'
+                  WHERE StorerKey = @c_Storerkey
+                  AND TaskDetailKey = @c_CheckTaskKey
+                  AND Status NOT IN ('9','F','Q','0','X')
+
+                  IF @@ERROR <> 0
+                  BEGIN
+                     SET @n_Continue = 3
+                     SET @n_Err      = @@ERROR
+                     SET @c_ErrMsg   = 'NSQL' + CONVERT(VARCHAR(10),@n_Err) + ': Update TaskDetail failed (isp_VNABackendUnlockQty).'
+                     GOTO RollbackTran
+                  END
+                  GOTO UNLOCKQty
+               END -- @c_ManualMove = 'Y'
+            END -- @c_CKheckTaskType IN ('VNAIN','PA1')
+         END -- @c_CheckTaskStatus = '3'
+         ELSE IF @c_CheckTaskStatus IN ('9','X','F','')
+         BEGIN
+            GOTO UNLOCKQty
+         END
+
+         UNLOCKQty:
+         SET @n_ErrNo  = 0
+         SET @c_ErrMsg = ''
+         EXEC rdt.rdt_Putaway_PendingMoveIn
+              @cUserName      = ''
+            , @cType          = 'UNLOCK'
+    --      , @cFromLOC       = ''                    VPA235
+			, @cFromLOC       = @c_SuggestedLoc
+            , @cFromID        = @c_FromID
+	--		, @cSuggestedLOC  = ''                     VPA235
+            , @cSuggestedLOC  = @c_SuggestedLoc                         
+            , @cStorerkey     = @c_Storerkey
+            , @nPABookingKey  = @n_PABookingKey OUTPUT
+            , @nErrNo         = @n_ErrNo        OUTPUT
+            , @cErrMsg        = @c_ErrMsg       OUTPUT
+
+         IF @n_ErrNo <> 0
+         BEGIN
+            SET @n_Continue = 3
+            SET @n_Err      = @n_ErrNo
+            SET @c_ErrMsg   = 'NSQL' + CONVERT(VARCHAR(10),@n_Err) + ': ' + @c_ErrMsg
+            GOTO RollbackTran
+         END
+
+         IF @b_Debug = 1
+         BEGIN
+            SELECT @n_PABookingKey '@n_PABookingKey', @c_FromID '@c_FromID'
+                 , @c_CheckTaskKey '@c_CheckTaskKey', @c_CheckSourceKey '@c_CheckSourceKey'
+                 , @c_CKheckTaskType '@c_CKheckTaskType', @c_CheckTaskStatus '@c_CheckTaskStatus'
+                 , @n_ErrNo '@n_ErrNo', @c_ErrMsg '@c_ErrMsg'
+         END
+		 
+		  --ADDED @c_SuggestedLoc parameter
+         FETCH NEXT FROM CUR_UNLOCK_TASK INTO @n_PABookingKey, @c_FromID, @c_CheckTaskKey, @c_CheckSourceKey, @c_CKheckTaskType, @c_CheckTaskStatus, @d_CheckTaskDate, @c_SuggestedLoc
+      END
+      CLOSE CUR_UNLOCK_TASK
+      DEALLOCATE CUR_UNLOCK_TASK
+   END -- IF @n_Continue = 1 OR @n_Continue = 2
+
+   IF @n_Continue = 1 OR @n_Continue = 2
+   BEGIN
+      DECLARE CUR_UNLOCK_LLI CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
+      SELECT TOP 5000
+             LLI.PendingMoveIn
+           , LLI.Lot, LLI.Loc, LLI.Id
+           , LLI.StorerKey, LLI.Sku
+      FROM LOTxLOCxID LLI WITH (NOLOCK)
+      JOIN LOC L WITH (NOLOCK)
+      ON (LLI.Loc = L.Loc)
+      LEFT JOIN rfPutaway R WITH (NOLOCK)
+      ON ( R.StorerKey = LLI.StorerKey
+           AND R.Id = LLI.Id
+           AND LLI.Loc IN (R.SuggestedLoc, R.FromLoc)
+         )
+      WHERE LLI.StorerKey = @c_Storerkey
+      AND L.Facility = @c_Facility
+      AND LLI.PendingMoveIn > 0
+      AND ISNULL(R.Qty,0) = 0
+      --AND DATEDIFF(MINUTE, LLI.EditDate, GETDATE()) > @n_Interval02
+      --ORDER BY LLI.EditDate DESC, LLI.Id
+	  -- check only for PND          VPA235
+	  AND DATEDIFF(MINUTE, LLI.EditDate, GETDATE()) > @n_Interval02
+	  AND L.LocationType ='PND'
+      ORDER BY LLI.EditDate DESC, LLI.Id
+
+      OPEN CUR_UNLOCK_LLI
+      FETCH NEXT FROM CUR_UNLOCK_LLI INTO @n_CheckPendingQty, @c_CheckLot, @c_CheckLoc, @c_CheckId, @c_CheckStorerKey, @c_CheckSku
+      WHILE @@FETCH_STATUS <> -1
+      BEGIN
+         IF @b_Debug = 1
+         BEGIN
+            SELECT @c_CheckStorerKey '@c_CheckStorerKey', @c_CheckSku '@c_CheckSku', @n_CheckPendingQty '@n_CheckPendingQty'
+                 , @c_CheckLot '@c_CheckLot', @c_CheckLoc '@c_CheckLoc', @c_CheckId '@c_CheckId'
+         END
+         UPDATE LOTxLOCxID WITH (ROWLOCK)
+         SET TrafficCop = NULL
+            , EditDate = GETDATE()
+   --       , EditWho  = SUSER_SNAME()            --VPA235
+	        , EditWho  = 'UNLKCJB'
+            , PendingMoveIn = PendingMoveIn - @n_CheckPendingQty
+         WHERE StorerKey = @c_CheckStorerKey
+         AND Sku = @c_CheckSku
+         AND Lot = @c_CheckLot
+         AND Loc = @c_CheckLoc
+         AND Id  = @c_CheckId
+         AND PendingMoveIn > 0
+
+         IF @@ERROR <> 0
+         BEGIN
+            SET @n_Continue = 3
+            SET @n_Err      = @@ERROR
+            SET @c_ErrMsg   = 'NSQL' + CONVERT(VARCHAR(10),@n_Err) + ': Update LOTxLOCxID failed (isp_VNABackendUnlockQty).'
+            GOTO RollbackTran
+         END
+
+         FETCH NEXT FROM CUR_UNLOCK_LLI INTO @n_CheckPendingQty, @c_CheckLot, @c_CheckLoc, @c_CheckId, @c_CheckStorerKey, @c_CheckSku
+      END
+      CLOSE CUR_UNLOCK_LLI
+      DEALLOCATE CUR_UNLOCK_LLI
+   END -- IF @n_Continue = 1 OR @n_Continue = 2
+
+   RollbackTran:
+   IF CURSOR_STATUS('LOCAL', 'CUR_UNLOCK_TASK') IN ( 0, 1 )
+   BEGIN
+      CLOSE CUR_UNLOCK_TASK
+      DEALLOCATE CUR_UNLOCK_TASK
+   END
+   IF CURSOR_STATUS('LOCAL', 'CUR_UNLOCK_LLI') IN ( 0, 1 )
+   BEGIN
+      CLOSE CUR_UNLOCK_LLI
+      DEALLOCATE CUR_UNLOCK_LLI
+   END
+
+   IF @n_Continue = 3
+   BEGIN
+      IF @b_Debug = 1
+      BEGIN
+         SELECT @n_Err 'Exit With Error', @c_ErrMsg 'Error Message'
+      END
+
+      SELECT @b_Success = 0
+      IF @@TRANCOUNT = 1 AND @@TRANCOUNT > @n_StartTCnt
+      BEGIN
+         ROLLBACK TRAN
+      END
+      ELSE
+      BEGIN
+         WHILE @@TRANCOUNT > @n_StartTCnt
+         BEGIN
+            COMMIT TRAN
+         END
+      END
+      EXECUTE nsp_LogError @n_Err, @c_ErrMsg, 'isp_VNABackendUnlockQty'
+      RAISERROR(@c_ErrMsg, 16, 1) WITH SETERROR
+      RETURN
+   END
+   ELSE
+   BEGIN
+      SELECT @b_Success = 1
+      WHILE @@TRANCOUNT > @n_StartTCnt
+      BEGIN
+         COMMIT TRAN
+      END
+      RETURN
+   END
+END --sp end

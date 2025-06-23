@@ -4,6 +4,7 @@ GO
 SET QUOTED_IDENTIFIER ON
 GO
 
+
 /***************************************************************************************/
 /* Store Procedure:  isp_753Routing_Granite                                            */
 /* Creation Date:  08-Oct-2024                                                         */
@@ -22,6 +23,8 @@ GO
 /* Date         Author      Ver         Purposes                                       */
 /* 2024-08-10   Shong       1.0         Created                                        */
 /* 2024-10-14   Shong       1.1         Adding Valication for Pickup date Userdefine02 */
+/* 2024-10-15   Shong       1.2         Changing Update By Dynamic group setup         */
+/* 2024-11-18   Shong       1.3         New validation logic before actual SP begins   */
 /***************************************************************************************/
 ALTER   PROCEDURE [dbo].[isp_753Routing_Granite]
    @c_WaveKey NVARCHAR(10),
@@ -38,8 +41,8 @@ BEGIN
          , @c_OrderInfo09     NVARCHAR(30)  = N''
          , @c_StorerKey       NVARCHAR(15)  = N''
          , @c_C_Contact1      NVARCHAR(100) = N''
-         , @c_MarkforKey      NVARCHAR(15)  = N'' 
-         , @c_ConsigneeKey    NVARCHAR(15)  = N''
+         , @c_Col01Value      NVARCHAR(15)  = N'' 
+         , @c_Col02Value      NVARCHAR(15)  = N''
          , @c_M_Contact1      NVARCHAR(100) = N''
          , @c_FirstString     NVARCHAR(50)  = N''
          , @c_SecondString    NVARCHAR(50)  = N''
@@ -48,16 +51,30 @@ BEGIN
          , @n_Continue        INT = 1
          , @n_StartTranCnt    INT
          , @b_Debug           INT = 0 
-         , @d_PicUpDate       DATETIME
+         , @d_PickupDate       DATETIME
          , @c_UserDefine02    NVARCHAR(20)
-         
+
+   DECLARE @c_SortOrder     NVARCHAR(10)
+         , @c_ColumnName01  NVARCHAR(60)
+         , @c_ColumnName02  NVARCHAR(60)
+         , @c_SQLFilter     NVARCHAR(4000)
+         , @c_TransmitBatch NVARCHAR(60)
+         , @c_SQL           NVARCHAR(4000)
+         , @c_SQL2          NVARCHAR(4000)
+         , @b_RecordFound   BIT           = 0
+         , @c_TMReleaseFlag NVARCHAR(20) = 'N'
+         , @cTransmitLogSubmitDate NVARCHAR(10) = ''; --(Ver 1.3)
 
    SET @n_Continue = 1
    SELECT @n_StartTranCnt = @@TRANCOUNT
 
    SET @c_UserDefine02 = ''
+   SET @cTransmitLogSubmitDate = ''
+
    SELECT @c_UserDefine02 = ISNULL(TRIM(UserDefine02),'')
-   FROM WAVE WITH (NOLOCK)
+        , @c_TMReleaseFlag=ISNULL(Wave.TMReleaseFlag,'N')
+        , @cTransmitLogSubmitDate = ISNULL(Wave.UserDefine10, '')
+   FROM dbo.WAVE WITH (NOLOCK)
    WHERE WaveKey = @c_WaveKey
 
    IF @c_UserDefine02 = ''
@@ -66,22 +83,30 @@ BEGIN
       SELECT @n_err = 562751;
       SELECT @c_errmsg='NSQL' + CONVERT(char(6), @n_err) + ': Pickup Date (UserDefine02) cannot be BLANK. (isp_753Routing_Granite)';
       GOTO RETURN_SP; 
-   END   
+   END  
 
    SET DATEFORMAT mdy;
-   IF ISDATE(@c_UserDefine02) <> 1
+   IF ISDATE(@c_UserDefine02) <> 1 OR @c_UserDefine02 NOT LIKE '[0-9][0-9]/[0-9][0-9]/[0-9][0-9][0-9][0-9]'
    BEGIN 
       SELECT @n_continue = 3;
       SELECT @n_err = 500253;
-      SELECT @c_errmsg='NSQL' + CONVERT(char(6), @n_err) + ': Wrong Date Format - ' + @d_PicUpDate + ', Correct Format is (MM/DD/YYYY). (isp_753Routing_Granite)';
+      SELECT @c_errmsg='NSQL' + CONVERT(char(6), @n_err) + ': Wrong Date Format - ' + @d_PickupDate + ', Correct Format is (MM/DD/YYYY). (isp_753Routing_Granite)';
       GOTO RETURN_SP; 
    END     
 
+   IF @cTransmitLogSubmitDate <> '' AND ISDATE(@cTransmitLogSubmitDate) = 1
+   BEGIN 
+      SELECT @n_continue = 3;
+      SELECT @n_err = 500256;
+      SELECT @c_errmsg='NSQL' + CONVERT(char(6), @n_err) + ': Retrigger of 753 is not allow. Trigger had submitted on ' + @cTransmitLogSubmitDate + '. (isp_753Routing_Granite)';
+      GOTO RETURN_SP; 
+   END   
+
    -- Check if date fall under Suturday (7) or Sunday (1)
-   SET @d_PicUpDate = TRY_CAST (@c_UserDefine02 AS Datetime)
-   IF @d_PicUpDate IS NOT NULL 
+   SET @d_PickupDate = TRY_CAST (@c_UserDefine02 AS Datetime)
+   IF @d_PickupDate IS NOT NULL 
    BEGIN
-      IF DATEPART(weekday, @d_PicUpDate) IN (1,7)
+      IF DATEPART(weekday, @d_PickupDate) IN (1,7)
       BEGIN 
          SELECT @n_continue = 3;
          SELECT @n_err = 500254;
@@ -89,6 +114,32 @@ BEGIN
          GOTO RETURN_SP; 
       END   
    END 
+
+   --(Ver 1.3) Begin
+   IF @c_TMReleaseFlag <> 'Y' 
+   BEGIN 
+      SELECT @n_continue = 3;
+      SELECT @n_err = 500255;
+      SELECT @c_errmsg='NSQL' + CONVERT(char(6), @n_err) + ': Wave not release yet. (isp_753Routing_Granite)';
+      GOTO RETURN_SP; 
+   END   
+   
+   DECLARE @c_MBOLKey NVARCHAR(10) = N'';
+   SELECT TOP 1 @c_MBOLKey = MD.MbolKey
+   FROM dbo.WAVEDETAIL WD WITH (NOLOCK) 
+   JOIN dbo.MBOLDETAIL MD WITH (NOLOCK) ON WD.OrderKey = MD.OrderKey
+   WHERE WD.WaveKey = @c_WaveKey
+   ORDER BY MD.MbolKey DESC 
+
+   IF @c_MBOLKey <> ''
+   BEGIN
+      SELECT @n_continue = 3;
+      SELECT @n_err = 500256;
+      SELECT @c_errmsg='NSQL' + CONVERT(char(6), @n_err) + ': Order already exist in Ship Ref ' + @c_MBOLKey + '. (isp_753Routing_Granite)';
+      GOTO RETURN_SP;        
+   END
+
+   -- (Ver 1.3) End
 
    DECLARE CUR_BillToKey CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
    SELECT Distinct O.BillToKey, O.StorerKey 
@@ -118,98 +169,98 @@ BEGIN
 			GOTO RETURN_SP; 
       END 
       
-      DECLARE CUR_OrderKey CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-      SELECT O.OrderKey
-      , ISNULL(TRIM(O.MarkforKey),'')
-      , ISNULL(TRIM(O.ConsigneeKey),'')
-      , ISNULL(TRIM(O.M_Contact1),'')
-      , ISNULL(TRIM(O.C_Contact1),'') 
-      FROM dbo.WAVEDETAIL WD WITH (NOLOCK) 
-      JOIN dbo.ORDERS O WITH (NOLOCK) ON O.OrderKey = WD.OrderKey
-      WHERE  WD.WaveKey = @c_WaveKey 
-      AND O.BillToKey = @c_BillToKey
+      --DECLARE CUR_OrderKey CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      --SELECT O.OrderKey
+      --, ISNULL(TRIM(O.MarkforKey),'')
+      --, ISNULL(TRIM(O.ConsigneeKey),'')
+      --, ISNULL(TRIM(O.M_Contact1),'')
+      --, ISNULL(TRIM(O.C_Contact1),'') 
+      --FROM dbo.WAVEDETAIL WD WITH (NOLOCK) 
+      --JOIN dbo.ORDERS O WITH (NOLOCK) ON O.OrderKey = WD.OrderKey
+      --WHERE  WD.WaveKey = @c_WaveKey 
+      --AND O.BillToKey = @c_BillToKey
       
-      OPEN CUR_OrderKey
+      --OPEN CUR_OrderKey
       
-      FETCH NEXT FROM CUR_OrderKey INTO @c_OrderKey, @c_MarkforKey, @c_ConsigneeKey, @c_M_Contact1, @c_C_Contact1
+      --FETCH NEXT FROM CUR_OrderKey INTO @c_OrderKey, @c_Col01Value, @c_Col02Value, @c_M_Contact1, @c_C_Contact1
       
-      WHILE @@FETCH_STATUS = 0
-      BEGIN
-         IF ISNULL(@c_MarkforKey,'') <> ''  
-         BEGIN
-           IF ISNULL(@c_MarkforKey,'') <> ISNULL(@c_ConsigneeKey,'')  
-            BEGIN
-           IF ISNULL(@c_M_Contact1, '') = '' 
-               BEGIN
-             SELECT @c_SecondString = ISNULL(TRIM(SUSR4), '')
-                  FROM dbo.STORER (NOLOCK) 
-                  WHERE ConsigneeFor = @c_StorerKey 
-                  AND [Type] = '2' 
-                  AND StorerKey = @c_MarkforKey
-               END 
-           ELSE 
-            SET @c_SecondString = @c_M_Contact1 
-        END
-            ELSE 
-            BEGIN 
-               IF ISNULL(@c_C_Contact1, '') =  '' 
-               BEGIN 
-                  SELECT @c_SecondString = ISNULL(TRIM(SUSR4), '')
-                  FROM dbo.STORER (NOLOCK)
-                  WHERE ConsigneeFor = @c_StorerKey
-                  AND type = '2' 
-                  AND StorerKey = @c_ConsigneeKey
-               END 
-             ELSE 
-              SET @c_SecondString = @c_C_Contact1 
-            END 
-         END 
-         ELSE  
-         BEGIN
-          IF ISNULL(@c_C_Contact1, '') =  '' 
-            BEGIN
-               SELECT @c_SecondString = ISNULL(TRIM(SUSR4), '')
-               FROM dbo.STORER (NOLOCK)
-               WHERE ConsigneeFor = @c_StorerKey
-               AND type = '2' 
-               AND StorerKey = @c_ConsigneeKey
-            END 
-          ELSE 
-           SET @c_SecondString = @c_C_Contact1 
-         END 
+      --WHILE @@FETCH_STATUS = 0
+      --BEGIN
+      --   IF ISNULL(@c_Col01Value,'') <> ''  
+      --   BEGIN
+      --     IF ISNULL(@c_Col01Value,'') <> ISNULL(@c_Col02Value,'')  
+      --      BEGIN
+      --     IF ISNULL(@c_M_Contact1, '') = '' 
+      --         BEGIN
+      --       SELECT @c_SecondString = ISNULL(TRIM(SUSR4), '')
+      --            FROM dbo.STORER (NOLOCK) 
+      --            WHERE ConsigneeFor = @c_StorerKey 
+      --            AND [Type] = '2' 
+      --            AND StorerKey = @c_Col01Value
+      --         END 
+      --     ELSE 
+      --      SET @c_SecondString = @c_M_Contact1 
+      --  END
+      --      ELSE 
+      --      BEGIN 
+      --         IF ISNULL(@c_C_Contact1, '') =  '' 
+      --         BEGIN 
+      --            SELECT @c_SecondString = ISNULL(TRIM(SUSR4), '')
+      --            FROM dbo.STORER (NOLOCK)
+      --            WHERE ConsigneeFor = @c_StorerKey
+      --            AND type = '2' 
+      --            AND StorerKey = @c_Col02Value
+      --         END 
+      --       ELSE 
+      --        SET @c_SecondString = @c_C_Contact1 
+      --      END 
+      --   END 
+      --   ELSE  
+      --   BEGIN
+      --    IF ISNULL(@c_C_Contact1, '') =  '' 
+      --      BEGIN
+      --         SELECT @c_SecondString = ISNULL(TRIM(SUSR4), '')
+      --         FROM dbo.STORER (NOLOCK)
+      --         WHERE ConsigneeFor = @c_StorerKey
+      --         AND type = '2' 
+      --         AND StorerKey = @c_Col02Value
+      --      END 
+      --    ELSE 
+      --     SET @c_SecondString = @c_C_Contact1 
+      --   END 
       
-         SELECT @c_SecondString = RIGHT('00000' + @c_SecondString, 5)
+      --   SELECT @c_SecondString = RIGHT('00000' + @c_SecondString, 5)
 
-         SELECT @c_CurrentDate = CONVERT(VARCHAR(10), GETDATE(), 112)
+      --   SELECT @c_CurrentDate = CONVERT(VARCHAR(10), GETDATE(), 112)
 
-         EXEC dbo.nspg_GetKey
-            @KeyName = '735Routing'
-         ,  @fieldlength = 6
-         ,  @keystring = @c_735RoutingKey OUTPUT
-         ,  @b_Success = @b_Success       OUTPUT
-         ,  @n_Err     = @n_Err           OUTPUT
-         ,  @c_ErrMsg  = @c_ErrMsg        OUTPUT
+      --   EXEC dbo.nspg_GetKey
+      --      @KeyName = '735Routing'
+      --   ,  @fieldlength = 6
+      --   ,  @keystring = @c_735RoutingKey OUTPUT
+      --   ,  @b_Success = @b_Success       OUTPUT
+      --   ,  @n_Err     = @n_Err           OUTPUT
+      --   ,  @c_ErrMsg  = @c_ErrMsg        OUTPUT
 
-         SET @c_OrderInfo09 = @c_FirstString + @c_SecondString + @c_CurrentDate + @c_735RoutingKey
+      --   SET @c_OrderInfo09 = @c_FirstString + @c_SecondString + @c_CurrentDate + @c_735RoutingKey
 
-         IF LEN(@c_OrderInfo09) = 25
-         BEGIN 
-            UPDATE dbo.OrderInfo
-              SET OrderInfo09 = @c_OrderInfo09  
-             WHERE OrderKey = @c_OrderKey
-         END 
-         ELSE
-         BEGIN 
-			   SELECT @n_continue = 3;
-			   SELECT @n_err = 562752;
-			   SELECT @c_errmsg='NSQL' + CONVERT(char(6), @n_err) + ': Generate 735 Routing Number Failed. (isp_753Routing_Granite)';
-			   GOTO RETURN_SP;            
-         END 
+      --   IF LEN(@c_OrderInfo09) = 25
+      --   BEGIN 
+      --      UPDATE dbo.OrderInfo
+      --        SET OrderInfo09 = @c_OrderInfo09  
+      --       WHERE OrderKey = @c_OrderKey
+      --   END 
+      --   ELSE
+      --   BEGIN 
+			   --SELECT @n_continue = 3;
+			   --SELECT @n_err = 562752;
+			   --SELECT @c_errmsg='NSQL' + CONVERT(char(6), @n_err) + ': Generate 735 Routing Number Failed. (isp_753Routing_Granite)';
+			   --GOTO RETURN_SP;            
+      --   END 
 
-         FETCH NEXT FROM CUR_OrderKey INTO @c_OrderKey, @c_MarkforKey, @c_ConsigneeKey, @c_M_Contact1, @c_C_Contact1
-      END
-      CLOSE CUR_OrderKey
-      DEALLOCATE CUR_OrderKey
+      --   FETCH NEXT FROM CUR_OrderKey INTO @c_OrderKey, @c_Col01Value, @c_Col02Value, @c_M_Contact1, @c_C_Contact1
+      --END
+      --CLOSE CUR_OrderKey
+      --DEALLOCATE CUR_OrderKey
 
       -------------------------------
       -- Part 2 Insert transmitlog 2
@@ -218,15 +269,6 @@ BEGIN
       IF @c_Code='DBUG'
          SET @b_Debug = 1 
 
-      DECLARE @c_SortOrder NVARCHAR(10),
-              @c_ColumnName01 NVARCHAR(60),
-              @c_ColumnName02 NVARCHAR(60),
-              @c_SQLFilter  NVARCHAR(4000),
-              @c_TransmitBatch      NVARCHAR(60),
-              @c_SQL        NVARCHAR(4000), 
-              @c_Col01Value NVARCHAR(100) = '',
-              @c_Col02Value NVARCHAR(100) = '',
-              @b_RecordFound BIT = 0
       
       IF @b_Debug =1
       BEGIN
@@ -253,19 +295,22 @@ BEGIN
 
          SELECT @c_SQL =  'DECLARE CUR_TRANSMITLOG_REC CURSOR FAST_FORWARD READ_ONLY FOR ' + CHAR(13) +
                           'SELECT ' + @c_ColumnName01 + ',  ' + @c_ColumnName02 + CHAR(13) +
-                          'FROM dbo.ORDERS ORDERS (NOLOCK) ' + CHAR(13) +
+                                + ', ISNULL(TRIM(MAX(ORDERS.M_Contact1)),''''), ISNULL(TRIM(MAX(ORDERS.C_Contact1)),'''') ' + CHAR(13) +
+                          'FROM dbo.ORDERS ORDERS (NOLOCK) ' + CHAR(13) + 
                           'JOIN dbo.WAVEDETAIL WAVEDETAIL (NOLOCK) ON ORDERS.OrderKey = WAVEDETAIL.OrderKey '  + CHAR(13) +
                           'JOIN dbo.WAVE WAVE (NOLOCK) ON WAVE.WaveKey = WAVEDETAIL.WaveKey ' + CHAR(13) +
                           'WHERE WAVE.WaveKey = ''' + @c_WaveKey + ''' '  + CHAR(13) +
-                          '  AND ORDERS.BillToKey = ''' + @c_BillToKey + ''' '  + CHAR(13)  
+                          'AND ORDERS.BillToKey = ''' + @c_BillToKey + ''' '  + CHAR(13)  
          
          IF TRIM(@c_SQLFilter) <> ''
          BEGIN
             IF CHARINDEX('AND ', LTRIM(@c_SQLFilter), 1) = 1 
-               SET @c_SQL = @c_SQL + @c_SQLFilter
+               SET @c_SQL = @c_SQL + @c_SQLFilter + CHAR(13)
             ELSE 
-               SET @c_SQL = @c_SQL + ' AND ' + @c_SQLFilter
+               SET @c_SQL = @c_SQL + 'AND ' + @c_SQLFilter + ' ' + CHAR(13)
          END 
+
+         SET @c_SQL = @c_SQL + 'GROUP BY ' +  @c_ColumnName01 + ',  ' + @c_ColumnName02 + ' ' + CHAR(13)
 
          IF @b_Debug = 1
          BEGIN
@@ -284,12 +329,133 @@ BEGIN
 
          OPEN CUR_TRANSMITLOG_REC
 
-         FETCH NEXT FROM CUR_TRANSMITLOG_REC INTO @c_Col01Value, @c_Col02Value
+         FETCH NEXT FROM CUR_TRANSMITLOG_REC INTO @c_Col01Value, @c_Col02Value, @c_M_Contact1, @c_C_Contact1
 
          WHILE @@FETCH_STATUS = 0 
          BEGIN
             IF @c_Col01Value <> '' AND @c_Col02Value <> ''
             BEGIN
+              IF ISNULL(@c_Col01Value,'') <> ''  
+              BEGIN
+                 IF ISNULL(@c_Col01Value,'') <> ISNULL(@c_Col02Value,'')  
+                 BEGIN
+                    IF ISNULL(@c_M_Contact1, '') = '' 
+                    BEGIN
+                      SELECT @c_SecondString = ISNULL(TRIM(SUSR4), '')
+                           FROM dbo.STORER (NOLOCK) 
+                           WHERE ConsigneeFor = @c_StorerKey 
+                           AND [Type] = '2' 
+                           AND StorerKey = @c_Col01Value
+                    END 
+                    ELSE 
+                       SET @c_SecondString = @c_M_Contact1 
+                  END
+                  ELSE 
+                  BEGIN 
+                     IF ISNULL(@c_C_Contact1, '') =  '' 
+                     BEGIN 
+                        SELECT @c_SecondString = ISNULL(TRIM(SUSR4), '')
+                        FROM dbo.STORER (NOLOCK)
+                        WHERE ConsigneeFor = @c_StorerKey
+                        AND type = '2' 
+                        AND StorerKey = @c_Col02Value
+                     END 
+                     ELSE 
+                        SET @c_SecondString = @c_C_Contact1 
+                  END 
+               END -- IF ISNULL(@c_Col01Value,'') <> '' 
+               ELSE  
+               BEGIN
+                  IF ISNULL(@c_C_Contact1, '') =  '' 
+                  BEGIN
+                     SELECT @c_SecondString = ISNULL(TRIM(SUSR4), '')
+                     FROM dbo.STORER (NOLOCK)
+                     WHERE ConsigneeFor = @c_StorerKey
+                     AND type = '2' 
+                     AND StorerKey = @c_Col02Value
+                  END 
+                  ELSE 
+                     SET @c_SecondString = @c_C_Contact1 
+               END 
+      
+               SELECT @c_SecondString = RIGHT('00000' + @c_SecondString, 5)
+
+               SELECT @c_CurrentDate = CONVERT(VARCHAR(10), GETDATE(), 112)
+
+               EXEC dbo.nspg_GetKey
+                  @KeyName = '735Routing'
+               ,  @fieldlength = 6
+               ,  @keystring = @c_735RoutingKey OUTPUT
+               ,  @b_Success = @b_Success       OUTPUT
+               ,  @n_Err     = @n_Err           OUTPUT
+               ,  @c_ErrMsg  = @c_ErrMsg        OUTPUT
+
+               SET @c_OrderInfo09 = @c_FirstString + @c_SecondString + @c_CurrentDate + @c_735RoutingKey
+
+               IF @b_Debug=1
+               BEGIN
+                   PRINT 'OrderInfo09: ' + @c_OrderInfo09
+               END
+
+               IF LEN(@c_OrderInfo09) = 25
+               BEGIN 
+                  SELECT @c_SQL2 = 'DECLARE CUR_ORDERKEY CURSOR FAST_FORWARD READ_ONLY FOR ' + CHAR(13) +
+                                   'SELECT ORDERS.OrderKey ' + CHAR(13) +
+                                   'FROM dbo.ORDERS ORDERS (NOLOCK) ' + CHAR(13) + 
+                                   'JOIN dbo.WAVEDETAIL WAVEDETAIL (NOLOCK) ON ORDERS.OrderKey = WAVEDETAIL.OrderKey '  + CHAR(13) +
+                                   'JOIN dbo.WAVE WAVE (NOLOCK) ON WAVE.WaveKey = WAVEDETAIL.WaveKey ' + CHAR(13) +
+                                   'WHERE WAVE.WaveKey = ''' + @c_WaveKey + ''' '  + CHAR(13) +
+                                   'AND ORDERS.BillToKey = ''' + @c_BillToKey + ''' '  + CHAR(13) +
+                                   'AND ' + @c_ColumnName01 + ' = ''' + @c_Col01Value + ''' ' + CHAR(13) +
+                                   'AND ' + @c_ColumnName02 + ' = ''' + @c_Col02Value + ''' ' + CHAR(13)  
+         
+                  IF TRIM(@c_SQLFilter) <> ''
+                  BEGIN
+                     IF CHARINDEX('AND ', LTRIM(@c_SQLFilter), 1) = 1 
+                        SET @c_SQL2 = @c_SQL2 + @c_SQLFilter + CHAR(13)
+                     ELSE 
+                        SET @c_SQL2 = @c_SQL2 + 'AND ' + @c_SQLFilter + CHAR(13)
+                  END 
+
+                  IF @b_Debug = 1
+                  BEGIN
+                     PRINT @c_SQL2
+                  END 
+
+                  EXEC sp_executesql @c_SQL2 
+
+                  IF CURSOR_STATUS('global','CUR_ORDERKEY') = -3
+                  BEGIN
+			            SELECT @n_continue = 3;
+			            SELECT @n_err = 562753;
+			            SELECT @c_errmsg='NSQL' + CONVERT(char(6), @n_err) + ': Declare CUR_ORDERKEY Cursor Failed. (isp_753Routing_Granite)';
+			            GOTO RETURN_SP; 
+                  END
+
+                  OPEN CUR_ORDERKEY
+
+                  FETCH NEXT FROM CUR_ORDERKEY INTO @c_OrderKey
+
+                  WHILE @@FETCH_STATUS = 0
+                  BEGIN
+                     UPDATE dbo.OrderInfo
+                        SET OrderInfo09 = @c_OrderInfo09  
+                        WHERE OrderKey = @c_OrderKey
+
+                     FETCH NEXT FROM CUR_ORDERKEY INTO @c_OrderKey
+                  END 
+                  CLOSE CUR_ORDERKEY
+                  DEALLOCATE CUR_ORDERKEY
+
+               END 
+               ELSE
+               BEGIN 
+			         SELECT @n_continue = 3;
+			         SELECT @n_err = 562752;
+			         SELECT @c_errmsg='NSQL' + CONVERT(char(6), @n_err) + ': Generate 735 Routing Number Failed. (isp_753Routing_Granite)';
+			         GOTO RETURN_SP;            
+               END 
+
                SET @b_RecordFound = 1
                EXEC dbo.ispGenTransmitLog2 @c_TableName = N'WSSOROUTLOG ',   
                                            @c_Key1 = @c_Col01Value,     
@@ -299,10 +465,10 @@ BEGIN
                                            @b_Success = @b_Success OUTPUT,  
                                            @n_err = @n_err OUTPUT,         
                                            @c_errmsg = @c_errmsg OUTPUT                  
-            END
+            END -- IF @c_Col01Value <> '' AND @c_Col02Value <> ''
    
 
-            FETCH NEXT FROM CUR_TRANSMITLOG_REC INTO @c_Col01Value, @c_Col02Value     
+            FETCH NEXT FROM CUR_TRANSMITLOG_REC INTO @c_Col01Value, @c_Col02Value, @c_M_Contact1, @c_C_Contact1     
          END
          CLOSE CUR_TRANSMITLOG_REC
          DEALLOCATE CUR_TRANSMITLOG_REC
@@ -311,7 +477,7 @@ BEGIN
             BREAK
       
           FETCH NEXT FROM CUR_CODELKUP_QUERY INTO @c_SortOrder, @c_ColumnName01, @c_ColumnName02, @c_SQLFilter, @c_TransmitBatch
-      END
+      END -- IF @c_Col01Value <> '' AND @c_Col02Value <> ''
       
       CLOSE CUR_CODELKUP_QUERY
       DEALLOCATE CUR_CODELKUP_QUERY
@@ -320,6 +486,16 @@ BEGIN
       FETCH NEXT FROM CUR_BillToKey INTO @c_BillToKey, @c_StorerKey
    END 
    CLOSE CUR_BillToKey
+
+   IF @n_Continue IN (1,2)
+   BEGIN
+       SET @cTransmitLogSubmitDate= CONVERT(NVARCHAR(10), GETDATE(), 110)
+       UPDATE dbo.WAVE WITH (ROWLOCK)
+         SET UserDefine10 = @cTransmitLogSubmitDate, 
+             EditDate=GETDATE()
+       WHERE WaveKey = @c_WaveKey
+       
+   END
 
    RETURN_SP:
 	IF @n_continue = 3  -- Error Occurred - Process And Return

@@ -1,6 +1,3 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE Id = OBJECT_ID(N'[dbo].[ntrPickDetailUpdate]') AND OBJECTPROPERTY(id, N'IsTrigger') = 1)
-   DROP TRIGGER [dbo].[ntrPickDetailUpdate]
-GO
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -99,9 +96,16 @@ GO
 /* 23-JUL-2019  Wan03   3.8   ChannelInventoryMgmt use fnc_SelectGetRight*/
 /* 04-MAR-2021  Wan04   3.9   WMS-16390 - [CN] NIKE_O2_Ecompacking_Check*/
 /*                            _Pickdetail_status_CR                     */
+/* 2024-11-26   Wan05   4.0   UWP-23317 - [FCR-618  819] Unpick SerialNo*/
+/* 2024-11-26   Wan06   4.1   [FCR-618] - Fixed if change on lot,id,qty &*/
+/*                            Status                                    */
+/* 20-Jan-2025  TLTIN03 4.1   Bug fix - aft ship no change avoid change */
+/* 17-Mar-2025  TLTIN04 4.1   Bug fix - avoid change stayus             */
+/* 04-Jun-2025  AYD01   4.2   UWP-32128: Allow RDT pick/move            */
+/*                            with MoveRefKey                           */
 /************************************************************************/
 
-CREATE TRIGGER [dbo].[ntrPickDetailUpdate]
+CREATE OR ALTER TRIGGER [dbo].[ntrPickDetailUpdate]
 ON  [dbo].[PICKDETAIL]
 FOR UPDATE
 AS
@@ -156,6 +160,8 @@ DECLARE   @cPickDetailKey NVARCHAR(10)     -- (james02)
         , @c_PDKey        NVARCHAR(10)     -- SOS# 264916
         
         , @c_EPACK4PickedOrder         NVARCHAR(30)   --(Wan04)
+        , @n_PickSerialNoKey           BIGINT = 0     --(Wan05)
+        , @CUR_SNDEL                   CURSOR         --(Wan05)
 
 --(Wan01) - START
          ,@c_AllocateByConsNewExpiry   NVARCHAR(10)
@@ -298,21 +304,14 @@ END
 -- tlting01
 IF (@n_Continue=1 or @n_Continue=2)
 BEGIN
-   -- (SWT01) Performance Tuning 
-   --IF NOT EXISTS ( SELECT 1 -- not changing ShipFlag
-   --                 FROM  INSERTED, DELETED
-   --                 WHERE INSERTED.PICKDETAILKEY = DELETED.PICKDETAILKEY
-   --                 AND   INSERTED.ShipFlag <> DELETED.ShipFlag )
-   --                 AND   NOT EXISTS ( SELECT 1  -- not changing [Status]
-   --                                    FROM INSERTED, DELETED
-   --                                    WHERE INSERTED.PICKDETAILKEY = DELETED.PICKDETAILKEY
-   --                                    AND INSERTED.[Status] <> DELETED.[Status] )
-   --                                    AND EXISTS( SELECT 1 -- user shipped
-   --                                                FROM INSERTED
-   --                                                WHERE ShipFlag = 'Y' OR [Status] = '9'  )
-   IF NOT UPDATE(ShipFlag) AND 
-      NOT UPDATE(Status) AND 
-      EXISTS(SELECT 1 FROM INSERTED WHERE ShipFlag = 'Y' OR [Status] = '9')   
+	-- TLTIN03
+   IF EXISTS ( SELECT 1 FROM DELETED WHERE ShipFlag = 'Y' OR [Status] = '9')   
+		AND  (  UPDATE (QTY) OR UPDATE(Sku) OR UPDATE(Lot) OR UPDATE(Loc) OR UPDATE(ID) OR UPDATE(Channel_ID) 
+		OR  UPDATE (Orderkey) OR UPDATE(Orderlinenumber)   
+		OR  EXISTS ( SELECT 1 FROM DELETED 
+						JOIN INSERTED ON INSERTED.PickDetailKey = DELETED.PickDetailKey
+						WHERE ( DELETED.ShipFlag = 'Y' OR DELETED.[Status] = '9' ) 
+						AND ( INSERTED.[Status] < DELETED.[Status] )  )	)	 
    BEGIN
       SET @c_PDKey = '' -- SOS# 264916
       
@@ -685,6 +684,43 @@ BEGIN
    END
    --SET ROWCOUNT 0
 END
+
+--(Wan05) - START
+IF (@n_Continue=1 or @n_Continue=2) and (Update(Status) OR Update(Qty) OR Update(Lot) OR Update(ID))
+BEGIN
+   --Allow to update if update from ntrpackserialnodelete trigger. direct update not allow if serialno is picked
+  SET @n_Cnt = 0
+  SELECT @n_Cnt = SUM(  CASE WHEN d.[Status] <> i.[Status] THEN 1                                  --(Wan06) 
+                        WHEN d.qty <> i.qty AND i.[Status] = '5'                                   --(Wan06) 
+                             AND RTRIM(ISNULL(i.MoveRefKey, '')) = '' AND sc.Authority ='1' THEN 1 --(AYD01)
+                        WHEN d.Lot <> i.Lot AND i.[Status] = '5' AND sc.Authority ='1' THEN 1      --(Wan06) 
+                        WHEN d.ID  <> i.ID  AND i.ID <> sn.ID AND i.[Status] = '5' AND             --(Wan06)    
+                             RTRIM(ISNULL(i.MoveRefKey, '')) = '' AND                              --(AYD01)
+                             sc.Authority ='1' THEN 1                                              --(Wan06) 
+                        WHEN d.ID <> i.ID  AND i.[Status] = '5' AND sc.Authority ='1'              --(AYD01)
+                             AND RTRIM(ISNULL(i.MoveRefKey, '')) = '' THEN 1                       --(AYD01)
+                        ELSE 0                                                                     --(Wan06) 
+                        END )                                                                      --(Wan06)
+               FROM INSERTED i   
+               JOIN DELETED  d ON d.Pickdetailkey = i.pickdetailkey
+               JOIN PickSerialNo psn WITH (NOLOCK) ON psn.PickDetailKey = i.PickDetailKey
+               JOIN SerialNo sn WITH (NOLOCK) ON  sn.SerialNo = psn.SerialNo
+               JOIN ORDERS o (NOLOCK) ON o.Orderkey = i.Orderkey
+               OUTER APPLY dbo.fnc_SelectGetRight(o.Facility, o.Storerkey, '', 'ASNFizUpdLotToSerialNo') AS sc
+               WHERE d.[Status] = '5' AND i.[Status] <= '5'                                        
+               AND   psn.SerialNo > ''
+               GROUP BY d.PickDetailKey, o.Facility, o.Storerkey, sc.Authority
+               HAVING COUNT(1) = SUM(d.Qty)
+   IF @n_Cnt > 0
+   BEGIN
+      SET @n_continue = 3
+      SET @n_err   = 61622
+      SET @c_errmsg= 'NSQL'+CONVERT(char(6), @n_err)+': SerialNo is picked'
+                   + '. Disallow to change Lot/ID/Qty/Status. (ntrPickdetailUpdate)'
+   END
+   SET @n_Cnt = 0
+END
+--(Wan05) - END
 
 /* #INCLUDE <TRPDU1.SQL> */
 IF @n_Continue = 1 or @n_Continue = 2

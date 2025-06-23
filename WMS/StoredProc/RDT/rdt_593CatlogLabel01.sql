@@ -3,15 +3,16 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-/******************************************************************************/
-/* Store procedure: rdt_593CatlogLabel01                                      */
-/* Customer: Granite                                                          */
-/*                                                                            */
-/* Modifications log:                                                         */
-/*                                                                            */
-/* Date       Rev  Author     Purposes                                        */
-/* 2018-02-07 1.0  NLT03      FCR-727 Create                                  */
-/******************************************************************************/
+/********************************************************************************/
+/* Store procedure: rdt_593CatlogLabel01                                        */
+/* Customer: Granite                                                            */
+/*                                                                              */
+/* Modifications log:                                                           */
+/*                                                                              */
+/* Date       Rev    Author     Purposes                                        */
+/* 2018-02-07 1.0    NLT03      FCR-727 Create                                  */
+/* 2024-10-12 1.2.0  NLT013     FCR-955 PPA by LabelNo, instead of PickSLipNo   */
+/********************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_593CatlogLabel01] (
    @nMobile    INT,
@@ -41,7 +42,6 @@ AS
       @nLoopIndex                INT,
       @nRowCount                 INT,
       @tCatelogLabelList           VariableTable,
-      @cPickSlipNo               NVARCHAR( 10),
       @cLabelPrinterGroup        NVARCHAR( 10),
       @cPaperPrinter             NVARCHAR( 10),
       @cPickConfirmStatus        NVARCHAR( 1),
@@ -123,11 +123,6 @@ AS
       GOTO Quit
    END
 
-   SELECT @cPickSlipNo = PickSlipNo
-   FROM dbo.PackDetail WITH(NOLOCK) 
-   WHERE StorerKey = @cStorerKey 
-   AND labelno = @cDropID
-
    INSERT INTO @tLabels (LabelName, PrintSequence)
    SELECT DISTINCT IIF(lk1.LISTNAME IS NULL, lk.UDF01, lk1.UDF01), lk.Code
    FROM (SELECT StorerKey, WorkOrderKey, ExternWorkOrderKey, ExternLineNo, WorkOrderLineNumber, Type
@@ -183,7 +178,6 @@ AS
 
       INSERT INTO @tCatelogLabelList (Variable, Value) 
       VALUES 
-         ( '@cPickSlipNo', @cPickSlipNo),
          ( '@cLabelNo', @cDropID),
          ( '@cSKU', @cSKU)
 

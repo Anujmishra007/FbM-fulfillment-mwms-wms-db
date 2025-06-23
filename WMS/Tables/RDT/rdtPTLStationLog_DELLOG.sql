@@ -1,40 +1,90 @@
-CREATE TABLE [RDT].[rdtPTLStationLog_DELLOG]
+SET ANSI_NULLS OFF
+GO
+
+SET QUOTED_IDENTIFIER OFF
+GO
+IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[RDT].[rdtPTLStationLog_DELLOG]') AND type in (N'U'))
+BEGIN
+CREATE TABLE [RDT].[rdtPTLStationLog_DELLOG](
+	[Rowref] [int] IDENTITY(1,1) NOT NULL,
+	[RowRefSource] [int] NOT NULL,
+	[Status] [nvarchar](1) NOT NULL  CONSTRAINT [DF_rdtPTLStationLog_DELLOG_Status]  DEFAULT ('0'),
+	[AddDate] [datetime] NOT NULL CONSTRAINT [DF_rdtPTLStationLog_DELLOG_AddDate]  DEFAULT (getdate()),
+	[AddWho] [nvarchar](128) NOT NULL CONSTRAINT [DF_rdtPTLStationLog_DELLOG_AddWho]  DEFAULT (suser_sname()),
+	[ArchiveCop] [nvarchar](1) NULL
+ CONSTRAINT [PK_rdtPTLStationLog_DELLOG] PRIMARY KEY CLUSTERED 
 (
-[RowRef] [int] NOT NULL IDENTITY(1, 1),
-[Station] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[IPAddress] [nvarchar] (40) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[Position] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
-[LOC] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtPTLStationLog_DELLOG_LOC] DEFAULT (''),
-[Method] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtPTLStationLog_DELLOG_Method] DEFAULT (''),
-[CartonID] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtPTLStationLog_DELLOG_CartonID] DEFAULT (''),
-[OrderKey] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtPTLStationLog_DELLOG_OrderKey] DEFAULT (''),
-[LoadKey] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtPTLStationLog_DELLOG_LoadKey] DEFAULT (''),
-[WaveKey] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtPTLStationLog_DELLOG_WaveKey] DEFAULT (''),
-[PickSlipNo] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtPTLStationLog_DELLOG_PickSlipNo] DEFAULT (''),
-[BatchKey] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtPTLStationLog_DELLOG_BatchKey] DEFAULT (''),
-[ConsigneeKey] [nvarchar] (15) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtPTLStationLog_DELLOG_ConsigneeKey] DEFAULT (''),
-[ShipTo] [nvarchar] (15) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtPTLStationLog_DELLOG_ShipTo] DEFAULT (''),
-[StorerKey] [nvarchar] (15) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtPTLStationLog_DELLOG_StorerKey] DEFAULT (''),
-[MaxTask] [int] NOT NULL CONSTRAINT [DF_rdtPTLStationLog_DELLOG_MaxTask] DEFAULT ((0)),
-[UserDefine01] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtPTLStationLog_DELLOG_UserDefine01] DEFAULT (''),
-[UserDefine02] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtPTLStationLog_DELLOG_UserDefine02] DEFAULT (''),
-[UserDefine03] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtPTLStationLog_DELLOG_UserDefine03] DEFAULT (''),
-[SourceKey] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtPTLStationLog_DELLOG_SourceKey] DEFAULT (''),
-[SourceType] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtPTLStationLog_DELLOG_SourceType] DEFAULT (''),
-[AddWho] [nvarchar] (128) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtPTLStationLog_DELLOG_AddWho] DEFAULT (suser_sname()),
-[AddDate] [datetime] NOT NULL CONSTRAINT [DF_rdtPTLStationLog_DELLOG_AddDate] DEFAULT (getdate()),
-[EditWho] [nvarchar] (128) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtPTLStationLog_DELLOG_EditWho] DEFAULT (suser_sname()),
-[EditDate] [datetime] NOT NULL CONSTRAINT [DF_rdtPTLStationLog_DELLOG_EditDate] DEFAULT (getdate()),
-[CreatedPTLTran] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_rdtPTLStationLog_DELLOG_CreatedPTLTran] DEFAULT ('')
+	[Rowref] ASC
+)WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = ON, FILLFACTOR = 80, OPTIMIZE_FOR_SEQUENTIAL_KEY = OFF) ON [PRIMARY]
 ) ON [PRIMARY]
-GO
-ALTER TABLE [RDT].[rdtPTLStationLog_DELLOG] ADD CONSTRAINT [PK_rdtPTLStationLog_DELLOG] PRIMARY KEY CLUSTERED ([RowRef]) WITH (FILLFACTOR=80) ON [PRIMARY]
-GO
-GRANT DELETE ON  [RDT].[rdtPTLStationLog_DELLOG] TO [NSQL]
-GO
-GRANT INSERT ON  [RDT].[rdtPTLStationLog_DELLOG] TO [NSQL]
-GO
-GRANT SELECT ON  [RDT].[rdtPTLStationLog_DELLOG] TO [NSQL]
-GO
-GRANT UPDATE ON  [RDT].[rdtPTLStationLog_DELLOG] TO [NSQL]
-GO
+
+
+
+END 
+
+ELSE 
+BEGIN
+
+			 IF NOT EXISTS (SELECT 1
+	               FROM sys.columns
+	               WHERE Name = 'AddWho' AND Object_ID = Object_ID('RDT.rdtPTLStationLog_DELLOG'))
+			BEGIN
+
+				ALTER TABLE [RDT].[rdtPTLStationLog_DELLOG] ADD AddWho [int] NOT NULL ;
+				EXEC sp_addextendedproperty N'MS_Description', 'RowRefSource', 'SCHEMA', N'RDT', 'TABLE', N'rdtPTLStationLog_DELLOG', 'COLUMN', N'RowRefSource'
+				
+			END
+
+
+
+			 IF NOT EXISTS (SELECT 1
+	               FROM sys.columns
+	               WHERE Name = 'Status' AND Object_ID = Object_ID('RDT.rdtPTLStationLog_DELLOG'))
+			BEGIN
+
+				ALTER TABLE [RDT].[rdtPTLStationLog_DELLOG] ADD Status [nvarchar](1) NOT NULL  CONSTRAINT [DF_rdtPTLStationLog_DELLOG_Status]  DEFAULT ('0') ;
+				EXEC sp_addextendedproperty N'MS_Description', 'Status', 'SCHEMA', N'RDT', 'TABLE', N'rdtPTLStationLog_DELLOG', 'COLUMN', N'Status'
+				
+			END
+
+
+
+
+			 IF NOT EXISTS (SELECT 1
+	               FROM sys.columns
+	               WHERE Name = 'AddDate' AND Object_ID = Object_ID('RDT.rdtPTLStationLog_DELLOG'))
+			BEGIN
+
+				ALTER TABLE [RDT].[rdtPTLStationLog_DELLOG] ADD AddDate  [datetime] NOT NULL CONSTRAINT [DF_rdtPTLStationLog_DELLOG_AddDate]  DEFAULT (getdate()) ;
+				EXEC sp_addextendedproperty N'MS_Description', 'AddDate', 'SCHEMA', N'RDT', 'TABLE', N'rdtPTLStationLog_DELLOG', 'COLUMN', N'AddDate'
+				
+			END
+
+
+
+
+			 IF NOT EXISTS (SELECT 1
+	               FROM sys.columns
+	               WHERE Name = 'AddWho' AND Object_ID = Object_ID('RDT.rdtPTLStationLog_DELLOG'))
+			BEGIN
+
+				ALTER TABLE [RDT].[rdtPTLStationLog_DELLOG] ADD AddWho [nvarchar](128) NOT NULL CONSTRAINT [DF_rdtPTLStationLog_DELLOG_AddWho]  DEFAULT (suser_sname());
+				EXEC sp_addextendedproperty N'MS_Description', 'AddWho', 'SCHEMA', N'RDT', 'TABLE', N'rdtPTLStationLog_DELLOG', 'COLUMN', N'AddWho'
+				
+			END
+
+
+
+
+
+			 IF NOT EXISTS (SELECT 1
+	               FROM sys.columns
+	               WHERE Name = 'ArchiveCop' AND Object_ID = Object_ID('RDT.rdtPTLStationLog_DELLOG'))
+			BEGIN
+
+				ALTER TABLE [RDT].[rdtPTLStationLog_DELLOG] ADD ArchiveCop [nvarchar](1) NULL;
+				EXEC sp_addextendedproperty N'MS_Description', 'ArchiveCop', 'SCHEMA', N'RDT', 'TABLE', N'rdtPTLStationLog_DELLOG', 'COLUMN', N'ArchiveCop'
+				
+			END
+END 
+

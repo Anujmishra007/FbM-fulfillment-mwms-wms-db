@@ -132,6 +132,8 @@ IF NOT EXISTS (SELECT *
             [MaxSKU]              [int]                                                NOT NULL
                 CONSTRAINT [DF_LOC_MaxSKU] DEFAULT ((0)),
             [DisableCheckDigitAutoCompute] [nvarchar](5) COLLATE SQL_Latin1_General_CP1_CI_AS  DEFAULT ('False'),
+            [ColorCode]               [nvarchar](20) COLLATE SQL_Latin1_General_CP1_CI_AS   NULL
+                CONSTRAINT [DF_LOC_ColorCode] DEFAULT (''),
             CONSTRAINT [CK_LOC_Loc_01] CHECK ((NOT [Loc] = ' ')),
             CONSTRAINT [PKLOC] PRIMARY KEY CLUSTERED ([Loc]) WITH (FILLFACTOR = 90) ON [PRIMARY],
             INDEX [IDX_LOC_facility2] NONCLUSTERED ([Facility], [LocAisle]) ON [PRIMARY],
@@ -156,6 +158,12 @@ ELSE
                     ADD DisableCheckDigitAutoCompute NVARCHAR(5) DEFAULT 'False';
                 EXEC sp_addextendedproperty N'MS_Description', N'If True, the check digit will not be auto computed',
                      'SCHEMA', N'dbo', 'TABLE', N'LOC', 'COLUMN', N'DisableCheckDigitAutoCompute';
+            END
+        IF NOT EXISTS (SELECT * FROM sys.columns
+                       WHERE Name = 'ColorCode' AND Object_ID = Object_ID('LOC'))
+            BEGIN
+                ALTER TABLE LOC ADD ColorCode NVARCHAR(20) DEFAULT '';
+                EXEC sp_addextendedproperty N'MS_Description', N'Locations are marked with different colors to aid productivity', 'SCHEMA', N'dbo', 'TABLE', N'LOC', 'COLUMN', N'ColorCode';
             END
     END
 

@@ -5,7 +5,7 @@ GO
 /**************************************************************************/  
 /* Stored Procedure: WM.lsp_Validate_AdjustmentDetail_Std                 */  
 /* Creation Date: 30-JUL-2018                                             */  
-/* Copyright: LFL                                                         */  
+/* Copyright: Maserk Logistics                                            */  
 /* Written by: Wan                                                        */  
 /*                                                                        */  
 /* Purpose:                                                               */  
@@ -13,7 +13,7 @@ GO
 /* Called By:                                                             */  
 /*                                                                        */  
 /*                                                                        */  
-/* Version: 1.5                                                           */  
+/* Version: 1.7                                                           */  
 /*                                                                        */  
 /* Data Modifications:                                                    */  
 /*                                                                        */  
@@ -33,6 +33,9 @@ GO
 /*                            CODELKUP in Inventory Adjustment screen     */
 /* 2023-05-18  Wan06    1.5   LFWM-4116 - [CN]CONVERSE_ADJ_'Copy value to */
 /*                            support all details in one Adjustmentkey    */
+/* 2024-05-28  NJOW02   1.6   WMS-24558 - Fix @c_Lot Null in checking     */
+/* 2024-08-02  Wan07    1.7   LFWM-4397 - RG [GIT] Serial Number Solution */
+/*                            - Adjustment by Serial Number               */
 /**************************************************************************/   
 CREATE OR ALTER PROC [WM].[lsp_Validate_AdjustmentDetail_Std] (
   @c_XMLSchemaString    NVARCHAR(MAX) 
@@ -192,69 +195,73 @@ BEGIN
       */
 
       DECLARE 
-            @c_AdjustmentKey        NVARCHAR(10) = ''
-         ,  @c_AdjustmentLineNo     NVARCHAR(5) = ''
-         ,  @c_Facility             NVARCHAR(5)  = ''
-         ,  @c_Storerkey            NVARCHAR(15) = ''
-         ,  @c_Sku                  NVARCHAR(20) = ''
-         ,  @c_FinalizedFlag_Ins    NVARCHAR(10) = ''
-         ,  @c_FinalizedFlag_Del    NVARCHAR(10) = ''
-         ,  @c_FinalizedFlag_H_Del  NVARCHAR(10) = ''
-         ,  @c_Loc                  NVARCHAR(10) = ''
-         ,  @c_UDF05                NVARCHAR(20) = ''
-         ,  @c_UCCNo                NVARCHAR(20) = ''
-         ,  @c_Packkey              NVARCHAR(10) = ''       --(Wan03)           
-         ,  @c_ReasonCode           NVARCHAR(30) = ''       --(Wan03) 
-         ,  @n_Qty                  INT          = 0
-         ,  @c_Channel              NVARCHAR(20) = ''       --(Wan05)
+            @c_AdjustmentKey           NVARCHAR(10) = ''
+         ,  @c_AdjustmentLineNo        NVARCHAR(5) = ''
+         ,  @c_Facility                NVARCHAR(5)  = ''
+         ,  @c_Storerkey               NVARCHAR(15) = ''
+         ,  @c_Sku                     NVARCHAR(20) = ''
+         ,  @c_FinalizedFlag_Ins       NVARCHAR(10) = ''
+         ,  @c_FinalizedFlag_Del       NVARCHAR(10) = ''
+         ,  @c_FinalizedFlag_H_Del     NVARCHAR(10) = ''
+         ,  @c_Loc                     NVARCHAR(10) = ''
+         ,  @c_UDF05                   NVARCHAR(20) = ''
+         ,  @c_UCCNo                   NVARCHAR(20) = ''
+         ,  @c_Packkey                 NVARCHAR(10) = ''       --(Wan03)           
+         ,  @c_ReasonCode              NVARCHAR(30) = ''       --(Wan03) 
+         ,  @n_Qty                     INT          = 0
+         ,  @c_Channel                 NVARCHAR(20) = ''       --(Wan05)
          
-         ,  @c_LottableLabel        NVARCHAR(20) = ''
-         ,  @c_Lottable01Label      NVARCHAR(20) = ''
-         ,  @c_Lottable02Label      NVARCHAR(20) = ''
-         ,  @c_Lottable03Label      NVARCHAR(20) = ''
-         ,  @c_Lottable04Label      NVARCHAR(20) = ''
-         ,  @c_Lottable05Label      NVARCHAR(20) = ''
-         ,  @c_Lottable06Label      NVARCHAR(20) = ''
-         ,  @c_Lottable07Label      NVARCHAR(20) = ''
-         ,  @c_Lottable08Label      NVARCHAR(20) = ''
-         ,  @c_Lottable09Label      NVARCHAR(20) = ''
-         ,  @c_Lottable10Label      NVARCHAR(20) = ''
-         ,  @c_Lottable11Label      NVARCHAR(20) = ''
-         ,  @c_Lottable12Label      NVARCHAR(20) = ''
-         ,  @c_Lottable13Label      NVARCHAR(20) = ''
-         ,  @c_Lottable14Label      NVARCHAR(20) = ''
-         ,  @c_Lottable15Label      NVARCHAR(20) = ''
-         ,  @c_LottableValue        NVARCHAR(30) = ''
-         ,  @c_Lottable01           NVARCHAR(18) = ''
-         ,  @c_Lottable02           NVARCHAR(18) = ''
-         ,  @c_Lottable03           NVARCHAR(18) = ''
-         ,  @dt_Lottable04          DATETIME 
-         ,  @dt_Lottable05          DATETIME 
-         ,  @c_Lottable06           NVARCHAR(30) = ''
-         ,  @c_Lottable07           NVARCHAR(30) = ''
-         ,  @c_Lottable08           NVARCHAR(30) = ''
-         ,  @c_Lottable09           NVARCHAR(30) = ''
-         ,  @c_Lottable10           NVARCHAR(30) = ''
-         ,  @c_Lottable11           NVARCHAR(30) = ''
-         ,  @c_Lottable12           NVARCHAR(30) = ''
-         ,  @dt_Lottable13          DATETIME
-         ,  @dt_Lottable14          DATETIME
-         ,  @dt_Lottable15          DATETIME
+         ,  @c_LottableLabel           NVARCHAR(20) = ''
+         ,  @c_Lottable01Label         NVARCHAR(20) = ''
+         ,  @c_Lottable02Label         NVARCHAR(20) = ''
+         ,  @c_Lottable03Label         NVARCHAR(20) = ''
+         ,  @c_Lottable04Label         NVARCHAR(20) = ''
+         ,  @c_Lottable05Label         NVARCHAR(20) = ''
+         ,  @c_Lottable06Label         NVARCHAR(20) = ''
+         ,  @c_Lottable07Label         NVARCHAR(20) = ''
+         ,  @c_Lottable08Label         NVARCHAR(20) = ''
+         ,  @c_Lottable09Label         NVARCHAR(20) = ''
+         ,  @c_Lottable10Label         NVARCHAR(20) = ''
+         ,  @c_Lottable11Label         NVARCHAR(20) = ''
+         ,  @c_Lottable12Label         NVARCHAR(20) = ''
+         ,  @c_Lottable13Label         NVARCHAR(20) = ''
+         ,  @c_Lottable14Label         NVARCHAR(20) = ''
+         ,  @c_Lottable15Label         NVARCHAR(20) = ''
+         ,  @c_LottableValue           NVARCHAR(30) = ''
+         ,  @c_Lottable01              NVARCHAR(18) = ''
+         ,  @c_Lottable02              NVARCHAR(18) = ''
+         ,  @c_Lottable03              NVARCHAR(18) = ''
+         ,  @dt_Lottable04             DATETIME 
+         ,  @dt_Lottable05             DATETIME 
+         ,  @c_Lottable06              NVARCHAR(30) = ''
+         ,  @c_Lottable07              NVARCHAR(30) = ''
+         ,  @c_Lottable08              NVARCHAR(30) = ''
+         ,  @c_Lottable09              NVARCHAR(30) = ''
+         ,  @c_Lottable10              NVARCHAR(30) = ''
+         ,  @c_Lottable11              NVARCHAR(30) = ''
+         ,  @c_Lottable12              NVARCHAR(30) = ''
+         ,  @dt_Lottable13             DATETIME
+         ,  @dt_Lottable14             DATETIME
+         ,  @dt_Lottable15             DATETIME
 
-         ,  @n_Cnt                  INT          = 1
-         ,  @n_ExistsCnt            INT          = 1
-         ,  @c_Cnt                  NVARCHAR(2)  = ''
-         ,  @c_SeekCode             NVARCHAR(40) = ''
-         ,  @c_MatchCfgValue        NVARCHAR(30) = ''
+         ,  @n_Cnt                     INT          = 1
+         ,  @n_ExistsCnt               INT          = 1
+         ,  @c_Cnt                     NVARCHAR(2)  = ''
+         ,  @c_SeekCode                NVARCHAR(40) = ''
+         ,  @c_MatchCfgValue           NVARCHAR(30) = ''
 
-         ,  @c_Lot                  NVARCHAR(10) = ''       --(Wan01)   
-         ,  @c_Getlot               NVARCHAR(10) = ''       --(Wan01)   
+         ,  @c_Lot                     NVARCHAR(10) = ''       --(Wan01)   
+         ,  @c_Getlot                  NVARCHAR(10) = ''       --(Wan01)  
+         ,  @c_ID                      NVARCHAR(18) = ''       --(Wan07) 
+         ,  @c_SerialNo                NVARCHAR(50) = ''       --(Wan07) 
+         ,  @c_SerialNoCapture         NVARCHAR(1)  = ''       --(Wan07) 
 
-         ,  @c_AdjStatusControl     NVARCHAR(30) = ''
-         ,  @c_VLDLotLabelExist     NVARCHAR(30) = ''
-         ,  @c_SkipUDF05UccChkInAdj NVARCHAR(30) = ''
-         ,  @c_AdjAllowZeroQty      NVARCHAR(30) = ''       --(Wan03)
-         ,  @c_ChannelInventoryMgmt NVARCHAR(30) = ''       --(Wan05)  
+         ,  @c_AdjStatusControl        NVARCHAR(30) = ''
+         ,  @c_VLDLotLabelExist        NVARCHAR(30) = ''
+         ,  @c_SkipUDF05UccChkInAdj    NVARCHAR(30) = ''
+         ,  @c_AdjAllowZeroQty         NVARCHAR(30) = ''    --(Wan03)
+         ,  @c_ChannelInventoryMgmt    NVARCHAR(30) = ''    --(Wan05)
+         ,  @c_ASNFizUpdLotToSerialNo  NVARCHAR(10)=''      --(Wan07)
          
       IF EXISTS ( SELECT 1                                                          --(Wan06) - START
                  FROM tempdb.INFORMATION_SCHEMA.COLUMNS c 
@@ -280,8 +287,9 @@ BEGIN
          ,  @c_Storerkey         = AD.Storerkey
          ,  @c_Sku               = AD.Sku
          ,  @c_FinalizedFlag_Ins = AD.FinalizedFlag
-         ,  @c_Lot               = AD.Lot                   --(Wan01)          
+         ,  @c_Lot               = ISNULL(AD.Lot,'')          --(Wan01) --NJOW01
          ,  @c_Loc               = ISNULL(AD.Loc,'')
+         ,  @c_ID                = ad.ID                      --(Wan06)  
          ,  @c_Lottable01        = AD.Lottable01
          ,  @c_Lottable02        = AD.Lottable02
          ,  @c_Lottable03        = AD.Lottable03
@@ -302,7 +310,8 @@ BEGIN
          ,  @c_Packkey           = ISNULL(AD.Packkey,'')       --(Wan03) 
          ,  @c_ReasonCode        = ISNULL(AD.ReasonCode,'')    --(Wan03)  
          ,  @n_Qty               = ISNULL(AD.Qty,0)            --(Wan03) 
-         ,  @c_Channel           = ad.channel                  --(Wan05)  
+         ,  @c_Channel           = ad.channel                  --(Wan05) 
+         ,  @c_SerialNo          = ad.SerialNo                 --(Wan07)           
       FROM  #VALDN AD  --NJOW01
       
       SELECT TOP 1 
@@ -437,6 +446,7 @@ BEGIN
            , @c_Lottable13Label = ISNULL(RTRIM(Lottable13Label),'')
            , @c_Lottable14Label = ISNULL(RTRIM(Lottable14Label),'')
            , @c_Lottable15Label = ISNULL(RTRIM(Lottable15Label),'')
+           , @c_SerialNoCapture = SerialNoCapture                                   --(Wan07)
       FROM SKU S WITH (NOLOCK)
       WHERE S.Storerkey = @c_Storerkey
       AND S.Sku = @c_Sku
@@ -641,7 +651,7 @@ BEGIN
       END
 
       --(Wan01) - START
-      IF @c_Lot <> ''
+      IF ISNULL(@c_Lot,'') <> ''   --NJOW01
       BEGIN
          IF NOT EXISTS (SELECT 1 
                         FROM LOT WITH (NOLOCK)
@@ -701,6 +711,73 @@ BEGIN
          GOTO EXIT_SP         
       END
       --(Wan04) - END
+
+      --(Wan07) - START
+      IF @c_SerialNoCapture NOT IN ('1','2','3') AND @c_SerialNo <> '' 
+      BEGIN
+         SET @n_Continue = 3
+         SET @n_Err = 552069
+         SET @c_errmsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) 
+                        + ': SerialNo is NOT required.'
+                        + '. SerialNo: ' + @c_SerialNo 
+                     + '. (lsp_Validate_AdjustmentDetail_Std) |' + @c_SerialNo
+
+         GOTO EXIT_SP
+      END
+      ELSE IF @c_SerialNoCapture IN ('1','2','3')
+      BEGIN
+         SELECT @c_ASNFizUpdLotToSerialNo = fsgr.Authority                                            --(Wan05)
+         FROM dbo.fnc_SelectGetRight(@c_Facility, @c_Storerkey, '', 'ASNFizUpdLotToSerialNo')AS fsgr  --(Wan05)
+
+         IF  @c_SerialNo <> '' AND @n_Qty NOT IN (-1,1)             
+         BEGIN
+            SET @n_Continue = 3
+            SET @n_Err = 552067
+            SET @c_errmsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) 
+                           + ': SerialNo adjust qty is allowed either -1 OR 1'
+                           + '. SerialNo: ' + @c_SerialNo 
+                        + '. (lsp_Validate_AdjustmentDetail_Std) |' + @c_SerialNo
+
+            GOTO EXIT_SP
+         END
+
+         IF @c_ASNFizUpdLotToSerialNo = '1' --SerialNo Tracking 
+         BEGIN
+            IF @c_SerialNo = '' AND @c_SerialNoCapture IN ('1','2')
+            BEGIN
+               SET @n_Continue = 3
+               SET @n_Err = 552065
+               SET @c_errmsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) 
+                  + ': SerialNo is required.'
+                  + '. (lsp_Validate_AdjustmentDetail_Std)'
+               GOTO EXIT_SP  
+            END
+            ELSE IF @c_SerialNo <> ''
+            BEGIN
+               IF @c_ID = ''   
+               BEGIN
+                  SET @n_Continue = 3
+                  SET @n_Err = 552066
+                  SET @c_errmsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) 
+                                 + ': ID is Required for SerialNo Adjusment'
+                                 + '. SerialNo: ' + @c_SerialNo 
+                                 + '. (lsp_Validate_AdjustmentDetail_Std) |' + @c_SerialNo
+                  GOTO EXIT_SP
+               END
+
+               IF @c_Lot = '' AND @n_Qty = -1 
+               BEGIN
+                  SET @n_Continue = 3
+                  SET @n_Err = 552068
+                  SET @c_errmsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) 
+                                 + ': Negative SerialNo Adjustment requires Lot #'
+                                 + '. SerialNo: ' + @c_SerialNo  
+                                 + '. (lsp_Validate_AdjustmentDetail_Std) |' + @c_SerialNo
+               END
+            END
+         END
+      END 
+      --(Wan07) - END
    END TRY
    
    BEGIN CATCH

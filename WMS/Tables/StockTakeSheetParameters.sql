@@ -1,3 +1,5 @@
+IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[StockTakeSheetParameters]') AND type in (N'U'))
+BEGIN
 CREATE TABLE [dbo].[StockTakeSheetParameters]
 (
 [StockTakeKey] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
@@ -61,89 +63,198 @@ CREATE TABLE [dbo].[StockTakeSheetParameters]
 [BlankCSheetDPTRNOnly] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_STOCKTAKESHEETPARAMETERS_BlankCSheetDPTRNOnly] DEFAULT ('N'),
 [QueryinJSON] [nvarchar] (4000) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_StockTakeSheetParameters_QueryinJSON] DEFAULT (''),
 [Status] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_StockTakeSheetParameters_Status] DEFAULT (''),
-[LocPerPage] [int] NULL CONSTRAINT [DF_StockTakeSheetParameters_LocPerPage] DEFAULT ((0))
+[LocPerPage] [int] NULL CONSTRAINT [DF_StockTakeSheetParameters_LocPerPage] DEFAULT ((0)),
+[IncludeZeroSkuQty] [nvarchar](1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_StockTakeSheetParameters_IncludeZeroSkuQty]  DEFAULT (''),
+[Userdefine01] [nvarchar](50) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_StockTakeSheetParameters_Userdefine01]  DEFAULT (''),
+[Userdefine02] [nvarchar](50) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_StockTakeSheetParameters_Userdefine02]  DEFAULT (''),
+[Userdefine03] [nvarchar](50) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_StockTakeSheetParameters_Userdefine03]  DEFAULT (''),
+[Userdefine04] [nvarchar](50) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_StockTakeSheetParameters_Userdefine04]  DEFAULT (''),
+[Userdefine05] [nvarchar](50) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_StockTakeSheetParameters_Userdefine05]  DEFAULT (''),
+[Userdefine06] [datetime] NULL CONSTRAINT [DF_StockTakeSheetParameters_Userdefine06]  DEFAULT (''),
+[Userdefine07] [datetime] NULL CONSTRAINT [DF_StockTakeSheetParameters_Userdefine07]  DEFAULT (''),
+[Userdefine08] [nvarchar](50) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_StockTakeSheetParameters_Userdefine08]  DEFAULT (''),
+[Userdefine09] [nvarchar](50) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_StockTakeSheetParameters_Userdefine09]  DEFAULT (''),
+[Userdefine10] [nvarchar](50) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_StockTakeSheetParameters_Userdefine10]  DEFAULT (''),
 ) ON [PRIMARY]
-GO
+
 
 ALTER TABLE [dbo].[StockTakeSheetParameters] ADD CONSTRAINT [PK_StockTakeSheetParameters] PRIMARY KEY CLUSTERED ([StockTakeKey]) WITH (FILLFACTOR=90) ON [PRIMARY]
-GO
-GRANT SELECT ON  [dbo].[StockTakeSheetParameters] TO [JReportRole]
-GO
+
+--GRANT SELECT ON  [dbo].[StockTakeSheetParameters] TO [JReportRole]
+
 GRANT DELETE ON  [dbo].[StockTakeSheetParameters] TO [NSQL]
-GO
+
 GRANT INSERT ON  [dbo].[StockTakeSheetParameters] TO [NSQL]
-GO
+
 GRANT SELECT ON  [dbo].[StockTakeSheetParameters] TO [NSQL]
-GO
+
 GRANT UPDATE ON  [dbo].[StockTakeSheetParameters] TO [NSQL]
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'The system will print the stock count blind sheets based on the parameters configuration in Stock Take Parameters window. The WMS will list all the locations in the area/zone specified. Automatic stock quantity withdrawal from these locations will occur once the posting is executed.', 'SCHEMA', N'dbo', 'TABLE', N'StockTakeSheetParameters', NULL, NULL
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Date of the information added. (System date)', 'SCHEMA', N'dbo', 'TABLE', N'StockTakeSheetParameters', 'COLUMN', N'AddDate'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'The username/login ID added the information.', 'SCHEMA', N'dbo', 'TABLE', N'StockTakeSheetParameters', 'COLUMN', N'AddWho'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'Generate Count Sheet Group By Field 1', 'SCHEMA', N'dbo', 'TABLE', N'StockTakeSheetParameters', 'COLUMN', N'CountSheetGroupBy01'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'Generate Count Sheet By Group Field 2', 'SCHEMA', N'dbo', 'TABLE', N'StockTakeSheetParameters', 'COLUMN', N'CountSheetGroupBy02'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'Generate Count Sheet Group By Field 3', 'SCHEMA', N'dbo', 'TABLE', N'StockTakeSheetParameters', 'COLUMN', N'CountSheetGroupBy03'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'Generate Count Sheet By Group Field 4', 'SCHEMA', N'dbo', 'TABLE', N'StockTakeSheetParameters', 'COLUMN', N'CountSheetGroupBy04'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'Generate Count Sheet By Group Field 5', 'SCHEMA', N'dbo', 'TABLE', N'StockTakeSheetParameters', 'COLUMN', N'CountSheetGroupBy05'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'Count Sheet Sort By Field 1', 'SCHEMA', N'dbo', 'TABLE', N'StockTakeSheetParameters', 'COLUMN', N'CountSheetSortBy01'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'Count Sheet Sort By Field 2', 'SCHEMA', N'dbo', 'TABLE', N'StockTakeSheetParameters', 'COLUMN', N'CountSheetSortBy02'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'Count Sheet Sort By Field 3', 'SCHEMA', N'dbo', 'TABLE', N'StockTakeSheetParameters', 'COLUMN', N'CountSheetSortBy03'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'Count Sheet Sort By Field 4', 'SCHEMA', N'dbo', 'TABLE', N'StockTakeSheetParameters', 'COLUMN', N'CountSheetSortBy04'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'Count Sheet Sort By Field 5', 'SCHEMA', N'dbo', 'TABLE', N'StockTakeSheetParameters', 'COLUMN', N'CountSheetSortBy05'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'Count Sheet Sort By Field 6', 'SCHEMA', N'dbo', 'TABLE', N'StockTakeSheetParameters', 'COLUMN', N'CountSheetSortBy06'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'Count Sheet Sort By Field 7', 'SCHEMA', N'dbo', 'TABLE', N'StockTakeSheetParameters', 'COLUMN', N'CountSheetSortBy07'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'Count Sheet Sort By Field 8', 'SCHEMA', N'dbo', 'TABLE', N'StockTakeSheetParameters', 'COLUMN', N'CountSheetSortBy08'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Date of the information edited/modified/updated. (System date)', 'SCHEMA', N'dbo', 'TABLE', N'StockTakeSheetParameters', 'COLUMN', N'EditDate'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'The username/login ID edited/modified/updated the information.', 'SCHEMA', N'dbo', 'TABLE', N'StockTakeSheetParameters', 'COLUMN', N'EditWho'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'Exclude QtyAllocated Option', 'SCHEMA', N'dbo', 'TABLE', N'StockTakeSheetParameters', 'COLUMN', N'ExcludeQtyAllocated'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'Extended Parameters 1', 'SCHEMA', N'dbo', 'TABLE', N'StockTakeSheetParameters', 'COLUMN', N'ExtendedParm1'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'Extended Parameters 1', 'SCHEMA', N'dbo', 'TABLE', N'StockTakeSheetParameters', 'COLUMN', N'ExtendedParm1Field'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'Extended Parameters 2 Value', 'SCHEMA', N'dbo', 'TABLE', N'StockTakeSheetParameters', 'COLUMN', N'ExtendedParm2'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'Extended Parameters 2', 'SCHEMA', N'dbo', 'TABLE', N'StockTakeSheetParameters', 'COLUMN', N'ExtendedParm2Field'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'Extended Parameters 3 Value', 'SCHEMA', N'dbo', 'TABLE', N'StockTakeSheetParameters', 'COLUMN', N'ExtendedParm3'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'Extended Parameters 3', 'SCHEMA', N'dbo', 'TABLE', N'StockTakeSheetParameters', 'COLUMN', N'ExtendedParm3Field'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'A building or place that provide services for effective warehouse management. Identified by unique code.', 'SCHEMA', N'dbo', 'TABLE', N'StockTakeSheetParameters', 'COLUMN', N'Facility'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'Loc Per Page', 'SCHEMA', N'dbo', 'TABLE', N'StockTakeSheetParameters', 'COLUMN', N'LocPerPage'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'Cycle Count Strategy parameters 01', 'SCHEMA', N'dbo', 'TABLE', N'StockTakeSheetParameters', 'COLUMN', N'Parameter01'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'Cycle Count Strategy parameters 02', 'SCHEMA', N'dbo', 'TABLE', N'StockTakeSheetParameters', 'COLUMN', N'Parameter02'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'Cycle Count Strategy parameters 03', 'SCHEMA', N'dbo', 'TABLE', N'StockTakeSheetParameters', 'COLUMN', N'Parameter03'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'Cycle Count Strategy parameters 04', 'SCHEMA', N'dbo', 'TABLE', N'StockTakeSheetParameters', 'COLUMN', N'Parameter04'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'Cycle Count Strategy parameters 05', 'SCHEMA', N'dbo', 'TABLE', N'StockTakeSheetParameters', 'COLUMN', N'Parameter05'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Unique code identifying Stock Take.', 'SCHEMA', N'dbo', 'TABLE', N'StockTakeSheetParameters', 'COLUMN', N'StockTakeKey'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Unique key to the Storer record.', 'SCHEMA', N'dbo', 'TABLE', N'StockTakeSheetParameters', 'COLUMN', N'StorerKey'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', N'Cycle Count Strategy Key', 'SCHEMA', N'dbo', 'TABLE', N'StockTakeSheetParameters', 'COLUMN', N'StrategyKey'
-GO
+
+END
+
+ELSE 
+BEGIN 
+
+IF NOT EXISTS (SELECT * FROM sys.columns WHERE Name = 'IncludeZeroSkuQty' AND Object_ID = Object_ID('dbo.StockTakeSheetParameters'))
+BEGIN
+	ALTER TABLE dbo.StockTakeSheetParameters ADD IncludeZeroSkuQty [nvarchar](1) NULL CONSTRAINT [DF_StockTakeSheetParameters_IncludeZeroSkuQty]  DEFAULT ('');
+	EXEC sp_addextendedproperty N'MS_Description', 'IncludeZeroSkuQty', 'SCHEMA', N'DBO', 'TABLE', N'StockTakeSheetParameters', 'COLUMN', N'IncludeZeroSkuQty'
+				
+END
+
+
+IF NOT EXISTS (SELECT * FROM sys.columns WHERE Name = 'SKUParm' AND Object_ID = Object_ID('dbo.StockTakeSheetParameters'))
+BEGIN
+	ALTER TABLE dbo.StockTakeSheetParameters ADD [SKUParm] [nvarchar] (125) NULL CONSTRAINT [DF_StockTakeSheetParameters_SKUParm] DEFAULT ('ALL');
+	EXEC sp_addextendedproperty N'MS_Description', 'SKUParm', 'SCHEMA', N'DBO', 'TABLE', N'StockTakeSheetParameters', 'COLUMN', N'SKUParm'
+				
+END
+
+
+IF NOT EXISTS (SELECT * FROM sys.columns WHERE Name = 'Userdefine01' AND Object_ID = Object_ID('dbo.StockTakeSheetParameters'))
+BEGIN
+	ALTER TABLE dbo.StockTakeSheetParameters ADD [Userdefine01] [nvarchar](50) NULL CONSTRAINT [DF_StockTakeSheetParameters_Userdefine01]  DEFAULT ('');
+	EXEC sp_addextendedproperty N'MS_Description', 'Userdefine01', 'SCHEMA', N'DBO', 'TABLE', N'StockTakeSheetParameters', 'COLUMN', N'Userdefine01'
+				
+END
+
+IF NOT EXISTS (SELECT * FROM sys.columns WHERE Name = 'Userdefine02' AND Object_ID = Object_ID('dbo.StockTakeSheetParameters'))
+BEGIN
+	ALTER TABLE dbo.StockTakeSheetParameters ADD [Userdefine02] [nvarchar](50) NULL CONSTRAINT [DF_StockTakeSheetParameters_Userdefine02]  DEFAULT ('');
+	EXEC sp_addextendedproperty N'MS_Description', 'Userdefine02', 'SCHEMA', N'DBO', 'TABLE', N'StockTakeSheetParameters', 'COLUMN', N'Userdefine02'
+				
+END
+
+
+IF NOT EXISTS (SELECT * FROM sys.columns WHERE Name = 'Userdefine03' AND Object_ID = Object_ID('dbo.StockTakeSheetParameters'))
+BEGIN
+	ALTER TABLE dbo.StockTakeSheetParameters ADD [Userdefine03] [nvarchar](50) NULL CONSTRAINT [DF_StockTakeSheetParameters_Userdefine03]  DEFAULT ('');
+	EXEC sp_addextendedproperty N'MS_Description', 'Userdefine03', 'SCHEMA', N'DBO', 'TABLE', N'StockTakeSheetParameters', 'COLUMN', N'Userdefine03'
+				
+END
+
+IF NOT EXISTS (SELECT * FROM sys.columns WHERE Name = 'Userdefine04' AND Object_ID = Object_ID('dbo.StockTakeSheetParameters'))
+BEGIN
+	ALTER TABLE dbo.StockTakeSheetParameters ADD [Userdefine04] [nvarchar](50) NULL CONSTRAINT [DF_StockTakeSheetParameters_Userdefine04]  DEFAULT ('');
+	EXEC sp_addextendedproperty N'MS_Description', 'Userdefine04', 'SCHEMA', N'DBO', 'TABLE', N'StockTakeSheetParameters', 'COLUMN', N'Userdefine04'
+				
+END
+
+IF NOT EXISTS (SELECT * FROM sys.columns WHERE Name = 'Userdefine05' AND Object_ID = Object_ID('dbo.StockTakeSheetParameters'))
+BEGIN
+	ALTER TABLE dbo.StockTakeSheetParameters ADD [Userdefine05] [nvarchar](50) NULL CONSTRAINT [DF_StockTakeSheetParameters_Userdefine05]  DEFAULT ('');
+	EXEC sp_addextendedproperty N'MS_Description', 'Userdefine05', 'SCHEMA', N'DBO', 'TABLE', N'StockTakeSheetParameters', 'COLUMN', N'Userdefine05'
+				
+END
+
+
+IF NOT EXISTS (SELECT * FROM sys.columns WHERE Name = 'Userdefine06' AND Object_ID = Object_ID('dbo.StockTakeSheetParameters'))
+BEGIN
+	ALTER TABLE dbo.StockTakeSheetParameters ADD [Userdefine06]  [datetime] NULL CONSTRAINT [DF_StockTakeSheetParameters_Userdefine06]  DEFAULT ('');
+	EXEC sp_addextendedproperty N'MS_Description', 'Userdefine06', 'SCHEMA', N'DBO', 'TABLE', N'StockTakeSheetParameters', 'COLUMN', N'Userdefine06'
+				
+END
+
+IF NOT EXISTS (SELECT * FROM sys.columns WHERE Name = 'Userdefine07' AND Object_ID = Object_ID('dbo.StockTakeSheetParameters'))
+BEGIN
+	ALTER TABLE dbo.StockTakeSheetParameters ADD [Userdefine07]  [datetime] NULL CONSTRAINT [DF_StockTakeSheetParameters_Userdefine07]  DEFAULT ('');
+	EXEC sp_addextendedproperty N'MS_Description', 'Userdefine07', 'SCHEMA', N'DBO', 'TABLE', N'StockTakeSheetParameters', 'COLUMN', N'Userdefine07'
+				
+END
+
+
+IF NOT EXISTS (SELECT * FROM sys.columns WHERE Name = 'Userdefine08' AND Object_ID = Object_ID('dbo.StockTakeSheetParameters'))
+BEGIN
+	ALTER TABLE dbo.StockTakeSheetParameters ADD [Userdefine08] [nvarchar](50) NULL CONSTRAINT [DF_StockTakeSheetParameters_Userdefine08]  DEFAULT ('');
+	EXEC sp_addextendedproperty N'MS_Description', 'Userdefine08', 'SCHEMA', N'DBO', 'TABLE', N'StockTakeSheetParameters', 'COLUMN', N'Userdefine08'
+				
+END
+
+
+IF NOT EXISTS (SELECT * FROM sys.columns WHERE Name = 'Userdefine09' AND Object_ID = Object_ID('dbo.StockTakeSheetParameters'))
+BEGIN
+	ALTER TABLE dbo.StockTakeSheetParameters ADD [Userdefine09] [nvarchar](50) NULL CONSTRAINT [DF_StockTakeSheetParameters_Userdefine09]  DEFAULT ('');
+	EXEC sp_addextendedproperty N'MS_Description', 'Userdefine09', 'SCHEMA', N'DBO', 'TABLE', N'StockTakeSheetParameters', 'COLUMN', N'Userdefine09'
+				
+END
+
+
+IF NOT EXISTS (SELECT * FROM sys.columns WHERE Name = 'Userdefine10' AND Object_ID = Object_ID('dbo.StockTakeSheetParameters'))
+BEGIN
+	ALTER TABLE dbo.StockTakeSheetParameters ADD [Userdefine10] [nvarchar](50) NULL CONSTRAINT [DF_StockTakeSheetParameters_Userdefine10]  DEFAULT ('');
+	EXEC sp_addextendedproperty N'MS_Description', 'Userdefine10', 'SCHEMA', N'DBO', 'TABLE', N'StockTakeSheetParameters', 'COLUMN', N'Userdefine10'
+				
+END
+
+
+END

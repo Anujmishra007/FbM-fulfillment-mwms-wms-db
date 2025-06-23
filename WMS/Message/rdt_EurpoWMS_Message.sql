@@ -74,9 +74,17 @@ execute rdt.rdtAddMsg 217968, 10, '217968UPD PDInfoFail',      'us_english'
 execute rdt.rdtAddMsg 217969, 10, '217969OrderIsLoaded',       'us_english'
 execute rdt.rdtAddMsg 217970, 10, '217970KeepCondEmpty',       'us_english'
 execute rdt.rdtAddMsg 217971, 10, '217971BadFormat/Len',       'us_english'
-execute rdt.rdtAddMsg 217972, 10, '217972IDinUse',              'us_english'
+execute rdt.rdtAddMsg 217972, 10, '217972IDinUse',             'us_english'
 
+execute rdt.rdtAddMsg 218074, 10, '218074Lottable03NotExists',             'us_english', 600, 0, '218074 Lottable03 Not Exist'
+execute rdt.rdtAddMsg 217975, 10, '217975Lottable03Mismatch ',             'us_english', 600, 0, '218075 Lottable03 Mismatch'
+execute rdt.rdtAddMsg 217976, 10, '217976LPNUsedDiffPO',                   'us_english', 600, 0, '218076 LPN Used Diff PO'
+execute rdt.rdtAddMsg 217977, 10, '217977OverReceipt',                     'us_english', 600, 0, '218077 Over Receipt'
 
+execute rdt.rdtAddMsg 218003, 10, '218003Multi BU on ID',                  'us_english', 600, 0, '218003 Multi BU on ID'
+
+execute rdt.rdtAddMsg 218044, 10, '218044 LPN exists in inv',              'us_english', 600, 0, '218044 LPN exists in inv'
+execute rdt.rdtAddMsg 218045, 10, '218045 LPN exists in inv',              'us_english', 600, 0, '218045 Multi BU on ID'
 
 SELECT * FROM rdt.rdtMsg WHERE Message_ID BETWEEN 217901 AND 218400
 

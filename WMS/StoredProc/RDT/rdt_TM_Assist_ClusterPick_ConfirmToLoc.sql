@@ -7,17 +7,18 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-/******************************************************************************/    
-/* Store procedure: rdt_TM_Assist_ClusterPick_ConfirmToLoc                    */    
-/* Copyright      : LF Logistics                                              */    
-/*                                                                            */    
-/* Purpose: Confirm To Loc                                                    */  
-/*                                                                            */  
-/* Called from: rdtfnc_TM_Assist_ClusterPick                                  */  
-/*                                                                            */  
-/* Date         Rev  Author   Purposes                                        */  
-/* 2020-07-26   1.0  James    WMS-17335 Created                               */  
-/******************************************************************************/    
+/*********************************************************************************/    
+/* Store procedure: rdt_TM_Assist_ClusterPick_ConfirmToLoc                       */    
+/* Copyright      : LF Logistics                                                 */    
+/*                                                                               */    
+/* Purpose: Confirm To Loc                                                       */  
+/*                                                                               */  
+/* Called from: rdtfnc_TM_Assist_ClusterPick                                     */  
+/*                                                                               */  
+/* Date         Rev  Author   Purposes                                           */  
+/* 2020-07-26   1.0  James    WMS-17335 Created                                  */
+/* 2024-12-17   1.1  JCH507   UWP-28528 Donot move inventory when task qty = 0   */  
+/*********************************************************************************/    
     
 CREATE PROC rdt.rdt_TM_Assist_ClusterPick_ConfirmToLoc (    
     @nMobile         INT,    
@@ -139,27 +140,30 @@ BEGIN
         
       IF @cConfirmToLocMoveInventory = '1'  
       BEGIN  
-         -- Move inventory  
-         EXECUTE rdt.rdt_Move  
-            @nMobile     = @nMobile,  
-            @cLangCode   = @cLangCode,  
-            @nErrNo      = @nErrNo  OUTPUT,  
-            @cErrMsg     = @cErrMsg OUTPUT,  
-            @cSourceType = 'ASTCPK_ConfirmToLoc',  
-            @cStorerKey  = @cStorerKey,  
-            @cFacility   = @cFacility,  
-            @cFromLOC    = @cFromLOC,  
-            @cToLOC      = @cToLoc,  
-            @cFromID     = @cFromID,  
-            @cToID       = @cFromID,  
-            @cSKU        = @cSKU,  
-            @nQTY        = @nQTY,  
-            @nQTYPick    = @nQTY,  
-            @cDropID     = @cDropID,  
-            @nFunc       = @nFunc  
-        
-         IF @nErrNo <> 0  
-            GOTO RollBackTran  
+         -- Move inventory
+         IF @nQty > 0 --V1.1
+         BEGIN
+            EXECUTE rdt.rdt_Move  
+               @nMobile     = @nMobile,  
+               @cLangCode   = @cLangCode,  
+               @nErrNo      = @nErrNo  OUTPUT,  
+               @cErrMsg     = @cErrMsg OUTPUT,  
+               @cSourceType = 'ASTCPK_ConfirmToLoc',  
+               @cStorerKey  = @cStorerKey,  
+               @cFacility   = @cFacility,  
+               @cFromLOC    = @cFromLOC,  
+               @cToLOC      = @cToLoc,  
+               @cFromID     = @cFromID,  
+               @cToID       = @cFromID,  
+               @cSKU        = @cSKU,  
+               @nQTY        = @nQTY,  
+               @nQTYPick    = @nQTY,  
+               @cDropID     = @cDropID,  
+               @nFunc       = @nFunc  
+         
+            IF @nErrNo <> 0  
+               GOTO RollBackTran
+         END --Qty > 0 --V1.1 
       END  
   
       FETCH NEXT FROM @cur INTO @cTaskKey, @cFromLOC, @cFromID, @cSKU, @nQty, @cDropID  

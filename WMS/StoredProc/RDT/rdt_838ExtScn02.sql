@@ -12,7 +12,9 @@ GO
 /* Modifications log:                                                   */  
 /*                                                                      */  
 /* Date       Rev  Author     Purposes                                  */  
-/* 2024-06-27 1.0  JACKC      FCR-392. Created                          */  
+/* 2024-06-27 1.0  JACKC      FCR-392. Created                          */
+/* 2024-10-24 1.1  JACKC      FCR-392 Enhancement Handel Extar 0s before*/ 
+/*                               cartonID                               */  
 /************************************************************************/  
   
 CREATE OR ALTER PROC [RDT].[rdt_838ExtScn02] (
@@ -242,9 +244,14 @@ BEGIN
                SET @cPickSlipNo = ''
                SET @nCartonNo = 0
 
-               SET @cLabelNo = @cInField01
+               --V1.1 start
+               --SET @cLabelNo = STUFF(@cInField01, 1, 2, '')
+               SELECT @cLabelNo = CASE WHEN LEN(@cInField01) = 20 AND @cInField01 LIKE '00%'
+                                    THEN STUFF(@cInField01,1,2,'')
+                                    ELSE @cInField01
+                                  END
+               --V1.1 End
                
-
                -- Check blank
                IF @cLabelNo = ''
                BEGIN

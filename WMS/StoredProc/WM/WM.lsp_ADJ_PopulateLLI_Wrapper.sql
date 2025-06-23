@@ -12,7 +12,7 @@ GO
 /*                                                                      */
 /* Called By: SCE                                                       */                                                                                  
 /*          :                                                           */                                                                                  
-/* PVCS Version: 1.0                                                    */                                                                                  
+/* PVCS Version: 1.1                                                    */                                                                                  
 /*                                                                      */                                                                                  
 /* Version: 8.0                                                         */                                                                                  
 /*                                                                      */                                                                                  
@@ -21,6 +21,9 @@ GO
 /* Updates:                                                             */                                                                                  
 /* Date        Author   Ver.  Purposes                                  */
 /* 2023-07-05  Wan      1.0   Created & DevOps Combine Script           */
+/* 2024-08-03  Wan01    1.1   LFWM-4397 - RG [GIT] Serial Number Solution*/
+/*                            - Adjustment by Serial Number             */
+/* 2024-06-13  SSA01    1.2   FCR-3982 - Added Pallettype to Adjustment */
 /************************************************************************/                                                                                  
 CREATE OR ALTER PROC [WM].[lsp_ADJ_PopulateLLI_Wrapper]                                                                                                                     
    @c_AdjustmentKey        NVARCHAR(10)         
@@ -39,9 +42,9 @@ BEGIN
 
    DECLARE  @n_StartTCnt                  INT            = @@TRANCOUNT  
          ,  @n_Continue                   INT            = 1
-         ,  @c_SelectSQL                  NVARCHAR(1000) = ''
-         
-
+         ,  @c_SelectSQL                  NVARCHAR(4000) = ''                       --(Wan01)
+         ,  @c_SelectSQLParms             NVARCHAR(1000) = ''                       --(Wan01)
+ 
          ,  @n_AdjLineNo                  INT            = 0
          ,  @c_Facility                   NVARCHAR(10)   = ''
          ,  @c_AdjustmentLineNumber       NVARCHAR(5)    = ''
@@ -68,12 +71,18 @@ BEGIN
          ,  @dt_Lottable13                DATETIME       = NULL
          ,  @dt_Lottable14                DATETIME       = NULL
          ,  @dt_Lottable15                DATETIME       = NULL
+         ,  @c_SerialNoCapture            NVARCHAR(1)    = ''                       --(Wan01)
+         ,  @c_SerialNoKey                NVARCHAR(10)   = ''                       --(Wan01)
+         ,  @c_SerialNo                   NVARCHAR(50)   = ''                       --(Wan01)
+         ,  @n_Qty                        INT            = 0                        --(Wan01)
+         ,  @n_RowCount                   INT            = 0                        --(Wan01)
          
          ,  @c_Channel_Default            NVARCHAR(20)   = ''      
          ,  @c_Channel                    NVARCHAR(20)   = ''                      
          ,  @c_ChannelInventoryMgmt       NVARCHAR(10)   = '' 
          ,  @c_FinalizeAdjustment         NVARCHAR(10)   = ''  
-         ,  @c_AdjStatusControl           NVARCHAR(10)   = ''   
+         ,  @c_AdjStatusControl           NVARCHAR(10)   = ''
+         ,  @c_ASNFizUpdLotToSerialNo     NVARCHAR(10)   = ''                       --(Wan01)
          
          ,  @c_TableName                  NVARCHAR(50)   = 'AdjustmentDetail'
          ,  @c_SourceType                 NVARCHAR(50)   = 'lsp_ADJ_PopulateLLI_Wrapper' 
@@ -82,6 +91,7 @@ BEGIN
          ,  @c_Refkey3                    NVARCHAR(20)   = ''
          ,  @c_WriteType                  NVARCHAR(50)   = ''
          ,  @n_LogWarningNo               INT            = 0
+         ,  @c_PalletType                 NVARCHAR(10)   = ''                      --(SSA01)
          
          ,  @CUR_LLI                      CURSOR
          ,  @CUR_ERRLIST                  CURSOR   
@@ -126,6 +136,8 @@ BEGIN
    
       SELECT @c_FinalizeAdjustment = fsgr.Authority FROM dbo.fnc_SelectGetRight (@c_Facility, @c_Storerkey,'','FinalizeAdjustment') AS fsgr
       SELECT @c_AdjStatusControl = fsgr.Authority FROM dbo.fnc_SelectGetRight (@c_Facility, @c_Storerkey,'','AdjStatusControl') AS fsgr
+      SELECT @c_ASNFizUpdLotToSerialNo = fsgr.Authority                                            --(Wan01)
+      FROM dbo.fnc_SelectGetRight(@c_Facility, @c_Storerkey, '', 'ASNFizUpdLotToSerialNo')AS fsgr  --(Wan01)
 
       IF @c_FinalizeAdjustment IN (0,'') AND @c_AdjStatusControl IN (0,'')
       BEGIN
@@ -182,6 +194,16 @@ BEGIN
       
       INSERT INTO #tLLI ( Lot, Loc, ID ) 
       EXEC sp_ExecuteSQL @c_SearchSQL
+
+      IF OBJECT_ID('tempdb..#tSN', 'U') IS NOT NULL                                 --(Wan01) - START
+      BEGIN 
+         DROP TABLE #tSN
+      END
+      
+      CREATE TABLE #tSN 
+         (  SerialNoKey NVARCHAR(10)   NOT NULL DEFAULT('')       PRIMARY KEY
+         ,  SerialNo    NVARCHAR(50)   NOT NULL DEFAULT('')   
+         )                                                                          --(Wan01) - END
                 
       SELECT TOP 1 @n_AdjLineNo = CONVERT(INT, a.AdjustmentLineNumber)
       FROM dbo.ADJUSTMENTDETAIL AS a (NOLOCK)
@@ -215,7 +237,9 @@ BEGIN
             ,l.Lottable13
             ,l.Lottable14
             ,l.Lottable15
-      FROM #tLLI AS tl (NOLOCK) 
+            ,s.SerialNoCapture                                                      --(Wan01)
+            ,ltlci.PalletType                                                       --(SSA01)
+      FROM #tLLI AS tl (NOLOCK)
       JOIN dbo.LOTxLOCxID AS ltlci (NOLOCK) ON  ltlci.Lot = tl.Lot 
                                             AND ltlci.Loc = tl.Loc 
                                             AND ltlci.Id = tl.ID
@@ -247,7 +271,9 @@ BEGIN
                                     ,@c_Lottable12   
                                     ,@dt_Lottable13  
                                     ,@dt_Lottable14  
-                                    ,@dt_Lottable15  
+                                    ,@dt_Lottable15 
+                                    ,@c_SerialNoCapture                             --(Wan01)
+                                    ,@c_PalletType                                  --(SSA01)
       WHILE @@FETCH_STATUS <> -1 
       BEGIN
          IF @c_ChannelInventoryMgmt = '1'
@@ -263,116 +289,203 @@ BEGIN
                SET @c_Channel = @c_Channel_Default
             END
          END
+
+         SET @n_Qty = @n_QtyAvailable                                               --(Wan01) - START
+         IF @c_SerialNoCapture IN ('1', '2') AND
+            @c_ASNFizUpdLotToSerialNo = '1'
+         BEGIN 
+            TRUNCATE TABLE #tSN;
+
+            SET @c_SelectSQL =
+                  N'SELECT TOP (@n_QtyAvailable)'
+                  +'  sn.SerialNoKey'
+                  +', sn.SerialNo'
+                  +' FROM SerialNo sn (NOLOCK)'
+                  +' WHERE sn.StorerKey = @c_Storerkey'
+                  +' AND sn.Sku = @c_Sku'
+                  +' AND sn.Lot = @c_Lot'
+                  +' AND sn.ID  = @c_ID'
+                  +' AND sn.[Status] = ''1'''
+                  +' AND sn.Qty = 1'
+                  +' AND NOT EXISTS ( SELECT 1 FROM ADJUSTMENTDETAIL ad (NOLOCK)'
+                  +                 ' WHERE ad.AdjustmentKey = @c_AdjustmentKey' 
+                  +                 ' AND ad.SerialNo = sn.SerialNo'
+                  +                 ' AND ad.SerialNo <> '''''
+                  +                 ' )'
+
+                  +' ORDER BY sn.SerialNoKey'
+            
+            SET @c_SelectSQLParms = N'@n_QtyAvailable    INT'
+                                  + ',@c_Storerkey       NVARCHAR(15)'
+                                  + ',@c_Sku             NVARCHAR(20)'
+                                  + ',@c_ID              NVARCHAR(18)'
+                                  + ',@c_Lot             NVARCHAR(18)'
+                                  + ',@c_AdjustmentKey   NVARCHAR(10)'
+                                    
+            INSERT INTO #tSN (SerialNoKey, SerialNo) 
+            EXEC sp_ExecuteSQL @c_SelectSQL
+                              ,@c_SelectSQLParms
+                              ,@n_QtyAvailable
+                              ,@c_Storerkey
+                              ,@c_Sku             
+                              ,@c_ID              
+                              ,@c_Lot             
+                              ,@c_AdjustmentKey  
+                              
+            SET @n_RowCount = @@ROWCOUNT    
+            
+            IF @n_RowCount < @n_QtyAvailable                                       
+            BEGIN
+               SET @n_Err    = 0
+               SET @c_ErrMsg = N': Warning: Inventory does not tally with SerialNo records. Proceed with caution!!!'
+                             + '. (lsp_ADJ_PopulateLLI_Wrapper)' 
+
+               INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
+               VALUES (@c_TableName, @c_SourceType, @c_AdjustmentKey, '', '', 'WARNING', 0, @n_Err, @c_Errmsg)  
+            END
+
+            SET @n_Qty = -1
+         END
+
+         SET @c_SerialNoKey = ''
+         WHILE @n_QtyAvailable > 0
+         BEGIN
+            IF @c_SerialNoCapture IN ('1', '2') AND @c_ASNFizUpdLotToSerialNo = '1'                                   
+            BEGIN 
+               SET @c_SerialNo = ''
+               SELECT TOP 1 
+                      @c_SerialNoKey =  t.SerialNoKey
+                     ,@c_SerialNo    =  t.SerialNo 
+               FROM #tSN t
+               WHERE t.SerialNoKey > @c_SerialNoKey
+               ORDER BY t.SerialNoKey
+
+               SET @n_QtyAvailable = @n_QtyAvailable - 1
+
+               IF @c_SerialNo = ''
+               BEGIN
+                  SET @n_Qty = 1
+               END
+            END
+            ELSE
+            BEGIN
+               SET @n_QtyAvailable = 0
+            END
+            
+            SET @n_AdjLineNo = @n_AdjLineNo + 1
+            SET @c_AdjustmentLineNumber = RIGHT('00000' + CONVERT(NVARCHAR(5), @n_AdjLineNo),5)
          
-         SET @n_AdjLineNo = @n_AdjLineNo + 1
-         SET @c_AdjustmentLineNumber = RIGHT('00000' + CONVERT(NVARCHAR(5), @n_AdjLineNo),5)
-         
-         INSERT INTO dbo.ADJUSTMENTDETAIL
-             (
-                 AdjustmentKey
-             ,   AdjustmentLineNumber 
-             ,   StorerKey 
-             ,   Sku
-             ,   Lot
-             ,   Loc
-             ,   Id
-             ,   ReasonCode
-             ,   UOM
-             ,   PackKey
-             ,   Qty
-             ,   CaseCnt
-             ,   InnerPack
-             ,   Pallet
-             ,   Cube
-             ,   GrossWgt
-             ,   NetWgt
-             ,   OtherUnit1
-             ,   OtherUnit2
-             ,   ItrnKey
-             ,   EffectiveDate
-             ,   UserDefine01
-             ,   UserDefine02
-             ,   UserDefine03
-             ,   UserDefine04
-             ,   UserDefine05
-             ,   UserDefine06
-             ,   UserDefine07
-             ,   UserDefine08
-             ,   UserDefine09
-             ,   UserDefine10
-             ,   FinalizedFlag
-             ,   Lottable01
-             ,   Lottable02
-             ,   Lottable03
-             ,   Lottable04
-             ,   Lottable05
-             ,   Lottable06
-             ,   Lottable07
-             ,   Lottable08
-             ,   Lottable09
-             ,   Lottable10
-             ,   Lottable11
-             ,   Lottable12
-             ,   Lottable13
-             ,   Lottable14
-             ,   Lottable15 
-             ,   UCCNo 
-             ,   Channel 
-             ,   Channel_ID
-             )
-         VALUES 
-             (   @c_AdjustmentKey
-             ,   @c_AdjustmentLineNumber
-             ,   @c_Storerkey
-             ,   @c_Sku
-             ,   @c_Lot
-             ,   @c_Loc
-             ,   @c_ID
-             ,   ''                          --ReasonCode 
-             ,   @c_PackUOM3
-             ,   @c_PackKey
-             ,   @n_QtyAvailable          
-             ,   0.00                        --CaseCnt  
-             ,   0.00                        --InnerPack
-             ,   0.00                        --Pallet 
-             ,   0.00                        --CUBE  
-             ,   0.00                        --GrossWgt
-             ,   0.00                        --NetWgt  
-             ,   0.00                        --OtherUnit1           
-             ,   0.00                        --OtherUnit2
-             ,   ''                          --ItrnKey
-             ,   GETDATE()                   --EffectiveDate
-             ,   ''                          --UserDefine01 
-             ,   ''                          --UserDefine02 
-             ,   ''                          --UserDefine03 
-             ,   ''                          --UserDefine04 
-             ,   ''                          --UserDefine05 
-             ,   ''                          --UserDefine06 
-             ,   ''                          --UserDefine07 
-             ,   ''                          --UserDefine08 
-             ,   ''                          --UserDefine09 
-             ,   ''                          --UserDefine10 
-             ,   'N'                         --FinalizedFlag 
-             ,   @c_Lottable01
-             ,   @c_Lottable02
-             ,   @c_Lottable03
-             ,   @dt_Lottable04
-             ,   @dt_Lottable05
-             ,   @c_Lottable06
-             ,   @c_Lottable07
-             ,   @c_Lottable08
-             ,   @c_Lottable09
-             ,   @c_Lottable10
-             ,   @c_Lottable11
-             ,   @c_Lottable12
-             ,   @dt_Lottable13
-             ,   @dt_Lottable14
-             ,   @dt_Lottable15
-             ,   ''                          --UCCNo  
-             ,   @c_Channel                  --Channel  
-             ,   0                           --Channel_ID  
-             )
-     
+            INSERT INTO dbo.ADJUSTMENTDETAIL
+                (
+                    AdjustmentKey
+                ,   AdjustmentLineNumber 
+                ,   StorerKey 
+                ,   Sku
+                ,   Lot
+                ,   Loc
+                ,   Id
+                ,   ReasonCode
+                ,   UOM
+                ,   PackKey
+                ,   Qty
+                ,   CaseCnt
+                ,   InnerPack
+                ,   Pallet
+                ,   Cube
+                ,   GrossWgt
+                ,   NetWgt
+                ,   OtherUnit1
+                ,   OtherUnit2
+                ,   ItrnKey
+                ,   EffectiveDate
+                ,   UserDefine01
+                ,   UserDefine02
+                ,   UserDefine03
+                ,   UserDefine04
+                ,   UserDefine05
+                ,   UserDefine06
+                ,   UserDefine07
+                ,   UserDefine08
+                ,   UserDefine09
+                ,   UserDefine10
+                ,   FinalizedFlag
+                ,   Lottable01
+                ,   Lottable02
+                ,   Lottable03
+                ,   Lottable04
+                ,   Lottable05
+                ,   Lottable06
+                ,   Lottable07
+                ,   Lottable08
+                ,   Lottable09
+                ,   Lottable10
+                ,   Lottable11
+                ,   Lottable12
+                ,   Lottable13
+                ,   Lottable14
+                ,   Lottable15 
+                ,   UCCNo 
+                ,   Channel 
+                ,   Channel_ID
+                ,   SerialNo                                                        --(Wan01)
+                ,   PalletType                                                      --(SSA01)
+                )
+            VALUES 
+                (   @c_AdjustmentKey
+                ,   @c_AdjustmentLineNumber
+                ,   @c_Storerkey
+                ,   @c_Sku
+                ,   @c_Lot
+                ,   @c_Loc
+                ,   @c_ID
+                ,   ''                          --ReasonCode 
+                ,   @c_PackUOM3
+                ,   @c_PackKey
+                ,   @n_Qty                                                          --(Wan01)           
+                ,   0.00                        --CaseCnt  
+                ,   0.00                        --InnerPack
+                ,   0.00                        --Pallet 
+                ,   0.00                        --CUBE  
+                ,   0.00                        --GrossWgt
+                ,   0.00                        --NetWgt  
+                ,   0.00                        --OtherUnit1           
+                ,   0.00                        --OtherUnit2
+                ,   ''                          --ItrnKey
+                ,   GETDATE()                   --EffectiveDate
+                ,   ''                          --UserDefine01 
+                ,   ''                          --UserDefine02 
+                ,   ''                          --UserDefine03 
+                ,   ''                          --UserDefine04 
+                ,   ''                          --UserDefine05 
+                ,   ''                          --UserDefine06 
+                ,   ''                          --UserDefine07 
+                ,   ''                          --UserDefine08 
+                ,   ''                          --UserDefine09 
+                ,   ''                          --UserDefine10 
+                ,   'N'                         --FinalizedFlag 
+                ,   @c_Lottable01
+                ,   @c_Lottable02
+                ,   @c_Lottable03
+                ,   @dt_Lottable04
+                ,   @dt_Lottable05
+                ,   @c_Lottable06
+                ,   @c_Lottable07
+                ,   @c_Lottable08
+                ,   @c_Lottable09
+                ,   @c_Lottable10
+                ,   @c_Lottable11
+                ,   @c_Lottable12
+                ,   @dt_Lottable13
+                ,   @dt_Lottable14
+                ,   @dt_Lottable15
+                ,   ''                          --UCCNo  
+                ,   @c_Channel                  --Channel  
+                ,   0                           --Channel_ID 
+                ,   @c_SerialNo                                                     --(Wan01)
+                ,   @c_PalletType                                                   --(SSA01)
+                )
+         END                                                                        --(Wan01) - END
+
          FETCH NEXT FROM  @CUR_LLI INTO @c_Storerkey
                                      ,  @c_Sku
                                      ,  @c_Packkey
@@ -395,7 +508,9 @@ BEGIN
                                      ,  @c_Lottable12   
                                      ,  @dt_Lottable13  
                                      ,  @dt_Lottable14  
-                                     ,  @dt_Lottable15 
+                                     ,  @dt_Lottable15
+                                     ,  @c_SerialNoCapture                          --(Wan01)
+                                     ,  @c_PalletType                               --(SSA01)
       END
       CLOSE @CUR_LLI
       DEALLOCATE @CUR_LLI
@@ -418,6 +533,11 @@ EXIT_SP:
    IF OBJECT_ID('tempdb..#tLLI', 'U') IS NOT NULL
    BEGIN
       DROP TABLE #tLLI
+   END
+
+   IF OBJECT_ID('tempdb..#tSN', 'U') IS NOT NULL
+   BEGIN
+      DROP TABLE #tSN
    END
    
    IF @n_Continue=3  -- Error Occured - Process And Return

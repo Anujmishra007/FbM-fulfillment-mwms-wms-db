@@ -23,7 +23,8 @@ GO
 /* Updates:                                                             */  
 /* Date         Author    Ver.  Purposes                                */  
 /* 14-Apr-2023  CSCHONG   1.0   Devops Scripts Combine                  */  
-/* 10-JUL-2023  CSCHONG   1.1   WMS-22018 revised field logic (CS01)    */  
+/* 10-JUL-2023  CSCHONG   1.1   WMS-22018 revised field logic (CS01)    */
+/* 22-Sep-2023  CSCHONG   1.2   WMS-23642 revised report logic (CS02)   */
 /************************************************************************/  
   
 CREATE  OR ALTER PROC isp_GENZPL02 (  
@@ -79,7 +80,7 @@ BEGIN
           @c_field21             NVARCHAR(150) = '',   --CS01  
           @c_field22             NVARCHAR(150) = '',  
           @c_field23             NVARCHAR(150) = '',  
-          @c_field24       NVARCHAR(150) = '',  
+          @c_field24             NVARCHAR(150) = '',  
           @c_field25             NVARCHAR(150) = '',  
           @c_field26             NVARCHAR(150) = '',  
           @c_field27             NVARCHAR(150) = '',  
@@ -94,7 +95,8 @@ BEGIN
           @c_long                NVARCHAR(500) = '',    --CS01  
           @c_short               NVARCHAR(10)  = '',    --CS01  
           @c_KeyName             NVARCHAR(18)  = '',    --CS01  
-          @c_RunningNo           NVARCHAR(10)  = ''     --CS01  
+          @c_RunningNo           NVARCHAR(10)  = ''     --CS01   
+          , @c_SkipCTNTRACK        NVARCHAR(1)   = 'N'    --CS02   
   
    SELECT @n_starttcnt=@@TRANCOUNT, @n_Continue = 1, @b_success = 1, @n_err = 0, @c_Errmsg = '', @c_ZPLCode = ''  
   
@@ -105,6 +107,20 @@ BEGIN
   
    SET @n_codelen = CAST(@c_codelen AS INT)  
   
+   --CS02 S
+    IF ISNULL(@c_Param05,'0') = '1'
+    BEGIN
+      SET @c_SkipCTNTRACK ='Y'
+
+      SELECT @c_field01 = ISNULL(CT.TrackingNo,'')
+      FROM dbo.CartonTrack CT WITH (NOLOCK)
+      WHERE CT.LabelNo=@c_Param02 AND CT.KeyName = @c_Param04
+
+    END
+
+   --CS02 E
+ IF @c_SkipCTNTRACK = 'N'      --CS02 S
+ BEGIN  
    --CS01 S  
     IF @c_short ='SSCC'  
     BEGIN  
@@ -129,7 +145,7 @@ BEGIN
     END  
   
    --CS01 E  
-  
+ END  --CS02 E 
   
   
    -- Parameter mapping  
@@ -176,43 +192,45 @@ BEGIN
    AND OH.StorerKey = @c_Param04  
   
   
-   SET @c_PrnTemplate = REPLACE (@c_PrnTemplate, '<Field01>', RTRIM( @c_field01))  
-   SET @c_PrnTemplate = REPLACE (@c_PrnTemplate, '<Field02>', RTRIM( @c_field02))  
-   SET @c_PrnTemplate = REPLACE (@c_PrnTemplate, '<Field03>', RTRIM( @c_field03))  
-   SET @c_PrnTemplate = REPLACE (@c_PrnTemplate, '<Field04>', RTRIM( @c_field04))  
-   SET @c_PrnTemplate = REPLACE (@c_PrnTemplate, '<Field05>', RTRIM( @c_field05))  
-   SET @c_PrnTemplate = REPLACE (@c_PrnTemplate, '<Field06>', RTRIM( @c_field06))  
-   SET @c_PrnTemplate = REPLACE (@c_PrnTemplate, '<Field07>', RTRIM( @c_field07))  
-   SET @c_PrnTemplate = REPLACE (@c_PrnTemplate, '<Field08>', RTRIM( @c_field08))  
-   SET @c_PrnTemplate = REPLACE (@c_PrnTemplate, '<Field09>', RTRIM( @c_field09))  
-   SET @c_PrnTemplate = REPLACE (@c_PrnTemplate, '<Field10>', RTRIM( @c_field10))  
-   SET @c_PrnTemplate = REPLACE (@c_PrnTemplate, '<Field11>', RTRIM( @c_field11))  
-   SET @c_PrnTemplate = REPLACE (@c_PrnTemplate, '<Field12>', RTRIM( @c_field12))  
-   SET @c_PrnTemplate = REPLACE (@c_PrnTemplate, '<Field13>', RTRIM( @c_field13))  
-   SET @c_PrnTemplate = REPLACE (@c_PrnTemplate, '<Field14>', RTRIM( @c_field14))  
-   SET @c_PrnTemplate = REPLACE (@c_PrnTemplate, '<Field15>', RTRIM( @c_field15))  
-   SET @c_PrnTemplate = REPLACE (@c_PrnTemplate, '<Field16>', RTRIM( @c_field16))  
-   SET @c_PrnTemplate = REPLACE (@c_PrnTemplate, '<Field17>', RTRIM( @c_field17))  
+   SET @c_PrnTemplate = REPLACE (@c_PrnTemplate, '<Field01>', RTRIM( ISNULL( @c_field01,'')))  
+   SET @c_PrnTemplate = REPLACE (@c_PrnTemplate, '<Field02>', RTRIM( ISNULL( @c_field02,'')))  
+   SET @c_PrnTemplate = REPLACE (@c_PrnTemplate, '<Field03>', RTRIM( ISNULL( @c_field03,'')))  
+   SET @c_PrnTemplate = REPLACE (@c_PrnTemplate, '<Field04>', RTRIM( ISNULL( @c_field04,'')))  
+   SET @c_PrnTemplate = REPLACE (@c_PrnTemplate, '<Field05>', RTRIM( ISNULL( @c_field05,'')))  
+   SET @c_PrnTemplate = REPLACE (@c_PrnTemplate, '<Field06>', RTRIM( ISNULL( @c_field06,'')))  
+   SET @c_PrnTemplate = REPLACE (@c_PrnTemplate, '<Field07>', RTRIM( ISNULL( @c_field07,'')))  
+   SET @c_PrnTemplate = REPLACE (@c_PrnTemplate, '<Field08>', RTRIM( ISNULL( @c_field08,'')))  
+   SET @c_PrnTemplate = REPLACE (@c_PrnTemplate, '<Field09>', RTRIM( ISNULL( @c_field09,'')))  
+   SET @c_PrnTemplate = REPLACE (@c_PrnTemplate, '<Field10>', RTRIM( ISNULL( @c_field10,'')))  
+   SET @c_PrnTemplate = REPLACE (@c_PrnTemplate, '<Field11>', RTRIM( ISNULL( @c_field11,'')))  
+   SET @c_PrnTemplate = REPLACE (@c_PrnTemplate, '<Field12>', RTRIM( ISNULL( @c_field12,'')))  
+   SET @c_PrnTemplate = REPLACE (@c_PrnTemplate, '<Field13>', RTRIM( ISNULL( @c_field13,'')))  
+   SET @c_PrnTemplate = REPLACE (@c_PrnTemplate, '<Field14>', RTRIM( ISNULL( @c_field14,'')))  
+   SET @c_PrnTemplate = REPLACE (@c_PrnTemplate, '<Field15>', RTRIM( ISNULL( @c_field15,'')))  
+   SET @c_PrnTemplate = REPLACE (@c_PrnTemplate, '<Field16>', RTRIM( ISNULL( @c_field16,'')))  
+   SET @c_PrnTemplate = REPLACE (@c_PrnTemplate, '<Field17>', RTRIM( ISNULL( @c_field17,'')))  
    --CS01 S  
-   SET @c_PrnTemplate = REPLACE (@c_PrnTemplate, '<Field18>', RTRIM( @c_field18))  
-   SET @c_PrnTemplate = REPLACE (@c_PrnTemplate, '<Field19>', RTRIM( @c_field19))  
-   SET @c_PrnTemplate = REPLACE (@c_PrnTemplate, '<Field20>', RTRIM( @c_field20))  
-   SET @c_PrnTemplate = REPLACE (@c_PrnTemplate, '<Field21>', RTRIM( @c_field21))  
-   SET @c_PrnTemplate = REPLACE (@c_PrnTemplate, '<Field22>', RTRIM( @c_field22))  
-   SET @c_PrnTemplate = REPLACE (@c_PrnTemplate, '<Field23>', RTRIM( @c_field23))  
-   SET @c_PrnTemplate = REPLACE (@c_PrnTemplate, '<Field24>', RTRIM( @c_field24))  
-   SET @c_PrnTemplate = REPLACE (@c_PrnTemplate, '<Field25>', RTRIM( @c_field25))  
-   SET @c_PrnTemplate = REPLACE (@c_PrnTemplate, '<Field26>', RTRIM( @c_field26))  
-   SET @c_PrnTemplate = REPLACE (@c_PrnTemplate, '<Field27>', RTRIM( @c_field27))  
-   SET @c_PrnTemplate = REPLACE (@c_PrnTemplate, '<Field28>', RTRIM( @c_field28))  
-   SET @c_PrnTemplate = REPLACE (@c_PrnTemplate, '<Field29>', RTRIM( @c_field29))  
-   SET @c_PrnTemplate = REPLACE (@c_PrnTemplate, '<Field30>', RTRIM( @c_field30))  
-   SET @c_PrnTemplate = REPLACE (@c_PrnTemplate, '<Field31>', RTRIM( @c_field31))  
+   SET @c_PrnTemplate = REPLACE (@c_PrnTemplate, '<Field18>', RTRIM( ISNULL( @c_field18,'')))  
+   SET @c_PrnTemplate = REPLACE (@c_PrnTemplate, '<Field19>', RTRIM( ISNULL( @c_field19,'')))  
+   SET @c_PrnTemplate = REPLACE (@c_PrnTemplate, '<Field20>', RTRIM( ISNULL( @c_field20,'')))  
+   SET @c_PrnTemplate = REPLACE (@c_PrnTemplate, '<Field21>', RTRIM( ISNULL( @c_field21,'')))  
+   SET @c_PrnTemplate = REPLACE (@c_PrnTemplate, '<Field22>', RTRIM( ISNULL( @c_field22,'')))  
+   SET @c_PrnTemplate = REPLACE (@c_PrnTemplate, '<Field23>', RTRIM( ISNULL( @c_field23,'')))  
+   SET @c_PrnTemplate = REPLACE (@c_PrnTemplate, '<Field24>', RTRIM( ISNULL( @c_field24,'')))  
+   SET @c_PrnTemplate = REPLACE (@c_PrnTemplate, '<Field25>', RTRIM( ISNULL( @c_field25,'')))  
+   SET @c_PrnTemplate = REPLACE (@c_PrnTemplate, '<Field26>', RTRIM( ISNULL( @c_field26,'')))  
+   SET @c_PrnTemplate = REPLACE (@c_PrnTemplate, '<Field27>', RTRIM( ISNULL( @c_field27,'')))  
+   SET @c_PrnTemplate = REPLACE (@c_PrnTemplate, '<Field28>', RTRIM( ISNULL( @c_field28,'')))  
+   SET @c_PrnTemplate = REPLACE (@c_PrnTemplate, '<Field29>', RTRIM( ISNULL( @c_field29,'')))  
+   SET @c_PrnTemplate = REPLACE (@c_PrnTemplate, '<Field30>', RTRIM( ISNULL( @c_field30,'')))  
+   SET @c_PrnTemplate = REPLACE (@c_PrnTemplate, '<Field31>', RTRIM( ISNULL( @c_field31,'')))  
    --CS01 E  
   
    SET @c_ZPLCode = @c_PrnTemplate  
   
   
+IF @c_SkipCTNTRACK = 'N'      --CS02 S
+BEGIN  
    INSERT INTO CARTONTRACK (LabelNo, CarrierName, KeyName, TrackingNo, printdata,UDF03)  
     VALUES (@c_Param02, 'Internal', @c_Param04, @c_field01, @c_ZPLCode,@c_Externorderkey)       --CS01  
    --VALUES (@c_Param02, 'Internal', @c_Param04, (@c_Param02+@c_Param03), @c_ZPLCode)  
@@ -237,7 +255,7 @@ BEGIN
         IF NOT EXISTS (SELECT 1 FROM TransmitLog2 (NOLOCK)  
                             WHERE TableName = 'WSLABELAVB'  
                             AND Key1 = @c_Param01  
-                          AND Key2 = @c_Param03  
+                            AND Key2 = @c_Param03  
                             AND Key3 = @c_Param04)  
         BEGIN  
   
@@ -287,6 +305,7 @@ BEGIN
         END  
   
     END  
+    END  --CS02 E
 Quit_SP:  
   
 IF @n_continue=3  -- Error Occured - Process And Return  

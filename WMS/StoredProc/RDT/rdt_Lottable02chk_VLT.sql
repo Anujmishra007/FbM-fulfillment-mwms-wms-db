@@ -88,13 +88,13 @@ BEGIN
 
    SELECT TOP 1 @IVASCode = cast(Pallet as NVARCHAR(max))+' EA on PALLET' FROM PACK WITH (NOLOCK) WHERE PackKey = (SELECT TOP 1 PackKey FROM sku WITH (NOLOCK) WHERE sku = @cSKU AND StorerKey = @cStorerKey)
 
-   IF NOT EXISTS (SELECT TOP 1 1 FROM CODELKUP WITH (NOLOCK) WHERE LISTNAME = 'IVAS' AND Code = @IVASCode) AND @cStorerKey = 'HUSQ'
+   IF NOT EXISTS (SELECT TOP 1 1 FROM CODELKUP WITH (NOLOCK) WHERE LISTNAME = 'IVAS' AND Code = @IVASCode AND Storerkey = @cStorerKey) AND @cStorerKey = 'HUSQ'
    BEGIN
       INSERT INTO CODELKUP (LISTNAME, code, description, short, long, notes, AddDate, AddWho, EditDate, EditWho, TrafficCop, Notes2, Storerkey, UDF01, UDF02, UDF03, UDF04, UDF05, code2)
       VALUES ('IVAS',@IVASCode,@IVASCode,'','','',getdate(),   SUSER_NAME(),getdate(),SUSER_NAME(),NULL,'','HUSQ','','','','','','')
    END
 
-   IF @cStorerKey = 'HUSQ' AND isnull(@IVAS,'')='' 
+   IF @cStorerKey = 'HUSQ' --AND isnull(@IVAS,'')='' 
       UPDATE SKU
       SET IVAS = @IVASCode
       WHERE sku = @cSKU

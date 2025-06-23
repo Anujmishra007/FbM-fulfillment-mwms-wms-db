@@ -11,6 +11,8 @@ GO
 /* Date       Rev  Author   Purposes                                          */  
 /* 15-08-2024 1.0  yeekung  FCR-609 Created                                   */  
 /* 23-09-2024 1.1  yeekung  UWP-24488 Add Light on carton field (yeekung01)   */
+/* 26-10-2024 1.2  yeekung  INC7378172 Fix the Duplicate carton in same wave  */
+/* 20-12-2024 1.3  yeekung  FCR-1484 remove multi ppl scan same wave          */
 /******************************************************************************/  
   
 CREATE OR ALTER PROC [RDT].[rdt_PTLStation_Assign_WaveCarton04] (  
@@ -225,14 +227,36 @@ BEGIN
             GOTO Quit  
          END  
   
-         -- Check load assigned  
-         IF EXISTS( SELECT 1 FROM rdt.rdtPTLStationLog WITH (NOLOCK) WHERE WaveKey = @cWaveKey AND CartonID <> '' and Station NOT IN (@cStation1 ))  
+         ---- Check load assigned  
+         --IF EXISTS( SELECT 1 FROM rdt.rdtPTLStationLog WITH (NOLOCK) WHERE WaveKey = @cWaveKey AND CartonID <> '' and Station NOT IN (@cStation1 ))  
+         --BEGIN  
+         --   SET @nErrNo = 222653  
+         --   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --WaveKey Assigned
+         --   EXEC rdt.rdtSetFocusField @nMobile, 1 -- WaveKey  
+         --   GOTO Quit  
+         --END 
+
+          
+         -- Check load no task  
+         IF NOT EXISTS( SELECT TOP 1 1  
+            FROM LoadPlanDetail LPD WITH (NOLOCK)  
+               JOIN Orders O WITH (NOLOCK) ON (LPD.OrderKey = O.OrderKey)  
+               JOIN PickDetail PD WITH (NOLOCK) ON (O.OrderKey = PD.OrderKey)  
+            WHERE O.UserDefine09 = @cWaveKey  
+               AND O.StorerKey = @cStorerKey  
+               AND O.Facility = @cFacility  
+               AND O.Status <> 'CANC'  
+               AND O.SOStatus <> 'CANC'  
+               AND PD.Status  <= '5'
+               AND PD.CaseID = ''  
+               AND PD.QTY > 0)  
          BEGIN  
-            SET @nErrNo = 222653  
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --WaveKey Assigned
+            SET @nErrNo = 222655  
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Wave no task  
             EXEC rdt.rdtSetFocusField @nMobile, 1 -- WaveKey  
+            SET @cOutField01 = ''  
             GOTO Quit  
-         END  
+         END   
   
          IF EXISTS( SELECT 1 FROM rdt.rdtPTLStationLog WITH (NOLOCK)  
                     WHERE Station IN (@cStation1 ) )  
@@ -270,71 +294,77 @@ BEGIN
             SET @cFieldAttr01 = '' -- cWaveKey  
             GOTO Quit  
          END  
- 
-         -- Check load no task  
-         IF NOT EXISTS( SELECT TOP 1 1  
-            FROM LoadPlanDetail LPD WITH (NOLOCK)  
-               JOIN Orders O WITH (NOLOCK) ON (LPD.OrderKey = O.OrderKey)  
-               JOIN PickDetail PD WITH (NOLOCK) ON (O.OrderKey = PD.OrderKey)  
-            WHERE O.UserDefine09 = @cWaveKey  
-               AND O.StorerKey = @cStorerKey  
-               AND O.Facility = @cFacility  
-               AND O.Status <> 'CANC'  
-               AND O.SOStatus <> 'CANC'  
-               AND PD.Status  <= '5'
-               AND PD.CaseID = ''  
-               AND PD.QTY > 0)  
-         BEGIN  
-            SET @nErrNo = 222655  
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Wave no task  
-            EXEC rdt.rdtSetFocusField @nMobile, 1 -- WaveKey  
-            SET @cOutField01 = ''  
-            GOTO Quit  
-         END  
 
-         SET @curPTLAssign = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
-         SELECT WD.OrderKey --, SUM(PD.QTY) AS Qty  
-         FROM dbo.WaveDetail WD WITH (NOLOCK)  
-         INNER JOIN dbo.PickDetail PD WITH (NOLOCK) ON PD.OrderKey = WD.OrderKey  
-         WHERE WD.Wavekey = @cWaveKey  
-            AND PD.UOM <>'2'
-         GROUP BY WD.OrderKey  
-         ORDER BY SUM(Qty) DESC  
-  
-         OPEN @curPTLAssign  
-         FETCH NEXT FROM @curPTLAssign INTO @cOrderKey  
-         WHILE @@FETCH_STATUS = 0  
-         BEGIN  
-  
-            SELECT TOP 1 @cIPAddress = IPAddress,  
-                   @cPosition  = DevicePosition,  
-                   @cLoc       = Loc  
-            FROM dbo.DeviceProfile D  
-            WHERE DeviceID IN (@cStation1, @cStation2, @cStation3, @cStation4, @cStation5)  
-            AND DevicePosition NOT IN ( SELECT Position FROM rdt.rdtPTLStationLog WITH (NOLOCK)  
-                                        WHERE WaveKey = @cWaveKey )  
-			   AND Facility = @cFacility
-            ORDER BY CAST(D.logicalpos AS INT)
-  
-            -- Save assign  
-            INSERT INTO rdt.rdtPTLStationLog (Station, IPAddress, Position, CartonID, Method, WaveKey, OrderKey, StorerKey,loc)  
-            VALUES (@cStation1, @cIPAddress, @cPosition, '', @cMethod, @cWaveKey, @cOrderKey, @cStorerKey,@cLoc)  
-            IF @@ERROR <> 0  
+         IF NOT EXISTS (   SELECT 1 FROM rdt.rdtPTLStationLog WITH (NOLOCK)  
+                              WHERE Station IN (@cStation1, @cStation2, @cStation3, @cStation4, @cStation5)  
+                              AND WaveKey = @cWaveKey )
+         BEGIN
+ 
+            -- Check load no task  
+            IF NOT EXISTS( SELECT TOP 1 1  
+               FROM LoadPlanDetail LPD WITH (NOLOCK)  
+                  JOIN Orders O WITH (NOLOCK) ON (LPD.OrderKey = O.OrderKey)  
+                  JOIN PickDetail PD WITH (NOLOCK) ON (O.OrderKey = PD.OrderKey)  
+               WHERE O.UserDefine09 = @cWaveKey  
+                  AND O.StorerKey = @cStorerKey  
+                  AND O.Facility = @cFacility  
+                  AND O.Status <> 'CANC'  
+                  AND O.SOStatus <> 'CANC'  
+                  AND PD.Status  <= '5'
+                  AND PD.CaseID = ''  
+                  AND PD.QTY > 0)  
             BEGIN  
-               SET @nErrNo = 222656  
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INS Log Fail  
+               SET @nErrNo = 222655  
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Wave no task  
                EXEC rdt.rdtSetFocusField @nMobile, 1 -- WaveKey  
                SET @cOutField01 = ''  
                GOTO Quit  
             END  
-  
+
+            SET @curPTLAssign = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
+            SELECT WD.OrderKey --, SUM(PD.QTY) AS Qty  
+            FROM dbo.WaveDetail WD WITH (NOLOCK)  
+            INNER JOIN dbo.PickDetail PD WITH (NOLOCK) ON PD.OrderKey = WD.OrderKey  
+            WHERE WD.Wavekey = @cWaveKey  
+               AND PD.UOM <>'2'
+            GROUP BY WD.OrderKey  
+            ORDER BY SUM(Qty) DESC  
+   
+            OPEN @curPTLAssign  
             FETCH NEXT FROM @curPTLAssign INTO @cOrderKey  
-  
-         END  
-  
-         SET @cOutField01 = @cWaveKey  
-  
-         SET @nTotalLoad = @nTotalLoad + 1  
+            WHILE @@FETCH_STATUS = 0  
+            BEGIN  
+   
+               SELECT TOP 1 @cIPAddress = IPAddress,  
+                     @cPosition  = DevicePosition,  
+                     @cLoc       = Loc  
+               FROM dbo.DeviceProfile D  
+               WHERE DeviceID IN (@cStation1, @cStation2, @cStation3, @cStation4, @cStation5)  
+               AND DevicePosition NOT IN ( SELECT Position FROM rdt.rdtPTLStationLog WITH (NOLOCK)  
+                                          WHERE WaveKey = @cWaveKey )  
+               AND Facility = @cFacility
+               ORDER BY CAST(D.logicalpos AS INT)
+   
+               -- Save assign  
+               INSERT INTO rdt.rdtPTLStationLog (Station, IPAddress, Position, CartonID, Method, WaveKey, OrderKey, StorerKey,loc)  
+               VALUES (@cStation1, @cIPAddress, @cPosition, '', @cMethod, @cWaveKey, @cOrderKey, @cStorerKey,@cLoc)  
+               IF @@ERROR <> 0  
+               BEGIN  
+                  SET @nErrNo = 222656  
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INS Log Fail  
+                  EXEC rdt.rdtSetFocusField @nMobile, 1 -- WaveKey  
+                  SET @cOutField01 = ''  
+                  GOTO Quit  
+               END  
+   
+               FETCH NEXT FROM @curPTLAssign INTO @cOrderKey  
+   
+            END  
+   
+            SET @cOutField01 = @cWaveKey  
+   
+            SET @nTotalLoad = @nTotalLoad + 1  
+         END
   
          -- Get carton not yet assign  
          SELECT TOP 1  

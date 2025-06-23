@@ -21,6 +21,7 @@ GO
 /* Date       Author   Ver   Purposes                                    */ 
 /* 2023-03-29 Wan      1.0   Created & DevOps Combine Script             */
 /* 2024-05-24 CSCHONG  1.1   WMS-25490 revised field logic (CS01)        */ 
+/* 2024-12-10 YeeKung  1.2   FCR-1787 Add CMDSUMATRA (yeekung01)         */
 /*************************************************************************/   
 CREATE OR ALTER PROCEDURE [dbo].[isp_SubmitPrintJobToCloudPrint] 
    @c_DataProcess    NVARCHAR(50) = ''
@@ -193,10 +194,10 @@ BEGIN
                       + ' (' + @c_vbErrMsg + ')'   
       GOTO QUIT_SP  
    END 
-   
-   SET @c_CmdType    = UPPER(IIF(@c_PrintType NOT IN ('BARTENDER','ZPL'), 'PDF', @c_PrintType))
 
-   SET @c_B64FileSrc = IIF(@c_CmdType = 'PDF', @c_Data_Base64, '')
+   SET @c_CmdType    = UPPER(IIF(@c_PrintType NOT IN ('BARTENDER','ZPL','CMDSUMATRA'), 'PDF', @c_PrintType))
+
+   SET @c_B64FileSrc = IIF(@c_CmdType  IN ('PDF','CMDSUMATRA'), @c_Data_Base64, '')
       
    IF @c_B64FileSrc <> ''
    BEGIN

@@ -20,6 +20,8 @@ GO
 /*                            Add CloseMBOL                                */
 /*                            Add RefNo                                    */
 /*                            Add TrackCartonType                          */
+/* 2024-10-25   1.2  PXL009   FCR-759 ID and UCC Length Issue              */
+/* 2025-06-17   0.0  JackC   !!!Cutover. Use V0 repo for work!!!           */
 /***************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_CartonToMBOL] (
@@ -92,7 +94,9 @@ DECLARE
    @cAllowHeightZero    NVARCHAR( 1),
    @cCloseMBOL          NVARCHAR( 1),
    @cTrackCartonType    NVARCHAR( 1),
-   
+   @cBarcode            NVARCHAR( 60),
+   @cDecodeSP           NVARCHAR( 20),
+
    @cData1              NVARCHAR( 60),
    @cData2              NVARCHAR( 60),
    @cData3              NVARCHAR( 60),
@@ -167,6 +171,7 @@ SELECT
    @cAllowHeightZero    = V_String36,
    @cCloseMBOL          = V_String37,
    @cTrackCartonType    = V_String38,
+   @cDecodeSP           = V_String39,
 
    @cData1              = V_String41,
    @cData2              = V_String42,
@@ -248,6 +253,10 @@ BEGIN
    SET @cExtendedValidateSP = rdt.RDTGetConfig( @nFunc, 'ExtendedValidateSP', @cStorerKey)
    IF @cExtendedValidateSP = '0'
       SET @cExtendedValidateSP = ''
+
+   SET @cDecodeSP = rdt.RDTGetConfig( @nFunc, 'DecodeSP', @cStorerKey)
+   IF @cDecodeSP = '0'
+      SET @cDecodeSP = ''
 
    -- Logging
    EXEC RDT.rdt_STD_EventLog
@@ -568,6 +577,7 @@ BEGIN
    BEGIN
       -- Screen mapping
       SET @cCartonID = @cInField02
+      SET @cBarcode = @cInField02
 
       -- Check blank
       IF @cCartonID = ''
@@ -575,6 +585,23 @@ BEGIN
          SET @nErrNo = 198859
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Need carton ID
          GOTO Step_Carton_Fail
+      END
+
+      -- Decode
+      IF @cDecodeSP <> ''
+      BEGIN
+         -- Standard decode
+         IF @cDecodeSP = '1'
+         BEGIN
+            EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cBarcode,
+               @cUCCNo  = @cCartonID      OUTPUT,
+               @nErrNo  = @nErrNo         OUTPUT,
+               @cErrMsg = @cErrMsg        OUTPUT,
+               @cType   = 'UCCNo'
+
+               IF @nErrNo <> 0
+                  GOTO Step_Carton_Fail
+         END
       END
 
       -- Check format
@@ -1675,6 +1702,7 @@ BEGIN
       V_String36 = @cAllowHeightZero,
       V_String37 = @cCloseMBOL,
       V_String38 = @cTrackCartonType,
+      V_String39 = @cDecodeSP,
 
       V_String41 = @cData1,
       V_String42 = @cData2,

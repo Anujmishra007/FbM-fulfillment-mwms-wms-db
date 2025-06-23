@@ -14,9 +14,10 @@ GO
 /*                                                                            */
 /* Date       Rev  Author           Purposes                                  */
 /* 2024-05-31 1.0  Xiaotong Guan     UWP-21389 Created                        */
+/* 2024-11-05 1.1  Bruce Ping        UWP-21389 Updated                        */
 /******************************************************************************/
 
-CREATE OR ALTER   PROC [RDT].[rdt_593OutPLWgt01] (
+CREATE OR ALTER PROC [RDT].[rdt_593OutPLWgt01] (
    @nMobile    INT,
    @nFunc      INT,
    @nStep      INT,
@@ -42,15 +43,22 @@ BEGIN
    DECLARE @n_Err          INT
    DECLARE @c_ErrMsg       NVARCHAR( 250)
 
-   DECLARE @cPalletWeight  NVARCHAR( 20)
-   DECLARE @cPalletQty     NVARCHAR( 20)
-   DECLARE @cMbolKey       NVARCHAR( 20)
-   DECLARE @cStatus        NVARCHAR( 20)
-   DECLARE @cMbolDetailNo  NVARCHAR( 20)
-   DECLARE @cID            NVARCHAR( 18)
-   DECLARE @c_weight       FLOAT
-   DECLARE @c_RemainWeight FLOAT
+   DECLARE @cPalletWeight        NVARCHAR( 20)
+   DECLARE @cPalletQty           NVARCHAR( 20)
+   DECLARE @cMbolKey             NVARCHAR( 20)
+   DECLARE @cStatus              NVARCHAR( 20)
+   DECLARE @cPalletCnt           NVARCHAR( 20)
+   DECLARE @cContainerKey        NVARCHAR( 20)
+   DECLARE @cContainerLineNumber NVARCHAR(5)
+   DECLARE @cID                  INT
+   DECLARE @c_weight             FLOAT
+   DECLARE @c_RemainWeight       FLOAT
 
+   DECLARE @ContainerDtl TABLE(  
+     RowID                INT IDENTITY(1,1) NOT NULL,  
+     containerkey         NVARCHAR(20)  NOT NULL,
+     containerlinenumber  nvarchar(5) NOT NULL
+     )
 
    -- Parameter mapping
    SET @cPalletWeight = @cParam1
@@ -58,7 +66,7 @@ BEGIN
    SET @cMbolKey      = @cParam3
 
    -- Check blank
-   IF @cPalletWeight = ''
+   IF @cPalletWeight = '' or TRY_CAST(@cPalletWeight as FLOAT) IS NULL or @cPalletWeight = 0
    BEGIN
       SET @nErrNo = 218751
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') 
@@ -99,39 +107,63 @@ BEGIN
    END
 
    -- PalletQty = Count of MbolDetail
-   SELECT @cMbolDetailNo = count(MbolKey)
-   FROM dbo.MBOLDETAIL WITH(NOLOCK)
-   WHERE MbolKey = @cMbolKey
+   SELECT @cPalletCnt = count(dtl.PalletKey)
+   FROM dbo.CONTAINERDETAIL dtl WITH(NOLOCK)
+   INNER JOIN dbo.CONTAINER ctn WITH(NOLOCK) ON dtl.ContainerKey = ctn.ContainerKey
+   WHERE ctn.MbolKey = @cMbolKey
 
-   IF @cPalletQty <> @cMbolDetailNo
+   IF @cPalletQty <> @cPalletCnt
    BEGIN
       SET @nErrNo = 218756
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP')   ---- Bad Pallet Qty
       GOTO Quit
    END
 
+   INSERT INTO @ContainerDtl
+              (containerkey,
+               containerlinenumber)
+      SELECT ctn.ContainerKey,
+            dtl.ContainerLineNumber
+      FROM dbo.CONTAINER ctn WITH(NOLOCK)
+      INNER JOIN CONTAINERDETAIL dtl WITH(NOLOCK) ON ctn.ContainerKey = dtl.ContainerKey
+      WHERE ctn.MBOLKey = @cMbolKey
+      ORDER BY ctn.ContainerKey,
+               dtl.ContainerLineNumber
+
+   SET @cID = 0
+   SET @c_RemainWeight = @cPalletWeight
+   WHILE(1=1)
+   BEGIN 
+      SELECT TOP 1
+            @cID = RowID,
+            @cContainerKey = containerkey,
+            @cContainerLineNumber = containerlinenumber
+      FROM @ContainerDtl
+      WHERE RowID > @cID
+      ORDER BY RowID
+
+      IF @@ROWCOUNT = 0 
+      BEGIN
+          BREAK
+      END
 
 
-   -- Insert Ave Pallet Weight
+      IF @cPalletQty = @cID
+      BEGIN
+         SELECT @c_weight = @c_RemainWeight
+      END
+      ELSE
+      BEGIN
+         SELECT @c_weight = FLOOR(CAST(@cPalletWeight AS FLOAT) / CAST(@cPalletQty AS INT ))
 
-   IF @cPalletQty = 1
-   BEGIN
-      SELECT @c_weight = @cPalletWeight
-      SELECT @c_RemainWeight = @cPalletWeight
+         SELECT @c_RemainWeight = @c_RemainWeight - @c_weight
+      END
+
+      UPDATE dbo.CONTAINERDETAIL WITH (ROWLOCK)
+         SET Userdefine01 = @c_weight
+       WHERE ContainerKey = @cContainerKey
+         AND ContainerLineNumber = @cContainerLineNumber
    END
-   ELSE
-   BEGIN
-      SELECT @c_weight = FLOOR(CAST(@cPalletWeight AS FLOAT) / CAST(@cPalletQty AS INT ))
-
-      SELECT @c_RemainWeight = @c_weight + (@cPalletWeight - @c_weight * @cPalletQty)
-   END
-
-
-   UPDATE MBOLDETAIL  SET Weight = @c_weight 
-   WHERE MbolKey = @cMbolKey
-
-   UPDATE MBOLDETAIL  SET Weight = @c_RemainWeight 
-   WHERE MbolKey = @cMbolKey AND MbolLineNumber = '00001'
 
 
    Quit:

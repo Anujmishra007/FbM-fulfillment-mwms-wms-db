@@ -136,3 +136,17 @@ EXECUTE rdt.rdtAddScn 4027, 'ENG',
    ,@cLine14 = '%e'
    ,@nFunc = 1812
 
+-- Is the location completely empty?
+DELETE rdt.RDTScn WHERE Scn = 4028 AND Lang_Code = 'ENG'
+EXECUTE rdt.rdtAddScn 4028, 'ENG',
+    @cLine01 = 'PICK CASE        FCP'
+   ,@cLine02 = ''
+   ,@cLine03 = 'Is the location'
+   ,@cLine04 = 'completely empty?'
+   ,@cLine05 = ''
+   ,@cLine06 = '1 = YES'
+   ,@cLine07 = '9 = NO'
+   ,@cLine08 = ''
+   ,@cLine09 = 'OPTION: %01i01'
+   ,@cLine14 = '%e'
+   ,@nFunc = 1812

@@ -1,189 +1,196 @@
-SET QUOTED_IDENTIFIER OFF
+SET QUOTED_IDENTIFIER OFF--ddddd
 GO
 SET ANSI_NULLS OFF
 GO
 
-/************************************************************************/
-/* Store procedure: rdtfnc_Cluster_Pick                                 */
-/* Copyright      : IDS                                                 */
-/* FBR: 116248                                                          */
-/* Purpose: COT Cluster Pick                                            */
-/*                                                                      */
-/* Modifications log:                                                   */
-/*                                                                      */
-/* Date         Rev  Author     Purposes                                */
-/* 15-Sep-2008  1.0  James      Created                                 */
-/* 05-Dec-2008  1.1  Vicky      Add (NOLOCK) to Update statment and     */
-/*                              UPPER to ID checking                    */
-/* 12-Dec-2008  1.1  Vicky      Add TraceInfo (Vicky02)                 */
-/* 03-Feb-2009  1.2  James      SOS127539 - Merged with Pharma          */
-/*                              Cluster Pick                            */
-/* 19-Mar-2009  1.3  James      SOS131967 - Insert short picked qty     */
-/* 23-Apr-2009  1.4  James      SOS133222 - Add STD Short Pick screen   */
-/* 19-Jun-2009  1.5  Vicky      Performance Tuning (Vicky03)            */
-/* 24-Aug-2009  1.6  James      SOS145455 - Add DropID checking(james01)*/
-/* 28-Aug-2009  1.7  Vicky      Add in EventLog (Vicky06)               */
-/* 29-Sep-2009  1.8  James      SOS147577 - TTL O/S Qty failed to show  */
-/*                              the total Qty to pick (james02)         */
-/* 30-Sep-2009  1.9  James      SOS149089 - Add Close Case scn (james03)*/
-/* 14-Oct-2009  1.10 James      Include Mobile when insert into         */
-/*                              RDTPicklock (James01)                   */
-/* 08-Nov-2009  1.11 James      Add Configkey 'ClusterPickInsPackDt' to */
-/*                              control insertion of PackHeader(James05)*/
-/* 11-Nov-2009  1.12 James      SOS152582-Add Generic printing (james04)*/
-/* 30-Apr-2010  1.13 James      Add in Conso PS scan in/Out (james06)   */
-/* 03-May-2010  1.14 James      SOS170848 - Picking by Conso  (james07) */
-/* 20-May-2010  1.15 James      SOS172041 - L'Oreal enhancement(james08)*/
-/*                              1. Change Drop ID flow, add new screen  */
-/*                              2. Add Anti-diversion screen            */
-/* 07-June-2010 1.16 James      SOS176144 - Change filter of storerkey  */
-/*                              to orderdetail (james09)                */
-/* 07-Jun-2010  1.17 Leong      SOS# 173419 - Bug Fix on Drop Id update */
-/* 24-June-2010 1.18 Leong      SOS# 176144 - Bug Fix                   */
-/* 07-Jul-2010  1.19 Shong      Update PickingInfo with TrafficCop      */
-/* 08-Jul-2010  1.20 Vicky      Fix PickingInfo Update (Vicky07)        */
-/* 21-July-2010 1.21 James      Add new Configkey                       */
-/*                              'InsDiscretePackHdrInfo' (james10)      */
-/* 13-Aug-2010  1.21 ChewKP     Should allow Pick to Different DropID   */
-/*                              for same SKU (ChewKP01)                 */
-/* 02-Dec-2010  1.22 James      SOS197651 -                             */
-/*                              1. Show packey configuration            */
-/*                              2. Show error msg in new scn            */
-/*                              3. Allow to skip scan SKU (james11)     */
-/* 04-Mar-2011  1.23 James      Add decode label (james12)              */
-/* 11-Mar-2011  1.24 James      Bug fix (james13)                       */
-/* 15-Mar-2011  1.25 Leong      SOS# 208635 - Bug fix                   */
-/* 17-Mar-2011  1.26 James      SOS209194 - Show ttl qty picked/unpick  */
-/*                                          on orders (james14)         */
-/* 17-Mar-2011  1.26 James      SOS207999 - NIKE Enhancement (james15)  */
-/* 19-May-2011  1.27 James      SOS216118 - US Enhancement (james16)    */
-/*                              Limit no of orders per user to pick     */
-/* 17-Jun-2011  1.27 James      SOS216485 - Check over pick (james17)   */
-/*                              Add SHOWQTYPICK/UNPICK on CONSO pick    */
-/* 15-Aug-2011  1.27 James      Perfomance tuning (james_tune)          */
-/* 14-Dec-2011  1.28 TLTING     Deadlock Tune (TLTING02)                */
-/* 21-Feb-2012  1.29 Leong      SOS# 237003 - Fine tune to allow display*/
-/*                                            more than 10 PutAwayZone  */
-/* 05-Mar-2012  1.30 Ung        SOS232145 Fix data truncation issue on  */
-/*                              RDT.RDTPickLock.OrderLineNumber         */
-/* 05-Mar-2012  1.31 Audrey     SOS237778 - Bug fixed            (ang01)*/
-/* 09-Apr-2011  1.32 TLTING     Performance Tune (TLTING03)             */
-/* 07-May-2012  1.33 James      SOS242497 - Confirm skipped SKU if      */
-/*                              config turned on (james18)              */
-/* 12-Dec-2012  1.34 James      SOS263803 - New config key              */
-/*                              CLUSTERPICKCONFIRMLOC (james19)         */
-/* 21-Feb-2013  1.35 James      SOS270278 - Use codelkup to determine   */
-/*                              whether need capture serial no (james20)*/
-/* 25-Feb-2013  1.36 James      SOS269625 - Use rdt config to skip drop */
-/*                              id screen if it is exists (james21)     */
-/* 04-Apr-2013  1.37 James      SOS274284 - Bug fix (james22)           */
-/* 23-Apr-2013  1.38 James      SOS276154 - Bug fix (james23)           */
-/* 30-Apr-2013  1.40 James      SOS276235 - Allow multi storer (james25)*/
-/* 22-May-2013  1.41 James      SOS278790 - Bug fix (james26)           */
-/* 28-Apr-2013  1.42 James      SOS270278 - Use rdt storerconfig to ctrl*/
-/*                              which field store ADCode (james27)      */
-/* 19-Jun-2013  1.43 James      Enhance short pick selection (james28)  */
-/* 26-Jun-2013  1.45 James      Remove Archivecop and mbol carton count */
-/*                              back to packheader trigger (james29)    */
-/* 04-Jul-2013  1.46 Shong      Serial Capture fixes  (Shong01)         */
-/* 12-Jul-2013  1.47 James      AEO enhancement (james30)               */
-/* 04-Sep-2013  1.48 James      Bug fix on SKIP task (james31)          */
-/* 11-Sep-2013  1.49 James      Consolidate ver from HK & TH (james32)  */
-/* 22-Oct-2013  1.50 James      SOS291607 - Scan Lot02 & enable case    */
-/*                              & piece qty (james32)                   */
-/* 03-Dec-2013  1.51 James      SOS295906-Enhance UOM display (james33) */
-/* 27-Dec-2013  1.52 James      SOS294366 - Add msg queue after picking */
-/*                              completed (james34)                     */
-/* 23-Jan-2014  1.53 James      SOS297732 - Add new print type (james35)*/
-/* 11-Feb-2014  1.54 James      SOS302650 - Bug fix (james35)           */
-/* 13-Feb-2014  1.55 James      SOS303010 - Add config to control short */
-/*                              pick and display msg when picking not   */
-/*                              complete (james36)                      */
-/* 05-Mar-2014  1.56 James      SOS304794 - Bug fix (james37)           */
-/* 01-Apr-2014  1.57 Leong      SOS# 307304 - Include StorerKey.        */
-/*                                          - Reset variable at Step_4. */
-/*                                          - Add TraceInfo to Step_3.  */
-/* 05-May-2014  1.58 James      SOS304353-Bug fix on qty keyin (james38)*/
-/*                              Add extended update in orderkey screen  */
-/* 19-Jun-2014  1.59 James      SOS304353-Add ExtendedUpdateSP (james39)*/
-/*                              Change Dropid to 20 chars               */
-/* 04-Sep-2014  1.60 Chee       Bug Fix - Allow reuse of DropID, check  */
-/*                              dropid status, pickslipno (Chee01)      */
-/* 29-Oct-2014  1.61 James      SOS323916-Add ExtendedInfoSP (james40)  */
-/* 04-Mar-2015  1.62 SPChin     SOS334125 - Enhance Prefer UOM QTY      */
-/* 									  				  Display   						*/
-/* 05-Jun-2015  1.63 James      SOS342111-ExtendedValidateSP (james41)  */
-/*                              Add confirm task sub sp                 */
-/* 03-Jul-2015  1.64 James      SOS342407-Capture carton type (james42) */
-/* 21-Jul-2015  1.65 James      Performance tuning (james41)            */
-/* 07-Oct-2015  1.66 James      Enhance pickinginfo scan in (james43)   */
-/* 19-Nov-2015  1.67 James      SOS356971 - Enhance RDTLBLRPT (james44) */
-/*                              Add extendedvalidate in step 3          */
-/*                              Enhance prompt close case logic         */
-/* 07-Mar-2016  1.68 James      SOS365449- Bug fix on Step10 screen     */
-/*                              Order count & picked qty not show       */
-/*                              correctly (james45)                     */
-/* 05-May-2016  1.69 James      SOS364904 - Enhance dropid display      */
-/*                              by ClusterPickPromtBlankDropID          */
-/*                              Add ExtendedUpdateSP in step 7 (james46)*/
-/* 13-Jun-2016  1.70 James      SOS371620 - Add DecodeSP (james47)      */
-/* 02-Sep-2016  1.71 James      SOS375742 - Rearrage display @ step 8   */
-/*                              by config (james48)                     */
-/* 15-Sep-2016  1.72 James      WMS319-Add rdtIsValidFormat to validate */
-/*                              Drop ID (james49)                       */
-/* 30-Sep-2016  1.73 Ung        Performance tuning                      */
-/* 08-Feb-2017  1.74 James      WMS1016 - Add hold/unhold picking       */
-/*                              function (james50)                      */
-/*                              Bug fix on variable                     */
-/* 25-Apr-2017  1.75 James      Perf tuning (james51)                   */
-/* 21-Jul-2017  1.76 James      WMS2447 - Pick using pref uom (james52) */
-/* 03-Nov-2016  1.76 James      Fix pickzone issue (james53)            */
-/* 26-Jul-2017  1.77 SPChin     IN00416131 - Bug Fixed                  */
-/* 01-Nov-2017  1.78 James      WMS3356 - Add custom fetch task for     */
-/*                              consolidated pick (james54)             */
-/* 05-Dec-2017  1.79 James      WMS3572-Change ClusterPickNIKE config   */
-/*                              to configurable stored proc (james55)   */
-/* 15-Dec-2017  1.80 James      Bug fix. Need group orderkey+lot for    */
-/*                              conso pick (james56)                    */
-/* 16-Jan-2017  1.81 ChewKP     WMS-3767-Call rdt.rdtPrintJob (ChewKP02)*/
-/* 23-Feb-2018  1.82 CheeMun    INC0139851-Extend Pack.CaseCnt length 5 */
-/* 04-Apr-2018  1.82 James      WMS4338-Add config auto gen id (james57)*/
-/* 06-Jul-2018  1.83 James      INC0295949 - Perfomance tuning (james58)*/
-/* 29-Oct-2018  1.84 James      WMS-6843-Add extendedinfo @ screen 1875 */
-/*                              (james58)                               */
-/* 06-Dec-2018  1.85 James      Bug fix (james59)                       */
-/* 16-Jan-2019  1.86 James      WMS7588-Add Loc.Descr (james60)         */
-/* 28-Feb-2019  1.87 James      WMS7944-Add ExtendedValidateSP @        */
-/*                              @ screen 1 & 2 (james61)                */
-/* 08-Mar-2019  1.88 James      WMS8143-Add SKU attr display (james62)  */
-/* 09-May-2019  1.89 James      WMS8817-Use config to decide what field */
-/*                              to show as SKU on screen (james63)      */
-/* 12-Jun-2019  1.90 James      WMS9227-Fix cursor issue @ step 8       */
-/*                              Rearrange V_String portion (james64)    */
-/* 15-Aug-2019  1.91 James      WMS-10274 Add extended packcfm (james65)*/
-/* 24-Aug-2020  1.92 James      WMS-14577 Add extended update to close  */
-/*                              case screen (james66)                   */
-/* 21-Dec-2020  1.93 James      WMS-15813 Fix cannot dropid cannot mix  */
-/*                              orders logic (james67)                  */
-/* 07-Sep-2020  1.94 James      WMS-14783 Allow skip loc when RDT config*/
-/*                              ClusterPickConfirmLoc turned on(james67)*/
-/* 02-Oct-2020  1.95 James      WMS-15409 Enhance packcfm (james68)     */
-/* 27-Oct-2020  1.96 James      WMS-15548 Add DecodeDropIDSP (james69)  */
-/* 25-Feb-2021  1.97 LZG        INC1436470 - Bug fix (ZG01)             */
-/* 02-Sep-2020  1.98 James      WMS-14944 Add MultiSKUBarcode (james70) */
-/* 13-Jan-2021  1.99 james01    INC1408845 - Fixed overpick issue       */
-/* 05-Mar-2021  2.0 James       WMS-16417 Add config to enable (james71)*/
-/*                              AssignPackLabelToOrdCfg                 */
-/* 22-Apr-2021  2.1 James       WMS-16756 Add ExtendedUpdateSP to       */
-/*                              step 10 (james72)                       */
-/* 26-Jan-2022  2.2 yeekung     WMS-18619 Add ExtendedWCS SP             */
-/* 17-Jun-2022  2.3 yeekung     WMS-18523 Add defaultloadplan (yeekung01)*/
-/* 28-Jul-2022  2.4 LZG         JSM-84937 - Disallowed option if config */
-/*                              is disabled (ZG02)                      */
-/* 26-Feb-2024  2.5 James        UWP-15502 - Invalid Drop ID Error      */
-/* 03-Mar-2024  2.51 James       UWP-15502 - Invalid Drop ID Error, fix */
-/*                               multiple orders in one drop id error   */
-/************************************************************************/
+/***************************************************************************/
+/* Store procedure: rdtfnc_Cluster_Pick                                    */
+/* Copyright      : IDS                                                    */
+/* FBR: 116248                                                             */
+/* Purpose: COT Cluster Pick                                               */
+/*                                                                         */
+/* Modifications log:                                                      */
+/*                                                                         */
+/* Date         Rev  Author     Purposes                                   */
+/* 15-Sep-2008  1.0  James      Created                                    */
+/* 05-Dec-2008  1.1  Vicky      Add (NOLOCK) to Update statment and        */
+/*                              UPPER to ID checking                       */
+/* 12-Dec-2008  1.1  Vicky      Add TraceInfo (Vicky02)                    */
+/* 03-Feb-2009  1.2  James      SOS127539 - Merged with Pharma             */
+/*                              Cluster Pick                               */
+/* 19-Mar-2009  1.3  James      SOS131967 - Insert short picked qty        */
+/* 23-Apr-2009  1.4  James      SOS133222 - Add STD Short Pick screen      */
+/* 19-Jun-2009  1.5  Vicky      Performance Tuning (Vicky03)               */
+/* 24-Aug-2009  1.6  James      SOS145455 - Add DropID checking(james01)   */
+/* 28-Aug-2009  1.7  Vicky      Add in EventLog (Vicky06)                  */
+/* 29-Sep-2009  1.8  James      SOS147577 - TTL O/S Qty failed to show     */
+/*                              the total Qty to pick (james02)            */
+/* 30-Sep-2009  1.9  James      SOS149089 - Add Close Case scn (james03)   */
+/* 14-Oct-2009  1.10 James      Include Mobile when insert into            */
+/*                              RDTPicklock (James01)                      */
+/* 08-Nov-2009  1.11 James      Add Configkey 'ClusterPickInsPackDt' to    */
+/*                              control insertion of PackHeader(James05)   */
+/* 11-Nov-2009  1.12 James      SOS152582-Add Generic printing (james04)   */
+/* 30-Apr-2010  1.13 James      Add in Conso PS scan in/Out (james06)      */
+/* 03-May-2010  1.14 James      SOS170848 - Picking by Conso  (james07)    */
+/* 20-May-2010  1.15 James      SOS172041 - L'Oreal enhancement(james08)   */
+/*                              1. Change Drop ID flow, add new screen     */
+/*                              2. Add Anti-diversion screen               */
+/* 07-June-2010 1.16 James      SOS176144 - Change filter of storerkey     */
+/*                              to orderdetail (james09)                   */
+/* 07-Jun-2010  1.17 Leong      SOS# 173419 - Bug Fix on Drop Id update    */
+/* 24-June-2010 1.18 Leong      SOS# 176144 - Bug Fix                      */
+/* 07-Jul-2010  1.19 Shong      Update PickingInfo with TrafficCop         */
+/* 08-Jul-2010  1.20 Vicky      Fix PickingInfo Update (Vicky07)           */
+/* 21-July-2010 1.21 James      Add new Configkey                          */
+/*                              'InsDiscretePackHdrInfo' (james10)         */
+/* 13-Aug-2010  1.21 ChewKP     Should allow Pick to Different DropID      */
+/*                              for same SKU (ChewKP01)                    */
+/* 02-Dec-2010  1.22 James      SOS197651 -                                */
+/*                              1. Show packey configuration               */
+/*                              2. Show error msg in new scn               */
+/*                              3. Allow to skip scan SKU (james11)        */
+/* 04-Mar-2011  1.23 James      Add decode label (james12)                 */
+/* 11-Mar-2011  1.24 James      Bug fix (james13)                          */
+/* 15-Mar-2011  1.25 Leong      SOS# 208635 - Bug fix                      */
+/* 17-Mar-2011  1.26 James      SOS209194 - Show ttl qty picked/unpick     */
+/*                                          on orders (james14)            */
+/* 17-Mar-2011  1.26 James      SOS207999 - NIKE Enhancement (james15)     */
+/* 19-May-2011  1.27 James      SOS216118 - US Enhancement (james16)       */
+/*                              Limit no of orders per user to pick        */
+/* 17-Jun-2011  1.27 James      SOS216485 - Check over pick (james17)      */
+/*                              Add SHOWQTYPICK/UNPICK on CONSO pick       */
+/* 15-Aug-2011  1.27 James      Perfomance tuning (james_tune)             */
+/* 14-Dec-2011  1.28 TLTING     Deadlock Tune (TLTING02)                   */
+/* 21-Feb-2012  1.29 Leong      SOS# 237003 - Fine tune to allow display   */
+/*                                            more than 10 PutAwayZone     */
+/* 05-Mar-2012  1.30 Ung        SOS232145 Fix data truncation issue on     */
+/*                              RDT.RDTPickLock.OrderLineNumber            */
+/* 05-Mar-2012  1.31 Audrey     SOS237778 - Bug fixed            (ang01)   */
+/* 09-Apr-2011  1.32 TLTING     Performance Tune (TLTING03)                */
+/* 07-May-2012  1.33 James      SOS242497 - Confirm skipped SKU if         */
+/*                              config turned on (james18)                 */
+/* 12-Dec-2012  1.34 James      SOS263803 - New config key                 */
+/*                              CLUSTERPICKCONFIRMLOC (james19)            */
+/* 21-Feb-2013  1.35 James      SOS270278 - Use codelkup to determine      */
+/*                              whether need capture serial no (james20)   */
+/* 25-Feb-2013  1.36 James      SOS269625 - Use rdt config to skip drop    */
+/*                              id screen if it is exists (james21)        */
+/* 04-Apr-2013  1.37 James      SOS274284 - Bug fix (james22)              */
+/* 23-Apr-2013  1.38 James      SOS276154 - Bug fix (james23)              */
+/* 30-Apr-2013  1.40 James      SOS276235 - Allow multi storer (james25)   */
+/* 22-May-2013  1.41 James      SOS278790 - Bug fix (james26)              */
+/* 28-Apr-2013  1.42 James      SOS270278 - Use rdt storerconfig to ctrl   */
+/*                              which field store ADCode (james27)         */
+/* 19-Jun-2013  1.43 James      Enhance short pick selection (james28)     */
+/* 26-Jun-2013  1.45 James      Remove Archivecop and mbol carton count    */
+/*                              back to packheader trigger (james29)       */
+/* 04-Jul-2013  1.46 Shong      Serial Capture fixes  (Shong01)            */
+/* 12-Jul-2013  1.47 James      AEO enhancement (james30)                  */
+/* 04-Sep-2013  1.48 James      Bug fix on SKIP task (james31)             */
+/* 11-Sep-2013  1.49 James      Consolidate ver from HK & TH (james32)     */
+/* 22-Oct-2013  1.50 James      SOS291607 - Scan Lot02 & enable case       */
+/*                              & piece qty (james32)                      */
+/* 03-Dec-2013  1.51 James      SOS295906-Enhance UOM display (james33)    */
+/* 27-Dec-2013  1.52 James      SOS294366 - Add msg queue after picking    */
+/*                              completed (james34)                        */
+/* 23-Jan-2014  1.53 James      SOS297732 - Add new print type (james35)   */
+/* 11-Feb-2014  1.54 James      SOS302650 - Bug fix (james35)              */
+/* 13-Feb-2014  1.55 James      SOS303010 - Add config to control short    */
+/*                              pick and display msg when picking not      */
+/*                              complete (james36)                         */
+/* 05-Mar-2014  1.56 James      SOS304794 - Bug fix (james37)              */
+/* 01-Apr-2014  1.57 Leong      SOS# 307304 - Include StorerKey.           */
+/*                                          - Reset variable at Step_4.    */
+/*                                          - Add TraceInfo to Step_3.     */
+/* 05-May-2014  1.58 James      SOS304353-Bug fix on qty keyin (james38)   */
+/*                              Add extended update in orderkey screen     */
+/* 19-Jun-2014  1.59 James      SOS304353-Add ExtendedUpdateSP (james39)   */
+/*                              Change Dropid to 20 chars                  */
+/* 04-Sep-2014  1.60 Chee       Bug Fix - Allow reuse of DropID, check     */
+/*                              dropid status, pickslipno (Chee01)         */
+/* 29-Oct-2014  1.61 James      SOS323916-Add ExtendedInfoSP (james40)     */
+/* 04-Mar-2015  1.62 SPChin     SOS334125 - Enhance Prefer UOM QTY         */
+/* 									  				  Display   						   */
+/* 05-Jun-2015  1.63 James      SOS342111-ExtendedValidateSP (james41)     */
+/*                              Add confirm task sub sp                    */
+/* 03-Jul-2015  1.64 James      SOS342407-Capture carton type (james42)    */
+/* 21-Jul-2015  1.65 James      Performance tuning (james41)               */
+/* 07-Oct-2015  1.66 James      Enhance pickinginfo scan in (james43)      */
+/* 19-Nov-2015  1.67 James      SOS356971 - Enhance RDTLBLRPT (james44)    */
+/*                              Add extendedvalidate in step 3             */
+/*                              Enhance prompt close case logic            */
+/* 07-Mar-2016  1.68 James      SOS365449- Bug fix on Step10 screen        */
+/*                              Order count & picked qty not show          */
+/*                              correctly (james45)                        */
+/* 05-May-2016  1.69 James      SOS364904 - Enhance dropid display         */
+/*                              by ClusterPickPromtBlankDropID             */
+/*                              Add ExtendedUpdateSP in step 7 (james46)   */
+/* 13-Jun-2016  1.70 James      SOS371620 - Add DecodeSP (james47)         */
+/* 02-Sep-2016  1.71 James      SOS375742 - Rearrage display @ step 8      */
+/*                              by config (james48)                        */
+/* 15-Sep-2016  1.72 James      WMS319-Add rdtIsValidFormat to validate    */
+/*                              Drop ID (james49)                          */
+/* 30-Sep-2016  1.73 Ung        Performance tuning                         */
+/* 08-Feb-2017  1.74 James      WMS1016 - Add hold/unhold picking          */
+/*                              function (james50)                         */
+/*                              Bug fix on variable                        */
+/* 25-Apr-2017  1.75 James      Perf tuning (james51)                      */
+/* 21-Jul-2017  1.76 James      WMS2447 - Pick using pref uom (james52)    */
+/* 03-Nov-2016  1.76 James      Fix pickzone issue (james53)               */
+/* 26-Jul-2017  1.77 SPChin     IN00416131 - Bug Fixed                     */
+/* 01-Nov-2017  1.78 James      WMS3356 - Add custom fetch task for        */
+/*                              consolidated pick (james54)                */
+/* 05-Dec-2017  1.79 James      WMS3572-Change ClusterPickNIKE config      */
+/*                              to configurable stored proc (james55)      */
+/* 15-Dec-2017  1.80 James      Bug fix. Need group orderkey+lot for       */
+/*                              conso pick (james56)                       */
+/* 16-Jan-2017  1.81 ChewKP     WMS-3767-Call rdt.rdtPrintJob (ChewKP02)   */
+/* 23-Feb-2018  1.82 CheeMun    INC0139851-Extend Pack.CaseCnt length 5    */
+/* 04-Apr-2018  1.82 James      WMS4338-Add config auto gen id (james57)   */
+/* 06-Jul-2018  1.83 James      INC0295949 - Perfomance tuning (james58)   */
+/* 29-Oct-2018  1.84 James      WMS-6843-Add extendedinfo @ screen 1875    */
+/*                              (james58)                                  */
+/* 06-Dec-2018  1.85 James      Bug fix (james59)                          */
+/* 16-Jan-2019  1.86 James      WMS7588-Add Loc.Descr (james60)            */
+/* 28-Feb-2019  1.87 James      WMS7944-Add ExtendedValidateSP @           */
+/*                              @ screen 1 & 2 (james61)                   */
+/* 08-Mar-2019  1.88 James      WMS8143-Add SKU attr display (james62)     */
+/* 09-May-2019  1.89 James      WMS8817-Use config to decide what field    */
+/*                              to show as SKU on screen (james63)         */
+/* 12-Jun-2019  1.90 James      WMS9227-Fix cursor issue @ step 8          */
+/*                              Rearrange V_String portion (james64)       */
+/* 15-Aug-2019  1.91 James      WMS-10274 Add extended packcfm (james65)   */
+/* 24-Aug-2020  1.92 James      WMS-14577 Add extended update to close     */
+/*                              case screen (james66)                      */
+/* 21-Dec-2020  1.93 James      WMS-15813 Fix cannot dropid cannot mix     */
+/*                              orders logic (james67)                     */
+/* 07-Sep-2020  1.94 James      WMS-14783 Allow skip loc when RDT config   */
+/*                              ClusterPickConfirmLoc turned on(james67)   */
+/* 02-Oct-2020  1.95 James      WMS-15409 Enhance packcfm (james68)        */
+/* 27-Oct-2020  1.96 James      WMS-15548 Add DecodeDropIDSP (james69)     */
+/* 25-Feb-2021  1.97 LZG        INC1436470 - Bug fix (ZG01)                */
+/* 02-Sep-2020  1.98 James      WMS-14944 Add MultiSKUBarcode (james70)    */
+/* 13-Jan-2021  1.99 james01    INC1408845 - Fixed overpick issue          */
+/* 05-Mar-2021  2.0 James       WMS-16417 Add config to enable (james71)   */
+/*                              AssignPackLabelToOrdCfg                    */
+/* 22-Apr-2021  2.1 James       WMS-16756 Add ExtendedUpdateSP to          */
+/*                              step 10 (james72)                          */
+/* 26-Jan-2022  2.2 yeekung     WMS-18619 Add ExtendedWCS SP               */
+/* 17-Jun-2022  2.3 yeekung     WMS-18523 Add defaultloadplan (yeekung01)  */
+/* 28-Jul-2022  2.4 LZG         JSM-84937 - Disallowed option if config    */
+/*                              is disabled (ZG02)                         */
+/* 27-Sep-2023  2.5 James       WMS-23735 Enhance check cannot mix         */
+/*                              orderkey in dropid (james73)               */
+/* 05-Dec-2023  2.6 James       WMS-24341 When pref qty turn on, set       */
+/*                              default cursor (james74)                   */
+/*                              Default SKU on input field when screen     */
+/*                              waiting for qty input                      */
+/* 26-Feb-2024  2.7   James        UWP-15502 - Invalid Drop ID Error       */
+/* 03-Mar-2024  2.7.1 James       UWP-15502 - Invalid Drop ID Error, fix   */
+/*                               multiple orders in one drop id error      */
+/* 01-Jan-2025  2.8.0 James        FCR-2435 Merge 2.5, 2.6 from V0         */
+/***************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_Cluster_Pick](
    @nMobile    int,
@@ -3987,6 +3994,22 @@ BEGIN
                      SET @nDropIDMixOrd = 1
                END
 
+               --v2.8 start
+               -- For those storer not using DropID table (james73)
+               IF @nDropIDMixOrd = 0
+               BEGIN
+                  SELECT TOP 1 @cTemp_OrderKey = PD.OrderKey
+                  FROM dbo.PICKDETAIL PD WITH (NOLOCK)
+                  WHERE PD.Storerkey = @cStorerkey
+                  AND   PD.DropID = @cDropID
+                  AND   PD.[Status] < '9'
+                  ORDER BY 1
+                  
+                  IF ( @cOrderKey <> @cTemp_OrderKey) AND ISNULL( @cTemp_OrderKey, '') <> ''
+                     SET @nDropIDMixOrd = 1
+               END
+               --v2.8 end
+
             --AND EXISTS (SELECT 1 FROM dbo.PickDetail PD WITH (NOLOCK)
             --            JOIN dbo.PickHeader PH WITH (NOLOCK) ON (PH.OrderKey = PD.OrderKey)  -- (Chee01)
             --            JOIN dbo.DropID D WITH (NOLOCK) ON (PD.DropID = D.DropID)            -- (Chee01)
@@ -5581,50 +5604,88 @@ BEGIN
 
             GOTO Quit
          END
+      END --V2.8
 
-         IF @cPrefUOM <> '6' AND @cFieldAttr15 = '' AND ISNULL( @cInField15, '') = ''  -- (james32)
+      IF @cPrefUOM <> '6' AND @cFieldAttr15 = '' AND ISNULL( @cInField15, '') = '' AND ISNULL( @cInField13, '') = '' -- (james32) --v2.8
+      BEGIN
+         -- If carton field is blank then check if qty to pick is it > 1 carton
+         -- If yes then quit and force them use case field to enter (james35)
+         SELECT @nPrefQty = ISNULL ( CASE @cPrefUOM
+                                 WHEN '2' THEN Pack.CaseCNT
+                                 WHEN '3' THEN Pack.InnerPack
+                                 WHEN '6' THEN Pack.QTY
+                                 WHEN '1' THEN Pack.Pallet
+                                 WHEN '4' THEN Pack.OtherUnit1
+                                 WHEN '5' THEN Pack.OtherUnit2 END, 1)
+         FROM SKU SKU (NOLOCK)
+         JOIN PACK PACK (NOLOCK) ON SKU.PackKey = PACK.PackKey
+         WHERE SKU = @cSKU
+         AND (( @nMultiStorer = 1 AND SKU.StorerKey = @cORD_StorerKey) OR ( @nMultiStorer <> 1 AND SKU.StorerKey = @cStorerKey))
+
+         --v2.8 start
+         SELECT @nSumPickQTY = SUM( Qty)
+         FROM dbo.PICKDETAIL WITH (NOLOCK)
+         WHERE Storerkey = @cStorerKey
+         AND   Loc = @cLOC
+         AND   Sku = @cSKU
+         AND   [Status] = '0'
+         --V2.8 end
+
+         --IF @nPrefQty < CAST( @cActQty AS INT)
+         IF @nPrefQty < CAST( @nSumPickQTY AS INT) --v2.8
          BEGIN
-            -- If carton field is blank then check if qty to pick is it > 1 carton
-            -- If yes then quit and force them use case field to enter (james35)
-            SELECT @nPrefQty = ISNULL ( CASE @cPrefUOM
-                                    WHEN '2' THEN Pack.CaseCNT
-                                    WHEN '3' THEN Pack.InnerPack
-                                    WHEN '6' THEN Pack.QTY
-                                    WHEN '1' THEN Pack.Pallet
-                                    WHEN '4' THEN Pack.OtherUnit1
-                                    WHEN '5' THEN Pack.OtherUnit2 END, 1)
-            FROM SKU SKU (NOLOCK)
-            JOIN PACK PACK (NOLOCK) ON SKU.PackKey = PACK.PackKey
-            WHERE SKU = @cSKU
-            AND (( @nMultiStorer = 1 AND SKU.StorerKey = @cORD_StorerKey) OR ( @nMultiStorer <> 1 AND SKU.StorerKey = @cStorerKey))
+            IF @nFunc = 1620
+               SET @cOutField04 = @cInField04
+            ELSE
+               SET @cOutField03 = @cInField03
 
-            IF @nPrefQty < CAST( @cActQty AS INT)
-            BEGIN
-               IF @nFunc = 1620
-                  SET @cOutField04 = @cInField04
-               ELSE
-                  SET @cOutField03 = @cInField03
+            SET @cOutField06 = @cInField06
 
-               SET @cOutField06 = @cInField06
-
-               EXEC rdt.rdtSetFocusField @nMobile, 15
-               GOTO Quit
-            END
+            EXEC rdt.rdtSetFocusField @nMobile, 15
+            GOTO Quit
          END
-         ELSE
+      END
+      ELSE
+      BEGIN
+         --v2.8 start
+         SELECT @nPrefQty = ISNULL ( CASE @cPrefUOM
+                                 WHEN '2' THEN Pack.CaseCNT
+                                 WHEN '3' THEN Pack.InnerPack
+                                 WHEN '6' THEN Pack.QTY
+                                 WHEN '1' THEN Pack.Pallet
+                                 WHEN '4' THEN Pack.OtherUnit1
+                                 WHEN '5' THEN Pack.OtherUnit2 END, 1)
+         FROM SKU SKU (NOLOCK)
+         JOIN PACK PACK (NOLOCK) ON SKU.PackKey = PACK.PackKey
+         WHERE SKU = @cSKU
+         AND (( @nMultiStorer = 1 AND SKU.StorerKey = @cORD_StorerKey) OR ( @nMultiStorer <> 1 AND SKU.StorerKey = @cStorerKey))
+
+         SELECT @nSumPickQTY = SUM( Qty)
+         FROM dbo.PICKDETAIL WITH (NOLOCK)
+         WHERE Storerkey = @cStorerKey
+         AND   OrderKey = @cOrderKey
+         AND   Loc = @cLOC
+         AND   Sku = @cSKU
+         AND   [Status] = '0'
+
+         --INSERT INTO TRACEINFO(TRACENAME, TIMEIN, COL1, Col2, Col3) VALUES ('1621', GETDATE(), @nPrefQty, CAST( @cInField15 AS INT), @nSumPickQTY)
+         IF @nPrefQty * CAST( @cInField15 AS INT) = @nSumPickQTY
+            GOTO VALIDATE_QTY
+         --v2.8 end
+         IF ISNULL( @cInField13, '') = ''
          BEGIN
-            IF ISNULL( @cInField13, '') = ''
-            BEGIN
-               IF @nFunc = 1620
-                  SET @cOutField04 = @cInField04
-               ELSE
-                  SET @cOutField03 = @cInField03
+            IF @nFunc = 1620
+               SET @cOutField04 = @cInField04
+            ELSE
+               SET @cOutField03 = @cInField03
 
-               SET @cOutField06 = @cInField06
+            SET @cOutField06 = @cInField06
 
-               EXEC rdt.rdtSetFocusField @nMobile, 13
-               GOTO Quit
-            END
+            IF @cInField15 <> ''
+               SET @cOutField15 = @cInField15
+
+            EXEC rdt.rdtSetFocusField @nMobile, 13
+            GOTO Quit
          END
       END
 
@@ -5648,7 +5709,8 @@ BEGIN
             WHERE SKU = @cSKU
             AND (( @nMultiStorer = 1 AND SKU.StorerKey = @cORD_StorerKey) OR ( @nMultiStorer <> 1 AND SKU.StorerKey = @cStorerKey))
 
-         IF @cFieldAttr13 = '' AND ISNULL( @cInField13, '') = ''  AND @cOutField15 = '' -- (james32)
+         --IF @cFieldAttr13 = '' AND ISNULL( @cInField13, '') = ''  AND @cOutField15 = '' -- (james32)
+         IF @cFieldAttr13 = '' AND ISNULL( @cInField13, '') = ''  AND @cInField15 = '' -- V2.8
          BEGIN
             IF @nFunc = 1620
                SET @cOutField04 = @cInField04
@@ -5683,8 +5745,31 @@ BEGIN
                SET @nErrNo = 65937
                SET @cErrMsg = rdt.rdtgetmessage( 65937, @cLangCode, 'DSP') --'QTY needed'
             END
-            SET @cOutField13 = @cDefaultPickQty
-            EXEC rdt.rdtSetFocusField @nMobile, 13
+
+            --V2.8 start
+            IF ISNULL(@cActSKU, '') <> ''
+            BEGIN
+               IF @nFunc = 1620
+                  SET @cOutField04 = @cActSKU
+               ELSE
+               	SET @cOutField03 = @cActSKU
+            END
+
+            -- If config turned on, not allow to change Qty To Pick
+            IF @cClusterPickLockQtyToPick = '1'
+            BEGIN
+               SET @cFieldAttr13 = 'O'
+               SET @cInField13 = @cDefaultPickQty
+               IF @cFieldAttr15 = ''
+                  EXEC rdt.rdtSetFocusField @nMobile, 15
+            END
+            ELSE
+            BEGIN
+               SET @cOutField13 = @cDefaultPickQty
+               EXEC rdt.rdtSetFocusField @nMobile, 13
+            END
+            --V2.8 end
+
             GOTO Quit
          END
       END
@@ -5754,7 +5839,7 @@ BEGIN
             BEGIN
                SET @cActQty = (CAST(@cActQty AS INT) + @nPrefQty) * @nTemp_PackQtyIndicator
             END
-            END
+         END
 
          SET @cActQty = CAST( @cActQty AS INT) + @nPrefQty -- (james32)
          SET @nQtyToPick = @nQtyToPick + CAST(@cActQty AS INT)

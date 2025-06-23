@@ -60,9 +60,11 @@ GO
 /* 2016-09-30 3.3  Ung      Performance tuning                          */  
 /* 2018-10-04 3.4  Gan      Performance tuning                          */
 /* 2024-06-25 3.5  JHU51    FCR-349 add SCN 924 for DEFY                */
+/* 2024-11-18 3.6  CYU027   FCR-1205 Add extPA SP entry for Granite     */
+/* 2025-06-18 0.0  JACKC    !!!Cutover. Use V0 repo for work!!!         */
 /************************************************************************/
 
-CREATE PROCEDURE [RDT].[rdtfnc_Putaway] (
+CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_Putaway] (
    @nMobile    INT,
    @nErrNo     INT  OUTPUT,
    @cErrMsg    NVARCHAR( 20) OUTPUT -- screen limitation, 20 NVARCHAR max
@@ -117,6 +119,11 @@ DECLARE
    @cExtendedScreenSP   NVARCHAR( 20), --(JHU151)
    @tExtScnData			VariableTable, --(JHU151)
    @nAction             INT, --(JHU151)
+   @cPickAndDropLoc     NVARCHAR( 10),
+   @nPABookingKey       INT,          --V3.6 JCH507
+   @nPAErrNo            INT,          --V3.6 JCH507
+   @cUCC                NVARCHAR( 20),--V3.6 JCH507
+
    @cInField01 NVARCHAR( 60),  @cOutField01 NVARCHAR( 60),
    @cInField02 NVARCHAR( 60),  @cOutField02 NVARCHAR( 60),
    @cInField03 NVARCHAR( 60),  @cOutField03 NVARCHAR( 60),
@@ -749,25 +756,32 @@ BEGIN
          GOTO Quit
       END
 
-      -- Suggest LOC
-      EXEC @n_err = [dbo].[nspRDTPASTD]
-           @c_userid        = 'RDT'
-         , @c_storerkey     = @cStorerKey
-         , @c_lot           = ''
-         , @c_sku           = @cSKU
-         , @c_id            = @cID
-         , @c_fromloc       = @cFromLOC
-         , @n_qty           = @nQTY
-         , @c_uom           = '' -- not used
-         , @c_packkey       = '' -- optional, if pass-in SKU
-         , @n_putawaycapacity = 0
-         , @c_final_toloc     = @cSuggestedLOC OUTPUT
+      -- V3.6 JCH507 Start
+      -- Get suggest LOC
+      SET @nPAErrNo = 0
+      SET @nPABookingKey = 0
 
-      IF @nErrNo <> 0
+      EXEC rdt.rdt_Putaway_GetSuggestLOC @nMobile, @nFunc, @cLangCode, @cUserName, @cStorerKey, @cFacility
+         ,@cFromLOC
+         ,@cID
+         ,'' --NO LOT
+         ,'' --NO UCC
+         ,@cSKU
+         ,@nQTY
+         ,@cSuggestedLOC   OUTPUT
+         ,@cPickAndDropLoc OUTPUT
+         ,@nPABookingKey   OUTPUT
+         ,@nPAErrNo  OUTPUT
+         ,@cErrMsg         OUTPUT
+      IF @nPAErrNo <> 0 AND
+         @nPAErrNo <> -1 -- No suggested LOC
       BEGIN
+         SET @nErrNo = @nPAErrNo
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
          GOTO Quit
       END
+
+      -- V3.6 JCH507 END
 
      -- Check any suggested LOC
       IF @cSuggestedLOC = ''
@@ -781,22 +795,6 @@ BEGIN
       BEGIN
          SET @nErrNo = 63815
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- NoSuggestedLOC
-      END
-
-
-
-      -- Lock suggested location
-      IF ISNULL(RTRIM(@cSuggestedLoc),'') NOT IN ('', 'SEE_SUPV') -- (ChewKP02)
-      BEGIN
-         EXEC rdt.rdt_Putaway_PendingMoveIn @cUserName, 'LOCK'
-            ,@cFromLOC
-            ,@cID
-            ,@cSuggestedLOC
-            ,@cStorerKey
-            ,@nErrNo  OUTPUT
-            ,@cErrMsg OUTPUT
-            ,@cSKU = @cSKU
-            ,@nPutawayQTY = @nQTY
       END
 
       -- Prepare next screen variable

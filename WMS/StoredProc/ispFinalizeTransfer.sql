@@ -62,9 +62,12 @@ GO
 /* 10-Feb-2023  NJOW04    3.3 DEVOPS Combine Script                       */
 /* 07-Aug-2023  NJOW05    3.4 INC2128003 fix transfer error by adding     */
 /*                            lot,loc,id and channel validation           */
+/* 08-Oct-2024  PYU015    3.5 fix transferdetail lot value                */
+/* 12-AUG-2024  Wan11     3.6 LFWM-4446 - RG[GIT] Serial Number Solution  */
+/*                            - Transfer by Serial Number                 */
 /**************************************************************************/
 
-CREATE OR ALTER PROC ispFinalizeTransfer
+CREATE OR ALTER PROC [dbo].[ispFinalizeTransfer]
    @c_Transferkey    NVARCHAR(10),
    @b_Success        int = 0  OUTPUT,
    @n_err            int = 0  OUTPUT,
@@ -151,6 +154,7 @@ BEGIN
          , @c_Remark                   NVARCHAR(255)
          , @c_AllowTransferUCC         NVARCHAR(10)
          , @c_Facility                 NVARCHAR(5)
+         , @c_ToFacility               NVARCHAR(5) --PY01
          /* KC01 - end */
          , @c_FromSkuStatus            NVARCHAR(10) -- IN00051925
          , @c_ToSkuStatus              NVARCHAR(10) -- IN00051925
@@ -159,6 +163,7 @@ BEGIN
          , @cFromChannel               NVARCHAR(20) --NJOW05
          , @cToChannel                 NVARCHAR(20) --NJOW05
          , @n_ChannelAvailableQty      INT --NJOW05
+         , @b_CheckToValue             INT -- WAN11
 
    --XXXXXXX--
    SET @nStartTranCount = @@TRANCOUNT
@@ -315,12 +320,28 @@ BEGIN
          , @c_FromUCCStatus            NVARCHAR(10)            --(Wan10)
          , @c_ToUCCStatus              NVARCHAR(10)            --(Wan10)
 
+         , @c_SerialNoCapture          NVARCHAR(1)  = ''       --(Wan11)
+         , @c_FromSerialNo             NVARCHAR(50) = ''       --(Wan11)
+         , @c_ToSerialNo               NVARCHAR(50) = ''       --(Wan11)
+         , @c_SerialNoKey              NVARCHAR(10) = ''       --(Wan11)
+
+         , @c_SerialNo_Lot             NVARCHAR(10) = ''       --(Wan11)
+         , @c_SerialNo_ID              NVARCHAR(18) = ''       --(Wan11)
+         , @c_SerialNo_Status          NVARCHAR(10) = ''       --(Wan11)
+         , @n_SerialNo_Cnt             INT          = 0        --(Wan11)
+         , @n_SerialNo_Qty             INT          = 0        --(Wan11)
+         , @n_SerialNo_TRFQty          INT          = 0        --(Wan11)
+
+         , @c_ASNFizUpdLotToSerialNo   NVARCHAR(10) = ''       --(Wan11)
+
 
    --1 XXXXXXX--
    BEGIN TRAN
 
    SELECT @cFromStorerKey = FromStorerKey,
           @c_Facility     = Facility
+         ,@c_ToFacility   = ToFacility --PY01
+         ,@c_ToStorerkey  = ToStorerkey                                            --(Wan11)
    FROM   TRANSFER WITH (NOLOCK)
    WHERE  TransferKey = @c_TransferKey
 
@@ -362,6 +383,12 @@ BEGIN
                     + ' Retrieve of Right (ScanInLog) Failed (ispFinalizeTransfer) ( '
                     + ' SQLSvr MESSAGE=' + ISNULL(dbo.fnc_LTrim(RTRIM(@c_errmsg)),'') + ' ) '
    End
+
+   IF @nContinue IN (1,2)                                                           --(Wan11) - START
+   BEGIN
+      SELECT @c_ASNFizUpdLotToSerialNo = fsgr.Authority
+      FROM dbo.fnc_SelectGetRight(@c_ToFacility, @c_ToStorerkey, '', 'ASNFizUpdLotToSerialNo')AS fsgr
+   END                                                                              --(Wan11) - END
 
    /* KC01 - start */
    EXECUTE dbo.nspGetRight
@@ -560,7 +587,7 @@ BEGIN
          FETCH NEXT FROM CUR_TRFCHANNEL INTO @cTransferLineNumber, @cFromLOT, @cFromSKU, @cFromChannel, @nFromQty, @cToChannel       
          
          WHILE @@FETCH_STATUS = 0 AND @nContinue IN (1,2)
-         BEGIN         	
+         BEGIN          
             SET @n_Channel_ID = 0
             SET @n_ChannelAvailableQty = 0
             
@@ -573,7 +600,7 @@ BEGIN
                    ,@n_Channel_ID  = @n_Channel_ID OUTPUT
                    ,@b_Success     = @b_Success OUTPUT
                    ,@n_ErrNo       = @n_Err     OUTPUT
-                   ,@c_ErrMsg      = @c_ErrMsg  OUTPUT      	
+                   ,@c_ErrMsg      = @c_ErrMsg  OUTPUT         
             
             IF ISNULL(@n_Channel_ID,0) = 0
             BEGIN
@@ -581,7 +608,7 @@ BEGIN
                SET @n_err = 80030
                SET @c_errmsg =  'NSQL' + CONVERT(CHAR(5), ISNULL(RTrim(@n_err),0))
                              + ' Unable find from Channel inventory at transfer line ' + @cTransferLineNumber + ' (ispFinalizeTransfer) ( '
-                             + ' SQLSvr MESSAGE=' + ISNULL(dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)),'') + ' ) '            	
+                             + ' SQLSvr MESSAGE=' + ISNULL(dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)),'') + ' ) '             
             END
             ELSE
             BEGIN
@@ -595,17 +622,17 @@ BEGIN
                   SET @n_err = 80040
                   SET @c_errmsg =  'NSQL' + CONVERT(CHAR(5), ISNULL(RTrim(@n_err),0))
                                 + ' Insufficient from Channel inventory qty at transfer line ' + @cTransferLineNumber + ' (ispFinalizeTransfer) ( '
-                                + ' SQLSvr MESSAGE=' + ISNULL(dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)),'') + ' ) '            	                  
-               END                           	
+                                + ' SQLSvr MESSAGE=' + ISNULL(dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)),'') + ' ) '                               
+               END                              
             END
-            	  
+                 
             FETCH NEXT FROM CUR_TRFCHANNEL INTO @cTransferLineNumber, @cFromLOT, @cFromSKU, @cFromChannel, @nFromQty, @cToChannel       
          END
          CLOSE CUR_TRFCHANNEL
-         DEALLOCATE CUR_TRFCHANNEL      	      
+         DEALLOCATE CUR_TRFCHANNEL              
          
          IF @nContinue = 3
-            GOTO Quit_Proc         	
+            GOTO Quit_Proc          
       END      
    END
    --NJOW05 E
@@ -623,46 +650,46 @@ BEGIN
 
       IF ISNULL(@cTRFValidationRules,'') <> ''
       BEGIN
-            EXEC isp_TRF_ExtendedValidation @cTransferKey = @c_Transferkey,
-                                             @cTRFValidationRules=@cTRFValidationRules,
-                                             @nSuccess=@b_Success OUTPUT, @cErrorMsg=@c_ErrMsg OUTPUT
-                                          , @c_TransferLineNumber = @c_TransferLineNumber       --(Wan08)
+         EXEC isp_TRF_ExtendedValidation @cTransferKey = @c_Transferkey,
+                                          @cTRFValidationRules=@cTRFValidationRules,
+                                          @nSuccess=@b_Success OUTPUT, @cErrorMsg=@c_ErrMsg OUTPUT
+                                       , @c_TransferLineNumber = @c_TransferLineNumber       --(Wan08)
+
+         IF @b_Success <> 1
+         BEGIN
+            SELECT @nContinue = 3
+            SELECT @n_err = 80020
+            GOTO Quit_Proc
+         END
+      END
+      ELSE
+      BEGIN
+         SELECT @cTRFValidationRules = SC.sValue
+         FROM STORERCONFIG SC (NOLOCK)
+         WHERE SC.StorerKey = @cFromStorerKey
+         AND SC.Configkey = 'TRFExtendedValidation'
+
+         IF EXISTS (SELECT 1 FROM dbo.sysobjects WHERE name = RTRIM(@cTRFValidationRules) AND type = 'P')
+         BEGIN
+            SET @c_SQL = 'EXEC ' + @cTRFValidationRules + ' @c_TransferKey, @b_Success OUTPUT, @n_Err OUTPUT, @c_ErrMsg OUTPUT '
+                                 + ',@c_TransferLineNumber'                      --(Wan08)
+
+            EXEC sp_EXECUTEsql @c_SQL,
+                  N'@c_TransferKey NVARCHAR(10), @b_Success Int OUTPUT, @n_Err Int OUTPUT, @c_ErrMsg NVARCHAR(250) OUTPUT
+                  ,@c_TransferLineNumber NVARCHAR(5)' ,                          --(Wan08)
+                  @c_TransferKey,
+                  @b_Success OUTPUT,
+                  @n_Err OUTPUT,
+                  @c_ErrMsg OUTPUT
+               , @c_TransferLineNumber                                           --(Wan08)
 
             IF @b_Success <> 1
             BEGIN
                SELECT @nContinue = 3
-               SELECT @n_err = 80020
+               SELECT @n_err = 80030
                GOTO Quit_Proc
             END
-      END
-      ELSE
-      BEGIN
-            SELECT @cTRFValidationRules = SC.sValue
-            FROM STORERCONFIG SC (NOLOCK)
-            WHERE SC.StorerKey = @cFromStorerKey
-            AND SC.Configkey = 'TRFExtendedValidation'
-
-            IF EXISTS (SELECT 1 FROM dbo.sysobjects WHERE name = RTRIM(@cTRFValidationRules) AND type = 'P')
-            BEGIN
-               SET @c_SQL = 'EXEC ' + @cTRFValidationRules + ' @c_TransferKey, @b_Success OUTPUT, @n_Err OUTPUT, @c_ErrMsg OUTPUT '
-                                    + ',@c_TransferLineNumber'                      --(Wan08)
-
-               EXEC sp_EXECUTEsql @c_SQL,
-                    N'@c_TransferKey NVARCHAR(10), @b_Success Int OUTPUT, @n_Err Int OUTPUT, @c_ErrMsg NVARCHAR(250) OUTPUT
-                     ,@c_TransferLineNumber NVARCHAR(5)' ,                          --(Wan08)
-                    @c_TransferKey,
-                    @b_Success OUTPUT,
-                    @n_Err OUTPUT,
-                    @c_ErrMsg OUTPUT
-                  , @c_TransferLineNumber                                           --(Wan08)
-
-               IF @b_Success <> 1
-               BEGIN
-           SELECT @nContinue = 3
-                  SELECT @n_err = 80030
-                  GOTO Quit_Proc
-               END
-            END
+         END
       END
    END --    IF @n_Continue = 1 OR @n_Continue = 2
    ---NJOW01 End
@@ -726,7 +753,7 @@ BEGIN
    BEGIN
       SET @b_Success = 0
       EXECUTE dbo.ispPreFinalizeTransferWrapper
-              @c_TransferKey             = @c_TransferKey
+              @c_TransferKey            = @c_TransferKey
             , @c_PreFinalizeTransferSP  = @c_PreFinalizeTransferSP
             , @b_Success = @b_Success     OUTPUT
             , @n_Err     = @n_err         OUTPUT
@@ -947,6 +974,11 @@ BEGIN
       WHERE EXISTS (SELECT 1
                     FROM #TMP_TFD TD WITH (NOLOCK)
                     WHERE TD.ToLoc = LLI.Loc)
+      /* PYU015 Start*/
+     AND NOT EXISTS(SELECT 1
+                    FROM #TMP_TFD TD WITH (NOLOCK)
+                    WHERE TD.FromLoc = LLI.Loc)
+      /* PYU015 - end */
       AND LLI.Qty > 0
       GROUP BY LLI.Storerkey
             ,  LLI.Sku
@@ -980,7 +1012,8 @@ BEGIN
 
    WHILE @@FETCH_STATUS <> -1
    BEGIN
-      SELECT @c_FromStorerkey  = FromStorerkey
+     /* PYU015 Start*/
+     /* SELECT @c_FromStorerkey  = FromStorerkey
             ,@c_FromSku        = FromSku
             ,@c_FromLoc        = FromLoc
             ,@n_FromQty        = FromQty
@@ -1021,7 +1054,73 @@ BEGIN
       FROM TRANSFERDETAIL WITH (NOLOCK)
       WHERE TransferKey = @c_TrfKey
       AND   TransferLineNumber = @c_TrfLineNo
+      */
 
+      SELECT @c_FromStorerkey  = FromStorerkey
+            ,@c_FromSku        = FromSku
+            ,@c_FromLoc        = FromLoc
+            ,@n_FromQty        = FromQty
+            ,@c_FromLottable01 = Fromattr.Lottable01
+            ,@c_FromLottable02 = Fromattr.Lottable02
+            ,@c_FromLottable03 = Fromattr.Lottable03
+            ,@d_FromLottable04 = CASE WHEN Fromattr.Lottable04 IS NULL THEN '19000101' ELSE Fromattr.Lottable04 END
+            ,@d_FromLottable05 = CASE WHEN Fromattr.Lottable05 IS NULL THEN '19000101' ELSE Fromattr.Lottable05 END
+            ,@c_FromLottable06 = Fromattr.Lottable06
+            ,@c_FromLottable07 = Fromattr.Lottable07
+            ,@c_FromLottable08 = Fromattr.Lottable08
+            ,@c_FromLottable09 = Fromattr.Lottable09
+            ,@c_FromLottable10 = Fromattr.Lottable10
+            ,@c_FromLottable11 = Fromattr.Lottable11
+            ,@c_FromLottable12 = Fromattr.Lottable12
+            ,@d_FromLottable13 = CASE WHEN Fromattr.Lottable13 IS NULL THEN '19000101' ELSE Fromattr.Lottable13 END
+            ,@d_FromLottable14 = CASE WHEN Fromattr.Lottable14 IS NULL THEN '19000101' ELSE Fromattr.Lottable14 END
+            ,@d_FromLottable15 = CASE WHEN Fromattr.Lottable15 IS NULL THEN '19000101' ELSE Fromattr.Lottable15 END
+            ,@c_ToStorerkey    = ToStorerkey
+            ,@c_ToSku          = ToSku
+            ,@c_ToLoc          = ToLoc
+            ,@n_ToQty          = ToQty
+            ,@c_ToLottable01   = CASE WHEN RTRIM(trn.ToLot)='' THEN trn.ToLottable01 ELSE Toattr.Lottable01 END
+            ,@c_ToLottable02   = CASE WHEN RTRIM(trn.ToLot)='' THEN trn.ToLottable02 ELSE Toattr.Lottable02 END
+            ,@c_ToLottable03   = CASE WHEN RTRIM(trn.ToLot)='' THEN trn.ToLottable03 ELSE Toattr.Lottable03 END
+            ,@d_ToLottable04   = CASE WHEN RTRIM(trn.ToLot)  ='' AND trn.ToLottable04 IS NULL THEN '19000101' 
+                                      WHEN RTRIM(trn.ToLot)  ='' AND trn.ToLottable04 IS NOT NULL THEN trn.ToLottable04
+                                      WHEN RTRIM(trn.ToLot) !='' AND Toattr.Lottable04 IS NULL THEN '19000101'
+                                      WHEN RTRIM(trn.ToLot) !='' AND Toattr.Lottable04 IS NOT NULL THEN Toattr.Lottable04
+                                      ELSE trn.ToLottable04 END
+            ,@d_ToLottable05   = CASE WHEN RTRIM(trn.ToLot)  ='' AND trn.ToLottable05 IS NULL THEN '19000101' 
+                                      WHEN RTRIM(trn.ToLot)  ='' AND trn.ToLottable05 IS NOT NULL THEN trn.ToLottable05
+                                      WHEN RTRIM(trn.ToLot) !='' AND Toattr.Lottable05 IS NULL THEN '19000101'
+                                      WHEN RTRIM(trn.ToLot) !='' AND Toattr.Lottable05 IS NOT NULL THEN Toattr.Lottable05
+                                      ELSE trn.ToLottable05 END
+            ,@c_ToLottable06   = CASE WHEN RTRIM(trn.ToLot)='' THEN trn.ToLottable06 ELSE Toattr.Lottable06 END
+            ,@c_ToLottable07   = CASE WHEN RTRIM(trn.ToLot)='' THEN trn.ToLottable07 ELSE Toattr.Lottable07 END
+            ,@c_ToLottable08   = CASE WHEN RTRIM(trn.ToLot)='' THEN trn.ToLottable08 ELSE Toattr.Lottable08 END
+            ,@c_ToLottable09   = CASE WHEN RTRIM(trn.ToLot)='' THEN trn.ToLottable09 ELSE Toattr.Lottable09 END
+            ,@c_ToLottable10   = CASE WHEN RTRIM(trn.ToLot)='' THEN trn.ToLottable10 ELSE Toattr.Lottable10 END
+            ,@c_ToLottable11   = CASE WHEN RTRIM(trn.ToLot)='' THEN trn.ToLottable11 ELSE Toattr.Lottable11 END
+            ,@c_ToLottable12   = CASE WHEN RTRIM(trn.ToLot)='' THEN trn.ToLottable12 ELSE Toattr.Lottable12 END
+            ,@d_ToLottable13   = CASE WHEN RTRIM(trn.ToLot)  ='' AND trn.ToLottable13 IS NULL THEN '19000101' 
+                                      WHEN RTRIM(trn.ToLot)  ='' AND trn.ToLottable13 IS NOT NULL THEN trn.ToLottable13
+                                      WHEN RTRIM(trn.ToLot) !='' AND Toattr.Lottable13 IS NULL THEN '19000101'
+                                      WHEN RTRIM(trn.ToLot) !='' AND Toattr.Lottable13 IS NOT NULL THEN Toattr.Lottable13
+                                      ELSE trn.ToLottable13 END
+            ,@d_ToLottable14   = CASE WHEN RTRIM(trn.ToLot)  ='' AND trn.ToLottable14 IS NULL THEN '19000101' 
+                                      WHEN RTRIM(trn.ToLot)  ='' AND trn.ToLottable14 IS NOT NULL THEN trn.ToLottable14
+                                      WHEN RTRIM(trn.ToLot) !='' AND Toattr.Lottable14 IS NULL THEN '19000101'
+                                      WHEN RTRIM(trn.ToLot) !='' AND Toattr.Lottable14 IS NOT NULL THEN Toattr.Lottable14
+                                      ELSE trn.ToLottable14 END
+            ,@d_ToLottable15   = CASE WHEN RTRIM(trn.ToLot)  ='' AND trn.ToLottable15 IS NULL THEN '19000101' 
+                                      WHEN RTRIM(trn.ToLot)  ='' AND trn.ToLottable15 IS NOT NULL THEN trn.ToLottable15
+                                      WHEN RTRIM(trn.ToLot) !='' AND Toattr.Lottable15 IS NULL THEN '19000101'
+                                      WHEN RTRIM(trn.ToLot) !='' AND Toattr.Lottable15 IS NOT NULL THEN Toattr.Lottable15
+                                      ELSE trn.ToLottable15 END
+      FROM TRANSFERDETAIL trn WITH (NOLOCK)
+      INNER JOIN LOTATTRIBUTE Fromattr WITH(NOLOCK) ON trn.FromLot = Fromattr.Lot
+      LEFT OUTER JOIN LOTATTRIBUTE Toattr WITH(NOLOCK) ON trn.ToLot = Toattr.Lot
+      WHERE TransferKey = @c_TrfKey
+      AND   TransferLineNumber = @c_TrfLineNo
+
+      /* PYU015 End*/
 
       -- WithDraw
       UPDATE #TMP_LLI
@@ -1121,7 +1220,7 @@ BEGIN
    DEALLOCATE CUR_TFD
    --(Wan07) - END
 
-   -- 2 XXXXXXX--
+    -- 2 XXXXXXX--
    WHILE @@TRANCOUNT > 0 
       COMMIT TRAN      
       
@@ -1140,6 +1239,7 @@ BEGIN
                 ToLottable06, ToLottable07,  ToLottable08,  ToLottable09,  ToLottable10,
                 ToLottable11, ToLottable12,  ToLottable13,  ToLottable14,  ToLottable15
                 /* KC01 - end */
+               ,FromSerialNo, ToSerialNo                                            --(Wan11)
          FROM   TRANSFERDETAIL WITH (NOLOCK)
          WHERE  TransferKey = @c_TransferKey
          AND    TransferLineNumber = CASE WHEN @c_TransferLineNumber = '' THEN TransferLineNumber  --(Wan08)
@@ -1161,7 +1261,7 @@ BEGIN
                @c_ToLottable06,     @c_ToLottable07,     @c_ToLottable08,     @c_ToLottable09,     @c_ToLottable10,
                @c_ToLottable11,     @c_ToLottable12,     @d_ToLottable13,     @d_ToLottable14,     @d_ToLottable15
                /* KC01 - end */
-
+               ,@c_FromSerialNo, @c_ToSerialNo                                      --(Wan11)
       WHILE @@FETCH_STATUS <> -1
       BEGIN
          -- 2 XXXXXXX--
@@ -1958,6 +2058,166 @@ BEGIN
             END
          END
          --TK01 END
+
+         SELECT @c_SerialNoCapture = s.SerialNoCapture                              --(Wan11) - START
+         FROM SKU s (NOLOCK)
+                     WHERE s.StorerKey = @cFromStorerKey
+                     AND   s.Sku = @cFromSku
+                     AND   s.SerialNoCapture IN ('1','2','3')
+
+         IF @c_SerialNoCapture IN ('1','2','3')
+         BEGIN
+            IF @c_FromSerialNo = '' AND @c_ASNFizUpdLotToSerialNo = '1' AND
+               @c_SerialNoCapture IN ('1','2')
+            BEGIN
+               SET @nContinue = 3
+               SET @n_Err = 80050
+               SET @c_errmsg = 'NSQL' + CONVERT(CHAR(5), @n_Err)
+                             + ': From SerialNo is required'
+                             + '. Line #: ' + @cTransferLineNumber
+                             + '. (ispFinalizeTransfer)'
+               GOTO Quit_Proc
+            END
+
+            SET @b_CheckToValue = 0
+            IF @c_FromSerialNo > '' OR @c_ToSerialNo > ''
+            BEGIN
+                IF @c_FromSerialNo <> @c_ToSerialNo OR
+                    @cFromSku <> @cToSku OR
+                    @nFromQty <> @nToQty
+                BEGIN
+                    SET @b_CheckToValue = 1
+                END
+
+                IF @b_CheckToValue = 0 AND @c_ASNFizUpdLotToSerialNo = '1' AND
+                    @cFromID <> @cToID
+                BEGIN
+                    SET @b_CheckToValue = 1
+                END
+
+                IF @b_CheckToValue = 1
+                BEGIN
+                    SET @n_Err = 80053
+                    SET @c_errmsg = 'NSQL' + CONVERT(CHAR(6), @n_Err)
+                                 + ': Serialno transfer are required same From & To Sku'
+                                 + ', ID And Serialno'
+                                 + '. From SerialNo: ' + @c_FromSerialNo
+                                 + ', Line #: ' + @cTransferLineNumber
+                                 + '. (ispFinalizeTransfer)'
+
+                    GOTO Quit_Proc
+                END
+
+                IF @nFromQty NOT IN (1)
+                BEGIN
+                    SET @nContinue = 3
+                    SET @n_Err = 80051
+                    SET @c_errmsg = 'NSQL' + CONVERT(CHAR(5), @n_Err)
+                                  + ': SerialNo transfer qty is mandatory to be 1'
+                                  + '. From SerialNo: ' + @c_FromSerialNo
+                                  + ', Line #: ' + @cTransferLineNumber
+                                  + '. (ispFinalizeTransfer)'
+                    GOTO Quit_Proc
+                END
+
+                IF @c_ASNFizUpdLotToSerialNo = '1' AND (@cFromID = '' Or @cToID ='')
+                BEGIN
+                    SET @nContinue = 3
+                    SET @n_Err = 80052
+                    SET @c_errmsg = 'NSQL' + CONVERT(CHAR(5), @n_Err)
+                                  + ': From & To ID are Required for SerialNo Transfer'
+                                  + '. To SerialNo: ' + @c_ToSerialNo
+                                  + ', Line #: ' + @cTransferLineNumber
+                                  + '. (ispFinalizeTransfer)'
+                    GOTO Quit_Proc
+                END
+
+                SET @n_SerialNo_Cnt    = 0
+                SET @c_SerialNo_Lot = ''
+                SET @c_SerialNo_ID  = ''
+                SET @c_SerialNo_Status = ''
+
+                SELECT @n_SerialNo_Cnt = 1
+                      ,@c_SerialNo_Lot = sn.Lot
+                      ,@c_SerialNo_ID  = sn.ID
+                      ,@c_SerialNo_Status = sn.[Status]
+                      ,@n_SerialNo_Qty = sn.Qty
+                FROM SerialNo sn (NOLOCK)
+                WHERE sn.SerialNo = @c_FromSerialNo
+                AND   sn.Storerkey= @cFromStorerkey
+                AND   sn.Sku= @cFromSku
+
+                IF @n_SerialNo_Cnt = 1
+                BEGIN
+                   IF @c_SerialNo_Status IN ('CANC', '9')
+                   BEGIN
+                      SET @n_SerialNo_Cnt = 0
+                   END
+
+                   IF @c_ASNFizUpdLotToSerialNo = '1' AND
+                      (@c_SerialNo_Lot <> @cFromLot OR @c_SerialNo_ID <> @cFromID)
+                   BEGIN
+                      SET @n_SerialNo_Cnt = 0
+                   END
+
+                   IF @n_SerialNo_Qty <> 1
+                   BEGIN
+                      SET @nContinue = 3
+                      SET @n_Err = 80054
+                      SET @c_errmsg = 'NSQL' + CONVERT(CHAR(5), @n_Err)
+                                     + ': Invalid Serialno qty found in SerialNo Table for adjustment'
+                                     + '. From SerialNo: ' + @c_FromSerialNo
+                                     + ', Line #: ' + @cTransferLineNumber
+                                     + '. (ispFinalizeTransfer)'
+                      GOTO Quit_Proc
+                   END
+
+                   IF @n_SerialNo_Cnt = 0
+                   BEGIN
+                      SET @nContinue = 3
+                      SET @n_Err = 80055
+                      SET @c_errmsg = 'NSQL' + CONVERT(CHAR(5), @n_Err)
+                                     + ': From SerialNo not found for transfer'
+                                     + '. From SerialNo: ' + @c_FromSerialNo
+                                     + ', Line #: ' + @cTransferLineNumber
+                                     + '. (ispFinalizeTransfer)'
+                      GOTO Quit_Proc
+                   END
+
+                   IF @n_SerialNo_Cnt = 1 AND @c_SerialNo_Status IN ('5','6')
+                   BEGIN
+                      SET @nContinue = 3
+                      SET @n_Err = 80056
+                      SET @c_errmsg = 'NSQL' + CONVERT(CHAR(5), @n_Err)
+                                     + ': Disallow transfer for Picked/Packed From SerialNo: ' + @c_FromSerialNo
+                                     + '. Line #: ' + @cTransferLineNumber
+                                     + '. (ispFinalizeTransfer)'
+                      GOTO Quit_Proc
+                   END
+                END
+                ELSE
+                BEGIN
+                   SET @nContinue = 3
+                   SET @n_Err = 80058
+                   SET @c_errmsg = 'NSQL' + CONVERT(CHAR(5), @n_Err)
+                                     + ': Transfer from SerialNo not found: ' + @c_FromSerialNo
+                                     + '. Line #: ' + @cTransferLineNumber
+                                     + '. (ispFinalizeTransfer)'
+                   GOTO Quit_Proc
+                END
+            END
+         END
+         ELSE IF @c_FromSerialNo <> ''
+         BEGIN
+            SET @nContinue = 3
+            SET @n_Err = 80057
+            SET @c_errmsg = 'NSQL' + CONVERT(CHAR(6), @n_Err)
+                           + ': From & To ToSerialNo is Not required.'
+                           + '. From SerialNo: ' + @c_FromSerialNo + ', Line #: ' + @cTransferLineNumber
+                           + '. Please make sure From & To SerialNo are same value'
+                           + '. (ispFinalizeTransfer) |' + @c_FromSerialNo
+            GOTO Quit_Proc
+         END            --(Wan11) - END
          --------------------------------------------------------------------------------------------------------------------------------------
 
          UPDATE TRANSFERDETAIL WITH (ROWLOCK)
@@ -1989,7 +2249,7 @@ BEGIN
                SELECT @c_LoseUCC = ISNULL(LoseUCC,'')
                FROM Loc WITH (NOLOCK)
                WHERE Loc = @cToLOC
-               AND Facility = @c_Facility
+               AND Facility in ( @c_Facility , @c_ToFacility) --PY01
 
                SELECT TOP 1
                   @cUCCStatus = [status],
@@ -2491,7 +2751,7 @@ BEGIN
                @c_ToLottable06,     @c_ToLottable07,     @c_ToLottable08,     @c_ToLottable09,     @c_ToLottable10,
                @c_ToLottable11,     @c_ToLottable12,     @d_ToLottable13,     @d_ToLottable14,     @d_ToLottable15
                /* KC01 - end */
-
+               ,@c_FromSerialNo, @c_ToSerialNo                                      --(Wan11)
       END -- While
       CLOSE CUR_TRANSFERDET
       DEALLOCATE CUR_TRANSFERDET

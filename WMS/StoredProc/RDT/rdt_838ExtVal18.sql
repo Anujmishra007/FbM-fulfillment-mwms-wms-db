@@ -6,10 +6,13 @@ GO
 
 /************************************************************************/
 /* Store procedure: rdt_838ExtVal18                                     */
-/* Copyright      : LF Logistics                                        */
+/* Copyright      : Maersk                                              */
+/* Customer       : Royal Enfield                                       */
 /*                                                                      */
 /* Date       Rev  Author      Purposes                                 */
 /* 2023-11-14 1.0  yeekung     WMS-23946 Created                        */
+/* 2024-01-09 1.1  Ung         WMS-24587 Add TO DROP ID reuse checking  */
+/* 2025-04-18 1.2  CYU027      FCR-3473 Validate Max Weight             */
 /************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_838ExtVal18 (
@@ -42,7 +45,7 @@ CREATE OR ALTER PROC rdt.rdt_838ExtVal18 (
    @cPackData2       NVARCHAR( 30),
    @cPackData3       NVARCHAR( 30),
    @nErrNo           INT            OUTPUT,
-   @cErrMsg          NVARCHAR( 20)  OUTPUT
+   @cErrMsg          NVARCHAR( 1024)  OUTPUT
 )
 AS
 BEGIN
@@ -59,9 +62,32 @@ BEGIN
    DECLARE @cPackSKU NVARCHAR(20)
    DECLARE @nPackQTY  INT
    DECLARE @cErrMsg1  NVARCHAR(20)
+   DECLARE @nMaxWeight FLOAT
+   DECLARE @nInputWeight FLOAT
 
    IF @nFunc = 838 -- Pack
    BEGIN
+      IF @nStep = 2 -- Option
+      BEGIN
+         IF @nInputKey = 1 -- ENTER
+         BEGIN
+            IF @cPackDtlDropID <> '' AND  -- TO DROP ID
+               @cOption = '1'             -- NEW carton
+            BEGIN
+               -- Check TO DROP ID had used 
+               IF EXISTS( SELECT TOP 1 1 
+                  FROM dbo.PackDetail WITH (NOLOCK)
+                  WHERE StorerKey = @cStorerKey
+                     AND DropID = @cPackDtlDropID)
+               BEGIN
+                  SET @nErrNo = 208803
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Pack NewCarton
+                  GOTO Quit
+               END
+            END
+         END
+      END
+      
       IF @nStep = 3 -- SKU
       BEGIN
          IF @nInputKey = 1 -- ENTER
@@ -120,6 +146,33 @@ BEGIN
                   SET @nErrNo = 0
                END
             END
+         END
+      END
+
+      IF @nStep = 4 -- Weight
+      BEGIN
+         IF @nInputKey = 1 -- ENTER
+         BEGIN
+
+            SET @nInputWeight = ISNULL( CAST( @cWeight AS FLOAT), 0)
+
+            IF @nInputWeight > 0
+            BEGIN
+               SELECT
+                  @nMaxWeight= CONVERT(FLOAT,ISNULL( MaxWeight, 0))/1000 --input is kg
+               FROM Cartonization WITH (NOLOCK)
+                       INNER JOIN Storer WITH (NOLOCK) ON (Storer.CartonGroup = Cartonization.CartonizationGroup)
+               WHERE Storer.StorerKey = @cStorerKey
+                 AND Cartonization.CartonType = @cCartonType
+
+               IF @nInputWeight > @nMaxWeight
+               BEGIN
+                  SET @nErrNo = 237001
+                  SET @cErrMsg = REPLACE (rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP'),'{}',@nMaxWeight)--Max Weight cannot exceed {}
+                  GOTO Quit
+               END
+            END
+
          END
       END
    END

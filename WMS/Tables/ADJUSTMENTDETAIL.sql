@@ -1,3 +1,7 @@
+IF NOT EXISTS (SELECT *
+               FROM sys.tables
+               WHERE name = 'ADJUSTMENTDETAIL' AND type = 'U')
+BEGIN
 CREATE TABLE [dbo].[ADJUSTMENTDETAIL]
 (
 [AdjustmentKey] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
@@ -56,130 +60,157 @@ CREATE TABLE [dbo].[ADJUSTMENTDETAIL]
 [Lottable14] [datetime] NULL,
 [Lottable15] [datetime] NULL,
 [Channel] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_AdjustmentDetail_Channel] DEFAULT (''),
-[Channel_ID] [bigint] NULL CONSTRAINT [DF_AdjustmentDetail_Channel_ID] DEFAULT ((0))
+[Channel_ID] [bigint] NULL CONSTRAINT [DF_AdjustmentDetail_Channel_ID] DEFAULT ((0)),
+[SerialNo] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_AdjustmentDetail_Serial_No] DEFAULT (''),
+[PalletType] [nvarchar] (10) NOT NULL CONSTRAINT [DF_AdjustmentDetail_PalletType] DEFAULT ('')
+
 ) ON [PRIMARY]
-GO
+
 GRANT SELECT ON  [dbo].[ADJUSTMENTDETAIL] TO [JReportRole]
-GO
+
 GRANT DELETE ON  [dbo].[ADJUSTMENTDETAIL] TO [NSQL]
-GO
+
 GRANT INSERT ON  [dbo].[ADJUSTMENTDETAIL] TO [NSQL]
-GO
+
 GRANT SELECT ON  [dbo].[ADJUSTMENTDETAIL] TO [NSQL]
-GO
+
 GRANT UPDATE ON  [dbo].[ADJUSTMENTDETAIL] TO [NSQL]
-GO
+
 ALTER TABLE [dbo].[ADJUSTMENTDETAIL] ADD CONSTRAINT [PKAdjustmentDetail] PRIMARY KEY CLUSTERED ([AdjustmentKey], [AdjustmentLineNumber]) WITH (FILLFACTOR=90) ON [PRIMARY]
-GO
+
 ALTER TABLE [dbo].[ADJUSTMENTDETAIL] WITH NOCHECK ADD CONSTRAINT [FK_ADJUSTMENTDETAIL_SKU_01] FOREIGN KEY ([StorerKey], [Sku]) REFERENCES [dbo].[SKU] ([StorerKey], [Sku])
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Date of the information added. (System date)', 'SCHEMA', N'dbo', 'TABLE', N'ADJUSTMENTDETAIL', 'COLUMN', N'AddDate'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'The username/login ID added the information.', 'SCHEMA', N'dbo', 'TABLE', N'ADJUSTMENTDETAIL', 'COLUMN', N'AddWho'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Unique code identifying Adjustment.', 'SCHEMA', N'dbo', 'TABLE', N'ADJUSTMENTDETAIL', 'COLUMN', N'AdjustmentKey'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'detail line number in sequence', 'SCHEMA', N'dbo', 'TABLE', N'ADJUSTMENTDETAIL', 'COLUMN', N'AdjustmentLineNumber'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Update to ''9'' for archiving purpose', 'SCHEMA', N'dbo', 'TABLE', N'ADJUSTMENTDETAIL', 'COLUMN', N'ArchiveCop'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'total case count', 'SCHEMA', N'dbo', 'TABLE', N'ADJUSTMENTDETAIL', 'COLUMN', N'CaseCnt'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Records the maximum cubic size for a Commodity the carton can hold.', 'SCHEMA', N'dbo', 'TABLE', N'ADJUSTMENTDETAIL', 'COLUMN', N'Cube'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Date of the information edited/modified/updated. (System date)', 'SCHEMA', N'dbo', 'TABLE', N'ADJUSTMENTDETAIL', 'COLUMN', N'EditDate'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'The username/login ID edited/modified/updated the information.', 'SCHEMA', N'dbo', 'TABLE', N'ADJUSTMENTDETAIL', 'COLUMN', N'EditWho'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Enter the date on which the transfer should take place', 'SCHEMA', N'dbo', 'TABLE', N'ADJUSTMENTDETAIL', 'COLUMN', N'EffectiveDate'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'confirm the adjustment by detail line', 'SCHEMA', N'dbo', 'TABLE', N'ADJUSTMENTDETAIL', 'COLUMN', N'FinalizedFlag'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Gross weight', 'SCHEMA', N'dbo', 'TABLE', N'ADJUSTMENTDETAIL', 'COLUMN', N'GrossWgt'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'pallet id of the goods to be adjusted', 'SCHEMA', N'dbo', 'TABLE', N'ADJUSTMENTDETAIL', 'COLUMN', N'Id'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Pick method to use when picking inner packs in the zone.', 'SCHEMA', N'dbo', 'TABLE', N'ADJUSTMENTDETAIL', 'COLUMN', N'InnerPack'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Unique code identifying Inventory Transaction.', 'SCHEMA', N'dbo', 'TABLE', N'ADJUSTMENTDETAIL', 'COLUMN', N'ItrnKey'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'physical location of the goods to be adjusted', 'SCHEMA', N'dbo', 'TABLE', N'ADJUSTMENTDETAIL', 'COLUMN', N'Loc'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'lot number associated with the product being adjusted', 'SCHEMA', N'dbo', 'TABLE', N'ADJUSTMENTDETAIL', 'COLUMN', N'Lot'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'User defined lottable01 - depends on Commodity lottable label01 set-up', 'SCHEMA', N'dbo', 'TABLE', N'ADJUSTMENTDETAIL', 'COLUMN', N'Lottable01'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'User defined lottable02 - depends on Commodity lottable label02 set-up', 'SCHEMA', N'dbo', 'TABLE', N'ADJUSTMENTDETAIL', 'COLUMN', N'Lottable02'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'User defined lottable03 - depends on Commodity lottable label03 set-up', 'SCHEMA', N'dbo', 'TABLE', N'ADJUSTMENTDETAIL', 'COLUMN', N'Lottable03'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'User defined lottable04 - manufacturing date/expiry date', 'SCHEMA', N'dbo', 'TABLE', N'ADJUSTMENTDETAIL', 'COLUMN', N'Lottable04'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'User defined lottable05 - receipt date', 'SCHEMA', N'dbo', 'TABLE', N'ADJUSTMENTDETAIL', 'COLUMN', N'Lottable05'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'User defined lottable06', 'SCHEMA', N'dbo', 'TABLE', N'ADJUSTMENTDETAIL', 'COLUMN', N'Lottable06'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'User defined lottable07', 'SCHEMA', N'dbo', 'TABLE', N'ADJUSTMENTDETAIL', 'COLUMN', N'Lottable07'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'User defined lottable08', 'SCHEMA', N'dbo', 'TABLE', N'ADJUSTMENTDETAIL', 'COLUMN', N'Lottable08'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'User defined lottable09', 'SCHEMA', N'dbo', 'TABLE', N'ADJUSTMENTDETAIL', 'COLUMN', N'Lottable09'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'User defined lottable10', 'SCHEMA', N'dbo', 'TABLE', N'ADJUSTMENTDETAIL', 'COLUMN', N'Lottable10'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'User defined lottable11', 'SCHEMA', N'dbo', 'TABLE', N'ADJUSTMENTDETAIL', 'COLUMN', N'Lottable11'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'User defined lottable12', 'SCHEMA', N'dbo', 'TABLE', N'ADJUSTMENTDETAIL', 'COLUMN', N'Lottable12'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'User defined lottable13', 'SCHEMA', N'dbo', 'TABLE', N'ADJUSTMENTDETAIL', 'COLUMN', N'Lottable13'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'User defined lottable14', 'SCHEMA', N'dbo', 'TABLE', N'ADJUSTMENTDETAIL', 'COLUMN', N'Lottable14'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'User defined lottable15', 'SCHEMA', N'dbo', 'TABLE', N'ADJUSTMENTDETAIL', 'COLUMN', N'Lottable15'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Net weight', 'SCHEMA', N'dbo', 'TABLE', N'ADJUSTMENTDETAIL', 'COLUMN', N'NetWgt'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Total quantity not found in the actual receiving 1', 'SCHEMA', N'dbo', 'TABLE', N'ADJUSTMENTDETAIL', 'COLUMN', N'OtherUnit1'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Total quantity not found in the actual receiving 2', 'SCHEMA', N'dbo', 'TABLE', N'ADJUSTMENTDETAIL', 'COLUMN', N'OtherUnit2'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Pack key of the SKU', 'SCHEMA', N'dbo', 'TABLE', N'ADJUSTMENTDETAIL', 'COLUMN', N'PackKey'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'A portable platform designed to allow a forklift or pallet jack to lift, move, and store various loads.', 'SCHEMA', N'dbo', 'TABLE', N'ADJUSTMENTDETAIL', 'COLUMN', N'Pallet'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'unit of quantity to be adjusted for the sku', 'SCHEMA', N'dbo', 'TABLE', N'ADJUSTMENTDETAIL', 'COLUMN', N'Qty'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'reason code to be adjusted', 'SCHEMA', N'dbo', 'TABLE', N'ADJUSTMENTDETAIL', 'COLUMN', N'ReasonCode'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'SKU being adjusted', 'SCHEMA', N'dbo', 'TABLE', N'ADJUSTMENTDETAIL', 'COLUMN', N'Sku'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Unique key to the storer record.', 'SCHEMA', N'dbo', 'TABLE', N'ADJUSTMENTDETAIL', 'COLUMN', N'StorerKey'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Timestamp', 'SCHEMA', N'dbo', 'TABLE', N'ADJUSTMENTDETAIL', 'COLUMN', N'TimeStamp'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'When checked, fields updated in this table will not trigger to update other tables that are linked with this table.', 'SCHEMA', N'dbo', 'TABLE', N'ADJUSTMENTDETAIL', 'COLUMN', N'TrafficCop'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'A unique number to identify the carton or pallet which is standard and will be used from suppliers to customers', 'SCHEMA', N'dbo', 'TABLE', N'ADJUSTMENTDETAIL', 'COLUMN', N'UCCNo'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'Unit of measurement in which the SKU will be adjusted', 'SCHEMA', N'dbo', 'TABLE', N'ADJUSTMENTDETAIL', 'COLUMN', N'UOM'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'adjusment detail Userdefine01', 'SCHEMA', N'dbo', 'TABLE', N'ADJUSTMENTDETAIL', 'COLUMN', N'UserDefine01'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'adjusment detail Userdefine02', 'SCHEMA', N'dbo', 'TABLE', N'ADJUSTMENTDETAIL', 'COLUMN', N'UserDefine02'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'adjusment detail Userdefine03', 'SCHEMA', N'dbo', 'TABLE', N'ADJUSTMENTDETAIL', 'COLUMN', N'UserDefine03'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'adjusment detail Userdefine04', 'SCHEMA', N'dbo', 'TABLE', N'ADJUSTMENTDETAIL', 'COLUMN', N'UserDefine04'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'adjusment detail Userdefine05', 'SCHEMA', N'dbo', 'TABLE', N'ADJUSTMENTDETAIL', 'COLUMN', N'UserDefine05'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'adjusment detail Userdefine06 (datetime)', 'SCHEMA', N'dbo', 'TABLE', N'ADJUSTMENTDETAIL', 'COLUMN', N'UserDefine06'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'adjusment detail Userdefine07 (datetime)', 'SCHEMA', N'dbo', 'TABLE', N'ADJUSTMENTDETAIL', 'COLUMN', N'UserDefine07'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'adjusment detail Userdefine08', 'SCHEMA', N'dbo', 'TABLE', N'ADJUSTMENTDETAIL', 'COLUMN', N'UserDefine08'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'adjusment detail Userdefine09', 'SCHEMA', N'dbo', 'TABLE', N'ADJUSTMENTDETAIL', 'COLUMN', N'UserDefine09'
-GO
+
 EXEC sp_addextendedproperty N'MS_Description', 'adjusment detail Userdefine10', 'SCHEMA', N'dbo', 'TABLE', N'ADJUSTMENTDETAIL', 'COLUMN', N'UserDefine10'
-GO
+
+EXEC sp_addextendedproperty N'MS_Description', 'adjustment detail SerialNo', 'SCHEMA', N'dbo', 'TABLE', N'ADJUSTMENTDETAIL', 'COLUMN', N'SerialNo'
+
+EXEC sp_addextendedproperty N'MS_Description', 'adjustment detail Pallet Type' , 'SCHEMA', N'dbo', 'TABLE', N'ADJUSTMENTDETAIL', 'COLUMN',N'PalletType'
+END
+ELSE 
+BEGIN
+IF NOT EXISTS (SELECT 1
+		               FROM sys.columns
+		               WHERE Name = 'SerialNo' AND Object_ID = Object_ID('ADJUSTMENTDETAIL'))
+				BEGIN
+					ALTER TABLE ADJUSTMENTDETAIL ADD SerialNo [nvarchar] (50) NOT NULL CONSTRAINT [DF_AdjustmentDetail_Serial_No] DEFAULT ('');
+					EXEC sp_addextendedproperty N'MS_Description', 'adjustment detail SerialNo', 'SCHEMA', N'dbo', 'TABLE', N'ADJUSTMENTDETAIL', 'COLUMN', N'SerialNo'
+				END
+ IF NOT EXISTS (SELECT *
+                       FROM sys.columns
+                       WHERE Name = 'PalletType'
+                         AND Object_ID = Object_ID('ADJUSTMENTDETAIL'))
+            BEGIN
+                ALTER TABLE ADJUSTMENTDETAIL
+                    ADD PalletType NVARCHAR(10) NOT NULL CONSTRAINT [DF_AdjustmentDetail_PalletType] DEFAULT ('');
+                EXEC sp_addextendedproperty N'MS_Description', 'adjustment detail Pallet Type', 'SCHEMA', N'dbo', 'TABLE',
+                     N'ADJUSTMENTDETAIL', 'COLUMN', N'PalletType'
+            END
+END

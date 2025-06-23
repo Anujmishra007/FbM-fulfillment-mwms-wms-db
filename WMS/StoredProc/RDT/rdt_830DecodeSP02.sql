@@ -15,6 +15,7 @@ GO
 /*                                                                            */
 /* Date        Author    Ver.  Purposes                                       */
 /* 10-10-2020  YeeKung   1.0   WMS-15415 Created                              */
+/* 2024-10-22  PXL009    1.1   FCR-759 ID and UCC Length Issue                */
 /******************************************************************************/
 
 CREATE PROC rdt.rdt_830DecodeSP02 ( 
@@ -48,6 +49,7 @@ CREATE PROC rdt.rdt_830DecodeSP02 (
   @dLottable13  DATETIME       OUTPUT,
   @dLottable14  DATETIME       OUTPUT,
   @dLottable15  DATETIME       OUTPUT,
+  @cUserDefine01 NVARCHAR(30)  OUTPUT,
   @nErrNo       INT            OUTPUT,
   @cErrMsg      NVARCHAR( 20)  OUTPUT
 ) AS
@@ -56,33 +58,42 @@ BEGIN
    SET QUOTED_IDENTIFIER OFF
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
-
-   declare @ctempsku nvarchar(20),
-           @cZone nvarchar(20),
-           @cPH_OrderKey nvarchar(20),
-           @cPH_LoadKey nvarchar(20),
-           @nRowCount INT,
-           @nStartPos  INT,
-           @nEndPos  INT,
-           @nTtlQty INT
-
-   IF LEN(@cUPC)>=16
+   IF @nFunc = 830
    BEGIN
-
-      IF (CHARINDEX ( '02' , @cUPC)=1 )
+      IF @nStep = 3 
       BEGIN
-         SET @nStartPos=CHARINDEX ( '02' , @cUPC)
+         IF @nInputKey = 1
+         BEGIN
 
-         set @nStartPos=@nStartPos+2
+            declare @ctempsku nvarchar(20),
+                  @cZone nvarchar(20),
+                  @cPH_OrderKey nvarchar(20),
+                  @cPH_LoadKey nvarchar(20),
+                  @nRowCount INT,
+                  @nStartPos  INT,
+                  @nEndPos  INT,
+                  @nTtlQty INT
 
-         SET @nEndPos=@nStartPos+14
+            IF LEN(@cUPC)>=16
+            BEGIN
 
-         SET @cUPC =SUBSTRING( @cUPC, @nStartPos, @nEndPos - @nStartPos) 
+               IF (CHARINDEX ( '02' , @cUPC)=1 )
+               BEGIN
+                  SET @nStartPos=CHARINDEX ( '02' , @cUPC)
+
+                  set @nStartPos=@nStartPos+2
+
+                  SET @nEndPos=@nStartPos+14
+
+                  SET @cUPC =SUBSTRING( @cUPC, @nStartPos, @nEndPos - @nStartPos) 
 
 
+               END
+            END
+
+         END
       END
    END
-
 
 Quit:
 

@@ -1,7 +1,7 @@
 
 
--- rdt_1836Extvalid01
-execute rdt.rdtDropMsg 155951, 156000
+-- rdt_1836ExtValid01
+execute rdt.rdtDropMsg 239201, 239250
 
-execute rdt.rdtAddMsg 155951, 10, '155951CapacityFull', 'us_english', 1836
+execute rdt.rdtAddMsg 239201, 10, '239201CapacityFull', 'us_english', 1836,
 

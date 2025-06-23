@@ -12,6 +12,7 @@ GO
 /* Modifications log:                                                   */
 /* Date        Rev  Author      Purposes                                */
 /* 2022-12-06  1.0  James       WMS-21272 Created                       */ 
+/* 2024-10-24  1.1  ShaoAn      Extended parameter definition           */ 
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE rdt.rdt_523DecodeSP02
@@ -23,9 +24,10 @@ CREATE OR ALTER PROCEDURE rdt.rdt_523DecodeSP02
    @cFacility         NVARCHAR( 5),  
    @cStorerKey        NVARCHAR( 15), 
    @cBarcode          NVARCHAR( 60), 
-   @cID               NVARCHAR( 18), 
-   @cUCC              NVARCHAR( 20), 
-   @cLOC              NVARCHAR( 10), 
+   @cBarcodeUCC       NVARCHAR( 60), 
+   @cID               NVARCHAR( 18)  OUTPUT, 
+   @cUCC              NVARCHAR( 20)  OUTPUT, 
+   @cLOC              NVARCHAR( 10)  OUTPUT, 
    @cSKU              NVARCHAR( 20)  OUTPUT, 
    @nQTY              INT            OUTPUT, 
    @cLottable01       NVARCHAR( 18)  OUTPUT, 

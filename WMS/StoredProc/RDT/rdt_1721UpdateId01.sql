@@ -4,7 +4,7 @@ SET QUOTED_IDENTIFIER OFF
 GO
 
 /************************************************************************/
-/* Store procedure: rdt_1721UpdateId01                                */
+/* Store procedure: rdt_1721UpdateId01                                  */
 /* Copyright      : Maersk                                              */
 /*                                                                      */
 /* Called from: rdtfnc_Pallet_Move                                      */
@@ -14,6 +14,7 @@ GO
 /* Modifications log:                                                   */
 /* Date        Rev  Author   Purposes                                   */
 /* 2024-07-16  1.0  CYU027   FCR-575                                    */
+/* 2025-04-01  1.1  CYU027   FCR-3837                                   */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1721UpdateId01] (
@@ -68,13 +69,9 @@ BEGIN
 
    IF @@ERROR <> 0
    BEGIN
-      ROLLBACK TRAN UPD_DROPID
-      WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
-         COMMIT TRAN UPD_DROPID
-
       SET @nErrNo = 219304
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Upd PalletDetail fail
-      GOTO Quit
+      GOTO RBACK
    END
 
 --    UPDATE LOTxLOCxID
@@ -94,21 +91,30 @@ BEGIN
 
    IF @nErrNo <> 0
    BEGIN
-      ROLLBACK TRAN UPD_DROPID
-      WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
-         COMMIT TRAN UPD_DROPID
-
       SET @nErrNo = 219305
       SET @cErrMsg = @cErrMsg -- Upd LOTxLOCxID fail
-      GOTO Quit
+      GOTO RBACK
    END
 
+   --UPDATE PICKDETAIL
+   --RDT_MOVE will not update pickdetail
+   UPDATE PICKDETAIL WITH (ROWLOCK) SET PICKDETAIL.LOC = @cToLOC
+      WHERE PICKDETAIL.CaseID IN ( SELECT
+   DISTINCT(PALLETDETAIL.CASEID) FROM PALLETDETAIL WHERE PalletKey = @cID)
+   IF @nErrNo <> 0
+   BEGIN
+      SET @nErrNo = 219305
+      SET @cErrMsg = @cErrMsg -- Upd LOTxLOCxID fail
+      GOTO RBACK
+   END
 
+   GOTO Quit
+
+RBACK:
+   ROLLBACK TRAN UPD_DROPID
+Quit:
    WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
-      COMMIT TRAN UPD_DROPID
-
-   Quit:
-
+      COMMIT TRAN
 
 END
 GO
@@ -117,5 +123,5 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS ON
 GO
-GRANT EXECUTE ON RDT.rdt_TrackNo_SortToPallet_GetMbolKey TO NSQL
+GRANT EXECUTE ON RDT.rdt_1721UpdateId01 TO NSQL
 GO

@@ -18,7 +18,7 @@ GO
 /*                                                                      */
 /* Called By:                                                           */
 /*                                                                      */
-/* Github Version: 1.1                                                  */
+/* Github Version: 1.3                                                  */
 /*                                                                      */
 /* Version: V2                                                          */
 /*                                                                      */
@@ -29,6 +29,8 @@ GO
 /* 2024-06-12  Wan01    1.1   UWP-18392-JCB-MixSkuAllocation for Normal */
 /* 2024-10-09  SSA01    1.2   UWP-24678-JCB- Allocation for Kitting and */
 /*                                    Decanting                         */
+/* 2025-05-19  Wan01    1.3   FCR-4962 - JCB - Kitting Allocation       */
+/*                            - Adding OD.Lottable03 <> '' filtering    */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[ispPRJCB04] (
      @c_OrderKey        NVARCHAR(10)
@@ -135,6 +137,7 @@ BEGIN
          AND o.SOStatus <> 'CANC' 
          AND o.Status < '9'            
          AND O.Type = @c_Type
+         AND od.Lottable03 <> ''                                                    --(Wan01)
          AND SKU.BUSR7 <> '1'                                         --(SSA01)
          ORDER BY OD.Orderkey, OD.OrderLineNumber
       END
@@ -169,6 +172,7 @@ BEGIN
          AND o.SOStatus <> 'CANC' 
          AND o.Status < '9'                     
          AND O.Type = @c_Type
+         AND od.Lottable03 <> ''                                                    --(Wan01)
          AND SKU.BUSR7 <> '1'                                               --(SSA01)
          ORDER BY OD.Orderkey, OD.OrderLineNumber
       END
@@ -203,6 +207,7 @@ BEGIN
          AND o.SOStatus <> 'CANC' 
          AND o.Status < '9'                     
          AND O.Type = @c_Type
+         AND od.Lottable03 <> ''                                                    --(Wan01)
          AND SKU.BUSR7 <> '1'                                                 --(SSA01)
          ORDER BY OD.Orderkey, OD.OrderLineNumber
       END
@@ -231,7 +236,7 @@ BEGIN
           AND SL.Storerkey = @c_Storerkey
           AND SL.Sku = @c_Sku
           AND LOC.LocationType = 'PICK'
-          AND SL.LocationType IN ('PICK','CASE')
+          AND SL.LocationType IN ('CASE','PICK')
           ORDER BY CASE WHEN OP.Loc IS NOT NULL THEN 1 ELSE 2 END, SL.Qty, LOC.LogicalLocation, LOC.Loc                                 
 
          IF ISNULL(@c_PickLoc,'') = ''

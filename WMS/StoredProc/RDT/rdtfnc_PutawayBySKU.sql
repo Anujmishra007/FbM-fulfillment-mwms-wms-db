@@ -4,85 +4,87 @@ SET QUOTED_IDENTIFIER OFF
 GO
 
 
-/******************************************************************************/
-/* Store procedure: rdtfnc_PutawayBySKU                                       */
-/* Copyright      : IDS                                                       */
-/*                                                                            */
-/* Purpose: Putaway by SKU                                                    */
-/*                                                                            */
-/* Called from: 3                                                             */
-/*    1. From PowerBuilder                                                    */
-/*    2. From scheduler                                                       */
-/*    3. From others stored procedures or triggers                            */
-/*    4. From interface program. DX, DTS                                      */
-/*                                                                            */
-/* Exceed version: 5.4                                                        */
-/*                                                                            */
-/* Modifications log:                                                         */
-/*                                                                            */
-/* Date       Rev  Author   Purposes                                          */
-/* 2011-09-05 1.0  Ung      Created                                           */
-/* 2011-09-29 1.1  Shong    US LCI Project                                    */
-/* 2011-10-14 1.2  ChewKP   Initialize Outfield Values (ChewKP01)             */
-/* 2011-10-14 1.3  Shong    Check UCC already Putaway                         */
-/* 2012-01-13 1.4  James    PA Qty need to match suggested (james01)          */
-/* 2012-02-21 1.5  ChewKP   Update UCC.ID to blank only when LoseID is        */
-/*                          turn on (ChewKP02)                                */
-/* 2012-04-02 1.6  James    SOS240530 - Prevent same loc locked by            */
-/*                          multi user (james02)                              */
-/* 2012-04-16 1.7  Ung      SOS239385 ToLOC lookup logic                      */
-/*                          Custom putaway strategy                           */
-/* 2012-04-18 1.7  James    SOS241610 - Bug fix (james03)                     */
-/* 2012-04-26 1.8  Shong    Patching Update UCC Table                         */
-/* 2012-05-15 1.9  Shong    Add Default UOM is not setup                      */
-/* 2012-09-03 2.0  ChewKP   SOS#255108 - Display error when Location is       */
-/*                          lock by other users (ChewKP03)                    */
-/* 2013-04-25 2.1  Ung      SOS276721 Fix SKU UPC > 20 chars (ung01)          */
-/* 2012-11-21 2.2  Ung      SOS257047 Add Multi SKU UCC                       */
-/*                          Add ExtendedUpdateSP                              */
-/* 2013-08-01 2.3  James    SOS285469 - Add LOC prefix (james04)              */
-/*                          Add confirm add new loc screen                    */
-/* 2013-09-23 2.4  SPChin   SOS290116 - Bug Fixed                             */
-/* 2014-01-02 2.5  ChewKP   SOS292706 - Various Fixes (ChewKP04)              */
-/* 2014-02-26 2.6  James    SOS301646-H&M Modification (james05)              */
-/* 2014-04-28 2.7  James    Bug fix (james06)                                 */
-/* 2015-05-11 2.8  ChewKP   SOS#340776 - Order By Loc (ChewKP05)              */
-/* 2015-10-28 2.8  James    SOS353560-Revamp ExtendedValidateSP @ step4       */
-/*                          Add ExtendedInfoSP (james07)                      */
-/* 2016-09-30 2.9  Ung      Performance tuning                                */
-/* 2016-12-07 3.0  Ung      WMS-751 Add ExtendedPutawaySP                     */
-/*                          Replace DefaultPutawayQTYtoActQTY with DefaultQTY */
-/*                          Remove PutawayBySKUSkipErrMsg                 */
-/*                          Remove CtnRcvAllowNewLoc                          */
-/*                          Remove CtnRcvGetFacilityPrefix                    */
-/*                          Clean up source                                   */
-/* 2017-02-17 3.0  James    WMS1079-Add ExtendedValidateSP @ step1&2 (james08)*/
-/* 2017-10-10 3.1  Ung      IN00487075 Fix wo PASuggestSKU go to ID/SKU scn   */
-/* 2017-10-10 3.2  Ung      WMS-3552 Bring back LOC not match screen          */
-/* 2018-05-28 3.3  Ung      WMS-5183 Add DefaultSuggestLOC                    */
-/* 2018-06-05 3.4  James    WMS5311-Add rdt_decode sp (james09)               */
-/* 2018-02-08 3.5  James    WMS6248-Check status of SKU (james10)             */
-/* 2018-09-28 3.6  TungGH   Performance                                       */
-/* 2019-05-03 3.7  Ung      INC0686264 ID with UCC must putaway by UCC        */
-/* 2019-02-20 3.8  YeeKung  WMS-8020 Add RDTSTDEVENTLOG (yeekung01)           */
-/* 2019-03-05 3.9  YeeKung  WMS-8196 Add Loc Prefix   (yeekung02)             */
-/*                          Comparing count by qty put away and carton        */
-/* 2019-05-21 4.0  YeeKung  WMS-9018 Add multisku screen   (yeekung03)        */
-/* 2019-12-03 4.2  James    WMS-10987 Add SKUBarcode variable (james11)       */
-/* 2020-01-20 4.3  YeeKung  WMS-11780 Add lotxlocxid doctype (yeekung04)      */
-/* 2020-02-18 4.4  Chermaine WMS-11813 Add upc to RDTMOBREC (cc01)            */
-/* 2020-12-15 4.5  James    WMS-15820 Restructure output @ Qty screen(james12)*/
-/*                          Add ExtInfo @ step 2 & 4, ExtValid @ step 3       */
-/* 2022-07-08 4.6  James    WMS-20188 Add flow thru screen 3-> 4 (james13)    */
-/* 2020-09-17 4.7  WinSern  Increase @nMQTY_PWY AS NVARCHAR( 5) to (6)  (ws01)*/       
-/* 2022-12-06 4.8  James    WMS-21272 Add DecodeSP, retrieve lot using        */
-/*                          lottable returned (james14)                       */
-/* 2022-12-09 4.9  James    WMS-21307 Add ExtendedInfoSP step 1 & 5 (james14) */
-/* 2023-06-28 5.0  Ung      WMS-22741 Remove rdt_Decode error                 */
-/*                          Add L01-04 to rdt_Decode                          */
-/* 2023-08-08 5.1  YeeKung  JSM-168921 ADD Rowcount  (yeekung04)              */
-/* 2023-08-10 5.2  Ung      WMS-23170 Add PieceScan                           */
-/******************************************************************************/
+/********************************************************************************************/
+/* Store procedure: rdtfnc_PutawayBySKU                                                     */
+/* Copyright      : IDS                                                                     */
+/*                                                                                          */
+/* Purpose: Putaway by SKU                                                                  */
+/*                                                                                          */
+/* Called from: 3                                                                           */
+/*    1. From PowerBuilder                                                                  */
+/*    2. From scheduler                                                                     */
+/*    3. From others stored procedures or triggers                                          */
+/*    4. From interface program. DX, DTS                                                    */
+/*                                                                                          */
+/* Exceed version: 5.4                                                                      */
+/*                                                                                          */
+/* Modifications log:                                                                       */
+/*                                                                                          */
+/* Date       Rev    Author   Purposes                                                      */
+/* 2011-09-05 1.0    Ung      Created                                                       */
+/* 2011-09-29 1.1    Shong    US LCI Project                                                */
+/* 2011-10-14 1.2    ChewKP   Initialize Outfield Values (ChewKP01)                         */
+/* 2011-10-14 1.3    Shong    Check UCC already Putaway                                     */
+/* 2012-01-13 1.4    James    PA Qty need to match suggested (james01)                      */
+/* 2012-02-21 1.5    ChewKP   Update UCC.ID to blank only when LoseID is                    */
+/*                          turn on (ChewKP02)                                              */
+/* 2012-04-02 1.6    James    SOS240530 - Prevent same loc locked by                        */
+/*                          multi user (james02)                                            */
+/* 2012-04-16 1.7    Ung      SOS239385 ToLOC lookup logic                                  */
+/*                          Custom putaway strategy                                         */
+/* 2012-04-18 1.7    James    SOS241610 - Bug fix (james03)                                 */
+/* 2012-04-26 1.8    Shong    Patching Update UCC Table                                     */
+/* 2012-05-15 1.9    Shong    Add Default UOM is not setup                                  */
+/* 2012-09-03 2.0    ChewKP   SOS#255108 - Display error when Location is                   */
+/*                          lock by other users (ChewKP03)                                  */
+/* 2013-04-25 2.1    Ung      SOS276721 Fix SKU UPC > 20 chars (ung01)                      */
+/* 2012-11-21 2.2    Ung      SOS257047 Add Multi SKU UCC                                   */
+/*                          Add ExtendedUpdateSP                                            */
+/* 2013-08-01 2.3    James    SOS285469 - Add LOC prefix (james04)                          */
+/*                          Add confirm add new loc screen                                  */
+/* 2013-09-23 2.4    SPChin   SOS290116 - Bug Fixed                                         */
+/* 2014-01-02 2.5    ChewKP   SOS292706 - Various Fixes (ChewKP04)                          */
+/* 2014-02-26 2.6    James    SOS301646-H&M Modification (james05)                          */
+/* 2014-04-28 2.7    James    Bug fix (james06)                                             */
+/* 2015-05-11 2.8    ChewKP   SOS#340776 - Order By Loc (ChewKP05)                          */
+/* 2015-10-28 2.8    James    SOS353560-Revamp ExtendedValidateSP @ step4                   */
+/*                          Add ExtendedInfoSP (james07)                                    */
+/* 2016-09-30 2.9    Ung      Performance tuning                                            */
+/* 2016-12-07 3.0    Ung      WMS-751 Add ExtendedPutawaySP                                 */
+/*                          Replace DefaultPutawayQTYtoActQTY with DefaultQTY               */
+/*                          Remove PutawayBySKUSkipErrMsg                                   */
+/*                          Remove CtnRcvAllowNewLoc                                        */
+/*                          Remove CtnRcvGetFacilityPrefix                                  */
+/*                          Clean up source                                                 */
+/* 2017-02-17 3.0    James    WMS1079-Add ExtendedValidateSP @ step1&2 (james08)            */
+/* 2017-10-10 3.1    Ung      IN00487075 Fix wo PASuggestSKU go to ID/SKU scn               */
+/* 2017-10-10 3.2    Ung      WMS-3552 Bring back LOC not match screen                      */
+/* 2018-05-28 3.3    Ung      WMS-5183 Add DefaultSuggestLOC                                */
+/* 2018-06-05 3.4    James    WMS5311-Add rdt_decode sp (james09)                           */
+/* 2018-02-08 3.5    James    WMS6248-Check status of SKU (james10)                         */
+/* 2018-09-28 3.6    TungGH   Performance                                                   */
+/* 2019-05-03 3.7    Ung      INC0686264 ID with UCC must putaway by UCC                    */
+/* 2019-02-20 3.8    YeeKung  WMS-8020 Add RDTSTDEVENTLOG (yeekung01)                       */
+/* 2019-03-05 3.9    YeeKung  WMS-8196 Add Loc Prefix   (yeekung02)                         */
+/*                          Comparing count by qty put away and carton                      */
+/* 2019-05-21 4.0    YeeKung  WMS-9018 Add multisku screen   (yeekung03)                    */
+/* 2019-12-03 4.2    James    WMS-10987 Add SKUBarcode variable (james11)                   */
+/* 2020-01-20 4.3    YeeKung  WMS-11780 Add lotxlocxid doctype (yeekung04)                  */
+/* 2020-02-18 4.4    Chermaine WMS-11813 Add upc to RDTMOBREC (cc01)                        */
+/* 2020-12-15 4.5    James    WMS-15820 Restructure output @ Qty screen(james12)            */
+/*                          Add ExtInfo @ step 2 & 4, ExtValid @ step 3                     */
+/* 2022-07-08 4.6    James    WMS-20188 Add flow thru screen 3-> 4 (james13)                */
+/* 2020-09-17 4.7    WinSern  Increase @nMQTY_PWY AS NVARCHAR( 5) to (6)  (ws01)            */
+/* 2022-12-06 4.8    James    WMS-21272 Add DecodeSP, retrieve lot using                    */
+/*                          lottable returned (james14)                                     */
+/* 2022-12-09 4.9    James    WMS-21307 Add ExtendedInfoSP step 1 & 5 (james14)             */
+/* 2023-06-28 5.0    Ung      WMS-22741 Remove rdt_Decode error                             */
+/*                          Add L01-04 to rdt_Decode                                        */
+/* 2023-08-08 5.1    YeeKung  JSM-168921 ADD Rowcount  (yeekung04)                          */
+/* 2023-08-10 5.2    Ung      WMS-23170 Add PieceScan                                       */
+/* 2024-10-21 5.3    ShaoAn   FCR-759-999 ID and UCC Length Issue                           */
+/* 2024-10-24 5.3.1           Extended parameter definition                                 */
+/********************************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_PutawayBySKU] (
    @nMobile    INT,
@@ -170,6 +172,7 @@ DECLARE
    @cDefaultSuggestSKU  NVARCHAR( 1),
    @cDecodeSP           NVARCHAR( 20),
    @cBarcode            NVARCHAR( 60),
+   @cBarcodeUCC         NVARCHAR( 60),
    @cLabelNo            NVARCHAR( 32),
    @cSKUStatus          NVARCHAR( 10), -- (james10)
    @cLOCLookupSP        NVARCHAR( 20),  -- (yeekung02)
@@ -396,6 +399,7 @@ BEGIN
       SET @cLOC = @cInField03
       SET @cBarcode = @cInField01
       SET @cLabelNo = @cInField01
+      SET @cBarcodeUCC = @cInField02
 
       -- Check blank
       IF @cID = '' AND @cUCC = ''
@@ -408,13 +412,56 @@ BEGIN
 
       -- Decode
       -- Standard decode
-      IF @cDecodeSP = '1'
+      IF @cDecodeSP <> ''
       BEGIN
-         EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorer, @cFacility, @cBarcode,
-            @cID     = @cID     OUTPUT,
-            @nErrNo  = 0,  --@nErrNo     OUTPUT,
-            @cErrMsg = '', --@cErrMsg    OUTPUT
-            @cType   = 'ID'
+         IF @cDecodeSP = '1'
+         BEGIN
+            EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorer, @cFacility, @cBarcode,
+               @cID     = @cID     OUTPUT,
+               @nErrNo  = 0,  --@nErrNo     OUTPUT,
+               @cErrMsg = '', --@cErrMsg    OUTPUT
+               @cType   = 'ID'
+         END
+         -- Customize decode    
+         ELSE IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cDecodeSP AND type = 'P')    
+         BEGIN    
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cDecodeSP) +    
+                  ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cBarcode, @cBarcodeUCC,' +    
+                  ' @cID OUTPUT, @cUCC OUTPUT, @cLOC OUTPUT, @cSKU OUTPUT, @nQTY OUTPUT, ' + 
+                  ' @cLottable01 OUTPUT, @cLottable02 OUTPUT, @cLottable03 OUTPUT, @dLottable04 OUTPUT, ' +
+                  ' @nErrNo OUTPUT, @cErrMsg OUTPUT '   
+      
+            SET @cSQLParam =    
+                  ' @nMobile           INT                  , ' +
+                  ' @nFunc             INT                  , ' +
+                  ' @cLangCode         NVARCHAR( 3)         , ' +
+                  ' @nStep             INT                  , ' +
+                  ' @nInputKey         INT                  , ' +
+                  ' @cFacility         NVARCHAR( 5)         , ' +
+                  ' @cStorerKey        NVARCHAR( 15)        , ' +
+                  ' @cBarcode          NVARCHAR( 60)        , ' +
+                  ' @cBarcodeUCC       NVARCHAR( 60)        , ' +
+                  ' @cID               NVARCHAR( 18)  OUTPUT, ' +
+                  ' @cUCC              NVARCHAR( 20)  OUTPUT, ' +
+                  ' @cLOC              NVARCHAR( 10)  OUTPUT, ' +
+                  ' @cSKU              NVARCHAR( 20)  OUTPUT, ' +
+                  ' @nQTY              INT            OUTPUT, ' +
+                  ' @cLottable01       NVARCHAR( 18)  OUTPUT, ' +
+                  ' @cLottable02       NVARCHAR( 18)  OUTPUT, ' +
+                  ' @cLottable03       NVARCHAR( 18)  OUTPUT, ' +
+                  ' @dLottable04       DATETIME       OUTPUT, ' +
+                  ' @nErrNo            INT            OUTPUT, ' +
+                  ' @cErrMsg           NVARCHAR( 20)  OUTPUT'    
+      
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,    
+                  @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorer, @cBarcode,@cBarcodeUCC,
+                  @cID OUTPUT, @cUCC OUTPUT, @cLOC OUTPUT, @cSKU OUTPUT, @nQTY OUTPUT, 
+                  @cDecodeLottable01 OUTPUT, @cDecodeLottable02 OUTPUT, @cDecodeLottable03 OUTPUT, @dDecodeLottable04 OUTPUT,
+                  @nErrNo OUTPUT, @cErrMsg OUTPUT    
+
+            IF @nErrNo <> 0
+               GOTO Quit
+         END
       END
       ELSE
       BEGIN
@@ -872,23 +919,24 @@ BEGIN
          ELSE IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cDecodeSP AND type = 'P')    
          BEGIN    
             SET @cSQL = 'EXEC rdt.' + RTRIM( @cDecodeSP) +    
-               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cBarcode, ' +    
-               ' @cID, @cUCC, @cLOC, @cSKU OUTPUT, @nQTY OUTPUT, ' + 
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cBarcode, @cBarcodeUCC, ' +    
+               ' @cID OUTPUT, @cUCC OUTPUT, @cLOC OUTPUT, @cSKU OUTPUT, @nQTY OUTPUT, ' + 
                ' @cLottable01 OUTPUT, @cLottable02 OUTPUT, @cLottable03 OUTPUT, @dLottable04 OUTPUT, ' +
                ' @nErrNo OUTPUT, @cErrMsg OUTPUT '   
    
             SET @cSQLParam =    
-               ' @nMobile           INT,           ' +    
-               ' @nFunc             INT,           ' +    
-               ' @cLangCode         NVARCHAR( 3),  ' +    
-               ' @nStep             INT,           ' +    
-               ' @nInputKey         INT,           ' +    
-               ' @cFacility         NVARCHAR( 5),  ' +    
-               ' @cStorerKey        NVARCHAR( 15), ' +    
-               ' @cBarcode          NVARCHAR( 60), ' +    
-               ' @cID               NVARCHAR( 18), ' +
-               ' @cUCC              NVARCHAR( 20), ' +
-               ' @cLOC              NVARCHAR( 10), ' +
+               ' @nMobile           INT                  , ' +    
+               ' @nFunc             INT                  , ' +    
+               ' @cLangCode         NVARCHAR( 3)         , ' +    
+               ' @nStep             INT                  , ' +    
+               ' @nInputKey         INT                  , ' +    
+               ' @cFacility         NVARCHAR( 5)         , ' +    
+               ' @cStorerKey        NVARCHAR( 15)        , ' +    
+               ' @cBarcode          NVARCHAR( 60)        , ' +    
+               ' @cBarcodeUCC       NVARCHAR( 60)        , ' +
+               ' @cID               NVARCHAR( 18)  OUTPUT, ' +
+               ' @cUCC              NVARCHAR( 20)  OUTPUT, ' +
+               ' @cLOC              NVARCHAR( 10)  OUTPUT, ' +
                ' @cSKU              NVARCHAR( 20)  OUTPUT, ' +
                ' @nQTY              INT            OUTPUT, ' +
                ' @cLottable01       NVARCHAR( 18)  OUTPUT, ' +
@@ -899,8 +947,8 @@ BEGIN
                ' @cErrMsg           NVARCHAR( 20)  OUTPUT'    
     
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,    
-               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorer, @cBarcode,    
-               @cID, @cUCC, @cLOC, @cSKU OUTPUT, @nQTY OUTPUT, 
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorer, @cBarcode, @cBarcodeUCC,   
+               @cID OUTPUT, @cUCC OUTPUT, @cLOC OUTPUT, @cSKU OUTPUT, @nQTY OUTPUT, 
                @cDecodeLottable01 OUTPUT, @cDecodeLottable02 OUTPUT, @cDecodeLottable03 OUTPUT, @dDecodeLottable04 OUTPUT,
                @nErrNo OUTPUT, @cErrMsg OUTPUT    
 

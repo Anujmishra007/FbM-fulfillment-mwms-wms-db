@@ -1,9 +1,9 @@
 --rdtfnc_ScanToTruck_Barry
 -- 6400 - 6409
 
-
-INSERT INTO RDT.RDTMsg (Message_ID, Lang_Code, Message_Type, Message_Text, StoredProcName, Eventtype)
-VALUES ('925', 'ENG', 'FNC', 'Truck Loading(Barry)', 'rdtfnc_ScanToTruck_Barry', '0')
+IF NOT EXISTS (SELECT 1 FROM RDT.RDTMSG (NOLOCK) WHERE Message_ID = '925')
+   INSERT INTO RDT.RDTMsg (Message_ID, Lang_Code, Message_Type, Message_Text, StoredProcName, Eventtype)
+   VALUES ('925', 'ENG', 'FNC', 'Truck Loading(Barry)', 'rdtfnc_ScanToTruck_Barry', '0')
 
 -- Screen 1
 -- Scn = 6400 

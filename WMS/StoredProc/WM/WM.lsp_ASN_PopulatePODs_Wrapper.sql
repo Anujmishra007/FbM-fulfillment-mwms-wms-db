@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_ASN_PopulatePODs_Wrapper]')
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 )
-DROP PROCEDURE [WM].[lsp_ASN_PopulatePODs_Wrapper]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -35,7 +30,7 @@ GO
 /*                            3)Fixed missing lottabel09                */
 /* 2021-07-20  Wan02    1.2   LFWM-2854 - UAT - TW  Receipt - Populate  */
 /*                            from PO ( 1 PO 1 ASN ) in SCE does not    */
-/*                            support codelkup 'PO2ASNMAP               */
+/*                            support codelkup 'PO2ASNMAP'               */
 /* 2020-08-11  Wan03    1.3   LFWM-2962 - Populate Order details -Populate*/
 /*                            SO Detail fail.                           */
 /* 2021-09-23  LZG      1.4   JSM-21916 - Allowed PO population continue*/
@@ -45,8 +40,9 @@ GO
 /*                            sub-stored proc.                          */
 /* 2021-12-21  Wan04    1.7   LFWM-3210 - SCE UAT SG ASN Should Not     */
 /*                            Populate Same POKey+POLinenumber          */
+/* 2024-12-04  Wan05    1.7   UWP-27816 - Populate All for PO Line      */
 /************************************************************************/
-CREATE PROC [WM].[lsp_ASN_PopulatePODs_Wrapper]
+CREATE OR ALTER PROC [WM].[lsp_ASN_PopulatePODs_Wrapper]
       @c_ReceiptKey           NVARCHAR(10)
    ,  @c_POKeyList            NVARCHAR(4000) = ''  -- PO Keys seperated by '|'; for eg '0000128313|0000128314|0000128314' => 0000128314 to twice as pass 2 polinenumber ; IF @c_WarningNo = 1, Get Overdue pass & Y response Orderkey & Line to pass to continue populate
    ,  @c_POLineNumberList     NVARCHAR(4000) = ''  -- POLineNumber seperated by '|'; for eg '00001|00001|00002'
@@ -58,24 +54,21 @@ CREATE PROC [WM].[lsp_ASN_PopulatePODs_Wrapper]
    ,  @c_ProceedWithWarning   CHAR(1)      = 'N'
    ,  @c_UserName             NVARCHAR(128)= ''
    ,  @n_ErrGroupKey          INT          = 0  OUTPUT
+   ,  @c_SearchSQL            NVARCHAR(MAX)= ''
 AS
 BEGIN
    SET NOCOUNT ON
    SET ANSI_NULLS OFF
    SET QUOTED_IDENTIFIER OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
-
    -- 1) Log All Validation Errors into WM.WMS_Error_list as ERROR write type and return fail (b_success = 0) before process, Java to get the error message from
    --    WM.WMS_Error_list table
    -- 2) Start Populate POs logic If validation checks are passed. during population process, any errors will log into WM.WMS_Error_list as ERROR write type
    --  , quit population proess and return fail (@b_success = 0). Java to get the message from WM.WMS_Error_list table
    -- 3) Log Message/information into  WM.WMS_Error_list as Message write type and return success (b_success = 1) in SP when Populate successfully, Java to get the message from
    --    WM.WMS_Error_list table
-
-
    DECLARE  @n_StartTCnt               INT = @@TRANCOUNT
          ,  @n_Continue                INT = 1
-
          ,  @n_Cnt                     INT = 0
          ,  @n_RowRef_PH               INT = 0
          ,  @n_RowRef_PD               INT = 0
@@ -84,36 +77,32 @@ BEGIN
          ,  @n_RowRef_PH_Last          INT = 0
          ,  @n_RowCnt_RH               INT = 0
          ,  @n_RowCnt_RD               INT = 0
-
          ,  @n_PopulatedOrderCnt       INT = 0
          ,  @n_ToPopulateOrderCnt      INT = 0
          ,  @n_PopulateReturnMaxOrder  INT = 0
          ,  @n_ReceiptLineNumber       INT = 0
-
          ,  @c_SQL                     NVARCHAR(4000) = ''
          ,  @c_SQL1                    NVARCHAR(4000) = ''
          ,  @c_SQLParms              NVARCHAR(4000) = ''
-
          ,  @c_SQL_INS_FIELDS          NVARCHAR(4000) = ''        --(Wan01)
          ,  @c_SQL_UPD_FIELDS          NVARCHAR(4000) = ''        --(Wan01)
-
          ,  @c_SQLSchema               NVARCHAR(4000) = ''
          ,  @c_TableColumns            NVARCHAR(4000) = ''
          ,  @c_TableColumns_SELECT     NVARCHAR(4000) = ''
          ,  @c_Table                   NVARCHAR(60) = ''
          ,  @c_TempTableName           NVARCHAR(50) = ''          --(Wan03)
-
          ,  @c_TableName               NVARCHAR(50)   = 'RECEIPTDETAIL'
          ,  @c_SourceType              NVARCHAR(50)   = 'lsp_ASN_PopulatePODs_Wrapper'
-         ,  @c_WriteType               NVARCHAR(10)   = ''
-
+         ,  @c_Refkey1                 NVARCHAR(20)   = ''        --(Wan05)
+         ,  @c_Refkey2                 NVARCHAR(20)   = ''        --(Wan05)
+         ,  @c_Refkey3                 NVARCHAR(20)   = ''        --(Wan05)
+         ,  @c_WriteType               NVARCHAR(20)   = ''
+         ,  @n_LogWarningNo            INT            = 0         --(Wan05)
          ,  @c_DBName                  NVARCHAR(30)   = ''
          ,  @c_ArchiveDB               NVARCHAR(30)   = ''
          ,  @c_IsArch                  CHAR(1)        = 'N'
-
          ,  @c_POStatus                NVARCHAR(10)   = ''
          ,  @c_POExternStatus          NVARCHAR(10)   = ''
-
          ,  @c_Facility                NVARCHAR(5)    = ''
          ,  @c_Storerkey               NVARCHAR(15)   = ''
          ,  @c_ExternReceiptkey        NVARCHAR(30)   = ''
@@ -136,7 +125,6 @@ BEGIN
          ,  @c_UserDefine08            NVARCHAR(30)   = ''
          ,  @c_UserDefine09            NVARCHAR(30)   = ''
          ,  @c_UserDefine10            NVARCHAR(30)   = ''
-
          ,  @c_POKey                   NVARCHAR(10)   = ''
          ,  @c_POLineNumber            NVARCHAR(5)    = ''
          ,  @c_ReceiptLineNumber       NVARCHAR(5)    = ''
@@ -144,10 +132,8 @@ BEGIN
          ,  @c_ExternLineNo            NVARCHAR(20)   = ''
          ,  @c_Sku                     NVARCHAR(20)   = ''
          ,  @c_Altsku                  NVARCHAR(20)   = ''
-
          ,  @c_ToLoc                   NVARCHAR(10)   = ''
          ,  @c_PutawayLoc              NVARCHAR(10)   = ''
-
          ,  @c_Lottable01              NVARCHAR(18)   = ''
          ,  @c_Lottable02              NVARCHAR(18)   = ''
          ,  @c_Lottable03              NVARCHAR(18)   = ''
@@ -164,7 +150,6 @@ BEGIN
          ,  @dt_Lottable14             DATETIME       = NULL
          ,  @dt_Lottable15             DATETIME       = NULL
          ,  @c_SubReasonCode           NVARCHAR(10)   = ''
-
          ,  @c_ListName                NVARCHAR(10)   = ''
          ,  @c_SPName                  NVARCHAR(60)   = ''
          ,  @c_UDF01                   NVARCHAR(60)   = ''
@@ -172,7 +157,7 @@ BEGIN
          ,  @c_Lottable01Label         NVARCHAR(20)   = ''
          ,  @c_Lottable02Label         NVARCHAR(20)   = ''
          ,  @c_Lottable03Label         NVARCHAR(20)   = ''
-   ,  @c_Lottable04Label         NVARCHAR(20)   = ''
+         ,  @c_Lottable04Label         NVARCHAR(20)   = ''
          ,  @c_Lottable05Label         NVARCHAR(20)   = ''
          ,  @c_Lottable06Label         NVARCHAR(20)   = ''
          ,  @c_Lottable07Label         NVARCHAR(20)   = ''
@@ -216,42 +201,46 @@ BEGIN
          ,  @dt_Lottable13ReturnValue  DATETIME       = NULL
          ,  @dt_Lottable14ReturnValue  DATETIME       = NULL
          ,  @dt_Lottable15ReturnValue  DATETIME       = NULL
-
          ,  @c_SourceKey               NVARCHAR(50)   = ''
          ,  @c_SourceType_LARule       NVARCHAR(50)   = ''
-
          ,  @c_Code                    NVARCHAR(30)   = ''
          ,  @c_Code2                   NVARCHAR(30)   = ''
          ,  @c_UpdateCol               NVARCHAR(60)   = ''
          ,  @c_ReturnSQL               NVARCHAR(MAX)  = ''
-
          ,  @c_ReceiptLoc              NVARCHAR(10)   = ''
          ,  @c_ReturnLoc               NVARCHAR(10)   = ''
          ,  @c_ReceiptInspectionLoc    NVARCHAR(10)   = ''
          ,  @c_XDockReceiptLoc         NVARCHAR(10)   = ''
-
          ,  @c_AllowPopulateSamePOLine NVARCHAR(30)   = ''                 --(Wan04)
-         ,  @c_DefaultLOC    NVARCHAR(30)   = ''
+         ,  @c_DefaultLOC              NVARCHAR(30)   = ''
          ,  @c_DefaultRcptLOC          NVARCHAR(30)   = ''
          ,  @c_DefaultReturnPickFace   NVARCHAR(30)   = ''
          ,  @c_POKeyListParam          NVARCHAR(4000) = ''  --NJOW01
          ,  @c_POLineNumberListParam   NVARCHAR(4000) = ''  --NJOW01
-
+         ,  @c_SelectSQL               NVARCHAR(500)  = ''                 --(Wan05)
          ,  @CUR_SCHEMA                CURSOR
-
          ,  @CUR_COLMAP                CURSOR
-
+         ,  @CUR_ERRLIST               CURSOR                              --(Wan05)
    DECLARE @tCODELKUP TABLE
          (  RowRef         INT   IDENTITY(1,1) Primary Key
          ,  ColName        NVARCHAR(30)  NULL DEFAULT('')
          ,  DefaultValue   NVARCHAR(250) NULL DEFAULT('')
          )
-
+   DECLARE  @t_WMSErrorList TABLE                                          --(Wan05) - START
+         (  RowID             INT            IDENTITY(1,1)
+         ,  TableName         NVARCHAR(10)   NOT NULL DEFAULT('')
+         ,  SourceType        NVARCHAR(50)   NOT NULL DEFAULT('')
+         ,  Refkey1           NVARCHAR(20)   NOT NULL DEFAULT('')
+         ,  Refkey2           NVARCHAR(20)   NOT NULL DEFAULT('')
+         ,  Refkey3           NVARCHAR(20)   NOT NULL DEFAULT('')
+         ,  WriteType         NVARCHAR(20)   NOT NULL DEFAULT('')
+         ,  LogWarningNo      INT            NOT NULL DEFAULT(0)
+         ,  ErrCode           INT            NOT NULL DEFAULT(0)
+         ,  Errmsg            NVARCHAR(255)  NOT NULL DEFAULT('')
+         )                                                                 --(Wan05) - END
    SET @b_Success = 1
    SET @n_Err     = 0
-
    IF @b_PopulateFromArchive = 1 SET @c_IsArch = 'Y'
-
    SET @n_Err = 0
    IF SUSER_SNAME() <> @c_UserName
    BEGIN
@@ -259,31 +248,51 @@ BEGIN
             @c_UserName = @c_UserName  OUTPUT
          ,  @n_Err      = @n_Err       OUTPUT
          ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
-
       IF @n_Err <> 0
       BEGIN
          GOTO EXIT_SP
       END
-
       EXECUTE AS LOGIN = @c_UserName
    END
-
    SET @n_ErrGroupKey = 0
-
    BEGIN TRY
+      IF OBJECT_ID('tempdb..#tSearchPO', 'U') IS NOT NULL
+      BEGIN
+         DROP TABLE #tSearchPO
+      END
+      CREATE TABLE #tSearchPO
+         (  RowRef         INT            NOT NULL IDENTITY(1,1) PRIMARY KEY
+         ,  POKey          NVARCHAR(10)   NOT NULL DEFAULT('')
+         ,  POLineNumber   NVARCHAR(10)   NOT NULL DEFAULT('')
+         )
+      IF @c_POKeyList = '' OR @c_POLineNumberList = ''                              --(Wan05) - START
+      BEGIN
+         SET @c_SelectSQL = N'SELECT PODETAIL.POKey, PODETAIL.POLineNumber'
+         SELECT @c_SearchSQL = dbo.fnc_ParseSearchSQL(@c_SearchSQL, @c_SelectSQL)
+         IF @c_SearchSQL = ''
+         BEGIN
+            SET @n_Continue = 3
+            SET @n_Err      = 559010
+            SET @c_ErrMsg   = 'NSQL' + CONVERT(CHAR(6), @n_Err)
+                            + ': Empty Search Criteria found. (lsp_ASN_PopulatePODs_Wrapper)'
+            INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
+            VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, '', '', 'ERROR', 0, @n_Err, @c_Errmsg)
+            GOTO EXIT_SP
+         END
+         INSERT INTO #tSearchPO (POKey, POLineNumber)
+         EXEC sp_ExecuteSQL @c_SearchSQL
+      END                                                                           --(Wan05) - END
       IF @b_PopulateFromArchive = 1
       BEGIN
          SET @c_ArchiveDB = ''
          SELECT @c_ArchiveDB = ISNULL(RTRIM(NSQLValue),'')
          FROM NSQLCONFIG WITH (NOLOCK)
          WHERE ConfigKey='ArchiveDBName'
-
          IF @c_ArchiveDB <> ''
          BEGIN
             SET @c_DBName = @c_ArchiveDB  + '.'
          END
       END
-
       SET @c_Facility = ''
       SET @c_Storerkey= ''
       SELECT @c_Facility = RH.Facility
@@ -310,7 +319,6 @@ BEGIN
             ,@c_UserDefine10    = ISNULL(RH.UserDefine10,'')
       FROM RECEIPT RH WITH (NOLOCK)
       WHERE RH.ReceiptKey = @c_ReceiptKey
-
       /*-------------------------------------------------------*/
       /* BUILD TEMP TABLES & INSERT DATA - START               */
       /*-------------------------------------------------------*/
@@ -318,55 +326,60 @@ BEGIN
       BEGIN
          DROP TABLE #tPOH
       END
-
       CREATE TABLE #tPOH
          (  RowRef      INT            NOT NULL IDENTITY(1,1) PRIMARY KEY
          ,  PORefKey    NVARCHAR(10)   NOT NULL DEFAULT('')
          ,  Receiptkey  NVARCHAR(10)   NOT NULL DEFAULT('')
          )
-
-      INSERT INTO #tPOH (PORefKey, Receiptkey)
-      SELECT T.[Value], @c_Receiptkey FROM string_split (@c_POKeyList, '|') T
-
+      IF @c_POKeyList > '' AND @c_POLineNumberList > ''                             --(Wan05) - START
+      BEGIN
+         INSERT INTO #tPOH (PORefKey, Receiptkey)
+         SELECT T.[Value], @c_Receiptkey FROM string_split (@c_POKeyList, '|') T
+      END                                                                           --(Wan05) - END
        IF OBJECT_ID('tempdb..#tPOD', 'U') IS NOT NULL
       BEGIN
          DROP TABLE #tPOD
       END
-
       CREATE TABLE #tPOD
          (  RowRef         INT            NOT NULL IDENTITY(1,1) PRIMARY KEY
          ,  PORefLineNo    NVARCHAR(5)    NOT NULL DEFAULT('')
          )
-
-      INSERT INTO #tPOD (PORefLineNo)
-      SELECT T.[Value] FROM string_split (@c_POLineNumberList, '|') T
-
-
+      IF @c_POKeyList > '' AND @c_POLineNumberList > ''                             --(Wan05) - START
+      BEGIN
+         INSERT INTO #tPOD (PORefLineNo)
+         SELECT T.[Value] FROM string_split (@c_POLineNumberList, '|') T
+      END
+      ELSE
+      BEGIN
+         INSERT INTO #tPOD (PORefLineNo)
+         SELECT POLineNumber
+         FROM #tSearchPO
+         ORDER BY RowRef
+         INSERT INTO #tPOH (PORefKey, Receiptkey)
+         SELECT POKey, @c_ReceiptKey
+         FROM #tSearchPO
+         ORDER BY RowRef
+      END                                                                           --(Wan05) - END
       IF OBJECT_ID('tempdb..#tRECEIPT', 'U') IS NOT NULL
       BEGIN
          DROP TABLE #tRECEIPT
       END
-
       IF OBJECT_ID('tempdb..#tRECEIPTDETAIL', 'U') IS NOT NULL
       BEGIN
          DROP TABLE #tRECEIPTDETAIL
       END
-
       IF OBJECT_ID('tempdb..#tPO', 'U') IS NOT NULL
       BEGIN
          DROP TABLE #tPO
       END
-
       IF OBJECT_ID('tempdb..#tPODETAIL', 'U') IS NOT NULL
       BEGIN
          DROP TABLE #tPODETAIL
       END
-
       CREATE TABLE #tRECEIPT (RowRef INT IDENTITY(1,1) PRIMARY KEY)
       CREATE TABLE #tRECEIPTDETAIL (RowRef INT IDENTITY(1,1) PRIMARY KEY)
       CREATE TABLE #tPO (RowRef INT IDENTITY(1,1) PRIMARY KEY)
       CREATE TABLE #tPODETAIL (RowRef INT IDENTITY(1,1) PRIMARY KEY)
-
       SET @CUR_SCHEMA = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
       SELECT Tab.Table_Name
       FROM INFORMATION_SCHEMA.TABLES Tab WITH (NOLOCK)
@@ -376,11 +389,8 @@ BEGIN
                     WHEN Tab.Table_Name = 'RECEIPT' THEN 6
                     WHEN Tab.Table_Name = 'RECEIPTDETAIL' THEN 8
                     END
-
       OPEN @CUR_SCHEMA
-
       FETCH NEXT FROM @CUR_SCHEMA INTO @c_Table
-
       WHILE @@FETCH_STATUS <> - 1
       BEGIN
          --(Wan03) - START
@@ -408,15 +418,12 @@ BEGIN
                               FOR XML PATH(''), TYPE
                               )
                              ),''))
-
          IF @c_SQLSchema <> '' AND @c_Table <> ''
          BEGIN
             SET @c_SQLSchema = SUBSTRING(@c_SQLSchema, 1, LEN(@c_SQLSchema) - 1)
             SET @c_SQL = N'ALTER TABLE #t' + @c_Table + ' ADD ' + @c_SQLSchema
-
             EXEC sp_ExecuteSQL @c_SQL
          END
-
          SET @c_TableColumns_SELECT = ''
          SET @c_TableColumns_SELECT = RTRIM(ISNULL(CONVERT(NVARCHAR(4000),
                               ( SELECT TABLE_NAME + '.' + col.column_name + ','
@@ -426,7 +433,6 @@ BEGIN
                                  FOR XML PATH(''), TYPE
                               )
                               ),''))
-
          SET @c_TableColumns = ''
          SET @c_TableColumns = RTRIM(ISNULL(CONVERT(NVARCHAR(4000),
                               ( SELECT col.column_name + ','
@@ -436,12 +442,10 @@ BEGIN
                                  FOR XML PATH(''), TYPE
                               )
                               ),''))
-
          IF @c_TableColumns_SELECT <> ''
          BEGIN
             SET @c_TableColumns_SELECT = SUBSTRING(@c_TableColumns_SELECT, 1, LEN(@c_TableColumns_SELECT) - 1)
          END
-
          IF @c_TableColumns <> ''
          BEGIN
             SET @c_TableColumns = SUBSTRING(@c_TableColumns, 1, LEN(@c_TableColumns) - 1)
@@ -459,41 +463,32 @@ BEGIN
                         +                              ' AND D.PORefLineNo= PODETAIL.POLineNumber'
                         + ' WHERE PODETAIL.QtyReceived < PODETAIL.QtyOrdered'
                         + ' ORDER BY PODETAIL.POKey, PODETAIL.POLineNumber'
-
             EXEC sp_ExecuteSQL @c_SQL
          END
-
          IF @c_Table = 'PO' AND @c_TableColumns <> ''
          BEGIN
             SET @c_SQL = N'INSERT INTO #tPO ( ' + @c_TableColumns + ' )'
                         + ' SELECT ' + @c_TableColumns_SELECT +
                         + ' FROM ' + RTRIM(@c_DBName) + 'dbo.PO PO WITH (NOLOCK)'
                         + ' WHERE EXISTS (SELECT 1 FROM #tPODETAIL PD WHERE PO.POKey = PD.POKey)'
-
             EXEC sp_ExecuteSQL @c_SQL
          END
-
          IF @c_Table = 'RECEIPT' AND @c_TableColumns <> ''
          BEGIN
             SET @c_SQL = N'INSERT INTO #tRECEIPT  (' + @c_TableColumns + ')'
             SET @c_SQL1= ' SELECT ' + @c_TableColumns_SELECT
                         + ' FROM RECEIPT WITH (NOLOCK)'
                         + ' WHERE EXISTS (SELECT 1 FROM #tPOH H WHERE RECEIPT.Receiptkey = H.Receiptkey)'
-
             EXEC ( @c_SQL + @c_SQL1 )
-
             SET @n_RowRef_RH = @@IDENTITY
          END
-
          FETCH NEXT FROM @CUR_SCHEMA INTO @c_Table
       END
       CLOSE @CUR_SCHEMA
       DEALLOCATE @CUR_SCHEMA
-
       /*-------------------------------------------------------*/
       /* BUILD TEMP TABLES & INSERT DATA - END                 */
       /*-------------------------------------------------------*/
-
       IF @c_ProceedWithWarning = 'N' AND @n_WarningNo < 1
       BEGIN
          IF NOT EXISTS (SELECT 1
@@ -503,22 +498,24 @@ BEGIN
             SET @n_Continue = 3
             SET @n_Err      = 559001
             SET @c_errmsg   = 'No PO to found to populate to ASN #: ' + @c_Receiptkey + '. (lsp_ASN_PopulatePODs_Wrapper)'
-
-            EXEC [WM].[lsp_WriteError_List]
-               @i_iErrGroupKey= @n_ErrGroupKey OUTPUT
-            ,  @c_TableName   = @c_TableName
-            ,  @c_SourceType  = @c_SourceType
-            ,  @c_Refkey1     = @c_Receiptkey
-            , @c_Refkey2     = ''
-            ,  @c_Refkey3     = ''
-            ,  @c_WriteType   = 'ERROR'
-            ,  @n_err2        = @n_err
-            ,  @c_errmsg2     = @c_errmsg
-            ,  @b_Success     = @b_Success
-            ,  @n_err         = @n_err
-            ,  @c_errmsg      = @c_errmsg
+            --(Wan05) - START
+            INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
+            VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, '', '', 'ERROR', 0, @n_Err, @c_Errmsg)
+            --EXEC [WM].[lsp_WriteError_List]
+            --   @i_iErrGroupKey= @n_ErrGroupKey OUTPUT
+            --,  @c_TableName   = @c_TableName
+            --,  @c_SourceType  = @c_SourceType
+            --,  @c_Refkey1     = @c_Receiptkey
+            --,  @c_Refkey2     = ''
+            --,  @c_Refkey3     = ''
+            --,  @c_WriteType   = 'ERROR'
+            --,  @n_err2        = @n_err
+            --,  @c_errmsg2     = @c_errmsg
+            --,  @b_Success     = @b_Success
+            --,  @n_err         = @n_err
+            --,  @c_errmsg      = @c_errmsg
+            --(Wan05) - END
          END
-
          SET @n_RowRef_PH = 0
          WHILE 1 = 1
          BEGIN
@@ -533,34 +530,34 @@ BEGIN
             FROM #tPO PO WITH (NOLOCK)
             WHERE PO.RowRef > @n_RowRef_PH
             ORDER BY PO.RowRef
-
             IF @@ROWCOUNT = 0 OR @c_POKey = ''
             BEGIN
                BREAK
             END
-
             IF @c_POStatus IN  ('9', 'CANCELLED', 'CLOSED')  OR @c_POExternStatus IN  ('9', 'CANC')
             BEGIN
                SET @n_Continue = 3
- SET @n_Err      = 559002
+               SET @n_Err      = 559002
                SET @c_errmsg   = 'Population Fail due to PO #: ' + @c_POKey + ' is CLOSED OR CANCELLED. (lsp_ASN_PopulatePODs_Wrapper)'
-
-               EXEC [WM].[lsp_WriteError_List]
-                  @i_iErrGroupKey= @n_ErrGroupKey OUTPUT
-               ,  @c_TableName   = @c_TableName
-               ,  @c_SourceType  = @c_SourceType
-               ,  @c_Refkey1     = @c_Receiptkey
-               ,  @c_Refkey2     = @c_POKey
-               ,  @c_Refkey3     = ''
-               ,  @c_WriteType   = 'ERROR'
-               ,  @n_err2        = @n_err
-               ,  @c_errmsg2     = @c_errmsg
-               ,  @b_Success     = @b_Success
-               ,  @n_err         = @n_err
-               ,  @c_errmsg      = @c_errmsg
+               --(Wan05) - START
+               INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
+               VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_POKey, '', 'ERROR', 0, @n_Err, @c_Errmsg)
+               --EXEC [WM].[lsp_WriteError_List]
+               --   @i_iErrGroupKey= @n_ErrGroupKey OUTPUT
+               --,  @c_TableName   = @c_TableName
+               --,  @c_SourceType  = @c_SourceType
+               --,  @c_Refkey1     = @c_Receiptkey
+               --,  @c_Refkey2     = @c_POKey
+               --,  @c_Refkey3     = ''
+               --,  @c_WriteType   = 'ERROR'
+               --,  @n_err2        = @n_err
+               --,  @c_errmsg2     = @c_errmsg
+               --,  @b_Success     = @b_Success
+               --,  @n_err         = @n_err
+               --,  @c_errmsg      = @c_errmsg
+               --(Wan05) - END
             END
          END
-
          SET @n_RowRef_PD = 0
          WHILE 1 = 1
          BEGIN
@@ -576,107 +573,100 @@ BEGIN
             AND   PD.Facility <> ''
             AND   PD.Facility IS NOT NULL
             ORDER BY PD.RowRef
-
             IF @@ROWCOUNT = 0 OR @c_POKey = ''
             BEGIN
                BREAK
             END
-
             SET @n_Continue = 3
             SET @n_Err      = 559003
             SET @c_errmsg   = 'Population Fail due to Different PODetail Facility found. PO #: ' + @c_POKey + ', POLineNumber: ' + @c_POLineNumber
                             + '. (lsp_ASN_PopulatePODs_Wrapper)'
-
-            EXEC [WM].[lsp_WriteError_List]
-               @i_iErrGroupKey= @n_ErrGroupKey OUTPUT
-            ,  @c_TableName   = @c_TableName
-            ,  @c_SourceType  = @c_SourceType
-            ,  @c_Refkey1     = @c_Receiptkey
-            ,  @c_Refkey2     = @c_POKey
-            ,  @c_Refkey3     = @c_POLineNumber
-            ,  @c_WriteType   = 'ERROR'
-            ,  @n_err2        = @n_err
-            ,  @c_errmsg2     = @c_errmsg
-            ,  @b_Success     = @b_Success
-            ,  @n_err         = @n_err
-            ,  @c_errmsg      = @c_errmsg
+            --(Wan05) - START
+            INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
+            VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_POKey, @c_POLineNumber, 'ERROR', 0, @n_Err, @c_Errmsg)
+            --EXEC [WM].[lsp_WriteError_List]
+            --   @i_iErrGroupKey= @n_ErrGroupKey OUTPUT
+            --,  @c_TableName   = @c_TableName
+            --,  @c_SourceType  = @c_SourceType
+            --,  @c_Refkey1     = @c_Receiptkey
+            --,  @c_Refkey2     = @c_POKey
+            --,  @c_Refkey3     = @c_POLineNumber
+            --,  @c_WriteType   = 'ERROR'
+            --,  @n_err2        = @n_err
+            --,  @c_errmsg2     = @c_errmsg
+            --,  @b_Success     = @b_Success
+            --,  @n_err         = @n_err
+            --,  @c_errmsg      = @c_errmsg
+            --(Wan05) - END
          END
-
          --NJOW01
          SET @c_POKeyListParam = REPLACE(@c_POKeyList,'|',',')
          SET @c_POLineNumberListParam = REPLACE(@c_POLineNumberList,'|',',')
-
          BEGIN TRY
             EXEC [dbo].[isp_PrePopulatePO_Wrapper]
-         @c_Receiptkey  = @c_Receiptkey
+                 @c_Receiptkey  = @c_Receiptkey
                , @c_POKeys       = @c_POKeyListParam         --NJOW01
                , @c_POLineNumbers= @c_POLineNumberListParam  --NJOW01
                , @b_Success      = @b_Success      OUTPUT
                , @n_Err          = @n_Err          OUTPUT
                , @c_ErrMsg       = @c_ErrMsg       OUTPUT
          END TRY
-
          BEGIN CATCH
             SET @c_ErrMsg = ERROR_MESSAGE()
             SET @n_Err = 559004
             SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Error Executing isp_PrePopulatePO_Wrapper. (lsp_ASN_PopulatePODs_Wrapper)'
                         + '(' + @c_ErrMsg + ')'
-
             IF (XACT_STATE()) = -1
             BEGIN
                ROLLBACK TRAN
-
                WHILE @@TRANCOUNT < @n_StartTCnt
                BEGIN
                   BEGIN TRAN
                END
             END
          END CATCH
-
          IF @b_Success = 0 OR @n_Err > 0
          BEGIN
             SET @n_Continue = 3
-            EXEC [WM].[lsp_WriteError_List]
-                  @i_iErrGroupKey= @n_ErrGroupKey OUTPUT
-               ,  @c_TableName   = @c_TableName
-               ,  @c_SourceType  = @c_SourceType
-               ,  @c_Refkey1     = @c_ReceiptKey
-               ,  @c_Refkey2     = ''
-               ,  @c_Refkey3     = ''
-               ,  @c_WriteType   = 'ERROR'
-               ,  @n_err2        = @n_err
-               ,  @c_errmsg2     = @c_errmsg
-               ,  @b_Success     = @b_Success   --2020-09-15
-               ,  @n_err         = @n_err       --2020-09-15
-               ,  @c_errmsg      = @c_errmsg    --2020-09-15
+            --(Wan05) - START
+            INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
+            VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, '', '', 'ERROR', 0, @n_Err, @c_Errmsg)
+            --EXEC [WM].[lsp_WriteError_List]
+            --      @i_iErrGroupKey= @n_ErrGroupKey OUTPUT
+            --   ,  @c_TableName   = @c_TableName
+            --   ,  @c_SourceType  = @c_SourceType
+            --   ,  @c_Refkey1     = @c_ReceiptKey
+            --   ,  @c_Refkey2     = ''
+            --   ,  @c_Refkey3     = ''
+            --   ,  @c_WriteType   = 'ERROR'
+            --   ,  @n_err2        = @n_err
+            --   ,  @c_errmsg2     = @c_errmsg
+            --   ,  @b_Success     = @b_Success   --2020-09-15
+            --   ,  @n_err         = @n_err       --2020-09-15
+            --   ,  @c_errmsg      = @c_errmsg    --2020-09-15
+            --(Wan05) - END
          END
-
          IF @n_Continue = 3
          BEGIN
             GOTO EXIT_SP
          END
       END
-
       -- Get Storerconfig
       SET @c_DefaultLOC = '0'
       SET @c_DefaultReturnPickFace = '0'
       SET @c_DefaultRcptLOC = ''
-
       SELECT @c_DefaultLOC     = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'DefaultLOC')
       SELECT @c_DefaultReturnPickFace = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'DefaultReturnPickFace')
       SELECT @c_DefaultRcptLOC = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, @c_Sku, 'DefaultRcptLOC')
-
       IF @c_DefaultRcptLOC = '0'
       BEGIN
          SET @c_DefaultRcptLOC = ''
       END
-
       SELECT TOP 1
             @n_RowRef_PH_Last = PH.RowRef
       FROM #tPO PH
       WHERE PH.RowRef > @n_RowRef_PH
       ORDER BY PH.RowRef DESC
-
       SET @n_RowRef_PH = 0
       WHILE 1 = 1
       BEGIN
@@ -700,29 +690,25 @@ BEGIN
          FROM #tPO PO
          WHERE PO.RowRef > @n_RowRef_PH
          ORDER BY PO.RowRef
-
          IF @@ROWCOUNT = 0 OR @c_POKey = ''
          BEGIN
             BREAK
          END
-
          SET @c_ExternPOKey = ''
          SELECT TOP 1 @c_ExternPOKey = ISNULL(PD.ExternPOkey,'')
          FROM #tPODETAIL PD WITH (NOLOCK)
          WHERE PD.POKey = @c_POKey
          AND PD.ExternPOkey <> ''
          ORDER BY PD.RowRef
-
          SET @c_ExternReceiptkey = CASE WHEN @c_ExternReceiptkey = '' THEN @c_ExternPOKey
                                         WHEN @c_ExternReceiptkey <> @c_ExternPOKey THEN ''
                                         ELSE @c_ExternReceiptkey
                                         END
-
          UPDATE #tRECEIPT
             SET  ExternReceiptkey   = @c_ExternReceiptkey
                , Carrierkey         = @c_Carrierkey
                , CarrierAddress1    = @c_CarrierAddress1
-    , CarrierAddress2    = @c_CarrierAddress2
+               , CarrierAddress2    = @c_CarrierAddress2
                , UserDefine01       = @c_UserDefine01
                , UserDefine02       = @c_UserDefine02
                , UserDefine03       = @c_UserDefine03
@@ -734,7 +720,6 @@ BEGIN
                , UserDefine09       = @c_UserDefine09
                , UserDefine10       = @c_UserDefine10
          WHERE RowRef = @n_RowRef_RH
-
          --(Wan01) - START
          SET @c_SQL_UPD_FIELDS =
               N' ExternReceiptKey = T.ExternReceiptKey'
@@ -770,7 +755,7 @@ BEGIN
              +', BilledContainerQty = T.BilledContainerQty'
              +', RECType = T.RECType'
              +', ASNStatus = T.ASNStatus'
-  +', ASNReason = T.ASNReason'
+             +', ASNReason = T.ASNReason'
              +', MBOLKey = T.MBOLKey'
              +', Appointment_No = T.Appointment_No'
              +', LoadKey = T.LoadKey'
@@ -862,7 +847,6 @@ BEGIN
              +', HoldChannel = T.HoldChannel'
              +', TrackingNo = T.TrackingNo'
          --(Wan01) - END
-
          -- Call Custom Header Mapping - START
          SET @c_ListName = 'PO2ASNMAP'
          SET @CUR_COLMAP = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
@@ -881,11 +865,8 @@ BEGIN
          AND   CL.Storerkey = @c_Storerkey
          AND  @c_DocType IN (SELECT LTRIM(RTRIM(ss.value)) FROM STRING_SPLIT(CL.UDF03,',') AS ss)  --(Wan01)
          ORDER BY CL.Code
-
          OPEN @CUR_COLMAP
-
          FETCH NEXT FROM @CUR_COLMAP INTO @c_Code, @c_Code2
-
          WHILE @@FETCH_STATUS <> -1
          BEGIN
             SET @c_ReturnSQL = ''
@@ -903,39 +884,38 @@ BEGIN
                ,  @c_UpdateCol         =  @c_UpdateCol   OUTPUT
                ,  @c_ReturnSQL         =  @c_ReturnSQL   OUTPUT
             END TRY
-
             BEGIN CATCH
                SET @n_Continue = 3
                SET @n_Err = 559005
                SET @c_ErrMsg = ERROR_MESSAGE()
                SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Error Executing lsp_Populate_GetDocFieldsMap - Header. (lsp_ASN_PopulatePODs_Wrapper)'
                               + '(' + @c_ErrMsg + ')'
-
-               EXEC [WM].[lsp_WriteError_List]
-                     @i_iErrGroupKey= @n_ErrGroupKey OUTPUT
-                  ,  @c_TableName   = @c_TableName
-                  ,  @c_SourceType  = @c_SourceType
-                  ,  @c_Refkey1     = @c_Receiptkey
-                  ,  @c_Refkey2     = @c_POKey
-                  ,  @c_Refkey3     = ''
-                  ,  @c_WriteType   = 'ERROR'
-                  ,  @n_err2        = @n_err
-                  ,  @c_errmsg2     = @c_errmsg
-                  ,  @b_Success     = @b_Success   --2020-09-15
-                  ,  @n_err         = @n_err       --2020-09-15
-                  ,  @c_errmsg      = @c_errmsg    --2020-09-15
-
+               --(Wan05) - START
+               INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo
+                                          , ErrCode, ErrMsg)
+               VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_POKey, '', 'ERROR', 0, @n_Err, @c_Errmsg)
+               --EXEC [WM].[lsp_WriteError_List]
+               --      @i_iErrGroupKey= @n_ErrGroupKey OUTPUT
+               --   ,  @c_TableName   = @c_TableName
+               --   ,  @c_SourceType  = @c_SourceType
+               --   ,  @c_Refkey1     = @c_Receiptkey
+               --   ,  @c_Refkey2     = @c_POKey
+               --   ,  @c_Refkey3     = ''
+               --   ,  @c_WriteType   = 'ERROR'
+               --   ,  @n_err2        = @n_err
+               --   ,  @c_errmsg2     = @c_errmsg
+               --   ,  @b_Success     = @b_Success   --2020-09-15
+               --   ,  @n_err         = @n_err       --2020-09-15
+               --   ,  @c_errmsg      = @c_errmsg    --2020-09-15
+               --(Wan05) - END
                GOTO EXIT_SP
             END CATCH
-
             SET @c_UpdateCol = RTRIM(LTRIM(@c_UpdateCol))         --(Wan01)
-
             IF @c_ReturnSQL <> ''
             BEGIN
                --(Wan02) - START
                --SET @c_SQL = REPLACE(@c_ReturnSQL, ' FromValue', ' Top 1 FromValue')
                SET @c_SQL = @c_ReturnSQL
-
                -- Direct mapping
                IF CHARINDEX('WHERE', @c_ReturnSQL ) = 0
                BEGIN
@@ -946,7 +926,6 @@ BEGIN
                         SET @c_SQL = @c_SQL + ' WHERE PO.RowRef = @n_RowRef_PH'
                      END
                END
-
                --IF CHARINDEX(' FROM ',@c_ReturnSQL) > 0
                --BEGIN
                --   IF CHARINDEX('WHERE', @c_ReturnSQL ) = 0
@@ -965,11 +944,9 @@ BEGIN
                   SET @c_SQL = 'UPDATE #tRECEIPT'
                              + ' SET ' + @c_UpdateCol + ' = (' + @c_SQL + ')'
                              + ' WHERE RowRef = @n_RowRef_RH'
-
                   SET @c_SQLParms = '@n_RowRef_PH  INT'
                                   +',@n_RowRef_RH  INT'
                                   +',@c_PoKey      NVARCHAR(18)'        --(Wan02)
-
                   EXEC sp_ExecuteSQL @c_SQL
                            , @c_SQLParms
                            , @n_RowRef_PH
@@ -989,7 +966,6 @@ BEGIN
          CLOSE @CUR_COLMAP
          DEALLOCATE @CUR_COLMAP
          -- Call Custom Header Mapping - END
-
          SET @n_RowRef_PD = 0
          WHILE 1 = 1
          BEGIN
@@ -1012,7 +988,6 @@ BEGIN
             SET @dt_Lottable13= NULL
             SET @dt_Lottable14= NULL
             SET @dt_Lottable15= NULL
-
             SELECT Top 1
                    @n_RowRef_PD = PD.RowRef
                   ,@c_POLineNumber = PD.POLineNumber
@@ -1037,16 +1012,13 @@ BEGIN
             WHERE PD.POKey = @c_POKey
             AND PD.RowRef > @n_RowRef_PD
             ORDER BY PD.RowRef
-
             IF @@ROWCOUNT = 0 OR @c_POLineNumber = ''
             BEGIN
                BREAK
             END
-
             --(Wan04) - START
             SET @c_AllowPopulateSamePOLine = '0'
             SELECT @c_AllowPopulateSamePOLine = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, @c_Sku, 'AllowPopulateSamePOLine')
-
             IF @c_AllowPopulateSamePOLine = '0'
             BEGIN
                IF EXISTS ( SELECT 1
@@ -1060,12 +1032,10 @@ BEGIN
                END
             END
             --(Wan04) - END
-
             SET @c_ReceiptLoc = ''
             SET @c_ReturnLoc  = ''
             SET @c_ReceiptInspectionLoc = ''
             SET @c_XDockReceiptLoc = ''
-
             SELECT @c_ReceiptLoc = ISNULL(ReceiptLoc,'')
                   ,@c_ReturnLoc  = ISNULL(ReturnLoc,'')
                   ,@c_XDockReceiptLoc      = ISNULL(XDockReceiptLoc,'')
@@ -1089,9 +1059,7 @@ BEGIN
             FROM SKU WITH (NOLOCK)
             WHERE Storerkey = @c_Storerkey
             AND Sku = @c_Sku
-
             SET @c_Toloc = ''
-
             IF @c_DefaultLOC > '0'
             BEGIN
                SET @c_Toloc = CASE WHEN @c_Doctype = 'A' THEN ISNULL(@c_ReceiptLoc,'')
@@ -1100,12 +1068,10 @@ BEGIN
                                    ELSE ''
                                    END
             END
-
             IF @c_Toloc = '' AND @c_DefaultRcptLOC <> ''
             BEGIN
                SET @c_Toloc = @c_DefaultRcptLOC
             END
-
             SET @c_Putawayloc = ''
             IF @c_DefaultReturnPickFace = '1' AND @c_Rectype <> 'NORMAL'
             BEGIN
@@ -1113,12 +1079,10 @@ BEGIN
                FROM SKUxLOC SL WITH (NOLOCK)
                JOIN LOC L WITH (NOLOCK) ON SL.Loc = L.Loc AND L.Facility = @c_Facility
                WHERE SL.Storerkey = @c_Storerkey
- AND   SL.Sku = @c_Sku
+               AND   SL.Sku = @c_Sku
                AND   SL.LocationType IN ( 'CASE', 'PICK' )
             END
-
             --SET @c_ReceiptLineNumber = RIGHT( '00000' + CONVERT(NVARCHAR(5), CONVERT(INT, @c_ReceiptLineNumber) + 1), 5 )
-
             SET @c_Lottable01Value = @c_Lottable01
             SET @c_Lottable02Value = @c_Lottable02
             SET @c_Lottable03Value = @c_Lottable03
@@ -1134,7 +1098,6 @@ BEGIN
             SET @dt_Lottable13Value= @dt_Lottable13
             SET @dt_Lottable14Value= @dt_Lottable14
             SET @dt_Lottable15Value= @dt_Lottable15
-
             SET @n_Cnt = 1
             WHILE @n_Cnt <= 15
             BEGIN
@@ -1154,7 +1117,6 @@ BEGIN
                                            WHEN @n_Cnt = 14 THEN 'Lottable14'
                                            WHEN @n_Cnt = 15 THEN 'Lottable15'
                                            END
-
                SET @c_LottableValue = CASE WHEN @n_Cnt = 1  THEN @c_Lottable01
                                            WHEN @n_Cnt = 2  THEN @c_Lottable02
                                            WHEN @n_Cnt = 3  THEN @c_Lottable03
@@ -1174,7 +1136,6 @@ BEGIN
                                            WHEN @n_Cnt = 15 THEN @dt_Lottable15
                                            ELSE NULL
                                            END
-
                SET @c_LottableLabel = CASE WHEN @n_Cnt = 1  THEN @c_Lottable01Label
                                            WHEN @n_Cnt = 2  THEN @c_Lottable02Label
                                            WHEN @n_Cnt = 3  THEN @c_Lottable03Label
@@ -1206,7 +1167,6 @@ BEGIN
                   AND ((CL.Storerkey = @c_Storerkey AND @c_Storerkey <> '') OR (CL.Storerkey = ''))
                   ORDER BY CL.Storerkey DESC
                END
-
                IF  @c_SPName <> '' AND EXISTS (SELECT 1 FROM SYS.Objects WHERE Name = @c_SPName AND [Type] = 'p')
                BEGIN
                   SET @c_SourceKey         = @c_ReceiptKey --+ @c_ReceiptLineNumber
@@ -1217,7 +1177,7 @@ BEGIN
                   BEGIN TRY
                      SET @b_Success = 1
                      EXEC dbo.ispLottableRule_Wrapper
-               @c_SPName            = @c_SPName
+                           @c_SPName            = @c_SPName
                         ,  @c_Listname          = @c_Listname
                         ,  @c_Storerkey         = @c_Storerkey
                         ,  @c_Sku               = @c_Sku
@@ -1257,7 +1217,6 @@ BEGIN
                         ,  @c_ErrMsg            = @c_ErrMsg                   OUTPUT
                         ,  @c_SourceKey         = @c_SourceKey
                         ,  @c_SourceType        = @c_SourceType_LARule        --2020-08-26 - fixed
-
                   END TRY
                   BEGIN CATCH
                      SET @n_Err = 559006
@@ -1265,29 +1224,30 @@ BEGIN
                      SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Error Executing ispLottableRule_Wrapper. (lsp_ASN_PopulatePODs_Wrapper)'
                                     + '(' + @c_ErrMsg + ')'
                   END CATCH
-
                   IF @b_Success = 0 OR @n_Err <> 0
                   BEGIN
                      --SET @n_Continue = 3   -- ZG01
-
-                     EXEC [WM].[lsp_WriteError_List]
-                           @i_iErrGroupKey= @n_ErrGroupKey OUTPUT
-                        ,  @c_TableName   = @c_TableName
-                        ,  @c_SourceType  = @c_SourceType
-             ,  @c_Refkey1     = @c_Receiptkey
-                        ,  @c_Refkey2     = @c_POKey
-                        ,  @c_Refkey3     = ''
-                        --,  @c_WriteType   = 'ERROR'    -- ZG01
-                        ,  @c_WriteType   = 'WARNING'    -- ZG01
-                        ,  @n_err2        = @n_err
-                        ,  @c_errmsg2     = @c_errmsg
-                        ,  @b_Success     = @b_Success   --2020-09-15
-                        ,  @n_err         = @n_err       --2020-09-15
-                        ,  @c_errmsg      = @c_errmsg    --2020-09-15
-
+                     --(Wan05) - START
+                     INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType
+                                                , LogWarningNo, ErrCode, ErrMsg)
+                     VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_POKey, '', 'WARNING', 0, @n_Err, @c_Errmsg)
+                     --EXEC [WM].[lsp_WriteError_List]
+                     --      @i_iErrGroupKey= @n_ErrGroupKey OUTPUT
+                     --   ,  @c_TableName   = @c_TableName
+                     --   ,  @c_SourceType  = @c_SourceType
+                     --   ,  @c_Refkey1     = @c_Receiptkey
+                     --   ,  @c_Refkey2     = @c_POKey
+                     --   ,  @c_Refkey3     = ''
+                     --   --,  @c_WriteType   = 'ERROR'    -- ZG01
+                     --   ,  @c_WriteType   = 'WARNING'    -- ZG01
+                     --   ,  @n_err2        = @n_err
+                     --   ,  @c_errmsg2     = @c_errmsg
+                     --   ,  @b_Success     = @b_Success   --2020-09-15
+                     --   ,  @n_err         = @n_err       --2020-09-15
+                     --   ,  @c_errmsg      = @c_errmsg    --2020-09-15
+                     --(Wan05) - END
                      --GOTO EXIT_SP    -- ZG01
                   END
-
                   IF @n_Cnt = 1
                      SET @c_Lottable01 = @c_Lottable01ReturnValue
                   IF @n_Cnt = 2
@@ -1318,12 +1278,9 @@ BEGIN
                      SET @dt_Lottable14= @dt_Lottable14ReturnValue
                   IF @n_Cnt = 15
                      SET @dt_Lottable15= @dt_Lottable15ReturnValue
-
                END
-
                SET @n_Cnt = @n_Cnt + 1
             END
-
             SET @c_Lottable01   = ISNULL(@c_Lottable01,'')  --2020-09-14
             SET @c_Lottable02   = ISNULL(@c_Lottable02,'')  --2020-09-14
             SET @c_Lottable03   = ISNULL(@c_Lottable03,'')  --2020-09-14
@@ -1337,7 +1294,6 @@ BEGIN
             SET @c_Altsku       = ISNULL(@c_Altsku,'')      --2020-08-13
             SET @c_ToLoc        = ISNULL(@c_ToLoc,'')       --2020-09-15
             --SET @c_ExternLineNo = ISNULL(@c_ExternLineNo,'')--2020-09-15
-
             INSERT INTO #tRECEIPTDETAIL
                (  ReceiptKey
                ,  ReceiptLineNumber
@@ -1385,7 +1341,7 @@ BEGIN
                ,  UserDefine10
                ,  SubReasonCode
                ,  Channel
- )
+               )
             SELECT
                   @c_ReceiptKey
                ,  @c_ReceiptLineNumber
@@ -1435,9 +1391,7 @@ BEGIN
                ,  PD.Channel
             FROM #tPODETAIL PD
             WHERE PD.RowRef = @n_RowRef_PD
-
             SET @n_RowRef_RD = @@IDENTITY
-
             --(Wan01) - START
             SET @c_SQL_INS_FIELDS =
                  N', Storerkey'
@@ -1476,7 +1430,7 @@ BEGIN
                 + ', UserDefine02'
                 + ', UserDefine03'
                 + ', UserDefine04'
-          + ', UserDefine05'
+                + ', UserDefine05'
                 + ', UserDefine06'
                 + ', UserDefine07'
                 + ', UserDefine08'
@@ -1487,9 +1441,8 @@ BEGIN
             --(Wan01) - END
             -- Call Custom Detail Mapping - START
             SET @c_ListName = 'PO2ASNMAP'
-
             SET @CUR_COLMAP = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-      SELECT Code  = CL.Code
+            SELECT Code  = CL.Code
                   ,Code2 = CL.Code2
             FROM CODELKUP CL WITH (NOLOCK)
             WHERE CL.ListName = @c_ListName
@@ -1505,17 +1458,13 @@ BEGIN
             AND   CL.Storerkey = @c_Storerkey
             AND  @c_DocType IN (SELECT LTRIM(RTRIM(ss.value)) FROM STRING_SPLIT(CL.UDF03,',') AS ss)  --(Wan01)
             ORDER BY CL.Code
-
             OPEN @CUR_COLMAP
-
             FETCH NEXT FROM @CUR_COLMAP INTO @c_Code, @c_Code2
-
             WHILE @@FETCH_STATUS <> -1
             BEGIN
                SET @c_ReturnSQL = ''
                SET @c_UpdateCol = ''
                BEGIN TRY
-
                   EXEC [WM].[lsp_Populate_GetDocFieldsMap]
                      @c_SourceTable       =  'PODETAIL'
                   ,  @c_Sourcekey         =  @c_POkey
@@ -1534,42 +1483,39 @@ BEGIN
                   SET @c_ErrMsg = ERROR_MESSAGE()
                   SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Error Executing lsp_Populate_GetDocFieldsMap - DETAIL. (lsp_ASN_PopulatePODs_Wrapper)'
                                  + '(' + @c_ErrMsg + ')'
-
-                  EXEC [WM].[lsp_WriteError_List]
-                        @i_iErrGroupKey= @n_ErrGroupKey OUTPUT
-                     ,  @c_TableName   = @c_TableName
-                     ,  @c_SourceType  = @c_SourceType
-                     ,  @c_Refkey1     = @c_Receiptkey
-                     ,  @c_Refkey2     = @c_POKey
-                     ,  @c_Refkey3     = ''
-                     ,  @c_WriteType   = 'ERROR'
-                     ,  @n_err2        = @n_err
-                     ,  @c_errmsg2     = @c_errmsg
-                     ,  @b_Success     = @b_Success   --2020-09-15
-                     ,  @n_err         = @n_err       --2020-09-15
-                     ,  @c_errmsg      = @c_errmsg    --2020-09-15
-
+                  --(Wan05) - START
+                  INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
+                  VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_POKey, '', 'ERROR', 0, @n_Err, @c_Errmsg)
+                  --EXEC [WM].[lsp_WriteError_List]
+                  --      @i_iErrGroupKey= @n_ErrGroupKey OUTPUT
+                  --   ,  @c_TableName   = @c_TableName
+                  --   ,  @c_SourceType  = @c_SourceType
+                  --   ,  @c_Refkey1     = @c_Receiptkey
+                  --   ,  @c_Refkey2     = @c_POKey
+                  --   ,  @c_Refkey3     = ''
+                  --   ,  @c_WriteType   = 'ERROR'
+                  --   ,  @n_err2        = @n_err
+                  --   ,  @c_errmsg2     = @c_errmsg
+                  --   ,  @b_Success     = @b_Success   --2020-09-15
+                  --   ,  @n_err         = @n_err       --2020-09-15
+                  --   ,  @c_errmsg      = @c_errmsg    --2020-09-15
+                  --(Wan05) - END
                   GOTO EXIT_SP
                END CATCH
-
                SET @c_UpdateCol = RTRIM(LTRIM(@c_UpdateCol))      -- Wan01
-
                IF @c_ReturnSQL <> ''
                BEGIN
                   --(Wan02) - START
                   --SET @c_SQL = REPLACE(@c_ReturnSQL, ' FromValue', ' Top 1 FromValue')
                   SET @c_SQL = @c_ReturnSQL
-
                   -- Direct mapping
                   IF CHARINDEX('WHERE', @c_ReturnSQL ) = 0
                   BEGIN
                      SET @c_SQL = REPLACE(@c_SQL, ' PO ', ' #tPO PO ')
                      SET @c_SQL = REPLACE(@c_SQL, ' PODETAIL ', ' #tPODETAIL PODETAIL ')
-
                      IF CHARINDEX('#tPODETAIL', @c_SQL) > 0
                             SET @c_SQL = @c_SQL + ' WHERE PODETAIL.RowRef = @n_RowRef_PD'
                   END
-
                   --IF CHARINDEX(' FROM ', @c_ReturnSQL) > 0
                   --BEGIN
                   --   IF CHARINDEX('WHERE', @c_ReturnSQL) = 0
@@ -1588,12 +1534,10 @@ BEGIN
                      SET @c_SQL = 'UPDATE #tRECEIPTDETAIL'
                                 + ' SET ' + @c_UpdateCol + ' = (' + @c_SQL + ')'
                                 + ' WHERE RowRef = @n_RowRef_RD'
-
                      SET @c_SQLParms = '@n_RowRef_PD     INT'
                                      +',@n_RowRef_RD     INT'
                                      +',@c_PoKey         NVARCHAR(18)'        --(Wan02)
                                      +',@c_POLineNumber  NVARCHAR(5)'         --(Wan02)
-
                      EXEC sp_ExecuteSQL @c_SQL
                               , @c_SQLParms
                               , @n_RowRef_PD
@@ -1602,26 +1546,21 @@ BEGIN
                               , @c_POLineNumber                              --(Wan02)
                   END
                END
-
                --(Wan01) - START
                IF CHARINDEX(', ' + @c_UpdateCol, @c_SQL_INS_FIELDS, 1) = 0
                BEGIN
                   SET @c_SQL_INS_FIELDS = @c_SQL_INS_FIELDS + N', '   + @c_UpdateCol
                END
                --(Wan01) - END
-
                FETCH NEXT FROM @CUR_COLMAP INTO @c_Code, @c_Code2
             END
             CLOSE @CUR_COLMAP
             DEALLOCATE @CUR_COLMAP
          END
       END
-
       SET @n_RowCnt_RH = 0
       SET @n_RowCnt_RD = 0
-
       BEGIN TRAN
-
       IF EXISTS ( SELECT 1 FROM #tRECEIPT H JOIN #tRECEIPTDETAIL D ON H.ReceiptKey = D.Receiptkey )
       BEGIN
          BEGIN TRY
@@ -1632,56 +1571,51 @@ BEGIN
             + ' FROM #tRECEIPT T'
             + ' JOIN RECEIPT RH ON (T.ReceiptKey = RH.ReceiptKey)'
             + ' WHERE T.RowRef = @n_RowRef_RH'
-
             SET @c_SQLParms = N'@n_RowRef_RH INT'
-
             EXEC sp_ExecuteSQL @c_SQL_UPD_FIELDS
                               ,@c_SQLParms
                               ,@n_RowRef_RH
             --(Wan01) - END
-
             SET @n_RowCnt_RH = @@ROWCOUNT
          END TRY
          BEGIN CATCH
             ROLLBACK TRAN
-
             WHILE @@TRANCOUNT < @n_StartTCnt
             BEGIN
                BEGIN TRAN
             END
-
             SET @n_Continue = 3
             SET @n_Err = 559008
             SET @c_ErrMsg = ERROR_MESSAGE()
             SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': UPDATE RECEIPT Table Fail. (lsp_ASN_PopulatePODs_Wrapper)'
                            + '(' + @c_ErrMsg + ')'
-
-            EXEC [WM].[lsp_WriteError_List]
-                  @i_iErrGroupKey= @n_ErrGroupKey OUTPUT
-               ,  @c_TableName   = @c_TableName
-               ,  @c_SourceType  = @c_SourceType
-               ,  @c_Refkey1     = @c_Receiptkey
-               ,  @c_Refkey2     = @c_POKey
-               ,  @c_Refkey3     = ''
-               ,  @c_WriteType   = 'ERROR'
-               ,  @n_err2        = @n_err
-               ,  @c_errmsg2     = @c_errmsg
-               ,  @b_Success     = @b_Success
-               ,  @n_err         = @n_err
-               ,  @c_errmsg      = @c_errmsg
+            --(Wan05) - START
+            INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
+            VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_POKey, '', 'ERROR', 0, @n_Err, @c_Errmsg)
+            --EXEC [WM].[lsp_WriteError_List]
+            --      @i_iErrGroupKey= @n_ErrGroupKey OUTPUT
+            --   ,  @c_TableName   = @c_TableName
+            --   ,  @c_SourceType  = @c_SourceType
+            --   ,  @c_Refkey1     = @c_Receiptkey
+            --   ,  @c_Refkey2     = @c_POKey
+            --   ,  @c_Refkey3     = ''
+            --   ,  @c_WriteType   = 'ERROR'
+            --   ,  @n_err2        = @n_err
+            --   ,  @c_errmsg2     = @c_errmsg
+            --   ,  @b_Success     = @b_Success
+            --   ,  @n_err         = @n_err
+            --   ,  @c_errmsg      = @c_errmsg
+            --(Wan05) - END
          END CATCH
-
          SET @n_ReceiptLineNumber = 0
          SELECT TOP 1 @n_ReceiptLineNumber = CONVERT(INT, RD.ReceiptLineNumber)
          FROM RECEIPTDETAIL RD WITH (NOLOCK)
          WHERE RD.ReceiptKey = @c_ReceiptKey
          ORDER BY RD.ReceiptLineNumber DESC
-
          BEGIN TRY
             --(Wan01) - START
             SET @c_SQL_INS_FIELDS
             = N'INSERT INTO RECEIPTDETAIL ( Receiptkey, ReceiptLineNumber'
-
             + @c_SQL_INS_FIELDS
             + ')'
             +' SELECT Receiptkey'
@@ -1689,15 +1623,11 @@ BEGIN
             + @c_SQL_INS_FIELDS
             +' FROM #tRECEIPTDETAIL'
             +' ORDER BY RowRef'
-
             SET @c_SQLParms = N'@n_ReceiptLineNumber INT'
-
             EXEC sp_ExecuteSQL @c_SQL_INS_FIELDS
                               ,@c_SQLParms
                               ,@n_ReceiptLineNumber
-
             --(Wan01) - END
-
             SET @n_RowCnt_RD = @@ROWCOUNT
          END TRY
          BEGIN CATCH
@@ -1705,37 +1635,35 @@ BEGIN
             BEGIN
                ROLLBACK TRAN
             END
-
             WHILE @@TRANCOUNT < @n_StartTCnt
             BEGIN
                BEGIN TRAN
             END
-
             SET @n_Continue = 3
             SET @n_Err = 559009
             SET @c_ErrMsg = ERROR_MESSAGE()
-
             SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': INSERT RECEIPTDETAIL Table Fail. (lsp_ASN_PopulatePODs_Wrapper)'
                            + '(' + @c_ErrMsg + ')'
-
-            EXEC [WM].[lsp_WriteError_List]
-               @i_iErrGroupKey= @n_ErrGroupKey OUTPUT
-            ,  @c_TableName   = @c_TableName
-            ,  @c_SourceType  = @c_SourceType
-            ,  @c_Refkey1     = @c_Receiptkey
-            ,  @c_Refkey2     = ''
-            ,  @c_Refkey3     = ''
-            ,  @c_WriteType   = 'ERROR'
-            ,  @n_err2        = @n_err
-            ,  @c_errmsg2     = @c_errmsg
-            ,  @b_Success     = @b_Success
-            ,  @n_err         = @n_err
-            ,  @c_errmsg      = @c_errmsg
-
+            --(Wan05) - START
+            INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
+            VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, '', '', 'ERROR', 0, @n_Err, @c_Errmsg)
+            --EXEC [WM].[lsp_WriteError_List]
+            --   @i_iErrGroupKey= @n_ErrGroupKey OUTPUT
+            --,  @c_TableName   = @c_TableName
+            --,  @c_SourceType  = @c_SourceType
+            --,  @c_Refkey1     = @c_Receiptkey
+            --,  @c_Refkey2     = ''
+            --,  @c_Refkey3     = ''
+            --,  @c_WriteType   = 'ERROR'
+            --,  @n_err2        = @n_err
+            --,  @c_errmsg2     = @c_errmsg
+            --,  @b_Success     = @b_Success
+            --,  @n_err         = @n_err
+            --,  @c_errmsg      = @c_errmsg
+            --(Wan05) - END
             GOTO EXIT_SP
          END CATCH
          -- Update Data to Receipt & ReceiptDetail - END
-
          IF @n_Continue = 3
          BEGIN
             ROLLBACK TRAN
@@ -1745,47 +1673,51 @@ BEGIN
             WHILE @@TRANCOUNT > 0
             COMMIT TRAN
          END
-
          IF @n_Continue = 1 AND @n_RowCnt_RH > 0 AND @n_RowCnt_RD > 0
          BEGIN
             SET @c_errmsg = 'PO Lines populates to ASN successully.'
-            EXEC [WM].[lsp_WriteError_List]
-               @i_iErrGroupKey= @n_ErrGroupKey OUTPUT
-            ,  @c_TableName   = @c_TableName
-            ,  @c_SourceType  = @c_SourceType
-            ,  @c_Refkey1     = @c_Receiptkey
-            ,  @c_Refkey2     = ''
-            ,  @c_Refkey3     = ''
-            ,  @c_WriteType   = 'MESSAGE'
-            ,  @n_err2        = @n_err
-            ,  @c_errmsg2     = @c_errmsg
-            ,  @b_Success     = @b_Success
-            ,  @n_err         = @n_err
-            ,  @c_errmsg      = @c_errmsg
-
+            --(Wan05) - START
+            INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
+            VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, '', '', 'MESSAGE', 0, @n_Err, @c_Errmsg)
+            --EXEC [WM].[lsp_WriteError_List]
+            --   @i_iErrGroupKey= @n_ErrGroupKey OUTPUT
+            --,  @c_TableName   = @c_TableName
+            --,  @c_SourceType  = @c_SourceType
+            --,  @c_Refkey1     = @c_Receiptkey
+            --,  @c_Refkey2     = ''
+            --,  @c_Refkey3     = ''
+            --,  @c_WriteType   = 'MESSAGE'
+            --,  @n_err2        = @n_err
+            --,  @c_errmsg2     = @c_errmsg
+            --,  @b_Success     = @b_Success
+            --,  @n_err         = @n_err
+            --,  @c_errmsg      = @c_errmsg
+            --(Wan05) - END
             GOTO EXIT_SP
          END
       END
    END TRY
    BEGIN CATCH
-  SET @n_Continue = 3
+      SET @n_Continue = 3
       SET @c_ErrMsg = ERROR_MESSAGE()
-
       --Log Error to WMS_Error_List
-      EXEC [WM].[lsp_WriteError_List]        --(Wan02)
-            @i_iErrGroupKey= @n_ErrGroupKey OUTPUT
-         ,  @c_TableName   = @c_TableName
-         ,  @c_SourceType  = @c_SourceType
-         ,  @c_Refkey1     = @c_Receiptkey
-         ,  @c_Refkey2     = @c_POKey
-         ,  @c_Refkey3     = ''
-         ,  @c_WriteType   = 'ERROR'
-         ,  @n_err2        = @n_err
-         ,  @c_errmsg2     = @c_errmsg
-         ,  @b_Success     = @b_Success
-         ,  @n_err         = @n_err
-         ,  @c_errmsg      = @c_errmsg
-
+      --(Wan05) - START
+      INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
+      VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_POKey, '', 'ERROR', 0, @n_Err, @c_Errmsg)
+      --EXEC [WM].[lsp_WriteError_List]        --(Wan02)
+      --      @i_iErrGroupKey= @n_ErrGroupKey OUTPUT
+      --   ,  @c_TableName   = @c_TableName
+      --   ,  @c_SourceType  = @c_SourceType
+      --   ,  @c_Refkey1     = @c_Receiptkey
+      --   ,  @c_Refkey2     = @c_POKey
+      --   ,  @c_Refkey3     = ''
+      --   ,  @c_WriteType   = 'ERROR'
+      --   ,  @n_err2        = @n_err
+      --   ,  @c_errmsg2     = @c_errmsg
+      --   ,  @b_Success     = @b_Success
+      --   ,  @n_err         = @n_err
+      --   ,  @c_errmsg      = @c_errmsg
+      --(Wan05) - END
       GOTO EXIT_SP
    END CATCH
 EXIT_SP:
@@ -1814,12 +1746,62 @@ EXIT_SP:
          COMMIT TRAN
       END
    END
-
+   --(Wan05) - START
+   SET @CUR_ERRLIST = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+   SELECT   twl.TableName
+         ,  twl.SourceType
+         ,  twl.Refkey1
+         ,  twl.Refkey2
+         ,  twl.Refkey3
+         ,  twl.WriteType
+         ,  twl.LogWarningNo
+         ,  twl.ErrCode
+         ,  twl.Errmsg
+   FROM @t_WMSErrorList AS twl
+   ORDER BY twl.RowID
+   OPEN @CUR_ERRLIST
+   FETCH NEXT FROM @CUR_ERRLIST INTO   @c_TableName
+                                     , @c_SourceType
+                                     , @c_Refkey1
+                                     , @c_Refkey2
+                                     , @c_Refkey3
+                                     , @c_WriteType
+                                     , @n_LogWarningNo
+                                     , @n_Err
+                                     , @c_Errmsg
+   WHILE @@FETCH_STATUS <> -1
+   BEGIN
+      EXEC [WM].[lsp_WriteError_List]
+         @i_iErrGroupKey= @n_ErrGroupKey OUTPUT
+      ,  @c_TableName   = @c_TableName
+      ,  @c_SourceType  = @c_SourceType
+      ,  @c_Refkey1     = @c_Refkey1
+      ,  @c_Refkey2     = @c_Refkey2
+      ,  @c_Refkey3     = @c_Refkey3
+      ,  @n_LogWarningNo= @n_LogWarningNo
+      ,  @c_WriteType   = @c_WriteType
+      ,  @n_err2        = @n_err
+      ,  @c_errmsg2     = @c_errmsg
+      ,  @b_Success     = @b_Success
+      ,  @n_err         = @n_err
+      ,  @c_errmsg      = @c_errmsg
+      FETCH NEXT FROM @CUR_ERRLIST INTO   @c_TableName
+                                        , @c_SourceType
+                                        , @c_Refkey1
+                                        , @c_Refkey2
+                                        , @c_Refkey3
+                                        , @c_WriteType
+                                        , @n_LogWarningNo
+                                        , @n_Err
+                                        , @c_Errmsg
+   END
+   CLOSE @CUR_ERRLIST
+   DEALLOCATE @CUR_ERRLIST
+   --(Wan05) - END
    WHILE @@TRANCOUNT < @n_StartTCnt
    BEGIN
       BEGIN TRAN
    END
-
    REVERT
 END
 GO

@@ -55,7 +55,7 @@ BEGIN
       IF NOT EXISTS(SELECT 1
                     FROM WM.WMS_USER_CREATION_STATUS WITH (NOLOCK)
                     WHERE USER_NAME = @c_NoDomainUserName
-                    AND LDAP_Domain = CASE WHEN ISNULL(@c_domain,'') <> '' THEN @c_Domain ELSE LDAP_Domain END) 
+                    AND ISNULL(LDAP_Domain, '') = CASE WHEN ISNULL(@c_domain, '') <> '' THEN '' ELSE ISNULL(LDAP_Domain, '') END)
       BEGIN
            SET @n_Err = 553101
            SET @c_ErrMsg = 'Invalid User ID'

@@ -1,7 +1,7 @@
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
-GO    
+GO
 
 /************************************************************************/    
 /* Store procedure: rdt_1653ExtUpd06                                    */    
@@ -14,7 +14,9 @@ GO
 /* Modifications log:                                                   */    
 /* Date        Rev  Author   Purposes                                   */    
 /* 2022-10-05  1.0  James    WMS-20667. Created                         */  
-/* 2023-11-14  1.2  James    WMS-23712 Extend Lane var length (james02) */
+/* 2023-10-26  1.1  James    WMS-23879 Skip printing check when         */
+/*                           CODELKUP setup (james01)                   */
+/* 2023-11-14  1.2  James    WMS-23712 Extend Lane var length (james02) */  
 /************************************************************************/    
     
 CREATE OR ALTER PROC [RDT].[rdt_1653ExtUpd06] (    
@@ -48,7 +50,7 @@ BEGIN
    DECLARE @cWidth         NVARCHAR( 10)
    DECLARE @cLength        NVARCHAR( 10)
    DECLARE @fTotalWeight   FLOAT
-   
+   DECLARE @cTransmitLogKey NVARCHAR(10)
    DECLARE
       @c_ExecStatements     NVARCHAR( MAX), 
       @c_ExecArguments      NVARCHAR( MAX),
@@ -59,8 +61,10 @@ BEGIN
       @cPltPalletizedField  NVARCHAR( 30),
       @cPltEditDate         DATETIME,
       @cMasterPalletKey     NVARCHAR( 20) = '',
-      @cUDF03               NVARCHAR( 60)
-   
+      @cUDF03               NVARCHAR( 60) = '',
+      @cUDF02               NVARCHAR( 60) = '',
+      @cKey1                NVARCHAR( 10) = ''
+      
    DECLARE @nTranCount INT  
    SET @nTranCount = @@TRANCOUNT  
    BEGIN TRAN  
@@ -149,6 +153,14 @@ BEGIN
    
    IF @nStep = 6
    BEGIN   
+      SELECT @cUDF02 = ISNULL(CL.UDF02, '')  
+      FROM dbo.ORDERS O WITH (NOLOCK)   
+      JOIN dbo.CODELKUP CL WITH (NOLOCK) ON   
+         ( O.ConsigneeKey = CL.Code AND O.ShipperKey = CL.Code2 AND O.StorerKey = CL.StorerKey)  
+      WHERE OrderKey = @cOrderKey  
+      AND   CL.ListName = 'NOMIXPLSHP'  
+      AND   CL.Storerkey = @cStorerKey 
+         
       SELECT @fTotalWeight = ISNULL( SUM( Weight), 0)
       FROM dbo.PackInfo PI WITH (NOLOCK)  
       CROSS APPLY (  
@@ -178,20 +190,23 @@ BEGIN
          GOTO RollBackTran
       END
 
-      -- Do not trigger pallet label because palletized customer with few cartons can be mixed with normal pallet
-      IF EXISTS (
-         SELECT 1 FROM dbo.PalletDetail PD WITH (NOLOCK)    
-         JOIN dbo.ORDERS WITH (NOLOCK) ON ( PD.UserDefine01 = Orders.OrderKey AND PD.StorerKey = Orders.StorerKey)     
-         LEFT JOIN dbo.CODELKUP CL WITH (NOLOCK) ON ( Orders.ConsigneeKey = CL.Code AND Orders.ShipperKey = CL.Code2)   
-         AND Orders.StorerKey = CL.StorerKey AND CL.ListName = 'NOMIXPLSHP'    
-         WHERE Orders.StorerKey = @cStorerKey  
-         AND   PD.PalletKey = @cPalletKey   
-         GROUP BY PD.PalletKey
-         HAVING COUNT(CASE WHEN ISNULL(CL.Code, '') <> '' THEN 1 END) <> COUNT(1)
-      )
-      BEGIN 
-         GOTO Quit  
-      END 
+      IF @cUDF02 = ''
+      BEGIN
+         -- Do not trigger pallet label because palletized customer with few cartons can be mixed with normal pallet
+         IF EXISTS (
+            SELECT 1 FROM dbo.PalletDetail PD WITH (NOLOCK)    
+            JOIN dbo.ORDERS WITH (NOLOCK) ON ( PD.UserDefine01 = Orders.OrderKey AND PD.StorerKey = Orders.StorerKey)     
+            LEFT JOIN dbo.CODELKUP CL WITH (NOLOCK) ON ( Orders.ConsigneeKey = CL.Code AND Orders.ShipperKey = CL.Code2)   
+            AND Orders.StorerKey = CL.StorerKey AND CL.ListName = 'NOMIXPLSHP'    
+            WHERE Orders.StorerKey = @cStorerKey  
+            AND   PD.PalletKey = @cPalletKey   
+            GROUP BY PD.PalletKey
+            HAVING COUNT(CASE WHEN ISNULL(CL.Code, '') <> '' THEN 1 END) <> COUNT(1)
+         )
+         BEGIN 
+            GOTO Quit  
+         END 
+      END
       -- CHANGES (END)
 
       DECLARE @tPallets TABLE
@@ -286,16 +301,47 @@ BEGIN
                GOTO RollBackTran
             END
          END 
-   
+
+         -- Lane value might >10 chars but key1 only able to accept 10 chars
+         -- Need trim the Lane value else transmitlogkey not able to retrieve
+         IF LEN( @cLane) > 10
+            SET @cKey1 = LEFT( @cLane, 10)
+         ELSE
+         	SET @cKey1 = @cLane
+         	
+         SET @nErrNo = 0
          EXECUTE ispGenTransmitLog2   
             @c_TableName      = @cTableName,   
-            @c_Key1           = @cLane,   
+            @c_Key1           = @cKey1,   
             @c_Key2           = @cPalletKey,   
             @c_Key3           = @cStorerkey,   
             @c_TransmitBatch  = '',   
             @b_Success        = @bSuccess   OUTPUT,      
             @n_err            = @nErrNo     OUTPUT,      
             @c_errmsg         = @cErrMsg    OUTPUT      
+
+         IF @nErrNo <> 0
+            GOTO RollBackTran
+
+         SELECT @cTransmitLogKey = transmitlogkey  
+         FROM dbo.TRANSMITLOG2 WITH (NOLOCK)  
+         WHERE tablename = @cTableName  
+         AND   key1 = @cKey1  
+         AND   key2 = @cPalletKey  
+         AND   key3 = @cStorerkey  
+
+         SET @nErrNo = 0
+         EXEC dbo.isp_QCmd_WSTransmitLogInsertAlert  
+            @c_QCmdClass         = '',  
+            @c_FrmTransmitlogKey = @cTransmitLogKey,  
+            @c_ToTransmitlogKey  = @cTransmitLogKey,  
+            @b_Debug             = 0,  
+            @b_Success           = @bSuccess    OUTPUT,  
+            @n_Err               = @nErrNo      OUTPUT,  
+            @c_ErrMsg            = @cErrMsg     OUTPUT  
+  
+         IF @nErrNo <> 0  
+            GOTO RollBackTran  
       END 
    END
    
@@ -310,10 +356,11 @@ BEGIN
 END    
 GO
 
+
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS ON
 GO
 
-GRANT EXECUTE ON RDT.rdt_1653ExtUpd06 TO NSQL
+GRANT EXECUTE ON [rdt].[rdt_1653ExtUpd06] TO NSQL
 GO

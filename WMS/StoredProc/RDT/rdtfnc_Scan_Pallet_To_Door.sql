@@ -653,6 +653,7 @@ BEGIN
       --prepare next screen variable
       SET @cPalletID = ''
       SET @cOutField01 = ''
+      SET @cOutField06 = ''
       
       -- Go back prev screen to scan next Pallet ID
       SET @nScn = @nScn - 1
@@ -700,6 +701,7 @@ BEGIN
       --prepare prev screen variable
       SET @cPalletID = ''
       SET @cOutField01 = ''
+      SET @cOutField06 = ''
 
       SET @nScn = @nScn - 1
       SET @nStep = @nStep - 1

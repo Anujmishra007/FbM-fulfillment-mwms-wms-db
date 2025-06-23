@@ -10,6 +10,7 @@ GO
 /*                                                                      */
 /* Date       Rev  Author      Purposes                                 */
 /* 2023-06-28 1.0  JHU151     FCR-352 Created                           */
+/* 2024-10-24 1.1  TLE109     FCR-990. Packing Serial Number Validation */
 /************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_838ExtVal20 (
@@ -60,6 +61,12 @@ BEGIN
    DECLARE @nPackQTY  INT
    DECLARE @cErrMsg1  NVARCHAR(20)
 
+   
+   SELECT
+      @cSerialNo         = V_Max
+	FROM rdt.rdtMobRec WITH (NOLOCK)
+	WHERE Mobile = @nMobile
+
    IF @nFunc = 838 -- Pack
    BEGIN
       IF @nStep = 1 -- pickslip no
@@ -75,6 +82,42 @@ BEGIN
             END
          END
       END
+      ELSE IF @nStep = 9
+      BEGIN
+         IF @nInputKey = 1
+         BEGIN
+            DECLARE  @cAddRCPTValidtn     NVARCHAR(10)
+            SET @cAddRCPTValidtn = rdt.RDTGetConfig( @nFunc, 'AddSerialValidtn', @cStorerKey)
+
+            IF @cAddRCPTValidtn = '1'
+            BEGIN
+               --alpha numeric
+               IF PATINDEX('%[^0-9a-zA-Z]%', @cSerialNo) > 0
+               BEGIN
+                  SET @nErrNo = 100248
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')  --100248Invalid Serial No
+                  GOTO Quit
+               END
+
+               IF EXISTS( SELECT 1 FROM dbo.SerialNo WITH(NOLOCK) WHERE StorerKey = @cStorerkey AND SKU = @cSKU AND SerialNo = @cSerialNo AND [Status] <> 1 )
+               BEGIN
+                  SET @nErrNo = 100249
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')  --100249SSerial No Cannot Be Packed
+                  GOTO Quit
+               END
+
+               IF (LEFT(@cSerialNo, 6) <> @cSKU OR LEN(@cSerialNo) <= 6)
+                  AND (LEFT(@cSerialNo, 10) <> @cSKU OR LEN(@cSerialNo) <= 10) 
+               BEGIN
+                  SET @nErrNo = 100250
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')  --100250Serial Confirm
+                  GOTO Quit
+               END
+
+
+            END
+         END
+      END   
    END
 
 Quit:

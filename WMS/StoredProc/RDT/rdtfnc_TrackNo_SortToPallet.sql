@@ -44,12 +44,15 @@ GO
 /* 2023-11-01   2.6  WyeChun  JSM-187801 Add validation from Step2 to   */  
 /*                            Step5 (WC01)                              */  
 /* 2023-11-14   2.7  James    WMS-23712 Extend Lane var length (james13)*/
+/* 2024-04-23   2.8  JihHaur  Add storerkey filter (JH01)               */
 /* 2024-07-09   2.8  CYU027   FCR-539 Granite Scan to Pallet            */
 /* 2024-09-20   2.9  CYU027   Add Validation TrackNo                    */
 /* 2024-10-08   3.0  NLT013   FCR-950 Add OrderKey into @tExtScnData    */
 /* 2024-10-31   3.1  NLT013   UWP-26400 The validation for new pallet   */
 /*                            does not work in some scenarios           */
-/************************************************************************/
+/* 2024-11-12   3.2  YYS027   FCR-1122 Merged from 3.0(v2,NLT)          */
+/*                                     and 2.8(V0,JH01)                 */
+/************************************************************************/  
   
 CREATE OR ALTER PROC [RDT].[rdtfnc_TrackNo_SortToPallet] (  
    @nMobile    int,  
@@ -101,9 +104,9 @@ DECLARE
    @cSuggPalletKey      NVARCHAR( 20),  
    @cMBOLKey            NVARCHAR( 10),  
    @cLoadKey            NVARCHAR( 10),  
-   @cPalletCloseStatus  NVARCHAR( 10),
+   @cPalletCloseStatus  NVARCHAR( 10),  
    @cPltDetailCloseStatus  NVARCHAR( 10),
-   @cOrderInfo04        NVARCHAR( 30),
+   @cOrderInfo04        NVARCHAR( 30),  
    @cOption             NVARCHAR( 1),  
    @cPalletLineNumber   NVARCHAR( 5),  
    @nQty_Picked         INT,  
@@ -143,7 +146,7 @@ DECLARE
    @cNotAllowReusePalletKey      NVARCHAR( 1),  
    @cPallet_Status         NVARCHAR( 10),  
    @cChkPalletOrdStatus    NVARCHAR( 1),  
-   @cScanPalletToLane      NVARCHAR( 1),
+   @cScanPalletToLane      NVARCHAR( 1),  
    @cSuggestLoc            NVARCHAR( 1),
    @cOverrideLoc           NVARCHAR( 1),
    @cExtendedScreenSP      NVARCHAR( 20),
@@ -153,8 +156,8 @@ DECLARE
    @tCreateMBOLVar         VARIABLETABLE,  
    @nIsChildLane           INT = 0,  
    @nIsOriginalLane        INT = 0,  
-   @tValidateLane          VARIABLETABLE,
-   @tExtScnData			   VariableTable,
+   @tValidateLane          VARIABLETABLE,  
+   @tExtScnData            VariableTable,
    @nAction                INT,
      
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),    @cFieldAttr01 NVARCHAR( 1),  
@@ -171,8 +174,8 @@ DECLARE
    @cInField12 NVARCHAR( 60),   @cOutField12 NVARCHAR( 60),    @cFieldAttr12 NVARCHAR( 1),  
    @cInField13 NVARCHAR( 60),   @cOutField13 NVARCHAR( 60),    @cFieldAttr13 NVARCHAR( 1),  
    @cInField14 NVARCHAR( 60),   @cOutField14 NVARCHAR( 60),    @cFieldAttr14 NVARCHAR( 1),  
-   @cInField15 NVARCHAR( 60),   @cOutField15 NVARCHAR( 60),    @cFieldAttr15 NVARCHAR( 1),
-
+   @cInField15 NVARCHAR( 60),   @cOutField15 NVARCHAR( 60),    @cFieldAttr15 NVARCHAR( 1),  
+  
    @cLottable01  NVARCHAR( 18), @cLottable02  NVARCHAR( 18), @cLottable03  NVARCHAR( 18),
    @dLottable04  DATETIME,      @dLottable05  DATETIME,      @cLottable06  NVARCHAR( 30),
    @cLottable07  NVARCHAR( 30), @cLottable08  NVARCHAR( 30), @cLottable09  NVARCHAR( 30),
@@ -189,7 +192,6 @@ DECLARE
    @cUDF22  NVARCHAR( 250), @cUDF23 NVARCHAR( 250), @cUDF24 NVARCHAR( 250),
    @cUDF25  NVARCHAR( 250), @cUDF26 NVARCHAR( 250), @cUDF27 NVARCHAR( 250),
    @cUDF28  NVARCHAR( 250), @cUDF29 NVARCHAR( 250), @cUDF30 NVARCHAR( 250)
-  
 -- Getting Mobile information  
 SELECT  
    @nFunc       = Func,  
@@ -213,9 +215,9 @@ SELECT
    @cSuggPalletKey         = V_String5,  
    @cAllowScanToDiffPallet = V_String6,  
    @cCapturePackInfoSP     = V_String7,  
-   @cChkPalletOrdStatus    = V_String8,
+   @cChkPalletOrdStatus    = V_String8,  
    @cPltDetailCloseStatus    = V_String9,
-
+  
    @cDecodeSP              =  V_String20,  
    @cExtendedInfoSP        =  V_String21,  
    @cExtendedValidateSP    =  V_String22,  
@@ -223,7 +225,7 @@ SELECT
    @cPalletNotAllowMixShipperKey = V_String24,  
    @cSortToPalletNotCreateMBOL   = V_String25,  
    @cNotAllowReusePalletKey      = V_String26,  
-   @cScanPalletToLane            = V_String27,
+   @cScanPalletToLane            = V_String27,  
    @cExtendedScreenSP      = V_String28,
    @cSuggestLoc            = V_String29,
    @cOverrideLoc           = V_String30,
@@ -280,8 +282,8 @@ BEGIN
    IF @nStep = 4 GOTO Step_ClosePallet       -- Scn = 5803. CLOSE PALLET ID  
    IF @nStep = 5 GOTO Step_ScanDiffPallet    -- Scn = 5804. SCAN TO DIFF PALLET ID  
    IF @nStep = 6 GOTO Step_PalletDimension   -- Scn = 5805. PALLET DIMENSION  
-   IF @nStep = 7 GOTO Step_ConfirmNewLane    -- Scn = 5806. CONFIRM SCAN NEW LANE
-   IF @nStep =99 GOTO Step_ExtScn       -- Scn = 5807. SCAN TO LOC/LANE
+   IF @nStep = 7 GOTO Step_ConfirmNewLane    -- Scn = 5806. CONFIRM SCAN NEW LANE  
+   IF @nStep =99 GOTO Step_ExtScn            -- Scn = 5807. SCAN TO LOC/LANE
 END  
   
 RETURN -- Do nothing if incorrect step  
@@ -305,13 +307,13 @@ BEGIN
   
    SET @cDecodeSP = rdt.RDTGetConfig( @nFunc, 'DecodeSP', @cStorerkey)  
    IF @cDecodeSP IN ('0', '')  
-      SET @cDecodeSP = ''
+      SET @cDecodeSP = ''  
+  
+   SET @cPalletCloseStatus = rdt.RDTGetConfig( @nFunc, 'PalletCloseStatus', @cStorerkey)  
+   IF @cPalletCloseStatus = '0'  
+      SET @cPalletCloseStatus = '9'  
 
-   SET @cPalletCloseStatus = rdt.RDTGetConfig( @nFunc, 'PalletCloseStatus', @cStorerkey)
-   IF @cPalletCloseStatus = '0'
-      SET @cPalletCloseStatus = '9'
-
-   SET @cPltDetailCloseStatus = rdt.RDTGetConfig( @nFunc, 'PltDetailCloseStatus', @cStorerkey)
+     SET @cPltDetailCloseStatus = rdt.RDTGetConfig( @nFunc, 'PltDetailCloseStatus', @cStorerkey)
    IF @cPltDetailCloseStatus = '0'
       SET @cPltDetailCloseStatus = '9'
 
@@ -329,20 +331,20 @@ BEGIN
   
    SET @cChkPalletOrdStatus = rdt.RDTGetConfig( @nFunc, 'ChkPalletOrdStatus', @cStorerKey)  
   
-   SET @cScanPalletToLane = rdt.RDTGetConfig( @nFunc, 'ScanPalletToLane', @cStorerKey)
-
+   SET @cScanPalletToLane = rdt.RDTGetConfig( @nFunc, 'ScanPalletToLane', @cStorerKey)  
+  
    SET @cSuggestLoc = rdt.RDTGetConfig( @nFunc, 'SUGGESTLOC', @cStorerKey)
    SET @cOverrideLoc = rdt.RDTGetConfig( @nFunc, 'OVERRIDELOC', @cStorerKey)
    SET @cExtendedScreenSP = rdt.RDTGetConfig( @nFunc, 'ExtScnSP', @cStorerKey)
    IF @cExtendedScreenSP = '0'
       SET @cExtendedScreenSP = ''
-  
+
    -- Initialize value  
    SET @cTrackNo = ''  
    SET @cOption = ''  
    SET @cLane = ''  
    SET @cMBOLKey = ''  
-   SET @cPalletKey = ''
+   SET @cPalletKey = ''  
    SET @cOrderKey = ''
   
    EXEC rdt.rdtSetFocusField @nMobile, 1  
@@ -457,13 +459,13 @@ BEGIN
                FROM dbo.CartonTrack WITH (NOLOCK)  
                WHERE KeyName = @cStorerKey  
                AND   Trackingno = @cBarcode  
-
-               SELECT TOP 1 @cOrderKey = PH.OrderKey
+  
+               SELECT TOP 1 @cOrderKey = PH.OrderKey  
                FROM dbo.PackDetail PD WITH (NOLOCK)  
                JOIN dbo.PackHeader PH WITH (NOLOCK) ON ( PD.PickSlipNo = PH.PickSlipNo)  
-               WHERE PD.StorerKey = @cStorerKey
-                 AND   PD.LabelNo = @cLabelNo
-               ORDER BY 1
+               WHERE PD.StorerKey = @cStorerKey  
+               AND   PD.LabelNo = @cLabelNo  
+               ORDER BY 1  
   
                SET @cTrackNo = @cInTrackNo  
             END  
@@ -497,9 +499,9 @@ BEGIN
                      WHERE StorerKey = @cStorerKey  
                      AND   UserDefine02 = @cTrackNo)  
          BEGIN  
-            SET @nErrNo = 189817
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --TrackNo In Use
-            GOTO Step_TrackNo_Fail
+            SET @nErrNo = 189817  
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --TrackNo In Use  
+            GOTO Step_TrackNo_Fail  
          END  
   
          -- Extended validate  
@@ -716,7 +718,7 @@ BEGIN
          IF @cExtendedInfo <> ''  
             SET @cOutField15 = @cExtendedInfo  
       END  
-   END
+   END  
 
    --FCR-539 extend screen
    IF @cExtendedScreenSP <> ''
@@ -730,7 +732,7 @@ BEGIN
 
       GOTO Step_ExtScn
    END
-  
+     
    GOTO Quit  
   
    Step_TrackNo_Fail:  
@@ -795,8 +797,18 @@ BEGIN
       SET @cChk_StorerKey = ''  
       SELECT TOP 1 @cChk_StorerKey = StorerKey  
       FROM dbo.PackDetail WITH (NOLOCK)  
-      WHERE LabelNo = @cLabelNo  
+      WHERE StorerKey = @cStorerKey --JH01
+      AND LabelNo = @cLabelNo
       ORDER BY 1  
+
+      --JH01
+      IF @@ROWCOUNT = 0
+      BEGIN
+         SET @nErrNo = 156397  
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Diff StorerKey  
+         GOTO Step_ShowPalletID_Fail   
+      END
+      --JH01
   
       IF @cChk_StorerKey <> ''  
       BEGIN  
@@ -1261,8 +1273,18 @@ BEGIN
       SET @cChk_StorerKey = ''  
       SELECT TOP 1 @cChk_StorerKey = StorerKey  
       FROM dbo.PackDetail WITH (NOLOCK)  
-      WHERE LabelNo = @cLabelNo  
+      WHERE StorerKey = @cStorerKey  --JH01
+      AND LabelNo = @cLabelNo  
       ORDER BY 1  
+
+      --JH01
+      IF @@ROWCOUNT = 0
+      BEGIN
+         SET @nErrNo = 156398  
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Diff StorerKey  
+         GOTO Step_ShowPalletID_Fail   
+      END
+      --JH01
   
       IF NOT EXISTS ( SELECT 1 FROM dbo.PALLETDETAIL WITH (NOLOCK)  
                       WHERE PalletKey = @cPalletKey  
@@ -1707,7 +1729,7 @@ BEGIN
          GOTO Quit_UpdatePltDim  
   
          RollBackTran_UpdatePltDim:  
-            ROLLBACK TRAN rdt_UpdatePltDim -- Only rollback change made here
+            ROLLBACK TRAN rdt_UpdatePltDim -- Only rollback change made here  
          Quit_UpdatePltDim:  
             WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started  
                COMMIT TRAN  
@@ -2339,7 +2361,7 @@ BEGIN
       SET @nErrNo = 0  
   
       UPDATE dbo.PalletDetail SET  
-         [Status] = @cPltDetailCloseStatus,
+         [Status] = @cPltDetailCloseStatus, 
          EditDate = GETDATE(),  
          EditWho = SUSER_SNAME()  
       WHERE PalletKey = @cPalletKey  
@@ -2699,7 +2721,7 @@ BEGIN
       SET @cOutField03 = ''  
    END  
 END  
-GOTO Quit
+GOTO Quit  
 
 /********************************************************************************
 Scn = 5807. SCAN TO LOC/LANE
@@ -2770,7 +2792,7 @@ BEGIN
    END
 END
 GOTO Quit
-
+ 
 /********************************************************************************  
 Quit. Update back to I/O table, ready to be pick up by JBOSS  
 ********************************************************************************/  
@@ -2799,7 +2821,7 @@ BEGIN
       V_String7   = @cCapturePackInfoSP,  
       V_String8   = @cChkPalletOrdStatus,  
       V_String9   = @cPltDetailCloseStatus,
-
+  
       V_String20 = @cDecodeSP,  
       V_String21 = @cExtendedInfoSP,  
       V_String22 = @cExtendedValidateSP,  
@@ -2807,11 +2829,11 @@ BEGIN
       V_String24 = @cPalletNotAllowMixShipperKey,  
       V_String25 = @cSortToPalletNotCreateMBOL,  
       V_String26 = @cNotAllowReusePalletKey,  
-      V_String27 = @cScanPalletToLane,
+      V_String27 = @cScanPalletToLane,  
       V_String28 = @cExtendedScreenSP,
       V_String29 = @cSuggestLoc,
       V_String30 = @cOverrideLoc,
-  
+
       V_String41 = @cTrackNo,  
       V_String42 = @cLane,
 

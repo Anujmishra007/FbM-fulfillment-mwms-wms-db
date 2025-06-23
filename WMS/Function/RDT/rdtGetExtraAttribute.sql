@@ -21,6 +21,8 @@ GO
 /* Updates:                                                             */
 /* Date         Rev  Author     Purposes                                */
 /* 2024-09-23   1.0  CYU027     Created                                 */
+/* 2025-01-02   1.1  CYU027     FCR-1584                                */
+/* 2025-03-26   1.2  CYU027     UWP-32041                               */
 /************************************************************************/
 
 CREATE OR ALTER PROC RDT.rdtGetExtraAttribute (
@@ -40,7 +42,9 @@ CREATE OR ALTER PROC RDT.rdtGetExtraAttribute (
                @cSValueSP              NVARCHAR( MAX),
                @cSQL                   NVARCHAR( Max),
                @cSQLParam              NVARCHAR( Max),
-               @nFunc                  INT
+               @currentId              INT,
+               @nFunc                  INT,
+               @n_cnt                  INT
 
    -- INITIAL
    SET @cAttrAndVal = ''
@@ -52,57 +56,86 @@ CREATE OR ALTER PROC RDT.rdtGetExtraAttribute (
    FROM rdt.rdtMobRec WITH (NOLOCK)
    WHERE Mobile = @nMobile
 
-----ONLY 1 RECORD
-   SELECT TOP 1
-      @cAttribute = Attribute,
-      @cSValue    = SValue
+   DECLARE @attributeAndValue TABLE
+   (
+      Id          INT IDENTITY(1,1) PRIMARY KEY,
+      Attribute   NVARCHAR(30),
+      SValue      NVARCHAR( MAX)
+   );
+
+   INSERT INTO @attributeAndValue (Attribute, SValue)
+   SELECT Attribute, SValue
    FROM RDT.ScreenStorerConfig WITH (NOLOCK)
    WHERE StorerKey = @cStorerKey
       AND Scn = @nScn
       AND line = CAST(@cY as INT)
       AND (Function_ID = @nFunc or Function_ID = 0)
 
-   --Nothing found, quit
-   IF ISNULL(@cAttribute, '') = '' OR ISNULL(@cSValue, '') = ''
-   BEGIN
+   SELECT @n_cnt = @@ROWCOUNT
+   IF @n_cnt <= 0
       GOTO Quit
-   END
 
-/***********************************************************************************************
+   --Start Loop
+   SET @currentId = @n_cnt
+
+   WHILE (@currentId > 0)
+   BEGIN
+
+      SELECT @cAttribute   = ISNULL(Attribute,''),
+             @cSValue      = ISNULL(SValue,''),
+             @currentId    = ISNULL(Id, 0)
+      FROM @attributeAndValue
+      WHERE ID = @currentId
+
+      SET @currentId = @currentId - 1
+
+      --Nothing found, quit
+      IF ISNULL(@cAttribute, '') = '' OR ISNULL(@cSValue, '') = ''
+      BEGIN
+         CONTINUE
+      END
+
+      /***********************************************************************************************
                                            Custom get AttrAndVal
-***********************************************************************************************/
+      ***********************************************************************************************/
 
-   -- Extended info
+      -- Extended info
 
-   IF @cSValue <> '' AND EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cSValue AND type = 'P')
-   BEGIN
-      SET @cSValueSP = ''
-      SET @cSQL = 'EXEC rdt.' + RTRIM( @cSValue) +
-                  ' @nMobile, @nFunc, @nScn, @cY, @cStorerKey, @cSValueSP OUTPUT '
+      IF @cSValue <> '' AND EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cSValue AND type = 'P')
+      BEGIN
+         SET @cSValueSP = ''
+         SET @cSQL = 'EXEC rdt.' + RTRIM( @cSValue) +
+                     ' @nMobile, @nFunc, @nScn, @cY, @cStorerKey, @cSValueSP OUTPUT '
 
-      SET @cSQLParam =
-              '@nMobile          INT, ' +
-              '@nFunc            INT, ' +
-              '@nScn             INT, ' +
-              '@cY               NVARCHAR(2), ' +
-              '@cStorerKey       NVARCHAR( 15), '  +
-              '@cSValueSP      NVARCHAR( 20) OUTPUT '
+         SET @cSQLParam =
+                 '@nMobile          INT, ' +
+                 '@nFunc            INT, ' +
+                 '@nScn             INT, ' +
+                 '@cY               NVARCHAR(2), ' +
+                 '@cStorerKey       NVARCHAR( 15), '  +
+                 '@cSValueSP        NVARCHAR( MAX) OUTPUT'
 
-      EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-           @nMobile, @nFunc, @nScn, @cY, @cStorerKey,
-           @cSValueSP OUTPUT
+         EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+              @nMobile, @nFunc, @nScn, @cY, @cStorerKey,
+              @cSValueSP OUTPUT
 
 
-      SET @cAttrAndVal =  '" ' + @cAttribute + '="' + @cSValueSP
+         SET @cAttrAndVal = @cAttrAndVal + ' ' + @cAttribute + '=''' + @cSValueSP + ''' '
 
-      GOTO Quit
+      END
+      ELSE
+      BEGIN
+
+         /***********************************************************************************************
+                                   Standard get AttrAndVal
+         ***********************************************************************************************/
+
+         SET @cAttrAndVal = @cAttrAndVal + ' ' + @cAttribute + '=''' + @cSValue + ''' '
+
+      END
+
    END
 
-/***********************************************************************************************
-                                   Standard get AttrAndVal
-***********************************************************************************************/
-
-   SET @cAttrAndVal =  @cAttribute + '=''' + @cSValue + ''''
    GOTO Quit
 
 Quit:

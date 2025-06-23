@@ -15,6 +15,7 @@ GO
 /* 2024-10-22  1.3.0    NLT013      FCR-973 Diff Aisle: No need to create new task      */
 /*                                  ToLoc is PickFace location                          */
 /*                                  Same Aisle: Move inv to final location directly     */
+/* 2024-10-22  1.4.0    NLT013      UWP-27527 No need to add QtyRepl if ToLoc is not PND*/
 /****************************************************************************************/
 
 CREATE OR ALTER PROCEDURE [dbo].[isp_VNAReplenishmentConfirm] (
@@ -358,11 +359,15 @@ BEGIN
       GOTO RollBackTran
    END
 
-   -- Add back QTYReplen
-   UPDATE dbo.LOTxLOCxID WITH (ROWLOCK) SET
-      QTYReplen = @nQTY
-   WHERE LOC = @cTaskToLoc
-      AND ID = @cID
+   -- Add QTYReplen to PND location
+   IF EXISTS (SELECT 1 FROM dbo.LOC WITH(NOLOCK) WHERE Facility = @cFacility AND LOC = @cTaskToLoc AND LocationCategory IN ('PND_IN', 'PND_OUT', 'PND') 
+      OR @cTaskToLoc <> @cTaskFinalLoc)
+   BEGIN
+      UPDATE dbo.LOTxLOCxID WITH (ROWLOCK) SET
+         QTYReplen = @nQTY
+      WHERE LOC = @cTaskToLoc
+         AND ID = @cID
+   END
 
    IF @@ERROR <> 0
    BEGIN

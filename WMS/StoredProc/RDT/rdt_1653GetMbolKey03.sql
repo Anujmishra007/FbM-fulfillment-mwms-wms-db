@@ -15,6 +15,7 @@ GO
 /* Date        Rev  Author   Purposes                                   */    
 /* 2022-09-15  1.0  James    WMS-20667. Created                         */    
 /* 2023-08-30  1.1  James    WMS-23471 Allow palletkey blank (james01)  */
+/* 202405-17   1.2  James    WMS-23948 Add plt not mix mbol (james02)   */
 /************************************************************************/    
     
 CREATE OR ALTER PROC [RDT].[rdt_1653GetMbolKey03] (    
@@ -43,7 +44,9 @@ BEGIN
    DECLARE @cNew_ShipperKey   NVARCHAR( 15) = ''    
    DECLARE @cCur_OrderKey     NVARCHAR( 10) = ''    
    DECLARE @cPalletNotAllowMixShipperKey  NVARCHAR( 1)    
-    
+   DECLARE @cBillToKey        NVARCHAR( 15) = ''
+   DECLARE @cBuyerPO          NVARCHAR( 20) = ''
+
    IF ISNULL( @cOrderKey, '') = ''    
       SELECT @cOrderKey = OrderKey,    
              @cNew_ShipperKey = ShipperKey    
@@ -117,6 +120,50 @@ BEGIN
       IF @cPalletKey = ''
          SET @cMBOLKey = ''
    END    
+
+   IF ISNULL( @cMBOLKey, '') = ''
+   BEGIN
+      SELECT 
+         @cBuyerPO = BuyerPO,
+         @cBillToKey = BillToKey
+      FROM dbo.ORDERS WITH (NOLOCK)      
+      WHERE OrderKey = @cOrderKey
+
+      IF EXISTS (SELECT 1 
+                 FROM dbo.CODELKUP WITH (NOLOCK) 
+                 WHERE ListName = 'NOMIXPLSHP'
+                 AND   Code = @cBillToKey
+                 AND   StorerKey = @cStorerkey 
+                 AND   UDF02 = 'AUTOSORTPO')
+      BEGIN
+         SET @cMBOLKey = ''
+         SELECT TOP 1 @cMBOLKey = MbolKey
+         FROM dbo.ORDERS WITH (NOLOCK)      
+         WHERE StorerKey = @cStorerKey
+         AND   BuyerPO = @cBuyerPO
+         AND   BillToKey = @cBillToKey
+         AND   [Status] NOT IN ( '9', 'CANC') 
+         AND   ISNULL( MBOLKey, '') <> ''
+         ORDER BY 1
+         
+         IF ISNULL( @cMBOLKey, '') <> ''
+         BEGIN
+         	SET @cLane = ''      
+            SELECT @cLane = ExternMbolKey      
+            FROM dbo.MBOL WITH (NOLOCK)      
+            WHERE MbolKey = @cMBOLKey
+            
+            SET @cPalletKey = ''
+            SELECT TOP 1 @cPalletKey = PalletKey 
+            FROM dbo.PALLETDETAIL PD WITH (NOLOCK) 
+            JOIN dbo.ORDERS O WITH (NOLOCK) ON ( PD.UserDefine01 = O.OrderKey AND PD.StorerKey = O.StorerKey)
+            WHERE O.MBOLKey = @cMbolKey 
+            AND   PD.StorerKey = @cStorerKey 
+            AND   PD.Status = '0'
+            ORDER BY 1
+         END
+      END
+   END
 Quit:    
 END 
 GO

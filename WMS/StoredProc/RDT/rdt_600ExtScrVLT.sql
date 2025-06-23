@@ -66,13 +66,26 @@ BEGIN
          WHERE Mobile = @nMobile
 
          --Checking that location type that user is trying to receive to is added to the receiving codelkup
-         IF NOT EXISTS (SELECT 1 FROM dbo.loc WITH(NOLOCK) WHERE loc = @cLOC AND EXISTS (SELECT 1 FROM dbo.CODELKUP (NOLOCK) WHERE LocationType = Code
+         IF NOT EXISTS (SELECT 1 FROM dbo.LOC WITH(NOLOCK) WHERE loc = @cLOC AND EXISTS (SELECT 1 FROM dbo.CODELKUP (NOLOCK) WHERE LocationType = Code
             AND LISTNAME = 'HUSQINBLOC' AND Storerkey = @cStorerKey) AND FACILITY = @cFacility)
          BEGIN
             SET @nErrNo = 217909
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --NotReceivingLocation
             GOTO Quit  
          END
+
+            UPDATE dbo.SKU WITH(ROWLOCK)
+               SET LottableCode = 'HUSQBATTERY'
+            WHERE Style = 'B' AND StorerKey = @cStorerKey AND LottableCode <> 'HUSQBATTERY'
+         
+            UPDATE dbo.SKU WITH(ROWLOCK)
+               SET LottableCode = 'HUSQSHELF'
+            WHERE Style = 'SHLV' AND StorerKey = @cStorerKey AND LottableCode <> 'HUSQSHELF'
+			
+			UPDATE dbo.SKU WITH(ROWLOCK)
+               SET LottableCode = 'HUSQSTD'
+            WHERE Style NOT IN ('SHLV','B') AND StorerKey = @cStorerKey AND LottableCode <> 'HUSQSTD'
+
       END
 
       IF @nStep = 5
@@ -92,11 +105,18 @@ BEGIN
             GOTO Quit
          END
 
-         IF ISNUMERIC(@cLottable11) <> 1 AND @cLottable11 <> ''
+         IF (ISNUMERIC(@cLottable11) <> 1 or CHARINDEX('.', @cLottable11) > 0) AND @cLottable11 <> ''
          --Checklottables
          BEGIN
             SET @nErrNo = 218032
-            SET @cErrMsg = @cLottable12--rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Enter numeric value'
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Enter whole numeric value'
+            GOTO Quit
+         END
+
+		 IF @cLottable11 <= 10 AND @cLottable11 <> ''
+		 BEGIN
+            SET @nErrNo = 218067
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')--'Please use CM'
             GOTO Quit
          END
 

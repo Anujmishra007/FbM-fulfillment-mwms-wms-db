@@ -14,6 +14,7 @@ GO
 /* 2023-05-30 1.0  Ung      WMS-22370 Created                                 */
 /* 2023-10-24 1.1  Ung      WMS-23891 Add CheckPalletStatus                   */
 /*                          UpdatePickDetailDropID, UpdatePickDetailCaseID    */
+/* 2025-02-26 1.2.0 NLT013  UWP-30204 ToLoc is Missing  while executing ConfirmSP  */
 /******************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_PickPallet_Confirm] (
@@ -94,6 +95,7 @@ BEGIN
             ' @cID           NVARCHAR( 18), ' +
             ' @cSKU          NVARCHAR( 20), ' +
             ' @nQTY          INT,           ' +
+            ' @cToLOC        NVARCHAR( 10), ' +
             ' @cLottableCode NVARCHAR( 30), ' +
             ' @cLottable01   NVARCHAR( 18), ' +
             ' @cLottable02   NVARCHAR( 18), ' +

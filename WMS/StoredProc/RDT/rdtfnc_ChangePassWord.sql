@@ -17,6 +17,7 @@ GO
 /* 2016-09-30 1.1  Ung      Performance tuning                          */
 /* 2018-10-30 1.2  TungGH   Performance                                 */
 /* 2024-07-26 1.3  Jackc    UWP-21905 Encrypt password                  */
+/* 2025-06-20 0.0  Jackc    !!!Cutover. Use V0 repo for work!!!         */
 /************************************************************************/
 
 CREATE PROCEDURE [RDT].[rdtfnc_ChangePassWord] (

@@ -30,6 +30,7 @@ GO
 /* 2018-09-28   2.2  TungGH   Performance                                  */
 /* 2020-08-07   2.3  YeeKung  WMS-14477 Add Continue screen (yeekung01)    */
 /* 2022-12-22   2.4  YeeKung  WMS-21359 Extend option length (yeekung02)   */
+/* 2025-05-30   0.0  JACKC    !!!Cutover.Use V0 for development!!!         */
 /***************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_PrintLabelReport](

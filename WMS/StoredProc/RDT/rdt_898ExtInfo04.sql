@@ -8,8 +8,9 @@ GO
 /* Copyright      : Maersk                                              */
 /* Customer       : Granite                                             */
 /*                                                                      */
-/* Date       Rev  Author  Purposes                                     */
-/* 2024-10-07 1.0  NLT013  FCR-926 Created                              */
+/* Date       Rev    Author  Purposes                                   */
+/* 2024-10-07 1.0.0  NLT013  FCR-926 Created                            */
+/* 2025-01-02 1.0.1  JCH507  FCR-1103 Adapt for extscn02                */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_898ExtInfo04]
@@ -46,13 +47,17 @@ BEGIN
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
+   SET @cExtendedInfo = '' --V1.0.1
+
    DECLARE 
       @cStorerKey       NVARCHAR(20),
       @cFacility        NVARCHAR(10),
-      @nScannedUCC      INT
+      @nScannedUCC      INT,
+      @nScn             INT --v1.0.1
 
    SELECT @cStorerKey = StorerKey,
-      @cFacility = Facility
+      @cFacility = Facility,
+      @nScn = Scn
    FROM RDT.RDTMOBREC WITH(NOLOCK)
    WHERE Mobile = @nMobile
 
@@ -74,6 +79,20 @@ BEGIN
             SET @cExtendedInfo = 'Scanned UCC: ' +  CAST (@nScannedUCC AS NVARCHAR(5))
          END
       END
+      IF @nStep = 10 AND @nScn = 1308 AND @nAfterStep = 99 --ExtScn02 Step10 branch --V1.0.1 start
+      BEGIN
+         -- Get total scanned 
+         SELECT @nScannedUCC = COUNT( DISTINCT UCC)
+         FROM RDT.RDTSTDEVENTLOG WITH(NOLOCK)
+         WHERE FunctionID = @nFunc 
+            AND Facility = @cFacility
+            AND StorerKey = @cStorerKey 
+            AND ID = @cToID
+            AND ISNULL(Refno1, '') <> 'CLOSE'
+         -- Output balance/total
+         SET @cExtendedInfo = 'Scanned UCC: ' +  CAST (@nScannedUCC AS NVARCHAR(5))
+      END --End of @nStep = 99 AND @nScn = 1305
+      --v1.0.1 end
    END
 
 Quit:

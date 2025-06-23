@@ -29,6 +29,7 @@ GO
 /*                            Revert when Sub SP Raise error            */
 /* 2021-01-15  Wan02    1.2   Execute Login if @c_UserName<>SUSER_SNAME()*/
 /* 2022-06-24  SYCHUA   1.3   JSM-76615 - Filter out status = 9 (SY01)  */
+/*2025-05-26   SSA01    1.4   UWP-3982- Added PalletType                */
 /************************************************************************/
 
 CREATE PROCEDURE [WM].[lsp_FinalizeTransfer_Wrapper]
@@ -126,6 +127,54 @@ BEGIN
 
          GOTO EXIT_SP
       END
+
+      IF @n_continue IN(1,2)
+      BEGIN
+          IF EXISTS(
+          SELECT 1
+          FROM transferdetail tfd
+          WHERE
+            (
+            tfd.ToPalletType IS NOT NULL
+            AND tfd.ToPalletType != ''
+            AND tfd.transferkey = @c_Transferkey
+            AND NOT EXISTS (
+              SELECT 1
+              FROM pallettypemaster(NOLOCK) ptm
+              WHERE ptm.PalletType = tfd.ToPalletType
+              )
+            )
+            OR
+            (
+            tfd.FromPalletType IS NOT NULL
+            AND tfd.FromPalletType != ''
+            AND tfd.transferkey = @c_Transferkey
+            AND NOT EXISTS (
+              SELECT 1
+              FROM pallettypemaster(NOLOCK) ptm
+              WHERE ptm.PalletType = tfd.FromPalletType
+            )
+            ))
+            BEGIN
+            SELECT @n_continue = 3
+            SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 551751
+            SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(6),@n_err)+' FromPalletType / ToPalletType are not valid. (lsp_FinalizeTransfer_Wrapper)'
+
+            EXEC [WM].[lsp_WriteError_List]
+                  @i_iErrGroupKey = @n_ErrGroupKey OUTPUT,
+                  @c_TableName   = @c_TableName,
+                  @c_SourceType  = @c_SourceType,
+                  @c_Refkey1     = @c_Transferkey,
+                  @c_Refkey2     = '',
+                  @c_Refkey3     = '',
+                  @n_err2        = @n_err,
+                  @c_errmsg2     = @c_errmsg,
+                  @b_Success     = @b_Success OUTPUT,
+                  @n_err         = @n_err OUTPUT,
+                  @c_errmsg      = @c_errmsg OUTPUT
+              GOTO EXIT_SP
+            END
+          END
 
       SELECT @c_ChkTransferQtyTally = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'ChkTransferQtyTally')
       SELECT @c_ChkMARSTrfLot01 = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'ChkMARSTrfLot01')

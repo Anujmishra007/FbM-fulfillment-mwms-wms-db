@@ -66,6 +66,9 @@ GO
 /* 2022-03-09   3.7  yeekung    WMS-18588 Add Extendedvalidate (yeekung01)    */
 /* 2022-05-19   3.8  Ung        WMS-22486 Add pick pallet with UCC            */
 /* 2022-10-21   3.9  PXL009     UWP-25970 Fix Implicit type conversion error  */
+/* 2024-10-22   4.0  PXL009     FCR-759 ID and UCC Length Issue               */
+/* 2025-02-26   4.1.0  NLT013   FCR-2519 Be able to config Lottable           */
+/* 2025-02-26   4.1.1  CYU027   FCR-2519 Lottable 1-15 Swap UCC               */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_Pick] (
@@ -167,6 +170,7 @@ DECLARE
    @cDecodeDropIDSP        NVARCHAR(20),
    @nQty                   INT,
    @cDecodeSP              NVARCHAR( 20),
+   @cLottableValidSP       NVARCHAR( 20),
 
    @cLottable01            NVARCHAR( 18),
    @cLottable02            NVARCHAR( 18),
@@ -187,6 +191,8 @@ DECLARE
    @cPickDontShowLot02     NVARCHAR( 20),
    @cDefaultToPickQty      NVARCHAR( 20),
    @cAutoScanIn            NVARCHAR( 1),  -- (james15)
+   @cMatchUCCLottable      NVARCHAR( 20),  
+   @tValidationData        VariableTable,
 
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),
@@ -2513,6 +2519,7 @@ BEGIN
    BEGIN
       -- Screen mapping
       SET @cUCC = @cInField10
+      SET @cBarcode = @cInField10
 
       -- (Vicky02) - Start
       SET @cFieldAttr01 = ''
@@ -2559,6 +2566,76 @@ BEGIN
          GOTO Quit
       END
 
+      -- Decode
+      IF @cDecodeSP <> ''
+      BEGIN
+         -- Standard decode
+         IF @cDecodeSP = '1'
+         BEGIN
+            EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorer, @cFacility, @cBarcode,
+               @cUCCNo  = @cUCC        OUTPUT,
+               @nErrNo  = @nErrNo      OUTPUT,
+               @cErrMsg = @cErrMsg     OUTPUT,
+               @cType   = 'UCCNo'
+
+               IF @nErrNo <> 0
+                  GOTO UCC_Fail
+         END
+         -- Customize decode
+         ELSE IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cDecodeSP AND type = 'P')
+         BEGIN
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cDecodeSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cPickSlipNo, @cBarcode, ' +
+               ' @cDropID     OUTPUT, @cLOC        OUTPUT, @cID         OUTPUT, @cSKU        OUTPUT, @nQty        OUTPUT, ' +
+               ' @cLottable01 OUTPUT, @cLottable02 OUTPUT, @cLottable03 OUTPUT, @dLottable04 OUTPUT, @dLottable05 OUTPUT,' +
+               ' @cLottable06 OUTPUT, @cLottable07 OUTPUT, @cLottable08 OUTPUT, @cLottable09 OUTPUT, @cLottable10 OUTPUT,' +
+               ' @cLottable11 OUTPUT, @cLottable12 OUTPUT, @dLottable13 OUTPUT, @dLottable14 OUTPUT, @dLottable15 OUTPUT,' +
+               ' @nErrNo OUTPUT, @cErrMsg OUTPUT'
+            SET @cSQLParam =
+               '@nMobile         INT, '            +
+               '@nFunc           INT, '            +
+               '@cLangCode       NVARCHAR( 3), '   +
+               '@nStep           INT, '            +
+               '@nInputKey       INT, '            +
+               '@cStorerKey      NVARCHAR( 15), '  +
+               '@cPickSlipNo     NVARCHAR( 10), '  +
+               '@cBarcode        NVARCHAR( 60), '  +
+               '@cDropID         NVARCHAR(60)   OUTPUT, ' +
+               '@cLOC            NVARCHAR(10)   OUTPUT, ' +
+               '@cID             NVARCHAR(18)   OUTPUT, ' +
+               '@cSKU            NVARCHAR(20)   OUTPUT, ' +
+               '@nQty            INT            OUTPUT, ' +
+               '@cLottable01     NVARCHAR( 18)  OUTPUT, ' +
+               '@cLottable02     NVARCHAR( 18)  OUTPUT, ' +
+               '@cLottable03     NVARCHAR( 18)  OUTPUT, ' +
+               '@dLottable04     DATETIME       OUTPUT, ' +
+               '@dLottable05     DATETIME       OUTPUT, ' +
+               '@cLottable06     NVARCHAR( 30)  OUTPUT, ' +
+               '@cLottable07     NVARCHAR( 30)  OUTPUT, ' +
+               '@cLottable08     NVARCHAR( 30)  OUTPUT, ' +
+               '@cLottable09     NVARCHAR( 30)  OUTPUT, ' +
+               '@cLottable10     NVARCHAR( 30)  OUTPUT, ' +
+               '@cLottable11     NVARCHAR( 30)  OUTPUT, ' +
+               '@cLottable12     NVARCHAR( 30)  OUTPUT, ' +
+               '@dLottable13     DATETIME       OUTPUT, ' +
+               '@dLottable14     DATETIME       OUTPUT, ' +
+               '@dLottable15     DATETIME       OUTPUT, ' +
+               '@nErrNo          INT OUTPUT,    '         +
+               '@cErrMsg         NVARCHAR( 20) OUTPUT'
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorer, @cPickSlipNo, @cBarcode,
+               @cUCC             OUTPUT, @cLOC        OUTPUT, @cID         OUTPUT, @cSKU        OUTPUT, @nQty        OUTPUT,
+               @cLottable1       OUTPUT, @cLottable2  OUTPUT, @cLottable3  OUTPUT, @dLottable4  OUTPUT, @dLottable05 OUTPUT,
+               @cLottable06      OUTPUT, @cLottable07 OUTPUT, @cLottable08 OUTPUT, @cLottable09 OUTPUT, @cLottable10 OUTPUT,
+               @cLottable11      OUTPUT, @cLottable12 OUTPUT, @dLottable13 OUTPUT, @dLottable14 OUTPUT, @dLottable15 OUTPUT,
+               @nErrNo           OUTPUT, @cErrMsg     OUTPUT
+
+            IF @nErrNo <> 0
+               GOTO UCC_Fail
+         END
+      END
+
       -- Validate UCC
       EXEC RDT.rdtIsValidUCC @cLangCode, @nErrNo OUTPUT, @cErrMsg OUTPUT,
          @cUCC,
@@ -2592,15 +2669,57 @@ BEGIN
          AND UCC.StorerKey = @cStorer
          AND UCC.Status = '1' -- Received
 
+      SET @cMatchUCCLottable = rdt.rdtGetConfig( @nFunc, 'MATCHUCCLOTTABLE', @cStorer)
+      DECLARE @tLottableList TABLE
+      (
+         LottableNo    NVARCHAR(5)
+      )
+
+      INSERT INTO @tLottableList ( LottableNo) 
+      SELECT VALUE FROM STRING_SPLIT(@cMatchUCCLottable, ',')
+
       -- Validate UCC lottables
-      IF @cUCCLottable1 <> @cLottable1 OR
-         @cUCCLottable2 <> @cLottable2 OR
-         @cUCCLottable3 <> @cLottable3 OR
-         @dUCCLottable4 <> @dLottable4
+      IF EXISTS(SELECT 1 FROM @tLottableList WHERE LottableNo IN
+         ('01','02','03','04','05','06','07','08','09','10','11','12','13','14','15'))
       BEGIN
-         SET @nErrNo = 62650
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'UCC LotbleDiff'
-         GOTO UCC_Fail
+         SET @cLottableValidSP = rdt.RDTGetConfig( @nFunc, 'LottableValidSP', @cStorer)
+         EXEC rdt.rdt_861LottableValidWrapper 
+                @nMobile          = @nMobile
+               ,@nFunc           = @nFunc
+               ,@cSPName         = @cLottableValidSP
+               ,@cLangCode       = @cLangCode
+               ,@cStorerKey      = @cStorer
+               ,@cFacility       = @cFacility
+               ,@nStep           = @nStep
+               ,@nInputKey       = @nInputKey
+               ,@cPickSlipNo     = @cPickSlipNo
+               ,@cDropID         = @cDropID
+               ,@cLOC            = @cLOC
+               ,@cID             = @cID
+               ,@cSKU            = @cSKU
+               ,@cUOM            = @cUOM
+               ,@cUCC            = @cUCC
+               ,@cLottable1      = @cLottable1
+               ,@cLottable2      = @cLottable2
+               ,@cLottable3      = @cLottable3
+               ,@dLottable4      = @dLottable4
+               ,@tValidationData = @tValidationData
+               ,@nErrNo          = @nErrNo      OUTPUT
+               ,@cErrMsg         = @cErrMsg     OUTPUT
+
+         IF @nErrNo <> 0
+            GOTO UCC_Fail
+      END
+      ELSE BEGIN
+         IF @cUCCLottable1 <> @cLottable1 OR
+            @cUCCLottable2 <> @cLottable2 OR
+            @cUCCLottable3 <> @cLottable3 OR
+            @dUCCLottable4 <> @dLottable4
+         BEGIN
+            SET @nErrNo = 62650
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'UCC LotbleDiff'
+            GOTO UCC_Fail
+         END
       END
 
       -- Validate TaskQTY not in full case count
@@ -2624,8 +2743,8 @@ BEGIN
       END
 
       -- Store UCC in RDTTempUCC
-      INSERT INTO RDT.RDTTempUCC (TaskType, PickSlipNo, StorerKey, SKU, UCCNo, LOT, LOC, [ID], Lottable01, Lottable02, Lottable03, Lottable04)
-      VALUES ('PICK', @cPickSlipNo, @cStorer, @cSKU, @cUCC, @cUCCLOT, @cLOC, @cUCCID, @cUCCLottable1, @cUCCLottable2, @cUCCLottable3, @dUCCLottable4)
+      INSERT INTO RDT.RDTTempUCC (TaskType, PickSlipNo, StorerKey, SKU, UCCNo, LOT, LOC, [ID], Lottable01, Lottable02, Lottable03, Lottable04, UCCLottable01, UCCLottable02, UCCLottable03, UCCLottable04)
+      VALUES ('PICK', @cPickSlipNo, @cStorer, @cSKU, @cUCC, @cUCCLOT, @cLOC, @cUCCID, @cUCCLottable1, @cUCCLottable2, @cUCCLottable3, @dUCCLottable4, @cLottable1, @cLottable2, @cLottable3, @dLottable4)
       IF @@ERROR <> 0
       BEGIN
          SET @nErrNo = 62653

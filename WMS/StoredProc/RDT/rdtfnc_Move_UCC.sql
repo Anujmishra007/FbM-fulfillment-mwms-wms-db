@@ -37,6 +37,9 @@ GO
 /* 2023-01-20 2.6  Ung      WMS-21577 Add unlimited UCC to move         */
 /* 2023-05-09 2.7  Ung      WMS-22401 Fix UCC DoubleScan                */
 /* 2023-06-12 2.8  Ung      WMS-22742 Add 2D barcode                    */
+/* 2024-10-25 2.9  ShaoAn   FCR-759-1001 ID and UCC Length Issue        */
+/* 2024-08-05 3.0  Ung      WMS-25998 Add UCC.Status = 3                */
+/* 2024-11-07 3.1  PXL009   Merged 2.9 from v0 branch                   */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_Move_UCC] (
@@ -71,9 +74,12 @@ DECLARE
    @cStorerKey NVARCHAR( 15),
    @cFacility  NVARCHAR( 5),
 
-   @cSKU       NVARCHAR( 20),
-   @cSKUDescr  NVARCHAR( 60),
-   @cBarcode   NVARCHAR( MAX),
+   @cSKU         NVARCHAR( 20),
+   @cSKUDescr    NVARCHAR( 60),
+   @cBarcode     NVARCHAR( MAX),
+   @cBarcodeUCC  NVARCHAR( 60),
+   @cUCCNo       NVARCHAR( 20),
+   @cUDF01       NVARCHAR( 30),
 
    @cUCC1      NVARCHAR( 20),
    @cUCC2      NVARCHAR( 20),
@@ -85,10 +91,11 @@ DECLARE
    @cUCC8      NVARCHAR( 20),
    @cUCC9      NVARCHAR( 20),
 
-   @cToLOC     NVARCHAR( 10),
-   @cToID      NVARCHAR( 18),
-   @cFromLOC   NVARCHAR( 10), 
-   @cFromID    NVARCHAR( 18), 
+   @cToLOC       NVARCHAR( 10),
+   @cToID        NVARCHAR( 18),
+   @cFromLOC     NVARCHAR( 10),
+   @cFromID      NVARCHAR( 18),
+   @cUCCStatus NVARCHAR( 10),
 
    @cExtendedValidateSP NVARCHAR( 20), 
    @cExtendedUpdateSP   NVARCHAR( 20),
@@ -146,6 +153,8 @@ SELECT
    @cToID      = V_String11,
    @cFromLOC   = V_String12,
    @cFromID    = V_String15,
+   @cUCCStatus = V_String16,
+   @cUDF01     = V_String17,
 
    @cExtendedValidateSP = V_String20,
    @cExtendedUpdateSP   = V_String21,
@@ -234,6 +243,11 @@ BEGIN
    SET @cLOCLookUP = rdt.rdtGetConfig( @nFunc, 'LOCLookUPSP', @cStorerKey)
    IF @cLOCLookUP = '0'
       SET @cLOCLookUP = ''
+
+   -- UCC status allowed
+	SET @cUCCStatus = '1' -- Received
+	IF rdt.RDTGetConfig( @nFunc, 'MoveQTYAlloc', @cStorerKey) = '1'
+      SET @cUCCStatus += '3' -- Alloc
 
    -- Initiate var
    SET @cUCC1 = ''
@@ -373,6 +387,48 @@ BEGIN
          END
       END
       
+         -- Decode
+         -- Standard decode
+      IF @cDecodeSP = '1'
+      BEGIN
+         SET @i = 1
+         WHILE @i < 10
+         BEGIN
+            IF @i = 1 SELECT @cBarcodeUCC = @cInField01,@cUCC = @cUCC1
+            IF @i = 2 SELECT @cBarcodeUCC = @cInField02,@cUCC = @cUCC2
+            IF @i = 3 SELECT @cBarcodeUCC = @cInField03,@cUCC = @cUCC3
+            IF @i = 4 SELECT @cBarcodeUCC = @cInField04,@cUCC = @cUCC4
+            IF @i = 5 SELECT @cBarcodeUCC = @cInField05,@cUCC = @cUCC5
+            IF @i = 6 SELECT @cBarcodeUCC = @cInField06,@cUCC = @cUCC6
+            IF @i = 7 SELECT @cBarcodeUCC = @cInField07,@cUCC = @cUCC7
+            IF @i = 8 SELECT @cBarcodeUCC = @cInField08,@cUCC = @cUCC8
+            IF @i = 9 SELECT @cBarcodeUCC = @cInField09,@cUCC = @cUCC9
+
+            IF @cBarcodeUCC <> '' AND @cBarcodeUCC <> @cUCC
+            BEGIN
+               SET @cUCCNo = ''
+               EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cBarcodeUCC,
+                        @cUCCNo  = @cUCCNo  OUTPUT,
+                        @nErrNo  = @nErrNo   OUTPUT,
+                        @cErrMsg = @cErrMsg  OUTPUT,
+                        @cType   = 'UCCno'
+               IF @nErrNo <> 0
+                  GOTO Step_UCC_Fail
+
+               IF @i = 1 SELECT  @cInField01 = @cUCCNo ,@cOutField01 = @cUCCNo
+               IF @i = 2 SELECT  @cInField02 = @cUCCNo ,@cOutField02 = @cUCCNo
+               IF @i = 3 SELECT  @cInField03 = @cUCCNo ,@cOutField03 = @cUCCNo
+               IF @i = 4 SELECT  @cInField04 = @cUCCNo ,@cOutField04 = @cUCCNo
+               IF @i = 5 SELECT  @cInField05 = @cUCCNo ,@cOutField05 = @cUCCNo
+               IF @i = 6 SELECT  @cInField06 = @cUCCNo ,@cOutField06 = @cUCCNo
+               IF @i = 7 SELECT  @cInField07 = @cUCCNo ,@cOutField07 = @cUCCNo
+               IF @i = 8 SELECT  @cInField08 = @cUCCNo ,@cOutField08 = @cUCCNo
+               IF @i = 9 SELECT  @cInField09 = @cUCCNo ,@cOutField09 = @cUCCNo
+            END
+            SET @i = @i + 1
+         END
+      END
+
       -- Validate if anything changed
       IF @cUCC1 <> @cInField01 OR
          @cUCC2 <> @cInField02 OR
@@ -416,7 +472,7 @@ BEGIN
                   EXEC RDT.rdtIsValidUCC @cLangCode, @nErrNo OUTPUT, @cErrMsg OUTPUT, 
                      @cInField, -- UCC
                      @cStorerKey, 
-                     '1', -- Received, 
+                     @cUCCStatus, -- 1=Received, 3=Alloc
                      @cChkLOC = @cFromLOC
 
                   IF @nErrNo = 0
@@ -837,6 +893,21 @@ BEGIN
          GOTO Step_ToLOC_Fail
       END
 
+      -- Decode
+      -- Standard decode
+      SET @cUDF01 = ''
+      IF @cDecodeSP = '1'
+      BEGIN
+         EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cOutField01,
+               @cID           = @cToID   OUTPUT,
+               @cUserDefine01 = @cUDF01  OUTPUT,
+               @nErrNo        = @nErrNo  OUTPUT,
+               @cErrMsg       = @cErrMsg OUTPUT,
+               @cType         = 'ID'
+            IF @nErrNo <> 0
+               GOTO Step_ToLOC_Fail
+      END
+
       IF @cLOCLookUP <> ''
       BEGIN
          EXEC rdt.rdt_LOCLookUp @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cFacility,
@@ -1012,7 +1083,7 @@ BEGIN
          BEGIN
             SET @cSQL = 'EXEC rdt.' + RTRIM(@cExtendedUpdateSP) +
                ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cToID, @cToLoc, @cFromLOC, @cFromID, ' +
-               ' @cUCC1, @cUCC2, @cUCC3, @cUCC4, @cUCC5, @cUCC6, @cUCC7, @cUCC8, @cUCC9, ' +
+               ' @cUCC1, @cUCC2, @cUCC3, @cUCC4, @cUCC5, @cUCC6, @cUCC7, @cUCC8, @cUCC9, @cUDF01, ' +
                ' @nErrNo OUTPUT, @cErrMsg OUTPUT '
             SET @cSQLParam =
                '@nMobile        INT, ' +
@@ -1034,12 +1105,13 @@ BEGIN
                '@cUCC7          NVARCHAR( 20), ' +
                '@cUCC8          NVARCHAR( 20), ' +
                '@cUCC9          NVARCHAR( 20), ' +
+               '@cUDF01         NVARCHAR( 30), ' +
                '@nErrNo         INT           OUTPUT, ' +
                '@cErrMsg        NVARCHAR( 20) OUTPUT'
 
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
                @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cToID, @cToLoc, @cFromLOC, @cFromID,
-               @cUCC1, @cUCC2, @cUCC3, @cUCC4, @cUCC5, @cUCC6, @cUCC7, @cUCC8, @cUCC9,
+               @cUCC1, @cUCC2, @cUCC3, @cUCC4, @cUCC5, @cUCC6, @cUCC7, @cUCC8, @cUCC9, @cUDF01,
                @nErrNo OUTPUT, @cErrMsg OUTPUT
 
             IF @nErrNo <> 0
@@ -1534,7 +1606,7 @@ BEGIN
       EXEC RDT.rdtIsValidUCC @cLangCode, @nErrNo OUTPUT, @cErrMsg OUTPUT, 
          @cUCC, -- UCC
          @cStorerKey, 
-         '1', -- Received, 
+         @cUCCStatus, -- 1=Received, 3=Alloc
          @cChkLOC = @cFromLOC
       IF @nErrNo <> 0
          GOTO Step_2DUCC_Fail
@@ -1772,6 +1844,8 @@ BEGIN
       V_String11 = @cToID,
       V_String12 = @cFromLOC,
       V_String15 = @cFromID,
+      V_String16 = @cUCCStatus,
+      V_String17 = @cUDF01,
 
       V_String20 = @cExtendedValidateSP,
       V_String21 = @cExtendedUpdateSP,

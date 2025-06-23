@@ -3,98 +3,101 @@ GO
 SET ANSI_NULLS OFF
 GO  
 
-/************************************************************************/
-/* Store procedure: rdtfnc_PostPickAudit                                */
-/* Copyright      : LF Logistics                                        */
-/*                                                                      */
-/* Date       Rev  Author     Purposes                                  */
-/* 05-03-2006 1.8  dhung      SOS# 45327. Support XB LB LP pick slip    */
-/*                            Clean up source code                      */
-/* 14-11-2008 1.9  jwong      Add filter by storerkey                   */
-/* 25-11-2008 2.0  jwong      SOS121650 - Unilever RDT PPA Revision -   */
-/*                            Accepting Loadkey for Scanning            */
-/* 20-02-2009 2.1  jwong      Performance tuning (james01)              */
-/* 30-04-2010 2.2  jwong      SOS170309 - Add in OrderKey (james02)     */
-/* 08-05-2010 2.3  jwong      SOS169094 - Add in DropID (james03)       */
-/* 04-04-2011 2.4  Ung        SOS211078                                 */
-/*                            PPA CartonID:Add support PackDetail.DropID*/
-/*                            PPA CartonID:Remove scan-in/out checking  */
-/*                            PPA Order: modify scan-in/out checking    */
-/*                            Replace rdtgetcfg with rdtGetConfig       */
-/* 05-04-2011 2.5  Ung        SOS208274 Add piece scanning              */
-/*                            Migrate RDT storer configure:             */
-/*                            1) sh_ppasum to PPAShowSummary            */
-/*                            2) chk_ppatlr to PPACheckTolerance        */
-/*                            Add RDT storer configure:                 */
-/*                            1) PPAAllowSKUNotInPickList               */
-/*                            2) PPAAllowQTYExceedTolerance             */
-/*                            Clean up source code                      */
-/* 11-01-2012 2.6  Leong      SOS# 233768 - Convert char to int         */
-/* 20-12-2012 2.7  James      SOS264934 - Convert qty (james04)         */
-/* 03-01-2013 2.8  Ung        SOS265337 Expand DropID 20 chars          */
-/*                            Add ExtendedUpdateSP                      */
-/*                            Add PPAPromptDiscrepancy                  */
-/* 26-03-2014 2.9  ChewKP     SOS#303019 - Add ExtendedValidateSP       */
-/*                            (ChewKP01)                                */
-/* 14-05-2014 3.0  James      Various fixes (james05)                   */
-/*                            Add InputKey as param for ExtendedUpdateSP*/
-/*                            Add config to bypass pkslip must scan out */
-/* 27-05-2014 3.1  Ung        SOS311861 Add PPABlindCount               */
-/*                            Fix Tolerance cannot set negative value   */
-/* 15-07-2014 3.2  Ung        SOS316336 Add ExtendedUpdateSP for step 1 */
-/* 31-07-2014 3.3  Ung        SOS316605 Add Prefer UOM and QTY          */
-/* 30-01-2015 3.4  Ung        SOS331668 Add Print packing list screen   */
-/* 22-12-2015 3.5  Leong      SOS359525 - Revise variable size.         */
-/* 10-06-2016 3.6  Ung        SOS371045 Add DecodeSP                    */
-/*                            Add PickConfirmStatus                     */
-/* 30-09-2016 3.7  Ung        Performance tuning                        */
-/* 10-03-2017 3.8  James      WMS1256 - Add scan pickdetail case id     */
-/*                            Add ExtendedUpdateSP @ screen 3 (james06) */
-/*                            Extend @cPackQTYIndicator variable        */
-/* 02-06-2017 3.9  James      Add new param in extendedupdatesp(james07)*/
-/* 05-07-2017 4.0  Ung        WMS-2331 Add ExtendedInfoSP at screen 2   */
-/*                            Migrate ExtendedInfoSP to VariableTable   */
-/*                            Add PickDetail.ShipFlag (reuse DropID)    */
-/* 06-12-2018 4.1  Ung        WMS-6842 Show PackQTYIndicator            */
-/*                            Add PreCartonization                      */
-/*                            Add ExtendedUpdateSP at screen 3 ESC      */
-/* 16-11-2018 4.1  Ung        WMS-6932 Add pallet ID                    */
-/*                            Add custom DecodeSP                       */
-/* 26-02-2019 4.2  YeeKung    WMS-8090 Add ShippingLabel printing       */
-/*                            (yeekung01)                               */
-/* 28-03-2019 4.3  James      WMS-8002 Add TaskDetailKey field (james08)*/ 
-/*                            Add capture data screen                   */
-/* 17-04-2019 4.4  ChewKP     WMS-8593 Add EventLog (ChewKP02)          */
-/* 17-04-2019 4.5  James      WMS-7983 Add variable table to            */
-/*                            ExtendedValidateSP (james09)              */
-/* 05-11-2019 4.6 Chermaine   WMS-11031 Add EventLog (cc01)             */
-/* 19-02-2020 4.7 CheeMun     INC1045866-Bug Fix for RDT906             */
-/* 24-09-2019 4.8 YeeKung     INC0868161 Bug Fixed (yeekung02)          */      
-/* 13-02-2020 4.9 YeeKung     INC1039880 Added logic to prompt error    */      
-/*                            if sku is invalid in lotxlocxid(yeekung03)*/       
-/* 03-03-2020 5.0 YeeKung     Performance Tune (yeekung04)              */
-/* 29-04-2020 5.1 YeeKung     Performance Tune (yeekung05)              */ 
-/* 30-06-2021 5.2 YeeKung     WMS-17278 add reason code (yeekung06)     */         
-/* 19-07-2021 5.3 Chermaine   WMS-17439 Add CaptureDataSP after scn2    */    
-/*                            And Add ExtendedUOMSP in Scn 1            */    
-/*                            And Add CaptureDataColName config         */    
-/*                            And Add CapturePackInfo Screen st8 (cc02) */    
-/* 21-12-2021 5.4 James       Bug fix (james10)                         */ 
-/* 28-03-2022 5.5 James       WMS-17439 Bug fix ON DECODESP (james11)   */ 
-/* 07-09-2022 5.6 James       WMS-20689 Add config to default qty onto  */
-/*                            preferred uom default (james12)           */
-/* 19-05-2021 5.7 SeongYaik   Revise IF Statement (SY01)                */
-/* 18-08-2022 5.8 Ung         Fix CaptureDataSP after scn2              */
-/* 13-12-2022 5.9 Yeekung     WMS-20944 fix nvarchar(5)->6  (yeekung07) */
-/* 07-02-2022 6.0 YeeKung     WMS-21562 customize refno to support      */
-/*                            trackingno  (yeekung08)                   */
-/* 30-05-2023 6.1 James       WMS-22322 Enhance Qty convertion (james13)*/
-/* 14-11-2023 6.2 Ung         WMS-23972 Add SkipChkPSlipMustScanIn      */
-/* 14-11-2023 6.3 Ung         WMS-23960 Add PickConfirmStatus for pallet*/
-/* 24-11-2023 6.4 YeeKung     UWP-11249Fix bug (yeekung08)              */
-/* 28-03-2024 6.5 YeeKung     UWP-16421 Add ExtendedvalidateSP          */
-/*                            (yeekung09)                               */
-/* 24-06-2024 6.6 NLT013      FCR-386 Add Extended Screen               */
+/*******************************************************************************/
+/* Store procedure: rdtfnc_PostPickAudit                                       */
+/* Copyright      : LF Logistics                                               */
+/*                                                                             */
+/* Date       Rev  Author     Purposes                                         */
+/* 05-03-2006 1.8  dhung      SOS# 45327. Support XB LB LP pick slip           */
+/*                            Clean up source code                             */
+/* 14-11-2008 1.9  jwong      Add filter by storerkey                          */
+/* 25-11-2008 2.0  jwong      SOS121650 - Unilever RDT PPA Revision -          */
+/*                            Accepting Loadkey for Scanning                   */
+/* 20-02-2009 2.1  jwong      Performance tuning (james01)                     */
+/* 30-04-2010 2.2  jwong      SOS170309 - Add in OrderKey (james02)            */
+/* 08-05-2010 2.3  jwong      SOS169094 - Add in DropID (james03)              */
+/* 04-04-2011 2.4  Ung        SOS211078                                        */
+/*                            PPA CartonID:Add support PackDetail.DropID       */
+/*                            PPA CartonID:Remove scan-in/out checking         */
+/*                            PPA Order: modify scan-in/out checking           */
+/*                            Replace rdtgetcfg with rdtGetConfig              */
+/* 05-04-2011 2.5  Ung        SOS208274 Add piece scanning                     */
+/*                            Migrate RDT storer configure:                    */
+/*                            1) sh_ppasum to PPAShowSummary                   */
+/*                            2) chk_ppatlr to PPACheckTolerance               */
+/*                            Add RDT storer configure:                        */
+/*                            1) PPAAllowSKUNotInPickList                      */
+/*                            2) PPAAllowQTYExceedTolerance                    */
+/*                            Clean up source code                             */
+/* 11-01-2012 2.6  Leong      SOS# 233768 - Convert char to int                */
+/* 20-12-2012 2.7  James      SOS264934 - Convert qty (james04)                */
+/* 03-01-2013 2.8  Ung        SOS265337 Expand DropID 20 chars                 */
+/*                            Add ExtendedUpdateSP                             */
+/*                            Add PPAPromptDiscrepancy                         */
+/* 26-03-2014 2.9  ChewKP     SOS#303019 - Add ExtendedValidateSP              */
+/*                            (ChewKP01)                                       */
+/* 14-05-2014 3.0  James      Various fixes (james05)                          */
+/*                            Add InputKey as param for ExtendedUpdateSP       */
+/*                            Add config to bypass pkslip must scan out        */
+/* 27-05-2014 3.1  Ung        SOS311861 Add PPABlindCount                      */
+/*                            Fix Tolerance cannot set negative value          */
+/* 15-07-2014 3.2  Ung        SOS316336 Add ExtendedUpdateSP for step 1        */
+/* 31-07-2014 3.3  Ung        SOS316605 Add Prefer UOM and QTY                 */
+/* 30-01-2015 3.4  Ung        SOS331668 Add Print packing list screen          */
+/* 22-12-2015 3.5  Leong      SOS359525 - Revise variable size.                */
+/* 10-06-2016 3.6  Ung        SOS371045 Add DecodeSP                           */
+/*                            Add PickConfirmStatus                            */
+/* 30-09-2016 3.7  Ung        Performance tuning                               */
+/* 10-03-2017 3.8  James      WMS1256 - Add scan pickdetail case id            */
+/*                            Add ExtendedUpdateSP @ screen 3 (james06)        */
+/*                            Extend @cPackQTYIndicator variable               */
+/* 02-06-2017 3.9  James      Add new param in extendedupdatesp(james07)       */
+/* 05-07-2017 4.0  Ung        WMS-2331 Add ExtendedInfoSP at screen 2          */
+/*                            Migrate ExtendedInfoSP to VariableTable          */
+/*                            Add PickDetail.ShipFlag (reuse DropID)           */
+/* 06-12-2018 4.1  Ung        WMS-6842 Show PackQTYIndicator                   */
+/*                            Add PreCartonization                             */
+/*                            Add ExtendedUpdateSP at screen 3 ESC             */
+/* 16-11-2018 4.1  Ung        WMS-6932 Add pallet ID                           */
+/*                            Add custom DecodeSP                              */
+/* 26-02-2019 4.2  YeeKung    WMS-8090 Add ShippingLabel printing              */
+/*                            (yeekung01)                                      */
+/* 28-03-2019 4.3  James      WMS-8002 Add TaskDetailKey field (james08)       */ 
+/*                            Add capture data screen                          */
+/* 17-04-2019 4.4  ChewKP     WMS-8593 Add EventLog (ChewKP02)                 */
+/* 17-04-2019 4.5  James      WMS-7983 Add variable table to                   */
+/*                            ExtendedValidateSP (james09)                     */
+/* 05-11-2019 4.6 Chermaine   WMS-11031 Add EventLog (cc01)                    */
+/* 19-02-2020 4.7 CheeMun     INC1045866-Bug Fix for RDT906                    */
+/* 24-09-2019 4.8 YeeKung     INC0868161 Bug Fixed (yeekung02)                 */      
+/* 13-02-2020 4.9 YeeKung     INC1039880 Added logic to prompt error           */      
+/*                            if sku is invalid in lotxlocxid(yeekung03)       */       
+/* 03-03-2020 5.0 YeeKung     Performance Tune (yeekung04)                     */
+/* 29-04-2020 5.1 YeeKung     Performance Tune (yeekung05)                     */ 
+/* 30-06-2021 5.2 YeeKung     WMS-17278 add reason code (yeekung06)            */         
+/* 19-07-2021 5.3 Chermaine   WMS-17439 Add CaptureDataSP after scn2           */    
+/*                            And Add ExtendedUOMSP in Scn 1                   */    
+/*                            And Add CaptureDataColName config                */    
+/*                            And Add CapturePackInfo Screen st8 (cc02)        */    
+/* 21-12-2021 5.4 James       Bug fix (james10)                                */ 
+/* 28-03-2022 5.5 James       WMS-17439 Bug fix ON DECODESP (james11)          */ 
+/* 07-09-2022 5.6 James       WMS-20689 Add config to default qty onto         */
+/*                            preferred uom default (james12)                  */
+/* 19-05-2021 5.7 SeongYaik   Revise IF Statement (SY01)                       */
+/* 18-08-2022 5.8 Ung         Fix CaptureDataSP after scn2                     */
+/* 13-12-2022 5.9 Yeekung     WMS-20944 fix nvarchar(5)->6  (yeekung07)        */
+/* 07-02-2022 6.0 YeeKung     WMS-21562 customize refno to support             */
+/*                            trackingno  (yeekung08)                          */
+/* 30-05-2023 6.1 James       WMS-22322 Enhance Qty convertion (james13)       */
+/* 14-11-2023 6.2 Ung         WMS-23972 Add SkipChkPSlipMustScanIn             */
+/* 14-11-2023 6.3 Ung         WMS-23960 Add PickConfirmStatus for pallet       */
+/* 24-11-2023 6.4 YeeKung     UWP-11249Fix bug (yeekung08)                     */
+/* 28-03-2024 6.5 YeeKung     UWP-16421 Add ExtendedvalidateSP                 */
+/*                            (yeekung09)                                      */
+/* 24-06-2024 6.6 NLT013      FCR-386 Add Extended Screen                      */
+/* 21-11-2024 6.7.0 LJQ006    FCR-1109 Update Extend Screen and ExtInfo        */
+/* 2024-12-31 6.8.0  NLT013   UWP-28680 fix rollback transaction issue.        */
+/* 2025-02-05 6.9.0  CYU027   FCR-2630 Add Option=5 in step 5                  */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_PostPickAudit] (
@@ -353,6 +356,8 @@ SELECT
    @cMultiColScan                   = V_String48,
    @cExtendedScnSP                  = V_String49,
 
+   @nAction                         = V_Integer2,
+
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,  @cFieldAttr01 = FieldAttr01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,  @cFieldAttr02 = FieldAttr02,
    @cInField03 = I_Field03,   @cOutField03 = O_Field03,  @cFieldAttr03 = FieldAttr03,
@@ -561,6 +566,8 @@ BEGIN
    IF @nFunc in ( 850, 855) SET @cFieldAttr05 = '' ELSE SET @cFieldAttr05 = 'O' --DropID
    IF @nFunc in ( 850, 844) SET @cFieldAttr06 = '' ELSE SET @cFieldAttr06 = 'O' --ID
    IF @nFunc in ( 850, 906) SET @cFieldAttr07 = '' ELSE SET @cFieldAttr07 = 'O' --TaskDetailKey
+   IF @cExtendedScnSP <> ''
+	   GOTO Step_99
 END
 GOTO Quit
 
@@ -1664,8 +1671,7 @@ BEGIN
                SET @cOutField01 = '' -- Option
                SET @nScn = @nScn + 3
                SET @nStep = @nStep + 3
-
-               GOTO Quit
+               GOTO Step_99
             END
          END
       END
@@ -1737,6 +1743,8 @@ BEGIN
       -- Go to prev screen
       SET @nScn = @nScn - 1
       SET @nStep = @nStep - 1
+      -- Go to extend screen label, if no config, will jump to previous step
+      GOTO Step_99
    END
 END
 GOTO Quit
@@ -2811,12 +2819,17 @@ BEGIN
       GOTO Step_3_Commit
 
       Step_3_RollBackTran:
-         ROLLBACK TRAN Step_3_Upd
+      IF @@TRANCOUNT > 0
+      BEGIN
+         ROLLBACK TRAN
+         GOTO Reset_Qty
+      END
 
       Step_3_Commit:
          WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
             COMMIT TRAN
 
+      Reset_Qty:
       IF @nPUOM_Div > 0 AND @cPUOM <> '6' 
       BEGIN
          SET @nPQTY = @nPQTY/@nPUOM_Div--rdt.rdtConvUOMQTY( @cStorer, @cSKU, @cMQTY, 6, @cPUOM)
@@ -3366,6 +3379,7 @@ BEGIN
       -- Go to first screen
       SET @nScn = @nScn - 3
       SET @nStep = @nStep - 3
+      GOTO Step_99
    END
 
    IF @nInputKey = 0 -- Esc OR No
@@ -3591,6 +3605,7 @@ BEGIN
       -- Go to first screen
       SET @nScn = @nScn - 4
       SET @nStep = @nStep - 4
+      GOTO Step_99
    END
 
    IF @nInputKey = 0 -- Esc OR No
@@ -4550,7 +4565,8 @@ BEGIN
       -- Go to st 1
       SET @nScn = 814
       SET @nStep = @nStep - 7
-   END    
+      GOTO Step_99
+   END
     
    IF @nInputKey = 0 -- ESC    
    BEGIN    
@@ -4653,7 +4669,8 @@ BEGIN
             ('@cDropID',      @cDropID), 
             ('@cID',          @cID), 
             ('@cSKU',         @cSKU), 
-            ('@nQTY',         CAST( @nQTY AS NVARCHAR( 10))), 
+            ('@cPUOM',        @cPUOM),
+            ('@nQTY',         CAST( @nQTY AS NVARCHAR( 10))),
             ('@nScn',         CAST( @nScn AS NVARCHAR( 10)))
          
          EXECUTE [RDT].[rdt_ExtScnEntry] 
@@ -4691,6 +4708,32 @@ BEGIN
 
          IF @nErrNo <> 0
             GOTO Step_99_Fail
+
+         IF (@cExtendedScnSP = 'rdt_855ExtScn01'
+            AND @nStep = 2)
+         BEGIN
+            SET @cDropId = @cUDF01
+            SET @nCSKU = CAST(@cUDF02 AS INT)
+            SET @nPSKU = CAST(@cUDF03 AS INT)
+            SET @nPQTY = CAST(@cUDF04 AS INT)
+            SET @nCQTY = CAST(@cUDF05 AS INT)
+            SET @cSKUStat = @cUDF06
+            SET @cQTYStat = @cUDF07
+            SET @cExtendedInfo = @cUDF08
+            SET @cPPACartonIDByPackDetailLabelNo = @cUDF09
+            SET @cPPACartonIDByPickDetailCaseID = @cUDF10
+         END
+
+         IF (@cExtendedScnSP = 'rdt_855ExtScn01'
+            AND @nStep = 0)
+         BEGIN
+            SET @nFunc = @nMenu
+         END
+         IF (@cExtendedScnSP = 'rdt_855ExtScn01'
+            AND @nStep = 99)
+         BEGIN
+            SET @nAction = CAST(@cUDF09 AS INT)
+         END
 
          GOTO Quit
       END
@@ -4780,6 +4823,8 @@ BEGIN
       v_String47 = @cExtendedRefNoSP,
       V_String48 = @cMultiColScan,
       V_String49 = @cExtendedScnSP,
+
+      V_Integer2 = @nAction,
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,   FieldAttr01 = @cFieldAttr01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,   FieldAttr02 = @cFieldAttr02,

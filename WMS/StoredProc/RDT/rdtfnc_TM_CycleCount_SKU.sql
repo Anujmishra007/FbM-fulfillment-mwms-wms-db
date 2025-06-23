@@ -2,52 +2,55 @@ SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
-/******************************************************************************/
-/* Copyright: Maersk                                                          */
-/* Purpose: SkipJack CycleCount SOS#227151                                    */
-/*                                                                            */
-/* Modifications log:                                                         */
-/*                                                                            */
-/* Date       Rev  Author     Purposes                                        */
-/* 2011-11-18 1.0  ChewKP     Created                                         */
-/* 2012-10-30 1.1  James      SOS257258 - Bug fix (james01)                   */
-/* 2013-04-04 1.2  Leong      SOS# 274011 - Add TraceInfo.                    */
-/* 2013-05-13 1.3  SPChin     SOS278025 - Reset value for @cInField06 &       */
-/*                                        @cInField07                         */
-/* 2011-09-09 1.4  James      SOS315521-Get correct codelkup for lottable     */
-/*                            Skip Lottable (james01)                         */
-/* 2014-11-06 1.5  Audrey     SOS325165 - Bug fixed                    (ang01)*/
-/* 2015-06-04 1.6  Leong      SOS# 342953 - Change variables.                 */
-/* 2015-09-17 1.7  James      SOS350672 - Add defaultqty & disable EA field   */
-/*                            (james02)                                       */
-/* 2016-09-05 1.8  James      SOS375903 Add DecodeSP (james03)                */
-/* 2016-10-26 1.9  James      Perf tuning (james03)                           */
-/* 2018-05-14 2.0  James      WMS4614-Extend sql variable length (james04)    */
-/* 2019-04-03 2.1  James      WMS7262-Add MultiSKUBarcode, ExtendedCfmSP,     */
-/*                            ExtendedInfoSP, remove rdtIsValidQTY when       */
-/*                            rdtMobRec loading (james05)                     */
-/* 2019-10-16 2.2  YeeKung    INC0892773 BugFix (yeekung01)                   */
-/* 2020-01-06 2.3  James      WMS-11550 Add ExtendedInfoSP @ scn 4 (james06)  */
-/* 2021-04-26 2.4  James      WMS-16634 Add CheckSKUExistsInLoc (james07)     */
-/*                            Skip step_1, misc bug fix                       */
-/* 2021-05-07 2.5  James      WMS-16965 Add default opt in scn 3 (james08)    */
-/* 2021-06-02 2.6  James      WMS-16634 Add update loc.lastcyclecount(james09)*/
-/* 2022-07-22 2.7  James      WMS-19597 Add ExtendedDisplayQtySP (james10)    */
-/* 2022-02-11 2.8  James      WMS-18635 Add check max qty input (james11)     */
-/* 2023-08-01 2.9  James      WMS-23133 Add ExtendedUpdateSP at step3(james12)*/
-/* 2023-08-03 3.0  James      WMS-23166 Rearrange ExtendedInfoSP (james13)    */
-/* 2023-11-20 3.1  James      WMS-23429 Bug fix on Option not enabled(james15)*/
-/* 2023-11-29 3.2  James      WMS-24279 Set focus on sku when come back from  */
-/*                            sku not exists screen (james16)                 */
-/* 2023-11-11 3.3  James      WMS-23133. Add new param ExtUpdateSP (james14)  */
-/* 2024-01-16 3.4  James      WMS-23249 Add variance count (james15)          */
-/*                            Allow adj posting even not CCSUP tasktype       */
-/* 2024-04-19 3.5  James      WMS-25276 Skip scn 3 based on Loc setup(james16)*/
-/* 2024-05-28 3.6  Dennis     FCR-235 Lottable Capture                        */
-/* 2023-10-12 3.7  James      WMS-23113 Add Serial No (james17)               */
-/*                            Add lottable06 ~ 15 parameters whenever required*/
-/* 2024-05-28 3.8  JACKC      FCR-395 Merge WMS-23113 to V2                   */
-/******************************************************************************/
+/********************************************************************************/
+/* Copyright: Maersk                                                            */
+/* Purpose: SkipJack CycleCount SOS#227151                                      */
+/*                                                                              */
+/* Modifications log:                                                           */
+/*                                                                              */
+/* Date       Rev    Author     Purposes                                        */
+/* 2011-11-18 1.0    ChewKP     Created                                         */
+/* 2012-10-30 1.1    James      SOS257258 - Bug fix (james01)                   */
+/* 2013-04-04 1.2    Leong      SOS# 274011 - Add TraceInfo.                    */
+/* 2013-05-13 1.3    SPChin     SOS278025 - Reset value for @cInField06 &       */
+/*                                          @cInField07                         */
+/* 2011-09-09 1.4    James      SOS315521-Get correct codelkup for lottable     */
+/*                              Skip Lottable (james01)                         */
+/* 2014-11-06 1.5    Audrey     SOS325165 - Bug fixed                    (ang01)*/
+/* 2015-06-04 1.6    Leong      SOS# 342953 - Change variables.                 */
+/* 2015-09-17 1.7    James      SOS350672 - Add defaultqty & disable EA field   */
+/*                              (james02)                                       */
+/* 2016-09-05 1.8    James      SOS375903 Add DecodeSP (james03)                */
+/* 2016-10-26 1.9    James      Perf tuning (james03)                           */
+/* 2018-05-14 2.0    James      WMS4614-Extend sql variable length (james04)    */
+/* 2019-04-03 2.1    James      WMS7262-Add MultiSKUBarcode, ExtendedCfmSP,     */
+/*                              ExtendedInfoSP, remove rdtIsValidQTY when       */
+/*                              rdtMobRec loading (james05)                     */
+/* 2019-10-16 2.2    YeeKung    INC0892773 BugFix (yeekung01)                   */
+/* 2020-01-06 2.3    James      WMS-11550 Add ExtendedInfoSP @ scn 4 (james06)  */
+/* 2021-04-26 2.4    James      WMS-16634 Add CheckSKUExistsInLoc (james07)     */
+/*                              Skip step_1, misc bug fix                       */
+/* 2021-05-07 2.5    James      WMS-16965 Add default opt in scn 3 (james08)    */
+/* 2021-06-02 2.6    James      WMS-16634 Add update loc.lastcyclecount(james09)*/
+/* 2022-07-22 2.7    James      WMS-19597 Add ExtendedDisplayQtySP (james10)    */
+/* 2022-02-11 2.8    James      WMS-18635 Add check max qty input (james11)     */
+/* 2023-08-01 2.9    James      WMS-23133 Add ExtendedUpdateSP at step3(james12)*/
+/* 2023-08-03 3.0    James      WMS-23166 Rearrange ExtendedInfoSP (james13)    */
+/* 2023-11-20 3.1    James      WMS-23429 Bug fix on Option not enabled(james15)*/
+/* 2023-11-29 3.2    James      WMS-24279 Set focus on sku when come back from  */
+/*                              sku not exists screen (james16)                 */
+/* 2023-11-11 3.3    James      WMS-23133. Add new param ExtUpdateSP (james14)  */
+/* 2024-01-16 3.4    James      WMS-23249 Add variance count (james15)          */
+/*                              Allow adj posting even not CCSUP tasktype       */
+/* 2024-04-19 3.5    James      WMS-25276 Skip scn 3 based on Loc setup(james16)*/
+/* 2024-05-28 3.6    Dennis     FCR-235 Lottable Capture                        */
+/* 2023-10-12 3.7    James      WMS-23113 Add Serial No (james17)               */
+/*                              Add lottable06 ~ 15 parameters whenever required*/
+/* 2024-05-28 3.8    JACKC      FCR-395 Merge WMS-23113 to V2                   */
+/* 2024-11-12 3.9    Dennis     UWP-26828 Fix Conversion bug from str to dtime  */
+/* 2024-11-21 4.0.0  NLT03      UWP-27346 Additional textbox displays           */
+/* 2024-11-21 4.1.0  PXL003     UWP-27584 Fix SKU/UPC decode                    */
+/********************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_CycleCount_SKU] (
    @nMobile    int,
@@ -571,6 +574,8 @@ BEGIN
       IF @cDecodeSP <> ''
       BEGIN
          SET @cBarcode = ISNULL(RTRIM(@cInField03),'')
+         SET @cUPC = @cBarcode
+         SET @nQTY = @nActQTY
 
          -- Standard decode
          IF @cDecodeSP = '1'
@@ -605,7 +610,7 @@ BEGIN
                ' @cLOC           NVARCHAR( 10), ' +
                ' @cID            NVARCHAR( 18), ' +
                ' @cUPC           NVARCHAR( 20)  OUTPUT, ' +
-          ' @nQTY           INT            OUTPUT, ' +
+               ' @nQTY           INT            OUTPUT, ' +
                ' @cLottable01    NVARCHAR( 18)  OUTPUT, ' +
                ' @cLottable02    NVARCHAR( 18)  OUTPUT, ' +
                ' @cLottable03    NVARCHAR( 18)  OUTPUT, ' +
@@ -638,14 +643,16 @@ BEGIN
                @cUserDefine01 OUTPUT, @cUserDefine02  OUTPUT, @cUserDefine03  OUTPUT, @cUserDefine04  OUTPUT, @cUserDefine05  OUTPUT,
                @nErrNo        OUTPUT, @cErrMsg        OUTPUT
 
-            SET @cCommodity = @cUPC
-            SET @nActQTY = @nQTY
-
-            -- The sku/qty screen doesn't has suggested qty
-            -- If decode return qty then default it
-            IF @nQty > 0
-               SET @cDefaultQty = @nQty
          END
+
+         SET @cCommodity = @cUPC
+         SET @nActQTY = @nQTY
+
+         -- The sku/qty screen doesn't has suggested qty
+         -- If decode return qty then default it
+         IF @nQty > 0
+            SET @cDefaultQty = @nQty
+
       END   -- End for DecodeSP
 
       SET @cCheckSKUExistsInLoc = rdt.RDTGetConfig( @nFunc, 'CheckSKUExistsInLoc', @cStorerKey)  
@@ -818,6 +825,10 @@ BEGIN
       SET @nPUOM_Div = 0
       SET @nMQTY = 0
       SET @nPQTY = 0
+
+      SET @cFieldAttr06 = ''  
+      SET @cFieldAttr07 = ''  
+      SET @cFieldAttr12 = ''  
 
       SET @cLottable01 = ''
       SET @cLottable02 = ''
@@ -997,8 +1008,6 @@ BEGIN
          SET @cOutField07 = ''
       END
 
-      SET @cFieldAttr07 = ''
-
       IF @nPQTY > 0
          EXEC rdt.rdtSetFocusField @nMobile, 06
       ELSE
@@ -1023,10 +1032,6 @@ BEGIN
          SET @cOutField10 = @cLottable03
          SET @cOutField11 = rdt.rdtFormatDate( @dLottable04)
       END
-
-      SET @cFieldAttr06 = ''  
-      SET @cFieldAttr07 = ''  
-      SET @cFieldAttr12 = ''  
 
       --SET @nDefaultQty = 0
 
@@ -1861,6 +1866,8 @@ BEGIN
       IF @cDecodeSP <> ''
       BEGIN
          SET @cBarcode = @cInField12
+         SET @cUPC = @cActSKU
+         SET @nQTY = @nActQTY
 
          -- Standard decode
          IF @cDecodeSP = '1'
@@ -1928,9 +1935,10 @@ BEGIN
                @cUserDefine01 OUTPUT, @cUserDefine02  OUTPUT, @cUserDefine03  OUTPUT, @cUserDefine04  OUTPUT, @cUserDefine05  OUTPUT,
                @nErrNo        OUTPUT, @cErrMsg        OUTPUT
 
-            SET @cActSKU = @cUPC
-            SET @nActQTY = @nQTY
          END
+
+         SET @cActSKU = @cUPC
+         SET @nActQTY = @nQTY
       END   -- End for DecodeSP
 
       IF ISNULL( @cActSKU, '') = ''
@@ -2225,14 +2233,14 @@ BEGIN
                 SET @cTempLottable01 = IsNULL( @cTempLottable01, '')
                 SET @cTempLottable02 = IsNULL( @cTempLottable02, '')
                 SET @cTempLottable03 = IsNULL( @cTempLottable03, '')
-                SET @dTempLottable04 = IsNULL( @dTempLottable04, '0')--ang01
-                SET @dTempLottable05 = IsNULL( @dTempLottable05, '0')--ang01
+                SET @dTempLottable04 = @dTempLottable04--NLT013
+                SET @dTempLottable05 = @dTempLottable05--NLT013
 
 
                 SET @cOutField02 = CASE WHEN @cTempLottable01 <> '' THEN @cTempLottable01 ELSE @cLottable01 END
                 SET @cOutField04 = CASE WHEN @cTempLottable02 <> '' THEN @cTempLottable02 ELSE @cLottable02 END
                 SET @cOutField06 = CASE WHEN @cTempLottable03 <> '' THEN @cTempLottable03 ELSE @cLottable03 END
-                SET @cOutField08 = CASE WHEN @dTempLottable04 <> '0'  THEN rdt.rdtFormatDate( @dTempLottable04) ELSE @cLottable04 END --ang01
+                SET @cOutField08 = CASE WHEN @dTempLottable04 IS NOT NULL AND TRY_CAST(@dTempLottable04 AS DATETIME) IS NOT NULL THEN rdt.rdtFormatDate( @dTempLottable04) ELSE @cLottable04 END --ang01
 
                 SET @cLottable01 = IsNULL(@cOutField02, '')
                 SET @cLottable02 = IsNULL(@cOutField04, '')
@@ -2568,9 +2576,9 @@ BEGIN
             
             IF @nReCountLoc <> 0
             BEGIN
-            	SET @cInField01 = @nReCountLoc
-            	
-            	GOTO Step_3
+               SET @cInField01 = @nReCountLoc
+               
+               GOTO Step_3
             END
          END  
       END  
@@ -4594,7 +4602,7 @@ BEGIN
          ELSE
          BEGIN
             -- if default qty turned on then overwrite the actual MQty (james02)
-		      --SET @cDefaultQty = rdt.RDTGetConfig( @nFunc, 'TMCCDefaultQty', @cStorerkey)
+            --SET @cDefaultQty = rdt.RDTGetConfig( @nFunc, 'TMCCDefaultQty', @cStorerkey)
             IF RDT.rdtIsValidQTY( @cDefaultQty, 1) = 1
                SET @nDefaultQty = CAST( @cDefaultQty AS INT)
             ELSE

@@ -1,26 +1,25 @@
 -- 4200 = Pallet ID screen
 DELETE rdt.RDTScn WHERE Scn = 4200 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 4200, 'ENG',
-    @cLine01 = 'SCAN TO DOOR'
-   ,@cLine03 = 'PALLET ID:'
-   ,@cLine04 = '%18i01'
-   ,@cLine05 = ''
-   ,@cLine06 = '%20d06'
+    @cLine01 = 'PALLET ID:'
+   ,@cLine02 = '%18i01'
+   ,@cLine03 = ''
+   ,@cLine05 = '%20d06'
    ,@cLine14 = '%e'
-   ,@cWebGroup = '{"1":["3","4"]}'
+   ,@cWebGroup = '{"1":["1","2"]}'
    ,@nFunc = 1650
- 
+
 -- 4201 = TO DOOR screen
 DELETE rdt.RDTScn WHERE Scn = 4201 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 4201, 'ENG',
-    @cLine01 = 'SCAN TO DOOR'
-   ,@cLine03 = 'PALLET ID:'
-   ,@cLine04 = '%18d01'
-   ,@cLine05 = 'TO DOOR:'
-   ,@cLine06 = '%20d02'
-   ,@cLine07 = '%20i03'
+    @cLine01 = 'PALLET ID:'
+   ,@cLine02 = '%18d01'
+   ,@cLine03 = 'TO DOOR:'
+   ,@cLine04 = '%20d02'
+   ,@cLine05 = '%20i03'
+   ,@cLine06 = '%20d06'
    ,@cLine14 = '%e'
-   ,@cWebGroup = '{"1":["3","4"],"2":["5","6","7"]}'
+   ,@cWebGroup = '{"1":["1","2"],"2":["3","4","5"]}'
    ,@nFunc = 1650
    
 -- 4202 = Close truck screen

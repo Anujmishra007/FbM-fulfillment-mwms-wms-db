@@ -103,6 +103,9 @@ GO
 /*                            UCC if the channel insufficient stock     */
 /* 27-SEP-2022  NJOW29  5.0   WMS-20812 Pass in additional parameters to*/
 /*                            isp_ChannelAllocGetHoldQty_Wrapper        */ 
+/* 17-APR-2024  NJOW30  5.1   WMS-25272 Allow auto set skippreallocation*/            
+/*                            by config if not setup preallocation.     */      
+/*                            if PreRunStrategykey skip execute pre/post*/
 /* 16-May-2024  Wan06   6.0   UWP-19537-Mattel Overallocation           */
 /* 23-May-2024  Wan07   7.0   UWP-19537-Bug fixing Insert NULL          */
 /* 08-Jul-2024  Wan08   7.1   UWP-19537-Mattel Overallocation           */
@@ -110,6 +113,7 @@ GO
 /* 18-Jul-2024  Wan09   7.2   UWP-22202-Mattel Overallocation           */
 /*                            Get OverQtyLeftToFulfill from Sub SP      */
 /*                            Do Not Overallocate to partial fulfill DPP*/
+/* 20-SEP-2024  SPChin  7.3   INC7245374 - Bug Fixed                    */   
 /************************************************************************/      
 
 CREATE OR ALTER PROC [dbo].[ispWaveProcessing]        
@@ -184,7 +188,11 @@ BEGIN
             @c_UOMByLoad                  NVARCHAR(10), --NJOW27
             @c_UOMByOrder                 NVARCHAR(10), --NJOW27
             @c_FullPallet                 NVARCHAR(10), --NJOW27
-            @c_DYNUOMQty                  NVARCHAR(10)  --NJOW27
+            @c_DYNUOMQty                  NVARCHAR(10),  --NJOW27
+            @c_SkipPreAllocation_OPT5     NVARCHAR(MAX)='', --NJOW30
+            @c_AutoSkipByStrategy         NVARCHAR(30)='N', --NJOW30
+            @c_Strategykey                NVARCHAR(10)='',  --NJOW30
+            @c_PreRunStrategykey          NVARCHAR(10) = '' --NJOW30            
                 
     --NJOW17  
     DECLARE @c_OparmsOption1             NVARCHAR(50),   
@@ -372,7 +380,21 @@ BEGIN
       RAISERROR (@c_ErrMsg, 16, 1) WITH SETERROR    -- SQL2012  
       RETURN  
    END       
-   --NJOW19 End                       
+   --NJOW19 End                  
+   
+   --NJOW30 S
+   SET @c_PreRunStrategykey = ''  
+                                 
+   EXEC nspGetRight    
+        @c_Facility  = @c_Facility,   
+        @c_StorerKey = @c_StorerKey,    
+        @c_sku       = NULL,    
+        @c_ConfigKey = 'PreRunStrategy',     
+        @b_Success   = @b_Success                  OUTPUT,    
+        @c_authority = @c_PreRunStrategykey        OUTPUT,     
+        @n_err       = @n_err                      OUTPUT,     
+        @c_errmsg    = @c_errmsg                   OUTPUT    
+   --NJOW30 E        
   
    --NJOW18 Start  
    SET @c_PreAllocationSP = ''  
@@ -405,9 +427,10 @@ BEGIN
          Select @n_continue = 3, @c_ErrMsg = 'ispWaveProcessing:' + ISNULL(RTRIM(@c_ErrMsg),'')  
       END  
    END    
-     
-   IF EXISTS(SELECT 1 FROM sys.Objects WHERE NAME = @c_PreAllocationSP AND TYPE = 'P')     
-      OR EXISTS(SELECT 1 FROM AllocateStrategy (NOLOCK) WHERE AllocateStrategyKey = @c_PreAllocationSP)  
+
+   IF (EXISTS(SELECT 1 FROM sys.Objects WHERE NAME = @c_PreAllocationSP AND TYPE = 'P')     
+      OR EXISTS(SELECT 1 FROM AllocateStrategy (NOLOCK) WHERE AllocateStrategyKey = @c_PreAllocationSP))
+      AND (ISNULL(@c_PreRunStrategykey,'') <> @c_StrategykeyParm OR ISNULL(@c_PreRunStrategykey,'')='')  --NJOW30     
    BEGIN    
       SET @b_Success = 0    
         
@@ -489,7 +512,53 @@ BEGIN
            @b_Success   = @b_Success               OUTPUT,        
            @c_authority = @c_SkipPreAllocationFlag OUTPUT,        
            @n_err       = @n_err                   OUTPUT,        
-           @c_errmsg    = @c_errmsg                OUTPUT        
+           @c_errmsg    = @c_errmsg                OUTPUT,    
+           @c_Option5   = @c_SkipPreAllocation_OPT5 OUTPUT     --NJOW30             
+           
+      --NJOW30 S
+      SELECT @c_AutoSkipByStrategy = dbo.fnc_GetParamValueFromString ('@c_AutoSkipByStrategy', @c_SkipPreAllocation_OPT5, @c_AutoSkipByStrategy)
+      
+      IF @c_AutoSkipByStrategy = 'Y'
+      BEGIN 
+         IF ISNULL(@c_StrategykeyParm,'') <> ''
+         BEGIN
+            SET @c_Strategykey = @c_StrategykeyParm                  
+         END
+
+         IF ISNULL(@c_Strategykey,'') = ''                          
+         BEGIN
+            SELECT @c_Strategykey = SGY.Strategykey
+            FROM STORERCONFIG SC (NOLOCK) 
+            JOIN STRATEGY SGY (NOLOCK) ON SC.Svalue = SGY.Strategykey
+            WHERE SC.Storerkey = @c_Storerkey
+            AND SC.Facility = @c_Facility
+            AND SC.Configkey = 'StorerDefaultAllocStrategy'         	
+         END                   	   
+               
+         IF ISNULL(@c_Strategykey,'') = '' 
+         BEGIN
+         	  SELECT TOP 1 @c_Strategykey = SKU.Strategykey
+         	  FROM WAVEDETAIL WD (NOLOCK)
+         	  JOIN ORDERDETAIL OD (NOLOCK) ON WD.Orderkey = OD.Orderkey 
+         	  JOIN SKU (NOLOCK) ON OD.Storerkey = SKU.Storerkey AND OD.Sku = SKU.Sku
+         	  WHERE WD.Wavekey = @c_Wavekey
+         END
+         
+         IF ISNULL(@c_Strategykey,'') <> '' 
+         BEGIN
+         	 IF NOT EXISTS (SELECT 1
+                          FROM STRATEGY SGY (NOLOCK)                                                                              
+                          JOIN PREALLOCATESTRATEGY PRS (NOLOCK) ON SGY.PreallocateStrategykey = PRS.PreallocateStrategykey        
+                          JOIN PREALLOCATESTRATEGYDETAIL PRSD (NOLOCK) ON PRS.Preallocatestrategykey = PRSD.Preallocatestrategykey
+                          WHERE SGY.Strategykey = @c_Strategykey
+                          AND PRSD.PreAllocatePickCode <> '' 
+                          AND PRSD.PreAllocatePickCode IS NOT NULL)
+            BEGIN
+               SELECT @c_SkipPreAllocationFlag = '1'
+            END                        
+         END      
+      END
+      --NJOW30 E                                                
            
       IF (@n_Continue = 1 OR @n_Continue = 2) AND ISNULL(@c_SkipPreAllocationFlag,'0') <> '1'        
       BEGIN        
@@ -2789,9 +2858,10 @@ BEGIN
            @c_authority = @c_PostAllocationSP         OUTPUT,     
            @n_err       = @n_err                      OUTPUT,     
            @c_errmsg    = @c_errmsg                   OUTPUT    
-  
-      IF EXISTS(SELECT 1 FROM sys.Objects WHERE NAME = @c_PostAllocationSP AND TYPE = 'P')     
-         OR EXISTS(SELECT 1 FROM AllocateStrategy (NOLOCK) WHERE AllocateStrategyKey = @c_PostAllocationSP)  
+
+      IF (EXISTS(SELECT 1 FROM sys.Objects WHERE NAME = @c_PostAllocationSP AND TYPE = 'P')     
+         OR EXISTS(SELECT 1 FROM AllocateStrategy (NOLOCK) WHERE AllocateStrategyKey = @c_PostAllocationSP))
+         AND (ISNULL(@c_PreRunStrategykey,'') <> @c_StrategykeyParm OR ISNULL(@c_PreRunStrategykey,'')='')  --NJOW30  
       BEGIN    
          SET @b_Success = 0    
          EXECUTE dbo.ispPostAllocationWrapper   
@@ -3324,7 +3394,7 @@ BEGIN
                       'U',  
                       @c_aPickMethod,   
                       @c_WaveKey,  
-                      ISNULL(@c_UCCNo,''),                                          --Wan07--NJOW13    
+                      ISNULL(@c_UCCNo,''),                                          --Wan07--NJOW13 --INC7245374    
                       @n_Channel_ID   
                     )  
   
