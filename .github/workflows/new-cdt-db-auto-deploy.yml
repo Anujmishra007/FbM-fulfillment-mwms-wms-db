@@ -20,7 +20,7 @@ jobs:
         id: check_sql
         shell: bash
         run: |
-          #### >>>> CHANGED_FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }} HEAD)
+          CHANGED_FILES=$(git diff --name-only ${{ github.event.pull_request.base.sha }} HEAD)
 
           # Separate files into WMS/Tables/*.sql and other WMS/*.sql
           WMS_TABLES_SQL=$(echo "$CHANGED_FILES" | grep '^WMS/Tables/.*\.sql' || true)
