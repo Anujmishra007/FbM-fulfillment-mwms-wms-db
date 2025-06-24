@@ -697,13 +697,13 @@ BEGIN
   SET @n_Cnt = 0
   SELECT @n_Cnt = SUM(  CASE WHEN d.[Status] <> i.[Status] THEN 1                                  --(Wan06) 
                         WHEN d.qty <> i.qty AND i.[Status] = '5'                                   --(Wan06) 
-                             AND @n_IsRDT <> 1 AND sc.Authority ='1' THEN 1                        --(AYD01)
+                             AND @n_IsRDT <> 1 AND sc.Authority ='1' THEN 1                        --(AYD02)
                         WHEN d.Lot <> i.Lot AND i.[Status] = '5' AND sc.Authority ='1' THEN 1      --(Wan06) 
                         WHEN d.ID  <> i.ID  AND i.ID <> sn.ID AND i.[Status] = '5' AND             --(Wan06)    
-                             @n_IsRDT <> 1 AND                                                     --(AYD01)
+                             @n_IsRDT <> 1 AND                                                     --(AYD02)
                              sc.Authority ='1' THEN 1                                              --(Wan06) 
                         WHEN d.ID <> i.ID  AND i.[Status] = '5' AND sc.Authority ='1'              --(AYD01)
-                             AND @n_IsRDT <> 1 THEN 1                                              --(AYD01)
+                             AND @n_IsRDT <> 1 THEN 1                                              --(AYD02)
                         ELSE 0                                                                     --(Wan06) 
                         END )                                                                      --(Wan06)
                FROM INSERTED i   
