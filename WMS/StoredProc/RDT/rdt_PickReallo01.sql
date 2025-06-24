@@ -10,6 +10,7 @@
 /* 2025-03-26 1.0.0  JCH507   FCR-2704 Re-allocation if short happens   */
 /* 2025-04-15 1.0.1  JCH507   FCR-2704 Support PickDetail.UOM = 7       */
 /* 2025-04-24 1.0.2  NLT013   FCR-2704 Update RefKeyLookup              */
+/* 2025-05-16 1.0.3  JACKC    FCR-2704 UOM must match when finding PSNO */
 /*                                                                      */
 /************************************************************************/
 
@@ -252,28 +253,33 @@ BEGIN
    SELECT @cPickZone, @cPickSlipNo, 1
    UNION ALL
    SELECT LOC.PickZone, PD.PickSlipNo, 99
-      FROM dbo.PickDetail PD WITH (NOLOCK)
-      INNER JOIN dbo.LOC WITH (NOLOCK) 
-         ON PD.Loc = LOC.Loc
-         AND LOC.Facility = @cFacility
-      INNER JOIN dbo.PickHeader PH WITH (NOLOCK)
-         ON PD.PickSlipNo = PH.PickHeaderKey
-         AND PD.Storerkey = PH.StorerKey
-      INNER JOIN dbo.LoadPlanDetail LPD WITH (NOLOCK)
-         ON LPD.OrderKey = PD.OrderKey
-      WHERE PD.StorerKey = @cStorerKey
-         AND PD.Status = '0'
-         AND PD.Loc <> @cLOC
-         AND LOC.PickZone <> @cPickZone
-         AND ISNULL(LOC.PickZone, '') <> ''
-         AND PD.WaveKey = @cWaveKey
-         AND LPD.LoadKey = @cLoadKey --v1.0.1
-         AND LOC.Facility = @cFacility
-         --AND EXISTS ( --v1.0.1
-         --   SELECT 1
-         --   FROM @tShortPickDetails TSPD
-         --   WHERE TSPD.OrderKey = PD.OrderKey
-         --)
+   FROM dbo.PickDetail PD WITH (NOLOCK)
+   INNER JOIN dbo.LOC WITH (NOLOCK) 
+      ON PD.Loc = LOC.Loc
+      AND LOC.Facility = @cFacility
+   INNER JOIN dbo.PickHeader PH WITH (NOLOCK)
+      ON PD.PickSlipNo = PH.PickHeaderKey
+      AND PD.Storerkey = PH.StorerKey
+   INNER JOIN dbo.LoadPlanDetail LPD WITH (NOLOCK)
+      ON LPD.OrderKey = PD.OrderKey
+   WHERE PD.StorerKey = @cStorerKey
+      AND PD.Status = '0'
+      AND PD.Loc <> @cLOC
+      AND LOC.PickZone <> @cPickZone
+      AND ISNULL(LOC.PickZone, '') <> ''
+      AND PD.WaveKey = @cWaveKey
+      AND LPD.LoadKey = @cLoadKey --v1.0.1
+      AND LOC.Facility = @cFacility
+      --V1.0.3 The pickdetail UOM must exists in ShortPickDetails
+      AND EXISTS (
+         SELECT 1 FROM @tShortPickDetails t
+         WHERE t.UOM = PD.UOM
+      )
+      --AND EXISTS ( --v1.0.1
+      --   SELECT 1
+      --   FROM @tShortPickDetails TSPD
+      --   WHERE TSPD.OrderKey = PD.OrderKey
+      --)
       GROUP BY LOC.PickZone, PD.PickSlipNo
 
    IF @nDebugFlag = 1
@@ -282,7 +288,7 @@ BEGIN
       SELECT * FROM @tPickZoneCandidate ORDER BY Priority, PickZone
    END
    
-   IF @cType = 'UCC'
+   IF @cType = 'UCC' --Fnc957
    BEGIN
       IF @nDebugFlag = 1
       BEGIN
@@ -317,6 +323,7 @@ BEGIN
          AND LLI.Loc <> @cLOC
          AND LOC.LocationFlag = 'None'
          AND LOC.Status = 'OK'
+         AND LOC.LocationType = 'OTHER' --V1.0.3
          AND LA.Lottable01 = @cLottable01
       GROUP BY LOC.Loc, LLI.Loc, LLI.ID,  PZ.Priority, PZ.PickZone, PZ.PickSlipNo
       HAVING COUNT(UCC.ID) >= (SELECT COUNT(DISTINCT DropID)
@@ -592,7 +599,7 @@ BEGIN
 
    END -- UCC
 
-   ELSE IF @cType = 'SKU'
+   ELSE IF @cType = 'SKU' --Fnc839
    BEGIN
       IF @nDebugFlag = 1
       BEGIN
@@ -618,6 +625,7 @@ BEGIN
       WHERE LLI.StorerKey = @cStorerKey
          AND LOC.LocationFlag = 'None'
          AND LOC.Status = 'OK'
+         AND LOC.LocationType = 'PICK' --V1.0.3
          AND LLI.SKU = @cSKU
          AND LLI.Loc <> @cLOC
          AND LA.Lottable01 = @cLottable01
