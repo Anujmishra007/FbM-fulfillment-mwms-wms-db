@@ -112,31 +112,31 @@ jobs:
           
 
 
-      #     response=$(curl -s -X POST https://bffp.maersk-digital.net/v2/platforms/fbm/environments/cdt/products/wms/configurations \
-      #       -H "Authorization: Bearer $bearer_token" \
-      #       -H "Content-Type: application/json" \
-      #       -d "$payload")
+          response=$(curl -s -X POST https://bffp.maersk-digital.net/v2/platforms/fbm/environments/cdt/products/wms/configurations \
+            -H "Authorization: Bearer $bearer_token" \
+            -H "Content-Type: application/json" \
+            -d "$payload")
 
-      #     echo "Response from API: $response"
+          echo "Response from API: $response"
 
-      # - name: Deployment Request Failure Notification
-      #   if: steps.deploy_CDT.outcome == 'failure'
-      #   uses: jdcargile/ms-teams-notification@v1.3
-      #   with:
-      #     github-token: ${{ github.token }}
-      #     ms-teams-webhook-uri: ${{ secrets.MSTEAMS_NOTIFY_WEBHOOK }}
-      #     notification-summary: Deployment Request Failed &#x1F534
-      #     notification-color: D30A13
+      - name: Deployment Request Failure Notification
+        if: steps.deploy_CDT.outcome == 'failure'
+        uses: jdcargile/ms-teams-notification@v1.3
+        with:
+          github-token: ${{ github.token }}
+          ms-teams-webhook-uri: ${{ secrets.MSTEAMS_NOTIFY_WEBHOOK }}
+          notification-summary: Deployment Request Failed &#x1F534
+          notification-color: D30A13
 
-      # - name: Deployment Request Success Notification
-      #   if: steps.deploy_CDT.outcome == 'success'
-      #   uses: jdcargile/ms-teams-notification@v1.3
-      #   with:
-      #     github-token: ${{ github.token }}
-      #     ms-teams-webhook-uri: ${{ secrets.MSTEAMS_NOTIFY_WEBHOOK }}
-      #     notification-summary: Deployment Triggered Successfully &#x2705
-      #     notification-color: 04A10E
+      - name: Deployment Request Success Notification
+        if: steps.deploy_CDT.outcome == 'success'
+        uses: jdcargile/ms-teams-notification@v1.3
+        with:
+          github-token: ${{ github.token }}
+          ms-teams-webhook-uri: ${{ secrets.MSTEAMS_NOTIFY_WEBHOOK }}
+          notification-summary: Deployment Triggered Successfully &#x2705
+          notification-color: 04A10E
 
-      # - name: Print Grafana URL
-      #   if: env.run_sql == 'true'
-      #   run: echo "::notice title=Grafana Link::https://grafana.maersk.io/goto/F49pfjONR?orgId=1"
+      - name: Print Grafana URL
+        if: env.run_sql == 'true'
+        run: echo "::notice title=Grafana Link::https://grafana.maersk.io/goto/F49pfjONR?orgId=1"
