@@ -49,12 +49,6 @@ jobs:
             echo "run_sql=false" >> $GITHUB_ENV
           fi
 
-      - name: Tag release (all)
-        uses: softprops/action-gh-release@v2
-        with:
-            tag_name: "v0.0.0.${{ github.run_number }}"
-            token: "${{ secrets.GITHUB_TOKEN }}"
-
       - name: Print Modified SQL files
         if: env.run_sql == 'true'
         shell: bash
