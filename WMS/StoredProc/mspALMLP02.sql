@@ -34,7 +34,8 @@ GO
 /*                           strategy for BUD                              */
 /* 2025-06-04  Wan06    1.8  FCR-2902 - MLP Enhancement - Allocate         */
 /*                           Case/Shrink at BULK, Demand Replenishment     */
-/*                           to DPP.                                       */ 
+/*                           to DPP.                                       */
+/* 2025-06-24  JH01     1.9  UWP-35703 Can't Get AllocateStrategyKey       */
 /***************************************************************************/
 CREATE OR ALTER PROC [dbo].[mspALMLP02]
    @c_DocumentNo        NVARCHAR(10)
@@ -192,6 +193,11 @@ BEGIN
    SELECT @c_StorerDefaultAllocStrategy = 
    dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'StorerDefaultAllocStrategy')    --(Wan06) - START
 
+   IF @c_StorerDefaultAllocStrategy = '0' OR @c_StorerDefaultAllocStrategy = NULL   /*JH01*/
+   BEGIN
+      SET @c_StorerDefaultAllocStrategy = ''
+   END
+   
    IF ISNULL(@c_Wavekey,'') <> ''  
    BEGIN  
       --Get strategy from wave  
@@ -203,7 +209,7 @@ BEGIN
       AND W.Strategykey <> ''  
    END        
      
-   IF @c_AllocateStrategykey = '' AND @c_Loadkey <> ''  
+   IF ISNULL(@c_AllocateStrategykey,'') = '' AND ISNULL(@c_Loadkey,'') <> ''          /*JH01*/
    BEGIN  
         --Get strategy from load defaultstrategykey  
         SELECT TOP 1 @c_AllocateStrategykey = ALS.AllocateStrategyKey          
@@ -219,7 +225,7 @@ BEGIN
         AND S.Strategykey IS NOT NULL  
    END           
      
-   IF @c_AllocateStrategykey = '' AND @c_StorerDefaultAllocStrategy <> ''  
+   IF ISNULL(@c_AllocateStrategykey,'') = '' AND @c_StorerDefaultAllocStrategy <> ''    /*JH01*/
    BEGIN  
       --Get strategy from storerconfig StorerDefaultAllocStrategy  
       SELECT @c_AllocateStrategykey = ALS.AllocateStrategyKey  
@@ -228,7 +234,7 @@ BEGIN
       WHERE SY.Strategykey = @c_StorerDefaultAllocStrategy        
    END  
 
-   IF @c_AllocateStrategykey = ''
+   IF ISNULL(@c_AllocateStrategykey,'') = ''                                        /*JH01*/
    BEGIN
      --Get strategy from sku  
       SELECT @c_AllocateStrategykey = STRATEGY.AllocateStrategykey  
