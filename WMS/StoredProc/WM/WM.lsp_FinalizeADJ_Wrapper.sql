@@ -200,6 +200,8 @@ BEGIN
               SELECT 1
               FROM PalletTypeMaster(NOLOCK) ptm
               WHERE ptm.PalletType = AD.PalletType
+              AND ptm.StorerKey = AD.StorerKey
+              AND ptm.facility = @c_Facility
               )
             )
             )

@@ -142,6 +142,8 @@ BEGIN
               SELECT 1
               FROM pallettypemaster(NOLOCK) ptm
               WHERE ptm.PalletType = tfd.ToPalletType
+              AND ptm.storerkey = tfd.toStorerKey
+              AND ptm.facility = @c_ToFacility
               )
             )
             OR
