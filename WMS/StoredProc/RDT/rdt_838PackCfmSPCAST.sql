@@ -299,7 +299,7 @@ BEGIN
   
                -- Insert PackInfo  
                INSERT INTO PackInfo (PickSlipNo, CartonNo, Weight, Cube, Qty, Cartontype, Length, Width, Height)  
-               VALUES (@cPickSlipNo, @nCartonNo, '0', @nCube, @nQTY, @cCartonType, @nCartonLength, @nCartonWidth, @nCartonHeight)  
+               VALUES (@cPickSlipNo, @nCartonNo, @nWeight, @nCube, @nQTY, @cCartonType, @nCartonLength, @nCartonWidth, @nCartonHeight)  
                IF @nErrNo <> 0  
                BEGIN  
                   SET @nErrNo = 193601   
