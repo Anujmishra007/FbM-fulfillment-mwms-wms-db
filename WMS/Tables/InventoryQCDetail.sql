@@ -39,7 +39,8 @@ BEGIN
       [FinalizeFlag] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_InventoryQCDetail_FinalizeFlag] DEFAULT ('N'),
       [Channel] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_INVENTORYQCDETAIL_Channel] DEFAULT (''),
       [Channel_ID] [bigint] NULL CONSTRAINT [DF_INVENTORYQCDETAIL_Channel_ID] DEFAULT ((0)),
-      [PalletType] [nvarchar] (10) NOT NULL CONSTRAINT [DF_INVENTORYQCDETAIL_PalletType] DEFAULT ('')
+      [FromPalletType] [nvarchar] (10) NOT NULL CONSTRAINT [DF_INVENTORYQCDETAIL_FromPalletType] DEFAULT (''),
+      [ToPalletType] [nvarchar] (10) NOT NULL CONSTRAINT [DF_INVENTORYQCDETAIL_ToPalletType] DEFAULT ('')
       ) ON [PRIMARY]
 
       GRANT DELETE ON  [dbo].[InventoryQCDetail] TO [NSQL]
@@ -119,18 +120,37 @@ BEGIN
 
       EXEC sp_addextendedproperty N'MS_Description', 'IQC userdefine10', 'SCHEMA', N'dbo', 'TABLE', N'InventoryQCDetail', 'COLUMN', N'UserDefine10'
 
-      EXEC sp_addextendedproperty N'MS_Description', 'Pallet Type' , 'SCHEMA', N'dbo', 'TABLE', N'InventoryQCDetail', 'COLUMN',N'PalletType'
+      EXEC sp_addextendedproperty N'MS_Description', 'From Pallet Type' , 'SCHEMA', N'dbo', 'TABLE', N'InventoryQCDetail', 'COLUMN',N'FromPalletType'
+
+      EXEC sp_addextendedproperty N'MS_Description', 'To Pallet Type' , 'SCHEMA', N'dbo', 'TABLE', N'InventoryQCDetail', 'COLUMN',N' ToPalletType'
  END
  ELSE
      BEGIN
+          IF EXISTS (SELECT 1
+ 		               FROM sys.columns
+ 		               WHERE Name = 'PalletType' AND Object_ID = Object_ID('InventoryQCDetail'))
+          BEGIN
+              ALTER TABLE INVENTORYQCDETAIL DROP CONSTRAINT DF_INVENTORYQCDETAIL_PalletType;
+              ALTER TABLE INVENTORYQCDETAIL DROP COLUMN PalletType;
+          END
           IF NOT EXISTS (SELECT *
                              FROM sys.columns
-                             WHERE Name = 'PalletType'
+                             WHERE Name = 'FromPalletType'
                                AND Object_ID = Object_ID('InventoryQCDetail'))
                   BEGIN
                       ALTER TABLE InventoryQCDetail
-                          ADD PalletType NVARCHAR(10) NOT NULL CONSTRAINT [DF_INVENTORYQCDETAIL_PalletType] DEFAULT ('');
-                      EXEC sp_addextendedproperty N'MS_Description', 'Pallet Type', 'SCHEMA', N'dbo', 'TABLE',
-                           N'InventoryQCDetail', 'COLUMN', N'PalletType'
+                          ADD FromPalletType NVARCHAR(10) NOT NULL CONSTRAINT [DF_INVENTORYQCDETAIL_FromPalletType] DEFAULT ('');
+                      EXEC sp_addextendedproperty N'MS_Description', 'From Pallet Type', 'SCHEMA', N'dbo', 'TABLE',
+                           N'InventoryQCDetail', 'COLUMN', N'FromPalletType'
+                  END
+          IF NOT EXISTS (SELECT *
+                             FROM sys.columns
+                             WHERE Name = 'ToPalletType'
+                               AND Object_ID = Object_ID('InventoryQCDetail'))
+                  BEGIN
+                      ALTER TABLE InventoryQCDetail
+                          ADD ToPalletType NVARCHAR(10) NOT NULL CONSTRAINT [DF_INVENTORYQCDETAIL_ToPalletType] DEFAULT ('');
+                      EXEC sp_addextendedproperty N'MS_Description', 'To Pallet Type', 'SCHEMA', N'dbo', 'TABLE',
+                           N'InventoryQCDetail', 'COLUMN', N'ToPalletType'
                   END
     END

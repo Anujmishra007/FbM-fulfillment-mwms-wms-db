@@ -36,7 +36,7 @@ GO
 /* 23-FEB-2021  Wan04       1.9      WMS-16391 - [CN] ANFQHW_WMS_Transfer Finalize_CR */
 /* 12-Aug-2022  Leong       2.0      JSM-86964 Initialize variable.                   */
 /* 13-Feb-2025  WLChooi     2.1      UWP-30034 Populate PalletType (WL01)             */
-/* 25-JUN-2025  SSA01       2.2       UWP-3982- Added PalletType in inventory        */
+/* 25-JUN-2025  SSA01       2.2      UWP-3982- Added PalletType in inventory          */
 /**************************************************************************************/
 
 CREATE OR ALTER TRIGGER [dbo].[ntrTransferDetailUpdate]

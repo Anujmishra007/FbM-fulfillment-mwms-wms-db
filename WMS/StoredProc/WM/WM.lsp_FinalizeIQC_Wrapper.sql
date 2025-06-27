@@ -191,7 +191,7 @@ BEGIN
               SELECT 1
               FROM PalletTypeMaster(NOLOCK) ptm
               WHERE ptm.PalletType = iqc.PalletType
-              AND ptm.StorerKey = iqc.PalletType
+              AND ptm.StorerKey = iqc.StorerKey
               AND ptm.Facility = @c_Facility
               )
             )
