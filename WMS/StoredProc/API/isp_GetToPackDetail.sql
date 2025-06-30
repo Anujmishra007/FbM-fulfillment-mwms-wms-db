@@ -144,6 +144,8 @@ BEGIN
    DECLARE @cPickStsFilter1 NVARCHAR(1)
    DECLARE @cPickStsLT1 NVARCHAR(1)
    DECLARE @cPickStsEQ2 NVARCHAR(1)
+   DECLARE @nTtlQtyPack INT  
+   DECLARE @nPackedQty INT  
 
    SET @cShrtPckSts = ''
    SET @cAltSkuSelection = '0'
@@ -185,7 +187,6 @@ BEGIN
       PickDetailStatus NVARCHAR ( 3)--,  
    --  UCCNo            NVARCHAR( 20)--(yeekung02)  
    )    
-
 
    --DECLARE @pickSKUDetail TABLE (    
    CREATE TABLE #PackTable (    
@@ -305,10 +306,21 @@ BEGIN
    --  UCCNO             NVARCHAR( 20)  '$.UCCNo'      --(yeekung02)            
    )
 
+   INSERT INTO #PackTable  
+   SELECT PD.SKU,SUM(PD.QTY) AS QtyToPack,@cPickSlipNo   
+   FROM packdetail PD WITH (NOLOCK)  
+   WHERE PD.pickslipno=@cPickSlipNo  
+   GROUP BY PD.SKU 
+
    IF ISNULL(@cShrtPckSts,'') = ''  --if show ShortPick Config not configured, then delete to filter out the shortpick records
    BEGIN
       DELETE FROM #pickSKUDetail WHERE PickDetailStatus = '4'
    END
+
+   --Get Total pick and packed Qty for the pickslip.
+   SELECT @nTtlQtyPack = SUM(QtyToPack)  FROM #pickSKUDetail
+
+   SELECT @nPackedQty = SUM(QtyToPack) FROM #PackTable 
 
    -- if PickstatusFilter got value and (PickStatusLE1 or PickStatusEQ2) enabled, then delete the records that is bigger than PickstatusFilter
    IF ISNULL(@cPickStsFilter1,'') <> '' 
@@ -935,13 +947,6 @@ BEGIN
       SET @cSQLDymWgtSelect = @cSQLDymWgtSelect + ', SKU.Cube'    
    END   
 
-
-   INSERT INTO #PackTable  
-   SELECT PD.SKU,SUM(PD.QTY) AS QtyToPack,@cPickSlipNo   
-   FROM packdetail PD WITH (NOLOCK)  
-   WHERE PD.pickslipno=@cPickSlipNo  
-   GROUP BY PD.SKU  
-   
    --form packInfo output    
    DECLARE @cSQLCobine     NVARCHAR( MAX)    
    DECLARE @cSQLFrom       NVARCHAR( MAX)   
@@ -976,7 +981,7 @@ BEGIN
             ISNULL(SUM(PH.QtyToPack),0)  AS PackedQty   
          ,case when isnull(SKU.PackQtyIndicator,0) = 0 then 1 else isnull(SKU.PackQtyIndicator,0) end    
          ,'''' AS Img,SKU.EcomCartonType ' +    
-         ', CASE WHEN ISNULL(@cSkipSKUADScn,'''') IN (''1'') THEN ''0'' 
+         ', CASE WHEN ISNULL(@cSkipSKUADScn,'''') = ''1'' THEN ''0'' 
                WHEN SKU.SUSR4 = ''AD''  THEN ''1'' 
                ELSE ''0'' END AS AD   
          , SUM(Pack.otherunit2)'--(cc12)--(cc13)    
@@ -1008,10 +1013,6 @@ BEGIN
       GOTO EXIT_SP    
    END    
 
-   DECLARE @nTTlQTYPack INT  
-   DECLARE @nPackQty INT  
-
-   SELECT @nTTlQTYPack = SUM(QtyToPack), @nPackQty = SUM(PackedQty) FROM @packSKUDetail  
    IF EXISTS (SELECT 1 FROM @packSKUDetail WHERE QtyToPack<0)    
    BEGIN    
       SET @n_Err = 1000862    
@@ -1449,8 +1450,8 @@ BEGIN
       , @cStatus AS [status]  
    FROM @packSKUDetail p
    FOR JSON AUTO, INCLUDE_NULL_VALUES) AS Details    
-   ,(@nTTlQTYPack+@nPackQty) AS TTLQTYPack  
-   ,@nPackQty AS PackedQTY  
+   ,@nTtlQtyPack AS TTLQTYPack  
+   ,@nPackedQty AS PackedQTY  
    --LEFT JOIN PackDetail PD WITH (NOLOCK) ON (PSKU.pickslipno = PD.pickslipNo)    
    --AND StorerKey = @cStorerKey    
    FOR JSON PATH, INCLUDE_NULL_VALUES)     

@@ -115,7 +115,7 @@ DECLARE
    @pickSkuDetailJson   NVARCHAR( MAX),  
    @bToPrint            INT,  
    @cPrintAfterPacked   NVARCHAR( 1),  
-   @cLottableVal     NVARCHAR( 60), --(cc05)  
+   @cLottableValue   NVARCHAR( 30), --(cc05)  
    @cSQL             NVARCHAR(MAX), --(cc08)  
    @cSQLParam        NVARCHAR(MAX), --(cc08)  
    @cDisableLblPrint NVARCHAR(1), --(yeekung01)  
@@ -138,6 +138,7 @@ DECLARE @cNewLabelPrinter NVARCHAR(20)
    SET @cDisableLblPrint = '0'  
    SET @cDisablePLPrint = '0'  
    SET @nLimitCartonType = 0  --(Gh01)
+   SET @cShowCartonNo = '0'
    
    DECLARE @CartonIDList TABLE (  
       CartonID        NVARCHAR( 20)  
@@ -371,15 +372,13 @@ DECLARE @cNewLabelPrinter NVARCHAR(20)
 
 
    --Get New cartonno  
-   IF EXISTS (SELECT 1 FROM packdetail(nolock) --(yeekung03)
+   IF @cShowCartonNo = '1' AND
+   EXISTS (SELECT 1 FROM packdetail(nolock) --(yeekung03)
                WHERE pickslipno = @cPickSlipNo  
                   AND Storerkey = @cStorerKey 
                   AND cartonNo = @nCartonNo )
    BEGIN
-      SELECT @nCartonNo = MAX(cartonno) + 1
-      FROM packdetail(nolock) 
-      WHERE pickslipno = @cPickSlipNo  
-         AND Storerkey = @cStorerKey 
+      SET @nCartonNo = 0
    END
 
 
@@ -502,8 +501,8 @@ DECLARE @cNewLabelPrinter NVARCHAR(20)
    
    --SELECT @cCartonID AS cCartonID, @cLabelNo AS LabelNo  
    DECLARE @SQLParam NVARCHAR(MAX)   
-   DECLARE @cCartonNo NVARCHAR(3)  
-   SET @cCartonNo = CONVERT(NVARCHAR(3),@nCartonNo)  
+   DECLARE @cCartonNo NVARCHAR(5)  
+   SET @cCartonNo = CONVERT(NVARCHAR(5),@nCartonNo)  
    IF ISNULL(@cCartonID,'') =''   
    BEGIN   --(cc06)  
       SET @GetCartonID = '       
@@ -578,7 +577,7 @@ DECLARE @cNewLabelPrinter NVARCHAR(20)
    GROUP BY SKU,QTY,WEIGHT,[CUBE],lottableVal,UPC   
       
    OPEN @curPD 
-   FETCH NEXT FROM @curPD INTO @cSKU,@nQTY,@cWeight,@cCube,@cLottableVal,@cUPCJSON  
+   FETCH NEXT FROM @curPD INTO @cSKU,@nQTY,@cWeight,@cCube,@cLottableJSON,@cUPCJSON  
    WHILE @@FETCH_STATUS <> -1  
    BEGIN  
       
@@ -696,10 +695,8 @@ DECLARE @cNewLabelPrinter NVARCHAR(20)
                   --END 
 
                   -- Close: PackDetail  
-                  IF NOT EXISTS( SELECT 1 FROM dbo.PackDetail WITH (NOLOCK) WHERE PickslipNo = @cPickslipNo AND cartonno =@nCartonNo AND SKU=@cSKU AND LOTTABLEVALUE = @cLottableVal and upc=@cupc)  
+                  IF NOT EXISTS( SELECT 1 FROM dbo.PackDetail WITH (NOLOCK) WHERE PickslipNo = @cPickslipNo AND cartonno =@nCartonNo AND SKU=@cSKU and upc=@cupc)  
                   BEGIN  
-
-                  
                      SELECT @cLabelLine = RIGHT( '00000' + CAST( CAST( IsNULL( MAX( LabelLine), 0) AS INT) + 1 AS NVARCHAR( 5)), 5)   
                      FROM dbo.PackDetail (NOLOCK)  
                      WHERE Pickslipno = @cPickSlipNo  
@@ -710,11 +707,11 @@ DECLARE @cNewLabelPrinter NVARCHAR(20)
                      INSERT INTO dbo.PackDetail  
                         (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, DropID,  
                         AddWho, AddDate, EditWho, EditDate  
-                        , LOTTABLEVALUE,UPC)--(cc05)  
+                        ,UPC)--(cc05)  
                      VALUES  
                         (@cPickSlipNo, @nCartonNo, @cCartonID, @cLabelLine, @cStorerKey, @cSKU, @nUPCQTY, ISNULL(@cDropID,''),  
                            @cUserName, GETDATE(), @cUserName, GETDATE()  
-                           , @cLottableVal,@cUPC) --(cc05)  
+                           ,@cUPC) --(cc05)  
                      IF @@ERROR <> 0  
                      BEGIN  
                         SET @b_Success = 0    
@@ -732,9 +729,7 @@ DECLARE @cNewLabelPrinter NVARCHAR(20)
                         DropID = ISNULL(@cDropID,''),  
                         EditWho =  @cUserName,   
                         EditDate = GETDATE(),   
-                        ArchiveCop = NULL,  
-                        LOTTABLEVALUE = @cLottableVal,
-                        UPC   = @cUPC
+                        ArchiveCop = NULL
                      WHERE PickSlipNo = @cPickSlipNo  
                         AND SKU = @cSKU 
                         AND cartonno =@nCartonNo 
@@ -781,7 +776,6 @@ DECLARE @cNewLabelPrinter NVARCHAR(20)
             ) )
          BEGIN
             DECLARE @cCurLottable Cursor
-            DECLARE @cLottableValue NVARCHAR(30)
             DECLARE @nLotQTY INT
 
             SET @cCurLottable = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
@@ -790,7 +784,7 @@ DECLARE @cNewLabelPrinter NVARCHAR(20)
             WITH (  
                Lottable               NVARCHAR( 30)  '$.Lottable',  
                PackedQTY              INT            '$.PackedQty'
-            )  
+            )
             GROUP BY Lottable
 
             OPEN @cCurLottable 
@@ -835,7 +829,7 @@ DECLARE @cNewLabelPrinter NVARCHAR(20)
                   --END 
 
                   -- Close: PackDetail  
-                  IF NOT EXISTS( SELECT 1 FROM dbo.PackDetail WITH (NOLOCK) WHERE PickslipNo = @cPickslipNo AND cartonno =@nCartonNo AND SKU=@cSKU AND LOTTABLEVALUE = @cLottableVal  AND UPC = @cUPC)  
+                  IF NOT EXISTS( SELECT 1 FROM dbo.PackDetail WITH (NOLOCK) WHERE PickslipNo = @cPickslipNo AND cartonno =@nCartonNo AND SKU=@cSKU AND LOTTABLEVALUE = @cLottableValue)  
                   BEGIN  
                   
                      SELECT @cLabelLine = RIGHT( '00000' + CAST( CAST( IsNULL( MAX( LabelLine), 0) AS INT) + 1 AS NVARCHAR( 5)), 5)   
@@ -849,11 +843,11 @@ DECLARE @cNewLabelPrinter NVARCHAR(20)
                      INSERT INTO dbo.PackDetail  
                         (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, DropID,  
                         AddWho, AddDate, EditWho, EditDate  
-                        , LOTTABLEVALUE,UPC)--(cc05)  
+                        , LOTTABLEVALUE)--(cc05)  
                      VALUES  
                         (@cPickSlipNo, @nCartonNo, @cCartonID, @cLabelLine, @cStorerKey, @cSKU, @nLotQTY,ISNULL(@cDropID,''),  
                            @cUserName, GETDATE(), @cUserName, GETDATE()  
-                           , @cLottableValue,@cUPC) --(cc05)  
+                           , @cLottableValue) --(cc05)  
                      IF @@ERROR <> 0  
                      BEGIN  
                         SET @b_Success = 0    
@@ -871,9 +865,7 @@ DECLARE @cNewLabelPrinter NVARCHAR(20)
                         DropID = ISNULL(@cDropID,''),  
                         EditWho =  @cUserName,   
                         EditDate = GETDATE(),   
-                        ArchiveCop = NULL,  
-                        LOTTABLEVALUE = @cLottableVal,
-                        UPC   = @cUPC
+                        ArchiveCop = NULL
                      WHERE PickSlipNo = @cPickSlipNo  
                         AND SKU = @cSKU 
                         AND cartonno =@nCartonNo
@@ -913,7 +905,7 @@ DECLARE @cNewLabelPrinter NVARCHAR(20)
          END
 
          SET @cUPC = ''
-         SET @cLottableVal = ''
+         SET @cLottableValue = ''
       END
 
       IF @nQTY >0
@@ -957,7 +949,7 @@ DECLARE @cNewLabelPrinter NVARCHAR(20)
          IF @nQTY > 0
          BEGIN
             -- Close: PackDetail  
-            IF NOT EXISTS( SELECT 1 FROM dbo.PackDetail WITH (NOLOCK) WHERE PickslipNo = @cPickslipNo AND cartonno =@nCartonNo AND UPC = @cSKU AND SKU=@cSKU) 
+            IF NOT EXISTS( SELECT 1 FROM dbo.PackDetail WITH (NOLOCK) WHERE PickslipNo = @cPickslipNo AND cartonno =@nCartonNo AND UPC = @cUPC AND SKU=@cSKU) 
             BEGIN  
             
                SELECT @cLabelLine = RIGHT( '00000' + CAST( CAST( IsNULL( MAX( LabelLine), 0) AS INT) + 1 AS NVARCHAR( 5)), 5)   
@@ -970,11 +962,11 @@ DECLARE @cNewLabelPrinter NVARCHAR(20)
                INSERT INTO dbo.PackDetail  
                   (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, DropID,  
                   AddWho, AddDate, EditWho, EditDate  
-                  , LOTTABLEVALUE,UPC)--(cc05)  
+                  ,UPC)--(cc05)  
                VALUES  
                   (@cPickSlipNo, @nCartonNo, @cCartonID, @cLabelLine, @cStorerKey, @cSKU, @nQTY, ISNULL(@cDropID,''),  
                      @cUserName, GETDATE(), @cUserName, GETDATE()  
-                     , @cLottableVal,@cUPC) --(cc05)  
+                     ,@cUPC) --(cc05)  
                IF @@ERROR <> 0  
                BEGIN  
                   SET @b_Success = 0    
@@ -992,13 +984,12 @@ DECLARE @cNewLabelPrinter NVARCHAR(20)
                   DropID = ISNULL(@cDropID,''),  
                   EditWho =  @cUserName,   
                   EditDate = GETDATE(),   
-                  ArchiveCop = NULL,  
-                  LOTTABLEVALUE = @cLottableVal,
-                  UPC   = @cUPC
+                  ArchiveCop = NULL
                WHERE PickSlipNo = @cPickSlipNo  
                   AND CartonNo = @nCartonNo  
                   AND LabelNo = @cCartonID  
                   AND SKU     = @cSKU 
+                  AND UPC   = @cUPC
                IF @@ERROR <> 0  
                BEGIN           
                   SET @b_Success = 0    
@@ -1097,7 +1088,7 @@ DECLARE @cNewLabelPrinter NVARCHAR(20)
          END   
       END     
          
-      FETCH NEXT FROM @curPD INTO @cSKU,@nQTY,@cWeight,@cCube,@cLottableVal,@cUPCJSON  
+      FETCH NEXT FROM @curPD INTO @cSKU,@nQTY,@cWeight,@cCube,@cLottableJSON,@cUPCJSON  
    END  
 
    SELECT @nPackQtyCarton = SUM(Qty) FROM packDetail WHERE storerKey = @cStorerKey AND pickSlipNo = @cPickSlipNo AND cartonNo = @nCartonNo  
@@ -2024,7 +2015,7 @@ DECLARE @cNewLabelPrinter NVARCHAR(20)
       SET @n_Err = 0  
       SET @c_ErrMsg = ''  
       SET @jResult = (select @cOrderKey AS OrderKey, @cLabelJobID as LabelJobID, @cPackingJobID as PackingJobID ,@nProceedPrintFlag AS nProceedPrintFlag, @nVasConfig AS VasConfig, @cVasCol1Name AS VasCol1Name, @cVasCol1Value AS VasCol1Value, @cWorkInstruction AS WorkInstruction 
-      ,(CASE WHEN ISNULL(@cShowCartonNo,'') IN ('1') THEN @nCartonNo ELSE '' END) AS CartonNo --(yeekung14)
+      ,(CASE WHEN ISNULL(@cShowCartonNo,'') = '1' THEN @nCartonNo ELSE NULL END) AS CartonNo --(yeekung14)
       FOR JSON PATH )   
    END     
             

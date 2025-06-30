@@ -18,7 +18,8 @@ GO
 /* 2024-09-23   1.7  YeeKung    TPS-966 Add Facility on Storerconfig          */
 /*                               Control (yeekung04)                          */
 /* 2025-01-04   1.8  YeeKung    UWP-28816 Fix facility (yeekung05)            */      
-/* 2025-05-06   1.9  GhChan     Bug fix for @cCartonNo (Gh01)                 */ 
+/* 2025-05-06   1.9  GhChan     Bug fix for @cCartonNo (Gh01)                 */
+/* 2025-05-19   2.0  GhChan     UWP-34530 Fix LabelNo return value issue(Gh02)*/
 /******************************************************************************/
 
 CREATE OR ALTER PROC [API].[isp_GetPackCartonID] (
@@ -133,7 +134,7 @@ BEGIN
          '@nFunc           INT,           ' +  
          '@cLangCode       NVARCHAR( 3),  ' +  
          '@cPickSlipNo     NVARCHAR( 30), ' + 
-         '@cCartonNo       NVARCHAR(3),   ' +
+         '@cCartonNo       NVARCHAR(5),   ' +
          '@cLabelNo        NVARCHAR( 20)  OUTPUT, ' +  
          '@b_Success       INT            OUTPUT, ' +  
          '@n_Err           INT            OUTPUT, ' +  
