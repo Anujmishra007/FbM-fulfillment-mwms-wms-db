@@ -15,7 +15,7 @@ on:
           - DEVWMS
           - INVWMS
           - IOBWMS
-          - SDRWMS
+          - RDTWMS
   
 
 permissions: write-all
