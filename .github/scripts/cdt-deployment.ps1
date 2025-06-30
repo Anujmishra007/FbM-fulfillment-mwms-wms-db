@@ -1,65 +1,65 @@
-# Define a hashtable of server instances and their corresponding databases
-$serverInstances = @{
+############################# Dynamic Varibles #############################
+$WMSDB_NAME = "#{DATBASE_NAME}#"
+$WMSDB_DB_SERVER_NAME = "#{DB_SERVER_NAME}#"
+$SQL_SCRIPT_FILES = ('#{SQL_SCRIPT_FILES_STRING}#').Split(",")
 
-    #CDT
-    #"wmsdb1" = @("GLOWMS","NLDWMS","GBRWMS")
-    "wmsdb-a-utc-4"  = @("USA4DNJWMS")
-}
-
-$username = "admin_user"
-
-# Prompt for the password securely
-$password = "{{DB_ADMIN_USER_PASSWORD}}"
-
-# Define an array of SQL script paths
-$sqlScriptFiles = @(
-"c:\temp\FbM-fulfillment-mwms-wms-db\WMS\StoredProc\isp_ODMRPL01.sql"
-)
-
-# Check if any SQL files are specified
-if ($sqlScriptFiles.Count -eq 0) {
-    Write-Host "No SQL files specified."
+# Check if Dynamic variables are specified
+if (($SQL_SCRIPT_FILES.Count -eq 0) -or ($WMSDB_NAME -eq "") -or ($WMSDB_DB_SERVER_NAME -eq "")) {
+    Write-Host "One or more required variables are not set. Please ensure that WMSDB_NAME, WMSDB_DB_SERVER_NAME, and SQL_SCRIPT_FILES are defined."
     exit
 }
 
+# Separate WMS\Tables\ scripts and others
+$wmsTablesScripts = $SQL_SCRIPT_FILES | Where-Object { $_ -like "*WMS\Tables\*" }
+$otherScripts = $SQL_SCRIPT_FILES | Where-Object { $_ -notlike "*WMS\Tables\*" }
+
+# Combine with WMS\Tables\ scripts first
+$SQL_SCRIPT_FILES = $wmsTablesScripts + $otherScripts
+
+############################# Static Varibles #############################
+$username = "admin_user"
+# Prompt for the password securely
+$password = "#{DB_ADMIN_USER_PASSWORD}#"
+
 # Generate a unique timestamp for the log files
 $timestamp = Get-Date -Format 'dd_MMM_yy_HH-mm-ss'
-$logFilePath = "D:\log_$timestamp.txt"
-$errorFilePath = "D:\error_$timestamp.txt"
+New-Item -ItemType Directory  -Name "logs" | Out-Null
+$logFilePath = ".\logs\$($WMSDB_NAME).txt"
+$errorFilePath = ".\logs\logs_error_$($timestamp).txt"
 
-foreach ($serverInstance in $serverInstances.Keys) {
-    $databases = $serverInstances[$serverInstance]
-
-    foreach ($database in $databases) {
-        foreach ($scriptFile in $sqlScriptFiles) {
-            # Check if the file exists
-            if (-Not (Test-Path $scriptFile)) {
-                Write-Host "The specified SQL file does not exist: $scriptFile"
-                continue  # Skip to the next file
-            }
-
-            # Read the SQL script content
-            $sqlQuery = Get-Content -Path $scriptFile -Raw
-
-            # Output the script name for logging purposes
-            $logMessage = "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Running script: $($scriptFile) on server: $serverInstance, database: $database"
-            Write-Host $logMessage
-            Add-Content -Path $logFilePath -Value $logMessage
-
-            try {
-                # Run the SQL script using Invoke-Sqlcmd
-                $connectionString = "Server=$serverInstance;Database=$database;User Id=$username;Password=$password;TrustServerCertificate=True;"
-                Invoke-Sqlcmd -ConnectionString $connectionString -Query $sqlQuery -ErrorAction Stop
-                $successMessage = "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Successfully executed: $($scriptFile) on server: $serverInstance, database: $database"
-                Write-Host $successMessage
-                Add-Content -Path $logFilePath -Value $successMessage
-            }
-            catch {
-                $errorMessage = "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Failed to execute: $($scriptFile) on server: $serverInstance, database: $database - Error: $($_.Exception.Message)"
-                Write-Host $errorMessage
-                Add-Content -Path $logFilePath -Value $errorMessage
-                Add-Content -Path $errorFilePath -Value $errorMessage
-            }
-        }
+$ERROR_FOUND = $false
+foreach ($scriptFile in $SQL_SCRIPT_FILES) {
+    # Check if the file exists
+    if (-Not (Test-Path $scriptFile)) {
+        Write-Host "The specified SQL file does not exist: $scriptFile"
+        continue  # Skip to the next file
     }
+
+    # Read the SQL script content
+    $sqlQuery = Get-Content -Path $scriptFile -Raw
+
+    # Output the script name for logging purposes
+    $logMessage = "====================$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Running script: $($scriptFile) on server: $($WMSDB_DB_SERVER_NAME), database: $($WMSDB_NAME)===================="
+    Write-Host $logMessage
+    Add-Content -Path $logFilePath -Value $logMessage -Encoding UTF8
+    try {
+        # Run the SQL script using Invoke-Sqlcmd
+        $connectionString = "Server=$($WMSDB_DB_SERVER_NAME);Database=$($WMSDB_NAME);User Id=$($username);Password=$($password);TrustServerCertificate=True;"
+        Invoke-Sqlcmd -ConnectionString $connectionString -Query $sqlQuery -ErrorAction Stop | Tee-Object -FilePath $logFilePath -Encoding utf8 -Append
+        $successMessage = "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Successfully executed: $($scriptFile) on server: $($WMSDB_DB_SERVER_NAME), database: $($WMSDB_NAME)"
+        Write-Output $successMessage
+        Add-Content -Path $logFilePath -Value $successMessage -Encoding UTF8
+        Add-Content -Path $logFilePath -Value ' ' -Encoding UTF8
+    }
+    catch {
+        $errorMessage = "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - [SqlQueryExecutionFailure] Failed to execute: $($scriptFile) on server: $($WMSDB_DB_SERVER_NAME), database: $($WMSDB_NAME) - Error: $($_.Exception.Message)"
+        Write-Output $errorMessage
+        Add-Content -Path $logFilePath -Value $errorMessage -Encoding UTF8
+        Add-Content -Path $errorFilePath -Value $errorMessage -Encoding UTF8
+        $ERROR_FOUND = $true
+    }
+}
+if($ERROR_FOUND)
+{
+    throw "One or more SQL scripts failed to execute. Please check the logs and error files for details."
 }
