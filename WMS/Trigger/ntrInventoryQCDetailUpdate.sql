@@ -163,7 +163,7 @@ AS
           @c_toid      = Inserted.toid
        ,  @c_Channel   = Inserted.Channel       --(Wan01)
        ,  @n_Channel_ID= Inserted.Channel_ID    --(Wan01)
-       ,  @c_PalletType= INSERTED.PalletType  --(SSA01)
+       ,  @c_PalletType= INSERTED.ToPalletType  --(SSA01)
    FROM Inserted, Deleted
    WHERE  Inserted.qc_key = Deleted.qc_key
    AND    Inserted.qclineno = Deleted.qclineno

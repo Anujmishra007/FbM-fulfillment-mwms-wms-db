@@ -112,7 +112,7 @@ BEGIN
           @c_toid             = toid
        ,  @c_Channel          = Channel         --(Wan01)
        ,  @n_Channel_ID       = Channel_ID      --(Wan01)
-       ,  @c_PalletType       = PalletType  --(SSA01)
+       ,  @c_PalletType       = FromPalletType  --(SSA01)
     FROM INSERTED
     WHERE qc_key + qclineno > @c_qc_key + @c_qclineno
     AND   toqty > 0
