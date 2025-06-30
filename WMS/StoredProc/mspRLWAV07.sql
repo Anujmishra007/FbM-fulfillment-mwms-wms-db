@@ -287,6 +287,59 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV07]
        END
        CLOSE cur_fullucc
        DEALLOCATE cur_fullucc
+       
+       DECLARE cur_FCP CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
+          SELECT TD.FromLoc, TD.FromID
+          FROM TASKDETAIL TD (NOLOCK)
+          OUTER APPLY (SELECT SUM(LLI.Qty - LLI.QtyAllocated - LLI.QtyPicked) AS QtyAvai
+                       FROM LOTXLOCXID LLI (NOLOCK) 
+					             WHERE LLI.Storerkey = TD.Storerkey                       
+                       AND LLI.Loc = TD.FromLoc
+                       AND LLI.ID = TD.FromID
+                       AND LLI.Qty > 0) AS INV
+          OUTER APPLY (SELECT COUNT(DISTINCT PD.Orderkey) AS OrdCnt                      
+                       FROM PICKDETAIL PD (NOLOCK) 
+                       WHERE PD.Storerkey = @c_Storerkey
+                       AND PD.Status < '5'
+                       AND PD.Loc = TD.FromLoc
+                       AND PD.ID = TD.FromID) AS PK
+          WHERE TD.Wavekey = @c_Wavekey
+          AND TD.SourceType = @c_SourceType
+          AND TD.TaskType = 'FCP'
+          AND TD.Status <> '9'         
+          AND TD.UOM = '2'
+          GROUP BY TD.FromLoc, TD.FromID, ISNULL(INV.QtyAvai,0), ISNULL(PK.OrdCnt,0) 
+          HAVING ISNULL(INV.QtyAvai,0) = 0 AND ISNULL(PK.OrdCnt,0) = 1
+          
+       OPEN cur_FCP
+
+       FETCH NEXT FROM cur_FCP INTO @c_FromLoc, @c_ID
+
+       WHILE @@FETCH_STATUS = 0 AND @n_continue IN(1,2)
+       BEGIN 
+       	  UPDATE TASKDETAIL WITH (ROWLOCK)
+       	  SET PickMethod = 'FP',
+       	      TrafficCop = NULL
+          WHERE Wavekey = @c_Wavekey
+          AND SourceType = @c_SourceType
+          AND TaskType = 'FCP'
+          AND Status <> '9'         
+          AND UOM = '2'
+          AND FromLoc = @c_FromLoc
+          AND FromID = @c_Id       	         	   
+          
+          SELECT @n_err = @@ERROR
+          IF @n_err <> 0
+          BEGIN
+             SELECT @n_continue = 3
+             SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 83030   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+             SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update on TASKDETAIL Failed (mspRLWAV07)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
+          END          
+       	
+          FETCH NEXT FROM cur_FCP INTO @c_FromLoc, @c_ID
+       END           
+       CLOSE cur_FCP 
+       DEALLOCATE cur_FCP
     END
 
     --Create partial UCC case from bulk replen to Pick (PnD) (UOM = 7)
@@ -483,7 +536,7 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV07]
        IF @n_err <> 0
        BEGIN
           SELECT @n_continue = 3
-          SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 83030   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+          SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 83040   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
           SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update on wave Failed (mspRLWAV07)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
        END
     END

@@ -59,13 +59,11 @@ DECLARE
    @cCube            NVARCHAR(10),  
    @cLottableVal     NVARCHAR(20),  
    @cSerialNoKey     NVARCHAR(60),  
-   @cErrMsg          NVARCHAR(128),  
    @cSerialSKU       NVARCHAR(60),  
    @cADCode          NVARCHAR(MAX),  
    @cLabelLine       NVARCHAR(20),  
    @nQty             INT,  
-   @bsuccess         INT,  
-   @nErrNo           INT,  
+   @bsuccess         INT, 
    @nTranCount       INT  
   
 DECLARE @CloseCtnList TABLE (  
@@ -132,13 +130,13 @@ BEGIN
                    10 ,  
                      @cSerialNoKey      OUTPUT,  
                      @bsuccess          OUTPUT,  
-                     @nErrNo            OUTPUT,  
-                     @cErrMsg           OUTPUT  
+                     @n_Err            OUTPUT,  
+                     @c_ErrMsg           OUTPUT  
   
             IF @bsuccess <> 1  
             BEGIN  
                SET @n_Err = 1001701  
-               SET @c_ErrMsg = rdt.rdtgetmessage(@n_Err ,@cLangCode ,'DSP') -- 'Fail to get SerialNo Key. Function : isp_TPS_ExtUpdHld02'  
+               SET @c_ErrMsg = API.TouchPadGetMessage(@n_Err ,@cLangCode ,'DSP') -- 'Fail to get SerialNo Key. Function : isp_TPS_ExtUpdHld02'  
                GOTO RollBackTran  
             END  
   
@@ -168,7 +166,7 @@ BEGIN
             IF @@ERROR <> 0  
             BEGIN  
                SET @n_Err = 1001702  
-               SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'1001702 Err Insert SerialNO Function : isp_TPS_ExtUpdHld02'   
+               SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Err Insert SerialNO Function : isp_TPS_ExtUpdHld02'   
                GOTO RollBackTran  
             END  
   
@@ -178,7 +176,7 @@ BEGIN
             IF @@ERROR <> 0  
             BEGIN  
                SET @n_Err = 1001703  
-               SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'1001703 Err Insert SerialNO Function : isp_TPS_ExtUpdHld02'   
+               SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Err Insert SerialNO Function : isp_TPS_ExtUpdHld02'   
                GOTO RollBackTran  
             END     
          END  

@@ -9,8 +9,10 @@ GO
 /*                                                                                              */
 /* Purpose: New Pack function for LVSUSA Only                                                   */
 /*                                                                                              */
-/* Date         Rev  Author     Purposes                                                        */
-/* 2024-10-16   1.0  JCH507     FCR-946 New Pack for LVSUSA                                     */
+/* Date         Rev    Author     Purposes                                                      */
+/* 2024-10-16   1.0    JCH507     FCR-946 New Pack for LVSUSA                                   */
+/* 2025-04-30   1.1.0  NickT      UWP-33520 Recalculate weight and cube                         */
+/* 2025-04-30   1.1.1  JCH507     UWP-33520 Weight/Cube calculation issue in merge/new          */
 /************************************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_pack_LVSUSA] (
@@ -99,6 +101,7 @@ DECLARE
    @fCartonLength    FLOAT, -- fcr-946 
    @fCartonWidth    FLOAT, -- fcr-946 
    @fCartonHeight    FLOAT, -- fcr-946  
+   @nCartonPickSlipNoQty  INT,
 
    @cDefaultPrintLabelOption     NVARCHAR( 1),
    @cDefaultPrintPackListOption  NVARCHAR( 1),
@@ -2022,10 +2025,15 @@ BEGIN
       ELSE -- New Carton created
       BEGIN
          -- Update SKU weight to Master LabelNo Pack Info Weight column first
+         --NLT013 UWP-33520
          BEGIN TRY
+            SELECT @nCartonPickSlipNoQty = COUNT(DISTINCT PickSlipNo)
+            FROM dbo.PackDetail  WITH (NOLOCK)
+            WHERE LabelNo = @cMasterLabelNo
+
             ;WITH CartonInfo AS 
             (
-               SELECT PD.PickSlipNo AS PickSlipNo, PD.CartonNO AS CartonNo, SUM(PD.qty)* MAX(SKU.STDGROSSWGT) AS WGT,  MAX(CAT.CartonWeight) AS CartonWeight
+               SELECT PD.PickSlipNo AS PickSlipNo, PD.CartonNO AS CartonNo, SUM(PD.qty * SKU.STDGROSSWGT) AS WGT, CAT.CartonWeight / @nCartonPickSlipNoQty AS CartonWeight
                FROM PackDetail PD WITH (NOLOCK)
                INNER JOIN SKU WITH (NOLOCK)
                   ON PD.StorerKey = SKU.StorerKey
@@ -2038,11 +2046,11 @@ BEGIN
                INNER JOIN CARTONIZATION CAT WITH (NOLOCK)
                   ON Storer.CartonGroup = CAT.CartonizationGroup AND PI.CartonType = CAT.CartonType
                WHERE PD.LabelNo = @cMasterLabelNo
-               GROUP BY PD.LabelNo, PD.CartonNo, PD.PickSlipNo 
+               GROUP BY PD.LabelNo, PD.CartonNo, PD.PickSlipNo, CAT.CartonWeight
             )
             UPDATE PackInfo WITH (ROWLOCK)
             SET 
-               PackInfo.Weight = CartonInfo.WGT,
+               PackInfo.Weight = CartonInfo.WGT + CartonInfo.CartonWeight,
                PackInfo.CartonStatus = 'PACKED'
             FROM PackInfo
             JOIN CartonInfo
@@ -2056,39 +2064,39 @@ BEGIN
          END CATCH
 
          --Update Add carton weight to the 1st record weight value in packinfo under this carton
-         BEGIN TRY
-            SET @fCartonWeight = 0
-            SELECT TOP 1 @fCartonWeight = MAX(CAT.CartonWeight)
-            FROM PackDetail PD WITH (NOLOCK)
-            INNER JOIN Storer WITH (NOLOCK)
-               ON PD.StorerKey = STORER.StorerKey
-            INNER JOIN PackInfo PI WITH (NOLOCK)
-               ON PD.PickSlipNo = PI.PickSlipNo
-               AND PD.CartonNo = PI.CartonNo
-            INNER JOIN CARTONIZATION CAT WITH (NOLOCK)
-               ON Storer.CartonGroup = CAT.CartonizationGroup AND PI.CartonType = CAT.CartonType
-            WHERE PD.LabelNo = @cMasterLabelNo
-            GROUP BY PD.LabelNo, PD.CartonNo, PD.PickSlipNo
+         -- BEGIN TRY
+         --    SET @fCartonWeight = 0
+         --    SELECT TOP 1 @fCartonWeight = MAX(CAT.CartonWeight)
+         --    FROM PackDetail PD WITH (NOLOCK)
+         --    INNER JOIN Storer WITH (NOLOCK)
+         --       ON PD.StorerKey = STORER.StorerKey
+         --    INNER JOIN PackInfo PI WITH (NOLOCK)
+         --       ON PD.PickSlipNo = PI.PickSlipNo
+         --       AND PD.CartonNo = PI.CartonNo
+         --    INNER JOIN CARTONIZATION CAT WITH (NOLOCK)
+         --       ON Storer.CartonGroup = CAT.CartonizationGroup AND PI.CartonType = CAT.CartonType
+         --    WHERE PD.LabelNo = @cMasterLabelNo
+         --    GROUP BY PD.LabelNo, PD.CartonNo, PD.PickSlipNo
 
-            UPDATE PackInfo WITH (ROWLOCK)
-            SET Weight = PackInfo.Weight + ISNULL(@fCartonWeight,0)
-            FROM (
-               SELECT TOP (1) PI.*
-               FROM PackInfo PI WITH (NOLOCK)
-               JOIN PackDetail PD WITH (NOLOCK)
-                  ON PI.PickSlipNo = PD.PickSlipNo
-                  AND PI.CartonNo = PD.CartonNo
-               WHERE PD.LabelNo = @cMasterLabelNo
-               ORDER BY PI.PickSlipNo
-            ) AS TOP1
-            WHERE PackInfo.PickSlipNo = TOP1.PickSlipNo
-            AND PackInfo.CartonNo = TOP1.CartonNo
-         END TRY
-         BEGIN CATCH
-            SET @nErrNo = 226470
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Fail add carton weight
-            GOTO Quit
-         END CATCH
+         --    UPDATE PackInfo WITH (ROWLOCK)
+         --    SET Weight = PackInfo.Weight + ISNULL(@fCartonWeight,0)
+         --    FROM (
+         --       SELECT TOP (1) PI.*
+         --       FROM PackInfo PI WITH (NOLOCK)
+         --       JOIN PackDetail PD WITH (NOLOCK)
+         --          ON PI.PickSlipNo = PD.PickSlipNo
+         --          AND PI.CartonNo = PD.CartonNo
+         --       WHERE PD.LabelNo = @cMasterLabelNo
+         --       ORDER BY PI.PickSlipNo
+         --    ) AS TOP1
+         --    WHERE PackInfo.PickSlipNo = TOP1.PickSlipNo
+         --    AND PackInfo.CartonNo = TOP1.CartonNo
+         -- END TRY
+         -- BEGIN CATCH
+         --    SET @nErrNo = 226470
+         --    SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Fail add carton weight
+         --    GOTO Quit
+         -- END CATCH
          --Update Add carton weight to the 1st record weight value in packinfo under this carton
 
          SET @cOutField01 = @cNewLabelNo
@@ -2319,22 +2327,37 @@ BEGIN
 
          --Update Master Carton Packinfo
          BEGIN TRY
+            SELECT @nCartonPickSlipNoQty = COUNT(DISTINCT PickSlipNo)
+            FROM dbo.PackDetail  WITH (NOLOCK)
+            WHERE LabelNo = @cMasterLabelNo
+
             ;WITH CartonInfo AS 
             (
-               SELECT PD.PickSlipNo AS PickSlipNo, PD.CartonNO AS CartonNo, SUM(PD.qty)* MAX(SKU.STDGROSSWGT) AS WGT
+               SELECT PD.PickSlipNo AS PickSlipNo, PD.CartonNO AS CartonNo, SUM(PD.qty * SKU.STDGROSSWGT) AS WGT, CAT.CartonWeight / @nCartonPickSlipNoQty AS CartonWeight,
+               CASE WHEN ISNULL(CAT.cube,0) <> 0 THEN  --V1.1.1 Update cube too. Because confirm logic delete the original master label info
+                  CAT.[cube] * (CASE WHEN ISNULL(CAT.FillTolerance,0) = 0 THEN 1 ELSE CAT.FillTolerance * 0.01 END ) / @nCartonPickSlipNoQty
+                  ELSE 
+                  (ISNULL(CAT.CartonLength,0) * ISNULL(CAT.CartonWidth,0) * ISNULL(CAT.CartonHeight,0)) * (CASE WHEN ISNULL(CAT.FillTolerance,0) = 0 THEN 1 ELSE CAT.FillTolerance * 0.01 END ) / @nCartonPickSlipNoQty
+               END AS CartonCube
                FROM PackDetail PD WITH (NOLOCK)
                INNER JOIN SKU WITH (NOLOCK)
                   ON PD.StorerKey = SKU.StorerKey
                   AND PD.SKU = SKU.Sku
+               INNER JOIN Storer WITH (NOLOCK)
+                  ON PD.StorerKey = STORER.StorerKey
                INNER JOIN PackInfo PI WITH (NOLOCK)
                   ON PD.PickSlipNo = PI.PickSlipNo
                   AND PD.CartonNo = PI.CartonNo
+               INNER JOIN CARTONIZATION CAT WITH (NOLOCK)
+                  ON Storer.CartonGroup = CAT.CartonizationGroup AND PI.CartonType = CAT.CartonType
                WHERE PD.LabelNo = @cMasterLabelNo
-               GROUP BY PD.LabelNo, PD.CartonNo, PD.PickSlipNo 
+               GROUP BY PD.LabelNo, PD.CartonNo, PD.PickSlipNo, CAT.CartonWeight, CAT.[cube], CAT.FillTolerance,
+               CAT.CartonLength, CAT.CartonWidth, CAT.CartonHeight --v1.1.1
             )
             UPDATE PackInfo WITH (ROWLOCK)
             SET 
-               PackInfo.Weight = CartonInfo.WGT,
+               PackInfo.Weight = CartonInfo.WGT + CartonInfo.CartonWeight,
+               PackInfo.Cube = CartonInfo.CartonCube, -- V1.1.1
                PackInfo.CartonStatus = 'PACKED'
             FROM PackInfo
             JOIN CartonInfo
@@ -2348,40 +2371,40 @@ BEGIN
          END CATCH
 
          --Update Add carton weight to the 1st record weight value in packinfo under this carton
-         BEGIN TRY
-            SET @fCartonWeight = 0
+         -- BEGIN TRY
+         --    SET @fCartonWeight = 0
 
-            SELECT TOP 1 @fCartonWeight = MAX(CAT.CartonWeight)
-            FROM PackDetail PD WITH (NOLOCK)
-            INNER JOIN Storer WITH (NOLOCK)
-               ON PD.StorerKey = STORER.StorerKey
-            INNER JOIN PackInfo PI WITH (NOLOCK)
-               ON PD.PickSlipNo = PI.PickSlipNo
-               AND PD.CartonNo = PI.CartonNo
-            INNER JOIN CARTONIZATION CAT WITH (NOLOCK)
-               ON Storer.CartonGroup = CAT.CartonizationGroup AND PI.CartonType = CAT.CartonType
-            WHERE PD.LabelNo = @cMasterLabelNo
-            GROUP BY PD.LabelNo, PD.CartonNo, PD.PickSlipNo
+         --    SELECT TOP 1 @fCartonWeight = MAX(CAT.CartonWeight)
+         --    FROM PackDetail PD WITH (NOLOCK)
+         --    INNER JOIN Storer WITH (NOLOCK)
+         --       ON PD.StorerKey = STORER.StorerKey
+         --    INNER JOIN PackInfo PI WITH (NOLOCK)
+         --       ON PD.PickSlipNo = PI.PickSlipNo
+         --       AND PD.CartonNo = PI.CartonNo
+         --    INNER JOIN CARTONIZATION CAT WITH (NOLOCK)
+         --       ON Storer.CartonGroup = CAT.CartonizationGroup AND PI.CartonType = CAT.CartonType
+         --    WHERE PD.LabelNo = @cMasterLabelNo
+         --    GROUP BY PD.LabelNo, PD.CartonNo, PD.PickSlipNo
 
-            UPDATE PackInfo WITH (ROWLOCK)
-            SET Weight = PackInfo.Weight + ISNULL(@fCartonWeight, 0)
-            FROM (
-               SELECT TOP (1) PI.*
-               FROM PackInfo PI WITH (NOLOCK)
-               JOIN PackDetail PD WITH (NOLOCK)
-                  ON PI.PickSlipNo = PD.PickSlipNo
-                  AND PI.CartonNo = PD.CartonNo
-               WHERE PD.LabelNo = @cMasterLabelNo
-               ORDER BY PI.PickSlipNo
-            ) AS TOP1
-            WHERE PackInfo.PickSlipNo = TOP1.PickSlipNo
-            AND PackInfo.CartonNo = TOP1.CartonNo
-         END TRY
-         BEGIN CATCH
-            SET @nErrNo = 226472
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Add carton weight fail
-            GOTO Quit
-         END CATCH
+         --    UPDATE PackInfo WITH (ROWLOCK)
+         --    SET Weight = PackInfo.Weight + ISNULL(@fCartonWeight, 0)
+         --    FROM (
+         --       SELECT TOP (1) PI.*
+         --       FROM PackInfo PI WITH (NOLOCK)
+         --       JOIN PackDetail PD WITH (NOLOCK)
+         --          ON PI.PickSlipNo = PD.PickSlipNo
+         --          AND PI.CartonNo = PD.CartonNo
+         --       WHERE PD.LabelNo = @cMasterLabelNo
+         --       ORDER BY PI.PickSlipNo
+         --    ) AS TOP1
+         --    WHERE PackInfo.PickSlipNo = TOP1.PickSlipNo
+         --    AND PackInfo.CartonNo = TOP1.CartonNo
+         -- END TRY
+         -- BEGIN CATCH
+         --    SET @nErrNo = 226472
+         --    SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Add carton weight fail
+         --    GOTO Quit
+         -- END CATCH
          --Update Add carton weight to the 1st record weight value in packinfo under this carton
 
          --Back to Step 2
@@ -2493,25 +2516,41 @@ BEGIN
 
       -- Update new label packinfo
       BEGIN TRY
+         SELECT @nCartonPickSlipNoQty = COUNT(DISTINCT PickSlipNo)
+         FROM dbo.PackDetail  WITH (NOLOCK)
+         WHERE LabelNo = @cNewLabelNo
+         
          ;WITH CartonInfo AS 
          (
-            SELECT PD.PickSlipNo AS PickSlipNo, PD.CartonNO AS CartonNo, SUM(PD.qty)* MAX(SKU.STDGROSSWGT) AS WGT
+            SELECT PD.PickSlipNo AS PickSlipNo, PD.CartonNO AS CartonNo, SUM(PD.qty * SKU.STDGROSSWGT) AS WGT, CAT.CartonWeight / @nCartonPickSlipNoQty AS CartonWeight,
+               CASE WHEN ISNULL(CAT.cube,0) <> 0 THEN  
+                  CAT.[cube] * (CASE WHEN ISNULL(CAT.FillTolerance,0) = 0 THEN 1 ELSE CAT.FillTolerance * 0.01 END ) / @nCartonPickSlipNoQty
+                  ELSE 
+                  (ISNULL(CAT.CartonLength,0) * ISNULL(CAT.CartonWidth,0) * ISNULL(CAT.CartonHeight,0)) * (CASE WHEN ISNULL(CAT.FillTolerance,0) = 0 THEN 1 ELSE CAT.FillTolerance * 0.01 END ) / @nCartonPickSlipNoQty
+               END AS CartonCube
             FROM PackDetail PD WITH (NOLOCK)
             INNER JOIN SKU WITH (NOLOCK)
                ON PD.StorerKey = SKU.StorerKey
                AND PD.SKU = SKU.Sku
+            INNER JOIN Storer WITH (NOLOCK)
+               ON PD.StorerKey = STORER.StorerKey
             INNER JOIN PackInfo PI WITH (NOLOCK)
                ON PD.PickSlipNo = PI.PickSlipNo
                AND PD.CartonNo = PI.CartonNo
+            INNER JOIN CARTONIZATION CAT WITH (NOLOCK)
+               ON Storer.CartonGroup = CAT.CartonizationGroup
+               -- AND PI.CartonType = CAT.CartonType
+               AND CAT.CartonType = @cCartonType --V1.1.1 PackInfo.CartonType not updated at this time. So use @cCartonType to get cartonization data.
             WHERE PD.LabelNo = @cNewLabelNo
-            GROUP BY PD.LabelNo, PD.CartonNo, PD.PickSlipNo 
+            GROUP BY PD.LabelNo, PD.CartonNo, PD.PickSlipNo, CAT.CartonWeight, CAT.[cube], CAT.FillTolerance,
+               CAT.CartonLength, CAT.CartonWidth, CAT.CartonHeight
          )
          UPDATE PackInfo WITH (ROWLOCK) SET
-            PackInfo.Weight = CartonInfo.WGT,
+            PackInfo.Weight = CartonInfo.WGT + CartonInfo.CartonWeight,
             PackInfo.Height = @fCartonHeight,
             PackInfo.Width = @fCartonWidth,
             PackInfo.Length = @fCartonLength,
-            PackInfo.Cube = @fCartonHeight * @fCartonLength * @fCartonWidth, -- Calculate cube
+            PackInfo.Cube = CartonInfo.CartonCube, -- Calculate cube
             PackInfo.CartonType = @cCartonType,
             PackInfo.CartonStatus = 'PACKED'
          FROM PackInfo
@@ -2526,26 +2565,26 @@ BEGIN
       END CATCH
 
       --Update Add carton weight to the 1st record weight value in packinfo under this carton
-      BEGIN TRY
-         UPDATE PackInfo WITH (ROWLOCK)
-         SET Weight = PackInfo.Weight + ISNULL(@fCartonWeight, 0)
-         FROM (
-            SELECT TOP (1) PI.*
-            FROM PackInfo PI WITH (NOLOCK)
-            JOIN PackDetail PD WITH (NOLOCK)
-               ON PI.PickSlipNo = PD.PickSlipNo
-               AND PI.CartonNo = PD.CartonNo
-            WHERE PD.LabelNo = @cNewLabelNo
-            ORDER BY PI.PickSlipNo
-         ) AS TOP1
-         WHERE PackInfo.PickSlipNo = TOP1.PickSlipNo
-         AND PackInfo.CartonNo = TOP1.CartonNo
-      END TRY
-      BEGIN CATCH
-         SET @nErrNo = 226474
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Add carton weight fail
-         GOTO Quit
-      END CATCH
+      -- BEGIN TRY
+      --    UPDATE PackInfo WITH (ROWLOCK)
+      --    SET Weight = PackInfo.Weight + ISNULL(@fCartonWeight, 0)
+      --    FROM (
+      --       SELECT TOP (1) PI.*
+      --       FROM PackInfo PI WITH (NOLOCK)
+      --       JOIN PackDetail PD WITH (NOLOCK)
+      --          ON PI.PickSlipNo = PD.PickSlipNo
+      --          AND PI.CartonNo = PD.CartonNo
+      --       WHERE PD.LabelNo = @cNewLabelNo
+      --       ORDER BY PI.PickSlipNo
+      --    ) AS TOP1
+      --    WHERE PackInfo.PickSlipNo = TOP1.PickSlipNo
+      --    AND PackInfo.CartonNo = TOP1.CartonNo
+      -- END TRY
+      -- BEGIN CATCH
+      --    SET @nErrNo = 226474
+      --    SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Add carton weight fail
+      --    GOTO Quit
+      -- END CATCH
       --Update Add carton weight to the 1st record weight value in packinfo under this carton
 
       SET @cOutField01 = 'NEW CARTON ID: ' + @cNewLabelNo --Carton ID

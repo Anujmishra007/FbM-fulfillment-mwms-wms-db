@@ -142,6 +142,8 @@ BEGIN
               SELECT 1
               FROM pallettypemaster(NOLOCK) ptm
               WHERE ptm.PalletType = tfd.ToPalletType
+              AND ptm.storerkey = tfd.toStorerKey
+              AND ptm.facility = @c_ToFacility
               )
             )
             OR
@@ -151,8 +153,9 @@ BEGIN
             AND tfd.transferkey = @c_Transferkey
             AND NOT EXISTS (
               SELECT 1
-              FROM pallettypemaster(NOLOCK) ptm
-              WHERE ptm.PalletType = tfd.FromPalletType
+              FROM ID (NOLOCK) id
+              WHERE id.PalletType = tfd.FromPalletType
+              AND id.id = tfd.FromId
             )
             ))
             BEGIN

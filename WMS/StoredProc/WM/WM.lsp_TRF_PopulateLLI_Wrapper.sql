@@ -182,6 +182,7 @@ BEGIN
          ,  CommaIdx1            INT            NOT NULL DEFAULT(0)
          ,  CommaIdx2            INT            NOT NULL DEFAULT(0)
          ,  SkuSerialNoCapture   NVARCHAR(1)    NOT NULL DEFAULT('')
+         ,  PalletType           NVARCHAR(10)    NOT NULL DEFAULT('')       --(SSA01)
          )
    
       INSERT INTO #tLLI (LotxLocxID, Lot, CommaIdx1)
@@ -208,6 +209,11 @@ BEGIN
       JOIN Lot (NOLOCK) ON Lot.lot = #tLLI.lot
       JOIN Sku (NOLOCK) ON  Sku.Storerkey = Lot.Storerkey
                         AND Sku.Sku = Lot.Sku
+
+      UPDATE #tLLI                                                                  --(SSA01)
+      SET Pallettype = ID.Pallettype
+      FROM #tLLI
+      JOIN ID (NOLOCK) ON ID.ID = #tLLI.ID
       /*-------------------------------------------------------*/
       /* BUILD TEMP TABLES & INSERT DATA - END                 */
       /*-------------------------------------------------------*/
@@ -293,7 +299,7 @@ BEGIN
             ,@c_FromID     = ltlci.ID 
             ,@n_FromQty    = ltlci.Qty - ltlci.QtyAllocated - ltlci.QtyPicked
             ,@c_ToSku      = ltlci.Sku
-            ,@c_FromPalletType = ltlci.PalletType
+            ,@c_FromPalletType = tl.PalletType
          FROM #tLLI AS tl
          JOIN dbo.LOTxLOCxID AS ltlci WITH (NOLOCK) ON  ltlci.Lot = tl.Lot 
                                                     AND ltlci.Loc = tl.Loc 

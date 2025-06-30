@@ -26,6 +26,8 @@ GO
 /* 2024-12-26   1.8.1   JCH507   FCR-1755 Go to wrong label when extvail fail    */
 /* 2024-12-18   1.9     Jackc    UWP-28528 ActQty is reset to 0 when partial short*/
 /* 2025-04-27   2.0.0   Dennis   UWP-31758 Skip confirm tote if full short       */
+/* 2025-04-27   2.0.1   Dennis   FCR-4243 Resume task                            */
+/* 2025-06-17   0.0.0   JACKC    !!!Cutover. Use V2 file in V0 for work!!!       */
 /*********************************************************************************/
         
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_Assist_ClusterPick](        
@@ -2636,7 +2638,7 @@ BEGIN
          SET @cOutField04 = SUBSTRING( @cSKUDescr, 1, 20)        
          SET @cOutField04 = SUBSTRING( @cSKUDescr, 21, 20)        
          SET @cOutField06 = ''   -- SKU/UPC        
-         SET @cOutField07 = CASE WHEN @cDefaultQTY = '0' THEN '' ELSE @cDefaultQTY END -- QTY        
+         SET @cOutField07 = CASE WHEN @cDefaultQTY = '0' THEN '' ELSE @cDefaultQTY END -- QTY
          SET @cOutField08 = @nActQTY--@nPickedQty        
          SET @cOutField09 = @nSuggQty        
          SET @cOutField15 = '' -- ExtendedInfo      
@@ -2735,13 +2737,13 @@ BEGIN
          IF @nStep = @nStep_SKUQTY      
             SET @cOutField15 = @cExtendedInfo      
       END        
-   END   
-   
+   END
+
    IF @cExtendedScnSP <> ''
    BEGIN
       SET @nAction = 0
       GOTO Step_99
-   END -- ExtendedScreenSP <> ''     
+   END -- ExtendedScreenSP <> ''
    GOTO Quit                  
                   
    Step_Option_Fail:                  
@@ -3512,6 +3514,7 @@ BEGIN
                SET  @cResult05         = ISNULL(@cExtScnUDF14,'')
                SET  @cMethod           = ISNULL(@cExtScnUDF15,'')
                SET  @cPickSlipNo       = ISNULL(@cExtScnUDF16,'')
+               SET  @cSuggToLOC        = ISNULL(@cExtScnUDF17,'')
             END -- SCN 6414  new scn 1 Enter
             ELSE IF @nPreSCn = '6416' AND @nPreInputKey = 1
             BEGIN

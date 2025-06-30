@@ -157,7 +157,7 @@ BEGIN
                WHERE SerialNo = @cBarcode
                AND storerKey = @cStorerKey )
          BEGIN
-            SET @n_Err = 1000101
+            SET @n_Err = 1000102
 	         SET @c_ErrMsg = CAST(@n_Err AS NVARCHAR(20))+'Err Insert Duplicate SerialNO'
 
             SET @jResult = (SELECT '' AS SKU

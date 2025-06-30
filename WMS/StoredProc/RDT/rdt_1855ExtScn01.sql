@@ -28,6 +28,7 @@ GO
 /* 2025-04-22 1.6.3  CYU027     FCR-4191 Add UserKeyOverRide when picking tasks    */
 /* 2025-03-11 1.6.4  Dennis     FCR-3925  Add Validation for Tote Rel              */
 /* 2025-04-11 1.6.5  Dennis     UWP-31758 Skip Confirm Tote after Short pick       */
+/* 2025-04-25 1.6.6  DENNIS     FCR-4243 Resume tasks                              */
 /***********************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1855ExtScn01] (
@@ -127,6 +128,7 @@ BEGIN
       @cTaskDetailCaseID               NVARCHAR( 20),
       @tExtValidate                    VariableTable,
       @b_success                       INT,
+      @cSuggToLOC                      NVARCHAR( 10),
 
       -- 1855 old Step 2 variables
       @nCartonScanned      INT = 0,
@@ -149,7 +151,27 @@ BEGIN
       -- 1855 new step1 variables
       @cOrderKey     NVARCHAR( 10) = '',
       @cPickSlipNo   NVARCHAR( 18)
-
+   DECLARE
+   @nStep_CartID           INT,  @nScn_CartID            INT,
+   @nStep_CartMatrix       INT,  @nScn_CartMatrix        INT,
+   @nStep_Loc              INT,  @nScn_Loc               INT,
+   @nStep_SKUQTY           INT,  @nScn_SKUQTY            INT,
+   @nStep_Option           INT,  @nScn_Option            INT,
+   @nStep_ConfirmTote      INT,  @nScn_ConfirmTote       INT,
+   @nStep_ToLoc            INT,  @nScn_ToLoc             INT,
+   @nStep_UnAssign         INT,  @nScn_UnAssign          INT,
+   @nStep_NextTask         INT,  @nScn_NextTask          INT
+   SELECT
+   @nStep_CartID           = 1,  @nScn_CartID            = 5920,
+   @nStep_CartMatrix       = 2,  @nScn_CartMatrix        = 5921,
+   @nStep_Loc              = 3,  @nScn_Loc               = 5922,
+   @nStep_SKUQTY           = 4,  @nScn_SKUQTY            = 5923,
+   @nStep_ConfirmTote      = 5,  @nScn_ConfirmTote       = 5924,
+   @nStep_Option           = 6,  @nScn_Option            = 5925,
+   @nStep_ToLoc            = 7,  @nScn_ToLoc             = 5926,
+   @nStep_UnAssign         = 8,  @nScn_UnAssign          = 5927,
+   @nStep_NextTask         = 9,  @nScn_NextTask          = 5928,
+   @nStep_ContTask         = 10, @nScn_ContTask          = 5929
    DECLARE @tTaskDetailKeyList TABLE
    (
       id             INT IDENTITY(1,1),
@@ -361,29 +383,65 @@ BEGIN
                   EXEC rdt.rdtSetFocusField @nMobile, 1          
                   GOTO Quit          
                END      
+               --If any picked task goto toloc first
+               IF EXISTS ( SELECT 1 FROM dbo.TaskDetail WITH (NOLOCK)
+                              WHERE Storerkey = @cStorerKey
+                              AND   TaskType = 'ASTCPK'
+                              AND   [Status] = '5'
+                              AND   Groupkey <> ''
+                              AND   UserKey = @cUserName
+                              AND   DeviceID = @cCartID
+                              AND   DropID <> '')
+               AND @cCartID <> ''
+               BEGIN
+                  SELECT TOP 1 @cTaskDetailKey = TaskDetailKey,@cSuggToLOC = toloc FROM dbo.TaskDetail WITH (NOLOCK)
+                     WHERE Storerkey = @cStorerKey
+                     AND   TaskType = 'ASTCPK'
+                     AND   [Status] = '5'
+                     AND   Groupkey <> ''
+                     AND   UserKey = @cUserName
+                     AND   DeviceID = @cCartID
+                     AND   DropID <> ''
+                     ORDER BY EditDate DESC
 
+                  -- Check Method valid
+                  SELECT @cCartPickMethod = Long
+                  FROM dbo.CODELKUP WITH (NOLOCK)
+                  WHERE LISTNAME = 'TMPickMtd'
+                  AND   Code = @cMethod
+                  AND   Storerkey = @cStorerKey
+
+                  -- Prepare next screen var
+                  SET @cOutField01 = @cCartPickMethod
+                  SET @cOutField02 = @cSuggToLOC -- To LOC
+                  SET @cOutField03 = ''
+
+                  SET @nAfterScn = @nScn_ToLoc
+                  SET @nAfterStep = @nStep_ToLoc
+
+                  GOTO SCN6414_Return_Value
+               END
+               IF @cContinuePickOnAssignedCart = '1' AND @cCartID <> ''
+               BEGIN
+                  IF EXISTS ( SELECT 1 FROM dbo.TaskDetail WITH (NOLOCK)
+                              WHERE Storerkey = @cStorerKey
+                              AND   TaskType = 'ASTCPK'
+                              AND   [Status] = '3'
+                              AND   Groupkey <> ''
+                              AND   UserKey = @cUserName
+                              AND   DeviceID = @cCartID
+                              AND   DropID <> '')
+                  BEGIN
+                     SET @cOutField01 = ''
+
+                     SET @nAfterScn = @nScn_ContTask
+                     SET @nAfterStep = @nStep_ContTask
+
+                     GOTO SCN6414_Return_Value
+                  END
+               END   -- Comment out Continue Pick Logic for further investigation
                IF @cPickZone = 'PICK'
                BEGIN
-                  IF @cContinuePickOnAssignedCart = '1' AND @cCartID <> ''      
-                  BEGIN      
-                     IF EXISTS ( SELECT 1 FROM dbo.TaskDetail WITH (NOLOCK)      
-                                 WHERE Storerkey = @cStorerKey      
-                                 AND   TaskType = 'ASTCPK'      
-                                 AND   [Status] = '3'      
-                                 AND   Groupkey <> ''      
-                                 AND   UserKey = @cUserName      
-                                 AND   DeviceID = @cCartID
-                                 AND   DropID <> '')      
-                     BEGIN      
-                        SET @cOutField01 = ''      
-                           
-                        SET @nAfterScn = @nScn_ContTask      
-                        SET @nAfterStep = @nStep_ContTask      
-                           
-                        GOTO SCN6414_Return_Value      
-                     END      
-                  END   -- Comment out Continue Pick Logic for further investigation    
-
                   --FCR-652 Validate PSNO
                   IF @cPickSlipNo = ''
                   BEGIN          
@@ -767,6 +825,7 @@ BEGIN
                      SET @cUDF14 = @cResult05
                      SET @cUDF15 = @cMethod
                      SET @cUDF16 = @cPickSlipNo
+                     SET @cUDF17 = @cSuggToLOC
                END -- Normal Picking FLow
                ELSE BEGIN --Automation Picking FLow
                   -- Check pickzone valid

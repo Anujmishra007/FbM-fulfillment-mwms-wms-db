@@ -23,6 +23,7 @@ GO
 /************************************************************************/  
 CREATE OR ALTER PROC [dbo].[mspPOA01]
      @c_OrderKey    NVARCHAR(10)
+   , @c_LoadKey    NVARCHAR(10)
    , @b_Success     INT           OUTPUT    
    , @n_Err         INT           OUTPUT    
    , @c_ErrMsg      NVARCHAR(250) OUTPUT    

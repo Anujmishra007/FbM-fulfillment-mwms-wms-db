@@ -36,6 +36,7 @@ GO
 /* 2024-07-08   2.8  JHU151     FCR-330 SSCC code generator                      */
 /* 2024-10-17   2.9  PXL009     FCR-759 ID and UCC Length Issue                  */
 /* 2025-04-29   3.0.0 NickT     UWP-33739 Add Extended Validation SP in step 1   */
+/* 2025-06-20   0.0.0 Jackc     !!!Cutover. Use V0 repo for work!!!              */
 /*********************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdtfnc_PickSKU (

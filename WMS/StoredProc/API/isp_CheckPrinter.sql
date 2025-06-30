@@ -12,6 +12,7 @@ GO
 /* Date         Rev  Author     Purposes                                      */
 /* 2020-04-07   1.0  Chermaine  Created                                       */
 /* 2021-09-05   1.1  Chermaine  TPS-11 ErrMsg add to rdtmsg (cc01)            */
+/* 2025-02-14   1.2  yeekung    TPS-995 Follow Error Message (yeekung01)      */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [API].[isp_CheckPrinter] (
@@ -63,18 +64,16 @@ WITH (
 IF @cWorkstation = ''
 BEGIN
    SET @b_Success = 0
-   SET @n_Err = 175616
-   SET @c_ErrMsg = rdt.rdtgetmessage( @n_Err, @cLangCode, 'DSP')--'Unable to retrieve Workstation ID. Function : isp_CheckPrinter. Function : isp_CheckPrinter'
-
+   SET @n_Err = 1001001
+   SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Unable to retrieve Workstation ID. Function : isp_CheckPrinter. Function : isp_CheckPrinter'
    GOTO EXIT_SP
 END
 
 IF @cStorerKey = ''
 BEGIN
    SET @b_Success = 0
-   SET @n_Err = 175617
-   SET @c_ErrMsg = rdt.rdtgetmessage( @n_Err, @cLangCode, 'DSP')--'Unable to retrieve StorerKey. Function : isp_CheckPrinter'
-
+   SET @n_Err = 1001002
+   SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Unable to retrieve StorerKey. Function : isp_CheckPrinter'
    GOTO EXIT_SP
 END
 
@@ -96,14 +95,14 @@ OPEN @curPT
 	      IF EXISTS (SELECT TOP 1 ReportType FROM rdt.rdtReport WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND paperType = @cprinterType)
 	      BEGIN
 	         SET @b_Success = 0
-            SET @n_Err = 175618
+            SET @n_Err = 1001003
             IF @c_ErrMsg = ''
             BEGIN
-            	SET @c_ErrMsg = @cPrinterType+ ' printer'
+            	SET @c_ErrMsg = @n_Err + @cPrinterType+ ' printer'
             END
             ELSE
             BEGIN
-            	SET @c_ErrMsg = @c_ErrMsg + ' and ' + @cPrinterType+ ' printer'
+            	SET @c_ErrMsg =  @n_Err +  @c_ErrMsg + ' and ' + @cPrinterType+ ' printer'
             END
 
             --SET @c_ErrMsg = @c_ErrMsg +' not setup in Touch Pack config. Function : isp_CheckPrinter'
@@ -116,14 +115,14 @@ OPEN @curPT
 	      IF EXISTS (SELECT TOP 1 ReportType FROM rdt.rdtReport WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND (paperType = @cprinterType OR paperType = ''))
 	      BEGIN
 	         SET @b_Success = 0
-            SET @n_Err = 175619
+            SET @n_Err = 1001004
             IF @c_ErrMsg = ''
             BEGIN
-            	SET @c_ErrMsg =  @cPrinterType+ ' printer'
+            	SET @c_ErrMsg =  @n_Err + @cPrinterType+ ' printer'
             END
             ELSE
             BEGIN
-            	SET @c_ErrMsg = @c_ErrMsg + ' and ' + @cPrinterType+ ' printer'
+            	SET @c_ErrMsg = @n_Err + @c_ErrMsg + ' and ' + @cPrinterType+ ' printer'
             END
             --SET @c_ErrMsg = @c_ErrMsg +' not setup in Touch Pack config. Function : isp_CheckPrinter'
             --GOTO EXIT_SP

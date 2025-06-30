@@ -10,6 +10,7 @@ GO
 /* Date        Rev    Author         Purposes                                                   */
 /* 2024-12-05  1.0.0  PXL009         FCR-1398 Temp Capture                                      */
 /* 2025-04-01  1.1.0  NLT013         FCR-3256 Add DecodeSP                                      */
+/* 2025-06-17  0.0.0  Jackc          !!!Cutover. Use V0 repo for work!!!                        */
 /************************************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_Outbound_PalletTempCapture] (

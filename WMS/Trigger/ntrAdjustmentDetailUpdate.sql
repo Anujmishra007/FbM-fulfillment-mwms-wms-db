@@ -57,6 +57,7 @@ GO
 /* 18-Aug-2023  NJOW03       2.4    WMS-23479 Support multi-sku ucc adjustment */
 /* 18-Aug-2023  NJOW03       2.4    DEVOPS Combine Script                      */
 /* 27-May-2025  Ansuman01    2.5    UWP-32480 - Lot,Loc,Id validation          */
+/* 25-JUN-2025  SSA01        2.6    UWP-3982- Added PalletType in inventory    */
 /*******************************************************************************/
 
 CREATE OR ALTER TRIGGER [dbo].[ntrAdjustmentDetailUpdate]
@@ -325,6 +326,7 @@ BEGIN
                 @c_ADJ_UCCNo                NVARCHAR(20) -- SOS75806
                 , @c_Channel                  NVARCHAR(20) = '' --(SWT02)
                 , @n_Channel_ID               BIGINT = 0 --(SWT02)
+                , @c_PalletType               NVARCHAR(10) = ''  --(SSA01)
 
             DECLARE  @c_lottable01     NVARCHAR(18)   -- Lot lottable01
                 ,  @c_lottable02     NVARCHAR(18)   -- Lot lottable02
@@ -403,6 +405,7 @@ BEGIN
                                          @c_ADJ_UCCNo                = ISNULL(INSERTED.UCCNo, '') -- SOS75806
                                     , @c_Channel                  = INSERTED.Channel    --(SWT02)
                                     , @n_Channel_ID               = INSERTED.Channel_ID --(SWT02)
+                                    , @c_PalletType               = INSERTED.PalletType  --(SSA01)
                             FROM INSERTED
                                      JOIN DELETED ON ( INSERTED.AdjustmentKey = DELETED.AdjustmentKey AND
                                                        INSERTED.AdjustmentLineNumber = DELETED.AdjustmentLineNumber )
@@ -574,7 +577,8 @@ BEGIN
                                      @c_itrnkey    = @c_ItrnKey OUTPUT,
                                      @b_Success    = @b_Success OUTPUT,
                                      @n_err        = @n_err     OUTPUT,
-                                     @c_errmsg     = @c_errmsg  OUTPUT
+                                     @c_errmsg     = @c_errmsg  OUTPUT,
+                                     @c_PalletType = @c_PalletType
                             IF @b_success <> 1
                                 BEGIN
                                     SELECT @n_continue = 3 /* Other Error flags Set By nspItrnAddAdjustment */

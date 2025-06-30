@@ -16,8 +16,9 @@ GO
 /* Date       Rev    Author     Purposes                                      */
 /* 2024-12-26 1.0.1  BDH028     Print PDF file                                */
 /* 2025-04-09 1.1.0  YWA059     Fix issue: endless loop in a scenario         */
+/* 2025-05-30 1.1.1  PYU015     FCR-5485 Fix issue:add configkey MaxOrderPrint*/
 /******************************************************************************/
-CREATE OR ALTER PROC [RDT].[rdt_593PrtCldFile03] (
+CREATE OR ALTER   PROC [RDT].[rdt_593PrtCldFile03] (
    @nMobile    INT,
    @nFunc      INT,
    @nStep      INT,
@@ -82,7 +83,8 @@ BEGIN
       @loop_OrderKey          NVARCHAR(10),
       @end_loop_flag          INT,
       @nRtnCnt                INT,
-      @loop_qty               INT
+      @loop_qty               INT,
+      @cMaxOrderPrint         INT
 
    -- fetch printer
    SELECT @cLabelPrinter = Printer
@@ -95,8 +97,12 @@ BEGIN
    SET @end_loop_flag = 0
    SET @loop_qty = 1
 
+   SELECT @cMaxOrderPrint = CAST(rdt.RDTGetConfig( @nFunc, 'MaxOrderPrint', @cStorerKey) AS INT)
+   IF @cMaxOrderPrint = 0
+      SET @cMaxOrderPrint = 20
+
    -- fetch extern order key
-   WHILE(@loop_qty < 20)
+   WHILE(@loop_qty < @cMaxOrderPrint)
    BEGIN
      SET @loop_qty = @loop_qty + 1
       IF ISNULL(@cParam2,'') <> ''

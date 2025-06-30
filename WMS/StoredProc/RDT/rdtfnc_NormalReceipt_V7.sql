@@ -59,6 +59,7 @@ GO
 /* 2024-11-12 5.2  CYU027   FCR-759   UPDATE ID UDF01                            */
 /* 2025-03-10 5.3  YeeKung  UWP-31293 FIX SerialNo Blank (yeekung07)             */
 /* 2025-03-12 5.4  CYU027   UWP-26488&FCR-2729 DropListSp                        */
+/* 2025-06-18 0.0  Jackc    !!!Cutover. Use V2 file in V0 repo for work!!!       */
 /*********************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_NormalReceipt_V7] (

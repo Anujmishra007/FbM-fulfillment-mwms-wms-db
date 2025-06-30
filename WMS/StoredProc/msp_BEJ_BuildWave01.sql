@@ -102,10 +102,7 @@ BEGIN
 
       SELECT @c_BuildParmKey = dbO.fnc_GetParamValueFromString ('@c_BuildParmKey',@c_OtherConfig, @c_BuildParmKey)
 
-      IF ISNULL(@c_Facility, '') = ''
-      BEGIN
-          SELECT @c_Facility = dbo.fnc_GetParamValueFromString('@c_Facility', @c_OtherConfig, @c_Facility)
-      END
+      SELECT @c_Facility = dbo.fnc_GetParamValueFromString('@c_Facility', @c_OtherConfig, @c_Facility)
 
       IF @b_Debug = 1
       BEGIN

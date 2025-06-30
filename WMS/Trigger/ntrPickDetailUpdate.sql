@@ -101,6 +101,10 @@ GO
 /*                            Status                                    */
 /* 20-Jan-2025  TLTIN03 4.1   Bug fix - aft ship no change avoid change */
 /* 17-Mar-2025  TLTIN04 4.1   Bug fix - avoid change stayus             */
+/* 04-Jun-2025  AYD01   4.2   UWP-34128: Allow RDT pick/move            */
+/*                            with MoveRefKey                           */
+/* 24-Jun-2025  AYD02   4.3   UWP-34128: Use RDT.rdtIsRDT to identify if*/
+/*                            move is from RDT                          */
 /************************************************************************/
 
 CREATE OR ALTER TRIGGER [dbo].[ntrPickDetailUpdate]
@@ -165,12 +169,15 @@ DECLARE   @cPickDetailKey NVARCHAR(10)     -- (james02)
          ,@c_AllocateByConsNewExpiry   NVARCHAR(10)
          ,@c_Consigneekey              NVARCHAR(15)
          ,@c_Sku                       NVARCHAR(20)
-
+    
 SET @c_AllocateByConsNewExpiry= ''
 SET @c_Consigneekey           = ''
 SET @c_Sku                    = ''
-
 --(Wan01) - END
+--AYD02 START
+DECLARE @n_IsRDT INT
+EXECUTE RDT.rdtIsRDT @n_IsRDT OUTPUT
+--AYD02 END
 SELECT @n_Continue=1, @n_starttcnt=@@TRANCOUNT
 
 IF UPDATE(ArchiveCop)
@@ -689,10 +696,14 @@ BEGIN
    --Allow to update if update from ntrpackserialnodelete trigger. direct update not allow if serialno is picked
   SET @n_Cnt = 0
   SELECT @n_Cnt = SUM(  CASE WHEN d.[Status] <> i.[Status] THEN 1                                  --(Wan06) 
-                        WHEN d.qty <> i.qty AND i.[Status] = '5' THEN 1                            --(Wan06) 
+                        WHEN d.qty <> i.qty AND i.[Status] = '5'                                   --(Wan06) 
+                             AND @n_IsRDT <> 1 AND sc.Authority ='1' THEN 1                        --(AYD02)
                         WHEN d.Lot <> i.Lot AND i.[Status] = '5' AND sc.Authority ='1' THEN 1      --(Wan06) 
                         WHEN d.ID  <> i.ID  AND i.ID <> sn.ID AND i.[Status] = '5' AND             --(Wan06)    
+                             @n_IsRDT <> 1 AND                                                     --(AYD02)
                              sc.Authority ='1' THEN 1                                              --(Wan06) 
+                        WHEN d.ID <> i.ID  AND i.[Status] = '5' AND sc.Authority ='1'              --(AYD01)
+                             AND @n_IsRDT <> 1 THEN 1                                              --(AYD02)
                         ELSE 0                                                                     --(Wan06) 
                         END )                                                                      --(Wan06)
                FROM INSERTED i   
@@ -1782,9 +1793,7 @@ QUIT:
 
 IF @n_continue=3
 BEGIN
-   DECLARE @n_IsRDT INT
-   EXECUTE RDT.rdtIsRDT @n_IsRDT OUTPUT
-
+   
    IF @n_IsRDT = 1
    BEGIN
       -- RDT cannot handle rollback (blank XML will generate). So we are not going to issue a rollback here
