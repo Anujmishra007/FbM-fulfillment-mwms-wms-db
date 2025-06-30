@@ -184,13 +184,13 @@ BEGIN
           FROM InventoryQCDetail(NOLOCK) iqc
           WHERE
             (
-            iqc.PalletType IS NOT NULL
-            AND iqc.PalletType != ''
+            iqc.ToPalletType IS NOT NULL
+            AND iqc.ToPalletType != ''
             AND iqc.QC_Key = @c_QC_Key
             AND NOT EXISTS (
               SELECT 1
               FROM PalletTypeMaster(NOLOCK) ptm
-              WHERE ptm.PalletType = iqc.PalletType
+              WHERE ptm.PalletType = iqc.ToPalletType
               AND ptm.StorerKey = iqc.StorerKey
               AND ptm.Facility = @c_Facility
               )
