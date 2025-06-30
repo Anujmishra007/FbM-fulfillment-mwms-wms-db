@@ -258,7 +258,7 @@ jobs:
       name: PROD-ASIA
       url: ${{ env.DEPLOYMENT_STATUS_PAGE }}
     if: ${{ needs.INIT_DEPLOY.outputs.MATRIX_OUTPUT != '' }}
-    name: "Approval for PROD AMERICAS Deployment"
+    name: "Approval for PROD ASIA Deployment"
     steps:
       - name: print matrix values for testing test
         run: echo "APPROVED"
