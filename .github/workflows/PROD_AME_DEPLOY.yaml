@@ -252,9 +252,20 @@ jobs:
           write-output '' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
           write-output "#### Once deployed, please check the Deployment version status here :point_right: [click here](${{ env.DEPLOYMENT_STATUS_PAGE }})" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
           write-output "#### Note: Once the pipeline has finished running, refresh the page to view the latest status updates and artifact logs." | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+  APPROVAL:
+    runs-on: ubuntu-latest
+    needs: [INIT_DEPLOY]
+    environment:
+      name: PROD-AMERICAS
+      url: ${{ env.DEPLOYMENT_STATUS_PAGE }}
+    if: ${{ needs.INIT_DEPLOY.outputs.MATRIX_OUTPUT != '' }}
+    name: "Approval for PROD AMERICAS Deployment"
+    steps:
+      - name: print matrix values for testing test
+        run: echo "APPROVED"
   DEPLOY:
     runs-on: prod-eu2-vm-management-agent
-    needs: [INIT_DEPLOY]
+    needs: [INIT_DEPLOY, APPROVAL]
     if: ${{ needs.INIT_DEPLOY.outputs.MATRIX_OUTPUT != '' }}
     environment:
       name: prod-ame
