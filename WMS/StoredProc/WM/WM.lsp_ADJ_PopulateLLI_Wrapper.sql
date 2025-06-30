@@ -176,6 +176,7 @@ BEGIN
          ,  Lot         NVARCHAR(10)   NOT NULL DEFAULT('')
          ,  Loc         NVARCHAR(10)   NOT NULL DEFAULT('')
          ,  ID          NVARCHAR(18)   NOT NULL DEFAULT('')
+         ,  PalletType  NVARCHAR(10)    NOT NULL DEFAULT('')       --(SSA01)
          )
       
       SET @c_SelectSQL = 'SELECT LotxLocxID.Lot, LotxLocxID.Loc, LotxLocxID.ID'
@@ -194,6 +195,11 @@ BEGIN
       
       INSERT INTO #tLLI ( Lot, Loc, ID ) 
       EXEC sp_ExecuteSQL @c_SearchSQL
+
+      UPDATE #tLLI                                                                  --(SSA01)
+      SET Pallettype = ID.Pallettype
+      FROM #tLLI
+      JOIN ID (NOLOCK) ON ID.ID = #tLLI.ID
 
       IF OBJECT_ID('tempdb..#tSN', 'U') IS NOT NULL                                 --(Wan01) - START
       BEGIN 
@@ -238,7 +244,7 @@ BEGIN
             ,l.Lottable14
             ,l.Lottable15
             ,s.SerialNoCapture                                                      --(Wan01)
-            ,ltlci.PalletType                                                       --(SSA01)
+            ,tl.PalletType                                                       --(SSA01)
       FROM #tLLI AS tl (NOLOCK)
       JOIN dbo.LOTxLOCxID AS ltlci (NOLOCK) ON  ltlci.Lot = tl.Lot 
                                             AND ltlci.Loc = tl.Loc 

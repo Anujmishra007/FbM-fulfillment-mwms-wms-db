@@ -834,7 +834,7 @@ BEGIN
 
    
    --JHU151   
-   IF @cExtendedScreenSP IN ( 'rdt_605ExtScn01', 'rdt_605ExtScn03')
+   IF @cExtendedScreenSP IN ( 'rdt_605ExtScn01', 'rdt_605ExtScn03','rdt_605ExtScn04')
    BEGIN
       SET @nAction = 0 -- jump new screen
       GOTO Step_99
@@ -1161,7 +1161,7 @@ BEGIN
                @cUDF25   OUTPUT, @cUDF26 OUTPUT, @cUDF27 OUTPUT,
                @cUDF28   OUTPUT, @cUDF29 OUTPUT, @cUDF30 OUTPUT
 
-         IF @cExtendedScreenSP IN ( 'rdt_605ExtScn01', 'rdt_605ExtScn03')
+         IF @cExtendedScreenSP IN ( 'rdt_605ExtScn01', 'rdt_605ExtScn03','rdt_605ExtScn04')
          BEGIN
             IF @nPreScn = 6441 AND @nInputKey = 1
             BEGIN

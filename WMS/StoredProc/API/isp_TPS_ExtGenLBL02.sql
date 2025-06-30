@@ -11,7 +11,8 @@ GO
 /* Purpose        : Generate the labelNo by Trackingno                        */
 /*                                                                            */
 /* Date         Rev  Author     Purposes                                      */      
-/* 2024-02-21   1.0  YeeKung  TPS-970 Created                                 */    
+/* 2024-02-21   1.0  YeeKung  TPS-970 Created                                 */
+/* 2025-05-19   1.1  GhChan   UWP-34530 Fix LabelNo return value issue        */
 /******************************************************************************/      
       
 CREATE OR ALTER PROC [API].[isp_TPS_ExtGenLBL02] (      
@@ -20,7 +21,7 @@ CREATE OR ALTER PROC [API].[isp_TPS_ExtGenLBL02] (
  @nFunc           INT,            
  @cLangCode       NVARCHAR( 3),   
  @cPickSlipNo     NVARCHAR( 30),  
- @cCartonNo       NVARCHAR(3),
+ @cCartonNo       NVARCHAR(5),
  @cLabelNo        NVARCHAR( 20)  OUTPUT,  
  @b_Success       INT            OUTPUT,
  @n_Err           INT            OUTPUT,

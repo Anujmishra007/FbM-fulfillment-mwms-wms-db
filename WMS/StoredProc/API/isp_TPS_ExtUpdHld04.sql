@@ -4,19 +4,19 @@ SET QUOTED_IDENTIFIER OFF
 GO
 
     
-/******************************************************************************/      
-/* Store procedure: isp_TPS_ExtUpdHld04                                       */      
-/* Copyright      : Maersk                                                    */      
-/*                                                                            */  
-/* Description    : This Extended Update Hold Carton SP is mainly update the  */ 
-/*                  Hold carton that contains AD Barcode only. It will not    */ 
-/*                  support for update the non AD Barcode value.              */
-/*                  And this SP is only for old method, which will add the    */
-/*                  transactional data into SerialNo Table.                   */
-/*                                                                            */ 
-/* Date         Rev  Author     Purposes                                      */      
-/* 2025-06-16   1.1  GhChan     Modified based on isp_TPS_ExtUpdHld03         */    
-/******************************************************************************/      
+/*******************************************************************************/      
+/* Store procedure: isp_TPS_ExtUpdHld04                                        */      
+/* Copyright      : Maersk                                                     */      
+/*                                                                             */  
+/* Description    : This Extended Update Hold Carton SP is mainly update the   */ 
+/*                  Hold carton that contains AD Barcode only. It will not     */ 
+/*                  support for update the non AD Barcode value.               */
+/*                  And this SP is only for old method, which will add the     */
+/*                  transactional data into SerialNo Table.                    */
+/*                                                                             */ 
+/* Date         Rev  Author     Purposes                                       */      
+/* 2025-06-16   1.1  GhChan     FCR-5168 Modified based on isp_TPS_ExtUpdHld03 */    
+/*******************************************************************************/      
       
 CREATE OR ALTER PROC [API].[isp_TPS_ExtUpdHld04] (      
  @cStorerKey      NVARCHAR( 15),    
@@ -160,7 +160,7 @@ BEGIN
       IF @nQty < 1
       BEGIN
          SET @b_Success = 0
-         SET @n_Err = 1003010      
+         SET @n_Err = 1003003      
          SET @c_ErrMsg = API.TouchPadGetMessage(@n_Err ,@cLangCode ,'DSP') -- 'PackOtherUnit2 cannot be less than 1. Function : isp_TPS_ExtUpdHld04'      
          GOTO RollBackTran 
       END
@@ -188,65 +188,26 @@ BEGIN
 
       SELECT  @cSerialNoKey = SerialNoKey
          FROM SerialNo (NOLOCK)
-         WHERE StorerKEy = @cStorerKey      
-         AND OrderKey = ''      
+         WHERE StorerKEy = @cStorerKey           
          AND SKU = @cSKU      
-         AND SerialNo = @cADCode 
-         AND [Status] = '1'
-
-      --Insert/Update SerialNo 
+         AND SerialNo = @cADCode
+         
       IF @@ROWCOUNT = 0  
       BEGIN
-         --Insert/Update PackSerialNo
-         IF EXISTS(select 1 from PackSerialNo (NOLOCK)    
-                  where PickSlipNo=@cpickslipNo    
-                  and storerkey=@cStorerKey    
-                  and sku=@csku
-                  and serialno=@cADCode)    
-         BEGIN
-            SET @b_Success = 0
-            SET @n_Err = 1003004      
-            SET @c_ErrMsg = API.TouchPadGetMessage(@n_Err ,@cLangCode ,'DSP') --'Failed to insert SerialNo into PackSerialNo Table. Records already exists. Function : isp_TPS_ExtUpdHld04'      
-            GOTO RollBackTran
-         END  
-
-         INSERT INTO PackSerialNo(pickslipno,cartonno,labelno,labelline,storerkey,sku,serialno,qty, PickDetailKey,AddWho,AddDate,EditWho,EditDate)    
-         values(@cpickslipNo,@nCartonNo,@cLabelNo,@cLblLineNumber,@cStorerKey,@csku,@cADCode,@nQty, @cPickDetailKey,@cUserName,GETDATE(),@cUserName,GETDATE())    
-    
-         IF @@ERROR <> 0       
-         BEGIN    
-            SET @b_Success = 0
-            SET @n_Err = 1003003      
-            SET @c_ErrMsg = API.TouchPadGetMessage(@n_Err ,@cLangCode ,'DSP') -- 'Failed to insert SerialNo into PackSerialNo Table. Function : isp_TPS_ExtUpdHld04'      
-            GOTO RollBackTran      
-         END 
-
-         EXECUTE dbo.nspg_GetKey      
-                  'SerialNo',      
-                  10 ,      
-                  @cSerialNoKey      OUTPUT,      
-                  @bsuccess          OUTPUT,      
-                  @n_Err            OUTPUT,      
-                  @c_ErrMsg           OUTPUT      
-                     
-         IF @bsuccess <> 1      
-         BEGIN      
-            SET @b_Success = 0
-            SET @n_Err = 1003005      
-            SET @c_ErrMsg = API.TouchPadGetMessage(@n_Err ,@cLangCode ,'DSP') -- 'Fail to get SerialNo Key. Function : isp_TPS_ExtUpdHld04'      
-            GOTO RollBackTran      
-         END  
-
-         INSERT INTO SerialNo (SerialNoKey, OrderKey, OrderLineNumber, StorerKey, SKU, SerialNo, Qty, [Status], CartonNo, LabelLine,AddWho,AddDate,EditWho,EditDate )       
-         VALUES ( @cSerialNoKey, @cOrderKey, @cOrderLineNumber, @cStorerKey, @cSKU , @cADCode , @nQty, '1', @nCartonNo, @cLblLineNumber, @cUserName,GETDATE(),@cUserName,GETDATE())       
-
-         IF @@ERROR <> 0       
-         BEGIN       
-            SET @b_Success = 0
-            SET @n_Err = 1003006      
-            SET @c_ErrMsg = API.TouchPadGetMessage(@n_Err ,@cLangCode ,'DSP') -- 'Fail to Insert SerialNo table. Function : isp_TPS_ExtUpdHld04'      
-            GOTO RollBackTran      
-         END      
+         SET @b_Success = 0
+         SET @n_Err = 1003004      
+         SET @c_ErrMsg = API.TouchPadGetMessage(@n_Err ,@cLangCode ,'DSP') --'Invalid SerialNo. SerialNo Not found in the SerialNo Table Function : isp_TPS_ExtUpdHld04'      
+         GOTO RollBackTran
+      END
+     
+      IF EXISTS ( SELECT  1
+                  FROM SerialNo (NOLOCK)
+                  WHERE SerialNoKey = @cSerialNoKey
+                     AND (OrderKey <> ''
+                     OR [Status] <> '1')
+         )
+      BEGIN
+         GOTO NEXTITEM
       END      
       ELSE     
       BEGIN
@@ -279,7 +240,7 @@ BEGIN
          IF @@ERROR <> 0       
          BEGIN    
             SET @b_Success = 0
-            SET @n_Err = 1003007      
+            SET @n_Err = 1003005      
             SET @c_ErrMsg = API.TouchPadGetMessage(@n_Err ,@cLangCode ,'DSP') -- 'Failed to Insert SerialNo into PackSerialNo Table. Function : isp_TPS_ExtUpdHld04'
             GOTO RollBackTran      
          END 
@@ -289,8 +250,7 @@ BEGIN
             OrderKey = @cOrderKey,
             OrderLineNumber = @cOrderLineNumber,
             CartonNo = @nCartonNo,
-            LabelLine = @cLblLineNumber,
-            STATUS = '1' ,  
+            LabelLine = @cLblLineNumber, 
             EditDate = GETDATE(),  
             EditWho = @cUserName   
          WHERE SerialNoKey = @cSerialNoKey
@@ -298,7 +258,7 @@ BEGIN
          IF @@ERROR <> 0       
          BEGIN       
             SET @b_Success = 0;
-            SET @n_Err = 1003009      
+            SET @n_Err = 1003006      
             SET @c_ErrMsg = API.TouchPadGetMessage(@n_Err ,@cLangCode ,'DSP') -- 'Fail to Update SerialNo table. Function : isp_TPS_ExtUpdHld04'      
             GOTO RollBackTran      
          END      

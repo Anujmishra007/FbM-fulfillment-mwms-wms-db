@@ -70,6 +70,7 @@ GO
 /* 22-Jan-2025  Wan11     UWP-23317 - Unpick Serial if change on id.      */
 /*                        Fixed RDT move issue(FCR-540)                   */
 /* 04-Apr-2025  Wan12     UWP-31258-FCR-822 Partial Pallet Serial No Move */
+/* 26-JUN-2025  SSA01     UWP-3982- Added PalletType in inventory         */
 /**************************************************************************/
 
 CREATE OR ALTER PROCEDURE [dbo].[nspItrnAddMoveCheck]
@@ -113,6 +114,7 @@ CREATE OR ALTER PROCEDURE [dbo].[nspItrnAddMoveCheck]
    , @c_MoveRefKey   NVARCHAR(10)  = ''        --(Wan04)
    , @c_Channel      NVARCHAR(20) = ''      --(Wan08)
    , @n_Channel_ID   BIGINT = 0 OUTPUT      --(Wan08)
+   , @c_PalletType   NVARCHAR(10)   = '' --(SSA01)
 AS
 BEGIN
    SET NOCOUNT ON
@@ -1337,7 +1339,7 @@ BEGIN
       IF @n_cnt  = 0
       BEGIN
          /* Insert New Row Into ID,LOTxID,LOTxLOCxID */
-         INSERT INTO ID (ID,PACKKEY) VALUES (@c_toid,@c_packkey)
+         INSERT INTO ID (ID,PACKKEY,PALLETTYPE) VALUES (@c_toid,@c_packkey,@c_PalletType)
          SELECT @n_err = @@ERROR
          IF @n_err <> 0
          BEGIN
@@ -1996,7 +1998,9 @@ BEGIN
    /* Reduce The FROM ID in The ID Table */
    IF @n_continue=1 or @n_continue=2
    BEGIN
-      UPDATE ID with (ROWLOCK) SET QTY = QTY - @n_Qty WHERE ID = @c_fromID
+      UPDATE ID with (ROWLOCK) SET QTY = QTY - @n_Qty
+      , PalletType = @c_PalletType   --(SSA01)
+      WHERE ID = @c_fromID
       /* Check SQL Error Message */
       SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
       IF @n_err <> 0
@@ -2067,7 +2071,9 @@ BEGIN
       IF @c_AllowIDQtyUpdate = '1'
       BEGIN
          /* Update table 'Id' */
-         UPDATE ID with (ROWLOCK) SET QTY = QTY + @n_Qty, Status = @c_Status WHERE ID = @c_TOID
+         UPDATE ID with (ROWLOCK) SET QTY = QTY + @n_Qty, Status = @c_Status
+          , PalletType = @c_PalletType   --(SSA01)
+         WHERE ID = @c_TOID
       END
       ELSE
       BEGIN
@@ -2078,7 +2084,9 @@ BEGIN
          /* Update table 'Id' */
          IF EXISTS ( SELECT 1 FROM  ID with (NOLOCK) WHERE ID = @c_TOID AND [Status] <> @c_Status )
          BEGIN
-            UPDATE ID with (ROWLOCK) SET Status = @c_Status WHERE ID = @c_TOID
+            UPDATE ID with (ROWLOCK) SET Status = @c_Status
+             , PalletType = @c_PalletType   --(SSA01)
+            WHERE ID = @c_TOID
          END
       END
       /* Check SQL Error Message */

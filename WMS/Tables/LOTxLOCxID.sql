@@ -22,7 +22,6 @@ CREATE TABLE [dbo].[LOTxLOCxID]
 [QtyReplen] [int] NULL CONSTRAINT [DF_lotxlocxid_QtyReplen] DEFAULT ((0)),
 [EditWho] [nvarchar] (128) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_LOTxLOCxID_EditWho] DEFAULT (suser_sname()),
 [EditDate] [datetime] NOT NULL CONSTRAINT [DF_LOTxLOCxID_EditDate] DEFAULT (getdate()),
-[PalletType] [nvarchar] (10) NOT NULL CONSTRAINT [DF_LOTxLOCxID_PalletType] DEFAULT ('')
 ) ON [PRIMARY]
 
 GRANT SELECT ON  [dbo].[LOTxLOCxID] TO [JReportRole]
@@ -34,7 +33,6 @@ GRANT INSERT ON  [dbo].[LOTxLOCxID] TO [NSQL]
 GRANT SELECT ON  [dbo].[LOTxLOCxID] TO [NSQL]
 
 GRANT UPDATE ON  [dbo].[LOTxLOCxID] TO [NSQL]
-
 
 ALTER TABLE [dbo].[LOTxLOCxID] WITH NOCHECK ADD CONSTRAINT [CK_LOTxLOCxID_01] CHECK (([Qty]+[QtyExpected]>=([QtyAllocated]+[QtyPicked])))
 
@@ -90,16 +88,18 @@ EXEC sp_addextendedproperty N'MS_Description', 'Owner of the good.', 'SCHEMA', N
 
 EXEC sp_addextendedproperty N'MS_Description', 'When checked, fields updated in this table will not trigger to update other tables that are linked with this table.', 'SCHEMA', N'dbo', 'TABLE', N'LOTxLOCxID', 'COLUMN', N'TrafficCop'
 
-EXEC sp_addextendedproperty N'MS_Description', 'Pallet Type' , 'SCHEMA', N'dbo', 'TABLE', N'LOTxLOCxID', 'COLUMN',N'PalletType'
 END
 ELSE
 BEGIN
-IF NOT EXISTS (SELECT 1
+IF EXISTS (SELECT 1
  		               FROM sys.columns
  		               WHERE Name = 'PalletType' AND Object_ID = Object_ID('LOTxLOCxID'))
 BEGIN
-ALTER TABLE LOTxLOCxID ADD PalletType NVARCHAR(10) NOT NULL CONSTRAINT [DF_LOTxLOCxID_PalletType]  DEFAULT (' ');
-EXEC sp_addextendedproperty N'MS_Description', 'Pallet Type', 'SCHEMA', N'dbo', 'TABLE', N'LOTxLOCxID', 'COLUMN', N'PalletType'
+
+ALTER TABLE LOTxLOCxID DROP CONSTRAINT DF_LOTxLOCxID_PalletType;
+ALTER TABLE LOTxLOCxID DROP COLUMN PalletType;
 END
 END
+
+
 

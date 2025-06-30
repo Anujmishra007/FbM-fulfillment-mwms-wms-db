@@ -37,6 +37,7 @@ GO
 /* 2024-Aug-23 GCH002   Added the VAS & VAP Type                        */
 /* 2024-Nov-25 GCH003   Enhance the logic to cater the Long JSON data   */
 /* 2025-Jan-28 GCH004   Resolve the STUFF with whitespace               */
+/* 2025-May-07 GCH005   Fix ViewAction Condition during Upload stage    */  
 /************************************************************************/
 CREATE OR ALTER  PROC [dbo].[isp_WebAPI_ImgProcUploadDocInfo]
     (
@@ -269,7 +270,7 @@ BEGIN
             GOTO QUIT;
         END;
 
-        IF LEN(@c_col3) > 20 OR LEN(@c_col4) > 20 OR LEN(@c_col5) > 20
+        IF (LEN(@c_col3) > 20 OR LEN(@c_col4) > 20 OR LEN(@c_col5) > 20 ) AND @b_ViewAction != 1
         BEGIN
             SET @n_Continue = 3;
             SET @n_ErrNo = 97002;

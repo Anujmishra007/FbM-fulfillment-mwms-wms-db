@@ -75,7 +75,8 @@ DECLARE @CloseCtnList TABLE (
    SkuBarcode      NVARCHAR(60),    
    ADCode          NVARCHAR(60)    
 )    
-    
+
+SET @b_Success = 1
 --INSERT INTO @CloseCtnList    
 --SELECT *    
 --FROM OPENJSON(@cHoldCartonJson)    
@@ -117,7 +118,7 @@ BEGIN
    BEGIN TRAN    
    SAVE TRAN isp_TPS_ExtUpdHld03     
     
-   IF ISNULL(@cOrderKey,'') = ''    
+   IF ISNULL(@cOrderKey,'') = '' AND ISNULL(@cLoadKey,'') = ''
    BEGIN    
       SET @b_Success = 0
       SET @n_Err = 1001801      
@@ -162,22 +163,32 @@ BEGIN
          GOTO RollBackTran 
       END
 
+      SELECT   @cLblLineNumber = PD.LabelLine,  
+               @cLabelNo = labelno,
+               @cDropID = RTRIM(PD.DropID)
+      FROM dbo.Packheader PH WITH (NOLOCK)    
+         JOIN dbo.packdetail PD(nolock) ON PH.PickSlipNo=PD.PickSlipNo  
+      WHERE PD.StorerKey = @cStorerKey        
+         AND (@cOrderKey = '' OR PH.OrderKey = @cOrderKey)
+         AND (@cLoadKey = '' OR PH.LoadKey = @cLoadKey)
+         AND PD.SKU = @cSKU   
+         AND Cartonno = @nCartonNo
+
       SELECT @cPickDetailKey = PD.PickDetailKey
       FROM dbo.PickDetail PD WITH (NOLOCK)
          JOIN Orders O WITH (NOLOCK) 
          ON PD.Orderkey = O.Orderkey AND PD.Storerkey = O.Storerkey
       WHERE PD.StorerKey = @cStorerKey
-         AND O.OrderKey = @cOrderKey
+         AND (@cOrderKey = '' OR O.OrderKey = @cOrderKey)
+         AND (@cLoadKey = '' OR O.LoadKey = @cLoadKey)
+         AND (@cDropID = '' OR PD.DropID = @cDropID)
          AND PD.SKU = @cSKU
-
-      SELECT @cLblLineNumber = PD.LabelLine  
-      FROM dbo.Packheader PH (NOLOCK)    
-         JOIN dbo.packdetail PD (NOLOCK) 
-         ON PH.PickSlipNo=PD.PickSlipNo
-      WHERE PD.StorerKey = @cStorerKey
-         AND PH.OrderKey = @cOrderKey
-         AND PD.SKU = @cSKU
-         AND PD.CartonNo = @nCartonNo
+         AND NOT EXISTS (  SELECT 1
+                           FROM PackSerialNo PSN (NOLOCK)
+                           WHERE PSN.PickDetailKey = PD.PickDetailKey
+                           GROUP BY PSN.PickDetailKey
+                           HAVING SUM(PSN.Qty) = PD.Qty
+                           )
 
       SET @cSerialNoKey = ''
 
@@ -306,8 +317,7 @@ RollBackTran:
 Quit:    
    WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started  
    BEGIN
-      COMMIT TRAN isp_TPS_ExtUpdHld03    
-      SET @b_Success = '1'  
+      COMMIT TRAN isp_TPS_ExtUpdHld03     
    END
 END    
 

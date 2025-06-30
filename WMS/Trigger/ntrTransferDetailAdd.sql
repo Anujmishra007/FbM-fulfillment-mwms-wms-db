@@ -1,6 +1,3 @@
-IF EXISTS (SELECT name FROM dbo.sysobjects WHERE name = 'ntrTransferDetailAdd' AND type = 'TR')
-   DROP TRIGGER ntrTransferDetailAdd
-GO
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF

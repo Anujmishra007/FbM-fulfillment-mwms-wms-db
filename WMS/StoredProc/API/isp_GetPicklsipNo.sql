@@ -24,6 +24,7 @@ GO
 /* 2025-02-14   2.1  yeekung    TPS-995 Change Error Message (yeekung03)       */
 /* 2025-02-15   2.2  YeeKung    TPS-956 Add Status (yeekung04)                 */
 /* 2025-04-10   2.3  GhChan     FCR-3471 Update Status to 9 (Gh01)             */
+/* 2025-05-19   2.4  GhChan     UWP-34530 Fix LabelNo return value issue(Gh02) */
 /*******************************************************************************/
 
 CREATE OR ALTER PROC [API].[isp_GetPicklsipNo] (
@@ -104,7 +105,6 @@ AS
 
       IF SUBSTRING(@cPickSlipNo,1,1) ='P'
       BEGIN
-
          -- Get PickHeader info
          SELECT TOP 1
             @cOrderKey = OrderKey,
@@ -209,8 +209,7 @@ AS
             SET @cDynamicRightName1 = 'OrderKey'
             SET @cDynamicRightValue1 = @cOrderKey
          END
-
-    END
+      END
       ELSE
       BEGIN
          SET @cOrderKey = @cScanNo
@@ -680,15 +679,13 @@ AS
    SET @b_Success = 1
    SET @n_Err = 0
    SET @c_ErrMsg = ''
-   SET @jResult =
-
-   (SELECT @cScanNoType AS ScanNoType, @cPickSlipNo AS PickslipNo, @cDropID AS DropID, @cOrderKey AS OrderKey, @cLoadKey AS LoadKey, @cZone AS Zone, @EcomSingle AS EcomSingle
+   SET @jResult = (SELECT @cScanNoType AS ScanNoType, @cPickSlipNo AS PickslipNo, @cDropID AS DropID, @cOrderKey AS OrderKey, @cLoadKey AS LoadKey, @cZone AS Zone, @EcomSingle AS EcomSingle
    , @cDynamicRightName1 AS DynamicRightName1, @cDynamicRightValue1 AS DynamicRightValue1,
    (SELECT * FROM @pickSKUDetail
    FOR JSON PATH , INCLUDE_NULL_VALUES) AS PickSkuDetail
    FOR JSON PATH , INCLUDE_NULL_VALUES)
-   EXIT_SP:
-
+   
+EXIT_SP:
    SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS ON
