@@ -21,7 +21,6 @@ on:
 permissions: write-all
 
 env:
-  GRAFANA_LINK: https://grafana.maersk.io/goto/F49pfjONR?orgId=1
   DEPLOYMENT_STATUS_PAGE: https://mwmsdb-status.fulfillment.maersk.com/
   WORKFLOW_RUN_ID: ${{ github.event.repository.name }}-${{ github.ref_name }}-${{ github.run_id }}-${{ github.run_attempt }}
   GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -30,7 +29,6 @@ env:
   ENV_CODE: cdt
   WMSDB_NAME: ${{(github.event_name == 'workflow_dispatch' && github.event.inputs.WMSDB) || (github.event_name == 'push' && 'DEVWMS')}}
   WMSDB_METADATA_REPO: FbM-fulfillment-mwms-wms-db-metadata
-  STORAGE_ACCOUNT_URL: https://azewfbmdevopsstr001.file.core.windows.net/fbmdevopspoc
 
 jobs:
   INIT_DEPLOY:
@@ -226,19 +224,15 @@ jobs:
           write-output "$($env:MATRIX_OUTPUT)"
           write-output "---------------------------- ADDING link Summery----------------------------"
           write-output '' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
-          write-output "#### Please check the SQL Script deployment progress here in Grafana :point_right: [click here](${{ env.GRAFANA_LINK }})" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
           write-output "#### Once deployed, please check the Deployment version status here :point_right: [click here](${{ env.DEPLOYMENT_STATUS_PAGE }})" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
           write-output "#### Note: Once the pipeline has finished running, refresh the page to view the latest status updates and artifact logs." | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
 
   DEPLOY:
-    runs-on: ubuntu-latest
+    runs-on: cdt-weu-vm-management-agent
     if: ${{ needs.INIT_DEPLOY.outputs.MATRIX_OUTPUT != '' }}
     needs: [INIT_DEPLOY]
-    concurrency:
-      group: cdt-${{ (github.event_name == 'workflow_dispatch' && github.event.inputs.WMSDB) || (github.event_name == 'push' && 'DEVWMS') }}
-      cancel-in-progress: false
     environment:
-      name: stage-eur
+      name: cdt
       url: https://fbm-sre-poc-db-metadata.fbm.maersk.com/
     strategy:
       max-parallel: 1
@@ -251,157 +245,93 @@ jobs:
       DB_CURRENT_VERSION: ${{ matrix.data.DB_CURRENT_VERSION }}
       DB_DEPLOY_VERSION: ${{ matrix.data.DB_DEPLOY_VERSION }}
       DB_SERVER_NAME: ${{ matrix.data.DB_SERVER_NAME }}
-
+      SQL_SCRIPT_FILES_STRING: ${{ matrix.data.CHANGED_FILES_STRING }}
+      DB_ADMIN_USER_PASSWORD: ${{ secrets.CDT_DB_ADMIN_USER_PASSWORD }}
     steps:
       - name: print matrix values for testing test
         run: |
+          pwd
           echo "database name : ${{ matrix.data.DATBASE_NAME }}"
           echo "current version : ${{ matrix.data.DB_CURRENT_VERSION }}"
           echo "deploy version : ${{ matrix.data.DB_DEPLOY_VERSION }}"
           echo "server name : ${{ matrix.data.DB_SERVER_NAME }}"
           echo "changed files : ${{ matrix.data.CHANGED_FILES_STRING }}"
-      # - name: Create change
-      #   id: create-change
-      #   uses: Maersk-Global/Athena-Automations/.github/Actions/openChangeRequest@main
-      #   env:
-      #     CLIENT_ID: ${{ secrets.CLIENT_ID }}
-      #     CLIENT_SECRET: ${{ secrets.CLIENT_SECRET }}
-      #     USERNAME: ${{ secrets.CR_USERNAME }}
-      #     PASSWORD: ${{ secrets.CR_PASSWORD }}
-      #     APP_NAME: 'Maersk WMS Database'
-      #     CHANGE_TEMPLATE: 'FbM MWMS EUR - WMS DB Deployment'
-      #   with:
-      #     username: ${{ secrets.CR_USERNAME }}
-      #     password: ${{ secrets.CR_PASSWORD }}
-      #     clientId:  ${{ secrets.CLIENT_ID }}
-      #     clientSecret:  ${{ secrets.CLIENT_SECRET }}
-      #     description: 'FbM MWMS EUR - WMS DB Deployment'
-      #     appName: 'Maersk WMS Database'
-      #     changeTemplate: 'FbM MWMS EUR - WMS DB Deployment'
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.ref_name }}
+      - name: Install PowerShell
+        uses: PSModule/install-powershell@v1
+      - name: Install required PowerShell modules
+        shell: pwsh
+        run: |
+          $modules = @('SqlServer', 'PSScriptAnalyzer')
+
+            foreach ($module in $modules) {
+                if (-not (Get-Module -ListAvailable -Name $module)) {
+                    Write-Host "Installing $module..."
+                    Set-PSRepository PSGallery -InstallationPolicy Trusted
+                    Install-Module $module -ErrorAction Stop -Force
+                } else {
+                    Write-Host "$module is already installed. Skipping..."
+                }
+            }
+
+      - name: Copy db-deply script to pwd
+        run: |
+          cp ./.github/scripts/db-deployment.ps1 ./db-deployment.ps1
+      - name: replace token if any
+        uses: cschleiden/replace-tokens@v1.3
+        with:
+          files: '["./db-deployment.ps1"]'
       - name: Deployment Started Notification
         uses: Maersk-Global/fbm-github-actions/ms-teams-notification@v3
         with:
           github-token: ${{ github.token }}
-          ms-teams-webhook-uri: ${{ secrets.MSTEAMS_NOTIFY_WEBHOOK }}
+          ms-teams-webhook-uri: ${{ secrets.MWMS_V2_CDT_DEV_TEAMS_HOOK }}
           notification-summary: CDT - ${{ matrix.data.DATBASE_NAME }} - new version ${{ matrix.data.DB_DEPLOY_VERSION }} - Deployment STARTED &#x1F6A2
           notification-color: 09ACF3
-      - name: Issue token
-        id: issue-token
-        run: |
-          response=$(curl -s -X POST -H "Content-Type: application/x-www-form-urlencoded" \
-            -d "grant_type=client_credentials&client_id=${{ secrets.WMS_COUNTRY_SETUP_SPN_CLIENT_ID }}&client_secret=${{ secrets.WMS_COUNTRY_SETUP_SPN_CLIENT_SECRET }}&resource=api://b506118d-67ee-44d4-9bee-61bf30f7866d/" \
-            "https://login.microsoftonline.com/05d75c05-fa1a-42e7-9cf1-eb416c396f2d/oauth2/token")
-
-          token=$(echo "$response" | jq -r .access_token)
-
-          if [[ -z "$token" ]]; then
-            echo "Error issuing token"
-            exit 1
-          fi
-
-          echo "bearer_token=${token}" >> $GITHUB_ENV
-
-      - name: Deploy to CDT DB
-        id: deploy_CDT
-        run: |
-          payload='{
-            "region": "westeurope",
-            "repositoryName": "fbm-infra-automation",
-            "playbookPath": "wms-db-auto-deploy.yml",
-            "inventoryPath": "inventories/cdt.yml",
-            "branchName": "main",
-            "debugFlag": true,
-            "extraVars": {
-              "ENV_CODE": "cdt",
-              "ENV_TYPE": "cdt",
-              "REGION": "westeurope",
-              "GEOGRAPHY": "europe",
-              "PRODUCT_CODE": "wms",
-              "PLATFORM_CODE": "fbm",
-              "HASHICORP_VAULT_URL": "https://vault.maersk-digital.net",
-              "WORKFLOW_RUN_ID": "${{ env.WORKFLOW_RUN_ID }}",
-              "targets": "${{ matrix.data.DB_SERVER_NAME }}",
-              "WMSDB_REPO_NAME": "${{ github.event.repository.name }}",
-              "WMSDB_NAME": "${{ matrix.data.DATBASE_NAME }}",
-              "WMSDB_DB_SERVER_NAME": "${{ matrix.data.DB_SERVER_NAME }}",
-              "WMSDB_DEPLOY_VERSION": "${{ matrix.data.DB_DEPLOY_VERSION }}",
-              "TRIGGERING_ACTOR": "${{ github.triggering_actor}}", 
-              "WMSDB_METADATA_REPO": "${{ env.WMSDB_METADATA_REPO }}",
-              "SQL_SCRIPT_FILES": "${{ matrix.data.CHANGED_FILES_STRING }}"
-            }
-          }'
-
-          echo "Deploying with the following payload: $payload"
-
-
-          response=$(curl -s -X POST https://bffp.maersk-digital.net/v2/platforms/fbm/environments/cdt/products/wms/configurations \
-            -H "Authorization: Bearer $bearer_token" \
-            -H "Content-Type: application/json" \
-            -d "$payload")
-
-          echo "Response from API: $response"
-      - name: Validate the deployment
-        id: validate
+      - name: Run the DB script
+        id: run-db-script
         timeout-minutes: 10
         shell: pwsh
         run: |
+          ./db-deployment.ps1
+      - name: Updating Metadata
+        if: github.ref == 'refs/heads/dev'
+        timeout-minutes: 10
+        shell: pwsh
+        run: |
+          curl -L -X POST -H "Accept: application/vnd.github+json" -H "Authorization: Bearer ${{ secrets.FBM_WMS_BRANCH_AUTOMATION_PAT }}" -H "X-GitHub-Api-Version: 2022-11-28" https://api.github.com/repos/Maersk-Global/${{ env.WMSDB_METADATA_REPO}}/dispatches  -d '{"event_type":"auto-merge-pr","client_payload":{"environment_code": "${{ env.ENV_CODE }}","database": "${{ matrix.data.DATBASE_NAME }}","db_version": "${{ matrix.data.DB_DEPLOY_VERSION }}","requestor": "${{ github.triggering_actor}}","workflow_run_failed": "false"}}'
           $retry_count = 0
           do{
            sleep 5
            $retry_count = $retry_count + 1
-           $json_metadata = curl -L -s -H "Accept: application/vnd.github+json" -H "Authorization: Bearer ${{ secrets.PERSONAL_ACCESS_TOKEN }}" -H "X-GitHub-Api-Version: 2022-11-28"  https://api.github.com/repos/Maersk-Global/${{ env.WMSDB_METADATA_REPO}}/contents/metadata/wms/databases/v2/${{ env.ENV_CODE }}.json?ref=main | jq -r '.content' | base64 -d | ConvertFrom-Json
-           write-output "Attempt : $($retry_count) - $($env:DATBASE_NAME) :: Metadata Version is $($json_metadata.databases.$($env:DATBASE_NAME).Database_Version), workflow failed.? : $($json_metadata.databases.$($env:DATBASE_NAME).workflow_run_failed)"
-          }until(($json_metadata.databases.$($env:DATBASE_NAME).Database_Version -eq $($env:DB_DEPLOY_VERSION)) -or ($json_metadata.databases.$($env:DATBASE_NAME).workflow_run_failed -eq $env:WORKFLOW_RUN_ID)-or ($json_metadata.databases.$($env:DATBASE_NAME).last_branch_deployed -eq $env:WORKFLOW_RUN_ID))
+           $json_metadata = curl -L -s -H "Accept: application/vnd.github+json" -H "Authorization: Bearer ${{ secrets.FBM_WMS_BRANCH_AUTOMATION_PAT }}" -H "X-GitHub-Api-Version: 2022-11-28"  https://api.github.com/repos/Maersk-Global/${{ env.WMSDB_METADATA_REPO}}/contents/metadata/wms/databases/v2/${{ env.ENV_CODE }}.json?ref=main | jq -r '.content' | base64 -d | ConvertFrom-Json
+           write-output "Attempt : $($retry_count) - $($env:DATBASE_NAME) :: Metadata Version is $($json_metadata.databases.$($env:DATBASE_NAME).Database_Version)"
+          }until($json_metadata.databases.$($env:DATBASE_NAME).Database_Version -eq $($env:DB_DEPLOY_VERSION))
 
-          if($json_metadata.databases.$($env:DATBASE_NAME).workflow_run_failed -eq $env:WORKFLOW_RUN_ID)
-          {
-           throw "Workflow run failed for $($env:DATBASE_NAME), one or more sql scripts failed. Please check the logs for more details."
-          }
-      - name: download logs from azure file share
-        id: azcopy-logs
-        if: always()
-        run: |
-          echo "Downloading logs from Azure File Share"
-          azcopy copy '${{ env.STORAGE_ACCOUNT_URL }}/${{ env.WORKFLOW_RUN_ID }}-${{ matrix.data.DATBASE_NAME }}.txt${{ secrets.CDT_AZURE_FILE_SHARE_SAS_TOKEN }}' ./${{ env.WORKFLOW_RUN_ID }}-${{ matrix.data.DATBASE_NAME }}.txt --overwrite=true --check-md5 FailIfDifferent --recursive --log-level=INFO --trailing-dot=Enable;
       - name: Upload logs to GitHub
-        if: always() && steps.azcopy-logs.outcome == 'success'
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.data.DATBASE_NAME }}-sql-scripts-logs
-          path: ./${{ env.WORKFLOW_RUN_ID }}-${{ matrix.data.DATBASE_NAME }}.txt
-      # - name: Close CR
-      #   uses: "Maersk-Global/Athena-Automations/.github/Actions/closeChangeRequest@main"
-      #   with:
-      #     change-number: ${{ steps.create-change.outputs.change-number }}
-      #     sys-id: ${{ steps.create-change.outputs.sys-id }}
-      #     change-dates: ${{ steps.create-change.outputs.change-dates }}
-      #     username: ${{ secrets.CR_USERNAME }}
-      #     password: ${{ secrets.CR_PASSWORD }}
-      #     clientId: ${{ secrets.CLIENT_ID }}
-      #     clientSecret: ${{ secrets.CLIENT_SECRET }}
+          path: ./logs/${{ matrix.data.DATBASE_NAME }}.txt
       - name: Deployment Started Notification
-        if: steps.validate.outcome == 'success'
+        if: steps.run-db-script.outcome == 'success'
         uses: Maersk-Global/fbm-github-actions/ms-teams-notification@v3
         with:
           github-token: ${{ github.token }}
-          ms-teams-webhook-uri: ${{ secrets.MSTEAMS_NOTIFY_WEBHOOK }}
+          ms-teams-webhook-uri: ${{ secrets.MWMS_V2_CDT_DEV_TEAMS_HOOK }}
           notification-summary: CDT - ${{ matrix.data.DATBASE_NAME }} - new version ${{ matrix.data.DB_DEPLOY_VERSION }} - Deployment Successful &#x1F6A2
           notification-color: 09ACF3
 
       - name: Deployment Started Notification
-        if: steps.validate.outcome == 'failure'
+        if: steps.run-db-script.outcome == 'failure'
         uses: Maersk-Global/fbm-github-actions/ms-teams-notification@v3
         with:
           github-token: ${{ github.token }}
-          ms-teams-webhook-uri: ${{ secrets.MSTEAMS_NOTIFY_WEBHOOK }}
+          ms-teams-webhook-uri: ${{ secrets.MWMS_V2_CDT_DEV_TEAMS_HOOK }}
           notification-summary: CDT - ${{ matrix.data.DATBASE_NAME }} - new version ${{ matrix.data.DB_DEPLOY_VERSION }} - Deployment failure &#x1F6A2
           notification-color: 09ACF3
-  # Deploy-with-change-europe:
-
-  #   uses: Maersk-Global/Athena-Automations/.github/workflows/deploy-with-change.yml@main
-  #   secrets: inherit
-  #   with:
-  #     description: 'FbM MWMS APA - WMS DB Deployment'
-  #     notify-email: FbMDevOps@maersk.com
-  #     app-name: 'Maersk WMS Database'
-  #     change-template: 'FbM MWMS APA - WMS DB Deployment'

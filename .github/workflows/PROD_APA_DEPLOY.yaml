@@ -1,36 +1,26 @@
-name: Stage EUR DEPLOY
+name: PROD ASIA DEPLOY
 
 on:
   workflow_dispatch:
     inputs:
       WMSDB:
-        description: "Kindly choose a Tag from the options above and a WMSDB Name from the list below for deployment. To deploy all WMSDBs in the stage, select ALL."
+        description: "Kindly choose a *-prod Tag from the options above and a WMSDB Name from the list below for deployment. To deploy all WMSDBs in PROD ASIA, select ALL."
         required: true
         type: choice
         options:
           - ALL
-          - USALEV4DWMS
-          - USA4DNJWMS
-          - USAMAT4DWMS
-          - PTWWMS
-          - GBREMGWMS
-          - SBXWMS
-          - NLDWMS
-          - USALEVISWMS
-          - GBRWMS
-          - IRLWMS
-          - SAUWMS
-          - AREWMS
-          - DNKWMS
-          - HRVWMS
-          - KENWMS
-          - ESPWMS
-          - DEUWMS
-          - ZAFWMS
-          - CMRWMS
-          - SENWMS
-          - TGOWMS
-
+          - INDWMS
+          - AUSWMS
+          - MYSWMS
+          - CHNWMS
+          - VNMWMS
+          - HKGWMS
+          - TWNWMS
+          - PAKWMS
+          - IDNWMS
+concurrency:
+  group: apa-prod-${{ github.event.inputs.WMSDB }}
+  cancel-in-progress: false
 permissions: write-all
 
 env:
@@ -39,10 +29,9 @@ env:
   OWNER: ${{ github.repository_owner }}
   WORKFLOW_RUN_ID: ${{ github.event.repository.name }}-${{ github.ref_name }}-${{ github.run_id }}-${{ github.run_attempt }}
   REPO: ${{ github.event.repository.name }}
-  ENV_CODE: stage
+  ENV_CODE: asia
   WMSDB_NAME: ${{ github.event.inputs.WMSDB }}
   WMSDB_METADATA_REPO: FbM-fulfillment-mwms-wms-db-metadata
-
 
 jobs:
   INIT_DEPLOY:
@@ -60,13 +49,13 @@ jobs:
       - name: checking stage deployment conditions
         shell: pwsh
         run: |
-          if('${{ github.ref }}' -like "refs/tags/*")
+          if('${{ github.ref }}' -like "refs/tags/*-prod*")
            {
             write-host "This is a tag deployment"
            }else{
             write-output '# ERROR : Deployment was initiated using a branch(${{ github.ref_name }}) instead of a tag.' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
             write-output '```markdown' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
-            write-output '❌ **Error:**  stage deployment can only be initiated using a tag and not directly from any branch. Please choose the appropriate tag for deployment.' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+            write-output '❌ **Error:** PROD deployment must be initiated using a designated prod tag (*-prod or *-prod-hotfix). It cannot be triggered directly from a branch or any other tag. Please select the correct tag for deployment.' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
             throw "tage deployment can only be initiated using a tag and not directly from any branch. Please choose the appropriate tag for deployment."
            }
       - name: Checkout
@@ -101,7 +90,7 @@ jobs:
                 ####################### Checking Currrent Version and Deploy Version Format ########################
                 if($DB_CURRENT_VERSION -match $pattern)
                  {
-                  $DB_CURRENT_VERSION = $Matches.0
+                  $DB_CURRENT_VERSION_ZERO = $Matches.0
                   $DB_CURRENT_VERSION_YEAR = $Matches.year
                   $DB_CURRENT_VERSION_MONTH = $Matches.month
                   $DB_CURRENT_VERSION_TAGNUMBER = $Matches.tagnumber
@@ -113,7 +102,7 @@ jobs:
                  ####################### Checking Deployment Version and Deploy Version Format ########################
                  if($DB_DEPLOY_VERSION -match $pattern)
                  {
-                  $DB_DEPLOY_VERSION = $Matches.0
+                  $DB_DEPLOY_VERSION_ZERO = $Matches.0
                   $DB_DEPLOY_VERSION_YEAR = $Matches.year
                   $DB_DEPLOY_VERSION_MONTH = $Matches.month
                   $DB_DEPLOY_VERSION_TAGNUMBER = $Matches.tagnumber
@@ -123,7 +112,7 @@ jobs:
                   continue
                  }
                 ####################### Deployment version is higher than Current version ########################
-                if($DB_DEPLOY_VERSION -eq $DB_CURRENT_VERSION)
+                if($DB_DEPLOY_VERSION_ZERO -eq $DB_CURRENT_VERSION_ZERO)
                  {
                   write-output "| $($DATBASE_NAME) |$($DB_SERVER_NAME) |$($DB_CURRENT_VERSION) |$($DB_DEPLOY_VERSION) | **SKIPPED :heavy_exclamation_mark:** | $($DATBASE_NAME): ⚠️ is already on the $($DB_DEPLOY_VERSION) |"| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
                   continue
@@ -142,7 +131,7 @@ jobs:
                  }
 
 
-                $changed_files = git diff --name-only  $DB_CURRENT_VERSION ${{ github.ref_name }}  -- ':*.sql' | out-string
+                $changed_files = git diff --name-only $DB_CURRENT_VERSION ${{ github.ref_name }}  -- ':*.sql' | out-string
                 $changed_files_list = $changed_files -split '\r?\n' | where-object { $_ -ne ''}
                 $changed_files_string = $changed_files_list -join ","
                 if($changed_files_string -ne '')
@@ -167,13 +156,12 @@ jobs:
             write-output "MATRIX_OUTPUT=$($matrixtable | ConvertTo-JSON -Compress)"
             }
           }else{
-              if ('${{ github.event.inputs.WMSDB }}' -in $json_metadata.databases.PSObject.Properties.name){write-host "WMSDB:: ${{ github.event.inputs.WMSDB }} exists in stage.json"}else{throw "WMSDB does not exist in stage.json"}
+              if ('${{ github.event.inputs.WMSDB }}' -in $json_metadata.databases.PSObject.Properties.name){write-host "WMSDB:: ${{ github.event.inputs.WMSDB }} exists in stg.json"}else{throw "WMSDB does not exist in stg.json"}
               
               write-output "## $($DATBASE_NAME) database deployment status" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
               write-output '' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
               write-output '| DATBASE_NAME |DB_SERVER_NAME |CURRENT_VERSION |DEPLOY_VERSION |DEPLOYMENT_STATUS |COMMENTS |'| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
               write-output '| :-------------: |:-------------: |:-------------: |:-------------: |:-------------: |:------------- |'| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
-
               $matrixtable = @()
               $DB_CURRENT_VERSION = $json_metadata.databases.$($env:WMSDB_NAME).Database_Version
               $DB_DEPLOY_VERSION = '${{ github.ref_name }}'
@@ -184,7 +172,7 @@ jobs:
               ####################### Checking Currrent Version and Deploy Version Format ########################
               if($DB_CURRENT_VERSION -match $pattern)
                 {
-                $DB_CURRENT_VERSION = $Matches.0
+                $DB_CURRENT_VERSION_ZERO = $Matches.0
                 $DB_CURRENT_VERSION_YEAR = $Matches.year
                 $DB_CURRENT_VERSION_MONTH = $Matches.month
                 $DB_CURRENT_VERSION_TAGNUMBER = $Matches.tagnumber
@@ -196,7 +184,7 @@ jobs:
                 ####################### Checking Deployment Version and Deploy Version Format ########################
                 if($DB_DEPLOY_VERSION -match $pattern)
                 {
-                $DB_DEPLOY_VERSION = $Matches.0
+                $DB_DEPLOY_VERSION_ZERO = $Matches.0
                 $DB_DEPLOY_VERSION_YEAR = $Matches.year
                 $DB_DEPLOY_VERSION_MONTH = $Matches.month
                 $DB_DEPLOY_VERSION_TAGNUMBER = $Matches.tagnumber
@@ -206,7 +194,7 @@ jobs:
                 throw "$($DATBASE_NAME): ⚠️ ERROR : Deploy version $($DB_DEPLOY_VERSION) is not in the correct format, skipping deployment for this database."
                 }
               ####################### Deployment version is higher than Current version condition ########################
-              if($DB_DEPLOY_VERSION -eq $DB_CURRENT_VERSION)
+              if($DB_DEPLOY_VERSION_ZERO -eq $DB_CURRENT_VERSION_ZERO)
                 {
                 write-output "| $($DATBASE_NAME) |$($DB_SERVER_NAME) |$($DB_CURRENT_VERSION) |$($DB_DEPLOY_VERSION) | **SKIPPED :heavy_exclamation_mark:** | $($DATBASE_NAME): ⚠️ is already on the $($DB_DEPLOY_VERSION) |"| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
                 throw "$($DATBASE_NAME): ⚠️ is already on the $($DB_DEPLOY_VERSION) version, skipping deployment for this database."
@@ -224,7 +212,7 @@ jobs:
                 throw "$($DATBASE_NAME): ⚠️ version is on higher version $($DB_CURRENT_VERSION), cannot be downgraded."
                 }
               ################### Checking for changed files between current version and deploy version ########################
-              $changed_files = git diff --name-only $DB_CURRENT_VERSION ${{ github.ref_name }}  -- ':*.sql' | out-string
+              $changed_files = git diff --name-only  $DB_CURRENT_VERSION ${{ github.ref_name }}  -- ':*.sql' | out-string
               $changed_files_list = $changed_files -split '\r?\n' | where-object { $_ -ne ''}
               $changed_files_string = $changed_files_list -join ","
               if($changed_files_string -ne '')
@@ -263,11 +251,11 @@ jobs:
           write-output "#### Once deployed, please check the Deployment version status here :point_right: [click here](${{ env.DEPLOYMENT_STATUS_PAGE }})" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
           write-output "#### Note: Once the pipeline has finished running, refresh the page to view the latest status updates and artifact logs." | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
   DEPLOY:
-    runs-on: stage-weu-vm-management-agent
+    runs-on: prod-sea-vm-management-agent
     needs: [INIT_DEPLOY]
     if: ${{ needs.INIT_DEPLOY.outputs.MATRIX_OUTPUT != '' }}
     environment:
-      name: stage-eur
+      name: prod-apa
       url: ${{ env.DEPLOYMENT_STATUS_PAGE }}
     strategy:
       max-parallel: 1
@@ -281,7 +269,8 @@ jobs:
       DB_DEPLOY_VERSION: ${{ matrix.data.DB_DEPLOY_VERSION }}
       DB_SERVER_NAME: ${{ matrix.data.DB_SERVER_NAME }}
       SQL_SCRIPT_FILES_STRING: ${{ matrix.data.CHANGED_FILES_STRING }}
-      DB_ADMIN_USER_PASSWORD: ${{ secrets.STAGE_EUR_DB_ADMIN_USER_PASSWORD }}
+      DB_ADMIN_USER_PASSWORD: ${{ secrets.PROD_APA_DB_ADMIN_USER_PASSWORD }}
+
     steps:
       - name: print matrix values for testing test
         run: |
@@ -295,6 +284,7 @@ jobs:
         with:
           fetch-depth: 0
           ref: ${{ github.ref_name }}
+
       - name: Install PowerShell
         uses: PSModule/install-powershell@v1
       - name: Install required PowerShell modules
@@ -322,8 +312,8 @@ jobs:
         uses: Maersk-Global/fbm-github-actions/ms-teams-notification@v3
         with:
           github-token: ${{ github.token }}
-          ms-teams-webhook-uri: ${{ secrets.MWMS_V2_STAGE_EUR_TEAMS_HOOK }}
-          notification-summary: Stage EUR - ${{ matrix.data.DATBASE_NAME }} - new version ${{ matrix.data.DB_DEPLOY_VERSION }} - Deployment STARTED &#x1F6A2
+          ms-teams-webhook-uri: ${{ secrets.MWMS_V2_PROD_APA_TEAMS_HOOK }}
+          notification-summary: PROD APA - ${{ matrix.data.DATBASE_NAME }} - new version ${{ matrix.data.DB_DEPLOY_VERSION }} - Deployment STARTED &#x1F6A2
           notification-color: 09ACF3
       - name: Run the DB script
         id: run-db-script
@@ -344,21 +334,19 @@ jobs:
            $json_metadata = curl -L -s -H "Accept: application/vnd.github+json" -H "Authorization: Bearer ${{ secrets.FBM_WMS_BRANCH_AUTOMATION_PAT }}" -H "X-GitHub-Api-Version: 2022-11-28"  https://api.github.com/repos/Maersk-Global/${{ env.WMSDB_METADATA_REPO}}/contents/metadata/wms/databases/v2/${{ env.ENV_CODE }}.json?ref=main | jq -r '.content' | base64 -d | ConvertFrom-Json
            write-output "Attempt : $($retry_count) - $($env:DATBASE_NAME) :: Metadata Version is $($json_metadata.databases.$($env:DATBASE_NAME).Database_Version)"
           }until($json_metadata.databases.$($env:DATBASE_NAME).Database_Version -eq $($env:DB_DEPLOY_VERSION))
-
       - name: Upload logs to GitHub
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.data.DATBASE_NAME }}-sql-scripts-logs
           path: ./logs/${{ matrix.data.DATBASE_NAME }}.txt
-          
       - name: Deployment Started Notification
         if: steps.validate.outcome == 'success'
         uses: Maersk-Global/fbm-github-actions/ms-teams-notification@v3
         with:
           github-token: ${{ github.token }}
-          ms-teams-webhook-uri: ${{ secrets.MWMS_V2_STAGE_EUR_TEAMS_HOOK }}
-          notification-summary: Stage EUR - ${{ matrix.data.DATBASE_NAME }} - new version ${{ matrix.data.DB_DEPLOY_VERSION }} - Deployment Successful &#x1F6A2
+          ms-teams-webhook-uri: ${{ secrets.MWMS_V2_PROD_APA_TEAMS_HOOK }}
+          notification-summary: PROD APA - ${{ matrix.data.DATBASE_NAME }} - new version ${{ matrix.data.DB_DEPLOY_VERSION }} - Deployment Successful &#x1F6A2
           notification-color: 09ACF3
 
       - name: Deployment Started Notification
@@ -366,6 +354,6 @@ jobs:
         uses: Maersk-Global/fbm-github-actions/ms-teams-notification@v3
         with:
           github-token: ${{ github.token }}
-          ms-teams-webhook-uri: ${{ secrets.MWMS_V2_STAGE_EUR_TEAMS_HOOK }}
-          notification-summary: Stage EUR - ${{ matrix.data.DATBASE_NAME }} - new version ${{ matrix.data.DB_DEPLOY_VERSION }} - Deployment failure &#x1F6A2
+          ms-teams-webhook-uri: ${{ secrets.MWMS_V2_PROD_APA_TEAMS_HOOK }}
+          notification-summary: PROD APA - ${{ matrix.data.DATBASE_NAME }} - new version ${{ matrix.data.DB_DEPLOY_VERSION }} - Deployment failure &#x1F6A2
           notification-color: 09ACF3
