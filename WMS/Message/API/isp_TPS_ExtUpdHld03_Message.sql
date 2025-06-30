@@ -1,7 +1,7 @@
 --isp_TPS_ExtUpdHld03
 exec API.TouchPadDropMsg 1001801 , 1001850
 
-execute API.TouchPadAddMsg 1001801, 10, 'OrderKey not Found. Failed to proceed to update the SerialNo/PackSerialNo. Function : isp_TPS_ExtUpdHld03',    'us_english'
+execute API.TouchPadAddMsg 1001801, 10, 'No OrderKey and LoadKey found. Failed to proceed to update the SerialNo/PackSerialNo. Function : isp_TPS_ExtUpdHld03',    'us_english'
 execute API.TouchPadAddMsg 1001802, 10, 'Codelkup ListName(REQEXP) and Code(ADBARCODE) not found. Function : isp_TPS_ExtUpdHld03',   'us_english'
 execute API.TouchPadAddMsg 1001803, 10, 'Failed to insert SerialNo into PackSerialNo Table. Function : isp_TPS_ExtUpdHld03',   'us_english'
 execute API.TouchPadAddMsg 1001804, 10, 'Failed to insert SerialNo into PackSerialNo Table. Records already exists. Function : isp_TPS_ExtUpdHld03',   'us_english'

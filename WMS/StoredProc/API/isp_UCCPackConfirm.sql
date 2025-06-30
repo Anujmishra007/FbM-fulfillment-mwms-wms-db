@@ -130,6 +130,7 @@ SET @nProceedPrintFlag = '0'
 SET @cDisableLblPrint = '0'  
 SET @cDisablePLPrint = '0'  
 SET @nLimitCartonType = 0  --(Gh01)
+SET @cShowCartonNo = '0'
 
 DECLARE @cFieldName1 NVARCHAR(max),
         @cFieldName2 NVARCHAR(max),
@@ -360,16 +361,14 @@ END
 --(Gh01) end
 
 --Get New cartonno  
-IF EXISTS (SELECT 1 FROM packdetail(nolock) --(yeekung03)
+IF @cShowCartonNo = '1' AND
+EXISTS (SELECT 1 FROM packdetail(nolock) --(yeekung03)
             WHERE pickslipno = @cPickSlipNo  
                AND Storerkey = @cStorerKey 
                AND cartonNo = @nCartonNo 
                AND addwho <> @cUserName)
 BEGIN
-   SELECT @nCartonNo = MAX(cartonno) + 1
-   FROM packdetail(nolock) 
-   WHERE pickslipno = @cPickSlipNo  
-      AND Storerkey = @cStorerKey 
+   SET @nCartonNo = 0
 END
 
 SELECT @cUCCtoUPC =Svalue FROM storerConfig WITH (NOLOCK) WHERE storerKey = @cStorerKey AND configKey = 'PACKUPD_UCCTOUPC' 
@@ -476,8 +475,8 @@ END
   
 --SELECT @cCartonID AS cCartonID, @cLabelNo AS LabelNo  
 DECLARE @SQLParam NVARCHAR(MAX)   
-DECLARE @cCartonNo NVARCHAR(3)  
-SET @cCartonNo = CONVERT(NVARCHAR(3),@nCartonNo)  
+DECLARE @cCartonNo NVARCHAR(5)  
+SET @cCartonNo = CONVERT(NVARCHAR(5),@nCartonNo)  
 IF ISNULL(@cCartonID,'') =''   
 BEGIN   --(cc06)  
    SET @GetCartonID = '       
@@ -1828,7 +1827,7 @@ BEGIN
    SET @n_Err = 0  
    SET @c_ErrMsg = ''  
    SET @jResult = (select @cOrderKey AS OrderKey, @cLabelJobID as LabelJobID, @cPackingJobID as PackingJobID ,@nProceedPrintFlag AS nProceedPrintFlag, @nVasConfig AS VasConfig, @cVasCol1Name AS VasCol1Name, @cVasCol1Value AS VasCol1Value, @cWorkInstruction AS WorkInstruction,@nQueueID AS QueueID 
-   ,(CASE WHEN ISNULL(@cShowCartonNo,'') IN ('1') THEN @nCartonNo ELSE '' END) AS CartonNo --(yeekung09)
+   ,(CASE WHEN ISNULL(@cShowCartonNo,'') = '1' THEN @nCartonNo ELSE NULL END) AS CartonNo --(yeekung09)
    FOR JSON PATH )   
 END     
            

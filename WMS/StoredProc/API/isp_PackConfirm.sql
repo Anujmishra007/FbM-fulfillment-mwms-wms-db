@@ -185,6 +185,7 @@ BEGIN
    SET @cDisableLblPrint = '0'  
    SET @cDisablePLPrint = '0'  
    SET @nLimitCartonType = 0  --(Gh01)
+   SET @cShowCartonNo = '0'
   
    DECLARE @CartonIDList TABLE (  
       CartonID        NVARCHAR( 20)  
@@ -546,8 +547,8 @@ END
   
 --SELECT @cCartonID AS cCartonID, @cLabelNo AS LabelNo  
 DECLARE @SQLParam NVARCHAR(MAX)   
-DECLARE @cCartonNo NVARCHAR(3)  
-SET @cCartonNo = CONVERT(NVARCHAR(3),@nCartonNo)  
+DECLARE @cCartonNo NVARCHAR(5)  
+SET @cCartonNo = CONVERT(NVARCHAR(5),@nCartonNo)  
 IF ISNULL(@cCartonID,'') =''   
 BEGIN   --(cc06)  
    SET @GetCartonID = '       
@@ -615,7 +616,8 @@ BEGIN
    END  
 END 
 
-IF EXISTS ( SELECT 1 FROM PACKDETAIL (NOLOCK) 
+IF @cShowCartonNo = '1'
+AND EXISTS ( SELECT 1 FROM PACKDETAIL (NOLOCK) 
             WHERE PickSlipNo = @cPickSlipNo
                AND Storerkey = @cStorerkey
                AND CartonNo = @nCartonNo)
@@ -2288,7 +2290,7 @@ BEGIN
    SET @c_ErrMsg = ''  
    SET @jResult = (select @cOrderKey AS OrderKey, @cLabelJobID as LabelJobID, @cPackingJobID as PackingJobID ,@nProceedPrintFlag AS nProceedPrintFlag, @nVasConfig AS VasConfig, @cVasCol1Name AS VasCol1Name, @cVasCol1Value AS VasCol1Value, @cWorkInstruction AS WorkInstruction
    --,@nQueueID AS QueueID 
-                   ,(CASE WHEN ISNULL(@cShowCartonNo,'') IN ('1') THEN @nCartonNo ELSE '' END) AS CartonNo
+                   ,(CASE WHEN ISNULL(@cShowCartonNo,'') = '1' THEN @nCartonNo ELSE NULL END) AS CartonNo
    FOR JSON PATH )   
 END     
            

@@ -77,7 +77,6 @@ DECLARE
    @cLabelLine       NVARCHAR(5),
    @cScanNoType      NVARCHAR( 30),
    @cZone            NVARCHAR( 18),
-   @cLottableVal     NVARCHAR( 60), 
 
    @cDymEcomCtnWgtTb    NVARCHAR( 20),  
    @cDymEcomCtnWgtCol   NVARCHAR( 20),  
@@ -531,6 +530,7 @@ END
                UPC               NVARCHAR( 30)  '$.UPC',  
                QTY               INT            '$.QTY'
             )  
+            WHERE ISNULL(UPC,'') <> ''
             GROUP BY  UPC
 
             OPEN @cCurUPC 
@@ -560,8 +560,9 @@ END
 
                IF @nPackedQTY <> @nUPCQTY
                BEGIN
+                  SET @nUPCQTY = @nUPCQTY - @nPackedQTY
                   -- Close: PackDetail  
-                  IF NOT EXISTS( SELECT 1 FROM dbo.PackDetail WITH (NOLOCK) WHERE PickslipNo = @cPickslipNo AND cartonno =@nCartonNo AND SKU=@cSKU AND LOTTABLEVALUE = @cLottableVal and upc=@cupc)  
+                  IF NOT EXISTS( SELECT 1 FROM dbo.PackDetail WITH (NOLOCK) WHERE PickslipNo = @cPickslipNo AND cartonno =@nCartonNo AND SKU=@cSKU and upc=@cupc)  
                   BEGIN  
                      SELECT @cLabelLine = RIGHT( '00000' + CAST( CAST( IsNULL( MAX( LabelLine), 0) AS INT) + 1 AS NVARCHAR( 5)), 5)   
                      FROM dbo.PackDetail (NOLOCK)  
@@ -572,12 +573,10 @@ END
                      -- Insert PackDetail  
                      INSERT INTO dbo.PackDetail  
                         (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, DropID,  
-                        AddWho, AddDate, EditWho, EditDate  
-                        , LOTTABLEVALUE,UPC)--(cc05)  
+                        AddWho, AddDate, EditWho, EditDate, UPC)--(cc05)  
                      VALUES  
                         (@cPickSlipNo, @nCartonNo, @cCartonID, @cLabelLine, @cStorerKey, @cSKU, @nUPCQTY, ISNULL(@cDropID,''),  
-                           @cUserName, GETDATE(), @cUserName, GETDATE()  
-                           , @cLottableVal,@cUPC) --(cc05)  
+                           @cUserName, GETDATE(), @cUserName, GETDATE(),@cUPC) --(cc05)  
                      IF @@ERROR <> 0  
                      BEGIN  
                         SET @b_Success = 0    
@@ -595,12 +594,10 @@ END
                         DropID = ISNULL(@cDropID,''),  
                         EditWho =  @cUserName,   
                         EditDate = GETDATE(),   
-                        ArchiveCop = NULL,  
-                        LOTTABLEVALUE = @cLottableVal,
-                        UPC   = @cUPC
+                        ArchiveCop = NULL
                      WHERE PickSlipNo = @cPickSlipNo  
-                        AND SKU = @cSKU 
                         AND cartonno =@nCartonNo 
+                        AND SKU = @cSKU 
                         and upc = @cupc
                      IF @@ERROR <> 0  
                      BEGIN           
@@ -609,7 +606,6 @@ END
                         SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Fail to update into PackDetail. Function : isp_HoldCarton'   
                         GOTO RollBackTran  
                      END
-            
                   END  
                END
 
@@ -647,18 +643,20 @@ END
 
             SET @cCurLottable = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
             SELECT Lottable,SUM(PackedQTY ) 
-            FROM OPENJSON(@cLottableJSON)  
+            FROM OPENJSON(@cLottableJSON)    
             WITH (  
                Lottable               NVARCHAR( 30)  '$.Lottable',  
                PackedQTY              INT            '$.PackedQty'
             )  
+            WHERE ISNULL(Lottable,'') <> ''
             GROUP BY Lottable
 
             OPEN @cCurLottable 
             FETCH NEXT FROM @cCurLottable INTO @cLottableValue,@nLotQTY
             WHILE @@FETCH_STATUS <> -1  
             BEGIN  
-
+               IF ISNULL(@cLottableValue,'') =''
+                  GOTO NEXT_Lottable
                      -- Get LabelLine  
                SET @cLabelLine = ''  
                SET @nPackedQTY = 0
@@ -691,8 +689,10 @@ END
 
                IF @nPackedQTY <> @nLotQTY
                BEGIN
+                   SET @nLotQTY = @nLotQTY - @nPackedQTY
+
                   -- Close: PackDetail  
-                  IF NOT EXISTS( SELECT 1 FROM dbo.PackDetail WITH (NOLOCK) WHERE PickslipNo = @cPickslipNo AND cartonno =@nCartonNo AND SKU=@cSKU AND LOTTABLEVALUE = @cLottableVal  AND UPC = @cUPC)  
+                  IF NOT EXISTS( SELECT 1 FROM dbo.PackDetail WITH (NOLOCK) WHERE PickslipNo = @cPickslipNo AND cartonno =@nCartonNo AND SKU=@cSKU AND LOTTABLEVALUE = @cLottableValue)  
                   BEGIN  
                      SELECT @cLabelLine = RIGHT( '00000' + CAST( CAST( IsNULL( MAX( LabelLine), 0) AS INT) + 1 AS NVARCHAR( 5)), 5)   
                      FROM dbo.PackDetail (NOLOCK)  
@@ -703,12 +703,10 @@ END
                      -- Insert PackDetail  
                      INSERT INTO dbo.PackDetail  
                         (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, DropID,  
-                        AddWho, AddDate, EditWho, EditDate  
-                        , LOTTABLEVALUE,UPC)--(cc05)  
+                        AddWho, AddDate, EditWho, EditDate, LOTTABLEVALUE)--(cc05)  
                      VALUES  
-                        (@cPickSlipNo, @nCartonNo, @cCartonID, @cLabelLine, @cStorerKey, @cSKU, @nPackedQTY, ISNULL(@cDropID,''),  
-                           @cUserName, GETDATE(), @cUserName, GETDATE()  
-                           , @cLottableValue,@cUPC) --(cc05)  
+                        (@cPickSlipNo, @nCartonNo, @cCartonID, @cLabelLine, @cStorerKey, @cSKU, @nLotQTY, ISNULL(@cDropID,''),  
+                           @cUserName, GETDATE(), @cUserName, GETDATE(), @cLottableValue) --(cc05)  
                      IF @@ERROR <> 0  
                      BEGIN  
                         SET @b_Success = 0    
@@ -722,16 +720,14 @@ END
                      -- Update Packdetail  
                      UPDATE dbo.PackDetail WITH (ROWLOCK) SET     
                         SKU = @cSKU,   
-                        QTY = QTY+ @nPackedQTY,   
+                        QTY = QTY+ @nLotQTY,   
                         DropID = ISNULL(@cDropID,''),  
                         EditWho =  @cUserName,   
                         EditDate = GETDATE(),   
-                        ArchiveCop = NULL,  
-                        LOTTABLEVALUE = @cLottableVal,
-                        UPC   = @cUPC
+                        ArchiveCop = NULL
                      WHERE PickSlipNo = @cPickSlipNo  
-                        AND SKU = @cSKU 
                         AND cartonno =@nCartonNo
+                        AND SKU = @cSKU 
                         and LOTTABLEVALUE = @cLottableValue
                      IF @@ERROR <> 0  
                      BEGIN           
@@ -739,35 +735,33 @@ END
                         SET @n_Err = 1001363    
                         SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Fail to update into PackDetail. Function : isp_HoldCarton'   
                         GOTO RollBackTran  
-                     END
-
-                     SET @nQTY = @nQTY- @nPackedQTY
-
-                     -- Get system assigned CartonoNo and LabelNo
-                     IF @nCartonNo = 0
-                     BEGIN
-                        -- If insert cartonno = 0, system will auto assign max cartonno
-                        SELECT TOP 1 
-                           @nCartonNo = CartonNo
-                        FROM PackDetail WITH (NOLOCK)
-                        WHERE PickSlipNo = @cPickSlipNo
-                           AND SKU = @cSKU
-                           AND AddWho = @cUserName
-                        ORDER BY CartonNo DESC -- max cartonno
-                     END   
-            
-                  END  
+                     END  
+                  END 
                END
 
-               FETCH NEXT FROM @cCurLottable INTO @cLottableValue,@nPackedQTY
+               SET @nQTY = @nQTY- @nLotQTY
+
+               -- Get system assigned CartonoNo and LabelNo
+               IF @nCartonNo = 0
+               BEGIN
+                  -- If insert cartonno = 0, system will auto assign max cartonno
+                  SELECT TOP 1 
+                     @nCartonNo = CartonNo
+                  FROM PackDetail WITH (NOLOCK)
+                  WHERE PickSlipNo = @cPickSlipNo
+                     AND SKU = @cSKU
+                     AND AddWho = @cUserName
+                  ORDER BY CartonNo DESC -- max cartonno
+               END 
+NEXT_Lottable:
+               FETCH NEXT FROM @cCurLottable INTO @cLottableValue,@nLotQTY
             END
             CLOSE @cCurLottable
             DEALLOCATE @cCurLottable
-
          END
 
          SET @cUPC = ''
-         SET @cLottableVal = ''
+         SET @cLottableValue = ''
       END
 
       IF @nQTY >0
@@ -810,7 +804,7 @@ END
          IF @nQTY > 0
          BEGIN
             -- Close: PackDetail  
-            IF NOT EXISTS( SELECT 1 FROM dbo.PackDetail WITH (NOLOCK) WHERE PickslipNo = @cPickslipNo AND cartonno =@nCartonNo AND labelNo=@cCartonID AND SKU=@cSKU AND LOTTABLEVALUE = @cLottableVal  AND UPC = @cUPC)  AND @nQTY > 0
+            IF NOT EXISTS( SELECT 1 FROM dbo.PackDetail WITH (NOLOCK) WHERE PickslipNo = @cPickslipNo AND cartonno =@nCartonNo AND labelNo=@cCartonID AND UPC = @cUPC AND SKU=@cSKU)
             BEGIN  
                SELECT @cLabelLine = RIGHT( '00000' + CAST( CAST( IsNULL( MAX( LabelLine), 0) AS INT) + 1 AS NVARCHAR( 5)), 5)   
                FROM dbo.PackDetail (NOLOCK)  
@@ -821,12 +815,10 @@ END
                -- Insert PackDetail  
                INSERT INTO dbo.PackDetail  
                   (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, DropID,  
-                  AddWho, AddDate, EditWho, EditDate  
-                  , LOTTABLEVALUE,UPC)--(cc05)  
+                  AddWho, AddDate, EditWho, EditDate,UPC)--(cc05)  
                VALUES  
                   (@cPickSlipNo, @nCartonNo, @cCartonID, @cLabelLine, @cStorerKey, @cSKU, @nQTY, ISNULL(@cDropID,''),  
-                     @cUserName, GETDATE(), @cUserName, GETDATE()  
-                     , @cLottableVal,@cUPC) --(cc05)  
+                     @cUserName, GETDATE(), @cUserName, GETDATE(),@cUPC) --(cc05)  
                IF @@ERROR <> 0  
                BEGIN  
                   SET @b_Success = 0    
@@ -840,17 +832,16 @@ END
                -- Update Packdetail  
                UPDATE dbo.PackDetail WITH (ROWLOCK) SET     
                   SKU = @cSKU,   
-                  QTY = @nQTY,   
+                  QTY = QTY + @nQTY, 
                   DropID = ISNULL(@cDropID,''),  
                   EditWho =  @cUserName,   
                   EditDate = GETDATE(),   
-                  ArchiveCop = NULL,  
-                  LOTTABLEVALUE = @cLottableVal,
-                  UPC   = @cUPC
+                  ArchiveCop = NULL
                WHERE PickSlipNo = @cPickSlipNo  
                   AND CartonNo = @nCartonNo  
                   AND LabelNo = @cCartonID  
-                  AND LabelLine = @cLabelLine  
+                  AND SKU = @cSKU 
+                  AND UPC = @cUPC
                IF @@ERROR <> 0  
                BEGIN           
                   SET @b_Success = 0    
@@ -1532,7 +1523,7 @@ END
             SET @n_Err = @n_Err  
             SET @c_ErrMsg = @c_ErrMsg  
             SET @jResult = (select @cOrderKey AS OrderKey, '' as LabelJobID, '' as PackingJobID ,@nProceedPrintFlag AS nProceedPrintFlag                   
-                           ,(CASE WHEN ISNULL(@cShowCartonNo,'') IN ('1') THEN @nCartonNo ELSE '' END) AS CartonNo
+                           ,(CASE WHEN ISNULL(@cShowCartonNo,'') = '1' THEN @nCartonNo ELSE NULL END) AS CartonNo
                            FOR JSON PATH )    
             GOTO EXIT_SP  
          END  

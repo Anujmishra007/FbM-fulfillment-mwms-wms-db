@@ -9,7 +9,7 @@ execute API.TouchPadAddMsg 1002854, 10, 'Fail to Insert PackSerialNo table. Func
 execute API.TouchPadAddMsg 1002855, 10, 'Fail to Update SerialNo table. Function : isp_TPS_ExtUpd09',    'us_english'
 execute API.TouchPadAddMsg 1002856, 10, 'Fail to Insert PackSerialNo table. Function : isp_TPS_ExtUpd09',    'us_english'
 execute API.TouchPadAddMsg 1002857, 10, 'Fail to Update SerialNo table. Function : isp_TPS_ExtUpd09',    'us_english'
-execute API.TouchPadAddMsg 1002858, 10, 'No OrderKey found, failed to proceed. Function : isp_TPS_ExtUpd09',    'us_english'
+execute API.TouchPadAddMsg 1002858, 10, 'No OrderKey and LoadKey found, failed to proceed. Function : isp_TPS_ExtUpd09',    'us_english'
 execute API.TouchPadAddMsg 1002859, 10, 'ListName(REQEXP) and Code(ADBARCODE) setup not found. Function : isp_TPS_ExtUpd09',    'us_english'
 execute API.TouchPadAddMsg 1002860, 10, 'Fail to Insert SerialNo table. Function : isp_TPS_ExtUpd09',    'us_english'
 execute API.TouchPadAddMsg 1002861, 10, 'PackOtherUnit2 cannot be less than 1. Function : isp_TPS_ExtUpd09',    'us_english'
