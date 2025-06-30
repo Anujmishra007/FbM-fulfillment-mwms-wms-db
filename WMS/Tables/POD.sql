@@ -189,4 +189,36 @@ BEGIN
 END
 
 
+
+IF NOT EXISTS (SELECT * FROM sys.columns WHERE Name = 'TrackCol06' AND Object_ID = Object_ID('dbo.POD'))
+BEGIN
+	ALTER TABLE dbo.POD ADD [TrackCol06] [nvarchar] (100) NULL;
+	EXEC sp_addextendedproperty N'MS_Description', 'TrackCol06', 'SCHEMA', N'dbo', 'TABLE', N'POD', 'COLUMN', N'TrackCol06'
+				
 END
+
+IF NOT EXISTS (SELECT * FROM sys.columns WHERE Name = 'TrackCol07' AND Object_ID = Object_ID('dbo.POD'))
+BEGIN
+	ALTER TABLE dbo.POD ADD [TrackCol07] [nvarchar] (100) NULL;
+	EXEC sp_addextendedproperty N'MS_Description', 'TrackCol07', 'SCHEMA', N'dbo', 'TABLE', N'POD', 'COLUMN', N'TrackCol07'
+				
+END
+
+IF NOT EXISTS (SELECT * FROM sys.columns WHERE Name = 'TrackCol08' AND Object_ID = Object_ID('dbo.POD'))
+BEGIN
+	ALTER TABLE dbo.POD ADD [TrackCol08] [nvarchar] (100) NULL;
+	EXEC sp_addextendedproperty N'MS_Description', 'TrackCol08', 'SCHEMA', N'dbo', 'TABLE', N'POD', 'COLUMN', N'TrackCol08'
+				
+END
+
+IF NOT EXISTS (SELECT * FROM sys.columns WHERE Name = 'TrackCol09' AND Object_ID = Object_ID('dbo.POD'))
+BEGIN
+	ALTER TABLE dbo.POD ADD [TrackCol09] [nvarchar] (100) NULL;
+	EXEC sp_addextendedproperty N'MS_Description', 'TrackCol09', 'SCHEMA', N'dbo', 'TABLE', N'POD', 'COLUMN', N'TrackCol09'
+				
+END
+
+
+END
+
+

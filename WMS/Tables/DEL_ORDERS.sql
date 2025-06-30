@@ -136,7 +136,7 @@ CREATE TABLE [dbo].[DEL_ORDERS]
 [CurrencyCode] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
 [RTNTrackingNo] [nvarchar] (40) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
 [BizUnit] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[ECOM_OAID] [nvarchar] (128) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_DEL_ORDERS_ECOM_OAID] DEFAULT (''),
+[ECOM_OAID] [nvarchar] (256) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_DEL_ORDERS_ECOM_OAID] DEFAULT (''),
 [ECOM_Platform] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_DEL_ORDERS_ECOM_Platform] DEFAULT (''),
 [CancelReasonCode] [nvarchar](60) NULL 
 ) ON [PRIMARY]
@@ -313,6 +313,18 @@ BEGIN
 				ALTER TABLE dbo.DEL_ORDERS ADD CancelReasonCode [nvarchar](60) NULL ;
 				EXEC sp_addextendedproperty N'MS_Description', 'The reason why an order detail is cancelled.', 'SCHEMA', N'dbo', 'TABLE', N'DEL_ORDERS', 'COLUMN', N'CancelReasonCode'
 				
+			END
+
+
+
+	--ALTER COLUMN 
+ IF  EXISTS (SELECT 1
+	               FROM sys.columns
+	               WHERE Name = 'ECOM_OAID' AND Object_ID = Object_ID('dbo.DEL_ORDERS') and max_length <>512)
+			BEGIN
+				ALTER TABLE dbo.DEL_ORDERS 
+				ALTER COLUMN [ECOM_OAID]  [nvarchar] (256) NULL;
+
 			END
 
 END
