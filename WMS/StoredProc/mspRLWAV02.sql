@@ -36,7 +36,7 @@ GO
 /* 2025-05-09  Wan01    1.8   FCR-3958 - JCB Picking Task                */
 /* 2025-06-17                 Overwrite the whole logic as implement new */
 /*                            process. Use back same SP                  */
-/* 2025-06-30                 Version 1.90 & 1.91 & fixes                */
+/* 2025-07-01                 Version 1.90 & 1.91 & fixes. Add v2.0      */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV02]
    @c_Wavekey      NVARCHAR(10)
@@ -914,7 +914,7 @@ BEGIN
          SELECT @c_ToLoc = l.Loc
          FROM LOC l (NOLOCK)
          WHERE l.Facility = @c_Facility
-         AND   l.LocationCategory = 'PNDOUT'
+         AND   l.LocationCategory = 'PND_OUT'                                       --v2.0
          AND   l.LocAisle = @c_LocAisle
          AND   l.[Floor]  = @c_Floor
                              
