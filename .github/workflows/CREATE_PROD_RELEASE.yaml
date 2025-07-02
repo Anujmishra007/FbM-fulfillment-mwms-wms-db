@@ -38,102 +38,102 @@ jobs:
           ref: ${{ github.ref_name }}
           token: ${{ env.GH_TOKEN }}
 
-      # - name: Check Previous Tag version
-      #   shell: pwsh
-      #   run: |
-      #     # Get the latest tag
-      #     [regex]$pattern = '(?i)^V(?<year>\d{2})\.(?<month>\d{1,2})\.(?<tagnumber>\d{3})'
-      #     $CURRENT_TAG = '${{ github.ref_name }}-prod'
-      #     $LAST_RELEASE_TAG = $(gh release view  --json tagName|out-string| ConvertFrom-Json).tagName
+      - name: Check Previous Tag version
+        shell: pwsh
+        run: |
+          # Get the latest tag
+          [regex]$pattern = '(?i)^V(?<year>\d{2})\.(?<month>\d{1,2})\.(?<tagnumber>\d{3})'
+          $CURRENT_TAG = '${{ github.ref_name }}-prod'
+          $LAST_RELEASE_TAG = $(gh release view  --json tagName|out-string| ConvertFrom-Json).tagName
 
-      #     $CURRENT_TAG
-      #     $LAST_RELEASE_TAG
+          $CURRENT_TAG
+          $LAST_RELEASE_TAG
 
-      #     ####################### Checking Currrent Version and Deploy Version Format ########################
-      #     $DB_CURRENT_VERSION = $LAST_RELEASE_TAG
-      #     $DB_DEPLOY_VERSION = $CURRENT_TAG
-      #     if(($DB_CURRENT_VERSION -ne '') -or ($DB_DEPLOY_VERSION -notmatch $pattern))
-      #     {
-      #       if($DB_CURRENT_VERSION -match $pattern)
-      #         {
-      #         $DB_CURRENT_VERSION = $Matches.0
-      #         $DB_CURRENT_VERSION_YEAR = $Matches.year
-      #         $DB_CURRENT_VERSION_MONTH = $Matches.month
-      #         $DB_CURRENT_VERSION_TAGNUMBER = $Matches.tagnumber
-      #         write-host "Current version: $($DB_CURRENT_VERSION), Year : $($DB_CURRENT_VERSION_YEAR), Month: $($DB_CURRENT_VERSION_MONTH), Tag Number: $($DB_CURRENT_VERSION_TAGNUMBER)" 
-      #         }else{
-      #         write-output "| $($DATBASE_NAME) |$($DB_SERVER_NAME) |$($DB_CURRENT_VERSION) |$($DB_DEPLOY_VERSION) | **SKIPPED :heavy_exclamation_mark:** | $($DATBASE_NAME): ⚠️ ERROR : Current version is not in the correct format, skipping deployment for this database. |"| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
-      #         throw " $($DATBASE_NAME): ⚠️ ERROR : Current version is not in the correct format, skipping deployment for this database."
-      #         }
-      #         ####################### Checking Deployment Version and Deploy Version Format ########################
-      #         if($DB_DEPLOY_VERSION -match $pattern)
-      #         {
-      #         $DB_DEPLOY_VERSION = $Matches.0
-      #         $DB_DEPLOY_VERSION_YEAR = $Matches.year
-      #         $DB_DEPLOY_VERSION_MONTH = $Matches.month
-      #         $DB_DEPLOY_VERSION_TAGNUMBER = $Matches.tagnumber
-      #         write-host "Current version: $($DB_DEPLOY_VERSION), Year : $($DB_DEPLOY_VERSION_YEAR), Month: $($DB_DEPLOY_VERSION_MONTH), Tag Number: $($DB_DEPLOY_VERSION_TAGNUMBER)"
-      #         }else{
-      #         write-output "| $($DATBASE_NAME) |$($DB_SERVER_NAME) |$($DB_CURRENT_VERSION) |$($DB_DEPLOY_VERSION) | **SKIPPED :heavy_exclamation_mark:** | $($DATBASE_NAME): ⚠️ ERROR : Current version is not in the correct format, skipping deployment for this database. |"| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
-      #         throw " $($DATBASE_NAME): ⚠️ ERROR : Deployment version is not in the correct format, skipping deployment for this database."
-      #         }
-      #       ####################### Deployment version is higher than Current version ########################
-      #       if($DB_DEPLOY_VERSION -eq $DB_CURRENT_VERSION)
-      #         {
-      #         write-output "**:heavy_exclamation_mark:** There is already a latest release tag $($LAST_RELEASE_TAG) for prod"| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
-      #         write-output '```markdown' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
-      #         write-output "❌ There is already a latest release tag $($LAST_RELEASE_TAG) for prod, $($CURRENT_TAG) cannot be released."| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
-      #         throw " $($DATBASE_NAME): ⚠️ is already on the $($DB_DEPLOY_VERSION), skipping deployment for this database."
-      #         }elseif($DB_DEPLOY_VERSION_YEAR -lt $DB_CURRENT_VERSION_YEAR)
-      #         {
-      #         write-output "**:heavy_exclamation_mark:** There is already a latest release tag $($LAST_RELEASE_TAG) for prod"| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
-      #         write-output '```markdown' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
-      #         write-output "❌ There is already a latest release tag $($LAST_RELEASE_TAG) for prod, $($CURRENT_TAG) cannot be released."| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
-      #         throw " $($DATBASE_NAME): ⚠️ version is on higher version $($DB_CURRENT_VERSION), cannot be downgraded."
-      #         }elseif(($DB_DEPLOY_VERSION_YEAR -eq $DB_CURRENT_VERSION_YEAR) -and ($DB_DEPLOY_VERSION_MONTH -lt $DB_CURRENT_VERSION_MONTH))
-      #         {
-      #         write-output "**:heavy_exclamation_mark:** There is already a latest release tag $($LAST_RELEASE_TAG) for prod"| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
-      #         write-output '```markdown' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
-      #         write-output "❌ There is already a latest release tag $($LAST_RELEASE_TAG) for prod, $($CURRENT_TAG) cannot be released."| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
-      #         throw " $($DATBASE_NAME): ⚠️ version is on higher version $($DB_CURRENT_VERSION), cannot be downgraded."
-      #         }elseif(($DB_DEPLOY_VERSION_YEAR -eq $DB_CURRENT_VERSION_YEAR) -and ($DB_DEPLOY_VERSION_MONTH -eq $DB_CURRENT_VERSION_MONTH) -and ($DB_DEPLOY_VERSION_TAGNUMBER -lt $DB_CURRENT_VERSION_TAGNUMBER))
-      #         {
-      #         write-output "**:heavy_exclamation_mark:** There is already a latest release tag $($LAST_RELEASE_TAG) for prod"| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
-      #         write-output '```markdown' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
-      #         write-output "❌ There is already a latest release tag $($LAST_RELEASE_TAG) for prod, $($CURRENT_TAG) cannot be released."| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
-      #         throw " $($DATBASE_NAME): ⚠️ version is on higher version $($DB_CURRENT_VERSION), cannot be downgraded."
-      #         }
-      #     }
+          ####################### Checking Currrent Version and Deploy Version Format ########################
+          $DB_CURRENT_VERSION = $LAST_RELEASE_TAG
+          $DB_DEPLOY_VERSION = $CURRENT_TAG
+          if(($DB_CURRENT_VERSION -ne '') -or ($DB_DEPLOY_VERSION -notmatch $pattern))
+          {
+            if($DB_CURRENT_VERSION -match $pattern)
+              {
+              $DB_CURRENT_VERSION = $Matches.0
+              $DB_CURRENT_VERSION_YEAR = $Matches.year
+              $DB_CURRENT_VERSION_MONTH = $Matches.month
+              $DB_CURRENT_VERSION_TAGNUMBER = $Matches.tagnumber
+              write-host "Current version: $($DB_CURRENT_VERSION), Year : $($DB_CURRENT_VERSION_YEAR), Month: $($DB_CURRENT_VERSION_MONTH), Tag Number: $($DB_CURRENT_VERSION_TAGNUMBER)" 
+              }else{
+              write-output "| $($DATBASE_NAME) |$($DB_SERVER_NAME) |$($DB_CURRENT_VERSION) |$($DB_DEPLOY_VERSION) | **SKIPPED :heavy_exclamation_mark:** | $($DATBASE_NAME): ⚠️ ERROR : Current version is not in the correct format, skipping deployment for this database. |"| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+              throw " $($DATBASE_NAME): ⚠️ ERROR : Current version is not in the correct format, skipping deployment for this database."
+              }
+              ####################### Checking Deployment Version and Deploy Version Format ########################
+              if($DB_DEPLOY_VERSION -match $pattern)
+              {
+              $DB_DEPLOY_VERSION = $Matches.0
+              $DB_DEPLOY_VERSION_YEAR = $Matches.year
+              $DB_DEPLOY_VERSION_MONTH = $Matches.month
+              $DB_DEPLOY_VERSION_TAGNUMBER = $Matches.tagnumber
+              write-host "Current version: $($DB_DEPLOY_VERSION), Year : $($DB_DEPLOY_VERSION_YEAR), Month: $($DB_DEPLOY_VERSION_MONTH), Tag Number: $($DB_DEPLOY_VERSION_TAGNUMBER)"
+              }else{
+              write-output "| $($DATBASE_NAME) |$($DB_SERVER_NAME) |$($DB_CURRENT_VERSION) |$($DB_DEPLOY_VERSION) | **SKIPPED :heavy_exclamation_mark:** | $($DATBASE_NAME): ⚠️ ERROR : Current version is not in the correct format, skipping deployment for this database. |"| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+              throw " $($DATBASE_NAME): ⚠️ ERROR : Deployment version is not in the correct format, skipping deployment for this database."
+              }
+            ####################### Deployment version is higher than Current version ########################
+            if($DB_DEPLOY_VERSION -eq $DB_CURRENT_VERSION)
+              {
+              write-output "**:heavy_exclamation_mark:** There is already a latest release tag $($LAST_RELEASE_TAG) for prod"| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+              write-output '```markdown' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+              write-output "❌ There is already a latest release tag $($LAST_RELEASE_TAG) for prod, $($CURRENT_TAG) cannot be released."| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+              throw " $($DATBASE_NAME): ⚠️ is already on the $($DB_DEPLOY_VERSION), skipping deployment for this database."
+              }elseif($DB_DEPLOY_VERSION_YEAR -lt $DB_CURRENT_VERSION_YEAR)
+              {
+              write-output "**:heavy_exclamation_mark:** There is already a latest release tag $($LAST_RELEASE_TAG) for prod"| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+              write-output '```markdown' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+              write-output "❌ There is already a latest release tag $($LAST_RELEASE_TAG) for prod, $($CURRENT_TAG) cannot be released."| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+              throw " $($DATBASE_NAME): ⚠️ version is on higher version $($DB_CURRENT_VERSION), cannot be downgraded."
+              }elseif(($DB_DEPLOY_VERSION_YEAR -eq $DB_CURRENT_VERSION_YEAR) -and ($DB_DEPLOY_VERSION_MONTH -lt $DB_CURRENT_VERSION_MONTH))
+              {
+              write-output "**:heavy_exclamation_mark:** There is already a latest release tag $($LAST_RELEASE_TAG) for prod"| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+              write-output '```markdown' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+              write-output "❌ There is already a latest release tag $($LAST_RELEASE_TAG) for prod, $($CURRENT_TAG) cannot be released."| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+              throw " $($DATBASE_NAME): ⚠️ version is on higher version $($DB_CURRENT_VERSION), cannot be downgraded."
+              }elseif(($DB_DEPLOY_VERSION_YEAR -eq $DB_CURRENT_VERSION_YEAR) -and ($DB_DEPLOY_VERSION_MONTH -eq $DB_CURRENT_VERSION_MONTH) -and ($DB_DEPLOY_VERSION_TAGNUMBER -lt $DB_CURRENT_VERSION_TAGNUMBER))
+              {
+              write-output "**:heavy_exclamation_mark:** There is already a latest release tag $($LAST_RELEASE_TAG) for prod"| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+              write-output '```markdown' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+              write-output "❌ There is already a latest release tag $($LAST_RELEASE_TAG) for prod, $($CURRENT_TAG) cannot be released."| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+              throw " $($DATBASE_NAME): ⚠️ version is on higher version $($DB_CURRENT_VERSION), cannot be downgraded."
+              }
+          }
 
-      #     write-host "Last release tag name: $($LAST_RELEASE_TAG)"
-      #     $last_release_sha = $(gh api /repos/:owner/:repo/git/refs/tags/$($LAST_RELEASE_TAG) | out-string| ConvertFrom-Json).object.sha
-      #     $changed_files = git diff --name-only $last_release_sha ${{ github.sha }} | out-string 
-      #     $changed_files_list = $changed_files -split '\r?\n' | where-object { $_ -ne ''}
-      #     $changed_files_string = $changed_files_list -join ","
-      #     write-output "changed_files_string : $($changed_files_string)"
-      #     write-output "# $($CURRENT_TAG) : New prod tag released by ${{ github.actor }}" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
-      #     write-output '' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
-      #     write-output '| PREVIOUS_PROD_TAG |NEW_PROD_TAG |COMMIT_SHA |RELEASED_BY |COMMMENTS |' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
-      #     write-output '| :-----------: |:-----------: |:-----------: |:-----------: |:-----------: |' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
-      #     write-output "| $($LAST_RELEASE_TAG) | $($CURRENT_TAG) |${{ github.sha }} |${{ github.actor }} |${{ github.event.inputs.COMMENTS }} |" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
-      #     write-output '' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
-      #     write-output '| Files which have been modified/added |'| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
-      #     write-output '| :----------- |'| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
-      #     foreach ($file in $changed_files_list) {
-      #       write-output "| $($file) |" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
-      #     }
-      #     echo '' >> Release.txt
-      #     write-output "# $($CURRENT_TAG) : New prod tag released by ${{ github.actor }}" | Out-File -FilePath Release.txt -Encoding UTF8 -Append
-      #     write-output '' | Out-File -FilePath Release.txt -Encoding UTF8 -Append
-      #     write-output '| PREVIOUS_PROD_TAG |NEW_PROD_TAG |COMMIT_SHA |RELEASED_BY |COMMMENTS |' | Out-File -FilePath Release.txt -Encoding UTF8 -Append
-      #     write-output '| :-----------: |:-----------: |:-----------: |:-----------: |:-----------: |' | Out-File -FilePath Release.txt -Encoding UTF8 -Append
-      #     write-output "| $($LAST_RELEASE_TAG) | $($CURRENT_TAG) |${{ github.sha }} |${{ github.actor }} |${{ github.event.inputs.COMMENTS }} |" | Out-File -FilePath Release.txt -Encoding UTF8 -Append
-      #     write-output '' | Out-File -FilePath Release.txt -Encoding UTF8 -Append
-      #     write-output '| Files which have been modified/added |'| Out-File -FilePath Release.txt -Encoding UTF8 -Append
-      #     write-output '| :----------- |'| Out-File -FilePath Release.txt -Encoding UTF8 -Append
-      #     foreach ($file in $changed_files_list) {
-      #       write-output "| $($file) |" | Out-File -FilePath Release.txt -Encoding UTF8 -Append
-      #     }
+          write-host "Last release tag name: $($LAST_RELEASE_TAG)"
+          $last_release_sha = $(gh api /repos/:owner/:repo/git/refs/tags/$($LAST_RELEASE_TAG) | out-string| ConvertFrom-Json).object.sha
+          $changed_files = git diff --name-only $last_release_sha ${{ github.sha }} | out-string 
+          $changed_files_list = $changed_files -split '\r?\n' | where-object { $_ -ne ''}
+          $changed_files_string = $changed_files_list -join ","
+          write-output "changed_files_string : $($changed_files_string)"
+          write-output "# $($CURRENT_TAG) : New prod tag released by ${{ github.actor }}" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+          write-output '' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+          write-output '| PREVIOUS_PROD_TAG |NEW_PROD_TAG |COMMIT_SHA |RELEASED_BY |COMMMENTS |' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+          write-output '| :-----------: |:-----------: |:-----------: |:-----------: |:-----------: |' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+          write-output "| $($LAST_RELEASE_TAG) | $($CURRENT_TAG) |${{ github.sha }} |${{ github.actor }} |${{ github.event.inputs.COMMENTS }} |" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+          write-output '' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+          write-output '| Files which have been modified/added |'| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+          write-output '| :----------- |'| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+          foreach ($file in $changed_files_list) {
+            write-output "| $($file) |" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+          }
+          echo '' >> Release.txt
+          write-output "# $($CURRENT_TAG) : New prod tag released by ${{ github.actor }}" | Out-File -FilePath Release.txt -Encoding UTF8 -Append
+          write-output '' | Out-File -FilePath Release.txt -Encoding UTF8 -Append
+          write-output '| PREVIOUS_PROD_TAG |NEW_PROD_TAG |COMMIT_SHA |RELEASED_BY |COMMMENTS |' | Out-File -FilePath Release.txt -Encoding UTF8 -Append
+          write-output '| :-----------: |:-----------: |:-----------: |:-----------: |:-----------: |' | Out-File -FilePath Release.txt -Encoding UTF8 -Append
+          write-output "| $($LAST_RELEASE_TAG) | $($CURRENT_TAG) |${{ github.sha }} |${{ github.actor }} |${{ github.event.inputs.COMMENTS }} |" | Out-File -FilePath Release.txt -Encoding UTF8 -Append
+          write-output '' | Out-File -FilePath Release.txt -Encoding UTF8 -Append
+          write-output '| Files which have been modified/added |'| Out-File -FilePath Release.txt -Encoding UTF8 -Append
+          write-output '| :----------- |'| Out-File -FilePath Release.txt -Encoding UTF8 -Append
+          foreach ($file in $changed_files_list) {
+            write-output "| $($file) |" | Out-File -FilePath Release.txt -Encoding UTF8 -Append
+          }
       - name: Create branch with tag name -prod
         shell: pwsh
         run: |
