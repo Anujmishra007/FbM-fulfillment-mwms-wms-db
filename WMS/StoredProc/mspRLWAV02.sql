@@ -37,6 +37,7 @@ GO
 /* 2025-06-17                 Overwrite the whole logic as implement new */
 /*                            process. Use back same SP                  */
 /* 2025-07-01                 Version 1.90 & 1.91 & fixes. Add v2.0      */
+/* 2025-07-02                 Version v2.1 & fixes                       */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV02]
    @c_Wavekey      NVARCHAR(10)
@@ -229,20 +230,21 @@ BEGIN
       ,  C_Company      NVARCHAR(100)  NOT NULL    DEFAULT('')
       ,  CompML         NVARCHAR(10)   NOT NULL    DEFAULT('')
       ,  KitOrder       INT            NOT NULL    DEFAULT(0)
-      ,  KitLoc         NVARCHAR(100)  NOT NULL    DEFAULT('')
-      ,  MSLanes        NVARCHAR(100)  NOT NULL    DEFAULT('')
+      ,  KitLoc         NVARCHAR(100)      NULL    DEFAULT('')                      --2025-07-02
+      ,  MSLanes        NVARCHAR(100)      NULL    DEFAULT('')                      --2025-07-02
       ,  ToLocCodes     NVARCHAR(100)  NOT NULL    DEFAULT('')                      --v1.91
       ,  AutoRL         NCHAR(1)       NOT NULL    DEFAULT('N')
       ,  FCP            NCHAR(1)       NOT NULL    DEFAULT('N')
       ,  RPF            NCHAR(1)       NOT NULL    DEFAULT('N')
+      ,  PRGRP          NVARCHAR(30)   NOT NULL    DEFAULT('')                      --v2.1      
       )
 
       INSERT INTO #TMP_ORD ( Orderkey, Facility, Storerkey, Loadkey, MBOLKey
                            , OtherReference, [Type], [Priority], [Status]
                            , C_Company, CompML, MSLanes, ToLocCodes                 --v1.91
-                           , AutoRL, FCP, RPF
+                           , AutoRL, FCP, RPF, PRGRP                                --v2.1
                            )
-      SELECT TOP 1 WITH TIES                                                        --2025-06-30
+      SELECT  
               o.Orderkey
             , o.Facility
             , o.StorerKey
@@ -254,13 +256,14 @@ BEGIN
             , o.[Status]
             , C_Company = ISNULL(o.C_Company,'')
             , CompML =  ISNULL(MIN(cl.ListName),'')
-            , MSLanes=  STRING_AGG(ISNULL(l.Loc,'') , ',')     
+            , MSLanes=  STRING_AGG(l.Loc , ',')                                     --2025-07-02
                         WITHIN GROUP (ORDER BY l.Loc, cl.Short ASC)                 --v1.91
             , ToLocCodes=STRING_AGG(cl.Short , ',')                                 --v1.91
                         WITHIN GROUP (ORDER BY l.Loc, cl.Short ASC)
             , AutoRL = CASE WHEN cl2.UDF01 = 'Y' THEN cl2.UDF01 ELSE 'N' END
             , FCP    = CASE WHEN cl2.UDF04 = 'Y' THEN cl2.UDF04 ELSE 'N' END
             , RPF    = CASE WHEN cl2.UDF05 = 'Y' THEN cl2.UDF05 ELSE 'N' END
+            , PRGRP  = ISNULL(cl2.Code,'')                                          --v2.1            
       FROM WAVE w (NOLOCK) 
       JOIN WAVEDETAIL wd (NOLOCK) ON wd.Wavekey  = w.Wavekey
       JOIN ORDERS o (NOLOCK) ON o.Orderkey = wd.OrderKey
@@ -275,11 +278,21 @@ BEGIN
                                      AND l.Facility = o.Facility
                                      AND cl.Short <> '' AND cl.Short IS NOT NULL
                                      AND l.LocationFlag <> 'INACTIVE'                                      
-      LEFT OUTER JOIN @TMP_FCP_CL cl2  ON  cl2.ListName = 'JCBORDPR' 
-                                       AND cl2.Storerkey= o.StorerKey
-                                       AND cl2.Code2 = o.[Type]
-                                       AND cl2.UDF02 IN ('', o.[Priority])
-                                       AND cl2.UDF03 IN ('', o.[OrderGroup])  
+      OUTER APPLY (SELECT TOP 1 WITH TIES                                           --v2.1
+                     cl.Code, cl.Short, cl.UDF01, cl.UDF04, cl.UDF05
+                   FROM @TMP_FCP_CL cl   
+                   WHERE cl.ListName = 'JCBORDPR' 
+                   AND cl.Storerkey= o.StorerKey
+                   AND cl.Code2 = o.[Type]
+                   AND cl.UDF02 IN ('', o.[Priority])
+                   AND cl.UDF03 IN ('', o.[OrderGroup]) 
+                   GROUP BY cl.Code, cl.Short, cl.UDF01, cl.UDF02, cl.UDF03, cl.UDF04, cl.UDF05
+                   ORDER BY DENSE_RANK() OVER (PARTITION BY o.Orderkey                            
+                                               ORDER BY o.Orderkey
+                                              ,CASE WHEN cl.UDF02 = o.[Priority]   THEN 1
+                                                    WHEN cl.UDF03 = o.[OrderGroup] THEN 2 
+                                                    ELSE 3 END)
+                  ) cl2  
       WHERE w.WaveKey = @c_Wavekey
       GROUP BY o.Orderkey
             ,  o.Facility
@@ -294,14 +307,8 @@ BEGIN
             ,  CASE WHEN cl2.UDF01 = 'Y' THEN cl2.UDF01 ELSE 'N' END
             ,  CASE WHEN cl2.UDF04 = 'Y' THEN cl2.UDF04 ELSE 'N' END
             ,  CASE WHEN cl2.UDF05 = 'Y' THEN cl2.UDF05 ELSE 'N' END
-            ,  CASE WHEN cl2.UDF02 = o.[Priority] THEN 1
-                    WHEN cl2.UDF03 = o.[OrderGroup] THEN 2 
-                    ELSE 3 END
-      ORDER BY ROW_NUMBER() OVER (PARTITION BY o.Orderkey                           --2025-06-30
-                                  ORDER BY o.Orderkey
-                                          ,CASE WHEN cl2.UDF02 = o.[Priority]   THEN 1
-                                                WHEN cl2.UDF03 = o.[OrderGroup] THEN 2 
-                                                ELSE 3 END)
+            ,  ISNULL(cl2.Code,'')                                                  --v2.1    
+
       SET @c_InValid = ''
       SELECT @c_InValid = CASE WHEN SUM(CASE WHEN o.Loadkey = '' THEN 1 ELSE 0 END) > 0 
                                THEN 'BLP' 
@@ -309,6 +316,8 @@ BEGIN
                                THEN 'BMB'
                                WHEN COUNT(DISTINCT o.[Type]) > 1    
                                THEN 'MT'
+                               WHEN COUNT(DISTINCT o.PRGrp) > 1                     --v2.1 
+                               THEN 'MPG'                               
                                WHEN COUNT(DISTINCT o.C_Company) > 1 
                                THEN 'MC'
                                END
@@ -362,6 +371,27 @@ BEGIN
                        + '. (mspRLWAV02)'
          SET @c_ShortErrMsg = 'Bad Order Type'
       END
+      ELSE IF @c_InValid = 'MPG'                                                    --v2.1
+      BEGIN
+         SET @c_errmsg = ''
+         ;WITH PG AS
+         (
+         SELECT TOP 2 WITH TIES o.PRGrp, Orderkey = MIN(o.Orderkey) 
+         FROM #TMP_ORD o 
+         GROUP BY o.PRGrp
+         ORDER BY ROW_NUMBER() OVER (PARTITION BY o.PRGrp ORDER BY o.PRGrp)
+         )
+         SELECT @c_ErrMsg = String_Agg( PG.PRGrp + ' - ' + PG.Orderkey, ', ' )
+                          WITHIN GROUP (ORDER BY PG.PRGrp) 
+         FROM PG 
+
+         SET @n_Continue = 3
+         SET @n_err = 83032
+         SET @c_errmsg = 'NSQL'+CONVERT(NVARCHAR(5),@n_err)+': More than one JCBORDPR''s code in the wave:'
+                       + @c_errmsg
+                       + '. (mspRLWAV02)'
+         SET @c_ShortErrMsg = 'Bad JCBORDPR Code'
+      END
       ELSE IF @c_InValid = 'MC'
       BEGIN
          SET @c_errmsg = ''
@@ -387,34 +417,29 @@ BEGIN
 
       IF @n_Continue = 1 
       BEGIN
-         IF EXISTS (SELECT 1 FROM #TMP_ORD o WHERE o.OtherReference = '')
-         BEGIN
-            ;WITH ko  AS  
-            (SELECT o.Orderkey 
-                   , KitOrder = 1
-                   , KitLoc   = STRING_AGG(ISNULL(l.Loc,'') , ',')               
-                                WITHIN GROUP (ORDER BY l.Loc, cl.Long ASC)          --v1.91
-                   , ToLocCodes= STRING_AGG(cl.Long , ',')                          --v1.91
-                                 WITHIN GROUP (ORDER BY l.Loc, cl.Long ASC)
-            FROM #TMP_ORD o
-            JOIN @TMP_FCP_CL cl ON  cl.ListName = 'JCBKITORDT' 
-                                AND cl.Storerkey= o.StorerKey
-                                AND cl.Code = o.[Type] 
-                                AND cl.Short = 'Y' 
-            LEFT OUTER JOIN LOC l (NOLOCK) ON  l.LocationCategory = cl.Long
-                                           AND l.Facility = o.Facility
-                                           AND l.LocationFlag <> 'INACTIVE'                                           
-            WHERE o.OtherReference = ''
-            GROUP BY o.Orderkey
-            )
-            UPDATE o
-               SET  KitOrder = ko.KitOrder
-                  , KitLoc   = ko.KitLoc
-                  , ToLocCodes = ko.ToLocCodes                                      --v1.91
-            FROM #TMP_ORD o
-            JOIN ko  ON  ko.Orderkey = o.Orderkey
-            WHERE o.OtherReference = ''
-         END
+         ;WITH ko  AS  
+         (SELECT o.Orderkey 
+                , KitOrder = 1
+                , KitLoc   = STRING_AGG(l.Loc, ',')                              --2025-07-02
+                             WITHIN GROUP (ORDER BY l.Loc, cl.Long ASC)          --v1.91
+                , ToLocCodes= STRING_AGG(cl.Long , ',')                          --v1.91
+                              WITHIN GROUP (ORDER BY l.Loc, cl.Long ASC)
+         FROM #TMP_ORD o
+         JOIN @TMP_FCP_CL cl ON  cl.ListName = 'JCBKITORDT' 
+                             AND cl.Storerkey= o.StorerKey
+                             AND cl.Code = o.[Type] 
+                             AND cl.Short = 'Y' 
+         LEFT OUTER JOIN LOC l (NOLOCK) ON  l.LocationCategory = cl.Long
+                                        AND l.Facility = o.Facility
+                                        AND l.LocationFlag <> 'INACTIVE'                                           
+         GROUP BY o.Orderkey
+         )
+         UPDATE o
+            SET  KitOrder = ko.KitOrder
+               , KitLoc   = ko.KitLoc
+               , ToLocCodes = ko.ToLocCodes                                      --v1.91
+         FROM #TMP_ORD o
+         JOIN ko  ON  ko.Orderkey = o.Orderkey
 
          SET @c_InValid = ''
          SELECT TOP 1 WITH TIES                       
@@ -423,15 +448,15 @@ BEGIN
                                THEN 'PA'
                                WHEN o.CompML = ''          
                                THEN 'BC'
-                               WHEN o.KitOrder = 1 AND k.KitLoc = ''                --2025-06-30 - START    
+                               WHEN o.KitOrder = 1 AND ISNULL(k.KitLoc,'') = ''  --2025-06-30 - START    
                                THEN 'BKL'
-                               WHEN o.OtherReference > '' AND l.Loc IS NULL
+                               WHEN o.KitOrder = 0 AND o.OtherReference > '' AND l.Loc IS NULL
                                THEN 'BMBL'
-                               WHEN o.OtherReference = '' AND m.MSLanes = ''                                         
+                               WHEN o.KitOrder = 0 AND o.OtherReference = '' AND ISNULL(m.MSLanes,'') = ''                                            
                                THEN 'BML'
                                ELSE '' END
-            ,@c_ToLocCodes = CASE WHEN o.KitOrder = 1        THEN tc.ToLocCodes     --v1.91
-                                  WHEN o.OtherReference = '' THEN tc.ToLocCodes
+            ,@c_ToLocCodes = CASE WHEN o.KitOrder = 1   THEN tc.ToLocCodes     --v1.91
+                                  WHEN o.KitOrder = 0 AND o.OtherReference = '' THEN tc.ToLocCodes --2025-07-02
                                   ELSE o.OtherReference END
          FROM #TMP_ORD o 
          LEFT OUTER JOIN LOC l (NOLOCK) ON  l.loc = o.OtherReference
@@ -452,9 +477,9 @@ BEGIN
                        THEN 2
                        WHEN o.KitOrder = 1 AND k.KitLoc = ''        
                        THEN 3
-                       WHEN o.OtherReference > '' AND l.Loc IS NULL
+                       WHEN o.KitOrder = 0 AND o.OtherReference > '' AND l.Loc IS NULL             --2025-07-02
                        THEN 3
-                       WHEN o.OtherReference = '' AND m.MSLanes = ''                --2025-06-30 - END                                        
+                       WHEN o.KitOrder = 0 AND o.OtherReference = '' AND m.MSLanes = ''            --2025-06-30 - END                                            
                        THEN 3
                        ELSE 9 END
 
@@ -979,10 +1004,15 @@ BEGIN
       
    IF @n_Continue IN (1,2) AND @c_FCP = 'Y'   
    BEGIN
-      IF EXISTS ( SELECT 1 FROM WAVE w (NOLOCK) 
-                  WHERE w.Wavekey = @c_Wavekey
-                  AND   w.UserDefine04 > ''
-                  )
+      SET @n_Cnt = 0                                                                --2025-07-02 - START
+      SELECT @n_Cnt = CASE WHEN w.[Status] = '99'   THEN 1
+                           WHEN w.UserDefine04 > '' THEN 1
+                           ELSE 0
+                           END
+      FROM WAVE w (NOLOCK) 
+      WHERE w.Wavekey = @c_Wavekey
+      
+      IF @n_Cnt > 0                                                                 --2025-07-02 - END
       BEGIN 
          UPDATE Wave WITH (ROWLOCK)
             SET UserDefine04 = ''
