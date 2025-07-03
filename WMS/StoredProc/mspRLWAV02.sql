@@ -230,8 +230,8 @@ BEGIN
       ,  C_Company      NVARCHAR(100)  NOT NULL    DEFAULT('')
       ,  CompML         NVARCHAR(10)   NOT NULL    DEFAULT('')
       ,  KitOrder       INT            NOT NULL    DEFAULT(0)
-      ,  KitLoc         NVARCHAR(100)      NULL    DEFAULT('')                      --2025-07-02
-      ,  MSLanes        NVARCHAR(100)      NULL    DEFAULT('')                      --2025-07-02
+      ,  KitLoc         NVARCHAR(100)  NOT NULL    DEFAULT('')                      --2025-07-03
+      ,  MSLanes        NVARCHAR(100)  NOT NULL    DEFAULT('')                      --2025-07-03
       ,  ToLocCodes     NVARCHAR(100)  NOT NULL    DEFAULT('')                      --v1.91
       ,  AutoRL         NCHAR(1)       NOT NULL    DEFAULT('N')
       ,  FCP            NCHAR(1)       NOT NULL    DEFAULT('N')
@@ -256,10 +256,10 @@ BEGIN
             , o.[Status]
             , C_Company = ISNULL(o.C_Company,'')
             , CompML =  ISNULL(MIN(cl.ListName),'')
-            , MSLanes=  STRING_AGG(l.Loc , ',')                                     --2025-07-02
-                        WITHIN GROUP (ORDER BY l.Loc, cl.Short ASC)                 --v1.91
-            , ToLocCodes=STRING_AGG(cl.Short , ',')                                 --v1.91
-                        WITHIN GROUP (ORDER BY l.Loc, cl.Short ASC)
+            , MSLanes=  ISNULL(STRING_AGG(l.Loc , ',')     
+                        WITHIN GROUP (ORDER BY l.Loc, cl.Short ASC),'')             --2025-07-03
+            , ToLocCodes=ISNULL(STRING_AGG(cl.Short , ',')     
+                        WITHIN GROUP (ORDER BY l.Loc, cl.Short ASC),'')             --2025-07-03
             , AutoRL = CASE WHEN cl2.UDF01 = 'Y' THEN cl2.UDF01 ELSE 'N' END
             , FCP    = CASE WHEN cl2.UDF04 = 'Y' THEN cl2.UDF04 ELSE 'N' END
             , RPF    = CASE WHEN cl2.UDF05 = 'Y' THEN cl2.UDF05 ELSE 'N' END
@@ -420,10 +420,10 @@ BEGIN
          ;WITH ko  AS  
          (SELECT o.Orderkey 
                 , KitOrder = 1
-                , KitLoc   = STRING_AGG(l.Loc, ',')                              --2025-07-02
-                             WITHIN GROUP (ORDER BY l.Loc, cl.Long ASC)          --v1.91
-                , ToLocCodes= STRING_AGG(cl.Long , ',')                          --v1.91
-                              WITHIN GROUP (ORDER BY l.Loc, cl.Long ASC)
+                , KitLoc   = ISNULL(STRING_AGG(l.Loc , ',')                      --2025-07-03   
+                             WITHIN GROUP (ORDER BY l.Loc, cl.Long ASC),'')      --v1.91
+                , ToLocCodes= ISNULL(STRING_AGG(cl.Long , ',')                   --v1.91
+                              WITHIN GROUP (ORDER BY l.Loc, cl.Long ASC),'')     --2025-07-03
          FROM #TMP_ORD o
          JOIN @TMP_FCP_CL cl ON  cl.ListName = 'JCBKITORDT' 
                              AND cl.Storerkey= o.StorerKey
@@ -448,11 +448,11 @@ BEGIN
                                THEN 'PA'
                                WHEN o.CompML = ''          
                                THEN 'BC'
-                               WHEN o.KitOrder = 1 AND ISNULL(k.KitLoc,'') = ''  --2025-06-30 - START    
+                               WHEN o.KitOrder = 1 AND k.KitLoc = ''                --2025-07-03     
                                THEN 'BKL'
                                WHEN o.KitOrder = 0 AND o.OtherReference > '' AND l.Loc IS NULL
                                THEN 'BMBL'
-                               WHEN o.KitOrder = 0 AND o.OtherReference = '' AND ISNULL(m.MSLanes,'') = ''                                            
+                               WHEN o.KitOrder = 0 AND o.OtherReference = '' AND m.MSLanes = ''                                         
                                THEN 'BML'
                                ELSE '' END
             ,@c_ToLocCodes = CASE WHEN o.KitOrder = 1   THEN tc.ToLocCodes     --v1.91
@@ -479,7 +479,7 @@ BEGIN
                        THEN 3
                        WHEN o.KitOrder = 0 AND o.OtherReference > '' AND l.Loc IS NULL             --2025-07-02
                        THEN 3
-                       WHEN o.KitOrder = 0 AND o.OtherReference = '' AND m.MSLanes = ''            --2025-06-30 - END                                            
+                       WHEN o.KitOrder = 0 AND o.OtherReference = '' AND m.MSLanes = ''            --2025-07-03                                         
                        THEN 3
                        ELSE 9 END
 
@@ -503,21 +503,39 @@ BEGIN
          BEGIN
             SET @n_Continue = 3
             SET @n_err = 83070
-            SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': No Location with Category: (' 
-                         + @c_ToLocCodes 
-                         +') exists in ' + @c_Facility + ' facility. (mspRLWAV02)'
+            IF  @c_ToLocCodes = ''                                                  --2025-07-03
+            BEGIN 
+               SET @c_errmsg = 'NSQL'+CONVERT(NVARCHAR(5),@n_err) 
+                             + ': Invalid Location Category. (mspRLWAV02)'
+            END
+            ELSE
+            BEGIN
+               SET @c_errmsg = 'NSQL'+CONVERT(NVARCHAR(5),@n_err) 
+                             + ': No Location OR INACTIVE Location with Category: (' + @c_ToLocCodes  
+                             + ') exists in ' + @c_Facility + ' facility'
+                             + '. (mspRLWAV02)'
+            END
             SET @c_ShortErrMsg = 'Bad Kit Loc'
          END
          ELSE IF @c_InValid IN ('BMBL','BML')
          BEGIN
             SET @n_Continue = 3
             SET @n_err = 83080
-            SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err) 
-                         + CASE WHEN @c_InValid = 'BMBL' THEN ': Location ('
-                                ELSE ': Marshalling lane ('
-                                END
-                         + @c_ToLocCodes 
-                         +') does not exist in ' + @c_Facility + ' facility. (mspRLWAV02)'
+            IF  @c_ToLocCodes = ''                                                  --2025-07-03
+            BEGIN
+               SET @c_errmsg = 'NSQL'+CONVERT(NVARCHAR(5),@n_err) 
+                  + ': Invalid JCBCOMPML''s Short. (mspRLWAV02)'
+            END
+            ELSE
+            BEGIN 
+               SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err) 
+                            + CASE WHEN @c_InValid = 'BMBL' THEN ': Location ('
+                                   ELSE ': Marshalling lane ('
+                                   END
+                            + @c_ToLocCodes 
+                            +') does not exist OR INACTIVE in ' + @c_Facility 
+                            + ' facility. (mspRLWAV02)'
+            END
             SET @c_ShortErrMsg = 'Bad Marshall Lane'
          END
       END
@@ -826,10 +844,10 @@ BEGIN
       SELECT o.Orderkey
          ,   o.[Priority]
          ,   o.C_Company
-         ,   Lanes = CASE WHEN o.OtherReference > '' THEN o.OtherReference
-                          WHEN o.KitOrder = 1 THEN o.KitLoc
-                          ELSE o.MSLanes
-                          END
+         ,   Lanes = CASE  WHEN o.KitOrder = 1 THEN o.KitLoc                              --2025-07-03
+                           WHEN o.KitOrder = 0 AND o.OtherReference > '' THEN o.OtherReference
+                           ELSE o.MSLanes
+                           END
          ,   pd.Storerkey
          ,   Sku = CASE WHEN COUNT(DISTINCT pd.Sku) > 1 THEN '' ELSE MIN(pd.SKU) END
          ,   UOM = MAX(pd.UOM)   --UOM='7' if Have RPF, Use for Reverse Logic
@@ -853,8 +871,8 @@ BEGIN
       GROUP BY o.Orderkey
             ,  o.[Priority]      
             ,  o.C_Company
-            ,  CASE  WHEN o.OtherReference > '' THEN o.OtherReference
-                     WHEN o.KitOrder = 1 THEN o.KitLoc
+            ,  CASE  WHEN o.KitOrder = 1 THEN o.KitLoc                              --2025-07-03
+                     WHEN o.KitOrder = 0 AND o.OtherReference > '' THEN o.OtherReference
                      ELSE o.MSLanes
                      END
             ,  pd.Storerkey
