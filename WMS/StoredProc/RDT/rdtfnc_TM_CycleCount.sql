@@ -45,6 +45,7 @@ GO
 /* 2025-02-11 3.2    JCH507   FCR-1917 Add ext upd entry                         */
 /* 2025-05-19 4.2.0  JACKC      UWP-34563 Count SKU task genrerates cc detaill   */ 
 /*                               for all SKUs on the loc                         */
+/* 2025-06-17 4.3.0  NickT    FCR-4971 Add ExtScn in Step 3                      */
 /*********************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_CycleCount](
@@ -65,6 +66,7 @@ DECLARE
 -- Define a variable
 DECLARE
    @nFunc               INT,
+   @nCurrentFunc        INT,
    @nScn                INT,
    @nStep               INT,
    @cLangCode           NVARCHAR(3),
@@ -222,6 +224,7 @@ DECLARE @cStorerConfig_UCC  NVARCHAR( 1)     -- (james05)
 -- Getting Mobile information
 SELECT
    @nFunc            = Func,
+   @nCurrentFunc     = Func,
    @nScn             = Scn,
    @nStep            = Step,
    @nInputKey        = InputKey,
@@ -1818,7 +1821,7 @@ BEGIN
          SET @nScn = 2930
          SET @nStep = 1
 
-         GOTO QUIT
+         GOTO Step_3_ExtScn
       END
       ELSE IF @cOptions = '2'
       BEGIN
@@ -2610,8 +2613,9 @@ BEGIN
       SET @nStep = @nStep - 1
    END
 
+   Step_3_ExtScn:
    SET @nAction = 3 --Prepare output fields
-   SET @cExtendedScreenSP = rdt.RDTGetConfig( @nFunc, 'ExtScnSP', @cStorerKey)
+   SET @cExtendedScreenSP = rdt.RDTGetConfig( @nCurrentFunc, 'ExtScnSP', @cStorerKey)
    IF @cExtendedScreenSP = '0'
    BEGIN
       SET @cExtendedScreenSP = ''
@@ -3581,7 +3585,7 @@ GOTO Quit
 
 Step_99:
 BEGIN
-   SET @cExtendedScreenSP = rdt.RDTGetConfig( @nFunc, 'ExtScnSP', @cStorerKey)
+   SET @cExtendedScreenSP = rdt.RDTGetConfig( @nCurrentFunc, 'ExtScnSP', @cStorerKey)
    IF @cExtendedScreenSP = '0'
    BEGIN
       SET @cExtendedScreenSP = ''
@@ -3590,6 +3594,12 @@ BEGIN
    BEGIN
       IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
       BEGIN
+
+         DELETE FROM @tExtScnData
+
+         INSERT INTO @tExtScnData (Variable, Value) 
+         VALUES
+            ('@cOptions', @cOptions)
          
          EXECUTE [RDT].[rdt_ExtScnEntry] 
             @cExtendedScreenSP, 
