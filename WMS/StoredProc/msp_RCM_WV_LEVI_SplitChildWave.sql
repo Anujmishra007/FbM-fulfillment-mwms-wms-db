@@ -13,7 +13,7 @@ GO
 /*                                                                       */
 /* Called By: Dynamic RCM                                                */
 /*                                                                       */
-/* GitHub Version: 1.1                                                   */
+/* GitHub Version: 1.3                                                   */
 /*                                                                       */
 /* Version: 7.0                                                          */
 /*                                                                       */
@@ -26,6 +26,7 @@ GO
 /*                            calculate VCCount (WL01)                   */
 /* 05-May-2025  SWT01   1.2   Change UDF01 = "Y" instead of "1" FOR      */
 /*                            MPOCPERMIT                                 */
+/* 04-Jul-2025  WLChooi 1.3   UWP-37271 Performance Tuning (WL02)        */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[msp_RCM_WV_LEVI_SplitChildWave]
    @c_Wavekey NVARCHAR(10)
@@ -472,6 +473,8 @@ BEGIN
                          FROM WAVE WITH (NOLOCK)
                          WHERE WaveKey = @c_GetWavekey )
          BEGIN
+            BEGIN TRAN   --WL02
+
             INSERT INTO dbo.WAVE (WaveKey, WaveType, Descr, DispatchPalletPickMethod, DispatchCasePickMethod
                                 , DispatchPiecePickMethod, [Status], WaveGenloadflag, GenDynamicPickSlipCode, Strategykey
                                 , UserDefine01, UserDefine02, UserDefine03, UserDefine04, UserDefine05, UserDefine06, UserDefine07
@@ -495,6 +498,13 @@ BEGIN
                                 + N': Failed to Insert Wave. (msp_RCM_WV_LEVI_SplitChildWave)'
                GOTO EXIT_SP
             END
+
+            --WL02 S
+            WHILE @@TRANCOUNT > 0
+            BEGIN
+               COMMIT TRAN
+            END
+            --WL02 E
          END
 
          --Populate Wavedetail to the new Wave
@@ -502,6 +512,8 @@ BEGIN
                      FROM WAVE WITH (NOLOCK)
                      WHERE WaveKey = @c_GetWavekey )
          BEGIN
+            BEGIN TRAN   --WL02
+
             --Delete from existing Wave (Master Wave)
             DELETE FROM WAVEDETAIL WHERE OrderKey = @c_Orderkey
 
@@ -514,6 +526,15 @@ BEGIN
                                 + N': Failed to remove order from master Wave. (msp_RCM_WV_LEVI_SplitChildWave)'
                GOTO EXIT_SP
             END
+
+            --WL02 S
+            WHILE @@TRANCOUNT > 0
+            BEGIN
+               COMMIT TRAN
+            END
+
+            BEGIN TRAN
+            --WL02 E
 
             SELECT @b_Success = 0  
             SELECT @c_Wavedetailkey = ''
@@ -548,6 +569,13 @@ BEGIN
                   GOTO EXIT_SP
                END
             END
+
+            --WL02 S
+            WHILE @@TRANCOUNT > 0
+            BEGIN
+               COMMIT TRAN
+            END
+            --WL02 E
          END
 
          FETCH NEXT FROM CUR_WAVEINSERT INTO @c_GetWavekey, @c_Orderkey
@@ -563,6 +591,8 @@ BEGIN
                       FROM WAVEDETAIL WITH (NOLOCK)
                       WHERE Wavekey = @c_Wavekey )
       BEGIN
+         BEGIN TRAN   --WL02
+
          DELETE FROM dbo.WAVE
          WHERE WaveKey = @c_Wavekey
 
@@ -575,6 +605,13 @@ BEGIN
                              + N': Failed to delete the master Wave. (msp_RCM_WV_LEVI_SplitChildWave)'
             GOTO EXIT_SP
          END
+
+         --WL02 S
+         WHILE @@TRANCOUNT > 0
+         BEGIN
+            COMMIT TRAN
+         END
+         --WL02 E
       END
    END
 
@@ -591,6 +628,13 @@ BEGIN
       CLOSE CUR_WAVEINSERT
       DEALLOCATE CUR_WAVEINSERT   
    END
+
+   --WL02 S
+   WHILE @@TRANCOUNT < @n_StartTCnt
+   BEGIN
+      BEGIN TRAN
+   END
+   --WL02 E
 
    IF @n_Continue = 3 -- Error Occured - Process And Return      
    BEGIN
