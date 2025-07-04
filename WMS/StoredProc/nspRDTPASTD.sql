@@ -144,7 +144,7 @@ GO
 /* 15-Apr-2024  SPChin        5.5   UWP-14640 Bug Fixed                               */
 /* 31-May-2024  NLT013        5.6   UWP-20191 Skip PAType02 if fromLocation <>        */
 /*                                  pa_FromLoc                                        */
-/* 01-07-2025   YKC028        5.7   UWP-36799 Change Logic (yeekung01)                */
+/* 01-07-2025   YKC028        5.7   UWP-36799 Fix MultiLotID  (yeekung01)             */
 /**************************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[nspRDTPASTD]
      @c_userid          NVARCHAR(18)
