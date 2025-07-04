@@ -69,7 +69,7 @@ GO
 /*                                  Parameter (ChewKP04)                              */
 /* 23-Mar-2011  Leong         1.5   SOS# 209838 - Add ISNULL check and display        */
 /*                                                error in handheld                   */
-/* 14-Arp-2011  Audrey        1.5   SOS# 206770 - comment SET @b_MultiLotID           */
+/* 14-Arp-2011  Audrey        1.5   SOS# 206770 - comment SET @b_MultiLot           */
 /*                                                = @n_IdCnt (ang01)                  */
 /* 28-Sep-2011  Shong         1.6   SOS#224116 - US LCI Project (Shong001)            */
 /* 07-Dec-2011  ChewKP        1.7   Failed Putaway when FromLoc = ToLoc               */
@@ -144,6 +144,7 @@ GO
 /* 15-Apr-2024  SPChin        5.5   UWP-14640 Bug Fixed                               */
 /* 31-May-2024  NLT013        5.6   UWP-20191 Skip PAType02 if fromLocation <>        */
 /*                                  pa_FromLoc                                        */
+/* 01-07-2025   YKC028        5.7   UWP-36799 Fix MultiLotID  (yeekung01)             */
 /**************************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[nspRDTPASTD]
      @c_userid          NVARCHAR(18)
@@ -180,11 +181,11 @@ BEGIN
            @cSQLParam                  NVARCHAR(1000)
 
    -- Added By Shong
-   DECLARE @n_RowCount            INT,
+   DECLARE @n_RowCount                 INT,
            @c_ToLoc                    NVARCHAR(10) = '',
            @n_IdCnt                    INT,
            @b_MultiProductID           INT,
-           @b_MultiLotID               INT,
+           @b_MultiLot                 INT,
            @c_PutawayStrategyKey       NVARCHAR(10),
            @b_Success                  INT,
            @n_StdGrossWgt              FLOAT(8),
@@ -242,7 +243,7 @@ BEGIN
    SELECT @c_ToLoc          = SPACE(10),
           @n_IdCnt          = 0,
           @b_MultiProductID = 0,
-          @b_MultiLotID     = 0,
+          @b_MultiLot     = 0,
           @n_LocsReviewed   = 0,
           @d_StartDTim      = GETDATE(),
           @c_LastPndAisle   ='',
@@ -361,6 +362,33 @@ BEGIN
     ELSE
        SET @b_PutawayBySKU = 'N'
 
+   SET @b_MultiLot = 0
+   --(yeekung010)
+   SET @cSQL  = ' SELECT @b_MultiLot =  CASE WHEN COUNT(DISTINCT LOT) > 1 THEN 1 ELSE 0 END
+                  FROM LOTXLOCXID (NOLOCK)
+                  WHERE LOC = @c_FromLoc 
+                     AND QTY > 0' +
+                  CASE WHEN @c_SKU = '' THEN '' ELSE '    AND SKU = @c_SKU ' END +
+                  CASE WHEN @c_LOT = '' THEN '' ELSE '    AND LOT = @c_LOT ' END +
+                  CASE WHEN @c_ID  = '' THEN '' ELSE '    AND ID = @c_ID ' END
+
+   SET @cSQLParam =
+	   ' @c_StorerKey       NVARCHAR(15) ,'  + 
+	   ' @c_LOT             NVARCHAR(10) ,'	 +
+	   ' @c_SKU             NVARCHAR(20) ,'	 +
+	   ' @c_ID              NVARCHAR(18) ,'	 +
+	   ' @c_FromLoc         NVARCHAR(10) ,'	 +
+	   ' @b_MultiLot      NVARCHAR(10) OUTPUT'
+
+   EXEC sp_ExecuteSQL @cSQL, @cSQLParam
+      ,@c_StorerKey 
+      ,@c_LOT       
+      ,@c_SKU       
+      ,@c_ID        
+      ,@c_FromLoc   
+      ,@b_MultiLot OUTPUT
+
+
    -- If SKU NOT provided, then get FROM LOT
    IF ISNULL(RTRIM(@c_SKU), '')=''
    BEGIN
@@ -374,7 +402,7 @@ BEGIN
    END
 
    -- Check if Pallet contain Conmingle LOT?
-   SET @b_MultiLotID = 0
+
    IF ISNULL(RTRIM(@c_ID), '') <> ''
    BEGIN
       IF ISNULL(RTRIM(@c_SKU),'') = ''
@@ -412,7 +440,7 @@ BEGIN
                               ELSE @n_Qty
                             END,
                    @c_LOT = CASE
-                              WHEN @n_IdCnt = 1 THEN MAX(LOT)
+                              WHEN COUNT(DISTINCT LOT) = '1' THEN MAX(LOT)
                               ELSE ''
                             END
             FROM  LOTxLOCxID WITH (NOLOCK)
@@ -422,7 +450,7 @@ BEGIN
                   StorerKey = @c_StorerKey AND
                   SKU = @c_SKU
 
-            --SET @b_MultiLotID = @n_IdCnt(ang01)
+           --SET @b_MultiLot = @n_IdCnt(ang01)
          END -- (ChewKP04) End
          ELSE
          BEGIN
@@ -432,7 +460,7 @@ BEGIN
                             END,
                    @c_SKU = SKU,
                    @c_LOT = CASE
-                              WHEN @n_IdCnt = 1 THEN MAX(LOT)
+                              WHEN COUNT(DISTINCT LOT) = '1' THEN MAX(LOT)
                               ELSE ''
                             END
             FROM   LOTxLOCxID WITH (NOLOCK)
@@ -442,12 +470,12 @@ BEGIN
                    StorerKey = @c_StorerKey
             GROUP BY StorerKey, SKU
 
-            --SET @b_MultiLotID = @n_IdCnt(ang01)
+            --SET @b_MultiLot = @n_IdCnt(ang01)
          END
       END
       ELSE
       BEGIN
-         SET @b_MultiLotID = 1 -- Multiproduct is multilot by definition of lot
+     --    SET @b_MultiLot = 1 -- Multiproduct is multilot by definition of lot
          SET @c_LOT = ''
          SET @c_StorerKey = ''
          SET @c_SKU = ''
@@ -494,31 +522,72 @@ BEGIN
             QTY > 0
    END
 
-   IF @b_MultiLotID <> 1
-   BEGIN
-      SELECT @c_Lottable01 = Lottable01,
-             @c_Lottable02 = Lottable02,
-             @c_Lottable03 = Lottable03,
-             @d_Lottable04 = Lottable04,
-             @d_Lottable05 = Lottable05
-      FROM   LotAttribute WITH (NOLOCK)
-      WHERE  LOT = @c_LOT
-   END
-   ELSE
-   BEGIN
-      -- If Multiple LOT Found, Get the last Lottables
-      SELECT TOP 1
-            @c_Lottable01 = Lottable01,
-            @c_Lottable02 = Lottable02,
-            @c_Lottable03 = Lottable03,
-            @d_Lottable04 = Lottable04,
-            @d_Lottable05 = Lottable05
-      FROM  LotAttribute WITH (NOLOCK)
-      JOIN LOTxLOCxID WITH (NOLOCK)
-        ON LotAttribute.LOT = LOTxLOCxID.LOT
-      WHERE ID = @c_ID
-      ORDER BY LotAttribute.LOT DESC
-   END
+   --IF @b_MultiLot <> 1
+   --BEGIN
+   --   SELECT @c_Lottable01 = Lottable01,
+   --          @c_Lottable02 = Lottable02,
+   --          @c_Lottable03 = Lottable03,
+   --          @d_Lottable04 = Lottable04,
+   --          @d_Lottable05 = Lottable05
+   --   FROM   LotAttribute WITH (NOLOCK)
+	  --WHERE LOT  = @c_LOT
+   --END
+   --ELSE
+   --BEGIN
+   --   -- If Multiple LOT Found, Get the last Lottables
+   --   SELECT TOP 1
+   --         @c_Lottable01 = Lottable01,
+   --         @c_Lottable02 = Lottable02,
+   --         @c_Lottable03 = Lottable03,
+   --         @d_Lottable04 = Lottable04,
+   --         @d_Lottable05 = Lottable05
+   --   FROM  LotAttribute WITH (NOLOCK)
+   --   JOIN LOTxLOCxID WITH (NOLOCK)
+   --     ON LotAttribute.LOT = LOTxLOCxID.LOT
+   --   WHERE ID = @c_ID
+   --   ORDER BY LotAttribute.LOT DESC
+   --END
+
+   --(yeekung010)
+    SET @cSQL  = ' SELECT TOP 1
+						@c_Lottable01 = Lottable01,
+						@c_Lottable02 = Lottable02,
+						@c_Lottable03 = Lottable03,
+						@d_Lottable04 = Lottable04,
+						@d_Lottable05 = Lottable05
+			        FROM  LotAttribute LOT WITH (NOLOCK)
+			        JOIN LOTxLOCxID LLI WITH (NOLOCK)
+			          ON LOT.LOT = LLI.LOT
+					WHERE LLI.LOC = @c_FromLoc 
+						AND LLI.QTY > 0' +
+					CASE WHEN @c_SKU = '' THEN '' ELSE '    AND LLI.SKU = @c_SKU ' END +
+					CASE WHEN @c_LOT = '' THEN '' ELSE '    AND LOT = @c_LOT ' END +
+					CASE WHEN @c_ID  = '' THEN '' ELSE '    AND LLI.ID = @c_ID ' END
+
+   SET @cSQLParam =
+	' @c_StorerKey       NVARCHAR(15) ,'  + 
+	' @c_LOT             NVARCHAR(10) ,'	 +
+	' @c_SKU             NVARCHAR(20) ,'	 +
+	' @c_ID              NVARCHAR(18) ,'	 +
+	' @c_FromLoc         NVARCHAR(10) ,'	 +
+	' @c_Lottable01      NVARCHAR(18) OUTPUT ,' +
+	' @c_Lottable02      NVARCHAR(18) OUTPUT ,' +
+	' @c_Lottable03      NVARCHAR(18) OUTPUT ,' + 
+	' @d_Lottable04      DATETIME OUTPUT,	  ' +
+	' @d_Lottable05      DATETIME OUTPUT     ' 
+								
+   EXEC sp_ExecuteSQL @cSQL, @cSQLParam
+      ,@c_StorerKey 
+      ,@c_LOT       
+      ,@c_SKU       
+      ,@c_ID        
+      ,@c_FromLoc   
+      ,@c_Lottable01  OUTPUT
+	  ,@c_Lottable02  OUTPUT
+	  ,@c_Lottable03  OUTPUT
+	  ,@d_Lottable04  OUTPUT
+	  ,@d_Lottable05  OUTPUT
+
 
    DECLARE @n_PalletTotStdCube     DECIMAL(15,5),
            @n_PalletTotStdGrossWgt DECIMAL(15,5)
@@ -890,7 +959,7 @@ BEGIN
                   @c_PackKey,
                   @n_Qty,
                   @b_MultiProductID,
-                  @b_MultiLotID,
+                  @b_MultiLot,
                   @d_StartDTim,
                   NULL,
                   0,
@@ -5665,7 +5734,7 @@ BEGIN
       END
    END
 
-   IF @b_MultiLotID = 1
+   IF @b_MultiLot = 1
    BEGIN
       SELECT @n_CurrLocMultiLot = 1
       IF @b_Debug = 1
