@@ -38,6 +38,7 @@ GO
 /*                            process. Use back same SP                  */
 /* 2025-07-01                 Version 1.90 & 1.91 & fixes. Add v2.0      */
 /* 2025-07-02                 Version v2.1 & fixes                       */
+/* 2025-07-04                 Version v2.2 & fix                         */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV02]
    @c_Wavekey      NVARCHAR(10)
@@ -704,6 +705,7 @@ BEGIN
                                    AND lli.Loc = pd.Toloc
                                    AND lli.ID  = pd.CaseID
       JOIN LotAttribute la(NOLOCK) ON  la.lot  = lli.Lot
+      JOIN Loc l (NOLOCK) ON pd.ToLoc = l.Loc                                       --v2.2
       OUTER APPLY ( SELECT Qty = SUM(lli1.Qty)
                     FROM LOTxLOCxID lli1 (NOLOCK) 
                     WHERE lli1.Storerkey = pd.Storerkey
@@ -731,8 +733,10 @@ BEGIN
                     END
             ,  ISNULL(lpn.Qty,0)
             ,  la.Lottable11
-      ORDER BY pd.Loc
-            ,  pd.ID
+            ,  l.LogicalLocation                                                    --v2.2
+      ORDER BY l.LogicalLocation                                                    --v2.2
+            ,  pd.ToLoc                                                             --v2.2
+            ,  pd.CaseID                                                            --v2.2
 
       OPEN @cur_RPF
 
@@ -757,6 +761,7 @@ BEGIN
          SET @c_UOM        = '1'
          SET @c_FinalLoc   = ''
          SET @c_Priority   = '3'
+         SET @c_TaskStatus = '0'                                                    --v2.2         
          
          SELECT TOP 1 @c_FinalLoc = l.Loc
          FROM string_split (@c_Lanes, ',') ss
@@ -779,6 +784,10 @@ BEGIN
             AND   lli.ID  = @c_FromID 
             AND   la.Lottable11 = @c_CaseID
          END
+         ELSE                                                                       --2025-07-04 - START
+         BEGIN
+            SET @n_Qty = @n_IDQty
+         END                                                                        --2025-07-04 - END             
 
          EXEC isp_InsertTaskDetail
             @c_Taskdetailkey         = @c_Taskdetailkey OUTPUT
@@ -797,6 +806,7 @@ BEGIN
          ,  @c_ToID                  = @c_ToID 
          ,  @c_CaseID                = @c_CaseID                                    --2025-06-17
          ,  @c_PickMethod            = @c_PickMethod
+         ,  @c_Status                = @c_TaskStatus                                --v2.2         
          ,  @c_Priority              = @c_Priority
          ,  @c_SourcePriority        = '9'
          ,  @c_SourceType            = @c_SourceType
