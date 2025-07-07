@@ -116,7 +116,7 @@ BEGIN
                             ': Failed to execute nsp_orderprocessing_wrapper. (msp_BEJ_msp_BEJ_XDockAutoAL01)'
             GOTO QUIT_SP
         END
-        --Create pickslip
+        --Create pickslip if the order is fully allocated
         IF @n_continue IN(1,2) AND (SELECT Status FROM Orders where OrderKey = @c_Orderkey) = 2
         BEGIN
             EXEC dbo.isp_CreatePickSlip @c_Orderkey = @c_Orderkey, 
@@ -159,7 +159,7 @@ BEGIN
     FETCH NEXT FROM CUR_OD INTO @c_Orderkey, @c_OrderLineNumber, @c_SKU, @c_UOM, @c_WaveKey, @c_Lot, @n_OrderLineQty
     WHILE @@FETCH_STATUS <> -1 AND @n_continue IN(1,2)
     BEGIN
-        -- INSERT #PickDetail   
+        -- INSERT PickDetail   
         IF @n_continue IN(1,2)
         BEGIN
             EXECUTE nspg_getkey      
