@@ -23,6 +23,7 @@ GO
 /* 2025-02-06 1.4.2  CYU027   UWP-30023 Hotfix add trim avoid spaces        */
 /* 2025-01-10 1.4.3  Dennis   FCR-1316 Performance Issue                    */
 /* 2025-02-20 1.5.0  NLT013   UWP-30312 Performance Tune                    */
+/* 2025-07-07 1.6.0  NLT013   UWP-36981 Performance Tune                    */
 /****************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_1653ExtScn01] (
@@ -189,7 +190,7 @@ BEGIN
                BEGIN TRY
                   SET @cSQLString =
                   'WITH FilteredPalletDetail AS (
-                     SELECT
+                     SELECT DISTINCT
                         UserDefine01,
                         UserDefine02,
                         UserDefine03,
@@ -202,7 +203,7 @@ BEGIN
                         PD2.palletkey = @cPalletKey
                         AND PD2.StorerKey = @cStorerKey
                   )
-                  SELECT distinct
+                  SELECT DISTINCT
                      @cCaseID = PD.caseid
                   FROM dbo.PickDetail PD WITH (NOLOCK)
                   INNER JOIN dbo.Orders O WITH (NOLOCK) ON PD.orderkey = O.orderkey AND PD.StorerKey = O.StorerKey
@@ -251,13 +252,13 @@ BEGIN
                BEGIN TRY
                   SET @cSQLString =
                      'WITH FilteredOrders AS (
-                        SELECT '
+                        SELECT DISTINCT'
                         +IIF(@cCODELKUPUdf01 <> '',   'O2.'+@cCODELKUPUdf01+', ','')
                         +IIF(@cCODELKUPUdf02 <> '',   'O2.'+@cCODELKUPUdf02+', ','')
                         +IIF(@cCODELKUPUdf03 <> '',   'O2.'+@cCODELKUPUdf03+', ','')
                         +IIF(@cCODELKUPUdf04 <> '',   'O2.'+@cCODELKUPUdf04+', ','')
                         +IIF(@cCODELKUPUdf05 <> '',   'O2.'+@cCODELKUPUdf05+', ','')
-                     +' O2.ORDERKEY
+                        +' O2.ORDERKEY
                         FROM dbo.Orders O2 WITH (NOLOCK)
                         INNER JOIN dbo.PickDetail PD2 WITH (NOLOCK) ON PD2.ORDERKEY = O2.ORDERKEY AND O2.StorerKey = PD2.StorerKey
                         WHERE
@@ -265,21 +266,13 @@ BEGIN
                            AND O2.StorerKey = @cStorerKey
                      ),
                      FilteredPalletDetail AS (
-                        SELECT
+                        SELECT DISTINCT
                            PD2.CaseID,
                            PD2.UserDefine01
                         FROM dbo.PalletDetail PD2 WITH (NOLOCK)
-                        WHERE
-                           EXISTS (
-                                 SELECT 1
-                                 FROM dbo.Orders O2 WITH (NOLOCK)
-                                 INNER JOIN dbo.PickDetail PD3 WITH (NOLOCK) ON PD3.ORDERKEY = O2.ORDERKEY AND O2.StorerKey = PD3.StorerKey
-                                 WHERE
-                                    PD3.CaseID = @cTrackNo
-                                    AND O2.MBOLKey = PD2.UserDefine01
-                                    AND O2.StorerKey = @cStorerKey
-                           )
-                           AND PD2.StorerKey = @cStorerKey
+                        INNER JOIN dbo.Orders O2 WITH (NOLOCK) ON ISNULL(O2.MBOLKey, '''') = ISNULL(PD2.UserDefine01, '''') AND O2.StorerKey = PD2.StorerKey
+                        INNER JOIN dbo.PickDetail PD3 WITH (NOLOCK) ON PD3.ORDERKEY = O2.ORDERKEY AND O2.StorerKey = PD3.StorerKey AND PD3.CaseID = @cTrackNo
+                        WHERE PD2.StorerKey = @cStorerKey
                      )
                      SELECT DISTINCT
                         @cCaseID = PD.caseid
