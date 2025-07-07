@@ -1,7 +1,3 @@
-IF EXISTS (SELECT 1 FROM dbo.sysobjects WHERE id = object_id(N'rdt.rdt_1650ExtUpd04') AND OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   DROP PROCEDURE rdt.rdt_1650ExtUpd04
-GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -17,7 +13,7 @@ GO
 /* 2024-12-16 1.0  CYU027     FCR-1606 Create                           */
 /************************************************************************/
 
-CREATE PROC [RDT].[rdt_1650ExtUpd04] (
+CREATE OR ALTER PROC [RDT].[rdt_1650ExtUpd04] (
    @nMobile          INT, 
    @nFunc            INT, 
    @nStep            INT, 
@@ -45,14 +41,14 @@ BEGIN
    SAVE TRAN rdt_1650ExtUpd04
 
    --Call 1650ExtUpd01
-   IF NOT EXISTS (SELECT 1 FROM dbo.sysobjects WHERE id = object_id(N'rdt.rdt_1650ExtUpd01') AND OBJECTPROPERTY(id, N'IsProcedure') = 1)
+   IF NOT EXISTS (SELECT 1 FROM dbo.sysobjects WHERE id = object_id(N'rdt.rdt_1650ExtUpd05') AND OBJECTPROPERTY(id, N'IsProcedure') = 1)
    BEGIN
       SET @nErrNo = 231051
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --1650ExtUpd01 is Missing
       GOTO Quit
    END
 
-   EXEC [RDT].[rdt_1650ExtUpd01]
+   EXEC [RDT].[rdt_1650ExtUpd05]
         @nMobile          = @nMobile,
         @nFunc            = @nFunc,
         @nStep            = @nStep,
