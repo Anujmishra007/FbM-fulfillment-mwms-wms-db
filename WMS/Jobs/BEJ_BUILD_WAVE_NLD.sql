@@ -15,7 +15,7 @@ SELECT @jobId = j.job_id FROM msdb..sysjobs j where j.name = N'BEJ - mWMS BuildW
 
 IF @jobId IS NULL
 BEGIN
-   EXEC @ReturnCode =  msdb.dbo.sp_add_job @job_name=N'BEJ - mWMS BuildWave(NDL)', 
+   EXEC @ReturnCode =  msdb.dbo.sp_add_job @job_name=N'BEJ - mWMS BuildWave(NLD)', 
 		   @enabled=1, 
 		   @notify_level_eventlog=2, 
 		   @notify_level_email=0, 
@@ -32,7 +32,7 @@ END
 IF NOT EXISTS (SELECT 1 from msdb..sysjobsteps js
                JOIN msdb..sysjobs j on j.job_id = js.job_id
                WHERE js.command LIKE '%msp_BEJ%''BEJ-BuildWave''%' 
-               AND database_name = 'NDLWMS'
+               AND database_name = 'NLDWMS'
                AND j.job_id = @jobId
               )
 BEGIN  
@@ -48,7 +48,7 @@ BEGIN
 		   @os_run_priority=0, @subsystem=N'TSQL', 
 		   @command=N'SET ANSI_DEFAULTS OFF
    EXEC msp_BEJ ''BEJ-BuildWave''', 
-		   @database_name=N'NDLWMS', 
+		   @database_name=N'NLDWMS', 
 		   @flags=0
    IF (@@ERROR <> 0 OR @ReturnCode <> 0) GOTO QuitWithRollback
    EXEC @ReturnCode = msdb.dbo.sp_update_job @job_id = @jobId, @start_step_id = 1
