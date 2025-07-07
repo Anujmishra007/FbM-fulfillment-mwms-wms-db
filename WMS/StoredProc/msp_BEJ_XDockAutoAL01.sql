@@ -108,7 +108,7 @@ BEGIN
             @c_Extendparms = '',
             @c_StrategykeyParm = ''
 
-        IF @b_Success <> 1 
+        IF @@ERROR <> 0
         BEGIN
             SET @n_Continue = 3
             SET @n_Err = 68073
@@ -117,7 +117,9 @@ BEGIN
             GOTO QUIT_SP
         END
         --Create pickslip if the order is fully allocated
-        IF @n_continue IN(1,2) AND (SELECT Status FROM Orders where OrderKey = @c_Orderkey) = 2
+        IF @n_continue IN(1,2) AND (SELECT Status
+            FROM Orders
+            where OrderKey = @c_Orderkey) = 2
         BEGIN
             EXEC dbo.isp_CreatePickSlip @c_Orderkey = @c_Orderkey, 
                             @c_Loadkey = N'', 
@@ -190,7 +192,7 @@ BEGIN
                 (
                     @c_PickDetailKey, '', @c_OrderKey, @c_OrderLineNumber,
                     @c_Lot, @c_StorerKey, @c_SKU, @c_UOM, @n_OrderLineQty, @c_Wavekey          
-            )
+                )
 
             IF @@ERROR <> 0    
             BEGIN
