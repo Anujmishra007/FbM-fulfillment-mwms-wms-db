@@ -116,27 +116,8 @@ BEGIN
                             ': Failed to execute nsp_orderprocessing_wrapper. (msp_BEJ_msp_BEJ_XDockAutoAL01)'
             GOTO QUIT_SP
         END
-
-    END
-    CLOSE CUR_OH
-    DEALLOCATE CUR_OH
-
-    DECLARE CUR_OD CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-    -- Select full allocated orders(status=2) from the temporary table that are ready for processing
-    SELECT OD.Orderkey, OD.OrderLineNumber, OD.SKU, OD.UOM, OD.WaveKey, OD.Lot,
-        OD.OpenQty - ( OD.QtyAllocated + OD.QtyPreAllocated + OD.QtyPicked ) AS Qty
-    FROM ORDERDETAIL OD (NOLOCK)
-        JOIN WAVEDETAIL WD (NOLOCK) ON (OD.Orderkey = WD.Orderkey)
-    WHERE OD.Orderkey IN (SELECT Orderkey
-        FROM #TMP_msp_BEJ_XDockAutoAL01_OH)
-        AND OD.Status = 2
-
-    OPEN CUR_OD
-    FETCH NEXT FROM CUR_OD INTO @c_Orderkey, @c_OrderLineNumber, @c_SKU, @c_UOM, @c_WaveKey, @c_Lot, @n_OrderLineQty
-    WHILE @@FETCH_STATUS <> -1 AND @n_continue IN(1,2)
-    BEGIN
         --Create pickslip
-        IF @n_continue IN(1,2)
+        IF @n_continue IN(1,2) AND (SELECT Status FROM Orders where OrderKey = @c_Orderkey) = 2
         BEGIN
             EXEC dbo.isp_CreatePickSlip @c_Orderkey = @c_Orderkey, 
                             @c_Loadkey = N'', 
@@ -159,6 +140,25 @@ BEGIN
                 GOTO QUIT_SP
             END
         END
+
+    END
+    CLOSE CUR_OH
+    DEALLOCATE CUR_OH
+
+    DECLARE CUR_OD CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+    -- Select full allocated orders(status=2) from the temporary table that are ready for processing
+    SELECT OD.Orderkey, OD.OrderLineNumber, OD.SKU, OD.UOM, OD.WaveKey, OD.Lot,
+        OD.OpenQty - ( OD.QtyAllocated + OD.QtyPreAllocated + OD.QtyPicked ) AS Qty
+    FROM ORDERDETAIL OD (NOLOCK)
+        JOIN WAVEDETAIL WD (NOLOCK) ON (OD.Orderkey = WD.Orderkey)
+    WHERE OD.Orderkey IN (SELECT Orderkey
+        FROM #TMP_msp_BEJ_XDockAutoAL01_OH)
+        AND OD.Status = 2
+
+    OPEN CUR_OD
+    FETCH NEXT FROM CUR_OD INTO @c_Orderkey, @c_OrderLineNumber, @c_SKU, @c_UOM, @c_WaveKey, @c_Lot, @n_OrderLineQty
+    WHILE @@FETCH_STATUS <> -1 AND @n_continue IN(1,2)
+    BEGIN
         -- INSERT #PickDetail   
         IF @n_continue IN(1,2)
         BEGIN
