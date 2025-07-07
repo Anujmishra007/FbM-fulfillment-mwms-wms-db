@@ -3847,6 +3847,15 @@ BEGIN
    GOTO Quit
 
    Step_10_Fail:
+   IF @cFlowThruScreen ='1'
+   BEGIN
+      SET @nScn = @nScn - 1
+      SET @nStep = @nStep - 1
+   END
+
+   IF @cDisableQTYField = '1'
+      SET @cFieldAttr10 = 'O'
+
 END
 GOTO Quit
 
