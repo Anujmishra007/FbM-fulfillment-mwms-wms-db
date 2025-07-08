@@ -104,6 +104,7 @@ BEGIN
                      @cSKUDescr = SKU.DESCR
                   FROM dbo.UCC UCC WITH (NOLOCK)
                   INNER JOIN dbo.SKU SKU WITH (NOLOCK) ON (SKU.SKU = UCC.SKU AND SKU.Storerkey = UCC.StorerKey)
+                  INNER JOIN dbo.Taskdetail TD WITH (NOLOCK) ON TD.TaskDetailKey = @cTaskDetailKey AND PickMethod = 'SKU'
                   INNER JOIN dbo.CCDetail CC WITH (NOLOCK) 
                      ON CC.SKU         = UCC.SKU 
                      AND CC.StorerKey  = UCC.StorerKey
