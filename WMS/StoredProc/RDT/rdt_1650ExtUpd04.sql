@@ -11,6 +11,7 @@ GO
 /*                                                                      */
 /* Date       Rev  Author     Purposes                                  */
 /* 2024-12-16 1.0  CYU027     FCR-1606 Create                           */
+/* 2025-07-09 1.1.0 NickT     UWP-37279 Performance Tuning              */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1650ExtUpd04] (
@@ -40,7 +41,7 @@ BEGIN
    BEGIN TRAN rdt_1650ExtUpd04
    SAVE TRAN rdt_1650ExtUpd04
 
-   --Call 1650ExtUpd01
+   --Call 1650ExtUpd05
    IF NOT EXISTS (SELECT 1 FROM dbo.sysobjects WHERE id = object_id(N'rdt.rdt_1650ExtUpd05') AND OBJECTPROPERTY(id, N'IsProcedure') = 1)
    BEGIN
       SET @nErrNo = 231051

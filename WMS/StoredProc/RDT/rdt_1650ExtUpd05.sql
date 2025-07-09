@@ -66,6 +66,10 @@ SET ANSI_NULLS OFF
            @nWarningNo        INT = 0,
            @cUserName         NVARCHAR( 128)
 
+   DECLARE @tPickDetailKey TABLE 
+   (
+      PickDetailKey NVARCHAR(10) PRIMARY KEY CLUSTERED NOT NULL
+   )
 
    SELECT @cFacility = Facility,
       @cUserName = UserName
@@ -130,28 +134,48 @@ SET ANSI_NULLS OFF
                SET @nErrNo = 53802   
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Get RFKey Fail 
                GOTO Quit
-            END 
+            END
 
-            BEGIN TRY
-               UPDATE dbo.PickDetail WITH (ROWLOCK)
-               SET
-                  MoveRefKey = @cMoveRefKey,
-                  EditWho    = SUSER_NAME(),
-                  EditDate   = GETDATE(),
-                  Trafficcop = NULL
-               WHERE ID = @cPalletID
-                  AND StorerKey = @cStorerKey
-                  AND SKU = @cSku
-                  AND Status < '9'
-                  AND ShipFlag <> 'Y'
-                  AND LOT = @cLot
-                  AND LOC = @cFromLoc
-            END TRY
-            BEGIN CATCH
-               SET @nErrNo = 53803
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --LOCK PDTL FAIL
-               GOTO Quit
-            END CATCH
+            DELETE FROM @tPickDetailKey
+
+            -- (james04)
+            DECLARE CUR_UPDMOVREF CURSOR LOCAL READ_ONLY FAST_FORWARD FOR 
+            SELECT DISTINCT PickDetailKey 
+            FROM dbo.PickDetail WITH (NOLOCK)
+            WHERE  ID = @cPalletID
+            AND    StorerKey = @cStorerKey
+            AND    SKU = @cSku
+            AND    Status < '9'
+            AND    ShipFlag <> 'Y'
+            AND    LOT = @cLot
+            AND    LOC = @cFromLoc
+            OPEN CUR_UPDMOVREF 
+            FETCH NEXT FROM CUR_UPDMOVREF INTO @cPickDetailKey
+            WHILE @@FETCH_STATUS <> -1
+            BEGIN
+               UPDATE dbo.PickDetail WITH (ROWLOCK) SET 
+                MoveRefKey = @cMoveRefKey
+               ,EditWho    = SUSER_NAME()
+               ,EditDate   = GETDATE()
+               ,Trafficcop = NULL
+               WHERE PickDetailKey = @cPickDetailKey
+
+               IF @@ERROR <> 0
+               BEGIN
+                  SET @nErrNo = 53803   
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --LOCK PDTL FAIL 
+                  CLOSE CUR_UPDMOVREF
+                  DEALLOCATE CUR_UPDMOVREF
+                  GOTO Quit
+               END
+
+               INSERT INTO @tPickDetailKey (PickDetailKey)
+               VALUES (@cPickDetailKey)
+
+               FETCH NEXT FROM CUR_UPDMOVREF INTO @cPickDetailKey
+            END
+            CLOSE CUR_UPDMOVREF
+            DEALLOCATE CUR_UPDMOVREF
 
             --Update all SKU on pallet to new ASRS LOC
             EXEC nspItrnAddMove
@@ -208,15 +232,15 @@ SET ANSI_NULLS OFF
             END
 
             BEGIN TRY
-               UPDATE dbo.PICKDETAIL WITH (ROWLOCK) 
+               UPDATE PD WITH (ROWLOCK) 
                SET
                   MoveRefKey = '',
                   EditWho    = SUSER_NAME(),
                   EditDate   = GETDATE(),
                   Trafficcop = NULL
-               WHERE StorerKey = @cStorerKey
-                  AND MoveRefKey IS NOT NULL
-                  AND MoveRefKey = @cMoveRefKey
+               FROM dbo.PICKDETAIL PD WITH (ROWLOCK)
+               INNER JOIN @tPickDetailKey TPD ON PD.PickDetailKey = TPD.PickDetailKey
+
             END TRY
             BEGIN CATCH
                SET @nErrNo = 53805
