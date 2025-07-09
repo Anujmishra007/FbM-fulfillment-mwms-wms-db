@@ -40,6 +40,7 @@ GO
 /* 2024-10-25 2.9  ShaoAn   FCR-759-1001 ID and UCC Length Issue        */
 /* 2024-08-05 3.0  Ung      WMS-25998 Add UCC.Status = 3                */
 /* 2024-11-07 3.1  PXL009   Merged 2.9 from v0 branch                   */
+/* 2025-07-09 3.2.0 NickT   !!!Cutover, use V0 REPO for new development */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_Move_UCC] (
