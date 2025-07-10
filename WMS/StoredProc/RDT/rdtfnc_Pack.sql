@@ -99,6 +99,7 @@ GO
 /* 2024-03-15   7.4 Ung         WMS-24885 Add DefaultCursor                                     */
 /* 2025-01-24   7.5 JCH507      FCR-2435 Merge V7.0 to 7.4 from v0 to v2                        */
 /* 2025-03-25   7.6 YeeKung     FCR-3145 Add Out for rdt_serialNo Params (yeekung03)            */
+/* 2025-07-10   7.7 NickT       FCR-4325 Split SKU Qty screen into 2 screens                    */
 /************************************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_Pack] (
@@ -1624,6 +1625,11 @@ BEGIN
       IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
       BEGIN
          SET @nAction = 0
+
+         DELETE FROM @tExtScnData
+         INSERT INTO @tExtScnData (Variable, Value) VALUES
+            ('@cLabelNo',        @cLabelNo),
+            ('@cLabelLine',      @cLabelLine)
 
          EXECUTE [RDT].[rdt_ExtScnEntry] 
          @cExtendedScreenSP, 
