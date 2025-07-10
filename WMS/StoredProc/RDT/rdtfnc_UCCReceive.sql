@@ -66,9 +66,10 @@ GO
 /* 2024-09-30 4.9  YYS027  UWP-25017 bugfix for string(dmy) to date when   */
 /*                         calling rdt_UCCReceive_Confirm                  */
 /* 2024-10-14 5.0  CYU027  FCR-759 ID and UCC Length Issue                 */
-/* 2024-11-07 5.1  YYS027   Merged from 4.6(v0) and 4.3(V2) to 4.7(V2)      */
+/* 2024-11-07 5.1  YYS027   Merged from 4.6(v0) and 4.3(V2) to 4.7(V2)     */
 /* 2024-12-05 5.2  ShaoAn  FCR-1103 Changes in UCC Receive to process      */
 /* 2025-05-19 5.3  Dennis  FCR-4531 Add Ext Valation on Step 2             */
+/* 2025-07-10 0.0  Jackc   !!!Cutover!!! Use V2 version in V0 repo for work*/
 /***************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdtfnc_UCCReceive](
    @nMobile    INT,
