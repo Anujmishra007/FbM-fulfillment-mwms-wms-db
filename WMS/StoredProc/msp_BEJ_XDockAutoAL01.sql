@@ -46,7 +46,7 @@ BEGIN
     -- specialhandling is 'N', SOStatus is '0', userdefine09 is not empty,
     -- and delivery date is tomorrow
     select orders.OrderKey
-    from orders
+    from orders (nolock) 
     where orders.status = 0
         and orders.storerkey = @c_StorerKey
         and orders.facility = @c_Facility
@@ -81,7 +81,7 @@ BEGIN
         END
 
         IF @n_continue IN(1,2) AND (SELECT Status
-            FROM Orders
+            FROM Orders (nolock)  
             where OrderKey = @c_Orderkey) = 2
         BEGIN
             --Create pickslip if the order is fully allocated
@@ -108,7 +108,7 @@ BEGIN
             --Update pickdetail status to 5
             IF @n_continue IN(1,2)
             BEGIN
-                UPDATE PICKDETAIL
+                UPDATE PICKDETAIL WITH (ROWLOCK)
                 SET Status = 5
                 WHERE OrderKey = @c_Orderkey
                 IF @@ERROR <> 0
