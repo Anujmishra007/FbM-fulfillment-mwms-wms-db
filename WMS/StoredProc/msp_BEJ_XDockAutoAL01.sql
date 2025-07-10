@@ -39,6 +39,7 @@ BEGIN
             , @n_Continue           INT            = 1
             , @n_StartTranCount     INT            = @@TRANCOUNT
             , @c_OrderKey           NVARCHAR(10)   = ''
+            , @c_PickDetailKey      NVARCHAR(10)   = ''
 
     DECLARE CUR_OH CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
     -- Select orders that are ready for processing
@@ -108,17 +109,29 @@ BEGIN
             --Update pickdetail status to 5
             IF @n_continue IN(1,2)
             BEGIN
-                UPDATE PICKDETAIL WITH (ROWLOCK)
-                SET Status = 5
-                WHERE OrderKey = @c_Orderkey
-                IF @@ERROR <> 0
+                DECLARE CUR_PD CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+                SELECT pd.PickDetailKey FROM PICKDETAIL pd (nolock) WHERE pd.OrderKey=@c_Orderkey
+                OPEN CUR_PD
+                FETCH NEXT FROM CUR_PD INTO @c_PickDetailKey
+                WHILE @@FETCH_STATUS <> -1 AND @n_continue IN(1,2)
                 BEGIN
-                    SET @n_Continue = 3
-                    SET @n_Err = 68075
-                    SET @c_ErrMsg = 'NSQL' + CONVERT(NCHAR(5), @n_Err) + 
-                                ': Failed to update PICKDETAIL status. (msp_BEJ_msp_BEJ_XDockAutoAL01)'
-                    GOTO QUIT_SP
+                    -- Update the status of each pickdetail to 5
+                    UPDATE PICKDETAIL WITH (ROWLOCK)
+                    SET Status = 5
+                    WHERE PickDetailKey = @c_PickDetailKey
+                    AND OrderKey = @c_Orderkey
+
+                    IF @@ERROR <> 0
+                        BEGIN
+                        SET @n_Continue = 3
+                        SET @n_Err = 68075
+                        SET @c_ErrMsg = 'NSQL' + CONVERT(NCHAR(5), @n_Err) + 
+                                    ': Failed to update PICKDETAIL status. (msp_BEJ_msp_BEJ_XDockAutoAL01)'
+                        GOTO QUIT_SP
+                    END
                 END
+                CLOSE CUR_PD
+                DEALLOCATE CUR_PD
             END
         END
     END
@@ -130,6 +143,11 @@ BEGIN
         BEGIN
         CLOSE CUR_OH
         DEALLOCATE CUR_OH
+    END
+    IF CURSOR_STATUS('LOCAL', 'CUR_PD') in (0 , 1)    
+        BEGIN
+        CLOSE CUR_PD
+        DEALLOCATE CUR_PD
     END
     IF @n_continue = 3
     BEGIN
