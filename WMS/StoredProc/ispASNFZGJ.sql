@@ -13,7 +13,7 @@ GO
 /* Date         Rev   Author   Purposes                                              */
 /* 09/07/2025   1.0   PPA374   Updating pallet ID for the inventory at finalisation  */
 /*************************************************************************************/
-ALTER PROCEDURE [dbo].[ispASNFZGJ]
+CREATE OR ALTER PROCEDURE [dbo].[ispASNFZGJ]
    @c_ReceiptKey         NVARCHAR(10),
    @c_ReceiptLineNumber  NVARCHAR(10),
    @b_Success            INT OUTPUT,
