@@ -57,7 +57,8 @@ GO
 /* 2023-04-05 4.0  Ung        WMS-22053 Revise ExtendedInfo                   */
 /* 2024-06-14 4.1  Dennis     UWP-20813 Check Digit                           */
 /* 2025-03-13 4.2  NLT013     UWP-31321 Be able to close pending pallet       */
-/* 2025-05-21 1.1  NLT013     UWP-34785 Add new Exit Screen for Levis         */
+/* 2025-05-21 4.3  NLT013     UWP-34785 Add new Exit Screen for Levis         */
+/* 2025-07-10 0.0  JackC      !!!Cutover!!! Use V0 repo for work              */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_Replen](
