@@ -3,13 +3,13 @@
 IF NOT EXISTS ( SELECT 1 FROM RDT.RDTMSG (NOLOCK) WHERE MESSAGE_ID = 731 AND Message_Type = 'FNC')
 BEGIN
    INSERT INTO RDT.RDTMsg (Message_ID, Lang_Code, Message_Type, Message_Text, StoredProcName, Eventtype)
-   VALUES ('731', 'ENG', 'FNC', 'Apparel CC', 'rdtfnc_SimpleCC', '1')
+   VALUES ('731', 'ENG', 'FNC', 'Apparel CC', 'rdtfnc_SimpleCC', '8')
 END
 
 IF NOT EXISTS ( SELECT 1 FROM RDT.RDTMSG (NOLOCK) WHERE MESSAGE_ID = 732 AND Message_Type = 'FNC')
 BEGIN
    INSERT INTO RDT.RDTMsg (Message_ID, Lang_Code, Message_Type, Message_Text, StoredProcName, Eventtype)
-   VALUES ('732', 'ENG', 'FNC', 'Simple CC (Assisted)', 'rdtfnc_SimpleCC', '1')
+   VALUES ('732', 'ENG', 'FNC', 'Simple CC (Assisted)', 'rdtfnc_SimpleCC', '8')
 END
 
 -- 2770 = CCREF screen
@@ -138,8 +138,3 @@ EXECUTE rdt.rdtAddScn 2779, 'ENG'
    ,@cLine06 = ''
    ,@cLine07 = 'OPTION: %01i01'
    ,@cLine14 = '%e' 
-      
--- update rdt.rdtscn with function id   
-UPDATE RDT.RDTSCN SET FUNC = 731 WHERE SCN BETWEEN 2770 AND 2779
-   
--- Note: This module no need set function no as it is shared across multi function
