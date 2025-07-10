@@ -617,6 +617,7 @@ BEGIN
                         @b_UOMCalc    = 0,
                         @d_EffectiveDate = @d_EffectiveDate,
                         @c_ItrnKey    = '',
+                        @c_PalletType = @c_FromPalletType,   --(SSA01)
                         @b_Success    = @b_Success OUTPUT,
                         @n_err        = @n_err     OUTPUT,
                         @c_errmsg     = @c_errmsg  OUTPUT

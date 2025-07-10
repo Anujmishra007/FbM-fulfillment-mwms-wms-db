@@ -38,6 +38,7 @@ GO
 /* 09-Aug-20200 NJOW01    2.0 DEVOPS Combine Script                       */
 /* 12-Aug-2024  Wan04     2.1 LFWM-4446 - RG[GIT] Serial Number Solution  */
 /*                            - Transfer by Serial Number                 */
+/* 11-Jun-2025  TLTING02  2.1 storerconfig BlockDoubleShip                */
 /**************************************************************************/
 
 CREATE OR ALTER PROC  [dbo].[nspItrnAddWithdrawalCheck]
@@ -95,6 +96,8 @@ CREATE OR ALTER PROC  [dbo].[nspItrnAddWithdrawalCheck]
  ,      @c_pstprocess NVARCHAR(250)
  ,      @n_cnt int
 
+ DECLARE @c_BlockDoubleShip NVARCHAR(30)
+ 
  IF @n_continue=1 or @n_continue=2
  BEGIN
      IF @d_Lottable04 = ''
@@ -890,6 +893,42 @@ CREATE OR ALTER PROC  [dbo].[nspItrnAddWithdrawalCheck]
    END
 END
 
+
+  --TLTING02
+  IF @n_continue = 1 or @n_continue = 2
+   BEGIN
+	 
+     SET @b_success = 0
+     SET @c_BlockDoubleShip = ''
+     Execute nspGetRight
+        @c_facility = ''
+     ,  @c_StorerKey= @c_StorerKey                   -- Storer
+     ,  @c_Sku      = ''                             -- Sku
+     ,  @c_ConfigKey= 'BlockDoubleShip'                  -- ConfigKey
+     ,  @b_success  = @b_success         OUTPUT
+     ,  @c_authority= @c_BlockDoubleShip     OUTPUT
+     ,  @n_err      = @n_err             OUTPUT
+     ,  @c_ErrMsg   = @c_ErrMsg          OUTPUT
+
+     IF @b_success <> 1
+     BEGIN
+        SET @n_continue = 3
+        SET @n_Err = 62711
+        SET @c_ErrMsg = 'nspItrnAddWithdrawalCheck:' + ISNULL(RTRIM(@c_ErrMsg),'')
+     END
+
+	   IF @c_BlockDoubleShip = '1' 
+	   AND @c_sourcetype = 'ntrPickDetailUpdate'  
+	   AND EXISTS (  SELECT 1 FROM ITRN  (NOLOCK) WHERE SourceKey = @c_sourcekey  AND  SourceType = @c_sourcetype  AND ItrnKey <> @c_itrnkey  )
+	   
+	   BEGIN 
+	      SELECT @n_continue = 3  
+	                  SELECT @n_err = 62992  
+	                  SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)  
+	                  +': Double ship for Pickdetail. (nspItrnAddWithdrawalCheck)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) ' 
+	   END
+	END
+	
 /* #INCLUDE <SPIAWC2.SQL> */
 IF @n_continue = 3  -- Error Occured - Process And Return
 BEGIN
