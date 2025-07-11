@@ -9,6 +9,7 @@ on:
         type: choice
         options:
           - ALL
+          - GLOWMS
           - USALEV4DWMS
           - USA4DNJWMS
           - USAMAT4DWMS
@@ -30,7 +31,6 @@ on:
           - CMRWMS
           - SENWMS
           - TGOWMS
-          - GLOWMS
 
 permissions: write-all
 
