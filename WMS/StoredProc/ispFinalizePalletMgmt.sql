@@ -25,7 +25,7 @@ GO
 /*                            Management - Change Request for validate  */
 /*                            UID login (WL01)                          */
 /* 10-Sep-2024  WLChooi 1.1   DevOps Combine Script                     */
-/************************************************************************/
+/************************************************************************/ 
 CREATE OR ALTER PROC dbo.ispFinalizePalletMgmt 
             @c_PMkey            NVARCHAR(10) 
          ,  @b_Success          INT = 0  OUTPUT 
