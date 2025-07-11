@@ -43,7 +43,7 @@ CREATE OR ALTER PROC [RDT].[rdt_838ExtScn05] (
    @cInField13       NVARCHAR( 60) OUTPUT,  @cOutField13 NVARCHAR( 60) OUTPUT,  @cFieldAttr13 NVARCHAR( 1) OUTPUT,  @dLottable13 DATETIME      OUTPUT,
    @cInField14       NVARCHAR( 60) OUTPUT,  @cOutField14 NVARCHAR( 60) OUTPUT,  @cFieldAttr14 NVARCHAR( 1) OUTPUT,  @dLottable14 DATETIME      OUTPUT,
    @cInField15       NVARCHAR( 60) OUTPUT,  @cOutField15 NVARCHAR( 60) OUTPUT,  @cFieldAttr15 NVARCHAR( 1) OUTPUT,  @dLottable15 DATETIME      OUTPUT,
-   @nAction      INT, --0 Jump Screen, 2. Prepare output fields, Step = 99 is a new screen
+   @nAction      INT,
    @nAfterScn    INT OUTPUT, @nAfterStep    INT OUTPUT,
    @nErrNo             INT            OUTPUT,
    @cErrMsg            NVARCHAR( 20)  OUTPUT,
@@ -66,6 +66,38 @@ BEGIN
    SET CONCAT_NULL_YIELDS_NULL OFF
 
    DECLARE
+      @bSuccess       INT,
+      @nRowCount      INT, --v7.5
+      @cOption        NVARCHAR( 2),
+      @cCurrLOC       NVARCHAR( 10),
+      @cSQL           NVARCHAR( MAX),
+      @cSQLParam      NVARCHAR( MAX),
+      @cUCCNo         NVARCHAR( 20),
+      @cType          NVARCHAR( 10),
+      @cPrintPackList NVARCHAR( 1),
+      @cCustomID      NVARCHAR( 20),
+      @nTotalUCC      INT,
+      @cSerialNo      NVARCHAR( 30) = '',
+      @cIsValSerialNo NVARCHAR( 1) = '0',  --TLE109
+      @nSerialQTY     INT,
+      @nMoreSNO       INT,
+      @nBulkSNO       INT,
+      @nBulkSNOQTY    INT,
+      @tVar                VariableTable, 
+      @tVarDisableQTYField VARIABLETABLE,
+      @cBarcode               NVARCHAR( 60),
+      @cBarcode2              NVARCHAR( 60),
+      @cFromDropIDDecode      NVARCHAR( 20),
+      @cToDropIDDecode        NVARCHAR( 20),
+      @cUPC                   NVARCHAR( 30),
+      @cQTY                   NVARCHAR( 5),
+      @nDecodeQTY             INT,
+      @cPackDtlDropID_Decode  NVARCHAR(20),
+      @cSKUDataCapture        NVARCHAR(1),
+      @cDataCapture           NVARCHAR(1),
+      @cSkipChkPPKQTY         NVARCHAR(1) = '0',
+
+      @cCstLabelSP NVARCHAR(30),
       @nCurrentStep INT,
       @nCurrentScn  INT,
 
@@ -102,9 +134,7 @@ BEGIN
       @nTotalPack       INT,
       @nTotalShort      INT,
       @nPackedQTY       INT,
-      @nAction          INT, --(JHU151)   
-      @nEnter           INT, --(cc01)  
-      
+      @nEnter           INT, --(cc01)
 
       @cDefaultPrintLabelOption     NVARCHAR( 1),
       @cDefaultPrintPackListOption  NVARCHAR( 1),
@@ -163,7 +193,6 @@ BEGIN
       @cDefaultcartontype  NVARCHAR( 20),  --(yeekung01)
       @cExtendedScreenSP   NVARCHAR( 20), --(JHU151)
       @cJumpType           NVARCHAR( 10), --(JHU151) Forward/Back
-      @tExtScnData			VariableTable, --(JHU151)
       @cPackByFromDropID   NVARCHAR( 1),
       @cDefaultCursor      NVARCHAR( 2), --(v7.5)
       @nScan               INT
@@ -255,8 +284,8 @@ BEGIN
       -- If next step is 3, need jump to new SKU screen
       IF @nStep = 3 AND @nScn = 4652
       BEGIN
-         SET @nAfterStep = 99
-         SET @nAfterScn = 6624
+         SET @nStep = 99
+         SET @nScn = 6624
          GOTO Quit
       END
 
@@ -336,7 +365,7 @@ BEGIN
                               WHEN '5' THEN Pack.OtherUnit2
                            END, 1) AS INT)
                      FROM dbo.SKU SKU WITH (NOLOCK)
-                        INNER JOIN dbo.Pack Pack WITH (NOLOCK) ON (SKU.PackKey = Pack.PackKey)
+                     INNER JOIN dbo.Pack Pack WITH (NOLOCK) ON (SKU.PackKey = Pack.PackKey)
                      WHERE SKU.StorerKey = @cStorerKey
                         AND SKU.SKU = @cSKU
 
@@ -704,7 +733,7 @@ BEGIN
                            WHEN '5' THEN Pack.OtherUnit2
                         END, 1) AS INT)
                   FROM dbo.SKU SKU WITH (NOLOCK)
-                     INNER JOIN dbo.Pack Pack WITH (NOLOCK) ON (SKU.PackKey = Pack.PackKey)
+                  INNER JOIN dbo.Pack Pack WITH (NOLOCK) ON (SKU.PackKey = Pack.PackKey)
                   WHERE SKU.StorerKey = @cStorerKey
                      AND SKU.SKU = @cSKU
 
@@ -895,7 +924,7 @@ BEGIN
                         IF @nErrNo <> 0
                            GOTO Quit
 
-                        IF @nStep = 3
+                        IF @nStep = 99 AND @nScn = 6624
                            SET @cOutField15 = @cExtendedInfo
                      END
                   END
@@ -924,19 +953,24 @@ BEGIN
                      SET @cFieldAttr14 = '' -- @nPQTY
                   END
 
-                  SET @nAfterStep = 99
-                  SET @nAfterScn = 6625
+                  SET @nStep = 99
+                  SET @nScn = 6625
                   IF @cDefaultCursor <> ''
                      EXEC rdt.rdtSetFocusField @nMobile, @cDefaultCursor
                   ELSE
-                     EXEC rdt.rdtSetFocusField @nMobile, IIF(@cFieldAttr14 <> 'O', 14, 8)
+                  BEGIN
+                     IF @cFieldAttr14 = 'O'
+                        EXEC rdt.rdtSetFocusField @nMobile,  8
+                     ELSE 
+                        EXEC rdt.rdtSetFocusField @nMobile, 14
+                  END
                   GOTO Quit
                END
             END
             ELSE
             BEGIN
-               SET @nAfterStep = 2
-               SET @nAfterScn = 4651
+               SET @nStep = 2
+               SET @nScn = 4651
                GOTO Quit
             END
 
@@ -1271,7 +1305,8 @@ BEGIN
                            WHERE Mobile = @nMobile
                            
                            SET @nInputKey='1'
-                           GOTO Step_9
+                           SET @cUDF01 = 'JumpTo_Step_9'
+                           --GOTO Step_9
                         END
                      END
 
@@ -1429,7 +1464,12 @@ BEGIN
                IF @cDefaultCursor <> ''
                   EXEC rdt.rdtSetFocusField @nMobile, @cDefaultCursor
                ELSE
-                  EXEC rdt.rdtSetFocusField @nMobile, IIF(@cFieldAttr14 <> 'O', 14, 8)
+               BEGIN
+                  IF @cFieldAttr14 = 'O'
+                     EXEC rdt.rdtSetFocusField @nMobile,  8
+                  ELSE 
+                     EXEC rdt.rdtSetFocusField @nMobile, 14
+               END
             END
             ELSE IF @nInputKey = 0
             BEGIN
@@ -1649,7 +1689,8 @@ BEGIN
                      BEGIN
                         SET @cInField01 = CASE WHEN ISNULL(@cCartonType ,'') ='' AND ISNULL(@cDefaultcartontype,'')<>''  THEN @cDefaultcartontype ELSE @cCartonType end
                         SET @nInputKey='1'
-                        GOTO Step_4
+                        SET @cUDF01 = 'JumpTo_Step_4'
+                        --GOTO Step_4
                      END
 
                      GOTO Quit
@@ -1676,7 +1717,8 @@ BEGIN
                      BEGIN
                         SET @cInField01 = @cDefaultPrintLabelOption --Option
                         SET @nInputKey = 1 -- ENTER
-                        GOTO Step_5
+                        SET @cUDF01 = 'JumpTo_Step_5'
+                        --GOTO Step_5
                      END
                      ELSE
                      GOTO Quit
@@ -1743,7 +1785,12 @@ BEGIN
                IF @cDefaultCursor <> ''
                   EXEC rdt.rdtSetFocusField @nMobile, @cDefaultCursor
                ELSE
-                  EXEC rdt.rdtSetFocusField @nMobile, IIF(@cFieldAttr14 <> 'O', 14, 8)
+               BEGIN
+                  IF @cFieldAttr14 = 'O'
+                     EXEC rdt.rdtSetFocusField @nMobile,  8
+                  ELSE 
+                     EXEC rdt.rdtSetFocusField @nMobile, 14
+               END
          END
          GOTO Quit
       END
@@ -1752,6 +1799,112 @@ BEGIN
    GOTO Quit
 
 Quit:
+   UPDATE rdt.RDTMOBREC WITH (ROWLOCK) SET
+      EditDate = GETDATE(),
+      ErrMsg = @cErrMsg,
+      Func   = @nFunc,
+      Step   = @nStep,
+      Scn    = @nScn,
+
+      StorerKey      = @cStorerKey,
+      Facility       = @cFacility,
+      -- UserName       = @cUserName,
+      Printer_Paper  = @cPaperPrinter,
+      Printer        = @cLabelPrinter,
+
+      V_PickSlipNo   = @cPickSlipNo,
+      V_SKU          = @cSKU,
+      V_QTY          = @nQTY,
+      -- V_CaseID       = @cCustomID,
+      V_SKUDescr     = @cSKUDescr,
+      V_FromScn      = @nFromScn,
+      V_FromStep     = @nFromStep,
+      V_UOM          = @cPUOM,
+
+      V_String1      = @cPackDtlRefNo,
+      V_String2      = @cPackDtlRefNo2,
+      V_String3      = @cLabelNo,
+      V_String4      = @cCartonType,
+      V_String5      = @cCube,
+      V_String6      = @cWeight,
+      V_String7      = @cRefNo,
+      V_String8      = @cLabelLine,
+      V_String9      = @cPackDtlDropID,
+      V_String10     = @cUCCCounter,
+      V_String11     = @cMUOM_Desc,
+      V_String12     = @cPUOM_Desc,
+      V_String13     = @cDisableQTYFieldSP,
+      V_String14     = @cFlowThruScreen, 
+
+      V_CartonNo     = @nCartonNo,
+      V_Integer1     = @nCartonSKU,
+      V_Integer2     = @nCartonQTY,
+      V_Integer3     = @nTotalCarton,
+      V_Integer4     = @nTotalPick,
+      V_Integer5     = @nTotalPack,
+      V_Integer6     = @nTotalShort,
+      V_Integer7     = @nPackedQTY,
+      V_Integer8     = @nPUOM_Div,
+      V_Integer9     = @nPQTY,
+      V_Integer10    = @nMQTY,
+      V_Integer11    = @nEnter,     --(cc01)  
+      V_Integer12    = @nScan,
+
+      V_String15     = @cShowPickSlipNo,
+      V_String16     = @cDefaultPrintLabelOption,
+      V_String17     = @cDefaultPrintPackListOption,
+      V_String18     = @cDefaultWeight,
+      V_String19     = @cUCCNo,
+      V_String20     = @cFromDropID,
+      V_String21     = @cExtendedValidateSP,
+      V_String22     = @cExtendedUpdateSP,
+      V_String23     = @cExtendedInfoSP,
+      V_String24     = @cExtendedInfo,
+      V_String25     = @cDecodeSP,
+      V_String26     = @cDisableQTYField,
+      V_String27     = @cCapturePackInfoSP,
+      V_String28     = @cPackInfo,
+      V_String29     = @cAllowWeightZero,
+      V_String30     = @cAllowCubeZero,
+      V_String31     = @cAutoScanIn,
+      V_String32     = @cDefaultOption,
+      V_String33     = @cDisableOption,
+      V_String34     = @cSerialNoCapture,
+      V_String35     = @cPackList,
+      V_String36     = @cShipLabel,
+      V_String37     = @cCartonManifest,
+      V_String38     = @cCustomCartonNo,
+      V_String39     = @cCustomNo,
+      V_String40     = @cDataCaptureSP,
+      V_String41     = @cPackDtlUPC,
+      V_String42     = @cPrePackIndicator,
+      V_String43     = @cPackQtyIndicator,
+      V_String44     = @cPackData1,
+      V_String45     = @cPackData2,
+      V_String46     = @cPackData3,
+      V_String47     = @cMultiSKUBarcode,
+      V_String48     = @cDefaultQTY, --(cc01)
+      V_String49     = @cDefaultcartontype,
+      V_String50     = @cPackByFromDropID,
+      V_String51     = @cDefaultCursor, --(v7.5)
+
+      I_Field01 = @cInField01,  O_Field01 = @cOutField01,   FieldAttr01  = @cFieldAttr01,
+      I_Field02 = @cInField02,  O_Field02 = @cOutField02,   FieldAttr02  = @cFieldAttr02,
+      I_Field03 = @cInField03,  O_Field03 = @cOutField03,   FieldAttr03  = @cFieldAttr03,
+      I_Field04 = @cInField04,  O_Field04 = @cOutField04,   FieldAttr04  = @cFieldAttr04,
+      I_Field05 = @cInField05,  O_Field05 = @cOutField05,   FieldAttr05  = @cFieldAttr05,
+      I_Field06 = @cInField06,  O_Field06 = @cOutField06,   FieldAttr06  = @cFieldAttr06,
+      I_Field07 = @cInField07,  O_Field07 = @cOutField07,   FieldAttr07  = @cFieldAttr07,
+      I_Field08 = @cInField08,  O_Field08 = @cOutField08,   FieldAttr08  = @cFieldAttr08,
+      I_Field09 = @cInField09,  O_Field09 = @cOutField09,   FieldAttr09  = @cFieldAttr09,
+      I_Field10 = @cInField10,  O_Field10 = @cOutField10,   FieldAttr10  = @cFieldAttr10,
+      I_Field11 = @cInField11,  O_Field11 = @cOutField11,   FieldAttr11  = @cFieldAttr11,
+      I_Field12 = @cInField12,  O_Field12 = @cOutField12,   FieldAttr12  = @cFieldAttr12,
+      I_Field13 = @cInField13,  O_Field13 = @cOutField13,   FieldAttr13  = @cFieldAttr13,
+      I_Field14 = @cInField14,  O_Field14 = @cOutField14,   FieldAttr14  = @cFieldAttr14,
+      I_Field15 = @cInField15,  O_Field15 = @cOutField15,   FieldAttr15  = @cFieldAttr15
+
+   WHERE Mobile = @nMobile
 
 END
 GO

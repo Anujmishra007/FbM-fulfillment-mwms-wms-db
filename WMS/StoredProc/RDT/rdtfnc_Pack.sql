@@ -1626,11 +1626,6 @@ BEGIN
       BEGIN
          SET @nAction = 0
 
-         DELETE FROM @tExtScnData
-         INSERT INTO @tExtScnData (Variable, Value) VALUES
-            ('@cLabelNo',        @cLabelNo),
-            ('@cLabelLine',      @cLabelLine)
-
          EXECUTE [RDT].[rdt_ExtScnEntry] 
          @cExtendedScreenSP, 
          @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorerKey, @tExtScnData ,
@@ -6331,10 +6326,16 @@ BEGIN
                SET @nTotalPick      =  CAST(@cUDF11 AS INT)  
                SET @nTotalPack      =  CAST(@cUDF12 AS INT)  
                SET @nTotalShort     =  CAST(@cUDF13 AS INT)
-
             END -- 6385 inputkey=1
-
          END -- rdt_838ExtScn02
+         IF @cExtendedScreenSP = 'rdt_838ExtScn05'
+         BEGIN
+            IF @cUDF01 = 'JumpTo_Step_4' GOTO Step_4
+            ELSE IF @cUDF01 = 'JumpTo_Step_5' GOTO Step_5
+            ELSE IF @cUDF01 = 'JumpTo_Step_9' GOTO Step_9
+
+            RETURN
+         END
 
          GOTO Quit
       END
