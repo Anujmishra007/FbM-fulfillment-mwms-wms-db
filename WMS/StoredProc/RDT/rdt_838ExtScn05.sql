@@ -200,99 +200,117 @@ BEGIN
    SELECT 
       @nCurrentStep = Step,
       @nCurrentScn  = Scn,
-      @cUserName = UserName,
-
-      @cPickSlipNo      = V_PickSlipNo,
-      @cSKU             = V_SKU,
-      @nQTY             = V_QTY,
-      @cSKUDescr        = V_SKUDescr,
-      @nFromScn         = V_FromScn,
-      @nFromStep        = V_FromStep,
-      @cPUOM            = V_UOM,
-
-      @cPackDtlRefNo       = V_String1,
-      @cPackDtlRefNo2      = V_String2,
-      @cLabelNo            = V_String3,
-      @cCartonType         = V_String4,
-      @cCube               = V_String5,
-      @cWeight             = V_String6,
-      @cRefNo              = V_String7,
-      @cLabelLine          = V_String8,
-      @cPackDtlDropID      = V_String9,
-      @cUCCCounter         = V_String10,
-      @cMUOM_Desc          = V_String11,
-      @cPUOM_Desc          = V_String12,
-      @cDisableQTYFieldSP  = V_String13,
-      @cFlowThruScreen     = V_String14,
-
-      @nCartonNo           = V_CartonNo,
-      @nCartonSKU          = V_Integer1,
-      @nCartonQTY          = V_Integer2,
-      @nTotalCarton        = V_Integer3,
-      @nTotalPick          = V_Integer4,
-      @nTotalPack          = V_Integer5,
-      @nTotalShort         = V_Integer6,
-      @nPackedQTY          = V_Integer7,
-      @nPUOM_Div           = V_Integer8,
-      @nPQTY               = V_Integer9,
-      @nMQTY               = V_Integer10,
-      @nEnter              = V_Integer11,  --(cc01)  
-      @nScan               = V_Integer12,
-
-      @cShowPickSlipNo     = V_String15,
-      @cDefaultPrintLabelOption    = V_String16,
-      @cDefaultPrintPackListOption = V_String17,
-      @cDefaultWeight      = V_String18,
-      @cUCCNo              = V_String19,
-      @cFromDropID         = V_String20,
-      @cExtendedValidateSP = V_String21,
-      @cExtendedUpdateSP   = V_String22,
-      @cExtendedInfoSP     = V_String23,
-      @cExtendedInfo       = V_String24,
-      @cDecodeSP           = V_String25,
-      @cDisableQTYField    = V_String26,
-      @cCapturePackInfoSP  = V_String27,
-      @cPackInfo           = V_String28,
-      @cAllowWeightZero    = V_String29,
-      @cAllowCubeZero      = V_String30,
-      @cAutoScanIn         = V_String31,
-      @cDefaultOption      = V_String32,
-      @cDisableOption      = V_String33,
-      @cSerialNoCapture    = V_String34,
-      @cPackList           = V_String35,
-      @cShipLabel          = V_String36,
-      @cCartonManifest     = V_String37,
-      @cCustomCartonNo     = V_String38,
-      @cCustomNo           = V_String39,
-      @cDataCaptureSP      = V_String40,
-      @cPackDtlUPC         = V_String41,
-      @cPrePackIndicator   = V_String42,
-      @cPackQtyIndicator   = V_String43,
-      @cPackData1          = V_String44,
-      @cPackData2          = V_String45,
-      @cPackData3          = V_String46,
-      @cMultiSKUBarcode    = V_String47,
-      @cDefaultQTY         = V_String48, --(cc01)
-      @cDefaultcartontype  = V_String49,
-      @cPackByFromDropID   = V_String50,
-      @cDefaultCursor      = V_String51 --(v7.5)
+      @cUserName = UserName
    FROM rdt.RDTMOBREC WITH(NOLOCK)
    WHERE Mobile = @nMobile
 
+   SET @cUDF01 = ''
+   SET @cUDF02 = ''
+
    IF @nFunc = 838
    BEGIN
+      SET @cUDF02 = '1' -- 1 means update RDTMOBREC in main function SP
+
       -- If next step is 3, need jump to new SKU screen
       IF @nStep = 3 AND @nScn = 4652
       BEGIN
+         SET @nErrNo = 0
+         SET @cErrMsg = ''
+
          SET @nAfterStep = 99
          SET @nAfterScn = 6624
+
+         SET @nStep = 99
+         SET @nScn = 6624
          RETURN
       END
 
       IF @nCurrentStep = 99
       BEGIN
+         SET @cUDF02 = '0' -- 0 means update RDTMOBREC in the ExtScnSP
+         SELECT
+            @cPickSlipNo      = V_PickSlipNo,
+            @cSKU             = V_SKU,
+            @nQTY             = V_QTY,
+            @cSKUDescr        = V_SKUDescr,
+            @nFromScn         = V_FromScn,
+            @nFromStep        = V_FromStep,
+            @cPUOM            = V_UOM,
+
+            @cPackDtlRefNo       = V_String1,
+            @cPackDtlRefNo2      = V_String2,
+            @cLabelNo            = V_String3,
+            @cCartonType         = V_String4,
+            @cCube               = V_String5,
+            @cWeight             = V_String6,
+            @cRefNo              = V_String7,
+            @cLabelLine          = V_String8,
+            @cPackDtlDropID      = V_String9,
+            @cUCCCounter         = V_String10,
+            @cMUOM_Desc          = V_String11,
+            @cPUOM_Desc          = V_String12,
+            @cDisableQTYFieldSP  = V_String13,
+            @cFlowThruScreen     = V_String14,
+
+            @nCartonNo           = V_CartonNo,
+            @nCartonSKU          = V_Integer1,
+            @nCartonQTY          = V_Integer2,
+            @nTotalCarton        = V_Integer3,
+            @nTotalPick          = V_Integer4,
+            @nTotalPack          = V_Integer5,
+            @nTotalShort         = V_Integer6,
+            @nPackedQTY          = V_Integer7,
+            @nPUOM_Div           = V_Integer8,
+            @nPQTY               = V_Integer9,
+            @nMQTY               = V_Integer10,
+            @nEnter              = V_Integer11,  --(cc01)  
+            @nScan               = V_Integer12,
+
+            @cShowPickSlipNo     = V_String15,
+            @cDefaultPrintLabelOption    = V_String16,
+            @cDefaultPrintPackListOption = V_String17,
+            @cDefaultWeight      = V_String18,
+            @cUCCNo              = V_String19,
+            @cFromDropID         = V_String20,
+            @cExtendedValidateSP = V_String21,
+            @cExtendedUpdateSP   = V_String22,
+            @cExtendedInfoSP     = V_String23,
+            @cExtendedInfo       = V_String24,
+            @cDecodeSP           = V_String25,
+            @cDisableQTYField    = V_String26,
+            @cCapturePackInfoSP  = V_String27,
+            @cPackInfo           = V_String28,
+            @cAllowWeightZero    = V_String29,
+            @cAllowCubeZero      = V_String30,
+            @cAutoScanIn         = V_String31,
+            @cDefaultOption      = V_String32,
+            @cDisableOption      = V_String33,
+            @cSerialNoCapture    = V_String34,
+            @cPackList           = V_String35,
+            @cShipLabel          = V_String36,
+            @cCartonManifest     = V_String37,
+            @cCustomCartonNo     = V_String38,
+            @cCustomNo           = V_String39,
+            @cDataCaptureSP      = V_String40,
+            @cPackDtlUPC         = V_String41,
+            @cPrePackIndicator   = V_String42,
+            @cPackQtyIndicator   = V_String43,
+            @cPackData1          = V_String44,
+            @cPackData2          = V_String45,
+            @cPackData3          = V_String46,
+            @cMultiSKUBarcode    = V_String47,
+            @cDefaultQTY         = V_String48, --(cc01)
+            @cDefaultcartontype  = V_String49,
+            @cPackByFromDropID   = V_String50,
+            @cDefaultCursor      = V_String51 --(v7.5)
+         FROM rdt.RDTMOBREC WITH(NOLOCK)
+         WHERE Mobile = @nMobile
+
          IF @nCurrentScn = 6624
          BEGIN
+            SET @nErrNo = 0
+            SET @cErrMsg = ''
+
             IF @nInputKey = 1
             BEGIN
                IF @cDisableQTYFieldSP = '1'
@@ -1227,11 +1245,14 @@ BEGIN
          END
          ELSE IF @nCurrentScn = 6625
          BEGIN
+            SET @nErrNo = 0
+            SET @cErrMsg = ''
+
             IF @nInputKey = 1
             BEGIN
                SET @cMQTY = CASE WHEN @cFieldAttr08 = 'O' THEN '' ELSE @cInField08 END
                SET @cPQTY = CASE WHEN @cFieldAttr14 = 'O' THEN '' ELSE @cInField14 END
-               
+
                --(cc01)  
                IF @cDefaultQTY >0 AND @nEnter = 0  
                BEGIN
@@ -1812,11 +1833,11 @@ BEGIN
                      EXEC rdt.rdtSetFocusField @nMobile, 14
                END
          END
-         GOTO Quit
+         GOTO Quit --  Only Step 99 need to update RDTMOBREC here
       END
    END
 
-   GOTO Quit
+   RETURN
 
 Quit:
    UPDATE rdt.RDTMOBREC WITH (ROWLOCK) SET
