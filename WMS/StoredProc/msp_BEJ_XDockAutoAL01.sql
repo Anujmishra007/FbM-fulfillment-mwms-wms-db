@@ -3,7 +3,7 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 /************************************************************************/
-/* Stored Procedure: msp_BEJ_msp_BEJ_XDockAutoAL01                      */
+/* Stored Procedure: msp_BEJ_XDockAutoAL01                              */
 /* Creation Date: 07-Jul-2025                                           */
 /* Copyright: Maersk                                                    */
 /* Written by: AYD                                                      */
@@ -19,7 +19,7 @@ GO
 /* Updates:                                                             */
 /* Date         Author  Rev   Purposes                                  */
 /************************************************************************/
-CREATE OR ALTER PROC [dbo].[msp_BEJ_msp_BEJ_XDockAutoAL01]
+CREATE OR ALTER PROC [dbo].[msp_BEJ_XDockAutoAL01]
     @c_StorerKey   NVARCHAR(15)    = '',
     @c_Facility    NVARCHAR(5)     = '',
     @c_OtherConfig NVARCHAR(4000)  = ''
@@ -77,7 +77,7 @@ BEGIN
             SET @n_Continue = 3
             SET @n_Err = 68073
             SET @c_ErrMsg = 'NSQL' + CONVERT(NCHAR(5), @n_Err) + 
-                            ': Failed to execute nsp_orderprocessing_wrapper. (msp_BEJ_msp_BEJ_XDockAutoAL01)'
+                            ': Failed to execute nsp_orderprocessing_wrapper. (msp_BEJ_XDockAutoAL01)'
             GOTO QUIT_SP
         END
 
@@ -103,7 +103,7 @@ BEGIN
                 SET @n_Continue = 3
                 SET @n_Err = 68074
                 SET @c_ErrMsg = 'NSQL' + CONVERT(NVARCHAR(5),ISNULL(@n_Err,0))       
-                                            + ': Get PickDetailKey Failed. (msp_BEJ_msp_BEJ_XDockAutoAL01)'
+                                            + ': Get PickDetailKey Failed. (msp_BEJ_XDockAutoAL01)'
                 GOTO QUIT_SP
             END
             --Update pickdetail status to 5
@@ -126,7 +126,7 @@ BEGIN
                         SET @n_Continue = 3
                         SET @n_Err = 68075
                         SET @c_ErrMsg = 'NSQL' + CONVERT(NCHAR(5), @n_Err) + 
-                                    ': Failed to update PICKDETAIL status. (msp_BEJ_msp_BEJ_XDockAutoAL01)'
+                                    ': Failed to update PICKDETAIL status. (msp_BEJ_XDockAutoAL01)'
                         GOTO QUIT_SP
                     END
                 END
