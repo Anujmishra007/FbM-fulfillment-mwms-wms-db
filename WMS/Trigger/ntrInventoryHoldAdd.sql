@@ -28,6 +28,7 @@ GO
 /* 09-May-2025  SSA01         FCR-3392- Modified to enable storer level */
 /*                            config                                    */
 /* 22-May-2025  SSA02         FCR-3392- Updated key2 and Key3 values    */
+/* 09-Jul-2025  PPA01         FCR-6025- Added lot and Id level checks   */
 /************************************************************************/
 
 CREATE OR ALTER TRIGGER [dbo].[ntrInventoryHoldAdd]
@@ -39,19 +40,19 @@ BEGIN
    SET ANSI_NULLS OFF
    SET QUOTED_IDENTIFIER OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
-	
+
    DECLARE
       @b_Success            int       -- Populated by calls to stored procedures - was the proc successful?
       ,         @n_err                int       -- Error number returned by stored procedure or this trigger
       ,         @n_err2 int              -- For Additional Error Detection
       ,         @c_errmsg             NVARCHAR(250) -- Error message returned by stored procedure or this trigger
-      ,         @n_continue int                 
+      ,         @n_continue int
       ,         @n_starttcnt int                -- Holds the current transaction count
       ,         @c_preprocess NVARCHAR(250)         -- preprocess
       ,         @c_pstprocess NVARCHAR(250)         -- post process
-      ,         @n_cnt int                  
+      ,         @n_cnt int
    SELECT @n_continue=1, @n_starttcnt=@@TRANCOUNT
-   /* #INCLUDE <TRADA1.SQL> */     
+   /* #INCLUDE <TRADA1.SQL> */
    /************************************************************************
    *	Add records in TransmitLog to track the QC HOLD		        *
    *************************************************************************/
@@ -74,9 +75,11 @@ BEGIN
    While 1 = 1
    Begin
      -- Set rowcount 1
-      Select TOP 1 @c_primarykey = InventoryHoldKey, 
+      Select TOP 1 @c_primarykey = InventoryHoldKey,
       @c_hold = ISNULL(INSERTED.Hold, ''),  --(SSA01)
       @c_loc = ISNULL(INSERTED.Loc, ''),    --(SSA01)
+	    @c_LOT = ISNULL(INSERTED.Lot, ''),    --(PPA01)
+	    @c_ID = ISNULL(INSERTED.Id, ''),    --(PPA01)
       @c_StorerKey = ISNULL(INSERTED.Storerkey, ''), --(SSA01)
       @c_Status = ISNULL(INSERTED.Status, '')  --(SSA02)
       From INSERTED
@@ -91,9 +94,9 @@ BEGIN
          @c_StorerKey,  -- Storer     --(SSA01)
          null,  -- Sku
          'INVENTORY HOLD - INTERFACE2',      -- ConfigKey
-         @b_success    output, 
-         @c_authority  output, 
-         @n_err        output, 
+         @b_success    output,
+         @c_authority  output,
+         @n_err        output,
          @c_errmsg     output
       If @b_success <> 1
       Begin
@@ -102,7 +105,7 @@ BEGIN
          Select @c_errmsg = 'ntrInventoryHoldAdd: ' + dbo.fnc_RTrim(@c_errmsg)
          Break
       End
-      Else 
+      Else
       Begin
       If @c_authority = '1'
          Select @b_interface = '1'
@@ -112,7 +115,7 @@ BEGIN
 
       If @b_interface = '1'
       BEGIN
-         If dbo.fnc_RTrim(@c_loc) is not null and @c_hold = '1' 
+         If (@c_hold = '1'  and (dbo.fnc_RTrim(@c_loc) <> '' OR dbo.fnc_RTrim(@c_LOT) <> '' OR  dbo.fnc_RTrim(@c_ID) <> '') ) --PPA01
          Begin
             EXECUTE nspg_getkey
                'TransmitlogKey2'              --(SSA01)
