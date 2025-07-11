@@ -2,7 +2,6 @@
 /****** Object:  StoredProcedure [dbo].[ispASNExtVal_GBR_JCB]    Script Date: 7/10/2025 1:56:46 PM ******/
 SET ANSI_NULLS OFF
 SET QUOTED_IDENTIFIER OFF
-SET CONCAT_NULL_YIELDS_NULL OFF
 GO
 /**************************************************************************/
 /* Store procedure: [ispASNExtVal_GBR_JCB]                                */
@@ -19,8 +18,9 @@ CREATE OR ALTER PROC [dbo].[ispASNExtVal_GBR_JCB]  (
    @c_ReceiptLineNumber NVARCHAR(5)
 ) AS
 SET NOCOUNT ON
-SET QUOTED_IDENTIFIER OFF
 SET ANSI_NULLS OFF
+SET QUOTED_IDENTIFIER OFF
+SET CONCAT_NULL_YIELDS_NULL OFF
 
 BEGIN
 
