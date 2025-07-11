@@ -1,11 +1,11 @@
 
-/****** Object:  StoredProcedure [dbo].[ispASNPPPO_GBR_JCB]    Script Date: 7/10/2025 1:03:45 PM ******/
+/****** Object:  StoredProcedure [dbo].[ispPRPPLPO_GBR_JCB]    Script Date: 7/10/2025 1:03:45 PM ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
 GO
 /*********************************************************************************/
-/* Store procedure: ispASNPPPO_GBR_JCB                                           */
+/* Store procedure: ispPRPPLPO_GBR_JCB                                           */
 /* Copyright      : Maersk                                                       */
 /* Customer       : JCB                                                          */
 /*                                                                               */
@@ -13,7 +13,7 @@ GO
 /* Date         Rev   Author   Purposes                                          */
 /* 09/07/2025   1.0   PPA374   Updatiing TMS_Shipment for an ASN as per PO       */
 /*********************************************************************************/
-CREATE OR ALTER PROCEDURE [dbo].[ispASNPPPO_GBR_JCB]
+CREATE OR ALTER PROCEDURE [dbo].[ispPRPPLPO_GBR_JCB]
    @c_ReceiptKey NVARCHAR(10)
    , @c_POKeys NVARCHAR(MAX)
    , @c_POLineNumbers NVARCHAR(MAX)
