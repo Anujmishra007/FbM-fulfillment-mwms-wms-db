@@ -1,8 +1,8 @@
 
 /****** Object:  StoredProcedure [dbo].[ispPRPPLPO_GBR_JCB]    Script Date: 7/10/2025 1:03:45 PM ******/
-SET ANSI_NULLS ON
-GO
-SET QUOTED_IDENTIFIER ON
+SET ANSI_NULLS OFF
+SET QUOTED_IDENTIFIER OFF
+SET CONCAT_NULL_YIELDS_NULL OFF
 GO
 /*********************************************************************************/
 /* Store procedure: ispPRPPLPO_GBR_JCB                                           */
