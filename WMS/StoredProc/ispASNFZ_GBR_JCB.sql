@@ -4,8 +4,6 @@ SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
-SET CONCAT_NULL_YIELDS_NULL OFF
-GO
 /*************************************************************************************/
 /* Store procedure: ispASNFZ_GBR_JCB                                                 */
 /* Copyright      : Maersk                                                           */
@@ -24,7 +22,10 @@ CREATE OR ALTER PROCEDURE [dbo].[ispASNFZ_GBR_JCB]
 
 AS
 BEGIN
-   SET NOCOUNT ON;
+   SET NOCOUNT ON
+   SET ANSI_NULLS OFF
+   SET QUOTED_IDENTIFIER OFF
+   SET CONCAT_NULL_YIELDS_NULL OFF
 
    UPDATE ID
    SET ID.PalletType = RD.PalletType
