@@ -85,6 +85,7 @@ GO
 /* 10-Feb-2023  NJOW11    WMS-21722 Allow check nomixlottable for all   */
 /*                        commingle sku in a loc.                       */
 /* 10-Feb-2023  NJOW11    DEVOPS Combine Script                         */
+/* 19-Jun-2025  JH01      UWP-36358 - Enhanced the error message show   */
 /* 10-JUL-2025  Wan08     UWP-37554 - Increases Variable Length         */
 /************************************************************************/  
   
@@ -385,7 +386,7 @@ BEGIN
             SET @n_continue= 3   
             SET @b_Success = 0  
             SET @n_err  = 163053  
-            SET @c_errmsg = 'Execute ispFinalizeReceipt Failed'  
+            SET @c_errmsg = 'Execute ispFinalizeReceipt Failed. ' + RTRIM(@c_ErrMsg)  /*JH01*/
             GOTO RollbackTran  
          END   
       END   
@@ -2038,7 +2039,7 @@ BEGIN
                SET @n_continue= 3   
                SET @b_Success = 0  
                SET @n_err  = 163084 
-               SET @c_errmsg = 'Execute ispFinalizeReceipt Failed'  
+               SET @c_errmsg = 'Execute ispFinalizeReceipt Failed. ' + RTRIM(@c_ErrMsg)  /*JH01*/
             END   
          END   
       END
@@ -2081,7 +2082,7 @@ BEGIN
                SET @n_continue= 3   
                SET @b_Success = 0  
                SET @n_err  = 163085  
-               SET @c_errmsg = 'Execute ispFinalizeReceipt Failed'  
+               SET @c_errmsg = 'Execute ispFinalizeReceipt Failed. ' + RTRIM(@c_ErrMsg)  /*JH01*/
             END
          END
       END  
