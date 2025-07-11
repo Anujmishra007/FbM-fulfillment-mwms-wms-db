@@ -1,5 +1,5 @@
 
-/****** Object:  StoredProcedure [dbo].[ispASNFZGJ_GBR_JCB]    Script Date: 7/10/2025 2:28:09 PM ******/
+/****** Object:  StoredProcedure [dbo].[ispASNFZ_GBR_JCB]    Script Date: 7/10/2025 2:28:09 PM ******/
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -7,7 +7,7 @@ GO
 SET CONCAT_NULL_YIELDS_NULL OFF
 GO
 /*************************************************************************************/
-/* Store procedure: ispASNFZGJ_GBR_JCB                                               */
+/* Store procedure: ispASNFZ_GBR_JCB                                                 */
 /* Copyright      : Maersk                                                           */
 /* Customer       : JCB                                                              */
 /*                                                                                   */
@@ -15,7 +15,7 @@ GO
 /* Date         Rev   Author   Purposes                                              */
 /* 09/07/2025   1.0   PPA374   Updating pallet ID for the inventory at finalisation  */
 /*************************************************************************************/
-CREATE OR ALTER PROCEDURE [dbo].[ispASNFZGJ_GBR_JCB]
+CREATE OR ALTER PROCEDURE [dbo].[ispASNFZ_GBR_JCB]
    @c_ReceiptKey         NVARCHAR(10),
    @c_ReceiptLineNumber  NVARCHAR(10),
    @b_Success            INT OUTPUT,
