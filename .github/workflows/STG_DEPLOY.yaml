@@ -30,6 +30,7 @@ on:
           - CMRWMS
           - SENWMS
           - TGOWMS
+          - GLOWMS
 
 permissions: write-all
 
