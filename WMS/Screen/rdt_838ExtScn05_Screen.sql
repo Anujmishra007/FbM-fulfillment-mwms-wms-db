@@ -10,13 +10,13 @@ EXECUTE rdt.rdtAddScn 6624, 'ENG'
    ,@cLine06 = '%20d05'
    ,@cLine07 = '%20d06'
    ,@cLine08 = ''
-   ,@cLine09 = ''
+   ,@cLine09 = 'PACKED: %05d07 PPK:%03d10'
    ,@cLine10 = ''
    ,@cLine11 = ''
    ,@cLine12 = 'CARTON QTY: %05d09'
    ,@cLine13 = '%05d15'
    ,@cLine14 = '%e'
-   ,@cWebGroup = '{"1":["1"],"2":["3","4","5","6","7"],"3":["12"],"4":["13"]}'
+   ,@cWebGroup = '{"1":["1"],"2":["3","4","5","6","7"],"3":["9","10"],"4":["12"],"5":["13"]}'
    ,@nFunc = 838
 
 -- 6625 = Qty screen

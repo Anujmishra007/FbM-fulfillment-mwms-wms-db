@@ -284,9 +284,9 @@ BEGIN
       -- If next step is 3, need jump to new SKU screen
       IF @nStep = 3 AND @nScn = 4652
       BEGIN
-         SET @nStep = 99
-         SET @nScn = 6624
-         GOTO Quit
+         SET @nAfterStep = 99
+         SET @nAfterScn = 6624
+         RETURN
       END
 
       IF @nCurrentStep = 99
@@ -967,8 +967,249 @@ BEGIN
                   GOTO Quit
                END
             END
-            ELSE
+            ELSE IF @nInputkey = 0
             BEGIN
+               -- Repack without add SKU QTY
+               IF @nCartonNo > 0 AND @nCartonQTY = 0
+               BEGIN
+                  -- Handling transaction
+                  DECLARE @nTranCount INT
+                  SET @nTranCount = @@TRANCOUNT
+                  BEGIN TRAN  -- Begin our own transaction
+                  SAVE TRAN rdtfnc_Pack -- For rollback or commit only our own transaction
+
+                  -- PackInfo
+                  IF EXISTS( SELECT 1 FROM PackInfo WITH (NOLOCK) WHERE PickSlipNo = @cPickSlipNo AND CartonNo = @nCartonNo)
+                  BEGIN
+                     DELETE PackInfo WHERE PickSlipNo = @cPickSlipNo AND CartonNo = @nCartonNo
+                     IF @@ERROR <> 0
+                     BEGIN
+                        ROLLBACK TRAN rdtfnc_Pack
+                        WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
+                           COMMIT TRAN
+                        SET @nErrNo = 241557
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Delete PackInfo fail
+                        GOTO Step_99_6625_Fail
+                     END
+                  END
+
+                  -- PackDetail (delete the booking record, 1 line with blank SKU)
+                  IF EXISTS( SELECT 1 FROM PackDetail WITH (NOLOCK) WHERE PickSlipNo = @cPickSlipNo AND CartonNo = @nCartonNo)
+                  BEGIN
+                     DELETE PackDetail WHERE PickSlipNo = @cPickSlipNo AND CartonNo = @nCartonNo
+                     IF @@ERROR <> 0
+                     BEGIN
+                        ROLLBACK TRAN rdtfnc_Pack
+                        WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
+                           COMMIT TRAN
+                        SET @nErrNo = 241558
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --DEL PAKDtlFail
+                        GOTO Step_99_6625_Fail
+                     END
+                  END
+
+                  COMMIT TRAN rdtfnc_Pack
+                  WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
+                     COMMIT TRAN
+               END
+
+               -- Packed
+               IF @nCartonQTY > 0
+               BEGIN
+                  -- Custom PackInfo field setup
+                  SET @cPackInfo = ''
+                  IF @cCapturePackInfoSP <> ''
+                  BEGIN
+                     -- Custom SP to get PackInfo setup
+                     IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cCapturePackInfoSP AND type = 'P')
+                     BEGIN
+                        SET @cSQL = 'EXEC rdt.' + RTRIM( @cCapturePackInfoSP) +
+                           ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cPickSlipNo, @cFromDropID, @nCartonNo, @cLabelNo, ' +
+                           ' @nErrNo      OUTPUT, ' +
+                           ' @cErrMsg     OUTPUT, ' +
+                           ' @cPackInfo   OUTPUT, ' +
+                           ' @cWeight     OUTPUT, ' +
+                           ' @cCube       OUTPUT, ' +
+                           ' @cRefNo      OUTPUT, ' +
+                           ' @cCartonType OUTPUT'
+                        SET @cSQLParam =
+                           '@nMobile     INT,           ' +
+                           '@nFunc       INT,           ' +
+                           '@cLangCode   NVARCHAR( 3),  ' +
+                           '@nStep       INT,           ' +
+                           '@nInputKey   INT,           ' +
+                           '@cFacility   NVARCHAR( 5),  ' +
+                           '@cStorerKey  NVARCHAR( 15), ' +
+                           '@cPickSlipNo NVARCHAR( 10), ' +
+                           '@cFromDropID NVARCHAR( 20), ' +
+                           '@nCartonNo   INT,           ' +
+                           '@cLabelNo    NVARCHAR( 20), ' +
+                           '@nErrNo      INT           OUTPUT, ' +
+                           '@cErrMsg     NVARCHAR( 20) OUTPUT, ' +
+                           '@cPackInfo   NVARCHAR( 3)  OUTPUT, ' +
+                           '@cWeight     NVARCHAR( 10) OUTPUT, ' +
+                           '@cCube       NVARCHAR( 10) OUTPUT, ' +
+                           '@cRefNo      NVARCHAR( 20) OUTPUT, ' +
+                           '@cCartonType NVARCHAR( 10) OUTPUT  '
+
+                        EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                           @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cPickSlipNo, @cFromDropID, @nCartonNo, @cLabelNo,
+                           @nErrNo      OUTPUT,
+                           @cErrMsg     OUTPUT,
+                           @cPackInfo   OUTPUT,
+                           @cWeight     OUTPUT,
+                           @cCube       OUTPUT,
+                           @cRefNo      OUTPUT,
+                           @cCartonType OUTPUT
+                     END
+                     ELSE
+                        -- Setup is non SP
+                        SET @cPackInfo = @cCapturePackInfoSP
+                  END
+
+                  -- Capture pack info
+                  IF @cPackInfo <> ''
+                  BEGIN
+                     -- Get PackInfo
+                     SET @cCartonType = ''
+                     SET @cWeight = ''
+                     SET @cCube = ''
+                     SET @cRefNo = ''
+                     SET @cLength = ''
+                     SET @cWidth = ''
+                     SET @cHeight = ''
+
+                     SELECT
+                        @cCartonType = ISNULL( CartonType, ''),
+                        @cWeight = rdt.rdtFormatFloat( Weight),
+                        @cCube = rdt.rdtFormatFloat( [Cube]),
+                        @cRefNo = RefNo,
+                        @cLength = rdt.rdtFormatFloat( [Length]),
+                        @cWidth = rdt.rdtFormatFloat( [Width]),
+                        @cHeight = rdt.rdtFormatFloat( [Height])
+                     FROM dbo.PackInfo WITH (NOLOCK)
+                     WHERE PickSlipNo = @cPickSlipNo
+                        AND CartonNo  = @nCartonNo
+
+                     -- Prepare LOC screen var
+                     SET @cOutField01 = CASE WHEN ISNULL(@cCartonType ,'') ='' AND ISNULL(@cDefaultcartontype,'')<>''  THEN @cDefaultcartontype ELSE @cCartonType end
+                     SET @cOutField02 = @cWeight           --WinSern
+                     SET @cOutField03 = @cCube             --WinSern
+                     SET @cOutField04 = @cRefNo
+                     SET @cOutField05 = @cLength
+                     SET @cOutField06 = @cWidth
+                     SET @cOutField07 = @cHeight
+
+                     -- Enable disable field
+                     SET @cFieldAttr01 = CASE WHEN CHARINDEX( 'T', @cPackInfo) = 0 THEN 'O' ELSE '' END
+                     SET @cFieldAttr02 = CASE WHEN CHARINDEX( 'C', @cPackInfo) = 0 THEN 'O' ELSE '' END
+                     SET @cFieldAttr03 = CASE WHEN CHARINDEX( 'W', @cPackInfo) = 0 THEN 'O' ELSE '' END
+                     SET @cFieldAttr04 = CASE WHEN CHARINDEX( 'R', @cPackInfo) = 0 THEN 'O' ELSE '' END
+                     SET @cFieldAttr05 = CASE WHEN CHARINDEX( 'L', @cPackInfo) = 0 THEN 'O' ELSE '' END
+                     SET @cFieldAttr06 = CASE WHEN CHARINDEX( 'D', @cPackInfo) = 0 THEN 'O' ELSE '' END
+                     SET @cFieldAttr07 = CASE WHEN CHARINDEX( 'H', @cPackInfo) = 0 THEN 'O' ELSE '' END
+                     SET @cFieldAttr08 = '' -- QTY
+
+                     -- Position cursor
+                     IF @cFieldAttr01 = '' AND @cOutField01 = ''  EXEC rdt.rdtSetFocusField @nMobile, 1 ELSE
+                     IF @cFieldAttr02 = '' AND @cOutField02 = '0' EXEC rdt.rdtSetFocusField @nMobile, 2 ELSE
+                     IF @cFieldAttr03 = '' AND @cOutField03 = '0' EXEC rdt.rdtSetFocusField @nMobile, 3 ELSE
+                     IF @cFieldAttr04 = '' AND @cOutField04 = ''  EXEC rdt.rdtSetFocusField @nMobile, 4 ELSE
+                     IF @cFieldAttr05 = '' AND @cOutField05 = '0' EXEC rdt.rdtSetFocusField @nMobile, 5 ELSE
+                     IF @cFieldAttr06 = '' AND @cOutField06 = '0' EXEC rdt.rdtSetFocusField @nMobile, 6 ELSE
+                     IF @cFieldAttr07 = '' AND @cOutField07 = '0' EXEC rdt.rdtSetFocusField @nMobile, 7 
+
+                     --Reset 
+                     SET @nEnter = 0 --(JHU151)  
+
+                     -- Go to next screen
+                     SET @nScn = 4653
+                     SET @nStep = 4
+
+                     IF EXISTS( SELECT 1 FROM STRING_SPLIT( @cFlowThruScreen, ',') WHERE TRIM( value) = '4') -- PackInfo screen
+                     BEGIN
+                        SET @cInField01 = CASE WHEN ISNULL(@cCartonType ,'') ='' AND ISNULL(@cDefaultcartontype,'')<>''  THEN @cDefaultcartontype ELSE @cCartonType end
+                        SET @nInputKey='1'
+                        SET @cUDF01 = 'JumpTo_Step_4'
+                        --GOTO Step_4
+                     END
+
+                     GOTO Quit
+                  END
+
+                  -- Print label
+                  IF @cShipLabel <> '' OR @cCartonManifest <> ''
+                  BEGIN
+                     -- Prepare next screen var
+                     SET @cOutField01 = @cDefaultPrintLabelOption --Option
+
+                     -- Enable field
+                     SET @cFieldAttr08 = '' -- QTY
+                     
+                     --Reset 
+                     SET @nEnter = 0 --(JHU151) 
+
+                     -- Go to next screen
+                     SET @nScn = 5
+                     SET @nStep = 4654
+
+                     -- Flow thru
+                     IF EXISTS( SELECT 1 FROM STRING_SPLIT( @cFlowThruScreen, ',') WHERE TRIM( value) = '5') -- Print label screen
+                     BEGIN
+                        SET @cInField01 = @cDefaultPrintLabelOption --Option
+                        SET @nInputKey = 1 -- ENTER
+                        SET @cUDF01 = 'JumpTo_Step_5'
+                        --GOTO Step_5
+                     END
+                     ELSE
+                     GOTO Quit
+                  END
+               END
+
+               IF @nCartonNo = 0 OR @nCartonQTY = 0
+                  SET @cType = 'NEXT'
+               ELSE
+                  SET @cType = 'CURRENT'
+
+               -- Get task
+               EXEC rdt.rdt_Pack_GetStat @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cType
+                  ,@cPickSlipNo
+                  ,@cFromDropID
+                  ,@cPackDtlDropID
+                  ,@nCartonNo    OUTPUT
+                  ,@cLabelNo     OUTPUT
+                  ,@cCustomNo    OUTPUT
+                  ,@cCustomID    OUTPUT
+                  ,@nCartonSKU   OUTPUT
+                  ,@nCartonQTY   OUTPUT
+                  ,@nTotalCarton OUTPUT
+                  ,@nTotalPick   OUTPUT
+                  ,@nTotalPack   OUTPUT
+                  ,@nTotalShort  OUTPUT
+                  ,@nErrNo       OUTPUT
+                  ,@cErrMsg      OUTPUT
+               IF @nErrNo <> 0
+                  GOTO Step_99_6625_Fail
+
+               -- Prepare next screen var
+               SET @cOutField01 = @cPickSlipNo
+               SET @cOutField02 = CAST( @nTotalPick AS NVARCHAR(8))  -- ZG02
+               SET @cOutField03 = CAST( @nTotalPack AS NVARCHAR(8))  -- ZG02
+               SET @cOutField04 = CAST( @nTotalShort AS NVARCHAR(8))  -- ZG02
+               SET @cOutField05 = RTRIM( @cCustomNo) + '/' + CAST( @nTotalCarton AS NVARCHAR(5))
+               SET @cOutField06 = @cCustomID
+               SET @cOutField07 = CAST( @nCartonSKU AS NVARCHAR(5))
+               SET @cOutField08 = CAST( @nCartonQTY AS NVARCHAR(5))
+               SET @cOutField09 = @cDefaultOption -- Option
+
+               -- Enable field
+               SET @cFieldAttr08 = '' -- QTY
+
+               SET @cOutField15 = ''
+
+               --Reset 
+               SET @nEnter = 0 --(JHU151)
+
                SET @nStep = 2
                SET @nScn = 4651
                GOTO Quit
@@ -988,6 +1229,9 @@ BEGIN
          BEGIN
             IF @nInputKey = 1
             BEGIN
+               SET @cMQTY = CASE WHEN @cFieldAttr08 = 'O' THEN '' ELSE @cInField08 END
+               SET @cPQTY = CASE WHEN @cFieldAttr14 = 'O' THEN '' ELSE @cInField14 END
+               
                --(cc01)  
                IF @cDefaultQTY >0 AND @nEnter = 0  
                BEGIN
@@ -1528,250 +1772,26 @@ BEGIN
                   END
                END
 
-               -- Repack without add SKU QTY
-               IF @nCartonNo > 0 AND @nCartonQTY = 0
-               BEGIN
-                  -- Handling transaction
-                  DECLARE @nTranCount INT
-                  SET @nTranCount = @@TRANCOUNT
-                  BEGIN TRAN  -- Begin our own transaction
-                  SAVE TRAN rdtfnc_Pack -- For rollback or commit only our own transaction
+               SET @cOutField01 = RTRIM( @cCustomNo)
+               SET @cOutField02 = CAST( CAST( @cLabelLine AS INT) AS NVARCHAR(5)) + '/' + CAST( @nCartonSKU AS NVARCHAR(5))
+               SET @cOutField03 = '' -- SKU
+               SET @cOutField04 = ''
+               SET @cOutField05 = ''
+               SET @cOutField06 = ''
+               SET @cOutField07 = CAST( @nPackedQTY AS NVARCHAR( 8))    -- ZG02
+               SET @cOutField08 = CASE WHEN @cDisableQTYField = '1' THEN @cQTY ELSE @cDefaultQTY END --(cc01)
+               SET @cOutField09 = CAST( @nCartonQTY AS NVARCHAR( 5))
+               SET @cOutField10 = CASE WHEN @cPrePackIndicator = '2' THEN @cPackQtyIndicator ELSE '' END
+               SET @cOutField11 = '1:' + CASE WHEN @nPUOM_Div > 99999 THEN '*' ELSE CAST( @nPUOM_Div AS NCHAR( 5)) END
+               SET @cOutField12 = rdt.rdtRightAlign( @cPUOM_Desc, 5)
+               SET @cOutField13 = rdt.rdtRightAlign( @cMUOM_Desc, 5)
+               SET @cOutField14 = '' -- PQTY
+               --SET @cOutField15 = '' -- ExtendedInfo
+               SET @nEnter = 0      --(cc01)  
 
-                  -- PackInfo
-                  IF EXISTS( SELECT 1 FROM PackInfo WITH (NOLOCK) WHERE PickSlipNo = @cPickSlipNo AND CartonNo = @nCartonNo)
-                  BEGIN
-                     DELETE PackInfo WHERE PickSlipNo = @cPickSlipNo AND CartonNo = @nCartonNo
-                     IF @@ERROR <> 0
-                     BEGIN
-                        ROLLBACK TRAN rdtfnc_Pack
-                        WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
-                           COMMIT TRAN
-                        SET @nErrNo = 241557
-                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Delete PackInfo fail
-                        GOTO Step_99_6625_Fail
-                     END
-                  END
-
-                  -- PackDetail (delete the booking record, 1 line with blank SKU)
-                  IF EXISTS( SELECT 1 FROM PackDetail WITH (NOLOCK) WHERE PickSlipNo = @cPickSlipNo AND CartonNo = @nCartonNo)
-                  BEGIN
-                     DELETE PackDetail WHERE PickSlipNo = @cPickSlipNo AND CartonNo = @nCartonNo
-                     IF @@ERROR <> 0
-                     BEGIN
-                        ROLLBACK TRAN rdtfnc_Pack
-                        WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
-                           COMMIT TRAN
-                        SET @nErrNo = 241558
-                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --DEL PAKDtlFail
-                        GOTO Step_99_6625_Fail
-                     END
-                  END
-
-                  COMMIT TRAN rdtfnc_Pack
-                  WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
-                     COMMIT TRAN
-               END
-
-               -- Packed
-               IF @nCartonQTY > 0
-               BEGIN
-                  -- Custom PackInfo field setup
-                  SET @cPackInfo = ''
-                  IF @cCapturePackInfoSP <> ''
-                  BEGIN
-                     -- Custom SP to get PackInfo setup
-                     IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cCapturePackInfoSP AND type = 'P')
-                     BEGIN
-                        SET @cSQL = 'EXEC rdt.' + RTRIM( @cCapturePackInfoSP) +
-                           ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cPickSlipNo, @cFromDropID, @nCartonNo, @cLabelNo, ' +
-                           ' @nErrNo      OUTPUT, ' +
-                           ' @cErrMsg     OUTPUT, ' +
-                           ' @cPackInfo   OUTPUT, ' +
-                           ' @cWeight     OUTPUT, ' +
-                           ' @cCube       OUTPUT, ' +
-                           ' @cRefNo      OUTPUT, ' +
-                           ' @cCartonType OUTPUT'
-                        SET @cSQLParam =
-                           '@nMobile     INT,           ' +
-                           '@nFunc       INT,           ' +
-                           '@cLangCode   NVARCHAR( 3),  ' +
-                           '@nStep       INT,           ' +
-                           '@nInputKey   INT,           ' +
-                           '@cFacility   NVARCHAR( 5),  ' +
-                           '@cStorerKey  NVARCHAR( 15), ' +
-                           '@cPickSlipNo NVARCHAR( 10), ' +
-                           '@cFromDropID NVARCHAR( 20), ' +
-                           '@nCartonNo   INT,           ' +
-                           '@cLabelNo    NVARCHAR( 20), ' +
-                           '@nErrNo      INT           OUTPUT, ' +
-                           '@cErrMsg     NVARCHAR( 20) OUTPUT, ' +
-                           '@cPackInfo   NVARCHAR( 3)  OUTPUT, ' +
-                           '@cWeight     NVARCHAR( 10) OUTPUT, ' +
-                           '@cCube       NVARCHAR( 10) OUTPUT, ' +
-                           '@cRefNo      NVARCHAR( 20) OUTPUT, ' +
-                           '@cCartonType NVARCHAR( 10) OUTPUT  '
-
-                        EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-                           @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cPickSlipNo, @cFromDropID, @nCartonNo, @cLabelNo,
-                           @nErrNo      OUTPUT,
-                           @cErrMsg     OUTPUT,
-                           @cPackInfo   OUTPUT,
-                           @cWeight     OUTPUT,
-                           @cCube       OUTPUT,
-                           @cRefNo      OUTPUT,
-                           @cCartonType OUTPUT
-                     END
-                     ELSE
-                        -- Setup is non SP
-                        SET @cPackInfo = @cCapturePackInfoSP
-                  END
-
-                  -- Capture pack info
-                  IF @cPackInfo <> ''
-                  BEGIN
-                     -- Get PackInfo
-                     SET @cCartonType = ''
-                     SET @cWeight = ''
-                     SET @cCube = ''
-                     SET @cRefNo = ''
-                     SET @cLength = ''
-                     SET @cWidth = ''
-                     SET @cHeight = ''
-
-                     SELECT
-                        @cCartonType = ISNULL( CartonType, ''),
-                        @cWeight = rdt.rdtFormatFloat( Weight),
-                        @cCube = rdt.rdtFormatFloat( [Cube]),
-                        @cRefNo = RefNo,
-                        @cLength = rdt.rdtFormatFloat( [Length]),
-                        @cWidth = rdt.rdtFormatFloat( [Width]),
-                        @cHeight = rdt.rdtFormatFloat( [Height])
-                     FROM dbo.PackInfo WITH (NOLOCK)
-                     WHERE PickSlipNo = @cPickSlipNo
-                        AND CartonNo  = @nCartonNo
-
-                     -- Prepare LOC screen var
-                     SET @cOutField01 = CASE WHEN ISNULL(@cCartonType ,'') ='' AND ISNULL(@cDefaultcartontype,'')<>''  THEN @cDefaultcartontype ELSE @cCartonType end
-                     SET @cOutField02 = @cWeight           --WinSern
-                     SET @cOutField03 = @cCube             --WinSern
-                     SET @cOutField04 = @cRefNo
-                     SET @cOutField05 = @cLength
-                     SET @cOutField06 = @cWidth
-                     SET @cOutField07 = @cHeight
-
-                     -- Enable disable field
-                     SET @cFieldAttr01 = CASE WHEN CHARINDEX( 'T', @cPackInfo) = 0 THEN 'O' ELSE '' END
-                     SET @cFieldAttr02 = CASE WHEN CHARINDEX( 'C', @cPackInfo) = 0 THEN 'O' ELSE '' END
-                     SET @cFieldAttr03 = CASE WHEN CHARINDEX( 'W', @cPackInfo) = 0 THEN 'O' ELSE '' END
-                     SET @cFieldAttr04 = CASE WHEN CHARINDEX( 'R', @cPackInfo) = 0 THEN 'O' ELSE '' END
-                     SET @cFieldAttr05 = CASE WHEN CHARINDEX( 'L', @cPackInfo) = 0 THEN 'O' ELSE '' END
-                     SET @cFieldAttr06 = CASE WHEN CHARINDEX( 'D', @cPackInfo) = 0 THEN 'O' ELSE '' END
-                     SET @cFieldAttr07 = CASE WHEN CHARINDEX( 'H', @cPackInfo) = 0 THEN 'O' ELSE '' END
-                     SET @cFieldAttr08 = '' -- QTY
-
-                     -- Position cursor
-                     IF @cFieldAttr01 = '' AND @cOutField01 = ''  EXEC rdt.rdtSetFocusField @nMobile, 1 ELSE
-                     IF @cFieldAttr02 = '' AND @cOutField02 = '0' EXEC rdt.rdtSetFocusField @nMobile, 2 ELSE
-                     IF @cFieldAttr03 = '' AND @cOutField03 = '0' EXEC rdt.rdtSetFocusField @nMobile, 3 ELSE
-                     IF @cFieldAttr04 = '' AND @cOutField04 = ''  EXEC rdt.rdtSetFocusField @nMobile, 4 ELSE
-                     IF @cFieldAttr05 = '' AND @cOutField05 = '0' EXEC rdt.rdtSetFocusField @nMobile, 5 ELSE
-                     IF @cFieldAttr06 = '' AND @cOutField06 = '0' EXEC rdt.rdtSetFocusField @nMobile, 6 ELSE
-                     IF @cFieldAttr07 = '' AND @cOutField07 = '0' EXEC rdt.rdtSetFocusField @nMobile, 7 
-
-                     --Reset 
-                     SET @nEnter = 0 --(JHU151)  
-
-                     -- Go to next screen
-                     SET @nScn = 4653
-                     SET @nStep = 4
-
-                     IF EXISTS( SELECT 1 FROM STRING_SPLIT( @cFlowThruScreen, ',') WHERE TRIM( value) = '4') -- PackInfo screen
-                     BEGIN
-                        SET @cInField01 = CASE WHEN ISNULL(@cCartonType ,'') ='' AND ISNULL(@cDefaultcartontype,'')<>''  THEN @cDefaultcartontype ELSE @cCartonType end
-                        SET @nInputKey='1'
-                        SET @cUDF01 = 'JumpTo_Step_4'
-                        --GOTO Step_4
-                     END
-
-                     GOTO Quit
-                  END
-
-                  -- Print label
-                  IF @cShipLabel <> '' OR @cCartonManifest <> ''
-                  BEGIN
-                     -- Prepare next screen var
-                     SET @cOutField01 = @cDefaultPrintLabelOption --Option
-
-                     -- Enable field
-                     SET @cFieldAttr08 = '' -- QTY
-                     
-                     --Reset 
-                     SET @nEnter = 0 --(JHU151) 
-
-                     -- Go to next screen
-                     SET @nScn = 5
-                     SET @nStep = 4654
-
-                     -- Flow thru
-                     IF EXISTS( SELECT 1 FROM STRING_SPLIT( @cFlowThruScreen, ',') WHERE TRIM( value) = '5') -- Print label screen
-                     BEGIN
-                        SET @cInField01 = @cDefaultPrintLabelOption --Option
-                        SET @nInputKey = 1 -- ENTER
-                        SET @cUDF01 = 'JumpTo_Step_5'
-                        --GOTO Step_5
-                     END
-                     ELSE
-                     GOTO Quit
-                  END
-               END
-
-               IF @nCartonNo = 0 OR @nCartonQTY = 0
-                  SET @cType = 'NEXT'
-               ELSE
-                  SET @cType = 'CURRENT'
-
-               -- Get task
-               EXEC rdt.rdt_Pack_GetStat @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cType
-                  ,@cPickSlipNo
-                  ,@cFromDropID
-                  ,@cPackDtlDropID
-                  ,@nCartonNo    OUTPUT
-                  ,@cLabelNo     OUTPUT
-                  ,@cCustomNo    OUTPUT
-                  ,@cCustomID    OUTPUT
-                  ,@nCartonSKU   OUTPUT
-                  ,@nCartonQTY   OUTPUT
-                  ,@nTotalCarton OUTPUT
-                  ,@nTotalPick   OUTPUT
-                  ,@nTotalPack   OUTPUT
-                  ,@nTotalShort  OUTPUT
-                  ,@nErrNo       OUTPUT
-                  ,@cErrMsg      OUTPUT
-               IF @nErrNo <> 0
-                  GOTO Step_99_6625_Fail
-
-               -- Prepare next screen var
-               SET @cOutField01 = @cPickSlipNo
-               SET @cOutField02 = CAST( @nTotalPick AS NVARCHAR(8))  -- ZG02
-               SET @cOutField03 = CAST( @nTotalPack AS NVARCHAR(8))  -- ZG02
-               SET @cOutField04 = CAST( @nTotalShort AS NVARCHAR(8))  -- ZG02
-               SET @cOutField05 = RTRIM( @cCustomNo) + '/' + CAST( @nTotalCarton AS NVARCHAR(5))
-               SET @cOutField06 = @cCustomID
-               SET @cOutField07 = CAST( @nCartonSKU AS NVARCHAR(5))
-               SET @cOutField08 = CAST( @nCartonQTY AS NVARCHAR(5))
-               SET @cOutField09 = @cDefaultOption -- Option
-
-               -- Enable field
-               SET @cFieldAttr08 = '' -- QTY
-
-               SET @cOutField15 = ''
-
-               --Reset 
-               SET @nEnter = 0 --(JHU151)
-
-               -- Go to statistic screen
-               SET @nScn = 4651
-               SET @nStep = 2
+               SET @nScn = 6624
+               SET @nStep = 99
+               GOTO Quit
             END
 
             Step_99_6625_Fail:
