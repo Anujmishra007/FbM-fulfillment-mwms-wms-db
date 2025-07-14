@@ -117,7 +117,7 @@ BEGIN
                 BEGIN
                     -- Update the status of each pickdetail to 5
                     UPDATE PICKDETAIL WITH (ROWLOCK)
-                    SET Status = 5
+                    SET Status = '5'
                     WHERE PickDetailKey = @c_PickDetailKey
                     AND OrderKey = @c_Orderkey
 
