@@ -92,7 +92,7 @@ BEGIN
                             @c_PickslipType = N'',  
                             @c_ConsolidateByLoad = N'', 
                             @c_Refkeylookup = N'',      
-                            @c_LinkPickSlipToPick = N'',
+                            @c_LinkPickSlipToPick = N'Y',
                             @c_AutoScanIn = N'',        
                             @b_Success = @b_Success OUTPUT, 
                             @n_Err = @n_Err OUTPUT,         
