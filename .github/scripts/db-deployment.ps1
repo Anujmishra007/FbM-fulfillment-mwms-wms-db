@@ -44,8 +44,9 @@ foreach ($scriptFile in $SQL_SCRIPT_FILES) {
     Add-Content -Path $logFilePath -Value $logMessage -Encoding UTF8
     try {
         # Run the SQL script using Invoke-Sqlcmd
-        # Convert LF to CRLF
-        (Get-Content $scriptFile) | ForEach-Object { "$_" } | Set-Content -NoNewline -Encoding utf8 $scriptFile
+        # Force CRLF line endings manually
+        (Get-Content $scriptFile) | ForEach-Object { $_ + "`r" } | Set-Content -Encoding utf8 $scriptFile
+
 
         $connectionString = "Server=$($WMSDB_DB_SERVER_NAME);Database=$($WMSDB_NAME);User Id=$($username);Password=$($password);TrustServerCertificate=True;"
         Invoke-Sqlcmd -ConnectionString $connectionString -Query $sqlQuery -ErrorAction Stop | Tee-Object -FilePath $logFilePath -Encoding utf8 -Append
