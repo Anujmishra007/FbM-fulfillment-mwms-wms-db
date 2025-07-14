@@ -12,6 +12,7 @@ GO
 /*                                                                               */
 /* Date       Rev  Author      Purposes                                          */
 /* 2025-05-06 1.0  NLT013      FCR-3830 Create                                   */
+/* 2028-07-11 0.0  JACKC       !!!Cutover!!! Use V0 repo for work                */
 /*********************************************************************************/
 
 CREATE OR ALTER PROCEDURE [rdt].[rdtfnc_MoveIDBeforeFinalization] (
