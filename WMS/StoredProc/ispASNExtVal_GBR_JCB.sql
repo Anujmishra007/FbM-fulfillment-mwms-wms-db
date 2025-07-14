@@ -30,7 +30,8 @@ BEGIN
       @cShortReceipt = IIF(TRIM(Notes) = '', 'N', 'Y')
    FROM dbo.ReceiptInfo WITH(NOLOCK)
    WHERE ReceiptKey = @c_ReceiptKey
-
+   
+   SET @cShortReceipt = ISNULL(@cShortReceipt,'N')
    SET @n_ErrNo = 0
    SET @c_ErrMsg = ''
    SET @b_Success = 1
