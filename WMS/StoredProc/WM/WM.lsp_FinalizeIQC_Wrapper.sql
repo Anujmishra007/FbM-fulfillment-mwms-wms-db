@@ -63,7 +63,7 @@ BEGIN
             , @n_continue              int   
             , @n_StartTCnt             INT = @@TRANCOUNT                                 
             , @c_StorerKey             NVARCHAR(15) 
-            , @c_Facility              NVARCHAR(5) 
+            , @c_Facility              NVARCHAR(5)
             , @c_FinalizeFlag          NVARCHAR(1)
             , @c_OriginalQCLineNo      NVARCHAR(5)
 
@@ -78,7 +78,9 @@ BEGIN
             , @c_FromLot               NVARCHAR(10)   = ''        --(Wan02) 
             , @c_FromLoc               NVARCHAR(10)   = ''        --(Wan02) 
             , @c_FromID                NVARCHAR(18)   = ''        --(Wan02)
-            
+            , @c_ToFacility            NVARCHAR(5)
+            , @c_InvalidQCLineNo       NVARCHAR(5)
+
       --(Wan02) - START                                                          
       IF OBJECT_ID('tempdb..#TMP_QCD','u') IS NOT NULL
       BEGIN
@@ -112,7 +114,8 @@ BEGIN
          
          SELECT @c_FinalizeFlag = IQC.FinalizeFlag, 
                @c_StorerKey = IQC.StorerKey, 
-               @c_Facility  = IQC.From_Facility
+               @c_Facility  = IQC.From_Facility,
+               @c_ToFacility = IQC.To_Facility
             , @c_IQCStatus = RTRIM(IQCD.Status)
          FROM InventoryQC AS IQC WITH(NOLOCK)
          JOIN InventoryQCDetail IQCD WITH (NOLOCK) ON IQCD.QC_Key = IQC.QC_Key and IQCD.QCLineNo = @c_QCLineNo
@@ -128,7 +131,8 @@ BEGIN
          SET @c_IQCStatus = ''
          SELECT @c_FinalizeFlag = IQC.FinalizeFlag, 
                   @c_StorerKey = IQC.StorerKey, 
-                  @c_Facility  = IQC.From_Facility  
+                  @c_Facility  = IQC.From_Facility,
+                  @c_ToFacility = IQC.To_Facility
          FROM InventoryQC AS IQC WITH(NOLOCK)
          WHERE IQC.QC_Key = @c_QC_Key          
       END
@@ -311,12 +315,9 @@ BEGIN
       --(SSA01) - START
       IF @n_continue IN(1,2)
       BEGIN
-          IF EXISTS(
-          SELECT 1
-          FROM InventoryQCDetail(NOLOCK) iqc
-          WHERE
-            (
-            iqc.ToPalletType IS NOT NULL
+          SELECT TOP 1 @c_InvalidQCLineNo = iqc.QCLineNo
+            FROM InventoryQCDetail(NOLOCK) iqc
+            WHERE iqc.ToPalletType IS NOT NULL
             AND iqc.ToPalletType != ''
             AND iqc.QC_Key = @c_QC_Key
             AND NOT EXISTS (
@@ -324,21 +325,20 @@ BEGIN
               FROM PalletTypeMaster(NOLOCK) ptm
               WHERE ptm.PalletType = iqc.ToPalletType
               AND ptm.StorerKey = iqc.StorerKey
-              AND ptm.Facility = @c_Facility
+              AND ptm.Facility = @c_ToFacility
               )
-            )
-            )
+           IF @c_InvalidQCLineNo IS NOT NULL AND @c_InvalidQCLineNo <> ''
             BEGIN
             SELECT @n_continue = 3
             SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 551707
-            SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(6),@n_err)+' PalletType is not valid. (lsp_FinalizeIQC_Wrapper)'
+            SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(6),@n_err)+'LineNo : '+@c_InvalidQCLineNo+' : To Pallet Type Not found in palletTypeMaster Data (lsp_FinalizeIQC_Wrapper)'
 
             EXEC [WM].[lsp_WriteError_List]
                   @i_iErrGroupKey = @n_ErrGroupKey OUTPUT,
                   @c_TableName   = @c_TableName,
                   @c_SourceType  = @c_SourceType,
                   @c_Refkey1     = @c_QC_Key,
-                  @c_Refkey2     = '',
+                  @c_Refkey2     = @c_InvalidQCLineNo,
                   @c_Refkey3     = '',
                   @n_err2        = @n_err,
                   @c_errmsg2     = @c_errmsg,

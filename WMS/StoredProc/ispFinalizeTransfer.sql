@@ -216,6 +216,7 @@ BEGIN
          , @c_ToLoc                     NVARCHAR(10)      --(Wan07)
          , @n_ToQty                     INT               --(Wan07)
          , @c_ChkNoMixLottableForAllSku NVARCHAR(30)=''  --NJOW04
+         , @c_TransferLineNo            NVARCHAR(5)
 
   /*CS01 Start*/
  DECLARE    @c_Lottable01                  NVARCHAR(18),
@@ -504,18 +505,19 @@ BEGIN
    BEGIN
       CREATE TABLE  #tTransferDet
        ( Rowref      int not NULL Identity(1,1) Primary Key,
-         LOT NVARCHAR(10), LOC NVARCHAR(10), ID NVARCHAR(18), Qty int, PalletType NVARCHAR(10), ToPalletType NVARCHAR(10))
+         LOT NVARCHAR(10), LOC NVARCHAR(10), ID NVARCHAR(18), Qty int, PalletType NVARCHAR(10)
+         , ToPalletType NVARCHAR(10), TransferLineNumber NVARCHAR(5))
 
       --Declare @tTransferDet Table (LOT NVARCHAR(10), LOC NVARCHAR(10), ID NVARCHAR(18), Qty int)
 
-      INSERT INTO #tTransferDet (LOT, LOC, ID, Qty, PalletType, ToPalletType)
-      SELECT FromLOT, FromLOC, FromID, SUM(FromQTY), FromPalletType, ToPalletType
+      INSERT INTO #tTransferDet (LOT, LOC, ID, Qty, PalletType, ToPalletType, TransferLineNumber)
+      SELECT FromLOT, FromLOC, FromID, SUM(FromQTY), FromPalletType, ToPalletType, TransferLineNumber
       FROM   TransferDetail WITH (NOLOCK)
       Where  TransferKey = @c_Transferkey
       AND    TransferLineNumber = CASE WHEN @c_TransferLineNumber = '' THEN TransferLineNumber  --(Wan08)
                                        ELSE @c_TransferLineNumber END                           --(Wan08)
       AND    Status < '9'                    --(Wan04)
-      GROUP BY FromLOT, FromLOC, FromID, FromPalletType, ToPalletType
+      GROUP BY FromLOT, FromLOC, FromID, FromPalletType, ToPalletType, TransferLineNumber
 
       IF EXISTS(SELECT 1 FROM LOTxLOCxID LLI WITH (NOLOCK)
                 JOIN #tTransferDet TD ON TD.LOT = LLI.LOT AND
@@ -541,16 +543,13 @@ BEGIN
       BEGIN
          SET @nContinue = 3
          SET @n_err = 80010
-         SET @c_ErrMsg='NSQL'+CONVERT(char(5),@n_err)+': From Lot + Location + ID Not found at the inventory (ispFinalizeTransfer)'
+         SET @c_ErrMsg='NSQL'+CONVERT(char(5),@n_err)+':  From Pallettype is not matched with From ID (ispFinalizeTransfer)'
          GOTO Quit_Proc
       END
       --(SSA01) start
-      IF EXISTS(
-          SELECT 1
-          FROM #tTransferDet tfd
-          WHERE
-            (
-            tfd.PalletType IS NOT NULL
+     SELECT TOP 1 @c_TransferLineNo = tfd.TransferLineNumber
+            FROM #tTransferDet tfd
+            WHERE tfd.PalletType IS NOT NULL
             AND tfd.PalletType != ''
             AND NOT EXISTS (
               SELECT 1
@@ -558,20 +557,17 @@ BEGIN
               WHERE id.PalletType = tfd.PalletType
               AND id.id = tfd.ID
             )
-            ))
+      IF @c_TransferLineNo IS NOT NULL AND @c_TransferLineNo <> ''
       BEGIN
          SET @nContinue = 3
          SET @n_err = 80019
-         SET @c_ErrMsg='NSQL'+CONVERT(char(5),@n_err)+': From ID + PalletType Not found at the inventory (ispFinalizeTransfer)'
+         SET @c_ErrMsg='NSQL'+CONVERT(char(5),@n_err)+':LineNo :'+@c_TransferLineNo+': To PalletType Not found in palletTypeMaster Data  (ispFinalizeTransfer)'
          GOTO Quit_Proc
       END
 
-      IF EXISTS(
-          SELECT 1
-          FROM #tTransferDet tfd
-          WHERE
-            (
-            tfd.ToPalletType IS NOT NULL
+      SELECT TOP 1 @c_TransferLineNo = tfd.TransferLineNumber
+            FROM #tTransferDet tfd
+            WHERE tfd.ToPalletType IS NOT NULL
             AND tfd.ToPalletType != ''
             AND NOT EXISTS (
               SELECT 1
@@ -580,11 +576,11 @@ BEGIN
               AND ptm.storerkey = @c_ToStorerKey
               AND ptm.facility = @c_ToFacility
               )
-            ))
+          IF @c_TransferLineNo IS NOT NULL AND @c_TransferLineNo <> ''
           BEGIN
              SET @nContinue = 3
              SET @n_err = 80024
-             SET @c_ErrMsg='NSQL'+CONVERT(char(5),@n_err)+': To PalletType Not found at the inventory (ispFinalizeTransfer)'
+             SET @c_ErrMsg='NSQL'+CONVERT(char(5),@n_err)+':LineNo:'+@c_TransferLineNo +': To PalletType Not found at the inventory (ispFinalizeTransfer)'
              GOTO Quit_Proc
           END
           --(SSA01) end
