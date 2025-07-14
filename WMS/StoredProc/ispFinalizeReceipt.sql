@@ -90,7 +90,6 @@ GO
 /************************************************************************/  
 
   
-  
 CREATE OR ALTER PROC [dbo].[ispFinalizeReceipt]  
                @c_ReceiptKey   NVARCHAR(10)  
 ,              @b_Success      int       = 1  OUTPUT  
