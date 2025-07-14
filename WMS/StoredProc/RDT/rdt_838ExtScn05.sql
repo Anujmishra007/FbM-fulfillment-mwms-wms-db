@@ -219,9 +219,6 @@ BEGIN
 
          SET @nAfterStep = 99
          SET @nAfterScn = 6624
-
-         SET @nStep = 99
-         SET @nScn = 6624
          RETURN
       END
 
@@ -956,6 +953,7 @@ BEGIN
                   SET @cOutField11 = '1:' + CASE WHEN @nPUOM_Div > 99999 THEN '*' ELSE CAST( @nPUOM_Div AS NCHAR( 5)) END
                   SET @cOutField12 = rdt.rdtRightAlign( @cPUOM_Desc, 5)
                   SET @cOutField13 = rdt.rdtRightAlign( @cMUOM_Desc, 5)
+                  SET @cOutField08 = '' -- MQTY
                   SET @cOutField14 = '' -- PQTY
 
                   -- Convert to prefer UOM QTY
@@ -1147,7 +1145,7 @@ BEGIN
                      IF EXISTS( SELECT 1 FROM STRING_SPLIT( @cFlowThruScreen, ',') WHERE TRIM( value) = '4') -- PackInfo screen
                      BEGIN
                         SET @cInField01 = CASE WHEN ISNULL(@cCartonType ,'') ='' AND ISNULL(@cDefaultcartontype,'')<>''  THEN @cDefaultcartontype ELSE @cCartonType end
-                        SET @nInputKey='1'
+                        SET @nInputKey = 1
                         SET @cUDF01 = 'JumpTo_Step_4'
                         --GOTO Step_4
                      END
@@ -1168,8 +1166,8 @@ BEGIN
                      SET @nEnter = 0 --(JHU151) 
 
                      -- Go to next screen
-                     SET @nScn = 5
-                     SET @nStep = 4654
+                     SET @nScn = 4654
+                     SET @nStep = 5
 
                      -- Flow thru
                      IF EXISTS( SELECT 1 FROM STRING_SPLIT( @cFlowThruScreen, ',') WHERE TRIM( value) = '5') -- Print label screen
@@ -1179,7 +1177,7 @@ BEGIN
                         SET @cUDF01 = 'JumpTo_Step_5'
                         --GOTO Step_5
                      END
-                     ELSE
+                     
                      GOTO Quit
                   END
                END
@@ -1391,6 +1389,36 @@ BEGIN
                         GOTO Step_99_6625_Fail
                   END
                END
+
+               -- Get SKU info
+               SELECT
+                  @cSKUDescr = Descr,
+                  @cSKUDataCapture = DataCapture,
+                  @cPrePackIndicator = ISNULL( PrePackIndicator, ''),
+                  @cPackQtyIndicator = LEFT( ISNULL( PackQtyIndicator, '0'), 3),
+                  @cMUOM_Desc = Pack.PackUOM3,
+                  @cPUOM_Desc =
+                     CASE @cPUOM
+                        WHEN '2' THEN Pack.PackUOM1 -- Case
+                        WHEN '3' THEN Pack.PackUOM2 -- Inner pack
+                        WHEN '6' THEN Pack.PackUOM3 -- Master unit
+                        WHEN '1' THEN Pack.PackUOM4 -- Pallet
+                        WHEN '4' THEN Pack.PackUOM8 -- Other unit 1
+                        WHEN '5' THEN Pack.PackUOM9 -- Other unit 2
+                     END,
+                     @nPUOM_Div = CAST( IsNULL(
+                     CASE @cPUOM
+                        WHEN '2' THEN Pack.CaseCNT
+                        WHEN '3' THEN Pack.InnerPack
+                        WHEN '6' THEN Pack.QTY
+                        WHEN '1' THEN Pack.Pallet
+                        WHEN '4' THEN Pack.OtherUnit1
+                        WHEN '5' THEN Pack.OtherUnit2
+                     END, 1) AS INT)
+               FROM dbo.SKU SKU WITH (NOLOCK)
+               INNER JOIN dbo.Pack Pack WITH (NOLOCK) ON (SKU.PackKey = Pack.PackKey)
+               WHERE SKU.StorerKey = @cStorerKey
+                  AND SKU.SKU = @cSKU
 
                -- Custom data capture setup
                SET @cDataCapture = ''
