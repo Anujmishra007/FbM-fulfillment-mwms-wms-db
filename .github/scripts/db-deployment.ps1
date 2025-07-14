@@ -44,15 +44,12 @@ foreach ($scriptFile in $SQL_SCRIPT_FILES) {
     Add-Content -Path $logFilePath -Value $logMessage -Encoding UTF8
     try {
         # Run the SQL script using Invoke-Sqlcmd
+        # Convert LF to CRLF
+        (Get-Content $scriptFile) | ForEach-Object { "$_" } | Set-Content -NoNewline -Encoding utf8 $scriptFile
+
         $connectionString = "Server=$($WMSDB_DB_SERVER_NAME);Database=$($WMSDB_NAME);User Id=$($username);Password=$($password);TrustServerCertificate=True;"
-       # Invoke-Sqlcmd -ConnectionString $connectionString -Query $sqlQuery -ErrorAction Stop | Tee-Object -FilePath $logFilePath -Encoding utf8 -Append
-         $result = Invoke-Sqlcmd -ConnectionString $connectionString -Query $sqlQuery -ErrorAction Stop
-        
-        # Combine lines preserving spacing
-        $formattedText = $result | ForEach-Object { $_.Text } | Out-String
-        
-        # Save to log
-        $formattedText | Set-Content -Path $logFilePath -Encoding utf8    
+        Invoke-Sqlcmd -ConnectionString $connectionString -Query $sqlQuery -ErrorAction Stop | Tee-Object -FilePath $logFilePath -Encoding utf8 -Append
+  
 
         $successMessage = "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Successfully executed: $($scriptFile) on server: $($WMSDB_DB_SERVER_NAME), database: $($WMSDB_NAME)"
         Write-Output $successMessage
