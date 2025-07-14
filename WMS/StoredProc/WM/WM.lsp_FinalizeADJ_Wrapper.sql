@@ -760,7 +760,7 @@ BEGIN
                 BEGIN
                   SELECT @n_continue = 3
                   SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 551124
-                  SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(6),@n_err)+': LineNo : '+@c_InvalidADLineNo+': Pallet Type Not found in palletTypeMaster Data (lsp_finalizeADJ_Wrapper)'
+                  SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(6),@n_err)+': LineNo : '+@c_InvalidADLineNo+': Pallet Type Not Found In Pallet Type Master Data (lsp_finalizeADJ_Wrapper)'
 
                   EXEC [WM].[lsp_WriteError_List]
                         @i_iErrGroupKey = @n_ErrGroupKey OUTPUT,

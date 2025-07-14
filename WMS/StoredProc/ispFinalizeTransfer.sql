@@ -543,7 +543,7 @@ BEGIN
       BEGIN
          SET @nContinue = 3
          SET @n_err = 80010
-         SET @c_ErrMsg='NSQL'+CONVERT(char(5),@n_err)+':  From Pallettype is not matched with From ID (ispFinalizeTransfer)'
+         SET @c_ErrMsg='NSQL'+CONVERT(char(5),@n_err)+': From Lot + Location + ID Not found at the inventory (ispFinalizeTransfer)'
          GOTO Quit_Proc
       END
       --(SSA01) start
@@ -561,7 +561,7 @@ BEGIN
       BEGIN
          SET @nContinue = 3
          SET @n_err = 80019
-         SET @c_ErrMsg='NSQL'+CONVERT(char(5),@n_err)+':LineNo :'+@c_TransferLineNo+': To PalletType Not found in palletTypeMaster Data  (ispFinalizeTransfer)'
+         SET @c_ErrMsg='NSQL'+CONVERT(char(5),@n_err)+':LineNo :'+@c_TransferLineNo+': From Pallet Type Is Not Matched With From ID (ispFinalizeTransfer)'
          GOTO Quit_Proc
       END
 
@@ -580,7 +580,7 @@ BEGIN
           BEGIN
              SET @nContinue = 3
              SET @n_err = 80024
-             SET @c_ErrMsg='NSQL'+CONVERT(char(5),@n_err)+':LineNo:'+@c_TransferLineNo +': To PalletType Not found at the inventory (ispFinalizeTransfer)'
+             SET @c_ErrMsg='NSQL'+CONVERT(char(5),@n_err)+':LineNo:'+@c_TransferLineNo +': To Pallet Type Not found In Pallet Type Master Data (ispFinalizeTransfer)'
              GOTO Quit_Proc
           END
           --(SSA01) end
