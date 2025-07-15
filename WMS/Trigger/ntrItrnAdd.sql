@@ -110,6 +110,8 @@ GO
 /* 23-May-2022  LiLiChua     3.3    LFI-5880 - Add Configkey 'HWCDMV2LOG'(LL01)*/
 /* 15-Mar-2024  Wan01        3.4    UWP-16968-Post PalletType to Inventory When*/
 /*                                  Finalize                                   */
+/* 26-JUN-2025  SSA01        3.5   UWP-3982- Added PalletType in inventory when*/
+/*                                 Finalize QC and Adjustment                  */
 /*******************************************************************************/  
 CREATE OR ALTER TRIGGER [dbo].[ntrItrnAdd]  
 ON  [dbo].[ITRN]  
@@ -1379,7 +1381,8 @@ BEGIN
                , @c_sourcekey        = itrn.sourcekey  
                , @c_sourcetype       = itrn.sourcetype  
                , @c_Channel          = itrn.Channel       --(SWT02)
-               , @n_Channel_ID       = itrn.Channel_ID    --(SWT02)               
+               , @n_Channel_ID       = itrn.Channel_ID    --(SWT02)
+               , @c_PalletType       = itrn.PalletType    --(SSA01)
            FROM ITRN WITH (NOLOCK)  
            JOIN INSERTED ON ( ITRN.itrnkey = INSERTED.itrnkey )  
   
@@ -1420,7 +1423,8 @@ BEGIN
                , @n_Channel_ID   = @n_Channel_ID      OUTPUT -- (SWT02)
                , @b_Success      = @b_success         OUTPUT  
                , @n_err          = @n_err             OUTPUT  
-               , @c_errmsg       = @c_errmsg          OUTPUT  
+               , @c_errmsg       = @c_errmsg          OUTPUT
+               ,@c_PalletType    = @c_PalletType
   
          IF @b_success <> 1  
          BEGIN  
@@ -1949,7 +1953,8 @@ BEGIN
                , @c_sourcetype       = itrn.sourcetype 
                , @c_MoveRefKey       = ISNULL(RTRIM(ITRN.MoveRefKey),'')   --(Wan01) 
                , @c_Channel          = itrn.Channel         --(Wan03)
-               , @n_Channel_ID       = itrn.Channel_ID      --(Wan03) 
+               , @n_Channel_ID       = itrn.Channel_ID      --(Wan03)
+               , @c_PalletType       = itrn.PalletType    --(SSA01)
                FROM ITRN WITH (NOLOCK)  
                JOIN INSERTED ON ( ITRN.itrnkey = INSERTED.itrnkey )  
   
@@ -1993,7 +1998,8 @@ BEGIN
                , @c_errmsg       = @c_errmsg          OUTPUT  
                , @c_MoveRefKey   = @c_MoveRefKey      --(Wan01) 
                , @c_Channel      = @c_Channel                  --(Wan03)
-               , @n_Channel_ID   = @n_Channel_ID      OUTPUT   --(Wan03) 
+               , @n_Channel_ID   = @n_Channel_ID      OUTPUT   --(Wan03)
+               , @c_PalletType    = @c_PalletType
 
          IF @b_success <> 1  
          BEGIN  

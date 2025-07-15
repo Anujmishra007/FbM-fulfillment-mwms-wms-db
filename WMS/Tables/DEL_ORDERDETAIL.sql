@@ -81,8 +81,8 @@ CREATE TABLE [dbo].[DEL_ORDERDETAIL](
 [Notes] [nvarchar] (500) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_Del_OrderDetail_Notes] DEFAULT (''),
 [Notes2] [nvarchar] (500) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_Del_OrderDetail_Notes2] DEFAULT (''),
 [Channel] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[SalesChannel] [nvarchar](50) NULL ,
-[CancelReasonCode] [nvarchar](60) NULL 
+[SalesChannel] [nvarchar](50) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[CancelReasonCode] [nvarchar](60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL
 ) ON [PRIMARY]
 
 ALTER TABLE [dbo].[DEL_ORDERDETAIL] ADD CONSTRAINT [DEL_PKOrderDetail] PRIMARY KEY CLUSTERED ([OrderKey], [OrderLineNumber]) WITH (FILLFACTOR=90) ON [PRIMARY]

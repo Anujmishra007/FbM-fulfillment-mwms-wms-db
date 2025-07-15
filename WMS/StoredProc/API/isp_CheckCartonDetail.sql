@@ -3,21 +3,21 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-/******************************************************************************/  
-/* Store procedure: isp_CheckCartonDetail                                     */  
-/* Copyright      : LFLogistics                                               */  
-/*                                                                            */  
-/* Date         Rev  Author     Purposes                                      */  
-/* 2020-03-27   1.0  Chermaine  Created                                       */ 
-/* 2020-10-28   1.1  Chermaine  TPS-533 change @cInputCube to nvarchar(10) (cc01)*/
-/* 2021-09-05   1.2  Chermaine  TPS-11 ErrMsg add to rdtmsg (cc02)            */
-/* 2022-05-18   1.3  YeeKung    TPS-585 extended weight and cube length (yeekung01)*/  
-/* 2024-01-30   1.4  Yeekung    TPS-879 Fix innerjoin (yeekung03)             */
-/* 2025-02-14   1.5  yeekung    TPS-995 Follow Error Message (yeekung04)      */
-/* 2025-02-18   1.6  YeeKung    TPS-1013 Add new path (yeekung05)             */
-/* 2025-02-20   1.7  GhChan     TPS-1013, UWP29093 Enhance UPC,Lottable       */
-/*                               , BarcodeObj (Gh01)                          */
-/******************************************************************************/  
+/***************************************************************************************/  
+/* Store procedure: isp_CheckCartonDetail                                              */  
+/* Copyright      : LFLogistics                                                        */  
+/*                                                                                     */  
+/* Date         Rev  Author     Purposes                                               */  
+/* 2020-03-27   1.0  Chermaine  Created                                                */ 
+/* 2020-10-28   1.1  Chermaine  TPS-533 change @cInputCube to nvarchar(10) (cc01)      */
+/* 2021-09-05   1.2  Chermaine  TPS-11 ErrMsg add to rdtmsg (cc02)                     */
+/* 2022-05-18   1.3  YeeKung    TPS-585 extended weight and cube length (yeekung01)    */  
+/* 2024-01-30   1.4  Yeekung    TPS-879 Fix innerjoin (yeekung03)                      */
+/* 2025-02-14   1.5  yeekung    TPS-995 Follow Error Message (yeekung04)               */
+/* 2025-02-18   1.6  YeeKung    TPS-1013 Add new path (yeekung05)                      */
+/* 2025-02-20   1.7  GhChan     TPS-1013, UWP29093 Enhance CheckCartonDetail (Gh01)    */
+/* 2025-05-05   1.8  GhChan     Enhance the GetSKUImageLogic(Gh02)                     */
+/***************************************************************************************/  
   
 CREATE OR ALTER PROC [API].[isp_CheckCartonDetail] (  
    @json       NVARCHAR( MAX),  
@@ -76,7 +76,8 @@ DECLARE
    @cDymCtnCubeCol      NVARCHAR( 20),
    @pickSkuDetailJson   NVARCHAR( MAX),
    @cPSN                INT,
-   @cLBarcode           INT
+   @cLBarcode           INT,
+   @c_SKUImageURL       NVARCHAR(MAX)
       
  SET @EcomSingle = '0' 
  SET @CalOrderSKU = 'N'
@@ -464,10 +465,11 @@ DECLARE @cSQLUCCSelect NVARCHAR ( MAX)
 
                            
 SET @cSQLUCCSelect = ',ISNULL((SELECT UCCNO
-                           FROM packDetail PDl(nolock)
+                           FROM packDetail PDL(nolock)
                               JOIN UCC UCC (NOLOCK) ON UCC.UCCNO = PDL.UPC
-                           WHERE PickSlipNo = PD.pickslipNo
-                           and cartonno = PD.CartonNo),'''')'  + 'AS UCC'
+                           WHERE PDL.PickSlipNo = PD.pickslipNo
+                           and PDL.cartonno = PD.CartonNo AND PDL.UPC IS NOT NULL 
+                           AND PDL.UPC <> ''''),'''')'  + 'AS UCC'
 
 
 IF EXISTS (   SELECT 1 
@@ -620,7 +622,7 @@ EXEC (@cSQLCobine)
 DECLARE @SkuImg TABLE (  
    storerKey   NVARCHAR( 20),
     SKU        NVARCHAR( 30),  
-    ImageURL   NVARCHAR( 1024)    
+    ImageURL   NVARCHAR(MAX)    
 ) 
 
 DECLARE @SkuImgURL NVARCHAR( 1024)
@@ -635,16 +637,20 @@ FETCH NEXT FROM curMsg INTO @cSku
 WHILE @@FETCH_STATUS = 0
    BEGIN
       --default Img, cause sp still point to MYWMS
-      INSERT INTO @SkuImg
+
       EXEC [API].[isp_Get_SKU_Image_UR] 
       --exec [MYWMS].rdt.[Get_SKU_Image_URL_test]       
       --EXEC [MYWMS].[WM].[lsp_WM_Get_SKU_Image_URL]
-         'NIKEMY'      
+        @cStorerKey
       , @cSku            
       , @cUserName         
       , @b_Success        OUTPUT  
-      , @n_err            OUTPUT                                                                                                             
+      , @n_err            OUTPUT
       , @c_ErrMsg         OUTPUT
+      , @c_SKUImageURL    OUTPUT
+
+      INSERT INTO @SkuImg (storerKey, SKU, ImageURL)
+      VALUES (@cStorerKey, @cSku, ISNULL(@c_SKUImageURL, ''))
 
       --EXEC [MYWMS].[WM].[lsp_WM_Get_SKU_Image_URL] 
       -- @c_Storerkey = 'NIKEMY'

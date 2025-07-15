@@ -23,6 +23,8 @@ GO
 /* 2025-02-06 1.4.2  CYU027   UWP-30023 Hotfix add trim avoid spaces        */
 /* 2025-01-10 1.4.3  Dennis   FCR-1316 Performance Issue                    */
 /* 2025-02-20 1.5.0  NLT013   UWP-30312 Performance Tune                    */
+/* 2024-10-31 1.6.0  NLT013   UWP-26400 The validation for new pallet       */
+/*                            does not work in some scenarios               */
 /****************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_1653ExtScn01] (
@@ -124,6 +126,7 @@ BEGIN
       @cTrackNo               = V_String41,
       @cOrderKey              = V_OrderKey,
       @cLane                  = V_String42,
+      @cSuggPalletKey         = V_String5,
       @nCurrentScn            = Scn
    FROM rdt.RDTMOBREC (NOLOCK)
    WHERE Mobile = @nMobile
@@ -343,8 +346,8 @@ BEGIN
                      LOC/LANE:         (field05, input)
                ********************************************************************************/
                -- Initialize value
-               SET @cSuggPalletKey = @cOutField03
-               SET @cPalletKey = trim(@cInField04)
+               --SET @cSuggPalletKey = @cOutField03
+               SET @cPalletKey = @cInField04
 
                IF ISNULL(@cOverrideLoc,'0') <> '1' AND @cLane <> @cInField05 AND ISNULL(@cLane,'') <> ''
                BEGIN
@@ -650,7 +653,6 @@ BEGIN
    END
 Quit:
 END
-GO
 
 SET QUOTED_IDENTIFIER OFF
 GO

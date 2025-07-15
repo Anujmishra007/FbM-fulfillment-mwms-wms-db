@@ -31,7 +31,7 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 2025-05-20  Wan      1.0   UWP-32707 - FCR-3957 - JCB Putaway Using  */
-/*                            TM SCE                                    */
+/* 2025-06-11                 TM SCE                                    */
 /************************************************************************/
 
 CREATE OR ALTER PROC dbo.mspPARL01
@@ -195,6 +195,14 @@ BEGIN
       GOTO QUIT_SP
    END
   
+   IF EXISTS ( SELECT 1 FROM RECEIPTDETAIL rd (NOLOCK)                              --2025-06-11  
+               WHERE rd.ReceiptKey = @c_ReceiptKey  
+               AND   rd.PutawayLoc = 'WIP'
+              )  
+   BEGIN  
+       GOTO QUIT_SP 
+   END
+   
    WHILE @@TRANCOUNT > 0
    BEGIN
       COMMIT TRAN
@@ -280,7 +288,6 @@ BEGIN
    AND   l.LocationFlag IN ('', 'NONE')
    AND   l.[Status] = 'OK'
    AND   l.MaxPallet > 0
-
    GROUP BY CASE WHEN l.LocationRoom = '' THEN l.Loc ELSE '' END
          ,  l.Facility
          ,  l.LocationGroup
@@ -310,7 +317,7 @@ BEGIN
    AND   CODELKUP.Storerkey = @c_Storerkey
    ORDER BY CODELKUP.Code 
 
-      INSERT INTO @TMP_PA_CL (Listname, Code, Description, Short, Long, Notes, Notes2, Storerkey, UDF01, UDF02, UDF03, UDF04, UDF05, Code2)  
+   INSERT INTO @TMP_PA_CL (Listname, Code, Description, Short, Long, Notes, Notes2, Storerkey, UDF01, UDF02, UDF03, UDF04, UDF05, Code2)  
    SELECT CODELKUP.Listname   
         , CODELKUP.Code   
         , [Description] = ISNULL(CODELKUP.[Description],'')   
@@ -421,27 +428,45 @@ BEGIN
       SET @c_ToLoc = ''
       SET @c_FinalLoc = ''
       SET @c_LocationCategory_F = ''
+      
+      BEGIN TRAN                                                                    --2025-06-11
+      UPDATE RECEIPTDETAIL WITH (ROWLOCK)
+      SET PutawayLoc = 'WIP'
+         ,TrafficCop = NULL
+      WHERE Receiptkey = @c_Receiptkey
+      AND ToLoc = @c_FromLoc 
+      AND ToID  = @c_FromID
 
+      IF @@ERROR <> 0  
+      BEGIN  
+         SET @n_Continue = 3  
+         SET @n_Err = 60122 
+         SET @c_Errmsg = 'NSQL'+CONVERT(CHAR(5),@n_err)+': Set PutawayLoc to ''WIP''. (mspPARL01)'  
+      END  
+      
       IF @b_Debug = 1
       BEGIN
          PRINT ' @c_FromLoc: '+ @c_FromLoc
               +',@c_FromID: '+ @c_FromID
       END
       
-      IF @c_PalletKey = ''
+      IF @n_Continue = 1
       BEGIN
-         SET @n_Continue = 3
-         SET @n_Err = 60130
-         SET @c_Errmsg = 'NSQL'+CONVERT(CHAR(5),@n_err)
-                       + ': Pallet Key not Found. LPN: ' + @c_FromID
-                       + ' (mspPARL01)'
-         IF @n_Err_rv = 0 
+         IF @c_PalletKey = ''
          BEGIN
-            SET @n_Err_rv = @n_Err
-            SET @c_Errmsg_rv = @c_Errmsg
+            SET @n_Continue = 3
+            SET @n_Err = 60130
+            SET @c_Errmsg = 'NSQL'+CONVERT(CHAR(5),@n_err)
+                          + ': Pallet Key not Found. LPN: ' + @c_FromID
+                          + ' (mspPARL01)'
+            IF @n_Err_rv = 0 
+            BEGIN
+               SET @n_Err_rv = @n_Err
+               SET @c_Errmsg_rv = @c_Errmsg
+            END
          END
       END
-
+      
       IF @n_Continue = 1
       BEGIN
          IF @n_Length_P = 0.00 OR @n_Width_P = 0.00 OR @n_Height_P = 0.00 OR  
@@ -580,6 +605,12 @@ BEGIN
       IF @n_Continue = 1 
       BEGIN
          TRUNCATE TABLE #TMP_GRP_STYLE;
+
+         ;with lg AS                                                                --2025-06-03
+         (  SELECT RowID = ROW_NUMBER() OVER (ORDER BY (SELECT NULL))
+                  ,locationGroup = ss.[value]
+            FROM STRING_SPLIT(@c_LocationGroups, ',') ss 
+         )
          INSERT INTO #TMP_GRP_STYLE ( Loc, LogicalLocation, Facility          
                                     , LocationGroup, LocationCategory, LocLevel, LocAisle          
                                     , LocationRoom, [Floor], MaxPallet, WeightLimit
@@ -596,7 +627,7 @@ BEGIN
                ,l.MaxPallet  
                ,ca.UDF05
          FROM #TMP_GRP l (NOLOCK)
-         JOIN STRING_SPLIT(@c_LocationGroups, ',') ss ON ss.[value] = l.LocationGroup
+         JOIN lg ON lg.LocationGroup = l.LocationGroup                              --2025-06-03
          JOIN @TMP_PA_CL ca ON  ca.LISTNAME = 'JCBLOCCAP'
                             AND ca.Short = l.LocationCategory
                             AND ca.Long  = l.LocLevel
@@ -604,7 +635,7 @@ BEGIN
          AND   ca.UDF02 >= @n_Width_P
          AND   ca.UDF03 >= @n_height_P
          AND   ca.UDF04 >= @n_GrossWgt_P
-         ORDER BY l.LogicalLocation      
+         ORDER BY lg.RowID, l.LogicalLocation                                       --2025-06-03
 
          SET @CUR_PALOC = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
          SELECT l.RowID 
@@ -635,10 +666,11 @@ BEGIN
                            AND   lli.Loc = pnd.Loc
                            AND   lli.Loc > ''
                            AND   lli.ID  > ''
+                           AND   lli.Qty + lli.PendingMoveIn > 0                    --2025-06-11
                            GROUP BY lli.Loc
-                           HAVING COUNT(DISTINCT lli.ID) <= pnd.MaxPallet
+                           HAVING COUNT(DISTINCT lli.ID) >= pnd.MaxPallet           --2025-06-03
                            )
-         ORDER BY  l.LogicalLocation 
+         ORDER BY l.RowID, l.LogicalLocation 
 
          OPEN @CUR_PALOC 
 
@@ -676,8 +708,6 @@ BEGIN
                                        ,  @n_LocLevel) bl 
                   JOIN LOC l (NOLOCK) ON l.Loc = bl.StartLoc
                   WHERE bl.TotalPalletWeights + @n_GrossWgt_P <= @n_WeightLimit
-                  --AND   bl.LocCount >= @n_NoOfLoc
-                  --AND   bl.EmptyLPNCount >= @n_NoOfLoc
                   ORDER BY l.LogicalLocation
                END
                
@@ -691,24 +721,24 @@ BEGIN
                AND   bl.EmptyLPNCount >= @n_NoOfLoc
                ORDER BY l.LogicalLocation
             END
-
-            IF @c_LocationRoom = '' AND @c_FinalLoc > ''
-            BEGIN 
-               IF EXISTS ( SELECT 1
-                           FROM LotxLocxid lli (NOLOCK)  
-                           LEFT OUTER JOIN Pallet pm (NOLOCK) ON pm.PalletKey = lli.ID
-                           WHERE lli.Storerkey = @c_Storerkey
-                           AND   lli.loc = @c_ToLoc
-                           AND   lli.id > ''
-                           GROUP BY lli.Loc
-                           HAVING SUM(CASE WHEN ISNULL(lli.Qty+lli.PendingMoveIN,0)=0 THEN 0 ELSE ISNULL(pm.GrossWgt,0.00) END) 
-                                    + @n_GrossWgt_P > @n_WeightLimit
-                           AND  COUNT(DISTINCT lli.id) >= @n_MaxPallet 
-                           )
-               BEGIN
-                  SET @c_FinalLoc = ''
-               END
-            END
+            
+            IF @c_LocationRoom = '' AND @c_FinalLoc > ''  
+            BEGIN   
+               IF EXISTS ( SELECT 1  
+                           FROM LotxLocxid lli (NOLOCK)    
+                           LEFT OUTER JOIN Pallet pm (NOLOCK) ON pm.PalletKey = lli.ID  
+                           WHERE lli.Storerkey = @c_Storerkey  
+                           AND   lli.loc = @c_FinalLoc                              --2025-06-11 - (Start)
+                           AND   lli.id > ''  
+                           AND   lli.Qty + lli.PendingMoveIn > 0                    
+                           GROUP BY lli.Loc  
+                           HAVING SUM(ISNULL(pm.GrossWgt,0.00)) + @n_GrossWgt_P > @n_WeightLimit  
+                           OR  COUNT(DISTINCT lli.id) >= @n_MaxPallet               --2025-06-11 - (END)   
+                           )  
+               BEGIN  
+                  SET @c_FinalLoc = ''  
+               END  
+            END 
             
             IF @c_FinalLoc = '' 
             BEGIN
@@ -768,8 +798,6 @@ BEGIN
 
       IF @n_Continue = 1
       BEGIN
-         BEGIN TRAN
-
          EXECUTE nspg_GetKey
            @KeyName     = 'TaskDetailKey'
          , @fieldlength = 10
@@ -806,10 +834,14 @@ BEGIN
                    @c_Putawayzone   = l.PutawayZone
                   ,@c_LocationGroup = l.LocationGroup
                   ,@c_LocationCategory = l.LocationCategory
-                  ,@c_Areakey       = a.AreaKey
+            FROM dbo.LOC l (NOLOCK)
+            WHERE Loc = @c_ToLoc
+
+            SELECT TOP 1                                                            --2025-06-03
+                   @c_Areakey = a.AreaKey
             FROM dbo.LOC l (NOLOCK)
             JOIN AreaDetail a (NOLOCK) ON a.PutawayZone = l.PutawayZone
-            WHERE Loc = @c_ToLoc
+            WHERE Loc = @c_FromLoc
             ORDER BY a.AreaKey
 
             SET @c_Lot = ''
@@ -822,141 +854,159 @@ BEGIN
                   ,  lli.Loc
                   ,  lli.ID
 
-            SET @n_NoOfTasks = @n_NoOfTasks + 1
-            INSERT INTO dbo.TASKDETAIL
-                   (    TaskDetailKey
-                     ,  TaskType
-                     ,  Storerkey
-                     ,  Sku
-                     ,  Lot
-                     ,  UOM
-                     ,  UOMQty
-                     ,  Qty
-                     ,  Fromloc
-                     ,  LogicalFromLoc
-                     ,  FromID
-                     ,  ToLoc
-                     ,  LogicalToLoc
-                     ,  ToID
-                     ,  FinalLoc
-                     ,  FinalID
-                     ,  PickMethod
-                     ,  [Status]
-                     ,  [Priority]
-                     ,  SourcePriority
-                     ,  SourceType
-                     ,  SourceKey
-                     ,  AreaKey
-                     ,  Message01
-                     ,  Message02
-                     ,  Message03
-                     ,  PendingMoveIn
-                   )
-            VALUES (    @c_TaskdetailKey
-                     ,  @c_TaskType 
-                     ,  @c_Storerkey
-                     ,  @c_Sku
-                     ,  @c_Lot
-                     ,  @c_UOM
-                     ,  @n_Qty_ID
-                     ,  @n_Qty_ID
-                     ,  @c_FromLoc
-                     ,  @c_FromLoc
-                     ,  @c_FromID
-                     ,  @c_ToLoc
-                     ,  @c_ToLoc
-                     ,  @c_FromID
-                     ,  @c_FinalLoc
-                     ,  @c_FromID
-                     ,  @c_PickMethod
-                     ,  '0'
-                     ,  '5'
-                     ,  '9'
-                     ,  'mspPARL01'
-                     ,  @c_Receiptkey
-                     ,  @c_Areakey
-                     ,  @c_PutawayZone
-                     ,  @c_LocationGroup
-                     ,  @c_LocationCategory
-                     ,  @n_Qty_ID
-                   )
+            BEGIN TRY                                                               --2025-06-03
+               INSERT INTO dbo.TASKDETAIL
+                      (    TaskDetailKey
+                        ,  TaskType
+                        ,  Storerkey
+                        ,  Sku
+                        ,  Lot
+                        ,  UOM
+                        ,  UOMQty
+                        ,  Qty
+                        ,  Fromloc
+                        ,  LogicalFromLoc
+                        ,  FromID
+                        ,  ToLoc
+                        ,  LogicalToLoc
+                        ,  ToID
+                        ,  FinalLoc
+                        ,  FinalID
+                        ,  PickMethod
+                        ,  [Status]
+                        ,  [Priority]
+                        ,  SourcePriority
+                        ,  SourceType
+                        ,  SourceKey
+                        ,  AreaKey
+                        ,  Message01
+                        ,  Message02
+                        ,  Message03
+                        ,  PendingMoveIn
+                      )
+               VALUES (    @c_TaskdetailKey
+                        ,  @c_TaskType 
+                        ,  @c_Storerkey
+                        ,  @c_Sku
+                        ,  @c_Lot
+                        ,  @c_UOM
+                        ,  @n_Qty_ID
+                        ,  @n_Qty_ID
+                        ,  @c_FromLoc
+                        ,  @c_FromLoc
+                        ,  @c_FromID
+                        ,  @c_ToLoc
+                        ,  @c_ToLoc
+                        ,  @c_FromID
+                        ,  @c_FinalLoc
+                        ,  @c_FromID
+                        ,  @c_PickMethod
+                        ,  '0'
+                        ,  '5'
+                        ,  '9'
+                        ,  'mspPARL01'
+                        ,  @c_Receiptkey
+                        ,  @c_Areakey
+                        ,  @c_PutawayZone
+                        ,  @c_LocationGroup
+                        ,  @c_LocationCategory
+                        ,  @n_Qty_ID
+                      )
 
-            IF @@ERROR <> 0
-            BEGIN 
+               IF @@ERROR <> 0
+               BEGIN 
+                  SET @n_Continue = 3
+                  SET @c_ErrMsg   =  ERROR_MESSAGE()
+
+                  IF @n_Err_rv = 0 
+                  BEGIN
+                     SET @n_Err_rv = @n_Err
+                     SET @c_Errmsg_rv = @c_Errmsg
+                  END
+               END
+
+               IF @n_Continue = 1
+               BEGIN
+                  SET @CUR_UPD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+                  SELECT rd.ReceiptKey
+                        ,rd.ReceiptLineNumber
+                  FROM dbo.RECEIPTDETAIL rd (NOLOCK)
+                  WHERE rd.ReceiptKey = @c_ReceiptKey
+                  AND   rd.ToLoc= @c_FromLoc
+                  AND   rd.ToID = @c_FromID
+                  AND   rd.PutawayLoc = 'WIP'
+                  ORDER BY rd.ReceiptKey
+                        ,  rd.ReceiptLineNumber
+
+                  OPEN @CUR_UPD 
+
+                  FETCH NEXT FROM @CUR_UPD INTO @c_ReceiptKey, @c_ReceiptLineNumber 
+
+                  WHILE @@FETCH_STATUS <> -1
+                  BEGIN
+                     UPDATE RECEIPTDETAIL WITH (ROWLOCK)
+                        SET PutawayLoc = @c_FinalLoc
+                           ,TrafficCop = NULL
+                           ,EditDate = GETDATE()
+                           ,EditWho  = SUSER_SNAME()
+                     WHERE ReceiptKey = @c_ReceiptKey
+                     AND   ReceiptLineNumber = @c_ReceiptLineNumber
+
+                     IF @@ERROR <> 0
+                     BEGIN
+                        SET @n_Continue = 3
+                        SET @n_Err = 60200
+                        SET @c_Errmsg = 'NSQL'+CONVERT(CHAR(5),@n_err)+': Reset PutawayLoc ON Receiptdetail table fail.'
+                                      + ' (mspPARL01)'
+
+                        IF @n_Err_rv = 0 
+                        BEGIN
+                           SET @n_Err_rv = @n_Err
+                           SET @c_Errmsg_rv = @c_Errmsg
+                        END
+                        GOTO QUIT_SP
+                     END 
+                     FETCH NEXT FROM @CUR_UPD INTO @c_ReceiptKey, @c_ReceiptLineNumber 
+                  END
+                  CLOSE @CUR_UPD
+                  DEALLOCATE @CUR_UPD
+               END
+            END TRY
+            BEGIN CATCH
                SET @n_Continue = 3
-               SET @c_ErrMsg   =  ERROR_MESSAGE()
+               SET @n_Err = 60210
+               SET @c_Errmsg = ERROR_MESSAGE()
 
                IF @n_Err_rv = 0 
                BEGIN
                   SET @n_Err_rv = @n_Err
                   SET @c_Errmsg_rv = @c_Errmsg
                END
-            END
-
-            IF @n_Continue = 1
-            BEGIN
-               SET @CUR_UPD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-               SELECT rd.ReceiptKey
-                     ,rd.ReceiptLineNumber
-               FROM dbo.RECEIPTDETAIL rd (NOLOCK)
-               WHERE rd.ReceiptKey = @c_ReceiptKey
-               AND   rd.ToLoc= @c_FromLoc
-               AND   rd.ToID = @c_FromID
-               AND   rd.PutawayLoc = ''
-               ORDER BY rd.ReceiptKey
-                     ,  rd.ReceiptLineNumber
-
-               OPEN @CUR_UPD 
-
-               FETCH NEXT FROM @CUR_UPD INTO @c_ReceiptKey, @c_ReceiptLineNumber 
-
-               WHILE @@FETCH_STATUS <> -1
-               BEGIN
-                  UPDATE RECEIPTDETAIL WITH (ROWLOCK)
-                     SET PutawayLoc = @c_FinalLoc
-                        ,TrafficCop = NULL
-                        ,EditDate = GETDATE()
-                        ,EditWho  = SUSER_SNAME()
-                  WHERE ReceiptKey = @c_ReceiptKey
-                  AND   ReceiptLineNumber = @c_ReceiptLineNumber
-
-                  IF @@ERROR <> 0
-                  BEGIN
-                     SET @n_Continue = 3
-                     SET @n_Err = 60200
-                     SET @c_Errmsg = 'NSQL'+CONVERT(CHAR(5),@n_err)+': Reset PutawayLoc ON Receiptdetail table fail.'
-                                   + ' (mspPARL01)'
-
-                     IF @n_Err_rv = 0 
-                     BEGIN
-                        SET @n_Err_rv = @n_Err
-                        SET @c_Errmsg_rv = @c_Errmsg
-                     END
-                     GOTO QUIT_SP
-                  END 
-                  FETCH NEXT FROM @CUR_UPD INTO @c_ReceiptKey, @c_ReceiptLineNumber 
-               END
-               CLOSE @CUR_UPD
-               DEALLOCATE @CUR_UPD
-            END
-
-            IF @n_Continue = 3 
-            BEGIN
-               IF @@ROWCOUNT > 0
+               
+               IF (XACT_STATE()) = -1                                                             
                BEGIN
                   ROLLBACK TRAN
-               END
-            END
-            ELSE IF @n_Continue = 1 
-            BEGIN
-               IF @@ROWCOUNT > 0
-               BEGIN
-                  COMMIT TRAN
-               END
-            END
+               END                 
+            END CATCH                                                                
          END
       END
 
+      IF @n_Continue = 3                                                      --2025-06-11
+      BEGIN
+         IF @@TRANCOUNT > 0                                                   
+         BEGIN
+            ROLLBACK TRAN
+         END
+      END
+      ELSE IF @n_Continue = 1 
+      BEGIN
+         SET @n_NoOfTasks = @n_NoOfTasks + 1                                  --2025-06-03
+         IF @@TRANCOUNT > 0                                                   
+         BEGIN
+            COMMIT TRAN
+         END
+      END                                                                     --2025-06-11
+            
       FETCH NEXT FROM @CUR_PAID INTO @c_ReceiptKey, @c_Storerkey, @c_Sku 
                                     ,@c_FromLoc, @c_FromID, @c_PalletKey, @c_PalletType, @n_Qty_ID
                                     ,@n_Length_P, @n_Width_P, @n_Height_P, @n_GrossWgt_P

@@ -11,6 +11,10 @@ GO
 /* 2020-05-05   1.0  Chermaine  Created                                       */
 /* 2021-09-05   1.1  Chermaine  TPS-11 ErrMsg add to rdtmsg (cc01)            */
 /* 2025-02-14   1.2  yeekung    TPS-995 Change Error Message (yeekung01)      */
+/* 2025-02-20   1.3  yeekung    UWP-27764 Add New Params (yeekung02)          */
+/* 2025-03-26   1.4  yeekung    UWP-31832 Filter out userid in appsection     */
+/*                              (yeekung03)                                   */
+/* 2025-04-25   2.1  GhChan     Enhanced the whole logic with support V0 & V2 */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [API].[isp_GetWorkstation] (
@@ -30,22 +34,28 @@ SET CONCAT_NULL_YIELDS_NULL OFF
 DECLARE
    @cLangCode        NVARCHAR( 3),
    @cUserName        NVARCHAR( 30),
-   @cStorerKey       NVARCHAR( 15),
-   @cFacility        NVARCHAR( 5),
+   @cStorerKey       NVARCHAR( 15) = '',
+   @cFacility        NVARCHAR( 5) = '',
    @nFunc            INT,
    @cDeviceID        NVARCHAR( 50),
    @cDefaultWorkstation     NVARCHAR( 30),
    @cTargetVersion          NVARCHAR( 12),
    @cCurrentVersion         NVARCHAR( 12)
 
+DECLARE @tempworkstation TABLE (
+   workstation NVARCHAR( 30)
+)
 
 --Decode Json Format
-SELECT @nFunc=Func, @cLangCode = LangCode, @cDeviceID = Device
+SELECT @nFunc=Func, @cLangCode = LangCode, @cDeviceID = Device, @cStorerKey = Storerkey ,@cFacility  = Facility, @cUserName = UserName
 FROM OPENJSON(@json)
 WITH (
 	   Func        INT,
       LangCode    NVARCHAR( 3),
-      Device      NVARCHAR( 50)
+      Device      NVARCHAR( 50),
+      Storerkey   NVARCHAR( 15),
+      Facility    NVARCHAR(  5),
+      UserName      NVARCHAR( 128)
 )
 --SELECT @nFunc AS Func, @cLangCode AS LangCode,@cWorkstation as Workstation
 
@@ -70,18 +80,55 @@ WITH (
 
 IF @cDeviceID <>''
 BEGIN
-	SELECT @cDefaultWorkstation = workstation, @cTargetVersion = ISNULL(TargetVersion,''), @cCurrentVersion = ISNULL(CurrentVersion,'')FROM API.AppWorkstation WHERE deviceid = @cDeviceID
+   IF ISNULL(@cDeviceID,'') NOT LIKE 'Web%'
+   BEGIN
+      SELECT @cDefaultWorkstation = workstation, @cTargetVersion = ISNULL(TargetVersion,''), @cCurrentVersion = ISNULL(CurrentVersion,'')
+      FROM API.AppWorkstation (NOLOCK)  
+      WHERE DeviceID = @cDeviceID
 
-	IF ISNULL(@cDefaultWorkstation,'') = ''
-	BEGIN
-		IF NOT EXISTS (SELECT TOP 1 1 FROM Api.AppWorkstation WITH (NOLOCK) WHERE deviceID ='')
-	   BEGIN
-		   SET @b_Success = 0
-         SET @n_Err = 1001301
-         SET @c_ErrMsg =  API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'No workstation available for device setup. Please ensure workstation has been setup. Funtion : isp_GetWorkstation'
-         GOTO EXIT_SP
-	   END
-	END
+      IF ISNULL(@cDefaultWorkstation,'') = '' 
+      BEGIN
+         IF NOT EXISTS (SELECT TOP 1 1 FROM Api.AppWorkstation WITH (NOLOCK) WHERE DeviceID ='')
+         BEGIN
+            SET @b_Success = 0
+            SET @n_Err = 1001301
+            SET @c_ErrMsg =  API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'No workstation available for device setup. Please ensure workstation has been setup. Funtion : isp_GetWorkstation'
+            GOTO EXIT_SP
+         END
+      END
+
+      INSERT INTO @tempworkstation (workstation)
+      SELECT WorkStation 
+      FROM Api.AppWorkstation WITH (NOLOCK)
+      WHERE DeviceID = ''
+   END
+   ELSE
+   BEGIN
+      SET @cDeviceID = @cDeviceID + @cUserName
+      SELECT @cDefaultWorkstation = workstation, @cTargetVersion = ISNULL(TargetVersion,''), @cCurrentVersion = ISNULL(CurrentVersion,'')
+      FROM API.AppWorkstation (NOLOCK)  
+      WHERE DeviceID = @cDeviceID
+      AND DefaultStorerkey = @cStorerKey
+      AND DefaultFacility = @cFacility
+
+      INSERT INTO @tempworkstation (workstation)
+      SELECT WorkStation 
+      FROM Api.AppWorkstation WITH (NOLOCK)
+      WHERE DeviceID = ''
+         AND DefaultStorerkey = @cStorerKey
+         AND DefaultFacility = @cFacility
+
+   END
+   
+
+   
+
+   SET @jResult =(
+      SELECT @cDefaultWorkstation AS DefaultWorkstation,@cCurrentVersion AS CurrentVersion, @cTargetVersion AS TargetVersion,* FROM (
+      SELECT '[' +STUFF(( SELECT ',' + '"' + workstation  + '"' FROM @tempworkstation FOR XML PATH('')),1,1,'')+ ']' as WorkStationList
+      )WorkStationList1
+      FOR JSON AUTO , INCLUDE_NULL_VALUES
+      )
 END
 ELSE
 BEGIN
@@ -92,7 +139,7 @@ BEGIN
    GOTO EXIT_SP
 END
 
-SET @b_Success = 1
+--SET @b_Success = 1
 
 --SET @jResult =(
 --SELECT @cDefaultWorkstation AS DefaultWorkstation,workstation
@@ -100,13 +147,14 @@ SET @b_Success = 1
 --FOR JSON AUTO
 --)
 
-SET @jResult =(
-SELECT @cDefaultWorkstation AS DefaultWorkstation,@cCurrentVersion AS CurrentVersion, @cTargetVersion AS TargetVersion,* FROM (SELECT
-'[' +STUFF(( SELECT ',' + '"' + workstation  + '"'
-FROM Api.AppWorkstation WITH (NOLOCK) WHERE deviceID ='' FOR XML PATH('')),1,1,'')+ ']' as WorkStationList
-)WorkStationList1
-FOR JSON AUTO , INCLUDE_NULL_VALUES
-)
+--SET @jResult =(
+--SELECT @cDefaultWorkstation AS DefaultWorkstation,@cCurrentVersion AS CurrentVersion, @cTargetVersion AS TargetVersion,* FROM (SELECT
+--'[' +STUFF(( SELECT ',' + '"' + workstation  + '"'
+--FROM Api.AppWorkstation APP WITH (NOLOCK) 
+--WHERE APP.deviceID = '' FOR XML PATH('')),1,1,'')+ ']' as WorkStationList
+--)WorkStationList1
+--FOR JSON AUTO , INCLUDE_NULL_VALUES
+--)
 
 
 EXIT_SP:

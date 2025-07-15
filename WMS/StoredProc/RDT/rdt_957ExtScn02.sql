@@ -11,7 +11,8 @@ GO
 /*                                                                           */
 /* Date       Rev  Author   Purposes                                         */
 /* 2024-07-04 1.0  NLT013   FCR-454 CREATE                                   */
-/* 2024-11-07 1.0  NLT013   UWP-26694 update orderkey info for swapped UCC   */
+/* 2024-11-07 1.1  NLT013   UWP-26694 update orderkey info for swapped UCC   */
+/* 2025-07-03 1.2  JackC    UWP-37190 Set UCCstatus to 6 if toLoc is loseUCC */
 /*                                                                           */
 /*****************************************************************************/
 
@@ -89,6 +90,7 @@ BEGIN
       @cSuggestUCC         NVARCHAR( 1),
       @cSuggestLoc         NVARCHAR( 10),
       @cToLoc              NVARCHAR( 10),
+      @cToLocLoseUCC       NVARCHAR( 1), --V1.2
       @cUCCLoc             NVARCHAR( 10),
       @cLOT                NVARCHAR( 10),
       @cPickDetailKey      NVARCHAR( 18),
@@ -641,14 +643,28 @@ BEGIN
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --ToLocNeeded
                   GOTO Quit
                END
+               -- V1.2 start
+               -- Check TOLOC valid 
+               /*IF NOT EXISTS( SELECT 1 FROM LOC WITH (NOLOCK) WHERE LOC = @cToLOC AND Facility = @cFacility)
+               BEGIN
+                  SET @nErrNo = 218919
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InvalidLOC
+                  GOTO Quit
+               END*/
+               SELECT @cToLocLoseUCC = loseucc FROM LOC WITH (NOLOCK) WHERE LOC = @cToLOC AND Facility = @cFacility
 
-               -- Check TOLOC valid
-               IF NOT EXISTS( SELECT 1 FROM LOC WITH (NOLOCK) WHERE LOC = @cToLOC AND Facility = @cFacility)
+               IF @@ROWCOUNT = 0
                BEGIN
                   SET @nErrNo = 218919
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InvalidLOC
                   GOTO Quit
                END
+               ELSE
+               BEGIN
+                  IF @cToLocLoseUCC <> '1'
+                     SET @cToLocLoseUCC = '0'
+               END
+               --V1.2 end
 
                IF @nTranCount = 0
                   BEGIN TRANSACTION
@@ -695,7 +711,10 @@ BEGIN
                         @cFromLOT    = @cLOT 
 
                      UPDATE dbo.UCC WITH(ROWLOCK)
-                     SET Status = '5',
+                     SET 
+                        Status = CASE WHEN @cToLocLoseUCC = '1' 
+                                    THEN '6' --lost
+                                    ELSE '5' END, --Picked V1.2
                         Userdefined08 = '',
                         Loc = @cToLoc,
                         ID = @cDropID

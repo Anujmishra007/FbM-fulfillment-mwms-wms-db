@@ -11,7 +11,9 @@ GO
 /* Purpose        : Generate the labelNo by Trackingno                        */
 /*                                                                            */
 /* Date         Rev  Author     Purposes                                      */      
-/* 2024-01-09   1.0  YeeKung  TPS-805 Created                                 */      
+/* 2024-01-09   1.0  YeeKung    TPS-805 Created                               */  
+/* 2025-02-21   1.1  YeeKung    Fix Bug For success (yeekung01)               */
+/* 2025-05-19   1.2  GhChan     UWP-34530 Fix LabelNo return value issue      */
 /******************************************************************************/      
       
 CREATE OR ALTER PROC [API].[isp_TPS_ExtGenLBL01] (      
@@ -20,7 +22,7 @@ CREATE OR ALTER PROC [API].[isp_TPS_ExtGenLBL01] (
  @nFunc           INT,            
  @cLangCode       NVARCHAR( 3),   
  @cPickSlipNo     NVARCHAR( 30),  
- @cCartonNo       NVARCHAR(3),
+ @cCartonNo       NVARCHAR(5),
  @cLabelNo        NVARCHAR( 20)  OUTPUT,  
  @b_Success       INT            OUTPUT,
  @n_Err           INT            OUTPUT,
@@ -109,6 +111,7 @@ BEGIN
          BEGIN
             SET @n_Err = 1000351
             SET @c_ErrMsg = api.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP') --'NO TRACKING #|isp_TPS_ExtGenLBL01'
+            SET @b_Success = 0
             GOTO RollBackTran
          END
 
@@ -121,6 +124,7 @@ BEGIN
          BEGIN
             SET @n_Err = 1000352
             SET @c_ErrMsg = api.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP') --'Insert CartonTrack table fail :isp_TPS_ExtGenLBL01'
+            SET @b_Success = 0
             GOTO RollBackTran
          END
 
@@ -130,6 +134,7 @@ BEGIN
          BEGIN
             SET @n_Err = 1000353
             SET @c_ErrMsg = api.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP') --'DEL TRACK# Err:isp_TPS_ExtGenLBL01'
+            SET @b_Success = 0
             GOTO RollBackTran
          END
          
@@ -189,6 +194,9 @@ BEGIN
 
             IF @cLabelNo <> ''
             BEGIN
+               SET @b_Success = 0
+               SET @n_Err = 1000356
+               SET @c_ErrMsg = api.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Failed to get the LabelNo from sub SP api.isp_TP_GenLabelNo_Wrapper. Function : isp_TPS_ExtGenLBL01'
                GOTO RollbackTran
             END
          END
@@ -213,10 +221,14 @@ BEGIN
             EXECUTE isp_TP_GenSSCCLabel_Wrapper
             @c_PickSlipNo = @cPickSlipno,
             @n_CartonNo   = 0,
-            @cLabelNo    = @cLabelNo   OUTPUT
+            @c_SSCC_LabelNo    = @cLabelNo   OUTPUT
 
             IF @cLabelNo <> ''
             BEGIN
+               SET @b_Success = 0
+               SET @n_Err = 1000357
+               SET @c_ErrMsg = api.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Failed to get the LabelNo from sub SP api.isp_TP_GenSSCCLabel_Wrapper. Function : isp_TPS_ExtGenLBL01'
+               
                GOTO RollbackTran
             END
          END
@@ -265,7 +277,8 @@ BEGIN
                IF ISNUMERIC(@c_VAT) = 0
                BEGIN
                   SET @n_Err = 1000355
-                  SET @c_errmsg = rdt.rdtgetmessage( @n_Err, @cLangCode, 'DSP')--'Execution Error : Vat is not a numeric value. Function : isp_TPS_ExtGenLBL01'
+                  SET @c_errmsg = api.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Execution Error : Vat is not a numeric value. Function : isp_TPS_ExtGenLBL01'
+                  SET @b_Success = 0
                   GOTO RollbackTran
                END
             END
@@ -368,6 +381,9 @@ BEGIN
       
 END      
 GO
+  
+SET QUOTED_IDENTIFIER OFF  
+
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS ON

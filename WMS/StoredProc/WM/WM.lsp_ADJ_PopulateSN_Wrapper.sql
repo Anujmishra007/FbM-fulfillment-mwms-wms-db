@@ -22,6 +22,7 @@ GO
 /* Updates:                                                             */                                                                                  
 /* Date        Author   Ver.  Purposes                                  */
 /* 2023-08-09  Wan      1.0   Created & DevOps Combine Script           */
+/* 2024-06-13  SSA01    1.1   FCR-3982 - Added Pallettype to Adjustment */
 /************************************************************************/                                                                                  
 CREATE OR ALTER PROC [WM].[lsp_ADJ_PopulateSN_Wrapper]                                                                                                                     
    @c_AdjustmentKey        NVARCHAR(10)         
@@ -84,6 +85,7 @@ BEGIN
          ,  @c_Refkey3                    NVARCHAR(20)   = ''
          ,  @c_WriteType                  NVARCHAR(50)   = ''
          ,  @n_LogWarningNo               INT            = 0
+         ,  @c_PalletType                 NVARCHAR(10)   = ''            --(SSA01)
          
          ,  @CUR_LLI                      CURSOR
          ,  @CUR_ERRLIST                  CURSOR   
@@ -228,6 +230,7 @@ BEGIN
             ,l.Lottable14
             ,l.Lottable15
             ,sn.SerialNo
+            ,i.PalletType                            --(SSA01)
       FROM #tSN AS ts 
       JOIN dbo.SerialNo AS sn (NOLOCK) ON sn.SerialNoKey = ts.SerialNoKey
       JOIN dbo.LOTxLOCxID AS ltlci (NOLOCK) ON  ltlci.Storerkey = sn.Storerkey
@@ -236,7 +239,8 @@ BEGIN
                                             AND ltlci.Lot = ts.Lot 
       JOIN dbo.LOTATTRIBUTE AS l (NOLOCK) ON l.Lot = ltlci.Lot                                    
       JOIN dbo.SKU AS s (NOLOCK) ON s.StorerKey = l.StorerKey AND s.Sku = l.Sku
-      JOIN dbo.PACK AS p (NOLOCK) ON p.PackKey= s.PACKKey 
+      JOIN dbo.PACK AS p (NOLOCK) ON p.PackKey= s.PACKKey
+      JOIN dbo.ID As i (NOLOCK) ON i.id = ltlci.ID
       WHERE ltlci.Qty - ltlci.Qtyallocated - ltlci.QtyPicked >= sn.qty
       AND s.SerialNoCapture IN ('1','2','3')
       AND sn.[Status] = '1'
@@ -267,7 +271,8 @@ BEGIN
                                     ,@dt_Lottable13  
                                     ,@dt_Lottable14  
                                     ,@dt_Lottable15
-                                    ,@c_SerialNo  
+                                    ,@c_SerialNo
+                                    ,@c_PalletType                       --(SSA01)
       WHILE @@FETCH_STATUS <> -1 
       BEGIN
          IF @c_ChannelInventoryMgmt = '1'
@@ -340,6 +345,7 @@ BEGIN
              ,   Channel 
              ,   Channel_ID
              ,   SerialNo
+             ,   PalletType                         --(SSA01)
              )
          VALUES 
              (   @c_AdjustmentKey
@@ -393,6 +399,7 @@ BEGIN
              ,   @c_Channel                  --Channel  
              ,   0                           --Channel_ID  
              ,   @c_SerialNo
+             ,   @c_PalletType                        --(SSA01)
              )
      
          FETCH NEXT FROM  @CUR_LLI INTO @c_Storerkey
@@ -418,7 +425,8 @@ BEGIN
                                      ,  @dt_Lottable13  
                                      ,  @dt_Lottable14  
                                      ,  @dt_Lottable15 
-                                     ,  @c_SerialNo                                     
+                                     ,  @c_SerialNo
+                                     ,  @c_PalletType              --(SSA01)
       END
       CLOSE @CUR_LLI
       DEALLOCATE @CUR_LLI

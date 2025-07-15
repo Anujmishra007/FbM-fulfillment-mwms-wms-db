@@ -24,9 +24,10 @@ GO
 /* 2025-05-15  Wan01    1.8   FCR-3958 - JCB Picking Task                */
 /*                            Overwrite the whole logic as implement new */
 /*                            process. Use back same SP                  */
+/* 2025-06-30                 Version 1.90                               */
 /*************************************************************************/     
 CREATE OR ALTER PROCEDURE [dbo].[mspRVWAV02]        
-   @c_wavekey      NVARCHAR(10) 
+   @c_Wavekey      NVARCHAR(10) 
 ,  @c_Orderkey     NVARCHAR(10) = ''     
 ,  @b_Success      int          = 1    OUTPUT    
 ,  @n_err          int          = 0    OUTPUT    
@@ -55,6 +56,7 @@ BEGIN
          , @c_FromID         NVARCHAR(18) = ''
          , @c_ToLoc          NVARCHAR(18) = ''
          , @c_ToID           NVARCHAR(18) = ''
+         , @c_RefTaskkey     NVARCHAR(10) = ''                                      --v1.90 
          , @c_SourceType     NVARCHAR(30) = 'mspRLWAV02'
                                       
          , @CUR_DELTASK      CURSOR
@@ -137,6 +139,7 @@ BEGIN
    BEGIN 
       SET @CUR_DELTASK = CURSOR FAST_FORWARD READ_ONLY FOR
       SELECT td.TaskDetailKey
+            ,td.RefTaskKey                                                          --v1.90
       FROM TASKDETAIL td (NOLOCK)
       JOIN #TMP_ORD O ON O.Orderkey  = TD.Orderkey
       WHERE td.Wavekey    = @c_Wavekey
@@ -148,6 +151,7 @@ BEGIN
       OPEN @CUR_DELTASK
 
       FETCH NEXT FROM @CUR_DELTASK INTO @c_TaskDetailKey
+                                       ,@c_RefTaskkey                               --v1.90
 
       WHILE @@FETCH_STATUS = 0 AND @n_Continue = 1
       BEGIN
@@ -220,29 +224,23 @@ BEGIN
                   SET @c_TaskDetailKey = ''
                   SELECT @c_TaskDetailKey =  td.TaskDetailKey 
                   FROM TASKDETAIL td (NOLOCK)
-                  WHERE td.Wavekey    = @c_Wavekey
+                  WHERE td.TaskDetailKey = @c_RefTaskKey                            --v1.90
                   AND   td.TaskType   = 'RPF'
-                  AND   td.Caseid     = ''
                   AND   td.Storerkey  = @c_Storerkey
-                  AND   td.UOM        = '1'
-                  AND   td.FromLoc    = @c_FromLoc
-                  AND   td.FromID     = @c_FromID
                   AND   td.[Status]   = '0'
                   AND   td.SourceType = @c_SourceType
 
                   IF @c_TaskDetailKey > ''
                   BEGIN
-                     IF NOT EXISTS (SELECT 1 
-                                    FROM  PICKDETAIL pd (NOLOCK)
-                                    JOIN  TASKDETAIL td (NOLOCK) ON td.Taskdetailkey = pd.Taskdetailkey
-                                    WHERE pd.Storerkey = @c_Storerkey
-                                    AND   pd.ToLoc     = @c_FromLoc
-                                    AND   pd.[CaseID]  = @c_FromID
-                                    AND   pd.Lot       = @c_FromLot
-                                    AND   pd.Loc       = @c_ToLoc
-                                    AND   pd.ID        = @c_ToID
-                                    AND   pd.[Status]  = '0'
-                                    AND   pd.TaskdetailKey > ''
+                     IF NOT EXISTS (SELECT 1                                        --v1.90         
+                                    FROM TASKDETAIL td (NOLOCK)
+                                    WHERE td.TaskType   = 'FCP'
+                                    AND   td.CaseID     = ''
+                                    AND   td.Storerkey  = @c_Storerkey
+                                    AND   td.Sourcetype = @c_SourceType 
+                                    AND   td.RefTaskkey = @c_RefTaskkey
+                                    AND   td.[Status] IN ('0','S')
+                                    AND   td.FromID     = @c_ToID
                                    )
                      BEGIN
                         DELETE TASKDETAIL WITH (ROWLOCK) 
@@ -276,6 +274,7 @@ BEGIN
             DEALLOCATE @CUR_DELPICK
          END
          FETCH NEXT FROM @CUR_DELTASK INTO @c_TaskDetailKey
+                                          ,@c_RefTaskkey                            --v1.90
       END
       CLOSE @CUR_DELTASK
       DEALLOCATE @CUR_DELTASK

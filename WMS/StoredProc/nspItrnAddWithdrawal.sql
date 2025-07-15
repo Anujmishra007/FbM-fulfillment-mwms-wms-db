@@ -36,6 +36,7 @@ GO
 /* 07-May-2014  TKLIM         Added Lottables 06-15                     */
 /* 06-Oct-2016  TLTING        SET OPTION                                */
 /* 07-Feb-2016  SWT02         Channel Management                        */
+/* 04-JUL-2025  SSA01         UWP-3982- Added PalletType                */
 /************************************************************************/
 
 CREATE PROC [dbo].[nspItrnAddWithdrawal]
@@ -82,6 +83,7 @@ CREATE PROC [dbo].[nspItrnAddWithdrawal]
    , @c_errmsg          NVARCHAR(250)  OUTPUT
    , @c_Channel         NVARCHAR(20)   = '' -- SWT02
    , @n_Channel_ID      BIGINT         = 0  OUTPUT -- SWT02
+   , @c_PalletType   NVARCHAR(10)   = '' -- (SSA01)
 AS
 BEGIN
    SET NOCOUNT ON
@@ -285,6 +287,7 @@ BEGIN
          ,EditDate--SOS 131697         
          ,Channel 
          ,Channel_ID
+         ,PalletType  --(SSA01)
         )
       VALUES
         (
@@ -336,6 +339,7 @@ BEGIN
          ,@d_EditDate--SOS 131697         
          ,@c_Channel -- SWT02
          ,@n_Channel_ID -- SWT02
+         ,@c_PalletType  --(SSA01)
         )
       SELECT @n_err = @@ERROR
       IF @n_err <> 0

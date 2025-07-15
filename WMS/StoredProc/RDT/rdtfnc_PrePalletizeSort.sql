@@ -34,6 +34,7 @@ GO
 /* 2024-11-06   2.1.0 XLL045  FCR-1066  Add cPosition                   */
 /*                            Check UserDefine02 in UCC                 */
 /*                            Upd beforereceivedqty                     */
+/* 2025-06-18   0.0.0 Jackc   !!!Cutover. Use V0 repor for work!!!      */
 /************************************************************************/    
     
 CREATE OR ALTER PROC [RDT].[rdtfnc_PrePalletizeSort] (    

@@ -1,4 +1,3 @@
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -15,9 +14,7 @@ GO
 /*                                                                         */  
 /* Called By: nspOrderProcessing                                           */  
 /*                                                                         */  
-/* PVCS Version: 1.4                                                       */  
-/*                                                                         */  
-/* Version: V2                                                             */  
+/* Version: 2.0                                                            */  
 /*                                                                         */  
 /* Data Modifications:                                                     */  
 /*                                                                         */  
@@ -37,6 +34,10 @@ GO
 /*                           UWP-28329                                     */
 /* 2024-03-03  Wan05    1.9  UWP-30435 - [FCR-2424] [UL-Riyadh] Allocation */
 /*                           strategy for BUD                              */
+/* 2025-06-04  Wan06    2.0  FCR-2902 - MLP Enhancement - Allocate         */
+/*                           Case/Shrink at BULK, Demand Replenishment     */
+/*                           to DPP.                                       */
+/* 2025-06-24  JH01     2.1  UWP-35703 Can't Get AllocateStrategyKey       */ 
 /***************************************************************************/  
 CREATE OR ALTER  PROC [dbo].[mspALMLP01]  
    @c_DocumentNo        NVARCHAR(10)  
@@ -113,6 +114,8 @@ BEGIN
          , @c_FromPickLocFlag                NCHAR(1)       = 'N'                   --(Wan04)
          , @c_FromBulkFlag                   NCHAR(1)       = 'N'                   --(Wan05)
          , @c_AllocateQtyReplenFlag          NCHAR(1)       = 'N'                   --(Wan05)
+
+         , @c_StorerDefaultAllocStrategy     NVARCHAR(10)   = ''                    --(Wan06)
   
    SET @c_Condition = ''  
    SET @n_SkuOutGoingMinShelfLife = 0  
@@ -124,7 +127,7 @@ BEGIN
    SET @c_CLKCondition = ''     --SSA91301  
    SET @c_SkipLottableFilter = ''     --SSA91301  
   
-   EXEC isp_Init_Allocate_Candidates            
+   EXEC isp_Init_Allocate_Candidates  
   
    IF LEN(@c_OtherParms) > 0  
    BEGIN  
@@ -188,14 +191,61 @@ BEGIN
        [UDF05] [nvarchar](60) NULL,  
        [code2] [nvarchar](30) NULL  
        )  
+
+   SELECT @c_StorerDefaultAllocStrategy = 
+   dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'StorerDefaultAllocStrategy')    --(Wan06) - START
+   
+   IF @c_StorerDefaultAllocStrategy = '0' OR @c_StorerDefaultAllocStrategy = NULL   /*JH01*/
+   BEGIN
+      SET @c_StorerDefaultAllocStrategy = ''
+   END
   
-  --Get strategy from sku  
-   SELECT @c_AllocateStrategykey = STRATEGY.AllocateStrategykey  
+   IF ISNULL(@c_Wavekey,'') <> ''  
+   BEGIN  
+      --Get strategy from wave  
+      SELECT @c_AllocateStrategykey = ALS.AllocateStrategyKey  
+      FROM WAVE W (NOLOCK)  
+      JOIN STRATEGY SY (NOLOCK) ON W.Strategykey = SY.Strategykey  
+      JOIN ALLOCATESTRATEGY ALS (NOLOCK) ON SY.AllocateStrategyKey = ALS.AllocateStrategyKey  
+      AND W.Wavekey = @c_Wavekey  
+      AND W.Strategykey <> ''  
+   END        
+     
+   IF ISNULL(@c_AllocateStrategykey,'') = '' AND ISNULL(@c_Loadkey,'') <> ''    /*JH01*/  
+   BEGIN  
+        --Get strategy from load defaultstrategykey  
+        SELECT TOP 1 @c_AllocateStrategykey = ALS.AllocateStrategyKey          
+        FROM LOADPLAN LP (NOLOCK)  
+        JOIN LOADPLANDETAIL LPD (NOLOCK) ON LP.Loadkey = LPD.Loadkey  
+        JOIN ORDERS O (NOLOCK) ON LPD.Orderkey = O.Orderkey  
+        JOIN STORER S (NOLOCK) ON O.Storerkey = S.Storerkey  
+        JOIN STRATEGY SY (NOLOCK) ON S.Strategykey = SY.Strategykey  
+        JOIN ALLOCATESTRATEGY ALS (NOLOCK) ON SY.AllocateStrategyKey = ALS.AllocateStrategyKey  
+        AND LP.Loadkey = @c_Loadkey  
+        AND LP.DefaultStrategykey = 'Y'  
+        AND S.Strategykey <> ''  
+        AND S.Strategykey IS NOT NULL  
+   END           
+     
+   IF ISNULL(@c_AllocateStrategykey,'') = '' AND @c_StorerDefaultAllocStrategy <> ''    /*JH01*/ 
+   BEGIN  
+      --Get strategy from storerconfig StorerDefaultAllocStrategy  
+      SELECT @c_AllocateStrategykey = ALS.AllocateStrategyKey  
+      FROM STRATEGY SY (NOLOCK)  
+      JOIN ALLOCATESTRATEGY ALS (NOLOCK) ON SY.AllocateStrategyKey = ALS.AllocateStrategyKey  
+      WHERE SY.Strategykey = @c_StorerDefaultAllocStrategy        
+   END  
+
+   IF ISNULL(@c_AllocateStrategykey,'') = ''                                           /*JH01*/ 
+   BEGIN
+     --Get strategy from sku  
+      SELECT @c_AllocateStrategykey = STRATEGY.AllocateStrategykey  
       FROM SKU (NOLOCK)  
       JOIN STRATEGY (NOLOCK) ON SKU.Strategykey = STRATEGY.Strategykey  
       WHERE SKU.Storerkey = @c_Storerkey  
-      AND SKU.Sku = @c_Sku  
-  
+      AND SKU.Sku = @c_Sku                   
+   END                                                                              --(Wan06) - END
+
    IF EXISTS(  SELECT 1 FROM ALLOCATESTRATEGYDETAIL (NOLOCK)                        --(Wan04) - START  
                WHERE LocationTypeOverride IN ('PICK','CASE')    
                AND AllocateStrategyKey = @c_AllocateStrategykey  
@@ -203,7 +253,7 @@ BEGIN
    BEGIN  
       SET @c_OverAllocateFlag = 'Y'     
    END                                                                              --(Wan04) - END  
-  
+
    INSERT INTO @TMP_CODELKUP (Listname, Code, Description, Short, Long, Notes, Notes2, Storerkey, UDF01, UDF02, UDF03, UDF04, UDF05, Code2)  
    SELECT CODELKUP.Listname,  
           CODELKUP.Code,  
@@ -219,10 +269,14 @@ BEGIN
           CODELKUP.UDF04,  
           CODELKUP.UDF05,  
           CODELKUP.Code2  
-   FROM CODELKUP (NOLOCK)  
+   FROM CODELKUP (NOLOCK) 
+   LEFT OUTER JOIN STORER st (NOLOCK) ON st.Storerkey = CODELKUP.Storerkey          --(Wan06)              
    WHERE CODELKUP.Listname = 'mspALMLP01'  
-   AND CODELKUP.Storerkey = CASE WHEN CODELKUP.Short = @c_AllocateStrategykey AND CODELKUP.Storerkey = '' THEN CODELKUP.Storerkey ELSE @c_Storerkey END --if setup short and no setup storer ignore storer otherwise by storer.  
-   AND CODELKUP.Short IN ( CASE WHEN CODELKUP.Short NOT IN (NULL,'') THEN @c_AllocateStrategykey ELSE CODELKUP.Short END ) --if short setup must match Allocate strategykey  
+   AND CODELKUP.Storerkey = CASE WHEN CODELKUP.Short = @c_AllocateStrategykey AND   --if setup short and no setup storer 
+                                      st.Storerkey IS NULL                          --ignore storer otherwise by storer.  
+                                 THEN CODELKUP.Storerkey ELSE @c_Storerkey END                              
+   AND CODELKUP.Short IN  ( CASE WHEN CODELKUP.Short NOT IN (NULL,'') 
+                                 THEN @c_AllocateStrategykey ELSE CODELKUP.Short END)--if short setup must match Allocate strategykey  
    AND Code2 IN (@c_UOM,'')  
 
    --Get Shelflife  
@@ -253,7 +307,7 @@ BEGIN
 
    SELECT TOP 1 @c_FromBulkFlag =  UDF01                                            --(Wan05) - START
    FROM @TMP_CODELKUP
-   WHERE Code = 'FROMBULKLOC' --allocation from pick location only. default is all location type.
+   WHERE Code = 'FROMBULKLOC' --allocation from bulk only. default is all location type.
    AND Code2 IN (@c_UOM,'')
    ORDER BY CASE WHEN Code2 = @c_UOM THEN 0 ELSE 1 END                              --(Wan05) - END
 
@@ -483,7 +537,7 @@ BEGIN
                               + ' OR Lottable04 IS NULL OR CONVERT(char(10), Lottable04, 103) = ''01/01/1900'')'                                  
          END  
          ELSE IF @c_ShelfLifeFlag = 'M'  
-  BEGIN  
+         BEGIN  
              SET @c_Condition = ISNULL(RTRIM(@c_Condition),'') + ' AND ( DATEDIFF(day, LOTTABLE04, GETDATE()) <= @n_SkuOutGoingMinShelfLife'    
                                  + ' OR Lottable04 IS NULL OR CONVERT(char(10), Lottable04, 103) = ''01/01/1900'')'                                  
          END  
@@ -577,7 +631,7 @@ BEGIN
            ,@n_UOMBase        
            ,@n_QtyLeftToFulfill     
            ,@c_Orderkey  
-         ,@c_OrderLineNumber    
+           ,@c_OrderLineNumber    
            ,@c_Loadkey     
            ,@c_Wavekey      
            ,@c_Lottable01                                       
@@ -797,7 +851,7 @@ BEGIN
                END  
             END                       
          END  
-  
+
          IF @n_QtyToTake > 0  
          BEGIN  
             UPDATE #TMP_LOT  
@@ -919,3 +973,6 @@ BEGIN
       DEALLOCATE CURSOR_AVAILABLECFG  
    END  
 END  
+GO
+GRANT EXECUTE ON  [dbo].[mspALMLP02] TO [NSQL]
+GO

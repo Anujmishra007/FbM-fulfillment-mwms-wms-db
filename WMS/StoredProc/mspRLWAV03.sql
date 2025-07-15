@@ -12,7 +12,7 @@ GO
 /*                                                                      */
 /* Called By: Wave                                                      */
 /*                                                                      */
-/* GitHub Version: 2.9                                                  */
+/* GitHub Version: 5.0                                                  */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -83,6 +83,9 @@ GO
 /* 26-May-2025 SWT11     4.6 Do not insert RPF Task when Drop ID Exists */
 /* 29-May-2025 SWT12     4.7 UWP-35196 Change CheckDigit from MOD10 to  */
 /*                           GS1                                        */
+/* 11-Jun-2025 WLC015    4.9 UWP-35878 Validate UCC Qty (WL11)          */
+/* 26-Jun-2025 WLC015    5.0 UWP-36753 Do not update Pickdetail if skip */ 
+/*                           insert task (WL12)                         */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[mspRLWAV03]
    @c_WaveKey NVARCHAR(10)
@@ -412,25 +415,7 @@ BEGIN
                          +': PND Location is currently being used by another Wave. (mspRLWAV03)'     
             GOTO QUIT_SP             
          END
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
       END
-
       ELSE
       BEGIN
          SET @C_Replenishmentkey ='' --Yung
@@ -3241,6 +3226,7 @@ BEGIN
             SET @c_ToLocCategory = ''
             SET @c_ToPAZone      = ''  
             SET @c_FinalLoc      = ''
+            SET @b_InsertTask    = 1   --WL12 
                                   
             IF @c_UOM = '2'
             BEGIN
@@ -3414,103 +3400,113 @@ BEGIN
                             AND FromLoc = @c_FromLoc)
                   BEGIN
                      SET @b_InsertTask = 0
-                     SELECT @b_InsertTask [InsertTaskFlag]
-                  END                             
-                     
-                            
+                  END
+
                   SELECT @n_PickdetQty = SUM(UCC.Qty) 
                   FROM UCC (NOLOCK)
                   WHERE UCC.Storerkey = @c_Storerkey
                   AND   UCC.UCCNo = @c_DropID
                   AND   UCC.[Status] = '3'
+
+                  --WL11 S
+                  IF ISNULL(@n_PickdetQty, 0) = 0
+                  BEGIN
+                     SET @n_continue = 3
+                     SET @n_err = 82035
+                     SET @c_errmsg = 'NSQL' + CONVERT(char(6), @n_err) 
+                                    + ': Cannot get UCC qty for RPF task.'
+                                    + ' Please check if UCC# ' + TRIM(@c_DropID) + ' exists. (mspRLWAV03)'
+                     GOTO QUIT_SP
+                  END
+                  --WL11 E
                END
 
                -- (SWT11) 
                IF @b_InsertTask= 1
                BEGIN
-               SET @b_success = 1
-               EXECUTE dbo.nspg_Getkey
-                  @KeyName       = 'TaskDetailKey'
-               ,  @fieldlength   =  10
-               ,  @keystring     =  @c_TaskdetailKey OUTPUT
-               ,  @b_Success     =  @b_success       OUTPUT
-               ,  @n_err         =  @n_err           OUTPUT
-               ,  @c_errmsg      =  @c_errmsg        OUTPUT
-
-               IF @b_success <> 1
-               BEGIN
-                  SET @n_continue = 3
-               END  
-               
-               IF @n_continue = 1
-               BEGIN
-                  SET @c_RefTaskkey = ''
-                  IF @c_ToLoc <> @c_FinalLoc AND @c_FinalLoc > ''
-                  BEGIN
-                     SET @c_RefTaskkey = @c_TaskdetailKey
-                  END
-
-                  SET @n_PendingMoveIn = 0
-                  IF @c_TaskType = 'RPF' 
-                  BEGIN
-                     SET @n_PendingMoveIn = @n_PickdetQty
-                  END
-
-                  INSERT dbo.TASKDETAIL
-                        ( TaskDetailKey, TaskType, Storerkey, Sku, Lot
-                        , UOM, UOMQty, Qty, FromLoc, LogicalFromLoc, FromID, ToLoc, LogicalToLoc
-                        , ToId, SourceType, SourceKey, Caseid, Priority
-                        , SourcePriority, OrderKey, OrderLineNumber, PickDetailKey
-                        , PickMethod, STATUS, WaveKey, Areakey
-                        , Message01, SystemQty, PendingMoveIn, FinalLoc, GroupKey, RefTaskKey)  
-                  VALUES (
-                    @c_TaskDetailKey
-                  , @c_TaskType
-                  , @c_Storerkey
-                  , @c_Sku
-                  , @c_Lot -- Lot,
-                  , @c_UOM -- UOM
-                  , @n_PickdetQty  -- UOMQty,
-                  , @n_PickdetQty
-                  , @c_Fromloc
-                  , @c_FromLogicalLoc
-                  , @c_ID
-                  , @c_ToLoc
-                  , @c_ToLoc
-                  , @c_ID
-                  , @c_SourceType
-                  , '' --SourceKey
-                  , CASE WHEN @c_DropId = '' THEN @c_LabelNo ELSE @c_DropId END     --(Wan02) Fixed
-                  , '5' -- Priority
-                  , '9' -- SourcePriority
-                  , '' -- Orderkey,
-                  , '' -- OrderLineNumber
-                  , '' -- PickDetailKey
-                  , @c_PickMethod_TD
-                  , @c_TaskStatus  --Status
-                  , @c_WaveKey
-                  , @c_AreaKey
-                  , ''
-                  , @n_PickdetQty
-                  , @n_PendingMoveIn
-                  , @c_FinalLoc      
-                  , ''
-                  , @c_RefTaskkey
-                  )  
-
-                  SET @n_err = @@ERROR
-                  IF @n_err <> 0
+                  SET @b_success = 1
+                  EXECUTE dbo.nspg_Getkey
+                     @KeyName       = 'TaskDetailKey'
+                  ,  @fieldlength   =  10
+                  ,  @keystring     =  @c_TaskdetailKey OUTPUT
+                  ,  @b_Success     =  @b_success       OUTPUT
+                  ,  @n_err         =  @n_err           OUTPUT
+                  ,  @c_errmsg      =  @c_errmsg        OUTPUT
+   
+                  IF @b_success <> 1
                   BEGIN
                      SET @n_continue = 3
-                     SET @c_ErrMsg = CONVERT(CHAR(250), @n_err)
-                     SET @n_err = 82015
-                     SET @c_ErrMsg = 'NSQL'+CONVERT(CHAR(5) ,@n_err) + ': Insert Into TaskDetail Failed (mspRLWAV03)'  
-                                    +    ' ( '+' SQLSvr MESSAGE= ' + @c_ErrMsg + ' ) '
+                  END  
+                  
+                  IF @n_continue = 1
+                  BEGIN
+                     SET @c_RefTaskkey = ''
+                     IF @c_ToLoc <> @c_FinalLoc AND @c_FinalLoc > ''
+                     BEGIN
+                        SET @c_RefTaskkey = @c_TaskdetailKey
+                     END
+   
+                     SET @n_PendingMoveIn = 0
+                     IF @c_TaskType = 'RPF' 
+                     BEGIN
+                        SET @n_PendingMoveIn = @n_PickdetQty
+                     END
+   
+                     INSERT dbo.TASKDETAIL
+                           ( TaskDetailKey, TaskType, Storerkey, Sku, Lot
+                           , UOM, UOMQty, Qty, FromLoc, LogicalFromLoc, FromID, ToLoc, LogicalToLoc
+                           , ToId, SourceType, SourceKey, Caseid, Priority
+                           , SourcePriority, OrderKey, OrderLineNumber, PickDetailKey
+                           , PickMethod, STATUS, WaveKey, Areakey
+                           , Message01, SystemQty, PendingMoveIn, FinalLoc, GroupKey, RefTaskKey)  
+                     VALUES (
+                       @c_TaskDetailKey
+                     , @c_TaskType
+                     , @c_Storerkey
+                     , @c_Sku
+                     , @c_Lot -- Lot,
+                     , @c_UOM -- UOM
+                     , @n_PickdetQty  -- UOMQty,
+                     , @n_PickdetQty
+                     , @c_Fromloc
+                     , @c_FromLogicalLoc
+                     , @c_ID
+                     , @c_ToLoc
+                     , @c_ToLoc
+                     , @c_ID
+                     , @c_SourceType
+                     , '' --SourceKey
+                     , CASE WHEN @c_DropId = '' THEN @c_LabelNo ELSE @c_DropId END     --(Wan02) Fixed
+                     , '5' -- Priority
+                     , '9' -- SourcePriority
+                     , '' -- Orderkey,
+                     , '' -- OrderLineNumber
+                     , '' -- PickDetailKey
+                     , @c_PickMethod_TD
+                     , @c_TaskStatus  --Status
+                     , @c_WaveKey
+                     , @c_AreaKey
+                     , ''
+                     , @n_PickdetQty
+                     , @n_PendingMoveIn
+                     , @c_FinalLoc      
+                     , ''
+                     , @c_RefTaskkey
+                     )  
+   
+                     SET @n_err = @@ERROR
+                     IF @n_err <> 0
+                     BEGIN
+                        SET @n_continue = 3
+                        SET @c_ErrMsg = CONVERT(CHAR(250), @n_err)
+                        SET @n_err = 82015
+                        SET @c_ErrMsg = 'NSQL'+CONVERT(CHAR(5) ,@n_err) + ': Insert Into TaskDetail Failed (mspRLWAV03)'  
+                                       +    ' ( '+' SQLSvr MESSAGE= ' + @c_ErrMsg + ' ) '
+                     END
                   END
                END
-						END
 
-               IF @n_Continue IN (1, 2)
+               IF @n_Continue IN (1, 2) AND @b_InsertTask = 1   --WL12 
                BEGIN
                   DECLARE CUR_UDPATEPD CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
                   SELECT P.PickDetailKey

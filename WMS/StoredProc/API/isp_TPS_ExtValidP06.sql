@@ -75,8 +75,8 @@ BEGIN
       IF @cBarcode LIKE @cQRCodeValid
       BEGIN     
          SET @b_Success = 0    
-         SET @n_Err = 1001501    
-         SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'1000701 Err Scan QRCode : isp_TPS_ExtValidP06'  
+         SET @n_Err = 1001901    
+         SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Err Scan QRCode : isp_TPS_ExtValidP06'  
          GOTO QUIT  
       END  
 
@@ -92,7 +92,7 @@ BEGIN
                   AND Barcode = @cBarcode)
    BEGIN
       SET @b_Success = 0    
-      SET @n_Err = 1001502    
+      SET @n_Err = 1001902    
       SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'1000702 Duplicate QRCode : isp_TPS_ExtValidP06'  
       GOTO QUIT  
    END
