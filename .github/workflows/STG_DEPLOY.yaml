@@ -260,7 +260,7 @@ jobs:
                 throw " ⚠️ there are no *.sql files for deployment"
                 }
               }
-              $SDRWMS_changed_files = git diff --name-only $SDRWMS_DB_CURRENT_VERSION ${{ github.ref_name }} -- ':SDRWMS/*.sql' | Out-String
+              $SDRWMS_changed_files = git diff --name-only $SDRWMS_DB_CURRENT_VERSION ${{ github.ref_name }} -- ':*.sql' | Out-String
               $SDRWMS_changed_files_list = $SDRWMS_changed_files -split '\r?\n' | Where-Object { $_ -ne '' }
               $SDRWMS_changed_files_string = $SDRWMS_changed_files_list -join ","
 
