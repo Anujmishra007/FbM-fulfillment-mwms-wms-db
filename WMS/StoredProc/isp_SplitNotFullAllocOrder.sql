@@ -127,7 +127,7 @@ BEGIN
          	UserDefine10, Issued,	DeliveryNote, PODCust, PODArrive, PODReject, PODUser, xdockpokey,
          	SpecialHandling, RoutingTool,	MarkforKey,	M_Contact1,	M_Contact2,	M_Company, M_Address1, M_Address2,
          	M_Address3,	M_Address4,	M_City, M_State, M_Zip, M_Country, M_ISOCntryCode, M_Phone1, M_Phone2,
-         	M_Fax1, M_Fax2, M_vat, ShipperKey, DocType, TrackingNo 
+         	M_Fax1, M_Fax2, M_vat, ShipperKey, DocType, TrackingNo, Ecom_Platform
          	-- AddDate, AddWho, EditDate, EditWho, TrafficCop, ArchiveCop, SOStatus, [Status], LoadKey,  PrintFlag, MBOLKey, UserDefine09
          )
          SELECT @c_neworderkey, StorerKey,	ExternOrderKey, OrderDate,	DeliveryDate, Priority,	ConsigneeKey, C_contact1,
@@ -145,7 +145,7 @@ BEGIN
          	      UserDefine10, Issued,	DeliveryNote, PODCust, PODArrive, PODReject, PODUser, xdockpokey,
          	      SpecialHandling, RoutingTool,	MarkforKey,	M_Contact1,	M_Contact2,	M_Company, M_Address1, M_Address2,
          	      M_Address3,	M_Address4,	M_City, M_State, M_Zip, M_Country, M_ISOCntryCode, M_Phone1, M_Phone2,
-         	      M_Fax1, M_Fax2, M_vat, ShipperKey, DocType, @c_orderkey
+         	      M_Fax1, M_Fax2, M_vat, ShipperKey, DocType, @c_orderkey, Ecom_Platform
          	FROM ORDERS (NOLOCK) 
          	WHERE Orderkey = @c_orderkey
 
@@ -226,7 +226,7 @@ BEGIN
 		    END		    		    
         
         UPDATE ORDERS WITH (ROWLOCK)
-        SET OrderGroup = @c_orderkey,
+        SET OrderGroup = OrderGroup,
             TrafficCop = NULL,
             openqty = (SELECT SUM(OD.Openqty) FROM ORDERDETAIL OD (NOLOCK) WHERE OD.Orderkey = @c_neworderkey)
         WHERE Orderkey = @c_neworderkey
