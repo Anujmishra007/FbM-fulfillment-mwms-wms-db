@@ -12,7 +12,7 @@ GO
 /*                                                                      */
 /* Called By: Wave                                                      */
 /*                                                                      */
-/* GitHub Version: 5.0                                                  */
+/* GitHub Version: 5.1                                                  */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -86,6 +86,8 @@ GO
 /* 11-Jun-2025 WLC015    4.9 UWP-35878 Validate UCC Qty (WL11)          */
 /* 26-Jun-2025 WLC015    5.0 UWP-36753 Do not update Pickdetail if skip */ 
 /*                           insert task (WL12)                         */
+/* 15-Jul-2025 WLC015    5.1 UWP-37739 Filter MPOCFlag when updating    */ 
+/*                           Ordergroup (WL13)                          */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[mspRLWAV03]
    @c_WaveKey NVARCHAR(10)
@@ -620,60 +622,6 @@ BEGIN
          DEALLOCATE CUR_MPOCFLAG
       END -- IF @n_continue IN(1,2)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
       --AYD01 UWP-32643 START
       --Order sku info
       INSERT INTO #ORDERSKU (Orderkey, Storerkey, Sku, TotalQty, TotalCube, TotalQtyPacked, TotalCubePacked, StdCube, Length, Width, Height, OrderGroup, MasterShipmentID)
@@ -871,10 +819,12 @@ BEGIN
             SET OS.OrderGroup='M' + @c_MPOCOrder
             FROM #ORDERSKU OS 
             JOIN dbo.ORDERS O WITH (NOLOCK) ON OS.Orderkey = O.OrderKey
+            JOIN #OrderGroup OG WITH (NOLOCK) ON OS.Orderkey = OG.OrderKey   --WL13
             WHERE OS.OrderGroup=''
             AND O.ConsigneeKey = @c_ConsigneeKey 
             AND O.BillToKey  = @c_BillToKey
-            AND O.MarkforKey = @c_MarkforKey            
+            AND O.MarkforKey = @c_MarkforKey
+            AND OG.MPOCFlag <> '0'   --WL13
             
             UPDATE OG
             SET OG.OrderGroup='M' + @c_MPOCOrder
@@ -883,7 +833,8 @@ BEGIN
             WHERE OG.OrderGroup=''
             AND O.ConsigneeKey = @c_ConsigneeKey 
             AND O.BillToKey  = @c_BillToKey
-            AND O.MarkforKey = @c_MarkforKey            
+            AND O.MarkforKey = @c_MarkforKey
+            AND OG.MPOCFlag <> '0'   --WL13            
          END
 
          FETCH NEXT FROM CUR_MPOC_GROUP INTO @c_ConsigneeKey, @c_BillToKey, @c_MarkforKey
