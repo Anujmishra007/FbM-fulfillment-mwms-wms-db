@@ -31,7 +31,7 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 2025-05-20  Wan      1.0   UWP-32707 - FCR-3957 - JCB Putaway Using  */
-/* 2025-07-15                 TM SCE                                    */
+/* 2025-07-16                 TM SCE                                    */
 /************************************************************************/
 
 CREATE OR ALTER PROC dbo.mspPARL01
@@ -832,7 +832,7 @@ BEGIN
             
             SELECT TOP 1 
                    @c_Putawayzone   = l.PutawayZone
-                  ,@c_LocationGroup = l.LocationGroup
+                  ,@c_LocationGroup = ISNULL(l.LocationGroup,'')                    --2025-07-16
                   ,@c_LocationCategory = l.LocationCategory
             FROM dbo.LOC l (NOLOCK)
             WHERE Loc = @c_ToLoc
