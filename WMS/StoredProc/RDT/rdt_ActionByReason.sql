@@ -11,6 +11,7 @@ GO
 /* Date       Rev  Author     Purposes                                  */  
 /* 2024-07-14 1.0    JHU151   FCR-428. Created                          */  
 /* 2024-11-08 1.1    YYS027   FCR-989 use @cFunc instead of @nFunc      */
+/* 2025-07-15 1.2.0  NickT    FCR-4885 Release LOC after CC complete    */
 /************************************************************************/  
 CREATE OR ALTER PROC [RDT].[rdt_ActionByReason] (
    @nMobile          INT,           
@@ -40,24 +41,26 @@ BEGIN
       @cCCKey            NVARCHAR(10),
       @cCCTaskType       NVARCHAR(60),
       @cHoldCheckFlg     NVARCHAR(60),
+      @cReleaseCheckFlg  NVARCHAR(60),
       @cHoldType         NVARCHAR(60),
       @cPickDetailKey    NVARCHAR(50) = '',
       @cOrderKey         NVARCHAR(10) = '',
       @cLoadKey          NVARCHAR(10) = '',
-      @cZone             NVARCHAR(18) = ''
-   DECLARE 
-      @cFunc             NVARCHAR(20)      
-         
+      @cZone             NVARCHAR(18) = '',
+      @cFunc             NVARCHAR(20)
+
    SELECT @cFunc = CONVERT(NVARCHAR(20),@nFunc)
+
    SELECT 
       @cCCTaskType = UDF01,-- CC task type
       @cHoldType = UDF02, -- Hold type
-      @cHoldCheckFlg = CASE WHEN ISNULL(UDF03,'') = 'X' THEN '1' ELSE '0' END
-   FROM codelkup 
+      @cHoldCheckFlg = CASE WHEN ISNULL(UDF03,'') = 'X' THEN '1' ELSE '0' END,
+      @cReleaseCheckFlg = CASE WHEN ISNULL(UDF04,'') = 'X' THEN '1' ELSE '0' END
+   FROM dbo.CODELKUP WITH(NOLOCK)
    WHERE listname = 'RDTREASON'
-   AND code = @cFunc
-   AND code2 = @cReasonCode
-   AND storerkey = @cStorerKey
+      AND code = @cFunc
+      AND code2 = @cReasonCode
+      AND storerkey = @cStorerKey
 
    IF @@ROWCOUNT = 0
    BEGIN
@@ -111,9 +114,9 @@ BEGIN
          ,Message01,Message02,Message03,RefTaskKey,LoadKey,AreaKey,DropID, SystemQty)
          SELECT 
          @cTaskDetailKeyCC,@cCCTaskType,@cStorerKey,@cSKU,'','',0,0,@cLoc,'','','',''
-         ,'','','SKU','0','','1','1','','','',''
+         ,'','','SKU','0','','1','1', IIF(@cReleaseCheckFlg = '1', 'UNHOLD', ''),'','',''
          ,GetDATE(),GetDATE(),'rdt_ActionByReason',@cCCKey,'','','','','',''
-         ,'','','','','','', '', 0
+         ,IIF(@cReleaseCheckFlg = '1', @cHoldType, ''),'','','','','', '', 0
          
 
          IF @@ERROR <> 0
