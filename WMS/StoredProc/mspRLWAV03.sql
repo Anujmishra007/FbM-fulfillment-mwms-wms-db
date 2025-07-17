@@ -12,7 +12,7 @@ GO
 /*                                                                      */
 /* Called By: Wave                                                      */
 /*                                                                      */
-/* GitHub Version: 5.1                                                  */
+/* GitHub Version: 5.2                                                  */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -88,6 +88,7 @@ GO
 /*                           insert task (WL12)                         */
 /* 15-Jul-2025 WLC015    5.1 UWP-37739 Filter MPOCFlag when updating    */ 
 /*                           Ordergroup (WL13)                          */
+/* 17-Jul-2025 WLC015    5.2 UWP-35381 Update RPF FinalLoc = blank(WL14)*/
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[mspRLWAV03]
    @c_WaveKey NVARCHAR(10)
@@ -3711,6 +3712,22 @@ BEGIN
       DEALLOCATE CUR_ASTCPK_TASK
    END
 
+   --WL14 S
+   --Update other RPF TaskDetail Final Location to Blank 
+   IF EXISTS ( SELECT 1 
+               FROM TASKDETAIL TD (NOLOCK)
+               WHERE TD.TaskType = 'RPF'
+               AND (TD.FinalLoc IS NULL OR TD.FinalLoc <> '')
+               AND TD.WaveKey = @c_Wavekey )
+   BEGIN 
+      UPDATE TASKDETAIL WITH (ROWLOCK)
+         SET FinalLoc = ''
+           , TrafficCop = ''
+      WHERE TaskType = 'RPF'
+      AND (FinalLoc IS NULL OR FinalLoc <> '')
+      AND WaveKey = @c_Wavekey
+   END
+   --WL14 E
 
    -----Update pickdetail_WIP work in progress staging table back to pickdetail    
    IF @n_continue IN(1,2)
