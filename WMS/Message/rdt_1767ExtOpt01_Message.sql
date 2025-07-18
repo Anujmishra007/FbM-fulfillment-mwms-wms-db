@@ -6,7 +6,8 @@ execute rdt.rdtAddMsg 241752, 10, '241752 Ins AdjHdr Er',   'us_english', 1767
 execute rdt.rdtAddMsg 241753, 10, '241753 Ins AdjDtl Er',   'us_english', 1767
 execute rdt.rdtAddMsg 241754, 10, '241754 FinalizeAdJEr',   'us_english', 1767
 execute rdt.rdtAddMsg 241755, 10, '241755 Upd TaskDt Er',   'us_english', 1767
-execute rdt.rdtAddMsg 241756, 10, '241756 FinalizeCCDEr',   'us_english', 1767
+execute rdt.rdtAddMsg 241756, 10, '241756 UPD ALERT Err',   'us_english', 1767
+execute rdt.rdtAddMsg 241757, 10, '241757 FinalizeCCDEr',   'us_english', 1767
 
 SELECT * FROM RDT.RDTMSG (NOLOCK) WHERE MESSAGE_ID BETWEEN 241751 AND 241800
 
