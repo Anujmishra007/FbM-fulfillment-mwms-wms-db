@@ -20,9 +20,6 @@ EXECUTE rdt.rdtAddScn 6633, 'ENG'
    ,@nFunc = 684
    ,@cWebGroup = '{"1":["1"],"2":["2"],"3":["3","4","5","6","7","8","9","10","11","12","13"]}'
 
-INSERT INTO rdt.RDTSCNHeader (scn, scndescr, lang_code, adddate, addwho, editddate, editwho)
-VALUES (6633, 'JCB receipt', 'ENG', GETDATE(), 'PPA374', GETDATE(), 'PPA374')
-
 --
 DELETE rdt.RDTScn WHERE Scn = 6632 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 6632, 'ENG'
@@ -36,9 +33,6 @@ EXECUTE rdt.rdtAddScn 6632, 'ENG'
    ,@cLine14 = '%e'
    ,@nFunc = 684
 
-INSERT INTO rdt.RDTSCNHeader (scn, scndescr, lang_code, adddate, addwho, editddate, editwho)
-VALUES (6632, 'JCB receipt', 'ENG', GETDATE(), 'PPA374', GETDATE(), 'PPA374')
-
 --
 DELETE rdt.RDTScn WHERE Scn = 6634 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 6634, 'ENG'
@@ -51,9 +45,6 @@ EXECUTE rdt.rdtAddScn 6634, 'ENG'
    ,@nFunc = 684
    ,@cWebGroup = '{"1":["1"],"2":["2"],"3":["4","5"]}'
 
-   INSERT INTO rdt.RDTSCNHeader (scn, scndescr, lang_code, adddate, addwho, editddate, editwho)
-   VALUES (6634, 'JCB receipt', 'ENG', GETDATE(), 'PPA374', GETDATE(), 'PPA374')
-
 --
 DELETE rdt.RDTScn WHERE Scn = 6635 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 6635, 'ENG'
@@ -64,9 +55,6 @@ EXECUTE rdt.rdtAddScn 6635, 'ENG'
    ,@nFunc = 684
    ,@cWebGroup = '{"1":["1","2"],"2":["3"]}'
 
-   INSERT INTO rdt.RDTSCNHeader (scn, scndescr, lang_code, adddate, addwho, editddate, editwho)
-   VALUES (6635, 'JCB receipt', 'ENG', GETDATE(), 'PPA374', GETDATE(), 'PPA374')
-   
  --
  DELETE rdt.RDTScn WHERE Scn = 6638 AND Lang_Code = 'ENG'
  EXECUTE rdt.rdtAddScn 6638, 'ENG'
@@ -83,9 +71,6 @@ EXECUTE rdt.rdtAddScn 6635, 'ENG'
    ,@cLine14 = '%e'
    ,@nFunc = 684
    ,@cWebGroup = '{"1":["1","2"],"2":["3","4"],"3":["5","6"],"4":["7","8"],"5":["9","10"]}'
-
-   INSERT INTO rdt.RDTSCNHeader (scn, scndescr, lang_code, adddate, addwho, editddate, editwho)
-   VALUES (6638, 'JCB receipt', 'ENG', GETDATE(), 'PPA374', GETDATE(), 'PPA374')
  
  --
  DELETE rdt.RDTScn WHERE Scn = 6637 AND Lang_Code = 'ENG'
@@ -103,9 +88,6 @@ EXECUTE rdt.rdtAddScn 6635, 'ENG'
    ,@nFunc = 684
    ,@cWebGroup = '{"1":["1","2"],"2":["4","5"]}'
 
-   INSERT INTO rdt.RDTSCNHeader (scn, scndescr, lang_code, adddate, addwho, editddate, editwho)
-   VALUES (6637, 'JCB receipt', 'ENG', GETDATE(), 'PPA374', GETDATE(), 'PPA374')
-   
  --
  DELETE rdt.RDTScn WHERE Scn = 6636 AND Lang_Code = 'ENG'
  EXECUTE rdt.rdtAddScn 6636, 'ENG'
@@ -116,9 +98,6 @@ EXECUTE rdt.rdtAddScn 6635, 'ENG'
    ,@nFunc = 684
    ,@cWebGroup = '{"1":["1"],"2":["2","3"]}'
 
-   INSERT INTO rdt.RDTSCNHeader (scn, scndescr, lang_code, adddate, addwho, editddate, editwho)
-   VALUES (6636, 'JCB receipt', 'ENG', GETDATE(), 'PPA374', GETDATE(), 'PPA374')
-   
 --
 DELETE rdt.RDTScn WHERE Scn = 6639 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 6639, 'ENG'
@@ -139,9 +118,6 @@ EXECUTE rdt.rdtAddScn 6639, 'ENG'
    ,@nFunc = 684
    ,@cWebGroup = '{"1":["1","2","3","4"],"2":["5","6"],"3":["8","9"],"4":["11"],"5":["13"]}'
 
-   INSERT INTO rdt.RDTSCNHeader (scn, scndescr, lang_code, adddate, addwho, editddate, editwho)
-   VALUES (6639, 'JCB receipt', 'ENG', GETDATE(), 'PPA374', GETDATE(), 'PPA374')
-   
 --
 DELETE rdt.RDTScn WHERE Scn = 6640 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 6640, 'ENG'
@@ -154,9 +130,6 @@ EXECUTE rdt.rdtAddScn 6640, 'ENG'
    ,@cLine14 = '%e'
    ,@nFunc = 684
 
-   INSERT INTO rdt.RDTSCNHeader (scn, scndescr, lang_code, adddate, addwho, editddate, editwho)
-   VALUES (6640, 'JCB receipt', 'ENG', GETDATE(), 'PPA374', GETDATE(), 'PPA374')
-   
 --
 DELETE rdt.RDTScn WHERE Scn = 6642 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 6642, 'ENG'
@@ -176,9 +149,6 @@ EXECUTE rdt.rdtAddScn 6642, 'ENG'
    ,@cLine14 = '%e'
    ,@nFunc = 684
 
-   INSERT INTO rdt.RDTSCNHeader (scn, scndescr, lang_code, adddate, addwho, editddate, editwho)
-   VALUES (6642, 'JCB receipt', 'ENG', GETDATE(), 'PPA374', GETDATE(), 'PPA374')
-   
 --
 DELETE rdt.RDTScn WHERE Scn = 6641 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 6641, 'ENG'
@@ -192,9 +162,6 @@ EXECUTE rdt.rdtAddScn 6641, 'ENG'
    ,@cLine14 = '%e'
    ,@nFunc = 684
 
-   INSERT INTO rdt.RDTSCNHeader (scn, scndescr, lang_code, adddate, addwho, editddate, editwho)
-   VALUES (6641, 'JCB receipt', 'ENG', GETDATE(), 'PPA374', GETDATE(), 'PPA374')
-   
 --
 DELETE rdt.RDTScn WHERE Scn = 6643 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 6643, 'ENG'
@@ -215,9 +182,6 @@ EXECUTE rdt.rdtAddScn 6643, 'ENG'
    ,@nFunc = 684
    ,@cWebGroup = '{"1":["3","4","5","6","7","8","9","10","11"],"2":["13"]}'
 
-   INSERT INTO rdt.RDTSCNHeader (scn, scndescr, lang_code, adddate, addwho, editddate, editwho)
-   VALUES (6643, 'JCB receipt', 'ENG', GETDATE(), 'PPA374', GETDATE(), 'PPA374')
-   
 --
 DELETE rdt.RDTScn WHERE Scn = 6644 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 6644, 'ENG'
@@ -231,9 +195,6 @@ EXECUTE rdt.rdtAddScn 6644, 'ENG'
    ,@cLine14 = '%e'
    ,@nFunc = 684
    ,@cWebGroup = '{"1":["3","4"],"2":["6","7"]}'
-
-   INSERT INTO rdt.RDTSCNHeader (scn, scndescr, lang_code, adddate, addwho, editddate, editwho)
-   VALUES (6644, 'JCB receipt', 'ENG', GETDATE(), 'PPA374', GETDATE(), 'PPA374')
 
 --
 DELETE rdt.RDTScn WHERE Scn = 6645 AND Lang_Code = 'ENG'
@@ -255,9 +216,6 @@ EXECUTE rdt.rdtAddScn 6645, 'ENG'
    ,@nFunc = 684
    ,@cWebGroup = '{"1":["3","4"],"2":["6","7"]}'
 
-   INSERT INTO rdt.RDTSCNHeader (scn, scndescr, lang_code, adddate, addwho, editddate, editwho)
-   VALUES (6645, 'JCB receipt', 'ENG', GETDATE(), 'PPA374', GETDATE(), 'PPA374')
-
 --
 DELETE rdt.RDTScn WHERE Scn = 6646 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 6646, 'ENG'
@@ -274,9 +232,6 @@ EXECUTE rdt.rdtAddScn 6646, 'ENG'
    ,@nFunc = 684
    ,@cWebGroup = '{{"1":["1","2","3","4"],"2":["6","7"],"3":["9"]}'
 
-   INSERT INTO rdt.RDTSCNHeader (scn, scndescr, lang_code, adddate, addwho, editddate, editwho)
-   VALUES (6646, 'JCB receipt', 'ENG', GETDATE(), 'PPA374', GETDATE(), 'PPA374')
-   
 --
 DELETE rdt.RDTScn WHERE Scn = 6647 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 6647, 'ENG'
@@ -289,7 +244,3 @@ EXECUTE rdt.rdtAddScn 6647, 'ENG'
    ,@cLine07 = 'OPTION: %01i01'
    ,@cLine14 = '%e'
    ,@nFunc = 684
-
-
-   INSERT INTO rdt.RDTSCNHeader (scn, scndescr, lang_code, adddate, addwho, editddate, editwho)
-   VALUES (6647, 'JCB receipt', 'ENG', GETDATE(), 'PPA374', GETDATE(), 'PPA374')
