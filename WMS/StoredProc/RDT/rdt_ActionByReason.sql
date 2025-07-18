@@ -11,7 +11,7 @@ GO
 /* Date       Rev  Author     Purposes                                  */  
 /* 2024-07-14 1.0    JHU151   FCR-428. Created                          */  
 /* 2024-11-08 1.1    YYS027   FCR-989 use @cFunc instead of @nFunc      */
-/* 2025-07-15 1.2.0  NickT    FCR-4885 Release LOC after CC complete    */
+/* 2025-07-15 1.2.0  NickT    FCR-4885 Release LOC/LOT/ID after CC done */
 /************************************************************************/  
 CREATE OR ALTER PROC [RDT].[rdt_ActionByReason] (
    @nMobile          INT,           
@@ -113,7 +113,7 @@ BEGIN
          ,StartTime,EndTime,SourceType,SourceKey,PickDetailKey,OrderKey,OrderLineNumber,ListKey,WaveKey,ReasonKey
          ,Message01,Message02,Message03,RefTaskKey,LoadKey,AreaKey,DropID, SystemQty)
          SELECT 
-         @cTaskDetailKeyCC,@cCCTaskType,@cStorerKey,@cSKU,'','',0,0,@cLoc,'','','',''
+         @cTaskDetailKeyCC,@cCCTaskType,@cStorerKey,@cSKU,@cLot,'',0,0,@cLoc,'','','',''
          ,'','','SKU','0','','1','1', IIF(@cReleaseCheckFlg = '1', 'UNHOLD', ''),'','',''
          ,GetDATE(),GetDATE(),'rdt_ActionByReason',@cCCKey,'','','','','',''
          ,IIF(@cReleaseCheckFlg = '1', @cHoldType, ''),'','','','','', '', 0
