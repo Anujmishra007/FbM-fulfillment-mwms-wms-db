@@ -418,7 +418,7 @@ AS
             WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
                COMMIT TRAN rdt_1768ExtOpt01
 
-            IF @cADJFinalize = '1' --AND @cUserName <> 'JAMESWONG'
+            IF @cADJFinalize = '1' 
             BEGIN
                SELECT @cAdjustmentKey = AdjustmentKey FROM #Posting
 
