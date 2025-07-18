@@ -1,16 +1,12 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[ispRDTGenCountSheetByUCC]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [dbo].[ispRDTGenCountSheetByUCC]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
+
 /************************************************************************/
 /* Stored Procedure: ispRDTGenCountSheetByUCC                           */
 /* Creation Date:                                                       */
-/* Copyright: IDS                                                       */
+/* Copyright: MAERSK                                                    */
 /* Written by:                                                          */
 /*                                                                      */
 /* Purpose: Generate Count Sheet by UCC in Stock Take module			   */
@@ -42,9 +38,11 @@ GO
 /*                         take.                                        */
 /* 01-Mar-2012  James      Additional LOC filter (james01)              */
 /* 01-Aug-2014  CSCHONG    Added 10 Lottables                           */
+/* 17-Jul-2025  James      Remove Loc type Case for generate location   */
+/*					   	   with UCC (james02)						 */
 /************************************************************************/
 
-CREATE PROC ispRDTGenCountSheetByUCC (
+CREATE OR ALTER PROC [dbo].[ispRDTGenCountSheetByUCC] (
 @c_StockTakeKey NVARCHAR(10)
 ,@c_Loc NVARCHAR(10)
 ,@c_SKU NVARCHAR(20) = ''
@@ -53,8 +51,9 @@ CREATE PROC ispRDTGenCountSheetByUCC (
 )
 AS
 BEGIN
-   SET NOCOUNT ON 
-   SET QUOTED_IDENTIFIER OFF 
+   SET NOCOUNT ON
+   SET QUOTED_IDENTIFIER OFF
+   SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
    	
 	DECLARE @c_Facility NVARCHAR(5),
@@ -532,13 +531,13 @@ BEGIN
 				+ 'LOTATTRIBUTE.Lottable06,LOTATTRIBUTE.Lottable07,LOTATTRIBUTE.Lottable08,LOTATTRIBUTE.Lottable09,'          --(CS01)
 				+ 'LOTATTRIBUTE.Lottable10,LOTATTRIBUTE.Lottable11,LOTATTRIBUTE.Lottable12,LOTATTRIBUTE.Lottable13,'          --(CS01)
 				+ 'LOTATTRIBUTE.Lottable14,LOTATTRIBUTE.Lottable15,'                                                          --(CS01)
-				+ 'Qty = CASE WHEN LOC.LocationType IN ("DYNAMICPK", "PICK", "CASE", "DYNPICKP", "DYNPPICK") THEN SUM(LOTxLOCxID.Qty-LOTxLOCxID.QtyAllocated-LOTxLOCxID.QtyPicked)  '            
+				+ 'Qty = CASE WHEN LOC.LocationType IN ("DYNAMICPK", "PICK", "DYNPICKP", "DYNPPICK") THEN SUM(LOTxLOCxID.Qty-LOTxLOCxID.QtyAllocated-LOTxLOCxID.QtyPicked)  '            
 			   + '           WHEN LOC.LocationType = "OTHER" AND LOC.LocationCategory IN ("SHELVING", "DECK") THEN SUM(LOTxLOCxID.Qty-LOTxLOCxID.QtyAllocated-LOTxLOCxID.QtyPicked) '  -- (james01)
-				+ '           WHEN LOC.LocationType NOT IN ("DYNAMICPK", "PICK", "CASE", "DYNPICKP", "DYNPPICK") AND MIN(UCC.Qty) IS NULL THEN SUM(LOTxLOCxID.Qty-LOTxLOCxID.QtyAllocated-LOTxLOCxID.QtyPicked) '  
+				+ '           WHEN LOC.LocationType NOT IN ("DYNAMICPK", "PICK", "DYNPICKP", "DYNPPICK") AND MIN(UCC.Qty) IS NULL THEN SUM(LOTxLOCxID.Qty-LOTxLOCxID.QtyAllocated-LOTxLOCxID.QtyPicked) '  
 				+ 'ELSE MIN(UCC.Qty) END, ' 
 				+ 'LOC.PutawayZone,LOC.LocLevel,Aisle = LOC.locAisle,LOC.Facility, '
 				+ 'LOC.CCLogicalLoc, '
-				+ 'CASE WHEN LOC.LocationType IN ("DYNAMICPK", "PICK", "CASE", "DYNPICKP", "DYNPPICK") THEN "" ELSE ISNULL(UCC.UccNo,"") END as UCCNo ' 
+				+ 'CASE WHEN LOC.LocationType IN ("DYNAMICPK", "PICK", "DYNPICKP", "DYNPPICK") THEN "" ELSE ISNULL(UCC.UccNo,"") END as UCCNo ' 
 				+ 'FROM LOTxLOCxID (NOLOCK) '
 				+ 'JOIN SKUxLOC (NOLOCK) ON LOTxLOCxID.Loc = SKUxLOC.Loc '
 				+ 'AND LOTxLOCxID.StorerKey = SKUxLOC.StorerKey AND LOTxLOCxID.SKU = SKUxLOC.SKU '
@@ -550,7 +549,7 @@ BEGIN
 				+ 'AND LOTxLOCxID.Id = UCC.Id '
 				--+ 'AND UCC.Status BETWEEN "1" AND "2" '-- (james01)
 				+ 'AND UCC.Status < "4" '
-				+ 'AND 1 = CASE WHEN LOC.LocationType IN ("DYNAMICPK", "PICK", "CASE", "DYNPICKP", "DYNPPICK") THEN 2 ELSE 1 END ' 
+				+ 'AND 1 = CASE WHEN LOC.LocationType IN ("DYNAMICPK", "PICK", "DYNPICKP", "DYNPPICK") THEN 2 ELSE 1 END ' 
 				+ 'JOIN SKU (NOLOCK) ON LOTxLOCxID.StorerKey = SKU.StorerKey '
 				+ 'AND LOTxLOCxID.Sku = SKU.Sku '
 				+ 'JOIN LOTATTRIBUTE (NOLOCK) ON LOTxLOCxID.Lot = LOTATTRIBUTE.Lot '
@@ -578,7 +577,7 @@ BEGIN
 				+ 'LOTATTRIBUTE.Lottable09,LOTATTRIBUTE.Lottable10,LOTATTRIBUTE.Lottable11,LOTATTRIBUTE.Lottable12,'           --(CS01)
 				+ 'LOTATTRIBUTE.Lottable13,LOTATTRIBUTE.Lottable14,LOTATTRIBUTE.Lottable15,'                                   --(CS01)
 				+ 'LOC.PutawayZone,LOC.LocLevel,LOC.locAisle, LOC.Facility, LOC.CCLogicalLoc, UCC.UccNo, '
-				+ 'LOC.LocationType, LOC.LocationCategory, CASE WHEN LOC.LocationType IN ("DYNAMICPK", "PICK", "CASE", "DYNPICKP", "DYNPPICK") THEN "" ELSE ISNULL(UCC.UccNo,"") END ' 
+				+ 'LOC.LocationType, LOC.LocationCategory, CASE WHEN LOC.LocationType IN ("DYNAMICPK", "PICK", "DYNPICKP", "DYNPPICK") THEN "" ELSE ISNULL(UCC.UccNo,"") END ' 
 				+ 'Order By LOTxLOCxID.loc,LOTxLOCxID.id,LOTxLOCxID.StorerKey, LOTxLOCxID.sku '
 		END 
 --		ELSE
