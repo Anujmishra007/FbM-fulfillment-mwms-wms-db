@@ -287,7 +287,6 @@ jobs:
               elseif ($SDRWMS_changed_files_string -eq '' -and $DATBASE_NAME -ne 'SDRWMS') {
                   write-output "| $($SDRWMS_DATABASE_NAME) |$($SDRWMS_DB_SERVER_NAME) |$($SDRWMS_DB_CURRENT_VERSION) |$($SDRWMS_DB_DEPLOY_VERSION) | **SKIPPED :heavy_exclamation_mark:** | $($SDRWMS_DATABASE_NAME): ⚠️ there are no *.sql files between version $($SDRWMS_DB_CURRENT_VERSION) to  $($SDRWMS_DB_DEPLOY_VERSION)|" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
                   write-output '' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
-                  throw " ⚠️ there are no *.sql files for SDRWMS deployment"
               }
 
       - name: print METRIX_OUTPUT
