@@ -121,7 +121,7 @@ BEGIN
          JOIN dbo.LOTxLOCxID LLI WITH (NOLOCK) ON ( CCD.Lot = LLI.Lot AND CCD.Loc = LLI.Loc AND CCD.Id = LLI.Id)
          JOIN dbo.LOC LOC WITH (NOLOCK) ON ( LLI.Loc = LOC.Loc)
          WHERE CCD.CCKey = @cCCKey
-         AND   CCD.[Status] = '3'
+         AND   CCD.[Status] = '0'
          AND   CCD.SKU = @cSKU
          AND   CCD.StorerKEy = @cStorerKey
          AND   CCD.Loc = @cLoc
@@ -148,7 +148,7 @@ BEGIN
    END
 
    OPEN @curConfirmCC
-   FETCH NEXT FROM CursorConfirmCC INTO @cCCDetailKEy, @nSystemQty, @nCCQty, @cLot
+   FETCH NEXT FROM @curConfirmCC INTO @cCCDetailKEy, @nSystemQty, @nCCQty, @cLot
    WHILE @@FETCH_STATUS <> -1
    BEGIN
       IF @nQTY = 0
@@ -188,24 +188,21 @@ BEGIN
       END
       ELSE IF @nSystemQty < ( @nCCQty + @nQTY)
       BEGIN
-         IF @nSystemQty = 0
+         UPDATE dbo.CCDetail SET
+            Qty = Qty + @nQTY,
+            Status = CASE WHEN Status = '4' THEN Status ELSE '2' END,
+            EditWho = @cUserName,
+            EditDate = GETDATE()
+         WHERE CCDetailKey   = @cCCDetailKEy
+
+         IF @@ERROR <> 0
          BEGIN
-            UPDATE dbo.CCDetail SET
-               Qty = Qty + @nQTY,
-               Status = CASE WHEN Status = '4' THEN Status ELSE '2' END,
-               EditWho = @cUserName,
-               EditDate = GETDATE()
-            WHERE CCDetailKey   = @cCCDetailKEy
-
-            IF @@ERROR <> 0
-            BEGIN
-               SET @nErrNo = 241453
-               SET @cErrMsg = rdt.rdtgetmessage(@nErrNo ,@cLangCode ,'DSP') --'Upd CCDetFail'
-               GOTO RollBackTran
-            END
-
-            SET @nQTY = 0
+            SET @nErrNo = 241453
+            SET @cErrMsg = rdt.rdtgetmessage(@nErrNo ,@cLangCode ,'DSP') --'Upd CCDetFail'
+            GOTO RollBackTran
          END
+
+         SET @nQTY = 0
       END
       ELSE IF @nSystemQty > ( @nCCQty + @nQTY)
       BEGIN
