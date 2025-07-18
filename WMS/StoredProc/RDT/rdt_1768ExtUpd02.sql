@@ -3,61 +3,66 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-/************************************************************************/
-/* Store procedure: rdt_1766ExtUpd05                                    */
-/* Purpose: For PAGE                                                    */
-/*                                                                      */
-/* Modifications log:                                                   */
-/*                                                                      */
-/* Date       Rev    Author    Purposes                                 */
-/* 2025-07-15 1..00  NickT     FCR-4885. Created                        */
-/************************************************************************/
 
-CREATE OR ALTER PROC [RDT].[rdt_1766ExtUpd05] (
-   @nMobile     INT,
-   @nFunc       INT, 
-   @cLangCode   NVARCHAR( 3), 
-   @nStep       INT, 
-   @nInputKey   INT, 
-   @cFacility       NVARCHAR( 15), 
+/**************************************************************************/
+/* Store procedure: rdt_1768ExtUpd02                                      */
+/* Purpose: Release inventory by LOC/LOT/ID once CC is done               */
+/* Customer: Chile PUMA                                                   */
+/*                                                                        */
+/* Modifications log:                                                     */
+/*                                                                        */
+/* Date       Rev    Author     Purposes                                  */
+/* 2025-07-18 1.0.0  NickT      FCR-4885. Created                         */
+/**************************************************************************/
+
+CREATE OR ALTER PROC [RDT].[rdt_1768ExtUpd02] (
+   @nMobile         INT,   
+   @nFunc           INT,   
+   @cLangCode       NVARCHAR( 3), 
+   @nStep           INT, 
+   @nInputKey       INT, 
    @cStorerKey      NVARCHAR( 15), 
-   @cTaskdetailkey  NVARCHAR( 20), 
-   @cFromLoc        NVARCHAR( 20), 
-   @cID             NVARCHAR( 20), 
-   @cPickMethod     NVARCHAR( 20), 
+   @cTaskDetailKey  NVARCHAR( 10), 
+   @cCCKey          NVARCHAR( 10), 
+   @cCCDetailKey    NVARCHAR( 10), 
+   @cLoc            NVARCHAR( 10), 
+   @cID             NVARCHAR( 18), 
+   @cSKU            NVARCHAR( 20), 
+   @nActQTY          INT, 
+   @cOptions        NVARCHAR( 1), 
+   @cLottable01     NVARCHAR( 18), 
+   @cLottable02     NVARCHAR( 18), 
+   @cLottable03     NVARCHAR( 18), 
+   @dLottable04     DATETIME, 
+   @dLottable05     DATETIME, 
+   @cLottable06     NVARCHAR( 30), 
+   @cLottable07     NVARCHAR( 30), 
+   @cLottable08     NVARCHAR( 30), 
+   @cLottable09     NVARCHAR( 30), 
+   @cLottable10     NVARCHAR( 30), 
+   @cLottable11     NVARCHAR( 30), 
+   @cLottable12     NVARCHAR( 30), 
+   @dLottable13     DATETIME, 
+   @dLottable14     DATETIME, 
+   @dLottable15     DATETIME, 
    @nErrNo          INT           OUTPUT, 
    @cErrMsg         NVARCHAR( 20) OUTPUT  
 )
 AS
-BEGIN
 
-   SET NOCOUNT ON  
-   SET QUOTED_IDENTIFIER OFF  
-   SET ANSI_NULLS OFF  
-   SET CONCAT_NULL_YIELDS_NULL OFF 
+   SET NOCOUNT ON
+   SET QUOTED_IDENTIFIER OFF
+   SET ANSI_NULLS OFF
+   SET CONCAT_NULL_YIELDS_NULL OFF
 
-   DECLARE
-      @cUserName        NVARCHAR( 18),
-      @cOptions         NVARCHAR( 60),
-      @cLoc             NVARCHAR( 10),
-      @cHoldType        NVARCHAR( 60),
-      @cLoc             NVARCHAR(10),
-      @cLot             NVARCHAR(10),
-      @cID              NVARCHAR(20),
-      @nRowCount        INT
 
-   SELECT 
-      @cUserName = UserName,
-      @cOptions = I_Field02
-   FROM rdt.RDTMOBREC (NOLOCK) WHERE Mobile = @nMobile
-
-   IF @nFunc IN (1766) -- Handle CC & CCSUP
+   IF @nFunc = 1768
    BEGIN
-      IF @nStep = 4
+      IF @nStep = 3
       BEGIN
          IF @nInputKey = 1
          BEGIN
-            IF ISNULL(@cOptions, '') = '1'
+            IF ISNULL(@cOptions, '') = '2'
             BEGIN
                SELECT @cLoc = FromLoc,
                   @cHoldType = Message01,
@@ -129,15 +134,14 @@ BEGIN
             END
          END
       END
-   END --Func
+   END
 
-   Quit:
-END
+GO
 GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS ON
 GO
-GRANT EXECUTE ON RDT.rdt_1766ExtUpd05 TO NSQL
+GRANT EXECUTE ON RDT.rdt_1768ExtUpd02 TO NSQL
 GO
