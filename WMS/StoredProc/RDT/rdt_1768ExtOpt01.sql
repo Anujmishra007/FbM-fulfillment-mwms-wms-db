@@ -343,7 +343,8 @@ AS
             UPDATE dbo.TaskDetail SET
                [Status] = '9',
                EditWho = @cUserName,
-               EditDate = GetDate()
+               EditDate = GetDate(),
+               EndTime = GetDate()
             WHERE TaskDetailKey = @cTaskDetailKey
 
             IF @@ERROR <> ''
