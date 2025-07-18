@@ -81,6 +81,7 @@ AS
    DECLARE @cUserName      NVARCHAR( 18)
    DECLARE @nIsAlert       INT = 0
    DECLARE @cSKUGroup      NVARCHAR( 10)
+   DECLARE @nQtyAlloc	INT = 0
 
    SELECT @cUserName = UserName
    FROM RDT.RDTMOBREC WITH (NOLOCK)
@@ -222,6 +223,14 @@ AS
                   FETCH NEXT FROM @curCCD INTO @cCCDetailKey, @nCCDQty
                   WHILE @@FETCH_STATUS = 0
                   BEGIN
+					SELECT @nQtyAlloc = SUM( LLI.QtyAllocated)
+					FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
+					JOIN dbo.CCDetail CCD WITH (NOLOCK) ON ( CCD.Lot = LLI.Lot AND CCD.Loc = LLI.Loc AND CCD.Id = LLI.ID)
+					WHERE CCD.CCDetailKey = @cCCDetailKey
+
+					IF @nQtyAlloc > 0
+					   SET @nCCDQty = ABS( @nCCDQty) - @nQtyAlloc
+
                      IF NOT EXISTS( SELECT 1 FROM dbo.ADJUSTMENT WITH (NOLOCK) WHERE AdjustmentKey = @cAdjustmentKey)
                      BEGIN
                         EXECUTE nspg_getkey
@@ -409,7 +418,7 @@ AS
             WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
                COMMIT TRAN rdt_1768ExtOpt01
 
-            IF @cADJFinalize = '1' 
+            IF @cADJFinalize = '1' --AND @cUserName <> 'JAMESWONG'
             BEGIN
                SELECT @cAdjustmentKey = AdjustmentKey FROM #Posting
 
