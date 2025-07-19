@@ -11,8 +11,9 @@ GO
 /*                                                                      */
 /* Modifications log:                                                   */
 /*                                                                      */
-/* Date       Rev  Author     Purposes                                  */
-/* 2025-07-07 1.0  James      FCR-6059. Created                         */
+/* Date       Rev   Author     Purposes                                 */
+/* 2025-07-07 1.0.0 James      FCR-6059. Created                        */
+/* 2025-07-19 1.0.1 NickT      FCR-6059. No adjustment on allocated INV */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1768ExtOpt01] (
@@ -81,7 +82,9 @@ AS
    DECLARE @cUserName      NVARCHAR( 18)
    DECLARE @nIsAlert       INT = 0
    DECLARE @cSKUGroup      NVARCHAR( 10)
-   DECLARE @nQtyAlloc	INT = 0
+   DECLARE @nQtyAlloc      INT = 0
+   DECLARE @nOriCCQty      INT
+   DECLARE @nInvQty        INT
 
    SELECT @cUserName = UserName
    FROM RDT.RDTMOBREC WITH (NOLOCK)
@@ -208,7 +211,8 @@ AS
                               WHEN SystemQty > Qty THEN -(SystemQty - Qty)    -- Negative difference
                               WHEN SystemQty < Qty THEN (Qty - SystemQty)   -- Positive difference
                               ELSE 0
-                           END)
+                           END),
+                     SUM(Qty)
                      FROM dbo.CCDetail WITH (NOLOCK)
                      WHERE StorerKey = @cStorerKey
                      AND   CCSheetNo = @cTaskDetailKey
@@ -220,16 +224,36 @@ AS
                                        ELSE 0
                                     END)) > 0
                   OPEN @curCCD
-                  FETCH NEXT FROM @curCCD INTO @cCCDetailKey, @nCCDQty
+                  FETCH NEXT FROM @curCCD INTO @cCCDetailKey, @nCCDQty, @nOriCCQty
                   WHILE @@FETCH_STATUS = 0
                   BEGIN
-					SELECT @nQtyAlloc = SUM( LLI.QtyAllocated)
-					FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
-					JOIN dbo.CCDetail CCD WITH (NOLOCK) ON ( CCD.Lot = LLI.Lot AND CCD.Loc = LLI.Loc AND CCD.Id = LLI.ID)
-					WHERE CCD.CCDetailKey = @cCCDetailKey
+                     SELECT @nQtyAlloc = SUM( LLI.QtyAllocated),
+                        @nInvQty = SUM( LLI.Qty)
+                     FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
+                     JOIN dbo.CCDetail CCD WITH (NOLOCK) ON ( CCD.Lot = LLI.Lot AND CCD.Loc = LLI.Loc AND CCD.Id = LLI.ID)
+                     WHERE CCD.CCDetailKey = @cCCDetailKey
 
-					IF @nQtyAlloc > 0
-					   SET @nCCDQty = ABS( @nCCDQty) - @nQtyAlloc
+                     -- If Qty Allocated > 0 and CCDQty > 0, then skip this CCDetailKey
+                     --Qty 20 @nQtyAlloc 2
+                        --@nOriCCQty 0 -> Qty 2 @nQtyAlloc 2
+                        --@nOriCCQty 2 -> Qty 2 @nQtyAlloc 2
+                        --@nOriCCQty 3 -> Qty 3 @nQtyAlloc 2
+                        --@nOriCCQty 20 -> Qty 20 @nQtyAlloc 2
+                        --@nOriCCQty 21 -> Qty 21 @nQtyAlloc 2
+                     IF @nQtyAlloc > 0 
+                     BEGIN 
+                        IF @nOriCCQty <= @nQtyAlloc
+                        BEGIN
+                           SELECT @nCCDQty = @nQtyAlloc - @nInvQty
+                        END
+                        ELSE
+                        BEGIN
+                           IF @nOriCCQty = @nInvQty
+                              GOTO CONTINUE_curCCD
+                           ELSE
+                              SET @nCCDQty = @nOriCCQty - @nInvQty
+                        END
+                     END
 
                      IF NOT EXISTS( SELECT 1 FROM dbo.ADJUSTMENT WITH (NOLOCK) WHERE AdjustmentKey = @cAdjustmentKey)
                      BEGIN
@@ -313,39 +337,40 @@ AS
 
                      INSERT INTO #Posting (AdjustmentKey) VALUES (@cAdjustmentKey)
 
-                     FETCH NEXT FROM @curCCD INTO @cCCDetailKey, @nCCDQty
+                     CONTINUE_curCCD:
+                     FETCH NEXT FROM @curCCD INTO @cCCDetailKey, @nCCDQty, @nOriCCQty
                   END
                   CLOSE @curCCD
                   DEALLOCATE @curCCD
-                  /*
-                  IF @cADJFinalize = '1' 
-                     AND @cUserName <> 'jameswong' -- testing
-                  BEGIN
-                     SET @curADJ = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
-                     SELECT AdjustmentKey
-                     FROM #Posting
-                     ORDER BY 1
-                     OPEN @curADJ
-                     FETCH NEXT FROM @curADJ INTO @cAdjustmentKey
-                     WHILE @@FETCH_STATUS = 0
+                     /*
+                     IF @cADJFinalize = '1' 
+                        AND @cUserName <> 'jameswong' -- testing
                      BEGIN
-                        EXEC dbo.isp_FinalizeADJ
-                           @c_ADJKey   = @cAdjustmentKey,
-                           @b_Success  = @bSuccess    OUTPUT,
-                           @n_err      = @nErrNo      OUTPUT,
-                           @c_errmsg   = @cErrMsg     OUTPUT
-
-                        IF NOT @bSuccess = 1
-                        BEGIN
-                           SET @nErrNo = 241504
-                           SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP')   -- Finalize failed
-                           GOTO RollBackTran   
-                        END
-
+                        SET @curADJ = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
+                        SELECT AdjustmentKey
+                        FROM #Posting
+                        ORDER BY 1
+                        OPEN @curADJ
                         FETCH NEXT FROM @curADJ INTO @cAdjustmentKey
+                        WHILE @@FETCH_STATUS = 0
+                        BEGIN
+                           EXEC dbo.isp_FinalizeADJ
+                              @c_ADJKey   = @cAdjustmentKey,
+                              @b_Success  = @bSuccess    OUTPUT,
+                              @n_err      = @nErrNo      OUTPUT,
+                              @c_errmsg   = @cErrMsg     OUTPUT
+
+                           IF NOT @bSuccess = 1
+                           BEGIN
+                              SET @nErrNo = 241504
+                              SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP')   -- Finalize failed
+                              GOTO RollBackTran   
+                           END
+
+                           FETCH NEXT FROM @curADJ INTO @cAdjustmentKey
+                        END
                      END
-                  END
-                  */
+                     */
                END
             END
 
