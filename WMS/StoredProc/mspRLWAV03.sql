@@ -12,7 +12,7 @@ GO
 /*                                                                      */
 /* Called By: Wave                                                      */
 /*                                                                      */
-/* GitHub Version: 5.2                                                  */
+/* GitHub Version: 5.3                                                  */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -89,6 +89,8 @@ GO
 /* 15-Jul-2025 WLC015    5.1 UWP-37739 Filter MPOCFlag when updating    */ 
 /*                           Ordergroup (WL13)                          */
 /* 17-Jul-2025 WLC015    5.2 UWP-35381 Update RPF FinalLoc = blank(WL14)*/
+/* 22-Jul-2025 WLC015    5.3 FCR-6612 BOLbyConsigneekey - New sequence  */
+/*                           number for PARCEL order (WL15)             */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[mspRLWAV03]
    @c_WaveKey NVARCHAR(10)
@@ -2960,18 +2962,27 @@ BEGIN
    --------------------------------------------------  
    IF @n_continue IN(1,2) 
    BEGIN 
-      DECLARE @c_BOLbyConsigneeKey NVARCHAR(20) = '', 
-              @c_Susr5Prefix NVARCHAR(60) = '',            --(SSA03)
-              @n_FieldLength INT = 8,                      --(SSA03)
-              --@n_CheckDigit INT                          --(SSA03)
-              @c_CheckDigit  CHAR(1) --(SWT01)
+      DECLARE @c_BOLbyConsigneeKey NVARCHAR(20) = '' 
+              --@c_Susr5Prefix NVARCHAR(60) = '',            --(SSA03)   --WL15
+              --@n_FieldLength INT = 8,                      --(SSA03)   --WL15
+              ----@n_CheckDigit INT                          --(SSA03)   --WL15
+              --@c_CheckDigit  CHAR(1) --(SWT01)
  
       DECLARE CUR_BOLbyConsigneekey CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
          SELECT OH.ConsigneeKey, OH.Facility, MAX(ISNULL(OI.ReferenceId,''))  
          FROM dbo.ORDERS OH WITH (NOLOCK)  
          JOIN dbo.OrderInfo OI WITH (NOLOCK) ON OH.OrderKey = OI.OrderKey 
          JOIN dbo.WAVEDETAIL WD WITH (NOLOCK) ON WD.OrderKey = OH.OrderKey 
-         WHERE WD.WaveKey = @c_WaveKey  
+         WHERE WD.WaveKey = @c_WaveKey
+         --WL15 S
+         AND EXISTS ( SELECT 1
+                      FROM CODELKUP CL WITH (NOLOCK)
+                      WHERE CL.LISTNAME = 'WSCOURIER'
+                      AND CL.Short = OH.Shipperkey
+                      AND CL.Storerkey = OH.Storerkey
+                      AND (CL.Short IS NOT NULL AND CL.Short <> '')
+                    )
+         --WL15 E
          GROUP BY OH.ConsigneeKey, OH.Facility  
        
       OPEN CUR_BOLbyConsigneekey 
@@ -2982,36 +2993,52 @@ BEGIN
       BEGIN 
           IF TRIM(@c_BOLbyConsigneeKey) = '' 
           BEGIN 
-             --(SSA03) start---
-             SET @c_Susr5Prefix = ''
-              
-             SELECT @c_Susr5Prefix = ISNULL(TRIM(Storer.SUSR5),'0')
-             FROM dbo.STORER Storer (NOLOCK)
-             WHERE Storer.StorerKey = @c_Storerkey
-             AND Storer.Facility = @c_Facility
-             --(SSA03) end---
-              
-             EXECUTE dbo.nspg_GetKey   
-               @KeyName='BOLbyCons',   
-               @fieldlength=@n_FieldLength,   
-               @keystring=@c_BOLbyConsigneeKey OUTPUT,   
-               @b_Success = @b_success OUTPUT,   
-               @n_err = @n_err OUTPUT,   
-               @c_errmsg = @c_errmsg OUTPUT   
-              
+             --WL15 S
+             ----(SSA03) start---
+             --SET @c_Susr5Prefix = ''
+             -- 
+             --SELECT @c_Susr5Prefix = ISNULL(TRIM(Storer.SUSR5),'0')
+             --FROM dbo.STORER Storer (NOLOCK)
+             --WHERE Storer.StorerKey = @c_Storerkey
+             --AND Storer.Facility = @c_Facility
+             ----(SSA03) end---
+             -- 
+             --EXECUTE dbo.nspg_GetKey   
+             --  @KeyName='BOLbyCons',   
+             --  @fieldlength=@n_FieldLength,   
+             --  @keystring=@c_BOLbyConsigneeKey OUTPUT,   
+             --  @b_Success = @b_success OUTPUT,   
+             --  @n_err = @n_err OUTPUT,   
+             --  @c_errmsg = @c_errmsg OUTPUT   
+             -- 
+             --IF NOT @b_success = 1   
+             --BEGIN   
+             --   SELECT @n_continue = 3   
+             --   BREAK   
+             --END     
+             -- 
+             ----(SSA03) start---
+             --SET @c_BOLbyConsigneeKey = @c_Susr5Prefix + @c_BOLbyConsigneeKey
+             ----SET @n_CheckDigit = dbo.fnc_CalcCheckDigitLuhn_M10(RTRIM(@c_BOLbyConsigneeKey), 0)
+             --SELECT @c_CheckDigit = dbo.fnc_CalcGS1CheckDigit(RTRIM(@c_BOLbyConsigneeKey)) -- (SWT12)
+             ----SET @c_BOLbyConsigneeKey = RIGHT(@c_BOLbyConsigneeKey + CAST(@n_CheckDigit AS NVARCHAR( 1)), 17)
+             --SET @c_BOLbyConsigneeKey = RIGHT(@c_BOLbyConsigneeKey + @c_CheckDigit, 17) -- (SWT12)
+             ----(SSA03) end----
+
+             EXEC dbo.msp_GetBOLbyConsigneeKey @c_Wavekey = @c_Wavekey -- nvarchar(10)
+                                             , @c_Consigneekey = @c_ConsigneeKey -- nvarchar(15)
+                                             , @c_BOLByConsigneekey = @c_BOLByConsigneekey OUTPUT -- nvarchar(50)
+                                             , @b_Success = @b_Success OUTPUT -- int
+                                             , @n_Err = @n_Err OUTPUT -- int
+                                             , @c_ErrMsg = @c_ErrMsg OUTPUT -- nvarchar(255)
+
              IF NOT @b_success = 1   
              BEGIN   
                 SELECT @n_continue = 3   
                 BREAK   
-             END     
-              
-             --(SSA03) start---
-             SET @c_BOLbyConsigneeKey = @c_Susr5Prefix + @c_BOLbyConsigneeKey
-             --SET @n_CheckDigit = dbo.fnc_CalcCheckDigitLuhn_M10(RTRIM(@c_BOLbyConsigneeKey), 0)
-             SELECT @c_CheckDigit = dbo.fnc_CalcGS1CheckDigit(RTRIM(@c_BOLbyConsigneeKey)) -- (SWT12)
-             --SET @c_BOLbyConsigneeKey = RIGHT(@c_BOLbyConsigneeKey + CAST(@n_CheckDigit AS NVARCHAR( 1)), 17)
-             SET @c_BOLbyConsigneeKey = RIGHT(@c_BOLbyConsigneeKey + @c_CheckDigit, 17) -- (SWT12)
-             --(SSA03) end----
+             END  
+             --WL15 E
+
              DECLARE CUR_UPDATE_BOLbyConsigneekey CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
              SELECT OH.OrderKey 
              FROM dbo.ORDERS OH WITH (NOLOCK)  
@@ -3020,7 +3047,16 @@ BEGIN
              WHERE WD.WaveKey = @c_WaveKey  
              AND OH.ConsigneeKey = @c_ConsigneeKey              
              AND OH.Facility = @c_Facility 
-             AND (OI.ReferenceId = '' OR OI.ReferenceId IS NULL) 
+             AND (OI.ReferenceId = '' OR OI.ReferenceId IS NULL)
+             --WL15 S
+             AND EXISTS ( SELECT 1
+                          FROM CODELKUP CL WITH (NOLOCK)
+                          WHERE CL.LISTNAME = 'WSCOURIER'
+                          AND CL.Short = OH.Shipperkey
+                          AND CL.Storerkey = OH.Storerkey
+                          AND (CL.Short IS NOT NULL AND CL.Short <> '')
+                        )
+             --WL15 E
               
              OPEN CUR_UPDATE_BOLbyConsigneekey 
               
@@ -3717,14 +3753,14 @@ BEGIN
    IF EXISTS ( SELECT 1 
                FROM TASKDETAIL TD (NOLOCK)
                WHERE TD.TaskType = 'RPF'
-               AND (TD.FinalLoc IS NULL OR TD.FinalLoc <> '')
+               AND TD.FinalLoc <> ''
                AND TD.WaveKey = @c_Wavekey )
    BEGIN 
       UPDATE TASKDETAIL WITH (ROWLOCK)
          SET FinalLoc = ''
            , TrafficCop = ''
       WHERE TaskType = 'RPF'
-      AND (FinalLoc IS NULL OR FinalLoc <> '')
+      AND FinalLoc <> ''
       AND WaveKey = @c_Wavekey
    END
    --WL14 E
