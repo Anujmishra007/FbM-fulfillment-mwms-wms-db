@@ -31,7 +31,7 @@ GO
 /* 2024-06-18  Wan05    1.4   LFWM-4607 - RG UATPROD-All storer-Print Label*/
 /*                            button is not responding in Inventory Move*/
 /*                            module                                    */
-/************************************************************************/   
+/************************************************************************/    
 CREATE OR ALTER PROCEDURE [WM].[lsp_Move_Wrapper]
    @c_Storerkey            NVARCHAR(15) 
   ,@c_Sku                  NVARCHAR(20)

@@ -17,6 +17,7 @@ GO
 /* 30-Sep-2016  1.1   Ung        Performance tuning                     */
 /* 21-Nov-2024  1.2.0 Dennis     FCR-1349 Extended Update               */
 /* 27-Nov-2022  1.3.0 PXL009     UWP-27586 correct the step jump        */
+/* 10-Jul-2025  0.0.0 Jackc      !!!Cutover!!! Use V0 repo for work     */
 /************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdtfnc_ConfirmShortPick(

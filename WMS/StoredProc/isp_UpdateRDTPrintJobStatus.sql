@@ -65,11 +65,11 @@ BEGIN
          , @c_CloudClientPrinterID     NVARCHAR(30)   = ''              --(Wan04)
          , @c_CloudClientPrinterName   NVARCHAR(128)  = ''              --(Wan04)
          , @c_PrintBy                  NVARCHAR(128)  = ''              --(Wan04)
-		   ,   @c_IniFilePath			   NVARCHAR(100)  = ''  
-         ,@c_RemoteEndPoint            NVARCHAR(50)   = ''   
-		   , @c_IP					   NVARCHAR(20)  = ''        
-		   , @c_PORT                     NVARCHAR(5)   = ''   
-		   , @n_POS                       INT            = 0 
+         , @c_IniFilePath              NVARCHAR(100)  = ''  
+         , @c_RemoteEndPoint           NVARCHAR(50)   = ''   
+         , @c_IP                       NVARCHAR(20)   = ''        
+         , @c_PORT                     NVARCHAR(5)    = ''   
+         , @n_POS                      INT            = 0 
 
 
 
@@ -304,8 +304,8 @@ BEGIN
                JOIN rdt.RDTPrinter prt WITH (NOLOCK) ON prt.PrinterGroup = C.StorerKey  
             WHERE  ListName = 'TCPClient'  
                AND c.Short = 'BARTENDER'  
-			   and c.code = 'BAR'
-			   and prt.CloudPrintClientID = @c_CloudClientPrinterID
+               AND c.code = 'BAR'
+               AND prt.CloudPrintClientID = @c_CloudClientPrinterID
                AND c.Storerkey IN ( @c_Storerkey)  
             IF ISNULL(RTRIM(@c_RemoteEndPoint), '') = ''          
         BEGIN  
@@ -315,7 +315,7 @@ BEGIN
                FROM CODELKUP c WITH (NOLOCK)  
                WHERE  ListName = 'TCPClient'  
                   AND c.Short = 'BARTENDER' 
-				  and c.code = 'BAR'
+                  AND c.code = 'BAR'
                   AND c.Storerkey IN ( @c_Storerkey,'')  
             END
 
@@ -393,4 +393,7 @@ QUIT_SP:
       BEGIN TRAN
    END
 END -- procedure
+GO
 
+GRANT EXECUTE ON [dbo].[isp_UpdateRDTPrintJobStatus] TO nSQL 
+GO

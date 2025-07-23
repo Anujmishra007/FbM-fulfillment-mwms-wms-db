@@ -34,9 +34,7 @@ GO
 /*                            PickDetails are picked, some Packinfo was missing    */
 /* 2025-03-22 1.15.1 NLT013   UWP-31481 Need check if all packdetail are generated */
 /* 2025-04-08 1.15.2 Dennis   UWP-32495 FixBugs                                    */
-/* 2025-04-29 1.16.0 NickT    UWP-33521 Carton weight is not corret for MPOC       */
-/* 2025-05-12 1.17.0 JCH507   FCR-4159 if single unit order, archive dropid when   */
-/*                              all sku packed                                     */
+/* 2025-04-29 1.16.2 NickT    UWP-33521 Carton weight is not corret for MPOC       */
 /***********************************************************************************/
 CREATE OR ALTER PROC rdt.rdt_855ExtUpd13 (
    @nMobile      INT,   
@@ -115,8 +113,6 @@ BEGIN
       @cOLPSDescription          NVARCHAR(15) = 'OlpsPlacement'
       DECLARE @tPackSlipList     VariableTable
 
-      DECLARE @cSingleUnitOrdFlag NVARCHAR(1) --V1.16.0
-
    DECLARE @bDebugFlag   BINARY = 0 --1, print log; 2, insert traceinfo
    DECLARE @cToteID      NVARCHAR(20)
    DECLARE @cWaveKey     NVARCHAR(20),
@@ -172,8 +168,7 @@ BEGIN
    SELECT @nScn = Scn,
       @cLabelPrinterGroup = Printer,
       @cPaperPrinter = Printer_Paper,
-      @cDropIDFlag   = C_STRING1,
-      @cSingleUnitOrdFlag = C_String2 --v1.16.0
+      @cDropIDFlag   = C_STRING1
    FROM rdt.RDTMOBREC WITH(NOLOCK)
    WHERE Mobile = @nMobile
    
@@ -1358,29 +1353,7 @@ BEGIN
                   --V1.13.0 end
 
                   --clear dropid to reuse
-                  --V1.16.0 start
-                  IF @cSingleUnitOrdFlag = 'Y'
-                  BEGIN
-                     IF NOT EXISTS (SELECT  1
-                              FROM PackInfo PI WITH (NOLOCK)
-                              INNER JOIN PackDetail PD WITH (NOLOCK)
-                                 ON PI.PickSlipNo = PD.PickSlipNo
-                                 AND PI.CartonNo = PD.CartonNo
-                              INNER JOIN PickHeader PH WITH (NOLOCK)
-                                 ON PD.PickSlipNo = PH.PickHeaderKey
-                                 AND PD.StorerKey = PH.StorerKey
-                              WHERE
-                                 PD.StorerKey = @cStorerKey
-                                 AND PD.DropID = @cToteID --ToteID
-                                 AND ISNULL(PI.CartonStatus,'') <> 'PACKED') -- All skus are packed in single unit order tote
-                     BEGIN
-                        UPDATE dbo.PackDetail WITH(ROWLOCK) SET DropID = CONCAT('ARC',DropID) WHERE DropID=@cToteID
-                        UPDATE dbo.PICKDETAIL WITH(ROWLOCK) SET DropID = CONCAT('ARC',DropID) WHERE DropID=@cToteID
-                        UPDATE RDT.RDTMOBREC WITH(ROWLOCK) SET C_STRING1 = '' WHERE Mobile = @nMobile
-                     END
-                  END
-                  --V1.16.0 end
-                  ELSE IF @cDropIDFlag = 'Y'
+                  IF @cDropIDFlag = 'Y'
                   BEGIN
                      UPDATE dbo.PackDetail WITH(ROWLOCK) SET DropID = CONCAT('ARC',DropID) WHERE DropID=@cToteID
                      UPDATE dbo.PICKDETAIL WITH(ROWLOCK) SET DropID = CONCAT('ARC',DropID) WHERE DropID=@cToteID

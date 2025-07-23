@@ -44,8 +44,13 @@ foreach ($scriptFile in $SQL_SCRIPT_FILES) {
     Add-Content -Path $logFilePath -Value $logMessage -Encoding UTF8
     try {
         # Run the SQL script using Invoke-Sqlcmd
+        unix2dos "$scriptFile"
         $connectionString = "Server=$($WMSDB_DB_SERVER_NAME);Database=$($WMSDB_NAME);User Id=$($username);Password=$($password);TrustServerCertificate=True;"
-        Invoke-Sqlcmd -ConnectionString $connectionString -Query $sqlQuery -ErrorAction Stop | Tee-Object -FilePath $logFilePath -Encoding utf8 -Append
+        #Invoke-Sqlcmd -ConnectionString $connectionString -Query $sqlQuery -ErrorAction Stop | Tee-Object -FilePath $logFilePath -Encoding utf8 -Append
+        Invoke-Sqlcmd -InputFile $scriptFile -ConnectionString $connectionString -ErrorAction Stop | Tee-Object -FilePath $logFilePath -Encoding utf8 -Append
+
+  
+
         $successMessage = "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - Successfully executed: $($scriptFile) on server: $($WMSDB_DB_SERVER_NAME), database: $($WMSDB_NAME)"
         Write-Output $successMessage
         Add-Content -Path $logFilePath -Value $successMessage -Encoding UTF8

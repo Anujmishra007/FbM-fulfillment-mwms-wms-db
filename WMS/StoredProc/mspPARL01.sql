@@ -31,7 +31,7 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 2025-05-20  Wan      1.0   UWP-32707 - FCR-3957 - JCB Putaway Using  */
-/* 2025-06-11                 TM SCE                                    */
+/* 2025-07-16                 TM SCE                                    */
 /************************************************************************/
 
 CREATE OR ALTER PROC dbo.mspPARL01
@@ -273,29 +273,29 @@ BEGIN
                         , LocationGroup, LocationCategory, LocLevel, LocAisle          
                         , LocationRoom, [Floor], MaxPallet
                         )
-   SELECT loc = MIN(CASE WHEN l.LocationRoom = '' THEN l.Loc ELSE '' END)
-         ,LogicalLocation = MIN(l.LogicalLocation) 
+   SELECT loc = MIN(CASE WHEN ISNULL(l.LocationRoom,'') = '' THEN l.Loc ELSE '' END)
+         ,LogicalLocation = ISNULL(MIN(l.LogicalLocation),'') 
          ,l.Facility
-         ,l.LocationGroup
+         ,LocationGroup = ISNULL(l.LocationGroup,'')
          ,l.LocationCategory
          ,l.LocLevel
-         ,l.LocAisle
-         ,l.LocationRoom
-         ,l.[Floor]
-         ,MaxPallet = SUM(l.MaxPallet)
+         ,LocAisle = ISNULL(l.LocAisle,'')
+         ,LocationRoom = ISNULL(l.LocationRoom,'')
+         ,[Floor] = ISNULL(l.[Floor],'')
+         ,MaxPallet = ISNULL(SUM(l.MaxPallet),0)
    FROM LOC l (NOLOCK)
    WHERE l.Facility = @c_Facility
    AND   l.LocationFlag IN ('', 'NONE')
    AND   l.[Status] = 'OK'
    AND   l.MaxPallet > 0
-   GROUP BY CASE WHEN l.LocationRoom = '' THEN l.Loc ELSE '' END
+   GROUP BY CASE WHEN ISNULL(l.LocationRoom,'') = '' THEN l.Loc ELSE '' END
          ,  l.Facility
-         ,  l.LocationGroup
+         ,  ISNULL(l.LocationGroup,'')
          ,  l.LocationCategory
-         ,  l.LocAisle
-         ,  l.[Floor]
+         ,  ISNULL(l.LocAisle,'')
+         ,  ISNULL(l.[Floor],'')
          ,  l.LocLevel
-         ,  l.LocationRoom
+         ,  ISNULL(l.LocationRoom,'')
 
    INSERT INTO @TMP_PA_CL (Listname, Code, Description, Short, Long, Notes, Notes2, Storerkey, UDF01, UDF02, UDF03, UDF04, UDF05, Code2)  
    SELECT CODELKUP.Listname   
@@ -832,7 +832,7 @@ BEGIN
             
             SELECT TOP 1 
                    @c_Putawayzone   = l.PutawayZone
-                  ,@c_LocationGroup = l.LocationGroup
+                  ,@c_LocationGroup = ISNULL(l.LocationGroup,'')                    --2025-07-16
                   ,@c_LocationCategory = l.LocationCategory
             FROM dbo.LOC l (NOLOCK)
             WHERE Loc = @c_ToLoc

@@ -17,6 +17,8 @@ GO
 /* 2025-02-27    JCH507   1.1.0  FCR-1157 Unlock toLoc when full short     */
 /* 2025-04-09    Dennis   1.2.0  FCR-3925 Trigger Transmitlog2             */
 /* 2025-04-21    JACKC    1.2.1  FCR-3925 Add Transmitlog2 to full short   */
+/* 2025-06-03    NickT    1.3.0  UWP-35382 Mark TaskDetail as X for Short  */
+/*                               pick detail                               */
 /***************************************************************************/
 
 CREATE OR ALTER PROCEDURE rdt.rdt_1764CfmExtUpd05
@@ -58,7 +60,10 @@ BEGIN
    DECLARE @cOrderKey      NVARCHAR(10) -- v1.2.0
    DECLARE @cStorerKey     NVARCHAR(15) --v1.2.0
    DECLARE @curPD          CURSOR --v1.2.1
-
+   DECLARE @cFinalLoc      NVARCHAR(10) = ''
+   DECLARE @cFinalLocPickZone NVARCHAR(10) = ''
+   DECLARE @cAutomationPick   NVARCHAR(1) = 'N'
+   DECLARE @cRefTaskKey       NVARCHAR(10) = ''
 
    -- All logics are copied from 1764CfmExtUpd01, update the rdtmobrec retrieving logic.  By JCH507
 
@@ -71,7 +76,9 @@ BEGIN
       @cFromID = FromID, 
       @nOrgSystemQTY = SystemQTY, 
       @nOrgTaskQty = CASE WHEN QTY < SystemQTY THEN QTY ELSE SystemQTY END, -- QTY for PickDetail
-      @nShortQTY   = CASE WHEN QTY < SystemQTY THEN SystemQTY - QTY ELSE 0 END
+      @nShortQTY   = CASE WHEN QTY < SystemQTY THEN SystemQTY - QTY ELSE 0 END,
+      @cFinalLoc = FinalLoc,
+      @cRefTaskKey = RefTaskKey
    FROM dbo.TaskDetail WITH (NOLOCK) 
    WHERE TaskDetailKey = @cTaskdetailKey
 
@@ -82,6 +89,16 @@ BEGIN
    -- FP, does not close pallet or short
    IF @cPickMethod = 'FP'
       RETURN
+
+   IF ISNULL(@cFinalLoc, '') <> '' 
+      SELECT @cFinalLocPickZone = PickZone
+      FROM dbo.LOC WITH (NOLOCK)
+      WHERE LOC.LOC = @cFinalLOC
+
+   IF ISNULL(@cFinalLocPickZone, '') <> 'PICK'
+      SET @cAutomationPick = 'Y'
+   ELSE
+      SET @cAutomationPick = 'N'
 
    -- Get suggested replen QTY and actual QTY
    SET @nQTY_RPL = 0
@@ -167,6 +184,27 @@ BEGIN
          BEGIN CATCH
             SET @nErrNo = 231257
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD PKDtl Fail
+            GOTO RollBackTran
+         END CATCH
+
+         BEGIN TRY
+            IF @cAutomationPick = 'Y'
+            BEGIN
+               UPDATE dbo.TaskDetail WITH (ROWLOCK) 
+               SET
+                  Status = 'X', 
+                  EditWho  = SUSER_SNAME(), 
+                  EditDate = GETDATE(),
+                  Trafficcop = NULL
+               WHERE StorerKey = @cStorerKey
+                  AND TaskType = 'ASTCPK'
+                  AND RefTaskKey = @cRefTaskKey
+                  AND Status = 'H'
+            END
+         END TRY
+         BEGIN CATCH
+            SET @nErrNo = 231258
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Mark ASTCPK Task as X Fail
             GOTO RollBackTran
          END CATCH
 
@@ -284,6 +322,37 @@ BEGIN
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD PKDtl Fail
                   GOTO RollBackTran
                END
+
+               BEGIN TRY
+                  IF @cTask = 'SHT' AND @cAutomationPick = 'Y'
+                  BEGIN
+                     UPDATE TD WITH (ROWLOCK) 
+                     SET
+                        TD.Status = 'X', 
+                        TD.EditWho  = SUSER_SNAME(), 
+                        TD.EditDate = GETDATE(),
+                        TD.Trafficcop = NULL
+                     FROM dbo.TaskDetail TD WITH (ROWLOCK)
+                     INNER JOIN dbo.PickDetail PD WITH(NOLOCK)
+                        ON TD.StorerKey = PD.StorerKey
+                        AND TD.CaseID = PD.CaseID
+                        AND TD.RefTaskKey = PD.TaskDetailKey
+                        AND TD.SKU = PD.SKU
+                        AND TD.Lot = PD.LOT
+                        AND TD.Qty = PD.Qty
+                     WHERE PD.StorerKey = @cStorerKey
+                        AND PD.PickDetailKey = @cPickDetailKey
+                        AND PD.Status = '4'
+                        AND TD.TaskType = 'ASTCPK'
+                        AND TD.Status = 'H'
+                  END
+               END TRY
+               BEGIN CATCH
+                  SET @nErrNo = 231259
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Mark ASTCPK Task as X Fail
+                  GOTO RollBackTran
+               END CATCH
+
                --V1.2.0 DENNIS
                IF @cTask = 'SHT'
                BEGIN
@@ -382,6 +451,36 @@ BEGIN
                BEGIN CATCH
                   SET @nErrNo = 231254
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD PKDtl Fail
+                  GOTO RollBackTran
+               END CATCH
+
+               BEGIN TRY
+                  IF @cTask = 'SHT' AND @cAutomationPick = 'Y'
+                  BEGIN
+                     UPDATE TD WITH (ROWLOCK) 
+                     SET
+                        TD.Status = 'X', 
+                        TD.EditWho  = SUSER_SNAME(), 
+                        TD.EditDate = GETDATE(),
+                        TD.Trafficcop = NULL
+                     FROM dbo.TaskDetail TD WITH (ROWLOCK)
+                     INNER JOIN dbo.PickDetail PD WITH(NOLOCK)
+                        ON TD.StorerKey = PD.StorerKey
+                        AND TD.CaseID = PD.CaseID
+                        AND TD.RefTaskKey = PD.TaskDetailKey
+                        AND TD.SKU = PD.SKU
+                        AND TD.Lot = PD.LOT
+                        AND TD.Qty = PD.Qty
+                     WHERE PD.StorerKey = @cStorerKey
+                        AND PD.PickDetailKey = @cPickDetailKey
+                        AND PD.Status = '4'
+                        AND TD.TaskType = 'ASTCPK'
+                        AND TD.Status = 'H'
+                  END
+               END TRY
+               BEGIN CATCH
+                  SET @nErrNo = 231260
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Mark ASTCPK Task as X Fail
                   GOTO RollBackTran
                END CATCH
                
