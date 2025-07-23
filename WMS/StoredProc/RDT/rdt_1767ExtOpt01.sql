@@ -353,6 +353,12 @@ AS
                      FETCH NEXT FROM @curADJ INTO @cAdjustmentKey
                      WHILE @@FETCH_STATUS = 0
                      BEGIN
+                        IF NOT EXISTS( SELECT 1 FROM dbo.ADJUSTMENTDETAIL WITH (NOLOCK) WHERE AdjustmentKey = @cAdjustmentKey)
+                        BEGIN
+                           DELETE FROM dbo.ADJUSTMENT WHERE AdjustmentKey = @cAdjustmentKey
+                           GOTO NEXT_ADJUSTMENT
+                        END
+
                         EXEC dbo.isp_FinalizeADJ
                            @c_ADJKey   = @cAdjustmentKey,
                            @b_Success  = @bSuccess    OUTPUT,
@@ -366,6 +372,7 @@ AS
                            GOTO RollBackTran
                         END
 
+                        NEXT_ADJUSTMENT:
                         FETCH NEXT FROM @curADJ INTO @cAdjustmentKey
                      END
 
@@ -476,11 +483,6 @@ AS
             END
             CLOSE @curCCD
             DEALLOCATE @curCCD
-
-            IF NOT EXISTS( SELECT 1 FROM dbo.ADJUSTMENTDETAIL WITH (NOLOCK) WHERE AdjustmentKey = @cAdjustmentKey)
-            BEGIN
-               DELETE FROM dbo.ADJUSTMENT WHERE AdjustmentKey = @cAdjustmentKey
-            END
 
             IF @nVariance = 0
             BEGIN
