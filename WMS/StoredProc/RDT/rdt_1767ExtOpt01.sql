@@ -140,13 +140,14 @@ AS
                   SET @cAlertMessage =
                      'UCC: ' + @cUCC + ' WITH VARIANCE QTY (' + CAST( @nCCDQty AS NVARCHAR( 5)) + ').'
 
-                  SELECT @cUCCStatus = Status
+                  SELECT @cUCCStatus = Status,
+                     @cUCCFromLOC = LOC
                   FROM dbo.UCC WITH (NOLOCK)
                   WHERE StorerKey = @cStorerKey
                      AND UCCNo = @cUCC
 
                   IF @cUCCStatus = '3'
-                     SET @cAlertMessage = @cAlertMessage + ' It is allocated.'
+                     SET @cAlertMessage = @cAlertMessage + ' It is allocated to ' + ISNULL(@cUCCFromLOC, '') + '.'
                   ELSE
                      SET @cAlertMessage = @cAlertMessage + ' No allocation.'
 
