@@ -142,17 +142,3 @@ EXECUTE rdt.rdtAddScn 6464, 'ENG',
    ,@cLine07 = 'OPTION: %01i01'
    ,@cLine14 = '%e'
    ,@nFunc = 850
-
---FCR-4159
--- 6468 = Scan SKU to get real case id in single order
-DELETE rdt.RDTScn WHERE Scn = 6468 AND Lang_Code = 'ENG'
-EXECUTE rdt.rdtAddScn 6468, 'ENG',
-    @cLine01 = 'SINGLE UNIT ORDERS'
-   ,@cLine02 = 'SCAN SKU IN CARTON'
-   ,@cLine03 = 'SKU:'
-   ,@cLine04 = '%20i01'
-   ,@cLine05 = ''
-   ,@cLine06 = ''
-   ,@cLine07 = ''
-   ,@cLine14 = '%e'
-   ,@nFunc = 850
