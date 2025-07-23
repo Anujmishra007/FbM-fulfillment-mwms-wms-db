@@ -20,6 +20,7 @@ CREATE OR ALTER PROC [RDT].[rdt_1768ExtUpd02] (
    @nFunc           INT,   
    @cLangCode       NVARCHAR( 3), 
    @nStep           INT, 
+   @nAfterStep      INT,
    @nInputKey       INT, 
    @cStorerKey      NVARCHAR( 15), 
    @cTaskDetailKey  NVARCHAR( 10), 
