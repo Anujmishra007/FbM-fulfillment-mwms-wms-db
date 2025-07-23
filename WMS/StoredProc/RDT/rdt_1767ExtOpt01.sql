@@ -102,6 +102,12 @@ AS
       ToID              NVARCHAR( 18)
    )
 
+   DECLARE @tAdjustmentKeys     TABLE
+   (
+      RowIndex          INT IDENTITY(1,1),
+      AdjustmentKey     NVARCHAR( 10)
+   )
+
    SELECT 
       @cUserName = UserName,
       @cSkipAlertScreen = V_String7
@@ -187,6 +193,7 @@ AS
                IF @cPostADJ = '1'
                BEGIN
                   DELETE FROM @tUCCToMove
+                  DELETE FROM @tAdjustmentKeys
 
                   IF OBJECT_ID('tempdb..#Posting') IS NOT NULL      
                      DROP TABLE #Posting    
@@ -248,6 +255,9 @@ AS
                            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP')   -- Ins AdjHdr Err
                            GOTO RollBackTran   
                         END
+
+                        INSERT INTO @tAdjustmentKeys (AdjustmentKey)
+                        VALUES (@cAdjustmentKey)
                      END
 
                      SELECT TOP 1
@@ -331,7 +341,10 @@ AS
                                        AND LLI.QtyAllocated > 0
                                        AND UCC.Status = '3')
                      BEGIN
-                        INSERT INTO #Posting (AdjustmentKey) VALUES (@cAdjustmentKey)
+                        IF NOT EXISTS(SELECT 1 FROM #Posting WHERE AdjustmentKey = @cAdjustmentKey)
+                        BEGIN
+                           INSERT INTO #Posting (AdjustmentKey) VALUES (@cAdjustmentKey)
+                        END
                      END
                      
                      VARIANCE:
@@ -353,12 +366,6 @@ AS
                      FETCH NEXT FROM @curADJ INTO @cAdjustmentKey
                      WHILE @@FETCH_STATUS = 0
                      BEGIN
-                        IF NOT EXISTS( SELECT 1 FROM dbo.ADJUSTMENTDETAIL WITH (NOLOCK) WHERE AdjustmentKey = @cAdjustmentKey)
-                        BEGIN
-                           DELETE FROM dbo.ADJUSTMENT WHERE AdjustmentKey = @cAdjustmentKey
-                           GOTO NEXT_ADJUSTMENT
-                        END
-
                         EXEC dbo.isp_FinalizeADJ
                            @c_ADJKey   = @cAdjustmentKey,
                            @b_Success  = @bSuccess    OUTPUT,
@@ -483,6 +490,13 @@ AS
             END
             CLOSE @curCCD
             DEALLOCATE @curCCD
+
+            DELETE ADJ
+            FROM dbo.ADJUSTMENT ADJ
+            INNER JOIN @tAdjustmentKeys TADJ ON ADJ.AdjustmentKey = TADJ.AdjustmentKey
+            LEFT JOIN dbo.ADJUSTMENTDETAIL ADJD ON ADJ.AdjustmentKey = ADJD.AdjustmentKey
+            WHERE ADJ.StorerKey = @cStorerkey
+               AND ADJD.AdjustmentKey IS NULL
 
             IF @nVariance = 0
             BEGIN
