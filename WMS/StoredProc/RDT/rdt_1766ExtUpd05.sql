@@ -51,13 +51,13 @@ BEGIN
       @cOptions = I_Field02
    FROM rdt.RDTMOBREC (NOLOCK) WHERE Mobile = @nMobile
 
-   IF @nFunc =1766 -- Handle CC & CCSUP
+   IF @nFunc = 1766 -- Handle CC & CCSUP
    BEGIN
-      IF @nStep = 4
+      IF @nStep IN (4, 7)
       BEGIN
          IF @nInputKey = 1
          BEGIN
-            IF ISNULL(@cOptions, '') = '1'
+            IF (@nStep = 4 AND ISNULL(@cOptions, '') = '1') OR @nStep = 7
             BEGIN
                SELECT @cLoc = FromLoc,
                   @cHoldType = Message01,
