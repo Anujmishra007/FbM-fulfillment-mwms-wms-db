@@ -5,7 +5,8 @@ GO
 
 /************************************************************************/
 /* Store procedure: rdt_1766ExtUpd05                                    */
-/* Purpose: For PAGE                                                    */
+/* Purpose: Release inventory by LOC/LOT/ID once CC is done              */
+/* Customer: Chile PUMA                                                  */
 /*                                                                      */
 /* Modifications log:                                                   */
 /*                                                                      */
@@ -37,21 +38,20 @@ BEGIN
    SET CONCAT_NULL_YIELDS_NULL OFF 
 
    DECLARE
-      @cUserName        NVARCHAR( 18),
-      @cOptions         NVARCHAR( 60),
-      @cLoc             NVARCHAR( 10),
-      @cHoldType        NVARCHAR( 60),
+      @cUserName        NVARCHAR(18),
+      @cOptions         NVARCHAR(60),
+      @cHoldType        NVARCHAR(60),
       @cLoc             NVARCHAR(10),
       @cLot             NVARCHAR(10),
-      @cID              NVARCHAR(20),
-      @nRowCount        INT
+      @nRowCount        INT,
+      @bSuccess         INT
 
    SELECT 
       @cUserName = UserName,
       @cOptions = I_Field02
    FROM rdt.RDTMOBREC (NOLOCK) WHERE Mobile = @nMobile
 
-   IF @nFunc IN (1766) -- Handle CC & CCSUP
+   IF @nFunc =1766 -- Handle CC & CCSUP
    BEGIN
       IF @nStep = 4
       BEGIN
@@ -62,7 +62,7 @@ BEGIN
                SELECT @cLoc = FromLoc,
                   @cHoldType = Message01,
                   @cLot = Lot,
-                  @cID = ID,
+                  @cID = FromID,
                   @cLoc = FromLoc
                FROM dbo.TaskDetail WITH (NOLOCK)
                WHERE TaskDetailKey = @cTaskdetailkey
@@ -115,7 +115,7 @@ BEGIN
                         ,@dt_Lottable15  = NULL
                         ,@c_Status = 'CCUNHOLD'
                         ,@c_Hold = 0
-                        ,@b_success = @b_Success OUTPUT
+                        ,@b_success = @bSuccess OUTPUT
                         ,@n_Err = @nErrNo OUTPUT
                         ,@c_Errmsg = @cErrMsg OUTPUT
                         ,@c_Remark  = ''

@@ -49,12 +49,17 @@ CREATE OR ALTER PROC [RDT].[rdt_1768ExtUpd02] (
    @cErrMsg         NVARCHAR( 20) OUTPUT  
 )
 AS
-
+BEGIN
    SET NOCOUNT ON
    SET QUOTED_IDENTIFIER OFF
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
+   DECLARE 
+      @cHoldType        NVARCHAR(60),
+      @cLot             NVARCHAR(10),
+      @nRowCount        INT,
+      @bSuccess         INT
 
    IF @nFunc = 1768
    BEGIN
@@ -67,7 +72,7 @@ AS
                SELECT @cLoc = FromLoc,
                   @cHoldType = Message01,
                   @cLot = Lot,
-                  @cID = ID,
+                  @cID = FromID,
                   @cLoc = FromLoc
                FROM dbo.TaskDetail WITH (NOLOCK)
                WHERE TaskDetailKey = @cTaskdetailkey
@@ -120,7 +125,7 @@ AS
                         ,@dt_Lottable15  = NULL
                         ,@c_Status = 'CCUNHOLD'
                         ,@c_Hold = 0
-                        ,@b_success = @b_Success OUTPUT
+                        ,@b_success = @bSuccess OUTPUT
                         ,@n_Err = @nErrNo OUTPUT
                         ,@c_Errmsg = @cErrMsg OUTPUT
                         ,@c_Remark  = ''
@@ -135,8 +140,8 @@ AS
          END
       END
    END
-
-GO
+   Quit:
+END
 GO
 
 SET QUOTED_IDENTIFIER OFF
