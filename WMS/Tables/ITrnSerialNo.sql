@@ -180,6 +180,11 @@ BEGIN
 EXEC sp_addextendedproperty N'MS_Description', N'UCCNo', 'SCHEMA', N'dbo', 'TABLE', N'ITrnSerialNo', 'COLUMN', N'UCCNo'
 END
 
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'ITrnSerialNo', N'COLUMN',N'FromID'))
+BEGIN
+EXEC sp_addextendedproperty N'MS_Description', N'FromID', 'SCHEMA', N'dbo', 'TABLE', N'ITrnSerialNo', 'COLUMN', N'FromID'
+END
+
 END
 ELSE
 BEGIN
@@ -310,6 +315,12 @@ BEGIN
 	EXEC sp_addextendedproperty N'MS_Description', N'UCCNo', 'SCHEMA', N'dbo', 'TABLE', N'ITrnSerialNo', 'COLUMN', N'UCCNo'
 END
 
+/*UWP-32503*/
+IF NOT EXISTS (SELECT * FROM sys.columns WHERE Name = 'FromID' AND Object_ID = Object_ID('ITrnSerialNo'))
+BEGIN
+ALTER TABLE ITrnSerialNo ADD FromID NVARCHAR(18) NOT NULL CONSTRAINT  [DF_ITrnSerialNo_FromID]  DEFAULT (' ');
+EXEC sp_addextendedproperty N'MS_Description', N'FromID', 'SCHEMA', N'dbo', 'TABLE', N'ITrnSerialNo', 'COLUMN', N'FromID'
+END
 
 IF NOT EXISTS ( SELECT *  FROM INFORMATION_SCHEMA.COLUMNS  WHERE TABLE_NAME = 'ITRNSerialNo' AND COLUMN_NAME = 'Lot' AND CHARACTER_MAXIMUM_LENGTH = 10 )
 BEGIN
@@ -384,14 +395,6 @@ END
 IF NOT EXISTS ( SELECT *  FROM INFORMATION_SCHEMA.COLUMNS  WHERE TABLE_NAME = 'ITRNSerialNo' AND COLUMN_NAME = 'UCCNo' AND CHARACTER_MAXIMUM_LENGTH = 20 )
 BEGIN
    ALTER TABLE [ITRNSerialNo] ALTER COLUMN [UCCNo] nvarchar(20);
-END
-
-
-/*UWP-32503*/
-IF NOT EXISTS (SELECT * FROM sys.columns WHERE Name = 'FromID' AND Object_ID = Object_ID('ITrnSerialNo'))
-BEGIN
-ALTER TABLE ITrnSerialNo ADD FromID NVARCHAR(18) NOT NULL CONSTRAINT  [DF_ITrnSerialNo_FromID]  DEFAULT (' ');
-EXEC sp_addextendedproperty N'MS_Description', N'FromID', 'SCHEMA', N'dbo', 'TABLE', N'ITrnSerialNo', 'COLUMN', N'FromID'
 END
 
 END
