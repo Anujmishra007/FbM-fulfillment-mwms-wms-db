@@ -1,3 +1,4 @@
+-- FCR-6059
 -- rdt_1768ExtOpt01
 exec rdt.rdtDropMsg 241501 , 241550
 
