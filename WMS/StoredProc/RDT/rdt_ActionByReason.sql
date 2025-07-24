@@ -113,7 +113,7 @@ BEGIN
          ,StartTime,EndTime,SourceType,SourceKey,PickDetailKey,OrderKey,OrderLineNumber,ListKey,WaveKey,ReasonKey
          ,Message01,Message02,Message03,RefTaskKey,LoadKey,AreaKey,DropID, SystemQty)
          SELECT 
-         @cTaskDetailKeyCC,@cCCTaskType,@cStorerKey,@cSKU,@cLot,'',0,0,@cLoc,'','','',''
+         @cTaskDetailKeyCC,@cCCTaskType,@cStorerKey,@cSKU,@cLot,'',0,0,@cLoc,'',@cID,'',''
          ,'','','SKU','0','','1','1', IIF(@cReleaseCheckFlg = '1', 'UNHOLD', ''),'','',''
          ,GetDATE(),GetDATE(),'rdt_ActionByReason',@cCCKey,'','','','','',''
          ,IIF(@cReleaseCheckFlg = '1', @cHoldType, ''),'','','','','', '', 0

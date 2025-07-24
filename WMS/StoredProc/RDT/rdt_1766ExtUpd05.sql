@@ -5,8 +5,8 @@ GO
 
 /************************************************************************/
 /* Store procedure: rdt_1766ExtUpd05                                    */
-/* Purpose: Release inventory by LOC/LOT/ID once CC is done              */
-/* Customer: Chile PUMA                                                  */
+/* Purpose: Release inventory by LOC/LOT/ID once CC is done             */
+/* Customer: Chile PUMA                                                 */
 /*                                                                      */
 /* Modifications log:                                                   */
 /*                                                                      */
