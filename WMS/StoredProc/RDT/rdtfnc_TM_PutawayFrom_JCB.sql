@@ -15,6 +15,7 @@ GO
 /* 2025-04-21  1.0.0  NLT013   FCR-3954. Created                               */
 /* 2025-06-27  1.0.1  Dennis   FCR-3954. Update Dispatch strategy              */
 /* 2025-07-16  1.0.2  Jackc    FCR-3954. Fix overwriteToLoc is cleared issue.  */  
+/* 2025-07-23  1.0.3  Dennis   FCR-3954. Fix Recalculation issue.              */  
 /*******************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_PutawayFrom_JCB](
    @nMobile    INT,
@@ -623,10 +624,10 @@ BEGIN
                         WHERE PAE.EquipmentProfileKey = @cEquipmentProfileKey
                            AND PAE.PutawayZone = LOC1.PutawayZone
                      )
-         AND NOT EXISTS(SELECT 1 
+         AND (NOT EXISTS(SELECT 1 
                         FROM @tAisleInUsed AIU
                         WHERE AIU.LocAisle = LOC1.LocAisle
-                     )
+                     ) OR LOC1.LocationCategory <> 'VNA')
       ORDER BY IIF (TD.Status = '3' AND TD.UserKey = @cUserName, 1, 2), IIF(TD.UserKeyOverRide = @cUserName, 1, 2), RT.FinalizeDate, TD.Priority, LOC.LocAisle, LOC.LogicalLocation, LOC.Loc, TD.TaskDetailKey
 
       IF ISNULL(@cTaskdetailKey, '') = ''
@@ -1361,7 +1362,7 @@ BEGIN
          UPDATE dbo.TaskDetail WITH(ROWLOCK) 
          SET
             ToLoc = IIF(@cToLoc <> @cSuggToLoc, @cToLoc, ToLoc),
-            TransitLOC = IIF(@cLocCategory IN ('PND', 'PNDIN', 'PNDOOUT'), @cToLoc, TransitLoc)
+            TransitLOC = IIF(@cLocCategory IN ('PND','PND_IN','PNDIN'), @cToLoc, TransitLoc)
          WHERE StorerKey = @cStorerKey
             AND TaskType IN ('PAF', 'PA1')
             AND UserKey = @cUserName
@@ -1550,7 +1551,7 @@ BEGIN
 
       -- If last task is from PND location, then next task should be from PND location
       -- Sequence: 1. same aisle but opposite side to be given 2. Next aisle in the same AreaKey
-      IF @cLocCategory IN  ('PND_IN', 'PND_OUT', 'PND')
+      IF @cLocCategory IN  ('PND','PND_IN','PNDIN')
       BEGIN
          SELECT TOP 1 
             @cNextTaskDetailKey = TD.TaskDetailKey,
@@ -1564,7 +1565,7 @@ BEGIN
          INNER JOIN dbo.PALLET PL WITH(NOLOCK) ON TD.StorerKey = PL.StorerKey AND TD.FromID = PL.PalletKey
          WHERE TD.StorerKey = @cStorerKey
             AND LOC.Facility = @cFacility
-            AND LOC.LocationCategory IN  ('PND_IN', 'PND_OUT', 'PND')
+            AND LOC.LocationCategory IN ('PND','PND_IN','PNDIN')
             AND TD.TaskType IN ('PAF', 'PA1')
             AND ((TD.Status = '0' AND TD.UserKey = '') OR (TD.Status = '3' AND TD.UserKey = @cUserName))
             AND TD.UserKeyOverRide IN (@cUserName, '')
@@ -1928,13 +1929,13 @@ BEGIN
                                     )
                      END
                      -- b) If ToLoc is a PND location, search candidate location
-                     ELSE IF @cLocCategory IN ('PND', 'PND_IN', 'PND_OUT')
+                     ELSE IF @cLocCategory IN ('PND','PND_IN','PNDIN')
                      BEGIN
                         SELECT TOP 1 @cNewToLoc = LOC.Loc
                         FROM dbo.LOC WITH(NOLOCK)
                         WHERE LOC.Facility = @cFacility
                            AND LOC.Status = 'OK'
-                           AND LOC.LocationCategory IN ('PND', 'PND_IN', 'PND_OUT')
+                           AND LOC.LocationCategory = @cLocCategory
                            AND LOC.LocAisle = @cLocAisle
                            AND LOC.Loc <> @cSuggToLoc
                            AND ISNULL(LOC.LocationFlag,'') IN ('','NONE')
@@ -1986,7 +1987,7 @@ BEGIN
                            AND AD.AreaKey = @cToLocAreaKey
                            AND Loc.PutawayZone = @cToLocPutawayZone
                            AND LOC.LocLevel = @nToLocLevel
-                           AND LOC.LocAisle = @cLocAisle
+                           AND (LOC.LocAisle = @cLocAisle OR LOC.LocationCategory <> 'VNA')
                            AND LOC.Status = 'OK'
                            AND ISNULL(LOC.LocationFlag,'') IN ('','NONE')
                            AND NOT EXISTS(SELECT 1 FROM dbo.LOTxLOCxID LLI (NOLOCK) 
