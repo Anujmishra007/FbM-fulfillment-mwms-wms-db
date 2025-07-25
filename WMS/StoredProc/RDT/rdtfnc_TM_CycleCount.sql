@@ -46,6 +46,8 @@ GO
 /* 2025-05-19 4.2.0  JACKC      UWP-34563 Count SKU task genrerates cc detaill   */ 
 /*                               for all SKUs on the loc                         */
 /* 2025-06-17 4.3.0  NickT    FCR-4971 Add ExtScn in Step 3                      */
+/* 2025-07-16 4.3.1  James    FCR-6059 Change @nFromScn @nFromStep rdtMobRec     */
+/*                            variable mapping (james17)                         */
 /*********************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_CycleCount](
@@ -281,9 +283,10 @@ SELECT
 
    @nUCCQty          = V_Integer1,
    @nRowID           = V_Integer2,
+   @nFromScn         = V_Integer3,
+   @nFromStep        = V_Integer4,
 
-   @nFromScn         = V_String30,
-   @nFromStep        = V_String31,
+
    @cAreakey         = V_String32,
    @cTTMStrategykey  = V_String33,
    @cTTMTasktype     = V_String34,
@@ -3705,9 +3708,9 @@ BEGIN
 
       V_Integer1 = @nUCCQty,
       V_Integer2 = @nRowID,
+      V_Integer3 = @nFromScn,
+      V_Integer4 = @nFromStep,
 
-      V_String30 = @nFromScn,
-      V_String31 = @nFromStep,
       V_String32 = @cAreakey,
       V_String33 = @cTTMStrategykey,
       V_String34 = @cTTMTasktype,
