@@ -100,7 +100,6 @@ BEGIN
    IF EXISTS (SELECT 1 FROM dbo.CCDetail WITH (NOLOCK)
               WHERE CCSheetNo = @cTaskDetailKey
               AND   Storerkey = @cStorerKey
-              AND   RefNo = @cUCC
               AND   [Status] = '0'
               AND   Loc = @cLoc
               AND   ID = @cID)
@@ -110,10 +109,10 @@ BEGIN
       FROM dbo.CCDetail WITH (NOLOCK)
       WHERE CCSheetNo = @cTaskDetailKey
       AND   Storerkey = @cStorerKey
-      AND   RefNo = @cUCC
       AND   [Status] = '0'
       AND   Loc = @cLoc
       AND   ID = @cID
+      AND   RefNo = @cUCC
       OPEN @curCfmUCC
       FETCH NEXT FROM @curCfmUCC INTO @cCCDetailKey, @cCCSheetNo, @nSystemQty
       WHILE @@FETCH_STATUS = 0
@@ -150,11 +149,11 @@ BEGIN
 
             INSERT INTO dbo.CCDetail (
                      CCKey, CCDetailKey, StorerKey, Sku, Lot, Loc, Id, Qty, CCSheetNo, 
-                     Lottable01, Lottable02, Lottable03, Lottable04, Lottable05, 
+                     Lottable01, Lottable02, Lottable03, Lottable04, Lottable05,   
                      SystemQty, RefNo, STATUS, AddWho, AddDate)
             SELECT CCKey, @cNewCCDetailKey, @cStorerKey, @cSKU, Lot, @cLoc, @cID, 0, CCSheetNo, 
                    @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05, 
-                   SystemQty - @nQty, '', '0', @cUserName, GETDATE()
+                   SystemQty - @nQty, @cUCC, '0', @cUserName, GETDATE()
             FROM dbo.CCDetail WITH (NOLOCK)
             WHERE CCDetailKey  = @cCCDetailKey
 
