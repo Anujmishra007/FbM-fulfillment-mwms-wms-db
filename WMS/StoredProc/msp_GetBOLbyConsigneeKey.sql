@@ -44,31 +44,40 @@ BEGIN
          , @n_MaxSeq       BIGINT = 69999999
          , @c_Susr5Prefix  NVARCHAR(60) = ''
          , @c_CheckDigit   NVARCHAR(1) = ''
+         , @n_RowCount     INT = 0
 
    SET @c_BOLByConsigneekey = ''
 
-   IF @c_Wavekey <> ''   --By Wave
+   IF ISNULL(@c_Wavekey, '') <> ''   --By Wave
    BEGIN
       SELECT @c_StorerKey = MAX(OH.StorerKey)
            , @c_Facility = MAX(OH.Facility)
-           , @c_BOLByConsigneekey = MAX(ISNULL(OI.ReferenceId,''))  
+           , @c_BOLByConsigneekey = MAX(ISNULL(OI.ReferenceId,''))
+           , @n_RowCount = COUNT(1)
       FROM dbo.WAVEDETAIL WD WITH (NOLOCK)
       JOIN dbo.ORDERS OH WITH (NOLOCK) ON WD.OrderKey = OH.OrderKey
       JOIN dbo.OrderInfo OI WITH (NOLOCK) ON OH.OrderKey = OI.OrderKey 
       WHERE WD.WaveKey = @c_Wavekey
       AND OH.ConsigneeKey = @c_Consigneekey
    END
-   ELSE IF @c_Orderkey <> ''   --By Order
+   ELSE IF ISNULL(@c_Orderkey, '') <> ''   --By Order
    BEGIN
       SELECT @c_StorerKey = MAX(OH.StorerKey)
            , @c_Facility = MAX(OH.Facility)
-           , @c_BOLByConsigneekey = MAX(ISNULL(OI.ReferenceId,''))  
+           , @c_BOLByConsigneekey = MAX(ISNULL(OI.ReferenceId,''))
+           , @n_RowCount = COUNT(1)
       FROM dbo.ORDERS OH WITH (NOLOCK)
       JOIN dbo.OrderInfo OI WITH (NOLOCK) ON OH.OrderKey = OI.OrderKey 
       WHERE OH.OrderKey = @c_Orderkey
       AND OH.ConsigneeKey = @c_Consigneekey
    END
    ELSE
+   BEGIN
+      GOTO QUIT_SP
+   END
+
+   --If no result, return
+   IF @n_RowCount = 0
    BEGIN
       GOTO QUIT_SP
    END
