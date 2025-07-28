@@ -76,7 +76,8 @@ GO
 /* 2025-03-31   5.8.0   Dennis      FCR-2705 ExtScn04                            */
 /* 2025-01-23   5.9.0   CYU027      FCR-540 Fix issues， SerinaNo                */
 /* 2025-05-20   6.0.0   Jackc       UWP-34683 Add extupd to step4                */
-/* 2025-01-23   6.1.0   CYU027      FCR-540 Fix issues， SerinaNo                 */
+/* 2025-01-23   6.1.0   CYU027      FCR-540 Fix issues， SerinaNo                */
+/* 2025-07-28   0.0.0   Jackc       !!!Cutover!!! Use V2 version in V0 repo for work*/
 /*********************************************************************************/
 
 CREATE OR ALTER   PROC [RDT].[rdtfnc_PickPiece] (
