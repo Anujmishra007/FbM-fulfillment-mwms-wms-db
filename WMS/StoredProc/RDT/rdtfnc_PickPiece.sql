@@ -76,6 +76,7 @@ GO
 /* 2025-03-31   5.8.0   Dennis      FCR-2705 ExtScn04                            */
 /* 2025-01-23   5.9.0   CYU027      FCR-540 Fix issues， SerinaNo                */
 /* 2025-05-20   6.0.0   Jackc       UWP-34683 Add extupd to step4                */
+/* 2025-01-23   6.1.0   CYU027      FCR-540 Fix issues， SerinaNo                 */
 /*********************************************************************************/
 
 CREATE OR ALTER   PROC [RDT].[rdtfnc_PickPiece] (
@@ -2078,6 +2079,7 @@ BEGIN
 
          IF @cExtScnSP <> ''
          BEGIN
+            SET @nPre_Step = '' -- clear pre step
             GOTO STEP_99
          END
          GOTO QUIT
@@ -5048,6 +5050,7 @@ BEGIN
 
    IF @cExtScnSP <> '' AND EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
    BEGIN
+      SET @nPre_Step = ''
       GOTO Step_99
    END
 
