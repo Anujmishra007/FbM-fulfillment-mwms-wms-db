@@ -22,6 +22,7 @@ GO
 /*                          rdt_MoveToID_Close (james02)                */
 /* 2023-07-29 1.8  Ung      WMS-23069 Add serial no                     */
 /* 2024-08-30 1.9  Dennis   UWP-23768 Qty NULL Bug fix                  */
+/* 2025-07-28 2.0  NickT    !!!Cutover. Use V0 for development!!!       */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_MoveToID] (
