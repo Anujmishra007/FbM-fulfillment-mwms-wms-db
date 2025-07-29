@@ -62,6 +62,10 @@ BEGIN
    SET @cLogicalLOC = ''  
    SELECT @cLogicalLOC = LogicalLocation FROM LOC WITH (NOLOCK) WHERE LOC = @cLOC  
   
+   SELECT @cPickZone  = V_string35,
+   FROM rdt.rdtMobRec WITH (NOLOCK)
+   WHERE Mobile = @nMobile
+
    -- Get PickHeader info  
    SELECT TOP 1  
       @cOrderKey = OrderKey,  
