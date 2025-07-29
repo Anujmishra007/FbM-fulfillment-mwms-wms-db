@@ -49,21 +49,32 @@ BEGIN
       BEGIN
          IF @nInputKey = 1 -- ENTER
          BEGIN
-            SELECT @cFromIDLottable03 = Lottable03
-            FROM dbo.LOTXLOCXID WITH (NOLOCK)
-            WHERE ID = @cFromID
-               AND StorerKey = @cStorerKey
+            SELECT @cFromIDLottable03 = LA.Lottable03
+            FROM dbo.LOTXLOCXID LLI WITH (NOLOCK)
+            INNER JOIN dbo.LOTATTRIBUTE LA WITH (NOLOCK) ON LLI.Lot = LA.Lot
+            WHERE LLI.ID = @cFromID
+               AND LLI.StorerKey = @cStorerKey
 
-            SELECT @cToIDLottable03 = Lottable03
-            FROM dbo.LOTXLOCXID WITH (NOLOCK)
-            WHERE ID = @cToID
-               AND StorerKey = @cStorerKey
-
-            IF ISNULL(@cFromIDLottable03, '') <> ISNULL(@cToIDLottable03, '')
+            IF @cToID IS NULL OR @cToID = ''
             BEGIN
-               SET @nErrNo = 242851
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Lottable03 need to be the same
-               GOTO Quit
+               SELECT @cToIDLottable03 = LA.Lottable03
+               FROM dbo.LOTXLOCXID LLI WITH (NOLOCK)
+               INNER JOIN dbo.LOTATTRIBUTE LA WITH (NOLOCK) ON LLI.Lot = LA.Lot
+               WHERE LLI.ID = @cToID
+                  AND LLI.StorerKey = @cStorerKey
+                  AND LLI.Qty > 0
+
+               SELECT @nRowCount = @@ROWCOUNT
+
+               IF @nRowCount > 0
+               BEGIN
+                  IF ISNULL(@cFromIDLottable03, '') <> ISNULL(@cToIDLottable03, '')
+                  BEGIN
+                     SET @nErrNo = 242851
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Lottable03 need to be the same
+                     GOTO Quit
+                  END
+               END
             END
          END
       END
@@ -72,10 +83,11 @@ BEGIN
       BEGIN
          IF @nInputKey = 1 -- ENTER
          BEGIN
-            SELECT @cFromIDLottable03 = Lottable03
-            FROM dbo.LOTXLOCXID WITH (NOLOCK)
-            WHERE ID = @cFromID
-               AND StorerKey = @cStorerKey
+            SELECT @cFromIDLottable03 = LA.Lottable03
+            FROM dbo.LOTXLOCXID LLI WITH (NOLOCK)
+            INNER JOIN dbo.LOTATTRIBUTE LA WITH (NOLOCK) ON LLI.Lot = LA.Lot
+            WHERE LLI.ID = @cFromID
+               AND LLI.StorerKey = @cStorerKey
 
             IF ISNULL(@cFromIDLottable03, '') = ''
             BEGIN

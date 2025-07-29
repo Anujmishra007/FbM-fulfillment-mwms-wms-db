@@ -72,9 +72,10 @@ BEGIN
          BEGIN
             SELECT @nRowCount = COUNT(DISTINCT LA.Lottable03)
             FROM rdt.rdtMoveUCCLog RMU WITH (NOLOCK)
-            INNER JOIN dbo.LOTATTRIBUTE LA WITH(NOLOCK) ON RMU.Lot = LA.Lot
-            WHERE StorerKey = @cStorerKey
-               AND AddWho = SUSER_SNAME()
+            INNER JOIN dbo.UCC WITH(NOLOCK) ON RMU.UCCNo = UCC.UCCNo
+            INNER JOIN dbo.LOTATTRIBUTE LA WITH(NOLOCK) ON UCC.Lot = LA.Lot
+            WHERE UCC.StorerKey = @cStorerKey
+               AND RMU.AddWho = SUSER_SNAME()
 
             IF @nRowCount > 1
             BEGIN
@@ -94,9 +95,9 @@ BEGIN
                SELECT @cToIDLottable03 = LA.Lottable03
                FROM dbo.LOTXLOCXID LLI WITH (NOLOCK)
                INNER JOIN dbo.LOTATTRIBUTE LA WITH(NOLOCK) ON LLI.Lot = LA.Lot
-               WHERE ID = @cToID
-                  AND StorerKey = @cStorerKey
-                  AND Qty > 0
+               WHERE LLI.ID = @cToID
+                  AND LLI.StorerKey = @cStorerKey
+                  AND LLI.Qty > 0
 
                SET @nRowCount = @@ROWCOUNT
 
@@ -104,11 +105,12 @@ BEGIN
                BEGIN
                   SELECT TOP 1 @cUCCLottable03 = LA.Lottable03
                   FROM rdt.rdtMoveUCCLog RMU WITH (NOLOCK)
-                  INNER JOIN dbo.LOTATTRIBUTE LA WITH(NOLOCK) ON RMU.Lot = LA.Lot
-                  WHERE StorerKey = @cStorerKey
-                     AND AddWho = SUSER_SNAME()
+                  INNER JOIN dbo.UCC WITH(NOLOCK) ON RMU.UCCNo = UCC.UCCNo
+                  INNER JOIN dbo.LOTATTRIBUTE LA WITH(NOLOCK) ON UCC.Lot = LA.Lot
+                  WHERE UCC.StorerKey = @cStorerKey
+                     AND RMU.AddWho = SUSER_SNAME()
 
-                  IF @cUCCLottable03 <> @cToIDLottable03
+                  IF ISNULL(@cUCCLottable03, '') <> ISNULL(@cToIDLottable03, '')
                   BEGIN
                      SET @nErrNo = 242902
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Lottable03 need to be the same
@@ -121,11 +123,12 @@ BEGIN
             BEGIN
                SELECT TOP 1 @cUCCLottable03 = LA.Lottable03
                FROM rdt.rdtMoveUCCLog RMU WITH (NOLOCK)
-               INNER JOIN dbo.LOTATTRIBUTE LA WITH(NOLOCK) ON RMU.Lot = LA.Lot
-               WHERE StorerKey = @cStorerKey
-                  AND AddWho = SUSER_SNAME()
+               INNER JOIN dbo.UCC WITH(NOLOCK) ON RMU.UCCNo = UCC.UCCNo
+               INNER JOIN dbo.LOTATTRIBUTE LA WITH(NOLOCK) ON UCC.Lot = LA.Lot
+               WHERE UCC.StorerKey = @cStorerKey
+                  AND RMU.AddWho = SUSER_SNAME()
 
-               IF @cUCCLottable03 = ''
+               IF ISNULL(@cUCCLottable03, '') = ''
                BEGIN
                   SELECT @cToLocationType = LocationType
                   FROM dbo.LOC WITH (NOLOCK)
