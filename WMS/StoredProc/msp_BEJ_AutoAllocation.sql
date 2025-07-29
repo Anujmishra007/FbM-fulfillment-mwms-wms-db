@@ -210,7 +210,7 @@ BEGIN
           ANd od.Lottable03 is NOT NULL
           AND (o.UserDefine09 is NULL OR o.UserDefine09 = '')
           AND (CASE WHEN ISNULL(SequenceNo,0) = 0 OR (SequenceNo = 99999999) THEN 0 ELSE SequenceNo END) < 24
-          AND ISNULL(o.Ecom_Platform,'') <> '3RDParty'
+          AND ISNULL(o.Ecom_Platform,'') NOT LIKE '3RDParty%'
           group by o.orderkey,o.Type
           HAVING sum(od.openqty) > 0
 
@@ -285,12 +285,40 @@ BEGIN
          DEALLOCATE CUR_NORMAL_ORDERKEY
        END
         /* Third Party Preallocation*/
-       IF @n_Continue=1 OR @n_Continue=2
-       BEGIN
-          DECLARE CUR_THIRD_PARTY_ORDERKEY CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-          SELECT o.OrderKey
+
+           IF OBJECT_ID('tempdb..#skuQty','u') IS NOT NULL
+           BEGIN
+             DROP TABLE #skuQty;
+           END
+
+           CREATE TABLE #skuQty
+           (
+             OrderKey       NVARCHAR(10)   NOT NULL
+           , Sku            NVARCHAR(20)   NOT NULL DEFAULT('')
+           ,  QtyAvailable   INT            NOT NULL DEFAULT(0)
+           ,  QtyOpen        INT            NOT NULL DEFAULT(0)
+           )
+
+          INSERT INTO #skuQty
+          SELECT o.OrderKey, od.sku, SUM(li.avaialbleQty),od.openQty
           FROM ORDERS o WITH (NOLOCK)
           JOIN ORDERDETAIL od WITH (NOLOCK) on od.OrderKey = o.Orderkey
+          JOIN ( SELECT LLI.storerkey, LLI.sku, LA.Lottable03, SUM(LLI.QTY - LLI.QTYALLOCATED - LLI.QTYPICKED - LLI.QtyReplen) as avaialbleQty
+                   FROM LOTxLOCxID LLI (NOLOCK)
+                   JOIN LOC (NOLOCK) ON (LLI.Loc = LOC.LOC)
+                   JOIN ID (NOLOCK) ON (LLI.Id = ID.ID)
+                   JOIN LOT (NOLOCK) ON (LLI.LOT = LOT.LOT)
+                   JOIN LOTATTRIBUTE LA (NOLOCK) ON LOT.LOT = LA.LOT
+                   JOIN PUTAWAYZONE PA (NOLOCK) ON LOC.Putawayzone = PA.Putawayzone
+                   WHERE LOC.LocationFlag = 'NONE'
+                   AND LOC.Status = 'OK'
+                   AND LOT.Status = 'OK'
+                   AND ID.Status = 'OK'
+                   AND LOC.Facility = @c_Facility
+                   AND (LLI.QTY - LLI.QTYALLOCATED - LLI.QTYPICKED - LLI.QtyReplen) > 0
+                   AND LLI.STORERKEY = @c_StorerKey
+                   AND pa.ZoneCategory = 'OTHER'
+                   GROUP BY LLI.Storerkey, LLI.sku,LA.Lottable03) li ON od.sku = li.sku AND od.Lottable03 = li.Lottable03 AND o.storerkey = li.storerkey
           WHERE o.StorerKey = @c_StorerKey
           AND o.Facility = @c_Facility
           AND o.Type IN ('0','1','2')
@@ -302,10 +330,31 @@ BEGIN
           AND (o.UserDefine09 is NULL OR o.UserDefine09 = '')
           AND (CASE WHEN ISNULL(SequenceNo,0) = 0 OR (SequenceNo = 99999999)
           THEN 1 ELSE SequenceNo END) BETWEEN 1 AND 24
-          AND ISNULL(o.Ecom_Platform,'') <> '3RDParty'
-          group by o.OrderKey
+          AND ISNULL(o.Ecom_Platform,'') NOT LIKE '3RDParty%'
+          AND NOT EXISTS (
+                   SELECT 1
+                   FROM LOTxLOCxID LLI (NOLOCK)
+                   JOIN LOC (NOLOCK) ON (LLI.Loc = LOC.LOC)
+                   JOIN ID (NOLOCK) ON (LLI.Id = ID.ID)
+                   JOIN LOT (NOLOCK) ON (LLI.LOT = LOT.LOT)
+                   JOIN LOTATTRIBUTE LA (NOLOCK) ON LOT.LOT = LA.LOT
+                   LEFT JOIN PUTAWAYZONE PA (NOLOCK) ON LOC.Putawayzone = PA.Putawayzone
+                   WHERE LOC.LocationFlag = 'NONE'
+                   AND LOC.Status = 'OK'
+                   AND LOT.Status = 'OK'
+                   AND ID.Status = 'OK'
+                   AND LOC.Facility = @c_Facility
+                   AND (LLI.QTY - LLI.QTYALLOCATED - LLI.QTYPICKED - LLI.QtyReplen) > 0
+                   AND LLI.STORERKEY =  @c_StorerKey
+                   AND LLI.Sku = od.sku
+                   GROUP BY LLI.Storerkey, LLI.sku,LA.Lottable03
+				           HAVING COUNT(DISTINCT PA.ZoneCategory) > 1 )
+          GROUP BY o.OrderKey,od.sku,od.openQty
           HAVING sum(od.openqty) > 0
-          order by o.OrderKey
+          ORDER BY o.OrderKey
+
+       DECLARE CUR_THIRD_PARTY_ORDERKEY CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+       SELECT DISTINCT OrderKey FROM #skuQty
 
        OPEN CUR_THIRD_PARTY_ORDERKEY
 
@@ -318,45 +367,10 @@ BEGIN
             print(@c_Orderkey)
           END
 
-       IF OBJECT_ID('tempdb..#skuQty','u') IS NOT NULL
-       BEGIN
-         DROP TABLE #skuQty;
-       END
-
-       CREATE TABLE #skuQty
-       (
-         Sku            NVARCHAR(10)   NOT NULL DEFAULT('')
-       ,  QtyAvailable   INT            NOT NULL DEFAULT(0)
-       ,  QtyOpen        INT            NOT NULL DEFAULT(0)
-       )
-
-       INSERT INTO #skuQty
-       SELECT li.sku, SUM(li.avaialbleQty) availableQty, od.openqty FROM
-		   ( SELECT LLI.storerkey, LLI.sku, LA.Lottable03, SUM(LLI.QTY - LLI.QTYALLOCATED - LLI.QTYPICKED - LLI.QtyReplen) as avaialbleQty
-                   FROM LOTxLOCxID LLI (NOLOCK)
-                   JOIN LOC (NOLOCK) ON (LLI.Loc = LOC.LOC)
-                   JOIN ID (NOLOCK) ON (LLI.Id = ID.ID)
-                   JOIN LOT (NOLOCK) ON (LLI.LOT = LOT.LOT)
-                   JOIN LOTATTRIBUTE LA (NOLOCK) ON LOT.LOT = LA.LOT
-                   JOIN SKUXLOC SL (NOLOCK) ON (LLI.Storerkey = SL.Storerkey AND LLI.Sku = SL.Sku AND LLI.Loc = SL.Loc)
-                   JOIN SKU (NOLOCK) ON (LLI.Storerkey = Sku.Storerkey AND LLI.Sku = Sku.Sku)
-                   JOIN PUTAWAYZONE PA (NOLOCK) ON LOC.Putawayzone = PA.Putawayzone
-                   WHERE LOC.LocationFlag = 'NONE'
-                   AND LOC.Status = 'OK'
-                   AND LOT.Status = 'OK'
-                   AND ID.Status = 'OK'
-                   AND LOC.Facility = @c_Facility
-                   AND (LLI.QTY - LLI.QTYALLOCATED - LLI.QTYPICKED - LLI.QtyReplen) > 0
-                   AND LLI.STORERKEY = @c_StorerKey
-                   AND pa.ZoneCategory = 'OTHER'
-                   GROUP BY LLI.Storerkey, LLI.sku,LA.Lottable03) li
-				   JOIN ORDERDETAIL od ON od.sku = li.sku AND od.Lottable03 = li.Lottable03 AND od.storerkey = li.storerkey
-				   where od.orderkey = @c_OrderKey
-				   GROUP BY li.sku,od.OpenQty
-
        IF EXISTS (SELECT 1
           FROM #skuQty
-          WHERE QtyAvailable < QtyOpen)
+          WHERE QtyAvailable < QtyOpen
+          AND OrderKey = @c_Orderkey)
           BEGIN
               UPDATE ORDERS WITH (ROWLOCK)
               SET Ecom_Platform = '3RDPartyQty'
@@ -378,7 +392,7 @@ BEGIN
        END
        CLOSE CUR_THIRD_PARTY_ORDERKEY
        DEALLOCATE CUR_THIRD_PARTY_ORDERKEY
-      END
+
    END
 EXIT_SP:
     
