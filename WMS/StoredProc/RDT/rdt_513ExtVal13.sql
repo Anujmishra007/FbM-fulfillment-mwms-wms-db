@@ -55,7 +55,7 @@ BEGIN
             WHERE LLI.ID = @cFromID
                AND LLI.StorerKey = @cStorerKey
 
-            IF @cToID IS NULL OR @cToID = ''
+            IF @cToID <> ''
             BEGIN
                SELECT @cToIDLottable03 = LA.Lottable03
                FROM dbo.LOTXLOCXID LLI WITH (NOLOCK)
