@@ -124,6 +124,7 @@ BEGIN
          , @c_StoredProc            nvarchar(200)    
          , @c_ConfigFacility        nvarchar(5)  
          , @c_UpdatedColumns        NVARCHAR(250)      
+         , @c_TablenameHP           NVARCHAR(30)   --(YT05)
     
    -- ORDERS table    
    DECLARE @c_StorerKey             nvarchar(15)    
