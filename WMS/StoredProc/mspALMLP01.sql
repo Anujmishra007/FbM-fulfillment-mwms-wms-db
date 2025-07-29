@@ -665,7 +665,7 @@ SET @c_SortBy = ' ORDER BY ' + RTRIM(@c_LocTypeSort) + ' Lotattribute.Lottable04
     ELSE IF ISNULL(@c_SortFields,'') = ''
 SET @c_SortBy = ' ORDER BY ' + RTRIM(@c_LocTypeSort) + ' Lotattribute.Lottable05, Lotattribute.Lot, Loc.LogicalLocation, Loc.Loc'
     ELSE
-SET @c_SortBy = ' ORDER BY ' + RTRIM(@c_LocTypeSort) + RTRIM(@c_SortFields) + " "
+SET @c_SortBy = ' ORDER BY ' + RTRIM(@c_LocTypeSort) + RTRIM(@c_SortFields) + ' '
 END
 ELSE
 BEGIN
