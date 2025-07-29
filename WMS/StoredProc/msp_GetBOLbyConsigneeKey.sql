@@ -46,6 +46,11 @@ BEGIN
          , @c_CheckDigit   NVARCHAR(1) = ''
          , @n_RowCount     INT = 0
 
+   SET @b_Debug = @n_Err
+   SET @b_Debug = ISNULL(@b_Debug, 0)
+   SET @b_Success = 1
+   SET @n_Err = 0
+   SET @c_Errmsg = ''
    SET @c_BOLByConsigneekey = ''
 
    IF ISNULL(@c_Wavekey, '') <> ''   --By Wave
