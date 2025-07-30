@@ -34,7 +34,9 @@ GO
 /*                            PickDetails are picked, some Packinfo was missing    */
 /* 2025-03-22 1.15.1 NLT013   UWP-31481 Need check if all packdetail are generated */
 /* 2025-04-08 1.15.2 Dennis   UWP-32495 FixBugs                                    */
+/* 2025-04-29 1.16.0 NickT    UWP-33521 Carton weight is not corret for MPOC       */
 /* 2025-04-29 1.16.2 NickT    UWP-33521 Carton weight is not corret for MPOC       */
+/* 2025-07-22 1.17.0 Jackc    FCR-6705 Generate BOL sequence number                */
 /***********************************************************************************/
 CREATE OR ALTER PROC rdt.rdt_855ExtUpd13 (
    @nMobile      INT,   
@@ -155,6 +157,22 @@ BEGIN
    DECLARE @nDropIDCounter   INT
    DECLARE @cPackDropID      NVARCHAR(20)
    --v1.13.0 end
+
+   --V1.17.0 start
+   DECLARE @tOrderNoRefID TABLE
+   (
+      RowNumber      INT IDENTITY(1,1),
+      OrderKey       NVARCHAR(10),
+      ConsigneeKey   NVARCHAR(15),
+      WaveKey        NVARCHAR(10)
+   )
+
+   DECLARE @cONRIOrderKey     NVARCHAR(10)
+   DECLARE @cONRIConsigneeKey NVARCHAR(15)
+   DECLARE @cONRIWaveKey      NVARCHAR(10)
+   DECLARE @cReferenceID      NVARCHAR(20)
+   DECLARE @cOtherParams      NVARCHAR(MAX) = ''
+   --V1.17.0 end
 
    SET @nErrNo = 0
    SET @cErrMsg = ''
@@ -878,6 +896,84 @@ BEGIN
                      IF TRIM(@cShipperKey) <> ''
                         AND EXISTS(SELECT 1 FROM CODELKUP WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND LISTNAME = 'WSCourier' AND @cShipperKey = ISNULL(notes,'-1'))
                      BEGIN
+                        --V1.17 start
+                        -- Get all order key without orderinfo.ReferenceNo value in the paperboard box
+                        INSERT INTO @tOrderNoRefID (OrderKey, ConsigneeKey, WaveKey)
+                           SELECT DISTINCT ORM.OrderKey, ORM.ConsigneeKey, ORM.UserDefine09 
+                           FROM dbo.PICKDETAIL PD WITH(NOLOCK)
+                           JOIN dbo.ORDERS ORM WITH(NOLOCK) ON PD.OrderKey = orm.OrderKey
+                           JOIN dbo.OrderInfo OI WITH(NOLOCK) ON ORM.OrderKey = oi.OrderKey
+                           WHERE PD.CaseID = @cDropID
+                              AND PD.CaseID <> ''
+                              AND PD.StorerKey = @cStorerKey
+                              AND PD.Status NOT IN ('4', '9')
+                              AND (OI.ReferenceId IS NULL OR OI.ReferenceId = '')
+                        
+                        IF @bDebugFlag = 1
+                        BEGIN
+                           SELECT 'Order without ReferenceID', @cDropID AS DropID
+                           SELECT * FROM @tOrderNoRefID
+                        END
+
+                        IF EXISTS (SELECT 1 FROM @tOrderNoRefID)
+                        BEGIN
+                           SET @nLoopIndex = -1
+                           WHILE 1 = 1
+                           BEGIN
+                              SELECT TOP 1
+                                 @cONRIOrderKey = OrderKey,
+                                 @cONRIConsigneeKey = ConsigneeKey,
+                                 @cONRIWaveKey = WaveKey,
+                                 @nLoopIndex = RowNumber
+                              FROM @tOrderNoRefID
+                              WHERE RowNumber > @nLoopIndex
+                              ORDER BY RowNumber
+
+                              SET @nRowCount = @@ROWCOUNT
+
+                              IF @nRowCount = 0
+                                 BREAK
+
+                              SET @cReferenceID = ''
+
+                              --Call BOL running number generator
+                              
+                              EXEC	[dbo].[msp_GetBOLbyConsigneeKey]
+                                 @c_Wavekey  = @cONRIWaveKey,
+                                 @c_Orderkey = @cONRIOrderKey,
+                                 @c_Consigneekey = @cONRIConsigneeKey,
+                                 @c_BOLByConsigneekey = @cReferenceID OUTPUT,
+                                 @c_OtherParams = @cOtherParams OUTPUT,
+                                 @b_Success = @bSuccess OUTPUT,
+                                 @n_Err = @nErrNo OUTPUT,
+                                 @c_ErrMsg = @cErrMsg OUTPUT
+
+                              IF @bSuccess <> 1 OR @nErrNo <> 0
+                              BEGIN
+                                 SET @nErrNo = 217807
+                                 SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --GenReferenceIDFail
+                                 GOTO Quit
+                              END
+
+                              IF @bDebugFlag = 1
+                                 SELECT 'Generating ReferenceID for OrderKey', @nLoopIndex AS RowNumber, 
+                                          @cONRIOrderKey AS Orderkey, @cONRIConsigneeKey AS Consigneekey, 
+                                          @cONRIWaveKey AS WaveKey, @cReferenceID AS ReferenceID 
+
+                              BEGIN TRY
+                                 UPDATE dbo.OrderInfo WITH(ROWLOCK)
+                                 SET ReferenceId = @cReferenceID
+                                 WHERE OrderKey = @cONRIOrderKey
+                              END TRY
+                              BEGIN CATCH
+                                 SET @nErrNo = 217808
+                                 SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Update OrderInfo fail
+                                 GOTO Quit
+                              END CATCH
+                           END-- loop generating reference id end
+                        END -- OrderNoRefID exists end
+                        --V1.17 end
+
                         DECLARE @cTrauncatedDropID    NVARCHAR(10) = @cDropID
                         -- Insert transmitlog2 here
                         EXECUTE ispGenTransmitLog2
