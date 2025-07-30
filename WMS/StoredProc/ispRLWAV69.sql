@@ -33,6 +33,7 @@ GO
 /* 21-Jul-2025  Wan05   1.7   FCR-6708 - MLP Cold Store Allocation and   */
 /*                            Replenishment Issues                       */
 /*                            FCR-2902 Bug Fix                           */
+/* 29-Jul-2025                FCR-6708 Bug Fix                           */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]        
     @c_Wavekey      NVARCHAR(10)    
@@ -93,6 +94,7 @@ CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]
          , @n_Qty_Alloc                INT         = 0                              --(Wan02) 
          , @c_PickDetailKey            NVARCHAR(10) = ''                            --(Wan02)            
          , @c_NewPickDetailKey         NVARCHAR(10) = ''                            --(Wan02)   
+         , @n_RowID                    INT            = 0                           --2025-07-29   
 
          , @b_CherryPick               INT            = 0                           --(Wan03)
          , @c_AllowOverAllocations     NVARCHAR(10)   = ''                          --(Wan03)
@@ -353,6 +355,19 @@ CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]
             
       CREATE INDEX PDWIP_Wave ON #PickDetail_WIP (Wavekey, WIP_RefNo, UOM, [Status]) 
    END
+   
+   IF OBJECT_ID('#ZoneAisle') IS NOT NULL                                          --2025-07-29 - START
+   BEGIN 
+      DROP TABLE #ZoneAisle
+   END
+
+   CREATE TABLE #ZoneAisle
+   ( RowID        INT                                    PRIMARY KEY
+   , Facility     NVARCHAR(5)    NOT NULL DEFAULT('')
+   , [Zone]       NVARCHAR(10)   NOT NULL DEFAULT('')
+   , LocAisle     NVARCHAR(10)   NOT NULL DEFAULT('')
+   , Direction    NCHAR(1)       NOT NULL DEFAULT('')
+   )                                                                                --2025-07-29 - END
 
     --Initialize Pickdetail work in progress staging table
    IF @n_continue = 1 or @n_continue = 2
@@ -433,7 +448,7 @@ CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]
       BEGIN
          ;WITH SplitValues AS (
             SELECT 
-               [Value],
+               [Value] = LTRIM([Value]),                                            --2025-07-29
                ROW_NUMBER() OVER (ORDER BY (SELECT '')) AS RowNum
             FROM STRING_SPLIT(@c_DPPBatch, ',')
          )
@@ -519,7 +534,19 @@ CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]
          SET @c_ToID     = ''
          SET @c_FinalLoc = ''
          SET @c_FinalID  = ''
- 
+         SET @n_RowID    = 0
+   
+         TRUNCATE TABLE #ZoneAisle;                                                 --2025-07-29
+         INSERT INTO #ZoneAisle ( RowID, Facility, [Zone], LocAisle, Direction )
+         SELECT  RowID, Facility, [Zone], LocAisle, Direction 
+         FROM dbo.fnc_GetToZoneAisle ( @c_Facility
+                                    ,  @c_Putawayzone 
+                                    ,  ''
+                                    ,  @c_LocAisle 
+                                    ,  ''
+                                    ,  @c_DirectionType 
+                                    ,  @c_PZJSon 
+                                    ) za 
    
          -- Find DPP 
          -- 1) Same Friend From Same Aisle
@@ -528,18 +555,24 @@ CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]
          -- 4) Empty Loc From Others Aisle
          IF @c_ToLoc = ''
          BEGIN
-            SET @c_SQL = N'SELECT TOP 1 @c_ToLoc = l.Loc'
+            -- Get Same Friend
+             SET @c_SQL = N'SELECT TOP 1 @c_ToLoc = l.Loc'                          --2025-07-29 - START
                        + ' , @c_LoseID = l.LoseID'
+                       + ' , @n_RowID  = za.RowID'                                  
                        + ' FROM Loc l (NOLOCK)'
-                       + ' CROSS APPLY dbo.fnc_GetToZoneAisle (l.Facility'
-                       +                                   ',  @c_Putawayzone'
-                       +                                   ',  '''''
-                       +                                   ',  @c_LocAisle'
-                       +                                   ',  '''''
-                       +                                   ',  @c_DirectionType'
-                       +                                   ',  @c_PZJSon'
-                       +                                   ') za'
-                       + ' OUTER APPLY ( SELECT P.Pallet'
+                       --+ ' CROSS APPLY dbo.fnc_GetToZoneAisle (l.Facility'
+                       --+                                   ',  @c_Putawayzone'
+                       --+                                   ',  '''''
+                       --+                                   ',  @c_LocAisle'
+                       --+                                   ',  '''''
+                       --+                                   ',  @c_DirectionType'
+                       --+                                   ',  @c_PZJSon'
+                       --+                                   ') za'
+                       + ' JOIN #ZoneAisle za ON za.facility = l.Facility'                         
+                       +                   ' AND za.[Zone] = l.PutawayZone'
+                       + CASE WHEN @c_LocAisle > '' THEN ' AND za.LocAisle = l.LocAisle' 
+                                                    ELSE '' END
+                       + ' CROSS APPLY ( SELECT P.Pallet'
                        +               ' , QtyRepl = SUM(lli.Qty - lli.QtyPicked + lli.PendingMoveIn)'
                        +                         ' + @n_Qty'
                        +               ' FROM LOTxLOCxID lli (NOLOCK) '
@@ -556,6 +589,7 @@ CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]
                               END
                        +                ' WHERE lli.StorerKey = @c_Storerkey'
                        +                ' AND lli.Loc = l.loc'
+                       +                ' AND lli.Qty - lli.QtyPicked + lli.PendingMoveIn > 0'     --2025-07-29
                        +                @c_SQLCond 
                        +                ' GROUP BY P.Pallet'
                        +                ' HAVING P.Pallet * l.MaxPallet <' 
@@ -565,13 +599,9 @@ CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]
                        + ' AND   l.LocationType = ''DYNPPICK'''
                        + ' AND   l.LocationFlag NOT IN (''HOLD'', ''DAMAGE'')'
                        + ' AND   l.[Status] = ''OK''' 
-                       + ' AND   l.MaxPallet * ISNULL(inv.Pallet,1) > ISNULL(inv.QtyRepl,0)'
-                       + ' GROUP BY l.loc, l.LogicalLocation, l.PAlogicalloc, l.LoseID, l.LocAisle, l.MaxPallet'
-                       +         ', ISNULL(inv.Pallet,0), ISNULL(inv.QtyRepl,0)'                       
-                       + ' ORDER BY MIN(za.RowID)'
+                       + ' AND   l.MaxPallet * inv.Pallet >= inv.QtyRepl'
+                       + ' ORDER BY za.RowID'
                        +         ', CASE WHEN l.LocAisle = @c_LocAisle THEN 1 ELSE 9 END'
-                       +         ', CASE WHEN ISNULL(inv.QtyRepl,0) - @n_Qty > 0'  
-                       +               ' THEN 1 ELSE 9 END'
                        +         ', l.LogicalLocation, l.PAlogicalloc'    
                    
             SET @c_SQLParms = N'@c_Facility        NVARCHAR(5)'
@@ -588,6 +618,7 @@ CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]
                             + ',@n_Qty             INT'
                             + ',@c_ToLoc           NVARCHAR(30)   OUTPUT'
                             + ',@c_Loseid          NVARCHAR(1)    OUTPUT'
+                            + ',@n_RowID           INT            OUTPUT'
  
             EXEC sp_ExecuteSQL @c_SQL
                               ,@c_SQLParms
@@ -605,7 +636,53 @@ CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]
                               ,@n_Qty
                               ,@c_ToLoc      OUTPUT   
                               ,@c_Loseid     OUTPUT   
-         END
+                              ,@n_RowID      OUTPUT    
+        END
+        
+        -- Get Empty Loc, if Toloc > '', Get Empty Loc From Same Aisle and overwritten
+        SET @c_SQL  = N' SELECT TOP 1 @c_ToLoc = l.Loc' 
+            +          ', @c_LoseID  = l.LoseID' 
+            + ' FROM Loc l (NOLOCK)'
+            + ' JOIN #ZoneAisle za ON za.facility = l.Facility'                        
+            +           ' AND za.[Zone] = l.PutawayZone'
+            + CASE WHEN @c_LocAisle > '' THEN ' AND za.LocAisle = l.LocAisle' 
+                                          ELSE '' END
+            + ' OUTER APPLY ( SELECT Qty = SUM(lli.Qty - lli.QtyPicked + lli.PendingMoveIn)'
+            +               ' FROM LOTxLOCxID lli (NOLOCK)'
+            +               ' WHERE lli.Storerkey = @c_Storerkey'
+            +               ' AND lli.Loc = l.Loc' 
+            +               ' GROUP BY lli.Loc'             
+            +               ') inv'
+            + ' WHERE l.Facility  = @c_Facility' 
+            + ' AND   l.LocationType = ''DYNPPICK'''
+            + ' AND   l.LocationFlag NOT IN (''HOLD'', ''DAMAGE'')'
+            + ' AND   l.[Status] = ''OK'''
+            + ' AND   (inv.Qty = 0 OR inv.Qty IS NULL)'
+            + CASE WHEN @c_ToLoc > '' AND @c_LocAisle > '' 
+                   THEN ' AND l.@c_LocAisle = @c_LocAisle AND za.RowID < @n_RowID'
+                   WHEN @c_ToLoc > '' AND @c_LocAisle = ''
+                   THEN ' AND za.RowID < @n_RowID'
+                   ELSE '' END
+            + ' ORDER BY za.RowID'
+            +         ', l.LogicalLocation, l.PAlogicalloc'
+ 
+         SET @c_SQLParms = N'@c_Facility        NVARCHAR(5)'
+                         + ',@c_Storerkey       NVARCHAR(15)'
+                         + ',@c_Putawayzone     NVARCHAR(10)' 
+                         + ',@c_LocAisle        NVARCHAR(10)' 
+                         + ',@c_ToLoc           NVARCHAR(30)   OUTPUT'
+                         + ',@c_Loseid          NVARCHAR(1)    OUTPUT'
+                         + ',@n_RowID           INT'
+ 
+         EXEC sp_ExecuteSQL @c_SQL
+                           ,@c_SQLParms
+                           ,@c_Facility
+                           ,@c_Storerkey
+                           ,@c_PutawayZone
+                           ,@c_LocAisle
+                           ,@c_ToLoc      OUTPUT   
+                           ,@c_Loseid     OUTPUT   
+                           ,@n_RowID                                                --2025-07-29 - END
   
          SET @c_ToID = CASE WHEN @c_LoseID = 1 THEN '' ELSE @c_FromID END
          SET @c_FinalLoc = @c_ToLoc
@@ -1483,6 +1560,11 @@ CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]
    BEGIN 
       DROP TABLE #PickDetail_WIP
    END
+   
+   IF OBJECT_ID('#ZoneAisle') IS NOT NULL                                               --2025-07-29
+   BEGIN 
+      DROP TABLE #ZoneAisle
+   END   
 
    IF CURSOR_STATUS('LOCAL', 'Orders_Pickdet_cur') IN (0 , 1)
    BEGIN

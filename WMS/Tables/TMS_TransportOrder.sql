@@ -39,7 +39,6 @@ GRANT INSERT ON  [dbo].[TMS_TransportOrder] TO [NSQL]
 GRANT SELECT ON  [dbo].[TMS_TransportOrder] TO [NSQL]
 GRANT UPDATE ON  [dbo].[TMS_TransportOrder] TO [NSQL]
 
-
 END
 
 ELSE

@@ -1,7 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[RDT].[rdtPrevScreen]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [RDT].[rdtPrevScreen]
-GO
-
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
@@ -45,8 +41,9 @@ GO
 /* 18-Mar-2013  Ung           SOS271056 Add DeviceID                    */
 /* 15-Aug-2016  Ung           Update rdtMobRec with EditDate            */
 /* 05-Feb-2018  James         WMS3893-Add DefaultDeviceID (james02)     */
+/* 03-Apr-2025  NLT013        UWP-32244 Extend Menu number              */
 /************************************************************************/
-CREATE PROC [RDT].[rdtPrevScreen] (
+CREATE OR ALTER PROC [RDT].[rdtPrevScreen] (
    @nMobile int,
    @nScn    int OUTPUT
 ) AS
@@ -70,7 +67,7 @@ CREATE PROC [RDT].[rdtPrevScreen] (
    BEGIN
       SET @nScn = 1
    END
-   ELSE IF @nScn Between 6 and 499 -- Menu (Screen 5, Mainmenu, do nothing)
+   ELSE IF @nScn Between 6 and 499 OR @nScn < -100 -- Menu (Screen 5, Mainmenu, do nothing)
    BEGIN
       DECLARE @nDefaultMenu int
       
@@ -99,7 +96,7 @@ CREATE PROC [RDT].[rdtPrevScreen] (
                                       WHEN '4' THEN 'Other Unit 1'
                                       WHEN '5' THEN 'Other Unit 2'
                                       WHEN '6' THEN 'Each'
---                                      ELSE 'Each' END, -- (james01)
+        --                                      ELSE 'Each' END, -- (james01)
                                       ELSE CASE DefaultUOM WHEN '1' THEN 'Pallet'
                                                            WHEN '2' THEN 'Carton'
                                                            WHEN '3' THEN 'Inner Pack'
