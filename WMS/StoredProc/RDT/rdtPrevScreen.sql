@@ -1,7 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[RDT].[rdtPrevScreen]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [RDT].[rdtPrevScreen]
-GO
-
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
@@ -47,7 +43,7 @@ GO
 /* 05-Feb-2018  James         WMS3893-Add DefaultDeviceID (james02)     */
 /* 03-Apr-2025  NLT013        UWP-32244 Extend Menu number              */
 /************************************************************************/
-CREATE PROC [RDT].[rdtPrevScreen] (
+CREATE OR ALTER PROC [RDT].[rdtPrevScreen] (
    @nMobile int,
    @nScn    int OUTPUT
 ) AS
