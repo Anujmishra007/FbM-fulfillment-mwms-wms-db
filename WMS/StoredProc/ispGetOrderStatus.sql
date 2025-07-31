@@ -1,7 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[ispGetOrderStatus]') AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 )
-   DROP PROCEDURE [dbo].[ispGetOrderStatus]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -10,7 +6,7 @@ GO
 /***********************************************************************************/  
 /* Stored Procedure: ispGetOrderStatus                                             */  
 /* Creation Date:                                                                  */  
-/* Copyright: IDS                                                                  */  
+/* Copyright: Maersk Logistics                                                     */  
 /* Written by:                                                                     */  
 /*                                                                                 */  
 /* Purpose: Set Orders Status base on quantity in OrderDetail                      */  
@@ -49,8 +45,11 @@ GO
 /* 27-May-2016  NJOW01     1.5   Fix-calculate status not to incldue freegoodqty   */  
 /*                               if 'FREE GOODS ALLOCATION' not turn on            */  
 /* 11-Nov-2020  SHONG      1.6   Fixing Issues for CANC status change to 1         */
+/* 17-JUL-2025  Wan01      1.7   [FCR-2532] [JCB] SO Header Status Update          */
+/*                               Partial Shipment - Multi Allocation, Picking &    */
+/*                               Shipment for an Order Status                      */
 /***********************************************************************************/  
-CREATE PROC [dbo].[ispGetOrderStatus]  
+CREATE OR ALTER PROC [dbo].[ispGetOrderStatus]  
      @c_OrderKey     NVARCHAR(10)  
    , @c_StorerKey    NVARCHAR(15)  
    , @c_OrdType      NVARCHAR(10)  
@@ -77,7 +76,11 @@ BEGIN
       @n_QtyPicked     decimal,-- (ang01)  
       @n_FreeGoodQty   decimal,-- (ang01)  
       @n_ShortPickFlag INT, -- (Vicky01)  
-      @c_SOStatus      NVARCHAR(10)  
+      @c_SOStatus      NVARCHAR(10) 
+   ,  @c_ScanInStatus               NVARCHAR(10) = ''                               --(Wan01)
+   ,  @c_PickSlipNo                 NVARCHAR(10) = ''                               --(Wan01)
+   ,  @c_Facility                   NVARCHAR(5)  = ''                               --(Wan01)
+   ,  @c_PartialShipOrderStatus     NVARCHAR(10) = ''                               --(Wan01)
   
    IF ISNULL(RTRIM(@c_OrderKey), '') = ''  
       RETURN  
@@ -94,6 +97,7 @@ BEGIN
    WHERE Orderkey = @c_OrderKey  
   
    SELECT @c_SOStatus = SOSTATUS  
+         ,@c_Facility = Facility                                                    --(Wan01)
    FROM   ORDERS o WITH (NOLOCK)  
    WHERE  o.OrderKey = @c_OrderKey   
   
@@ -167,6 +171,9 @@ BEGIN
       END  
       ELSE -- (Vicky01) - Start  
       BEGIN  
+         SELECT @c_PartialShipOrderStatus = fgr.Authority                           --(Wan01)  
+         FROM dbo.fnc_GetRight2( @c_Facility, @c_Storerkey, '', 'PartialShipOrderStatus') AS fgr      
+         
          IF EXISTS (SELECT 1 FROM STORERCONFIG (NOLOCK) WHERE StorerKey = @c_StorerKey AND sValue = '1'  
                                   AND ConfigKey = 'ClusterPickStatus')  
          BEGIN  
@@ -193,8 +200,58 @@ BEGIN
                ELSE @c_NewStatus  
             END  
          END  -- (Vicky01) - End  
-         ELSE  
-         BEGIN  
+         ELSE IF @c_PartialShipOrderStatus = '1'                                      --(Wan01) - START
+         BEGIN 
+            SET @c_ScanInStatus = ''
+            SET @c_PickSlipNo   = ''
+
+            SELECT @c_PickSlipNo = p.PickHeaderKey
+            FROM  PICKHEADER p (NOLOCK) 
+            WHERE p.OrderKey = @c_OrderKey
+
+            IF @c_PickSlipNo = ''
+            BEGIN
+               SELECT TOP 1 @c_PickSlipNo = p.PickHeaderKey
+               FROM ORDERS o (NOLOCK) 
+               JOIN LoadPlanDetail lpd (NOLOCK) ON lpd.Orderkey = o.Orderkey 
+               JOIN PICKHEADER p (NOLOCK) ON  p.ExternOrderKey = lpd.Loadkey
+                                          AND p.Loadkey = lpd.Loadkey
+               WHERE o.OrderKey = @c_OrderKey             
+            END
+
+            IF @c_PickSlipNo > ''
+            BEGIN
+               IF EXISTS ( SELECT 1
+                           FROM  PickingInfo pif (NOLOCK) 
+                           WHERE pif.PickSlipNo = @c_PickSlipNo
+                           AND   pif.ScanInDate IS NOT NULL
+                         )
+               BEGIN
+                  SET @c_ScanInStatus = '3' 
+               END
+            END
+
+            SET @c_NewStatus =  
+               CASE  
+               WHEN (@c_NewStatus = '9' OR @c_NewStatus = 'CANC') THEN @c_NewStatus  
+               WHEN (@n_AllocatedQty + @n_ShippedQty + @n_QtyPicked = 0) AND 
+                    (@c_NewStatus <> 'CANC') THEN '0'  
+               WHEN (@n_ShippedQty > 0)  THEN '9'
+               WHEN (@n_OpenQty + @n_FreeGoodQty) = (@n_AllocatedQty + @n_QtyPicked) AND @n_AllocatedQty = 0 AND 
+                    (@c_NewStatus <='5') THEN '5' 
+               WHEN (@n_OpenQty + @n_FreeGoodQty) = (@n_AllocatedQty + @n_QtyPicked) AND @n_QtyPicked > 0 AND
+                    (@c_NewStatus >='0' AND @c_ScanInStatus = '3') THEN '3' 
+               WHEN (@n_OpenQty + @n_FreeGoodQty) = (@n_AllocatedQty + @n_QtyPicked) AND @n_AllocatedQty > 0 AND
+                    (@c_NewStatus <='5' AND @c_ScanInStatus = '3') THEN '3'
+               WHEN (@n_OpenQty + @n_FreeGoodQty) = (@n_AllocatedQty + @n_QtyPicked) AND @n_AllocatedQty > 0 AND 
+                    (@c_NewStatus <='5') THEN '2'
+               WHEN (@n_OpenQty + @n_FreeGoodQty) > (@n_AllocatedQty + @n_QtyPicked) AND (@n_AllocatedQty + @n_QtyPicked) > 0 AND
+                    (@c_NewStatus <='5') THEN '1'   
+               ELSE @c_NewStatus 
+               END
+         END                                                                        --(Wan01) - END                                                          
+         ELSE
+         BEGIN                                                       
             SELECT @c_NewStatus =  
             CASE  
                WHEN (@c_NewStatus = '9' OR @c_NewStatus = 'CANC' OR @c_SOStatus = 'CANC') THEN @c_NewStatus  
