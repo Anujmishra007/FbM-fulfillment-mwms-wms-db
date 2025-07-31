@@ -13,7 +13,7 @@ GO
 /*          Get Additional Orders, Orderdetail, Pickdetail Status                   */  
 /*          Status: '6' -> 'Marshell'                                               */  
 /*          Status: '7' -> 'Loaded'                                                 */  
-/*          Storerconfig: GetAddOrderStatus, SValue=<msp_GetAddOrdStatusXX>         */ 
+/*          Storerconfig: GetAddOrderStatus, SValue=<msp_GetAddOrderStatusXX>       */ 
 /*                                                                                  */  
 /* Called By: JAVA Backend: Orders, Orderdetail, Pickdetail Screen                  */ 
 /*          : Orders Header: Orderkey data is mandatory                             */
