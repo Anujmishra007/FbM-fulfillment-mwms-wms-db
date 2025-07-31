@@ -29,7 +29,7 @@ GO
 /*                                                                                  */  
 /* Updates:                                                                         */  
 /* Date        Author      Ver   Purposes                                           */ 
-/* 2025-07-31  Wan         1.0                                                      */
+/* 2025-07-31  Wan         1.0   Adding tableid-allocpickdettd                      */
 /************************************************************************************/  
 CREATE OR ALTER PROC [dbo].[msp_GetAddOrderStatus01]  
   @c_RequestString   NVARCHAR(MAX)   
@@ -199,7 +199,7 @@ BEGIN
                 ON  col.TABLE_NAME  = LEFT(SCC.[column], CHARINDEX('.',SCC.[column])-1)
                 AND col.COLUMN_NAME = RIGHT(SCC.[column],LEN(SCC.[column])- CHARINDEX('.',SCC.[column]))
 
-         IF @c_TableID IN ( 'sotd', 'picksearchtd')
+         IF @c_TableID IN ('sotd', 'picksearchtd')
          BEGIN
             SET @c_SQL = 'SELECT ORDERS.Orderkey, Orderlinenumber ='''', Pickdetailkey=''''' 
          END
@@ -207,7 +207,7 @@ BEGIN
          BEGIN
             SET @c_SQL = 'SELECT ORDERDETAIL.Orderkey, ORDERDETAIL.Orderlinenumber, Pickdetailkey=''''' 
          END
-         ELSE IF @c_TableID = 'picktd' 
+         ELSE IF @c_TableID IN ('picktd','allocpickdettd')  
          BEGIN
             SET @c_SQL = 'SELECT PICKDETAIL.Orderkey, Orderlinenumber ='''', PICKDETAIL.Pickdetailkey' 
          END
@@ -336,22 +336,22 @@ BEGIN
 
 
 
-         SET @c_SQLSelect = CASE WHEN @c_TableID IN ( 'sotd', 'picksearchtd')
+         SET @c_SQLSelect = CASE WHEN @c_TableID IN ('sotd', 'picksearchtd')
                                  THEN REPLACE(@c_SQLSelect, 'ORDERS.Status', 'o.Order_Status AS Status') 
                                  WHEN @c_TableID = 'sodetailtd' 
                                  THEN REPLACE(@c_SQLSelect, 'ORDERDETAIL.Status', 'o.OrderLine_Status AS Status') 
-                                 WHEN @c_TableID = 'picktd' 
+                                 WHEN @c_TableID IN ('picktd','allocpickdettd') 
                                  THEN REPLACE(@c_SQLSelect, 'PICKDETAIL.Status', 'o.Pickdetail_Status AS Status') 
                                  END
 
          SET @c_SQL = @c_SQLSelect
                      + ' ' + @c_SQLFrom 
-                     + ' ' + CASE WHEN @c_TableID IN ( 'sotd', 'picksearchtd')
+                     + ' ' + CASE WHEN @c_TableID IN ('sotd', 'picksearchtd')
                                  THEN 'JOIN #TMP_ORD o ON o.Orderkey = ORDERS.Orderkey'
                                  WHEN @c_TableID = 'sodetailtd' 
                                  THEN 'JOIN #TMP_ORD o ON o.Orderkey = ORDERS.Orderkey  
                                        AND o.OrderlineNumber = ORDERDETAIL.OrderlineNumber'
-                                 WHEN @c_TableID = 'picktd' 
+                                 WHEN @c_TableID IN ('picktd','allocpickdettd')  
                                  THEN 'JOIN #TMP_ORD o ON o.PickdetailKey = o.PickdetailKey'
                                  END
                      + ' ' + @c_SQLWhere  
