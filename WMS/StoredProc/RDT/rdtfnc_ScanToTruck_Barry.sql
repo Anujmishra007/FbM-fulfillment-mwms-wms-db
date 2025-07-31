@@ -12,6 +12,7 @@ GO
 /* Date       Rev  Author     Purposes                                        */ 
 /* 2024-07-01 1.0  Dennis     FCR-262 Created                                 */
 /* 2024-10-09 1.1  XLL045     FCR-859 Created                                 */
+/* 2025-07-23 1.2  Dennis     UWP-38128 Fix Bugs                              */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_ScanToTruck_Barry] (
@@ -540,6 +541,16 @@ BEGIN
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Pallet ID
          GOTO Step_4_Fail
       END
+
+      IF NOT EXISTS (SELECT 1 FROM dbo.MBOLDETAIL MD WITH (NOLOCK)
+                     WHERE MD.MbolKey = @cMBOLKey
+                     AND MD.OrderKey = @cOrderKey)
+      BEGIN
+         SET @nErrNo = 218463
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Pallet ID
+         GOTO Step_4_Fail
+      END
+
       -- Handling transaction
       SET @nTranCount = @@TRANCOUNT
       BEGIN TRAN  -- Begin our own transaction

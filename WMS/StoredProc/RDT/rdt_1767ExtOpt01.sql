@@ -3,16 +3,16 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-
 /************************************************************************/
 /* Store procedure: rdt_1767ExtOpt01                                    */
-/* Copyright      : MAERSK                                              */    
+/* Copyright      : MAERSK                                              */
 /* Purpose: Decide whether need to send Alert and Supervisor count      */
 /*                                                                      */
 /* Modifications log:                                                   */
 /*                                                                      */
 /* Date       Rev  Author     Purposes                                  */
 /* 2025-07-07 1.0  James      FCR-6060. Created                         */
+/* 2025-07-23 1.1.0 NickT     FCR-6060 fixed some issues                */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1767ExtOpt01] (
@@ -67,19 +67,46 @@ AS
    DECLARE @curCCD      CURSOR
    DECLARE @curADJ      CURSOR
    DECLARE @cTaskType   NVARCHAR( 10)
+   DECLARE @cCCDLOT     NVARCHAR( 10)
    DECLARE @cCCDLOC     NVARCHAR( 10)
+   DECLARE @cCCDID      NVARCHAR( 18)
    DECLARE @cCCDSKU     NVARCHAR( 20)
    DECLARE @cPostADJ       NVARCHAR( 1)
    DECLARE @cADJFinalize   NVARCHAR( 1)
    DECLARE @cADJType       NVARCHAR( 10)
    DECLARE @cADJReason     NVARCHAR( 10)
-   DECLARE @cAdjustmentKey NVARCHAR( 10)
+   DECLARE @cAdjustmentKey NVARCHAR( 10) = ''
    DECLARE @cAdjDetailLine NVARCHAR( 5)
    DECLARE @cPackkey       NVARCHAR( 10)
    DECLARE @cAlertMessage  NVARCHAR( 255)
    DECLARE @nVariance      INT = 0
    DECLARE @cSkipAlertScreen  NVARCHAR( 1)
    DECLARE @cUserName      NVARCHAR( 18)
+   DECLARE @cUCCStatus     NVARCHAR(1) = '1'
+   DECLARE @nIsAlert       INT = 0
+   DECLARE @curADJDtl      CURSOR
+   DECLARE @nLoopIndex     INT
+   DECLARE @nRowCount      INT
+   DECLARE @nAdjustmentQty INT
+   DECLARE @cUCCFromLOC    NVARCHAR( 10)
+   DECLARE @cUCCFromID     NVARCHAR( 18)
+   DECLARE @cUCCToLOC      NVARCHAR( 10)
+   DECLARE @cUCCToID       NVARCHAR( 18)
+   DECLARE @tUCCToMove     TABLE
+   (
+      RowIndex          INT IDENTITY(1,1),
+      UCCNo             NVARCHAR( 20),
+      FromLoc           NVARCHAR( 10),
+      FromID            NVARCHAR( 18),
+      ToLoc             NVARCHAR( 10),
+      ToID              NVARCHAR( 18)
+   )
+
+   DECLARE @tAdjustmentKeys     TABLE
+   (
+      RowIndex          INT IDENTITY(1,1),
+      AdjustmentKey     NVARCHAR( 10)
+   )
 
    SELECT 
       @cUserName = UserName,
@@ -97,10 +124,6 @@ AS
             FROM dbo.TaskDetail WITH (NOLOCK)
             WHERE TaskDetailKey = @cTaskDetailKey
 
-            SET @nTranCount = @@TRANCOUNT
-            BEGIN TRAN
-            SAVE TRAN rdt_1767ExtOpt01
-
             IF @cTaskType = 'CC'
             BEGIN
                SET @curCCD = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
@@ -108,14 +131,26 @@ AS
                FROM dbo.CCDetail WITH (NOLOCK)
                WHERE CCSheetNo = @cTaskDetailKey
                GROUP BY RefNo
-               HAVING SUM( SystemQty - Qty) > 0
+               HAVING ABS( SUM( SystemQty - Qty)) > 0
                OPEN @curCCD
                FETCH NEXT FROM @curCCD INTO @cUCC, @nCCDQty
                WHILE @@FETCH_STATUS = 0
                BEGIN
                   SET @nErrNo = 0
                   SET @cAlertMessage =
-                     'UCC: ' + @cUCC + ' WITH VARIANCE QTY (' + @nCCDQty + ')'
+                     'UCC: ' + @cUCC + ' WITH VARIANCE QTY (' + CAST( @nCCDQty AS NVARCHAR( 5)) + ').'
+
+                  SELECT @cUCCStatus = Status,
+                     @cUCCFromLOC = LOC
+                  FROM dbo.UCC WITH (NOLOCK)
+                  WHERE StorerKey = @cStorerKey
+                     AND UCCNo = @cUCC
+
+                  IF @cUCCStatus = '3'
+                     SET @cAlertMessage = @cAlertMessage + ' It is allocated to ' + ISNULL(@cUCCFromLOC, '') + '.'
+                  ELSE
+                     SET @cAlertMessage = @cAlertMessage + ' No allocation.'
+
                   EXEC nspLogAlert
                         @c_modulename       = 'TMCCUCC'
                      , @c_AlertMessage     = @cAlertMessage
@@ -141,6 +176,8 @@ AS
                   IF @nVariance = 0
                      SET @nVariance = 1
 
+                  SET @nIsAlert = 1
+
                   FETCH NEXT FROM @curCCD INTO @cUCC, @nCCDQty
                END
                CLOSE @curCCD
@@ -156,6 +193,9 @@ AS
 
                IF @cPostADJ = '1'
                BEGIN
+                  DELETE FROM @tUCCToMove
+                  DELETE FROM @tAdjustmentKeys
+
                   IF OBJECT_ID('tempdb..#Posting') IS NOT NULL      
                      DROP TABLE #Posting    
     
@@ -164,42 +204,64 @@ AS
                      AdjustmentKey     NVARCHAR( 10))      
 
                   SET @curCCD = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
-                  SELECT RefNo, Loc, Sku, SUM( SystemQty - Qty)
+                  SELECT RefNo, Lot, Loc, Id, Sku, 
+                  SUM(
+                     CASE
+                        WHEN SystemQty > Qty THEN -SystemQty     -- Rule 1
+                        WHEN SystemQty < Qty THEN Qty            -- Rule 2
+                        ELSE 0                                   -- Equal: ignore in sum
+                    END
+                    )
                   FROM dbo.CCDetail WITH (NOLOCK)
-                  WHERE CCSheetNo = @cTaskDetailKey
-                  GROUP BY RefNo, Loc, Sku
-                  HAVING SUM( SystemQty - Qty) > 0
+                  WHERE Storerkey = @cStorerKey
+                  AND   CCSheetNo = @cTaskDetailKey
+                  GROUP BY RefNo, Lot, Loc, Id, Sku
+                  HAVING 
+                  SUM(
+                     CASE
+                        WHEN SystemQty <> Qty THEN 1
+                        ELSE 0
+                     END
+                     ) > 0  -- Rule 3: include only if mismatch exists
                   OPEN @curCCD
-                  FETCH NEXT FROM @curCCD INTO @cUCC, @cCCDLOC, @cCCDSKU, @nCCDQty
+                  FETCH NEXT FROM @curCCD INTO @cUCC, @cCCDLOT, @cCCDLOC, @cCCDID, @cCCDSKU, @nCCDQty
                   WHILE @@FETCH_STATUS = 0
                   BEGIN
-                     EXECUTE nspg_getkey
-                        @KeyName       = 'Adjustment',
-                        @fieldlength   = 10,
-                        @keystring     = @cAdjustmentKey OUTPUT,
-                        @b_success     = @bSuccess       OUTPUT,
-                        @n_err         = @nErrNo         OUTPUT,
-                        @c_errmsg      = @cErrMsg        OUTPUT
-
-                     IF NOT @bSuccess = 1
+                     IF @cAdjustmentKey = ''
                      BEGIN
-                        SET @nErrNo = 241751
-                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP')   --nspg_GetKey
-                        GOTO RollBackTran   
+                        EXECUTE nspg_getkey
+                           @KeyName       = 'Adjustment',
+                           @fieldlength   = 10,
+                           @keystring     = @cAdjustmentKey OUTPUT,
+                           @b_success     = @bSuccess       OUTPUT,
+                           @n_err         = @nErrNo         OUTPUT,
+                           @c_errmsg      = @cErrMsg        OUTPUT
+
+                        IF NOT @bSuccess = 1
+                        BEGIN
+                           SET @nErrNo = 241751
+                           SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP')   --nspg_GetKey
+                           GOTO RollBackTran   
+                        END
                      END
 
-                     INSERT INTO dbo.ADJUSTMENT ( AdjustmentKey, AdjustmentType, StorerKey, Facility, CustomerRefNo, Remarks)
-                     VALUES ( @cAdjustmentKey, @cADJType, @cStorerKey, @cFacility, @cAdjustmentKey, '')
-
-                     IF @@ERROR <> 0
+                     IF NOT EXISTS( SELECT 1 FROM dbo.ADJUSTMENT WITH (NOLOCK) WHERE AdjustmentKey = @cAdjustmentKey)
                      BEGIN
-                        SET @nErrNo = 241752
-                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP')   -- Ins AdjHdr Err
-                        GOTO RollBackTran   
+                        INSERT INTO dbo.ADJUSTMENT ( AdjustmentKey, AdjustmentType, StorerKey, Facility, CustomerRefNo, Remarks, DocType)
+                        VALUES ( @cAdjustmentKey, @cADJType, @cStorerKey, @cFacility, @cAdjustmentKey, @cTaskDetailKey, 'U')
+
+                        IF @@ERROR <> 0
+                        BEGIN
+                           SET @nErrNo = 241752
+                           SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP')   -- Ins AdjHdr Err
+                           GOTO RollBackTran   
+                        END
+
+                        INSERT INTO @tAdjustmentKeys (AdjustmentKey)
+                        VALUES (@cAdjustmentKey)
                      END
 
                      SELECT TOP 1
-                        @cID = Id,
                         @cLottable01 = Lottable01,
                         @cLottable02 = Lottable02,
                         @cLottable03 = Lottable03,
@@ -226,22 +288,40 @@ AS
                      WHERE SKU.StorerKey = @cStorerKey
                      AND   SKU.SKU = @cCCDSKU
 
+                     IF EXISTS(SELECT 1 
+                              FROM dbo.UCC WITH (NOLOCK) 
+                              INNER JOIN dbo.LOTxLOCxID LLI WITH (NOLOCK)
+                              ON UCC.StorerKey = LLI.StorerKey AND UCC.Lot = LLI.Lot AND UCC.Loc = LLI.Loc AND UCC.Id = LLI.Id
+                              WHERE UCC.StorerKey = @cStorerKey
+                                 AND UCC.UCCNo = @cUCC
+                                 AND UCC.Status = '1'
+                                 AND (UCC.Loc <> @cLoc OR UCC.ID <> @cID) )
+                     BEGIN
+                        INSERT INTO @tUCCToMove (UCCNo, FromLoc, FromID, ToLoc, ToID)
+                        SELECT @cUCC, Loc, ID, @cLoc, @cID
+                        FROM dbo.UCC WITH (NOLOCK)
+                        WHERE StorerKey = @cStorerKey
+                              AND UCCNo = @cUCC
+
+                        GOTO VARIANCE
+                     END
+
                      SELECT @cAdjDetailLine = RIGHT('0000' + RTRIM(Cast( (ISNULL(MAX(AdjustmentLineNumber),0) + 1) as NVARCHAR(5))),5)
                      FROM  dbo.ADJUSTMENTDETAIL (NOLOCK)
                      WHERE AdjustmentKey = @cAdjustmentKey
 
                      INSERT INTO dbo.ADJUSTMENTDETAIL
-                     (AdjustmentKey,AdjustmentLineNumber,StorerKey, Sku, 
-                     Loc, Id, ReasonCode, UOM, PackKey, Qty, 
-                     Lottable01, Lottable02, Lottable03,Lottable04, Lottable05,
-                     Lottable06, Lottable07, Lottable08, Lottable09, Lottable10, 
-                     Lottable11, Lottable12, Lottable13, Lottable14, Lottable15)
+                        (AdjustmentKey,AdjustmentLineNumber,StorerKey, Sku, 
+                        Lot, Loc, Id, ReasonCode, UOM, PackKey, Qty, 
+                        Lottable01, Lottable02, Lottable03,Lottable04, Lottable05,
+                        Lottable06, Lottable07, Lottable08, Lottable09, Lottable10, 
+                        Lottable11, Lottable12, Lottable13, Lottable14, Lottable15, UCCNo)
                      VALUES
-                     (@cAdjustmentKey, @cAdjDetailLine, @cStorerKey, @cCCDSKU, 
-                     @cCCDLOC, @cID, @cADJReason, 'EA', @cPackkey, @nCCDQty, 
-                     @cLottable01, @cLottable02, @cLottable03, @dLottable04, NULL, 
-                     @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10, 
-                     @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15)
+                        (@cAdjustmentKey, @cAdjDetailLine, @cStorerKey, @cCCDSKU, 
+                        @cCCDLOT, @cCCDLOC, @cID, @cADJReason, 'EA', @cPackkey, @nCCDQty,
+                        @cLottable01, @cLottable02, @cLottable03, @dLottable04, NULL, 
+                        @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10, 
+                        @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, @cUCC)
 
                      IF @@ERROR <> 0
                      BEGIN
@@ -251,26 +331,33 @@ AS
                      END
 
                      -- Skip posting if UCC has Qty allocated, ops need do it manually
-                     IF EXISTS( SELECT 1
-                                FROM dbo.CCDetail CCD WITH (NOLOCK)
-                                JOIN dbo.LOTxLOCxID LLI WITH (NOLOCK) ON 
-                                 ( CCD.Lot = LLI.Lot AND CCD.Loc = LLI.Loc AND CCD.Id = LLI.Id)
-                                WHERE CCD.CCSheetNo = @cTaskDetailKey
-                                AND   CCD.RefNo = @cUCC
-                                AND   LLI.QtyAllocated > 0)
+                     IF NOT EXISTS( SELECT 1
+                                    FROM dbo.CCDetail CCD WITH (NOLOCK)
+                                    INNER JOIN dbo.LOTxLOCxID LLI WITH (NOLOCK) 
+                                    ON CCD.Lot = LLI.Lot AND CCD.Loc = LLI.Loc AND CCD.Id = LLI.Id
+                                    INNER JOIN dbo.UCC WITH (NOLOCK)
+                                    ON CCD.StorerKey = UCC.StorerKey AND CCD.RefNo = UCC.UCCNo
+                                    WHERE CCD.CCSheetNo = @cTaskDetailKey
+                                       AND CCD.RefNo = @cUCC
+                                       AND LLI.QtyAllocated > 0
+                                       AND UCC.Status = '3')
                      BEGIN
-                        INSERT INTO #Posting (AdjustmentKey) VALUES (@cAdjustmentKey)
+                        IF NOT EXISTS(SELECT 1 FROM #Posting WHERE AdjustmentKey = @cAdjustmentKey)
+                        BEGIN
+                           INSERT INTO #Posting (AdjustmentKey) VALUES (@cAdjustmentKey)
+                        END
                      END
                      
+                     VARIANCE:
                      IF @nVariance = 0
                         SET @nVariance = 1
 
-                     FETCH NEXT FROM @curCCD INTO @cUCC, @cCCDLOC, @cCCDSKU, @nCCDQty
+                     FETCH NEXT FROM @curCCD INTO @cUCC, @cCCDLOT, @cCCDLOC, @cCCDID, @cCCDSKU, @nCCDQty
                   END
                   CLOSE @curCCD
                   DEALLOCATE @curCCD
 
-                  IF @cADJFinalize = '1'
+                  IF @cADJFinalize = '1' --AND @cUserName <> 'JAMESWONG'
                   BEGIN
                      SET @curADJ = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
                      SELECT AdjustmentKey
@@ -290,10 +377,62 @@ AS
                         BEGIN
                            SET @nErrNo = 241754
                            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP')   -- Finalize failed
-                           GOTO RollBackTran   
+                           GOTO RollBackTran
                         END
 
+                        NEXT_ADJUSTMENT:
                         FETCH NEXT FROM @curADJ INTO @cAdjustmentKey
+                     END
+
+                     SET @nLoopIndex = -1
+                     WHILE 1 = 1
+                     BEGIN
+                        SELECT TOP 1 
+                           @cUCC = UCCNo,
+                           @cUCCFromLOC = FromLoc,
+                           @cUCCFromID = FromID,
+                           @cUCCToLOC = ToLoc,
+                           @cUCCToID = ToID,
+                           @nLoopIndex = RowIndex
+                        FROM @tUCCToMove
+                        WHERE RowIndex > @nLoopIndex
+                        ORDER BY RowIndex
+
+                        SET @nRowCount = @@ROWCOUNT
+
+                        IF @nRowCount = 0
+                           BREAK
+
+                        BEGIN TRY
+                           EXEC RDT.rdt_Move 
+                              @nMobile     = @nMobile,
+                              @cLangCode   = @cLangCode,
+                              @nErrNo      = @nErrNo  OUTPUT,
+                              @cErrMsg     = @cErrMsg OUTPUT,
+                              @cSourceType = 'rdt_1767ExtOpt01',
+                              @cStorerKey  = @cStorerKey,
+                              @cFacility   = @cFacility,
+                              @cFromLOC    = @cUCCFromLOC,
+                              @cToLOC      = @cUCCToLOC,
+                              @cFromID     = @cUCCFromID,
+                              @cToID       = @cUCCToID,
+                              @cSKU        = NULL, 
+                              @cUCC        = @cUCC,
+                              @nFunc       = @nFunc,
+                              @cDropID     = @cUCC
+                        END TRY
+                        BEGIN CATCH
+                           SET @nErrNo = 241758
+                           SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP')   -- MoveUCCFail
+                           GOTO RollBackTran
+                        END CATCH
+
+                        IF @nErrNo <> 0
+                        BEGIN
+                           SET @nErrNo = 241759
+                           SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP')   -- MoveUCCFail
+                           GOTO RollBackTran
+                        END
                      END
                   END
                END
@@ -312,6 +451,21 @@ AS
                GOTO RollBackTran
             END
 
+            UPDATE AL WITH (ROWLOCK) SET 
+               AL.STATUS = '9'
+            FROM dbo.TaskDetail TD 
+            JOIN dbo.Alert AL ON TD.Message03 = AL.AlertKey 
+            WHERE TD.TaskDetailKey = @cTaskDetailKey
+            AND   TD.TaskType = 'CCSUP'
+            AND   TD.Status = '9'
+
+            IF @@ERROR <> ''
+            BEGIN
+               SET @nErrNo = 241756
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'UPD ALERT FAIL'
+               GOTO RollBackTran
+            END    
+
             SET @curCCD = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
             SELECT CCDetailKey
             FROM dbo.CCDetail WITH (NOLOCK)
@@ -328,7 +482,7 @@ AS
             
                IF @@ERROR <> 0
                BEGIN
-                  SET @nErrNo = 241756
+                  SET @nErrNo = 241757
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'UPDCCDetFail'
                   GOTO RollBackTran
                END 
@@ -338,30 +492,38 @@ AS
             CLOSE @curCCD
             DEALLOCATE @curCCD
 
+            DELETE ADJ
+            FROM dbo.ADJUSTMENT ADJ
+            INNER JOIN @tAdjustmentKeys TADJ ON ADJ.AdjustmentKey = TADJ.AdjustmentKey
+            LEFT JOIN dbo.ADJUSTMENTDETAIL ADJD ON ADJ.AdjustmentKey = ADJD.AdjustmentKey
+            WHERE ADJ.StorerKey = @cStorerkey
+               AND ADJD.AdjustmentKey IS NULL
+
             IF @nVariance = 0
             BEGIN
-         	   -- GOTO Main Module Get Next Task Screen Screen
-         		SET @nFunc = 1766
-         		SET @nScn = 2875
-         	   SET @nStep = 6 
-      	   END
+               -- GOTO Main Module Get Next Task Screen Screen
+               SET @nFunc = 1766
+               SET @nScn = 2875
+               SET @nStep = 6 
+            END
             ELSE
             BEGIN
                IF @cTaskType = 'CCSUP'
                BEGIN
-                  -- GOTO Alert Screen
-                  SET @nScn = @nScn + 1
-                  SET @nStep = @nStep + 1
+                  -- GOTO Main Module Get Next Task Screen Screen
+                  SET @nFunc = 1766
+                  SET @nScn = 2875
+                  SET @nStep = 6 
                END
                ELSE
                BEGIN
-                  IF @cSkipAlertScreen = '1'
+                  IF @cSkipAlertScreen = '1' OR @nIsAlert = 0
                   BEGIN
-         	         -- GOTO Main Module Get Next Task Screen Screen
-         		      SET @nFunc = 1766
-         		      SET @nScn = 2875
-         	         SET @nStep = 6 
-      	         END
+                     -- GOTO Main Module Get Next Task Screen Screen
+                     SET @nFunc = 1766
+                     SET @nScn = 2875
+                     SET @nStep = 6 
+                  END
                   ELSE
                   BEGIN
                      -- GOTO Alert Screen
@@ -374,11 +536,8 @@ AS
             GOTO QUIT
 
             RollBackTran:
-               ROLLBACK TRAN rdt_1767ExtOpt01
 
             Quit:
-            WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
-               COMMIT TRAN rdt_1767ExtOpt01
          END
       END
    END

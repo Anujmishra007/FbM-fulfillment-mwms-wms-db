@@ -9,7 +9,7 @@ CREATE TABLE [dbo].[StockTakeSheetParameters]
 [AisleParm] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_StockTakeSheetParameters_AisleParm] DEFAULT ('ALL'),
 [LevelParm] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_StockTakeSheetParameters_LevelParm] DEFAULT ('0 - 99'),
 [HostWHCodeParm] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_StockTakeSheetParameters_HostWHCodeParm] DEFAULT ('ALL'),
-[SKUParm] [nvarchar] (125) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_StockTakeSheetParameters_SKUParm] DEFAULT ('ALL'),
+[SKUParm] [nvarchar] (4000) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_StockTakeSheetParameters_SKUParm] DEFAULT ('ALL'),
 [AgencyParm] [nvarchar] (125) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_StockTakeSheetParameters_AgencyParm] DEFAULT ('ALL'),
 [ABCParm] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_StockTakeSheetParameters_ABCParm] DEFAULT ('ALL'),
 [Protect] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_StockTakeSheetParameters_Protect] DEFAULT ('N'),
@@ -254,6 +254,15 @@ BEGIN
 	ALTER TABLE dbo.StockTakeSheetParameters ADD [Userdefine10] [nvarchar](50) NULL CONSTRAINT [DF_StockTakeSheetParameters_Userdefine10]  DEFAULT ('');
 	EXEC sp_addextendedproperty N'MS_Description', 'Userdefine10', 'SCHEMA', N'DBO', 'TABLE', N'StockTakeSheetParameters', 'COLUMN', N'Userdefine10'
 				
+END
+
+
+
+--ALTER COLUMN 
+IF  EXISTS (SELECT * FROM sys.columns WHERE Name = 'SKUParm' AND Object_ID = Object_ID('dbo.StockTakeSheetParameters') AND max_length <> 8000)
+BEGIN
+	ALTER TABLE dbo.StockTakeSheetParameters
+	ALTER COLUMN [SKUParm] [nvarchar](4000) NULL;				
 END
 
 

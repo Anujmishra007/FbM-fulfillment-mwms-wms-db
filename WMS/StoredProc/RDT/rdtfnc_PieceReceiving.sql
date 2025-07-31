@@ -167,6 +167,7 @@ GO
 /* 2024-07-31 11.0 JHU151     FCR-550 Scan SN on sku screen              */
 /* 2024-12-27 12.0 Dennis     UWP-28649 Fix Capture Pallet Type Bug      */
 /* 2025-03-25 12.1 YeeKung    FCR-3145 Add Out for rdt_serialNo Params   */
+/* 2025-07-28 0.0  JackC      !!!Cutover!!! Use V2 version in V0 repo for work */
 /************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdtfnc_PieceReceiving] (
    @nMobile    INT,

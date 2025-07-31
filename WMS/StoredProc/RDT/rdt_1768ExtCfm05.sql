@@ -78,6 +78,7 @@ BEGIN
          , @cErrMsg1              NVARCHAR(20)
          , @cInField12            NVARCHAR(60)
          , @curConfirmCC          CURSOR
+         , @nCCDetailExitFlag     INT = 0
 
    SET @nTotalRecord = 0
    SET @bDebug = 0
@@ -115,13 +116,14 @@ BEGIN
                AND SKU        = @cSKU
                AND CCSheetNo  = @cTaskDetailKey)  
    BEGIN
+         SET @nCCDetailExitFlag = 1
          SET @curConfirmCC = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
          SELECT CCD.CCDetailKey, CCD.SystemQty, CCD.Qty, CCD.Lot
          FROM dbo.CCDetail CCD WITH (NOLOCK)
          JOIN dbo.LOTxLOCxID LLI WITH (NOLOCK) ON ( CCD.Lot = LLI.Lot AND CCD.Loc = LLI.Loc AND CCD.Id = LLI.Id)
          JOIN dbo.LOC LOC WITH (NOLOCK) ON ( LLI.Loc = LOC.Loc)
          WHERE CCD.CCKey = @cCCKey
-         AND   CCD.[Status] = '3'
+         AND   CCD.[Status] = '0'
          AND   CCD.SKU = @cSKU
          AND   CCD.StorerKEy = @cStorerKey
          AND   CCD.Loc = @cLoc
@@ -148,7 +150,7 @@ BEGIN
    END
 
    OPEN @curConfirmCC
-   FETCH NEXT FROM CursorConfirmCC INTO @cCCDetailKEy, @nSystemQty, @nCCQty, @cLot
+   FETCH NEXT FROM @curConfirmCC INTO @cCCDetailKEy, @nSystemQty, @nCCQty, @cLot
    WHILE @@FETCH_STATUS <> -1
    BEGIN
       IF @nQTY = 0
@@ -188,24 +190,21 @@ BEGIN
       END
       ELSE IF @nSystemQty < ( @nCCQty + @nQTY)
       BEGIN
-         IF @nSystemQty = 0
+         UPDATE dbo.CCDetail SET
+            Qty = @nSystemQty, --Qty + @nQTY,
+            Status = CASE WHEN Status = '4' THEN Status ELSE '2' END,
+            EditWho = @cUserName,
+            EditDate = GETDATE()
+         WHERE CCDetailKey   = @cCCDetailKEy
+
+         IF @@ERROR <> 0
          BEGIN
-            UPDATE dbo.CCDetail SET
-               Qty = Qty + @nQTY,
-               Status = CASE WHEN Status = '4' THEN Status ELSE '2' END,
-               EditWho = @cUserName,
-               EditDate = GETDATE()
-            WHERE CCDetailKey   = @cCCDetailKEy
-
-            IF @@ERROR <> 0
-            BEGIN
-               SET @nErrNo = 241453
-               SET @cErrMsg = rdt.rdtgetmessage(@nErrNo ,@cLangCode ,'DSP') --'Upd CCDetFail'
-               GOTO RollBackTran
-            END
-
-            SET @nQTY = 0
+            SET @nErrNo = 241453
+            SET @cErrMsg = rdt.rdtgetmessage(@nErrNo ,@cLangCode ,'DSP') --'Upd CCDetFail'
+            GOTO RollBackTran
          END
+
+         SET @nQTY = @nQTY - @nSystemQty + @nCCQty
       END
       ELSE IF @nSystemQty > ( @nCCQty + @nQTY)
       BEGIN
@@ -250,20 +249,45 @@ BEGIN
          GOTO RollBackTran
       END
 
-      INSERT INTO dbo.CCDetail (
-               CCKey, CCDetailKey, StorerKey, Sku, Lot, Loc, Id, Qty, CCSheetNo, 
-               Lottable01, Lottable02, Lottable03, Lottable04, Lottable05, 
-               SystemQty, RefNo, Status)
-      VALUES ( @cCCKey, @cNewCCDetailKey, @cStorerKey, @cSKU, '', @cLoc, @cID, @nQTY, @cTaskDetailKey, 
-               '', '', '', NULL, NULL, 
-               0, '', '4' )
-
-      IF @@ERROR <> 0
+      --Add CCDetail for Additional qty
+      IF @nCCDetailExitFlag = 1
       BEGIN
-         SET @nErrNo = 241456
-         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo ,@cLangCode ,'DSP') --'InsCCDetFail'
-         GOTO RollBackTran
+         INSERT INTO dbo.CCDetail (
+                  CCKey, CCDetailKey, StorerKey, Sku, Lot, Loc, Id, Qty, CCSheetNo, 
+                  Lottable01, Lottable02, Lottable03, Lottable04, Lottable05, 
+                  SystemQty, RefNo, Status)
+         SELECT CCKey, @cNewCCDetailKey, StorerKey, Sku, Lot, Loc, Id, @nQTY + Qty, CCSheetNo, 
+                  Lottable01, Lottable02, Lottable03, Lottable04, Lottable05, 
+                  SystemQty, RefNo, '4'
+         FROM dbo.CCDetail CCD WITH (NOLOCK)
+         WHERE CCDetailKey = @cCCDetailKEy
+
+         IF @@ERROR <> 0
+         BEGIN
+            SET @nErrNo = 241456
+            SET @cErrMsg = rdt.rdtgetmessage(@nErrNo ,@cLangCode ,'DSP') --'InsCCDetFail'
+            GOTO RollBackTran
+         END
       END
+      ELSE
+      BEGIN
+         INSERT INTO dbo.CCDetail (
+                  CCKey, CCDetailKey, StorerKey, Sku, Lot, Loc, Id, Qty, CCSheetNo, 
+                  Lottable01, Lottable02, Lottable03, Lottable04, Lottable05, 
+                  SystemQty, RefNo, Status)
+         VALUES ( @cCCKey, @cNewCCDetailKey, @cStorerKey, @cSKU, '', @cLoc, @cID, @nQTY, @cTaskDetailKey, 
+                  '', '', '', NULL, NULL, 
+                  0, '', '4' )
+         
+         IF @@ERROR <> 0
+         BEGIN
+            SET @nErrNo = 241460
+            SET @cErrMsg = rdt.rdtgetmessage(@nErrNo ,@cLangCode ,'DSP') --'InsCCDetFail'
+            GOTO RollBackTran
+         END
+      END
+
+      
 
       SET @nQTY = 0
    END

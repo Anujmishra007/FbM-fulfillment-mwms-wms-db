@@ -29,6 +29,7 @@ GO
 /* 2025-03-11 1.6.4  Dennis     FCR-3925  Add Validation for Tote Rel              */
 /* 2025-04-11 1.6.5  Dennis     UWP-31758 Skip Confirm Tote after Short pick       */
 /* 2025-04-25 1.6.6  DENNIS     FCR-4243 Resume tasks                              */
+/* 2025-07-16 1.7.0  NickT      UWP-37893 PickDetail.CaseID is not updated as empty string*/
 /***********************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1855ExtScn01] (
@@ -394,15 +395,19 @@ BEGIN
                               AND   DropID <> '')
                AND @cCartID <> ''
                BEGIN
-                  SELECT TOP 1 @cTaskDetailKey = TaskDetailKey,@cSuggToLOC = toloc FROM dbo.TaskDetail WITH (NOLOCK)
-                     WHERE Storerkey = @cStorerKey
-                     AND   TaskType = 'ASTCPK'
-                     AND   [Status] = '5'
-                     AND   Groupkey <> ''
-                     AND   UserKey = @cUserName
-                     AND   DeviceID = @cCartID
-                     AND   DropID <> ''
-                     ORDER BY EditDate DESC
+                  SELECT TOP 1 
+                        @cTaskDetailKey = TaskDetailKey,
+                        @cSuggToLOC = toloc,
+                        @cGroupKey = Groupkey
+                  FROM dbo.TaskDetail WITH (NOLOCK)
+                  WHERE Storerkey = @cStorerKey
+                  AND   TaskType = 'ASTCPK'
+                  AND   [Status] = '5'
+                  AND   Groupkey <> ''
+                  AND   UserKey = @cUserName
+                  AND   DeviceID = @cCartID
+                  AND   DropID <> ''
+                  ORDER BY EditDate DESC
 
                   -- Check Method valid
                   SELECT @cCartPickMethod = Long

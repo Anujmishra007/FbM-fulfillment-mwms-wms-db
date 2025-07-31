@@ -32,6 +32,9 @@ GO
 /* Date        Author   Ver   Purposes                                  */
 /* 2025-04-16  Wan      1.0   UWP-32707 - FCR-3957 - JCB Putaway Using  */
 /*                            TM SCE                                    */
+/* 2025-07-24  Wan01    1.1   UWP-38325 - GBRProd-ASN Release-Putaway   */
+/*                            issue                                     */
+/*                            1. Fix Null Insert 2. Fix Potential Bugs  */
 /************************************************************************/
 
 CREATE OR ALTER FUNCTION [dbo].[fnc_GetBeamLoc] 
@@ -103,6 +106,7 @@ BEGIN
    ,  Loc                  NVARCHAR(10)   DEFAULT ('')   PRIMARY KEY
    ,  LocationRoom         NVARCHAR(10)   DEFAULT ('')    
    ,  EmptyLPNCount        INT            DEFAULT (0)
+   ,  NoOfLPN              INT            DEFAULT (0)                               --(Wan01)
    )
 
    INSERT INTO @TMP_PALTYPE_CL (Listname, Code, Description, Short, Long, Notes, Notes2, Storerkey
@@ -158,60 +162,75 @@ BEGIN
 
       INSERT INTO @t_Beam (LocationRoom, MidRowID, TotalPalletWeights)
       SELECT l.LocationRoom
-            ,MidRowID = CEILING(COUNT(1)/2.00)   
-            ,TotalPalletWeights = SUM(CASE WHEN ISNULL(lli.Qty-lli.QtyPicked+lli.PendingMoveIN,0)=0 THEN 0 ELSE ISNULL(pm.GrossWgt,0.00) END)  
+            ,MidRowID = CEILING(COUNT(DISTINCT l.Loc)/2.00)                         --(Wan01)   
+            ,TotalPalletWeights = SUM(CASE WHEN ISNULL(lli.Qty-lli.QtyPicked+lli.PendingMoveIN,0)=0 
+                                           THEN 0 ELSE ISNULL(pm.GrossWgt,0.00) END)  
       FROM @t_Locs l  
       LEFT OUTER JOIN LotxLocxid lli (NOLOCK) ON lli.loc = l.loc and lli.Storerkey = @c_Storerkey
                                                 AND lli.id > ''
       LEFT OUTER JOIN Pallet pm (NOLOCK) ON pm.PalletKey = lli.ID
       GROUP BY l.LocationRoom
 
-      ;WITH OccupiedLoc AS  
-      (  SELECT 
+     ;WITH OccupiedLoc AS                                                           --(Wan01) - START
+      (     SELECT  
               l.Loc    
             , l.LocationRoom
             , StartRowID = l.RowId
             , EndRowID   = CASE  WHEN l.RowId < bl.MidRowID 
-                                 THEN l.RowID + cl.Short - 1 
-                                 ELSE l.RowID - cl.Short + 1 END
+                                 THEN l.RowID + MAX(CASE WHEN ISNUMERIC(cl.Short) = 0 
+                                                     THEN 1 ELSE cl.Short END) - 1 
+                                 ELSE l.RowID - MAX(CASE WHEN ISNUMERIC(cl.Short) = 0 
+                                                     THEN 1 ELSE cl.Short END) + 1 END     
+            , NoOfLPN  = COUNT(DISTINCT lli.ID)
             FROM @t_Locs l   
             JOIN @t_Beam bl ON bl.LocationRoom = l.LocationRoom
-            JOIN LotxLocxid lli (NOLOCK) ON lli.loc = l.loc and lli.ID > '' AND lli.Storerkey = @c_Storerkey
-            JOIN Pallet pm (NOLOCK) ON pm.palletkey = lli.ID  
-            JOIN @TMP_PALTYPE_CL cl ON cl.code = pm.PalletType AND cl.ListName = 'JCBPALTYPE'
-            GROUP BY l.Loc
-                  , l.LocationRoom 
-                  , l.MaxPallet
-                  , l.RowID
-                  , bl.MidRowID
-                  , cl.Short
-            HAVING SUM(lli.Qty - lli.Qtypicked + lli.PendingMoveIN) > 0 
+
+            JOIN LotxLocxid lli (NOLOCK) ON  lli.Storerkey = @c_Storerkey
+                                         AND lli.loc = l.loc 
+                                         AND lli.ID > '' 
+            LEFT OUTER JOIN Pallet pm (NOLOCK) ON pm.PalletKey = lli.ID
+            LEFT OUTER JOIN @TMP_PALTYPE_CL cl ON  cl.code = pm.PalletType 
+                                             AND cl.ListName = 'JCBPALTYPE'
+            WHERE lli.Qty - lli.Qtypicked + lli.PendingMoveIN > 0
+            GROUP BY l.Loc    
+                  ,  l.LocationRoom
+                  ,  l.RowId
+                  ,  bl.MidRowID 
       )
-      INSERT INTO @t_OccupiedLoc (RowID, Loc, LocationRoom, EmptyLPNCount)
-      SELECT l.RowId, l.Loc, l.LocationRoom
-            , EmptyLPNCount = l.MaxPallet - COUNT(DISTINCT lli.ID) 
-                           - CASE WHEN ol.StartRowID = l.RowID THEN 0 ELSE 1 END
+      INSERT INTO @t_OccupiedLoc (RowID, Loc, LocationRoom, EmptyLPNCount, NoOfLPN)
+      SELECT 
+              l.RowId, l.Loc, l.LocationRoom
+            , EmptyLPNCount = l.MaxPallet - SUM(li.NoOfLPN)
+            , NoOfLPN = SUM(li.NoOfLPN) 
       FROM @t_Locs l
-      JOIN OccupiedLoc ol ON ol.LocationRoom = l.LocationRoom
-      LEFT OUTER JOIN LotxLocxid lli (NOLOCK) ON lli.loc = l.loc and lli.ID > '' AND lli.Storerkey = @c_Storerkey
-      LEFT OUTER JOIN Pallet pm (NOLOCK) ON pm.palletkey = lli.ID  
-      WHERE l.RowID BETWEEN ol.StartRowID AND ol.EndRowID
-      GROUP BY l.RowId, l.Loc, l.LocationRoom, l.MaxPallet, ol.StartRowID 
-      ORDER BY l.RowId;
-    
-      ; WITH EmptyLocs AS 
+      CROSS APPLY (  SELECT NoOfLPN = CASE WHEN ol.StartRowID = l.RowID 
+                                           THEN ol.NoOfLPN
+                                           ELSE 1 END   
+                     FROM OccupiedLoc ol
+                     WHERE ol.LocationRoom = l.LocationRoom
+                     AND   (l.RowID BETWEEN ol.StartRowID AND ol.EndRowID OR
+                            l.RowID BETWEEN ol.EndRowID AND ol.StartRowID)
+   
+                  ) li
+      GROUP BY l.RowId, l.Loc, l.LocationRoom, l.MaxPallet
+      HAVING SUM( li.NoOfLPN) > 0
+      ORDER BY l.RowId;                                                             --(Wan01) - END
+     
+      --Refer to FCR Sample, Double LPN Loc: Empty Loc regardless Available spaces. NoOfPallet = 0 ,  
+      ; WITH EmptyLocs AS                                                           --(Wan01) - START
       (
          SELECT 
               l.Loc 
             , l.LocationRoom
             , l.RowId 
             , Grp = ROW_NUMBER() OVER (ORDER BY l.RowID) - l.RowID
-            , PalletLocSeq = CASE WHEN l.RowId <= bl.MidRowID THEN 'F' ELSE 'B' END
+            , PalletLocSeqF = CASE WHEN l.RowId <= bl.MidRowID THEN 'F' ELSE 'B' END
+            , PalletLocSeqB = CASE WHEN l.RowId <  bl.MidRowID THEN 'F' ELSE 'B' END
             , bl.TotalPalletWeights
           FROM @t_Locs l  
           JOIN @t_Beam bl ON bl.LocationRoom = l.LocationRoom
-          LEFT OUTER JOIN @t_OccupiedLoc ol ON ol.loc = l.loc
-          LEFT OUTER JOIN LotxLocxid lli (NOLOCK) ON lli.loc = l.loc and lli.Storerkey = @c_Storerkey
+          LEFT OUTER JOIN @t_OccupiedLoc ol ON ol.loc = l.loc AND ol.NoOfLPN > 0
+          --LEFT OUTER JOIN LotxLocxid lli (NOLOCK) ON lli.loc = l.loc and lli.Storerkey = @c_Storerkey
           WHERE l.[Status] = 'OK' 
           AND   l.LocationFlag  IN ('', 'NONE')
           AND   ol.RowId IS NULL
@@ -222,25 +241,52 @@ BEGIN
                   , l.LocationFlag
                   , bl.MidRowID
                   , bl.TotalPalletWeights
-          HAVING ISNULL(SUM(lli.Qty - lli.Qtypicked + lli.PendingMoveIN),0) = 0
+          --HAVING ISNULL(SUM(lli.Qty - lli.Qtypicked + lli.PendingMoveIN),0) = 0
+      )
+      , LR AS
+      ( SELECT RowID = MIN(l.RowID)
+            , l.LocationCategory, l.LocationRoom, l.LocLevel, [Status] = 'E'
+            , StartLoc =  MIN(el.Loc)  
+            , EndLoc   =  MAX(el.Loc) 
+            , EmptyLocCount = Count(1)
+            , EmptyLPNCount = SUM(l.MaxPallet)
+            , LocCount      = Count(1)
+            , el.TotalPalletWeights
+         FROM EmptyLocs el
+         JOIN @t_Locs l ON l.RowId = el.RowId where PalletLocSeqF = 'F'
+         GROUP BY l.LocationCategory, l.LocationRoom, l.LocLevel
+                  , el.grp--, el.PalletLocSeqF
+                  , el.TotalPalletWeights
+         UNION
+         SELECT  RowID = MIN(l.RowID)
+               , l.LocationCategory, l.LocationRoom, l.LocLevel, [Status] = 'E'
+               , StartLoc = MIN(el.Loc)  
+               , EndLoc   = MAX(el.Loc)   
+               , EmptyLocCount = Count(1)
+               , EmptyLPNCount = SUM(l.MaxPallet)
+               , LocCount      = Count(1)
+               , el.TotalPalletWeights
+         FROM EmptyLocs el
+         JOIN @t_Locs l ON l.RowId = el.RowId AND PalletLocSeqB = 'B'
+         GROUP BY l.LocationCategory, l.LocationRoom, l.LocLevel
+                  , el.grp, el.PalletLocSeqB
+                  , el.TotalPalletWeights
       )
       INSERT INTO @t_BeamLocs (LocationGroup, LocationCategory, LocationRoom, LocLevel, [Status]
-                              ,StartLoc, EndLoc, EmptyLocCount, EmptyLPNCount, LocCount, TotalPalletWeights)
-      SELECT 
-            l.LocationGroup, l.LocationCategory, l.LocationRoom, l.LocLevel, [Status] = 'E'
-          , StartLoc = CASE WHEN el.PalletLocSeq = 'F' THEN MIN(el.Loc) ELSE MAX(el.Loc) END   
-          , EndLoc   = CASE WHEN el.PalletLocSeq = 'F' THEN MAX(el.Loc) ELSE MIN(el.Loc) END    
-          , EmptyLocCount = Count(1)
-          , EmptyLPNCount = SUM(l.MaxPallet)
-          , LocCount      = Count(1)
-          , el.TotalPalletWeights
-      FROM EmptyLocs el
-      JOIN @t_Locs l ON l.RowId = el.RowId
-      GROUP BY l.LocationGroup, l.LocationCategory, l.LocationRoom, l.LocLevel 
-             , el.grp, el.PalletLocSeq, el.TotalPalletWeights
-      ORDER BY MIN (l.LogicalLocation)
+                              ,StartLoc, EndLoc, EmptyLocCount, EmptyLPNCount, LocCount, TotalPalletWeights
+                              )
+      SELECT  l.LocationGroup, lr.LocationCategory, lr.LocationRoom, lr.LocLevel, lr.[Status] 
+            , lr.StartLoc  
+            , lr.EndLoc   
+            , lr.EmptyLocCount 
+            , lr.EmptyLPNCount 
+            , lr.LocCount     
+            , lr.TotalPalletWeights
+      FROM @t_Locs l
+      JOIN lr ON lr.RowID = l.RowId
+      ORDER BY l.LogicalLocation                                                    --(Wan01) - END 
 
-
+      -- For Single Pallet: Posible loc Maxpallet > 0 with not fully occupied
       INSERT INTO @t_BeamLocs (LocationGroup, LocationCategory, LocationRoom, LocLevel, [Status]
                               ,StartLoc, EndLoc, EmptyLocCount, EmptyLPNCount, LocCount, TotalPalletWeights)
       SELECT 
@@ -254,7 +300,7 @@ BEGIN
       FROM @t_OccupiedLoc ol
       JOIN @t_Locs l ON l.RowId = ol.RowId
       JOIN @t_Beam b ON b.LocationRoom = l.LocationRoom
-      WHERE ol.EmptyLPNCount > 0
+      WHERE ol.EmptyLPNCount > 0                                                    
       GROUP BY l.LocationGroup, l.LocationCategory, l.LocationRoom, l.LocLevel, l.Loc, l.LogicalLocation
              , ol.EmptyLPNCount, b.TotalPalletWeights
       ORDER BY l.LogicalLocation

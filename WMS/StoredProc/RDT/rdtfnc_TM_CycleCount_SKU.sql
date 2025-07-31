@@ -368,7 +368,6 @@ SELECT
    -- Start of Common Variable use by UCC, SKU, SingleScan CC
    @cExtendedDisplayQtySP  = V_String29,
    @cDiffQTYScanSNO        = V_String30,
-   @cExtOptionSP           = V_String31,
    @cAreakey               = V_String32,
    @cTTMStrategykey        = V_String33,
    @cTTMTasktype           = V_String34,
@@ -380,6 +379,7 @@ SELECT
    @cTMCCAllowPostAdj      = V_String40,
    @cSerialNoCapture       = V_String41,
    @cLottableCode          = V_String42,  
+   @cExtOptionSP           = V_String43,
 
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,
@@ -3149,7 +3149,7 @@ BEGIN
             IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtOptionSP AND type = 'P')  
             BEGIN  
                SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtOptionSP) +  
-                  ' @nMobile, @nFunc, @cLangCode, @nStep OUTPUT, @nScn OUTPUT, @nInputKey, @cStorerKey, @cTaskDetailKey, @cCCKey, ' + 
+                  ' @nMobile, @nFunc OUTPUT, @cLangCode, @nStep OUTPUT, @nScn OUTPUT, @nInputKey, @cFacility, @cStorerKey, @cTaskDetailKey, @cCCKey, ' + 
                   ' @cCCDetailKey, @cLoc, @cID, @cSKU, @nActQTY, @cOptions, ' +  
                   ' @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05, ' +  
                   ' @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10, ' +  
@@ -3158,7 +3158,7 @@ BEGIN
     
                SET @cSQLParam =  
                   '@nMobile         INT, ' +  
-                  '@nFunc           INT, ' +  
+                  '@nFunc           INT        OUTPUT,' +  
                   '@cLangCode       NVARCHAR( 3), ' +  
                   '@nStep           INT         OUTPUT, ' +  
                   '@nScn            INT         OUTPUT, ' +  
@@ -3193,7 +3193,7 @@ BEGIN
                   '@cErrMsg         NVARCHAR( 20) OUTPUT  '
   
                EXEC sp_ExecuteSQL @cSQL, @cSQLParam,  
-                  @nMobile, @nFunc, @cLangCode, @nStep OUTPUT, @nScn OUTPUT, @nInputKey, @cStorerKey, @cTaskDetailKey, @cCCKey, 
+                  @nMobile, @nFunc OUTPUT, @cLangCode, @nStep OUTPUT, @nScn OUTPUT, @nInputKey, @cFacility, @cStorerKey, @cTaskDetailKey, @cCCKey, 
                   @cCCDetailKey, @cLoc, @cID, @cSKU, @nActQTY,  @cOptions, 
                   @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,  
                   @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,  
@@ -6495,7 +6495,6 @@ BEGIN
       V_String28       = @cTMCCVarianceCountSP,
       V_String29       = @cExtendedDisplayQtySP,
       V_String30       = @cDiffQTYScanSNO, 
-      V_String31       = @cExtOptionSP,
       V_String32       = @cAreakey,  
       V_String33       = @cTTMStrategykey,  
       V_String34       = @cTTMTasktype,  
@@ -6507,6 +6506,7 @@ BEGIN
       V_String40       = @cTMCCAllowPostAdj,
       V_String41       = @cSerialNoCapture,
       V_String42       = @cLottableCode,  
+      V_String43       = @cExtOptionSP,
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,

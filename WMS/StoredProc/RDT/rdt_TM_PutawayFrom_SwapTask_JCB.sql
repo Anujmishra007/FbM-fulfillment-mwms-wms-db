@@ -169,7 +169,7 @@ BEGIN
 
    IF EXISTS (SELECT 1 FROM dbo.TaskDetail TD WITH (NOLOCK)  
               INNER JOIN dbo.LOC WITH (NOLOCK) ON TD.ToLoc = LOC.Loc AND LOC.Facility = @cFacility
-              WHERE TD.TaskDetailKey = @cNewTaskDetailKey 
+              WHERE TD.TaskDetailKey = @cNewTaskDetailKey AND TD.Message03 = 'VNA'
               AND EXISTS (SELECT 1 FROM @tAisleInUsed t WHERE t.LocAisle = LOC.LocAisle))
    BEGIN
       SET @cNewTaskDetailKey = ''

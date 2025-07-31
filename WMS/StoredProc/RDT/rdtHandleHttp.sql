@@ -16,7 +16,8 @@ GO
 /* 20-Sep-2023 1.0  JLC042   Created base on rdtHandle ver 1.28         */
 /* 07-Nov-2023 1.1  JLC042   Fix Message Screen issue UWP-10463         */
 /* 24-May-2024 1.2  NLT013   Add session id to get unique mobile        */
-/* 23-Jul-2025 1.3  Dennis   Add trace id                               */
+/* 03-Apr-2025 1.3.0 NLT013  UWP-32244 Extend Menu number               */
+/* 23-Jul-2025 1.4.0 Dennis   Add trace id                              */
 /************************************************************************/
 CREATE OR ALTER PROC  [RDT].[rdtHandleHttp]
   @InMobile      INT ,
@@ -130,7 +131,7 @@ BEGIN
                IF @nErrNo <> 0
                   GOTO EXIT_PROCESS_MENU
             END
-            ELSE
+            ELSE IF @nFunction > 2 OR @nFunction < -100
             BEGIN
                -- Menu
                EXEC RDT.rdtProcessMenu @InMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nFunction OUTPUT
@@ -142,7 +143,7 @@ BEGIN
 
          IF @cActionKey = 'NO' -- ESC
          BEGIN
-            IF @nFunction <= 5   -- logout if at top level menu
+            IF @nFunction > -1 AND @nFunction <= 5   -- logout if at top level menu
             BEGIN
                IF @nFunction = 1
                BEGIN
@@ -251,7 +252,7 @@ BEGIN
                      GOTO EXIT_PROCESS_MENU
                END
             END  --IF @nFunction <= 5
-            ELSE
+            ELSE IF @nFunction > 5 OR @nFunction < -100
             BEGIN
                -- Back to Previous Screen
                EXEC RDT.rdtPrevScreen @InMobile, @nScn OUTPUT
@@ -384,7 +385,7 @@ BEGIN
       DECLARE @cXML NVARCHAR( MAX)
       SET @cXML = ''
 
-      IF @nFunction Between 5 AND 499
+      IF @nFunction Between 5 AND 499 OR @nFunction < -100
          EXEC RDT.rdtGetMenuHttp @InMobile, @cXML OUTPUT    -- Menu
       ELSE
          EXEC RDT.rdtGetScreenHttp @InMobile, @cXML OUTPUT  -- Functional

@@ -1,3 +1,4 @@
+-- FCR-6059
 -- rdt_1768ExtCfm05
 exec rdt.rdtDropMsg 241451 , 241500
 
@@ -10,6 +11,7 @@ execute rdt.rdtAddMsg 241456, 10, '241456 Ins CCDetFail',   'us_english', 1768
 execute rdt.rdtAddMsg 241457, 10, '241457Upd CCDateFail',   'us_english', 1768
 execute rdt.rdtAddMsg 241458, 10, '241458Upd CCDateFail',   'us_english', 1768
 execute rdt.rdtAddMsg 241459, 10, '241459Upd CCDateFail',   'us_english', 1768
+execute rdt.rdtAddMsg 241460, 10, '241460 Ins CCDetFail',   'us_english', 1768
 
 SELECT * FROM RDT.RDTMSG (NOLOCK) WHERE MESSAGE_ID BETWEEN 241451 AND 241500
 

@@ -1,7 +1,4 @@
-IF NOT EXISTS (SELECT 1
-               FROM sys.tables
-               WHERE name = 'RECEIPT'
-                 AND type = 'U')
+IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[RECEIPT]') AND type in (N'U'))
 BEGIN
 CREATE TABLE [dbo].[RECEIPT]
 (
@@ -12,7 +9,7 @@ CREATE TABLE [dbo].[RECEIPT]
 [ReceiptDate] [datetime] NULL CONSTRAINT [DF_RECEIPT_ReceiptDate] DEFAULT (getdate()),
 [POKey] [nvarchar] (18) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RECEIPT_PoKey] DEFAULT (' '),
 [CarrierKey] [nvarchar] (15) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
-[CarrierName] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
+[CarrierName] [nvarchar] (45) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
 [CarrierAddress1] [nvarchar] (45) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
 [CarrierAddress2] [nvarchar] (45) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
 [CarrierCity] [nvarchar] (45) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
@@ -375,9 +372,7 @@ EXEC sp_addextendedproperty N'MS_Description', 'Seller telephone number 01', 'SC
 
 EXEC sp_addextendedproperty N'MS_Description', 'Seller telephone number 02', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'SellerPhone2'
 
-EXEC sp_addextendedproperty N'MS_Description', 'Seller state
-
-', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'SellerState'
+EXEC sp_addextendedproperty N'MS_Description', 'Seller state', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'SellerState'
 
 EXEC sp_addextendedproperty N'MS_Description', 'Seller ZIP code', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'SellerZip'
 
@@ -451,4 +446,15 @@ ELSE
                   ADD TotalReceivedQty int NULL
                   EXEC sp_addextendedproperty N'MS_Description', 'Total received quantity', 'SCHEMA', N'dbo', 'TABLE', N'RECEIPT', 'COLUMN', N'TotalReceivedQty'
             END
+
+
+-- ALTER COLUMN 
+
+	IF EXISTS (SELECT * FROM SYS.COLUMNS WHERE name ='CarrierName' AND object_id = OBJECT_ID ('[dbo].[RECEIPT]') AND max_length <> 90)
+	BEGIN
+	
+		ALTER TABLE [dbo].[RECEIPT]
+		ALTER COLUMN [CarrierName] [nvarchar](45) NULL; 
+
+	END
    END
