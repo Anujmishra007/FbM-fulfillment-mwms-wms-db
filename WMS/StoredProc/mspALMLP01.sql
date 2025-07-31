@@ -1,4 +1,7 @@
-
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
 /***************************************************************************/
 /* Stored Procedure: mspALMLP01                                            */
 /* Creation Date: 2024-03-14                                               */
@@ -963,10 +966,10 @@ END                                                         --(Wan05) - END
 END
      
    IF CURSOR_STATUS('GLOBAL' , 'CURSOR_AVAILABLECFG') in (0 , 1)
-BEGIN
-CLOSE CURSOR_AVAILABLECFG
-    DEALLOCATE CURSOR_AVAILABLECFG
-END
+   BEGIN
+   CLOSE CURSOR_AVAILABLECFG
+       DEALLOCATE CURSOR_AVAILABLECFG
+   END
 END
 GO
 GRANT EXECUTE ON  [dbo].[mspALMLP01] TO [NSQL]
