@@ -10,6 +10,7 @@ GO
 /* Date       Rev  Author     Purposes                                  */
 /* 2024-08-06 1.0  JHU151    FCR-631 Created                            */
 /* 2024-11-25 1.1  TLE109    FCR-1378 Change in report PackInfLE        */
+/* 2025-11-25 1.2  Dennis    FCR-2636 Delete Dropid                     */
 /************************************************************************/
 CREATE OR ALTER PROC [rdt].[rdt_921ExtPrint01] (
    @nMobile    INT,
@@ -41,7 +42,11 @@ BEGIN
            @cPrinter       NVARCHAR( 10),
            @nInputKey      INT,
            @nTotalCQty     INT,
-           @nTotalPackQty  INT
+           @nTotalPackQty  INT,
+           @cReuseDropID   NVARCHAR(1),
+           @cPalletID      NVARCHAR(20)
+   
+   SET @cReuseDropID = rdt.RDTGetConfig( @nFunc, 'ReuseDropID', @cStorerKey)
 
    -- Get Default Printer
    SELECT   @cPrinter = ISNULL(Printer,'')
@@ -131,7 +136,13 @@ BEGIN
       GOTO QUIT
    END
 
-   
+   IF @cReuseDropID = '1'
+   BEGIN
+      SELECT @cPalletID = DROPID FROM DBO.DROPIDDETAIL WITH (NOLOCK) WHERE CHILDID = @cParam1
+      DELETE FROM DBO.DROPIDDETAIL WITH (ROWLOCK) WHERE CHILDID = @cParam1
+      IF NOT EXISTS (SELECT 1 FROM dbo.DROPIDDETAIL WITH(NOLOCK) WHERE DROPID = @cPalletID)
+         DELETE FROM DBO.DROPID WITH (ROWLOCK) WHERE DROPID = @cPalletID
+   END
 
    -- Print label
    EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cPrinter, @cPaperPrinter, 

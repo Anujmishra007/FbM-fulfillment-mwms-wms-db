@@ -1,12 +1,11 @@
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
-GO
-  
-    
+GO    
+
 /*********************************************************************************/  
 /* Store procedure: isp_PackConfirm                                              */  
-/* Copyright      : LFLogistics                                                  */  
+/* Copyright      : Maersk                                                       */  
 /*                                                                               */  
 /* Date         Rev  Author     Purposes                                         */  
 /* 2020-04-09   1.0  Chermaine  Created                                          */  
@@ -28,13 +27,39 @@ GO
 /* 2023-02-03   2.4  YeeKung    TPS-668 Fix cartonno (yeekung03)                 */
 /* 2023-03-20   2.5  YeeKung    TPS-678 add new error message (yeekung04)        */
 /* 2023-03-20   2.6  YeeKung    TPS-687 add order info into packheader (yeekung05)*/
-/* 2023-04-12   2.7  YeeKung    TPS-700 DefaultcartonType (yeekung06)             */
-/* 2023-07-11   2.8  YeeKung    TPS-756 Substring orderrefno 18 chars (yeekung07) */
-/* 2023-09-12   2.9  YeeKung    TPS-791 resetting the packinfo (yeekung08)        */
-/* 2023-07-05   3.0  YeeKung    TPS-735 add hold carton printing(yeekung09)       */
-/* 2023-08-09   3.1  YeeKung    TPS-727 add UPC on packdetail (yeekung10)         */  
-/* 2023-09-12   3.2  YeeKung    TPS-773/TPS-740 New print (yeekung11)             */
+/* 2023-04-12   2.7  YeeKung    TPS-700 DefaultcartonType (yeekung06)            */
+/* 2023-07-11   2.8  YeeKung    TPS-756 Substring orderrefno 18 chars (yeekung07)*/
+/* 2023-09-12   2.9  YeeKung    TPS-791 resetting the packinfo (yeekung08)       */
+/* 2023-07-05   3.0  YeeKung    TPS-735 add hold carton printing(yeekung09)      */
+/* 2023-08-09   3.1  YeeKung    TPS-727 add UPC on packdetail (yeekung10)        */  
+/* 2023-09-12   3.2  YeeKung    TPS-773/TPS-740 New print (yeekung11)            */
 /* 2023-12-11   3.3  YeeKung    TPS-826 Add params for paper (yeekung12)         */
+/* 2024-01-30   3.4  YeeKung    Bug Fixed (yeekung13)                            */
+/* 2024-01-30   3.5  Yeekung    JSM-205854 Fix labelline (yeekung14)             */
+/* 2024-02-27   3.6  Yeekung    TPS-888 Fix the labelline (yeekung04)            */
+/* 2024-03-14   3.7  YeeKung    TPS-892 Fix the insert (yeekung15)               */
+/* 2024-03-14   3.8  Xulu       BugFixed (XULU01)                                */
+/* 2024-05-29   3.9  YeeKung    TPS-908 Fixed the cartonid (yeekung16)           */
+/* 2024-11-06   4.0  YeeKung    TPS-989 Add Facility (yeekung17)                 */
+/* 2024-01-14   4.1  YeeKung    UWP-29167 Fix The packdetail (yeekung18)         */
+/* 2025-01-21   4.2  YeeKung    TPS-970 Add New Param on Extendedupdate(yeekung19)*/
+/* 2024-09-27   4.3  YeeKung    TPS-960 Add Qcommander PackConfirm (yeekung20)   */
+/* 2025-03-27   4.4  YeeKung    UWP-31731 Fix SKU replaced (yeekung21)           */
+/* 2025-04-07   4.5  YeeKung    UWP-32172 Fix Distinct Order (yeekung22)         */
+/* 2025-04-08   4.6  YeeKung    UWP-32466 Change Int -> BigInt (yeekung23)       */
+/* 2025-01-23   4.7  YeeKung    FCR-2019  Add CartonWeight (yeekung24)           */
+/* 2025-01-28   4.8  YeeKung    UWP-29489 Change API Username (yeekung25)        */
+/* 2025-02-10   4.9  GhChan     TPS-985 Carton Type Limit Config (Gh01)          */
+/* 2025-03-03   5.0 YeeKung    UWP-29086 check ucc or lottable qty whether null  */
+/*                              (yeekung26)                                      */
+/* 2025-03-27   5.1  YeeKung    UWP-31731 Fix SKU replaced (yeekung27)           */
+/* 2025-04-22   5.2  YeeKung    UWP-33225 Fix SUM SKU Issue (yeekung28)          */
+/* 2025-04-22   5.3  GhChan     UWP-33066 FCR-4039 Fix Group By (Gh02)           */
+/* 2025-04-23   5.4  GhChan     FCR-4207 Fix DynamicPrinter (Gh03)               */
+/* 2025-04-28   5.5  GhChan     UWP-33185 Changed CartonStatus Condition (Gh04)  */
+/* 2025-04-28   5.6  Yeekung    FCR-3819 Pack Merge with other app(yeekung29)    */
+/* 2025-05-16   5.7  Yeekung    UWP-33699 Merge username (yeekung30)             */
+/* 2025-05-27   5.8  GhChan     FCR-5305 Get CartonizationGroup (Gh04)           */
 /*********************************************************************************/  
   
 CREATE OR ALTER PROC [API].[isp_PackConfirm] (  
@@ -46,160 +71,171 @@ CREATE OR ALTER PROC [API].[isp_PackConfirm] (
 )  
 AS  
 BEGIN  
-SET NOCOUNT ON  
-SET QUOTED_IDENTIFIER OFF  
-SET ANSI_NULLS OFF  
-SET CONCAT_NULL_YIELDS_NULL OFF  
+   SET NOCOUNT ON  
+   SET QUOTED_IDENTIFIER OFF  
+   SET ANSI_NULLS OFF  
+   SET CONCAT_NULL_YIELDS_NULL OFF  
   
-DECLARE   
-   @nMobile          INT,  
-   @nStep            INT,  
-   @cLangCode        NVARCHAR( 3),  
-   @nInputKey        INT,  
-     
-   @cStorerKey       NVARCHAR( 15),  
-   @cFacility        NVARCHAR( 5),  
-   @nFunc            NVARCHAR( 5),  
-   @cUserName        NVARCHAR( 128),  
-   @cOriUserName     NVARCHAR( 128),  
-   @cScanNo          NVARCHAR( 50),  
-   @cScanNoType      NVARCHAR( 30),  
-   @cDropID          NVARCHAR( 50),  
-   @cPickSlipNo      NVARCHAR( 30),  
-   @cZone            NVARCHAR( 18),  
-   @nCartonNo        INT,  
-   @cCartonID        NVARCHAR( 20),  
-   @cType            NVARCHAR( 30),  
-   @nQTY             INT,  
-   @cSKU             NVARCHAR( 20),  
-   @cCartonType      NVARCHAR( 10),  
-   @cCube            FLOAT,  
-   @cWeight          FLOAT,  
-   @fCartonWeight    FLOAT,  
-   @fCartonCube      FLOAT,  
-   @cCloseCartonJson NVARCHAR( MAX),  
-   @cUPCJSON         NVARCHAR( MAX),  
-   @cLottableJSON    NVARCHAR( MAX),  
-   @cLoadKey         NVARCHAR( 10),  
-   @cOrderKey        NVARCHAR( 10),  
-   @nPickQty         INT,  
-   @nPackQty         INT,  
-   @nPackQtyCarton   INT,  
-   @cUPC             NVARCHAR( 30),  
-   @cLabelLine       NVARCHAR(5),  
-   @CalOrderSKU      NVARCHAR( 1),  
-   @EcomSingle       NVARCHAR( 1),  
-   @nProceedPrintFlag NVARCHAR( 1),  
-     
-   @cAssignPackLabelToOrdCfg     NVARCHAR(1), --(cc08)  
-   @cAssignPackLabelToOrdCfgSP   NVARCHAR(30), --(cc08)  
-     
-   @cSKUBarcode         NVARCHAR( 60),   --(cc09)  
-   @cExtendedUpdateSP   NVARCHAR( 20),   --(cc09)  
-   @cExtendedPrintSP    NVARCHAR( 20),   --(cc10)  
-   @cDymEcomCtnWgtTb    NVARCHAR( 20),  
-   @cDymEcomCtnWgtCol   NVARCHAR( 20),  
-   @cDymEcomCtnCubeTb   NVARCHAR( 20),  
-   @cDymEcomCtnCubeCol  NVARCHAR( 20),  
-   @UpdDymEcomWeight    NVARCHAR( 1),  
-   @UpdDymEcomCube      NVARCHAR( 1),  
-   @cDymWgtSQL          NVARCHAR( MAX),  
-   @cDymCubeSQL         NVARCHAR( MAX),  
-   @cCartonWeight       NVARCHAR( 20),  
-   @cCartonCube         NVARCHAR( 20),  
-  
-   @bSuccess         INT,  
-   @nErrNo           INT,   
-   @cErrMsg          NVARCHAR(250),  
-   @nTranCount       INT,  
-   @curPD            CURSOR,  
-   @GetCartonID      NVARCHAR( MAX),  
-   @cShipLabel       NVARCHAR( 10),  
-   @nJobID           INT,  
-   @cWorkstation     NVARCHAR( 30),  
-   @cLabelNo         NVARCHAR( 20), --(cc01)  
-   @pickSkuDetailJson   NVARCHAR( MAX),  
-   @bToPrint            INT,  
-   @cPrintAfterPacked   NVARCHAR( 1),  
-   @cLottableVal     NVARCHAR( 60), --(cc05)  
-   @cSQL             NVARCHAR(MAX), --(cc08)  
-   @cSQLParam        NVARCHAR(MAX), --(cc08)  
-   @cDisableLblPrint NVARCHAR(1), --(yeekung01)  
-   @cDisablePLPrint  NVARCHAR(1), --(yeekung01)  
-   @cDefaultCartonType  NVARCHAR(20), --(yeekung06) 
-   @nUPCQTY          INT,
-   @cCurUPC          CURSOR,
-   @cUCCCounter      INT
-
-DECLARE @cFieldName1 NVARCHAR(max),
-        @cFieldName2 NVARCHAR(max),
-        @cFieldName3 NVARCHAR(max),
-        @cFieldName4 NVARCHAR(max),
-        @cParams1    NVARCHAR(max),
-        @cParams2    NVARCHAR(max),
-        @cParams3    NVARCHAR(max),
-        @cParams4    NVARCHAR(max)
-
-DECLARE @cNewPaperPrinter NVARCHAR(20)
-DECLARE @cNewLabelPrinter NVARCHAR(20)
+   DECLARE   
+      @nMobile          INT,  
+      @nStep            INT,  
+      @cLangCode        NVARCHAR( 3),  
+      @nInputKey        INT,  
+      
+      @cStorerKey       NVARCHAR( 15),  
+      @cFacility        NVARCHAR( 5),  
+      @nFunc            NVARCHAR( 5),  
+      @cUserName        NVARCHAR( 128),  
+      @cDBUserName     NVARCHAR( 128),  
+      @cScanNo          NVARCHAR( 50),  
+      @cScanNoType      NVARCHAR( 30),  
+      @cDropID          NVARCHAR( 50),  
+      @cPickSlipNo      NVARCHAR( 30),  
+      @cZone            NVARCHAR( 18),  
+      @nCartonNo        INT,  
+      @cCartonID        NVARCHAR( 20),  
+      @cType            NVARCHAR( 30),  
+      @nQTY             INT,  
+      @cSKU             NVARCHAR( 20),  
+      @cCartonType      NVARCHAR( 10),  
+      @cCube            FLOAT,  
+      @cWeight          FLOAT,  
+      @fCartonWeight    FLOAT,  
+      @fCartonCube      FLOAT,  
+      @cCloseCartonJson NVARCHAR( MAX),  
+      @cUPCJSON         NVARCHAR( MAX),  
+      @cLottableJSON    NVARCHAR( MAX),  
+      @cLoadKey         NVARCHAR( 10),  
+      @cOrderKey        NVARCHAR( 10),  
+      @nPickQty         INT,  
+      @nPackQty         INT,  
+      @nPackQtyCarton   INT,  
+      @cUPC             NVARCHAR( 30),  
+      @cLabelLine       NVARCHAR(5),  
+      @CalOrderSKU      NVARCHAR( 1),  
+      @EcomSingle       NVARCHAR( 1),  
+      @nProceedPrintFlag NVARCHAR( 1),  
+      
+      @cAssignPackLabelToOrdCfg     NVARCHAR(1), --(cc08)  
+      @cAssignPackLabelToOrdCfgSP   NVARCHAR(30), --(cc08)  
+      
+      @cSKUBarcode         NVARCHAR( 60),   --(cc09)  
+      @cExtendedUpdateSP   NVARCHAR( 20),   --(cc09)  
+      @cExtendedPrintSP    NVARCHAR( 20),   --(cc10)  
+      @cDymEcomCtnWgtTb    NVARCHAR( 20),  
+      @cDymEcomCtnWgtCol   NVARCHAR( 20),  
+      @cDymEcomCtnCubeTb   NVARCHAR( 20),  
+      @cDymEcomCtnCubeCol  NVARCHAR( 20),  
+      @UpdDymEcomWeight    NVARCHAR( 1),  
+      @UpdDymEcomCube      NVARCHAR( 1),  
+      @cDymWgtSQL          NVARCHAR( MAX),  
+      @cDymCubeSQL         NVARCHAR( MAX),  
+      @cCartonWeight       NVARCHAR( 20),  
+      @cCartonCube         NVARCHAR( 20),  
    
+      @bSuccess            INT,  
+      @nErrNo              INT,   
+      @cErrMsg             NVARCHAR(250),  
+      @nTranCount          INT,  
+      @curPD               CURSOR,  
+      @GetCartonID         NVARCHAR( MAX),  
+      @cShipLabel          NVARCHAR( 10),  
+      @nJobID              INT,  
+      @cWorkstation        NVARCHAR( 30),  
+      @cLabelNo            NVARCHAR( 20), --(cc01)  
+      @pickSkuDetailJson   NVARCHAR( MAX),  
+      @bToPrint            INT,  
+      @cPrintAfterPacked   NVARCHAR( 1),  
+      @cLottableVal        NVARCHAR( 60), --(cc05)  
+      @cSQL                NVARCHAR(MAX), --(cc08)  
+      @cSQLParam           NVARCHAR(MAX), --(cc08)  
+      @cDisableLblPrint    NVARCHAR(1), --(yeekung01)  
+      @cDisablePLPrint     NVARCHAR(1), --(yeekung01)  
+      @cDefaultCartonType  NVARCHAR(20), --(yeekung06) 
+      @nUPCQTY             INT,
+      @cCurUPC             CURSOR,
+      @cUCCCounter         INT,
+      @nPackedQTY          INT,
+      @cRemainCartonTypeScn INT  = 0,
+      @nLimitCartonType    INT, --(Gh01)
+      @cPrinterInGroup NVARCHAR(10),
+      @cShowCartonNo       NVARCHAR(20) --(Yeekung29)
+
+   DECLARE @cFieldName1 NVARCHAR(max),
+         @cFieldName2 NVARCHAR(max),
+         @cFieldName3 NVARCHAR(max),
+         @cFieldName4 NVARCHAR(max),
+         @cParams1    NVARCHAR(max),
+         @cParams2    NVARCHAR(max),
+         @cParams3    NVARCHAR(max),
+         @cParams4    NVARCHAR(max),
+         @IsAggregate1 BIT = 0,
+         @IsAggregate2 BIT = 0,
+         @IsAggregate3 BIT = 0,
+         @IsAggregate4 BIT = 0
+
+   DECLARE @cNewPaperPrinter NVARCHAR(20)
+   DECLARE @cNewLabelPrinter NVARCHAR(20)
+   DECLARE @groupByFields NVARCHAR(MAX) = ''   
+   
+   SET @UpdDymEcomWeight = 'N'  
+   SET @EcomSingle = '0'  
+   SET @UpdDymEcomCube = 'N'  
+   SET @nProceedPrintFlag = '0'  
+   SET @cDisableLblPrint = '0'  
+   SET @cDisablePLPrint = '0'  
+   SET @nLimitCartonType = 0  --(Gh01)
+   SET @cShowCartonNo = '0'
   
-SET @UpdDymEcomWeight = 'N'  
-SET @EcomSingle = '0'  
-SET @UpdDymEcomCube = 'N'  
-SET @nProceedPrintFlag = '0'  
-SET @cDisableLblPrint = '0'  
-SET @cDisablePLPrint = '0'  
-  
-DECLARE @CartonIDList TABLE (  
-   CartonID        NVARCHAR( 20)  
-)  
+   DECLARE @CartonIDList TABLE (  
+      CartonID        NVARCHAR( 20)  
+   )  
 
 
-DECLARE @CloseCartonList TABLE (  
-   SKU             NVARCHAR( 20),  
-   QTY             INT,  
-   Weight          FLOAT,  
-   Cube            FLOAT,    
-   lottableVal     NVARCHAR(MAX),  
-   barcodeVal      NVARCHAR(60),  
-   ADCode          NVARCHAR(60),
-   UPC             NVARCHAR(MAX)
-)  
+   DECLARE @CloseCartonList TABLE (  
+      SKU             NVARCHAR( 20),  
+      QTY             INT,  
+      Weight          FLOAT,  
+      Cube            FLOAT,    
+      lottableVal     NVARCHAR(MAX),  
+      barcodeVal      NVARCHAR(60),  
+      ADCode          NVARCHAR(60),
+      UPC             NVARCHAR(MAX)
+   )  
   
   
-DECLARE @pickSKUDetail TABLE (  
-   SKU              NVARCHAR( 30),    
-   QtyToPack        INT,  
-   OrderKey         NVARCHAR( 30),  
-   PickslipNo       NVARCHAR( 30),  
-   LoadKey          NVARCHAR( 30),--externalOrderKey  
-   PickDetailStatus NVARCHAR ( 3)  
-)  
+   DECLARE @pickSKUDetail TABLE (  
+      SKU              NVARCHAR( 30),    
+      QtyToPack        INT,  
+      OrderKey         NVARCHAR( 30),  
+      PickslipNo       NVARCHAR( 30),  
+      LoadKey          NVARCHAR( 30),--externalOrderKey  
+      PickDetailStatus NVARCHAR ( 3)  
+   )  
   
---decode json  
-select @cStorerKey = StorerKey, @cFacility = Facility, @nFunc = Func, @cUserName = UserName, @cLangCode = LangCode,  
-@cScanNo = ScanNo, @nCartonNo = CartonNo, @cCartonType = CartonType, @cType = ctype, @fCartonWeight = CartonWeight,   
-@fCartonCube = CartonCube, @cWorkstation = Workstation, @cLabelNo = LabelNo,   
-@cCloseCartonJson=CloseCarton  
-FROM OPENJSON(@json)    
-WITH (  
- StorerKey      NVARCHAR( 30),  
- Facility       NVARCHAR( 30),  
-   Func           NVARCHAR( 5),  
-   UserName       NVARCHAR( 128),  
-   LangCode       NVARCHAR( 3),  
-   ScanNo         NVARCHAR( 30),  
-   CartonNo       INT,  
-   CartonType     NVARCHAR( 30),  
-   cType          NVARCHAR( 30),  
-   CartonWEIGHT   FLOAT,  
-   CartonCUBE     FLOAT,  
-   Workstation    NVARCHAR( 30),  
-   LabelNo        NVARCHAR( 20), --(cc01)  
-   CloseCarton    NVARCHAR( max) as json  
-)   
-     
+   --decode json  
+   SELECT   @cStorerKey = StorerKey, @cFacility = Facility, @nFunc = Func, @cUserName = UserName, @cLangCode = LangCode,  
+            @cScanNo = ScanNo, @nCartonNo = CartonNo, @cCartonType = CartonType, @cType = ctype, @fCartonWeight = CartonWeight,   
+            @fCartonCube = CartonCube, @cWorkstation = Workstation, @cLabelNo = LabelNo,   
+            @cCloseCartonJson=CloseCarton  
+   FROM OPENJSON(@json)    
+   WITH (  
+      StorerKey      NVARCHAR( 30),  
+      Facility       NVARCHAR( 30),  
+      Func           NVARCHAR( 5),  
+      UserName       NVARCHAR( 128),  
+      LangCode       NVARCHAR( 3),  
+      ScanNo         NVARCHAR( 30),  
+      CartonNo       INT,  
+      CartonType     NVARCHAR( 30),  
+      cType          NVARCHAR( 30),  
+      CartonWEIGHT   FLOAT,  
+      CartonCUBE     FLOAT,  
+      Workstation    NVARCHAR( 30),  
+      LabelNo        NVARCHAR( 20), --(cc01)  
+      CloseCarton    NVARCHAR( max) as json  
+   )   
+      
 INSERT INTO @CloseCartonList  
 SELECT Hdr.SKU  
 , Hdr.Qty  
@@ -237,19 +273,20 @@ WITH (
    Lottable    NVARCHAR( max) as json  
 )
 
-
-
-SELECT 'ab',* FROM @CloseCartonList  
---GOTO Quit  
 SET @cCartonWeight = CONVERT(NVARCHAR(20),@fCartonWeight)  
 SET @cCartonCube = CONVERT(NVARCHAR(20),@fCartonCube)  
-SET @cOriUserName = @cUserName  
---convert login   
-SET @n_Err = 0   
-EXEC [WM].[lsp_SetUser] @c_UserName = @cUserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT  
-  
-EXECUTE AS LOGIN = @cUserName  
-  
+SET @cDBUserName = @cUserName
+
+--convert login
+SET @n_Err = 0
+EXEC [WM].[lsp_SetUser] @c_UserName = @cDBUserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
+
+IF @cDBUserName Like '%' + @cUserName + '%'
+BEGIN
+   EXECUTE AS LOGIN = @cDBUserName
+   SET @cUserName = @cDBUserName
+END
+   
 IF @n_Err <> 0   
 BEGIN    
    SET @b_Success = 0    
@@ -258,6 +295,8 @@ BEGIN
    SET @jResult = (select '' AS OrderKey, '' as LabelJobID, '' as PackingJobID ,@nProceedPrintFlag AS nProceedPrintFlag, '' AS VasConfig, '' AS VasCol1Name, '' AS VasCol1Value, '' AS WorkInstruction FOR JSON PATH )  
    GOTO EXIT_SP    
 END    
+
+-- SET @cUserName = @cOriUserName
   
 --check pickslipNo  
 EXEC [API].[isp_GetPicklsipNo] @cStorerKey,@cFacility,@nFunc,@cLangCode,@cScanNo,@cType,@cUserName, @jResult OUTPUT,@b_Success OUTPUT,@n_Err OUTPUT,@c_ErrMsg OUTPUT  
@@ -275,7 +314,7 @@ END
 --Decode pickslipNo Json Format  
 SELECT @cScanNoType = ScanNoType, @cpickslipNo = PickslipNo, @cDropID = DropID,  @cOrderKey=ISNULL(OrderKey,''), @cLoadKey = LoadKey, @cZone = Zone, @EcomSingle = EcomSingle  
 --, @cDynamicRightName1 = DynamicRightName1, @cDynamicRightValue1 = DynamicRightValue1  
-,@pickSkuDetailJson = PickSkuDetail  
+      ,@pickSkuDetailJson = PickSkuDetail  
 FROM OPENJSON(@jResult)    
 WITH (    
    ScanNoType        NVARCHAR( 30),  
@@ -307,10 +346,10 @@ WITH (
 IF EXISTS (select 1 from @CloseCartonList  where QTY<0) OR 
    EXISTS  (select 1 from @pickSKUDetail  where QtyToPack<0 )
 BEGIN  
-   SET @jResult = (select '' AS OrderKey, '' as LabelJobID, '' as PackingJobID ,@nProceedPrintFlag AS nProceedPrintFlag, '' AS VasConfig, '' AS VasCol1Name, '' AS VasCol1Value, '' AS WorkInstruction FOR JSON PATH )  
    SET @b_Success = 0    
    SET @n_Err = 1000000    
-   SET @c_ErrMsg = @c_ErrMsg  
+   SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Negative Quantity Detected Failed to Proceed PackConfirm. Function : isp_PackConfirm'    
+   SET @jResult = (select '' AS OrderKey, '' as LabelJobID, '' as PackingJobID ,@nProceedPrintFlag AS nProceedPrintFlag, '' AS VasConfig, '' AS VasCol1Name, '' AS VasCol1Value, '' AS WorkInstruction FOR JSON PATH )  
    GOTO EXIT_SP  
 END  
   
@@ -342,6 +381,16 @@ BEGIN
    END
 END 
 
+EXEC nspGetRight  -- (yeekung20)  
+      @c_Facility   = @cFacility   
+   ,  @c_StorerKey  = @cStorerKey   
+   ,  @c_sku        = ''    
+   ,  @c_ConfigKey  = 'TPS-ShowCartonNo'    
+   ,  @b_Success    = @b_Success       OUTPUT    
+   ,  @c_authority  = @cShowCartonNo   OUTPUT    
+   ,  @n_err        = @n_Err           OUTPUT    
+   ,  @c_errmsg     = @c_ErrMsg        OUTPUT  
+
   
 IF EXISTS (SELECT TOP 1 1 FROM storerConfig WITH (NOLOCK) WHERE storerKey = @cStorerKey AND configKey = 'TPS-DisableLblPrint' AND sValue = '1')  
 BEGIN  
@@ -366,32 +415,38 @@ BEGIN
                       
    --SELECT @cOrderKey AS cOrderKeyEcom, @cPickSlipNo AS cPickSlipNoEcom  
 END  
---SELECT @cOrderKey AS orderKeyAAAAA  
-  
---SELECT @cEcomSKU AS ecomSKU            
---SELECT * FROM @pickSKUDetail  
---SELECT @cPickSlipNo AS pickslipno  
---GOTO EXIT_SP 
-
-
---Get New cartonno  
-IF EXISTS (SELECT 1 FROM packdetail(nolock) --(yeekung03)
-            WHERE pickslipno = @cPickSlipNo  
-               AND Storerkey = @cStorerKey 
-               AND cartonNo = @nCartonNo )
-BEGIN
-   SELECT @nCartonNo = MAX(cartonno) + 1
-   FROM packdetail(nolock) 
-   WHERE pickslipno = @cPickSlipNo  
-      AND Storerkey = @cStorerKey 
-END
 
 
 IF ISNULL(@cCartonType,'') =''
 BEGIN
-   SELECT @cDefaultCartonType = sValue FROM dbo.StorerConfig WITH (NOLOCK) WHERE @cStorerKey = @cStorerKey AND configKey = 'DefaultCartonType'  
+   SELECT @cDefaultCartonType = sValue FROM dbo.StorerConfig WITH (NOLOCK) WHERE Storerkey = @cStorerKey AND configKey = 'DefaultCartonType'  
    SET @cCartonType = @cDefaultCartonType
 END
+--(Gh01) start
+ELSE 
+BEGIN
+   SELECT @nLimitCartonType= TRY_CAST(sValue AS INT) FROM dbo.StorerConfig WITH (NOLOCK) WHERE Storerkey = @cStorerKey AND configKey = 'TPS-LimitCartonType'
+   
+   IF @@ROWCOUNT = 1 AND @nLimitCartonType > 0
+   BEGIN
+      IF (SELECT COUNT(DISTINCT CartonType) 
+            FROM 
+            (SELECT CartonType FROM dbo.PackInfo WITH (NOLOCK) WHERE PickSlipNo = @cPickSlipNo
+            UNION
+            SELECT @cCartonType) AS TtlCartonType 
+         ) > @nLimitCartonType
+      BEGIN
+         SELECT @c_ErrMsg = STRING_AGG(CartonType, ', ') FROM (SELECT DISTINCT CartonType FROM dbo.PackInfo WITH (NOLOCK) WHERE PickSlipNo = @cPickSlipNo) AS ExistingItems
+         SET @b_Success = 0    
+         SET @n_Err = 1000025    
+         SET @c_ErrMsg = @c_ErrMsg + ' ' + API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--' - Cannot select more than these items:  Function : isp_PackConfirm'  
+         SET @jResult = ''
+         --SET @jResult = (select '' AS OrderKey, '' as LabelJobID, '' as PackingJobID ,@nProceedPrintFlag AS nProceedPrintFlag, '' AS VasConfig, '' AS VasCol1Name, '' AS VasCol1Value, '' AS WorkInstruction FOR JSON PATH )  
+         GOTO EXIT_SP  
+      END
+   END
+END
+--(Gh01) end
 
 --check status       
 IF EXISTS (SELECT TOP 1 1 FROM packInfo WITH (NOLOCK) WHERE PickSlipNo = @cPickSlipNo AND CartonNo = @nCartonNo AND CartonStatus = 'Hold')  
@@ -492,8 +547,8 @@ END
   
 --SELECT @cCartonID AS cCartonID, @cLabelNo AS LabelNo  
 DECLARE @SQLParam NVARCHAR(MAX)   
-DECLARE @cCartonNo NVARCHAR(3)  
-SET @cCartonNo = CONVERT(NVARCHAR(3),@nCartonNo)  
+DECLARE @cCartonNo NVARCHAR(5)  
+SET @cCartonNo = CONVERT(NVARCHAR(5),@nCartonNo)  
 IF ISNULL(@cCartonID,'') =''   
 BEGIN   --(cc06)  
    SET @GetCartonID = '       
@@ -539,7 +594,7 @@ BEGIN
    DECLARE @cConsigneekey NVARCHAR(20)   = ''
 
       --(yeekung05)
-   SELECT @cRoute          = ISNULL(Route,''),
+   SELECT   @cRoute          = ISNULL(Route,''),
             @cOrderRefNo     = ISNULL(ExternOrderkey,''),
             @cConsigneekey   = ISNULL(Consigneekey,'')
    FROM ORDERS (NOLOCK)
@@ -550,8 +605,8 @@ BEGIN
       SET @cOrderRefNo = SUBSTRING(trim(@cOrderRefNo),1,18)
 
    INSERT INTO dbo.PackHeader (PickSlipNo, StorerKey, OrderKey, LoadKey, AddWho, AddDate,Route,OrderRefNo,ConsigneeKey)  
-   VALUES (@cPickSlipNo, @cStorerKey, @cOrderKey, @cLoadKey, SUSER_NAME(), GETDATE(),@cRoute,@cOrderRefNo,@cConsigneekey)  
-   
+   VALUES (@cPickSlipNo, @cStorerKey, @cOrderKey, @cLoadKey, @cUserName, GETDATE(),@cRoute,@cOrderRefNo,@cConsigneekey)  
+    
    IF @@ERROR <> 0  
    BEGIN        
       SET @b_Success = 0    
@@ -560,6 +615,16 @@ BEGIN
       GOTO RollBackTran  
    END  
 END 
+
+IF @cShowCartonNo = '1'
+AND EXISTS ( SELECT 1 FROM PACKDETAIL (NOLOCK) 
+            WHERE PickSlipNo = @cPickSlipNo
+               AND Storerkey = @cStorerkey
+               AND CartonNo = @nCartonNo)
+BEGIN
+   SET @nCartonNo = 0 
+END
+
 
 --Close: packDetail  
 SET @curPD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
@@ -601,7 +666,7 @@ BEGIN
    --check pickQty<=packQty (per sku)  
    SELECT @nPackQty = ISNULL(SUM(Qty),0) FROM PackDetail WITH (NOLOCK) WHERE pickslipno = @cPickSlipNo AND SKU = @csku AND Storerkey = @cStorerKey  
    SELECT @nPackQtyCarton = ISNULL(SUM(Qty),0) FROM PackDetail WITH (NOLOCK) WHERE pickslipno = @cPickSlipNo AND SKU = @csku AND Storerkey = @cStorerKey AND cartonNo = @nCartonNo  
-   SELECT @nPickQty = QtyToPack FROM @pickSKUDetail WHERE sku = @cSKU  
+   SELECT @nPickQty = ISNULL(SUM(QtyToPack),0) FROM @pickSKUDetail WHERE sku = @cSKU  
 
    IF @nPickQty < @nQTY  
    BEGIN  
@@ -636,20 +701,25 @@ BEGIN
           
    
          SET @cCurUPC = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
-         SELECT UPC,QTY  
+         SELECT UPC, SUM(QTY) 
          FROM OPENJSON(@cUPCJSON)  
          WITH (  
             UPC               NVARCHAR( 30)  '$.UPC',  
             QTY               INT            '$.QTY'
          )  
+         GROUP BY  UPC
 
          OPEN @cCurUPC 
          FETCH NEXT FROM @cCurUPC INTO @cUPC,@nUPCQTY
          WHILE @@FETCH_STATUS <> -1  
          BEGIN  
-                  -- Get LabelLine  
-            SET @cLabelLine = ''  
-            SELECT @cLabelLine = LabelLine  
+            IF ISNULL(@cUPC,'') =''
+               GOTO NEXT_UPC
+         
+                -- Get LabelLine  
+            SET @cLabelLine = ''
+            SET @nPackedQTY = 0
+            SELECT @cLabelLine = LabelLine, @nPackedQTY = qty 
             FROM dbo.PackDetail WITH (NOLOCK)   
             WHERE PickSlipNo = @cPickSlipNo   
                AND CartonNo = @nCartonNo  
@@ -664,64 +734,93 @@ BEGIN
                   AND CartonNo = @nCartonNo  
                   AND LabelNo = @cCartonID   
                   AND SKU = ''  
+
+            SET @nPackedQTY = CASE WHEN ISNULL(@nPackedQTY,'') ='' THEN 0 ELSE @nPackedQTY END 
+
+            IF @nPackedQTY <> @nUPCQTY
+            BEGIN
+               SET @nUPCQTY = @nUPCQTY - @nPackedQTY
   
-            IF @cLabelLine = ''  
-            BEGIN  
-               SELECT @cLabelLine = RIGHT( '00000' + CAST( CAST( IsNULL( MAX( LabelLine), 0) AS INT) + 1 AS NVARCHAR( 5)), 5)   
-               FROM dbo.PackDetail (NOLOCK)  
-               WHERE Pickslipno = @cPickSlipNo  
-                  AND CartonNo = @nCartonNo  
-                  AND LabelNo = @cCartonID  
-            END 
+            --IF @cLabelLine = ''  
+            --BEGIN  
+            --   SELECT @cLabelLine = RIGHT( '00000' + CAST( CAST( IsNULL( MAX( LabelLine), 0) AS INT) + 1 AS NVARCHAR( 5)), 5)   
+            --   FROM dbo.PackDetail (NOLOCK)  
+            --   WHERE Pickslipno = @cPickSlipNo  
+            --      AND CartonNo = @nCartonNo  
+            --      AND LabelNo = @cCartonID  
+            --END 
 
             -- Close: PackDetail  
-            IF NOT EXISTS( SELECT 1 FROM dbo.PackDetail WITH (NOLOCK) WHERE PickslipNo = @cPickslipNo AND cartonno =@nCartonNo AND SKU=@cSKU AND LOTTABLEVALUE = @cLottableVal and upc=@cupc)  
-            BEGIN  
-      
-               -- Insert PackDetail  
-               INSERT INTO dbo.PackDetail  
-                  (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, DropID,  
-                  AddWho, AddDate, EditWho, EditDate  
-                  , LOTTABLEVALUE,UPC)--(cc05)  
-               VALUES  
-                  (@cPickSlipNo, @nCartonNo, @cCartonID, @cLabelLine, @cStorerKey, @cSKU, @nUPCQTY, ISNULL(@cDropID,''),  
-                     SUSER_NAME(), GETDATE(), SUSER_NAME(), GETDATE()  
-                     , @cLottableVal,@cUPC) --(cc05)  
-               IF @@ERROR <> 0  
+               IF NOT EXISTS( SELECT 1 FROM dbo.PackDetail WITH (NOLOCK) WHERE PickslipNo = @cPickslipNo AND cartonno =@nCartonNo AND SKU=@cSKU AND LOTTABLEVALUE = @cLottableVal and upc=@cupc)  
                BEGIN  
-                  SET @b_Success = 0    
-                  SET @n_Err = 1000016    
-                  SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Fail to insert into PackDetail. Function : isp_PackConfirm'          
-                  GOTO RollBackTran  
+
+               
+                  SELECT @cLabelLine = RIGHT( '00000' + CAST( CAST( IsNULL( MAX( LabelLine), 0) AS INT) + 1 AS NVARCHAR( 5)), 5)   
+                  FROM dbo.PackDetail (NOLOCK)  
+                  WHERE Pickslipno = @cPickSlipNo  
+                     AND CartonNo = @nCartonNo  
+                     AND LabelNo = @cCartonID  
+
+                  -- Insert PackDetail  
+                  INSERT INTO dbo.PackDetail  
+                     (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, DropID,  
+                     AddWho, AddDate, EditWho, EditDate  
+                     , LOTTABLEVALUE,UPC)--(cc05)  
+                  VALUES  
+                     (@cPickSlipNo, @nCartonNo, @cCartonID, @cLabelLine, @cStorerKey, @cSKU, @nUPCQTY, ISNULL(@cDropID,''),  
+                        @cUserName, GETDATE(), @cUserName, GETDATE()  
+                        , @cLottableVal,@cUPC) --(cc05)  
+                  IF @@ERROR <> 0  
+                  BEGIN  
+                     SET @b_Success = 0    
+                     SET @n_Err = 1000016    
+                     SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Fail to insert into PackDetail. Function : isp_PackConfirm'          
+                     GOTO RollBackTran  
+                  END  
                END  
-            END  
-            ELSE  
-            BEGIN  
-               -- Update Packdetail  
-               UPDATE dbo.PackDetail WITH (ROWLOCK) SET     
-                  SKU = @cSKU,   
-                  QTY = QTY+ @nUPCQTY,   
-                  DropID = ISNULL(@cDropID,''),  
-                  EditWho =  SUSER_NAME(),   
-                  EditDate = GETDATE(),   
-                  ArchiveCop = NULL,  
-                  LOTTABLEVALUE = @cLottableVal,
-                  UPC   = @cUPC
-               WHERE PickSlipNo = @cPickSlipNo  
-                  AND SKU = @cSKU 
-                  AND cartonno =@nCartonNo 
-                  and upc = @cupc
-               IF @@ERROR <> 0  
-               BEGIN           
-                  SET @b_Success = 0    
-                  SET @n_Err = 1000017    
-                  SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Fail to update into PackDetail. Function : isp_PackConfirm'   
-                  GOTO RollBackTran  
-               END
+               ELSE  
+               BEGIN  
+                  -- Update Packdetail  
+                  UPDATE dbo.PackDetail WITH (ROWLOCK) SET     
+                     SKU = @cSKU,   
+                     QTY = QTY+ @nUPCQTY,   
+                     DropID = ISNULL(@cDropID,''),  
+                     EditWho =  @cUserName,   
+                     EditDate = GETDATE(),   
+                     ArchiveCop = NULL,  
+                     LOTTABLEVALUE = @cLottableVal,
+                     UPC   = @cUPC
+                  WHERE PickSlipNo = @cPickSlipNo  
+                     AND SKU = @cSKU 
+                     AND cartonno =@nCartonNo 
+                     and upc = @cupc
+                  IF @@ERROR <> 0  
+                  BEGIN           
+                     SET @b_Success = 0    
+                     SET @n_Err = 1000017    
+                     SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Fail to update into PackDetail. Function : isp_PackConfirm'   
+                     GOTO RollBackTran  
+                  END
             
-            END  
+               END  
+            END
+
+            -- Get system assigned CartonoNo and LabelNo
+            IF @nCartonNo = 0
+            BEGIN
+               -- If insert cartonno = 0, system will auto assign max cartonno
+               SELECT TOP 1 
+                  @nCartonNo = CartonNo
+               FROM PackDetail WITH (NOLOCK)
+               WHERE PickSlipNo = @cPickSlipNo
+                  AND SKU = @cSKU
+                  AND AddWho = @cUserName
+               ORDER BY CartonNo DESC -- max cartonno
+            END   
 
             SET @nQTY = @nQTY- @nUPCQTY
+
+            NEXT_UPC:
 
             FETCH NEXT FROM @cCurUPC INTO @cUPC,@nUPCQTY
          END
@@ -738,24 +837,28 @@ BEGIN
       BEGIN
          DECLARE @cCurLottable Cursor
          DECLARE @cLottableValue NVARCHAR(30)
-         DECLARE @nPackedQTY INT
+         DECLARE @nLotQTY INT
 
          SET @cCurLottable = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
-         SELECT Lottable,PackedQTY  
+         SELECT Lottable,SUM(PackedQTY ) 
          FROM OPENJSON(@cLottableJSON)  
          WITH (  
             Lottable               NVARCHAR( 30)  '$.Lottable',  
             PackedQTY              INT            '$.PackedQty'
          )  
+         GROUP BY Lottable
 
          OPEN @cCurLottable 
-         FETCH NEXT FROM @cCurLottable INTO @cLottableValue,@nPackedQTY
+         FETCH NEXT FROM @cCurLottable INTO @cLottableValue,@nLotQTY
          WHILE @@FETCH_STATUS <> -1  
          BEGIN  
+            IF ISNULL(@cLottableValue,'') =''
+               GOTO NEXT_Lottable
 
                   -- Get LabelLine  
             SET @cLabelLine = ''  
-            SELECT @cLabelLine = LabelLine  
+            SET @nPackedQTY = 0
+            SELECT @cLabelLine = LabelLine, @nPackedQTY =qty
             FROM dbo.PackDetail WITH (NOLOCK)   
             WHERE PickSlipNo = @cPickSlipNo   
                AND CartonNo = @nCartonNo  
@@ -770,65 +873,95 @@ BEGIN
                   AND CartonNo = @nCartonNo  
                   AND LabelNo = @cCartonID   
                   AND SKU = ''  
+            
+            SET @nPackedQTY = CASE WHEN ISNULL(@nPackedQTY,'') ='' THEN 0 ELSE @nPackedQTY END 
+
+            IF @nPackedQTY <> @nLotQTY
+            BEGIN
+               SET @nLotQTY = @nLotQTY - @nPackedQTY
   
-            IF @cLabelLine = ''  
-            BEGIN  
-               SELECT @cLabelLine = RIGHT( '00000' + CAST( CAST( IsNULL( MAX( LabelLine), 0) AS INT) + 1 AS NVARCHAR( 5)), 5)   
-               FROM dbo.PackDetail (NOLOCK)  
-               WHERE Pickslipno = @cPickSlipNo  
-                  AND CartonNo = @nCartonNo  
-                  AND LabelNo = @cCartonID  
-            END 
+            --IF @cLabelLine = ''  
+            --BEGIN  
+            --   SELECT @cLabelLine = RIGHT( '00000' + CAST( CAST( IsNULL( MAX( LabelLine), 0) AS INT) + 1 AS NVARCHAR( 5)), 5)   
+            --   FROM dbo.PackDetail (NOLOCK)  
+            --   WHERE Pickslipno = @cPickSlipNo  
+            --      AND CartonNo = @nCartonNo  
+            --      AND LabelNo = @cCartonID  
+            --END 
 
             -- Close: PackDetail  
-            IF NOT EXISTS( SELECT 1 FROM dbo.PackDetail WITH (NOLOCK) WHERE PickslipNo = @cPickslipNo AND cartonno =@nCartonNo AND SKU=@cSKU AND LOTTABLEVALUE = @cLottableVal  AND UPC = @cUPC)  
-            BEGIN  
-      
-               -- Insert PackDetail  
-               INSERT INTO dbo.PackDetail  
-                  (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, DropID,  
-                  AddWho, AddDate, EditWho, EditDate  
-                  , LOTTABLEVALUE,UPC)--(cc05)  
-               VALUES  
-                  (@cPickSlipNo, @nCartonNo, @cCartonID, @cLabelLine, @cStorerKey, @cSKU, @nPackedQTY,ISNULL(@cDropID,''),  
-                     SUSER_NAME(), GETDATE(), SUSER_NAME(), GETDATE()  
-                     , @cLottableValue,@cUPC) --(cc05)  
-               IF @@ERROR <> 0  
+               IF NOT EXISTS( SELECT 1 FROM dbo.PackDetail WITH (NOLOCK) WHERE PickslipNo = @cPickslipNo AND cartonno =@nCartonNo AND SKU=@cSKU AND LOTTABLEVALUE = @cLottableVal  AND UPC = @cUPC)  
                BEGIN  
-                  SET @b_Success = 0    
-                  SET @n_Err = 1000016    
-                  SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Fail to insert into PackDetail. Function : isp_PackConfirm'          
-                  GOTO RollBackTran  
+               
+                  SELECT @cLabelLine = RIGHT( '00000' + CAST( CAST( IsNULL( MAX( LabelLine), 0) AS INT) + 1 AS NVARCHAR( 5)), 5)   
+                  FROM dbo.PackDetail (NOLOCK)  
+                  WHERE Pickslipno = @cPickSlipNo  
+                     AND CartonNo = @nCartonNo  
+                     AND LabelNo = @cCartonID  
+
+      
+                  -- Insert PackDetail  
+                  INSERT INTO dbo.PackDetail  
+                     (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, DropID,  
+                     AddWho, AddDate, EditWho, EditDate  
+                     , LOTTABLEVALUE,UPC)--(cc05)  
+                  VALUES  
+                     (@cPickSlipNo, @nCartonNo, @cCartonID, @cLabelLine, @cStorerKey, @cSKU, @nLotQTY,ISNULL(@cDropID,''),  
+                        @cUserName, GETDATE(), @cUserName, GETDATE()  
+                        , @cLottableValue,@cUPC) --(cc05)  
+                  IF @@ERROR <> 0  
+                  BEGIN  
+                     SET @b_Success = 0    
+                     SET @n_Err = 1000026    
+                     SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Fail to insert into PackDetail. Function : isp_PackConfirm'          
+                     GOTO RollBackTran  
+                  END  
                END  
-            END  
-            ELSE  
-            BEGIN  
-               -- Update Packdetail  
-               UPDATE dbo.PackDetail WITH (ROWLOCK) SET     
-                  SKU = @cSKU,   
-                  QTY = QTY+ @nPackedQTY,   
-                  DropID = ISNULL(@cDropID,''),  
-                  EditWho =  SUSER_NAME(),   
-                  EditDate = GETDATE(),   
-                  ArchiveCop = NULL,  
-                  LOTTABLEVALUE = @cLottableVal,
-                  UPC   = @cUPC
-               WHERE PickSlipNo = @cPickSlipNo  
-                  AND SKU = @cSKU 
-                  AND cartonno =@nCartonNo
-                  and LOTTABLEVALUE = @cLottableValue
-               IF @@ERROR <> 0  
-               BEGIN           
-                  SET @b_Success = 0    
-                  SET @n_Err = 1000017    
-                  SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Fail to update into PackDetail. Function : isp_PackConfirm'   
-                  GOTO RollBackTran  
-               END
-            END  
+               ELSE  
+               BEGIN  
+                  -- Update Packdetail  
+                  UPDATE dbo.PackDetail WITH (ROWLOCK) SET     
+                     SKU = @cSKU,   
+                     QTY = QTY+ @nLotQTY,   
+                     DropID = ISNULL(@cDropID,''),  
+                     EditWho =  @cUserName,   
+                     EditDate = GETDATE(),   
+                     ArchiveCop = NULL,  
+                     LOTTABLEVALUE = @cLottableVal,
+                     UPC   = @cUPC
+                  WHERE PickSlipNo = @cPickSlipNo  
+                     AND SKU = @cSKU 
+                     AND cartonno =@nCartonNo
+                     and LOTTABLEVALUE = @cLottableValue
+                  IF @@ERROR <> 0  
+                  BEGIN           
+                     SET @b_Success = 0    
+                     SET @n_Err = 1000027    
+                     SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Fail to update into PackDetail. Function : isp_PackConfirm'   
+                     GOTO RollBackTran  
+                  END
+               END 
+            END
 
-            SET @nQTY = @nQTY- @nPackedQTY
+            SET @nQTY = @nQTY- @nLotQTY
 
-            FETCH NEXT FROM @cCurLottable INTO @cLottableValue,@nPackedQTY
+            
+            -- Get system assigned CartonoNo and LabelNo
+            IF @nCartonNo = 0
+            BEGIN
+               -- If insert cartonno = 0, system will auto assign max cartonno
+               SELECT TOP 1 
+                  @nCartonNo = CartonNo
+               FROM PackDetail WITH (NOLOCK)
+               WHERE PickSlipNo = @cPickSlipNo
+                  AND SKU = @cSKU
+                  AND AddWho = @cUserName
+               ORDER BY CartonNo DESC -- max cartonno
+            END   
+
+            NEXT_Lottable:
+
+            FETCH NEXT FROM @cCurLottable INTO @cLottableValue,@nLotQTY
          END
          CLOSE @cCurLottable
          DEALLOCATE @cCurLottable
@@ -843,84 +976,115 @@ BEGIN
    BEGIN
                      -- Get LabelLine  
       SET @cLabelLine = ''  
-      SELECT @cLabelLine = LabelLine  
+      SET @nPackedQTY = 0
+      SELECT @cLabelLine = LabelLine, @nPackedQTY =qty  
       FROM dbo.PackDetail WITH (NOLOCK)   
       WHERE PickSlipNo = @cPickSlipNo   
          AND CartonNo = @nCartonNo  
          AND LabelNo = @cCartonID   
          AND SKU = @cSKU  
-         AND LOTTABLEVALUE = @cLottableVal 
+         AND UPC = @cSKU
         
       IF @cLabelLine = ''  
          SELECT @cLabelLine = LabelLine  
          FROM dbo.PackDetail WITH (NOLOCK)   
          WHERE PickSlipNo = @cPickSlipNo   
             AND CartonNo = @nCartonNo  
-            AND LabelNo = @cCartonID   
-            AND SKU = ''  
-  
-      IF @cLabelLine = ''  
-      BEGIN  
-         SELECT @cLabelLine = RIGHT( '00000' + CAST( CAST( IsNULL( MAX( LabelLine), 0) AS INT) + 1 AS NVARCHAR( 5)), 5)   
-         FROM dbo.PackDetail (NOLOCK)  
-         WHERE Pickslipno = @cPickSlipNo  
-            AND CartonNo = @nCartonNo  
             AND LabelNo = @cCartonID  
-      END 
+            AND SKU = '' 
+           
+  
+      --IF @cLabelLine = ''  
+      --BEGIN  
+      --   SELECT @cLabelLine = RIGHT( '00000' + CAST( CAST( IsNULL( MAX( LabelLine), 0) AS INT) + 1 AS NVARCHAR( 5)), 5)   
+      --   FROM dbo.PackDetail (NOLOCK)  
+      --   WHERE Pickslipno = @cPickSlipNo  
+      --      AND CartonNo = @nCartonNo  
+      --      AND LabelNo = @cCartonID  
+      --END 
+
 
       SET @cUPC = @cSKU
 
-      select @cLabelLine,@cUPC
+      SET @nPackedQTY = CASE WHEN ISNULL(@nPackedQTY,'') ='' THEN 0 ELSE @nPackedQTY END 
+
+      SET @nQTY = @nQTY - @nPackedQTY
+
+      IF @nQTY > 0
+      BEGIN
+
+      --select @cLabelLine,@cUPC
 
       -- Close: PackDetail  
-      IF NOT EXISTS( SELECT 1 FROM dbo.PackDetail WITH (NOLOCK) WHERE PickslipNo = @cPickslipNo AND cartonno =@nCartonNo AND labelNo=@cCartonID AND SKU=@cSKU AND LOTTABLEVALUE = @cLottableVal  AND UPC = @cUPC)  
-      BEGIN  
-      
-         -- Insert PackDetail  
-         INSERT INTO dbo.PackDetail  
-            (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, DropID,  
-            AddWho, AddDate, EditWho, EditDate  
-            , LOTTABLEVALUE,UPC)--(cc05)  
-         VALUES  
-            (@cPickSlipNo, @nCartonNo, @cCartonID, @cLabelLine, @cStorerKey, @cSKU, @nQTY, ISNULL(@cDropID,''),  
-               SUSER_NAME(), GETDATE(), SUSER_NAME(), GETDATE()  
-               , @cLottableVal,@cUPC) --(cc05)  
-         IF @@ERROR <> 0  
+         IF NOT EXISTS( SELECT 1 FROM dbo.PackDetail WITH (NOLOCK) WHERE PickslipNo = @cPickslipNo AND cartonno =@nCartonNo AND UPC = @cSKU AND SKU=@cSKU) 
          BEGIN  
-            SET @b_Success = 0    
-            SET @n_Err = 1000016    
-            SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Fail to insert into PackDetail. Function : isp_PackConfirm'          
-            GOTO RollBackTran  
+         
+            SELECT @cLabelLine = RIGHT( '00000' + CAST( CAST( IsNULL( MAX( LabelLine), 0) AS INT) + 1 AS NVARCHAR( 5)), 5)   
+            FROM dbo.PackDetail (NOLOCK)  
+            WHERE Pickslipno = @cPickSlipNo  
+               AND CartonNo = @nCartonNo  
+               AND LabelNo = @cCartonID  
+
+            -- Insert PackDetail  
+            INSERT INTO dbo.PackDetail  
+               (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, DropID,  
+               AddWho, AddDate, EditWho, EditDate  
+               , LOTTABLEVALUE,UPC)--(cc05)  
+            VALUES  
+               (@cPickSlipNo, @nCartonNo, @cCartonID, @cLabelLine, @cStorerKey, @cSKU, @nQTY, ISNULL(@cDropID,''),  
+                  @cUserName, GETDATE(), @cUserName, GETDATE()  
+                  , @cLottableVal,@cUPC) --(cc05)  
+            IF @@ERROR <> 0  
+            BEGIN  
+               SET @b_Success = 0    
+               SET @n_Err = 1000028    
+               SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Fail to insert into PackDetail. Function : isp_PackConfirm'          
+               GOTO RollBackTran  
+            END  
          END  
-      END  
-      ELSE  
-      BEGIN  
-         -- Update Packdetail  
-         UPDATE dbo.PackDetail WITH (ROWLOCK) SET     
-            SKU = @cSKU,   
-            QTY = @nQTY,   
-            DropID = ISNULL(@cDropID,''),  
-            EditWho =  SUSER_NAME(),   
-            EditDate = GETDATE(),   
-            ArchiveCop = NULL,  
-            LOTTABLEVALUE = @cLottableVal,
-            UPC   = @cUPC
-         WHERE PickSlipNo = @cPickSlipNo  
-            AND CartonNo = @nCartonNo  
-            AND LabelNo = @cCartonID  
-            AND LabelLine = @cLabelLine  
-         IF @@ERROR <> 0  
-         BEGIN           
-            SET @b_Success = 0    
-            SET @n_Err = 1000017    
-            SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Fail to update into PackDetail. Function : isp_PackConfirm'   
-            GOTO RollBackTran  
+         ELSE  
+         BEGIN  
+            -- Update Packdetail  
+            UPDATE dbo.PackDetail WITH (ROWLOCK) SET     
+               SKU = @cSKU,   
+               QTY = QTY + @nQTY,   
+               DropID = ISNULL(@cDropID,''),  
+               EditWho =  @cUserName,   
+               EditDate = GETDATE(),   
+               ArchiveCop = NULL,  
+               LOTTABLEVALUE = @cLottableVal,
+               UPC   = @cUPC
+            WHERE PickSlipNo = @cPickSlipNo  
+               AND CartonNo = @nCartonNo  
+               AND LabelNo = @cCartonID  
+               AND SKU     = @cSKU 
+            IF @@ERROR <> 0  
+            BEGIN           
+               SET @b_Success = 0    
+               SET @n_Err = 1000029    
+               SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Fail to update into PackDetail. Function : isp_PackConfirm'   
+               GOTO RollBackTran  
+            END 
          END  
-      END  
+
+      END
    END
 
+   -- Get system assigned CartonoNo and LabelNo
+   IF @nCartonNo = 0
+   BEGIN
+      -- If insert cartonno = 0, system will auto assign max cartonno
+      SELECT TOP 1 
+         @nCartonNo = CartonNo
+      FROM PackDetail WITH (NOLOCK)
+      WHERE PickSlipNo = @cPickSlipNo
+         AND SKU = @cSKU
+         AND AddWho = @cUserName
+      ORDER BY CartonNo DESC -- max cartonno
+   END   
+
      
-    --Close: Dynamic EcomWeight  
+      --Close: Dynamic EcomWeight  
    IF @EcomSingle = '1'    
    BEGIN      
       --Ecom Carton type  
@@ -932,14 +1096,14 @@ BEGIN
          and SKU = @cSKU    
       END    
       
-    ----Dynamic Ecom Weight col  
+      ----Dynamic Ecom Weight col  
       IF @UpdDymEcomWeight = 'Y'  
       BEGIN  
          SET @cDymWgtSQL = 'IF EXISTS (SELECT TOP 1 1 FROM '+@cDymEcomCtnWgtTb+' WITH (NOLOCK) WHERE StorerKey = '''+@cStorerKey+''' and SKU = ''' +@cSKU+''' and (ISNULL('+@cDymEcomCtnWgtCol+','''')='''' OR '+@cDymEcomCtnWgtCol+' = 0))  
             BEGIN  
-             UPDATE '+@cDymEcomCtnWgtTb+' WITH (ROWLOCK) SET '+@cDymEcomCtnWgtCol+' = '+@cCartonWeight+' WHERE StorerKey = '''+@cStorerKey+''' and SKU = ''' +@cSKU+'''  
+               UPDATE '+@cDymEcomCtnWgtTb+' WITH (ROWLOCK) SET '+@cDymEcomCtnWgtCol+' = '+@cCartonWeight+' WHERE StorerKey = '''+@cStorerKey+''' and SKU = ''' +@cSKU+'''  
             END  
-     '   
+      '   
          EXEC (@cDymWgtSQL)                   
       END  
       ELSE  
@@ -962,12 +1126,12 @@ BEGIN
          END  
       END  
       
-    --Dynamic Ecom Cube col  
+      --Dynamic Ecom Cube col  
       IF @UpdDymEcomCube = 'Y'  
       BEGIN  
          SET @cDymCubeSQL = 'IF EXISTS (SELECT TOP 1 1 FROM '+@cDymEcomCtnCubeTb+' WITH (NOLOCK) WHERE StorerKey = '''+@cStorerKey+''' and SKU = ''' +@cSKU+''' and (ISNULL('+@cDymEcomCtnCubeCol+','''')='''' OR '+@cDymEcomCtnCubeCol+' = 0))  
             BEGIN  
-             UPDATE '+@cDymEcomCtnCubeTb+' WITH (ROWLOCK) SET '+@cDymEcomCtnCubeCol+' = '+@cCartonCube+' WHERE StorerKey = '''+@cStorerKey+''' and SKU = ''' +@cSKU+'''  
+               UPDATE '+@cDymEcomCtnCubeTb+' WITH (ROWLOCK) SET '+@cDymEcomCtnCubeCol+' = '+@cCartonCube+' WHERE StorerKey = '''+@cStorerKey+''' and SKU = ''' +@cSKU+'''  
             END  
             '   
          EXEC (@cDymCubeSQL)                   
@@ -996,7 +1160,7 @@ BEGIN
    FETCH NEXT FROM @curPD INTO @cSKU,@nQTY,@cWeight,@cCube,@cLottableJSON,@cUPCJSON  
 END 
 
-  
+
   
 SELECT @nPackQtyCarton = SUM(Qty) FROM packDetail WHERE storerKey = @cStorerKey AND pickSlipNo = @cPickSlipNo AND cartonNo = @nCartonNo  
 
@@ -1004,28 +1168,54 @@ SELECT @nPackQtyCarton = SUM(Qty) FROM packDetail WHERE storerKey = @cStorerKey 
 -- Close: PackInfo  
 DECLARE @cWeightItf INT  
 DECLARE @nCtnCube Float
+DECLARE @nCtnWeight Float
 SET @cWeightItf = 0 
+SET @nCtnCube  = 0      --XULU01
 
-SELECT @nCtnCube =cube
-FROM Cartonization
-WHERE cartontype = @cCartonType
-  
+IF EXISTS(SELECT 1 FROM STORER (NOLOCK) WHERE StorerKey = @cStorerKey AND CartonGroup <> '')
+BEGIN
+   SELECT   @nCtnCube = c.[cube],
+            @nCtnWeight = c.CartonWeight
+   FROM STORER s (NOLOCK)
+      INNER JOIN Cartonization c (NOLOCK) 
+   ON s.CartonGroup = c.CartonizationGroup
+   WHERE s.StorerKey = @cStorerKey
+   AND c.cartontype = @cCartonType  
+END
+ELSE
+BEGIN
+   SELECT TOP 1  @nCtnCube = c.[cube],
+            @nCtnWeight = c.CartonWeight
+   FROM Cartonization c (NOLOCK)
+   WHERE c.cartontype = @cCartonType 
+   ORDER BY CartonizationKey DESC
+END
+
+IF EXISTS (SELECT TOP 1 1 FROM storerConfig WITH (NOLOCK) WHERE configkey ='TPS-CubeByCarton' AND storerKey = @cStorerKey AND sValue = 1)    
+BEGIN    
+   SET @fCartonCube= @nCtnCube  
+END   
+
+
+
 IF (@fCartonWeight > 0 OR @fCartonCube > 0)   
 BEGIN  
    IF @fCartonWeight > 30   
    BEGIN  
       SET @cWeightItf = 1  
    END  
-   
-   IF ISNULL(@fCartonCube,0)=0
-      SET @fCartonCube= @nCtnCube
+
+   IF EXISTS (SELECT TOP 1 1 FROM storerConfig WITH (NOLOCK) WHERE configkey ='TPS-WeightByCarton' AND storerKey = @cStorerKey AND sValue = 1)    
+   BEGIN    
+      SET @fCartonWeight = @fCartonWeight + @nCtnWeight
+   END   
 
  --SELECT 'update cartonWeight'  
    IF NOT EXISTS (SELECT 1 FROM dbo.PackInfo WITH (NOLOCK) WHERE PickSlipNo = @cPickSlipNo AND CartonNo = @nCartonNo)  
    BEGIN  
 
       INSERT INTO dbo.PackInfo (PickslipNo, CartonNo, QTY, Weight, Cube, CartonType,CartonStatus, AddWho,AddDate,EditWho,EditDate)  
-      VALUES (@cPickSlipNo, @nCartonNo, @nPackQtyCarton, @fCartonWeight, @fCartonCube, @cCartonType,'Closed',SUSER_NAME(),GETDATE(),SUSER_NAME(),GETDATE())  
+      VALUES (@cPickSlipNo, @nCartonNo, @nPackQtyCarton, @fCartonWeight, @fCartonCube, @cCartonType,'Closed',@cUserName,GETDATE(),@cUserName,GETDATE())  
      
       IF @@ERROR <> 0  
       BEGIN    
@@ -1043,7 +1233,7 @@ BEGIN
          Weight = @fCartonWeight,  
          [Cube] = @fCartonCube,  
          EditDate = GETDATE(),   
-         EditWho = SUSER_NAME(),   
+         EditWho = @cUserName,   
          TrafficCop = NULL,  
          cartonStatus = 'Closed'  
       WHERE PickSlipNo = @cPickSlipNo  
@@ -1074,10 +1264,15 @@ BEGIN
    IF ISNULL(@ttlCube,0)=0
       SET @ttlCube= @nCtnCube
 
+   IF EXISTS (SELECT TOP 1 1 FROM storerConfig WITH (NOLOCK) WHERE configkey ='TPS-WeightByCarton' AND storerKey = @cStorerKey AND sValue = 1)    
+   BEGIN    
+      SET @ttlWeight = @ttlWeight + @nCtnWeight
+   END   
+
    IF NOT EXISTS (SELECT 1 FROM dbo.PackInfo WITH (NOLOCK) WHERE PickSlipNo = @cPickSlipNo AND CartonNo = @nCartonNo)  
    BEGIN  
       INSERT INTO dbo.PackInfo (PickslipNo, CartonNo, QTY, Weight, Cube, CartonType,CartonStatus, AddWho,AddDate,EditWho,EditDate)  
-      VALUES (@cPickSlipNo, @nCartonNo, @nPackQtyCarton, @ttlWeight, @ttlCube, @cCartonType,'Closed',SUSER_NAME(),GETDATE(),SUSER_NAME(),GETDATE())  
+      VALUES (@cPickSlipNo, @nCartonNo, @nPackQtyCarton, @ttlWeight, @ttlCube, @cCartonType,'Closed',@cUserName,GETDATE(),@cUserName,GETDATE())  
      
       IF @@ERROR <> 0  
       BEGIN    
@@ -1095,7 +1290,7 @@ BEGIN
          Weight = @ttlWeight,  
          [Cube] = @ttlCube,  
          EditDate = GETDATE(),   
-         EditWho = SUSER_NAME(),   
+         EditWho = @cUserName,     
          TrafficCop = NULL,  
          cartonStatus = 'Closed'  
       WHERE PickSlipNo = @cPickSlipNo  
@@ -1159,7 +1354,7 @@ BEGIN
          ' @cStorerKey, @cFacility, @nFunc, @cUserName, @cLangCode, @cScanNo, ' +   
          ' @cpickslipNo, @cDropID, @cOrderKey, @cLoadKey, @cZone, @EcomSingle, ' +  
          ' @nCartonNo, @cCartonType, @cType, @fCartonWeight, @fCartonCube, @cWorkstation, @cLabelNo, ' +   
-         ' @cCloseCartonJson, @b_Success OUTPUT, @n_Err OUTPUT, @c_ErrMsg OUTPUT '  
+         ' @cCloseCartonJson,@pickSkuDetailJson, @b_Success OUTPUT, @n_Err OUTPUT, @c_ErrMsg OUTPUT '  
       SET @cSQLParam =     
          '@cStorerKey      NVARCHAR( 15), ' +  
          '@cFacility       NVARCHAR( 5),  ' +   
@@ -1180,20 +1375,21 @@ BEGIN
          '@fCartonCube     FLOAT,         ' +   
          '@cWorkstation    NVARCHAR( 30), ' +   
          '@cLabelNo        NVARCHAR( 20), ' +  
-         '@cCloseCartonJson NVARCHAR( Max), ' +  
+         '@cCloseCartonJson NVARCHAR( Max), ' +
+   '@pickSkuDetailJson   NVARCHAR( MAX),'+
          '@b_Success       INT            OUTPUT, ' +  
          '@n_Err           INT            OUTPUT, ' +  
-         '@c_ErrMsg        NVARCHAR( 20)  OUTPUT'  
+         '@c_ErrMsg        NVARCHAR(255)  OUTPUT'  
   
       EXEC sp_ExecuteSQL @cSQL, @cSQLParam,  
          @cStorerKey, @cFacility, @nFunc, @cUserName, @cLangCode, @cScanNo,   
          @cpickslipNo, @cDropID, @cOrderKey, @cLoadKey, @cZone, @EcomSingle,  
-         @nCartonNo, @cCartonType, @cType, @fCartonWeight, @fCartonCube, @cWorkstation, @cLabelNo,   
-         @cCloseCartonJson, @b_Success OUTPUT, @n_Err OUTPUT, @c_ErrMsg OUTPUT  
+         @nCartonNo, @cCartonType, @cType, @fCartonWeight, @fCartonCube, @cWorkstation, @cCartonID,   --yeekung16
+         @cCloseCartonJson,@pickSkuDetailJson, @b_Success OUTPUT, @n_Err OUTPUT, @c_ErrMsg OUTPUT  
     
       IF @b_Success <> 1  
       BEGIN           
-      	SET @b_Success = 0   
+       SET @b_Success = 0   
          SET @n_Err = @n_Err  
          SET @c_ErrMsg = @c_ErrMsg  
          SET @jResult = (select '' AS OrderKey, '' as LabelJobID, '' as PackingJobID ,@nProceedPrintFlag AS nProceedPrintFlag, '' AS VasConfig, '' AS VasCol1Name, '' AS VasCol1Value, '' AS WorkInstruction FOR JSON PATH )  
@@ -1219,27 +1415,124 @@ ELSE
    SELECT @nPickslipPackQty = ISNULL(SUM(PD.Qty),0)   
    FROM PackDetail PD WITH (NOLOCK)   
    JOIN packInfo PKI WITH (NOLOCK) ON (PD.PickSlipNo = PKI.PickSlipNo AND PD.CartonNo = PKI.CartonNo)  
-   WHERE PD.pickslipno = @cPickSlipNo AND PD.Storerkey = @cStorerKey AND PKI.CartonStatus = 'Closed'  
+   WHERE PD.pickslipno = @cPickSlipNo AND PD.Storerkey = @cStorerKey AND PKI.CartonStatus IN('Closed',  '')  
   
 SELECT @nPickslipPickQty = SUM(QtyToPack) FROM @pickSKUDetail WHERE pickslipNo = @cPickSlipNo  
 
 SELECT * FROM @pickSKUDetail WHERE pickslipNo = @cPickSlipNo  
-
 IF @nPickslipPackQty = @nPickslipPickQty  
 BEGIN  
-   UPDATE PackHeader WITH (ROWLOCK) SET   
-      Status = '9'   
-   WHERE PickSlipNo = @cPickSlipNo  
-      AND Status <> '9'  
+
+   DECLARE @CountOrders INT = 1
+
+   IF ISNULL(@cLoadkey,'') <> ''
+   BEGIN
+      SELECT  @CountOrders =   COUNT( DISTINCT PD.Orderkey) --(yeekung24)
+    FROM dbo.LoadPlanDetail LPD WITH (NOLOCK)
+         JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)
+         --LEFT JOIN UCC UCC WITH (NOLOCK) ON (PD.SKU=UCC.SKU AND PD.storerkey=UCC.storerkey AND PD.Lot=UCC.lot AND PD.LOC=UCC.LOC)
+      WHERE LPD.LoadKey = @cLoadKey
+         AND PD.Status <= '5'
+         AND PD.Status NOT IN  ('4')
+
+   END
+
+   --IF @CountOrders > 40  --(yeekung24)
+   --BEGIN
+   --   DECLARE @cIPAddress     NVARCHAR( 40) = ''  
+   --   DECLARE @cPortNo        NVARCHAR( 5) = ''  
+   --   DECLARE @cIniFilePath   NVARCHAR( 200) = ''
+   --   DECLARE @cCommand       NVARCHAR( MAX)
+   --   DECLARE @nQueueID       BIGINT
+  
+   --   -- Check QCommander setup  
+   --   SELECT @cPortNo = SHORT,
+   --          @cIPAddress = Long,
+   --          @cIniFilePath = UDF01
+   --   FROM CODELKUP (NOLOCK) 
+   --   WHERE LISTNAME = 'TPQMDSVC'
+   --      AND Storerkey='ALL'
+
+   --    SET @cCommand = 'UPDATE PackHeader WITH (ROWLOCK) SET' +   
+   --      '  Status = ''9'' ' +   
+   --      ' WHERE PickSlipNo = ''' +   @cPickSlipNo +''''
+
+
+   --   INSERT INTO TCPSocket_QueueTask (CmdType, Cmd, StorerKey, Port, TargetDB, IP, TransmitLogKey, DataStream)               
+   --   VALUES ('SQL', @cCommand, @cStorerKey, @cPortNo, DB_NAME(), @cIPAddress, '', 'TPS')    
+   --   SELECT @nQueueID = SCOPE_IDENTITY(), @nErrNo = @@ERROR    
+   --   IF @nErrNo <> 0    
+   --   BEGIN    
+   --      SET @n_Err = 1000023    
+   --      SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP') --TCPQueueTask Insert Fail. Function : isp_PackConfirm
+   --      GOTO Quit     
+   --   END  
       
-   IF @@ERROR <> 0  
-   BEGIN  
-      SET @b_Success = 0    
-      SET @n_Err = 1000020    
-      SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Fail to update into PackHeader. Function : isp_PackConfirm'  
-      GOTO RollBackTran  
-   END  
-     
+
+   --    SET @cCommand =     
+   --   '<STX>' +     
+   --      'SQL|' +     
+   --      CAST( @nQueueID AS NVARCHAR( 20)) + '|' +     
+   --      DB_NAME() + '|' +     
+   --      'EXEC ' +  DB_NAME() + '..' + 'isp_QCmd_ExecuteSQL' +   
+   --         ' @cTargetDB=''' + DB_NAME() + '''' +   
+   --         ', @nQTaskID=' + CAST( @nQueueID AS NVARCHAR( 20)) +   
+   --         ', @cPort=''' + @cPortNo + '''' +   
+   --   '<ETX>'  
+
+   --    -- Call Qcommander    
+   --   EXEC isp_QCmd_SendTCPSocketMsg    
+   --      @cApplication  = 'QCommander',    
+   --      @cStorerKey    = @cStorerKey,     
+   --      @cMessageNum   = @nQueueID,    
+   --      @cData         = @cCommand,    
+   --      @cIP           = @cIPAddress,     
+   --      @cPORT         = @cPortNo,     
+   --      @cIniFilePath  = @cIniFilePath,     
+   --      @cDataReceived = '', --@cDataReceived OUTPUT,    
+   --      @bSuccess      = @bSuccess      OUTPUT,     
+   --      @nErr          = @nErrNo        OUTPUT,     
+   --      @cErrMsg       = @cErrMsg       OUTPUT    
+   --   IF @nErrNo <> 0    
+   --   BEGIN    
+   --      DECLARE @cDBName NVARCHAR( 30) = DB_NAME()  
+   --      EXEC dbo.isp_QCmd_UpdateQueueTaskStatus    
+   --         @cTargetDB    = @cDBName,    
+   --         @nQTaskID     = @nQueueID,     
+   --         @cQStatus     = 'X',    
+   --         @cThreadID    = '',    
+   --         @cMsgRecvDate = '',    
+   --         @cQErrMsg     = ''    
+   --         -- @bSuccess     = @bSuccess OUTPUT,     
+   --         -- @nErr         = @nErrNo   OUTPUT,     
+   --         -- @cErrMsg      = @cErrMsg  OUTPUT    
+   --      IF @@ERROR <> 0    
+   --      BEGIN    
+   --         SET @n_Err = 1000024    
+   --         SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP') --QTask Update PackHeader Fail. Function : isp_PackConfirm
+   --         GOTO Quit  
+   --      END    
+   --   END  
+    
+       
+
+   --END
+   --ELSE
+   --BEGIN
+
+      UPDATE PackHeader WITH (ROWLOCK) SET   
+         Status = '9'   
+      WHERE PickSlipNo = @cPickSlipNo  
+         AND Status <> '9'  
+      
+      IF @@ERROR <> 0  
+      BEGIN  
+         SET @b_Success = 0    
+         SET @n_Err = 1000020    
+         SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Fail to update into PackHeader. Function : isp_PackConfirm'  
+         GOTO RollBackTran  
+      END  
+  -- END
    --(cc08)  
    EXEC nspGetRight    
          @c_Facility   = @cFacility      
@@ -1259,7 +1552,7 @@ BEGIN
          '@cPickSlipNo    NVARCHAR( 20), ' +                      
          '@b_Success      NVARCHAR( 1)  OUTPUT, ' +                           
          '@n_Err          INT           OUTPUT, ' +                      
-         '@c_ErrMsg       NVARCHAR( 20) OUTPUT  '                    
+         '@c_ErrMsg       NVARCHAR(255) OUTPUT  '                    
                       
       EXEC sp_ExecuteSQL @cSQL, @cSQLParam,                      
          @cPickSlipNo, @b_Success OUTPUT, @n_Err OUTPUT, @c_ErrMsg OUTPUT  
@@ -1271,7 +1564,7 @@ BEGIN
    SET @cPrintPackList = 'Y'  
    SET @bToPrint = 1  
 END  
-  
+
 IF @cPrintCartonLabelByITF = 1  
 BEGIN  
    SET @cSQL = 'EXEC isp_PrintCartonLabel_Interface @c_Pickslipno=@cPickSlipNo, @n_CartonNo_Min=@nCartonNoMin, @n_CartonNo_Max=@nCartonNoMax, @b_Success=@b_Success OUTPUT, @n_Err=@n_Err OUTPUT, @c_ErrMsg=@c_ErrMsg OUTPUT '      
@@ -1401,7 +1694,7 @@ BEGIN
             '@cPackingJobID   NVARCHAR ( 30) OUTPUT,  ' +
             '@b_Success       INT            OUTPUT, ' +
             '@n_Err           INT            OUTPUT, ' +
-            '@c_ErrMsg        NVARCHAR( 20)  OUTPUT'
+            '@c_ErrMsg        NVARCHAR(255)  OUTPUT'
 
          EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
             @cStorerKey, @cFacility, @nFunc, @cUserName, @cLangCode, @cScanNo,
@@ -1459,7 +1752,8 @@ BEGIN
          IF EXISTS (SELECT  TOP 1 1 FROM dbo.WMReport WMR WITH (NOLOCK) 
                     JOIN WMReportdetail WMRD (NOLOCK) ON WMR.reportid =WMRD.reportid
                     WHERE Storerkey = @cStorerKey 
-                     AND reporttype ='TPSHIPPLBL')  
+                     AND reporttype ='TPSHIPPLBL'
+                     AND (WMRD.Facility = '' OR WMRD.Facility = @cFacility) )  
          BEGIN  
             SELECT   @c_ReportID = WMR.reportid,
                @c_PrintSource = CASE WHEN printtype='LOGIREPORT' THEN 'JReport' ELSE 'WMReport' END,
@@ -1476,6 +1770,55 @@ BEGIN
                AND ispaperprinter <> 'Y'
                and (WMRD.username = '' OR WMRD.username = @cUsername)
                AND (ISNULL(ComputerName,'') ='' OR ComputerName= @cWorkstation)
+               AND (WMRD.Facility = '' OR WMRD.Facility = @cFacility) 
+
+            IF @@ROWCOUNT = 0
+            BEGIN
+               SET @b_Success = 0
+               SET @n_Err = 1000032
+               SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'No records found in WMReport. Function : isp_PackConfirm'
+               GOTO EXIT_SP
+            END
+
+            IF ISNULL(@cFieldName1,'') = ''
+            BEGIN
+               SET @b_Success = 0
+               SET @n_Err = 1000033
+               SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'No value found in table(WMReport); column(keyFieldname1), this column cannot be empty or null. Function : isp_rePrint'
+               GOTO EXIT_SP
+            END       
+            
+               SET @IsAggregate1 = CASE WHEN ISNULL(@cFieldName1,'') <> '' AND (
+                                    UPPER(@cFieldName1) LIKE '%SUM(%' OR 
+                                    UPPER(@cFieldName1) LIKE '%AVG(%' OR
+                                    UPPER(@cFieldName1) LIKE '%COUNT(%' OR
+                                    UPPER(@cFieldName1) LIKE '%MIN(%' OR
+                                    UPPER(@cFieldName1) LIKE '%MAX(%' COLLATE SQL_Latin1_General_CP1_CS_AS
+                                 ) THEN 1 ELSE 0 END
+
+               SET @IsAggregate2 = CASE WHEN ISNULL(@cFieldName2,'') <> '' AND (
+                                    UPPER(@cFieldName2) LIKE '%SUM(%' OR 
+                                    UPPER(@cFieldName2) LIKE '%AVG(%' OR
+                                    UPPER(@cFieldName2) LIKE '%COUNT(%' OR
+                                    UPPER(@cFieldName2) LIKE '%MIN(%' OR
+                                    UPPER(@cFieldName2) LIKE '%MAX(%' COLLATE SQL_Latin1_General_CP1_CS_AS
+                                 ) THEN 1 ELSE 0 END
+
+               SET @IsAggregate3 = CASE WHEN ISNULL(@cFieldName3,'') <> '' AND (
+                                    UPPER(@cFieldName3) LIKE '%SUM(%' OR 
+                                    UPPER(@cFieldName3) LIKE '%AVG(%' OR
+                                    UPPER(@cFieldName3) LIKE '%COUNT(%' OR
+                                    UPPER(@cFieldName3) LIKE '%MIN(%' OR
+                                    UPPER(@cFieldName3) LIKE '%MAX(%' COLLATE SQL_Latin1_General_CP1_CS_AS
+                                 ) THEN 1 ELSE 0 END
+
+               SET @IsAggregate4 = CASE WHEN ISNULL(@cFieldName4,'') <> '' AND (
+                                    UPPER(@cFieldName4) LIKE '%SUM(%' OR 
+                                    UPPER(@cFieldName4) LIKE '%AVG(%' OR
+                                    UPPER(@cFieldName4) LIKE '%COUNT(%' OR
+                                    UPPER(@cFieldName4) LIKE '%MIN(%' OR
+                                    UPPER(@cFieldName4) LIKE '%MAX(%' COLLATE SQL_Latin1_General_CP1_CS_AS
+                                 ) THEN 1 ELSE 0 END
 
             IF @cPrintAfterPacked = '1'  
             BEGIN 
@@ -1486,9 +1829,7 @@ BEGIN
                         SELECT @cSQL= CASE WHEN ISNULL(@cFieldName4,'')<>''THEN @cSQL +',@cParams4='  + @cFieldName4  ELSE  @cSQL END
                SET @cSQL = @cSQL +' FROM Packdetail (NOLOCK)
                   WHERE Storerkey = @cstorerkey
-                     AND Pickslipno = @cPickslipno
-                  GROUP BY Pickslipno,Storerkey
-                  '
+                     AND Pickslipno = @cPickslipno '
             END
             ELSE
             BEGIN 
@@ -1500,9 +1841,26 @@ BEGIN
                SET @cSQL = @cSQL +' FROM Packdetail (NOLOCK)
                   WHERE Storerkey = @cstorerkey
                      AND Pickslipno = @cPickslipno
-                     AND CartonNO = @nCartonno
-                  '
+                     AND CartonNo = @nCartonno '
             END
+
+            SET @groupByFields = ''
+
+            IF ISNULL(@cFieldName1, '') <> '' AND @IsAggregate1 = 0 AND ISNUMERIC(@cFieldName1) = 0
+               SET @groupByFields = @groupByFields + CASE WHEN LEN(@groupByFields) > 0 THEN ', ' ELSE '' END + @cFieldName1
+
+            IF ISNULL(@cFieldName2, '') <> '' AND @IsAggregate2 = 0 AND ISNUMERIC(@cFieldName2) = 0
+               SET @groupByFields = @groupByFields + CASE WHEN LEN(@groupByFields) > 0 THEN ', ' ELSE '' END + @cFieldName2
+
+            IF ISNULL(@cFieldName3, '') <> '' AND @IsAggregate3 = 0 AND ISNUMERIC(@cFieldName3) = 0
+                  SET @groupByFields = @groupByFields + CASE WHEN LEN(@groupByFields) > 0 THEN ', ' ELSE '' END + @cFieldName3
+
+            IF ISNULL(@cFieldName4, '') <> '' AND @IsAggregate4 = 0 AND ISNUMERIC(@cFieldName4) = 0
+                  SET @groupByFields = @groupByFields + CASE WHEN LEN(@groupByFields) > 0 THEN ', ' ELSE '' END + @cFieldName4
+
+            -- If any valid fields found, append GROUP BY
+            IF LEN(@groupByFields) > 0
+                  SET @cSQL = @cSQL + ' GROUP BY ' + @groupByFields
 
             SET @cSQLParam = 
             ' @cFieldName1 NVARCHAR(max),
@@ -1522,62 +1880,86 @@ BEGIN
             
 
             IF ISNULL(@cNewLabelPrinter,'')= ''
+            BEGIN
                SET @cNewLabelPrinter = @cLabelPrinter
+               -- Check if printer is a group  
+               IF EXISTS( SELECT TOP 1 1 FROM rdt.rdtPrinterGroup WITH (NOLOCK) WHERE PrinterGroup = @cLabelPrinter)  
+               BEGIN  
+                  SET @cPrinterInGroup = ''  
+  
+                  -- Check if report print to a specific printer in group  
+                  SELECT @cPrinterInGroup = PrinterID  
+                  FROM rdt.rdtReportToPrinter WITH (NOLOCK)  
+                  WHERE Function_ID = @nFunc  
+                     AND StorerKey = @cStorerKey  
+                     AND ReportType = 'TPSHIPPLBL'  
+                     AND PrinterGroup = @cLabelPrinter  
+  
+                  IF @cPrinterInGroup = ''  
+                  BEGIN  
+                     -- Get default printer in the group  
+                     SELECT @cPrinterInGroup = PrinterID  
+                     FROM rdt.rdtPrinterGroup WITH (NOLOCK)  
+                     WHERE PrinterGroup = @cLabelPrinter  
+                        AND DefaultPrinter = 1  
+                  END  
 
-            IF ISNULL(@cNewLabelPrinter,'') = ''  
+                  -- Check no default printer
+                  IF @cPrinterInGroup = ''  
+                  BEGIN  
+                     SET @b_Success = 0    
+                     SET @n_Err = 1000021    
+                     SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Label Printer setup not done. Please setup the Label Printer. Function : isp_PackConfirm'  
+                     SET @jResult = (select @cOrderKey AS OrderKey, '' as LabelJobID, '' as PackingJobID ,@nProceedPrintFlag AS nProceedPrintFlag, @nVasConfig AS VasConfig, @cVasCol1Name AS VasCol1Name, @cVasCol1Value AS VasCol1Value, @cWorkInstruction AS WorkInstruction FOR JSON PATH )   
+                     GOTO EXIT_SP  
+                  END
+                  SET @cNewLabelPrinter = @cPrinterInGroup
+               END
+            END
+
+            --EXEC API.isp_Print @cLangCode, @cFacility, @cStorerKey, @cLabelPrinter, @cPaperPrinter,   
+            --   'TPSHIPPLBL', -- Report type  
+            --   @tShipLabel, -- Report params  
+            --   'API.isp_PackConfim', --source Type  
+            --   @n_Err  OUTPUT,  
+            --   @c_ErrMsg OUTPUT,  
+            --   '1', --noOfCopy  
+            --   '', --@cPrintCommand  
+            --   @nJobID OUTPUT,  
+            --   @cUsername  
+  
+            --set @cLabelJobID = @nJobID  
+
+               EXEC  [WM].[lsp_WM_Print_Report]
+                  @c_ModuleID = @c_ModuleID           
+               , @c_ReportID = @c_ReportID         
+               , @c_Storerkey = @cStorerkey         
+               , @c_Facility  = @cFacility        
+               , @c_UserName  = @cUsername   
+               , @c_ComputerName = ''
+               , @c_PrinterID = @cNewLabelPrinter         
+               , @n_NoOfCopy  = '1'     
+               , @c_KeyValue1 = @cParams1        
+               , @c_KeyValue2 = @cParams2        
+               , @c_KeyValue3 = @cParams3     
+               , @c_KeyValue4 = @cParams4    
+               , @b_Success   = @b_Success         OUTPUT      
+               , @n_Err       = @n_Err             OUTPUT
+               , @c_ErrMsg    = @c_ErrMsg          OUTPUT
+               , @c_PrintSource  = @c_PrintSource        
+               , @b_SCEPreView   = 0         
+               , @c_JobIDs      = @cLabelJobID         OUTPUT    
+               , @c_AutoPrint  = 'N'     
+         
+  
+            IF @n_Err <> 0   
             BEGIN  
-               SET @b_Success = 0    
-               SET @n_Err = 1000021    
-               SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Label Printer setup not done. Please setup the Label Printer. Function : isp_PackConfirm'  
+               SET @b_Success = 0  
+               SET @n_Err = @n_Err  
+               SET @c_ErrMsg = @c_ErrMsg  
                SET @jResult = (select @cOrderKey AS OrderKey, '' as LabelJobID, '' as PackingJobID ,@nProceedPrintFlag AS nProceedPrintFlag, @nVasConfig AS VasConfig, @cVasCol1Name AS VasCol1Name, @cVasCol1Value AS VasCol1Value, @cWorkInstruction AS WorkInstruction FOR JSON PATH )   
                GOTO EXIT_SP  
             END  
-            ELSE  
-            BEGIN  
-               --EXEC API.isp_Print @cLangCode, @cFacility, @cStorerKey, @cLabelPrinter, @cPaperPrinter,   
-               --   'TPSHIPPLBL', -- Report type  
-               --   @tShipLabel, -- Report params  
-               --   'API.isp_PackConfim', --source Type  
-               --   @n_Err  OUTPUT,  
-               --   @c_ErrMsg OUTPUT,  
-               --   '1', --noOfCopy  
-               --   '', --@cPrintCommand  
-               --   @nJobID OUTPUT,  
-               --   @cUsername  
-  
-               --set @cLabelJobID = @nJobID  
-
-                 EXEC  [WM].[lsp_WM_Print_Report]
-                    @c_ModuleID = @c_ModuleID           
-                  , @c_ReportID = @c_ReportID         
-                  , @c_Storerkey = @cStorerkey         
-                  , @c_Facility  = @cFacility        
-                  , @c_UserName  = @cUsername   
-                  , @c_ComputerName = ''
-                  , @c_PrinterID = @cNewLabelPrinter         
-                  , @n_NoOfCopy  = '1'     
-                  , @c_KeyValue1 = @cParams1        
-                  , @c_KeyValue2 = @cParams2        
-                  , @c_KeyValue3 = @cParams3     
-                  , @c_KeyValue4 = @cParams4    
-                  , @b_Success   = @b_Success         OUTPUT      
-                  , @n_Err       = @n_Err             OUTPUT
-                  , @c_ErrMsg    = @c_ErrMsg          OUTPUT
-                  , @c_PrintSource  = @c_PrintSource        
-                  , @b_SCEPreView   = 0         
-                  , @c_JobIDs      = @cLabelJobID         OUTPUT    
-                  , @c_AutoPrint  = 'N'     
-         
-  
-               IF @n_Err <> 0   
-               BEGIN  
-                  SET @b_Success = 0  
-                  SET @n_Err = @n_Err  
-                  SET @c_ErrMsg = @c_ErrMsg  
-                  SET @jResult = (select @cOrderKey AS OrderKey, '' as LabelJobID, '' as PackingJobID ,@nProceedPrintFlag AS nProceedPrintFlag, @nVasConfig AS VasConfig, @cVasCol1Name AS VasCol1Name, @cVasCol1Value AS VasCol1Value, @cWorkInstruction AS WorkInstruction FOR JSON PATH )   
-                  GOTO EXIT_SP  
-               END  
-            END   
          END  
       END  
   
@@ -1588,7 +1970,8 @@ BEGIN
             IF EXISTS (SELECT  TOP 1 1 FROM dbo.WMReport WMR WITH (NOLOCK) 
                        JOIN WMReportdetail WMRD (NOLOCK) ON WMR.reportid =WMRD.reportid
                        WHERE Storerkey = @cStorerKey 
-                        AND reportType ='TPPACKLIST')  
+                        AND reportType ='TPPACKLIST'
+                        AND (WMRD.Facility = '' OR WMRD.Facility = @cFacility) )  
             BEGIN  
                IF ISNULL(@cPaperPrinter,'') = ''  
                BEGIN  
@@ -1600,22 +1983,22 @@ BEGIN
                END  
                ELSE  
                BEGIN  
-	             --  DECLARE @tPackList AS VariableTable
+              --  DECLARE @tPackList AS VariableTable
 
-	   	         --INSERT INTO @tPackList (Variable, Value) VALUES
-	             --     ( '@c_PickSlipNo',    @cPickSlipNo)
+              --INSERT INTO @tPackList (Variable, Value) VALUES
+              --     ( '@c_PickSlipNo',    @cPickSlipNo)
 
 
-	               --EXEC API.isp_Print @cLangCode, @cFacility, @cStorerKey, @cLabelPrinter, @cPaperPrinter,
-	               --   'TPPACKLIST', -- Report type
-	               --   @tPackList, -- Report params
-	               --   'API.isp_PackConfim', --source Type
-	               --   @n_Err  OUTPUT,
-	               --   @c_ErrMsg OUTPUT,
-	               --   '1', --noOfCopy
-	               --   '', --@cPrintCommand
-	               --   @nJobID OUTPUT,
-	               --   @cUsername
+                --EXEC API.isp_Print @cLangCode, @cFacility, @cStorerKey, @cLabelPrinter, @cPaperPrinter,
+                --   'TPPACKLIST', -- Report type
+                --   @tPackList, -- Report params
+                --   'API.isp_PackConfim', --source Type
+                --   @n_Err  OUTPUT,
+                --   @c_ErrMsg OUTPUT,
+                --   '1', --noOfCopy
+                --   '', --@cPrintCommand
+                --   @nJobID OUTPUT,
+                --   @cUsername
   
                 --  SET @cPackingJobID = @nJobID  
 
@@ -1634,7 +2017,55 @@ BEGIN
                      AND ispaperprinter = 'Y'
                      and (WMRD.username = '' OR WMRD.username = @cUsername)
                      AND (ISNULL(ComputerName,'') ='' OR ComputerName= @cWorkstation)
+                     AND (WMRD.Facility = '' OR WMRD.Facility = @cFacility) 
 
+                  IF @@ROWCOUNT = 0
+                  BEGIN
+                     SET @b_Success = 0
+                     SET @n_Err = 1000034
+                     SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'No records found in WMReport. Function : isp_PackConfirm'
+                     GOTO EXIT_SP
+                  END
+
+                  IF ISNULL(@cFieldName1,'') = ''
+                  BEGIN
+                     SET @b_Success = 0
+                     SET @n_Err = 1000035
+                     SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'No value found in table(WMReport); column(keyFieldname1), this column cannot be empty or null. Function : isp_PackConfirm'
+                     GOTO EXIT_SP
+                  END  
+
+                  SET @IsAggregate1 = CASE WHEN ISNULL(@cFieldName1,'') <> '' AND (
+                                      UPPER(@cFieldName1) LIKE '%SUM(%' OR 
+                                      UPPER(@cFieldName1) LIKE '%AVG(%' OR
+                                      UPPER(@cFieldName1) LIKE '%COUNT(%' OR
+                                      UPPER(@cFieldName1) LIKE '%MIN(%' OR
+                                      UPPER(@cFieldName1) LIKE '%MAX(%' COLLATE SQL_Latin1_General_CP1_CS_AS
+                                  ) THEN 1 ELSE 0 END
+
+                  SET @IsAggregate2 = CASE WHEN ISNULL(@cFieldName2,'') <> '' AND (
+                                      UPPER(@cFieldName2) LIKE '%SUM(%' OR 
+                                      UPPER(@cFieldName2) LIKE '%AVG(%' OR
+                                      UPPER(@cFieldName2) LIKE '%COUNT(%' OR
+                                      UPPER(@cFieldName2) LIKE '%MIN(%' OR
+                                      UPPER(@cFieldName2) LIKE '%MAX(%' COLLATE SQL_Latin1_General_CP1_CS_AS
+                                  ) THEN 1 ELSE 0 END
+
+                  SET @IsAggregate3 = CASE WHEN ISNULL(@cFieldName3,'') <> '' AND (
+                                      UPPER(@cFieldName3) LIKE '%SUM(%' OR 
+                                      UPPER(@cFieldName3) LIKE '%AVG(%' OR
+                                      UPPER(@cFieldName3) LIKE '%COUNT(%' OR
+                                      UPPER(@cFieldName3) LIKE '%MIN(%' OR
+                                      UPPER(@cFieldName3) LIKE '%MAX(%' COLLATE SQL_Latin1_General_CP1_CS_AS
+                                  ) THEN 1 ELSE 0 END
+
+                  SET @IsAggregate4 = CASE WHEN ISNULL(@cFieldName4,'') <> '' AND (
+                                      UPPER(@cFieldName4) LIKE '%SUM(%' OR 
+                                      UPPER(@cFieldName4) LIKE '%AVG(%' OR
+                                      UPPER(@cFieldName4) LIKE '%COUNT(%' OR
+                                      UPPER(@cFieldName4) LIKE '%MIN(%' OR
+                                      UPPER(@cFieldName4) LIKE '%MAX(%' COLLATE SQL_Latin1_General_CP1_CS_AS
+                                  ) THEN 1 ELSE 0 END
 
                   SET @cSQL = ''
                   SET @cSQLParam = ''
@@ -1647,9 +2078,25 @@ BEGIN
                   SET @cSQL = @cSQL +' FROM Packdetail (NOLOCK)
                      WHERE Storerkey = @cstorerkey
                         AND Pickslipno = @cPickslipno
-                        AND CartonNO = @nCartonno
-                     '
+                        AND CartonNo = @nCartonno '
 
+                  SET @groupByFields = ''
+
+                  IF ISNULL(@cFieldName1, '') <> '' AND @IsAggregate1 = 0 AND ISNUMERIC(@cFieldName1) = 0
+                     SET @groupByFields = @groupByFields + CASE WHEN LEN(@groupByFields) > 0 THEN ', ' ELSE '' END + @cFieldName1
+
+                  IF ISNULL(@cFieldName2, '') <> '' AND @IsAggregate2 = 0 AND ISNUMERIC(@cFieldName2) = 0
+                     SET @groupByFields = @groupByFields + CASE WHEN LEN(@groupByFields) > 0 THEN ', ' ELSE '' END + @cFieldName2
+
+                  IF ISNULL(@cFieldName3, '') <> '' AND @IsAggregate3 = 0 AND ISNUMERIC(@cFieldName3) = 0
+                        SET @groupByFields = @groupByFields + CASE WHEN LEN(@groupByFields) > 0 THEN ', ' ELSE '' END + @cFieldName3
+
+                  IF ISNULL(@cFieldName4, '') <> '' AND @IsAggregate4 = 0 AND ISNUMERIC(@cFieldName4) = 0
+                        SET @groupByFields = @groupByFields + CASE WHEN LEN(@groupByFields) > 0 THEN ', ' ELSE '' END + @cFieldName4
+
+                  -- If any valid fields found, append GROUP BY
+                  IF LEN(@groupByFields) > 0
+                        SET @cSQL = @cSQL + ' GROUP BY ' + @groupByFields
 
                   SET @cSQLParam = 
                   ' @cFieldName1 NVARCHAR(max),
@@ -1668,8 +2115,42 @@ BEGIN
                                        @cParams1 OUTPUT,@cParams2 OUTPUT,@cParams3 OUTPUT,@cParams4 OUTPUT,@cstorerkey,@cPickslipno,@nCartonno 
 
                   IF ISNULL(@cNewPaperPrinter,'')= ''
+                  BEGIN
                      SET @cNewPaperPrinter = @cPaperPrinter
-
+                     -- Check if printer is a group  
+                     IF EXISTS( SELECT TOP 1 1 FROM rdt.rdtPrinterGroup WITH (NOLOCK) WHERE PrinterGroup = @cPaperPrinter)  
+                     BEGIN  
+                        SET @cPrinterInGroup = ''  
+  
+                        -- Check if report print to a specific printer in group  
+                        SELECT @cPrinterInGroup = PrinterID  
+                        FROM rdt.rdtReportToPrinter WITH (NOLOCK)  
+                        WHERE Function_ID = @nFunc  
+                           AND StorerKey = @cStorerKey  
+                           AND ReportType = 'TPPACKLIST'  
+                           AND PrinterGroup = @cPaperPrinter  
+  
+                        IF @cPrinterInGroup = ''  
+                        BEGIN  
+                           -- Get default printer in the group  
+                           SELECT @cPrinterInGroup = PrinterID  
+                           FROM rdt.rdtPrinterGroup WITH (NOLOCK)  
+                           WHERE PrinterGroup = @cPaperPrinter  
+                              AND DefaultPrinter = 1  
+  
+                           -- Check no default printer  
+                           IF @cPrinterInGroup = ''  
+                           BEGIN  
+                              SET @b_Success = 0    
+                              SET @n_Err = 1000031    
+                              SET @c_ErrMsg = API.TouchPadGetMessage( @n_Err, @cLangCode, 'DSP')--'Paper Printer setup not done. Please setup the Label Printer. Function : isp_PackConfirm'  
+                              SET @jResult = (select @cOrderKey AS OrderKey, '' as LabelJobID, '' as PackingJobID ,@nProceedPrintFlag AS nProceedPrintFlag, @nVasConfig AS VasConfig, @cVasCol1Name AS VasCol1Name, @cVasCol1Value AS VasCol1Value, @cWorkInstruction AS WorkInstruction FOR JSON PATH )   
+                              GOTO EXIT_SP  
+                           END  
+                        END  
+                        SET @cNewPaperPrinter = @cPrinterInGroup
+                     END
+                  END
 
                   EXEC  [WM].[lsp_WM_Print_Report]
                      @c_ModuleID = @c_ModuleID           
@@ -1725,7 +2206,7 @@ BEGIN
                '@cLabelPrinter   NVARCHAR( 30),' +    
                '@cPaperPrinter  NVARCHAR( 30),' +    
                '@nErrNo          INT OUTPUT,  ' +    
-               '@cErrMsg         NVARCHAR( 20) OUTPUT'    
+               '@cErrMsg         NVARCHAR(255) OUTPUT'    
     
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,    
                @cStorerKey, @cFacility, @cPickSlipNo, @cLabelPrinter, @cPaperPrinter, @nErrNo OUTPUT, @cErrMsg OUTPUT    
@@ -1739,7 +2220,8 @@ BEGIN
       IF EXISTS (SELECT  TOP 1 1 FROM dbo.WMReport WMR WITH (NOLOCK) 
                   JOIN WMReportdetail WMRD (NOLOCK) ON WMR.reportid =WMRD.reportid
                   WHERE Storerkey = @cStorerKey 
-                     AND reportType ='TPCtnLbl')   
+                     AND reportType ='TPCtnLbl'
+                     AND (WMRD.Facility = '' OR WMRD.Facility = @cFacility) )   
       BEGIN  
          --DECLARE @tCtnLabel AS VariableTable  
       
@@ -1765,6 +2247,7 @@ BEGIN
             AND reporttype = 'TPCtnLbl'
             AND ModuleID ='TPPack'
             and (WMRD.username = '' OR WMRD.username = @cUsername)
+            AND (WMRD.Facility = '' OR WMRD.Facility = @cFacility) 
 
          EXEC  [WM].[lsp_WM_Print_Report]
             @c_ModuleID = @c_ModuleID           
@@ -1805,7 +2288,10 @@ IF @b_Success = 1
 BEGIN  
    SET @n_Err = 0  
    SET @c_ErrMsg = ''  
-   SET @jResult = (select @cOrderKey AS OrderKey, @cLabelJobID as LabelJobID, @cPackingJobID as PackingJobID ,@nProceedPrintFlag AS nProceedPrintFlag, @nVasConfig AS VasConfig, @cVasCol1Name AS VasCol1Name, @cVasCol1Value AS VasCol1Value, @cWorkInstruction AS WorkInstruction FOR JSON PATH )   
+   SET @jResult = (select @cOrderKey AS OrderKey, @cLabelJobID as LabelJobID, @cPackingJobID as PackingJobID ,@nProceedPrintFlag AS nProceedPrintFlag, @nVasConfig AS VasConfig, @cVasCol1Name AS VasCol1Name, @cVasCol1Value AS VasCol1Value, @cWorkInstruction AS WorkInstruction
+   --,@nQueueID AS QueueID 
+                   ,(CASE WHEN ISNULL(@cShowCartonNo,'') = '1' THEN @nCartonNo ELSE NULL END) AS CartonNo
+   FOR JSON PATH )   
 END     
            
 EXIT_SP:  

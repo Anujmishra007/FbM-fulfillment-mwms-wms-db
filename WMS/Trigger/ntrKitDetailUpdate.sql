@@ -1,6 +1,3 @@
-IF EXISTS (SELECT name FROM dbo.sysobjects WHERE name = 'ntrKitDetailUpdate' AND type = 'TR')
-DROP TRIGGER ntrKitDetailUpdate
-GO
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -36,10 +33,11 @@ GO
 /* 30-May-2007  Shong         Add Checking on TrifficCop and ArchiveCop */
 /* 02-May-2014  Shong    1.5  Added Lottables 06-15                     */
 /* 24-Jan-2017  TLTING01 1.6  Remove Set ROWCOUNT                       */
-/* 2021-01-19   Wan01    1.7  WMS-16051 - ANFQHW_Exceed_Channel_Kitting */
+/* 19-Jan-2021  Wan01    1.7  WMS-16051 - ANFQHW_Exceed_Channel_Kitting */
+/* 25-Feb-2025  SSA01    1.8  UWP-29649 -  Populate PalletType          */
 /************************************************************************/
 
-CREATE TRIGGER [dbo].[ntrKitDetailUpdate]
+CREATE OR ALTER TRIGGER [dbo].[ntrKitDetailUpdate]
 ON  [dbo].[KITDETAIL]
 FOR UPDATE
 AS
@@ -229,7 +227,8 @@ BEGIN
       @d_lottable13             datetime,
       @d_lottable14             datetime,
       @d_lottable15             datetime,        
-      @d_EffectiveDate          DATETIME
+      @d_EffectiveDate          DATETIME,
+      @c_PalletType             NVARCHAR(10)     --(SSA01)
       
       SELECT @c_KitPrimaryKey = ' '
       WHILE (1 = 1)
@@ -479,7 +478,8 @@ BEGIN
                      @c_lottable12    = lottable12,
                      @d_lottable13    = lottable13,
                      @d_lottable14    = lottable14,
-                     @d_lottable15    = lottable15,            
+                     @d_lottable15    = lottable15,
+                     @c_PalletType    = PalletType,      --(SSA01)
                      @d_EffectiveDate = EffectiveDate
                   , @n_Channel_ID     = Channel_ID       --(Wan01)
                   , @c_Channel        = Channel          --(Wan01) 
@@ -553,6 +553,7 @@ BEGIN
                   @b_UOMCalc    = 0,
                   @d_EffectiveDate = @d_EffectiveDate,   
                   @c_ItrnKey    = '',
+                  @c_PalletType = @c_PalletType,         --(SSA01)
                   @b_Success    = @b_Success OUTPUT,
                   @n_err        = @n_err     OUTPUT,
                   @c_errmsg     = @c_errmsg OUTPUT

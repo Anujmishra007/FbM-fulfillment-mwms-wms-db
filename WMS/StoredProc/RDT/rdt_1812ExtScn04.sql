@@ -14,10 +14,10 @@ GO
 /* 2024-11-01 1.0.0   YYS027   FCR-989 Min Max Replenishment to add               */
 /*                             screen for choicing whether location is empty.     */
 /*                             use config ExtScnSP in rdt.StorerConfig            */
-/* 2024-11-12 1.1     PXL009   FCR-1125 v0->v2 Code Sync for CROCS                */
-/*                                ExtScnSP call logic change in generic SP        */
 /* 2024-11-01 1.2.0   NLT013   UWP-27662 fix a bug: @cOutField01 is set as 0      */
-/* 2024-11-01 1.3.0   NLT013   UWP-27662 fix a bug: DropID is invisibe            */
+/* 2024-11-01 1.2.1   NLT013   UWP-27662 fix a bug: DropID is invisibe            */
+/* 2024-11-12 1.3     PXL009   FCR-1125 v0->v2 Code Sync for CROCS                */
+/*                                ExtScnSP call logic change in generic SP        */
 /**********************************************************************************/
 
 CREATE OR ALTER  PROC [RDT].[rdt_1812ExtScn04] (

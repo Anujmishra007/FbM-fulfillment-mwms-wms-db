@@ -13,7 +13,8 @@ GO
 /*                           added some fixes                           */    
 /* 2023-03-23  1.2  James    WMS-21868 Add filter order type when       */
 /*                           retrieve record from codelkup (james01)    */
-/* 2023-11-14  1.2  James    WMS-23712 Extend Lane var length (james02) */
+/* 2023-10-26  1.3  James    WMS-23879 Change palletize rules (james02) */
+/* 2023-11-14  1.4  James    WMS-23712 Extend Lane var length (james03) */  
 /************************************************************************/      
       
 CREATE OR ALTER PROC [RDT].[rdt_1653ExtValid07] (      
@@ -82,6 +83,28 @@ BEGIN
            @cErrMsg5          NVARCHAR( 20)  
    DECLARE @cOrderType        NVARCHAR( 10)
    DECLARE @nFilterOrdType    INT = 0
+   DECLARE @cUDF02            NVARCHAR( 60)
+   
+   IF @nStep = 1
+   BEGIN
+   	IF @nInputKey = 1
+   	BEGIN
+   		IF EXISTS ( SELECT 1 
+   		            FROM dbo.PackDetail PD WITH (NOLOCK)
+   		            WHERE PD.StorerKey = @cStorerKey
+   		            AND   PD.LabelNo LIKE 'T00%'
+   		            AND   ISNULL( PD.RefNo, '') = ''
+                     AND   EXISTS ( SELECT 1 
+                                    FROM dbo.CartonTrack CT WITH (NOLOCK)
+                                    WHERE PD.LabelNo = CT.LabelNo
+                                    AND   CT.TrackingNo = @cTrackNo))
+         BEGIN  
+            SET @nErrNo = 191427  
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --ToteXTransfer  
+            GOTO Quit  
+         END  
+   	END
+   END
    
    IF @nStep IN ( 2, 5) -- PalletKey  
    BEGIN  
@@ -90,27 +113,31 @@ BEGIN
          -- Check if the order needs to be palletized as no mix  
          SELECT   
                @cOrdPalletizedField = ISNULL(CL.Long, ''),  
-               @cPltCustOverrideClause = ISNULL(CL.Notes, '')  
+               @cPltCustOverrideClause = ISNULL(CL.Notes, ''),
+               @cUDF02 = ISNULL(CL.UDF02, '')  
          FROM dbo.ORDERS O WITH (NOLOCK)   
          JOIN dbo.CODELKUP CL WITH (NOLOCK) ON   
             ( O.ConsigneeKey = CL.Code AND O.ShipperKey = CL.Code2 AND O.StorerKey = CL.StorerKey)  
          WHERE OrderKey = @cOrderKey  
          AND   CL.ListName = 'NOMIXPLSHP'  
          AND   CL.Storerkey = @cStorerKey  
-           
+
          -- Get order's palletize criteria   
          IF @cOrdPalletizedField <> ''  
          BEGIN   
                SET @c_ExecStatements = N' SELECT @cOrdChkField = ' + @cOrdPalletizedField   
-                                    + ',       @cOrdChkConsignee = ConsigneeKey '   
+                                    + CASE WHEN @cUDF02 <> '' THEN 
+                                    	+ ',    @cOrdChkConsignee = @cUDF02 ' ELSE 
+                                       + ',    @cOrdChkConsignee = ConsigneeKey ' END
                                     + ',       @cOrdChkShipper = ShipperKey '  
                                     + ' FROM dbo.ORDERS WITH (NOLOCK) '  
                                     + ' WHERE OrderKey = @cOrderKey '  
-               SET @c_ExecArguments = N'@cOrderKey NVARCHAR(10)'  
+               SET @c_ExecArguments = N'@cOrderKey NVARCHAR(10)' 
                                  + ', @cOrdPalletizedField NVARCHAR(20)'  
                                  + ', @cOrdChkField NVARCHAR(100) OUTPUT'  
                                  + ', @cOrdChkConsignee NVARCHAR(100) OUTPUT'  
-                                 + ', @cOrdChkShipper NVARCHAR(100) OUTPUT'  
+                                 + ', @cOrdChkShipper NVARCHAR(100) OUTPUT'
+                                 + ', @cUDF02 NVARCHAR(60)'
                EXEC sp_ExecuteSql   @c_ExecStatements  
                                  , @c_ExecArguments  
                                  , @cOrderKey  
@@ -118,6 +145,7 @@ BEGIN
                                  , @cOrdChkField OUTPUT  
                                  , @cOrdChkConsignee OUTPUT   
                                  , @cOrdChkShipper OUTPUT   
+                                 , @cUDF02
          END   
   
          -- If PalletKey exists, then further check the palletization constraints  
@@ -156,11 +184,15 @@ BEGIN
                               + ', @cOrderKey           NVARCHAR(10)'  
                               + ', @cPltCustOverrideClause  NVARCHAR(MAX)'  
                               + ', @cPalletCriteria     NVARCHAR(30) OUTPUT'      
+                              + ', @cUDF02              NVARCHAR(60) '
   
             -- If pallet is specially palletized, then check if scanned order can be merge into the pallet with the criteria   
             IF @cPltPalletizedField <> ''   
             BEGIN   
-               SET @c_ExecStatements = @c_OriExecStatements + ' AND (' + @cPltPalletizedField + ' <> @cOrdChkField OR Orders.ConsigneeKey <> @cOrdChkConsignee OR Orders.ShipperKey <> @cOrdChkShipper) '  
+            	IF @cUDF02 <> ''
+            	   SET @c_ExecStatements = @c_OriExecStatements + ' AND (' + @cPltPalletizedField + ' <> @cOrdChkField OR @cUDF02 <> @cOrdChkConsignee OR Orders.ShipperKey <> @cOrdChkShipper) '
+            	ELSE
+                  SET @c_ExecStatements = @c_OriExecStatements + ' AND (' + @cPltPalletizedField + ' <> @cOrdChkField OR Orders.ConsigneeKey <> @cOrdChkConsignee OR Orders.ShipperKey <> @cOrdChkShipper) '  
                EXEC sp_ExecuteSql   @c_ExecStatements  
                                  , @c_ExecArguments  
                                  , @cStorerKey  
@@ -174,7 +206,7 @@ BEGIN
                                  , @cOrderKey  
                                  , @cPltCustOverrideClause  
                                  , @cPalletCriteria OUTPUT   
-          
+                                 , @cUDF02
                IF @nNoMixPallet = 1  
                BEGIN  
                   SET @nErrNo = 0    
@@ -203,8 +235,12 @@ BEGIN
             -- If order has palletize criteria, then check if scanned order can be merge into the pallet with the criteria   
             IF @cOrdPalletizedField <> ''   
             BEGIN     
-               SET @c_ExecStatements = @c_OriExecStatements + ' AND (' + @cOrdPalletizedField + ' <> @cOrdChkField OR Orders.ConsigneeKey <> @cOrdChkConsignee OR Orders.ShipperKey <> @cOrdChkShipper) '  
-                                     + CASE WHEN @cPltCustOverrideClause <> '' THEN ' AND NOT EXISTS (' + @cPltCustOverrideClause + ') ' ELSE '' END  
+            	IF @cUDF02 <> ''
+                  SET @c_ExecStatements = @c_OriExecStatements + ' AND (' + @cOrdPalletizedField + ' <> @cOrdChkField OR @cUDF02 <> @cOrdChkConsignee OR Orders.ShipperKey <> @cOrdChkShipper) '  
+                                        + CASE WHEN @cPltCustOverrideClause <> '' THEN ' AND NOT EXISTS (' + @cPltCustOverrideClause + ') ' ELSE '' END  
+               ELSE
+                  SET @c_ExecStatements = @c_OriExecStatements + ' AND (' + @cOrdPalletizedField + ' <> @cOrdChkField OR Orders.ConsigneeKey <> @cOrdChkConsignee OR Orders.ShipperKey <> @cOrdChkShipper) '  
+                                        + CASE WHEN @cPltCustOverrideClause <> '' THEN ' AND NOT EXISTS (' + @cPltCustOverrideClause + ') ' ELSE '' END  
                EXEC sp_ExecuteSql   @c_ExecStatements  
                                  , @c_ExecArguments  
                                  , @cStorerKey  
@@ -218,7 +254,8 @@ BEGIN
                                  , @cOrderKey  
                                  , @cPltCustOverrideClause  
                                  , @cPalletCriteria OUTPUT   
-  
+                                 , @cUDF02
+
                IF @nNoMixPallet = 1  
                BEGIN  
                   SET @nErrNo = 0    
@@ -237,7 +274,7 @@ BEGIN
                      SET @cErrMsg4 = ''  
                      SET @cErrMsg5 = ''  
                   END    
-                       
+                  
                   SET @nErrNo = 191404  
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')  
                   GOTO Quit  
@@ -668,10 +705,11 @@ BEGIN
 END  
 GO
 
+
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS ON
 GO
 
-GRANT EXECUTE ON [RDT].rdt_1653ExtValid07 TO NSQL
+GRANT EXECUTE ON [rdt].[rdt_1653ExtValid07] TO NSQL
 GO

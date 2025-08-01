@@ -3,13 +3,10 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-CREATE OR ALTER VIEW [dbo].[V_WorkOrderDetail] AS SELECT * FROM WorkOrderDetail WITH (NOLOCK)
+CREATE OR ALTER VIEW [dbo].[V_WorkOrderDetail] 
+AS 
+SELECT * FROM WorkOrderDetail WITH (NOLOCK)
 GO
-GRANT DELETE ON  [dbo].[V_WorkOrderDetail] TO [NSQL]
-GO
-GRANT INSERT ON  [dbo].[V_WorkOrderDetail] TO [NSQL]
-GO
+
 GRANT SELECT ON  [dbo].[V_WorkOrderDetail] TO [NSQL]
-GO
-GRANT UPDATE ON  [dbo].[V_WorkOrderDetail] TO [NSQL]
 GO

@@ -16,6 +16,8 @@ GO
 /* 20-Sep-2023 1.0  JLC042   Created base on rdtHandle ver 1.28         */
 /* 07-Nov-2023 1.1  JLC042   Fix Message Screen issue UWP-10463         */
 /* 24-May-2024 1.2  NLT013   Add session id to get unique mobile        */
+/* 03-Apr-2025 1.3.0 NLT013  UWP-32244 Extend Menu number               */
+/* 23-Jul-2025 1.4.0 Dennis   Add trace id                              */
 /************************************************************************/
 CREATE OR ALTER PROC  [RDT].[rdtHandleHttp]
   @InMobile      INT ,
@@ -47,6 +49,7 @@ BEGIN
       @nMsgQStatus NVARCHAR(1), -- SOS90411
       @cStoredProcName NVARCHAR( 1024),
       @cClientIP   NVARCHAR( 15),
+      @cTraceID    NVARCHAR( 100),
       @cUserName   NVARCHAR(18),
       @cSessionID  NVARCHAR(60)
 
@@ -88,7 +91,7 @@ BEGIN
    -- EXEC RDT.rdtRecordXML @InMobile, 'IN', @InMessage
 
    -- Base on the XML received, update RDTMobRec.InFieldXX, and determine user press ENTER or ESC
-   EXEC RDT.rdtSetMobColRetActionHttp @InMobile, @InMessage, @nErrNo OUTPUT, @cErrMsg OUTPUT, @cActionKey OUTPUT, @cClientIP OUTPUT
+   EXEC RDT.rdtSetMobColRetActionHttp @InMobile, @InMessage, @nErrNo OUTPUT, @cErrMsg OUTPUT, @cActionKey OUTPUT, @cClientIP OUTPUT,@cTraceID OUTPUT
 
    --Print 'HELLO'
    -- SOS90411
@@ -128,7 +131,7 @@ BEGIN
                IF @nErrNo <> 0
                   GOTO EXIT_PROCESS_MENU
             END
-            ELSE
+            ELSE IF @nFunction > 2 OR @nFunction < -100
             BEGIN
                -- Menu
                EXEC RDT.rdtProcessMenu @InMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nFunction OUTPUT
@@ -140,7 +143,7 @@ BEGIN
 
          IF @cActionKey = 'NO' -- ESC
          BEGIN
-            IF @nFunction <= 5   -- logout if at top level menu
+            IF @nFunction > -1 AND @nFunction <= 5   -- logout if at top level menu
             BEGIN
                IF @nFunction = 1
                BEGIN
@@ -249,7 +252,7 @@ BEGIN
                      GOTO EXIT_PROCESS_MENU
                END
             END  --IF @nFunction <= 5
-            ELSE
+            ELSE IF @nFunction > 5 OR @nFunction < -100
             BEGIN
                -- Back to Previous Screen
                EXEC RDT.rdtPrevScreen @InMobile, @nScn OUTPUT
@@ -366,7 +369,7 @@ BEGIN
       SET  @dEndTime = GETDATE()
       SET @nTimeTaken = CAST( DATEDIFF( ms, @dStartTime, @dEndTime) AS INT)
       SET @nTimeTaken1 = CAST( DATEDIFF( ms, @dStartTime1, @dEndTime) AS INT)
-      EXEC RDT.rdtSetTrace @InMobile ,999, 999, 1, @dStartTime, @dEndTime, @nTimeTaken, @nTimeTaken1
+      EXEC RDT.rdtSetTrace @InMobile ,999, 999, 1, @dStartTime, @dEndTime, @nTimeTaken, @nTimeTaken1, @cTraceID
    -- (Vicky02) - End
    END  -- Process Message Queue
    ELSE
@@ -382,7 +385,7 @@ BEGIN
       DECLARE @cXML NVARCHAR( MAX)
       SET @cXML = ''
 
-      IF @nFunction Between 5 AND 499
+      IF @nFunction Between 5 AND 499 OR @nFunction < -100
          EXEC RDT.rdtGetMenuHttp @InMobile, @cXML OUTPUT    -- Menu
       ELSE
          EXEC RDT.rdtGetScreenHttp @InMobile, @cXML OUTPUT  -- Functional
@@ -410,7 +413,7 @@ BEGIN
       SET @dEndTime = GETDATE()
       SET @nTimeTaken = CAST( DATEDIFF( ms, @dStartTime, @dEndTime) AS INT)
       SET @nTimeTaken1 = @nTimeTaken - @nTimeTaken1
-      EXEC RDT.rdtSetTrace @InMobile ,@nStartFunc, @nStartScn, @nStartStep, @dStartTime, @dEndTime, @nTimeTaken, @nTimeTaken1
+      EXEC RDT.rdtSetTrace @InMobile ,@nStartFunc, @nStartScn, @nStartStep, @dStartTime, @dEndTime, @nTimeTaken, @nTimeTaken1,@cTraceID
    END
 
    -- Record the XML being send out
@@ -423,8 +426,8 @@ BEGIN
       SELECT @InMessage = REPLACE( @InMessage, 'encoding="UTF-8"', 'encoding="UTF-16"')     -- (ChewKP01)
       SELECT @OutMessage = REPLACE( @OutMessage, 'encoding="UTF-8"', 'encoding="UTF-16"')   -- (ChewKP01)
 
-      INSERT INTO RDT.RDTMessage(Mobile, Message, MessageOut, InFunc, InScn, InStep)
-      VALUES (@InMobile, @InMessage, @OutMessage, @nStartFunc, @nStartScn, @nStartStep)
+      INSERT INTO RDT.RDTMessage(Mobile, Message, MessageOut, InFunc, InScn, InStep,TraceID)
+      VALUES (@InMobile, @InMessage, @OutMessage, @nStartFunc, @nStartScn, @nStartStep,@cTraceID)
    END
 
    WHILE @@TRANCOUNT > 0

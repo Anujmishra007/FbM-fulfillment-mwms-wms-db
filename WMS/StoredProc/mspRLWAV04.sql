@@ -756,7 +756,7 @@ BEGIN
             END
             ELSE IF @c_UOM = '6' AND
               (@c_ORderkey <> @c_Orderkey_Last OR @c_Loc <> @c_Loc_Last OR @c_ID <> @c_ID_Last --USH022-01
-              OR (@c_Sku <> @c_Sku_last AND @c_Skuclass <> @c_SkuClass_last)           --USH022-01
+              OR (@c_Sku <> @c_Sku_last OR @c_Skuclass <> @c_SkuClass_last)           --USH022-01
               )
             BEGIN
                IF @b_debug=1

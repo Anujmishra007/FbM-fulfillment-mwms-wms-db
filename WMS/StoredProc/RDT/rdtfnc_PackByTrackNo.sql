@@ -122,7 +122,13 @@ GO
 /* 2024-06-02 7.6  James    WMS-24295 Add custom carton no sp (james54)      */
 /*                          Add ExtValidSP into step 1 (ESC)                 */
 /* 2024-09-06 7.7  James    Add Pickslip output during decode (james54)      */
-/* 2025-02-24 7.8.0 NLT013  UWP-30499 Be albe to scan next SKU which is in same dropid */
+/* 2024-09-03 7.8  James    WMS-26174 Add Tote/DropID format check (james55) */
+/* 2024-11-08 7.9  PXL009   FCR-1118 Merged 7.8 from v0 branch               */
+/* 2025-02-24 8.0  NLT013   UWP-30499 Be albe to scan next SKU which is in   */
+/*                           same dropid                                     */
+/* 2025-07-09 0.0  Jackc    !!!Cutover!!! Use V0 repo for work               */
+/* 2025-08-01 8.1  NickT    UWP-38674 Get PickedQty by                       */
+/*                          PickDetail.Status = PickConfirmStatus            */
 /*****************************************************************************/    
     
 CREATE OR ALTER PROC [RDT].[rdtfnc_PackByTrackNo](    
@@ -610,6 +616,19 @@ BEGIN
     
       IF ISNULL(@cDropID,'') <> '' OR ISNULL(@cRefNo,'') <> '' --(yeekung01)    
       BEGIN    
+         IF ISNULL(@cDropID,'') <> ''
+         BEGIN
+            -- Check DropID format
+            IF rdt.rdtIsValidFormat( @nFunc, @cStorerKey, 'DROPID', @cDropID) = 0   -- (james55)
+            BEGIN
+               SET @nErrNo = 90672
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Format
+               EXEC rdt.rdtSetFocusField @nMobile, 2  -- DropID
+               SET @cOutField02 = ''
+               GOTO Quit
+            END
+         END
+
          -- Custom get orderkey sp. Can do swap lot inside the sp and insert ecommlog      
          IF @cGetOrders_SP <> ''      
             AND EXISTS ( SELECT 1 FROM dbo.sysobjects WHERE name = @cGetOrders_SP AND type = 'P')      
@@ -1609,7 +1628,7 @@ BEGIN
          EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')  
       BEGIN  
          SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +  
-            ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cOrderKey, @cPickSlipNo, @cTrackNo, @cSKU, @nCartonNo,' +  
+            ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cOrderKey, @cPickSlipNo, @cTrackNo, @cSKU, @nCartonNo, @cSerialNo, @nSerialQTY, ' +  
             ' @nErrNo OUTPUT, @cErrMsg OUTPUT '  
   
          SET @cSQLParam =  
@@ -1624,11 +1643,13 @@ BEGIN
             '@cTrackNo                  NVARCHAR( 20), ' +  
             '@cSKU                      NVARCHAR( 20), ' +  
             '@nCartonNo                 INT,           ' +  
+            '@cSerialNo                 NVARCHAR( 30), ' +         
+            '@nSerialQTY                INT,           ' +      
             '@nErrNo                    INT           OUTPUT,  ' +  
             '@cErrMsg                   NVARCHAR( 20) OUTPUT   '  
   
          EXEC sp_ExecuteSQL @cSQL, @cSQLParam,  
-              @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cOrderKey, @cPickSlipNo, @cTrackNo, @cSKU, @nCartonNo,  
+              @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cOrderKey, @cPickSlipNo, @cTrackNo, @cSKU, @nCartonNo, @cSerialNo, @nSerialQTY,   
               @nErrNo OUTPUT, @cErrMsg OUTPUT  
   
          IF @nErrNo <> 0  
@@ -1845,9 +1866,9 @@ BEGIN
                   ' @cStorerKey   NVARCHAR( 15),   ' +    
                   ' @cBarcode     NVARCHAR( 2000), ' +    
                   ' @cDropID      NVARCHAR( 20),' +  
-                  ' @cOrderKey    NVARCHAR( 18)  OUTPUT, ' +  
+                  ' @cOrderKey    NVARCHAR( 10)  OUTPUT, ' +  
                   ' @cSKU         NVARCHAR( 20)  OUTPUT, ' +    
-                  ' @cTrackingNo  NVARCHAR( 18)  OUTPUT, ' +  
+                  ' @cTrackingNo  NVARCHAR( 20)  OUTPUT, ' +  
                   ' @cLottable01  NVARCHAR( 18)  OUTPUT, ' +    
                   ' @cLottable02  NVARCHAR( 18)  OUTPUT, ' +  
                   ' @cLottable03  NVARCHAR( 18)  OUTPUT, ' +  
@@ -2036,7 +2057,7 @@ BEGIN
       WHERE StorerKey = @cStorerKey    
          AND OrderKey = @cOrderKey    
          AND SKU = @cSKU    
-         AND Status < '9'    
+         AND Status = IIF(@cPickConfirmStatus = '', '5', @cPickConfirmStatus)
     
       IF @nSUM_PickedSKU < (@nSUM_PackedSKU + 1)   -- +1 because each scan is increase by 1 qty    
       BEGIN    
@@ -4472,7 +4493,7 @@ BEGIN
          IF @nExpectedQty > @nPackedQty      
          BEGIN      
             SET @nMoreToPack = 1      
-            SET @cInField02 = @cDropID   --NLT013 it is required for scan next sku which is in same DropID
+            SET @cInField02 = @cDropID --NLT013 it is required for scan next sku which is in same DropID     
          END      
       END      
           

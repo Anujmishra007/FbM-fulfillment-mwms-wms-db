@@ -24,6 +24,9 @@ GO
 /* 2021-01-04  Wan02    1.2   LFWM-2448 - UAT - TW  Validation while      */
 /*                            creating new kitting                        */
 /* 2023-03-14  NJOW01   1.3   LFWM-3608 performance tuning for XML Reading*/
+/* 2025-03-07  SSA01    1.4   UWP-29649 - Add PalletType to KITDETAIL     */
+/*                            Validate Pallettype is Mandatory if Facility*/
+/*                            is setup pallettypeinuse = 'Y'              */
 /**************************************************************************/   
 CREATE OR ALTER PROC [WM].[lsp_Validate_KitDetail_Std] (
   @c_XMLSchemaString    NVARCHAR(MAX) 
@@ -230,6 +233,8 @@ BEGIN
       ,  @n_CheckLottables       INT          = 1  --(Wan02)
 
       ,  @c_VLDLotLabelExist     NVARCHAR(30) = ''
+      ,  @c_PalletType           NVARCHAR(10) = '' --(SSA01)
+      ,  @c_ID                   NVARCHAR(18) = '' --(SSA01)
 
    SELECT TOP 1 
          @c_KitKey      = KD.KitKey
@@ -254,6 +259,8 @@ BEGIN
       ,  @dt_Lottable13 = KD.Lottable13
       ,  @dt_Lottable14 = KD.Lottable14
       ,  @dt_Lottable15 = KD.Lottable15
+      ,  @c_PalletType  = KD.PalletType     --(SSA01)
+      ,  @c_ID          = ISNULL(KD.Id,'')  --(SSA01)
    FROM  #VALDN KD   --NJOW01
 
    --(Wan02) - START
@@ -281,6 +288,20 @@ BEGIN
          FROM LOC L WITH (NOLOCK)
          WHERE L.Loc = @c_Loc
       END
+
+      --(SSA01) - START
+      IF EXISTS ( SELECT 1 FROM FACILITY f(NOLOCK) WHERE f.Facility = @c_Facility
+                  AND f.PalletTypeInUse = 'Yes')
+      BEGIN
+         IF @c_PalletType = '' OR @c_ID = ''
+         BEGIN
+            SET @n_Continue = 3
+            SET @n_Err = 557552
+            SET @c_errmsg =  'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Pallet Type and Id are required. (lsp_Validate_KitDetail_Std)'
+            GOTO EXIT_SP
+         END
+      END
+      --(SSA01) - END
 
       SELECT @c_Lottable01Label = ISNULL(RTRIM(Lottable01Label),'')
            , @c_Lottable02Label = ISNULL(RTRIM(Lottable02Label),'')

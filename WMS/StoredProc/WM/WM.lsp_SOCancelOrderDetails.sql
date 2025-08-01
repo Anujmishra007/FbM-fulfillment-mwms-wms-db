@@ -19,7 +19,8 @@ GO
 /* Data Modifications:                                                  */
 /*                                                                      */
 /* Updates:                                                             */
-/* Date        Author   Ver.  Purposes                                  */
+/* Date           Author      Ver.        Purposes                      */
+/* 04-APR-2025    USH022      1.0         UWP-31476- ErrMsg not showing */
 /************************************************************************/
 CREATE OR ALTER   PROC [WM].[lsp_SOCancelOrderDetails]
       @c_Orderkey             NVARCHAR(10)
@@ -107,7 +108,7 @@ BEGIN
                               + ' |' + @c_Orderkey
 
             INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
-            VALUES (@c_TableName, @c_SourceType, @c_Orderkey,@c_orderlineNo, '', 'ERROR', 0, @n_err, @c_errmsg)
+            VALUES (@c_TableName, @c_SourceType, @c_Orderkey, @c_OrderLineNumber, '', 'ERROR', 0, @n_err, @c_errmsg)
             GOTO EXIT_SP
          END
 
@@ -185,7 +186,7 @@ BEGIN
                            + ' |' + @c_orderlineNo
 
             INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
-            VALUES (@c_TableName, @c_SourceType, @c_Orderkey,@c_orderlineNo, '', 'ERROR', 0, @n_err, @c_errmsg)
+            VALUES (@c_TableName, @c_SourceType, @c_Orderkey, @c_orderlineNo, '', 'ERROR', 0, @n_err, @c_errmsg)
             GOTO EXIT_SP
          END
 
@@ -242,7 +243,7 @@ BEGIN
                                 + ' |' + @c_Orderkey
 
                   INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
-                  VALUES (@c_TableName, @c_SourceType, @c_Orderkey,@c_orderlineNo, '', 'ERROR', 0, @n_err, @c_errmsg)
+                  VALUES (@c_TableName, @c_SourceType, @c_Orderkey, @c_OrderLineNumber, '', 'ERROR', 0, @n_err, @c_errmsg)
                   GOTO EXIT_SP
                END
 

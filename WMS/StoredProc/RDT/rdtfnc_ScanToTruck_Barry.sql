@@ -12,6 +12,7 @@ GO
 /* Date       Rev  Author     Purposes                                        */ 
 /* 2024-07-01 1.0  Dennis     FCR-262 Created                                 */
 /* 2024-10-09 1.1  XLL045     FCR-859 Created                                 */
+/* 2025-07-23 1.2  Dennis     UWP-38128 Fix Bugs                              */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_ScanToTruck_Barry] (
@@ -57,12 +58,12 @@ DECLARE
    @cStatus       NVARCHAR(10),
    @cTruckID      NVARCHAR( 20),
    @cPallet       NVARCHAR( 18),
-   @cSealNo1      NVARCHAR(10),
-   @cSealNo2      NVARCHAR(10),
-   @cSealNo3      NVARCHAR(10),
-   @cSealNo4      NVARCHAR(10),
-   @cSealNo5      NVARCHAR(10),
-   @cSealNo6      NVARCHAR(10),
+   @cSealNo1      NVARCHAR(30),
+   @cSealNo2      NVARCHAR(30),
+   @cSealNo3      NVARCHAR(30),
+   @cSealNo4      NVARCHAR(30),
+   @cSealNo5      NVARCHAR(30),
+   @cSealNo6      NVARCHAR(30),
    @nTotal         INT,
    @nScanned       INT,
    @cExtScnSP     NVARCHAR(20),
@@ -540,6 +541,16 @@ BEGIN
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Pallet ID
          GOTO Step_4_Fail
       END
+
+      IF NOT EXISTS (SELECT 1 FROM dbo.MBOLDETAIL MD WITH (NOLOCK)
+                     WHERE MD.MbolKey = @cMBOLKey
+                     AND MD.OrderKey = @cOrderKey)
+      BEGIN
+         SET @nErrNo = 218463
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Pallet ID
+         GOTO Step_4_Fail
+      END
+
       -- Handling transaction
       SET @nTranCount = @@TRANCOUNT
       BEGIN TRAN  -- Begin our own transaction
@@ -644,6 +655,30 @@ BEGIN
       SET @cSealNo2 = @cInField03
       SET @cSealNo3 = @cInField04
       SET @cOption = @cInField05
+
+      -- Check valid format
+      IF rdt.rdtIsValidFormat( @nFunc, @cStorerKey, 'Seal1', @cSealNo1) = 0
+      BEGIN
+         SET @nErrNo = 218457
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Seal1 Invalid
+         GOTO Quit
+      END
+
+      IF rdt.rdtIsValidFormat( @nFunc, @cStorerKey, 'Seal2', @cSealNo2) = 0
+      BEGIN
+         SET @nErrNo = 218458
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Seal2 Invalid
+         GOTO Quit
+      END
+
+
+      IF rdt.rdtIsValidFormat( @nFunc, @cStorerKey, 'Seal3', @cSealNo3) = 0
+      BEGIN
+         SET @nErrNo = 218459
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Seal3 Invalid
+         GOTO Quit
+      END
+
       IF @cOption = '1'
       BEGIN
          UPDATE CONTAINER SET
@@ -693,6 +728,29 @@ BEGIN
       SET @cSealNo4 = @cInField02
       SET @cSealNo5 = @cInField03
       SET @cSealNo6 = @cInField04
+
+      -- Check valid format
+      IF rdt.rdtIsValidFormat( @nFunc, @cStorerKey, 'Seal4', @cSealNo4) = 0
+      BEGIN
+         SET @nErrNo = 218460
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Seal1 Invalid
+         GOTO Quit
+      END
+
+      IF rdt.rdtIsValidFormat( @nFunc, @cStorerKey, 'Seal5', @cSealNo5) = 0
+      BEGIN
+         SET @nErrNo = 218461
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Seal2 Invalid
+         GOTO Quit
+      END
+
+
+      IF rdt.rdtIsValidFormat( @nFunc, @cStorerKey, 'Seal6', @cSealNo6) = 0
+      BEGIN
+         SET @nErrNo = 218462
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Seal3 Invalid
+         GOTO Quit
+      END
    
       UPDATE CONTAINER SET
       Seal01 = @cSealNo1,

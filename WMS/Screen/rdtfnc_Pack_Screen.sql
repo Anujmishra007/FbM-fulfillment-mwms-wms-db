@@ -169,3 +169,51 @@ EXECUTE rdt.rdtAddScn 6449, 'ENG'
    ,@cLine14 = '%e'
    ,@nFunc = 838
 
+
+-- 6521 = FCR-2495, Add 5=PTL
+DELETE rdt.RDTScn WHERE Scn = 6521 AND Lang_Code = 'ENG'
+EXECUTE rdt.rdtAddScn 6521, 'ENG'
+   ,@cLine01 = 'PSNO: %10d01'
+   ,@cLine02 = 'TOTAL PICK: %05d02'
+   ,@cLine03 = 'TOTAL PACK: %05d03'
+   ,@cLine04 = 'SHORT PICK: %03d04'
+   ,@cLine05 = ''
+   ,@cLine06 = 'CARTON NO:  %08d05'
+   ,@cLine07 = 'CARTON ID:'
+   ,@cLine08 = '%20d06'
+   ,@cLine09 = 'SKU: %04d07 QTY: %05d08'
+   ,@cLine10 = 'OPTION: %02i09 '
+   ,@cLine11 = '1=NEW 2=EDT 3=REPACK'
+   ,@cLine12 = '4=UCC 5=PLT'
+   ,@cLine13 = '%20d15'
+   ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1"],"2":["2","3","4"],"3":["6","7","8","9"],"4":["11","12"],"5":["11"]}'
+   ,@nFunc = 838
+
+-- 6522 = FCR-2495, Add 5=PTL
+DELETE rdt.RDTScn WHERE Scn = 6522 AND Lang_Code = 'ENG'
+EXECUTE rdt.rdtAddScn 6522, 'ENG'
+   ,@cLine01 = '%20d11'
+   ,@cLine02 = ''
+   ,@cLine03 = '%20d01'
+   ,@cLine04 = '%60i02'
+   ,@cLine05 = '%20d03'
+   ,@cLine06 = '%60i04'
+   ,@cLine07 = '%20d05'
+   ,@cLine08 = '%60i06'
+   ,@cLine09 = '%20d07'
+   ,@cLine10 = '%60i08'
+   ,@cLine11 = '%20d09'
+   ,@cLine12 = '%60i10'
+   ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["3","4"],"2":["5","6"],"3":["7","8"],"4":["9","10"],"5":["11","12"]}'
+   ,@nFunc = 838
+
+--6525 FCR-2495 Confirm Scn
+DELETE rdt.RDTScn WHERE Scn = 6525 AND Lang_Code = 'ENG'
+EXECUTE rdt.rdtAddScn 6525, 'ENG',
+     @cLine01 = 'Packing complete',
+     @cLine02 = '',
+     @cLine04 = 'Press ENTER or ESC',
+     @cLine05 = 'to continue',
+     @cLine14 = '%e'

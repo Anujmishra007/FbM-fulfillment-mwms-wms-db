@@ -5,7 +5,7 @@ GO
 
 /************************************************************************/
 /* Store procedure: rdt_1641ExtUpdSP10                                  */
-/* Copyright      : IDS                                                 */
+/* Copyright      : Maersk WMS                                          */
 /*                                                                      */
 /* Called from: rdtfnc_Pallet_Build                                     */
 /*              Transfer 02->08                                         */
@@ -15,7 +15,8 @@ GO
 /* Modifications log:                                                   */
 /* Date        Rev  Author   Purposes                                   */
 /* 2020-10-29  1.0  YeeKung  WMS-15617 Created                          */
-/* 2023-02-10  1.1  YeeKung  WMS-21738 Add UCC column (yeekung01)        */
+/* 2023-02-10  1.1  YeeKung  WMS-21738 Add UCC column (yeekung01)       */
+/* 2025-03-31  1.2.0 NLT013  UWP-32212 Loc is missing for new PackDetail*/
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1641ExtUpdSP10] (
@@ -55,10 +56,12 @@ BEGIN
             @cTrackingNumber06 NVARCHAR(20)='',
             @cTrackingNumber07 NVARCHAR(20)='',
             @cPalletCaseID NVARCHAR(20),
-            @cLottableValue NVARCHAR(20)
+            @cLottableValue NVARCHAR(20),
+            @cDropLoc      NVARCHAR(10)
 
    SELECT @nStep = Step,
-          @nInputKey = InputKey
+          @nInputKey = InputKey,
+          @cDropLoc = V_String5
    FROM RDT.RDTMobRec WITH (NOLOCK)
    WHERE Mobile = @nMobile
 
@@ -123,9 +126,9 @@ BEGIN
          GROUP BY SKU
 
          INSERT INTO dbo.PalletDetail
-         (PalletKey, PalletLineNumber, CaseId, StorerKey, Sku, Qty, UserDefine01, UserDefine02,userdefine03)
+         (Loc, PalletKey, PalletLineNumber, CaseId, StorerKey, Sku, Qty, UserDefine01, UserDefine02,userdefine03)
          VALUES
-         (@cDropID, @cPalletLineNumber, @cUCCNo, @cStorerKey, @cSKU, @nPD_Qty, @cRouteCode, @cOrderKey,@cLottableValue)
+         (@cDropLoc, @cDropID, @cPalletLineNumber, @cUCCNo, @cStorerKey, @cSKU, @nPD_Qty, @cRouteCode, @cOrderKey,@cLottableValue)
 
          IF @@ERROR <> 0
          BEGIN
@@ -182,5 +185,11 @@ BEGIN
 Fail:
 END
 GO
+
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS ON
+GO
+
 GRANT EXECUTE ON  [RDT].[rdt_1641ExtUpdSP10] TO [NSQL]
 GO

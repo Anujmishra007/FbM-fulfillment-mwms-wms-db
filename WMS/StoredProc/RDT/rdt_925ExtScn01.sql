@@ -163,6 +163,14 @@ BEGIN
                   --GOTO Step_99_Fail
                --End
 
+               -- Check valid format
+               IF rdt.rdtIsValidFormat( @nFunc, @cStorerKey, 'Truck', @cTruckID) = 0
+               BEGIN
+                  SET @nErrNo = 225904
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --TruckID Invalid
+                  GOTO Step_99_Fail
+               END
+
                IF rdt.RDTGetConfig( @nFunc, 'CheckContainer', @cStorerKey) = '1'
                BEGIN
                   -- get containerno

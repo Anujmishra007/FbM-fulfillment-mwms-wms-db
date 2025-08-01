@@ -85,9 +85,12 @@ GO
 /* 10-Feb-2023  NJOW11    WMS-21722 Allow check nomixlottable for all   */
 /*                        commingle sku in a loc.                       */
 /* 10-Feb-2023  NJOW11    DEVOPS Combine Script                         */
+/* 19-Jun-2025  JH01      UWP-36358 - Enhanced the error message show   */
+/* 10-JUL-2025  Wan08     UWP-37554 - Increases Variable Length         */
 /************************************************************************/  
+
   
-CREATE OR ALTER PROC    [dbo].[ispFinalizeReceipt]  
+CREATE OR ALTER PROC [dbo].[ispFinalizeReceipt]  
                @c_ReceiptKey   NVARCHAR(10)  
 ,              @b_Success      int       = 1  OUTPUT  
 ,              @n_err          int       = 0  OUTPUT  
@@ -190,12 +193,12 @@ BEGIN
            @c_SQLParm                     NVARCHAR(2000),  
            @nLottableRules                INT  
   
-        ,  @c_PostFinalizeReceiptSP     NVARCHAR(10)            --(Wan01)  
+        ,  @c_PostFinalizeReceiptSP     NVARCHAR(30)            --(Wan08) --(Wan01)  
         ,  @c_FinalizeSplitReceiptLine  NVARCHAR(10)            --(Wan02)  
         ,  @c_NewReceiptLineNumber      NVARCHAR(5)             --(Wan02)  
         ,  @n_NewQtyExpected            INT                     --(Wan02)  
           
-        ,  @c_PreFinalizeReceiptSP      NVARCHAR(10)            --(Wan03)  
+        ,  @c_PreFinalizeReceiptSP      NVARCHAR(30)            --(Wan08) --(Wan03)  
         ,  @c_UDF01                     NVARCHAR(60) --NJOW07  
         ,  @c_Value                     NVARCHAR(60) --NJOW07  
         ,  @c_DocType                   NVARCHAR(10)            --(Wan06)     
@@ -384,7 +387,7 @@ BEGIN
             SET @n_continue= 3   
             SET @b_Success = 0  
             SET @n_err  = 163053  
-            SET @c_errmsg = 'Execute ispFinalizeReceipt Failed'  
+            SET @c_errmsg = 'Execute ispFinalizeReceipt Failed. ' + RTRIM(@c_ErrMsg)  /*JH01*/
             GOTO RollbackTran  
          END   
       END   
@@ -2037,7 +2040,7 @@ BEGIN
                SET @n_continue= 3   
                SET @b_Success = 0  
                SET @n_err  = 163084 
-               SET @c_errmsg = 'Execute ispFinalizeReceipt Failed'  
+               SET @c_errmsg = 'Execute ispFinalizeReceipt Failed. ' + RTRIM(@c_ErrMsg)  /*JH01*/
             END   
          END   
       END
@@ -2080,7 +2083,7 @@ BEGIN
                SET @n_continue= 3   
                SET @b_Success = 0  
                SET @n_err  = 163085  
-               SET @c_errmsg = 'Execute ispFinalizeReceipt Failed'  
+               SET @c_errmsg = 'Execute ispFinalizeReceipt Failed. ' + RTRIM(@c_ErrMsg)  /*JH01*/
             END
          END
       END  

@@ -1,6 +1,3 @@
-IF EXISTS (SELECT Name FROM dbo.sysobjects WHERE Name = 'ntrAdjustmentDetailAdd' AND Type = 'TR')
-   DROP TRIGGER ntrAdjustmentDetailAdd
-GO
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -42,9 +39,10 @@ GO
 /* 06-Feb-2018  SWT02        1.7    Added Channel Management Logic             */
 /* 23-JUL-2019  Wan02        1.8    WMS-9872 - CN_NIKESDC_Exceed_Channel       */
 /* 01-Jun-2020  Wan03        1.9    WMS-13117 - [CN] Sephora_WMS_ITRN_Add_UCC_CR*/
+/* 25-JUN-2025  SSA01        2.0       UWP-3982- Added PalletType in inventory */
 /*******************************************************************************/
 
-CREATE TRIGGER [dbo].[ntrAdjustmentDetailAdd]
+CREATE OR ALTER TRIGGER [dbo].[ntrAdjustmentDetailAdd]
 ON  [dbo].[ADJUSTMENTDETAIL]
 FOR INSERT
 AS
@@ -196,6 +194,7 @@ BEGIN
              , @c_ADJ_UCCNo                NVARCHAR(20)  -- SOS75806
              , @c_Channel                  NVARCHAR(20) = '' --(SWT02)
              , @n_Channel_ID               BIGINT = 0 --(SWT02)
+             , @c_PalletType               NVARCHAR(10) = ''  --(SSA01)
  
       DECLARE  @c_lottable01     NVARCHAR(18)   -- Lot lottable01
             ,  @c_lottable02     NVARCHAR(18)   -- Lot lottable02
@@ -268,6 +267,7 @@ BEGIN
                  , @c_ADJ_UCCNo                = ISNULL(INSERTED.UCCNo, '') -- SOS75806
                  , @c_Channel                  = INSERTED.Channel    --(SWT02)
                  , @n_Channel_ID               = INSERTED.Channel_ID --(SWT02)
+                 , @c_PalletType               = INSERTED.PalletType  --(SSA01)
               FROM INSERTED
              WHERE AdjustmentKey = @c_ADJ_AdjustmentKey
                AND AdjustmentLineNumber > @c_ADJ_AdjustmentLineNumber
@@ -372,7 +372,8 @@ BEGIN
                      @c_itrnkey       = @c_ItrnKey OUTPUT,
                      @b_Success       = @b_Success OUTPUT,
                      @n_err           = @n_err     OUTPUT,
-                     @c_errmsg        = @c_errmsg  OUTPUT
+                     @c_errmsg        = @c_errmsg  OUTPUT,
+                     @c_PalletType    = @c_PalletType
 
             IF @b_success <> 1
             BEGIN

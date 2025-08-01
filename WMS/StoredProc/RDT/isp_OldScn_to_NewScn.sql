@@ -158,6 +158,9 @@ BEGIN
          SET @nPos = CHARINDEX('i', @cFieldLabel)
 
       IF @nPos = 0
+         SET @nPos = CHARINDEX('l', @cFieldLabel) -- DropList
+
+      IF @nPos = 0
          SET @nPos = CHARINDEX('d', @cFieldLabel)
 
       IF @nPos = 0
@@ -174,6 +177,8 @@ BEGIN
                THEN 'p'
             WHEN 'i'
                THEN 'i'
+            WHEN 'l'
+               THEN 'l'
             WHEN 'd'
                THEN 'd'
             WHEN 'm'
@@ -235,9 +240,18 @@ BEGIN
          END
       END
 
+      --Dropdown List set title
+      DECLARE @clistTitle NVARCHAR(20) = ''
+      -- 'COND CODE%10l10' as title+list
+      IF @InpType = 'l'
+      BEGIN
+         SET @clistTitle = SUBSTRING(@cMsg, 1, @nFieldPos - 1)
+         SET @cMsg = STUFF(@cMsg, 1, @nFieldPos, REPLICATE('`', @nFieldPos));
+      END
+
       -- Insert field
       INSERT INTO @Format ([mobile], [typ], [x], [y], [length], [id], [default], [type], [value], [func], [datatype])
-      VALUES (0, @InpType, @x, @y, @InpLng, @InpColName, '', '', '', '', @cDataType)
+      VALUES (0, @InpType, @x, @y, @InpLng, @InpColName, '', '', @clistTitle, '', @cDataType)
 
       -- Get the rest of the string after the current field position
       SET @cEndString = ''

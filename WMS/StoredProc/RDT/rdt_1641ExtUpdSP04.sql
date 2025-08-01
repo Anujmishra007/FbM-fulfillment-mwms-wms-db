@@ -13,9 +13,10 @@ GO
 /*                                                                      */
 /* Modifications log:                                                   */
 /* Date        Rev  Author   Purposes                                   */
-/* 2019-08-10  1.0  YeeKung   WMS10083 Created                          */
-/* 2020-07-09  1.1  YeeKung   WMS14187 update UD03(yeekung01)           */
-/* 2023-02-10  1.2  YeeKung  WMS-21738 Add UCC column (yeekung01)        */
+/* 2019-08-10  1.0  YeeKung  WMS10083 Created                           */
+/* 2020-07-09  1.1  YeeKung  WMS14187 update UD03(yeekung01)            */
+/* 2023-02-10  1.2  YeeKung  WMS-21738 Add UCC column (yeekung01)       */
+/* 2025-04-01  1.3.0 NLT013  UWP-32212 Loc is missing for new PackDetail*/
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1641ExtUpdSP04] (
@@ -46,10 +47,12 @@ BEGIN
             @cOrderKey     NVARCHAR( 10),
             @cPickSlipNo   NVARCHAR( 10),
             @cPalletLineNumber   NVARCHAR( 5),
-            @cdeliverymode NVARCHAR(20)
+            @cdeliverymode NVARCHAR(20),
+            @cDropLoc      NVARCHAR(10)
 
    SELECT @nStep = Step,
-          @nInputKey = InputKey
+          @nInputKey = InputKey,
+          @cDropLoc = V_String5
    FROM RDT.RDTMobRec WITH (NOLOCK)
    WHERE Mobile = @nMobile
 
@@ -118,9 +121,9 @@ BEGIN
          WHERE ORDERKEY=@cOrderKey
 
          INSERT INTO dbo.PalletDetail   --(yeekung01)
-         (PalletKey, PalletLineNumber, CaseId, StorerKey, Sku, Qty, UserDefine01, UserDefine02, UserDefine03)
+         (Loc, PalletKey, PalletLineNumber, CaseId, StorerKey, Sku, Qty, UserDefine01, UserDefine02, UserDefine03)
          VALUES
-         (@cDropID, @cPalletLineNumber, @cUCCNo, @cStorerKey, @cSKU, @nPD_Qty, @cRouteCode, @cOrderKey,@cdeliverymode)
+         (@cDropLoc, @cDropID, @cPalletLineNumber, @cUCCNo, @cStorerKey, @cSKU, @nPD_Qty, @cRouteCode, @cOrderKey,@cdeliverymode)
 
          IF @@ERROR <> 0
          BEGIN
@@ -254,5 +257,11 @@ BEGIN
 Fail:
 END
 GO
+
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS ON
+GO
+
 GRANT EXECUTE ON  [RDT].[rdt_1641ExtUpdSP04] TO [NSQL]
 GO

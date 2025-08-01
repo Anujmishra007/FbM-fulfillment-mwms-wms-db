@@ -57,6 +57,8 @@ GO
 /*                            from UCC -> UCCNO (james10)               */
 /* 2023-07-26 3.9  YeeKung    WMS-23108 Add DefaultToLOCSP (yeekung02)  */
 /* 2023-10-03 4.0  JihHaur    JSM-181441 reset @cTrackCartonType (JH01) */
+/* 2025-04-07 4.1  NLT013     UWP-32374 Add ExtValidSP in step 2, 3     */
+/* 2025-05-30 0.0  JACKC      !!!Cutover. Use v0 for development!!!     */
 /************************************************************************/
 CREATE OR ALTER PROC rdt.rdtfnc_UCCInboundReceive (
    @nMobile    INT,
@@ -247,7 +249,7 @@ BEGIN
 
    SET @cDefaultReceiptDetailLoc = rdt.RDTGetConfig( @nFunc, 'DefaultReceiptDetailLoc', @cStorerKey) -- (ChewKP03)
    IF @cDefaultReceiptDetailLoc = '0'
-		SET @cDefaultReceiptDetailLoc = ''
+      SET @cDefaultReceiptDetailLoc = ''
    SET @cExtendedValidateSP = rdt.rdtGetConfig( @nFunc, 'ExtendedValidateSP', @cStorerKey)
    IF @cExtendedValidateSP = '0'
       SET @cExtendedValidateSP = ''
@@ -303,7 +305,7 @@ BEGIN
    SET @cQTY = ''
    SET @cTotalUCC = ''
    SET @cTrackCartonType = ''  /*(JH01)*/
-	
+   
    -- Init screen
    SET @cOutField01 = '' -- ReceiptKey1
    SET @cOutField02 = '' -- ReceiptKey2
@@ -359,7 +361,7 @@ BEGIN
                   EXCEPT
                   SELECT @cFacility)
       BEGIN
-      	SET @nErrNo = 62247
+         SET @nErrNo = 62247
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') --Diff facility
          GOTO Step_1_Fail
       END
@@ -648,16 +650,16 @@ BEGIN
 
       --(yeekung01)
       IF @cExtendedValidateSP <> ''
-	   BEGIN
-	      IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedValidateSP AND type = 'P')
+      BEGIN
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedValidateSP AND type = 'P')
          BEGIN
             SET @cExecStatements = N'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +
                                     ' @nMobile                 ' +
-	                                 ' , @nFunc                 ' +
-	                                 ' , @cLangCode             ' +
-	                                 ' , @nStep                 ' +
-	                                 ' , @cStorerKey            ' +
-	                                 ' , @cFacility             ' +
+                                    ' , @nFunc                 ' +
+                                    ' , @cLangCode             ' +
+                                    ' , @nStep                 ' +
+                                    ' , @cStorerKey            ' +
+                                    ' , @cFacility             ' +
                                     ' , @cReceiptKey1          ' +
                                     ' , @cReceiptKey2          ' +
                                     ' , @cReceiptKey3          ' +
@@ -672,11 +674,11 @@ BEGIN
 
             SET @cExecArguments =
                       N'@nMobile     INT, ' +
-	                    '@nFunc       INT, ' +
-	                    '@cLangCode   NVARCHAR(3), ' +
-	                    '@nStep       INT, ' +
-	                    '@cStorerKey  NVARCHAR(15), ' +
-	                    '@cFacility   NVARCHAR(5), '  +
+                       '@nFunc       INT, ' +
+                       '@cLangCode   NVARCHAR(3), ' +
+                       '@nStep       INT, ' +
+                       '@cStorerKey  NVARCHAR(15), ' +
+                       '@cFacility   NVARCHAR(5), '  +
                        '@cReceiptKey1 NVARCHAR(20),          ' +
                        '@cReceiptKey2 NVARCHAR(20),          ' +
                        '@cReceiptKey3 NVARCHAR(20),          ' +
@@ -714,13 +716,13 @@ BEGIN
                GOTO Step_1_Fail
            END
          END
-	   END
+      END
 
       IF @cExtendedUpdateSP <> ''        
       BEGIN        
           IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')        
           BEGIN        
-          	SET @nErrNo = 0
+             SET @nErrNo = 0
              SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +                          
                 ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, ' + 
                 ' @cReceiptKey1, @cReceiptKey2, @cReceiptKey3, @cReceiptKey4, @cReceiptKey5, @cLoc, @cID, @cUCC, @cCartonType, ' +
@@ -767,11 +769,11 @@ BEGIN
       BEGIN
          SET @cExecStatements = N'EXEC rdt.' + RTRIM( @cDefaultToLocSP) +
                               ' @nMobile                 ' +
-	                           ' , @nFunc                 ' +
-	                           ' , @cLangCode             ' +
-	                           ' , @nStep                 ' +
-	                           ' , @cStorerKey            ' +
-	                           ' , @cFacility             ' +
+                              ' , @nFunc                 ' +
+                              ' , @cLangCode             ' +
+                              ' , @nStep                 ' +
+                              ' , @cStorerKey            ' +
+                              ' , @cFacility             ' +
                               ' , @cReceiptKey1          ' +
                               ' , @cReceiptKey2          ' +
                               ' , @cReceiptKey3          ' +
@@ -787,11 +789,11 @@ BEGIN
 
          SET @cExecArguments =
                      N'@nMobile     INT, ' +
-	                  '@nFunc       INT, ' +
-	                  '@cLangCode   NVARCHAR(3), ' +
-	                  '@nStep       INT, ' +
-	                  '@cStorerKey  NVARCHAR(15), ' +
-	                  '@cFacility   NVARCHAR(5), '  +
+                     '@nFunc       INT, ' +
+                     '@cLangCode   NVARCHAR(3), ' +
+                     '@nStep       INT, ' +
+                     '@cStorerKey  NVARCHAR(15), ' +
+                     '@cFacility   NVARCHAR(5), '  +
                      '@cReceiptKey1 NVARCHAR(20),          ' +
                      '@cReceiptKey2 NVARCHAR(20),          ' +
                      '@cReceiptKey3 NVARCHAR(20),          ' +
@@ -905,17 +907,17 @@ BEGIN
             GOTO Step_2_Fail
          END
 
-		   -- (james06)
-		   IF @cLOCLookupSP = 1
-		   BEGIN
-			   EXEC rdt.rdt_LOCLookUp @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cFacility,
-			      @cLOC       OUTPUT,
-			      @nErrNo     OUTPUT,
-			      @cErrMsg    OUTPUT
+         -- (james06)
+         IF @cLOCLookupSP = 1
+         BEGIN
+            EXEC rdt.rdt_LOCLookUp @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cFacility,
+               @cLOC       OUTPUT,
+               @nErrNo     OUTPUT,
+               @cErrMsg    OUTPUT
 
-			   IF @nErrNo <> 0
-				   GOTO Step_2_Fail
-		   END
+            IF @nErrNo <> 0
+               GOTO Step_2_Fail
+         END
 
          -- Get the location
          DECLARE @cChkFacility NVARCHAR( 5)
@@ -942,17 +944,86 @@ BEGIN
       END
       ELSE
       BEGIN
-		   -- (james06)
-		   IF @cLOCLookupSP = 1
-		   BEGIN
-			   EXEC rdt.rdt_LOCLookUp @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cFacility,
-			      @cLOC       OUTPUT,
-			      @nErrNo     OUTPUT,
-			      @cErrMsg    OUTPUT
+         -- (james06)
+         IF @cLOCLookupSP = 1
+         BEGIN
+            EXEC rdt.rdt_LOCLookUp @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cFacility,
+               @cLOC       OUTPUT,
+               @nErrNo     OUTPUT,
+               @cErrMsg    OUTPUT
 
-			   IF @nErrNo <> 0
-				   GOTO Step_2_Fail
-		   END
+            IF @nErrNo <> 0
+               GOTO Step_2_Fail
+         END
+      END
+
+      IF @cExtendedValidateSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedValidateSP AND type = 'P')
+         BEGIN
+            SET @cExecStatements = N'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +
+                                    ' @nMobile                 ' +
+                                    ' , @nFunc                 ' +
+                                    ' , @cLangCode             ' +
+                                    ' , @nStep                 ' +
+                                    ' , @cStorerKey            ' +
+                                    ' , @cFacility             ' +
+                                    ' , @cReceiptKey1          ' +
+                                    ' , @cReceiptKey2          ' +
+                                    ' , @cReceiptKey3          ' +
+                                    ' , @cReceiptKey4          ' +
+                                    ' , @cReceiptKey5          ' +
+                                    ' , @cLoc                  ' +
+                                    ' , @cID                   ' +
+                                    ' , @cUCC                  ' +
+                                    ' , @nErrNo       OUTPUT   ' +
+                                    ' , @cErrMSG      OUTPUT   '
+
+
+            SET @cExecArguments =
+                      N'@nMobile     INT, ' +
+                       '@nFunc       INT, ' +
+                       '@cLangCode   NVARCHAR(3), ' +
+                       '@nStep       INT, ' +
+                       '@cStorerKey  NVARCHAR(15), ' +
+                       '@cFacility   NVARCHAR(5), '  +
+                       '@cReceiptKey1 NVARCHAR(20),          ' +
+                       '@cReceiptKey2 NVARCHAR(20),          ' +
+                       '@cReceiptKey3 NVARCHAR(20),          ' +
+                       '@cReceiptKey4 NVARCHAR(20),          ' +
+                       '@cReceiptKey5 NVARCHAR(20),          ' +
+                       '@cLoc        NVARCHAR(20),           ' +
+                       '@cID         NVARCHAR(18),           ' +
+                       '@cUCC        NVARCHAR(20),           ' +
+                       '@nErrNo      INT  OUTPUT,            ' +
+                       '@cErrMsg     NVARCHAR(1024) OUTPUT  '
+
+
+            EXEC sp_executesql @cExecStatements, @cExecArguments,
+                                @nMobile
+                              , @nFunc
+                              , @cLangCode
+                              , @nStep
+                              , @cStorerKey
+                              , @cFacility
+                              , @cReceiptKey1
+                              , @cReceiptKey2
+                              , @cReceiptKey3
+                              , @cReceiptKey4
+                              , @cReceiptKey5
+                              , @cLoc
+                              , @cID
+                              , @cUCC
+                              , @nErrNo       OUTPUT
+                              , @cErrMSG      OUTPUT
+
+
+           IF @nErrNo <> 0
+           BEGIN
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+               GOTO Step_2_Fail
+           END
+         END
       END
 
       -- Prepare next screen var
@@ -1063,11 +1134,11 @@ BEGIN
       BEGIN
          SET @cExecStatements = N'EXEC rdt.' + RTRIM( @cDefaultToLocSP) +
                      ' @nMobile                 ' +
-	                  ' , @nFunc                 ' +
-	                  ' , @cLangCode             ' +
-	                  ' , @nStep                 ' +
-	                  ' , @cStorerKey            ' +
-	                  ' , @cFacility             ' +
+                     ' , @nFunc                 ' +
+                     ' , @cLangCode             ' +
+                     ' , @nStep                 ' +
+                     ' , @cStorerKey            ' +
+                     ' , @cFacility             ' +
                      ' , @cReceiptKey1          ' +
                      ' , @cReceiptKey2          ' +
                      ' , @cReceiptKey3          ' +
@@ -1083,11 +1154,11 @@ BEGIN
 
          SET @cExecArguments =
                      N'@nMobile     INT, ' +
-	                  '@nFunc       INT, ' +
-	                  '@cLangCode   NVARCHAR(3), ' +
-	                  '@nStep       INT, ' +
-	                  '@cStorerKey  NVARCHAR(15), ' +
-	                  '@cFacility   NVARCHAR(5), '  +
+                     '@nFunc       INT, ' +
+                     '@cLangCode   NVARCHAR(3), ' +
+                     '@nStep       INT, ' +
+                     '@cStorerKey  NVARCHAR(15), ' +
+                     '@cFacility   NVARCHAR(5), '  +
                      '@cReceiptKey1 NVARCHAR(20),          ' +
                      '@cReceiptKey2 NVARCHAR(20),          ' +
                      '@cReceiptKey3 NVARCHAR(20),          ' +
@@ -1240,6 +1311,75 @@ BEGIN
             SET @nErrNo = 62234
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Duplicate ID'
             GOTO Step_3_Fail
+         END
+      END
+
+      IF @cExtendedValidateSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedValidateSP AND type = 'P')
+         BEGIN
+            SET @cExecStatements = N'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +
+                                    ' @nMobile                 ' +
+                                    ' , @nFunc                 ' +
+                                    ' , @cLangCode             ' +
+                                    ' , @nStep                 ' +
+                                    ' , @cStorerKey            ' +
+                                    ' , @cFacility             ' +
+                                    ' , @cReceiptKey1          ' +
+                                    ' , @cReceiptKey2          ' +
+                                    ' , @cReceiptKey3          ' +
+                                    ' , @cReceiptKey4          ' +
+                                    ' , @cReceiptKey5          ' +
+                                    ' , @cLoc                  ' +
+                                    ' , @cID                   ' +
+                                    ' , @cUCC                  ' +
+                                    ' , @nErrNo       OUTPUT   ' +
+                                    ' , @cErrMSG      OUTPUT   '
+
+
+            SET @cExecArguments =
+                      N'@nMobile     INT, ' +
+                       '@nFunc       INT, ' +
+                       '@cLangCode   NVARCHAR(3), ' +
+                       '@nStep       INT, ' +
+                       '@cStorerKey  NVARCHAR(15), ' +
+                       '@cFacility   NVARCHAR(5), '  +
+                       '@cReceiptKey1 NVARCHAR(20),          ' +
+                       '@cReceiptKey2 NVARCHAR(20),          ' +
+                       '@cReceiptKey3 NVARCHAR(20),          ' +
+                       '@cReceiptKey4 NVARCHAR(20),          ' +
+                       '@cReceiptKey5 NVARCHAR(20),          ' +
+                       '@cLoc        NVARCHAR(20),           ' +
+                       '@cID         NVARCHAR(18),           ' +
+                       '@cUCC        NVARCHAR(20),           ' +
+                       '@nErrNo      INT  OUTPUT,            ' +
+                       '@cErrMsg     NVARCHAR(1024) OUTPUT  '
+
+
+            EXEC sp_executesql @cExecStatements, @cExecArguments,
+                                @nMobile
+                              , @nFunc
+                              , @cLangCode
+                              , @nStep
+                              , @cStorerKey
+                              , @cFacility
+                              , @cReceiptKey1
+                              , @cReceiptKey2
+                              , @cReceiptKey3
+                              , @cReceiptKey4
+                              , @cReceiptKey5
+                              , @cLoc
+                              , @cID
+                              , @cUCC
+                              , @nErrNo       OUTPUT
+                              , @cErrMSG      OUTPUT
+
+
+           IF @nErrNo <> 0
+           BEGIN
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+               GOTO Step_3_Fail
+           END
          END
       END
 
@@ -1458,11 +1598,11 @@ BEGIN
       BEGIN
          SET @cExecStatements = N'EXEC rdt.' + RTRIM( @cDefaultToLocSP) +
                      ' @nMobile                 ' +
-	                  ' , @nFunc                 ' +
-	                  ' , @cLangCode             ' +
-	                  ' , @nStep                 ' +
-	                  ' , @cStorerKey            ' +
-	                  ' , @cFacility             ' +
+                     ' , @nFunc                 ' +
+                     ' , @cLangCode             ' +
+                     ' , @nStep                 ' +
+                     ' , @cStorerKey            ' +
+                     ' , @cFacility             ' +
                      ' , @cReceiptKey1          ' +
                      ' , @cReceiptKey2          ' +
                      ' , @cReceiptKey3          ' +
@@ -1478,11 +1618,11 @@ BEGIN
 
          SET @cExecArguments =
                      N'@nMobile     INT, ' +
-	                  '@nFunc       INT, ' +
-	                  '@cLangCode   NVARCHAR(3), ' +
-	                  '@nStep       INT, ' +
-	                  '@cStorerKey  NVARCHAR(15), ' +
-	                  '@cFacility   NVARCHAR(5), '  +
+                     '@nFunc       INT, ' +
+                     '@cLangCode   NVARCHAR(3), ' +
+                     '@nStep       INT, ' +
+                     '@cStorerKey  NVARCHAR(15), ' +
+                     '@cFacility   NVARCHAR(5), '  +
                      '@cReceiptKey1 NVARCHAR(20),          ' +
                      '@cReceiptKey2 NVARCHAR(20),          ' +
                      '@cReceiptKey3 NVARCHAR(20),          ' +
@@ -1697,17 +1837,17 @@ BEGIN
       END
 
       -- (ChewKP04)
-	   IF @cExtendedValidateSP <> ''
-	   BEGIN
-	      IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedValidateSP AND type = 'P')
+      IF @cExtendedValidateSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedValidateSP AND type = 'P')
          BEGIN
             SET @cExecStatements = N'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +
                                     ' @nMobile                 ' +
-	                                 ' , @nFunc                 ' +
-	                                 ' , @cLangCode             ' +
-	                                 ' , @nStep                 ' +
-	                                 ' , @cStorerKey            ' +
-	                                 ' , @cFacility             ' +
+                                    ' , @nFunc                 ' +
+                                    ' , @cLangCode             ' +
+                                    ' , @nStep                 ' +
+                                    ' , @cStorerKey            ' +
+                                    ' , @cFacility             ' +
                                     ' , @cReceiptKey1          ' +
                                     ' , @cReceiptKey2          ' +
                                     ' , @cReceiptKey3          ' +
@@ -1722,11 +1862,11 @@ BEGIN
 
             SET @cExecArguments =
                       N'@nMobile     INT, ' +
-	                    '@nFunc       INT, ' +
-	                    '@cLangCode   NVARCHAR(3), ' +
-	                    '@nStep       INT, ' +
-	                    '@cStorerKey  NVARCHAR(15), ' +
-	                    '@cFacility   NVARCHAR(5), '  +
+                       '@nFunc       INT, ' +
+                       '@cLangCode   NVARCHAR(3), ' +
+                       '@nStep       INT, ' +
+                       '@cStorerKey  NVARCHAR(15), ' +
+                       '@cFacility   NVARCHAR(5), '  +
                        '@cReceiptKey1 NVARCHAR(20),          ' +
                        '@cReceiptKey2 NVARCHAR(20),          ' +
                        '@cReceiptKey3 NVARCHAR(20),          ' +
@@ -1764,7 +1904,7 @@ BEGIN
                GOTO Step_4_Fail
            END
          END
-	   END
+      END
 
       -- Print UCC ASN Label -- (ChewKP03)
       SELECT   @cDataWindow = DataWindow,
@@ -1936,17 +2076,17 @@ BEGIN
 
       -- ExtendedUpdate -- (ChewKP05)
       IF @cExtendedUpdateSP <> ''
-	   BEGIN
-	      IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')
+      BEGIN
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')
          BEGIN
             SET @cExecStatements = N'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +
                                     ' @nMobile                 ' +
-	                                 ' , @nFunc                 ' +
-	                                 ' , @cLangCode             ' +
-	                                 ' , @nStep                 ' +
-	                                 ' , @nInputKey             ' +
-	                                 ' , @cStorerKey            ' +
-	                                 ' , @cFacility             ' +
+                                    ' , @nFunc                 ' +
+                                    ' , @cLangCode             ' +
+                                    ' , @nStep                 ' +
+                                    ' , @nInputKey             ' +
+                                    ' , @cStorerKey            ' +
+                                    ' , @cFacility             ' +
                                     ' , @cReceiptKey1          ' +
                                     ' , @cReceiptKey2          ' +
                                     ' , @cReceiptKey3          ' +
@@ -1963,12 +2103,12 @@ BEGIN
 
             SET @cExecArguments =
                       N'@nMobile     INT, ' +
-	                    '@nFunc       INT, ' +
-	                    '@cLangCode   NVARCHAR(3), ' +
-	                    '@nStep       INT, ' +
-	                    '@nInputKey   INT, ' +
-	                    '@cStorerKey  NVARCHAR(15), ' +
-	                    '@cFacility   NVARCHAR(5), '  +
+                       '@nFunc       INT, ' +
+                       '@cLangCode   NVARCHAR(3), ' +
+                       '@nStep       INT, ' +
+                       '@nInputKey   INT, ' +
+                       '@cStorerKey  NVARCHAR(15), ' +
+                       '@cFacility   NVARCHAR(5), '  +
                        '@cReceiptKey1 NVARCHAR(20),          ' +
                        '@cReceiptKey2 NVARCHAR(20),          ' +
                        '@cReceiptKey3 NVARCHAR(20),          ' +
@@ -2011,7 +2151,7 @@ BEGIN
                GOTO RollBackTran
            END
          END
-	   END
+      END
 
       COMMIT TRAN rdtfnc_UCCInboundReceive -- Only commit change made here
       WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started

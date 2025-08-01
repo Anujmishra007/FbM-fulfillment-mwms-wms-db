@@ -44,6 +44,7 @@ GO
 /* 03-JAN-2024  Wan06     2.6 LFWM-4405 - [GIT] Serial Number Solution-Post*/
 /*                            Cycle Count by Adjustment Serialnon - Fix  */
 /*                            sourcetype truncate issue                  */
+/* 26-JUN-2025  SSA01     2.7 UWP-3982- Added PalletType in inventory    */
 /*************************************************************************/
 CREATE OR ALTER PROC  [dbo].[nspItrnAddAdjustmentCheck]
                @c_itrnkey      NVARCHAR(10)
@@ -83,6 +84,7 @@ CREATE OR ALTER PROC  [dbo].[nspItrnAddAdjustmentCheck]
 ,              @c_errmsg       NVARCHAR(250)  OUTPUT
 ,              @c_Channel      NVARCHAR(20) = '' --(SWT02)
 ,              @n_Channel_ID   BIGINT = 0 OUTPUT --(SWT02)
+,              @c_PalletType   NVARCHAR(10)   = '' --(SSA01)
 AS
 BEGIN
    SET NOCOUNT ON 
@@ -811,11 +813,11 @@ BEGIN
             END
             IF @c_allowidqtyupdate = '1'
             BEGIN
-               INSERT INTO ID (ID, QTY, STATUS,PACKKEY) VALUES (@c_toid, @n_qty, @c_status, @c_packkey)
+               INSERT INTO ID (ID, QTY, STATUS,PACKKEY,PalletType) VALUES (@c_toid, @n_qty, @c_status, @c_packkey, @c_PalletType)    --(SSA01)
             END
             ELSE
             BEGIN
-               INSERT INTO ID (ID, QTY, STATUS,PACKKEY) VALUES (@c_toid, 0, @c_status, @c_packkey)
+               INSERT INTO ID (ID, QTY, STATUS,PACKKEY,PalletType) VALUES (@c_toid, 0, @c_status, @c_packkey,@c_PalletType)     --(SSA01)
             END
             SELECT @n_err = @@ERROR
             IF @n_err <> 0
@@ -838,7 +840,9 @@ BEGIN
                IF dbo.fnc_RTrim(@c_toid) IS NOT NULL AND dbo.fnc_RTrim(@c_toid) <> ''
                BEGIN
                   UPDATE ID WITH (ROWLOCK) 
-                  SET QTY = QTY+@n_qty, Status = @c_Status, Packkey = @c_packkey WHERE ID=@c_toid
+                  SET QTY = QTY+@n_qty, Status = @c_Status, Packkey = @c_packkey
+                  , PalletType = @c_PalletType   --(SSA01)
+                  WHERE ID=@c_toid
                END
                ELSE
                   SELECT @n_cnt = 1, @n_err = 0
@@ -855,7 +859,9 @@ BEGIN
                IF EXISTS ( SELECT 1 FROM  ID with (NOLOCK) WHERE ID = @c_toid AND [Status] <> @c_Status )
                BEGIN  
                   UPDATE ID WITH (ROWLOCK) 
-                  SET Status = @c_Status, Packkey = @c_packkey WHERE ID=@c_toid
+                  SET Status = @c_Status, Packkey = @c_packkey
+                  , PalletType = @c_PalletType   --(SSA01)
+                  WHERE ID=@c_toid
                END
             END
             SELECT @n_err = @@ERROR--, @n_cnt = @@ROWCOUNT

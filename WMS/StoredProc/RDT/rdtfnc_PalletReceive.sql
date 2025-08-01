@@ -17,12 +17,13 @@ GO
 /* 2020-07-29 1.6  YeeKung  WMS-14414 Add flowthrough (yeekung01)                */
 /* 2022-02-21 1.7  YeeKung  WMS-18676 fix extendevalidate (yeekung02)            */
 /* 2024-09-19 1.8  JHU151   FCR-752                                              */
+/* 2025-06-18 1.0  CYU027   FCR-4200                                             */
 /*********************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_PalletReceive] (
    @nMobile    INT,
    @nErrNo     INT  OUTPUT,
-   @cErrMsg    NVARCHAR( 20) OUTPUT
+   @cErrMsg    NVARCHAR( 1024) OUTPUT
 ) AS
 
 SET NOCOUNT ON
@@ -86,6 +87,7 @@ DECLARE
    @cDecodeSP           NVARCHAR( 20),
    @cBarcode            NVARCHAR( 60),
    @cDefaultcursor      NVARCHAR( 1),  --(yeekung01)
+   @cToLOC              NVARCHAR( 10),
 
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),
@@ -175,6 +177,7 @@ SELECT
    @cFlowThruScreen     = V_String24,
    @cDefaultcursor      = V_String25,
    @cExtendedScreenSP   = V_String26,
+   @cToLOC              = V_String27,
 
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,
@@ -455,7 +458,7 @@ BEGIN
             ' @nRowCount    INT OUTPUT,   ' +
             ' @nErrNo       INT OUTPUT    '
          EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-@nMobile,
+            @nMobile,
             @cFacility,
             @cStorerGroup,
             @cStorerKey,
@@ -507,6 +510,13 @@ BEGIN
 
       SET @cOutField01 = ''
    END
+
+   IF @cExtendedScreenSP <> ''
+         AND EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
+   BEGIN
+      GOTO Step_99
+   END
+
    GOTO Quit
 
    Step_1_Fail:
@@ -577,7 +587,7 @@ BEGIN
                ' @cRefNo       NVARCHAR( 20)  OUTPUT, ' +
                ' @cID          NVARCHAR( 18)  OUTPUT, ' +
                ' @nErrNo       INT            OUTPUT, ' +
-               ' @cErrMsg      NVARCHAR( 20)  OUTPUT'
+               ' @cErrMsg      NVARCHAR( 1024)  OUTPUT'
 
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
                @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cBarcode,
@@ -589,84 +599,97 @@ BEGIN
             GOTO Step_2_Fail
       END
 
-      -- Check barcode format
-      IF rdt.rdtIsValidFormat( @nFunc, @cStorerKey, 'ID', @cID) = 0
-      BEGIN
-         SET @nErrNo = 52963
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Format
+      EXEC rdt.rdt_PalletReceive_CheckDetail @nFunc, @nMobile, @cLangCode, @nScn, @nInputKey, @cFacility,
+         @cReceiptKey,
+         @cID,
+         @cRefNo,
+         @cStorerKey       OUTPUT,
+         @cActReceiptKey   OUTPUT,
+         @nErrNo           OUTPUT,
+         @cErrMsg          OUTPUT
+      IF @nErrNo <> 0
          GOTO Step_2_Fail
-      END
 
-      -- Get ID info
-      SELECT @nTotalLine = COUNT(1)
-      FROM rdt.rdtPalletReceiveLog PRL WITH (NOLOCK)
-         JOIN dbo.ReceiptDetail RD WITH (NOLOCK) ON (PRL.ReceiptKey = RD.ReceiptKey)
-      WHERE PRL.Mobile = @nMobile
-         AND RD.ToID = @cID
 
-      -- Check ID in ASN
-      IF @nTotalLine = 0
-      BEGIN
-         SET @nErrNo = 52964
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --ID not in ASN
-         GOTO Step_2_Fail
-      END
-
-      -- Check ID received in ASN
-      IF EXISTS (SELECT 1
-         FROM rdt.rdtPalletReceiveLog PRL WITH (NOLOCK)
-            JOIN dbo.ReceiptDetail RD WITH (NOLOCK) ON (PRL.ReceiptKey = RD.ReceiptKey)
-         WHERE PRL.Mobile = @nMobile
-            AND RD.ToID = @cID
-            AND RD.BeforeReceivedQty > 0)
-      BEGIN
-         SET @nErrNo = 52965
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --ID received
-         GOTO Step_2_Fail
-      END
-
-      -- Check ID received
-      IF EXISTS( SELECT 1
-         FROM dbo.LOTxLOCxID WITH (NOLOCK)
-            INNER JOIN dbo.LOC WITH (NOLOCK) ON (LOTxLOCxID.LOC = LOC.LOC)
-         WHERE [ID] = @cID
-            AND QTY > 0
-            AND LOC.Facility = @cFacility)
-      BEGIN
-         SET @nErrNo = 52966
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --ID in used
-         GOTO Step_2_Fail
-      END
-
-      -- ReceiptKey
-      IF @cReceiptKey <> ''
-         SET @cActReceiptKey = @cReceiptKey
-
-      -- RefNo
-      IF @cRefNo <> ''
-      BEGIN
-         -- Check ID in multi ASN
-         IF EXISTS( SELECT 1
-            FROM rdt.rdtPalletReceiveLog PRL WITH (NOLOCK)
-               JOIN dbo.ReceiptDetail RD WITH (NOLOCK) ON (PRL.ReceiptKey = RD.ReceiptKey)
-            WHERE PRL.Mobile = @nMobile
-               AND RD.ToID = @cID
-            HAVING COUNT( DISTINCT PRL.ReceiptKey) > 1)
-         BEGIN
-            SET @nErrNo = 52967
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --ID in MultiASN
-            GOTO Step_2_Fail
-         END
-
-         -- Set session storer, receipt
-         SELECT TOP 1
-            @cStorerKey = RD.StorerKey,
-            @cActReceiptKey = RD.ReceiptKey
-         FROM rdt.rdtPalletReceiveLog PRL WITH (NOLOCK)
-            JOIN dbo.ReceiptDetail RD WITH (NOLOCK) ON (PRL.ReceiptKey = RD.ReceiptKey)
-         WHERE PRL.Mobile = @nMobile
-            AND RD.ToID = @cID
-      END
+--
+--       -- Check barcode format
+--       IF rdt.rdtIsValidFormat( @nFunc, @cStorerKey, 'ID', @cID) = 0
+--       BEGIN
+--          SET @nErrNo = 52963
+--          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Format
+--          GOTO Step_2_Fail
+--       END
+--
+--       -- Get ID info
+--       SELECT @nTotalLine = COUNT(1)
+--       FROM rdt.rdtPalletReceiveLog PRL WITH (NOLOCK)
+--          JOIN dbo.ReceiptDetail RD WITH (NOLOCK) ON (PRL.ReceiptKey = RD.ReceiptKey)
+--       WHERE PRL.Mobile = @nMobile
+--          AND RD.ToID = @cID
+--
+--       -- Check ID in ASN
+--       IF @nTotalLine = 0
+--       BEGIN
+--          SET @nErrNo = 52964
+--          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --ID not in ASN
+--          GOTO Step_2_Fail
+--       END
+--
+--       -- Check ID received in ASN
+--       IF EXISTS (SELECT 1
+--          FROM rdt.rdtPalletReceiveLog PRL WITH (NOLOCK)
+--             JOIN dbo.ReceiptDetail RD WITH (NOLOCK) ON (PRL.ReceiptKey = RD.ReceiptKey)
+--          WHERE PRL.Mobile = @nMobile
+--             AND RD.ToID = @cID
+--             AND RD.BeforeReceivedQty > 0)
+--       BEGIN
+--          SET @nErrNo = 52965
+--          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --ID received
+--          GOTO Step_2_Fail
+--       END
+--
+--       -- Check ID received
+--       IF EXISTS( SELECT 1
+--          FROM dbo.LOTxLOCxID WITH (NOLOCK)
+--             INNER JOIN dbo.LOC WITH (NOLOCK) ON (LOTxLOCxID.LOC = LOC.LOC)
+--          WHERE [ID] = @cID
+--             AND QTY > 0
+--             AND LOC.Facility = @cFacility)
+--       BEGIN
+--          SET @nErrNo = 52966
+--          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --ID in used
+--          GOTO Step_2_Fail
+--       END
+--
+--       -- ReceiptKey
+--       IF @cReceiptKey <> ''
+--          SET @cActReceiptKey = @cReceiptKey
+--
+--       -- RefNo
+--       IF @cRefNo <> ''
+--       BEGIN
+--          -- Check ID in multi ASN
+--          IF EXISTS( SELECT 1
+--             FROM rdt.rdtPalletReceiveLog PRL WITH (NOLOCK)
+--                JOIN dbo.ReceiptDetail RD WITH (NOLOCK) ON (PRL.ReceiptKey = RD.ReceiptKey)
+--             WHERE PRL.Mobile = @nMobile
+--                AND RD.ToID = @cID
+--             HAVING COUNT( DISTINCT PRL.ReceiptKey) > 1)
+--          BEGIN
+--             SET @nErrNo = 52967
+--             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --ID in MultiASN
+--             GOTO Step_2_Fail
+--          END
+--
+--          -- Set session storer, receipt
+--          SELECT TOP 1
+--             @cStorerKey = RD.StorerKey,
+--             @cActReceiptKey = RD.ReceiptKey
+--          FROM rdt.rdtPalletReceiveLog PRL WITH (NOLOCK)
+--             JOIN dbo.ReceiptDetail RD WITH (NOLOCK) ON (PRL.ReceiptKey = RD.ReceiptKey)
+--          WHERE PRL.Mobile = @nMobile
+--             AND RD.ToID = @cID
+--       END
 
       -- Get storer config
       SET @cDefaultOption = rdt.RDTGetConfig( @nFunc, 'DefaultOption', @cStorerKey)
@@ -702,7 +725,7 @@ BEGIN
                '@cRefNo       NVARCHAR( 20), ' +
                '@cID          NVARCHAR( 18), ' +
                '@nErrNo             INT            OUTPUT, ' +
-               '@cErrMsg            NVARCHAR( 20)  OUTPUT'
+               '@cErrMsg            NVARCHAR( 1024)  OUTPUT'
 
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
                @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cReceiptKey, @cRefNo, @cID,
@@ -724,7 +747,7 @@ BEGIN
       SET @cSKU = ''
       SET @nQTY = 0
       SET @cRDLineNo = ''
-      EXEC rdt.rdt_PalletReceive_GetDetail @nMobile, @nFunc, @cLangCode, @nScn, @nInputKey, @cFacility, @cStorerKey,
+      EXEC rdt.rdt_PalletReceive_GetDetail @nFunc, @nMobile, @cLangCode, @nScn, @nInputKey, @cFacility, @cStorerKey,
          @cActReceiptKey,
          @cID,
          @cSKU        OUTPUT,
@@ -834,7 +857,7 @@ BEGIN
 
    
    --JHU151   
-   IF @cExtendedScreenSP IN ( 'rdt_605ExtScn01', 'rdt_605ExtScn03')
+   IF @cExtendedScreenSP IN ( 'rdt_605ExtScn01', 'rdt_605ExtScn03', 'rdt_605ExtScn05')
    BEGIN
       SET @nAction = 0 -- jump new screen
       GOTO Step_99
@@ -999,6 +1022,7 @@ BEGIN
       EXEC rdt.rdt_PalletReceive_Confirm @nFunc, @nMobile, @cLangCode, @cStorerKey, @cFacility,
          @cActReceiptKey,
          @cID,
+         @cToLOC,
          @nErrNo  OUTPUT,
          @cErrMsg OUTPUT
       IF @nErrNo <> 0
@@ -1029,7 +1053,7 @@ BEGIN
                '@cRefNo       NVARCHAR( 20), ' +
                '@cID          NVARCHAR( 18), ' +
                '@nErrNo       INT            OUTPUT, ' +
-               '@cErrMsg      NVARCHAR( 20)  OUTPUT'
+               '@cErrMsg      NVARCHAR( 1024)  OUTPUT'
 
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
                @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cReceiptKey, @cRefNo, @cID,
@@ -1161,7 +1185,17 @@ BEGIN
                @cUDF25   OUTPUT, @cUDF26 OUTPUT, @cUDF27 OUTPUT,
                @cUDF28   OUTPUT, @cUDF29 OUTPUT, @cUDF30 OUTPUT
 
-         IF @cExtendedScreenSP IN ( 'rdt_605ExtScn01', 'rdt_605ExtScn03')
+         IF @cExtendedScreenSP = 'rdt_605ExtScn04'
+         BEGIN
+
+            SET @cToLOC = @cUDF01
+            SET @nCurrentScanned = CAST(@cUDF02 AS INT)
+
+
+         END
+
+
+         IF @cExtendedScreenSP IN ( 'rdt_605ExtScn01', 'rdt_605ExtScn03','rdt_605ExtScn05')
          BEGIN
             IF @nPreScn = 6441 AND @nInputKey = 1
             BEGIN
@@ -1246,6 +1280,8 @@ BEGIN
       V_String24   = @cFlowThruScreen,
       V_String25   = @cDefaultcursor, --(yeekung01)
       V_String26   = @cExtendedScreenSP,
+      V_String27   = @cToLOC,
+
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,

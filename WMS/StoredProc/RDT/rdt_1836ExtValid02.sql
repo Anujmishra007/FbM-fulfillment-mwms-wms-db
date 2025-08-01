@@ -9,6 +9,7 @@
 /*                                                                          */  
 /* Date         Author    Ver.    Purposes                                  */  
 /* 2024-12-04   YYS027    1.0.0   FCR-1489 Created                          */  
+/* 2025-05-30   NickT     1.1.0   UWP-35284 DYNAMICPK is a valid loc type   */
 /****************************************************************************/  
   
 CREATE OR ALTER PROCEDURE [RDT].[rdt_1836ExtValid02]  
@@ -87,12 +88,12 @@ BEGIN
             WHERE TaskdetailKey = @cTaskdetailKey
 
             --User is allowed to override the suggested location while scanning the final location on 1836, but the location scanned should meet below requirement.
-            --Loc.LocationType = 'PICK'
+            --Loc.LocationType IN ('DYNAMICPK', 'PICK')
             --Loc.LocationFlag <> 'DAMAGE' / 'HOLD'
             --Loc.PickZone = 'PICK'
             --If the final location does not meet the above requirement, please raise an error 'Invalid Location'.   
-            IF NOT EXISTS(SELECT * FROM loc  (NOLOCK)  WHERE Loc.LocationType = 'PICK' AND Loc.LocationFlag NOT IN ( 'DAMAGE' , 'HOLD')
-               AND Loc.PickZone = 'PICK' AND loc.Loc=@cFinalLOC )
+            IF NOT EXISTS(SELECT 1 FROM loc  (NOLOCK) WHERE Loc.LocationType IN ('DYNAMICPK', 'PICK') AND Loc.LocationFlag NOT IN ( 'DAMAGE' , 'HOLD')
+               AND Loc.PickZone = 'PICK' AND loc.Loc = @cFinalLOC )
             BEGIN
                SET @nErrNo = 230051   
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Invalid Location

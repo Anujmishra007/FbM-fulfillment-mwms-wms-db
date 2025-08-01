@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_TRFPopulateSOH_Wrapper]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [WM].[lsp_TRFPopulateSOH_Wrapper]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -26,8 +21,10 @@ GO
 /* Date         Author   Ver  Purposes                                   */ 
 /* 2021-02-10   mingle01 1.1  Add Big Outer Begin try/Catch              */
 /*                            Execute Login if @c_UserName<>SUSER_SNAME()*/
-/*************************************************************************/   
-CREATE PROCEDURE [WM].[lsp_TRFPopulateSOH_Wrapper]  
+/* 2024-09-25  Wan01    1.2   LFWM-4446 - RG[GIT] Serial Number Solution */
+/*                            - Transfer by Serial Number                */
+/*************************************************************************/
+CREATE OR ALTER PROCEDURE [WM].[lsp_TRFPopulateSOH_Wrapper]
    @c_TransferKey          NVARCHAR(10)
 ,  @b_Success              INT          = 1  OUTPUT   
 ,  @n_Err                  INT          = 0  OUTPUT
@@ -48,7 +45,12 @@ BEGIN
 
    DECLARE @c_TableName                NVARCHAR(50)   = 'TRANSFERDETAIL'
          , @c_SourceType               NVARCHAR(50)   = 'lsp_TRFPopulateSOH_Wrapper'
-             
+         , @c_Refkey1                  NVARCHAR(20)   = ''                          --(Wan01)
+         , @c_Refkey2                  NVARCHAR(20)   = ''                          --(Wan01)
+         , @c_Refkey3                  NVARCHAR(20)   = ''                          --(Wan01)
+         , @c_WriteType                NVARCHAR(50)   = ''                          --(Wan01)
+         , @n_LogWarningNo             INT            = 0                           --(Wan01)
+
          , @c_Facility                 NVARCHAR(5)    = ''
          , @c_FromStorerkey            NVARCHAR(15)   = ''
          , @c_TransferLineNumber       NVARCHAR(20)   = ''
@@ -108,6 +110,8 @@ BEGIN
          , @c_SourceKey                NVARCHAR(15)   = ''
          , @c_LASourceType             NVARCHAR(20)   = 'TRANSFER'
 
+         , @c_ASNFizUpdLotToSerialNo   NVARCHAR(10)   = ''                          --(Wan01)
+
          , @c_SQL                      NVARCHAR(4000) = ''
          , @c_SQLParms                 NVARCHAR(4000) = ''
 
@@ -115,6 +119,20 @@ BEGIN
          , @CUR_PPLTRF                 CURSOR
          , @CUR_INV                    CURSOR
 
+         ,  @CUR_ERRLIST               CURSOR                                       --(Wan01)
+
+   DECLARE  @t_WMSErrorList   TABLE                                                 --(Wan01) - START
+         (  RowID             INT            IDENTITY(1,1)
+         ,  TableName         NVARCHAR(50)   NOT NULL DEFAULT('')
+         ,  SourceType        NVARCHAR(50)   NOT NULL DEFAULT('')
+         ,  Refkey1           NVARCHAR(20)   NOT NULL DEFAULT('')
+         ,  Refkey2           NVARCHAR(20)   NOT NULL DEFAULT('')
+         ,  Refkey3           NVARCHAR(20)   NOT NULL DEFAULT('')
+         ,  WriteType         NVARCHAR(50)   NOT NULL DEFAULT('')
+         ,  LogWarningNo      INT            NOT NULL DEFAULT(0)
+         ,  ErrCode           INT            NOT NULL DEFAULT(0)
+         ,  Errmsg            NVARCHAR(255)  NOT NULL DEFAULT('')
+         )                                                                          --(Wan01) - END
    SET @b_Success = 1
    SET @c_ErrMsg = ''
 
@@ -137,7 +155,15 @@ BEGIN
       EXECUTE AS LOGIN = @c_UserName
    END
    --(mingle01) - END
-   
+   SET @c_Facility = ''                                                             --(Wan01) - START
+   SELECT @c_Facility = T.Facility
+         ,@c_FromStorerkey = T.FromStorerKey
+   FROM [TRANSFER]  T WITH (NOLOCK)
+   WHERE T.TransferKey = @c_TransferKey
+
+   SELECT @c_ASNFizUpdLotToSerialNo = fsgr.Authority                                --(Wan01) - END
+   FROM dbo.fnc_SelectGetRight(@c_Facility, @c_FromStorerkey, '', 'ASNFizUpdLotToSerialNo')AS fsgr
+
    --(mingle01) - START
    BEGIN TRY
       IF @c_ProceedWithWarning = 'N' AND @n_WarningNo  < 1
@@ -145,10 +171,10 @@ BEGIN
          -------------------
          -- Validation Start
          -------------------
-         SET @c_Facility = ''
-         SELECT @c_Facility = T.Facility
-         FROM [TRANSFER] T WITH (NOLOCK) 
-         WHERE T.TransferKey = @c_TransferKey 
+         --SET @c_Facility = ''                                                     --(Wan01) - START
+         --SELECT @c_Facility = T.Facility
+         --FROM [TRANSFER] T WITH (NOLOCK)
+         --WHERE T.TransferKey = @c_TransferKey                                     --(Wan01) - END
 
          IF @c_Facility = ''
          BEGIN
@@ -157,7 +183,7 @@ BEGIN
             SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_err) 
                           + ': Facility Cannot Be BLANK. (lsp_TRFPopulateSOH_Wrapper)'
 
-            EXEC [WM].[lsp_WriteError_List] 
+            EXEC [WM].[lsp_WriteError_List]
                   @i_iErrGroupKey= @n_ErrGroupKey OUTPUT
                ,  @c_TableName   = @c_TableName
                ,  @c_SourceType  = @c_SourceType
@@ -201,7 +227,12 @@ BEGIN
 
          IF EXISTS ( SELECT 1
                      FROM TRANSFERDETAIL TD WITH (NOLOCK)
+                     LEFT OUTER JOIN SKU (NOLOCK) ON  Sku.Storerkey = TD.FromStorerkey --(Wan01) - START
+                                      AND Sku.Sku = TD.FromSku
+                                      AND SerialNoCapture IN ('1','2')
+                                      AND @c_ASNFizUpdLotToSerialNo = '1'              --(Wan01) - END
                      WHERE TD.TransferKey = @c_TransferKey
+                     AND Sku.Sku IS NULL
                      AND  ( (ISNUMERIC(TD.UserDefine04) = 1 AND CONVERT(INT,TD.UserDefine04) > 0
                      OR      ISNULL(RTRIM(TD.UserDefine05),'') > '') ) 
                    )
@@ -251,7 +282,12 @@ BEGIN
                ,@n_OriginalQty = CASE WHEN ISNUMERIC(TD.UserDefine04) = 1 THEN CONVERT(INT,TD.UserDefine04) ELSE 0 END
                ,@c_OriginalLineNo= ISNULL(RTRIM(TD.UserDefine05),'')
          FROM TRANSFERDETAIL TD WITH (NOLOCK)
+         LEFT OUTER JOIN SKU (NOLOCK) ON  Sku.Storerkey = TD.FromStorerkey          --(Wan01) - START
+                           AND Sku.Sku = TD.FromSku
+                           AND SerialNoCapture IN ('1','2')
+                           AND @c_ASNFizUpdLotToSerialNo = '1'                      --(Wan01) - END
          WHERE TD.TransferKey = @c_TransferKey
+         AND SKU.Sku IS NULL
          AND TD.TransferLineNumber > @c_TransferLineNumber
          ORDER BY TD.TransferLineNumber
 
@@ -279,7 +315,7 @@ BEGIN
             END CATCH
          END
 
-         IF @n_OriginalQty > ''
+         IF @n_OriginalQty > 0                                                      --(Wan01)
          BEGIN
             BEGIN TRY
                UPDATE TRANSFERDETAIL
@@ -463,8 +499,14 @@ BEGIN
             ,  Lottable14   = Lottable14 
             ,  Lottable15   = Lottable15
       FROM TRANSFERDETAIL TD WITH (NOLOCK)
+      LEFT OUTER JOIN SKU (NOLOCK) ON  Sku.Storerkey = TD.FromStorerkey             --(Wan01) - START
+                        AND Sku.Sku = TD.FromSku
+                        AND SerialNoCapture IN ('1','2')
+                        AND @c_ASNFizUpdLotToSerialNo = '1'                         --(Wan01) - END
       WHERE TD.TransferKey = @c_TransferKey
       AND   TD.FromQty     > 0
+      AND   TD.UserDefine05 = ''                                                    --(Wan01)
+      AND   SKU.Sku IS NULL                                                         --(Wan01)
       ORDER BY TD.TransferLineNumber
 
       OPEN @CUR_PPLTRF
@@ -880,7 +922,7 @@ BEGIN
          CLOSE @CUR_INV
          DEALLOCATE @CUR_INV
 
-         IF @b_NewLine > 1 AND @n_RemainQty > 0 
+         IF @b_NewLine > 0 AND @n_RemainQty > 0                                     --(Wan01)
          BEGIN
             SET @n_continue = 3
             SET @n_err = 554807
@@ -924,12 +966,31 @@ BEGIN
                                        ,  @c_Lottable12    
                                        ,  @dt_Lottable13  
                                        ,  @dt_Lottable14   
-                                       ,  @dt_Lottable15 
-                                       
-     
+                                       ,  @dt_Lottable15
       END
       CLOSE @CUR_PPLTRF
       DEALLOCATE @CUR_PPLTRF 
+
+      IF @c_ASNFizUpdLotToSerialNo = '1' AND                                        --(Wan01) - START
+         @c_OriginalLineNo <> ''
+      BEGIN
+         IF EXISTS ( SELECT 1
+                     FROM TRANSFERDETAIL TD WITH (NOLOCK)
+                     LEFT OUTER JOIN SKU (NOLOCK) ON  Sku.Storerkey = TD.FromStorerkey
+                                                  AND Sku.Sku = TD.FromSku
+                                                  AND SerialNoCapture IN ('1','2')
+                   )
+         BEGIN
+            SET @n_Err    = 0
+            SET @c_ErrMsg = N'Warning: There is sku with mandatory SerialNo not populated!!!'
+                           + '. (lsp_TRFPopulateSOH_Wrapper)'
+
+            INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3
+                                       , WriteType, LogWarningNo, ErrCode, ErrMsg)
+            VALUES (@c_TableName, @c_SourceType, @c_TransferKey, '', ''
+                  , 'WARNING', 0, @n_Err, @c_Errmsg)
+         END
+      END
    END TRY
    
    BEGIN CATCH
@@ -946,13 +1007,13 @@ BEGIN
    IF @n_Continue=3  -- Error Occured - Process And Return
    BEGIN
       SET @b_Success = 0
-      IF  @@TRANCOUNT = 1 AND @@TRANCOUNT > @n_StartTCnt
+      IF  @n_StartTCnt = 0 AND @@TRANCOUNT > @n_StartTCnt                           --(Wan01)
       BEGIN
          ROLLBACK TRAN
       END
       ELSE
       BEGIN
-         WHILE @@TRANCOUNT > @n_StartTCnt
+         WHILE @@TRANCOUNT > 0
          BEGIN
             COMMIT TRAN
          END
@@ -964,11 +1025,66 @@ BEGIN
    ELSE
    BEGIN
       SET @b_Success = 1
-      WHILE @@TRANCOUNT > @n_StartTCnt
+      WHILE @@TRANCOUNT > 0
       BEGIN
          COMMIT TRAN
       END
    END
+
+   SET @CUR_ERRLIST = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR                       --(Wan01) - START
+   SELECT   twl.TableName
+         ,  twl.SourceType
+         ,  twl.Refkey1
+         ,  twl.Refkey2
+         ,  twl.Refkey3
+         ,  twl.WriteType
+         ,  twl.LogWarningNo
+         ,  twl.ErrCode
+         ,  twl.Errmsg
+   FROM @t_WMSErrorList AS twl
+   ORDER BY twl.RowID
+
+   OPEN @CUR_ERRLIST
+
+   FETCH NEXT FROM @CUR_ERRLIST INTO   @c_TableName
+                                     , @c_SourceType
+                                     , @c_Refkey1
+                                     , @c_Refkey2
+                                     , @c_Refkey3
+                                     , @c_WriteType
+                                     , @n_LogWarningNo
+                                     , @n_Err
+                                     , @c_Errmsg
+
+   WHILE @@FETCH_STATUS <> -1
+   BEGIN
+      EXEC [WM].[lsp_WriteError_List]
+         @i_iErrGroupKey= @n_ErrGroupKey OUTPUT
+      ,  @c_TableName   = @c_TableName
+      ,  @c_SourceType  = @c_SourceType
+      ,  @c_Refkey1     = @c_Refkey1
+      ,  @c_Refkey2     = @c_Refkey2
+      ,  @c_Refkey3     = @c_Refkey3
+      ,  @n_LogWarningNo= @n_LogWarningNo
+      ,  @c_WriteType   = @c_WriteType
+      ,  @n_err2        = @n_err
+      ,  @c_errmsg2     = @c_errmsg
+      ,  @b_Success     = @b_Success
+      ,  @n_err         = @n_err
+      ,  @c_errmsg      = @c_errmsg
+
+      FETCH NEXT FROM @CUR_ERRLIST INTO   @c_TableName
+                                        , @c_SourceType
+                                        , @c_Refkey1
+                                        , @c_Refkey2
+                                        , @c_Refkey3
+                                        , @c_WriteType
+                                        , @n_LogWarningNo
+                                        , @n_Err
+                                        , @c_Errmsg
+   END
+   CLOSE @CUR_ERRLIST
+   DEALLOCATE @CUR_ERRLIST                                                          --(Wan01) - END
 
    WHILE @@TRANCOUNT < @n_StartTCnt
    BEGIN

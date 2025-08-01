@@ -46,6 +46,7 @@ GO
 /* 2018-10-02 3.0  James    WMS-6003 Add ToLoc check digit (james07)    */ 
 /* 2023-12-14 3.1  YeeKung  WMS-23085 Extended ID length (yeekung01)    */
 /* 2024-04-08 3.2  Dennis   UWP-16906 Check Digit                       */
+/* 2025-06-18 0.0  Jackc    !!!Cutover. Use V0 repo for work!!!         */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_Replenish] (

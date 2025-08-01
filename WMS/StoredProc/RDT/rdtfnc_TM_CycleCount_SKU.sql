@@ -50,6 +50,8 @@ GO
 /* 2024-11-12 3.9    Dennis     UWP-26828 Fix Conversion bug from str to dtime  */
 /* 2024-11-21 4.0.0  NLT03      UWP-27346 Additional textbox displays           */
 /* 2024-11-21 4.1.0  PXL003     UWP-27584 Fix SKU/UPC decode                    */
+/* 2025-07-07 4.2.0  James      FCR-6059 Add ExtOptionSP in step 3 (james18)    */
+/* 2025-07-18 4.3.0  NickT      UWP-37598 Update TaskDetail.EndTime when CC done*/
 /********************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_CycleCount_SKU] (
@@ -250,7 +252,9 @@ DECLARE
    @nBulkSNO               INT,
    @nBulkSNOQTY            INT,
    @cDiffQTYScanSNO        NVARCHAR( 1),
-   
+   @cExtOptionSP           NVARCHAR( 20),
+   @tExtOption             VARIABLETABLE,
+
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),
    @cInField03 NVARCHAR( 60),   @cOutField03 NVARCHAR( 60),
@@ -365,7 +369,6 @@ SELECT
    -- Start of Common Variable use by UCC, SKU, SingleScan CC
    @cExtendedDisplayQtySP  = V_String29,
    @cDiffQTYScanSNO        = V_String30,
-
    @cAreakey               = V_String32,
    @cTTMStrategykey        = V_String33,
    @cTTMTasktype           = V_String34,
@@ -377,6 +380,7 @@ SELECT
    @cTMCCAllowPostAdj      = V_String40,
    @cSerialNoCapture       = V_String41,
    @cLottableCode          = V_String42,  
+   @cExtOptionSP           = V_String43,
 
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,
@@ -474,6 +478,10 @@ BEGIN
    SET @cDiffQTYScanSNO = rdt.RDTGetConfig( @nFunc, 'DiffQTYScanSNO', @cStorerKey)
 
    SET @cCCGroupExLottable05 = rdt.RDTGetConfig( @nFunc, 'CCGroupExLottable05', @cStorerkey)
+
+   SET @cExtOptionSP = rdt.RDTGetConfig( @nFunc, 'ExtOptionSP', @cStorerKey)
+   IF @cExtOptionSP = '0'
+      SET @cExtOptionSP = ''
 
    --IF @nStep = 0 GOTO Step_0   -- TM CC- SKU
    IF @nStep = 1 GOTO Step_1   -- Scn = 2940. SKU
@@ -3136,200 +3144,279 @@ BEGIN
       END
       ELSE IF @cOptions = '2'
       BEGIN
-         -- Get QTY available
-         SET @nQTYAvail = 0
-         SELECT @nQTYAvail = ISNULL(SUM(QTY - QTYAllocated - QTYPicked), 0)
-         FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
-         WHERE LOC = @cLoc
+         -- Variance count  
+         IF @cExtOptionSP <> ''  
+         BEGIN  
+            IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtOptionSP AND type = 'P')  
+            BEGIN  
+               SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtOptionSP) +  
+                  ' @nMobile, @nFunc OUTPUT, @cLangCode, @nStep OUTPUT, @nScn OUTPUT, @nInputKey, @cFacility, @cStorerKey, @cTaskDetailKey, @cCCKey, ' + 
+                  ' @cCCDetailKey, @cLoc, @cID, @cSKU, @nActQTY, @cOptions, ' +  
+                  ' @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05, ' +  
+                  ' @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10, ' +  
+                  ' @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, ' +  
+                  ' @tExtOption, @nErrNo OUTPUT, @cErrMsg OUTPUT '
+    
+               SET @cSQLParam =  
+                  '@nMobile         INT, ' +  
+                  '@nFunc           INT        OUTPUT,' +  
+                  '@cLangCode       NVARCHAR( 3), ' +  
+                  '@nStep           INT         OUTPUT, ' +  
+                  '@nScn            INT         OUTPUT, ' +  
+                  '@nInputKey       INT, ' +  
+                  '@cFacility       NVARCHAR( 5),  ' +  
+                  '@cStorerKey      NVARCHAR( 15), ' +  
+                  '@cTaskDetailKey  NVARCHAR( 10), ' +  
+                  '@cCCKey          NVARCHAR( 10), ' +  
+                  '@cCCDetailKey    NVARCHAR( 10), ' +  
+                  '@cLoc            NVARCHAR( 10), ' +  
+                  '@cID             NVARCHAR( 18), ' +  
+                  '@cSKU            NVARCHAR( 20), ' +  
+                  '@nActQTY         INT, ' +  
+                  '@cOptions        NVARCHAR( 1), ' +
+                  '@cLottable01     NVARCHAR( 18), ' +  
+                  '@cLottable02     NVARCHAR( 18), ' +  
+                  '@cLottable03     NVARCHAR( 18), ' +  
+                  '@dLottable04     DATETIME, ' +  
+                  '@dLottable05     DATETIME, ' +  
+                  '@cLottable06     NVARCHAR( 30), ' +  
+                  '@cLottable07     NVARCHAR( 30), ' +  
+                  '@cLottable08     NVARCHAR( 30), ' +  
+                  '@cLottable09     NVARCHAR( 30), ' +  
+                  '@cLottable10     NVARCHAR( 30), ' +  
+                  '@cLottable11     NVARCHAR( 30), ' +  
+                  '@cLottable12     NVARCHAR( 30), ' +  
+                  '@dLottable13     DATETIME, ' +  
+                  '@dLottable14     DATETIME, ' +  
+                  '@dLottable15     DATETIME, ' +  
+                  '@tExtOption      VARIABLETABLE READONLY, ' +
+                  '@nErrNo          INT           OUTPUT, ' +
+                  '@cErrMsg         NVARCHAR( 20) OUTPUT  '
+  
+               EXEC sp_ExecuteSQL @cSQL, @cSQLParam,  
+                  @nMobile, @nFunc OUTPUT, @cLangCode, @nStep OUTPUT, @nScn OUTPUT, @nInputKey, @cFacility, @cStorerKey, @cTaskDetailKey, @cCCKey, 
+                  @cCCDetailKey, @cLoc, @cID, @cSKU, @nActQTY,  @cOptions, 
+                  @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,  
+                  @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,  
+                  @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,  
+                  @tExtOption, @nErrNo OUTPUT, @cErrMsg OUTPUT
 
-         SELECT @cLOT = C.LOT, @cLOC = C.LOC, @cID = C.ID, @nSystemQty =
-                CASE WHEN C.Status = '4' THEN 0
-                     WHEN C.Status = '2' THEN (C.SystemQTY - C.QTY)
-                     WHEN C.SystemQTY = 0 THEN
-              /*
-                  1. blank count sheet, systemqty = 0
-                  2. count sheet
-                   if include empty loc, systemqty = 0 (for all locations)
-                   if not include empty loc, systemqty = lotxlocxid
-                  3. ucc count sheet
-                   regardless include empty loc, systemqty = ucc.qty / lotxlocxid
-                  4. RDT TM CC, systemqty = ucc.qty / lotxlocxid
-               */
-                     (SELECT ISNULL( SUM( QTY-QTYAllocated-QTYPicked), 0) FROM dbo.LotxLocxID WITH (NOLOCK) WHERE LOT = C.LOT AND LOC = C.LOC AND ID = C.ID)
-              ELSE ISNULL(SUM(C.SystemQTY), 0) END
-         FROM dbo.CCDetail C WITH (NOLOCK)
-         INNER JOIN LOC L WITH (NOLOCK) ON (C.LOC = L.LOC)
-         WHERE C.CCKey  = @cCCKey
-           AND C.Loc    = @cLoc
-           AND C.Status < '9'
-        GROUP BY C.STATUS, C.SYSTEMQTY, C.LOT, C.LOC, C.ID, C.QTY
-
-         -- Check if adjust out more then available
-         IF @nSystemQty > @nQTYAvail
-         BEGIN
-            SET @cAlertMessage =
-               'Adjust out qty (' + CAST( @nSystemQty AS NVARCHAR( 10)) + ') more then available QTY (' + CAST( @nQTYAvail AS NVARCHAR( 10)) + ')'
-            EXEC nspLogAlert
-                 @c_modulename       = 'TMCC'
-               , @c_AlertMessage     = @cAlertMessage
-               , @n_Severity         = '5'
-               , @b_success          = @bSuccess
-               , @n_err              = @n_Err
-               , @c_errmsg           = @c_ErrMsg
-               , @c_Activity         = 'CC'
-               , @c_Storerkey        = @cStorerkey
-               , @c_SKU              = @cSKU
-               , @c_UOM              = ''
-               , @c_UOMQty           = ''
-               , @c_Qty              = @nSystemQty
-               , @c_Lot              = @cLot
-               , @c_Loc              = @cLoc
-               , @c_ID               = @cID
-               , @c_TaskDetailKey    = @cTaskDetailKey
-               , @c_UCCNo            = ''
-
-            UPDATE dbo.TaskDetail
-            SET Status = '9'
-                ,TrafficCop = NULL
-                ,EditDate = GetDate()
-            WHERE TaskDetailKey = @cTaskDetailKey
-
-            IF @@ERROR <> ''
-            BEGIN
-               SET @nErrNo = 74530
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'UpdTaskDetFailed'
-               GOTO Step_3_Fail
-            END
-
-            -- GOTO Alert Screen
-            SET @nScn = @nScn + 1
-            SET @nStep = @nStep + 1
-
-            --GOTO Quit
-         END
+               IF @nErrNo <> 0
+                  GOTO Quit  
+            END  
+         END  
          ELSE
          BEGIN
-            -- Update CCDetail Remaining Loc , ID to Status = '5'  
-            UPDATE dbo.CCDetail WITH (ROWLOCK)  
-               SET FinalizeFlag = 'Y'  
-                 , FinalizeFlag_Cnt2 = CASE WHEN Counted_Cnt2 > 0 THEN 'Y' END  
-                 , FinalizeFlag_Cnt3 = CASE WHEN Counted_Cnt3 > 0 THEN 'Y' END  
-            WHERE CCKey  = @cCCKey  
-              AND Loc    = @cLoc  
-              AND Status < '9'  
-  
-            IF @@ERROR <> ''  
-            BEGIN  
-               SET @nErrNo = 74511  
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'UPDCCDetFail'  
-               GOTO Step_3_Fail  
-            END  
-            
-            -- Update CCDetail Remaining Loc , ID to Status = '5'
-            UPDATE dbo.CCDetail WITH (ROWLOCK)
-               SET FinalizeFlag = 'Y'
-            WHERE CCKey  = @cCCKey
-              AND Loc    = @cLoc
-              AND Status < '9'
+            -- Get QTY available
+            SET @nQTYAvail = 0
+            SELECT @nQTYAvail = ISNULL(SUM(QTY - QTYAllocated - QTYPicked), 0)
+            FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
+            WHERE LOC = @cLoc
 
-            IF @@ERROR <> ''
+            SELECT @cLOT = C.LOT, @cLOC = C.LOC, @cID = C.ID, @nSystemQty =
+                   CASE WHEN C.Status = '4' THEN 0
+                        WHEN C.Status = '2' THEN (C.SystemQTY - C.QTY)
+                        WHEN C.SystemQTY = 0 THEN
+                 /*
+                     1. blank count sheet, systemqty = 0
+                     2. count sheet
+                      if include empty loc, systemqty = 0 (for all locations)
+                      if not include empty loc, systemqty = lotxlocxid
+                     3. ucc count sheet
+                      regardless include empty loc, systemqty = ucc.qty / lotxlocxid
+                     4. RDT TM CC, systemqty = ucc.qty / lotxlocxid
+                  */
+                        (SELECT ISNULL( SUM( QTY-QTYAllocated-QTYPicked), 0) FROM dbo.LotxLocxID WITH (NOLOCK) WHERE LOT = C.LOT AND LOC = C.LOC AND ID = C.ID)
+                 ELSE ISNULL(SUM(C.SystemQTY), 0) END
+            FROM dbo.CCDetail C WITH (NOLOCK)
+            INNER JOIN LOC L WITH (NOLOCK) ON (C.LOC = L.LOC)
+            WHERE C.CCKey  = @cCCKey
+              AND C.Loc    = @cLoc
+              AND C.Status < '9'
+           GROUP BY C.STATUS, C.SYSTEMQTY, C.LOT, C.LOC, C.ID, C.QTY
+
+            -- Check if adjust out more then available
+            IF @nSystemQty > @nQTYAvail
             BEGIN
-               SET @nErrNo = 74511
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'UPDCCDetFail'
-               GOTO Step_3_Fail
+               SET @cAlertMessage =
+                  'Adjust out qty (' + CAST( @nSystemQty AS NVARCHAR( 10)) + ') more then available QTY (' + CAST( @nQTYAvail AS NVARCHAR( 10)) + ')'
+               EXEC nspLogAlert
+                    @c_modulename       = 'TMCC'
+                  , @c_AlertMessage     = @cAlertMessage
+                  , @n_Severity         = '5'
+                  , @b_success          = @bSuccess
+                  , @n_err              = @n_Err
+                  , @c_errmsg           = @c_ErrMsg
+                  , @c_Activity         = 'CC'
+                  , @c_Storerkey        = @cStorerkey
+                  , @c_SKU              = @cSKU
+                  , @c_UOM              = ''
+                  , @c_UOMQty           = ''
+                  , @c_Qty              = @nSystemQty
+                  , @c_Lot              = @cLot
+                  , @c_Loc              = @cLoc
+                  , @c_ID               = @cID
+                  , @c_TaskDetailKey    = @cTaskDetailKey
+                  , @c_UCCNo            = ''
+
+               UPDATE dbo.TaskDetail
+               SET Status = '9'
+                  ,EndTime = GetDate()
+                  ,TrafficCop = NULL
+                  ,EditWho = @cUserName
+                  ,EditDate = GetDate()
+               WHERE TaskDetailKey = @cTaskDetailKey
+
+               IF @@ERROR <> ''
+               BEGIN
+                  SET @nErrNo = 74530
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'UpdTaskDetFailed'
+                  GOTO Step_3_Fail
+               END
+
+               -- GOTO Alert Screen
+               SET @nScn = @nScn + 1
+               SET @nStep = @nStep + 1
+
+               --GOTO Quit
             END
-
-            IF  @cTTMTasktype = 'CCSUP' OR @cTMCCAllowPostAdj = '1' 
-            BEGIN  
-               SET @nCountNo = 1    
-               SELECT TOP 1 @nCountNo =     
-               CASE WHEN Counted_Cnt3 > 0 THEN 3    
-                     WHEN Counted_Cnt2 > 0 THEN 2     
-                     ELSE 1 END    
-               FROM dbo.CCDetail WITH (NOLOCK)    
-               WHERE CCKey   = @cCCKey        
-               AND CCSheetNo = @cTaskDetailKey    
-               ORDER BY CCDetailKey DESC    
-               
-               EXEC ispGenCCAdjustmentPost_MultiCnt  
-                       @c_StockTakeKey = @cCCKey  
-                     , @c_CountNo      = @nCountNo  
-                     , @b_success      = @bSuccess OUTPUT  
-                     , @c_TaskDetailKey = @cTaskDetailKey  
-
-               IF @bSuccess = 0  
+            ELSE
+            BEGIN
+               -- Update CCDetail Remaining Loc , ID to Status = '5'  
+               UPDATE dbo.CCDetail WITH (ROWLOCK)  
+                  SET FinalizeFlag = 'Y'  
+                    , FinalizeFlag_Cnt2 = CASE WHEN Counted_Cnt2 > 0 THEN 'Y' END  
+                    , FinalizeFlag_Cnt3 = CASE WHEN Counted_Cnt3 > 0 THEN 'Y' END  
+               WHERE CCKey  = @cCCKey  
+                 AND Loc    = @cLoc  
+                 AND Status < '9'  
+  
+               IF @@ERROR <> ''  
                BEGIN  
-                  SET @nErrNo = 74524  
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'CCPostingFail'  
+                  SET @nErrNo = 74511  
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'UPDCCDetFail'  
                   GOTO Step_3_Fail  
                END  
-            END  
+            
+               -- Update CCDetail Remaining Loc , ID to Status = '5'
+               UPDATE dbo.CCDetail WITH (ROWLOCK)
+                  SET FinalizeFlag = 'Y'
+               WHERE CCKey  = @cCCKey
+                 AND Loc    = @cLoc
+                 AND Status < '9'
 
-            UPDATE dbo.TaskDetail WITH (ROWLOCK)
-            SET Status = '9'
-                ,TrafficCop = NULL
-                ,EditDate = GetDate()
-            WHERE TaskDetailKey = @cTaskDetailKey
-
-            IF @@ERROR <> ''
-            BEGIN
-               SET @nErrNo = 74512
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'UpdTaskDetFailed'
-               GOTO Step_3_Fail
-            END
-
-            UPDATE AL WITH (ROWLOCK) SET
-               AL.STATUS = '9'
-            FROM dbo.TaskDetail TD
-            JOIN dbo.Alert AL ON TD.Message03 = AL.AlertKey
-            WHERE TD.TaskDetailKey = @cTaskDetailKey
-            AND   TD.TaskType = 'CCSUP'
-            AND   TD.Status = '9'
-
-            IF @@ERROR <> ''
-            BEGIN
-               SET @nErrNo = 74529
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'UPD ALERT FAIL'
-               GOTO Step_3_Fail
-            END
-
-            IF EXISTS ( SELECT 1 FROM dbo.CCDetail WITH (NOLOCK)
-                           WHERE CCKey = @cCCKey
-                           AND Loc = @cLoc
-                           AND CCSheetNo = @cTaskDetailKey
-                           GROUP BY Loc
-                           HAVING SUM( SystemQty) <> SUM( Qty))
-            BEGIN
-               IF @cTTMTasktype <> 'CCSUP'
+               IF @@ERROR <> ''
                BEGIN
-                  -- Go to ALERT Message Screen
-                  SET @cCCType = 'SKU'
-                  SET @c_ModuleName = 'TMCC'
-                  SET @c_Activity  = 'CC'
+                  SET @nErrNo = 74511
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'UPDCCDetFail'
+                  GOTO Step_3_Fail
+               END
 
-                  EXEC [RDT].[rdt_TM_CycleCount_Alert]
-                      @nMobile         = @nMobile
-                     ,@cCCKey          = @cCCKey
-                     ,@cStorerKey      = @cStorerKey
-                     ,@cLOC            = @cLOC
-                     ,@cID             = @cID
-                     ,@cSKU            = @cSKU
-                     ,@cUserName       = @cUserName
-                     ,@cModuleName     = @c_ModuleName
-                     ,@cActivity       = @c_Activity
-                     ,@cCCType         = @cCCType
-                     ,@cTaskDetailKey  = @cTaskDetailKey
-                     ,@cLangCode       = @cLangCode
-                     ,@nErrNo          = @nErrNo
-                     ,@cErrMsg         = @cErrMsg
+               IF  @cTTMTasktype = 'CCSUP' OR @cTMCCAllowPostAdj = '1' 
+               BEGIN  
+                  SET @nCountNo = 1    
+                  SELECT TOP 1 @nCountNo =     
+                  CASE WHEN Counted_Cnt3 > 0 THEN 3    
+                        WHEN Counted_Cnt2 > 0 THEN 2     
+                        ELSE 1 END    
+                  FROM dbo.CCDetail WITH (NOLOCK)    
+                  WHERE CCKey   = @cCCKey        
+                  AND CCSheetNo = @cTaskDetailKey    
+                  ORDER BY CCDetailKey DESC    
+               
+                  EXEC ispGenCCAdjustmentPost_MultiCnt  
+                          @c_StockTakeKey = @cCCKey  
+                        , @c_CountNo      = @nCountNo  
+                        , @b_success      = @bSuccess OUTPUT  
+                        , @c_TaskDetailKey = @cTaskDetailKey  
 
-                  -- GOTO Next Screen
-                  SET @nScn = @nScn + 1
-                  SET @nStep = @nStep + 1
+                  IF @bSuccess = 0  
+                  BEGIN  
+                     SET @nErrNo = 74524  
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'CCPostingFail'  
+                     GOTO Step_3_Fail  
+                  END  
+               END  
 
-                  --(james08)
-                  IF @cSkipAlertScreen = '1'
-                     GOTO Step_4
+               UPDATE dbo.TaskDetail WITH (ROWLOCK)
+               SET Status = '9'
+                  ,EndTime = GetDate()
+                  ,TrafficCop = NULL
+                  ,EditWho = @cUserName
+                  ,EditDate = GetDate()
+               WHERE TaskDetailKey = @cTaskDetailKey
+
+               IF @@ERROR <> ''
+               BEGIN
+                  SET @nErrNo = 74512
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'UpdTaskDetFailed'
+                  GOTO Step_3_Fail
+               END
+
+               UPDATE AL WITH (ROWLOCK) SET
+                  AL.STATUS = '9'
+               FROM dbo.TaskDetail TD
+               JOIN dbo.Alert AL ON TD.Message03 = AL.AlertKey
+               WHERE TD.TaskDetailKey = @cTaskDetailKey
+               AND   TD.TaskType = 'CCSUP'
+               AND   TD.Status = '9'
+
+               IF @@ERROR <> ''
+               BEGIN
+                  SET @nErrNo = 74529
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'UPD ALERT FAIL'
+                  GOTO Step_3_Fail
+               END
+
+               IF EXISTS ( SELECT 1 FROM dbo.CCDetail WITH (NOLOCK)
+                              WHERE CCKey = @cCCKey
+                              AND Loc = @cLoc
+                              AND CCSheetNo = @cTaskDetailKey
+                              GROUP BY Loc
+                              HAVING SUM( SystemQty) <> SUM( Qty))
+               BEGIN
+                  IF @cTTMTasktype <> 'CCSUP'
+                  BEGIN
+                     -- Go to ALERT Message Screen
+                     SET @cCCType = 'SKU'
+                     SET @c_ModuleName = 'TMCC'
+                     SET @c_Activity  = 'CC'
+
+                     EXEC [RDT].[rdt_TM_CycleCount_Alert]
+                         @nMobile         = @nMobile
+                        ,@cCCKey          = @cCCKey
+                        ,@cStorerKey      = @cStorerKey
+                        ,@cLOC            = @cLOC
+                        ,@cID             = @cID
+                        ,@cSKU            = @cSKU
+                        ,@cUserName       = @cUserName
+                        ,@cModuleName     = @c_ModuleName
+                        ,@cActivity       = @c_Activity
+                        ,@cCCType         = @cCCType
+                        ,@cTaskDetailKey  = @cTaskDetailKey
+                        ,@cLangCode       = @cLangCode
+                        ,@nErrNo          = @nErrNo
+                        ,@cErrMsg         = @cErrMsg
+
+                     -- GOTO Next Screen
+                     SET @nScn = @nScn + 1
+                     SET @nStep = @nStep + 1
+
+                     --(james08)
+                     IF @cSkipAlertScreen = '1'
+                        GOTO Step_4
+                  END
+                  ELSE
+                  BEGIN
+                     -- GOTO Main Module Get Next Task Screen Screen
+                     SET @cCCOption           = ''
+                     SET @cNewSKUorLottable   = ''
+                     SET @cHasLottable        = ''
+
+                     SET @nFunc = 1766
+                     SET @nScn = 2875
+                     SET @nStep = 6
+                  END
                END
                ELSE
                BEGIN
@@ -3342,32 +3429,21 @@ BEGIN
                   SET @nScn = 2875
                   SET @nStep = 6
                END
-            END
-            ELSE
-            BEGIN
-               -- GOTO Main Module Get Next Task Screen Screen
-               SET @cCCOption           = ''
-               SET @cNewSKUorLottable   = ''
-               SET @cHasLottable        = ''
 
-               SET @nFunc = 1766
-               SET @nScn = 2875
-               SET @nStep = 6
-            END
+               -- (james09)
+               UPDATE dbo.Loc WITH (ROWLOCK) SET
+                  LastCycleCount = GETDATE(),
+                  EditWho = @cUserName,
+                  EditDate = GETDATE()
+               WHERE Loc = @cLoc
+               AND   Facility = @cFacility
 
-            -- (james09)
-            UPDATE dbo.Loc WITH (ROWLOCK) SET
-               LastCycleCount = GETDATE(),
-               EditWho = @cUserName,
-               EditDate = GETDATE()
-            WHERE Loc = @cLoc
-            AND   Facility = @cFacility
-
-            IF @@ERROR <> 0
-            BEGIN
-               SET @nErrNo = 74535
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')  -- Upd LastCC Err
-               GOTO Step_3_Fail
+               IF @@ERROR <> 0
+               BEGIN
+                  SET @nErrNo = 74535
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')  -- Upd LastCC Err
+                  GOTO Step_3_Fail
+               END
             END
          END
       END
@@ -6424,7 +6500,6 @@ BEGIN
       V_String28       = @cTMCCVarianceCountSP,
       V_String29       = @cExtendedDisplayQtySP,
       V_String30       = @cDiffQTYScanSNO, 
-
       V_String32       = @cAreakey,  
       V_String33       = @cTTMStrategykey,  
       V_String34       = @cTTMTasktype,  
@@ -6436,6 +6511,7 @@ BEGIN
       V_String40       = @cTMCCAllowPostAdj,
       V_String41       = @cSerialNoCapture,
       V_String42       = @cLottableCode,  
+      V_String43       = @cExtOptionSP,
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,

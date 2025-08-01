@@ -81,5 +81,10 @@ execute rdt.rdtAddMsg 217975, 10, '217975Lottable03Mismatch ',             'us_e
 execute rdt.rdtAddMsg 217976, 10, '217976LPNUsedDiffPO',                   'us_english', 600, 0, '218076 LPN Used Diff PO'
 execute rdt.rdtAddMsg 217977, 10, '217977OverReceipt',                     'us_english', 600, 0, '218077 Over Receipt'
 
+execute rdt.rdtAddMsg 218003, 10, '218003Multi BU on ID',                  'us_english', 600, 0, '218003 Multi BU on ID'
+
+execute rdt.rdtAddMsg 218044, 10, '218044 LPN exists in inv',              'us_english', 600, 0, '218044 LPN exists in inv'
+execute rdt.rdtAddMsg 218045, 10, '218045 LPN exists in inv',              'us_english', 600, 0, '218045 Multi BU on ID'
+
 SELECT * FROM rdt.rdtMsg WHERE Message_ID BETWEEN 217901 AND 218400
 

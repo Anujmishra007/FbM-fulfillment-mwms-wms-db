@@ -9,7 +9,8 @@ GO
 /* Copyright      : LFLogistics                                               */
 /*                                                                            */
 /* Date         Rev  Author     Purposes                                      */
-/* 2023-05-17   1.0  yeekung   TPS-703 Created                               */
+/* 2023-05-17   1.0  yeekung   TPS-703 Created                                */
+/* 2025-01-16   1.1  yeekung   UWP-28824 Correct the QTY when cast to JSON    */ 
 /******************************************************************************/
 
 CREATE OR ALTER PROC [API].[isp_TPS_DecodeSP05] (
@@ -74,14 +75,14 @@ BEGIN
 
       SET @jResult = ( SELECT
                         @cSKU AS SKU,
-                        CASE @cPackUOM
-                           WHEN Pack.PackUOM1  THEN Pack.CaseCNT
-                           WHEN Pack.PackUOM2 THEN Pack.InnerPack
-                           WHEN Pack.PackUOM3 THEN Pack.QTY
-                           WHEN Pack.PackUOM4 THEN Pack.Pallet
-                           WHEN Pack.PackUOM8 THEN Pack.OtherUnit1
-                           WHEN Pack.PackUOM9 THEN Pack.OtherUnit2
-                        ELSE 1 END AS QTY
+                        CAST (CASE @cPackUOM  
+                           WHEN Pack.PackUOM1  THEN Pack.CaseCNT  
+                           WHEN Pack.PackUOM2 THEN Pack.InnerPack  
+                           WHEN Pack.PackUOM3 THEN Pack.QTY  
+                           WHEN Pack.PackUOM4 THEN Pack.Pallet  
+                           WHEN Pack.PackUOM8 THEN Pack.OtherUnit1  
+                           WHEN Pack.PackUOM9 THEN Pack.OtherUnit2  
+                        ELSE 1 END AS INT) AS QTY 
                         FROM dbo.Pack Pack WITH (NOLOCK) 
                         WHERE packkey= @cPackKey
                         FOR JSON AUTO, INCLUDE_NULL_VALUES)   
@@ -156,7 +157,7 @@ BEGIN
                WHERE SerialNo = @cBarcode
                AND storerKey = @cStorerKey )
          BEGIN
-            SET @n_Err = 1000101
+            SET @n_Err = 1000102
 	         SET @c_ErrMsg = CAST(@n_Err AS NVARCHAR(20))+'Err Insert Duplicate SerialNO'
 
             SET @jResult = (SELECT '' AS SKU

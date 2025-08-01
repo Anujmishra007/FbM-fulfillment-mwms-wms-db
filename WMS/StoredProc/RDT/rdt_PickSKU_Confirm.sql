@@ -6,21 +6,22 @@ GO
 
 /************************************************************************/
 /* Store procedure: rdt_PickSKU_Confirm                                 */
-/* Copyright      : LFLogistics                                         */
+/* Copyright      : Maersk                                              */
 /*                                                                      */
 /* Purpose: Pick confirm task                                           */
 /*                                                                      */
-/* Date        Rev  Author      Purposes                                */
-/* 21-06-2016  1.0  Ung         SOS372037 Created                       */
-/* 21-02-2017  1.1  Ung         WMS-1715 Add balance type               */
-/* 03-10-2017  1.2  Ung         WMS-3052 Add VerifyID                   */
-/* 26-04-2019  1.3  Ung         INC0678825 Fix SKU declare              */
-/* 12-03-2019  1.4  YeeKung     WMS-8281 Add eventlog                   */  
-/* 16-10-2019  1.5  James       WMS-10860 Add move to dropid (james01)  */  
-/* 22-12-2020  1.6  YeeKung     WMS-15995 Add PickZone (yeekung01)      */
-/* 24-05-2022  1.7  YeeKung     Add Close Cursor (yeekung02)            */
-/* 10-07-2023  1.8  YeeKUng     JSM-162074 Fix Join bug (yeekung03)     */ 
-/* 18-06-2023  1.9  Ung         WMS-22819 Add UpdatePackDetail          */
+/* Date        Rev   Author      Purposes                                */
+/* 21-06-2016  1.0   Ung         SOS372037 Created                       */
+/* 21-02-2017  1.1   Ung         WMS-1715 Add balance type               */
+/* 03-10-2017  1.2   Ung         WMS-3052 Add VerifyID                   */
+/* 26-04-2019  1.3   Ung         INC0678825 Fix SKU declare              */
+/* 12-03-2019  1.4   YeeKung     WMS-8281 Add eventlog                   */  
+/* 16-10-2019  1.5   James       WMS-10860 Add move to dropid (james01)  */  
+/* 22-12-2020  1.6   YeeKung     WMS-15995 Add PickZone (yeekung01)      */
+/* 24-05-2022  1.7   YeeKung     Add Close Cursor (yeekung02)            */
+/* 10-07-2023  1.8   YeeKUng     JSM-162074 Fix Join bug (yeekung03)     */ 
+/* 18-06-2023  1.9   Ung         WMS-22819 Add UpdatePackDetail          */
+/* 27-03-2025  2.0.0 JCH507      UWP-32111 Not update short status to 4  */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE rdt.rdt_PickSKU_Confirm
@@ -500,6 +501,26 @@ BEGIN
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKDtl Fail
                GOTO RollBackTran
             END
+            --V2.0.0 start
+            -- Short pick
+            IF @cType = 'SHORT'
+            BEGIN
+               -- Confirm PickDetail
+               UPDATE dbo.PickDetail WITH (ROWLOCK) SET
+                  Status = @cShortStatus,
+                  DropID = '',
+                  EditDate = GETDATE(),
+                  EditWho  = SUSER_SNAME(),
+                  TrafficCop = NULL
+               WHERE PickDetailKey = @cNewPickDetailKey
+               IF @@ERROR <> 0
+               BEGIN
+                  SET @nErrNo = 102015
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKDtl Fail
+                  GOTO RollBackTran
+               END
+            END
+            --V2.0.0 end
    
             SET @nQTY_Move = @nQTY_Bal
             SET @nQTY_Bal = 0 -- Reduce balance

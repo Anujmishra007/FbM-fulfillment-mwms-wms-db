@@ -15,6 +15,7 @@ GO
 /* Date        Rev  Author   Purposes                                   */
 /* 2020-02-13  1.0  YeeKung  WMS-12162 Created                          */
 /* 2023-02-10  1.1  YeeKung  WMS-21738 Add UCC column (yeekung01)        */
+/* 2025-04-01  1.2.0 NLT013  UWP-32212 Loc is missing for new PackDetail*/
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1641ExtUpdSP07] (
@@ -47,11 +48,13 @@ BEGIN
             @nQty            INT,
             @cOtherPalletKey NVARCHAR( 30) = '',
             @cRoute          NVARCHAR( 20) = '',
-            @cOption         NVARCHAR( 1) = ''
+            @cOption         NVARCHAR( 1) = '',
+            @cDropLoc        NVARCHAR(10)
 
 
    SELECT @nStep = Step,
-          @nInputKey = InputKey
+          @nInputKey = InputKey,
+          @cDropLoc = V_String5
    FROM RDT.RDTMobRec WITH (NOLOCK)
    WHERE Mobile = @nMobile
 
@@ -126,9 +129,9 @@ BEGIN
             WHERE OrderKey = @cOrderKey
 
             INSERT INTO dbo.PalletDetail
-            (PalletKey, PalletLineNumber, CaseId, StorerKey, Sku, Qty, UserDefine01, UserDefine02)
+            (Loc, PalletKey, PalletLineNumber, CaseId, StorerKey, Sku, Qty, UserDefine01, UserDefine02)
             VALUES
-            (@cDropID, 0, @cUCCNo, @cStorerKey, @cSKU, @nPD_Qty, @cRoute, @cOrderKey)
+            (@cDropLoc, @cDropID, 0, @cUCCNo, @cStorerKey, @cSKU, @nPD_Qty, @cRoute, @cOrderKey)
 
             IF @@ERROR <> 0
             BEGIN
@@ -272,5 +275,11 @@ BEGIN
 Fail:
 END
 GO
+
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS ON
+GO
+
 GRANT EXECUTE ON  [RDT].[rdt_1641ExtUpdSP07] TO [NSQL]
 GO

@@ -41,6 +41,7 @@ GO
 /* 2023-06-14  SPChin   1.6   JSM-156017 - Bug Fixed                    */
 /* 2023-03-14  Wan05    1.7   LFWM-3954 - Philippines All Customer LFSCE*/
 /*                            WM Inventory Transaction CR               */
+/* 2025-06-23  SSA01    1.8   UWP-36401 - Removed NOT NULL to PalletType*/
 /************************************************************************/
 CREATE OR ALTER PROC [WM].[lsp_GetItrn_Wrapper]
    @c_WhereClause       NVARCHAR(MAX)                 --Contain WHERE for eg. WHERE ITRN.Storerkey = ''NIKEPH''
@@ -164,7 +165,7 @@ BEGIN
       ,  CaseQty              FLOAT          NOT NULL DEFAULT (0.00)                --(Wan05)
       ,  InnerPackQty         FLOAT          NOT NULL DEFAULT (0.00)                --(Wan05)
       ,  Rowfocusindicatorcol CHAR(1)        NOT NULL DEFAULT ('')
-      ,  PalletType           NVARCHAR(30)   NOT NULL
+      ,  PalletType           NVARCHAR(10)   NULL  DEFAULT ('')                     --(SSA01)
       )
 
       CREATE INDEX IDX_TRNX ON #TMP_ITRN (TxnSourceType, TxnKey)

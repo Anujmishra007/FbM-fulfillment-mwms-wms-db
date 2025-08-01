@@ -126,12 +126,12 @@ EXECUTE rdt.rdtAddScn 1759, 'ENG',
 DELETE rdt.RDTScn WHERE Scn = 6382 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 6382, 'ENG',
     @cLine01 = 'Enter/Scan Pallet Type'
-   ,@cLine02 = '%10i01'
+   ,@cLine02 = '%10l01'
    ,@cLine04 = ''
    ,@cLine05 = ''
    ,@cLine06 = ''
    ,@cLine14 = '%e'
-   ,@cWebGroup = '{"1":["1","2"]}'
+   ,@cWebGroup = '{"1":["1"],"2":["2"]}'
    ,@nFunc = 1580
 
 -- 6415 = SKU, QTY screen

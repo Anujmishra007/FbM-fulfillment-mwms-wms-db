@@ -11,8 +11,12 @@ GO
 /*                         For HuSQ                                           */
 /* Called from: rdt_TM_Assist_ClusterPick_ConfirmPickV2                       */
 /*                                                                            */
-/* Date         Rev  Author   Purposes                                        */
-/* 2024-10-10   1.0  JHU151    FCR-777 Created                                */ 
+/* Date         Rev   Author    Purposes                                      */
+/* 2024-10-10   1.0   JHU151    FCR-777 Created                               */
+/* 2024-12-27   1.1.0 Dennis    FCR-1872 Remove Lot                           */ 
+/* 2025-02-08   1.1.1 NLT013    FCR-1872 Fix some bugs                        */ 
+/* 2025-02-08   1.1.2 NLT013    FCR-1872 Update PickDetailKey for PickSerialNo*/ 
+/* 2025-02-22   1.1.3 NLT013    FCR-1872 Got an error when short pick for methond 1, 2*/ 
 /******************************************************************************/  
   
 CREATE OR ALTER PROC rdt.rdt_1867Confirm01 (  
@@ -48,29 +52,32 @@ BEGIN
    
 
 
-   DECLARE @cOrderKey      NVARCHAR( 10)  
-   DECLARE @cLoadKey       NVARCHAR( 10)  
-   DECLARE @cZone          NVARCHAR( 18)  
-   DECLARE @cPickDetailKey NVARCHAR( 18)  
-   DECLARE @cPickConfirmStatus NVARCHAR( 1)  
-   DECLARE @nQTY_Bal       INT  
-   DECLARE @nQTY_PD        INT 
-   DECLARE @nTotalPkdSN    INT 
-   DECLARE @bSuccess       INT  
-   DECLARE @curCfmTask     CURSOR  
-   DECLARE @curPD          CURSOR
-   DECLARE @cCaseID        NVARCHAR( 20)
-   DECLARE @cSKU           NVARCHAR( 20)
-   DECLARE @cPickSlipNo    NVARCHAR( 10)
-   DECLARE @cLOC           NVARCHAR( 10)
-   DECLARE @cTaskKey       NVARCHAR( 10)
-   DECLARE @cDropID        NVARCHAR( 20)
-   DECLARE @cUserName      NVARCHAR( 18)
-   DECLARE @cFromLoc       NVARCHAR( 10)
+   DECLARE @cOrderKey            NVARCHAR( 10)  
+   DECLARE @cLoadKey             NVARCHAR( 10)  
+   DECLARE @cZone                NVARCHAR( 18)  
+   DECLARE @cPickDetailKey       NVARCHAR( 18)  
+   DECLARE @cPickConfirmStatus   NVARCHAR( 1)  
+   DECLARE @nQTY_Bal             INT  
+   DECLARE @nQTY_PD              INT 
+   DECLARE @nTotalPkdSN          INT 
+   DECLARE @bSuccess             INT  
+   DECLARE @curCfmTask           CURSOR  
+   DECLARE @curPD                CURSOR
+   DECLARE @cCaseID              NVARCHAR( 20)
+   DECLARE @cSKU                 NVARCHAR( 20)
+   DECLARE @cPickSlipNo          NVARCHAR( 10)
+   DECLARE @cLOC                 NVARCHAR( 10)
+   DECLARE @cTaskKey             NVARCHAR( 10)
+   DECLARE @cDropID              NVARCHAR( 20)
+   DECLARE @cUserName            NVARCHAR( 18)
+   DECLARE @cFromLoc             NVARCHAR( 10)
    DECLARE @cNewPickDetailKey    NVARCHAR( 10)
    DECLARE @cNewTaskDetailKey    NVARCHAR( 10)
    DECLARE @cUserDefine10        NVARCHAR( 10)
-   DECLARE @cMethod        NVARCHAR( 1)
+   DECLARE @cMethod              NVARCHAR( 1)
+   DECLARE @nPickedQty           INT
+   DECLARE @nPickDetailQty       INT
+   DECLARE @nRowCount            INT
 
    SELECT 
       @cUserName = UserName 
@@ -102,26 +109,6 @@ BEGIN
 
    IF @cSerialNo <> ''
    BEGIN
-      /**
-     NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'PickSerialNo')
-      CREATE TABLE dbo.PickSerialNo
-      (
-         PickSerialNoKey      BIGINT        NOT NULL IDENTITY( 1, 1), 
-         PickDetailKey        NVARCHAR(18)  NOT NULL,
-         StorerKey            NVARCHAR(15)  NOT NULL, 
-         SKU                  NVARCHAR(20)  NOT NULL, 
-         SerialNo             NVARCHAR(30)  NOT NULL, 
-         QTY                  INT           NOT NULL, 
-         -- ID                   NVARCHAR(18) NOT NULL, 
-         AddWho               NVARCHAR(128) NOT NULL CONSTRAINT DF_PickSerialNo_AddWho   DEFAULT (SUSER_SNAME()), 
-         AddDate              DATETIME      NOT NULL CONSTRAINT DF_PickSerialNo_AddDate  DEFAULT (GETDATE()), 
-         EditWho              NVARCHAR(128) NOT NULL CONSTRAINT DF_PickSerialNo_EditWho  DEFAULT (SUSER_SNAME()), 
-         EditDate             DATETIME      NOT NULL CONSTRAINT DF_PickSerialNo_EditDate DEFAULT (GETDATE()), 
-         TrafficCop           NVARCHAR( 1)  NULL, 
-         ArchiveCop           NVARCHAR( 1)  NULL, 
-         CONSTRAINT PK_PickSerialNo PRIMARY KEY CLUSTERED (PickSerialNoKey)
-      )
-      **/
       BEGIN TRAN  -- Begin our own transaction  
       SAVE TRAN ConfirmPick -- For rollback or commit only our own transaction 
  
@@ -379,76 +366,6 @@ BEGIN
             GOTO RollBackTran  
          END 
 
-         /**
-         -- Get PickHeader info  
-         SELECT @cZone = Zone  
-         FROM dbo.PickHeader WITH (NOLOCK)  
-         WHERE PickHeaderKey = @cPickSlipNo  
-
-
-
-         -- Cross dock PickSlip  
-         IF @cZone IN ('XD', 'LB', 'LP')  
-            SET @curPD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-            SELECT PD.PickDetailKey, PD.QTY 
-            FROM dbo.RefKeyLookup RKL WITH (NOLOCK) 
-            JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey) 
-            WHERE RKL.PickSlipNo = @cPickSlipNo 
-            AND   PD.LOC = @cLOC 
-            AND   PD.SKU = @cSKU 
-            AND   PD.CaseID = @cCaseID
-            AND   PD.QTY > 0 
-            AND   PD.Status <> '4'
-            AND   PD.Status < @cPickConfirmStatus 
-            AND   PD.TaskDetailKey = @cTaskDetailKey
-            
-         -- Discrete PickSlip  
-         ELSE IF @cOrderKey <> ''  
-            SET @curPD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR   
-            SELECT PD.PickDetailKey, PD.QTY 
-            FROM dbo.PickDetail PD WITH (NOLOCK) 
-            JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC) 
-            WHERE PD.OrderKey = @cOrderKey 
-            AND   PD.LOC = @cLOC 
-            AND   PD.SKU = @cSKU 
-            AND   PD.CaseID = @cCaseID
-            AND   PD.QTY > 0 
-            AND   PD.Status <> '4' 
-            AND   PD.Status < @cPickConfirmStatus 
-            AND   PD.TaskDetailKey = @cTaskDetailKey
-            
-         -- Conso PickSlip  
-         ELSE IF @cLoadKey <> ''  
-            SET @curPD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR   
-            SELECT PD.PickDetailKey, PD.QTY 
-            FROM dbo.LoadPlanDetail LPD WITH (NOLOCK) 
-            JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey) 
-            JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC) 
-            WHERE LPD.LoadKey = @cLoadKey 
-            AND   PD.LOC = @cLOC 
-            AND   PD.SKU = @cSKU 
-            AND   PD.CaseID = @cCaseID
-            AND   PD.QTY > 0 
-            AND   PD.Status <> '4' 
-            AND   PD.Status < @cPickConfirmStatus 
-            AND   PD.TaskDetailKey = @cTaskDetailKey
-            
-         -- Custom PickSlip  
-         ELSE  
-            SET @curPD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR   
-            SELECT PD.PickDetailKey, PD.QTY 
-            FROM dbo.PickDetail PD WITH (NOLOCK) 
-            JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC) 
-            WHERE PD.PickSlipNo = @cPickSlipNo 
-            AND   PD.LOC = @cLOC 
-            AND   PD.SKU = @cSKU 
-            AND   PD.CaseID = @cCaseID
-            AND   PD.QTY > 0 
-            AND   PD.Status <> '4' 
-            AND   PD.Status < @cPickConfirmStatus 
-            AND   PD.TaskDetailKey = @cTaskDetailKey
-         **/
-
          SET @curPD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR   
          SELECT PD.PickDetailKey, PD.QTY 
          FROM dbo.PickDetail PD WITH (NOLOCK) 
@@ -530,10 +447,18 @@ BEGIN
                         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKDtl Fail  
                         GOTO RollBackTran  
                      END  
+
+                     SELECT @nPickedQty = SUM(Qty) 
+                     FROM dbo.PickDetail WITH(NOLOCK)
+                     WHERE StorerKey = @cStorerKey
+                        AND TaskDetailKey = @cTaskDetailKey
+                        AND Status = @cPickConfirmStatus
+
+                     SET @nPickedQty = ISNULL(@nPickedQty, 0)
                      
                      UPDATE dbo.TaskDetail SET
                         SystemQty = Qty, 
-                        Qty = @nQTY_Bal,  
+                        Qty = @nPickedQty,  
                         EditDate = GETDATE(),  
                         EditWho  = SUSER_SNAME()
                      WHERE TaskDetailKey = @cTaskDetailKey
@@ -565,16 +490,20 @@ BEGIN
                            GOTO RollBackTran 
                         END
 
+                        SELECT @nPickDetailQty = Qty
+                        FROM dbo.PickDetail WITH (NOLOCK)
+                        WHERE PickDetailKey = @cPickDetailKey
+
                         INSERT INTO dbo.TaskDetail
                         (TaskDetailKey,TaskType,Storerkey,Sku,Lot,UOM,UOMQty,QTY,FromLoc,LogicalFromLoc,FromID,ToLoc,LogicalToLoc
                         ,ToID,Caseid,PickMethod,Status,StatusMsg,Priority,SourcePriority,Holdkey,UserKey,UserPosition,UserKeyOverRide
                         ,StartTime,EndTime,SourceType,SourceKey,PickDetailKey,OrderKey,OrderLineNumber,ListKey,WaveKey,ReasonKey
                         ,Message01,Message02,Message03,RefTaskKey,LoadKey,AreaKey,DropID, SystemQty,Groupkey,TrafficCop)
                         SELECT  TOP 1
-                        @cNewTaskDetailKey,TaskType,Storerkey,Sku,Lot,UOM,UOMQty,QTY-@nQTY_Bal,FromLoc,LogicalFromLoc,FromID,ToLoc,LogicalToLoc
+                        @cNewTaskDetailKey,TaskType,Storerkey,Sku,Lot,UOM,UOMQty,@nPickDetailQty,FromLoc,LogicalFromLoc,FromID,ToLoc,LogicalToLoc
                         ,ToID,Caseid,PickMethod,Status,StatusMsg,Priority,SourcePriority,Holdkey,UserKey,UserPosition,UserKeyOverRide
                         ,StartTime,EndTime,SourceType,SourceKey,PickDetailKey,OrderKey,OrderLineNumber,ListKey,WaveKey,ReasonKey
-                        ,Message01,Message02,Message03,RefTaskKey,LoadKey,AreaKey,DropID, SystemQty,GroupKey,'9'
+                        ,Message01,Message02,Message03,RefTaskKey,LoadKey,AreaKey,DropID, @nPickDetailQty,GroupKey,'9'
                         FROM dbo.TaskDetail WITH (NOLOCK)
                         WHERE Taskdetailkey = @cTaskDetailKey
                         AND Storerkey = @cStorerkey
@@ -709,41 +638,54 @@ BEGIN
                      GOTO RollBackTran  
                   END  
 
-                  EXECUTE dbo.nspg_getkey
-                     'TaskDetailKey'
-                     , 10
-                     , @cNewTaskDetailKey OUTPUT
-                     , @bSuccess OUTPUT
-                     , @nErrNo     --OUTPUT Commented by NLT013, it overrides the old error no, if the error was not 0, but no error happens while executing this SP, error no will be updated as 0
-                     , @cErrMsg OUTPUT
-
-                  IF NOT @bSuccess = 1
+                  --Commented by NLT013-01
+                  IF @cType = 'SHORT' AND @nQTY_Bal  > 0
                   BEGIN
-                     SET @nErrNo = 227271
-                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --GetKeyFailed(rdt_1867Confirm01)
-                     GOTO RollBackTran 
-                  END
+                     EXECUTE dbo.nspg_getkey
+                        'TaskDetailKey'
+                        , 10
+                        , @cNewTaskDetailKey OUTPUT
+                        , @bSuccess OUTPUT
+                        , @nErrNo     --OUTPUT Commented by NLT013, it overrides the old error no, if the error was not 0, but no error happens while executing this SP, error no will be updated as 0
+                        , @cErrMsg OUTPUT
 
-                  INSERT INTO dbo.TaskDetail
-                  (TaskDetailKey,TaskType,Storerkey,Sku,Lot,UOM,UOMQty,QTY,FromLoc,LogicalFromLoc,FromID,ToLoc,LogicalToLoc
-                  ,ToID,Caseid,PickMethod,Status,StatusMsg,Priority,SourcePriority,Holdkey,UserKey,UserPosition,UserKeyOverRide
-                  ,StartTime,EndTime,SourceType,SourceKey,PickDetailKey,OrderKey,OrderLineNumber,ListKey,WaveKey,ReasonKey
-                  ,Message01,Message02,Message03,RefTaskKey,LoadKey,AreaKey,DropID, SystemQty,Groupkey,DeviceID)
-                  SELECT  TOP 1
-                  @cNewTaskDetailKey,TaskType,Storerkey,Sku,Lot,UOM,UOMQty,@nQTY_PD - @nQTY_Bal,FromLoc,LogicalFromLoc,FromID,ToLoc,LogicalToLoc
-                  ,ToID,Caseid,PickMethod,Status,StatusMsg,Priority,SourcePriority,Holdkey,UserKey,UserPosition,UserKeyOverRide
-                  ,StartTime,EndTime,SourceType,SourceKey,PickDetailKey,OrderKey,OrderLineNumber,ListKey,WaveKey,ReasonKey
-                  ,Message01,Message02,Message03,RefTaskKey,LoadKey,AreaKey,DropID, @nQTY_PD - @nQTY_Bal,GroupKey,DeviceID
-                  FROM dbo.TaskDetail WITH (NOLOCK)
-                  WHERE Taskdetailkey = @cTaskDetailKey
-                  AND Storerkey = @cStorerkey
-                  
-                  IF @@ERROR <> 0
-                  BEGIN
-                     SET @nErrNo = 227272
-                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InsTaskFailed
-                     GOTO RollBackTran 
+                     IF NOT @bSuccess = 1
+                     BEGIN
+                        SET @nErrNo = 227271
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --GetKeyFailed(rdt_1867Confirm01)
+                        GOTO RollBackTran 
+                     END
+
+                     SELECT @nPickedQty = SUM(Qty) 
+                     FROM dbo.PickDetail WITH(NOLOCK)
+                     WHERE StorerKey = @cStorerKey
+                     AND TaskDetailKey = @cTaskDetailKey
+                     AND Status = @cPickConfirmStatus
+
+                     SET @nPickedQty = ISNULL(@nPickedQty, 0)
+
+                     INSERT INTO dbo.TaskDetail
+                     (TaskDetailKey,TaskType,Storerkey,Sku,Lot,UOM,UOMQty,QTY,FromLoc,LogicalFromLoc,FromID,ToLoc,LogicalToLoc
+                     ,ToID,Caseid,PickMethod,Status,StatusMsg,Priority,SourcePriority,Holdkey,UserKey,UserPosition,UserKeyOverRide
+                     ,StartTime,EndTime,SourceType,SourceKey,PickDetailKey,OrderKey,OrderLineNumber,ListKey,WaveKey,ReasonKey
+                     ,Message01,Message02,Message03,RefTaskKey,LoadKey,AreaKey,DropID, SystemQty,Groupkey,DeviceID)
+                     SELECT  TOP 1
+                     @cNewTaskDetailKey,TaskType,Storerkey,Sku,Lot,UOM,UOMQty,@nQTY_PD - @nQTY_Bal,FromLoc,LogicalFromLoc,FromID,ToLoc,LogicalToLoc
+                     ,ToID,Caseid,PickMethod,Status,StatusMsg,Priority,SourcePriority,Holdkey,UserKey,UserPosition,UserKeyOverRide
+                     ,StartTime,EndTime,SourceType,SourceKey,PickDetailKey,OrderKey,OrderLineNumber,ListKey,WaveKey,ReasonKey
+                     ,Message01,Message02,Message03,RefTaskKey,LoadKey,AreaKey,DropID, @nQTY_PD - @nQTY_Bal,GroupKey,DeviceID
+                     FROM dbo.TaskDetail WITH (NOLOCK)
+                     WHERE Taskdetailkey = @cTaskDetailKey
+                     AND Storerkey = @cStorerkey
+                     
+                     IF @@ERROR <> 0
+                     BEGIN
+                        SET @nErrNo = 227272
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InsTaskFailed
+                        GOTO RollBackTran 
+                     END
                   END
+                  --Commented by NLT013-01
                   
                   -- Short pick
                   IF @cType = 'SHORT'
@@ -763,9 +705,17 @@ BEGIN
                         GOTO RollBackTran
                      END
 
+                     SELECT @nPickedQty = SUM(Qty) 
+                     FROM dbo.PickDetail WITH(NOLOCK)
+                     WHERE StorerKey = @cStorerKey
+                        AND TaskDetailKey = @cTaskDetailKey
+                        AND Status = @cPickConfirmStatus
+
+                     SET @nPickedQty = ISNULL(@nPickedQty, 0)
+
                      UPDATE dbo.TaskDetail SET
                         SystemQty = @nQTY_Bal, 
-                        Qty = @nQTY_Bal,  
+                        Qty = @nPickedQty,  
                         EditDate = GETDATE(),  
                         EditWho  = SUSER_SNAME(),
                         RefTaskKey = @cNewTaskDetailKey
@@ -777,35 +727,38 @@ BEGIN
                         GOTO RollBackTran  
                      END  
                   END
-                  ELSE
-                  Begin
-                     UPDATE dbo.TaskDetail SET
-                        SystemQty = Qty, 
-                        Qty = @nQTY_Bal,  
-                        EditDate = GETDATE(),  
-                        EditWho  = SUSER_SNAME()
-                     WHERE TaskDetailKey = @cTaskDetailKey
-                     IF @@ERROR <> 0  
-                     BEGIN  
-                        SET @nErrNo = 227263  
-                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKDtl Fail  
-                        GOTO RollBackTran  
-                     End
+
+                  --Commented by NLT013-02
+                  -- ELSE
+                  -- BEGIN
+                  --    UPDATE dbo.TaskDetail SET
+                  --       SystemQty = Qty, 
+                  --       Qty = @nPickedQty,  
+                  --       EditDate = GETDATE(),  
+                  --       EditWho  = SUSER_SNAME()
+                  --    WHERE TaskDetailKey = @cTaskDetailKey
+                  --    IF @@ERROR <> 0  
+                  --    BEGIN  
+                  --       SET @nErrNo = 227263  
+                  --       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKDtl Fail  
+                  --       GOTO RollBackTran  
+                  --    End
                      
-                     -- Confirm PickDetail
-                     UPDATE dbo.PickDetail WITH (ROWLOCK) SET 
-                        EditDate = GETDATE(), 
-                        EditWho  = SUSER_SNAME(),
-                        TrafficCop = NULL,
-                        TaskDetailKey = @cNewTaskDetailKey
-                     WHERE PickDetailKey = @cNewPickDetailKey
-                     IF @@ERROR <> 0
-                     BEGIN
-                        SET @nErrNo = 227268
-                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKDtl Fail
-                        GOTO RollBackTran
-                     END
-                  END
+                  --    -- Confirm PickDetail
+                  --    UPDATE dbo.PickDetail WITH (ROWLOCK) SET 
+                  --       EditDate = GETDATE(), 
+                  --       EditWho  = SUSER_SNAME(),
+                  --       TrafficCop = NULL,
+                  --       TaskDetailKey = @cNewTaskDetailKey
+                  --    WHERE PickDetailKey = @cNewPickDetailKey
+                  --    IF @@ERROR <> 0
+                  --    BEGIN
+                  --       SET @nErrNo = 227268
+                  --       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD PKDtl Fail
+                  --       GOTO RollBackTran
+                  --    END
+                  -- END
+                  --Commented by NLT013-02
 
                   SET @nQTY_Bal = 0 -- Reduce balance  
                END  
@@ -832,41 +785,6 @@ BEGIN
 
          FETCH NEXT FROM @curCfmTask INTO @cTaskDetailKey, @cSKU, @cCaseID, @cLOC, @cDropID, @cOrderKey
       END
-      
-      /**
-      DECLARE @curUpdTask CURSOR
-      SET @curUpdTask = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
-      SELECT TaskDetailKey
-      FROM dbo.TaskDetail WITH (NOLOCK)
-      WHERE Storerkey = @cStorerKey
-      AND   TaskType = 'ASTCPK'
-      AND   [Status] = '3'
-      AND   FromLoc = @cLOC
-      AND   Sku = @cSKU
-      AND   Caseid = @cCaseID
-      AND   Groupkey = @cGroupKey
-      AND   DeviceID = @cCartID 
-      AND   TaskdetailKey = @cTaskDetailKey
-
-      OPEN @curUpdTask
-      FETCH NEXT FROM @curUpdTask INTO @cTaskKey
-      WHILE @@FETCH_STATUS = 0
-      BEGIN
-         UPDATE dbo.TaskDetail SET 
-            [Status] = '5',
-            EditDate = GETDATE(),
-            EditWho = @cUserName
-         WHERE TaskDetailKey = @cTaskKey
-         IF @@ERROR <> 0
-         BEGIN
-            SET @nErrNo = 227270
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- UPD Task Fail
-            GOTO RollBackTran
-         END      
-
-         FETCH NEXT FROM @curUpdTask INTO @cTaskKey
-      END
-      **/       
 
       UPDATE dbo.TaskDetail SET 
          [Status] = '5',
@@ -886,10 +804,71 @@ BEGIN
 
    END-- non serial no
 
-   --COMMIT TRAN ConfirmPick  
-  
- 
-   GOTO Quit  
+   --Update PickDetailKey for PickSerialNo
+   SELECT @nRowCount = COUNT(1)
+   FROM dbo.PickSerialNo PSN WITH(NOLOCK)
+   INNER JOIN dbo.PickDetail PD WITH(NOLOCK)
+      ON PSN.PickDetailKey = PD.PickDetailKey
+   INNER JOIN dbo.TaskDetail TD WITH(NOLOCK)
+      ON PD.StorerKey = TD.StorerKey
+      AND PD.TaskDetailKey = TD.TaskDetailKey
+   WHERE TD.StorerKey = @cStorerKey
+      AND TD.TaskDetailKey = @cTaskDetailKey
+
+   IF @nRowCount > 0 AND @nQTY > 0
+   BEGIN
+      DECLARE
+         @nLoopIndex          INT,
+         @nUpdateIDStart      INT,
+         @nUpdateIDRange      INT
+
+      DECLARE @tPickDetails TABLE
+      (
+         id                   INT IDENTITY(1,1),
+         PickDetailKey        NVARCHAR(18),
+         Qty                  INT
+      )
+
+      DECLARE @tPickSerialNo TABLE
+      (
+         id                   INT IDENTITY(1,1),
+         PickSerialNoKey      BIGINT
+      )
+
+      INSERT INTO @tPickDetails( PickDetailKey, Qty)
+      SELECT PickDetailKey, Qty FROM dbo.PICKDETAIL WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND TaskDetailKey = @cTaskDetailKey
+
+      INSERT INTO @tPickSerialNo( PickSerialNoKey)
+      SELECT PickSerialNoKey 
+      FROM dbo.PickSerialNo PSN WITH(NOLOCK)
+      INNER JOIN @tPickDetails PD ON PSN.PickDetailKey = PD.PickDetailKey
+
+      SET @nLoopIndex = -1
+      SET @nUpdateIDStart = 1
+
+      WHILE 1 = 1
+      BEGIN
+         SELECT TOP 1
+            @cPickDetailKey = PickDetailKey,
+            @nQty = Qty,
+            @nLoopIndex = id
+         FROM @tPickDetails
+         WHERE id > @nLoopIndex
+
+         IF @@ROWCOUNT = 0
+            BREAK
+
+         SET @nUpdateIDRange = @nQty
+
+         UPDATE dbo.PickSerialNo WITH(ROWLOCK)
+         SET PickDetailKey = @cPickDetailKey
+         WHERE EXISTS(SELECT 1 FROM @tPickSerialNo PSN WHERE PSN.PickSerialNoKey = PickSerialNo.PickSerialNoKey AND PSN.id BETWEEN @nUpdateIDStart AND @nUpdateIDStart + @nUpdateIDRange - 1)
+
+         SET @nUpdateIDStart = @nUpdateIDStart + @nUpdateIDRange
+      END
+   END
+
+   GOTO Quit
   
 RollBackTran:  
    ROLLBACK TRAN ConfirmPick -- Only rollback change made here  
@@ -908,3 +887,4 @@ GO
 
 GRANT EXECUTE ON RDT.rdt_1867Confirm01 TO NSQL
 GO
+

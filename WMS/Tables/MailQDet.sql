@@ -1,3 +1,5 @@
+IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[MailQDet]') AND type in (N'U'))
+BEGIN
 CREATE TABLE [dbo].[MailQDet]
 (
 [QDetid] [int] NOT NULL IDENTITY(1, 1),
@@ -21,18 +23,32 @@ CREATE TABLE [dbo].[MailQDet]
 [ArchiveCop] [nvarchar] (1) NULL,
 [AddDate] [datetime] NOT NULL CONSTRAINT [DF_MailQDet_AddDate] DEFAULT (getdate())
 ) ON [PRIMARY]
-GO
+
 ALTER TABLE [dbo].[MailQDet] ADD CONSTRAINT [QDetid_MustBeUnique] PRIMARY KEY CLUSTERED ([QDetid]) ON [PRIMARY]
-GO
+
 CREATE NONCLUSTERED INDEX [IX_MailQDet_OrderKey] ON [dbo].[MailQDet] ([OrderKey]) ON [PRIMARY]
-GO
-ALTER TABLE [dbo].[MailQDet] ADD CONSTRAINT [FK_MailQDet_MailQ] FOREIGN KEY ([Qid]) REFERENCES [dbo].[MailQ] ([Qid])
-GO
+
+ALTER TABLE [dbo].[MailQDet] ADD CONSTRAINT [FK_MailQDet_MailQ] FOREIGN KEY ([Qid]) REFERENCES [dbo].[MailQDet] ([Qid])
+
 GRANT DELETE ON  [dbo].[MailQDet] TO [NSQL]
-GO
+
 GRANT INSERT ON  [dbo].[MailQDet] TO [NSQL]
-GO
+
 GRANT SELECT ON  [dbo].[MailQDet] TO [NSQL]
-GO
+
 GRANT UPDATE ON  [dbo].[MailQDet] TO [NSQL]
-GO
+
+END
+
+ELSE
+BEGIN
+
+IF NOT EXISTS (SELECT * FROM sys.columns WHERE Name = 'ArchiveCop' AND Object_ID = Object_ID('dbo.MailQDet'))
+BEGIN
+	ALTER TABLE dbo.[MailQDet] ADD [ArchiveCop] [nvarchar] (1) NULL;
+	EXEC sp_addextendedproperty N'MS_Description', 'ArchiveCop', 'SCHEMA', N'dbo', 'TABLE', N'MailQDet', 'COLUMN', N'ArchiveCop'
+				
+END
+
+
+END

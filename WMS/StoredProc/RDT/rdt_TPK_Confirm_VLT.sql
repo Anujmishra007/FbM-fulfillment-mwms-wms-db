@@ -394,7 +394,7 @@ BEGIN
          IF @cLOT = ''
             SET @cLOT = NULL
 
-         SELECT @cTransID = CASE WHEN @cLocationType <> 'VAS' THEN @cDropID ELSE @cFromID END
+         SELECT @cTransID = @cDropID
 
          IF @nTaskQTY = @nQTY AND @cPickMethod = 'FP'
             -- Move by ID

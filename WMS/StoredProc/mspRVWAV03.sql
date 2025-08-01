@@ -14,7 +14,7 @@ GO
 /*                                                                       */    
 /* Called By: Wave Release                                               */    
 /*                                                                       */    
-/* PVCS Version: 1.1                                                     */    
+/* PVCS Version: 1.3                                                     */    
 /*                                                                       */    
 /* Version: 7.0                                                          */    
 /*                                                                       */    
@@ -24,6 +24,10 @@ GO
 /* Date        Author   Ver   Purposes                                   */
 /* 2024-11-25  Wan01    1.1   UWP-27137 - [FCR-1348] [Levi's] Levi's Wave*/
 /*                            Release (Automation and Manual Operations) */
+/* 2025-05-16  SWT01    1.2   If No Task Created, then if all PikDetail  */
+/*                            UOM = 2 (Full Carton). Then allow reverse  */
+/* 22-Jul-2025 WLC015   1.3   FCR-6612 Update Orderinfo.ReferenceID to   */
+/*                            blank (WL01)                               */
 /*************************************************************************/     
 CREATE OR ALTER PROCEDURE [dbo].[mspRVWAV03]        
  @c_wavekey      NVARCHAR(10) 
@@ -53,11 +57,13 @@ BEGIN
          , @c_authority      NVARCHAR(10) = '' 
          , @c_SourceType     NVARCHAR(30) = 'mspRLWAV03'
          , @c_Automation     NVARCHAR(10) = ''                                   --(Wan01)
+         , @c_SingleUOM      NVARCHAR(10) = '' -- SWT01         
 
          , @CUR_DELTASK      CURSOR
          , @CUR_DELPICK      CURSOR
          , @CUR_DELPRECARTON CURSOR
          , @CUR_UPDATEORD    CURSOR                                              --(Wan01)
+         , @CUR_ORDERINFO    CURSOR    --WL01
                      
    SET @b_success=0
    SET @n_err=0
@@ -81,10 +87,21 @@ BEGIN
       IF NOT EXISTS (SELECT 1 FROM TASKDETAIL TD (NOLOCK)   
                      WHERE TD.Wavekey = @c_Wavekey AND TD.SourceType = @c_SourceType
                      AND TD.TaskType IN ('ASTCPK','FCP', 'RPF'))                    --(Wan01)  
-      BEGIN                                            
-         SET @n_continue = 3    
-         SET @n_err = 81010    
-         SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': This Wave has not been released. (mspRVWAV03)'           
+      BEGIN        
+         -- SWT01 Only ignore when the entire Wave Pick task is full carton (UOM=2)
+         SET @c_SingleUOM = ''              
+         SELECT @c_SingleUOM = MAX(PD.UOM) 
+         FROM PICKDETAIL PD (NOLOCK)   
+         JOIN WAVEDETAIL WD (NOLOCK) ON PD.OrderKey = WD.OrderKey
+         WHERE WD.Wavekey = @c_Wavekey
+         HAVING COUNT(DISTINCT UOM) = 1
+
+         IF @c_SingleUOM <> '2' 
+         BEGIN
+            SET @n_continue = 3    
+            SET @n_err = 81010    
+            SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': This Wave has not been released. (mspRVWAV03)'    
+         END        
       END                   
    END  
  
@@ -310,7 +327,43 @@ BEGIN
       END
       CLOSE @CUR_UPDATEORD
       DEALLOCATE @CUR_UPDATEORD
-   END                                                                              --(Wan01) - END  
+   END                                                                              --(Wan01) - END
+
+   --WL01 S
+   IF (@n_continue = 1 OR @n_continue = 2)
+   BEGIN
+      SET @CUR_ORDERINFO = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
+      SELECT DISTINCT OI.Orderkey
+      FROM dbo.WAVEDETAIL WD WITH (NOLOCK)
+      JOIN dbo.OrderInfo OI WITH (NOLOCK) ON OI.OrderKey = WD.OrderKey
+      WHERE WD.WaveKey = @c_wavekey
+      AND (OI.ReferenceId IS NOT NULL AND OI.ReferenceId <> '')
+
+      OPEN @CUR_ORDERINFO
+
+      FETCH NEXT FROM @CUR_ORDERINFO INTO @c_Orderkey
+
+      WHILE @@FETCH_STATUS <> -1 AND @n_Continue IN (1,2)
+      BEGIN
+         UPDATE dbo.OrderInfo
+         SET ReferenceId = ''
+         WHERE OrderKey = @c_Orderkey
+
+         IF @@ERROR <> 0
+         BEGIN
+            SET @n_Continue = 3
+            SET @n_Err = 81050
+            SET @c_ErrMsg = 'NSQL'+CONVERT(CHAR(5) ,@n_err) + ': Updating OrderInfo Failed (mspRVWAV03)'  
+                          + ' ( '+' SQLSvr MESSAGE= ' + @c_ErrMsg + ' ) '
+         END
+
+         FETCH NEXT FROM @CUR_ORDERINFO INTO @c_Orderkey
+      END
+      CLOSE @CUR_ORDERINFO
+      DEALLOCATE @CUR_ORDERINFO
+   END
+   --WL01 E
+
    -----Reverse wave status------  
    IF @n_continue = 1 or @n_continue = 2    
    BEGIN    

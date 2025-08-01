@@ -1,4 +1,3 @@
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -29,6 +28,15 @@ GO
 /* 2025-01-15 1.10.1 NLT013   UWP-29176 Performance Tune version 2                 */
 /* 2025-02-05 1.11.0 CYU027   FCR-2630 Add Option=5 in step 5                      */
 /* 2025-02-11 1.12.0 Dennis   FCR-2630 Clear the dropid info to reuse              */
+/* 2025-02-20 1.13.0 NLT013   UWP-30312 Performance Tune                           */
+/* 2025-03-05 1.14.0 JCH507   FCR-3356 Change WSSortTotRel Transmitlog2 data       */
+/* 2025-03-13 1.15.0 NLT013   Misupdate PickDetail as 5, because not check all     */
+/*                            PickDetails are picked, some Packinfo was missing    */
+/* 2025-03-22 1.15.1 NLT013   UWP-31481 Need check if all packdetail are generated */
+/* 2025-04-08 1.15.2 Dennis   UWP-32495 FixBugs                                    */
+/* 2025-04-29 1.16.0 NickT    UWP-33521 Carton weight is not corret for MPOC       */
+/* 2025-04-29 1.16.2 NickT    UWP-33521 Carton weight is not corret for MPOC       */
+/* 2025-07-22 1.17.0 Jackc    FCR-6705 Generate BOL sequence number                */
 /***********************************************************************************/
 CREATE OR ALTER PROC rdt.rdt_855ExtUpd13 (
    @nMobile      INT,   
@@ -107,6 +115,7 @@ BEGIN
       @cOLPSDescription          NVARCHAR(15) = 'OlpsPlacement'
       DECLARE @tPackSlipList     VariableTable
 
+   DECLARE @bDebugFlag   BINARY = 0 --1, print log; 2, insert traceinfo
    DECLARE @cToteID      NVARCHAR(20)
    DECLARE @cWaveKey     NVARCHAR(20),
    @cDropIDFlag          NVARCHAR(1)
@@ -138,6 +147,32 @@ BEGIN
       ID                      INT IDENTITY(1,1),
       OrderKey                NVARCHAR(10)
    )
+   --v1.13.0 start
+   DECLARE @tDropID TABLE
+   (
+      RowNumber INT IDENTITY,
+      DropID NVARCHAR(20)
+   )
+   DECLARE @nDropIDMax       INT
+   DECLARE @nDropIDCounter   INT
+   DECLARE @cPackDropID      NVARCHAR(20)
+   --v1.13.0 end
+
+   --V1.17.0 start
+   DECLARE @tOrderNoRefID TABLE
+   (
+      RowNumber      INT IDENTITY(1,1),
+      OrderKey       NVARCHAR(10),
+      ConsigneeKey   NVARCHAR(15),
+      WaveKey        NVARCHAR(10)
+   )
+
+   DECLARE @cONRIOrderKey     NVARCHAR(10)
+   DECLARE @cONRIConsigneeKey NVARCHAR(15)
+   DECLARE @cONRIWaveKey      NVARCHAR(10)
+   DECLARE @cReferenceID      NVARCHAR(20)
+   DECLARE @cOtherParams      NVARCHAR(MAX) = ''
+   --V1.17.0 end
 
    SET @nErrNo = 0
    SET @cErrMsg = ''
@@ -233,7 +268,7 @@ BEGIN
                   INNER JOIN dbo.PickDetail PKD WITH(NOLOCK) ON WOD.StorerKey = PKD.StorerKey AND WOD.ExternWorkOrderKey = PKD.OrderKey
                   INNER JOIN dbo.CODELKUP CLK WITH(NOLOCK) ON PKD.StorerKey = CLK.StorerKey AND CLK.LISTNAME = 'VASORD' AND WOD.Type = CLK.Code
                   WHERE PKD.StorerKey = @cStorerKey
-                     AND ISNULL(PKD.CaseID, '') = @cDropID
+                     AND PKD.CaseID = @cDropID
                      AND WOD.ExternLineNo = '0H'
                   ORDER BY CLK.Code ASC
                   
@@ -512,22 +547,36 @@ BEGIN
 
                   --1. Print price labels and catelogy labels
                   --Price Labels
+                  DECLARE @tCODELKUP TABLE
+                  (
+                     LISTNAME             NVARCHAR(10),
+                     StorerKey            NVARCHAR(15),
+                     Code                 NVARCHAR(30),
+                     Code2                NVARCHAR(30),
+                     UDF01                NVARCHAR(60),
+                     INDEX IDX_tCODELKUP CLUSTERED(StorerKey, Code)
+                  )
+
+                  INSERT INTO @tCODELKUP (LISTNAME, StorerKey, Code, Code2, UDF01)
+                  SELECT DISTINCT lk1.LISTNAME, lk1.StorerKey, lk1.Code, Lk1.code2, lk1.UDF01 
+                  FROM dbo.WorkOrderDetail wod1 WITH(NOLOCK) 
+                  INNER JOIN dbo.PickDetail pkd1 WITH(NOLOCK) ON wod1.StorerKey = pkd1.StorerKey AND wod1.ExternWorkOrderKey = pkd1.OrderKey
+                  INNER JOIN dbo.CODELKUP lk1 WITH(NOLOCK) ON wod1.StorerKey = lk1.StorerKey AND lk1.LISTNAME = 'LVSPRICELB' AND wod1.Type = lk1.code2
+                  WHERE wod1.StorerKey = @cStorerKey
+                     AND wod1.ExternLineNo = ''
+                     AND wod1.Remarks = 'PriceTicketFormat'
+                     AND wod1.ExternWorkOrderKey IS NOT NULL
+                     AND wod1.ExternWorkOrderKey <> ''
+                     AND pkd1.CaseID <> ''
+                     AND pkd1.CaseID = @cDropID
+
                   INSERT INTO @tLabels(LabelListName, VASCode, LabelName, Qty, PrintSequence)
                   SELECT DISTINCT IIF(wodEX.LISTNAME IS NULL, lk.LISTNAME, wodEX.LISTNAME), wod.type, IIF(wodEX.UDF01 IS NULL, lk.UDF01, wodEX.UDF01), pkd.Qty, '00001'
                   FROM dbo.WorkOrderDetail wod  WITH(NOLOCK)
                   INNER JOIN dbo.WorkOrder wo WITH(NOLOCK) ON wo.WorkOrderKey = wod.WorkOrderKey
                   INNER JOIN dbo.CODELKUP lk WITH(NOLOCK) ON wo.StorerKey = lk.StorerKey AND wod.Type = lk.Code AND lk.LISTNAME = 'WKORDTYPE' AND lk.UDF04 = 'LVSPRICELB'
                   INNER JOIN dbo.PickDetail pkd WITH(NOLOCK) ON wo.StorerKey = pkd.StorerKey AND wod.ExternWorkOrderKey = pkd.OrderKey AND pkd.OrderLinenumber = wod.ExternLineNo AND pkd.Status = @cPickConfirmStatus
-                  LEFT JOIN (SELECT DISTINCT lk1.LISTNAME, wod1.StorerKey, lk1.Code, Lk1.code2, lk1.UDF01 FROM dbo.WorkOrderDetail wod1 WITH(NOLOCK) 
-                           INNER JOIN dbo.PickDetail pkd1 WITH(NOLOCK) ON wod1.StorerKey = pkd1.StorerKey AND wod1.ExternWorkOrderKey = pkd1.OrderKey
-                           INNER JOIN dbo.CODELKUP lk1 WITH(NOLOCK) ON wod1.StorerKey = lk1.StorerKey AND lk1.LISTNAME = 'LVSPRICELB' AND wod1.Type = lk1.code2
-                           WHERE wod1.StorerKey = @cStorerKey
-                              AND wod1.ExternLineNo = ''
-                              AND wod1.Remarks = 'PriceTicketFormat'
-                              AND wod1.ExternWorkOrderKey IS NOT NULL
-                              AND wod1.ExternWorkOrderKey <> ''
-                              AND pkd1.CaseID <> ''
-                              AND pkd1.CaseID = @cDropID) AS wodEX
+                  LEFT JOIN @tCODELKUP AS wodEX
                      ON wod.StorerKey = wodEX.StorerKey AND lk.Code = wodEX.Code
                   WHERE wo.StorerKey = @cStorerKey
                      AND pkd.Sku = @cSKU
@@ -537,41 +586,69 @@ BEGIN
                      AND pkd.CaseID = @cDropID
                      AND wod.ExternLineNo <> ''
 
-                  INSERT INTO @tLabels(LabelListName, VASCode, LabelName, Qty, PrintSequence)
-                  SELECT DISTINCT IIF(lk1.LISTNAME IS NULL, lk.LISTNAME, lk1.LISTNAME), wod.Type, IIF(lk1.LISTNAME IS NULL, lk.UDF01, lk1.UDF01), pakd.Qty, lk.Code
-                  FROM (SELECT StorerKey, WorkOrderKey, ExternWorkOrderKey, ExternLineNo, WorkOrderLineNumber, Type
-                        FROM
-                           (SELECT 
-                              wod1.StorerKey, wod1.WorkOrderKey, wod1.ExternWorkOrderKey, wod1.ExternLineNo, wod1.WorkOrderLineNumber, wod1.Type, 
-                              ROW_NUMBER()OVER(PARTITION BY WorkOrderKey, ExternWorkOrderKey, ExternLineNo ORDER BY ExternWorkOrderKey, ExternLineNo) AS ROW#
-                              FROM dbo.WorkOrderDetail wod1 WITH(NOLOCK)
-                              INNER JOIN (SELECT DISTINCT StorerKey, OrderKey
-                                          FROM dbo.PickDetail WITH(NOLOCK)
-                                          WHERE StorerKey = @cStorerKey
-                                             AND CaseID <> ''
-                                             AND CaseID = @cDropID) AS pkd1
-                                 ON wod1.StorerKey = pkd1.StorerKey AND wod1.ExternWorkOrderKey = pkd1.OrderKey
-                              INNER JOIN dbo.CODELKUP lk2 WITH(NOLOCK) ON wod1.StorerKey = lk2.StorerKey AND lk2.LISTNAME = 'WKORDTYPE' AND lk2.UDF04 = 'LVSCatalog' AND wod1.Type = lk2.Code
-                              WHERE wod1.StorerKey = @cStorerKey
-                                 AND wod1.Type <> ''
-                                 AND wod1.ExternLineNo <> ''
-                                 AND wod1.ExternWorkOrderKey IS NOT NULL
-                                 AND wod1.ExternWorkOrderKey <> '') AS t
-                        WHERE ROW# = 1) AS wod
-                  INNER JOIN dbo.WorkOrder wo WITH(NOLOCK) ON wo.WorkOrderKey = wod.WorkOrderKey
-                  INNER JOIN dbo.ORDERS orm WITH(NOLOCK) ON wod.StorerKey = orm.StorerKey AND wod.ExternWorkOrderKey = orm.OrderKey
-                  INNER JOIN dbo.CODELKUP lk WITH(NOLOCK) ON wo.StorerKey = lk.StorerKey AND wod.Type = lk.Code AND lk.LISTNAME = 'WKORDTYPE' AND lk.UDF04 = 'LVSCatalog' 
-                  INNER JOIN dbo.PickDetail pkd WITH(NOLOCK) ON wo.StorerKey = pkd.StorerKey AND wod.ExternWorkOrderKey = pkd.OrderKey AND pkd.OrderLinenumber = wod.ExternLineNo AND pkd.Status = @cPickConfirmStatus
-                  INNER JOIN dbo.PackDetail pakd WITH(NOLOCK) ON pkd.StorerKey = pakd.StorerKey AND pkd.CaseID = pakd.LabelNo AND pakd.SKU = pkd.SKU
-                  LEFT JOIN dbo.CODELKUP lk1 WITH(NOLOCK) ON lk.StorerKey = lk1.StorerKey AND lk.Code = lk1.Code AND lk.UDF04 = lk1.LISTNAME AND lk1.Code2 <> ''
-                     AND (orm.ConsigneeKey = lk1.Code2 OR  MarkforKey = lk1.Code2 OR BillToKey = lk1.Code2)
-                  WHERE wo.StorerKey = @cStorerKey
-                     AND pkd.Sku = @cSKU
-                     AND wod.ExternWorkOrderKey IS NOT NULL
-                     AND wod.ExternWorkOrderKey <> ''
-                     AND pkd.CaseID <> ''
-                     AND pkd.CaseID = @cDropID
-                  ORDER BY lk.Code ASC
+                  DECLARE @tOrders TABLE
+                  (
+                     StorerKey      NVARCHAR(15),
+                     OrderKey       NVARCHAR(10),
+                     INDEX IDX_tOrders CLUSTERED(StorerKey, OrderKey)
+                  )
+
+                  INSERT INTO @tOrders (StorerKey, OrderKey)
+                  SELECT DISTINCT StorerKey, OrderKey
+                  FROM dbo.PickDetail WITH(NOLOCK)
+                  WHERE StorerKey = @cStorerKey
+                     AND CaseID <> ''
+                     AND CaseID = @cDropID
+
+                  DECLARE @tWorkOrderDetails TABLE
+                  (
+                     StorerKey            NVARCHAR(15),
+                     WorkOrderKey         NVARCHAR(10),
+                     ExternWorkOrderKey   NVARCHAR(20),
+                     ExternLineNo         NVARCHAR(5),
+                     WorkOrderLineNumber  NVARCHAR(5),
+                     Type                 NVARCHAR(12)
+                  )
+
+                  INSERT INTO @tWorkOrderDetails (StorerKey, WorkOrderKey, ExternWorkOrderKey, ExternLineNo, WorkOrderLineNumber, Type)
+                  SELECT StorerKey, WorkOrderKey, ExternWorkOrderKey, ExternLineNo, WorkOrderLineNumber, Type
+                  FROM
+                     (SELECT 
+                        wod1.StorerKey, wod1.WorkOrderKey, wod1.ExternWorkOrderKey, wod1.ExternLineNo, wod1.WorkOrderLineNumber, wod1.Type, 
+                        ROW_NUMBER()OVER(PARTITION BY WorkOrderKey, ExternWorkOrderKey, ExternLineNo ORDER BY ExternWorkOrderKey, ExternLineNo) AS ROW#
+                        FROM dbo.WorkOrderDetail wod1 WITH(NOLOCK)
+                        INNER JOIN @tOrders AS pkd1
+                           ON wod1.StorerKey = pkd1.StorerKey AND wod1.ExternWorkOrderKey = pkd1.OrderKey
+                        INNER JOIN dbo.CODELKUP lk2 WITH(NOLOCK) ON wod1.StorerKey = lk2.StorerKey AND lk2.LISTNAME = 'WKORDTYPE' AND lk2.UDF04 = 'LVSCatalog' AND wod1.Type = lk2.Code
+                        WHERE wod1.StorerKey = @cStorerKey
+                           AND wod1.Type <> ''
+                           AND wod1.ExternLineNo <> ''
+                           AND wod1.ExternWorkOrderKey IS NOT NULL
+                           AND wod1.ExternWorkOrderKey <> '') AS t
+                  WHERE ROW# = 1
+
+                  SELECT @nRowCount = @@ROWCOUNT
+
+                  IF @nRowCount > 0
+                  BEGIN
+                     INSERT INTO @tLabels(LabelListName, VASCode, LabelName, Qty, PrintSequence)
+                     SELECT DISTINCT IIF(lk1.LISTNAME IS NULL, lk.LISTNAME, lk1.LISTNAME), wod.Type, IIF(lk1.LISTNAME IS NULL, lk.UDF01, lk1.UDF01), pakd.Qty, lk.Code
+                     FROM @tWorkOrderDetails AS wod
+                     INNER JOIN dbo.WorkOrder wo WITH(NOLOCK) ON wo.WorkOrderKey = wod.WorkOrderKey
+                     INNER JOIN dbo.ORDERS orm WITH(NOLOCK) ON wod.StorerKey = orm.StorerKey AND wod.ExternWorkOrderKey = orm.OrderKey
+                     INNER JOIN dbo.CODELKUP lk WITH(NOLOCK) ON wo.StorerKey = lk.StorerKey AND wod.Type = lk.Code AND lk.LISTNAME = 'WKORDTYPE' AND lk.UDF04 = 'LVSCatalog' 
+                     INNER JOIN dbo.PickDetail pkd WITH(NOLOCK) ON wo.StorerKey = pkd.StorerKey AND wod.ExternWorkOrderKey = pkd.OrderKey AND pkd.OrderLinenumber = wod.ExternLineNo AND pkd.Status = @cPickConfirmStatus
+                     INNER JOIN dbo.PackDetail pakd WITH(NOLOCK) ON pkd.StorerKey = pakd.StorerKey AND pkd.CaseID = pakd.LabelNo AND pakd.SKU = pkd.SKU
+                     LEFT JOIN dbo.CODELKUP lk1 WITH(NOLOCK) ON lk.StorerKey = lk1.StorerKey AND lk.Code = lk1.Code AND lk.UDF04 = lk1.LISTNAME AND lk1.Code2 <> ''
+                        AND (orm.ConsigneeKey = lk1.Code2 OR  MarkforKey = lk1.Code2 OR BillToKey = lk1.Code2)
+                     WHERE wo.StorerKey = @cStorerKey
+                        AND pkd.Sku = @cSKU
+                        AND wod.ExternWorkOrderKey IS NOT NULL
+                        AND wod.ExternWorkOrderKey <> ''
+                        AND pkd.CaseID <> ''
+                        AND pkd.CaseID = @cDropID
+                     ORDER BY lk.Code ASC
+                  END
                END
 
                SELECT @nTotalCQty = SUM(CQty)
@@ -624,28 +701,37 @@ BEGIN
                      DECLARE @tCartonWeight TABLE
                      (
                         CaseID            NVARCHAR(30),
+                        PickSlipNo        NVARCHAR(10),
+                        CartonNo          INT,
                         Weight            FLOAT
                      )
 
-                     INSERT INTO @tCartonWeight (CaseID, Weight)
-                     SELECT CaseID, InvWeight + CartonWeight
+                     DECLARE @nPickSlipNoQty    INT = 1
+                     SELECT @nPickSlipNoQty = COUNT(DISTINCT PickSlipNo)
+                     FROM dbo.PackInfo WITH(NOLOCK)
+                     WHERE RefNo IS NOT NULL
+                        AND RefNo = @cDropID
+                        AND CartonStatus = 'PACKED'
+
+                     INSERT INTO @tCartonWeight (CaseID, PickSlipNo, CartonNo, Weight)
+                     SELECT LabelNo, PickSlipNo, CartonNo, InvWeight + CartonWeight
                      FROM
-                        (SELECT PKD.CaseID, CART.CartonWeight, SUM(PKD.qty * SKU.StdGrossWgt) AS InvWeight
-                        FROM dbo.CARTONIZATION CART WITH(NOLOCK)
-                        INNER JOIN dbo.PackInfo PKI WITH(NOLOCK) ON CART.CartonType = ISNULL(PKI.CartonType, '')
-                        INNER JOIN dbo.PickDetail PKD WITH(NOLOCK) ON PKI.RefNo = PKD.CaseID
-                        INNER JOIN dbo.SKU SKU WITH(NOLOCK) ON PKD.StorerKey = SKU.StorerKey AND PKD.Sku = SKU.Sku
-                        WHERE PKI.RefNo IS NOT NULL
-                           AND PKD.CaseID <> ''
-                           AND PKD.CaseID = @cDropID
-                           AND PKD.StorerKey = @cStorerKey
-                           AND PKD.Status = @cPickConfirmStatus
-                        GROUP BY PKD.CaseID, CART.CartonWeight) AS t
+                        (SELECT PD.LabelNo, PH.PickSlipNo, PD.CartonNo, SUM(SKU.STDNETWGT * PD.qty) AS InvWeight, CART.CartonWeight / ISNULL(@nPickSlipNoQty, 1) AS CartonWeight 
+                        FROM PACKDETAIL PD (nolock)
+                        INNER JOIN SKU (nolock) on  PD.storerkey = SKU.storerkey and PD.sku=SKU.sku
+                        INNER JOIN packheader PH (nolock) on PH.pickslipno = PD.pickslipno
+                        INNER JOIN dbo.PackInfo PKI WITH(NOLOCK) ON PD.PickSlipNo = PKI.PickSlipNo AND PD.CartonNo = PKI.CartonNo
+                        INNER JOIN dbo.Storer STORER WITH (NOLOCK) ON PD.StorerKey = STORER.StorerKey
+                        INNER JOIN dbo.CARTONIZATION CART WITH(NOLOCK) ON Storer.CartonGroup = CART.CartonizationGroup AND CART.CartonType = PKI.CartonType
+                        WHERE PD.LabelNo = @cDropID
+                           AND PKI.CartonStatus = 'PACKED'
+                           AND PD.StorerKey = @cStorerKey
+                           GROUP BY PD.StorerKey, PH.PickSlipNo, PD.CartonNo, PD.labelno, CART.CartonWeight) AS t
 
                      UPDATE PI WITH(ROWLOCK) 
                      SET PI.Weight = CW.Weight
                      FROM dbo.PackInfo PI
-                     INNER JOIN @tCartonWeight CW ON ISNULL(PI.RefNo, '') = CW.CaseID
+                     INNER JOIN @tCartonWeight CW ON PI.RefNo = CW.CaseID AND PI.PickSlipNo = CW.PickSlipNo
                      WHERE
                         PI.RefNo IS NOT NULL
                         AND PI.RefNo = @cDropID
@@ -681,15 +767,16 @@ BEGIN
                            WHERE StorerKey = @cStorerKey
                               AND OrderKey = @cOrderKey 
                               AND Status NOT IN ('4', '9')
-                              AND TRIM(CaseID) <> '')
+                              AND CaseID <> '')
                            =
                            (SELECT COUNT( DISTINCT RefNo )
                            FROM dbo.PICKDETAIL PKD WITH(NOLOCK)
-                           INNER JOIN dbo.PackInfo PI WITH(NOLOCK) ON ISNULL(PKD.CaseID, '-1') = ISNULL(PI.RefNo, '')
+                           INNER JOIN dbo.PackInfo PI WITH(NOLOCK) ON PKD.CaseID = PI.RefNo
                            WHERE PKD.StorerKey = @cStorerKey
                               AND PKD.OrderKey = @cOrderKey 
                               AND PI.CartonStatus = 'PACKED'
-                              AND TRIM(ISNULL(RefNo, '')) <> '')
+                              AND PI.RefNo IS NOT NULL
+                              AND PI.RefNo <> '')
                         BEGIN
                            -- Print Logi report
                            SELECT @cConsigneeKey = ISNULL(ConsigneeKey, ''),
@@ -748,7 +835,7 @@ BEGIN
                      )
 
                      INSERT INTO @tPickSlipNoList (PickSlipNo)
-                     SELECT PH.PickHeaderKey
+                     SELECT DISTINCT PH.PickHeaderKey
                      FROM dbo.PickHeader PH WITH(NOLOCK) 
                      INNER JOIN dbo.PickDetail PKD WITH(NOLOCK)
                         ON PH.StorerKey = PKD.StorerKey
@@ -772,10 +859,33 @@ BEGIN
                         IF @nRowCount = 0
                            BREAk
 
-                        --If all Packedinfo are marked as PACKED, mark PackHeader as 9
+                        --Meet below conditions, mark PackHeader as 9
+                        --1. all packinfo marked as 'PACKED'
+                        --2. all PickDetails are finished
+                        --3. Count(PickDetail.CaseID) = Count(PackDetail.LabelNo)
                         IF (SELECT COUNT(1) FROM dbo.PackInfo WITH(NOLOCK) WHERE PickSlipNo = @cPickSlipNo)
                            =
                            (SELECT COUNT(1) FROM dbo.PackInfo WITH(NOLOCK) WHERE PickSlipNo = @cPickSlipNo AND ISNULL(CartonStatus, '') = 'PACKED')
+                           AND NOT EXISTS (SELECT 1 
+                                          FROM dbo.PickHeader PH WITH(NOLOCK)
+                                          INNER JOIN dbo.PickDetail PD WITH(NOLOCK)
+                                             ON PH.StorerKey = PD.StorerKey
+                                             AND PH.OrderKey = PD.OrderKey
+                                          WHERE PH.StorerKey = @cStorerkey
+                                             AND PH.PickHeaderKey = @cPickSlipNo
+                                             AND PD.Status < '4'
+                                             AND PD.QTY > 0
+                                           )
+                           AND (SELECT COUNT(DISTINCT LabelNo) FROM dbo.PackDetail WITH(NOLOCK) WHERE StorerKey = @cStorerkey AND PickSlipNo = @cPickSlipNo)
+                               =
+                               (SELECT COUNT(DISTINCT CaseID)
+                                 FROM dbo.PickHeader PH WITH(NOLOCK)
+                                 INNER JOIN dbo.PickDetail PD WITH(NOLOCK)
+                                    ON PH.StorerKey = PD.StorerKey
+                                    AND PH.OrderKey = PD.OrderKey
+                                 WHERE PH.StorerKey = @cStorerkey
+                                    AND PH.PickHeaderKey = @cPickSlipNo
+                                    AND PD.qty > 0)
                         BEGIN
                            UPDATE dbo.PackHeader WITH(ROWLOCK)
                            SET Status = '9'
@@ -786,6 +896,84 @@ BEGIN
                      IF TRIM(@cShipperKey) <> ''
                         AND EXISTS(SELECT 1 FROM CODELKUP WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND LISTNAME = 'WSCourier' AND @cShipperKey = ISNULL(notes,'-1'))
                      BEGIN
+                        --V1.17 start
+                        -- Get all order key without orderinfo.ReferenceNo value in the paperboard box
+                        INSERT INTO @tOrderNoRefID (OrderKey, ConsigneeKey, WaveKey)
+                           SELECT DISTINCT ORM.OrderKey, ORM.ConsigneeKey, ORM.UserDefine09 
+                           FROM dbo.PICKDETAIL PD WITH(NOLOCK)
+                           JOIN dbo.ORDERS ORM WITH(NOLOCK) ON PD.OrderKey = orm.OrderKey
+                           JOIN dbo.OrderInfo OI WITH(NOLOCK) ON ORM.OrderKey = oi.OrderKey
+                           WHERE PD.CaseID = @cDropID
+                              AND PD.CaseID <> ''
+                              AND PD.StorerKey = @cStorerKey
+                              AND PD.Status NOT IN ('4', '9')
+                              AND (OI.ReferenceId IS NULL OR OI.ReferenceId = '')
+                        
+                        IF @bDebugFlag = 1
+                        BEGIN
+                           SELECT 'Order without ReferenceID', @cDropID AS DropID
+                           SELECT * FROM @tOrderNoRefID
+                        END
+
+                        IF EXISTS (SELECT 1 FROM @tOrderNoRefID)
+                        BEGIN
+                           SET @nLoopIndex = -1
+                           WHILE 1 = 1
+                           BEGIN
+                              SELECT TOP 1
+                                 @cONRIOrderKey = OrderKey,
+                                 @cONRIConsigneeKey = ConsigneeKey,
+                                 @cONRIWaveKey = WaveKey,
+                                 @nLoopIndex = RowNumber
+                              FROM @tOrderNoRefID
+                              WHERE RowNumber > @nLoopIndex
+                              ORDER BY RowNumber
+
+                              SET @nRowCount = @@ROWCOUNT
+
+                              IF @nRowCount = 0
+                                 BREAK
+
+                              SET @cReferenceID = ''
+
+                              --Call BOL running number generator
+                              
+                              EXEC	[dbo].[msp_GetBOLbyConsigneeKey]
+                                 @c_Wavekey  = @cONRIWaveKey,
+                                 @c_Orderkey = @cONRIOrderKey,
+                                 @c_Consigneekey = @cONRIConsigneeKey,
+                                 @c_BOLByConsigneekey = @cReferenceID OUTPUT,
+                                 @c_OtherParams = @cOtherParams OUTPUT,
+                                 @b_Success = @bSuccess OUTPUT,
+                                 @n_Err = @nErrNo OUTPUT,
+                                 @c_ErrMsg = @cErrMsg OUTPUT
+
+                              IF @bSuccess <> 1 OR @nErrNo <> 0
+                              BEGIN
+                                 SET @nErrNo = 217807
+                                 SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --GenReferenceIDFail
+                                 GOTO Quit
+                              END
+
+                              IF @bDebugFlag = 1
+                                 SELECT 'Generating ReferenceID for OrderKey', @nLoopIndex AS RowNumber, 
+                                          @cONRIOrderKey AS Orderkey, @cONRIConsigneeKey AS Consigneekey, 
+                                          @cONRIWaveKey AS WaveKey, @cReferenceID AS ReferenceID 
+
+                              BEGIN TRY
+                                 UPDATE dbo.OrderInfo WITH(ROWLOCK)
+                                 SET ReferenceId = @cReferenceID
+                                 WHERE OrderKey = @cONRIOrderKey
+                              END TRY
+                              BEGIN CATCH
+                                 SET @nErrNo = 217808
+                                 SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Update OrderInfo fail
+                                 GOTO Quit
+                              END CATCH
+                           END-- loop generating reference id end
+                        END -- OrderNoRefID exists end
+                        --V1.17 end
+
                         DECLARE @cTrauncatedDropID    NVARCHAR(10) = @cDropID
                         -- Insert transmitlog2 here
                         EXECUTE ispGenTransmitLog2
@@ -1162,58 +1350,113 @@ BEGIN
 
                   -- add record into transmitlog2
                   BEGIN TRAN
-                     SAVE TRAN rdt_855TransLog2
+                  SAVE TRAN rdt_855TransLog2
 
-                     WHILE @nWaveKeyCount > 0
+                  WHILE @nWaveKeyCount > 0
+                  BEGIN
+                     SELECT TOP 1 @cWaveKey = WaveKey FROM @tWaveKeys
+                     EXECUTE ispGenTransmitLog2
+                              @c_TableName      = 'WSCTNAdd',
+                              @c_Key1           = @cWaveKey,
+                              @c_Key2           = @cDropID, -- LabelNo/CaseID
+                              @c_Key3           = @cStorerkey,
+                              @c_TransmitBatch  = '',
+                              @b_Success        = @bSuccess   OUTPUT,
+                              @n_err            = @nErrNo     OUTPUT,
+                              @c_errmsg         = @cErrMsg    OUTPUT
+                     IF @nErrNo <> 0 OR @bSuccess <> 1
                      BEGIN
-                        SELECT TOP 1 @cWaveKey = WaveKey FROM @tWaveKeys
+                        ROLLBACK TRAN rdt_855TransLog2
+                        GOTO Quit
+                     END
+
+                     --V1.13.0 start
+                     /*
+                     IF @cDropIDFlag = 'Y' AND LEN(@cToteID) = 10
+                     BEGIN
                         EXECUTE ispGenTransmitLog2
-                                @c_TableName      = 'WSCTNAdd',
-                                @c_Key1           = @cWaveKey,
-                                @c_Key2           = @cDropID, -- LabelNo/CaseID
-                                @c_Key3           = @cStorerkey,
-                                @c_TransmitBatch  = '',
-                                @b_Success        = @bSuccess   OUTPUT,
-                                @n_err            = @nErrNo     OUTPUT,
-                                @c_errmsg         = @cErrMsg    OUTPUT
+                                 @c_TableName      = 'WSSortTotRel',
+                                 @c_Key1           = @cWaveKey,
+                                 @c_Key2           = @cToteID, -- Tote ID, dropid from pickdetail
+                                 @c_Key3           = @cStorerkey,
+                                 @c_TransmitBatch  = '',
+                                 @b_Success        = @bSuccess   OUTPUT,
+                                 @n_err            = @nErrNo     OUTPUT,
+                                 @c_errmsg         = @cErrMsg    OUTPUT
                         IF @nErrNo <> 0 OR @bSuccess <> 1
                         BEGIN
                            ROLLBACK TRAN rdt_855TransLog2
                            GOTO Quit
                         END
+                     END*/ --v1.13.0 end
 
-                        IF @cDropIDFlag = 'Y' AND LEN(@cToteID) = 10
+                     -- renew loop controll
+                     DELETE FROM @tWaveKeys WHERE WaveKey = @cWaveKey;
+                     SELECT @nWaveKeyCount = COUNT(*) FROM @tWaveKeys;
+                  END --WSCTNAdd
+
+                  --V1.13.0 start
+                  IF @cDropIDFlag = 'Y'
+                  BEGIN
+                     INSERT INTO @tDropID (DropID)
+                     SELECT DISTINCT DropID
+                     FROM dbo.PackDetail WITH(NOLOCK)
+                     WHERE StorerKey = @cStorerKey
+                     AND LabelNo = @cDropID --The scanned dropid is the label no in packdetail
+
+                     SET @nDropIDMax = @@ROWCOUNT
+                     SET @nDropIDCounter = 1
+
+                     IF @bDebugFlag = 1
+                     BEGIN
+                        SELECT 'Temp Drop ID list'
+                        SELECT * FROM @tDropID
+                     END
+
+                     IF @nDropIDCounter <= @nDropIDMax
+                     BEGIN
+                        SELECT @cPackDropID = ISNULL(DropID, '')
+                        FROM @tDropID
+                        WHERE RowNumber = @nDropIDCounter
+
+                        IF @cPackDropID <> '' AND LEN(@cPackDropID) = 10
                         BEGIN
+                           IF @bDebugFlag = 1
+                              SELECT 'Send TransmitLog2', @cPackDropID AS PackDropID, @cDropID AS PackLabelNo
                            EXECUTE ispGenTransmitLog2
-                                   @c_TableName      = 'WSSortTotRel',
-                                   @c_Key1           = @cWaveKey,
-                                   @c_Key2           = @cToteID, -- Tote ID, dropid from pickdetail
-                                   @c_Key3           = @cStorerkey,
-                                   @c_TransmitBatch  = '',
-                                   @b_Success        = @bSuccess   OUTPUT,
-                                   @n_err            = @nErrNo     OUTPUT,
-                                   @c_errmsg         = @cErrMsg    OUTPUT
+                              @c_TableName      = 'WSSortTotRel',
+                              @c_Key1           = @cPackDropID, --PackDetail DropID
+                              @c_Key2           = @cDropID, -- PackDetail LabelNo
+                              @c_Key3           = @cStorerkey,
+                              @c_TransmitBatch  = '',
+                              @b_Success        = @bSuccess   OUTPUT,
+                              @n_err            = @nErrNo     OUTPUT,
+                              @c_errmsg         = @cErrMsg    OUTPUT
                            IF @nErrNo <> 0 OR @bSuccess <> 1
                            BEGIN
                               ROLLBACK TRAN rdt_855TransLog2
                               GOTO Quit
-                           END
+                           END 
+                        END --create transmitlog2
+                        ELSE
+                        BEGIN
+                           IF @bDebugFlag = 1
+                              SELECT 'Fail to Send TransmitLog2',  @cPackDropID AS PackDropID, @cDropID AS PackLabelNo
                         END
+                        SET @nDropIDCounter = @nDropIDCounter + 1
+                     END --end while
+                  END --WSSortTotRel
+                  --V1.13.0 end
 
-                        -- renew loop controll
-                        DELETE FROM @tWaveKeys WHERE WaveKey = @cWaveKey;
-                        SELECT @nWaveKeyCount = COUNT(*) FROM @tWaveKeys;
-                     END
-                     --clear dropid to reuse
-                     IF @cDropIDFlag = 'Y'
-                     BEGIN
-                        UPDATE dbo.PackDetail WITH(ROWLOCK) SET DropID = CONCAT('ARC',DropID) WHERE DropID=@cToteID
-                        UPDATE dbo.PICKDETAIL WITH(ROWLOCK) SET DropID = CONCAT('ARC',DropID) WHERE DropID=@cToteID
-                        UPDATE RDT.RDTMOBREC WITH(ROWLOCK) SET C_STRING1 = '' WHERE Mobile = @nMobile
-                     END
-                     WHILE @@TRANCOUNT > @nTranCount
+                  --clear dropid to reuse
+                  IF @cDropIDFlag = 'Y'
+                  BEGIN
+                     UPDATE dbo.PackDetail WITH(ROWLOCK) SET DropID = CONCAT('ARC',DropID) WHERE DropID=@cToteID
+                     UPDATE dbo.PICKDETAIL WITH(ROWLOCK) SET DropID = CONCAT('ARC',DropID) WHERE DropID=@cToteID
+                     UPDATE RDT.RDTMOBREC WITH(ROWLOCK) SET C_STRING1 = '' WHERE Mobile = @nMobile
+                  END
+                  WHILE @@TRANCOUNT > @nTranCount
                      COMMIT TRAN
-
                END
             END
          END

@@ -41,8 +41,12 @@ GO
 /*                            control                                      */
 /* 2024-08-13  SSA06    1.6   Added ORDERDETAIL.ID = RECEIPTDETAIL.TOID    */
 /*                            mapping                                      */
+/* 2025-03-03  SSA07    1.7   UWP-30752 - seller order naming convention   */
+/* 2025-05-14  JH01     1.8   UWP-31657 - Change to map Receipt/ReceiptDetail*/
+/* 2025-06-19  JH02     1.9   UWP-36358 - Enhanced the error message show  */
+/* 2025-07-11  JH03     2.0   UWP-37565 - Duplicate OrderKey Issue         */ 
 /***************************************************************************/
-CREATE OR ALTER   PROC [dbo].[mspASNFZ01]
+CREATE OR ALTER PROC [dbo].[mspASNFZ01]
 (     @c_Receiptkey  NVARCHAR(10)
   ,   @b_Success     INT           OUTPUT
   ,   @n_Err         INT           OUTPUT
@@ -63,6 +67,8 @@ BEGIN
 
    DECLARE @n_OrderCnt           INT            = 0
          , @c_ASNStatus          NVARCHAR(10)   = '0'
+         , @c_ExistingOrderKey             NVARCHAR(10)   = ''              /*JH01*/
+         , @c_ExistingOrderStatus          NVARCHAR(10)   = '0'             /*JH01*/
          , @c_DocType            NVARCHAR(1)    = ''
          , @c_OrderKey           NVARCHAR(10)   = ''
          , @c_StorerKey          NVARCHAR(15)   = ''
@@ -274,15 +280,16 @@ BEGIN
    BEGIN
       GOTO QUIT_SP
    END
-
-   IF NOT EXISTS( SELECT 1
-                  FROM RECEIPTDETAIL RD (NOLOCK)
-                  JOIN PODETAIL POD (NOLOCK) ON RD.Pokey = POD.POKey AND RD.POLineNumber = POD.POLineNumber
-                  WHERE POD.Facility = @c_Facility
-                  AND RD.Receiptkey = @c_Receiptkey)
-   BEGIN
-      GOTO QUIT_SP
-   END
+       
+   -- IF NOT EXISTS( SELECT 1
+   --               FROM RECEIPTDETAIL RD (NOLOCK)
+   --               JOIN PODETAIL POD (NOLOCK) ON RD.Pokey = POD.POKey AND RD.POLineNumber = POD.POLineNumber
+   --               WHERE POD.Facility = @c_Facility
+   --               AND RD.Receiptkey = @c_Receiptkey)
+   --BEGIN
+   --   GOTO QUIT_SP
+   --END  /*JH01*/
+   
    --Construct order records
    IF @n_continue IN(1,2)
    BEGIN
@@ -310,9 +317,9 @@ BEGIN
             ,  RD.ToId                                         --(SSA06)
          FROM  RECEIPT RH WITH (NOLOCK)
          JOIN  RECEIPTDETAIL RD WITH (NOLOCK) ON (RH.ReceiptKey = RD.ReceiptKey)
-         JOIN  PODETAIL POD WITH (NOLOCK) ON (RD.Pokey = POD.Pokey)
-                                          AND (RD.POLineNumber = POD.POLineNumber)
-                                          AND (RH.FACILITY = POD.FACILITY)              --(SSA01)
+       --  JOIN  PODETAIL POD WITH (NOLOCK) ON (RD.Pokey = POD.Pokey)                     --(JH01)
+      --                                    AND (RD.POLineNumber = POD.POLineNumber)      --(JH01)
+      --                                    AND (RH.FACILITY = POD.FACILITY)              --(SSA01)  --(JH01)
          WHERE RH.ReceiptKey = @c_Receiptkey
          AND RD.QtyExpected > 0
          ORDER BY ISNULL(RD.Userdefine02,'')
@@ -328,110 +335,148 @@ BEGIN
 
          WHILE @@FETCH_STATUS <> -1 AND @n_continue IN(1,2)
          BEGIN
+             /*Check if existing externorderkey created SO - Start*/ /*JH01*/    
+             SET @c_ExistingOrderKey = ''
+             Set @c_ExistingOrderStatus = ''
+             SELECT @c_ExistingOrderKey = ISNULL(OH.OrderKey,''), @c_ExistingOrderStatus  = OH.Status                                            
+             FROM  ORDERS OH WITH (NOLOCK)                  
+             JOIN  RECEIPTDETAIL RD WITH (NOLOCK) ON (OH.StorerKey = RD.StorerKey AND RD.ExternReceiptkey = OH.ExternOrderKey)   
+                           WHERE OH.Storerkey = @c_Storerkey                  
+                           AND OH.ExternOrderKey = @c_ExternReceiptkey
+                           AND OH.Consigneekey = @c_Consigneekey
+                           AND OH.DeliveryDate = @c_DeliveryDate                
+                           AND OH.Door = @c_Door      /*JH01*/
+            IF @c_ExistingOrderKey <> ''
+            BEGIN
+               IF @c_ExistingOrderStatus = '0' 
+               BEGIN
+                  DELETE ORDERDETAIL WHERE ORDERKEY = @c_ExistingOrderKey 
+               END
+               ELSE 
+               BEGIN
+                  CONTINUE; 
+               END
+            END            
+             /*Check if existing externorderkey created SO - End*/ /*JH01*/    
+
             ---- (SSA01) start -----
             IF EXISTS (SELECT 1
-                     FROM #TMP_ORD WHERE Consigneekey = @c_Consigneekey and DeliveryDate = @c_DeliveryDate and Door = @c_Door)
+                     FROM #TMP_ORD WHERE ExternOrderKey = @c_ExternReceiptkey AND  Consigneekey = @c_Consigneekey and DeliveryDate = @c_DeliveryDate and Door = @c_Door )   /*JH01 add @c_ExternReceiptkey*/
             BEGIN
-			        SELECT @c_Orderkey = orderkey, @c_ExternOrderkey = ExternOrderkey
-			        FROM #TMP_ORD WHERE Consigneekey = @c_Consigneekey and DeliveryDate = @c_DeliveryDate and Door = @c_Door
-              IF(@c_Receiptkey <> @c_ExternOrderkey)
-              BEGIN
-                UPDATE #TMP_ORD set ExternOrderkey = @c_Receiptkey where orderkey = @c_Orderkey
-              END
+			        SELECT @c_Orderkey = orderkey
+			        FROM #TMP_ORD WHERE ExternOrderKey = @c_ExternReceiptkey AND  Consigneekey = @c_Consigneekey and DeliveryDate = @c_DeliveryDate and Door = @c_Door  /*JH01 add @c_ExternReceiptkey*/
             END
             ELSE
             BEGIN
-               SET @c_Orderkey = ''
-               EXECUTE nspg_GetKey
-               @KeyName = 'ORDER'
-               , @fieldlength = 10
-               , @keystring = @c_Orderkey   OUTPUT
-               , @b_Success = @b_Success    OUTPUT
-               , @n_Err     = @n_Err        OUTPUT
-               , @c_ErrMsg  = @c_ErrMsg     OUTPUT
-               , @n_Batch   = 1                                  --(SSA02)
-
-               IF @b_Success = 0
+               IF @c_ExistingOrderKey <> ''              /*JH01*/    
                BEGIN
-                  SET @n_Continue = 3
-                  GOTO QUIT_SP
+                  SET @c_Orderkey = @c_ExistingOrderKey                  
                END
+               ELSE
+               BEGIN
+                  SET @c_Orderkey = ''
+                  EXECUTE nspg_GetKey
+                  @KeyName = 'ORDER'
+                  , @fieldlength = 10
+                  , @keystring = @c_Orderkey   OUTPUT
+                  , @b_Success = @b_Success    OUTPUT
+                  , @n_Err     = @n_Err        OUTPUT
+                  , @c_ErrMsg  = @c_ErrMsg     OUTPUT
+                  , @n_Batch   = 1                                  --(SSA02)
 
-               INSERT INTO #TMP_ORD
-               (  OrderKey
-               ,  Storerkey
-               ,  Type
-               ,  Door
-               ,  DeliveryDate
-               ,  ExternOrderkey
-               ,  Consigneekey
-               ,  C_Contact1
-               ,  C_Contact2
-               ,  C_Company
-               ,  C_Address1
-               ,  C_Address2
-               ,  C_Address3
-               ,  C_Address4
-               ,  C_City
-               ,  C_State
-               ,  C_Zip
-               ,  C_Country
-               ,  C_ISOCntryCode
-               ,  C_Phone1
-               ,  C_Phone2
-               ,  C_Fax1
-               ,  C_Fax2
-               ,  C_Vat
-               ,  Facility
-               ,  Billtokey
-               ,  B_Contact1
-               ,  B_Company
-               ,  B_Address1
-               ,  Userdefine01
-               ,  UserDefine02
-               ,  Userdefine06
-               ,  Userdefine07
-               ,  ExternPOKey
-               )
-               SELECT
-                  @c_Orderkey
-               ,  @c_Storerkey
-               ,  'XDOCK'
-               ,  Door           = @c_Door
-               ,  DeliveryDate   = @c_DeliveryDate
-               ,  ExternOrderkey = @c_ExternReceiptkey
-               ,  Consigneekey   = @c_Consigneekey
-               ,  C_Contact1     = ''
-               ,  C_Contact2     = ''
-               ,  C_Company      = ''
-               ,  C_Address1     = ''
-               ,  C_Address2     = ''
-               ,  C_Address3     = ''
-               ,  C_Address4     = ''
-               ,  C_City         = ''
-               ,  C_State        = ''
-               ,  C_Zip          = ''
-               ,  C_Country      = ''
-               ,  C_ISOCntryCode = ''
-               ,  C_Phone1       = ''
-               ,  C_Phone2       = ''
-               ,  C_Fax1         = ''
-               ,  C_Fax2         = ''
-               ,  C_Vat          = ''
-               ,  Facility       = @c_Facility
-               ,  Billtokey      = SubString(PO.SellersReference,0,15)                               --(SSA04)
-               ,  B_Contact1     = PO.OtherReference
-               ,  B_Company      = PO.SellerName
-               ,  B_Address1     = PO.SellerAddress1
-               ,  Userdefine01   = PO.Userdefine01
-               ,  UserDefine02   = PO.POType
-               ,  UserDefine06   = PO.PODate
-               ,  Userdefine07   = PO.LoadingDate
-               ,  ExternPOKey    = @c_ExternPOKey                                                    --(SSA04)
-               FROM  PO  (NOLOCK)
-               WHERE PO.Pokey = @c_POKey
-           END
-		        INSERT INTO #TMP_ORDDTL
+                  IF @b_Success = 0
+                  BEGIN
+                     SET @n_Continue = 3
+                     GOTO QUIT_SP
+                  END
+               END
+               
+               IF @c_ExistingOrderKey = ''              /*JH01*/    
+               BEGIN
+                  INSERT INTO #TMP_ORD
+                  (  OrderKey
+                  ,  Storerkey
+                  ,  Type
+                  ,  Door
+                  ,  DeliveryDate
+                  ,  ExternOrderkey
+                  ,  Consigneekey
+                  ,  C_Contact1
+                  ,  C_Contact2
+                  ,  C_Company
+                  ,  C_Address1
+                  ,  C_Address2
+                  ,  C_Address3
+                  ,  C_Address4
+                  ,  C_City
+                  ,  C_State
+                  ,  C_Zip
+                  ,  C_Country
+                  ,  C_ISOCntryCode
+                  ,  C_Phone1
+                  ,  C_Phone2
+                  ,  C_Fax1
+                  ,  C_Fax2
+                  ,  C_Vat
+                  ,  Facility
+                  ,  Billtokey
+                  ,  B_Contact1
+                  ,  B_Company
+                  ,  B_Address1
+                  ,  Userdefine01
+                  ,  UserDefine02
+                  ,  Userdefine06
+                  ,  Userdefine07
+                  ,  ExternPOKey
+                  )
+                  SELECT
+                     @c_Orderkey
+                  ,  @c_Storerkey
+                  ,  'XDOCK'
+                  ,  Door           = @c_Door
+                  ,  DeliveryDate   = @c_DeliveryDate
+                  ,  ExternOrderkey = RD.ExternReceiptkey  --@c_ExternReceiptkey
+                  ,  Consigneekey   = @c_Consigneekey
+                  ,  C_Contact1     = S.Company                                                          
+                  ,  C_Contact2     = ''
+                  ,  C_Company      = ''
+                  ,  C_Address1     = S.Address1                                                     --(JH01)
+                  ,  C_Address2     = S.Address2                                                     --(JH01)
+                  ,  C_Address3     = S.Address3                                                     --(JH01)
+                  ,  C_Address4     = ''
+                  ,  C_City         = ''
+                  ,  C_State        = ''
+                  ,  C_Zip          = ''
+                  ,  C_Country      = ''
+                  ,  C_ISOCntryCode = ''
+                  ,  C_Phone1       = ''
+                  ,  C_Phone2       = ''
+                  ,  C_Fax1         = ''
+                  ,  C_Fax2         = ''
+                  ,  C_Vat          = ''
+                  ,  Facility       = @c_Facility
+                  ,  Billtokey      = RH.SellerCompany                                                  --(SSA04) (JH01)
+                  ,  B_Contact1     = RH.CarrierReference                                               --(JH01)
+                  ,  B_Company      = RH.SellerName                                                     --(JH01)
+                  ,  B_Address1     = RH.SellerAddress1                                                 --(JH01)
+                  ,  Userdefine01   = RH.Userdefine01                                                   --(JH01)
+                  ,  UserDefine02   = RH.RECType                                                        --(JH01)
+                  ,  UserDefine06   = RH.UserDefine06                                                   --(JH01)
+                  ,  Userdefine07   = RH.UserDefine07                                                   --(JH01)
+                  ,  ExternPOKey    = RD.ExternReceiptKey                                               --(SSA04)  (JH01)
+                  FROM  RECEIPT RH  (NOLOCK)                                                            --(JH01)
+                  JOIN  RECEIPTDETAIL RD WITH (NOLOCK) ON (RH.ReceiptKey = RD.ReceiptKey)               --(JH01)
+                  LEFT JOIN  STORER S WITH (NOLOCK) ON (S.StorerKey = RD.UserDefine02 AND S.Type = '2'  AND S.ConsigneeFor = RD.StorerKey)
+                  WHERE RD.ExternReceiptkey = @c_ExternReceiptkey                                        --(JH01)
+			  AND RD.ReceiptKey = @c_Receiptkey                                              --(JH03)
+                  -- FROM  PO  (NOLOCK)                                                                  --(JH01)
+                  -- WHERE PO.Pokey = @c_POKey                                                           --(JH01)
+                  GROUP BY S.Company, S.Address1, S.Address2, S.Address3, RH.SellerCompany, RH.CarrierReference, RH.SellerName, RH.SellerAddress1, --(JH01)
+                  RH.Userdefine01, RH.RECType, RH.UserDefine06, RH.UserDefine07, RD.ExternReceiptKey                                               --(JH01)
+               END               
+            END
+
+	    INSERT INTO #TMP_ORDDTL
             (  OrderKey
 			      ,  ReceiptKey
             ,  POKey
@@ -464,8 +509,16 @@ BEGIN
          END
          CLOSE CUR_RECDET
          DEALLOCATE CUR_RECDET
+         --Updating externorderkey in the orders table
+        /* --(SSA07) start--
+         SELECT @n_OrderCnt = COUNT(DISTINCT ExternOrderkey) FROM #TMP_ORD
+         IF @n_OrderCnt > 1
+         BEGIN
+            UPDATE #TMP_ORD set ExternOrderkey = @c_Receiptkey
+         END
+         --(SSA07) end-- comment out by JH01*/
          IF NOT EXISTS (SELECT 1
-                     FROM #TMP_ORD)
+                     FROM #TMP_ORDDTL)   /*JH01 #TMP_ORD*/
          BEGIN
          SET @n_Continue = 3
          GOTO QUIT_SP
@@ -473,7 +526,7 @@ BEGIN
    END
 
    --Insert order to DB
-   IF @n_continue IN(1,2)
+   IF @n_continue IN(1,2)   
    BEGIN
 
       INSERT INTO ORDERS
@@ -732,7 +785,7 @@ BEGIN
                        + ': INSERT INTO ORDERS Table Failed. (mspASNFZ01)'
          GOTO QUIT_SP
       END
-
+   
       INSERT INTO ORDERDETAIL
             (  Orderkey
             ,  OrderLineNumber
@@ -806,11 +859,11 @@ BEGIN
       IF @@ERROR <> 0
       BEGIN
          SET @n_Continue = 3
-         SET @n_Err = 68021
+         /*SET @n_Err = 68021                                                                   JH02*/
          SET @c_ErrMsg = 'NSQL' + CONVERT(NCHAR(5),@n_Err)
-                       + ': XDOCK ASN Allocation Failed. (mspASNFZ01)'
+                       + ': XDOCK ASN Allocation Failed. (mspASNFZ01). ' + RTRIM(@c_ErrMsg)   /*JH02*/
          GOTO QUIT_SP
-      END
+      END  
    END
 
    QUIT_SP:

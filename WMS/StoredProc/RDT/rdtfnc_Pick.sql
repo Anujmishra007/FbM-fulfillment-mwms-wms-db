@@ -67,6 +67,9 @@ GO
 /* 2022-05-19   3.8  Ung        WMS-22486 Add pick pallet with UCC            */
 /* 2022-10-21   3.9  PXL009     UWP-25970 Fix Implicit type conversion error  */
 /* 2024-10-22   4.0  PXL009     FCR-759 ID and UCC Length Issue               */
+/* 2025-02-26   4.1.0  NLT013   FCR-2519 Be able to config Lottable           */
+/* 2025-02-26   4.1.1  CYU027   FCR-2519 Lottable 1-15 Swap UCC               */
+/* 2025-07-28   0.0.0  Jackc    !!!Cutover!!! Use V0 repo for work            */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_Pick] (
@@ -168,6 +171,7 @@ DECLARE
    @cDecodeDropIDSP        NVARCHAR(20),
    @nQty                   INT,
    @cDecodeSP              NVARCHAR( 20),
+   @cLottableValidSP       NVARCHAR( 20),
 
    @cLottable01            NVARCHAR( 18),
    @cLottable02            NVARCHAR( 18),
@@ -188,6 +192,8 @@ DECLARE
    @cPickDontShowLot02     NVARCHAR( 20),
    @cDefaultToPickQty      NVARCHAR( 20),
    @cAutoScanIn            NVARCHAR( 1),  -- (james15)
+   @cMatchUCCLottable      NVARCHAR( 20),  
+   @tValidationData        VariableTable,
 
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),
@@ -2664,15 +2670,57 @@ BEGIN
          AND UCC.StorerKey = @cStorer
          AND UCC.Status = '1' -- Received
 
+      SET @cMatchUCCLottable = rdt.rdtGetConfig( @nFunc, 'MATCHUCCLOTTABLE', @cStorer)
+      DECLARE @tLottableList TABLE
+      (
+         LottableNo    NVARCHAR(5)
+      )
+
+      INSERT INTO @tLottableList ( LottableNo) 
+      SELECT VALUE FROM STRING_SPLIT(@cMatchUCCLottable, ',')
+
       -- Validate UCC lottables
-      IF @cUCCLottable1 <> @cLottable1 OR
-         @cUCCLottable2 <> @cLottable2 OR
-         @cUCCLottable3 <> @cLottable3 OR
-         @dUCCLottable4 <> @dLottable4
+      IF EXISTS(SELECT 1 FROM @tLottableList WHERE LottableNo IN
+         ('01','02','03','04','05','06','07','08','09','10','11','12','13','14','15'))
       BEGIN
-         SET @nErrNo = 62650
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'UCC LotbleDiff'
-         GOTO UCC_Fail
+         SET @cLottableValidSP = rdt.RDTGetConfig( @nFunc, 'LottableValidSP', @cStorer)
+         EXEC rdt.rdt_861LottableValidWrapper 
+                @nMobile          = @nMobile
+               ,@nFunc           = @nFunc
+               ,@cSPName         = @cLottableValidSP
+               ,@cLangCode       = @cLangCode
+               ,@cStorerKey      = @cStorer
+               ,@cFacility       = @cFacility
+               ,@nStep           = @nStep
+               ,@nInputKey       = @nInputKey
+               ,@cPickSlipNo     = @cPickSlipNo
+               ,@cDropID         = @cDropID
+               ,@cLOC            = @cLOC
+               ,@cID             = @cID
+               ,@cSKU            = @cSKU
+               ,@cUOM            = @cUOM
+               ,@cUCC            = @cUCC
+               ,@cLottable1      = @cLottable1
+               ,@cLottable2      = @cLottable2
+               ,@cLottable3      = @cLottable3
+               ,@dLottable4      = @dLottable4
+               ,@tValidationData = @tValidationData
+               ,@nErrNo          = @nErrNo      OUTPUT
+               ,@cErrMsg         = @cErrMsg     OUTPUT
+
+         IF @nErrNo <> 0
+            GOTO UCC_Fail
+      END
+      ELSE BEGIN
+         IF @cUCCLottable1 <> @cLottable1 OR
+            @cUCCLottable2 <> @cLottable2 OR
+            @cUCCLottable3 <> @cLottable3 OR
+            @dUCCLottable4 <> @dLottable4
+         BEGIN
+            SET @nErrNo = 62650
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'UCC LotbleDiff'
+            GOTO UCC_Fail
+         END
       END
 
       -- Validate TaskQTY not in full case count
@@ -2696,8 +2744,8 @@ BEGIN
       END
 
       -- Store UCC in RDTTempUCC
-      INSERT INTO RDT.RDTTempUCC (TaskType, PickSlipNo, StorerKey, SKU, UCCNo, LOT, LOC, [ID], Lottable01, Lottable02, Lottable03, Lottable04)
-      VALUES ('PICK', @cPickSlipNo, @cStorer, @cSKU, @cUCC, @cUCCLOT, @cLOC, @cUCCID, @cUCCLottable1, @cUCCLottable2, @cUCCLottable3, @dUCCLottable4)
+      INSERT INTO RDT.RDTTempUCC (TaskType, PickSlipNo, StorerKey, SKU, UCCNo, LOT, LOC, [ID], Lottable01, Lottable02, Lottable03, Lottable04, UCCLottable01, UCCLottable02, UCCLottable03, UCCLottable04)
+      VALUES ('PICK', @cPickSlipNo, @cStorer, @cSKU, @cUCC, @cUCCLOT, @cLOC, @cUCCID, @cUCCLottable1, @cUCCLottable2, @cUCCLottable3, @dUCCLottable4, @cLottable1, @cLottable2, @cLottable3, @dLottable4)
       IF @@ERROR <> 0
       BEGIN
          SET @nErrNo = 62653

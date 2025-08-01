@@ -1,4 +1,4 @@
-
+﻿
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
@@ -15,6 +15,9 @@ GO
 /* 2023-01-20 1.1  Ung      WMS-21577 Add unlimited UCC to move               */
 /* 2023-06-01 1.2  Ung      WMS-22561 Add UCCWithMultiSKU                     */
 /* 2023-11-28 1.3  Ung      WMS-24170 Standardize LocationType from SKUxLOC   */
+/* 2024-08-05 1.4  Ung      WMS-25998 Add UCC.Status = 3                      */
+/* 2024-09-03 1.5  Ung      WMS-26113 Add force use standard logic            */
+/* 2024-11-07 1.6  PXL009   Merged 1.4,1.5 from v0 branch                     */
 /******************************************************************************/
 CREATE OR ALTER PROCEDURE [RDT].[rdt_Move_UCC_Confirm] (
    @nMobile        INT, 
@@ -39,7 +42,8 @@ CREATE OR ALTER PROCEDURE [RDT].[rdt_Move_UCC_Confirm] (
    @cUCC9          NVARCHAR( 20),
    @i              INT           OUTPUT, 
    @nErrNo         INT           OUTPUT, 
-   @cErrMsg        NVARCHAR( 20) OUTPUT
+   @cErrMsg        NVARCHAR( 20) OUTPUT, 
+   @nUseStandard   INT = 0
 ) AS
 BEGIN
    SET NOCOUNT ON
@@ -55,9 +59,12 @@ BEGIN
    SET @nTranCount = @@TRANCOUNT
 
    -- Get storer config
-   SET @cConfirmSP = rdt.rdtGetConfig( @nFunc, 'ConfirmSP', @cStorerKey)
-   IF @cConfirmSP = '0'
-      SET @cConfirmSP = ''  
+   IF @nUseStandard = 0
+   BEGIN
+      SET @cConfirmSP = rdt.rdtGetConfig( @nFunc, 'ConfirmSP', @cStorerKey)
+      IF @cConfirmSP = '0'
+         SET @cConfirmSP = ''  
+   END
 
    /***********************************************************************************************
                                              Custom confirm
@@ -113,6 +120,7 @@ BEGIN
    DECLARE @cUCC           NVARCHAR( 20)
    DECLARE @cUCCLOC        NVARCHAR( 10)
    DECLARE @cUCCID         NVARCHAR( 18)
+   DECLARE @cUCCStatus     NVARCHAR( 10)
    DECLARE @nUCCQTY        INT
    DECLARE @cToLocType     NVARCHAR( 10)
    DECLARE @cLoseID        NVARCHAR( 1) 
@@ -129,6 +137,11 @@ BEGIN
    SET @cMoveQTYAlloc = rdt.RDTGetConfig( @nFunc, 'MoveQTYAlloc', @cStorerKey)
    SET @cMoveQTYPick = rdt.RDTGetConfig( @nFunc, 'MoveQTYPick', @cStorerKey)
    SET @cUCCWithMultiSKU = rdt.RDTGetConfig( @nFunc, 'UCCWithMultiSKU', @cStorerKey)
+
+   -- UCC status allowed
+	SET @cUCCStatus = '1' -- Received
+	IF @cMoveQTYAlloc = '1'
+      SET @cUCCStatus += '3' -- Alloc
 
    -- Get ToLOC info
    IF @cUCCWithMultiSKU = '1'
@@ -168,7 +181,7 @@ BEGIN
       FROM dbo.UCC (NOLOCK)
       WHERE StorerKey = @cStorerKey
          AND UCCNo = @cUCC
-         AND Status = '1' -- Received
+         AND CHARINDEX( Status, @cUCCStatus) > 0
       GROUP BY LOC, ID, SKU
 
       SET @nRowCount = @@ROWCOUNT
@@ -183,7 +196,7 @@ BEGIN
             FROM dbo.UCC (NOLOCK)
             WHERE StorerKey = @cStorerKey
                AND UCCNo = @cUCC
-               AND Status = '1' -- Received
+               AND CHARINDEX( Status, @cUCCStatus) > 0
             ORDER BY SKU
          OPEN @curSKU
          FETCH NEXT FROM @curSKU INTO @cSKU, @nQTY, @cLOT

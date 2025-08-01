@@ -29,8 +29,30 @@ GO
 GRANT SELECT, INSERT, UPDATE, DELETE ON rdt.rdtBundleSKULog TO NSQL
 GO
 
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'RDT', N'TABLE',N'rdtBundleSKULog', NULL,NULL))
 EXEC sp_addextendedproperty 
     @name = N'MS_Description', @value = 'Logitech bundle SKU (kitting)',
     @level0type = N'Schema', @level0name = rdt, 
     @level1type = N'Table',  @level1name = rdtBundleSKULog;
+GO
+
+
+-- ALTER COLUMN
+
+	IF EXISTS (SELECT 1
+   FROM sys.columns
+   WHERE Name = 'AddWho' AND Object_ID = Object_ID('RDT.rdtBundleSKULog') and max_length < 500)
+   BEGIN
+      ALTER table rdt.rdtBundleSKULog
+      ALTER column  AddWho nvarchar(128) NULL
+   END
+	IF EXISTS (SELECT 1
+   FROM sys.columns
+   WHERE Name = 'EditWho' AND Object_ID = Object_ID('RDT.rdtBundleSKULog') and max_length < 500)
+   BEGIN
+      ALTER table rdt.rdtBundleSKULog
+      ALTER column  EditWho nvarchar(128) NULL
+   END
+
 GO

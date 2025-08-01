@@ -11,10 +11,14 @@ GO
 /*                  For HUSQ                                                  */
 /* Called from: rdt_TM_Assist_ClusterPick_ConfirmToLoc                        */
 /*                                                                            */
-/* Date         Rev  Author   Purposes                                        */
-/* 2024-10-10   1.0  JHU151    FCR-777 Created                                */ 
-/* 17/01/2025   1.1   PPA374   Adding TOP 1 to @nCartonNo to avoid grey scren */
-/* 2025-01-23   1.2  Dennis    Fix Serial No Issue                            */ 
+/* Date         Rev    Author    Purposes                                     */
+/* 2024-10-10   1.0    JHU151    FCR-777 Created                              */ 
+/* 2025-01-17   1.1    PPA374    Adding TOP 1 to @nCartonNo to avoid grey scren */
+/* 2025-01-23   1.2    Dennis    Fix Serial No Issue                          */ 
+/* 2025-02-11   1.3.0  NLT013    FCR-1872 Correct picked quantity             */ 
+/* 2025-02-11   1.3.1  NLT013    FCR-1872 Correct LabelLine                   */ 
+/* 2025-02-11   1.3.2  NLT013    FCR-1872 Be able to picking the remaining of */
+/*                               an order which  was unassigned cart          */ 
 /******************************************************************************/  
   
 CREATE OR ALTER PROCEDURE rdt.rdt_1867CfmToLoc01 (  
@@ -71,6 +75,18 @@ BEGIN
    DECLARE @nPickedQty     INT
    DECLARE @nPackedQty     INT
    DECLARE @bSuccess       INT
+   DECLARE @nLoopIndex         INT
+   DECLARE @cPickDetailKey      NVARCHAR(10)
+   DECLARE @nPickDetailQty      INT
+   DECLARE @cNewTaskDetailKey   NVARCHAR(10)
+
+   DECLARE @tTaskDetailPickDetail TABLE
+   (
+      id   INT IDENTITY(1,1),
+      TaskDetailKey   NVARCHAR(10),
+      PickDetailKey   NVARCHAR(10),
+      PickDetailQty   INT
+   )
 
 
    SELECT @cUserName = UserName
@@ -193,6 +209,104 @@ BEGIN
       FETCH NEXT FROM @cur INTO @cTaskKey
    END
 
+   --Split TaskDetails if needed
+   INSERT INTO @tTaskDetailPickDetail (TaskDetailKey, PickDetailKey, PickDetailQty)
+   SELECT TD.TaskDetailKey, PKD.PickDetailKey, PKD.Qty
+   FROM dbo.TASKDETAIL TD WITH (NOLOCK)   
+   INNER JOIN dbo.PickDetail PKD WITH (NOLOCK)  
+      ON TD.Storerkey = PKD.Storerkey AND TD.TaskDetailKey = PKD.TaskDetailKey
+   INNER JOIN dbo.PickDetail PKD1 WITH (NOLOCK)  
+      ON PKD.Storerkey = PKD1.Storerkey AND PKD.TaskDetailKey = PKD1.TaskDetailKey
+   WHERE TD.Groupkey = @cGroupKey 
+      AND TD.DeviceID = @cCartID 
+      AND TD.UserKey = @cUserName
+      AND TD.[Status] = '3' AND PKD.Status = '0'
+      AND PKD1.Status = '5'
+
+   SET @nLoopIndex = -1
+
+   WHILE 1 = 1
+   BEGIN
+      SELECT TOP 1
+         @cPickDetailKey = PickDetailKey,
+         @nPickDetailQty = PickDetailQty,
+         @cTaskDetailKey = TaskDetailKey,
+         @nLoopIndex = id
+      FROM @tTaskDetailPickDetail
+      WHERE id > @nLoopIndex
+
+      IF @@ROWCOUNT = 0 
+         BREAK
+
+      EXECUTE dbo.nspg_getkey
+         'TaskDetailKey'
+         , 10
+         , @cNewTaskDetailKey OUTPUT
+         , @bSuccess OUTPUT
+         , @nErrNo
+         , @cErrMsg OUTPUT
+
+         IF NOT @bSuccess = 1
+         BEGIN
+            SET @nErrNo = 227208
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --GetKeyFailed
+            GOTO RollBackTran 
+         END
+
+      INSERT INTO dbo.TaskDetail
+        (TaskDetailKey,TaskType,Storerkey,Sku,Lot,UOM,UOMQty,QTY,FromLoc,LogicalFromLoc,FromID,ToLoc,LogicalToLoc
+        ,ToID,Caseid,PickMethod,Status,StatusMsg,Priority,SourcePriority,Holdkey,UserKey,UserPosition,UserKeyOverRide
+        ,StartTime,EndTime,SourceType,SourceKey,PickDetailKey,OrderKey,OrderLineNumber,ListKey,WaveKey,ReasonKey
+        ,Message01,Message02,Message03,RefTaskKey,LoadKey,AreaKey,DropID, SystemQty,Groupkey,TrafficCop, DeviceID)
+        SELECT  TOP 1
+        @cNewTaskDetailKey,TaskType,Storerkey,Sku,Lot,UOM,UOMQty,@nPickDetailQty,FromLoc,LogicalFromLoc,FromID,ToLoc,LogicalToLoc
+        ,ToID,Caseid,PickMethod,'3',StatusMsg,Priority,SourcePriority,Holdkey,UserKey,UserPosition,UserKeyOverRide
+        ,StartTime,EndTime,SourceType,SourceKey,PickDetailKey,OrderKey,OrderLineNumber,ListKey,WaveKey,ReasonKey
+        ,Message01,Message02,Message03,RefTaskKey,LoadKey,AreaKey,DropID, @nPickDetailQty,GroupKey,NULL, DeviceID
+        FROM dbo.TaskDetail WITH (NOLOCK)
+        WHERE Taskdetailkey = @cTaskDetailKey
+         AND Storerkey = @cStorerkey
+                        
+      IF @@ERROR <> 0
+      BEGIN
+         SET @nErrNo = 227209
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InsTaskFailed
+         GOTO RollBackTran 
+      END
+
+      UPDATE dbo.PickDetail SET 
+         TaskDetailKey = @cNewTaskDetailKey, 
+         EditWho = @cUserName, 
+         EditDate = GETDATE()
+      WHERE PickDetailKey = @cPickDetailKey 
+      AND Storerkey = @cStorerkey
+
+      UPDATE TD WITH(ROWLOCK)
+      SET SystemQty = PKD.Qty,
+         Qty = PKD.Qty,
+         TD.EditWho = SUSER_SNAME(),
+         TD.EditDate = GETDATE(), 
+         TD.EndTime = GETDATE()
+      FROM dbo.TASKDETAIL TD   
+      INNER JOIN dbo.PICKDETAIL PKD WITH(NOLOCK)
+         ON TD.StorerKey = PKD.StorerKey AND TD.TaskDetailKey = PKD.TaskDetailKey
+      WHERE TD.Taskdetailkey = @cTaskDetailKey
+         AND TD.Storerkey = @cStorerkey
+   END
+
+   UPDATE TD WITH(ROWLOCK)
+   SET TD.Status = '5',
+      TD.EditWho = SUSER_SNAME(),
+      TD.EditDate = GETDATE(), 
+      TD.EndTime = GETDATE()
+   FROM dbo.TASKDETAIL TD   
+   INNER JOIN dbo.PICKDETAIL PKD WITH(NOLOCK)
+      ON TD.StorerKey = PKD.StorerKey AND TD.TaskDetailKey = PKD.TaskDetailKey
+   WHERE TD.Groupkey = @cGroupKey 
+      AND TD.DeviceID = @cCartID 
+      AND TD.UserKey = @cUserName
+      AND TD.[Status] = '3' AND PKD.Status = '5'
+
    SET @cur = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
    SELECT TaskdetailKey,OrderKey,DropID,SKU,QTY
    FROM dbo.TASKDETAIL WITH (NOLOCK)   
@@ -260,11 +374,12 @@ BEGIN
       SELECT TOP 1
          @cPickSlipNo = PH.PickheaderKey,
          @cStatus = PH.Status,
-         @cConsigneeKey = PH.ConsigneeKey,
+         @cConsigneeKey = ORD.ConsigneeKey,
          @cRoute = ORD.Route
       FROM dbo.PICKHEADER PH WITH (NOLOCK)
-      INNER JOIN dbo.ORDERS ORD WITH (NOLOCK) ON PH.Storerkey = ORD.StorerKey AND PH.OrderKey = ORD.OrderKey
+      INNER JOIN dbo.ORDERS ORD WITH (NOLOCK) ON ORD.StorerKey = @cStorerKey AND PH.OrderKey = ORD.OrderKey
       WHERE PH.OrderKey = @cOrderKey 
+	    AND ORD.StorerKey = @cStorerKey
 
       -- PackHeader
       IF NOT EXISTS( SELECT 1 FROM dbo.PackHeader WITH (NOLOCK) 
@@ -302,15 +417,26 @@ BEGIN
            AND status <> @cStatus
       END
 
+      SET @cLabelLine = ''
+      SET @nMaxCartonNo = 0
 
       SELECT TOP 1
-         @cLabelLine = RIGHT( '00000' + CAST( CAST( IsNULL( MAX( LabelLine), 0) AS INT) + 1 AS NVARCHAR( 5)), 5) ,
+         @cLabelLine = RIGHT( '00000' + CAST( CAST( IsNULL( MAX( LabelLine), 0) AS INT) AS NVARCHAR( 5)), 5) ,
          @nMaxCartonNo = MAX(CartonNo)
       FROM dbo.PackDetail (NOLOCK)
       WHERE Pickslipno = @cPickSlipNo
-         --AND CartonNo = @nCartonNo
-         --AND LabelNo = @cDropID
+         AND LabelNo = @cDropID
          AND Storerkey = @cStorerKey
+
+      IF @cLabelLine = '00000'
+      BEGIN
+         SELECT TOP 1
+            @cLabelLine = RIGHT( '00000' + CAST( CAST( IsNULL( MAX( LabelLine), 0) AS INT) + 1 AS NVARCHAR( 5)), 5) ,
+            @nMaxCartonNo = MAX(CartonNo)
+         FROM dbo.PackDetail (NOLOCK)
+         WHERE Pickslipno = @cPickSlipNo
+            AND Storerkey = @cStorerKey
+      END
       
       IF @cLabelLine = ''
          SET @cLabelLine = '000001'
@@ -318,7 +444,6 @@ BEGIN
       BEGIN
          SET @nMaxCartonNo = 0
       END
-            
       
       IF NOT EXISTS(SELECT 1 FROM dbo.PackDetail WITH(NOLOCK)
                      WHERE PickslipNo = @cPickslipNo
@@ -379,7 +504,8 @@ BEGIN
                       AND Sku = @cSKU
                       AND DropID = @cDropID)
       BEGIN
-         SELECT TOP 1 @nCartonNo = CartonNo   --PPA374 ADDED TOP 1 15/01/2025
+         SELECT TOP 1 @nCartonNo = CartonNo,   --PPA374 ADDED TOP 1 15/01/2025
+            @cLabelLine = RIGHT( '00000' + CONVERT(NVARCHAR(5), @cLabelLine + 1  ), 5)
          FROM dbo.PackDetail WITH(NOLOCK)
             WHERE PickslipNo = @cPickslipNo
                AND StorerKey = @cStorerKey
@@ -546,6 +672,7 @@ BEGIN
       FROM pickdetail PD WITH(NOLOCK)
       WHERE storerKey = @cStorerkey
       AND OrderKey =  @cOrderKey
+         AND STATUS NOT IN ('4', '9')
 
       SELECT @nPackedQty = SUM(Qty)
       FROM PackHeader PH WITH(NOLOCK)
@@ -559,8 +686,7 @@ BEGIN
       IF @nPickedQty = @nPackedQty
       Begin
          UPDATE PackHeader
-         SET status = '9',
-         ArchiveCop = NULL
+         SET status = '9'
          WHERE OrderKey = @cOrderKey
          AND storerkey = @cStorerKey
          AND status <> '9'

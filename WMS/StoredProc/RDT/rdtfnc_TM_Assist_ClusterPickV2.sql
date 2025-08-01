@@ -3,21 +3,22 @@ GO
 SET ANSI_NULLS OFF 
 GO
   
-/******************************************************************************/
-/* Store procedure: rdtfnc_TM_Assist_ClusterPickV2                            */
-/* Copyright      : Maersk                                                    */
-/*                                                                            */
-/* Purpose: For HUSQ                                                          */
-/*                                                                            */
-/* Modifications log:                                                         */
-/*                                                                            */
-/* Date         Rev   Author   Purposes                                       */
-/* 2024-10-10   1.0   JHU151   FCR-777 Created                                */
-/* 13/01/2024   2.0   PPA374   Correcting issues on assignment where          */
-/*                             pickdetail remains in status 5 with no ID      */
-/* 13/01/2024   2.1   PPA374   Allowing to use same DropID for trolley        */
-/* 17/01/2024   2.2   PPA374   Fix for method 3 close option no DROPID update */
-/******************************************************************************/
+/*****************************************************************************************/
+/* Store procedure: rdtfnc_TM_Assist_ClusterPickV2                                       */
+/* Copyright      : Maersk                                                               */
+/*                                                                                       */
+/* Purpose: For HUSQ                                                                     */
+/*                                                                                       */
+/* Modifications log:                                                                    */
+/*                                                                                       */
+/* Date         Rev    Author   Purposes                                                 */
+/* 2024-10-10   1.0    JHU151   FCR-777 Created                                          */
+/* 2025-01-13   1.2    PPA374   Correcting issues on assignment where                    */
+/*                              pickdetail remains in status 5 with no ID                */
+/* 2025-01-13   1.2    PPA374   Allowing to use same DropID for trolley                  */
+/* 2025-01-17   1.3    PPA374   Fix for method 3 close option no DROPID update           */
+/* 2025-02-08   1.4.0  NLT013   FCR-1872 ignore lottable values while picking            */ 
+/*****************************************************************************************/
         
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_Assist_ClusterPickV2](        
    @nMobile    int,        
@@ -1791,7 +1792,7 @@ BEGIN
          
          UPDATE dbo.TaskDetail SET
             DropID = @cCartonID,
-            StatusMsg =  CAST( @nCartonScanned + 1 AS NVARCHAR( 1)) + '-' + @cCartonType,
+            StatusMsg =  CAST( @nCartonScanned + 1 AS NVARCHAR( 5)) + '-' + @cCartonType,
             EditWho = @cUserName,
             EditDate = GETDATE()
          WHERE TaskDetailKey = @cLockTaskKey
@@ -1833,7 +1834,7 @@ BEGIN
          BEGIN      
             UPDATE dbo.TaskDetail SET
                DropID = @cCartonID,
-               StatusMsg =  CAST( @nCartonScanned + 1 AS NVARCHAR( 1)) + '-' + @cCartonType,
+               StatusMsg =  CAST( @nCartonScanned + 1 AS NVARCHAR( 5)) + '-' + @cCartonType,
                EditWho = @cUserName,
                EditDate = GETDATE()
             WHERE TaskDetailKey = @cLockTaskKey
@@ -3041,8 +3042,8 @@ BEGIN
             WHERE PKD.StorerKey = @cStorerKey        
             AND   PKD.Loc = @cFromLoc        
             AND   PKD.Sku = @cSuggSKU        
-            AND   PKD.CaseID = @cSuggCartonID        
-            AND   PKD.[Status] < @cPickConfirmStatus        
+            AND   TD.DropID = @cSuggToteId  --FCR-1872 NLT013 should sum up by TaskDetail.DropID
+            AND   PKD.[Status] < @cPickConfirmStatus    
             AND   TD.GroupKey = @cGroupKey
             AND   TD.TaskDetailKey = @cTaskdetailKey
 
@@ -3052,7 +3053,7 @@ BEGIN
             WHERE PKD.StorerKey = @cStorerKey        
             AND   PKD.Loc = @cFromLoc        
             AND   PKD.Sku = @cSuggSKU        
-            AND   PKD.CaseID = @cSuggCartonID        
+            AND   TD.DropID = @cSuggToteId  --FCR-1872 NLT013 should sum up by TaskDetail.DropID
             AND   PKD.[Status] = @cPickConfirmStatus        
             AND   TD.GroupKey = @cGroupKey
             AND   TD.TaskDetailKey = @cTaskdetailKey    
@@ -4683,6 +4684,7 @@ BEGIN
                WHERE storerkey = @cStorerKey
                AND taskdetailkey = @cTaskDetailKey
                AND status = '5')
+         AND @nActQTY > 0 --FCR-1872 NLT013 If it is full short pick, no need go to ConformTote screen
       BEGIN
          SELECT TOP 1 --PPA374 Added TOP 1 15/01/2025      
             @cPosition = StatusMsg,       

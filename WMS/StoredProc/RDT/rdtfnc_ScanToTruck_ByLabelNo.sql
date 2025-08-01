@@ -62,6 +62,8 @@ GO
 /* 2023-11-14 3.5  YeeKung  WMS-24119 Add ExtendedInfoSP  in step 2     */
 /* 2024-02-28 3.6  Ung      WMS-24945 RefNoLookupColumn add param       */
 /* 2024-03-05 3.7  Ung      WMS-24782 Add ManifestReport                */
+/* 2025-03-14 3.8  CYU027   UWP-30537 Add Top 1 for labelNo             */
+/* 2025-07-11 0.0  JackC    !!!Cuotover!!! Use V0 repo for work         */
 /************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdtfnc_ScanToTruck_ByLabelNo] (
    @nMobile    INT,
@@ -851,7 +853,7 @@ BEGIN
       BEGIN
          -- Get PackHeaderInfo
          IF @cCheckPackDetailDropID = '1'
-            SELECT
+            SELECT TOP 1
                @cPickSlipNo = PH.PickSlipNo,
                @cPackHeaderOrderKey = PH.OrderKey,
                @cPackHeaderLoadKey = PH.LoadKey,
@@ -862,7 +864,7 @@ BEGIN
                AND PD.DropID = @cLabelNo
             ORDER BY PH.PickslipNo Desc -- (ChewKP04)
          ELSE
-            SELECT
+            SELECT TOP 1
                @cPickSlipNo = PH.PickSlipNo,
                @cPackHeaderOrderKey = PH.OrderKey,
                @cPackHeaderLoadKey = PH.LoadKey,

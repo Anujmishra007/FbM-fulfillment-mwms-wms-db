@@ -1,7 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[RDT].[rdtLogin]') AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 )
-   DROP PROCEDURE [RDT].[rdtLogin]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -48,9 +44,10 @@ GO
 /* 2024-05-24   NLT013  2.8   Add session id to get unique mobile       */
 /* 2024-07-26   JACKC   2.9   UWP-19305 Encrypt rdt password            */
 /* 2024-08-15   JACKC   3.0   UWP-15736 Penetration Testing Fix         */
+/* 2025-04-03   Dennis  3.1   FCR-3926 Disable Resume Screen Prompt     */
 /************************************************************************/
 
-CREATE PROC [RDT].[rdtLogin] (
+CREATE OR ALTER PROC [RDT].[rdtLogin] (
    @nMobile    int,
    @nErrNo     int  OUTPUT,
    @cErrMsg    NVARCHAR(1024) OUTPUT,
@@ -84,14 +81,15 @@ AS
           @cLightMode            NVARCHAR(10), -- (ChewKP01)
           @cAllowResumeSession   NVARCHAR( 1),   -- (james03)
           @nLoginFailCount       INT,
-          @dLastLoginDate        DATETIME
+          @dLastLoginDate        DATETIME,
+          @cDisableResumePrompt  NVARCHAR( 1)
 
    SELECT @nFunc     = Func,
           @nScn      = Scn,
           @nStep     = Step,
           @cUsrName  = I_Field01,
           @cPassword = I_Field02
-	FROM   RDT.RDTMOBREC WITH (NOLOCK)  WHERE Mobile = @nMobile
+   FROM   RDT.RDTMOBREC WITH (NOLOCK)  WHERE Mobile = @nMobile
 
    IF RTRIM(@cUsrName) IS NULL OR RTRIM(@cUsrName) = ''
    BEGIN
@@ -143,7 +141,8 @@ AS
           @cDeviceID   = ISNULL(DefaultDeviceID, ''), -- (james02)
           @cActive     = ISNULL(Active, ''),
           @cLightMode  = ISNULL(DefaultLightColor, '' ), -- (ChewKP01)
-          @cAllowResumeSession = AllowResumeSession
+          @cAllowResumeSession = AllowResumeSession,
+          @cDisableResumePrompt = ISNULL(DisableResumePrompt, 'N')
    FROM RDT.rdtUser WITH (NOLOCK)
    WHERE Username =  @cUsrname
 
@@ -176,12 +175,12 @@ AS
    -- (james03)
    IF @cAllowResumeSession <> 'Y'
    BEGIN
- 	IF EXISTS (SELECT 1 FROM RDT.RDTMOBREC (NOLOCK) WHERE Username = RTRIM(@cUsrName) AND Step > 0)
- 	BEGIN
- 	   SELECT @nErrNo = -1,
- 	            @cErrMsg = rdt.rdtgetmessage(44,@cLangCode,'DSP')
- 	   --GOTO RETURN_SP
- 	END
+    IF EXISTS (SELECT 1 FROM RDT.RDTMOBREC (NOLOCK) WHERE Username = RTRIM(@cUsrName) AND Step > 0)
+    BEGIN
+       SELECT @nErrNo = -1,
+                @cErrMsg = rdt.rdtgetmessage(44,@cLangCode,'DSP')
+       --GOTO RETURN_SP
+    END
    END
 
    -- (Vicky02) - Start
@@ -220,12 +219,29 @@ AS
    -- (Vicky01) - Start
    IF EXISTS (SELECT 1 FROM RDT.RDTMOBREC (NOLOCK) WHERE Username = RTRIM(@cUsrName) AND Func > 0) --(yeekung01)
    BEGIN
-		SET @nScn = 5390
-		SET @nFunc = 2
-		SET @nStep = 1
+      IF @cDisableResumePrompt = 'Y' AND @nErrNo <> -1
+      BEGIN
+         UPDATE RDT.RDTMOBREC WITH (ROWLOCK) SET
+         Username  = @cUsrName,
+         I_Field01 = '1'
+         WHERE Mobile = @nMobile
+
+         EXEC rdt.RDTResumeSession @nMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nFunction OUTPUT, @cClientIP, @cSessionID
+         
+         SET @nFunc = 500
+         SET @nStep = 2
+         IF @nErrNo = 0
+            GOTO EXIT_PROCESS
+      END
+      ELSE 
+      BEGIN
+         SET @nScn = 5390
+         SET @nFunc = 2
+         SET @nStep = 1
+      END
    END
 
-	-- (Vicky01) - End
+   -- (Vicky01) - End
 
    -- Validate SQL login
    EXECUTE RDT.rdtIsSQLLoginSetup @cUsrName, @cLangCode, @bSuccess OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
@@ -255,13 +271,13 @@ AS
       COMMIT TRAN
    END
 
-	IF (@nStep=0) AND (@nScn=0) --(yeekung01)
-	BEGIN
-		-- Login Successfull update Step
-		SET @nStep = 1
-		SET @nScn = 1
-		SET @nFunc = 1
-	END
+   IF (@nStep=0) AND (@nScn=0) --(yeekung01)
+   BEGIN
+      -- Login Successfull update Step
+      SET @nStep = 1
+      SET @nScn = 1
+      SET @nFunc = 1
+   END
 
    BEGIN TRAN
 
@@ -274,70 +290,70 @@ AS
    END
    ELSE
    BEGIN
-   	IF @nFunc=1 --(yeekung01)
-		BEGIN
-			
-	      EXEC rdt.rdtSetFocusField @nMobile, 1
-	      UPDATE RDT.RDTMOBREC WITH (ROWLOCK) SET
-	         EditDate  = GETDATE(),
-	         Facility  = @cFacility,
-	         StorerKey = @cStorer,
-	         ErrMsg    = @cErrMsg,
-	         Username  = @cUsrName,
-	         Lang_code = @cLangCode,
-	         Scn       = @nScn,
-	         Step      = @nStep,
-				Func      = @nFunc,
-	         O_Field01 = @cStorer,
-	         O_Field02 = @cFacility,
-	         O_Field03 = CASE @cDefaultUOM WHEN '1' THEN 'Pallet'
-	                                       WHEN '2' THEN 'Carton'
-	                                       WHEN '3' THEN 'Inner Pack'
-	                                       WHEN '4' THEN 'Other Unit 1'
-	                                       WHEN '5' THEN 'Other Unit 2'
-	                                       WHEN '6' THEN 'Each'
-	                                       ELSE 'Each'
-	                     END,
-	         O_Field04 = @cPrinter,
-	         O_Field05 = @cPrinter_Paper, -- (Vicky03)
-	         O_Field06 = @cDeviceID,
-	         V_UOM     = @cDefaultUOM,
-	         Printer   = @cPrinter,
-	         Printer_Paper = @cPrinter_Paper, -- (Vicky03)
-	         DeviceID  = @cDeviceID,
-	         LightMode = @cLightMode, -- (ChewKP01)
-	         FieldAttr01 = '', --(ung01)
-	         FieldAttr02 = '',
-	         FieldAttr03 = '',
-	         FieldAttr04 = '',
-	         FieldAttr05 = '',
-	         FieldAttr06 = '',
-	         FieldAttr07 = '',
-	         FieldAttr08 = '',
-	         FieldAttr09 = '',
-	         FieldAttr10 = '',
-	         FieldAttr11 = '',
-	         FieldAttr12 = '',
-	         FieldAttr13 = '',
-	         FieldAttr14 = '',
-	         FieldAttr15 = ''
-	      WHERE Mobile = @nMobile
-	   END
-	   ELSE IF @nFunc =2 --(yeekung01)
-		BEGIN
-			EXEC rdt.rdtSetFocusField @nMobile, 1
-			UPDATE RDT.RDTMOBREC WITH (ROWLOCK) SET
-			EditDate  = GETDATE(),
-			ErrMsg    = @cErrMsg,
-			Username  = @cUsrName,
-			Lang_code = @cLangCode,
-			Scn       = @nScn,
-			Step      = @nStep,
-			Func      = @nFunc
-			WHERE Mobile = @nMobile
-		END
-	END
-	
+      IF @nFunc=1 --(yeekung01)
+      BEGIN
+         
+         EXEC rdt.rdtSetFocusField @nMobile, 1
+         UPDATE RDT.RDTMOBREC WITH (ROWLOCK) SET
+            EditDate  = GETDATE(),
+            Facility  = @cFacility,
+            StorerKey = @cStorer,
+            ErrMsg    = @cErrMsg,
+            Username  = @cUsrName,
+            Lang_code = @cLangCode,
+            Scn       = @nScn,
+            Step      = @nStep,
+            Func      = @nFunc,
+            O_Field01 = @cStorer,
+            O_Field02 = @cFacility,
+            O_Field03 = CASE @cDefaultUOM WHEN '1' THEN 'Pallet'
+                                          WHEN '2' THEN 'Carton'
+                                          WHEN '3' THEN 'Inner Pack'
+                                          WHEN '4' THEN 'Other Unit 1'
+                                          WHEN '5' THEN 'Other Unit 2'
+                                          WHEN '6' THEN 'Each'
+                                          ELSE 'Each'
+                        END,
+            O_Field04 = @cPrinter,
+            O_Field05 = @cPrinter_Paper, -- (Vicky03)
+            O_Field06 = @cDeviceID,
+            V_UOM     = @cDefaultUOM,
+            Printer   = @cPrinter,
+            Printer_Paper = @cPrinter_Paper, -- (Vicky03)
+            DeviceID  = @cDeviceID,
+            LightMode = @cLightMode, -- (ChewKP01)
+            FieldAttr01 = '', --(ung01)
+            FieldAttr02 = '',
+            FieldAttr03 = '',
+            FieldAttr04 = '',
+            FieldAttr05 = '',
+            FieldAttr06 = '',
+            FieldAttr07 = '',
+            FieldAttr08 = '',
+            FieldAttr09 = '',
+            FieldAttr10 = '',
+            FieldAttr11 = '',
+            FieldAttr12 = '',
+            FieldAttr13 = '',
+            FieldAttr14 = '',
+            FieldAttr15 = ''
+         WHERE Mobile = @nMobile
+      END
+      ELSE IF @nFunc =2 --(yeekung01)
+      BEGIN
+         EXEC rdt.rdtSetFocusField @nMobile, 1
+         UPDATE RDT.RDTMOBREC WITH (ROWLOCK) SET
+         EditDate  = GETDATE(),
+         ErrMsg    = @cErrMsg,
+         Username  = @cUsrName,
+         Lang_code = @cLangCode,
+         Scn       = @nScn,
+         Step      = @nStep,
+         Func      = @nFunc
+         WHERE Mobile = @nMobile
+      END
+   END
+   
    IF @@ERROR <> 0
    BEGIN
       ROLLBACK TRAN

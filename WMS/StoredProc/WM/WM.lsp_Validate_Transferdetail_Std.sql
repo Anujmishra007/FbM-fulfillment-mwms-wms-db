@@ -23,7 +23,9 @@ GO
 /* 2023-03-09   NJOW01   1.2  LFWM-3608 performance tuning for XML Reading*/
 /* 2023-05-23   Wan01    1.3  LFWM-3608 performance tuning, Skip Validation*/
 /*                            Trafficcop IS NOT NULL                      */
-/**************************************************************************/   
+/* 2024-08-12   Wan02    1.4  LFWM-4446 - RG[GIT] Serial Number Solution  */
+/*                            - Transfer by Serial Number                 */
+/**************************************************************************/
 CREATE OR ALTER PROC [WM].[lsp_Validate_TransferDetail_Std] (
   @c_XMLSchemaString    NVARCHAR(MAX) 
 , @c_XMLDataString      NVARCHAR(MAX) 
@@ -190,6 +192,7 @@ BEGIN
 
          ,  @c_ToStorerkey          NVARCHAR(15) = ''
          ,  @c_ToSku                NVARCHAR(20) = ''
+         ,  @c_ToLot                NVARCHAR(10) = ''                               --(Wan02)
          ,  @c_ToLoc                NVARCHAR(10) = ''
          ,  @c_Userdefine02         NVARCHAR(20) = ''
          ,  @c_UCCNo                NVARCHAR(20) = ''
@@ -229,6 +232,16 @@ BEGIN
          ,  @dt_ToLottable14        DATETIME
          ,  @dt_ToLottable15        DATETIME
 
+         ,  @c_Facility             NVARCHAR(5) = ''                                --(Wan02)
+         ,  @c_FromStorerkey        NVARCHAR(15) = ''                               --(Wan02)
+         ,  @c_FromSku              NVARCHAR(20) = ''                               --(Wan02)
+         ,  @c_FromLot              NVARCHAR(10) = ''                               --(Wan02)
+         ,  @c_FromID               NVARCHAR(18) = ''                               --(Wan02)
+         ,  @c_ToID                 NVARCHAR(18) = ''                               --(Wan02)
+         ,  @c_FromSerialNo         NVARCHAR(50) = ''                               --(Wan02)
+         ,  @c_ToSerialNo           NVARCHAR(50) = ''                               --(Wan02)
+         ,  @c_SerialNoCapture      NVARCHAR(1)  = ''                               --(Wan02)
+
          ,  @n_Cnt                  INT          = 1
          ,  @n_ExistsCnt            INT          = 1
          ,  @c_Cnt                  NVARCHAR(2)  = ''
@@ -242,6 +255,7 @@ BEGIN
          ,  @c_InvTrfItf            NVARCHAR(30) = ''
          ,  @c_CheckTrfQtyDiff      NVARCHAR(30) = ''
          ,  @c_UCCTracking          NVARCHAR(30) = ''
+         ,  @c_ASNFizUpdLotToSerialNo  NVARCHAR(10)=''      --(Wan02)
 
       IF EXISTS ( SELECT 1                                                          --(Wan01) - START
                  FROM tempdb.INFORMATION_SCHEMA.COLUMNS c 
@@ -264,9 +278,15 @@ BEGIN
       SELECT TOP 1 
             @c_TransferKey     = TFD.TransferKey
          ,  @c_TransferLineNo  = TFD.TransferLineNumber
+         ,  @c_FromStorerkey   = TFD.FromStorerkey                                  --(Wan02)
          ,  @c_ToStorerkey     = TFD.ToStorerkey
+         ,  @c_FromSku         = TFD.FromSku                                        --(Wan02)
          ,  @c_ToSku           = RTRIM(TFD.ToSku)
+         ,  @c_FromLot         = TFD.FromLot                                        --(Wan02)
+         ,  @c_ToLot           = TFD.ToLot                                          --(Wan02)
          ,  @c_ToLoc           = ISNULL(TFD.ToLoc,'')
+         ,  @c_FromID          = TFD.FromID                                         --(Wan02)
+         ,  @c_ToID            = TFD.ToID                                           --(Wan02)
          ,  @n_FromQty         = TFD.FromQty
          ,  @n_ToQty           = TFD.ToQty
          ,  @c_Userdefine02    = ISNULL(RTRIM(TFD.Userdefine02),'')
@@ -285,6 +305,8 @@ BEGIN
          ,  @dt_ToLottable13   = TFD.ToLottable13
          ,  @dt_ToLottable14   = TFD.ToLottable14
          ,  @dt_ToLottable15   = TFD.ToLottable15
+         ,  @c_FromSerialNo    = TFD.FromSerialNo
+         ,  @c_ToSerialNo      = TFD.ToSerialNo
       FROM  #VALDN TFD  --NJOW01
 
       IF @n_FromQty = 0 AND @n_ToQty = 0
@@ -293,7 +315,7 @@ BEGIN
       END
 
       SELECT TOP 1 
-               @c_ToFacility = TFH.Facility
+               @c_Facility   = TFH.Facility
             ,  @c_Status     = TFH.[Status]           
       FROM  [TRANSFER] TFH WITH (NOLOCK) 
       WHERE TFH.TransferKey = @c_TransferKey  
@@ -334,7 +356,7 @@ BEGIN
                SET @n_Continue = 3
                SET @n_Err = 557502
                SET @c_errmsg = 'From Qty should be greater than 0 in Line# : ' + @c_TransferLineNo 
-                             + '(lsp_Validate_TransferDetail_Std). |' +  @c_TransferLineNo 
+                             + '.(lsp_Validate_TransferDetail_Std). |' +  @c_TransferLineNo
                GOTO EXIT_SP
             END
 
@@ -343,7 +365,7 @@ BEGIN
                SET @n_Continue = 3
                SET @n_Err = 557503
                SET @c_errmsg = 'To Qty should be greater than 0 in Line#: ' + @c_TransferLineNo 
-                             + '(lsp_Validate_TransferDetail_Std). |' +  @c_TransferLineNo 
+                             + '.(lsp_Validate_TransferDetail_Std). |' +  @c_TransferLineNo
                GOTO EXIT_SP
             END
 
@@ -352,7 +374,7 @@ BEGIN
                SET @n_Continue = 3
                SET @n_Err = 557504
                SET @c_errmsg = 'From/To Qty does not match in Line#: ' + @c_TransferLineNo 
-                             + '(lsp_Validate_TransferDetail_Std). |' +  @c_TransferLineNo 
+                             + '. (lsp_Validate_TransferDetail_Std). |' +  @c_TransferLineNo
                GOTO EXIT_SP
             END
          END
@@ -388,6 +410,7 @@ BEGIN
            , @c_Lottable13Label = ISNULL(RTRIM(Lottable13Label),'')
            , @c_Lottable14Label = ISNULL(RTRIM(Lottable14Label),'')
            , @c_Lottable15Label = ISNULL(RTRIM(Lottable15Label),'')
+           , @c_SerialNoCapture = S.SerialNoCapture                                 --(Wan02)
       FROM SKU S WITH (NOLOCK)
       WHERE S.Storerkey = @c_ToStorerkey
       AND S.Sku = @c_ToSku
@@ -517,8 +540,9 @@ BEGIN
          BEGIN
             SET @n_Continue = 3
             SET @n_Err = 557506
-            SET @c_errmsg = 'Please Empty To Lottable01 (' + @c_LottableLabel + ') for SKU: ' + @c_ToSku + ' (lsp_Validate_TransferDetail_Std)'
-                           + '|' + @c_LottableLabel + '|' + @c_ToSku
+            SET @c_errmsg = 'Please Empty To Lottable01 (' + @c_LottableLabel + ') for SKU: '
+                          + @c_ToSku + '. (lsp_Validate_TransferDetail_Std)'
+                          + '|' + @c_LottableLabel + '|' + @c_ToSku
             GOTO EXIT_SP
          END   
 
@@ -531,8 +555,8 @@ BEGIN
             BEGIN
                SET @n_Continue = 3
                SET @n_Err = 557507
-               SET @c_errmsg = 'To Lottable ' + @c_Cnt + '(' + @c_LottableLabel + ') Cannot be BLANK! (lsp_Validate_TransferDetail_Std)'
-                             + '|' + @c_Cnt + '|' + @c_LottableLabel
+               SET @c_errmsg = 'To Lottable ' + @c_Cnt + '(' + @c_LottableLabel + ') Cannot be BLANK'
+                             + '! (lsp_Validate_TransferDetail_Std)|' + @c_Cnt + '|' + @c_LottableLabel
                GOTO EXIT_SP
             END
          END
@@ -552,8 +576,9 @@ BEGIN
             BEGIN
                SET @n_Continue = 3
                SET @n_Err = 557508
-               SET @c_errmsg = 'To Lottable' + @c_Cnt + ' value does not match in List Name:' + @c_MatchCfgValue + '. (lsp_Validate_TransferDetail_Std)'
-                              + '|' + @c_Cnt + '|' + @c_MatchCfgValue
+               SET @c_errmsg = 'To Lottable' + @c_Cnt + ' value does not match in List Name:' + @c_MatchCfgValue
+                             + '. (lsp_Validate_TransferDetail_Std)'
+                             + '|' + @c_Cnt + '|' + @c_MatchCfgValue
                GOTO EXIT_SP
             END
          
@@ -565,13 +590,95 @@ BEGIN
             BEGIN
                SET @n_Continue = 3
                SET @n_Err = 557509
-               SET @c_errmsg = 'To Lottable' + @c_Cnt + '''s Label Not Yet Setup In SKU: ' + @c_ToSku + '. Edit disallow. (lsp_Validate_TransferDetail_Std)'
-                              + '|' + @c_Cnt + '|' + @c_ToSku
+               SET @c_errmsg = 'To Lottable' + @c_Cnt + '''s Label Not Yet Setup In SKU: ' + @c_ToSku
+                             + '. Edit disallow. (lsp_Validate_TransferDetail_Std)'
+                             + '|' + @c_Cnt + '|' + @c_ToSku
                GOTO EXIT_SP
             END
          END
          SET @n_Cnt = @n_Cnt + 1
       END 
+
+      IF @c_SerialNoCapture NOT IN ('1','2','3')
+      BEGIN
+         IF @c_ToSerialNo <> '' OR @c_FromSerialNo <> ''
+         BEGIN
+            SET @n_Continue = 3
+            SET @n_Err = 557510
+            SET @c_errmsg = 'NSQL' + CONVERT(CHAR(6), @n_Err)
+               + ': From & To ToSerialNo is Not required. SerialNo: ' + @c_ToSerialNo
+               + '. Please make sure From & To SerialNo are same value'
+               + '. (lsp_Validate_TransferDetail_Std) |' + @c_ToSerialNo
+            GOTO EXIT_SP
+         END
+      END
+      ELSE IF @c_SerialNoCapture IN ('1','2','3')
+      BEGIN
+         SELECT @c_ASNFizUpdLotToSerialNo = fsgr.Authority                                            --(Wan05)
+         FROM dbo.fnc_SelectGetRight(@c_ToFacility, @c_ToStorerkey, '', 'ASNFizUpdLotToSerialNo')AS fsgr  --(Wan05)
+
+         IF @c_ASNFizUpdLotToSerialNo = '1' AND @c_ToSerialNo = '' AND  --SerialNo Tracking
+            @c_SerialNoCapture IN ('1','2')
+         BEGIN
+            SET @n_Continue = 3
+            SET @n_Err = 557511
+            SET @c_errmsg = 'NSQL' + CONVERT(CHAR(6), @n_Err)
+               + ': To SerialNo is required.'
+               + '. (lsp_Validate_TransferDetail_Std)'
+            GOTO EXIT_SP
+         END
+
+         IF @c_ToSerialNo <> ''
+         BEGIN
+            IF @c_ASNFizUpdLotToSerialNo = '1' AND (@c_FromID = '' OR @c_ToID = '')
+            BEGIN
+               SET @n_Continue = 3
+               SET @n_Err = 557512
+               SET @c_errmsg = 'NSQL' + CONVERT(CHAR(6), @n_Err)
+                              + ': From & To ID is Required for SerialNo Transfer'
+                              + '. From SerialNo: ' + @c_ToSerialNo
+                              + '. (lsp_Validate_AdjustmentDetail_Std) |' + @c_ToSerialNo
+               GOTO EXIT_SP
+            END
+
+            IF @c_FromLot = ''
+            BEGIN
+               SET @n_Continue = 3
+               SET @n_Err = 557513
+               SET @c_errmsg = 'NSQL' + CONVERT(CHAR(6), @n_Err)
+                              + ': Invalid Transfer SerialNo FromLot'
+                              + '. To SerialNo: ' + @c_ToSerialNo
+                           + '. (lsp_Validate_TransferDetail_Std) |' + @c_ToSerialNo
+               GOTO EXIT_SP
+            END
+
+            IF @n_ToQty NOT IN (1)
+            BEGIN
+               SET @n_Continue = 3
+               SET @n_Err = 557514
+               SET @c_errmsg = 'NSQL' + CONVERT(CHAR(6), @n_Err)
+                              + ': Invalid Transfer To SerialNo qty'
+                              + '. To SerialNo: ' + @c_ToSerialNo
+                           + '. (lsp_Validate_TransferDetail_Std) |' + @c_ToSerialNo
+               GOTO EXIT_SP
+            END
+
+            IF @c_FromSerialNo <> @c_ToSerialNo OR
+               @c_FromSku <> @c_ToSku OR
+               @c_FromID <> @c_ToID                                                 --2024-09-25
+            BEGIN
+               SET @n_Continue = 3
+               SET @n_Err = 557515
+               SET @c_errmsg = 'NSQL' + CONVERT(CHAR(6), @n_Err)
+                              + ': Serialno transfer are required same From & To Sku'
+                              + ', ID And Serialno'                                 --2024-09-25
+                              + '. To SerialNo: ' + @c_ToSerialNo
+                           + '. (lsp_Validate_TransferDetail_Std) |' + @c_ToSerialNo
+               GOTO EXIT_SP
+            END
+         END
+      END
+      --(Wan02) - END
    END TRY
    
    BEGIN CATCH

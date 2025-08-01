@@ -1,6 +1,3 @@
-IF EXISTS (SELECT name FROM dbo.sysobjects WHERE name = 'ntrTransferDetailAdd' AND type = 'TR')
-   DROP TRIGGER ntrTransferDetailAdd
-GO
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -33,9 +30,10 @@ GO
 /* 25-Jul-2017  TLTING     Remove SET ROWCOUNT                          */
 /* 07-Feb-2016  SWT02      Channel Management                           */
 /* 23-JUL-2019  Wan01      WMS-9872 - CN_NIKESDC_Exceed_Channel         */
+/* 26-MAY-2025  SSA01      UWP-3982- Added PalletType                   */
 /************************************************************************/
 
-CREATE TRIGGER [dbo].[ntrTransferDetailAdd]
+CREATE OR ALTER TRIGGER [dbo].[ntrTransferDetailAdd]
    ON  [dbo].[TRANSFERDETAIL]
    FOR INSERT
 AS
@@ -179,6 +177,8 @@ BEGIN
             ,  @c_ChannelInventoryMgmt  NVARCHAR(10) = '0' -- SWT02 
             ,  @c_TransferKey           NVARCHAR(10) = ''  -- SWT02
             ,  @c_TransferLineNumber    NVARCHAR(5)  = ''  -- SWT02
+            ,  @c_FromPalletType        NVARCHAR(10) = ''  --(SSA01)
+            ,  @c_ToPalletType          NVARCHAR(10) = ''  --(SSA01)
 
       DECLARE @c_Bondedflag NVARCHAR(1)
       
@@ -325,7 +325,10 @@ BEGIN
                   @d_ToLottable15           = ToLottable15,
                   @d_EffectiveDate          = EffectiveDate,
                   @c_FromChannel            = FromChannel,
-                  @c_ToChannel              = ToChannel                   
+                  @c_ToChannel              = ToChannel,
+                  @c_FromPalletType         = FromPalletType,     --(SSA01)
+                  @c_ToPalletType           = ToPalletType        --(SSA01)
+
          FROM INSERTED
          WHERE TransferKey + TransferLineNumber > @c_TransferPrimaryKey
          AND Status = '9'
@@ -460,7 +463,8 @@ BEGIN
                   @c_ItrnKey        = '',
                   @b_Success        = @b_Success OUTPUT,
                   @n_err            = @n_err     OUTPUT,
-                  @c_errmsg         = @c_errmsg  OUTPUT
+                  @c_errmsg         = @c_errmsg  OUTPUT,
+                  @c_PalletType     = @c_ToPalletType
          IF @b_success <> 1
          BEGIN
             IF @b_debug = 1   PRINT '[ntrTransferDetailAdd] nspItrnAddDeposit Fail'   -- ONG01a

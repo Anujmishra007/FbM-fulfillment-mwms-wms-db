@@ -17,6 +17,8 @@ GO
 /* 2024-12-26   1.0.1   JCH507  FCR-1755 Wrong position at st5 when short  */
 /* 2025-01-15   1.0.2   NLT013  FCR-1755 Remove duplicate scanned tote     */
 /* 2025-02-12   1.0.3   NLT013  FCR-1755 Wrong position issue              */
+/* 2025-03-18   1.1.0   NLT013  UWP-31257 Fix issue, the root cause is that*/
+/*                              PickDetail.TaskDetailKey <> TaskDetail.TaskDetailKey */
 /***************************************************************************/
       
 CREATE OR ALTER PROCEDURE [rdt].[rdt_1855ExtUpd03]
@@ -210,9 +212,30 @@ BEGIN
                AND TD.Groupkey = @cGroupKey   
                AND TD.DeviceID = @cCartID   
                AND TD.Status = '9'
+               AND TD.TaskType = 'ASTCPK'
                AND PKD.Status = @cPickConfirmStatus
 
-            SELECT @nRowCount = @@ROWCOUNT
+            INSERT INTO @tDropIDList(WaveKey, DropID)
+            SELECT DISTINCT ISNULL(ORM.userdefine09, ''), PKD.DropID
+            FROM dbo.TASKDETAIL TD WITH (NOLOCK)
+            INNER JOIN dbo.PickDetail PKD WITH(NOLOCK)
+               ON TD.StorerKey = PKD.StorerKey 
+               AND TD.FromLoc = PKD.Loc 
+               AND TD.Sku = PKD.Sku 
+               AND TD.RefTaskKey = PKD.TaskDetailKey 
+               AND TD.CaseID = PKD.CaseID
+            INNER JOIN dbo.ORDERS ORM WITH(NOLOCK)
+               ON ORM.StorerKey = PKD.StorerKey
+               AND ORM.OrderKey = PKD.OrderKey
+            WHERE TD.StorerKey = @cStorerKey
+               AND TD.Groupkey = @cGroupKey   
+               AND TD.DeviceID = @cCartID   
+               AND TD.Status = '9'
+               AND TD.TaskType = 'ASTCPK'
+               AND PKD.Status = @cPickConfirmStatus
+               AND NOT EXISTS(SELECT 1 FROM @tDropIDList DIL WHERE ISNULL(ORM.userdefine09, '') = DIL.WaveKey AND PKD.DropID = DIL.DropID)
+
+            SELECT @nRowCount = COUNT(1) FROM @tDropIDList
             IF @nRowCount = 0 
                GOTO Quit
 
@@ -231,6 +254,23 @@ BEGIN
                AND TD.Groupkey = @cGroupKey   
                AND TD.DeviceID = @cCartID   
                AND TD.Status = '9'
+               AND TD.TaskType = 'ASTCPK'
+               AND PKD.Status = @cPickConfirmStatus
+
+            UPDATE PKD
+            SET PKD.CaseID = ''
+            FROM dbo.PickDetail PKD WITH(ROWLOCK)
+            INNER JOIN dbo.TASKDETAIL TD WITH (NOLOCK)
+               ON TD.StorerKey = PKD.StorerKey 
+               AND TD.FromLoc = PKD.Loc 
+               AND TD.Sku = PKD.Sku 
+               AND TD.RefTaskKey = PKD.TaskDetailKey 
+               AND TD.CaseID = PKD.CaseID
+            WHERE TD.StorerKey = @cStorerKey
+               AND TD.Groupkey = @cGroupKey   
+               AND TD.DeviceID = @cCartID   
+               AND TD.Status = '9'
+               AND TD.TaskType = 'ASTCPK'
                AND PKD.Status = @cPickConfirmStatus
 
             SET @nLoopIndex = -1

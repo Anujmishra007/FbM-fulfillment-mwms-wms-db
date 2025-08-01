@@ -69,6 +69,8 @@ GO
 /* 21-Nov-2024  SWT04     FCR-822 - Merge Pallets with Serial Numbers     */
 /* 22-Jan-2025  Wan11     UWP-23317 - Unpick Serial if change on id.      */
 /*                        Fixed RDT move issue(FCR-540)                   */
+/* 04-Apr-2025  Wan12     UWP-31258-FCR-822 Partial Pallet Serial No Move */
+/* 26-JUN-2025  SSA01     UWP-3982- Added PalletType in inventory         */
 /**************************************************************************/
 
 CREATE OR ALTER PROCEDURE [dbo].[nspItrnAddMoveCheck]
@@ -112,6 +114,7 @@ CREATE OR ALTER PROCEDURE [dbo].[nspItrnAddMoveCheck]
    , @c_MoveRefKey   NVARCHAR(10)  = ''        --(Wan04)
    , @c_Channel      NVARCHAR(20) = ''      --(Wan08)
    , @n_Channel_ID   BIGINT = 0 OUTPUT      --(Wan08)
+   , @c_PalletType   NVARCHAR(10)   = '' --(SSA01)
 AS
 BEGIN
    SET NOCOUNT ON
@@ -183,7 +186,10 @@ BEGIN
                                      
       , @c_FromLocTypeSkipChannel    CHAR(1)           --NJOW01
       , @c_ToLocTypeSkipChannel      CHAR(1)           --NJOW01
-      , @c_ChkNoMixLottableForAllSku NVARCHAR(30) = '' --NJOW04      
+      , @c_ChkNoMixLottableForAllSku NVARCHAR(30) = '' --NJOW04  
+      
+      , @n_Qty_ID                   INT = 0              --(Wan12)
+      , @c_MoveType                 NVARCHAR(30) = ''    --(SSA01)
 
    SET @c_IDLottable01     = ''
    SET @c_IDLottable02     = ''
@@ -272,6 +278,9 @@ BEGIN
    /* Get status of overallocations flag */
    IF @n_continue = 1 or @n_continue = 2
    BEGIN
+     SELECT @c_MoveType = sourcetype
+                     FROM ITRN (NOLOCK) WHERE
+                     ITRNKEY = @c_itrnkey   --(SSA01)
       -- Added By Ricky to handle Overallocation by storerkey
 
       SELECT @c_facility = LOC.FACILITY
@@ -768,7 +777,7 @@ BEGIN
              ,@c_Work_toid        NVARCHAR(18)
              ,@b_addid            INT
              ,@c_InitialID        NVARCHAR(18)
-
+ 
       IF ISNULL(RTRIM(@c_LOT),'') <> '' AND ISNULL(RTRIM(@c_FromLOC),'') <> '' AND
          ISNULL(RTRIM(@c_StorerKey),'') <> '' AND ISNULL(RTRIM(@c_SKU),'') <> '' AND
          @n_Qty > 0
@@ -781,7 +790,7 @@ BEGIN
            AND ID = @c_FromID
            AND Qty >= @n_Qty
            SELECT @n_cnt = @@ROWCOUNT
-
+ 
          IF @n_cnt <> 1
          BEGIN
             /* Out Of Luck - Cannot Continue Because Unique FROM Row Not Found */
@@ -799,10 +808,11 @@ BEGIN
             GOTO FINDTOLOCATION
          END
       END
-
+ 
       /* Search By ID,LOC,QTY */
       IF ISNULL(RTRIM(@c_FromID),'') <> ''
       BEGIN
+
          SELECT @c_Work_FromLoc = Loc,
                 @c_Work_Fromid = id,
                 @c_Work_lot = lot,
@@ -1290,6 +1300,12 @@ BEGIN
 END
 IF @n_continue=1 or @n_continue=2
 BEGIN
+   SELECT @n_Qty_ID = SUM(lli.Qty) FROM LOTxLOCxID lli (NOLOCK)               --(Wan12)
+   WHERE lli.Storerkey = @c_Storerkey
+   AND   lli.Loc       = @c_FromLoc
+   AND   lli.ID        = @c_FromID  
+   GROUP BY lli.Storerkey, lli.Loc, lli.ID 
+
    /* Default TOID and TOLOC IF Necessary */
    IF (ISNULL(RTrim(@c_ToID), '') ='')
    BEGIN
@@ -1327,7 +1343,7 @@ BEGIN
       IF @n_cnt  = 0
       BEGIN
          /* Insert New Row Into ID,LOTxID,LOTxLOCxID */
-         INSERT INTO ID (ID,PACKKEY) VALUES (@c_toid,@c_packkey)
+         INSERT INTO ID (ID,PACKKEY,PALLETTYPE) VALUES (@c_toid,@c_packkey,@c_PalletType)
          SELECT @n_err = @@ERROR
          IF @n_err <> 0
          BEGIN
@@ -1986,7 +2002,9 @@ BEGIN
    /* Reduce The FROM ID in The ID Table */
    IF @n_continue=1 or @n_continue=2
    BEGIN
-      UPDATE ID with (ROWLOCK) SET QTY = QTY - @n_Qty WHERE ID = @c_fromID
+      UPDATE ID with (ROWLOCK) SET QTY = QTY - @n_Qty
+      , PalletType = CASE WHEN @c_MoveType = 'ntrInventoryQCDetailUpdate' THEN @c_PalletType ELSE PalletType END   --(SSA01)
+      WHERE ID = @c_fromID
       /* Check SQL Error Message */
       SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
       IF @n_err <> 0
@@ -2057,7 +2075,9 @@ BEGIN
       IF @c_AllowIDQtyUpdate = '1'
       BEGIN
          /* Update table 'Id' */
-         UPDATE ID with (ROWLOCK) SET QTY = QTY + @n_Qty, Status = @c_Status WHERE ID = @c_TOID
+         UPDATE ID with (ROWLOCK) SET QTY = QTY + @n_Qty, Status = @c_Status
+          , PalletType = CASE WHEN @c_MoveType = 'ntrInventoryQCDetailUpdate' THEN @c_PalletType ELSE PalletType END  --(SSA01)
+         WHERE ID = @c_TOID
       END
       ELSE
       BEGIN
@@ -2068,7 +2088,9 @@ BEGIN
          /* Update table 'Id' */
          IF EXISTS ( SELECT 1 FROM  ID with (NOLOCK) WHERE ID = @c_TOID AND [Status] <> @c_Status )
          BEGIN
-            UPDATE ID with (ROWLOCK) SET Status = @c_Status WHERE ID = @c_TOID
+            UPDATE ID with (ROWLOCK) SET Status = @c_Status
+            , PalletType = CASE WHEN @c_MoveType = 'ntrInventoryQCDetailUpdate' THEN @c_PalletType ELSE PalletType END   --(SSA01)
+            WHERE ID = @c_TOID
          END
       END
       /* Check SQL Error Message */
@@ -2543,56 +2565,58 @@ BEGIN
                 AND StorerKey = @c_StorerKey 
                 AND SerialNoCapture IN ('1','3'))
       BEGIN
-         BEGIN TRY
-            EXEC dbo.msp_SerialNoMoveCheck 
-                  @c_itrnkey    = @c_itrnkey   
-                , @c_StorerKey  = @c_StorerKey 
-                , @c_Sku        = @c_Sku       
-                , @c_Lot        = @c_Lot       
-                , @c_fromloc    = @c_fromloc   
-                , @c_fromid     = @c_fromid    
-                , @c_ToLoc      = @c_ToLoc     
-                , @c_ToID       = @c_ToID      
-                , @c_packkey    = @c_packkey   
-                , @c_Status     = @c_Status    
-                , @n_casecnt    = @n_casecnt   
-                , @n_innerpack  = @n_innerpack 
-                , @n_Qty        = @n_Qty       
-                , @n_pallet     = @n_pallet    
-                , @f_cube       = @f_cube      
-                , @f_grosswgt   = @f_grosswgt  
-                , @f_netwgt     = @f_netwgt    
-                , @f_otherunit1 = @f_otherunit1
-                , @f_otherunit2 = @f_otherunit2
-                , @c_lottable01 = @c_lottable01
-                , @c_lottable02 = @c_lottable02
-                , @c_lottable03 = @c_lottable03
-                , @d_lottable04 = @d_lottable04
-                , @d_lottable05 = @d_lottable05
-                , @c_lottable06 = @c_lottable06
-                , @c_lottable07 = @c_lottable07
-                , @c_lottable08 = @c_lottable08
-                , @c_lottable09 = @c_lottable09
-                , @c_lottable10 = @c_lottable10
-                , @c_lottable11 = @c_lottable11
-                , @c_lottable12 = @c_lottable12
-                , @d_lottable13 = @d_lottable13
-                , @d_lottable14 = @d_lottable14
-                , @d_lottable15 = @d_lottable15
-                , @b_Success    = @b_Success OUTPUT  
-                , @n_err        = @n_err     OUTPUT  
-                , @c_errmsg     = @c_errmsg  OUTPUT  
-                , @c_MoveRefKey = @c_MoveRefKey
-                , @c_Channel    = @c_Channel   
-                , @n_Channel_ID = @n_Channel_ID OUTPUT
-         END TRY
-         BEGIN CATCH
-               SET @n_err = ERROR_NUMBER()
-               SET @c_ErrMsg = ERROR_MESSAGE()
-                               
-               SET @n_continue = 3
-               SET @c_ErrMsg = RTRIM(@c_ErrMsg) + '. (nspItrnAddMoveCheck)' 
-         END CATCH                                          
+         IF @n_Qty > 0 AND @n_Qty = @n_Qty_ID                                       --(Wan12)
+         BEGIN
+            BEGIN TRY
+               EXEC dbo.msp_SerialNoMoveCheck 
+                     @c_itrnkey    = @c_itrnkey   
+                   , @c_StorerKey  = @c_StorerKey 
+                   , @c_Sku        = @c_Sku       
+                   , @c_Lot        = @c_Lot       
+                   , @c_fromloc    = @c_fromloc   
+                   , @c_fromid     = @c_fromid    
+                   , @c_ToLoc      = @c_ToLoc     
+                   , @c_ToID       = @c_ToID      
+                   , @c_packkey    = @c_packkey   
+                   , @c_Status     = @c_Status    
+                   , @n_casecnt    = @n_casecnt   
+                   , @n_innerpack  = @n_innerpack 
+                   , @n_Qty        = @n_Qty       
+                   , @n_pallet     = @n_pallet    
+                   , @f_cube       = @f_cube      
+                   , @f_grosswgt   = @f_grosswgt  
+                   , @f_netwgt     = @f_netwgt    
+                   , @f_otherunit1 = @f_otherunit1
+                   , @f_otherunit2 = @f_otherunit2
+                   , @c_lottable01 = @c_lottable01
+                   , @c_lottable02 = @c_lottable02
+                   , @c_lottable03 = @c_lottable03
+                   , @d_lottable04 = @d_lottable04
+                   , @d_lottable05 = @d_lottable05
+                   , @c_lottable06 = @c_lottable06
+                   , @c_lottable07 = @c_lottable07
+                   , @c_lottable08 = @c_lottable08
+                   , @c_lottable09 = @c_lottable09
+                   , @c_lottable10 = @c_lottable10
+                   , @c_lottable11 = @c_lottable11
+                   , @c_lottable12 = @c_lottable12
+                   , @d_lottable13 = @d_lottable13
+                   , @d_lottable14 = @d_lottable14
+                   , @d_lottable15 = @d_lottable15
+                   , @b_Success    = @b_Success OUTPUT  
+                   , @n_err        = @n_err     OUTPUT  
+                   , @c_errmsg     = @c_errmsg  OUTPUT  
+                   , @c_MoveRefKey = @c_MoveRefKey
+                   , @c_Channel    = @c_Channel   
+                   , @n_Channel_ID = @n_Channel_ID OUTPUT
+            END TRY
+            BEGIN CATCH
+                  SET @n_err = ERROR_NUMBER()
+                  SET @c_ErrMsg = ERROR_MESSAGE()
+                  SET @n_continue = 3
+                  SET @c_ErrMsg = RTRIM(@c_ErrMsg) + '. (nspItrnAddMoveCheck)' 
+            END CATCH   
+         END
       END
    END
    /* SWT04 FCR-822 END */

@@ -1307,12 +1307,10 @@ BEGIN
                      @cUPC    = @cUPC       OUTPUT,  
                      @nErrNo  = @nErrNo     OUTPUT,  
                      @cErrMsg = @cErrMsg    OUTPUT  
-                  IF @nErrNo <> 0  
-                     GOTO Quit  
                END  
   
                -- Customize decode  
-      ELSE IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cDecodeSP AND type = 'P')  
+               ELSE IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cDecodeSP AND type = 'P')  
                BEGIN  
                   SET @cSQL = 'EXEC rdt.' + RTRIM( @cDecodeSP) +  
                      ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, ' +  

@@ -18,21 +18,43 @@ GO
    1.0   Created                                        */
 /******************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdt_898Decode01] (
-    @nMobile            INT
-   ,@nFunc              INT
-   ,@cLangCode          NVARCHAR(3)
-   ,@nStep              INT
-   ,@nInputKey          INT
-   ,@cStorerKey         NVARCHAR(15)
-   ,@cReceiptKey        NVARCHAR(10)
-   ,@cPOKey             NVARCHAR(10)
-   ,@cLOC               NVARCHAR(10)
-   ,@cUCC               NVARCHAR(2000) OUTPUT
-   ,@nUCCQTY            INT OUTPUT
-   ,@cUserDefine08      NVARCHAR(30) OUTPUT
-   ,@cUserDefine09      NVARCHAR(30) OUTPUT
-   ,@nErrNo             INT OUTPUT
-   ,@cErrMsg            NVARCHAR(20) OUTPUT
+   @nMobile             INT,
+   @nFunc               INT,
+   @cLangCode           NVARCHAR( 3),
+   @nStep               INT,
+   @nInputKey           INT,
+   @cStorerKey          NVARCHAR( 15),
+   @cReceiptKey         NVARCHAR( 10),
+   @cPOKey              NVARCHAR( 10),
+   @cLOC                NVARCHAR( 10),
+   @cUCC                NVARCHAR( MAX)  OUTPUT,
+   @nUCCQTY             INT            OUTPUT,
+   @cUserDefine01       NVARCHAR(30)   OUTPUT,
+   @cUserDefine02       NVARCHAR(30)   OUTPUT,
+   @cUserDefine03       NVARCHAR(30)   OUTPUT,
+   @cUserDefine04       NVARCHAR(30)   OUTPUT,
+   @cUserDefine05       NVARCHAR(30)   OUTPUT,
+   @cUserDefine06       NVARCHAR(30)   OUTPUT,
+   @cUserDefine07       NVARCHAR(30)   OUTPUT,
+   @cUserDefine08       NVARCHAR(30)   OUTPUT,
+   @cUserDefine09       NVARCHAR(30)   OUTPUT,
+   @cLottable01         NVARCHAR( 18)  OUTPUT,
+   @cLottable02         NVARCHAR( 18)  OUTPUT,
+   @cLottable03         NVARCHAR( 18)  OUTPUT,
+   @dLottable04         DATETIME       OUTPUT,
+   @dLottable05         DATETIME       OUTPUT,
+   @cLottable06         NVARCHAR( 30)  OUTPUT,
+   @cLottable07         NVARCHAR( 30)  OUTPUT,
+   @cLottable08         NVARCHAR( 30)  OUTPUT,
+   @cLottable09         NVARCHAR( 30)  OUTPUT,
+   @cLottable10         NVARCHAR( 30)  OUTPUT,
+   @cLottable11         NVARCHAR( 30)  OUTPUT,
+   @cLottable12         NVARCHAR( 30)  OUTPUT,
+   @dLottable13         DATETIME       OUTPUT,
+   @dLottable14         DATETIME       OUTPUT,
+   @dLottable15         DATETIME       OUTPUT,
+   @nErrNo              INT            OUTPUT,
+   @cErrMsg             NVARCHAR( 20)  OUTPUT
 )
 AS
 BEGIN

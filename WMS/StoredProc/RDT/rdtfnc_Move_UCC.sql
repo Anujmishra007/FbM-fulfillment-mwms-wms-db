@@ -38,6 +38,9 @@ GO
 /* 2023-05-09 2.7  Ung      WMS-22401 Fix UCC DoubleScan                */
 /* 2023-06-12 2.8  Ung      WMS-22742 Add 2D barcode                    */
 /* 2024-10-25 2.9  ShaoAn   FCR-759-1001 ID and UCC Length Issue        */
+/* 2024-08-05 3.0  Ung      WMS-25998 Add UCC.Status = 3                */
+/* 2024-11-07 3.1  PXL009   Merged 2.9 from v0 branch                   */
+/* 2025-07-09 3.2.0 NickT   !!!Cutover, use V0 REPO for new development */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_Move_UCC] (
@@ -62,15 +65,15 @@ DECLARE
 
 -- RDT.RDTMobRec variable
 DECLARE
-   @nFunc        INT,
-   @nScn         INT,
-   @nStep        INT,
-   @cLangCode    NVARCHAR( 3),
-   @nInputKey    INT,
-   @nMenu        INT,
+   @nFunc      INT,
+   @nScn       INT,
+   @nStep      INT,
+   @cLangCode  NVARCHAR( 3),
+   @nInputKey  INT,
+   @nMenu      INT,
 
-   @cStorerKey   NVARCHAR( 15),
-   @cFacility    NVARCHAR( 5),
+   @cStorerKey NVARCHAR( 15),
+   @cFacility  NVARCHAR( 5),
 
    @cSKU         NVARCHAR( 20),
    @cSKUDescr    NVARCHAR( 60),
@@ -79,20 +82,21 @@ DECLARE
    @cUCCNo       NVARCHAR( 20),
    @cUDF01       NVARCHAR( 30),
 
-   @cUCC1        NVARCHAR( 20),
-   @cUCC2        NVARCHAR( 20),
-   @cUCC3        NVARCHAR( 20),
-   @cUCC4        NVARCHAR( 20),
-   @cUCC5        NVARCHAR( 20),
-   @cUCC6        NVARCHAR( 20),
-   @cUCC7        NVARCHAR( 20),
-   @cUCC8        NVARCHAR( 20),
-   @cUCC9        NVARCHAR( 20),
+   @cUCC1      NVARCHAR( 20),
+   @cUCC2      NVARCHAR( 20),
+   @cUCC3      NVARCHAR( 20),
+   @cUCC4      NVARCHAR( 20),
+   @cUCC5      NVARCHAR( 20),
+   @cUCC6      NVARCHAR( 20),
+   @cUCC7      NVARCHAR( 20),
+   @cUCC8      NVARCHAR( 20),
+   @cUCC9      NVARCHAR( 20),
 
    @cToLOC       NVARCHAR( 10),
    @cToID        NVARCHAR( 18),
-   @cFromLOC     NVARCHAR( 10), 
-   @cFromID      NVARCHAR( 18), 
+   @cFromLOC     NVARCHAR( 10),
+   @cFromID      NVARCHAR( 18),
+   @cUCCStatus NVARCHAR( 10),
 
    @cExtendedValidateSP NVARCHAR( 20), 
    @cExtendedUpdateSP   NVARCHAR( 20),
@@ -150,7 +154,8 @@ SELECT
    @cToID      = V_String11,
    @cFromLOC   = V_String12,
    @cFromID    = V_String15,
-   @cUDF01     = V_String16,
+   @cUCCStatus = V_String16,
+   @cUDF01     = V_String17,
 
    @cExtendedValidateSP = V_String20,
    @cExtendedUpdateSP   = V_String21,
@@ -239,6 +244,11 @@ BEGIN
    SET @cLOCLookUP = rdt.rdtGetConfig( @nFunc, 'LOCLookUPSP', @cStorerKey)
    IF @cLOCLookUP = '0'
       SET @cLOCLookUP = ''
+
+   -- UCC status allowed
+	SET @cUCCStatus = '1' -- Received
+	IF rdt.RDTGetConfig( @nFunc, 'MoveQTYAlloc', @cStorerKey) = '1'
+      SET @cUCCStatus += '3' -- Alloc
 
    -- Initiate var
    SET @cUCC1 = ''
@@ -417,7 +427,7 @@ BEGIN
                IF @i = 9 SELECT  @cInField09 = @cUCCNo ,@cOutField09 = @cUCCNo
             END
             SET @i = @i + 1
-         END  
+         END
       END
 
       -- Validate if anything changed
@@ -463,7 +473,7 @@ BEGIN
                   EXEC RDT.rdtIsValidUCC @cLangCode, @nErrNo OUTPUT, @cErrMsg OUTPUT, 
                      @cInField, -- UCC
                      @cStorerKey, 
-                     '1', -- Received, 
+                     @cUCCStatus, -- 1=Received, 3=Alloc
                      @cChkLOC = @cFromLOC
 
                   IF @nErrNo = 0
@@ -896,9 +906,9 @@ BEGIN
                @cErrMsg       = @cErrMsg OUTPUT,
                @cType         = 'ID'
             IF @nErrNo <> 0
-               GOTO Step_ToLOC_Fail  
+               GOTO Step_ToLOC_Fail
       END
-   
+
       IF @cLOCLookUP <> ''
       BEGIN
          EXEC rdt.rdt_LOCLookUp @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cFacility,
@@ -1597,7 +1607,7 @@ BEGIN
       EXEC RDT.rdtIsValidUCC @cLangCode, @nErrNo OUTPUT, @cErrMsg OUTPUT, 
          @cUCC, -- UCC
          @cStorerKey, 
-         '1', -- Received, 
+         @cUCCStatus, -- 1=Received, 3=Alloc
          @cChkLOC = @cFromLOC
       IF @nErrNo <> 0
          GOTO Step_2DUCC_Fail
@@ -1835,7 +1845,8 @@ BEGIN
       V_String11 = @cToID,
       V_String12 = @cFromLOC,
       V_String15 = @cFromID,
-      V_String16 = @cUDF01,
+      V_String16 = @cUCCStatus,
+      V_String17 = @cUDF01,
 
       V_String20 = @cExtendedValidateSP,
       V_String21 = @cExtendedUpdateSP,

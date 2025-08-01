@@ -68,6 +68,7 @@ GO
 /*                           (yeekung04)                                */
 /* 2019-08-30 4.4  James      WMS-10415 Remove Qty hold and replace with*/
 /*                            Pendingmovein (james12)                   */
+/* 2024-11-27 5.0.0 LJQ006    FCR-1292.Created                          */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_Inquiry] (
@@ -186,6 +187,10 @@ DECLARE
    @cLOCLookUP          NVARCHAR(20),  --(yeekung03)
    @cDispStyleColorSize  NVARCHAR( 20), --(yeekung04)
 
+   @cExtendedScnSP     NVARCHAR( 20),
+   @nAction            INT,
+   @tExtScnData        VariableTable,
+
  -- (james04)
    @c_oFieled01 NVARCHAR(20), @c_oFieled02 NVARCHAR(20),
    @c_oFieled03 NVARCHAR(20), @c_oFieled04 NVARCHAR(20),
@@ -219,7 +224,18 @@ DECLARE
    @cFieldAttr09 NVARCHAR( 1), @cFieldAttr10 NVARCHAR( 1),
    @cFieldAttr11 NVARCHAR( 1), @cFieldAttr12 NVARCHAR( 1),
    @cFieldAttr13 NVARCHAR( 1), @cFieldAttr14 NVARCHAR( 1),
-   @cFieldAttr15 NVARCHAR( 1)
+   @cFieldAttr15 NVARCHAR( 1),
+
+   @cUDF01  NVARCHAR( 250), @cUDF02 NVARCHAR( 250), @cUDF03 NVARCHAR( 250),
+   @cUDF04  NVARCHAR( 250), @cUDF05 NVARCHAR( 250), @cUDF06 NVARCHAR( 250),
+   @cUDF07  NVARCHAR( 250), @cUDF08 NVARCHAR( 250), @cUDF09 NVARCHAR( 250),
+   @cUDF10  NVARCHAR( 250), @cUDF11 NVARCHAR( 250), @cUDF12 NVARCHAR( 250),
+   @cUDF13  NVARCHAR( 250), @cUDF14 NVARCHAR( 250), @cUDF15 NVARCHAR( 250),
+   @cUDF16  NVARCHAR( 250), @cUDF17 NVARCHAR( 250), @cUDF18 NVARCHAR( 250),
+   @cUDF19  NVARCHAR( 250), @cUDF20 NVARCHAR( 250), @cUDF21 NVARCHAR( 250),
+   @cUDF22  NVARCHAR( 250), @cUDF23 NVARCHAR( 250), @cUDF24 NVARCHAR( 250),
+   @cUDF25  NVARCHAR( 250), @cUDF26 NVARCHAR( 250), @cUDF27 NVARCHAR( 250),
+   @cUDF28  NVARCHAR( 250), @cUDF29 NVARCHAR( 250), @cUDF30 NVARCHAR( 250)
 
 -- Load RDT.RDTMobRec
 SELECT
@@ -280,6 +296,8 @@ SELECT
    @cPUOM_Desc   = V_String6,
    @cMUOM_Desc   = V_String10,
 
+   @cExtendedScnSP = V_String11,
+
    @cQtyDisplayBySingleUOM = V_String20, -- (ChewKP01)
    @cMultiSKUBarcode       = V_String21,
    @cSKUBarcode1           = V_String22, -- (james04)
@@ -328,6 +346,7 @@ BEGIN
    IF @nStep = 2 GOTO Step_2   -- Scn = 802. Result screen
    IF @nStep = 3 GOTO Step_3   -- Scn = 803. Result screen - Lottable01 - 05
    IF @nStep = 4 GOTO Step_4   -- Scn = 3570  Multi SKU screen
+   IF @nStep = 99 GOTO Step_99 -- Extended screen
 END
 RETURN -- Do nothing if incorrect step
 
@@ -384,7 +403,8 @@ BEGIN
    IF @cLOCLookUP = '0'              
       SET @cLOCLookUP = ''         
    
-   SET @cDispStyleColorSize = rdt.RDTGetConfig( @nFunc, 'DispStyleColorSize', @cStorerKey)    
+   SET @cDispStyleColorSize = rdt.RDTGetConfig( @nFunc, 'DispStyleColorSize', @cStorerKey)
+   SET @cExtendedScnSP = rdt.RDTGetConfig( @nFunc, 'ExtendedScnSP', @cStorerKey)    
      
     
    -- EventLog - Sign In Function
@@ -400,6 +420,9 @@ BEGIN
    SET @cOutField01 = ''
    SET @cOutField02 = ''
    SET @cOutField03 = ''
+
+   -- Go to ext screen
+   GOTO Step_99
 END
 GOTO Quit
 
@@ -1448,6 +1471,7 @@ BEGIN
             SET @cOutField13 = @cExtendedInfo
          END
       END
+      GOTO Step_99
    END
 
    IF @nInputKey = 0 -- Esc or No
@@ -1468,6 +1492,9 @@ BEGIN
       -- Go to prev screen
       SET @nScn = @nScn - 1
       SET @nStep = @nStep - 1
+
+      -- Go to ext screen
+      GOTO Step_99
    END
 END
 GOTO Quit
@@ -2023,9 +2050,141 @@ BEGIN
    -- Go to next screen
    SET @nScn = @nFromScn
    SET @nStep = @nStep - 3
+   
+   -- Go to ext screen
+   GOTO Step_99
 END
 GOTO Quit
 
+/********************************************************************************
+ExtScn. Extend screen for customized requirements
+********************************************************************************/
+Step_99:
+BEGIN
+   IF @cExtendedScnSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScnSP AND type = 'P')
+      BEGIN
+         SET @nAction = 0
+
+         INSERT INTO @tExtScnData (Variable, Value)
+         VALUES
+            ('@nTotalRec', CAST(@nTotalRec AS NVARCHAR(50))),
+            ('@nCurrentRec', CAST(@nCurrentRec AS NVARCHAR(50))),
+            ('@cInquiry_LOC', @cInquiry_LOC),
+            ('@cInquiry_ID', @cInquiry_ID),
+            ('@cInquiry_SKU', @cInquiry_SKU),
+            ('@cPUOM_Desc', @cPUOM_Desc),
+            ('@cMUOM_Desc', @cMUOM_Desc),
+            ('@cSKUBarcode', @cSKUBarcode),
+            ('@cSKUBarcode1', @cSKUBarcode1),
+            ('@cSKUBarcode2', @cSKUBarcode2),
+            ('@cLOC', @cLOC),
+            ('@cID', @cID),
+            ('@cSKU', @cSKU),
+            ('@cSKUDescr', @cSKUDescr),
+            ('@cPUOM_Desc', @cPUOM_Desc),
+            ('@cMUOM_Desc', @cMUOM_Desc),
+            ('@nMQTY_TTL', CAST(@nMQTY_TTL AS NVARCHAR(50))),
+            ('@nMQTY_Alloc', CAST(@nMQTY_Alloc AS NVARCHAR(50))),
+            ('@nMQTY_Pick', CAST(@nMQTY_Pick AS NVARCHAR(50))),
+            ('@nMQTY_RPL', CAST(@nMQTY_RPL AS NVARCHAR(50))),
+            ('@nMQTY_PMV', CAST(@nMQTY_PMV AS NVARCHAR(50))),
+            ('@nMQTY_Avail', CAST(@nMQTY_Avail AS NVARCHAR(50))),
+            ('@nPQTY_TTL', CAST(@nPQTY_TTL AS NVARCHAR(50))),
+            ('@nPQTY_Alloc', CAST(@nPQTY_Alloc AS NVARCHAR(50))),
+            ('@nPQTY_Pick', CAST(@nPQTY_Pick AS NVARCHAR(50))),
+            ('@nPQTY_RPL', CAST(@nPQTY_RPL AS NVARCHAR(50))),
+            ('@nPQTY_PMV', CAST(@nPQTY_PMV AS NVARCHAR(50))),
+            ('@nPQTY_Avail', CAST(@nPQTY_Avail AS NVARCHAR(50)));
+
+         EXECUTE [RDT].[rdt_ExtScnEntry] 
+            @cExtendedScnSP,  --855ExtScn01
+            @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorerKey, @tExtScnData,
+            @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT, @cLottable01 OUTPUT,
+            @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT, @cLottable02 OUTPUT,
+            @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT, @cLottable03 OUTPUT,
+            @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT, @dLottable04 OUTPUT,
+            @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT, @dLottable05 OUTPUT,
+            @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT, @cLottable06 OUTPUT,
+            @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT, @cLottable07 OUTPUT,
+            @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT, @cLottable08 OUTPUT,
+            @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT, @cLottable09 OUTPUT,
+            @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT, @cLottable10 OUTPUT,
+            @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT, @cLottable11 OUTPUT,
+            @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT, @cLottable12 OUTPUT,
+            @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT, @dLottable13 OUTPUT,
+            @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT, @dLottable14 OUTPUT,
+            @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT, @dLottable15 OUTPUT,
+            @nAction, 
+            @nScn OUTPUT,  @nStep OUTPUT,
+            @nErrNo   OUTPUT, 
+            @cErrMsg  OUTPUT,
+            @cUDF01 OUTPUT, @cUDF02 OUTPUT, @cUDF03 OUTPUT,
+            @cUDF04 OUTPUT, @cUDF05 OUTPUT, @cUDF06 OUTPUT,
+            @cUDF07 OUTPUT, @cUDF08 OUTPUT, @cUDF09 OUTPUT,
+            @cUDF10 OUTPUT, @cUDF11 OUTPUT, @cUDF12 OUTPUT,
+            @cUDF13 OUTPUT, @cUDF14 OUTPUT, @cUDF15 OUTPUT,
+            @cUDF16 OUTPUT, @cUDF17 OUTPUT, @cUDF18 OUTPUT,
+            @cUDF19 OUTPUT, @cUDF20 OUTPUT, @cUDF21 OUTPUT,
+            @cUDF22 OUTPUT, @cUDF23 OUTPUT, @cUDF24 OUTPUT,
+            @cUDF25 OUTPUT, @cUDF26 OUTPUT, @cUDF27 OUTPUT,
+            @cUDF28 OUTPUT, @cUDF29 OUTPUT, @cUDF30 OUTPUT
+
+            IF @nErrNo <> 0
+            GOTO Step_99_Fail
+
+            IF @cExtendedScnSP = 'rdt_555ExtScn01'
+            BEGIN
+               IF @nScn = 802
+               BEGIN
+                  IF @nInputKey = 1
+                  BEGIN
+                     SET @cLottableCode = @cUDF01
+                     SET @cInquiry_ID   = @cUDF02
+                     SET @cInquiry_SKU  = @cUDF03
+                     SET @cInquiry_LOC  = @cUDF04
+                     SET @cSKUBarcode   = @cUDF05
+                     SET @cSKUBarcode1  = @cUDF06
+                     SET @cSKUBarcode2  = @cUDF07
+                     SET @nTotalRec     = CAST(@cUDF08 AS INT)
+                     SET @nCurrentRec   = CAST(@cUDF09 AS INT)
+
+                     SET @cLOC = @cUDF10
+                     SET @cID = @cUDF11
+                     SET @cSKU = @cUDF12
+                     SET @cSKUDescr = @cUDF13
+                     SET @cPUOM_Desc = @cUDF14
+                     SET @cMUOM_Desc = @cUDF15
+
+                     SET @nMQTY_TTL = CAST(@cUDF16 AS INT)
+                     SET @nMQTY_Alloc = CAST(@cUDF17 AS INT)
+                     SET @nMQTY_Pick = CAST(@cUDF18 AS INT)
+                     SET @nMQTY_RPL = CAST(@cUDF19 AS INT)
+                     SET @nMQTY_PMV = CAST(@cUDF20 AS INT)
+                     SET @nMQTY_Avail = CAST(@cUDF21 AS INT)
+
+                     SET @nPQTY_TTL = CAST(@cUDF22 AS INT)
+                     SET @nPQTY_Alloc = CAST(@cUDF23 AS INT)
+                     SET @nPQTY_Pick = CAST(@cUDF24 AS INT)
+                     SET @nPQTY_RPL = CAST(@cUDF25 AS INT)
+                     SET @nPQTY_PMV = CAST(@cUDF26 AS INT)
+                     SET @nPQTY_Avail = CAST(@cUDF27 AS INT)
+                     
+                  END
+               END
+               IF @nScn = @nMenu
+               BEGIN
+                  SET @nFunc = @nMenu
+               END
+            END
+
+         GOTO Quit
+      END
+   END
+   Step_99_Fail:
+      GOTO Quit
+END
 /********************************************************************************
 Quit. Update back to I/O table, ready to be pick up by JBOSS
 ********************************************************************************/
@@ -2105,6 +2264,7 @@ BEGIN
       --V_String19 = @nPQTY_Pick,
 
       -- (Vicky01) - End
+      V_String11 = @cExtendedScnSP,
 
       V_String20 = @cQtyDisplayBySingleUOM, -- (ChewKP01)
       V_String21 = @cMultiSKUBarcode,
