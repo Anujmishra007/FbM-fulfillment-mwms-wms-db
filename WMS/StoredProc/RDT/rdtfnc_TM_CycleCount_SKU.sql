@@ -50,7 +50,8 @@ GO
 /* 2024-11-12 3.9    Dennis     UWP-26828 Fix Conversion bug from str to dtime  */
 /* 2024-11-21 4.0.0  NLT03      UWP-27346 Additional textbox displays           */
 /* 2024-11-21 4.1.0  PXL003     UWP-27584 Fix SKU/UPC decode                    */
-/* 2025-07-07 4.1.1  James      FCR-6059 Add ExtOptionSP in step 3 (james18)    */
+/* 2025-07-07 4.2.0  James      FCR-6059 Add ExtOptionSP in step 3 (james18)    */
+/* 2025-07-18 4.3.0  NickT      UWP-37598 Update TaskDetail.EndTime when CC done*/
 /********************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_CycleCount_SKU] (
@@ -3260,8 +3261,10 @@ BEGIN
 
                UPDATE dbo.TaskDetail
                SET Status = '9'
-                   ,TrafficCop = NULL
-                   ,EditDate = GetDate()
+                  ,EndTime = GetDate()
+                  ,TrafficCop = NULL
+                  ,EditWho = @cUserName
+                  ,EditDate = GetDate()
                WHERE TaskDetailKey = @cTaskDetailKey
 
                IF @@ERROR <> ''
@@ -3337,8 +3340,10 @@ BEGIN
 
                UPDATE dbo.TaskDetail WITH (ROWLOCK)
                SET Status = '9'
-                   ,TrafficCop = NULL
-                   ,EditDate = GetDate()
+                  ,EndTime = GetDate()
+                  ,TrafficCop = NULL
+                  ,EditWho = @cUserName
+                  ,EditDate = GetDate()
                WHERE TaskDetailKey = @cTaskDetailKey
 
                IF @@ERROR <> ''

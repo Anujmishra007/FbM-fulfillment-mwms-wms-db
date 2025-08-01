@@ -46,8 +46,9 @@ GO
 /* 2025-05-19 4.2.0  JACKC      UWP-34563 Count SKU task genrerates cc detaill   */ 
 /*                               for all SKUs on the loc                         */
 /* 2025-06-17 4.3.0  NickT    FCR-4971 Add ExtScn in Step 3                      */
-/* 2025-07-16 4.3.1  James    FCR-6059 Change @nFromScn @nFromStep rdtMobRec     */
+/* 2025-07-16 4.4.0  James    FCR-6059 Change @nFromScn @nFromStep rdtMobRec     */
 /*                            variable mapping (james17)                         */
+/* 2025-06-17 4.5.0  NickT    UWP-37598 Update TaskDetail.EndTime when CC done   */
 /*********************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_CycleCount](
@@ -2677,9 +2678,10 @@ BEGIN
          -- Update TaskDetail Status = '9'
          Update dbo.TaskDetail
          SET Status = '9'
-               ,EditDate = GetDate()
-               ,EditWho  = @cUserName
-               ,TrafficCop = NULL
+            ,EndTime = GetDate()
+            ,EditDate = GetDate()
+            ,EditWho  = @cUserName
+            ,TrafficCop = NULL
          WHERE TaskDetailKey = @cTaskDetailKey
 
          IF @@Error <> 0
