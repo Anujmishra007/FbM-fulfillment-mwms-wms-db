@@ -539,7 +539,7 @@ BEGIN
                      END
 
                      SET @cUDF01 = 'SWAPUCC'
-                     SET @cUDF02 = @cSwapUCCID
+                     SET @cUDF02 = ''
 
                      UPDATE dbo.UCC WITH(ROWLOCK)
                      SET Status = '3',
