@@ -20,8 +20,9 @@ GO
 /* 2023-11-29 1.7  James      WMS-24279 Add config check whether UCC exists in*/
 /*                            current loc (james04)                           */
 /* 2025-06-24 1.8.0 NickT     FCR-4971 Add ExtScn in Step 1                   */
-/* 2025-07-07 1.8.1 James     FCR-6060 Add ExtendedCfmSP                      */ 
+/* 2025-07-07 1.9.0 James     FCR-6060 Add ExtendedCfmSP                      */ 
 /*                            Add ExtOptionSP in step 3 (james05)             */
+/* 2025-07-18 1.10.0 NickT    UWP-37598 Update TaskDetail.EndTime when CC done*/
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_CycleCount_UCC] (
@@ -929,8 +930,10 @@ BEGIN
                BEGIN
                   UPDATE dbo.TaskDetail 
                   SET Status = '9'
-                        ,TrafficCop = NULL
-                        ,EditDate = GetDate()
+                     ,EndTime = GetDate()
+                     ,TrafficCop = NULL
+                     ,EditWho  = @cUserName
+                     ,EditDate = GetDate()
                   WHERE TaskDetailKey = @cTaskDetailKey
                   
                   IF @@ERROR <> ''
@@ -951,8 +954,10 @@ BEGIN
                     
             UPDATE dbo.TaskDetail 
             SET Status = '9'
-                  ,TrafficCop = NULL
-                  ,EditDate = GetDate()
+               ,EndTime = GetDate()
+               ,TrafficCop = NULL
+               ,EditWho  = @cUserName
+               ,EditDate = GetDate()
             WHERE TaskDetailKey = @cTaskDetailKey
             
             IF @@ERROR <> ''
