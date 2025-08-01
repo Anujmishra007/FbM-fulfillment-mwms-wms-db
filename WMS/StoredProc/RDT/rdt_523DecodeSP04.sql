@@ -5,14 +5,15 @@ SET QUOTED_IDENTIFIER ON
 GO
 
 /******************************************************************************/
-/* Store procedure: rdt_523DecodeSP04                                          */
+/* Store procedure: rdt_523DecodeSP04                                         */
 /* Copyright: Maersk                                                          */
 /*                                                                            */
 /* Purpose: Decode For PMI case                                               */
 /*                                                                            */
 /* Date        Author    Ver.  Purposes                                       */
 /* 2024-10-22  ShaoAn    1.0   FCR-759-999 ID and UCC Length Issue            */
-/* 2024-10-24            1.0.1 Extended parameter definition                  */
+/* 2024-10-24  ShaoAn    1.0.1 Extended parameter definition                  */
+/* 2025-07-31  Jackc     1.1.0 FCR-2961 Support new types of labels           */
 /******************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdt_523DecodeSP04] (
    @nMobile           INT,           
@@ -43,6 +44,8 @@ BEGIN
    SET QUOTED_IDENTIFIER OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
+   DECLARE @cUCCSKU  NVARCHAR (20)
+
    SET @cBarcode = LTRIM(RTRIM(@cBarcode))
    IF @nFunc = 523
    BEGIN
@@ -59,7 +62,7 @@ BEGIN
                END
                IF LEN(@cBarcode) <> 25
                BEGIN
-                  SET @nErrNo = 227101
+                  SET @nErrNo = 243101
                   SET @cErrMsg = [rdt].[rdtgetmessage]( @nErrNo, @cLangCode, N'DSP') -- Invalid ID(25 digit)
                   GOTO Quit
                END
@@ -68,21 +71,68 @@ BEGIN
 
             If @cBarcodeUCC <> '' -- UCC  Decode
             BEGIN
-               IF LEN(@cBarcodeUCC) = 20
+               SET @cBarcodeUCC = LTRIM(RTRIM(@cBarcodeUCC))
+               IF LEN(@cBarcodeUCC) = 20 --V1.0.1 logic
                BEGIN
                   SET @cUCC = @cBarcodeUCC
                   GOTO Quit
                END
-               IF LEN(@cBarcodeUCC) <> 40
+               ELSE IF LEN(@cBarcodeUCC) = 40 --V1.0.1 logic
                BEGIN
-                  SET @nErrNo = 227102
+                  SET @cUCC = RIGHT(@cBarcodeUCC, 20)
+                  GOTO Quit
+               END --40
+               ELSE IF LEN(@cBarcodeUCC) = 49 --Fertin label
+               BEGIN
+                  SET @cUCC = SUBSTRING(@cBarcodeUCC, 19, 17)
+                  SET @cUCCSKU = SUBSTRING(@cBarcodeUCC, 39, 11)
+
+                  IF LEFT(@cSKU, 2) <> 'NP'
+                  BEGIN
+                     SET @nErrNo = 243103
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+                     GOTO Quit
+                  END
+
+                  IF NOT EXISTS (SELECT 1 FROM SKU (NOLOCK) WHERE StorerKey = @cStorerKey AND SKU = @cUCCSKU)
+                  BEGIN
+                     SET @nErrNo = 243104
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+                     GOTO Quit
+                  END
+
+                  GOTO Quit
+               END--Fertin label
+               ELSE IF LEN(@cBarcodeUCC) = 57 --Swedish label
+               BEGIN
+                  SET @cUCC = SUBSTRING(@cBarcodeUCC, 19, 17)
+                  SET @cUCCSKU = SUBSTRING(@cBarcodeUCC, 39, 11)
+
+                  IF LEFT(@cSKU, 2) <> 'NP'
+                  BEGIN
+                     SET @nErrNo = 243105
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+                     GOTO Quit
+                  END
+
+                  IF NOT EXISTS (SELECT 1 FROM SKU (NOLOCK) WHERE StorerKey = @cStorerKey AND SKU = @cUCCSKU)
+                  BEGIN
+                     SET @nErrNo = 243106
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+                     GOTO Quit
+                  END
+
+                  GOTO Quit
+               END -- swedish label
+               ELSE
+               BEGIN
+                  SET @nErrNo = 243102
                   SET @cErrMsg = [rdt].[rdtgetmessage]( @nErrNo, @cLangCode, N'DSP') -- Invalid UCC(40 digit)
                   GOTO Quit
                END
-               SET @cUCC = RIGHT(@cBarcodeUCC, 20)
-               GOTO Quit
-            END
-         END
+               
+            END--barcodeUCC
+         END --inputkey=1
       END
 
       IF @nStep = 2
