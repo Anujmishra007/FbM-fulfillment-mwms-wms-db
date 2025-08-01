@@ -54,7 +54,7 @@ BEGIN
 		   @retry_interval=1, 
 		   @os_run_priority=0, @subsystem=N'TSQL', 
 		   @command=N'SET ANSI_DEFAULTS OFF
-   EXEC msp_BEJ ''BEJ-BEJ-UnwaveLoadShipOrders''', 
+   EXEC msp_BEJ ''BEJ-UnwaveLoadShipOrders''', 
 		   @database_name=@DBName, 
 		   @flags=0
    IF (@@ERROR <> 0 OR @ReturnCode <> 0) GOTO QuitWithRollback
