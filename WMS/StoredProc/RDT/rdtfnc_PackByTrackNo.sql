@@ -127,6 +127,8 @@ GO
 /* 2025-02-24 8.0  NLT013   UWP-30499 Be albe to scan next SKU which is in   */
 /*                           same dropid                                     */
 /* 2025-07-09 0.0  Jackc    !!!Cutover!!! Use V0 repo for work               */
+/* 2025-08-01 8.1  NickT    UWP-38674 Get PickedQty by                       */
+/*                          PickDetail.Status = PickConfirmStatus            */
 /*****************************************************************************/    
     
 CREATE OR ALTER PROC [RDT].[rdtfnc_PackByTrackNo](    
@@ -2055,7 +2057,7 @@ BEGIN
       WHERE StorerKey = @cStorerKey    
          AND OrderKey = @cOrderKey    
          AND SKU = @cSKU    
-         AND Status < '9'    
+         AND Status = IIF(@cPickConfirmStatus = '', '5', @cPickConfirmStatus)
     
       IF @nSUM_PickedSKU < (@nSUM_PackedSKU + 1)   -- +1 because each scan is increase by 1 qty    
       BEGIN    
