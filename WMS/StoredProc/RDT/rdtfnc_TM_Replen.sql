@@ -58,6 +58,7 @@ GO
 /* 2024-06-14 4.1  Dennis     UWP-20813 Check Digit                           */
 /* 2025-03-13 4.2  NLT013     UWP-31321 Be able to close pending pallet       */
 /* 2025-05-21 4.3  NLT013     UWP-34785 Add new Exit Screen for Levis         */
+/* 2025-06-16 4.4  Dennis     FCR-3959 Extended Update on Step 7              */
 /* 2025-07-10 0.0  JackC      !!!Cutover!!! Use V0 repo for work              */
 /******************************************************************************/
 
@@ -369,8 +370,7 @@ BEGIN
    IF @nStep = 7 GOTO Step_Exit        -- Scn = 2686 Pallet is close. Next task / Exit
    IF @nStep = 8 GOTO Step_ShortPick   -- Scn = 2687 Short pick / Close pallet
    IF @nStep = 9 GOTO Step_Reason      -- Scn = 2109 Reason code
-   IF @nStep = 9 GOTO Step_Reason      -- Scn = 2109 Reason code
-   IF @nStep = 99 GOTO Step_99         -- Step 99 
+   IF @nStep = 99  GOTO Step_99        -- Scn = Extended Screen
 END
 RETURN -- Do nothing if incorrect step
 
@@ -757,35 +757,35 @@ BEGIN
          GOTO Step_DropID_Fail
       END
 
-      /*
-            BEGIN TRAN
+/*
+      BEGIN TRAN
 
-            -- Delete used DropID
-            IF EXISTS( SELECT 1 FROM dbo.DropID WITH (NOLOCK) WHERE DropID = @cDropID AND Status = '9')
-            BEGIN
-               -- Delete DropIDDetail
-               DELETE dbo.DropIDDetail WHERE DropID = @cDropID
-               IF @@ERROR <> 0
-               BEGIN
-                  ROLLBACK TRAN
-                  SET @nErrNo = 72270
+      -- Delete used DropID
+      IF EXISTS( SELECT 1 FROM dbo.DropID WITH (NOLOCK) WHERE DropID = @cDropID AND Status = '9')
+      BEGIN
+         -- Delete DropIDDetail
+         DELETE dbo.DropIDDetail WHERE DropID = @cDropID
+         IF @@ERROR <> 0
+         BEGIN
+            ROLLBACK TRAN
+            SET @nErrNo = 72270
+        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --DelDropIDFail
+            GOTO Step_DropID_Fail
+         END
+
+         -- Delete used DropID
+         DELETE dbo.DropID WHERE DropID = @cDropID AND Status = '9'
+         IF @@ERROR <> 0
+         BEGIN
+            ROLLBACK TRAN
+            SET @nErrNo = 72271
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --DelDropIDFail
-                  GOTO Step_DropID_Fail
-               END
+            GOTO Step_DropID_Fail
+         END
+      END
 
-               -- Delete used DropID
-               DELETE dbo.DropID WHERE DropID = @cDropID AND Status = '9'
-               IF @@ERROR <> 0
-               BEGIN
-                  ROLLBACK TRAN
-                  SET @nErrNo = 72271
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --DelDropIDFail
-                  GOTO Step_DropID_Fail
-               END
-            END
-
-            COMMIT TRAN
-      */
+      COMMIT TRAN
+*/
       -- Extended update
       IF @cExtendedUpdateSP <> ''
       BEGIN
@@ -841,6 +841,14 @@ BEGIN
       SET @nScn  = @nScn_Reason
       SET @nStep = @nStep_Reason
 
+   END
+
+   IF @cExtScnSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
+      BEGIN
+         GOTO Step_99
+      END
    END
 
    -- Extended info
@@ -1115,7 +1123,13 @@ BEGIN
          SET @nStep = @nStep_Reason
       END
    END
-      
+   IF @cExtScnSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
+      BEGIN
+         GOTO Step_99
+      END
+   END
    -- Extended info
    IF @cExtendedInfoSP <> ''
    BEGIN
@@ -1169,15 +1183,15 @@ BEGIN
       SET @cFromID  = @cInField05
       SET @cBarcode = @cInField05
 
-      /*
-            -- Check blank FromID
-            IF @cFromID = ''
-            BEGIN
-               SET @nErrNo = 72274
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --FROM ID needed
-               GOTO Step_FromID_Fail
-            END
-      */
+/*
+      -- Check blank FromID
+      IF @cFromID = ''
+      BEGIN
+         SET @nErrNo = 72274
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --FROM ID needed
+         GOTO Step_FromID_Fail
+      END
+*/
 
       -- Decode
       IF @cDecodeSP <> ''
@@ -2215,18 +2229,18 @@ BEGIN
             GOTO Step_NextTask_Fail
 
          SET @cTaskDetailKey = @cNextTaskDetailKey
-         /*
-                  EXEC rdt.rdt_TM_Replen_GetNextTask @nMobile, @nFunc, @cLangCode,
-                     @cUserName,
-                     @cAreaKey,
-                     @cListKey,
-                     @cDropID,
-                     @cNextTaskDetailKey OUTPUT,
-                     @nErrNo             OUTPUT,
-                     @cErrMsg            OUTPUT
-                  IF @nErrNo <> 0
-                     GOTO Step_NextTask_Fail
-         */
+/*
+         EXEC rdt.rdt_TM_Replen_GetNextTask @nMobile, @nFunc, @cLangCode,
+            @cUserName,
+            @cAreaKey,
+            @cListKey,
+            @cDropID,
+            @cNextTaskDetailKey OUTPUT,
+            @nErrNo             OUTPUT,
+            @cErrMsg            OUTPUT
+         IF @nErrNo <> 0
+            GOTO Step_NextTask_Fail
+*/
 
          -- Disable QTY field
          IF @cDisableQTYFieldSP <> ''
@@ -2546,6 +2560,15 @@ BEGIN
          SET @cOutField10 = @cExtendedInfo1
       END
    END
+
+   IF @cExtScnSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
+      BEGIN
+         GOTO Step_99
+      END
+   END
+
    GOTO Quit
 
    Step_NextTask_Fail:
@@ -3014,6 +3037,30 @@ BEGIN
        @cFacility   = @cFacility,
        @cStorerKey  = @cStorerKey
 
+      -- Extended update
+      IF @cExtendedUpdateSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedUpdateSP AND type = 'P')
+         BEGIN
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @cTaskdetailKey, @nErrNo OUTPUT, @cErrMsg OUTPUT'
+            SET @cSQLParam =
+               '@nMobile         INT,        ' +
+               '@nFunc           INT,        ' +
+               '@cLangCode       NVARCHAR( 3),   ' +
+               '@nStep           INT,        ' +
+               '@cTaskdetailKey  NVARCHAR( 10),  ' +
+               '@nErrNo          INT OUTPUT, ' +
+               '@cErrMsg         NVARCHAR( 20) OUTPUT'
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, @nStep, @cTaskdetailKey, @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+            IF @nErrNo <> 0
+               GOTO Quit
+         END
+      END
+
       -- Enable field
       SET @cFieldAttr14 = '' -- @nPQTY
       SET @cFieldAttr15 = '' -- @nMQTY
@@ -3162,7 +3209,13 @@ BEGIN
       SET @nScn = @nScn_SKU
       SET @nStep = @nStep_SKU
    END
-
+   IF @cExtScnSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
+      BEGIN
+         GOTO Step_99
+      END
+   END
    -- Extended info
    IF @cExtendedInfoSP <> ''
    BEGIN
@@ -3621,6 +3674,8 @@ BEGIN
                END
             END  
          END
+
+         
       END
    END
    GOTO Quit

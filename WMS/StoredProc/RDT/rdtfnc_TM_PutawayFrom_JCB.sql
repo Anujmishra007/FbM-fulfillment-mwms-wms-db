@@ -1950,7 +1950,7 @@ BEGIN
                      @cToLocAreaKey          NVARCHAR(10),
                      @cToLocPutawayZone      NVARCHAR(10),
                      @nToLocLevel            INT,
-                     @cToLocFloor            NVARCHAR(10)
+					 @cToLocFloor            NVARCHAR(10)
 
                   IF @cSuggToLoc <> '' AND @cLOCHoldKey <> ''
                   BEGIN
@@ -2129,12 +2129,19 @@ BEGIN
 
                         --Rollback the status, UserKey, ReasonKey if no ToLoc is found
                         UPDATE dbo.TaskDetail WITH(ROWLOCK) SET
-                           Status = 'H',
-                           UserKey = '',
+                           Status = '9',
                            EditDate = GETDATE(),
                            EditWho  = SUSER_SNAME(),
                            TrafficCop = NULL
                         WHERE TaskDetailKey = @cTaskDetailKey
+
+                        EXEC rdt.rdt_Putaway_PendingMoveIn '', 'UNLOCK'
+                           ,'' --@cSuggFromLOC
+                           ,@cSuggID 
+                           ,'' --@cSuggToLoc
+                           ,@cStorerKey
+                           ,@nErrNo  OUTPUT
+                           ,@cErrMsg OUTPUT
                      END
                   END
                END

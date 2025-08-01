@@ -1,24 +1,26 @@
 
-/***************************************************************************/
-/* Store procedure: rdt_TM_CasePick_ClosePallet                            */
-/* Copyright      : Maersk                                                 */
-/*                                                                         */
-/* Purpose: Confirm pick                                                   */
-/*                                                                         */
-/* Date        Rev     Author    Purposes                                  */
-/* 17-Dec-2014 1.0     Ung       SOS327467 Created                         */
-/* 17-Apr-2018 1.1     Ung       WMS-3273                                  */
-/*                               Add MoveQTYAlloc, MoveQTYPick             */
-/*                               Add PickConfirmStatus                     */
-/*                               Add ClosePalletSP                         */
-/* 03-Jan-2019 1.2     Ung       WMS-3273 Fix full short                   */
-/* 07-Mar-2019 1.3     Ung       WMS-8058 Fix move UCC                     */
-/* 01-Apr-2024 1.4     CYU027    UWP-17449 Create Replen task              */
-/* 29-Oct-2024 1.5.0   YYS027    FCR-989 add ReplenTaskSP                  */
-/* 01-Oct-2024 1.6     James     WMS-26122 Stamp TaskDetail.ToLoc (james01)*/
-/* 12-Nov-2024 1.7     PXL009    FCR-1125 Merged 1.4->1.6 from v0 branch   */
-/* 27-Nov-2024 1.8     Dennis    FCR-1483 Remove ReplenTask                */
-/***************************************************************************/
+/*********************************************************************************/
+/* Store procedure: rdt_TM_CasePick_ClosePallet                                  */
+/* Copyright      : Maersk                                                       */
+/*                                                                               */
+/* Purpose: Confirm pick                                                         */
+/*                                                                               */
+/* Date        Rev     Author    Purposes                                        */
+/* 17-Dec-2014 1.0     Ung       SOS327467 Created                               */
+/* 17-Apr-2018 1.1     Ung       WMS-3273                                        */
+/*                               Add MoveQTYAlloc, MoveQTYPick                   */
+/*                               Add PickConfirmStatus                           */
+/*                               Add ClosePalletSP                               */
+/* 03-Jan-2019 1.2     Ung       WMS-3273 Fix full short                         */
+/* 07-Mar-2019 1.3     Ung       WMS-8058 Fix move UCC                           */
+/* 01-Apr-2024 1.4     CYU027    UWP-17449 Create Replen task                    */
+/* 29-Oct-2024 1.5.0   YYS027    FCR-989 add ReplenTaskSP                        */
+/* 01-Oct-2024 1.6     James     WMS-26122 Stamp TaskDetail.ToLoc (james01)      */
+/* 12-Nov-2024 1.7     PXL009    FCR-1125 Merged 1.4->1.6 from v0 branch         */
+/* 27-Nov-2024 1.8     Dennis    FCR-1483 Remove ReplenTask                      */
+/* 30-Jun-2025 1.9.0   JACKC     1. UWP-36863 Add rdt_move when pickmethod = FP  */
+/*                               2. UWP-36988 Adapt with Loc Digit Check         */
+/*********************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_TM_CasePick_ClosePallet] (
    @nMobile        INT,
@@ -35,26 +37,29 @@ BEGIN
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
-   DECLARE @nTranCount     INT
-   DECLARE @cSQL           NVARCHAR(MAX)
-   DECLARE @cSQLParam      NVARCHAR(MAX)
+   DECLARE @nTranCount        INT
+   DECLARE @cSQL              NVARCHAR(MAX)
+   DECLARE @cSQLParam         NVARCHAR(MAX)
 
-   DECLARE @cClosePalletSP NVARCHAR(20)
-   DECLARE @cReplenTaskSP  NVARCHAR(20)
-   DECLARE @cReplenFlag    NVARCHAR(20)
-   DECLARE @cStorerKey     NVARCHAR( 15)
-   DECLARE @cSKU           NVARCHAR( 20)
-   DECLARE @cFromLOC       NVARCHAR( 10)
-   DECLARE @cFacility      NVARCHAR( 5)
-   DECLARE @b_Success      INT
-   DECLARE @nInputKey      INT
-   DECLARE @nStep          INT
-   DECLARE @cSuggToLOC     NVARCHAR( 10)
-   DECLARE @cInToLOC       NVARCHAR( 10)
-   DECLARE @nDebugMode     INT = 0
+   DECLARE @cClosePalletSP    NVARCHAR(20)
+   DECLARE @cReplenTaskSP     NVARCHAR(20)
+   DECLARE @cReplenFlag       NVARCHAR(20)
+   DECLARE @cStorerKey        NVARCHAR( 15)
+   DECLARE @cSKU              NVARCHAR( 20)
+   DECLARE @cFromLOC          NVARCHAR( 10)
+   DECLARE @cFacility         NVARCHAR( 5)
+   DECLARE @b_Success         INT
+   DECLARE @nInputKey         INT
+   DECLARE @nStep             INT
+   DECLARE @cSuggToLOC        NVARCHAR( 10)
+   DECLARE @cInToLOC          NVARCHAR( 20)--V1.9.0
+   DECLARE @cCheckDigitLOC    NVARCHAR( 20)
+   DECLARE @cLOCCheckDigitSP  NVARCHAR( 20)
+   DECLARE @nDebugMode        INT = 0
 
-   SELECT 
+   SELECT
       @nInputKey = InputKey,
+      @cFacility = Facility, --V1.9.0
       @nStep = Step,
       @cSuggToLOC = V_String5,
       @cInToLOC = I_Field03   -- Input ToLoc from user
@@ -84,6 +89,24 @@ BEGIN
    SET @cReplenTaskSP = rdt.rdtGetConfig( @nFunc, 'ReplenTaskSP', @cStorerKey)
    IF @cReplenTaskSP = '0'
       SET @cReplenTaskSP = ''
+
+   --V1.9.0 start
+   SET @cLOCCheckDigitSP = rdt.rdtGetConfig(@nFunc, 'LOCCheckDigitSP', @cStorerKey)
+   IF @cLOCCheckDigitSP = '1'
+   BEGIN
+      --If LOC CheckDitgit on, then InField03 is the loc with check digit not a real loc.
+      SET @cCheckDigitLOC = @cInToLoc 
+
+      EXEC rdt.rdt_LOCLookUp_CheckDigit @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cFacility,
+         @cCheckDigitLOC   OUTPUT,
+         @nErrNo           OUTPUT,
+         @cErrMsg          OUTPUT
+      IF @nErrNo <> 0
+         GOTO Fail
+         
+      SET @cInToLOC = @cCheckDigitLOC
+   END
+   --V1.9.0 end
 
    SET @nTranCount = @@TRANCOUNT
    
@@ -167,7 +190,7 @@ BEGIN
       SET @cPickConfirmStatus = rdt.RDTGetConfig( @nFunc, 'PickConfirmStatus', @cStorerKey)
       IF @cPickConfirmStatus = '0'
          SET @cPickConfirmStatus = '5'
-      
+
       -- (james02)
       IF ISNULL( @cInToLOC, '') <> '' AND ( @cInToLOC <> @cToLOC)
       BEGIN
@@ -176,7 +199,7 @@ BEGIN
       END
       ELSE
          SET @nIsToLOCDiff = 0
-   
+
       -- Check move alloc, but picked
       IF @cMoveQTYAlloc = '1' AND @cPickConfirmStatus = '5'
       BEGIN
@@ -197,6 +220,45 @@ BEGIN
 
       -- Full pallet pick
       IF @cPickMethod = 'FP'
+      BEGIN
+         --V1.9.0 start
+         -- Calc QTY to move
+         IF @cMoveQTYAlloc = '1'
+         BEGIN
+            SET @nQTYAlloc = @nQTY
+            SET @nQTYPick = 0
+         END
+         ELSE IF @cMoveQTYPick = '1'
+         BEGIN
+            SET @nQTYAlloc = 0
+            SET @nQTYPick = @nQTY
+         END
+         ELSE
+         BEGIN
+            SET @nQTYAlloc = 0
+            SET @nQTYPick = 0
+         END
+
+         EXECUTE rdt.rdt_Move
+            @nMobile        = @nMobile,
+            @cLangCode      = @cLangCode,
+            @nErrNo         = @nErrNo  OUTPUT,
+            @cErrMsg        = @cErrMsg OUTPUT, -- screen limitation, 20 NVARCHAR max
+            @cSourceType    = 'rdt_TM_CasePick_ClosePallet',
+            @cStorerKey     = @cStorerKey,
+            @cFacility      = @cFacility,
+            @cFromLOC       = @cFromLOC,
+            @cToLOC         = @cToLOC,
+            @cFromID        = @cFromID,     -- NULL means not filter by ID. Blank is a valid ID
+            @cToID          = @cFromID,     -- NULL means not changing ID. Blank consider a valid ID
+            @nQTYAlloc      = @nQTYAlloc,
+            @nQTYPick       = @nQTYPick,
+            @cTaskDetailKey = @cTaskDetailKey,
+            @nFunc          = @nFunc
+         IF @nErrNo <> 0
+            GOTO RollBackTran
+         --V1.9.0 end
+
          EXEC RDT.rdt_STD_EventLog
             @cActionType    = '3', -- Pick
             @cUserID        = @cUserName,
@@ -209,6 +271,7 @@ BEGIN
             @cID            = @cFromID,
             @cToID          = @cToID,
             @cTaskDetailKey = @cTaskDetailKey
+      END --FP
 
       -- Partial pallet pick
       IF @cPickMethod = 'PP'
@@ -273,26 +336,26 @@ BEGIN
                      -- Move by SKU (Multi sku ucc)
                      EXEC RDT.rdt_Move
                         @nMobile     = @nMobile,
-                        @cLangCode   = @cLangCode, 
+                        @cLangCode   = @cLangCode,
                         @nErrNo      = @nErrNo  OUTPUT,
-                        @cErrMsg     = @cErrMsg OUTPUT, 
-                        @cSourceType = 'rdt_TM_CasePick_ClosePallet', 
+                        @cErrMsg     = @cErrMsg OUTPUT,
+                        @cSourceType = 'rdt_TM_CasePick_ClosePallet',
                         @cStorerKey  = @cStorerKey,
-                        @cFacility   = @cFacility, 
-                        @cFromLOC    = @cFromLOC, 
-                        @cToLOC      = @cToLOC, 
+                        @cFacility   = @cFacility,
+                        @cFromLOC    = @cFromLOC,
+                        @cToLOC      = @cToLOC,
                         @cFromID     = @cFromID,
                         @cToID       = @cToID,
-                        @cSKU        = @cMoveSKU, 
+                        @cSKU        = @cMoveSKU,
                         @nQTY        = @nMoveQTY,
-                        @nFunc       = @nFunc, 
+                        @nFunc       = @nFunc,
                         @nQTYAlloc   = @nQTYAlloc,
                         @nQTYPick    = @nQTYPick,
-                        @cDropID     = @cUCCNo, 
-                        @cFromLOT    = @cMoveLOT 
+                        @cDropID     = @cUCCNo,
+                        @cFromLOT    = @cMoveLOT
                      IF @nErrNo <> 0
                         GOTO RollBackTran
-         
+
                      FETCH NEXT FROM @curSKU INTO @cMoveSKU, @nMoveQTY, @cMoveLOT
                   END
                END

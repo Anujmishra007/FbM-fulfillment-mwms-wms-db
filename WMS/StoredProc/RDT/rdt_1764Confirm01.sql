@@ -1,110 +1,76 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
 GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
 
 /************************************************************************/
-/* Store procedure: rdt_TM_Replen_Confirm                               */
-/* Copyright      : IDS                                                 */
+/* Store procedure: rdt_1764Confirm01                                   */
+/* Copyright      :                                                     */
 /*                                                                      */
-/* Purpose: Confirm replenish                                           */
-/*    1. Split task                                                     */
-/*    2. Update TaskDetail to 5-Picked                                  */
 /*                                                                      */
 /* Modifications log:                                                   */
 /*                                                                      */
-/* Date        Rev  Author    Purposes                                  */
-/* 21-Oct-2011 1.0  Ung       Created                                   */
-/* 24-Feb-2014 1.1  Ung       Fix split transit task                    */
-/* 24-May-2014 1.2  Ung       Fix split task, ListKey not reset         */
-/* 29-Jul-2016 1.3  Ung       SOS324184 Fix split task QTY <> SystemQTY */
-/* 07-Sep-2016 1.4  Ung       SOS372531 Add GroupKey                    */
-/* 17-Jun-2025 1.5  Dennis    FCR-3959 Customize Confirm                */
+/* Date       Rev  Author    Purposes                                   */
+/* 2025-06-18 1.0  Dennis    FCR-3959 Created                           */
 /************************************************************************/
 
-CREATE OR ALTER PROC [rdt].[rdt_TM_Replen_Confirm] (
+CREATE OR ALTER PROC [RDT].[rdt_1764Confirm01] (
    @nMobile        INT,
    @nFunc          INT,
    @cLangCode      NVARCHAR( 3),
-   @cUserName      NVARCHAR( 18), 
-   @cFacility      NVARCHAR( 5), 
-   @cStorerKey     NVARCHAR( 15), 
+   @cUserName      NVARCHAR( 18),
+   @cFacility      NVARCHAR( 5),
+   @cStorerKey     NVARCHAR( 15),
    @cTaskDetailKey NVARCHAR( 10),
-   @cDropID        NVARCHAR( 20), 
-   @nQTY           INT, 
-   @cReasonKey     NVARCHAR( 10), 
-   @cListKey       NVARCHAR( 10), 
-   @nErrNo         INT          OUTPUT,
-   @cErrMsg        NVARCHAR( 20) OUTPUT
+   @cDropID        NVARCHAR( 20),
+   @nQTY           INT,
+   @cReasonKey     NVARCHAR( 10),
+   @cListKey       NVARCHAR( 10),
+   @nErrNo         INT           OUTPUT,
+   @cErrMsg        NVARCHAR( 20) OUTPUT,
+   @nDebug         INT = 0
 ) AS
 BEGIN
    SET NOCOUNT ON
    SET QUOTED_IDENTIFIER OFF
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
-   
+
    DECLARE @cNewTaskDetailKey NVARCHAR(10)
-   DECLARE @cTaskType         NVARCHAR( 10)
-   DECLARE @cFromLOC          NVARCHAR( 10)
-   DECLARE @cToLOC            NVARCHAR( 10)
-   DECLARE @cFromID           NVARCHAR( 18)
-   DECLARE @cLOT              NVARCHAR( 10)
-   DECLARE @cPickMethod       NVARCHAR( 10)
-   DECLARE @nTaskQTY          INT
-   DECLARE @nSystemQTY        INT
-   DECLARE @nNewSystemQTY     INT
-   DECLARE @cStatus           NVARCHAR( 10)
-   DECLARE @cSQL              NVARCHAR( MAX)
-   DECLARE @cSQLParam         NVARCHAR( MAX),
-   @cConfirmSP                NVARCHAR( 20)
+   DECLARE @cPickDetailKey NVARCHAR(10)
+   DECLARE @cTaskType   NVARCHAR( 10)
+   DECLARE @cFromLOC    NVARCHAR( 10)
+   DECLARE @cToLOC      NVARCHAR( 10)
+   DECLARE @cFromID     NVARCHAR( 18)
+   DECLARE @cLOT        NVARCHAR( 10)
+   DECLARE @cPickMethod NVARCHAR( 10)
+   DECLARE @nSystemQTY  INT
+   DECLARE @bSuccess    INT
+   DECLARE @cStatus     NVARCHAR( 10)
+   DECLARE @cSQL        NVARCHAR(1000)
+   DECLARE @cSQLParam   NVARCHAR(1000)
+   DECLARE @nQTY_PD     INT
+   DECLARE @nPickQTY    INT
+   DECLARE @nNewTaskQty INT
+   DECLARE @nOrgTaskQty INT
+   DECLARE @nShortQTY   INT
+   DECLARE @cTask       NVARCHAR(3)
+   DECLARE @cLOCType    NVARCHAR(10)
+   DECLARE @cPickConfirmStatus NVARCHAR( 1),
+   @nTaskQTY            INT,
+   @nNewSystemQTY       INT
 
    -- Init var
    SET @nErrNo = 0
    SET @cErrMsg = ''
    SET @cNewTaskDetailKey = ''
-
-      -- Get storer config
-   SET @cConfirmSP = rdt.rdtGetConfig( @nFunc, 'ConfirmSP', @cStorerKey)
-   IF @cConfirmSP = '0'
-      SET @cConfirmSP = ''
-
-   /***********************************************************************************************
-                                          Custom confirm
-   ***********************************************************************************************/
-   IF @cConfirmSP <> ''
-   BEGIN
-      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cConfirmSP AND type = 'P')
-      BEGIN
-         SET @cSQL = 'EXEC rdt.' + RTRIM( @cConfirmSP) +
-            ' @nMobile, @nFunc, @cLangCode, @cUserName, @cFacility, @cStorerKey, @cTaskDetailKey, @cDropID, @nQTY, @cReasonKey, @cListKey, ' +
-            ' @nErrNo OUTPUT, @cErrMsg OUTPUT '
-         SET @cSQLParam =
-            ' @nMobile        INT,           ' +
-            ' @nFunc          INT,           ' +
-            ' @cLangCode      NVARCHAR( 3),  ' +
-            ' @cUserName      NVARCHAR( 18), ' +
-            ' @cFacility      NVARCHAR( 5),  ' +
-            ' @cStorerKey     NVARCHAR( 15), ' +
-            ' @cTaskDetailKey NVARCHAR( 10), ' +
-            ' @cDropID        NVARCHAR( 20), ' +
-            ' @nQTY           INT,           ' +
-            ' @cReasonKey     NVARCHAR( 10), ' +
-            ' @cListKey       NVARCHAR( 10), ' +
-            ' @nErrNo         INT           OUTPUT, ' +
-            ' @cErrMsg        NVARCHAR( 20) OUTPUT, ' +
-            ' @nDebug         INT = 0               '
-
-         EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-            @nMobile, @nFunc, @cLangCode, @cUserName, @cFacility, @cStorerKey, @cTaskDetailKey, @cDropID, @nQTY, @cReasonKey, @cListKey,
-            @nErrNo OUTPUT, @cErrMsg OUTPUT
-
-         GOTO Quit
-      END
-   END
+   SET @nNewTaskQTY = 0
 
    -- Handling transaction
    DECLARE @nTranCount INT
    SET @nTranCount = @@TRANCOUNT
+
    -- Get task info
    SET @nSystemQTY = 0
    SELECT 
@@ -120,15 +86,12 @@ BEGIN
    FROM dbo.TaskDetail WITH (NOLOCK) 
    WHERE TaskDetailKey = @cTaskDetailKey
 
-   -- Check task already confirm/SKIP/CANCEL
-   IF @cStatus IN ('5', '0', 'X')
+   -- Check task already confirm/SKIP/CANCEL/Hold
+   IF @cStatus IN ('5', '0', 'X','S')
       RETURN
 
    BEGIN TRAN  -- Begin our own transaction
-   SAVE TRAN rdt_TM_Replen_Confirm -- For rollback or commit only our own transaction
-
---if suser_sname() = 'wmsgt'
---select @nQTY '@nQTY', @nTaskQTY '@nTaskQTY', @cReasonKey '@cReasonKey', @cPickMethod '@cPickMethod'
+   SAVE TRAN rdt_TM_Replen_Confirm01 -- For rollback or commit only our own transaction
 
    -- Split task (PP, close pallet with balance)
    IF @nQTY < @nTaskQTY AND   -- not full replen
@@ -231,22 +194,16 @@ BEGIN
       END
    END
    
-   COMMIT TRAN rdt_TM_Replen_Confirm -- Only commit change made here
+   COMMIT TRAN rdt_TM_Replen_Confirm01 -- Only commit change made here
    GOTO Quit
 
 RollBackTran:
-   ROLLBACK TRAN rdt_TM_Replen_Confirm -- Only rollback change made here
+   ROLLBACK TRAN rdt_TM_Replen_Confirm01 -- Only rollback change made here
 Fail:
 Quit:
    WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
       COMMIT TRAN
 END
 GO
-
-SET QUOTED_IDENTIFIER OFF
-GO
-SET ANSI_NULLS ON
-GO
-
-GRANT EXECUTE ON [rdt].[rdt_TM_Replen_Confirm] TO NSQL
+GRANT EXECUTE ON  [RDT].[rdt_1764Confirm01] TO [NSQL]
 GO
