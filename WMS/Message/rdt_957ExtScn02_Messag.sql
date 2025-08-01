@@ -23,5 +23,6 @@ execute rdt.rdtAddMsg 218918, 10, '218918 UCCPicked',       'us_english', 957
 execute rdt.rdtAddMsg 218919, 10, '218919 InvalidLoc',      'us_english', 957
 execute rdt.rdtAddMsg 218920, 10, '218920 SwapUCCFail',     'us_english', 957
 execute rdt.rdtAddMsg 218921, 10, '218921 CdlookupErr',     'us_english', 957
+execute rdt.rdtAddMsg 218922, 10, '218922 NotAllowSwap',    'us_english', 957, 0, '218922 Not allow to swap UCC'
 
 SELECT * FROM RDT.RDTMSG WITH(NOLOCK) WHERE Message_ID BETWEEN 218901 AND 218950

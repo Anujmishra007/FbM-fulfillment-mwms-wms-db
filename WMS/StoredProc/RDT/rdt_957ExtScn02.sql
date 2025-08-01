@@ -109,7 +109,12 @@ BEGIN
       @cMoveQTYPick        NVARCHAR( 1),
       @cPickConfirmStatus  NVARCHAR( 1),
       @cPacKKey            NVARCHAR( 10),
-      @nCaseCnt            INT
+      @nCaseCnt            INT,
+
+      @cOrderType          NVARCHAR( 10),
+      @cOrderConsigneeKey  NVARCHAR( 15),
+      @cPickDetailUOM      NVARCHAR( 10),
+      @nPackFlag           INT
 
    SELECT 
       @nCurrentStep       = Step,
@@ -387,7 +392,8 @@ BEGIN
                      @cOrderLineNumber = ISNULL(ucc1.OrderLineNumber, ''),
                      @cSwapUCCID    = ucc2.Id,
                      @cSwapUCCLot   = ucc2.LOT,
-                     @cPickDetailKey = pkd.PickDetailKey
+                     @cPickDetailKey = pkd.PickDetailKey,
+                     @cPickDetailUOM = pkd.UOM
                   FROM dbo.PICKDETAIL pkd WITH(NOLOCK)
                   INNER JOIN dbo.PICKHEADER pkh WITH(NOLOCK) ON pkd.StorerKey = pkh.StorerKey AND pkd.OrderKey = pkh.OrderKey
                   INNER JOIN dbo.UCC ucc1 WITH(NOLOCK) ON ucc1.StorerKey = pkd.StorerKey AND ucc1.UCCNo = pkd.DropID
@@ -409,6 +415,28 @@ BEGIN
                   BEGIN
                      SET @nErrNo = 218906
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid UCC
+                     GOTO Quit
+                  END
+
+                  SELECT 
+                     @cOrderType = ord.Type,
+                     @cOrderConsigneeKey = ord.ConsigneeKey
+                  FROM dbo.ORDERS ord WITH(NOLOCK)
+                  WHERE ord.StorerKey = @cStorerKey
+                     AND ord.OrderKey = @cOrderKey
+
+                  SELECT @nRowCount = COUNT(1)
+                  FROM dbo.CODELKUP WITH(NOLOCK)
+                  WHERE StorerKey = @cStorerKey
+                     AND ListName = 'NOSWAP'
+                     AND Code = @cOrderConsigneeKey
+                     AND Shot IS NOT NULL
+                     AND Short = @cOrderType 
+                  
+                  IF @nRowCount > 0
+                  BEGIN
+                     SET @nErrNo = 218922
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Not allow to swap UCC
                      GOTO Quit
                   END
                END 
@@ -472,6 +500,45 @@ BEGIN
                         DropID = @cUCCNo
                      WHERE PickDetailKey = @cPickDetailKey
 
+                     SELECT @nRowCount = COUNT(1)
+                     FROM dbo.CODELKUP WITH(NOLOCK)
+                     WHERE StorerKey = @cStorerKey
+                        AND ListName = 'LVSSTO'
+                        AND Code = @cOrderConsigneeKey
+                        AND Shot IS NOT NULL
+                        AND Short = @cOrderType 
+                     
+                     IF @nRowCount > 0 AND @cPickDetailUOM = '2'
+                     BEGIN
+                        UPDATE dbo.PickDetail WITH(ROWLOCK)
+                        SET
+                           Caseid = @cUCCNo,
+                           EditDate = GETDATE(),
+                           EditWho  = SUSER_SNAME(),
+                           TrafficCop = NULL
+                        WHERE PickDetailKey = @cPickDetailKey
+
+                        UPDATE dbo.PackDetail WITH(ROWLOCK)
+                        SET
+                           LabelNo = @cUCCNo,
+                           DropID = @cUCCNo,
+                           RefNo = @cUCCNo,
+                           EditDate = GETDATE(),
+                           EditWho  = SUSER_SNAME()
+                        WHERE PickSlipNo = @cPickSlipNo
+                           AND LabelNo = @cUCCAllocated
+
+                        UPDATE dbo.PackInfo WITH(ROWLOCK)
+                        SET
+                           RefNo = @cUCCNo,
+                           EditDate = GETDATE(),
+                           EditWho  = SUSER_SNAME(),
+                           TrafficCop = NULL
+                        WHERE PickSlipNo = @cPickSlipNo
+                           AND RefNo IS NOT NULL
+                           AND Refno = @cUCCAllocated
+                     END
+
                      SET @cUDF01 = 'SWAPUCC'
                      SET @cUDF02 = @cSwapUCCID
 
@@ -479,14 +546,18 @@ BEGIN
                      SET Status = '3',
                         Userdefined08 = '1',
                         OrderKey = @cOrderKey,
-                        OrderLineNumber = @cOrderLineNumber
+                        OrderLineNumber = @cOrderLineNumber,
+                        EditDate = GETDATE(),
+                        EditWho  = SUSER_SNAME()
                      WHERE StorerKey = @cStorerKey
                         AND UCCNo = @cUCCNo
 
                      UPDATE dbo.UCC WITH(ROWLOCK)
                      SET Status = '1',
                         OrderKey = '',
-                        OrderLineNumber = ''
+                        OrderLineNumber = '',
+                        EditDate = GETDATE(),
+                        EditWho  = SUSER_SNAME()
                      WHERE StorerKey = @cStorerKey
                         AND UCCNo = @cUCCAllocated
                   END
@@ -495,7 +566,9 @@ BEGIN
                   BEGIN
                      ---update UCC
                      UPDATE dbo.UCC WITH(ROWLOCK)
-                     SET Userdefined08 = '1'
+                     SET Userdefined08 = '1',
+                        EditDate = GETDATE(),
+                        EditWho  = SUSER_SNAME()
                      WHERE StorerKey = @cStorerKey
                         AND UCCNo = @cUCCNo
                         AND Status = '3'
@@ -515,7 +588,9 @@ BEGIN
                      AND ucc.Status = '5'
 
                   UPDATE orm WITH(ROWLOCK)
-                  SET orm.Status = '3'
+                  SET orm.Status = '3',
+                     EditDate = GETDATE(),
+                     EditWho  = SUSER_SNAME()
                   FROM ORDERS orm
                   INNER JOIN 
                      (SELECT orm1.StorerKey, orm1.OrderKey, COUNT(1) AS totalOrderQty
@@ -675,7 +750,7 @@ BEGIN
                   --Create Cursor to loop PickDetail 1 by 1
                   DECLARE C_UCC CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
                   SELECT 
-                     ucc.UCCNo, ucc.Loc, ucc.Qty, ucc.Sku, ucc.LOT, pkd.PickDetailKey, pkd.ID
+                     ucc.UCCNo, ucc.Loc, ucc.Qty, ucc.Sku, ucc.LOT, pkd.PickDetailKey, pkd.ID, pkd.OrderKey
                   FROM dbo.PICKDETAIL pkd WITH(NOLOCK)
                   INNER JOIN dbo.PICKHEADER pkh WITH(NOLOCK) ON pkd.StorerKey = pkh.StorerKey AND pkd.OrderKey = pkh.OrderKey
                   INNER JOIN dbo.UCC ucc WITH(NOLOCK) ON ucc.StorerKey = pkd.StorerKey AND ucc.UCCNo = pkd.DropID AND ucc.Sku = pkd.Sku
@@ -685,7 +760,7 @@ BEGIN
                      --AND pkd.ID = @cDropID
 
                   OPEN C_UCC
-                  FETCH NEXT FROM C_UCC INTO @cUCCNo, @cUCCLoc, @nUCCQTY, @cSKU, @cLOT, @cPickDetailKey, @cToID
+                  FETCH NEXT FROM C_UCC INTO @cUCCNo, @cUCCLoc, @nUCCQTY, @cSKU, @cLOT, @cPickDetailKey, @cToID, @cOrderKey
 
                   WHILE (@@FETCH_STATUS <> -1)
                   BEGIN
@@ -717,14 +792,57 @@ BEGIN
                                     ELSE '5' END, --Picked V1.2
                         Userdefined08 = '',
                         Loc = @cToLoc,
-                        ID = @cDropID
+                        ID = @cDropID,
+                        EditDate = GETDATE(),
+                        EditWho  = SUSER_SNAME()
                      WHERE StorerKey = @cStorerKey
                         AND UCCNo = @cUCCNo
 
                      UPDATE dbo.PICKDETAIL WITH(ROWLOCK)
                      SET Loc = @cToLoc,
-                        ID = @cDropID
+                        ID = @cDropID,
+                        EditDate = GETDATE(),
+                        EditWho  = SUSER_SNAME()
                      WHERE PickDetailKey = @cPickDetailKey
+
+                     SELECT 
+                        @cOrderType = ord.Type,
+                        @cOrderConsigneeKey = ord.ConsigneeKey
+                     FROM dbo.ORDERS ord WITH(NOLOCK)
+                     WHERE ord.StorerKey = @cStorerKey
+                        AND ord.OrderKey = @cOrderKey
+
+                     SELECT @nRowCount = COUNT(1)
+                     FROM dbo.CODELKUP WITH(NOLOCK)
+                     WHERE StorerKey = @cStorerKey
+                        AND ListName = 'LVSSTO'
+                        AND Code = @cOrderConsigneeKey
+                        AND Shot IS NOT NULL
+                        AND Short = @cOrderType
+
+                     IF @nRowCount > 0
+                     BEGIN
+                        UPDATE dbo.PackInfo WITH(ROWLOCK)
+                        SET CartonStatus = 'PACKED',
+                           EditDate = GETDATE(),
+                           EditWho  = SUSER_SNAME()
+                        WHERE PickSlipNo = @cPickSlipNo
+                           AND RefNo IS NOT NULL
+                           AND RefNo = @cUCCNo
+
+                        SELECT @nRowCount = COUNT(1)
+                        FROM dbo.PackInfo WITH(NOLOCK)
+                        WHERE PickSlipNo = @cPickSlipNo
+                           AND ISNULL(CartonStatus, '') <> 'PACKED'
+
+                        IF @nRowCount = 0
+                        BEGIN
+                           UPDATE dbo.PackHeader WITH(ROWLOCK)
+                           SET Status = '9', --Packed
+                              EditDate = GETDATE(),
+                              EditWho  = SUSER_SNAME()
+                           WHERE PickSlipNo = @cPickSlipNo
+                     END
 
                      IF @nErrNo <> 0
                      BEGIN
@@ -743,7 +861,7 @@ BEGIN
                      END
 
                      -- Fetch Next From Cursor
-                     FETCH NEXT FROM C_UCC INTO @cUCCNo, @cUCCLoc, @nUCCQTY, @cSKU, @cLOT, @cPickDetailKey, @cToID
+                     FETCH NEXT FROM C_UCC INTO @cUCCNo, @cUCCLoc, @nUCCQTY, @cSKU, @cLOT, @cPickDetailKey, @cToID, @cOrderKey
                   END -- WHILE 1=1
                   CLOSE C_UCC
                   DEALLOCATE C_UCC
