@@ -1,6 +1,6 @@
-SET ANSI_NULLS OFF
+SET QUOTED_IDENTIFIER OFF 
 GO
-SET QUOTED_IDENTIFIER OFF
+SET ANSI_NULLS OFF 
 GO
 
 /************************************************************************/
@@ -150,7 +150,7 @@ BEGIN
    SET @cCartonCountCfg = rdt.RDTGetConfig( @nFunc, 'CartonCountCfg', @cStorerKey)
    
    SET @cUpdPalletDetailLoc = rdt.RDTGetConfig( @nFunc, 'UpdPalletDetailLoc', @cStorerKey)
-   IF @cUpdPalletDetailLoc = 0
+   IF @cUpdPalletDetailLoc = '0'
       SET @cUpdPalletDetailLoc = ''
 
    -- Variable mapping
@@ -173,17 +173,13 @@ BEGIN
    AND   Status <> '4'
    AND   StorerKey  = @cStorerKey
 
-   SELECT @nSum_PackDQty = ISNULL( SUM( Qty), 0)
+   SELECT @nSum_PackDQty = ISNULL( SUM( PD.Qty), 0)
    FROM dbo.PackDetail PD WITH (NOLOCK)
    JOIN dbo.PackHeader PH WITH (NOLOCK) ON ( PD.PickSlipNo = PH.PickSlipNo)
+   JOIN dbo.PickDetail PID WITH (NOLOCK) ON ( PD.DropID = PID.DropID AND PD.SKU = PID.Sku AND PH.OrderKey = PID.OrderKey)
    WHERE PD.StorerKey = @cStorerKey
-   AND   PD.DropID = @cPalletID
-   AND   PH.OrderKey IN (
-         SELECT DISTINCT OrderKey
-         FROM dbo.PickDetail WITH (NOLOCK) 
-         WHERE ( ( @cPackByPickDetailDropID = '1' AND DropID = @cPalletID) OR 
+   AND ( ( @cPackByPickDetailDropID = '1' AND PID.DropID = @cPalletID) OR 
                   ( @cPackByPickDetailID = '1' AND ID = @cPalletID))
-         AND   PD.StorerKey  = @cStorerKey)
 
    IF ( @nSum_PickDQty <= @nSum_PackDQty) AND @nSum_PackDQty > 0
    BEGIN
@@ -415,19 +411,18 @@ BEGIN
    END
 
    SET @curPDSKU = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
-   SELECT SKU, Qty
+   SELECT SKU, Qty, DropID
    FROM @tPickDetail
-   WHERE DropID = @cPalletID
    ORDER BY SKU
    OPEN @curPDSKU
-   FETCH NEXT FROM @curPDSKU INTO @cPD_SKU, @nPD_Qty
+   FETCH NEXT FROM @curPDSKU INTO @cPD_SKU, @nPD_Qty, @cDropID
    WHILE @@FETCH_STATUS = 0
    BEGIN
       SET @curPackDtl = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
       SELECT SerialNo, SUM(Qty)
       FROM dbo.SerialNo WITH (NOLOCK)
       WHERE StorerKey = @cStorerKey
-      AND   UCCNo = @cPalletID
+	  AND   UCCNo = @cDropID
       AND   SKU = @cPD_SKU
       AND   [Status] < '6'
       GROUP BY SerialNo
@@ -438,19 +433,19 @@ BEGIN
       BEGIN
          IF NOT EXISTS (SELECT 1 FROM dbo.PackDetail WITH (NOLOCK) 
             WHERE PickSlipNo = @cPickSlipNo
-            AND   DropID = @cPalletID
+			AND   DropID = @cDropID
             AND   SKU = @cPD_SKU
             AND   RefNo = @cSerialNo)
          BEGIN
             SET @nCartonNo = 0
 
-            SET @cLabelNo = @cPalletID
+			SET @cLabelNo = @cDropID
 
             INSERT INTO dbo.PackDetail
                (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, Refno, AddWho, AddDate, EditWho, EditDate, DropID)
             VALUES
                (@cPickSlipNo, 0, @cLabelNo, '00000', @cStorerKey, @cPD_SKU, @nSNQty,
-               @cSerialNo, 'rdt.' + sUser_sName(), GETDATE(), 'rdt.' + sUser_sName(), GETDATE(), @cPalletID)
+               @cSerialNo, 'rdt.' + sUser_sName(), GETDATE(), 'rdt.' + sUser_sName(), GETDATE(), @cDropID)
 
             IF @@ERROR <> 0
             BEGIN
@@ -459,10 +454,15 @@ BEGIN
                GOTO RollBackTran
             END 
 
-            SELECT TOP 1 @nCartonNo = CartonNo
+            SELECT TOP 1 
+				@nCartonNo = CartonNo,
+				@cLabelLine = LabelLine
             FROM dbo.PackDetail WITH (NOLOCK) 
             WHERE PickSlipNo = @cPickSlipNo
             AND   LabelNo = @cLabelNo
+			AND   SKU = @cPD_SKU
+			AND   DropID = @cDropID
+			AND   RefNo = @cSerialNo
             ORDER BY 1 
 
             IF @cGenPackInfo = '1'
@@ -523,7 +523,7 @@ BEGIN
                      @cLabelLine = @cLabelLine
             FROM dbo.PackDetail WITH (NOLOCK) 
             WHERE PickSlipNo = @cPickSlipNo
-            AND   DropID = @cPalletID
+            AND   DropID = @cDropID
             AND   SKU = @cPD_SKU
             AND   RefNo = @cSerialNo
             ORDER BY 1
@@ -603,7 +603,8 @@ BEGIN
       IF @cGenPalletDetail = '1'
       BEGIN
          IF NOT EXISTS ( SELECT 1 FROM dbo.Pallet WITH (NOLOCK) 
-                           WHERE PalletKey = @cPalletID)
+                           WHERE PalletKey = @cPalletID
+						   AND   StorerKey = @cStorerKey)
          BEGIN
             INSERT INTO dbo.Pallet (PalletKey, StorerKey, Status) VALUES 
             (@cPalletID, @cStorerKey, '0')
@@ -614,39 +615,29 @@ BEGIN
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'InsPltInfoFail'
                GOTO RollBackTran
             END
-
-            INSERT INTO dbo.PalletDetail (PalletKey, PalletLineNumber, CaseId, Sku, Qty, StorerKey, Status) VALUES 
-            (@cPalletID, '0', @cPalletID, @cPD_SKU, @nPD_Qty, @cStorerKey, '0')
+		END
+   
+        IF NOT EXISTS ( SELECT 1 FROM dbo.PalletDetail WITH (NOLOCK) 
+                WHERE PalletKey = @cPalletID
+                AND   StorerKey = @cStorerKey
+                AND   CaseID = @cDropID
+                AND   SKU = @cPD_SKU)
+        BEGIN
+            INSERT INTO dbo.PalletDetail (PalletKey, PalletLineNumber, CaseId, Sku, Qty, StorerKey, Status, Loc) VALUES 
+               
+			(@cPalletID, '0', @cDropID, @cSku, @nPD_Qty, @cStorerKey, '0', @cUpdPalletDetailLoc)
 
             IF @@ERROR <> 0
             BEGIN
-               SET @nErrNo = 237918
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'InsPldInfoFail'
-               GOTO RollBackTran
+                SET @nErrNo = 237919
+                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'InsPldInfoFail'
+                GOTO RollBackTran
             END
-         END
-         ELSE
-         BEGIN
-            IF NOT EXISTS ( SELECT 1 FROM dbo.PalletDetail WITH (NOLOCK) 
-                  WHERE PalletKey = @cPalletID
-                  AND   StorerKey = @cStorerKey
-                  AND   CaseID = @cPalletID
-                  AND   SKU = @cPD_SKU)
-            BEGIN
-               INSERT INTO dbo.PalletDetail (PalletKey, PalletLineNumber, CaseId, Sku, Qty, StorerKey, Status) VALUES 
-               (@cPalletID, '0', @cPalletID, @cSku, @nPD_Qty, @cStorerKey, '0')
-
-               IF @@ERROR <> 0
-               BEGIN
-                  SET @nErrNo = 237919
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'InsPldInfoFail'
-                  GOTO RollBackTran
-               END
-            END
-         END
+        END
+         
       END
 
-      FETCH NEXT FROM @curPDSKU INTO @cPD_SKU, @nPD_Qty
+      FETCH NEXT FROM @curPDSKU INTO @cPD_SKU, @nPD_Qty, @cDropID
    END
 
    SET @nSum_Packed = 0
@@ -794,35 +785,40 @@ BEGIN
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Scan Out Fail
          GOTO RollBackTran
       END
+   END
 
-      IF EXISTS( SELECT 1 FROM @tSerialNo)
+   --Pack confirm only can update serialno.status = 6 (packed)
+   IF EXISTS ( SELECT 1 
+               FROM dbo.PACKHEADER WITH (NOLOCK)
+               WHERE PickSlipNo = @cPickSlipNo
+               AND   [Status] = '9')
+   BEGIN
+      -- Pack confirm only can update serial status
+      SET @curSN = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
+      SELECT SN.SerialNoKey
+      FROM dbo.SerialNo SN WITH (NOLOCK)
+      JOIN dbo.PACKDETAIL PD WITH (NOLOCK) ON 
+         ( SN.StorerKey = PD.StorerKey AND SN.SKU = PD.SKU AND SN.SerialNo = PD.RefNo)
+      WHERE SN.[Status] < '6'
+      AND   PD.PickSlipNo = @cPickSlipNo
+      OPEN @curSN
+      FETCH NEXT FROM @curSN INTO @cSerialNoKey
+      WHILE @@FETCH_STATUS = 0
       BEGIN
-         -- Pack confirm only can update serial status
-         SET @curSN = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
-         SELECT SerialNoKey
-         FROM dbo.SerialNo SN WITH (NOLOCK)
-         JOIN @tSerialNo t ON 
-            ( SN.StorerKey = t.StorerKey AND SN.SKU = t.SKU AND SN.SerialNo = t.SerialNo)
-         WHERE SN.[Status] < '6'
-         OPEN @curSN
-         FETCH NEXT FROM @curSN INTO @cSerialNoKey
-         WHILE @@FETCH_STATUS = 0
+         UPDATE dbo.SerialNo SET
+            [Status] = '6',
+            EditWho = @cUserName,
+            EditDate = GETDATE()
+         WHERE SerialNoKey = @cSerialNoKey
+
+         IF @@ERROR <> 0
          BEGIN
-            UPDATE dbo.SerialNo SET
-               [Status] = '6',
-               EditWho = @cUserName,
-               EditDate = GETDATE()
-            WHERE SerialNoKey = @cSerialNoKey
-
-            IF @@ERROR <> 0
-            BEGIN
-               SET @nErrNo = 237916
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD SNO Err
-               GOTO RollBackTran
-            END
-
-            FETCH NEXT FROM @curSN INTO @cSerialNoKey
+            SET @nErrNo = 237916
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD SNO Err
+            GOTO RollBackTran
          END
+
+         FETCH NEXT FROM @curSN INTO @cSerialNoKey
       END
    END
 
@@ -879,9 +875,10 @@ BEGIN
 END
 GO
 
-SET QUOTED_IDENTIFIER OFF 
+
+SET QUOTED_IDENTIFIER OFF
 GO
-SET ANSI_NULLS ON 
+SET ANSI_NULLS ON
 GO
-GRANT EXECUTE ON  [RDT].[rdt_835PackConfirm02] TO [NSQL]
+GRANT EXECUTE ON RDT.rdt_835PackConfirm02 TO NSQL
 GO
