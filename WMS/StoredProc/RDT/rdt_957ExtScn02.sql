@@ -14,6 +14,7 @@ GO
 /* 2024-11-07 1.1  NLT013   UWP-26694 update orderkey info for swapped UCC   */
 /* 2025-07-03 1.2  JackC    UWP-37190 Set UCCstatus to 6 if toLoc is loseUCC */
 /*                                                                           */
+/* 2025-08-01 1.3.0 NickT   FCR-7106 Enhancement for FN957                   */
 /*****************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_957ExtScn02] (
@@ -430,7 +431,7 @@ BEGIN
                   WHERE StorerKey = @cStorerKey
                      AND ListName = 'NOSWAP'
                      AND Code = @cOrderConsigneeKey
-                     AND Shot IS NOT NULL
+                     AND Short IS NOT NULL
                      AND Short = @cOrderType 
                   
                   IF @nRowCount > 0
@@ -505,7 +506,7 @@ BEGIN
                      WHERE StorerKey = @cStorerKey
                         AND ListName = 'LVSSTO'
                         AND Code = @cOrderConsigneeKey
-                        AND Shot IS NOT NULL
+                        AND Short IS NOT NULL
                         AND Short = @cOrderType 
                      
                      IF @nRowCount > 0 AND @cPickDetailUOM = '2'
@@ -514,8 +515,7 @@ BEGIN
                         SET
                            Caseid = @cUCCNo,
                            EditDate = GETDATE(),
-                           EditWho  = SUSER_SNAME(),
-                           TrafficCop = NULL
+                           EditWho  = SUSER_SNAME()
                         WHERE PickDetailKey = @cPickDetailKey
 
                         UPDATE dbo.PackDetail WITH(ROWLOCK)
@@ -532,8 +532,7 @@ BEGIN
                         SET
                            RefNo = @cUCCNo,
                            EditDate = GETDATE(),
-                           EditWho  = SUSER_SNAME(),
-                           TrafficCop = NULL
+                           EditWho  = SUSER_SNAME()
                         WHERE PickSlipNo = @cPickSlipNo
                            AND RefNo IS NOT NULL
                            AND Refno = @cUCCAllocated
@@ -817,7 +816,7 @@ BEGIN
                      WHERE StorerKey = @cStorerKey
                         AND ListName = 'LVSSTO'
                         AND Code = @cOrderConsigneeKey
-                        AND Shot IS NOT NULL
+                        AND Short IS NOT NULL
                         AND Short = @cOrderType
 
                      IF @nRowCount > 0
@@ -836,12 +835,33 @@ BEGIN
                            AND ISNULL(CartonStatus, '') <> 'PACKED'
 
                         IF @nRowCount = 0
+                           AND NOT EXISTS (SELECT 1 
+                                          FROM dbo.PickHeader PH WITH(NOLOCK)
+                                          INNER JOIN dbo.PickDetail PD WITH(NOLOCK)
+                                             ON PH.StorerKey = PD.StorerKey
+                                             AND PH.OrderKey = PD.OrderKey
+                                          WHERE PH.StorerKey = @cStorerkey
+                                             AND PH.PickHeaderKey = @cPickSlipNo
+                                             AND PD.Status < '4'
+                                             AND PD.Qty > 0
+                                           )
+                           AND (SELECT COUNT(DISTINCT LabelNo) FROM dbo.PackDetail WITH(NOLOCK) WHERE StorerKey = @cStorerkey AND PickSlipNo = @cPickSlipNo)
+                               =
+                               (SELECT COUNT(DISTINCT CaseID)
+                                 FROM dbo.PickHeader PH WITH(NOLOCK)
+                                 INNER JOIN dbo.PickDetail PD WITH(NOLOCK)
+                                    ON PH.StorerKey = PD.StorerKey
+                                    AND PH.OrderKey = PD.OrderKey
+                                 WHERE PH.StorerKey = @cStorerkey
+                                    AND PH.PickHeaderKey = @cPickSlipNo
+                                    AND PD.Qty > 0)
                         BEGIN
                            UPDATE dbo.PackHeader WITH(ROWLOCK)
                            SET Status = '9', --Packed
                               EditDate = GETDATE(),
                               EditWho  = SUSER_SNAME()
                            WHERE PickSlipNo = @cPickSlipNo
+                        END
                      END
 
                      IF @nErrNo <> 0
