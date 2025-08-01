@@ -1,4 +1,4 @@
-DECLARE @DBName NVARCHAR(10) = 'GBRWMS'
+DECLARE @DBName NVARCHAR(10) = 'GLOWMS'
 
 IF NOT EXISTS (SELECT 1 FROM master.sys.databases WHERE name = @DBName)
 BEGIN
@@ -18,11 +18,11 @@ BEGIN
 END
 
 DECLARE @jobId BINARY(16)
-SELECT @jobId = j.job_id FROM msdb..sysjobs j where j.name = N'BEJ - mWMS Unwave Orders(GBR)'
+SELECT @jobId = j.job_id FROM msdb..sysjobs j where j.name = N'BEJ - mWMS Unwave LoadShipOrders(GLO)'
 
 IF @jobId IS NULL
 BEGIN
-   EXEC @ReturnCode =  msdb.dbo.sp_add_job @job_name=N'BEJ - mWMS Unwave Orders(GBR)', 
+   EXEC @ReturnCode =  msdb.dbo.sp_add_job @job_name=N'BEJ - mWMS Unwave LoadShipOrders(GLO)', 
 		   @enabled=1, 
 		   @notify_level_eventlog=2, 
 		   @notify_level_email=0, 
@@ -38,7 +38,7 @@ END
 /****** Object:  Step [Backend Build Wave]    Script Date: 5/14/2024 9:35:34 AM ******/
 IF NOT EXISTS (SELECT 1 from msdb..sysjobsteps js
                JOIN msdb..sysjobs j on j.job_id = js.job_id
-               WHERE js.command LIKE '%msp_BEJ%''BEJ-UnwaveOrders''%' 
+               WHERE js.command LIKE '%msp_BEJ%''BEJ-UnwaveLoadShipOrders''%' 
                AND database_name = @DBName
                AND j.job_id = @jobId
               )
@@ -54,7 +54,7 @@ BEGIN
 		   @retry_interval=1, 
 		   @os_run_priority=0, @subsystem=N'TSQL', 
 		   @command=N'SET ANSI_DEFAULTS OFF
-   EXEC msp_BEJ ''BEJ-UnwaveOrders''', 
+   EXEC msp_BEJ ''BEJ-BEJ-UnwaveLoadShipOrders''', 
 		   @database_name=@DBName, 
 		   @flags=0
    IF (@@ERROR <> 0 OR @ReturnCode <> 0) GOTO QuitWithRollback

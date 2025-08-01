@@ -3,7 +3,7 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 /************************************************************************/
-/* Stored Proc: msp_BEJ_UnwaveOrders                                    */
+/* Stored Proc: msp_BEJ_UnWaveLoadShipOrders                            */
 /* Creation Date: 2025-07-31                                            */
 /* Copyright: Maersk Logistics                                          */
 /* Written by: AlexK                                                    */
@@ -22,7 +22,7 @@ GO
 /* 2025-07-31  AlexK    1.0   FCR-6833 - initial.                       */
 /************************************************************************/
 
-CREATE OR ALTER PROC [dbo].[msp_BEJ_UnwaveOrders]
+CREATE OR ALTER PROC [dbo].[msp_BEJ_UnWaveLoadShipOrders]
      @c_StorerKey   NVARCHAR(15)   = ''
    , @c_Facility    NVARCHAR(5)    = ''
    , @c_OtherConfig NVARCHAR(4000) = ''
