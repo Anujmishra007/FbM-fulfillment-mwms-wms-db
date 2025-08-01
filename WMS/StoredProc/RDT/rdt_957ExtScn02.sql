@@ -6,15 +6,18 @@ GO
 /*****************************************************************************/
 /* Store procedure: rdt_957ExtScn02                                          */
 /* Copyright: Maersk WMS                                                     */
+/* Customer: Granite Levis                                                   */
 /*                                                                           */
 /* Purpose:                                                                  */
 /*                                                                           */
 /* Date       Rev  Author   Purposes                                         */
 /* 2024-07-04 1.0  NLT013   FCR-454 CREATE                                   */
 /* 2024-11-07 1.1  NLT013   UWP-26694 update orderkey info for swapped UCC   */
-/* 2025-07-03 1.2  JackC    UWP-37190 Set UCCstatus to 6 if toLoc is loseUCC */
+/* 2025-02-27 1.2.0 NLT013  UWP-30644 FN957 case pick error                  */
+/* 2025-03-07 1.2.1 Dennis  UWP-30644 FN957 case pick error                  */
+/* 2025-07-03 1.3  JackC    UWP-37190 Set UCCstatus to 6 if toLoc is loseUCC */
 /*                                                                           */
-/* 2025-08-01 1.3.0 NickT   FCR-7106 Enhancement for FN957                   */
+/* 2025-08-01 1.4.0 NickT   FCR-7106 Enhancement for FN957                   */
 /*****************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_957ExtScn02] (
@@ -756,7 +759,10 @@ BEGIN
                   WHERE pkh.StorerKey = @cStorerKey
                      AND pkh.PickHeaderKey = @cPickSlipNo
                      AND pkd.Status = @cPickConfirmStatus
-                     --AND pkd.ID = @cDropID
+                     AND ucc.Status <'5'
+                     AND pkd.uom = '2'
+                     -- AND pkd.CaseID = @cSSCC
+                     -- AND pkd.ID = @cDropID
 
                   OPEN C_UCC
                   FETCH NEXT FROM C_UCC INTO @cUCCNo, @cUCCLoc, @nUCCQTY, @cSKU, @cLOT, @cPickDetailKey, @cToID, @cOrderKey
