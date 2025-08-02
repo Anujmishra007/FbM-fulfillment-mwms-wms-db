@@ -454,7 +454,7 @@ BEGIN
                   --swap UCC successfully, need update the pkd and UCC
                   IF @cUCCAllocated IS NOT NULL AND @cUCCAllocated <> @cUCCNo
                   BEGIN
-                     EXEC [RDT].[rdt_957SwapID01]
+                     EXEC [RDT].[rdt_957SwapUCC01]
                         @nMobile       = @nMobile,
                         @nFunc         = @nFunc,
                         @cLangCode     = @cLangCode,
@@ -463,29 +463,10 @@ BEGIN
                         @cFacility     = @cFacility,
                         @cStorerKey    = @cStorerKey,
                         @cPickSlipNo   = @cPickSlipNo,
-                        @cPickZone     = '',
-                        @cLOC          = @cUCCLoc,
-                        @cSuggID       = @cID,
-                        @cID           = @cSwapUCCID,
-                        @cSKU          = @cSKU,
-                        @nQTY          = @nUCCQTY,
-                        @cLottable01   = '',
-                        @cLottable02   = '',
-                        @cLottable03   = '',
-                        @dLottable04   = NULL,
-                        @dLottable05   = NULL,
-                        @cLottable06   = '',
-                        @cLottable07   = '',
-                        @cLottable08   = '',
-                        @cLottable09   = '',
-                        @cLottable10   = '',
-                        @cLottable11   = '',
-                        @cLottable12   = '',
-                        @dLottable13   = NULL,
-                        @dLottable14   = NULL,
-                        @dLottable15   = NULL,
-                        @nErrNo        = @nErrNo,
-                        @cErrMsg       = @cErrMsg
+                        @cActUCCNo     = @cUCCNo,
+                        @cTaskUCCNo    = @cUCCAllocated OUTPUT,
+                        @nErrNo        = @nErrNo OUTPUT,
+                        @cErrMsg       = @cErrMsg OUTPUT
 
                      IF @nErrNo <> 0
                      BEGIN
@@ -542,7 +523,7 @@ BEGIN
                      END
 
                      SET @cUDF01 = 'SWAPUCC'
-                     SET @cUDF02 = @cSwapUCCID
+                     SET @cUDF02 = ''
 
                      UPDATE dbo.UCC WITH(ROWLOCK)
                      SET Status = '3',
