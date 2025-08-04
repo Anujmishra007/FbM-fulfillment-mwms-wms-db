@@ -1,21 +1,13 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[rdt].[rdt_898Decode01]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   drop procedure [rdt].[rdt_898Decode01]
-GO
-
-SET ANSI_NULLS ON
-GO
-SET QUOTED_IDENTIFIER ON
-GO
 
 /******************************************************************************/
-/* Store procedure: rdt_898Decode01                                          */
+/* Store procedure: rdt_898Decode01                                           */
 /* Copyright: Maersk                                                          */
 /*                                                                            */
 /* Purpose: Decode PMI GS1 ID/UCC Label                                       */
 /*                                                                            */
-/* Date        Author    Ver.  Purposes                                       */
-/* 08-10-2024  CYU027
-   1.0   Created                                        */
+/* Date        Author    Ver.    Purposes                                     */
+/* 08-10-2024  CYU027    1.0     FCR-759 Created                              */
+/* 2025-07-30  Jackc     1.1.0   FCR-2961 Support new types of UCC barcode    */
 /******************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdt_898Decode01] (
    @nMobile             INT,
@@ -63,8 +55,9 @@ BEGIN
    SET QUOTED_IDENTIFIER OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
-   DECLARE @cLocalUCC AS NVARCHAR(20)
-   DECLARE @cID AS NVARCHAR(18)
+   DECLARE @cLocalUCC   NVARCHAR(20)
+   DECLARE @cID         NVARCHAR(18)
+   DECLARE @cSKU        NVARCHAR(20) 
 
    IF @nFunc = 898 -- UCC receiving
    BEGIN
@@ -96,16 +89,63 @@ BEGIN
          BEGIN
             IF @cUCC <> ''
             BEGIN
-               IF LEN( LTRIM(RTRIM( @cUCC))) <> 40
+               SET @cUCC = LTRIM(RTRIM( @cUCC))
+
+               IF LEN(@cUCC) = 49 --Fertin label
+               BEGIN
+                  SET @cLocalUCC = SUBSTRING(@cUCC, 19, 17)
+                  SET @cSKU = SUBSTRING(@cUCC, 39, 11)
+
+                  SET @cSKU = SUBSTRING(@cUCC, 39, 11)
+
+                  IF LEFT(@cSKU, 2) <> 'NP'
+                  BEGIN
+                     SET @nErrNo = 226805
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+                     GOTO Quit
+                  END
+
+                  IF NOT EXISTS (SELECT 1 FROM SKU (NOLOCK) WHERE StorerKey = @cStorerKey AND SKU = @cSKU)
+                  BEGIN
+                     SET @nErrNo = 226806
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+                     GOTO Quit
+                  END
+               END--len 49 
+               ELSE IF LEN(@cUCC) = 57 --Swedish label 
+               BEGIN
+                  SET @cLocalUCC = SUBSTRING(@cUCC, 19, 17)
+                  SET @cUserDefine09 = RIGHT(@cUCC, 6)
+                  SET @cSKU = SUBSTRING(@cUCC, 39, 11)
+
+                  IF LEFT(@cSKU, 2) <> 'NP'
+                  BEGIN
+                     SET @nErrNo = 226803
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+                     GOTO Quit
+                  END
+
+                  IF NOT EXISTS (SELECT 1 FROM SKU (NOLOCK) WHERE StorerKey = @cStorerKey AND SKU = @cSKU)
+                  BEGIN
+                     SET @nErrNo = 226803
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+                     GOTO Quit
+                  END
+               END-- len57
+               ELSE IF LEN(@cUCC) = 40
+               BEGIN 
+                  --V1.0.0 logic
+                  SET @cLocalUCC = SUBSTRING( @cUCC, 21, 40)
+                  SET @cUserDefine09 = SUBSTRING( @cUCC,1 ,20)
+               END --len 40
+               ELSE
                BEGIN
                   SET @nErrNo = 226802
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
                   GOTO Quit
                END
 
-               SET @cLocalUCC = SUBSTRING( @cUCC, 21, 40)
-               SET @cUserDefine09 = SUBSTRING( @cUCC,1 ,20)
-               SET @cUCC = @cLocalUCC
+               SET @cUCC = @cLocalUCC --return decode value
 
                GOTO Quit
             END
@@ -119,5 +159,14 @@ BEGIN
      V_String38 = @cUserDefine08,
      V_String39 = @cUserDefine09
    WHERE Mobile = @nMobile
-
 END
+GO
+
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS ON
+GO
+
+GRANT EXECUTE ON rdt.rdt_898Decode01 TO NSQL
+GO
+

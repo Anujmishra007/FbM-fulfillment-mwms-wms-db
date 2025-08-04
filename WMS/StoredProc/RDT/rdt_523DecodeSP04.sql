@@ -87,7 +87,7 @@ BEGIN
                   SET @cUCC = SUBSTRING(@cBarcodeUCC, 19, 17)
                   SET @cUCCSKU = SUBSTRING(@cBarcodeUCC, 39, 11)
 
-                  IF LEFT(@cSKU, 2) <> 'NP'
+                  IF LEFT(@cUCCSKU, 2) <> 'NP'
                   BEGIN
                      SET @nErrNo = 243103
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
@@ -108,7 +108,7 @@ BEGIN
                   SET @cUCC = SUBSTRING(@cBarcodeUCC, 19, 17)
                   SET @cUCCSKU = SUBSTRING(@cBarcodeUCC, 39, 11)
 
-                  IF LEFT(@cSKU, 2) <> 'NP'
+                  IF LEFT(@cUCCSKU, 2) <> 'NP'
                   BEGIN
                      SET @nErrNo = 243105
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
