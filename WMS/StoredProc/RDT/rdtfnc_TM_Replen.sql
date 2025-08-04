@@ -60,6 +60,7 @@ GO
 /* 2025-05-21 4.3  NLT013     UWP-34785 Add new Exit Screen for Levis         */
 /* 2025-06-16 4.4  Dennis     FCR-3959 Extended Update on Step 7              */
 /* 2025-07-10 0.0  JackC      !!!Cutover!!! Use V0 repo for work              */
+/* 2025-08-04 4.4.0 NickT     UWP-37578 Extend length of  @cOption            */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_Replen](
@@ -82,7 +83,7 @@ DECLARE
    @cUserPosition       NVARCHAR(1),
    @nTotPickQty         INT,
    @c_outstring         NVARCHAR(255),
-   @cOption             NVARCHAR(1),
+   @cOption             NVARCHAR(2),
    @cNextTaskDetailKey  NVARCHAR(10),
    @cReasonCode         NVARCHAR(10),
    @nRowRef             INT,
