@@ -1977,7 +1977,7 @@ BEGIN
                   ' @cFromDropID       NVARCHAR( 20), ' +
                   ' @cBarcode          NVARCHAR( 60), ' +
                   ' @cBarcode2         NVARCHAR( 60), ' +
-                  ' @cSKU              NVARCHAR( 20)  OUTPUT, ' +
+                  ' @cSKU              NVARCHAR( 30)  OUTPUT, ' +
                   ' @nQTY              INT            OUTPUT, ' +
                   ' @cPackDtlRefNo     NVARCHAR( 20)  OUTPUT, ' +
                   ' @cPackDtlRefNo2    NVARCHAR( 20)  OUTPUT, ' +
