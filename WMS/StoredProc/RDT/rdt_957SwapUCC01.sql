@@ -90,7 +90,7 @@ BEGIN
    IF @cActUCCStatus <> '1'
    BEGIN
       SET @nErrNo = 243302
-      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UCC is allocated
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UCC is invalid
       GOTO Fail
    END
    
