@@ -30,5 +30,6 @@ BEGIN
 END
 ELSE
 BEGIN
-    ALTER TABLE [RDT].[RDTMESSAGE] ADD [TraceID] [nvarchar] (100) NULL
+    IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('rdt.RDTMESSAGE') AND name = 'TraceID')
+        ALTER TABLE [RDT].[RDTMESSAGE] ADD [TraceID] [nvarchar] (100) NULL
 END
