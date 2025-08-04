@@ -4,14 +4,14 @@ SET ANSI_NULLS OFF
 GO
 
 /************************************************************************/
-/* Store procedure: rdt_LevisReplaceZPLCodeSP                           */
+/* Store procedure: rdt_LevisZPLSL05Label                               */
 /* Copyright      : Maersk                                              */
 /*                                                                      */
 /* Date        Rev  Author       Purposes                               */
-/* 2025-01-23  1.0  Dennis       FCR-1824 Created                       */
+/* 2025-01-23  1.0  CYU027       FCR-1824 Created                       */
 /************************************************************************/
 
-CREATE OR ALTER PROCEDURE rdt.rdt_LevisReplaceZPLCodeSP
+CREATE OR ALTER PROCEDURE rdt.rdt_LevisZPLSL07Label
    @nMobile      INT,             
    @nFunc        INT,             
    @cLangCode    NVARCHAR( 3),    
@@ -60,6 +60,7 @@ BEGIN
       QTY   INT
    )
 
+
    SELECT @cFacility = FACILITY FROM rdt.rdtMobRec WITH (NOLOCK) WHERE Mobile = @nMobile
    SELECT @cLabelNo = @cValue01, @cReportType = @cValue02
 
@@ -80,9 +81,6 @@ BEGIN
       @Facility_Facility NVARCHAR(MAX) = '',
       @Facility_State NVARCHAR(MAX) = '',
       @Facility_Zip NVARCHAR(MAX) = '',
-      @Orders_C_Zip NVARCHAR(MAX) = '',
-      @Orders_C_Zip_Barcode NVARCHAR(MAX) = '',
-      @Orders_C_Zip_Readable NVARCHAR(MAX) = '',
       @MBOL_Carrierkey NVARCHAR(MAX) = '',
       @MBOL_Door NVARCHAR(MAX) = '',
       @MBOL_ExternMBOLKey NVARCHAR(MAX) = '',
@@ -109,6 +107,7 @@ BEGIN
       @Orders_C_Contact1 NVARCHAR(MAX) = '',
       @Orders_C_ISOCntryCode NVARCHAR(MAX) = '',
       @Orders_C_State NVARCHAR(MAX) = '',
+      @Orders_C_Zip NVARCHAR(MAX) = '',
       @Orders_Consigneekey NVARCHAR(MAX) = '',
       @Orders_ConsigneekeyBarcode NVARCHAR(MAX) = '',
       @Orders_ExternOrderkey NVARCHAR(MAX) = '',
@@ -119,6 +118,8 @@ BEGIN
       @Orders_M_Contact1 NVARCHAR(MAX) = '',
       @Orders_M_State NVARCHAR(MAX) = '',
       @Orders_M_Zip NVARCHAR(MAX) = '',
+      @Orders_C_Zip_Barcode NVARCHAR(MAX) = '',
+      @Orders_C_Zip_Readable NVARCHAR(MAX) = '',
       @Orders_Markforkey NVARCHAR(MAX) = '',
       @Orders_UserDefine04 NVARCHAR(MAX) = '',
       @Orders_UserDefine08 NVARCHAR(MAX) = '',
@@ -183,8 +184,8 @@ BEGIN
          @Orders_C_ISOCntryCode = O.C_ISOCntryCode,
          @Orders_C_State = O.C_State,
          @Orders_C_Zip = O.C_Zip,
-         @Orders_C_Zip_Barcode = CONCAT('(420) ', SUBSTRING(O.C_Zip, 1, 5)),
-         @Orders_C_Zip_Readable = CONCAT('420', SUBSTRING(O.C_Zip, 1, 5)),
+         @Orders_C_Zip_Readable = CONCAT('(420) ', SUBSTRING(O.C_Zip, 1, 5)),
+         @Orders_C_Zip_Barcode = CONCAT('420', SUBSTRING(O.C_Zip, 1, 5)),
          @Orders_Consigneekey = O.Consigneekey,
          @Orders_ConsigneekeyBarcode = O.Consigneekey,
          @Orders_ExternOrderkey = O.ExternOrderkey,
@@ -236,18 +237,18 @@ BEGIN
 
    SELECT TOP 1
       @PackDetail_CartonNo = CartonNo,
-      @Packdetail_Labelno = CONCAT('00', Labelno),
+      @Packdetail_LabelnoBarcode = CONCAT('00', Labelno),
       @Packdetail_Carton_Count = (dbo.fnc_GetGNCarton(PICKSLIPNO)),
       @PackDetail_DropId = DropID
    FROM dbo.PackDetail WITH(NOLOCK)
    WHERE StorerKey = @cStorerKey
       AND labelno = @cLabelNo
 
-   SET @Packdetail_LabelnoBarcode = '(' + LEFT(@Packdetail_Labelno, 2) + ') ' +
-                                    SUBSTRING(@Packdetail_Labelno, 3, 1) + ' ' +
-                                    SUBSTRING(@Packdetail_Labelno, 4, 7) + ' ' +
-                                    SUBSTRING(@Packdetail_Labelno, 11, 9) + ' ' +
-                                    RIGHT(@Packdetail_Labelno, 1)
+   SET @Packdetail_Labelno = '(' + LEFT(@Packdetail_LabelnoBarcode, 2) + ') ' +
+                                    SUBSTRING(@Packdetail_LabelnoBarcode, 3, 1) + ' ' +
+                                    SUBSTRING(@Packdetail_LabelnoBarcode, 4, 7) + ' ' +
+                                    SUBSTRING(@Packdetail_LabelnoBarcode, 11, 9) + ' ' +
+                                    RIGHT(@Packdetail_LabelnoBarcode, 1)
 
    SELECT TOP 1
       @PackInfo_CartonType = CartonType
@@ -316,14 +317,146 @@ BEGIN
       AND WOD.StorerKey = @cStorerKey
 
 
-   IF @cReportType in ('CTNLVCL11', 'VENLVSL11')
-   BEGIN
-      SELECT @OrderInfo_Notes = dbo.fnc_GetGNDeptSL11(@cLabelNo)
-   END
-   ELSE
-   BEGIN
-      SELECT @OrderInfo_Notes = dbo.fnc_GetGNDept_MPOC(@cLabelNo)
-   END
+   SELECT
+--       t.Description,
+--       t.FromAddress,
+--       t.FromCity,
+--       t.FromState,
+--       t.FromZip,
+--       t.ToCompany,
+--       t.ToLoc,
+--       t.ShipToAddressStreetLine,
+--       t.ShipToAddressStreetLine1,
+--       t.ShipToAddressStreetLine2,
+--       t.ToCity,
+--       t.ToState,
+--       t.ToZip,
+--       t.ShipToPost,
+--       t.Vendor,
+--       CASE
+--          WHEN dbo.fnc_getGNMPOC(@cLabelNo) > 1 THEN 'VARIOUS'
+--          ELSE t.PO
+--          END AS PO,
+--       dbo.fnc_GetGNdept_MPOC(@cLabelNo) AS Dept,
+--       t.OrderInfo,
+      @MBOL_ExternMBOLKey = t.EMbolKey,
+      @MBOL_Carrierkey = t.CarrierKey,
+      @MBOL_CarrierAgent = t.CarrierAgent,
+      @OrderInfo_Notes = t.OrdNotes,
+      @Orders_ConsigneekeyBarcode = CONCAT('91',CASE
+         WHEN LEN(t.SellTo) % 2 = 1 THEN CONCAT('0', t.SellTo)
+         ELSE t.SellTo
+      END),
+      @Orders_Consigneekey = CONCAT('(91) ',CASE
+        WHEN LEN(t.SellTo) % 2 = 1 THEN CONCAT('0', t.SellTo)
+        ELSE t.SellTo
+      END),
+      @Orders_Billtokey = t.SellTo,
+      @Orders_M_State = t.ProvinceCode,
+      @Orders_UserDefine08 = t.Vendor,
+      @Orders_BuyerPO = t.PO
+--       CASE
+--          WHEN LEN(t.SellTo) % 2 <> 0 THEN CONCAT('0', t.SellTo)
+--          ELSE t.SellTo
+--          END AS SellToFormatted,
+--       t.SellTo,
+--       t.ProvinceCode,
+--       t.SSCC,
+
+   FROM (
+           SELECT DISTINCT
+              MAX(F.Descr) AS Description,
+              ISNULL(REPLACE(TRIM(MAX(F.Address1)), ',', ' '), '') AS FromAddress,
+              MAX(F.City) AS FromCity,
+              MAX(F.State) AS FromState,
+              MAX(F.Zip) AS FromZip,
+
+              MAX(O.C_Company) AS ToCompany,
+              ISNULL(REPLACE(TRIM(MAX(O.C_Address1)), ',', ' '), '') AS ToLoc,
+              ISNULL(REPLACE(TRIM(MAX(O.C_Address2)), ',', ' '), '') AS ShipToAddressStreetLine,
+              ISNULL(REPLACE(TRIM(MAX(O.C_Address3)), ',', ' '), '') AS ShipToAddressStreetLine1,
+              ISNULL(REPLACE(TRIM(MAX(O.C_Address4)), ',', ' '), '') AS ShipToAddressStreetLine2,
+
+              MAX(O.C_City) AS ToCity,
+              MAX(O.C_State) AS ToState,
+              MAX(O.C_Zip) AS ToZip,
+              MAX(SUBSTRING(O.C_Zip, 1, 5)) AS ShipToPost,
+              MAX(O.UserDefine08) AS Vendor,
+              O.BuyerPO AS PO,
+              ISNULL(REPLACE(TRIM(MAX(OI.Notes)), ',', ' '), '') AS OrdNotes,
+              MAX(OI.OrderInfo02) AS OrderInfo,
+
+              RIGHT(M.ExternMbolKey, 17) AS EMbolKey,
+              dbo.fnc_GetGNCarrier(O.OrderKey) AS CarrierKey,
+              M.CarrierAgent,
+
+              -- SellTo
+              (CASE
+                  WHEN COALESCE(MAX(O.M_CONTACT1), MAX(O.C_CONTACT1), '') <> '' AND
+                       (LEN(MAX(O.M_CONTACT1)) = 0 AND LEN(MAX(O.C_CONTACT1)) = 0) THEN ''
+                  WHEN LEN(MAX(O.M_CONTACT1)) = 0 THEN MAX(O.C_CONTACT1)
+                  ELSE COALESCE(MAX(O.M_CONTACT1), MAX(O.C_CONTACT1), '')
+                 END) AS SellTo,
+
+              -- ProvinceCode
+              (CASE
+                  WHEN COALESCE(MAX(O.M_State), MAX(O.C_State), '') <> '' AND
+                       (LEN(MAX(O.M_State)) = 0 AND LEN(MAX(O.C_State)) = 0) THEN ''
+                  WHEN LEN(MAX(O.M_State)) = 0 THEN MAX(O.C_State)
+                  ELSE COALESCE(MAX(O.M_State), MAX(O.C_State), '')
+                 END) AS ProvinceCode,
+
+              SUBSTRING(PCD.LabelNo, 1, 17) AS SSCC
+           FROM
+              FACILITY F WITH (NOLOCK)
+                 INNER JOIN ORDERS O WITH (NOLOCK) ON F.Facility = O.Facility
+                 LEFT JOIN OrderInfo OI WITH (NOLOCK) ON O.OrderKey = OI.OrderKey
+                 INNER JOIN PACKHEADER PCH WITH (NOLOCK) ON PCH.OrderKey = O.OrderKey AND PCH.StorerKey = O.StorerKey
+                 INNER JOIN PACKDETAIL PCD WITH (NOLOCK) ON PCD.PickSlipNo = PCH.PickSlipNo AND PCD.LabelNo = @cLabelNo
+                 LEFT JOIN MBOL M WITH (NOLOCK) ON M.Facility = O.Facility AND M.MbolKey = O.MBOLKey
+           WHERE
+              PCD.LabelNo = @cLabelNo
+           GROUP BY
+              O.BuyerPO, O.OrderKey, M.CarrierAgent, M.ExternMbolKey, PCD.LabelNo
+        ) t
+   GROUP BY
+      t.Description,
+      t.FromAddress,
+      t.FromCity,
+      t.FromState,
+      t.FromZip,
+      t.ToCompany,
+      t.ToLoc,
+      t.ShipToAddressStreetLine,
+      t.ShipToAddressStreetLine1,
+      t.ShipToAddressStreetLine2,
+      t.ToCity,
+      t.ToState,
+      t.ToZip,
+      t.ShipToPost,
+      t.Vendor,
+      t.OrdNotes,
+      CASE
+         WHEN dbo.fnc_getGNMPOC(@cLabelNo) > 1 THEN 'VARIOUS'
+         ELSE t.PO
+         END,
+      t.OrderInfo,
+      t.EMbolKey,
+      t.CarrierKey,
+      t.CarrierAgent,
+      CASE
+         WHEN LEN(t.SellTo) % 2 <> 0 THEN CONCAT('0', t.SellTo)
+         ELSE t.SellTo
+         END,
+      t.SellTo,
+      t.ProvinceCode,
+      t.SSCC,
+      t.Vendor,
+      t.PO
+   ;
+
+
+
 
    SET @cPrintData = REPLACE(@cPrintData, '[[Label.CartonTrack_TrackingNo]]', ISNULL(@CartonTrack_TrackingNo, ''));
    SET @cPrintData = REPLACE(@cPrintData, '[[Label.Date_Time_Now]]', CONVERT(NVARCHAR(5), GETDATE(), 110));
@@ -407,7 +540,7 @@ END
 
 GO
 
-GRANT EXECUTE ON rdt.rdt_LevisReplaceZPLCodeSP TO NSQL
+GRANT EXECUTE ON rdt.rdt_LevisZPLSL07Label TO NSQL
 GO
 
 SET QUOTED_IDENTIFIER OFF
