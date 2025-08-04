@@ -57,5 +57,8 @@ execute rdt.rdtAddMsg 212547, 10, '212547^VNAOUTFPK - Remove Putaway Record Fail
 execute rdt.rdtAddMsg 212548, 10, '212548^VNAOUTRPF - Remove Putaway Record Fail',     'us_english'
 execute rdt.rdtAddMsg 212549, 10, '212549^VNAOUTRPF - Loc PF Loc Fail, details: ',     'us_english'
 execute rdt.rdtAddMsg 212550, 10, '212550^VNAOUTRPF - Unlock Loc Fail, details: ',     'us_english'
+execute rdt.rdtAddMsg 212551, 10, '212551^VNAOUTRPF - Update TaskDetail Fail',         'us_english'
+execute rdt.rdtAddMsg 212552, 10, '212552^VNAOUTRPF - Update TaskDetail Fail',         'us_english'
+
 
 select * from rdt.rdtmsg (nolock) where message_id between 212501 and 212550
