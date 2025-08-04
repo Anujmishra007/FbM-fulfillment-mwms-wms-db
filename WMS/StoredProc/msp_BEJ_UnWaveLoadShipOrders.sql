@@ -68,12 +68,14 @@ BEGIN
    BEGIN
       SET @CUR = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
       SELECT OrderKey
-      FROM dbo.ORDERS (NOLOCK)
+      FROM dbo.ORDERS ORD (NOLOCK)
       WHERE StorerKey = @c_StorerKey
       AND [Status] = '0'
       AND OrderGroup <> ''
-      AND UserDefine09 IS NOT NULL 
-      AND UserDefine09 <> ''
+      --AND UserDefine09 IS NOT NULL 
+      --AND UserDefine09 <> ''
+      AND EXISTS ( SELECT 1 FROM dbo.WAVEDETAIL WD WITH (NOLOCK) 
+         WHERE WD.OrderKey = ORD.OrderKey)
       AND SpecialHandling = 'B'
 
       OPEN @CUR
