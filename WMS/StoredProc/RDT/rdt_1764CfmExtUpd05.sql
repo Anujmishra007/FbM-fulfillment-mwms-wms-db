@@ -19,6 +19,8 @@ GO
 /* 2025-04-21    JACKC    1.2.1  FCR-3925 Add Transmitlog2 to full short   */
 /* 2025-06-03    NickT    1.3.0  UWP-35382 Mark TaskDetail as X for Short  */
 /*                               pick detail                               */
+/* 2025-08-05    NickT    1.3.1  UWP-35382 No need to mark TaskDetail as X */
+/*                        for Short pick detail if @cRefTaskKey is empty   */
 /***************************************************************************/
 
 CREATE OR ALTER PROCEDURE rdt.rdt_1764CfmExtUpd05
@@ -188,18 +190,21 @@ BEGIN
          END CATCH
 
          BEGIN TRY
-            IF @cAutomationPick = 'Y'
+            IF @cRefTaskKey <> ''
             BEGIN
-               UPDATE dbo.TaskDetail WITH (ROWLOCK) 
-               SET
-                  Status = 'X', 
-                  EditWho  = SUSER_SNAME(), 
-                  EditDate = GETDATE(),
-                  Trafficcop = NULL
-               WHERE StorerKey = @cStorerKey
-                  AND TaskType = 'ASTCPK'
-                  AND RefTaskKey = @cRefTaskKey
-                  AND Status = 'H'
+               IF @cAutomationPick = 'Y'
+               BEGIN
+                  UPDATE dbo.TaskDetail WITH (ROWLOCK) 
+                  SET
+                     Status = 'X', 
+                     EditWho  = SUSER_SNAME(), 
+                     EditDate = GETDATE(),
+                     Trafficcop = NULL
+                  WHERE StorerKey = @cStorerKey
+                     AND TaskType = 'ASTCPK'
+                     AND RefTaskKey = @cRefTaskKey
+                     AND Status = 'H'
+               END
             END
          END TRY
          BEGIN CATCH
