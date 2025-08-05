@@ -20,6 +20,8 @@
 /* 27-Nov-2024 1.8     Dennis    FCR-1483 Remove ReplenTask                      */
 /* 30-Jun-2025 1.9.0   JACKC     1. UWP-36863 Add rdt_move when pickmethod = FP  */
 /*                               2. UWP-36988 Adapt with Loc Digit Check         */
+/* 05-Aug-2025 1.9.1   JACKC     Add begin try when calling fp movement and      */
+/*                               call pending move in                            */
 /*********************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_TM_CasePick_ClosePallet] (
@@ -239,22 +241,30 @@ BEGIN
             SET @nQTYPick = 0
          END
 
-         EXECUTE rdt.rdt_Move
-            @nMobile        = @nMobile,
-            @cLangCode      = @cLangCode,
-            @nErrNo         = @nErrNo  OUTPUT,
-            @cErrMsg        = @cErrMsg OUTPUT, -- screen limitation, 20 NVARCHAR max
-            @cSourceType    = 'rdt_TM_CasePick_ClosePallet',
-            @cStorerKey     = @cStorerKey,
-            @cFacility      = @cFacility,
-            @cFromLOC       = @cFromLOC,
-            @cToLOC         = @cToLOC,
-            @cFromID        = @cFromID,     -- NULL means not filter by ID. Blank is a valid ID
-            @cToID          = @cFromID,     -- NULL means not changing ID. Blank consider a valid ID
-            @nQTYAlloc      = @nQTYAlloc,
-            @nQTYPick       = @nQTYPick,
-            @cTaskDetailKey = @cTaskDetailKey,
-            @nFunc          = @nFunc
+         BEGIN TRY
+            EXECUTE rdt.rdt_Move
+               @nMobile        = @nMobile,
+               @cLangCode      = @cLangCode,
+               @nErrNo         = @nErrNo  OUTPUT,
+               @cErrMsg        = @cErrMsg OUTPUT, -- screen limitation, 20 NVARCHAR max
+               @cSourceType    = 'rdt_TM_CasePick_ClosePallet',
+               @cStorerKey     = @cStorerKey,
+               @cFacility      = @cFacility,
+               @cFromLOC       = @cFromLOC,
+               @cToLOC         = @cToLOC,
+               @cFromID        = @cFromID,     -- NULL means not filter by ID. Blank is a valid ID
+               @cToID          = @cFromID,     -- NULL means not changing ID. Blank consider a valid ID
+               @nQTYAlloc      = @nQTYAlloc,
+               @nQTYPick       = @nQTYPick,
+               @cTaskDetailKey = @cTaskDetailKey,
+               @nFunc          = @nFunc
+         END TRY
+         BEGIN CATCH
+            SET @nErrNo = 51155
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- rdt_move fail
+            GOTO RollBackTran
+         END CATCH
+
          IF @nErrNo <> 0
             GOTO RollBackTran
          --V1.9.0 end
@@ -502,15 +512,24 @@ BEGIN
       END
 
       -- Unlock  suggested location
-      EXEC rdt.rdt_Putaway_PendingMoveIn '', 'UNLOCK'
-         ,''      --@cFromLOC
-         ,@cFromID--@cFromID
-         ,@cToLOC --@cSuggestedLOC
-         ,''      --@cStorerKey
-         ,@nErrNo  OUTPUT
-         ,@cErrMsg OUTPUT
+      BEGIN TRY
+         EXEC rdt.rdt_Putaway_PendingMoveIn '', 'UNLOCK'
+            ,''      --@cFromLOC
+            ,@cFromID--@cFromID
+            ,@cToLOC --@cSuggestedLOC
+            ,''      --@cStorerKey
+            ,@nErrNo  OUTPUT
+            ,@cErrMsg OUTPUT
+      END TRY
+      BEGIN CATCH --V1.9.1
+         SET @nErrNo = 51156
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- unlock pending move in fail
+         GOTO RollBackTran
+      END CATCH
+
       IF @nErrNo <> 0
-         GOTO REPLEN_TASK
+         GOTO RollBackTran --V1.9.1
+         --GOTO REPLEN_TASK
 
       -- Update Task
       UPDATE dbo.TaskDetail WITH (ROWLOCK) SET
