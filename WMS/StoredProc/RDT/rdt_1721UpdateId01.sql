@@ -15,6 +15,7 @@ GO
 /* Date        Rev  Author   Purposes                                   */
 /* 2024-07-16  1.0  CYU027   FCR-575                                    */
 /* 2025-04-01  1.1  CYU027   FCR-3837                                   */
+/* 2025-07-30  1.2.0 NLT013  UWP-38609 Performance tuning               */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1721UpdateId01] (
@@ -36,6 +37,10 @@ BEGIN
    DECLARE    @nTranCount       INT
    DECLARE    @cFromLOC         NVARCHAR( 40)
 
+   DECLARE @tPickDetail TABLE 
+   (
+      PickDetailKey NVARCHAR(18) PRIMARY KEY
+   )
 
    -- Get DropID status from Codelkup table because
    -- user can move pallet anywhere. Location type determine
@@ -98,9 +103,20 @@ BEGIN
 
    --UPDATE PICKDETAIL
    --RDT_MOVE will not update pickdetail
-   UPDATE PICKDETAIL WITH (ROWLOCK) SET PICKDETAIL.LOC = @cToLOC
-      WHERE PICKDETAIL.CaseID IN ( SELECT
-   DISTINCT(PALLETDETAIL.CASEID) FROM PALLETDETAIL WHERE PalletKey = @cID)
+   INSERT INTO @tPickDetail (PickDetailKey)
+   SELECT PD.PickDetailKey
+   FROM dbo.PICKDETAIL PD WITH (NOLOCK) 
+   INNER JOIN dbo.PALLETDETAIL PTD WITH(NOLOCK) 
+      ON PTD.CaseID IS NOT NULL
+      AND PTD.CaseID = PD.CaseID
+   WHERE PTD.PalletKey = @cID
+   
+   UPDATE PD WITH (ROWLOCK) 
+   SET PD.LOC = @cToLOC
+   FROM dbo.PICKDETAIL PD WITH (ROWLOCK) 
+   INNER JOIN @tPickDetail TPD
+      ON PD.PickDetailKey = TPD.PickDetailKey
+
    IF @nErrNo <> 0
    BEGIN
       SET @nErrNo = 219305

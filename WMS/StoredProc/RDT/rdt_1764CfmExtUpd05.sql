@@ -19,6 +19,7 @@ GO
 /* 2025-04-21    JACKC    1.2.1  FCR-3925 Add Transmitlog2 to full short   */
 /* 2025-06-03    NickT    1.3.0  UWP-35382 Mark TaskDetail as X for Short  */
 /*                               pick detail                               */
+/* 2025-07-30    NLT013   1.4.0  UWP-38609 Performance tuning              */
 /* 2025-08-05    NickT    1.3.1  UWP-35382 No need to mark TaskDetail as X */
 /*                        for Short pick detail if @cRefTaskKey is empty   */
 /***************************************************************************/
@@ -66,6 +67,16 @@ BEGIN
    DECLARE @cFinalLocPickZone NVARCHAR(10) = ''
    DECLARE @cAutomationPick   NVARCHAR(1) = 'N'
    DECLARE @cRefTaskKey       NVARCHAR(10) = ''
+
+   DECLARE @tPickDetail TABLE 
+   (
+      PickDetailKey NVARCHAR(18) PRIMARY KEY
+   )
+
+   DECLARE @tTaskDetail TABLE 
+   (
+      TaskDetailKey NVARCHAR(10) PRIMARY KEY
+   )
 
    -- All logics are copied from 1764CfmExtUpd01, update the rdtmobrec retrieving logic.  By JCH507
 
@@ -175,13 +186,19 @@ BEGIN
          IF @bDebugFlag = 1
             SELECT 'Full UCC short'
          BEGIN TRY
-            UPDATE dbo.PickDetail WITH (ROWLOCK) SET
-               TaskDetailKey = @cTaskDetailKey, 
+            INSERT INTO @tPickDetail (PickDetailKey)
+            SELECT PickDetailKey
+            FROM dbo.PickDetail WITH (NOLOCK)
+            WHERE TaskDetailKey = @cTaskDetailKey
+
+            UPDATE PD WITH (ROWLOCK)
+            SET
                Status =  '4', 
                EditWho  = SUSER_SNAME(), 
                EditDate = GETDATE(),
                Trafficcop = NULL
-            WHERE TaskDetailKey = @cTaskDetailKey
+            FROM dbo.PickDetail PD WITH (ROWLOCK)
+            INNER JOIN @tPickDetail TPD ON PD.PickDetailKey = TPD.PickDetailKey
          END TRY
          BEGIN CATCH
             SET @nErrNo = 231257
@@ -194,16 +211,22 @@ BEGIN
             BEGIN
                IF @cAutomationPick = 'Y'
                BEGIN
-                  UPDATE dbo.TaskDetail WITH (ROWLOCK) 
-                  SET
-                     Status = 'X', 
-                     EditWho  = SUSER_SNAME(), 
-                     EditDate = GETDATE(),
-                     Trafficcop = NULL
+                  INSERT INTO @tTaskDetail (TaskDetailKey)
+                  SELECT TaskDetailKey
+                  FROM dbo.TaskDetail WITH (ROWLOCK)
                   WHERE StorerKey = @cStorerKey
                      AND TaskType = 'ASTCPK'
                      AND RefTaskKey = @cRefTaskKey
                      AND Status = 'H'
+                     
+                  UPDATE TD WITH (ROWLOCK) 
+                  SET
+                     TD.Status = 'X', 
+                     TD.EditWho  = SUSER_SNAME(), 
+                     TD.EditDate = GETDATE(),
+                     TD.Trafficcop = NULL
+                  FROM dbo.TaskDetail TD WITH (ROWLOCK)
+                  INNER JOIN @tTaskDetail TTD ON TD.TaskDetailKey = TTD.TaskDetailKey
                END
             END
          END TRY

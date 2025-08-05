@@ -25,6 +25,7 @@ GO
 /* 2025-02-20 1.5.0  NLT013   UWP-30312 Performance Tune                    */
 /* 2024-10-31 1.6.0  NLT013   UWP-26400 The validation for new pallet       */
 /*                            does not work in some scenarios               */
+/* 2025-07-30 1.7.0  NLT013   UWP-38609 Performance tuning                  */
 /* 2025-07-07 1.7.0  NLT013   UWP-36981 Performance Tune                    */
 /****************************************************************************/
 
@@ -556,6 +557,13 @@ BEGIN
                      AND CaseID = @cLabelNo
                      AND StorerKey = @cStorerKey
 
+                  DECLARE @tPalletDetail TABLE
+                  (
+                     PalletKey            NVARCHAR(30),
+                     PalletLineNumber     NVARCHAR(5),
+                     PRIMARY KEY (PalletKey, PalletLineNumber)
+                  )
+
                   IF @nTranCount = 0
                   BEGIN
                      BEGIN TRANSACTION
@@ -567,11 +575,19 @@ BEGIN
 
                   BEGIN TRY
                      --Remove PalletDetails
-                     DELETE FROM dbo.PalletDetail
+                     INSERT INTO @tPalletDetail (PalletKey, PalletLineNumber)
+                     SELECT DISTINCT PalletKey, PalletLineNumber
+                     FROM dbo.PalletDetail WITH(NOLOCK)
                      WHERE PalletKey = @cPalletKey
-                     AND CaseID IS NOT NULL
-                     AND CaseID = @cLabelNo
-                     AND StorerKey = @cStorerKey
+                        AND CaseID IS NOT NULL
+                        AND CaseID = @cLabelNo
+                        AND StorerKey = @cStorerKey
+
+                     DELETE PD
+                     FROM dbo.PalletDetail PD
+                     INNER JOIN @tPalletDetail TPD 
+                        ON PD.PalletKey = TPD.PalletKey
+                        AND PD.PalletLineNumber = TPD.PalletLineNumber
 
                      SELECT @nRowCount = COUNT(1) 
                      FROM dbo.PalletDetail WITH(NOLOCK)
@@ -646,9 +662,11 @@ BEGIN
    END
 Quit:
 END
+GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
+
 SET ANSI_NULLS ON
 GO
 
