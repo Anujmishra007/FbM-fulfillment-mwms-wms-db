@@ -1,15 +1,10 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[ispMBRTK09]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-   DROP PROCEDURE [dbo].[ispMBRTK09]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
 /************************************************************************/  
-/* Store Procedure: ispMBRTK09                                          */  
+/* Store Procedure: ispMBRTK11                                          */  
 /* Creation Date: 09-Apr-2020                                           */  
 /* Copyright: LFL                                                       */  
 /* Written by: WLChooi                                                  */  
@@ -37,9 +32,10 @@ GO
 /*                                                                      */  
 /* Updates:                                                             */  
 /* Date        Author   Ver  Purposes                                   */
+/* 04-Mar-2024 WLChooi  1.0  DevOps Combine Script                      */
 /************************************************************************/  
   
-CREATE PROC [dbo].[ispMBRTK09]  
+CREATE OR ALTER PROC [dbo].[ispMBRTK11]  
    @c_MbolKey NVARCHAR(10),     
    @b_Success int OUTPUT,  
    @n_err     int OUTPUT,  
@@ -97,7 +93,7 @@ BEGIN
       BEGIN  
          SELECT @n_continue = 3  
          SELECT @n_err = 63501  
-         SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": No Orders being populated into MBOLDetail Of MBOL# " + RTRIM(@c_CurrMbolKey) + " (ispMBRTK09)"  
+         SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': No Orders being populated into MBOLDetail Of MBOL# ' + RTRIM(@c_CurrMbolKey) + ' (ispMBRTK11)'  
          GOTO RETURN_SP  
       END  
         
@@ -106,7 +102,7 @@ BEGIN
       BEGIN  
          SELECT @n_continue = 3  
          SELECT @n_err = 63502  
-         SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": No Lanes/Doors being assigned for the MBOL " + RTRIM(@c_CurrMbolKey) + " (ispMBRTK09)"  
+         SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': No Lanes/Doors being assigned for the MBOL ' + RTRIM(@c_CurrMbolKey) + ' (ispMBRTK11)'  
           GOTO RETURN_SP  
       END*/  
         
@@ -116,7 +112,7 @@ BEGIN
       BEGIN  
          SELECT @n_continue = 3  
          SELECT @n_err = 63503  
-         SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": Wrong Lanes/Doors being assigned. Only STAGING/QC is allowed at MBOL# " + RTRIM(@c_CurrMbolKey) + " (ispMBRTK09)"  
+         SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Wrong Lanes/Doors being assigned. Only STAGING/QC is allowed at MBOL# ' + RTRIM(@c_CurrMbolKey) + ' (ispMBRTK11)'  
          GOTO RETURN_SP  
       END */
         
@@ -128,7 +124,7 @@ BEGIN
       BEGIN  
          SELECT @n_continue = 3  
          SELECT @n_err = 63504  
-         SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": No Complete Pack being created for the MBOL# " + RTRIM(@c_CurrMbolKey) + " (ispMBRTK09)"  
+         SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': No Complete Pack being created for the MBOL# ' + RTRIM(@c_CurrMbolKey) + ' (ispMBRTK11)'  
          GOTO RETURN_SP  
       END*/
                 
@@ -162,7 +158,7 @@ BEGIN
           JOIN DROPIDDETAIL (NOLOCK) ON (PACKDETAIL.LabelNo = DROPIDDETAIL.Childid)  
           JOIN DROPID WITH (NOLOCK) ON (DROPIDDETAIL.Dropid = DROPID.Dropid)  
           JOIN LOC WITH (NOLOCK) ON (DROPID.Droploc = LOC.Loc)  
-          LEFT JOIN TASKDETAIL WITH (NOLOCK) ON (MBOLDETAIL.MBOLKEY = TASKDETAIL.Sourcekey AND TASKDETAIL.SourceType = 'ispMBRTK09'  
+          LEFT JOIN TASKDETAIL WITH (NOLOCK) ON (MBOLDETAIL.MBOLKEY = TASKDETAIL.Sourcekey AND TASKDETAIL.SourceType = 'ispMBRTK11'  
                                             AND DROPID.Dropid = TASKDETAIL.FromId AND TASKDETAIL.TaskType ='NMV')  
           WHERE MBOLDETAIL.Mbolkey = @c_CurrMbolkey  
           AND TASKDETAIL.Taskdetailkey IS NULL  
@@ -175,7 +171,7 @@ BEGIN
          JOIN MBOLDETAIL MD (NOLOCK) ON MD.Orderkey = PD.Orderkey
          JOIN LOC WITH (NOLOCK) ON (PD.Loc = LOC.Loc)
          JOIN LOADPLANDETAIL LPD (NOLOCK) ON LPD.Orderkey = OH.Orderkey
-         LEFT JOIN TASKDETAIL TD WITH (NOLOCK) ON (MD.Mbolkey = TD.Sourcekey AND TD.SourceType = 'ispMBRTK09' AND  
+         LEFT JOIN TASKDETAIL TD WITH (NOLOCK) ON (MD.Mbolkey = TD.Sourcekey AND TD.SourceType = 'ispMBRTK11' AND  
                                                    TD.TaskType ='MVF') 
           WHERE MD.Mbolkey = @c_CurrMbolkey 
           AND TD.Taskdetailkey IS NULL
@@ -206,7 +202,7 @@ BEGIN
         
             SELECT @b_success = 1  
             EXECUTE nspg_getkey  
-            "TaskDetailKey"  
+            'TaskDetailKey'  
             , 10  
             , @c_taskdetailkey OUTPUT  
             , @b_success OUTPUT  
@@ -261,7 +257,7 @@ BEGIN
               ,@c_GetPalletID -- from id  
               ,@c_toloc -- to loc
               ,@c_GetPalletID -- to id  
-              ,'ispMBRTK09' --Sourcetype  
+              ,'ispMBRTK11' --Sourcetype  
               ,@c_CurrMbolkey --Sourcekey  
               ,'1' -- Priority  
               ,'1' -- Sourcepriority  
@@ -282,7 +278,7 @@ BEGIN
             BEGIN  
                SELECT @n_continue = 3  
                SELECT @n_err = 63505  
-               SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": Insert TASKDETAIL Failed. (ispMBRTK09)"  
+               SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Insert TASKDETAIL Failed. (ispMBRTK11)'  
                GOTO RETURN_SP  
             END  
         
@@ -313,7 +309,7 @@ RETURN_SP:
             COMMIT TRAN  
          END  
       END  
-      execute nsp_logerror @n_err, @c_errmsg, 'ispMBRTK09'  
+      execute nsp_logerror @n_err, @c_errmsg, 'ispMBRTK11'  
       --RAISERROR @n_err @c_errmsg  
       RETURN  
    END  
@@ -332,5 +328,5 @@ RETURN_SP:
    RETURN  
 END  
 GO
-GRANT EXECUTE ON [dbo].[ispMBRTK09] TO nSQL 
+GRANT EXECUTE ON [dbo].[ispMBRTK11] TO [nSQL]
 GO

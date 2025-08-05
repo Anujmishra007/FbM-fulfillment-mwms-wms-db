@@ -9,6 +9,7 @@ on:
         type: choice
         options:
           - ALL
+          - GLOWMS
           - USALEV4DWMS
           - USA4DNJWMS
           - USAMAT4DWMS
@@ -30,6 +31,7 @@ on:
           - CMRWMS
           - SENWMS
           - TGOWMS
+          - SDRWMS
 
 permissions: write-all
 
@@ -84,6 +86,17 @@ jobs:
           [regex]$pattern = '(?i)^V(?<year>\d{2})\.(?<month>\d{1,2})\.(?<tagnumber>\d{3})'
           $json_metadata = curl -L -s -H "Accept: application/vnd.github+json" -H "Authorization: Bearer ${{ secrets.PERSONAL_ACCESS_TOKEN }}" -H "X-GitHub-Api-Version: 2022-11-28"  https://api.github.com/repos/Maersk-Global/${{ env.WMSDB_METADATA_REPO}}/contents/metadata/wms/databases/v2/${{ env.ENV_CODE }}.json?ref=main | jq -r '.content' | base64 -d | ConvertFrom-Json
           write-host "$($json_metadata | ConvertTo-Json -Depth 10)"
+          $sdrwms_info = $null
+          if ($json_metadata.databases.PSObject.Properties.Name -contains "SDRWMS") {
+              $sdrwms_info = $json_metadata.databases.SDRWMS
+              $SDRWMS_DB_CURRENT_VERSION = $sdrwms_info.current_version
+              $SDRWMS_DB_DEPLOY_VERSION = $sdrwms_info.deploy_version
+              $SDRWMS_DB_SERVER_NAME = $sdrwms_info.server_name
+              $SDRWMS_DB_NAME = $sdrwms_info.database_name
+              Write-Host "SDRWMS metadata loaded"
+          } else {
+              Write-Host "No SDRWMS metadata found"
+          }
           if ($env:WMSDB_NAME -eq 'ALL')
             {
              write-output "## All WMSDBs are selected for deployment" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
@@ -228,7 +241,7 @@ jobs:
               $changed_files_list = $changed_files -split '\r?\n' | where-object { $_ -ne ''}
               $changed_files_string = $changed_files_list -join ","
               if($changed_files_string -ne '')
-                {
+              {
                 $obj = New-Object -TypeName PSObject
                 $obj | Add-Member -MemberType NoteProperty -Name DATBASE_NAME -Value $($DATBASE_NAME)
                 $obj | Add-Member -MemberType NoteProperty -Name DB_SERVER_NAME -Value $($DB_SERVER_NAME)
@@ -250,6 +263,30 @@ jobs:
                 write-output '' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
                 throw " ⚠️ there are no *.sql files for deployment"
                 }
+              }
+              $SDRWMS_changed_files = git diff --name-only $SDRWMS_DB_CURRENT_VERSION ${{ github.ref_name }} -- ':*.sql' | Out-String
+              $SDRWMS_changed_files_list = $SDRWMS_changed_files -split '\r?\n' | Where-Object { $_ -ne '' }
+              $SDRWMS_changed_files_string = $SDRWMS_changed_files_list -join ","
+              if ($SDRWMS_changed_files_string -ne '' -and $DATBASE_NAME -ne 'SDRWMS') {
+                  $obj_sdr = New-Object -TypeName PSObject
+                  $obj_sdr | Add-Member -MemberType NoteProperty -Name DATBASE_NAME -Value $($SDRWMS_DATABASE_NAME)
+                  $obj_sdr | Add-Member -MemberType NoteProperty -Name DB_SERVER_NAME -Value $($SDRWMS_DB_SERVER_NAME)
+                  $obj_sdr | Add-Member -MemberType NoteProperty -Name DB_CURRENT_VERSION -Value $($SDRWMS_DB_CURRENT_VERSION)
+                  $obj_sdr | Add-Member -MemberType NoteProperty -Name DB_DEPLOY_VERSION -Value $($SDRWMS_DB_DEPLOY_VERSION)
+                  $obj_sdr | Add-Member -MemberType NoteProperty -Name CHANGED_FILES_LIST -Value $($SDRWMS_changed_files_list)
+                  $obj_sdr | Add-Member -MemberType NoteProperty -Name CHANGED_FILES_STRING -Value $($SDRWMS_changed_files_string)
+                  $matrixtable += $obj_sdr
+
+                  write-output "| $($SDRWMS_DATABASE_NAME) |$($SDRWMS_DB_SERVER_NAME) |$($SDRWMS_DB_CURRENT_VERSION) |$($SDRWMS_DB_DEPLOY_VERSION) | **READY :white_check_mark:** |Files changed : $($SDRWMS_changed_files_string) |" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+                  write-output '' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+                  write-output "MATRIX_OUTPUT=[$($matrixtable | ConvertTo-JSON -Compress)]" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+                  write-output "MATRIX_OUTPUT=[$($matrixtable | ConvertTo-JSON -Compress)]"
+                  write-output "MATRIX_OUTPUT=[$($matrixtable | ConvertTo-JSON -Compress)]" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+                  write-output "MATRIX_OUTPUT=[$($matrixtable | ConvertTo-JSON -Compress)]"
+              }
+              elseif ($SDRWMS_changed_files_string -eq '' -and $DATBASE_NAME -ne 'SDRWMS') {
+                  write-output "| $($SDRWMS_DATABASE_NAME) |$($SDRWMS_DB_SERVER_NAME) |$($SDRWMS_DB_CURRENT_VERSION) |$($SDRWMS_DB_DEPLOY_VERSION) | **SKIPPED :heavy_exclamation_mark:** | $($SDRWMS_DATABASE_NAME): ⚠️ there are no *.sql files between version $($SDRWMS_DB_CURRENT_VERSION) to  $($SDRWMS_DB_DEPLOY_VERSION)|" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
+                  write-output '' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
               }
 
       - name: print METRIX_OUTPUT

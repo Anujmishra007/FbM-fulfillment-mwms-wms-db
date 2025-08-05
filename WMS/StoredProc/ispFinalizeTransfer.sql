@@ -65,6 +65,7 @@ GO
 /* 08-Oct-2024  PYU015    3.5 fix transferdetail lot value                */
 /* 12-AUG-2024  Wan11     3.6 LFWM-4446 - RG[GIT] Serial Number Solution  */
 /*                            - Transfer by Serial Number                 */
+/*04-JUL-2025   SSA01     3.7 UWP-3982- Added PalletType                  */
 /**************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[ispFinalizeTransfer]
@@ -215,6 +216,7 @@ BEGIN
          , @c_ToLoc                     NVARCHAR(10)      --(Wan07)
          , @n_ToQty                     INT               --(Wan07)
          , @c_ChkNoMixLottableForAllSku NVARCHAR(30)=''  --NJOW04
+         , @c_TransferLineNo            NVARCHAR(5)
 
   /*CS01 Start*/
  DECLARE    @c_Lottable01                  NVARCHAR(18),
@@ -503,18 +505,19 @@ BEGIN
    BEGIN
       CREATE TABLE  #tTransferDet
        ( Rowref      int not NULL Identity(1,1) Primary Key,
-         LOT NVARCHAR(10), LOC NVARCHAR(10), ID NVARCHAR(18), Qty int)
+         LOT NVARCHAR(10), LOC NVARCHAR(10), ID NVARCHAR(18), Qty int, PalletType NVARCHAR(10)
+         , ToPalletType NVARCHAR(10), TransferLineNumber NVARCHAR(5))
 
       --Declare @tTransferDet Table (LOT NVARCHAR(10), LOC NVARCHAR(10), ID NVARCHAR(18), Qty int)
 
-      INSERT INTO #tTransferDet (LOT, LOC, ID, Qty)
-      SELECT FromLOT, FromLOC, FromID, SUM(FromQTY)
+      INSERT INTO #tTransferDet (LOT, LOC, ID, Qty, PalletType, ToPalletType, TransferLineNumber)
+      SELECT FromLOT, FromLOC, FromID, SUM(FromQTY), FromPalletType, ToPalletType, TransferLineNumber
       FROM   TransferDetail WITH (NOLOCK)
       Where  TransferKey = @c_Transferkey
       AND    TransferLineNumber = CASE WHEN @c_TransferLineNumber = '' THEN TransferLineNumber  --(Wan08)
                                        ELSE @c_TransferLineNumber END                           --(Wan08)
       AND    Status < '9'                    --(Wan04)
-      GROUP BY FromLOT, FromLOC, FromID
+      GROUP BY FromLOT, FromLOC, FromID, FromPalletType, ToPalletType, TransferLineNumber
 
       IF EXISTS(SELECT 1 FROM LOTxLOCxID LLI WITH (NOLOCK)
                 JOIN #tTransferDet TD ON TD.LOT = LLI.LOT AND
@@ -542,7 +545,45 @@ BEGIN
          SET @n_err = 80010
          SET @c_ErrMsg='NSQL'+CONVERT(char(5),@n_err)+': From Lot + Location + ID Not found at the inventory (ispFinalizeTransfer)'
          GOTO Quit_Proc
-      END                        
+      END
+      --(SSA01) start
+     SELECT TOP 1 @c_TransferLineNo = tfd.TransferLineNumber
+            FROM #tTransferDet tfd
+            WHERE tfd.PalletType IS NOT NULL
+            AND tfd.PalletType != ''
+            AND NOT EXISTS (
+              SELECT 1
+              FROM ID (NOLOCK) id
+              WHERE id.PalletType = tfd.PalletType
+              AND id.id = tfd.ID
+            )
+      IF @c_TransferLineNo IS NOT NULL AND @c_TransferLineNo <> ''
+      BEGIN
+         SET @nContinue = 3
+         SET @n_err = 80019
+         SET @c_ErrMsg='NSQL'+CONVERT(char(5),@n_err)+':LineNo :'+@c_TransferLineNo+': From Pallet Type Is Not Matched With From ID (ispFinalizeTransfer)'
+         GOTO Quit_Proc
+      END
+
+      SELECT TOP 1 @c_TransferLineNo = tfd.TransferLineNumber
+            FROM #tTransferDet tfd
+            WHERE tfd.ToPalletType IS NOT NULL
+            AND tfd.ToPalletType != ''
+            AND NOT EXISTS (
+              SELECT 1
+              FROM pallettypemaster(NOLOCK) ptm
+              WHERE ptm.PalletType = tfd.ToPalletType
+              AND ptm.storerkey = @c_ToStorerKey
+              AND ptm.facility = @c_ToFacility
+              )
+          IF @c_TransferLineNo IS NOT NULL AND @c_TransferLineNo <> ''
+          BEGIN
+             SET @nContinue = 3
+             SET @n_err = 80024
+             SET @c_ErrMsg='NSQL'+CONVERT(char(5),@n_err)+':LineNo:'+@c_TransferLineNo +': To Pallet Type Not found In Pallet Type Master Data (ispFinalizeTransfer)'
+             GOTO Quit_Proc
+          END
+          --(SSA01) end
    END
    
    --NJOW05 S

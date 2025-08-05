@@ -54,6 +54,10 @@ GO
 /* 13-Mar-2019  YTKuek    2.6   Add GVTITF Event (YT01)                 */
 /* 06-Apr-2021  MCTang    2.7   Add SOPICKOTM (MC10)                    */
 /* 22-Apr-2022  YTKuek    2.8   Add TNTITF (YT02)                       */
+/* 29-Jan-2024  YTKuek    2.9   Add GVTITF LOGIGH (CY01)                */
+/* 26-Apr-2024  YTKuek    3.0   Add GVTITF HPQ (YT03)                   */
+/* 26-May-2025  YTKuek    3.1   UWP-34181 (YT04)                        */
+/* 29-Jul-2025  YTKuek    3.2   FCR-5838 (YT05)                         */
 /************************************************************************/    
     
 CREATE PROC [dbo].[isp_ITF_ntrOrderHeader]    
@@ -111,6 +115,8 @@ BEGIN
    DECLARE @c_ConfigKey             nvarchar(30)    
          , @c_Tablename             nvarchar(30)    
          , @c_Tablename2            nvarchar(30)  -- (MC05)  
+         , @c_TablenameLOGIGH       NVARCHAR(30)  -- (CY01)
+         , @c_TablenameLOGIGH2      NVARCHAR(30)  -- (CY01)
          , @c_RecordType            nvarchar(10)    
          , @c_RecordStatus          nvarchar(10)    
          , @c_sValue                nvarchar(10)    
@@ -118,6 +124,7 @@ BEGIN
          , @c_StoredProc            nvarchar(200)    
          , @c_ConfigFacility        nvarchar(5)  
          , @c_UpdatedColumns        NVARCHAR(250)      
+         , @c_TablenameHP           NVARCHAR(30)   --(YT05)
     
    -- ORDERS table    
    DECLARE @c_StorerKey             nvarchar(15)    
@@ -538,7 +545,42 @@ BEGIN
             END  
             --(YT01)-E
 
-                
+            --(CY01)-S
+            IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
+                        WHERE STC.StorerKey = @c_Storerkey   
+                        AND   STC.ConfigKey = 'GVTSOADDLOGIGH'  
+                        AND   STC.SValue    = '1' )  
+            BEGIN  
+               EXEC ispGenGVTLog 'GVTSOADDLOGIGH' , @c_OrderKey, @c_Status, @c_StorerKey, ''    
+                                 , @b_success   OUTPUT    
+                                 , @n_err       OUTPUT    
+                                 , @c_errmsg    OUTPUT   
+  
+               IF @b_success <> 1  
+               BEGIN  
+                  SET @n_continue = 3  
+                  GOTO QUIT   
+               END  
+            END  
+
+            IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
+                        WHERE STC.StorerKey = @c_Storerkey   
+                        AND   STC.ConfigKey = 'GVTESOADDLOGIGH'  
+                        AND   STC.SValue    = '1' )  
+            BEGIN  
+               EXEC ispGenGVTLog 'GVTESOADDLOGIGH' , @c_OrderKey, @c_Status, @c_StorerKey, ''    
+                                 , @b_success   OUTPUT    
+                                 , @n_err       OUTPUT    
+                                 , @c_errmsg    OUTPUT   
+  
+               IF @b_success <> 1  
+               BEGIN  
+                  SET @n_continue = 3  
+                  GOTO QUIT   
+               END  
+            END  
+
+            --(CY01)-E  
          END
          ELSE IF ISNULL(RTRIM(@c_TriggerName),'') = 'ntrOrderHeaderUpdate'
          BEGIN  
@@ -550,17 +592,23 @@ BEGIN
                SET @b_Success = 0  
                SET @c_TableName  = ''  --(YT01)
                SET @c_TableName2 = ''  --(YT01)
+               SET @c_TablenameLOGIGH = ''  --(CY01)
+               SET @c_TablenameLOGIGH2 = ''  --(CY01)
 
                IF @c_Status = '5'   
                BEGIN  
                   SET @c_TableName = 'GVTSOPACK'  
                   SET @c_TableName2 = 'GVTESOPACK' --(YT01)
+                  SET @c_TablenameLOGIGH = 'GVTSOPACKLOGIGH' --(CY01)
+                  SET @c_TablenameLOGIGH2 = 'GVTESOPACKLOGIGH' --(CY01)
                   SET @b_Success = 1 
                END   
 
                IF @c_Status = '9'   
                BEGIN  
                   SET @c_TableName = 'GVTSOCFM'  
+                  SET @c_TablenameLOGIGH = 'GVTSOCFMLOGIGH' --(CY01)
+                  SET @c_TablenameLOGIGH2 = 'GVTPOASNLOGIGH' --(CY01)
                   SET @b_Success = 1 
                END   
 
@@ -568,9 +616,17 @@ BEGIN
                IF @c_Status = 'CANC'   
                BEGIN  
                   SET @c_TableName = 'GVTESOCANC'  
+                  SET @c_TablenameLOGIGH = 'GVTESOCANCLOGIGH' --(CY01)
                   SET @b_Success = 1 
                END  
                --(YT01)-E
+
+               --(YT03)-S
+               IF @c_SOStatus IN ('PendCHK','CHKDone','9')
+               BEGIN
+                  SET @b_Success = 1
+               END
+               --(YT03)-E
   
                IF @b_Success = 1  
                BEGIN  
@@ -611,6 +667,269 @@ BEGIN
                   END 
                   --(YT01)-E
 
+                  --(CY01)-S
+                  IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
+                              WHERE STC.StorerKey = @c_Storerkey   
+                              AND   STC.ConfigKey = @c_TablenameLOGIGH  
+                              AND   STC.SValue    = '1' )  
+                  BEGIN  
+                     EXEC ispGenGVTLog @c_TablenameLOGIGH, @c_OrderKey, @c_Status, @c_StorerKey, ''    
+                                     , @b_success   OUTPUT    
+                                     , @n_err       OUTPUT    
+                                     , @c_errmsg    OUTPUT   
+  
+                     IF @b_success <> 1  
+                     BEGIN  
+                        SET @n_continue = 3  
+                        GOTO QUIT   
+                     END  
+                  END 
+
+                  IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
+                              WHERE STC.StorerKey = @c_Storerkey   
+                              AND   STC.ConfigKey = @c_TablenameLOGIGH2  
+                              AND   STC.SValue    = '1' )  
+                  BEGIN  
+                     EXEC ispGenGVTLog @c_TablenameLOGIGH2, @c_OrderKey, @c_Status, @c_StorerKey, ''    
+                                     , @b_success   OUTPUT    
+                                     , @n_err       OUTPUT    
+                                     , @c_errmsg    OUTPUT   
+  
+                     IF @b_success <> 1  
+                     BEGIN  
+                        SET @n_continue = 3  
+                        GOTO QUIT   
+                     END  
+                  END 
+                  --(CY01)-E
+
+                  --(YT03)-S
+                  IF @c_SOStatus = 'PendCHK'
+                  BEGIN
+                     IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
+                                 WHERE STC.StorerKey = @c_Storerkey   
+                                 AND   STC.ConfigKey = 'GVTEPendCHKHPQ'
+                                 AND   STC.SValue    = '1' )  
+                     BEGIN  
+                        EXEC ispGenGVTLog 'GVTEPendCHKHPQ', @c_OrderKey, @c_SOStatus, @c_StorerKey, ''    
+                                        , @b_success   OUTPUT    
+                                        , @n_err       OUTPUT    
+                                        , @c_errmsg    OUTPUT   
+                                        , 'Y'
+  
+                        IF @b_success <> 1  
+                        BEGIN  
+                           SET @n_continue = 3  
+                           GOTO QUIT   
+                        END  
+                     END 
+
+                     IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
+                                 WHERE STC.StorerKey = @c_Storerkey   
+                                 AND   STC.ConfigKey = 'GVTPendCHKHPQ'
+                                 AND   STC.SValue    = '1' )  
+                     BEGIN  
+                        EXEC ispGenGVTLog 'GVTPendCHKHPQ', @c_OrderKey, @c_SOStatus, @c_StorerKey, ''    
+                                        , @b_success   OUTPUT    
+                                        , @n_err       OUTPUT    
+                                        , @c_errmsg    OUTPUT   
+                                        , 'Y'
+  
+                        IF @b_success <> 1  
+                        BEGIN  
+                           SET @n_continue = 3  
+                           GOTO QUIT   
+                        END  
+                     END
+                  END
+
+                  IF @c_SOStatus = 'CHKDone'
+                  BEGIN
+                     IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
+                                 WHERE STC.StorerKey = @c_Storerkey   
+                                 AND   STC.ConfigKey = 'GVTECHKDoneHPQ'
+                                 AND   STC.SValue    = '1' )  
+                     BEGIN  
+                        EXEC ispGenGVTLog 'GVTECHKDoneHPQ', @c_OrderKey, @c_SOStatus, @c_StorerKey, ''    
+                                        , @b_success   OUTPUT    
+                                        , @n_err       OUTPUT    
+                                        , @c_errmsg    OUTPUT   
+  
+                        IF @b_success <> 1  
+                        BEGIN  
+                           SET @n_continue = 3  
+                           GOTO QUIT   
+                        END  
+                     END 
+
+                     IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
+                                 WHERE STC.StorerKey = @c_Storerkey   
+                                 AND   STC.ConfigKey = 'GVTCHKDoneHPQ'
+                                 AND   STC.SValue    = '1' )  
+                     BEGIN  
+                        EXEC ispGenGVTLog 'GVTCHKDoneHPQ', @c_OrderKey, @c_SOStatus, @c_StorerKey, ''    
+                                        , @b_success   OUTPUT    
+                                        , @n_err       OUTPUT    
+                                        , @c_errmsg    OUTPUT   
+  
+                        IF @b_success <> 1  
+                        BEGIN  
+                           SET @n_continue = 3  
+                           GOTO QUIT   
+                        END  
+                     END
+                  END
+
+                  IF @c_SOStatus = '9'
+                  BEGIN
+                     IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
+                                 WHERE STC.StorerKey = @c_Storerkey   
+                                 AND   STC.ConfigKey = 'GVTEORD9HPQ'
+                                 AND   STC.SValue    = '1' )  
+                     BEGIN  
+                        EXEC ispGenGVTLog 'GVTEORD9HPQ', @c_OrderKey, @c_SOStatus, @c_StorerKey, ''    
+                                        , @b_success   OUTPUT    
+                                        , @n_err       OUTPUT    
+                                        , @c_errmsg    OUTPUT   
+  
+                        IF @b_success <> 1  
+                        BEGIN  
+                           SET @n_continue = 3  
+                           GOTO QUIT   
+                        END  
+                     END 
+                  END
+                  --(YT03)-E
+
+                  --(YT04)-S
+                  IF @c_Status = '3'
+                  BEGIN
+                     IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
+                                 WHERE STC.StorerKey = @c_Storerkey   
+                                 AND   STC.ConfigKey = 'GVTESOPICK3'
+                                 AND   STC.SValue    = '1' )  
+                     BEGIN  
+                        EXEC ispGenGVTLog 'GVTESOPICK3', @c_OrderKey, @c_SOStatus, @c_StorerKey, ''    
+                                        , @b_success   OUTPUT    
+                                        , @n_err       OUTPUT    
+                                        , @c_errmsg    OUTPUT   
+  
+                        IF @b_success <> 1  
+                        BEGIN  
+                           SET @n_continue = 3  
+                           GOTO QUIT   
+                        END  
+                     END 
+                  END
+                  --(YT04)-E
+
+                  --(YT05)-S
+                  IF @c_Status = '7'
+                  BEGIN
+                     IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
+                                 WHERE STC.StorerKey = @c_Storerkey   
+                                 AND   STC.ConfigKey = 'GVTESTS7HPNL'
+                                 AND   STC.SValue    = '1' )  
+                     BEGIN  
+                        EXEC ispGenGVTLog 'GVTESTS7HPNL', @c_OrderKey, @c_Status, @c_StorerKey, ''    
+                                        , @b_success   OUTPUT    
+                                        , @n_err       OUTPUT    
+                                        , @c_errmsg    OUTPUT   
+  
+                        IF @b_success <> 1  
+                        BEGIN  
+                           SET @n_continue = 3  
+                           GOTO QUIT   
+                        END  
+                     END 
+                  END
+
+                  IF @c_Status = '8'
+                  BEGIN
+                     IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
+                                 WHERE STC.StorerKey = @c_Storerkey   
+                                 AND   STC.ConfigKey = 'GVTESTS8HPNL'
+                                 AND   STC.SValue    = '1' )  
+                     BEGIN  
+                        EXEC ispGenGVTLog 'GVTESTS8HPNL', @c_OrderKey, @c_Status, @c_StorerKey, ''    
+                                        , @b_success   OUTPUT    
+                                        , @n_err       OUTPUT    
+                                        , @c_errmsg    OUTPUT   
+  
+                        IF @b_success <> 1  
+                        BEGIN  
+                           SET @n_continue = 3  
+                           GOTO QUIT   
+                        END  
+                     END 
+                  END
+
+                  IF @c_Status = '9'
+                  BEGIN
+                     IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
+                                 WHERE STC.StorerKey = @c_Storerkey   
+                                 AND   STC.ConfigKey = 'GVTESTS9HPNL'
+                                 AND   STC.SValue    = '1' )  
+                     BEGIN  
+                        EXEC ispGenGVTLog 'GVTESTS9HPNL', @c_OrderKey, @c_Status, @c_StorerKey, ''    
+                                        , @b_success   OUTPUT    
+                                        , @n_err       OUTPUT    
+                                        , @c_errmsg    OUTPUT   
+  
+                        IF @b_success <> 1  
+                        BEGIN  
+                           SET @n_continue = 3  
+                           GOTO QUIT   
+                        END  
+                     END 
+
+                     IF @c_SOStatus IN ('RC','AV','BN','AK','BC','AA','S1','AW','BK')
+                     BEGIN
+                        SET @c_TablenameHP = ''
+
+                        IF @c_SOStatus = 'RC'
+                           SET @c_TablenameHP = 'GVTESTSRCHPNL'
+                        ELSE IF @c_SOStatus = 'AV'
+                           SET @c_TablenameHP = 'GVTESTSAVHPNL'
+                        ELSE IF @c_SOStatus = 'BN'
+                           SET @c_TablenameHP = 'GVTESTSBNHPNL'
+                        ELSE IF @c_SOStatus = 'AK'
+                           SET @c_TablenameHP = 'GVTESTSAKHPNL'
+                        ELSE IF @c_SOStatus = 'BC'
+                           SET @c_TablenameHP = 'GVTESTSBCHPNL'
+                        ELSE IF @c_SOStatus = 'AA'
+                           SET @c_TablenameHP = 'GVTESTSAAHPNL'
+                        ELSE IF @c_SOStatus = 'S1'
+                           SET @c_TablenameHP = 'GVTESTSS1HPNL'
+                        ELSE IF @c_SOStatus = 'AW'
+                           SET @c_TablenameHP = 'GVTESTSAWHPNL'
+                        ELSE IF @c_SOStatus = 'BK'
+                           SET @c_TablenameHP = 'GVTESTSBKHPNL'
+                        ELSE
+                           SET @c_TablenameHP = ''
+
+                        IF @c_TablenameHP <> ''
+                        BEGIN
+                           IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
+                                       WHERE STC.StorerKey = @c_Storerkey   
+                                       AND   STC.ConfigKey = @c_TablenameHP
+                                       AND   STC.SValue    = '1' )  
+                           BEGIN  
+                              EXEC ispGenGVTLog @c_TablenameHP, @c_OrderKey, @c_SOStatus, @c_StorerKey, ''    
+                                              , @b_success   OUTPUT    
+                                              , @n_err       OUTPUT    
+                                              , @c_errmsg    OUTPUT   
+  
+                              IF @b_success <> 1  
+                              BEGIN  
+                                 SET @n_continue = 3  
+                                 GOTO QUIT   
+                              END  
+                           END 
+                        END
+                     END
+                  END
+                  --(YT05)-E
                END -- IF @b_Success = 1  
             END -- ColValue IN ('STATUS','SOSTATUS')  
          END -- IF (ISNULL(RTRIM(@c_TriggerName),'') = 'ntrOrderHeaderUpdate')    

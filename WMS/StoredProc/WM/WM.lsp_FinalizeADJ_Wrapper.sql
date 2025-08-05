@@ -97,6 +97,7 @@ BEGIN
          
          , @c_CrossWH         NVARCHAR(30)
          , @c_ReasonCode      NVARCHAR(30)   = ''              --(Wan04)
+         , @c_InvalidADLineNo       NVARCHAR(5)
 
          , @CUR_AJD           CURSOR
 
@@ -185,47 +186,6 @@ BEGIN
                , @n_err         = @n_err       
                , @c_errmsg      = @c_errmsg   
       END
-      --(SSA01) start --
-      IF @n_continue IN(1,2)
-      BEGIN
-          IF EXISTS(
-          SELECT 1
-          FROM ADJUSTMENTDETAIL(NOLOCK) AD
-          WHERE
-            (
-            AD.PalletType IS NOT NULL
-            AND AD.PalletType != ''
-            AND AD.AdjustmentKey = @c_Adjustmentkey
-            AND NOT EXISTS (
-              SELECT 1
-              FROM PalletTypeMaster(NOLOCK) ptm
-              WHERE ptm.PalletType = AD.PalletType
-              AND ptm.StorerKey = AD.StorerKey
-              AND ptm.facility = @c_Facility
-              )
-            )
-            )
-            BEGIN
-            SELECT @n_continue = 3
-            SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 551124
-            SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(6),@n_err)+' PalletType is not valid. (lsp_finalizeADJ_Wrapper)'
-
-            EXEC [WM].[lsp_WriteError_List]
-                  @i_iErrGroupKey = @n_ErrGroupKey OUTPUT,
-                  @c_TableName   = @c_TableName,
-                  @c_SourceType  = @c_SourceType,
-                  @c_Refkey1     = @c_Adjustmentkey,
-                  @c_Refkey2     = '',
-                  @c_Refkey3     = '',
-                  @n_err2        = @n_err,
-                  @c_errmsg2     = @c_errmsg,
-                  @b_Success     = @b_Success OUTPUT,
-                  @n_err         = @n_err OUTPUT,
-                  @c_errmsg      = @c_errmsg OUTPUT
-              GOTO EXIT_SP
-            END
-      END
-      --(SSA01) end --
 
       IF OBJECT_ID('tempdb..#UPDLOT05','u') IS NOT NULL
       BEGIN
@@ -780,7 +740,44 @@ BEGIN
                      , @n_err         = @n_err       
                      , @c_errmsg      = @c_errmsg          
          END
-         --(Wan04) - END   
+         --(Wan04) - END
+         --(SSA01) - START
+          IF @n_continue IN(1,2)
+          BEGIN
+                SELECT TOP 1 @c_InvalidADLineNo = AD.AdjustmentLineNumber
+                FROM ADJUSTMENTDETAIL(NOLOCK) AD
+                WHERE AD.PalletType IS NOT NULL
+                AND AD.PalletType != ''
+                AND AD.AdjustmentKey = @c_Adjustmentkey
+                AND NOT EXISTS (
+                  SELECT 1
+                  FROM PalletTypeMaster(NOLOCK) ptm
+                  WHERE ptm.PalletType = AD.PalletType
+                  AND ptm.StorerKey = AD.StorerKey
+                  AND ptm.facility = @c_Facility
+                  )
+                IF @c_InvalidADLineNo IS NOT NULL AND @c_InvalidADLineNo <> ''
+                BEGIN
+                  SELECT @n_continue = 3
+                  SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 551124
+                  SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(6),@n_err)+': LineNo : '+@c_InvalidADLineNo+': Pallet Type Not Found In Pallet Type Master Data (lsp_finalizeADJ_Wrapper)'
+
+                  EXEC [WM].[lsp_WriteError_List]
+                        @i_iErrGroupKey = @n_ErrGroupKey OUTPUT,
+                        @c_TableName   = @c_TableName,
+                        @c_SourceType  = @c_SourceType,
+                        @c_Refkey1     = @c_Adjustmentkey,
+                        @c_Refkey2     = @c_InvalidADLineNo,
+                        @c_Refkey3     = '',
+                        @n_err2        = @n_err,
+                        @c_errmsg2     = @c_errmsg,
+                        @b_Success     = @b_Success OUTPUT,
+                        @n_err         = @n_err OUTPUT,
+                        @c_errmsg      = @c_errmsg OUTPUT
+                    GOTO EXIT_SP
+                END
+          END
+        --(SSA01) - END
          FETCH NEXT FROM @CUR_AJD INTO    @c_AdjLineNo 
                                        ,  @c_Storerkey 
                                        ,  @c_Sku       

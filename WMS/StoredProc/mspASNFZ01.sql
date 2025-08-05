@@ -44,6 +44,7 @@ GO
 /* 2025-03-03  SSA07    1.7   UWP-30752 - seller order naming convention   */
 /* 2025-05-14  JH01     1.8   UWP-31657 - Change to map Receipt/ReceiptDetail*/
 /* 2025-06-19  JH02     1.9   UWP-36358 - Enhanced the error message show  */
+/* 2025-07-11  JH03     2.0   UWP-37565 - Duplicate OrderKey Issue         */ 
 /***************************************************************************/
 CREATE OR ALTER PROC [dbo].[mspASNFZ01]
 (     @c_Receiptkey  NVARCHAR(10)
@@ -466,7 +467,8 @@ BEGIN
                   FROM  RECEIPT RH  (NOLOCK)                                                            --(JH01)
                   JOIN  RECEIPTDETAIL RD WITH (NOLOCK) ON (RH.ReceiptKey = RD.ReceiptKey)               --(JH01)
                   LEFT JOIN  STORER S WITH (NOLOCK) ON (S.StorerKey = RD.UserDefine02 AND S.Type = '2'  AND S.ConsigneeFor = RD.StorerKey)
-                  WHERE RD.ExternReceiptkey = @c_ExternReceiptkey                                      --(JH01)
+                  WHERE RD.ExternReceiptkey = @c_ExternReceiptkey                                        --(JH01)
+			  AND RD.ReceiptKey = @c_Receiptkey                                              --(JH03)
                   -- FROM  PO  (NOLOCK)                                                                  --(JH01)
                   -- WHERE PO.Pokey = @c_POKey                                                           --(JH01)
                   GROUP BY S.Company, S.Address1, S.Address2, S.Address3, RH.SellerCompany, RH.CarrierReference, RH.SellerName, RH.SellerAddress1, --(JH01)
@@ -474,7 +476,7 @@ BEGIN
                END               
             END
 
-		      INSERT INTO #TMP_ORDDTL
+	    INSERT INTO #TMP_ORDDTL
             (  OrderKey
 			      ,  ReceiptKey
             ,  POKey

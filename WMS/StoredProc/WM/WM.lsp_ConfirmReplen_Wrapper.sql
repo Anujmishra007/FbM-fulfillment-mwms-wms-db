@@ -26,7 +26,7 @@ GO
 /* 2024-03-30  TLTING01 1.3   Infinite loop on trancount commit          */
 /* 2023-06-06  Wan02    1.4   LFWM-4671 - CN SCE Generate E-Order        */
 /*                            Replenishmenet UI Change For Converse      */     
-/*************************************************************************/   
+/*************************************************************************/    
 CREATE OR ALTER PROCEDURE [WM].[lsp_ConfirmReplen_Wrapper]  
    @c_Facility             NVARCHAR(10) = ''
 ,  @c_Zone02               NVARCHAR(10) = ''
