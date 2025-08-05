@@ -12,6 +12,7 @@ GO
 /* 2024-11-21   1.0.0  Dennis   FCR-1349 Created                        */
 /* 2025-04-09   1.1.0  Dennis   FCR-3925 Remove Trigger For Transmitlog2*/
 /* 2025-07-02   1.2.0  Dennis   FCR-5019 Remove Pack Header             */
+/* 2025-08-04   1.3.0  Dennis   UWP-38742 Fix Bugs                      */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_869ExtUpd01] (
@@ -109,8 +110,22 @@ BEGIN
 
             IF EXISTS (SELECT 1 FROM dbo.PackDetail WITH(NOLOCK) WHERE LABELNO = @cCaseID AND StorerKey = @cStorerKey)
             BEGIN
-               SELECT @nQTY = SUM(QTY) FROM dbo.PickDetail WITH(NOLOCK) WHERE CaseID = @cCaseID AND StorerKey = @cStorerKey AND SKU = @cSKU
-               UPDATE dbo.PackDetail WITH(ROWLOCK) SET QTY = @nQTY WHERE LABELNO = @cCaseID AND StorerKey = @cStorerKey AND SKU = @cSKU
+               SELECT @nQTY = SUM(QTY) FROM dbo.PickDetail WITH(NOLOCK) WHERE CaseID = @cCaseID AND StorerKey = @cStorerKey AND SKU = @cSKU AND OrderKey = @cOrderKey
+               UPDATE PD
+               SET PD.QTY = @nQTY
+               FROM PackDetail PD
+               INNER JOIN PICKHEADER PH ON PD.PICKSLIPNO = PH.PICKHEADERKEY AND PH.OrderKey = @cOrderKey AND PH.StorerKey = @cStorerKey
+               WHERE PD.LABELNO = @cCaseID AND PD.StorerKey = @cStorerKey AND PD.SKU = @cSKU
+            END
+
+            SELECT TOP 1 @cPickSlipNo = PICKHEADERKEY FROM dbo.PICKHEADER(NOLOCK) WHERE OrderKey=@cOrderKey AND @cStorerKey = StorerKey
+
+            --All pickdetail status = 0
+            --No packdetail exists
+            IF NOT EXISTS (SELECT 1 FROM dbo.PICKDETAIL(NOLOCK) WHERE OrderKey = @cOrderKey AND STATUS <> '0')
+            AND NOT EXISTS (SELECT 1 FROM dbo.PACKDETAIL PD(NOLOCK) WHERE PickSLipNo = @cPickSlipNo AND PD.StorerKey = @cStorerKey)
+            BEGIN
+               DELETE FROM PackHeader WHERE OrderKey = @cOrderKey AND StorerKey = @cStorerKey
             END
 
             SELECT TOP 1 @cPickSlipNo = PICKHEADERKEY FROM dbo.PICKHEADER(NOLOCK) WHERE OrderKey=@cOrderKey AND @cStorerKey = StorerKey
