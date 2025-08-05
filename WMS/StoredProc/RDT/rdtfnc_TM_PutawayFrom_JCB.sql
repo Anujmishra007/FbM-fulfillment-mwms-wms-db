@@ -1396,7 +1396,7 @@ BEGIN
             AND TaskDetailKey = @cTaskDetailKey
 
          -- Confirm task
-         EXEC rdt.rdt_TM_PutawayFrom_Confirm @nMobile, @nFunc, @cLangCode, @cUserName
+         EXEC rdt.rdt_TM_PutawayFrom_Confirm_JCB @nMobile, @nFunc, @cLangCode, @cUserName
             ,@cTaskDetailKey
             ,@nErrNo  OUTPUT
             ,@cErrMsg OUTPUT
