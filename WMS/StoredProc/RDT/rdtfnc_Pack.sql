@@ -101,6 +101,7 @@ GO
 /* 2025-03-25   7.6 YeeKung     FCR-3145 Add Out for rdt_serialNo Params (yeekung03)            */
 /* 2025-07-10   7.7 NickT       FCR-4325 Split SKU Qty screen into 2 screens.                   */
 /*                              Update PackInfo.Qty after capture data                          */
+/* 2025-07-14   7.8 Cuize       FCR-990 STEP9 Need go to extscn after validation                */
 /************************************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_Pack] (
@@ -4881,34 +4882,34 @@ BEGIN
    BEGIN
       SET @cExtendedScreenSP = ''
    END
-   
+
    IF @cExtendedScreenSP <> ''
    BEGIN
       IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
       BEGIN
          SET @nAction = 0
 
-         EXECUTE [RDT].[rdt_ExtScnEntry] 
-         @cExtendedScreenSP, 
+         EXECUTE [RDT].[rdt_ExtScnEntry]
+         @cExtendedScreenSP,
          @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorerKey, @tExtScnData ,
-         @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01 OUTPUT,  
-         @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02 OUTPUT,  
-         @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03 OUTPUT,  
-         @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04 OUTPUT,  
-         @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  @dLottable05 OUTPUT,  
-         @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  @cLottable06 OUTPUT, 
-         @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  @cLottable07 OUTPUT, 
-         @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  @cLottable08 OUTPUT, 
-         @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  @cLottable09 OUTPUT, 
-         @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  @cLottable10 OUTPUT, 
+         @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01 OUTPUT,
+         @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02 OUTPUT,
+         @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03 OUTPUT,
+         @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04 OUTPUT,
+         @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  @dLottable05 OUTPUT,
+         @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  @cLottable06 OUTPUT,
+         @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  @cLottable07 OUTPUT,
+         @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  @cLottable08 OUTPUT,
+         @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  @cLottable09 OUTPUT,
+         @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  @cLottable10 OUTPUT,
          @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  @cLottable11 OUTPUT,
          @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT,  @cLottable12 OUTPUT,
          @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  @dLottable13 OUTPUT,
          @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT,  @dLottable14 OUTPUT,
          @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT,  @dLottable15 OUTPUT,
-         @nAction, 
+         @nAction,
          @nScn OUTPUT,  @nStep OUTPUT,
-         @nErrNo   OUTPUT, 
+         @nErrNo   OUTPUT,
          @cErrMsg  OUTPUT,
          @cUDF01   OUTPUT, @cUDF02 OUTPUT, @cUDF03 OUTPUT,
          @cUDF04   OUTPUT, @cUDF05 OUTPUT, @cUDF06 OUTPUT,
@@ -4920,7 +4921,7 @@ BEGIN
          @cUDF22   OUTPUT, @cUDF23 OUTPUT, @cUDF24 OUTPUT,
          @cUDF25   OUTPUT, @cUDF26 OUTPUT, @cUDF27 OUTPUT,
          @cUDF28   OUTPUT, @cUDF29 OUTPUT, @cUDF30 OUTPUT
-         
+
          IF @nErrNo <> 0
          BEGIN
             GOTO  Quit
@@ -5582,7 +5583,7 @@ BEGIN
                @nErrNo OUTPUT, @cErrMsg OUTPUT
 
             IF @nErrNo <> 0
-               GOTO Step_9_Quit
+               GOTO Step_9_Quit -- revert version 7.6, Cuize
          END
       END
       -- Update SKU setting
@@ -6164,32 +6165,32 @@ BEGIN
       BEGIN
          SET @cExtendedScreenSP = ''
       END
-      
+
       IF @cExtendedScreenSP <> ''
       BEGIN
          IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
          BEGIN
-            EXECUTE [RDT].[rdt_ExtScnEntry] 
-            @cExtendedScreenSP, 
+            EXECUTE [RDT].[rdt_ExtScnEntry]
+            @cExtendedScreenSP,
             @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorerKey, @tExtScnData ,
-            @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01 OUTPUT,  
-            @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02 OUTPUT,  
-            @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03 OUTPUT,  
-            @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04 OUTPUT,  
-            @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  @dLottable05 OUTPUT,  
-            @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  @cLottable06 OUTPUT, 
-            @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  @cLottable07 OUTPUT, 
-            @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  @cLottable08 OUTPUT, 
-            @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  @cLottable09 OUTPUT, 
-            @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  @cLottable10 OUTPUT, 
+            @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01 OUTPUT,
+            @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02 OUTPUT,
+            @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03 OUTPUT,
+            @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04 OUTPUT,
+            @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  @dLottable05 OUTPUT,
+            @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  @cLottable06 OUTPUT,
+            @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  @cLottable07 OUTPUT,
+            @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  @cLottable08 OUTPUT,
+            @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  @cLottable09 OUTPUT,
+            @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  @cLottable10 OUTPUT,
             @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  @cLottable11 OUTPUT,
             @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT,  @cLottable12 OUTPUT,
             @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  @dLottable13 OUTPUT,
             @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT,  @dLottable14 OUTPUT,
             @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT,  @dLottable15 OUTPUT,
-            @nAction, 
+            @nAction,
             @nScn OUTPUT,  @nStep OUTPUT,
-            @nErrNo   OUTPUT, 
+            @nErrNo   OUTPUT,
             @cErrMsg  OUTPUT,
             @cUDF01   OUTPUT, @cUDF02 OUTPUT, @cUDF03 OUTPUT,
             @cUDF04   OUTPUT, @cUDF05 OUTPUT, @cUDF06 OUTPUT,
@@ -6201,7 +6202,7 @@ BEGIN
             @cUDF22   OUTPUT, @cUDF23 OUTPUT, @cUDF24 OUTPUT,
             @cUDF25   OUTPUT, @cUDF26 OUTPUT, @cUDF27 OUTPUT,
             @cUDF28   OUTPUT, @cUDF29 OUTPUT, @cUDF30 OUTPUT
-            
+
             IF @nErrNo <> 0
             BEGIN
                GOTO  Quit
@@ -6317,27 +6318,27 @@ BEGIN
       BEGIN
          IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
          BEGIN
-            EXECUTE [RDT].[rdt_ExtScnEntry] 
-            @cExtendedScreenSP, 
+            EXECUTE [RDT].[rdt_ExtScnEntry]
+            @cExtendedScreenSP,
             @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorerKey, @tExtScnData ,
-            @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01 OUTPUT,  
-            @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02 OUTPUT,  
-            @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03 OUTPUT,  
-            @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04 OUTPUT,  
-            @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  @dLottable05 OUTPUT,  
-            @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  @cLottable06 OUTPUT, 
-            @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  @cLottable07 OUTPUT, 
-            @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  @cLottable08 OUTPUT, 
-            @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  @cLottable09 OUTPUT, 
-            @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  @cLottable10 OUTPUT, 
+            @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01 OUTPUT,
+            @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02 OUTPUT,
+            @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03 OUTPUT,
+            @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04 OUTPUT,
+            @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  @dLottable05 OUTPUT,
+            @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  @cLottable06 OUTPUT,
+            @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  @cLottable07 OUTPUT,
+            @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  @cLottable08 OUTPUT,
+            @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  @cLottable09 OUTPUT,
+            @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  @cLottable10 OUTPUT,
             @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  @cLottable11 OUTPUT,
             @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT,  @cLottable12 OUTPUT,
             @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  @dLottable13 OUTPUT,
             @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT,  @dLottable14 OUTPUT,
             @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT,  @dLottable15 OUTPUT,
-            @nAction, 
+            @nAction,
             @nScn OUTPUT,  @nStep OUTPUT,
-            @nErrNo   OUTPUT, 
+            @nErrNo   OUTPUT,
             @cErrMsg  OUTPUT,
             @cUDF01   OUTPUT, @cUDF02 OUTPUT, @cUDF03 OUTPUT,
             @cUDF04   OUTPUT, @cUDF05 OUTPUT, @cUDF06 OUTPUT,
@@ -6349,7 +6350,7 @@ BEGIN
             @cUDF22   OUTPUT, @cUDF23 OUTPUT, @cUDF24 OUTPUT,
             @cUDF25   OUTPUT, @cUDF26 OUTPUT, @cUDF27 OUTPUT,
             @cUDF28   OUTPUT, @cUDF29 OUTPUT, @cUDF30 OUTPUT
-            
+
             IF @nErrNo <> 0
             BEGIN
                GOTO  Quit
@@ -6491,7 +6492,7 @@ BEGIN
          END -- rdt_838ExtScn02
          IF @cExtendedScreenSP = 'rdt_838ExtScn05'
          BEGIN
-            IF @cUDF01 = 'JumpTo_Step_4' 
+            IF @cUDF01 = 'JumpTo_Step_4'
             BEGIN
                SET @nInputKey = 1
                SET @nScn = 4653
@@ -6499,7 +6500,7 @@ BEGIN
 
                GOTO Step_4
             END
-            ELSE IF @cUDF01 = 'JumpTo_Step_5' 
+            ELSE IF @cUDF01 = 'JumpTo_Step_5'
             BEGIN
                SET @nInputKey = 1
                SET @nScn = 4654
@@ -6507,7 +6508,7 @@ BEGIN
 
                GOTO Step_5
             END
-            ELSE IF @cUDF01 = 'JumpTo_Step_9' 
+            ELSE IF @cUDF01 = 'JumpTo_Step_9'
             BEGIN
                SET @nInputKey = 1
                SET @nScn = 4831
@@ -6518,7 +6519,7 @@ BEGIN
 
             IF @cUDF02 = '1' -- 1 means update RDTMOBREC in main function SP, 0 means updated RDTMOBREC in ExtScnSP
                GOTO Quit
-               
+
             RETURN
          END
 
