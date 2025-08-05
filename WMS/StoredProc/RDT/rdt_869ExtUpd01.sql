@@ -11,6 +11,7 @@ GO
 /* Date         VER    Author   Purpose                                 */
 /* 2024-11-21   1.0.0  Dennis   FCR-1349 Created                        */
 /* 2025-04-09   1.1.0  Dennis   FCR-3925 Remove Trigger For Transmitlog2*/
+/* 2025-07-02   1.2.0  Dennis   FCR-5019 Remove Pack Header             */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_869ExtUpd01] (
@@ -39,6 +40,7 @@ DECLARE
    @nRowCount  INT,
    @nTranCount INT,
    @bSuccess   INT,
+   @cPickslipNo NVARCHAR( 10),
    @cSKU       NVARCHAR(20)
 DECLARE @List TABLE
    (
@@ -109,6 +111,16 @@ BEGIN
             BEGIN
                SELECT @nQTY = SUM(QTY) FROM dbo.PickDetail WITH(NOLOCK) WHERE CaseID = @cCaseID AND StorerKey = @cStorerKey AND SKU = @cSKU
                UPDATE dbo.PackDetail WITH(ROWLOCK) SET QTY = @nQTY WHERE LABELNO = @cCaseID AND StorerKey = @cStorerKey AND SKU = @cSKU
+            END
+
+            SELECT TOP 1 @cPickSlipNo = PICKHEADERKEY FROM dbo.PICKHEADER(NOLOCK) WHERE OrderKey=@cOrderKey AND @cStorerKey = StorerKey
+
+            --All pickdetail status = 0
+            --No packdetail exists
+            IF NOT EXISTS (SELECT 1 FROM dbo.PICKDETAIL(NOLOCK) WHERE OrderKey = @cOrderKey AND STATUS <> '0')
+            AND NOT EXISTS (SELECT 1 FROM dbo.PACKDETAIL PD(NOLOCK) WHERE PickSLipNo = @cPickSlipNo AND PD.StorerKey = @cStorerKey)
+            BEGIN
+               DELETE FROM PackHeader WHERE OrderKey = @cOrderKey AND StorerKey = @cStorerKey
             END
          END
 
