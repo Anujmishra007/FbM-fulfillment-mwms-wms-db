@@ -67,7 +67,7 @@ GO
 CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_NormalReceipt_V7] (
    @nMobile    INT,
    @nErrNo     INT  OUTPUT,
-   @cErrMsg    NVARCHAR( 20) OUTPUT
+   @cErrMsg    NVARCHAR( 1024) OUTPUT
 ) AS
 
 SET NOCOUNT ON
@@ -3513,7 +3513,7 @@ BEGIN
                '@cFinalLOC    NVARCHAR( 10), ' +
                '@cReceiptLineNumber NVARCHAR( 10), ' +
                '@nErrNo             INT            OUTPUT, ' +
-               '@cErrMsg            NVARCHAR( 20)  OUTPUT'
+               '@cErrMsg            NVARCHAR( 1024)  OUTPUT'
 
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
                @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cReceiptKey, @cPOKey, @cLOC, @cID, @cSKU,
