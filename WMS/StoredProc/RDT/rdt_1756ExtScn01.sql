@@ -11,6 +11,8 @@ GO
 /*                                                                       */
 /* Date       Rev    Author    Purposes                                  */
 /* 2025-06-09 1.0.0  NickT     FCR-5727. Created                         */
+/* 2025-07-08 1.0.1  Jackc     FCR-5727. Only check equipment when       */
+/*                             new equipment is empty                    */
 /*************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1756ExtScn01] (
@@ -141,7 +143,8 @@ BEGIN
                   GOTO Step_99_6529_Fail
                END
 
-               IF @cEquipmentProfileKey <> '' AND NOT EXISTS(SELECT 1 FROM dbo.EquipmentProfile WITH(NOLOCK) WHERE EquipmentProfileKey = @cEquipmentProfileKey)
+               IF @cEquipmentProfileKey <> '' AND @cNewEquipmentProfileKey = '' --v1.0.1
+                  AND NOT EXISTS(SELECT 1 FROM dbo.EquipmentProfile WITH(NOLOCK) WHERE EquipmentProfileKey = @cEquipmentProfileKey)
                BEGIN
                   SET @nErrNo = 239602
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Invalid MHE

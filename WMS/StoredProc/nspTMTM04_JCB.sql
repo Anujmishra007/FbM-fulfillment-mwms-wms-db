@@ -3,16 +3,16 @@ GO
 SET ANSI_NULLS OFF
 GO
 
-/************************************************************************/
-/* Stored Procedure: nspTMTM04_JCB                                      */
-/* Copyright: Maersk                                                    */
-/* Customer : JCB                                                       */
-/*                                                                      */
-/*                                                                      */
-/* Modifications:                                                       */
-/* Date         Ver.  Author    Purposes                                */
-/* 2025-06-09   1.0.0 NickT     FCR-5727 Create                         */
-/************************************************************************/
+/********************************************************************************/
+/* Stored Procedure: nspTMTM04_JCB                                              */
+/* Copyright: Maersk                                                            */
+/* Customer : JCB                                                               */
+/*                                                                              */
+/*                                                                              */
+/* Modifications:                                                               */
+/* Date         Ver.  Author    Purposes                                        */
+/* 2025-06-09   1.0.0 NickT     FCR-5727 Create                                 */
+/********************************************************************************/
 CREATE  OR ALTER PROC    [RDT].[nspTMTM04_JCB]
    @c_sendDelimiter    NVARCHAR(1)
    ,@c_ptcid            NVARCHAR(5)
@@ -531,7 +531,7 @@ BEGIN
 
                     IF @b_debug=1
                     BEGIN
- SELECT '@c_MinPriority'
+                            SELECT '@c_MinPriority'
                               ,@c_MinPriority
                               ,'@c_NextTaskType'
                               ,@c_NextTaskType
@@ -601,7 +601,7 @@ BEGIN
                                             AND tmud.PermissionType = td.TaskType
                             WHERE  ad.AreaKey = CASE
                                                        WHEN ISNULL(RTRIM(@c_AreaKey01) ,'')
-   ='' THEN ad.AreaKey
+                                                        ='' THEN ad.AreaKey
                                                        ELSE @c_AreaKey01
                                                   END
                                    AND td.status = '0'
@@ -679,7 +679,7 @@ BEGIN
                     IF ISNULL(RTRIM(@c_OtherTaskType) ,'')=''
                     BEGIN
                         SET @c_OtherTaskType = ''
-   END
+                    END
 
                     IF ISNULL(RTRIM(@c_LastAisle) ,'')=''
                     BEGIN
@@ -740,16 +740,16 @@ BEGIN
                         WHERE  TTMStrategykey = @c_TTMStrategyKey
                         AND   TTMStrategyLineNumber > @c_CurrentLineNumber
                         ORDER BY TTMStrategyLineNumber
---                        AND   EXISTS(SELECT 1
---                                     FROM   TaskManagerUserDetail WITH (NOLOCK)
---                                     WHERE  USERKEY = @c_userid
---                                     AND PERMISSIONTYPE = TTMStrategyDetail.TaskType
---                                     AND PERMISSION = '1')
---                        ORDER BY CASE WHEN TTMStrategyLineNumber = @c_CurrentLineNumber THEN 9
---                                      WHEN TTMStrategyLineNumber < @c_CurrentLineNumber THEN 8
---                                      ELSE 1
---                                 END,
---                                 TTMStrategyLineNumber
+                        /*AND   EXISTS(SELECT 1
+                                     FROM   TaskManagerUserDetail WITH (NOLOCK)
+                                     WHERE  USERKEY = @c_userid
+                                     AND PERMISSIONTYPE = TTMStrategyDetail.TaskType
+                                     AND PERMISSION = '1')
+                        ORDER BY CASE WHEN TTMStrategyLineNumber = @c_CurrentLineNumber THEN 9
+                                      WHEN TTMStrategyLineNumber < @c_CurrentLineNumber THEN 8
+                                      ELSE 1
+                                 END,
+                                 TTMStrategyLineNumber*/
 
                         IF @nCnt2=0
                         BEGIN
@@ -769,17 +769,17 @@ BEGIN
                     FROM   TTMStrategyDetail WITH (NOLOCK)
                     WHERE  TTMStrategykey = @c_TTMStrategyKey
                     AND    TTMStrategyLineNumber>@c_CurrentLineNumber
---                    AND   EXISTS(SELECT 1
---                                 FROM   TaskManagerUserDetail WITH (NOLOCK)
---                                 WHERE  USERKEY = @c_userid
---                                 AND PERMISSIONTYPE = TTMStrategyDetail.TaskType
---                                 AND PERMISSION = '1')
+                    /*AND   EXISTS(SELECT 1
+                                 FROM   TaskManagerUserDetail WITH (NOLOCK)
+                                 WHERE  USERKEY = @c_userid
+                                 AND PERMISSIONTYPE = TTMStrategyDetail.TaskType
+                                 AND PERMISSION = '1')*/
                     ORDER BY TTMStrategyLineNumber
---                    ORDER BY CASE WHEN TTMStrategyLineNumber = @c_CurrentLineNumber THEN 9
---                                  WHEN TTMStrategyLineNumber < @c_CurrentLineNumber THEN 8
---                                  ELSE 1
---                             END,
---                             TTMStrategyLineNumber
+                    /*ORDER BY CASE WHEN TTMStrategyLineNumber = @c_CurrentLineNumber THEN 9
+                                  WHEN TTMStrategyLineNumber < @c_CurrentLineNumber THEN 8
+                                  ELSE 1
+                             END,
+                             TTMStrategyLineNumber*/
 
                     IF @nCnt2=0
                     BEGIN
@@ -788,11 +788,11 @@ BEGIN
                     END
                 END
 
---               INSERT INTO TRACEINFO (TraceName, TimeIn, Step1, Step2, Step3,
---                           Step4, Step5, Col1, Col2, Col3, Col4, Col5)
---               VALUES('nspTMTM01-InterLeave', GETDATE(), @c_LastTaskType, @c_LastLOC, @c_LastAisle,
---                     @c_NextTaskType,  @c_TTMTaskType,  @c_CurrentLineNumber,  @c_ttmpickcode,
---                     @c_ttmoverride, SUSER_SNAME(), @c_AreaKey01)
+               /*INSERT INTO TRACEINFO (TraceName, TimeIn, Step1, Step2, Step3,
+                           Step4, Step5, Col1, Col2, Col3, Col4, Col5)
+               VALUES('nspTMTM01-InterLeave', GETDATE(), @c_LastTaskType, @c_LastLOC, @c_LastAisle,
+                     @c_NextTaskType,  @c_TTMTaskType,  @c_CurrentLineNumber,  @c_ttmpickcode,
+                     @c_ttmoverride, SUSER_SNAME(), @c_AreaKey01)*/
 
 
             END-- interleave = 1
@@ -1008,7 +1008,7 @@ BEGIN
                 , @c_userid=@c_userid
                 , @c_Strategykey=@c_Strategykey
                 , @c_ttmStrategykey=@c_ttmStrategykey
-      , @c_ttmpickcode=@c_ttmpickcode
+                , @c_ttmpickcode=@c_ttmpickcode
                 , @c_ttmoverride=@c_ttmoverride
                 , @c_AreaKey01=@c_AreaKey01
                 , @c_AreaKey02=@c_AreaKey02

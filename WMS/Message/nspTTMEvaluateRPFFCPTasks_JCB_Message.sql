@@ -12,5 +12,6 @@ execute rdt.rdtAddMsg 239808, 10, '239808^PopLateFail',        'us_english', 176
 execute rdt.rdtAddMsg 239809, 10, '239809^UpdFail',            'us_english', 1764, 0, '239809 Update @tTaskCandidate Fail'
 execute rdt.rdtAddMsg 239810, 10, '239810^UpdFail',            'us_english', 1764, 0, '239810 Update @tTaskCandidate Fail'
 execute rdt.rdtAddMsg 239811, 10, '239811^UpdFail',            'us_english', 1764, 0, '239811 Update @tTaskCandidate Fail'
+execute rdt.rdtAddMsg 239812, 10, '239812^MissOrdDelivDate',   'us_english', 1764, 0, '239812 Task delivery date is missing'
 
 SELECT * FROM rdt.RDTMsg WITH(NOLOCK) WHERE Message_ID BETWEEN 239801 AND 239850

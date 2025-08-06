@@ -3,17 +3,22 @@ GO
 SET ANSI_NULLS OFF
 GO
 
-/************************************************************************/
-/* Stored Procedure: nspTTMEvaluateRPFFCPTasks_JCB                      */
-/* Copyright: Maersk                                                    */
-/* Customer : JCB                                                       */
-/* Purpose:                                                             */
-/*                                                                      */
-/* Modification log:                                                    */
-/* Date        Ver.   Author      Purposes                              */
-/* 2025-06-09  1.0.0  NickT       FCR-5727. Created, copied from        */
-/*                                nspTTMEvaluateRPFTasks                */
-/************************************************************************/
+/************************************************************************************************/
+/* Stored Procedure: nspTTMEvaluateRPFFCPTasks_JCB                                              */
+/* Copyright: Maersk                                                                            */
+/* Customer : JCB                                                                               */
+/* Purpose:                                                                                     */
+/*                                                                                              */
+/* Modification log:                                                                            */
+/* Date        Ver.   Author   Purposes                                                         */
+/* 2025-06-09  1.0.0  NickT    FCR-5727. Created, copied from                                   */
+/*                              nspTTMEvaluateRPFTasks                                          */
+/* 2025-06-26  1.0.1  Jackc    FCR-5727 1. Not get task from aisle in use.                      */
+/*                               2. Fix @tFCPRPFTaskDeliveryDate join condition                 */
+/*                               3. Fix Qty, weight calculation for task with SKU=''(UWP36863)  */
+/*                               4. Use Picking task reftaskkey to link RPF (UWP36799)          */
+/* 2025-07-03  1.0.2  Jackc    FCR-5727 Get task order by task priority                         */
+/************************************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[nspTTMEvaluateRPFFCPTasks_JCB]
     @c_sendDelimiter    NVARCHAR(1)
@@ -96,6 +101,7 @@ BEGIN
       TaskDetailKey           NVARCHAR(10) NOT NULL,
       TaskType                NVARCHAR(10),
       PickMethod              NVARCHAR(10),
+      Priority                NVARCHAR(10) NOT NULL DEFAULT '9',-- V1.0.2 Priority of the task 
       OrderKey                NVARCHAR(10) NULL, -- Order key of the task
       OrderType               NVARCHAR(10) NULL, -- Order type of the task
       OrderPriority           NVARCHAR(10) NULL, -- Order priority of the task
@@ -122,7 +128,7 @@ BEGIN
       RowIndex                INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
       TaskDetailKey           NVARCHAR(10) NOT NULL,
       TaskType                NVARCHAR(10) NOT NULL,
-      Priority                NVARCHAR(10) NOT NULL DEFAULT '', -- Priority of the task 
+      Priority                NVARCHAR(10) NOT NULL DEFAULT '9', -- V1.0.2 change default to 9 
       FromLoc                 NVARCHAR(10) NOT NULL,
       FromLocationCategory    NVARCHAR(10) NOT NULL,
       PutawayZone             NVARCHAR(10) NOT NULL, -- Putaway zone of the task
@@ -138,6 +144,13 @@ BEGIN
       Status                  NVARCHAR(10) NOT NULL DEFAULT '0', -- Status of the task
       ListKey                 NVARCHAR(10) NOT NULL DEFAULT '',-- List key for the task
       OrderKey                NVARCHAR(10) NOT NULL DEFAULT ''
+   )
+
+   DECLARE @tAisle_InUsed TABLE
+   ( 
+      Rowref INT identity(1,1) Primary Key,
+      LocAIsle NVARCHAR(10) ,
+      UserKey NVARCHAR(18)
    )
 
    DECLARE @nIsRDT INT
@@ -170,6 +183,14 @@ BEGIN
    FROM dbo.EquipmentProfile EP WITH(NOLOCK) 
    WHERE EquipmentProfileKey = @cEquipmentProfileKey
 
+   IF @bDebug = 1
+   BEGIN
+      SET @cLogMsg = CONCAT_WS(',', 'EquipmentProfile: ' + ISNULL(@cEquipmentProfileKey, ''),
+                                 'EquipMaxWeight: ' + FORMAT(ISNULL(@fMaximumWeight, 0), '0.##########')
+                              )
+      PRINT @cLogMsg
+   END
+
    -- Candidate task selection
    -- 1. Task status must be in status 0 or 3 if assigned to the same user.   Y
    -- 2. Task must be in the provided area (TaskDetail.AreaKey).              Y
@@ -178,11 +199,43 @@ BEGIN
    -- 5. MHE must not be excluded from the source zone (TaskDetail.Message01)                   Y
    -- 6. MHE must not be excluded from the target (To Loc) zone.                                Y
 
+   --V1.0.1(1) start
+   -- Get all VNA aisles in user by other users
+   INSERT INTO @tAisle_InUsed
+   (
+      LocAisle, UserKey
+   )
+      SELECT DISTINCT v.LocAisle, Td.UserKey
+      FROM TaskDetail TD WITH (NOLOCK)
+      LEFT JOIN LOC FromLoc WITH (NOLOCK) 
+         ON TD.FromLOC = FromLoc.Loc 
+         AND FromLoc.LocationCategory = 'VNA' 
+         AND FromLOC.Facility = @cFacility
+      LEFT JOIN LOC ToLoc WITH (NOLOCK) 
+         ON TD.ToLOC = ToLoc.Loc 
+         AND ToLoc.LocationCategory = 'VNA'
+         AND ToLoc.Facility = @cFacility
+      CROSS APPLY (
+         SELECT FromLoc.LocAisle WHERE ISNULL(FromLoc.LocAisle,'') <> ''
+         UNION ALL
+         SELECT ToLoc.LocAisle WHERE ISNULL(ToLoc.LocAisle,'') <> ''
+      ) v(LocAisle)
+      WHERE TD.UserKey <> @c_UserID
+      AND TD.Status = '3'
+      AND (FromLoc.Loc IS NOT NULL OR ToLoc.Loc IS NOT NULL)
+
+   IF @bDebug = 1
+   BEGIN
+      SELECT 'In used VNA Aisle'
+      SELECT * FROM @tAisle_InUsed
+   END
+   --V1.0.1(1) end
+
    IF ISNULL(RTRIM(@c_AreaKey01), '') IN ('', 'ALL' )
    BEGIN
       BEGIN TRY 
-         INSERT INTO @tFCPRPFTaskCandidate (TaskDetailKey, TaskType, PickMethod, OrderKey, OrderType, OrderPriority, OrderGroup, OrderDeliveryDate)
-         SELECT DISTINCT TD.TaskDetailKey, TD.TaskType, TD.PickMethod, PD.OrderKey, ORM.Type, ORM.Priority, ORM.OrderGroup, ORM.DeliveryDate
+         INSERT INTO @tFCPRPFTaskCandidate (TaskDetailKey, TaskType, PickMethod, Priority, OrderKey, OrderType, OrderPriority, OrderGroup, OrderDeliveryDate)
+         SELECT DISTINCT TD.TaskDetailKey, TD.TaskType, TD.PickMethod, TD.Priority, PD.OrderKey, ORM.Type, ORM.Priority, ORM.OrderGroup, ORM.DeliveryDate
          FROM dbo.TaskDetail TD WITH (NOLOCK)
          INNER JOIN dbo.PickDetail PD WITH (NOLOCK) ON TD.StorerKey = PD.StorerKey AND TD.TaskDetailKey = PD.TaskDetailKey
          INNER JOIN dbo.ORDERS ORM WITH (NOLOCK) ON PD.StorerKey = ORM.StorerKey AND PD.OrderKey = ORM.OrderKey
@@ -202,11 +255,15 @@ BEGIN
             AND TMU.UserKey = @c_UserID
             AND TMU.Permission = '1'
             AND (LOC1.Status = 'OK' AND LOC1.LocationFlag IN ('','NONE'))
-            AND NOT EXISTS(SELECT 1 
+            AND NOT EXISTS (SELECT 1 
                         FROM dbo.PAZoneEquipmentExcludeDetail PAE WITH(NOLOCK)
                         WHERE PAE.EquipmentProfileKey = @cEquipmentProfileKey
                            AND (PAE.PutawayZone = LOC.PutawayZone OR PAE.PutawayZone = LOC1.PutawayZone)
                      )
+            AND NOT EXISTS (SELECT 1
+                        FROM @tAisle_InUsed Aisle
+                        WHERE (Aisle.LocAisle = LOC.LocAisle OR Aisle.LocAisle = LOC1.LocAisle)
+                     ) --V1.0.1(1)
          END TRY
          BEGIN CATCH
             SET @nContinue = 3
@@ -216,11 +273,17 @@ BEGIN
          END CATCH
 
       BEGIN TRY
-         INSERT INTO @tFCPRPFTaskCandidate (TaskDetailKey, TaskType, PickMethod, OrderKey, OrderType, OrderPriority, OrderGroup, OrderDeliveryDate)
-         SELECT DISTINCT TD.TaskDetailKey, TD.TaskType, TD.PickMethod, PD.OrderKey, ORM.Type, ORM.Priority, ORM.OrderGroup, ORM.DeliveryDate
+         INSERT INTO @tFCPRPFTaskCandidate (TaskDetailKey, TaskType, PickMethod, Priority, OrderKey, OrderType, OrderPriority, OrderGroup, OrderDeliveryDate)
+         SELECT DISTINCT TD.TaskDetailKey, TD.TaskType, TD.PickMethod, TD.Priority, PD.OrderKey, ORM.Type, ORM.Priority, ORM.OrderGroup, ORM.DeliveryDate
          FROM dbo.TaskDetail TD WITH (NOLOCK)
-         INNER JOIN dbo.PickDetail PD WITH (NOLOCK) ON TD.StorerKey = PD.StorerKey AND TD.FromID = PD.CaseID
-         INNER JOIN dbo.TaskDetail TD1 WITH (NOLOCK) ON PD.StorerKey = TD1.StorerKey AND PD.TaskDetailKey = TD1.TaskDetailKey AND TD1.TaskType IN ('FCP', 'FCP1') AND TD1.Status = '0'
+         --INNER JOIN dbo.PickDetail PD WITH (NOLOCK) ON TD.StorerKey = PD.StorerKey AND TD.FromID = PD.CaseID
+         --INNER JOIN dbo.TaskDetail TD1 WITH (NOLOCK) ON PD.StorerKey = TD1.StorerKey AND PD.TaskDetailKey = TD1.TaskDetailKey AND TD1.TaskType IN ('FCP', 'FCP1') AND TD1.Status = '0'
+         INNER JOIN dbo.TaskDetail TD1 WITH (NOLOCK) 
+            ON TD.StorerKey = TD1.StorerKey 
+            AND TD.TaskDetailKey = TD1.RefTaskKey 
+            AND TD1.TaskType IN ('FCP', 'FCP1') 
+            AND TD1.Status IN ('0', 'S') --V1.0.1(4)
+         INNER JOIN dbo.PickDetail PD WITH (NOLOCK) ON TD1.TaskDetailKey = PD.TaskDetailKey --V1.0.1(4)
          INNER JOIN dbo.ORDERS ORM WITH (NOLOCK) ON PD.StorerKey = ORM.StorerKey AND PD.OrderKey = ORM.OrderKey
          INNER JOIN dbo.LOC LOC WITH(NOLOCK) ON TD.FromLoc = LOC.Loc AND LOC.Facility = @cFacility
          INNER JOIN dbo.LOC LOC1 WITH(NOLOCK) ON TD.ToLoc = LOC1.Loc AND LOC1.Facility = @cFacility
@@ -243,6 +306,10 @@ BEGIN
                         WHERE PAE.EquipmentProfileKey = @cEquipmentProfileKey
                            AND (PAE.PutawayZone = LOC.PutawayZone OR PAE.PutawayZone = LOC1.PutawayZone)
                      )
+            AND NOT EXISTS (SELECT 1
+                        FROM @tAisle_InUsed Aisle
+                        WHERE (Aisle.LocAisle = LOC.LocAisle OR Aisle.LocAisle = LOC1.LocAisle)
+                     ) --V1.0.1(1)
       END TRY
       BEGIN CATCH
          SET @nContinue = 3
@@ -250,12 +317,12 @@ BEGIN
          SET @c_errmsg = rdt.rdtgetmessage( @n_err, @cLangCode, 'DSP') --Populate @tFCPRPFTaskCandidate Fail
          GOTO Fail
       END CATCH
-   END
+   END --areakey is empty
    ELSE
    BEGIN
       BEGIN TRY
-         INSERT INTO @tFCPRPFTaskCandidate (TaskDetailKey, TaskType, PickMethod, OrderKey, OrderType, OrderPriority, OrderGroup, OrderDeliveryDate)
-         SELECT DISTINCT TD.TaskDetailKey, TD.TaskType, TD.PickMethod, PD.OrderKey, ORM.Type, ORM.Priority, ORM.OrderGroup, ORM.DeliveryDate
+         INSERT INTO @tFCPRPFTaskCandidate (TaskDetailKey, TaskType, PickMethod, Priority, OrderKey, OrderType, OrderPriority, OrderGroup, OrderDeliveryDate)
+         SELECT DISTINCT TD.TaskDetailKey, TD.TaskType, TD.PickMethod, TD.Priority, PD.OrderKey, ORM.Type, ORM.Priority, ORM.OrderGroup, ORM.DeliveryDate
          FROM dbo.TaskDetail TD WITH (NOLOCK)
          INNER JOIN dbo.PickDetail PD WITH (NOLOCK) ON TD.StorerKey = PD.StorerKey AND TD.TaskDetailKey = PD.TaskDetailKey
          INNER JOIN dbo.ORDERS ORM WITH (NOLOCK) ON PD.StorerKey = ORM.StorerKey AND PD.OrderKey = ORM.OrderKey
@@ -280,6 +347,10 @@ BEGIN
                         WHERE PAE.EquipmentProfileKey = @cEquipmentProfileKey
                            AND (PAE.PutawayZone = LOC.PutawayZone OR PAE.PutawayZone = LOC1.PutawayZone)
                      )
+            AND NOT EXISTS (SELECT 1
+                        FROM @tAisle_InUsed Aisle
+                        WHERE (Aisle.LocAisle = LOC.LocAisle OR Aisle.LocAisle = LOC1.LocAisle)
+                     ) --V1.0.1(1)
       END TRY
       BEGIN CATCH
          SET @nContinue = 3
@@ -289,11 +360,17 @@ BEGIN
       END CATCH
 
       BEGIN TRY
-         INSERT INTO @tFCPRPFTaskCandidate (TaskDetailKey, TaskType, PickMethod, OrderKey, OrderType, OrderPriority, OrderGroup, OrderDeliveryDate)
-         SELECT DISTINCT TD.TaskDetailKey, TD.TaskType, TD.PickMethod, PD.OrderKey, ORM.Type, ORM.Priority, ORM.OrderGroup, ORM.DeliveryDate
+         INSERT INTO @tFCPRPFTaskCandidate (TaskDetailKey, TaskType, PickMethod, Priority, OrderKey, OrderType, OrderPriority, OrderGroup, OrderDeliveryDate)
+         SELECT DISTINCT TD.TaskDetailKey, TD.TaskType, TD.PickMethod, TD.Priority, PD.OrderKey, ORM.Type, ORM.Priority, ORM.OrderGroup, ORM.DeliveryDate
          FROM dbo.TaskDetail TD WITH (NOLOCK)
-         INNER JOIN dbo.PickDetail PD WITH (NOLOCK) ON TD.StorerKey = PD.StorerKey AND TD.FromID = PD.CaseID
-         INNER JOIN dbo.TaskDetail TD1 WITH (NOLOCK) ON PD.StorerKey = TD1.StorerKey AND PD.TaskDetailKey = TD1.TaskDetailKey AND TD1.TaskType IN ('FCP', 'FCP1') AND TD1.Status = '0'
+         --INNER JOIN dbo.PickDetail PD WITH (NOLOCK) ON TD.StorerKey = PD.StorerKey AND TD.FromID = PD.CaseID
+         --INNER JOIN dbo.TaskDetail TD1 WITH (NOLOCK) ON PD.StorerKey = TD1.StorerKey AND PD.TaskDetailKey = TD1.TaskDetailKey AND TD1.TaskType IN ('FCP', 'FCP1') AND TD1.Status = '0'
+         INNER JOIN dbo.TaskDetail TD1 WITH (NOLOCK) 
+            ON TD.StorerKey = TD1.StorerKey 
+            AND TD.TaskDetailKey = TD1.RefTaskKey 
+            AND TD1.TaskType IN ('FCP', 'FCP1') 
+            AND TD1.Status IN ('0', 'S') --V1.0.1(4)
+         INNER JOIN dbo.PickDetail PD WITH (NOLOCK) ON TD1.TaskDetailKey = PD.TaskDetailKey --V1.0.1(4)
          INNER JOIN dbo.ORDERS ORM WITH (NOLOCK) ON PD.StorerKey = ORM.StorerKey AND PD.OrderKey = ORM.OrderKey
          INNER JOIN dbo.LOC LOC WITH(NOLOCK) ON TD.FromLoc = LOC.Loc AND LOC.Facility = @cFacility
          INNER JOIN dbo.LOC LOC1 WITH(NOLOCK) ON TD.ToLoc = LOC1.Loc AND LOC1.Facility = @cFacility
@@ -316,6 +393,10 @@ BEGIN
                         WHERE PAE.EquipmentProfileKey = @cEquipmentProfileKey
                            AND (PAE.PutawayZone = LOC.PutawayZone OR PAE.PutawayZone = LOC1.PutawayZone)
                      )
+            AND NOT EXISTS (SELECT 1
+                        FROM @tAisle_InUsed Aisle
+                        WHERE (Aisle.LocAisle = LOC.LocAisle OR Aisle.LocAisle = LOC1.LocAisle)
+                     ) --V1.0.1(1)
       END TRY
       BEGIN CATCH
          SET @nContinue = 3
@@ -326,59 +407,20 @@ BEGIN
 
       IF @bDebug = 1
          SELECT '@tFCPRPFTaskCandidate', * FROM @tFCPRPFTaskCandidate
+   END--areakey is not empty
 
+   IF @bDebug = 1
+   BEGIN
+      SELECT 'After inserting into @tFCPRPFTaskCandidate'
+      SELECT * FROM @tFCPRPFTaskCandidate
+   END
 
-      /***************************************************************
-      INSERT INTO @tTaskCandidate (TaskDetailKey, TaskType, PutawayZone, FromLoc, FromLocationCategory,
-         ToLoc, ToLocationCategory, ToLocMaxPallet, FinalLoc, FromID, SKU, SKUGrossWeight, Qty,
-         Assigned, PickMethod)
-      SELECT TD.TaskDetailKey, TD.TaskType, LOC.PutawayZone, TD.FromLoc, LOC.LocationCategory,
-         TD.ToLoc, LOC1.LocationCategory, ISNULL(LOC1.MaxPallet, 99999), TD.FinalLoc, TD.FromID, TD.SKU, SKU.STDGROSSWGT, TD.QTY,
-         IIF((TD.UserKey = @c_UserID AND TD.Status = '3') OR (TD.UserKeyOverRide = @c_UserID AND TD.Status IN ('0', '3') ), 1, 0 ), TD.PickMethod
-      FROM dbo.TaskDetail TD WITH (NOLOCK) 
-      INNER JOIN dbo.LOC LOC WITH(NOLOCK) ON TD.FromLoc = LOC.Loc AND LOC.Facility = @cFacility
-      INNER JOIN dbo.LOC LOC1 WITH(NOLOCK) ON TD.ToLoc = LOC1.Loc AND LOC1.Facility = @cFacility
-      INNER JOIN dbo.TaskManagerUserDetail TMU WITH (NOLOCK) ON TMU.PermissionType = TD.TASKTYPE AND TD.AreaKey = TMU.AreaKey
-      INNER JOIN dbo.SKU WITH(NOLOCK) ON TD.StorerKey = SKU.StorerKey AND TD.SKU = SKU.SKU
-      WHERE TD.StorerKey = @cStorerKey
-         AND
-         (
-            (TD.Status = '0' AND (TD.UserKey = '' OR TD.UserKeyOverRide IN ('', @c_UserID) ) )
-            OR
-            (TD.Status = '3' AND TD.UserKey = @c_UserID )
-         )
-         AND TD.TaskType IN ('RPF', 'RP1', 'FCP', 'FCP1')
-         AND TD.AreaKey = @c_AreaKey01
-         AND TMU.UserKey = @c_UserID
-         AND TMU.Permission = '1'
-         AND NOT EXISTS(SELECT 1 
-                     FROM dbo.PAZoneEquipmentExcludeDetail PAE WITH(NOLOCK)
-                     WHERE PAE.EquipmentProfileKey = @cEquipmentProfileKey
-                        AND (PAE.PutawayZone = LOC.PutawayZone OR PAE.PutawayZone = LOC1.PutawayZone)
-                  )
-      ORDER BY IIF (TD.Status = '3' AND TD.UserKey = @c_UserID, 1, 2), IIF(TD.UserKeyOverRide = @c_UserID AND TD.Status IN ('0', '3'), 1, 2), 
-         IIF(TD.ListKey <> '', 1, 2), Priority, 
-         Orders.DeliveryDate + ISNULL( (SELECT Long
-            FROM ( SELECT  CLK.Long,
-                           ROW_NUMBER() OVER (
-                                 PARTITION BY ORM.OrderKey
-                                 ORDER BY 
-                                    CASE 
-                                       WHEN CLK.UDF02 = ORM.Priority THEN 1
-                                       WHEN CLK.UDF03 = ORM.OrderGroup THEN 2
-                                       ELSE 3
-                                    END
-                           ) AS rn
-                  FROM dbo.CODELKUP CLK WITH(NOLOCK)
-                  INNER JOIN dbo.ORDERS ORM WITH(NOLOCK) ON ORM.Type = CLK.code2 AND (CLK.UDF02 = '' OR CLK.UDF02 = ORM.Priority) AND (CLK.UDF03 = '' OR CLK.UDF03 = ORM.OrderGroup)
-                  INNER JOIN dbo.TaskDetail TD1 WITH(NOLOCK) ON TD1.StorerKey = ORM.StorerKey AND TD1.OrderKey = ORM.OrderKey
-                  WHERE CLK.LISTNAME = 'JCBORDPR'
-                     AND ORM.StorerKey = @cStorerKey
-                     AND TD1.TaskDetailKey = TD1.TaskDetailKey
-            ) AS Ranked
-            WHERE rn = 1), 0) - GETDATE(),
-         TaskDetailKey
-      *************************************************/
+   IF NOT EXISTS (SELECT 1 FROM @tFCPRPFTaskCandidate)
+   BEGIN
+      IF @bDebug = 1
+         PRINT '@tFCPRPFTaskCandidate is empty, return'
+      SET @c_TaskDetailKey = ''
+      RETURN
    END
 
    BEGIN TRY
@@ -414,33 +456,84 @@ BEGIN
    END CATCH
 
    IF @bDebug = 1
-      SELECT '@tFCPRPFTaskDeliveryDate', * FROM @tFCPRPFTaskDeliveryDate
+   BEGIN
+      SELECT '@tFCPRPFTaskDeliveryDate'
+      SELECT * FROM @tFCPRPFTaskDeliveryDate
+   END
+
+   IF NOT EXISTS (SELECT 1 FROM @tFCPRPFTaskDeliveryDate)
+   BEGIN
+      IF @bDebug = 1
+         PRINT '@tFCPRPFTaskDeliveryDate is empty'
+      SET @nContinue = 3
+      SET @n_err = 239812
+      SET @c_errmsg = rdt.rdtgetmessage( @n_err, @cLangCode, 'DSP') --@tFCPRPFTaskDeliveryDate is empty
+      GOTO Fail
+   END
 
    BEGIN TRY
-      INSERT INTO @tTaskCandidate (TaskDetailKey, TaskType, PutawayZone, FromLoc, FromLocationCategory,
+      INSERT INTO @tTaskCandidate (TaskDetailKey, TaskType, Priority, PutawayZone, FromLoc, FromLocationCategory,
          ToLoc, ToLocationCategory, ToLocMaxPallet, FinalLoc, FromID, SKU, SKUGrossWeight, Qty,
          PickMethod, OrderKey)
-      SELECT TaskDetailKey, TaskType, PutawayZone, FromLoc, FromLocationCategory,
-         ToLoc, ToLocationCategory, ToLocMaxPallet, FinalLoc, FromID, SKU, SKUGrossWeight, Qty,
-         PickMethod, OrderKey
-      FROM
-         (SELECT TD.TaskDetailKey, TD.TaskType, LOC.PutawayZone, TD.FromLoc, LOC.LocationCategory AS FromLocationCategory,
-            TD.ToLoc, LOC1.LocationCategory AS ToLocationCategory, ISNULL(LOC1.MaxPallet, 99999) AS ToLocMaxPallet, TD.FinalLoc, TD.FromID, TD.SKU, SKU.STDGROSSWGT AS SKUGrossWeight, TD.QTY,
-            TD.PickMethod,
-            ROW_NUMBER() OVER (PARTITION BY TD.TaskDetailKey 
-                              ORDER BY TD.TaskDetailKey ) AS RowIndex,
-            TD.Status, TD.UserKey, TD.UserKeyOverRide, TD.ListKey, TD.Priority, FCPRRPFDD.DeliveryDate, FCPRRPFDD.OrderKey
+      SELECT TaskDetailKey, TaskType, Priority, PutawayZone, FromLoc, FromLocationCategory,
+             ToLoc, ToLocationCategory, ToLocMaxPallet, FinalLoc, FromID, SKU, ISNULL(SKUGrossWeight,0), Qty,
+             PickMethod, OrderKey
+      FROM (
+         SELECT 
+           TD.TaskDetailKey, 
+           TD.TaskType, 
+           LOC.PutawayZone, 
+           TD.FromLoc, 
+           LOC.LocationCategory AS FromLocationCategory,
+           TD.ToLoc, 
+           LOC1.LocationCategory AS ToLocationCategory, 
+           ISNULL(LOC1.MaxPallet, 99999) AS ToLocMaxPallet, 
+           TD.FinalLoc, 
+           TD.FromID, 
+           ISNULL(TD.SKU,'') AS SKU, 
+           -- Calculate SKUGrossWeight of a task
+           CASE 
+             WHEN TD.SKU IS NULL OR TD.SKU = '' THEN 
+               -- IF SKU is empty then get all SKU and Qty from lotxlocxid to get gross weight
+               (
+                  SELECT SUM(ISNULL(LLI.Qty,0) * ISNULL(SKU2.STDGROSSWGT,0))
+                  FROM dbo.LOTXLOCXID LLI WITH(NOLOCK)
+                  INNER JOIN dbo.SKU SKU2 WITH(NOLOCK) ON LLI.StorerKey = SKU2.StorerKey AND LLI.SKU = SKU2.SKU
+                  WHERE LLI.LOC = TD.FromLoc AND LLI.ID = TD.FromID AND LLI.StorerKey = TD.StorerKey
+               )
+             ELSE -- IF SKU is not empty then get the gross weight via task and SKU table
+               ISNULL(SKU.STDGROSSWGT,0) * ISNULL(TD.QTY,0)
+           END AS SKUGrossWeight, --V1.0.1(3)
+           CASE 
+             WHEN TD.SKU IS NULL OR TD.SKU = '' THEN 
+               --IF SKU is empty then get qty from lotxlocxid 
+               (
+                  SELECT SUM(ISNULL(LLI.Qty,0))
+                  FROM dbo.LOTXLOCXID LLI WITH(NOLOCK)
+                  WHERE LLI.LOC = TD.FromLoc AND LLI.ID = TD.FromID AND LLI.StorerKey = TD.StorerKey
+               )
+             ELSE 
+               TD.QTY
+           END AS Qty, --V1.0.1(3)
+           TD.PickMethod,
+           ROW_NUMBER() OVER (PARTITION BY TD.TaskDetailKey ORDER BY TD.TaskDetailKey ) AS RowIndex,
+           TD.Status, TD.UserKey, TD.UserKeyOverRide, TD.ListKey, TD.Priority, FCPRRPFDD.DeliveryDate, FCPRRPFDD.OrderKey
          FROM dbo.TaskDetail TD WITH (NOLOCK) 
          INNER JOIN @tFCPRPFTaskCandidate AS FCPRRPF ON TD.TaskDetailKey = FCPRRPF.TaskDetailKey
-         INNER JOIN @tFCPRPFTaskDeliveryDate AS FCPRRPFDD ON TD.TaskDetailKey = FCPRRPFDD.TaskDetailKey
+         --INNER JOIN @tFCPRPFTaskDeliveryDate AS FCPRRPFDD ON TD.TaskDetailKey = FCPRRPFDD.TaskDetailKey
+         INNER JOIN @tFCPRPFTaskDeliveryDate AS FCPRRPFDD ON FCPRRPF.OrderKey = FCPRRPFDD.OrderKey --v1.0.1(2)
          INNER JOIN dbo.LOC LOC WITH(NOLOCK) ON TD.FromLoc = LOC.Loc AND LOC.Facility = @cFacility
          INNER JOIN dbo.LOC LOC1 WITH(NOLOCK) ON TD.ToLoc = LOC1.Loc AND LOC1.Facility = @cFacility
-         LEFT JOIN dbo.SKU WITH(NOLOCK) ON TD.StorerKey = SKU.StorerKey AND TD.SKU = SKU.SKU) AS T
+         LEFT JOIN dbo.SKU WITH(NOLOCK) ON TD.StorerKey = SKU.StorerKey AND TD.SKU = SKU.SKU
+      ) AS T
       WHERE T.RowIndex = 1
-      ORDER BY IIF (Status = '3' AND UserKey = @c_UserID, 1, 2), IIF(UserKeyOverRide = @c_UserID AND Status IN ('0', '3'), 1, 2), 
-         IIF(ListKey <> '', 1, 2), 
+      ORDER BY 
+         IIF (Status = '3' AND UserKey = @c_UserID, 1, 2), 
+         IIF(UserKeyOverRide = @c_UserID AND Status IN ('0', '3'), 1, 2), 
+         --IIF(ListKey <> '', 1, 2), --V1.0.2
          Priority, 
          DeliveryDate,
+         IIF(ListKey <> '', 1, 2), --V1.0.2 Adjust the sequence. Consider business priority first.
          TaskDetailKey
    END TRY
    BEGIN CATCH
@@ -451,7 +544,10 @@ BEGIN
    END CATCH
 
    IF @bDebug = 1
-      SELECT '@tTaskCandidate', * FROM @tTaskCandidate
+   BEGIN
+      SELECT 'Ordered tasks in @tTaskCandidate'
+      SELECT * FROM @tTaskCandidate
+   END
 
    -- Check if any task candidate were found
    -- 1. Weight of the pallet: sum of (LOTxLOCxID.Qty * SKU.STDGROSSWGT) must be <= max weight of the MHE provided (EquipmentProfile.MaximumWeight).
@@ -486,25 +582,29 @@ BEGIN
       SELECT @nRowCount = @@ROWCOUNT
 
       IF @nRowCount = 0
+      BEGIN
+         SET @cLogMsg = CONCAT_WS(',','No more task candidates found, exiting loop','')
+         PRINT @cLogMsg
          BREAK -- No more task candidates
+      END
 
       IF @bDebug = 1
       BEGIN
          SET @cLogMsg = CONCAT_WS(',', 'Loop @tTaskCandidate - 1',
-                                    '@cTaskDetailKey: ' + ISNULL(@cTaskDetailKey, 'Empty'),
-                                    '@cTaskType: ' + ISNULL(@cTaskType, 'Empty'),
-                                    '@cPutawayZone: ' + ISNULL(@cPutawayZone, 'Empty'),
-                                    '@cFromLoc: ' + ISNULL(@cFromLoc, 'Empty'),
-                                    '@cToLOC: ' + ISNULL(@cToLOC, 'Empty'),
-                                    '@cFinalLOC: ' + ISNULL(@cFinalLOC, 'Empty'),
-                                    '@cFromLocationCategory: ' + ISNULL(@cFromLocationCategory, 'Empty'),
-                                    '@cToLocationCategory: ' + ISNULL(@cToLocationCategory, 'Empty'),
-                                    '@cFromID: ' + ISNULL(@cFromID, 'Empty'),
-                                    '@cSKU: ' + ISNULL(@cSKU, 'Empty'),
+                                    '@cTaskDetailKey: ' + ISNULL(@cTaskDetailKey, ''),
+                                    '@cTaskType: ' + ISNULL(@cTaskType, ''),
+                                    '@cPutawayZone: ' + ISNULL(@cPutawayZone, ''),
+                                    '@cFromLoc: ' + ISNULL(@cFromLoc, ''),
+                                    '@cToLOC: ' + ISNULL(@cToLOC, ''),
+                                    '@cFinalLOC: ' + ISNULL(@cFinalLOC, ''),
+                                    '@cFromLocationCategory: ' + ISNULL(@cFromLocationCategory, ''),
+                                    '@cToLocationCategory: ' + ISNULL(@cToLocationCategory, ''),
+                                    '@cFromID: ' + ISNULL(@cFromID, ''),
+                                    '@cSKU: ' + ISNULL(@cSKU, ''),
                                     '@fSKUGrossWeight: ' + CAST(ISNULL(@fSKUGrossWeight, 0) AS NVARCHAR(10)),
                                     '@nQty: ' + CAST(ISNULL(@nQty, 0) AS NVARCHAR(10)),
                                     '@nToLocMaxPallet: ' + CAST(ISNULL(@nToLocMaxPallet, 0) AS NVARCHAR(10)),
-                                    '@cTaskDetailOrderKey: ' + ISNULL(@cTaskDetailOrderKey, 'Empty'),
+                                    '@cTaskDetailOrderKey: ' + ISNULL(@cTaskDetailOrderKey, ''),
                                     '@nLoopIndex: ' + CAST(ISNULL(@nLoopIndex, 0) AS NVARCHAR(10))
                                  )
          PRINT @cLogMsg
@@ -537,7 +637,7 @@ BEGIN
       BEGIN
          SET @cLogMsg = CONCAT_WS(',', 'Loop @tTaskCandidate - 1',
                                     '@fPalletWeight: ' + CAST(ISNULL(@fPalletWeight, 0) AS NVARCHAR(10)),
-                                    '@fMaximumWeight: ' + CAST(ISNULL(@fMaximumWeight, 0) AS NVARCHAR(10))
+                                    '@fMaximumWeight: ' + FORMAT(ISNULL(@fMaximumWeight, 0), '0.##########')
                                  )
          PRINT @cLogMsg
       END
@@ -556,7 +656,9 @@ BEGIN
       END
 
       -- 2. If ToLoc is PND location, check if there are enough space available     Y
-      IF @cToLocationCategory IN ('PND', 'PND_OUT')
+      --IF @cToLocationCategory IN ('PND', 'PND_OUT')
+      IF @cToLocationCategory IN ('PND', 'PND_OUT') AND @cCandidateTaskDetailKey=''-- V1.0.1
+      -- Only check capacity when find the candidate task. If candidate task is found, no need to check capacity for PP tasks to lock. They are in one pallet.
       BEGIN
          SET @nExistingPallets = 0
          SELECT @nExistingPallets = COUNT(DISTINCT ID)
@@ -568,6 +670,7 @@ BEGIN
          IF @bDebug = 1
          BEGIN
             SET @cLogMsg = CONCAT_WS(',', 'Loop @tTaskCandidate - 1',
+                                       'ToLoc is PND, checking capacity',
                                        '@nExistingPallets: ' + CAST(ISNULL(@nExistingPallets, 0) AS NVARCHAR(10)),
                                        '@nToLocMaxPallet: ' + CAST(ISNULL(@nToLocMaxPallet, 0) AS NVARCHAR(10))
                                     )
@@ -674,11 +777,13 @@ BEGIN
             END
             CONTINUE
          END
-      END
+      END --END while
 
       -- 3. If the first task is from PND OUT. Tasks having “From Loc” category as PND OUT must be sorted not only by priority, delivery date, logical loc and loc, 
       --    but also by number of unique users already having tasks assigned to that location. 
       --    need select a best task in the PND OUT location where minimum user is working on it 
+
+      --@cCandidateTaskDetailKey is empty means no task found yet, still try to find a valid task to return
       IF @cCandidateTaskDetailKey = '' AND @cFromLocationCategory IN ('PND', 'PND_OUT') AND @cPickMethod = 'FP'
       BEGIN
          IF @bDebug = 1
@@ -800,16 +905,16 @@ BEGIN
             IF @bDebug = 1
             BEGIN
                SET @cLogMsg = CONCAT_WS(',', 'Loop @tFPTaskCandidate - 1',
-                                          '@cTaskDetailKey1: ' + ISNULL(@cTaskDetailKey1, 'Empty'),
-                                          '@cTaskType: ' + ISNULL(@cTaskType, 'Empty'),
-                                          '@cPutawayZone: ' + ISNULL(@cPutawayZone, 'Empty'),
-                                          '@cFromLoc: ' + ISNULL(@cFromLoc, 'Empty'),
-                                          '@cToLOC: ' + ISNULL(@cToLOC, 'Empty'),
-                                          '@cFinalLOC: ' + ISNULL(@cFinalLOC, 'Empty'),
-                                          '@cFromLocationCategory: ' + ISNULL(@cFromLocationCategory, 'Empty'),
-                                          '@cToLocationCategory: ' + ISNULL(@cToLocationCategory, 'Empty'),
-                                          '@cFromID: ' + ISNULL(@cFromID, 'Empty'),
-                                          '@cSKU: ' + ISNULL(@cSKU, 'Empty'),
+                                          '@cTaskDetailKey1: ' + ISNULL(@cTaskDetailKey1, ''),
+                                          '@cTaskType: ' + ISNULL(@cTaskType, ''),
+                                          '@cPutawayZone: ' + ISNULL(@cPutawayZone, ''),
+                                          '@cFromLoc: ' + ISNULL(@cFromLoc, ''),
+                                          '@cToLOC: ' + ISNULL(@cToLOC, ''),
+                                          '@cFinalLOC: ' + ISNULL(@cFinalLOC, ''),
+                                          '@cFromLocationCategory: ' + ISNULL(@cFromLocationCategory, ''),
+                                          '@cToLocationCategory: ' + ISNULL(@cToLocationCategory, ''),
+                                          '@cFromID: ' + ISNULL(@cFromID, ''),
+                                          '@cSKU: ' + ISNULL(@cSKU, ''),
                                           '@fSKUGrossWeight: ' + CAST(ISNULL(@fSKUGrossWeight, 0) AS NVARCHAR(10)),
                                           '@nQty: ' + CAST(ISNULL(@nQty, 0) AS NVARCHAR(10)),
                                           '@nToLocMaxPallet: ' + CAST(ISNULL(@nToLocMaxPallet, 0) AS NVARCHAR(10)),
@@ -993,7 +1098,7 @@ BEGIN
             END
             
             BREAK -- Break PND location searching loop
-         END
+         END --FP task list while end
 
          IF @cCandidateTaskDetailKey = ''
          BEGIN
@@ -1030,7 +1135,7 @@ BEGIN
 
             BREAK -- Break entire task loop
          END
-      END
+      END -- Current task from PND and PickMethod = FP
 
       -- The first task is found, populate the candidate task variables
       IF @cCandidateTaskDetailKey = ''
@@ -1057,14 +1162,28 @@ BEGIN
          IF @bDebug = 1
          BEGIN
             SET @cLogMsg = CONCAT_WS(',', 'Loop @tTaskCandidate - 1',
-                                       'Task is found, mark is as 3', @cCandidateTaskDetailKey
+                                       'Task found, marked as 3:' + @cCandidateTaskDetailKey,
+                                       '@cCandidateTaskType: ' + ISNULL(@cCandidateTaskType, ''),
+                                       '@cCandidateToLoc: ' + ISNULL(@cCandidateToLoc, ''),
+                                       '@cCandidateFinalLoc: ' + ISNULL(@cCandidateFinalLoc, ''),
+                                       '@cCandidateFromLocationCategory: ' + ISNULL(@cCandidateFromLocationCategory, ''),
+                                       '@cCandidateToLocationCategory: ' + ISNULL(@cCandidateToLocationCategory, ''),
+                                       '@cCandidatePutawayZone: ' + ISNULL(@cCandidatePutawayZone, '')
                                     )
             PRINT @cLogMsg
          END
 
          --Remove tasks that are not in the same putaway zone as the candidate task
          DELETE FROM @tTaskCandidate
-         WHERE PutawayZone <> @cPutawayZone
+         WHERE PutawayZone <> @cCandidatePutawayZone
+
+         IF @bDebug = 1
+         BEGIN
+            SET @cLogMsg = CONCAT_WS(',', 'Remove tasks that are not in the same putaway zone as the candidate task',
+                                       '@cCandidatePutawayZone: ' + ISNULL(@cCandidatePutawayZone, '')
+                                    )
+            PRINT @cLogMsg
+         END
 
          -- If task is “FP”, stop searching for other tasks
          IF @cPickMethod = 'FP'
@@ -1081,6 +1200,11 @@ BEGIN
 
          IF ISNULL(@cTaskDetailOrderKey, '') = ''
          BEGIN
+            IF @bDebug = 1
+            BEGIN
+               SET @cLogMsg = CONCAT_WS(',', 'Orderkey is not retrieved from @tTaskCandidate, try to get it from PickDetail', '')
+               PRINT @cLogMsg
+            END
             -- If task is “PP”, then search other tasks for the same order in the same putaway zone must be having status 0 (or 3 if assigned to the same user) to be suggested
             IF @cTaskType IN ('FCP', 'FCP1')
             BEGIN
@@ -1117,8 +1241,10 @@ BEGIN
                   INNER JOIN dbo.CODELKUP CLK WITH(NOLOCK) ON ORM.Type = CLK.code2 AND (CLK.UDF02 = '' OR CLK.UDF02 = ORM.Priority) AND (CLK.UDF03 = '' OR CLK.UDF03 = ORM.OrderGroup)
                   WHERE TD.StorerKey = @cStorerKey
                      AND TD.TaskType IN ('FCP', 'FCP1')
-                     AND TD.FromLoc = @cCandidateFinalLoc
-                     AND TD.Status = '0'
+                     --AND TD.FromLoc = @cCandidateFinalLoc
+                     --AND TD.Status = '0'
+                     AND TD.RefTaskKey = @cCandidateTaskDetailKey --V1.0.1(4)
+                     AND TD.Status IN ('0','S') --V1.0.1(4)
                      AND CLK.LISTNAME = 'JCBORDPR'
                   ) AS T1
                WHERE T1.ROW_INDEX = 1
@@ -1144,9 +1270,10 @@ BEGIN
             END
             SET @cCandidateOrderKey = @cTaskDetailOrderKey
          END
-      END
+      END --Candidate taks is empty
       ELSE
       BEGIN
+         --CandidateTaskDetailKey empty means a task is found, now continue to loop list to make the qualified tasks will be locked for the same user
          -- If task is “PP”, then all other tasks for the same order in the same putaway zone must be having status 0 (or 3 if assigned to the same user) to be suggested
          IF @cPickMethod = 'PP' AND ISNULL(@cCandidateOrderKey, '') <> ''
          BEGIN
@@ -1193,7 +1320,8 @@ BEGIN
                INNER JOIN dbo.PickDetail PD WITH(NOLOCK) ON TD.StorerKey = PD.StorerKey AND TD.TaskDetailKey = PD.TaskDetailKey
                WHERE TD.StorerKey = @cStorerKey
                  AND TD.TaskType IN ('FCP', 'FCP1')
-                 AND TD.FromLoc = @cFinalLOC
+                 --AND TD.FromLoc = @cFinalLOC
+                 AND TD.RefTaskKey = @cTaskDetailKey --V1.0.1(4)
                  AND TD.Status = '0'
                  AND PD.OrderKey = @cCandidateOrderKey
 
@@ -1230,8 +1358,8 @@ BEGIN
                PRINT @cLogMsg
             END
          END
-      END
-   END
+      END --Candidate task is found
+   END --END while
 
    -- Update ListKey for the tasks that are RPF, RP1, FCP or FCP1
    DECLARE @cTaskDetailKeyTemp   NVARCHAR(10)
