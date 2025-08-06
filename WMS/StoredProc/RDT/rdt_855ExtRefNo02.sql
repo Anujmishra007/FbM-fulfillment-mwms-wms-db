@@ -11,6 +11,7 @@ GO
 /*                                                                      */
 /* Date       Rev    Author   Purposes                                  */
 /* 2025-08-04 1.0.0  Jackc    FCR-5413 Created (copy from Extref01)     */
+/* 2025-08-06 1.0.1  NickT    FCR-5413 Change @cStep to @nStep          */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_855ExtRefNo02] (
@@ -66,7 +67,7 @@ BEGIN
       @cC_SKU           NVARCHAR( 20)
 
    IF @nDebugFlag = 1
-      SELECT 'Executing 855ExtRefNo02', @cDropID AS DropID, @cSKU AS SKU, @cStep AS Step
+      SELECT 'Executing 855ExtRefNo02', @cDropID AS DropID, @cSKU AS SKU, @nStep AS Step
 
    SELECT @cLangCode=lang_code,
           @nStep     = step
