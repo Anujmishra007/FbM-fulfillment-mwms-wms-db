@@ -1,8 +1,8 @@
 
-/****** Object:  StoredProcedure [RDT].[rdt_825ExtUpdJCB]    Script Date: 7/15/2025 4:27:12 PM ******/
-SET ANSI_NULLS ON
+/****** Object:  StoredProcedure [RDT].[rdt_825ExtUpdJCB]    Script Date: 8/6/2025 11:27:08 AM ******/
+SET ANSI_NULLS OFF
 GO
-SET QUOTED_IDENTIFIER ON
+SET QUOTED_IDENTIFIER OFF
 GO
 /*****************************************************************************************************/
 /* Store procedure: [rdt_825ExtUpdJCB]                                                               */
@@ -18,10 +18,11 @@ GO
 /* 17/06/2025   2.0   PPA374   Inserts other non-captured U non-captured pallets (U type)            */
 /* 17/06/2025   2.0   PPA374   Updates receipt detail for the pallet and same U type pallets         */
 /* 17/06/2025   2.0   PPA374   Not allowing to capture pallet with >1 zero SKUs and not updatng it   */
-/* 06/08/2025	2.1   ALT028   Hotfix missing NOLOCK TASK1868115                                     */
+/* 06/08/2025	2.1   ALT028   Hotfix missing NOLOCK								                 */
+/* 06/08/2025   2.2   PPA374   Allowing to measure pallet up to 999 rather than 400                  */
 /*****************************************************************************************************/
 
-CREATE OR ALTER PROC [RDT].[rdt_825ExtUpdJCB] (
+ALTER    PROC [RDT].[rdt_825ExtUpdJCB] (
    @nMobile      INT,            
    @nFunc        INT,            
    @cLangCode    NVARCHAR( 3),   
@@ -92,30 +93,28 @@ BEGIN
 		 WHERE StorerKey = @cStorerKey 
 		    AND PalletKey = @cPalletKey
 		 
+		 SET @cInvXRD = ''
+
 		 --Check if pallet exists in LOTxLOCxID or only RECEIPTDETAIL
          IF EXISTS (
-		    SELECT 1 
+		    SELECT TOP 1 1 
+			FROM dbo.RECEIPTDETAIL RD WITH(NOLOCK) 
+			WHERE StorerKey = @cStorerKey 
+			   AND ToId = @cPalletKey
+	     )
+		 BEGIN
+		    SET @cInvXRD = 'RD' --Pallet is in RECEIPTDETAIL
+			SELECT TOP 1 @cReceiptKey = ReceiptKey FROM dbo.RECEIPTDETAIL RD WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND ToId = @cPalletKey
+		 END
+		 
+		 IF EXISTS (
+		    SELECT TOP 1 1 
 			FROM dbo.LOTxLOCxID LLI WITH(NOLOCK) 
 			WHERE ID = @cPalletKey 
 			   AND StorerKey = @cStorerKey
 	     )
 		 BEGIN
 		    SET @cInvXRD = 'LLI' --Pallet is in the LOTxLOCxID table
-		 END
-
-		 ELSE IF EXISTS (
-		    SELECT 1 
-			FROM dbo.RECEIPTDETAIL RD WITH(NOLOCK) 
-			WHERE StorerKey = @cStorerKey 
-			   AND ToId = @cPalletKey
-	     )
-		 BEGIN
-		    SET @cInvXRD = 'RD' --Pallet is NOT in the LOTxLOCxID table but is in RECEIPTDETAIL
-		 END
-
-		 ELSE
-		 BEGIN
-		    SET @cInvXRD = '' --Pallet does not exist in either table
 		 END
 
 		 IF @cInvXRD = 'LLI'
@@ -125,14 +124,14 @@ BEGIN
 
 		 IF @cInvXRD = 'RD'
 		 BEGIN
-		    SET @cSKUonPal = (SELECT COUNT(DISTINCT SKU) FROM dbo.RECEIPTDETAIL RD WITH(NOLOCK) WHERE ToId = @cPalletKey AND SKU <> '' AND StorerKey = @cStorerKey)
+		    SET @cSKUonPal = (SELECT COUNT(DISTINCT SKU) FROM dbo.RECEIPTDETAIL RD WITH(NOLOCK) WHERE ToId = @cPalletKey AND SKU <> '' AND StorerKey = @cStorerKey AND ReceiptKey = @cReceiptKey)
 		 END
 
          IF @nInputKey = 1 --Enter
          BEGIN   
 		    SET @nErrNo = 0 --To avoid accidental errors
 
-			IF @cInvXRD = '' --If pallet does not exist in the system
+			IF ISNULL(@cInvXRD,'') = '' --If pallet does not exist in the system
 		    BEGIN
 		       SET @nErrNo = 218093
 			   SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')--'Pallet not exists'
@@ -152,6 +151,7 @@ BEGIN
 					 WHERE ToId = @cPalletKey 
 					    AND RD.Sku = S.Sku 
 						AND StorerKey = @cStorerKey
+						AND ReceiptKey = @cReceiptKey
 				  )
 			      OR EXISTS (
 				     SELECT 1 
@@ -199,6 +199,8 @@ BEGIN
 			      ON S.Sku = RD.Sku
 			      WHERE ToId = @cPalletKey
 			         AND STDGROSSWGT <= 0
+					 AND ReceiptKey = @cReceiptKey
+					 AND RD.StorerKey = @cStorerKey
 
 			      --Calculating how much SKUs are without the weight. If > 1 then it will not go through and will not be updated.
 			      SELECT TOP 1 
@@ -208,6 +210,8 @@ BEGIN
 			      ON S.Sku = RD.Sku
 			      WHERE ToId = @cPalletKey
 			         AND STDGROSSWGT <= 0
+					 AND ReceiptKey = @cReceiptKey
+					 AND RD.StorerKey = @cStorerKey
 
 				  SET @nZeroSKUNo = ISNULL(@nZeroSKUNo,0)
 
@@ -221,16 +225,16 @@ BEGIN
 			--Checking that dims are within reasonable values
 		    IF @nLength = '' 
 			   OR @nLength < 20 
-			   OR @nLength > 400 
+			   OR @nLength > 999 
 			   OR @nWidth = '' 
 			   OR @nWidth < 20 
-			   OR @nWidth > 400 
+			   OR @nWidth > 999 
 			   OR @nHeight = '' 
 			   OR @nHeight < 20 
-			   OR @nHeight > 400
+			   OR @nHeight > 999
 		    BEGIN
 		       SET @nErrNo = 218094
-			   SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')--'Dims NOT >=20 <=400'
+			   SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')--'Dims NOT >=20 <=999'
 			   UPDATE dbo.PALLET WITH(ROWLOCK)
                SET Length = 0, 
 			      Width = 0, 
@@ -244,6 +248,7 @@ BEGIN
 			   SET PalletType = 'U' --Updating pallet type in RECEIPTDETAIL as undefined
 			   WHERE ToId = @cPalletKey 
 			      AND StorerKey = @cStorerKey
+				  AND ReceiptKey = @cReceiptKey
 
 			   GOTO QUIT --Stopping the SP
 		    END
@@ -265,6 +270,7 @@ BEGIN
 			      SET PalletType = 'U' --Updating pallet type in RECEIPTDETAIL as undefined
 			   WHERE ToId = @cPalletKey 
 			      AND StorerKey = @cStorerKey
+				  AND ReceiptKey = @cReceiptKey
 
 			   GOTO QUIT --Stopping the SP
 		    END
@@ -286,6 +292,7 @@ BEGIN
 			   SET PalletType = 'U'
 			   WHERE ToId = @cPalletKey 
 			      AND StorerKey = @cStorerKey
+				  AND ReceiptKey = @cReceiptKey
 
 			   GOTO QUIT --Stopping the SP
 			END
@@ -330,7 +337,7 @@ BEGIN
 				  END
                END
 
-               ELSE IF @cInvXRD = 'RD'
+          ELSE IF @cInvXRD = 'RD'
 			   BEGIN
 			      --Calculating SKU weight based on total entered weight
 			      SELECT TOP 1 
@@ -340,6 +347,7 @@ BEGIN
                   ON S.Sku = RD.Sku
                   WHERE S.StorerKey = @cStorerKey
                      AND ToID = @cPalletKey
+					 AND ReceiptKey = @cReceiptKey
 
 				  IF @nZeroSKUNewW <= 0 --If SKU calculated weight is <= 0
 				  BEGIN
@@ -366,7 +374,7 @@ BEGIN
 			   END
 			END
 
-			-- Calculating the pallet type and recoring entered values
+			-- Calculating the pallet type and recording entered values
             SELECT TOP 1 
 			   @cPalletType = PTM.PalletType, 
 			   @nLength = P.Length, 
@@ -382,7 +390,8 @@ BEGIN
             WHERE PTM.StorerKey = @cStorerKey
                AND Facility = @cFacility
                AND PalletKey = @cPalletKey
-               AND PTM.PalletType <> 'M'
+               AND PTM.PalletType <> 'M' 
+			   AND PTM.PalletTypeInUse='Y' --bug fix to only allow active palet types
             ORDER BY PTM.Length * PTM.Width * PTM.Height
 
 			--Updating Pallet Type based on the above calculation
@@ -391,22 +400,31 @@ BEGIN
             WHERE PalletKey = @cPalletKey 
 			   AND StorerKey = @cStorerKey
 
-		    --Updatng RECEIPTDETIAL table
+		    --Updating RECEIPTDETIAL table
 			UPDATE dbo.RECEIPTDETAIL WITH(ROWLOCK)
 			SET PalletType = @cPalletType
 			WHERE ToId = @cPalletKey 
 			   AND StorerKey = @cStorerKey
+			   AND ReceiptKey = @cReceiptKey
+
+			--Updating ID table
+			UPDATE dbo.ID WITH(ROWLOCK)
+			SET PalletType = @cPalletType
+			WHERE ID = @cPalletKey
 
             SELECT 
-               @cReceiptKey = ReceiptKey, --ASN number
+               --@cReceiptKey = ReceiptKey, --ASN number
                @cSKU = STRING_AGG(CAST(SKU AS NVARCHAR(MAX)), ', ')WITHIN GROUP(ORDER BY SKU) --SKU list
 			FROM (
 		       SELECT DISTINCT ToId, 
 			      ReceiptKey, 
 				  SKU
                FROM dbo.RECEIPTDETAIL RD WITH(NOLOCK)
+			   WHERE StorerKey = @cStorerKey
+			   AND ReceiptKey = @cReceiptKey
 		    )T1
-            WHERE ToId = @cPalletKey
+            WHERE ToId = @cPalletKey 
+			   AND ReceiptKey = @cReceiptKey
             GROUP BY ReceiptKey;
 
 			--Identifying all non-finalisd received non-captured pallets to insert
@@ -422,14 +440,18 @@ BEGIN
                      FROM dbo.RECEIPTDETAIL RD WITH(NOLOCK)
 					 WHERE StorerKey = @cStorerKey
 					    AND @cInvXRD = 'RD'
+						AND ToId = @cPalletKey 
+			            AND StorerKey = @cStorerKey
+			            AND ReceiptKey = @cReceiptKey
 				     UNION ALL
 					 SELECT DISTINCT ID, 
 					    SKU
 					 FROM dbo.LOTxLOCxID LLI WITH(NOLOCK)
 					 WHERE StorerKey = @cStorerKey
+					    AND ID = @cPalletKey
 					    AND @cInvXRD = 'LLI'
                   ) T1
-               WHERE /*ReceiptKey = @cReceiptKey AND*/ ToId = @cPalletKey
+               WHERE ToId = @cPalletKey
                GROUP BY ToId
                ) T1
                WHERE SKU = @cSKU
@@ -488,6 +510,8 @@ BEGIN
                            WHERE ISNULL(@nZeroSKUNo,0) <= 1--@cZeroExists = 'N'
                              AND PalletType IN ('U','')
 							 AND RD.UserDefine10 = 'Y'
+							 AND RD.StorerKey = @cStorerKey
+							 AND ReceiptKey = @cReceiptKey
                         ) T4
                      ) T3
                      GROUP BY ToID, ReceiptKey, StorerKey, SKU, PalletType, LineWeight
@@ -525,11 +549,14 @@ BEGIN
 						   SKU, 
 						   ReceiptKey
                         FROM dbo.RECEIPTDETAIL WITH(NOLOCK)
+						WHERE StorerKey = @cStorerKey
+						AND ReceiptKey = @cReceiptKey
 				     )T1
                      WHERE PalletType IN ('U','') 
 					    AND ToID <> '' 
 						AND ISNULL(@nZeroSKUNo,0) <= 1
-                     GROUP BY PalletType, 
+						AND ReceiptKey = @cReceiptKey
+           GROUP BY PalletType, 
 					    ToID --, ReceiptKey
                   ) Agg 
 			   ON RD.PalletType = Agg.PalletType  
@@ -541,7 +568,7 @@ BEGIN
 			   UPDATE ID
                SET PalletType = @cPalletType
                --FROM dbo.ID ID missing NOLOCK
- 	       FROM dbo.ID WITH(NOLOCK) --ALT028
+					FROM dbo.ID WITH(NOLOCK) --ALT028
                   INNER JOIN dbo.LOTxLOCxID LLI WITH(ROWLOCK) 
 			   ON ID.ID = LLI.ID
                   INNER JOIN (
@@ -563,7 +590,7 @@ BEGIN
                   AND LLI.StorerKey = @cStorerKey
                   AND ISNULL(@nZeroSKUNo,0) <= 1; --@cZeroExists = 'N';
 
-               -- Updating ITRN table without pallet type
+               /*-- Updating ITRN table without pallet type
 			   UPDATE ITRN
                SET PalletType = @cPalletType
                FROM dbo.ITRN ITRN WITH(NOLOCK)
@@ -585,7 +612,7 @@ BEGIN
 				  OR ITRN.ToID = @cPalletKey)
                   AND Agg.SKUList = @cSKU
                   AND LLI.StorerKey = @cStorerKey
-                  AND ISNULL(@nZeroSKUNo,0) <= 1;--@cZeroExists = 'N';
+                  AND ISNULL(@nZeroSKUNo,0) <= 1;--@cZeroExists = 'N';*/
 
                --Updating SKU with DIMs and dims for inventory (LOTxLOCxID)
 			   IF @cInvXRD = 'LLI'
@@ -605,13 +632,14 @@ BEGIN
 					    )
 			         )
                BEGIN
-			      SELECT @nDivWeight = @nWeight / Qty
+			      SELECT @nDivWeight = @nWeight / SUM(Qty)
 				  FROM dbo.LOTxLOCxID LLI WITH(NOLOCK)
                      INNER JOIN dbo.SKU S WITH(NOLOCK)
                   ON S.Sku = LLI.Sku
                   WHERE S.StorerKey = @cStorerKey
                      AND ID = @cPalletKey
 				     AND S.Sku = @cSKU
+					 AND LLI.Qty > 0
 
 				  UPDATE dbo.SKU WITH(ROWLOCK)
 				  SET Length = @nLength, 
@@ -642,13 +670,14 @@ BEGIN
 					    )
 			         )
 			   BEGIN
-			      SELECT @nDivWeight = @nWeight / BeforeReceivedQty
+			      SELECT @nDivWeight = @nWeight / SUM(BeforeReceivedQty)
 				  FROM dbo.RECEIPTDETAIL RD WITH(NOLOCK)
                      INNER JOIN dbo.SKU S WITH(NOLOCK)
                   ON S.Sku = RD.Sku
                   WHERE S.StorerKey = @cStorerKey
                      AND ToID = @cPalletKey
 					 AND S.SKU = @cSKU
+					 AND ReceiptKey = @cReceiptKey
 			   
 				  UPDATE dbo.SKU WITH(ROWLOCK)
 				  SET Length = @nLength, 
