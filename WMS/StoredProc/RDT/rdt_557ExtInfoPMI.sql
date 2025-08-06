@@ -20,7 +20,7 @@ CREATE OR ALTER PROCEDURE rdt.rdt_557ExtInfoPMI
    @nStep      INT,            
    @cStorerKey NVARCHAR( 15),  
    @cUCC       NVARCHAR( 20),  
-   @coFieled01 NVARCHAR( 20) OUTPUT
+   @coFieled01 NVARCHAR( 60) OUTPUT
 AS    
 BEGIN    
    SET NOCOUNT ON    
