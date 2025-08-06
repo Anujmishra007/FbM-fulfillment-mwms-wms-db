@@ -18,6 +18,7 @@ GO
 /* 17/06/2025   2.0   PPA374   Inserts other non-captured U non-captured pallets (U type)            */
 /* 17/06/2025   2.0   PPA374   Updates receipt detail for the pallet and same U type pallets         */
 /* 17/06/2025   2.0   PPA374   Not allowing to capture pallet with >1 zero SKUs and not updatng it   */
+/* 06/08/2025	2.1   ALT028   Hotfix missing NOLOCK TASK1868115                                     */
 /*****************************************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_825ExtUpdJCB] (
@@ -539,7 +540,8 @@ BEGIN
 			   -- Updating ID table without pallet type
 			   UPDATE ID
                SET PalletType = @cPalletType
-               FROM dbo.ID ID
+               --FROM dbo.ID ID missing NOLOCK
+ 	       FROM dbo.ID WITH(NOLOCK) --ALT028
                   INNER JOIN dbo.LOTxLOCxID LLI WITH(ROWLOCK) 
 			   ON ID.ID = LLI.ID
                   INNER JOIN (
