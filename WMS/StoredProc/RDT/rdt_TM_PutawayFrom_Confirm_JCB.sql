@@ -4,7 +4,7 @@ SET ANSI_NULLS OFF
 GO
 
 /************************************************************************/
-/* Store procedure: rdt_TM_PutawayFrom_Confirm_JCB                          */
+/* Store procedure: rdt_TM_PutawayFrom_Confirm_JCB                      */
 /*                                                                      */
 /* Modifications log:                                                   */
 /*                                                                      */
@@ -186,6 +186,37 @@ BEGIN
          AND LocationCategory NOT IN ('STAGE','PNDIN')
    )
 
+   --Delete RFPUTAWAY that got tasks archived
+   DELETE R
+   FROM dbo.RFPUTAWAY R
+      INNER JOIN (
+         SELECT LLI1.Loc, LLI1.ID
+         FROM dbo.LOTxLOCxID LLI1 WITH(NOLOCK)
+            LEFT JOIN dbo.TaskDetail TD WITH(NOLOCK)
+               ON TD.ToLoc = LLI1.Loc
+                  AND TD.FromID = LLI1.ID
+				  AND TD.StorerKey = @cStorerKey
+				  AND LLI1.StorerKey = @cStorerKey
+         WHERE LLI1.StorerKey = @cStorerKey
+            AND LLI1.PendingMoveIN > 0
+            AND TD.TaskDetailKey IS NULL
+         ) AS Sub
+         ON R.ID = Sub.ID 
+	    AND R.SuggestedLoc = Sub.Loc;
+
+   --Update pending that got task archived
+   UPDATE LLI
+   SET LLI.PendingMoveIN = '0'
+   FROM dbo.LOTxLOCxID LLI WITH(ROWLOCK)
+      LEFT JOIN dbo.TaskDetail TD WITH(NOLOCK)
+         ON TD.ToLoc = LLI.LOC
+            AND TD.FromID = LLI.ID
+            AND TD.StorerKey = @cStorerKey
+            AND LLI.StorerKey = @cStorerKey
+   WHERE LLI.StorerKey = @cStorerKey
+      AND LLI.PendingMoveIN > 0
+      AND TD.TaskDetailKey IS NULL;
+	
    COMMIT TRAN rdt_TM_PutawayFrom_Confirm_JCB -- Only commit change made here
    GOTO Quit
 
