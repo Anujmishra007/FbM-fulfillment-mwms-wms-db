@@ -45,5 +45,7 @@ execute rdt.rdtAddMsg 238187, 10, '238187BookLocFail',          'us_english', 17
 execute rdt.rdtAddMsg 238188, 10, '238188UpdLLIFail',           'us_english', 1764, 0, '238188: Update QtyReplen failed'
 execute rdt.rdtAddMsg 238189, 10, '238189UpdLLiFail',           'us_english', 1764, 0, '238189: Update QtyReplen failed'
 execute rdt.rdtAddMsg 238190, 10, '238190InvalidTaskType',      'us_english', 1764, 0, '238190: Scanned ID has the task not allowed to swap'
+execute rdt.rdtAddMsg 238191, 10, '238191UpdPKDFail',           'us_english', 1764, 0, '238191: Update PickDetail failed'
+execute rdt.rdtAddMsg 238192, 10, '238192UpdPKDFail',           'us_english', 1764, 0, '238192: Update PickDetail failed'
 
 select * from rdt.rdtmsg (nolock) where Message_ID between 238151 and 238200

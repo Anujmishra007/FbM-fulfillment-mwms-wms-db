@@ -8,6 +8,7 @@
 /*                                                                        */
 /* Date        Rev      Author      Purposes                              */
 /* 2025-04-08  1.0.0    Jackc       FCR-3916 Create                       */
+/* 2025-08-06  1.0.1    NickT       FCR-3916 Reallocate pick task         */
 /**************************************************************************/
 
 CREATE OR ALTER PROCEDURE rdt.rdt_1764SwapID05
@@ -124,7 +125,7 @@ BEGIN
       @cTaskSKU = TD.SKU, 
       @cTaskLOT = TD.LOT,
       @cTaskLOC = TD.FromLOC,
-      @cTaskID = TD.FromID, 
+      @cTaskID = TD.FromID,
       @nTaskQTY = TD.SystemQTY,
       --@cTaskPickDetailKey = PickDetailKey,
       @cTaskLocHandling = LOC.LocationHandling
@@ -1234,6 +1235,86 @@ BEGIN
          GOTO RollBackTran
       END
    END --4.2 otherRPFRowRef <> ''
+
+   --- Reallocate FCP/FPK task
+   DECLARE 
+      @cNextPickTaskDetailKey NVARCHAR( 18),
+      @cNextPickDetailKey     NVARCHAR( 18),
+      @nPDQty  INT,
+      @nLoopIndex INT
+
+   DECLARE @tNextPickDetail TABLE
+   (
+      RowIndex INT IDENTITY(1, 1) PRIMARY KEY,
+      TaskDetailKey NVARCHAR( 18) NOT NULL,
+      PickDetailKey NVARCHAR( 18) NOT NULL,
+      Qty INT NOT NULL
+   )
+
+   INSERT INTO @tNextPickDetail (TaskDetailKey, PickDetailKey, Qty)
+   SELECT 
+      PD.TaskDetailKey,
+      PD.PickDetailKey,
+      PD.QTY
+   FROM dbo.PickDetail PD WITH(NOLOCK)
+   INNER JOIN dbo.TaskDetail TD WITH(NOLOCK)
+      ON PD.TaskDetailKey = TD.TaskDetailKey
+   WHERE PD.StorerKey = @cStorerKey
+      AND PD.ID = @cTaskID
+      AND PD.LOC = @cTaskLoc
+      AND PD.QTY > 0
+      AND PD.Status = '0'
+      AND TD.TaskType IN ('FCP', 'FPK')
+
+   SET @nLoopIndex = -1
+
+   WHILE 1 = 1
+   BEGIN
+      SELECT TOP 1 
+         @cNextPickTaskDetailKey = TaskDetailKey,
+         @cNextPickDetailKey = PickDetailKey,
+         @nPDQty = Qty,
+         @nLoopIndex = RowIndex
+      FROM @tNextPickDetail
+      WHERE RowIndex > @nLoopIndex
+      ORDER BY RowIndex
+
+      IF @@ROWCOUNT = 0
+         BREAK
+
+      -- Reallocate
+      BEGIN TRY
+         UPDATE PickDetail WITH (ROWLOCK)
+         SET
+            Qty = 0,
+            EditDate = GETDATE(), 
+            EditWho = SUSER_SNAME()
+         WHERE PickDetailKey = @cNextPickDetailKey
+            AND StorerKey = @cStorerKey
+      END TRY
+      BEGIN CATCH
+         SET @nErrNo = 238191
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Update PickDetail failed
+         GOTO RollBackTran
+      END CATCH
+
+      BEGIN TRY
+         UPDATE PickDetail WITH (ROWLOCK)
+         SET
+            ID = @cNewID,
+            LOT = @cNewLOT,
+            Qty = @nPDQty,
+            EditDate = GETDATE(),
+            EditWho = SUSER_SNAME()
+         WHERE PickDetailKey = @cNextPickDetailKey
+            AND StorerKey = @cStorerKey
+      END TRY
+      BEGIN CATCH
+         SET @nErrNo = 238192
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Update PickDetail failed
+         GOTO RollBackTran
+      END CATCH
+   END
 
 CommitTran:
    COMMIT TRAN rdt_1764SwapID05
