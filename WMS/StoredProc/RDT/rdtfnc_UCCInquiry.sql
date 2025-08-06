@@ -247,8 +247,8 @@ BEGIN
    BEGIN
       -- Screen mapping
       SET @cUCC = @cInField01      
-      SET @cBarcode = @cInField01   
-
+      SET @cBarcode = @cInField01
+      
       -- If UCC and SKU are blank
       IF (@cUCC = '' OR @cUCC IS NULL) AND (@cSKU = '' OR @cSKU IS NULL)
       BEGIN
@@ -266,11 +266,11 @@ BEGIN
             -- Standard decode
             IF @cDecodeSP = '1'
             BEGIN
-               EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorer, @cFacility, @cBarcode,
-                  @cID     = @cID     OUTPUT,
-                  @nErrNo  = @nErrNo  OUTPUT,
-                  @cErrMsg = @cErrMsg OUTPUT,
-                  @cType   = 'UCCNo'
+             EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorer, @cFacility, @cBarcode, 
+               @cUCCNo  = @cUCC    OUTPUT,   
+               @nErrNo  = @nErrNo  OUTPUT,   
+               @cErrMsg = @cErrMsg OUTPUT,  
+               @cType   = 'UCCNo'  
             END
 
             -- Customize decode
@@ -605,7 +605,7 @@ BEGIN
             IF @cDecodeSP = '1'
             BEGIN
                EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorer, @cFacility, @cBarcode,
-                  @cID     = @cID     OUTPUT,
+                  @cUCCNo  = @cUCC    OUTPUT,
                   @nErrNo  = @nErrNo  OUTPUT,
                   @cErrMsg = @cErrMsg OUTPUT,
                   @cType   = 'UCCNo'
