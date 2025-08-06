@@ -786,7 +786,7 @@ BEGIN
 				  ) = ''
 				  BEGIN
 				     --Finding next SET number to use
-				     SELECT @cSetMax = 'SET'+CAST(SUBSTRING(MAX(Code),4,6)+1 AS NVARCHAR(10)) 
+				     SELECT @cSetMax = 'SET'+CAST(MAX(CAST(SUBSTRING(Code,4,10)AS INT))+1 AS NVARCHAR(10)) 
 					 FROM dbo.CODELKUP WITH(NOLOCK) 
 					 WHERE LISTNAME = 'JCBSKUPAL' 
 					    AND Code LIKE 'SET%'
