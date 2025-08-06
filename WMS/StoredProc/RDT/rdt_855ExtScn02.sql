@@ -11,6 +11,7 @@ GO
 /*                                                                      */
 /* Date       Rev    Author     Purposes                                */
 /* 2025-07-21 1.0.0  Jackc      FCR-5413. Created                       */
+/* 2025-08-06 1.0.1  NickT      FCR-5413 No need display Total Qty      */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_855ExtScn02] (
@@ -278,8 +279,8 @@ BEGIN
                @nPSKU = @nPSKU OUTPUT,
                @nPQTY = @nPQTY OUTPUT
 
-            SET @cSKUStat = CAST( @nCSKU AS NVARCHAR( 10)) + '/' + CAST( @nPSKU AS NVARCHAR( 10))
-            SET @cQTYStat = CAST( @nCQty AS NVARCHAR( 10)) + '/' + CAST( @nPQty AS NVARCHAR( 10))
+            SET @cSKUStat = CAST( @nCSKU AS NVARCHAR( 10)) -- + '/' + CAST( @nPSKU AS NVARCHAR( 10))
+            SET @cQTYStat = CAST( @nCQty AS NVARCHAR( 10)) -- + '/' + CAST( @nPQty AS NVARCHAR( 10))
 
             SET @cOutField07 = @cSKUStat
             SET @cOutField08 = @cQTYStat
@@ -475,8 +476,8 @@ BEGIN
                         @nPSKU = @nPSKU OUTPUT,
                         @nPQTY = @nPQTY OUTPUT
 
-                     SET @cSKUStat = CAST( @nCSKU AS NVARCHAR( 10)) + '/' + CAST( @nPSKU AS NVARCHAR( 10))
-                     SET @cQTYStat = CAST( @nCQty AS NVARCHAR( 10)) + '/' + CAST( @nPQty AS NVARCHAR( 10))
+                     SET @cSKUStat = CAST( @nCSKU AS NVARCHAR( 10)) --+ '/' + CAST( @nPSKU AS NVARCHAR( 10))
+                     SET @cQTYStat = CAST( @nCQty AS NVARCHAR( 10)) --+ '/' + CAST( @nPQty AS NVARCHAR( 10))
 
                      SET @cOutField07 = @cSKUStat
                      SET @cOutField08 = @cQTYStat
