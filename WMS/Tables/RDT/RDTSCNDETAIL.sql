@@ -13,7 +13,7 @@ CREATE TABLE [RDT].[RDTSCNDETAIL]
 [ColText] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTSCNDETAIL_ColText] DEFAULT (''),
 [ColValue] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTSCNDETAIL_ColValue] DEFAULT (''),
 [ColValueLength] [smallint] NULL CONSTRAINT [DF_RDTSCNDETAIL_ColValueLength] DEFAULT ((0)),
-[ColLookUpView] [nvarchar] (200) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTSCNDETAIL_ColLookUpView] DEFAULT (''),
+[ColLookUpView] [nvarchar](4000) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTSCNDETAIL_ColLookUpView] DEFAULT (''),
 [AddDate] [datetime] NULL CONSTRAINT [DF_RDTSCNDETAIL_AddDate] DEFAULT (getdate()),
 [AddWho] [nvarchar] (128) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_RDTSCNDETAIL_AddWho] DEFAULT (suser_sname()),
 [EditDate] [datetime] NULL CONSTRAINT [DF_RDTSCNDETAIL_EditDate] DEFAULT (getdate()),
@@ -115,6 +115,19 @@ BEGIN
 				EXEC sp_addextendedproperty N'MS_Description', 'WebColSize', 'SCHEMA', N'RDT', 'TABLE', N'RDTSCNDETAIL', 'COLUMN', N'WebColSize'
 				
 			END
+
+
+--ALTER COLUMN
+
+		IF EXISTS( SELECT 1 
+				FROM SYS.columns WHERE NAME ='ColLookUpView' AND Object_ID = Object_ID('RDT.RDTSCNDETAIL') AND  max_length <> 8000)
+		BEGIN
+		ALTER TABLE [RDT].[RDTSCNDETAIL]
+		ALTER COLUMN [ColLookUpView] [nvarchar](4000) NULL;
+
+		END
+
+
 
 END 
 GO

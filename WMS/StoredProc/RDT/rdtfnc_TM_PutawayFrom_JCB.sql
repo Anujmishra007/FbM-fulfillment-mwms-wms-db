@@ -15,6 +15,7 @@ GO
 /* 2025-04-21  1.0.0  NLT013   FCR-3954. Created                               */
 /* 2025-06-27  1.0.1  Dennis   FCR-3954. Update Dispatch strategy              */
 /* 2025-07-16  1.0.2  Jackc    FCR-3954. Fix overwriteToLoc is cleared issue.  */  
+/* 2025-07-23  1.0.3  Dennis   FCR-3954. Fix Recalculation issue.              */  
 /*******************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_PutawayFrom_JCB](
    @nMobile    INT,
@@ -623,10 +624,10 @@ BEGIN
                         WHERE PAE.EquipmentProfileKey = @cEquipmentProfileKey
                            AND PAE.PutawayZone = LOC1.PutawayZone
                      )
-         AND NOT EXISTS(SELECT 1 
+         AND (NOT EXISTS(SELECT 1 
                         FROM @tAisleInUsed AIU
                         WHERE AIU.LocAisle = LOC1.LocAisle
-                     )
+                     ) OR LOC1.LocationCategory <> 'VNA')
       ORDER BY IIF (TD.Status = '3' AND TD.UserKey = @cUserName, 1, 2), IIF(TD.UserKeyOverRide = @cUserName, 1, 2), RT.FinalizeDate, TD.Priority, LOC.LocAisle, LOC.LogicalLocation, LOC.Loc, TD.TaskDetailKey
 
       IF ISNULL(@cTaskdetailKey, '') = ''
@@ -707,6 +708,19 @@ BEGIN
 
       WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
          COMMIT TRAN
+
+	  IF @cAreaKey IN (SELECT Code FROM CODELKUP WITH(NOLOCK) WHERE Short = 1 AND Storerkey = @cStorerKey AND LISTNAME = 'JCBPAAREAR')
+      BEGIN
+	     UPDATE dbo.TaskDetail WITH (ROWLOCK)
+         SET Status = '0',
+            ReasonKey = '',
+            UserKey = '',
+            EditDate = GETDATE(),
+            EditWho = 'RDTPA'
+         WHERE TaskDetailKey = @cTaskdetailKey
+
+	     SET @cSuggID = ''
+	  END
 
       SET @cOutField01 = @cSuggFromLoc --Suggested FromLoc
       SET @cOutField02 = @cSuggID  --Suggested FromID
@@ -827,8 +841,8 @@ BEGIN
          INNER JOIN dbo.AreaDetail AD WITH(NOLOCK)
             ON LOC.PutawayZone = AD.PutawayZone
          WHERE TD.TaskType IN ('PAF', 'PA1')
-            AND TD.Status = '3'
-            AND TD.UserKey = @cUserName
+            AND (TD.Status = '3' OR (TD.Status = '0' AND @cAreaKey IN (SELECT Code FROM CODELKUP WITH(NOLOCK) WHERE Short = 1 AND Storerkey = @cStorerKey AND LISTNAME = 'JCBPAAREAR')))
+            AND (TD.UserKey = @cUserName OR (TD.UserKey = '' AND @cAreaKey IN (SELECT Code FROM CODELKUP WITH(NOLOCK) WHERE Short = 1 AND Storerkey = @cStorerKey AND LISTNAME = 'JCBPAAREAR')))
             AND TD.UserKeyOverRide IN (@cUserName, '')
             AND Loc.Facility = @cFacility
             AND TD.TaskDetailKey = @cTaskdetailKey
@@ -1134,7 +1148,7 @@ BEGIN
       ELSE
       BEGIN
          -- Prepare next screen var
-         SET @cOutField01 = @cSuggFromLoc
+         SET @cOutField01 = ''--@cSuggFromLoc
          SET @cOutField02 = '' 
 
          -- go to previous screen
@@ -1147,6 +1161,19 @@ BEGIN
 
    Step_3_Fail:
    BEGIN
+   	  IF @cAreaKey IN (SELECT Code FROM CODELKUP WITH(NOLOCK) WHERE Short = 1 AND Storerkey = @cStorerKey AND LISTNAME = 'JCBPAAREAR')
+      BEGIN
+	     UPDATE dbo.TaskDetail WITH (ROWLOCK)
+         SET Status = '0',
+            ReasonKey = '',
+            UserKey = '',
+            EditDate = GETDATE(),
+            EditWho = 'RDTPA'
+         WHERE TaskDetailKey = @cTaskdetailKey
+
+	     SET @cSuggID = ''
+	  END
+
       SET @cOutField01 = @cSuggFromLoc --Suggested FromLoc
       SET @cOutField02 = @cSuggID  --Suggested FromID
       SET @cOutField03 = ''            --ID to be scanned
@@ -1361,7 +1388,7 @@ BEGIN
          UPDATE dbo.TaskDetail WITH(ROWLOCK) 
          SET
             ToLoc = IIF(@cToLoc <> @cSuggToLoc, @cToLoc, ToLoc),
-            TransitLOC = IIF(@cLocCategory IN ('PND', 'PNDIN', 'PNDOOUT'), @cToLoc, TransitLoc)
+            TransitLOC = IIF(@cLocCategory IN ('PND', 'PNDIN','PND_IN'), @cToLoc, TransitLoc)
          WHERE StorerKey = @cStorerKey
             AND TaskType IN ('PAF', 'PA1')
             AND UserKey = @cUserName
@@ -1369,7 +1396,7 @@ BEGIN
             AND TaskDetailKey = @cTaskDetailKey
 
          -- Confirm task
-         EXEC rdt.rdt_TM_PutawayFrom_Confirm @nMobile, @nFunc, @cLangCode, @cUserName
+         EXEC rdt.rdt_TM_PutawayFrom_Confirm_JCB @nMobile, @nFunc, @cLangCode, @cUserName
             ,@cTaskDetailKey
             ,@nErrNo  OUTPUT
             ,@cErrMsg OUTPUT
@@ -1379,6 +1406,20 @@ BEGIN
             ;THROW @nErrNo, @cErrMsg, 1
          END
 
+         IF @cToLoc <> @cSuggToLoc
+         BEGIN
+            EXEC rdt.rdt_Putaway_PendingMoveIn '', 'UNLOCK' 
+               ,''       --@cLOC      
+               ,@cSuggID   --@cID       
+               ,@cSuggToLoc --@cFinalLOC 
+               ,''       --@cStorerKey
+               ,@nErrNo  OUTPUT
+               ,@cErrMsg OUTPUT
+            IF @nErrNo <> 0
+            BEGIN
+               ;THROW @nErrNo, @cErrMsg, 1
+            END
+         END
          -- If PA1 task was created, need update Message01, Message02, Message03 in TaskDetail table
          DECLARE @cPA1TaskDetailKey NVARCHAR(10) = ''
 
@@ -1499,6 +1540,19 @@ BEGIN
 
    IF @nInputKey = 0 -- ESC
    BEGIN
+      IF @cAreaKey IN (SELECT Code FROM CODELKUP WITH(NOLOCK) WHERE Short = 1 AND Storerkey = @cStorerKey AND LISTNAME = 'JCBPAAREAR')
+      BEGIN
+	     UPDATE dbo.TaskDetail WITH (ROWLOCK)
+         SET Status = '0',
+            ReasonKey = '',
+            UserKey = '',
+            EditDate = GETDATE(),
+            EditWho = 'RDTPA'
+         WHERE TaskDetailKey = @cTaskdetailKey
+
+	     SET @cSuggID = ''
+	  END
+
       -- Go to previous screen
       SET @cOutField01 = @cSuggFromLoc --Suggested FromLoc
       SET @cOutField02 = @cSuggID  --Suggested FromID
@@ -1550,7 +1604,7 @@ BEGIN
 
       -- If last task is from PND location, then next task should be from PND location
       -- Sequence: 1. same aisle but opposite side to be given 2. Next aisle in the same AreaKey
-      IF @cLocCategory IN  ('PND_IN', 'PND_OUT', 'PND')
+      IF @cLocCategory IN  ('PNDIN', 'PND', 'PND_IN')
       BEGIN
          SELECT TOP 1 
             @cNextTaskDetailKey = TD.TaskDetailKey,
@@ -1564,7 +1618,7 @@ BEGIN
          INNER JOIN dbo.PALLET PL WITH(NOLOCK) ON TD.StorerKey = PL.StorerKey AND TD.FromID = PL.PalletKey
          WHERE TD.StorerKey = @cStorerKey
             AND LOC.Facility = @cFacility
-            AND LOC.LocationCategory IN  ('PND_IN', 'PND_OUT', 'PND')
+            AND LOC.LocationCategory IN  ('PND_IN', 'PND', 'PNDIN')
             AND TD.TaskType IN ('PAF', 'PA1')
             AND ((TD.Status = '0' AND TD.UserKey = '') OR (TD.Status = '3' AND TD.UserKey = @cUserName))
             AND TD.UserKeyOverRide IN (@cUserName, '')
@@ -1658,6 +1712,19 @@ BEGIN
       END
       ELSE 
       BEGIN
+	     IF @cAreaKey IN (SELECT Code FROM CODELKUP WITH(NOLOCK) WHERE Short = 1 AND Storerkey = @cStorerKey AND LISTNAME = 'JCBPAAREAR')
+         BEGIN
+	        UPDATE dbo.TaskDetail WITH (ROWLOCK)
+            SET Status = '0',
+               ReasonKey = '',
+               UserKey = '',
+               EditDate = GETDATE(),
+               EditWho = 'RDTPA'
+            WHERE TaskDetailKey = @cTaskdetailKey
+
+	        SET @cSuggID = ''
+	     END
+
          SET @cOutField01 = @cSuggFromLoc --Suggested FromLoc
          SET @cOutField02 = @cSuggID  --Suggested FromID
          SET @cOutField03 = ''               --ID to be scanned
@@ -1882,7 +1949,8 @@ BEGIN
                   DECLARE 
                      @cToLocAreaKey          NVARCHAR(10),
                      @cToLocPutawayZone      NVARCHAR(10),
-                     @nToLocLevel            INT
+                     @nToLocLevel            INT,
+					 @cToLocFloor            NVARCHAR(10)
 
                   IF @cSuggToLoc <> '' AND @cLOCHoldKey <> ''
                   BEGIN
@@ -1916,7 +1984,7 @@ BEGIN
                            AND LLI.Sku = @cSKU
                            AND LLI.Qty - LLI.QtyPicked > 0
                            AND LOC.Status = 'OK'
-                           AND LOC.LocAisle = @cLocAisle
+                           --AND LOC.LocAisle = @cLocAisle
                            AND LOC.PutawayZone = @cTaskDetailMsg01
                            AND LOC.LocationGroup = @cTaskDetailMsg02
                            AND LOC.LocationCategory = @cTaskDetailMsg03
@@ -1928,13 +1996,13 @@ BEGIN
                                     )
                      END
                      -- b) If ToLoc is a PND location, search candidate location
-                     ELSE IF @cLocCategory IN ('PND', 'PND_IN', 'PND_OUT')
+                     ELSE IF @cLocCategory IN ('PND', 'PNDIN', 'PND_IN')
                      BEGIN
                         SELECT TOP 1 @cNewToLoc = LOC.Loc
                         FROM dbo.LOC WITH(NOLOCK)
                         WHERE LOC.Facility = @cFacility
                            AND LOC.Status = 'OK'
-                           AND LOC.LocationCategory IN ('PND', 'PND_IN', 'PND_OUT')
+                           AND LOC.LocationCategory = @cLocCategory
                            AND LOC.LocAisle = @cLocAisle
                            AND LOC.Loc <> @cSuggToLoc
                            AND ISNULL(LOC.LocationFlag,'') IN ('','NONE')
@@ -1947,7 +2015,8 @@ BEGIN
                         SELECT 
                            @cToLocAreaKey = AD.AreaKey,
                            @cToLocPutawayZone = LOC.PutawayZone,
-                           @nToLocLevel = LOC.LocLevel
+                           @nToLocLevel = LOC.LocLevel,
+                           @cToLocFloor = LOC.Floor
                         FROM dbo.LOC WITH(NOLOCK)
                         INNER JOIN dbo.AreaDetail AD WITH(NOLOCK) ON LOC.PutawayZone = AD.PutawayZone
                         WHERE LOC.Facility = @cFacility
@@ -1970,6 +2039,7 @@ BEGIN
                               AND AD.AreaKey = @cToLocAreaKey
                               AND LOC.PutawayZone = @cToLocPutawayZone
                               AND LOC.LocLevel = @nToLocLevel
+                              AND LOC.Floor = @cToLocFloor
                               AND LOC.Status = 'OK'
                               AND LOC.LocationRoom IS NOT NULL
                               AND LOC.LocationRoom <> ''
@@ -1980,14 +2050,17 @@ BEGIN
                         SELECT TOP 1 @cNewToLoc = LOC.Loc
                         FROM dbo.LOC WITH(NOLOCK)
                         INNER JOIN dbo.AreaDetail AD WITH(NOLOCK) ON LOC.PutawayZone = AD.PutawayZone
-                        INNER JOIN @tEmptyLocBeam EB ON LOC.LocationRoom = EB.LocationRoom
+                        LEFT JOIN dbo.PALLET P ON P.StorerKey = @cStorerKey AND P.PalletKey = @cSuggID
+                        LEFT JOIN @tEmptyLocBeam EB ON LOC.LocationRoom = EB.LocationRoom
                         WHERE Facility = @cFacility
                            AND LOC.Loc <> @cSuggToLoc
                            AND AD.AreaKey = @cToLocAreaKey
                            AND Loc.PutawayZone = @cToLocPutawayZone
-                           AND LOC.LocLevel = @nToLocLevel
-                           AND LOC.LocAisle = @cLocAisle
+                           AND LOC.LocLevel <= @nToLocLevel
+                           AND (LOC.Floor = @cToLocFloor OR LOC.LocationCategory <> 'VNA')
+                           AND (LOC.LocAisle = @cLocAisle OR LOC.LocationCategory <> 'VNA')
                            AND LOC.Status = 'OK'
+                           AND (EB.LocationRoom IS NOT NULL OR LOC.LocationCategory = 'VNA' OR ISNULL(P.PalletType,'') NOT LIKE 'D%')
                            AND ISNULL(LOC.LocationFlag,'') IN ('','NONE')
                            AND NOT EXISTS(SELECT 1 FROM dbo.LOTxLOCxID LLI (NOLOCK) 
                            WHERE LLI.Loc = LOC.Loc AND QTY-QtyPicked+PendingMoveIN > 0 
@@ -2011,7 +2084,7 @@ BEGIN
 
                         IF @cSuggID <> ''
                         BEGIN
-                           EXEC rdt.rdt_Putaway_PendingMoveIn @cUserName, 'UNLOCK'
+                           EXEC rdt.rdt_Putaway_PendingMoveIn '', 'UNLOCK'
                               ,'' --@cSuggFromLOC
                               ,@cSuggID 
                               ,'' --@cSuggToLoc
@@ -2056,12 +2129,19 @@ BEGIN
 
                         --Rollback the status, UserKey, ReasonKey if no ToLoc is found
                         UPDATE dbo.TaskDetail WITH(ROWLOCK) SET
-                           Status = 'H',
-                           UserKey = '',
+                           Status = '9',
                            EditDate = GETDATE(),
                            EditWho  = SUSER_SNAME(),
                            TrafficCop = NULL
                         WHERE TaskDetailKey = @cTaskDetailKey
+
+                        EXEC rdt.rdt_Putaway_PendingMoveIn '', 'UNLOCK'
+                           ,'' --@cSuggFromLOC
+                           ,@cSuggID 
+                           ,'' --@cSuggToLoc
+                           ,@cStorerKey
+                           ,@nErrNo  OUTPUT
+                           ,@cErrMsg OUTPUT
                      END
                   END
                END
@@ -2117,6 +2197,19 @@ BEGIN
             -- Back to ID screen
             IF @nFromStep = 3
             BEGIN
+		       IF @cAreaKey IN (SELECT Code FROM CODELKUP WITH(NOLOCK) WHERE Short = 1 AND Storerkey = @cStorerKey AND LISTNAME = 'JCBPAAREAR')
+               BEGIN
+	              UPDATE dbo.TaskDetail WITH (ROWLOCK)
+                  SET Status = '0',
+                  ReasonKey = '',
+                  UserKey = '',
+                  EditDate = GETDATE(),
+                  EditWho = 'RDTPA'
+               WHERE TaskDetailKey = @cTaskdetailKey
+
+	          SET @cSuggID = ''
+	       END
+
                SET @cOutField01 = @cSuggFromLoc --Suggested FromLoc
                SET @cOutField02 = @cSuggID      --Suggested FromID
                SET @cOutField03 = ''               --ID to be scanned
@@ -2246,6 +2339,19 @@ BEGIN
       -- Go to ID screen
       IF @nFromStep = 3
       BEGIN
+	     IF @cAreaKey IN (SELECT Code FROM CODELKUP WITH(NOLOCK) WHERE Short = 1 AND Storerkey = @cStorerKey AND LISTNAME = 'JCBPAAREAR')
+         BEGIN
+	        UPDATE dbo.TaskDetail WITH (ROWLOCK)
+            SET Status = '0',
+               ReasonKey = '',
+               UserKey = '',
+               EditDate = GETDATE(),
+               EditWho = 'RDTPA'
+            WHERE TaskDetailKey = @cTaskdetailKey
+
+	        SET @cSuggID = ''
+	     END
+
          SET @cOutField01 = @cSuggFromLoc --Suggested FromLoc
          SET @cOutField02 = @cSuggID  --Suggested FromID
          SET @cOutField03 = ''               --ID to be scanned

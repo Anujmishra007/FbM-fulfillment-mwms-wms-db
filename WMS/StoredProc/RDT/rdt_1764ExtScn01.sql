@@ -13,6 +13,7 @@ GO
 /* Date       Rev    Author   Purposes                                      */
 /* 2025-03-11 1.0    NLT013   UWP-31321 Create                              */
 /* 2025-05-21 1.1    NLT013   UWP-34785 Add new Exit Screen                 */
+/* 2025-07-11 1.2.0  NLT013   UWP-37578 Option issue                        */
 /****************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_1764ExtScn01] (
@@ -351,27 +352,29 @@ BEGIN
          BEGIN
             IF @nInputKey = 1 -- ENTER
             BEGIN
-               DECLARE @cOption  NVARCHAR(1)
-
-               -- Screen mapping
-               SET @cOption = @cInField02
+               DECLARE 
+                  @nOption  INT
 
                -- Check blank option
-               IF @cOption = ''
+               IF @cInField02 = ''
                BEGIN
                   SET @nErrNo = 234852
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --OptionNeeded
                   GOTO Fail
                END
+
+               -- Screen mapping
+               SET @nOption = ISNULL(TRY_CAST(@cInField02 AS INT), 0)
+
                -- Check option is valid
-               IF @cOption NOT IN ('1', '9')
+               IF @nOption NOT IN (1, 9)
                BEGIN
                   SET @nErrNo = 234853
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InvalidOption
                   GOTO Fail
                END
 
-               IF @cOption = '1'
+               IF @nOption = 1
                BEGIN
                   SET @cUDF01 = '1'
                END

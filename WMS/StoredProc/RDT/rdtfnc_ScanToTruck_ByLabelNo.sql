@@ -64,6 +64,7 @@ GO
 /* 2024-03-05 3.7  Ung      WMS-24782 Add ManifestReport                */
 /* 2025-03-14 3.8  CYU027   UWP-30537 Add Top 1 for labelNo             */
 /* 2025-07-11 0.0  JackC    !!!Cuotover!!! Use V0 repo for work         */
+/****************************Migrated into V0****************************/
 /************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdtfnc_ScanToTruck_ByLabelNo] (
    @nMobile    INT,

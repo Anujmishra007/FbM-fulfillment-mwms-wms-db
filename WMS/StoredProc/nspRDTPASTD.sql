@@ -145,6 +145,7 @@ GO
 /* 31-May-2024  NLT013        5.6   UWP-20191 Skip PAType02 if fromLocation <>        */
 /*                                  pa_FromLoc                                        */
 /* 01-07-2025   YKC028        5.7   UWP-36799 Fix MultiLotID  (yeekung01)             */
+/* 11-07-2025   YKC028        5.8   UWP-37762 Fix Ambiguous column (yeekung02)        */
 /**************************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[nspRDTPASTD]
      @c_userid          NVARCHAR(18)
@@ -561,7 +562,7 @@ BEGIN
 					WHERE LLI.LOC = @c_FromLoc 
 						AND LLI.QTY > 0' +
 					CASE WHEN @c_SKU = '' THEN '' ELSE '    AND LLI.SKU = @c_SKU ' END +
-					CASE WHEN @c_LOT = '' THEN '' ELSE '    AND LOT = @c_LOT ' END +
+					CASE WHEN @c_LOT = '' THEN '' ELSE '    AND LLI.LOT = @c_LOT ' END +
 					CASE WHEN @c_ID  = '' THEN '' ELSE '    AND LLI.ID = @c_ID ' END
 
    SET @cSQLParam =

@@ -91,6 +91,8 @@ GO
 /* 17-Jul-2025 WLC015    5.2 UWP-35381 Update RPF FinalLoc = blank(WL14)*/
 /* 22-Jul-2025 WLC015    5.3 FCR-6612 BOLbyConsigneekey - New sequence  */
 /*                           number for PARCEL order (WL15)             */
+/* 01-Aug-2025 WLC015    5.4 FCR-7102 Reuse UCCNo as LabelNo for full   */
+/*                           case conditionally (WL16)                  */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[mspRLWAV03]
    @c_WaveKey NVARCHAR(10)
@@ -203,7 +205,8 @@ BEGIN
          , @c_FinalLoc                 NVARCHAR(10) = ''                            --(Wan01)     
          , @c_PickMethod_TD            NVARCHAR(10) = ''                            --(Wan01)          
          , @c_RefTaskkey               NVARCHAR(10) = ''                            --(Wan01)  
-         , @c_WCSPack                  NVARCHAR(10) = 'Y'                           --(Wan02)          
+         , @c_WCSPack                  NVARCHAR(10) = 'Y'                           --(Wan02)
+         , @c_OrderType                NVARCHAR(10) = ''                            --WL16          
          
    SELECT @n_StartTCnt = @@TRANCOUNT, @n_Continue = 1, @b_Success = 1, @n_err = 0, @c_errmsg = '', @c_SourceType = 'mspRLWAV03'
     
@@ -988,11 +991,41 @@ BEGIN
    
             WHILE @@FETCH_STATUS <> -1 AND @n_continue IN(1,2) 
             BEGIN                 
-               SET @n_CartonNo = @n_CartonNo + 1            
-                     --SWT03 
+               --WL16 S
+               SET @c_Consigneekey = N''
+               SET @c_OrderType = N''
+               SET @c_LabelNo = N''
+
+               SELECT @c_Consigneekey = O.Consigneekey
+                    , @c_OrderType = O.[Type]
+               FROM ORDERS O WITH (NOLOCK)
+               WHERE O.Orderkey = @c_Orderkey
+
+               IF EXISTS ( SELECT 1
+                            FROM CODELKUP CL WITH (NOLOCK)
+                            WHERE CL.ListName = 'GS1xLabel'
+                            AND CL.Code = @c_Consigneekey
+                          )
+               BEGIN
+                  IF EXISTS ( SELECT 1
+                              FROM CODELKUP CL WITH (NOLOCK)
+                              WHERE CL.ListName = 'LVSSTO'
+                              AND CL.Storerkey = @c_Storerkey
+                              AND CL.Code = @c_Consigneekey
+                              AND CL.Short = @c_OrderType
+                            )
+                  BEGIN
+                     SET @c_LabelNo = @c_UCCNo
+                  END
+               END
+               --WL16 E
+               
+               SET @n_CartonNo = @n_CartonNo + 1
+               --SWT03 
                INSERT INTO #CARTON (Orderkey, CartonNo, LabelNo, CartonGroup, CartonType, MaxCube, MaxWeight, MaxCount, MaxSku, 
                                     CartonLength, CartonWidth, CartonHeight, UCCNo, OrderGroup, VASCartonType, CartonWeight)
-               VALUES (@c_Orderkey, @n_CartonNo, '', @c_CartonGroup, '9999', 0, 0, 0, 0, 0, 0, 0, @c_UCCNo, '', '', 0) --ALiang01 hardcode 9999 for carton type                                 
+               VALUES (@c_Orderkey, @n_CartonNo, @c_LabelNo, @c_CartonGroup, '9999', 0, 0, 0, 0   --WL16
+                     , 0, 0, 0, @c_UCCNo, '', '', 0) --ALiang01 hardcode 9999 for carton type                                 
             
                INSERT INTO #CARTONDETAIL (OrderGroup, Orderkey, Storerkey, Sku, CartonNo, Qty, RowRef)  --refer to ORDERSKU.RowID
                VALUES ('', @c_Orderkey, @c_Storerkey, @c_Sku, @n_CartonNo, @n_PackQty, @n_RowID) 

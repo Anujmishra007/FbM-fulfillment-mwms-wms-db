@@ -20,8 +20,9 @@ GO
 /* 2023-11-29 1.7  James      WMS-24279 Add config check whether UCC exists in*/
 /*                            current loc (james04)                           */
 /* 2025-06-24 1.8.0 NickT     FCR-4971 Add ExtScn in Step 1                   */
-/* 2025-07-07 1.8.1 James     FCR-6060 Add ExtendedCfmSP                      */ 
+/* 2025-07-07 1.9.0 James     FCR-6060 Add ExtendedCfmSP                      */ 
 /*                            Add ExtOptionSP in step 3 (james05)             */
+/* 2025-07-18 1.10.0 NickT    UWP-37598 Update TaskDetail.EndTime when CC done*/
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_CycleCount_UCC] (
@@ -448,8 +449,10 @@ BEGIN
              , @cLottable01 = CC.Lottable01
              , @cLottable02 = CC.Lottable02
              , @cLottable03 = CC.Lottable03
-             , @dLottable04 = rdt.rdtFormatDate( CC.Lottable04)
-             , @dLottable05 = rdt.rdtFormatDate( CC.Lottable05)
+             --, @dLottable04 = rdt.rdtFormatDate( CC.Lottable04)
+             --, @dLottable05 = rdt.rdtFormatDate( CC.Lottable05)
+             , @dLottable04 = CC.Lottable04
+             , @dLottable05 = CC.Lottable05
       FROM dbo.UCC UCC WITH (NOLOCK)
       INNER JOIN dbo.SKU SKU WITH (NOLOCK) ON (SKU.SKU = UCC.SKU AND SKU.Storerkey = UCC.StorerKey)
       INNER JOIN dbo.CCDetail CC WITH (NOLOCK) ON ( CC.SKU           = UCC.SKU 
@@ -551,7 +554,7 @@ BEGIN
 
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
                @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cTaskDetailKey,
-               @cCCKey, @cCCDetailKey, @cPickMethod, @cLoc, @cID, @cUCC, @cSKU, @nActQTY,
+               @cCCKey, @cCCDetailKey, @cPickMethod, @cLoc, @cID, @cUCC, @cSKU, @nUCCQty,
                @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
                @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
                @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,
@@ -829,8 +832,8 @@ BEGIN
             IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtOptionSP AND type = 'P')  
             BEGIN  
                SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtOptionSP) +  
-                  ' @nMobile, @nFunc OUTPUT, @cLangCode, @nStep OUTPUT, @nScn OUTPUT, @nInputKey, @cStorerKey, @cTaskDetailKey, @cCCKey, ' + 
-                  ' @cCCDetailKey, @cLoc, @cID, @cSKU, @nActQTY, @cOptions, ' +  
+                  ' @nMobile, @nFunc OUTPUT, @cLangCode, @nStep OUTPUT, @nScn OUTPUT, @nInputKey, @cFacility, @cStorerKey, @cTaskDetailKey, @cCCKey, ' + 
+                  ' @cCCDetailKey, @cLoc, @cID, @cUCC, @cSKU, @nActQTY, @cOptions, ' +  
                   ' @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05, ' +  
                   ' @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10, ' +  
                   ' @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, ' +  
@@ -850,6 +853,7 @@ BEGIN
                   '@cCCDetailKey    NVARCHAR( 10), ' +  
                   '@cLoc            NVARCHAR( 10), ' +  
                   '@cID             NVARCHAR( 18), ' +  
+                  '@cUCC            NVARCHAR( 20), ' +
                   '@cSKU            NVARCHAR( 20), ' +  
                   '@nActQTY         INT, ' +  
                   '@cOptions        NVARCHAR( 1), ' +
@@ -873,8 +877,8 @@ BEGIN
                   '@cErrMsg         NVARCHAR( 20) OUTPUT  '
   
                EXEC sp_ExecuteSQL @cSQL, @cSQLParam,  
-                  @nMobile, @nFunc OUTPUT, @cLangCode, @nStep OUTPUT, @nScn OUTPUT, @nInputKey, @cStorerKey, @cTaskDetailKey, @cCCKey, 
-                  @cCCDetailKey, @cLoc, @cID, @cSKU, @nActQTY,  @cOptions, 
+                  @nMobile, @nFunc OUTPUT, @cLangCode, @nStep OUTPUT, @nScn OUTPUT, @nInputKey, @cFacility, @cStorerKey, @cTaskDetailKey, @cCCKey, 
+                  @cCCDetailKey, @cLoc, @cID, @cUCC, @cSKU, @nActQTY,  @cOptions, 
                   @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,  
                   @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,  
                   @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,  
@@ -926,15 +930,17 @@ BEGIN
                BEGIN
                   UPDATE dbo.TaskDetail 
                   SET Status = '9'
-                        ,TrafficCop = NULL
-                        ,EditDate = GetDate()
+                     ,EndTime = GetDate()
+                     ,TrafficCop = NULL
+                     ,EditWho  = @cUserName
+                     ,EditDate = GetDate()
                   WHERE TaskDetailKey = @cTaskDetailKey
                   
                   IF @@ERROR <> ''
                   BEGIN
                      SET @nErrNo = 74475
                      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'UpdTaskDetFailed'
-    GOTO Step_2_Fail
+                     GOTO Step_2_Fail
                   END    
 
                   -- GOTO Alert Screen
@@ -948,8 +954,10 @@ BEGIN
                     
             UPDATE dbo.TaskDetail 
             SET Status = '9'
-                  ,TrafficCop = NULL
-                  ,EditDate = GetDate()
+               ,EndTime = GetDate()
+               ,TrafficCop = NULL
+               ,EditWho  = @cUserName
+               ,EditDate = GetDate()
             WHERE TaskDetailKey = @cTaskDetailKey
             
             IF @@ERROR <> ''
@@ -1174,8 +1182,10 @@ BEGIN
                 , @cLottable01 = CC.Lottable01
                 , @cLottable02 = CC.Lottable02
                 , @cLottable03 = CC.Lottable03
-                , @dLottable04 = rdt.rdtFormatDate( CC.Lottable04)
-                , @dLottable05 = rdt.rdtFormatDate( CC.Lottable05)
+                --, @dLottable04 = rdt.rdtFormatDate( CC.Lottable04)
+                --, @dLottable05 = rdt.rdtFormatDate( CC.Lottable05)
+                , @dLottable04 = CC.Lottable04
+                , @dLottable05 = CC.Lottable05
          FROM dbo.UCC UCC WITH (NOLOCK)
          INNER JOIN dbo.SKU SKU WITH (NOLOCK) ON (SKU.SKU = UCC.SKU AND SKU.Storerkey = UCC.StorerKey)
          INNER JOIN dbo.CCDetail CC WITH (NOLOCK) ON ( CC.SKU           = UCC.SKU 

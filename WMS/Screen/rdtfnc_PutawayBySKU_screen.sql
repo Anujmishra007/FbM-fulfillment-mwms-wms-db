@@ -6,7 +6,7 @@ EXECUTE rdt.rdtAddScn 2880, 'ENG'
    ,@cLine03 = 'OR'
    ,@cLine04 = ''
    ,@cLine05 = 'UCC:'
-   ,@cLine06 = '%20i02'
+   ,@cLine06 = '%60i02' --FCR-2961
    ,@cLine07 = ''
    ,@cLine08 = 'LOC:'
    ,@cLine09 = '%10i03'

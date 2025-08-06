@@ -145,6 +145,7 @@ GO
 /*                           does not work                              */
 /* 19-Nov-2024 5.8.0 NLT013  UWP-27188 Merge code, map @v_Barcode to @cUCC  */
 /* 03-Apr-2025 6.4  WinSern  INC7862618 clear @cBarcode value (ws01)    */
+/* 25-Jul-2025 6.5  Cuize    UWP-38274 bugfix DecodeSP                  */
 /************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdtfnc_CycleCount] (
    @nMobile    INT,
@@ -3813,6 +3814,10 @@ BEGIN
       -- Retain the key-in value
       SET @cOutField01 = @cUCC
       SET @cOutField12 = @cOptAction
+
+      SET @cDecodeSP = rdt.RDTGetConfig( @nFunc, 'DecodeSP', @cStorer) -- Cuize
+      IF @cDecodeSP = '0'
+         SET @cDecodeSP = ''
 
       IF ISNULL(@cDecodeSP,'') <> ''
       BEGIN

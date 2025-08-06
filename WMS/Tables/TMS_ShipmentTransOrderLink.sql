@@ -8,7 +8,7 @@ CREATE TABLE [dbo].[TMS_ShipmentTransOrderLink]
 	[ShipmentGID] [nvarchar] (50) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
 	[AddDate] [datetime] NULL CONSTRAINT [DF_TMS_ShipmentTransOrderLink_AddDate]  DEFAULT (getdate()),
 	[AddWho] [nvarchar](128) NULL CONSTRAINT [DF_TMS_ShipmentTransOrderLink_AddWho]  DEFAULT (suser_name()),
-	[EditDate] [datetime] NULL CONSTRAINT [DF_TMS_ShipmentTransOrderLink_EditDate]  DEFAULT (getdate()) FOR [EditDate],
+	[EditDate] [datetime] NULL CONSTRAINT [DF_TMS_ShipmentTransOrderLink_EditDate]  DEFAULT (getdate()),
 	[EditWho] [nvarchar](128) NULL CONSTRAINT [DF_TMS_ShipmentTransOrderLink_EditWho]  DEFAULT (suser_name()),
 	[ArchiveCop] [nvarchar](1) NULL
 ) ON [PRIMARY]
@@ -49,7 +49,7 @@ BEGIN
 	               WHERE Name = 'EditDate' AND Object_ID = Object_ID('dbo.TMS_ShipmentTransOrderLink'))
 			BEGIN
 
-				ALTER TABLE dbo.TMS_ShipmentTransOrderLink ADD EditDate [datetime] NULL CONSTRAINT [DF_TMS_ShipmentTransOrderLink_EditDate]  DEFAULT (getdate()) FOR [EditDate];
+				ALTER TABLE dbo.TMS_ShipmentTransOrderLink ADD EditDate [datetime] NULL CONSTRAINT [DF_TMS_ShipmentTransOrderLink_EditDate]  DEFAULT (getdate());
 				EXEC sp_addextendedproperty N'MS_Description', 'Date of the information edited/modified/updated. (System date)', 'SCHEMA', N'dbo', 'TABLE', N'TMS_ShipmentTransOrderLink', 'COLUMN', N'EditDate'
 				
 			END

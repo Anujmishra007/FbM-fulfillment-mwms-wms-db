@@ -18,6 +18,7 @@ GO
 /*                          step to loc (james01)                       */
 /* 2022-08-23 1.2  Ung      WMS-20562 Add UCC                           */
 /* 2024-10-17 1.3  PXL009   FCR-759 ID and UCC Length Issue             */
+/* 2025-05-29 1.4  Dennis   UWP-35252 Bug fix                           */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_Replenish_V7] (
@@ -1854,6 +1855,7 @@ BEGIN
                ,@cUCCNo
                ,@cToLOC
                ,@cToID
+               ,@cLottableCode
                ,@cLottable01,   @cLottable02,   @cLottable03,   @dLottable04,   @dLottable05
                ,@cLottable06,   @cLottable07,   @cLottable08,   @cLottable09,   @cLottable10
                ,@cLottable11,   @cLottable12,   @dLottable13,   @dLottable14,   @dLottable15
@@ -1871,6 +1873,7 @@ BEGIN
                ,@cUCCNo
                ,@cToLOC
                ,@cToID
+               ,@cLottableCode
                ,@cLottable01,   @cLottable02,   @cLottable03,   @dLottable04,   @dLottable05
                ,@cLottable06,   @cLottable07,   @cLottable08,   @cLottable09,   @cLottable10
                ,@cLottable11,   @cLottable12,   @dLottable13,   @dLottable14,   @dLottable15

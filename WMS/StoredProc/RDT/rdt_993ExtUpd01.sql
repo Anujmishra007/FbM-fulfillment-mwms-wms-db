@@ -4,15 +4,16 @@ GO
 SET ANSI_NULLS OFF
 GO
 
-/*********************************************************************************/
-/* Store procedure: rdt_993ExtUpd01                                              */
-/* Copyright      : Maersk                                                       */
-/*                                                                               */
-/* Purpose: Extended Upd for Granite - Levis US                                  */
-/*                                                                               */
-/* Date       Rev  Author      Purposes                                          */
-/* 2024-11-01 1.0  JCH507      FCR-946 Created                                   */
-/*********************************************************************************/
+/************************************************************************************/
+/* Store procedure: rdt_993ExtUpd01                                                 */
+/* Copyright      : Maersk                                                          */
+/*                                                                                  */
+/* Purpose: Extended Upd for Granite - Levis US                                     */
+/*                                                                                  */
+/* Date       Rev    Author      Purposes                                           */
+/* 2024-11-01 1.0.0  JCH507      FCR-946 Created                                    */
+/* 2025-07-22 1.1.0  JCH507      FCR-6706 Generate BOL sequence number              */
+/************************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_993ExtUpd01 (
    @nMobile          INT,
@@ -58,6 +59,24 @@ BEGIN
    DECLARE  @nFromScn               INT
    DECLARE  @nFromStep              INT
    DECLARE  @cMasterLabelNo         NVARCHAR(20)
+
+   --V1.2 start
+   DECLARE @tOrderNoRefID TABLE
+   (
+      RowNumber      INT IDENTITY(1,1),
+      OrderKey       NVARCHAR(10),
+      ConsigneeKey   NVARCHAR(15),
+      WaveKey        NVARCHAR(10)
+   )
+
+   DECLARE @cONRIOrderKey     NVARCHAR(10)
+   DECLARE @cONRIConsigneeKey NVARCHAR(15)
+   DECLARE @cONRIWaveKey      NVARCHAR(10)
+   DECLARE @cReferenceID      NVARCHAR(20)
+   DECLARE @cOtherParams      NVARCHAR(MAX) = ''
+   DECLARE @nRowCount         INT
+   DECLARE @nLoopIndex        INT
+   --V1.2 end
 
    SELECT @nFromScn = V_FromScn, @nFromStep = V_FromStep, @cMasterLabelNo = V_String3
    FROM rdt.RDTMOBREC WITH(NOLOCK)
@@ -246,7 +265,7 @@ BEGIN
                END -- PSNO rowcount > 0
             END -- Confirm Pick Header
 
-            IF @cOption = 1 -- Yes
+            IF @cOption = '1' -- Yes
             BEGIN
                DECLARE @bSuccess             INT
                DECLARE @cTransmitLogKey      NVARCHAR( 10)
@@ -255,11 +274,7 @@ BEGIN
                DECLARE @b_Debug              INT = 0
                DECLARE @nTranCount           INT
 
-               
-               IF @bDebugFlag = 1
-                     SELECT 'Begining transmitlog2', @cPickSlipNo AS PSNO, @cLabelNo AS LabelNo, @nCartonNo AS CartNo
-               
-               SELECT TOP 1 @cShipperKey = ORD.ShipperKey
+               SELECT TOP 1 @cShipperKey = TRIM(ORD.ShipperKey)
                FROM ORDERS ORD WITH (NOLOCK) 
                INNER JOIN PickDetail PD WITH (NOLOCK)
                   ON ORD.OrderKey = PD.OrderKey
@@ -276,8 +291,90 @@ BEGIN
 
                IF EXISTS (SELECT 1 FROM CODELKUP WITH (NOLOCK)
                            WHERE LISTNAME = 'WSCourier'
-                              AND Notes = @cShipperKey)
+                              AND ISNULL(Notes,'-1') = @cShipperKey
+                              AND StorerKey = @cStorerKey)
                BEGIN
+                  --V1.2 start
+                  IF @bDebugFlag = 1
+                     SELECT 'Update OrderInfo', @cLabelNo AS LabelNo
+               
+                  -- Get all order key without orderinfo.ReferenceNo value in the paperboard box
+                  INSERT INTO @tOrderNoRefID (OrderKey, ConsigneeKey, WaveKey)
+                     SELECT DISTINCT ORM.OrderKey, ORM.ConsigneeKey, ORM.UserDefine09 
+                     FROM dbo.PICKDETAIL PD WITH (NOLOCK)
+                     JOIN dbo.ORDERS ORM WITH (NOLOCK) ON PD.OrderKey = orm.OrderKey
+                     JOIN dbo.OrderInfo OI WITH (NOLOCK) ON ORM.OrderKey = oi.OrderKey
+                     WHERE PD.CaseID = @cLabelNo
+                        AND PD.CaseID <> ''
+                        AND PD.StorerKey = @cStorerKey
+                        AND PD.Status NOT IN ('4', '9')
+                        AND (OI.ReferenceId IS NULL OR OI.ReferenceId = '')
+                  
+                  IF @bDebugFlag = 1
+                  BEGIN
+                     SELECT 'Order without ReferenceID', @cLabelNo AS LabelNo
+                     SELECT * FROM @tOrderNoRefID
+                  END
+
+                  IF EXISTS (SELECT 1 FROM @tOrderNoRefID)
+                  BEGIN
+                     SET @nLoopIndex = -1
+                     WHILE 1 = 1
+                     BEGIN
+                        SELECT TOP 1
+                           @cONRIOrderKey = OrderKey,
+                           @cONRIConsigneeKey = ConsigneeKey,
+                           @cONRIWaveKey = WaveKey,
+                           @nLoopIndex = RowNumber
+                        FROM @tOrderNoRefID
+                        WHERE RowNumber > @nLoopIndex
+                        ORDER BY RowNumber
+
+                        SET @nRowCount = @@ROWCOUNT
+
+                        IF @nRowCount = 0
+                           BREAK
+
+                        SET @cReferenceID = ''
+
+                        --Call BOL running number generator
+                        
+                        EXEC	[dbo].[msp_GetBOLbyConsigneeKey]
+                           @c_Wavekey  = @cONRIWaveKey,
+                           @c_Orderkey = @cONRIOrderKey,
+                           @c_Consigneekey = @cONRIConsigneeKey,
+                           @c_BOLByConsigneekey = @cReferenceID OUTPUT,
+                           @c_OtherParams = @cOtherParams OUTPUT,
+                           @b_Success = @bSuccess OUTPUT,
+                           @n_Err = @nErrNo OUTPUT,
+                           @c_ErrMsg = @cErrMsg OUTPUT
+
+                        IF @bSuccess <> 1 OR @nErrNo <> 0
+                        BEGIN
+                           SET @nErrNo = 242451
+                           SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --GenReferenceIDFail
+                           GOTO RollBackTran
+                        END
+
+                        IF @bDebugFlag = 1
+                           SELECT 'Generating ReferenceID for OrderKey', @nLoopIndex AS RowNumber, 
+                                    @cONRIOrderKey AS Orderkey, @cONRIConsigneeKey AS Consigneekey, 
+                                    @cONRIWaveKey AS WaveKey, @cReferenceID AS ReferenceID  
+
+                        BEGIN TRY
+                           UPDATE dbo.OrderInfo WITH(ROWLOCK)
+                           SET ReferenceId = @cReferenceID
+                           WHERE OrderKey = @cONRIOrderKey
+                        END TRY
+                        BEGIN CATCH
+                           SET @nErrNo = 242452
+                           SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Upd OrderInfo fail
+                           GOTO RollBackTran
+                        END CATCH
+                     END-- loop generating reference id end
+                  END -- OrderNoRefID exists end
+                  --V1.2 end
+
                   IF @bDebugFlag = 1
                      SELECT 'Generate Transmit Log2', @cPickSlipNo AS PSNO, @cLabelNo AS LabelNo, @nCartonNo AS CartNo
 

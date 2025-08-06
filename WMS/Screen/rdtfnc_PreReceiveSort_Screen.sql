@@ -38,5 +38,5 @@ EXECUTE rdt.rdtAddScn 4802, 'ENG',
    ,@cLine05 = '%20d02'
    ,@cLine06 = '%20d15'
    ,@cLine07 = '%20d03'
-   ,@cLine14 = '%e'   
+   ,@cLine14 = '%e'
    ,@nFunc = 1825

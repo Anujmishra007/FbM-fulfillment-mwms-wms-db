@@ -16,7 +16,8 @@ GO
 /* Date        Rev  Author    Purposes                                  */
 /* 29-Nov-2024 1.0  VBH079	   FCR-1652 Change the Lock PND transit LOC. */
 /*                               1=Yes,0=No*/
-/*************************************************************************/
+/* 21-Jul-2025 1.1  Dennis	   FCR-4498 Change RP1 Final Loc             */
+/************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1764CreateTask12] (
    @nMobile        INT,
@@ -75,6 +76,7 @@ BEGIN
       @nTransitCount   = TransitCount, 
       @cPriority       = Priority, 
       @cSourcePriority = SourcePriority, 
+      @cFinalLOC       = FinalLOC,
       @cSourceType     = 'rdt_1764CreateTask12'
    FROM dbo.TaskDetail WITH (NOLOCK)
    WHERE ListKey = @cListKey
@@ -303,10 +305,10 @@ BEGIN
          BEGIN
             -- Insert final task
             INSERT INTO TaskDetail (
-               TaskDetailKey, TaskType, Status, UserKey, FromLOC, FromID, ToLOC, ToID, QTY, AreaKey, 
+               TaskDetailKey, TaskType, Status, UserKey, FromLOC, FromID, ToLOC, ToID, QTY, AreaKey, FinalLOC,
                PickMethod, StorerKey, SKU, LOT, ListKey, TransitCount, SourceType, WaveKey, Priority, SourcePriority, TrafficCop)
             VALUES (
-               @cNewTaskDetailKey, 'RP1', '0', '', @cToLOC, @cToID, @cFinalLOC, @cToID, 0, @cToLOCAreaKey, 
+               @cNewTaskDetailKey, 'RP1', '0', '', @cToLOC, @cToID, @cFinalLOC, @cToID, 0, @cToLOCAreaKey, @cFinalLOC,
                'FP', @cStorerKey, '', '', @cListKey, @nTransitCount, @cSourceType, @cWaveKey, @cPriority, @cSourcePriority, NULL)
             IF @@ERROR <> 0
             BEGIN
@@ -321,10 +323,10 @@ BEGIN
    BEGIN 
       -- Insert transit task
       INSERT INTO TaskDetail (
-         TaskDetailKey, TaskType, Status, UserKey, FromLOC, FromID, ToLOC, ToID, QTY, AreaKey, 
+         TaskDetailKey, TaskType, Status, UserKey, FromLOC, FromID, ToLOC, ToID, QTY, AreaKey,  FinalLOC,
          PickMethod, Storerkey, SKU, LOT, ListKey, TransitCount, SourceType, WaveKey, Priority, SourcePriority, TrafficCop)
       VALUES (
-         @cNewTaskDetailKey, 'RP1', '0', '', @cToLOC, @cToID, @cTransitLOC, @cToID, 0, @cToLOCAreaKey, 
+         @cNewTaskDetailKey, 'RP1', '0', '', @cToLOC, @cToID, @cTransitLOC, @cToID, 0, @cToLOCAreaKey,  @cFinalLOC,
          'FP', @cStorerkey, '', '', @cListKey, @nTransitCount, @cSourceType, @cWaveKey, @cPriority, @cSourcePriority, NULL)
       IF @@ERROR <> 0
       BEGIN
