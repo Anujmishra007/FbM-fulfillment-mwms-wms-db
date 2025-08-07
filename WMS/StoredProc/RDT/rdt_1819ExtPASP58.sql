@@ -146,9 +146,10 @@ BEGIN
                ON lli.Loc = loc.Loc
                AND lli.StorerKey = @cStorerKey
             WHERE loc.Facility = @cFacility
-               AND (lli.Qty - lli.QtyPicked + LLI.PendingMoveIN = 0 OR lli.loc IS NULL)
                AND loc.PutawayZone = @cSTDPutawayKey
-            ORDER BY LOC.LogicalLocation
+            GROUP BY LOC.LOC
+            HAVING (MAX(lli.Qty - lli.QtyPicked + LLI.PendingMoveIN) = 0 OR MAX(lli.loc) IS NULL)
+            ORDER BY MAX(LOC.LogicalLocation)
          END
          
          IF @nDebugFlag = 1
