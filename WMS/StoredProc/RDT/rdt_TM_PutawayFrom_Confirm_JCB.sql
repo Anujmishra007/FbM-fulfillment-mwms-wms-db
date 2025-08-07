@@ -1,6 +1,7 @@
-SET QUOTED_IDENTIFIER OFF
-GO
+
 SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
 GO
 
 /************************************************************************/
@@ -12,7 +13,7 @@ GO
 /* 2025-08-05  1.0  Dennis   FCR-3954 Created                           */
 /************************************************************************/
 
-CREATE OR ALTER PROC [rdt].[rdt_TM_PutawayFrom_Confirm_JCB] (
+CREATE OR ALTER PROC [RDT].[rdt_TM_PutawayFrom_Confirm_JCB] (
    @nMobile        INT,
    @nFunc          INT,
    @cLangCode      NVARCHAR( 3),
@@ -39,6 +40,13 @@ BEGIN
    DECLARE @cFinalLOC   NVARCHAR( 10)
    DECLARE @cTransitLOC NVARCHAR( 10)
    DECLARE @cListKey    NVARCHAR( 10)
+   DECLARE @cPalType    NVARCHAR( 15)
+   DECLARE @cLocRoom    NVARCHAR( 20)
+   DECLARE @cUserKey    NVARCHAR( 30)
+   DECLARE @cMidLoc     NVARCHAR( 10)
+   DECLARE @cTrdLoc     NVARCHAR( 10)
+   DECLARE @cFstLoc     NVARCHAR( 10)
+   DECLARE @cLocCat     NVARCHAR( 20)
 
    -- Init var
    SET @nErrNo = 0
@@ -119,6 +127,147 @@ BEGIN
       ,@cErrMsg OUTPUT
    IF @nErrNo <> 0
       GOTO RollBackTran
+
+   SELECT TOP 1 @cPalType = ISNULL(PalletType,'U') 
+   FROM dbo.PALLET WITH(NOLOCK)
+   WHERE StorerKey = @cStorerkey
+      AND PalletKey = @cFromID
+
+   SELECT TOP 1 @cLocRoom = LocationRoom
+   FROM dbo.LOC WITH(NOLOCK)
+   WHERE LOC = @cToLOC
+      AND Facility = @cFacility
+		 
+   SELECT TOP 1 @cMidLoc = LOC
+   FROM dbo.LOC WITH(NOLOCK)
+   WHERE LocationRoom = @cLocRoom
+      AND Facility = @cFacility
+      AND RIGHT(SUBSTRING(LOC,1,7),1) = '2'
+
+   SELECT TOP 1 @cTrdLoc = LOC
+   FROM dbo.LOC WITH(NOLOCK)
+   WHERE LocationRoom = @cLocRoom
+      AND Facility = @cFacility
+	  AND RIGHT(SUBSTRING(LOC,1,7),1) = '3'
+
+   SELECT TOP 1 @cFstLoc = LOC
+   FROM dbo.LOC WITH(NOLOCK)
+   WHERE LocationRoom = @cLocRoom
+      AND Facility = @cFacility
+      AND RIGHT(SUBSTRING(LOC,1,7),1) = '1'
+
+   DECLARE @b_Success INT;
+   DECLARE @n_Err INT;
+   DECLARE @c_ErrMsg NVARCHAR(250);
+
+   IF @cPalType LIKE ('D%') 
+      AND @cLocCat = 'WA' 
+	  AND @cToLOC <> @cMidLoc
+   BEGIN
+      EXEC [WM].[lsp_Inventoryhold_Wrapper]
+         @c_StorerKey   = @cStorerkey
+         ,@c_SKU         = N''
+         ,@c_lot         = N''
+         ,@c_Loc         = @cMidLoc
+         ,@c_ID          = N''
+         ,@c_lottable01  = N''
+         ,@c_lottable02  = N''
+         ,@c_lottable03  = N''
+         ,@dt_lottable04 = ''
+         ,@dt_lottable05 = ''
+         ,@c_lottable06  = N''
+         ,@c_lottable07  = N''
+         ,@c_lottable08  = N''
+         ,@c_lottable09  = N''
+         ,@c_lottable10  = N''
+         ,@c_lottable11  = N''
+         ,@c_lottable12  = N''
+         ,@dt_lottable13 = ''
+         ,@dt_lottable14 = ''
+         ,@dt_lottable15 = ''
+         ,@c_Status      = N'DoublePal'
+         ,@c_Hold        = 1
+         ,@c_Remark      = N'DoublePal'
+         ,@b_Success     = @b_Success OUTPUT
+         ,@n_Err         = @n_Err OUTPUT
+         ,@c_ErrMsg      = @c_ErrMsg OUTPUT
+         ,@c_UserName    = @cUserKey
+   END
+
+   IF @cPalType LIKE ('D%') 
+      AND @cLocCat = 'WA' 
+      AND @cToLOC = @cMidLoc 
+	  AND NOT EXISTS (
+	     SELECT 1 
+		 FROM LOTxLOCxID WITH(NOLOCK)
+		 WHERE Loc = @cFstLoc
+		    AND Qty + PendingMoveIN > 0
+			AND StorerKey = @cStorerkey
+		 )
+   BEGIN
+      EXEC [WM].[lsp_Inventoryhold_Wrapper]
+         @c_StorerKey   = @cStorerkey
+         ,@c_SKU         = N''
+         ,@c_lot         = N''
+         ,@c_Loc         = @cFstLoc
+         ,@c_ID          = N''
+         ,@c_lottable01  = N''
+         ,@c_lottable02  = N''
+         ,@c_lottable03  = N''
+         ,@dt_lottable04 = ''
+         ,@dt_lottable05 = ''
+         ,@c_lottable06  = N''
+         ,@c_lottable07  = N''
+         ,@c_lottable08  = N''
+         ,@c_lottable09  = N''
+         ,@c_lottable10  = N''
+         ,@c_lottable11  = N''
+         ,@c_lottable12  = N''
+         ,@dt_lottable13 = ''
+         ,@dt_lottable14 = ''
+         ,@dt_lottable15 = ''
+         ,@c_Status      = N'DoublePal'
+         ,@c_Hold        = 1
+         ,@c_Remark      = N'DoublePal'
+         ,@b_Success     = @b_Success OUTPUT
+         ,@n_Err         = @n_Err OUTPUT
+         ,@c_ErrMsg      = @c_ErrMsg OUTPUT
+         ,@c_UserName    = @cUserKey
+   END
+
+   ELSE IF @cPalType LIKE ('D%') 
+      AND @cLocCat = 'WA' 
+	  AND @cToLOC = @cMidLoc
+   BEGIN
+      EXEC [WM].[lsp_Inventoryhold_Wrapper]
+         @c_StorerKey   = @cStorerkey
+         ,@c_SKU         = N''
+         ,@c_lot         = N''
+         ,@c_Loc         = @cTrdLoc
+         ,@c_ID          = N''
+         ,@c_lottable01  = N''
+         ,@c_lottable02  = N''
+         ,@c_lottable03  = N''
+         ,@dt_lottable04 = ''
+         ,@dt_lottable05 = ''
+         ,@c_lottable06  = N''
+         ,@c_lottable07  = N''
+         ,@c_lottable08  = N''
+         ,@c_lottable09  = N''
+         ,@c_lottable10  = N''
+         ,@c_lottable11  = N''
+         ,@c_lottable12  = N''
+         ,@dt_lottable13 = ''
+         ,@dt_lottable14 = ''
+         ,@dt_lottable15 = ''
+         ,@c_Status      = N'DoublePal'
+         ,@c_Hold        = 1
+         ,@c_Remark      = N'DoublePal'
+         ,@b_Success     = @b_Success OUTPUT
+         ,@n_Err         = @n_Err OUTPUT
+         ,@c_ErrMsg      = @c_ErrMsg OUTPUT
+         ,@c_UserName    = @cUserKey
+   END
 
    -- Create next task
    IF @cTransitLOC <> ''
@@ -202,7 +351,7 @@ BEGIN
             AND TD.TaskDetailKey IS NULL
          ) AS Sub
          ON R.ID = Sub.ID 
-	    AND R.SuggestedLoc = Sub.Loc;
+		    AND R.SuggestedLoc = Sub.Loc;
 
    --Update pending that got task archived
    UPDATE LLI
@@ -215,8 +364,8 @@ BEGIN
             AND LLI.StorerKey = @cStorerKey
    WHERE LLI.StorerKey = @cStorerKey
       AND LLI.PendingMoveIN > 0
-      AND TD.TaskDetailKey IS NULL;
-	
+      AND TD.TaskDetailKey IS NULL
+
    COMMIT TRAN rdt_TM_PutawayFrom_Confirm_JCB -- Only commit change made here
    GOTO Quit
 
