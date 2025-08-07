@@ -32,6 +32,8 @@ GO
 /* Date        Author   Ver   Purposes                                  */
 /* 2025-04-30  AYD      1.0   UWP-31046 - FCR-2403 -                    */
 /*                            ASN Release Putaway Task                  */
+/* 2025-08-06  AYD01    1.1   UWP-31046 - Map TaskDetail.AreaKey with   */
+/*                            FromLoc for RDT function                  */
 /************************************************************************/
 
 CREATE OR ALTER PROC dbo.mspPARLSTD
@@ -165,7 +167,7 @@ BEGIN
             SELECT TOP 1 @c_Areakey = a.AreaKey
             FROM dbo.LOC l (NOLOCK)
             JOIN AreaDetail a (NOLOCK) ON a.PutawayZone = l.PutawayZone
-            WHERE Loc = @c_ToLoc
+            WHERE Loc = @c_FromLoc     -- AYD01
             ORDER BY a.AreaKey
 
             SET @c_Lot = ''
