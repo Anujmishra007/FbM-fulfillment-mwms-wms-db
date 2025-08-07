@@ -12,7 +12,7 @@ GO
 /*                                                                      */
 /* Called By: Wave                                                      */
 /*                                                                      */
-/* GitHub Version: 5.3                                                  */
+/* GitHub Version: 5.5                                                  */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -93,6 +93,8 @@ GO
 /*                           number for PARCEL order (WL15)             */
 /* 01-Aug-2025 WLC015    5.4 FCR-7102 Reuse UCCNo as LabelNo for full   */
 /*                           case conditionally (WL16)                  */
+/* 07-Aug-2025 WLC015    5.5 UWP-38984 Prevent same UCC being packed    */
+/*                           into multiple cartons for full case (WL17) */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[mspRLWAV03]
    @c_WaveKey NVARCHAR(10)
@@ -977,12 +979,13 @@ BEGIN
          IF @n_continue IN(1,2) 
          BEGIN                                         
             DECLARE CUR_UCC CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-            SELECT OS.RowID, OS.Sku, PD.Qty, PD.DropID, OS.StdCube
+            SELECT OS.RowID, OS.Sku, Qty = SUM(PD.Qty), PD.DropID, OS.StdCube   --WL17
             FROM #ORDERSKU OS (NOLOCK)
             JOIN #PickDetail_WIP PD (NOLOCK) ON OS.Orderkey = PD.Orderkey AND OS.Storerkey = PD.Storerkey AND OS.Sku = PD.Sku        
             WHERE OS.Orderkey = @c_Orderkey
             AND PD.UOM = '2'
             AND ISNULL(PD.DropID,'') <> ''
+            GROUP BY OS.RowID, OS.Sku, PD.DropID, OS.StdCube   --WL17
             ORDER BY OS.RowID
 
             OPEN CUR_UCC
