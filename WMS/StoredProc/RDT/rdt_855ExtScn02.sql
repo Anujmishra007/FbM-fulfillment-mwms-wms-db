@@ -1316,8 +1316,8 @@ BEGIN
                      @nPSKU = @nPSKU OUTPUT,
                      @nPQTY = @nPQTY OUTPUT
 
-                  SET @cSKUStat = CAST( @nCSKU AS NVARCHAR( 10)) + '/' + CAST( @nPSKU AS NVARCHAR( 10))
-                  SET @cQTYStat = CAST( @nCQty AS NVARCHAR( 10)) + '/' + CAST( @nPQty AS NVARCHAR( 10))
+                  SET @cSKUStat = CAST( @nCSKU AS NVARCHAR( 10)) --+ '/' + CAST( @nPSKU AS NVARCHAR( 10))
+                  SET @cQTYStat = CAST( @nCQty AS NVARCHAR( 10)) --+ '/' + CAST( @nPQty AS NVARCHAR( 10))
 
                   SET @cOutField07 = @cSKUStat
                   SET @cOutField08 = @cQTYStat
