@@ -193,7 +193,7 @@ BEGIN
          SELECT LLI1.Loc, LLI1.ID
          FROM dbo.LOTxLOCxID LLI1 WITH(NOLOCK)
             LEFT JOIN dbo.TaskDetail TD WITH(NOLOCK)
-               ON TD.ToLoc = LLI1.Loc
+               ON (TD.ToLoc = LLI1.LOC OR TD.FinalLOC = LLI1.LOC)
                   AND TD.FromID = LLI1.ID
 				  AND TD.StorerKey = @cStorerKey
 				  AND LLI1.StorerKey = @cStorerKey
@@ -209,7 +209,7 @@ BEGIN
    SET LLI.PendingMoveIN = '0'
    FROM dbo.LOTxLOCxID LLI WITH(ROWLOCK)
       LEFT JOIN dbo.TaskDetail TD WITH(NOLOCK)
-         ON TD.ToLoc = LLI.LOC
+         ON (TD.ToLoc = LLI1.LOC OR TD.FinalLOC = LLI1.LOC)
             AND TD.FromID = LLI.ID
             AND TD.StorerKey = @cStorerKey
             AND LLI.StorerKey = @cStorerKey
