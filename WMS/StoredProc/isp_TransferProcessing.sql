@@ -1,7 +1,3 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE Id = OBJECT_ID(N'[isp_TransferProcessing]') AND OBJECTPROPERTY(Id, N'IsProcedure') = 1)
-   DROP PROCEDURE isp_TransferProcessing
-GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -30,8 +26,11 @@ GO
 /* 21-Aug-2017  Wan     1.1   WMS-HK CPI - Lululemon - Transfer Allocation*/
 /* 23-Apr-2018  NJOW02  1.2   WMS-9567 None conso allocation            */
 /* 08-Aug-2021  NJOW03  1.3   WMS-17314 add #ALLOCATE_CANDIDATES        */
+/* 10-Mar-2025  NJOW04  1.4   FCR-3051 To support channel transfer, hold*/
+/*                            and configure- transfer strategy by config*/
+/* 30-Jul-2025  Michae  1.5   FCR-6779 -CN-Capri-Add UCC support (ML01) */
 /************************************************************************/
-CREATE PROC  isp_TransferProcessing  
+CREATE OR ALTER PROC  isp_TransferProcessing  
                @c_TransferKey   NVARCHAR(10)
 ,              @b_Success  INT            OUTPUT
 ,              @n_err      INT            OUTPUT
@@ -60,7 +59,7 @@ BEGIN
          , @c_aUOM                     NVARCHAR(10)
          , @n_aUOMQty                  INT 
          , @n_aQtyLeftToFulfill        INT
-         , @c_aLot                     NVARCHAR(10)
+         , @c_aLot                     NVARCHAR(10) 
          , @c_aStrategyKey             NVARCHAR(10)
          , @n_MinShelfLife             INT
          , @c_Lottable01               NVARCHAR(18)
@@ -103,22 +102,40 @@ BEGIN
          , @c_AllocatePickCode         NVARCHAR(10)
          , @c_HostWHCode               NVARCHAR(10)
          , @c_OtherParms               NVARCHAR(255)
-         , @c_Lot                      NVARCHAR(10)
+         , @c_Lot                      NVARCHAR(10) = ''
          , @c_Loc                      NVARCHAR(10)
          , @c_ID                       NVARCHAR(18)
          , @n_Available                INT  
          , @n_QtyAvailable             INT
          , @n_QtyToTake                INT
          , @c_TransferAllocateNoConso  NVARCHAR(10) --NJOW02
+         , @c_Option5                  NVARCHAR(MAX)      --ML01
+         , @c_AllocateUCC              NVARCHAR(10) = ''  --ML01
+         , @c_UCCNo                    NVARCHAR(20)       --ML01
 
+   --NJOW04      
+   DECLARE @c_TransferStrategykey       NVARCHAR(10) 
+         , @c_ChannelInventoryMgmt      NVARCHAR(10) = '0' 
+         , @n_FromChannel_ID            BIGINT = 0        
+         , @n_ToChannel_ID              BIGINT = 0        
+         , @n_Channel_Qty_Available     INT = 0               
+         , @n_ChannelHoldQty            INT = 0       
+		 , @n_AllocatedHoldQty          INT = 0
+         , @c_FromChannel               NVARCHAR(20) = ''
+         , @c_ToChannel                 NVARCHAR(20) = ''
+         , @c_PrevLot                   NVARCHAR(10) = ''
+         , @c_SourceType                NVARCHAR(50) = ''
+         , @c_SourceKey                 NVARCHAR(30) = ''         
+         , @c_TRFAllocHoldChannel       NVARCHAR(30) = ''
+                      
    DECLARE @c_NewTransferLineNumber NVARCHAR(5)
          , @c_TransferLineNumber NVARCHAR(5)
          , @n_BalQty INT
          , @n_FromQty INT
          , @n_SplitQty INT
          , @n_AllocatedLineCnt INT
-         , @n_OpenLineCnt INT
-
+         , @n_OpenLineCnt INT           
+                  
    --NJOW03
    IF OBJECT_ID('tempdb..#ALLOCATE_CANDIDATES','u') IS NOT NULL
    BEGIN
@@ -168,20 +185,47 @@ BEGIN
          
    SELECT @c_TransferAllocateNoConso = dbo.fnc_GetRight(@c_aFacility, @c_aStorerkey, '', 'TransferAllocateNoConso') 
    --NJOW02 End
+   
+   --NJOW04 S
+   SELECT @c_ChannelInventoryMgmt = dbo.fnc_GetRight(@c_aFacility, @c_aStorerkey, '', 'ChannelInventoryMgmt')
+   SELECT @c_TransferStrategykey = dbo.fnc_GetRight(@c_aFacility, @c_aStorerkey, '', 'TransferStrategykey')
+   SELECT @c_TRFAllocHoldChannel = dbo.fnc_GetRight(@c_aFacility, @c_aStorerkey, '', 'TRFAllocHoldChannel')
+
+   SET @c_Option5 = ''                                                                                       --ML01
+   SELECT @c_Option5 = Option5 FROM dbo.fnc_GetRight2(@c_aFacility, @c_aStorerKey,'','TransferStrategykey')  --ML01
+   SET @c_AllocateUCC = dbo.fnc_GetParamValueFromString('@c_AllocateUCC', @c_Option5, @c_AllocateUCC)        --ML01
+
+
+   IF ISNULL(@c_TransferStrategykey,'') NOT IN ('','0','1')
+   BEGIN
+   	  IF NOT EXISTS(SELECT 1 FROM ALLOCATESTRATEGY AST(NOLOCK)
+   	                JOIN ALLOCATESTRATEGYDETAIL ASTD (NOLOCK) ON AST.AllocateStrategykey = ASTD.AllocateStrategykey
+   	                WHERE AST.AllocateStrategykey = @c_TransferStrategykey)
+   	  BEGIN
+         SET @n_continue = 3
+         SET @n_err = 63500   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+         SET @c_errmsg='NSQL'+CONVERT(Char(5),@n_err)+': Invalid allocation strategykey at storerconfig TransferStrategykey (nspTransferProcessing)' + '( ' + ' SQLSvr MESSAGE=' + dbo.fnc_LTrim(RTRIM(@c_errmsg)) + ' ) '
+         GOTO EXIT_SP
+   	  END
+   END
+   --NJOW04 E
 
    --Store original qty to userdefine09 if not empty
    UPDATE TRANSFERDETAIL WITH (ROWLOCK)
-   SET Userdefine09 = CAST(FromQty AS NVARCHAR),
+--ML01   SET Userdefine09 = CAST(FromQty AS NVARCHAR),
+   SET Userdefine09 = CASE WHEN ISNULL(Userdefine09,'') = '' THEN CAST(FromQty AS NVARCHAR) ELSE Userdefine09 END,   --ML01
+       Userdefine08 = CASE WHEN @c_AllocateUCC = 'Y' THEN '' ELSE Userdefine08 END,                                  --ML01
+       Userdefine05 = CASE WHEN @c_AllocateUCC = 'Y' THEN '' ELSE Userdefine05 END,                                  --ML01
        TrafficCop = NULL
    WHERE Transferkey = @c_Transferkey
    AND ISNULL(FromLot,'') = ''
-   AND ISNULL(Userdefine09,'') = ''
+--ML01   AND ISNULL(Userdefine09,'') = ''
       
    SELECT @n_err = @@ERROR
    IF @n_err <> 0
    BEGIN
       SET @n_continue = 3
-      SET @n_err = 63500   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+      SET @n_err = 63510   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
       SET @c_errmsg='NSQL'+CONVERT(Char(5),@n_err)+': Update Transferdetail Failed! (nspTransferProcessing)' + '( ' + ' SQLSvr MESSAGE=' + dbo.fnc_LTrim(RTRIM(@c_errmsg)) + ' ) '
       GOTO EXIT_SP
    END
@@ -212,6 +256,8 @@ BEGIN
          ,  [Lottable13]               [DATETIME]     NOT NULL
          ,  [Lottable14]               [DATETIME]     NOT NULL
          ,  [Lottable15]               [DATETIME]     NOT NULL
+         ,  [FromChannel]              [NVARCHAR](20) NULL  --NJOW04
+         ,  [ToChannel]                [NVARCHAR](20) NULL  --NJOW04
          )
 
    INSERT INTO #OPTRANSFERLINES
@@ -238,7 +284,9 @@ BEGIN
          ,  [Lottable12] 
          ,  [Lottable13] 
          ,  [Lottable14] 
-         ,  [Lottable15]             
+         ,  [Lottable15]        
+         ,  [FromChannel]  --NJOW04       
+         ,  [ToChannel]    --NJOW04
          )
    SELECT   Facility = ISNULL(RTRIM(TRANSFER.Facility),'')
          ,  TransferKey = ISNULL(RTRIM(TRANSFER.Transferkey),'')
@@ -247,7 +295,9 @@ BEGIN
          ,  FromSku      = ISNULL(RTRIM(TRANSFERDETAIL.FromSku),'')
          ,  FromQty      = ISNULL(TRANSFERDETAIL.FromQty,0)
          ,  FromPackkey  = ISNULL(RTRIM(TRANSFERDETAIL.FromPackkey),'')
-         ,  StrategyKey = ISNULL(RTRIM(STGY.TransferStrategyKey),'') 
+         --,  StrategyKey = ISNULL(RTRIM(STGY.TransferStrategyKey),'') 
+         ,  StrategyKey = CASE WHEN ISNULL(@c_TransferStrategykey,'') NOT IN ('','0','1') THEN @c_TransferStrategykey
+                               ELSE ISNULL(RTRIM(STGY.TransferStrategyKey),'') END  --NJOW04       
          ,  MinShelf    = 0
          ,  Lottable01  = ISNULL(RTRIM(TRANSFERDETAIL.Lottable01),'')
          ,  Lottable02  = ISNULL(RTRIM(TRANSFERDETAIL.Lottable02),'')
@@ -264,6 +314,8 @@ BEGIN
          ,  Lottable13  = ISNULL(TRANSFERDETAIL.Lottable13, '19000101')
          ,  Lottable14  = ISNULL(TRANSFERDETAIL.Lottable14, '19000101')
          ,  Lottable15  = ISNULL(TRANSFERDETAIL.Lottable15, '19000101')
+         ,  FromChannel = ISNULL(TRANSFERDETAIL.FromChannel,'') --NJOW02
+         ,  ToChannel = ISNULL(TRANSFERDETAIL.ToChannel,'')   --NJOW02
       FROM  TRANSFER (NOLOCK)
       JOIN  TRANSFERDETAIL (NOLOCK) ON TRANSFER.Transferkey = TRANSFERDETAIL.Transferkey
       JOIN  SKU (NOLOCK) ON TRANSFERDETAIL.FromStorerkey = SKU.StorerKey AND TRANSFERDETAIL.FromSku = SKU.Sku
@@ -312,6 +364,8 @@ BEGIN
             ,  #OPTRANSFERLINES.Lottable14 
             ,  #OPTRANSFERLINES.Lottable15
             ,  #OPTRANSFERLINES.TransferLineNumber
+            ,  #OPTRANSFERLINES.FromChannel --NJOW04
+            ,  #OPTRANSFERLINES.ToChannel --NJOW04
         FROM #OPTRANSFERLINES 
         GROUP BY #OPTRANSFERLINES.TransferKey
             ,  #OPTRANSFERLINES.Facility
@@ -336,6 +390,8 @@ BEGIN
             ,  #OPTRANSFERLINES.Lottable14 
             ,  #OPTRANSFERLINES.Lottable15
             ,  #OPTRANSFERLINES.TransferLineNumber
+            ,  #OPTRANSFERLINES.FromChannel --NJOW04
+            ,  #OPTRANSFERLINES.ToChannel --NJOW04            
          ORDER BY #OPTRANSFERLINES.FromStorerKey, #OPTRANSFERLINES.FromSKU
    END   
    ELSE
@@ -365,6 +421,8 @@ BEGIN
             ,  #OPTRANSFERLINES.Lottable14 
             ,  #OPTRANSFERLINES.Lottable15
             ,  '     '  --NJOW02
+            ,  #OPTRANSFERLINES.FromChannel --NJOW04
+            ,  #OPTRANSFERLINES.ToChannel --NJOW04            
         FROM #OPTRANSFERLINES 
         GROUP BY #OPTRANSFERLINES.TransferKey
             ,  #OPTRANSFERLINES.Facility
@@ -388,6 +446,8 @@ BEGIN
             ,  #OPTRANSFERLINES.Lottable13 
             ,  #OPTRANSFERLINES.Lottable14 
             ,  #OPTRANSFERLINES.Lottable15
+            ,  #OPTRANSFERLINES.FromChannel --NJOW04
+            ,  #OPTRANSFERLINES.ToChannel --NJOW04            
          ORDER BY #OPTRANSFERLINES.FromStorerKey, #OPTRANSFERLINES.FromSKU
    END
      
@@ -416,12 +476,16 @@ BEGIN
                                          ,@dt_Lottable14
                                          ,@dt_Lottable15
                                          ,@c_aTransferLineNumber --NJOW02
+                                         ,@c_FromChannel --NJOW04
+                                         ,@c_ToChannel --NJOW04
 
    WHILE (@@FETCH_STATUS <> -1)
    BEGIN
       SET @c_aLot = ''
       SET @c_ALLineNo = ''
       SET @n_aUOMQty = 0
+      SET @n_FromChannel_ID = ''--NJOW04
+      SET @n_ToChannel_ID = '' --NJOW04
       
       IF @c_aStorerkey <> @c_PStorerkey 
       BEGIN
@@ -615,6 +679,7 @@ BEGIN
                      WHEN '@n_UOMBase'    THEN ',@n_UOMBase= ' + CONVERT(NVARCHAR(10),@n_PackQty) 
                      WHEN '@n_QtyLeftToFulfill' THEN ',@n_QtyLeftToFulfill=' + CONVERT(NVARCHAR(10), @n_aQtyLeftToFulfill) 
                      WHEN '@c_OtherParms' THEN ',@c_OtherParms=''' + @c_OtherParms + ''''     
+                     WHEN '@c_AllocateUCC' THEN ',@c_AllocateUCC=''' + ISNULL(@c_AllocateUCC,'') + ''''   --ML01
                   END
                END 
             
@@ -674,15 +739,34 @@ BEGIN
             SET @n_CursorCandidates_Open = 1
          END
 
+         SET @c_Lot = '' --NJOW04
          IF @n_CursorCandidates_Open = 1 
          BEGIN
-            WHILE @n_aQtyLeftToFulfill > 0
+            WHILE @n_aQtyLeftToFulfill > 0 
             BEGIN
-               FETCH NEXT FROM CURSOR_CANDIDATES INTO @c_LOT
-                                                   ,  @c_loc
-                                                   ,  @c_id
-                                                   ,  @n_QtyAvailable
-                                                   ,  @c_LocType
+               SET @c_PrevLot = @c_Lot
+               --ML01-S
+               SET @c_UCCNo = ''
+               IF @c_AllocateUCC = 'Y' AND
+                   EXISTS(SELECT TOP 1 1 FROM [INFORMATION_SCHEMA].[PARAMETERS]
+                   WHERE SPECIFIC_NAME = @c_AllocatePickCode AND PARAMETER_NAME=N'@c_AllocateUCC')
+               BEGIN
+                  FETCH NEXT FROM CURSOR_CANDIDATES INTO @c_LOT
+                                                       , @c_loc
+                                                       , @c_id
+                                                       , @n_QtyAvailable
+                                                       , @c_LocType
+                                                       , @c_UCCNo
+               END
+               ELSE
+               BEGIN
+               --ML01-E
+                  FETCH NEXT FROM CURSOR_CANDIDATES INTO @c_LOT
+                                                      ,  @c_loc
+                                                      ,  @c_id
+                                                      ,  @n_QtyAvailable
+                                                      ,  @c_LocType
+               END   --ML01
                IF @@FETCH_STATUS = -1
                BEGIN
                   BREAK
@@ -690,6 +774,87 @@ BEGIN
 
                IF @@FETCH_STATUS = 0
                BEGIN
+               	  --NJOW04 S               	  
+                  IF @c_ChannelInventoryMgmt = '1'         
+                  BEGIN  
+                     IF @c_PrevLot <> @c_Lot OR @c_PrevLot = ''
+                        SET @n_FromChannel_ID = 0  
+                     
+                     IF ISNULL(RTRIM(@c_FromChannel), '') <> ''  AND  
+                        ISNULL(@n_FromChannel_ID,0) = 0  
+                     BEGIN  
+                        SET @n_FromChannel_ID = 0  
+                 
+                        BEGIN TRY  
+                           EXEC isp_ChannelGetID   
+                               @c_StorerKey   = @c_aStorerKey  
+                              ,@c_Sku         = @c_aSKU  
+                              ,@c_Facility    = @c_aFacility  
+                              ,@c_Channel     = @c_FromChannel  
+                              ,@c_LOT         = @c_Lot  
+                              ,@n_Channel_ID  = @n_FromChannel_ID OUTPUT  
+                              ,@b_Success     = @b_Success OUTPUT  
+                              ,@n_ErrNo       = @n_Err OUTPUT  
+                              ,@c_ErrMsg      = @c_ErrMsg OUTPUT           
+                              ,@c_CreateIfNotExist = 'N'  
+                              
+                              IF @b_Success = 0
+                              BEGIN
+                              	 SET @c_ErrMsg = RTRIM(@c_ErrMsg) + '. (nspTransferProcessing)'   
+                                 SET @n_continue = 3                              
+                              END   
+                        END TRY  
+                        BEGIN CATCH  
+                              SELECT @n_err = ERROR_NUMBER(),  
+                                     @c_ErrMsg = ERROR_MESSAGE()  
+                  
+                              SELECT @n_continue = 3  
+                              SET @c_ErrMsg = RTRIM(@c_ErrMsg) + '. (nspTransferProcessing)'   
+                        END CATCH                                            
+                     END   
+                     
+                     IF @n_FromChannel_ID > 0   
+                     BEGIN  
+                        SET @n_Channel_Qty_Available = 0                    
+                        SET @n_AllocatedHoldQty = 0                           
+                        SET @n_ChannelHoldQty = 0
+                        SET @c_SourceType = 'nspTransferProcessing'
+                        SET @c_SourceKey = @c_Transferkey                        
+
+                        EXEC isp_ChannelAllocGetHoldQty_Wrapper  
+                           @c_StorerKey = @c_aStorerkey, 
+                           @c_Sku = @c_aSKU,  
+                           @c_Facility = @c_aFacility,           
+                           @c_Lot = @c_Lot,
+                           @c_Channel = @c_FromChannel,
+                           @n_Channel_ID = @n_FromChannel_ID,   
+                           @n_AllocateQty = @n_QtyAvailable, 
+                           @n_QtyLeftToFulFill = @n_aQtyLeftToFulfill, 
+                           @c_SourceKey = @c_SourceKey,
+                           @c_SourceType = @c_SourceType, 
+                           @n_ChannelHoldQty = @n_ChannelHoldQty OUTPUT,
+                           @b_Success = @b_Success OUTPUT,
+                           @n_Err = @n_Err OUTPUT, 
+                           @c_ErrMsg = @c_ErrMsg OUTPUT
+                         
+                        IF @b_success <> 1
+                        BEGIN
+                           SET @n_continue = 3                                                                                
+                        END
+                             
+                        SELECT @n_Channel_Qty_Available = ci.Qty - (ci.QtyAllocated - @n_AllocatedHoldQty) - ci.QtyOnHold - @n_ChannelHoldQty 
+                        FROM ChannelInv AS ci WITH(NOLOCK)  
+                        WHERE ci.Channel_ID = @n_FromChannel_ID  
+                        IF @n_Channel_Qty_Available < @n_QtyAvailable  
+                        BEGIN   
+                           SET @n_QtyAvailable = @n_Channel_Qty_Available     
+                        END                 
+                     END   
+                     ELSE IF ISNULL(RTRIM(@c_FromChannel), '') <> ''   
+                        SET @n_QtyAvailable = 0  
+                  END                  	  
+               	  --NJOW04 E
+               	
                   IF @c_LocType = 'FULLPALLET' AND @c_aUOM = '1' 
                   BEGIN                           
                      --SELECT @n_UOMQty = 1
@@ -783,7 +948,9 @@ BEGIN
                                             ,@dt_Lottable13
                                             ,@dt_Lottable14
                                             ,@dt_Lottable15
-                                            ,@c_aTransferLineNumber --NJOW02                                           
+                                            ,@c_aTransferLineNumber --NJOW02          
+                                            ,@c_FromChannel --NJOW04
+                                            ,@c_ToChannel --NJOW04                                                                             
    END
    CLOSE TRANSFERLINES_CUR
    DEALLOCATE TRANSFERLINES_CUR
@@ -878,6 +1045,8 @@ BEGIN
       AND ISNULL(TD.Lottable14, '19000101') = @dt_Lottable14
       AND ISNULL(TD.Lottable15, '19000101') = @dt_Lottable15
       AND TD.TransferLineNumber = CASE WHEN ISNULL(@c_aTransferLineNumber,'') <> '' THEN @c_aTransferLineNumber ELSE TD.TransferLineNumber END --NJOW02
+      AND ISNULL(TD.FromChannel,'') = @c_FromChannel --NJOW04
+      AND ISNULL(TD.ToChannel,'') = @c_ToChannel  --NJOW04      
    
    OPEN CUR_TRANSFERDET_UPDATE  
    
@@ -905,7 +1074,9 @@ BEGIN
       	     ToPackkey = CASE WHEN ISNULL(ToPackkey,'') = '' THEN FromPackkey ELSE ToPackkey END,
       	     ToUOM = CASE WHEN ISNULL(ToUOM,'') = '' THEN FromUOM ELSE ToUOM END,
       	     Userdefine10 = @c_aUOM,     	     
-      	     TrafficCop = NULL
+      	     TrafficCop = NULL,
+      	     FromChannel_ID = CASE WHEN @c_TRFAllocHoldChannel = '1' THEN @n_FromChannel_ID ELSE FromChannel_ID END --NJOW04
+            , Userdefine05 = CASE WHEN @c_AllocateUCC = 'Y' THEN @c_UCCNo ELSE Userdefine05 END   --ML01
       	 WHERE Transferkey = @c_Transferkey
       	 AND TransferLineNumber = @c_TransferLineNumber
       	 
@@ -913,11 +1084,44 @@ BEGIN
       	 IF @n_err <> 0
       	 BEGIN
             SET @n_continue = 3
-            SET @n_err = 63530   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+            SET @n_err = 63520   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
             SET @c_errmsg='NSQL'+CONVERT(Char(5),@n_err)+': Update Transferdetail Failed! (nspTransferProcessing)' + '( ' + ' SQLSvr MESSAGE=' + dbo.fnc_LTrim(RTRIM(@c_errmsg)) + ' ) '
 		   	 END
 		   	 
-		   	 SELECT @n_BalQty = @n_BalQty - @n_FromQty
+		   	 SELECT @n_BalQty = @n_BalQty - @n_FromQty		   	 
+		   	 
+		   	 --NJOW04 S		   	 
+         IF @c_ChannelInventoryMgmt = '1' AND @c_TRFAllocHoldChannel = '1' AND @n_FromChannel_ID > 0
+         BEGIN  
+            EXEC isp_ChannelInvHoldWrapper    
+                 @c_HoldType     = 'TRF'           
+               , @c_SourceKey    = @c_Transferkey      
+               , @c_SourceLineNo = @c_TransferLineNumber                                   
+               , @c_Facility     = ''         
+               , @c_Storerkey    = ''         
+               , @c_Sku          = ''         
+               , @c_Channel      = ''         
+               , @c_C_Attribute01= ''         
+               , @c_C_Attribute02= ''         
+               , @c_C_Attribute03= ''         
+               , @c_C_Attribute04= ''         
+               , @c_C_Attribute05= ''         
+               , @n_Channel_ID   = 0         
+               , @c_Hold         = '1'         
+               , @c_Remarks      = ''    
+               , @c_HoldTRFType  = 'F'         
+               , @b_Success      = @b_Success   OUTPUT    
+               , @n_Err          = @n_Err       OUTPUT    
+               , @c_ErrMsg       = @c_ErrMsg    OUTPUT    
+         
+            IF @b_Success = 0    
+            BEGIN    
+               SET @n_continue = 3    
+               SET @n_err = 63530    
+               SET @c_errmsg='NSQL'+CONVERT(Char(5),@n_err)+': Error Executing isp_ChannelInvHoldWrapper. (nspTransferProcessing)' + '( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '               
+            END    
+         END  		 
+         --NJOW04 E           	 		   	 
       END
       ELSE
       BEGIN  -- pickqty > packqty
@@ -993,7 +1197,11 @@ BEGIN
          	ToLottable12,
          	ToLottable13,
          	ToLottable14,
-         	ToLottable15
+         	ToLottable15,         	
+         	FromChannel, --NJOW04
+         	ToChannel, --NJOW04
+         	FromChannel_ID, --NJOW04
+         	ToChannel_ID --NJOW04
          )
          SELECT	TransferKey,
          	      @c_NewTransferLineNumber,
@@ -1028,7 +1236,8 @@ BEGIN
          	      UserDefine02,
          	      UserDefine03,
          	      UserDefine04,
-         	      UserDefine05,
+--ML01         	      UserDefine05,
+                  Userdefine05 = CASE WHEN @c_AllocateUCC = 'Y' THEN '' ELSE Userdefine05 END,   --ML01
          	      UserDefine06,
          	      UserDefine07,
          	      UserDefine08,
@@ -1053,7 +1262,11 @@ BEGIN
          	      ToLottable12,
          	      ToLottable13,
          	      ToLottable14,
-         	      ToLottable15
+         	      ToLottable15,
+         	      FromChannel, --NJOW04
+         	      ToChannel, --NJOW04
+         	      FromChannel_ID, --NJOW04
+         	      ToChannel_ID --NJOW04         	      
          FROM TRANSFERDETAIL(NOLOCK)
          WHERE Transferkey = @c_Transferkey
          AND TransferLineNumber = @c_TransferLineNumber    	 
@@ -1075,7 +1288,7 @@ BEGIN
       	 IF @n_err <> 0
       	 BEGIN
             SET @n_continue = 3
-            SET @n_err = 63545   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+            SET @n_err = 63550   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
             SET @c_errmsg='NSQL'+CONVERT(Char(5),@n_err)+': Update Transfer Failed! (nspTransferProcessing)' + '( ' + ' SQLSvr MESSAGE=' + dbo.fnc_LTrim(RTRIM(@c_errmsg)) + ' ) '
 		   	 END      	 
 		   	 
@@ -1092,7 +1305,9 @@ BEGIN
       	     ToPackkey = CASE WHEN ISNULL(ToPackkey,'') = '' THEN FromPackkey ELSE ToPackkey END,
       	     ToUOM = CASE WHEN ISNULL(ToUOM,'') = '' THEN FromUOM ELSE ToUOM END,
       	     Userdefine10 = @c_aUOM,      	     
-      	     TrafficCop = NULL
+      	     TrafficCop = NULL,
+      	     FromChannel_ID = CASE WHEN @c_TRFAllocHoldChannel = '1' THEN @n_FromChannel_ID ELSE FromChannel_ID END --NJOW04      	     
+            , Userdefine05 = CASE WHEN @c_AllocateUCC = 'Y' THEN @c_UCCNo ELSE Userdefine05 END   --ML01
       	 WHERE Transferkey = @c_Transferkey
       	 AND TransferLineNumber = @c_TransferLineNumber
       	 
@@ -1100,11 +1315,44 @@ BEGIN
       	 IF @n_err <> 0
       	 BEGIN
             SET @n_continue = 3
-            SET @n_err = 63550   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+            SET @n_err = 63560   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
             SET @c_errmsg='NSQL'+CONVERT(Char(5),@n_err)+': Update Transferdetail Failed! (nspTransferProcessing)' + '( ' + ' SQLSvr MESSAGE=' + dbo.fnc_LTrim(RTRIM(@c_errmsg)) + ' ) '
-		   	 END
+		   	 END		   	 		   	 
           
          SELECT @n_BalQty = 0
+         
+		     --NJOW04 S		   	 
+         IF @c_ChannelInventoryMgmt = '1' AND @c_TRFAllocHoldChannel = '1' AND @n_FromChannel_ID > 0
+         BEGIN  
+            EXEC isp_ChannelInvHoldWrapper    
+                 @c_HoldType     = 'TRF'           
+               , @c_SourceKey    = @c_Transferkey      
+               , @c_SourceLineNo = @c_TransferLineNumber                                   
+               , @c_Facility     = ''         
+               , @c_Storerkey    = ''         
+               , @c_Sku          = ''         
+               , @c_Channel      = ''         
+               , @c_C_Attribute01= ''         
+               , @c_C_Attribute02= ''         
+               , @c_C_Attribute03= ''         
+               , @c_C_Attribute04= ''         
+               , @c_C_Attribute05= ''         
+               , @n_Channel_ID   = 0         
+               , @c_Hold         = '1'         
+               , @c_Remarks      = ''    
+               , @c_HoldTRFType  = 'F'         
+               , @b_Success      = @b_Success   OUTPUT    
+               , @n_Err          = @n_Err       OUTPUT    
+               , @c_ErrMsg       = @c_ErrMsg    OUTPUT    
+         
+            IF @b_Success = 0    
+            BEGIN    
+               SET @n_continue = 3    
+               SET @n_err = 63570    
+               SET @c_errmsg='NSQL'+CONVERT(Char(5),@n_err)+': Error Executing isp_ChannelInvHoldWrapper. (nspTransferProcessing)' + '( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '               
+            END    
+         END  		 
+         --NJOW04 E           	 		           
       END
       
       UPDATE TRANSFERDETAIL WITH (ROWLOCK)
@@ -1148,10 +1396,10 @@ BEGIN
       IF @n_err <> 0
       BEGIN
          SET @n_continue = 3
-         SET @n_err = 63560   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+         SET @n_err = 63580   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
          SET @c_errmsg='NSQL'+CONVERT(Char(5),@n_err)+': Update Transferdetail Failed! (nspTransferProcessing)' + '( ' + ' SQLSvr MESSAGE=' + dbo.fnc_LTrim(RTRIM(@c_errmsg)) + ' ) '
 		  END      	 
-      
+		        
       FETCH NEXT FROM CUR_TRANSFERDET_UPDATE INTO @c_TransferLineNumber, @n_FromQty            
    END
    CLOSE CUR_TRANSFERDET_UPDATE  
