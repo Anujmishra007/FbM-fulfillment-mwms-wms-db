@@ -41,6 +41,9 @@ BEGIN
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
+   DECLARE @nRowCount INT = 0,
+   @cDropID NVARCHAR(20) = ''
+
    DECLARE @nTranCount  INT
    SET @nTranCount = @@TRANCOUNT
    -- Handling transaction
@@ -53,11 +56,22 @@ BEGIN
       BEGIN
          IF @nInputKey = 1 -- ENTER
          BEGIN
-            DELETE FROM dbo.DROPIDDETAIL
+
+            SELECT TOP 1 @cDropID = DropID FROM dbo.DROPIDDETAIL
             WHERE Childid = @cLabelNo
 
-            DELETE FROM dbo.DROPID
-            WHERE DROPID = @cLabelNo
+            SELECT @nRowCount = @@ROWCOUNT
+            IF @nRowCount <> 0 -- No record found
+            BEGIN
+               DELETE FROM dbo.DROPIDDETAIL
+               WHERE Childid = @cLabelNo
+
+               IF NOT EXISTS (SELECT 1 FROM dbo.DROPIDDETAIL WHERE DropID = @cDropID)
+               BEGIN
+                  DELETE FROM dbo.DROPID
+                  WHERE DropID = @cDropID
+               END
+            END
          END
       END
    END
