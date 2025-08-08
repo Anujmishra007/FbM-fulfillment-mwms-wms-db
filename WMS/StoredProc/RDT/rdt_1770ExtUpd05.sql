@@ -11,7 +11,7 @@ GO
 /* 2025-08-07   PSJ036    1.0   RITM7939100 - Enter to inventory holds and validated qty = 0    */
 /************************************************************************************************/
 
-ALTER   PROCEDURE [RDT].[rdt_1770ExtUpd05]
+CREATE OR ALTER   PROCEDURE [RDT].[rdt_1770ExtUpd05]
     @nMobile         INT 
    ,@nFunc           INT 
    ,@cLangCode       NVARCHAR( 3) 
