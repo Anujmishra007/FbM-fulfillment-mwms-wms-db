@@ -13,6 +13,7 @@ GO
 /* 2025-06-10 1.0.0  Dennis     FCR-3959 Created                        */
 /* 2025-06-26 1.0.1  Jackc      FCR-3959 Fill in srckey when create task*/
 /*                               add update pickdetail logic            */
+/* 2025-08-08 1.0.2  Dennis     FCR-3959 Prevent generatingDuplicateTask*/
 /************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_1812CreateTask03] (
@@ -181,6 +182,9 @@ BEGIN
 
       IF @nDebugFlag = 1
          SELECT 'Handling task', @nLoopIndex+1 AS RowNumber, @cTaskDetailKey AS TaskDetailKey
+      --V1.0.2
+      IF EXISTS (SELECT 1 FROM dbo.TaskDetail (NOLOCK) WHERE FromID = @cToID AND TaskType = 'FCP1' AND STATUS <> '9')
+         CONTINUE
 
       --Get Order info
       SELECT TOP 1
