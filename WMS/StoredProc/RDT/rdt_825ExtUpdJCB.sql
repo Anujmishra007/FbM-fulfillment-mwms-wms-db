@@ -1,5 +1,4 @@
 
-/****** Object:  StoredProcedure [RDT].[rdt_825ExtUpdJCB]    Script Date: 8/6/2025 11:27:08 AM ******/
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -275,6 +274,28 @@ BEGIN
 			   GOTO QUIT --Stopping the SP
 		    END
 
+			IF @nWidth > @nLength --Check if Width > Length
+			BEGIN
+			   SET @nErrNo = 218153
+			   SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') --'Bad length and width'
+			   UPDATE dbo.PALLET WITH(ROWLOCK)
+               SET Length = 0, 
+			      Width = 0, 
+				  Height = 0, 
+				  GrossWgt = 0, 
+				  PalletType = 'U' --Updating pallet type in PALLET as undefined with 0 dims and weight
+               WHERE PalletKey = @cPalletKey 
+			      AND StorerKey = @cStorerKey
+
+			   UPDATE dbo.RECEIPTDETAIL WITH(ROWLOCK)
+			      SET PalletType = 'U' --Updating pallet type in RECEIPTDETAIL as undefined
+			   WHERE ToId = @cPalletKey 
+			      AND StorerKey = @cStorerKey
+				  AND ReceiptKey = @cReceiptKey
+
+			   GOTO QUIT --Stopping the SP
+			END
+	
 		    IF @cZeroExists = 'Y' AND ISNULL(@nZeroSKUNo,0) > 1 --Checks that more than 1 SKU got no weight
 		    BEGIN
 			   SET @nErrNo = 218095
