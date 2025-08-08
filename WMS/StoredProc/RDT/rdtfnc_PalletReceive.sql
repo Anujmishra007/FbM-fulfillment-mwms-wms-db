@@ -1022,9 +1022,10 @@ BEGIN
       EXEC rdt.rdt_PalletReceive_Confirm @nFunc, @nMobile, @cLangCode, @cStorerKey, @cFacility,
          @cActReceiptKey,
          @cID,
-         @cToLOC,
          @nErrNo  OUTPUT,
-         @cErrMsg OUTPUT
+         @cErrMsg OUTPUT,
+         @cToLOC
+
       IF @nErrNo <> 0
       BEGIN
          ROLLBACK TRAN rdtfnc_PalletReceive
