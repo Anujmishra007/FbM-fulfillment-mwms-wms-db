@@ -13,7 +13,7 @@ GO
 /* 2025-08-05  1.0  Dennis   FCR-3954 Created                           */
 /************************************************************************/
 
-CREATE OR ALTER PROC [RDT].[rdt_TM_PutawayFrom_Confirm_JCB] (
+ALTER     PROC [RDT].[rdt_TM_PutawayFrom_Confirm_JCB] (
    @nMobile        INT,
    @nFunc          INT,
    @cLangCode      NVARCHAR( 3),
@@ -281,6 +281,67 @@ BEGIN
       IF @nErrNo <> 0
          GOTO RollBackTran
    END
+
+   BEGIN
+      -- 1. Declare the temp table
+      DECLARE @TempLocationRooms TABLE (
+         Loc NVARCHAR(10)
+      );
+
+      -- 2. Insert results with suffixes (1, 2, 3) into the temp table
+      INSERT INTO @TempLocationRooms (Loc)
+      SELECT LocationRoom + CAST(Number AS NVARCHAR(1)) AS Loc
+      FROM (
+         -- Base query to get distinct LocationRooms
+         SELECT DISTINCT LocationRoom
+         FROM dbo.LOTxLOCxID LLI WITH(NOLOCK)
+         RIGHT JOIN (
+            SELECT L.LocationRoom, L.Facility
+            FROM dbo.INVENTORYHOLD IH WITH(NOLOCK)
+            INNER JOIN LOC L WITH(NOLOCK)
+               ON IH.Loc = L.Loc
+               AND L.Facility = @cFacility
+               AND IH.Status = 'DoublePal'
+               AND IH.Hold = '1'
+         ) LR
+            ON LLI.Loc LIKE LR.LocationRoom + '%'
+            AND LLI.StorerKey = @cStorerKey
+            AND LR.Facility = @cFacility
+            AND LLI.Qty > 0
+         LEFT JOIN PALLET P WITH(NOLOCK)
+            ON LLI.Id = P.PalletKey
+            AND LLI.StorerKey = @cStorerKey
+            AND P.PalletType LIKE 'D%'
+            AND P.StorerKey = @cStorerKey
+         GROUP BY LocationRoom
+         HAVING MAX(PalletKey) IS NULL
+      ) AS BaseRooms
+      CROSS JOIN (VALUES (1), (2), (3)) AS Suffix(Number);
+
+      -- 3. Update INVENTORYHOLD based on locations in the temp table
+      UPDATE dbo.INVENTORYHOLD WITH(ROWLOCK)
+      SET Hold = '0'
+      WHERE Status = 'DoublePal'
+         AND Hold = '1'
+         AND LOC IN (
+            SELECT Loc FROM @TempLocationRooms
+         )
+
+      -- 4. Update LOCs to have status 'OK' when there are no Holds
+      UPDATE dbo.LOC WITH(ROWLOCK)
+	  SET Status = 'OK'
+	  WHERE Facility = @cFacility
+	     AND LOC IN ( 
+	        SELECT L.Loc
+            FROM dbo.Loc L WITH(NOLOCK)
+               LEFT JOIN dbo.InventoryHold IH WITH(NOLOCK)
+                  ON IH.Loc = L.Loc AND IH.Hold = '1'
+            WHERE IH.Loc IS NULL
+               AND L.Facility = @cFacility
+               AND L.Status <> 'OK'
+         )
+   END
+
 
    --Cancel tasks that can no longer be fulfilled
    UPDATE TD WITH(ROWLOCK)
