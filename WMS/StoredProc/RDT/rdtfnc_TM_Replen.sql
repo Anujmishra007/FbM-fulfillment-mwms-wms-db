@@ -61,6 +61,7 @@ GO
 /* 2025-06-16 4.4  Dennis     FCR-3959 Extended Update on Step 7              */
 /* 2025-07-10 0.0  JackC      !!!Cutover!!! Use V0 repo for work              */
 /* 2025-08-04 4.4.0 NickT     UWP-37578 Extend length of  @cOption            */
+/* 2025-08-08 4.5.0 NickT     UWP-39061 SuggestToLoc is reset by mistake      */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_Replen](
@@ -3637,7 +3638,7 @@ BEGIN
 
          IF @cExtScnSP = 'rdt_1764ExtScn01'
          BEGIN
-            IF @nStep = @nStep_ToLoc
+            IF @nStep = @nStep_ToLoc AND @nCurrentStep = 0
             BEGIN
                SET @cTTMTaskType    = @cUDF01
                SET @cSuggID         = @cUDF02
