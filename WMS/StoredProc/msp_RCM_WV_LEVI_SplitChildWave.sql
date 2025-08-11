@@ -90,6 +90,22 @@ BEGIN
                           + N': Wavekey# ' + @c_Wavekey + ' is invalid. (msp_RCM_WV_LEVI_SplitChildWave)'
          GOTO EXIT_SP
       END
+
+      --WL03 S
+      --Check if Wave has been split before (UserDefine08 = master Wavekey)
+      IF EXISTS ( SELECT 1
+                  FROM WAVE WITH (NOLOCK)
+                  WHERE Wavekey = @c_Wavekey
+                  AND (UserDefine08 IS NOT NULL AND UserDefine08 <> '')
+                )
+      BEGIN
+         SELECT @n_Continue = 3
+         SELECT @n_Err = 64013
+         SELECT @c_Errmsg = N'NSQL' + CONVERT(NVARCHAR(5), @n_Err)
+                          + N': Wavekey# ' + @c_Wavekey + ' is a child Wave. Not allow to split further. (msp_RCM_WV_LEVI_SplitChildWave)'
+         GOTO EXIT_SP
+      END
+      --WL03 E
    END
 
    IF @n_Continue IN (1,2)
@@ -138,68 +154,15 @@ BEGIN
       WHERE W.WaveKey = @c_Wavekey
    END
 
-   --Manual Wave - split all orders to a new Wave
-   IF @n_Continue IN (1,2) AND ISNULL(@c_WaveUDF09, '') <> 'Y'
+   --WL03 S
+   IF  @n_Continue IN (1,2)
+   AND ((ISNULL(@c_WaveUDF09, '') <> 'Y' AND @b_debug IN (1,2)) OR ISNULL(@c_WaveUDF09, '') = 'Y')
    BEGIN
-      --Generate Wavekey
-      SELECT @b_Success = 0  
-      SET @c_GetWavekey = ''
-      EXECUTE nspg_GetKey  
-               'Wavekey',  
-               10,  
-               @c_GetWavekey  OUTPUT,  
-               @b_Success     OUTPUT,  
-               @n_Err         OUTPUT,  
-               @c_Errmsg      OUTPUT  
-
-      IF @n_Err <> 0
-      BEGIN
-         SELECT @n_Continue = 3
-         SELECT @n_Err = 64001
-         SELECT @c_Errmsg = N'NSQL' + CONVERT(NVARCHAR(5), @n_Err)
-                          + N': Failed to execute nspg_GetKey - Wavekey. (msp_RCM_WV_LEVI_SplitChildWave)'
-         GOTO EXIT_SP
-      END
-      ELSE
-      BEGIN
-         INSERT INTO @T_WAVEDETAIL (Wavekey, Orderkey, BuyerPO, VCCount)
-         SELECT DISTINCT @c_GetWavekey, Orderkey, '', 1
-         FROM WAVEDETAIL WITH (NOLOCK)
-         WHERE WaveKey = @c_Wavekey
-      END
-
-      GOTO WAVE_INSERT
-   END
-
-   --Automation Wave - split child Wave
-   IF @n_Continue IN (1,2) AND @c_WaveUDF09 = 'Y'
-   BEGIN
-      INSERT @T_WCSPackReq (WODType, SKUPerVC, ActiveFlag)
-      SELECT DISTINCT CL.Code, IIF(ISNUMERIC(CL.UDF01) = 1, CL.UDF01, 0), CL.UDF05
-      FROM CODELKUP CL WITH (NOLOCK)
-      WHERE CL.LISTNAME = 'WCSPackReq'
-      AND CL.Storerkey = @c_Storerkey
-      
       INSERT @T_MPOCPERMIT (Code, UDF01)
       SELECT DISTINCT CL.Code, CL.UDF01
       FROM CODELKUP CL WITH (NOLOCK)
       WHERE CL.LISTNAME = 'MPOCPERMIT'
       AND CL.Storerkey = @c_Storerkey
-
-      SELECT @n_WCSConfigWaveSize = IIF(ISNUMERIC(CL.Long) = 1, CL.Long, 0)
-      FROM CODELKUP CL WITH (NOLOCK)
-      WHERE CL.LISTNAME = 'WCSConfigs'
-      AND CL.Short = 'WaveSize'
-      AND CL.Storerkey = @c_Storerkey
-      
-      IF ISNULL(@n_WCSConfigWaveSize, 0) = 0
-      BEGIN
-         SELECT @n_Continue = 3
-         SELECT @n_Err = 64002
-         SELECT @c_Errmsg = N'NSQL' + CONVERT(NVARCHAR(5), @n_Err)
-                          + N': WCSConfigWaveSize is invalid - Codelkup.Listname = WCSConfigs. (msp_RCM_WV_LEVI_SplitChildWave)'
-         GOTO EXIT_SP
-      END
 
       --Validate MPOC - START
       --UDF01 = N, MPOCFlag > 0 (MPOC for manual only)
@@ -272,6 +235,75 @@ BEGIN
       CLOSE @CUR_MPOC
       DEALLOCATE @CUR_MPOC
       --WL03 E
+   END
+   --WL03 E
+
+   --Manual Wave - split all orders to a new Wave
+   IF @n_Continue IN (1,2) AND ISNULL(@c_WaveUDF09, '') <> 'Y'
+   BEGIN
+      --Generate Wavekey
+      SELECT @b_Success = 0  
+      SET @c_GetWavekey = ''
+
+      --WL03 S
+      IF @b_debug IN (1,2)
+      BEGIN
+         SET @c_GetWavekey = RIGHT(REPLICATE('0', 10) + CAST(@n_Count AS NVARCHAR), 10)
+      END
+      ELSE
+      BEGIN
+         EXECUTE nspg_GetKey  
+                  'Wavekey',  
+                  10,  
+                  @c_GetWavekey  OUTPUT,  
+                  @b_Success     OUTPUT,  
+                  @n_Err         OUTPUT,  
+                  @c_Errmsg      OUTPUT  
+      END
+      --WL03 E
+
+      IF @n_Err <> 0
+      BEGIN
+         SELECT @n_Continue = 3
+         SELECT @n_Err = 64001
+         SELECT @c_Errmsg = N'NSQL' + CONVERT(NVARCHAR(5), @n_Err)
+                          + N': Failed to execute nspg_GetKey - Wavekey. (msp_RCM_WV_LEVI_SplitChildWave)'
+         GOTO EXIT_SP
+      END
+      ELSE
+      BEGIN
+         INSERT INTO @T_WAVEDETAIL (Wavekey, Orderkey, BuyerPO, VCCount)
+         SELECT DISTINCT @c_GetWavekey, Orderkey, '', 1
+         FROM WAVEDETAIL WITH (NOLOCK)
+         WHERE WaveKey = @c_Wavekey
+      END
+
+      GOTO WAVE_INSERT
+   END
+
+   --Automation Wave - split child Wave
+   IF @n_Continue IN (1,2) AND @c_WaveUDF09 = 'Y'
+   BEGIN
+      INSERT @T_WCSPackReq (WODType, SKUPerVC, ActiveFlag)
+      SELECT DISTINCT CL.Code, IIF(ISNUMERIC(CL.UDF01) = 1, CL.UDF01, 0), CL.UDF05
+      FROM CODELKUP CL WITH (NOLOCK)
+      WHERE CL.LISTNAME = 'WCSPackReq'
+      AND CL.Storerkey = @c_Storerkey
+
+      SELECT @n_WCSConfigWaveSize = IIF(ISNUMERIC(CL.Long) = 1, CL.Long, 0)
+      FROM CODELKUP CL WITH (NOLOCK)
+      WHERE CL.LISTNAME = 'WCSConfigs'
+      AND CL.Short = 'WaveSize'
+      AND CL.Storerkey = @c_Storerkey
+      
+      IF ISNULL(@n_WCSConfigWaveSize, 0) = 0
+      BEGIN
+         SELECT @n_Continue = 3
+         SELECT @n_Err = 64002
+         SELECT @c_Errmsg = N'NSQL' + CONVERT(NVARCHAR(5), @n_Err)
+                          + N': WCSConfigWaveSize is invalid - Codelkup.Listname = WCSConfigs. (msp_RCM_WV_LEVI_SplitChildWave)'
+         GOTO EXIT_SP
+      END
 
       --Check if mixed MPOC & non MPOC Orders in a same master Wave
       IF EXISTS ( SELECT 1
@@ -511,6 +543,7 @@ BEGIN
    END
    --Main process - END
 
+   WAVE_INSERT:   --WL03
    IF @b_debug IN (1,2)
    BEGIN
       SELECT T1.Wavekey
@@ -525,12 +558,12 @@ BEGIN
            , T2.GroupNumber
            , T2.Consigneekey   --WL03
            , T2.VCCountCS      --WL03
+           , Automation = IIF(@c_WaveUDF09 = 'Y', 'Y', 'N')   --WL03
       FROM @T_WAVEDETAIL T1
       JOIN @T_ORDERS T2 ON T2.Orderkey = T1.Orderkey
       ORDER BY T1.Wavekey
    END
 
-   WAVE_INSERT:
    IF @n_Continue IN (1,2) AND @b_debug <> 1
    BEGIN
       DECLARE CUR_WAVEINSERT CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
