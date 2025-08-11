@@ -69,6 +69,7 @@ BEGIN
          BEGIN
             SET @nErrNo = 244101
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Need qty is ZERO
+            RETURN
          END
 
          -- Get task info
