@@ -173,8 +173,8 @@ BEGIN
                   WHERE TaskDetailKey = @cTaskKey
                IF @@ERROR <> 0
                BEGIN
-                  SET @nErrNo = 117001
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPDTaskDtlFail
+                  SET @nErrNo = 244102
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Update TaskDetail Failed
                   GOTO RollBackTran
                END
                

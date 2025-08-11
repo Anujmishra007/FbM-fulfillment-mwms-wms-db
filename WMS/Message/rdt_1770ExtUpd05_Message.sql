@@ -3,6 +3,7 @@
 EXECUTE rdt.rdtDropMsg 244101, 244150
 
 EXECUTE rdt.rdtAddMsg 244101, 10, '244101^Need qty is ZERO',         'us_english', 1770, 0, '244101^Need qty is ZERO'
+execute rdt.rdtAddMsg 244102, 10, '244102^UPDTaskDtlFail',           'us_english', 1770, 0, '244102^Update TaskDetail Failed'
 
 SELECT * FROM rdt.rdtMsg WITH(NOLOCK) WHERE Message_ID BETWEEN 244101 AND 244150
 
