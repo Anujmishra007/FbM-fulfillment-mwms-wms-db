@@ -4,11 +4,15 @@ SET QUOTED_IDENTIFIER ON
 GO
 
 /************************************************************************************************/
-/* Store procedure: rdt_1770ExtUpd05                                          					*/
-/* Purpose: Process reason code                                               					*/
-/*                                                                          			   		*/
-/* Date         Author    Ver.  Purposes                                      		            */
-/* 2025-08-07   PSJ036    1.0   RITM7939100 - Enter to inventory holds and validated qty = 0    */
+/* Store procedure: rdt_1770ExtUpd05                                                            */
+/* Copyright: Maersk                                                                            */
+/* Customer: Mattel                                                                             */
+/*                                                                                              */
+/* Purpose: Process reason code                                                                 */
+/*                                                                                              */
+/* Date         Author    Ver.   Purposes                                                       */
+/* 2025-08-07   PSJ036    1.0.0  UWP-39119 - RITM7939100 - Enter to inventory holds and         */
+/*                               validated qty = 0                                              */
 /************************************************************************************************/
 
 CREATE OR ALTER   PROCEDURE [RDT].[rdt_1770ExtUpd05]
@@ -61,6 +65,12 @@ BEGIN
    BEGIN
       IF @nStep = 6 -- Reason
       BEGIN
+         IF @nQTY <> 0   --PSJ036 - Validate when short pick the qty is equal a zero
+         BEGIN
+            SET @nErrNo = 244101
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Need qty is ZERO
+         END
+
          -- Get task info
          SELECT
             @cTaskType   = TaskType, 
@@ -93,7 +103,7 @@ BEGIN
 
          IF @cTaskStatus = '' -- For short pick
             GOTO Quit
-			
+         
          -- Get own task
          INSERT INTO @tTask (TaskDetailKey)
          SELECT @cTaskDetailKey
@@ -119,14 +129,6 @@ BEGIN
 
          BEGIN TRAN
          SAVE TRAN rdt_1770ExtUpd05
-
-		 IF @nQTY <> 0   --PSJ036 - Validate when short pick the qty is equal a zero
-            BEGIN
-               SET @nErrNo = 239053
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPDTaskDtlFail
-               GOTO RollBackTran
-            END
-
 
          IF @cTaskType = 'FPK'
          BEGIN
