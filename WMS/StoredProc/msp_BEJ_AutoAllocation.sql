@@ -8,7 +8,7 @@ GO
 /* Copyright: Maersk                                                    */
 /* Written by:                                                          */  
 /*                                                                      */  
-/* Purpose: UWP-32704 - Auto Allocate SO                                */
+/* Purpose: FCR-3955 UWP-32704 - Auto Allocate SO                       */
 /*                                                                      */  
 /* Called By: Call by SQL Scheduler Job                                 */
 /*                                                                      */  
@@ -19,7 +19,8 @@ GO
 /* Data Modifications:                                                  */  
 /*                                                                      */  
 /* Updates:                                                             */  
-/* Date         Author  Rev   Purposes                                  */  
+/* Date         Author  Rev   Purposes                                  */
+/*2024-04-30    SSA01   1.0   Created - UWP-32704 - Auto Allocate SO    */
 /************************************************************************/  
 CREATE OR ALTER PROC [dbo].[msp_BEJ_AutoAllocation]
      @c_StorerKey   NVARCHAR(15)   = ''
