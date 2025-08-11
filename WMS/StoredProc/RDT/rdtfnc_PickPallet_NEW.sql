@@ -20,6 +20,7 @@ GO
 /* 2024-05-28   1.6  Ung        UWP-19459 Fix suggested ID sequence           */
 /* 2024-08-26   1.7  LJQ006     FCR-735 Add new screen of short pick option   */
 /* 2025-04-29   1.8  NickT      UWP-33740 Add ExtendedValidationSP            */
+/* 2025-08-11   0.0  Jackc      !!!Cutover. Use V0 repo for work!!!           */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_PickPallet_NEW] (
