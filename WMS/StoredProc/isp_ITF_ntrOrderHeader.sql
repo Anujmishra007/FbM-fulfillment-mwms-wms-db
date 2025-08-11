@@ -824,6 +824,26 @@ BEGIN
                   --(YT04)-E
 
                   --(YT05)-S
+                  IF @c_Status = '0'
+                  BEGIN
+                     IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
+                                 WHERE STC.StorerKey = @c_Storerkey   
+                                 AND   STC.ConfigKey = 'GVTSOADDHP'
+                                 AND   STC.SValue    = '1' )  
+                     BEGIN  
+                        EXEC ispGenGVTLog 'GVTSOADDHP', @c_OrderKey, @c_Status, @c_StorerKey, ''    
+                                        , @b_success   OUTPUT    
+                                        , @n_err       OUTPUT    
+                                        , @c_errmsg    OUTPUT   
+  
+                        IF @b_success <> 1  
+                        BEGIN  
+                           SET @n_continue = 3  
+                           GOTO QUIT   
+                        END  
+                     END 
+                  END
+
                   IF @c_Status = '7'
                   BEGIN
                      IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
