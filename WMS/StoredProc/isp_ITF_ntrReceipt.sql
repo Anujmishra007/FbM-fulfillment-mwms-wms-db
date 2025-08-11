@@ -37,8 +37,10 @@ GO
 /* 11-Apr-2018  MCTang    2.1   OTM add StorerConfig Check (MC02)       */
 /* 10-Apr-2019  YTKuek    2.3   Add GVTLog. (YT01)                      */
 /* 10-Apr-2022  MCTang    2.4   Customize for RCPTHM9LOG (MC03)         */
-/* 24-Mar-2025  YTKuek    2.5   Add GVT ASN Info (YT02)                 */
-/* 29-Jul-2025  YTKuek    2.6   Add HP Netherland GVT trigger (YT03)    */
+/* 26-Apr-2024  YTKuek    2.5   Add GVTITF HPQ (YT02)                   */
+/* 24-Mar-2025  YTKuek    2.6   Add GVT ASN Info (YT03)                 */
+/* 15-May-2025  YTKuek    2.7   Add GVT ASN Event (YT04)                */
+/* 29-Jul-2025  YTKuek    2.8   Add HP Netherland GVT trigger (YT05)    */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[isp_ITF_ntrReceipt]
@@ -523,6 +525,48 @@ BEGIN
             BEGIN
                IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
                            WHERE STC.StorerKey = @c_Storerkey   
+                           AND   STC.ConfigKey = 'GVTASNADDHPQ'  
+                           AND   STC.SValue    = '1' )  
+               BEGIN  
+                  EXEC ispGenGVTLog 'GVTASNADDHPQ', @c_ReceiptKey, @c_Status, @c_StorerKey, ''    
+                                  , @b_success   OUTPUT    
+                                  , @n_err       OUTPUT    
+                                  , @c_errmsg    OUTPUT   
+                  
+                  IF @b_success <> 1  
+                  BEGIN  
+                     SET @n_continue = 3  
+                     GOTO QUIT   
+                  END  
+               END  
+            END
+
+            IF @c_Status = '9'
+            BEGIN
+               IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
+                           WHERE STC.StorerKey = @c_Storerkey   
+                           AND   STC.ConfigKey = 'GVTEASNCFMHPQ'  
+                           AND   STC.SValue    = '1' )  
+               BEGIN  
+                  EXEC ispGenGVTLog 'GVTEASNCFMHPQ', @c_ReceiptKey, @c_Status, @c_StorerKey, ''    
+                                  , @b_success   OUTPUT    
+                                  , @n_err       OUTPUT    
+                                  , @c_errmsg    OUTPUT   
+                  
+                  IF @b_success <> 1  
+                  BEGIN  
+                     SET @n_continue = 3  
+                     GOTO QUIT   
+                  END  
+               END  
+            END
+            --(YT02)-E
+
+            --(YT03)-S
+            IF @c_Status = '0'
+            BEGIN
+               IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
+                           WHERE STC.StorerKey = @c_Storerkey   
                            AND   STC.ConfigKey = 'GVTASNREC'  
                            AND   STC.SValue    = '1' ) 
                BEGIN
@@ -538,7 +582,7 @@ BEGIN
                   END  
                END
 
-               --(YT03)-S
+               --(YT05)-S
                IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
                            WHERE STC.StorerKey = @c_Storerkey   
                            AND   STC.ConfigKey = 'GVTASNADDHP'  
@@ -555,10 +599,10 @@ BEGIN
                      GOTO QUIT   
                   END  
                END
-               --(YT03)-E
+               --(YT05)-E
             END
 
-            --(YT03)-S
+            --(YT05)-S
             IF @c_Status = '1'
             BEGIN
                IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
@@ -578,7 +622,7 @@ BEGIN
                   END  
                END
             END
-            --(YT03)-E
+            --(YT05)-E
 
             IF @c_Status = '9'
             BEGIN
@@ -599,7 +643,7 @@ BEGIN
                   END  
                END
 
-               --(YT03)-S
+               --(YT05)-S
                IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
                            WHERE STC.StorerKey = @c_Storerkey   
                            AND   STC.ConfigKey = 'GVTEASN9HPNL'  
@@ -616,9 +660,51 @@ BEGIN
                      GOTO QUIT   
                   END  
                END
-               --(YT03)-E
+               --(YT05)-E
             END
-            --(YT02)-E
+            --(YT03)-E
+
+            --(YT04)-S
+            IF @c_ASNStatus = '1'
+            BEGIN
+               IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
+                           WHERE STC.StorerKey = @c_Storerkey   
+                           AND   STC.ConfigKey = 'GVTEASNS1'  
+                           AND   STC.SValue    = '1' ) 
+               BEGIN
+                  EXEC ispGenGVTLog 'GVTEASNS1', @c_ReceiptKey, 'A1', @c_StorerKey, ''    
+                                 , @b_success   OUTPUT    
+                                 , @n_err       OUTPUT    
+                                 , @c_errmsg    OUTPUT   
+  
+                  IF @b_success <> 1  
+                  BEGIN  
+                     SET @n_continue = 3  
+                     GOTO QUIT   
+                  END  
+               END
+            END
+
+            IF @c_ASNStatus = '9'
+            BEGIN
+               IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
+                           WHERE STC.StorerKey = @c_Storerkey   
+                           AND   STC.ConfigKey = 'GVTEASNS9'  
+                           AND   STC.SValue    = '1' ) 
+               BEGIN
+                  EXEC ispGenGVTLog 'GVTEASNS9', @c_ReceiptKey, 'A9', @c_StorerKey, ''    
+                                 , @b_success   OUTPUT    
+                                 , @n_err       OUTPUT    
+                                 , @c_errmsg    OUTPUT   
+  
+                  IF @b_success <> 1  
+                  BEGIN  
+                     SET @n_continue = 3  
+                     GOTO QUIT   
+                  END  
+               END
+            END
+            --(YT04)-E
         END -- ColValue IN ('STATUS','SOSTATUS')  
    
       END -- IF EXISTS ( SELECT 1 FROM ITFTriggerConfig WITH (NOLOCK)    
