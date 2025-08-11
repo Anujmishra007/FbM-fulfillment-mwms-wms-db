@@ -90,6 +90,22 @@ BEGIN
                           + N': Wavekey# ' + @c_Wavekey + ' is invalid. (msp_RCM_WV_LEVI_SplitChildWave)'
          GOTO EXIT_SP
       END
+
+      --WL03 S
+      --Check if Wave has been split before (UserDefine08 = master Wavekey)
+      IF EXISTS ( SELECT 1
+                  FROM WAVE WITH (NOLOCK)
+                  WHERE Wavekey = @c_Wavekey
+                  AND (UserDefine08 IS NOT NULL OR UserDefine08 <> '')
+                )
+      BEGIN
+         SELECT @n_Continue = 3
+         SELECT @n_Err = 64000
+         SELECT @c_Errmsg = N'NSQL' + CONVERT(NVARCHAR(5), @n_Err)
+                          + N': Wavekey# ' + @c_Wavekey + ' is a child Wave. Not allow to split further. (msp_RCM_WV_LEVI_SplitChildWave)'
+         GOTO EXIT_SP
+      END
+      --WL03 E
    END
 
    IF @n_Continue IN (1,2)
