@@ -62,6 +62,7 @@ GO
 /* 2025-06-18 0.0  Jackc    !!!Cutover. Use V2 file in V0 repo for work!!!       */
 /************************** Merged Into V0 ***************************************/
 /* 2025-06-25 5.5  Dennis   FCR-5716 ExtScn SP                                   */
+/* 2025-06-25 5.6  Cuize    FCR-6888 GOTO step 98                                */
 /*********************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_NormalReceipt_V7] (
@@ -3695,6 +3696,9 @@ BEGIN
       END
    END
 
+   IF @cExtScnSP <> ''
+      GOTO STEP_98
+
    GOTO Quit
 
    Step_6_Fail:
@@ -4025,6 +4029,9 @@ BEGIN
       @cLottable06 = '', @cLottable07 = '', @cLottable08 = '',    @cLottable09 = '',   @cLottable10 = '',
       @cLottable11 = '', @cLottable12 = '', @dLottable13 = NULL,  @dLottable14 = NULL, @dLottable15 = NULL
    
+   IF @cExtScnSP <> ''
+      GOTO STEP_98
+
    Step_7_Fail:
       GOTO Quit
 
@@ -5530,7 +5537,8 @@ BEGIN
             ('@cPUOM_Desc', @cPUOM_Desc),
             ('@nPUOM_Div', CONCAT(@nPUOM_Div,'')),
             ('@cMUOM_Desc', @cMUOM_Desc),
-            ('@cReceiptKey', @cReceiptKey)
+            ('@cReceiptKey', @cReceiptKey),
+            ('@cPalletType', @cPalletType)
 
          EXECUTE [RDT].[rdt_ExtScnEntry]
          @cExtScnSP,
