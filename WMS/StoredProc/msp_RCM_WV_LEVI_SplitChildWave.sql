@@ -96,7 +96,7 @@ BEGIN
       IF EXISTS ( SELECT 1
                   FROM WAVE WITH (NOLOCK)
                   WHERE Wavekey = @c_Wavekey
-                  AND (UserDefine08 IS NOT NULL OR UserDefine08 <> '')
+                  AND (UserDefine08 IS NOT NULL AND UserDefine08 <> '')
                 )
       BEGIN
          SELECT @n_Continue = 3
