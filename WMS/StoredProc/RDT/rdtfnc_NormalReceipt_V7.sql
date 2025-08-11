@@ -56,10 +56,11 @@ GO
 /*                          BatchCheck                                           */
 /* 2024-10-12 4.10 LJQ006   FCR-911   use uom in receiptdetail                   */
 /* 2024-10-08 5.0  TianLei  FCR-839   Add Fully received go back to screen 1     */
-/* 2024-11-12 5.2  CYU027   FCR-759   UPDATE ID UDF01                            */
+/* 2024-11-12 5.2  Cuize    FCR-759   UPDATE ID UDF01                            */
 /* 2025-03-10 5.3  YeeKung  UWP-31293 FIX SerialNo Blank (yeekung07)             */
 /* 2025-03-12 5.4  CYU027   UWP-26488&FCR-2729 DropListSp                        */
 /* 2025-06-18 0.0  Jackc    !!!Cutover. Use V2 file in V0 repo for work!!!       */
+/* 2025-05-19 5.5  Cuize    FCR-4500  Created                                    */
 /************************** Merged Into V0 ***************************************/
 /* 2025-06-25 5.5  Dennis   FCR-5716 ExtScn SP                                   */
 /* 2025-06-25 5.6  Cuize    FCR-6888 GOTO step 98                                */
@@ -4471,8 +4472,8 @@ BEGIN
       IF @cClosePallet ='1'
       BEGIN
          SET @cOption = ''
-         SET @nScn = @nScn + 7
-         SET @nStep = @nStep + 5
+         SET @nScn = @nScn + 4 --4042
+         SET @nStep = @nStep + 6 -- step15
       END
       ELSE
       BEGIN
@@ -5481,8 +5482,8 @@ BEGIN
          SET @cOutField01 = '' -- Option
 
          -- Go to print pallet label screen
-         SET @nScn = @nScn - 7
-         SET @nStep = @nStep - 5 
+         SET @nScn = @nScn - 4--4038
+         SET @nStep = @nStep - 6 --step9
       END
       ELSE
       BEGIN
@@ -5491,8 +5492,8 @@ BEGIN
          SET @cOutField02 = '' -- @cID
 
          -- Go to ID screen
-         SET @nScn = @nScn - 10
-         SET @nStep = @nStep - 12
+         SET @nScn = @nScn - 10--4032
+         SET @nStep = @nStep - 12 -- step3
       END
 
    END
@@ -5509,6 +5510,42 @@ BEGIN
       SET @nScn = @nScn - 9
       SET @nStep = @nStep - 11
    END
+
+   SET @cExtendedScreenSP =  ISNULL(rdt.RDTGetConfig( @nFunc, 'ExtendedScreenSP', @cStorerKey), '')
+   SET @nAction = 3
+   IF @cExtendedScreenSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
+      BEGIN
+         EXECUTE [RDT].[rdt_600ExtScnEntry]
+                 @cExtendedScreenSP,
+                 @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorerKey, @cSuggLOC OUTPUT, @cLOC OUTPUT, @cID OUTPUT, @cSKU OUTPUT,
+                 @cReceiptKey,@cPoKey,@cReasonCode,@cReceiptLineNumber,@cPalletType,
+                 @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01  OUTPUT,
+                 @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02  OUTPUT,
+                 @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03  OUTPUT,
+                 @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04  OUTPUT,
+                 @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  @dLottable05  OUTPUT,
+                 @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  @cLottable06  OUTPUT,
+                 @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  @cLottable07  OUTPUT,
+                 @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  @cLottable08  OUTPUT,
+                 @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  @cLottable09  OUTPUT,
+                 @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  @cLottable10  OUTPUT,
+                 @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  @cLottable11  OUTPUT,
+                 @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT,  @cLottable12  OUTPUT,
+                 @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  @dLottable13  OUTPUT,
+                 @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT,  @dLottable14  OUTPUT,
+                 @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT,  @dLottable15  OUTPUT,
+                 @nAction,
+                 @nScn OUTPUT,  @nStep OUTPUT,
+                 @nErrNo   OUTPUT,
+                 @cErrMsg  OUTPUT
+
+         IF @nErrNo <> 0
+            GOTO Step_1_Fail
+      END
+   END
+
    GOTO Quit
 
    Step_15_Fail:
@@ -5585,12 +5622,13 @@ Step 99. Screen = 6382. Pallet Type
 ********************************************************************************/
 Step_99:
 BEGIN
-   IF @nInputKey = 1 -- ENTER
+   SET @cExtendedScreenSP =  ISNULL(rdt.RDTGetConfig( @nFunc, 'ExtendedScreenSP', @cStorerKey), '')
+
+   IF @nInputKey = 1 OR @cExtendedScreenSP = 'rdt_600ExtScn08' -- ENTER
    BEGIN
       -- Screen mapping
       SET @cPalletType = @cInField01
 
-      SET @cExtendedScreenSP =  ISNULL(rdt.RDTGetConfig( @nFunc, 'ExtendedScreenSP', @cStorerKey), '')
       SET @nAction = 1
       IF @cExtendedScreenSP <> ''
       BEGIN
@@ -5623,6 +5661,13 @@ BEGIN
             IF @nErrNo <> 0
                GOTO Step_99_Fail
          END
+      END
+
+      IF @cExtendedScreenSP = 'rdt_600ExtScn08'
+      BEGIN
+         SET @nScn = @nAfterScn
+         SET @nStep = @nAfterStep
+         GOTO Quit
       END
       -- Init next screen var
       SET @cOutField01 = @cID
