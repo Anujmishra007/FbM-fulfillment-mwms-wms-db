@@ -100,7 +100,7 @@ BEGIN
                 )
       BEGIN
          SELECT @n_Continue = 3
-         SELECT @n_Err = 64000
+         SELECT @n_Err = 64013
          SELECT @c_Errmsg = N'NSQL' + CONVERT(NVARCHAR(5), @n_Err)
                           + N': Wavekey# ' + @c_Wavekey + ' is a child Wave. Not allow to split further. (msp_RCM_WV_LEVI_SplitChildWave)'
          GOTO EXIT_SP
