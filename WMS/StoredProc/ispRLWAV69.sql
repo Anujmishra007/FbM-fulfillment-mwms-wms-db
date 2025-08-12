@@ -33,7 +33,7 @@ GO
 /* 21-Jul-2025  Wan05   1.7   FCR-6708 - MLP Cold Store Allocation and   */
 /*                            Replenishment Issues                       */
 /*                            FCR-2902 Bug Fix                           */
-/* 05-Aug-2025                FCR-6708 Bug Fix                           */
+/* 11-Aug-2025                FCR-6708 Bug Fix                           */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]        
     @c_Wavekey      NVARCHAR(10)    
@@ -1283,6 +1283,10 @@ CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]
       AND PICKDETAIL.[Status] = '0'  
       AND PICKDETAIL.WIP_Refno = @c_SourceType 
       AND LOC.LocationType NOT IN ('VNA')                                           --2025-08-05--(Wan05)
+      AND NOT EXISTS (SELECT 1                                                      --2025-08-11- Fixed
+                      WHERE PICKDETAIL.UOM > '1'
+                      AND @c_AllowOverAllocations = '0' AND @b_FPP = 1
+                      )
       GROUP BY PICKDETAIL.Storerkey 
             , PICKDETAIL.Sku 
             , PICKDETAIL.Lot
