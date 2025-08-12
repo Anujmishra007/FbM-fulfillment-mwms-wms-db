@@ -908,51 +908,51 @@ BEGIN
                            GOTO QUIT   
                         END  
                      END 
+                  END
 
-                     IF @c_SOStatus IN ('RC','AV','BN','AK','BC','AA','S1','AW','BK')
-                     BEGIN
+                  IF @c_SOStatus IN ('RC','AV','BN','AK','BC','AA','S1','AW','BK')
+                  BEGIN
+                     SET @c_TablenameHP = ''
+
+                     IF @c_SOStatus = 'RC'
+                        SET @c_TablenameHP = 'GVTESTSRCHPNL'
+                     ELSE IF @c_SOStatus = 'AV'
+                        SET @c_TablenameHP = 'GVTESTSAVHPNL'
+                     ELSE IF @c_SOStatus = 'BN'
+                        SET @c_TablenameHP = 'GVTESTSBNHPNL'
+                     ELSE IF @c_SOStatus = 'AK'
+                        SET @c_TablenameHP = 'GVTESTSAKHPNL'
+                     ELSE IF @c_SOStatus = 'BC'
+                        SET @c_TablenameHP = 'GVTESTSBCHPNL'
+                     ELSE IF @c_SOStatus = 'AA'
+                        SET @c_TablenameHP = 'GVTESTSAAHPNL'
+                     ELSE IF @c_SOStatus = 'S1'
+                        SET @c_TablenameHP = 'GVTESTSS1HPNL'
+                     ELSE IF @c_SOStatus = 'AW'
+                        SET @c_TablenameHP = 'GVTESTSAWHPNL'
+                     ELSE IF @c_SOStatus = 'BK'
+                        SET @c_TablenameHP = 'GVTESTSBKHPNL'
+                     ELSE
                         SET @c_TablenameHP = ''
 
-                        IF @c_SOStatus = 'RC'
-                           SET @c_TablenameHP = 'GVTESTSRCHPNL'
-                        ELSE IF @c_SOStatus = 'AV'
-                           SET @c_TablenameHP = 'GVTESTSAVHPNL'
-                        ELSE IF @c_SOStatus = 'BN'
-                           SET @c_TablenameHP = 'GVTESTSBNHPNL'
-                        ELSE IF @c_SOStatus = 'AK'
-                           SET @c_TablenameHP = 'GVTESTSAKHPNL'
-                        ELSE IF @c_SOStatus = 'BC'
-                           SET @c_TablenameHP = 'GVTESTSBCHPNL'
-                        ELSE IF @c_SOStatus = 'AA'
-                           SET @c_TablenameHP = 'GVTESTSAAHPNL'
-                        ELSE IF @c_SOStatus = 'S1'
-                           SET @c_TablenameHP = 'GVTESTSS1HPNL'
-                        ELSE IF @c_SOStatus = 'AW'
-                           SET @c_TablenameHP = 'GVTESTSAWHPNL'
-                        ELSE IF @c_SOStatus = 'BK'
-                           SET @c_TablenameHP = 'GVTESTSBKHPNL'
-                        ELSE
-                           SET @c_TablenameHP = ''
-
-                        IF @c_TablenameHP <> ''
-                        BEGIN
-                           IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
-                                       WHERE STC.StorerKey = @c_Storerkey   
-                                       AND   STC.ConfigKey = @c_TablenameHP
-                                       AND   STC.SValue    = '1' )  
-                           BEGIN  
-                              EXEC ispGenGVTLog @c_TablenameHP, @c_OrderKey, @c_SOStatus, @c_StorerKey, ''    
-                                              , @b_success   OUTPUT    
-                                              , @n_err       OUTPUT    
-                                              , @c_errmsg    OUTPUT   
+                     IF @c_TablenameHP <> ''
+                     BEGIN
+                        IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
+                                    WHERE STC.StorerKey = @c_Storerkey   
+                                    AND   STC.ConfigKey = @c_TablenameHP
+                                    AND   STC.SValue    = '1' )  
+                        BEGIN  
+                           EXEC ispGenGVTLog @c_TablenameHP, @c_OrderKey, @c_SOStatus, @c_StorerKey, ''    
+                                             , @b_success   OUTPUT    
+                                             , @n_err       OUTPUT    
+                                             , @c_errmsg    OUTPUT   
   
-                              IF @b_success <> 1  
-                              BEGIN  
-                                 SET @n_continue = 3  
-                                 GOTO QUIT   
-                              END  
-                           END 
-                        END
+                           IF @b_success <> 1  
+                           BEGIN  
+                              SET @n_continue = 3  
+                              GOTO QUIT   
+                           END  
+                        END 
                      END
                   END
                   --(YT05)-E
