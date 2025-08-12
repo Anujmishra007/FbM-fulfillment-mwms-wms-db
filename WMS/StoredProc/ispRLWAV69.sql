@@ -33,7 +33,9 @@ GO
 /* 21-Jul-2025  Wan05   1.7   FCR-6708 - MLP Cold Store Allocation and   */
 /*                            Replenishment Issues                       */
 /*                            FCR-2902 Bug Fix                           */
-/* 11-Aug-2025                FCR-6708 Bug Fix                           */
+/* 12-Aug-2025                FCR-6708 Bug Fix                           */
+/* 12-Aug-2025  Wan06  1.8    UWP-39035 - Matching RPF Section to find   */
+/*                            DPP for FCR-6708 & FCR-2902                */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]        
     @c_Wavekey      NVARCHAR(10)    
@@ -110,7 +112,8 @@ CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]
          , @c_Batch3                   NVARCHAR(50)   = ''                          --(Wan03) 
          , @c_Batch4                   NVARCHAR(50)   = ''                          --(Wan03) 
          , @c_Batch5                   NVARCHAR(50)   = ''                          --(Wan03)
-         , @c_LocationType             NVARCHAR(10)   = ''                          --(Wan05)         
+         , @c_LocationType             NVARCHAR(10)   = ''                          --(Wan05)  
+         , @c_SectionKey               NVARCHAR(10)   = ''                          --(Wan06)         
          , @c_PutawayZone              NVARCHAR(10)   = ''                          --(Wan03)
          , @c_ReplFromLoc              NVARCHAR(10)   = ''                          --(Wan03)
          , @c_ReplFromID               NVARCHAR(18)   = ''                          --(Wan03)
@@ -479,6 +482,7 @@ CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]
                  + ', ''1'' AS UOM' 
                  + ', LOTxLOCxID.Qty AS UOMQty' 
                  + ', LOTxLOCxID.Qty' 
+                 + ', LOC.Sectionkey'                                               --(Wan06) 
                  + ', LOC.PutawayZone' 
                  + ', LOC.LocAisle' 
                  + ', LOC.LocationType'                                             --(Wan05)                   
@@ -507,6 +511,7 @@ CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]
                  + ', PICKDETAIL.Loc' 
                  + ', PICKDETAIL.ID'
                  + ', LOTxLOCxID.Qty'
+                 + ', LOC.Sectionkey'                                               --(Wan06) 
                  + ', LOC.PutawayZone' 
                  + ', LOC.LocAisle'
                  + ', LOC.LocationType'                                             --(Wan05)                   
@@ -524,8 +529,9 @@ CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]
                         ,@CUR_VNAOUT_RPF  OUTPUT
 
       FETCH NEXT FROM @CUR_VNAOUT_RPF INTO @c_Storerkey, @c_SKU, @c_Lot, @c_FromLoc, @c_FromID
-                                          ,@c_UOM, @n_UOMQty, @n_Qty, @c_PutawayZone, @c_LocAisle
-                                          ,@c_LocationType                          --(Wan05)                                         
+                                          ,@c_UOM, @n_UOMQty, @n_Qty
+                                          ,@c_SectionKey, @c_PutawayZone, @c_LocAisle              --(Wan06)
+                                          ,@c_LocationType                                         --(Wan05)                                         
                                           ,@c_Batch1, @c_Batch2, @c_Batch3, @c_Batch4, @c_Batch5
 
       WHILE @@FETCH_STATUS <> -1 AND @n_Continue = 1
@@ -535,6 +541,16 @@ CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]
          SET @c_FinalLoc = ''
          SET @c_FinalID  = ''
          SET @n_RowID    = 0
+
+         
+         SET @c_PZJSon = ( SELECT DISTINCT                                          --(Wan06)
+                           l.Facility, l.PutawayZone, l.LocAisle       
+                           FROM Loc l (NOLOCK) 
+                           WHERE l.Facility     = @c_Facility
+                           AND   l.SectionKey   = @c_SectionKey
+                           AND   l.LocationType = 'DYNPPICK'
+                           FOR JSON AUTO
+                      )
    
          TRUNCATE TABLE #ZoneAisle;                                                 --2025-07-29
          INSERT INTO #ZoneAisle ( RowID, Facility, [Zone], LocAisle, Direction )
@@ -587,15 +603,16 @@ CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]
                        +                        ' ON LOTATTRIBUTE.Lot = lli.LOT'
 
                               END
-                       +                ' WHERE lli.StorerKey = @c_Storerkey'
-                       +                ' AND lli.Loc = l.loc'
-                       +                ' AND lli.Qty - lli.QtyPicked + lli.PendingMoveIn > 0'     --2025-07-29
-                       +                @c_SQLCond 
-                       +                ' GROUP BY P.Pallet'
-                       +                ' HAVING P.Pallet * l.MaxPallet <' 
-                       +                ' SUM(lli.Qty - lli.QtyPicked + lli.PendingMoveIn) + @n_Qty'
-                       +                ' ) inv'
+                       +               ' WHERE lli.StorerKey = @c_Storerkey'
+                       +               ' AND lli.Loc = l.loc'
+                       +               ' AND lli.Qty - lli.QtyPicked + lli.PendingMoveIn > 0'      --2025-07-29
+                       +               @c_SQLCond 
+                       +               ' GROUP BY P.Pallet'
+                       +               ' HAVING P.Pallet * l.MaxPallet <' 
+                       +               ' SUM(lli.Qty - lli.QtyPicked + lli.PendingMoveIn) + @n_Qty'
+                       +               ' ) inv'
                        + ' WHERE l.Facility  = @c_Facility'
+                       + ' AND   l.Sectionkey = @c_Sectionkey'                      --(Wan06)
                        + ' AND   l.LocationType = ''DYNPPICK'''
                        + ' AND   l.LocationFlag NOT IN (''HOLD'', ''DAMAGE'')'
                        + ' AND   l.[Status] = ''OK''' 
@@ -606,6 +623,7 @@ CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]
                    
             SET @c_SQLParms = N'@c_Facility        NVARCHAR(5)'
                             + ',@c_Storerkey       NVARCHAR(15)'
+                            + ',@c_SectionKey      NVARCHAR(10)'                    --(Wan06)
                             + ',@c_Putawayzone     NVARCHAR(10)' 
                             + ',@c_LocAisle        NVARCHAR(10)' 
                             + ',@c_DirectionType   NVARCHAR(10)'
@@ -624,6 +642,7 @@ CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]
                               ,@c_SQLParms
                               ,@c_Facility
                               ,@c_Storerkey
+                              ,@c_SectionKey                                        --(Wan06)
                               ,@c_PutawayZone
                               ,@c_LocAisle
                               ,@c_DirectionType
@@ -654,6 +673,7 @@ CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]
             +               ' GROUP BY lli.Loc'             
             +               ') inv'
             + ' WHERE l.Facility  = @c_Facility' 
+            + ' AND   l.Sectionkey = @c_Sectionkey'                                 --(Wan06)
             + ' AND   l.LocationType = ''DYNPPICK'''
             + ' AND   l.LocationFlag NOT IN (''HOLD'', ''DAMAGE'')'
             + ' AND   l.[Status] = ''OK'''
@@ -668,6 +688,7 @@ CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]
  
          SET @c_SQLParms = N'@c_Facility        NVARCHAR(5)'
                          + ',@c_Storerkey       NVARCHAR(15)'
+                         + ',@c_SectionKey      NVARCHAR(10)'                       --(Wan06)
                          + ',@c_Putawayzone     NVARCHAR(10)' 
                          + ',@c_LocAisle        NVARCHAR(10)' 
                          + ',@c_ToLoc           NVARCHAR(30)   OUTPUT'
@@ -678,6 +699,7 @@ CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]
                            ,@c_SQLParms
                            ,@c_Facility
                            ,@c_Storerkey
+                           ,@c_SectionKey                                           --(Wan06)
                            ,@c_PutawayZone
                            ,@c_LocAisle
                            ,@c_ToLoc      OUTPUT   
@@ -759,8 +781,9 @@ CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]
                
          END
          FETCH NEXT FROM @CUR_VNAOUT_RPF INTO @c_Storerkey, @c_SKU, @c_Lot, @c_FromLoc, @c_FromID
-                                             ,@c_UOM, @n_UOMQty, @n_Qty, @c_PutawayZone, @c_LocAisle
-                                             ,@c_LocationType                       --(Wan05)                                             
+                                             ,@c_UOM, @n_UOMQty, @n_Qty 
+                                             ,@c_SectionKey, @c_PutawayZone, @c_LocAisle              --(Wan06)
+                                             ,@c_LocationType                                         --(Wan05)                                          
                                              ,@c_Batch1, @c_Batch2, @c_Batch3, @c_Batch4, @c_Batch5
       END
       CLOSE @CUR_VNAOUT_RPF
@@ -1285,8 +1308,9 @@ CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]
       AND LOC.LocationType NOT IN ('VNA')                                           --2025-08-05--(Wan05)
       AND NOT EXISTS (SELECT 1                                                      --2025-08-11- Fixed
                       WHERE PICKDETAIL.UOM > '1'
+                      AND PICKDETAIL.TaskDetailKey > ''                             --2025-08-12- Fixed
                       AND @c_AllowOverAllocations = '0' AND @b_FPP = 1
-                      )
+                      )      
       GROUP BY PICKDETAIL.Storerkey 
             , PICKDETAIL.Sku 
             , PICKDETAIL.Lot
