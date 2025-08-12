@@ -1,5 +1,4 @@
 
-/****** Object:  StoredProcedure [RDT].[rdt_684ExtScnJCB]    Script Date: 7/14/2025 12:20:23 PM ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
@@ -14,9 +13,10 @@ GO
 /* Date         Rev   Author   Purposes                                                  */
 /* 26/02/2025   1.0   PPA374   UWP-30939 ID having multiple Lottable03 validation        */
 /* 19/03/2025   1.1   PPA374   Adding extended validation to not allow duplicate case ID */
+/* 29/07/2025   1.2   PPA374   Restricting receipt to specific loc category and zone     */
 /*****************************************************************************************/
 
-CREATE OR ALTER PROC [RDT].[rdt_684ExtScnJCB] (
+CREATE OR ALTER   PROC [RDT].[rdt_684ExtScnJCB] (
    @nMobile      INT,           
    @nFunc        INT,           
    @cLangCode    NVARCHAR( 3),  
@@ -476,6 +476,22 @@ BEGIN
             END
             IF( @nStep = 2 )
             BEGIN
+			   
+			   DECLARE @cLocCat AS NVARCHAR(30)
+			   DECLARE @cPAZone AS NVARCHAR(30)
+			   DECLARE @cChkDgt AS NVARCHAR(5)
+
+			   SELECT @cChkDgt = IIF(ISNULL(CheckDigitLengthForLocation,'')='',0,ISNULL(CheckDigitLengthForLocation,'')) FROM dbo.FACILITY WITH(NOLOCK) WHERE Facility = @cFacility
+
+			   SELECT TOP 1 @cLocCat = LocationCategory, @cPAZone = PutawayZone FROM dbo.LOC WITH(NOLOCK) WHERE Facility = @cFacility AND LOC = SUBSTRING(@cLOC,1,LEN(@cLOC)-@cChkDgt)
+
+			   IF EXISTS(SELECT 1 FROM dbo.CODELKUP WITH(NOLOCK) WHERE Storerkey = @cStorerKey AND Short = @cLocCat AND Long = @cPAZone AND UDF01 = '1' AND LISTNAME = 'JCBRECREST')
+			   BEGIN
+			      SET @nErrNo = 218235
+			      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'Invalid Receipt Loc'
+			      GOTO QUIT
+			   END
+
                IF ISNULL(rdt.RDTGetConfig( @nFunc, 'ReceiveDefaultToLoc', @cStorerKey),'') = @cLOC
                   GOTO QUIT
 
