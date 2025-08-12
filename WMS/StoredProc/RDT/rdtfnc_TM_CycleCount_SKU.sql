@@ -52,6 +52,8 @@ GO
 /* 2024-11-21 4.1.0  PXL003     UWP-27584 Fix SKU/UPC decode                    */
 /* 2025-07-07 4.2.0  James      FCR-6059 Add ExtOptionSP in step 3 (james18)    */
 /* 2025-07-18 4.3.0  NickT      UWP-37598 Update TaskDetail.EndTime when CC done*/
+/* 2025-07-18 4.4.0  NickT      UWP-39152 CaseQty text box should be visible    */
+/*                              if PUOM is setup AS CASE                        */
 /********************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_CycleCount_SKU] (
@@ -957,11 +959,13 @@ BEGIN
          SET @cPUOM_Desc = ''
          SET @nPQTY = 0
          SET @nMQTY = @nQtyAval
+         SET @cFieldAttr06 = 'O'
       END
       ELSE
       BEGIN
          SET @nPQTY = @nQtyAval / @nPUOM_Div  -- Calc QTY in preferred UOM
          SET @nMQTY = @nQtyAval % @nPUOM_Div  -- Calc the remaining in master unit
+         SET @cFieldAttr06 = ''
       END
 
       -- Prepare Next Screen Variable
@@ -982,7 +986,7 @@ BEGIN
       BEGIN
          SET @cOutField04 = ''
          SET @cOutField06 = ''
-         SET @cFieldAttr06 = 'O'
+        -- SET @cFieldAttr06 = 'O'
       END
       ELSE
       BEGIN
@@ -1002,7 +1006,7 @@ BEGIN
          --SET @cOutField04 = ''
          SET @cOutField06 = ''
          SET @cOutField06 = ''
-         SET @cFieldAttr06 = 'O'
+         --SET @cFieldAttr06 = 'O'
       END
 
       SET @cOutField05 = @cMUOM_Desc
@@ -1654,7 +1658,7 @@ BEGIN
       SET @nScn = @nScn + 1
       SET @nStep = @nStep + 1
 
-  IF @nPrevStep = 6
+      IF @nPrevStep = 6
       BEGIN
          EXEC rdt.rdtSetFocusField @nMobile, 03
          SET @cOutField12 = ''
@@ -2795,18 +2799,20 @@ BEGIN
                SET @cPUOM_Desc = ''
                SET @nPQTY = 0
                SET @nMQTY = @nQtyAval
+               SET @cFieldAttr06 = 'O'
             END
             ELSE
             BEGIN
-                  SET @nPQTY = @nQtyAval / @nPUOM_Div  -- Calc QTY in preferred UOM
-                  SET @nMQTY = @nQtyAval % @nPUOM_Div  -- Calc the remaining in master unit
+               SET @nPQTY = @nQtyAval / @nPUOM_Div  -- Calc QTY in preferred UOM
+               SET @nMQTY = @nQtyAval % @nPUOM_Div  -- Calc the remaining in master unit
+               SET @cFieldAttr06 = ''
             END
 
             IF @cPUOM_Desc = ''
             BEGIN
                SET @cOutField04 = ''
                SET @cOutField06 = ''
-               SET @cFieldAttr06 = 'O'
+               --SET @cFieldAttr06 = 'O'
             END
             ELSE
             BEGIN
@@ -2826,7 +2832,7 @@ BEGIN
                SET @cOutField04 = ''
                SET @cOutField06 = ''
                SET @cOutField06 = ''
-               SET @cFieldAttr06 = 'O'
+               --SET @cFieldAttr06 = 'O'
             END
 
 
@@ -3849,18 +3855,20 @@ BEGIN
             SET @cPUOM_Desc = ''
             SET @nPQTY = 0
             SET @nMQTY = @nQtyAval
+            SET @cFieldAttr06 = 'O'
          END
          ELSE
          BEGIN
             SET @nPQTY = @nQtyAval / @nPUOM_Div  -- Calc QTY in preferred UOM
             SET @nMQTY = @nQtyAval % @nPUOM_Div  -- Calc the remaining in master unit
+            SET @cFieldAttr06 = ''
          END
 
          IF @cPUOM_Desc = ''
          BEGIN
             SET @cOutField04 = ''
             SET @cOutField06 = ''
-            SET @cFieldAttr06 = 'O'
+            --SET @cFieldAttr06 = 'O'
          END
          ELSE
          BEGIN
@@ -3873,7 +3881,7 @@ BEGIN
             SET @cOutField04 = ''
             SET @cOutField06 = ''
             SET @cOutField06 = ''
-            SET @cFieldAttr06 = 'O'
+            --SET @cFieldAttr06 = 'O'
          END
 
          SET @cOutField05 = @cMUOM_Desc
@@ -4492,8 +4500,8 @@ BEGIN
          BEGIN  
             SET @nQtyAval = @nQty  
             SET @cCounted = '1'  
-         END  
-  
+         END
+
          -- Convert to prefer UOM QTY  
          IF @cPUOM = '6' OR -- When preferred UOM = master unit  
             @nPUOM_Div = 0  -- UOM not setup  
@@ -4501,11 +4509,13 @@ BEGIN
             SET @cPUOM_Desc = ''  
             SET @nPQTY = 0  
             SET @nMQTY = @nQtyAval  
+            SET @cFieldAttr06 = 'O'
          END  
          ELSE  
          BEGIN  
             SET @nPQTY = @nQtyAval / @nPUOM_Div  -- Calc QTY in preferred UOM  
             SET @nMQTY = @nQtyAval % @nPUOM_Div  -- Calc the remaining in master unit  
+            SET @cFieldAttr06 = ''
          END  
   
          -- Prepare Next Screen Variable  
@@ -4526,7 +4536,7 @@ BEGIN
          BEGIN  
             SET @cOutField04 = ''  
             SET @cOutField06 = ''  
-            SET @cFieldAttr06 = 'O'  
+            --SET @cFieldAttr06 = 'O'  
          END  
          ELSE  
          BEGIN  
@@ -4546,7 +4556,7 @@ BEGIN
             --SET @cOutField04 = ''  
             SET @cOutField06 = ''  
             SET @cOutField06 = ''  
-            SET @cFieldAttr06 = 'O'  
+            --SET @cFieldAttr06 = 'O'  
          END  
   
          SET @cOutField05 = @cMUOM_Desc  
@@ -5223,7 +5233,7 @@ BEGIN
       BEGIN    
          SET @nQtyAval = @nQty    
          SET @cCounted = '1'    
-      END    
+      END
     
       -- Convert to prefer UOM QTY    
       IF @cPUOM = '6' OR -- When preferred UOM = master unit    
@@ -5232,11 +5242,13 @@ BEGIN
          SET @cPUOM_Desc = ''    
          SET @nPQTY = 0    
          SET @nMQTY = @nQtyAval    
+         SET @cFieldAttr06 = 'O'
       END    
       ELSE    
       BEGIN    
          SET @nPQTY = @nQtyAval / @nPUOM_Div  -- Calc QTY in preferred UOM    
          SET @nMQTY = @nQtyAval % @nPUOM_Div  -- Calc the remaining in master unit    
+         SET @cFieldAttr06 = ''
       END    
     
       -- Prepare Next Screen Variable    
@@ -5257,7 +5269,7 @@ BEGIN
       BEGIN    
          SET @cOutField04 = ''    
          SET @cOutField06 = ''    
-         SET @cFieldAttr06 = 'O'    
+         --SET @cFieldAttr06 = 'O'    
       END    
       ELSE    
       BEGIN    
@@ -5281,7 +5293,7 @@ BEGIN
          --SET @cOutField04 = ''    
          SET @cOutField06 = ''    
          SET @cOutField06 = ''    
-         SET @cFieldAttr06 = 'O'    
+         --SET @cFieldAttr06 = 'O'    
       END    
     
       SET @cOutField05 = @cMUOM_Desc    
@@ -5983,7 +5995,7 @@ BEGIN
             BEGIN  
                SET @nQtyAval = @nQty  
                SET @cCounted = '1'  
-            END  
+            END
   
             -- Convert to prefer UOM QTY  
             IF @cPUOM = '6' OR -- When preferred UOM = master unit  
@@ -5991,19 +6003,20 @@ BEGIN
             BEGIN  
                SET @cPUOM_Desc = ''  
                SET @nPQTY = 0  
-               SET @nMQTY = @nQtyAval  
+               SET @nMQTY = @nQtyAval
+               SET @cFieldAttr06 = 'O'  
             END  
             ELSE  
             BEGIN  
-                  SET @nPQTY = @nQtyAval / @nPUOM_Div  -- Calc QTY in preferred UOM  
-                  SET @nMQTY = @nQtyAval % @nPUOM_Div  -- Calc the remaining in master unit  
+               SET @nPQTY = @nQtyAval / @nPUOM_Div  -- Calc QTY in preferred UOM  
+               SET @nMQTY = @nQtyAval % @nPUOM_Div  -- Calc the remaining in master unit  
+               SET @cFieldAttr06 = ''
             END  
   
             IF @cPUOM_Desc = ''  
             BEGIN  
                SET @cOutField04 = ''  
                SET @cOutField06 = ''  
-               SET @cFieldAttr06 = 'O'  
             END  
             ELSE  
             BEGIN  
@@ -6023,7 +6036,7 @@ BEGIN
                SET @cOutField04 = ''  
                SET @cOutField06 = ''  
                SET @cOutField06 = ''  
-               SET @cFieldAttr06 = 'O'  
+               --SET @cFieldAttr06 = 'O'  
             END  
   
   
@@ -6273,11 +6286,13 @@ BEGIN
          SET @cPUOM_Desc = ''
          SET @nPQTY = 0
          SET @nMQTY = @nQtyAval
+         SET @cFieldAttr06 = 'O'  
       END
       ELSE
       BEGIN
          SET @nPQTY = @nQtyAval / @nPUOM_Div  -- Calc QTY in preferred UOM
          SET @nMQTY = @nQtyAval % @nPUOM_Div  -- Calc the remaining in master unit
+         SET @cFieldAttr06 = ''  
       END
 
       -- Prepare Next Screen Variable  
@@ -6298,7 +6313,6 @@ BEGIN
       BEGIN  
          SET @cOutField04 = ''  
          SET @cOutField06 = ''  
-         SET @cFieldAttr06 = 'O'  
       END  
       ELSE  
       BEGIN  
@@ -6316,7 +6330,7 @@ BEGIN
       IF @nPQTY <= 0  
       BEGIN  
          SET @cOutField06 = ''  
-         SET @cFieldAttr06 = 'O'  
+         --SET @cFieldAttr06 = 'O'  
       END  
   
       SET @cOutField05 = @cMUOM_Desc  
