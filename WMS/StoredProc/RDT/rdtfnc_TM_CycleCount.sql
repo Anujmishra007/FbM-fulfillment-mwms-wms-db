@@ -48,7 +48,8 @@ GO
 /* 2025-06-17 3.4.0  NickT    FCR-4971 Add ExtScn in Step 3                      */
 /* 2025-07-16 3.5.0  James    FCR-6059 Change @nFromScn @nFromStep rdtMobRec     */
 /*                            variable mapping (james17)                         */
-/* 2025-06-17 3.6.0  NickT    UWP-37598 Update TaskDetail.EndTime when CC done 
+/* 2025-06-17 3.6.0  NickT    UWP-37598 Update TaskDetail.EndTime when CC done   */
+/* 2025-08-12 0.0.0  Jackc    !!!Cutover. Use V0 repo for work!!!                */
 /*********************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_CycleCount](

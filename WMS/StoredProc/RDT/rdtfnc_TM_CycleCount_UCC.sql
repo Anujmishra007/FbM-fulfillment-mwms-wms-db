@@ -23,6 +23,7 @@ GO
 /* 2025-07-07 1.9.0 James     FCR-6060 Add ExtendedCfmSP                      */ 
 /*                            Add ExtOptionSP in step 3 (james05)             */
 /* 2025-07-18 1.10.0 NickT    UWP-37598 Update TaskDetail.EndTime when CC done*/
+/* 2025-08-12 0.0.0  Jackc    !!!Cutover. Use V0 repo for work!!!             */  
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_CycleCount_UCC] (
