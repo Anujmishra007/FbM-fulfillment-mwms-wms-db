@@ -581,6 +581,25 @@ BEGIN
             END  
 
             --(CY01)-E  
+
+            --(YT05)-S
+            IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
+                        WHERE STC.StorerKey = @c_Storerkey   
+                        AND   STC.ConfigKey = 'GVTSOADDHP'
+                        AND   STC.SValue    = '1' )  
+            BEGIN  
+               EXEC ispGenGVTLog 'GVTSOADDHP', @c_OrderKey, @c_Status, @c_StorerKey, ''    
+                                 , @b_success   OUTPUT    
+                                 , @n_err       OUTPUT    
+                                 , @c_errmsg    OUTPUT   
+  
+               IF @b_success <> 1  
+               BEGIN  
+                  SET @n_continue = 3  
+                  GOTO QUIT   
+               END  
+            END 
+            --(YT05)-E
          END
          ELSE IF ISNULL(RTRIM(@c_TriggerName),'') = 'ntrOrderHeaderUpdate'
          BEGIN  
@@ -627,6 +646,13 @@ BEGIN
                   SET @b_Success = 1
                END
                --(YT03)-E
+
+               --(YT05)-S
+               IF @c_SOStatus IN ('RC','AV','BN','AK','BC','AA','S1','AW','BK')
+               BEGIN
+                  SET @b_Success = 1
+               END
+               --(YT05)-E
   
                IF @b_Success = 1  
                BEGIN  
@@ -824,26 +850,6 @@ BEGIN
                   --(YT04)-E
 
                   --(YT05)-S
-                  IF @c_Status = '0'
-                  BEGIN
-                     IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
-                                 WHERE STC.StorerKey = @c_Storerkey   
-                                 AND   STC.ConfigKey = 'GVTSOADDHP'
-                                 AND   STC.SValue    = '1' )  
-                     BEGIN  
-                        EXEC ispGenGVTLog 'GVTSOADDHP', @c_OrderKey, @c_Status, @c_StorerKey, ''    
-                                        , @b_success   OUTPUT    
-                                        , @n_err       OUTPUT    
-                                        , @c_errmsg    OUTPUT   
-  
-                        IF @b_success <> 1  
-                        BEGIN  
-                           SET @n_continue = 3  
-                           GOTO QUIT   
-                        END  
-                     END 
-                  END
-
                   IF @c_Status = '7'
                   BEGIN
                      IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
