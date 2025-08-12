@@ -29,7 +29,7 @@ GO
 /* 04-Jul-2025  WLChooi 1.3   UWP-37271 Performance Tuning (WL02)        */
 /* 23-Jul-2025  Wan01   1.4   FCR-4602 - Levi Split wave logic must be   */
 /*                            Shipto & buyerpo                           */
-/* 25-Jul-2025  WLChooi 1.5   FCR-4602 - Revise the logic of identifying */
+/* 12-Aug-2025  WLChooi 1.5   FCR-4602 - Revise the logic of identifying */
 /*                            MPOC Orders (WL03)                         */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[msp_RCM_WV_LEVI_SplitChildWave]
@@ -140,7 +140,8 @@ BEGIN
       DECLARE @T_WAVEDETAIL AS TABLE ( Wavekey     NVARCHAR(10)
                                      , Orderkey    NVARCHAR(10)
                                      , BuyerPO     NVARCHAR(20)
-                                     , VCCount     INT 
+                                     , VCCount     INT
+                                     , RowID       INT IDENTITY(1,1) PRIMARY KEY   --WL03
                                      )
    END
 
@@ -475,6 +476,7 @@ BEGIN
               , VCCount = SUM(VCCount)
          FROM @T_ORDERS
          GROUP BY GroupNumber
+         ORDER BY GroupNumber   --WL03
       END
       
       DECLARE CUR_MAIN CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
@@ -561,7 +563,7 @@ BEGIN
            , Automation = IIF(@c_WaveUDF09 = 'Y', 'Y', 'N')   --WL03
       FROM @T_WAVEDETAIL T1
       JOIN @T_ORDERS T2 ON T2.Orderkey = T1.Orderkey
-      ORDER BY T1.Wavekey
+      ORDER BY T1.RowID   --WL03
    END
 
    IF @n_Continue IN (1,2) AND @b_debug <> 1
