@@ -54,6 +54,7 @@ GO
 /* 2024-08-15 3.9  NLT013   FCR-673 Add Extended Screen                      */
 /* 2024-05-28 4.0  James    WMS-25441 Allow containerkey blank and auto      */   
 /*                          create new container record (not exists)(james12)*/
+/* 2025-08-12 3.9  Jackc    !!!Cutover. Use V0 repo for work!!!              */
 /*****************************************************************************/  
   
 CREATE OR ALTER PROC [RDT].[rdtfnc_Scan_To_Container](  
