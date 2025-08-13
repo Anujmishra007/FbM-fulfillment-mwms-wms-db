@@ -13,6 +13,7 @@ GO
 /* Date       Rev  Author     Purposes                                  */
 /* 2025-07-07 1.0  James      FCR-6060. Created                         */
 /* 2025-07-23 1.1.0 NickT     FCR-6060 fixed some issues                */
+/* 2025-08-13 1.2.0 NickT     UWP-39425 RDT screen go to blank screen   */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1767ExtOpt01] (
@@ -108,6 +109,12 @@ AS
       AdjustmentKey     NVARCHAR( 10)
    )
 
+   DECLARE @tPosting TABLE
+   (
+      RowRef            BIGINT IDENTITY(1,1) PRIMARY KEY,
+      AdjustmentKey     NVARCHAR( 10)
+   )
+
    SELECT 
       @cUserName = UserName,
       @cSkipAlertScreen = V_String7
@@ -195,13 +202,7 @@ AS
                BEGIN
                   DELETE FROM @tUCCToMove
                   DELETE FROM @tAdjustmentKeys
-
-                  IF OBJECT_ID('tempdb..#Posting') IS NOT NULL      
-                     DROP TABLE #Posting    
-    
-                  CREATE TABLE #Posting  (      
-                     RowRef            BIGINT IDENTITY(1,1)  Primary Key,      
-                     AdjustmentKey     NVARCHAR( 10))      
+                  DELETE FROM @tPosting
 
                   SET @curCCD = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
                   SELECT RefNo, Lot, Loc, Id, Sku, 
@@ -342,9 +343,9 @@ AS
                                        AND LLI.QtyAllocated > 0
                                        AND UCC.Status = '3')
                      BEGIN
-                        IF NOT EXISTS(SELECT 1 FROM #Posting WHERE AdjustmentKey = @cAdjustmentKey)
+                        IF NOT EXISTS(SELECT 1 FROM @tPosting WHERE AdjustmentKey = @cAdjustmentKey)
                         BEGIN
-                           INSERT INTO #Posting (AdjustmentKey) VALUES (@cAdjustmentKey)
+                           INSERT INTO @tPosting (AdjustmentKey) VALUES (@cAdjustmentKey)
                         END
                      END
                      
@@ -361,7 +362,7 @@ AS
                   BEGIN
                      SET @curADJ = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
                      SELECT AdjustmentKey
-                     FROM #Posting
+                     FROM @tPosting
                      ORDER BY 1
                      OPEN @curADJ
                      FETCH NEXT FROM @curADJ INTO @cAdjustmentKey
