@@ -26,6 +26,7 @@ GO
 /*                            to DPP.                                    */
 /* 20-Jun-2025  Wan02   1.2   UWP-36410 -MLP Link Repln Task ID in       */
 /*                            pickDetail for FCR-2902                    */
+/* 13-AUG-2025                Fixed to reverse RPF task type             */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[ispRVWAV69]
    @c_Wavekey  NVARCHAR(10)
@@ -214,7 +215,7 @@ BEGIN
       FROM TaskDetail td (NOLOCK)
       WHERE td.WaveKey = @c_Wavekey
       AND   td.SourceType IN ( 'ispRLWAV69' )
-      AND   td.TaskType IN ( 'VNAOUT', 'FCP', 'FPK' )
+      AND   td.TaskType IN ( 'VNAOUT', 'FCP', 'FPK', 'RPF' )                        --2025-08-13
       AND   td.[Status] IN ('Q', '0', 'H')
       ORDER BY td.Taskdetailkey DESC                                                --(Wan02)  
 
@@ -229,12 +230,12 @@ BEGIN
 
       WHILE @@FETCH_STATUS <> -1 AND @n_Continue = 1
       BEGIN  
-         IF @c_TaskType IN ('VNAOUT', 'FPK') AND @c_Message03 = 'RPF'               --(Wan02) - START 
+         IF @c_TaskType IN ('VNAOUT', 'RPF') AND @c_Message03 = 'RPF'               --2025-08-13--(Wan02) - START   
          BEGIN
             IF EXISTS ( SELECT 1 FROM TASKDETAIL td (NOLOCK) 
                         WHERE td.Storerkey = @c_Storerkey
                         AND   td.TaskType = 'FCP'
-                        AND   td.UOM IN ('2','3')
+                        AND   td.UOM IN ('2','3','6')                               --2025-07-09           
                         AND   td.SourceType = 'ispRLWAV69'
                         AND   td.RefTaskKey = @c_Taskdetailkey
                         AND   td.[Status] NOT IN ('X','9')
