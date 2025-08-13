@@ -295,6 +295,8 @@ BEGIN
       SET @cOutField01 = '' -- From LOC
       SET @cOutField02 = '' -- From ID
       
+      SET @nUCCOnPage = 9
+
       EXEC rdt.rdtSetFocusField @nMobile, 1 -- FromLOC
       
       SET @nScn = @nScn_FromLOC
