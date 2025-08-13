@@ -9,8 +9,9 @@ GO
 /*                                                                      */
 /* Purpose: FCR-6888                                                    */
 /*                                                                      */
-/* Date         Rev  Author     Purposes                                  */
-/* 06-Aug-2025  1.0  Cuize      FCR-6888. Created                         */
+/* Date         Rev  Author     Purposes                                */
+/* 06-Aug-2025  1.0  Cuize      FCR-6888. Created                       */
+/* 12-Aug-2025  1.1  AGA399     Add Id Validations                      */
 /************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_600ExtVal28 (
@@ -92,7 +93,7 @@ WHERE Mobile = @nMobile
                GOTO Quit
             END
 
-            IF @cPrinter = '' AND @cPrinter_Paper = ''
+            IF @cPrinter = ''
             BEGIN
                SET @nErrNo = 243702
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --NoPrinter
@@ -108,6 +109,18 @@ WHERE Mobile = @nMobile
 
          END
       END
+
+      IF @nStep = 3 -- To Id Entry -- AGA399
+      BEGIN
+         IF len(replace(rtrim(ltrim(@cID)),' ',''))<>18 OR (SELECT CHARINDEX (' ',@cID))>0
+            BEGIN
+               SET @nErrNo = 217971
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --217971BadFormat
+               GOTO Quit
+            END
+      END
+
+
 
       IF @nStep = 6 -- QTY screen
       BEGIN
