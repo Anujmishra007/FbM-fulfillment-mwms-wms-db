@@ -54,6 +54,7 @@ GO
 /* 2025-07-18 4.3.0  NickT      UWP-37598 Update TaskDetail.EndTime when CC done*/
 /* 2025-07-18 4.4.0  NickT      UWP-39152 CaseQty text box should be visible    */
 /*                              if PUOM is setup AS CASE                        */
+/* 2025-08-13 0.0.0  JackC      !!!Cutover. Use V0 repo for work!!!             */
 /********************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_CycleCount_SKU] (
