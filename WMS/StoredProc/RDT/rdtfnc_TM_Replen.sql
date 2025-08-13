@@ -62,6 +62,7 @@ GO
 /* 2025-07-10 0.0  JackC      !!!Cutover!!! Use V0 repo for work              */
 /* 2025-08-04 4.4.0 NickT     UWP-37578 Extend length of  @cOption            */
 /* 2025-08-08 4.5.0 NickT     UWP-39061 SuggestToLoc is reset by mistake      */
+/* 2025-06-16 4.6.0 Dennis    FCR-3959 Extended Update on Step 7              */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_Replen](
@@ -845,14 +846,6 @@ BEGIN
 
    END
 
-   IF @cExtScnSP <> ''
-   BEGIN
-      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
-      BEGIN
-         GOTO Step_99
-      END
-   END
-
    -- Extended info
    IF @cExtendedInfoSP <> ''
    BEGIN
@@ -877,6 +870,13 @@ BEGIN
 
          SET @cOutField10 = @cExtendedInfo1
       END
+   END
+   IF @cExtScnSP <> ''
+   BEGIN
+       IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
+       BEGIN
+           GOTO Step_99
+       END
    END
    GOTO Quit
 
@@ -1125,13 +1125,7 @@ BEGIN
          SET @nStep = @nStep_Reason
       END
    END
-   IF @cExtScnSP <> ''
-   BEGIN
-      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
-      BEGIN
-         GOTO Step_99
-      END
-   END
+      
    -- Extended info
    IF @cExtendedInfoSP <> ''
    BEGIN
@@ -1157,6 +1151,15 @@ BEGIN
          SET @cOutField10 = @cExtendedInfo1
       END
    END
+
+   IF @cExtScnSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
+      BEGIN
+         GOTO Step_99
+      END
+   END
+
    GOTO Quit
 
    Step_FromLOC_Fail:
@@ -3211,13 +3214,7 @@ BEGIN
       SET @nScn = @nScn_SKU
       SET @nStep = @nStep_SKU
    END
-   IF @cExtScnSP <> ''
-   BEGIN
-      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
-      BEGIN
-         GOTO Step_99
-      END
-   END
+
    -- Extended info
    IF @cExtendedInfoSP <> ''
    BEGIN
@@ -3242,6 +3239,13 @@ BEGIN
 
          SET @cOutField10 = @cExtendedInfo1
       END
+   END
+   IF @cExtScnSP <> ''
+   BEGIN
+       IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
+       BEGIN
+           GOTO Step_99
+       END
    END
    GOTO Quit
 
@@ -3591,7 +3595,7 @@ BEGIN
    BEGIN
       IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
       BEGIN
-         DECLARE 
+         DECLARE
             @nCurrentScn      INT = @nScn,
             @nCurrentStep     INT = @nStep
          DELETE FROM @tExtScnData
@@ -3674,7 +3678,7 @@ BEGIN
 
                   GOTO Step_Exit
                END
-            END  
+            END
          END
 
          
