@@ -14,6 +14,7 @@ GO
 /* Date       Rev   Author     Purposes                                 */
 /* 2025-07-07 1.0.0 James      FCR-6059. Created                        */
 /* 2025-07-19 1.0.1 NickT      FCR-6059. No adjustment on allocated INV */
+/* 2025-08-13 1.1.0 NickT      UWP-39425 RDT screen go to blank screen  */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1768ExtOpt01] (
@@ -85,6 +86,12 @@ AS
    DECLARE @nQtyAlloc      INT = 0
    DECLARE @nOriCCQty      INT
    DECLARE @nInvQty        INT
+   DECLARE @nLoopIndex     INT = -1
+
+   DECLARE @tPosting TABLE (
+      RowRef            BIGINT IDENTITY(1,1)  Primary Key,
+      AdjustmentKey     NVARCHAR( 10)
+   )
 
    SELECT @cUserName = UserName
    FROM RDT.RDTMOBREC WITH (NOLOCK)
@@ -195,15 +202,10 @@ AS
                SET @cADJType = rdt.RDTGetConfig( @nFunc, 'ADJType', @cStorerKey)
                SET @cADJReason = rdt.RDTGetConfig( @nFunc, 'ADJReason', @cStorerKey)
 
-               IF @cPostADJ = '1'
-               BEGIN
-                  IF OBJECT_ID('tempdb..#Posting') IS NOT NULL      
-                     DROP TABLE #Posting    
-    
-                  CREATE TABLE #Posting  (      
-                     RowRef            BIGINT IDENTITY(1,1)  Primary Key,      
-                     AdjustmentKey     NVARCHAR( 10))      
+               DELETE FROM @tPosting
 
+               IF @cPostADJ = '1'
+               BEGIN 
                   SET @curCCD = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
                   SELECT 
                      CCDetailKey, 
@@ -335,7 +337,7 @@ AS
                         GOTO RollBackTran   
                      END
 
-                     INSERT INTO #Posting (AdjustmentKey) VALUES (@cAdjustmentKey)
+                     INSERT INTO @tPosting (AdjustmentKey) VALUES (@cAdjustmentKey)
 
                      CONTINUE_curCCD:
                      FETCH NEXT FROM @curCCD INTO @cCCDetailKey, @nCCDQty, @nOriCCQty
@@ -348,7 +350,7 @@ AS
                      BEGIN
                         SET @curADJ = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
                         SELECT AdjustmentKey
-                        FROM #Posting
+                        FROM @tPosting
                         ORDER BY 1
                         OPEN @curADJ
                         FETCH NEXT FROM @curADJ INTO @cAdjustmentKey
@@ -445,21 +447,33 @@ AS
 
             IF @cADJFinalize = '1' 
             BEGIN
-               SELECT @cAdjustmentKey = AdjustmentKey FROM #Posting
-
-               IF ISNULL( @cAdjustmentKey, '') <> ''
+               SET @nLoopIndex = -1
+               WHILE 1 = 1
                BEGIN
-                  EXEC dbo.isp_FinalizeADJ
-                     @c_ADJKey   = @cAdjustmentKey,
-                     @b_Success  = @bSuccess    OUTPUT,
-                     @n_err      = @nErrNo      OUTPUT,
-                     @c_errmsg   = @cErrMsg     OUTPUT
+                  SELECT TOP 1 
+                     @cAdjustmentKey = AdjustmentKey,
+                     @nLoopIndex = RowRef
+                  FROM @tPosting
+                  WHERE RowRef > @nLoopIndex
+                  ORDER BY RowRef
 
-                  IF NOT @bSuccess = 1
+                  IF @@ROWCOUNT = 0
+                     BREAK
+
+                  IF ISNULL( @cAdjustmentKey, '') <> ''
                   BEGIN
-                     SET @nErrNo = 241507
-                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP')   -- Finalize failed
-                     GOTO Quit_SP   
+                     EXEC dbo.isp_FinalizeADJ
+                        @c_ADJKey   = @cAdjustmentKey,
+                        @b_Success  = @bSuccess    OUTPUT,
+                        @n_err      = @nErrNo      OUTPUT,
+                        @c_errmsg   = @cErrMsg     OUTPUT
+
+                     IF NOT @bSuccess = 1
+                     BEGIN
+                        SET @nErrNo = 241507
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP')   -- Finalize failed
+                        GOTO Quit_SP   
+                     END
                   END
                END
             END
