@@ -14,6 +14,7 @@ GO
 /* 2024-10-03 1.1    NLT03      Grainte urgent case fix                          */
 /* 2024-10-05 1.2    NLT03      FCR-949 new request, enhancement                 */
 /* 2025-07-23 1.3.0  JackC      FCR-6707 generate BOL sequence number            */
+/* 2025-08-11 1.4.0  Dennis     FCR-7046 Add Validation                          */
 /*********************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_593FedexLabel01] (
@@ -73,6 +74,16 @@ AS
    BEGIN
       SET @nErrNo = 223001
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --LabelNoNeeded
+      GOTO Quit
+   END
+
+   IF EXISTS (SELECT 1 FROM dbo.PickDetail  WITH(NOLOCK)
+      WHERE StorerKey = @cStorerKey
+      AND ISNULL(CaseID, '') = @cDropID
+      AND Status < '5')
+   BEGIN
+      SET @nErrNo = 223011
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- PickNotFinished
       GOTO Quit
    END
 
