@@ -11,6 +11,7 @@ GO
 /*                                                                          */
 /* Date         Ver.  Author    Purposes                                    */
 /* 20-Sep-2023  1.0   JLC042    Created base on rdtGetXML 2.0               */
+/* 03-Apr-2025  1.1.0 NLT013    UWP-32244 Extend Menu number                */
 /****************************************************************************/
 
 CREATE OR ALTER PROC RDT.rdtGetXMLHttp(
@@ -107,9 +108,9 @@ AS
 
    -- Get screen title
    DECLARE @cScnTitle NVARCHAR( 250) = ''
-   IF @nFunc BETWEEN 5 AND 499 -- Menu
+   IF @nFunc BETWEEN 5 AND 499 OR @nFunc < -100 -- Menu
       SET @cScnTitle = rdt.rdtGetMessageLong( @nFunc, @cLangCode, 'MNU')
-   ELSE -- Function, include login, store and facility, resume session
+   ELSE IF @nFunc BETWEEN 0 AND 4  OR @nFunc > 499 -- Function, include login, store and facility, resume session
       SET @cScnTitle = rdt.rdtGetMessageLong( @nFunc, @cLangCode, 'FNC')
    SET @cXMLScreen += ' title="' + @cScnTitle + '"'
 
@@ -131,13 +132,13 @@ AS
    -- XML footer
    IF @cMobileDisp = 'N'
       SET @cXMLFooter = '<field typ="output" x="01" y="6" value="' +
-         'Fn'+ CAST( @nFunc AS NVARCHAR(4)) +
+         'Fn'+ CAST( @nFunc AS NVARCHAR(11)) +
          '-St' + CAST( @nStep AS NVARCHAR(3)) +
          --'-M' + CAST( @nMobile AS NVARCHAR(3))  -- take out because screen only can display 19 chars
          + '"/>'
    ELSE
       SET @cXMLFooter = '<field typ="output" x="01" y="15" value="' +
-         'Fn'+ CAST( @nFunc AS NVARCHAR(4)) +
+         'Fn'+ CAST( @nFunc AS NVARCHAR(11)) +
          '-St' + CAST( @nStep AS NVARCHAR(3)) +
          '-M' + CAST( @nMobile AS NVARCHAR(5)) +
          '"/>'

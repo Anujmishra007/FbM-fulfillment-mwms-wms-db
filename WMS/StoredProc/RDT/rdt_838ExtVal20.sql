@@ -1,16 +1,15 @@
-SET ANSI_NULLS OFF
-GO
-SET QUOTED_IDENTIFIER OFF
-GO
+
 
 
 /************************************************************************/
 /* Store procedure: rdt_838ExtVal20                                     */
 /* Copyright      :                                                     */
 /*                                                                      */
-/* Date       Rev  Author      Purposes                                 */
+/* Date       Rev  Author     Purposes                                  */
 /* 2023-06-28 1.0  JHU151     FCR-352 Created                           */
 /* 2024-10-24 1.1  TLE109     FCR-990. Packing Serial Number Validation */
+/* 2025-07-05 1.2  Cuize      FCR-5078                                  */
+/* 2025-07-10 1.3  VIBIN01    RITM8036731                               */
 /************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_838ExtVal20 (
@@ -60,19 +59,22 @@ BEGIN
    DECLARE @cPackSKU NVARCHAR(20)
    DECLARE @nPackQTY  INT
    DECLARE @cErrMsg1  NVARCHAR(20)
+   DECLARE @cUserName           NVARCHAR(128)
 
-   
+
+
    SELECT
-      @cSerialNo         = V_Max
-	FROM rdt.rdtMobRec WITH (NOLOCK)
-	WHERE Mobile = @nMobile
+      @cSerialNo         = V_Max,
+      @cUsername        = UserName
+ FROM rdt.rdtMobRec WITH (NOLOCK)
+ WHERE Mobile = @nMobile
 
    IF @nFunc = 838 -- Pack
    BEGIN
       IF @nStep = 1 -- pickslip no
       BEGIN
          IF @nInputKey = 1 -- ENTER
-         BEGIN            
+         BEGIN
             -- Check Pack confirmed
             IF EXISTS( SELECT 1 FROM PackHeader WITH (NOLOCK) WHERE PickSlipNo = @cPickSlipNo AND Status = '9')
             BEGIN
@@ -106,18 +108,26 @@ BEGIN
                   GOTO Quit
                END
 
-               IF (LEFT(@cSerialNo, 6) <> @cSKU OR LEN(@cSerialNo) <= 6)
-                  AND (LEFT(@cSerialNo, 10) <> @cSKU OR LEN(@cSerialNo) <= 10) 
+               DECLARE @cOPSPosition        NVARCHAR(60) -- V1.2 Cuize
+               SELECT
+                  @cOPSPosition = ISNULL(OPSPosition,'')
+               FROM RDT.RDTUser (NOLOCK )
+               WHERE UserName = @cUsername
+
+               --IF (LEFT(@cSerialNo, 6) <> @cSKU OR LEN(@cSerialNo) <= 6)  --- VIBIN01
+               --AND (LEFT(@cSerialNo, 10) <> @cSKU OR LEN(@cSerialNo) <= 10) --- VIBIN01
+
+               IF (LEFT(@cSerialNo, 6) <> LEFT(@cSKU,6) OR LEN(@cSerialNo) <= 6) ---- VIBIN01
+                  AND (LEFT(@cSerialNo, 10) <> LEFT(@cSKU,10) OR LEN(@cSerialNo) <= 10) --- VIBIN01
+                  AND (@cOPSPosition <> '1') -- V1.2 Cuize
                BEGIN
                   SET @nErrNo = 100250
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')  --100250Serial Confirm
                   GOTO Quit
                END
-
-
             END
          END
-      END   
+      END
    END
 
 Quit:

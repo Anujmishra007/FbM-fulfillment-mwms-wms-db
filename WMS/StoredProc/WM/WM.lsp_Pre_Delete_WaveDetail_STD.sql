@@ -33,6 +33,8 @@ GO
 /* 2021-11-24  Wan02    1.4   LFWM-3141 - UAT - TW  Outbound - Order    */
 /*                            Remove from Wave Bug                      */
 /*                      1.3   DevOps Combine Script                     */
+/* 2025-07-18  AYD01    1.5   UWP-37984: include condition orders.status*/
+/*                            = 'CANC' when deleting wave details       */
 /************************************************************************/     
 CREATE PROCEDURE [WM].[lsp_Pre_Delete_WaveDetail_STD]  
       @c_StorerKey         NVARCHAR(15)  
@@ -127,7 +129,8 @@ BEGIN
   
       IF @c_DelSOCancCFromWave = '1'  
       BEGIN  
-         IF @c_Status = '0' AND @c_SOStatus = 'CANC'  -- Delete without other pre-delete validation  
+         IF @c_Status IN ('0', 'CANC') --AYD01
+         AND @c_SOStatus = 'CANC'  -- Delete without other pre-delete validation  
          BEGIN  
             GOTO EXIT_SP    
          END  

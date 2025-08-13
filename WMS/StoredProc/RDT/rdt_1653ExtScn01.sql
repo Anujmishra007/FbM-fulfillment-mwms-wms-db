@@ -25,6 +25,8 @@ GO
 /* 2025-02-20 1.5.0  NLT013   UWP-30312 Performance Tune                    */
 /* 2024-10-31 1.6.0  NLT013   UWP-26400 The validation for new pallet       */
 /*                            does not work in some scenarios               */
+/* 2025-07-30 1.7.0  NLT013   UWP-38609 Performance tuning                  */
+/* 2025-07-07 1.7.0  NLT013   UWP-36981 Performance Tune                    */
 /****************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_1653ExtScn01] (
@@ -192,7 +194,7 @@ BEGIN
                BEGIN TRY
                   SET @cSQLString =
                   'WITH FilteredPalletDetail AS (
-                     SELECT
+                     SELECT DISTINCT
                         UserDefine01,
                         UserDefine02,
                         UserDefine03,
@@ -205,7 +207,7 @@ BEGIN
                         PD2.palletkey = @cPalletKey
                         AND PD2.StorerKey = @cStorerKey
                   )
-                  SELECT distinct
+                  SELECT DISTINCT
                      @cCaseID = PD.caseid
                   FROM dbo.PickDetail PD WITH (NOLOCK)
                   INNER JOIN dbo.Orders O WITH (NOLOCK) ON PD.orderkey = O.orderkey AND PD.StorerKey = O.StorerKey
@@ -254,13 +256,13 @@ BEGIN
                BEGIN TRY
                   SET @cSQLString =
                      'WITH FilteredOrders AS (
-                        SELECT '
+                        SELECT DISTINCT'
                         +IIF(@cCODELKUPUdf01 <> '',   'O2.'+@cCODELKUPUdf01+', ','')
                         +IIF(@cCODELKUPUdf02 <> '',   'O2.'+@cCODELKUPUdf02+', ','')
                         +IIF(@cCODELKUPUdf03 <> '',   'O2.'+@cCODELKUPUdf03+', ','')
                         +IIF(@cCODELKUPUdf04 <> '',   'O2.'+@cCODELKUPUdf04+', ','')
                         +IIF(@cCODELKUPUdf05 <> '',   'O2.'+@cCODELKUPUdf05+', ','')
-                     +' O2.ORDERKEY
+                        +' O2.ORDERKEY
                         FROM dbo.Orders O2 WITH (NOLOCK)
                         INNER JOIN dbo.PickDetail PD2 WITH (NOLOCK) ON PD2.ORDERKEY = O2.ORDERKEY AND O2.StorerKey = PD2.StorerKey
                         WHERE
@@ -268,21 +270,13 @@ BEGIN
                            AND O2.StorerKey = @cStorerKey
                      ),
                      FilteredPalletDetail AS (
-                        SELECT
+                        SELECT DISTINCT
                            PD2.CaseID,
                            PD2.UserDefine01
                         FROM dbo.PalletDetail PD2 WITH (NOLOCK)
-                        WHERE
-                           EXISTS (
-                                 SELECT 1
-                                 FROM dbo.Orders O2 WITH (NOLOCK)
-                                 INNER JOIN dbo.PickDetail PD3 WITH (NOLOCK) ON PD3.ORDERKEY = O2.ORDERKEY AND O2.StorerKey = PD3.StorerKey
-                                 WHERE
-                                    PD3.CaseID = @cTrackNo
-                                    AND O2.MBOLKey = PD2.UserDefine01
-                                    AND O2.StorerKey = @cStorerKey
-                           )
-                           AND PD2.StorerKey = @cStorerKey
+                        INNER JOIN dbo.Orders O2 WITH (NOLOCK) ON ISNULL(O2.MBOLKey, '''') = ISNULL(PD2.UserDefine01, '''') AND O2.StorerKey = PD2.StorerKey
+                        INNER JOIN dbo.PickDetail PD3 WITH (NOLOCK) ON PD3.ORDERKEY = O2.ORDERKEY AND O2.StorerKey = PD3.StorerKey AND PD3.CaseID = @cTrackNo
+                        WHERE PD2.StorerKey = @cStorerKey
                      )
                      SELECT DISTINCT
                         @cCaseID = PD.caseid
@@ -563,6 +557,13 @@ BEGIN
                      AND CaseID = @cLabelNo
                      AND StorerKey = @cStorerKey
 
+                  DECLARE @tPalletDetail TABLE
+                  (
+                     PalletKey            NVARCHAR(30),
+                     PalletLineNumber     NVARCHAR(5),
+                     PRIMARY KEY (PalletKey, PalletLineNumber)
+                  )
+
                   IF @nTranCount = 0
                   BEGIN
                      BEGIN TRANSACTION
@@ -574,11 +575,19 @@ BEGIN
 
                   BEGIN TRY
                      --Remove PalletDetails
-                     DELETE FROM dbo.PalletDetail
+                     INSERT INTO @tPalletDetail (PalletKey, PalletLineNumber)
+                     SELECT DISTINCT PalletKey, PalletLineNumber
+                     FROM dbo.PalletDetail WITH(NOLOCK)
                      WHERE PalletKey = @cPalletKey
-                     AND CaseID IS NOT NULL
-                     AND CaseID = @cLabelNo
-                     AND StorerKey = @cStorerKey
+                        AND CaseID IS NOT NULL
+                        AND CaseID = @cLabelNo
+                        AND StorerKey = @cStorerKey
+
+                     DELETE PD
+                     FROM dbo.PalletDetail PD
+                     INNER JOIN @tPalletDetail TPD 
+                        ON PD.PalletKey = TPD.PalletKey
+                        AND PD.PalletLineNumber = TPD.PalletLineNumber
 
                      SELECT @nRowCount = COUNT(1) 
                      FROM dbo.PalletDetail WITH(NOLOCK)
@@ -653,9 +662,11 @@ BEGIN
    END
 Quit:
 END
+GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
+
 SET ANSI_NULLS ON
 GO
 

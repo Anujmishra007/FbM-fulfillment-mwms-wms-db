@@ -50,6 +50,7 @@ GRANT SELECT ON  [dbo].[TMS_Shipment] TO [NSQL]
 GRANT UPDATE ON  [dbo].[TMS_Shipment] TO [NSQL]
 
 
+
 /* 
 --WMS-18951
 

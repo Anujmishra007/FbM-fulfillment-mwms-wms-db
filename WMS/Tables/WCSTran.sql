@@ -1,3 +1,5 @@
+IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[WCSTran]') AND type in (N'U'))
+BEGIN
 CREATE TABLE [dbo].[WCSTran]
 (
 [MessageID] [int] NOT NULL IDENTITY(1, 1),
@@ -25,29 +27,118 @@ CREATE TABLE [dbo].[WCSTran]
 [ImgFileName3] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_WCSTran_ImgFileName3] DEFAULT (''),
 [ImgFileName4] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_WCSTran_ImgFileName4] DEFAULT (''),
 [ImgFileName5] [nvarchar] (60) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_WCSTran_ImgFileName5] DEFAULT (''),
-[Param1] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_WCSTran_Param1] DEFAULT (''),
-[Param2] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_WCSTran_Param2] DEFAULT (''),
-[Param3] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_WCSTran_Param3] DEFAULT (''),
-[Param4] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_WCSTran_Param4] DEFAULT (''),
-[Param5] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_WCSTran_Param5] DEFAULT (''),
-[Param6] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_WCSTran_Param6] DEFAULT (''),
-[Param7] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_WCSTran_Param7] DEFAULT (''),
-[Param8] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_WCSTran_Param8] DEFAULT (''),
-[Param9] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_WCSTran_Param9] DEFAULT (''),
-[Param10] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_WCSTran_Param10] DEFAULT (''),
+[Param1] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_WCSTran_Param1] DEFAULT (''),
+[Param2] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_WCSTran_Param2] DEFAULT (''),
+[Param3] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_WCSTran_Param3] DEFAULT (''),
+[Param4] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_WCSTran_Param4] DEFAULT (''),
+[Param5] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_WCSTran_Param5] DEFAULT (''),
+[Param6] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_WCSTran_Param6] DEFAULT (''),
+[Param7] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_WCSTran_Param7] DEFAULT (''),
+[Param8] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_WCSTran_Param8] DEFAULT (''),
+[Param9] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_WCSTran_Param9] DEFAULT (''),
+[Param10] [nvarchar] (100) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_WCSTran_Param10] DEFAULT (''),
 [AddDate] [datetime] NULL CONSTRAINT [DF_WCSTran_AddDate] DEFAULT (getdate()),
 [AddWho] [nvarchar] (128) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_WCSTran_AddWho] DEFAULT (suser_sname()),
 [EditDate] [datetime] NULL CONSTRAINT [DF_WCSTran_EditDate] DEFAULT (getdate()),
 [EditWho] [nvarchar] (128) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_WCSTran_EditWho] DEFAULT (suser_sname())
 ) ON [PRIMARY]
-GO
+
 ALTER TABLE [dbo].[WCSTran] ADD CONSTRAINT [PK_WCSTran] PRIMARY KEY CLUSTERED ([MessageID]) ON [PRIMARY]
-GO
+
 GRANT DELETE ON  [dbo].[WCSTran] TO [NSQL]
-GO
+
 GRANT INSERT ON  [dbo].[WCSTran] TO [NSQL]
-GO
+
 GRANT SELECT ON  [dbo].[WCSTran] TO [NSQL]
-GO
+
 GRANT UPDATE ON  [dbo].[WCSTran] TO [NSQL]
-GO
+
+END
+
+ELSE 
+BEGIN
+
+--ALTER COLUMN 
+	IF EXISTS (SELECT * FROM SYS.COLUMNS WHERE name ='Param1' AND Object_ID = Object_ID('[dbo].[WCSTran]') AND max_length <>200)
+	BEGIN
+
+	ALTER TABLE [dbo].[WCSTran]
+	ALTER COLUMN [Param1] [nvarchar] (100) NULL;
+
+	END
+
+		IF EXISTS (SELECT * FROM SYS.COLUMNS WHERE name ='Param2' AND Object_ID = Object_ID('[dbo].[WCSTran]') AND max_length <>200)
+	BEGIN
+
+	ALTER TABLE [dbo].[WCSTran]
+	ALTER COLUMN [Param2] [nvarchar] (100) NULL;
+
+	END
+
+		IF EXISTS (SELECT * FROM SYS.COLUMNS WHERE name ='Param3' AND Object_ID = Object_ID('[dbo].[WCSTran]') AND max_length <>200)
+	BEGIN
+
+	ALTER TABLE [dbo].[WCSTran]
+	ALTER COLUMN [Param3] [nvarchar] (100) NULL;
+
+	END
+
+		IF EXISTS (SELECT * FROM SYS.COLUMNS WHERE name ='Param4' AND Object_ID = Object_ID('[dbo].[WCSTran]') AND max_length <>200)
+	BEGIN
+
+	ALTER TABLE [dbo].[WCSTran]
+	ALTER COLUMN [Param4] [nvarchar] (100) NULL;
+
+	END
+
+		IF EXISTS (SELECT * FROM SYS.COLUMNS WHERE name ='Param5' AND Object_ID = Object_ID('[dbo].[WCSTran]') AND max_length <>200)
+	BEGIN
+
+	ALTER TABLE [dbo].[WCSTran]
+	ALTER COLUMN [Param5] [nvarchar] (100) NULL;
+
+	END
+
+		IF EXISTS (SELECT * FROM SYS.COLUMNS WHERE name ='Param6' AND Object_ID = Object_ID('[dbo].[WCSTran]') AND max_length <>200)
+	BEGIN
+
+	ALTER TABLE [dbo].[WCSTran]
+	ALTER COLUMN [Param6] [nvarchar] (100) NULL;
+
+	END
+
+		IF EXISTS (SELECT * FROM SYS.COLUMNS WHERE name ='Param7' AND Object_ID = Object_ID('[dbo].[WCSTran]') AND max_length <>200)
+	BEGIN
+
+	ALTER TABLE [dbo].[WCSTran]
+	ALTER COLUMN [Param7] [nvarchar] (100) NULL;
+
+	END
+
+		IF EXISTS (SELECT * FROM SYS.COLUMNS WHERE name ='Param8' AND Object_ID = Object_ID('[dbo].[WCSTran]') AND max_length <>200)
+	BEGIN
+
+	ALTER TABLE [dbo].[WCSTran]
+	ALTER COLUMN [Param8] [nvarchar] (100) NULL;
+
+	END
+
+		IF EXISTS (SELECT * FROM SYS.COLUMNS WHERE name ='Param9' AND Object_ID = Object_ID('[dbo].[WCSTran]') AND max_length <>200)
+	BEGIN
+
+	ALTER TABLE [dbo].[WCSTran]
+	ALTER COLUMN [Param9] [nvarchar] (100) NULL;
+
+	END
+
+
+		IF EXISTS (SELECT * FROM SYS.COLUMNS WHERE name ='Param10' AND Object_ID = Object_ID('[dbo].[WCSTran]') AND max_length <>200)
+	BEGIN
+
+	ALTER TABLE [dbo].[WCSTran]
+	ALTER COLUMN [Param10] [nvarchar] (100) NULL;
+
+	END
+
+END
+

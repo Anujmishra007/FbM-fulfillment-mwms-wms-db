@@ -69,6 +69,7 @@ GO
 /* 2024-10-22   4.0  PXL009     FCR-759 ID and UCC Length Issue               */
 /* 2025-02-26   4.1.0  NLT013   FCR-2519 Be able to config Lottable           */
 /* 2025-02-26   4.1.1  CYU027   FCR-2519 Lottable 1-15 Swap UCC               */
+/* 2025-07-28   0.0.0  Jackc    !!!Cutover!!! Use V0 repo for work            */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_Pick] (

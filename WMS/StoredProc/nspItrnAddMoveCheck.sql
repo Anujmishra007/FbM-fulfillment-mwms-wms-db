@@ -189,6 +189,7 @@ BEGIN
       , @c_ChkNoMixLottableForAllSku NVARCHAR(30) = '' --NJOW04  
       
       , @n_Qty_ID                   INT = 0              --(Wan12)
+      , @c_MoveType                 NVARCHAR(30) = ''    --(SSA01)
 
    SET @c_IDLottable01     = ''
    SET @c_IDLottable02     = ''
@@ -277,6 +278,9 @@ BEGIN
    /* Get status of overallocations flag */
    IF @n_continue = 1 or @n_continue = 2
    BEGIN
+     SELECT @c_MoveType = sourcetype
+                     FROM ITRN (NOLOCK) WHERE
+                     ITRNKEY = @c_itrnkey   --(SSA01)
       -- Added By Ricky to handle Overallocation by storerkey
 
       SELECT @c_facility = LOC.FACILITY
@@ -1999,7 +2003,7 @@ BEGIN
    IF @n_continue=1 or @n_continue=2
    BEGIN
       UPDATE ID with (ROWLOCK) SET QTY = QTY - @n_Qty
-      , PalletType = @c_PalletType   --(SSA01)
+      , PalletType = CASE WHEN @c_MoveType = 'ntrInventoryQCDetailUpdate' THEN @c_PalletType ELSE PalletType END   --(SSA01)
       WHERE ID = @c_fromID
       /* Check SQL Error Message */
       SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
@@ -2072,7 +2076,7 @@ BEGIN
       BEGIN
          /* Update table 'Id' */
          UPDATE ID with (ROWLOCK) SET QTY = QTY + @n_Qty, Status = @c_Status
-          , PalletType = @c_PalletType   --(SSA01)
+          , PalletType = CASE WHEN @c_MoveType = 'ntrInventoryQCDetailUpdate' THEN @c_PalletType ELSE PalletType END  --(SSA01)
          WHERE ID = @c_TOID
       END
       ELSE
@@ -2085,7 +2089,7 @@ BEGIN
          IF EXISTS ( SELECT 1 FROM  ID with (NOLOCK) WHERE ID = @c_TOID AND [Status] <> @c_Status )
          BEGIN
             UPDATE ID with (ROWLOCK) SET Status = @c_Status
-             , PalletType = @c_PalletType   --(SSA01)
+            , PalletType = CASE WHEN @c_MoveType = 'ntrInventoryQCDetailUpdate' THEN @c_PalletType ELSE PalletType END   --(SSA01)
             WHERE ID = @c_TOID
          END
       END

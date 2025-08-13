@@ -13,6 +13,7 @@ GO
 /* 2025-02-13 1.1.0  ASK138     FCR-2724                                   */
 /* 2025-05-19 1.2.0  Dennis     FCR-4531                                   */
 /* 2025-05-31 1.3.0  NickT      UWP-35355 Add additional validation        */
+/* 2025-07-23 1.4.0  Dennis     FCR-6157                                   */
 /***************************************************************************/
 
 CREATE OR ALTER   PROCEDURE [RDT].[rdt_898ExtVal05]
@@ -75,6 +76,33 @@ BEGIN
                GOTO Quit
             END
 
+            IF EXISTS (SELECT 1 FROM dbo.RECEIPTDETAIL RD (NOLOCK)
+                     WHERE StorerKey = @cStorerKey
+                     AND ReceiptKey = @cReceiptKey
+                     GROUP BY ReceiptKey
+                     HAVING COUNT(DISTINCT POKey) > 1 )
+            BEGIN
+               SET @nErrNo = 225306
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- MultiPOInReceipt
+               GOTO Quit
+            END
+
+            IF EXISTS (SELECT 1
+               FROM dbo.Receipt R WITH (NOLOCK)
+               JOIN dbo.ReceiptDetail RD WITH (NOLOCK) ON R.ReceiptKey = RD.ReceiptKey
+               JOIN dbo.PO PO WITH (NOLOCK) ON RD.POKey = PO.POKey
+               WHERE R.ReceiptKey = @cReceiptkey
+                  AND R.Facility = @cFacility
+                  AND R.StorerKey = @cStorerKey 
+                  AND R.DOCTYPE = 'R'
+                  AND PO.POType <> 'RETURN' 
+                  )
+            BEGIN
+               SET @nErrNo = 225307
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- POTypeNotReturn
+               GOTO Quit
+            END
+
             IF EXISTS(SELECT 1
                FROM dbo.RECEIPT RT WITH(NOLOCK) 
                INNER JOIN dbo.RECEIPTDETAIL RTD WITH(NOLOCK) 
@@ -88,6 +116,19 @@ BEGIN
             BEGIN
                SET @nErrNo = 225304 
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- POClosed
+               GOTO Quit
+            END
+
+            IF EXISTS(SELECT 1
+               FROM dbo.Receipt R WITH (NOLOCK)
+               WHERE R.ReceiptKey = @cReceiptkey
+                  AND R.Facility = @cFacility
+                  AND R.StorerKey = @cStorerKey 
+                  AND R.DOCTYPE = 'R'
+                  AND R.UserDefine06 < GETDATE())
+            BEGIN
+               SET @nErrNo = 225305 
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Cancel Date Past
                GOTO Quit
             END
          END

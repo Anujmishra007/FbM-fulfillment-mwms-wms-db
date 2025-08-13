@@ -9,7 +9,8 @@ GO
 /*                                                                      */
 /* Date        Rev  Author       Purposes                               */
 /* 2025-01-23  1.0  Dennis       FCR-1824 Created                       */
-/* 2025-02-05  1.1  CYU027   FCR-2630 Add Option=5 in step 5           */
+/* 2025-02-05  1.1  CYU027       FCR-2630 Add Option=5 in step 5         */
+/* 2025-05-08  1.2  Dennis       FCR-4463                                */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE rdt.rdt_855TempLabel01
@@ -47,14 +48,22 @@ BEGIN
    @cSQLParam      NVARCHAR( MAX),
    @cUserName      NVARCHAR( 20),
    @cReportType    NVARCHAR( 10),
-   @cUDF02         NVARCHAR( 10)
+   @cUDF02         NVARCHAR( 10),
+   @cLBLTemplateSP NVARCHAR(30)
+
+   SELECT @cLabelNo = @cValue01, @cReportType = @cValue02
 
    SELECT @cUserName = UserName FROM rdt.rdtMobRec WITH (NOLOCK) WHERE Mobile = @nMobile
 
    SET @cExtTemplateSP = rdt.RDTGetConfig( @nFunc, 'ExtTemplateSP', @cStorerKey)
 
+   SELECT @cLBLTemplateSP = ISNULL(UDF03,'')
+   FROM DBO.CODELKUP WITH(NOLOCK)
+   WHERE StorerKey = @cStorerKey
+      AND LISTNAME = 'LVSCARTLBL'
+      AND UDF01 = @cReportType
+
    -- Variable mapping
-   SELECT @cLabelNo = @cValue01, @cReportType = @cValue02
    IF NOT EXISTS (
       SELECT 1 FROM dbo.ORDERS ord WITH(NOLOCK)
       INNER JOIN dbo.PickDetail pd WITH(NOLOCK) ON ord.OrderKey = pd.OrderKey
@@ -79,33 +88,10 @@ BEGIN
       AND CaseID = @cLabelNo
    GROUP BY OrderKey
 
-   EXECUTE [RDT].[rdt_LevisReplaceZPLCodeSP]
-   @nMobile = @nMobile
-   ,@nFunc = @nFunc
-   ,@cLangCode = @cLangCode
-   ,@cStorerKey = @cStorerKey
-   ,@cValue01 = @cValue01
-   ,@cValue02 = @cValue02
-   ,@cValue03 = @cValue03
-   ,@cValue04 = @cValue04
-   ,@cValue05 = @cValue05
-   ,@cValue06 = @cValue06
-   ,@cValue07 = @cValue07
-   ,@cValue08 = @cValue08
-   ,@cValue09 = @cValue09
-   ,@cValue10 = @cValue10
-   ,@cTemplate = @cTemplate
-   ,@cPrintData = @cPrintData OUTPUT
-   ,@nErrNo = @nErrNo OUTPUT
-   ,@cErrMsg = @cErrMSG OUTPUT
-
-   IF @nErrNo <> 0
-      GOTO QUIT
-
-   IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtTemplateSP AND type = 'P')
+   IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cLBLTemplateSP AND type = 'P')
    BEGIN
       -- Execute SP to merge data and template, output print data as ZPL code
-      SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtTemplateSP) +
+      SET @cSQL = 'EXEC rdt.' + RTRIM( @cLBLTemplateSP) +
          ' @nMobile, @nFunc, @cLangCode, @cStorerKey, ' +
          ' @cValue01, @cValue02, @cValue03, @cValue04, @cValue05, @cValue06, @cValue07, @cValue08, @cValue09, @cValue10, ' +
          ' @cTemplate, @cPrintData OUTPUT, @nErrNo OUTPUT, @cErrMSG OUTPUT '
@@ -137,6 +123,68 @@ BEGIN
 
       IF @nErrNo <> 0
          GOTO Quit
+   END
+   ELSE
+   BEGIN
+      EXECUTE [RDT].[rdt_LevisReplaceZPLCodeSP]
+      @nMobile = @nMobile
+      ,@nFunc = @nFunc
+      ,@cLangCode = @cLangCode
+      ,@cStorerKey = @cStorerKey
+      ,@cValue01 = @cValue01
+      ,@cValue02 = @cValue02
+      ,@cValue03 = @cValue03
+      ,@cValue04 = @cValue04
+      ,@cValue05 = @cValue05
+      ,@cValue06 = @cValue06
+      ,@cValue07 = @cValue07
+      ,@cValue08 = @cValue08
+      ,@cValue09 = @cValue09
+      ,@cValue10 = @cValue10
+      ,@cTemplate = @cTemplate
+      ,@cPrintData = @cPrintData OUTPUT
+      ,@nErrNo = @nErrNo OUTPUT
+      ,@cErrMsg = @cErrMSG OUTPUT
+
+      IF @nErrNo <> 0
+         GOTO QUIT
+
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtTemplateSP AND type = 'P')
+      BEGIN
+         -- Execute SP to merge data and template, output print data as ZPL code
+         SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtTemplateSP) +
+            ' @nMobile, @nFunc, @cLangCode, @cStorerKey, ' +
+            ' @cValue01, @cValue02, @cValue03, @cValue04, @cValue05, @cValue06, @cValue07, @cValue08, @cValue09, @cValue10, ' +
+            ' @cTemplate, @cPrintData OUTPUT, @nErrNo OUTPUT, @cErrMSG OUTPUT '
+
+         SET @cSQLParam =
+            '@nMobile      INT,            ' +
+            '@nFunc        INT,            ' +
+            '@cLangCode    NVARCHAR( 3),   ' +
+            '@cStorerKey   NVARCHAR( 15),  ' +
+            '@cValue01     NVARCHAR( 20),  ' +
+            '@cValue02     NVARCHAR( 20),  ' +
+            '@cValue03     NVARCHAR( 20),  ' +
+            '@cValue04     NVARCHAR( 20),  ' +
+            '@cValue05     NVARCHAR( 20),  ' +
+            '@cValue06     NVARCHAR( 20),  ' +
+            '@cValue07     NVARCHAR( 20),  ' +
+            '@cValue08     NVARCHAR( 20),  ' +
+            '@cValue09     NVARCHAR( 20),  ' +
+            '@cValue10     NVARCHAR( 20),  ' +
+            '@cTemplate    NVARCHAR( MAX), ' +
+            '@cPrintData   NVARCHAR( MAX) OUTPUT, ' +
+            '@nErrNo       INT            OUTPUT, ' +
+            '@cErrMsg      NVARCHAR( 20)  OUTPUT  '
+
+         EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+            @nMobile, @nFunc, @cLangCode, @cStorerKey,
+            @cValue01, @cValue02, @cValue03, @cValue04, @cValue05, @cValue06, @cValue07, @cValue08, @cValue09, @cValue10,
+            @cTemplate, @cPrintData OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+         IF @nErrNo <> 0
+            GOTO Quit
+      END
    END
 
    SELECT TOP 1 @cUDF02 = UDF02

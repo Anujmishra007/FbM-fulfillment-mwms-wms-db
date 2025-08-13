@@ -73,6 +73,7 @@ GO
 /* 2024-10-01 4.6  James    WMS-26122 Add UCCPickStatus (james05)       */
 /* 2024-11-12 4.7  PXL009   FCR-1125 Merged 4.5, 4.6 from v0 branch     */
 /* 2024-11-27 4.8.0  NLT013 FCR-1522 Support Overallocation for UL      */
+/* 2025-05-12 4.9.0  NLT013 UWP-34122 MAXSKU does not work in FN514     */
 /************************************************************************/
 
 CREATE OR ALTER  PROCEDURE [RDT].[rdt_Move] (
@@ -599,7 +600,7 @@ BEGIN
             AND   LOC.Facility = @cFacility
             AND   LOC.Loc = @cFromLOC
             AND   NOT EXISTS ( SELECT 1 FROM dbo.LOTxLOCxID LLI2 WITH (NOLOCK)
-                  JOIN dbo.LOC LOC2 WITH (NOLOCK) ON ( LLI.Loc = LOC.Loc)
+                  JOIN dbo.LOC LOC2 WITH (NOLOCK) ON ( LLI2.Loc = LOC2.Loc)
                   WHERE LLI2.StorerKey = @cStorerKey
                   AND   (LLI2.QTY - LLI2.QTYPicked > 0 OR LLI2.PendingMoveIn > 0)
                   AND   LOC2.Facility = @cFacility

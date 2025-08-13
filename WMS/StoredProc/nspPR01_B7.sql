@@ -34,6 +34,11 @@ GO
 /* 28/05/2020   NJOW06  1.7   WMS-13544 Change FIFO to use lottable04   */
 /* 15/12/2021   NJOW07  1.8   WMS-18573 Lottable07 filtring condition   */
 /* 15/12/2021   NJOW07  1.8   DEVOPS combine script                     */
+/* 08/01/2024   NJOW08  1.9   WMS-24370/73 Fix orderkey to char and get */
+/*                            lottable03 from codelkup                  */
+/* 23-APR-2025  NJOW09  2.0   WMS-26521 lottable03 with ok status is not*/
+/*                            allow allocate from hold loc.             */
+/* 10-Jul-2025  MICHAEL 2.1   FCR-6166 Alloc by DMG-BOX for Tester(ML01)*/
 /************************************************************************/
 
 CREATE OR ALTER PROC    nspPR01_B7  -- Rename From nspPR01_07; used by IDSSG
@@ -66,14 +71,29 @@ BEGIN
    DECLARE @c_SQLStatement NVARCHAR(4000) 
           ,@c_Condition    NVARCHAR(4000)   
           ,@n_ConMinShelfLife INT  --NJOW02
-          ,@c_Orderkey        INT  --NJOW02
+          ,@c_Orderkey        NVARCHAR(10)  --NJOW02  --NJOW08
           ,@c_Strategykey     NVARCHAR(10) --NJOW02
           ,@n_SkuOGShelflife  INT  --NJOW04
+          ,@c_lottable03CLK   NVARCHAR(18)='' --NJOW08
+          ,@c_ALLOBYSHSL      NVARCHAR(1) = 'N' --NJOW09
    
    SELECT @c_Orderkey = LEFT(@c_OtherParms,10) --NJOW02
          
    SET @c_SQLStatement = ''
    --(Wan01) - END
+
+   --ML01-S
+   DECLARE @c_DmgBoxTester    NVARCHAR(10) = 'N'
+
+   IF EXISTS ( SELECT TOP 1 1
+      FROM CODELKUP WITH (NOLOCK)
+      WHERE ListName = 'PRESTALLOC'
+      AND Code = '*DMGBOX-TESTER'
+      AND Storerkey = @c_StorerKey )
+   BEGIN
+      SET @c_DmgBoxTester = 'Y'
+   END
+   --ML01-E
          
    IF dbo.fnc_LTrim(dbo.fnc_RTrim(@c_lot)) IS NOT NULL
    BEGIN
@@ -153,14 +173,35 @@ BEGIN
          BEGIN
             SET @c_Condition = @c_Condition + ' AND LOTATTRIBUTE.Lottable02 = N''' + RTRIM(@c_Lottable02) + '''' 
          END   
-   
+             
          IF RTRIM(@c_Lottable03) <> '' AND @c_Lottable03 IS NOT NULL
          BEGIN
             SET @c_Condition = @c_Condition + ' AND LOTATTRIBUTE.Lottable03 = N''' + RTRIM(@c_Lottable03) + '''' 
          END   
          ELSE IF @c_Storerkey = 'PRESTIGE'  --NJOW05
          BEGIN
-            SET @c_Condition = @c_Condition + ' AND LOTATTRIBUTE.Lottable03 = ''OK'' '              
+            --NJOW08
+            SELECT TOP 1 @c_lottable03CLK = CASE WHEN CL1.Code IS NOT NULL THEN                                                 
+                                              O.Userdefine04 ELSE @c_lottable03 END         
+            FROM ORDERS O (NOLOCK)       
+            OUTER APPLY (SELECT TOP 1 CL.Code FROM CODELKUP CL (NOLOCK) WHERE O.Storerkey = CL.Storerkey AND CL.Listname IN('MDMALLOC','PRESTALLOC') AND CL.Code = 'ALLOBYLTBL' AND O.Userdefine04 = CL.Code2 AND ISNULL(O.Userdefine04,'') <> '') CL1
+            WHERE O.Orderkey = @c_Orderkey     
+            
+            IF ISNULL(@c_lottable03CLK,'') <> ''  --NJOW08
+            BEGIN
+               SET @c_Lottable03 = @c_lottable03CLK               
+               SET @c_Condition = @c_Condition + ' AND LOTATTRIBUTE.Lottable03 = N''' + RTRIM(@c_Lottable03) + '''' 
+		        END
+            ELSE
+            BEGIN                        	
+               SET @c_Condition = @c_Condition + ' AND LOTATTRIBUTE.Lottable03 = ''OK'' '              
+            END   
+            
+            --NJOW09
+            SELECT TOP 1 @c_ALLOBYSHSL = CASE WHEN CL1.Code IS NOT NULL THEN 'Y' ELSE 'N' END
+            FROM ORDERS O (NOLOCK)       
+            OUTER APPLY (SELECT TOP 1 CL.Code FROM CODELKUP CL (NOLOCK) WHERE O.Storerkey = CL.Storerkey AND CL.Listname = 'PRESTALLOC' AND CL.Code = 'ALLOBYSHSL' AND O.Userdefine03 = CL.Code2 AND ISNULL(O.Userdefine03,'') <> '') CL1
+            WHERE O.Orderkey = @c_Orderkey                          
          END
 
          IF CONVERT(CHAR(10), @c_Lottable04, 103) <> '01/01/1900'
@@ -244,6 +285,8 @@ BEGIN
          WHERE O.Orderkey = @c_Orderkey
          
          IF @c_Strategykey = 'PPDSTD' 
+            AND ISNULL(@c_lottable03CLK,'') = ''  --NJOW08
+            AND @c_ALLOBYSHSL = 'N'  --NJOW09
          BEGIN
             --SET @c_Condition = @c_Condition + " AND LOTATTRIBUTE.Lottable05 >= N'" + CONVERT( NVARCHAR(8), DateAdd(day, @n_ConMinShelfLife * -1, GETDATE()), 112) + "'"  --NJOW03            
             
@@ -255,6 +298,16 @@ BEGIN
                --SET @c_Condition = @c_Condition + " AND DateDiff(Day, GETDATE(), LOTATTRIBUTE.Lottable05 + SKU.ShelfLife) >= " + CAST(@n_SkuOGShelfLife AS NVARCHAR)   
                SET @c_Condition = @c_Condition + " AND DateDiff(Day, GETDATE(), LOTATTRIBUTE.Lottable04) >= " + CAST(@n_SkuOGShelfLife AS NVARCHAR)   --NJOW06
          END --NJOW02 End
+         --ML01-S
+         ELSE IF @c_DmgBoxTester = 'Y'
+         BEGIN
+            IF @c_Strategykey='PPDSTD' AND ISNULL(@n_ConMinShelfLife,0) > 0
+            BEGIN
+               SET @c_Condition = @c_Condition + " AND DateDiff(Day, GETDATE(), LOTATTRIBUTE.Lottable04) >= @n_ConMinShelfLife "
+            END
+         END
+         --ML01-E
+         
                         
          SET @c_SQLStatement = N'DECLARE  PREALLOCATE_CURSOR_CANDIDATES CURSOR FAST_FORWARD READ_ONLY FOR
                                  SELECT LOT.STORERKEY, LOT.SKU, LOT.LOT, 
@@ -278,9 +331,12 @@ BEGIN
                                  AND LOT.SKU = N''' +@c_Sku + '''
                                  AND LOT.STATUS = ''OK''
                                  --AND (LOT.QTY - LOT.QTYALLOCATED - LOT.QTYPICKED - P.QTYPREALLOCATED - LOT.QtyOnHold) > 0
-                                 AND LOT.STATUS = ''OK'' AND LOC.STATUS = ''OK'' AND ID.STATUS = ''OK'' 
-                                 And LOC.LocationFlag <> ''DAMAGE'' And LOC.LocationFlag <> ''HOLD''   
-                                 AND LOC.Facility = ''' + @c_facility + '''' + 
+                                 AND LOT.STATUS = ''OK'' AND LOC.STATUS = ''OK'' AND ID.STATUS = ''OK'' '+                                                                  
+                                 CASE WHEN ISNULL(@c_lottable03CLK,'') <> '' AND @c_ALLOBYSHSL = 'N' THEN ' ' --NJOW09
+                                      WHEN @c_ALLOBYSHSL = 'Y' THEN --NJOW09
+                                        ' AND NOT (LOTATTRIBUTE.Lottable03 = ''OK'' AND LOC.LocationFlag <> ''NONE'' AND LOTATTRIBUTE.Lottable07 <> ''PPM'')'  --NJOW09                                 
+                                      ELSE ' AND LOC.LocationFlag <> ''DAMAGE'' AND LOC.LocationFlag <> ''HOLD'' ' END +  --NJOW08                                                                     
+                               ' AND LOC.Facility = ''' + @c_facility + '''' + 
                                  @c_Condition + '
                                  GROUP BY LOT.STORERKEY, LOT.SKU, LOT.LOT, LOTATTRIBUTE.LOTTABLE04, LOTATTRIBUTE.LOTTABLE05 -- SOS38650
                                  HAVING SUM(LOTXLOCXID.QTY - LOTXLOCXID.QTYALLOCATED - LOTXLOCXID.QTYPICKED) - MIN(ISNULL(P.QTYPREALLOCATED, 0)) > 0

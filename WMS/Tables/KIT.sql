@@ -46,8 +46,6 @@ BEGIN
 
     ALTER TABLE [dbo].[KIT] ADD CONSTRAINT [PK_KIT] PRIMARY KEY CLUSTERED ([KITKey]) WITH (FILLFACTOR=90) ON [PRIMARY]
 
-    GRANT SELECT ON  [dbo].[KIT] TO [JReportRole]
-
     GRANT DELETE ON  [dbo].[KIT] TO [NSQL]
 
     GRANT INSERT ON  [dbo].[KIT] TO [NSQL]
@@ -179,4 +177,55 @@ BEGIN
         ALTER TABLE KIT ADD ExternStatus NVARCHAR(30) NULL CONSTRAINT [DF_KIT_ExternStatus]  DEFAULT (' ');
         EXEC sp_addextendedproperty N'MS_Description', N'ExternStatus', 'SCHEMA', N'dbo', 'TABLE', N'KIT', 'COLUMN', N'ExternStatus'
     END
+
+
+	--ALTER COLUMN 
+		IF EXISTS ( SELECT 1 FROM sys.columns sc              
+					   JOIN sys.tables so ON so.object_id = sc.object_id
+					   WHERE sc.name = 'USRDEF14'
+					   AND so.name = 'KIT'
+					   AND sc.Max_length <> 8
+		   )
+		   BEGIN
+			  DECLARE @c_ConstraintName NVARCHAR(100) = ''
+			  SELECT @c_ConstraintName = default_constraints.name
+			  FROM sys.all_columns
+			  INNER JOIN sys.tables ON all_columns.object_id = tables.object_id
+			  INNER JOIN sys.schemas ON tables.schema_id = schemas.schema_id
+			  INNER JOIN sys.default_constraints ON all_columns.default_object_id = default_constraints.object_id
+			  WHERE  schemas.name = 'dbo'
+			  AND tables.name = 'KIT'
+			  AND all_columns.name = 'USRDEF14'
+
+			  EXEC ( N'ALTER TABLE dbo.KIT DROP CONSTRAINT ' + @c_ConstraintName );
+			  ALTER TABLE dbo.KIT ALTER COLUMN USRDEF14 DATETIME NULL;
+			  ALTER TABLE dbo.KIT ADD CONSTRAINT [DF_KIT_USRDEF14] DEFAULT (' ') FOR USRDEF14;
+		   END             
+		   
+		 
+
+		IF EXISTS ( SELECT 1 FROM sys.columns sc              
+					   JOIN sys.tables so ON so.object_id = sc.object_id
+					   WHERE sc.name = 'USRDEF15'
+					   AND so.name = 'KIT'
+					   AND sc.Max_length <> 8
+		   )
+		   BEGIN
+			  DECLARE @c_ConstraintNames NVARCHAR(100) = ''
+			  SELECT @c_ConstraintNames = default_constraints.name
+			  FROM sys.all_columns
+			  INNER JOIN sys.tables ON all_columns.object_id = tables.object_id
+			  INNER JOIN sys.schemas ON tables.schema_id = schemas.schema_id
+			  INNER JOIN sys.default_constraints ON all_columns.default_object_id = default_constraints.object_id
+			  WHERE  schemas.name = 'dbo'
+			  AND tables.name = 'KIT'
+			  AND all_columns.name = 'USRDEF15'
+
+			  EXEC ( N'ALTER TABLE dbo.KIT DROP CONSTRAINT ' + @c_ConstraintNames );
+			  ALTER TABLE dbo.KIT ALTER COLUMN USRDEF15 DATETIME NULL;
+			  ALTER TABLE dbo.KIT ADD CONSTRAINT [DF_KIT_USRDEF15] DEFAULT (' ') FOR USRDEF15;
+		   END                        
+
 END
+
+

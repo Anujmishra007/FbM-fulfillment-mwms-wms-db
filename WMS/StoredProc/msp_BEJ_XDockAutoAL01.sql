@@ -92,7 +92,7 @@ BEGIN
                             @c_PickslipType = N'',  
                             @c_ConsolidateByLoad = N'', 
                             @c_Refkeylookup = N'',      
-                            @c_LinkPickSlipToPick = N'',
+                            @c_LinkPickSlipToPick = N'Y',
                             @c_AutoScanIn = N'',        
                             @b_Success = @b_Success OUTPUT, 
                             @n_Err = @n_Err OUTPUT,         
@@ -117,7 +117,7 @@ BEGIN
                 BEGIN
                     -- Update the status of each pickdetail to 5
                     UPDATE PICKDETAIL WITH (ROWLOCK)
-                    SET Status = 5
+                    SET Status = '5'
                     WHERE PickDetailKey = @c_PickDetailKey
                     AND OrderKey = @c_Orderkey
 

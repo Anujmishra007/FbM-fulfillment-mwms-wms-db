@@ -88,6 +88,7 @@ GO
 /* 19-Jun-2025  JH01      UWP-36358 - Enhanced the error message show   */
 /* 10-JUL-2025  Wan08     UWP-37554 - Increases Variable Length         */
 /************************************************************************/  
+
   
 CREATE OR ALTER PROC [dbo].[ispFinalizeReceipt]  
                @c_ReceiptKey   NVARCHAR(10)  

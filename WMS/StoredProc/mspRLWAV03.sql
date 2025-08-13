@@ -12,7 +12,7 @@ GO
 /*                                                                      */
 /* Called By: Wave                                                      */
 /*                                                                      */
-/* GitHub Version: 5.0                                                  */
+/* GitHub Version: 5.5                                                  */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -86,6 +86,15 @@ GO
 /* 11-Jun-2025 WLC015    4.9 UWP-35878 Validate UCC Qty (WL11)          */
 /* 26-Jun-2025 WLC015    5.0 UWP-36753 Do not update Pickdetail if skip */ 
 /*                           insert task (WL12)                         */
+/* 15-Jul-2025 WLC015    5.1 UWP-37739 Filter MPOCFlag when updating    */ 
+/*                           Ordergroup (WL13)                          */
+/* 17-Jul-2025 WLC015    5.2 UWP-35381 Update RPF FinalLoc = blank(WL14)*/
+/* 22-Jul-2025 WLC015    5.3 FCR-6612 BOLbyConsigneekey - New sequence  */
+/*                           number for PARCEL order (WL15)             */
+/* 01-Aug-2025 WLC015    5.4 FCR-7102 Reuse UCCNo as LabelNo for full   */
+/*                           case conditionally (WL16)                  */
+/* 07-Aug-2025 WLC015    5.5 UWP-38984 Prevent same UCC being packed    */
+/*                           into multiple cartons for full case (WL17) */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[mspRLWAV03]
    @c_WaveKey NVARCHAR(10)
@@ -198,7 +207,8 @@ BEGIN
          , @c_FinalLoc                 NVARCHAR(10) = ''                            --(Wan01)     
          , @c_PickMethod_TD            NVARCHAR(10) = ''                            --(Wan01)          
          , @c_RefTaskkey               NVARCHAR(10) = ''                            --(Wan01)  
-         , @c_WCSPack                  NVARCHAR(10) = 'Y'                           --(Wan02)          
+         , @c_WCSPack                  NVARCHAR(10) = 'Y'                           --(Wan02)
+         , @c_OrderType                NVARCHAR(10) = ''                            --WL16          
          
    SELECT @n_StartTCnt = @@TRANCOUNT, @n_Continue = 1, @b_Success = 1, @n_err = 0, @c_errmsg = '', @c_SourceType = 'mspRLWAV03'
     
@@ -620,60 +630,6 @@ BEGIN
          DEALLOCATE CUR_MPOCFLAG
       END -- IF @n_continue IN(1,2)
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
       --AYD01 UWP-32643 START
       --Order sku info
       INSERT INTO #ORDERSKU (Orderkey, Storerkey, Sku, TotalQty, TotalCube, TotalQtyPacked, TotalCubePacked, StdCube, Length, Width, Height, OrderGroup, MasterShipmentID)
@@ -871,10 +827,12 @@ BEGIN
             SET OS.OrderGroup='M' + @c_MPOCOrder
             FROM #ORDERSKU OS 
             JOIN dbo.ORDERS O WITH (NOLOCK) ON OS.Orderkey = O.OrderKey
+            JOIN #OrderGroup OG WITH (NOLOCK) ON OS.Orderkey = OG.OrderKey   --WL13
             WHERE OS.OrderGroup=''
             AND O.ConsigneeKey = @c_ConsigneeKey 
             AND O.BillToKey  = @c_BillToKey
-            AND O.MarkforKey = @c_MarkforKey            
+            AND O.MarkforKey = @c_MarkforKey
+            AND OG.MPOCFlag <> '0'   --WL13
             
             UPDATE OG
             SET OG.OrderGroup='M' + @c_MPOCOrder
@@ -883,7 +841,8 @@ BEGIN
             WHERE OG.OrderGroup=''
             AND O.ConsigneeKey = @c_ConsigneeKey 
             AND O.BillToKey  = @c_BillToKey
-            AND O.MarkforKey = @c_MarkforKey            
+            AND O.MarkforKey = @c_MarkforKey
+            AND OG.MPOCFlag <> '0'   --WL13            
          END
 
          FETCH NEXT FROM CUR_MPOC_GROUP INTO @c_ConsigneeKey, @c_BillToKey, @c_MarkforKey
@@ -1020,12 +979,13 @@ BEGIN
          IF @n_continue IN(1,2) 
          BEGIN                                         
             DECLARE CUR_UCC CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-            SELECT OS.RowID, OS.Sku, PD.Qty, PD.DropID, OS.StdCube
+            SELECT OS.RowID, OS.Sku, Qty = SUM(PD.Qty), PD.DropID, OS.StdCube   --WL17
             FROM #ORDERSKU OS (NOLOCK)
             JOIN #PickDetail_WIP PD (NOLOCK) ON OS.Orderkey = PD.Orderkey AND OS.Storerkey = PD.Storerkey AND OS.Sku = PD.Sku        
             WHERE OS.Orderkey = @c_Orderkey
             AND PD.UOM = '2'
             AND ISNULL(PD.DropID,'') <> ''
+            GROUP BY OS.RowID, OS.Sku, PD.DropID, OS.StdCube   --WL17
             ORDER BY OS.RowID
 
             OPEN CUR_UCC
@@ -1034,11 +994,41 @@ BEGIN
    
             WHILE @@FETCH_STATUS <> -1 AND @n_continue IN(1,2) 
             BEGIN                 
-               SET @n_CartonNo = @n_CartonNo + 1            
-                     --SWT03 
+               --WL16 S
+               SET @c_Consigneekey = N''
+               SET @c_OrderType = N''
+               SET @c_LabelNo = N''
+
+               SELECT @c_Consigneekey = O.Consigneekey
+                    , @c_OrderType = O.[Type]
+               FROM ORDERS O WITH (NOLOCK)
+               WHERE O.Orderkey = @c_Orderkey
+
+               IF EXISTS ( SELECT 1
+                            FROM CODELKUP CL WITH (NOLOCK)
+                            WHERE CL.ListName = 'GS1xLabel'
+                            AND CL.Code = @c_Consigneekey
+                          )
+               BEGIN
+                  IF EXISTS ( SELECT 1
+                              FROM CODELKUP CL WITH (NOLOCK)
+                              WHERE CL.ListName = 'LVSSTO'
+                              AND CL.Storerkey = @c_Storerkey
+                              AND CL.Code = @c_Consigneekey
+                              AND CL.Short = @c_OrderType
+                            )
+                  BEGIN
+                     SET @c_LabelNo = @c_UCCNo
+                  END
+               END
+               --WL16 E
+               
+               SET @n_CartonNo = @n_CartonNo + 1
+               --SWT03 
                INSERT INTO #CARTON (Orderkey, CartonNo, LabelNo, CartonGroup, CartonType, MaxCube, MaxWeight, MaxCount, MaxSku, 
                                     CartonLength, CartonWidth, CartonHeight, UCCNo, OrderGroup, VASCartonType, CartonWeight)
-               VALUES (@c_Orderkey, @n_CartonNo, '', @c_CartonGroup, '9999', 0, 0, 0, 0, 0, 0, 0, @c_UCCNo, '', '', 0) --ALiang01 hardcode 9999 for carton type                                 
+               VALUES (@c_Orderkey, @n_CartonNo, @c_LabelNo, @c_CartonGroup, '9999', 0, 0, 0, 0   --WL16
+                     , 0, 0, 0, @c_UCCNo, '', '', 0) --ALiang01 hardcode 9999 for carton type                                 
             
                INSERT INTO #CARTONDETAIL (OrderGroup, Orderkey, Storerkey, Sku, CartonNo, Qty, RowRef)  --refer to ORDERSKU.RowID
                VALUES ('', @c_Orderkey, @c_Storerkey, @c_Sku, @n_CartonNo, @n_PackQty, @n_RowID) 
@@ -3008,18 +2998,27 @@ BEGIN
    --------------------------------------------------  
    IF @n_continue IN(1,2) 
    BEGIN 
-      DECLARE @c_BOLbyConsigneeKey NVARCHAR(20) = '', 
-              @c_Susr5Prefix NVARCHAR(60) = '',            --(SSA03)
-              @n_FieldLength INT = 8,                      --(SSA03)
-              --@n_CheckDigit INT                          --(SSA03)
-              @c_CheckDigit  CHAR(1) --(SWT01)
+      DECLARE @c_BOLbyConsigneeKey NVARCHAR(20) = '' 
+              --@c_Susr5Prefix NVARCHAR(60) = '',            --(SSA03)   --WL15
+              --@n_FieldLength INT = 8,                      --(SSA03)   --WL15
+              ----@n_CheckDigit INT                          --(SSA03)   --WL15
+              --@c_CheckDigit  CHAR(1) --(SWT01)
  
       DECLARE CUR_BOLbyConsigneekey CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
          SELECT OH.ConsigneeKey, OH.Facility, MAX(ISNULL(OI.ReferenceId,''))  
          FROM dbo.ORDERS OH WITH (NOLOCK)  
          JOIN dbo.OrderInfo OI WITH (NOLOCK) ON OH.OrderKey = OI.OrderKey 
          JOIN dbo.WAVEDETAIL WD WITH (NOLOCK) ON WD.OrderKey = OH.OrderKey 
-         WHERE WD.WaveKey = @c_WaveKey  
+         WHERE WD.WaveKey = @c_WaveKey
+         --WL15 S
+         AND EXISTS ( SELECT 1
+                      FROM CODELKUP CL WITH (NOLOCK)
+                      WHERE CL.LISTNAME = 'WSCOURIER'
+                      AND CL.Short = OH.Shipperkey
+                      AND CL.Storerkey = OH.Storerkey
+                      AND (CL.Short IS NOT NULL AND CL.Short <> '')
+                    )
+         --WL15 E
          GROUP BY OH.ConsigneeKey, OH.Facility  
        
       OPEN CUR_BOLbyConsigneekey 
@@ -3030,36 +3029,52 @@ BEGIN
       BEGIN 
           IF TRIM(@c_BOLbyConsigneeKey) = '' 
           BEGIN 
-             --(SSA03) start---
-             SET @c_Susr5Prefix = ''
-              
-             SELECT @c_Susr5Prefix = ISNULL(TRIM(Storer.SUSR5),'0')
-             FROM dbo.STORER Storer (NOLOCK)
-             WHERE Storer.StorerKey = @c_Storerkey
-             AND Storer.Facility = @c_Facility
-             --(SSA03) end---
-              
-             EXECUTE dbo.nspg_GetKey   
-               @KeyName='BOLbyCons',   
-               @fieldlength=@n_FieldLength,   
-               @keystring=@c_BOLbyConsigneeKey OUTPUT,   
-               @b_Success = @b_success OUTPUT,   
-               @n_err = @n_err OUTPUT,   
-               @c_errmsg = @c_errmsg OUTPUT   
-              
+             --WL15 S
+             ----(SSA03) start---
+             --SET @c_Susr5Prefix = ''
+             -- 
+             --SELECT @c_Susr5Prefix = ISNULL(TRIM(Storer.SUSR5),'0')
+             --FROM dbo.STORER Storer (NOLOCK)
+             --WHERE Storer.StorerKey = @c_Storerkey
+             --AND Storer.Facility = @c_Facility
+             ----(SSA03) end---
+             -- 
+             --EXECUTE dbo.nspg_GetKey   
+             --  @KeyName='BOLbyCons',   
+             --  @fieldlength=@n_FieldLength,   
+             --  @keystring=@c_BOLbyConsigneeKey OUTPUT,   
+             --  @b_Success = @b_success OUTPUT,   
+             --  @n_err = @n_err OUTPUT,   
+             --  @c_errmsg = @c_errmsg OUTPUT   
+             -- 
+             --IF NOT @b_success = 1   
+             --BEGIN   
+             --   SELECT @n_continue = 3   
+             --   BREAK   
+             --END     
+             -- 
+             ----(SSA03) start---
+             --SET @c_BOLbyConsigneeKey = @c_Susr5Prefix + @c_BOLbyConsigneeKey
+             ----SET @n_CheckDigit = dbo.fnc_CalcCheckDigitLuhn_M10(RTRIM(@c_BOLbyConsigneeKey), 0)
+             --SELECT @c_CheckDigit = dbo.fnc_CalcGS1CheckDigit(RTRIM(@c_BOLbyConsigneeKey)) -- (SWT12)
+             ----SET @c_BOLbyConsigneeKey = RIGHT(@c_BOLbyConsigneeKey + CAST(@n_CheckDigit AS NVARCHAR( 1)), 17)
+             --SET @c_BOLbyConsigneeKey = RIGHT(@c_BOLbyConsigneeKey + @c_CheckDigit, 17) -- (SWT12)
+             ----(SSA03) end----
+
+             EXEC dbo.msp_GetBOLbyConsigneeKey @c_Wavekey = @c_Wavekey -- nvarchar(10)
+                                             , @c_Consigneekey = @c_ConsigneeKey -- nvarchar(15)
+                                             , @c_BOLByConsigneekey = @c_BOLByConsigneekey OUTPUT -- nvarchar(50)
+                                             , @b_Success = @b_Success OUTPUT -- int
+                                             , @n_Err = @n_Err OUTPUT -- int
+                                             , @c_ErrMsg = @c_ErrMsg OUTPUT -- nvarchar(255)
+
              IF NOT @b_success = 1   
              BEGIN   
                 SELECT @n_continue = 3   
                 BREAK   
-             END     
-              
-             --(SSA03) start---
-             SET @c_BOLbyConsigneeKey = @c_Susr5Prefix + @c_BOLbyConsigneeKey
-             --SET @n_CheckDigit = dbo.fnc_CalcCheckDigitLuhn_M10(RTRIM(@c_BOLbyConsigneeKey), 0)
-             SELECT @c_CheckDigit = dbo.fnc_CalcGS1CheckDigit(RTRIM(@c_BOLbyConsigneeKey)) -- (SWT12)
-             --SET @c_BOLbyConsigneeKey = RIGHT(@c_BOLbyConsigneeKey + CAST(@n_CheckDigit AS NVARCHAR( 1)), 17)
-             SET @c_BOLbyConsigneeKey = RIGHT(@c_BOLbyConsigneeKey + @c_CheckDigit, 17) -- (SWT12)
-             --(SSA03) end----
+             END  
+             --WL15 E
+
              DECLARE CUR_UPDATE_BOLbyConsigneekey CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
              SELECT OH.OrderKey 
              FROM dbo.ORDERS OH WITH (NOLOCK)  
@@ -3068,7 +3083,16 @@ BEGIN
              WHERE WD.WaveKey = @c_WaveKey  
              AND OH.ConsigneeKey = @c_ConsigneeKey              
              AND OH.Facility = @c_Facility 
-             AND (OI.ReferenceId = '' OR OI.ReferenceId IS NULL) 
+             AND (OI.ReferenceId = '' OR OI.ReferenceId IS NULL)
+             --WL15 S
+             AND EXISTS ( SELECT 1
+                          FROM CODELKUP CL WITH (NOLOCK)
+                          WHERE CL.LISTNAME = 'WSCOURIER'
+                          AND CL.Short = OH.Shipperkey
+                          AND CL.Storerkey = OH.Storerkey
+                          AND (CL.Short IS NOT NULL AND CL.Short <> '')
+                        )
+             --WL15 E
               
              OPEN CUR_UPDATE_BOLbyConsigneekey 
               
@@ -3760,6 +3784,22 @@ BEGIN
       DEALLOCATE CUR_ASTCPK_TASK
    END
 
+   --WL14 S
+   --Update other RPF TaskDetail Final Location to Blank 
+   IF EXISTS ( SELECT 1 
+               FROM TASKDETAIL TD (NOLOCK)
+               WHERE TD.TaskType = 'RPF'
+               AND TD.FinalLoc <> ''
+               AND TD.WaveKey = @c_Wavekey )
+   BEGIN 
+      UPDATE TASKDETAIL WITH (ROWLOCK)
+         SET FinalLoc = ''
+           , TrafficCop = ''
+      WHERE TaskType = 'RPF'
+      AND FinalLoc <> ''
+      AND WaveKey = @c_Wavekey
+   END
+   --WL14 E
 
    -----Update pickdetail_WIP work in progress staging table back to pickdetail    
    IF @n_continue IN(1,2)
