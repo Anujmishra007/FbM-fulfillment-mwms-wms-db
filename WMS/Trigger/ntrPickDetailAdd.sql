@@ -1,8 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrPickDetailAdd]')
-              and OBJECTPROPERTY(id, N'IsTrigger') = 1)
-drop trigger [dbo].[ntrPickDetailAdd]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -18,7 +13,7 @@ GO
 /*                                                                      */
 /* Called By: When records Added                                        */
 /*                                                                      */
-/* PVCS Version: 1.2                                                    */
+/* PVCS Version: 4.0                                                    */
 /*                                                                      */
 /* Version: 5.4                                                         */
 /*                                                                      */
@@ -54,8 +49,9 @@ GO
 /*                            turn off                                  */
 /* 28-Sep-2021  SYChua        Fix: Added CLOSE and DEALLOCATE statement */
 /*                            for cursor: CUR_CHANNEL_MGMT  (SY01)      */
+/* 12-Aug-2025  WLChooi 4.0   FCR-5700 Trigger ITF By Wave (WL01)       */
 /************************************************************************/
-CREATE  TRIGGER [dbo].[ntrPickDetailAdd]
+CREATE OR ALTER TRIGGER [dbo].[ntrPickDetailAdd]
 ON  [dbo].[PICKDETAIL]
 FOR INSERT
 AS
@@ -82,7 +78,8 @@ DECLARE
    , @c_PrevOrderKey    NVARCHAR(10) --NJOW03
    , @c_OrderLineNumber NVARCHAR(5)
    , @n_InsertedRows    INT = 0
-
+   , @c_WaveKey         NVARCHAR(10)   --WL01
+   , @CUR_TriggerPoints CURSOR         --WL01
 
 SELECT @n_InsertedRows = COUNT(*)
 FROM   INSERTED
@@ -108,7 +105,7 @@ END
 -- End 30th Apr 2003
 
 
-IF (SELECT COUNT(*) FROM INSERTED WHERE OptimizeCop is not NULL ) > 0
+IF (SELECT COUNT(*) FROM INSERTED WHERE OptimizeCop IS NOT NULL ) > 0
 BEGIN
    -- SHONG03 Bug Fixing
    UPDATE PICKDETAIL
@@ -121,7 +118,7 @@ BEGIN
    BEGIN
       SELECT @n_Continue = 3
       SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 63110   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
-      SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": Insert Trigger On PickDetail Failed. (ntrPickDetailAdd)" + " ( " + " SQLSvr MESSAGE=" + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + " ) "
+      SELECT @c_errmsg="NSQL"+CONVERT(CHAR(5),@n_err)+": Insert Trigger On PickDetail Failed. (ntrPickDetailAdd)" + " ( " + " SQLSvr MESSAGE=" + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + " ) "
    END
    ELSE
    BEGIN
@@ -874,6 +871,83 @@ BEGIN
 
 END -- IF EXISTS(StorerConfig - 'WAVEUPDLOG')
 -- MC01-E
+
+--WL01 S
+   --Custom process - If allocated - trigger ITF by Wavekey
+   --Copy from ntrWaveHeaderAdd
+   --Only check for condition below
+   --If Wave.Status = 1 (Partially allocated) and user unallocate again, Wave.status will not change and remain status = 1
+   --Therefore need to include the logic in ntrPickDetailDelete trigger
+   /********************************************************/
+   /* Interface Trigger Points Calling Process - (Start)   */
+   /********************************************************/
+   IF (@n_continue = 1 OR @n_continue = 2) 
+   BEGIN
+      SET @CUR_TriggerPoints = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      SELECT DISTINCT WD.WaveKey, OH.StorerKey
+      FROM   INSERTED INS
+      JOIN   WAVEDETAIL WD WITH (NOLOCK)        ON INS.OrderKey = WD.OrderKey
+      JOIN   Orders OH WITH (NOLOCK)            ON WD.OrderKey = OH.OrderKey
+      JOIN   ITFTriggerConfig ITC WITH (NOLOCK) ON ITC.StorerKey = OH.StorerKey
+      WHERE  ITC.SourceTable = 'PickDetail'
+      AND    ITC.sValue      = '1'
+
+      OPEN @CUR_TriggerPoints
+      FETCH NEXT FROM @CUR_TriggerPoints INTO @c_WaveKey, @c_Storerkey
+
+      WHILE @@FETCH_STATUS <> -1
+      BEGIN
+         EXECUTE dbo.isp_ITF_ntrPICKDETAIL_Wave
+                  @c_TriggerName    = 'ntrPickDetailAdd'
+                , @c_SourceTable    = 'PickDetail'
+                , @c_Storerkey      = @c_Storerkey
+                , @c_WaveKey        = @c_WaveKey
+                , @b_ColumnsUpdated = NULL
+                , @b_Success        = @b_Success   OUTPUT
+                , @n_err            = @n_err       OUTPUT
+                , @c_errmsg         = @c_errmsg    OUTPUT
+
+         FETCH NEXT FROM @CUR_TriggerPoints INTO @c_WaveKey, @c_Storerkey
+      END -- WHILE @@FETCH_STATUS <> -1
+      CLOSE @CUR_TriggerPoints
+      DEALLOCATE @CUR_TriggerPoints
+
+      SET @CUR_TriggerPoints = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      SELECT DISTINCT WD.WaveKey, OH.StorerKey
+      FROM   INSERTED INS
+      JOIN   WAVEDETAIL WD WITH (NOLOCK)        ON INS.OrderKey = WD.OrderKey
+      JOIN   Orders OH WITH (NOLOCK)            ON WD.OrderKey   = OH.OrderKey
+      JOIN   ITFTriggerConfig ITC WITH (NOLOCK) ON ITC.StorerKey = 'ALL'
+      JOIN   StorerConfig STC WITH (NOLOCK)     ON OH.StorerKey = STC.StorerKey 
+                                               AND STC.ConfigKey = ITC.ConfigKey 
+                                               AND STC.SValue = '1'
+      WHERE  ITC.SourceTable = 'PickDetail'
+      AND    ITC.sValue      = '1'
+
+      OPEN @CUR_TriggerPoints
+      FETCH NEXT FROM @CUR_TriggerPoints INTO @c_WaveKey, @c_Storerkey
+
+      WHILE @@FETCH_STATUS <> -1
+      BEGIN
+         EXECUTE dbo.isp_ITF_ntrPICKDETAIL_Wave
+                  @c_TriggerName    = 'ntrPickDetailDelete'
+                , @c_SourceTable    = 'PickDetail'
+                , @c_Storerkey      = @c_Storerkey
+                , @c_WaveKey        = @c_WaveKey
+                , @b_ColumnsUpdated = NULL
+                , @b_Success        = @b_Success   OUTPUT
+                , @n_err            = @n_err       OUTPUT
+                , @c_errmsg         = @c_errmsg    OUTPUT
+
+         FETCH NEXT FROM @CUR_TriggerPoints INTO @c_WaveKey, @c_Storerkey
+      END -- WHILE @@FETCH_STATUS <> -1
+      CLOSE @CUR_TriggerPoints
+      DEALLOCATE @CUR_TriggerPoints
+   END -- IF @n_continue = 1 OR @n_continue = 2
+   /********************************************************/
+   /* Interface Trigger Points Calling Process - (End)     */
+   /********************************************************/
+   --WL01 E
 
 SET NOCOUNT OFF
 /* #INCLUDE <TRPDA2.SQL> */
