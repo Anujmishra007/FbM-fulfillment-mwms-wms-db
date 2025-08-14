@@ -59,7 +59,6 @@ GO
 /* 2025-03-13 4.2  NLT013     UWP-31321 Be able to close pending pallet       */
 /* 2025-05-21 4.3  NLT013     UWP-34785 Add new Exit Screen for Levis         */
 /* 2025-06-16 4.4  Dennis     FCR-3959 Extended Update on Step 7              */
-/* 2025-07-10 0.0  JackC      !!!Cutover!!! Use V0 repo for work              */
 /* 2025-08-04 4.4.0 NickT     UWP-37578 Extend length of  @cOption            */
 /* 2025-08-08 4.5.0 NickT     UWP-39061 SuggestToLoc is reset by mistake      */
 /* 2025-06-16 4.6.0 Dennis    FCR-3959 Extended Update on Step 7              */
