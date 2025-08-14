@@ -602,28 +602,6 @@ BEGIN
                --(YT05)-E
             END
 
-            --(YT05)-S
-            IF @c_Status = '1'
-            BEGIN
-               IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
-                           WHERE STC.StorerKey = @c_Storerkey   
-                           AND   STC.ConfigKey = 'GVTEASN1HPNL'  
-                           AND   STC.SValue    = '1' ) 
-               BEGIN
-                  EXEC ispGenGVTLog 'GVTEASN1HPNL', @c_ReceiptKey, @c_Status, @c_StorerKey, ''    
-                        , @b_success   OUTPUT    
-                        , @n_err       OUTPUT    
-                        , @c_errmsg    OUTPUT   
-  
-                  IF @b_success <> 1  
-                  BEGIN  
-                     SET @n_continue = 3  
-                     GOTO QUIT   
-                  END  
-               END
-            END
-            --(YT05)-E
-
             IF @c_Status = '9'
             BEGIN
                IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
@@ -683,6 +661,25 @@ BEGIN
                      GOTO QUIT   
                   END  
                END
+
+               --(YT05)-S
+               IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
+                           WHERE STC.StorerKey = @c_Storerkey   
+                           AND   STC.ConfigKey = 'GVTEASN1HPNL'  
+                           AND   STC.SValue    = '1' ) 
+               BEGIN
+                  EXEC ispGenGVTLog 'GVTEASN1HPNL', @c_ReceiptKey, @c_Status, @c_StorerKey, ''    
+                        , @b_success   OUTPUT    
+                        , @n_err       OUTPUT    
+                        , @c_errmsg    OUTPUT   
+  
+                  IF @b_success <> 1  
+                  BEGIN  
+                     SET @n_continue = 3  
+                     GOTO QUIT   
+                  END  
+               END
+               --(YT05)-E
             END
 
             IF @c_ASNStatus = '9'
