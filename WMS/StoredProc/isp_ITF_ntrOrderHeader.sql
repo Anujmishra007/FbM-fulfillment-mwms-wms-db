@@ -652,6 +652,11 @@ BEGIN
                BEGIN
                   SET @b_Success = 1
                END
+
+               IF @c_Status IN ('7','8')
+               BEGIN
+                  SET @b_Success = 1
+               END
                --(YT05)-E
   
                IF @b_Success = 1  
