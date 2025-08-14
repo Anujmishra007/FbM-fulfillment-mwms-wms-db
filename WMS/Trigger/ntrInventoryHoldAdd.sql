@@ -30,7 +30,6 @@ GO
 /* 09-Jul-2025  PPA01         FCR-6025- Added lot and Id level checks   */
 /* 08-Aug-2025  Michael       FCR-6025- Handle Hold&Release(TLOG2)(ML01)*/
 /************************************************************************/
-
 CREATE OR ALTER TRIGGER [dbo].[ntrInventoryHoldAdd]
 ON  [dbo].[INVENTORYHOLD]
 FOR INSERT
