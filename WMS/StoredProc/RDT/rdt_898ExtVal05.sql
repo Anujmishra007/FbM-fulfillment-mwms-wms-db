@@ -14,6 +14,7 @@ GO
 /* 2025-05-19 1.2.0  Dennis     FCR-4531                                   */
 /* 2025-05-31 1.3.0  NickT      UWP-35355 Add additional validation        */
 /* 2025-07-23 1.4.0  Dennis     FCR-6157                                   */
+/* 2025-08-14 1.5.0  Dennis     FCR-6157 Multi PO only when Return         */
 /***************************************************************************/
 
 CREATE OR ALTER   PROCEDURE [RDT].[rdt_898ExtVal05]
@@ -77,10 +78,12 @@ BEGIN
             END
 
             IF EXISTS (SELECT 1 FROM dbo.RECEIPTDETAIL RD (NOLOCK)
-                     WHERE StorerKey = @cStorerKey
-                     AND ReceiptKey = @cReceiptKey
-                     GROUP BY ReceiptKey
-                     HAVING COUNT(DISTINCT POKey) > 1 )
+                     JOIN dbo.RECEIPT R (NOLOCK) ON RD.ReceiptKey = R.ReceiptKey AND R.StorerKey = RD.StorerKey
+                     WHERE RD.StorerKey = @cStorerKey
+                     AND RD.ReceiptKey = @cReceiptKey
+                     AND R.DOCTYPE = 'R'
+                     GROUP BY RD.ReceiptKey
+                     HAVING COUNT(DISTINCT RD.POKey) > 1 )
             BEGIN
                SET @nErrNo = 225306
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- MultiPOInReceipt
