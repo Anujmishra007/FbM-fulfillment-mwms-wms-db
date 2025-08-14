@@ -65,8 +65,8 @@ DECLARE @b_Success     int       -- Populated by calls to stored procedures - wa
       , @c_Lot                NVARCHAR(10) 
       , @c_Loc                NVARCHAR(10)   --ML01
       , @c_ID                 NVARCHAR(18)
-      , @c_DelStatus          NVARCHAR(5)
-      , @c_InsStatus          NVARCHAR(5)    --ML01
+      , @c_DelStatus          NVARCHAR(10)
+      , @c_InsStatus          NVARCHAR(10)    --ML01
       , @c_Hold               NVARCHAR(1)    --ML01
       , @c_authority          NVARCHAR(30)   --ML01
   
