@@ -477,10 +477,10 @@ BEGIN
                   AND   STC.SValue    = '1' )                       
       BEGIN  
 
-        IF EXISTS(SELECT 1 FROM                                                                             
-                    dbo.fnc_DelimSplit(',', @c_ColumnsUpdated)                                                 
-                    WHERE ColValue IN ('STATUS','ASNStatus'))        
-        BEGIN  
+         IF EXISTS(SELECT 1 FROM                                                                             
+                   dbo.fnc_DelimSplit(',', @c_ColumnsUpdated)                                                 
+                   WHERE ColValue IN ('STATUS','ASNStatus'))        
+         BEGIN  
   
             SET @b_Success = 0  
 				
@@ -502,23 +502,23 @@ BEGIN
             IF @b_Success = 1  
             BEGIN  
   
-            IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
-                        WHERE STC.StorerKey = @c_Storerkey   
-                        AND   STC.ConfigKey = @c_Tablename  
-                        AND   STC.SValue    = '1' )  
-                BEGIN  
-                    EXEC ispGenGVTLog @c_Tablename, @c_ReceiptKey, @c_Status, @c_StorerKey, ''    
-                                    , @b_success   OUTPUT    
-                                    , @n_err       OUTPUT    
-                                    , @c_errmsg    OUTPUT   
+               IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
+                           WHERE STC.StorerKey = @c_Storerkey   
+                           AND   STC.ConfigKey = @c_Tablename  
+                           AND   STC.SValue    = '1' )  
+               BEGIN  
+                  EXEC ispGenGVTLog @c_Tablename, @c_ReceiptKey, @c_Status, @c_StorerKey, ''    
+                       , @b_success   OUTPUT    
+                       , @n_err       OUTPUT    
+                       , @c_errmsg    OUTPUT   
   
-                    IF @b_success <> 1  
-                    BEGIN  
-                    SET @n_continue = 3  
-                    GOTO QUIT   
-                    END  
-                END   
-            END -- IF @b_Success = 1  
+                  IF @b_success <> 1  
+                  BEGIN  
+                     SET @n_continue = 3  
+                     GOTO QUIT   
+                  END  
+               END   
+            END -- IF @b_Success = 1   
 
             --(YT02)-S
             IF @c_Status = '0'
@@ -529,10 +529,10 @@ BEGIN
                            AND   STC.SValue    = '1' )  
                BEGIN  
                   EXEC ispGenGVTLog 'GVTASNADDHPQ', @c_ReceiptKey, @c_Status, @c_StorerKey, ''    
-                                  , @b_success   OUTPUT    
-                                  , @n_err       OUTPUT    
-                                  , @c_errmsg    OUTPUT   
-                  
+                        , @b_success   OUTPUT    
+                        , @n_err       OUTPUT    
+                        , @c_errmsg    OUTPUT   
+                           
                   IF @b_success <> 1  
                   BEGIN  
                      SET @n_continue = 3  
@@ -549,10 +549,10 @@ BEGIN
                            AND   STC.SValue    = '1' )  
                BEGIN  
                   EXEC ispGenGVTLog 'GVTEASNCFMHPQ', @c_ReceiptKey, @c_Status, @c_StorerKey, ''    
-                                  , @b_success   OUTPUT    
-                                  , @n_err       OUTPUT    
-                                  , @c_errmsg    OUTPUT   
-                  
+                        , @b_success   OUTPUT    
+                        , @n_err       OUTPUT    
+                        , @c_errmsg    OUTPUT   
+                           
                   IF @b_success <> 1  
                   BEGIN  
                      SET @n_continue = 3  
@@ -571,9 +571,9 @@ BEGIN
                            AND   STC.SValue    = '1' ) 
                BEGIN
                   EXEC ispGenGVTLog 'GVTASNREC', @c_ReceiptKey, @c_Status, @c_StorerKey, ''    
-                                 , @b_success   OUTPUT    
-                                 , @n_err       OUTPUT    
-                                 , @c_errmsg    OUTPUT   
+                        , @b_success   OUTPUT    
+                        , @n_err       OUTPUT    
+                        , @c_errmsg    OUTPUT   
   
                   IF @b_success <> 1  
                   BEGIN  
@@ -589,9 +589,9 @@ BEGIN
                            AND   STC.SValue    = '1' ) 
                BEGIN
                   EXEC ispGenGVTLog 'GVTASNADDHP', @c_ReceiptKey, @c_Status, @c_StorerKey, ''    
-                                 , @b_success   OUTPUT    
-                                 , @n_err       OUTPUT    
-                                 , @c_errmsg    OUTPUT   
+                        , @b_success   OUTPUT    
+                        , @n_err       OUTPUT    
+                        , @c_errmsg    OUTPUT   
   
                   IF @b_success <> 1  
                   BEGIN  
@@ -611,9 +611,9 @@ BEGIN
                            AND   STC.SValue    = '1' ) 
                BEGIN
                   EXEC ispGenGVTLog 'GVTEASN1HPNL', @c_ReceiptKey, @c_Status, @c_StorerKey, ''    
-                                 , @b_success   OUTPUT    
-                                 , @n_err       OUTPUT    
-                                 , @c_errmsg    OUTPUT   
+                        , @b_success   OUTPUT    
+                        , @n_err       OUTPUT    
+                        , @c_errmsg    OUTPUT   
   
                   IF @b_success <> 1  
                   BEGIN  
@@ -632,9 +632,9 @@ BEGIN
                            AND   STC.SValue    = '1' ) 
                BEGIN
                   EXEC ispGenGVTLog 'GVTASNCFM', @c_ReceiptKey, @c_Status, @c_StorerKey, ''    
-                                 , @b_success   OUTPUT    
-                                 , @n_err       OUTPUT    
-                                 , @c_errmsg    OUTPUT   
+                        , @b_success   OUTPUT    
+                        , @n_err       OUTPUT    
+                        , @c_errmsg    OUTPUT   
   
                   IF @b_success <> 1  
                   BEGIN  
@@ -650,9 +650,9 @@ BEGIN
                            AND   STC.SValue    = '1' ) 
                BEGIN
                   EXEC ispGenGVTLog 'GVTEASN9HPNL', @c_ReceiptKey, @c_Status, @c_StorerKey, ''    
-                                 , @b_success   OUTPUT    
-                                 , @n_err       OUTPUT    
-                                 , @c_errmsg    OUTPUT   
+                        , @b_success   OUTPUT    
+                        , @n_err       OUTPUT    
+                        , @c_errmsg    OUTPUT   
   
                   IF @b_success <> 1  
                   BEGIN  
@@ -673,9 +673,9 @@ BEGIN
                            AND   STC.SValue    = '1' ) 
                BEGIN
                   EXEC ispGenGVTLog 'GVTEASNS1', @c_ReceiptKey, 'A1', @c_StorerKey, ''    
-                                 , @b_success   OUTPUT    
-                                 , @n_err       OUTPUT    
-                                 , @c_errmsg    OUTPUT   
+                                    , @b_success   OUTPUT    
+                                    , @n_err       OUTPUT    
+                                    , @c_errmsg    OUTPUT   
   
                   IF @b_success <> 1  
                   BEGIN  
@@ -693,9 +693,9 @@ BEGIN
                            AND   STC.SValue    = '1' ) 
                BEGIN
                   EXEC ispGenGVTLog 'GVTEASNS9', @c_ReceiptKey, 'A9', @c_StorerKey, ''    
-                                 , @b_success   OUTPUT    
-                                 , @n_err       OUTPUT    
-                                 , @c_errmsg    OUTPUT   
+                        , @b_success   OUTPUT    
+                        , @n_err       OUTPUT    
+                        , @c_errmsg    OUTPUT   
   
                   IF @b_success <> 1  
                   BEGIN  
@@ -704,9 +704,8 @@ BEGIN
                   END  
                END
             END
-            --(YT04)-E
-        END -- ColValue IN ('STATUS','SOSTATUS')  
-   
+            --(YT04)-E      
+         END -- ColValue IN ('STATUS','SOSTATUS')   
       END -- IF EXISTS ( SELECT 1 FROM ITFTriggerConfig WITH (NOLOCK)    
       --(YT01) - E        
       /********************************************/    
