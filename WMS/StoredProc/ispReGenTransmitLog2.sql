@@ -5,7 +5,7 @@ GO
 
 /************************************************************************/
 /* Store Procedure: ispReGenTransmitLog2                                */
-/* Creation Date: 14-Jul-2025                                           */
+/* Creation Date: 12-Aug-2025                                           */
 /* Copyright: MAERSK                                                    */
 /* Written by: WLChooi                                                  */
 /*                                                                      */
@@ -38,7 +38,7 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date         Author    Ver.  Purposes                                */
-/* 14-Jul-2025  WLChooi   1.0   Initial Version                         */
+/* 12-Aug-2025  WLChooi   1.0   Initial Version                         */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[ispReGenTransmitLog2]
