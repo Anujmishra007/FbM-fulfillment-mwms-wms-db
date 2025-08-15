@@ -11,9 +11,10 @@ GO
 /*                                                                      */
 /* Date        Rev  Author   Purposes                                   */
 /* 2025-08-05  1.0  Dennis   FCR-3954 Created                           */
+/* 2025-08-14  2.0  PPA374   Adding housekeepiing for holds and tasks   */
 /************************************************************************/
 
-ALTER     PROC [RDT].[rdt_TM_PutawayFrom_Confirm_JCB] (
+CREATE OR ALTER PROC [RDT].[rdt_TM_PutawayFrom_Confirm_JCB] (
    @nMobile        INT,
    @nFunc          INT,
    @cLangCode      NVARCHAR( 3),
@@ -269,6 +270,206 @@ BEGIN
          ,@c_UserName    = @cUserKey
    END
 
+   -- Check for locations without double pal hold that require it  
+   IF EXISTS (
+   SELECT 1
+   FROM dbo.LOTxLOCxID LLI WITH(NOLOCK)
+   INNER JOIN dbo.PALLET P WITH(NOLOCK)
+      ON LLI.Id = P.PalletKey
+      AND LLI.StorerKey = @cStorerKey
+      AND P.StorerKey = @cStorerKey
+      AND P.PalletType LIKE 'D%'
+      AND LLI.Qty > 0
+   INNER JOIN dbo.LOC L WITH(NOLOCK)
+      ON L.Loc = LLI.Loc
+      AND LLI.StorerKey = @cStorerKey
+      AND L.Facility = @cFacility
+      AND L.LocationFlag IN ('','NONE')
+   LEFT JOIN dbo.LOTxLOCxID LLIx WITH(NOLOCK)
+      ON LLIx.StorerKey = @cStorerKey
+      AND L.Facility = @cFacility
+      AND LLI.Loc <> LLIx.Loc
+      AND LLIx.Qty + LLIx.PendingMoveIN > 0
+      AND LLIx.Loc IN (L.LocationRoom + '1', L.LocationRoom + '2', L.LocationRoom + '3')
+   LEFT JOIN dbo.INVENTORYHOLD IH WITH(NOLOCK)
+      ON IH.Loc LIKE L.LocationRoom + '%'
+      AND IH.Hold = '1'
+      AND IH.Status = 'DoublePal'
+   WHERE IH.Status IS NULL
+     AND L.LocationCategory = 'WA'
+   )
+   BEGIN
+      DECLARE @DoublePalletLocations TABLE (LocToHold NVARCHAR(10));
+      DECLARE @cLocToHold NVARCHAR(10);
+
+      -- Populate temp table with locations to hold
+      INSERT INTO @DoublePalletLocations (LocToHold)
+      SELECT DISTINCT
+         CASE 
+            WHEN RIGHT(Loc,1) IN ('3','1') AND SecondLoc IS NULL THEN LocBeam +'2'
+            WHEN RIGHT(Loc,1) = '2' AND FirstLoc IS NULL THEN LocBeam +'1'
+            WHEN RIGHT(Loc,1) = '2' AND ThirdLoc IS NULL THEN LocBeam +'3'
+         END AS LocToHold
+      FROM (
+         SELECT DISTINCT
+            LLI.Loc,
+            L.LocationRoom AS LocBeam,
+            MAX(CASE WHEN LLIx.Loc = L.LocationRoom + '1' THEN LLIx.Loc END) AS FirstLoc,
+            MAX(CASE WHEN LLIx.Loc = L.LocationRoom + '2' THEN LLIx.Loc END) AS SecondLoc,
+            MAX(CASE WHEN LLIx.Loc = L.LocationRoom + '3' THEN LLIx.Loc END) AS ThirdLoc
+         FROM dbo.LOTxLOCxID LLI WITH(NOLOCK)
+         INNER JOIN dbo.PALLET P WITH(NOLOCK)
+            ON LLI.Id = P.PalletKey
+               AND LLI.StorerKey = @cStorerKey
+               AND P.StorerKey = @cStorerKey
+               AND P.PalletType LIKE 'D%'
+               AND LLI.Qty > 0
+         INNER JOIN dbo.LOC L WITH(NOLOCK)
+            ON L.Loc = LLI.Loc
+               AND LLI.StorerKey = @cStorerKey
+               AND L.Facility = @cFacility
+               AND L.LocationFlag IN ('','NONE')
+         LEFT JOIN dbo.LOTxLOCxID LLIx WITH(NOLOCK)
+            ON LLIx.StorerKey = @cStorerKey
+               AND L.Facility = @cFacility
+               AND LLI.Loc <> LLIx.Loc
+               AND LLIx.Qty + LLIx.PendingMoveIN > 0
+               AND LLIx.Loc IN (L.LocationRoom + '1', L.LocationRoom + '2', L.LocationRoom + '3')
+         LEFT JOIN dbo.INVENTORYHOLD IH WITH(NOLOCK)
+            ON IH.Loc LIKE L.LocationRoom + '%'
+               AND IH.Hold = '1'
+               AND IH.Status = 'DoublePal'
+         WHERE IH.Status IS NULL
+            AND L.LocationCategory = 'WA'
+         GROUP BY LLI.Loc, L.LocationRoom
+      ) T
+      WHERE (
+         (FirstLoc IS NULL AND SecondLoc IS NULL) OR
+         (FirstLoc IS NULL AND ThirdLoc IS NULL) OR
+         (SecondLoc IS NULL AND ThirdLoc IS NULL)
+      ) 
+	     AND CASE 
+            WHEN RIGHT(Loc,1) IN ('3','1') AND SecondLoc IS NULL THEN LocBeam +'2'
+            WHEN RIGHT(Loc,1) = '2' AND FirstLoc IS NULL THEN LocBeam +'1'
+            WHEN RIGHT(Loc,1) = '2' AND ThirdLoc IS NULL THEN LocBeam +'3'
+         END IS NOT NULL;
+
+      -- Loop through top 10 locations and call the hold procedure
+      DECLARE @nCounter INT = 1;
+      DECLARE @nLimit   INT = 0;
+
+      SELECT TOP 1 @nLimit = COUNT(LocToHold)
+      FROM (
+         SELECT LocToHold, 
+		    ROW_NUMBER() OVER(ORDER BY LocToHold) AS RowID
+         FROM @DoublePalletLocations DPL
+		    INNER JOIN dbo.LOC L WITH(NOLOCK)
+			ON L.Loc = DPL.LocToHold
+		 WHERE L.LocationFlag IN ('','NONE')
+	  )T
+
+      WHILE @nCounter <= @nLimit AND @nCounter <= 20
+      BEGIN
+         SELECT TOP 1 @cLocToHold = LocToHold
+         FROM (
+            SELECT LocToHold, 
+		       ROW_NUMBER() OVER(ORDER BY LocToHold) AS RowID
+            FROM @DoublePalletLocations DPL
+		       INNER JOIN dbo.LOC L WITH(NOLOCK)
+			   ON L.Loc = DPL.LocToHold
+		    WHERE L.LocationFlag IN ('','NONE')
+         ) T
+         WHERE RowID = @nCounter;
+
+	     IF ISNULL(@cLocToHold, '') <> ''
+         BEGIN
+            EXEC [WM].[lsp_Inventoryhold_Wrapper]
+                 @c_StorerKey   = @cStorerKey,
+                 @c_SKU         = N'',
+                 @c_lot         = N'',
+                 @c_Loc         = @cLocToHold,
+                 @c_ID          = N'',
+                 @c_lottable01  = N'',
+                 @c_lottable02  = N'',
+                 @c_lottable03  = N'',
+                 @dt_lottable04 = '',
+                 @dt_lottable05 = '',
+                 @c_lottable06  = N'',
+                 @c_lottable07  = N'',
+                 @c_lottable08  = N'',
+                 @c_lottable09  = N'',
+                 @c_lottable10  = N'',
+                 @c_lottable11  = N'',
+                 @c_lottable12  = N'',
+                 @dt_lottable13 = '',
+                 @dt_lottable14 = '',
+                 @dt_lottable15 = '',
+                 @c_Status      = N'DoublePal',
+                 @c_Hold        = 1,
+                 @c_Remark      = N'DoublePal',
+                 @b_Success     = @b_Success OUTPUT,
+                 @n_Err         = @n_Err OUTPUT,
+                 @c_ErrMsg      = @c_ErrMsg OUTPUT,
+                 @c_UserName    = @cUserKey;
+         END
+	     SET @nCounter = @nCounter + 1;
+      END
+   END
+
+   IF EXISTS (
+      SELECT 1
+      FROM (
+         SELECT 
+		    LOC, 
+            Hold, 
+            Status, 
+            DateOn, 
+            WhoOn, 
+            DateOff, 
+            WhoOff,
+            ROW_NUMBER() OVER(PARTITION BY LOC ORDER BY LOC, Hold, DateOn) AS RowID,
+            COUNT(*) OVER(PARTITION BY LOC) AS TotalPerLoc
+         FROM dbo.INVENTORYHOLD IH WITH(NOLOCK)
+      WHERE Status = 'DoublePal'
+      ) AS T
+      WHERE TotalPerLoc > 1 AND RowID = 1
+   )
+
+   BEGIN
+      UPDATE IH WITH(ROWLOCK)
+      SET Hold = 0,
+         Remark = 'deleteDP'
+      FROM dbo.INVENTORYHOLD IH
+         INNER JOIN (
+            SELECT LOC, 
+	           Hold, 
+		       DateOn, 
+		       WhoOn
+            FROM (
+               SELECT 
+			      LOC,
+                  Hold,
+                  DateOn,
+                  WhoOn,
+                  ROW_NUMBER() OVER(PARTITION BY LOC ORDER BY LOC, Hold, DateOn) AS RowID,
+                  COUNT(*) OVER(PARTITION BY LOC) AS TotalPerLoc
+               FROM dbo.INVENTORYHOLD WITH(NOLOCK)
+               WHERE Status = 'DoublePal'
+            ) AS T
+            WHERE TotalPerLoc > 1 AND RowID = 1
+         ) AS Dups
+         ON IH.LOC = Dups.LOC
+            AND IH.Hold = Dups.Hold
+            AND IH.DateOn = Dups.DateOn
+            AND IH.WhoOn = Dups.WhoOn
+      WHERE IH.Status = 'DoublePal';
+
+      DELETE FROM dbo.INVENTORYHOLD
+      WHERE Status = 'DoublePal'
+         AND Hold = '0'
+         AND Remark = 'DeleteDP'
+   END
+
    -- Create next task
    IF @cTransitLOC <> ''
    BEGIN
@@ -341,7 +542,6 @@ BEGIN
                AND L.Status <> 'OK'
          )
    END
-
 
    --Cancel tasks that can no longer be fulfilled
    UPDATE TD WITH(ROWLOCK)

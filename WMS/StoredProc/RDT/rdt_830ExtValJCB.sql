@@ -71,14 +71,16 @@ BEGIN
 		 FROM dbo.PICKHEADER PH WITH(NOLOCK) 
 		 WHERE PickHeaderKey = @cPickSlipNo
 
-		 SELECT TOP 1 @cLot = LOT 
-		 FROM dbo.PICKDETAIL WITH(NOLOCK)
-		 WHERE OrderKey = @cOrderKey
-		    AND LOC = @cSuggLOC
-			AND Status = '0'
-			AND LOT in (select LOT from LOTATTRIBUTE where Lottable11=ISNULL(@cDropID,''))  -- --'Select Unique'
-			AND Storerkey = @cStorerKey
-		 ORDER BY PickDetailKey, LOT
+		 SELECT TOP 1 @cLot = PD.LOT
+         FROM dbo.PICKDETAIL PD WITH (NOLOCK)
+            INNER JOIN dbo.LOTATTRIBUTE LA WITH (NOLOCK) 
+            ON PD.LOT = LA.LOT
+               AND ISNULL(LA.Lottable11, '') <> ''
+         WHERE PD.OrderKey = @cOrderKey
+            AND PD.LOC = @cSuggLOC
+            AND PD.Status = '0'
+            AND PD.Storerkey = @cStorerKey
+         ORDER BY PD.PickDetailKey, PD.LOT
 
 		 SELECT TOP 1 @cCaseLot11 = Lottable11
 		 FROM dbo.LOTATTRIBUTE WITH(NOLOCK)
