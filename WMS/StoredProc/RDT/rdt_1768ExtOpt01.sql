@@ -15,6 +15,7 @@ GO
 /* 2025-07-07 1.0.0 James      FCR-6059. Created                        */
 /* 2025-07-19 1.0.1 NickT      FCR-6059. No adjustment on allocated INV */
 /* 2025-08-13 1.1.0 NickT      UWP-39425 RDT screen go to blank screen  */
+/* 2025-08-13 1.1.1 NickT      UWP-39425 delete duplicate data in @tPosting */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1768ExtOpt01] (
@@ -337,7 +338,8 @@ AS
                         GOTO RollBackTran   
                      END
 
-                     INSERT INTO @tPosting (AdjustmentKey) VALUES (@cAdjustmentKey)
+                     IF NOT EXISTS (SELECT 1 FROM @tPosting WHERE AdjustmentKey = @cAdjustmentKey)
+                        INSERT INTO @tPosting (AdjustmentKey) VALUES (@cAdjustmentKey)
 
                      CONTINUE_curCCD:
                      FETCH NEXT FROM @curCCD INTO @cCCDetailKey, @nCCDQty, @nOriCCQty
