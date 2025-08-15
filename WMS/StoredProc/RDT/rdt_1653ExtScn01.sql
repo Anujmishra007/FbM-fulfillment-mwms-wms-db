@@ -27,6 +27,7 @@ GO
 /*                            does not work in some scenarios               */
 /* 2025-07-30 1.7.0  NLT013   UWP-38609 Performance tuning                  */
 /* 2025-07-07 1.7.0  NLT013   UWP-36981 Performance Tune                    */
+/* 2025-08-14 1.8.0  Dennis   UWP-38609 Fix Bug                             */
 /****************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_1653ExtScn01] (
@@ -256,7 +257,7 @@ BEGIN
                BEGIN TRY
                   SET @cSQLString =
                      'WITH FilteredOrders AS (
-                        SELECT DISTINCT'
+                        SELECT DISTINCT '
                         +IIF(@cCODELKUPUdf01 <> '',   'O2.'+@cCODELKUPUdf01+', ','')
                         +IIF(@cCODELKUPUdf02 <> '',   'O2.'+@cCODELKUPUdf02+', ','')
                         +IIF(@cCODELKUPUdf03 <> '',   'O2.'+@cCODELKUPUdf03+', ','')
