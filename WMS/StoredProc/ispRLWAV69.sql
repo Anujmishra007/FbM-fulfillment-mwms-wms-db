@@ -33,9 +33,9 @@ GO
 /* 21-Jul-2025  Wan05   1.7   FCR-6708 - MLP Cold Store Allocation and   */
 /*                            Replenishment Issues                       */
 /*                            FCR-2902 Bug Fix                           */
-/* 12-Aug-2025                FCR-6708 Bug Fix                           */
 /* 12-Aug-2025  Wan06  1.8    UWP-39035 - Matching RPF Section to find   */
 /*                            DPP for FCR-6708 & FCR-2902                */
+/* 15-Aug-2025                FCR-6708 Bug Fix                           */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]        
     @c_Wavekey      NVARCHAR(10)    
@@ -714,7 +714,7 @@ CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]
          BEGIN
             SET @n_Continue = 3
             SET @n_err = 67819   
-            SET @c_Errmsg = 'NSQL'+CONVERT(CHAR(5),@n_err)+': ToLoc not found. LPN: ' + @c_FromID
+            SET @c_Errmsg = 'NSQL'+CONVERT(CHAR(5),@n_err)+': Replenish ToLoc not found. LPN: ' + @c_FromID
                           + ' (ispRLWAV69)'
          END
 
@@ -754,7 +754,7 @@ CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]
                 ,@c_FinalLoc              = @c_FinalLoc         
                 ,@c_FinalID               = @c_FinalID   
                 ,@n_QtyReplen             = @n_Qty 
-                ,@n_PendingMoveIn         = 0  
+                ,@n_PendingMoveIn         = @n_Qty                                  --2025-08-15 
                 ,@c_LinkTaskToReplen      = 'Y'  
                 ,@b_Success               = @b_Success   OUTPUT  
                 ,@n_Err                   = @n_Err       OUTPUT   
