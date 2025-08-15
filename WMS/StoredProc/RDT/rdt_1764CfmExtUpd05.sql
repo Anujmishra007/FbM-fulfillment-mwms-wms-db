@@ -19,9 +19,10 @@ GO
 /* 2025-04-21    JACKC    1.2.1  FCR-3925 Add Transmitlog2 to full short   */
 /* 2025-06-03    NickT    1.3.0  UWP-35382 Mark TaskDetail as X for Short  */
 /*                               pick detail                               */
-/* 2025-07-30    NLT013   1.4.0  UWP-38609 Performance tuning              */
 /* 2025-08-05    NickT    1.3.1  UWP-35382 No need to mark TaskDetail as X */
 /*                        for Short pick detail if @cRefTaskKey is empty   */
+/* 2025-07-30    NLT013   1.4.0  UWP-38609 Performance tuning              */
+/* 2025-08-15    NLT013   1.5.0  UWP-39510 SQL Server exception            */
 /***************************************************************************/
 
 CREATE OR ALTER PROCEDURE rdt.rdt_1764CfmExtUpd05
@@ -187,7 +188,7 @@ BEGIN
             SELECT 'Full UCC short'
          BEGIN TRY
             INSERT INTO @tPickDetail (PickDetailKey)
-            SELECT PickDetailKey
+            SELECT DISTINCT PickDetailKey
             FROM dbo.PickDetail WITH (NOLOCK)
             WHERE TaskDetailKey = @cTaskDetailKey
 
@@ -218,7 +219,7 @@ BEGIN
                      AND TaskType = 'ASTCPK'
                      AND RefTaskKey = @cRefTaskKey
                      AND Status = 'H'
-                     
+
                   UPDATE TD WITH (ROWLOCK) 
                   SET
                      TD.Status = 'X', 

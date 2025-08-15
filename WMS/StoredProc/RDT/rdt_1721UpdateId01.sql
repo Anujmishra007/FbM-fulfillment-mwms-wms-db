@@ -16,6 +16,7 @@ GO
 /* 2024-07-16  1.0  CYU027   FCR-575                                    */
 /* 2025-04-01  1.1  CYU027   FCR-3837                                   */
 /* 2025-07-30  1.2.0 NLT013  UWP-38609 Performance tuning               */
+/* 2025-08-15  1.3.0 NLT013  UWP-39510 SQL Server exception             */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1721UpdateId01] (
@@ -104,7 +105,7 @@ BEGIN
    --UPDATE PICKDETAIL
    --RDT_MOVE will not update pickdetail
    INSERT INTO @tPickDetail (PickDetailKey)
-   SELECT PD.PickDetailKey
+   SELECT DISTINCT PD.PickDetailKey
    FROM dbo.PICKDETAIL PD WITH (NOLOCK) 
    INNER JOIN dbo.PALLETDETAIL PTD WITH(NOLOCK) 
       ON PTD.CaseID IS NOT NULL
