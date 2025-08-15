@@ -4,19 +4,22 @@ SET QUOTED_IDENTIFIER OFF
 GO
 
 
-/************************************************************************/
-/* Store procedure: rdt_1768ExtOpt01                                    */
-/* Copyright      : MAERSK                                              */    
-/* Purpose: Decide whether need to send Alert and Supervisor count      */
-/*                                                                      */
-/* Modifications log:                                                   */
-/*                                                                      */
-/* Date       Rev   Author     Purposes                                 */
-/* 2025-07-07 1.0.0 James      FCR-6059. Created                        */
-/* 2025-07-19 1.0.1 NickT      FCR-6059. No adjustment on allocated INV */
-/* 2025-08-13 1.1.0 NickT      UWP-39425 RDT screen go to blank screen  */
-/* 2025-08-13 1.1.1 NickT      UWP-39425 delete duplicate data in @tPosting */
-/************************************************************************/
+/******************************************************************************/
+/* Store procedure: rdt_1768ExtOpt01                                          */
+/* Copyright      : MAERSK                                                    */    
+/* Purpose: Decide whether need to send Alert and Supervisor count            */
+/*                                                                            */
+/* Modifications log:                                                         */
+/*                                                                            */
+/* Date       Rev   Author     Purposes                                       */
+/* 2025-07-07 1.0.0 James      FCR-6059. Created                              */
+/* 2025-07-19 1.0.1 NickT      FCR-6059. No adjustment on allocated INV       */
+/* 2025-08-13 1.1.0 NickT      UWP-39425 RDT screen go to blank screen        */
+/* 2025-08-13 1.1.1 NickT      UWP-39425 delete duplicate data in @tPosting   */
+/* 2025-08-14 1.1.2 CalvinK    UWP-39425 Add Begin End (CLVN01)               */
+/* 2025-08-14 1.1.3 Jackc      UWP-39425 Add trace log and capture adjfinalize*/ 
+/*                               failure                                      */
+/******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1768ExtOpt01] (
    @nMobile         INT,   
@@ -55,6 +58,7 @@ CREATE OR ALTER PROC [RDT].[rdt_1768ExtOpt01] (
    @cErrMsg         NVARCHAR( 20) OUTPUT  
 )
 AS
+BEGIN --(CLVN01)
 
    SET NOCOUNT ON
    SET QUOTED_IDENTIFIER OFF
@@ -88,6 +92,9 @@ AS
    DECLARE @nOriCCQty      INT
    DECLARE @nInvQty        INT
    DECLARE @nLoopIndex     INT = -1
+   DECLARE @nSQLErrorNo	   INT = 0 --v1.1.3
+   DECLARE @cLogMsg	      NVARCHAR(MAX) --v1.1.3
+   DECLARE @xExceptionLogMsg NVARCHAR(MAX) --v1.1.3
 
    DECLARE @tPosting TABLE (
       RowRef            BIGINT IDENTITY(1,1)  Primary Key,
@@ -378,19 +385,21 @@ AS
                END
             END
 
-            UPDATE dbo.TaskDetail SET
-               [Status] = '9',
-               EditWho = @cUserName,
-               EditDate = GetDate(),
-               EndTime = GetDate()
-            WHERE TaskDetailKey = @cTaskDetailKey
+            BEGIN TRY
+               UPDATE dbo.TaskDetail SET
+                  [Status] = '9',
+                  EditWho = @cUserName,
+                  EditDate = GetDate(),
+                  EndTime = GetDate()
+               WHERE TaskDetailKey = @cTaskDetailKey
+            END TRY
+            BEGIN CATCH
+               SELECT @nSQLErrorNo = ERROR_NUMBER(),  @cLogMsg =  ERROR_MESSAGE() --v1.1.3
 
-            IF @@ERROR <> ''
-            BEGIN
                SET @nErrNo = 241504
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'UpdTaskDetFailed'
                GOTO RollBackTran
-            END
+            END CATCH
 
             IF EXISTS ( SELECT 1 
                         FROM dbo.TaskDetail WITH (NOLOCK)
@@ -447,9 +456,17 @@ AS
             WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
                COMMIT TRAN rdt_1768ExtOpt01
 
+            IF @nSQLErrorNo <> 0
+            BEGIN
+               SET @xExceptionLogMsg = CONCAT_WS(',', 'rdt_1768ExtOpt01' , @nSQLErrorNo, @cLogMsg , @cTaskDetailKey)
+               INSERT INTO DocInfo (Tablename, Storerkey, key1, key2, key3, lineSeq, Data)
+               VALUES ('LOGMSG', '', '', '', '', 0, @xExceptionLogMsg)
+            END
+
             IF @cADJFinalize = '1' 
             BEGIN
                SET @nLoopIndex = -1
+               SET @nSQLErrorNo = 0 --V1.1.3
                WHILE 1 = 1
                BEGIN
                   SELECT TOP 1 
@@ -464,18 +481,31 @@ AS
 
                   IF ISNULL( @cAdjustmentKey, '') <> ''
                   BEGIN
-                     EXEC dbo.isp_FinalizeADJ
-                        @c_ADJKey   = @cAdjustmentKey,
-                        @b_Success  = @bSuccess    OUTPUT,
-                        @n_err      = @nErrNo      OUTPUT,
-                        @c_errmsg   = @cErrMsg     OUTPUT
+                     BEGIN TRY --v1.1.3
+                        EXEC dbo.isp_FinalizeADJ
+                           @c_ADJKey   = @cAdjustmentKey,
+                           @b_Success  = @bSuccess    OUTPUT,
+                           @n_err      = @nErrNo      OUTPUT,
+                           @c_errmsg   = @cErrMsg     OUTPUT
 
-                     IF NOT @bSuccess = 1
-                     BEGIN
-                        SET @nErrNo = 241507
-                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP')   -- Finalize failed
-                        GOTO Quit_SP   
-                     END
+                        IF NOT @bSuccess = 1
+                        BEGIN
+                           SET @nErrNo = 241507
+                           SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP')   -- Finalize failed
+                           GOTO Quit_SP   
+                        END
+                     END TRY
+                     BEGIN CATCH
+                        SELECT @nSQLErrorNo = ERROR_NUMBER(),  @cLogMsg =  ERROR_MESSAGE()
+                        SET @xExceptionLogMsg = CONCAT_WS(',', 'rdt_1768ExtOpt01-FinalAdj' , @nSQLErrorNo, @cLogMsg , @cAdjustmentKey)
+
+                        INSERT INTO DocInfo (Tablename, Storerkey, key1, key2, key3, lineSeq, Data)
+                        VALUES ('LOGMSG', '', '', '', '', 0, @xExceptionLogMsg)
+
+                        SET @nErrNo = 241508
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP')   -- Finalize sql failed
+                        GOTO Quit_SP
+                     END CATCH
                   END
                END
             END
@@ -484,7 +514,7 @@ AS
    END
 
    Quit_SP:
-
+END --(CLVN01)
 GO
 
 SET QUOTED_IDENTIFIER OFF
