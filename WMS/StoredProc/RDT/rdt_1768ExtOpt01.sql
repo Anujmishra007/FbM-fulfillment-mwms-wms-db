@@ -4,22 +4,22 @@ SET QUOTED_IDENTIFIER OFF
 GO
 
 
-/******************************************************************************/
-/* Store procedure: rdt_1768ExtOpt01                                          */
-/* Copyright      : MAERSK                                                    */    
-/* Purpose: Decide whether need to send Alert and Supervisor count            */
-/*                                                                            */
-/* Modifications log:                                                         */
-/*                                                                            */
-/* Date       Rev   Author     Purposes                                       */
-/* 2025-07-07 1.0.0 James      FCR-6059. Created                              */
-/* 2025-07-19 1.0.1 NickT      FCR-6059. No adjustment on allocated INV       */
-/* 2025-08-13 1.1.0 NickT      UWP-39425 RDT screen go to blank screen        */
-/* 2025-08-13 1.1.1 NickT      UWP-39425 delete duplicate data in @tPosting   */
-/* 2025-08-14 1.1.2 CalvinK    UWP-39425 Add Begin End (CLVN01)               */
-/* 2025-08-14 1.1.3 Jackc      UWP-39425 Add trace log and capture adjfinalize*/ 
-/*                               failure                                      */
-/******************************************************************************/
+/*********************************************************************************/
+/* Store procedure: rdt_1768ExtOpt01                                             */
+/* Copyright      : MAERSK                                                       */    
+/* Purpose: Decide whether need to send Alert and Supervisor count               */
+/*                                                                               */
+/* Modifications log:                                                            */
+/*                                                                               */
+/* Date       Rev   Author     Purposes                                          */
+/* 2025-07-07 1.0.0 James      FCR-6059. Created                                 */
+/* 2025-07-19 1.0.1 NickT      FCR-6059. No adjustment on allocated INV          */
+/* 2025-08-13 1.1.0 NickT      UWP-39425 RDT screen go to blank screen           */
+/* 2025-08-13 1.1.1 NickT      UWP-39425 delete duplicate data in @tPosting      */
+/* 2025-08-14 1.1.2 CalvinK    UWP-39425 Add Begin End (CLVN01)                  */
+/* 2025-08-14 1.1.3 Jackc      UWP-39425 Add trace log, capture adjfinalize      */ 
+/*                               failure, and do not block when finalization fail*/
+/*********************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1768ExtOpt01] (
    @nMobile         INT,   
@@ -65,36 +65,42 @@ BEGIN --(CLVN01)
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
-   DECLARE @bSuccess       INT
-   DECLARE @nTranCount     INT
-   DECLARE @nTolQty        INT = 0
-   DECLARE @nCCDQty        INT
-   DECLARE @cTolQty        NVARCHAR( 10)
-   DECLARE @curCCD         CURSOR
-   DECLARE @curADJ         CURSOR
-   DECLARE @cTaskType      NVARCHAR( 10)
-   DECLARE @cCCDLOT        NVARCHAR( 10)
-   DECLARE @cCCDLOC        NVARCHAR( 10)
-   DECLARE @cCCDID         NVARCHAR( 18)
-   DECLARE @cCCDSKU        NVARCHAR( 20)
-   DECLARE @cPostADJ       NVARCHAR( 1)
-   DECLARE @cADJFinalize   NVARCHAR( 1)
-   DECLARE @cADJType       NVARCHAR( 10)
-   DECLARE @cADJReason     NVARCHAR( 10)
-   DECLARE @cAdjustmentKey NVARCHAR( 10) = ''
-   DECLARE @cAdjDetailLine NVARCHAR( 5)
-   DECLARE @cPackkey       NVARCHAR( 10)
-   DECLARE @cAlertMessage  NVARCHAR( 255)
-   DECLARE @cUserName      NVARCHAR( 18)
-   DECLARE @nIsAlert       INT = 0
-   DECLARE @cSKUGroup      NVARCHAR( 10)
-   DECLARE @nQtyAlloc      INT = 0
-   DECLARE @nOriCCQty      INT
-   DECLARE @nInvQty        INT
-   DECLARE @nLoopIndex     INT = -1
-   DECLARE @nSQLErrorNo	   INT = 0 --v1.1.3
-   DECLARE @cLogMsg	      NVARCHAR(MAX) --v1.1.3
-   DECLARE @xExceptionLogMsg NVARCHAR(MAX) --v1.1.3
+   DECLARE @bSuccess          INT
+   DECLARE @nTranCount        INT
+   DECLARE @nTolQty           INT = 0
+   DECLARE @nCCDQty           INT
+   DECLARE @cTolQty           NVARCHAR( 10)
+   DECLARE @curCCD            CURSOR
+   DECLARE @curADJ            CURSOR
+   DECLARE @cTaskType         NVARCHAR( 10)
+   DECLARE @cCCDLOT           NVARCHAR( 10)
+   DECLARE @cCCDLOC           NVARCHAR( 10)
+   DECLARE @cCCDID            NVARCHAR( 18)
+   DECLARE @cCCDSKU           NVARCHAR( 20)
+   DECLARE @cPostADJ          NVARCHAR( 1)
+   DECLARE @cADJFinalize      NVARCHAR( 1)
+   DECLARE @cADJType          NVARCHAR( 10)
+   DECLARE @cADJReason        NVARCHAR( 10)
+   DECLARE @cAdjustmentKey    NVARCHAR( 10) = ''
+   DECLARE @cAdjDetailLine    NVARCHAR( 5)
+   DECLARE @cPackkey          NVARCHAR( 10)
+   DECLARE @cAlertMessage     NVARCHAR( 255)
+   DECLARE @cUserName         NVARCHAR( 18)
+   DECLARE @nIsAlert          INT = 0
+   DECLARE @cSKUGroup         NVARCHAR( 10)
+   DECLARE @nQtyAlloc         INT = 0
+   DECLARE @nOriCCQty         INT
+   DECLARE @nInvQty           INT
+   DECLARE @nLoopIndex        INT = -1
+
+   --V1.1.3
+   DECLARE @nSQLErrorNo	      INT = 0 
+   DECLARE @cLogMsg	         NVARCHAR(MAX) 
+   DECLARE @xExceptionLogMsg  NVARCHAR(MAX) 
+   DECLARE @cMsgQueueLine01   NVARCHAR(125) 
+   DECLARE @cMsgQueueLine02   NVARCHAR(125) 
+   DECLARE @cMsgQueueLine03   NVARCHAR(125)
+   DECLARE @cMsgQueueLine04   NVARCHAR(125) 
 
    DECLARE @tPosting TABLE (
       RowRef            BIGINT IDENTITY(1,1)  Primary Key,
@@ -392,6 +398,7 @@ BEGIN --(CLVN01)
                   EditDate = GetDate(),
                   EndTime = GetDate()
                WHERE TaskDetailKey = @cTaskDetailKey
+                  AND Status <> '9' --v1.1.3
             END TRY
             BEGIN CATCH
                SELECT @nSQLErrorNo = ERROR_NUMBER(),  @cLogMsg =  ERROR_MESSAGE() --v1.1.3
@@ -487,27 +494,39 @@ BEGIN --(CLVN01)
                            @b_Success  = @bSuccess    OUTPUT,
                            @n_err      = @nErrNo      OUTPUT,
                            @c_errmsg   = @cErrMsg     OUTPUT
-
-                        IF NOT @bSuccess = 1
-                        BEGIN
-                           SET @nErrNo = 241507
-                           SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP')   -- Finalize failed
-                           GOTO Quit_SP   
-                        END
                      END TRY
                      BEGIN CATCH
                         SELECT @nSQLErrorNo = ERROR_NUMBER(),  @cLogMsg =  ERROR_MESSAGE()
-                        SET @xExceptionLogMsg = CONCAT_WS(',', 'rdt_1768ExtOpt01-FinalAdj' , @nSQLErrorNo, @cLogMsg , @cAdjustmentKey)
+                        SET @xExceptionLogMsg = CONCAT_WS(',', 'rdt_1768ExtOpt01-FinalAdj', @nSQLErrorNo, @cLogMsg , @cAdjustmentKey)
 
                         INSERT INTO DocInfo (Tablename, Storerkey, key1, key2, key3, lineSeq, Data)
                         VALUES ('LOGMSG', '', '', '', '', 0, @xExceptionLogMsg)
 
-                        SET @nErrNo = 241508
-                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP')   -- Finalize sql failed
+                        SET @cMsgQueueLine01 = '241508-Adjustment Err'
+                        SET @cMsgQueueLine02 = CONCAT_WS(',', '241508', 'Adj SQL Error')
+                        SET @cMsgQueueLine03 = 'Task ' + @cTaskDetailKey
+                        SET @cMsgQueueLine04 = 'Finalize adjustment via SCE.'
+                        EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT, @cMsgQueueLine01, @cMsgQueueLine02, 
+                                                   @cMsgQueueLine03, @cMsgQueueLine04
+
                         GOTO Quit_SP
                      END CATCH
+
+                     IF NOT @bSuccess = 1
+                     BEGIN
+                        --v1.1.3
+                        /*SET @nErrNo = 241507
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP')   -- Finalize failed*/
+                        SET @cMsgQueueLine01 = '241507-Adjustment Err'
+                        SET @cMsgQueueLine02 = CONCAT_WS(',', @nErrNo, @cErrMsg)
+                        SET @cMsgQueueLine03 = 'Task ' + @cTaskDetailKey
+                        SET @cMsgQueueLine04 = 'Finalize adjustment via SCE.'
+                        EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT, @cMsgQueueLine01, @cMsgQueueLine02, 
+                                                   @cMsgQueueLine03, @cMsgQueueLine04
+                        GOTO Quit_SP   
+                     END
                   END
-               END
+               END -- while end
             END
          END
       END
