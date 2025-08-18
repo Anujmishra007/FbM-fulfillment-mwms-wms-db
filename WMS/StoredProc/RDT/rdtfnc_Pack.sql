@@ -102,6 +102,7 @@ GO
 /* 2025-07-10   7.7 NickT       FCR-4325 Split SKU Qty screen into 2 screens.                   */
 /*                              Update PackInfo.Qty after capture data                          */
 /* 2025-07-14   7.8 Cuize       FCR-990 STEP9 Need go to extscn after validation                */
+/* 2025-08-18   0.0 Jackc       !!!Cutover. Use V0 repo for work!!!                             */
 /************************************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_Pack] (
