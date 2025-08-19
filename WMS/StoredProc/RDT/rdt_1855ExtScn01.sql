@@ -31,6 +31,7 @@ GO
 /* 2025-04-25 1.6.6  DENNIS     FCR-4243 Resume tasks                              */
 /* 2025-06-18 1.6.7  DENNIS     UWP-36228 Filter task                              */
 /* 2025-07-16 1.7.0  NickT      UWP-37893 PickDetail.CaseID is not updated as empty string*/
+/* 2025-08-14 1.8.0  Cuize      Goto STEP 99 for Mask SKU                          */
 /***********************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1855ExtScn01] (
@@ -286,6 +287,11 @@ BEGIN
          SET @nAfterStep = 99
 
       END -- back to 2nd screen
+      ELSE IF @nScn=@nScn_SKUQTY AND @nStep = @nStep_SKUQTY
+      BEGIN
+         SET @cOutField03 = rdt.rdtMaskValue(@nFunc,@cStorerKey,'SKU',@cSuggSKU )  --Mask SKU values
+         GOTO Quit
+      END
       -- generic esc handling end
 
       --Screnn logic
