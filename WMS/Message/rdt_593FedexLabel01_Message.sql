@@ -13,5 +13,6 @@ execute rdt.rdtAddMsg 223008, 10, '223008UpdOrdInfoFail',      'us_english', 593
 execute rdt.rdtAddMsg 223009, 10, '223009CreateBolSeqNoFail',  'us_english', 593, 0, '223009: Create BOL sequence number failed.'
 execute rdt.rdtAddMsg 223010, 10, '223010UpdOrdInfoFail',      'us_english', 593, 0, '223010: Update orderinfo failed'
 execute rdt.rdtAddMsg 223011, 10, '223011PickNotFinished',      'us_english', 593, 0, '223011: Pick Not Finished'
+execute rdt.rdtAddMsg 223012, 10, '223012PackNotFinished',      'us_english', 593, 0, '223012: Pack Not Finished'
 
 SELECT * FROM RDT.RDTMsg WITH(NOLOCK) WHERE Message_ID BETWEEN 223001 AND 223050

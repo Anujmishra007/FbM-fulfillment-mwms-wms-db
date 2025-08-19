@@ -15,6 +15,7 @@ GO
 /* 2024-10-05 1.2    NLT03      FCR-949 new request, enhancement                 */
 /* 2025-07-23 1.3.0  JackC      FCR-6707 generate BOL sequence number            */
 /* 2025-08-11 1.4.0  Dennis     FCR-7046 Add Validation                          */
+/* 2025-08-19 1.4.1  Dennis     FCR-7046 Add Validation                          */
 /*********************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_593FedexLabel01] (
@@ -94,6 +95,16 @@ AS
    BEGIN
       SET @nErrNo = 223002
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InvalidLabel
+      GOTO Quit
+   END
+
+   IF NOT EXISTS(SELECT 1 FROM dbo.PACKDETAIL PAD WITH(NOLOCK) 
+                  JOIN dbo.PackHeader PH WITH(NOLOCK) ON PAD.StorerKey = PH.StorerKey AND PAD.PickSlipNo = PH.PickSlipNo
+                  WHERE PAD.StorerKey = @cStorerKey 
+                  AND PAD.LabelNo = @cDropID AND PH.Status >= '9')
+   BEGIN
+      SET @nErrNo = 223012
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --PackNotFinished
       GOTO Quit
    END
 
