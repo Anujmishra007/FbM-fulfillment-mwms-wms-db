@@ -12,7 +12,7 @@ GO
 /* 2024-11-21   1.0.0  Dennis   FCR-1349 Created                        */
 /* 2025-04-09   1.1.0  Dennis   FCR-3925 Remove Trigger For Transmitlog2*/
 /* 2025-07-02   1.2.0  Dennis   FCR-5019 Remove Pack Header             */
-/* 2025-08-04   1.3.0  Dennis   UWP-38742 Fix Bugs                      */
+/* 2025-08-19   1.3.0  NickT    UWP-39586 Performance tuning            */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_869ExtUpd01] (
@@ -50,6 +50,15 @@ DECLARE @List TABLE
    OrderKey NVARCHAR(20),
    SKU      NVARCHAR(20)
    )
+DECLARE @tPackDetail TABLE
+(
+   RowNumber   INT IDENTITY,
+   PickSlipNo  NVARCHAR( 10) NOT NULL,
+   CartonNo    INT NOT NULL,
+   LabelNo     NVARCHAR( 20) NOT NULL,
+   LabelLine   NVARCHAR( 5) NOT NULL,
+   PRIMARY KEY CLUSTERED(PickSlipNo, CartonNo, LabelNo, LabelLine)
+)
 
 IF @nFunc = 869
 BEGIN
@@ -108,24 +117,29 @@ BEGIN
             IF @nRowCount = 0
                BREAK
 
-            IF EXISTS (SELECT 1 FROM dbo.PackDetail WITH(NOLOCK) WHERE LABELNO = @cCaseID AND StorerKey = @cStorerKey)
-            BEGIN
-               SELECT @nQTY = SUM(QTY) FROM dbo.PickDetail WITH(NOLOCK) WHERE CaseID = @cCaseID AND StorerKey = @cStorerKey AND SKU = @cSKU AND OrderKey = @cOrderKey
-               UPDATE PD
-               SET PD.QTY = @nQTY
-               FROM PackDetail PD
-               INNER JOIN PICKHEADER PH ON PD.PICKSLIPNO = PH.PICKHEADERKEY AND PH.OrderKey = @cOrderKey AND PH.StorerKey = @cStorerKey
-               WHERE PD.LABELNO = @cCaseID AND PD.StorerKey = @cStorerKey AND PD.SKU = @cSKU
-            END
+            DELETE FROM @tPackDetail
 
-            SELECT TOP 1 @cPickSlipNo = PICKHEADERKEY FROM dbo.PICKHEADER(NOLOCK) WHERE OrderKey=@cOrderKey AND @cStorerKey = StorerKey
+            INSERT INTO @tPackDetail (PickSlipNo, CartonNo, LabelNo, LabelLine)
+            SELECT DISTINCT PickSlipNo, CartonNo, LabelNo, LabelLine 
+            FROM dbo.PackDetail WITH(NOLOCK) 
+            WHERE LabelNo = @cCaseID 
+               AND StorerKey = @cStorerKey
 
-            --All pickdetail status = 0
-            --No packdetail exists
-            IF NOT EXISTS (SELECT 1 FROM dbo.PICKDETAIL(NOLOCK) WHERE OrderKey = @cOrderKey AND STATUS <> '0')
-            AND NOT EXISTS (SELECT 1 FROM dbo.PACKDETAIL PD(NOLOCK) WHERE PickSLipNo = @cPickSlipNo AND PD.StorerKey = @cStorerKey)
+            SELECT @nRowCount = @@ROWCOUNT
+
+            --IF EXISTS (SELECT 1 FROM dbo.PackDetail WITH(NOLOCK) WHERE LABELNO = @cCaseID AND StorerKey = @cStorerKey)
+            IF @nRowCount > 0
             BEGIN
-               DELETE FROM PackHeader WHERE OrderKey = @cOrderKey AND StorerKey = @cStorerKey
+               SELECT @nQTY = SUM(QTY) FROM dbo.PickDetail WITH(NOLOCK) WHERE CaseID = @cCaseID AND StorerKey = @cStorerKey AND SKU = @cSKU
+               --UPDATE dbo.PackDetail WITH(ROWLOCK) SET QTY = @nQTY WHERE LABELNO = @cCaseID AND StorerKey = @cStorerKey AND SKU = @cSKU
+               UPDATE PD WITH(ROWLOCK)
+               SET QTY = @nQTY
+               FROM dbo.PackDetail PD WITH(ROWLOCK)
+               INNER JOIN @tPackDetail tPD 
+                  ON PD.PickSlipNo = tPD.PickSLipNo 
+                  AND PD.CartonNo = tPD.CartonNo
+                  AND PD.LabelNo = tPD.LabelNo
+                  AND PD.LabelLine = tPD.LabelLine
             END
 
             SELECT TOP 1 @cPickSlipNo = PICKHEADERKEY FROM dbo.PICKHEADER(NOLOCK) WHERE OrderKey=@cOrderKey AND @cStorerKey = StorerKey

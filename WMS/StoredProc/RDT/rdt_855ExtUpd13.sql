@@ -37,6 +37,7 @@ GO
 /* 2025-04-29 1.16.0 NickT    UWP-33521 Carton weight is not corret for MPOC       */
 /* 2025-04-29 1.16.2 NickT    UWP-33521 Carton weight is not corret for MPOC       */
 /* 2025-07-22 1.17.0 Jackc    FCR-6705 Generate BOL sequence number                */
+/* 2025-08-19 1.18.0 NickT    UWP-39586 Performance tuning                         */
 /***********************************************************************************/
 CREATE OR ALTER PROC rdt.rdt_855ExtUpd13 (
    @nMobile      INT,   
@@ -167,6 +168,11 @@ BEGIN
       WaveKey        NVARCHAR(10)
    )
 
+   DECLARE @tRDTPPA TABLE
+   (
+      RowRef INT NOT NULL PRIMARY KEY
+   )
+
    DECLARE @cONRIOrderKey     NVARCHAR(10)
    DECLARE @cONRIConsigneeKey NVARCHAR(15)
    DECLARE @cONRIWaveKey      NVARCHAR(10)
@@ -194,13 +200,24 @@ BEGIN
    BEGIN
       IF @nStep = 1 OR (@nStep = 99 AND @nScn = 814)-- CartonID
       BEGIN
-         IF EXISTS(SELECT 1 FROM RDT.RDTPPA WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND DropID = @cDropID AND Status = '2')
-            UPDATE RDT.RDTPPA WITH(ROWLOCK)
+         DELETE FROM @tRDTPPA
+
+         INSERT INTO @tRDTPPA (RowRef)
+         SELECT DISTINCT RowRef
+         FROM RDT.RDTPPA WITH(NOLOCK) 
+         WHERE StorerKey = @cStorerKey 
+            AND DropID = @cDropID 
+            AND Status = '2'
+         SELECT @nRowCount = @@ROWCOUNT
+
+         IF @nRowCount > 0
+         BEGIN
+            UPDATE RP
             SET Status = '0',
                CQty = 0
-            WHERE StorerKey = @cStorerKey
-               AND DropID = @cDropID
-               AND Status = '2'
+            FROM RDT.RDTPPA RP WITH(ROWLOCK)
+            INNER JOIN @tRDTPPA TRP ON RP.RowRef = TRP.RowRef
+         END
       END
       ELSE IF @nStep = 3 -- SKU/UPC
       BEGIN
@@ -676,11 +693,23 @@ BEGIN
 
                BEGIN TRY
                   --Mark PPA as 5 (audit finished)
-                  UPDATE RDT.RDTPPA WITH(ROWLOCK)
-                  SET Status = '5' --Aduit finished
+                  DELETE FROM @tRDTPPA
+
+                  INSERT INTO @tRDTPPA (RowRef)
+                  SELECT DISTINCT RowRef
+                  FROM RDT.RDTPPA WITH(NOLOCK) 
                   WHERE StorerKey = @cStorerKey
                      AND DropID = @cDropID
                      AND Sku = @cSKU
+                  SELECT @nRowCount = @@ROWCOUNT
+
+                  IF @nRowCount > 0
+                  BEGIN
+                     UPDATE RP
+                     SET Status = '5'
+                     FROM RDT.RDTPPA RP WITH(ROWLOCK)
+                     INNER JOIN @tRDTPPA TRP ON RP.RowRef = TRP.RowRef
+                  END
 
                   --Carton audit finished
                   --1. Mark PackInfo as PACKED
@@ -1220,11 +1249,23 @@ BEGIN
                --2. Print QC label
                IF @cOption = '1' -- 1. Confirm Short,  9. No short, go bakc to Screen 3
                BEGIN
-                  UPDATE RDT.RDTPPA WITH(ROWLOCK)
-                  SET Status = '2' --Short
+                  DELETE FROM @tRDTPPA
+
+                  INSERT INTO @tRDTPPA (RowRef)
+                  SELECT DISTINCT RowRef
+                  FROM RDT.RDTPPA WITH(NOLOCK) 
                   WHERE StorerKey = @cStorerKey
                      AND DropID = @cDropID
                      AND Sku = @cSKU
+                  SELECT @nRowCount = @@ROWCOUNT
+
+                  IF @nRowCount > 0
+                  BEGIN
+                     UPDATE RP
+                     SET Status = '2' --Short
+                     FROM RDT.RDTPPA RP WITH(ROWLOCK)
+                     INNER JOIN @tRDTPPA TRP ON RP.RowRef = TRP.RowRef
+                  END
 
                   --Print QC label
                   SELECT @cLabelName = RDT.RDTGetConfig(@nFunc, 'LVSQALABEL', @cStorerkey)

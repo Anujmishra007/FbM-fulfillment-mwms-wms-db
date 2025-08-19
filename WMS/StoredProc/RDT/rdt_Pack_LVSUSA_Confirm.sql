@@ -12,6 +12,7 @@ GO
 /*                                                                      */
 /* Date       Rev  Author      Purposes                                 */
 /* 2024-10-23 1.0  JCH507      FCR-946 Created                          */
+/* 2025-08-19 1.1.0 NickT      UWP-39586 Performance tuning             */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_Pack_LVSUSA_Confirm] (
@@ -174,10 +175,21 @@ BEGIN
       MoveQty     INT
    )
 
+   DECLARE @tPackDetail TABLE
+   (
+      RowNumber   INT IDENTITY(1,1),
+      PickSlipNo  NVARCHAR( 10) NOT NULL,
+      CartonNo    INT NOT NULL,
+      LabelNo     NVARCHAR( 20) NOT NULL,
+      LabelLine   NVARCHAR( 5) NOT NULL,
+      PRIMARY KEY CLUSTERED (PickSlipNo, CartonNo, LabelNo, LabelLine)
+   )
+
+
    DECLARE @tPSNO TABLE
    (
       RowNumber   INT IDENTITY NOT NULL,
-      PickSlipNo  NVARCHAR(20) NOT NULL
+      PickSlipNo  NVARCHAR(20) NOT NULL PRIMARY KEY
    )
 
    SET @nErrNo = 0
@@ -687,7 +699,7 @@ BEGIN
       BEGIN TRY
          DELETE PI
          FROM PackInfo PI
-         JOIN PackDetail PD
+         INNER JOIN PackDetail PD WITH (NOLOCK)
             ON PI.PickSlipNo = PD.PickSlipNo
             AND PI.CartonNo = PD.CartonNo
          WHERE PD.StorerKey = @cStorerKey
@@ -736,12 +748,22 @@ BEGIN
             IF @bDebugFlag = 1
                SELECT 'Dest Carton has same pickslipno, and same sku records'
 
-            -- Add the qty to the existing record
-            UPDATE dbo.PackDetail WITH (ROWLOCK)
-            SET   Qty = Qty + @nTempQty
+            DELETE FROM @tPackDetail
+
+            INSERT INTO @tPackDetail (PickSlipNo, CartonNo, LabelNo, LabelLine)
+            SELECT DISTINCT PickSlipNo, CartonNo, LabelNo, LabelLine
+            FROM dbo.PackDetail WITH (NOLOCK)
             WHERE PickSlipNo = @cTempPSNO
                AND LabelNo = @cTempLabelNo
                AND SKU = @cTempSKU
+            
+            -- Add the qty to the existing record
+            UPDATE PD WITH (ROWLOCK)
+            SET Qty = Qty + @nTempQty
+            FROM dbo.PackDetail PD WITH(ROWLOCK)
+            INNER JOIN @tPackDetail TPD 
+            ON PD.PickSlipNo = TPD.PickSlipNo AND PD.CartonNo = TPD.CartonNo AND PD.LabelNo = TPD.LabelNo AND PD.LabelLine = TPD.LabelLine
+            WHERE PD.StorerKey = @cStorerKey
             -- No needs to handle Packinfo, trigger will handle it.
          END
          ELSE
@@ -825,30 +847,38 @@ BEGIN
       --PickDetail Handling (Merge) End
    END -- MERGE
    
+   DECLARE @tTempPackDetail TABLE
+   (
+      NewCartonNo       INT NOT NULL,
+      NewLabelLine      NVARCHAR(5) NOT NULL,
+      PickSlipNo        NVARCHAR(10) NOT NULL,
+      CartonNo          INT NOT NULL,
+      LabelNo           NVARCHAR(20) NOT NULL,
+      LabelLine         NVARCHAR(5) NOT NULL
+   )
    -- Reorganize the master carton packdetail
    BEGIN TRY
-      ;WITH TempPackDetail AS (
-         SELECT 
-            DENSE_RANK() OVER (PARTITION BY PickSlipNo ORDER BY LabelNo) AS NewCartonNo,
-            RIGHT('00000' + CAST(ROW_NUMBER() OVER (PARTITION BY PickSlipNo, CartonNo ORDER BY SKU) AS VARCHAR(5)), 5) AS NewLabelLine,
-            PickSlipNo, 
-            CartonNo, 
-            LabelNo, 
-            LabelLine, 
-            StorerKey, 
-            SKU, 
-            Qty
-         FROM dbo.PackDetail WITH (NOLOCK)
-         WHERE PickSlipNo IN (SELECT PickSlipNo FROM @tPSNO )
-      )
-      UPDATE pd
-      SET pd.CartonNo = tpd.NewCartonNo,
-         pd.LabelLine = tpd.NewLabelLine
-      FROM dbo.PackDetail pd
-      JOIN TempPackDetail tpd
-      ON pd.PickSlipNo = tpd.PickSlipNo
-      AND pd.LabelNo = tpd.LabelNo
-      AND pd.LabelLine = tpd.LabelLine;
+      INSERT INTO @tTempPackDetail (NewCartonNo, NewLabelLine, PickSlipNo, CartonNo, LabelNo, LabelLine)
+      SELECT 
+         DENSE_RANK() OVER (PARTITION BY PD.PickSlipNo ORDER BY PD.LabelNo) AS NewCartonNo,
+         RIGHT('00000' + CAST(ROW_NUMBER() OVER (PARTITION BY PD.PickSlipNo, PD.CartonNo ORDER BY PD.SKU) AS VARCHAR(5)), 5) AS NewLabelLine,
+         PD.PickSlipNo, 
+         PD.CartonNo, 
+         PD.LabelNo, 
+         PD.LabelLine
+      FROM dbo.PackDetail PD WITH (NOLOCK)
+      INNER JOIN @tPSNO TPN ON PD.PickSlipNo = TPN.PickSlipNo
+      WHERE PD.StorerKey = @cStorerKey
+
+      UPDATE PD WITH(ROWLOCK)
+      SET PD.CartonNo = TPD.NewCartonNo,
+         PD.LabelLine = TPD.NewLabelLine
+      FROM dbo.PackDetail PD WITH(ROWLOCK)
+      INNER JOIN @tTempPackDetail TPD
+         ON PD.PickSlipNo = TPD.PickSlipNo
+         AND PD.LabelNo = TPD.LabelNo
+         AND PD.LabelLine = TPD.LabelLine
+         AND PD.CartonNo = TPD.CartonNo
    END TRY
    BEGIN CATCH
       SET @nErrNo = 227621
