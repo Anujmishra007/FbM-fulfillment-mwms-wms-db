@@ -12,6 +12,7 @@ GO
 /*                                                                      */
 /* Date       Rev  Author    Purposes                                   */
 /* 2025-06-18 1.0  Dennis    FCR-3959 Created                           */
+/* 2025-08-19 1.1  Dennis    FP DropId = Toid                           */
 /************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_1812Confirm03] (
@@ -321,7 +322,7 @@ IF @nDebug = 1
    -- Update Task
    UPDATE dbo.TaskDetail WITH (ROWLOCK) SET
       Status = '5', -- Picked
-      DropID = @cDropID,
+      DropID = CASE WHEN PickMethod = 'FP' THEN ToID ELSE @cDropID END,
       ToID = CASE WHEN PickMethod = 'PP' THEN @cDropID ELSE ToID END,
       QTY = @nQTY,
       SystemQTY = @nSystemQTY,
