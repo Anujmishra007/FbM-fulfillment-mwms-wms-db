@@ -10,6 +10,7 @@
 /* Date         Rev     Author   Purposes                                     */
 /* 2025-05-07   1.0.0   Jackc    FCR-3925 fix groupkey is blank if there is   */
 /*                               X status task                                */
+/* 2025-08-18   1.1.0   NickT    UWP-39586 Performance tuning                 */
 /******************************************************************************/  
   
 CREATE OR ALTER PROC rdt.rdt_1855CfmToLoc02 (  
@@ -54,6 +55,13 @@ BEGIN
    DECLARE @cConfirmToLocMoveInventory NVARCHAR( 1)  
    DECLARE @cUserName   NVARCHAR( 18)
    DECLARE @cTaskType   NVARCHAR( 10)
+   DECLARE @nRowCount   INT
+
+   --@cTaskKey, @cFromLOC, @cFromID, @cSKU, @nQty, @cDropID
+   DECLARE @tTaskDetail TABLE
+   (
+      TaskDetailKey     NVARCHAR( 10) PRIMARY KEY
+   )
 
    IF @nDebugFlag = 1
       SELECT 'Executing rdt_1855CfmToLoc02'  
@@ -103,7 +111,6 @@ BEGIN
          ('1855CfmToLoc02', GETDATE(), 'NoTaskDetail', @cGroupKey, @cCartID, @cTaskDetailKey, @cToLOC, @nMobile, '', '', '', '')
    END
    --V1.0.0 end
-
    
    SET @nTranCount = @@TRANCOUNT    
    BEGIN TRAN  -- Begin our own transaction    
@@ -173,27 +180,33 @@ BEGIN
 
    --V1.0.0 start
    --Clear the groupkey and deviceid which status = x in this groupkey and deviceid
-   IF EXISTS (SELECT 1 FROM dbo.TaskDetail WITH (NOLOCK) 
-                  WHERE Groupkey = @cGroupKey 
-                     AND DeviceID = @cCartID 
-                     AND [Status] = 'X' 
-                     AND TaskType = @cTaskType)
+   DELETE FROM @tTaskDetail
+   
+   INSERT INTO @tTaskDetail (TaskDetailKey)
+   SELECT DISTINCT TaskDetailKey 
+   FROM dbo.TaskDetail WITH (NOLOCK) 
+   WHERE StorerKey = @cStorerKey
+      AND Groupkey = @cGroupKey
+      AND DeviceID = @cCartID
+      AND [Status] = 'X'
+      AND TaskType = @cTaskType
+
+   SELECT @nRowCount = @@ROWCOUNT
+
+   IF @nRowCount > 0
    BEGIN
       IF @nDebugFlag = 1
          SELECT 'Clear X status task groupkey and deviceid'
 
-      UPDATE dbo.TaskDetail SET   
-         Groupkey = '',  
+      UPDATE TD WITH(ROWLOCK) 
+      SET
+         Groupkey = '',
          DeviceID = '',
-         TrafficCop = NULL  
-      WHERE Groupkey = @cGroupKey   
-      AND   DeviceID = @cCartID   
-      AND   [Status] = 'X' 
-      AND   TaskType = @cTaskType --v1.0.0
+         TrafficCop = NULL
+      FROM dbo.TaskDetail TD WITH(ROWLOCK)
+      INNER JOIN @tTaskDetail TTD ON TD.TaskDetailKey = TTD.TaskDetailKey
    END
-   --V1.0.0 end  
-     
-    
+
    GOTO Quit  
   
 RollBackTran:  
