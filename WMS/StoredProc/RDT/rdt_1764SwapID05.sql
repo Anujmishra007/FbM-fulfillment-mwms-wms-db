@@ -1015,7 +1015,7 @@ BEGIN
 
       UPDATE TaskDetail SET
          LOT = @cTaskLOT, 
-         FromID = CASE WHEN FromID <> '' THEN @cNewID ELSE FromID END,
+         FromID = @cTaskID,
          ToID = CASE WHEN ToID <> '' THEN @cTaskID ELSE ToID END,
          FinalID = CASE WHEN FinalID <> '' THEN @cTaskID ELSE FinalID END, 
          EditDate = GETDATE(), 
@@ -1038,7 +1038,7 @@ BEGIN
          BEGIN TRY
             UPDATE TaskDetail WITH (ROWLOCK) SET
                LOT = @cTaskLOT, 
-               FromID = @cTaskID, 
+               FromID = CASE WHEN FromID <> '' THEN @cTaskID ELSE FromID END, 
                ToID = CASE WHEN ToID <> '' THEN @cTaskID ELSE ToID END, 
                EditDate = GETDATE(), 
                EditWho = SUSER_SNAME(), 
