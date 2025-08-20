@@ -18,7 +18,7 @@ GO
 /*                                                                        */    
 /* Called By: n_cst_busobj.ue_wrapup                                      */    
 /*                                                                        */    
-/* PVCS Version: 1.2                                                      */    
+/* PVCS Version: 2.0                                                      */    
 /*                                                                        */    
 /* Version: 7.0                                                           */    
 /*                                                                        */    
@@ -38,10 +38,11 @@ GO
 /*                            saving WaveDetail                           */
 /* 11-Jun-2021  NJOW04   1.7  WMS-17231 include inventoryhold validation  */
 /* 11-Jun-2021  NJOW04   1.7  DEVOPS Combine script                       */
-/* 15-AUG-2022  Wan05    1.8  LFWM-3669 - VN ¨C ADIDAS- WMS-SCE¨CAdding   */
+/* 15-AUG-2022  Wan05    1.8  LFWM-3669 - VN ï¿½C ADIDAS- WMS-SCEï¿½CAdding   */
 /*                            Validation for Location Type of Module      */
 /*                            Assign Pick Location                        */
-/* 09-Mar-2023  NJOW05   1.9  LFWM-3608 Performance tuning for XML reading*/ 
+/* 09-Mar-2023  NJOW05   1.9  LFWM-3608 Performance tuning for XML reading*/
+/* 20-Aug-2025  WLChooi  2.0  FCR-6862 Pack Mgmt Input Validation (WL01)  */ 
 /**************************************************************************/  
 CREATE OR ALTER PROCEDURE [dbo].[isp_Wrapup_Validation]    
       @c_Window            NVARCHAR(60) = ''  
@@ -103,6 +104,8 @@ BEGIN
          , @c_TableColumns_OXML  NVARCHAR(MAX) = N''  --NJOW05              
          , @c_SQL2               NVARCHAR(MAX) = N''  --NJOW05
          , @c_XMLToTemp          NVARCHAR(1) = 'N'  --NJOW01
+         , @c_Pickslipno         NVARCHAR(10) = ''  --WL01
+         , @b_IsConso            BIT = 0            --WL01
   
    SET @n_err        = 0  
    SET @b_Success   = 1  
@@ -408,10 +411,55 @@ BEGIN
                             + ' LEFT JOIN SKU WITH (NOLOCK) ON (INVENTORYHOLD.Storerkey = SKU.Storerkey AND INVENTORYHOLD.Sku = SKU.Sku)'
                             + ' LEFT JOIN STORER WITH (NOLOCK) ON (INVENTORYHOLD.Storerkey = STORER.Storerkey)' 
                          WHEN @c_UpdateTable = 'SKUXLOC'       --wan05 
-                         THEN ' JOIN LOC WITH (NOLOCK) ON (SKUXLOC.Loc = LOC.Loc)'  
+                         THEN ' JOIN LOC WITH (NOLOCK) ON (SKUXLOC.Loc = LOC.Loc)'
                          ELSE ''  
                          END  
   
+   --WL01 S
+   IF ISNULL(@c_SQLJoin,'') = '' AND @c_UpdateTable = 'PACKDETAIL'
+   BEGIN
+      SET @c_Pickslipno = ''
+      SET @b_IsConso = 0
+
+      SET @c_SQL = N' SELECT TOP 1 @c_Pickslipno = Pickslipno FROM #VALDN'
+
+      EXEC sp_executeSQL @c_SQL  
+                      , N'@c_Pickslipno NVARCHAR(10) OUTPUT'  
+                      , @c_Pickslipno OUTPUT
+
+      IF ISNULL(@c_Pickslipno,'') <> ''
+      BEGIN
+         SELECT @b_IsConso = IIF(ISNULL(PACKHEADER.Orderkey,'') = '' AND 
+                                 ISNULL(PACKHEADER.Loadkey,'') <> '', 1, @b_IsConso)
+         FROM PACKHEADER WITH (NOLOCK)
+         WHERE Pickslipno = @c_Pickslipno
+
+         IF ISNULL(@b_IsConso, 0) = 0
+            SET @b_IsConso = 0
+
+         SET @c_SQLJoin = ' LEFT JOIN PACKHEADER WITH (NOLOCK) ON (PACKDETAIL.Pickslipno = PACKHEADER.Pickslipno)'
+                        + ' LEFT JOIN PACKINFO WITH (NOLOCK) ON (PACKDETAIL.Pickslipno = PACKINFO.Pickslipno'
+                        + '                                  AND PACKDETAIL.CartonNo = PACKINFO.CartonNo)'
+                        + ' LEFT JOIN SKU WITH (NOLOCK) ON (PACKDETAIL.SKU = SKU.SKU AND PACKDETAIL.Storerkey = SKU.Storerkey)'
+
+         IF @b_IsConso = 1
+         BEGIN
+            SET @c_SQLJoin = @c_SQLJoin
+                           + ' LEFT JOIN LOADPLANDETAIL WITH (NOLOCK) ON (PACKHEADER.Loadkey = LOADPLANDETAIL.Loadkey)'
+                           + ' LEFT JOIN LOADPLAN       WITH (NOLOCK) ON (LOADPLANDETAIL.Loadkey = LOADPLAN.Loadkey)'
+                           + ' LEFT JOIN ORDERS WITH (NOLOCK) ON (LOADPLANDETAIL.Orderkey = ORDERS.Orderkey)'
+         END
+         ELSE
+         BEGIN
+            SET @c_SQLJoin = @c_SQLJoin
+                           + ' LEFT JOIN LOADPLANDETAIL WITH (NOLOCK) ON (PACKHEADER.Orderkey = LOADPLANDETAIL.Orderkey)'
+                           + ' LEFT JOIN LOADPLAN       WITH (NOLOCK) ON (LOADPLANDETAIL.Loadkey = LOADPLAN.Loadkey)'
+                           + ' LEFT JOIN ORDERS WITH (NOLOCK) ON (LOADPLANDETAIL.Orderkey = ORDERS.Orderkey)'
+         END
+      END
+   END
+   --WL01 E
+
    -- Get ListName to do validation (START)  
    IF @c_ListName = ''  
    BEGIN  
