@@ -65,6 +65,7 @@ GO
 /* 2025-03-14 3.8  CYU027   UWP-30537 Add Top 1 for labelNo             */
 /* 2025-07-11 0.0  JackC    !!!Cuotover!!! Use V0 repo for work         */
 /****************************Migrated into V0****************************/
+/* 2025-07-28 3.9  YeeKung  FCR-2901 Add AutoMBOL (yeekung01)           */
 /************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdtfnc_ScanToTruck_ByLabelNo] (
    @nMobile    INT,
@@ -101,6 +102,8 @@ DECLARE
    @cUserName     NVARCHAR(18),
    @cPaperPrinter NVARCHAR(10),
    @cLabelPrinter NVARCHAR(10),
+   @cOption		  NVARCHAR( 2),
+   @bSuccess	  INT,
 
    @cLoadKey      NVARCHAR(10),
    @cOrderKey     NVARCHAR(10),
@@ -139,6 +142,7 @@ DECLARE
    @cBarcode                NVARCHAR( MAX),
    @cID                     NVARCHAR( 18),
    @cUPC                    NVARCHAR( 30),
+   @cCloseMBOL              NVARCHAR( 20),  
 
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),    @cFieldAttr01 NVARCHAR( 1),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),    @cFieldAttr02 NVARCHAR( 1),
@@ -201,6 +205,7 @@ SELECT
    @cExtendedInfoSP         = V_String23,
    @cDecodeSP               = V_String24,
    @cManifestReport         = V_String25,
+   @cCloseMBOL              = V_String26,
 
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,  @cFieldAttr01 = FieldAttr01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,  @cFieldAttr02 = FieldAttr02,
@@ -229,7 +234,8 @@ BEGIN
    IF @nStep = 2 GOTO Step_2   -- Scn = 3431. LabelNo/DropID
    IF @nStep = 3 GOTO Step_3   -- Scn = 3432. Weight, Cube, CartonType
    IF @nStep = 4 GOTO Step_4   -- Scn = 3433. Door, RefNo
-   IF @nStep = 5 GOTO Step_5   -- Scn = 3434. Print manifest?
+   IF @nStep = 5 GOTO Step_5   -- Scn = 3434. Print manifest?   
+   IF @nStep = 6 GOTO Step_6   -- Scn = 3434. Print manifest?
 END
 RETURN -- Do nothing if incorrect step
 
@@ -249,6 +255,7 @@ BEGIN
    SET @cBypassMBOLShippedCheck = rdt.RDTGetConfig( @nFunc, 'BypassMBOLShippedCheck', @cStorerKey)
    SET @cBypassPackConfirmCheck = rdt.RDTGetConfig( @nFunc, 'BypassPackConfirmCheck', @cStorerKey)
    SET @cCaptureRefInfo = rdt.RDTGetConfig( @nFunc, 'CaptureRefInfo', @cStorerKey)
+   SET @cCloseMBOL = rdt.RDTGetConfig( @nFunc, 'CloseMBOL', @cStorerKey)
 
    SET @cAutoScanOutPS = rdt.RDTGetConfig( @nFunc, 'AutoScanOutPS', @cStorerKey)
    IF @cAutoScanOutPS = '0'
@@ -1286,6 +1293,19 @@ BEGIN
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --GenTLogFail
                GOTO Step_2_Fail
             END
+
+            IF @cCloseMBOL = '1'
+            BEGIN
+               -- Go to print manifest screen
+               SET @cOutField01 = '' -- Option
+
+               SET @nScn  = @nScn + 4
+               SET @nStep = @nStep + 4
+
+               GOTO Quit
+            END
+
+
          END
          IF (@nScanCarton = '1')--1st Carton
          BEGIN
@@ -1344,6 +1364,20 @@ BEGIN
             SET @cOutField15 = @cExtendedInfo
          END  
       END  
+
+      IF (@nTotalCarton = @nScanCarton) --last Carton
+      BEGIN
+         IF @cCloseMBOL = '1'
+         BEGIN
+            -- Go to print manifest screen
+            SET @cOutField01 = '' -- Option
+
+            SET @nScn  = @nScn + 4
+            SET @nStep = @nStep + 4
+
+            GOTO Quit
+         END
+      END
         
       -- EventLog
       EXEC RDT.rdt_STD_EventLog
@@ -1751,6 +1785,7 @@ BEGIN
 
    IF @nInputKey = 0 -- ESC
    BEGIN
+
       -- Prepare prev screen var
       SET @cOutField01 = ''
       SET @cOutField02 = ''
@@ -1779,7 +1814,6 @@ Step_5:
 BEGIN
    IF @nInputKey = 1 -- ENTER
    BEGIN
-      DECLARE @cOption NVARCHAR( 2)
 
       -- Screen mapping
       SET @cOption = @cInField01
@@ -1880,6 +1914,7 @@ BEGIN
 
    IF @nInputKey = 0 -- ESC
    BEGIN
+
       -- Prepare current screen var
       SET @cOutField01 = CASE WHEN @cType IN ('M', 'R') THEN @cMBOLKey  ELSE '' END
       SET @cOutField02 = CASE WHEN @cType = 'L' THEN @cLoadKey  ELSE '' END
@@ -1896,6 +1931,128 @@ BEGIN
    END
 END
 GOTO Quit
+
+
+/********************************************************************************
+Step 5. Scn = 3435. Message
+   All Label/DropID
+   Çompleted For MBOL
+
+   Mark MBOL AS
+   Shipped?
+   1 = YES
+   9 = NO
+   OPTION   (field01, input)
+********************************************************************************/
+Step_6:
+BEGIN
+   IF @nInputKey = 1 -- ENTER
+   BEGIN
+
+      -- Screen mapping
+      SET @cOption = @cInField01
+
+      -- Check blank
+      IF @cOption = ''
+      BEGIN
+         SET @nErrNo = 79341
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Need Option
+         GOTO Quit
+      END
+
+      -- Check option valid
+      IF @cOption NOT IN ('1', '9')
+      BEGIN
+         SET @nErrNo = 79342
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Option
+         GOTO Quit
+      END
+
+      IF @cOption = '1' -- Yes
+      BEGIN
+         DECLARE @cAutoMBOLPack  NVARCHAR(20)
+         SET @nErrNo = 0      
+         EXEC nspGetRight      
+               @c_Facility   = @cFacility      
+            ,  @c_StorerKey  = @cStorerKey      
+            ,  @c_sku        = ''      
+            ,  @c_ConfigKey  = 'AutoMBOLPack'      
+            ,  @b_Success    = @bSuccess             OUTPUT      
+            ,  @c_authority  = @cAutoMBOLPack        OUTPUT      
+            ,  @n_err        = @nErrNo               OUTPUT      
+            ,  @c_errmsg     = @cErrMsg              OUTPUT      
+            
+         IF @nErrNo <> 0      
+         BEGIN      
+            SET @nErrNo = 79343      
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- GetRightFail      
+            GOTO Quit      
+         END      
+               
+         IF @cAutoMBOLPack = '1'      
+         BEGIN      
+            SET @nErrNo = 0      
+            EXEC dbo.isp_QCmd_SubmitAutoMbolPack      
+            @c_PickSlipNo= @cPickSlipNo      
+            , @b_Success   = @bSuccess    OUTPUT      
+            , @n_Err       = @nErrNo      OUTPUT      
+            , @c_ErrMsg    = @cErrMsg     OUTPUT      
+            
+            IF @nErrNo <> 0      
+            BEGIN      
+               SET @nErrNo = 79344      
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- AutoMBOLPack      
+               GOTO Quit      
+            END      
+         END   
+      END
+
+      -- Print manifest
+      IF @nTotalCarton = @nScanCarton AND @cManifestReport <> ''
+      BEGIN
+         -- Go to print manifest screen
+         SET @cOutField01 = '' -- Option
+
+         SET @nScn  = @nScn - 1
+         SET @nStep = @nStep - 1
+
+         GOTO Quit
+      END   
+
+      -- Prepare prev screen var
+      SET @cOutField01 = ''
+      SET @cOutField02 = ''
+      SET @cOutField03 = ''
+
+      IF @cType = 'M' EXEC rdt.rdtSetFocusField @nMobile, 1
+      IF @cType = 'L' EXEC rdt.rdtSetFocusField @nMobile, 2
+      IF @cType = 'O' EXEC rdt.rdtSetFocusField @nMobile, 3
+      IF @cType = 'R' EXEC rdt.rdtSetFocusField @nMobile, 4
+
+      -- Go to prev screen
+      SET @nScn  = @nScn - 5
+      SET @nStep = @nStep - 5
+   END
+
+   IF @nInputKey = 0 -- ESC
+   BEGIN
+      -- Prepare current screen var
+      SET @cOutField01 = CASE WHEN @cType IN ('M', 'R') THEN @cMBOLKey  ELSE '' END
+      SET @cOutField02 = CASE WHEN @cType = 'L' THEN @cLoadKey  ELSE '' END
+      SET @cOutField03 = CASE WHEN @cType = 'O' THEN @cOrderKey ELSE '' END
+      SET @cOutField04 = ''
+      SET @cOutField05 = @cLabelNo -- Last
+      SET @cOutField06 = CAST( @nScanCarton AS NVARCHAR( 10))
+      SET @cOutField07 = CAST( @nTotalCarton AS NVARCHAR( 10))
+      SET @cOutField08 = CASE WHEN @cType = 'R' THEN @cRefNum  ELSE '' END
+
+      -- Go to prev screen
+      SET @nScn  = @nScn - 4
+      SET @nStep = @nStep - 4
+   END
+END
+GOTO Quit
+
 
 /********************************************************************************
 Quit. Update back to I/O table, ready to be pick up by JBOSS
@@ -1942,6 +2099,7 @@ BEGIN
       V_String23 = @cExtendedInfoSP,
       V_String24 = @cDecodeSP,
       V_String25 = @cManifestReport,
+      V_String26 = @cCloseMBOL,
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,   FieldAttr01  = @cFieldAttr01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,   FieldAttr02  = @cFieldAttr02,

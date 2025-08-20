@@ -46,4 +46,8 @@ execute rdt.rdtAddMsg 79339, 10, '79339 RefNoMultiMBOL', 'us_english', 922
 --WMS-15680 (cc01)
 execute rdt.rdtAddMsg 79340, 10, '79340 GenOTMLogFail ', 'us_english', 922
 
-
+--FCR-2901
+execute rdt.rdtAddMsg 79341, 10, '79341NeedOption   ', 'us_english', 922
+execute rdt.rdtAddMsg 79342, 10, '79342InvOption    ', 'us_english', 922
+execute rdt.rdtAddMsg 79343, 10, '79343GetRightFail ', 'us_english', 922
+execute rdt.rdtAddMsg 79344, 10, '79344AutoMBOLPack ', 'us_english', 922
