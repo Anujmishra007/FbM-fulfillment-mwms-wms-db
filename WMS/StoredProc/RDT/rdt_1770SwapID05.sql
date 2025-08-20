@@ -548,6 +548,20 @@ BEGIN
       AND PD.Status = '0'
       AND (TD.TaskDetailKey IS NULL OR (TD.TaskDetailKey IS NOT NULL AND TD.Status IN ( '0', 'Q' )) ) -- '0' = Open, 'Q' = Queued
 
+   -- Search other pick tasks base on RPF task
+   IF EXISTS (SELECT 1 FROM @tOtherTaskDetails WHERE TaskType IN ('RPF', 'RP1'))
+   BEGIN
+      INSERT INTO @tOtherTaskDetails (TaskDetailKey, TaskType, PickDetailKey, PickMethod, Qty)
+      SELECT 
+         TD.TaskDetailKey, TD.TaskType, PD.PickDetailKey, TD.PickMethod, PD.Qty
+      FROM dbo.PickDetail PD WITH (NOLOCK)
+      INNER JOIN dbo.TaskDetail TD WITH(NOLOCK) ON PD.StorerKey = TD.StorerKey AND TD.TaskDetailKey = PD.TaskDetailKey
+      INNER JOIN @tOtherTaskDetails TTD ON TD.RefTaskKey IS NOT NULL AND TTD.TaskDetailKey = TD.RefTaskKey
+      WHERE PD.StorerKey = @cStorerkey
+         AND PD.Status IN ( '0', 'H' )
+         AND TTD.TaskType IN ('RPF', 'RP1')
+   END
+
    SELECT @nNewIDAllocatedForRPF = COUNT(1)
    FROM @tOtherTaskDetails
    WHERE TaskType = 'RPF'
@@ -746,7 +760,7 @@ BEGIN
             UPDATE dbo.PickDetail SET
                Qty = @nQTY,
                LOT = @cTaskLOT, 
-               ID = @cTaskID, 
+               ID = CASE WHEN ID <> '' THEN @cTaskID ELSE ID END, 
                EditDate = GETDATE(), 
                EditWho = SUSER_SNAME()
             WHERE PickDetailKey = @cLoopPickDetailKey
@@ -761,7 +775,7 @@ BEGIN
             UPDATE dbo.TaskDetail WITH(ROWLOCK)
             SET
                LOT = @cTaskLOT,
-               FromID = @cTaskID,
+               FromID = CASE WHEN FromID <> '' THEN @cTaskID ELSE FromID END,
                ToID = CASE WHEN ToID <> '' THEN @cTaskID ELSE ToID END, 
                EditDate = GETDATE(), 
                EditWho = SUSER_SNAME(),
