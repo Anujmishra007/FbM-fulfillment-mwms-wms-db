@@ -12,6 +12,7 @@ GO
 /* Date       Rev     Author   Purposes                                 */  
 /* 2025-06-09 1.0.0   Dennis   FCR-3959                                 */
 /* 2025-06-10 1.1.0   Jackc    FCR-3959 Jump to 1756 equipment screen   */ 
+/* 2025-08-21 1.1.1   Dennis   FCR-3959 Fix Inventory Hold Bug          */ 
 /************************************************************************/  
 
 CREATE OR ALTER PROC [rdt].[rdt_1812ExtScn06] (  
@@ -448,99 +449,63 @@ BEGIN
                      @cLottable06 = ISNULL(@cLottable06,''),@cLottable07 = ISNULL(@cLottable07,''),@cLottable08 = ISNULL(@cLottable08,''),
                      @cLottable09 = ISNULL(@cLottable09,''),@cLottable10 = ISNULL(@cLottable10,''),@cLottable11 = ISNULL(@cLottable11,''),
                      @cLottable12 = ISNULL(@cLottable12,'')
+                  
+                  EXEC nspInventoryHoldWrapper  
+                     '',               -- lot  
+                     '',               -- loc  
+                     @cSuggID,               -- id  
+                     @cStorerKey,     -- storerkey  
+                     @cSuggSKU,           -- sku  
+                     '',               -- lottable01  
+                     '',               -- lottable01  
+                     '',               -- lottable01  
+                     NULL,             -- lottable01  
+                     NULL,             -- lottable01  
+                     '',  
+                     '',  
+                     '',  
+                     '',  
+                     '',  
+                     '',  
+                     '',  
+                     NULL,   
+                     NULL,   
+                     NULL,   
+                     @cReasonCode,      -- status  
+                     @cHoldID,              -- hold  
+                     @b_success OUTPUT,  
+                     @nErrNo OUTPUT,  
+                     @cErrMsg OUTPUT,  
+                     ''   -- remark  
+                  
+                  EXEC nspInventoryHoldWrapper  
+                     '',               -- lot  
+                     @cSuggFromLOC,    -- loc  
+                     '',               -- id  
+                     @cStorerKey,     -- storerkey  
+                     @cSuggSKU,           -- sku  
+                     '',               -- lottable01  
+                     '',               -- lottable01  
+                     '',               -- lottable01  
+                     NULL,             -- lottable01  
+                     NULL,             -- lottable01  
+                     '',  
+                     '',  
+                     '',  
+                     '',  
+                     '',  
+                     '',  
+                     '',  
+                     NULL,   
+                     NULL,   
+                     NULL,   
+                     @cReasonCode,      -- status  
+                     @cHoldLoc,              -- hold  
+                     @b_success OUTPUT,  
+                     @nErrNo OUTPUT,  
+                     @cErrMsg OUTPUT,  
+                     ''   -- remark  
 
-                  IF NOT EXISTS(SELECT 1 FROM dbo.InventoryHold WITH (NOLOCK) WHERE ID = @cSuggID)
-                  BEGIN
-                     EXECUTE nspg_getkey
-                     'InventoryHoldKey'
-                     , 10
-                     , @c_InventoryHoldKey OUTPUT
-                     , @b_success OUTPUT
-                     , @nErrNo OUTPUT
-                     , @cErrMsg OUTPUT
-                     --Hold ID is generated here
-                     INSERT INTO InventoryHold
-                     (
-                        InventoryHoldKey, Hold, STATUS, StorerKey, SKU,
-                        Lottable01, Lottable02, Lottable03, Lottable04,    
-                        Lottable05, 
-                        Lottable06, Lottable07, Lottable08, Lottable09, Lottable10,
-                        Lottable11, Lottable12, Lottable13, Lottable14, Lottable15,
-                        DateOn,    
-                        WhoOn,    
-                        Remark,ID
-                     ) 
-                     VALUES
-                     (
-                        @c_InventoryHoldKey, @cHoldID, @cReasonCode, @cStorerKey, @cSuggSKU,
-                        @cLottable01, @cLottable02, @cLottable03, @dLottable04,    
-                        @dLottable05,     
-                        @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
-                        @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,
-                        GETDATE(), 
-                        @cUserName,      
-                        '',@cSuggID
-                     )
-                  END
-                  ELSE
-                  BEGIN
-                     UPDATE dbo.InventoryHold 
-                     SET Hold = @cHoldID,STATUS = @cReasonCode, StorerKey = @cStorerKey, SKU = @cSuggSKU,
-                        Lottable01 = @cLottable01, Lottable02 = @cLottable02, Lottable03 = @cLottable03,
-                        Lottable04 = @dLottable04, Lottable05 = @dLottable05,
-                        Lottable06 = @cLottable06, Lottable07 = @cLottable07, Lottable08 = @cLottable08,
-                        Lottable09 = @cLottable09, Lottable10 = @cLottable10,
-                        Lottable11 = @cLottable11, Lottable12 = @cLottable12, 
-                        Lottable13 = @dLottable13, Lottable14 = @dLottable14, Lottable15 = @dLottable15,
-                        DateOn = GETDATE(), WhoOn = @cUserName
-                     WHERE ID = @cSuggID
-                  END
-                  IF NOT EXISTS( SELECT 1 FROM dbo.InventoryHold WITH (NOLOCK) WHERE LOC = @cSuggFromLOC)
-                  BEGIN
-                     EXECUTE nspg_getkey
-                     'InventoryHoldKey'
-                     , 10
-                     , @c_InventoryHoldKey OUTPUT
-                     , @b_success OUTPUT
-                     , @nErrNo OUTPUT
-                     , @cErrMsg OUTPUT
-                     --Hold Loc is generated here
-                     INSERT INTO InventoryHold
-                     (
-                        InventoryHoldKey, Hold, STATUS, StorerKey, SKU,
-                        Lottable01, Lottable02, Lottable03, Lottable04,    
-                        Lottable05, 
-                        Lottable06, Lottable07, Lottable08, Lottable09, Lottable10,
-                        Lottable11, Lottable12, Lottable13, Lottable14, Lottable15,
-                        DateOn,    
-                        WhoOn,    
-                        Remark,LOC
-                     ) 
-                     VALUES
-                     (
-                        @c_InventoryHoldKey, @cHoldLoc, @cReasonCode, @cStorerKey, @cSuggSKU,
-                        @cLottable01, @cLottable02, @cLottable03, @dLottable04,    
-                        @dLottable05,     
-                        @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
-                        @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,
-                        GETDATE(), 
-                        @cUserName,      
-                        '',@cSuggFromLOC -- Hold From LOC
-                     )
-                  END
-                  ELSE
-                  BEGIN
-                     UPDATE dbo.InventoryHold 
-                     SET Hold = @cHoldLoc,STATUS = @cReasonCode, StorerKey = @cStorerKey, SKU = @cSuggSKU,
-                        Lottable01 = @cLottable01, Lottable02 = @cLottable02, Lottable03 = @cLottable03,
-                        Lottable04 = @dLottable04, Lottable05 = @dLottable05,
-                        Lottable06 = @cLottable06, Lottable07 = @cLottable07, Lottable08 = @cLottable08,
-                        Lottable09 = @cLottable09, Lottable10 = @cLottable10,
-                        Lottable11 = @cLottable11, Lottable12 = @cLottable12, 
-                        Lottable13 = @dLottable13, Lottable14 = @dLottable14, Lottable15 = @dLottable15,
-                        DateOn = GETDATE(), WhoOn = @cUserName
-                     WHERE LOC = @cSuggFromLOC
-                  END
                   -- Go to next task/exit TM screen
                   IF @cPickMethod = 'FP'
                   BEGIN
