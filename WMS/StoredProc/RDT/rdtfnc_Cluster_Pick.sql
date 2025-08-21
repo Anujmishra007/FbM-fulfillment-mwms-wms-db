@@ -191,6 +191,7 @@ GO
 /*                               multiple orders in one drop id error      */
 /* 01-Jan-2025  2.8.0 James        FCR-2435 Merge 2.5, 2.6 from V0         */
 /* 12-May-2025  2.9.0 Dennis    FCR-3774 Add Extended Scn                  */
+/* 21-Aug-2025  0.0   Jackc     !!!Cutover!!! Use V0 repo for work         */
 /***************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_Cluster_Pick](

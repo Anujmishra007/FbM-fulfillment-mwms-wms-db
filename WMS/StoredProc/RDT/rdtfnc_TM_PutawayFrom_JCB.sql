@@ -15,7 +15,8 @@ GO
 /* 2025-04-21  1.0.0  NLT013   FCR-3954. Created                               */
 /* 2025-06-27  1.0.1  Dennis   FCR-3954. Update Dispatch strategy              */
 /* 2025-07-16  1.0.2  Jackc    FCR-3954. Fix overwriteToLoc is cleared issue.  */  
-/* 2025-07-23  1.0.3  Dennis   FCR-3954. Fix Recalculation issue.              */  
+/* 2025-07-23  1.0.3  Dennis   FCR-3954. Fix Recalculation issue.              */
+/* 2025-08-21  0.0.0  Jackc    !!!Cutover. User V0 repo for work!!!            */  
 /*******************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_PutawayFrom_JCB](
    @nMobile    INT,
