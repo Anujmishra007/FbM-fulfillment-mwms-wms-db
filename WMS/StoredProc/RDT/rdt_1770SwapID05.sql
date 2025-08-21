@@ -3,19 +3,19 @@ GO
 SET ANSI_NULLS OFF
 GO
 
-/**************************************************************************/
-/* Store procedure: rdt_1770SwapID05                                      */
-/* Copyright      : Maersk WMS                                            */
-/* Customer       : BRF BRASIL FOODS SA                                   */
-/*                                                                        */
-/* Purpose: Swap ID base on same LOC, SKU, QTY, Lottables                 */
-/*                                                                        */
-/* Date        Rev    Author      Purposes                                */
-/* 2025-04-08  1.0    NLT03       FCR-3836 Create                         */
-/* 2025-04-15  1.0.1  NLT03       FCR-3836 Remove useless validation      */
-/* 2025-04-15  1.0.2  NLT03       FCR-3836 Handle VNAOUT RPF task         */
+/****************************************************************************/
+/* Store procedure: rdt_1770SwapID05                                        */
+/* Copyright      : Maersk WMS                                              */
+/* Customer       : BRF BRASIL FOODS SA                                     */
+/*                                                                          */
+/* Purpose: Swap ID base on same LOC, SKU, QTY, Lottables                   */
+/*                                                                          */
+/* Date        Rev    Author      Purposes                                  */
+/* 2025-04-08  1.0    NLT03       FCR-3836 Create                           */
+/* 2025-04-15  1.0.1  NLT03       FCR-3836 Remove useless validation        */
+/* 2025-04-15  1.0.2  NLT03       FCR-3836 Handle VNAOUT RPF task           */
 /* 2025-08-15  1.1.0  NLT03       UWP-39385 Allocated Qty should be swapped */
-/**************************************************************************/
+/****************************************************************************/
 
 CREATE OR ALTER PROCEDURE rdt.rdt_1770SwapID05
    @nMobile           INT,
@@ -865,6 +865,7 @@ BEGIN
             ,@cFromLOT = @cTaskLOT
             ,@cTaskDetailKey = @cOtherTaskDetailKey
             ,@cMoveQTYAlloc = '1' -- Just to bypass QTYReplen
+            ,@cMoveQTYReplen = '1'
       END TRY
       BEGIN CATCH
          SET @nErrNo = 236037
