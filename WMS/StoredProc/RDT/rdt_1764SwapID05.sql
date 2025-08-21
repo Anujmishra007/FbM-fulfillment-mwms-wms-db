@@ -1,16 +1,17 @@
 
-/**************************************************************************/
-/* Store procedure: rdt_1764SwapID05                                      */
-/* Copyright      : Maersk WMS                                            */
-/* Customer       : BRF BRASIL FOODS SA                                   */
-/*                                                                        */
-/* Purpose: Swap ID base on same LOC, SKU, QTY, Lottables                 */
-/*                                                                        */
-/* Date        Rev      Author      Purposes                              */
-/* 2025-04-08  1.0.0    Jackc       FCR-3916 Create                       */
-/* 2025-08-06  1.0.1    NickT       UWP-38905 Reallocate pick task        */
-/* 2025-08-13  1.0.2    Jackc       UWP-38905 Improve pkd retriving logic */
-/**************************************************************************/
+/******************************************************************************/
+/* Store procedure: rdt_1764SwapID05                                          */
+/* Copyright      : Maersk WMS                                                */
+/* Customer       : BRF BRASIL FOODS SA                                       */
+/*                                                                            */
+/* Purpose: Swap ID base on same LOC, SKU, QTY, Lottables                     */
+/*                                                                            */
+/* Date        Rev      Author      Purposes                                  */
+/* 2025-04-08  1.0.0    Jackc       FCR-3916 Create                           */
+/* 2025-08-06  1.0.1    NickT       UWP-38905 Reallocate pick task            */
+/* 2025-08-13  1.0.2    Jackc       UWP-38905 Improve pkd retriving logic,    */
+/*                                  2.Bypass QtyAllocated when lock rfputaway */
+/******************************************************************************/
 
 CREATE OR ALTER PROCEDURE rdt.rdt_1764SwapID05
    @nMobile           INT,
@@ -982,19 +983,18 @@ BEGIN
    IF @cTaskType <> 'FPK'
    BEGIN
       IF @nDebugFlag = 1
-         SELECT '1.1.2 Handle Task ID sub tasks (picking task from pickface)'
-
+         SELECT '1.1.2 Handle Task ID FCP tasks (picking task from pickface)' --V1.0.2
       BEGIN TRY
          UPDATE TaskDetail WITH (ROWLOCK) SET
             LOT = @cNewLOT, 
-            FromID = @cNewID, 
+            FromID = CASE WHEN FromID <> '' THEN @cNewID ELSE FromID END, 
             ToID = CASE WHEN ToID <> '' THEN @cNewID ELSE ToID END, 
-            FinalID = CASE WHEN FinalID <> '' THEN @cNewID ELSE FinalID END, 
             EditDate = GETDATE(), 
             EditWho = SUSER_SNAME(), 
             TrafficCop = NULL
-         WHERE FromID = @cTaskID
-            AND TaskDetailKey <> @cTaskDetailKey
+         WHERE StorerKey = @cStorerKey
+            AND TaskType = 'FCP'
+            AND RefTaskKey = @cTaskDetailKey
             AND Status = 'H'
       END TRY
       BEGIN CATCH
@@ -1015,8 +1015,9 @@ BEGIN
 
       UPDATE TaskDetail SET
          LOT = @cTaskLOT, 
-         FromID = @cTaskID, 
-         ToID = CASE WHEN ToID <> '' THEN @cTaskID ELSE ToID END, 
+         FromID = @cTaskID,
+         ToID = CASE WHEN ToID <> '' THEN @cTaskID ELSE ToID END,
+         FinalID = CASE WHEN FinalID <> '' THEN @cTaskID ELSE FinalID END, 
          EditDate = GETDATE(), 
          EditWho = SUSER_SNAME(), 
          TrafficCop = NULL
@@ -1037,13 +1038,14 @@ BEGIN
          BEGIN TRY
             UPDATE TaskDetail WITH (ROWLOCK) SET
                LOT = @cTaskLOT, 
-               FromID = @cTaskID, 
+               FromID = CASE WHEN FromID <> '' THEN @cTaskID ELSE FromID END, 
                ToID = CASE WHEN ToID <> '' THEN @cTaskID ELSE ToID END, 
                EditDate = GETDATE(), 
                EditWho = SUSER_SNAME(), 
                TrafficCop = NULL
-            WHERE FromID = @cTaskID
-               AND TaskDetailKey <> @cOtherTaskDetailKey
+            WHERE StorerKey = @cStorerKey
+               AND TaskType = 'FCP'
+               AND RefTaskKey = @cOtherTaskDetailKey
                AND Status = 'H'
          END TRY
          BEGIN CATCH
@@ -1235,6 +1237,7 @@ BEGIN
             ,@cErrMsg OUTPUT
             ,@cFromLOT = @cNewLOT
             ,@cTaskDetailKey = @cTaskDetailKey
+            ,@cMoveQtyAlloc = '1' -- V1.0.2 RPF task LLI may have qtyallocted (FCP tasks), bypass QtyAllocted
             ,@cMoveQTYReplen = '1'
       ELSE --In the other cases, pass MoveQtyAlloc
          EXEC rdt.rdt_Putaway_PendingMoveIn '', 'LOCK' 
@@ -1274,6 +1277,7 @@ BEGIN
          ,@cErrMsg OUTPUT
          ,@cFromLOT = @cTaskLOT
          ,@cTaskDetailKey = @cOtherTaskDetailKey
+         ,@cMoveQtyAlloc = '1' -- V1.0.2 RPF task LLI may have qtyallocted (FCP tasks), bypass QtyAllocted
          ,@cMoveQTYReplen = '1' 
       ELSE --In the other cases, pass MoveQtyAlloc
          EXEC rdt.rdt_Putaway_PendingMoveIn '', 'LOCK' 
