@@ -60,6 +60,11 @@ DECLARE @tPackDetail TABLE
    PRIMARY KEY CLUSTERED(PickSlipNo, CartonNo, LabelNo, LabelLine)
 )
 
+DECLARE @tPackHeader TABLE
+(
+   PickSlipNo  NVARCHAR( 10) PRIMARY KEY
+)
+
 IF @nFunc = 869
 BEGIN
    IF @nStep = 3 
@@ -146,10 +151,18 @@ BEGIN
 
             --All pickdetail status = 0
             --No packdetail exists
-            IF NOT EXISTS (SELECT 1 FROM dbo.PICKDETAIL(NOLOCK) WHERE OrderKey = @cOrderKey AND STATUS <> '0')
+            IF NOT EXISTS (SELECT 1 FROM dbo.PICKDETAIL(NOLOCK) WHERE StorerKey = @cStorerKey AND OrderKey = @cOrderKey AND STATUS <> '0')
             AND NOT EXISTS (SELECT 1 FROM dbo.PACKDETAIL PD(NOLOCK) WHERE PickSLipNo = @cPickSlipNo AND PD.StorerKey = @cStorerKey)
             BEGIN
-               DELETE FROM PackHeader WHERE OrderKey = @cOrderKey AND StorerKey = @cStorerKey
+               INSERT INTO @tPackHeader (PickSlipNo)
+               SELECT PickSlipNo
+               FROM dbo.PackHeader WITH(NOLOCK)
+               WHERE OrderKey = @cOrderKey 
+                  AND StorerKey = @cStorerKey
+
+               DELETE PH
+               FROM dbo.PackHeader PH
+               INNER JOIN @tPackHeader TPH ON PH.PickSlipNo = TPH.PickSlipNo
             END
          END
 
