@@ -51,15 +51,19 @@ BEGIN
          IF @nInputKey = 1 -- ENTER
          BEGIN
 
-            --FROMID moved
-            IF EXISTS(
+            --FROMID entire moved to TOID
+            IF NOT EXISTS(
                SELECT 1 FROM LOTxLOCxID (NOLOCK)
-                  WHERE QTY = 0
+                  WHERE QTY > 0
                     AND ID = @cFromID
                     AND StorerKey = @cStorerKey
-                  --GROUP BY ID
-                  --HAVING COUNT(DISTINCT SKU) > 1
             )
+               AND EXISTS(
+                  SELECT 1 FROM LOTxLOCxID (NOLOCK)
+                  WHERE QTY > 0
+                    AND ID = @cToID
+                    AND StorerKey = @cStorerKey
+               )
             BEGIN
                DECLARE @LLI_SKU TABLE (
                   RowNum INT IDENTITY(1,1),
@@ -69,14 +73,14 @@ BEGIN
                   Sku VARCHAR(30)
                );
 
+               --move all SKU in this ID
                INSERT INTO @LLI_SKU (LOT, Qty, Sku)
                SELECT
                   LOT, Qty, Sku
-               FROM LOTxLOCxID WITH (NOLOCK)
-               WHERE QTY = 0
+               FROM SerialNo WITH (NOLOCK)
+               WHERE QTY > 0
                  AND ID = @cFromID
                  AND StorerKey = @cStorerKey
-
 
                DECLARE @i INT = 1;
                DECLARE @max INT;
@@ -89,8 +93,8 @@ BEGIN
                BEGIN
 
                   SELECT
-                     @cLOT    = LOT,
-                     @cLLI_SKU = Sku
+                     @cLLI_SKU = Sku,
+                     @cLOT = LOT
                   FROM @LLI_SKU
                   WHERE RowNum = @i;
 
@@ -99,12 +103,8 @@ BEGIN
                      SELECT 1 FROM dbo.SKU WITH (NOLOCK)
                      WHERE SKU = @cLLI_SKU
                        AND StorerKey = @cStorerKey
-                       AND SerialNoCapture IN ('1','3')) -- SN Capture
-                  AND EXISTS(
-                     SELECT 1 FROM dbo.SerialNo WITH (NOLOCK)
-                           WHERE Lot = @cLOT
-                              AND SKU = @cLLI_SKU
-                              AND ID = @cFromID) -- fromID not moved
+                       AND SerialNoCapture IN ('1','3')
+                     ) -- SN Capture
                   BEGIN
 
                      DECLARE @nSuccess INT = 1
