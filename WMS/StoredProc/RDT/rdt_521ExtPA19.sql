@@ -14,6 +14,7 @@ GO
 /* 11-Oct-2024  1.1.0  LJQ006   Use LocLevel and CubicCapacity          */
 /*                              instead of LocationGroup                */
 /* 30-Oct-2024  1.1.1  LJQ006   run strategy key in codelkup instead    */
+/* 21-Aug-2025	 1.2  ALT028   Bugs fixed and missing nolock 				*/
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_521ExtPA19] (
@@ -58,7 +59,7 @@ BEGIN
    -- Get putaway strategy  
    SET @cPAStrategyKey = ''  
    SELECT @cPAStrategyKey = Short   
-   FROM dbo.CodeLKUP WITH (NOLOCK)  
+   FROM CodeLKUP WITH (NOLOCK)  
    WHERE ListName = 'RDTExtPA'  
       AND StorerKey = @cStorerKey  
       AND Code2 = @cFacility  
@@ -85,7 +86,7 @@ BEGIN
       SELECT TOP 1
          @cSKU = ucc.SKU
       FROM dbo.UCC ucc WITH(NOLOCK)
-      INNER JOIN dbo.SKU sku ON sku.SKU = ucc.SKU
+      INNER JOIN dbo.SKU sku WITH(NOLOCK) ON sku.SKU = ucc.SKU   --ALT028 add nolock
       WHERE ucc.UCCNo = @cUCC
        AND sku.StorerKey = @cStorerKey
        AND ucc.StorerKey = @cStorerKey
@@ -110,7 +111,7 @@ BEGIN
             MAX(loc.LocLevel) AS LocLevel,
             MAX(loc.LocBay) AS LocBay,
             MAX(loc.LocAisle) AS LocAisle
-         FROM dbo.Loc loc 
+         FROM dbo.Loc loc WITH(NOLOCK) --ALT028 add nolock
          INNER JOIN dbo.LOTxLOCxID lli WITH(NOLOCK) ON loc.Loc = lli.Loc 
          INNER JOIN dbo.Sku sku WITH(NOLOCK) ON sku.Sku = lli.Sku
             WHERE loc.Facility = @cFacility
@@ -123,13 +124,13 @@ BEGIN
             AND loc.CommingleSku = 1
          GROUP BY loc.Loc
       )
-      SELECT TOP 1
-         ls.loc
+      SELECT TOP 1 
+			@cSuggestedLOC = ls.loc  --ALT028 
       FROM LocSummary ls
          WHERE ls.OccupiedCube + @nQty * @nSkuCube < ls.Cube
-         AND ls.OccupiedCube > 0
+        -- AND ls.OccupiedCube > 0
          AND ls.Loc IN (
-            SELECT Loc FROM dbo.LOTxLOCxID WITH (NOLOCK) WHERE StorerKey = @cStorerKey
+            SELECT Loc FROM LOTxLOCxID WITH (NOLOCK) WHERE StorerKey = @cStorerKey
                AND sku = @cSKU
                AND Qty-QtyPicked > 0
                -- OR lli.PendingMoveIN > 0
@@ -206,9 +207,9 @@ BEGIN
                MAX(loc.LocLevel) AS LocLevel,
                MAX(loc.LocBay) AS LocBay,
                MAX(loc.LocAisle) AS LocAisle
-            FROM dbo.Loc loc 
-            INNER JOIN dbo.LOTxLOCxID lli ON loc.Loc = lli.Loc 
-            INNER JOIN dbo.Sku sku ON sku.Sku = lli.Sku
+        FROM dbo.Loc loc WITH(NOLOCK)  --ALT028 add nolock
+            INNER JOIN dbo.LOTxLOCxID lli WITH(NOLOCK) ON loc.Loc = lli.Loc  --ALT028 add nolock
+            INNER JOIN dbo.Sku sku WITH(NOLOCK) ON sku.Sku = lli.Sku			--ALT028 add nolock
                WHERE loc.Facility = @cFacility
                AND lli.StorerKey = @cStorerKey
                AND sku.Style = @cStyle
@@ -220,13 +221,13 @@ BEGIN
             GROUP BY loc.Loc
          )  
          SELECT TOP 1
-            ls.loc
+            @cSuggestedLOC = ls.loc --ALT028
          FROM LocSummary ls
             WHERE ls.OccupiedCube + @nQty * @nSkuCube < ls.Cube
-            AND ls.OccupiedCube > 0
+            --AND ls.OccupiedCube > 0
             AND ls.Loc IN (
-               SELECT Loc FROM dbo.LOTxLOCxID WITH (NOLOCK) WHERE StorerKey = @cStorerKey
-                  AND sku = @cSKU
+               SELECT Loc FROM LOTxLOCxID WITH (NOLOCK) WHERE StorerKey = @cStorerKey
+                  --AND sku = @cSKU
                   AND Qty-QtyPicked > 0
                   -- OR lli.PendingMoveIN > 0
                )
@@ -300,7 +301,7 @@ BEGIN
 
       IF @cSuggestedLOC = ''
       BEGIN
-         -- Suggest LOC
+  -- Suggest LOC
          EXEC @nErrNo = [dbo].[nspRDTPASTD]    
               @c_userid        = 'RDT'          -- NVARCHAR(10)    
             , @c_storerkey     = @cStorerkey    -- NVARCHAR(15)    
@@ -381,3 +382,4 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS ON
 GO
+
