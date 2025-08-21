@@ -52,6 +52,7 @@ GO
 /*                            does not work in some scenarios           */
 /* 2024-11-12   3.2  YYS027   FCR-1122 Merged from 3.0(v2,NLT)          */
 /*                                     and 2.8(V0,JH01)                 */
+/* 2025-08-21   0.0  Jack     !!!Cutover. Use V0 repo for work!!!       */
 /************************************************************************/  
   
 CREATE OR ALTER PROC [RDT].[rdtfnc_TrackNo_SortToPallet] (  
