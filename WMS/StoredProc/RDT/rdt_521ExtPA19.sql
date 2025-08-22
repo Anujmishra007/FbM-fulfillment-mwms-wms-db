@@ -130,7 +130,7 @@ BEGIN
          WHERE ls.OccupiedCube + @nQty * @nSkuCube < ls.Cube
         -- AND ls.OccupiedCube > 0
          AND ls.Loc IN (
-            SELECT Loc FROM LOTxLOCxID WITH (NOLOCK) WHERE StorerKey = @cStorerKey
+            SELECT Loc FROM dbo.LOTxLOCxID WITH (NOLOCK) WHERE StorerKey = @cStorerKey
                AND sku = @cSKU
                AND Qty-QtyPicked > 0
                -- OR lli.PendingMoveIN > 0
@@ -226,8 +226,8 @@ BEGIN
             WHERE ls.OccupiedCube + @nQty * @nSkuCube < ls.Cube
             --AND ls.OccupiedCube > 0
             AND ls.Loc IN (
-               SELECT Loc FROM LOTxLOCxID WITH (NOLOCK) WHERE StorerKey = @cStorerKey
-                  --AND sku = @cSKU
+               SELECT Loc FROM dbo.LOTxLOCxID WITH (NOLOCK) WHERE StorerKey = @cStorerKey
+                  --AND sku = @cSKU  --ALT028
                   AND Qty-QtyPicked > 0
                   -- OR lli.PendingMoveIN > 0
                )
@@ -382,5 +382,6 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS ON
 GO
+
 
 
