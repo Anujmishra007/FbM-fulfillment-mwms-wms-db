@@ -32,6 +32,8 @@ BEGIN
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
+   DECLARE @dDEbug NVARCHAR(10) = '0'
+
    DECLARE @cLOT     NVARCHAR( 10)
    DECLARE @cItrnKey NVARCHAR(10)
    DECLARE @b_Success   INT
@@ -58,12 +60,12 @@ BEGIN
                     AND ID = @cFromID
                     AND StorerKey = @cStorerKey
             )
-               AND EXISTS(
-                  SELECT 1 FROM LOTxLOCxID (NOLOCK)
-                  WHERE QTY > 0
-                    AND ID = @cToID
-                    AND StorerKey = @cStorerKey
-               )
+            AND EXISTS(
+               SELECT 1 FROM LOTxLOCxID (NOLOCK)
+               WHERE QTY > 0
+                 AND ID = @cToID
+                 AND StorerKey = @cStorerKey
+            )
             BEGIN
                DECLARE @LLI_SKU TABLE (
                   RowNum INT IDENTITY(1,1),
@@ -82,6 +84,7 @@ BEGIN
                  AND ID = @cFromID
                  AND StorerKey = @cStorerKey
 
+
                DECLARE @i INT = 1;
                DECLARE @max INT;
                DECLARE @cLLI_SKU  NVARCHAR( 20);
@@ -97,7 +100,6 @@ BEGIN
                      @cLOT = LOT
                   FROM @LLI_SKU
                   WHERE RowNum = @i;
-
 
                   IF EXISTS(
                      SELECT 1 FROM dbo.SKU WITH (NOLOCK)
@@ -120,6 +122,12 @@ BEGIN
                         SET @nErrNo = 221309
                         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --nspg_getkey
                         GOTO RBack
+                     END
+
+                     IF @dDEbug = '1'
+                      BEGIN
+                        INSERT INTO TraceInfo (TraceName, TimeIn, Step1, Step2, Step3, step4)
+                        VALUES( 'rdt_1813ExtUpd02', GETDATE(), @cLLI_SKU,@cLOT, @cFromID, @cToID)
                      END
 
                      EXEC dbo.msp_SerialNoMoveCheck
