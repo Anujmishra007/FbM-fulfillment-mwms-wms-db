@@ -59,7 +59,7 @@ BEGIN
    -- Get putaway strategy  
    SET @cPAStrategyKey = ''  
    SELECT @cPAStrategyKey = Short   
-   FROM CodeLKUP WITH (NOLOCK)  
+   FROM dbo.CodeLKUP WITH (NOLOCK)  
    WHERE ListName = 'RDTExtPA'  
       AND StorerKey = @cStorerKey  
       AND Code2 = @cFacility  
@@ -382,4 +382,5 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS ON
 GO
+
 
