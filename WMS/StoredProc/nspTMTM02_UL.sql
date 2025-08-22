@@ -16,6 +16,7 @@ GO
 /* 2025-07-04   1.0.1   Jackc      FCR-5519 1. Add tasktype output         */
 /*                                 2. Change schema                        */
 /* 2025-07-04   1.0.2   Jackc      FCR-5519 Add task check after get one   */
+/* 2025-08-22   1.0.3   Jackc      FCR-5519 Fix begin tran issue           */
 /***************************************************************************/
 CREATE OR ALTER PROC [RDT].[nspTMTM02_UL]
    @c_userid                  NVARCHAR(18),
@@ -405,8 +406,11 @@ BEGIN
    -- Handling transaction
    DECLARE @nTranCount INT
    SET @nTranCount = @@TRANCOUNT
-   BEGIN TRAN  -- Begin our own transaction
-   SAVE TRAN nspTMTM02_UL -- For rollback or commit only our own transaction
+
+   IF @nTranCount = 0 --V1.0.3
+      BEGIN TRAN  -- Begin our own transaction
+   ELSE
+      SAVE TRAN nspTMTM02_UL -- For rollback or commit only our own transaction
 
    -- Get transit LOC
    IF @c_TransitLOC = ''
@@ -489,7 +493,10 @@ BEGIN
    --V1.0.2 end
 
    RollbackTran:
-      ROLLBACK TRAN nspTMTM02_UL
+      IF @nTranCount > 0
+         ROLLBACK TRAN nspTMTM02_UL
+      ELSE
+         ROLLBACK TRAN
       SET @b_Success = 0
       GOTO Quit
 
