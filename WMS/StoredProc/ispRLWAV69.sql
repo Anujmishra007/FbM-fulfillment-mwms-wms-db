@@ -37,7 +37,7 @@ GO
 /*                            DPP for FCR-6708 & FCR-2902                */
 /* 22-Aug-2025                FCR-6708 Bug Fix                           */
 /*************************************************************************/
-CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]        
+CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]       
     @c_Wavekey      NVARCHAR(10)    
    ,@b_Success      INT            OUTPUT    
    ,@n_err          INT            OUTPUT    
