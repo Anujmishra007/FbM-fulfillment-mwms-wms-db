@@ -35,7 +35,7 @@ GO
 /*                            FCR-2902 Bug Fix                           */
 /* 12-Aug-2025  Wan06  1.8    UWP-39035 - Matching RPF Section to find   */
 /*                            DPP for FCR-6708 & FCR-2902                */
-/* 15-Aug-2025                FCR-6708 Bug Fix                           */
+/* 22-Aug-2025                FCR-6708 Bug Fix                           */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]        
     @c_Wavekey      NVARCHAR(10)    
@@ -608,7 +608,7 @@ CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]
                        +               ' AND lli.Qty - lli.QtyPicked + lli.PendingMoveIn > 0'      --2025-07-29
                        +               @c_SQLCond 
                        +               ' GROUP BY P.Pallet'
-                       +               ' HAVING P.Pallet * l.MaxPallet <' 
+                       +               ' HAVING P.Pallet * l.MaxPallet >='                         --2025-08-22
                        +               ' SUM(lli.Qty - lli.QtyPicked + lli.PendingMoveIn) + @n_Qty'
                        +               ' ) inv'
                        + ' WHERE l.Facility  = @c_Facility'
