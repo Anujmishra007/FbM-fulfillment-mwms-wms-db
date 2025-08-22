@@ -128,7 +128,7 @@ BEGIN
 			@cSuggestedLOC = ls.loc  --ALT028 
       FROM LocSummary ls
          WHERE ls.OccupiedCube + @nQty * @nSkuCube < ls.Cube
-        -- AND ls.OccupiedCube > 0
+        -- AND ls.OccupiedCube > 0   --ALT028
          AND ls.Loc IN (
             SELECT Loc FROM dbo.LOTxLOCxID WITH (NOLOCK) WHERE StorerKey = @cStorerKey
                AND sku = @cSKU
@@ -382,6 +382,7 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS ON
 GO
+
 
 
 
