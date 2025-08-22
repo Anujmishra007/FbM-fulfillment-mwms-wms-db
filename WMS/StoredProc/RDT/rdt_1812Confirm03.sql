@@ -125,8 +125,8 @@ BEGIN
          SET @nNewTaskQTY = @nSystemQTY - @nQTY
       END
 
-IF @nDebug = 1
-   SELECT @nOrgTaskQty '@nOrgTaskQty', @nNewTaskQty '@nNewTaskQty', @nShortQTY '@nShortQTY'
+      IF @nDebug = 1
+         SELECT @nOrgTaskQty '@nOrgTaskQty', @nNewTaskQty '@nNewTaskQty', @nShortQTY '@nShortQTY'
 
       IF @nNewTaskQTY > 0
       BEGIN
@@ -298,8 +298,8 @@ IF @nDebug = 1
          FETCH NEXT FROM @curPD INTO @cPickDetailKey, @nQTY_PD
       END
 
-IF @nDebug = 1
-   SELECT @nOrgTaskQty '@nOrgTaskQty', @nNewTaskQty '@nNewTaskQty', @nShortQTY '@nShortQTY'
+      IF @nDebug = 1
+         SELECT @nOrgTaskQty '@nOrgTaskQty', @nNewTaskQty '@nNewTaskQty', @nShortQTY '@nShortQTY'
 
       -- Must fully offset
       IF @nOrgTaskQty <> 0 OR @nNewTaskQty <> 0 OR @nShortQTY <> 0
@@ -344,6 +344,8 @@ IF @nDebug = 1
    DECLARE @cUCC NVARCHAR(1)
    IF EXISTS( SELECT TOP 1 1 FROM rdt.rdtFCPLog WITH (NOLOCK) WHERE TaskDetailKey = @cTaskDetailKey)
       SET @cUCC = 'Y'
+
+   SELECT @cDropID = CASE WHEN @cPickMethod = 'FP' THEN @cFromID ELSE @cDropID END
 
    -- Loop PickDetail
    SET @curPD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
