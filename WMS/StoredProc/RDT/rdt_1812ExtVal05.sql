@@ -300,6 +300,7 @@ BEGIN
                      SELECT @nIDCount = COUNT (DISTINCT ID) 
                      FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
                      WHERE LOC = @cToLOC
+                     AND QTY - QtyPicked > 0
 
                      IF @nDebugFlag = 1
                         SELECT 'Check PND capacity', @cToLOC AS ToLoc, @nIDCount AS IDCount, @nToLocMaxPallet AS ToLocMaxPallet

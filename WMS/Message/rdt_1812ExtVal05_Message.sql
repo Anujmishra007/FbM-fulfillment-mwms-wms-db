@@ -10,7 +10,7 @@ execute rdt.rdtAddMsg 239654, 10, '239654InvalidMarshalling',   'us_english', 18
 execute rdt.rdtAddMsg 239655, 10, '239655ScanDefaultLane',      'us_english', 1812, 0, '239655: All Marshalling lanes are hold. Scan the default one'
 execute rdt.rdtAddMsg 239656, 10, '2396556ScanDefaultKitLoc',   'us_english', 1812, 0, '239656: All kitting LOCs are hold. Scan the default one'
 execute rdt.rdtAddMsg 239657, 10, '2396557ScanDefaultKitLoc',   'us_english', 1812, 0, '239657: Scan an valid kitting loc not hold'
-execute rdt.rdtAddMsg 239658, 10, '2396558PNDIsFull',           'us_english', 1812, 0, '239658: PND location is full'
+execute rdt.rdtAddMsg 239658, 10, '239658PNDIsFull',           'us_english', 1812, 0, '239658: PND location is full'
 execute rdt.rdtAddMsg 239659, 10, '2396559CannotOverwrite',     'us_english', 1812, 0, '239659: CannotOverwrite'
 execute rdt.rdtAddMsg 239660, 10, '2396560SOIsFullyPicked',     'us_english', 1812, 0, '239660: SOIsFullyPicked'
 
