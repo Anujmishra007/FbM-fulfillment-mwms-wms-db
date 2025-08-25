@@ -693,7 +693,7 @@ BEGIN
             ,pd.CaseID
             ,pd.Loc
             ,pd.ID
-            --,KitLoc = CASE WHEN o.OtherReference > '' THEN o.OtherReference
+            --,KitLoc = CASE WHEN o.OtherReference > '' THEN o.OtherReference       --2025-08-25
             --               WHEN o.KitOrder = 1 THEN o.KitLoc
             --               ELSE o.MSLanes
             --               END
@@ -729,10 +729,10 @@ BEGIN
             ,  pd.CaseID
             ,  pd.Loc
             ,  pd.ID
-            ,  CASE WHEN o.OtherReference > '' THEN o.OtherReference
-                    WHEN o.KitOrder = 1 THEN o.KitLoc
-                    ELSE o.MSLanes
-                    END
+            --,  CASE WHEN o.OtherReference > '' THEN o.OtherReference              --2025-08-25
+            --        WHEN o.KitOrder = 1 THEN o.KitLoc
+            --        ELSE o.MSLanes
+            --        END
             ,  ISNULL(lpn.Qty,0)
             ,  la.Lottable11
             ,  l.LogicalLocation                                                    --v2.2
@@ -750,7 +750,7 @@ BEGIN
                                  ,  @c_FromID
                                  ,  @c_ToLoc
                                  ,  @c_ToID
-                                 --,  @c_Lanes
+                                 --,  @c_Lanes                                      --2025-08-25
                                  ,  @n_Qty
                                  ,  @n_IDQty                                 
                                  ,  @c_CaseID    
@@ -858,7 +858,7 @@ BEGIN
                                     ,  @c_FromID
                                     ,  @c_ToLoc
                                     ,  @c_ToID
-                                    --,  @c_Lanes
+                                    --,  @c_Lanes                                   --2025-08-25
                                     ,  @n_Qty
                                     ,  @n_IDQty  
                                     ,  @c_CaseID      
