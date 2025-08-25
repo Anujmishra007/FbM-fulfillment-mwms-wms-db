@@ -39,6 +39,7 @@ GO
 /* 2025-07-01                 Version 1.90 & 1.91 & fixes. Add v2.0      */
 /* 2025-07-02                 Version v2.1 & fixes                       */
 /* 2025-07-04                 Version v2.2 & fix                         */
+/* 2025-08-25                 fix                                        */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV02]
    @c_Wavekey      NVARCHAR(10)
@@ -692,10 +693,11 @@ BEGIN
             ,pd.CaseID
             ,pd.Loc
             ,pd.ID
-            ,KitLoc = CASE WHEN o.OtherReference > '' THEN o.OtherReference
-                           WHEN o.KitOrder = 1 THEN o.KitLoc
-                           ELSE o.MSLanes
-                           END
+            --,KitLoc = CASE WHEN o.OtherReference > '' THEN o.OtherReference
+            --               WHEN o.KitOrder = 1 THEN o.KitLoc
+            --               ELSE o.MSLanes
+            --               END
+
              ,Qty    = SUM(pd.Qty)
             ,IDQty  = ISNULL(lpn.Qty,0)
             ,la.Lottable11
@@ -748,7 +750,7 @@ BEGIN
                                  ,  @c_FromID
                                  ,  @c_ToLoc
                                  ,  @c_ToID
-                                 ,  @c_Lanes
+                                 --,  @c_Lanes
                                  ,  @n_Qty
                                  ,  @n_IDQty                                 
                                  ,  @c_CaseID    
@@ -763,16 +765,33 @@ BEGIN
          SET @c_Priority   = '3'
          SET @c_TaskStatus = '0'                                                    --v2.2         
          
-         SELECT TOP 1 @c_FinalLoc = l.Loc
-         FROM string_split (@c_Lanes, ',') ss
-         JOIN LOC l (NOLOCK) ON l.Loc = ss.[value]
+         --SELECT TOP 1 @c_FinalLoc = l.Loc                                         --2025-08-25 - START
+         --FROM string_split (@c_Lanes, ',') ss
+         --JOIN LOC l (NOLOCK) ON l.Loc = ss.[value]
+         --WHERE l.Facility = @c_Facility
+         --ORDER BY CASE WHEN l.[Status] =  'OK' AND l.LocationFlag = 'NONE' THEN 1
+         --              WHEN l.[Status] <> 'OK' THEN 2
+         --              WHEN l.LocationFlag <> 'NONE' THEN 2
+         --              ELSE 9
+         --              END 
+         --         ,l.LogicalLocation
+
+         SET @c_FinalLoc = @c_ToLoc                                                  
+
+         SET @c_LocAisle = ''
+         SET @c_Floor    = ''
+         SELECT @c_LocAisle = l.LocAisle
+               ,@c_Floor    = l.[Floor]
+         FROM Loc l (NOLOCK)
+         WHERE l.Loc = @c_FromLoc
+
+         SELECT TOP 1 @c_ToLoc = l.Loc
+         FROM LOC l (NOLOCK)
          WHERE l.Facility = @c_Facility
-         ORDER BY CASE WHEN l.[Status] =  'OK' AND l.LocationFlag = 'NONE' THEN 1
-                       WHEN l.[Status] <> 'OK' THEN 2
-                       WHEN l.LocationFlag <> 'NONE' THEN 2
-                       ELSE 9
-                       END 
-                  ,l.LogicalLocation
+         AND   l.LocationCategory = 'PND_OUT'                                        
+         AND   l.LocAisle = @c_LocAisle
+         AND   l.[Floor]  = @c_Floor
+         ORDER BY l.LogicalLocation                                                 --2025-08-25 - END
 
          IF @n_IDQty > @n_Qty AND @c_CaseID > ''                     --Lottable11
          BEGIN
@@ -839,7 +858,7 @@ BEGIN
                                     ,  @c_FromID
                                     ,  @c_ToLoc
                                     ,  @c_ToID
-                                    ,  @c_Lanes
+                                    --,  @c_Lanes
                                     ,  @n_Qty
                                     ,  @n_IDQty  
                                     ,  @c_CaseID      
@@ -964,12 +983,13 @@ BEGIN
  
          SET @c_ToLoc = @c_FinalLoc
 
-         SELECT @c_ToLoc = l.Loc
+         SELECT TOP 1 @c_ToLoc = l.Loc
          FROM LOC l (NOLOCK)
          WHERE l.Facility = @c_Facility
          AND   l.LocationCategory = 'PND_OUT'                                       --v2.0
          AND   l.LocAisle = @c_LocAisle
          AND   l.[Floor]  = @c_Floor
+         ORDER BY l.LogicalLocation
                              
          SET @b_Success = 1
          SET @n_Err = 0
