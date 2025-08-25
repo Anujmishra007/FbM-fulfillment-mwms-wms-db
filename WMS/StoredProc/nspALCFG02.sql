@@ -14,7 +14,7 @@ GO
 /*                                                                         */
 /* Called By: nspOrderProcessing                                           */
 /*                                                                         */
-/* PVCS Version: 2.4                                                       */
+/* PVCS Version: 2.5                                                       */
 /*                                                                         */
 /* Version: 8.0                                                            */
 /*                                                                         */
@@ -43,6 +43,8 @@ GO
 /* 24-Jan-2024 NJOW11   2.2  Fix FULLPALLETBYLOC logic                     */
 /* 25-Mar-2025 USH022-01 2.3 Added Filter LOTxLOCxID.qty >0                */
 /* 17-Mar-2025 Wan02    2.4  PUMACL - Allocate from Allocated UCC          */
+/* 25-Aug-2025 WLChooi  2.5  UWP-39928 Optimize UCC allocation for UOM 2   */
+/*                           (WL02)                                        */
 /***************************************************************************/
 
 CREATE OR ALTER   PROC [dbo].[nspALCFG02]
@@ -962,6 +964,7 @@ BEGIN
 
    IF (@c_FullPalletByLocFlag = 'Y' AND @c_UOM = '1') OR (@c_OverAllocateFlag = 'Y') 
       OR (@c_FIFOByMultiUOM = 'Y')  --NJOW07
+      OR (@c_AllocateByUCCFlag = 'Y')   --WL02
    BEGIN
       SET @c_SQL = ''
       
@@ -1144,6 +1147,8 @@ BEGIN
                                   ' AND (LOTxLOCxID.QTYALLOCATED + LOTxLOCxID.QtyReplen) = 0 
                                     AND (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QtyReplen) <= @n_QtyLeftToFulfill ' 
                                    ELSE ' ' END +  --NJOW11
+                              CASE WHEN @c_AllocateByUCCFlag = 'Y' AND @c_UOM IN ('2')          --WL02
+                                   THEN ' AND UCC.Qty <= @n_QtyLeftToFulfill ' ELSE ' ' END +   --WL02
                               ISNULL(RTRIM(@c_Condition),'') + ' ' + ISNULL(RTRIM(@c_CLKCondition),'') + ' ' + @c_SortBy
 
       --(Wan01) - START
@@ -1304,11 +1309,25 @@ BEGIN
                       SET @n_QtyToTake = 0
                    ELSE IF @c_UOM IN('6','7') AND (@n_QtyLeftToFulfill - @n_PrevLotQtyAvailable) < @n_QtyAvailable   --allocate partial UCC by @n_QtyLeftToFulfill after deduct from previous lot qty for next UOM
                       SET @n_QtyToTake = @n_QtyLeftToFulfill - @n_PrevLotQtyAvailable  
-                   ELSE    
-                    SET @n_QtyToTake = @n_QtyAvailable
-              END   
-              ELSE
-                 SET @n_QtyToTake = @n_QtyAvailable
+                   ELSE                             
+                      SET @n_QtyToTake = @n_QtyAvailable                         
+                END   
+                ELSE
+                BEGIN
+                   --WL02 S
+                   IF @c_UOM = '2' AND @n_QtyLeftToFulfill >= @n_QtyAvailable
+                      SET @n_QtyToTake = @n_QtyAvailable
+                   ELSE IF @c_UOM IN('6','7')
+                      IF @n_QtyLeftToFulfill >= @n_QtyAvailable
+                         SET @n_QtyToTake = @n_QtyAvailable
+                      ELSE 
+                         SET @n_QtyToTake = @n_QtyLeftToFulfill     
+                   ELSE 
+                      SET @n_QtyToTake = 0               
+                	
+                   --SET @n_QtyToTake = @n_QtyAvailable
+                   --WL02 E
+                END
               END  
               ELSE
               BEGIN
@@ -1472,6 +1491,8 @@ BEGIN
                                  ' AND (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED) >= @n_uombase '
                               ELSE
                                  ' AND (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QTYREPLEN) >= @n_uombase ' END +
+                              CASE WHEN @c_AllocateByUCCFlag = 'Y' AND @c_UOM IN ('2')          --WL02
+                                   THEN ' AND UCC.Qty <= @n_QtyLeftToFulfill ' ELSE ' ' END +   --WL02
                               ISNULL(RTRIM(@c_Condition),'') + ' ' + ISNULL(RTRIM(@c_CLKCondition),'') + ' ' + @c_SortBy
 
       --(Wan01) - START
