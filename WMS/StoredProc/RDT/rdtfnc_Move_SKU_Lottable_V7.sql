@@ -21,6 +21,7 @@ GO
 /* 12-Aug-2021 1.4  YeeKung  WMS-17528 Add extendedvalidate (yeekung02) */
 /* 17-Aug-2022 1.5  YeeKung  WMS-20075 Fix fromID (yeekung03)           */
 /* 17-Apr-2023 1.6  Ung      WMS-22217 Add ConfirmSP                    */
+/* 22-Aug-2025 2.0  Cuize    FCR-7251 Add CheckDigit                    */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_Move_SKU_Lottable_V7] (
@@ -113,6 +114,10 @@ DECLARE
    @nPABookingKey          INT,           -- (james02)
    @nFlowThruToIDScn       INT,           -- (james02)
    @cPrevOutField15        NVARCHAR(20),  --(yeekung03)
+   @cLOCCheckDigitSP       NVARCHAR( 20), -- (Cuize)
+   @cCheckDigitLOC         NVARCHAR( 20), -- (Cuize)
+
+
 
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),
@@ -196,6 +201,8 @@ SELECT
    @cDefaultAvlQty2Move = V_String19,
    @cMultiSKUBarcode    = V_String20, -- (yeekung01)
    @cPrevOutField15     = V_String21,
+   @cLOCCheckDigitSP    = C_String1,
+
 
    @nFromStep           = V_FromStep,  --(yeekung01)
    @nFromScn            = V_FromScn,   --(yeekung01)
@@ -308,6 +315,9 @@ BEGIN
 
    SET @nFlowThruToIDScn = rdt.RDTGetConfig( @nFunc, 'FlowThruToIDScn', @cStorerKey)
 
+   SET @cLOCCheckDigitSP = rdt.rdtGetConfig(@nFunc, 'LOCCheckDigitSP', @cStorerKey)
+
+
    -- EventLog
    EXEC RDT.rdt_STD_EventLog
       @cActionType = '1', -- Sign-in
@@ -357,6 +367,18 @@ BEGIN
          SET @nErrNo = 125551
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --'LOC needed'
          GOTO Step_FromLOC_Fail
+      END
+
+      SET @cCheckDigitLOC = @cInField01
+      IF @cLOCCheckDigitSP = '1'
+      BEGIN
+         EXEC rdt.rdt_LOCLookUp_CheckDigit @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cFacility,
+              @cCheckDigitLOC    OUTPUT,
+              @nErrNo      OUTPUT,
+              @cErrMsg     OUTPUT
+         IF @nErrNo <> 0
+            GOTO Step_FromLOC_Fail
+         SET @cFromLOC = @cCheckDigitLOC
       END
 
       -- Get LOC info
@@ -1696,6 +1718,18 @@ BEGIN
          GOTO Step_ToLOC_Fail
       END
 
+      SET @cCheckDigitLOC = @cInField11
+      IF @cLOCCheckDigitSP = '1'
+      BEGIN
+         EXEC rdt.rdt_LOCLookUp_CheckDigit @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cFacility,
+              @cCheckDigitLOC    OUTPUT,
+              @nErrNo      OUTPUT,
+              @cErrMsg     OUTPUT
+         IF @nErrNo <> 0
+            GOTO Step_ToLOC_Fail
+         SET @cFromLOC = @cCheckDigitLOC
+      END
+
       -- Get LOC info
       SELECT @cChkFacility = Facility
       FROM dbo.LOC (NOLOCK)
@@ -2021,6 +2055,8 @@ BEGIN
       V_String19 = @cDefaultAvlQty2Move,
       V_String20 = @cMultiSKUBarcode, -- (yeekung01)
       V_String21 = @cPrevOutField15, --(yeekung03)
+      C_String1  = @cLOCCheckDigitSP, -- (Cuize)
+
 
       V_FromStep = @nFromStep, --(yeekung01)
       V_FromScn  = @nFromScn,  --(yeekung01)
