@@ -38,6 +38,7 @@ GO
 /* 2025-04-29   3.0.0 NickT     UWP-33739 Add Extended Validation SP in step 1   */
 /* 2025-06-05   3.1.0 JACKC     FCR-4328 Add ExtScn to ST4 when short            */
 /* 2025-06-20   0.0.0 Jackc     !!!Cutover. Use V0 repo for work!!!              */
+/* 2025-08-22   3.7   Cuize       FCR-7251 Check Digit                           */
 /*********************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdtfnc_PickSKU (
@@ -138,6 +139,9 @@ DECLARE
    @cSwapidSP           NVARCHAR(20), 
    @cExtendedScreenSP   NVARCHAR(20),
    @tExtScnData			VariableTable, --(JHU151)
+   @cLOCCheckDigitSP       NVARCHAR( 20), -- (Cuize)
+   @cCheckDigitLOC         NVARCHAR( 20), -- (Cuize)
+
 
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),    @cFieldAttr01 NVARCHAR( 1),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),    @cFieldAttr02 NVARCHAR( 1),
@@ -255,6 +259,8 @@ SELECT
    @cSwapidSP           = V_String40,
    @cExtendedScreenSP   = V_String41,
    @cUserDefine01       = V_String42,
+   @cLOCCheckDigitSP    = C_String1,
+
 
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,  @cFieldAttr01  = FieldAttr01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02, @cFieldAttr02  = FieldAttr02,
@@ -318,8 +324,7 @@ BEGIN
    IF @nStep = 7  GOTO Step_ShortPick        -- Scn = 4696. Confrim Short Pick?
    IF @nStep = 8  GOTO Step_VerifyLottable   -- Scn = 3990. Verify lottable
    IF @nStep = 9  GOTO Step_VerifyID         -- Scn = 4697. Verify ID
-   IF @nStep = 10 GOTO Step_MultiSKU         -- Scn = 3570  Multi SKU
-   IF @nStep = 99 GOTO Step_99               -- Extended Screen
+   IF @nStep = 10 GOTO Step_MultiSKU         -- Scn = 3570  Multi SKU screen
 END
 RETURN -- Do nothing if incorrect step
 
@@ -367,6 +372,9 @@ BEGIN
    SET @cExtendedScreenSP = rdt.RDTGetConfig( @nFunc, 'ExtScnSP', @cStorerKey)
    IF @cExtendedScreenSP = '0'
       SET @cExtendedScreenSP = ''
+
+   SET @cLOCCheckDigitSP = rdt.rdtGetConfig(@nFunc, 'LOCCheckDigitSP', @cStorerKey)
+
 
    -- Sign-In
    EXEC RDT.rdt_STD_EventLog
@@ -853,6 +861,21 @@ BEGIN
          END
       END
       SET @cOutField05 = @cPickZone
+
+      IF @cLOC <> ''
+      BEGIN
+         SET @cCheckDigitLOC = @cInField03
+         IF @cLOCCheckDigitSP = '1'
+         BEGIN
+            EXEC rdt.rdt_LOCLookUp_CheckDigit @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cFacility,
+                 @cCheckDigitLOC    OUTPUT,
+                 @nErrNo      OUTPUT,
+                 @cErrMsg     OUTPUT
+            IF @nErrNo <> 0
+               GOTO LOC_Fail
+            SET @cLOC = @cCheckDigitLOC
+         END
+      END
 
       -- Validate blank
       IF @cLOC = ''
@@ -2137,6 +2160,18 @@ BEGIN
          GOTO Quit
       END
 
+      SET @cCheckDigitLOC = @cInField01
+      IF @cLOCCheckDigitSP = '1'
+      BEGIN
+         EXEC rdt.rdt_LOCLookUp_CheckDigit @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cFacility,
+              @cCheckDigitLOC    OUTPUT,
+              @nErrNo      OUTPUT,
+              @cErrMsg     OUTPUT
+         IF @nErrNo <> 0
+            GOTO Quit
+         SET @cToLOC = @cCheckDigitLOC
+      END
+
       -- Get the location
       SET @cChkFacility = ''
       SELECT @cChkFacility = Facility
@@ -3348,7 +3383,7 @@ BEGIN
    IF @cExtendedScreenSP <> ''
    BEGIN
       IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
-      BEGIN
+      BEGIN      
          DECLARE @OrignStep INT
          SET @OrignStep = @nStep
 
@@ -3496,6 +3531,9 @@ BEGIN
       V_string40  = @cSwapidSP,   
       V_String41  = @cExtendedScreenSP,
       V_String42  = @cUserDefine01,
+
+      C_String1  = @cLOCCheckDigitSP, -- (Cuize)
+
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,   FieldAttr01  = @cFieldAttr01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,   FieldAttr02  = @cFieldAttr02,
