@@ -28,8 +28,6 @@ BEGIN
     GRANT UPDATE ON  [RDT].[RDTMESSAGE] TO [NSQL]
     
 END
-ELSE
-BEGIN
-    IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('rdt.RDTMESSAGE') AND name = 'TraceID')
-        ALTER TABLE [RDT].[RDTMESSAGE] ADD [TraceID] [nvarchar] (100) NULL
-END
+
+IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE object_id = OBJECT_ID('rdt.RDTMESSAGE') AND name = 'TraceID')
+    ALTER TABLE [RDT].[RDTMESSAGE] ADD [TraceID] [nvarchar] (100) NULL
