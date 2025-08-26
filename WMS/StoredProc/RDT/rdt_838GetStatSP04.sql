@@ -3,15 +3,16 @@ GO
 SET ANSI_NULLS OFF
 GO
 
-/************************************************************************/
-/* Store procedure: rdt_838GetStatSP04                                  */
-/* Copyright      : Maersk                                              */
-/*                                                                      */
-/* Purpose: Scan FromID, Get status only for single order               */
-/*                                                                      */
-/* Date       Rev  Author      Purposes                                 */
-/* 28.Jul-2025 1.0  Cuize       FCR-4649 created                        */
-/************************************************************************/
+/***************************************************************************/
+/* Store procedure: rdt_838GetStatSP04                                     */
+/* Copyright      : Maersk                                                 */
+/*                                                                         */
+/* Purpose: Scan FromID, Get status only for single order                  */
+/*                                                                         */
+/* Date       Rev    Author      Purposes                                  */
+/* 2025-07-28 1.0    Cuize       FCR-4649 created                          */
+/* 2025-08-26 1.0.1  Jackc       FCR-4649 Fix rowcount issue in Next type  */
+/***************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_838GetStatSP04(
     @nMobile         INT
@@ -112,6 +113,7 @@ BEGIN
          AND CartonNo > @nCartonNo
       ORDER BY CartonNo
 
+      SET @nRowCount = @@ROWCOUNT
 
       IF @nRowCount = 0
       BEGIN
@@ -125,6 +127,8 @@ BEGIN
          FROM dbo.PackDetail PD WITH (NOLOCK)
          WHERE PD.RefNo2 = @cOrderKey
          ORDER BY CartonNo
+
+         SET @nRowCount = @@ROWCOUNT
 
          IF @nRowCount = 0
          SELECT
