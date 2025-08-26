@@ -324,7 +324,8 @@ BEGIN
    IF @nStep = 7  GOTO Step_ShortPick        -- Scn = 4696. Confrim Short Pick?
    IF @nStep = 8  GOTO Step_VerifyLottable   -- Scn = 3990. Verify lottable
    IF @nStep = 9  GOTO Step_VerifyID         -- Scn = 4697. Verify ID
-   IF @nStep = 10 GOTO Step_MultiSKU         -- Scn = 3570  Multi SKU screen
+   IF @nStep = 10 GOTO Step_MultiSKU         -- Scn = 3570  Multi SKU
+   IF @nStep = 99 GOTO Step_99               -- Extended Screen
 END
 RETURN -- Do nothing if incorrect step
 
@@ -3383,7 +3384,7 @@ BEGIN
    IF @cExtendedScreenSP <> ''
    BEGIN
       IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
-      BEGIN      
+      BEGIN
          DECLARE @OrignStep INT
          SET @OrignStep = @nStep
 

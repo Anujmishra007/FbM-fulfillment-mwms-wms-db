@@ -5,7 +5,8 @@
 /* Purpose:       For MATTEL                                            */  
 /*                                                                      */  
 /* Date        Rev   Author     Purposes                                */
-/* 2025-06-05  1.0.0 JACKC      FCR-4328 Short Pick Screen              */
+/* 2025-06-05  1.0.0 Cuize      FCR-4328 Short Pick Screen              */
+/* 2025-08-26  1.0.1 Jackc      FCR-4328 Fix param convetion error      */
 /************************************************************************/  
   
 CREATE OR ALTER PROC  [RDT].[rdt_830ExtScn02] (
@@ -232,16 +233,6 @@ BEGIN
                      GOTO Scn_6528_Fail
                   END
 
-                  --Movement flag cannot be set in reallocation
-                  SET @cMoveQTYAlloc = rdt.rdtGetConfig( @nFunc, 'MoveQTYAlloc', @cStorerKey)
-                  SET @cMoveQTYPick = rdt.rdtGetConfig( @nFunc, 'MoveQTYPick', @cStorerKey)
-
-                  IF @cMoveQTYAlloc = '1' OR @cMoveQTYPick = '1'
-                  BEGIN
-                     SET @nErrNo = 240405
-                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Movement flag cannot be set in reallocation
-                     GOTO Scn_6528_Fail
-                  END
                END
 
                IF @cExtendedValidateSP <> ''
@@ -326,6 +317,29 @@ BEGIN
                   -- Confirm task
                   --Not support inventory movement, so @cToLoc is always empty
                   SET @cToLOC = ''
+
+                  SET @cMoveQTYPick = rdt.rdtGetConfig( @nFunc, 'MoveQTYPick', @cStorerKey)
+                  IF @cMoveQTYPick = '1'
+                  BEGIN
+
+                     SET @cToLOC = rdt.rdtGetConfig( @nFunc, 'DefaultToLOC', @cStorerKey)
+                     IF @cToLOC = ''
+                     BEGIN
+                        SET @nErrNo = 240405
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Movement flag cannot be set in reallocation
+                        GOTO Scn_6528_Fail
+                     END
+
+                     IF NOT EXISTS(
+                        SELECT 1 FROM dbo.Loc (NOLOCK) WHERE LOC = @cToLOC AND Facility = @cFacility
+                     )
+                     BEGIN
+                        SET @nErrNo = 240406
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Movement flag cannot be set in reallocation
+                        GOTO Scn_6528_Fail
+                     END
+                  END
+
                   EXEC rdt.rdt_PickSKU_Confirm @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cType,
                      @cPickSlipNo, @cPickZone, @cLOC, @cDropID, @cID, @cSKU, @nQTY, @cToLOC, 
                      @cLottableCode,
@@ -337,8 +351,6 @@ BEGIN
                   IF @nErrNo <> 0
                   BEGIN
                      ROLLBACK TRAN rdt_830ExtScn02_6528
-                     WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
-                        COMMIT TRAN
                      GOTO Scn_6528_Fail
                   END
                END --Confirm logic
@@ -494,7 +506,7 @@ BEGIN
                      ,@cLOC = @cLOC
                      ,@cID = @cID
                      ,@cSKU = @cSKU
-                     ,@nQTY = ''
+                     ,@nQTY = NULL --v1.0.1 no needed in the reallo SP
                      ,@cLot = @cLot OUTPUT
                      ,@cPickZone = @cRealloPickZone OUTPUT
                      ,@cSuggestLOC = @cRealloLOC OUTPUT
@@ -505,8 +517,6 @@ BEGIN
                   IF @nErrNo <> 0
                   BEGIN
                      ROLLBACK TRAN rdt_830ExtScn02_6528
-                     WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
-                        COMMIT TRAN
                      
                      IF @nErrNo > 0
                      BEGIN
@@ -528,8 +538,8 @@ BEGIN
                   --Alternate location found and is added to current pickslip
                   IF ISNULL(@cRealloLoc, '') <> ''
                   BEGIN
---                      IF ISNULL(@cRealloPickZone, '') = @cPickZone AND @cRealloPickSlipNo = @cPickSlipNo
---                      BEGIN
+                      --IF ISNULL(@cRealloPickZone, '') = @cPickZone AND @cRealloPickSlipNo = @cPickSlipNo
+                      --BEGIN
                         --i. Display message like "Alternate location found and is added to current pickslip"
                         SET @cMsg01 = 'Alternate location '
                         SET @cMsg02 = 'found and is added '
@@ -548,29 +558,29 @@ BEGIN
                                        @cLine08 = @cMsg08,
                                        @cLine09 = @cMsg09,
                                        @nDisplayMsg = 0
--- --                      END
--- --                      ELSE
---                      --2. New allocation in different zone, prompt a message, continue the picking
---                      --Alternate location found and is added to pickslip **********
---                      BEGIN
---                         SET @cMsg01 = 'Alternate location '
---                         SET @cMsg02 = 'found and is added '
---                         SET @cMsg03 = 'to pickslip '
---                         SET @cMsg04 = @cRealloPickSlipNo
---                         EXEC rdt.rdtInsertMsgQueue @nMobile = @nMobile,
---                                        @nErrNo = @nErrNo,
---                                        @cErrMsg = @cErrMsg,
---                                        @cLine01 = @cMsg01,
---                                        @cLine02 = @cMsg02,
---                                        @cLine03 = @cMsg03,
---                                        @cLine04 = @cMsg04,
---                                        @cLine05 = @cMsg05,
---                                        @cLine06 = @cMsg06,
---                                        @cLine07 = @cMsg07,
---                                        @cLine08 = @cMsg08,
---                                        @cLine09 = @cMsg09,
---                                        @nDisplayMsg = 0
---                      END
+                      --END
+                      --ELSE
+                      --2. New allocation in different zone, prompt a message, continue the picking
+                      --Alternate location found and is added to pickslip **********
+                      --BEGIN
+                         --SET @cMsg01 = 'Alternate location '
+                         --SET @cMsg02 = 'found and is added '
+                         --SET @cMsg03 = 'to pickslip '
+                         --SET @cMsg04 = @cRealloPickSlipNo
+                         --EXEC rdt.rdtInsertMsgQueue @nMobile = @nMobile,
+                                        --@nErrNo = @nErrNo,
+                                        --@cErrMsg = @cErrMsg,
+                                        --@cLine01 = @cMsg01,
+                                        --@cLine02 = @cMsg02,
+                                        --@cLine03 = @cMsg03,
+                                        --@cLine04 = @cMsg04,
+                                        --@cLine05 = @cMsg05,
+                                        --@cLine06 = @cMsg06,
+                                        --@cLine07 = @cMsg07,
+                                        --@cLine08 = @cMsg08,
+                                        --@cLine09 = @cMsg09,
+                                        --@nDisplayMsg = 0
+                      --END
                   END
                   ELSE -- Errno = -1
                   --3. No loc found
@@ -603,8 +613,6 @@ BEGIN
                END --Option = 9
 
                COMMIT TRAN rdt_830ExtScn02_6528 -- Only commit change made here
-               WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
-                  COMMIT TRAN
 
                --Go to next screen
                EXEC rdt.rdt_PickSKU_GoToNextScreen @nMobile, @nFunc, @cLangCode, @nInputKey, @cFacility, @cStorerKey, @cPUOM, @cPickSlipNo,@cPickZone, @cLOC, @cID, @cDropID,
@@ -629,16 +637,16 @@ BEGIN
                @cPPK       OUTPUT
                
                --Return values to main function
-               SET @cUDF01 = @cSuggLOC
-               SET @cUDF02 = @cSuggID
-               SET @cUDF03 = @cSKU
-               SET @cUDF04 = @nTaskQTY
-               SET @cUDF05 = @cLottableCode
-               SET @cUDF06 = @cSKUDescr
-               SET @cUDF07 = @cMUOM_Desc
-               SET @cUDF08 = @cPUOM_Desc
-               SET @cUDF09 = @nPUOM_Div
-               SET @cUDF10 = @cPPK
+--                SET @cUDF01 = @cSuggLOC
+--                SET @cUDF02 = @cSuggID
+--                SET @cUDF03 = @cSKU
+--                SET @cUDF04 = @nTaskQTY
+--                SET @cUDF05 = @cLottableCode
+--                SET @cUDF06 = @cSKUDescr
+--                SET @cUDF07 = @cMUOM_Desc
+--                SET @cUDF08 = @cPUOM_Desc
+--                SET @cUDF09 = @nPUOM_Div
+--                SET @cUDF10 = @cPPK
 
                --Go to next screen
                SET @nAfterScn = @nTempScn
@@ -707,6 +715,21 @@ Quit:
       SELECT 'Exiting rdt_830ExtScn02'
       SELECT @nErrNo AS ErrNo, @cErrMsg AS ErrMsg, @nAfterScn AS AfterScn, @nAfterStep AS AfterStep
    END
+
+   SET @cUDF01 = @cSuggLOC
+   SET @cUDF02 = @cSuggID
+   SET @cUDF03 = @cSKU
+   SET @cUDF04 = @nTaskQTY
+   SET @cUDF05 = @cLottableCode
+   SET @cUDF06 = @cSKUDescr
+   SET @cUDF07 = @cMUOM_Desc
+   SET @cUDF08 = @cPUOM_Desc
+   SET @cUDF09 = @nPUOM_Div
+   SET @cUDF10 = @cPPK
+
+   WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
+      COMMIT TRAN
+
 END
 
 GO
