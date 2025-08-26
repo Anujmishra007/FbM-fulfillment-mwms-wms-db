@@ -35,7 +35,7 @@ GO
 /*                            FCR-2902 Bug Fix                           */
 /* 12-Aug-2025  Wan06  1.8    UWP-39035 - Matching RPF Section to find   */
 /*                            DPP for FCR-6708 & FCR-2902                */
-/* 22-Aug-2025                FCR-6708 Bug Fix                           */
+/* 25-Aug-2025                FCR-6708 Bug Fix                           */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]       
     @c_Wavekey      NVARCHAR(10)    
@@ -678,8 +678,8 @@ CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]
             + ' AND   l.LocationFlag NOT IN (''HOLD'', ''DAMAGE'')'
             + ' AND   l.[Status] = ''OK'''
             + ' AND   (inv.Qty = 0 OR inv.Qty IS NULL)'
-            + CASE WHEN @c_ToLoc > '' AND @c_LocAisle > '' 
-                   THEN ' AND l.@c_LocAisle = @c_LocAisle AND za.RowID < @n_RowID'
+            + CASE WHEN @c_ToLoc > '' AND @c_LocAisle > ''                          --2025-08-25 
+                   THEN ' AND l.LocAisle = @c_LocAisle AND za.RowID < @n_RowID'
                    WHEN @c_ToLoc > '' AND @c_LocAisle = ''
                    THEN ' AND za.RowID < @n_RowID'
                    ELSE '' END
