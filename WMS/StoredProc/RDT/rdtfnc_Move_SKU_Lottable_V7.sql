@@ -1727,7 +1727,7 @@ BEGIN
               @cErrMsg     OUTPUT
          IF @nErrNo <> 0
             GOTO Step_ToLOC_Fail
-         SET @cFromLOC = @cCheckDigitLOC
+         SET @cToLOC = @cCheckDigitLOC
       END
 
       -- Get LOC info
