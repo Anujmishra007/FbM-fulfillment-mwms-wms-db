@@ -449,63 +449,80 @@ BEGIN
                      @cLottable06 = ISNULL(@cLottable06,''),@cLottable07 = ISNULL(@cLottable07,''),@cLottable08 = ISNULL(@cLottable08,''),
                      @cLottable09 = ISNULL(@cLottable09,''),@cLottable10 = ISNULL(@cLottable10,''),@cLottable11 = ISNULL(@cLottable11,''),
                      @cLottable12 = ISNULL(@cLottable12,'')
-                  
-                  EXEC nspInventoryHoldWrapper  
-                     '',               -- lot  
-                     '',               -- loc  
-                     @cSuggID,               -- id  
-                     @cStorerKey,     -- storerkey  
-                     @cSuggSKU,           -- sku  
-                     '',               -- lottable01  
-                     '',               -- lottable01  
-                     '',               -- lottable01  
-                     NULL,             -- lottable01  
-                     NULL,             -- lottable01  
-                     '',  
-                     '',  
-                     '',  
-                     '',  
-                     '',  
-                     '',  
-                     '',  
-                     NULL,   
-                     NULL,   
-                     NULL,   
-                     @cReasonCode,      -- status  
-                     @cHoldID,              -- hold  
-                     @b_success OUTPUT,  
-                     @nErrNo OUTPUT,  
-                     @cErrMsg OUTPUT,  
-                     ''   -- remark  
-                  
-                  EXEC nspInventoryHoldWrapper  
-                     '',               -- lot  
-                     @cSuggFromLOC,    -- loc  
-                     '',               -- id  
-                     @cStorerKey,     -- storerkey  
-                     @cSuggSKU,           -- sku  
-                     '',               -- lottable01  
-                     '',               -- lottable01  
-                     '',               -- lottable01  
-                     NULL,             -- lottable01  
-                     NULL,             -- lottable01  
-                     '',  
-                     '',  
-                     '',  
-                     '',  
-                     '',  
-                     '',  
-                     '',  
-                     NULL,   
-                     NULL,   
-                     NULL,   
-                     @cReasonCode,      -- status  
-                     @cHoldLoc,              -- hold  
-                     @b_success OUTPUT,  
-                     @nErrNo OUTPUT,  
-                     @cErrMsg OUTPUT,  
-                     ''   -- remark  
+                  BEGIN TRY
+                     EXEC nspInventoryHoldWrapper  
+                        '',               -- lot  
+                        '',               -- loc  
+                        @cSuggID,               -- id  
+                        @cStorerKey,     -- storerkey  
+                        @cSuggSKU,           -- sku  
+                        '',               -- lottable01  
+                        '',               -- lottable01  
+                        '',               -- lottable01  
+                        NULL,             -- lottable01  
+                        NULL,             -- lottable01  
+                        '',  
+                        '',  
+                        '',  
+                        '',  
+                        '',  
+                        '',  
+                        '',  
+                        NULL,   
+                        NULL,   
+                        NULL,   
+                        @cReasonCode,      -- status  
+                        @cHoldID,              -- hold  
+                        @b_success OUTPUT,  
+                        @nErrNo OUTPUT,  
+                        @cErrMsg OUTPUT,  
+                        ''   -- remark  
+                     IF @nErrNo <> 0
+                     BEGIN
+                        SET @nErrNo = 245402
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') 
+                        GOTO RollBackTran
+                     END
 
+                     EXEC nspInventoryHoldWrapper  
+                        '',               -- lot  
+                        @cSuggFromLOC,    -- loc  
+                        '',               -- id  
+                        @cStorerKey,     -- storerkey  
+                        @cSuggSKU,           -- sku  
+                        '',               -- lottable01  
+                        '',               -- lottable01  
+                        '',               -- lottable01  
+                        NULL,             -- lottable01  
+                        NULL,             -- lottable01  
+                        '',  
+                        '',  
+                        '',  
+                        '',  
+                        '',  
+                        '',  
+                        '',  
+                        NULL,   
+                        NULL,   
+                        NULL,   
+                        @cReasonCode,      -- status  
+                        @cHoldLoc,              -- hold  
+                        @b_success OUTPUT,  
+                        @nErrNo OUTPUT,  
+                        @cErrMsg OUTPUT,  
+                        ''   -- remark  
+                        IF @nErrNo <> 0
+                        BEGIN
+                           SET @nErrNo = 245403
+                           SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') 
+                           GOTO RollBackTran
+                        END
+                  END TRY
+                  BEGIN CATCH
+                     SET @nErrNo = 245401
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- 'UCC req'  
+                     GOTO RollBackTran
+                  END CATCH
                   -- Go to next task/exit TM screen
                   IF @cPickMethod = 'FP'
                   BEGIN
