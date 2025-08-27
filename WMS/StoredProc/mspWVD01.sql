@@ -70,7 +70,6 @@ BEGIN
       AND NOT EXISTS ( SELECT 1
                        FROM TransmitLog2 (NOLOCK) 
                        WHERE TableName = @c_TableName 
-                       AND Key1 = I.Wavekey 
                        AND Key2 = I.Orderkey 
                        AND Key3 = @c_Storerkey )
 
