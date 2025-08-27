@@ -146,6 +146,9 @@ GO
 /* 19-Nov-2024 5.8.0 NLT013  UWP-27188 Merge code, map @v_Barcode to @cUCC  */
 /* 03-Apr-2025 6.4  WinSern  INC7862618 clear @cBarcode value (ws01)    */
 /* 25-Jul-2025 6.5  Cuize    UWP-38274 bugfix DecodeSP                  */
+/* 07-Aug-2025 6.6  Cuize    FCR-5702 Extend Lottable01-03              */
+/* 27-Aug-2025 6.7  James    UWP-40007 Fix bug. Enable scan all sku     */
+/*                           barcode type (james33)                     */
 /************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdtfnc_CycleCount] (
    @nMobile    INT,
@@ -246,9 +249,9 @@ DECLARE
    @nNewEachQTY       FLOAT,  -- (james08)
    @cNewEachUOM       NVARCHAR( 10),   -- (james19)
    @cNewPPK           NVARCHAR( 6),
-   @cNewLottable01    NVARCHAR( 18),
-   @cNewLottable02    NVARCHAR( 18),
-   @cNewLottable03    NVARCHAR( 18),
+   @cNewLottable01    NVARCHAR( 60),
+   @cNewLottable02    NVARCHAR( 60),
+   @cNewLottable03    NVARCHAR( 60),
    @dNewLottable04    DATETIME,
    @dNewLottable05    DATETIME,
    @cAddNewLocFlag    NVARCHAR( 1),   -- (MaryVong01)
@@ -364,6 +367,7 @@ DECLARE  @cLottable01_Code    NVARCHAR( 20),
    @nAction             INT,
    @nAfterScn           INT,
    @cLocNeedValid       NVARCHAR( 20),
+   @cSKUStatus          NVARCHAR( 10) = '',
    -- (james18)
    @c_oFieled01 NVARCHAR(20), @c_oFieled02 NVARCHAR(20),
    @c_oFieled03 NVARCHAR(20), @c_oFieled04 NVARCHAR(20),
@@ -508,9 +512,12 @@ SELECT
    @cNewCaseUOM       = V_String30,
    @cNewEachUOM       = V_String32,
    @cNewPPK           = V_String33,
-   @cNewLottable01    = V_String34,
-   @cNewLottable02    = V_String35,
-   @cNewLottable03    = V_String36,
+--    @cNewLottable01    = V_String34,
+--    @cNewLottable02    = V_String35,
+--    @cNewLottable03    = V_String36,
+    @cNewLottable01    = V_String49,
+    @cNewLottable02    = V_String50,
+    @cNewLottable03    = V_String51,
    @cAddNewLocFlag    = V_String39,     -- (MaryVong01)
    @cID_In            = V_String40,     -- SOS79743
    @cRecountFlag      = V_ReceiptKey,   -- (MaryVong01) - Used for Recount
@@ -9081,7 +9088,7 @@ BEGIN
 
       -- Add eventlog (yeekung01)
       EXEC RDT.rdt_STD_EventLog
-   @cActionType   = '7',
+         @cActionType   = '7',
          @nFunctionID   = @nFunc,
          @nMobileNo     = @nMobile,
          @cStorerKey    = @cStorer,
@@ -9110,7 +9117,7 @@ BEGIN
             SET @cDecodeLabelNo = ''
             SET @cDecodeLabelNo = rdt.RDTGetConfig( @nFunc, 'DecodeLabelNo', @cCheckStorer)
 
-      IF ISNULL(@cDecodeLabelNo,'') NOT IN ('','0')   --SOS320895
+            IF ISNULL(@cDecodeLabelNo,'') NOT IN ('','0')   --SOS320895
             BEGIN
                EXEC dbo.ispLabelNo_Decoding_Wrapper
                 @c_SPName     = @cDecodeLabelNo
@@ -9245,7 +9252,7 @@ BEGIN
             GOTO SINGLE_SKU_Sku_Scan_Fail
          END
          CLOSE CUR_CheckSKU
-      DEALLOCATE CUR_CheckSKU
+         DEALLOCATE CUR_CheckSKU
       END
       ELSE
       BEGIN
@@ -14834,8 +14841,8 @@ BEGIN
       SELECT @nValidateSKU = CASE WHEN Short = '1' THEN 1 ELSE 0 END
       FROM dbo.CodeLKUP WITH (NOLOCK)
       WHERE ListName = 'CCVALFIELD'
-    AND   StorerKey = @cStorer
-      AND   Code = 'SKU'
+      AND   StorerKey = @cStorer
+      AND   Code = 'SKU' --OR Code='ÁLTSKU'
 
       SELECT @nValidateLot01 = CASE WHEN Short = '1' THEN 1 ELSE 0 END
       FROM dbo.CodeLKUP WITH (NOLOCK)
@@ -14868,24 +14875,337 @@ BEGIN
       SET @cDisplayLot03 = CASE WHEN @nValidateLot03 = 1 THEN @cOutField08 ELSE '' END
       SET @cDisplayLot04 = CASE WHEN @nValidateLot04 = 1 THEN @cOutField10 ELSE '' END
 
+	-- DECLARE @cFromSKU NVARCHAR(20)
+	  
+
       SET @cValidateSKU = CASE WHEN @nValidateSKU = 1 THEN @cInField03 ELSE '' END
       SET @cValidateLot01 = CASE WHEN @nValidateLot01 = 1 THEN @cInField05 ELSE '' END
       SET @cValidateLot02 = CASE WHEN @nValidateLot02 = 1 THEN @cInField07 ELSE '' END
       SET @cValidateLot03 = CASE WHEN @nValidateLot03 = 1 THEN @cInField09 ELSE '' END
       --SET @cValidateLot04 = CASE WHEN @nValidateLot04 = 1 THEN rdt.rdtFormatDate( @cInField11) ELSE '' END
       SET @cValidateLot04 = CASE WHEN @nValidateLot04 = 1 THEN @cInField11 ELSE '' END
+	--  SELECT @cFromSKU=SKU FROM SKU WHERE (ALTSKU=@cInField03 OR SKU=@cInField03) AND STORERKEY=@cStorer
+	--  SET @cValidateSKU=@cFromSKU
 
-      IF @nValidateSKU = 1 AND ( ISNULL( @cDisplaySKU, '') <> ISNULL( @cValidateSKU, ''))
+      IF @nValidateSKU = 1
       BEGIN
-         SET @nErrNo = 77715
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- 'INVALID SKU'
-         SET @cOutField03 = ''
-         SET @cOutField05 = @cValidateLot01
-         SET @cOutField07 = @cValidateLot02
-         SET @cOutField09 = @cValidateLot03
-         SET @cOutField11 = @cValidateLot04
-         EXEC rdt.rdtSetFocusField @nMobile, 3
-         GOTO Quit
+         --(james33)
+         SET @cLabel2Decode = @cInField03
+
+         -- Validate SKU
+         -- Check if SKU, alt sku, manufacturer sku, upc belong to the storer
+         IF NOT EXISTS( SELECT 1 FROM @t_Storer)
+            INSERT INTO @t_Storer (StorerKey)
+            SELECT Distinct StorerKey
+            FROM   CCDETAIL WITH (NOLOCK)
+            WHERE  CCKey = @cCCRefNo
+            AND    StorerKey <> ''
+
+         SET @b_success = 0
+         IF (SELECT COUNT(*) FROM @t_Storer) > 1
+         BEGIN
+            SET @cCheckStorer = ''
+
+            DECLARE CUR_CheckSKU CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+              SELECT StorerKey
+              FROM   @t_Storer
+
+            OPEN  CUR_CheckSKU
+            FETCH NEXT FROM CUR_CheckSKU INTO @cCheckStorer
+            WHILE @@FETCH_STATUS <> -1
+            BEGIN
+               SET @cDecodeLabelNo = ''
+               SET @cDecodeLabelNo = rdt.RDTGetConfig( @nFunc, 'DecodeLabelNo', @cCheckStorer)
+
+               IF ISNULL(@cDecodeLabelNo,'') NOT IN ('','0')   --SOS320895
+               BEGIN
+                  EXEC dbo.ispLabelNo_Decoding_Wrapper
+                   @c_SPName     = @cDecodeLabelNo
+                  ,@c_LabelNo    = @cLabel2Decode
+                  ,@c_Storerkey  = @cCheckStorer
+                  ,@c_ReceiptKey = @nMobile
+                  ,@c_POKey      = ''
+                  ,@c_LangCode   = @cLangCode
+                  ,@c_oFieled01  = @c_oFieled01 OUTPUT   -- SKU
+                  ,@c_oFieled02  = @c_oFieled02 OUTPUT   -- STYLE
+                  ,@c_oFieled03  = @c_oFieled03 OUTPUT   -- COLOR
+                  ,@c_oFieled04  = @c_oFieled04 OUTPUT   -- SIZE
+                  ,@c_oFieled05  = @c_oFieled05 OUTPUT   -- QTY
+                  ,@c_oFieled06  = @c_oFieled06 OUTPUT   -- CO#
+                  ,@c_oFieled07  = @c_oFieled07 OUTPUT
+                  ,@c_oFieled08  = @c_oFieled08 OUTPUT
+                  ,@c_oFieled09  = @c_oFieled09 OUTPUT
+                  ,@c_oFieled10  = @c_oFieled10 OUTPUT
+                  ,@b_Success    = @b_Success   OUTPUT
+                  ,@n_ErrNo      = @nErrNo      OUTPUT
+                  ,@c_ErrMsg     = @cErrMsg     OUTPUT   -- AvlQTY
+
+                  IF ISNULL(@cErrMsg, '') <> ''
+                  BEGIN
+                     SET @cErrMsg = @cErrMsg
+                     EXEC rdt.rdtSetFocusField @nMobile, 3
+                     GOTO Quit
+                  END
+
+                  SET @cValidateSKU = @c_oFieled01
+               END
+
+               -- (james21)
+               SET @cDecodeSP = rdt.RDTGetConfig( @nFunc, 'DecodeSP', @cCheckStorer)
+               IF @cDecodeSP = '0'
+                  SET @cDecodeSP = ''
+
+               IF @cDecodeSP <> ''
+               BEGIN
+                  SET @cBarcode = @cInField03
+                  SET @cUPC = ''
+
+                  -- Standard decode
+                  IF @cDecodeSP = '1'
+                  BEGIN
+                     EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cCheckStorer, @cFacility, @cLabel2Decode,
+                        @cID           OUTPUT, @cUPC           OUTPUT, @nQTY           OUTPUT,
+                        @cLottable01   OUTPUT, @cLottable02    OUTPUT, @cLottable03    OUTPUT, @dLottable04    OUTPUT, @dLottable05    OUTPUT,
+                        @cLottable06   OUTPUT, @cLottable07    OUTPUT, @cLottable08    OUTPUT, @cLottable09    OUTPUT, @cLottable10    OUTPUT,
+                        @cLottable11   OUTPUT, @cLottable12    OUTPUT, @dLottable13    OUTPUT, @dLottable14    OUTPUT, @dLottable15    OUTPUT,
+                        @cUserDefine01 OUTPUT, @cUserDefine02  OUTPUT, @cUserDefine03  OUTPUT, @cUserDefine04  OUTPUT, @cUserDefine05  OUTPUT
+
+                     IF ISNULL( @cUPC, '') <> ''
+                        SET @cSKU = @cUPC
+                  END
+
+                  -- Customize decode
+                  ELSE IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cDecodeSP AND type = 'P')
+                  BEGIN
+                     SET @cUPC = @cLabel2Decode
+                     SET @cSQL = 'EXEC rdt.' + RTRIM( @cDecodeSP) +
+                        ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cBarcode, @cCCRefNo, @cCCSheetNo, ' +
+                        ' @cLOC           OUTPUT, @cID            OUTPUT, @cUCC           OUTPUT, @cUPC           OUTPUT, @nQTY           OUTPUT, ' +
+                        ' @cLottable01    OUTPUT, @cLottable02    OUTPUT, @cLottable03    OUTPUT, @dLottable04    OUTPUT, @dLottable05    OUTPUT, ' +
+                        ' @cLottable06    OUTPUT, @cLottable07    OUTPUT, @cLottable08    OUTPUT, @cLottable09    OUTPUT, @cLottable10    OUTPUT, ' +
+                        ' @cLottable11    OUTPUT, @cLottable12    OUTPUT, @dLottable13    OUTPUT, @dLottable14    OUTPUT, @dLottable15    OUTPUT, ' +
+                        ' @cUserDefine01  OUTPUT, @cUserDefine02  OUTPUT, @cUserDefine03  OUTPUT, @cUserDefine04  OUTPUT, @cUserDefine05  OUTPUT, ' +
+                        ' @nErrNo      OUTPUT, @cErrMsg     OUTPUT'
+                     SET @cSQLParam =
+                        ' @nMobile        INT,           ' +
+                        ' @nFunc          INT,           ' +
+                        ' @cLangCode      NVARCHAR( 3),  ' +
+                        ' @nStep          INT,           ' +
+                        ' @nInputKey      INT,           ' +
+                        ' @cStorerKey     NVARCHAR( 15), ' +
+                        ' @cBarcode       NVARCHAR( 60), ' +
+                        ' @cCCRefNo       NVARCHAR( 10), ' +
+                        ' @cCCSheetNo     NVARCHAR( 10), ' +
+                        ' @cLOC           NVARCHAR( 10)  OUTPUT, ' +
+                        ' @cID            NVARCHAR( 18)  OUTPUT, ' +
+                        ' @cUCC           NVARCHAR( 20)  OUTPUT, ' +
+                        ' @cUPC           NVARCHAR( 20)  OUTPUT, ' +
+                        ' @nQTY           INT            OUTPUT, ' +
+                        ' @cLottable01    NVARCHAR( 18)  OUTPUT, ' +
+                        ' @cLottable02    NVARCHAR( 18)  OUTPUT, ' +
+                        ' @cLottable03    NVARCHAR( 18)  OUTPUT, ' +
+                        ' @dLottable04    DATETIME       OUTPUT, ' +
+                        ' @dLottable05    DATETIME       OUTPUT, ' +
+                        ' @cLottable06    NVARCHAR( 30)  OUTPUT, ' +
+                        ' @cLottable07    NVARCHAR( 30)  OUTPUT, ' +
+                        ' @cLottable08    NVARCHAR( 30)  OUTPUT, ' +
+                        ' @cLottable09 NVARCHAR( 30)  OUTPUT, ' +
+                        ' @cLottable10    NVARCHAR( 30)  OUTPUT, ' +
+                        ' @cLottable11    NVARCHAR( 30)  OUTPUT, ' +
+                        ' @cLottable12    NVARCHAR( 30)  OUTPUT, ' +
+                        ' @dLottable13    DATETIME       OUTPUT, ' +
+                        ' @dLottable14    DATETIME       OUTPUT, ' +
+                        ' @dLottable15    DATETIME       OUTPUT, ' +
+                        ' @cUserDefine01 NVARCHAR( 60)  OUTPUT, ' +
+                        ' @cUserDefine02  NVARCHAR( 60)  OUTPUT, ' +
+                        ' @cUserDefine03  NVARCHAR( 60)  OUTPUT, ' +
+                        ' @cUserDefine04  NVARCHAR( 60)  OUTPUT, ' +
+                        ' @cUserDefine05  NVARCHAR( 60)  OUTPUT, ' +
+                        ' @nErrNo         INT            OUTPUT, ' +
+                        ' @cErrMsg        NVARCHAR( 20)  OUTPUT'
+
+                     EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                        @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cCheckStorer, @cBarcode, @cCCRefNo, @cCCSheetNo,
+                        @cLOC          OUTPUT, @cID            OUTPUT, @cUCC           OUTPUT, @cUPC           OUTPUT, @nQTY           OUTPUT,
+                        @cLottable01   OUTPUT, @cLottable02    OUTPUT, @cLottable03    OUTPUT, @dLottable04    OUTPUT, @dLottable05    OUTPUT,
+                        @cLottable06   OUTPUT, @cLottable07    OUTPUT, @cLottable08    OUTPUT, @cLottable09    OUTPUT, @cLottable10    OUTPUT,
+                        @cLottable11   OUTPUT, @cLottable12    OUTPUT, @dLottable13    OUTPUT, @dLottable14    OUTPUT, @dLottable15    OUTPUT,
+                        @cUserDefine01 OUTPUT, @cUserDefine02  OUTPUT, @cUserDefine03  OUTPUT, @cUserDefine04  OUTPUT, @cUserDefine05  OUTPUT,
+                        @nErrNo        OUTPUT, @cErrMsg        OUTPUT
+
+                     IF ISNULL( @cUPC, '') <> ''
+                        SET @cValidateSKU = @cUPC
+                  END
+               END   -- End for DecodeSP
+
+               EXEC dbo.nspg_GETSKU @cCheckStorer, @cSKU OUTPUT, @b_success OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
+               IF @b_success = 1
+               BEGIN
+                  SET @cStorer = @cCheckStorer
+                  BREAK
+               END
+
+               FETCH NEXT FROM CUR_CheckSKU INTO @cCheckStorer
+            END
+            IF @b_success = 0
+            BEGIN
+               SET @nErrNo = 62120
+               SET @cErrMsg = rdt.rdtgetmessage( 62120, @cLangCode, 'DSP') -- 'Invalid SKU'
+               EXEC rdt.rdtSetFocusField @nMobile, 3
+               GOTO Quit
+            END
+            CLOSE CUR_CheckSKU
+            DEALLOCATE CUR_CheckSKU
+         END
+         ELSE
+         BEGIN
+            SET @cDecodeLabelNo = ''
+            SET @cDecodeLabelNo = rdt.RDTGetConfig( @nFunc, 'DecodeLabelNo', @cStorer)
+
+            IF ISNULL(@cDecodeLabelNo,'') NOT IN ('','0')   --SOS320895
+            BEGIN
+               EXEC dbo.ispLabelNo_Decoding_Wrapper
+                @c_SPName     = @cDecodeLabelNo
+               ,@c_LabelNo    = @cLabel2Decode
+               ,@c_Storerkey  = @cStorer
+               ,@c_ReceiptKey = @nMobile
+               ,@c_POKey      = ''
+               ,@c_LangCode   = @cLangCode
+               ,@c_oFieled01  = @c_oFieled01 OUTPUT   -- SKU
+               ,@c_oFieled02  = @c_oFieled02 OUTPUT   -- STYLE
+               ,@c_oFieled03  = @c_oFieled03 OUTPUT   -- COLOR
+               ,@c_oFieled04  = @c_oFieled04 OUTPUT   -- SIZE
+               ,@c_oFieled05  = @c_oFieled05 OUTPUT   -- QTY
+               ,@c_oFieled06  = @c_oFieled06 OUTPUT   -- CO#
+               ,@c_oFieled07  = @c_oFieled07 OUTPUT
+               ,@c_oFieled08  = @c_oFieled08 OUTPUT
+               ,@c_oFieled09  = @c_oFieled09 OUTPUT
+               ,@c_oFieled10  = @c_oFieled10 OUTPUT
+               ,@b_Success    = @b_Success   OUTPUT
+               ,@n_ErrNo      = @nErrNo      OUTPUT
+               ,@c_ErrMsg     = @cErrMsg     OUTPUT   -- AvlQTY
+
+               IF ISNULL(@cErrMsg, '') <> ''
+               BEGIN
+                  SET @cErrMsg = @cErrMsg
+                  EXEC rdt.rdtSetFocusField @nMobile, 3
+                  GOTO Quit
+               END
+
+               SET @cValidateSKU = @c_oFieled01
+            END
+
+            -- (james21)
+            SET @cDecodeSP = rdt.RDTGetConfig( @nFunc, 'DecodeSP', @cStorer)
+            IF @cDecodeSP = '0'
+               SET @cDecodeSP = ''
+
+            IF @cDecodeSP <> ''
+            BEGIN
+               SET @cBarcode = @cInField03
+               SET @cUPC = ''
+
+               -- Standard decode
+               IF @cDecodeSP = '1'
+               BEGIN
+                  EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorer, @cFacility, @cLabel2Decode,
+                     @cID           OUTPUT, @cUPC           OUTPUT, @nQTY           OUTPUT,
+                     @cLottable01   OUTPUT, @cLottable02    OUTPUT, @cLottable03    OUTPUT, @dLottable04    OUTPUT, @dLottable05    OUTPUT,
+                     @cLottable06   OUTPUT, @cLottable07    OUTPUT, @cLottable08    OUTPUT, @cLottable09    OUTPUT, @cLottable10    OUTPUT,
+                     @cLottable11   OUTPUT, @cLottable12    OUTPUT, @dLottable13    OUTPUT, @dLottable14    OUTPUT, @dLottable15    OUTPUT,
+                     @cUserDefine01 OUTPUT, @cUserDefine02  OUTPUT, @cUserDefine03  OUTPUT, @cUserDefine04  OUTPUT, @cUserDefine05  OUTPUT
+
+                  IF ISNULL( @cUPC, '') <> ''
+                     SET @cValidateSKU = @cUPC
+               END
+
+               -- Customize decode
+               ELSE IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cDecodeSP AND type = 'P')
+               BEGIN
+                  SET @cUPC = @cLabel2Decode
+                  SET @cSQL = 'EXEC rdt.' + RTRIM( @cDecodeSP) +
+                     ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cBarcode, @cCCRefNo, @cCCSheetNo, ' +
+                     ' @cLOC           OUTPUT, @cID            OUTPUT, @cUCC           OUTPUT, @cUPC           OUTPUT, @nQTY           OUTPUT, ' +
+                     ' @cLottable01    OUTPUT, @cLottable02    OUTPUT, @cLottable03    OUTPUT, @dLottable04    OUTPUT, @dLottable05    OUTPUT, ' +
+                     ' @cLottable06    OUTPUT, @cLottable07    OUTPUT, @cLottable08    OUTPUT, @cLottable09    OUTPUT, @cLottable10    OUTPUT, ' +
+                     ' @cLottable11    OUTPUT, @cLottable12    OUTPUT, @dLottable13    OUTPUT, @dLottable14    OUTPUT, @dLottable15    OUTPUT, ' +
+                     ' @cUserDefine01  OUTPUT, @cUserDefine02  OUTPUT, @cUserDefine03  OUTPUT, @cUserDefine04  OUTPUT, @cUserDefine05  OUTPUT, ' +
+                     ' @nErrNo      OUTPUT, @cErrMsg     OUTPUT'
+                  SET @cSQLParam =
+                     ' @nMobile        INT,           ' +
+                     ' @nFunc          INT,           ' +
+                     ' @cLangCode      NVARCHAR( 3),  ' +
+                     ' @nStep          INT,           ' +
+                     ' @nInputKey      INT,           ' +
+                     ' @cStorerKey     NVARCHAR( 15), ' +
+                     ' @cBarcode       NVARCHAR( 60), ' +
+                     ' @cCCRefNo       NVARCHAR( 10), ' +
+                     ' @cCCSheetNo     NVARCHAR( 10), ' +
+                     ' @cLOC           NVARCHAR( 10)  OUTPUT, ' +
+                     ' @cID            NVARCHAR( 18)  OUTPUT, ' +
+                     ' @cUCC           NVARCHAR( 20)  OUTPUT, ' +
+                     ' @cUPC           NVARCHAR( 20)  OUTPUT, ' +
+                     ' @nQTY           INT            OUTPUT, ' +
+                     ' @cLottable01    NVARCHAR( 18)  OUTPUT, ' +
+                     ' @cLottable02    NVARCHAR( 18)  OUTPUT, ' +
+                     ' @cLottable03    NVARCHAR( 18)  OUTPUT, ' +
+                     ' @dLottable04    DATETIME       OUTPUT, ' +
+                     ' @dLottable05    DATETIME       OUTPUT, ' +
+                     ' @cLottable06    NVARCHAR( 30)  OUTPUT, ' +
+                     ' @cLottable07    NVARCHAR( 30)  OUTPUT, ' +
+                     ' @cLottable08    NVARCHAR( 30)  OUTPUT, ' +
+                     ' @cLottable09    NVARCHAR( 30)  OUTPUT, ' +
+                     ' @cLottable10    NVARCHAR( 30)  OUTPUT, ' +
+                     ' @cLottable11    NVARCHAR( 30)  OUTPUT, ' +
+                     ' @cLottable12    NVARCHAR( 30)  OUTPUT, ' +
+                     ' @dLottable13    DATETIME       OUTPUT, ' +
+                     ' @dLottable14    DATETIME       OUTPUT, ' +
+                     ' @dLottable15    DATETIME       OUTPUT, ' +
+                     ' @cUserDefine01  NVARCHAR( 60)  OUTPUT, ' +
+                     ' @cUserDefine02  NVARCHAR( 60)  OUTPUT, ' +
+                     ' @cUserDefine03  NVARCHAR( 60)  OUTPUT, ' +
+                     ' @cUserDefine04  NVARCHAR( 60)  OUTPUT, ' +
+                     ' @cUserDefine05  NVARCHAR( 60)  OUTPUT, ' +
+                     ' @nErrNo         INT            OUTPUT, ' +
+                     ' @cErrMsg        NVARCHAR( 20)  OUTPUT'
+
+                  EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                     @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorer, @cBarcode, @cCCRefNo, @cCCSheetNo,
+                     @cLOC          OUTPUT, @cID            OUTPUT, @cUCC           OUTPUT, @cUPC           OUTPUT, @nQTY           OUTPUT,
+                     @cLottable01   OUTPUT, @cLottable02    OUTPUT, @cLottable03    OUTPUT, @dLottable04    OUTPUT, @dLottable05    OUTPUT,
+                     @cLottable06   OUTPUT, @cLottable07    OUTPUT, @cLottable08    OUTPUT, @cLottable09    OUTPUT, @cLottable10    OUTPUT,
+                     @cLottable11   OUTPUT, @cLottable12    OUTPUT, @dLottable13    OUTPUT, @dLottable14    OUTPUT, @dLottable15    OUTPUT,
+                     @cUserDefine01 OUTPUT, @cUserDefine02  OUTPUT, @cUserDefine03  OUTPUT, @cUserDefine04  OUTPUT, @cUserDefine05  OUTPUT,
+                     @nErrNo        OUTPUT, @cErrMsg        OUTPUT
+
+                  IF ISNULL( @cUPC, '') <> ''
+                     SET @cValidateSKU = @cUPC
+               END
+            END   -- End for DecodeSP
+
+            SET @b_success = 0
+            EXEC dbo.nspg_GETSKU @cStorer, @cValidateSKU OUTPUT, @b_success OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
+            IF @b_success = 0
+            BEGIN
+               SET @nErrNo = 62120
+               SET @cErrMsg = rdt.rdtgetmessage( 62120, @cLangCode, 'DSP') -- 'Invalid SKU'
+               EXEC rdt.rdtSetFocusField @nMobile, 3
+               GOTO Quit
+            END
+         END
+         -- SHONG001 (End)
+         IF ( ISNULL( @cDisplaySKU, '') <> ISNULL( @cValidateSKU, ''))
+         BEGIN
+		      SET @nErrNo = 77715
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- 'INVALID SKU'
+            SET @cOutField03 = ''
+            SET @cOutField05 = @cValidateLot01
+            SET @cOutField07 = @cValidateLot02
+            SET @cOutField09 = @cValidateLot03
+            SET @cOutField11 = @cValidateLot04
+            EXEC rdt.rdtSetFocusField @nMobile, 3
+            GOTO Quit
+         END
       END
 
       IF @nValidateLot01 = 1 AND ( ISNULL( @cDisplayLot01, '') <> ISNULL( @cValidateLot01, ''))
@@ -14917,7 +15237,7 @@ BEGIN
       IF @nValidateLot03 = 1 AND ( ISNULL( @cDisplayLot03, '') <> ISNULL( @cValidateLot03, ''))
       BEGIN
          SET @nErrNo = 77718
- SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- 'INVALID LOT03'
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- 'INVALID LOT03'
          SET @cOutField03 = @cValidateSKU
          SET @cOutField05 = @cValidateLot01
          SET @cOutField07 = @cValidateLot02
@@ -15145,7 +15465,7 @@ BEGIN
             AND S.SKU = @cSKU
             AND @cSKUDefaultUOM IN (P.PackUOM1, P.PackUOM2, P.PackUOM3, P.PackUOM4, P.PackUOM5, P.PackUOM6, P.PackUOM7, P.PackUOM8, P.PackUOM9))
          BEGIN
-  SET @nErrNo = 66844
+            SET @nErrNo = 66844
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- 'INV SKUDEFUOM'
             EXEC rdt.rdtSetFocusField @nMobile, 6 -- OPT
             GOTO ID_Fail
@@ -15180,7 +15500,7 @@ BEGIN
          EXEC nspUOMCONV
          @n_fromqty    = @nQTY,
          @c_fromuom    = @cEachUOM,
-  @c_touom      = @cSKUDefaultUOM,
+         @c_touom      = @cSKUDefaultUOM,
          @c_packkey    = @c_PackKey,
          @n_toqty      = @f_Qty        OUTPUT,
          @b_Success    = @b_Success    OUTPUT,
@@ -15315,9 +15635,13 @@ BEGIN
       V_String30     = @cNewCaseUOM,
       V_String32     = @cNewEachUOM,
       V_String33     = @cNewPPK,
-      V_String34     = @cNewLottable01,
-      V_String35     = @cNewLottable02,
-      V_String36     = @cNewLottable03,
+--       V_String34     = @cNewLottable01,
+--       V_String35     = @cNewLottable02,
+--       V_String36     = @cNewLottable03,
+      
+      V_String49     = @cNewLottable01,
+      V_String50     = @cNewLottable02,
+      V_String51     = @cNewLottable03,
       V_String39     = @cAddNewLocFlag,   -- (MaryVong01)
       V_String40     = @cID_In,  -- SOS79743
       V_ReceiptKey   = @cRecountFlag,      -- Used for RecountFlag
