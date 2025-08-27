@@ -51,7 +51,7 @@ BEGIN
    SET @n_err      = 0
    SET @c_errmsg   = ''
 
-   IF @c_Action NOT IN('INSERT','UPDATE','DELETE')
+   IF @c_Action NOT IN ('INSERT')
       GOTO QUIT_SP
 
    IF OBJECT_ID('tempdb..#INSERTED') IS NULL OR OBJECT_ID('tempdb..#DELETED') IS NULL
@@ -92,9 +92,6 @@ BEGIN
          IF @b_Success <> 1
          BEGIN
             SELECT @n_Continue = 3
-            SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 54000
-            SELECT @c_errmsg = 'NSQL'+ CONVERT(NVARCHAR(5),@n_err)+': Failed to trigger TransmitLog2. (mspWVD01)' 
-                             + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
          END
                         
          FETCH NEXT FROM @CUR_TL2 INTO @c_Wavekey, @c_Orderkey
