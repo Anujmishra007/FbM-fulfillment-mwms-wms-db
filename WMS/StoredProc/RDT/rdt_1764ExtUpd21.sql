@@ -14,6 +14,7 @@ GO
 /* 2025-02-21   NLT013   1.0.0   UWP-30476 Create Intial Version           */
 /* 2025-02-25   JCH507   1.0.1   UWP-30476 Clear Final loc when status = H */
 /* 2025-03-22   NLT013   1.1.0   UWP-31321 Clear ListKey while cancel task */
+/* 2025-08-26   NLT013   1.2.0   FCR-7417 Add TransmitLog                  */
 /***************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_1764ExtUpd21]
@@ -42,18 +43,90 @@ BEGIN
    DECLARE @cToLOCCat               NVARCHAR( 10)
    DECLARE @cFacilily               NVARCHAR( 5)
    DECLARE @cInputKey               NVARCHAR(3)
+   DECLARE @cSKU                    NVARCHAR( 20)
+   DECLARE @nRowCount               INT
+   DECLARE @cWSCTOTALLOCLOG         NVARCHAR(10)
+   DECLARE @cWaveKey                NVARCHAR( 10)
+   DECLARE @cCaseID                 NVARCHAR( 20)
+   DECLARE @bSuccess                INT
+   DECLARE @cOption                 NVARCHAR( 2)
 
    SET @nTranCount = @@TRANCOUNT
 
    SELECT @cFacilily = Facility,
       @cStorerKey  = StorerKey,
-      @cInputKey = InputKey
+      @cInputKey = InputKey,
+      @cOption = I_Field01
    FROM RDT.RDTMOBREC WITH(NOLOCK)
    WHERE Mobile = @nMobile
 
    -- TM Replen From
    IF @nFunc = 1764
    BEGIN
+      IF (@nStep = 5 AND @cOption = '1')  OR @nStep = 6 -- CONT NEXT TASK or ToLoc
+      BEGIN
+         IF @cInputKey = '1'
+         BEGIN
+            -- Get task info
+            SELECT
+               @cSKU = SKU,
+               @cWaveKey = WaveKey,
+               @cCaseID = CaseID,
+               @cTaskStatus = Status
+            FROM dbo.TaskDetail WITH (NOLOCK)
+            WHERE StorerKey = @cStorerKey
+               AND TaskdetailKey = @cTaskDetailKey
+               AND TaskType = 'RPF'
+               
+            IF @cTaskStatus = '5' -- RPF task is completed
+            BEGIN
+               SELECT @nRowCount = COUNT(*)
+               FROM dbo.SkuInfo WITH (NOLOCK)
+               WHERE StorerKey = @cStorerKey
+                  AND SKU = @cSKU
+                  AND ISNULL(ExtendedField06, '') = 'SORTABLE'
+                  AND ISNULL(ExtendedField07, '') = 'CONVEYABLE'
+
+               SET @cWSCTOTALLOCLOG = rdt.RDTGetConfig( @nFunc, 'WSCTOTALLOCLOG', @cStorerKey)
+
+               IF @nRowCount > 0 AND @cWSCTOTALLOCLOG = '1'
+               BEGIN
+                  SELECT @nRowCount = COUNT(*)
+                  FROM dbo.Transmitlog2 WITH (NOLOCK)
+                  WHERE TableName = 'WSCTOTALLOCLOG' 
+                     AND Key1 = @cWaveKey
+                     AND Key2 = @cCaseID
+                     AND Key3 = @cStorerKey
+
+                  IF @nRowCount = 0 -- No record exist, then generate TransmitLog
+                  BEGIN
+                     BEGIN TRY
+                        EXEC ispGenTransmitLog2
+                           @c_TableName        = 'WSCTOTALLOCLOG'
+                           ,@c_Key1             = @cWaveKey
+                           ,@c_Key2             = @cCaseID
+                           ,@c_Key3             = @cStorerKey
+                           ,@c_TransmitBatch    = ''
+                           ,@b_Success          = @bSuccess   OUTPUT
+                           ,@n_err              = @nErrNo     OUTPUT
+                           ,@c_errmsg           = @cErrMsg    OUTPUT
+                     END TRY
+                     BEGIN CATCH
+                        SET @nErrNo = 233652
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Generate TransmitLog Failed
+                        GOTO Fail
+                     END CATCH
+
+                     IF @bSuccess <> 1
+                     BEGIN
+                        GOTO Fail
+                     END
+                  END
+               END
+            END
+         END
+      END
+
       IF @nStep = 9 -- REASON CODE
       BEGIN
          IF @cInputKey = '1'
