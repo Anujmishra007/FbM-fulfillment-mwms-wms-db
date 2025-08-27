@@ -46,6 +46,7 @@ GO
 /* 2025-06-09 3.3.0  Dennis     FCR-3959 Extended Screen                         */
 /* 2025-06-23 3.4.0  NickT      FCR-5753 No need CAST @nDecodeQTY to @nUCCQty,  */
 /*                              expand QTY to support 6 digitals                */
+/* 2025-08-25 3.5.0  Dennis     FCR-3959 Extended Screen                         */
 /*********************************************************************************/
 
 CREATE OR ALTER  PROC [RDT].[rdtfnc_TM_CasePick](
@@ -3544,6 +3545,34 @@ BEGIN
          IF @nStepBak = 99 AND @nScnBak = 4028 AND @nInputKey=0
          BEGIN
             SET @cBarcode = @cUDF30
+         END
+         IF @cExtScnSP = 'rdt_1812ExtScn06'
+         BEGIN
+            IF @nStepBak = 99 AND @nScnBak = 4022 AND @nInputKey=1
+            BEGIN
+               SET @cTTMTaskType = @cUDF01
+               SET @cSuggID = @cUDF03
+               SET @cSuggLOT = @cUDF04
+               SET @cSuggFromLOC = @cUDF05
+               SET @cSuggToLOC = @cUDF06
+               SET @cSuggSKU = @cUDF07
+               SET @nQTY_RPL = @cUDF08
+               SET @cPickMethod = @cUDF09
+               SET @cDropID = @cUDF11
+               SET @cListKey = @cUDF12
+               SET @cTaskDetailUOM = @cUDF13
+               SET @nPQTY = @cUDF14
+               SET @nMQTY = @cUDF15
+               SET @nPQTY_RPL = @cUDF16
+               SET @nMQTY_RPL = @cUDF17
+               SET @nPUOM_Div = @cUDF18
+               SET @cLottableCode = @cUDF19
+            END
+            IF @nStepBak = 99 AND @nScnBak = 6672 AND @nInputKey=0
+            BEGIN
+               SET @nFromStep = @cUDF01
+               SET @nFromScn = @cUDF02
+            END
          END
       END
    END

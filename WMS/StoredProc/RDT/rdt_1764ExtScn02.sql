@@ -12,7 +12,8 @@ GO
 /*                                                                          */
 /* Date       Rev      Author   Purposes                                    */
 /* 2025-06-11 1.0.0    Dennis   FCR-3959 Created                            */
-/* 2025-08-21 1.0.1   Dennis   FCR-3959 Fix Inventory Hold Bug              */
+/* 2025-08-21 1.0.1    Dennis   FCR-3959 Fix Inventory Hold Bug              */
+/* 2025-08-20 1.1.0    Dennis   FCR-3959 New Feature                        */
 /****************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_1764ExtScn02] (
@@ -166,6 +167,26 @@ BEGIN
 
    IF @nFunc = 1764 -- TM Replen
    BEGIN
+      IF @nMOBRECStep = 0
+      BEGIN
+         SET @cTaskDetailKey = @cOutField06
+
+         SELECT
+            @cUDF01 = CASE WHEN TD.PickMethod = 'PP' THEN LA.Lottable11 ELSE '' END,
+            @cOutField01 = TD.PickMethod,
+            @cOutField03 = TD.FromLOC
+         FROM dbo.TaskDetail TD WITH(NOLOCK)
+         JOIN LOTAttribute LA WITH(NOLOCK) ON TD.LOT = LA.LOT AND TD.StorerKey = LA.StorerKey
+         WHERE TD.TaskDetailKey = @cTaskDetailKey
+
+         SET @cOutField02 = @cUDF01
+         SET @cOutField04 = '' -- FromLOC
+         SET @cOutField10 = '' -- ExtendedInfo
+
+         SET @nAfterStep = @nStep_FromLOC
+         SET @nAfterScn = @nScn_FromLOC
+         GOTO QUIT
+      END
       IF @nScn = 2109 -- Generic Reason Code screen
       BEGIN
          SET @nAfterStep = 99
@@ -427,61 +448,61 @@ BEGIN
                      @cLottable09 = ISNULL(@cLottable09,''),@cLottable10 = ISNULL(@cLottable10,''),@cLottable11 = ISNULL(@cLottable11,''),
                      @cLottable12 = ISNULL(@cLottable12,'')
 
-                  EXEC nspInventoryHoldWrapper  
-                     '',               -- lot  
-                     '',               -- loc  
-                     @cSuggID,               -- id  
-                     @cStorerKey,     -- storerkey  
-                     @cSuggSKU,           -- sku  
-                     '',               -- lottable01  
-                     '',               -- lottable01  
-                     '',               -- lottable01  
-                     NULL,             -- lottable01  
-                     NULL,             -- lottable01  
-                     '',  
-                     '',  
-                     '',  
-                     '',  
-                     '',  
-                     '',  
-                     '',  
-                     NULL,   
-                     NULL,   
-                     NULL,   
-                     @cReasonCode,      -- status  
-                     @cHoldID,              -- hold  
-                     @b_success OUTPUT,  
-                     @nErrNo OUTPUT,  
-                     @cErrMsg OUTPUT,  
-                     ''   -- remark  
-                  
-                  EXEC nspInventoryHoldWrapper  
-                     '',               -- lot  
-                     @cSuggFromLOC,    -- loc  
-                     '',               -- id  
-                     @cStorerKey,     -- storerkey  
-                     @cSuggSKU,           -- sku  
-                     '',               -- lottable01  
-                     '',               -- lottable01  
-                     '',               -- lottable01  
-                     NULL,             -- lottable01  
-                     NULL,             -- lottable01  
-                     '',  
-                     '',  
-                     '',  
-                     '',  
-                     '',  
-                     '',  
-                     '',  
-                     NULL,   
-                     NULL,   
-                     NULL,   
-                     @cReasonCode,      -- status  
-                     @cHoldLoc,              -- hold  
-                     @b_success OUTPUT,  
-                     @nErrNo OUTPUT,  
-                     @cErrMsg OUTPUT,  
-                     ''   -- remark  
+                  EXEC nspInventoryHoldWrapper
+                     '',               -- lot
+                     '',               -- loc
+                     @cSuggID,               -- id
+                     @cStorerKey,     -- storerkey
+                     @cSuggSKU,           -- sku
+                     '',               -- lottable01
+                     '',               -- lottable01
+                     '',               -- lottable01
+                     NULL,             -- lottable01
+                     NULL,             -- lottable01
+                     '',
+                     '',
+                     '',
+                     '',
+                     '',
+                     '',
+                     '',
+                     NULL,
+                     NULL,
+                     NULL,
+                     @cReasonCode,      -- status
+                     @cHoldID,              -- hold
+                     @b_success OUTPUT,
+                     @nErrNo OUTPUT,
+                     @cErrMsg OUTPUT,
+                     ''   -- remark
+
+                  EXEC nspInventoryHoldWrapper
+                     '',               -- lot
+                     @cSuggFromLOC,    -- loc
+                     '',               -- id
+                     @cStorerKey,     -- storerkey
+                     @cSuggSKU,           -- sku
+                     '',               -- lottable01
+                     '',               -- lottable01
+                     '',               -- lottable01
+                     NULL,             -- lottable01
+                     NULL,             -- lottable01
+                     '',
+                     '',
+                     '',
+                     '',
+                     '',
+                     '',
+                     '',
+                     NULL,
+                     NULL,
+                     NULL,
+                     @cReasonCode,      -- status
+                     @cHoldLoc,              -- hold
+                     @b_success OUTPUT,
+                     @nErrNo OUTPUT,
+                     @cErrMsg OUTPUT,
+                     ''   -- remark
 
                   IF @cPickMethod = 'FP'
                   BEGIN

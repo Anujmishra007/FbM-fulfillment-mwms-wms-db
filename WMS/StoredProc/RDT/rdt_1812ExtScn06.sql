@@ -12,8 +12,9 @@ GO
 /* Date       Rev     Author   Purposes                                 */  
 /* 2025-06-09 1.0.0   Dennis   FCR-3959                                 */
 /* 2025-06-10 1.1.0   Jackc    FCR-3959 Jump to 1756 equipment screen   */ 
-/* 2025-08-21 1.1.1   Dennis   FCR-3959 Fix Inventory Hold Bug          */ 
-/************************************************************************/  
+/* 2025-08-21 1.1.1   Dennis   FCR-3959 Fix Inventory Hold Bug          */
+/* 2025-08-25 1.1.2   Dennis   FCR-3959 New Scn                         */
+/************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_1812ExtScn06] (  
    @nMobile          INT,           
@@ -78,8 +79,10 @@ BEGIN
    @cExtendedInfo1   NVARCHAR(20),
    @cExtendedInfoSP  NVARCHAR(20),
    @cSuggSKU         NVARCHAR(20),
+   @cFromID          NVARCHAR(18),
    @cOption          NVARCHAR(1),
    @tExtData         VariableTable,
+   @cTaskDetailPUOM  NVARCHAR(20),
    @cReasonCode      NVARCHAR(10)
 
    -- Screen constant  
@@ -103,25 +106,65 @@ BEGIN
    DECLARE @cOrderKey      NVARCHAR( 10)
    DECLARE @nShipperCnt INT = 0
    DECLARE @nFromStep   INT
+   DECLARE @nCartonQTY INT
    DECLARE @nFromScn    INT,
+   @cBarcode            NVARCHAR( MAX),
    @cHoldID        NVARCHAR( 20),
+   @cSKU                NVARCHAR(20),
+   @cSKUValidated  NVARCHAR( 2),
    @cHoldLoc       NVARCHAR( 20),
+   @cMoveQTYAlloc  NVARCHAR( 1),
    @nRowCount      INT,
+   @cTaskDetailUOM      NVARCHAR( 5),
+   @cTTMTaskType        NVARCHAR(10),
    @cUserName      NVARCHAR(18),
    @cSuggToLOC          NVARCHAR(10),
    @c_outstring         NVARCHAR(255),
    @b_success           INT = 1,
+   @cSuggLOT            NVARCHAR(10),
+   @nPQTY_RPL           INT,
+   @nMQTY_RPL           INT,
    @cListKey            NVARCHAR(10),
    @cAutoGenDROPIDSP    NVARCHAR(20),
    @cExtendedValidateSP NVARCHAR(20),
    @cExtendedUpdateSP   NVARCHAR( 20),
+   @cDefaultFromID      NVARCHAR( 1),
+   @cSwapTaskSP         NVARCHAR(20),
+   @cLottableCode       NVARCHAR( 20),
+   @cPUOM               NVARCHAR( 1),
+   @cDefaultToLOC       NVARCHAR( 10),
+   @cDispStyleColorSize NVARCHAR( 1),
+   @cSKUDesc            NVARCHAR(60),
+   @cDisableQTYField    NVARCHAR(1),
+   @nPUOM_Div           INT,
+   @cPUOM_Desc          NCHAR( 5),
+   @cMUOM_Desc          NCHAR( 5),
    @nQTY_RPL            INT,
+   @nPQTY               INT,
+   @nMQTY               INT,
+   @nMorePage           INT,
    @cAutoID             NVARCHAR( 18)
    DECLARE @c_InventoryHoldKey NVARCHAR(10)
    DECLARE @nTranCount  INT
+   DECLARE @cNewTaskDetailKey NVARCHAR( 10)
 
    DECLARE @cEquipmentProfileKey NVARCHAR(10) --V1.1.0
-
+   DECLARE @tOptions TABLE
+   (
+      count     INT IDENTITY(1,1),
+      LOC       NVARCHAR(10),
+      ID        NVARCHAR(18),
+      SKU       NVARCHAR(20),
+      QTY       INT
+   )
+   DECLARE @tInventory TABLE
+   (
+      count     INT IDENTITY(1,1),
+      LOC       NVARCHAR(10),
+      ID        NVARCHAR(18),
+      SKU       NVARCHAR(20),
+      QTY       INT
+   )
    IF @nDebugFlag = 1 --V1.1.0
       SELECT 'Executing rdt_1812ExtScn06'
 
@@ -132,17 +175,32 @@ BEGIN
       ,@nFromStep           = [V_FromStep]
       ,@cExtendedInfoSP     = [V_String27]
       ,@cSuggSKU            = V_SKU
+      ,@cPUOM               = V_UOM
+      ,@cSuggLOT            = V_LOT
       ,@nQTY_RPL            =  V_TaskQTY
       ,@nQTY                =  V_QTY
       ,@cTaskDetailKey      = V_TaskDetailKey
       ,@cSuggFromLOC        = V_LOC
       ,@cSuggID             = V_ID
+      ,@nPQTY               = V_PQTY
+      ,@nMQTY               = V_MQTY
       ,@cDropID             = V_String3
       ,@cPickMethod         = V_String4
       ,@cSuggToloc          = V_String5
       ,@cListKey            = V_String7
+      ,@cDisableQTYField   = V_String8
+      ,@cSwapTaskSP        = V_String9
+      ,@cLottableCode      = V_String13
+      ,@cTaskDetailUOM     = V_String14
+      ,@cTaskDetailPUOM    = V_String15
+      ,@cDispStyleColorSize= V_String17
       ,@cExtendedUpdateSP  = V_String22
-      ,@cExtendedValidateSP= V_String31
+      ,@cDefaultToLOC      = V_String23
+      ,@cMoveQTYAlloc      = V_String24
+      ,@cSKUValidated      = V_String25
+      ,@cDefaultFromID     = V_String26
+      ,@cExtendedValidateSP = V_String31
+      ,@cTTMTaskType        = V_String34
       ,@cAutoGenDROPIDSP    = V_String43
       ,@cToLOC              = V_String44
       ,@cUserName           = UserName
@@ -450,77 +508,77 @@ BEGIN
                      @cLottable09 = ISNULL(@cLottable09,''),@cLottable10 = ISNULL(@cLottable10,''),@cLottable11 = ISNULL(@cLottable11,''),
                      @cLottable12 = ISNULL(@cLottable12,'')
                   BEGIN TRY
-                     EXEC nspInventoryHoldWrapper  
-                        '',               -- lot  
-                        '',               -- loc  
-                        @cSuggID,               -- id  
-                        @cStorerKey,     -- storerkey  
-                        @cSuggSKU,           -- sku  
-                        '',               -- lottable01  
-                        '',               -- lottable01  
-                        '',               -- lottable01  
-                        NULL,             -- lottable01  
-                        NULL,             -- lottable01  
-                        '',  
-                        '',  
-                        '',  
-                        '',  
-                        '',  
-                        '',  
-                        '',  
-                        NULL,   
-                        NULL,   
-                        NULL,   
-                        @cReasonCode,      -- status  
-                        @cHoldID,              -- hold  
-                        @b_success OUTPUT,  
-                        @nErrNo OUTPUT,  
-                        @cErrMsg OUTPUT,  
-                        ''   -- remark  
+                     EXEC nspInventoryHoldWrapper
+                        '',               -- lot
+                        '',               -- loc
+                        @cSuggID,               -- id
+                        @cStorerKey,     -- storerkey
+                        @cSuggSKU,           -- sku
+                        '',               -- lottable01
+                        '',               -- lottable01
+                        '',               -- lottable01
+                        NULL,             -- lottable01
+                        NULL,             -- lottable01
+                        '',
+                        '',
+                        '',
+                        '',
+                        '',
+                        '',
+                        '',
+                        NULL,
+                        NULL,
+                        NULL,
+                        @cReasonCode,      -- status
+                        @cHoldID,              -- hold
+                        @b_success OUTPUT,
+                        @nErrNo OUTPUT,
+                        @cErrMsg OUTPUT,
+                        ''   -- remark
                      IF @nErrNo <> 0
                      BEGIN
                         SET @nErrNo = 245402
-                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') 
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
                         GOTO RollBackTran
                      END
 
-                     EXEC nspInventoryHoldWrapper  
-                        '',               -- lot  
-                        @cSuggFromLOC,    -- loc  
-                        '',               -- id  
-                        @cStorerKey,     -- storerkey  
-                        @cSuggSKU,           -- sku  
-                        '',               -- lottable01  
-                        '',               -- lottable01  
-                        '',               -- lottable01  
-                        NULL,             -- lottable01  
-                        NULL,             -- lottable01  
-                        '',  
-                        '',  
-                        '',  
-                        '',  
-                        '',  
-                        '',  
-                        '',  
-                        NULL,   
-                        NULL,   
-                        NULL,   
-                        @cReasonCode,      -- status  
-                        @cHoldLoc,              -- hold  
-                        @b_success OUTPUT,  
-                        @nErrNo OUTPUT,  
-                        @cErrMsg OUTPUT,  
-                        ''   -- remark  
+                     EXEC nspInventoryHoldWrapper
+                        '',               -- lot
+                        @cSuggFromLOC,    -- loc
+                        '',               -- id
+                        @cStorerKey,     -- storerkey
+                        @cSuggSKU,           -- sku
+                        '',               -- lottable01
+                        '',               -- lottable01
+                        '',               -- lottable01
+                        NULL,             -- lottable01
+                        NULL,             -- lottable01
+                        '',
+                        '',
+                        '',
+                        '',
+                        '',
+                        '',
+                        '',
+                        NULL,
+                        NULL,
+                        NULL,
+                        @cReasonCode,      -- status
+                        @cHoldLoc,              -- hold
+                        @b_success OUTPUT,
+                        @nErrNo OUTPUT,
+                        @cErrMsg OUTPUT,
+                        ''   -- remark
                         IF @nErrNo <> 0
                         BEGIN
                            SET @nErrNo = 245403
-                           SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') 
+                           SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
                            GOTO RollBackTran
                         END
                   END TRY
                   BEGIN CATCH
                      SET @nErrNo = 245401
-                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- 'UCC req'  
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- 'UCC req'
                      GOTO RollBackTran
                   END CATCH
                   -- Go to next task/exit TM screen
@@ -620,6 +678,56 @@ BEGIN
                   SET @cOutField01 = '' -- Option
                END
 
+               IF @nFromStep = 99 AND @nFromScn = 6672
+               BEGIN
+                  SET @cOutField01 = ''
+                  SELECT @cOutField01 = Lottable03 FROM LOTAttribute (NOLOCK)
+                  WHERE lot = @cSuggLOT AND Storerkey = @cStorerKey AND SKU = @cSuggSKU
+
+                  INSERT INTO @tOptions (LOC,ID)
+                  SELECT TOP 3 LLI.LOC,LLI.ID
+                  FROM LOTxLOCxID LLI(NOLOCK)
+                  JOIN LOTAttribute LA (NOLOCK) ON LLI.LOT = LA.LOT AND LLI.StorerKey = LA.StorerKey AND LLI.SKU = LA.SKU
+                  WHERE LLI.QTY - LLI.QTYPICKED > 0
+                  AND LLI.StorerKey = @cStorerKey
+                  AND LLI.SKU = @cSuggSKU
+                  AND LLI.QTY = @nQTY_RPL
+                  AND LA.Lottable03 = @cOutField01
+                  AND LLI.ID <> @cSuggID
+                  ORDER BY CASE WHEN LLI.LOC = @cSuggFromLOC THEN 0 ELSE 1 END, LLI.LOT
+
+                  SELECT
+                     @cOutField02 = ISNULL(MAX(CASE WHEN count = 1 THEN LOC ELSE NULL END),''),
+                     @cOutField03 = ISNULL(MAX(CASE WHEN count = 1 THEN ID ELSE NULL END),''),
+                     @cOutField04 = ISNULL(MAX(CASE WHEN count = 2 THEN LOC ELSE NULL END),''),
+                     @cOutField06 = ISNULL(MAX(CASE WHEN count = 2 THEN ID ELSE NULL END),''),
+                     @cOutField07 = ISNULL(MAX(CASE WHEN count = 3 THEN LOC ELSE NULL END),''),
+                     @cOutField08 = ISNULL(MAX(CASE WHEN count = 3 THEN ID ELSE NULL END),'')
+                  FROM @tOptions
+
+                  INSERT INTO @tInventory (SKU,QTY)
+                  SELECT TOP 3 LLI.SKU,SUM(LLI.QTY)
+                  FROM LOTxLOCxID LLI(NOLOCK)
+                  WHERE LLI.QTY - LLI.QTYPICKED > 0
+                  AND LLI.StorerKey = @cStorerKey
+                  AND LLI.ID = @cSuggID
+                  AND LLI.LOC = @cSuggFromLOC
+                  GROUP BY LLI.SKU
+                  ORDER BY SKU
+
+                  SELECT
+                     @cOutField09 = ISNULL(CASE WHEN count = 1 THEN CONCAT(SKU,'   ',QTY) ELSE NULL END,''),
+                     @cOutField11 = ISNULL(CASE WHEN count = 2 THEN CONCAT(SKU,'   ',QTY) ELSE NULL END,''),
+                     @cOutField12 = ISNULL(CASE WHEN count = 3 THEN CONCAT(SKU,'   ',QTY) ELSE NULL END,'')
+                  FROM @tInventory
+
+                  SET @cOutField05 = ''
+                  SET @cOutField15 = @cSuggSKU
+                  SET @nAfterStep = 99
+                  SET @nAfterScn = 6672
+                  GOTO QUIT
+               END
+
                -- Back to prev screen
                SET @nAfterScn = @nFromScn
                SET @nAfterStep = @nFromStep
@@ -662,7 +770,442 @@ BEGIN
               
             GOTO Quit  
          END  
-      END  
+         IF @nScn = 4022 OR @nScn = 6672 -- FromID Scn
+         BEGIN
+            IF @nInputKey = 1 -- ENTER
+            BEGIN
+               -- Screen mapping
+               SET @cFromID  = @cInField05
+
+               -- Check FromID match
+               IF @cFromID <> @cSuggID
+               BEGIN
+                  IF @cFromID = '99' AND @nScn = 4022
+                  BEGIN
+                     SET @cOutField01 = ''
+                     SELECT @cOutField01 = Lottable03 FROM LOTAttribute (NOLOCK)
+                     WHERE lot = @cSuggLOT AND Storerkey = @cStorerKey AND SKU = @cSuggSKU
+
+                     INSERT INTO @tOptions (LOC,ID)
+                     SELECT TOP 3 LLI.LOC,LLI.ID
+                     FROM LOTxLOCxID LLI(NOLOCK)
+                     JOIN LOTAttribute LA (NOLOCK) ON LLI.LOT = LA.LOT AND LLI.StorerKey = LA.StorerKey AND LLI.SKU = LA.SKU
+                     WHERE LLI.QTY - LLI.QTYPICKED > 0
+                     AND LLI.StorerKey = @cStorerKey
+                     AND LLI.SKU = @cSuggSKU
+                     AND LLI.QTY = @nQTY_RPL
+                     AND LA.Lottable03 = @cOutField01
+                     AND LLI.ID <> @cSuggID
+                     ORDER BY CASE WHEN LLI.LOC = @cSuggFromLOC THEN 0 ELSE 1 END, LLI.LOT
+
+                     SELECT
+                        @cOutField02 = ISNULL(MAX(CASE WHEN count = 1 THEN LOC ELSE NULL END),''),
+                        @cOutField03 = ISNULL(MAX(CASE WHEN count = 1 THEN ID ELSE NULL END),''),
+                        @cOutField04 = ISNULL(MAX(CASE WHEN count = 2 THEN LOC ELSE NULL END),''),
+                        @cOutField06 = ISNULL(MAX(CASE WHEN count = 2 THEN ID ELSE NULL END),''),
+                        @cOutField07 = ISNULL(MAX(CASE WHEN count = 3 THEN LOC ELSE NULL END),''),
+                        @cOutField08 = ISNULL(MAX(CASE WHEN count = 3 THEN ID ELSE NULL END),'')
+                     FROM @tOptions
+
+                     INSERT INTO @tInventory (SKU,QTY)
+                     SELECT TOP 3 LLI.SKU,SUM(LLI.QTY)
+                     FROM LOTxLOCxID LLI(NOLOCK)
+                     WHERE LLI.QTY - LLI.QTYPICKED > 0
+                     AND LLI.StorerKey = @cStorerKey
+                     AND LLI.ID = @cSuggID
+                     AND LLI.LOC = @cSuggFromLOC
+                     GROUP BY LLI.SKU
+                     ORDER BY SKU
+
+                     SELECT
+                        @cOutField09 = ISNULL(CASE WHEN count = 1 THEN CONCAT(SKU,'   ',QTY) ELSE NULL END,''),
+                        @cOutField11 = ISNULL(CASE WHEN count = 2 THEN CONCAT(SKU,'   ',QTY) ELSE NULL END,''),
+                        @cOutField12 = ISNULL(CASE WHEN count = 3 THEN CONCAT(SKU,'   ',QTY) ELSE NULL END,'')
+                     FROM @tInventory
+
+                     SET @cUDF01 = @cTTMTaskType
+                     SET @cUDF03 = @cSuggID
+                     SET @cUDF04 = @cSuggLOT
+                     SET @cUDF05 = @cSuggFromLOC
+                     SET @cUDF06 = @cSuggToLOC
+                     SET @cUDF07 = @cSuggSKU
+                     SET @cUDF08 = @nQTY_RPL
+                     SET @cUDF09 = @cPickMethod
+                     SET @cUDF11 = @cDropID
+                     SET @cUDF12 = @cListKey
+                     SET @cUDF13 = @cTaskDetailUOM
+                     SET @cUDF14 = @nPQTY
+                     SET @cUDF15 = @nMQTY
+                     SET @cUDF16 = @nPQTY_RPL
+                     SET @cUDF17 = @nMQTY_RPL
+                     SET @cUDF18 = @nPUOM_Div
+                     SET @cUDF19 = @cLottableCode
+
+                     SET @cOutField05 = ''
+                     SET @cOutField15 = @cSuggSKU
+                     SET @nAfterStep = 99
+                     SET @nAfterScn = 6672
+                     GOTO QUIT
+                  END
+                  IF @cSwapTaskSP = ''
+                  BEGIN
+                     SET @nErrNo = 51359
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --ID not match
+                     GOTO Step_3_Fail
+                  END
+
+                  -- Swap ID
+                  IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cSwapTaskSP AND type = 'P')
+                  BEGIN
+                     SET @cNewTaskDetailKey = ''
+
+                     SET @cSQL = 'EXEC rdt.' + RTRIM( @cSwapTaskSP) +
+                        ' @nMobile, @nFunc, @cLangCode, @cTaskdetailKey, @cFromID, @cNewTaskDetailKey OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT'
+                     SET @cSQLParam =
+                        '@nMobile            INT,           ' +
+                        '@nFunc              INT,           ' +
+                        '@cLangCode          NVARCHAR( 3),  ' +
+                        '@cTaskdetailKey     NVARCHAR( 10), ' +
+                        '@cFromID            NVARCHAR( 18), ' +
+                        '@cNewTaskDetailKey  NVARCHAR( 10)  OUTPUT, ' +
+                        '@nErrNo             INT            OUTPUT, ' +
+                        '@cErrMsg            NVARCHAR( 20)  OUTPUT'
+
+                     EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                        @nMobile, @nFunc, @cLangCode, @cTaskdetailKey, @cFromID, @cNewTaskDetailKey OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+                     IF @nErrNo <> 0
+                        GOTO Quit
+
+                     -- New task
+                     IF @cNewTaskDetailKey <> ''
+                        SET @cTaskDetailKey = @cNewTaskDetailKey
+
+                     -- Reload task
+                     SELECT
+                        @cTTMTaskType = TaskType,
+                        @cSuggID      = FromID,
+                        @cSuggLOT     = LOT,
+                        @cSuggFromLOC = FromLOC,
+                        @cSuggToLOC   = ToLOC,
+                        @cSuggSKU     = SKU,
+                        @nQTY_RPL     = QTY,
+                        @cPickMethod  = PickMethod,
+                        @cDropID      = CASE WHEN ISNULL(DROPID,'')='' THEN @cDropID ELSE DROPID END , --(yeekung02)
+                        @cListKey     = ListKey,
+                        @cTaskDetailUOM = UOM
+                     FROM dbo.TaskDetail WITH (NOLOCK)
+                     WHERE TaskDetailKey = @cTaskDetailKey
+
+                     IF @cTaskDetailPUOM = '1'
+                     BEGIN
+                        -- Task Detail UoM as preferred UOM
+                        SET @cPUOM = @cTaskDetailUOM
+                     END
+                     ELSE
+                     BEGIN
+                        -- Get preferred UOM
+                        SELECT @cPUOM = DefaultUOM FROM rdt.rdtUser WITH (NOLOCK) WHERE UserName = @cUserName
+                     END
+
+                  END
+               END
+
+               -- Check QTYAlloc, QTYReplen
+               IF @cPickMethod = 'FP'
+               BEGIN
+                  IF EXISTS( SELECT 1
+                     FROM dbo.LOTxLOCxID WITH (NOLOCK)
+                     WHERE LOC = @cSuggFromLOC
+                        AND ID = @cSuggID
+                        AND (QTYReplen > 0 OR
+                           QTYAllocated > (CASE WHEN @cMoveQTYAlloc = '1' THEN QTYAllocated ELSE 0 END)))
+                  BEGIN
+                     SET @nErrNo = 51360
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --QTYALC/QTYRPL
+                     GOTO Step_3_Fail
+                  END
+               END
+
+               -- Extended update
+               IF @cExtendedUpdateSP <> ''
+               BEGIN
+                  IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')
+                  BEGIN
+                     SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +
+                        ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cTaskdetailKey, @cDropID, @nQTY, @cToLOC, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nAfterStep '
+                     SET @cSQLParam =
+                        '@nMobile         INT,           ' +
+                        '@nFunc           INT,           ' +
+                        '@cLangCode       NVARCHAR( 3),  ' +
+                        '@nStep           INT,           ' +
+                        '@nInputKey       INT,           ' +
+                        '@cTaskdetailKey  NVARCHAR( 10), ' +
+                        '@cDropID         NVARCHAR( 20), ' +
+                        '@nQTY            INT,           ' +
+                        '@cToLOC          NVARCHAR( 10), ' +
+                        '@nErrNo          INT OUTPUT,    ' +
+                        '@cErrMsg         NVARCHAR( 20) OUTPUT, ' +
+                        '@nAfterStep      INT            '
+
+                     EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                        @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cTaskdetailKey, @cDropID, @nQTY, @cToLOC, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nStep
+
+                     IF @nErrNo <> 0
+                        GOTO Quit
+                  END
+               END
+
+               -- Full pallet
+               IF @cPickMethod = 'FP'
+               BEGIN
+                  -- Prepare next screen var
+                  SET @cToLOC = ''
+                  SET @cOutField01 = @cSuggFromLOC
+                  SET @cOutField02 = @cSuggToLOC
+                  SET @cOutField03 = CASE WHEN @cDefaultToLOC = '1' THEN @cSuggToLOC ELSE '' END
+
+                  SET @nAfterScn = 4025
+                  SET @nAfterStep = 6
+               END
+
+               -- Partial pallet
+               IF @cPickMethod = 'PP'
+               BEGIN
+                  -- Get SKU info
+                  SELECT
+                     @cSKUDesc =
+                        CASE WHEN @cDispStyleColorSize = '0'
+                           THEN ISNULL( S.Descr, '')
+                           ELSE CAST( S.Style AS NCHAR(20)) +
+                                 CAST( S.Color AS NCHAR(10)) +
+                                 CAST( S.Size  AS NCHAR(10))
+                        END,
+                     @cLottableCode = S.LottableCode,
+                     @cMUOM_Desc = Pack.PackUOM3,
+                     @cPUOM_Desc =
+                        CASE @cPUOM
+                           WHEN '2' THEN Pack.PackUOM1 -- Case
+                           WHEN '3' THEN Pack.PackUOM2 -- Inner pack
+                           WHEN '6' THEN Pack.PackUOM3 -- Master unit
+                           WHEN '1' THEN Pack.PackUOM4 -- Pallet
+                           WHEN '4' THEN Pack.PackUOM8 -- Other unit 1
+                           WHEN '5' THEN Pack.PackUOM9 -- Other unit 2
+                        END,
+                     @nPUOM_Div = CAST(
+                        CASE @cPUOM
+                           WHEN '2' THEN Pack.CaseCNT
+                           WHEN '3' THEN Pack.InnerPack
+                           WHEN '6' THEN Pack.QTY
+                           WHEN '1' THEN Pack.Pallet
+                           WHEN '4' THEN Pack.OtherUnit1
+                           WHEN '5' THEN Pack.OtherUnit2
+                        END AS INT)
+                  FROM dbo.SKU S WITH (NOLOCK)
+                     INNER JOIN dbo.Pack Pack (nolock) ON (S.PackKey = Pack.PackKey)
+                  WHERE StorerKey = @cStorerKey
+                     AND SKU = @cSuggSKU
+
+                  SELECT
+                     @cLottable01 = '', @cLottable02 = '', @cLottable03 = '',    @dLottable04 = NULL,  @dLottable05 = NULL,
+                     @cLottable06 = '', @cLottable07 = '', @cLottable08 = '',    @cLottable09 = '',    @cLottable10 = '',
+                     @cLottable11 = '', @cLottable12 = '', @dLottable13 = NULL,  @dLottable14 = NULL,  @dLottable15 = NULL
+
+                  -- Get lottable
+                  SELECT
+                     @cLottable01 = LA.Lottable01,
+                     @cLottable02 = LA.Lottable02,
+                     @cLottable03 = LA.Lottable03,
+                     @dLottable04 = LA.Lottable04,
+                     @dLottable05 = LA.Lottable05,
+                     @cLottable06 = LA.Lottable06,
+                     @cLottable07 = LA.Lottable07,
+                     @cLottable08 = LA.Lottable08,
+                     @cLottable09 = LA.Lottable09,
+                     @cLottable10 = LA.Lottable10,
+                     @cLottable11 = LA.Lottable11,
+                     @cLottable12 = LA.Lottable12,
+                     @dLottable13 = LA.Lottable13,
+                     @dLottable14 = LA.Lottable14,
+                     @dLottable15 = LA.Lottable15
+                  FROM dbo.LOTAttribute LA WITH (NOLOCK)
+                  WHERE LOT = @cSuggLOT
+
+                  -- Dynamic lottable
+                  EXEC rdt.rdt_Lottable @nMobile, @nFunc, @cLangCode, @nScn, @nInputKey, @cStorerKey, @cSKU, @cLottableCode, 'DISPLAY', 'POPULATE', 4, 4,
+                     @cInField01  OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01 OUTPUT,
+                     @cInField02  OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02 OUTPUT,
+                     @cInField03  OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03 OUTPUT,
+                     @cInField04  OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04 OUTPUT,
+                     @cInField05  OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  @dLottable05 OUTPUT,
+                     @cInField06  OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  @cLottable06 OUTPUT,
+                     @cInField07  OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  @cLottable07 OUTPUT,
+                     @cInField08  OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  @cLottable08 OUTPUT,
+                     @cInField09  OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  @cLottable09 OUTPUT,
+                     @cInField10  OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  @cLottable10 OUTPUT,
+                     @cInField11  OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  @cLottable11 OUTPUT,
+                     @cInField12  OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT,  @cLottable12 OUTPUT,
+                     @cInField13  OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  @dLottable13 OUTPUT,
+                     @cInField14  OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT,  @dLottable14 OUTPUT,
+                     @cInField15  OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT,  @dLottable15 OUTPUT,
+                     @nMorePage   OUTPUT,
+                     @nErrNo      OUTPUT,
+                     @cErrMsg     OUTPUT,
+                     '',      -- SourceKey
+                     @nFunc   -- SourceType
+
+                  -- Restore scanned carton QTY
+                  SELECT @nCartonQTY = ISNULL( SUM( QTY), 0)
+                  FROM rdt.rdtFCPLog WITH (NOLOCK)
+                  WHERE TaskDetailKey = @cTaskDetailKey
+
+                  IF @nCartonQTY = 0
+                     SET @cSKUValidated = '0'
+                  ELSE
+                     SET @cSKUValidated = '1'
+
+                  -- Disable QTY field
+                  SET @cFieldAttr14 = CASE WHEN @cDisableQTYField = '1' THEN 'O' ELSE '' END -- PQTY
+                  SET @cFieldAttr15 = CASE WHEN @cDisableQTYField = '1' THEN 'O' ELSE '' END -- MQTY
+
+                  -- Convert to prefer UOM QTY
+                  IF @cPUOM = '6' OR -- When preferred UOM = master unit
+                     @nPUOM_Div = 0 -- UOM not setup
+                  BEGIN
+                     SET @cPUOM_Desc = ''
+                     SET @nPQTY_RPL = 0
+                     SET @nPQTY = 0
+                     SET @nMQTY = @nCartonQTY
+                     SET @nMQTY_RPL = @nQTY_RPL
+                     SET @cFieldAttr14 = 'O' -- @nPQTY_PWY
+                  END
+                  ELSE
+                  BEGIN
+                     SET @nPQTY = 0
+                     SET @nMQTY = @nCartonQTY
+
+                     SET @nPQTY = @nCartonQTY / @nPUOM_Div -- Calc QTY in preferred UOM
+                     SET @nMQTY = @nCartonQTY % @nPUOM_Div -- Calc the remaining in master unit
+
+                     SET @nPQTY_RPL = @nQTY_RPL / @nPUOM_Div -- Calc QTY in preferred UOM
+                     SET @nMQTY_RPL = @nQTY_RPL % @nPUOM_Div -- Calc the remaining in master unit
+                  END
+
+                  -- Prepare next screen variable
+                  SET @cOutField01 = @cSuggSKU
+                  SET @cOutField02 = SUBSTRING( @cSKUDesc, 1, 20)
+                  SET @cOutField03 = SUBSTRING( @cSKUDesc, 21, 20)
+                  SET @cBarcode    = '' -- SKU
+                  SET @cOutField09 = ''
+                  SET @cOutField10 = ''
+                  SET @cOutField11 = '1:' + CAST( @nPUOM_Div AS NCHAR( 6)) + ' ' + @cPUOM_Desc + ' ' + @cMUOM_Desc
+                  SET @cOutField12 = CASE WHEN (@cPUOM = '6' OR @nPUOM_Div = 0) THEN '' ELSE CAST( @nPQTY_RPL AS NVARCHAR( 6)) END
+                  SET @cOutField13 = CAST( @nMQTY_RPL AS NVARCHAR( 6))
+                  SET @cOutField14 = CASE WHEN (@cPUOM = '6' OR @nPUOM_Div = 0) THEN '' ELSE CAST( @nPQTY AS NVARCHAR( 6)) END -- PQTY
+                  SET @cOutField15 = CAST( @nMQTY AS NVARCHAR( 6)) -- MQTY
+                  EXEC rdt.rdtSetFocusField @nMobile, 'V_Barcode' -- SKU
+
+                  SET @nAfterScn = 4023
+                  SET @nAfterStep = 4
+               END
+
+               -- Extended info
+               IF @cExtendedInfoSP <> ''
+               BEGIN
+                  IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')
+                  BEGIN
+                     SET @cExtendedInfo1 = ''
+                     SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
+                        ' @nMobile, @nFunc, @cLangCode, @nStep, @cTaskdetailKey, @cExtendedInfo1 OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nAfterStep'
+                     SET @cSQLParam =
+                        '@nMobile         INT,           ' +
+                        '@nFunc           INT,           ' +
+                        '@cLangCode       NVARCHAR( 3),  ' +
+                        '@nStep           INT,           ' +
+                        '@cTaskdetailKey  NVARCHAR( 10), ' +
+                        '@cExtendedInfo1  NVARCHAR( 20) OUTPUT, ' +
+                        '@nErrNo          INT           OUTPUT, ' +
+                        '@cErrMsg         NVARCHAR( 20) OUTPUT, ' +
+                        '@nAfterStep      INT '
+
+                     EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                        @nMobile, @nFunc, @cLangCode, 3, @cTaskdetailKey, @cExtendedInfo1 OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nStep
+
+                     SET @cOutField10 = @cExtendedInfo1
+                  END
+               END
+
+               SET @cUDF01 = @cTTMTaskType
+               SET @cUDF03 = @cSuggID
+               SET @cUDF04 = @cSuggLOT
+               SET @cUDF05 = @cSuggFromLOC
+               SET @cUDF06 = @cSuggToLOC
+               SET @cUDF07 = @cSuggSKU
+               SET @cUDF08 = @nQTY_RPL
+               SET @cUDF09 = @cPickMethod
+               SET @cUDF11 = @cDropID
+               SET @cUDF12 = @cListKey
+               SET @cUDF13 = @cTaskDetailUOM
+               SET @cUDF14 = @nPQTY
+               SET @cUDF15 = @nMQTY
+               SET @cUDF16 = @nPQTY_RPL
+               SET @cUDF17 = @nMQTY_RPL
+               SET @cUDF18 = @nPUOM_Div
+               SET @cUDF19 = @cLottableCode
+            END
+            IF @nInputKey = 0 AND @nScn = 4022
+            BEGIN
+               SET @nAfterScn = 4021
+               SET @nAfterStep = 2
+
+               -- Prepare prev screen var
+               SET @cOutField01 = @cPickMethod
+               SET @cOutField02 = @cDropID
+               SET @cOutField03 = @cSuggFromLOC
+               SET @cOutField04 = '' -- FromLOC
+               SET @cOutField10 = '' -- ExtendedInfo
+
+               -- Extended info
+               IF @cExtendedInfoSP <> ''
+               BEGIN
+                  IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')
+                  BEGIN
+                     SET @cExtendedInfo1 = ''
+                     SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
+                        ' @nMobile, @nFunc, @cLangCode, @nStep, @cTaskdetailKey, @cExtendedInfo1 OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nAfterStep'
+                     SET @cSQLParam =
+                        '@nMobile         INT,           ' +
+                        '@nFunc           INT,           ' +
+                        '@cLangCode       NVARCHAR( 3),  ' +
+                        '@nStep           INT,           ' +
+                        '@cTaskdetailKey  NVARCHAR( 10), ' +
+                        '@cExtendedInfo1  NVARCHAR( 20) OUTPUT, ' +
+                        '@nErrNo          INT           OUTPUT, ' +
+                        '@cErrMsg         NVARCHAR( 20) OUTPUT, ' +
+                        '@nAfterStep      INT '
+
+                     EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                        @nMobile, @nFunc, @cLangCode, 3, @cTaskdetailKey, @cExtendedInfo1 OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nAfterStep
+
+                     SET @cOutField10 = @cExtendedInfo1
+                  END
+               END
+            END
+            IF @nInputKey = 0 AND @nScn = 6672 --GOTO ReasonCodeScn
+            BEGIN
+               SET @cOutField01 = ''
+               SET @cUDF01 = 99 --FROM STEP
+               SET @cUDF02 = 6672 -- FROM SCN
+               SET @nAfterStep = 99
+               SET @nAfterScn = @nScn_ReasonCode
+               GOTO QUIT
+            END
+            Step_3_Fail:
+            BEGIN
+               SET @cOutField05 = '' -- FromID
+            END
+         END
+      END
       IF @nMOBRECStep = 5
       BEGIN
          IF @nInputKey = 0 -- ESC
@@ -675,6 +1218,56 @@ BEGIN
                SET @nAfterScn = @nMOBRECScn
                SET @cOutField01 = ''
                GOTO Quit
+            END
+         END
+      END
+      IF @nMOBRECStep = 2 --FromLoc
+      BEGIN
+         IF @nInputKey = 1
+         BEGIN
+            IF EXISTS (SELECT 1 FROM LOC LOC WITH (NOLOCK)
+               JOIN dbo.CodeLKUP CL WITH (NOLOCK)
+                  ON LOC.LocationCategory = CL.LONG
+                  AND CL.ListName = 'JCBBKFRMLC'
+                  AND CL.StorerKey = @cStorerKey
+               WHERE LOC = @cSuggFromLOC AND LOC.Facility = @cFacility)
+            BEGIN
+               -- Prepare Next Screen
+               SET @cOutField01 = @cPickMethod
+               SET @cOutField02 = @cDropID
+               SET @cOutField03 = @cSuggFromLOC
+               SET @cOutField04 = @cSuggID
+               SET @cOutField05 = CASE WHEN @cDefaultFromID = '1' THEN @cSuggID ELSE '' END -- FromID
+               SET @cOutField10 = '' -- ExtendedInfo
+
+               SET @nAfterScn = 4022
+               SET @nAfterStep = 99
+
+               -- Extended info
+               IF @cExtendedInfoSP <> ''
+               BEGIN
+                  IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')
+                  BEGIN
+                     SET @cExtendedInfo1 = ''
+                     SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
+                        ' @nMobile, @nFunc, @cLangCode, @nStep, @cTaskdetailKey, @cExtendedInfo1 OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nAfterStep'
+                     SET @cSQLParam =
+                        '@nMobile         INT,           ' +
+                        '@nFunc           INT,           ' +
+                        '@cLangCode       NVARCHAR( 3),  ' +
+                        '@nStep           INT,           ' +
+                        '@cTaskdetailKey  NVARCHAR( 10), ' +
+                        '@cExtendedInfo1  NVARCHAR( 20) OUTPUT, ' +
+                        '@nErrNo          INT           OUTPUT, ' +
+                        '@cErrMsg         NVARCHAR( 20) OUTPUT, ' +
+                        '@nAfterStep      INT '
+
+                     EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                        @nMobile, @nFunc, @cLangCode, 2, @cTaskdetailKey, @cExtendedInfo1 OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nAfterStep
+
+                     SET @cOutField10 = @cExtendedInfo1
+                  END
+               END
             END
          END
       END

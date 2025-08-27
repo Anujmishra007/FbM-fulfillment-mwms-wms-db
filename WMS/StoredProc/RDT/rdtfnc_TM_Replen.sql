@@ -62,6 +62,7 @@ GO
 /* 2025-08-04 4.4.0 NickT     UWP-37578 Extend length of  @cOption            */
 /* 2025-08-08 4.5.0 NickT     UWP-39061 SuggestToLoc is reset by mistake      */
 /* 2025-06-16 4.6.0 Dennis    FCR-3959 Extended Update on Step 7              */
+/* 2025-08-20 4.6.1 Dennis    FCR-3959 New Feature                            */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_Replen](
@@ -3679,8 +3680,11 @@ BEGIN
                END
             END
          END
-
-         
+         ELSE IF @cExtScnSP = 'rdt_1764ExtScn02'
+         BEGIN
+            IF @nStep = @nStep_FromLOC
+               SET @cDropID = @cUDF01
+         END
       END
    END
    GOTO Quit
