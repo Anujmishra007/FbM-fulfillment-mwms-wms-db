@@ -39,7 +39,7 @@ GO
 /* 2025-07-01                 Version 1.90 & 1.91 & fixes. Add v2.0      */
 /* 2025-07-02                 Version v2.1 & fixes                       */
 /* 2025-07-04                 Version v2.2 & fix                         */
-/* 2025-08-25                 fix                                        */
+/* 2025-08-27                 fix                                        */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV02]
    @c_Wavekey      NVARCHAR(10)
@@ -698,7 +698,7 @@ BEGIN
             --               ELSE o.MSLanes
             --               END
 
-             ,Qty    = SUM(pd.Qty)
+            ,Qty    = SUM(pd.Qty)
             ,IDQty  = ISNULL(lpn.Qty,0)
             ,la.Lottable11
       FROM #TMP_ORD o 
@@ -792,7 +792,7 @@ BEGIN
          AND   l.LocAisle = @c_LocAisle
          AND   l.[Floor]  = @c_Floor
          ORDER BY l.LogicalLocation                                                 --2025-08-25 - END
-
+ 
          IF @n_IDQty > @n_Qty AND @c_CaseID > ''                     --Lottable11
          BEGIN
             SELECT @n_Qty = SUM(lli.Qty)
@@ -806,7 +806,7 @@ BEGIN
          ELSE                                                                       --2025-07-04 - START
          BEGIN
             SET @n_Qty = @n_IDQty
-         END                                                                        --2025-07-04 - END             
+         END                                                                        --2025-07-04 - END  
 
          EXEC isp_InsertTaskDetail
             @c_Taskdetailkey         = @c_Taskdetailkey OUTPUT
@@ -819,10 +819,10 @@ BEGIN
          ,  @n_Qty                   = @n_Qty
          ,  @c_FromLoc               = @c_FromLoc
          ,  @c_LogicalFromLoc        = @c_FromLoc
-         ,  @c_FromID                = @c_FromID
+         ,  @c_FromID                = @c_FromID                                    --Confirm refer to Inv's ID
          ,  @c_ToLoc                 = @c_ToLoc
          ,  @c_LogicalToLoc          = @c_ToLoc
-         ,  @c_ToID                  = @c_ToID 
+         ,  @c_ToID                  = @c_ToID                                      --Confirm refer to Inv's ID
          ,  @c_CaseID                = @c_CaseID                                    --2025-06-17
          ,  @c_PickMethod            = @c_PickMethod
          ,  @c_Status                = @c_TaskStatus                                --v2.2         
@@ -834,7 +834,7 @@ BEGIN
          ,  @c_Groupkey              = ''
          ,  @c_Wavekey               = @c_Wavekey
          ,  @c_FinalLoc              = @c_FinalLoc
-         ,  @c_FinalID               = @c_ToID         
+         ,  @c_FinalID               = @c_ToID                                      --Confirm refer to Inv's ID            
          ,  @c_AreaKey               = '?F'  -- ?F=Get from location areakey
          ,  @c_Message03             = ''
          ,  @n_QtyReplen             = @n_Qty
@@ -873,7 +873,7 @@ BEGIN
       SELECT o.Orderkey
          ,   o.[Priority]
          ,   o.C_Company
-         ,   Lanes = CASE  WHEN o.KitOrder = 1 THEN o.KitLoc                              --2025-07-03
+         ,   Lanes = CASE  WHEN o.KitOrder = 1 THEN o.KitLoc                        --2025-07-03
                            WHEN o.KitOrder = 0 AND o.OtherReference > '' THEN o.OtherReference
                            ELSE o.MSLanes
                            END
@@ -883,7 +883,7 @@ BEGIN
          ,   Lot = CASE WHEN COUNT(DISTINCT pd.Lot) > 1 THEN '' ELSE MIN(pd.Lot) END
          ,   pd.Loc
          ,   pd.ID
-         ,   CaseID = CASE WHEN UOM IN ('6', '7') THEN '' ELSE la.Lottable11 END
+         ,   CaseID = la.Lottable11                                                 --2025-08-27
          ,   ReplFromLoc = ISNULL(pd.ToLoc,'')                                      --v1.90
          ,   ReplFromID  = pd.CaseID                                                --v1.90
          ,   Qty = SUM(pd.Qty)
@@ -907,7 +907,7 @@ BEGIN
             ,  pd.Storerkey
             ,  pd.Loc
             ,  pd.ID
-            ,  CASE WHEN UOM IN ('6', '7') THEN '' ELSE la.Lottable11 END
+            ,  la.Lottable11                                                        --2025-08-27                                  
             ,  ISNULL(pd.ToLoc,'')                                                  --v1.90
             ,  pd.CaseID                                                            --v1.90
             ,  l.LocAisle
@@ -932,10 +932,13 @@ BEGIN
          SET @c_TaskType      = 'FCP'
          SET @c_ToLoc         = ''
          SET @c_FinalLoc      = ''
-         SET @c_ToID          = @c_FromID
-         SET @c_FinalID       = @c_ToID
-         SET @c_PickMethod    = CASE WHEN @c_CaseID = '' AND @c_UOM NOT IN ('6','7')--2025-06-17
-                                     THEN 'FP' ELSE 'PP' END
+         SET @c_ToID          = @c_FromID                                                
+         SET @c_FinalID       = @c_ToID                                                
+         SET @c_PickMethod    = CASE WHEN @c_CaseID > ''                            --2025-08-27
+                                     THEN 'PP' 
+                                     WHEN @c_FromID = ''
+                                     THEN 'PP' 
+                                     ELSE 'FP' END
          SET @c_TaskStatus    = '0'
          SET @c_RefTaskkey    = ''                                                  --v1.90
          SET @c_LinkTaskToPick_SQL = 'PICKDETAIL.Orderkey= @c_Orderkey'
@@ -961,12 +964,16 @@ BEGIN
                SELECT @c_RefTaskKey =  td.TaskDetailKey 
                FROM TASKDETAIL td (NOLOCK)
                WHERE td.TaskType   = 'RPF'
-               AND   td.Caseid     = ''
+               AND   td.Caseid     = ''                                           
                AND   td.Storerkey  = @c_Storerkey
                AND   td.UOM        = '1'
                AND   td.FromLoc    = @c_ReplFromLoc 
                AND   td.FromID     = @c_ReplFromID
                AND   td.SourceType = @c_SourceType
+
+               SET @c_Putawayzone      = ''                                         --2025-08-27
+               SET @c_LocationGroup    = ''                                         --2025-08-27
+               SET @c_LocationCategory = ''                                         --2025-08-27
             END
          END
       
@@ -990,7 +997,7 @@ BEGIN
          AND   l.LocAisle = @c_LocAisle
          AND   l.[Floor]  = @c_Floor
          ORDER BY l.LogicalLocation
-                             
+                
          SET @b_Success = 1
          SET @n_Err = 0
          SET @c_errmsg = ''
@@ -1006,10 +1013,10 @@ BEGIN
          ,  @n_Qty                   = @n_Qty
          ,  @c_FromLoc               = @c_FromLoc
          ,  @c_LogicalFromLoc        = @c_FromLoc
-         ,  @c_FromID                = @c_FromID
+         ,  @c_FromID                = @c_FromID                                    --Confirm refer to Inv's ID
          ,  @c_ToLoc                 = @c_ToLoc
          ,  @c_LogicalToLoc          = @c_ToLoc
-         ,  @c_ToID                  = @c_ToID 
+         ,  @c_ToID                  = @c_ToID                                      --Confirm refer to Inv's ID
          ,  @c_CaseID                = @c_CaseID
          ,  @c_PickMethod            = @c_PickMethod
          ,  @c_Status                = @c_TaskStatus
@@ -1022,7 +1029,7 @@ BEGIN
          ,  @c_RefTaskkey            = @c_RefTaskkey                                --v1.90
          ,  @c_Wavekey               = @c_Wavekey
          ,  @c_FinalLoc              = @c_FinalLoc
-         ,  @c_FinalID               = @c_FinalID
+         ,  @c_FinalID               = @c_FinalID                                    --Confirm refer to Inv's ID    
          ,  @c_AreaKey               = '?F'  -- ?F=Get from location areakey
          ,  @c_Message01             = @c_Putawayzone
          ,  @c_Message02             = @c_LocationGroup
