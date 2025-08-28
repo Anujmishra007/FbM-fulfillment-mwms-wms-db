@@ -78,7 +78,7 @@ BEGIN
                AND TaskdetailKey = @cTaskDetailKey
                AND TaskType = 'RPF'
                
-            IF @cTaskStatus = '5' -- RPF task is completed
+            IF @cTaskStatus IN ( '5', '9' ) -- RPF task is completed
             BEGIN
                SELECT @nRowCount = COUNT(*)
                FROM dbo.SkuInfo WITH (NOLOCK)
