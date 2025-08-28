@@ -3,7 +3,6 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-
 /******************************************************************************/
 /* Store procedure: rdt_593PrtCldFile03                                       */
 /*                                                                            */
@@ -17,8 +16,10 @@ GO
 /* 2024-12-26 1.0.1  BDH028     Print PDF file                                */
 /* 2025-04-09 1.1.0  YWA059     Fix issue: endless loop in a scenario         */
 /* 2025-05-30 1.1.1  PYU015     FCR-5485 Fix issue:add configkey MaxOrderPrint*/
+/* 2025-07-09 1.1.1  PYU015     UWP-37457- Fix issue: fix @cParam2 out of     */
+/*                              nvarchar(10) and @cOrderKey is nvarchar(10)   */
 /******************************************************************************/
-CREATE OR ALTER   PROC [RDT].[rdt_593PrtCldFile03] (
+CREATE OR ALTER  PROC [RDT].[rdt_593PrtCldFile03] (
    @nMobile    INT,
    @nFunc      INT,
    @nStep      INT,
@@ -108,7 +109,10 @@ BEGIN
       IF ISNULL(@cParam2,'') <> ''
       BEGIN
          SET @cOrderKey = @cParam2
-         IF ISNULL(@cOrderKey, '') = ''
+          -- UWP-37457 modify  by PYU015 begin --
+         IF ISNULL(@cOrderKey, '') = '' OR LEN(@cParam2) != 10
+          -- IF ISNULL(@cOrderKey, '') = ''
+          -- UWP-37457 modify  by PYU015 end   --
          BEGIN
             SET @nErrno = 236101
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- NeedOrderKey
@@ -145,7 +149,7 @@ BEGIN
          BREAK
       END
 
-      IF (@cOrderKey = @cParam2)
+      IF (@cOrderKey = @cParam2) 
       BEGIN
          SET @end_loop_flag = 1
       END
