@@ -18,6 +18,7 @@ GO
 /* 2025-05-30 1.1.1  PYU015     FCR-5485 Fix issue:add configkey MaxOrderPrint*/
 /* 2025-07-09 1.1.1  PYU015     UWP-37457- Fix issue: fix @cParam2 out of     */
 /*                              nvarchar(10) and @cOrderKey is nvarchar(10)   */
+/************************** Merged Into V0 ************************************/
 /******************************************************************************/
 CREATE OR ALTER  PROC [RDT].[rdt_593PrtCldFile03] (
    @nMobile    INT,
