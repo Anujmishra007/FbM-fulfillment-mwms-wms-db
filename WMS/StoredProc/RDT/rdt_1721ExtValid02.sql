@@ -45,9 +45,9 @@ BEGIN
                @cFromLocHOSTWHCODE     NVARCHAR( 10),
                @cToLocHOSTWHCODE       NVARCHAR( 10)
 
-            SELECT @cFromLOC = DropLOC
-            FROM dbo.DropID WITH (NOLOCK)
-            WHERE DropID = @cID
+            SELECT TOP 1 @cFromLOC = Loc
+            FROM dbo.PalletDetail WITH (NOLOCK)
+            WHERE PalletKey = @cID
 
             SELECT @cFromLocHOSTWHCODE = HOSTWHCODE
             FROM dbo.LOC WITH(NOLOCK)
