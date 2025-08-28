@@ -12,7 +12,7 @@ GO
 /*                                                                       */
 /* Called By: When Udpate Order Header Record                            */
 /*                                                                       */
-/* PVCS Version: 4.11                                                    */
+/* PVCS Version: 4.13                                                    */
 /*                                                                       */
 /* Version: 5.4                                                          */
 /*                                                                       */
@@ -269,6 +269,9 @@ GO
 /* 06-Sep-2024   PPA371    4.12 Validate if status is cancel             */
 /* 26-Feb-2025  USH022-01 4.12 FCR-2177-To Update UCC.ArchiveCop=9       */
 /*                             When Orders.Status =9                     */
+/* 28-08-2025   Wan08     4.13 [FCR-2532] [JCB] SO Header Status Update  */
+/*                             Partial Shipment-Multi Allocation, Picking*/
+/*                             & Shipment for an Order Status            */ 
 /*************************************************************************/
 
 CREATE OR ALTER TRIGGER [dbo].[ntrOrderHeaderUpdate]
@@ -3001,8 +3004,10 @@ IF @c_authority_SOShpCfmCMS = '1' AND ( @c_CurSOStatus = '9' OR @c_Status = '9')
          BEGIN
             -- Modify by ricky (Feb,2005) to prevent the orders status rollback to 1 or 2 when 3
             UPDATE ORDERS
-            SET STATUS = CASE WHEN ORDERS.STATUS = '3' and @c_Status in ('1','2') THEN ORDERS.STATUS
-                                     ELSE @c_status
+            SET STATUS = CASE WHEN ORDERS.STATUS = '3' and @c_Status in ('1','2') AND              --(Wan08)
+                                   ISNULL(scfg1.PartialShipOrderStatus,'0') <> '1'                 --(Wan08)
+                              THEN ORDERS.STATUS
+                              ELSE @c_status
                          END,
                 Editdate = getdate(),
                 Editwho = SUSER_SNAME(),
@@ -3028,6 +3033,10 @@ IF @c_authority_SOShpCfmCMS = '1' AND ( @c_CurSOStatus = '9' OR @c_Status = '9')
                                  -- TLTING10  -- tlting09
             FROM ORDERS
             JOIN STORER WITH (NOLOCK) ON (ORDERS.StorerKey = STORER.StorerKey)
+            OUTER APPLY (SELECT PartialShipOrderStatus= gr.Authority                               --(Wan08)
+                         FROM dbo.fnc_GetRight2(ORDERS.Facility, ORDERS.Storerkey                  --(Wan08)
+                                          ,'', 'PartialShipOrderStatus') gr                        --(Wan08)
+                        ) scfg1
             WHERE OrderKey = @c_OrderKey
 
             SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
