@@ -50,11 +50,11 @@ BEGIN
             WHERE DropID = @cID
 
             SELECT @cFromLocHOSTWHCODE = HOSTWHCODE
-            FROM dbo.LOC (NOLOCK)
+            FROM dbo.LOC WITH(NOLOCK)
             WHERE LOC = @cFromLOC
 
             SELECT @cToLocHOSTWHCODE = HOSTWHCODE
-            FROM dbo.LOC (NOLOCK)
+            FROM dbo.LOC WITH(NOLOCK)
             WHERE LOC = @cToLOC
             
             IF @cFromLocHOSTWHCODE = 'UR' AND @cToLocHOSTWHCODE = 'QI'
