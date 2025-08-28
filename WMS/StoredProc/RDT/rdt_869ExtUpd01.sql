@@ -50,6 +50,12 @@ DECLARE @List TABLE
    OrderKey NVARCHAR(20),
    SKU      NVARCHAR(20)
    )
+DECLARE @tPackHeader TABLE
+(
+   PickSlipNo NVARCHAR( 10) NOT NULL,
+   PRIMARY KEY CLUSTERED(PickSlipNo)
+)
+
 DECLARE @tPackDetail TABLE
 (
    RowNumber   INT IDENTITY,
@@ -149,7 +155,15 @@ BEGIN
             IF NOT EXISTS (SELECT 1 FROM dbo.PICKDETAIL(NOLOCK) WHERE OrderKey = @cOrderKey AND STATUS <> '0')
             AND NOT EXISTS (SELECT 1 FROM dbo.PACKDETAIL PD(NOLOCK) WHERE PickSLipNo = @cPickSlipNo AND PD.StorerKey = @cStorerKey)
             BEGIN
-               DELETE FROM PackHeader WHERE OrderKey = @cOrderKey AND StorerKey = @cStorerKey
+               INSERT INTO @tPackHeader (PickSlipNo)
+               SELECT PickSlipNo 
+               FROM dbo.PackHeader WITH(NOLOCK) 
+               WHERE OrderKey = @cOrderKey 
+                  AND StorerKey = @cStorerKey
+               
+               DELETE PH
+               FROM dbo.PackHeader PH WITH(ROWLOCK)
+               INNER JOIN @tPackHeader TPH ON PH.PickSlipNo = TPH.PickSlipNo
             END
          END
 
