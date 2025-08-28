@@ -1300,6 +1300,20 @@ BEGIN
          BEGIN
             IF @nInputKey = 1
             BEGIN
+               DECLARE @tPackDetail TABLE 
+               (
+                  PickSlipNo NVARCHAR(10),
+                  CartonNo   INT,
+                  LabelNo    NVARCHAR(20),
+                  LabelLine  NVARCHAR(5),
+                  PRIMARY KEY (PickSlipNo, CartonNo, LabelNo, LabelLine)
+               )
+
+               DECLARE @tPickDetail TABLE 
+               (
+                  PickDetailKey  NVARCHAR(18) PRIMARY KEY CLUSTERED
+               )
+               
                IF @cOption = '1'
                BEGIN
                   --print labels
@@ -1492,8 +1506,39 @@ BEGIN
                   --clear dropid to reuse
                   IF @cDropIDFlag = 'Y'
                   BEGIN
-                     UPDATE dbo.PackDetail WITH(ROWLOCK) SET DropID = CONCAT('ARC',DropID) WHERE DropID=@cToteID
-                     UPDATE dbo.PICKDETAIL WITH(ROWLOCK) SET DropID = CONCAT('ARC',DropID) WHERE DropID=@cToteID
+                     DELETE FROM @tPackDetail
+
+                     INSERT INTO @tPackDetail (PickSlipNo, CartonNo, LabelNo, LabelLine)
+                     SELECT DISTINCT PickSlipNo, CartonNo, LabelNo, LabelLine
+                     FROM dbo.PackDetail WITH(NOLOCK)
+                     WHERE StorerKey = @cStorerKey
+                       AND DropID = @cToteID
+
+                     UPDATE PD WITH(ROWLOCK)
+                        SET DropID = CONCAT('ARC',DropID)
+                     FROM dbo.PackDetail PD WITH(ROWLOCK)
+                     INNER JOIN @tPackDetail TPD 
+                     ON PD.PickSlipNo = TPD.PickSlipNo
+                        AND PD.CartonNo = TPD.CartonNo
+                        AND PD.LabelNo = TPD.LabelNo
+                        AND PD.LabelLine = TPD.LabelLine
+
+                     DELETE FROM @tPickDetail
+
+                     INSERT INTO @tPickDetail (PickDetailKey)
+                     SELECT PickDetailKey
+                     FROM dbo.PICKDETAIL WITH(ROWLOCK) 
+                     WHERE StorerKey = @cStorerKey
+                       AND DropID = @cToteID
+
+                     UPDATE PD WITH(ROWLOCK)
+                        SET DropID = CONCAT('ARC',DropID)
+                     FROM dbo.PICKDETAIL PD WITH(ROWLOCK)
+                     INNER JOIN @tPickDetail TPD 
+                     ON PD.PickDetailKey = TPD.PickDetailKey
+
+                     --UPDATE dbo.PackDetail WITH(ROWLOCK) SET DropID = CONCAT('ARC',DropID) WHERE DropID=@cToteID
+                     --UPDATE dbo.PICKDETAIL WITH(ROWLOCK) SET DropID = CONCAT('ARC',DropID) WHERE DropID=@cToteID
                      UPDATE RDT.RDTMOBREC WITH(ROWLOCK) SET C_STRING1 = '' WHERE Mobile = @nMobile
                   END
                   WHILE @@TRANCOUNT > @nTranCount
