@@ -2,19 +2,20 @@ SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
-/************************************************************************/
-/* Store procedure: rdt_1767ExtCfm01                                    */
-/* Copyright      : MAERSK                                              */
-/*                                                                      */
-/* Purpose: Comfirm UCC count                                           */
-/*                                                                      */
-/* Called from: rdtfnc_TM_CycleCount_UCC                                */
-/*                                                                      */
-/* Modifications log:                                                   */
-/*                                                                      */
-/* Date       Rev  Author   Purposes                                    */
-/* 2025-07-07 1.0  James    FCR-6060. Created                           */
-/************************************************************************/
+/*****************************************************************************/
+/* Store procedure: rdt_1767ExtCfm01                                         */
+/* Copyright      : MAERSK                                                   */
+/*                                                                           */
+/* Purpose: Comfirm UCC count                                                */
+/*                                                                           */
+/* Called from: rdtfnc_TM_CycleCount_UCC                                     */
+/*                                                                           */
+/* Modifications log:                                                        */
+/*                                                                           */
+/* Date       Rev    Author   Purposes                                       */
+/* 2025-07-07 1.0    James    FCR-6060. Created                              */
+/* 2025-08-29 1.1.0  NickT    UWP-40373 No need create CCDetail if UCC is 5,6 */
+/*****************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1767ExtCfm01] (
    @nMobile         INT,
@@ -74,6 +75,8 @@ BEGIN
           , @cWdLoc                NVARCHAR( 10)
           , @cWdId                 NVARCHAR( 18)
           , @cWdLot                NVARCHAR( 10)
+          , @cUCCStatus            NVARCHAR( 1)
+          , @nRowCount             INT
 
    DECLARE @curCfmUCC      CURSOR
    DECLARE @cUserName      NVARCHAR( 18)
@@ -97,12 +100,18 @@ BEGIN
    IF @dLottable05 IS NOT NULL
       SET @dLottable05 = rdt.rdtconverttodate(@dLottable05)
 
+   SELECT @cUCCStatus = Status
+   FROM dbo.UCC WITH ( NOLOCK )
+   WHERE StorerKey = @cStorerKey
+      AND UCCNo = @cUCC
+
    IF EXISTS (SELECT 1 FROM dbo.CCDetail WITH (NOLOCK)
               WHERE CCSheetNo = @cTaskDetailKey
               AND   Storerkey = @cStorerKey
               AND   [Status] = '0'
               AND   Loc = @cLoc
               AND   ID = @cID)
+      AND @cUCCStatus NOT IN ('5','6') -- UCC is replenished to/picking done
    BEGIN
       SET @curCfmUCC = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
       SELECT CCDetailKey, CCSheetNo, SystemQty
@@ -205,6 +214,7 @@ BEGIN
          IF @nQty = 0
             BREAK
 
+         NEXT_LOOP:
          FETCH NEXT FROM @curCfmUCC INTO @cCCDetailKey, @cCCSheetNo, @nSystemQty
 
       END
@@ -301,51 +311,121 @@ BEGIN
                 AND   UCCNo = @cUCC
                 AND   Loc <> @cLOC)
     BEGIN
-       SELECT
-         @cWdLot = Lot,
-         @cWdLoc = Loc,
-         @cWdId = Id
-       FROM dbo.UCC WITH (NOLOCK)
-       WHERE Storerkey = @cStorerKey
-       AND   UCCNo = @cUCC
+      SELECT
+      @cWdLot = Lot,
+      @cWdLoc = Loc,
+      @cWdId = Id
+      FROM dbo.UCC WITH (NOLOCK)
+      WHERE Storerkey = @cStorerKey
+      AND   UCCNo = @cUCC
 
-       SELECT
-         @cWdLottable01 = Lottable01,
-         @cWdLottable02 = Lottable02,
-         @cWdLottable03 = Lottable03,
-         @dWdLottable04 = Lottable04,
-         @dWdLottable05 = Lottable05
-       FROM dbo.LOTATTRIBUTE WITH (NOLOCK)
-       WHERE Lot = @cWdLot
-
-       EXECUTE nspg_getkey
-          'CCDetailKey'
-          , 10
-          , @cNewCCDetailKey OUTPUT
-          , @b_success OUTPUT
-          , @nErrNo OUTPUT
-          , @cErrMsg OUTPUT
-
-      IF @nErrNo <> 0
+      IF @cUCCStatus NOT IN ('5','6') -- UCC is not replenished to/picking done
       BEGIN
-         SET @nErrNo = 241710
-         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo ,@cLangCode ,'DSP') --'GetKey Fail'
-         GOTO RollBackTran
-      END
+         SELECT
+            @cWdLottable01 = Lottable01,
+            @cWdLottable02 = Lottable02,
+            @cWdLottable03 = Lottable03,
+            @dWdLottable04 = Lottable04,
+            @dWdLottable05 = Lottable05
+         FROM dbo.LOTATTRIBUTE WITH (NOLOCK)
+         WHERE Lot = @cWdLot
 
-      INSERT INTO dbo.CCDetail (
-         CCKey, CCDetailKey, CCSheetNo, StorerKey, Sku, Lot, Loc, Id, SystemQty, Qty, [Status], RefNo,
-         Lottable01, Lottable02, Lottable03, Lottable04, Lottable05, AddWho, AddDate)
-      VALUES (@cCCKey, @cNewCCDetailKey, @cTaskDetailKey, @cStorerKey, @cSKU, @cWdLot, @cWdLoc, @cWdId, 0, 0 , '4', @cUCC,
-         @cWdLottable01, @cWdLottable02, @cWdLottable03, @dWdLottable04, @dWdLottable05, @cUserName, GETDATE())
+         EXECUTE nspg_getkey
+            'CCDetailKey'
+            , 10
+            , @cNewCCDetailKey OUTPUT
+            , @b_success OUTPUT
+            , @nErrNo OUTPUT
+            , @cErrMsg OUTPUT
 
-      IF @@ERROR <> 0
-      BEGIN
-         SET @nErrNo = 241711
-         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo ,@cLangCode ,'DSP') --'InsCCDetFail'
-         GOTO RollBackTran
+         IF @nErrNo <> 0
+         BEGIN
+            SET @nErrNo = 241710
+            SET @cErrMsg = rdt.rdtgetmessage(@nErrNo ,@cLangCode ,'DSP') --'GetKey Fail'
+            GOTO RollBackTran
+         END
+
+         INSERT INTO dbo.CCDetail (
+            CCKey, CCDetailKey, CCSheetNo, StorerKey, Sku, Lot, Loc, Id, SystemQty, Qty, [Status], RefNo,
+            Lottable01, Lottable02, Lottable03, Lottable04, Lottable05, AddWho, AddDate)
+         VALUES (@cCCKey, @cNewCCDetailKey, @cTaskDetailKey, @cStorerKey, @cSKU, @cWdLot, @cWdLoc, @cWdId, 0, 0 , '4', @cUCC,
+            @cWdLottable01, @cWdLottable02, @cWdLottable03, @dWdLottable04, @dWdLottable05, @cUserName, GETDATE())
+
+         IF @@ERROR <> 0
+         BEGIN
+            SET @nErrNo = 241711
+            SET @cErrMsg = rdt.rdtgetmessage(@nErrNo ,@cLangCode ,'DSP') --'InsCCDetFail'
+            GOTO RollBackTran
+         END
       END
    END
+
+   -- -- If there is no detail left for the CCKey, then delete the CC too
+   -- -- But only when the UCC is replenished to/picking done
+   -- IF @cUCCStatus IN ('5','6')
+   -- BEGIN
+   --    DECLARE @tCCDetail TABLE 
+   --    (
+   --       RowIndex          INT IDENTITY(1,1),
+   --       CCDetailKey       NVARCHAR(10) PRIMARY KEY,
+   --       CCKey             NVARCHAR(10)
+   --    )
+
+   --    INSERT INTO @tCCDetail (CCDetailKey, CCKey)
+   --    SELECT DISTINCT CCDetailKey, CCKey
+   --    FROM dbo.CCDetail WITH (NOLOCK)
+   --    WHERE RefNo IS NOT NULL
+   --       AND RefNo = @cUCC
+   --       AND Storerkey = @cStorerKey
+   --       AND Status = '0'
+
+   --    SET @nRowCount = @@ROWCOUNT
+
+   --    IF @nRowCount > 0
+   --    BEGIN
+
+   --       BEGIN TRY
+   --          DELETE CCD WITH(ROWLOCK)
+   --          FROM dbo.CCDetail CCD WITH(ROWLOCK)
+   --          INNER JOIN @tCCDetail TCCD ON CCD.CCDetailKey = TCCD.CCDetailKey
+   --       END TRY
+   --       BEGIN CATCH
+   --          SET @nErrNo = 241712
+   --          SET @cErrMsg = rdt.rdtgetmessage(@nErrNo ,@cLangCode ,'DSP') -- Delete CC Detail Failed
+   --          GOTO RollBackTran
+   --       END CATCH
+
+   --       DECLARE @nLoopIndex INT = -1
+
+   --       WHILE 1 = 1
+   --       BEGIN
+   --          SELECT TOP 1
+   --             @cCCKey = CCKey,
+   --             @nLoopIndex = RowIndex
+   --          FROM @tCCDetail
+   --          WHERE RowIndex > @nLoopIndex
+   --          ORDER BY RowIndex
+
+   --          SET @nRowCount = @@ROWCOUNT
+   --          IF @nRowCount = 0
+   --             BREAK
+            
+   --          -- Check if there is any detail left
+   --          IF NOT EXISTS (SELECT 1 FROM dbo.CCDetail WITH (NOLOCK) WHERE CCKey = @cCCKey)
+   --          BEGIN
+   --             BEGIN TRY
+   --                DELETE FROM dbo.CC WITH(ROWLOCK)
+   --                WHERE CCKey = @cCCKey
+   --             END TRY
+   --             BEGIN CATCH
+   --                SET @nErrNo = 241713
+   --                SET @cErrMsg = rdt.rdtgetmessage(@nErrNo ,@cLangCode ,'DSP') -- Delete CC Failed
+   --                GOTO RollBackTran
+   --             END CATCH
+   --          END
+   --       END
+   --    END
+   -- END
 
    RollBackTran:
      ROLLBACK TRAN rdt_1767ExtCfm01
