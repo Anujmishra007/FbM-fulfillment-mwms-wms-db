@@ -143,6 +143,7 @@ DECLARE
    @cID                     NVARCHAR( 18),
    @cUPC                    NVARCHAR( 30),
    @cCloseMBOL              NVARCHAR( 20),  
+   @cConfirmStatus          NVARCHAR( 20),
 
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),    @cFieldAttr01 NVARCHAR( 1),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),    @cFieldAttr02 NVARCHAR( 1),
@@ -206,6 +207,7 @@ SELECT
    @cDecodeSP               = V_String24,
    @cManifestReport         = V_String25,
    @cCloseMBOL              = V_String26,
+   @cConfirmStatus          = V_String27,  
 
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,  @cFieldAttr01 = FieldAttr01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,  @cFieldAttr02 = FieldAttr02,
@@ -281,7 +283,8 @@ BEGIN
    SET @cManifestReport = rdt.RDTGetConfig( @nFunc, 'ManifestReport', @cStorerKey)
    IF @cManifestReport = '0'
       SET @cManifestReport = ''
-
+   SET @cConfirmStatus = rdt.RDTGetConfig( @nFunc, 'ConfirmStatus', @cStorerKey)
+   
     -- Storer config 'OTMITF'   --(cc01)
    EXECUTE dbo.nspGetRight
       NULL, -- Facility
@@ -1970,41 +1973,20 @@ BEGIN
 
       IF @cOption = '1' -- Yes
       BEGIN
-         DECLARE @cAutoMBOLPack  NVARCHAR(20)
-         SET @nErrNo = 0      
-         EXEC nspGetRight      
-               @c_Facility   = @cFacility      
-            ,  @c_StorerKey  = @cStorerKey      
-            ,  @c_sku        = ''      
-            ,  @c_ConfigKey  = 'AutoMBOLPack'      
-            ,  @b_Success    = @bSuccess             OUTPUT      
-            ,  @c_authority  = @cAutoMBOLPack        OUTPUT      
-            ,  @n_err        = @nErrNo               OUTPUT      
-            ,  @c_errmsg     = @cErrMsg              OUTPUT      
+      
+         -- Close Mbol
+         UPDATE dbo.MBOL WITH (ROWLOCK) SET 
+            STATUS = @cConfirmStatus,
+            EditWho = @cUserName,
+            EditDate = GETDATE()
+         WHERE MBOLKey = @cMbolKey
             
-         IF @nErrNo <> 0      
-         BEGIN      
-            SET @nErrNo = 79343      
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- GetRightFail      
-            GOTO Quit      
-         END      
-               
-         IF @cAutoMBOLPack = '1'      
-         BEGIN      
-            SET @nErrNo = 0      
-            EXEC dbo.isp_QCmd_SubmitAutoMbolPack      
-            @c_PickSlipNo= @cPickSlipNo      
-            , @b_Success   = @bSuccess    OUTPUT      
-            , @n_Err       = @nErrNo      OUTPUT      
-            , @c_ErrMsg    = @cErrMsg     OUTPUT      
-            
-            IF @nErrNo <> 0      
-            BEGIN      
-               SET @nErrNo = 79344      
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- AutoMBOLPack      
-               GOTO Quit      
-            END      
-         END   
+         IF @@ERROR <> 0
+         BEGIN
+            SET @nErrNo = 79343
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Close Mbol Err
+            GOTO Quit
+         END
       END
 
       -- Print manifest
@@ -2100,6 +2082,7 @@ BEGIN
       V_String24 = @cDecodeSP,
       V_String25 = @cManifestReport,
       V_String26 = @cCloseMBOL,
+      V_String27 = @cConfirmStatus,
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,   FieldAttr01  = @cFieldAttr01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,   FieldAttr02  = @cFieldAttr02,
