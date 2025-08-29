@@ -35,7 +35,7 @@ GO
 /*                            FCR-2902 Bug Fix                           */
 /* 12-Aug-2025  Wan06  1.8    UWP-39035 - Matching RPF Section to find   */
 /*                            DPP for FCR-6708 & FCR-2902                */
-/* 25-Aug-2025                FCR-6708 Bug Fix                           */
+/* 29-Aug-2025                FCR-6708 Bug Fix (include FCR-2902)        */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]       
     @c_Wavekey      NVARCHAR(10)    
@@ -541,7 +541,6 @@ CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]
          SET @c_FinalLoc = ''
          SET @c_FinalID  = ''
          SET @n_RowID    = 0
-
          
          SET @c_PZJSon = ( SELECT DISTINCT                                          --(Wan06)
                            l.Facility, l.PutawayZone, l.LocAisle       
@@ -1394,7 +1393,33 @@ CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]
                            AND l.LocationType IN ('PND')
                          )
                BEGIN
-                  SET @c_TaskStatus = 'H'
+                  --IF allocated from PND, it is a Replenishment stock
+                  SET @c_FinalLoc = ''                                              --2025-08-29 - START
+                  SELECT TOP 1 @c_FinalLoc= td.FinalLoc                                 
+                              ,@c_ID      = td.FinalID                               
+                  FROM TASKDETAIL td (NOLOCK)
+                  WHERE td.Storerkey = @c_Storerkey
+                  AND   td.TaskType = 'RP1'
+                  AND   td.FromLoc  = @c_FromLoc
+                  AND   td.FromID   = @c_ID
+                  AND   td.[Status] < '9'
+                  ORDER BY Taskdetailkey DESC
+
+                  IF @c_FinalLoc = ''
+                  BEGIN
+                     SET @n_Continue = 3  
+                     SET @n_err = 67845    
+                     SET @c_errmsg = 'NSQL' + CONVERT(NVARCHAR(5),@n_err)
+                                   +': Final Replenish to Loc/Pick loc not found'
+                                   + '. (ispRLWAV69)'     
+                  END
+    
+                  IF @n_Continue = 1
+                  BEGIN
+                     SET @c_FromLoc    = @c_FinalLoc
+                     SET @c_TaskStatus = 'H'
+                  END                                                               
+                  SET @c_FinalLoc = ''                --Reset                       --2025-08-29 - END
                END
             END
             ELSE IF @c_UOM IN ('2','3','6') AND @c_AllowOverAllocations = '1'       --2025-07-09 --(Wan03) - END
