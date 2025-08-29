@@ -98,7 +98,9 @@ GO
 /* 21-11-2024 6.7.0 LJQ006    FCR-1109 Update Extend Screen and ExtInfo        */
 /* 2024-12-31 6.8.0  NLT013   UWP-28680 fix rollback transaction issue.        */
 /* 2025-02-05 6.9.0  CYU027   FCR-2630 Add Option=5 in step 5                  */
-/* 2025-07-23 7.0.0  Jackc    FCR-5413 Mettel customized 855                    */
+/* 2025-04-22 7.0.0  JACKC    FCR-4159 Support single unit orders              */
+/* 2025-07-23 7.1.0  Jackc    FCR-5413 Mettel customized 855                   */
+/* 2025-08-27 7.2.0  Jackc    FCR-7348 Rework 4159 single unit order           */
 /*******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_PostPickAudit] (
@@ -190,6 +192,10 @@ DECLARE
    @nPPA_QTY        INT, --(yeekung01)    
    @nPD_QTY         INT, --(yeekung01) 
    @nVariance       INT,
+
+   @cToteID                         NVARCHAR( 20),--v7.0.0
+   @cSingleUnitOrdFlag              NVARCHAR( 1),--v7.0.0
+   @cDSPOrderKey                    NVARCHAR( 10),--V7.2.0 for orderkey display only
 
    @cPackQTYIndicator               NVARCHAR( 5),
    @cPrePackIndicator               NVARCHAR( 1),
@@ -358,6 +364,9 @@ SELECT
    @cExtendedScnSP                  = V_String49,
 
    @nAction                         = V_Integer2,
+   @cSingleUnitOrdFlag              = C_String2, --v7.0.0
+   @cToteID                         = C_String3, --v7.0.0
+   @cDSPOrderKey                    = C_String4, --V7.2.0   
 
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,  @cFieldAttr01 = FieldAttr01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,  @cFieldAttr02 = FieldAttr02,
@@ -1487,7 +1496,11 @@ BEGIN
            
             SET @cOutField15 = @cExtendedInfo  
          END  
-      END  
+      END
+
+      --v7.0.0
+      IF @cExtendedScnSP <> '' AND EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScnSP AND type = 'P')
+         GOTO Step_99  
    END
 
    IF @nInputKey = 0 -- Esc OR No
@@ -1550,7 +1563,9 @@ BEGIN
             SET @nScn = @nScn + 2
             SET @nStep = @nStep + 2
 
-            GOTO Quit
+            --GOTO Quit
+            IF @cExtendedScnSP <> '' AND EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScnSP AND type = 'P')
+               GOTO Step_99 --V7.0.0
          END
          ELSE --(cc02)
          BEGIN
@@ -2838,10 +2853,10 @@ BEGIN
       BEGIN
          --SET @nPQTY = @nPQTY/@nPUOM_Div--rdt.rdtConvUOMQTY( @cStorer, @cSKU, @cMQTY, 6, @cPUOM)
          --SET @nMQTY = @cMQTY%@nPUOM_Div
-         --V7.0.0 start fix PQtyCHK display
+         --V7.0.1 start fix PQtyCHK display
          SET @nPQTY = @nQTY/@nPUOM_Div
          SET @nMQTY = @nQTY%@nPUOM_Div
-         --V7.0.0 end
+         --V7.0.1 end
       END
 
       -- Top up check QTY
@@ -3472,6 +3487,11 @@ BEGIN
             SET @cOutField08 = @cExtendedInfo
          END
       END
+
+      --v7.0.0
+      -- Go to extend screen label, if no config, will jump to previous step
+      IF @cExtendedScnSP <> '' AND EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScnSP AND type = 'P')
+         GOTO Step_99
    END
    GOTO Quit
 
@@ -3699,9 +3719,9 @@ BEGIN
             SET @cOutField08 = @cExtendedInfo
          END
       END
-      --V7.0.0
+      --V7.0.1
       IF @cExtendedScnSP <> '' AND EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScnSP AND type = 'P')
-	      GOTO Step_99
+         GOTO Step_99
 
    END
    GOTO Quit
@@ -4737,9 +4757,24 @@ BEGIN
             SET @cExtendedInfo = @cUDF08
             SET @cPPACartonIDByPackDetailLabelNo = @cUDF09
             SET @cPPACartonIDByPickDetailCaseID = @cUDF10
+            SET @cDSPOrderKey = @cUDF12 --v7.2.0 --Saving to orderkey may impact calculation logic.
+
+            --v7.0.0 start
+            IF @cSingleUnitOrdFlag = 'Y'
+               SET @cSKU = @cUDF11 --SKU for single unit order
+            --V7.0.0 end
+         END
+         ELSE IF (@cExtendedScnSP = 'rdt_855ExtScn01' AND @nScn = 6468 --V7.0.0 Single unit order SKU screen
+            AND @nStep = 99)
+         BEGIN
+            SET @cToteID = @cUDF01 --ToteID for single unit order
+            SET @cExtendedInfo = @cUDF08
+            SET @cPPACartonIDByPackDetailLabelNo = @cUDF02
+            SET @cPPACartonIDByPickDetailCaseID =  @cUDF03
+            SET @cSingleUnitOrdFlag = @cUDF04
          END
 
-         IF (@cExtendedScnSP IN ('rdt_855ExtScn01')
+         IF (@cExtendedScnSP = 'rdt_855ExtScn01'
             AND @nStep = 0)
          BEGIN
             SET @nFunc = @nMenu
@@ -4748,9 +4783,18 @@ BEGIN
             AND @nStep = 99)
          BEGIN
             SET @nAction = CAST(@cUDF09 AS INT)
+            --v7.0.0 START
+            IF @nScn = 814
+            BEGIN
+              --Always reset single unit order values when jump to 814 screen
+              -- the 814 st99 backend logic will set these 2 values
+               SET @cToteID = ''
+               SET @cSingleUnitOrdFlag = ''
+            END
+            --v7.0.0 END
          END
 
-         --V7.0.0 start
+         --V7.0.1 start
          IF @cExtendedScnSP = 'rdt_855ExtScn02'
          BEGIN
             IF @nStep = 0 --back to menu from new 1st screen
@@ -4763,7 +4807,7 @@ BEGIN
                   SET @cDropID = @cUDF02
             END --Store loadkey, dropid to RDTMOBREC
          END--rdt_855ExtScn02
-         --V7.0.0 end
+         --V7.0.1 end
 
          GOTO Quit
       END
@@ -4855,6 +4899,9 @@ BEGIN
       V_String49 = @cExtendedScnSP,
 
       V_Integer2 = @nAction,
+      C_String2  = @cSingleUnitOrdFlag, --v7.0.0
+      C_String3  = @cToteID, --v7.0.0
+      C_String4 = @cDSPOrderKey, --V7.2.0
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,   FieldAttr01 = @cFieldAttr01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,   FieldAttr02 = @cFieldAttr02,
