@@ -1408,7 +1408,7 @@ CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]
                   IF @c_FinalLoc = ''
                   BEGIN
                      SET @n_Continue = 3  
-                     SET @n_err = 67845    
+                     SET @n_err = 67855   
                      SET @c_errmsg = 'NSQL' + CONVERT(NVARCHAR(5),@n_err)
                                    +': Final Replenish to Loc/Pick loc not found'
                                    + '. (ispRLWAV69)'     
