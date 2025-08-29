@@ -31,6 +31,7 @@ GO
 /*                            orderinfo.orderinfo06 as per v2.1          */
 /* 2025-04-23   WAN01   1.7   UWP-33280 - [FCR-4179] [LEVI's] Release    */
 /*                            to WCS Update SO DischargePlace            */
+/* 2025-08-29   AYD01   1.8   FCR-7636: Retrive WCSCode from LONG coliumn*/  
 /*************************************************************************/   
 CREATE OR ALTER PROCEDURE [dbo].[mspWaveReleaseWCS01]
   @c_Wavekey      NVARCHAR(10)  
@@ -183,7 +184,7 @@ CREATE OR ALTER PROCEDURE [dbo].[mspWaveReleaseWCS01]
 
             IF @b_IsParcel = 1
             BEGIN
-               SELECT @c_WCSCode = clu.Code FROM CODELKUP clu (NOLOCK)
+               SELECT @c_WCSCode = clu.long FROM CODELKUP clu (NOLOCK)              --(AYD01)
                JOIN storer s (NOLOCK) ON s.SUSR5 = clu.Short
                WHERE s.StorerKey = @c_ConsigneeKey AND s.type = @c_DestIdStorerType
                AND clu.StorerKey = @c_Storerkey AND clu.Code2 = @c_ShipperKey
@@ -191,7 +192,7 @@ CREATE OR ALTER PROCEDURE [dbo].[mspWaveReleaseWCS01]
             END
             ELSE
             BEGIN
-               SELECT @c_WCSCode = clu.Code FROM CODELKUP clu (NOLOCK)
+               SELECT @c_WCSCode = clu.long FROM CODELKUP clu (NOLOCK)              --(AYD01)
                JOIN storer s (NOLOCK) ON s.SUSR5 = clu.Short
                WHERE s.StorerKey = @c_ConsigneeKey AND s.type = @c_DestIdStorerType
                AND clu.StorerKey = @c_Storerkey
@@ -200,7 +201,7 @@ CREATE OR ALTER PROCEDURE [dbo].[mspWaveReleaseWCS01]
             END
             IF (ISNULL(@c_WCSCode, '') = '')
             BEGIN
-               SELECT @c_WCSCode = clu.Code FROM CODELKUP (NOLOCK) clu
+               SELECT @c_WCSCode = clu.long FROM CODELKUP (NOLOCK) clu              --(AYD01)
                WHERE clu.LISTNAME = @c_DestIdListName AND clu.Code = 'Default' AND clu.StorerKey = @c_Storerkey
             END
 
