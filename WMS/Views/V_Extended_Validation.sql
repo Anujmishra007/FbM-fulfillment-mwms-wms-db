@@ -422,6 +422,14 @@ SELECT 'PackMgmtInputValidation' as ValidateType,
        'PACKDETAIL.Storerkey' AS CfgValSourceCol,
        'isp_Wrapup_Validation' AS ValidationSP,
        '' AS IsConso
+UNION ALL --FCR-7196
+SELECT 'TaskDetInputValidation' as ValidateType,
+       'Task Detail Input Validation' AS ValidationDesc,
+       'TaskDetail' AS ValidateTable,
+       'Storer' AS ValidateBy,
+       'TaskDetail.Storerkey' AS CfgValSourceCol,
+       'isp_Wrapup_Validation' AS ValidationSP,
+       '' AS IsConso
 GO
 GRANT DELETE ON  [dbo].[V_Extended_Validation] TO [NSQL]
 GO

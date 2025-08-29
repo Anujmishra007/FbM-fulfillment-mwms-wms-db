@@ -18,7 +18,7 @@ GO
 /*                                                                        */    
 /* Called By: n_cst_busobj.ue_wrapup                                      */    
 /*                                                                        */    
-/* PVCS Version: 2.0                                                      */    
+/* PVCS Version: 2.1                                                      */    
 /*                                                                        */    
 /* Version: 7.0                                                           */    
 /*                                                                        */    
@@ -38,11 +38,12 @@ GO
 /*                            saving WaveDetail                           */
 /* 11-Jun-2021  NJOW04   1.7  WMS-17231 include inventoryhold validation  */
 /* 11-Jun-2021  NJOW04   1.7  DEVOPS Combine script                       */
-/* 15-AUG-2022  Wan05    1.8  LFWM-3669 - VN �C ADIDAS- WMS-SCE�CAdding   */
+/* 15-AUG-2022  Wan05    1.8  LFWM-3669 - VN - ADIDAS- WMS-SCE-Adding     */
 /*                            Validation for Location Type of Module      */
 /*                            Assign Pick Location                        */
 /* 09-Mar-2023  NJOW05   1.9  LFWM-3608 Performance tuning for XML reading*/
 /* 20-Aug-2025  WLChooi  2.0  FCR-6862 Pack Mgmt Input Validation (WL01)  */ 
+/* 27-Aug-2025  Michael  2.1  FCR-7196 TaskDetail Input Validation (ML01) */
 /**************************************************************************/  
 CREATE OR ALTER PROCEDURE [dbo].[isp_Wrapup_Validation]    
       @c_Window            NVARCHAR(60) = ''  
@@ -412,6 +413,16 @@ BEGIN
                             + ' LEFT JOIN STORER WITH (NOLOCK) ON (INVENTORYHOLD.Storerkey = STORER.Storerkey)' 
                          WHEN @c_UpdateTable = 'SKUXLOC'       --wan05 
                          THEN ' JOIN LOC WITH (NOLOCK) ON (SKUXLOC.Loc = LOC.Loc)'
+                         --ML01-S
+                         WHEN @c_UpdateTable = 'TASKDETAIL'
+                         THEN ' LEFT JOIN STORER WITH (NOLOCK) ON TASKDETAIL.Storerkey = STORER.Storerkey'
+                            + ' LEFT JOIN SKU WITH (NOLOCK) ON TASKDETAIL.Storerkey = SKU.Storerkey AND TASKDETAIL.Sku = SKU.Sku'
+                            + ' LEFT JOIN LOT WITH (NOLOCK) ON TASKDETAIL.Lot = LOT.Lot'
+                            + ' LEFT JOIN LOC WITH (NOLOCK) ON TASKDETAIL.FromLoc = LOC.Loc'
+                            + ' LEFT JOIN ID  WITH (NOLOCK) ON TASKDETAIL.FromID  = ID.ID'
+                            + ' LEFT JOIN LOC TOLOC WITH (NOLOCK) ON TASKDETAIL.ToLoc = TOLOC.Loc'  
+                            + ' LEFT JOIN ID TOID WITH (NOLOCK) ON TASKDETAIL.ToID = TOID.ID'
+                         --ML01-E
                          ELSE ''  
                          END  
   
