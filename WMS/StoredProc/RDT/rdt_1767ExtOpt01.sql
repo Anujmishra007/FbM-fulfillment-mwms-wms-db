@@ -14,6 +14,8 @@ GO
 /* 2025-07-07 1.0  James      FCR-6060. Created                         */
 /* 2025-07-23 1.1.0 NickT     FCR-6060 fixed some issues                */
 /* 2025-08-13 1.2.0 NickT     UWP-39425 RDT screen go to blank screen   */
+/* 2025-08-29 1.3.0 NickT     UWP-40373 Correct Qty of Alert Msg, no need*/
+/*                            to generate Adjustment if UCC is Picked   */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1767ExtOpt01] (
@@ -145,7 +147,7 @@ AS
                BEGIN
                   SET @nErrNo = 0
                   SET @cAlertMessage =
-                     'UCC: ' + @cUCC + ' WITH VARIANCE QTY (' + CAST( @nCCDQty AS NVARCHAR( 5)) + ').'
+                     'UCC: ' + @cUCC + ' WITH VARIANCE QTY (' + CAST( @nCCDQty * -1 AS NVARCHAR( 5)) + ').'
 
                   SELECT @cUCCStatus = Status,
                      @cUCCFromLOC = LOC
@@ -228,6 +230,16 @@ AS
                   FETCH NEXT FROM @curCCD INTO @cUCC, @cCCDLOT, @cCCDLOC, @cCCDID, @cCCDSKU, @nCCDQty
                   WHILE @@FETCH_STATUS = 0
                   BEGIN
+                     SELECT @cUCCStatus = Status
+                     FROM dbo.UCC WITH (NOLOCK)
+                     WHERE StorerKey = @cStorerKey
+                        AND UCCNo = @cUCC
+
+                     IF @cUCCStatus IN ('5','6') -- replenished to/picking done
+                     BEGIN
+                        GOTO NEXT_LOOP
+                     END
+
                      IF @cAdjustmentKey = ''
                      BEGIN
                         EXECUTE nspg_getkey
@@ -353,6 +365,7 @@ AS
                      IF @nVariance = 0
                         SET @nVariance = 1
 
+                     NEXT_LOOP:
                      FETCH NEXT FROM @curCCD INTO @cUCC, @cCCDLOT, @cCCDLOC, @cCCDID, @cCCDSKU, @nCCDQty
                   END
                   CLOSE @curCCD

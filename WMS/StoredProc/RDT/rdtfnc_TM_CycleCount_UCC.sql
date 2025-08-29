@@ -23,7 +23,8 @@ GO
 /* 2025-07-07 1.9.0 James     FCR-6060 Add ExtendedCfmSP                      */ 
 /*                            Add ExtOptionSP in step 3 (james05)             */
 /* 2025-07-18 1.10.0 NickT    UWP-37598 Update TaskDetail.EndTime when CC done*/
-/* 2025-08-12 0.0.0  Jackc    !!!Cutover. Use V0 repo for work!!!             */  
+/* 2025-08-12 0.0.0  Jackc    !!!Cutover. Use V0 repo for work!!!             */
+/* 2025-08-29 1.11.0 NickT    UWP-40373 Add ExtendedValidateSP                */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_CycleCount_UCC] (
@@ -143,6 +144,7 @@ DECLARE
 	@cSKUDescr2          NVARCHAR( 20),
 	@cCCDetailKey        NVARCHAR( 10),
    @cExtendedInfoSP     NVARCHAR( 20),
+   @cExtendedValidateSP     NVARCHAR( 20),
    @cExtendedInfo       NVARCHAR( 20),
    @cExtScnSP           NVARCHAR( 20),
    @cSkipAlertScreen    NVARCHAR( 1),
@@ -260,6 +262,7 @@ SELECT
    @cSKUDescr2       = V_String16,
    @cCCDetailKey     = V_String17,
    @cExtOptionSP     = V_String18,
+   @cExtendedValidateSP = V_String19,
    
    
    -- Module SP Variable V_String 20 - 26 -- 
@@ -323,6 +326,10 @@ BEGIN
    SET @cExtendedInfoSP = rdt.RDTGetConfig( @nFunc, 'ExtendedInfoSP', @cStorerKey)
    IF @cExtendedInfoSP = '0'
       SET @cExtendedInfoSP = ''
+
+   SET @cExtendedValidateSP = rdt.RDTGetConfig( @nFunc, 'ExtendedValidateSP', @cStorerKey)
+   IF @cExtendedValidateSP = '0'
+      SET @cExtendedValidateSP = ''
 
    SET @cSkipAlertScreen = rdt.RDTGetConfig( @nFunc, 'SkipAlertScreen', @cStorerkey)
 	
@@ -411,6 +418,36 @@ BEGIN
          SET @nErrNo = 74472
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo , @cLangCode, 'DSP') --'MixCountTypeNotAllowed'
          GOTO Step_1_Fail
+      END
+
+      -- Extended validate
+      IF @cExtendedValidateSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedValidateSP AND type = 'P')
+         BEGIN
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cTaskDetailKey, @cUCC, ' +
+               ' @nErrNo OUTPUT, @cErrMsg OUTPUT'
+            SET @cSQLParam =
+               '@nMobile      INT,           ' +
+               '@nFunc        INT,           ' +
+               '@cLangCode    NVARCHAR( 3),  ' +
+               '@nStep        INT,           ' +
+               '@nInputKey    INT,           ' +
+               '@cFacility    NVARCHAR( 5),  ' +
+               '@cStorerKey   NVARCHAR( 15), ' +
+               '@cTaskDetailKey   NVARCHAR( 10), ' +
+               '@cUCC         NVARCHAR( 20), ' +
+               '@nErrNo             INT            OUTPUT, ' +
+               '@cErrMsg            NVARCHAR( 20)  OUTPUT'
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cTaskDetailKey, @cUCC,
+               @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+            IF @nErrNo <> 0
+               GOTO Step_1_Fail
+         END
       END
       
       IF @cCheckUCCExistsInLoc = '1'  
@@ -1448,6 +1485,7 @@ BEGIN
       V_String16       = @cSKUDescr2,    
       V_String17       = @cCCDetailKey,
       V_String18       = @cExtOptionSP,
+      V_String19       = @cExtendedValidateSP,
 
       -- Module SP Variable V_String 20 - 26 -- 
       V_String20       = @cInUCCCount,

@@ -13,5 +13,9 @@ execute rdt.rdtAddMsg 241709, 10, '241709Upd CCDateFail',   'us_english', 1767
 execute rdt.rdtAddMsg 241710, 10, '241710 GetKey Fail  ',   'us_english', 1767
 execute rdt.rdtAddMsg 241711, 10, '241711 Ins CCDetFail',   'us_english', 1767
 
+-- UWP-40373
+execute rdt.rdtAddMsg 241712, 10, '241712 DelCCDetFail',    'us_english', 1767, 0, '241712 Delete CC Detail Failed'
+execute rdt.rdtAddMsg 241713, 10, '241713 DelCCFail',       'us_english', 1767, 0, '241713 Delete CC Failed'
+
 SELECT * FROM RDT.RDTMSG (NOLOCK) WHERE MESSAGE_ID BETWEEN 241701 AND 241750
 
