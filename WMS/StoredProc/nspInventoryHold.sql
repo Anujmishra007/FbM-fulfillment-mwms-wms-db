@@ -49,6 +49,8 @@ GO
 /* 05-APR-2024  Wan03     2.0   UWP-17363-Fix increase/decrease hold by iD*/  
 /*                              if Loc Status is not ok and locationflag  */  
 /*                              is not damage/hold                        */  
+/* 29-AUG-2025  MICHAEL   1.9   UWP-39358-Handle multi InvHold rec (ML01) */
+/*                           with new StorerCfg AllowMultiInventoryHoldRec*/
 /**************************************************************************/
 CREATE OR ALTER PROC [dbo].[nspInventoryHold]
                @c_lot          NVARCHAR(10)
@@ -106,6 +108,7 @@ BEGIN
          , @c_Key2Prefix            NVARCHAR(1)    -- Added By MaryVong on 04Oct04 (C4)
          , @c_Key2                  NVARCHAR(5)    -- Added By MaryVong on 04Oct04 (C4)
          , @c_Key3                  NVARCHAR(20)   -- Added By MaryVong on 04Oct04 (C4)
+         , @c_AllowMultiInvHoldRec  NVARCHAR(30)   --ML01
 
    --(Wan01) - START
    SET @cStorerKey = ''
@@ -236,6 +239,15 @@ BEGIN
 
       IF ISNULL( RTRIM(@c_id), '')  <> ''
       BEGIN
+         --ML01-S
+         SELECT TOP 1 @cStorerKey = StorerKey
+         FROM   LOTxLOCxID (NOLOCK)
+         WHERE  ID = @c_id
+         ORDER BY EditDate DESC
+
+         SELECT @c_AllowMultiInvHoldRec = dbo.fnc_GetRight('', @cStorerkey, '', 'AllowMultiInventoryHoldRec')
+         --ML01-E
+
          SELECT @c_CurrentHoldFlag = HOLD
          FROM   INVENTORYHOLD (NOLOCK)
          WHERE  STATUS = @c_status
@@ -248,6 +260,7 @@ BEGIN
             SELECT @b_newrecord = 1
          END
          IF @n_cnt > 1
+            AND ISNULL(@c_AllowMultiInvHoldRec,'')<>'1'   --ML01
          BEGIN
             SELECT @n_continue = 3
             SELECT @n_err = 62432 --78406   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
@@ -271,7 +284,7 @@ BEGIN
                FROM   INVENTORYHOLD (NOLOCK)
                WHERE  ID = @c_id
                AND    INVENTORYHOLD.HOLD = '1'
-               
+
                SELECT @n_cnt = @@ROWCOUNT
 
                IF @n_cnt = 0
@@ -455,7 +468,7 @@ BEGIN
                                AND   ConfigKey = 'INVHSTSLOG'
                                AND   sValue    = '1')
                      BEGIN
-                        -- (YokeBeen01) - Start 
+                        -- (YokeBeen01) - Start
                         IF @c_hold = '1'
                         BEGIN
                            SELECT @cKey2 = 'U2H-A'
@@ -464,7 +477,7 @@ BEGIN
                         BEGIN
                            SELECT @cKey2 = 'H2U-A'
                         END
-                        -- (YokeBeen01) - End 
+                        -- (YokeBeen01) - End
 
                         SELECT @c_transmitlogkey = ''
                         SELECT @b_success = 1
@@ -548,7 +561,7 @@ BEGIN
                      WHERE  STATUS = @c_status
                      AND    ID = @c_id
                      GROUP BY InventoryHoldKey
-                     
+
                      OPEN  Cur_InventoryHold
                      FETCH NEXT FROM Cur_InventoryHold INTO @c_InventoryHoldKey
                      WHILE @@FETCH_STATUS <> -1
@@ -647,15 +660,15 @@ BEGIN
                      SET QTYONHOLD = QTYONHOLD +
                      ( SELECT SUM(LOTxLOCxID.QTY)
                      FROM LOTxLOCxID (Nolock)
-                     JOIN LOC (Nolock) ON LOTxLOCxID.LOC = LOC.LOC  
-                     WHERE LOTxLOCxID.ID = @c_id 
+                     JOIN LOC (Nolock) ON LOTxLOCxID.LOC = LOC.LOC
+                     WHERE LOTxLOCxID.ID = @c_id
                      AND LOC.STATUS <> 'HOLD' AND LOC.LocationFlag NOT IN ('HOLD','DAMAGE')       --(Wan03)--Wan02
                      AND LOTxLOCxID.LOT = LOT.LOT
                      AND LOTxLOCxID.QTY > 0
                      )
-                     FROM LOT 
+                     FROM LOT
                      JOIN LOTxLOCxID WITH (NOLOCK) ON LOT.LOT = LOTxLOCxID.LOT
-                     JOIN LOC L WITH (NOLOCK) ON LOTxLOCxID.LOC = L.LOC 
+                     JOIN LOC L WITH (NOLOCK) ON LOTxLOCxID.LOC = L.LOC
                      WHERE LOTxLOCxID.ID = @c_id
                      AND LOTxLOCxID.QTY > 0
                      AND L.STATUS <> 'HOLD' AND L.LocationFlag NOT IN ('HOLD','DAMAGE')           --(Wan03)--Wan02
@@ -680,14 +693,14 @@ BEGIN
                      UPDATE LOT SET QTYONHOLD = QTYONHOLD -
                      ( SELECT SUM(LOTxLOCxID.QTY)
                      FROM LOTxLOCxID (NOLOCK)
-                     JOIN LOC (NOLOCK) ON LOTxLOCxID.LOC = LOC.LOC 
-                     WHERE LOTxLOCxID.ID = @c_id 
+                     JOIN LOC (NOLOCK) ON LOTxLOCxID.LOC = LOC.LOC
+                     WHERE LOTxLOCxID.ID = @c_id
                      AND LOC.STATUS <> 'HOLD' AND LOC.LocationFlag NOT IN ('HOLD','DAMAGE')       --(Wan03)--Wan02
                      AND LOTxLOCxID.LOT = LOT.LOT
                      AND LOTxLOCxID.QTY > 0 )
-                     FROM LOT 
-                     JOIN LOTxLOCxID WITH (NOLOCK) ON LOTxLOCxID.Lot = LOT.Lot 
-                     JOIN LOC L WITH (NOLOCK) ON L.Loc = LOTxLOCxID.Loc  
+                     FROM LOT
+                     JOIN LOTxLOCxID WITH (NOLOCK) ON LOTxLOCxID.Lot = LOT.Lot
+                     JOIN LOC L WITH (NOLOCK) ON L.Loc = LOTxLOCxID.Loc
                      WHERE LOTxLOCxID.ID = @c_id
                      AND LOTxLOCxID.QTY > 0
                      AND L.STATUS <> 'HOLD' AND L.LocationFlag NOT IN ('HOLD','DAMAGE')           --(Wan03)--Wan02
@@ -712,8 +725,10 @@ BEGIN
          ORDER BY EditDate DESC
          --(Wan01) - END
 
+         SELECT @c_AllowMultiInvHoldRec = dbo.fnc_GetRight('', @cStorerkey, '', 'AllowMultiInventoryHoldRec')   --ML01
+
          SELECT @c_CurrentHoldFlag = HOLD
-         FROM INVENTORYHOLD WITH (NOLOCK) 
+         FROM INVENTORYHOLD WITH (NOLOCK)
          WHERE STATUS = @c_status
          AND   LOC = @c_loc
          SELECT @n_cnt = @@ROWCOUNT
@@ -722,6 +737,7 @@ BEGIN
             SELECT @b_newrecord = 1
          END
          IF @n_cnt > 1
+            AND ISNULL(@c_AllowMultiInvHoldRec,'')<>'1'   --ML01
          BEGIN
             SELECT @n_continue = 3
             SELECT @n_err = 62439 --78420   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
@@ -812,7 +828,7 @@ BEGIN
                END
                ELSE
                BEGIN
-                  IF NOT EXISTS(SELECT 1 FROM INVENTORYHOLD WITH (NOLOCK) 
+                  IF NOT EXISTS(SELECT 1 FROM INVENTORYHOLD WITH (NOLOCK)
                   WHERE LOC = @c_loc AND HOLD = '1'
                   )
                   BEGIN
@@ -935,7 +951,7 @@ BEGIN
                IF @c_hold = '1' and @c_CurrentHoldFlag = '0'
                BEGIN
                   SELECT @n_numberofrecsonhold = COUNT(1)
-                  FROM INVENTORYHOLD WITH (NOLOCK) 
+                  FROM INVENTORYHOLD WITH (NOLOCK)
                   WHERE LOC = @c_loc and HOLD = '1'
 
                   IF @n_numberofrecsonhold = 1
@@ -944,15 +960,15 @@ BEGIN
                      SET QTYONHOLD = QTYONHOLD +
                      ( SELECT SUM(LOTxLOCxID.QTY)
                      FROM LOTxLOCxID (Nolock)
-                     JOIN ID (Nolock) ON ID.Id = LOTxLOCxID.Id 
+                     JOIN ID (Nolock) ON ID.Id = LOTxLOCxID.Id
                      WHERE LOTxLOCxID.LOC = @c_loc
                      AND   ID.STATUS <> 'HOLD'
                      AND LOTxLOCxID.LOT = LOT.LOT
                      AND LOTxLOCxID.QTY > 0
                      )
-                     FROM LOT 
+                     FROM LOT
                      JOIN LOTxLOCxID WITH (NOLOCK) ON LOTxLOCxID.Lot = LOT.Lot
-                     JOIN ID I WITH (NOLOCK) ON I.Id = LOTxLOCxID.Id  
+                     JOIN ID I WITH (NOLOCK) ON I.Id = LOTxLOCxID.Id
                      WHERE LOTxLOCxID.LOC = @c_loc
                      AND   LOTxLOCxID.QTY > 0
                      AND   I.STATUS <> 'HOLD'
@@ -967,7 +983,7 @@ BEGIN
                IF @c_hold = '0' and @c_CurrentHoldFlag = '1'
                BEGIN
                   SELECT @n_numberofrecsonhold = COUNT(1)
-                  FROM INVENTORYHOLD WITH (NOLOCK) 
+                  FROM INVENTORYHOLD WITH (NOLOCK)
                   WHERE LOC = @c_loc and HOLD = '1'
 
                   IF @n_numberofrecsonhold = 0
@@ -982,9 +998,9 @@ BEGIN
                      AND LOTxLOCxID.LOT = LOT.LOT
                      AND LOTxLOCxID.QTY > 0
                      )
-                     FROM LOT 
+                     FROM LOT
                      JOIN LOTxLOCxID WITH (NOLOCK) ON LOTxLOCxID.Lot = LOT.Lot
-                     JOIN ID I WITH (NOLOCK) ON I.Id = LOTxLOCxID.Id 
+                     JOIN ID I WITH (NOLOCK) ON I.Id = LOTxLOCxID.Id
                      WHERE LOTxLOCxID.LOC = @c_loc
                      AND   LOTxLOCxID.QTY > 0
                      AND   I.STATUS <> 'HOLD'
@@ -1002,8 +1018,17 @@ BEGIN
 
       IF ISNULL(RTRIM(@c_LOT), '') <> ''
       BEGIN
+         --ML01-S
+         SELECT TOP 1 @cStorerKey = StorerKey
+         FROM   LOTxLOCxID (NOLOCK)
+         WHERE  LOT = @c_lot
+         ORDER BY EditDate DESC
+
+         SELECT @c_AllowMultiInvHoldRec = dbo.fnc_GetRight('', @cStorerkey, '', 'AllowMultiInventoryHoldRec')
+         --ML01-E
+
          SELECT @c_CurrentHoldFlag = HOLD
-         FROM  INVENTORYHOLD WITH (NOLOCK) 
+         FROM  INVENTORYHOLD WITH (NOLOCK)
          WHERE LOT = @c_lot
          AND   STATUS = @c_status
 
@@ -1014,6 +1039,7 @@ BEGIN
          END
 
          IF @n_cnt > 1
+            AND ISNULL(@c_AllowMultiInvHoldRec,'')<>'1'
          BEGIN
             SELECT @n_continue = 3
             SELECT @n_err = 62449 --78440   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
@@ -1036,7 +1062,7 @@ BEGIN
                       AND sValue = '1')
             BEGIN
                SELECT TOP 1  @c_CurrentHoldFlag = HOLD
-               FROM  INVENTORYHOLD WITH (NOLOCK) 
+               FROM  INVENTORYHOLD WITH (NOLOCK)
                WHERE LOT = @c_lot
                AND   INVENTORYHOLD.HOLD = '1'
                AND   Status <> @c_status
@@ -1205,7 +1231,7 @@ BEGIN
                      WHERE  STATUS = @c_status
                      AND    LOT = @c_lot
                      GROUP BY InventoryHoldKey
-                     
+
                      OPEN  Cur_InventoryHold
                      FETCH NEXT FROM Cur_InventoryHold INTO @c_InventoryHoldKey
                      WHILE @@FETCH_STATUS <> -1
@@ -1270,7 +1296,7 @@ BEGIN
                END
                ELSE
                BEGIN
-                  IF NOT EXISTS(SELECT 1 FROM INVENTORYHOLD WITH (NOLOCK) 
+                  IF NOT EXISTS(SELECT 1 FROM INVENTORYHOLD WITH (NOLOCK)
                   WHERE LOT = @c_lot AND HOLD = '1'
                   )
                   BEGIN
@@ -1345,5 +1371,6 @@ BEGIN
 END
 GO
 
-GRANT EXECUTE ON nspInventoryHold to nSQL
+GRANT EXECUTE ON [dbo].[nspInventoryHold] TO nSQL
 GO
+
