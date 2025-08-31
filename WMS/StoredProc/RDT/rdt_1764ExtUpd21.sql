@@ -15,6 +15,7 @@ GO
 /* 2025-02-25   JCH507   1.0.1   UWP-30476 Clear Final loc when status = H */
 /* 2025-03-22   NLT013   1.1.0   UWP-31321 Clear ListKey while cancel task */
 /* 2025-08-26   NLT013   1.2.0   FCR-7417 Add TransmitLog                  */
+/* 2025-08-31   NLT013   1.2.1   FCR-7417 Get Task from RDTMOBREC          */
 /***************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_1764ExtUpd21]
@@ -55,18 +56,24 @@ BEGIN
 
    SELECT @cFacilily = Facility,
       @cStorerKey  = StorerKey,
-      @cInputKey = InputKey,
-      @cOption = I_Field01
+      @cInputKey = InputKey
    FROM RDT.RDTMOBREC WITH(NOLOCK)
    WHERE Mobile = @nMobile
 
    -- TM Replen From
    IF @nFunc = 1764
    BEGIN
-      IF (@nStep = 5 AND @cOption = '1')  OR @nStep = 6 -- CONT NEXT TASK or ToLoc
+      IF @nStep = 5 OR @nStep = 6 -- CONT NEXT TASK or ToLoc
       BEGIN
          IF @cInputKey = '1'
          BEGIN
+            IF @nStep = 5  -- Continue next task, get originak TaskDetailKey from rdtmobrec
+            BEGIN
+               SELECT @cTaskDetailKey = V_TaskDetailKey
+               FROM RDT.RDTMOBREC WITH(NOLOCK)
+               WHERE Mobile = @nMobile
+            END
+
             -- Get task info
             SELECT
                @cSKU = SKU,
