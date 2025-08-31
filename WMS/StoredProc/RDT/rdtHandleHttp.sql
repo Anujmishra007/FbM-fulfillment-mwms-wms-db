@@ -18,6 +18,7 @@ GO
 /* 24-May-2024 1.2  NLT013   Add session id to get unique mobile        */
 /* 03-Apr-2025 1.3.0 NLT013  UWP-32244 Extend Menu number               */
 /* 23-Jul-2025 1.4.0 Dennis   Add trace id                              */
+/* 31-Aug-2025 1.5.0 NickT   FCR-7417 Fix an issue: infinity tran loop  */
 /************************************************************************/
 CREATE OR ALTER PROC  [RDT].[rdtHandleHttp]
   @InMobile      INT ,
@@ -430,6 +431,13 @@ BEGIN
       VALUES (@InMobile, @InMessage, @OutMessage, @nStartFunc, @nStartScn, @nStartStep,@cTraceID)
    END
 
-   WHILE @@TRANCOUNT > 0
-      COMMIT TRAN
+   BEGIN TRY
+      WHILE @@TRANCOUNT > 0 AND XACT_STATE() = 1
+         COMMIT TRAN
+      IF XACT_STATE() = -1
+         ROLLBACK TRAN
+   END TRY
+   BEGIN CATCH
+      RETURN
+   END CATCH
 END
