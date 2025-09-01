@@ -3,21 +3,22 @@ GO
 SET ANSI_NULLS OFF
 GO
 
-/***************************************************************************/
-/* Stored Procedure: nspTMTM02_UL                                          */
-/* Copyright: Maersk                                                       */
-/* Customer : Unilever. Called by nspTMTM01_UL                             */
-/*                                                                         */
-/* Data Modifications:                                                     */
-/*                                                                         */
-/* Updates:                                                                */
-/* Date         Ver.    Author     Purposes                                */
-/* 2025-06-23   1.0.0   NickT      FCR-5519 Create                         */
-/* 2025-07-04   1.0.1   Jackc      FCR-5519 1. Add tasktype output         */
-/*                                 2. Change schema                        */
-/* 2025-07-04   1.0.2   Jackc      FCR-5519 Add task check after get one   */
-/* 2025-08-22   1.0.3   Jackc      FCR-5519 Fix begin tran issue           */
-/***************************************************************************/
+/*********************************************************************************/
+/* Stored Procedure: nspTMTM02_UL                                                */
+/* Copyright: Maersk                                                             */
+/* Customer : Unilever. Called by nspTMTM01_UL                                   */
+/*                                                                               */
+/* Data Modifications:                                                           */
+/*                                                                               */
+/* Updates:                                                                      */
+/* Date         Ver.    Author     Purposes                                      */
+/* 2025-06-23   1.0.0   NickT      FCR-5519 Create                               */
+/* 2025-07-04   1.0.1   Jackc      FCR-5519 1. Add tasktype output               */
+/*                                 2. Change schema                              */
+/* 2025-07-04   1.0.2   Jackc      FCR-5519 Add task check after get one         */
+/* 2025-08-22   1.0.3   Jackc      FCR-5519 Fix begin tran issue                 */
+/* 2025-08-23   1.0.4   Jackc      FCR-5519 Cutomized transit loc logic for FCP  */
+/*********************************************************************************/
 CREATE OR ALTER PROC [RDT].[nspTMTM02_UL]
    @c_userid                  NVARCHAR(18),
    @c_AreaKey01               NVARCHAR(10),
@@ -63,8 +64,11 @@ BEGIN
       ,@c_Facility               NVARCHAR(5)
       ,@c_GroupKey               NVARCHAR(10)
       ,@c_FromLOC                NVARCHAR(10)
-      ,@c_TransitLOC             NVARCHAR( 10) 
+      ,@c_TransitLOC             NVARCHAR( 10)
       --V1.0.2 end
+      ,@n_FuncID                 INT = 0 --V1.0.4
+      ,@cSkipPnDLocation         NVARCHAR(30)--V1.0.4
+
 
    DECLARE @tTaskType TABLE 
    (
@@ -401,7 +405,29 @@ BEGIN
 
    --V1.0.2 start
    IF @bDebug = 1
-      SELECT 'Update taks detail'
+      SELECT 'Start GetTransitLoc', @c_FromLOC AS FromLoc, @c_ToLoc AS ToLoc
+
+   --V1.0.4 start
+   IF @n_Func = 0
+   BEGIN
+      --Set function to get config if @n_func = 0
+      IF @c_TaskType IN ('RPF', 'RP1')
+         SET @n_FuncID = 1764
+      ELSE IF @c_TaskType IN ('FPK', 'FPK1')
+         SET @n_FuncID = 1770
+      ELSE IF @c_TaskType IN ('FCP','FCP1')
+         SET @n_FuncID = 1812
+      ELSE
+         SET @n_FuncID = @n_Func
+
+      IF @bDebug = 1
+         SELECT 'FunctionID to get config', @n_FuncID
+   END
+   ELSE
+   BEGIN
+      SET @n_FuncID = @n_Func
+   END   
+   --V1.0.4 end
 
    -- Handling transaction
    DECLARE @nTranCount INT
@@ -415,28 +441,95 @@ BEGIN
    -- Get transit LOC
    IF @c_TransitLOC = ''
    BEGIN
+      IF @bDebug = 1
+         SELECT 'Get transit location'
       SET @n_err = 0
-      EXECUTE rdt.rdt_GetTransitLOC 
-            @c_UserID
-         , @c_StorerKey
-         , @c_SKU
-         , @n_QTY
-         , @c_FromLOC
-         , @c_FromID
-         , @c_ToLOC
-         , 1             -- Lock PND transit LOC. 1=Yes, 0=No
-         , @c_TransitLOC OUTPUT 
-         , @n_err       OUTPUT
-         , @c_errmsg    OUTPUT
-         , @nFunc = 1764
-      IF @n_err <> 0
+      IF @n_FuncID = 1812 --V1.0.4 Call customized transit logic in 1812
       BEGIN
-         GOTO RollBackTran
+         IF @bDebug = 1
+            SELECT '1812 Transit logic'
+
+         SET @cSkipPnDLocation = rdt.RDTGetConfig( @n_FuncID, 'SkipPnDLocation', @c_StorerKey)
+         IF @cSkipPnDLocation IS NULL OR TRIM(@cSkipPnDLocation) = ''
+            SET @cSkipPnDLocation = '0'
+
+         SELECT @c_LOCCategory = LocationCategory FROM LOC WITH (NOLOCK) WHERE Loc = @c_FromLOC
+
+         IF @c_LOCCategory <> 'VNA' AND @cSkipPnDLocation <> '0' AND @cSkipPnDLocation <> 'PnD' AND EXISTS(SELECT 1 FROM CODELKUP WITH(NOLOCK) WHERE LISTNAME = 'LOCCATEGRY' AND Code = @cSkipPnDLocation)
+         BEGIN
+            IF @bDebug=1
+               SELECT '1812 Cutomized transit logic'
+
+            EXECUTE rdt.rdt_GetTransitLOC06
+               @c_UserID
+               , @c_StorerKey
+               , @c_SKU
+               , @n_QTY
+               , @c_FromLOC
+               , @c_FromID
+               , @c_ToLOC
+               , 1             -- Lock MoveTo transit LOC. 1=Yes, 0=No
+               , @c_TransitLOC OUTPUT 
+               , @n_Err        OUTPUT
+               , @c_ErrMsg     OUTPUT
+               , @nFunc = @n_FuncID
+            IF @n_Err <> 0
+            BEGIN
+               GOTO RollBackTran
+            END
+         END --Cutomized transit logic
+         ELSE
+         BEGIN
+            IF @bDebug=1
+               SELECT '1812 general transit logic'
+
+            EXECUTE rdt.rdt_GetTransitLOC 
+               @c_UserID
+               , @c_StorerKey
+               , @c_SKU
+               , @n_QTY
+               , @c_FromLOC
+               , @c_FromID
+               , @c_ToLOC
+               , 1             -- Lock PND transit LOC. 1=Yes, 0=No
+               , @c_TransitLOC OUTPUT 
+               , @n_Err       OUTPUT
+               , @c_ErrMsg    OUTPUT
+               , @nFunc = @n_FuncID
+            IF @n_Err <> 0
+            BEGIN
+               GOTO RollBackTran
+            END
+         END -- Generic transit logic
+
+      END --V1.0.4
+      ELSE
+      BEGIN
+         IF @bDebug = 1
+            SELECT '1764, 1770 get transit loc logic'
+
+         EXECUTE rdt.rdt_GetTransitLOC 
+            @c_UserID
+            , @c_StorerKey
+            , @c_SKU
+            , @n_QTY
+            , @c_FromLOC
+            , @c_FromID
+            , @c_ToLOC
+            , 1             -- Lock PND transit LOC. 1=Yes, 0=No
+            , @c_TransitLOC OUTPUT 
+            , @n_err       OUTPUT
+            , @c_errmsg    OUTPUT
+            , @nFunc = @n_FuncID --V1.0.4
+         IF @n_err <> 0
+         BEGIN
+            GOTO RollBackTran
+         END
       END
    END
 
    IF @bDebug = 1
-      SELECT 'Get Transit LOC, Update TaskDetail', @c_TransitLOC AS TransitLoc
+      SELECT 'Update TaskDetail', @c_TransitLOC AS TransitLoc
 
    -- Update task as in-progress
    IF NOT EXISTS( SELECT 1 FROM dbo.TaskDetail WITH (NOLOCK) WHERE TaskDetailKey = @c_TaskDetailKey AND Status = '3' AND UserKey = @c_UserID)
@@ -488,7 +581,8 @@ BEGIN
       SET @c_TTMTaskType = ''
    END
 
-   COMMIT TRAN nspTMTM02_UL -- Commit our own transaction
+   COMMIT TRAN
+   
    GOTO Quit
    --V1.0.2 end
 
