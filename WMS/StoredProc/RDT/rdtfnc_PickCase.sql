@@ -24,7 +24,9 @@ GO
 /* 2024-12-13   2.2  LJQ006      FCR-1168 Add extend screen                   */
 /* 2025-03-26   2.3.0 NLT013     FCR-2704 Remove useless code and extend ExtScn data*/
 /* 2025-07-29   2.4.0 NickT      !!!Cutover, user V0 REPO for development!!!  */
+/******************************Merged Into V0**********************************/
 /******************************************************************************/
+
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_PickCase] (
    @nMobile    INT,
