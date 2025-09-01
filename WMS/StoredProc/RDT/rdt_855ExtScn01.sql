@@ -652,14 +652,26 @@ BEGIN
                         HAVING COUNT(DISTINCT OD.OrderLineNumber) <> 1 OR SUM(OD.OpenQty) <> 1
                      )
                      BEGIN
-                        SET @cSingleUnitOrdConfig = rdt.rdtGetConfig( @nFunc, 'SingleUnitOrderConfig', @cStorerkey)
-                        IF @cSingleUnitOrdConfig = '0'
-                           SET @cSingleUnitOrdConfig = ''
+                        IF NOT EXISTS (SELECT 1
+                                    FROM dbo.PICKDETAIL PD WITH (NOLOCK)
+                                    JOIN dbo.ORDERS AS O WITH (NOLOCK) 
+                                       ON O.orderkey = PD.orderkey
+                                    JOIN dbo.CODELKUP AS C WITH (NOLOCK) 
+                                       ON LISTNAME = 'MPOCPERMIT'
+                                       AND ( C.Code = O.BillToKey OR C.Code = O.ConsigneeKey )
+                                       AND C.Storerkey = O.StorerKey
+                                    WHERE  PD.StorerKey = @cStorerkey
+                                       AND PD.DropID = @cDropID)
+                        BEGIN -- Not set SingleUnitOrder flag if any of orders is MPOC.
+                           SET @cSingleUnitOrdConfig = rdt.rdtGetConfig( @nFunc, 'SingleUnitOrderConfig', @cStorerkey)
+                           IF @cSingleUnitOrdConfig = '0'
+                              SET @cSingleUnitOrdConfig = ''
 
-                        IF @cSingleUnitOrdConfig = '1'
-                        BEGIN
-                           SET @cSingleUnitOrdFlag = 'Y'
-                           SET @cToteID = @cDropID -- in single unit order, the scanned dropid is the toteid
+                           IF @cSingleUnitOrdConfig = '1'
+                           BEGIN
+                              SET @cSingleUnitOrdFlag = 'Y'
+                              SET @cToteID = @cDropID -- in single unit order, the scanned dropid is the toteid
+                           END
                         END
                      END
 
