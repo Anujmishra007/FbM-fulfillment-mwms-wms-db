@@ -18,6 +18,7 @@ GO
 /*                               3. Fix Qty, weight calculation for task with SKU=''(UWP36863)  */
 /*                               4. Use Picking task reftaskkey to link RPF (UWP36799)          */
 /* 2025-07-03  1.0.2  Jackc    FCR-5727 Get task order by task priority                         */
+/* 2025-09-01  1.0.3  Dennis   FCR-3959 if toloc(ML or Kit) onhold then look for other lanes    */
 /************************************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[nspTTMEvaluateRPFFCPTasks_JCB]
@@ -338,7 +339,41 @@ BEGIN
             )
             AND TD.TaskType IN ('FCP', 'FCP1')
             AND TD.PickMethod IN ('PP', 'FP')
-            AND (LOC1.Status = 'OK' AND LOC1.LocationFlag IN ('','NONE'))
+            AND ((LOC1.Status = 'OK' AND LOC1.LocationFlag IN ('','NONE'))
+            --OR It is Marshalling lane
+             OR (EXISTS (SELECT 1 FROM dbo.CODELKUP WITH (NOLOCK)
+                  WHERE LISTNAME = 'JCBCOMPML'
+                  AND SHORT = TD.ToLOC
+                  AND Storerkey = @cStorerKey)
+               AND EXISTS ( SELECT 1 FROM dbo.CODELKUP CL WITH (NOLOCK)
+                        JOIN dbo.LOC L WITH (NOLOCK) ON CL.SHORT = L.LOC
+                        WHERE CL.LISTNAME = 'JCBCOMPML'
+                          AND CL.LONG = ORM.c_company
+                          AND CL.Storerkey = @cStorerKey
+                          AND (L.Status = 'OK' AND (L.LocationFlag = '' OR L.LocationFlag = 'NONE'))
+                     )
+               )
+            --OR its kitting loc
+               OR (EXISTS (SELECT 1
+                     FROM dbo.CodeLKUP CL WITH (NOLOCK )
+                     JOIN dbo.LOC L WITH (NOLOCK)
+                        ON CL.LONG = L.LocationCategory
+                     WHERE CL.LISTNAME = 'JCBKITORDT'
+                        AND CL.Storerkey = @cStorerKey
+                        AND CL.Short = 'Y'
+                        AND L.LOC = TD.ToLOC
+                        AND CL.Code = ORM.Type)
+               AND EXISTS ( SELECT 1 FROM dbo.CodeLKUP CL WITH (NOLOCK)
+                        JOIN dbo.LOC L WITH (NOLOCK) ON CL.LONG = L.LocationCategory
+                        WHERE CL.Short = 'Y'
+                           AND CL.LISTNAME = 'JCBKITORDT'
+                           AND CL.Code = ORM.Type
+                           AND CL.Storerkey = @cStorerKey
+                           AND L.Status = 'OK'
+                           AND (L.LocationFlag = '' OR L.LocationFlag = 'NONE')
+                     )
+               )
+            )
             AND TD.AreaKey = @c_AreaKey01
             AND TMU.UserKey = @c_UserID
             AND TMU.Permission = '1'
@@ -384,7 +419,41 @@ BEGIN
             )
             AND TD.TaskType IN ('RPF', 'RP1')
             AND TD.PickMethod IN ('PP', 'FP')
-            AND (LOC1.Status = 'OK' AND LOC1.LocationFlag IN ('','NONE'))
+            AND ((LOC1.Status = 'OK' AND LOC1.LocationFlag IN ('','NONE'))
+            --OR It is Marshalling lane
+             OR (EXISTS (SELECT 1 FROM dbo.CODELKUP WITH (NOLOCK)
+                  WHERE LISTNAME = 'JCBCOMPML'
+                  AND SHORT = TD.ToLOC
+                  AND Storerkey = @cStorerKey)
+               AND EXISTS ( SELECT 1 FROM dbo.CODELKUP CL WITH (NOLOCK)
+                        JOIN dbo.LOC L WITH (NOLOCK) ON CL.SHORT = L.LOC
+                        WHERE CL.LISTNAME = 'JCBCOMPML'
+                          AND CL.LONG = ORM.c_company
+                          AND CL.Storerkey = @cStorerKey
+                          AND (L.Status = 'OK' AND (L.LocationFlag = '' OR L.LocationFlag = 'NONE'))
+                     )
+               )
+            --OR its kitting loc
+               OR (EXISTS (SELECT 1
+                     FROM dbo.CodeLKUP CL WITH (NOLOCK )
+                     JOIN dbo.LOC L WITH (NOLOCK)
+                        ON CL.LONG = L.LocationCategory
+                     WHERE CL.LISTNAME = 'JCBKITORDT'
+                        AND CL.Short = 'Y'
+                        AND CL.Storerkey = @cStorerKey
+                        AND L.LOC = TD.ToLOC
+                        AND CL.Code = ORM.Type)
+               AND EXISTS ( SELECT 1 FROM dbo.CodeLKUP CL WITH (NOLOCK)
+                        JOIN dbo.LOC L WITH (NOLOCK) ON CL.LONG = L.LocationCategory
+                        WHERE CL.Short = 'Y'
+                           AND CL.LISTNAME = 'JCBKITORDT'
+                           AND CL.Storerkey = @cStorerKey
+                           AND CL.Code = ORM.Type
+                           AND L.Status = 'OK'
+                           AND (L.LocationFlag = '' OR L.LocationFlag = 'NONE')
+                     )
+               )
+            )
             AND TD.AreaKey = @c_AreaKey01
             AND TMU.UserKey = @c_UserID
             AND TMU.Permission = '1'
