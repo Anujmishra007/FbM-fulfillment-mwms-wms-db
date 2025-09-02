@@ -21,6 +21,7 @@
 /* 29-Jan-2024    Alex02   #PAC-322 - Scan QRCode in Serial# direct     */
 /*                         insert packdetail                            */
 /* 10-Sep-2024    Alex03   #PAC-353 - Bundle Packing validation         */
+/* 14-Jul-2025    Sean     #FCR-6199 - Packing SKU Decode               */
 /************************************************************************/    
 CREATE OR ALTER PROC [API].[isp_ECOMP_PackSKU_M](
      @b_Debug                    INT            = 0
@@ -35,6 +36,9 @@ CREATE OR ALTER PROC [API].[isp_ECOMP_PackSKU_M](
    , @c_SKU                      NVARCHAR(20)   = ''
    , @c_LottableValue            NVARCHAR(60)   = ''
    , @n_CartonNo                 INT            = 1
+   , @c_SerialNo                 NVARCHAR(60)   = ''
+   , @c_ScanSKULabel             NVARCHAR(500)  = ''
+   , @b_ScanQRInSKULabel         BIT            = 0
    , @b_IsOrderMatch             INT            = 0   OUTPUT
    , @b_IsSKUPacked              INT            = 0   OUTPUT
    , @c_PackHeaderOrderKey       NVARCHAR(10)   = ''  OUTPUT
@@ -266,7 +270,33 @@ BEGIN
       END
       --Alex03 E
 
-      --SELECT @n_CartonNo [@n_CartonNo]
+      --Sean S
+      SET @n_sp_Success = 1
+      EXEC [API].[isp_ECOMP_SKUDecode_PostAction_Wrapper]
+            @b_Debug          = @b_Debug
+         ,  @c_PickSlipNo     = @c_PickSlipNo
+         ,  @n_CartonNo       = @n_CartonNo
+         ,  @c_OrderKey       = @c_OrderKey
+         ,  @c_Storerkey      = @c_Storerkey
+         ,  @c_SKU            = @c_ScanSKULabel
+         ,  @b_Success        = @n_sp_Success   OUTPUT  
+         ,  @n_Err            = @n_sp_err       OUTPUT  
+         ,  @c_ErrMsg         = @c_sp_errmsg    OUTPUT  
+
+      IF @n_sp_Success = 0
+      BEGIN
+         SET @n_Continue = 3 
+         SET @n_ErrNo = @n_sp_err
+         SET @c_ErrMsg = @c_sp_errmsg
+         GOTO QUIT
+      END
+      ELSE IF @n_sp_Success = 1
+      BEGIN
+         GOTO SKIP_PACKDETAIL
+      END
+      --Sean E
+
+      
       IF NOT EXISTS ( 
          SELECT 1 FROM [dbo].[PackDetail] WITH (NOLOCK) 
          WHERE PickSlipNo = @c_PickSlipNo AND StorerKey = @c_StorerKey AND SKU = @c_SKU AND CartonNo = @n_CartonNo AND LOTTABLEVALUE = @c_LottableValue)
@@ -292,6 +322,26 @@ BEGIN
          AND CartonNo = @n_CartonNo
          AND LottableValue = @c_LottableValue
       END
+
+      --Sean S
+
+       -- update/insert packserialno
+      IF @b_IsSKUPacked = 1 AND @b_ScanQRInSKULabel = 1
+      BEGIN
+         INSERT INTO [dbo].[PackSerialNo] (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, SerialNo, QTY)
+         SELECT TOP 1 
+            PickSlipNo, CartonNo, '', LabelLine, StorerKey, SKU, @c_SerialNo, 1 --QTY --Alex03
+         FROM [dbo].[PackDetail] WITH (NOLOCK) 
+         WHERE PickSlipNo = @c_PickSlipNo 
+         AND CartonNo = @n_CartonNo
+         AND StorerKey = @c_StorerKey
+         AND SKU = @c_SKU
+      END
+
+      --Sean E
+
+
+      SKIP_PACKDETAIL:
 
       --Assign Order (Begin)
       SELECT @n_IsExists = (1)
