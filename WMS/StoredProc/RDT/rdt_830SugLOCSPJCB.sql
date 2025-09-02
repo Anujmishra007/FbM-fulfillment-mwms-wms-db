@@ -72,38 +72,81 @@ BEGIN
       IF @cZone IN ('XD', 'LB', 'LP')
       BEGIN
          IF (@cPickZone<>'')
-            SELECT TOP 1
-               @cNewSuggLOC = LOC.LOC
-            FROM dbo.RefKeyLookup RKL WITH (NOLOCK)
-               JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
-               JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
-			   JOIN dbo.LOTATTRIBUTE LA WITH(NOLOCK) ON PD.Lot = LA.Lot
-            WHERE RKL.PickSlipNo = @cPickSlipNo
-               AND PD.QTY > 0
-               AND PD.Status <> '4'
-			   AND LA.Lottable11 <> ''
-               AND PD.Status < @cPickConfirmStatus
-               AND (LOC.LogicalLocation >= @cLogicalLOC
-               AND  LOC.PickZone = @cPickZone
-               OR  (LOC.LogicalLocation >= @cLogicalLOC AND LOC.LOC >= @cLOC))
-            GROUP BY LOC.LogicalLocation, LOC.LOC
-            ORDER BY LOC.LogicalLocation, LOC.LOC
+		    IF @nStep = 2 AND @nInputKey = 1
+			BEGIN
+               SELECT TOP 1
+                  @cNewSuggLOC = LOC.LOC
+               FROM dbo.RefKeyLookup RKL WITH (NOLOCK)
+                  JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
+                  JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+			      JOIN dbo.LOTATTRIBUTE LA WITH(NOLOCK) ON PD.Lot = LA.Lot
+               WHERE RKL.PickSlipNo = @cPickSlipNo
+                  AND PD.QTY > 0
+                  AND PD.Status <> '4'
+			      AND LA.Lottable11 <> ''
+                  AND PD.Status < @cPickConfirmStatus
+                  AND (LOC.LogicalLocation > @cLogicalLOC
+                  AND  LOC.PickZone = @cPickZone
+                  OR  (LOC.LogicalLocation > @cLogicalLOC AND LOC.LOC > @cLOC))
+               GROUP BY LOC.LogicalLocation, LOC.LOC
+               ORDER BY LOC.LogicalLocation, LOC.LOC
+			END
+			ELSE
+			BEGIN
+               SELECT TOP 1
+                  @cNewSuggLOC = LOC.LOC
+               FROM dbo.RefKeyLookup RKL WITH (NOLOCK)
+                  JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
+                  JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+			      JOIN dbo.LOTATTRIBUTE LA WITH(NOLOCK) ON PD.Lot = LA.Lot
+               WHERE RKL.PickSlipNo = @cPickSlipNo
+                  AND PD.QTY > 0
+                  AND PD.Status <> '4'
+			      AND LA.Lottable11 <> ''
+                  AND PD.Status < @cPickConfirmStatus
+                  AND (LOC.LogicalLocation >= @cLogicalLOC
+                  AND  LOC.PickZone = @cPickZone
+                  OR  (LOC.LogicalLocation >= @cLogicalLOC AND LOC.LOC >= @cLOC))
+               GROUP BY LOC.LogicalLocation, LOC.LOC
+               ORDER BY LOC.LogicalLocation, LOC.LOC
+			END
          ELSE
-            SELECT TOP 1
-               @cNewSuggLOC = LOC.LOC
-            FROM dbo.RefKeyLookup RKL WITH (NOLOCK)
-               JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
-               JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
-			   JOIN dbo.LOTATTRIBUTE LA WITH(NOLOCK) ON PD.Lot = LA.Lot
-            WHERE RKL.PickSlipNo = @cPickSlipNo
-               AND PD.QTY > 0
-               AND PD.Status <> '4'
-			   AND LA.Lottable11 <> ''
-               AND PD.Status < @cPickConfirmStatus
-               AND (LOC.LogicalLocation >= @cLogicalLOC
-               OR  (LOC.LogicalLocation >= @cLogicalLOC AND LOC.LOC >= @cLOC))
-            GROUP BY LOC.LogicalLocation, LOC.LOC
-            ORDER BY LOC.LogicalLocation, LOC.LOC
+		    IF @nStep = 2 AND @nInputKey = 1
+			BEGIN
+               SELECT TOP 1
+                  @cNewSuggLOC = LOC.LOC
+               FROM dbo.RefKeyLookup RKL WITH (NOLOCK)
+                  JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
+                  JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+			      JOIN dbo.LOTATTRIBUTE LA WITH(NOLOCK) ON PD.Lot = LA.Lot
+               WHERE RKL.PickSlipNo = @cPickSlipNo
+                  AND PD.QTY > 0
+                  AND PD.Status <> '4'
+			      AND LA.Lottable11 <> ''
+                  AND PD.Status < @cPickConfirmStatus
+                  AND (LOC.LogicalLocation > @cLogicalLOC
+                  OR  (LOC.LogicalLocation > @cLogicalLOC AND LOC.LOC > @cLOC))
+               GROUP BY LOC.LogicalLocation, LOC.LOC
+               ORDER BY LOC.LogicalLocation, LOC.LOC
+			END
+			ELSE
+			BEGIN
+               SELECT TOP 1
+                  @cNewSuggLOC = LOC.LOC
+               FROM dbo.RefKeyLookup RKL WITH (NOLOCK)
+                  JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
+                  JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+			      JOIN dbo.LOTATTRIBUTE LA WITH(NOLOCK) ON PD.Lot = LA.Lot
+               WHERE RKL.PickSlipNo = @cPickSlipNo
+                  AND PD.QTY > 0
+                  AND PD.Status <> '4'
+			      AND LA.Lottable11 <> ''
+                  AND PD.Status < @cPickConfirmStatus
+                  AND (LOC.LogicalLocation >= @cLogicalLOC
+                  OR  (LOC.LogicalLocation >= @cLogicalLOC AND LOC.LOC >= @cLOC))
+               GROUP BY LOC.LogicalLocation, LOC.LOC
+               ORDER BY LOC.LogicalLocation, LOC.LOC
+			END
 
       END
    
@@ -111,111 +154,235 @@ BEGIN
       ELSE IF @cOrderKey <> ''
       BEGIN
          IF @cPickZone<>''
-            SELECT TOP 1
-               @cNewSuggLOC = LOC.LOC
-            FROM dbo.PickDetail PD WITH (NOLOCK)
-               JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
-			   JOIN dbo.LOTATTRIBUTE LA WITH(NOLOCK) ON PD.Lot = LA.Lot
-            WHERE PD.OrderKey = @cOrderKey
-               AND PD.QTY > 0
-               AND PD.Status <> '4'
-			   AND LA.Lottable11 <> ''
-               AND PD.Status < @cPickConfirmStatus
-               AND (LOC.LogicalLocation >= @cLogicalLOC
-               AND LOC.Pickzone=@cPickZone
-               OR  (LOC.LogicalLocation >= @cLogicalLOC AND LOC.LOC >= @cLOC))
-            GROUP BY LOC.LogicalLocation, LOC.LOC
-            ORDER BY LOC.LogicalLocation, LOC.LOC   
+		    IF @nStep = 2 AND @nInputKey = 1
+			BEGIN
+               SELECT TOP 1
+                  @cNewSuggLOC = LOC.LOC
+               FROM dbo.PickDetail PD WITH (NOLOCK)
+                  JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+			      JOIN dbo.LOTATTRIBUTE LA WITH(NOLOCK) ON PD.Lot = LA.Lot
+               WHERE PD.OrderKey = @cOrderKey
+                  AND PD.QTY > 0
+                  AND PD.Status <> '4'
+			      AND LA.Lottable11 <> ''
+                  AND PD.Status < @cPickConfirmStatus
+                  AND (LOC.LogicalLocation > @cLogicalLOC
+                  AND LOC.Pickzone=@cPickZone
+                  OR  (LOC.LogicalLocation > @cLogicalLOC AND LOC.LOC > @cLOC))
+               GROUP BY LOC.LogicalLocation, LOC.LOC
+               ORDER BY LOC.LogicalLocation, LOC.LOC
+			END
+			ELSE
+			BEGIN
+               SELECT TOP 1
+                  @cNewSuggLOC = LOC.LOC
+               FROM dbo.PickDetail PD WITH (NOLOCK)
+                  JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+			      JOIN dbo.LOTATTRIBUTE LA WITH(NOLOCK) ON PD.Lot = LA.Lot
+               WHERE PD.OrderKey = @cOrderKey
+                  AND PD.QTY > 0
+                  AND PD.Status <> '4'
+			      AND LA.Lottable11 <> ''
+                  AND PD.Status < @cPickConfirmStatus
+                  AND (LOC.LogicalLocation >= @cLogicalLOC
+                  AND LOC.Pickzone=@cPickZone
+                  OR  (LOC.LogicalLocation >= @cLogicalLOC AND LOC.LOC >= @cLOC))
+               GROUP BY LOC.LogicalLocation, LOC.LOC
+               ORDER BY LOC.LogicalLocation, LOC.LOC
+			END
          ELSE
-
-            SELECT TOP 1
-               @cNewSuggLOC = LOC.LOC
-            FROM dbo.PickDetail PD WITH (NOLOCK)
-               JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
-			   JOIN dbo.LOTATTRIBUTE LA WITH(NOLOCK) ON PD.Lot = LA.Lot
-            WHERE PD.OrderKey = @cOrderKey
-               AND PD.QTY > 0
-               AND PD.Status <> '4'
-			   AND LA.Lottable11 <> ''
-               AND PD.Status < @cPickConfirmStatus
-               AND (LOC.LogicalLocation >= @cLogicalLOC
-               OR  (LOC.LogicalLocation >= @cLogicalLOC AND LOC.LOC >= @cLOC))
-            GROUP BY LOC.LogicalLocation, LOC.LOC
-            ORDER BY LOC.LogicalLocation, LOC.LOC
+		    IF @nStep = 2 AND @nInputKey = 1
+			BEGIN
+               SELECT TOP 1
+                  @cNewSuggLOC = LOC.LOC
+               FROM dbo.PickDetail PD WITH (NOLOCK)
+                  JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+			      JOIN dbo.LOTATTRIBUTE LA WITH(NOLOCK) ON PD.Lot = LA.Lot
+               WHERE PD.OrderKey = @cOrderKey
+                  AND PD.QTY > 0
+                  AND PD.Status <> '4'
+			      AND LA.Lottable11 <> ''
+                  AND PD.Status < @cPickConfirmStatus
+                  AND (LOC.LogicalLocation > @cLogicalLOC
+                  OR  (LOC.LogicalLocation > @cLogicalLOC AND LOC.LOC > @cLOC))
+               GROUP BY LOC.LogicalLocation, LOC.LOC
+               ORDER BY LOC.LogicalLocation, LOC.LOC
+			END
+            ELSE
+			BEGIN
+			   SELECT TOP 1
+                  @cNewSuggLOC = LOC.LOC
+               FROM dbo.PickDetail PD WITH (NOLOCK)
+                  JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+			      JOIN dbo.LOTATTRIBUTE LA WITH(NOLOCK) ON PD.Lot = LA.Lot
+               WHERE PD.OrderKey = @cOrderKey
+                  AND PD.QTY > 0
+                  AND PD.Status <> '4'
+			      AND LA.Lottable11 <> ''
+                  AND PD.Status < @cPickConfirmStatus
+                  AND (LOC.LogicalLocation >= @cLogicalLOC
+                  OR  (LOC.LogicalLocation >= @cLogicalLOC AND LOC.LOC >= @cLOC))
+               GROUP BY LOC.LogicalLocation, LOC.LOC
+               ORDER BY LOC.LogicalLocation, LOC.LOC
+		    END
       END
                   
       -- Conso PickSlip
       ELSE IF @cLoadKey <> ''
       BEGIN
          IF @cPickZone<>''
-            SELECT TOP 1
-               @cNewSuggLOC = LOC.LOC
-            FROM dbo.LoadPlanDetail LPD WITH (NOLOCK) 
-               JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)    
-               JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
-			   JOIN dbo.LOTATTRIBUTE LA WITH(NOLOCK) ON PD.Lot = LA.Lot
-            WHERE LPD.LoadKey = @cLoadKey  
-               AND PD.QTY > 0
-               AND PD.Status <> '4'
-			   AND LA.Lottable11 <> ''
-               AND PD.Status < @cPickConfirmStatus
-               AND (LOC.LogicalLocation >= @cLogicalLOC
-               AND LOC.Pickzone=@cPickZone
-               OR  (LOC.LogicalLocation >= @cLogicalLOC AND LOC.LOC >= @cLOC))
-            GROUP BY LOC.LogicalLocation, LOC.LOC
-            ORDER BY LOC.LogicalLocation, LOC.LOC
+		    IF @nStep = 2 AND @nInputKey = 1
+			BEGIN
+               SELECT TOP 1
+                  @cNewSuggLOC = LOC.LOC
+               FROM dbo.LoadPlanDetail LPD WITH (NOLOCK) 
+                  JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)    
+                  JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+			      JOIN dbo.LOTATTRIBUTE LA WITH(NOLOCK) ON PD.Lot = LA.Lot
+               WHERE LPD.LoadKey = @cLoadKey  
+                  AND PD.QTY > 0
+                  AND PD.Status <> '4'
+			      AND LA.Lottable11 <> ''
+                  AND PD.Status < @cPickConfirmStatus
+                  AND (LOC.LogicalLocation > @cLogicalLOC
+                  AND LOC.Pickzone=@cPickZone
+                  OR  (LOC.LogicalLocation > @cLogicalLOC AND LOC.LOC > @cLOC))
+               GROUP BY LOC.LogicalLocation, LOC.LOC
+               ORDER BY LOC.LogicalLocation, LOC.LOC
+			END
+			ELSE
+			BEGIN
+               SELECT TOP 1
+                  @cNewSuggLOC = LOC.LOC
+               FROM dbo.LoadPlanDetail LPD WITH (NOLOCK) 
+                  JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)    
+                  JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+			      JOIN dbo.LOTATTRIBUTE LA WITH(NOLOCK) ON PD.Lot = LA.Lot
+               WHERE LPD.LoadKey = @cLoadKey  
+                  AND PD.QTY > 0
+                  AND PD.Status <> '4'
+			      AND LA.Lottable11 <> ''
+                  AND PD.Status < @cPickConfirmStatus
+                  AND (LOC.LogicalLocation >= @cLogicalLOC
+                  AND LOC.Pickzone=@cPickZone
+                  OR  (LOC.LogicalLocation >= @cLogicalLOC AND LOC.LOC >= @cLOC))
+               GROUP BY LOC.LogicalLocation, LOC.LOC
+               ORDER BY LOC.LogicalLocation, LOC.LOC
+			END
          ELSE
-            SELECT TOP 1
-               @cNewSuggLOC = LOC.LOC
-            FROM dbo.LoadPlanDetail LPD WITH (NOLOCK) 
-               JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)    
-               JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
-			   JOIN dbo.LOTATTRIBUTE LA WITH(NOLOCK) ON PD.Lot = LA.Lot
-            WHERE LPD.LoadKey = @cLoadKey  
-               AND PD.QTY > 0
-               AND PD.Status <> '4'
-			   AND LA.Lottable11 <> ''
-               AND PD.Status < @cPickConfirmStatus
-               AND (LOC.LogicalLocation >= @cLogicalLOC
-               OR  (LOC.LogicalLocation >= @cLogicalLOC AND LOC.LOC >= @cLOC))
-            GROUP BY LOC.LogicalLocation, LOC.LOC
-            ORDER BY LOC.LogicalLocation, LOC.LOC
+		    IF @nStep = 2 AND @nInputKey = 1
+            BEGIN
+			   SELECT TOP 1
+                  @cNewSuggLOC = LOC.LOC
+               FROM dbo.LoadPlanDetail LPD WITH (NOLOCK) 
+                  JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)    
+                  JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+			      JOIN dbo.LOTATTRIBUTE LA WITH(NOLOCK) ON PD.Lot = LA.Lot
+               WHERE LPD.LoadKey = @cLoadKey  
+                  AND PD.QTY > 0
+                  AND PD.Status <> '4'
+			      AND LA.Lottable11 <> ''
+                  AND PD.Status < @cPickConfirmStatus
+                  AND (LOC.LogicalLocation > @cLogicalLOC
+                  OR  (LOC.LogicalLocation > @cLogicalLOC AND LOC.LOC > @cLOC))
+               GROUP BY LOC.LogicalLocation, LOC.LOC
+               ORDER BY LOC.LogicalLocation, LOC.LOC
+			END
+			ELSE
+			BEGIN
+			   SELECT TOP 1
+                  @cNewSuggLOC = LOC.LOC
+               FROM dbo.LoadPlanDetail LPD WITH (NOLOCK) 
+                  JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)    
+                  JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+			      JOIN dbo.LOTATTRIBUTE LA WITH(NOLOCK) ON PD.Lot = LA.Lot
+               WHERE LPD.LoadKey = @cLoadKey  
+                  AND PD.QTY > 0
+                  AND PD.Status <> '4'
+			      AND LA.Lottable11 <> ''
+                  AND PD.Status < @cPickConfirmStatus
+                  AND (LOC.LogicalLocation >= @cLogicalLOC
+                  OR  (LOC.LogicalLocation >= @cLogicalLOC AND LOC.LOC >= @cLOC))
+               GROUP BY LOC.LogicalLocation, LOC.LOC
+               ORDER BY LOC.LogicalLocation, LOC.LOC
+			END
       END
       
       -- Custom PickSlip
       ELSE
       BEGIN
          IF @cPickZone<>''
-            SELECT TOP 1
-               @cNewSuggLOC = LOC.LOC
-            FROM dbo.PickDetail PD WITH (NOLOCK)
-               JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
-			   JOIN dbo.LOTATTRIBUTE LA WITH(NOLOCK) ON PD.Lot = LA.Lot
-            WHERE PD.PickSlipNo = @cPickSlipNo
-               AND PD.QTY > 0
-               AND PD.Status <> '4'
-			   AND LA.Lottable11 <> ''
-               AND PD.Status < @cPickConfirmStatus
-               AND (LOC.LogicalLocation >= @cLogicalLOC
-               AND LOC.PickZone=@cPickZone
-               OR  (LOC.LogicalLocation >= @cLogicalLOC AND LOC.LOC >= @cLOC))
-            GROUP BY LOC.LogicalLocation, LOC.LOC
-            ORDER BY LOC.LogicalLocation, LOC.LOC
+		    IF @nStep = 2 AND @nInputKey = 1
+			BEGIN
+               SELECT TOP 1
+                  @cNewSuggLOC = LOC.LOC
+               FROM dbo.PickDetail PD WITH (NOLOCK)
+                  JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+			      JOIN dbo.LOTATTRIBUTE LA WITH(NOLOCK) ON PD.Lot = LA.Lot
+               WHERE PD.PickSlipNo = @cPickSlipNo
+                  AND PD.QTY > 0
+                  AND PD.Status <> '4'
+			      AND LA.Lottable11 <> ''
+                  AND PD.Status < @cPickConfirmStatus
+                  AND (LOC.LogicalLocation > @cLogicalLOC
+                  AND LOC.PickZone=@cPickZone
+                  OR  (LOC.LogicalLocation > @cLogicalLOC AND LOC.LOC > @cLOC))
+               GROUP BY LOC.LogicalLocation, LOC.LOC
+               ORDER BY LOC.LogicalLocation, LOC.LOC
+			END
+			ELSE
+			BEGIN
+               SELECT TOP 1
+                  @cNewSuggLOC = LOC.LOC
+               FROM dbo.PickDetail PD WITH (NOLOCK)
+                  JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+			      JOIN dbo.LOTATTRIBUTE LA WITH(NOLOCK) ON PD.Lot = LA.Lot
+               WHERE PD.PickSlipNo = @cPickSlipNo
+                  AND PD.QTY > 0
+                  AND PD.Status <> '4'
+			      AND LA.Lottable11 <> ''
+                  AND PD.Status < @cPickConfirmStatus
+                  AND (LOC.LogicalLocation >= @cLogicalLOC
+                  AND LOC.PickZone=@cPickZone
+                  OR  (LOC.LogicalLocation >= @cLogicalLOC AND LOC.LOC >= @cLOC))
+               GROUP BY LOC.LogicalLocation, LOC.LOC
+               ORDER BY LOC.LogicalLocation, LOC.LOC
+			END
          ELSE
-            SELECT TOP 1
-               @cNewSuggLOC = LOC.LOC
-            FROM dbo.PickDetail PD WITH (NOLOCK)
-               JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
-			   JOIN dbo.LOTATTRIBUTE LA WITH(NOLOCK) ON PD.Lot = LA.Lot
-            WHERE PD.PickSlipNo = @cPickSlipNo
-               AND PD.QTY > 0
-               AND PD.Status <> '4'
-			   AND LA.Lottable11 <> ''
-               AND PD.Status < @cPickConfirmStatus
-               AND (LOC.LogicalLocation >= @cLogicalLOC
-               OR  (LOC.LogicalLocation >= @cLogicalLOC AND LOC.LOC >= @cLOC))
-            GROUP BY LOC.LogicalLocation, LOC.LOC
-            ORDER BY LOC.LogicalLocation, LOC.LOC
+		    IF @nStep = 2 AND @nInputKey = 1
+			BEGIN
+               SELECT TOP 1
+                  @cNewSuggLOC = LOC.LOC
+               FROM dbo.PickDetail PD WITH (NOLOCK)
+                  JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+			      JOIN dbo.LOTATTRIBUTE LA WITH(NOLOCK) ON PD.Lot = LA.Lot
+               WHERE PD.PickSlipNo = @cPickSlipNo
+                  AND PD.QTY > 0
+                  AND PD.Status <> '4'
+			      AND LA.Lottable11 <> ''
+                  AND PD.Status < @cPickConfirmStatus
+                  AND (LOC.LogicalLocation > @cLogicalLOC
+                  OR  (LOC.LogicalLocation > @cLogicalLOC AND LOC.LOC > @cLOC))
+               GROUP BY LOC.LogicalLocation, LOC.LOC
+               ORDER BY LOC.LogicalLocation, LOC.LOC
+			END
+			ELSE
+			BEGIN
+               SELECT TOP 1
+                  @cNewSuggLOC = LOC.LOC
+               FROM dbo.PickDetail PD WITH (NOLOCK)
+                  JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+			      JOIN dbo.LOTATTRIBUTE LA WITH(NOLOCK) ON PD.Lot = LA.Lot
+               WHERE PD.PickSlipNo = @cPickSlipNo
+                  AND PD.QTY > 0
+                  AND PD.Status <> '4'
+			      AND LA.Lottable11 <> ''
+                  AND PD.Status < @cPickConfirmStatus
+                  AND (LOC.LogicalLocation >= @cLogicalLOC
+                  OR  (LOC.LogicalLocation >= @cLogicalLOC AND LOC.LOC >= @cLOC))
+               GROUP BY LOC.LogicalLocation, LOC.LOC
+               ORDER BY LOC.LogicalLocation, LOC.LOC
+			END
       END
       
       -- Found suggest LOC
