@@ -16,6 +16,7 @@ GO
 /* 2025-08-13 1.2.0 NickT     UWP-39425 RDT screen go to blank screen   */
 /* 2025-08-29 1.3.0 NickT     UWP-40373 Correct Qty of Alert Msg, no need*/
 /*                            to generate Adjustment if UCC is Picked   */
+/* 2025-09-02 1.3.1 Jackc     UWP-40373 Correct Qty of Alert.Qty        */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1767ExtOpt01] (
@@ -66,6 +67,7 @@ AS
    DECLARE @nTranCount  INT
    DECLARE @nTolQty     INT
    DECLARE @nCCDQty     INT
+   DECLARE @nAlterQty   INT --v1.3.1
    DECLARE @cTolQty     NVARCHAR( 10)
    DECLARE @curCCD      CURSOR
    DECLARE @curADJ      CURSOR
@@ -160,6 +162,9 @@ AS
                   ELSE
                      SET @cAlertMessage = @cAlertMessage + ' No allocation.'
 
+                  --V1.3.1
+                  SET @nAlterQty = ISNULL(@nCCDQty,0) * -1
+
                   EXEC nspLogAlert
                         @c_modulename       = 'TMCCUCC'
                      , @c_AlertMessage     = @cAlertMessage
@@ -172,7 +177,7 @@ AS
                      , @c_SKU              = ''
                      , @c_UOM              = ''
                      , @c_UOMQty           = ''
-                     , @c_Qty              = @nCCDQty
+                     , @c_Qty              = @nAlterQty
                      , @c_Lot              = ''
                      , @c_Loc              = @cLoc
                      , @c_ID               = @cID
