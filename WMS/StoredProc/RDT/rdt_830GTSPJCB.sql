@@ -156,7 +156,7 @@ BEGIN
                   AND PD.Status <> '4'    
                   AND PD.Status < @cPickConfirmStatus    
                   AND LOC.PickZone =@cPickzone--(yeekung01)    
-               ORDER BY PD.SKU    
+               ORDER BY PD.PickDetailKey, PD.LOT   
             ELSE    
                SELECT TOP 1    
                   @cTempSKU = PD.SKU    
@@ -170,7 +170,7 @@ BEGIN
                   AND PD.QTY > 0    
                   AND PD.Status <> '4'    
                   AND PD.Status < @cPickConfirmStatus    
-               ORDER BY PD.SKU    
+               ORDER BY PD.PickDetailKey, PD.LOT     
          END    
           
          -- Discrete PickSlip    
@@ -189,7 +189,7 @@ BEGIN
                   AND PD.Status <> '4'    
                   AND PD.Status < @cPickConfirmStatus    
                   AND LOC.PickZone=@cPickZone --(yeekung01)    
-               ORDER BY PD.SKU    
+               ORDER BY PD.PickDetailKey, PD.LOT    
             ELSE    
                SELECT TOP 1    
                   @cTempSKU = PD.SKU    
@@ -202,7 +202,7 @@ BEGIN
                   AND PD.QTY > 0    
                   AND PD.Status <> '4'    
                   AND PD.Status < @cPickConfirmStatus    
-               ORDER BY PD.SKU    
+               ORDER BY PD.PickDetailKey, PD.LOT    
          END    
     
          -- Conso PickSlip    
@@ -222,7 +222,7 @@ BEGIN
                   AND PD.Status <> '4'    
                   AND PD.Status < @cPickConfirmStatus    
                   AND LOC.PickZone=@cPickZone --(yeekung01)    
-               ORDER BY PD.SKU    
+               ORDER BY PD.PickDetailKey, PD.LOT   
             ELSE    
                SELECT TOP 1    
                   @cTempSKU = PD.SKU    
@@ -236,7 +236,7 @@ BEGIN
                   AND PD.QTY > 0    
                   AND PD.Status <> '4'    
                   AND PD.Status < @cPickConfirmStatus    
-               ORDER BY PD.SKU    
+               ORDER BY PD.PickDetailKey, PD.LOT   
          END    
              
          -- Custom PickSlip    
@@ -255,7 +255,7 @@ BEGIN
                   AND PD.Status <> '4'    
                   AND PD.Status < @cPickConfirmStatus    
                   AND LOC.PickZone=@cPickZone --(yeekung01)    
-               ORDER BY PD.SKU    
+               ORDER BY PD.PickDetailKey, PD.LOT    
             ELSE    
                SELECT TOP 1    
                   @cTempSKU = PD.SKU    
@@ -268,7 +268,7 @@ BEGIN
                   AND PD.QTY > 0    
                   AND PD.Status <> '4'    
                   AND PD.Status < @cPickConfirmStatus    
-               ORDER BY PD.SKU    
+               ORDER BY PD.PickDetailKey, PD.LOT   
          END    
              
          IF @@ROWCOUNT = 0    
@@ -536,7 +536,7 @@ CASE WHEN @cGroupBy = '' THEN '' ELSE ' GROUP BY ' + @cGroupBy END +
    SELECT @cDropID = V_CaseID
    FROM RDT.RDTMOBREC 
    WHERE Mobile = @nMobile
-
+   
    IF @nStep = 2
    BEGIN
       IF ISNULL(@cOrderKey,'') = ''
@@ -554,7 +554,7 @@ CASE WHEN @cGroupBy = '' THEN '' ELSE ' GROUP BY ' + @cGroupBy END +
 	     AND LOC = @cLOC
 	     AND PD.SKU = @cSKU
 	     AND PD.OrderKey = @cOrderKey
-      ORDER BY PickDetailKey, Lot
+      ORDER BY PD.PickDetailKey, PD.Lot
    END
 
    IF @nStep = 5
@@ -564,7 +564,7 @@ CASE WHEN @cGroupBy = '' THEN '' ELSE ' GROUP BY ' + @cGroupBy END +
 
 Quit:    
     
-END 
+END  
 GO
 
 GRANT EXECUTE ON rdt_830GTSPJCB TO NSQL
