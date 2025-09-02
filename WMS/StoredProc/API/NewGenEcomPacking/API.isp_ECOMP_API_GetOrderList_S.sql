@@ -104,11 +104,40 @@ BEGIN
    END
 
    SET @c_ResponseString = ISNULL(( 
-                              SELECT PTD.TaskBatchNo                                    , OH.Orderkey                                    , OH.LoadKey                                    , PTD.Sku                                    , PTD.QtyAllocated                                    , ISNULL(PD.QtyPacked,0) AS QtyPacked                                    , OH.[Status]                                    , OH.SOStatus                               FROM PACKTASKDETAIL PTD WITH (NOLOCK)                               JOIN ORDERS OH WITH (NOLOCK) ON OH.OrderKey = PTD.Orderkey                               OUTER APPLY (SELECT SUM(Qty) AS QtyPacked                                            FROM PACKDETAIL WITH (NOLOCK)                                            WHERE PickSlipNo = PTD.PickSlipNo                                           AND PickSlipNo <> '') AS PD                                WHERE PTD.TaskBatchNo = @c_TaskBatchNo                               AND PTD.[Status] < '9'                              GROUP BY PTD.TaskBatchNo                                      , OH.Orderkey                                      , OH.LoadKey                                      , PTD.Sku                                      , PTD.QtyAllocated                                      , ISNULL(PD.QtyPacked,0)                                      , OH.[Status]                                      , OH.SOStatus 
+                              SELECT PTD.TaskBatchNo 
+                                   , OH.Orderkey 
+                                   , OH.LoadKey 
+                                   , PTD.Sku 
+                                   , PTD.QtyAllocated 
+                                   , ISNULL(PD.QtyPacked,0) AS QtyPacked 
+                                   , OH.[Status] 
+                                   , OH.SOStatus 
+                              FROM PACKTASKDETAIL PTD WITH (NOLOCK) 
+                              JOIN ORDERS OH WITH (NOLOCK) ON OH.OrderKey = PTD.Orderkey 
+                              OUTER APPLY (SELECT SUM(Qty) AS QtyPacked 
+                                           FROM PACKDETAIL WITH (NOLOCK) 
+                                           WHERE PickSlipNo = PTD.PickSlipNo
+                                           AND PickSlipNo <> '') AS PD  
+                              WHERE PTD.TaskBatchNo = @c_TaskBatchNo 
+                              AND PTD.[Status] < '9'
+                              GROUP BY PTD.TaskBatchNo 
+                                     , OH.Orderkey 
+                                     , OH.LoadKey 
+                                     , PTD.Sku 
+                                     , PTD.QtyAllocated 
+                                     , ISNULL(PD.QtyPacked,0) 
+                                     , OH.[Status] 
+                                     , OH.SOStatus 
                               FOR JSON PATH
                            ), '')
 
    QUIT:
+
+   IF EXISTS (SELECT 1 FROM sys.objects WHERE name = 'lsp_RevertUser' AND type = 'P') AND SESSION_CONTEXT(N'mwms_user_name') IS NOT NULL
+   BEGIN
+      EXEC [WM].[lsp_RevertUser]
+   END
+
    IF @n_Continue= 3  -- Error Occured - Process And Return      
    BEGIN      
       SET @b_Success = 0      

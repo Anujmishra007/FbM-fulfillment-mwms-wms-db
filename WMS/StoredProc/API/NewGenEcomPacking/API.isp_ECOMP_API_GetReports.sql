@@ -21,6 +21,7 @@
 /* 22-May-2023    Alex     Rename sp name to isp_ECOMP_API_GetReports   */
 /* 05-Sep-2023    Allen    Change default return string  (AL01)         */
 /* 08-May-2025    Alex01   #FCR-3165 - Skip changing  @c_UserID         */
+/* 23-Jul-2025    Sean     #UWP-38247 - Compatible with Login User      */
 /************************************************************************/
 
 CREATE OR ALTER PROC [API].[isp_ECOMP_API_GetReports] (  
@@ -81,27 +82,34 @@ BEGIN
    SET @c_ErrMsg                          = ''  
    SET @c_ResponseString                  = ''  
   
-   DECLARE @DBUserName NVARCHAR(100)	--#FCR-3165
-   SET @DBUserName = @c_UserID			--#FCR-3165
+   -- UWP-38247 - Compatible with Login User S
 
-  --Change Login User
-   SET @n_sp_err = 0     
-   EXEC [WM].[lsp_SetUser] @c_UserName = @DBUserName OUTPUT, @n_Err = @n_sp_err OUTPUT, @c_ErrMsg = @c_sp_errmsg OUTPUT    
+   DECLARE @DBUserName NVARCHAR(100),
+        @b_sp_ExecuteAs BIT
 
-   --#FCR-3165
-   IF @DBUserName LIKE '%' + @c_UserID + '%'
+   EXEC [API].[isp_ECOMP_ValidateAndSetUser]
+        @c_UserID      = @c_UserID,
+        @c_DBUserName  = @DBUserName OUTPUT,
+        @b_ExecuteAs   = @b_sp_ExecuteAs OUTPUT,
+        @b_Success     = @b_sp_Success OUTPUT,
+        @n_ErrNo       = @n_sp_err OUTPUT,
+        @c_ErrMsg      = @c_sp_errmsg OUTPUT;
+
+   IF @b_sp_Success = 0
    BEGIN
-    EXECUTE AS LOGIN = @DBUserName    --@c_UserID 
-    SET @c_UserID = @DBUserName
+      SET @b_Success = 0      
+      SET @n_ErrNo = @n_sp_err      
+      SET @c_ErrMsg = @c_sp_errmsg     
+      GOTO QUIT
    END
 
-   IF @n_sp_err <> 0       
-   BEGIN        
-      SET @n_Continue = 3        
-      SET @n_ErrNo = @n_sp_err        
-      SET @c_ErrMsg = @c_sp_errmsg       
-      GOTO QUIT        
-   END    
+   IF @b_sp_ExecuteAs = 1 OR @DBUserName LIKE '%' + @c_UserID + '%'
+   BEGIN
+      EXECUTE AS LOGIN = @DBUserName
+      SET @c_UserID = @DBUserName
+   END
+
+   -- UWP-38247 - Compatible with Login User E   
      
    SELECT @c_StorerKey     = ISNULL(RTRIM(StorerKey      ), '')  
          ,@c_Facility      = ISNULL(RTRIM(Facility    ), '')  
@@ -222,6 +230,12 @@ BEGIN
    --SET @c_ResponseString = '{"Reports":' + ISNULL(@c_ResponseString, '[]' + '}'  
   
    QUIT:  
+
+   IF EXISTS (SELECT 1 FROM sys.objects WHERE name = 'lsp_RevertUser' AND type = 'P') AND SESSION_CONTEXT(N'mwms_user_name') IS NOT NULL
+   BEGIN
+      EXEC [WM].[lsp_RevertUser]
+   END
+
    IF @n_Continue= 3  -- Error Occured - Process And Return        
    BEGIN        
       SET @b_Success = 0        

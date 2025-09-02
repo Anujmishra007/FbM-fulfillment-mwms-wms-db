@@ -18,6 +18,7 @@
 /* Updates:                                                             */
 /* Date           Author   Purposes                                     */
 /* 04-Oct-2023    Alex     #JIRA PAC-142 Initial                        */
+/* 23-Jul-2025    Sean     #UWP-38247 - Compatible with Login User      */
 /************************************************************************/    
 CREATE OR ALTER PROC [API].[isp_ECOMP_API_ScanLottable_S](
      @b_Debug           INT            = 0
@@ -134,19 +135,34 @@ BEGIN
       ,  [Value]           NVARCHAR(120)  NULL
    )
 
-   --Change Login User
-   SET @n_sp_err = 0     
-   EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserID OUTPUT, @n_Err = @n_sp_err OUTPUT, @c_ErrMsg = @c_sp_errmsg OUTPUT    
+   -- UWP-38247 - Compatible with Login User S
 
-   EXECUTE AS LOGIN = @c_UserID    
-       
-   IF @n_sp_err <> 0     
-   BEGIN      
+   DECLARE @DBUserName NVARCHAR(100),
+        @b_sp_ExecuteAs BIT
+
+   EXEC [API].[isp_ECOMP_ValidateAndSetUser]
+        @c_UserID      = @c_UserID,
+        @c_DBUserName  = @DBUserName OUTPUT,
+        @b_ExecuteAs   = @b_sp_ExecuteAs OUTPUT,
+        @b_Success     = @b_sp_Success OUTPUT,
+        @n_ErrNo       = @n_sp_err OUTPUT,
+        @c_ErrMsg      = @c_sp_errmsg OUTPUT;
+
+   IF @b_sp_Success = 0
+   BEGIN
       SET @b_Success = 0      
       SET @n_ErrNo = @n_sp_err      
       SET @c_ErrMsg = @c_sp_errmsg     
-      GOTO QUIT      
+      GOTO QUIT
    END
+
+   IF @b_sp_ExecuteAs = 1 OR @DBUserName LIKE '%' + @c_UserID + '%'
+   BEGIN
+      EXECUTE AS LOGIN = @DBUserName
+      SET @c_UserID = @DBUserName
+   END
+
+   -- UWP-38247 - Compatible with Login User E   
 
    SELECT @c_TaskBatchID   = ISNULL(RTRIM(TaskBatchID  ), '')
          ,@c_DropID        = ISNULL(RTRIM(DropID       ), '')
@@ -289,6 +305,12 @@ BEGIN
    --                        ), '')
 
    QUIT:
+
+   IF EXISTS (SELECT 1 FROM sys.objects WHERE name = 'lsp_RevertUser' AND type = 'P') AND SESSION_CONTEXT(N'mwms_user_name') IS NOT NULL
+   BEGIN
+      EXEC [WM].[lsp_RevertUser]
+   END
+
    IF @n_Continue= 3  -- Error Occured - Process And Return      
    BEGIN      
       SET @b_Success = 0      
