@@ -35,7 +35,7 @@ GO
 /*                            FCR-2902 Bug Fix                           */
 /* 12-Aug-2025  Wan06  1.8    UWP-39035 - Matching RPF Section to find   */
 /*                            DPP for FCR-6708 & FCR-2902                */
-/* 29-Aug-2025                FCR-6708 Bug Fix (include FCR-2902)        */
+/* 02-Sep-2025                FCR-6708 Bug Fix (include FCR-2902)        */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]       
     @c_Wavekey      NVARCHAR(10)    
@@ -667,8 +667,8 @@ CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]
                                           ELSE '' END
             + ' OUTER APPLY ( SELECT Qty = SUM(lli.Qty - lli.QtyPicked + lli.PendingMoveIn)'
             +               ' FROM LOTxLOCxID lli (NOLOCK)'
-            +               ' WHERE lli.Storerkey = @c_Storerkey'
-            +               ' AND lli.Loc = l.Loc' 
+            --+             ' WHERE lli.Storerkey = @c_Storerkey'                   --2025-09-02 Multiple Storer use same DPP
+            +               ' WHERE lli.Loc = l.Loc'                                --2025-09-02 Multiple Storer use same DPP
             +               ' GROUP BY lli.Loc'             
             +               ') inv'
             + ' WHERE l.Facility  = @c_Facility' 
