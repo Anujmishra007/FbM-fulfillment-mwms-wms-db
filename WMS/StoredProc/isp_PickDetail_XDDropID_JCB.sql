@@ -427,7 +427,7 @@ BEGIN
    WHERE LLI.StorerKey = @cStorerKey
       AND LLI.PendingMoveIN > 0
       AND TD.TaskDetailKey IS NULL
-
+	   
    -- PRIMARY filter for XDOCK pickdetails that do not have DROPID but have ID and are not shipped yet
    DECLARE CUR_PICK_LINES CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
       SELECT 
@@ -452,35 +452,36 @@ BEGIN
    FETCH FROM CUR_PICK_LINES INTO @c_OrderKey, @c_PickDetailKey
 
    WHILE @@FETCH_STATUS = 0 
+   BEGIN
       IF @b_debug = 1                                                           
-          BEGIN
-             SELECT  @c_OrderKey, @c_PickDetailKey
-			 PRINT 'Order: '+@c_OrderKey+' PickDetailKey: '+@c_PickDetailKey;
-          END
+         BEGIN
+            SELECT  @c_OrderKey, @c_PickDetailKey
+			PRINT 'Order: '+@c_OrderKey+' PickDetailKey: '+@c_PickDetailKey;
+         END
       
-	      BEGIN TRY
-             UPDATE dbo.PICKDETAIL WITH (ROWLOCK)
-             SET DropID = ID
-             WHERE Orderkey = @c_Orderkey
-             AND PickDetailKey = @c_PickDetailKey
-          END TRY
-		  BEGIN CATCH
-		     SET @b_Success=0
-             SET @n_err = ERROR_NUMBER()
+	     BEGIN TRY
+            UPDATE dbo.PICKDETAIL WITH (ROWLOCK)
+            SET DropID = ID
+            WHERE Orderkey = @c_Orderkey
+            AND PickDetailKey = @c_PickDetailKey
+         END TRY
+		 BEGIN CATCH
+		    SET @b_Success=0
+            SET @n_err = ERROR_NUMBER()
                
-             IF @n_err <> 0
-             BEGIN
+            IF @n_err <> 0
+            BEGIN
                --SET @n_continue = 3   --Not breaking the loop as on failed update should only skip that particular row, but continue on the next ones
                SET @c_errmsg = CONVERT(NVARCHAR(250),ERROR_MESSAGE())
                --SET @n_err = 81010  -- Should Be Set To The SQL Errmessage but I don't know how to do so.
                SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update XD PickDetail Failed. (isp_PickDetail_XDDropID_JCB)'
                            + '( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '  
 		       EXECUTE nsp_logerror @n_Err, @c_ErrMsg, 'isp_PickDetail_XDDropID_JCB'
-             END
-          END CATCH
+            END
+         END CATCH
 
-
-      FETCH FROM CUR_PICK_LINES INTO @c_OrderKey, @c_PickDetailKey 
+         FETCH FROM CUR_PICK_LINES INTO @c_OrderKey, @c_PickDetailKey 
+	  END
 
       CLOSE CUR_PICK_LINES
       DEALLOCATE CUR_PICK_LINES
