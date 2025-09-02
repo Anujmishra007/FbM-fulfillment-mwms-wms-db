@@ -43,7 +43,7 @@ BEGIN
    SET CONCAT_NULL_YIELDS_NULL OFF    
       
    DECLARE @n_continue       INT = 1      
-         , @n_starttcnt      INT = @@TRANCOUNT        -- Holds the current transaction count    
+         , @n_starttcnt      INT = @@TRANCOUNT        --  Holds the current transaction count    
          , @n_debug          INT = 0  
          , @n_cnt            INT = 0  
          , @c_otherwavekey   NVARCHAR(10) = '' 
