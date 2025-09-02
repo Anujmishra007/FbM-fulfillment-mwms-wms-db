@@ -221,7 +221,8 @@ BEGIN
       SET @n_ErrNo  = 53001
       SET @c_ErrMsg = 'Invalid Report Row ID - ' + CONVERT(NVARCHAR(15), @n_ReportRowID)
    END
-   EXEC [API].[isp_ECOMP_GetReportParamValue] 
+
+   EXEC [API].[isp_ECOMP_GetReportParamValue] 
         @b_Debug                    = 1
       , @c_ReportID                 = @c_ReportID
       , @c_PickSlipNo               = @c_PickSlipNo
@@ -310,7 +311,13 @@ BEGIN
                            FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
                         ), '')
 
-   QUIT:  
+   QUIT:
+
+   IF EXISTS (SELECT 1 FROM sys.objects WHERE name = 'lsp_RevertUser' AND type = 'P') AND SESSION_CONTEXT(N'mwms_user_name') IS NOT NULL
+   BEGIN
+      EXEC [WM].[lsp_RevertUser]
+   END
+     
    IF @n_Continue= 3  -- Error Occured - Process And Return        
    BEGIN        
       SET @b_Success = 0        
