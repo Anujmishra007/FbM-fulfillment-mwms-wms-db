@@ -785,13 +785,20 @@ BEGIN
          FROM Loc l (NOLOCK)
          WHERE l.Loc = @c_FromLoc
 
+         SET @n_Cnt = 0                                                             --2025-09-01
          SELECT TOP 1 @c_ToLoc = l.Loc
+               ,  @n_Cnt = 1                                                        --2025-09-01
          FROM LOC l (NOLOCK)
          WHERE l.Facility = @c_Facility
          AND   l.LocationCategory = 'PND_OUT'                                        
          AND   l.LocAisle = @c_LocAisle
          AND   l.[Floor]  = @c_Floor
          ORDER BY l.LogicalLocation                                                 --2025-08-25 - END
+
+         IF @n_Cnt = 1                                                                 
+         BEGIN
+            SET @c_ToId = @c_FromID                                                 --2025-09-01 Fix for UWP-40397
+         END
  
          IF @n_IDQty > @n_Qty AND @c_CaseID > ''                     --Lottable11
          BEGIN
