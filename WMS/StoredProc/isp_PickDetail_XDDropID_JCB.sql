@@ -363,17 +363,17 @@ BEGIN
    WHERE FromID IN (
       SELECT LLI1.ID
       FROM dbo.LOTxLOCxID LLI1 WITH(NOLOCK)
-         LEFT JOIN dbo.LOTxLOCxID LLI2 WITH(NOLOCK)
+         INNER JOIN dbo.LOTxLOCxID LLI2 WITH(NOLOCK)
             ON LLI1.Id = LLI2.Id 
-	           AND LLI2.Qty > 0
 		       AND LLI1.StorerKey = LLI2.StorerKey
          INNER JOIN LOC L WITH(NOLOCK)
             ON L.Loc = LLI2.Loc
 	           AND LLI2.StorerKey = LLI1.StorerKey
       WHERE LLI1.StorerKey = @cStorerKey
          AND LLI1.PendingMoveIN > 0
-         AND LocationCategory NOT IN ('STAGE','PNDIN')
+         AND L.LocationCategory NOT IN ('STAGE','PNDIN')
 		 AND L.Facility = @cFacility
+		 AND LLI2.Qty > 0
    )
 
    --Update pending qty that can no longer be done, to free up the location
@@ -382,17 +382,17 @@ BEGIN
    WHERE ID IN (
       SELECT LLI1.ID
       FROM dbo.LOTxLOCxID LLI1 WITH(NOLOCK)
-         LEFT JOIN dbo.LOTxLOCxID LLI2 WITH(NOLOCK)
+         INNER JOIN dbo.LOTxLOCxID LLI2 WITH(NOLOCK)
             ON LLI1.Id = LLI2.Id 
-	           AND LLI2.Qty > 0
 		       AND LLI1.StorerKey = LLI2.StorerKey
          INNER JOIN LOC L WITH(NOLOCK)
             ON L.Loc = LLI2.Loc
 	           AND LLI2.StorerKey = LLI1.StorerKey
       WHERE LLI1.StorerKey = @cStorerKey
          AND LLI1.PendingMoveIN > 0
-         AND LocationCategory NOT IN ('STAGE','PNDIN')
+         AND L.LocationCategory NOT IN ('STAGE','PNDIN')
 		 AND L.Facility = @cFacility
+		 AND LLI2.Qty > 0
    )
 
    --Delete RFPUTAWAY that got tasks archived
