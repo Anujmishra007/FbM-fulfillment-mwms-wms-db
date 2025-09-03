@@ -66,6 +66,7 @@ BEGIN
          , @n_StartTranCount     INT   = @@TRANCOUNT
 
    DECLARE @n_OrderCnt           INT            = 0
+         , @c_Id                 NVARCHAR(18)
          , @c_ASNStatus          NVARCHAR(10)   = '0'
          , @c_ExistingOrderKey             NVARCHAR(10)   = ''              /*JH01*/
          , @c_ExistingOrderStatus          NVARCHAR(10)   = '0'             /*JH01*/
