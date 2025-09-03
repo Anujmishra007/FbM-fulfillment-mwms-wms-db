@@ -54,15 +54,9 @@ BEGIN
    FROM dbo.LOTxLOCxID LLI WITH(NOLOCK)
    INNER JOIN dbo.PALLET P WITH(NOLOCK)
       ON LLI.Id = P.PalletKey
-      AND LLI.StorerKey = @cStorerKey
-      AND P.StorerKey = @cStorerKey
-      AND P.PalletType LIKE 'D%'
-      AND LLI.Qty > 0
+      AND LLI.StorerKey = P.StorerKey
    INNER JOIN dbo.LOC L WITH(NOLOCK)
       ON L.Loc = LLI.Loc
-      AND LLI.StorerKey = @cStorerKey
-      AND L.Facility = @cFacility
-      AND L.LocationFlag IN ('','NONE')
    LEFT JOIN dbo.LOTxLOCxID LLIx WITH(NOLOCK)
       ON LLIx.StorerKey = @cStorerKey
       AND L.Facility = @cFacility
@@ -74,7 +68,13 @@ BEGIN
       AND IH.Hold = '1'
       AND IH.Status = 'DoublePal'
    WHERE IH.Status IS NULL
-     AND L.LocationCategory = 'WA'
+      AND L.LocationCategory = 'WA'
+	  AND P.StorerKey = @cStorerKey
+	  AND P.PalletType LIKE 'D%'
+	  AND LLI.Qty > 0
+      AND LLI.StorerKey = @cStorerKey
+      AND L.Facility = @cFacility
+	  AND L.LocationFlag IN ('','NONE')
    )
    BEGIN
       DECLARE @DoublePalletLocations TABLE (LocToHold NVARCHAR(10));
@@ -98,15 +98,11 @@ BEGIN
          FROM dbo.LOTxLOCxID LLI WITH(NOLOCK)
          INNER JOIN dbo.PALLET P WITH(NOLOCK)
             ON LLI.Id = P.PalletKey
-               AND LLI.StorerKey = @cStorerKey
-               AND P.StorerKey = @cStorerKey
+               AND LLI.StorerKey = P.StorerKey
                AND P.PalletType LIKE 'D%'
                AND LLI.Qty > 0
          INNER JOIN dbo.LOC L WITH(NOLOCK)
             ON L.Loc = LLI.Loc
-               AND LLI.StorerKey = @cStorerKey
-               AND L.Facility = @cFacility
-               AND L.LocationFlag IN ('','NONE')
          LEFT JOIN dbo.LOTxLOCxID LLIx WITH(NOLOCK)
             ON LLIx.StorerKey = @cStorerKey
                AND L.Facility = @cFacility
@@ -119,6 +115,10 @@ BEGIN
                AND IH.Status = 'DoublePal'
          WHERE IH.Status IS NULL
             AND L.LocationCategory = 'WA'
+			AND P.StorerKey = @cStorerKey
+			AND LLI.StorerKey = @cStorerKey
+			AND L.Facility = @cFacility
+			AND L.LocationFlag IN ('','NONE')
          GROUP BY LLI.Loc, L.LocationRoom
       ) T
       WHERE (
@@ -330,14 +330,14 @@ BEGIN
       FROM LOTxLOCxID LLI1 WITH (NOLOCK)
          INNER JOIN LOTxLOCxID LLI2 WITH (NOLOCK)
          ON LLI1.ID = LLI2.ID
-            AND LLI2.StorerKey = @cStorerKey
-            AND LLI2.PendingMoveIN > 0
+            AND LLI2.StorerKey = LLI1.StorerKey
          LEFT JOIN LOTxLOCxID LLI3 WITH (NOLOCK)
          ON LLI1.ID = LLI3.ID
             AND LLI3.StorerKey = @cStorerKey
             AND LLI3.Qty > 0
       WHERE LLI1.StorerKey = @cStorerKey
          AND LLI3.ID IS NULL
+		 AND LLI2.PendingMoveIN > 0
    )
 
    --Update pending qty that can no longer be done, to free up the location
@@ -348,14 +348,14 @@ BEGIN
       FROM LOTxLOCxID LLI1 WITH (NOLOCK)
          INNER JOIN LOTxLOCxID LLI2 WITH (NOLOCK)
          ON LLI1.ID = LLI2.ID
-            AND LLI2.StorerKey = @cStorerKey
-            AND LLI2.PendingMoveIN > 0
+            AND LLI2.StorerKey = LLI1.StorerKey
          LEFT JOIN LOTxLOCxID LLI3 WITH (NOLOCK)
          ON LLI1.ID = LLI3.ID
             AND LLI3.StorerKey = @cStorerKey
             AND LLI3.Qty > 0
       WHERE LLI1.StorerKey = @cStorerKey
          AND LLI3.ID IS NULL
+		 AND LLI2.PendingMoveIN > 0
    )
 
    --Delete RFPutaway that can no longer be done, to free up the location
@@ -366,15 +366,14 @@ BEGIN
          LEFT JOIN dbo.LOTxLOCxID LLI2 WITH(NOLOCK)
             ON LLI1.Id = LLI2.Id 
 	           AND LLI2.Qty > 0
-		       AND LLI1.StorerKey = @cStorerKey
-		       AND LLI2.StorerKey = @cStorerKey
+		       AND LLI1.StorerKey = LLI2.StorerKey
          INNER JOIN LOC L WITH(NOLOCK)
             ON L.Loc = LLI2.Loc
-	           AND LLI2.StorerKey = @cStorerKey
-		       AND L.Facility = @cFacility
+	           AND LLI2.StorerKey = LLI1.StorerKey
       WHERE LLI1.StorerKey = @cStorerKey
          AND LLI1.PendingMoveIN > 0
          AND LocationCategory NOT IN ('STAGE','PNDIN')
+		 AND L.Facility = @cFacility
    )
 
    --Update pending qty that can no longer be done, to free up the location
@@ -386,15 +385,14 @@ BEGIN
          LEFT JOIN dbo.LOTxLOCxID LLI2 WITH(NOLOCK)
             ON LLI1.Id = LLI2.Id 
 	           AND LLI2.Qty > 0
-		       AND LLI1.StorerKey = @cStorerKey
-		       AND LLI2.StorerKey = @cStorerKey
+		       AND LLI1.StorerKey = LLI2.StorerKey
          INNER JOIN LOC L WITH(NOLOCK)
             ON L.Loc = LLI2.Loc
-	           AND LLI2.StorerKey = @cStorerKey
-		       AND L.Facility = @cFacility
+	           AND LLI2.StorerKey = LLI1.StorerKey
       WHERE LLI1.StorerKey = @cStorerKey
          AND LLI1.PendingMoveIN > 0
          AND LocationCategory NOT IN ('STAGE','PNDIN')
+		 AND L.Facility = @cFacility
    )
 
    --Delete RFPUTAWAY that got tasks archived
@@ -406,8 +404,7 @@ BEGIN
             LEFT JOIN dbo.TaskDetail TD WITH(NOLOCK)
                ON (TD.ToLoc = LLI1.LOC OR TD.FinalLOC = LLI1.LOC)
                   AND TD.FromID = LLI1.ID
-				  AND TD.StorerKey = @cStorerKey
-				  AND LLI1.StorerKey = @cStorerKey
+				  AND TD.StorerKey = LLI1.StorerKey
          WHERE LLI1.StorerKey = @cStorerKey
             AND LLI1.PendingMoveIN > 0
             AND TD.TaskDetailKey IS NULL
@@ -422,12 +419,11 @@ BEGIN
       LEFT JOIN dbo.TaskDetail TD WITH(NOLOCK)
          ON (TD.ToLoc = LLI.LOC OR TD.FinalLOC = LLI.LOC)
             AND TD.FromID = LLI.ID
-            AND TD.StorerKey = @cStorerKey
-            AND LLI.StorerKey = @cStorerKey
+            AND TD.StorerKey = LLI.StorerKey
    WHERE LLI.StorerKey = @cStorerKey
       AND LLI.PendingMoveIN > 0
       AND TD.TaskDetailKey IS NULL
-	   
+
    -- PRIMARY filter for XDOCK pickdetails that do not have DROPID but have ID and are not shipped yet
    DECLARE CUR_PICK_LINES CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
       SELECT 
@@ -486,3 +482,4 @@ BEGIN
       CLOSE CUR_PICK_LINES
       DEALLOCATE CUR_PICK_LINES
 END
+
