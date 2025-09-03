@@ -99,9 +99,8 @@ AS
    END
 
    IF NOT EXISTS(SELECT 1 FROM dbo.PACKDETAIL PAD WITH(NOLOCK) 
-                  JOIN dbo.PackHeader PH WITH(NOLOCK) ON PAD.StorerKey = PH.StorerKey AND PAD.PickSlipNo = PH.PickSlipNo
                   WHERE PAD.StorerKey = @cStorerKey 
-                  AND PAD.LabelNo = @cDropID AND PH.Status >= '9')
+                  AND PAD.LabelNo = @cDropID)
    BEGIN
       SET @nErrNo = 223012
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --PackNotFinished
