@@ -1554,7 +1554,7 @@ BEGIN
 
                      INSERT INTO @tPickDetail (PickDetailKey)
                      SELECT PickDetailKey
-                     FROM dbo.PICKDETAIL WITH(ROWLOCK) 
+                     FROM dbo.PICKDETAIL WITH(NOLOCK) 
                      WHERE StorerKey = @cStorerKey
                        AND DropID = @cToteID
 
