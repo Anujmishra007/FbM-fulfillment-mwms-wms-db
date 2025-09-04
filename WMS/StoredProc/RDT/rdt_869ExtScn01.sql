@@ -10,7 +10,8 @@ GO
 /*                                                                          */
 /*                                                                          */
 /* Date       Rev      Author   Purposes                                    */
-/* 2025-08-27 1..00    NickT    FCR-6730 Create                             */
+/* 2025-08-27 1.0.0    NickT    FCR-6730 Create                             */
+/* 2025-09-03 1.0.1    Jackc    FCR-6730 Fix bugs                           */
 /****************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_869ExtScn01] (
@@ -60,7 +61,8 @@ BEGIN
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
-   DECLARE 
+   DECLARE
+      @nDebugFlag             INT = 0,
       @nCurrentScn            INT,
       @nCurrentStep           INT,
       @nMenu                  INT,
@@ -72,22 +74,37 @@ BEGIN
       @cShipRef               NVARCHAR( 10),
       @cOrderCount            NVARCHAR( 5),
       @cShort                 NVARCHAR( 10),
-      @cPick                  NVARCHAR( 10)
+      @cPick                  NVARCHAR( 10),
+      @cExtendedUpdateSP      NVARCHAR( 20),
+      @cExtendedScnSP         NVARCHAR( 20)
 
    SELECT 
       @nCurrentScn         = Scn, 
       @nCurrentStep        = Step,
       @nMenu               = Menu,
+      @cLoadKey            = V_LoadKey,--V1.0.1
+      @cOrderKey           = V_OrderKey,--V1.0.1
       @cShort              = V_String1,
       @cPick               = V_String2,
       @nFocusField         = CASE WHEN rdt.rdtIsValidQTY( LEFT( V_String3,  5), 0) = 1 THEN LEFT( V_String3,  5) ELSE 0 END,
+      @cWaveKey            = V_String4, --V.0.1
       @cOrderCount         = V_String5,
+      @cExtendedUpdateSP   = V_String10,
+      @cExtendedScnSP      = V_String11,
       @cShipRef            = C_String1
    FROM rdt.rdtMobRec (NOLOCK)
    WHERE Mobile = @nMobile
 
    IF @nFunc = 869
    BEGIN
+      SET @cExtendedUpdateSP = rdt.RDTGetConfig( @nFunc, 'ExtendedUpdateSP', @cStorerKey)
+      IF @cExtendedUpdateSP = '0'
+         SET @cExtendedUpdateSP = ''
+
+      SET @cExtendedScnSP = rdt.RDTGetConfig( @nFunc, 'ExtScnSP', @cStorerKey)
+      IF @cExtendedScnSP = '0'
+         SET @cExtendedScnSP = ''
+
       -- If next step is 1, go to custom screen 6673
       IF @nScn = 3050 AND @nStep = 1
       BEGIN
@@ -95,6 +112,18 @@ BEGIN
          SET @nAfterScn = 6673
          SET @nAfterStep = 99
          GOTO Quit
+      END
+
+      --If next step is 2, then go to new screen 6674 if ShipRef <> ''
+      IF @nScn = 3051 AND @nStep = 2 --V1.0.1
+      BEGIN
+         IF ISNULL(@cShipRef, '') <> ''
+         BEGIN
+            SET @cOutField07 = @cShipRef
+            SET @nAfterScn = 6674
+            SET @nAfterStep = 99
+            GOTO Quit
+         END
       END
 
       IF @nCurrentStep = 99
@@ -165,34 +194,88 @@ BEGIN
                      GOTO Quit
                   END
                   
-                  -- Check not yet pick
-                  IF EXISTS (SELECT 1
-                     FROM PickDetail PD WITH (NOLOCK)
-                        INNER JOIN OrderDetail OD WITH (NOLOCK) ON (OD.OrderKey = PD.OrderKey AND OD.OrderLineNumber = PD.OrderLineNumber)
-                        INNER JOIN WaveDetail WD  WITH (NOLOCK) ON (OD.OrderKey = WD.OrderKey)
+                  IF ISNULL(@cShipRef, '') = ''
+                  BEGIN 
+                     -- Check not yet pick
+                     IF EXISTS (SELECT 1
+                        FROM PickDetail PD WITH (NOLOCK)
+                           INNER JOIN OrderDetail OD WITH (NOLOCK) ON (OD.OrderKey = PD.OrderKey AND OD.OrderLineNumber = PD.OrderLineNumber)
+                           INNER JOIN WaveDetail WD  WITH (NOLOCK) ON (OD.OrderKey = WD.OrderKey)
+                        WHERE WD.WaveKey = @cWaveKey
+                           AND PD.Status < '3'
+                           AND PD.QTY > 0)
+                     BEGIN
+                        SET @nErrNo = 245554
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Pick is not finished
+                        EXEC rdt.rdtSetFocusField @nMobile, 01
+                        GOTO Quit
+                     END
+                     
+                     -- Get stat
+                     SELECT 
+                        @nOrderCount = COUNT( DISTINCT OD.OrderKey), 
+                        @nShort = SUM( CASE WHEN PD.Status = 4 THEN PD.QTY ELSE 0 END), 
+                        @nPick  = SUM( CASE WHEN PD.Status = 5 THEN PD.QTY ELSE 0 END)
+                     FROM dbo.PickDetail PD WITH (NOLOCK)
+                     INNER JOIN dbo.OrderDetail OD WITH (NOLOCK) ON (OD.OrderKey = PD.OrderKey AND OD.OrderLineNumber = PD.OrderLineNumber)
+                     INNER JOIN dbo.WaveDetail WD  WITH (NOLOCK) ON (OD.OrderKey = WD.OrderKey)
                      WHERE WD.WaveKey = @cWaveKey
-                        AND PD.Status <= '3'
-                        AND PD.QTY > 0)
-                  BEGIN
-                     SET @nErrNo = 245554
-                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Pick is not finished
-                     EXEC rdt.rdtSetFocusField @nMobile, 01
-                     GOTO Quit
-                  END
-                  
-                  -- Get stat
-                  SELECT 
-                     @nOrderCount = COUNT( DISTINCT OD.OrderKey), 
-                     @nShort = SUM( CASE WHEN PD.Status = 4 THEN PD.QTY ELSE 0 END), 
-                     @nPick  = SUM( CASE WHEN PD.Status = 5 THEN PD.QTY ELSE 0 END)
-                  FROM dbo.PickDetail PD WITH (NOLOCK)
-                  INNER JOIN dbo.OrderDetail OD WITH (NOLOCK) ON (OD.OrderKey = PD.OrderKey AND OD.OrderLineNumber = PD.OrderLineNumber)
-                  INNER JOIN dbo.WaveDetail WD  WITH (NOLOCK) ON (OD.OrderKey = WD.OrderKey)
-                  WHERE WD.WaveKey = @cWaveKey
 
-                  --set field focus on field no. 1
-                  SET @nFocusField = 1
-               END
+                     --set field focus on field no. 1
+                     SET @nFocusField = 1
+                  END -- Shipref = ''
+                  ELSE -- wave <> '' and shipref <> '' -- V1.0.0
+                  BEGIN
+                     IF NOT EXISTS (SELECT 1 FROM dbo.MBOL WITH(NOLOCK) WHERE MbolKey = @cShipRef)
+                     BEGIN
+                        SET @nErrNo = 245560
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Ship Ref
+                        EXEC rdt.rdtSetFocusField @nMobile, 1
+                        GOTO Quit
+                     END
+
+                     IF NOT EXISTS (SELECT 1
+                     FROM dbo.PickDetail PD (NOLOCK)
+                     INNER JOIN dbo.MBOLDetail MD WITH(NOLOCK) ON PD.OrderKey = MD.OrderKey
+                     WHERE PD.StorerKey = @cStorerKey
+                        AND PD.WaveKey = @cWaveKey
+                        AND MD.MbolKey = @cShipRef
+                        AND PD.QTY > 0)
+                     BEGIN
+                        SET @nErrNo = 245561
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --No pick data found
+                        EXEC rdt.rdtSetFocusField @nMobile, 1
+                        GOTO Quit
+                     END
+
+                     IF EXISTS ( SELECT 1
+                        FROM dbo.PickDetail PD (NOLOCK)
+                        INNER JOIN dbo.MBOLDetail MD WITH(NOLOCK) ON PD.OrderKey = MD.OrderKey
+                        WHERE PD.StorerKey = @cStorerKey
+                           AND PD.WaveKey = @cWaveKey
+                           AND MD.MbolKey = @cShipRef
+                           AND PD.Status <= '3'
+                           AND PD.QTY > 0)
+                     BEGIN
+                        SET @nErrNo = 245562
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Pick is not finished
+                        EXEC rdt.rdtSetFocusField @nMobile, 1
+                        GOTO Quit
+                     END
+
+                     SELECT 
+                        @nOrderCount = COUNT( DISTINCT PD.OrderKey), 
+                        @nShort = SUM( CASE WHEN PD.Status = 4 THEN PD.QTY ELSE 0 END),
+                        @nPick  = SUM( CASE WHEN PD.Status = 5 THEN PD.QTY ELSE 0 END)
+                     FROM dbo.PickDetail PD WITH (NOLOCK)
+                     INNER JOIN dbo.OrderDetail OD WITH (NOLOCK) ON (OD.OrderKey = PD.OrderKey AND OD.OrderLineNumber = PD.OrderLineNumber)
+                     INNER JOIN dbo.ORDERS ORM WITH (NOLOCK) ON (ORM.OrderKey = OD.OrderKey AND ORM.StorerKey = OD.StorerKey)
+                     INNER JOIN dbo.WaveDetail WD WITH (NOLOCK) ON (ORM.OrderKey = WD.OrderKey)
+                     WHERE WD.WaveKey = @cWaveKey
+                        AND ORM.MBOLKey IS NOT NULL
+                        AND ORM.MBOLKey = @cShipRef
+                  END-- wave <> '' and shipref <> ''
+               END --Wavekey <> ''
 
                IF @cLoadKey <> ''
                BEGIN
@@ -210,7 +293,7 @@ BEGIN
                      FROM dbo.PickDetail PD WITH (NOLOCK)
                      INNER JOIN dbo.OrderDetail OD WITH (NOLOCK) ON (OD.OrderKey = PD.OrderKey AND OD.OrderLineNumber = PD.OrderLineNumber)
                      WHERE OD.LoadKey = @cLoadKey
-                        AND PD.Status <= '3'
+                        AND PD.Status < '3'
                         AND PD.QTY > 0)
                   BEGIN
                      SET @nErrNo = 245556
@@ -247,7 +330,7 @@ BEGIN
                   IF EXISTS (SELECT 1 
                      FROM dbo.PickDetail PD WITH (NOLOCK) 
                      WHERE PD.OrderKey = @cOrderKey 
-                        AND PD.Status <= '3' 
+                        AND PD.Status < '3' 
                         AND PD.QTY > 0)
                   BEGIN
                      SET @nErrNo = 245558
@@ -266,66 +349,6 @@ BEGIN
 
                   --set field focus on field no. 3
                   SET @nFocusField = 3
-               END
-
-               IF @cShipRef <> '' AND @cWaveKey <> ''
-               BEGIN
-                  SELECT @nRowCout = COUNT(*)
-                  FROM dbo.MBOL WITH(NOLOCK)
-                  WHERE MbolKey = @cShipRef
-
-                  IF @nRowCout = 0
-                  BEGIN
-                     SET @nErrNo = 245560
-                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Ship Ref
-                     EXEC rdt.rdtSetFocusField @nMobile, 1
-                     GOTO Quit
-                  END
-
-                  SELECT @nRowCout = COUNT(*)
-                  FROM dbo.PickDetail PD (NOLOCK)
-                  INNER JOIN dbo.MBOLDetail MD WITH(NOLOCK) ON PD.OrderKey = MD.OrderKey
-                  WHERE PD.StorerKey = @cStorerKey
-                  AND PD.WaveKey = @cWaveKey
-                  AND MD.MbolKey = @cShipRef
-                  AND PD.QTY > 0
-
-                  IF @nRowCout = 0
-                  BEGIN
-                     SET @nErrNo = 245561
-                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --No pick data found
-                     EXEC rdt.rdtSetFocusField @nMobile, 1
-                     GOTO Quit
-                  END
-
-                  SELECT @nRowCout = COUNT(*)
-                  FROM dbo.PickDetail PD (NOLOCK)
-                  INNER JOIN dbo.MBOLDetail MD WITH(NOLOCK) ON PD.OrderKey = MD.OrderKey
-                  WHERE PD.StorerKey = @cStorerKey
-                  AND PD.WaveKey = @cWaveKey
-                  AND MD.MbolKey = @cShipRef
-                  AND PD.Status <= '3'
-                  AND PD.QTY > 0
-
-                  IF @nRowCout > 0
-                  BEGIN
-                     SET @nErrNo = 245562
-                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Pick is not finished
-                     EXEC rdt.rdtSetFocusField @nMobile, 1
-                     GOTO Quit
-                  END
-
-                   SELECT 
-                     @nOrderCount = COUNT( DISTINCT PD.OrderKey), 
-                     @nShort = SUM( CASE WHEN PD.Status = 4 THEN PD.QTY ELSE 0 END),
-                     @nPick  = SUM( CASE WHEN PD.Status = 5 THEN PD.QTY ELSE 0 END)
-                  FROM dbo.PickDetail PD WITH (NOLOCK)
-                  INNER JOIN dbo.OrderDetail OD WITH (NOLOCK) ON (OD.OrderKey = PD.OrderKey AND OD.OrderLineNumber = PD.OrderLineNumber)
-                  INNER JOIN dbo.ORDERS ORD WITH (NOLOCK) ON (ORD.OrderKey = OD.OrderKey AND ORD.StorerKey = OD.StorerKey)
-                  WHERE ORD.UserDefine09 IS NOT NULL 
-                     AND ORD.userdefine09  = @cWaveKey
-                     AND ORD.MBOLKey IS NOT NULL
-                     AND ORD.MBOLKey  = @cShipRef
                END
 
                SET @cOrderCount = CAST( ISNULL( @nOrderCount, 0) AS NVARCHAR( 5))
@@ -368,6 +391,16 @@ BEGIN
             GOTO Quit
          END
 
+         /********************************************************************************
+         Scn = 6674. Info screen
+            WaveKey    (field01)
+            SHIP REF   (field07)
+            LoadKey    (field02)
+            OrderKey   (field03)
+            OrderCount (field04)
+            Short      (field05)
+            Pick       (field06)
+         ********************************************************************************/
          IF @nCurrentScn = 6674
          BEGIN
             IF @nInputKey = 1 -- ENTER
@@ -420,6 +453,8 @@ Quit:
       V_String3    = @nFocusField,
       V_String4    = @cWaveKey, 
       V_String5    = @cOrderCount, 
+      V_String10   = @cExtendedUpdateSP, 
+      V_String11   = @cExtendedScnSP, --V1.0.1 --@cExtendedScnSP
       C_String1    = @cShipRef,
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,  FieldAttr01  = @cFieldAttr01,

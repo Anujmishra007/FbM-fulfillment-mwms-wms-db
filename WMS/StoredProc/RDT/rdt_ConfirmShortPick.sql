@@ -79,8 +79,7 @@ DECLARE @List TABLE
          EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
             @nMobile, @nFunc, @cStorerKey, @cLangCode, @cWaveKey, @cLoadKey, @cOrderkey, @nErrNo OUTPUT, @cErrMsg OUTPUT
 
-         IF @nErrNo <> 0
-            GOTO Quit
+         GOTO Quit
       END
    END
 
