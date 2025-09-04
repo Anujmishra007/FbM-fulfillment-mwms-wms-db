@@ -365,10 +365,10 @@ BEGIN
 
             ---- (SSA01) start -----
             IF EXISTS (SELECT 1
-                     FROM #TMP_ORD WHERE ExternOrderKey = @c_ExternReceiptkey AND  Consigneekey = @c_Consigneekey and DeliveryDate = @c_DeliveryDate and Door = @c_Door and OH.ExternPOKey = @c_ExternPOKey )   /*JH01 add @c_ExternReceiptkey*/ /*CZJ002 add @c_ExternPOKey*/
+                     FROM #TMP_ORD WHERE ExternOrderKey = @c_ExternReceiptkey AND  Consigneekey = @c_Consigneekey and DeliveryDate = @c_DeliveryDate and Door = @c_Door and ExternPOKey = @c_ExternPOKey )   /*JH01 add @c_ExternReceiptkey*/ /*CZJ002 add @c_ExternPOKey*/
             BEGIN
 			        SELECT @c_Orderkey = orderkey
-			        FROM #TMP_ORD WHERE ExternOrderKey = @c_ExternReceiptkey AND  Consigneekey = @c_Consigneekey and DeliveryDate = @c_DeliveryDate and Door = @c_Door and OH.ExternPOKey = @c_ExternPOKey /*JH01 add @c_ExternReceiptkey*/ /*CZJ002 add @c_ExternPOKey*/
+			        FROM #TMP_ORD WHERE ExternOrderKey = @c_ExternReceiptkey AND  Consigneekey = @c_Consigneekey and DeliveryDate = @c_DeliveryDate and Door = @c_Door and ExternPOKey = @c_ExternPOKey /*JH01 add @c_ExternReceiptkey*/ /*CZJ002 add @c_ExternPOKey*/
             END
             ELSE
             BEGIN
