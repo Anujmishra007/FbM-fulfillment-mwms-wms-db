@@ -545,7 +545,7 @@ BEGIN
          ToLoc, ToLocationCategory, ToLocMaxPallet, FinalLoc, FromID, SKU, SKUGrossWeight, Qty,
          PickMethod, OrderKey)
       SELECT TaskDetailKey, TaskType, Priority, PutawayZone, FromLoc, FromLocationCategory,
-             ToLoc, ToLocationCategory, ToLocMaxPallet, FinalLoc, FromID, SKU, ISNULL(SKUGrossWeight,0), Qty,
+             ToLoc, ToLocationCategory, ToLocMaxPallet, FinalLoc, FromID, SKU, ISNULL(SKUGrossWeight,0), ISNULL(Qty,0),
              PickMethod, OrderKey
       FROM (
          SELECT 
@@ -594,6 +594,7 @@ BEGIN
          INNER JOIN dbo.LOC LOC WITH(NOLOCK) ON TD.FromLoc = LOC.Loc AND LOC.Facility = @cFacility
          INNER JOIN dbo.LOC LOC1 WITH(NOLOCK) ON TD.ToLoc = LOC1.Loc AND LOC1.Facility = @cFacility
          LEFT JOIN dbo.SKU WITH(NOLOCK) ON TD.StorerKey = SKU.StorerKey AND TD.SKU = SKU.SKU
+         WHERE EXISTS (SELECT 1 FROM LOTXLOCXID LL WITH(NOLOCK) WHERE LL.Loc = TD.FromLoc AND LL.ID = TD.FromID AND LL.StorerKey = TD.StorerKey)
       ) AS T
       WHERE T.RowIndex = 1
       ORDER BY 
