@@ -24,7 +24,7 @@ GO
 /* 2025-05-30   AYD02   1.2   Check ExternOrderKey when inserting OD    */
 /* 2025-09-02   CZJ002  1.3   LCL SP Enhancement                        */
 /************************************************************************/ 
-CREATE   PROC [dbo].[msp_BEJ_XDockCreateSO01]
+CREATE OR ALTER PROC [dbo].[msp_BEJ_XDockCreateSO01]
      @c_StorerKey   NVARCHAR(15)   = ''
    , @c_Facility    NVARCHAR(5)    = ''
    , @c_OtherConfig NVARCHAR(4000)  = ''
@@ -362,10 +362,10 @@ BEGIN
                     WHILE @@FETCH_STATUS <> -1 AND @n_continue IN(1, 2)
                     BEGIN
                         IF EXISTS (SELECT 1 FROM #TMP_ORD WHERE ExternOrderKey = @c_ExternReceiptkey    --AYD02
-                        and Consigneekey = @c_Consigneekey and DeliveryDate = @c_DeliveryDate and Door = @c_Door and OH.ExternPOKey = @c_ExternPOKey) --(CZJ002)
+                        and Consigneekey = @c_Consigneekey and DeliveryDate = @c_DeliveryDate and Door = @c_Door and ExternPOKey = @c_ExternPOKey) --(CZJ002)
                         BEGIN
                             SELECT @c_Orderkey = Orderkey FROM #TMP_ORD WHERE ExternOrderKey = @c_ExternReceiptkey  --AYD02
-                            and Consigneekey = @c_Consigneekey and DeliveryDate = @c_DeliveryDate and Door = @c_Door and OH.ExternPOKey = @c_ExternPOKey --(CZJ002)
+                            and Consigneekey = @c_Consigneekey and DeliveryDate = @c_DeliveryDate and Door = @c_Door and ExternPOKey = @c_ExternPOKey --(CZJ002)
                         END
 
                         ELSE
