@@ -136,7 +136,7 @@ BEGIN
    FROM ORDERS O WITH (NOLOCK) 
    JOIN MBOLDETAIL MD WITH (NOLOCK) ON MD.OrderKey = O.OrderKey
    WHERE MD.MBOLKey = @c_MbolKey
-   AND (O.DischargePlace IS NULL OR O.DischargePlace = '')
+   --AND (O.DischargePlace IS NULL OR O.DischargePlace = '')
 
    OPEN CUR_UPD_DISCHARGEPLACE;
    FETCH NEXT FROM CUR_UPD_DISCHARGEPLACE INTO  @c_OrderKey, @c_ShipperKey, @c_ConsigneeKey
