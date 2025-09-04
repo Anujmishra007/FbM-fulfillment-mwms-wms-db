@@ -77,8 +77,7 @@ BEGIN
                      AND Status <> '9'
                      AND Orderkey NOT IN (SELECT Orderkey
                                           FROM PickHeader (NOLOCK)
-                                          WHERE Pickheaderkey = @cPickSlipNo
-                                             AND Storerkey = @cStorerKey))
+                                          WHERE Pickheaderkey = @cPickSlipNo))
                   )
                BEGIN
                   SET @nErrNo = 217933  
