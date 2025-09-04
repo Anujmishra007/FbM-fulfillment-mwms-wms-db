@@ -16,7 +16,7 @@ EXECUTE rdt.rdtAddScn 6673, 'ENG',
 DELETE rdt.RDTScn WHERE Scn = 6674 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 6674, 'ENG',
     @cLine01 = 'WAVEKEY: %10d01'
-   ,@cLine02 = 'Ship Ref: %10d07'
+   ,@cLine02 = 'SHIP REF: %10d07'
    ,@cLine03 = 'LOADKEY: %10d02'
    ,@cLine04 = 'ORDERKEY: %10d03'
    ,@cLine05 = ''

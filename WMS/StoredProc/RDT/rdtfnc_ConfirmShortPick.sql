@@ -512,7 +512,6 @@ BEGIN
           -- Go to next screen
          SET @nScn  = @nScn + 1
          SET @nStep = @nStep + 1
-         GOTO Quit
       END
 
       IF @cOption = '2' -- No
@@ -528,7 +527,6 @@ BEGIN
          -- Go to prev screen
          SET @nScn  = @nScn - 1
          SET @nStep = @nStep - 1
-         GOTO Quit
       END
    END
 
@@ -547,6 +545,7 @@ BEGIN
       SET @nStep = @nStep - 1
    END
 
+   Step3_Ext_Scn:
    IF @cExtendedScnSP <> '' 
    BEGIN 
       IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScnSP AND type = 'P')

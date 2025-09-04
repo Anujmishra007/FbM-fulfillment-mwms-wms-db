@@ -84,26 +84,32 @@ BEGIN
       WHERE OD.LoadKey = @cLoadKey
          AND PD.Status = '4'
          
-   IF @cWaveKey <> '' AND @cShipRef = ''
-      INSERT INTO @tShortPickDetail (PickDetailKey, OrderKey)
-      SELECT DISTINCT PD.PickDetailKey, PD.OrderKey
-      FROM dbo.PickDetail PD WITH (NOLOCK)
-      INNER JOIN dbo.OrderDetail OD WITH (NOLOCK) ON (OD.OrderKey = PD.OrderKey AND OD.OrderLineNumber = PD.OrderLineNumber)
-      INNER JOIN dbo.WaveDetail WD  WITH (NOLOCK) ON (OD.OrderKey = WD.OrderKey)
-      WHERE WD.WaveKey = @cWaveKey
-         AND PD.Status = '4'
-
-   IF @cWaveKey <> '' AND @cShipRef <> ''
-      INSERT INTO @tShortPickDetail (PickDetailKey, OrderKey)
-      SELECT DISTINCT PD.PickDetailKey, PD.OrderKey
-      FROM dbo.PickDetail PD WITH (NOLOCK)
-      INNER JOIN dbo.OrderDetail OD WITH (NOLOCK) ON (OD.OrderKey = PD.OrderKey AND OD.OrderLineNumber = PD.OrderLineNumber)
-      INNER JOIN dbo.WaveDetail WD WITH (NOLOCK) ON (OD.OrderKey = WD.OrderKey)
-      INNER JOIN dbo.ORDERS ORD WITH (NOLOCK) ON (ORD.OrderKey = OD.OrderKey AND ORD.StorerKey = OD.StorerKey)
-      WHERE WD.WaveKey = @cWaveKey
-         AND ORD.MBOLKey IS NOT NULL
-         AND ORD.MBOLKey  = @cShipRef
-         AND PD.Status = '4'
+   IF @cWaveKey <> ''
+   BEGIN
+      IF @cShipRef = ''
+      BEGIN
+         INSERT INTO @tShortPickDetail (PickDetailKey, OrderKey)
+         SELECT DISTINCT PD.PickDetailKey, PD.OrderKey
+         FROM dbo.PickDetail PD WITH (NOLOCK)
+         INNER JOIN dbo.OrderDetail OD WITH (NOLOCK) ON (OD.OrderKey = PD.OrderKey AND OD.OrderLineNumber = PD.OrderLineNumber)
+         INNER JOIN dbo.WaveDetail WD  WITH (NOLOCK) ON (OD.OrderKey = WD.OrderKey)
+         WHERE WD.WaveKey = @cWaveKey
+            AND PD.Status = '4'
+      END
+      ELSE
+      BEGIN
+         INSERT INTO @tShortPickDetail (PickDetailKey, OrderKey)
+         SELECT DISTINCT PD.PickDetailKey, PD.OrderKey
+         FROM dbo.PickDetail PD WITH (NOLOCK)
+         INNER JOIN dbo.OrderDetail OD WITH (NOLOCK) ON (OD.OrderKey = PD.OrderKey AND OD.OrderLineNumber = PD.OrderLineNumber)
+         INNER JOIN dbo.WaveDetail WD WITH (NOLOCK) ON (OD.OrderKey = WD.OrderKey)
+         INNER JOIN dbo.ORDERS ORM WITH (NOLOCK) ON (ORM.OrderKey = OD.OrderKey AND ORM.StorerKey = OD.StorerKey)
+         WHERE WD.WaveKey = @cWaveKey
+            AND ORM.MBOLKey IS NOT NULL
+            AND ORM.MBOLKey = @cShipRef
+            AND PD.Status = '4'
+      END
+   END
          
 
    /*--------------------------------------------------------------------------------------------------
@@ -121,11 +127,27 @@ BEGIN
          SELECT PickHeaderKey FROM PickHeader WITH (NOLOCK) WHERE ExternOrderKey = @cLoadKey
 
    IF @cWaveKey <> ''
-      SET @curPickSlipNo = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+   BEGIN
+      IF @cShipRef = ''
+      BEGIN
+         SET @curPickSlipNo = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+            SELECT PickHeaderKey 
+            FROM dbo.PickHeader PH WITH (NOLOCK)
+            INNER JOIN dbo.WaveDetail WD  WITH (NOLOCK) ON (PH.OrderKey = WD.OrderKey)
+            WHERE WD.WaveKey = @cWaveKey
+      END
+      ELSE
+      BEGIN
+         SET @curPickSlipNo = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
          SELECT PickHeaderKey 
-         FROM PickHeader PH WITH (NOLOCK)
-            INNER JOIN WaveDetail WD  WITH (NOLOCK) ON (PH.OrderKey = WD.OrderKey)
+         FROM dbo.PickHeader PH WITH (NOLOCK)
+         INNER JOIN dbo.WaveDetail WD WITH (NOLOCK) ON (PH.OrderKey = WD.OrderKey)
+         INNER JOIN dbo.ORDERS ORM WITH (NOLOCK) ON (ORM.OrderKey = PH.OrderKey AND ORM.StorerKey = PH.StorerKey)
          WHERE WD.WaveKey = @cWaveKey
+            AND ORM.MBOLKey IS NOT NULL
+            AND ORM.MBOLKey  = @cShipRef
+      END
+   END
 
    OPEN @curPickSlipNo
    FETCH NEXT FROM @curPickSlipNo INTO @cPickSlipNo
@@ -198,13 +220,11 @@ BEGIN
          GOTO RollBackTran
       END
 
-      SELECT @nRowCount = COUNT(*) 
-      FROM dbo.Transmitlog2 WITH (NOLOCK) 
-      WHERE key1 = @cLoopOrderKey
-         AND Key2 = @cPickDetailKey
-         AND TableName = 'WSSOAlloUpd'
-
-      IF @nRowCount = 0
+      IF NOT EXISTS (SELECT 1 FROM dbo.Transmitlog2 WITH (NOLOCK) 
+                     WHERE key1 = @cLoopOrderKey
+                        AND Key2 = @cPickDetailKey
+                        AND Key3 = @cStorerkey
+                        AND TableName = 'WSSOAlloUpd')
       BEGIN
          BEGIN TRY
             EXECUTE ispGenTransmitLog2
