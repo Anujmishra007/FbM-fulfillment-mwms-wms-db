@@ -35,7 +35,7 @@ GO
 /*                            FCR-2902 Bug Fix                           */
 /* 12-Aug-2025  Wan06  1.8    UWP-39035 - Matching RPF Section to find   */
 /*                            DPP for FCR-6708 & FCR-2902                */
-/* 03-Sep-2025                FCR-6708 Bug Fix (include FCR-2902)        */
+/* 04-Sep-2025                FCR-6708 Bug Fix (include FCR-2902)        */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]       
     @c_Wavekey      NVARCHAR(10)    
@@ -1398,7 +1398,7 @@ CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]
                   SET @c_FinalLoc = ''                                              --2025-08-29 - START
                   SELECT TOP 1 @c_FinalLoc= td.FinalLoc                                 
                               ,@c_ID      = td.FinalID
-                              ,@c_ReplTaskKey = td.ListKey                          --2025-09-03
+                              ,@c_ReplTaskKey = td.TaskDetailKey                    --2025-09-04
                   FROM TASKDETAIL td (NOLOCK)
                   WHERE td.Storerkey = @c_Storerkey
                   AND   td.TaskType = 'RP1'
