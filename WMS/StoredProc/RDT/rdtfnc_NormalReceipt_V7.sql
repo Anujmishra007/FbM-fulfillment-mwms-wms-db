@@ -56,7 +56,7 @@ GO
 /*                          BatchCheck                                           */
 /* 2024-10-12 4.10 LJQ006   FCR-911   use uom in receiptdetail                   */
 /* 2024-10-08 5.0  TianLei  FCR-839   Add Fully received go back to screen 1     */
-/* 2024-11-12 5.2  Cuize    FCR-759   UPDATE ID UDF01                            */
+/* 2024-11-12 5.2  CYU027   FCR-759   UPDATE ID UDF01                            */
 /* 2025-03-10 5.3  YeeKung  UWP-31293 FIX SerialNo Blank (yeekung07)             */
 /* 2025-03-12 5.4  CYU027   UWP-26488&FCR-2729 DropListSp                        */
 /* 2025-06-18 0.0  Jackc    !!!Cutover. Use V2 file in V0 repo for work!!!       */
@@ -5558,7 +5558,7 @@ END
 GOTO Quit
 
 /********************************************************************************
-Step 98. 
+Step 98.
    EXT SCN
 ********************************************************************************/
 Step_98:

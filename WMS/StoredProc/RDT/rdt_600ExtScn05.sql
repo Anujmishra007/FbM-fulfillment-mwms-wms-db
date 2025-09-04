@@ -10,8 +10,8 @@ GO
 /*                                                                      */  
 /* Date       Rev  Author     Purposes                                  */  
 /* 2024-10-11 1.0  LJQ006     FCR-911  Created                          */  
-/* 2025-07-11 1.1  Dennis     FCR-5716 For Cold Store                   */  
-/************************************************************************/  
+/* 2025-07-11 1.1  Dennis     FCR-5716 For Cold Store                   */
+/************************************************************************/
   
 CREATE OR ALTER PROC [RDT].[rdt_600ExtScn05] (
    @nMobile      INT,           
@@ -77,11 +77,11 @@ BEGIN
       @cMUOM_Desc           NVARCHAR(10),
       @nMOBScn              INT,
       @cCaseID              NVARCHAR(18),
-      @cLottableCode        NVARCHAR(30),   
+      @cLottableCode        NVARCHAR(30),
       @cSKUDesc             NVARCHAR( 60),
       @cIVAS                NVARCHAR( 20),
       @cDropListSP          NVARCHAR( 20),
-      @nMorePage            INT, 
+      @nMorePage            INT,
       @cSQL                 NVARCHAR( MAX),
       @cSQLParam            NVARCHAR( MAX),
       @cPOKey               NVARCHAR( 10),
@@ -91,14 +91,14 @@ BEGIN
       @cPUOM_Desc           NCHAR( 5),
       @cPUOM                NVARCHAR(  1),
       @cReasonCode          NVARCHAR( 10),
-      @nQTY                 INT,  
+      @nQTY                 INT,
       @cSuggToLOC           NVARCHAR( 10),
       @cFinalLOC            NVARCHAR( 10),
       @cReceiptLineNumber   NVARCHAR( 5),
       @cExtendedInfoSP      NVARCHAR( 20),
       @cExtendedInfo        NVARCHAR( 20),
-      @nPQTY                INT,  
-      @nMQTY                INT,    
+      @nPQTY                INT,
+      @nMQTY                INT,
       @cOption              NVARCHAR(1)
       
    DECLARE @tTmpPackUom TABLE (
@@ -224,11 +224,11 @@ BEGIN
          IF @nStep = 98 AND @nScn = 6622 --CASE ID
          BEGIN
             SET @cBarcode = @cInField01
-            
+
             SELECT TOP 1 @cBUSR10 = BUSR10 FROM SKU WHERE itemclass='PVAR' AND SKU = @cSKU
             IF @cBUSR10 = 'BRAZIL'
             BEGIN
-               SELECT @cCaseID = SUBSTRING(@cBarcode, 5, 18)
+               SELECT @cCaseID = SUBSTRING(@cBarcode, 3, 18)
             END
             ELSE
                SET @cCaseID = @cBarcode
@@ -276,7 +276,7 @@ BEGIN
             BEGIN
                -- Get SKU info
                SELECT
-                  @cSKUDesc = 
+                  @cSKUDesc =
                      CASE WHEN @cDispStyleColorSize = '0'
                         THEN ISNULL( DescR, '')
                         ELSE CAST( Style AS NCHAR(20)) +
