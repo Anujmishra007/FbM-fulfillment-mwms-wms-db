@@ -39,7 +39,7 @@ GO
 /* 2025-07-01                 Version 1.90 & 1.91 & fixes. Add v2.0      */
 /* 2025-07-02                 Version v2.1 & fixes                       */
 /* 2025-07-04                 Version v2.2 & fix                         */
-/* 2025-08-27                 fix                                        */
+/* 2025-09-04                 fix                                        */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV02]
    @c_Wavekey      NVARCHAR(10)
@@ -254,10 +254,10 @@ BEGIN
             , MbolKey = ISNULL(md.MbolKey,'')
             , OtherReference = ISNULL(m.OtherReference, '')
             , o.[Type]
-            , [Priority] = ISNULL(cl2.Short, '')
-            , o.[Status]
+            , [Priority]= ISNULL(cl2.Short, '')
+            , [Status]  = ISNULL(od.[Status],'0')                                   --2025-09-04
             , C_Company = ISNULL(o.C_Company,'')
-            , CompML =  ISNULL(MIN(cl.ListName),'')
+            , CompML    = ISNULL(MIN(cl.ListName),'')
             , MSLanes=  ISNULL(STRING_AGG(l.Loc , ',')     
                         WITHIN GROUP (ORDER BY l.Loc, cl.Short ASC),'')             --2025-07-03
             , ToLocCodes=ISNULL(STRING_AGG(cl.Short , ',')     
@@ -295,6 +295,17 @@ BEGIN
                                                     WHEN cl.UDF03 = o.[OrderGroup] THEN 2 
                                                     ELSE 3 END)
                   ) cl2  
+      OUTER APPLY (SELECT od1.Orderkey                                              --2025-09-04
+                        , [Status] = CASE WHEN SUM(od1.QtyAllocated + od1.QtyPicked) = 0
+                                          THEN '0'
+                                          WHEN SUM(od1.OpenQty) = SUM(od1.QtyAllocated + od1.QtyPicked) 
+                                          THEN '2'
+                                          ELSE '1'
+                                          END
+                   FROM ORDERDETAIL od1 (NOLOCK)  
+                   WHERE od1.Orderkey = o.Orderkey
+                   GROUP BY od1.Orderkey
+                  ) od  
       WHERE w.WaveKey = @c_Wavekey
       GROUP BY o.Orderkey
             ,  o.Facility
@@ -304,7 +315,7 @@ BEGIN
             ,  ISNULL(m.OtherReference, '')
             ,  o.[Type]
             ,  ISNULL(cl2.Short, '')
-            ,  o.[Status]
+            ,  ISNULL(od.[Status],'0')                                              --2025-09-04
             ,  ISNULL(o.C_Company,'')
             ,  CASE WHEN cl2.UDF01 = 'Y' THEN cl2.UDF01 ELSE 'N' END
             ,  CASE WHEN cl2.UDF04 = 'Y' THEN cl2.UDF04 ELSE 'N' END

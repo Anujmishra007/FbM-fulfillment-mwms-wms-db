@@ -20,6 +20,7 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 2025-05-08  Wan      1.0   Created.                                  */
+/* 2025-09-04                 fix                                        */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[msp_BEJ_WaveRelease01]
    @c_StorerKey   NVARCHAR(15)   = ''
@@ -68,6 +69,17 @@ BEGIN
                                         AND cl.Code2 = o.[Type]
                                         AND cl.UDF02 IN ('', o.[Priority])
                                         AND cl.UDF03 IN ('', o.[OrderGroup])
+   OUTER APPLY (SELECT od1.Orderkey                                              --2025-09-04
+                     , [Status] = CASE WHEN SUM(od1.QtyAllocated + od1.QtyPicked) = 0
+                                       THEN '0'
+                                       WHEN SUM(od1.OpenQty) = SUM(od1.QtyAllocated + od1.QtyPicked) 
+                                       THEN '2'
+                                       ELSE '1'
+                                       END
+                  FROM ORDERDETAIL od1 (NOLOCK)  
+                  WHERE od1.Orderkey = o.Orderkey
+                  GROUP BY od1.Orderkey
+               ) od 
    WHERE w.[Status] IN ('2','99')
    AND   w.TMReleaseFlag = 'N'
    AND   o.StorerKey = @c_StorerKey
@@ -77,7 +89,7 @@ BEGIN
           , CASE WHEN cl.UDF02 = o.[Priority]   THEN 1
                  WHEN cl.UDF03 = o.[OrderGroup] THEN 2 
                  ELSE 3 END
-   HAVING COUNT(1) = SUM(CASE WHEN o.[Status] = '2' THEN 1 ELSE 0 END)
+   HAVING COUNT(1) = SUM(CASE WHEN od.[Status] = '2' THEN 1 ELSE 0 END)             --2025-09-04
    AND    SUM(CASE WHEN lpd.Loadkey IS NULL THEN 0 ELSE 1 END) > 0
    AND    SUM(CASE WHEN md.MBOLKey IS NULL  THEN 0 ELSE 1 END) > 0
    ORDER BY ROW_NUMBER() OVER (PARTITION BY w.Wavekey
