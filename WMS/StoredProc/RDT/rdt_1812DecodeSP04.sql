@@ -1,4 +1,3 @@
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -77,7 +76,7 @@ BEGIN
             GOTO Quit
          END
 
-         SET @cSKUTemp = SUBSTRING(@cBarcode, 5, 14 )
+         SET @cSKUTemp = SUBSTRING(@cBarcode, 3, 14 )
 
          IF ISNULL(@cSKUTemp, '') = ''
             RETURN
@@ -96,7 +95,7 @@ BEGIN
             RETURN
 
          INSERT INTO @tSKULabelInfo (ItemClass, BUSR10, SKURangeStart, SKULength, QtyRangeStart, QtyLength)
-         VALUES('PVAR', 'Brazil', 5, 14, 25, 6), ('PVAR', 'NewZealand', 5, 14, 35, 6)
+         VALUES('PVAR', 'Brazil', 3, 14, 21, 6), ('PVAR', 'NewZealand', 3, 14, 31, 6)
 
          SET @nLoopIndex = -1
          WHILE 1 = 1
