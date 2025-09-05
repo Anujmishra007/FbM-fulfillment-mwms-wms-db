@@ -17,19 +17,19 @@ GO
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_869ExtUpd01] (
-   @nMobile    INT,
-   @nFunc      INT,
-   @cLangCode  NVARCHAR( 3),
-   @nStep      INT,
-   @nInputKey  INT,
-   @cFacility  NVARCHAR( 5),
-   @cStorerKey NVARCHAR( 15),
-   @cOption    NVARCHAR(  1),
-   @cLoadKey   NVARCHAR( 10),
-   @cOrderKey  NVARCHAR( 10),
-   @cWaveKey   NVARCHAR( 10),
-   @nErrNo     INT           OUTPUT,
-   @cErrMsg    NVARCHAR( 20) OUTPUT
+@nMobile    INT,
+@nFunc      INT,
+@cLangCode  NVARCHAR( 3),
+@nStep      INT,
+@nInputKey  INT,
+@cFacility  NVARCHAR( 5),
+@cStorerKey NVARCHAR( 15),
+@cOption    NVARCHAR(  1),
+@cLoadKey   NVARCHAR( 10),
+@cOrderKey  NVARCHAR( 10),
+@cWaveKey   NVARCHAR( 10),
+@nErrNo     INT           OUTPUT,
+@cErrMsg    NVARCHAR( 20) OUTPUT
 ) AS
 BEGIN
 
@@ -103,13 +103,13 @@ BEGIN
             BEGIN
                IF @cShipRef = ''
                BEGIN
-                  INSERT INTO @List
-                     SELECT DISTINCT CaseID,OD.OrderKey,PD.SKU
-                     FROM dbo.PickDetail PD WITH (NOLOCK)
-                        INNER JOIN dbo.OrderDetail OD WITH (NOLOCK) ON (OD.OrderKey = PD.OrderKey AND OD.OrderLineNumber = PD.OrderLineNumber)
-                        INNER JOIN dbo.WaveDetail WD  WITH (NOLOCK) ON (OD.OrderKey = WD.OrderKey)
-                     WHERE WD.WaveKey = @cWaveKey
-               END
+               INSERT INTO @List
+                  SELECT DISTINCT CaseID,OD.OrderKey,PD.SKU
+                  FROM dbo.PickDetail PD WITH (NOLOCK)
+                     INNER JOIN dbo.OrderDetail OD WITH (NOLOCK) ON (OD.OrderKey = PD.OrderKey AND OD.OrderLineNumber = PD.OrderLineNumber)
+                     INNER JOIN dbo.WaveDetail WD  WITH (NOLOCK) ON (OD.OrderKey = WD.OrderKey)
+                  WHERE WD.WaveKey = @cWaveKey
+            END
                ELSE
                BEGIN
                   INSERT INTO @List
@@ -176,7 +176,7 @@ BEGIN
                      AND PH.PickHeaderKey = @cPickSlipNo
 
                   --UPDATE dbo.PackDetail WITH(ROWLOCK) SET QTY = @nQTY WHERE LABELNO = @cCaseID AND StorerKey = @cStorerKey AND SKU = @cSKU
-                  UPDATE PD WITH(ROWLOCK)
+                  UPDATE PD
                   SET QTY = @nQTY
                   FROM dbo.PackDetail PD WITH(ROWLOCK)
                   INNER JOIN @tPackDetail tPD 
@@ -191,6 +191,8 @@ BEGIN
                IF NOT EXISTS (SELECT 1 FROM dbo.PICKDETAIL(NOLOCK) WHERE OrderKey = @cOrderKey AND STATUS <> '0')
                AND NOT EXISTS (SELECT 1 FROM dbo.PACKDETAIL PD(NOLOCK) WHERE PickSLipNo = @cPickSlipNo AND PD.StorerKey = @cStorerKey)
                BEGIN
+                  DELETE FROM @tPackHeader
+                  
                   INSERT INTO @tPackHeader (PickSlipNo)
                   SELECT PickSlipNo 
                   FROM dbo.PackHeader WITH(NOLOCK) 

@@ -130,12 +130,13 @@ BEGIN
       IF @nDebugFlag = 1
          SELECT 'Close Task', @cTaskKey AS TaskKey
   
-      UPDATE dbo.TaskDetail SET   
-         FinalLOC = @cToLoc,  
-         [Status] = '9',  
-         EditWho = SUSER_SNAME(),  
-         EditDate = GETDATE()  
-      WHERE TaskDetailKey = @cTaskKey   
+      UPDATE dbo.TaskDetail WITH(ROWLOCK)
+      SET   
+         FinalLOC = @cToLoc,
+         [Status] = '9',
+         EditWho = SUSER_SNAME(),
+         EditDate = GETDATE()
+      WHERE TaskDetailKey = @cTaskKey
   
       IF @@ERROR <> 0 OR @@ROWCOUNT = 0  
       BEGIN  
@@ -198,7 +199,7 @@ BEGIN
       IF @nDebugFlag = 1
          SELECT 'Clear X status task groupkey and deviceid'
 
-      UPDATE TD WITH(ROWLOCK) 
+      UPDATE TD
       SET
          Groupkey = '',
          DeviceID = '',

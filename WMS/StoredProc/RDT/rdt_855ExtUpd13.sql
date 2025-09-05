@@ -762,9 +762,9 @@ BEGIN
                            AND PD.StorerKey = @cStorerKey
                            GROUP BY PD.StorerKey, PH.PickSlipNo, PD.CartonNo, PD.labelno, CART.CartonWeight) AS t
 
-                     UPDATE PI WITH(ROWLOCK) 
+                     UPDATE PI 
                      SET PI.Weight = CW.Weight
-                     FROM dbo.PackInfo PI
+                     FROM dbo.PackInfo PI WITH(ROWLOCK)
                      INNER JOIN @tCartonWeight CW ON PI.RefNo = CW.CaseID AND PI.PickSlipNo = CW.PickSlipNo
                      WHERE
                         PI.RefNo IS NOT NULL
@@ -1525,8 +1525,39 @@ BEGIN
                                  AND PD.DropID = @cToteID --ToteID
                                  AND ISNULL(PI.CartonStatus,'') <> 'PACKED') -- All skus are packed in single unit order tote
                      BEGIN
-                        UPDATE dbo.PackDetail WITH(ROWLOCK) SET DropID = CONCAT('ARC',DropID) WHERE DropID=@cToteID
-                        UPDATE dbo.PICKDETAIL WITH(ROWLOCK) SET DropID = CONCAT('ARC',DropID) WHERE DropID=@cToteID
+                        DELETE FROM @tPackDetail
+
+                        INSERT INTO @tPackDetail (PickSlipNo, CartonNo, LabelNo, LabelLine)
+                        SELECT DISTINCT PickSlipNo, CartonNo, LabelNo, LabelLine
+                        FROM dbo.PackDetail WITH(NOLOCK)
+                        WHERE StorerKey = @cStorerKey
+                        AND DropID = @cToteID
+
+                        UPDATE PD
+                           SET DropID = CONCAT('ARC',DropID)
+                        FROM dbo.PackDetail PD WITH(ROWLOCK)
+                        INNER JOIN @tPackDetail TPD 
+                        ON PD.PickSlipNo = TPD.PickSlipNo
+                           AND PD.CartonNo = TPD.CartonNo
+                           AND PD.LabelNo = TPD.LabelNo
+                           AND PD.LabelLine = TPD.LabelLine
+
+                        DELETE FROM @tPickDetail
+
+                        INSERT INTO @tPickDetail (PickDetailKey)
+                        SELECT PickDetailKey
+                        FROM dbo.PICKDETAIL WITH(NOLOCK) 
+                        WHERE StorerKey = @cStorerKey
+                        AND DropID = @cToteID
+
+                        UPDATE PD
+                           SET DropID = CONCAT('ARC',DropID)
+                        FROM dbo.PICKDETAIL PD WITH(ROWLOCK)
+                        INNER JOIN @tPickDetail TPD 
+                        ON PD.PickDetailKey = TPD.PickDetailKey
+
+                        --UPDATE dbo.PackDetail WITH(ROWLOCK) SET DropID = CONCAT('ARC',DropID) WHERE DropID=@cToteID
+                        --UPDATE dbo.PICKDETAIL WITH(ROWLOCK) SET DropID = CONCAT('ARC',DropID) WHERE DropID=@cToteID
                         UPDATE RDT.RDTMOBREC WITH(ROWLOCK) SET C_STRING1 = '' WHERE Mobile = @nMobile
                      END
                   END
@@ -1541,7 +1572,7 @@ BEGIN
                      WHERE StorerKey = @cStorerKey
                        AND DropID = @cToteID
 
-                     UPDATE PD WITH(ROWLOCK)
+                     UPDATE PD
                         SET DropID = CONCAT('ARC',DropID)
                      FROM dbo.PackDetail PD WITH(ROWLOCK)
                      INNER JOIN @tPackDetail TPD 
@@ -1558,7 +1589,7 @@ BEGIN
                      WHERE StorerKey = @cStorerKey
                        AND DropID = @cToteID
 
-                     UPDATE PD WITH(ROWLOCK)
+                     UPDATE PD
                         SET DropID = CONCAT('ARC',DropID)
                      FROM dbo.PICKDETAIL PD WITH(ROWLOCK)
                      INNER JOIN @tPickDetail TPD 

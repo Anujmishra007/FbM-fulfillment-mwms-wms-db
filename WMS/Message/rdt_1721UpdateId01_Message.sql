@@ -1,5 +1,6 @@
 
 -- rdt_1721UpdateId01
+-- UWP-39586 Performance tuning
 EXECUTE rdt.rdtDropMsg 245151, 245200
 
 EXECUTE rdt.rdtAddMsg 245151  ,10 ,'245151 UpdPalletDetailFail',     'us_english' ,1721  ,0 ,N'245151 Update PalletDetail Failed'

@@ -70,6 +70,8 @@ BEGIN
 
    IF @@ROWCOUNT > 0
    BEGIN
+      DELETE FROM @tPalletDetail
+      
       INSERT INTO @tPalletDetail (PalletKey, PalletLineNumber)
       SELECT DISTINCT PalletKey, PalletLineNumber
       FROM dbo.PalletDetail WITH (NOLOCK)
@@ -80,13 +82,13 @@ BEGIN
       IF @@ROWCOUNT > 0
       BEGIN
          BEGIN TRY
-            UPDATE PD WITH(ROWLOCK)
+            UPDATE PD
             SET
                [Status] = CASE WHEN ISNULL(@cDropID_Status, '') = '' THEN '0' ELSE @cDropID_Status END,
                LOC = @cToLOC,
                EditWho = 'rdt.' + sUser_sName(),
                EditDate = GETDATE()
-            FROM dbo.PalletDetail AS PD
+            FROM dbo.PalletDetail AS PD WITH(ROWLOCK)
             INNER JOIN @tPalletDetail AS TPD
                ON PD.PalletKey = TPD.PalletKey
                AND PD.PalletLineNumber = TPD.PalletLineNumber
@@ -128,6 +130,8 @@ BEGIN
 
    --UPDATE PICKDETAIL
    --RDT_MOVE will not update pickdetail
+   DELETE FROM @tPickDetail
+   
    INSERT INTO @tPickDetail (PickDetailKey)
    SELECT DISTINCT PD.PickDetailKey
    FROM dbo.PICKDETAIL PD WITH (NOLOCK) 
@@ -137,7 +141,7 @@ BEGIN
    WHERE PTD.PalletKey = @cID
    
    BEGIN TRY
-      UPDATE PD WITH (ROWLOCK) 
+      UPDATE PD
       SET PD.LOC = @cToLOC
       FROM dbo.PICKDETAIL PD WITH (ROWLOCK) 
       INNER JOIN @tPickDetail TPD
