@@ -377,11 +377,12 @@ BEGIN
 
             IF @c_InterLeaveTasks='1' --AND ISNULL(RTRIM(@c_LastLOC),'') <> ''
             BEGIN
+                SET @c_LastLOC = ''
                 IF @b_debug=1
                 BEGIN
                     SELECT 'LastLoc',@c_LastLOC,'Last TaskType =',@c_LastTaskType
                 END
-
+                
                 ---- Start TITAN Logic Here
                 IF ISNULL(RTRIM(@c_LastLOC) ,'')<>''
                 BEGIN
