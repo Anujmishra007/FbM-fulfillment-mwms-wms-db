@@ -103,11 +103,12 @@ BEGIN
          FETCH NEXT FROM @curDel INTO @cPalletLineNumber
          WHILE @@FETCH_STATUS = 0
          BEGIN
-            UPDATE dbo.PALLETDETAIL SET ArchiveCop = '9'
+            UPDATE dbo.PALLETDETAIL WITH(ROWLOCK)
+            SET ArchiveCop = '9'
             WHERE PalletKey = @cPalletKey
             AND PalletLineNumber = @cPalletLineNumber
 
-            DELETE FROM dbo.PALLETDETAIL
+            DELETE FROM dbo.PALLETDETAIL WITH(ROWLOCK)
             WHERE PalletKey = @cPalletKey
             AND PalletLineNumber = @cPalletLineNumber
 
@@ -121,9 +122,9 @@ BEGIN
             FETCH NEXT FROM @curDel INTO @cPalletLineNumber
          END
 
-         UPDATE dbo.PALLET SET ArchiveCop = '9' WHERE PalletKey = @cPalletKey
+         UPDATE dbo.PALLET WITH(ROWLOCK) SET ArchiveCop = '9' WHERE PalletKey = @cPalletKey
 
-         DELETE FROM PALLET WHERE PalletKey = @cPalletKey
+         DELETE FROM dbo.PALLET WITH(ROWLOCK) WHERE PalletKey = @cPalletKey
 
          IF @@ERROR <> 0
          BEGIN
