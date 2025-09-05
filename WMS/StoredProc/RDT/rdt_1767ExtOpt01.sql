@@ -141,6 +141,7 @@ AS
                SELECT RefNo, SUM( SystemQty - Qty)
                FROM dbo.CCDetail WITH (NOLOCK)
                WHERE CCSheetNo = @cTaskDetailKey
+                  AND ISNULL( RefNo, '') <> ''
                GROUP BY RefNo
                HAVING ABS( SUM( SystemQty - Qty)) > 0
                OPEN @curCCD
