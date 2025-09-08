@@ -105,8 +105,7 @@ BEGIN
          UPDATE UCC
          SET Loc = @c_ToLoc
            , ID  = @c_ToID
-           , Status = CASE WHEN @c_ToLocType = 'PICK' THEN '5'
-                           WHEN @c_LoseUCC   = '1'    THEN '6'
+           , Status = CASE WHEN @c_LoseUCC = '1' THEN '6'
                            ELSE Status END
            , TrafficCop = NULL
          WHERE UCC_RowRef = @n_UCC_RowRef
@@ -158,3 +157,4 @@ END -- procedure
 GO
 GRANT EXECUTE ON  [dbo].[ispPostReplen03] TO [NSQL]
 GO
+
