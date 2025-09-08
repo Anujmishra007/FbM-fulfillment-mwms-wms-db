@@ -91,7 +91,7 @@ BEGIN
       AND Lot = @c_Lot
       AND Loc = @c_FromLoc
       AND ID  = @c_FromID
-      AND (ISNULL(@c_FromID,'') <> ''
+      AND (ISNULL(@c_FromID,'') <> '' AND ISNULL(@c_UCCNo,'')='' 
         OR ISNULL(@c_UCCNo,'')<>'' AND UCCNo = @c_UCCNo)
     ORDER BY UCCNo, UCC_RowRef
 
@@ -157,4 +157,5 @@ END -- procedure
 GO
 GRANT EXECUTE ON  [dbo].[ispPostReplen03] TO [NSQL]
 GO
+
 
