@@ -35,7 +35,7 @@ GO
 /*                            FCR-2902 Bug Fix                           */
 /* 12-Aug-2025  Wan06  1.8    UWP-39035 - Matching RPF Section to find   */
 /*                            DPP for FCR-6708 & FCR-2902                */
-/* 04-Sep-2025                FCR-6708 Bug Fix (include FCR-2902)        */
+/* 08-Sep-2025                FCR-6708 Bug Fix (include FCR-2902)        */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]       
     @c_Wavekey      NVARCHAR(10)    
@@ -1401,11 +1401,26 @@ CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]
                               ,@c_ReplTaskKey = td.TaskDetailKey                    --2025-09-04
                   FROM TASKDETAIL td (NOLOCK)
                   WHERE td.Storerkey = @c_Storerkey
-                  AND   td.TaskType = 'RP1'
+                  AND   td.TaskType = 'RP1'                                    
                   AND   td.FromLoc  = @c_FromLoc
                   AND   td.FromID   = @c_ID
                   AND   td.[Status] < '9'
                   ORDER BY Taskdetailkey DESC
+
+                  IF @c_FinalLoc = ''                                               --2025-09-08 - START
+                  BEGIN
+                     SELECT TOP 1 @c_FinalLoc= td.FinalLoc                                 
+                                 ,@c_ID      = td.FinalID
+                                 ,@c_ReplTaskKey = td.TaskDetailKey                    
+                     FROM TASKDETAIL td (NOLOCK)
+                     WHERE td.Storerkey= @c_Storerkey
+                     AND   td.TaskType = 'VNAOUT'                                      
+                     AND   td.FromLoc  = @c_FromLoc
+                     AND   td.FromID   = @c_ID
+                     AND   td.[Status] = 'Q'
+                     AND   td.Message03='RPF'                                          
+                     ORDER BY Taskdetailkey DESC
+                  END                                                               --2025-09-08 - END
 
                   IF @c_FinalLoc = ''
                   BEGIN
