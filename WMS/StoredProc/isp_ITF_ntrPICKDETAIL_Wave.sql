@@ -176,7 +176,7 @@ BEGIN
                EXEC sys.sp_executesql @c_StoredProc, N'@c_WaveKey NVARCHAR(10), @b_Success INT OUTPUT, @c_ErrNo INT OUTPUT, @c_ErrMsg NVARCHAR(215) OUTPUT',
                            @c_WaveKey, 
                            @b_Success OUTPUT, 
-                           @n_Err     OUTPUT, 
+                           @c_ErrNo   OUTPUT, 
                            @c_ErrMsg  OUTPUT 
             END
             ELSE
