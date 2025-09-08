@@ -509,7 +509,9 @@ BEGIN
             SET @c_PrevStorer = @c_CurrentStorer
             SET @c_OPTION5 = ''
             SET @c_BulkLocType = ''
-            
+
+            TRUNCATE TABLE @t_Bulk_LocType
+
             SELECT @c_OPTION5 = OPTION5 FROM dbo.fnc_GetRight2('', @c_CurrentStorer, '', 'CustomReplen_LocType') WHERE Authority='1'
             SET @c_BulkLocType = dbo.fnc_GetParamValueFromString('@c_BulkLocType', @c_OPTION5, @c_BulkLocType)
 
@@ -1256,3 +1258,4 @@ END --SP end
 GO
 GRANT EXECUTE ON  [dbo].[isp_GenReplenishment] TO [NSQL]
 GO
+
