@@ -24,7 +24,7 @@ GO
 /* 2025-05-30   AYD02   1.2   Check ExternOrderKey when inserting OD    */
 /* 2025-09-02   CZJ01   1.3   LCL SP Enhancement                        */
 /************************************************************************/ 
-ALTER   PROC [dbo].[msp_BEJ_XDockCreateSO01]
+CREATE OR ALTER PROC [dbo].[msp_BEJ_XDockCreateSO01]
      @c_StorerKey   NVARCHAR(15)   = ''
    , @c_Facility    NVARCHAR(5)    = ''
    , @c_OtherConfig NVARCHAR(4000)  = ''
