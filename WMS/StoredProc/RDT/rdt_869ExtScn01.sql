@@ -12,6 +12,7 @@ GO
 /* Date       Rev      Author   Purposes                                    */
 /* 2025-08-27 1.0.0    NickT    FCR-6730 Create                             */
 /* 2025-09-03 1.0.1    Jackc    FCR-6730 Fix bugs                           */
+/* 2025-09-09 1.0.2    NickT    FCR-6730 Fix issue:UWP-40880                */
 /****************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_869ExtScn01] (
@@ -78,6 +79,8 @@ BEGIN
       @cExtendedUpdateSP      NVARCHAR( 20),
       @cExtendedScnSP         NVARCHAR( 20)
 
+   SET @cUDF30 = '0' -- 1 update rdtMobRec in current extendedScreenSP, 0 update rdtMobRec in main function SP
+
    SELECT 
       @nCurrentScn         = Scn, 
       @nCurrentStep        = Step,
@@ -111,7 +114,7 @@ BEGIN
          SET @cOutField04 = ''
          SET @nAfterScn = 6673
          SET @nAfterStep = 99
-         GOTO Quit
+         RETURN
       END
 
       --If next step is 2, then go to new screen 6674 if ShipRef <> ''
@@ -122,7 +125,7 @@ BEGIN
             SET @cOutField07 = @cShipRef
             SET @nAfterScn = 6674
             SET @nAfterStep = 99
-            GOTO Quit
+            RETURN
          END
       END
 
@@ -138,6 +141,7 @@ BEGIN
          IF @nCurrentScn = 6673
          BEGIN
             SET @nErrNo = 0
+            SET @cUDF30 = '1'
 
             IF @nInputKey = 1
             BEGIN
@@ -403,6 +407,7 @@ BEGIN
          ********************************************************************************/
          IF @nCurrentScn = 6674
          BEGIN
+            SET @cUDF30 = '1'
             IF @nInputKey = 1 -- ENTER
             BEGIN
                -- Check any short
