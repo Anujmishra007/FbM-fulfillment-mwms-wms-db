@@ -69,7 +69,7 @@ GO
 /* 2024-10-22   4.0  PXL009     FCR-759 ID and UCC Length Issue               */
 /* 2025-02-26   4.1.0  NLT013   FCR-2519 Be able to config Lottable           */
 /* 2025-02-26   4.1.1  CYU027   FCR-2519 Lottable 1-15 Swap UCC               */
-/* 2025-07-28   0.0.0  Jackc    !!!Cutover!!! Use V0 repo for work            */
+/* 2025-09-09   4.2.0  Jackc    FCR-7545 Add UCCNo to DecodeSP                */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_Pick] (
@@ -1370,7 +1370,8 @@ BEGIN
          BEGIN
             SET @cSQL = 'EXEC rdt.' + RTRIM( @cDecodeSP) +
                ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cPickSlipNo, @cBarcode, ' +
-               ' @cDropID     OUTPUT, @cLOC        OUTPUT, @cID         OUTPUT, @cSKU        OUTPUT, @nQty        OUTPUT, ' +
+               ' @cDropID     OUTPUT, @cLOC        OUTPUT, @cID         OUTPUT, ' +
+               ' @cSKU        OUTPUT, @nQty        OUTPUT, @cUCC        OUTPUT, ' +
                ' @cLottable01 OUTPUT, @cLottable02 OUTPUT, @cLottable03 OUTPUT, @dLottable04 OUTPUT, @dLottable05 OUTPUT,' +
                ' @cLottable06 OUTPUT, @cLottable07 OUTPUT, @cLottable08 OUTPUT, @cLottable09 OUTPUT, @cLottable10 OUTPUT,' +
                ' @cLottable11 OUTPUT, @cLottable12 OUTPUT, @dLottable13 OUTPUT, @dLottable14 OUTPUT, @dLottable15 OUTPUT,' +
@@ -1389,6 +1390,7 @@ BEGIN
                '@cID             NVARCHAR(18)   OUTPUT, ' +
                '@cSKU            NVARCHAR(20)   OUTPUT, ' +
                '@nQty            INT            OUTPUT, ' +
+               '@cUCC            NVARCHAR(20)   OUTPUT, ' +
                '@cLottable01     NVARCHAR( 18)  OUTPUT, ' +
                '@cLottable02     NVARCHAR( 18)  OUTPUT, ' +
                '@cLottable03     NVARCHAR( 18)  OUTPUT, ' +
@@ -1409,7 +1411,8 @@ BEGIN
 
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
                @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorer, @cPickSlipNo, @cBarcode,
-               @cDropID          OUTPUT, @cLOC        OUTPUT, @cID         OUTPUT, @cSKU        OUTPUT, @nQty        OUTPUT,
+               @cDropID          OUTPUT, @cLOC        OUTPUT, @cID         OUTPUT, 
+               @cSKU             OUTPUT, @nQty        OUTPUT, @cUCC        OUTPUT,
                @cLottable1       OUTPUT, @cLottable2  OUTPUT, @cLottable3  OUTPUT, @dLottable4  OUTPUT, @dLottable05 OUTPUT,
                @cLottable06      OUTPUT, @cLottable07 OUTPUT, @cLottable08 OUTPUT, @cLottable09 OUTPUT, @cLottable10 OUTPUT,
                @cLottable11      OUTPUT, @cLottable12 OUTPUT, @dLottable13 OUTPUT, @dLottable14 OUTPUT, @dLottable15 OUTPUT,
@@ -2587,7 +2590,8 @@ BEGIN
          BEGIN
             SET @cSQL = 'EXEC rdt.' + RTRIM( @cDecodeSP) +
                ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerkey, @cPickSlipNo, @cBarcode, ' +
-               ' @cDropID     OUTPUT, @cLOC        OUTPUT, @cID         OUTPUT, @cSKU        OUTPUT, @nQty        OUTPUT, ' +
+               ' @cDropID     OUTPUT, @cLOC        OUTPUT, @cID         OUTPUT, ' +
+               ' @cSKU        OUTPUT, @nQty        OUTPUT, @cUCC        OUTPUT, ' +
                ' @cLottable01 OUTPUT, @cLottable02 OUTPUT, @cLottable03 OUTPUT, @dLottable04 OUTPUT, @dLottable05 OUTPUT,' +
                ' @cLottable06 OUTPUT, @cLottable07 OUTPUT, @cLottable08 OUTPUT, @cLottable09 OUTPUT, @cLottable10 OUTPUT,' +
                ' @cLottable11 OUTPUT, @cLottable12 OUTPUT, @dLottable13 OUTPUT, @dLottable14 OUTPUT, @dLottable15 OUTPUT,' +
@@ -2606,6 +2610,7 @@ BEGIN
                '@cID             NVARCHAR(18)   OUTPUT, ' +
                '@cSKU            NVARCHAR(20)   OUTPUT, ' +
                '@nQty            INT            OUTPUT, ' +
+               '@cUCC            NVARCHAR(20)   OUTPUT, ' +
                '@cLottable01     NVARCHAR( 18)  OUTPUT, ' +
                '@cLottable02     NVARCHAR( 18)  OUTPUT, ' +
                '@cLottable03     NVARCHAR( 18)  OUTPUT, ' +
@@ -2626,7 +2631,8 @@ BEGIN
 
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
                @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorer, @cPickSlipNo, @cBarcode,
-               @cUCC             OUTPUT, @cLOC        OUTPUT, @cID         OUTPUT, @cSKU        OUTPUT, @nQty        OUTPUT,
+               @cDropID          OUTPUT, @cLOC        OUTPUT, @cID         OUTPUT, 
+               @cSKU             OUTPUT, @nQty        OUTPUT, @cUCC        OUTPUT,
                @cLottable1       OUTPUT, @cLottable2  OUTPUT, @cLottable3  OUTPUT, @dLottable4  OUTPUT, @dLottable05 OUTPUT,
                @cLottable06      OUTPUT, @cLottable07 OUTPUT, @cLottable08 OUTPUT, @cLottable09 OUTPUT, @cLottable10 OUTPUT,
                @cLottable11      OUTPUT, @cLottable12 OUTPUT, @dLottable13 OUTPUT, @dLottable14 OUTPUT, @dLottable15 OUTPUT,

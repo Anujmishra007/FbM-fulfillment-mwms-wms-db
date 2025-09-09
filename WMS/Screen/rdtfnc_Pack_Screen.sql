@@ -112,7 +112,7 @@ EXECUTE rdt.rdtAddScn 4656, 'ENG'
 DELETE rdt.RDTScn WHERE Scn = 4657 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 4657, 'ENG'
    ,@cLine01 = 'UCCNO:'
-   ,@cLine02 = '%20i01'
+   ,@cLine02 = '%60i01' --FCR-7545
    ,@cLine03 = ''
    ,@cLine04 = 'SCAN:  %05d02'
    ,@cLine05 = ''
