@@ -77,7 +77,7 @@ GO
 /* 2025-01-23   5.9.0   CYU027      FCR-540 Fix issues， SerinaNo                */
 /* 2025-05-20   6.0.0   Jackc       UWP-34683 Add extupd to step4                */
 /* 2025-01-23   6.1.0   CYU027      FCR-540 Fix issues， SerinaNo                */
-/* 2025-07-28   0.0.0   Jackc       !!!Cutover!!! Use V2 version in V0 repo for work*/
+/* 2025-09-09   6.2.0   Jackc       uwp-40901 Fix next scn value at st7          */
 /*********************************************************************************/
 
 CREATE OR ALTER   PROC [RDT].[rdtfnc_PickPiece] (
@@ -4584,9 +4584,15 @@ BEGIN
          SET @cOutField04 = @cSuggID --(yeekung02)
          SET @cOutField05 = ''
 
+         --V4.1.0 start
          -- Go to confirm LOC screen
-         SET @nScn = @nScn_ConfirmLOC
-         SET @nStep = @nStep_ConfirmLOC
+         --SET @nScn = @nScn_ConfirmLOC
+         --SET @nStep = @nStep_ConfirmLOC
+         
+         -- Go to verify ID screen
+         SET @nScn = @nScn_VerifyID
+         SET @nStep = @nStep_VerifyID
+         --V4.1.0
       END
       ELSE
       BEGIN
