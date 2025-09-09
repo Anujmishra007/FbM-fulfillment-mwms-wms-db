@@ -239,6 +239,25 @@ BEGIN
                   GOTO Step_9_Fail
                END
 
+               IF EXISTS (SELECT 1 FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
+                  WHERE LLI.StorerKey = @cStorerKey
+                  AND LLI.LOT = @cSuggLOT
+                  AND LLI.Loc = @cSuggFromLOC
+                  AND LLI.ID = @cSuggID
+                  AND QTY - QTYPICKED > 0
+                  AND QTYAllocated < @nQTY_RPL
+                  AND @cReasonCode IN (
+                    SELECT 
+                      Short 
+                   FROM CODELKUP WITH(NOLOCK)
+                        WHERE LISTNAME = 'JCBPREASON'
+                 ))
+               BEGIN
+                  SET @nErrNo = 245404
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Inventory issue
+                  GOTO Step_9_Fail
+               END
+
                -- Extended validate
                IF @cExtendedValidateSP <> ''
                BEGIN
