@@ -148,7 +148,7 @@ BEGIN
                   , [sqlFrom]       NVARCHAR(MAX) '$.sqlFrom'
                   , [sqlWhere]      NVARCHAR(MAX) '$.sqlWhere'
                   , [sqlCondition]  NVARCHAR(MAX) '$.sqlCondition'                   
-                  , [sqlGroupBy]    NVARCHAR(MAX) '$.sqlGroupBy' 
+                  , [sqlGroupBy]    NVARCHAR(MAX) '$.sqlGroup'                      --2025-09-09
                   , [sqlHaving]     NVARCHAR(MAX) '$.sqlHaving' 
                   , [sqlOrderBy]    NVARCHAR(MAX) '$.sqlOrderBy' 
                   ) AS [sql]
@@ -190,7 +190,7 @@ BEGIN
                , [sqlFrom]       NVARCHAR(MAX) '$.sqlFrom'
                , [sqlWhere]      NVARCHAR(MAX) '$.sqlWhere'
                , [sqlCondition]  NVARCHAR(MAX) '$.sqlCondition' 
-               , [sqlGroupBy]    NVARCHAR(MAX) '$.sqlGroupBy' 
+               , [sqlGroupBy]    NVARCHAR(MAX) '$.sqlGroup'                         --2025-09-09
                , [sqlHaving]     NVARCHAR(MAX) '$.sqlHaving' 
                , [sqlOrderBy]    NVARCHAR(MAX) '$.sqlOrderBy' 
                ) AS [sql]
@@ -222,7 +222,7 @@ BEGIN
                                       END  + ' ' 
                                + RTRIM(SCC.[Operator]) + CASE WHEN RTRIM(SCC.[Operator]) = '' 
                                                               THEN '' 
-                                                              ELSE '' END
+                                                              ELSE ' ' END          --2025-09-09
                                + CASE WHEN SCC.[Operator] = ''
                                       THEN SCC.[value] 
                                       WHEN col.DATA_TYPE IN ('char','nchar', 'varchar', 'nvarchar')
