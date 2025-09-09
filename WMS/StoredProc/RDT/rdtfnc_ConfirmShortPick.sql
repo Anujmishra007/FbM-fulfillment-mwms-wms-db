@@ -635,7 +635,8 @@ BEGIN
 
          IF 'rdt_869ExtScn01' = @cExtendedScnSP
          BEGIN
-            RETURN
+            IF @cUDF30 = '1' -- No need to jump to Quit
+               RETURN
          END
          
          GOTO Quit
