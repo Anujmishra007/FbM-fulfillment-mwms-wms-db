@@ -22,9 +22,9 @@ GO
 /* 2025-05-28   AYD01   1.1   Change mapping for OD.OpenQty:            */
 /*                            RD.QtyReceived -> RD.QtyExpected          */
 /* 2025-05-30   AYD02   1.2   Check ExternOrderKey when inserting OD    */
-/* 2025-09-02   CZJ002  1.3   LCL SP Enhancement                        */
+/* 2025-09-02   CZJ01   1.3   LCL SP Enhancement                        */
 /************************************************************************/ 
-CREATE OR ALTER PROC [dbo].[msp_BEJ_XDockCreateSO01]
+ALTER   PROC [dbo].[msp_BEJ_XDockCreateSO01]
      @c_StorerKey   NVARCHAR(15)   = ''
    , @c_Facility    NVARCHAR(5)    = ''
    , @c_OtherConfig NVARCHAR(4000)  = ''
@@ -329,14 +329,17 @@ BEGIN
 					,RD.GrossWgt                                     --(CZJ01)
                     FROM RECEIPT r WITH (nolock) 
                     INNER JOIN RECEIPTDETAIL rd WITH (nolock) ON r.ReceiptKey = rd.ReceiptKey
+					INNER JOIN CodelkUp CLK WITH (nolock) ON r.RECTYPE = CLK.Long and ListName = 'XD2SOConF' and r.ASNStatus =  CLK.short  --(CZJ01)
                     WHERE 
                     r.StorerKey = @c_StorerKey
                     AND r.Facility = @c_Facility 
-                    AND r.RECType='XDOCK' AND r.[Status] = '0' AND r.ASNStatus='0' AND RTRIM(r.ExternReceiptKey) <> ''
+                    --AND r.RECType='XDOCK' AND r.[Status] = '0' AND r.ASNStatus='0' AND RTRIM(r.ExternReceiptKey) <> ''  --(CZJ01)
+                    AND r.DocType='X' AND r.[Status] = '0' AND RTRIM(r.ExternReceiptKey) <> ''  --(CZJ01)
                     AND rd.QtyExpected > 0 AND RTRIM(rd.ExternReceiptKey) <> ''
                     AND NOT EXISTS (SELECT 1 FROM ORDERS o WITH (nolock) 
                         WHERE r.ExternReceiptKey = o.ExternOrderKey AND r.StorerKey = o.StorerKey
-                        AND r.RECType='XDOCK' AND r.[Status] = '0' AND r.ASNStatus='0' AND rd.QtyExpected > 0 AND RTRIM(r.ExternReceiptKey) <> '')
+                        --AND r.RECType='XDOCK' AND r.[Status] = '0' AND r.ASNStatus='0' AND rd.QtyExpected > 0 AND RTRIM(r.ExternReceiptKey) <> '')  --(CZJ01)
+                        AND r.DocType='X' AND r.[Status] = '0' AND rd.QtyExpected > 0 AND RTRIM(r.ExternReceiptKey) <> '')  --(CZJ01)
                     ORDER BY ISNULL(rd.Userdefine02,''), ISNULL(rd.UserDefine06,'1900-01-01'), ISNULL(rd.PutawayLoc  ,''), rd.ReceiptLineNumber
 
                     OPEN CUR_RECDET
