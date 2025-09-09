@@ -84,22 +84,24 @@ BEGIN
          , @c_OHUD06             NVARCHAR(50)  = ''
          , @c_OHUD07             NVARCHAR(50)  = ''
          , @n_ToDo               INT           = 0
-		 , @c_GrossWgt           FLOAT                         --(CZJ002)
+		 , @c_GrossWgt           FLOAT                         --(CZJ01)
          --AYD END
     IF OBJECT_ID('tempdb..#TMP_ORD') IS NOT NULL DROP TABLE #TMP_ORD
     IF OBJECT_ID('tempdb..#TMP_ORDDTL') IS NOT NULL DROP TABLE #TMP_ORDDTL
 
     SELECT @n_ToDo = COUNT(1) FROM RECEIPT r WITH (nolock)
     INNER JOIN RECEIPTDETAIL rd WITH (nolock) ON r.ReceiptKey = rd.ReceiptKey
+	INNER JOIN CodelkUp CLK WITH (nolock) ON r.RECTYPE = CLK.Long and ListName = 'XD2SOConF' and r.ASNStatus =  CLK.short  --(CZJ01)
     WHERE 
     r.StorerKey = @c_StorerKey
     AND r.Facility = @c_Facility 
-    AND r.RECType='XDOCK' AND r.[Status] = '0' AND r.ASNStatus='0' AND RTRIM(r.ExternReceiptKey) <> ''
+    --AND r.RECType='XDOCK' AND r.[Status] = '0' AND r.ASNStatus='0' AND RTRIM(r.ExternReceiptKey) <> '' --(CZJ01)
+    AND r.DocType='X' AND r.[Status] = '0'  AND RTRIM(r.ExternReceiptKey) <> '' --(CZJ01)
     AND rd.QtyExpected > 0 AND RTRIM(rd.ExternReceiptKey) <> ''
     AND NOT EXISTS (SELECT 1 FROM ORDERS o WITH (nolock) 
         WHERE r.ExternReceiptKey = o.ExternOrderKey AND r.StorerKey = o.StorerKey
-        AND r.RECType='XDOCK' AND r.[Status] = '0' AND r.ASNStatus='0' AND rd.QtyExpected > 0 AND RTRIM(r.ExternReceiptKey) <> '')
-    
+        --AND r.RECType='XDOCK' AND r.[Status] = '0' AND r.ASNStatus='0' AND rd.QtyExpected > 0 AND RTRIM(r.ExternReceiptKey) <> '')--(CZJ01)
+        AND r.DocType='X' AND r.[Status] = '0' AND rd.QtyExpected > 0 AND RTRIM(r.ExternReceiptKey) <> '')--(CZJ01)    
 
     IF @n_ToDo = 0
     BEGIN
@@ -324,7 +326,7 @@ BEGIN
                     ,c_address2   = rd.UserDefine04
                     ,c_address3   = rd.UserDefine05
                     ---AYD END
-					,RD.GrossWgt                                     --(CZJ002)
+					,RD.GrossWgt                                     --(CZJ01)
                     FROM RECEIPT r WITH (nolock) 
                     INNER JOIN RECEIPTDETAIL rd WITH (nolock) ON r.ReceiptKey = rd.ReceiptKey
                     WHERE 
@@ -356,16 +358,16 @@ BEGIN
                     , @c_C_Address1
                     , @c_C_Address2
                     , @c_C_Address3 
-					, @c_GrossWgt  --(CZJ002)
+					, @c_GrossWgt  --(CZJ01)
                     --AYD END
 
                     WHILE @@FETCH_STATUS <> -1 AND @n_continue IN(1, 2)
                     BEGIN
                         IF EXISTS (SELECT 1 FROM #TMP_ORD WHERE ExternOrderKey = @c_ExternReceiptkey    --AYD02
-                        and Consigneekey = @c_Consigneekey and DeliveryDate = @c_DeliveryDate and Door = @c_Door and ExternPOKey = @c_ExternPOKey) --(CZJ002)
+                        and Consigneekey = @c_Consigneekey and DeliveryDate = @c_DeliveryDate and Door = @c_Door and ExternPOKey = @c_ExternPOKey) --(CZJ01)
                         BEGIN
                             SELECT @c_Orderkey = Orderkey FROM #TMP_ORD WHERE ExternOrderKey = @c_ExternReceiptkey  --AYD02
-                            and Consigneekey = @c_Consigneekey and DeliveryDate = @c_DeliveryDate and Door = @c_Door and ExternPOKey = @c_ExternPOKey --(CZJ002)
+                            and Consigneekey = @c_Consigneekey and DeliveryDate = @c_DeliveryDate and Door = @c_Door and ExternPOKey = @c_ExternPOKey --(CZJ01)
                         END
 
                         ELSE
@@ -426,8 +428,8 @@ BEGIN
                                 ,  Userdefine06
                                 ,  Userdefine07
                                 ,  ExternPOKey
-								,  GrossWeight     --(CZJ002)
-								,  UpdateSource    --(CZJ002)
+								,  GrossWeight     --(CZJ01)
+								,  Userdefine03    --(CZJ01)
                                 ) VALUES 
                                 (  @c_Orderkey
                                 ,  @c_Storerkey
@@ -463,8 +465,8 @@ BEGIN
                                 ,  @c_OHUD06 --AYD
                                 ,  @c_OHUD07 --AYD
                                 ,  @c_ExternPOKey
-								,  @c_GrossWgt    --(CZJ002)
-								,  @c_Receiptkey  --(CZJ002)
+								,  @c_GrossWgt    --(CZJ01)
+								,  @c_Receiptkey  --(CZJ01)
                                 )   
                                 IF @@ERROR <> 0
                                 BEGIN
@@ -534,7 +536,7 @@ BEGIN
                             , @c_C_Address2
                             , @c_C_Address3 
                             --AYD END 
-							, @c_GrossWgt  --(CZJ002)
+							, @c_GrossWgt  --(CZJ01)
                     END
                     CLOSE CUR_RECDET
                     DEALLOCATE CUR_RECDET
