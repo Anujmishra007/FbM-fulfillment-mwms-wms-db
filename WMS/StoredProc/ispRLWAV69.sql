@@ -35,7 +35,7 @@ GO
 /*                            FCR-2902 Bug Fix                           */
 /* 12-Aug-2025  Wan06  1.8    UWP-39035 - Matching RPF Section to find   */
 /*                            DPP for FCR-6708 & FCR-2902                */
-/* 02-Sep-2025                FCR-6708 Bug Fix (include FCR-2902)        */
+/* 08-Sep-2025                FCR-6708 Bug Fix (include FCR-2902)        */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]       
     @c_Wavekey      NVARCHAR(10)    
@@ -1385,6 +1385,7 @@ CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]
             SET @n_Qty_Pick  = @n_Qty
             SET @n_Qty_Avail = 0
             SET @n_Qty_Task  = 0
+            SET @c_ReplTaskKey = ''                                                 --2025-09-03
 
             IF @c_UOM IN ('2','3','6') AND @c_AllowOverAllocations = '0'            --2025-07-09 --(Wan03) - START
             BEGIN
@@ -1396,14 +1397,30 @@ CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]
                   --IF allocated from PND, it is a Replenishment stock
                   SET @c_FinalLoc = ''                                              --2025-08-29 - START
                   SELECT TOP 1 @c_FinalLoc= td.FinalLoc                                 
-                              ,@c_ID      = td.FinalID                               
+                              ,@c_ID      = td.FinalID
+                              ,@c_ReplTaskKey = td.TaskDetailKey                    --2025-09-04
                   FROM TASKDETAIL td (NOLOCK)
                   WHERE td.Storerkey = @c_Storerkey
-                  AND   td.TaskType = 'RP1'
+                  AND   td.TaskType = 'RP1'                                    
                   AND   td.FromLoc  = @c_FromLoc
                   AND   td.FromID   = @c_ID
                   AND   td.[Status] < '9'
                   ORDER BY Taskdetailkey DESC
+
+                  IF @c_FinalLoc = ''                                               --2025-09-08 - START
+                  BEGIN
+                     SELECT TOP 1 @c_FinalLoc= td.FinalLoc                                 
+                                 ,@c_ID      = td.FinalID
+                                 ,@c_ReplTaskKey = td.TaskDetailKey                    
+                     FROM TASKDETAIL td (NOLOCK)
+                     WHERE td.Storerkey= @c_Storerkey
+                     AND   td.TaskType = 'VNAOUT'                                      
+                     AND   td.FromLoc  = @c_FromLoc
+                     AND   td.FromID   = @c_ID
+                     AND   td.[Status] = 'Q'
+                     AND   td.Message03='RPF'                                          
+                     ORDER BY Taskdetailkey DESC
+                  END                                                               --2025-09-08 - END
 
                   IF @c_FinalLoc = ''
                   BEGIN
@@ -1491,6 +1508,7 @@ CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]
                                        , @c_LinkTaskToPick = 'WIP' -- WIP=Update taskdetailkey to pickdetail_wip  
                                        , @c_LinkTaskToPick_SQL = @c_LinkTaskToPick_SQL
                                        , @c_WIP_RefNo = @c_SourceType
+                                       , @c_RefTaskKey= @c_ReplTaskKey              --2025-09-03
                                        , @b_Success = @b_Success OUTPUT
                                        , @n_Err = @n_err OUTPUT
                                        , @c_ErrMsg = @c_errmsg OUTPUT

@@ -930,7 +930,7 @@ END -- IF EXISTS(StorerConfig - 'WAVEUPDLOG')
       WHILE @@FETCH_STATUS <> -1
       BEGIN
          EXECUTE dbo.isp_ITF_ntrPICKDETAIL_Wave
-                  @c_TriggerName    = 'ntrPickDetailDelete'
+                  @c_TriggerName    = 'ntrPickDetailAdd'
                 , @c_SourceTable    = 'PickDetail'
                 , @c_Storerkey      = @c_Storerkey
                 , @c_WaveKey        = @c_WaveKey

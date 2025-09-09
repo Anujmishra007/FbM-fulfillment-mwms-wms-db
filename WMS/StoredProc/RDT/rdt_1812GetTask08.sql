@@ -73,6 +73,7 @@ BEGIN
    JOIN dbo.LOC WITH(NOLOCK) ON LOC.LOC = TD.FromLOC
    WHERE ListKey <> @cListKey  
    AND TD.UserKey = @cUserName  
+   AND TD.AreaKey = @cAreaKey
    AND TD.Status = '3'
    AND TaskType IN ('FCP','FCP1')
    ORDER BY LOC.LogicalLocation,LOC.LOC

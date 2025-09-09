@@ -100,18 +100,12 @@ BEGIN
    IF @dLottable05 IS NOT NULL
       SET @dLottable05 = rdt.rdtconverttodate(@dLottable05)
 
-   SELECT @cUCCStatus = Status
-   FROM dbo.UCC WITH ( NOLOCK )
-   WHERE StorerKey = @cStorerKey
-      AND UCCNo = @cUCC
-
    IF EXISTS (SELECT 1 FROM dbo.CCDetail WITH (NOLOCK)
               WHERE CCSheetNo = @cTaskDetailKey
               AND   Storerkey = @cStorerKey
               AND   [Status] = '0'
               AND   Loc = @cLoc
               AND   ID = @cID)
-      AND @cUCCStatus NOT IN ('5','6') -- UCC is replenished to/picking done
    BEGIN
       SET @curCfmUCC = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
       SELECT CCDetailKey, CCSheetNo, SystemQty
@@ -214,7 +208,6 @@ BEGIN
          IF @nQty = 0
             BREAK
 
-         NEXT_LOOP:
          FETCH NEXT FROM @curCfmUCC INTO @cCCDetailKey, @cCCSheetNo, @nSystemQty
 
       END
@@ -319,110 +312,104 @@ BEGIN
       WHERE Storerkey = @cStorerKey
       AND   UCCNo = @cUCC
 
-      IF @cUCCStatus NOT IN ('5','6') -- UCC is not replenished to/picking done
+
+      SELECT
+         @cWdLottable01 = Lottable01,
+         @cWdLottable02 = Lottable02,
+         @cWdLottable03 = Lottable03,
+         @dWdLottable04 = Lottable04,
+         @dWdLottable05 = Lottable05
+      FROM dbo.LOTATTRIBUTE WITH (NOLOCK)
+      WHERE Lot = @cWdLot
+
+      EXECUTE nspg_getkey
+         'CCDetailKey'
+         , 10
+         , @cNewCCDetailKey OUTPUT
+         , @b_success OUTPUT
+         , @nErrNo OUTPUT
+         , @cErrMsg OUTPUT
+
+      IF @nErrNo <> 0
       BEGIN
-         SELECT
-            @cWdLottable01 = Lottable01,
-            @cWdLottable02 = Lottable02,
-            @cWdLottable03 = Lottable03,
-            @dWdLottable04 = Lottable04,
-            @dWdLottable05 = Lottable05
-         FROM dbo.LOTATTRIBUTE WITH (NOLOCK)
-         WHERE Lot = @cWdLot
+         SET @nErrNo = 241710
+         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo ,@cLangCode ,'DSP') --'GetKey Fail'
+         GOTO RollBackTran
+      END
 
-         EXECUTE nspg_getkey
-            'CCDetailKey'
-            , 10
-            , @cNewCCDetailKey OUTPUT
-            , @b_success OUTPUT
-            , @nErrNo OUTPUT
-            , @cErrMsg OUTPUT
+      INSERT INTO dbo.CCDetail (
+         CCKey, CCDetailKey, CCSheetNo, StorerKey, Sku, Lot, Loc, Id, SystemQty, Qty, [Status], RefNo,
+         Lottable01, Lottable02, Lottable03, Lottable04, Lottable05, AddWho, AddDate)
+      VALUES (@cCCKey, @cNewCCDetailKey, @cTaskDetailKey, @cStorerKey, @cSKU, @cWdLot, @cWdLoc, @cWdId, 0, 0 , '4', @cUCC,
+         @cWdLottable01, @cWdLottable02, @cWdLottable03, @dWdLottable04, @dWdLottable05, @cUserName, GETDATE())
 
-         IF @nErrNo <> 0
-         BEGIN
-            SET @nErrNo = 241710
-            SET @cErrMsg = rdt.rdtgetmessage(@nErrNo ,@cLangCode ,'DSP') --'GetKey Fail'
-            GOTO RollBackTran
-         END
-
-         INSERT INTO dbo.CCDetail (
-            CCKey, CCDetailKey, CCSheetNo, StorerKey, Sku, Lot, Loc, Id, SystemQty, Qty, [Status], RefNo,
-            Lottable01, Lottable02, Lottable03, Lottable04, Lottable05, AddWho, AddDate)
-         VALUES (@cCCKey, @cNewCCDetailKey, @cTaskDetailKey, @cStorerKey, @cSKU, @cWdLot, @cWdLoc, @cWdId, 0, 0 , '4', @cUCC,
-            @cWdLottable01, @cWdLottable02, @cWdLottable03, @dWdLottable04, @dWdLottable05, @cUserName, GETDATE())
-
-         IF @@ERROR <> 0
-         BEGIN
-            SET @nErrNo = 241711
-            SET @cErrMsg = rdt.rdtgetmessage(@nErrNo ,@cLangCode ,'DSP') --'InsCCDetFail'
-            GOTO RollBackTran
-         END
+      IF @@ERROR <> 0
+      BEGIN
+         SET @nErrNo = 241711
+         SET @cErrMsg = rdt.rdtgetmessage(@nErrNo ,@cLangCode ,'DSP') --'InsCCDetFail'
+         GOTO RollBackTran
       END
    END
 
-   -- -- If there is no detail left for the CCKey, then delete the CC too
-   -- -- But only when the UCC is replenished to/picking done
-   -- IF @cUCCStatus IN ('5','6')
+   -- If there is no detail left for the CCKey, then delete the CC too
+   -- But only when the UCC is replenished to/picking done
+   -- DECLARE @tCCDetail TABLE 
+   -- (
+   --    RowIndex          INT IDENTITY(1,1),
+   --    CCDetailKey       NVARCHAR(10) PRIMARY KEY,
+   --    CCKey             NVARCHAR(10)
+   -- )
+
+   -- INSERT INTO @tCCDetail (CCDetailKey, CCKey)
+   -- SELECT CCD.CCDetailKey, CCD.CCKey
+   -- FROM dbo.UCC WITH (NOLOCK)
+   -- INNER JOIN dbo.CCDetail CCD WITH(NOLOCK) ON UCC.UCCNo = CCD.RefNo AND UCC.StorerKey = CCD.StorerKey
+   -- WHERE UCC.Storerkey = @cStorerKey
+   --    AND CCSheetNo = @cTaskDetailKey
+   --    AND UCC.Status IN ('5','6')  -- replenished to/picking done
+
+   -- SELECT @nRowCount = @@ROWCOUNT
+
+   -- IF @nRowCount > 0
    -- BEGIN
-   --    DECLARE @tCCDetail TABLE 
-   --    (
-   --       RowIndex          INT IDENTITY(1,1),
-   --       CCDetailKey       NVARCHAR(10) PRIMARY KEY,
-   --       CCKey             NVARCHAR(10)
-   --    )
+   --    BEGIN TRY
+   --       DELETE CCD WITH(ROWLOCK)
+   --       FROM dbo.CCDetail CCD WITH(ROWLOCK)
+   --       INNER JOIN @tCCDetail TCCD ON CCD.CCDetailKey = TCCD.CCDetailKey
+   --    END TRY
+   --    BEGIN CATCH
+   --       SET @nErrNo = 241712
+   --       SET @cErrMsg = rdt.rdtgetmessage(@nErrNo ,@cLangCode ,'DSP') -- Delete CC Detail Failed
+   --       GOTO RollBackTran
+   --    END CATCH
 
-   --    INSERT INTO @tCCDetail (CCDetailKey, CCKey)
-   --    SELECT DISTINCT CCDetailKey, CCKey
-   --    FROM dbo.CCDetail WITH (NOLOCK)
-   --    WHERE RefNo IS NOT NULL
-   --       AND RefNo = @cUCC
-   --       AND Storerkey = @cStorerKey
-   --       AND Status = '0'
+   --    DECLARE @nLoopIndex INT = -1
 
-   --    SET @nRowCount = @@ROWCOUNT
-
-   --    IF @nRowCount > 0
+   --    WHILE 1 = 1
    --    BEGIN
+   --       SELECT TOP 1
+   --          @cCCKey = CCKey,
+   --          @nLoopIndex = RowIndex
+   --       FROM @tCCDetail
+   --       WHERE RowIndex > @nLoopIndex
+   --       ORDER BY RowIndex
 
-   --       BEGIN TRY
-   --          DELETE CCD WITH(ROWLOCK)
-   --          FROM dbo.CCDetail CCD WITH(ROWLOCK)
-   --          INNER JOIN @tCCDetail TCCD ON CCD.CCDetailKey = TCCD.CCDetailKey
-   --       END TRY
-   --       BEGIN CATCH
-   --          SET @nErrNo = 241712
-   --          SET @cErrMsg = rdt.rdtgetmessage(@nErrNo ,@cLangCode ,'DSP') -- Delete CC Detail Failed
-   --          GOTO RollBackTran
-   --       END CATCH
-
-   --       DECLARE @nLoopIndex INT = -1
-
-   --       WHILE 1 = 1
+   --       SET @nRowCount = @@ROWCOUNT
+   --       IF @nRowCount = 0
+   --          BREAK
+         
+   --       -- Check if there is any detail left
+   --       IF NOT EXISTS (SELECT 1 FROM dbo.CCDetail WITH (NOLOCK) WHERE CCKey = @cCCKey)
    --       BEGIN
-   --          SELECT TOP 1
-   --             @cCCKey = CCKey,
-   --             @nLoopIndex = RowIndex
-   --          FROM @tCCDetail
-   --          WHERE RowIndex > @nLoopIndex
-   --          ORDER BY RowIndex
-
-   --          SET @nRowCount = @@ROWCOUNT
-   --          IF @nRowCount = 0
-   --             BREAK
-            
-   --          -- Check if there is any detail left
-   --          IF NOT EXISTS (SELECT 1 FROM dbo.CCDetail WITH (NOLOCK) WHERE CCKey = @cCCKey)
-   --          BEGIN
-   --             BEGIN TRY
-   --                DELETE FROM dbo.CC WITH(ROWLOCK)
-   --                WHERE CCKey = @cCCKey
-   --             END TRY
-   --             BEGIN CATCH
-   --                SET @nErrNo = 241713
-   --                SET @cErrMsg = rdt.rdtgetmessage(@nErrNo ,@cLangCode ,'DSP') -- Delete CC Failed
-   --                GOTO RollBackTran
-   --             END CATCH
-   --          END
+   --          BEGIN TRY
+   --             DELETE FROM dbo.CC WITH(ROWLOCK)
+   --             WHERE CCKey = @cCCKey
+   --          END TRY
+   --          BEGIN CATCH
+   --             SET @nErrNo = 241713
+   --             SET @cErrMsg = rdt.rdtgetmessage(@nErrNo ,@cLangCode ,'DSP') -- Delete CC Failed
+   --             GOTO RollBackTran
+   --          END CATCH
    --       END
    --    END
    -- END

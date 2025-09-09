@@ -110,7 +110,7 @@ BEGIN
                AND Status = '0'
 
             BEGIN TRY
-               UPDATE PD WITH (ROWLOCK)
+               UPDATE PD
                SET Status = '3'
                FROM dbo.PickDetail PD WITH (ROWLOCK) 
                INNER JOIN @tPickDetail TPD ON PD.PickDetailKey = TPD.PickDetailKey

@@ -114,6 +114,7 @@ BEGIN
    @cSKUValidated  NVARCHAR( 2),
    @cHoldLoc       NVARCHAR( 20),
    @cMoveQTYAlloc  NVARCHAR( 1),
+   @cAreaKey       NVARCHAR(10),
    @nRowCount      INT,
    @cTaskDetailUOM      NVARCHAR( 5),
    @cTTMTaskType        NVARCHAR(10),
@@ -184,6 +185,7 @@ BEGIN
       ,@cSuggID             = V_ID
       ,@nPQTY               = V_PQTY
       ,@nMQTY               = V_MQTY
+      ,@cAreaKey           = V_String1
       ,@cDropID             = V_String3
       ,@cPickMethod         = V_String4
       ,@cSuggToloc          = V_String5
@@ -594,13 +596,34 @@ BEGIN
                   -- Go to next task screen
                   IF @cPickMethod = 'PP'
                   BEGIN
-                     SET @cOption = ''
-                     SET @cOutField01 = '' -- Option
-                     SET @nAfterScn  = CASE WHEN @nFromStep = 1 THEN @nFromScn + 4
-                                       WHEN @nFromStep = 2 THEN @nFromScn + 3
-                                       WHEN @nFromStep = 8 THEN @nFromScn - 3
-                                 END
-                     SET @nAfterStep = 5
+                     IF NOT EXISTS( SELECT 1
+                        FROM dbo.TaskDetail TD WITH (NOLOCK)    
+                        JOIN dbo.LOC WITH(NOLOCK) ON LOC.LOC = TD.FromLOC
+                        WHERE ListKey <> @cListKey  
+                        AND TD.UserKey = @cUserName  
+                        AND TD.AreaKey = @cAreaKey
+                        AND TD.Status = '3'
+                        AND TaskType IN ('FCP','FCP1'))
+                     AND NOT EXISTS( SELECT 1    
+                        FROM dbo.TaskDetail WITH (NOLOCK)    
+                        WHERE ListKey = @cListKey    
+                        AND UserKey = @cUserName
+                        AND Status = '5')  
+                     BEGIN
+                        SET @nAfterScn  = 4026
+                        SET @nAfterStep = 7
+                     END
+                     ELSE 
+                     BEGIN
+                        SET @cOption = ''
+                        SET @cOutField01 = '' -- Option
+                        SET @nAfterScn  = CASE WHEN @nFromStep = 1 THEN @nFromScn + 4
+                                          WHEN @nFromStep = 2 THEN @nFromScn + 3
+                                          WHEN @nFromStep = 8 THEN @nFromScn - 3
+                                    END
+                        SET @nAfterStep = 5
+                     END
+
                   END
                END
 
@@ -1208,9 +1231,25 @@ BEGIN
       END
       IF @nMOBRECStep = 5
       BEGIN
+         IF @nInputKey = 1
+         BEGIN
+            IF @cInField01 = '9' -- Close Pallet
+            BEGIN
+               IF NOT EXISTS (SELECT 1 FROM TASKDETAIL (NOLOCK) WHERE ListKey = @cListKey AND Status = '5')
+               BEGIN
+                  SET @nErrNo = 239666
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Nothing to close
+                  SET @nAfterStep = @nMOBRECStep
+                  SET @nAfterScn = @nMOBRECScn
+                  SET @cOutField01 = ''
+                  GOTO Quit
+               END
+            END
+         END
          IF @nInputKey = 0 -- ESC
          BEGIN
-            IF NOT EXISTS( SELECT 1 FROM dbo.TaskDetail WITH (NOLOCK) WHERE TaskDetailKey = @cTaskdetailKey)
+            IF EXISTS( SELECT 1 FROM dbo.TaskDetail WITH (NOLOCK) WHERE TaskDetailKey = @cTaskdetailKey AND Status = 'S')
+            OR NOT EXISTS ( SELECT 1 FROM dbo.TaskDetail WITH (NOLOCK) WHERE TaskDetailKey = @cTaskdetailKey)
             BEGIN
                SET @nErrNo = 239665
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Pls choose an option

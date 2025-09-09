@@ -18,6 +18,7 @@ execute rdt.rdtAddMsg 239660, 10, '2396560SOIsFullyPicked',     'us_english', 18
 execute rdt.rdtAddMsg 239663, 10, '239663DefaultLaneNotFound',  'us_english', 1812, 0, '239663: Default marshalling lane not found'
 execute rdt.rdtAddMsg 239664, 10, '239664DefaultLocNotFound',   'us_english', 1812, 0, '239664: Default kitting loc not found'
 execute rdt.rdtAddMsg 239665, 10, '239665PleaseChooseAnOption',   'us_english', 1812, 0, '239665PleaseChooseAnOption'
+execute rdt.rdtAddMsg 239666, 10, '239666NothingToClose',   'us_english', 1812, 0, '239666NothingToClose'
 
 SELECT * FROM RDT.RDTMSG (NOLOCK) WHERE MESSAGE_ID BETWEEN 239651 AND 239700
 

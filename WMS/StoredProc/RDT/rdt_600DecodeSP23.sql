@@ -66,14 +66,14 @@ BEGIN
       BEGIN
          IF @nInputKey = 1 -- ENTER
          BEGIN
-            SELECT @cSKU = SUBSTRING(@cBarcode, 5, 14)
+            SELECT @cSKU = SUBSTRING(@cBarcode, 3, 14)
             BEGIN TRY
                IF EXISTS (SELECT 1 FROM SKU WHERE itemclass='PVAR' AND AltSKU = @cSKU AND StorerKey = @cStorerKey AND BUSR10 = 'NewZealand')
                BEGIN
                   --NewZealand
                   SELECT 
-                     @nQty = CAST(SUBSTRING(@cBarcode, 35, 6) AS DECIMAL(8,2)) * 10,
-                     @cCaseID = SUBSTRING(@cBarcode, 45, 12)
+                     @nQty = CAST(SUBSTRING(@cBarcode, 29, 6) AS DECIMAL(8,2)) * 10,
+                     @cCaseID = SUBSTRING(@cBarcode, 37, 12)
                   SELECT @cSKU = SKU FROM SKU WHERE AltSKU = @cSKU AND StorerKey = @cStorerKey
                   IF EXISTS (SELECT 1 FROM ReceiptDetail(NOLOCK) WHERE @cReceiptKey = ReceiptKey AND UserDefine10 = @cCaseID)
                   BEGIN
@@ -86,7 +86,7 @@ BEGIN
                BEGIN
                   -- Check if its a Brazil SKU
                   SELECT @cSKU = SKU FROM SKU WHERE AltSKU = @cSKU AND StorerKey = @cStorerKey
-                  SELECT @nQty = CAST(SUBSTRING(@cBarcode, 25, 6) AS INT)
+                  SELECT @nQty = CAST(SUBSTRING(@cBarcode, 21, 6) AS INT)
                END
                ELSE IF EXISTS (SELECT 1 FROM SKU WHERE itemclass='PVAR' AND SKU = @cBarcode AND StorerKey = @cStorerKey AND BUSR10 IN('BRAZIL','NewZealand'))
                BEGIN
