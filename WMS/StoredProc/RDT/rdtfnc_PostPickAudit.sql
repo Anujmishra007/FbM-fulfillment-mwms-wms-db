@@ -1563,9 +1563,10 @@ BEGIN
             SET @nScn = @nScn + 2
             SET @nStep = @nStep + 2
 
-            --GOTO Quit
             IF @cExtendedScnSP <> '' AND EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScnSP AND type = 'P')
                GOTO Step_99 --V7.0.0
+
+            GOTO Quit
          END
          ELSE --(cc02)
          BEGIN
