@@ -17,6 +17,7 @@ GO
 /* 2025-02-05 1.3.0 Dennis     Add Step_4                               */
 /* 2025-04-05 1.4.0 JackC      FCR-4159 Support single unit orders      */
 /* 2025-08-27 1.5.0 JackC      FCR-7348 New single unit order identifer */
+/* 2025-08-27 1.5.1 NickT      FCR-7348 New single unit order identifer */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_855ExtScn01] (
@@ -638,30 +639,27 @@ BEGIN
 
                      --V1.4.0 start
                      --V1.5.0 Replace the old flag set logic
+                     --V1.5.1 Only check PickDetail
                      IF NOT EXISTS (
                         SELECT 1
-                        FROM (
-                           SELECT DISTINCT PD.OrderKey
-                           FROM dbo.PickDetail PD WITH (NOLOCK)
-                           WHERE PD.StorerKey = @cStorerKey
-                              AND PD.DropID = @cDropID
-                        ) PD1
-                        INNER JOIN dbo.OrderDetail OD WITH (NOLOCK)
-                           ON PD1.OrderKey = OD.OrderKey
-                        GROUP BY OD.OrderKey
-                        HAVING COUNT(DISTINCT OD.OrderLineNumber) <> 1 OR SUM(OD.OpenQty) <> 1
+                        FROM dbo.PickDetail WITH (NOLOCK)
+                        WHERE StorerKey = @cStorerKey
+                              AND DropID = @cDropID
+                        GROUP BY OrderKey
+                        HAVING COUNT(DISTINCT OrderLineNumber) <> 1
                      )
                      BEGIN
-                        IF NOT EXISTS (SELECT 1
-                                    FROM dbo.PICKDETAIL PD WITH (NOLOCK)
-                                    JOIN dbo.ORDERS AS O WITH (NOLOCK) 
-                                       ON O.orderkey = PD.orderkey
-                                    JOIN dbo.CODELKUP AS C WITH (NOLOCK) 
-                                       ON LISTNAME = 'MPOCPERMIT'
-                                       AND ( C.Code = O.BillToKey OR C.Code = O.ConsigneeKey )
-                                       AND C.Storerkey = O.StorerKey
-                                    WHERE  PD.StorerKey = @cStorerkey
-                                       AND PD.DropID = @cDropID)
+                        -- V1.5.1 No need to check LISTNAME = 'MPOCPERMIT' for single unit order
+                        -- IF NOT EXISTS (SELECT 1
+                        --             FROM dbo.PICKDETAIL PD WITH (NOLOCK)
+                        --             JOIN dbo.ORDERS AS O WITH (NOLOCK) 
+                        --                ON O.orderkey = PD.orderkey
+                        --             JOIN dbo.CODELKUP AS C WITH (NOLOCK) 
+                        --                ON LISTNAME = 'MPOCPERMIT'
+                        --                AND ( C.Code = O.BillToKey OR C.Code = O.ConsigneeKey )
+                        --                AND C.Storerkey = O.StorerKey
+                        --             WHERE  PD.StorerKey = @cStorerkey
+                        --                AND PD.DropID = @cDropID)
                         BEGIN -- Not set SingleUnitOrder flag if any of orders is MPOC.
                            SET @cSingleUnitOrdConfig = rdt.rdtGetConfig( @nFunc, 'SingleUnitOrderConfig', @cStorerkey)
                            IF @cSingleUnitOrdConfig = '0'
