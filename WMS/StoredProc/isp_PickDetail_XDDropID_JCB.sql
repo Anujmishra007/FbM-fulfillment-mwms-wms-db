@@ -1,6 +1,8 @@
 
 SET ANSI_NULLS ON
+GO
 SET QUOTED_IDENTIFIER ON
+GO
 /************************************************************************/
 /* Stored Procedure:  isp_PickDetail_XDDropID_JCB                       */
 /* Creation Date: 22-AUG-2025                                           */
