@@ -18,6 +18,7 @@ GO
 /* 2025-07-04   1.0.2   Jackc      FCR-5519 Add task check after get one         */
 /* 2025-08-22   1.0.3   Jackc      FCR-5519 Fix begin tran issue                 */
 /* 2025-08-23   1.0.4   Jackc      FCR-5519 Cutomized transit loc logic for FCP  */
+/* 2025-08-23   1.0.5   Dennis     FCR-5519 FunctionId Bug                       */
 /*********************************************************************************/
 CREATE OR ALTER PROC [RDT].[nspTMTM02_UL]
    @c_userid                  NVARCHAR(18),
@@ -407,27 +408,20 @@ BEGIN
    IF @bDebug = 1
       SELECT 'Start GetTransitLoc', @c_FromLOC AS FromLoc, @c_ToLoc AS ToLoc
 
-   --V1.0.4 start
-   IF @n_Func = 0
-   BEGIN
-      --Set function to get config if @n_func = 0
-      IF @c_TaskType IN ('RPF', 'RP1')
-         SET @n_FuncID = 1764
-      ELSE IF @c_TaskType IN ('FPK', 'FPK1')
-         SET @n_FuncID = 1770
-      ELSE IF @c_TaskType IN ('FCP','FCP1')
-         SET @n_FuncID = 1812
-      ELSE
-         SET @n_FuncID = @n_Func
-
-      IF @bDebug = 1
-         SELECT 'FunctionID to get config', @n_FuncID
-   END
+   --V1.0.4,1.0.5 start 
+   --Set function to get config if @n_func = 0
+   IF @c_TaskType IN ('RPF', 'RP1')
+      SET @n_FuncID = 1764
+   ELSE IF @c_TaskType IN ('FPK', 'FPK1')
+      SET @n_FuncID = 1770
+   ELSE IF @c_TaskType IN ('FCP','FCP1')
+      SET @n_FuncID = 1812
    ELSE
-   BEGIN
       SET @n_FuncID = @n_Func
-   END   
-   --V1.0.4 end
+
+   IF @bDebug = 1
+      SELECT 'FunctionID to get config', @n_FuncID
+   --V1.0.4,1.0.5 end
 
    -- Handling transaction
    DECLARE @nTranCount INT
@@ -458,7 +452,7 @@ BEGIN
          IF @c_LOCCategory <> 'VNA' AND @cSkipPnDLocation <> '0' AND @cSkipPnDLocation <> 'PnD' AND EXISTS(SELECT 1 FROM CODELKUP WITH(NOLOCK) WHERE LISTNAME = 'LOCCATEGRY' AND Code = @cSkipPnDLocation)
          BEGIN
             IF @bDebug=1
-               SELECT '1812 Cutomized transit logic'
+               SELECT '1812 Cutomized transit logic',@c_Sku
 
             EXECUTE rdt.rdt_GetTransitLOC06
                @c_UserID
