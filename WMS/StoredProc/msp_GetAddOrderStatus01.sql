@@ -63,9 +63,13 @@ BEGIN
          , @c_SQLGroupBy      NVARCHAR(MAX)  = '' 
          , @c_sqlHaving       NVARCHAR(MAX)  = '' 
          , @c_sqlOrderBy      NVARCHAR(MAX)  = '' 
-         
-         , @c_ReplaceFrom     NVARCHAR(MAX)  = '' 
+         , @c_sqlJoin         NVARCHAR(MAX)  = ''                                   --2025-09-10  
+         , @c_sqlCondStatus   NVARCHAR(1000) = ''                                   --2025-09-10  
+           
+         , @c_ReplaceFrom     NVARCHAR(MAX)  = ''   
          , @c_ReplaceTo       NVARCHAR(MAX)  = '' 
+         , @c_StatusColumn    NVARCHAR(50)   = ''                                   --2025-09-10 
+         , @c_Table           NVARCHAR(50)   = ''                                   --2025-09-10 
          
 
    DECLARE @t_SCC             Table
@@ -75,9 +79,10 @@ BEGIN
       ,  [Operator]           NVARCHAR(10)   NOT NULL DEFAULT('')
       ,  [Value]              NVARCHAR(MAX)  NOT NULL DEFAULT('')
       ,  [Value1]             NVARCHAR(MAX)  NOT NULL DEFAULT('')
-      ,  LogicalOperation_SC  NVARCHAR(10)   NOT NULL DEFAULT('')
-      ,  ReplaceFrom          NVARCHAR(MAX)  NOT NULL DEFAULT('')
-      ,  ReplaceTo            NVARCHAR(MAX)  NOT NULL DEFAULT('')
+      ,  [LogicalOperation_SC]NVARCHAR(10)   NOT NULL DEFAULT('')  
+      ,  [ReplaceFrom]        NVARCHAR(MAX)  NOT NULL DEFAULT('')  
+      ,  [ReplaceTo]          NVARCHAR(MAX)  NOT NULL DEFAULT('') 
+      ,  [Table ]             NVARCHAR(50)   NOT NULL DEFAULT('')                   --2025-09-10     
       )
 
    SET @b_Success = 1    
@@ -214,7 +219,20 @@ BEGIN
                   , [value1]           NVARCHAR(MAX) '$.value1'
                   , [logicalOperation] NVARCHAR(10)  '$.logicalOperation'
                   ) AS SCC                  
-                  
+
+         IF @c_TableID IN ('sotd', 'picksearchtd')                                  --2025-09-09 - START
+         BEGIN  
+            SET @c_StatusColumn = 'ORDERS.Status'   
+         END  
+         ELSE IF @c_TableID = 'sodetailtd'   
+         BEGIN  
+            SET @c_StatusColumn = 'ORDERDETAIL.Status'  
+         END  
+         ELSE IF @c_TableID IN ('picktd','allocpickdettd')    
+         BEGIN  
+            SET @c_StatusColumn = 'PICKDETAIL.Status'      
+         END                                                                        --2025-09-09 - END
+                           
          UPDATE scc 
                SET ReplaceFrom = CASE WHEN SCC.[Operator] = '' AND SCC.[Value] like '%' + SCC.[column] + '%'
                                       THEN ''
@@ -231,11 +249,13 @@ BEGIN
                                       THEN 'CONVERT(datetime,' +   SCC.[value] + ')'
                                       ELSE SCC.[value] 
                                       END 
-         FROM @t_SCC AS scc
-         JOIN INFORMATION_SCHEMA.COLUMNS col WITH (NOLOCK)  
-         ON  col.TABLE_NAME  = LEFT(SCC.[column], CHARINDEX('.',SCC.[column])-1)
-         AND col.COLUMN_NAME = RIGHT(SCC.[column],LEN(SCC.[column])- CHARINDEX('.',SCC.[column]))
-         WHERE [Column] like '%.Status' AND ([Value] like '%6%' OR [Value] like '%7%')
+                  ,[Table] =LEFT(SCC.[column], CHARINDEX('.',SCC.[column])-1)       --2025-09-10                         
+         FROM @t_SCC AS scc  
+         JOIN INFORMATION_SCHEMA.COLUMNS col WITH (NOLOCK)    
+         ON  col.TABLE_NAME  = LEFT(SCC.[column], CHARINDEX('.',SCC.[column])-1)  
+         AND col.COLUMN_NAME = RIGHT(SCC.[column],LEN(SCC.[column])- CHARINDEX('.',SCC.[column]))  
+         WHERE [Column] = @c_StatusColumn                                           --2025-09-10     
+         AND ([Value] like '%6%' OR [Value] like '%7%')  
 
          UPDATE scc 
             SET scc.ReplaceTo = REPLACE(REPLACE(scc.ReplaceFrom ,'6','5'),'7','5')
@@ -244,12 +264,15 @@ BEGIN
 
          SELECT @c_ReplaceFrom = RTRIM(scc.ReplaceFrom)
                ,@c_ReplaceTo   = RTRIM(scc.ReplaceTo)
+               ,@c_Table       = RTRIM(scc.[Table])                                 --2025-09-10               
          FROM @t_SCC scc
          WHERE scc.ReplaceFrom > ''
 
+         SET @c_sqlCondStatus = ''                                                  --2025-09-10
          IF @c_ReplaceFrom > ''
          BEGIN 
             SET @c_sqlCondition = REPLACE(@c_sqlCondition, @c_ReplaceFrom, @c_ReplaceTo)
+            SET @c_sqlCondStatus= ' AND ' + @c_ReplaceFrom                          --2025-09-10             
          END
                               
          IF @c_TableID IN ('sotd', 'picksearchtd')
@@ -380,49 +403,62 @@ BEGIN
             END
          END
          
-         SET @c_ResponseString = (  SELECT totalRecords = @n_TotalRecords
-                                    FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
-                                 )
-
          IF @b_debug = 1
          BEGIN  
             PRINT  ' @c_Orderlinenumber: ' + @c_Orderlinenumber
                  + ',@c_pickdetailkey: '   + @c_pickdetailkey
-                 + ',@c_ResponseString:'   +  @c_ResponseString 
          END
 
-         SET @c_SQLSelect = CASE WHEN @c_TableID IN ('sotd', 'picksearchtd')
-                                 THEN REPLACE(@c_SQLSelect, 'ORDERS.Status', 'o.Status') 
-                                 WHEN @c_TableID = 'sodetailtd' 
-                                 THEN REPLACE(@c_SQLSelect, 'ORDERDETAIL.Status', 'o.Status') 
-                                 WHEN @c_TableID IN ('picktd','allocpickdettd')  
-                                 THEN REPLACE(@c_SQLSelect, 'PICKDETAIL.Status', 'o.Status') 
-                                 END
+         IF @c_TableID IN ('sotd', 'picksearchtd')                                  --2025-09-10 - START
+         BEGIN
+            IF @c_sqlCondStatus > '' 
+            BEGIN
+               SET @c_sqlCondStatus = REPLACE(@c_sqlCondStatus, @c_Table + '.Status','toh.Order_Status')
+            END
+
+            SET @c_SQLSelect = REPLACE(@c_SQLSelect, 'ORDERS.Status', 'o.Status')
+            SET @c_sqlJoin   = 'CROSS APPLY (SELECT DISTINCT toh.Order_Status AS Status  
+                                             FROM #TMP_ORD toh   
+                                             WHERE toh.Orderkey = ORDERS.Orderkey 
+                                             ' + @c_sqlCondStatus + 
+                                             ') o' 
+         END
+         ELSE IF @c_TableID = 'sodetailtd'
+         BEGIN
+            IF @c_sqlCondStatus > '' 
+            BEGIN
+               SET @c_sqlCondStatus = REPLACE(@c_sqlCondStatus, @c_Table + '.Status','toh.OrderLine_Status')
+            END
+            SET @c_SQLSelect = REPLACE(@c_SQLSelect, 'ORDERDETAIL.Status', 'o.Status')
+            SET @c_sqlJoin   = 'CROSS APPLY (SELECT DISTINCT toh.OrderLine_Status AS Status  
+                                             FROM #TMP_ORD toh   
+                                             WHERE toh.Orderkey = ORDERDETAIL.Orderkey   
+                                             AND toh.OrderlineNumber = ORDERDETAIL.OrderlineNumber  
+                                             ' + @c_sqlCondStatus + 
+                                             ') o' 
+         END
+         ELSE IF @c_TableID IN ('picktd','allocpickdettd')
+         BEGIN
+            IF @c_sqlCondStatus > '' 
+            BEGIN
+               SET @c_sqlCondStatus = REPLACE(@c_sqlCondStatus, @c_Table + '.Status','toh.PickDetail_Status')
+            END
+            SET @c_SQLSelect = REPLACE(@c_SQLSelect, 'PICKDETAIL.Status', 'o.Status') 
+            SET @c_sqlJoin   = 'CROSS APPLY (SELECT DISTINCT toh.Pickdetail_Status AS Status  
+                                             FROM #TMP_ORD toh   
+                                             WHERE toh.PickdetailKey = PICKDETAIL.PickdetailKey 
+                                             ' + @c_sqlCondStatus + 
+                                             ') o' 
+         END                                                                        --2025-09-10 - END
 
          SET @c_SQL = @c_SQLSelect
-                     + ' ' + @c_SQLFrom 
-                   + ' ' + CASE WHEN @c_TableID IN ('sotd', 'picksearchtd')
-                                 THEN 'CROSS APPLY (SELECT DISTINCT toh.Order_Status AS Status
-                                                    FROM #TMP_ORD toh 
-                                                    WHERE toh.Orderkey = ORDERS.Orderkey
-                                                    ) o'
-                                 WHEN @c_TableID = 'sodetailtd' 
-                                 THEN 'CROSS APPLY (SELECT DISTINCT toh.OrderLine_Status AS Status
-                                                    FROM #TMP_ORD toh 
-                                                    WHERE toh.Orderkey = ORDERDETAIL.Orderkey 
-                                                    AND toh.OrderlineNumber = ORDERDETAIL.OrderlineNumber
-                                                    ) o'
-                                 WHEN @c_TableID IN ('picktd','allocpickdettd')  
-                                 THEN 'CROSS APPLY (SELECT DISTINCT toh.Pickdetail_Status AS Status
-                                                    FROM #TMP_ORD toh 
-                                                    WHERE toh.PickdetailKey = PICKDETAIL.PickdetailKey
-                                                    ) o'
-                                 END
-                     + ' ' + @c_SQLWhere  
-                     + ' ' + @c_SQLCondition 
-                     + ' ' + @c_SQLGroupBy
-                     + ' ' + @c_SQLHaving
-                     + ' ' + @c_sqlOrderBy;
+                    + ' ' + @c_SQLFrom 
+                    + ' ' + @c_sqlJoin                                              --2025-09-10
+                    + ' ' + @c_SQLWhere  
+                    + ' ' + @c_SQLCondition 
+                    + ' ' + @c_SQLGroupBy
+                    + ' ' + @c_SQLHaving
+                    + ' ' + @c_sqlOrderBy;
 
          SET @c_SQL = @c_SQL
                     + ' OffSet ((@n_PageNo - 1) * @n_PageSize) ROWS FETCH NEXT @n_PageSize ROWS ONLY'
@@ -430,6 +466,15 @@ BEGIN
                            ,N'@n_PageNo INT, @n_PageSize INT'
                            , @n_PageNo
                            , @n_PageSize
+                           
+         SET @n_TotalRecords = @@ROWCOUNT                                           --2025-09-10                 
+         SET @c_ResponseString = (  SELECT totalRecords = @n_TotalRecords
+                                    FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+                                 )    
+         IF @b_debug = 1
+         BEGIN  
+            PRINT '@c_ResponseString:'   +  @c_ResponseString 
+         END                                                        
       END
    END TRY
    BEGIN CATCH
