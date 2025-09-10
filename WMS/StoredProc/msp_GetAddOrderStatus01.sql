@@ -82,7 +82,7 @@ BEGIN
       ,  [LogicalOperation_SC]NVARCHAR(10)   NOT NULL DEFAULT('')  
       ,  [ReplaceFrom]        NVARCHAR(MAX)  NOT NULL DEFAULT('')  
       ,  [ReplaceTo]          NVARCHAR(MAX)  NOT NULL DEFAULT('') 
-      ,  [Table ]             NVARCHAR(50)   NOT NULL DEFAULT('')                   --2025-09-10     
+      ,  [Table]              NVARCHAR(50)   NOT NULL DEFAULT('')                   --2025-09-10     
       )
 
    SET @b_Success = 1    
@@ -260,7 +260,7 @@ BEGIN
             SET scc.ReplaceTo = REPLACE(REPLACE(scc.ReplaceFrom ,'6','5'),'7','5')
          FROM @t_SCC AS scc
          WHERE scc.ReplaceFrom > ''
-         AND ([Value] like '%6%' OR [Value] like '%7%')                             --2025-09-10     
+         AND (scc.[Value] like '%6%' OR scc.[Value] like '%7%')                     --2025-09-10     
 
          SELECT @c_ReplaceFrom = RTRIM(scc.ReplaceFrom)
                ,@c_ReplaceTo   = RTRIM(scc.ReplaceTo)
