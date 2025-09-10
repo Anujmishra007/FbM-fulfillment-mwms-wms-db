@@ -83,17 +83,35 @@ BEGIN
 
    BEGIN TRAN
 
-   SET @CUR_UCC = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-   SELECT UCC_RowRef
-     FROM dbo.UCC WITH(NOLOCK)
-    WHERE Storerkey = @c_Storerkey
-      AND Sku = @c_Sku
-      AND Lot = @c_Lot
-      AND Loc = @c_FromLoc
-      AND ID  = @c_FromID
-      AND (ISNULL(@c_FromID,'') <> '' AND ISNULL(@c_UCCNo,'')='' 
-        OR ISNULL(@c_UCCNo,'')<>'' AND UCCNo = @c_UCCNo)
-    ORDER BY UCCNo, UCC_RowRef
+   IF ISNULL(@c_FromID,'') <> '' AND ISNULL(@c_UCCNo,'')='' 
+      SET @CUR_UCC = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      SELECT UCC_RowRef
+      FROM (
+         SELECT UCCNo
+              , UCC_RowRef
+              , Qty
+              , CumQty = SUM(Qty) OVER(ORDER BY UCCNo, UCC_RowRef)
+           FROM dbo.UCC WITH(NOLOCK)
+          WHERE Storerkey = @c_Storerkey
+            AND Sku = @c_Sku
+            AND Lot = @c_Lot
+            AND Loc = @c_FromLoc
+            AND ID  = @c_FromID
+      ) X
+      WHERE X.CumQty - X.Qty + 1 <= @n_Qty
+      ORDER BY UCCNo, UCC_RowRef
+   ELSE
+      SET @CUR_UCC = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      SELECT UCC_RowRef
+        FROM dbo.UCC WITH(NOLOCK)
+       WHERE Storerkey = @c_Storerkey
+         AND Sku = @c_Sku
+         AND Lot = @c_Lot
+         AND Loc = @c_FromLoc
+         AND ID  = @c_FromID
+         AND UCCNo = @c_UCCNo
+         AND ISNULL(@c_UCCNo,'')<>''
+       ORDER BY UCCNo, UCC_RowRef
 
    OPEN @CUR_UCC
    FETCH NEXT FROM @CUR_UCC INTO @n_UCC_RowRef
@@ -107,7 +125,6 @@ BEGIN
            , ID  = @c_ToID
            , Status = CASE WHEN @c_LoseUCC = '1' THEN '6'
                            ELSE Status END
-           , TrafficCop = NULL
          WHERE UCC_RowRef = @n_UCC_RowRef
 
          SELECT @n_err = @@ERROR
@@ -157,5 +174,3 @@ END -- procedure
 GO
 GRANT EXECUTE ON  [dbo].[ispPostReplen03] TO [NSQL]
 GO
-
-
