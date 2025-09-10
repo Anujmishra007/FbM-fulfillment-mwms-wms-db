@@ -561,6 +561,7 @@ BEGIN
       END          
 
       SET @c_LogicalFromLoc = ''
+      SET @c_Facility = ''   --ML02
       SELECT @c_LogicalFromLoc = ISNULL(LogicalLocation,'')  
             ,@c_Facility = Facility    --(TK01)
       FROM LOC WITH (NOLOCK)
@@ -858,3 +859,4 @@ END -- procedure
 GO
 GRANT EXECUTE ON [dbo].[ispRLTRF01] TO nSQL 
 GO
+
