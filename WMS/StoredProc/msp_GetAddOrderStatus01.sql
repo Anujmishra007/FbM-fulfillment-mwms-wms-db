@@ -255,12 +255,12 @@ BEGIN
          ON  col.TABLE_NAME  = LEFT(SCC.[column], CHARINDEX('.',SCC.[column])-1)  
          AND col.COLUMN_NAME = RIGHT(SCC.[column],LEN(SCC.[column])- CHARINDEX('.',SCC.[column]))  
          WHERE [Column] = @c_StatusColumn                                           --2025-09-10     
-         AND ([Value] like '%6%' OR [Value] like '%7%')  
 
          UPDATE scc 
             SET scc.ReplaceTo = REPLACE(REPLACE(scc.ReplaceFrom ,'6','5'),'7','5')
          FROM @t_SCC AS scc
          WHERE scc.ReplaceFrom > ''
+         AND ([Value] like '%6%' OR [Value] like '%7%')                             --2025-09-10     
 
          SELECT @c_ReplaceFrom = RTRIM(scc.ReplaceFrom)
                ,@c_ReplaceTo   = RTRIM(scc.ReplaceTo)
@@ -271,8 +271,12 @@ BEGIN
          SET @c_sqlCondStatus = ''                                                  --2025-09-10
          IF @c_ReplaceFrom > ''
          BEGIN 
-            SET @c_sqlCondition = REPLACE(@c_sqlCondition, @c_ReplaceFrom, @c_ReplaceTo)
             SET @c_sqlCondStatus= ' AND ' + @c_ReplaceFrom                          --2025-09-10             
+         END
+         
+         IF @c_ReplaceTo > ''                                                        --2025-09-10   
+         BEGIN 
+            SET @c_sqlCondition = REPLACE(@c_sqlCondition, @c_ReplaceFrom, @c_ReplaceTo)
          END
                               
          IF @c_TableID IN ('sotd', 'picksearchtd')
