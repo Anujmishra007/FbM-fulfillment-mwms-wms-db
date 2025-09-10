@@ -449,7 +449,27 @@ BEGIN
                                              WHERE toh.PickdetailKey = PICKDETAIL.PickdetailKey 
                                              ' + @c_sqlCondStatus + 
                                              ') o' 
-         END                                                                        --2025-09-10 - END
+         END                                                                        
+         
+         SET @c_SQL = N' SELECT @n_TotalRecords = COUNT(1)'
+           + ' ' + @c_SQLFrom 
+           + ' ' + @c_sqlJoin                                              
+           + ' ' + @c_SQLWhere  
+           + ' ' + @c_SQLCondition 
+           + ' ' + @c_SQLGroupBy
+           + ' ' + @c_SQLHaving
+ 
+         EXEC sp_ExecuteSQL @c_SQL
+                           ,N'@n_TotalRecords INT OUTPUT'
+                           ,@n_TotalRecords OUTPUT
+
+         SET @c_ResponseString = (  SELECT totalRecords = @n_TotalRecords
+                                    FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
+                                 )    
+         IF @b_debug = 1
+         BEGIN  
+            PRINT '@c_ResponseString:'   +  @c_ResponseString 
+         END                                                                        --2025-09-10 - END 
 
          SET @c_SQL = @c_SQLSelect
                     + ' ' + @c_SQLFrom 
@@ -466,15 +486,6 @@ BEGIN
                            ,N'@n_PageNo INT, @n_PageSize INT'
                            , @n_PageNo
                            , @n_PageSize
-                           
-         SET @n_TotalRecords = @@ROWCOUNT                                           --2025-09-10                 
-         SET @c_ResponseString = (  SELECT totalRecords = @n_TotalRecords
-                                    FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
-                                 )    
-         IF @b_debug = 1
-         BEGIN  
-            PRINT '@c_ResponseString:'   +  @c_ResponseString 
-         END                                                        
       END
    END TRY
    BEGIN CATCH
