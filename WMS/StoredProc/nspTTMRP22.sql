@@ -135,6 +135,36 @@ BEGIN
                LOC.LogicalLocation,
                LOC.LOC
       END
+      ELSE
+      BEGIN
+         DECLARE Cursor_RPFTaskCandidates CURSOR FAST_FORWARD READ_ONLY FOR --Note: global cursor
+            SELECT TaskDetailkey
+            FROM dbo.TaskDetail WITH (NOLOCK)
+            INNER JOIN dbo.LOC WITH (NOLOCK) ON (TaskDetail.FromLOC = LOC.LOC)
+            INNER JOIN dbo.AreaDetail WITH (NOLOCK) ON (AreaDetail.PutawayZone = LOC.PutAwayZone)
+            WHERE AreaDetail.AreaKey = @c_AreaKey01
+               AND TaskDetail.TaskType = 'RPF'
+               AND TaskDetail.Status = '0'
+               AND TaskDetail.UserKeyOverRide IN (@c_UserID, '')
+               AND NOT EXISTS( SELECT 1
+                  FROM dbo.TaskDetail T1 WITH (NOLOCK)
+                  WHERE TaskDetail.GroupKey <> '' 
+                     AND T1.GroupKey = TaskDetail.GroupKey 
+                     AND T1.Status < '9'
+                     AND T1.UserKey NOT IN (@c_userid, ''))
+               AND EXISTS( SELECT 1 
+                  FROM dbo.TaskManagerUserDetail tmu WITH (NOLOCK)
+                  WHERE tmu.PermissionType = TaskDetail.TASKTYPE
+                     AND tmu.UserKey = @c_UserID
+                     AND tmu.AreaKey = AreaDetail.AreaKey
+                     AND tmu.Permission = '1')
+            ORDER BY
+               TaskDetail.Priority,
+               CASE WHEN TaskDetail.UserKeyOverRide = @c_userid THEN '0' ELSE '1' END,
+               TaskDetail.AddDate,
+               LOC.LogicalLocation,
+               LOC.LOC
+      END
    END
    ELSE
    BEGIN
