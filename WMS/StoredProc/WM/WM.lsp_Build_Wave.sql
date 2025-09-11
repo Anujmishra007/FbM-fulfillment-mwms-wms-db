@@ -69,8 +69,10 @@ GO
 /* 2024-04-17  WLChooi  3.3   LFWM-4863 - Initialize @c_Wavekey to blank*/
 /*                            for non TopUpWave (WL02)                  */
 /* 2024-05-21  Wan20    3.4   Fixed missing @n_MaxOpenQty Parameter     */
-/* 2025-05-16  USH022-01   3.5   FCR-3956 ORDERDETAIL added dynamic query  */
+/* 2025-05-16  USH022-01   3.5   FCR-3956 ORDERDETAIL added dynamic query*/
 /*                            for group by logic                        */
+/* 2025-05-16  USH022-02   3.6 FCR-3956 datetime conversion based      */
+/*                            on udf01 logic added on groupby          */
 /************************************************************************/
 CREATE OR ALTER PROC [WM].[lsp_Build_Wave]
       @c_BuildParmKey      NVARCHAR(10)
@@ -628,9 +630,25 @@ AS
 
             IF @c_ColType IN ('datetime')
             BEGIN
-               SET @c_SQLField = @c_SQLField + CHAR(13) +  ', CONVERT(NVARCHAR(10),' + RTRIM(@c_FieldName) + ',112)'
+               --USH022-02 start
+               DECLARE @c_DateFormat NVARCHAR(60) = ''
+
+               SELECT TOP 1 @c_DateFormat = UDF01 FROM CODELKUP (NOLOCK)
+               WHERE LISTNAME = 'BDWAVDATFM' AND Storerkey = @c_StorerKey AND Long = @c_FieldName
+               --SET @c_SQLField = @c_SQLField + CHAR(13) +  ', CONVERT(NVARCHAR(10),' + RTRIM(@c_FieldName) + ',112)'
+               SET @c_SQLField = @c_SQLField + CHAR(13) +
+                  CASE WHEN ISNULL(@c_DateFormat,'')<>''
+                       THEN ', FORMAT(' + RTRIM(@c_FieldName) + ',''' + REPLACE(@c_DateFormat,'''','''''') + ''')'
+                       ELSE ', CONVERT(NVARCHAR(10),' + RTRIM(@c_FieldName) + ',112)'
+                  END
+               --USH022-02 end
                SET @c_SQLBuildByGroupWhere = @c_SQLBuildByGroupWhere
-                                    + CHAR(13) + ' AND CONVERT(NVARCHAR(10),' + RTRIM(@c_FieldName) + ',112)='
+               --USH022-02 start
+               --                   + CHAR(13) + ' AND CONVERT(NVARCHAR(10),' + RTRIM(@c_FieldName) + ',112)='
+                                    + CHAR(13) + CASE WHEN ISNULL(@c_DateFormat,'')<>''
+                                           THEN ' AND FORMAT(' + RTRIM(@c_FieldName) + ',''' + REPLACE(@c_DateFormat,'''','''''') + ''')='
+                                       ELSE ' AND CONVERT(NVARCHAR(10),' + RTRIM(@c_FieldName) + ',112)='
+                                       END                                                              --USH022-02 start
                                     + CASE WHEN @n_BuildGroupCnt = 1  THEN '@c_Field01'
                                            WHEN @n_BuildGroupCnt = 2  THEN '@c_Field02'
                                            WHEN @n_BuildGroupCnt = 3  THEN '@c_Field03'
