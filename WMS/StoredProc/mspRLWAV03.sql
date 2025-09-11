@@ -95,7 +95,7 @@ GO
 /*                           case conditionally (WL16)                  */
 /* 07-Aug-2025 WLC015    5.5 UWP-38984 Prevent same UCC being packed    */
 /*                           into multiple cartons for full case (WL17) */
-/* 09-Sep-2025 WLC015    5.6 FCR-7727 Change RPF ToLoc logic (WL18)     */
+/* 11-Sep-2025 WLC015    5.6 FCR-7727 Change RPF ToLoc logic (WL18)     */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[mspRLWAV03]
    @c_WaveKey NVARCHAR(10)
@@ -3320,20 +3320,6 @@ BEGIN
                                       + ': None PND Location / Unmatch PND Facility Found. (mspRLWAV03)'     
                         GOTO QUIT_SP             
                      END
-
-                     IF EXISTS ( SELECT 1
-                                 FROM LOTxLOCxID lli WITH (NOLOCK)
-                                 WHERE lli.Storerkey = @c_Storerkey
-                                 AND   lli.Loc       = @c_PNDLoc                     
-                                 AND   lli.Qty + lli.PendingMoveIN > 0
-                               )
-                     BEGIN 
-                        SET @n_continue = 3
-                        SET @n_Err = 82012
-                        SET @c_Errmsg = 'NSQL'+CONVERT(NVARCHAR(5),@n_Err)
-                                      + ': PND Location is currently being used by another Wave. (mspRLWAV03)'         
-                        GOTO QUIT_SP             
-                     END
                      --WL18 E
 
                      SET @c_TaskType      = 'RPF'
@@ -3468,20 +3454,6 @@ BEGIN
                            SET @n_Err = 82037
                            SET @c_Errmsg = 'NSQL'+CONVERT(NVARCHAR(5),@n_Err)
                                          + ': None PND Location / Unmatch PND Facility Found. (mspRLWAV03)'     
-                           GOTO QUIT_SP             
-                        END
-                        
-                        IF EXISTS ( SELECT 1
-                                    FROM LOTxLOCxID lli WITH (NOLOCK)
-                                    WHERE lli.Storerkey = @c_Storerkey
-                                    AND   lli.Loc       = @c_PNDLoc                     
-                                    AND   lli.Qty + lli.PendingMoveIN > 0
-                                  )
-                        BEGIN 
-                           SET @n_continue = 3
-                           SET @n_Err = 82038
-                           SET @c_Errmsg = 'NSQL'+CONVERT(NVARCHAR(5),@n_Err)
-                                         + ': PND Location is currently being used by another Wave. (mspRLWAV03)'     
                            GOTO QUIT_SP             
                         END
                         --WL18 E
