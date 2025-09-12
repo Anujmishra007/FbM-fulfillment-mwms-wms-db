@@ -35,7 +35,7 @@ GO
 /*                            FCR-2902 Bug Fix                           */
 /* 12-Aug-2025  Wan06  1.8    UWP-39035 - Matching RPF Section to find   */
 /*                            DPP for FCR-6708 & FCR-2902                */
-/* 11-Sep-2025                FCR-6708 Bug Fix (include FCR-2902)        */
+/* 12-Sep-2025                FCR-6708 Bug Fix (include FCR-2902)        */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]       
     @c_Wavekey      NVARCHAR(10)    
@@ -1296,7 +1296,7 @@ CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]
          , PICKDETAIL.Loc 
          , PICKDETAIL.ID 
          , UOM = CASE WHEN MIN(PICKDETAIL.UOM) = '1'                                        --2011-09-11  
-                      THEN MIN(PICKDETAIL.UOM) 
+                      THEN '1'                                                              --2011-09-12
                       ELSE MAX(PICKDETAIL.UOM) END
          , SUM(PICKDETAIL.UOMQty) AS UOMQty 
          , SUM(PICKDETAIL.Qty) AS Qty 
@@ -1324,9 +1324,7 @@ CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]
             , ORDERS.LoadKey
             , ORDERS.OrderKey
             --, PICKDETAIL.UOM                                                      --2011-09-11
-      ORDER BY CASE WHEN MIN(PICKDETAIL.UOM) = '1'                                  --2011-09-11  
-                    THEN MIN(PICKDETAIL.UOM) 
-                    ELSE MAX(PICKDETAIL.UOM) END
+      ORDER BY UOM                                                                  --2011-09-12  
             , PICKDETAIL.Sku, PICKDETAIL.Lot, PICKDETAIL.Loc, PICKDETAIL.ID
 
       OPEN CUR_PICK_NONVNA
