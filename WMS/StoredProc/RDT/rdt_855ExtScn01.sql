@@ -641,13 +641,30 @@ BEGIN
                      --V1.5.0 Replace the old flag set logic
                      --V1.5.1 Only check PickDetail
                      IF NOT EXISTS (
-                        SELECT 1
-                        FROM dbo.PickDetail WITH (NOLOCK)
-                        WHERE StorerKey = @cStorerKey
-                              AND DropID = @cDropID
-                        GROUP BY OrderKey
-                        HAVING COUNT(DISTINCT OrderLineNumber) <> 1
-                     )
+                           SELECT 1
+                           FROM dbo.PickDetail WITH (NOLOCK)
+                           WHERE StorerKey = @cStorerKey
+                                 AND DropID = @cDropID
+                           GROUP BY OrderKey
+                           HAVING COUNT(DISTINCT OrderLineNumber) <> 1
+                        )
+                        AND NOT EXISTS (
+                           SELECT 1
+                           FROM dbo.PickDetail WITH (NOLOCK)
+                           WHERE StorerKey = @cStorerKey
+                                 AND DropID = @cDropID
+                           GROUP BY OrderKey
+                           HAVING COUNT(DISTINCT SKU) <> 1
+                        )
+                        AND NOT EXISTS (
+                           SELECT 1
+                           FROM dbo.PickDetail WITH (NOLOCK)
+                           WHERE StorerKey = @cStorerKey
+                                 AND DropID = @cDropID
+                           GROUP BY OrderKey
+                           HAVING SUM(Qty) <> 1
+                        )
+         
                      BEGIN
                         -- V1.5.1 No need to check LISTNAME = 'MPOCPERMIT' for single unit order
                         -- IF NOT EXISTS (SELECT 1
