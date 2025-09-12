@@ -35,7 +35,7 @@ GO
 /*                            FCR-2902 Bug Fix                           */
 /* 12-Aug-2025  Wan06  1.8    UWP-39035 - Matching RPF Section to find   */
 /*                            DPP for FCR-6708 & FCR-2902                */
-/* 08-Sep-2025                FCR-6708 Bug Fix (include FCR-2902)        */
+/* 12-Sep-2025                FCR-6708 Bug Fix (include FCR-2902)        */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]       
     @c_Wavekey      NVARCHAR(10)    
@@ -866,8 +866,10 @@ CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]
             SET @c_TaskStatus = '0'
          END                                                                        --(Wan03) - END   
 
-         SET @c_LinkTaskToPick_SQL = 'PICKDETAIL.UOM = @c_UOM AND LOC.LocationType = ''VNA'' '
-
+         --SET @c_LinkTaskToPick_SQL = 'PICKDETAIL.UOM = @c_UOM AND LOC.LocationType = ''VNA'' '   --2025-09-11
+         SET @c_LinkTaskToPick_SQL = 'PICKDETAIL.UOM IN (''1'',''6'') AND '         --2025-09-11
+                                   + 'LOC.LocationType = ''VNA'' AND'               --2025-09-11
+                                   + 'PICKDETAIL.Orderkey = @c_Orderkey'            --2025-09-11
          --(Wan01) - START
          IF @c_LoadAssignLane = 'Y'
          BEGIN
@@ -1107,7 +1109,8 @@ CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]
                                 ELSE @c_Priority_PICK 
                                 END 
          SET @c_LinkTaskToPick_SQL = 'PICKDETAIL.UOM IN (''2'',''3'',''6'') AND '   --2025-07-09 --(Wan03)
-                                   + 'LOC.LocationType = ''VNA'''
+                                   + 'LOC.LocationType = ''VNA'' AND '
+                                   + 'PICKDETAIL.Orderkey = @c_Orderkey '           --2025-09-11
          SET @c_TaskStatus = CASE WHEN @b_FPP = 1                                   --(Wan05) --(Wan03)
                                   THEN 'H' 
                                   ELSE '0' 
@@ -1269,6 +1272,7 @@ CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]
                   AND   Loc = @c_ReplFromLoc
                   AND   ID  = @c_ReplFromID
                   AND   UOM IN ('2','3','6')                         --2025-07-09
+                  AND   Orderkey = @c_Orderkey                       --2025-09-11
                END                                                   --(Wan03) - END
             END                                                      --(Wan02) - END
          END
@@ -1291,7 +1295,9 @@ CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]
          , PICKDETAIL.Lot
          , PICKDETAIL.Loc 
          , PICKDETAIL.ID 
-         , MAX(PICKDETAIL.UOM) 
+         , UOM = CASE WHEN MIN(PICKDETAIL.UOM) = '1'                                        --2011-09-11  
+                      THEN '1'                                                              --2011-09-12
+                      ELSE MAX(PICKDETAIL.UOM) END
          , SUM(PICKDETAIL.UOMQty) AS UOMQty 
          , SUM(PICKDETAIL.Qty) AS Qty 
          , ORDERS.LoadKey
@@ -1317,8 +1323,9 @@ CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]
             , PICKDETAIL.ID 
             , ORDERS.LoadKey
             , ORDERS.OrderKey
-            , PICKDETAIL.UOM
-      ORDER BY PICKDETAIL.UOM, PICKDETAIL.Sku, PICKDETAIL.Lot, PICKDETAIL.Loc, PICKDETAIL.ID
+            --, PICKDETAIL.UOM                                                      --2011-09-11
+      ORDER BY UOM                                                                  --2011-09-12  
+            , PICKDETAIL.Sku, PICKDETAIL.Lot, PICKDETAIL.Loc, PICKDETAIL.ID
 
       OPEN CUR_PICK_NONVNA
 
@@ -1338,11 +1345,14 @@ CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]
                                 ELSE @c_Priority_PICK 
                                 END 
          SET @c_TaskStatus = '0'                                                    --(Wan03)
+         SET @c_ReplFromLoc= ''                                                     --(Wan06)   2025-09-11 
+         SET @c_ReplFromID = ''                                                     --(Wan06)   2025-09-11  
 
-         SET @c_LinkTaskToPick_SQL = 'PICKDETAIL.UOM = @c_UOM AND '                 --2025-07-09 --(Wan03) -- 2025-06-20
-                                   + 'LOC.LocationType <> ''VNA'''
-
-         --(Wan01) - START
+         --SET @c_LinkTaskToPick_SQL = 'PICKDETAIL.UOM = @c_UOM AND '               --2025-09-11       
+         --                          + 'LOC.LocationType <> ''VNA'' '               --2025-09-11    
+         SET @c_LinkTaskToPick_SQL = 'LOC.LocationType <> ''VNA'' AND '
+                                   + 'PICKDETAIL.Orderkey = @c_Orderkey '           --2025-09-11
+         --(Wan01) - START    
          IF @c_LoadAssignLane = 'Y'  
          BEGIN
             IF @c_Loadkey <> '' OR @c_Loadkey IS NULL
@@ -1394,6 +1404,8 @@ CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]
                            AND l.LocationType IN ('PND')
                          )
                BEGIN
+                  SET @c_ReplFromLoc = @c_FromLoc                                   --2025-09-11
+                  SET @c_ReplFromID  = @c_ID                                        --2025-09-11
                   --IF allocated from PND, it is a Replenishment stock
                   SET @c_FinalLoc = ''                                              --2025-08-29 - START
                   SELECT TOP 1 @c_FinalLoc= td.FinalLoc                                 
@@ -1539,6 +1551,18 @@ CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]
                      SET @n_continue = 3
                   END
                END
+
+               IF @n_continue = 1 AND @c_ReplFromLoc > ''            --(Wan06) - 2025-09-11 START  
+               BEGIN
+                  UPDATE #PickDetail_WIP
+                     SET TaskDetailKey = @c_TaskDetailKey
+                  WHERE Lot = @c_Lot
+                  AND   Loc = @c_ReplFromLoc
+                  AND   ID  = @c_ReplFromID
+                  AND   UOM IN ('2','3','6')                         
+                  AND   Orderkey = @c_Orderkey                       
+               END                                                   --(Wan06) - 2025-09-11 END  
+
             END                                                      --(Wan02) - END
          END
 
