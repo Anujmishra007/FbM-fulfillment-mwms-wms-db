@@ -42,6 +42,7 @@ GO
 /* 15-Aug-2016  Ung           Update rdtMobRec with EditDate            */
 /* 05-Feb-2018  James         WMS3893-Add DefaultDeviceID (james02)     */
 /* 03-Apr-2025  NLT013        UWP-32244 Extend Menu number              */
+/* 12-Sep-2025  NLT013        UWP-41083 Fix issue for Extend Menu number*/
 /************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdtPrevScreen] (
    @nMobile int,
@@ -117,14 +118,17 @@ CREATE OR ALTER PROC [RDT].[rdtPrevScreen] (
       ELSE
       BEGIN
          -- Get Parent Menu
-         SELECT @nScn = RIGHT( MenuStack, 3) 
+         DECLARE @cScnTemp NVARCHAR(6)
+         SELECT @cScnTemp = RIGHT( MenuStack, 6) 
          FROM RDT.rdtMobRec WITH (NOLOCK)
          WHERE Mobile = @nMobile
+
+         SET @nScn = CAST(IIF ( CHARINDEX('-', @cScnTemp) > 0, RIGHT(@cScnTemp, LEN(@cScnTemp) - CHARINDEX('-', @cScnTemp) + 1), @cScnTemp ) AS INT)
 
          -- Remove parent menu from menu stack
          UPDATE RDT.rdtMobRec WITH (ROWLOCK) SET
             EditDate = GETDATE(), 
-            MenuStack = LEFT( MenuStack, ABS( LEN( MenuStack) - 3))
+            MenuStack = LEFT( MenuStack, ABS( LEN( MenuStack) - 6))
          WHERE Mobile = @nMobile
 
          SET @nMenu = @nScn
