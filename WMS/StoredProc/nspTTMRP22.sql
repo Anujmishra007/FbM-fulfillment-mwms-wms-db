@@ -142,8 +142,7 @@ BEGIN
             FROM dbo.TaskDetail WITH (NOLOCK)
             INNER JOIN dbo.LOC WITH (NOLOCK) ON (TaskDetail.FromLOC = LOC.LOC)
             INNER JOIN dbo.AreaDetail WITH (NOLOCK) ON (AreaDetail.PutawayZone = LOC.PutAwayZone)
-            WHERE AreaDetail.AreaKey = @c_AreaKey01
-               AND TaskDetail.TaskType = 'RPF'
+            WHERE TaskDetail.TaskType = 'RPF'
                AND TaskDetail.Status = '0'
                AND TaskDetail.UserKeyOverRide IN (@c_UserID, '')
                AND NOT EXISTS( SELECT 1
