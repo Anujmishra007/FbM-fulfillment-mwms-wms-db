@@ -46,6 +46,7 @@ GO
 /* 01-Mar-2018  James         Support multi language (james02)                */
 /* 25-Sep-2018  Ung           WMS-6410 Add field 16-20                        */
 /* 03-Apr-2025  NLT013        UWP-32244 Extend Menu number                    */
+/* 12-Sep-2025  NLT013        UWP-41083 Fix issue for Extend Menu number      */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtProcessMenu] (
@@ -145,7 +146,7 @@ AS
                           ELSE ISNULL(Menu, 0)
                      END,
               MenuStack = CASE WHEN @nSubMenu between 5 and 499 OR @nSubMenu < -100
-                               THEN MenuStack + RIGHT( '000' + CAST( @nMenu AS NVARCHAR( 3)), 3) -- Store current menu into menu stack
+                               THEN MenuStack + RIGHT( '000000' + CAST( @nMenu AS NVARCHAR( 6)), 6) -- Store current menu into menu stack
                                ELSE ISNULL(MenuStack, 0)
                           END,
               ErrMsg = '', 
