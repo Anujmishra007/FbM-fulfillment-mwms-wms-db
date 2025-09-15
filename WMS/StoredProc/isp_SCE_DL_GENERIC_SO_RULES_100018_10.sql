@@ -244,7 +244,7 @@ BEGIN
 STEP_999_EXIT_SP:
    IF @b_Debug = 1
    BEGIN
-      SELECT '<<SUB-SP-RULES>> - [isp_SCE_DL_GENERIC_SO_RULES_100008_10] EXIT... ErrMsg : ' + ISNULL(RTRIM(@c_ErrMsg), '');
+      SELECT '<<SUB-SP-RULES>> - [isp_SCE_DL_GENERIC_SO_RULES_100018_10] EXIT... ErrMsg : ' + ISNULL(RTRIM(@c_ErrMsg), '');
    END
 
    IF @n_Continue = 1
