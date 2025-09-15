@@ -46,7 +46,7 @@ GO
 /* 2025-07-11  JH03     2.0   UWP-37565 - Duplicate OrderKey Issue         */ 
 /* 2025-09-02  CZJ01   2.1   UWP-40477 - LCL SP Enhancement                */ 
 /***************************************************************************/
-ALTER   PROC [dbo].[mspASNFZ03]
+CREATE OR ALTER PROC [dbo].[mspASNFZ03]
 (     @c_Receiptkey  NVARCHAR(10)
   ,   @b_Success     INT           OUTPUT
   ,   @n_Err         INT           OUTPUT
@@ -975,3 +975,4 @@ BEGIN
    RETURN
 END
 GO
+
