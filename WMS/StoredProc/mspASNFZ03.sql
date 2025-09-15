@@ -363,7 +363,7 @@ BEGIN
          FETCH NEXT FROM CUR_RECDET INTO @c_Receiptkey, @c_POKey, @c_POLineNumber, @c_ExternReceiptkey,@c_ExternLineNo,@c_Storerkey,
          @c_Sku, @c_Packkey, @c_UOM, @n_OriginalQty,@n_OpenQty,@c_Lottable03,@c_Lottable02, @c_Lottable08, @c_Lottable11, @c_Consigneekey,    -- (SSA03)
          @c_DeliveryDate,@c_Door,@c_ExternPOKey,@c_Id,@c_GrossWgt,                                                                                       -- (SSA04),(SSA06),(CZJ01)
-         @c_contact,@c_address1,@c_address2,@c_address3,@cBilltokey,@cB_Contact1,@cB_Company,@cB_Address1,@cUserdefine01,@cUserDefine02,@cUserDefine06,@cUserdefine07  --(CZJ01)
+         @c_contact,@c_address1,@c_address2,@c_address3,@c_Billtokey,@c_B_Contact1,@c_B_Company,@c_B_Address1,@c_Userdefine01,@c_UserDefine02,@c_UserDefine06,@c_Userdefine07  --(CZJ01)
 
          WHILE @@FETCH_STATUS <> -1 AND @n_continue IN(1,2)
          BEGIN
@@ -392,14 +392,14 @@ BEGIN
 				  ,  c_address1	   = @c_address1
 				  ,  c_address2	   = @c_address2
 				  ,  c_address3	   = @c_address3
-				  ,  Billtokey     = @cBilltokey
-                  ,  B_Contact1	   = @cB_Contact1  
-                  ,  B_Company	   = @cB_Company   
-                  ,  B_Address1	   = @cB_Address1  
-                  ,  Userdefine01  = @cUserdefine01
-                  ,  UserDefine02  = @cUserDefine02
-                  ,  Userdefine06  = @cUserDefine06
-                  ,  Userdefine07  = @cUserdefine07
+				  ,  Billtokey     = @c_Billtokey
+                  ,  B_Contact1	   = @c_B_Contact1  
+                  ,  B_Company	   = @c_B_Company   
+                  ,  B_Address1	   = @c_B_Address1  
+                  ,  Userdefine01  = @c_Userdefine01
+                  ,  UserDefine02  = @c_UserDefine02
+                  ,  Userdefine06  = @c_UserDefine06
+                  ,  Userdefine07  = @c_Userdefine07
 				  ,  GrossWeight   = @c_GrossWgt      
 				  WHERE ORDERKEY = @c_ExistingOrderKey 
 				  --CZJ01 END
@@ -563,7 +563,7 @@ BEGIN
             FETCH NEXT FROM CUR_RECDET INTO @c_Receiptkey, @c_POKey, @c_POLineNumber, @c_ExternReceiptkey,@c_ExternLineNo,@c_Storerkey,
             @c_Sku, @c_Packkey, @c_UOM, @n_OriginalQty,@n_OpenQty,@c_Lottable03,@c_Lottable02, @c_Lottable08, @c_Lottable11, @c_Consigneekey,     -- (SSA03)
             @c_DeliveryDate,@c_Door,@c_ExternPOKey,@c_Id,@c_GrossWgt,                                                                              -- (SSA04),(SSA06),(CZJ01)
-            @c_contact,@c_address1,@c_address2,@c_address3,@cBilltokey,@cB_Contact1,@cB_Company,@cB_Address1,@cUserdefine01,@cUserDefine02,@cUserDefine06,@cUserdefine07  --(CZJ01)
+            @c_contact,@c_address1,@c_address2,@c_address3,@c_Billtokey,@c_B_Contact1,@c_B_Company,@c_B_Address1,@c_Userdefine01,@c_UserDefine02,@c_UserDefine06,@c_Userdefine07  --(CZJ01)
          -- (SSA01) end ---
          END
          CLOSE CUR_RECDET
@@ -975,4 +975,3 @@ BEGIN
    RETURN
 END
 GO
-
