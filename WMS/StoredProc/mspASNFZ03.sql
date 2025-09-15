@@ -44,9 +44,9 @@ GO
 /* 2025-05-14  JH01     1.8   UWP-31657 - Change to map Receipt/ReceiptDetail*/
 /* 2025-06-19  JH02     1.9   UWP-36358 - Enhanced the error message show  */
 /* 2025-07-11  JH03     2.0   UWP-37565 - Duplicate OrderKey Issue         */ 
-/* 2025-09-02  CZJ002   2.1   UWP-40477 - LCL SP Enhancement               */ 
+/* 2025-09-02  CZJ01   2.1   UWP-40477 - LCL SP Enhancement                */ 
 /***************************************************************************/
-CREATE OR ALTER PROC [dbo].[mspASNFZ03]
+ALTER   PROC [dbo].[mspASNFZ03]
 (     @c_Receiptkey  NVARCHAR(10)
   ,   @b_Success     INT           OUTPUT
   ,   @n_Err         INT           OUTPUT
@@ -70,6 +70,20 @@ BEGIN
          , @c_ASNStatus          NVARCHAR(10)   = '0'
          , @c_ExistingOrderKey             NVARCHAR(10)   = ''              /*JH01*/
          , @c_ExistingOrderStatus          NVARCHAR(10)   = '0'             /*JH01*/
+		 --CZJ01 START
+		 , @c_contact            NVARCHAR(30)	= ''
+		 , @c_address1			 NVARCHAR(45)	= ''
+		 , @c_address2			 NVARCHAR(45)	= ''
+		 , @c_address3			 NVARCHAR(45)	= ''
+		 , @c_Billtokey          NVARCHAR(15)	= ''
+		 , @c_B_Contact1         NVARCHAR(30)	= ''
+		 , @c_B_Company          NVARCHAR(45)	= ''
+		 , @c_B_Address1         NVARCHAR(45)	= ''
+		 , @c_Userdefine01       NVARCHAR(20)	= ''
+		 , @c_UserDefine02       NVARCHAR(20)   = ''
+		 , @c_UserDefine06       datetime
+		 , @c_Userdefine07       datetime
+		 --CZJ01 END
          , @c_DocType            NVARCHAR(1)    = ''
          , @c_OrderKey           NVARCHAR(10)   = ''
          , @c_StorerKey          NVARCHAR(15)   = ''
@@ -95,7 +109,7 @@ BEGIN
          , @c_DeliveryDate       DATETIME
          , @c_Door               NVARCHAR(10)  = ''
          , @c_ExternPOKey        NVARCHAR(20)  = ''            --(SSA04)
-         , @c_GrossWgt           FLOAT                         --(CZJ002)
+         , @c_GrossWgt           FLOAT                         --(CZJ01)
          , @CUR_RECDET           CURSOR
 
    SET @b_Success= 1
@@ -316,7 +330,21 @@ BEGIN
             ,  Door         = ISNULL(RD.PutawayLoc  ,'')
             ,  RD.ExternPOKey                                  --(SSA04)
             ,  RD.ToId                                         --(SSA06)
-			,  RD.GrossWgt                                     --(CZJ002)
+			,  RD.GrossWgt                                     --(CZJ01)
+			--CZJ01 START
+			,  RD.UserDefine10
+			,  RD.UserDefine03
+			,  RD.UserDefine04
+			,  RD.UserDefine05
+            ,  RH.SellerCompany        
+            ,  RH.CarrierReference     
+            ,  RH.SellerName           
+            ,  RH.SellerAddress1       
+            ,  RH.Userdefine01         
+            ,  RH.RECType              
+            ,  RH.UserDefine06         
+            ,  RH.UserDefine07 
+			--CZJ01 END			
          FROM  RECEIPT RH WITH (NOLOCK)
          JOIN  RECEIPTDETAIL RD WITH (NOLOCK) ON (RH.ReceiptKey = RD.ReceiptKey)
        --  JOIN  PODETAIL POD WITH (NOLOCK) ON (RD.Pokey = POD.Pokey)                     --(JH01)
@@ -327,34 +355,55 @@ BEGIN
          ORDER BY ISNULL(RD.Userdefine02,'')
                ,  ISNULL(RD.UserDefine06,'1900-01-01')
                ,  ISNULL(RD.PutawayLoc  ,'')
-			   ,  ISNULL(RD.ExternPoKey  ,'')                                             --(CZJ002)
+			   ,  ISNULL(RD.ExternPoKey  ,'')                                             --(CZJ01)
                ,  RD.ReceiptLineNumber
 
          OPEN CUR_RECDET
 
          FETCH NEXT FROM CUR_RECDET INTO @c_Receiptkey, @c_POKey, @c_POLineNumber, @c_ExternReceiptkey,@c_ExternLineNo,@c_Storerkey,
          @c_Sku, @c_Packkey, @c_UOM, @n_OriginalQty,@n_OpenQty,@c_Lottable03,@c_Lottable02, @c_Lottable08, @c_Lottable11, @c_Consigneekey,    -- (SSA03)
-         @c_DeliveryDate,@c_Door,@c_ExternPOKey,@c_Id,@c_GrossWgt                                                                                       -- (SSA04),(SSA06),(CZJ002)
+         @c_DeliveryDate,@c_Door,@c_ExternPOKey,@c_Id,@c_GrossWgt,                                                                                       -- (SSA04),(SSA06),(CZJ01)
+         @c_contact,@c_address1,@c_address2,@c_address3,@cBilltokey,@cB_Contact1,@cB_Company,@cB_Address1,@cUserdefine01,@cUserDefine02,@cUserDefine06,@cUserdefine07  --(CZJ01)
 
          WHILE @@FETCH_STATUS <> -1 AND @n_continue IN(1,2)
          BEGIN
              /*Check if existing externorderkey created SO - Start*/ /*JH01*/    
              SET @c_ExistingOrderKey = ''
              Set @c_ExistingOrderStatus = ''
-             SELECT @c_ExistingOrderKey = ISNULL(OH.OrderKey,''), @c_ExistingOrderStatus  = OH.Status                                            
+
+             SELECT @c_ExistingOrderKey = ISNULL(OH.OrderKey,''), @c_ExistingOrderStatus  = OH.Status    			 
              FROM  ORDERS OH WITH (NOLOCK)                  
-             JOIN  RECEIPTDETAIL RD WITH (NOLOCK) ON (OH.StorerKey = RD.StorerKey AND RD.ExternReceiptkey = OH.ExternOrderKey)   
+             JOIN  RECEIPTDETAIL RD WITH (NOLOCK) ON (OH.StorerKey = RD.StorerKey AND RD.ExternReceiptkey = OH.ExternOrderKey) 
+			 JOIN  RECEIPT RH WITH(NOLOCK) ON RD.ReceiptKey = RH.ReceiptKey --CZJ01
                            WHERE OH.Storerkey = @c_Storerkey                  
                            AND OH.ExternOrderKey = @c_ExternReceiptkey
                            AND OH.Consigneekey = @c_Consigneekey
                            AND OH.DeliveryDate = @c_DeliveryDate                
                            AND OH.Door = @c_Door      /*JH01*/
-						   AND OH.ExternPOKey = @c_ExternPOKey  /*CZJ002*/
+						   AND OH.ExternPOKey = @c_ExternPOKey  /*CZJ01*/
             IF @c_ExistingOrderKey <> ''
             BEGIN
                IF @c_ExistingOrderStatus = '0' 
                BEGIN
                   DELETE ORDERDETAIL WHERE ORDERKEY = @c_ExistingOrderKey 
+				  --CZJ01 START
+				  UPDATE ORDERS SET
+				     c_contact1    = @c_contact
+				  ,  c_address1	   = @c_address1
+				  ,  c_address2	   = @c_address2
+				  ,  c_address3	   = @c_address3
+				  ,  Billtokey     = @cBilltokey
+                  ,  B_Contact1	   = @cB_Contact1  
+                  ,  B_Company	   = @cB_Company   
+                  ,  B_Address1	   = @cB_Address1  
+                  ,  Userdefine01  = @cUserdefine01
+                  ,  UserDefine02  = @cUserDefine02
+                  ,  Userdefine06  = @cUserDefine06
+                  ,  Userdefine07  = @cUserdefine07
+				  ,  GrossWeight   = @c_GrossWgt      
+				  WHERE ORDERKEY = @c_ExistingOrderKey 
+				  --CZJ01 END
+
                END
                ELSE 
                BEGIN
@@ -365,10 +414,10 @@ BEGIN
 
             ---- (SSA01) start -----
             IF EXISTS (SELECT 1
-                     FROM #TMP_ORD WHERE ExternOrderKey = @c_ExternReceiptkey AND  Consigneekey = @c_Consigneekey and DeliveryDate = @c_DeliveryDate and Door = @c_Door and ExternPOKey = @c_ExternPOKey )   /*JH01 add @c_ExternReceiptkey*/ /*CZJ002 add @c_ExternPOKey*/
+                     FROM #TMP_ORD WHERE ExternOrderKey = @c_ExternReceiptkey AND  Consigneekey = @c_Consigneekey and DeliveryDate = @c_DeliveryDate and Door = @c_Door and ExternPOKey = @c_ExternPOKey )   /*JH01 add @c_ExternReceiptkey*/ /*CZJ01 add @c_ExternPOKey*/
             BEGIN
 			        SELECT @c_Orderkey = orderkey
-			        FROM #TMP_ORD WHERE ExternOrderKey = @c_ExternReceiptkey AND  Consigneekey = @c_Consigneekey and DeliveryDate = @c_DeliveryDate and Door = @c_Door and ExternPOKey = @c_ExternPOKey /*JH01 add @c_ExternReceiptkey*/ /*CZJ002 add @c_ExternPOKey*/
+			        FROM #TMP_ORD WHERE ExternOrderKey = @c_ExternReceiptkey AND  Consigneekey = @c_Consigneekey and DeliveryDate = @c_DeliveryDate and Door = @c_Door and ExternPOKey = @c_ExternPOKey /*JH01 add @c_ExternReceiptkey*/ /*CZJ01 add @c_ExternPOKey*/
             END
             ELSE
             BEGIN
@@ -432,8 +481,8 @@ BEGIN
                   ,  Userdefine06
                   ,  Userdefine07
                   ,  ExternPOKey
-				  ,  GrossWeight        --(CZJ002)
-				  ,  UpdateSource		--(CZJ002)
+				  ,  GrossWeight        --(CZJ01)
+				  ,  UserDefine03		--(CZJ01)
                   )
                   SELECT
                      @c_Orderkey
@@ -469,10 +518,10 @@ BEGIN
                   ,  UserDefine02   = RH.RECType                                                        --(JH01)
                   ,  UserDefine06   = RH.UserDefine06                                                   --(JH01)
                   ,  Userdefine07   = RH.UserDefine07                                                   --(JH01)
-                  --,  ExternPOKey    = RD.ExternReceiptKey                                             --(SSA04)  (JH01)  (CZJ002)
-                  ,  ExternPOKey    = @c_ExternPOKey                                                    --(CZJ002)
-				  ,  GrossWeight	= @c_GrossWgt														--(CZJ002)
-				  ,  UpdateSource   = @c_Receiptkey														--(CZJ002)
+                  --,  ExternPOKey    = RD.ExternReceiptKey                                             --(SSA04)  (JH01)  (CZJ01)
+                  ,  ExternPOKey    = @c_ExternPOKey                                                    --(CZJ01)
+				  ,  GrossWeight	= @c_GrossWgt														--(CZJ01)
+				  ,  UserDefine03   = @c_Receiptkey														--(CZJ01)
                   FROM  RECEIPT RH  (NOLOCK)                                                            --(JH01)
                   JOIN  RECEIPTDETAIL RD WITH (NOLOCK) ON (RH.ReceiptKey = RD.ReceiptKey)               --(JH01)
                   LEFT JOIN  STORER S WITH (NOLOCK) ON (S.StorerKey = RD.UserDefine02 AND S.Type = '2'  AND S.ConsigneeFor = RD.StorerKey)
@@ -513,7 +562,8 @@ BEGIN
 
             FETCH NEXT FROM CUR_RECDET INTO @c_Receiptkey, @c_POKey, @c_POLineNumber, @c_ExternReceiptkey,@c_ExternLineNo,@c_Storerkey,
             @c_Sku, @c_Packkey, @c_UOM, @n_OriginalQty,@n_OpenQty,@c_Lottable03,@c_Lottable02, @c_Lottable08, @c_Lottable11, @c_Consigneekey,     -- (SSA03)
-            @c_DeliveryDate,@c_Door,@c_ExternPOKey,@c_Id,@c_GrossWgt                                                                              -- (SSA04),(SSA06),(CZJ002)
+            @c_DeliveryDate,@c_Door,@c_ExternPOKey,@c_Id,@c_GrossWgt,                                                                              -- (SSA04),(SSA06),(CZJ01)
+            @c_contact,@c_address1,@c_address2,@c_address3,@cBilltokey,@cB_Contact1,@cB_Company,@cB_Address1,@cUserdefine01,@cUserDefine02,@cUserDefine06,@cUserdefine07  --(CZJ01)
          -- (SSA01) end ---
          END
          CLOSE CUR_RECDET
@@ -852,6 +902,38 @@ BEGIN
                        + ': INSERT INTO ORDERDETAIL Table Failed. (mspASNFZ03)'
          GOTO QUIT_SP
       END
+	  
+	  --CZJ01 START
+	  DECLARE     @c_OrderKey2Canc             NVARCHAR(10)   = ''
+	  DECLARE CUR_ORD CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+
+	  SELECT DISTINCT
+	  O.OrderKey
+	  FROM ORDERS O WITH (NOLOCK) 
+	  LEFT JOIN #TMP_ORDDTL td ON O.OrderKey = td.OrderKey
+	  WHERE O.UserDefine03 = @c_Receiptkey
+	  AND O.Type = 'XDOCK'
+	  AND O.StorerKey = @c_StorerKey
+	  AND O.Status = '0'
+	  group by O.Orderkey,td.OrderKey
+	  having td.OrderKey is null
+	  
+	  
+	  OPEN CUR_ORD
+	  
+	  FETCH NEXT FROM CUR_ORD INTO @c_OrderKey2Canc
+	  
+	  WHILE @@FETCH_STATUS <> -1 AND @n_continue IN(1,2)
+	  BEGIN 
+	  
+	  Update Orders Set Status = 'CANC', ExternPOKey = '' where OrderKey = @c_OrderKey2Canc
+	  
+	  
+	  FETCH NEXT FROM CUR_ORD INTO @c_OrderKey2Canc
+	  END
+	  CLOSE CUR_ORD
+	  DEALLOCATE CUR_ORD 
+	  --CZJ01 END
 
       IF @c_RecType = 'XDELAY'                                                      --(Wan01) - START
       BEGIN
@@ -892,6 +974,4 @@ BEGIN
    END
    RETURN
 END
-GO
-GRANT EXECUTE ON [dbo].[mspASNFZ03] TO nSQL
 GO
