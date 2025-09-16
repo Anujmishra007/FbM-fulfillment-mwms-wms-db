@@ -14,46 +14,49 @@ GO
 /* 2025-07-02   1.2.0  Dennis   FCR-5019 Remove Pack Header             */
 /* 2025-08-19   1.3.0  NickT    UWP-39586 Performance tuning            */
 /* 2025-08-19   1.4.0  NickT    FCR-6730 Add @cShipRef, fixed an issue  */
+/* 2025-09-16   1.5.0  JackC    UWP-40608 Performance tuning            */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_869ExtUpd01] (
-@nMobile    INT,
-@nFunc      INT,
-@cLangCode  NVARCHAR( 3),
-@nStep      INT,
-@nInputKey  INT,
-@cFacility  NVARCHAR( 5),
-@cStorerKey NVARCHAR( 15),
-@cOption    NVARCHAR(  1),
-@cLoadKey   NVARCHAR( 10),
-@cOrderKey  NVARCHAR( 10),
-@cWaveKey   NVARCHAR( 10),
-@nErrNo     INT           OUTPUT,
-@cErrMsg    NVARCHAR( 20) OUTPUT
+   @nMobile    INT,
+   @nFunc      INT,
+   @cLangCode  NVARCHAR( 3),
+   @nStep      INT,
+   @nInputKey  INT,
+   @cFacility  NVARCHAR( 5),
+   @cStorerKey NVARCHAR( 15),
+   @cOption    NVARCHAR(  1),
+   @cLoadKey   NVARCHAR( 10),
+   @cOrderKey  NVARCHAR( 10),
+   @cWaveKey   NVARCHAR( 10),
+   @nErrNo     INT           OUTPUT,
+   @cErrMsg    NVARCHAR( 20) OUTPUT
 ) AS
 BEGIN
 
    SET NOCOUNT ON
    SET QUOTED_IDENTIFIER OFF
    SET ANSI_NULLS OFF
+
+   DECLARE @nDebugFlag INT = 0
+
    DECLARE 
-      @nLoopIndex       INT = -1,
       @cCaseID          NVARCHAR(20),
       @nQTY             INT,
       @nRowCount        INT,
       @nTranCount       INT,
       @bSuccess         INT,
       @cPickslipNo      NVARCHAR( 10),
-      @cSKU             NVARCHAR(20),
+      @cSKU             NVARCHAR( 20),
       @cShipRef         NVARCHAR( 10)
 
-   DECLARE @List TABLE
-      (
-      ID INT IDENTITY(1,1) NOT NULL,
-      CASEID NVARCHAR(20),
-      OrderKey NVARCHAR(20),
-      SKU      NVARCHAR(20)
-      )
+   DECLARE @nMaxPerBatch   INT = 2000    
+
+   DECLARE @tShortCaseList TABLE
+   (
+      CASEID NVARCHAR(20)
+   )
+
    DECLARE @tPackHeader TABLE
    (
       PickSlipNo NVARCHAR( 10) NOT NULL,
@@ -63,12 +66,15 @@ BEGIN
    DECLARE @tPackDetail TABLE
    (
       RowNumber   INT IDENTITY,
-      PickSlipNo  NVARCHAR( 10) NOT NULL,
-      CartonNo    INT NOT NULL,
-      LabelNo     NVARCHAR( 20) NOT NULL,
-      LabelLine   NVARCHAR( 5) NOT NULL,
+      PickSlipNo  NVARCHAR( 10)  NOT NULL,
+      OrderKey    NVARCHAR( 10)  NOT NULL,
+      CartonNo    INT            NOT NULL,
+      LabelNo     NVARCHAR( 20)  NOT NULL,
+      LabelLine   NVARCHAR( 5)   NOT NULL,
+      SKU         NVARCHAR( 20)  NOT NULL,
+      QTY         INT            NOT NULL DEFAULT 0,
       PRIMARY KEY CLUSTERED(PickSlipNo, CartonNo, LabelNo, LabelLine)
-   )
+   );
 
    IF @nFunc = 869
    BEGIN
@@ -81,47 +87,91 @@ BEGIN
             FROM rdt.rdtMobRec (NOLOCK)
             WHERE Mobile = @nMobile
 
-            DECLARE @curPD CURSOR
             IF @cOrderKey <> ''
             BEGIN
-               INSERT INTO @List
-                  SELECT DISTINCT CaseID,@cOrderKey,SKU
+               INSERT INTO @tShortCaseList
+                  SELECT DISTINCT CaseID
                   FROM dbo.PickDetail WITH (NOLOCK)
                   WHERE OrderKey = @cOrderKey
+                  AND StorerKey = @cStorerKey
+                  AND Status = 0
+                  AND Qty = 0
             END
 
             IF @cLoadKey <> ''
             BEGIN
-               INSERT INTO @List
-                  SELECT DISTINCT CaseID, OD.OrderKey,PD.SKU
+               INSERT INTO @tShortCaseList
+                  SELECT DISTINCT CaseID
                   FROM dbo.PickDetail PD WITH (NOLOCK)
                      INNER JOIN dbo.OrderDetail OD WITH (NOLOCK) ON (OD.OrderKey = PD.OrderKey AND OD.OrderLineNumber = PD.OrderLineNumber)
                   WHERE OD.LoadKey = @cLoadKey
+                     AND PD.StorerKey = @cStorerKey
+                     AND PD.Status = 0
+                     AND PD.Qty = 0
             END
 
             IF @cWaveKey <> ''
             BEGIN
                IF @cShipRef = ''
                BEGIN
-               INSERT INTO @List
-                  SELECT DISTINCT CaseID,OD.OrderKey,PD.SKU
-                  FROM dbo.PickDetail PD WITH (NOLOCK)
-                     INNER JOIN dbo.OrderDetail OD WITH (NOLOCK) ON (OD.OrderKey = PD.OrderKey AND OD.OrderLineNumber = PD.OrderLineNumber)
-                     INNER JOIN dbo.WaveDetail WD  WITH (NOLOCK) ON (OD.OrderKey = WD.OrderKey)
-                  WHERE WD.WaveKey = @cWaveKey
-            END
+                  INSERT INTO @tShortCaseList
+                     SELECT DISTINCT CaseID
+                     FROM dbo.PickDetail PD WITH (NOLOCK)
+                        INNER JOIN dbo.OrderDetail OD WITH (NOLOCK) ON (OD.OrderKey = PD.OrderKey AND OD.OrderLineNumber = PD.OrderLineNumber)
+                        INNER JOIN dbo.WaveDetail WD  WITH (NOLOCK) ON (OD.OrderKey = WD.OrderKey)
+                     WHERE WD.WaveKey = @cWaveKey
+                        AND PD.Storerkey = @cStorerKey
+                        AND PD.Status = 0
+                        AND PD.Qty = 0
+               END
                ELSE
                BEGIN
-                  INSERT INTO @List
-                  SELECT DISTINCT CaseID, OD.OrderKey, PD.SKU
-                  FROM dbo.PickDetail PD WITH (NOLOCK)
-                  INNER JOIN dbo.OrderDetail OD WITH (NOLOCK) ON (OD.OrderKey = PD.OrderKey AND OD.OrderLineNumber = PD.OrderLineNumber)
-                  INNER JOIN dbo.WaveDetail WD  WITH (NOLOCK) ON (OD.OrderKey = WD.OrderKey)
-                  INNER JOIN dbo.ORDERS ORD WITH (NOLOCK) ON (ORD.OrderKey = OD.OrderKey AND ORD.StorerKey = OD.StorerKey)
-                  WHERE WD.WaveKey = @cWaveKey
-                     AND ORD.MBOLKey IS NOT NULL
-                     AND ORD.MBOLKey  = @cShipRef
+                  INSERT INTO @tShortCaseList
+                     SELECT DISTINCT CaseID
+                     FROM dbo.PickDetail PD WITH (NOLOCK)
+                     INNER JOIN dbo.OrderDetail OD WITH (NOLOCK) ON (OD.OrderKey = PD.OrderKey AND OD.OrderLineNumber = PD.OrderLineNumber)
+                     INNER JOIN dbo.WaveDetail WD  WITH (NOLOCK) ON (OD.OrderKey = WD.OrderKey)
+                     INNER JOIN dbo.ORDERS ORD WITH (NOLOCK) ON (ORD.OrderKey = OD.OrderKey AND ORD.StorerKey = OD.StorerKey)
+                     WHERE WD.WaveKey = @cWaveKey
+                        AND PD.Storerkey = @cStorerKey
+                        AND ORD.MBOLKey IS NOT NULL
+                        AND ORD.MBOLKey  = @cShipRef
+                        AND PD.Status = 0
+                        AND PD.Qty = 0
                END
+            END
+
+            IF @nDebugFlag = 1
+            BEGIN
+               SELECT '@tShortCaseList'
+               SELECT * FROM @tShortCaseList
+            END
+
+            BEGIN TRY
+               INSERT INTO @tPackDetail
+                  SELECT  PH.PickHeaderKey, PKD.OrderKey, PD.CartonNo, PKD.CaseID, PD.LabelLine, PKD.SKU, SUM(PKD.Qty)
+                  FROM dbo.PickDetail PKD WITH (NOLOCK)
+                  INNER JOIN @tShortCaseList List
+                     ON PKD.CaseID = List.CASEID
+                  INNER JOIN dbo.PickHeader PH WITH (NOLOCK)
+                     ON PKD.OrderKey = PH.OrderKey
+                  INNER JOIN dbo.PackDetail PD WITH (NOLOCK)
+                     ON PH.PickHeaderKey = PD.PickSlipNo
+                     AND PKD.CaseID = PD.LabelNo
+                     AND PKD.SKU = PD.SKU
+                  GROUP BY PH.PickHeaderKey, PKD.OrderKey, PD.CartonNo, PKD.CaseID, PD.LabelLine, PKD.SKU
+                  ORDER BY PH.PickHeaderKey, PKD.OrderKey, PD.CartonNo,PD.LabelLine, PKD.SKU
+            END TRY
+            BEGIN CATCH
+               SET @nErrNo = 246851 
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INS fail
+               GOTO QUIT
+            END CATCH
+
+            IF @nDebugFlag = 1
+            BEGIN
+               SELECT '@tPackDetail'
+               SELECT * FROM @tPackDetail
             END
 
             SET @nTranCount = @@TRANCOUNT  
@@ -130,92 +180,94 @@ BEGIN
             ELSE
                SAVE TRANSACTION rdt_869ExtUpd01
 
-            -- CASE ID
-            SET @nLoopIndex = -1
-            WHILE 1 = 1
+            --Update packdetail by batch
+            WHILE EXISTS (SELECT 1 FROM @tPackDetail WHERE RowNumber > 0)
             BEGIN
-               SELECT TOP 1 
-                  @cCaseID = CaseID,
-                  @cOrderKey = OrderKey,
-                  @cSKU = SKU,
-                  @nLoopIndex = id
-               FROM @List
-               WHERE id > @nLoopIndex
-               ORDER BY id
+               --Only hanlde 
+               SELECT TOP (@nMaxPerBatch) *
+               INTO #Batch
+               FROM @tPackDetail
+               ORDER BY RowNumber
 
-               SELECT @nRowCount = @@ROWCOUNT
-               IF @nRowCount = 0
-                  BREAK
-
-               SELECT TOP 1 @cPickSlipNo = PICKHEADERKEY 
-               FROM dbo.PICKHEADER WITH(NOLOCK) 
-               WHERE OrderKey = @cOrderKey 
-                  AND @cStorerKey = StorerKey
-
-               DELETE FROM @tPackDetail
-
-               INSERT INTO @tPackDetail (PickSlipNo, CartonNo, LabelNo, LabelLine)
-               SELECT DISTINCT PickSlipNo, CartonNo, LabelNo, LabelLine 
-               FROM dbo.PackDetail WITH(NOLOCK) 
-               WHERE LabelNo = @cCaseID 
-                  AND StorerKey = @cStorerKey
-                  AND PickSlipNo = @cPickSlipNo
-                  AND SKU = @cSKU
-
-               SELECT @nRowCount = @@ROWCOUNT
-
-               --IF EXISTS (SELECT 1 FROM dbo.PackDetail WITH(NOLOCK) WHERE LABELNO = @cCaseID AND StorerKey = @cStorerKey)
-               IF @nRowCount > 0
+               IF @nDebugFlag = 1
                BEGIN
-                  SELECT @nQTY = SUM(PD.QTY)
-                  FROM dbo.PickDetail PD WITH(NOLOCK)
-                  INNER JOIN dbo.PickHeader PH WITH(NOLOCK) ON PD.OrderKey = PH.OrderKey AND PD.StorerKey = PH.StorerKey
-                  WHERE PD.CaseID = @cCaseID 
-                     AND PD.StorerKey = @cStorerKey 
-                     AND PD.SKU = @cSKU
-                     AND PH.PickHeaderKey = @cPickSlipNo
-
-                  --UPDATE dbo.PackDetail WITH(ROWLOCK) SET QTY = @nQTY WHERE LABELNO = @cCaseID AND StorerKey = @cStorerKey AND SKU = @cSKU
-                  UPDATE PD
-                  SET QTY = @nQTY
-                  FROM dbo.PackDetail PD WITH(ROWLOCK)
-                  INNER JOIN @tPackDetail tPD 
-                     ON PD.PickSlipNo = tPD.PickSLipNo 
-                     AND PD.CartonNo = tPD.CartonNo
-                     AND PD.LabelNo = tPD.LabelNo
-                     AND PD.LabelLine = tPD.LabelLine
+                  SELECT 'Get batch data'
+                  SELECT * FROM #Batch
                END
 
-               --All pickdetail status = 0
-               --No packdetail exists
-               IF NOT EXISTS (SELECT 1 FROM dbo.PICKDETAIL(NOLOCK) WHERE OrderKey = @cOrderKey AND STATUS <> '0')
-               AND NOT EXISTS (SELECT 1 FROM dbo.PACKDETAIL PD(NOLOCK) WHERE PickSLipNo = @cPickSlipNo AND PD.StorerKey = @cStorerKey)
-               BEGIN
-                  DELETE FROM @tPackHeader
-                  
-                  INSERT INTO @tPackHeader (PickSlipNo)
-                  SELECT PickSlipNo 
-                  FROM dbo.PackHeader WITH(NOLOCK) 
-                  WHERE OrderKey = @cOrderKey 
-                     AND StorerKey = @cStorerKey
-                  
+               BEGIN TRY
+                  UPDATE PD
+                     SET PD.QTY = B.QTY
+                  FROM dbo.PackDetail PD WITH(ROWLOCK)
+                  INNER JOIN #Batch B
+                     ON PD.PickSlipNo = B.PickSlipNo
+                  AND PD.CartonNo = B.CartonNo
+                  AND PD.LabelNo = B.LabelNo
+                  AND PD.LabelLine = B.LabelLine
+               END TRY
+               BEGIN CATCH
+                  SET @nErrNo = 246852 
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Upd pack detail fail
+                  GOTO RollBackTran
+               END CATCH
+
+               BEGIN TRY
                   DELETE PH
                   FROM dbo.PackHeader PH WITH(ROWLOCK)
-                  INNER JOIN @tPackHeader TPH ON PH.PickSlipNo = TPH.PickSlipNo
-               END
-            END
+                  INNER JOIN #Batch B ON PH.PickSlipNo = B.PickSlipNo
+                  WHERE NOT EXISTS (
+                     SELECT 1 FROM dbo.PickDetail PD WITH(NOLOCK)
+                     WHERE PD.OrderKey = B.OrderKey 
+                        AND PD.Status <> 0
+                  )
+                  AND NOT EXISTS (
+                     SELECT 1 FROM dbo.PackDetail PD WITH(NOLOCK)
+                     WHERE PD.PickSlipNo = B.PickSlipNo
+                  )
+               END TRY
+               BEGIN CATCH
+                  SET @nErrNo = 246853 
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INS fail
+                  GOTO RollBackTran
+               END CATCH
 
-            WHILE @@TRANCOUNT > @nTranCount
-               COMMIT TRANSACTION
+               DELETE T
+               FROM @tPackDetail T
+               INNER JOIN #Batch B ON T.RowNumber = B.RowNumber
+
+               DROP TABLE #Batch
+            END --END while
+
+            IF @nDebugFlag = 1
+               SELECT 'End of loop'
+            
+            IF (XACT_STATE()) = -1
+            BEGIN
+               SET @nErrNo = 246854
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INS fail
+               GOTO RollBackTran
+            END
+            ELSE
+               COMMIT TRAN
+
             GOTO QUIT
-         END
+         END --inputkey = 1
       END
    END
    GOTO QUIT
 
    RollBackTran:
-      ROLLBACK TRANSACTION
+      IF @nTranCount > 0 AND XACT_STATE() = 1
+         ROLLBACK TRAN rdt_869ExtUpd01
+      ELSE
+         ROLLBACK TRAN
+
    QUIT:
+      IF @nDebugFlag = 1
+         SELECT @nErrNo AS ErrNo, @cErrMsg AS ErrMsg
+
+      WHILE @@TRANCOUNT > @nTranCount
+         COMMIT TRAN
 END
 
 GO
