@@ -16,6 +16,7 @@ GO
 /* 2025-03-22   NLT013   1.1.0   UWP-31321 Clear ListKey while cancel task */
 /* 2025-08-26   NLT013   1.2.0   FCR-7417 Add TransmitLog                  */
 /* 2025-08-31   NLT013   1.2.1   FCR-7417 Get Task from RDTMOBREC          */
+/* 2025-09-16   NLT013   1.3.0   UWP-41254 No need fire trigger if short   */
 /***************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_1764ExtUpd21]
@@ -74,18 +75,21 @@ BEGIN
                WHERE Mobile = @nMobile
             END
 
+            DECLARE @nQty INT
+
             -- Get task info
             SELECT
                @cSKU = SKU,
                @cWaveKey = WaveKey,
                @cCaseID = CaseID,
-               @cTaskStatus = Status
+               @cTaskStatus = Status,
+               @nQty = Qty
             FROM dbo.TaskDetail WITH (NOLOCK)
             WHERE StorerKey = @cStorerKey
                AND TaskdetailKey = @cTaskDetailKey
                AND TaskType = 'RPF'
                
-            IF @cTaskStatus IN ( '5', '9' ) -- RPF task is completed
+            IF @cTaskStatus IN ( '5', '9' ) AND @nQty > 0 -- RPF task is completed
             BEGIN
                SELECT @nRowCount = COUNT(*)
                FROM dbo.SkuInfo WITH (NOLOCK)
