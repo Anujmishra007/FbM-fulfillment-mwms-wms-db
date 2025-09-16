@@ -38,8 +38,7 @@ GO
 /* 2025-04-29 1.16.2 NickT    UWP-33521 Carton weight is not corret for MPOC       */
 /* 2025-07-22 1.17.0 Jackc    FCR-6705 Generate BOL sequence number                */
 /* 2025-08-19 1.18.0 NickT    UWP-39586 Performance tuning                         */
-/* 2025-08-27 1.19.0 Jackc    FCR-4159 if single unit order, archive dropid when   */
-/*                              all sku packed (FCR-7348)                          */
+/* 2025-09-16 1.19.0 NickT    UWP-41279 No need fire trigger when archive dropdid  */
 /***********************************************************************************/
 CREATE OR ALTER PROC rdt.rdt_855ExtUpd13 (
    @nMobile      INT,   
@@ -1551,14 +1550,15 @@ BEGIN
                         AND DropID = @cToteID
 
                         UPDATE PD
-                           SET DropID = CONCAT('ARC',DropID)
+                              SET DropID = CONCAT('ARC',DropID),
+                              TrafficCop = NULL
                         FROM dbo.PICKDETAIL PD WITH(ROWLOCK)
                         INNER JOIN @tPickDetail TPD 
                         ON PD.PickDetailKey = TPD.PickDetailKey
 
-                        --UPDATE dbo.PackDetail WITH(ROWLOCK) SET DropID = CONCAT('ARC',DropID) WHERE DropID=@cToteID
-                        --UPDATE dbo.PICKDETAIL WITH(ROWLOCK) SET DropID = CONCAT('ARC',DropID) WHERE DropID=@cToteID
-                        UPDATE RDT.RDTMOBREC WITH(ROWLOCK) SET C_STRING1 = '' WHERE Mobile = @nMobile
+                           --UPDATE dbo.PackDetail WITH(ROWLOCK) SET DropID = CONCAT('ARC',DropID) WHERE DropID=@cToteID
+                           --UPDATE dbo.PICKDETAIL WITH(ROWLOCK) SET DropID = CONCAT('ARC',DropID) WHERE DropID=@cToteID
+                           UPDATE RDT.RDTMOBREC WITH(ROWLOCK) SET C_STRING1 = '' WHERE Mobile = @nMobile
                      END
                   END
                   --V1.19.0 end
@@ -1590,7 +1590,8 @@ BEGIN
                        AND DropID = @cToteID
 
                      UPDATE PD
-                        SET DropID = CONCAT('ARC',DropID)
+                        SET DropID = CONCAT('ARC',DropID),
+                        TrafficCop = NULL
                      FROM dbo.PICKDETAIL PD WITH(ROWLOCK)
                      INNER JOIN @tPickDetail TPD 
                      ON PD.PickDetailKey = TPD.PickDetailKey
