@@ -188,11 +188,18 @@ BEGIN
                            IF EXISTS(
                               SELECT 1 FROM dbo.PickDetail PD WITH(NOLOCK)
                               INNER JOIN dbo.ORDERS ORM WITH(NOLOCK) ON ORM.OrderKey = PD.OrderKey AND ORM.StorerKey = PD.StorerKey
+                              INNER JOIN dbo.SKU WITH(NOLOCK) ON PD.StorerKey = SKU.StorerKey AND PD.Sku = SKU.Sku
+                              LEFT JOIN dbo.WorkOrderDetail WOD WITH(NOLOCK) ON WOD.ExternWorkOrderKey IS NOT NULL AND WOD.ExternLineNo IS NOT NULL
+                                                                              AND WOD.ExternWorkOrderKey = PD.OrderKey AND WOD.ExternLineNo = PD.OrderLineNumber
                               WHERE PD.StorerKey = @cStorerKey
                                  AND PD.DropID = @cCaseID
                                  AND PD.UOM = '2'
-                                 AND NOT EXISTS (SELECT 1 FROM dbo.WorkOrderDetail WOD WITH(NOLOCK) WHERE WOD.ExternWorkOrderKey = PD.OrderKey)
-                                 AND NOT EXISTS(SELECT 1 FROM dbo.CODELKUP CL WITH(NOLOCK) WHERE ORM.ShipperKey = CL.short AND CL.LISTNAME = 'WSCourier' AND CL.Code = 'ECL-1')
+                                 --AND NOT EXISTS (SELECT 1 FROM dbo.WorkOrderDetail WOD WITH(NOLOCK) WHERE WOD.ExternWorkOrderKey = PD.OrderKey)
+                                 AND NOT EXISTS(SELECT 1 FROM dbo.CODELKUP CL WITH(NOLOCK) WHERE CL.StorerKey = @cStorerKey AND CL.LISTNAME = 'WSCourier' AND CL.Code = 'ECL-1' AND ORM.ShipperKey = CL.short)
+                                 AND ( ISNULL(SKU.PrePackIndicator, '') = 'Y'
+                                       OR 
+                                       NOT EXISTS (SELECT 1 FROM dbo.CODELKUP CL1 WITH(NOLOCK) WHERE CL1.StorerKey = @cStorerKey AND CL1.LISTNAME = 'WCSVAS' AND ISNULL(WOD.Type, '') = CL1.short)
+                                    )
                            )
                            AND EXISTS (SELECT 1 FROM dbo.UCC WITH(NOLOCK) WHERE UCCNo = @cCaseID AND StorerKey = @cStorerKey)
                            BEGIN
