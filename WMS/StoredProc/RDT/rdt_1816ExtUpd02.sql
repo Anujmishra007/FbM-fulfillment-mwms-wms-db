@@ -18,6 +18,7 @@ GO
 /* 2024-12-18   NLT013    1.0.2  FCR-1344 Unlock loc & set status3                     */
 /* 2025-01-14   Dennis    1.0.3  FCR-1344 Transmitlog2 key2 = caseid                   */
 /* 2025-08-26   NickT     1.1.0  FCR-7417 Add validation before insert Transmitlog2    */
+/* 2025-09-17   NickT     1.2.0  FCR-7730 Add parameter @cSourceName for rdt_LevisPrintCartonLabel*/
 /***************************************************************************************/
 
 CREATE OR ALTER PROCEDURE rdt.rdt_1816ExtUpd02
@@ -110,7 +111,7 @@ BEGIN
                AND Status = '0'
 
             BEGIN TRY
-               UPDATE PD
+               UPDATE PD 
                SET Status = '3'
                FROM dbo.PickDetail PD WITH (ROWLOCK) 
                INNER JOIN @tPickDetail TPD ON PD.PickDetailKey = TPD.PickDetailKey
@@ -219,6 +220,7 @@ BEGIN
                         ,@cPrintType   = 'ZPL'
                         ,@nErrNo       = @nErrNo      OUTPUT
                         ,@cErrMsg      = @cErrMsg     OUTPUT
+                        ,@cSourceName  = 'rdt_1816ExtUpd02'
 
                      IF @nErrNo <> 0
                      BEGIN

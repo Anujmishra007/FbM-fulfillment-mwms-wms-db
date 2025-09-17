@@ -10,6 +10,7 @@ GO
 /* Date        Rev    Author       Purposes                             */
 /* 2025-02-05  1.0.0  CYU027   FCR-2630 Add Option=5 in step 5          */
 /* 2025-02-12  1.0.1  CYU027   FCR-2630 Only print ZPL when option = 5  */
+/* 2025-09-17  1.1.0  NickT    FCR-7730 Add parameter @cSourceName      */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_LevisPrintCartonLabel]
@@ -22,7 +23,8 @@ CREATE OR ALTER PROCEDURE [RDT].[rdt_LevisPrintCartonLabel]
    @cDropID      NVARCHAR( 20),
    @cPrintType   NVARCHAR( 20) = 'BARTENDER', --'ZPL' when print only ZPL
    @nErrNo       INT            OUTPUT,
-   @cErrMsg      NVARCHAR( 20)  OUTPUT
+   @cErrMsg      NVARCHAR( 20)  OUTPUT,
+   @cSourceName  NVARCHAR( 50) = ''
 AS
 BEGIN
    SET NOCOUNT ON
@@ -196,7 +198,7 @@ BEGIN
             @cPaperPrinter,
             @cLabelName, -- Report type
             @tCartonLabelList, -- Report params
-            'rdt_855ExtUpd13',
+            @cSourceName,
             @nErrNo  OUTPUT,
             @cErrMsg OUTPUT
 
@@ -281,7 +283,7 @@ BEGIN
                   @cPaperPrinter,
                   @cLabelName, -- Report type
                   @tCartonLabelList, -- Report params
-                  'rdt_855ExtUpd13',
+                  @cSourceName,
                   @nErrNo  OUTPUT,
                   @cErrMsg OUTPUT
 
@@ -329,7 +331,7 @@ BEGIN
             @cPaperPrinter,
             @cLabelName, -- Report type
             @tCartonLabelList, -- Report params
-            'rdt_855ExtUpd13',
+            @cSourceName,
             @nErrNo  OUTPUT,
             @cErrMsg OUTPUT
 
