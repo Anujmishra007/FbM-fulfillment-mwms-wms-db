@@ -1,4 +1,7 @@
 
+USE [GBRWMS]
+GO
+/****** Object:  StoredProcedure [RDT].[rdt_839ExtValJCB]    Script Date: 9/17/2025 10:28:29 AM ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
@@ -12,7 +15,7 @@ GO
 /* 17/09/2025   2.0   PPA374   Stop from picking if stock is not available           */
 /*************************************************************************************/
 
-CREATE OR ALTER PROC [RDT].[rdt_839ExtValJCB] (
+CREATE OR ALTER   PROC [RDT].[rdt_839ExtValJCB] (
    @nMobile      INT,            
    @nFunc        INT,            
    @cLangCode    NVARCHAR( 3),   
@@ -60,24 +63,26 @@ BEGIN
                   AND       PD1.Sku = LLI.Sku
                   AND PD1.Storerkey = LLI.StorerKey
                OUTER APPLY(
-			      SELECT SUM(Qty)LLIQty 
+			      SELECT ISNULL(SUM(Qty),0)LLIQty 
 				  FROM dbo.LOTxLOCxID LLI WITH(NOLOCK) 
-				  WHERE        LLI.Loc = PD1.Loc 
-				     AND       LLI.LOT = PD1.LOT 
-					 AND       LLI.SKU = PD1.SKU
-	                 AND LLI.StorerKey = PD1.StorerKey
+				  WHERE LLI.Loc = PD1.Loc 
+				     AND LLI.LOT = PD1.LOT 
+					 AND LLI.SKU = PD1.SKU
+					 AND LLI.StorerKey = PD1.Storerkey
                )OA
-            WHERE EXISTS (
-               SELECT 1 
-               FROM dbo.PICKDETAIL PD2 WITH (NOLOCK) 
-               WHERE PD1.Sku = PD2.Sku 
-                  AND PD1.Storerkey = PD2.Storerkey 
-	              AND PD1.Lot = PD2.Lot 
-	              AND PD1.Loc = PD2.Loc 
-	              AND PD2.OrderKey = @cOrderKey 
-	              AND PD2.Status = '0' 
-	              AND PD1.Notes = 'Started' 
+            WHERE (
+			   EXISTS (
+                  SELECT 1 
+                  FROM dbo.PICKDETAIL PD2 WITH (NOLOCK) 
+                  WHERE PD1.Sku = PD2.Sku 
+                     AND PD1.Storerkey = PD2.Storerkey 
+	                 AND PD1.Lot = PD2.Lot 
+	                 AND PD1.Loc = PD2.Loc 
+	                 AND PD2.OrderKey = @cOrderKey 
+	                 AND PD2.Status = '0' 
             ) 
+			   AND PD1.Notes = 'Started'
+			   )
                OR PD1.OrderKey = @cOrderKey
             GROUP BY PD1.Sku, PD1.Loc, PD1.Lot, OA.LLIQty
             HAVING OA.LLIQty - SUM(PD1.Qty) < 0
