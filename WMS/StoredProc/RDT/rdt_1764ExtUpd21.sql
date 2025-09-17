@@ -230,6 +230,7 @@ BEGIN
             END
 
             -- Get task info
+            DECLARE @nQty INT
             SELECT
                @cSKU = SKU,
                @cWaveKey = WaveKey,
