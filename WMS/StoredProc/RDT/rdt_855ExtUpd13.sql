@@ -39,7 +39,10 @@ GO
 /* 2025-07-22 1.17.0 Jackc    FCR-6705 Generate BOL sequence number                */
 /* 2025-08-19 1.18.0 NickT    UWP-39586 Performance tuning                         */
 /* 2025-09-16 1.19.0 NickT    UWP-41279 No need fire trigger when archive dropdid  */
-/* 2025-09-17 1.20.0 NickT    FCR-7730 Add parameter @cSourceName for rdt_LevisPrintCartonLabel*/
+/* 2025-08-27 1.19.0 Jackc    FCR-4159 if single unit order, archive dropid when   */
+/*                              all sku packed (FCR-7348)                          */
+/* 2025-09-17 1.20.0 NickT    FCR-7730 Add parameter @cSourceName                  */
+/*                            for rdt_LevisPrintCartonLabel                        */
 /***********************************************************************************/
 CREATE OR ALTER PROC rdt.rdt_855ExtUpd13 (
    @nMobile      INT,   
