@@ -189,6 +189,9 @@ BEGIN
                FROM @tPackDetail
                ORDER BY RowNumber
 
+               ALTER TABLE #Batch
+               ADD CONSTRAINT PK_Batch PRIMARY KEY CLUSTERED (PickSlipNo, CartonNo, LabelNo, LabelLine)
+
                IF @nDebugFlag = 1
                BEGIN
                   SELECT 'Get batch data'
@@ -257,6 +260,9 @@ BEGIN
    GOTO QUIT
 
    RollBackTran:
+      IF OBJECT_ID('tempdb..#Batch') IS NOT NULL
+         DROP TABLE #Batch
+
       IF @nTranCount > 0 AND XACT_STATE() = 1
          ROLLBACK TRAN rdt_869ExtUpd01
       ELSE
