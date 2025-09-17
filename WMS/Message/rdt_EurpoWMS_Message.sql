@@ -273,7 +273,7 @@ execute rdt.rdtAddMsg 218209, 10, '218209 NotInStorerGrp', 'us_english', 685, 0,
 execute rdt.rdtAddMsg 218210, 10, '218210 ASN is closed', 'us_english', 685, 0, '218210 ASN is closed'
 execute rdt.rdtAddMsg 218211, 10, '218211^INVALID FORMAT', 'us_english', 685, 0, '218211^INVALID FORMAT'
 execute rdt.rdtAddMsg 218212, 10, '218212 ToID in used', 'us_english', 685, 0, '218212 ToID in used'
-execute rdt.rdtAddMsg 218213, 10, '218213 Need LineNo', 'us_english', 685, 0, '218213 ToID in used'
+execute rdt.rdtAddMsg 218213, 10, '218213 Need LineNo', 'us_english', 685, 0, '218213 Need LineNo'
 execute rdt.rdtAddMsg 218214, 10, '218214 Invalid LineNo', 'us_english', 685, 0, '218214 Invalid LineNo'
 execute rdt.rdtAddMsg 218215, 10, '218215 Line not exist', 'us_english', 685, 0, '218215 Line not exist'
 execute rdt.rdtAddMsg 218216, 10, '218216 Need LOC', 'us_english', 685, 0, '218216 Need LOC'
@@ -327,5 +327,6 @@ execute rdt.rdtAddMsg 218381, 10, '218381 Missing COD on Lottable03', 'us_englis
 execute rdt.rdtAddMsg 218382, 10, '218382 No SO in lottable10', 'us_english', 573, 0, ''
   
 SELECT * FROM rdt.rdtMsg WHERE Message_ID BETWEEN 217901 AND 218400
+
 
 
