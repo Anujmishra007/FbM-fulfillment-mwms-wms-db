@@ -9,9 +9,10 @@ GO
 /*                                                                                   */
 /* Date         Rev   Author   Purposes                                              */
 /* 12/09/2025   1.0   PPA374   Only allow PickZones from CODELKUP PickPiece pick     */
+/* 17/09/2025   2.0   PPA374   Stop from picking if stock is not available           */
 /*************************************************************************************/
 
-ALTER   PROC [RDT].[rdt_839ExtValJCB] (
+CREATE OR ALTER PROC [RDT].[rdt_839ExtValJCB] (
    @nMobile      INT,            
    @nFunc        INT,            
    @cLangCode    NVARCHAR( 3),   
@@ -39,8 +40,53 @@ BEGIN
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
+   DECLARE @cOrderKey AS NVARCHAR( 20)
+
+   SELECT TOP 1 @cOrderKey = OrderKey 
+   FROM PICKHEADER WITH(NOLOCK) 
+   WHERE PickHeaderKey = @cPickSlipNo
+
    IF @nFunc = 839
    BEGIN
+      IF @nStep = 1
+	     AND @nInputKey = 1 --PickSlipNo
+      BEGIN
+	     IF EXISTS (
+		    SELECT 1
+            FROM dbo.PICKDETAIL PD1 WITH (NOLOCK) 
+               LEFT JOIN dbo.LOTxLOCxID LLI WITH(NOLOCK)
+                   ON       PD1.Lot = LLI.Lot
+                  AND       PD1.Loc = LLI.Loc
+                  AND       PD1.Sku = LLI.Sku
+                  AND PD1.Storerkey = LLI.StorerKey
+               OUTER APPLY(
+			      SELECT SUM(Qty)LLIQty 
+				  FROM dbo.LOTxLOCxID LLI WITH(NOLOCK) 
+				  WHERE LLI.Loc = PD1.Loc 
+				     AND LLI.LOT = PD1.LOT 
+					 AND LLI.SKU = PD1.SKU
+               )OA
+            WHERE EXISTS (
+               SELECT 1 
+               FROM dbo.PICKDETAIL PD2 WITH (NOLOCK) 
+               WHERE PD1.Sku = PD2.Sku 
+                  AND PD1.Storerkey = PD2.Storerkey 
+	              AND PD1.Lot = PD2.Lot 
+	              AND PD1.Loc = PD2.Loc 
+	              AND PD2.OrderKey = @cOrderKey 
+	              AND PD2.Status = '0' 
+	              AND PD1.Notes = 'Started' 
+            ) 
+               OR PD1.OrderKey = @cOrderKey
+            GROUP BY PD1.Sku, PD1.Loc, PD1.Lot, OA.LLIQty
+            HAVING OA.LLIQty - SUM(PD1.Qty) < 0
+		 )
+		 BEGIN
+		    SET @nErrNo = 218239
+			SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')--'No stock Need replen'
+			GOTO QUIT
+		 END
+	  END
 	  IF @nStep = 2 
 	     AND @nInputKey = 1 --PickZone
 	  BEGIN
