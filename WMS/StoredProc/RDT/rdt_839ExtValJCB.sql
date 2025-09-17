@@ -62,9 +62,10 @@ BEGIN
                OUTER APPLY(
 			      SELECT SUM(Qty)LLIQty 
 				  FROM dbo.LOTxLOCxID LLI WITH(NOLOCK) 
-				  WHERE LLI.Loc = PD1.Loc 
-				     AND LLI.LOT = PD1.LOT 
-					 AND LLI.SKU = PD1.SKU
+				  WHERE        LLI.Loc = PD1.Loc 
+				     AND       LLI.LOT = PD1.LOT 
+					 AND       LLI.SKU = PD1.SKU
+	                 AND LLI.StorerKey = PD1.StorerKey
                )OA
             WHERE EXISTS (
                SELECT 1 
