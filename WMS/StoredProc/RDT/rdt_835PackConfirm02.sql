@@ -13,6 +13,8 @@ GO
 /*                                                                      */
 /* Date        Rev  Author      Purposes                                */
 /* 2025-05-07  1.0  James       FCR-3769. Created                       */
+/* 2025-09-17  1.1  James       Rewrite update ucc status (james01)     */
+/*                              Add a final check on ucc and serialno   */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_835PackConfirm02] (
@@ -821,14 +823,47 @@ BEGIN
          FETCH NEXT FROM @curSN INTO @cSerialNoKey
       END
 
+      --SET @curUCC = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
+      --SELECT UCC_RowRef
+      --FROM dbo.UCC UCC WITH (NOLOCK)
+      --WHERE UCC.Storerkey = @cStorerKey
+      --AND   UCC.[Status] = '3'
+      --AND   EXISTS( SELECT 1
+      --      FROM @tPickDetail t
+      --      WHERE UCC.UCCNo = t.DropID)
+      --OPEN @curUCC
+      --FETCH NEXT FROM @curUCC INTO @nUCC_RowRef
+      --WHILE @@FETCH_STATUS = 0
+      --BEGIN
+      --   UPDATE dbo.UCC SET 
+      --      [Status] = '6',
+      --      EditWho = @cUserName,
+      --      EditDate = GETDATE()
+      --   WHERE UCC_RowRef = @nUCC_RowRef
+
+      --   IF @@ERROR <> 0
+      --   BEGIN
+      --      SET @nErrNo = 237922
+      --      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD UCC Err
+      --      GOTO RollBackTran
+      --   END
+
+      --   FETCH NEXT FROM @curUCC INTO @nUCC_RowRef
+      --END
+
       SET @curUCC = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
       SELECT UCC_RowRef
       FROM dbo.UCC UCC WITH (NOLOCK)
       WHERE UCC.Storerkey = @cStorerKey
       AND   UCC.[Status] = '3'
-      AND   EXISTS( SELECT 1
-            FROM @tPickDetail t
-            WHERE UCC.UCCNo = t.DropID)
+      AND   EXISTS (
+            SELECT 1
+            FROM dbo.PackDetail PD WITH (NOLOCK)
+            JOIN dbo.PackHeader PH WITH (NOLOCK) ON ( PD.PickSlipNo = PH.PickSlipNo)
+            WHERE PD.DropID = UCC.UCCNo
+            AND   PD.StorerKey = UCC.StorerKey
+            AND   PD.PickSlipNo = @cPickSlipNo
+            AND   PH.Status = '9')
       OPEN @curUCC
       FETCH NEXT FROM @curUCC INTO @nUCC_RowRef
       WHILE @@FETCH_STATUS = 0
@@ -847,6 +882,42 @@ BEGIN
          END
 
          FETCH NEXT FROM @curUCC INTO @nUCC_RowRef
+      END
+
+      -- ==========================================================
+      -- Final check: find any SerialNo still not updated to 6
+      -- ==========================================================
+      IF EXISTS (
+          SELECT 1
+          FROM dbo.SerialNo SN WITH (NOLOCK)
+          JOIN dbo.PackDetail PD WITH (NOLOCK) ON 
+            ( SN.StorerKey = PD.StorerKey AND SN.SKU = PD.SKU AND SN.SerialNo = PD.RefNo)
+          JOIN dbo.PackHeader PH WITH (NOLOCK) ON ( PD.PickSlipNo = PH.PickSlipNo)
+          WHERE SN.Status <> '6'
+          AND   PD.PickSlipNo = @cPickSlipNo
+          AND   PH.Status = '9')
+      BEGIN
+         SET @nErrNo = 237923
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SN Status Er
+         GOTO RollBackTran
+      END
+
+      -- ==========================================================
+      -- Final check: find any UCC still not updated to 6
+      -- ==========================================================
+      IF EXISTS (
+          SELECT 1
+          FROM dbo.UCC UCC WITH (NOLOCK)
+          JOIN dbo.PackDetail PD WITH (NOLOCK) ON ( UCC.UCCNo = PD.DropID AND UCC.Storerkey = PD.StorerKey)
+          JOIN dbo.PackHeader PH WITH (NOLOCK) ON ( PD.PickSlipNo = PH.PickSlipNo)
+          WHERE UCC.Storerkey = @cStorerKey
+          AND   UCC.Status <> '6'
+          AND   PD.PickSlipNo = @cPickSlipNo
+          AND   PH.Status = '9')
+      BEGIN
+         SET @nErrNo = 237924
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UCC Status Er
+         GOTO RollBackTran
       END
    END
 
