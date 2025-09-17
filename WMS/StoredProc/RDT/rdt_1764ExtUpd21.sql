@@ -211,6 +211,7 @@ BEGIN
                                     ,@cPrintType   = 'ZPL'
                                     ,@nErrNo       = @nErrNo      OUTPUT
                                     ,@cErrMsg      = @cErrMsg     OUTPUT
+                                    ,@cSourceName  = 'rdt_1764ExtUpd21'
                               END TRY
                               BEGIN CATCH
                                  SET @nErrNo = 233654
