@@ -68,6 +68,7 @@ BEGIN
                @dLottable13 = '' ,
                @dLottable14 = '' ,
                @dLottable15 = ''
+         END
       END
    END
 END
