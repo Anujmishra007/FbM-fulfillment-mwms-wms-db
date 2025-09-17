@@ -23,5 +23,7 @@ execute rdt.rdtAddMsg 237919, 10, '237919InsPldInfoFail',   'us_english', 835
 execute rdt.rdtAddMsg 237920, 10, '237920 PackCfm Fail ',   'us_english', 835
 execute rdt.rdtAddMsg 237921, 10, '237921 Scan Out Fail',   'us_english', 835
 execute rdt.rdtAddMsg 237922, 10, '237922 UPD UCC Err  ',   'us_english', 835
+execute rdt.rdtAddMsg 237923, 10, '237923 SN Status Err',   'us_english', 835
+execute rdt.rdtAddMsg 237924, 10, '237924 UCC Status Er',   'us_english', 835
 
 SELECT * FROM RDT.RDTMSG (NOLOCK) WHERE MESSAGE_ID BETWEEN 237901 AND 237950
