@@ -23,6 +23,7 @@ GO
 /* 2025-04-29   1.9  NickT      UWP-33740 Add ExtendedValidationSP            */
 /******************************Migrated Into V0********************************/
 /* 2025-08-28   2.0  JackC      UWP-40252 Missing @cID in ExtInfo SQL string  */
+/* 2025-09-17   2.1  PPA374     Adding Extended update to the step 5          */ 
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_PickPallet_NEW] (
@@ -1918,6 +1919,64 @@ BEGIN
          END
       END
 
+      IF @cExtendedUpdateSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedUpdateSP AND type = 'P')
+         BEGIN
+            SET @cSQL = 'EXEC rdt.' + RTRIM(@cExtendedUpdateSP) + 
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, ' +
+               ' @cPickSlipNo, @cPickZone, @cLOC, @cID, @cSKU, ' +
+               ' @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05, ' + 
+               ' @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10, ' + 
+               ' @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, ' + 
+               ' @nTaskQTY, @cToLOC, @cOption, @nErrNo OUTPUT, @cErrMsg OUTPUT '
+            SET @cSQLParam =
+               '@nMobile       INT,           ' +
+               '@nFunc         INT,           ' +
+               '@cLangCode     NVARCHAR( 3),  ' +
+               '@nStep         INT,           ' +
+               '@nInputKey     INT,           ' +
+               '@cFacility     NVARCHAR( 5),  ' +
+               '@cStorerKey    NVARCHAR( 15), ' +
+               '@cPickSlipNo   NVARCHAR( 10), ' +
+               '@cPickZone     NVARCHAR( 10), ' +
+               '@cLOC          NVARCHAR( 10), ' +
+               '@cID           NVARCHAR( 18), ' +
+               '@cSKU          NVARCHAR( 20), ' +
+               '@cLottable01   NVARCHAR( 18), ' +
+               '@cLottable02   NVARCHAR( 18), ' +
+               '@cLottable03   NVARCHAR( 18), ' +
+               '@dLottable04   DATETIME,      ' +
+               '@dLottable05   DATETIME,      ' +
+               '@cLottable06   NVARCHAR( 30), ' +
+               '@cLottable07   NVARCHAR( 30), ' +
+               '@cLottable08   NVARCHAR( 30), ' +
+               '@cLottable09   NVARCHAR( 30), ' +
+               '@cLottable10   NVARCHAR( 30), ' +
+               '@cLottable11   NVARCHAR( 30), ' +
+               '@cLottable12   NVARCHAR( 30), ' +
+               '@dLottable13   DATETIME,      ' +
+               '@dLottable14   DATETIME,      ' +
+               '@dLottable15   DATETIME,      ' +
+               '@nTaskQTY      INT,           ' +
+               '@cToLOC        NVARCHAR( 10), ' +
+               '@cOption       NVARCHAR( 1),  ' +
+               '@nErrNo        INT           OUTPUT, ' +
+               '@cErrMsg       NVARCHAR( 20) OUTPUT  '
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam, @nMobile, 
+               @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 
+               @cPickSlipNo, @cPickZone, @cLOC, @cID, @cSKU, 
+               @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05, 
+               @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10, 
+               @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, 
+               @nTaskQTY, @cToLOC, @cOption, @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+            IF @nErrNo <> 0
+               GOTO Quit
+         END
+      END
+   
       -- Confirm task
       EXECUTE rdt.rdt_PickPallet_Confirm @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 
          @cPickSlipNo, @cPickZone, @cLOC, @cID, @cSKU, @nTaskQTY, @cToLOC, @cLottableCode, 
@@ -2237,3 +2296,4 @@ GO
 
 GRANT EXECUTE ON RDT.rdtfnc_PickPallet_NEW TO NSQL
 GO
+
