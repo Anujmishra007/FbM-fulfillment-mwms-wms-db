@@ -57,11 +57,6 @@ BEGIN
 	     IF EXISTS (
 		    SELECT 1
             FROM dbo.PICKDETAIL PD1 WITH (NOLOCK) 
-               LEFT JOIN dbo.LOTxLOCxID LLI WITH(NOLOCK)
-                   ON       PD1.Lot = LLI.Lot
-                  AND       PD1.Loc = LLI.Loc
-                  AND       PD1.Sku = LLI.Sku
-                  AND PD1.Storerkey = LLI.StorerKey
                OUTER APPLY(
 			      SELECT ISNULL(SUM(Qty),0)LLIQty 
 				  FROM dbo.LOTxLOCxID LLI WITH(NOLOCK) 
