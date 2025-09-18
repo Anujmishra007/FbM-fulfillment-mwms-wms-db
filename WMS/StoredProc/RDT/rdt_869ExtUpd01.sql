@@ -50,7 +50,7 @@ BEGIN
       @cSKU             NVARCHAR( 20),
       @cShipRef         NVARCHAR( 10)
 
-   DECLARE @nMaxPerBatch   INT = 2000    
+   DECLARE @nMaxPerBatch   INT = 5000    
 
    DECLARE @tShortCaseList TABLE
    (
@@ -174,15 +174,15 @@ BEGIN
                SELECT * FROM @tPackDetail
             END
 
-            SET @nTranCount = @@TRANCOUNT  
-            IF @nTranCount = 0
-               BEGIN TRANSACTION
-            ELSE
-               SAVE TRANSACTION rdt_869ExtUpd01
-
             --Update packdetail by batch
             WHILE EXISTS (SELECT 1 FROM @tPackDetail WHERE RowNumber > 0)
             BEGIN
+               SET @nTranCount = @@TRANCOUNT  
+               IF @nTranCount = 0
+                  BEGIN TRANSACTION
+               ELSE
+                  SAVE TRANSACTION rdt_869ExtUpd01
+
                --Only hanlde 
                SELECT TOP (@nMaxPerBatch) *
                INTO #Batch
@@ -239,19 +239,20 @@ BEGIN
                INNER JOIN #Batch B ON T.RowNumber = B.RowNumber
 
                DROP TABLE #Batch
+
+               IF (XACT_STATE()) = -1
+               BEGIN
+                  SET @nErrNo = 246854
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INS fail
+                  GOTO RollBackTran
+               END
+               ELSE
+                  COMMIT TRAN
             END --END while
 
             IF @nDebugFlag = 1
                SELECT 'End of loop'
-            
-            IF (XACT_STATE()) = -1
-            BEGIN
-               SET @nErrNo = 246854
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INS fail
-               GOTO RollBackTran
-            END
-            ELSE
-               COMMIT TRAN
+
 
             GOTO QUIT
          END --inputkey = 1
