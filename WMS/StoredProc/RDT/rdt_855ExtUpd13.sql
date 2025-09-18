@@ -43,6 +43,7 @@ GO
 /*                              all sku packed (FCR-7348)                          */
 /* 2025-09-17 1.20.0 NickT    FCR-7730 Add parameter @cSourceName                  */
 /*                            for rdt_LevisPrintCartonLabel                        */
+/* 2025-09-18 1.21.0 Jackc    FCR-7348 New dropid archiving logic (FBRv1.4)        */
 /***********************************************************************************/
 CREATE OR ALTER PROC rdt.rdt_855ExtUpd13 (
    @nMobile      INT,   
@@ -1393,9 +1394,18 @@ BEGIN
                   END
                END
 
+               --v1.21.0 start
+               -- archiving dropid logic move out of Opt=1 or opt=5
+               SET @nTranCount = @@TRANCOUNT
+               IF @nTranCount = 0
+                  BEGIN TRAN  
+               ELSE
+                  SAVE TRAN rdt_855TransLog2
+               --V1.21.0 end 
+
                IF @cOption = '1' OR @cOption = '5'
                BEGIN
-                  SET @nTranCount = @@TRANCOUNT
+                  --SET @nTranCount = @@TRANCOUNT --1.21.0
 
                   SELECT TOP 1 @cToteID = DropID
                   FROM dbo.PickDetail WITH(NOLOCK)
@@ -1414,8 +1424,8 @@ BEGIN
                   SELECT @nWaveKeyCount = COUNT(*) FROM @tWaveKeys;
 
                   -- add record into transmitlog2
-                  BEGIN TRAN
-                  SAVE TRAN rdt_855TransLog2
+                  --BEGIN TRAN  --1.21.0
+                  --SAVE TRAN rdt_855TransLog2 --1.21.0
 
                   WHILE @nWaveKeyCount > 0
                   BEGIN
@@ -1431,7 +1441,10 @@ BEGIN
                               @c_errmsg         = @cErrMsg    OUTPUT
                      IF @nErrNo <> 0 OR @bSuccess <> 1
                      BEGIN
-                        ROLLBACK TRAN rdt_855TransLog2
+                        IF @nTranCount > 0
+                           ROLLBACK TRAN rdt_855TransLog2
+                        ELSE
+                           ROLLBACK TRAN
                         GOTO Quit
                      END
 
@@ -1499,7 +1512,10 @@ BEGIN
                               @c_errmsg         = @cErrMsg    OUTPUT
                            IF @nErrNo <> 0 OR @bSuccess <> 1
                            BEGIN
-                              ROLLBACK TRAN rdt_855TransLog2
+                              IF @nTranCount > 0
+                                 ROLLBACK TRAN rdt_855TransLog2
+                              ELSE
+                                 ROLLBACK TRAN
                               GOTO Quit
                            END 
                         END --create transmitlog2
@@ -1513,62 +1529,35 @@ BEGIN
                   END --WSSortTotRel
                   --V1.13.0 end
 
-                  --clear dropid to reuse
-                  --V1.19.0 start
-                  IF @cSingleUnitOrdFlag = 'Y'
-                  BEGIN
-                     IF NOT EXISTS (SELECT  1
-                              FROM PackInfo PI WITH (NOLOCK)
-                              INNER JOIN PackDetail PD WITH (NOLOCK)
-                                 ON PI.PickSlipNo = PD.PickSlipNo
-                                 AND PI.CartonNo = PD.CartonNo
-                              INNER JOIN PickHeader PH WITH (NOLOCK)
-                                 ON PD.PickSlipNo = PH.PickHeaderKey
-                                 AND PD.StorerKey = PH.StorerKey
-                              WHERE
-                                 PD.StorerKey = @cStorerKey
-                                 AND PD.DropID = @cToteID --ToteID
-                                 AND ISNULL(PI.CartonStatus,'') <> 'PACKED') -- All skus are packed in single unit order tote
-                     BEGIN
-                        DELETE FROM @tPackDetail
+                  --V1.21.0 Move dropid archiving logic out
+                 
+                  --WHILE @@TRANCOUNT > @nTranCount --V1.21.0
+                     --COMMIT TRAN
+               END --option in 1 or 5
 
-                        INSERT INTO @tPackDetail (PickSlipNo, CartonNo, LabelNo, LabelLine)
-                        SELECT DISTINCT PickSlipNo, CartonNo, LabelNo, LabelLine
-                        FROM dbo.PackDetail WITH(NOLOCK)
-                        WHERE StorerKey = @cStorerKey
-                        AND DropID = @cToteID
+               --archive dropid to reuse
+               --V1.21.0 start
+               IF @cOption = '9' -- get toteid when option = 9
+                  SELECT TOP 1 @cToteID = DropID
+                     FROM dbo.PickDetail WITH(NOLOCK)
+                     WHERE StorerKey = @cStorerKey
+                     AND CaseID = @cDropID
+                     AND ShipFlag <> 'Y'
 
-                        UPDATE PD
-                           SET DropID = CONCAT('ARC',DropID)
-                        FROM dbo.PackDetail PD WITH(ROWLOCK)
-                        INNER JOIN @tPackDetail TPD 
-                        ON PD.PickSlipNo = TPD.PickSlipNo
-                           AND PD.CartonNo = TPD.CartonNo
-                           AND PD.LabelNo = TPD.LabelNo
-                           AND PD.LabelLine = TPD.LabelLine
-
-                        DELETE FROM @tPickDetail
-
-                        INSERT INTO @tPickDetail (PickDetailKey)
-                        SELECT PickDetailKey
-                        FROM dbo.PICKDETAIL WITH(NOLOCK) 
-                        WHERE StorerKey = @cStorerKey
-                        AND DropID = @cToteID
-
-                        UPDATE PD
-                              SET DropID = CONCAT('ARC',DropID),
-                              TrafficCop = NULL
-                        FROM dbo.PICKDETAIL PD WITH(ROWLOCK)
-                        INNER JOIN @tPickDetail TPD 
-                        ON PD.PickDetailKey = TPD.PickDetailKey
-
-                           --UPDATE dbo.PackDetail WITH(ROWLOCK) SET DropID = CONCAT('ARC',DropID) WHERE DropID=@cToteID
-                           --UPDATE dbo.PICKDETAIL WITH(ROWLOCK) SET DropID = CONCAT('ARC',DropID) WHERE DropID=@cToteID
-                           UPDATE RDT.RDTMOBREC WITH(ROWLOCK) SET C_STRING1 = '' WHERE Mobile = @nMobile
-                     END
-                  END
-                  --V1.19.0 end
-                  ELSE IF @cDropIDFlag = 'Y'
+               IF @cSingleUnitOrdFlag = 'Y'
+               BEGIN
+                  IF NOT EXISTS (SELECT  1
+                           FROM PackInfo PI WITH (NOLOCK)
+                           INNER JOIN PackDetail PD WITH (NOLOCK)
+                              ON PI.PickSlipNo = PD.PickSlipNo
+                              AND PI.CartonNo = PD.CartonNo
+                           INNER JOIN PickHeader PH WITH (NOLOCK)
+                              ON PD.PickSlipNo = PH.PickHeaderKey
+                              AND PD.StorerKey = PH.StorerKey
+                           WHERE
+                              PD.StorerKey = @cStorerKey
+                              AND PD.DropID = @cToteID --ToteID
+                              AND ISNULL(PI.CartonStatus,'') <> 'PACKED') -- All skus are packed in single unit order tote
                   BEGIN
                      DELETE FROM @tPackDetail
 
@@ -1576,7 +1565,7 @@ BEGIN
                      SELECT DISTINCT PickSlipNo, CartonNo, LabelNo, LabelLine
                      FROM dbo.PackDetail WITH(NOLOCK)
                      WHERE StorerKey = @cStorerKey
-                       AND DropID = @cToteID
+                     AND DropID = @cToteID
 
                      UPDATE PD
                         SET DropID = CONCAT('ARC',DropID)
@@ -1593,7 +1582,7 @@ BEGIN
                      SELECT PickDetailKey
                      FROM dbo.PICKDETAIL WITH(NOLOCK) 
                      WHERE StorerKey = @cStorerKey
-                       AND DropID = @cToteID
+                     AND DropID = @cToteID
 
                      UPDATE PD
                         SET DropID = CONCAT('ARC',DropID),
@@ -1606,10 +1595,50 @@ BEGIN
                      --UPDATE dbo.PICKDETAIL WITH(ROWLOCK) SET DropID = CONCAT('ARC',DropID) WHERE DropID=@cToteID
                      UPDATE RDT.RDTMOBREC WITH(ROWLOCK) SET C_STRING1 = '' WHERE Mobile = @nMobile
                   END
-                  WHILE @@TRANCOUNT > @nTranCount
-                     COMMIT TRAN
                END
-            END
+               ELSE IF @cDropIDFlag = 'Y'
+               BEGIN
+                  DELETE FROM @tPackDetail
+
+                  INSERT INTO @tPackDetail (PickSlipNo, CartonNo, LabelNo, LabelLine)
+                  SELECT DISTINCT PickSlipNo, CartonNo, LabelNo, LabelLine
+                  FROM dbo.PackDetail WITH(NOLOCK)
+                  WHERE StorerKey = @cStorerKey
+                     AND DropID = @cToteID
+
+                  UPDATE PD
+                     SET DropID = CONCAT('ARC',DropID)
+                  FROM dbo.PackDetail PD WITH(ROWLOCK)
+                  INNER JOIN @tPackDetail TPD 
+                  ON PD.PickSlipNo = TPD.PickSlipNo
+                     AND PD.CartonNo = TPD.CartonNo
+                     AND PD.LabelNo = TPD.LabelNo
+                     AND PD.LabelLine = TPD.LabelLine
+
+                  DELETE FROM @tPickDetail
+
+                  INSERT INTO @tPickDetail (PickDetailKey)
+                  SELECT PickDetailKey
+                  FROM dbo.PICKDETAIL WITH(NOLOCK) 
+                  WHERE StorerKey = @cStorerKey
+                     AND DropID = @cToteID
+
+                  UPDATE PD
+                     SET DropID = CONCAT('ARC',DropID),
+                     TrafficCop = NULL
+                  FROM dbo.PICKDETAIL PD WITH(ROWLOCK)
+                  INNER JOIN @tPickDetail TPD 
+                  ON PD.PickDetailKey = TPD.PickDetailKey
+
+                  --UPDATE dbo.PackDetail WITH(ROWLOCK) SET DropID = CONCAT('ARC',DropID) WHERE DropID=@cToteID
+                  --UPDATE dbo.PICKDETAIL WITH(ROWLOCK) SET DropID = CONCAT('ARC',DropID) WHERE DropID=@cToteID
+                  UPDATE RDT.RDTMOBREC WITH(ROWLOCK) SET C_STRING1 = '' WHERE Mobile = @nMobile
+               END
+
+               WHILE @@TRANCOUNT > @nTranCount
+                  COMMIT TRAN
+               --V1.21.0 end
+            END --scn6464, enter
          END
       END
    END
