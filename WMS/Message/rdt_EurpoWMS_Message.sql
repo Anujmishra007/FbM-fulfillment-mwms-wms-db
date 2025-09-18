@@ -76,11 +76,9 @@ execute rdt.rdtAddMsg 217970, 10, '217970KeepCondEmpty',       'us_english'
 execute rdt.rdtAddMsg 217971, 10, '217971BadFormat/Len',       'us_english'
 execute rdt.rdtAddMsg 217972, 10, '217972IDinUse',             'us_english'
 execute rdt.rdtAddMsg 217973, 10, 'LPN is in multi locs',                  'us_english', 511, 0, '217973 LPN is in multi locs'
-execute rdt.rdtAddMsg 218074, 10, '218074Lottable03NotExists',             'us_english', 600, 0, '218074 Lottable03 Not Exist'
 execute rdt.rdtAddMsg 217975, 10, '217975Lottable03Mismatch ',             'us_english', 600, 0, '218075 Lottable03 Mismatch'
 execute rdt.rdtAddMsg 217976, 10, '217976LPNUsedDiffPO',                   'us_english', 600, 0, '218076 LPN Used Diff PO'
 execute rdt.rdtAddMsg 217977, 10, '217977OverReceipt',                     'us_english', 600, 0, '218077 Over Receipt'
-execute rdt.rdtAddMsg 217978, 10, 'Loc on hold or flag',                   'us_english', 511, 0, '217978 Loc on hold or flag'
 execute rdt.rdtAddMsg 217978, 10, 'Loc on hold or flag',                   'us_english', 511, 0, '217978 Loc on hold or flag'
 execute rdt.rdtAddMsg 217979, 10, '7979^Move to out loc',                  'us_english', 511, 0, '217979 7979^Move to out loc'
 execute rdt.rdtAddMsg 217980, 10, 'Sku not set for loc',                   'us_english', 511, 0, '217980 Sku not set for loc'
@@ -122,7 +120,7 @@ execute rdt.rdtAddMsg 218015, 10, 'Loc is for Cons SKUs',                  'us_e
 execute rdt.rdtAddMsg 218016, 10, 'Not SHLV storage loc',                  'us_english', 513, 0, '218016 Not SHLV storage loc'
 execute rdt.rdtAddMsg 218017, 10, 'SKU not set for loc',                   'us_english', 513, 0, '218017 SKU not set for loc'
 execute rdt.rdtAddMsg 218018, 10, 'SKU not shelf type',                    'us_english', 513, 0, '218018 SKU not shelf type'
-execute rdt.rdtAddMsg 218019, 10, '218019Over cart capacity',              'us_english', 600, 0, '218019O ver cart capacity'
+execute rdt.rdtAddMsg 218019, 10, '218019Over cart capacity',              'us_english', 600, 0, '218019 Over cart capacity'
 execute rdt.rdtAddMsg 218020, 10, 'No order ID found',                     'us_english', 1642, 0, '218020 No order ID found'
 execute rdt.rdtAddMsg 218021, 10, 'DropID is a child ID',                  'us_english', 1641, 0, '218021 DropID is a child ID'
 execute rdt.rdtAddMsg 218022, 10, 'Non-parcel order ID',                   'us_english', 1641, 0, '218022 Non-parcel order ID'
@@ -327,6 +325,7 @@ execute rdt.rdtAddMsg 218381, 10, '218381 Missing COD on Lottable03', 'us_englis
 execute rdt.rdtAddMsg 218382, 10, '218382 No SO in lottable10', 'us_english', 573, 0, ''
   
 SELECT * FROM rdt.rdtMsg WHERE Message_ID BETWEEN 217901 AND 218400
+
 
 
 
