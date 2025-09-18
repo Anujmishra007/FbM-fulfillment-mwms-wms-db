@@ -40,7 +40,6 @@ BEGIN
            @n_Qty                          INT,
            @n_CaseCnt                      INT,
            @c_LottableNum                  NVARCHAR(2),
-           @c_LottableValue                NVARCHAR(60),
            @n_CtnQty                       INT,
            @c_PickslipNo                   NVARCHAR(10),
            @n_CartonNo                     INT,
@@ -49,10 +48,7 @@ BEGIN
            @c_LabelLineNo                  NVARCHAR(5),
            @c_Orderkey                     NVARCHAR(10),
            @c_Loadkey                      NVARCHAR(10),
-           @c_Conso                        NVARCHAR(10),
-           @c_SSCC_LabelNo                 NVARCHAR(20),
-           @c_SPCode                       NVARCHAR(50),
-           @c_SQL                          NVARCHAR(MAX)
+           @c_Conso                        NVARCHAR(10)
 
    DECLARE @n_Continue   INT,
            @n_StartTCnt  INT,
@@ -190,8 +186,8 @@ BEGIN
          JOIN ORDERS O (NOLOCK) ON PH.Orderkey = O.Orderkey
          WHERE O.Orderkey = @c_Orderkey
 
-         INSERT INTO PACKHEADER (Route, OrderKey, OrderRefNo, Loadkey, Consigneekey, StorerKey, PickSlipNo, STATUS)
-         SELECT O.Route, O.OrderKey, LEFT(O.ExternOrderKey, 18), O.LoadKey, O.ConsigneeKey, O.Storerkey, @c_PickSlipNo, '9'
+         INSERT INTO PACKHEADER (OrderKey, Loadkey, StorerKey, PickSlipNo, STATUS)
+         SELECT O.OrderKey, O.LoadKey, O.Storerkey, @c_PickSlipNo, '9'
          FROM  PICKHEADER PH (NOLOCK)
          JOIN  ORDERS O (NOLOCK) ON (PH.Orderkey = O.Orderkey)
          WHERE PH.PickHeaderKey = @c_PickSlipNo
@@ -207,35 +203,11 @@ BEGIN
 
          SET @c_LabelNo = ''
          SET @n_CartonNo = 0
-         SET @c_LottableNum = ''
-
-         SELECT @c_LottableNum = LTRIM(RTRIM(OPTION1))
-         FROM STORERCONFIG (NOLOCK)
-         WHERE Storerkey=@c_Storerkey
-         AND ConfigKey='PackByLottable'
-         AND SValue='1'
 
          DECLARE CUR_PICKDETAIL CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-            SELECT RTRIM(X.SKU), SUM(X.Qty), X.CaseCnt, RTRIM(X.LottableValue)
+            SELECT RTRIM(X.SKU), SUM(X.Qty), X.CaseCnt
             FROM (
                SELECT P.SKU, P.Qty, PACK.CaseCnt
-                    , LottableValue = ISNULL(CASE @c_LottableNum
-                                         WHEN '01' THEN LA.Lottable01
-                                         WHEN '02' THEN LA.Lottable02
-                                         WHEN '03' THEN LA.Lottable03
-                                         WHEN '04' THEN CONVERT(NVARCHAR,LA.Lottable04,121)
-                                         WHEN '05' THEN CONVERT(NVARCHAR,LA.Lottable05,121)
-                                         WHEN '06' THEN LA.Lottable06
-                                         WHEN '07' THEN LA.Lottable07
-                                         WHEN '08' THEN LA.Lottable08
-                                         WHEN '09' THEN LA.Lottable09
-                                         WHEN '10' THEN LA.Lottable10
-                                         WHEN '11' THEN LA.Lottable11
-                                         WHEN '12' THEN LA.Lottable12
-                                         WHEN '13' THEN CONVERT(NVARCHAR,LA.Lottable13,121)
-                                         WHEN '14' THEN CONVERT(NVARCHAR,LA.Lottable14,121)
-                                         WHEN '15' THEN CONVERT(NVARCHAR,LA.Lottable15,121)
-                                      END,'')
                FROM PICKDETAIL P (NOLOCK)
                JOIN SKU (NOLOCK) ON P.Storerkey=SKU.StorerKey and P.Sku=SKU.Sku
                JOIN PACK(NOLOCK) ON SKU.PACKKey=PACK.PackKey
@@ -243,12 +215,12 @@ BEGIN
                WHERE P.OrderKey = @c_OrderKey
                AND P.Qty > 0
             ) X
-            GROUP BY X.SKU, X.CaseCnt, X.LottableValue
-            ORDER BY 1,4
+            GROUP BY X.SKU, X.CaseCnt
+            ORDER BY 1
 
          OPEN CUR_PICKDETAIL
 
-         FETCH NEXT FROM CUR_PICKDETAIL INTO @c_SKU, @n_Qty, @n_CaseCnt, @c_LottableValue
+         FETCH NEXT FROM CUR_PICKDETAIL INTO @c_SKU, @n_Qty, @n_CaseCnt
 
          WHILE @@FETCH_STATUS<>-1 AND @n_continue IN(1,2)
          BEGIN
@@ -274,10 +246,10 @@ BEGIN
                END
 
                INSERT INTO PACKDETAIL
-                  (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, AddWho, AddDate, EditWho, EditDate, LottableValue)
+                  (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, AddWho, AddDate, EditWho, EditDate)
                VALUES
                   (@c_PickSlipNo, @n_CartonNo, @c_LabelNo, @c_LabelLineNo, @c_StorerKey, @c_SKU,
-                   @n_CtnQty, sUser_sName(), GETDATE(), sUser_sName(), GETDATE(), @c_LottableValue)
+                   @n_CtnQty, sUser_sName(), GETDATE(), sUser_sName(), GETDATE())
 
                SET @n_err = @@ERROR
 
@@ -290,7 +262,7 @@ BEGIN
                SET @n_Qty = @n_Qty - @n_CtnQty
             END
 
-            FETCH NEXT FROM CUR_PICKDETAIL INTO @c_SKU, @n_Qty, @n_CaseCnt, @c_LottableValue
+            FETCH NEXT FROM CUR_PICKDETAIL INTO @c_SKU, @n_Qty, @n_CaseCnt
          END
          CLOSE CUR_PICKDETAIL
          DEALLOCATE CUR_PICKDETAIL
@@ -369,8 +341,8 @@ BEGIN
          WHERE LP.Loadkey = @c_Loadkey
          AND (PH.Orderkey IS NULL OR PH.Orderkey = '')
 
-         INSERT INTO PACKHEADER (Route, OrderKey, OrderRefNo, Loadkey, Consigneekey, StorerKey, PickSlipNo, STATUS)
-         SELECT TOP 1 O.Route, '', '', LPD.LoadKey, '',O.Storerkey, @c_PickSlipNo, '9'
+         INSERT INTO PACKHEADER (OrderKey, Loadkey, StorerKey, PickSlipNo, STATUS)
+         SELECT TOP 1 O.OrderKey, O.LoadKey, O.Storerkey, @c_PickSlipNo, '9'
          FROM  PICKHEADER PH (NOLOCK)
          JOIN  LOADPLANDETAIL LPD (NOLOCK) ON PH.ExternOrderkey = LPD.Loadkey
          JOIN  ORDERS O (NOLOCK) ON LPD.Orderkey = O.Orderkey
@@ -387,35 +359,11 @@ BEGIN
 
          SET @c_LabelNo = ''
          SET @n_CartonNo = 0
-         SET @c_LottableNum = ''
-
-         SELECT @c_LottableNum = LTRIM(RTRIM(OPTION1))
-         FROM STORERCONFIG (NOLOCK)
-         WHERE Storerkey=@c_Storerkey
-         AND ConfigKey='PackByLottable'
-         AND SValue='1'
 
          DECLARE CUR_PICKDETAIL CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-            SELECT RTRIM(X.SKU), SUM(X.Qty), X.CaseCnt, RTRIM(X.LottableValue)
+            SELECT RTRIM(X.SKU), SUM(X.Qty), X.CaseCnt
             FROM (
                SELECT P.SKU, P.Qty, PACK.CaseCnt
-                    , LottableValue = ISNULL(CASE @c_LottableNum
-                                         WHEN '01' THEN LA.Lottable01
-                                         WHEN '02' THEN LA.Lottable02
-                                         WHEN '03' THEN LA.Lottable03
-                                         WHEN '04' THEN CONVERT(NVARCHAR,LA.Lottable04,121)
-                                         WHEN '05' THEN CONVERT(NVARCHAR,LA.Lottable05,121)
-                                         WHEN '06' THEN LA.Lottable06
-                                         WHEN '07' THEN LA.Lottable07
-                                         WHEN '08' THEN LA.Lottable08
-                                         WHEN '09' THEN LA.Lottable09
-                                         WHEN '10' THEN LA.Lottable10
-                                         WHEN '11' THEN LA.Lottable11
-                                         WHEN '12' THEN LA.Lottable12
-                                         WHEN '13' THEN CONVERT(NVARCHAR,LA.Lottable13,121)
-                                         WHEN '14' THEN CONVERT(NVARCHAR,LA.Lottable14,121)
-                                         WHEN '15' THEN CONVERT(NVARCHAR,LA.Lottable15,121)
-                                      END,'')
                FROM PICKDETAIL P (NOLOCK)
                JOIN LOADPLANDETAIL LPD (NOLOCK) ON P.Orderkey = LPD.Orderkey
                JOIN SKU (NOLOCK) ON P.Storerkey=SKU.StorerKey and P.Sku=SKU.Sku
@@ -424,12 +372,12 @@ BEGIN
                WHERE LPD.Loadkey = @c_Loadkey
                AND P.Qty > 0
             ) X
-            GROUP BY X.SKU, X.CaseCnt, X.LottableValue
-            ORDER BY 1,4
+            GROUP BY X.SKU, X.CaseCnt
+            ORDER BY 1
 
          OPEN CUR_PICKDETAIL
 
-         FETCH NEXT FROM CUR_PICKDETAIL INTO @c_SKU, @n_Qty, @n_CaseCnt, @c_LottableValue
+         FETCH NEXT FROM CUR_PICKDETAIL INTO @c_SKU, @n_Qty, @n_CaseCnt
 
          WHILE @@FETCH_STATUS<>-1 AND @n_continue IN(1,2)
          BEGIN
@@ -455,10 +403,10 @@ BEGIN
                END
 
                INSERT INTO PACKDETAIL
-                  (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, AddWho, AddDate, EditWho, EditDate, LottableValue)
+                  (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, AddWho, AddDate, EditWho, EditDate)
                VALUES
                   (@c_PickSlipNo, @n_CartonNo, @c_LabelNo, @c_LabelLineNo, @c_StorerKey, @c_SKU,
-                   @n_CtnQty, sUser_sName(), GETDATE(), sUser_sName(), GETDATE(), @c_LottableValue)
+                   @n_CtnQty, sUser_sName(), GETDATE(), sUser_sName(), GETDATE())
 
                SET @n_err = @@ERROR
 
@@ -471,7 +419,7 @@ BEGIN
                SET @n_Qty = @n_Qty - @n_CtnQty
             END
 
-            FETCH NEXT FROM CUR_PICKDETAIL INTO @c_SKU, @n_Qty, @n_CaseCnt, @c_LottableValue
+            FETCH NEXT FROM CUR_PICKDETAIL INTO @c_SKU, @n_Qty, @n_CaseCnt
          END
          CLOSE CUR_PICKDETAIL
          DEALLOCATE CUR_PICKDETAIL
