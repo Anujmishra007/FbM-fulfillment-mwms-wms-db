@@ -11,7 +11,7 @@ GO
 /*                                                                               */
 /* Date         Rev   Author   Purposes                                          */
 /* 11/03/2025   1.0   PPA374   Providing automatic LPN ID                        */
-/* 19/09/2025   1.1   
+/* 19/09/2025   1.1   PPA374   Adding check against the UDF01 = @nMobile         */
 /*********************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_684AutoGenJCB] (
