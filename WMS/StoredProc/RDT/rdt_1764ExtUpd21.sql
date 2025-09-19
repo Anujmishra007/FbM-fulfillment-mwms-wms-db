@@ -17,7 +17,7 @@ GO
 /* 2025-08-26   NLT013   1.2.0   FCR-7417 Add TransmitLog                  */
 /* 2025-08-31   NLT013   1.2.1   FCR-7417 Get Task from RDTMOBREC          */
 /* 2025-09-16   NLT013   1.3.0   UWP-41254 No need fire trigger if short   */
-/* 2025-09-15   NLT013   1.3.0   FCR-7730 Print ZPL                        */
+/* 2025-09-15   NLT013   1.4.0   FCR-7730 Print ZPL                        */
 /***************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_1764ExtUpd21]
@@ -81,9 +81,6 @@ BEGIN
    BEGIN
       IF @nTranCount = 0
          BEGIN TRAN
-      ELSE
-         SAVE TRAN rdt_1764ExtUpd21
-
 
       IF @nStep = 5 OR @nStep = 6 -- CONT NEXT TASK or ToLoc
       BEGIN
@@ -352,8 +349,7 @@ BEGIN
 RollBackTran:
    IF @nTranCount = 0
       ROLLBACK TRANSACTION
-   ELSE
-      ROLLBACK TRAN rdt_1764ExtUpd21 -- Only rollback change made here
+   RETURN
 Fail:
 Quit:
    WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
