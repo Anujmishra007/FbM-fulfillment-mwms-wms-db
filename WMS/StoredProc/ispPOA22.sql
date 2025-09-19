@@ -3,47 +3,48 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-/************************************************************************/    
-/* Stored Procedure: ispPOA22                                           */    
-/* Creation Date: 10-FEB-2022                                           */    
-/* Copyright: LFL                                                       */    
-/* Written by: CSCHONG                                                  */    
-/*                                                                      */    
-/* Purpose: WMS-18732 - SG - LOGITECH – Allocation [CR]                 */  
-/*                                                                      */    
-/* Called By: StorerConfig.ConfigKey = PostAllocationSP                 */    
-/*                                                                      */    
-/* GitLab Version: 1.0                                                  */    
-/*                                                                      */    
-/* Version: 1.0                                                         */    
-/*                                                                      */    
-/* Data Modifications:                                                  */    
-/*                                                                      */    
-/* Updates:                                                             */    
-/* Date         Author  Rev   Purposes                                  */ 
+/************************************************************************/
+/* Stored Procedure: ispPOA22                                           */
+/* Creation Date: 10-FEB-2022                                           */
+/* Copyright: LFL                                                       */
+/* Written by: CSCHONG                                                  */
+/*                                                                      */
+/* Purpose: WMS-18732 - SG - LOGITECH - Allocation [CR]                 */
+/*                                                                      */
+/* Called By: StorerConfig.ConfigKey = PostAllocationSP                 */
+/*                                                                      */
+/* GitLab Version: 1.0                                                  */
+/*                                                                      */
+/* Version: 1.0                                                         */
+/*                                                                      */
+/* Data Modifications:                                                  */
+/*                                                                      */
+/* Updates:                                                             */
+/* Date         Author  Rev   Purposes                                  */
 /* 10-FEB-2022  CSCHONG 1.0   Devops Scripts Combine                    */
 /* 31-MAY-2023  NJOW01  1.1   WMS-22704 modify @c_CountryOTH value      */
-/************************************************************************/    
-CREATE OR ALTER PROC [dbo].[ispPOA22]      
-     @c_OrderKey    NVARCHAR(10) = ''   
-   , @c_LoadKey     NVARCHAR(10) = ''  
-   , @c_Wavekey     NVARCHAR(10) = ''  
-   , @b_Success     INT           OUTPUT      
-   , @n_Err         INT           OUTPUT      
-   , @c_ErrMsg      NVARCHAR(250) OUTPUT      
-   , @b_debug       INT = 0      
-AS      
-BEGIN      
-   SET NOCOUNT ON   
-   SET QUOTED_IDENTIFIER OFF   
-   SET ANSI_NULLS OFF      
-   SET CONCAT_NULL_YIELDS_NULL OFF           
-      
-   DECLARE  @n_Continue              INT,      
-            @n_StartTCnt             INT, -- Holds the current transaction count  
-            @c_Pickdetailkey         NVARCHAR(10),  
+/* 03-JUL-2025  MICHAEL 1.2   FCR-6182 Add logic for C_Country=IN (ML01)*/
+/************************************************************************/
+CREATE OR ALTER PROC [dbo].[ispPOA22]
+     @c_OrderKey    NVARCHAR(10) = ''
+   , @c_LoadKey     NVARCHAR(10) = ''
+   , @c_Wavekey     NVARCHAR(10) = ''
+   , @b_Success     INT           OUTPUT
+   , @n_Err         INT           OUTPUT
+   , @c_ErrMsg      NVARCHAR(250) OUTPUT
+   , @b_debug       INT = 0
+AS
+BEGIN
+   SET NOCOUNT ON
+   SET QUOTED_IDENTIFIER OFF
+   SET ANSI_NULLS OFF
+   SET CONCAT_NULL_YIELDS_NULL OFF
+
+   DECLARE  @n_Continue              INT,
+            @n_StartTCnt             INT, -- Holds the current transaction count
+            @c_Pickdetailkey         NVARCHAR(10),
             @c_GetOrderkey           NVARCHAR(10),
-            @c_GetCZip               NVARCHAR(18),  
+            @c_GetCZip               NVARCHAR(18),
             @c_GetStorerkey          NVARCHAR(50),
             @c_GetLoadkey            NVARCHAR(10),
             @dt_GetAddDate           DATETIME,
@@ -67,72 +68,75 @@ DECLARE   @c_Country                 NVARCHAR(45)
          ,@c_CountryMY               NVARCHAR(5)
          ,@c_susr5NOFORM             NVARCHAR(5)
          ,@c_CountryOTH              NVARCHAR(5)
-                                  
-   SELECT @n_StartTCnt = @@TRANCOUNT , @n_Continue = 1, @b_Success = 1, @n_Err = 0, @c_ErrMsg = ''    
-   
-   CREATE TABLE #TMP_ORDSH (  
+         ,@c_CountryOTH2             NVARCHAR(5)    --ML01
+         ,@c_BUSR3                   NVARCHAR(18)   --ML01
+
+   SELECT @n_StartTCnt = @@TRANCOUNT , @n_Continue = 1, @b_Success = 1, @n_Err = 0, @c_ErrMsg = ''
+
+   CREATE TABLE #TMP_ORDSH (
       Orderkey      NVARCHAR(10)  NULL,
       C_Country     NVARCHAR(18)  NULL,
       Storerkey     NVARCHAR(15)  NULL,
       Loadkey       NVARCHAR(10)  NULL
    )
-   
-   IF @n_continue IN(1,2)   
-   BEGIN  
-      IF ISNULL(RTRIM(@c_OrderKey), '') <> ''  
-      BEGIN  
-         INSERT INTO #TMP_ORDSH (Orderkey, C_Country, Storerkey, Loadkey)  
+
+   IF @n_continue IN(1,2)
+   BEGIN
+      IF ISNULL(RTRIM(@c_OrderKey), '') <> ''
+      BEGIN
+         INSERT INTO #TMP_ORDSH (Orderkey, C_Country, Storerkey, Loadkey)
          SELECT DISTINCT O.Orderkey, O.C_Country, O.StorerKey, O.LoadKey
          FROM ORDERS O (NOLOCK)
          WHERE O.Orderkey = @c_OrderKey
       END
-      ELSE IF ISNULL(RTRIM(@c_Loadkey), '') <> ''  
+      ELSE IF ISNULL(RTRIM(@c_Loadkey), '') <> ''
       BEGIN
-         INSERT INTO #TMP_ORDSH (Orderkey, C_Country, Storerkey, Loadkey)  
+         INSERT INTO #TMP_ORDSH (Orderkey, C_Country, Storerkey, Loadkey)
          SELECT DISTINCT O.Orderkey, O.C_Country, O.StorerKey, O.LoadKey
-         FROM LoadPlanDetail LPD (NOLOCK)  
-         JOIN ORDERS O (NOLOCK) ON LPD.OrderKey = O.OrderKey 
+         FROM LoadPlanDetail LPD (NOLOCK)
+         JOIN ORDERS O (NOLOCK) ON LPD.OrderKey = O.OrderKey
          WHERE LPD.LoadKey = @c_Loadkey
-      END 
-      ELSE IF ISNULL(RTRIM(@c_Wavekey), '') <> ''  
+      END
+      ELSE IF ISNULL(RTRIM(@c_Wavekey), '') <> ''
       BEGIN
-         INSERT INTO #TMP_ORDSH (Orderkey, C_Country, Storerkey, Loadkey)  
+         INSERT INTO #TMP_ORDSH (Orderkey, C_Country, Storerkey, Loadkey)
          SELECT DISTINCT O.Orderkey, O.C_Country, O.StorerKey, O.LoadKey
-         FROM WaveDetail WD (NOLOCK)  
+         FROM WaveDetail WD (NOLOCK)
          JOIN ORDERS O (NOLOCK) ON WD.OrderKey = O.OrderKey
          WHERE WD.Wavekey = @c_Wavekey
-      END 
-      ELSE 
-      BEGIN      
-         SELECT @n_Continue = 3      
-         SELECT @n_Err = 67060      
-         SELECT @c_ErrMsg='NSQL'+CONVERT(NVARCHAR(5),@n_Err)+': Loadkey, Wave and Orderkey are Blank (ispPOA22)'  
-         GOTO EXIT_SP      
-      END    
-   END  
-   
+      END
+      ELSE
+      BEGIN
+         SELECT @n_Continue = 3
+         SELECT @n_Err = 67060
+         SELECT @c_ErrMsg='NSQL'+CONVERT(NVARCHAR(5),@n_Err)+': Loadkey, Wave and Orderkey are Blank (ispPOA22)'
+         GOTO EXIT_SP
+      END
+   END
+
    IF @@TRANCOUNT = 0
       BEGIN TRAN
 
-   IF @n_continue IN(1,2)   
-   BEGIN   
-      DECLARE cur_ORD CURSOR LOCAL FAST_FORWARD READ_ONLY FOR    
-         SELECT t.Orderkey    
+   IF @n_continue IN(1,2)
+   BEGIN
+      DECLARE cur_ORD CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+         SELECT t.Orderkey
               , t.C_Country
-              , t.Storerkey   
-              , t.Loadkey     
+              , t.Storerkey
+              , t.Loadkey
          FROM #TMP_ORDSH t
           WHERE t.C_Country IN ('ID', 'TH', 'VN','MY')
-        
-      OPEN cur_ORD    
-            
-      FETCH NEXT FROM cur_ORD INTO @c_GetOrderkey     
-                                 , @c_Country         
-                                 , @c_GetStorerkey    
-                                 , @c_GetLoadkey      
+             OR t.C_Country = 'IN'                                   --ML01
 
-        
-      WHILE @@FETCH_STATUS = 0 AND @n_continue IN(1,2)  
+      OPEN cur_ORD
+
+      FETCH NEXT FROM cur_ORD INTO @c_GetOrderkey
+                                 , @c_Country
+                                 , @c_GetStorerkey
+                                 , @c_GetLoadkey
+
+
+      WHILE @@FETCH_STATUS = 0 AND @n_continue IN(1,2)
       BEGIN
 
            SET @c_UpdateSH = 'N'
@@ -142,26 +146,30 @@ DECLARE   @c_Country                 NVARCHAR(45)
            SET @c_CountryMY = 'N'
            SET @c_CountryVN = 'N'
            SET @c_CountryOTH = 'N'
-           SET @c_susr5NOFORM = 'N'     
+           SET @c_CountryOTH2 = 'N'   --ML01
+           SET @c_susr5NOFORM = 'N'
 
 
-        DECLARE cur_ORDPD CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
+        DECLARE cur_ORDPD CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
          SELECT PD.sku,s.SUSR5,LOTT.Lottable11
-         FROM PICKDETAIL PD WITH (NOLOCK) 
+              , S.BUSR3                                              --ML01
+         FROM PICKDETAIL PD WITH (NOLOCK)
          JOIN SKU S WITH (NOLOCK) ON S.StorerKey = PD.Storerkey AND S.Sku = PD.Sku
          JOIN dbo.LOTATTRIBUTE LOTT WITH (NOLOCK) ON LOTT.lot = PD.lot AND LOTT.sku = PD.Sku AND LOTT.StorerKey = PD.Storerkey
-         WHERE PD.OrderKey = @c_getorderkey  
+         WHERE PD.OrderKey = @c_getorderkey
 
-         OPEN cur_ORDPD    
-            
-         FETCH NEXT FROM cur_ORDPD INTO  @c_sku     
+         OPEN cur_ORDPD
+
+         FETCH NEXT FROM cur_ORDPD INTO  @c_sku
                                       -- , @c_lot
-                                       , @c_susr5   
-                                       , @c_lottable11      
-         WHILE @@FETCH_STATUS = 0 --AND @n_continue IN(1,2)  
+                                       , @c_susr5
+                                       , @c_lottable11
+                                       , @c_BUSR3                    --ML01
+         WHILE @@FETCH_STATUS = 0 --AND @n_continue IN(1,2)
          BEGIN
 
-              IF @c_susr5 LIKE 'FORM%' AND  CHARINDEX(@c_Country,@c_susr5) > 0 
+              IF @c_susr5 LIKE 'FORM%' AND  CHARINDEX(@c_Country,@c_susr5) > 0
+              OR @c_BUSR3 LIKE 'FORM%' AND  CHARINDEX(@c_Country,@c_BUSR3) > 0           --ML01
               BEGIN
               	  SET @c_CountryOTH = 'N'  --NJOW01
                   -- SELECT @c_Country '@c_Country', @c_susr5 'susr5', @c_lottable11 'lot11'
@@ -185,34 +193,43 @@ DECLARE   @c_Country                 NVARCHAR(45)
                        BEGIN
                           SET @c_CountryCN = 'Y'
                        END
-                  END  
+                  END
+                  --ML01-S
+                  ELSE
+                  BEGIN
+                     IF @c_CountryOTH2 = 'N'
+                     BEGIN
+                        SET @c_CountryOTH2 = 'Y'
+                     END
+                  END
+                  --ML01-E
                   -- SET @c_getmsg = 'found'
- 
+
              END
              ELSE
              BEGIN
                 SET @c_CountryOTH = 'Y'
              END
-      
-                --Update special handling to 'D' 
+
+                --Update special handling to 'D'
                 IF @c_CountryCN = 'N' AND (@c_CountryVN = 'Y' OR @c_CountryMY = 'Y') AND @c_CountryOTH = 'N'
                 BEGIN
                        SET @c_UpdateSH = 'Y'
                        SET @c_sh = 'D'
                 END
-                --Update special handling to 'E' 
+                --Update special handling to 'E'
                 ELSE IF @c_CountryCN = 'Y' AND @c_CountryVN = 'N' AND @c_CountryMY = 'N' AND @c_CountryOTH = 'N'
                 BEGIN
                        SET @c_UpdateSH = 'Y'
                        SET @c_sh = 'E'
                 END
-                --Update special handling to 'F' 
+                --Update special handling to 'F'
                 ELSE IF @c_CountryCN = 'Y' AND (@c_CountryVN = 'Y' OR @c_CountryMY = 'Y') AND @c_CountryOTH = 'N'
                 BEGIN
                        SET @c_UpdateSH = 'Y'
                        SET @c_sh = 'F'
                 END
-              --Update special handling to 'N' 
+              --Update special handling to 'N'
                ELSE IF @c_CountryCN = 'N' AND (@c_CountryVN = 'N' AND @c_CountryMY = 'N') AND @c_CountryOTH = 'Y'
                 BEGIN
                        SET @c_UpdateSH = 'Y'
@@ -221,13 +238,41 @@ DECLARE   @c_Country                 NVARCHAR(45)
 
              --SELECT @c_CountryCN  '@c_CountryVN' , @c_CountryVN '@c_CountryVN',@c_CountryMY '@c_CountryMY', @c_CountryOTH '@c_CountryOTH', @c_sh '@c_sh', @c_UpdateSH '@c_UpdateSH'
 
-         FETCH NEXT FROM cur_ORDPD INTO   @c_sku     
+         FETCH NEXT FROM cur_ORDPD INTO   @c_sku
                                        -- , @c_lot
-                                       , @c_susr5 
-                                       , @c_lottable11 
-         END  
+                                       , @c_susr5
+                                       , @c_lottable11
+                                       , @c_BUSR3                    --ML01
+         END
          CLOSE cur_ORDPD
-         DEALLOCATE cur_ORDPD  
+         DEALLOCATE cur_ORDPD
+
+         --ML01-S
+         IF @c_Country = 'IN'
+         BEGIN
+            SET @c_UpdateSH = 'N'
+            SET @c_sh = ''
+
+            IF (@c_CountryVN = 'Y' OR @c_CountryMY = 'Y')
+            BEGIN
+               IF (@c_CountryCN = 'N' AND @c_CountryOTH2 = 'N')
+               BEGIN
+                  SET @c_UpdateSH = 'Y'
+                  SET @c_sh = 'B'
+               END
+               ELSE
+               BEGIN
+                  SET @c_UpdateSH = 'Y'
+                  SET @c_sh = 'F'
+               END
+            END
+            ELSE
+            BEGIN
+               SET @c_UpdateSH = 'Y'
+               SET @c_sh = 'N'
+            END
+         END
+         --ML01-E
 
          IF @c_UpdateSH = 'Y'
          BEGIN
@@ -240,69 +285,69 @@ DECLARE   @c_Country                 NVARCHAR(45)
             WHERE OrderKey   = @c_GetOrderkey
 
             SELECT @n_err = @@ERROR
-            
-            IF @n_err <> 0                                                                                                                                                               
-            BEGIN                                                                                                                                                                                  
-               SELECT @n_Continue = 3                                                                                                                                                              
-               SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 67070   -- Should Be Set To The SQL Errmessage but I don't know how to do so.                                            
-               SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update ORDERS Failed. (ispPOA22)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '             
+
+            IF @n_err <> 0
+            BEGIN
+               SELECT @n_Continue = 3
+               SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 67070   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+               SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Update ORDERS Failed. (ispPOA22)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
             END
          END
-         
-         FETCH NEXT FROM cur_ORD INTO @c_GetOrderkey     
-                                 , @c_Country         
-                                 , @c_GetStorerkey    
-                                 , @c_GetLoadkey   
-      END  
-      CLOSE cur_ORD
-      DEALLOCATE cur_ORD    
-   END  
 
-EXIT_SP:  
+         FETCH NEXT FROM cur_ORD INTO @c_GetOrderkey
+                                 , @c_Country
+                                 , @c_GetStorerkey
+                                 , @c_GetLoadkey
+      END
+      CLOSE cur_ORD
+      DEALLOCATE cur_ORD
+   END
+
+EXIT_SP:
    IF OBJECT_ID('tempdb..#TMP_ORDSH') IS NOT NULL
       DROP TABLE #TMP_ORDSH
-      
+
    IF CURSOR_STATUS('LOCAL', 'cur_ORD') IN (0 , 1)
    BEGIN
       CLOSE cur_ORD
-      DEALLOCATE cur_ORD   
-   END 
+      DEALLOCATE cur_ORD
+   END
 
   IF CURSOR_STATUS('LOCAL', 'cur_ORDPD') IN (0 , 1)
    BEGIN
       CLOSE cur_ORDPD
-      DEALLOCATE cur_ORDPD   
-   END 
-   
-   IF @n_Continue=3  -- Error Occured - Process And Return      
-   BEGIN      
-      SELECT @b_Success = 0      
-      IF @@TRANCOUNT = 1 AND @@TRANCOUNT > @n_StartTCnt      
-      BEGIN      
-         ROLLBACK TRAN      
-      END      
-      ELSE      
-      BEGIN      
-         WHILE @@TRANCOUNT > @n_StartTCnt      
-         BEGIN      
-            COMMIT TRAN      
-         END      
-      END      
-      EXECUTE nsp_logerror @n_Err, @c_ErrMsg, 'ispPOA22'      
-      RAISERROR (@c_errmsg, 16, 1) WITH SETERROR    -- SQL2012      
-      RETURN      
-   END      
-   ELSE      
-   BEGIN      
-      SELECT @b_Success = 1      
-      WHILE @@TRANCOUNT > @n_StartTCnt      
-      BEGIN      
-         COMMIT TRAN      
-      END      
-      RETURN      
-   END      
-      
-END -- Procedure    
+      DEALLOCATE cur_ORDPD
+   END
+
+   IF @n_Continue=3  -- Error Occured - Process And Return
+   BEGIN
+      SELECT @b_Success = 0
+      IF @@TRANCOUNT = 1 AND @@TRANCOUNT > @n_StartTCnt
+      BEGIN
+         ROLLBACK TRAN
+      END
+      ELSE
+      BEGIN
+         WHILE @@TRANCOUNT > @n_StartTCnt
+         BEGIN
+            COMMIT TRAN
+         END
+      END
+      EXECUTE nsp_logerror @n_Err, @c_ErrMsg, 'ispPOA22'
+      RAISERROR (@c_errmsg, 16, 1) WITH SETERROR    -- SQL2012
+      RETURN
+   END
+   ELSE
+   BEGIN
+      SELECT @b_Success = 1
+      WHILE @@TRANCOUNT > @n_StartTCnt
+      BEGIN
+         COMMIT TRAN
+      END
+      RETURN
+   END
+
+END -- Procedure
 GO
-GRANT EXECUTE ON [dbo].[ispPOA22] TO nSQL 
+GRANT EXECUTE ON [dbo].[ispPOA22] TO nSQL
 GO

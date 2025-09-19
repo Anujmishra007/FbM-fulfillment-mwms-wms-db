@@ -10,6 +10,7 @@ GO
 /*                                                                      */  
 /* Date       Rev  Author     Purposes                                  */  
 /* 2025-05-19 1.0  Cuize      FCR-6888  Created                         */
+/* 2025-09-01 1.1  Cuize      FCR-6888  New Requirement                 */
 /************************************************************************/  
   
 CREATE OR ALTER PROC [RDT].[rdt_600ExtScn09] (
@@ -91,6 +92,15 @@ BEGIN
       @cID                  NVARCHAR( 18),
       @cSKU                 NVARCHAR(20),
       @cLOC                 NVARCHAR( 20),
+      @cReasonCode            NVARCHAR( 10),
+      @cRcptConfirmSP      NVARCHAR( 20),
+      @cPalletTypeSave      NVARCHAR( 10),
+      @cSQL           NVARCHAR( MAX),
+      @cSQLParam      NVARCHAR( MAX),
+      @nMorePage        NVARCHAR( 10) = '',
+
+
+
 
       @cSKUDesc             NVARCHAR( 60),
       @cAutoID              NVARCHAR( 18),
@@ -101,21 +111,22 @@ BEGIN
       @cCursorPalletDetail  CURSOR,
       @curDel               CURSOR
 
---       SET @nOringinStep = @nStep
---       SET @nOringinScn  = @nScn
---
+
 
    SELECT
       @nStep               = Step,
       @nScn                = Scn,
       @cIVAS               = V_String2,
       @cLottableCode       = V_String3,
+      @cReasonCode         = V_String4,
       @cMUOM_Desc          = V_String10,
       @cPUOM_Desc          = V_String11,
       @cDropListSP         = V_String13,
+      @cRcptConfirmSP      = V_String32,
       @cReceiptKey        = V_Receiptkey,
       @cReceiptLineNumber = V_String7,
       @cID                = V_ID,
+      @nQTY                = V_QTY,
       @cPOKey             = V_POKey,
       @cLOC               = V_Loc,
       @cPUOM               = V_UOM,
@@ -124,29 +135,90 @@ BEGIN
       @cDispStyleColorSize = V_String20,
       @cAutoGenID          = V_String24,
       @cPrinter            = Printer,
-      @cPrinter_Paper      = Printer_Paper
+      @cPrinter_Paper      = Printer_Paper,
+      @cPalletTypeSave     = C_String2
    FROM rdt.RDTMOBREC WITH(NOLOCK)
    WHERE Mobile = @nMobile
 
    SELECT @cSKU = Value FROM @tExtScnData WHERE Variable = '@cSKU'
    SELECT @cPalletType = Value FROM @tExtScnData WHERE Variable = '@cPalletType'
-   SELECT @cSKU = Value FROM @tExtScnData WHERE Variable = '@cSKU'
+   SELECT @nMorePage = Value FROM @tExtScnData WHERE Variable = '@nMorePage'
+
+
+
+   -- Get UOM
+   DECLARE @cUOM NVARCHAR(10)
+   SELECT @cUOM = PackUOM3
+   FROM dbo.SKU WITH (NOLOCK)
+           JOIN dbo.Pack WITH (NOLOCK) ON (SKU.PackKey = Pack.PackKey)
+   WHERE StorerKey = @cStorerKey
+     AND SKU = @cSKU
+
+   -- NOPO flag
+   DECLARE @nNOPOFlag INT
+   SET @nNOPOFlag = CASE WHEN @cPOkey = 'NOPO' THEN 1 ELSE 0 END
+
+   -- Reason code
+   IF @cReasonCode = ''
+      SET @cReasonCode = 'OK'
+
 
    IF @nFunc = 600
    BEGIN
 
-      -- AGA399  Return Qty = 1 if SKU = LCLPAL
       IF @nStep = 4 -- SKU Screen
       BEGIN
          IF @nInputKey = 1
          BEGIN
-            IF @cSKU = 'LCLPLT'
+
+            IF @cUOM = 'PLT' AND @nMorePage = '0' --No lottable scns
             BEGIN
-               -- @cOutField08 = '55'
                SET @cOutField09 = '1'
             END
          END
-      END --AGA399 END
+         IF @nInputKey = 0-- ESC
+         BEGIN
+
+            -- Auto generate ID
+            SET @cID = ''
+            IF @cAutoGenID <> ''
+               BEGIN
+                  EXEC rdt.rdt_AutoGenID @nMobile, @nFunc, @nStep, @cLangCode
+                     ,@cAutoGenID
+                     ,@tExtData
+                     ,@cAutoID  OUTPUT
+                     ,@nErrNo   OUTPUT
+                     ,@cErrMsg  OUTPUT
+                  IF @nErrNo <> 0
+                     GOTO Quit
+
+                  SET @cID = @cAutoID
+               END
+
+            -- Prepare next screen var
+            SET @cOutField01 = @cLOC
+            SET @cOutField02 = @cID -- @cID
+            SET @cOutField03 = ''
+            SET @cOutField04 = ''
+            SET @cOutField05 = ''
+
+            -- Go to ID screen
+            SET @nAfterScn = 4032
+            SET @nAfterStep = 3
+
+         END
+      END
+
+      IF @nStep = 5
+      BEGIN
+         IF @nInputKey = 1 --LOTTABLE
+         BEGIN
+            IF @cUOM = 'PLT' --No lottable scns
+            BEGIN
+               SET @cOutField09 = '1'
+            END
+         END
+      END
 
       IF @nStep = 6 -- QTY screen
       BEGIN
@@ -304,6 +376,69 @@ BEGIN
                   GOTO Quit
                END
 
+               -- Start receiving
+               -- Custom receiving logic
+               IF @cRcptConfirmSP <> ''
+               BEGIN
+                  SET @cSQL = 'EXEC rdt.' + RTRIM( @cRcptConfirmSP) +
+                              ' @nFunc, @nMobile, @cLangCode, @cStorerKey, @cFacility, @cReceiptKey, @cPOKey, @cToLOC, @cToID, ' +
+                              ' @cSKUCode, @cSKUUOM, @nSKUQTY, @cUCC, @cUCCSKU, @nUCCQTY, @cCreateUCC, ' +
+                              ' @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05, ' +
+                              ' @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10, ' +
+                              ' @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, ' +
+                              ' @nNOPOFlag, @cConditionCode, @cSubreasonCode, @nErrNo OUTPUT, @cErrMsg OUTPUT, @cReceiptLineNumberOutput OUTPUT '
+
+                  SET @cSQLParam =
+                          '@nFunc          INT,            ' +
+                          '@nMobile        INT,            ' +
+                          '@cLangCode      NVARCHAR( 3),   ' +
+                          '@cStorerKey     NVARCHAR( 15),  ' +
+                          '@cFacility      NVARCHAR( 5),   ' +
+                          '@cReceiptKey    NVARCHAR( 10),  ' +
+                          '@cPOKey         NVARCHAR( 10),  ' +
+                          '@cToLOC         NVARCHAR( 10),  ' +
+                          '@cToID          NVARCHAR( 18),  ' +
+                          '@cSKUCode       NVARCHAR( 20),  ' +
+                          '@cSKUUOM        NVARCHAR( 10),  ' +
+                          '@nSKUQTY        INT,            ' +
+                          '@cUCC           NVARCHAR( 20),  ' +
+                          '@cUCCSKU        NVARCHAR( 20),  ' +
+                          '@nUCCQTY        INT,            ' +
+                          '@cCreateUCC     NVARCHAR( 1),   ' +
+                          '@cLottable01    NVARCHAR( 18),  ' +
+                          '@cLottable02    NVARCHAR( 18),  ' +
+                          '@cLottable03    NVARCHAR( 18),  ' +
+                          '@dLottable04    DATETIME,       ' +
+                          '@dLottable05    DATETIME,       ' +
+                          '@cLottable06    NVARCHAR( 30),  ' +
+                          '@cLottable07    NVARCHAR( 30),  ' +
+                          '@cLottable08    NVARCHAR( 30),  ' +
+                          '@cLottable09    NVARCHAR( 30),  ' +
+                          '@cLottable10    NVARCHAR( 30),  ' +
+                          '@cLottable11    NVARCHAR( 30),  ' +
+                          '@cLottable12    NVARCHAR( 30),  ' +
+                          '@dLottable13    DATETIME,       ' +
+                          '@dLottable14    DATETIME,       ' +
+                          '@dLottable15    DATETIME,       ' +
+                          '@nNOPOFlag      INT,            ' +
+                          '@cConditionCode NVARCHAR( 10),  ' +
+                          '@cSubreasonCode NVARCHAR( 10),  ' +
+                          '@nErrNo         INT           OUTPUT, ' +
+                          '@cErrMsg        NVARCHAR( 20) OUTPUT, ' +
+                          '@cReceiptLineNumberOutput NVARCHAR( 5) OUTPUT '
+
+                  EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                       @nFunc, @nMobile, @cLangCode, @cStorerKey, @cFacility, @cReceiptKey, @cPOKey, @cLOC, @cID,
+                       @cSKU, @cUOM, @nQTY, '', '', 0, '',
+                       @cLottable01, @cLottable02, @cLottable03, @dLottable04, NULL,
+                       @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
+                       @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,
+                       @nNOPOFlag, @cReasonCode, '', @nErrNo OUTPUT, @cErrMsg OUTPUT, @cReceiptLineNumber OUTPUT
+               END
+
+               IF @nErrNo <> 0
+                  GOTO Quit
+
 
                IF EXISTS ( SELECT 1 FROM PALLET WITH (NOLOCK) WHERE PalletKey = @cID AND Status in ('0','9'))
                BEGIN
@@ -345,10 +480,22 @@ BEGIN
                   END
                END
 
-               --INSERT Pallet TABLE
-               SET @cPalletType = rdt.RDTGetConfig( @nFunc, 'DefaultPalletType', @cStorerKey)
-               IF @cPalletType = '0'
-                  SET @cPalletType = ''
+               IF(ISNULL(rdt.RDTGetConfig( @nFunc, 'ValidatePalletType', @cStorerKey),'0'))!='0' -- Capture pallet type
+               BEGIN
+                  IF ISNULL(@cPalletTypeSave,'')!=''
+                     SET @cPalletType = @cPalletTypeSave
+               END
+
+               DECLARE @cPalletTypeDefault NVARCHAR(10)
+
+               SET @cPalletTypeDefault = rdt.RDTGetConfig( @nFunc, 'DefaultPalletType', @cStorerKey)
+
+               IF @cPalletType = ''
+                  SET @cPalletType = @cPalletTypeDefault
+
+               UPDATE RECEIPTDETAIL SET PalletType = @cPalletType
+               WHERE ReceiptKey = @cReceiptKey
+                 AND ReceiptLineNumber = @cReceiptLineNumber
 
                INSERT INTO dbo.Pallet (PalletKey, StorerKey, Status,Length, Width, Height, GrossWgt, PalletType) -- add palletType
                VALUES (@cID, @cStorerKey, '0',@cLength, @cWidth, @cHeight, @cWeight, @cPalletType)
@@ -490,6 +637,10 @@ BEGIN
    END
 
 Quit:
+   UPDATE RDT.RDTMOBREC SET
+      C_String2 = @cPalletTypeSave
+   WHERE Mobile = @nMobile
+
 END
 GO
 
