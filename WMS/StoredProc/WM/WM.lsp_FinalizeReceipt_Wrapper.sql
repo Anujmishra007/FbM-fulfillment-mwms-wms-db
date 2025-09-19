@@ -12,7 +12,7 @@ GO
 /*                                                                         */
 /* Called By: SCE                                                          */
 /*          :                                                              */
-/* PVCS Version: 2.7                                                       */
+/* PVCS Version: 2.8                                                       */
 /*                                                                         */
 /* Version: 8.0                                                            */
 /*                                                                         */
@@ -48,9 +48,15 @@ GO
 /* 2023-08-16  Wan14    2.6   LFWM-4417 - SCE PROD SG Receipt - Disallow   */
 /*                            Duplicate Movable Unit ID Error When Save when*/
 /*                            exists Receipt Reversed Detail               */
+/* 2024-01-12  SPChin   2.7   JSM-192983 Bug Fixed                         */
+/* 2023-06-15  Wan13    2.8   LFWM-4322 - PROD CN  ASNTrade ReturnXdock    */
+/*                            allow multiple times finalize                */
+/* 2024-04-19  Wan15    2.9   LFWM-4889 - PROD CN |SCE ASN INVENTORYHOLD.hold*/
+/*                            =1 didn't work                               */
 /* 2024-09-24  Wan15    2.7   SPP-36048 - Empty Reason Code prompt         */
+/* 2025-09-02  SWT01    3.0   Enhanced session management with conditional*/
+/*                            execution and proper cleanup                 */
 /***************************************************************************/
-
 CREATE OR ALTER PROCEDURE [WM].[lsp_FinalizeReceipt_Wrapper]
       @c_ReceiptKey              NVARCHAR(10)
     , @c_ReceiptLineNumber       NVARCHAR(5)    = ''
@@ -71,6 +77,7 @@ BEGIN
 
    DECLARE @n_Continue                 INT = 1
          , @n_StartTCnt                INT = @@TRANCOUNT
+         , @b_ExecuteAs                BIT = 0
          , @c_TableName                NVARCHAR(50)   = 'ReceiptDetail'
          , @c_SourceType               NVARCHAR(50)   = 'lsp_FinalizeReceipt_Wrapper'
 
@@ -232,6 +239,15 @@ BEGIN
          ,  @n_LogErrNo                INT            = ''     --(Wan06)               
          ,  @c_LogErrMsg               NVARCHAR(255)  = ''     --(Wan06)
          
+         ,  @b_ContinueFNZASN          BIT            = 0      --(Wan13)
+         ,  @c_FinalizeASNByLine       NVARCHAR(10)   = 0      --(Wan13)
+         ,  @c_AllowRefinalizeASN      NVARCHAR(10)   = 0      --(Wan13)
+         ,  @c_CloseASNStatus          NVARCHAR(10)   = 0      --(Wan13)   
+        
+         ,  @c_Status                  NVARCHAR(10)   = ''     --JSM-192983
+         ,  @c_Hold                    NVARCHAR(1)             --JSM-192983
+         ,  @c_remark                  NVARCHAR(260)           --JSM-192983  
+         
          , @CUR_RD                     CURSOR
          , @CUR_ERRLIST                CURSOR                  --(Wan06)
          
@@ -252,17 +268,22 @@ BEGIN
    
    SET  @n_ErrGroupKey = 0
    SET @n_Err = 0
-   IF SUSER_SNAME() <> @c_UserName     --(Wan03)
+   IF SUSER_SNAME() <> @c_UserName
    BEGIN
-      EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
-
-      IF @n_Err <> 0
+      EXEC [WM].[lsp_SetUser] 
+            @c_UserName = @c_UserName  OUTPUT
+         ,  @n_Err      = @n_Err       OUTPUT
+         ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+         ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
+            
+      IF @n_Err <> 0 
       BEGIN
          GOTO EXIT_SP
       END
 
-      EXECUTE AS LOGIN = @c_UserName
-   END                                  --(Wan03)
+      IF @b_ExecuteAs = 1
+         EXECUTE AS LOGIN = @c_UserName
+   END
 
    SET @n_continue   = 1
    SET @c_TableName  = 'ReceiptDetail'
@@ -294,6 +315,7 @@ BEGIN
       END
 
       SELECT @c_ASNStatus = r.ASNStatus
+            ,@c_Status    = r.[Status]                                              --(Wan13)
             ,@c_StorerKey = r.StorerKey
             ,@c_Facility  = r.Facility
             ,@c_RecType   = r.RECType
@@ -346,7 +368,45 @@ BEGIN
             ,@n_CTNCnt10     = ISNULL(R.CTNCnt10,0)
       FROM RECEIPT AS r WITH(NOLOCK)
       WHERE r.ReceiptKey = @c_ReceiptKey
+
+      IF @c_ReceiptLineNumber <> ''                                                 --(Wan13) - START
+      BEGIN 
+         SELECT @c_FinalizeASNByLine = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'FinalizeASNByLine')
+         IF @c_FinalizeASNByLine = '0' OR @c_ASNStatus = '9' OR @c_DocType = 'X'
+         BEGIN
+            GOTO EXIT_SP
+         END
+      END
+
+      SET @b_ContinueFNZASN = 0                                                     
+      SELECT @c_AllowRefinalizeASN = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'AllowRefinalizeASN')
+      IF @c_AllowRefinalizeASN = '1'
+      BEGIN 
+         SELECT TOP 1 @b_ContinueFNZASN = IIF(r.FinalizeFlag = 'N',1,0)
+         FROM dbo.RECEIPTDETAIL AS r WITH (NOLOCK)
+         WHERE r.ReceiptKey = @c_Receiptkey
+         ORDER BY r.FinalizeFlag ASC
+         
+         SELECT @c_CloseASNStatus = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'CloseASNStatus')
+         
+         IF @b_ContinueFNZASN = 1 AND  @c_ASNStatus IN ('0','1') AND @c_CloseASNStatus = '1'
+         BEGIN
+            SET @b_ContinueFNZASN = 0
+         END
+      END 
+      ELSE
+      BEGIN
+         IF @c_ASNStatus NOT IN ('9', 'CANC') AND @c_Status = '0'                      
+         BEGIN 
+            SET @b_ContinueFNZASN = 1
+         END                                                                           
+      END
       
+      IF @b_ContinueFNZASN = 0
+      BEGIN
+         GOTO EXIT_SP
+      END                                                                           --(Wan13) - END 
+           
       IF @c_ProceedWithWarning = 'N' AND @n_WarningNo < 1
       BEGIN
          IF @c_Facility = ''
@@ -360,7 +420,7 @@ BEGIN
             --(Wan06) - START
             INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
             VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNumber, '', 'ERROR', 0, @n_err, @c_errmsg)   
-            --EXEC [WM].[lsp_WriteError_List]
+            --EXEC [WM.[lsp_WriteError_List]
             --      @i_iErrGroupKey = @n_ErrGroupKey OUTPUT,
             --      @c_TableName   = @c_TableName,
             --      @c_SourceType  = @c_SourceType,
@@ -649,7 +709,7 @@ BEGIN
          BEGIN
             SET @c_Toloc     = ''
             SET @c_ToID      = ''
-			
+            
             SET @c_POKey     = ''
             SET @c_ExternReceiptKey = ''
             SELECT TOP 1                                                            --(Wan07)
@@ -879,7 +939,7 @@ BEGIN
                --(Wan06) - START
                INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)       
                VALUES (@c_TableName, @c_SourceType, @c_ReceiptKey, @c_ReceiptLineNumber, '', 'QUESTION', @n_WarningNo, 0, @c_errmsg)
-               --EXEC [WM].[lsp_WriteError_List]
+               --EXEC [WM.[lsp_WriteError_List]
                --      @i_iErrGroupKey= @n_ErrGroupKey OUTPUT
                --   ,  @c_TableName   = @c_TableName
                --   ,  @c_SourceType  = @c_SourceType
@@ -1847,7 +1907,7 @@ BEGIN
       --(Wan10) - START
       SELECT @c_DisAllowDuplicateIdsOnWSRcpt = fgr.Authority
             ,@c_DisAllowDupIDsOnWSRcpt_Option5 = fgr.Option5
-      FROM dbo.fnc_GetRight2( @c_Facility, @c_Storerkey, '', 'DisAllowDuplicateIdsOnWSRcpt') AS fgr      ---(Wan08)
+      FROM fnc_GetRight2( @c_Facility, @c_Storerkey, '', 'DisAllowDuplicateIdsOnWSRcpt') AS fgr      ---(Wan08)
       
       SELECT @c_UniqueIDSkipDocType = dbo.fnc_GetParamValueFromString('@c_UniqueIDSkipDocType', @c_DisAllowDupIDsOnWSRcpt_Option5, @c_UniqueIDSkipDocType)
       IF @c_DisAllowDuplicateIdsOnWSRcpt = '1' AND CHARINDEX(@c_DocType, @c_UniqueIDSkipDocType, 1) > 0
@@ -1862,13 +1922,12 @@ BEGIN
          SELECT @c_AllowDupWithinPLTCnt = dbo.fnc_GetParamValueFromString('@c_AllowDupWithinPLTCnt', @c_DisAllowDupIDsOnWSRcpt_Option5, @c_AllowDupWithinPLTCnt)
       END
       --(Wan11) - END
- 
       SET @c_ReceiptLineNo = ''
       WHILE 1 = 1
       BEGIN
          SET @c_Toloc     = ''
          SET @c_ToID      = ''
-         SET @c_ASNReason = ''
+ 				 SET @c_ASNReason = ''                                                    
          SET @c_POKey     = ''
          SET @c_ExternReceiptKey = ''
          SELECT TOP 1                                                               --(Wan07)
@@ -1879,7 +1938,7 @@ BEGIN
                ,@n_QtyExpected        = ISNULL(RD.QtyExpected,0)
                ,@c_Toloc              = ISNULL(RTRIM(RD.ToLoc),'')
                ,@c_ExternLineNo       = ISNULL(RTRIM(RD.ExternLineNo),'')
-               ,@c_ASNReason          = ISNULL(RTRIM(RD.UserDefine03),'')
+               ,@c_ASNReason          = ISNULL(RTRIM(RD.UserDefine03),'')      
                ,@c_ToID               = ISNULL(RD.ToId,'')                           --(Wan08)
          FROM @tRECEIPTDETAIL t
          JOIN RECEIPTDETAIL RD ON  t.ReceiptKey = RD.ReceiptKey
@@ -2554,6 +2613,7 @@ BEGIN
             GOTO EXIT_SP
          END
 
+         SET @c_ReceiptLineNo = ''                                               --(Wan15)
          WHILE 1 = 1
          BEGIN
             SELECT TOP 1                                                         --(Wan07)
@@ -2591,9 +2651,11 @@ BEGIN
             SET @dt_Lottable14 = NULL
             SET @dt_Lottable15 = NULL
 
+            SET @b_HoldInv  = 0  --JSM-192983
             SET @b_HoldID    = 1
             SET @b_HoldLot02 = 1
-            IF @c_HoldLot02ByUDF08 <> '' AND @c_UserDefine08 <> @c_UserDefine08
+            --IF @c_HoldLot02ByUDF08 <> '' AND @c_UserDefine08 <> @c_UserDefine08      --JSM-192983
+            IF @c_HoldLot02ByUDF08 <> '' AND @c_UserDefine08 <> @c_HoldLot02ByUDF08 --JSM-192983
             BEGIN
                SET @b_HoldLot02 = 0
             END
@@ -2601,14 +2663,17 @@ BEGIN
             IF @c_Lottable02 <> '' AND @c_DocType = 'A' AND @b_HoldLot02 = 1
             BEGIN
                SET @b_HoldID    = 0
-               SET @c_HoldLot02 = '0'
-               SELECT @c_HoldLot02 = H.Hold
+               SET @c_HoldLot02 = '1'                                                           --Wan15 --JSM-192983                            
+               --SET @c_HoldLot02 = ''                                                          --Wan15--JSM-192983                            - 
+               SELECT @c_HoldLot02 = H.Hold                                                    
                FROM INVENTORYHOLD H WITH (NOLOCK)
                WHERE H.Storerkey = @c_Storerkey
                AND   H.Sku = @c_Sku
                AND   H.Lottable02 = @c_Lottable02
+               AND   H.Hold = '0'                                                               --Wan15
 
-               IF @c_HoldLot02 = '0'
+               IF @c_HoldLot02 = '1' OR @c_AllowASNLot2Rehold = '1'                             --Wan15 --JSM-192983
+               --IF @c_HoldLot02 = '' OR (@c_AllowASNLot2Rehold = '1' AND @c_HoldLot02 = '0')   --Wan15 --JSM-192983
                BEGIN
                   SET @c_HoldByLottable02 = ''
                   SELECT @c_HoldByLottable02 = ISNULL(RTRIM(SC.Data),'')
@@ -2617,7 +2682,8 @@ BEGIN
                   AND SC.Sku = @c_Sku
                   AND SC.ConfigType = 'HoldByLottable02'
 
-                  IF @c_HoldByLottable02 = '1' AND @c_AllowASNLot2Rehold = '1'
+                  --IF @c_HoldByLottable02 = '1' AND @c_AllowASNLot2Rehold = '1' --JSM-192983
+                  IF @c_HoldByLottable02 = '1'                                                     --JSM-192983
                   BEGIN
                      SET @c_ToID = NULL
                      SET @c_ReceiptHoldCode = 'QC'
@@ -2662,10 +2728,12 @@ BEGIN
             IF @b_HoldInv = 1
             BEGIN
                BEGIN TRY
-                  EXEC dbo.nspInventoryHoldResultSet
+                  EXEC nspInventoryHoldResultSet
                         @c_Lot         = @c_Lot
                       , @c_Loc         = @c_ToLoc
                       , @c_ID          = @c_ToID
+                      , @c_Storerkey   = @c_Storerkey             --JSM-192983
+                      , @c_Sku         = @c_Sku                   --JSM-192983
                       , @c_Lottable01  = @c_Lottable01
                       , @c_Lottable02  = @c_Lottable02
                       , @c_Lottable03  = @c_Lottable03
@@ -2681,9 +2749,12 @@ BEGIN
                       , @dt_Lottable13  = @dt_Lottable13
                       , @dt_Lottable14 = @dt_Lottable14
                       , @dt_Lottable15 = @dt_Lottable15
+                      , @c_Status      = @c_ReceiptHoldCode          --JSM-192983
+                      , @c_Hold        = '1'                         --JSM-192983
                       , @b_Success     = @b_Success       OUTPUT
                       , @n_Err         = @n_Err           OUTPUT
                       , @c_ErrMsg      = @c_ErrMsg        OUTPUT
+                      , @c_remark      = ''                          --JSM-192983
 
                END TRY
                BEGIN CATCH
@@ -2870,9 +2941,13 @@ BEGIN
    END
    --(Wan06) - END
    
-   REVERT
+   IF @b_ExecuteAs = 1
+   BEGIN
+      REVERT
+   END
+   
+   EXEC [WM].[lsp_ResetUser]
 END -- End Procedure
-
 GO
 GRANT EXECUTE ON [WM].[lsp_FinalizeReceipt_Wrapper] TO nSQL
 GO

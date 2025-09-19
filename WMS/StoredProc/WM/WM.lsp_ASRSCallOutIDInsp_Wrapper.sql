@@ -1,44 +1,41 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_ASRSCallOutIDInsp_Wrapper]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [WM].[lsp_ASRSCallOutIDInsp_Wrapper]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
-/*************************************************************************/  
-/* Stored Procedure: lsp_ASRSCallOutIDInsp_Wrapper                       */  
-/* Creation Date: 05-APR-2018                                            */  
-/* Copyright: LFL                                                        */  
-/* Written by: Wan                                                       */  
-/*                                                                       */  
+
+/*************************************************************************/
+/* Stored Procedure: lsp_ASRSCallOutIDInsp_Wrapper                       */
+/* Creation Date: 05-APR-2018                                            */
+/* Copyright: LFL                                                        */
+/* Written by: Wan                                                       */
+/*                                                                       */
 /* Purpose: LFWM-505 - ASRS  ID Inspection & Pack and Hold               */
-/*                                                                       */  
-/* Called By:                                                            */  
-/*                                                                       */  
-/*                                                                       */  
-/* Version: 1.1                                                          */  
-/*                                                                       */  
-/* Data Modifications:                                                   */  
-/*                                                                       */  
-/* Updates:                                                              */  
-/* Date        Author   Ver  Purposes                                    */ 
+/*                                                                       */
+/* Called By:                                                            */
+/*                                                                       */
+/*                                                                       */
+/* Version: 1.1                                                          */
+/*                                                                       */
+/* Data Modifications:                                                   */
+/*                                                                       */
+/* Updates:                                                              */
+/* Date        Author   Ver  Purposes                                    */
 /* 28-Dec-2020 SWT01    1.0   Adding Begin Try/Catch                     */
 /* 2021-01-15  Wan01    1.1   Execute Login if @c_UserName<>SUSER_SNAME()*/
-/*************************************************************************/   
-CREATE PROCEDURE [WM].[lsp_ASRSCallOutIDInsp_Wrapper]  
+/* 2025-05-26  SWT02    1.2   Setting Session Context for user name     */
+/*************************************************************************/
+CREATE OR ALTER PROCEDURE [WM].[lsp_ASRSCallOutIDInsp_Wrapper]
    @c_PalletIDList   NVARCHAR(MAX)
 ,  @c_FinalLoc       NVARCHAR(10)
 ,  @c_ReasonCode     NVARCHAR(30)
 ,  @c_Remarks        NVARCHAR(255)
-,  @b_Success        INT          = 1  OUTPUT   
+,  @b_Success        INT          = 1  OUTPUT
 ,  @n_Err            INT          = 0  OUTPUT
 ,  @c_Errmsg         NVARCHAR(255)= '' OUTPUT
 ,  @c_UserName       NVARCHAR(128)= ''
 ,  @n_ErrGroupKey    INT = 0           OUTPUT
-AS  
-BEGIN  
+AS
+BEGIN
    SET ANSI_NULLS ON
    SET ANSI_PADDING ON
    SET ANSI_WARNINGS ON
@@ -57,37 +54,43 @@ BEGIN
    SET @b_Success = 1
    SET @c_ErrMsg = ''
 
-   SET @n_Err = 0 
-   
-   IF SUSER_SNAME() <> @c_UserName        --(Wan01) - START
-   BEGIN
+   SET @n_Err = 0
+
+   -- (SWT02) - START
+   DECLARE @b_ExecuteAs BIT = 0
+   IF SUSER_SNAME() <> @c_UserName
+   BEGIN 
+
       EXEC [WM].[lsp_SetUser] 
-               @c_UserName = @c_UserName  OUTPUT
-            ,  @n_Err      = @n_Err       OUTPUT
-            ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
-                
+            @c_UserName = @c_UserName  OUTPUT
+         ,  @n_Err      = @n_Err       OUTPUT
+         ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+         ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
+         
       IF @n_Err <> 0 
       BEGIN
          GOTO EXIT_SP
-      END  
-              
-      EXECUTE AS LOGIN = @c_UserName
-   END                                    --(Wan01) - END
+      END
 
-   
+      IF @b_ExecuteAs = 1                    
+         EXECUTE AS LOGIN = @c_UserName
+   END
+   -- (SWT02) - END
+
+
    BEGIN TRY -- SWT01 - Begin Outer Begin Try
       WHILE @@TRANCOUNT > 0
       BEGIN
          COMMIT TRAN
       END
-   
+
       IF ISNULL(RTRIM(@c_FinalLoc),'') = ''
       BEGIN
          SET @n_Continue = 3
          SET @n_err = 550451
-         SET @c_errmsg = 'NSQL' + CONVERT(NCHAR(6),@n_err) + ': Workstation is required.' 
+         SET @c_errmsg = 'NSQL' + CONVERT(NCHAR(6),@n_err) + ': Workstation is required.'
 
-         EXEC [WM].[lsp_WriteError_List] 
+         EXEC [WM].[lsp_WriteError_List]
                      @i_iErrGroupKey= @n_ErrGroupKey OUTPUT
                   ,  @c_TableName   = ''
                   ,  @c_SourceType  = @c_SourceType
@@ -100,16 +103,16 @@ BEGIN
                   ,  @n_err         = @n_err       OUTPUT
                   ,  @c_errmsg      = @c_errmsg    OUTPUT
 
-         GOTO EXIT_SP      
-      END 
+         GOTO EXIT_SP
+      END
 
       IF ISNULL(RTRIM(@c_ReasonCode),'') = ''
       BEGIN
          SET @n_Continue = 3
          SET @n_err = 550452
-         SET @c_errmsg = 'NSQL' + CONVERT(NCHAR(6),@n_err) + ': Reason Code is required.' 
-  
-         EXEC [WM].[lsp_WriteError_List] 
+         SET @c_errmsg = 'NSQL' + CONVERT(NCHAR(6),@n_err) + ': Reason Code is required.'
+
+         EXEC [WM].[lsp_WriteError_List]
                      @i_iErrGroupKey= @n_ErrGroupKey OUTPUT
                   ,  @c_TableName   = ''
                   ,  @c_SourceType  = @c_SourceType
@@ -121,17 +124,17 @@ BEGIN
                   ,  @b_Success     = @b_Success   OUTPUT
                   ,  @n_err         = @n_err       OUTPUT
                   ,  @c_errmsg      = @c_errmsg    OUTPUT
-         GOTO EXIT_SP  
+         GOTO EXIT_SP
       END
 
       IF LEN(RTRIM(@c_ReasonCode)) > 10
       BEGIN
          SET @n_Continue = 3
          SET @n_err = 550453
-         SET @c_errmsg = 'NSQL' + CONVERT(NCHAR(6),@n_err) + ': Reason Code is more than 10 characters. ' 
+         SET @c_errmsg = 'NSQL' + CONVERT(NCHAR(6),@n_err) + ': Reason Code is more than 10 characters. '
                        + 'Please check codelkup setup.'
 
-         EXEC [WM].[lsp_WriteError_List] 
+         EXEC [WM].[lsp_WriteError_List]
                      @i_iErrGroupKey= @n_ErrGroupKey OUTPUT
                   ,  @c_TableName   = ''
                   ,  @c_SourceType  = @c_SourceType
@@ -144,27 +147,27 @@ BEGIN
                   ,  @n_err         = @n_err       OUTPUT
                   ,  @c_errmsg      = @c_errmsg    OUTPUT
 
-         GOTO EXIT_SP  
+         GOTO EXIT_SP
       END
 
       SET @CUR_ID = CURSOR  FAST_FORWARD READ_ONLY FOR
       SELECT ID = ColValue
-      FROM fnc_DelimSplit ('|', @c_PalletIDList) 
+      FROM fnc_DelimSplit ('|', @c_PalletIDList)
 
       OPEN @CUR_ID
-   
+
       FETCH NEXT FROM @CUR_ID INTO @c_ID
       WHILE @@FETCH_STATUS <> -1
       BEGIN
          BEGIN TRAN
-         BEGIN TRY      
-            EXEC isp_InspectionCallOut 
+         BEGIN TRY
+            EXEC isp_InspectionCallOut
                   @c_ID          = @c_ID
                ,  @c_Finalloc    = @c_Finalloc
                ,  @c_Reasoncode  = @c_Reasoncode
                ,  @c_Remarks     = @c_Remarks
-               ,  @b_Success     = @b_Success   OUTPUT 
-               ,  @n_err         = @n_err       OUTPUT 
+               ,  @b_Success     = @b_Success   OUTPUT
+               ,  @n_err         = @n_err       OUTPUT
                ,  @c_errmsg      = @c_errmsg    OUTPUT
          END TRY
 
@@ -172,11 +175,11 @@ BEGIN
             SET @n_Continue = 3
             SET @n_err = 550454
             SET @c_ErrMsg = ERROR_MESSAGE()
-            SET @c_ErrMsg = 'NSQL' + CONVERT(NCHAR(6),@n_err) + ': Call out ID: ' + @c_ID + ' fail. ' +  @c_ErrMsg 
+            SET @c_ErrMsg = 'NSQL' + CONVERT(NCHAR(6),@n_err) + ': Call out ID: ' + @c_ID + ' fail. ' +  @c_ErrMsg
 
             ROLLBACK TRAN
 
-            EXEC [WM].[lsp_WriteError_List] 
+            EXEC [WM].[lsp_WriteError_List]
                      @i_iErrGroupKey= @n_ErrGroupKey OUTPUT
                   ,  @c_TableName   = ''
                   ,  @c_SourceType  = @c_SourceType
@@ -189,27 +192,27 @@ BEGIN
                   ,  @n_err         = @n_err       OUTPUT
                   ,  @c_errmsg      = @c_errmsg    OUTPUT
 
-         END CATCH  
+         END CATCH
 
          WHILE @@TRANCOUNT > 0
          BEGIN
             COMMIT TRAN
-         END  
+         END
 
          FETCH NEXT FROM @CUR_ID INTO @c_ID
       END
-      CLOSE @CUR_ID 
+      CLOSE @CUR_ID
       DEALLOCATE @CUR_ID
-   END TRY  
-  
-   BEGIN CATCH 
+   END TRY
+
+   BEGIN CATCH
       SET @n_Continue = 3                          --(Wan01)
-      SET @c_Errmsg = ERROR_MESSAGE()              --(Wan01) 
-      GOTO EXIT_SP  
-   END CATCH -- (SWT01) - End Big Outer Begin try.. end Try Begin Catch.. End Catch 
-             --       
+      SET @c_Errmsg = ERROR_MESSAGE()              --(Wan01)
+      GOTO EXIT_SP
+   END CATCH -- (SWT01) - End Big Outer Begin try.. end Try Begin Catch.. End Catch
+             --
    EXIT_SP:
-   
+
    IF @n_Continue=3  -- Error Occured - Process And Return
    BEGIN
       SET @b_Success = 0
@@ -237,14 +240,15 @@ BEGIN
    END
 
    WHILE @@TRANCOUNT < @n_StartTCnt
-   BEGIN 
+   BEGIN
       BEGIN TRAN
    END
 
-   REVERT      
-END  
-GO
-GRANT EXECUTE ON [WM].[lsp_ASRSCallOutIDInsp_Wrapper] TO nSQL 
-GO
+   IF @b_ExecuteAs = 1              -- (SWT02)
+      REVERT                        
 
-
+   EXEC [WM].[lsp_ResetUser] -- (SWT02)
+END
+GO
+GRANT EXECUTE ON  [WM].[lsp_ASRSCallOutIDInsp_Wrapper] TO [NSQL]
+GO

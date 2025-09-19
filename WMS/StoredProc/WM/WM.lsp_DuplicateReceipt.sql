@@ -25,6 +25,7 @@ GO
 /* 03-MAR-2023 NJOW01   1.4   DEVOPS Combine Script                      */
 /* 01-AUG-2023 NJOW02   1.5   WMS-21889 Copy adjustedqty to a new split  */
 /*                            if qtyexpected+qtyreceived=0               */
+/* 2025-05-26   SWT01    1.6   Setting Session Context for user name     */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE [WM].[lsp_DuplicateReceipt]
    @c_ReceiptKey  NVARCHAR(10)
@@ -102,18 +103,26 @@ BEGIN
 
    --EXECUTE AS LOGIN=@c_UserName
    
-   IF SUSER_SNAME() <> @c_UserName       --(Wan01) - START
-   BEGIN
-      EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
+   -- (SWT01) - START
+   DECLARE @b_ExecuteAs BIT = 0
+   IF SUSER_SNAME() <> @c_UserName
+   BEGIN 
 
-      IF @n_Err <> 0
+      EXEC [WM].[lsp_SetUser] 
+            @c_UserName = @c_UserName  OUTPUT
+         ,  @n_Err      = @n_Err       OUTPUT
+         ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+         ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
+         
+      IF @n_Err <> 0 
       BEGIN
-        GOTO EXIT_SP
+         GOTO EXIT_SP
       END
 
-      EXECUTE AS LOGIN = @c_UserName
-   END  
-                                     --(Wan01) - END
+      IF @b_ExecuteAs = 1                    
+         EXECUTE AS LOGIN = @c_UserName
+   END
+   -- (SWT01) - END
    BEGIN TRY -- SWT01 - Begin Outer Begin Try
 
       IF NOT EXISTS(
@@ -323,8 +332,7 @@ BEGIN
                Lottable07,          Lottable08,             Lottable09,
                Lottable10,          Lottable11,             Lottable12,
                Lottable13,          Lottable14,             Lottable15,
-               @c_UserName,         @c_UserName,            Notes,
-               Notes2
+               @c_UserName,         @c_UserName
                FROM RECEIPTDETAIL AS r WITH(NOLOCK)
                WHERE r.ReceiptKey = @c_ReceiptKey
                AND   r.ReceiptLineNumber = @c_ReceiptLineNumber
@@ -353,7 +361,10 @@ BEGIN
    END CATCH -- (SWT01) - End Big Outer Begin try.. end Try Begin Catch.. End Catch
 
    EXIT_SP:
-   REVERT
+   IF @b_ExecuteAs = 1              -- (SWT01)
+      REVERT                        
+
+   EXEC [WM].[lsp_ResetUser] -- (SWT01)
 END
 
 GO
