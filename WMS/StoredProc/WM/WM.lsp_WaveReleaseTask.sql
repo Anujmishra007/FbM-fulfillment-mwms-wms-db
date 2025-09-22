@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_WaveReleaseTask]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [WM].[lsp_WaveReleaseTask] 
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -32,8 +27,9 @@ GO
 /*                            2) Start Transaction For Batch Commit      */
 /* 2021-12-02  Wan02    1.3   LFWM-2997 - UAT CN - Outbound Ship Reference*/
 /*                            for CSHP                                  */
+/* 2025-09-22  AYD01    1.4   Add AppLock for releasing task            */
 /************************************************************************/                                                                                  
-CREATE PROC [WM].[lsp_WaveReleaseTask]                                                                                                                     
+CREATE OR ALTER PROC [WM].[lsp_WaveReleaseTask]                                                                                                                     
       @c_WaveKey              NVARCHAR(10) = ''       --(Wan02) Call From MBOLScreen
    ,  @c_Loadkey              NVARCHAR(10) = ''
    ,  @c_MBolkey              NVARCHAR(10) = ''
@@ -58,12 +54,32 @@ BEGIN
          ,  @c_PickDetailkey  NVARCHAR(10) = ''
          ,  @c_WaveStatus     NVARCHAR(10) = '0'
 
-         ,  @CUR_WAVEPD       CURSOR 
-
+         ,  @CUR_WAVEPD       CURSOR
+         -- AYD01 - START
+         ,  @c_LockName       NVARCHAR(40)
+         ,  @n_Result         INT
+         -- AYD01 - END
    SET @b_Success = 1
    SET @n_Err     = 0
-   
+
    BEGIN TRAN        --(Wan01)
+
+   -- AYD01 - START
+   SET @c_LockName  = 'lsp_WaveReleaseTask_' + @c_WaveKey
+   
+   EXEC @n_Result = sp_getapplock 
+      @Resource = @c_LockName, 
+      @LockMode = 'Exclusive', 
+      @LockTimeout = 0
+
+   IF @n_Result < 0
+   BEGIN
+      SET @n_Err = 555808
+      SET @c_ErrMsg = 'NSQL'+ CONVERT(Char(6),@n_Err)
+                     + ': Unable to obtain application lock, WaveKey[' + @c_WaveKey + '] already being processed (lsp_WaveReleaseTask)'
+      GOTO EXIT_SP
+   END
+   -- AYD01 - END
                                
    SET @n_Err = 0 
    --(mingle01) - START   
@@ -362,6 +378,9 @@ EXIT_SP:
    END
          
    REVERT
+
+   EXEC sp_releaseapplock 
+        @Resource = @c_LockName
 END
 GO
 GRANT EXECUTE ON [WM].[lsp_WaveReleaseTask] TO nSQL 
