@@ -868,7 +868,7 @@ CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]
 
          --SET @c_LinkTaskToPick_SQL = 'PICKDETAIL.UOM = @c_UOM AND LOC.LocationType = ''VNA'' '   --2025-09-11
          SET @c_LinkTaskToPick_SQL = 'PICKDETAIL.UOM IN (''1'',''6'') AND '         --2025-09-11
-                                   + 'LOC.LocationType = ''VNA'' AND'               --2025-09-11
+                                   + 'LOC.LocationType = ''VNA'' AND '              --2025-09-11
                                    + 'PICKDETAIL.Orderkey = @c_Orderkey'            --2025-09-11
          --(Wan01) - START
          IF @c_LoadAssignLane = 'Y'
