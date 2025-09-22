@@ -2,9 +2,9 @@
 USE [GBRWMS]
 GO
 /****** Object:  StoredProcedure [RDT].[rdt_839ExtValJCB]    Script Date: 9/17/2025 10:28:29 AM ******/
-SET ANSI_NULLS ON
+SET ANSI_NULLS OFF
 GO
-SET QUOTED_IDENTIFIER ON
+SET QUOTED_IDENTIFIER OFF
 GO
 /*************************************************************************************/
 /* Store procedure: [rdt_839ExtValJCB]                                               */
@@ -13,9 +13,10 @@ GO
 /* Date         Rev   Author   Purposes                                              */
 /* 12/09/2025   1.0   PPA374   Only allow PickZones from CODELKUP PickPiece pick     */
 /* 17/09/2025   2.0   PPA374   Stop from picking if stock is not available           */
+/* 22/09/2025   2.1   PPA374   Check that order type and location are correct        */
 /*************************************************************************************/
 
-CREATE OR ALTER   PROC [RDT].[rdt_839ExtValJCB] (
+CREATE OR ALTER PROC [RDT].[rdt_839ExtValJCB] (
    @nMobile      INT,            
    @nFunc        INT,            
    @cLangCode    NVARCHAR( 3),   
@@ -44,16 +45,48 @@ BEGIN
    SET CONCAT_NULL_YIELDS_NULL OFF
 
    DECLARE @cOrderKey AS NVARCHAR( 20)
+   DECLARE @cOrderType   AS NVARCHAR( 20)
+   DECLARE @cLocToMoveTo AS NVARCHAR( 20)
 
    SELECT TOP 1 @cOrderKey = OrderKey 
-   FROM PICKHEADER WITH(NOLOCK) 
+   FROM dbo.PICKHEADER WITH(NOLOCK) 
    WHERE PickHeaderKey = @cPickSlipNo
+
+   SELECT TOP 1
+      @cOrderType = Type
+   FROM dbo.ORDERS WITH(NOLOCK)
+   WHERE OrderKey = @cOrderKey
+
+   SELECT TOP 1
+      @cLocToMoveTo = Long
+   FROM dbo.CODELKUP WITH(NOLOCK) 
+   WHERE LISTNAME = 'JCBMVPPKIT' 
+      AND Code = @cOrderType
 
    IF @nFunc = 839
    BEGIN
       IF @nStep = 1
 	     AND @nInputKey = 1 --PickSlipNo
       BEGIN
+	     IF ISNULL(@cLocToMoveTo,'') = ''
+		 BEGIN 
+		    SET @nErrNo = 218240
+			SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')--'Loc not set for type'
+			GOTO QUIT
+		 END
+
+		 IF NOT EXISTS (
+		    SELECT 1 
+			FROM dbo.LOC WITH(NOLOCK) 
+			WHERE LOC = @cLocToMoveTo 
+			   AND Facility = 'EMG03'
+         )
+		 BEGIN
+		    SET @nErrNo = 218241
+			SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')+@cLocToMoveTo--'Bad loc '+@cLocToMoveTo
+			GOTO QUIT
+		 END
+
 	     IF EXISTS (
 		    SELECT 1
             FROM dbo.PICKDETAIL PD1 WITH (NOLOCK) 
@@ -88,6 +121,7 @@ BEGIN
 			GOTO QUIT
 		 END
 	  END
+
 	  IF @nStep = 2 
 	     AND @nInputKey = 1 --PickZone
 	  BEGIN
@@ -102,7 +136,27 @@ BEGIN
 			SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')
 			GOTO QUIT
 		 END
+
+		 IF @cDropID = ''
+		 BEGIN
+		    SET @nErrNo = 218242
+			SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')--'DropID cant be blank'
+			GOTO QUIT
+		 END
       END
+
+	  IF @nStep = 3
+	     AND @nInputKey = 1 --SKU / QTY
+      BEGIN
+	     IF @nQTY <> (SELECT TOP 1 V_QTY FROM RDT.RDTMOBREC WITH(NOLOCK) WHERE Mobile = @nMobile) 
+		    AND (SELECT TOP 1 V_String2 FROM RDT.RDTMOBREC WITH(NOLOCK) WHERE Mobile = @nMobile) = 1
+		 BEGIN
+		    SET @nErrNo = 218243
+			SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')--'Wrong qty entered'
+			GOTO QUIT
+		 END
+	  END
+
    END
 Quit:
 END
