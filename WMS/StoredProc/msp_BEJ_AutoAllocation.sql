@@ -57,11 +57,12 @@ BEGIN
             , @cMax_SKU_Per_Order      NVARCHAR(1000)
             , @dCutOffDate             DATETIME -- (SWT02)
             , @n_Priority    INT
-            , @cCommand              NVARCHAR(2014)
-            , @c_Priority NVARCHAR(1)
-            , @c_Status NVARCHAR(10)
-            , @c_PostAllocationSP NVARCHAR(200)
-            , @c_Type NVARCHAR(10)
+            , @cCommand                NVARCHAR(2014)
+            , @c_Priority              NVARCHAR(1)
+            , @c_Status                NVARCHAR(10)
+            , @c_PostAllocationSP      NVARCHAR(200)
+            , @c_Type                  NVARCHAR(10)
+            , @c_OrderLineNo           NVARCHAR(5)
 
     SELECT @c_APP_DB_Name           = qcfg.APP_DB_Name
            , @c_DataStream          = qcfg.DataStream
@@ -204,7 +205,7 @@ BEGIN
           WHERE o.StorerKey = @c_StorerKey
           AND o.Facility = @c_Facility
           AND o.Type IN ('0','1','2','6','8')
-          AND o.Status = '0'
+          AND o.Status IN ('0','1')
           AND o.OrderGroup <> 'XDOCK'
           AND o.DeliveryDate <= DATEADD(hh,CASE DATEPART(dw,DATEADD(hh,24,getdate())) WHEN 7 THEN 72 WHEN 1 THEN 48 ELSE 24 END,getdate())
           AND o.Priority <> '1'
@@ -296,12 +297,13 @@ BEGIN
            (
              OrderKey       NVARCHAR(10)   NOT NULL
            , Sku            NVARCHAR(20)   NOT NULL DEFAULT('')
-           ,  QtyAvailable   INT            NOT NULL DEFAULT(0)
-           ,  QtyOpen        INT            NOT NULL DEFAULT(0)
+           , QtyAvailable   INT            NOT NULL DEFAULT(0)
+           , QtyOpen        INT            NOT NULL DEFAULT(0)
+           , OrderLineNo    NVARCHAR(5)    NOT NULL
            )
 
           INSERT INTO #skuQty
-          SELECT o.OrderKey, od.sku, SUM(li.avaialbleQty),od.openQty
+          SELECT o.OrderKey, od.sku, SUM(li.avaialbleQty), od.openQty,od.OrderLineNumber
           FROM ORDERS o WITH (NOLOCK)
           JOIN ORDERDETAIL od WITH (NOLOCK) on od.OrderKey = o.Orderkey
           JOIN ( SELECT LLI.storerkey, LLI.sku, LA.Lottable03, SUM(LLI.QTY - LLI.QTYALLOCATED - LLI.QTYPICKED - LLI.QtyReplen) as avaialbleQty
@@ -355,11 +357,11 @@ BEGIN
           ORDER BY o.OrderKey
 
        DECLARE CUR_THIRD_PARTY_ORDERKEY CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-       SELECT DISTINCT OrderKey FROM #skuQty
+       SELECT DISTINCT OrderKey, OrderLineNo FROM #skuQty
 
        OPEN CUR_THIRD_PARTY_ORDERKEY
 
-       FETCH NEXT FROM CUR_THIRD_PARTY_ORDERKEY INTO @c_OrderKey
+       FETCH NEXT FROM CUR_THIRD_PARTY_ORDERKEY INTO @c_OrderKey, @c_OrderLineNo
 
        WHILE @@FETCH_STATUS <> -1
        BEGIN
@@ -371,28 +373,59 @@ BEGIN
        IF EXISTS (SELECT 1
           FROM #skuQty
           WHERE QtyAvailable < QtyOpen
-          AND OrderKey = @c_Orderkey)
+          AND OrderKey = @c_Orderkey
+          AND OrderLineNo = @c_OrderLineNo)
           BEGIN
-              UPDATE ORDERS WITH (ROWLOCK)
-              SET Ecom_Platform = '3RDPartyQty'
-              , SequenceNo = CASE WHEN ISNULL(Orders.SequenceNo,0) = 0 OR (Orders.SequenceNo = 99999999)
-              THEN 1 ELSE Cast(Orders.SequenceNo as Int)+1 END
+              UPDATE ORDERDETAIL WITH (ROWLOCK)
+              SET UserDefine03 = '3RDPartyQty'
               , TrafficCop = NULL
               WHERE Orderkey = @c_Orderkey
+              AND OrderLineNumber = @c_OrderLineNo
           END
        ELSE
           BEGIN
-              UPDATE ORDERS WITH (ROWLOCK)
-              SET Ecom_Platform = '3RDParty'
-              , SequenceNo = CASE WHEN ISNULL(Orders.SequenceNo,0) = 0 OR (Orders.SequenceNo = 99999999)
-              THEN 1 ELSE Cast(Orders.SequenceNo as Int)+1 END
+              UPDATE ORDERDETAIL WITH (ROWLOCK)
+              SET UserDefine03 = '3RDParty'
               , TrafficCop = NULL
               WHERE Orderkey = @c_Orderkey
+              AND OrderLineNumber = @c_OrderLineNo
           END
-          FETCH NEXT FROM CUR_THIRD_PARTY_ORDERKEY INTO @c_OrderKey
+          FETCH NEXT FROM CUR_THIRD_PARTY_ORDERKEY INTO @c_OrderKey, @c_OrderLineNo
        END
        CLOSE CUR_THIRD_PARTY_ORDERKEY
        DEALLOCATE CUR_THIRD_PARTY_ORDERKEY
+
+       DECLARE CUR_THIRD_PARTY_SPLIT_ORDER CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+       SELECT DISTINCT OrderKey FROM #skuQty
+
+       OPEN CUR_THIRD_PARTY_SPLIT_ORDER
+
+       FETCH NEXT FROM CUR_THIRD_PARTY_SPLIT_ORDER INTO @c_OrderKey
+
+       WHILE @@FETCH_STATUS <> -1
+       BEGIN
+          IF @b_debug = 1
+          BEGIN
+            print(@c_Orderkey)
+          END
+          EXEC isp_SplitNonThirdPartyOrder
+          @c_OrderKey ,
+          @b_success  OUTPUT,
+          @n_err      OUTPUT,
+          @c_errmsg   OUTPUT
+
+          IF @n_err <> 0 AND ISNULL(@c_errmsg,'') <> ''
+            BEGIN
+               SELECT @n_continue = 3
+               SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 550159
+               SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(6),@n_err)+':'+@c_OrderKey +': Execute isp_SplitNotThirdPartOrder Failed. (msp_BEJ_AutoAllocation)'
+               + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
+             EXECUTE nsp_logerror @n_Err, @c_ErrMsg, 'msp_BEJ_AutoAllocation'
+            END
+          FETCH NEXT FROM CUR_THIRD_PARTY_SPLIT_ORDER INTO @c_OrderKey
+       END
+       CLOSE CUR_THIRD_PARTY_SPLIT_ORDER
+       DEALLOCATE CUR_THIRD_PARTY_SPLIT_ORDER
 
    END
 EXIT_SP:

@@ -221,7 +221,7 @@ BEGIN
    	    BEGIN
    		    SELECT @n_continue = 3
 			    SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 30103
-			    SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Error Insert Orderdetail Table. (isp_SplitWaveNotFullAllocOrder)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) ' 
+			    SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Error Insert Orderdetail Table. (isp_SplitNotFullAllocOrder)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
 			    BREAK
 		    END		    		    
         
@@ -236,7 +236,7 @@ BEGIN
    	    BEGIN
    		    SELECT @n_continue = 3
 			    SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 30104
-			    SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Error Update Orders Table. (isp_SplitWaveNotFullAllocOrder)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) ' 
+			    SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Error Update Orders Table. (isp_SplitNotFullAllocOrder)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
 			    BREAK
 		    END
 
@@ -250,7 +250,7 @@ BEGIN
    	    BEGIN
    		    SELECT @n_continue = 3
 			    SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 30105
-			    SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Error Delete Preallocatepickdetail Table. (isp_SplitWaveNotFullAllocOrder)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) ' 
+			    SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Error Delete Preallocatepickdetail Table. (isp_SplitNotFullAllocOrder)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
 			    BREAK
 		    END		    		    
         
@@ -266,7 +266,7 @@ BEGIN
    	    BEGIN
    		    SELECT @n_continue = 3
 			    SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 301066
-			    SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Error Update Orderdetail Table. (isp_SplitWaveNotFullAllocOrder)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) ' 
+			    SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Error Update Orderdetail Table. (isp_SplitNotFullAllocOrder)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
 			    BREAK
 		    END
         
@@ -277,7 +277,7 @@ BEGIN
    	    BEGIN
    		    SELECT @n_continue = 3
 			    SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 30107
-			    SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Error Insert #TMP_NEWORDER Table. (isp_SplitWaveNotFullAllocOrder)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) ' 
+			    SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Error Insert #TMP_NEWORDER Table. (isp_SplitNotFullAllocOrder)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
 			    BREAK
 		    END
    	  END  -- while
