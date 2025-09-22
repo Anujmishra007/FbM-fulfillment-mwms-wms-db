@@ -79,7 +79,7 @@ BEGIN
 		    SELECT 1 
 			FROM dbo.LOC WITH(NOLOCK) 
 			WHERE LOC = @cLocToMoveTo 
-			   AND Facility = 'EMG03'
+			   AND Facility = @cFacility
          )
 		 BEGIN
 		    SET @nErrNo = 218241
