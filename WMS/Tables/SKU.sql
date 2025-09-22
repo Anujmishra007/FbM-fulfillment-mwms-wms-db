@@ -1,3 +1,10 @@
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
+IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'SKU' AND type = 'U')
+BEGIN
 CREATE TABLE [dbo].[SKU]
 (
 [StorerKey] [nvarchar] (15) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL,
@@ -19,7 +26,7 @@ CREATE TABLE [dbo].[SKU]
 [CLASS] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_SKU_Class] DEFAULT ('STD'),
 [ACTIVE] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_SKU_ACTIVE] DEFAULT ('1'),
 [SKUGROUP] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_SKU_SKUGROUP] DEFAULT ('STD'),
-[Tariffkey] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_SKU_Tariffkey] DEFAULT ('XXXXXXXXXX'),
+[Tariffkey] [nvarchar] (12) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_SKU_Tariffkey] DEFAULT ('XXXXXXXXXX'),
 [BUSR1] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
 [BUSR2] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
 [BUSR3] [nvarchar] (30) COLLATE SQL_Latin1_General_CP1_CI_AS NULL,
@@ -129,237 +136,382 @@ CREATE TABLE [dbo].[SKU]
 [DataCapture] [nvarchar] (1) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_SKU_DataCapture] DEFAULT (''),
 [EcomCartonType] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NULL CONSTRAINT [DF_SKU_EcomCartonType] DEFAULT ('')
 ) ON [PRIMARY]
-GO
-GRANT SELECT ON  [dbo].[SKU] TO [JReportRole]
-GO
-GRANT DELETE ON  [dbo].[SKU] TO [NSQL]
-GO
-GRANT INSERT ON  [dbo].[SKU] TO [NSQL]
-GO
-GRANT SELECT ON  [dbo].[SKU] TO [NSQL]
-GO
-GRANT UPDATE ON  [dbo].[SKU] TO [NSQL]
-GO
 
 ALTER TABLE [dbo].[SKU] ADD CONSTRAINT [PKSKU] PRIMARY KEY CLUSTERED ([StorerKey], [Sku]) WITH (FILLFACTOR=90) ON [PRIMARY]
+END
 GO
-CREATE NONCLUSTERED INDEX [IX_SKU_AltSku] ON [dbo].[SKU] ([ALTSKU]) WITH (FILLFACTOR=90) ON [PRIMARY]
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON [dbo].[SKU] to [NSQL]
 GO
+
+SET ANSI_PADDING ON
+GO
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE object_id = OBJECT_ID(N'[dbo].[SKU]') AND name = N'IX_SKU_AltSku')
+CREATE NONCLUSTERED INDEX [IX_SKU_AltSku] ON [dbo].[SKU] ([ALTSKU], [Storerkey]) WITH (FILLFACTOR=90) ON [PRIMARY]
+GO
+SET ANSI_PADDING ON
+GO
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE object_id = OBJECT_ID(N'[dbo].[SKU]') AND name = N'IX_SKU_BUSR5')
 CREATE NONCLUSTERED INDEX [IX_SKU_BUSR5] ON [dbo].[SKU] ([BUSR5], [StorerKey]) ON [PRIMARY]
 GO
+SET ANSI_PADDING ON
+GO
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE object_id = OBJECT_ID(N'[dbo].[SKU]') AND name = N'IX_SKU_BUSR6')
 CREATE NONCLUSTERED INDEX [IX_SKU_BUSR6] ON [dbo].[SKU] ([BUSR6], [StorerKey]) ON [PRIMARY]
 GO
+SET ANSI_PADDING ON
+GO
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE object_id = OBJECT_ID(N'[dbo].[SKU]') AND name = N'IX_SKU_BUSR7')
 CREATE NONCLUSTERED INDEX [IX_SKU_BUSR7] ON [dbo].[SKU] ([BUSR7], [StorerKey]) ON [PRIMARY]
 GO
-CREATE NONCLUSTERED INDEX [IX_SKU_Color] ON [dbo].[SKU] ([Color]) WITH (FILLFACTOR=90) ON [PRIMARY]
+SET ANSI_PADDING ON
 GO
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE object_id = OBJECT_ID(N'[dbo].[SKU]') AND name = N'IX_SKU_editdate')
 CREATE NONCLUSTERED INDEX [IX_SKU_editdate] ON [dbo].[SKU] ([EditDate]) ON [PRIMARY]
 GO
-CREATE NONCLUSTERED INDEX [IX_SKU_ManufacturerSku] ON [dbo].[SKU] ([MANUFACTURERSKU]) WITH (FILLFACTOR=90) ON [PRIMARY]
+SET ANSI_PADDING ON
 GO
-CREATE NONCLUSTERED INDEX [IX_SKU_Measurement] ON [dbo].[SKU] ([Measurement]) WITH (FILLFACTOR=90) ON [PRIMARY]
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE object_id = OBJECT_ID(N'[dbo].[SKU]') AND name = N'IX_SKU_ManufacturerSku')
+CREATE NONCLUSTERED INDEX [IX_SKU_ManufacturerSku] ON [dbo].[SKU] ([MANUFACTURERSKU], [Storerkey]) WITH (FILLFACTOR=90) ON [PRIMARY]
 GO
+SET ANSI_PADDING ON
+GO
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE object_id = OBJECT_ID(N'[dbo].[SKU]') AND name = N'IX_SKU_OTM_SKUGroup')
 CREATE NONCLUSTERED INDEX [IX_SKU_OTM_SKUGroup] ON [dbo].[SKU] ([OTM_SKUGroup], [StorerKey]) ON [PRIMARY]
 GO
+SET ANSI_PADDING ON
+GO
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE object_id = OBJECT_ID(N'[dbo].[SKU]') AND name = N'IX_SKU_PackKey')
 CREATE NONCLUSTERED INDEX [IX_SKU_PackKey] ON [dbo].[SKU] ([PACKKey]) WITH (FILLFACTOR=90) ON [PRIMARY]
 GO
+SET ANSI_PADDING ON
+GO
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE object_id = OBJECT_ID(N'[dbo].[SKU]') AND name = N'IX_SKU_PutawayZone')
 CREATE NONCLUSTERED INDEX [IX_SKU_PutawayZone] ON [dbo].[SKU] ([PutawayZone]) ON [PRIMARY]
 GO
-CREATE NONCLUSTERED INDEX [IX_SKU_RetailSKU] ON [dbo].[SKU] ([RETAILSKU]) WITH (FILLFACTOR=90) ON [PRIMARY]
+SET ANSI_PADDING ON
 GO
-CREATE NONCLUSTERED INDEX [IX_SKU_Size] ON [dbo].[SKU] ([Size]) WITH (FILLFACTOR=90) ON [PRIMARY]
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE object_id = OBJECT_ID(N'[dbo].[SKU]') AND name = N'IX_SKU_RetailSKU')
+CREATE NONCLUSTERED INDEX [IX_SKU_RetailSKU] ON [dbo].[SKU] ([RETAILSKU], [StorerKey]) WITH (FILLFACTOR=90) ON [PRIMARY]
 GO
+SET ANSI_PADDING ON
+GO
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE object_id = OBJECT_ID(N'[dbo].[SKU]') AND name = N'IDX_SKU_SKU')
 CREATE NONCLUSTERED INDEX [IDX_SKU_SKU] ON [dbo].[SKU] ([Sku]) WITH (FILLFACTOR=90) ON [PRIMARY]
 GO
-CREATE NONCLUSTERED INDEX [IDX_SKU_CIdx] ON [dbo].[SKU] ([StorerKey], [BUSR5], [itemclass], [SKUGROUP], [Style], [Color], [Size], [Measurement]) WITH (FILLFACTOR=90) ON [PRIMARY]
+SET ANSI_PADDING ON
 GO
-CREATE NONCLUSTERED INDEX [IX_SKU_Style] ON [dbo].[SKU] ([Style]) WITH (FILLFACTOR=90) ON [PRIMARY]
+IF NOT EXISTS (SELECT * FROM sys.indexes WHERE object_id = OBJECT_ID(N'[dbo].[SKU]') AND name = N'IX_SKU_StyleColorSizeM')
+CREATE NONCLUSTERED INDEX [IX_SKU_StyleColorSizeM] ON [dbo].[SKU] (StorerKey, Style, Color, Size, Measurement) WITH (FILLFACTOR=90) ON [PRIMARY]
 GO
+
+IF NOT EXISTS (SELECT * FROM sys.foreign_keys WHERE object_id = OBJECT_ID(N'[dbo].[FK_SKU_STORER_01]') AND parent_object_id = OBJECT_ID(N'[dbo].[SKU]'))
 ALTER TABLE [dbo].[SKU] WITH NOCHECK ADD CONSTRAINT [FK_SKU_STORER_01] FOREIGN KEY ([StorerKey]) REFERENCES [dbo].[STORER] ([StorerKey])
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', NULL,NULL) )
 EXEC sp_addextendedproperty N'MS_Description', 'Stock Keeping Unit (SKU) is also called as an item number, commodity, or product code.', 'SCHEMA', N'dbo', 'TABLE', N'SKU', NULL, NULL
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'ABC') )
 EXEC sp_addextendedproperty N'MS_Description', 'ABC designation of the SKU where A - fast mover, B - average mover, C - slow mover. Used during putaway to direct fast moving commodities to the correct locations', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'ABC'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'AddDate') )
 EXEC sp_addextendedproperty N'MS_Description', 'Date of the information added. (System date)', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'AddDate'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'AddWho') )
 EXEC sp_addextendedproperty N'MS_Description', 'The username/login ID added the information.', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'AddWho'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'ALTSKU') )
 EXEC sp_addextendedproperty N'MS_Description', 'Commodities in the warehouse can be identified with a variety of labels, each referring to the product by a different name or item number', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'ALTSKU'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'AvgCaseWeight') )
 EXEC sp_addextendedproperty N'MS_Description', 'Estimated average weight for the commodity', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'AvgCaseWeight'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'BUSR1') )
 EXEC sp_addextendedproperty N'MS_Description', 'User defined field', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'BUSR1'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'BUSR10') )
 EXEC sp_addextendedproperty N'MS_Description', 'User defined field', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'BUSR10'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'BUSR2') )
 EXEC sp_addextendedproperty N'MS_Description', 'User defined field', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'BUSR2'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'BUSR3') )
 EXEC sp_addextendedproperty N'MS_Description', 'Product Group', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'BUSR3'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'BUSR4') )
 EXEC sp_addextendedproperty N'MS_Description', 'Product bitmap file path - where the bitmap is kept', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'BUSR4'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'BUSR5') )
 EXEC sp_addextendedproperty N'MS_Description', 'User defined field', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'BUSR5'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'BUSR6') )
 EXEC sp_addextendedproperty N'MS_Description', 'User defined field', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'BUSR6'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'BUSR7') )
 EXEC sp_addextendedproperty N'MS_Description', 'User defined field', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'BUSR7'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'BUSR8') )
 EXEC sp_addextendedproperty N'MS_Description', 'User defined field', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'BUSR8'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'BUSR9') )
 EXEC sp_addextendedproperty N'MS_Description', 'User defined field', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'BUSR9'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'CarryCost') )
 EXEC sp_addextendedproperty N'MS_Description', 'Cost the facility incurs to carry the inventory', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'CarryCost'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'CartonGroup') )
 EXEC sp_addextendedproperty N'MS_Description', 'Code used to identify the family of cartons used during cartonization. If this commodity does not use the cartonization function, create a standard cartonization code for commodities of this type', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'CartonGroup'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'CLASS') )
 EXEC sp_addextendedproperty N'MS_Description', 'testing', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'CLASS'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'Color') )
 EXEC sp_addextendedproperty N'MS_Description', 'Apparel related - commodity color e.g. red, yellow, white, black, blue etc', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'Color'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'Cost') )
 EXEC sp_addextendedproperty N'MS_Description', 'Purchase prince for a master unit of the commodity', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'Cost'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'CtnPickQty') )
 EXEC sp_addextendedproperty N'MS_Description', 'Carton Pick Qty', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'CtnPickQty'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'Cube') )
 EXEC sp_addextendedproperty N'MS_Description', 'Records the maximum cubic size for a Commodity the carton can hold.', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'Cube'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'CycleCountFrequency') )
 EXEC sp_addextendedproperty N'MS_Description', 'Number of days between cycle counts for the commodity', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'CycleCountFrequency'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'DataCapture') )
 EXEC sp_addextendedproperty N'MS_Description', 'Data capture upon inbound and/or outbound', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'DataCapture'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'DESCR') )
 EXEC sp_addextendedproperty N'MS_Description', 'Description of the commodity', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'DESCR'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'EcomCartonType') )
 EXEC sp_addextendedproperty N'MS_Description', 'EcomCartonType', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'EcomCartonType'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'EditDate') )
 EXEC sp_addextendedproperty N'MS_Description', 'Date of the information edited/modified/updated. (System date)', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'EditDate'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'EditWho') )
 EXEC sp_addextendedproperty N'MS_Description', 'The username/login ID edited/modified/updated the information.', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'EditWho'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'Facility') )
 EXEC sp_addextendedproperty N'MS_Description', 'This is the warehouse or DC in which the goods are residing', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'Facility'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'HazardousFlag') )
 EXEC sp_addextendedproperty N'MS_Description', 'Hazardous Code', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'HazardousFlag'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'Height') )
 EXEC sp_addextendedproperty N'MS_Description', 'Height of the Commodity.', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'Height'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'InnerPack') )
 EXEC sp_addextendedproperty N'MS_Description', 'Pick method to use when picking inner packs in the zone.', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'InnerPack'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'IOFlag') )
 EXEC sp_addextendedproperty N'MS_Description', 'Communicates to the system the time when weight capture should take place.', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'IOFlag'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'itemclass') )
 EXEC sp_addextendedproperty N'MS_Description', 'Identifies the commodity class which is normally the department', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'itemclass'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'IVAS') )
 EXEC sp_addextendedproperty N'MS_Description', 'Inbound value added services', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'IVAS'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'LastCycleCount') )
 EXEC sp_addextendedproperty N'MS_Description', 'Date of the last cycle count', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'LastCycleCount'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'Length') )
 EXEC sp_addextendedproperty N'MS_Description', 'Length per inner pack', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'Length'
-GO
-EXEC sp_addextendedproperty N'MS_Description', 'Contain attributes that define a CommodityÆs lots. For example, perishable product might be lotted by expiration date, clothing by mill number and size or textiles by dye lot.', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'LOTTABLE01LABEL'
-GO
-EXEC sp_addextendedproperty N'MS_Description', 'Contain attributes that define a CommodityÆs lots. For example, perishable product might be lotted by expiration date, clothing by mill number and size or textiles by dye lot.', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'LOTTABLE02LABEL'
-GO
-EXEC sp_addextendedproperty N'MS_Description', 'Contain attributes that define a CommodityÆs lots. For example, perishable product might be lotted by expiration date, clothing by mill number and size or textiles by dye lot.', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'LOTTABLE03LABEL'
-GO
-EXEC sp_addextendedproperty N'MS_Description', 'Contain attributes that define a CommodityÆs lots. For example, perishable product might be lotted by expiration date, clothing by mill number and size or textiles by dye lot.', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'LOTTABLE04LABEL'
-GO
-EXEC sp_addextendedproperty N'MS_Description', 'Contain attributes that define a CommodityÆs lots. For example, perishable product might be lotted by expiration date, clothing by mill number and size or textiles by dye lot.', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'LOTTABLE05LABEL'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'LOTTABLE01LABEL') )
+EXEC sp_addextendedproperty N'MS_Description', 'Contain attributes that define a Commodity s lots. For example, perishable product might be lotted by expiration date, clothing by mill number and size or textiles by dye lot.', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'LOTTABLE01LABEL'
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'LOTTABLE02LABEL') )
+EXEC sp_addextendedproperty N'MS_Description', 'Contain attributes that define a Commodity s lots. For example, perishable product might be lotted by expiration date, clothing by mill number and size or textiles by dye lot.', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'LOTTABLE02LABEL'
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'LOTTABLE03LABEL') )
+EXEC sp_addextendedproperty N'MS_Description', 'Contain attributes that define a Commodity s lots. For example, perishable product might be lotted by expiration date, clothing by mill number and size or textiles by dye lot.', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'LOTTABLE03LABEL'
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'LOTTABLE04LABEL') )
+EXEC sp_addextendedproperty N'MS_Description', 'Contain attributes that define a Commodity s lots. For example, perishable product might be lotted by expiration date, clothing by mill number and size or textiles by dye lot.', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'LOTTABLE04LABEL'
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'LOTTABLE05LABEL') )
+EXEC sp_addextendedproperty N'MS_Description', 'Contain attributes that define a Commodity s lots. For example, perishable product might be lotted by expiration date, clothing by mill number and size or textiles by dye lot.', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'LOTTABLE05LABEL'
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'LotxIdDetailOtherlabel1') )
 EXEC sp_addextendedproperty N'MS_Description', 'Information that describes a particular commodity.', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'LotxIdDetailOtherlabel1'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'LotxIdDetailOtherlabel2') )
 EXEC sp_addextendedproperty N'MS_Description', 'Information that describes a particular commodity.', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'LotxIdDetailOtherlabel2'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'LotxIdDetailOtherlabel3') )
 EXEC sp_addextendedproperty N'MS_Description', 'Information that describes a particular commodity.', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'LotxIdDetailOtherlabel3'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'MANUFACTURERSKU') )
 EXEC sp_addextendedproperty N'MS_Description', 'Commodity code the manufacturer uses to refer to the commodity.', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'MANUFACTURERSKU'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'Measurement') )
 EXEC sp_addextendedproperty N'MS_Description', 'Apparel related - commodity measurement', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'Measurement'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'NOTES1') )
 EXEC sp_addextendedproperty N'MS_Description', 'Unlimited text field for entry of additional information about the commodity', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'NOTES1'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'NOTES2') )
 EXEC sp_addextendedproperty N'MS_Description', 'Unlimited text field for entry of additional information about the commodity', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'NOTES2'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'OnReceiptCopyPackkey') )
 EXEC sp_addextendedproperty N'MS_Description', 'Indicates whether the pack key used for receipt should be copied to the LOTTABLE01 field.', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'OnReceiptCopyPackkey'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'OVAS') )
 EXEC sp_addextendedproperty N'MS_Description', 'Outbound value added services', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'OVAS'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'PACKKey') )
 EXEC sp_addextendedproperty N'MS_Description', 'UOM identifying how the commodity is tracked', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'PACKKey'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'PickCode') )
 EXEC sp_addextendedproperty N'MS_Description', 'It is used to sort the lots during replenishment candidate selection.', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'PickCode'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'Price') )
 EXEC sp_addextendedproperty N'MS_Description', 'Retail price per master unit of the commodity', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'Price'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'ProductModel') )
 EXEC sp_addextendedproperty N'MS_Description', 'Product Model', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'ProductModel'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'PutawayLoc') )
 EXEC sp_addextendedproperty N'MS_Description', 'Putaway location for the commodity in the facility', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'PutawayLoc'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'PutawayZone') )
 EXEC sp_addextendedproperty N'MS_Description', 'Putaway zone in which the commodity is staged prior to actual putaway.', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'PutawayZone'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'PutCode') )
 EXEC sp_addextendedproperty N'MS_Description', 'Algorithm that determines where the commodity is putaway during receiving process. The default is nspPASTd. Putaway strategy: This is setup at Support->Setup->Strategies->Putaway', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'PutCode'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'ReceiptHoldCode') )
 EXEC sp_addextendedproperty N'MS_Description', 'Hold code to use if commodity is placed on hold upon RF receipt.', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'ReceiptHoldCode'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'ReceiptInspectionLoc') )
 EXEC sp_addextendedproperty N'MS_Description', 'Putaway algorithm will direct the product to this location for inspection/quality control purposes', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'ReceiptInspectionLoc'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'ReceiptLoc') )
 EXEC sp_addextendedproperty N'MS_Description', 'This is the default receipt location which can be used by the system during the ASN Receipt or RDT Receive', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'ReceiptLoc'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'ReorderPoint') )
 EXEC sp_addextendedproperty N'MS_Description', 'Minimum inventory level of the commodity for the facility. This field is not used for any logic processes in the system.', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'ReorderPoint'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'ReorderQty') )
 EXEC sp_addextendedproperty N'MS_Description', 'Quantity that must be re-ordered when re-order point is reached', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'ReorderQty'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'RETAILSKU') )
 EXEC sp_addextendedproperty N'MS_Description', 'Commodity code retailers use to refer to the commodity.', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'RETAILSKU'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'ReturnLoc') )
 EXEC sp_addextendedproperty N'MS_Description', 'During the return process, the system will use this location field to receive the stock return', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'ReturnLoc'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'SerialNoCapture') )
 EXEC sp_addextendedproperty N'MS_Description', 'Serial no capture', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'SerialNoCapture'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'ShelfLife') )
 EXEC sp_addextendedproperty N'MS_Description', 'shelflife', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'ShelfLife'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'Size') )
 EXEC sp_addextendedproperty N'MS_Description', 'Apparel related - commodity size e.g. small, medium, large etc.', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'Size'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'Sku') )
 EXEC sp_addextendedproperty N'MS_Description', 'Unique code identifying the product', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'Sku'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'SKUGROUP') )
 EXEC sp_addextendedproperty N'MS_Description', 'Identifies the commodity group which is normally the sub department', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'SKUGROUP'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'SkuStatus') )
 EXEC sp_addextendedproperty N'MS_Description', 'Identifies whether the commodity is active or inactive', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'SkuStatus'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'StackFactor') )
 EXEC sp_addextendedproperty N'MS_Description', 'Indicates the total number of block stack allowed', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'StackFactor'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'STDCUBE') )
 EXEC sp_addextendedproperty N'MS_Description', 'Identifies the default cube per unit in terms of eaches (Master Unit) for this commodity. Cube per unit in terms of eaches (Master Unit)', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'STDCUBE'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'STDGROSSWGT') )
 EXEC sp_addextendedproperty N'MS_Description', 'Gross weight per unit in terms of eaches', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'STDGROSSWGT'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'STDNETWGT') )
 EXEC sp_addextendedproperty N'MS_Description', 'Identifies the net weight per unit in terms of eaches (Master Unit)', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'STDNETWGT'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'StdOrderCost') )
 EXEC sp_addextendedproperty N'MS_Description', 'Cost to re-order the commodity', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'StdOrderCost'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'StorerKey') )
 EXEC sp_addextendedproperty N'MS_Description', 'Name of the storer associated with the new Commodity', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'StorerKey'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'StrategyKey') )
 EXEC sp_addextendedproperty N'MS_Description', 'Master strategy which comprises of putaway, pre-allocation and allocation', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'StrategyKey'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'Style') )
 EXEC sp_addextendedproperty N'MS_Description', 'Apparel related - commodity style e.g. jackets, dress, pants, shorts, tops, blazers etc', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'Style'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'SUSR1') )
 EXEC sp_addextendedproperty N'MS_Description', 'Commodity shelf life that will be used to check the incoming stock. Number of days permitted before the expiration date or the number of days permitted after the manufacturing date.', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'SUSR1'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'SUSR2') )
 EXEC sp_addextendedproperty N'MS_Description', 'Number of days that the customer allows between the current date and either the expiration date or the manufacturing date for the item being shipped.', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'SUSR2'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'SUSR3') )
 EXEC sp_addextendedproperty N'MS_Description', 'Customer''s principal that manufactures the goods', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'SUSR3'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'SUSR4') )
 EXEC sp_addextendedproperty N'MS_Description', 'Tolerance percentage for incoming receipt', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'SUSR4'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'SUSR5') )
 EXEC sp_addextendedproperty N'MS_Description', 'Variance allowed', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'SUSR5'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'TareWeight') )
 EXEC sp_addextendedproperty N'MS_Description', 'Difference between the net weight and the gross weight of the commodity', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'TareWeight'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'Tariffkey') )
 EXEC sp_addextendedproperty N'MS_Description', 'Type of tariff assigned to the commodity.', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'Tariffkey'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'TemperatureFlag') )
 EXEC sp_addextendedproperty N'MS_Description', 'Temperature Code', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'TemperatureFlag'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'TolerancePct') )
 EXEC sp_addextendedproperty N'MS_Description', 'Amount of difference allowed between the average case weight and the actual weight', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'TolerancePct'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'TrafficCop') )
 EXEC sp_addextendedproperty N'MS_Description', 'When checked, fields updated in this table will not trigger to update other tables that are linked with this table.', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'TrafficCop'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'weight') )
 EXEC sp_addextendedproperty N'MS_Description', 'Weight of the Commodity.', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'weight'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'Width') )
 EXEC sp_addextendedproperty N'MS_Description', 'Width of the Commodity.', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'Width'
-GO
+
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'XDockReceiptLoc') )
 EXEC sp_addextendedproperty N'MS_Description', 'During the crossdock process, the system will use this location field to receive the stock', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'XDockReceiptLoc'
-GO
+
+IF EXISTS (SELECT * FROM sys.indexes WHERE object_id = OBJECT_ID(N'[dbo].[SKU]') AND name = N'IDX_SKU_CIdx')
+BEGIN
+DROP INDEX IDX_SKU_CIdx ON [dbo].[SKU]
+END
+IF EXISTS (SELECT * FROM sys.indexes WHERE object_id = OBJECT_ID(N'[dbo].[SKU]') AND name = N'IX_SKU_Size')
+BEGIN
+DROP INDEX IX_SKU_Size ON [dbo].[SKU]
+END
+IF EXISTS (SELECT * FROM sys.indexes WHERE object_id = OBJECT_ID(N'[dbo].[SKU]') AND name = N'IX_SKU_Style')
+BEGIN
+DROP INDEX IX_SKU_Style ON [dbo].[SKU]
+END
+IF EXISTS (SELECT * FROM sys.indexes WHERE object_id = OBJECT_ID(N'[dbo].[SKU]') AND name = N'IX_SKU_Measurement')
+BEGIN
+DROP INDEX IX_SKU_Measurement ON [dbo].[SKU]
+END
+IF EXISTS (SELECT * FROM sys.indexes WHERE object_id = OBJECT_ID(N'[dbo].[SKU]') AND name = N'IX_SKU_Color')
+BEGIN
+DROP INDEX IX_SKU_Color ON [dbo].[SKU]
+END
+
+--UWP-41115
+IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.COLUMNS where TABLE_NAME = 'SKU' AND COLUMN_NAME = 'Tariffkey' AND CHARACTER_MAXIMUM_LENGTH <> 12)
+BEGIN
+ALTER TABLE dbo.SKU ALTER COLUMN Tariffkey nvarchar(12) NULL
+END
+
+
