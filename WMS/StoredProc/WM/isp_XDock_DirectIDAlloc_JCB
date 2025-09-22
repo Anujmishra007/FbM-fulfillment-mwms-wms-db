@@ -24,7 +24,7 @@ GO
 /* 2025-08-11  SKE140   1.0   Customized the XDCock for JCB                */
 /* 2024-07-15  SKE140   1.0   Initial Creation                             */
 /****************************************************************************/
-ALTER PROC [dbo].[isp_XDock_DirectIDAlloc_JCB]
+CREATE OR ALTER PROC [dbo].[isp_XDock_DirectIDAlloc_JCB]
 @c_OrderKey NVARCHAR(10) = '',
 @c_LoadKey NVARCHAR(10) = '',
 @c_WaveKey NVARCHAR(10) = '',
