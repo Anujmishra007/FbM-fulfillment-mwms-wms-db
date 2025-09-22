@@ -1,7 +1,7 @@
 
-SET ANSI_NULLS ON
+SET ANSI_NULLS OFF
 GO
-SET QUOTED_IDENTIFIER ON
+SET QUOTED_IDENTIFIER OFF
 GO
 /*************************************************************************************/
 /* Store procedure: [rdt_839ExtUpdJCB]                                               */
@@ -9,6 +9,7 @@ GO
 /*                                                                                   */
 /* Date         Rev   Author   Purposes                                              */
 /* 16/09/2025   1.0   PPA374   Mark order as started                                 */
+/* 22/09/2025   2.0   PPA374   Move DropID to relatd KIT staging                     */
 /*************************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_839ExtUpdJCB] (
@@ -55,12 +56,27 @@ BEGIN
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
-   DECLARE @cOrderKey AS NVARCHAR( 20)
+   DECLARE @cOrderKey    AS NVARCHAR( 20)
+   DECLARE @cOrderType   AS NVARCHAR( 20)
+   DECLARE @cLocToMoveTo   AS NVARCHAR( 20)
+   DECLARE @cFromLot       AS NVARCHAR( 20)
+   DECLARE @cPickDetailKey AS NVARCHAR( 20)
 
-   SELECT 
+   SELECT TOP 1
       @cOrderKey = OrderKey 
    FROM dbo.PICKHEADER WITH(NOLOCK) 
    WHERE PickHeaderKey = @cPickSlipNo
+
+   SELECT TOP 1
+      @cOrderType = Type
+   FROM dbo.ORDERS WITH(NOLOCK)
+   WHERE OrderKey = @cOrderKey
+
+   SELECT TOP 1
+      @cLocToMoveTo = Long
+   FROM dbo.CODELKUP WITH(NOLOCK) 
+   WHERE LISTNAME = 'JCBMVPPKIT' 
+      AND Code = @cOrderType
 
    IF @nFunc = 839
    BEGIN
@@ -71,6 +87,80 @@ BEGIN
 		 SET Notes = 'Started'
 		 WHERE OrderKey = @cOrderKey
 	  END
+
+	  IF @nStep = 2
+	     AND @nInputKey = 0 --PickSlipNo
+      BEGIN
+	     UPDATE dbo.PICKDETAIL WITH(ROWLOCK)
+		 SET Notes = ''
+		 WHERE OrderKey = @cOrderKey
+		    AND Notes = 'Started'
+	  END
+
+	  IF @nStep = 3
+	     AND @nInputKey = 1
+	  BEGIN
+         -- Step 1: Capture rows into a temporary table with unique RowID
+         DECLARE @ToProcess TABLE (
+            PickDetailKey NVARCHAR(20),
+            Lot NVARCHAR(20),
+            Qty INT
+         )
+
+	     INSERTTOUPD:
+         INSERT INTO @ToProcess (PickDetailKey, Lot, Qty)
+         SELECT TOP 1
+	        PickDetailKey,
+	        Lot,
+            Qty
+         FROM dbo.PICKDETAIL WITH(NOLOCK)
+         WHERE Status = '5'
+            AND OrderKey = @cOrderKey
+            AND Loc = @cLOC
+            AND ID = ''
+            AND DropID = @cDropID
+            AND SKU = @cSKU
+	        AND ISNULL(Notes,'') <> 'Moved'
+
+         IF EXISTS (SELECT 1 FROM @ToProcess)
+         BEGIN
+            -- Pick the next row
+            SELECT TOP 1 
+		       @cPickDetailKey = PickDetailKey,
+               @cFromLot = Lot,
+               @nQTY = Qty
+            FROM @ToProcess
+
+            -- Execute your procedure
+            EXECUTE rdt.rdt_Move
+               @nMobile     = @nMobile,
+               @cLangCode   = @cLangCode,
+               @nErrNo      = @nErrNo  OUTPUT,
+               @cErrMsg     = @cErrMsg OUTPUT,
+               @cSourceType = 'rdt_839ExtUpdJCB',
+               @cStorerKey  = @cStorerKey,
+               @cFacility   = @cFacility,
+               @cFromLOC    = @cLOC,
+               @cToLOC      = @cLocToMoveTo,
+               @cFromID     = '',
+               @cToID       = @cDropID,
+               @cSKU        = @cSKU,
+               @nQTY        = @nQTY,
+               @cFromLot    = @cFromLot,
+               @nQTYAlloc   = 0,
+               @nQTYPick    = @nQTY,
+               @cDropID     = @cDropID,
+               @nFunc       = @nFunc;
+
+		    UPDATE PICKDETAIL WITH(ROWLOCK)
+		    SET Notes = 'Moved'
+		    WHERE PickDetailKey = @cPickDetailKey
+		       AND Storerkey = @cStorerKey
+
+            DELETE FROM @ToProcess
+		    GOTO INSERTTOUPD
+         END
+      END
    END
 Quit:
 END
