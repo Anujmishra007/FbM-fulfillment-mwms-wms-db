@@ -78,6 +78,7 @@ GO
 /* 2025-05-20   6.0.0   Jackc       UWP-34683 Add extupd to step4                */
 /* 2025-01-23   6.1.0   CYU027      FCR-540 Fix issues， SerinaNo                */
 /* 2025-09-09   6.2.0   Jackc       uwp-40901 Fix next scn value at st7          */
+/* 2025-09-22   6.2.1   PPA374      Adding ExtUpd to step 2 inputkey 0           */
 /*********************************************************************************/
 
 CREATE OR ALTER   PROC [RDT].[rdtfnc_PickPiece] (
@@ -1380,6 +1381,69 @@ BEGIN
 
          IF @nStep IN (3,9)
             SET @cOutField12 = @cExtendedInfo
+      END
+
+      IF @cExtendedUpdateSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')
+         BEGIN
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, ' +
+               ' @cPickSlipNo, @cPickZone, @cDropID, @cLOC, @cSKU, @nQTY, @cOption, @cLottableCode, ' +
+               ' @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05, ' +
+               ' @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10, ' +
+               ' @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, ' +
+               ' @cPackData1,@cPackData2,@cPackData3, ' +
+               ' @nErrNo OUTPUT, @cErrMsg OUTPUT '
+            SET @cSQLParam =
+               ' @nMobile         INT                      ' +
+               ',@nFunc           INT                      ' +
+               ',@cLangCode       NVARCHAR( 3)             ' +
+               ',@nStep           INT                      ' +
+               ',@nInputKey       INT                      ' +
+               ',@cFacility       NVARCHAR( 5)             ' +
+               ',@cStorerKey      NVARCHAR( 15)            ' +
+               ',@cPickSlipNo     NVARCHAR( 10)            ' +
+               ',@cPickZone       NVARCHAR( 10)            ' +
+               ',@cDropID         NVARCHAR( 20)            ' +
+               ',@cLOC            NVARCHAR( 10)            ' +
+               ',@cSKU            NVARCHAR( 20)            ' +
+               ',@nQTY            INT                      ' +
+               ',@cOption         NVARCHAR( 1)             ' +
+               ',@cLottableCode   NVARCHAR( 30)            ' +
+               ',@cLottable01     NVARCHAR( 18)            ' +
+               ',@cLottable02     NVARCHAR( 18)            ' +
+               ',@cLottable03     NVARCHAR( 18)            ' +
+               ',@dLottable04     DATETIME                 ' +
+               ',@dLottable05     DATETIME                 ' +
+               ',@cLottable06     NVARCHAR( 30)            ' +
+               ',@cLottable07     NVARCHAR( 30)            ' +
+               ',@cLottable08     NVARCHAR( 30)            ' +
+               ',@cLottable09     NVARCHAR( 30)            ' +
+               ',@cLottable10     NVARCHAR( 30)            ' +
+               ',@cLottable11     NVARCHAR( 30)            ' +
+               ',@cLottable12     NVARCHAR( 30)            ' +
+               ',@dLottable13     DATETIME                 ' +
+               ',@dLottable14     DATETIME                 ' +
+               ',@dLottable15     DATETIME                 ' +
+               ',@cPackData1      NVARCHAR( 30)            ' +
+               ',@cPackData2      NVARCHAR( 30)            ' +
+               ',@cPackData3      NVARCHAR( 30)            ' +
+               ',@nErrNo          INT           OUTPUT     ' +
+               ',@cErrMsg         NVARCHAR(250) OUTPUT     '
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, 2, @nInputKey, @cFacility, @cStorerKey,
+               @cPickSlipNo, @cPickZone, @cDropID, @cSuggLOC, @cSuggSKU, @nQTY, @cOption, @cLottableCode,
+               @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
+               @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
+               @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,
+               @cPackData1,@cPackData2,@cPackData3,
+               @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+            IF @nErrNo <> 0
+               GOTO Step_2_Fail
+         END
       END
    END
 
