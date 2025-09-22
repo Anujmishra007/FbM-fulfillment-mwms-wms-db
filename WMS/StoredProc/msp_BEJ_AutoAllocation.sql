@@ -352,7 +352,7 @@ BEGIN
                    AND LLI.Sku = od.sku
                    GROUP BY LLI.Storerkey, LLI.sku,LA.Lottable03
 				           HAVING COUNT(DISTINCT PA.ZoneCategory) > 1 )
-          GROUP BY o.OrderKey,od.sku,od.openQty
+          GROUP BY o.OrderKey,od.sku,od.openQty,od.OrderLineNumber
           HAVING sum(od.openqty) > 0
           ORDER BY o.OrderKey
 
