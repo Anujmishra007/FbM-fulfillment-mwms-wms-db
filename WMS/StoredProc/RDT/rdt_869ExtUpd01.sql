@@ -13,8 +13,9 @@ GO
 /* 2025-04-09   1.1.0  Dennis   FCR-3925 Remove Trigger For Transmitlog2*/
 /* 2025-07-02   1.2.0  Dennis   FCR-5019 Remove Pack Header             */
 /* 2025-08-19   1.3.0  NickT    UWP-39586 Performance tuning            */
-/* 2025-08-19   1.4.0  NickT    FCR-6730 Add @cShipRef, fixed an issue  */
-/* 2025-09-16   1.5.0  JackC    UWP-40608 Performance tuning            */
+/* 2025-08-19   1.4.0  NickT    UWP-38742 Fix: PackDetail Qty is wrong  */
+/* 2025-08-19   1.5.0  NickT    FCR-6730 Add @cShipRef, fixed an issue  */
+/* 2025-09-16   1.6.0  JackC    UWP-40608 Performance tuning            */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_869ExtUpd01] (
@@ -55,12 +56,7 @@ BEGIN
    DECLARE @tShortCaseList TABLE
    (
       CASEID NVARCHAR(20)
-   )
-
-   DECLARE @tPackHeader TABLE
-   (
-      PickSlipNo NVARCHAR( 10) NOT NULL,
-      PRIMARY KEY CLUSTERED(PickSlipNo)
+      PRIMARY KEY CLUSTERED(CASEID)
    )
 
    DECLARE @tPackDetail TABLE
@@ -94,7 +90,7 @@ BEGIN
                   FROM dbo.PickDetail WITH (NOLOCK)
                   WHERE OrderKey = @cOrderKey
                   AND StorerKey = @cStorerKey
-                  AND Status = 0
+                  AND Status = '0'
                   AND Qty = 0
             END
 
@@ -106,7 +102,7 @@ BEGIN
                      INNER JOIN dbo.OrderDetail OD WITH (NOLOCK) ON (OD.OrderKey = PD.OrderKey AND OD.OrderLineNumber = PD.OrderLineNumber)
                   WHERE OD.LoadKey = @cLoadKey
                      AND PD.StorerKey = @cStorerKey
-                     AND PD.Status = 0
+                     AND PD.Status = '0'
                      AND PD.Qty = 0
             END
 
@@ -121,7 +117,7 @@ BEGIN
                         INNER JOIN dbo.WaveDetail WD  WITH (NOLOCK) ON (OD.OrderKey = WD.OrderKey)
                      WHERE WD.WaveKey = @cWaveKey
                         AND PD.Storerkey = @cStorerKey
-                        AND PD.Status = 0
+                        AND PD.Status = '0'
                         AND PD.Qty = 0
                END
                ELSE
@@ -136,7 +132,7 @@ BEGIN
                         AND PD.Storerkey = @cStorerKey
                         AND ORD.MBOLKey IS NOT NULL
                         AND ORD.MBOLKey  = @cShipRef
-                        AND PD.Status = 0
+                        AND PD.Status = '0'
                         AND PD.Qty = 0
                END
             END

@@ -11,13 +11,15 @@ GO
 /*                                                                      */
 /* Date       Rev  Author     Purposes                                  */
 /* 2024-06-13 1.0  NLT013     FCR-386. Created                          */
-/* 2024-11-15 1.1.0 LJQ006    FCR-1109. Updated                         */
-/* 2025-01-04 1.1.1 Dennis    FCR-1109. Updated                         */
-/* 2025-02-05 1.2.0 CYU027    FCR-2630 Add Option=5 in step 5           */
-/* 2025-02-05 1.3.0 Dennis    Add Step_4                                */
-/* 2025-04-05 1.4.0 JackC     FCR-4159 Support single unit orders       */
-/* 2025-08-27 1.5.0 JackC     FCR-7348 New single unit order identifer  */
-/* 2025-08-27 1.5.1 JackC     FCR-7348 New single unit order identifer  */
+/* 2024-11-15 1.1.0 LJQ006     FCR-1109. Updated                        */
+/* 2025-01-04 1.1.1 Dennis     FCR-1109. Updated                        */
+/* 2025-02-05 1.2.0 CYU027     FCR-2630 Add Option=5 in step 5          */
+/* 2025-02-05 1.3.0 Dennis     Add Step_4                               */
+/* 2025-04-05 1.4.0 JackC      FCR-4159 Support single unit orders      */
+/* 2025-08-27 1.5.0 JackC      FCR-7348 New single unit order identifer */
+/* 2025-08-27 1.5.1 JackC      FCR-7348 New single unit order identifer */
+/* 2025-09-20 1.5.2 JackC      FCR-7348 If PPK order not set single unit*/
+/*                               order flag                             */
 /* 2025-09-15 1.6.0 NickT     UWP-41178 Stay in PrintPackingList scn    */
 /*                            if input invalid option                   */
 /************************************************************************/
@@ -674,7 +676,19 @@ BEGIN
                         --                AND C.Storerkey = O.StorerKey
                         --             WHERE  PD.StorerKey = @cStorerkey
                         --                AND PD.DropID = @cDropID)
-                        BEGIN -- Not set SingleUnitOrder flag if any of orders is MPOC.
+                        --V1.5.2 Any SKU which PrePackIndicator = Y, then it is PPK order not single unit order.
+                        IF NOT EXISTS (
+                           SELECT 1
+                           FROM dbo.PickDetail PKD WITH (NOLOCK)
+                           JOIN dbo.SKU WITH (NOLOCK)
+                           ON PKD.Storerkey = SKU.StorerKey
+                              AND PKD.SKU = SKU.Sku
+                           WHERE PKD.StorerKey = @cStorerKey
+                                 AND DropID = @cDropID
+                                 AND ShipFlag <> 'Y'
+                                 AND SKU.PrePackIndicator = 'Y'
+                        ) -- V1.5.2 end
+                        BEGIN 
                            SET @cSingleUnitOrdConfig = rdt.rdtGetConfig( @nFunc, 'SingleUnitOrderConfig', @cStorerkey)
                            IF @cSingleUnitOrdConfig = '0'
                               SET @cSingleUnitOrdConfig = ''
