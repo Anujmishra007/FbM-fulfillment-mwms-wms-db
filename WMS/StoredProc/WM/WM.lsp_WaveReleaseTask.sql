@@ -65,7 +65,7 @@ BEGIN
    BEGIN TRAN        --(Wan01)
 
    -- AYD01 - START
-   SET @c_LockName  = 'APPLOCK_lsp_WaveReleaseTask_' + @c_WaveKey
+   SET @c_LockName  = 'APPLOCK_lsp_WaveReleaseTask_' + ISNULL(RTRIM(@c_WaveKey), '')
    
    EXEC @n_Result = sp_getapplock 
       @Resource = @c_LockName, 
@@ -77,7 +77,7 @@ BEGIN
       SET @n_Continue = 3
       SET @n_Err = 555808
       SET @c_ErrMsg = 'NSQL'+ CONVERT(Char(6),@n_Err)
-                     + ': Unable to obtain application lock, WaveKey[' + @c_WaveKey + '] already under processing (lsp_WaveReleaseTask)'
+                     + ': Unable to obtain application lock, WaveKey[' + ISNULL(RTRIM(@c_WaveKey), '') + '] already under processing (lsp_WaveReleaseTask)'
       GOTO EXIT_SP
    END
    -- AYD01 - END
