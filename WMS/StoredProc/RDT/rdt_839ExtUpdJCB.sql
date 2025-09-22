@@ -120,6 +120,7 @@ BEGIN
             AND ID = ''
             AND DropID = @cDropID
             AND SKU = @cSKU
+			AND Storerkey = @cStorerKey
 	        AND ISNULL(Notes,'') <> 'Moved'
 
          IF EXISTS (SELECT 1 FROM @ToProcess)
@@ -152,12 +153,18 @@ BEGIN
                @cDropID     = @cDropID,
                @nFunc       = @nFunc;
 
+			IF @nErrNo <> 0
+			BEGIN
+			   GOTO SKIPRECORD
+			END
+
 		    UPDATE PICKDETAIL WITH(ROWLOCK)
 		    SET Notes = 'Moved'
 		    WHERE PickDetailKey = @cPickDetailKey
 		       AND Storerkey = @cStorerKey
 
-            DELETE FROM @ToProcess
+			SKIPRECORD:
+            DELETE FROM @ToProcess --Deleting all records, to refresh and check if any split has happened
 		    GOTO INSERTTOUPD
          END
       END
