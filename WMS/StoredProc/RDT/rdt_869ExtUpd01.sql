@@ -56,12 +56,7 @@ BEGIN
    DECLARE @tShortCaseList TABLE
    (
       CASEID NVARCHAR(20)
-   )
-
-   DECLARE @tPackHeader TABLE
-   (
-      PickSlipNo NVARCHAR( 10) NOT NULL,
-      PRIMARY KEY CLUSTERED(PickSlipNo)
+      PRIMARY KEY CLUSTERED(CASEID)
    )
 
    DECLARE @tPackDetail TABLE
@@ -95,7 +90,7 @@ BEGIN
                   FROM dbo.PickDetail WITH (NOLOCK)
                   WHERE OrderKey = @cOrderKey
                   AND StorerKey = @cStorerKey
-                  AND Status = 0
+                  AND Status = '0'
                   AND Qty = 0
             END
 
@@ -107,7 +102,7 @@ BEGIN
                      INNER JOIN dbo.OrderDetail OD WITH (NOLOCK) ON (OD.OrderKey = PD.OrderKey AND OD.OrderLineNumber = PD.OrderLineNumber)
                   WHERE OD.LoadKey = @cLoadKey
                      AND PD.StorerKey = @cStorerKey
-                     AND PD.Status = 0
+                     AND PD.Status = '0'
                      AND PD.Qty = 0
             END
 
@@ -122,7 +117,7 @@ BEGIN
                         INNER JOIN dbo.WaveDetail WD  WITH (NOLOCK) ON (OD.OrderKey = WD.OrderKey)
                      WHERE WD.WaveKey = @cWaveKey
                         AND PD.Storerkey = @cStorerKey
-                        AND PD.Status = 0
+                        AND PD.Status = '0'
                         AND PD.Qty = 0
                END
                ELSE
@@ -137,7 +132,7 @@ BEGIN
                         AND PD.Storerkey = @cStorerKey
                         AND ORD.MBOLKey IS NOT NULL
                         AND ORD.MBOLKey  = @cShipRef
-                        AND PD.Status = 0
+                        AND PD.Status = '0'
                         AND PD.Qty = 0
                END
             END
