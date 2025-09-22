@@ -141,6 +141,9 @@ ALTER TABLE [dbo].[SKU] ADD CONSTRAINT [PKSKU] PRIMARY KEY CLUSTERED ([StorerKey
 END
 GO
 
+GRANT SELECT, INSERT, UPDATE, DELETE ON [dbo].[SKU] to [NSQL]
+GO
+
 SET ANSI_PADDING ON
 GO
 IF NOT EXISTS (SELECT * FROM sys.indexes WHERE object_id = OBJECT_ID(N'[dbo].[SKU]') AND name = N'IX_SKU_AltSku')
@@ -320,19 +323,19 @@ IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'S
 EXEC sp_addextendedproperty N'MS_Description', 'Length per inner pack', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'Length'
 
 IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'LOTTABLE01LABEL') )
-EXEC sp_addextendedproperty N'MS_Description', 'Contain attributes that define a Commodity∆s lots. For example, perishable product might be lotted by expiration date, clothing by mill number and size or textiles by dye lot.', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'LOTTABLE01LABEL'
+EXEC sp_addextendedproperty N'MS_Description', 'Contain attributes that define a Commodity s lots. For example, perishable product might be lotted by expiration date, clothing by mill number and size or textiles by dye lot.', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'LOTTABLE01LABEL'
 
 IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'LOTTABLE02LABEL') )
-EXEC sp_addextendedproperty N'MS_Description', 'Contain attributes that define a Commodity∆s lots. For example, perishable product might be lotted by expiration date, clothing by mill number and size or textiles by dye lot.', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'LOTTABLE02LABEL'
+EXEC sp_addextendedproperty N'MS_Description', 'Contain attributes that define a Commodity s lots. For example, perishable product might be lotted by expiration date, clothing by mill number and size or textiles by dye lot.', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'LOTTABLE02LABEL'
 
 IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'LOTTABLE03LABEL') )
-EXEC sp_addextendedproperty N'MS_Description', 'Contain attributes that define a Commodity∆s lots. For example, perishable product might be lotted by expiration date, clothing by mill number and size or textiles by dye lot.', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'LOTTABLE03LABEL'
+EXEC sp_addextendedproperty N'MS_Description', 'Contain attributes that define a Commodity s lots. For example, perishable product might be lotted by expiration date, clothing by mill number and size or textiles by dye lot.', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'LOTTABLE03LABEL'
 
 IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'LOTTABLE04LABEL') )
-EXEC sp_addextendedproperty N'MS_Description', 'Contain attributes that define a Commodity∆s lots. For example, perishable product might be lotted by expiration date, clothing by mill number and size or textiles by dye lot.', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'LOTTABLE04LABEL'
+EXEC sp_addextendedproperty N'MS_Description', 'Contain attributes that define a Commodity s lots. For example, perishable product might be lotted by expiration date, clothing by mill number and size or textiles by dye lot.', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'LOTTABLE04LABEL'
 
 IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'LOTTABLE05LABEL') )
-EXEC sp_addextendedproperty N'MS_Description', 'Contain attributes that define a Commodity∆s lots. For example, perishable product might be lotted by expiration date, clothing by mill number and size or textiles by dye lot.', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'LOTTABLE05LABEL'
+EXEC sp_addextendedproperty N'MS_Description', 'Contain attributes that define a Commodity s lots. For example, perishable product might be lotted by expiration date, clothing by mill number and size or textiles by dye lot.', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'LOTTABLE05LABEL'
 
 IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'SKU', N'COLUMN',N'LotxIdDetailOtherlabel1') )
 EXEC sp_addextendedproperty N'MS_Description', 'Information that describes a particular commodity.', 'SCHEMA', N'dbo', 'TABLE', N'SKU', 'COLUMN', N'LotxIdDetailOtherlabel1'
