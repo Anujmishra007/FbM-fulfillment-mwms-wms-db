@@ -17,6 +17,7 @@ GO
 /* 2025-05-20  1.1  NLT013    UWP-34684 Assign wrong task to user       */
 /* 2025-06-05  1.1.0  NLT013  UWP-34684 Fix issue: Cursor is not allocated*/
 /*                            , it causes unpected error                */
+/* 2025-09-22 1.2.0 NickT     FCR-7693 Add user override priority in task*/
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1764GetTask12] (
@@ -195,7 +196,9 @@ BEGIN
                      WHERE PermissionType = TaskDetail.TaskType
                         AND TMU.UserKey = @cUserName
                         AND TMU.Permission = '1')
-            ORDER BY TaskDetail.Priority, LOC.LogicalLocation, LOC.LOC
+            ORDER BY TaskDetail.Priority, 
+               CASE WHEN TaskDetail.UserKeyOverRide = @cUserName THEN '0' ELSE '1' END,
+               LOC.LogicalLocation, LOC.LOC
       END
       ELSE IF (@cSLLocType = 'PICK' OR @cFinalLocType = 'DYNAMICPK') AND @cFinalLocCategory = 'Shelving' --ASTRPT
       BEGIN
@@ -218,7 +221,9 @@ BEGIN
                      WHERE PermissionType = TaskDetail.TaskType
                         AND TMU.UserKey = @cUserName
                         AND TMU.Permission = '1')
-            ORDER BY TaskDetail.Priority, LOC.LogicalLocation, LOC.LOC
+            ORDER BY TaskDetail.Priority, 
+               CASE WHEN TaskDetail.UserKeyOverRide = @cUserName THEN '0' ELSE '1' END,
+               LOC.LogicalLocation, LOC.LOC
       END
    END
    ELSE
@@ -244,7 +249,9 @@ BEGIN
                      WHERE PermissionType = TaskDetail.TaskType
                         AND TMU.UserKey = @cUserName
                         AND TMU.Permission = '1')
-            ORDER BY TaskDetail.Priority, LOC.LogicalLocation, LOC.LOC
+            ORDER BY TaskDetail.Priority, 
+               CASE WHEN TaskDetail.UserKeyOverRide = @cUserName THEN '0' ELSE '1' END,
+               LOC.LogicalLocation, LOC.LOC
       END
       ELSE IF (@cSLLocType = 'PICK' OR @cFinalLocType = 'DYNAMICPK') AND @cFinalLocCategory = 'Shelving' --ASTRPT
       BEGIN
@@ -268,7 +275,9 @@ BEGIN
                      WHERE PermissionType = TaskDetail.TaskType
                         AND TMU.UserKey = @cUserName
                         AND TMU.Permission = '1')
-            ORDER BY TaskDetail.Priority, LOC.LogicalLocation, LOC.LOC
+            ORDER BY TaskDetail.Priority, 
+               CASE WHEN TaskDetail.UserKeyOverRide = @cUserName THEN '0' ELSE '1' END,
+               LOC.LogicalLocation, LOC.LOC
       END
    END
 
