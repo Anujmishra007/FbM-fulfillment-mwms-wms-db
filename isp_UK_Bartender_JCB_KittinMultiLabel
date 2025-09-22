@@ -367,3 +367,4 @@ EXIT_SP:
    SET @d_Trace_EndTime = GETDATE()      
    SET @c_UserName = SUSER_SNAME()             
 END -- procedure
+GO
