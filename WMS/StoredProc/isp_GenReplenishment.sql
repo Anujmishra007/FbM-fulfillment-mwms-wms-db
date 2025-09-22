@@ -2,7 +2,6 @@ SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
-
 /***************************************************************************/
 /* Stored Procedure: isp_GenReplenishment                                  */
 /* Creation Date:                                                          */
@@ -1258,5 +1257,3 @@ END --SP end
 GO
 GRANT EXECUTE ON  [dbo].[isp_GenReplenishment] TO [NSQL]
 GO
-
-

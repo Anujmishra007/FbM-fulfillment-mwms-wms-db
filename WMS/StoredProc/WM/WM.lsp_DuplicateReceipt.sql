@@ -290,7 +290,8 @@ BEGIN
                Lottable07,          Lottable08,             Lottable09,
                Lottable10,          Lottable11,             Lottable12,
                Lottable13,          Lottable14,             Lottable15,
-               AddWho,              EditWho
+               AddWho,              EditWho,                Notes,
+               Notes2
                )
                SELECT
                @c_NewReceiptKey,    @c_NextReceiveLineNo,   ExternReceiptKey,
@@ -322,7 +323,8 @@ BEGIN
                Lottable07,          Lottable08,             Lottable09,
                Lottable10,          Lottable11,             Lottable12,
                Lottable13,          Lottable14,             Lottable15,
-               @c_UserName,         @c_UserName
+               @c_UserName,         @c_UserName,            Notes,
+               Notes2
                FROM RECEIPTDETAIL AS r WITH(NOLOCK)
                WHERE r.ReceiptKey = @c_ReceiptKey
                AND   r.ReceiptLineNumber = @c_ReceiptLineNumber

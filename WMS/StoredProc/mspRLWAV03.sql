@@ -12,7 +12,7 @@ GO
 /*                                                                      */
 /* Called By: Wave                                                      */
 /*                                                                      */
-/* GitHub Version: 5.5                                                  */
+/* GitHub Version: 5.6                                                  */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -95,6 +95,7 @@ GO
 /*                           case conditionally (WL16)                  */
 /* 07-Aug-2025 WLC015    5.5 UWP-38984 Prevent same UCC being packed    */
 /*                           into multiple cartons for full case (WL17) */
+/* 11-Sep-2025 WLC015    5.6 FCR-7727 Change RPF ToLoc logic (WL18)     */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[mspRLWAV03]
    @c_WaveKey NVARCHAR(10)
@@ -268,7 +269,7 @@ BEGIN
    IF @n_continue IN(1,2)
    BEGIN
       SELECT @c_Automation = ISNULL(w.Userdefine09,'')                              --(Wan01)
-            ,@c_PNDLoc     = w.DispatchCasePickMethod
+            ,@c_PNDLoc     = ''   --w.DispatchCasePickMethod   --WL18
       FROM WAVE w (NOLOCK)
       WHERE w.Wavekey = @c_WaveKey
 
@@ -370,61 +371,63 @@ BEGIN
             GOTO QUIT_SP    
          END
 
+         --WL18 S
          --WL10 S
-         IF @c_PNDLoc = ''
-         BEGIN
-            SET @n_continue = 3
-            SET @n_Err = 82018
-            SET @c_Errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_Err)
-                         +': Replenishment PND Location Group cannot be BLANK. (mspRLWAV03)'     
-            GOTO QUIT_SP   
-         END
+         --IF @c_PNDLoc = ''
+         --BEGIN
+         --   SET @n_continue = 3
+         --   SET @n_Err = 82018
+         --   SET @c_Errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_Err)
+         --                +': Replenishment PND Location Group cannot be BLANK. (mspRLWAV03)'     
+         --   GOTO QUIT_SP   
+         --END
 
-         SET @c_Loc = @c_PNDLoc
-         SET @c_PNDLoc = ''
+         --SET @c_Loc = @c_PNDLoc
+         --SET @c_PNDLoc = ''
    
-         SELECT TOP 1 @c_PNDLoc = L.Loc
-         FROM LOC L WITH (NOLOCK)
-         WHERE L.LocationGroup = @c_Loc
+         --SELECT TOP 1 @c_PNDLoc = L.Loc
+         --FROM LOC L WITH (NOLOCK)
+         --WHERE L.LocationGroup = @c_Loc
 
-         -- Replenishment PND Lane or loc.locationgroup setup are missing
-         IF @c_PNDLoc = ''
-         BEGIN
-            SET @n_continue = 3
-            SET @n_Err = 82019
-            SET @c_Errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_Err)
-                         +': Missing PND Location setup for Location Group "'+ @c_Loc + '". (mspRLWAV03)'     
-            GOTO QUIT_SP   
-         END
-         --WL10 E
+         ---- Replenishment PND Lane or loc.locationgroup setup are missing
+         --IF @c_PNDLoc = ''
+         --BEGIN
+         --   SET @n_continue = 3
+         --   SET @n_Err = 82019
+         --   SET @c_Errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_Err)
+         --                +': Missing PND Location setup for Location Group "'+ @c_Loc + '". (mspRLWAV03)'     
+         --   GOTO QUIT_SP   
+         --END
+         ----WL10 E
          
-         SELECT @c_LocType_PND = l.Locationtype
-               ,@c_LocFac_PND  = l.Facility 
-         FROM LOC l (NOLOCK) 
-         WHERE l.Loc = @c_PNDLoc
+         --SELECT @c_LocType_PND = l.Locationtype
+         --      ,@c_LocFac_PND  = l.Facility 
+         --FROM LOC l (NOLOCK) 
+         --WHERE l.Loc = @c_PNDLoc
  
-         IF @c_LocType_PND <> 'PND' OR @c_LocFac_PND <> @c_Facility
-         BEGIN 
-            SET @n_continue = 3
-            SET @n_Err = 82020
-            SET @c_Errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_Err)
-                         +': None PND Location / Unmatch PND Facility Found. (mspRLWAV03)'     
-            GOTO QUIT_SP             
-         END
+         --IF @c_LocType_PND <> 'PND' OR @c_LocFac_PND <> @c_Facility
+         --BEGIN 
+         --   SET @n_continue = 3
+         --   SET @n_Err = 82020
+         --   SET @c_Errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_Err)
+         --                +': None PND Location / Unmatch PND Facility Found. (mspRLWAV03)'     
+         --   GOTO QUIT_SP             
+         --END
 
-         IF EXISTS ( SELECT 1
-                     FROM LOTxLOCxID lli (NOLOCK)
-                     WHERE lli.Storerkey = @c_Storerkey
-                     AND   lli.Loc       = @c_PNDLoc                     
-                     AND   lli.Qty + lli.PendingMoveIN > 0
-                   )
-         BEGIN 
-            SET @n_continue = 3
-            SET @n_Err = 82012
-            SET @c_Errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_Err)
-                         +': PND Location is currently being used by another Wave. (mspRLWAV03)'     
-            GOTO QUIT_SP             
-         END
+         --IF EXISTS ( SELECT 1
+         --            FROM LOTxLOCxID lli (NOLOCK)
+         --            WHERE lli.Storerkey = @c_Storerkey
+         --            AND   lli.Loc       = @c_PNDLoc                     
+         --            AND   lli.Qty + lli.PendingMoveIN > 0
+         --          )
+         --BEGIN 
+         --   SET @n_continue = 3
+         --   SET @n_Err = 82012
+         --   SET @c_Errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_Err)
+         --                +': PND Location is currently being used by another Wave. (mspRLWAV03)'     
+         --   GOTO QUIT_SP             
+         --END
+         --WL18 E
       END
       ELSE
       BEGIN
@@ -3285,6 +3288,40 @@ BEGIN
                BEGIN
                   IF @c_FromLocType = 'CASE'
                   BEGIN
+                     --WL18 S
+                     SET @c_PNDLoc = ''
+                     SELECT @c_PNDLoc = ISNULL(PZ.OutLoc, '')
+                     FROM LOC L1 WITH (NOLOCK)
+                     JOIN PutawayZone PZ WITH (NOLOCK) ON L1.PutawayZone = PZ.PutawayZone
+                     WHERE L1.Loc = @c_FromLOC   --Pickdetail.Loc
+
+                     -- Replenishment PND Lane is missing
+                     IF @c_PNDLoc = ''
+                     BEGIN
+                        SET @n_continue = 3
+                        SET @n_Err = 82019
+                        SET @c_Errmsg = 'NSQL' + CONVERT(NVARCHAR(5),@n_Err)
+                                      + ': Missing PND Location setup (PutawayZone.OutLoc) for Location "'+ @c_FromLOC + '". (mspRLWAV03)'     
+                        GOTO QUIT_SP   
+                     END
+
+                     SET @c_LocType_PND = ''
+                     SET @c_LocFac_PND = ''
+                     SELECT @c_LocType_PND = L2.LocationType
+                          , @c_LocFac_PND  = L2.Facility 
+                     FROM LOC L2 WITH (NOLOCK) 
+                     WHERE L2.Loc = @c_PNDLoc
+ 
+                     IF @c_LocType_PND <> 'PND' OR @c_LocFac_PND <> @c_Facility
+                     BEGIN 
+                        SET @n_continue = 3
+                        SET @n_Err = 82020
+                        SET @c_Errmsg = 'NSQL'+CONVERT(NVARCHAR(5),@n_Err)
+                                      + ': None PND Location / Unmatch PND Facility Found. (mspRLWAV03)'     
+                        GOTO QUIT_SP             
+                     END
+                     --WL18 E
+
                      SET @c_TaskType      = 'RPF'
                      SET @c_PickMethod_TD = 'PP'
                      SET @c_ToLoc         = @c_PNDLoc
@@ -3387,6 +3424,40 @@ BEGIN
                      SET @c_PickMethod_TD = 'PP'
                      IF @c_FromLocType    = 'CASE'
                      BEGIN
+                        --WL18 S
+                        SET @c_PNDLoc = ''
+                        SELECT @c_PNDLoc = ISNULL(PZ.OutLoc, '')
+                        FROM LOC L1 WITH (NOLOCK)
+                        JOIN PutawayZone PZ WITH (NOLOCK) ON L1.PutawayZone = PZ.PutawayZone
+                        WHERE L1.Loc = @c_FromLOC   --Pickdetail.Loc
+                        
+                        -- Replenishment PND Lane is missing
+                        IF @c_PNDLoc = ''
+                        BEGIN
+                           SET @n_continue = 3
+                           SET @n_Err = 82036
+                           SET @c_Errmsg = 'NSQL' + CONVERT(NVARCHAR(5),@n_Err)
+                                         + ': Missing PND Location setup (PutawayZone.OutLoc) for Location "'+ @c_FromLOC + '". (mspRLWAV03)'     
+                           GOTO QUIT_SP   
+                        END
+
+                        SET @c_LocType_PND = ''
+                        SET @c_LocFac_PND = ''
+                        SELECT @c_LocType_PND = L2.LocationType
+                             , @c_LocFac_PND  = L2.Facility 
+                        FROM LOC L2 WITH (NOLOCK) 
+                        WHERE L2.Loc = @c_PNDLoc
+                        
+                        IF @c_LocType_PND <> 'PND' OR @c_LocFac_PND <> @c_Facility
+                        BEGIN 
+                           SET @n_continue = 3
+                           SET @n_Err = 82037
+                           SET @c_Errmsg = 'NSQL'+CONVERT(NVARCHAR(5),@n_Err)
+                                         + ': None PND Location / Unmatch PND Facility Found. (mspRLWAV03)'     
+                           GOTO QUIT_SP             
+                        END
+                        --WL18 E
+
                         SET @c_ToLoc    = @c_PNDLoc
                         --SET @c_FinalLoc = @c_ToLoc
                      END

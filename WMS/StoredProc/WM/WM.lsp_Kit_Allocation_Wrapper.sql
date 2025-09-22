@@ -34,6 +34,7 @@ CREATE PROCEDURE [WM].[lsp_Kit_Allocation_Wrapper]
    ,  @n_Err                  INT            = 0   OUTPUT
    ,  @c_Errmsg               NVARCHAR(255)  = ''  OUTPUT
    ,  @c_UserName             NVARCHAR(128)  = ''
+   ,  @n_ErrGroupKey          INT = 0           OUTPUT
 AS  
 BEGIN  
    SET NOCOUNT ON
@@ -73,6 +74,7 @@ BEGIN
       ,  @b_Success              = @b_Success   OUTPUT 
       ,  @n_Err                  = @n_Err       OUTPUT
       ,  @c_Errmsg               = @c_Errmsg    OUTPUT
+      ,  @n_ErrGroupKey          = @n_ErrGroupKey OUTPUT
 
       IF @b_Success = 0
       BEGIN
@@ -84,7 +86,7 @@ BEGIN
          GOTO EXIT_SP
       END
       
-      IF @c_ErrMsg = ''
+      IF @n_ErrGroupKey = 0
       BEGIN
          SET @c_Errmsg = 'Allocation Completed'
       END

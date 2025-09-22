@@ -57,6 +57,7 @@ BEGIN
             WHILE @@FETCH_STATUS <> -1
                 BEGIN
                     --ML01-S
+                    SET @c_HoldStatus = ''
                     SET @c_HoldStatus = dbo.fnc_GetParamValueFromString('@c_HoldStatus', @c_OPTION5, @c_HoldStatus)
                     IF ISNULL(@c_HoldStatus,'')=''
                         SET @c_HoldStatus = 'Auto-Block'

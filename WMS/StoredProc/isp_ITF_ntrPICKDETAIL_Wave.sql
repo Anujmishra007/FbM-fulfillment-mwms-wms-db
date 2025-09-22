@@ -25,13 +25,14 @@ GO
 /* Called By:  Trigger/Store Procedure.                                 */   
 /*             - ntrPICKDETAILDelete/ntrPickDetailAdd                   */  
 /*                                                                      */  
-/* Github Version: 1.0                                                  */  
+/* Github Version: 1.1                                                  */  
 /*                                                                      */  
 /* Version: 1.0                                                         */  
 /*                                                                      */  
 /* Data Modifications:                                                  */  
 /* Date         Author    Ver.  Purposes                                */
 /* 12-Aug-2025  WLChooi   1.0   Initial Version                         */
+/* 10-Sep-2025  WLChooi   1.1   Fix syntax error (WL01)                 */
 /************************************************************************/  
 CREATE OR ALTER PROC [dbo].[isp_ITF_ntrPICKDETAIL_Wave]  
                      @c_TriggerName          NVARCHAR(120)  
@@ -176,7 +177,7 @@ BEGIN
                EXEC sys.sp_executesql @c_StoredProc, N'@c_WaveKey NVARCHAR(10), @b_Success INT OUTPUT, @c_ErrNo INT OUTPUT, @c_ErrMsg NVARCHAR(215) OUTPUT',
                            @c_WaveKey, 
                            @b_Success OUTPUT, 
-                           @c_ErrNo   OUTPUT, 
+                           @n_Err     OUTPUT,   --WL01
                            @c_ErrMsg  OUTPUT 
             END
             ELSE

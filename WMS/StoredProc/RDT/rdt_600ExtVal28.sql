@@ -11,7 +11,7 @@ GO
 /*                                                                      */
 /* Date         Rev  Author     Purposes                                */
 /* 06-Aug-2025  1.0  Cuize      FCR-6888. Created                       */
-/* 12-Aug-2025  1.1  AGA399     Add Id Validations                      */
+/* 01-Sep-2025  1.1  Cuize      FCR-6888  New Requirement               */
 /************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_600ExtVal28 (
@@ -114,8 +114,8 @@ WHERE Mobile = @nMobile
       BEGIN
          IF len(replace(rtrim(ltrim(@cID)),' ',''))<>18 OR (SELECT CHARINDEX (' ',@cID))>0
             BEGIN
-               SET @nErrNo = 217971
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --217971BadFormat
+               SET @nErrNo = 243706
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --243706BadFormat
                GOTO Quit
             END
       END
@@ -127,7 +127,22 @@ WHERE Mobile = @nMobile
          IF @nInputKey = 1 -- ENTER
          BEGIN
 
-            IF @cSKU = 'LCLPLT' AND @nQTY <> 1
+            IF @nQTY < 1
+            BEGIN
+               SET @nErrNo = 243705
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --QtyMustBe1
+               GOTO Quit
+            END
+
+            -- Get UOM
+            DECLARE @cUOM NVARCHAR(10)
+            SELECT @cUOM = PackUOM3
+            FROM dbo.SKU WITH (NOLOCK)
+                    JOIN dbo.Pack WITH (NOLOCK) ON (SKU.PackKey = Pack.PackKey)
+            WHERE StorerKey = @cStorerKey
+              AND SKU = @cSKU
+
+            IF @cUOM = 'PLT' AND @nQTY <> 1
             BEGIN
                SET @nErrNo = 243704
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --QtyMustBe1

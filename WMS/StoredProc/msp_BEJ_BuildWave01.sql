@@ -280,6 +280,22 @@ BEGIN
             ,  @c_StorerKey
             ,  @n_MaxOpenQty
 
+		 -- PPA374 updating ORDERS table for orders in temp table (JCB)
+		 IF EXISTS (
+		    SELECT 1 
+			FROM dbo.StorerConfig WITH(NOLOCK)
+			WHERE StorerKey = @c_StorerKey
+			   AND Facility = @c_Facility
+			   AND SValue = '1'
+			   AND ConfigKey = 'BillToKeyASDDHour'
+		 )
+		 BEGIN
+		    UPDATE ORDERS
+		    SET BillToKey = DATEPART(HOUR, DeliveryDate)
+		    WHERE OrderKey IN (SELECT OrderKey FROM #TMP_ORD)
+		 END
+		 --
+           
          ;WITH ord AS
                (  SELECT o.Orderkey
                , MAX(o.C_Zip)        AS C_Zip

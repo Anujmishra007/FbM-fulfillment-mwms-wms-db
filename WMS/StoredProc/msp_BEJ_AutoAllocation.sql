@@ -206,7 +206,7 @@ BEGIN
           AND o.Type IN ('0','1','2','6','8')
           AND o.Status = '0'
           AND o.OrderGroup <> 'XDOCK'
-          AND o.DeliveryDate <= dateadd(hh,48,getdate())
+          AND o.DeliveryDate <= DATEADD(hh,CASE DATEPART(dw,DATEADD(hh,24,getdate())) WHEN 7 THEN 72 WHEN 1 THEN 48 ELSE 24 END,getdate())
           AND o.Priority <> '1'
           ANd od.Lottable03 is NOT NULL
           AND (o.UserDefine09 is NULL OR o.UserDefine09 = '')
@@ -325,7 +325,7 @@ BEGIN
           AND o.Type IN ('0','1','2')
           AND o.Status = '0'
           AND o.OrderGroup <> 'XDOCK'
-          AND o.DeliveryDate <= dateadd(hh,48,getdate())
+          AND o.DeliveryDate <= DATEADD(hh,CASE DATEPART(dw,DATEADD(hh,24,getdate())) WHEN 7 THEN 72 WHEN 1 THEN 48 ELSE 24 END,getdate())
           AND o.Priority <> '1'
           ANd od.Lottable03 is NOT NULL
           AND (o.UserDefine09 is NULL OR o.UserDefine09 = '')

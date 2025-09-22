@@ -11,13 +11,15 @@ GO
 /*                                                                      */
 /* Date       Rev  Author     Purposes                                  */
 /* 2024-06-13 1.0  NLT013     FCR-386. Created                          */
-/* 2024-11-15 1.1.0 LJQ006     FCR-1109. Updated                        */
-/* 2025-01-04 1.1.1 Dennis     FCR-1109. Updated                        */
-/* 2025-02-05 1.2.0 CYU027     FCR-2630 Add Option=5 in step 5          */
-/* 2025-02-05 1.3.0 Dennis     Add Step_4                               */
-/* 2025-04-05 1.4.0 JackC      FCR-4159 Support single unit orders      */
-/* 2025-08-27 1.5.0 JackC      FCR-7348 New single unit order identifer */
-/* 2025-08-27 1.5.1 NickT      FCR-7348 New single unit order identifer */
+/* 2024-11-15 1.1.0 LJQ006    FCR-1109. Updated                         */
+/* 2025-01-04 1.1.1 Dennis    FCR-1109. Updated                         */
+/* 2025-02-05 1.2.0 CYU027    FCR-2630 Add Option=5 in step 5           */
+/* 2025-02-05 1.3.0 Dennis    Add Step_4                                */
+/* 2025-04-05 1.4.0 JackC     FCR-4159 Support single unit orders       */
+/* 2025-08-27 1.5.0 JackC     FCR-7348 New single unit order identifer  */
+/* 2025-08-27 1.5.1 JackC     FCR-7348 New single unit order identifer  */
+/* 2025-09-15 1.6.0 NickT     UWP-41178 Stay in PrintPackingList scn    */
+/*                            if input invalid option                   */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_855ExtScn01] (
@@ -645,8 +647,20 @@ BEGIN
                         FROM dbo.PickDetail WITH (NOLOCK)
                         WHERE StorerKey = @cStorerKey
                               AND DropID = @cDropID
+                              AND ShipFlag <> 'Y'
                         GROUP BY OrderKey
                         HAVING COUNT(DISTINCT OrderLineNumber) <> 1
+                           OR COUNT(DISTINCT SKU) <> 1
+                           OR SUM(Qty) <> 1
+                     )
+                     AND NOT EXISTS (
+                        SELECT 1
+                        FROM dbo.PickDetail WITH (NOLOCK)
+                        WHERE StorerKey = @cStorerKey
+                              AND DropID = @cDropID
+                              AND ShipFlag <> 'Y'
+                        GROUP BY CaseID
+                        HAVING COUNT(PickDetailKey) <> 1
                      )
                      BEGIN
                         -- V1.5.1 No need to check LISTNAME = 'MPOCPERMIT' for single unit order
@@ -1080,7 +1094,7 @@ BEGIN
                BEGIN
                   SET @nErrNo = 60883
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- OptionRequired
-                  GOTO Step_5_Fail
+                  GOTO Quit
                END
 
                -- Check option valid
@@ -1088,7 +1102,7 @@ BEGIN
                BEGIN
                   SET @nErrNo = 60884
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Invalid Option
-                  GOTO Step_5_Fail
+                  GOTO Quit
                END
 
                -- Prompt print packing list
@@ -1124,7 +1138,7 @@ BEGIN
                           @nErrNo OUTPUT, @cErrMsg OUTPUT, @cID, @cTaskDetailKey
 
                      IF @nErrNo <> 0
-                        GOTO Step_5_Fail
+                        GOTO Quit
                   END
                END
 
@@ -1313,9 +1327,6 @@ BEGIN
                   END
                END
             END
-
-            Step_5_Fail:
-               GOTO Quit
          END --6464
 
          --V1.4.0 START

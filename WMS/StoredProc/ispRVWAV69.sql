@@ -26,7 +26,7 @@ GO
 /*                            to DPP.                                    */
 /* 20-Jun-2025  Wan02   1.2   UWP-36410 -MLP Link Repln Task ID in       */
 /*                            pickDetail for FCR-2902                    */
-/* 13-AUG-2025                Fixed to reverse RPF task type             */
+/* 12-SEP-2025                Fixed to reverse RPF task type             */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[ispRVWAV69]
    @c_Wavekey  NVARCHAR(10)
@@ -95,6 +95,8 @@ BEGIN
       SET @n_Cnt = 0                                                                --(Wan01) - START
       SELECT TOP 1
              @n_Cnt = CASE WHEN TD.TaskType = 'VNAOUT' AND TD.[Status] NOT IN ('Q','X') 
+                           THEN 1
+                           WHEN TD.TaskType = 'RPF' AND TD.[Status] NOT IN ('0','X')--2025-09-12 Include RPF task (Manual) 
                            THEN 1
                            WHEN TD.TaskType = 'FPK' AND TD.[Status] NOT IN ('0','X') 
                            THEN 1

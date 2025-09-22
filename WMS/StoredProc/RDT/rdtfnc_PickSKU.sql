@@ -39,6 +39,7 @@ GO
 /* 2025-06-05   3.1.0 JACKC     FCR-4328 Add ExtScn to ST4 when short            */
 /* 2025-06-20   0.0.0 Jackc     !!!Cutover. Use V0 repo for work!!!              */
 /* 2025-08-22   3.7   Cuize       FCR-7251 Check Digit                           */
+/* 2025-09-18   3.8   Dennis    UWP-41326 Fix CheckDigit Bug                     */
 /*********************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdtfnc_PickSKU (
@@ -1015,7 +1016,10 @@ BEGIN
             GOTO LOC_Fail
          END
       END
-      SET @cOutField03 = @cLOC
+      IF @cLOCCheckDigitSP = '1'
+         SET @cOutField03 = @cInField03
+      ELSE
+         SET @cOutField03 = @cLOC
 
       -- Check DropID format
       IF rdt.rdtIsValidFormat( @nFunc, @cStorerKey, 'DROPID', @cDropID) = 0

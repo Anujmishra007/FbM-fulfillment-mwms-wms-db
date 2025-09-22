@@ -58,11 +58,12 @@ GO
 /* 2024-06-14 4.1  Dennis     UWP-20813 Check Digit                           */
 /* 2025-03-13 4.2  NLT013     UWP-31321 Be able to close pending pallet       */
 /* 2025-05-21 4.3  NLT013     UWP-34785 Add new Exit Screen for Levis         */
-/* 2025-06-16 4.4  Dennis     FCR-3959 Extended Update on Step 7              */
+/* 2025-07-10 0.0  JackC      !!!Cutover!!! Use V0 repo for work              */
 /* 2025-08-04 4.4.0 NickT     UWP-37578 Extend length of  @cOption            */
 /* 2025-08-08 4.5.0 NickT     UWP-39061 SuggestToLoc is reset by mistake      */
 /* 2025-06-16 4.6.0 Dennis    FCR-3959 Extended Update on Step 7              */
 /* 2025-08-20 4.6.1 Dennis    FCR-3959 New Feature                            */
+/* 2025-08-10 4.6.0 NickT     FCR-7730 Support OverwriteToLOC                 */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_Replen](
@@ -189,6 +190,7 @@ DECLARE
    @tExtScnData         VariableTable,
    @tExtValData         VariableTable,
    @nAction             INT,
+   @cOverwriteToLOC     NVARCHAR(1),
    
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),    @cFieldAttr01 NVARCHAR( 1),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),    @cFieldAttr02 NVARCHAR( 1),
@@ -315,6 +317,7 @@ SELECT
    @cSwapUCCSP         = V_String43,
    @cExtendedWCSSP     = V_String44,
    @cLOCCheckDigitSP   = V_string45,
+   @cOverwriteToLOC    = V_String46,
 
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,  @cFieldAttr01  = FieldAttr01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,  @cFieldAttr02  = FieldAttr02,
@@ -423,6 +426,7 @@ BEGIN
    SET @cDefaultFromID = rdt.rdtGetConfig( @nFunc, 'DefaultFromID', @cStorerKey)
    SET @cDefaultSKU = rdt.rdtGetConfig( @nFunc, 'DefaultSKU', @cStorerKey)
    SET @cDisableOverReplen = rdt.rdtGetConfig( @nFunc, 'DisableOverReplen', @cStorerKey)
+   SET @cOverwriteToLOC = rdt.rdtGetConfig( @nFunc, 'OverwriteToLOC', @cStorerKey)
 
    SET @cDecodeLabelNo = rdt.RDTGetConfig( @nFunc, 'DecodeLabelNo', @cStorerKey)
    IF @cDecodeLabelNo = '0'
@@ -760,35 +764,35 @@ BEGIN
          GOTO Step_DropID_Fail
       END
 
-/*
-      BEGIN TRAN
+      /*
+            BEGIN TRAN
 
-      -- Delete used DropID
-      IF EXISTS( SELECT 1 FROM dbo.DropID WITH (NOLOCK) WHERE DropID = @cDropID AND Status = '9')
-      BEGIN
-         -- Delete DropIDDetail
-         DELETE dbo.DropIDDetail WHERE DropID = @cDropID
-         IF @@ERROR <> 0
-         BEGIN
-            ROLLBACK TRAN
-            SET @nErrNo = 72270
-        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --DelDropIDFail
-            GOTO Step_DropID_Fail
-         END
-
-         -- Delete used DropID
-         DELETE dbo.DropID WHERE DropID = @cDropID AND Status = '9'
-         IF @@ERROR <> 0
-         BEGIN
-            ROLLBACK TRAN
-            SET @nErrNo = 72271
+            -- Delete used DropID
+            IF EXISTS( SELECT 1 FROM dbo.DropID WITH (NOLOCK) WHERE DropID = @cDropID AND Status = '9')
+            BEGIN
+               -- Delete DropIDDetail
+               DELETE dbo.DropIDDetail WHERE DropID = @cDropID
+               IF @@ERROR <> 0
+               BEGIN
+                  ROLLBACK TRAN
+                  SET @nErrNo = 72270
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --DelDropIDFail
-            GOTO Step_DropID_Fail
-         END
-      END
+                  GOTO Step_DropID_Fail
+               END
 
-      COMMIT TRAN
-*/
+               -- Delete used DropID
+               DELETE dbo.DropID WHERE DropID = @cDropID AND Status = '9'
+               IF @@ERROR <> 0
+               BEGIN
+                  ROLLBACK TRAN
+                  SET @nErrNo = 72271
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --DelDropIDFail
+                  GOTO Step_DropID_Fail
+               END
+            END
+
+            COMMIT TRAN
+      */
       -- Extended update
       IF @cExtendedUpdateSP <> ''
       BEGIN
@@ -876,7 +880,7 @@ BEGIN
        IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
        BEGIN
            GOTO Step_99
-       END
+      END
    END
    GOTO Quit
 
@@ -1188,15 +1192,15 @@ BEGIN
       SET @cFromID  = @cInField05
       SET @cBarcode = @cInField05
 
-/*
-      -- Check blank FromID
-      IF @cFromID = ''
-      BEGIN
-         SET @nErrNo = 72274
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --FROM ID needed
-         GOTO Step_FromID_Fail
-      END
-*/
+      /*
+            -- Check blank FromID
+            IF @cFromID = ''
+            BEGIN
+               SET @nErrNo = 72274
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --FROM ID needed
+               GOTO Step_FromID_Fail
+            END
+      */
 
       -- Decode
       IF @cDecodeSP <> ''
@@ -1863,18 +1867,19 @@ BEGIN
          IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedValidateSP AND type = 'P')
          BEGIN
             SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +
-               ' @nMobile, @nFunc, @cLangCode, @nStep, @cTaskdetailKey, @nErrNo OUTPUT, @cErrMsg OUTPUT'
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @cTaskdetailKey, @cToLoc, @nErrNo OUTPUT, @cErrMsg OUTPUT'
             SET @cSQLParam =
                '@nMobile         INT,        ' +
                '@nFunc           INT,        ' +
                '@cLangCode       NVARCHAR( 3),   ' +
                '@nStep           INT,        ' +
                '@cTaskdetailKey  NVARCHAR( 10),  ' +
+               '@cToLoc          NVARCHAR( 10),  ' +
                '@nErrNo          INT OUTPUT, ' +
                '@cErrMsg         NVARCHAR( 20) OUTPUT'
 
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-               @nMobile, @nFunc, @cLangCode, @nStep, @cTaskdetailKey, @nErrNo OUTPUT, @cErrMsg OUTPUT
+               @nMobile, @nFunc, @cLangCode, @nStep, @cTaskdetailKey, @cToLoc, @nErrNo OUTPUT, @cErrMsg OUTPUT
 
             IF @nErrNo <> 0
                GOTO Quit
@@ -2234,18 +2239,18 @@ BEGIN
             GOTO Step_NextTask_Fail
 
          SET @cTaskDetailKey = @cNextTaskDetailKey
-/*
-         EXEC rdt.rdt_TM_Replen_GetNextTask @nMobile, @nFunc, @cLangCode,
-            @cUserName,
-            @cAreaKey,
-            @cListKey,
-            @cDropID,
-            @cNextTaskDetailKey OUTPUT,
-            @nErrNo             OUTPUT,
-            @cErrMsg            OUTPUT
-         IF @nErrNo <> 0
-            GOTO Step_NextTask_Fail
-*/
+         /*
+                  EXEC rdt.rdt_TM_Replen_GetNextTask @nMobile, @nFunc, @cLangCode,
+                     @cUserName,
+                     @cAreaKey,
+                     @cListKey,
+                     @cDropID,
+                     @cNextTaskDetailKey OUTPUT,
+                     @nErrNo             OUTPUT,
+                     @cErrMsg            OUTPUT
+                  IF @nErrNo <> 0
+                     GOTO Step_NextTask_Fail
+         */
 
          -- Disable QTY field
          IF @cDisableQTYFieldSP <> ''
@@ -2635,20 +2640,57 @@ BEGIN
 
       SET @nIsToLOCDiff = 0
       -- Check if FromLOC match
-      IF @cDefaultSuggToLOC <> '' 
+      IF @cOverwriteToLOC <> '1'
       BEGIN
-         IF @cToLOC <> @cDefaultSuggToLOC
-            SET @nIsToLOCDiff = 1
+         IF @cDefaultSuggToLOC <> '' 
+         BEGIN
+            IF @cToLOC <> @cDefaultSuggToLOC
+               SET @nIsToLOCDiff = 1
+         END
+         ELSE
+         BEGIN
+            IF @cToLOC <> @cSuggToLOC
+               SET @nIsToLOCDiff = 1
+         END
+
+         IF @nIsToLOCDiff = 1
+         BEGIN
+            SET @nErrNo = 72286
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --ToLOC Diff
+            GOTO Step_ToLOC_Fail
+         END
       END
-      ELSE
-         IF @cToLOC <> @cSuggToLOC
-            SET @nIsToLOCDiff = 1
-      
-      IF @nIsToLOCDiff = 1
+
+      -- Check if ToLoc is valid
+      IF NOT EXISTS( SELECT 1 FROM dbo.LOC WITH (NOLOCK) WHERE LOC = @cToLOC)
       BEGIN
-         SET @nErrNo = 72286
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --ToLOC Diff
-        GOTO Step_ToLOC_Fail
+         SET @nErrNo = 72305
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid LOC
+         GOTO Step_ToLOC_Fail
+      END
+
+      IF @cExtendedValidateSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedValidateSP AND type = 'P')
+         BEGIN
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @cTaskdetailKey, @cToLoc, @nErrNo OUTPUT, @cErrMsg OUTPUT'
+            SET @cSQLParam =
+               '@nMobile         INT,           ' +
+               '@nFunc           INT,           ' +
+               '@cLangCode       NVARCHAR( 3),  ' +
+               '@nStep           INT,           ' +
+               '@cTaskdetailKey  NVARCHAR( 10), ' +
+               '@cToLoc          NVARCHAR( 10), ' +
+               '@nErrNo          INT OUTPUT,    ' +
+               '@cErrMsg         NVARCHAR( 20) OUTPUT'
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, @nStep, @cTaskdetailKey, @cToLoc, @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+            IF @nErrNo <> 0
+               GOTO Quit
+         END
       END
 
       -- Handling transaction
@@ -3245,7 +3287,7 @@ BEGIN
        IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
        BEGIN
            GOTO Step_99
-       END
+      END
    END
    GOTO Quit
 
@@ -3595,7 +3637,7 @@ BEGIN
    BEGIN
       IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
       BEGIN
-         DECLARE
+         DECLARE 
             @nCurrentScn      INT = @nScn,
             @nCurrentStep     INT = @nStep
          DELETE FROM @tExtScnData
@@ -3678,7 +3720,7 @@ BEGIN
 
                   GOTO Step_Exit
                END
-            END
+            END  
          END
          ELSE IF @cExtScnSP = 'rdt_1764ExtScn02'
          BEGIN
@@ -3771,6 +3813,7 @@ BEGIN
       V_String43   = @cSwapUCCSP,
       V_String44   = @cExtendedWCSSP,
       V_string45   = @cLOCCheckDigitSP,
+      V_String46   = @cOverwriteToLOC,
 
       V_Integer1   = @nQTY_RPL,
       V_Integer2   = @nPQTY_RPL,
