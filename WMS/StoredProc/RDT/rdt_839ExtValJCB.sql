@@ -1,7 +1,4 @@
 
-USE [GBRWMS]
-GO
-/****** Object:  StoredProcedure [RDT].[rdt_839ExtValJCB]    Script Date: 9/17/2025 10:28:29 AM ******/
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -16,7 +13,7 @@ GO
 /* 22/09/2025   2.1   PPA374   Check that order type and location are correct        */
 /*************************************************************************************/
 
-CREATE OR ALTER PROC [RDT].[rdt_839ExtValJCB] (
+ALTER   PROC [RDT].[rdt_839ExtValJCB] (
    @nMobile      INT,            
    @nFunc        INT,            
    @cLangCode    NVARCHAR( 3),   
@@ -44,9 +41,11 @@ BEGIN
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
-   DECLARE @cOrderKey AS NVARCHAR( 20)
+   DECLARE @cOrderKey    AS NVARCHAR( 20)
    DECLARE @cOrderType   AS NVARCHAR( 20)
    DECLARE @cLocToMoveTo AS NVARCHAR( 20)
+   DECLARE @nVQTY        AS INT
+   DECLARE @cVSTRING     AS NVARCHAR( 20)
 
    SELECT TOP 1 @cOrderKey = OrderKey 
    FROM dbo.PICKHEADER WITH(NOLOCK) 
@@ -148,15 +147,20 @@ BEGIN
 	  IF @nStep = 3
 	     AND @nInputKey = 1 --SKU / QTY
       BEGIN
-	     IF @nQTY <> (SELECT TOP 1 V_QTY FROM RDT.RDTMOBREC WITH(NOLOCK) WHERE Mobile = @nMobile) 
-		    AND (SELECT TOP 1 V_String2 FROM RDT.RDTMOBREC WITH(NOLOCK) WHERE Mobile = @nMobile) = 1
+	     SELECT TOP 1 
+		    @nVQTY = V_QTY, 
+			@cVSTRING = V_String2 
+		 FROM RDT.RDTMOBREC WITH(NOLOCK) 
+		 WHERE Mobile = @nMobile
+	     
+		 IF @nQTY <> @nVQTY
+		    AND @cVSTRING = '1'
 		 BEGIN
 		    SET @nErrNo = 218243
 			SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP')--'Wrong qty entered'
 			GOTO QUIT
 		 END
 	  END
-
    END
 Quit:
 END
@@ -164,3 +168,4 @@ GO
 
 GRANT EXECUTE ON rdt_839ExtValJCB TO NSQL
 GO
+
