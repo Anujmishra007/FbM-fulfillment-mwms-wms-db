@@ -14,6 +14,7 @@ GO
 /* Modifications log:                                                      */
 /* Date        Author    Ver    Prposes                                    */
 /* 2025-09-09  NickT     1.0.0  FCR-7693. Created, base on nspTTMRP02      */
+/* 2025-09-22  NickT     1.0.1  FCR-7693 Order By AddDate per Wave level   */
 /***************************************************************************/
 CREATE OR ALTER PROC [dbo].[nspTTMRP22]
     @c_UserID    NVARCHAR(18)
@@ -64,6 +65,12 @@ BEGIN
       TaskDetailKey        NVARCHAR(10) PRIMARY KEY
    )
 
+   DECLARE @tWaveReleaseTime TABLE
+   (
+      WaveKey        NVARCHAR(10) PRIMARY KEY NOT NULL,
+      AddDate        DATETIME NOT NULL
+   )
+
    INSERT INTO @tTaskDetail (TaskDetailKey)
    SELECT TaskDetailKey
    FROM dbo.TaskDetail WITH(NOLOCK)
@@ -89,6 +96,20 @@ BEGIN
       END CATCH
    END
 
+   INSERT INTO @tWaveReleaseTime (WaveKey, AddDate)
+   SELECT WaveKey, AddDate
+   FROM
+      (SELECT WaveKey, AddDate, ROW_NUMBER() OVER(PARTITION BY WaveKey ORDER BY AddDate) AS Row# 
+      FROM dbo.TaskDetail TD1 WITH(NOLOCK)
+      WHERE TaskType = 'RPF'
+         AND EXISTS(SELECT 1 FROM dbo.TaskDetail TD2 WITH(NOLOCK) 
+                     WHERE TD2.TaskType = 'RPF' 
+                        AND TD2.Status = '0'
+                        AND TD1.WaveKey = TD2.WaveKey
+                     ) 
+      ) AS T
+   WHERE T.Row# = 1
+
    -- Close cursor
    IF CURSOR_STATUS( 'global', 'Cursor_RPFTaskCandidates') IN (0, 1) -- 0=empty, 1=record
       CLOSE Cursor_RPFTaskCandidates
@@ -112,6 +133,7 @@ BEGIN
             FROM dbo.TaskDetail WITH (NOLOCK)
             INNER JOIN dbo.LOC WITH (NOLOCK) ON (TaskDetail.FromLOC = LOC.LOC)
             INNER JOIN dbo.AreaDetail WITH (NOLOCK) ON (AreaDetail.PutawayZone = LOC.PutAwayZone)
+            INNER JOIN @tWaveReleaseTime WT ON WT.WaveKey = TaskDetail.WaveKey
             WHERE AreaDetail.AreaKey = @c_AreaKey01
                AND TaskDetail.TaskType = 'RPF'
                AND TaskDetail.Status = '0'
@@ -131,7 +153,7 @@ BEGIN
             ORDER BY
                TaskDetail.Priority,
                CASE WHEN TaskDetail.UserKeyOverRide = @c_userid THEN '0' ELSE '1' END,
-               TaskDetail.AddDate,
+               WT.AddDate,
                LOC.LogicalLocation,
                LOC.LOC
       END
@@ -142,6 +164,7 @@ BEGIN
             FROM dbo.TaskDetail WITH (NOLOCK)
             INNER JOIN dbo.LOC WITH (NOLOCK) ON (TaskDetail.FromLOC = LOC.LOC)
             INNER JOIN dbo.AreaDetail WITH (NOLOCK) ON (AreaDetail.PutawayZone = LOC.PutAwayZone)
+            INNER JOIN @tWaveReleaseTime WT ON WT.WaveKey = TaskDetail.WaveKey
             WHERE TaskDetail.TaskType = 'RPF'
                AND TaskDetail.Status = '0'
                AND TaskDetail.UserKeyOverRide IN (@c_UserID, '')
@@ -160,7 +183,7 @@ BEGIN
             ORDER BY
                TaskDetail.Priority,
                CASE WHEN TaskDetail.UserKeyOverRide = @c_userid THEN '0' ELSE '1' END,
-               TaskDetail.AddDate,
+               WT.AddDate,
                LOC.LogicalLocation,
                LOC.LOC
       END
@@ -174,6 +197,7 @@ BEGIN
             FROM dbo.TaskDetail WITH (NOLOCK)
             INNER JOIN dbo.LOC WITH (NOLOCK) ON (TaskDetail.FromLOC = LOC.LOC)
             INNER JOIN dbo.AreaDetail WITH (NOLOCK) ON (AreaDetail.PutawayZone = LOC.PutAwayZone)
+            INNER JOIN @tWaveReleaseTime WT ON WT.WaveKey = TaskDetail.WaveKey
             WHERE AreaDetail.AreaKey = @c_AreaKey01
                AND TaskDetail.TaskType = 'RPF'
                AND TaskDetail.Status = '0'
@@ -193,7 +217,7 @@ BEGIN
             ORDER BY
                TaskDetail.Priority,
                CASE WHEN TaskDetail.UserKeyOverRide = @c_userid THEN '0' ELSE '1' END,
-               TaskDetail.AddDate,
+               WT.AddDate,
                LOC.LogicalLocation,
                LOC.LOC
       END
@@ -204,6 +228,7 @@ BEGIN
             FROM dbo.TaskDetail WITH (NOLOCK)
             INNER JOIN dbo.LOC WITH (NOLOCK) ON (TaskDetail.FromLOC = LOC.LOC)
             INNER JOIN dbo.AreaDetail WITH (NOLOCK) ON (AreaDetail.PutawayZone = LOC.PutAwayZone)
+            INNER JOIN @tWaveReleaseTime WT ON WT.WaveKey = TaskDetail.WaveKey
             WHERE TaskDetail.TaskType = 'RPF'
                AND TaskDetail.StorerKey = @cStorerKey
                AND TaskDetail.Status = '0'
@@ -223,7 +248,7 @@ BEGIN
             ORDER BY
                TaskDetail.Priority,
                CASE WHEN TaskDetail.UserKeyOverRide = @c_userid THEN '0' ELSE '1' END,
-               TaskDetail.AddDate,
+               WT.AddDate,
                LOC.LogicalLocation,
                LOC.LOC
       END
