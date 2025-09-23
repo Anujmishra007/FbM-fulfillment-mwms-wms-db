@@ -129,6 +129,7 @@ BEGIN
                         WHERE T.Row# = 1) AS WT ON WT.WaveKey = TaskDetail.WaveKey
             WHERE AreaDetail.AreaKey = @c_AreaKey01
                AND TaskDetail.TaskType = 'RPF'
+               AND TaskDetail.StorerKey = @cStorerKey
                AND TaskDetail.Status = '0'
                AND TaskDetail.UserKeyOverRide IN (@c_UserID, '')
                AND NOT EXISTS( SELECT 1
@@ -172,6 +173,7 @@ BEGIN
                            ) AS T
                         WHERE T.Row# = 1) AS WT ON WT.WaveKey = TaskDetail.WaveKey
             WHERE TaskDetail.TaskType = 'RPF'
+               AND TaskDetail.StorerKey = @cStorerKey
                AND TaskDetail.Status = '0'
                AND TaskDetail.UserKeyOverRide IN (@c_UserID, '')
                AND NOT EXISTS( SELECT 1
@@ -219,6 +221,7 @@ BEGIN
                         WHERE T.Row# = 1) AS WT ON WT.WaveKey = TaskDetail.WaveKey
             WHERE AreaDetail.AreaKey = @c_AreaKey01
                AND TaskDetail.TaskType = 'RPF'
+               AND TaskDetail.StorerKey = @cStorerKey
                AND TaskDetail.Status = '0'
                AND TaskDetail.UserKeyOverRide IN (@c_UserID, '')
                AND NOT EXISTS( SELECT 1
