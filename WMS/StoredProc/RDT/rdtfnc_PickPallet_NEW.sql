@@ -1918,6 +1918,16 @@ BEGIN
                GOTO Quit
          END
       END
+   
+      -- Confirm task
+      EXECUTE rdt.rdt_PickPallet_Confirm @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 
+         @cPickSlipNo, @cPickZone, @cLOC, @cID, @cSKU, @nTaskQTY, @cToLOC, @cLottableCode, 
+         @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05, 
+         @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10, 
+         @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, 
+         @nErrNo OUTPUT, @cErrMsg OUTPUT
+      IF @nErrNo <> 0
+         GOTO Quit
 
       IF @cExtendedUpdateSP <> ''
       BEGIN
@@ -1977,16 +1987,6 @@ BEGIN
          END
       END
    
-      -- Confirm task
-      EXECUTE rdt.rdt_PickPallet_Confirm @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, 
-         @cPickSlipNo, @cPickZone, @cLOC, @cID, @cSKU, @nTaskQTY, @cToLOC, @cLottableCode, 
-         @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05, 
-         @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10, 
-         @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, 
-         @nErrNo OUTPUT, @cErrMsg OUTPUT
-      IF @nErrNo <> 0
-         GOTO Quit
-
       -- Go to next screen
       EXEC rdt.rdt_PickPallet_GoToNextScreen @nMobile, @nFunc, @cLangCode, @nInputKey, @cFacility, @cStorerKey, 
          @cPUOM, @cPickSlipNo, @cPickZone, @cLOC, @cID, 
@@ -2296,4 +2296,5 @@ GO
 
 GRANT EXECUTE ON RDT.rdtfnc_PickPallet_NEW TO NSQL
 GO
+
 
