@@ -45,7 +45,8 @@ BEGIN
    DECLARE @c_neworderkey NVARCHAR(10),
            @n_newordcnt int,
            @n_moveordcnt int,
-           @c_status NVARCHAR(10)
+           @c_status NVARCHAR(10),
+           @b_isSplit INT
            
    CREATE TABLE #TMP_NEWORDERS (Orderkey NVARCHAR(10) NULL, OldOrderkey NVARCHAR(10) NULL, Rectype NVARCHAR(1) NULL)
                          
@@ -71,7 +72,60 @@ BEGIN
    	  	 SELECT @n_continue = 4
    	  END  
    END   
-      
+   IF @n_continue = 1 OR @n_continue = 2
+   BEGIN
+      SELECT @b_isSplit =
+      CASE
+        WHEN EXISTS (
+          SELECT 1
+          FROM (
+            SELECT DISTINCT UserDefine03
+            FROM ORDERDETAIL
+            WHERE OrderKey = @c_OrderKey
+          ) AS UD
+          WHERE ISNULL(UD.UserDefine03, '') = ''
+        )
+        AND EXISTS (
+          SELECT 1
+          FROM (
+            SELECT DISTINCT UserDefine03
+            FROM ORDERDETAIL
+            WHERE OrderKey = @c_OrderKey
+          ) AS UD
+          WHERE UD.UserDefine03 LIKE '3RDParty%'
+        )
+        THEN 1
+        ELSE 0
+      END
+      IF @b_isSplit = 0
+      BEGIN
+      SELECT @n_continue = 4
+      UPDATE ORDERS WITH (ROWLOCK)
+              SET Ecom_Platform = (
+              SELECT TOP 1
+              CASE
+                WHEN ISNULL(UserDefine03, '') = '' THEN 'EMG'
+                ELSE UserDefine03
+              END
+              FROM ORDERDETAIL (NOLOCK)
+              WHERE ORDERDETAIL.ORDERKEY = @c_OrderKey
+              AND (ISNULL(ORDERDETAIL.UserDefine03,'') LIKE '3RDParty%' OR ISNULL(ORDERDETAIL.UserDefine03,'') = '')
+              GROUP BY UserDefine03
+              ORDER BY UserDefine03 DESC
+              ), SequenceNo = CASE WHEN ISNULL(Orders.SequenceNo,0) = 0 OR (Orders.SequenceNo = 99999999)
+              THEN 1 ELSE Cast(Orders.SequenceNo as Int)+1 END
+              , TrafficCop = NULL
+              WHERE Orderkey = @c_OrderKey
+
+        SELECT @n_err = @@ERROR
+   	   	IF @n_err <> 0
+   	    BEGIN
+   		    SELECT @n_continue = 3
+			    SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 30109
+			    SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Error Update Orders Table. (isp_SplitNonThirdPartyOrder)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
+		    END
+      END
+   END
    IF @n_continue = 1 OR @n_continue = 2
    BEGIN
    	  SELECT ORDERDETAIL.Orderkey, ORDERDETAIL.Orderlinenumber
