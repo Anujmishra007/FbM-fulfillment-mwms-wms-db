@@ -1,5 +1,4 @@
 
-/****** Object:  StoredProcedure [RDT].[rdt_684AutoGenJCB]    Script Date: 7/11/2025 10:40:25 PM ******/
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -12,6 +11,7 @@ GO
 /*                                                                               */
 /* Date         Rev   Author   Purposes                                          */
 /* 11/03/2025   1.0   PPA374   Providing automatic LPN ID                        */
+/* 19/09/2025   1.1   PPA374   Adding check against the UDF01 = @nMobile         */
 /*********************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_684AutoGenJCB] (
@@ -97,6 +97,7 @@ BEGIN
       SELECT 1 
 	  FROM dbo.ReceiptJCBLPNCounter WITH(NOLOCK) 
 	  WHERE AddUser = @cAddUser 
+	     AND UDF01 = @nMobile
 	     AND ISNULL(STATUS,'') IN ('NOT RECEIVED','') 
 		 AND LPN LIKE 'L_________'
    )
@@ -104,7 +105,8 @@ BEGIN
       SELECT TOP 1 @cAutoID = (
 	     SELECT MAX(LPN) 
 		 FROM dbo.ReceiptJCBLPNCounter WITH(NOLOCK) 
-	     WHERE AddUser = @cAddUser 
+	     WHERE AddUser = @cAddUser
+		    AND UDF01 = @nMobile
 		    AND ISNULL(STATUS,'') IN ('NOT RECEIVED','') 
 			AND LPN LIKE 'L_________'
 	  )
@@ -116,6 +118,7 @@ BEGIN
 	     SELECT 1 
 		 FROM dbo.ReceiptJCBLPNCounter WITH(NOLOCK) 
          WHERE AddUser = @cAddUser 
+		    AND UDF01 = @nMobile
 		    AND ISNULL(STATUS,'') IN ('NOT RECEIVED','') 
 			AND LPN LIKE 'L_________'
    )
@@ -156,6 +159,8 @@ BEGIN
 			SET @nCounter = @nCounter+1
 			GOTO TryAgain
 		 END
+
+		 SET @cUDF01 = @nMobile
 
          INSERT INTO ReceiptJCBLPNCounter (
 		    PO, ASN, LOC, LPN, AddDate, AddUser, UDF01, UDF02, UDF03, UDF04, UDF05, UDF06, UDF07, UDF08, UDF09, UDF10, UDF11, UDF12, STATUS

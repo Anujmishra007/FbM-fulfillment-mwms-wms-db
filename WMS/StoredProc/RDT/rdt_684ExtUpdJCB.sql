@@ -1,5 +1,4 @@
 
-/****** Object:  StoredProcedure [RDT].[rdt_684ExtUpdJCB]    Script Date: 7/15/2025 2:06:09 PM ******/
 SET ANSI_NULLS ON
 GO
 SET QUOTED_IDENTIFIER ON
@@ -88,6 +87,7 @@ BEGIN
             WHERE LPN = (SELECT MAX(LPN) 
                          FROM ReceiptJCBLPNCounter WITH(NOLOCK) 
                          WHERE AddUser = @cAddUser 
+						 AND UDF01 = @nMobile
                          AND ISNULL(STATUS,'') IN ('NOT RECEIVED',''))
          END
       END
@@ -158,6 +158,8 @@ BEGIN
                            FROM ReceiptJCBLPNCounter WITH(NOLOCK) 
                            WHERE LPN = @cID)
             BEGIN
+			   SET @cUDF01 = @nMobile
+
                INSERT INTO ReceiptJCBLPNCounter (
                   PO, ASN, LOC, LPN, AddDate, AddUser, 
                   UDF01, UDF02, UDF03, UDF04, UDF05, UDF06, 
@@ -175,9 +177,10 @@ BEGIN
                        FROM ReceiptJCBLPNCounter WITH(NOLOCK) 
                        WHERE LPN = @cID)
             BEGIN 
+			   SET @cUDF01 = @nMobile
                UPDATE ReceiptJCBLPNCounter WITH(ROWLOCK)
                SET PO = @cPOKey, ASN = @cReceiptKey, LOC = @cLoc, 
-                   AddUser = @cAddUser, STATUS = 'RECEIVED'
+                   AddUser = @cAddUser, STATUS = 'RECEIVED', UDF01 = @cUDF01
                WHERE LPN = @cID
             END
 
@@ -187,6 +190,7 @@ BEGIN
                            WHERE CaseLPN = @cLottable11) 
                AND @cLottable11 <> ''
             BEGIN
+			   SET @cUDF01 = @nMobile
                INSERT INTO ReceiptJCBCaseCounter (
                   PO, ASN, LOC, CaseLPN, AddDate, AddUser, 
                   UDF01, UDF02, UDF03, UDF04, UDF05, UDF06, 
@@ -304,9 +308,9 @@ BEGIN
                       SELECT UDF02, Description, Code, Notes FROM CODELKUP WITH(NOLOCK) WHERE LISTNAME = 'JCBSKUPAL' AND Storerkey = @cStorerKey
                       UNION
                       SELECT UDF03, Description, Code, Notes FROM CODELKUP WITH(NOLOCK) WHERE LISTNAME = 'JCBSKUPAL' AND Storerkey = @cStorerKey
-                      UNION ALL
+                      UNION
                       SELECT UDF04, Description, Code, Notes FROM CODELKUP WITH(NOLOCK) WHERE LISTNAME = 'JCBSKUPAL' AND Storerkey = @cStorerKey
-                      UNION ALL
+                      UNION
                       SELECT UDF05, Description, Code, Notes FROM CODELKUP WITH(NOLOCK) WHERE LISTNAME = 'JCBSKUPAL' AND Storerkey = @cStorerKey
                       ) AS AllValues
                   WHERE Value IS NOT NULL AND LTRIM(RTRIM(Value)) <> ''
@@ -450,10 +454,10 @@ BEGIN
             END
       END
    END
-   IF @nTempErr <> '0' SET @nErrNo = @nTempErr
+IF @nTempErr <> '0' SET @nErrNo = @nTempErr
 Quit:
 END
-
+				
 GO
 GRANT EXECUTE ON [RDT].[rdt_684ExtUpdJCB] TO [NSQL]
 GO
