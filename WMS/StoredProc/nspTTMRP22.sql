@@ -65,12 +65,6 @@ BEGIN
       TaskDetailKey        NVARCHAR(10) PRIMARY KEY
    )
 
-   DECLARE @tWaveReleaseTime TABLE
-   (
-      WaveKey        NVARCHAR(10) PRIMARY KEY NOT NULL,
-      AddDate        DATETIME NOT NULL
-   )
-
    INSERT INTO @tTaskDetail (TaskDetailKey)
    SELECT TaskDetailKey
    FROM dbo.TaskDetail WITH(NOLOCK)
@@ -96,20 +90,6 @@ BEGIN
       END CATCH
    END
 
-   INSERT INTO @tWaveReleaseTime (WaveKey, AddDate)
-   SELECT WaveKey, AddDate
-   FROM
-      (SELECT WaveKey, AddDate, ROW_NUMBER() OVER(PARTITION BY WaveKey ORDER BY AddDate) AS Row# 
-      FROM dbo.TaskDetail TD1 WITH(NOLOCK)
-      WHERE TaskType = 'RPF'
-         AND EXISTS(SELECT 1 FROM dbo.TaskDetail TD2 WITH(NOLOCK) 
-                     WHERE TD2.TaskType = 'RPF' 
-                        AND TD2.Status = '0'
-                        AND TD1.WaveKey = TD2.WaveKey
-                     ) 
-      ) AS T
-   WHERE T.Row# = 1
-
    -- Close cursor
    IF CURSOR_STATUS( 'global', 'Cursor_RPFTaskCandidates') IN (0, 1) -- 0=empty, 1=record
       CLOSE Cursor_RPFTaskCandidates
@@ -133,7 +113,20 @@ BEGIN
             FROM dbo.TaskDetail WITH (NOLOCK)
             INNER JOIN dbo.LOC WITH (NOLOCK) ON (TaskDetail.FromLOC = LOC.LOC)
             INNER JOIN dbo.AreaDetail WITH (NOLOCK) ON (AreaDetail.PutawayZone = LOC.PutAwayZone)
-            INNER JOIN @tWaveReleaseTime WT ON WT.WaveKey = TaskDetail.WaveKey
+            INNER JOIN (SELECT WaveKey, AddDate
+                        FROM
+                           (SELECT WaveKey, AddDate, ROW_NUMBER() OVER(PARTITION BY WaveKey ORDER BY AddDate) AS Row# 
+                           FROM dbo.TaskDetail TD1 WITH(NOLOCK)
+                           WHERE TaskType = 'RPF'
+                              AND StorerKey = @cStorerKey
+                              AND EXISTS(SELECT 1 FROM dbo.TaskDetail TD2 WITH(NOLOCK) 
+                                          WHERE TD2.TaskType = 'RPF' 
+                                             AND TD2.Status = '0'
+                                             AND TD2.StorerKey = @cStorerKey
+                                             AND TD1.WaveKey = TD2.WaveKey
+                                          ) 
+                           ) AS T
+                        WHERE T.Row# = 1) AS WT ON WT.WaveKey = TaskDetail.WaveKey
             WHERE AreaDetail.AreaKey = @c_AreaKey01
                AND TaskDetail.TaskType = 'RPF'
                AND TaskDetail.Status = '0'
@@ -164,7 +157,20 @@ BEGIN
             FROM dbo.TaskDetail WITH (NOLOCK)
             INNER JOIN dbo.LOC WITH (NOLOCK) ON (TaskDetail.FromLOC = LOC.LOC)
             INNER JOIN dbo.AreaDetail WITH (NOLOCK) ON (AreaDetail.PutawayZone = LOC.PutAwayZone)
-            INNER JOIN @tWaveReleaseTime WT ON WT.WaveKey = TaskDetail.WaveKey
+            INNER JOIN (SELECT WaveKey, AddDate
+                        FROM
+                           (SELECT WaveKey, AddDate, ROW_NUMBER() OVER(PARTITION BY WaveKey ORDER BY AddDate) AS Row# 
+                           FROM dbo.TaskDetail TD1 WITH(NOLOCK)
+                           WHERE TaskType = 'RPF'
+                              AND StorerKey = @cStorerKey
+                              AND EXISTS(SELECT 1 FROM dbo.TaskDetail TD2 WITH(NOLOCK) 
+                                          WHERE TD2.TaskType = 'RPF' 
+                                             AND TD2.Status = '0'
+                                             AND TD2.StorerKey = @cStorerKey
+                                             AND TD1.WaveKey = TD2.WaveKey
+                                          ) 
+                           ) AS T
+                        WHERE T.Row# = 1) AS WT ON WT.WaveKey = TaskDetail.WaveKey
             WHERE TaskDetail.TaskType = 'RPF'
                AND TaskDetail.Status = '0'
                AND TaskDetail.UserKeyOverRide IN (@c_UserID, '')
@@ -197,7 +203,20 @@ BEGIN
             FROM dbo.TaskDetail WITH (NOLOCK)
             INNER JOIN dbo.LOC WITH (NOLOCK) ON (TaskDetail.FromLOC = LOC.LOC)
             INNER JOIN dbo.AreaDetail WITH (NOLOCK) ON (AreaDetail.PutawayZone = LOC.PutAwayZone)
-            INNER JOIN @tWaveReleaseTime WT ON WT.WaveKey = TaskDetail.WaveKey
+            INNER JOIN (SELECT WaveKey, AddDate
+                        FROM
+                           (SELECT WaveKey, AddDate, ROW_NUMBER() OVER(PARTITION BY WaveKey ORDER BY AddDate) AS Row# 
+                           FROM dbo.TaskDetail TD1 WITH(NOLOCK)
+                           WHERE TaskType = 'RPF'
+                              AND StorerKey = @cStorerKey
+                              AND EXISTS(SELECT 1 FROM dbo.TaskDetail TD2 WITH(NOLOCK) 
+                                          WHERE TD2.TaskType = 'RPF' 
+                                             AND TD2.Status = '0'
+                                             AND TD2.StorerKey = @cStorerKey
+                                             AND TD1.WaveKey = TD2.WaveKey
+                                          ) 
+                           ) AS T
+                        WHERE T.Row# = 1) AS WT ON WT.WaveKey = TaskDetail.WaveKey
             WHERE AreaDetail.AreaKey = @c_AreaKey01
                AND TaskDetail.TaskType = 'RPF'
                AND TaskDetail.Status = '0'
@@ -228,7 +247,20 @@ BEGIN
             FROM dbo.TaskDetail WITH (NOLOCK)
             INNER JOIN dbo.LOC WITH (NOLOCK) ON (TaskDetail.FromLOC = LOC.LOC)
             INNER JOIN dbo.AreaDetail WITH (NOLOCK) ON (AreaDetail.PutawayZone = LOC.PutAwayZone)
-            INNER JOIN @tWaveReleaseTime WT ON WT.WaveKey = TaskDetail.WaveKey
+            INNER JOIN (SELECT WaveKey, AddDate
+                        FROM
+                           (SELECT WaveKey, AddDate, ROW_NUMBER() OVER(PARTITION BY WaveKey ORDER BY AddDate) AS Row# 
+                           FROM dbo.TaskDetail TD1 WITH(NOLOCK)
+                           WHERE TaskType = 'RPF'
+                              AND StorerKey = @cStorerKey
+                              AND EXISTS(SELECT 1 FROM dbo.TaskDetail TD2 WITH(NOLOCK) 
+                                          WHERE TD2.TaskType = 'RPF' 
+                                             AND TD2.Status = '0'
+                                             AND TD2.StorerKey = @cStorerKey
+                                             AND TD1.WaveKey = TD2.WaveKey
+                                          ) 
+                           ) AS T
+                        WHERE T.Row# = 1) AS WT ON WT.WaveKey = TaskDetail.WaveKey
             WHERE TaskDetail.TaskType = 'RPF'
                AND TaskDetail.StorerKey = @cStorerKey
                AND TaskDetail.Status = '0'
