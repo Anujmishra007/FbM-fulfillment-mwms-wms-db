@@ -563,6 +563,9 @@ BEGIN
                         GOTO RollBackTran
                      END
 
+                     UPDATE ID SET STATUS = CASE WHEN @cHoldID = '1' THEN 'HOLD' ELSE STATUS END
+                     WHERE ID = @cSuggID
+
                      EXEC nspInventoryHoldWrapper
                         '',               -- lot
                         @cSuggFromLOC,    -- loc

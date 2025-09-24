@@ -1318,7 +1318,7 @@ BEGIN
                      AND CLK.LISTNAME = 'JCBORDPR'
                   ) AS T1
                WHERE T1.ROW_INDEX = 1
-               ORDER BY Priority, DATEADD( dd, ISNULL(CAST(Long AS INT), 0), DeliveryDate) - GetDate(), TaskDetailKey
+               ORDER BY Priority, DATEADD( hh, ISNULL(CAST(Long AS INT), 0), DeliveryDate), TaskDetailKey
 
                IF @bDebug = 1
                BEGIN
