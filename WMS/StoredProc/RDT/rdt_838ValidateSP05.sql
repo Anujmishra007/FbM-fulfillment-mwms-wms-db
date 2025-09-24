@@ -112,7 +112,7 @@ BEGIN
          ' WHERE PD.PickSlipNo = @cPickSlipNo ' + 
             ' AND PD.StorerKey = @cStorerKey ' + 
             ' AND PD.SKU = @cSKU '  + 
-            --CASE WHEN @cFromDropID <> '' AND @cPackByFromDropID = '1' THEN ' AND PD.DropID = @cFromDropID ' ELSE '' END +
+            CASE WHEN @cFromDropID <> '' AND @cPackByFromDropID = '1' THEN ' AND PD.DropID = @cFromDropID ' ELSE '' END +
             CASE WHEN @cPackFilter <> '' THEN @cPackFilter ELSE '' END
       SET @cSQLParam = 
          ' @cPickSlipNo NVARCHAR( 10), ' + 
@@ -131,118 +131,6 @@ BEGIN
       SET @nPackQTY = @nPackQTY + @nQTY
    END
 
---    -- Cross dock PickSlip
---    IF @cZone IN ('XD', 'LB', 'LP')
---    BEGIN
---       IF @cType = 'PickSlipNo'
---       BEGIN
---          -- Check PickSlipNo valid
---          IF NOT EXISTS( SELECT TOP 1 1 FROM dbo.RefKeyLookup RKL WITH (NOLOCK) WHERE RKL.PickSlipNo = @cPickSlipNo)
---          BEGIN
---             SET @nErrNo = 100351
---             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid PSNO
---             GOTO Quit
---          END
---
---          -- Check diff storer
---          IF EXISTS( SELECT TOP 1 1
---             FROM dbo.RefKeyLookup RKL WITH (NOLOCK)
---                JOIN dbo.Orders O WITH (NOLOCK) ON (O.OrderKey = RKL.Orderkey)
---             WHERE RKL.PickSlipNo = @cPickSlipNo
---                AND O.StorerKey <> @cStorerKey)
---          BEGIN
---             SET @nErrNo = 100352
---             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Diff storer
---             GOTO Quit
---          END
---       END
---
---       ELSE IF @cType = 'SKU'
---       BEGIN
---          IF @cFromDropID = ''
---          BEGIN
---             -- Check SKU in PickSlipNo
---             IF NOT EXISTS( SELECT TOP 1 1
---                FROM dbo.RefKeyLookup RKL WITH (NOLOCK)
---                   JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
---                WHERE RKL.PickSlipNo = @cPickSlipNo
---                   AND PD.StorerKey = @cStorerKey
---                   AND PD.SKU = @cSKU
---                   AND PD.QTY > 0)
---             BEGIN
---                SET @nErrNo = 100353
---                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SKU NotIn PSNO
---                EXEC rdt.rdtInsertMsgQueue @nMobile, 0, '', '', @nErrNo, @cErrMsg
---                SET @cErrMsg = ''
---                GOTO Quit
---             END
---          END
---          ELSE
---          BEGIN
---             -- Check SKU in DropID
---             IF NOT EXISTS( SELECT TOP 1 1
---                FROM dbo.RefKeyLookup RKL WITH (NOLOCK)
---                   JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
---                WHERE RKL.PickSlipNo = @cPickSlipNo
---                   AND PD.StorerKey = @cStorerKey
---                   AND PD.SKU = @cSKU
---                   AND PD.QTY > 0
---                   AND PD.DropID = @cFromDropID)
---             BEGIN
---                SET @nErrNo = 100369
---                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SKUNotInDropID
---                EXEC rdt.rdtInsertMsgQueue @nMobile, 0, '', '', @nErrNo, @cErrMsg
---                SET @cErrMsg = ''
---                GOTO Quit
---             END
---          END
---       END
---
---       ELSE IF @cType = 'QTY'
---       BEGIN
---          /*
---          SELECT @nPickQTY = ISNULL( SUM( QTY), 0)
---          FROM dbo.RefKeyLookup RKL WITH (NOLOCK)
---             JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
---          WHERE RKL.PickSlipNo = @cPickSlipNo
---             AND PD.StorerKey = @cStorerKey
---             AND PD.SKU = @cSKU
---             AND PD.Status IN (@cPickStatus)
---             AND (@cFromDropID = '' OR PD.DropID = @cFromDropID)
---          */
---          SET @cSQL =
---             ' SELECT @nPickQTY = ISNULL( SUM( QTY), 0) ' +
---             ' FROM dbo.RefKeyLookup RKL WITH (NOLOCK) ' +
---                ' JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey) ' +
---             ' WHERE RKL.PickSlipNo = @cPickSlipNo ' +
---                ' AND PD.StorerKey = @cStorerKey ' +
---                ' AND PD.SKU = @cSKU ' +
---                ' AND PD.Status IN (' + @cPickStatus + ') ' +
---                --CASE WHEN @cFromDropID <> '' THEN ' AND PD.DropID = @cFromDropID ' ELSE '' END +
---                CASE WHEN @cPickFilter <> '' THEN @cPickFilter ELSE '' END
---          SET @cSQLParam =
---             ' @cPickSlipNo NVARCHAR( 10), ' +
---             ' @cStorerKey  NVARCHAR( 15), ' +
---             ' @cSKU        NVARCHAR( 20), ' +
---             ' @cFromDropID NVARCHAR( 20), ' +
---             ' @nPickQTY    INT OUTPUT '
---          EXEC sp_executeSQL @cSQL, @cSQLParam
---             ,@cPickSlipNo = @cPickSlipNo
---             ,@cStorerKey  = @cStorerKey
---             ,@cSKU        = @cSKU
---             ,@cFromDropID = @cFromDropID
---             ,@nPickQTY    = @nPickQTY OUTPUT
---
---          IF @nPackQTY > @nPickQTY
---          BEGIN
---             SET @nErrNo = 100354
---             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Over pack
---             EXEC rdt.rdtInsertMsgQueue @nMobile, 0, '', '', @nErrNo, @cErrMsg
---             SET @cErrMsg = ''
---             GOTO Quit
---          END
---       END
---    END
 
    -- Discrete PickSlip
    IF @cOrderKey <> ''
@@ -351,7 +239,7 @@ BEGIN
                ' AND PD.StorerKey = @cStorerKey ' + 
                ' AND PD.SKU = @cSKU ' + 
                ' AND PD.Status IN (' + @cPickStatus + ') ' + 
-               --CASE WHEN @cFromDropID <> '' THEN ' AND PD.DropID = @cFromDropID ' ELSE '' END +
+               CASE WHEN @cFromDropID <> '' THEN ' AND PD.DropID = @cFromDropID ' ELSE '' END +
                CASE WHEN @cPickFilter <> '' THEN @cPickFilter ELSE '' END
          SET @cSQLParam = 
             ' @cOrderKey   NVARCHAR( 10), ' + 
@@ -446,47 +334,72 @@ BEGIN
       
       ELSE IF @cType = 'QTY'
       BEGIN
-         /*
-         SELECT @nPickQTY = ISNULL( SUM( QTY), 0)
-         FROM dbo.LoadPlanDetail LPD WITH (NOLOCK) 
-            JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)    
-         WHERE LPD.LoadKey = @cLoadKey
-            AND PD.StorerKey = @cStorerKey
-            AND PD.SKU = @cSKU
-            AND PD.Status IN (@cPickStatus) 
-            AND (@cFromDropID = '' OR PD.DropID = @cFromDropID)
-         */
-         SET @cSQL = 
-            ' SELECT @nPickQTY = ISNULL( SUM( QTY), 0) ' +
-            ' FROM dbo.LoadPlanDetail LPD WITH (NOLOCK) ' + 
-               ' JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey) ' +
-            ' WHERE LPD.LoadKey = @cLoadKey ' +
-               ' AND PD.StorerKey = @cStorerKey ' +
-               ' AND PD.SKU = @cSKU ' +
-               ' AND PD.Status IN (' + @cPickStatus + ') ' + 
-               --CASE WHEN @cFromDropID <> '' THEN ' AND PD.DropID = @cFromDropID ' ELSE '' END +
-               CASE WHEN @cPickFilter <> '' THEN @cPickFilter ELSE '' END
-         SET @cSQLParam = 
-            ' @cLoadKey    NVARCHAR( 10), ' + 
-            ' @cStorerKey  NVARCHAR( 15), ' + 
-            ' @cSKU        NVARCHAR( 20), ' + 
-            ' @cFromDropID NVARCHAR( 20), ' + 
-            ' @nPickQTY    INT OUTPUT '
-         EXEC sp_executeSQL @cSQL, @cSQLParam
-            ,@cLoadKey    = @cLoadKey
-            ,@cStorerKey  = @cStorerKey
-            ,@cSKU        = @cSKU
-            ,@cFromDropID = @cFromDropID
-            ,@nPickQTY    = @nPickQTY OUTPUT
-         
-         IF @nPackQTY > @nPickQTY
+
+         IF @cFromDropID <> ''
          BEGIN
-            SET @nErrNo = 100363
-            SET @cErrMsg = '@nPackQTY:'+CAST(@nPackQTY as NVARCHAR) +  '@nPickQTY:'+CAST(@nPickQTY as NVARCHAR)--Over pack
-            EXEC rdt.rdtInsertMsgQueue @nMobile, 0, '', '', @nErrNo, @cErrMsg
-            SET @cErrMsg = ''
-            GOTO Quit
+
+            DECLARE @nBalanceQtyOnDropID INT = 0
+
+            --After packed, DropID will be changed
+            ;WITH CTE AS (
+               SELECT value AS Status
+               FROM STRING_SPLIT(REPLACE(@cPickStatus, '''', ''), ',')
+            )
+            SELECT @nBalanceQtyOnDropID = ISNULL( SUM( QTY), 0)
+            FROM dbo.LoadPlanDetail LPD WITH (NOLOCK)
+                    JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)
+            WHERE LPD.LoadKey = @cLoadKey
+              AND PD.StorerKey = @cStorerKey
+              AND PD.SKU = @cSKU
+              AND PD.Status IN (SELECT Status FROM CTE )
+              AND PD.DropID = @cFromDropID
+
+            IF @nQTY > @nBalanceQtyOnDropID
+            BEGIN
+               SET @nErrNo = 100363
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- OverPack
+               EXEC rdt.rdtInsertMsgQueue @nMobile, 0, '', '', @nErrNo, @cErrMsg
+               SET @cErrMsg = ''
+               GOTO Quit
+            END
          END
+         ELSE
+         BEGIN
+
+            SET @cSQL =
+              ' SELECT @nPickQTY = ISNULL( SUM( QTY), 0) ' +
+              ' FROM dbo.LoadPlanDetail LPD WITH (NOLOCK) ' +
+              ' JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey) ' +
+              ' WHERE LPD.LoadKey = @cLoadKey ' +
+              ' AND PD.StorerKey = @cStorerKey ' +
+              ' AND PD.SKU = @cSKU ' +
+              ' AND PD.Status IN (' + @cPickStatus + ') ' +
+                 --CASE WHEN @cFromDropID <> '' THEN ' AND PD.DropID = @cFromDropID ' ELSE '' END +
+              CASE WHEN @cPickFilter <> '' THEN @cPickFilter ELSE '' END
+            SET @cSQLParam =
+              ' @cLoadKey    NVARCHAR( 10), ' +
+              ' @cStorerKey  NVARCHAR( 15), ' +
+              ' @cSKU        NVARCHAR( 20), ' +
+              ' @cFromDropID NVARCHAR( 20), ' +
+              ' @nPickQTY    INT OUTPUT '
+            EXEC sp_executeSQL @cSQL, @cSQLParam
+               ,@cLoadKey    = @cLoadKey
+               ,@cStorerKey  = @cStorerKey
+               ,@cSKU        = @cSKU
+               ,@cFromDropID = @cFromDropID
+               ,@nPickQTY    = @nPickQTY OUTPUT
+
+            IF @nPackQTY > @nPickQTY
+            BEGIN
+               SET @nErrNo = 100363
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')--Over pack
+               EXEC rdt.rdtInsertMsgQueue @nMobile, 0, '', '', @nErrNo, @cErrMsg
+               SET @cErrMsg = ''
+               GOTO Quit
+            END
+
+         END
+
       END
    END
    
