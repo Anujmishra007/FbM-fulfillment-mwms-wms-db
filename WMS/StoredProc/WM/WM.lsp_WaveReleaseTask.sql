@@ -29,6 +29,7 @@ GO
 /* 2021-12-02  Wan02    1.3   LFWM-2997 - UAT CN - Outbound Ship Reference*/
 /*                            for CSHP                                  */
 /* 2025-04-25  NJOW01   1.4   FCR-4205 Support Qcomm backend process    */
+/* 2025-09-22  AYD01    1.4   Add AppLock for releasing task            */
 /* 2025-09-02  SWT01    1.5   Enhanced session management pattern       */
 /************************************************************************/
 CREATE OR ALTER PROC [WM].[lsp_WaveReleaseTask]
@@ -56,8 +57,7 @@ BEGIN
          ,  @c_PickDetailkey  NVARCHAR(10) = ''
          ,  @c_WaveStatus     NVARCHAR(10) = '0'
 
-         ,  @CUR_WAVEPD       CURSOR                                            
-   
+	,  @CUR_WAVEPD       CURSOR
    --NJOW01      
    DECLARE  @n_BackEndProcess INT = 0   
          ,  @c_ProcessType    NVARCHAR(10)  = 'WAVEREL'  
@@ -67,32 +67,54 @@ BEGIN
          ,  @c_ExecCmd        NVARCHAR(MAX) = ''           
          ,  @c_DocumentKey2   NVARCHAR(50)  = ''      
          
+         -- AYD01 - START
+         ,  @c_LockName       NVARCHAR(40)
+         ,  @n_Result         INT
+         -- AYD01 - END
+
    SET @b_Success = 1
    SET @n_Err     = 0
 
    BEGIN TRAN        --(Wan01)
+   -- AYD01 - START
+   SET @c_LockName  = 'APPLOCK_lsp_WaveReleaseTask_' + ISNULL(RTRIM(@c_WaveKey), '')
+   
+   EXEC @n_Result = sp_getapplock 
+      @Resource = @c_LockName, 
+      @LockMode = 'Exclusive', 
+      @LockTimeout = 0
 
+   IF @n_Result < 0
+   BEGIN
+      SET @n_Continue = 3
+      SET @n_Err = 555808
+      SET @c_ErrMsg = 'NSQL'+ CONVERT(Char(6),@n_Err)
+                     + ': Unable to obtain application lock, WaveKey[' + ISNULL(RTRIM(@c_WaveKey), '') + '] already under processing (lsp_WaveReleaseTask)'
+      GOTO EXIT_SP
+   END
+   -- AYD01 - END
+                               
+   SET @n_Err = 0 
    -- Start enhanced session management (SWT01)
-	 SET @n_Err = 0
-	 DECLARE @b_ExecuteAs        BIT = 0
-	 IF SUSER_SNAME() <> @c_UserName AND @c_UserName <> ''        
-	 BEGIN
-	    EXEC [WM].[lsp_SetUser] 
-	         @c_UserName = @c_UserName  OUTPUT
-	      ,  @n_Err      = @n_Err       OUTPUT
-	      ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
-	      ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
-
-	    IF @n_Err <> 0
-	    BEGIN
-	       GOTO EXIT_SP
-	    END
-
-	    IF @b_ExecuteAs = 1
-	       EXECUTE AS LOGIN = @c_UserName
-	 END                                    
-	 -- End enhanced session management (SWT01)
-
+   DECLARE @b_ExecuteAs        BIT = 0
+   IF SUSER_SNAME() <> @c_UserName AND @c_UserName <> ''        
+   BEGIN
+      EXEC [WM].[lsp_SetUser] 
+           @c_UserName = @c_UserName  OUTPUT
+        ,  @n_Err      = @n_Err       OUTPUT
+        ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+        ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
+   
+      IF @n_Err <> 0
+      BEGIN
+         GOTO EXIT_SP
+      END
+   
+      IF @b_ExecuteAs = 1
+         EXECUTE AS LOGIN = @c_UserName
+   END                                    
+   -- End enhanced session management (SWT01)
+   
    --(mingle01) - START
    BEGIN TRY
 
@@ -478,7 +500,14 @@ BEGIN
    END CATCH
    --(mingle01) - END
 EXIT_SP:
-   IF (XACT_STATE()) = -1                                      --(Wan01)
+
+   -- AYD01 - START
+   IF @n_Result >= 0
+   BEGIN
+      EXEC sp_releaseapplock @Resource = @c_LockName
+   END
+   -- AYD01 - END
+   IF (XACT_STATE()) = -1                                      --(Wan01)  
    BEGIN
       SET @n_Continue = 3
       ROLLBACK TRAN

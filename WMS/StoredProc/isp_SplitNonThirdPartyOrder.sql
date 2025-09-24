@@ -1,0 +1,648 @@
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS OFF 
+GO
+
+/************************************************************************/
+/* Stored Procedure: isp_SplitNonThirdPartyOrder                         */
+/* Creation Date: 30-Apr-2025                                           */
+/* Copyright: Maersk                                                    */
+/* Written by:                                                          */
+/*                                                                      */
+/* Purpose: UWP-32704 - Splitting Non ThirdParty Order                  */
+/*                       to New Order                                   */
+/*                                                                      */
+/* Called By:                                                           */ 
+/*                                                                      */
+/* Parameters:                                                          */
+/*                                                                      */
+/* PVCS Version: 1.0	                                                  */
+/*                                                                      */
+/* Version: 5.4                                                         */
+/*                                                                      */
+/* Data Modifications:                                                  */
+/*                                                                      */
+/* Updates:                                                             */
+/* Date         Author    Ver.  Purposes                                */
+/************************************************************************/
+
+CREATE OR ALTER PROCEDURE isp_SplitNonThirdPartyOrder
+   @c_OrderKey  NVARCHAR(10),
+   @b_success  INT OUTPUT,
+   @n_err      INT OUTPUT,
+   @c_errmsg   NVARCHAR(225) OUTPUT
+AS
+BEGIN 
+   SET NOCOUNT ON
+   SET ANSI_DEFAULTS OFF  
+   SET QUOTED_IDENTIFIER OFF
+   SET CONCAT_NULL_YIELDS_NULL OFF
+
+   DECLARE @n_continue int,
+           @n_cnt int,
+           @n_starttcnt int
+
+   DECLARE @c_neworderkey NVARCHAR(10),
+           @n_newordcnt int,
+           @n_moveordcnt int,
+           @c_status NVARCHAR(10),
+           @b_isSplit INT
+           
+   CREATE TABLE #TMP_NEWORDERS (Orderkey NVARCHAR(10) NULL, OldOrderkey NVARCHAR(10) NULL, Rectype NVARCHAR(1) NULL)
+                         
+   SELECT @n_Continue = 1, @b_success = 1, @n_starttcnt=@@TRANCOUNT, @c_errmsg='', @n_err=0 
+       
+   --BEGIN TRAN
+   	
+   IF @n_continue = 1 OR @n_continue = 2
+   BEGIN
+   	  SELECT @c_status = status
+   	  FROM Orders (NOLOCK)
+   	  WHERE OrderKey = @c_OrderKey
+
+   	  IF @c_status = '2'
+   	  BEGIN
+   	  	 SELECT @c_errmsg = RTRIM(@c_status) + ' - No Orders to Split'
+   	  	 SELECT @n_continue = 4
+   	  END
+
+   	  IF @c_status = '9'
+   	  BEGIN
+   	  	 SELECT @c_errmsg = RTRIM(@c_status) +' - Order is closed. Splitting of Orders are not allowed'
+   	  	 SELECT @n_continue = 4
+   	  END  
+   END   
+   IF @n_continue = 1 OR @n_continue = 2
+   BEGIN
+      SELECT @b_isSplit =
+      CASE
+        WHEN EXISTS (
+          SELECT 1
+          FROM (
+            SELECT DISTINCT UserDefine03
+            FROM ORDERDETAIL
+            WHERE OrderKey = @c_OrderKey
+          ) AS UD
+          WHERE ISNULL(UD.UserDefine03, '') = ''
+        )
+        AND EXISTS (
+          SELECT 1
+          FROM (
+            SELECT DISTINCT UserDefine03
+            FROM ORDERDETAIL
+            WHERE OrderKey = @c_OrderKey
+          ) AS UD
+          WHERE UD.UserDefine03 LIKE '3RDParty%'
+        )
+        THEN 1
+        ELSE 0
+      END
+      IF @b_isSplit = 0
+      BEGIN
+      SELECT @n_continue = 4
+      UPDATE ORDERS WITH (ROWLOCK)
+              SET Ecom_Platform = (
+              SELECT TOP 1
+              CASE
+                WHEN ISNULL(UserDefine03, '') = '' THEN 'EMG'
+                ELSE UserDefine03
+              END
+              FROM ORDERDETAIL (NOLOCK)
+              WHERE ORDERDETAIL.ORDERKEY = @c_OrderKey
+              AND (ISNULL(ORDERDETAIL.UserDefine03,'') LIKE '3RDParty%' OR ISNULL(ORDERDETAIL.UserDefine03,'') = '')
+              GROUP BY UserDefine03
+              ORDER BY UserDefine03 DESC
+              ), SequenceNo = CASE WHEN ISNULL(Orders.SequenceNo,0) = 0 OR (Orders.SequenceNo = 99999999)
+              THEN 1 ELSE Cast(Orders.SequenceNo as Int)+1 END
+              , TrafficCop = NULL
+              WHERE Orderkey = @c_OrderKey
+
+        SELECT @n_err = @@ERROR
+   	   	IF @n_err <> 0
+   	    BEGIN
+   		    SELECT @n_continue = 3
+			    SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 30109
+			    SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Error Update Orders Table. (isp_SplitNonThirdPartyOrder)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
+		    END
+      END
+   END
+   IF @n_continue = 1 OR @n_continue = 2
+   BEGIN
+   	  SELECT ORDERDETAIL.Orderkey, ORDERDETAIL.Orderlinenumber
+   	  INTO #TMP_ORDER
+   	  FROM ORDERS (NOLOCK)
+   	  JOIN ORDERDETAIL (NOLOCK) ON (ORDERS.Orderkey = ORDERDETAIL.Orderkey)
+   	  WHERE ORDERS.Status <> '9'
+   	  AND ISNULL(ORDERDETAIL.UserDefine03,'') LIKE '3RDParty%'
+   	  AND ORDERS.OrderKey = @c_OrderKey
+   	     	     	  
+   	  SELECT @c_orderkey = ''
+   	  WHILE 1=1
+   	  BEGIN
+   	  	 SET ROWCOUNT 1
+   	  	 SELECT @c_OrderKey = Orderkey
+   	  	 FROM #TMP_ORDER
+   	  	 WHERE Orderkey > @c_OrderKey
+   	  	 ORDER BY Orderkey 
+   	  	 
+   	  	 SELECT @n_cnt = @@ROWCOUNT
+   	  	 SET ROWCOUNT 0
+   	  	 IF @n_cnt = 0 
+   	  	    BREAK
+   	  	 
+         EXECUTE nspg_GetKey
+         "order",
+         10,
+         @c_neworderkey  OUTPUT,
+         @b_success   	 OUTPUT,
+         @n_err       	 OUTPUT,
+         @c_errmsg    	 OUTPUT
+         IF NOT @b_success = 1
+         BEGIN
+            SELECT @n_continue = 3
+            BREAK
+         END   	  	 
+         
+         INSERT INTO ORDERS
+         (
+         	OrderKey, StorerKey,	ExternOrderKey, OrderDate,	DeliveryDate, Priority,	ConsigneeKey, C_contact1,
+         	C_Contact2,	C_Company, C_Address1, C_Address2, C_Address3, C_Address4, C_City, C_State,	
+          C_Zip, C_Country,	C_ISOCntryCode, C_Phone1, C_Phone2,	C_Fax1, C_Fax2, C_vat, BuyerPO,
+         	BillToKey, B_contact1, B_Contact2, B_Company, B_Address1, B_Address2, B_Address3,
+         	B_Address4, B_City, B_State, B_Zip, B_Country, B_ISOCntryCode, B_Phone1, B_Phone2,
+         	B_Fax1, B_Fax2, B_Vat, IncoTerm,	PmtTerm, OpenQty, DischargePlace, DeliveryPlace,
+         	IntermodalVehicle, CountryOfOrigin,	CountryDestination, UpdateSource, [Type], OrderGroup,
+         	Door, [Route], [Stop], Notes, EffectiveDate,  ContainerType,	ContainerQty, 
+         	BilledContainerQty, InvoiceNo, 
+          InvoiceAmount, Salesman, GrossWeight, Capacity, Rdd, Notes2, SequenceNo,
+         	Rds, SectionKey, Facility, PrintDocDate, LabelPrice, POKey,	ExternPOKey, XDockFlag, UserDefine01,
+         	UserDefine02, UserDefine03, UserDefine04,	UserDefine05, UserDefine06, UserDefine07, UserDefine08,
+         	UserDefine10, Issued,	DeliveryNote, PODCust, PODArrive, PODReject, PODUser, xdockpokey,
+         	SpecialHandling, RoutingTool,	MarkforKey,	M_Contact1,	M_Contact2,	M_Company, M_Address1, M_Address2,
+         	M_Address3,	M_Address4,	M_City, M_State, M_Zip, M_Country, M_ISOCntryCode, M_Phone1, M_Phone2,
+         	M_Fax1, M_Fax2, M_vat, ShipperKey, DocType, TrackingNo, Ecom_Platform
+         )
+         SELECT @c_neworderkey, StorerKey,	ExternOrderKey, OrderDate,	DeliveryDate, Priority,	ConsigneeKey, C_contact1,
+         	      C_Contact2,	C_Company, C_Address1, C_Address2, C_Address3, C_Address4, C_City, C_State,	
+                C_Zip, C_Country,	C_ISOCntryCode, C_Phone1, C_Phone2,	C_Fax1, C_Fax2, C_vat, BuyerPO,
+         	      BillToKey, B_contact1, B_Contact2, B_Company, B_Address1, B_Address2, B_Address3,
+         	      B_Address4, B_City, B_State, B_Zip, B_Country, B_ISOCntryCode, B_Phone1, B_Phone2,
+         	      B_Fax1, B_Fax2, B_Vat, IncoTerm,	PmtTerm, OpenQty, DischargePlace, DeliveryPlace,
+         	      IntermodalVehicle, CountryOfOrigin,	CountryDestination, UpdateSource, [Type], OrderGroup,
+         	      Door, [Route], [Stop], Notes, EffectiveDate,  ContainerType,	ContainerQty, 
+         	      BilledContainerQty, InvoiceNo, 
+                InvoiceAmount, Salesman, GrossWeight, Capacity, Rdd, Notes2, SequenceNo,
+         	      Rds, SectionKey, Facility, PrintDocDate, LabelPrice, POKey,	ExternPOKey, XDockFlag, UserDefine01,
+         	      UserDefine02, UserDefine03, UserDefine04,	UserDefine05, UserDefine06, UserDefine07, UserDefine08,
+         	      UserDefine10, Issued,	DeliveryNote, PODCust, PODArrive, PODReject, PODUser, xdockpokey,
+         	      SpecialHandling, RoutingTool,	MarkforKey,	M_Contact1,	M_Contact2,	M_Company, M_Address1, M_Address2,
+         	      M_Address3,	M_Address4,	M_City, M_State, M_Zip, M_Country, M_ISOCntryCode, M_Phone1, M_Phone2,
+         	      M_Fax1, M_Fax2, M_vat, ShipperKey, DocType, @c_orderkey, Ecom_Platform
+         	FROM ORDERS (NOLOCK) 
+         	WHERE Orderkey = @c_orderkey
+
+ 	  	   	SELECT @n_err = @@ERROR
+    	   	IF @n_err <> 0
+	   	    BEGIN
+	   		    SELECT @n_continue = 3
+				    SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 30101   
+				    SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Error Insert Orders Table. (isp_SplitNonThirdPartyOrder)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
+				    BREAK
+			    END
+
+		--JSM-36972 (START)
+		IF NOT EXISTS(SELECT 1 FROM ORDERINFO (NOLOCK) WHERE ORDERKEY = @c_neworderkey)
+		BEGIN
+         INSERT INTO ORDERINFO
+         (
+         	OrderKey, OrderInfo01, OrderInfo02, OrderInfo03, OrderInfo04, OrderInfo05, OrderInfo06, OrderInfo07, OrderInfo08,
+         	OrderInfo09, OrderInfo10, EComOrderId, REferenceId, StoreName, Platform, InvoiceType, PmtDate, InsuredAmount,
+         	CarrierCharges, OtherCharges, PayableAmount, DeliveryMode, CarrierName, DeliveryCategory, Notes, Notes2, 
+         	OTM_OrderOwner, OTM_BillTo, OTM_NotifyParty
+         )
+         SELECT @c_neworderkey, OrderInfo01, OrderInfo02, OrderInfo03, OrderInfo04, OrderInfo05, OrderInfo06, OrderInfo07, OrderInfo08,
+                OrderInfo09, OrderInfo10, EComOrderId, REferenceId, StoreName, Platform, InvoiceType, PmtDate, InsuredAmount,
+         	      CarrierCharges, OtherCharges, PayableAmount, DeliveryMode, CarrierName, DeliveryCategory, Notes, Notes2, 
+         	      OTM_OrderOwner, OTM_BillTo, OTM_NotifyParty
+         	FROM ORDERINFO (NOLOCK) 
+         	WHERE Orderkey = @c_orderkey
+
+ 	  	   	SELECT @n_err = @@ERROR
+    	   	IF @n_err <> 0
+	   	    BEGIN
+	   		    SELECT @n_continue = 3
+				    SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 30102   
+				    SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Error Insert Orderinfo Table. (isp_SplitNonThirdPartyOrder)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
+				    BREAK
+			    END	
+		END
+		--JSM-36972 (END)
+
+         INSERT INTO ORDERDETAIL
+        (
+        	OrderKey, OrderLineNumber, ExternOrderKey, ExternLineNo,	Sku,	StorerKey,
+        	ManufacturerSku, RetailSku, AltSku, OriginalQty, OpenQty, UOM, PackKey, PickCode,	CartonGroup, Lot, 
+          ID, Facility, UnitPrice, Tax01, Tax02, ExtendedPrice, UpdateSource, Lottable01,
+        	Lottable02, Lottable03, Lottable04, Lottable05,Lottable06,Lottable07, Lottable08, Lottable09, Lottable10,	
+		    	Lottable11,Lottable12, Lottable13, Lottable14, Lottable15,EffectiveDate, TariffKey, FreeGoodQty,	GrossWeight, 
+			    Capacity, QtyToProcess, MinShelfLife, UserDefine01, UserDefine02, UserDefine03, UserDefine04, UserDefine05,
+        	UserDefine06, UserDefine07, UserDefine08, UserDefine09, POkey, ExternPOKey,UserDefine10, EnteredQTY,
+        	ConsoOrderkey, ExternConsoOrderkey, ConsoOrderLineNo, Notes, Notes2
+        )
+        SELECT @c_newOrderKey, RIGHT(REPLICATE('0',5) + LTRIM(RTRIM(STR(1 + (SELECT COUNT(DISTINCT Orderlinenumber) 
+                                                     							           FROM #TMP_ORDER AS Rank 
+                                                     							           WHERE Rank.Orderlinenumber < #TMP_ORDER.Orderlinenumber
+                                                     							           AND Rank.Orderkey = @c_orderkey)))),5), 
+               OD.ExternOrderKey, OD.ExternLineNo,	OD.Sku,	OD.StorerKey,
+        	     OD.ManufacturerSku, OD.RetailSku, OD.AltSku, OD.OriginalQty, OD.OpenQty, OD.UOM, OD.PackKey, OD.PickCode,	OD.CartonGroup, OD.Lot,
+               OD.ID, OD.Facility, OD.UnitPrice, OD.Tax01, OD.Tax02, OD.ExtendedPrice, OD.UpdateSource, OD.Lottable01,
+        	     OD.Lottable02, OD.Lottable03, OD.Lottable04, OD.Lottable05, OD.Lottable06,OD.Lottable07, OD.Lottable08, OD.Lottable09, OD.Lottable10, 
+				       OD.Lottable11,OD.Lottable12, OD.Lottable13, OD.Lottable14, OD.Lottable15, OD.EffectiveDate, OD.TariffKey, OD.FreeGoodQty, 
+			 		     OD.GrossWeight, OD.Capacity,OD.QtyToProcess, OD.MinShelfLife, OD.UserDefine01, OD.UserDefine02, OD.UserDefine03, OD.UserDefine04, 
+					     OD.UserDefine05,OD.UserDefine06, OD.UserDefine07, OD.UserDefine08, OD.UserDefine09, OD.POkey, OD.ExternPOKey, OD.UserDefine10, OD.EnteredQTY,
+        	     OD.ConsoOrderkey, OD.ExternConsoOrderkey, OD.ConsoOrderLineNo, OD.Notes, OD.Notes2					     
+        FROM ORDERDETAIL OD (NOLOCK)
+        JOIN #TMP_ORDER ON (OD.Orderkey = #TMP_ORDER.Orderkey AND OD.Orderlinenumber = #TMP_ORDER.Orderlinenumber)
+        WHERE OD.Orderkey = @c_orderkey
+        ORDER BY #TMP_ORDER.Orderlinenumber
+
+  	   	SELECT @n_err = @@ERROR
+   	   	IF @n_err <> 0
+   	    BEGIN
+   		    SELECT @n_continue = 3
+			    SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 30103
+			    SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Error Insert Orderdetail Table. (isp_SplitNonThirdPartyOrder)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
+			    BREAK
+		    END		    		    
+        
+        UPDATE ORDERS WITH (ROWLOCK)
+        SET OrderGroup = OrderGroup,
+            TrafficCop = NULL,
+            openqty = (SELECT SUM(OD.Openqty) FROM ORDERDETAIL OD (NOLOCK) WHERE OD.Orderkey = @c_neworderkey)
+        WHERE Orderkey = @c_neworderkey
+
+  	   	SELECT @n_err = @@ERROR
+   	   	IF @n_err <> 0
+   	    BEGIN
+   		    SELECT @n_continue = 3
+			    SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 30104
+			    SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Error Update Orders Table. (isp_SplitNonThirdPartyOrder)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
+			    BREAK
+		    END
+
+		     UPDATE ORDERS WITH (ROWLOCK)
+              SET Ecom_Platform = (
+              SELECT TOP 1 UserDefine03
+              FROM ORDERDETAIL (NOLOCK)
+              WHERE ORDERDETAIL.ORDERKEY = @c_neworderkey
+              AND ISNULL(ORDERDETAIL.UserDefine03,'') <> ''
+              GROUP BY UserDefine03
+              ORDER BY UserDefine03 DESC
+              ), SequenceNo = CASE WHEN ISNULL(Orders.SequenceNo,0) = 0 OR (Orders.SequenceNo = 99999999)
+              THEN 1 ELSE Cast(Orders.SequenceNo as Int)+1 END
+              , TrafficCop = NULL
+              WHERE Orderkey = @c_neworderkey
+
+        SELECT @n_err = @@ERROR
+   	   	IF @n_err <> 0
+   	    BEGIN
+   		    SELECT @n_continue = 3
+			    SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 30109
+			    SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Error Update Orders Table. (isp_SplitNonThirdPartyOrder)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
+			    BREAK
+		    END
+
+        DELETE PREALLOCATEPICKDETAIL
+        FROM PREALLOCATEPICKDETAIL P (NOLOCK)
+        JOIN #TMP_ORDER ON (P.Orderkey = #TMP_ORDER.Orderkey AND P.Orderlinenumber = #TMP_ORDER.Orderlinenumber)
+        WHERE #TMP_ORDER.Orderkey = @c_orderkey
+  	   	SELECT @n_err = @@ERROR
+
+   	   	IF @n_err <> 0
+   	    BEGIN
+   		    SELECT @n_continue = 3
+			    SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 30105
+			    SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Error Delete Preallocatepickdetail Table. (isp_SplitNonThirdPartyOrder)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
+			    BREAK
+		    END
+        
+        INSERT #TMP_NEWORDERS (Orderkey, OldOrderkey, Rectype) VALUES (@c_neworderkey, @c_orderkey, 'N')        
+
+  	   	SELECT @n_err = @@ERROR
+   	   	IF @n_err <> 0
+   	    BEGIN
+   		    SELECT @n_continue = 3
+			    SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 30107
+			    SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Error Insert #TMP_NEWORDER Table. (isp_SplitNonThirdPartyOrder)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
+			    BREAK
+		    END
+   	  END  -- while
+   END
+   IF @n_continue = 1 OR @n_continue = 2
+   BEGIN
+
+   IF OBJECT_ID('tempdb..#tmpEmgOrder','u') IS NOT NULL
+   BEGIN
+      DROP TABLE #tmpEmgOrder;
+   END
+   	  SELECT ORDERDETAIL.Orderkey, ORDERDETAIL.Orderlinenumber
+   	  INTO #tmpEmgOrder
+   	  FROM ORDERS (NOLOCK)
+   	  JOIN ORDERDETAIL (NOLOCK) ON (ORDERS.Orderkey = ORDERDETAIL.Orderkey)
+   	  WHERE ORDERS.Status <> '9'
+   	  AND ISNULL(ORDERDETAIL.UserDefine03,'') = ''
+   	  AND ORDERS.OrderKey = @c_OrderKey
+
+   	  SELECT @c_orderkey = ''
+   	  WHILE 1=1
+   	  BEGIN
+   	  	 SET ROWCOUNT 1
+   	  	 SELECT @c_OrderKey = Orderkey
+   	  	 FROM #tmpEmgOrder
+   	  	 WHERE Orderkey > @c_OrderKey
+   	  	 ORDER BY Orderkey
+
+   	  	 SELECT @n_cnt = @@ROWCOUNT
+   	  	 SET ROWCOUNT 0
+   	  	 IF @n_cnt = 0
+   	  	    BREAK
+
+         EXECUTE nspg_GetKey
+         "order",
+         10,
+         @c_neworderkey  OUTPUT,
+         @b_success   	 OUTPUT,
+         @n_err       	 OUTPUT,
+         @c_errmsg    	 OUTPUT
+         IF NOT @b_success = 1
+         BEGIN
+            SELECT @n_continue = 3
+            BREAK
+         END
+
+         INSERT INTO ORDERS
+         (
+         	OrderKey, StorerKey,	ExternOrderKey, OrderDate,	DeliveryDate, Priority,	ConsigneeKey, C_contact1,
+         	C_Contact2,	C_Company, C_Address1, C_Address2, C_Address3, C_Address4, C_City, C_State,
+          C_Zip, C_Country,	C_ISOCntryCode, C_Phone1, C_Phone2,	C_Fax1, C_Fax2, C_vat, BuyerPO,
+         	BillToKey, B_contact1, B_Contact2, B_Company, B_Address1, B_Address2, B_Address3,
+         	B_Address4, B_City, B_State, B_Zip, B_Country, B_ISOCntryCode, B_Phone1, B_Phone2,
+         	B_Fax1, B_Fax2, B_Vat, IncoTerm,	PmtTerm, OpenQty, DischargePlace, DeliveryPlace,
+         	IntermodalVehicle, CountryOfOrigin,	CountryDestination, UpdateSource, [Type], OrderGroup,
+         	Door, [Route], [Stop], Notes, EffectiveDate,  ContainerType,	ContainerQty,
+         	BilledContainerQty, InvoiceNo,
+          InvoiceAmount, Salesman, GrossWeight, Capacity, Rdd, Notes2, SequenceNo,
+         	Rds, SectionKey, Facility, PrintDocDate, LabelPrice, POKey,	ExternPOKey, XDockFlag, UserDefine01,
+         	UserDefine02, UserDefine03, UserDefine04,	UserDefine05, UserDefine06, UserDefine07, UserDefine08,
+         	UserDefine10, Issued,	DeliveryNote, PODCust, PODArrive, PODReject, PODUser, xdockpokey,
+         	SpecialHandling, RoutingTool,	MarkforKey,	M_Contact1,	M_Contact2,	M_Company, M_Address1, M_Address2,
+         	M_Address3,	M_Address4,	M_City, M_State, M_Zip, M_Country, M_ISOCntryCode, M_Phone1, M_Phone2,
+         	M_Fax1, M_Fax2, M_vat, ShipperKey, DocType, TrackingNo, Ecom_Platform
+         	)
+         SELECT @c_neworderkey, StorerKey,	ExternOrderKey, OrderDate,	DeliveryDate, Priority,	ConsigneeKey, C_contact1,
+         	      C_Contact2,	C_Company, C_Address1, C_Address2, C_Address3, C_Address4, C_City, C_State,
+                C_Zip, C_Country,	C_ISOCntryCode, C_Phone1, C_Phone2,	C_Fax1, C_Fax2, C_vat, BuyerPO,
+         	      BillToKey, B_contact1, B_Contact2, B_Company, B_Address1, B_Address2, B_Address3,
+         	      B_Address4, B_City, B_State, B_Zip, B_Country, B_ISOCntryCode, B_Phone1, B_Phone2,
+         	      B_Fax1, B_Fax2, B_Vat, IncoTerm,	PmtTerm, OpenQty, DischargePlace, DeliveryPlace,
+         	      IntermodalVehicle, CountryOfOrigin,	CountryDestination, UpdateSource, [Type], OrderGroup,
+         	      Door, [Route], [Stop], Notes, EffectiveDate,  ContainerType,	ContainerQty,
+         	      BilledContainerQty, InvoiceNo,
+                InvoiceAmount, Salesman, GrossWeight, Capacity, Rdd, Notes2, SequenceNo,
+         	      Rds, SectionKey, Facility, PrintDocDate, LabelPrice, POKey,	ExternPOKey, XDockFlag, UserDefine01,
+         	      UserDefine02, UserDefine03, UserDefine04,	UserDefine05, UserDefine06, UserDefine07, UserDefine08,
+         	      UserDefine10, Issued,	DeliveryNote, PODCust, PODArrive, PODReject, PODUser, xdockpokey,
+         	      SpecialHandling, RoutingTool,	MarkforKey,	M_Contact1,	M_Contact2,	M_Company, M_Address1, M_Address2,
+         	      M_Address3,	M_Address4,	M_City, M_State, M_Zip, M_Country, M_ISOCntryCode, M_Phone1, M_Phone2,
+         	      M_Fax1, M_Fax2, M_vat, ShipperKey, DocType, @c_orderkey, Ecom_Platform
+         	FROM ORDERS (NOLOCK)
+         	WHERE Orderkey = @c_orderkey
+
+ 	  	   	SELECT @n_err = @@ERROR
+    	   	IF @n_err <> 0
+	   	    BEGIN
+	   		    SELECT @n_continue = 3
+				    SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 30110
+				    SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Error Insert Orders Table. (isp_SplitNonThirdPartyOrder)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
+				    BREAK
+			    END
+
+		--JSM-36972 (START)
+		IF NOT EXISTS(SELECT 1 FROM ORDERINFO (NOLOCK) WHERE ORDERKEY = @c_neworderkey)
+		BEGIN
+         INSERT INTO ORDERINFO
+         (
+         	OrderKey, OrderInfo01, OrderInfo02, OrderInfo03, OrderInfo04, OrderInfo05, OrderInfo06, OrderInfo07, OrderInfo08,
+         	OrderInfo09, OrderInfo10, EComOrderId, REferenceId, StoreName, Platform, InvoiceType, PmtDate, InsuredAmount,
+         	CarrierCharges, OtherCharges, PayableAmount, DeliveryMode, CarrierName, DeliveryCategory, Notes, Notes2,
+         	OTM_OrderOwner, OTM_BillTo, OTM_NotifyParty
+         )
+         SELECT @c_neworderkey, OrderInfo01, OrderInfo02, OrderInfo03, OrderInfo04, OrderInfo05, OrderInfo06, OrderInfo07, OrderInfo08,
+                OrderInfo09, OrderInfo10, EComOrderId, REferenceId, StoreName, Platform, InvoiceType, PmtDate, InsuredAmount,
+         	      CarrierCharges, OtherCharges, PayableAmount, DeliveryMode, CarrierName, DeliveryCategory, Notes, Notes2,
+         	      OTM_OrderOwner, OTM_BillTo, OTM_NotifyParty
+         	FROM ORDERINFO (NOLOCK)
+         	WHERE Orderkey = @c_orderkey
+
+ 	  	   	SELECT @n_err = @@ERROR
+    	   	IF @n_err <> 0
+	   	    BEGIN
+	   		    SELECT @n_continue = 3
+				    SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 30111
+				    SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Error Insert Orderinfo Table. (isp_SplitNonThirdPartyOrder)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
+				    BREAK
+			    END
+		END
+		--JSM-36972 (END)
+
+         INSERT INTO ORDERDETAIL
+        (
+        	OrderKey, OrderLineNumber, ExternOrderKey, ExternLineNo,	Sku,	StorerKey,
+        	ManufacturerSku, RetailSku, AltSku, OriginalQty, OpenQty, UOM, PackKey, PickCode,	CartonGroup, Lot,
+          ID, Facility, UnitPrice, Tax01, Tax02, ExtendedPrice, UpdateSource, Lottable01,
+        	Lottable02, Lottable03, Lottable04, Lottable05,Lottable06,Lottable07, Lottable08, Lottable09, Lottable10,
+		    	Lottable11,Lottable12, Lottable13, Lottable14, Lottable15,EffectiveDate, TariffKey, FreeGoodQty,	GrossWeight,
+			    Capacity, QtyToProcess, MinShelfLife, UserDefine01, UserDefine02, UserDefine03, UserDefine04, UserDefine05,
+        	UserDefine06, UserDefine07, UserDefine08, UserDefine09, POkey, ExternPOKey,UserDefine10, EnteredQTY,
+        	ConsoOrderkey, ExternConsoOrderkey, ConsoOrderLineNo, Notes, Notes2
+          )
+        SELECT @c_newOrderKey, RIGHT(REPLICATE('0',5) + LTRIM(RTRIM(STR(1 + (SELECT COUNT(DISTINCT Orderlinenumber)
+                                                     							           FROM #tmpEmgOrder AS Rank
+                                                     							           WHERE Rank.Orderlinenumber < #tmpEmgOrder.Orderlinenumber
+                                                     							           AND Rank.Orderkey = @c_orderkey)))),5),
+               OD.ExternOrderKey, OD.ExternLineNo,	OD.Sku,	OD.StorerKey,
+        	     OD.ManufacturerSku, OD.RetailSku, OD.AltSku,OD.OriginalQty, OD.OpenQty, OD.UOM, OD.PackKey, OD.PickCode,	OD.CartonGroup, OD.Lot,
+               OD.ID, OD.Facility, OD.UnitPrice, OD.Tax01, OD.Tax02, OD.ExtendedPrice, OD.UpdateSource, OD.Lottable01,
+        	     OD.Lottable02, OD.Lottable03, OD.Lottable04, OD.Lottable05, OD.Lottable06,OD.Lottable07, OD.Lottable08, OD.Lottable09, OD.Lottable10,
+				       OD.Lottable11,OD.Lottable12, OD.Lottable13, OD.Lottable14, OD.Lottable15, OD.EffectiveDate, OD.TariffKey, OD.FreeGoodQty,
+			 		     OD.GrossWeight, OD.Capacity,OD.QtyToProcess, OD.MinShelfLife, OD.UserDefine01, OD.UserDefine02, OD.UserDefine03, OD.UserDefine04,
+					     OD.UserDefine05,OD.UserDefine06, OD.UserDefine07, OD.UserDefine08, OD.UserDefine09, OD.POkey, OD.ExternPOKey, OD.UserDefine10, OD.EnteredQTY,
+        	     OD.ConsoOrderkey, OD.ExternConsoOrderkey, OD.ConsoOrderLineNo, OD.Notes, OD.Notes2
+        FROM ORDERDETAIL OD (NOLOCK)
+        JOIN #tmpEmgOrder ON (OD.Orderkey = #tmpEmgOrder.Orderkey AND OD.Orderlinenumber = #tmpEmgOrder.Orderlinenumber)
+        WHERE OD.Orderkey = @c_orderkey
+        ORDER BY #tmpEmgOrder.Orderlinenumber
+
+  	   	SELECT @n_err = @@ERROR
+   	   	IF @n_err <> 0
+   	    BEGIN
+   		    SELECT @n_continue = 3
+			    SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 30112
+			    SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Error Insert Orderdetail Table. (isp_SplitNonThirdPartyOrder)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
+			    BREAK
+		    END
+
+        UPDATE ORDERS WITH (ROWLOCK)
+        SET OrderGroup = OrderGroup,
+            TrafficCop = NULL,
+            openqty = (SELECT SUM(OD.Openqty) FROM ORDERDETAIL OD (NOLOCK) WHERE OD.Orderkey = @c_neworderkey)
+        WHERE Orderkey = @c_neworderkey
+
+  	   	SELECT @n_err = @@ERROR
+   	   	IF @n_err <> 0
+   	    BEGIN
+   		    SELECT @n_continue = 3
+			    SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 30113
+			    SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Error Update Orders Table. (isp_SplitNonThirdPartyOrder)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
+			    BREAK
+		    END
+
+		    UPDATE ORDERS WITH (ROWLOCK)
+              SET Ecom_Platform = 'EMG'
+              , SequenceNo = CASE WHEN ISNULL(Orders.SequenceNo,0) = 0 OR (Orders.SequenceNo = 99999999)
+              THEN 1 ELSE Cast(Orders.SequenceNo as Int)+1 END
+              , TrafficCop = NULL
+              WHERE Orderkey = @c_neworderkey
+
+        SELECT @n_err = @@ERROR
+   	   	IF @n_err <> 0
+   	    BEGIN
+   		    SELECT @n_continue = 3
+			    SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 30114
+			    SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Error Update Orders Table. (isp_SplitNonThirdPartyOrder)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
+			    BREAK
+		    END
+
+        DELETE PREALLOCATEPICKDETAIL
+        FROM PREALLOCATEPICKDETAIL P (NOLOCK)
+        JOIN #tmpEmgOrder ON (P.Orderkey = #tmpEmgOrder.Orderkey AND P.Orderlinenumber = #tmpEmgOrder.Orderlinenumber)
+        WHERE #tmpEmgOrder.Orderkey = @c_orderkey
+  	   	SELECT @n_err = @@ERROR
+
+   	   	IF @n_err <> 0
+   	    BEGIN
+   		    SELECT @n_continue = 3
+			    SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 30115
+			    SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Error Delete Preallocatepickdetail Table. (isp_SplitWaveNotFullAllocOrder)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
+			    BREAK
+		    END
+
+
+        INSERT #TMP_NEWORDERS (Orderkey, OldOrderkey, Rectype) VALUES (@c_neworderkey, @c_orderkey, 'N')
+
+  	   	SELECT @n_err = @@ERROR
+   	   	IF @n_err <> 0
+   	    BEGIN
+   		    SELECT @n_continue = 3
+			    SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 30116
+			    SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Error Insert #TMP_NEWORDER Table. (isp_SplitNonThirdPartyOrder)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
+			    BREAK
+		    END
+   	  END  -- while
+   END
+   IF @n_continue = 1 OR @n_continue = 2
+   BEGIN
+    DELETE OI
+    FROM ORDERINFO OI (NOLOCK)
+    WHERE Orderkey = @c_orderkey
+
+    SELECT @n_err = @@ERROR
+
+   	   	IF @n_err <> 0
+   	    BEGIN
+   		    SELECT @n_continue = 3
+			    SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 30117
+			    SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Error Delete ORDERINFO Table. (isp_SplitNonThirdPartyOrder)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
+		    END
+
+    DELETE OD
+    FROM ORDERDETAIL OD (NOLOCK)
+    JOIN ORDERS O(NOLOCK) ON OD.OrderKey = O.OrderKey
+    WHERE O.OrderKey = @c_OrderKey
+
+    SELECT @n_err = @@ERROR
+
+   	   	IF @n_err <> 0
+   	    BEGIN
+   		    SELECT @n_continue = 3
+			    SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 30118
+			    SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Error Delete ORDERDETAIL Table. (isp_SplitNonThirdPartyOrder)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
+		    END
+
+    DELETE O
+    FROM ORDERS O (NOLOCK)
+    WHERE O.OrderKey = @c_OrderKey
+
+  	SELECT @n_err = @@ERROR
+
+   	   	IF @n_err <> 0
+   	    BEGIN
+   		    SELECT @n_continue = 3
+			    SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 30119
+			    SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Error Delete ORDERS Table. (isp_SplitNonThirdPartyOrder)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
+		    END
+   END
+
+   IF @n_continue = 1 OR @n_continue = 2
+   BEGIN
+   IF (SELECT COUNT(1) FROM #TMP_NEWORDERS) = 0
+   	  BEGIN
+   	  	 SELECT @c_errmsg = 'No Orders to Split'
+   	  	 SELECT @n_continue = 4
+   	  END
+   END
+      	
+	IF (@n_continue = 1 OR @n_continue = 2) AND @n_err = 0
+	BEGIN
+		 SELECT @n_newordcnt = COUNT(orderkey)
+		 FROM #TMP_NEWORDERS
+		 WHERE rectype = 'N'
+
+		 SELECT @c_errmsg = RTRIM(LTRIM(STR(@n_newordcnt))) + ' New Orders Created. Check OrderGroup for Parent Order#' 
+	END
+   
+ ERR:
+ 
+   IF @n_continue=3  -- Error Occured - Process And Return
+	 BEGIN
+	    SELECT @b_success = 0
+	    IF @@TRANCOUNT = 1 and @@TRANCOUNT > @n_starttcnt
+	    BEGIN
+	       ROLLBACK TRAN
+	    END
+	    ELSE
+	    BEGIN
+	       WHILE @@TRANCOUNT > @n_starttcnt
+ 	      BEGIN
+	          COMMIT TRAN
+	       END
+	    END
+  	  execute nsp_logerror @n_err, @c_errmsg, 'isp_SplitNonThirdPartyOrder'
+	    RAISERROR (@c_errmsg, 16, 1) WITH SETERROR    -- SQL2012
+	    RETURN
+	 END
+	 ELSE
+	    BEGIN
+	       SELECT @b_success = 1
+	       WHILE @@TRANCOUNT > @n_starttcnt
+	       BEGIN
+	          COMMIT TRAN
+	       END
+	       RETURN
+	    END	   
+END -- End PROC
+GO 
+
+GRANT EXECUTE ON isp_SplitNonThirdPartyOrder TO NSQL
+GO
+
