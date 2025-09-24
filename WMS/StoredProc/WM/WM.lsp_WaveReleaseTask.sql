@@ -1,88 +1,98 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_WaveReleaseTask]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [WM].[lsp_WaveReleaseTask] 
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
-GO   
-/************************************************************************/                                                                                  
-/* Store Procedure: lsp_WaveReleaseTask                                 */                                                                                  
-/* Creation Date: 2019-03-19                                            */                                                                                  
-/* Copyright: LFL                                                       */                                                                                  
-/* Written by: Wan                                                      */                                                                                  
-/*                                                                      */                                                                                  
+GO
+
+/************************************************************************/
+/* Store Procedure: lsp_WaveReleaseTask                                 */
+/* Creation Date: 2019-03-19                                            */
+/* Copyright: LFL                                                       */
+/* Written by: Wan                                                      */
+/*                                                                      */
 /* Purpose: LFWM-1646 Wave Creation - Wave Summary - Release Wave       */
-/*                                                                      */                                                                                  
-/* Called By: SCE                                                       */                                                                                  
-/*          :                                                           */                                                                                  
-/* PVCS Version: 1.3                                                    */                                                                                  
-/*                                                                      */                                                                                  
-/* Version: 8.0                                                         */                                                                                  
-/*                                                                      */                                                                                  
-/* Data Modifications:                                                  */                                                                                  
-/*                                                                      */                                                                                  
-/* Updates:                                                             */                                                                                  
-/* Date        Author   Ver.  Purposes                                  */ 
+/*                                                                      */
+/* Called By: SCE                                                       */
+/*          :                                                           */
+/* PVCS Version: 1.3                                                    */
+/*                                                                      */
+/* Version: 8.0                                                         */
+/*                                                                      */
+/* Data Modifications:                                                  */
+/*                                                                      */
+/* Updates:                                                             */
+/* Date        Author   Ver.  Purposes                                  */
 /* 2021-02-10  mingle01 1.1   Add Big Outer Begin try/Catch              */
-/*                            Execute Login if @c_UserName<>SUSER_SNAME()*/ 
+/*                            Execute Login if @c_UserName<>SUSER_SNAME()*/
 /* 2021-09-28  Wan01    1.2   DevOps Combine Script.                     */
 /* 2021-08-12  wan01    1.2   Fixed. 1) to rollback for xact_status      */
 /*                            2) Start Transaction For Batch Commit      */
 /* 2021-12-02  Wan02    1.3   LFWM-2997 - UAT CN - Outbound Ship Reference*/
 /*                            for CSHP                                  */
-/************************************************************************/                                                                                  
-CREATE PROC [WM].[lsp_WaveReleaseTask]                                                                                                                     
+/* 2025-04-25  NJOW01   1.4   FCR-4205 Support Qcomm backend process    */
+/* 2025-09-02  SWT01    1.5   Enhanced session management pattern       */
+/************************************************************************/
+CREATE OR ALTER PROC [WM].[lsp_WaveReleaseTask]
       @c_WaveKey              NVARCHAR(10) = ''       --(Wan02) Call From MBOLScreen
    ,  @c_Loadkey              NVARCHAR(10) = ''
    ,  @c_MBolkey              NVARCHAR(10) = ''
-   ,  @b_Success              INT = 1           OUTPUT  
-   ,  @n_err                  INT = 0           OUTPUT                                                                                                             
-   ,  @c_ErrMsg               NVARCHAR(255)     OUTPUT 
+   ,  @b_Success              INT = 1           OUTPUT
+   ,  @n_err                  INT = 0           OUTPUT
+   ,  @c_ErrMsg               NVARCHAR(255)     OUTPUT
    ,  @n_WarningNo            INT          = 0  OUTPUT
-   ,  @c_ProceedWithWarning   CHAR(1)      = 'N'                      
-   ,  @c_UserName             NVARCHAR(128)= ''                                                                                                                         
+   ,  @c_ProceedWithWarning   CHAR(1)      = 'N'
+   ,  @c_UserName             NVARCHAR(128)= ''
 
-AS  
-BEGIN                                                                                                                                                        
-   SET NOCOUNT ON                                                                                                                                           
-   SET ANSI_NULLS OFF                                                                                                                                       
-   SET QUOTED_IDENTIFIER OFF                                                                                                                                
-   SET CONCAT_NULL_YIELDS_NULL OFF       
+AS
+BEGIN
+   SET NOCOUNT ON
+   SET ANSI_NULLS OFF
+   SET QUOTED_IDENTIFIER OFF
+   SET CONCAT_NULL_YIELDS_NULL OFF
 
-   DECLARE  @n_StartTCnt      INT = @@TRANCOUNT  
+   DECLARE  @n_StartTCnt      INT = @@TRANCOUNT
          ,  @n_Continue       INT = 1
 
          ,  @n_OrderCnt       INT = 0
          ,  @c_PickDetailkey  NVARCHAR(10) = ''
          ,  @c_WaveStatus     NVARCHAR(10) = '0'
 
-         ,  @CUR_WAVEPD       CURSOR 
-
+         ,  @CUR_WAVEPD       CURSOR                                            
+   
+   --NJOW01      
+   DECLARE  @n_BackEndProcess INT = 0   
+         ,  @c_ProcessType    NVARCHAR(10)  = 'WAVEREL'  
+         ,  @c_Storerkey      NVARCHAR(15)                          
+         ,  @c_SourceType     NVARCHAR(50)  = 'lsp_GenEOrderReplen_Wrapper' 
+         ,  @c_CallType       NVARCHAR(50)  = ''                         
+         ,  @c_ExecCmd        NVARCHAR(MAX) = ''           
+         ,  @c_DocumentKey2   NVARCHAR(50)  = ''      
+         
    SET @b_Success = 1
    SET @n_Err     = 0
-   
+
    BEGIN TRAN        --(Wan01)
-                               
-   SET @n_Err = 0 
-   --(mingle01) - START   
-   IF SUSER_SNAME() <> @c_UserName
-   BEGIN
-      EXEC [WM].[lsp_SetUser] 
-            @c_UserName = @c_UserName  OUTPUT
-         ,  @n_Err      = @n_Err       OUTPUT
-         ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
-                
-      IF @n_Err <> 0 
-      BEGIN
-         GOTO EXIT_SP
-      END
-    
-      EXECUTE AS LOGIN = @c_UserName
-   END
-   --(mingle01) - END
-   
+
+   -- Start enhanced session management (SWT01)
+	 SET @n_Err = 0
+	 DECLARE @b_ExecuteAs        BIT = 0
+	 IF SUSER_SNAME() <> @c_UserName AND @c_UserName <> ''        
+	 BEGIN
+	    EXEC [WM].[lsp_SetUser] 
+	         @c_UserName = @c_UserName  OUTPUT
+	      ,  @n_Err      = @n_Err       OUTPUT
+	      ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+	      ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
+
+	    IF @n_Err <> 0
+	    BEGIN
+	       GOTO EXIT_SP
+	    END
+
+	    IF @b_ExecuteAs = 1
+	       EXECUTE AS LOGIN = @c_UserName
+	 END                                    
+	 -- End enhanced session management (SWT01)
+
    --(mingle01) - START
    BEGIN TRY
 
@@ -93,10 +103,10 @@ BEGIN
       BEGIN
          SET @n_WarningNo = 1
          SET @c_ErrMsg = 'Do you want to Release '
-                       + CASE WHEN @c_Loadkey <> '' 
-                              THEN ' Selected Load #'  
-                              WHEN @c_MBOLkey <> '' 
-                              THEN ' Selected MBOL #'  
+                       + CASE WHEN @c_Loadkey <> ''
+                              THEN ' Selected Load #'
+                              WHEN @c_MBOLkey <> ''
+                              THEN ' Selected MBOL #'
                               ELSE ' Wave #: ' + @c_WaveKey
                               END
                        + ' task ?'
@@ -115,24 +125,24 @@ BEGIN
       SET @n_OrderCnt = 0
       IF @c_Loadkey = '' AND @c_MBolkey = ''
       BEGIN
-         SELECT @n_OrderCnt = 1 
+         SELECT @n_OrderCnt = 1
          FROM WAVEDETAIL WD WITH (NOLOCK)
-         WHERE WD.WaveKey = @c_WaveKey 
-      END 
+         WHERE WD.WaveKey = @c_WaveKey
+      END
       ELSE IF @c_Loadkey <> ''
-      BEGIN 
-         SELECT @n_OrderCnt = 1 
+      BEGIN
+         SELECT @n_OrderCnt = 1
          FROM LOADPLANDETAIL LPD WITH (NOLOCK)
-         WHERE LPD.LoadKey = @c_LoadKey 
+         WHERE LPD.LoadKey = @c_LoadKey
       END
       ELSE IF @c_MBolkey <> ''
-      BEGIN 
+      BEGIN
          --(Wan02) - START -- There is Sub Sub-Stored Prod / scenario to generate MBOLDETAIL FROM Container
          SET @n_OrderCnt = 1
-         --SELECT @n_OrderCnt = 1 
+         --SELECT @n_OrderCnt = 1
          --FROM MBOLDETAIL MD WITH (NOLOCK)
          --WHERE MD.MBolKey = @c_MBolkey
-         --(Wan02) - END 
+         --(Wan02) - END
       END
 
       IF @n_OrderCnt = 0
@@ -146,12 +156,44 @@ BEGIN
          END
          GOTO EXIT_SP
       END
+      
+      --NJOW01 S
+      IF @c_Loadkey = '' AND @c_MBolkey = ''
+      BEGIN
+      	 SELECT TOP 1 @c_Storerkey = O.Storerkey
+      	 FROM WAVEDETAIL WD (NOLOCK)
+      	 JOIN ORDERS O ON WD.Orderkey = O.Orderkey
+      	 WHERE WD.Wavekey = @c_Wavekey
+      END
+      ELSE IF @c_Loadkey <> '' 
+      BEGIN
+         SELECT TOP 1 @c_Storerkey = O.Storerkey
+         FROM LOADPLANDETAIL LPD (NOLOCK)
+         JOIN ORDERS O (NOLOCK) ON LPD.Orderkey = O.Orderkey
+         WHERE LPD.Loadkey = @c_Loadkey
+      END
+      ELSE IF @c_MBOLKey <> '' 
+      BEGIN
+         SELECT TOP 1 @c_Storerkey = O.Storerkey
+         FROM MBOLDETAIL MBD (NOLOCK)
+         JOIN ORDERS O (NOLOCK) ON MBD.Orderkey = O.Orderkey
+         WHERE MBD.Mbolkey = @c_Mbolkey
+      END
+            
+      SELECT @n_BackEndProcess = 1                                                                
+      
+      FROM  dbo.QCmd_TransmitlogConfig qcfg WITH (NOLOCK)                                         
+      WHERE qcfg.TableName      = 'BackEndProcessQueue'                                           
+      AND   qcfg.[App_Name]     = 'WMS'                                                           
+      AND   qcfg.DataStream     = @c_ProcessType                                                  
+      AND   qcfg.StorerKey IN (@c_Storerkey, 'ALL')                                               
+      --NJOW01 E
 
       IF @c_Loadkey = '' AND @c_MBolkey = ''
       BEGIN
          WAVE_RELEASE:
          SET @CUR_WAVEPD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-         SELECT PD.PickDetailkey 
+         SELECT PD.PickDetailkey
          FROM WAVEDETAIL WD WITH (NOLOCK)
          JOIN PICKDETAIL PD WITH (NOLOCK) ON (WD.Orderkey = PD.Orderkey)
          WHERE WD.WaveKey = @c_WaveKey
@@ -161,13 +203,13 @@ BEGIN
                ,  PD.PickDetailkey
 
          OPEN @CUR_WAVEPD
-      
-         FETCH NEXT FROM @CUR_WAVEPD INTO @c_PickDetailkey                                                                                
-                                       
+
+         FETCH NEXT FROM @CUR_WAVEPD INTO @c_PickDetailkey
+
          WHILE @@FETCH_STATUS <> -1
          BEGIN
             BEGIN TRY
-               UPDATE PICKDETAIL 
+               UPDATE PICKDETAIL
                SET Wavekey = @c_Wavekey
                   ,Trafficcop = NULL
                   ,EditWho = @c_UserName
@@ -184,7 +226,7 @@ BEGIN
                SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Update PICKDETAIL Fail. (lsp_WaveReleaseTask)'
                              + '(' + @c_ErrMsg + ')'
 
-               IF (XACT_STATE()) = -1  
+               IF (XACT_STATE()) = -1
                BEGIN
                   ROLLBACK TRAN
 
@@ -192,11 +234,11 @@ BEGIN
                   BEGIN
                      BEGIN TRAN
                   END
-               END 
-               GOTO EXIT_SP 
+               END
+               GOTO EXIT_SP
             END CATCH
 
-            FETCH NEXT FROM @CUR_WAVEPD INTO @c_PickDetailkey       
+            FETCH NEXT FROM @CUR_WAVEPD INTO @c_PickDetailkey
          END
          CLOSE @CUR_WAVEPD
          DEALLOCATE @CUR_WAVEPD
@@ -205,35 +247,72 @@ BEGIN
          SELECT @c_WaveStatus = WH.[Status]
          FROM WAVE WH WITH (NOLOCK)
          WHERE WH.Wavekey = @c_Wavekey
-
-         BEGIN TRY
-            EXEC  [dbo].[isp_ReleaseWave_Wrapper]  
-                 @c_WaveKey = @c_WaveKey    
-               , @b_Success = @b_Success OUTPUT
-               , @n_Err     = @n_Err     OUTPUT 
-               , @c_ErrMsg  = @c_ErrMsg  OUTPUT 
-         END TRY
-         BEGIN CATCH
-            SET @n_Err = 555804
-            SET @c_ErrMsg = ERROR_MESSAGE()
-            SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Error Executing isp_ReleaseWave_Wrapper. (lsp_WaveReleaseTask)'   
-                          + '(' + @c_ErrMsg + ')'
-                            
-            IF (XACT_STATE()) = -1        --(Wan01) - START 
-            BEGIN
-               ROLLBACK TRAN
-
-               WHILE @@TRANCOUNT < @n_StartTCnt
-               BEGIN
-                  BEGIN TRAN
-               END
-            END                           --(Wan01) - END                                 
-         END CATCH
-            
-         IF @b_Success = 0 OR @n_Err <> 0
+         
+         IF @n_BackEndProcess = 1  --NJOW01 S
          BEGIN
-            SET @n_Continue = 3
-            GOTO EXIT_SP   
+            SET @c_CallType= 'isp_ReleaseWave_Wrapper'
+            SET @c_ExecCmd = 'dbo.isp_ReleaseWave_Wrapper'
+                           + ' @c_Wavekey = ''' + @c_Wavekey + ''''
+                           + ',@b_Success = @b_Success OUTPUT'
+                           + ',@n_Err = @n_Err OUTPUT'
+                           + ',@c_ErrMsg = @c_Errmsg OUTPUT'
+                        
+            EXEC [WM].[lsp_BackEndProcess_Submit]                                                                                                                     
+                  @c_Storerkey      = @c_Storerkey
+               ,  @c_ModuleID       = 'WAVE' 
+               ,  @c_DocumentKey1   = @c_Wavekey                                       
+               ,  @c_DocumentKey2   = @c_DocumentKey2                                    
+               ,  @c_DocumentKey3   = ''      
+               ,  @c_ProcessType    = @c_ProcessType   
+               ,  @c_SourceType     = @c_SourceType    
+               ,  @c_CallType       = @c_CallType
+               ,  @c_RefKey1        = ''      
+               ,  @c_RefKey2        = ''      
+               ,  @c_RefKey3        = ''   
+               ,  @c_ExecCmd        = @c_ExecCmd  
+               ,  @c_StatusMsg      = 'Submitted to BackEndProcessQueue.'
+               ,  @b_Success        = @b_Success   OUTPUT  
+               ,  @n_err            = @n_err       OUTPUT                                                                                                             
+               ,  @c_ErrMsg         = @c_ErrMsg    OUTPUT  
+               ,  @c_UserName       = ''               
+               
+            IF @b_Success = 0 OR @n_Err <> 0
+            BEGIN
+               SET @n_Continue = 3
+               GOTO EXIT_SP
+            END               
+         END  --NJOW01 E
+         ELSE
+         BEGIN
+            BEGIN TRY
+               EXEC  [dbo].[isp_ReleaseWave_Wrapper]
+                    @c_WaveKey = @c_WaveKey
+                  , @b_Success = @b_Success OUTPUT
+                  , @n_Err     = @n_Err     OUTPUT
+                  , @c_ErrMsg  = @c_ErrMsg  OUTPUT
+            END TRY
+            BEGIN CATCH
+               SET @n_Err = 555804
+               SET @c_ErrMsg = ERROR_MESSAGE()
+               SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Error Executing isp_ReleaseWave_Wrapper. (lsp_WaveReleaseTask)'
+                             + '(' + @c_ErrMsg + ')'
+            
+               IF (XACT_STATE()) = -1        --(Wan01) - START
+               BEGIN
+                  ROLLBACK TRAN
+            
+                  WHILE @@TRANCOUNT < @n_StartTCnt
+                  BEGIN
+                     BEGIN TRAN
+                  END
+               END                           --(Wan01) - END
+            END CATCH
+            
+            IF @b_Success = 0 OR @n_Err <> 0
+            BEGIN
+               SET @n_Continue = 3
+               GOTO EXIT_SP
+            END
          END
 
          BEGIN TRY
@@ -247,9 +326,9 @@ BEGIN
          BEGIN CATCH
             SET @n_Err = 555807
             SET @c_ErrMsg = ERROR_MESSAGE()
-            SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Update WAVE table fail. (lsp_WaveReleaseTask)'   
-                          + '(' + @c_ErrMsg + ')'  
-            IF (XACT_STATE()) = -1  
+            SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Update WAVE table fail. (lsp_WaveReleaseTask)'
+                          + '(' + @c_ErrMsg + ')'
+            IF (XACT_STATE()) = -1
             BEGIN
                ROLLBACK TRAN
 
@@ -257,77 +336,153 @@ BEGIN
                BEGIN
                   BEGIN TRAN
                END
-            END 
+            END
          END CATCH
-            
+
          IF @n_Err <> 0
          BEGIN
             SET @n_Continue = 3
-            GOTO EXIT_SP   
+            GOTO EXIT_SP
          END
 
       END
       ELSE IF @c_Loadkey <> ''
-      BEGIN 
+      BEGIN
          LOAD_RELEASE:
-
-         BEGIN TRY
-            EXEC  [dbo].[nspLoadReleasePickTask_Wrapper]  
-                 @c_LoadKey = @c_Loadkey    
-         END TRY
-         BEGIN CATCH
-            SET @n_Err = 555805
-            SET @c_ErrMsg = ERROR_MESSAGE()
-            SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Error Executing nspLoadReleasePickTask_Wrapper. (lsp_WaveReleaseTask)'   
-                          + '(' + @c_ErrMsg + ')'          
-         END CATCH
+         
+         IF @n_BackEndProcess = 1  --NJOW01 S                                  
+         BEGIN                                                                 
+         	  SET @c_DocumentKey2 = @c_Loadkey
+            SET @c_CallType= 'nspLoadReleasePickTask_Wrapper'                         
+            SET @c_ExecCmd = 'dbo.nspLoadReleasePickTask_Wrapper'                     
+                           + ' @c_LoadKey = ''' + @c_Loadkey + ''''            
+                                                                               
+            EXEC [WM].[lsp_BackEndProcess_Submit]                              
+                  @c_Storerkey      = @c_Storerkey                             
+               ,  @c_ModuleID       = 'Wave'                                   
+               ,  @c_DocumentKey1   = @c_Wavekey                               
+               ,  @c_DocumentKey2   = @c_DocumentKey2                          
+               ,  @c_DocumentKey3   = ''                                       
+               ,  @c_ProcessType    = @c_ProcessType                           
+               ,  @c_SourceType     = @c_SourceType                            
+               ,  @c_CallType       = @c_CallType                              
+               ,  @c_RefKey1        = ''                                       
+               ,  @c_RefKey2        = ''                                       
+               ,  @c_RefKey3        = ''                                       
+               ,  @c_ExecCmd        = @c_ExecCmd                               
+               ,  @c_StatusMsg      = 'Submitted to BackEndProcessQueue.'      
+               ,  @b_Success        = @b_Success   OUTPUT                      
+               ,  @n_err            = @n_err       OUTPUT                      
+               ,  @c_ErrMsg         = @c_ErrMsg    OUTPUT                      
+               ,  @c_UserName       = ''                                       
+                                                                               
+            IF @b_Success = 0 OR @n_Err <> 0                                   
+            BEGIN                                                              
+               SET @n_Continue = 3                                             
+               GOTO EXIT_SP                                                    
+            END                                                                
+         END  --NJOW01 E                
+         ELSE
+         BEGIN                                                
+            BEGIN TRY
+               EXEC  [dbo].[nspLoadReleasePickTask_Wrapper]
+                    @c_LoadKey = @c_Loadkey
+            END TRY
+            BEGIN CATCH
+               SET @n_Err = 555805
+               SET @c_ErrMsg = ERROR_MESSAGE()
+               SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Error Executing nspLoadReleasePickTask_Wrapper. (lsp_WaveReleaseTask)'
+                             + '(' + @c_ErrMsg + ')'
+            END CATCH
             
-         IF @b_Success = 0 OR @n_Err <> 0
-         BEGIN
-            SET @n_Continue = 3
-            GOTO EXIT_SP   
+            IF @b_Success = 0 OR @n_Err <> 0
+            BEGIN
+               SET @n_Continue = 3
+               GOTO EXIT_SP
+            END
          END
       END
       ELSE IF @c_MBolkey <> ''
       BEGIN
          MBOL_RELEASE:
 
-         BEGIN TRY
-            EXEC  [dbo].[isp_MBOLReleasePickTask_Wrapper]  
-                 @c_MBolKey = @c_MBolKey    
-               , @b_Success = @b_Success OUTPUT
-               , @n_Err     = @n_Err     OUTPUT 
-               , @c_ErrMsg  = @c_ErrMsg  OUTPUT 
-         END TRY
-         BEGIN CATCH
-            SET @n_Err = 555806
-            SET @c_ErrMsg = ERROR_MESSAGE()
-            SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Error Executing isp_MBOLReleasePickTask_Wrapper. (lsp_WaveReleaseTask)'   
-                          + '(' + @c_ErrMsg + ')'          
-         END CATCH
-            
-         IF @b_Success = 0 OR @n_Err <> 0
+         IF @n_BackEndProcess = 1  --NJOW01 S                                  
+         BEGIN                                                                 
+         	  SET @c_DocumentKey2 = @c_Mbolkey
+            SET @c_CallType= 'isp_MBOLReleasePickTask_Wrapper'                         
+            SET @c_ExecCmd = 'dbo.isp_MBOLReleasePickTask_Wrapper'                     
+                           + ' @c_Mbolkey = ''' + @c_Mbolkey + ''''            
+                           + ',@b_Success = @b_Success OUTPUT'                 
+                           + ',@n_Err = @n_Err OUTPUT'                         
+                           + ',@c_ErrMsg = @c_Errmsg OUTPUT'                   
+                                                                               
+            EXEC [WM].[lsp_BackEndProcess_Submit]                              
+                  @c_Storerkey      = @c_Storerkey                             
+               ,  @c_ModuleID       = 'Wave'                                   
+               ,  @c_DocumentKey1   = @c_Wavekey                               
+               ,  @c_DocumentKey2   = @c_DocumentKey2                          
+               ,  @c_DocumentKey3   = ''                                       
+               ,  @c_ProcessType    = @c_ProcessType                           
+               ,  @c_SourceType     = @c_SourceType                            
+               ,  @c_CallType       = @c_CallType                              
+               ,  @c_RefKey1        = ''                                       
+               ,  @c_RefKey2        = ''                                       
+               ,  @c_RefKey3        = ''                                       
+               ,  @c_ExecCmd        = @c_ExecCmd                               
+               ,  @c_StatusMsg      = 'Submitted to BackEndProcessQueue.'      
+               ,  @b_Success        = @b_Success   OUTPUT                      
+               ,  @n_err            = @n_err       OUTPUT                      
+               ,  @c_ErrMsg         = @c_ErrMsg    OUTPUT                      
+               ,  @c_UserName       = ''                                       
+                                                                               
+            IF @b_Success = 0 OR @n_Err <> 0                                   
+            BEGIN                                                              
+               SET @n_Continue = 3                                             
+               GOTO EXIT_SP                                                    
+            END                                                                
+         END  --NJOW01 E
+         ELSE
          BEGIN
-            SET @n_Continue = 3
-            GOTO EXIT_SP   
+            BEGIN TRY
+               EXEC  [dbo].[isp_MBOLReleasePickTask_Wrapper]
+                    @c_MBolKey = @c_MBolKey
+                  , @b_Success = @b_Success OUTPUT
+                  , @n_Err     = @n_Err     OUTPUT
+                  , @c_ErrMsg  = @c_ErrMsg  OUTPUT
+            END TRY
+            BEGIN CATCH
+               SET @n_Err = 555806
+               SET @c_ErrMsg = ERROR_MESSAGE()
+               SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + ': Error Executing isp_MBOLReleasePickTask_Wrapper. (lsp_WaveReleaseTask)'
+                             + '(' + @c_ErrMsg + ')'
+            END CATCH
+            
+            IF @b_Success = 0 OR @n_Err <> 0
+            BEGIN
+               SET @n_Continue = 3
+               GOTO EXIT_SP
+            END
          END
       END
 
-      SET @c_ErrMsg = CASE WHEN @c_WaveKey = '' THEN 'Release Task Completed.' ELSE 'Wave Release Task Completed.' END        --(Wan02)
+      IF @n_BackEndProcess = '1'  --NJOW01
+         SET @c_ErrMsg = CASE WHEN @c_WaveKey = '' THEN 'Release Task Submitted to BackEndProcessQueue.' ELSE 'Wave Release Task Submitted to BackEndProcessQueue.' END        --(Wan02)
+      ELSE
+         SET @c_ErrMsg = CASE WHEN @c_WaveKey = '' THEN 'Release Task Completed.' ELSE 'Wave Release Task Completed.' END        --(Wan02)
    END TRY
-   
+
    BEGIN CATCH
       SET @n_Continue = 3
       SET @c_ErrMsg = ERROR_MESSAGE()
       GOTO EXIT_SP
    END CATCH
-   --(mingle01) - END 
+   --(mingle01) - END
 EXIT_SP:
-   IF (XACT_STATE()) = -1                                      --(Wan01)  
+   IF (XACT_STATE()) = -1                                      --(Wan01)
    BEGIN
       SET @n_Continue = 3
       ROLLBACK TRAN
-   END 
+   END
 
    IF @n_Continue=3  -- Error Occured - Process And Return
    BEGIN
@@ -355,14 +510,15 @@ EXIT_SP:
          COMMIT TRAN
       END
    END
-   
+
    IF @@TRANCOUNT < @n_StartTCnt
    BEGIN
-      BEGIN TRAN 
+      BEGIN TRAN
    END
-         
-   REVERT
+
+   IF @b_ExecuteAs = 1 REVERT -- (SWT01)
+   EXEC [WM].[lsp_ResetUser]  -- (SWT01)
 END
 GO
-GRANT EXECUTE ON [WM].[lsp_WaveReleaseTask] TO nSQL 
-GO  
+GRANT EXECUTE ON  [WM].[lsp_WaveReleaseTask] TO [NSQL]
+GO
