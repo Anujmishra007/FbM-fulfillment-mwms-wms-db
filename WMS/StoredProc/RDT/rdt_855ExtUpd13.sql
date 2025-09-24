@@ -44,6 +44,7 @@ GO
 /* 2025-09-17 1.20.0 NickT    FCR-7730 Add parameter @cSourceName                  */
 /*                            for rdt_LevisPrintCartonLabel                        */
 /* 2025-09-18 1.21.0 Jackc    FCR-7348 New dropid archiving logic (FBRv1.4)        */
+/* 2025-09-22 1.22.0 NickT    FCR-7845 Print 4X2 labels for all automation orders  */
 /***********************************************************************************/
 CREATE OR ALTER PROC rdt.rdt_855ExtUpd13 (
    @nMobile      INT,   
@@ -214,9 +215,9 @@ BEGIN
          INSERT INTO @tRDTPPA (RowRef)
          SELECT DISTINCT RowRef
          FROM RDT.RDTPPA WITH(NOLOCK) 
-            WHERE StorerKey = @cStorerKey
-               AND DropID = @cDropID
-               AND Status = '2'
+         WHERE StorerKey = @cStorerKey 
+            AND DropID = @cDropID 
+            AND Status = '2'
          SELECT @nRowCount = @@ROWCOUNT
 
          IF @nRowCount > 0
@@ -1350,15 +1351,16 @@ BEGIN
                        AND pd.StorerKey = @cStorerKey
                        AND pd.CaseID = @cDropID
                        AND w.UserDefine09 = 'Y')
-                  AND NOT EXISTS(
-                     SELECT 1 FROM dbo.codelkup cl WITH(NOLOCK)
-                        INNER JOIN dbo.ORDERS ord WITH(NOLOCK) ON ord.ShipperKey = cl.short
-                        INNER JOIN dbo.PickDetail pd WITH(NOLOCK) ON ord.OrderKey = pd.OrderKey
-                     WHERE ord.StorerKey = @cStorerKey
-                       AND pd.StorerKey = @cStorerKey
-                       AND pd.CaseID = @cDropID
-                       AND cl.listname = 'WSCourier'
-                       and cl.code = 'ECL-1' )
+                  -- Commnted by NickT, FCR-7845 no need to chec if it is a parcel order, print 4X2 label for all orders
+                  -- AND NOT EXISTS(
+                  --    SELECT 1 FROM dbo.codelkup cl WITH(NOLOCK)
+                  --       INNER JOIN dbo.ORDERS ord WITH(NOLOCK) ON ord.ShipperKey = cl.short
+                  --       INNER JOIN dbo.PickDetail pd WITH(NOLOCK) ON ord.OrderKey = pd.OrderKey
+                  --    WHERE ord.StorerKey = @cStorerKey
+                  --      AND pd.StorerKey = @cStorerKey
+                  --      AND pd.CaseID = @cDropID
+                  --      AND cl.listname = 'WSCourier'
+                  --      and cl.code = 'ECL-1' )
                   BEGIN
                      --print 4X2 label
                      DECLARE @t4x2ParamList VariableTable
@@ -1442,7 +1444,7 @@ BEGIN
                      IF @nErrNo <> 0 OR @bSuccess <> 1
                      BEGIN
                         IF @nTranCount > 0
-                           ROLLBACK TRAN rdt_855TransLog2
+                        ROLLBACK TRAN rdt_855TransLog2
                         ELSE
                            ROLLBACK TRAN
                         GOTO Quit
@@ -1513,7 +1515,7 @@ BEGIN
                            IF @nErrNo <> 0 OR @bSuccess <> 1
                            BEGIN
                               IF @nTranCount > 0
-                                 ROLLBACK TRAN rdt_855TransLog2
+                              ROLLBACK TRAN rdt_855TransLog2
                               ELSE
                                  ROLLBACK TRAN
                               GOTO Quit
@@ -1565,7 +1567,7 @@ BEGIN
                      SELECT DISTINCT PickSlipNo, CartonNo, LabelNo, LabelLine
                      FROM dbo.PackDetail WITH(NOLOCK)
                      WHERE StorerKey = @cStorerKey
-                     AND DropID = @cToteID
+                       AND DropID = @cToteID
 
                      UPDATE PD
                         SET DropID = CONCAT('ARC',DropID)
@@ -1582,7 +1584,7 @@ BEGIN
                      SELECT PickDetailKey
                      FROM dbo.PICKDETAIL WITH(NOLOCK) 
                      WHERE StorerKey = @cStorerKey
-                     AND DropID = @cToteID
+                       AND DropID = @cToteID
 
                      UPDATE PD
                         SET DropID = CONCAT('ARC',DropID),
@@ -1635,8 +1637,8 @@ BEGIN
                   UPDATE RDT.RDTMOBREC WITH(ROWLOCK) SET C_STRING1 = '' WHERE Mobile = @nMobile
                END
 
-               WHILE @@TRANCOUNT > @nTranCount
-                  COMMIT TRAN
+                  WHILE @@TRANCOUNT > @nTranCount
+                     COMMIT TRAN
                --V1.21.0 end
             END --scn6464, enter
          END
