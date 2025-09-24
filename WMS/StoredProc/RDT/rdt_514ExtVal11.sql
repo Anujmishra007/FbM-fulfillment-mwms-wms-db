@@ -153,7 +153,7 @@ BEGIN
                   INNER JOIN dbo.UCC WITH(NOLOCK) ON LLI.StorerKey = UCC.StorerKey AND LLI.Loc = UCC.Loc AND LLI.ID = UCC.ID
                   WHERE UCC.StorerKey = @cStorerKey
                      AND LLI.QTY - LLI.QTYPicked > 0
-                     AND UCC.Status IN ('1', '3', '4', '5')
+                     AND UCC.Status IN ('1', '3', '4')
                      AND LLI.Loc = @cToLoc
 
                   SELECT @nLocCaronQty = @nLocCaronQty + COUNT(DISTINCT UCC.UCCNo)
@@ -162,7 +162,7 @@ BEGIN
                   WHERE UCC.StorerKey = @cStorerKey
                      AND RP.SuggestedLoc = @cToLoc
                      AND UCC.Loc <> @cToLoc
-                     AND UCC.Status IN ('1', '3', '4', '5')
+                     AND UCC.Status IN ('1', '3', '4')
 
                   IF @nMaxCarton < @nScannedUCCQty + @nLocCaronQty
                   BEGIN
