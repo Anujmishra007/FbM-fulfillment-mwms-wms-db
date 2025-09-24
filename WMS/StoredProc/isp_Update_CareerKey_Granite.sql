@@ -222,6 +222,7 @@ BEGIN
       BEGIN
          UPDATE [dbo].[MBOL] WITH (ROWLOCK)
          SET ExternMBOLKey = @c_ExternMBOLKey
+            ,TrafficCop = NULL
          WHERE MbolKey = @c_MbolKey
       END
    END
