@@ -63,7 +63,7 @@ BEGIN
          BEGIN
            IF EXISTS (SELECT 1 FROM PickDetail PD (NOLOCK) 
                         JOIN LoadPlanDetail LPD (NOLOCK) ON PD.OrderKey = LPD.OrderKey
-                        JOIN PickHeader PH (NOLOCK) ON PH.ExternOrderKey = LPD.LoadKey AND PD.StorerKey = PH.StorerKey
+                        JOIN PickHeader PH (NOLOCK) ON PH.ExternOrderKey = LPD.LoadKey
                         WHERE PD.StorerKey = @cStorerKey
                         AND PH.PickHeaderKey <> @cPickSlipNo
                         AND PD.DropID = @cDropID)
