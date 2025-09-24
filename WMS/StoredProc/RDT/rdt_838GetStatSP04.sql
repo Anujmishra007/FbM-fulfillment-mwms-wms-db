@@ -69,6 +69,16 @@ BEGIN
      AND DropID = @cFromDropID
      AND Status <= '5'
 
+   IF @cOrderKey = ''
+   BEGIN
+      SELECT TOP 1
+         @cOrderKey = RefNo2
+      FROM Packdetail WITH (NOLOCK)
+      WHERE StorerKey = @cStorerKey
+        AND DropID = @cFromDropID
+        AND LabelNo = @cLabelNo
+   END
+
 
 /***********************************************************************************************
                                                 PackDetail
