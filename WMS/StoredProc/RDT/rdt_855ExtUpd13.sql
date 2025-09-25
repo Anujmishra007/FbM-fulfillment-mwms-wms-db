@@ -1444,7 +1444,7 @@ BEGIN
                      IF @nErrNo <> 0 OR @bSuccess <> 1
                      BEGIN
                         IF @nTranCount > 0
-                        ROLLBACK TRAN rdt_855TransLog2
+                           ROLLBACK TRAN rdt_855TransLog2
                         ELSE
                            ROLLBACK TRAN
                         GOTO Quit
@@ -1515,7 +1515,7 @@ BEGIN
                            IF @nErrNo <> 0 OR @bSuccess <> 1
                            BEGIN
                               IF @nTranCount > 0
-                              ROLLBACK TRAN rdt_855TransLog2
+                                 ROLLBACK TRAN rdt_855TransLog2
                               ELSE
                                  ROLLBACK TRAN
                               GOTO Quit
