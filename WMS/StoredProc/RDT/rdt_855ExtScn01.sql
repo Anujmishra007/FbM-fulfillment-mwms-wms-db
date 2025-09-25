@@ -140,7 +140,7 @@ BEGIN
       @cSingleUnitOrdFlag     NVARCHAR( 1),
       @cToteID                NVARCHAR(20), 
       @cLabelNo               NVARCHAR(20),
-      @cUPC                   NVARCHAR(30),
+      @cUPC                   NVARCHAR(20),--1.7.0 SKU.RetailSKU
       @nSKUCnt                INT, 
       @b_Success              INT
    --V1.4.0 end
@@ -362,8 +362,8 @@ BEGIN
                --The base step2 always set SKU back to '', so get sku from rdtmobrec again
                IF @cSingleUnitOrdFlag = 'Y' --V1.5.0 only set default value if single unit order
                BEGIN
-                  SELECT @cSKU = V_SKU FROM rdt.rdtmobrec WITH (NOLOCK) WHERE Mobile = @nMobile
-                  SET @cOutField01 = ISNULL(@cSKU,'')
+                  SELECT @cUPC = V_String35 FROM rdt.rdtmobrec WITH (NOLOCK) WHERE Mobile = @nMobile
+                  SET @cOutField01 = ISNULL(@cUPC,'') --V1.7.0
                END
                GOTO Quit
             END
@@ -1413,6 +1413,7 @@ BEGIN
                END
 
                SET @cSKU = @cUPC
+               SET @cUPC = @cInfield01 --V1.7.0 get scanned value back
 
                --Verify SKU in the scanned ToteID (DropID)
                IF NOT EXISTS ( SELECT 1 FROM dbo.PackDetail WITH (NOLOCK)
@@ -1514,6 +1515,7 @@ BEGIN
                SET @cUDF10 = @cPPACartonIDByPickDetailCaseID
                SET @cUDF11 = @cSKU --Save to mobrec V_SKU to populate on SKU QTY screen
                SET @cUDF12 = @cOrderKey --V1.5.0 Save orderkey to mobrec
+               SET @cUDF13 = @cUPC --V1.7.0 save to mobrec
 
                -- Extended info
                IF @cExtendedInfoSP <> ''
