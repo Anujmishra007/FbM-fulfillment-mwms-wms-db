@@ -735,7 +735,7 @@ BEGIN
          FROM dbo.LOTXLOCXID WITH(NOLOCK)
          WHERE LOC = @cToLOC
            AND StorerKey = @cStorerKey
-           AND Qty - QtyPicked > 0
+           AND Qty > 0
 
          IF @bDebug = 1
          BEGIN
