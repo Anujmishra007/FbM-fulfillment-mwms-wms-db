@@ -57,7 +57,7 @@ BEGIN
          ,  @CUR_WAVEPD       CURSOR
          -- AYD01 - START
          ,  @c_LockName       NVARCHAR(40)
-         ,  @n_LockResult         INT
+         ,  @n_LockResult     INT
          -- AYD01 - END
    SET @b_Success = 1
    SET @n_Err     = 0
@@ -82,7 +82,7 @@ BEGIN
    END
    --(mingle01) - END
    -- AYD01 - START
-   SET @c_LockName  = 'APPLOCK_lsp_WaveReleaseTask_' + ISNULL(RTRIM(@c_WaveKey), '')
+   SET @c_LockName  = 'lsp_WaveReleaseTask_' + ISNULL(RTRIM(@c_WaveKey), '')
    
    BEGIN TRY
       EXEC @n_LockResult = sp_getapplock 
@@ -96,7 +96,7 @@ BEGIN
          SET @n_Err = 555808
          SET @c_ErrMsg = 'NSQL'+ CONVERT(Char(6),@n_Err)
                         + ': WaveKey[' + ISNULL(RTRIM(@c_WaveKey), '') + '] '
-                        + 'already under processing by ' + @c_UserName  
+                        + 'already under processing by mWMS/IML/RDT/scheduler user.'
                         + ' (lsp_WaveReleaseTask)'    
          GOTO EXIT_SP
       END
@@ -106,9 +106,9 @@ BEGIN
       SET @n_Continue = 3
       SET @n_Err = 555808
       SET @c_ErrMsg = 'NSQL'+ CONVERT(Char(6),@n_Err)
-                     + ': WaveKey[' + ISNULL(RTRIM(@c_WaveKey), '') + '] '
-                     + 'already under processing by ' + @c_UserName 
-                     + ' (lsp_WaveReleaseTask)'
+                        + ': WaveKey[' + ISNULL(RTRIM(@c_WaveKey), '') + '] '
+                        + 'already under processing by mWMS/IML/RDT/scheduler user.'
+                        + ' (lsp_WaveReleaseTask)'  
       GOTO EXIT_SP
    END CATCH
    -- AYD01 - END
@@ -353,12 +353,7 @@ BEGIN
    END CATCH
    --(mingle01) - END 
 EXIT_SP:
-   -- AYD01 - START
-   IF @n_LockResult >= 0
-   BEGIN
-      EXEC sp_releaseapplock @Resource = @c_LockName
-   END
-   -- AYD01 - END
+
    IF (XACT_STATE()) = -1                                      --(Wan01)  
    BEGIN
       SET @n_Continue = 3
