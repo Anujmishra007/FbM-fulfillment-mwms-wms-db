@@ -962,6 +962,7 @@ BEGIN
          SET @c_LinkTaskToPick_SQL = 'PICKDETAIL.Orderkey= @c_Orderkey'
                                    +' AND PICKDETAIL.Loc = @c_FromLoc'
                                    +' AND PICKDETAIL.ID  = @c_FromID'
+         SET @c_LocationGroup = ISNULL(@c_LocationGroup,'')                         --2025-09-25
 
          IF @c_UOM = '7'
          BEGIN
