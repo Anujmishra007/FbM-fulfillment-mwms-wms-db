@@ -108,9 +108,6 @@ BEGIN
          IF LEN(@c_SQLSchema) > 0 
          BEGIN
             SET @c_SQL = N'ALTER TABLE #VALDN  ADD  ' + SUBSTRING(@c_SQLSchema, 1, LEN(@c_SQLSchema) - 1) + ' '
-
-            IF @c_SQL NOT LIKE '%UCCNo %'                           --ML01
-               SET @c_SQL = @c_SQL + ', UCCNo NVARCHAR(20) NULL '   --ML01
                
             EXEC (@c_SQL)
          
@@ -129,6 +126,7 @@ BEGIN
             EXEC sp_xml_removedocument @n_XMLHandle                         
          END
       END
+
       --NJOW01 E      
 
       /*
@@ -235,9 +233,18 @@ BEGIN
          ,  @c_Lottable13 = ISNULL(CONVERT(NCHAR(8),IH.Lottable13,112),'19000101')  
          ,  @c_Lottable14 = ISNULL(CONVERT(NCHAR(8),IH.Lottable14,112),'19000101')  
          ,  @c_Lottable15 = ISNULL(CONVERT(NCHAR(8),IH.Lottable15,112),'19000101') 
-         ,  @c_UCCNo      = ISNULL(RTRIM(IH.UCCNo),'')   --ML01
       FROM  #VALDN IH  --NJOW01
       ORDER BY RowId 
+
+      --ML01-S
+      IF COL_LENGTH('tempdb..#VALDN', 'UCCNo') IS NOT NULL
+      BEGIN
+         SET @c_SQL = N'SELECT TOP 1 @c_UCCNo = ISNULL(RTRIM(UCCNo),'''') FROM #VALDN ORDER BY RowId'
+         EXEC sp_executesql @c_SQL
+            , N'@c_UCCNo NVARCHAR(20) OUTPUT'
+            , @c_UCCNo OUTPUT
+      END
+      --ML01-E
 
       IF @c_Lottable04 = '19000101' SET @c_Lottable04 = ''
       IF @c_Lottable05 = '19000101' SET @c_Lottable05 = ''
