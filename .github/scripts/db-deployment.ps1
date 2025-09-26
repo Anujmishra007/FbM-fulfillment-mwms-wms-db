@@ -28,6 +28,7 @@ $logFilePath = ".\logs\$($WMSDB_NAME).txt"
 $errorFilePath = ".\logs\logs_error_$($timestamp).txt"
 
 $ERROR_FOUND = $false
+$failedScripts = @()
 foreach ($scriptFile in $SQL_SCRIPT_FILES) {
     # Check if the file exists
     if (-Not (Test-Path $scriptFile)) {
@@ -61,10 +62,20 @@ foreach ($scriptFile in $SQL_SCRIPT_FILES) {
         Write-Output $errorMessage
         Add-Content -Path $logFilePath -Value $errorMessage -Encoding UTF8
         Add-Content -Path $errorFilePath -Value $errorMessage -Encoding UTF8
+        $failedScripts += $scriptFile
         $ERROR_FOUND = $true
     }
 }
 if($ERROR_FOUND)
 {
-    throw "One or more SQL scripts failed to execute. Please check the logs and error files for details."
+    $summaryFile = $env:GITHUB_STEP_SUMMARY
+    if ($summaryFile) {
+        Add-Content $summaryFile "## ❌ SQL Script Execution Failed" -Encoding UTF8
+        Add-Content $summaryFile "" -Encoding UTF8
+        Add-Content $summaryFile "| Failed Scripts |" -Encoding UTF8
+        Add-Content $summaryFile "|---------------|" -Encoding UTF8
+        foreach ($f in $failedScripts) {
+            Add-Content $summaryFile "| $f |" -Encoding UTF8
+        }
+    }
 }
