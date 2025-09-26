@@ -57,6 +57,19 @@ BEGIN
          , @n_cnt int                    
          , @n_IsRDT INT            -- KHLim01
          , @c_PreUN varchar(5)     -- KHLim01
+--ML01-S
+         , @c_Storerkey        NVARCHAR(15)
+         , @c_CurrentStorerkey NVARCHAR(15)
+         , @c_CurrentUCCNo     NVARCHAR(20)
+         , @c_CurrentStorerUCC NVARCHAR(40)
+         , @c_invholditf       NVARCHAR(1)
+         , @n_IDCnt            INT
+         , @n_LocCnt           INT
+         , @c_InvHoldKey       NVARCHAR(10)
+         , @c_transmitlogkey   NVARCHAR(10)
+         , @c_InStatus         NVARCHAR(10)
+         , @c_DelStatus        NVARCHAR(10)
+--ML01-E
            
    SELECT @n_continue=1, @n_starttcnt=@@TRANCOUNT  
 
