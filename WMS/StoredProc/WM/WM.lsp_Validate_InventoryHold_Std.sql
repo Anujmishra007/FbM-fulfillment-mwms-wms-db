@@ -421,7 +421,6 @@ BEGIN
                                 + ' |' + ISNULL(RTRIM(@c_UCCNo),'')
                   GOTO EXIT_SP
                END
-            BEGIN
             END
          END
 --ML01-E
