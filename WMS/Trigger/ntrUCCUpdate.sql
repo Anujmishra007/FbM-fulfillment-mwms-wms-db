@@ -1,6 +1,6 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrUCCUpdate]') 
-              and OBJECTPROPERTY(id, N'IsTrigger') = 1) 
-drop trigger [dbo].[ntrUCCUpdate]
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
 GO
 /************************************************************************/  
 /* Trigger: ntrUCCUpdate                                                */  
@@ -32,7 +32,7 @@ GO
 /* 19-08-2014  TLTING    1.4  Add ArchiveCop & TrrafficCop              */  
 /* 25-09-2025  MICHAEL   1.5  FCR-7829 Inventory UCC-level HOLD (ML01)  */
 /************************************************************************/  
-CREATE TRIGGER [dbo].[ntrUCCUpdate]  
+CREATE OR ALTER TRIGGER [dbo].[ntrUCCUpdate]  
 ON  [dbo].[UCC]   
 FOR UPDATE  
 AS  
@@ -275,4 +275,4 @@ BEGIN
       RETURN  
    END  
 END  
-
+GO
