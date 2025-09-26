@@ -95,6 +95,7 @@ BEGIN
          , @d_lottable14      datetime           --(CS01)
          , @d_lottable15      datetime           --(CS01)
          , @c_Sku             NVARCHAR(20)
+         , @c_UCCStatus       NVARCHAR(1) = ''   --ML02
 --ML02         , @c_StorerKey       NVARCHAR(15)
 
    DECLARE @cStorerKey        NVARCHAR(15)
@@ -1365,6 +1366,26 @@ BEGIN
 
          IF @n_continue = 1 or @n_continue = 2
          BEGIN
+            IF @c_Hold = '1'
+            BEGIN
+               SET @c_UCCStatus = ''
+               SELECT @c_UCCStatus = RTRIM(MAX(Status))
+               FROM UCC WITH(NOLOCK)
+               WHERE Storerkey=@cStorerKey AND UCCNo=@c_UCCNo
+            
+               IF @c_UCCStatus NOT IN  ('1','2')
+               BEGIN
+                  SET @n_Continue = 3
+                  SET @n_err = 62453
+                  SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': UCCNo Status ''' + ISNULL(@c_UCCStatus,'') + ''' Not allow Hold'
+                                + '. (lsp_Validate_InventoryHold_Std)'
+                                + ' |' + ISNULL(RTRIM(@c_UCCNo),'')
+               END
+            END
+         END
+
+         IF @n_continue = 1 or @n_continue = 2
+         BEGIN
             IF @b_newrecord = 1
             BEGIN
                SELECT @b_success = 1
@@ -1526,4 +1547,3 @@ GO
 
 GRANT EXECUTE ON [dbo].[nspInventoryHold] TO nSQL
 GO
-
