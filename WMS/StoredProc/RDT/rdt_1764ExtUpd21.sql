@@ -109,7 +109,7 @@ BEGIN
                   @cLocationCategory = LOC.LocationCategory,
                   @cListKey = TD.ListKey
                FROM dbo.TaskDetail TD WITH(NOLOCK)
-               INNER JOIN dbo.LOC WITH(NOLOCK) ON TD.FinalLoc = LOC.Loc
+               INNER JOIN dbo.LOC WITH(NOLOCK) ON TD.ToLoc = LOC.Loc
                WHERE TD.TaskDetailKey = @cTaskDetailKey
 
                IF @cLocationType = 'PND'
