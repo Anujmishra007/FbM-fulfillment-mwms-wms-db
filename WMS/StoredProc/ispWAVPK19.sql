@@ -186,8 +186,8 @@ BEGIN
          JOIN ORDERS O (NOLOCK) ON PH.Orderkey = O.Orderkey
          WHERE O.Orderkey = @c_Orderkey
 
-         INSERT INTO PACKHEADER (OrderKey, Loadkey, StorerKey, PickSlipNo, STATUS)
-         SELECT O.OrderKey, O.LoadKey, O.Storerkey, @c_PickSlipNo, '9'
+         INSERT INTO PACKHEADER (OrderKey, Loadkey, StorerKey, PickSlipNo, STATUS, PackStatus)
+         SELECT O.OrderKey, O.LoadKey, O.Storerkey, @c_PickSlipNo, '9', '9'
          FROM  PICKHEADER PH (NOLOCK)
          JOIN  ORDERS O (NOLOCK) ON (PH.Orderkey = O.Orderkey)
          WHERE PH.PickHeaderKey = @c_PickSlipNo
