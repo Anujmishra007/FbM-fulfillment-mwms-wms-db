@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_WM_Get_ModuleReport]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [WM].[lsp_WM_Get_ModuleReport]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -18,7 +13,7 @@ GO
 /*        :                                                             */
 /* Called By:                                                           */
 /*          :                                                           */
-/* PVCS Version: 1.1                                                    */
+/* PVCS Version: 1.3                                                    */
 /*                                                                      */
 /* Version: 8.0                                                         */
 /*                                                                      */
@@ -31,14 +26,19 @@ GO
 /* 2021-02-10  mingle01 1.1   Add Big Outer Begin try/Catch             */
 /* 2021-02-15  Wan01    1.1   Execute Login if @c_UserName<>SUSER_SNAME()*/
 /* 2021-02-25  Wan01    1.2   Fixed. Add Revert                         */
+/* 2024-06-20  Wan02    1.3   LFWM-4607 - RG UATPROD-All storer-Print   */
+/*                            Label button is not responding in Inventory*/
+/*                            Move module                               */
+/* 2025-09-02  SWT01    1.1   Enhanced session management pattern       */
 /************************************************************************/
-CREATE PROC [WM].[lsp_WM_Get_ModuleReport]
+CREATE OR ALTER PROC [WM].[lsp_WM_Get_ModuleReport]
            @c_ModuleID           NVARCHAR(30)
          , @c_Storerkey          NVARCHAR(15)
          , @c_Facility           NVARCHAR(5)
          , @c_UserName           NVARCHAR(128) 
          , @c_ComputerName       NVARCHAR(30)
          , @c_PrintSource        NVARCHAR(10) = 'WMReport' --Wan01  1: Report, 2: JReport 
+         , @c_ReportType         NVARCHAR(30) = 'ALL'
 AS
 BEGIN
    SET NOCOUNT ON
@@ -51,26 +51,36 @@ BEGIN
          , @n_Continue        INT 
          , @n_err             INT
          , @c_ErrMsg          NVARCHAR(255)
+
+         , @c_SQL             NVARCHAR(MAX) = ''                                    --(Wan02)
+         , @c_SQLParms        NVARCHAR(4000)= ''                                    --(Wan02)
          
    SET @n_StartTCnt = @@TRANCOUNT
    SET @n_Continue = 1
    SET @n_err      = 0
    SET @c_errmsg   = ''
 
-   SET @n_Err = 0 
-   --(Wan01) - START 
-   IF SUSER_SNAME() <> @c_UserName 
+   -- Start enhanced session management (SWT01)
+   SET @n_Err = 0
+   DECLARE @b_ExecuteAs        BIT = 0
+   IF SUSER_SNAME() <> @c_UserName AND @c_UserName <> ''        
    BEGIN
-      EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
-   
-      IF @n_Err <> 0 
+      EXEC [WM].[lsp_SetUser] 
+           @c_UserName = @c_UserName  OUTPUT
+        ,  @n_Err      = @n_Err       OUTPUT
+        ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+        ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
+
+      IF @n_Err <> 0
       BEGIN
          GOTO EXIT_SP
       END
-      
-      EXECUTE AS LOGIN = @c_UserName
-   END
-   --(Wan01) - END
+
+      IF @b_ExecuteAs = 1
+         EXECUTE AS LOGIN = @c_UserName
+   END                                    
+   -- End enhanced session management (SWT01)
+
    --(mingle01) - START
    BEGIN TRY
 
@@ -86,93 +96,93 @@ BEGIN
          VALUES ('WMRptModID', @c_ModuleID, @c_ModuleID)
       END
 
-
-      SELECT WMRH.ReportID
+      SET @c_SQL =                                                                  --(Wan02) -START
+      N'SELECT WMRH.ReportID
          ,   WMRH.ReportTitle
          ,   WMRH.KeyFieldName1
-         ,   KeyFieldName2 = CASE WHEN ISNULL(CHARINDEX('.', WMRH.KeyFieldName2),0) > 0 
-                                  THEN ISNULL(RTRIM(WMRH.KeyFieldName2),'')
-                                  WHEN ISNULL(WMRH.KeyFieldParmLabel2,'') <> ''
-                                  THEN ISNULL(RTRIM(WMRH.KeyFieldName2),'')
-                                  ELSE ''
+         ,   KeyFieldName2 = CASE WHEN ISNULL(CHARINDEX(''.'', WMRH.KeyFieldName2),0) > 0 
+                                  THEN ISNULL(RTRIM(WMRH.KeyFieldName2),'''')
+                                  WHEN ISNULL(WMRH.KeyFieldParmLabel2,'''') <> ''''
+                                  THEN ISNULL(RTRIM(WMRH.KeyFieldName2),'''')
+                                  ELSE ''''
                                   END
-         ,   KeyFieldName3 = CASE WHEN ISNULL(CHARINDEX('.', WMRH.KeyFieldName3),0) > 0 
-                                  THEN ISNULL(RTRIM(WMRH.KeyFieldName3),'')
-                                  WHEN ISNULL(WMRH.KeyFieldParmLabel3,'') <> ''
-                                  THEN ISNULL(RTRIM(WMRH.KeyFieldName3),'')
-                                  ELSE ''
+         ,   KeyFieldName3 = CASE WHEN ISNULL(CHARINDEX(''.'', WMRH.KeyFieldName3),0) > 0 
+                                  THEN ISNULL(RTRIM(WMRH.KeyFieldName3),'''')
+                                  WHEN ISNULL(WMRH.KeyFieldParmLabel3,'''') <> ''''
+                                  THEN ISNULL(RTRIM(WMRH.KeyFieldName3),'''')
+                                  ELSE ''''
+                                  END 
+         ,   KeyFieldName4 = CASE WHEN ISNULL(CHARINDEX(''.'', WMRH.KeyFieldName4),0) > 0 
+                                  THEN ISNULL(RTRIM(WMRH.KeyFieldName4),'''')
+                                  WHEN ISNULL(WMRH.KeyFieldParmLabel4,'''') <> ''''
+                                  THEN ISNULL(RTRIM(WMRH.KeyFieldName4),'''')
+                                  ELSE ''''
                                   END
-         ,   KeyFieldName4 = CASE WHEN ISNULL(CHARINDEX('.', WMRH.KeyFieldName4),0) > 0 
-                                  THEN ISNULL(RTRIM(WMRH.KeyFieldName4),'')
-                                  WHEN ISNULL(WMRH.KeyFieldParmLabel4,'') <> ''
-                                  THEN ISNULL(RTRIM(WMRH.KeyFieldName4),'')
-                                  ELSE ''
+         ,   KeyFieldName5 = CASE WHEN ISNULL(CHARINDEX(''.'', WMRH.KeyFieldName5),0) > 0 
+                                  THEN ISNULL(RTRIM(WMRH.KeyFieldName5),'''')
+                                  WHEN ISNULL(WMRH.KeyFieldParmLabel5,'''') <> ''''
+                                  THEN ISNULL(RTRIM(WMRH.KeyFieldName5),'''')
+                                  ELSE ''''
                                   END
-         ,   KeyFieldName5 = CASE WHEN ISNULL(CHARINDEX('.', WMRH.KeyFieldName5),0) > 0 
-                                  THEN ISNULL(RTRIM(WMRH.KeyFieldName5),'')
-                                  WHEN ISNULL(WMRH.KeyFieldParmLabel5,'') <> ''
-                                  THEN ISNULL(RTRIM(WMRH.KeyFieldName5),'')
-                                  ELSE ''
+         ,   KeyFieldName6 = CASE WHEN ISNULL(CHARINDEX(''.'', WMRH.KeyFieldName6),0) > 0 
+                                  THEN ISNULL(RTRIM(WMRH.KeyFieldName6),'''')
+                                  WHEN ISNULL(WMRH.KeyFieldParmLabel6,'''') <> ''''
+                                  THEN ISNULL(RTRIM(WMRH.KeyFieldName6),'''')
+                                  ELSE ''''
                                   END
-         ,   KeyFieldName6 = CASE WHEN ISNULL(CHARINDEX('.', WMRH.KeyFieldName6),0) > 0 
-                                  THEN ISNULL(RTRIM(WMRH.KeyFieldName6),'')
-                                  WHEN ISNULL(WMRH.KeyFieldParmLabel6,'') <> ''
-                                  THEN ISNULL(RTRIM(WMRH.KeyFieldName6),'')
-                                  ELSE ''
+         ,   KeyFieldName7 = CASE WHEN ISNULL(CHARINDEX(''.'', WMRH.KeyFieldName7),0) > 0 
+                                  THEN ISNULL(RTRIM(WMRH.KeyFieldName7),'''')
+                                  WHEN ISNULL(WMRH.KeyFieldParmLabel7,'''') <> ''''
+                                  THEN ISNULL(RTRIM(WMRH.KeyFieldName7),'''')
+                                  ELSE ''''
                                   END
-         ,   KeyFieldName7 = CASE WHEN ISNULL(CHARINDEX('.', WMRH.KeyFieldName7),0) > 0 
-                                  THEN ISNULL(RTRIM(WMRH.KeyFieldName7),'')
-                                  WHEN ISNULL(WMRH.KeyFieldParmLabel7,'') <> ''
-                                  THEN ISNULL(RTRIM(WMRH.KeyFieldName7),'')
-                                  ELSE ''
+         ,   KeyFieldName8 = CASE WHEN ISNULL(CHARINDEX(''.'', WMRH.KeyFieldName8),0) > 0 
+                                  THEN ISNULL(RTRIM(WMRH.KeyFieldName8),'''')
+                                  WHEN ISNULL(WMRH.KeyFieldParmLabel8,'''') <> ''''
+                                  THEN ISNULL(RTRIM(WMRH.KeyFieldName8),'''')
+                                  ELSE ''''
                                   END
-         ,   KeyFieldName8 = CASE WHEN ISNULL(CHARINDEX('.', WMRH.KeyFieldName8),0) > 0 
-                                  THEN ISNULL(RTRIM(WMRH.KeyFieldName8),'')
-                                  WHEN ISNULL(WMRH.KeyFieldParmLabel8,'') <> ''
-                                  THEN ISNULL(RTRIM(WMRH.KeyFieldName8),'')
-                                  ELSE ''
+         ,   KeyFieldName9 = CASE WHEN ISNULL(CHARINDEX(''.'', WMRH.KeyFieldName9),0) > 0 
+                                  THEN ISNULL(RTRIM(WMRH.KeyFieldName9),'''')
+                                  WHEN ISNULL(WMRH.KeyFieldParmLabel9,'''') <> ''''
+                                  THEN ISNULL(RTRIM(WMRH.KeyFieldName9),'''')
+                                  ELSE ''''
                                   END
-         ,   KeyFieldName9 = CASE WHEN ISNULL(CHARINDEX('.', WMRH.KeyFieldName9),0) > 0 
-                                  THEN ISNULL(RTRIM(WMRH.KeyFieldName9),'')
-                                  WHEN ISNULL(WMRH.KeyFieldParmLabel9,'') <> ''
-                                  THEN ISNULL(RTRIM(WMRH.KeyFieldName9),'')
-                                  ELSE ''
+         ,   KeyFieldName10 = CASE WHEN ISNULL(CHARINDEX(''.'', WMRH.KeyFieldName10),0) > 0 
+                                  THEN ISNULL(RTRIM(WMRH.KeyFieldName10),'''')
+                                  WHEN ISNULL(WMRH.KeyFieldParmLabel10,'''') <> ''''
+                                  THEN ISNULL(RTRIM(WMRH.KeyFieldName10),'''')
+                                  ELSE ''''
                                   END
-         ,   KeyFieldName10 = CASE WHEN ISNULL(CHARINDEX('.', WMRH.KeyFieldName10),0) > 0 
-                                  THEN ISNULL(RTRIM(WMRH.KeyFieldName10),'')
-                                  WHEN ISNULL(WMRH.KeyFieldParmLabel10,'') <> ''
-                                  THEN ISNULL(RTRIM(WMRH.KeyFieldName10),'')
-                                  ELSE ''
+         ,   KeyFieldName11 = CASE WHEN ISNULL(CHARINDEX(''.'', WMRH.KeyFieldName11),0) > 0 
+                                  THEN ISNULL(RTRIM(WMRH.KeyFieldName11),'''')
+                                  WHEN ISNULL(WMRH.KeyFieldParmLabel11,'''') <> ''''
+                                  THEN ISNULL(RTRIM(WMRH.KeyFieldName11),'''')
+                                  ELSE ''''
                                   END
-         ,   KeyFieldName11 = CASE WHEN ISNULL(CHARINDEX('.', WMRH.KeyFieldName11),0) > 0 
-                                  THEN ISNULL(RTRIM(WMRH.KeyFieldName11),'')
-                                  WHEN ISNULL(WMRH.KeyFieldParmLabel11,'') <> ''
-                                  THEN ISNULL(RTRIM(WMRH.KeyFieldName11),'')
-                                  ELSE ''
+         ,   KeyFieldName12 = CASE WHEN ISNULL(CHARINDEX(''.'', WMRH.KeyFieldName12),0) > 0 
+                                  THEN ISNULL(RTRIM(WMRH.KeyFieldName12),'''')
+                                  WHEN ISNULL(WMRH.KeyFieldParmLabel12,'''') <> ''''
+                                  THEN ISNULL(RTRIM(WMRH.KeyFieldName12),'''')
+                                  ELSE ''''
                                   END
-         ,   KeyFieldName12 = CASE WHEN ISNULL(CHARINDEX('.', WMRH.KeyFieldName12),0) > 0 
-                                  THEN ISNULL(RTRIM(WMRH.KeyFieldName12),'')
-                                  WHEN ISNULL(WMRH.KeyFieldParmLabel12,'') <> ''
-                                  THEN ISNULL(RTRIM(WMRH.KeyFieldName12),'')
-                                  ELSE ''
+         ,   KeyFieldName13 = CASE WHEN ISNULL(CHARINDEX(''.'', WMRH.KeyFieldName13),0) > 0 
+                                  THEN ISNULL(RTRIM(WMRH.KeyFieldName13),'''')
+                                  WHEN ISNULL(WMRH.KeyFieldParmLabel13,'''') <> ''''
+                                  THEN ISNULL(RTRIM(WMRH.KeyFieldName13),'''')
+                                  ELSE ''''
                                   END
-         ,   KeyFieldName13 = CASE WHEN ISNULL(CHARINDEX('.', WMRH.KeyFieldName13),0) > 0 
-                                  THEN ISNULL(RTRIM(WMRH.KeyFieldName13),'')
-                                  WHEN ISNULL(WMRH.KeyFieldParmLabel13,'') <> ''
-                                  THEN ISNULL(RTRIM(WMRH.KeyFieldName13),'')
-                                  ELSE ''
+         ,   KeyFieldName14 = CASE WHEN ISNULL(CHARINDEX(''.'', WMRH.KeyFieldName14),0) > 0 
+                                  THEN ISNULL(RTRIM(WMRH.KeyFieldName14),'''')
+                                  WHEN ISNULL(WMRH.KeyFieldParmLabel14,'''') <> ''''
+                                  THEN ISNULL(RTRIM(WMRH.KeyFieldName14),'''')
+                                  ELSE ''''
                                   END
-         ,   KeyFieldName14 = CASE WHEN ISNULL(CHARINDEX('.', WMRH.KeyFieldName14),0) > 0 
-                                  THEN ISNULL(RTRIM(WMRH.KeyFieldName14),'')
-                                  WHEN ISNULL(WMRH.KeyFieldParmLabel14,'') <> ''
-                                  THEN ISNULL(RTRIM(WMRH.KeyFieldName14),'')
-                                  ELSE ''
-                                  END
-         ,   KeyFieldName15 = CASE WHEN ISNULL(CHARINDEX('.', WMRH.KeyFieldName15),0) > 0 
-                                  THEN ISNULL(RTRIM(WMRH.KeyFieldName15),'')
-                                  WHEN ISNULL(WMRH.KeyFieldParmLabel15,'') <> ''
-                                  THEN ISNULL(RTRIM(WMRH.KeyFieldName15),'')
-                                  ELSE ''
+         ,   KeyFieldName15 = CASE WHEN ISNULL(CHARINDEX(''.'', WMRH.KeyFieldName15),0) > 0 
+                                  THEN ISNULL(RTRIM(WMRH.KeyFieldName15),'''')
+                                  WHEN ISNULL(WMRH.KeyFieldParmLabel15,'''') <> ''''
+                                  THEN ISNULL(RTRIM(WMRH.KeyFieldName15),'''')
+                                  ELSE ''''
                                   END            
          ,   WMRH.ExtendedParm1 
          ,   WMRH.ExtendedParm2      
@@ -184,32 +194,51 @@ BEGIN
          ,   WMRH.ExtendedParmDefault3
          ,   WMRH.ExtendedParmDefault4
          ,   WMRH.ExtendedParmDefault5
-         ,   NeedExtendedParm = CASE WHEN ISNULL(RTRIM(WMRH.ExtendedParm1),'') <> '' THEN 'Y' ELSE 'N' END
-         ,   KeyFieldParmLabel1 = ISNULL(WMRH.KeyFieldParmLabel1,'')
-         ,   KeyFieldParmLabel2 = ISNULL(WMRH.KeyFieldParmLabel2,'')
-         ,   KeyFieldParmLabel3 = ISNULL(WMRH.KeyFieldParmLabel3,'')
-         ,   KeyFieldParmLabel4 = ISNULL(WMRH.KeyFieldParmLabel4,'')
-         ,   KeyFieldParmLabel5 = ISNULL(WMRH.KeyFieldParmLabel5,'')
-         ,   KeyFieldParmLabel6 = ISNULL(WMRH.KeyFieldParmLabel6,'')
-         ,   KeyFieldParmLabel7 = ISNULL(WMRH.KeyFieldParmLabel7,'')
-         ,   KeyFieldParmLabel8 = ISNULL(WMRH.KeyFieldParmLabel8,'')
-         ,   KeyFieldParmLabel9 = ISNULL(WMRH.KeyFieldParmLabel9,'')
-         ,   KeyFieldParmLabel10= ISNULL(WMRH.KeyFieldParmLabel10,'')
-         ,   KeyFieldParmLabel11= ISNULL(WMRH.KeyFieldParmLabel11,'')
-         ,   KeyFieldParmLabel12= ISNULL(WMRH.KeyFieldParmLabel12,'')
-         ,   KeyFieldParmLabel13= ISNULL(WMRH.KeyFieldParmLabel13,'')
-         ,   KeyFieldParmLabel14= ISNULL(WMRH.KeyFieldParmLabel14,'')
-         ,   KeyFieldParmLabel15= ISNULL(WMRH.KeyFieldParmLabel15,'')
-      FROM dbo.WMREPORT WMRH WITH (NOLOCK)
-      WHERE WMRH.ModuleID = @c_ModuleID
-      AND EXISTS (   SELECT 1 
-                     FROM WM.fnc_Get_WMReportDetail (WMRH.ReportID, @c_Storerkey, @c_Facility, @c_UserName, @c_ComputerName, 'N'
-                     ) D 
-                     JOIN dbo.WMREPORTDETAIL WMRD WITH (NOLOCK) ON D.RowID = WMRD.RowID
-                     JOIN CODELKUP CL WITH (NOLOCK) ON  CL.ListName = 'WMPrintTyp'           --(Wan01)
-                                                    AND CL.Code     = WMRD.PrintType         --(Wan01)
-                     WHERE CL.Short = @c_PrintSource                                         --(Wan01)
-                  )
+         ,   NeedExtendedParm = CASE WHEN ISNULL(RTRIM(WMRH.ExtendedParm1),'''') <> '''' THEN ''Y'' ELSE ''N'' END
+         ,   KeyFieldParmLabel1 = ISNULL(WMRH.KeyFieldParmLabel1,'''')
+         ,   KeyFieldParmLabel2 = ISNULL(WMRH.KeyFieldParmLabel2,'''')
+         ,   KeyFieldParmLabel3 = ISNULL(WMRH.KeyFieldParmLabel3,'''')
+         ,   KeyFieldParmLabel4 = ISNULL(WMRH.KeyFieldParmLabel4,'''')
+         ,   KeyFieldParmLabel5 = ISNULL(WMRH.KeyFieldParmLabel5,'''')
+         ,   KeyFieldParmLabel6 = ISNULL(WMRH.KeyFieldParmLabel6,'''')
+         ,   KeyFieldParmLabel7 = ISNULL(WMRH.KeyFieldParmLabel7,'''')
+         ,   KeyFieldParmLabel8 = ISNULL(WMRH.KeyFieldParmLabel8,'''')
+         ,   KeyFieldParmLabel9 = ISNULL(WMRH.KeyFieldParmLabel9,'''')
+         ,   KeyFieldParmLabel10= ISNULL(WMRH.KeyFieldParmLabel10,'''')
+         ,   KeyFieldParmLabel11= ISNULL(WMRH.KeyFieldParmLabel11,'''')
+         ,   KeyFieldParmLabel12= ISNULL(WMRH.KeyFieldParmLabel12,'''')
+         ,   KeyFieldParmLabel13= ISNULL(WMRH.KeyFieldParmLabel13,'''')
+         ,   KeyFieldParmLabel14= ISNULL(WMRH.KeyFieldParmLabel14,'''')
+         ,   KeyFieldParmLabel15= ISNULL(WMRH.KeyFieldParmLabel15,'''')'
+      + ' FROM dbo.WMREPORT WMRH WITH (NOLOCK)'
+      + ' WHERE WMRH.ModuleID = @c_ModuleID'
+      + CASE WHEN @c_ReportType IN ('','ALL') THEN '' ELSE
+        ' AND   WMRH.ReportType = @c_ReportType' END 
+      + ' AND EXISTS ( SELECT 1' 
+      +              ' FROM WM.fnc_Get_WMReportDetail (WMRH.ReportID, @c_Storerkey, @c_Facility, @c_UserName, @c_ComputerName, ''N'''
+      +              ' ) D' 
+      +              ' JOIN dbo.WMREPORTDETAIL WMRD WITH (NOLOCK) ON D.RowID = WMRD.RowID'
+      +              ' JOIN CODELKUP CL WITH (NOLOCK) ON  CL.ListName = ''WMPrintTyp'''         --(Wan01)
+      +              '                                AND CL.Code     = WMRD.PrintType'         --(Wan01)
+      +              ' WHERE CL.Short = @c_PrintSource'                                         --(Wan01)
+      +            ' )'
+      SET @c_SQLParms = N'@c_ModuleID     NVARCHAR(30)'
+                      +', @c_ReportType   NVARCHAR(30)'
+                      +', @c_Storerkey    NVARCHAR(15)'
+                      +', @c_Facility     NVARCHAR(5)'
+                      +', @c_UserName     NVARCHAR(128)'
+                      +', @c_ComputerName NVARCHAR(30)'
+                      +', @c_PrintSource  NVARCHAR(10)'
+
+      EXEC sp_ExecuteSQL @c_SQL
+                        ,@c_SQLParms
+                        ,@c_ModuleID     
+                        ,@c_ReportType   
+                        ,@c_Storerkey    
+                        ,@c_Facility   
+                        ,@c_UserName
+                        ,@c_ComputerName
+                        ,@c_PrintSource                                             --(Wan02) - END 
    END TRY
    
    BEGIN CATCH
@@ -219,7 +248,8 @@ BEGIN
    END CATCH
    --(mingle01) - END 
    EXIT_SP:
-   REVERT 
+   IF @b_ExecuteAs = 1 REVERT -- (SWT01)
+   EXEC [WM].[lsp_ResetUser]  -- (SWT01) 
 END -- procedure
 GO
 GRANT EXECUTE ON [WM].[lsp_WM_Get_ModuleReport] TO nSQL 

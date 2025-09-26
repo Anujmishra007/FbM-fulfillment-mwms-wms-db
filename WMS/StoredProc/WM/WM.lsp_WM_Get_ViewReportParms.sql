@@ -1,12 +1,8 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_WM_Get_ViewReportParms]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [WM].[lsp_WM_Get_ViewReportParms]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
+
 /************************************************************************/
 /* Stored Proc: lsp_WM_Get_ViewReportParms                              */
 /* Creation Date: 05-SEP-2018                                           */
@@ -36,8 +32,9 @@ GO
 /* 2021-09-06  Wan02    1.3   LFWM-3001 - UAT - TW  Cannot Print Delivery*/
 /*                            Note from View Report                     */
 /* 2021-10-13  CheeMun  1.4   LFWM-3126 - View Report Parameters Seq    */
+/* 2025-09-02  SWT01    1.1   Enhanced session management pattern       */
 /************************************************************************/
-CREATE PROC [WM].[lsp_WM_Get_ViewReportParms] 
+CREATE OR ALTER PROC [WM].[lsp_WM_Get_ViewReportParms] 
            @c_ModuleID           NVARCHAR(30) = 'ViewReport'
          , @c_ReportID           NVARCHAR(10)
          , @c_UserName           NVARCHAR(128) 
@@ -63,20 +60,27 @@ BEGIN
 
    SET @n_Err = 0 
    SET @c_ori_username = @c_UserName
-   IF SUSER_SNAME() <> @c_username        --(Wan01) - START
+   -- Start enhanced session management (SWT01)
+   SET @n_Err = 0
+   DECLARE @b_ExecuteAs        BIT = 0
+   IF SUSER_SNAME() <> @c_UserName AND @c_UserName <> ''        
    BEGIN
       EXEC [WM].[lsp_SetUser] 
-               @c_UserName = @c_UserName  OUTPUT 
-            ,  @n_Err      = @n_Err       OUTPUT
-            ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
-                
-      IF @n_Err <> 0 
+           @c_UserName = @c_UserName  OUTPUT
+        ,  @n_Err      = @n_Err       OUTPUT
+        ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+        ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
+
+      IF @n_Err <> 0
       BEGIN
          GOTO EXIT_SP
       END
-      
-      EXECUTE AS LOGIN = @c_UserName  
-   END                                    --(Wan01) - END
+
+      IF @b_ExecuteAs = 1
+         EXECUTE AS LOGIN = @c_UserName
+   END                                    
+   -- End enhanced session management (SWT01)
+
    
    BEGIN TRY                              --(Wan01) - START                                 
       DECLARE @dt_today       DATETIME
@@ -154,8 +158,9 @@ BEGIN
    END CATCH                              --(Wan01) - END
    
    EXIT_SP:
-   REVERT -- SWT01
+   IF @b_ExecuteAs = 1 REVERT -- (SWT01)
+   EXEC [WM].[lsp_ResetUser]  -- (SWT01)
 END -- procedure
 GO
-GRANT EXECUTE ON [WM].[lsp_WM_Get_ViewReportParms] TO nSQL 
+GRANT EXECUTE ON  [WM].[lsp_WM_Get_ViewReportParms] TO [NSQL]
 GO

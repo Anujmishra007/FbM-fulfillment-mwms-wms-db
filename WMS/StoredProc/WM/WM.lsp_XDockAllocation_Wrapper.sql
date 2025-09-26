@@ -30,7 +30,9 @@ GO
 /*                            multiple externpokey per ASN              */
 /* 06-Sep-2024 SWT02    1.4   Allow Partial Allocation for avaialble    */
 /*                            Orders                                    */
-/* 16-May-2025 JH01     1.5   UWP-31657 - Change to map Receipt/ReceiptDetail*/
+/* 16-May-2025 JH01     1.5   UWP-31657 - Change to map Receipt/        */
+/*                            ReceiptDetail                             */
+/* 02-SEP-2025 SWT01    1.6   Enhanced session management pattern       */
 /************************************************************************/   
 CREATE OR ALTER PROCEDURE [WM].[lsp_XDockAllocation_Wrapper]  
    @c_ReceiptKey NVARCHAR(10),    
@@ -61,18 +63,27 @@ BEGIN
                                                       
    SELECT @n_starttcnt=@@TRANCOUNT, @n_err=0, @b_success=1, @c_errmsg='', @n_continue=1
    
+   -- Start enhanced session management (SWT01)
    SET @n_Err = 0
-   IF SUSER_SNAME() <> @c_UserName        --(Wan02) - START
+   DECLARE @b_ExecuteAs        BIT = 0
+   IF SUSER_SNAME() <> @c_UserName AND @c_UserName <> ''        
    BEGIN
-      EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName OUTPUT , @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
-   
-      IF @n_Err <> 0 
+      EXEC [WM].[lsp_SetUser] 
+           @c_UserName = @c_UserName  OUTPUT
+        ,  @n_Err      = @n_Err       OUTPUT
+        ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+        ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
+
+      IF @n_Err <> 0
       BEGIN
          GOTO EXIT_SP
       END
-   
-      EXECUTE AS LOGIN=@c_UserName -- (SWT01) 
-   END                                    --(Wan02) - END
+
+      IF @b_ExecuteAs = 1
+         EXECUTE AS LOGIN = @c_UserName
+   END                                    
+   -- End enhanced session management (SWT01)
+
    
    BEGIN TRY                              --(Wan01) - START
       SELECT @c_Storerkey = Storerkey,
@@ -453,7 +464,8 @@ BEGIN
       END 
       
    --(Wan01) - Move Down   
-   REVERT              
+   IF @b_ExecuteAs = 1 REVERT -- (SWT01)
+   EXEC [WM].[lsp_ResetUser]  -- (SWT01)              
 END  
 
 GO
