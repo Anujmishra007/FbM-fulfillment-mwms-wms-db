@@ -71,6 +71,7 @@ GO
 /*                        Fixed RDT move issue(FCR-540)                   */
 /* 04-Apr-2025  Wan12     UWP-31258-FCR-822 Partial Pallet Serial No Move */
 /* 26-JUN-2025  SSA01     UWP-3982- Added PalletType in inventory         */
+/* 26-Sep-2025  TLTING02  UWP-41813 skip blank ID update                  */
 /**************************************************************************/
 
 CREATE OR ALTER PROCEDURE [dbo].[nspItrnAddMoveCheck]
@@ -2002,16 +2003,20 @@ BEGIN
    /* Reduce The FROM ID in The ID Table */
    IF @n_continue=1 or @n_continue=2
    BEGIN
-      UPDATE ID with (ROWLOCK) SET QTY = QTY - @n_Qty
-      , PalletType = CASE WHEN @c_MoveType = 'ntrInventoryQCDetailUpdate' THEN @c_PalletType ELSE PalletType END   --(SSA01)
-      WHERE ID = @c_fromID
-      /* Check SQL Error Message */
-      SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
-      IF @n_err <> 0
-      BEGIN
-         SELECT @n_continue = 3
-         SELECT @n_err = 62030 --62214   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
-         SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed On Table ID. (nspItrnAddMoveCheck)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTrim(@c_ErrMsg),'') + ' ) '
+   	  --TLTING02
+   	  IF ISNULL(RTRIM(@c_fromID), '') <> ''
+   	  BEGIN
+   	  	 UPDATE ID with (ROWLOCK) SET QTY = QTY - @n_Qty
+				 , PalletType = CASE WHEN @c_MoveType = 'ntrInventoryQCDetailUpdate' THEN @c_PalletType ELSE PalletType END   --(SSA01)
+				 WHERE ID = @c_fromID
+	      /* Check SQL Error Message */
+	      SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
+	      IF @n_err <> 0
+	      BEGIN
+	         SELECT @n_continue = 3
+	         SELECT @n_err = 62030 --62214   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+	         SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed On Table ID. (nspItrnAddMoveCheck)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTrim(@c_ErrMsg),'') + ' ) '
+	      END
       END
    ELSE IF @n_cnt = 0
    BEGIN
@@ -2075,9 +2080,14 @@ BEGIN
       IF @c_AllowIDQtyUpdate = '1'
       BEGIN
          /* Update table 'Id' */
-         UPDATE ID with (ROWLOCK) SET QTY = QTY + @n_Qty, Status = @c_Status
-          , PalletType = CASE WHEN @c_MoveType = 'ntrInventoryQCDetailUpdate' THEN @c_PalletType ELSE PalletType END  --(SSA01)
-         WHERE ID = @c_TOID
+         -- TLTING02
+         
+         IF ISNULL(RTRIM(@c_toid), '') <> ''
+         BEGIN
+            UPDATE ID with (ROWLOCK) SET QTY = QTY + @n_Qty, Status = @c_Status
+	          , PalletType = CASE WHEN @c_MoveType = 'ntrInventoryQCDetailUpdate' THEN @c_PalletType ELSE PalletType END  --(SSA01)
+	          WHERE ID = @c_TOID
+         END
       END
       ELSE
       BEGIN
