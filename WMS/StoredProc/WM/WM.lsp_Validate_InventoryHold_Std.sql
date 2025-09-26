@@ -207,7 +207,6 @@ BEGIN
          ,  @n_Count             INT          = 0
          ,  @c_InvHoldKey        NVARCHAR(10) = ''
          ,  @c_UCCNo             NVARCHAR(20) = ''   --ML01
-         ,  @c_UCCStatus         NVARCHAR(1)  = ''   --ML01
 
       SELECT TOP 1 
             @c_InventoryHoldKey = ISNULL(RTRIM(IH.InventoryHoldKey),'')
@@ -410,24 +409,6 @@ BEGIN
                              + '. (lsp_Validate_InventoryHold_Std)'
                              + ' |' + RTRIM(@c_InvHoldKey)
                GOTO EXIT_SP
-            END
-
-            IF @c_Hold = '1'
-            BEGIN
-               SET @c_UCCStatus = ''
-               SELECT @c_UCCStatus = RTRIM(MAX(Status))
-               FROM UCC WITH(NOLOCK)
-               WHERE Storerkey=@c_Storerkey AND UCCNo=@c_UCCNo
-
-               IF @c_UCCStatus NOT IN  ('1','2')
-               BEGIN
-                  SET @n_Continue = 3
-                  SET @n_err = 551410
-                  SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': UCCNo Status ''' + ISNULL(@c_UCCStatus,'') + ''' Not allow Hold'
-                                + '. (lsp_Validate_InventoryHold_Std)'
-                                + ' |' + ISNULL(RTRIM(@c_UCCNo),'')
-                  GOTO EXIT_SP
-               END
             END
          END
 --ML01-E
