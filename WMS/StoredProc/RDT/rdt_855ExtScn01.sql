@@ -3,26 +3,28 @@ GO
 SET ANSI_NULLS OFF
 GO
 
-/************************************************************************/
-/* Store procedure: rdt_855ExtScn01                                     */
-/*                                                                      */
-/* Modifications log:                                                   */
-/* Customer: Granite                                                    */
-/*                                                                      */
-/* Date       Rev  Author     Purposes                                  */
-/* 2024-06-13 1.0  NLT013     FCR-386. Created                          */
-/* 2024-11-15 1.1.0 LJQ006     FCR-1109. Updated                        */
-/* 2025-01-04 1.1.1 Dennis     FCR-1109. Updated                        */
-/* 2025-02-05 1.2.0 CYU027     FCR-2630 Add Option=5 in step 5          */
-/* 2025-02-05 1.3.0 Dennis     Add Step_4                               */
-/* 2025-04-05 1.4.0 JackC      FCR-4159 Support single unit orders      */
-/* 2025-08-27 1.5.0 JackC      FCR-7348 New single unit order identifer */
-/* 2025-08-27 1.5.1 JackC      FCR-7348 New single unit order identifer */
-/* 2025-09-20 1.5.2 JackC      FCR-7348 If PPK order not set single unit*/
-/*                               order flag                             */
-/* 2025-09-15 1.6.0 NickT     UWP-41178 Stay in PrintPackingList scn    */
-/*                            if input invalid option                   */
-/************************************************************************/
+/***************************************************************************************/
+/* Store procedure: rdt_855ExtScn01                                                    */
+/*                                                                                     */
+/* Modifications log:                                                                  */
+/* Customer: Granite                                                                   */
+/*                                                                                     */
+/* Date       Rev  Author     Purposes                                                 */
+/* 2024-06-13 1.0  NLT013     FCR-386. Created                                         */
+/* 2024-11-15 1.1.0 LJQ006    FCR-1109. Updated                                        */
+/* 2025-01-04 1.1.1 Dennis    FCR-1109. Updated                                        */
+/* 2025-02-05 1.2.0 CYU027    FCR-2630 Add Option=5 in step 5                          */
+/* 2025-02-05 1.3.0 Dennis    Add Step_4                                               */
+/* 2025-04-05 1.4.0 JackC     FCR-4159 Support single unit orders                      */
+/* 2025-08-27 1.5.0 JackC     FCR-7348 New single unit order identifer                 */
+/* 2025-08-27 1.5.1 JackC     FCR-7348 Remov MPOC condition from Single                */
+/*                                unit order judgement                                 */
+/* 2025-09-20 1.5.2 JackC     FCR-7348 If PPK order not set single unit                */
+/*                               order flag                                            */
+/* 2025-09-24 1.6.0 NickT     UWP-41178 Stay in PrintPackingList scn                   */
+/*                            if input invalid option                                  */
+/* 2025-09-25 1.7.0 JackC     FCR-7348 Support UPC at SKU screen when Single unit order*/
+/***************************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_855ExtScn01] (
    @nMobile      INT,
@@ -138,6 +140,7 @@ BEGIN
       @cSingleUnitOrdFlag     NVARCHAR( 1),
       @cToteID                NVARCHAR(20), 
       @cLabelNo               NVARCHAR(20),
+      @cUPC                   NVARCHAR(20),--1.7.0 SKU.RetailSKU
       @nSKUCnt                INT, 
       @b_Success              INT
    --V1.4.0 end
@@ -359,8 +362,8 @@ BEGIN
                --The base step2 always set SKU back to '', so get sku from rdtmobrec again
                IF @cSingleUnitOrdFlag = 'Y' --V1.5.0 only set default value if single unit order
                BEGIN
-                  SELECT @cSKU = V_SKU FROM rdt.rdtmobrec WITH (NOLOCK) WHERE Mobile = @nMobile
-                  SET @cOutField01 = ISNULL(@cSKU,'')
+                  SELECT @cUPC = V_String35 FROM rdt.rdtmobrec WITH (NOLOCK) WHERE Mobile = @nMobile
+                  SET @cOutField01 = ISNULL(@cUPC,'') --V1.7.0
                END
                GOTO Quit
             END
@@ -1358,9 +1361,9 @@ BEGIN
                IF @nDebugFlag = 1
                   SELECT 'Inputkey = 1', @cInfield01 AS InputField01
 
-               SET @cSKU = @cInField01 -- SKU
+               SET @cUPC = @cInField01 -- SKU
 
-               IF ISNULL(@cSKU, '') = ''
+               IF ISNULL(@cUPC, '') = ''
                BEGIN
                   SET @nErrNo = 217355
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') --SKU needed
@@ -1372,7 +1375,7 @@ BEGIN
 
                EXEC [RDT].[rdt_GETSKUCNT]
                   @cStorerKey  = @cStorerKey,
-                  @cSKU        = @cSKU,
+                  @cSKU        = @cUPC,
                   @nSKUCnt     = @nSKUCnt       OUTPUT,
                   @bSuccess    = @b_Success     OUTPUT,
                   @nErr        = @nErrNo        OUTPUT,
@@ -1391,6 +1394,26 @@ BEGIN
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Multi SKU barcode
                   GOTO Scn_6468_Fail
                END
+
+               --V1.7.0 Get real SKU value
+               EXEC [RDT].[rdt_GETSKU]
+                  @cStorerKey  = @cStorerKey
+                  ,@cSKU        = @cUPC          OUTPUT
+                  ,@bSuccess    = @b_Success     OUTPUT
+                  ,@nErr        = @nErrNo        OUTPUT
+                  ,@cErrMsg     = @cErrMsg       OUTPUT
+                  ,@cSKUStatus  = 'ACTIVE'
+               IF @nErrNo <> 0
+               BEGIN
+                  SET @nErrNo = 217361
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Invalid SKU
+                  EXEC rdt.rdtSetFocusField @nMobile, 1
+                  SET @cOutField01 = ''
+                  GOTO Scn_6468_Fail
+               END
+
+               SET @cSKU = @cUPC
+               SET @cUPC = @cInfield01 --V1.7.0 get scanned value back
 
                --Verify SKU in the scanned ToteID (DropID)
                IF NOT EXISTS ( SELECT 1 FROM dbo.PackDetail WITH (NOLOCK)
@@ -1492,6 +1515,7 @@ BEGIN
                SET @cUDF10 = @cPPACartonIDByPickDetailCaseID
                SET @cUDF11 = @cSKU --Save to mobrec V_SKU to populate on SKU QTY screen
                SET @cUDF12 = @cOrderKey --V1.5.0 Save orderkey to mobrec
+               SET @cUDF13 = @cUPC --V1.7.0 save to mobrec
 
                -- Extended info
                IF @cExtendedInfoSP <> ''

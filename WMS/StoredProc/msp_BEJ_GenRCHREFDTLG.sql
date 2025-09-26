@@ -71,12 +71,40 @@ BEGIN
       FROM dbo.RECEIPT R (NOLOCK)
       WHERE StorerKey = @c_StorerKey
       AND [Status] = '0'
-      AND EffectiveDate >= DATEADD(DAY, 3, CONVERT(DATE, GETDATE()))
-      AND EffectiveDate < DATEADD(DAY, 4, CONVERT(DATE, GETDATE()))
+      --AND EffectiveDate >= DATEADD(DAY, 3, CONVERT(DATE, GETDATE()))
+      --AND EffectiveDate < DATEADD(DAY, 4, CONVERT(DATE, GETDATE()))
       AND NOT EXISTS ( SELECT 1 FROM dbo.TransmitLog3 TL3 WITH (NOLOCK)
          WHERE TL3.TableName = 'RCHPEFDTLG'
          AND TL3.Key1 = R.ReceiptKey
          AND TL3.Key3 = R.StorerKey )
+      AND (
+        CASE 
+            -- Monday (1) or Tuesday (2): EffectiveDate must be 3 days ahead
+            WHEN DATEPART(WEEKDAY, R.EffectiveDate) IN (1, 2) 
+                 THEN CASE 
+                          WHEN R.EffectiveDate >= DATEADD(DAY, 3, CAST(GETDATE() AS DATE))
+                           AND R.EffectiveDate <  DATEADD(DAY, 4, CAST(GETDATE() AS DATE)) 
+                          THEN 1
+                          ELSE 0
+                      END
+            -- Wednesday (3) to Saturday (6): EffectiveDate must be 1 day ahead
+            WHEN DATEPART(WEEKDAY, R.EffectiveDate) IN (3, 4, 5, 6) 
+                 THEN CASE 
+                          WHEN R.EffectiveDate >= DATEADD(DAY, 1, CAST(GETDATE() AS DATE))
+                           AND R.EffectiveDate <  DATEADD(DAY, 2, CAST(GETDATE() AS DATE)) 
+                          THEN 1
+                          ELSE 0
+                      END
+            -- Sunday (7): EffectiveDate must be 2 days ahead
+            WHEN DATEPART(WEEKDAY, R.EffectiveDate) = 7
+                 THEN CASE 
+                          WHEN R.EffectiveDate >= DATEADD(DAY, 2, CAST(GETDATE() AS DATE))
+                           AND R.EffectiveDate <  DATEADD(DAY, 3, CAST(GETDATE() AS DATE)) 
+                          THEN 1
+                          ELSE 0
+                      END
+        END = 1
+      )
 
       OPEN @CUR
       FETCH NEXT FROM @CUR INTO @c_ReceiptKey

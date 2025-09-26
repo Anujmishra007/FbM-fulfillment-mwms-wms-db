@@ -101,6 +101,7 @@ GO
 /* 2025-04-22 7.0.0  JACKC    FCR-4159 Support single unit orders              */
 /* 2025-07-23 7.1.0  Jackc    FCR-5413 Mettel customized 855                   */
 /* 2025-08-27 7.2.0  Jackc    FCR-7348 Rework 4159 single unit order           */
+/* 2025-09-25 7.2.1  Jackc    FCR-7348 Show UPC on St3 when Single unit order  */
 /*******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_PostPickAudit] (
@@ -4762,7 +4763,10 @@ BEGIN
 
             --v7.0.0 start
             IF @cSingleUnitOrdFlag = 'Y'
+            BEGIN
                SET @cSKU = @cUDF11 --SKU for single unit order
+               SET @cUPC = @cUDF13 --UPC for single unit order --7.2.1
+            END
             --V7.0.0 end
          END
          ELSE IF (@cExtendedScnSP = 'rdt_855ExtScn01' AND @nScn = 6468 --V7.0.0 Single unit order SKU screen

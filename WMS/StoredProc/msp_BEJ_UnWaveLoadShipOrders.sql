@@ -76,7 +76,8 @@ BEGIN
       --AND UserDefine09 <> ''
       AND EXISTS ( SELECT 1 FROM dbo.WAVEDETAIL WD WITH (NOLOCK) 
          WHERE WD.OrderKey = ORD.OrderKey)
-      AND SpecialHandling = 'B'
+      --AND SpecialHandling = 'B'
+	  AND SOStatus NOT IN ('0', '9')
 
       OPEN @CUR
       FETCH NEXT FROM @CUR INTO @c_OrderKey

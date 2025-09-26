@@ -69,31 +69,14 @@ BEGIN
          
          -- AYD01 - START
          ,  @c_LockName       NVARCHAR(40)
-         ,  @n_Result         INT
+         ,  @n_LockResult     INT
          -- AYD01 - END
 
    SET @b_Success = 1
    SET @n_Err     = 0
 
    BEGIN TRAN        --(Wan01)
-   -- AYD01 - START
-   SET @c_LockName  = 'APPLOCK_lsp_WaveReleaseTask_' + ISNULL(RTRIM(@c_WaveKey), '')
-   
-   EXEC @n_Result = sp_getapplock 
-      @Resource = @c_LockName, 
-      @LockMode = 'Exclusive', 
-      @LockTimeout = 0
-
-   IF @n_Result < 0
-   BEGIN
-      SET @n_Continue = 3
-      SET @n_Err = 555808
-      SET @c_ErrMsg = 'NSQL'+ CONVERT(Char(6),@n_Err)
-                     + ': Unable to obtain application lock, WaveKey[' + ISNULL(RTRIM(@c_WaveKey), '') + '] already under processing (lsp_WaveReleaseTask)'
-      GOTO EXIT_SP
-   END
-   -- AYD01 - END
-                               
+                  
    SET @n_Err = 0 
    -- Start enhanced session management (SWT01)
    DECLARE @b_ExecuteAs        BIT = 0
@@ -115,6 +98,38 @@ BEGIN
    END                                    
    -- End enhanced session management (SWT01)
    
+   -- AYD01 - START
+   SET @c_LockName  = 'lsp_WaveReleaseTask_' + ISNULL(RTRIM(@c_WaveKey), '')
+   
+   BEGIN TRY
+      EXEC @n_LockResult = sp_getapplock 
+         @Resource = @c_LockName, 
+         @LockMode = 'Exclusive', 
+         @LockTimeout = 0
+
+      IF @n_LockResult < 0
+      BEGIN
+         SET @n_Continue = 3    
+         SET @n_Err = 555808
+         SET @c_ErrMsg = 'NSQL'+ CONVERT(Char(6),@n_Err)
+                        + ': WaveKey[' + ISNULL(RTRIM(@c_WaveKey), '') + '] '
+                        + 'already under processing by mWMS/IML/RDT/scheduler user.'
+                        + ' (lsp_WaveReleaseTask)'    
+         GOTO EXIT_SP
+      END
+   END TRY
+   BEGIN CATCH
+      SET @n_LockResult = -1
+      SET @n_Continue = 3
+      SET @n_Err = 555808
+      SET @c_ErrMsg = 'NSQL'+ CONVERT(Char(6),@n_Err)
+                        + ': WaveKey[' + ISNULL(RTRIM(@c_WaveKey), '') + '] '
+                        + 'already under processing by mWMS/IML/RDT/scheduler user.'
+                        + ' (lsp_WaveReleaseTask)'  
+      GOTO EXIT_SP
+   END CATCH
+   -- AYD01 - END
+
    --(mingle01) - START
    BEGIN TRY
 
@@ -501,12 +516,6 @@ BEGIN
    --(mingle01) - END
 EXIT_SP:
 
-   -- AYD01 - START
-   IF @n_Result >= 0
-   BEGIN
-      EXEC sp_releaseapplock @Resource = @c_LockName
-   END
-   -- AYD01 - END
    IF (XACT_STATE()) = -1                                      --(Wan01)  
    BEGIN
       SET @n_Continue = 3

@@ -44,6 +44,8 @@ GO
 /*											         Mbol.CareerKey                */
 /* 2025-09-02        HCK015      V.1      FCR-7640 - Update CarrierKey  */
 /*                                         with Destination ID.         */
+/* 2025-09-24        HCK015      V.2      FCR-8203 - Generate           */
+/*                                         MBOL.ExternMbolKey(HCK015-02)*/
 /************************************************************************/
 CREATE OR ALTER     PROCEDURE [dbo].[isp_Update_CareerKey_Granite]
     @c_MbolKey    NVARCHAR(10),
@@ -73,6 +75,10 @@ BEGIN
           , @b_IsParcelShipment  INT
           , @c_WCSCode           NVARCHAR(30)
           --(HCK015) E
+
+          --(HCK015-02) S
+          , @c_ExternMBOLKey     NVARCHAR(60)      = ''
+          --(HCK015-02) E
 
     -- Begin Transaction
 	SET @n_continue = 1;
@@ -199,6 +205,28 @@ BEGIN
    CLOSE CUR_UPD_DISCHARGEPLACE;
    DEALLOCATE CUR_UPD_DISCHARGEPLACE;
    --(HCK015) - End
+
+   --(HCK015-02) - S
+   SELECT @c_ExternMBOLKey = ISNULL(RTRIM(ExternMBOLKey), '')
+   FROM [dbo].[MBOL] WITH (NOLOCK) 
+   WHERE MbolKey = @c_MbolKey
+
+   IF @c_ExternMBOLKey = ''
+   BEGIN
+      --Generate ExternMBOLKey
+      EXEC [dbo].[isp_GetVicsMbol]  
+           @c_Mbolkey     = @c_MbolKey
+         , @c_Vics_MBOL   = @c_ExternMBOLKey    OUTPUT  
+
+      IF @c_ExternMBOLKey <> ''
+      BEGIN
+         UPDATE [dbo].[MBOL] WITH (ROWLOCK)
+         SET ExternMBOLKey = @c_ExternMBOLKey
+            ,TrafficCop = NULL
+         WHERE MbolKey = @c_MbolKey
+      END
+   END
+   --(HCK015-02) - E
 
    IF (@n_continue = 1)
    BEGIN
