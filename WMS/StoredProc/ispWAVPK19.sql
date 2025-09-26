@@ -186,8 +186,8 @@ BEGIN
          JOIN ORDERS O (NOLOCK) ON PH.Orderkey = O.Orderkey
          WHERE O.Orderkey = @c_Orderkey
 
-         INSERT INTO PACKHEADER (OrderKey, Loadkey, StorerKey, PickSlipNo, STATUS)
-         SELECT O.OrderKey, O.LoadKey, O.Storerkey, @c_PickSlipNo, '9'
+         INSERT INTO PACKHEADER (OrderKey, Loadkey, StorerKey, PickSlipNo, STATUS, PackStatus)
+         SELECT O.OrderKey, O.LoadKey, O.Storerkey, @c_PickSlipNo, '9', '9'
          FROM  PICKHEADER PH (NOLOCK)
          JOIN  ORDERS O (NOLOCK) ON (PH.Orderkey = O.Orderkey)
          WHERE PH.PickHeaderKey = @c_PickSlipNo
@@ -259,6 +259,21 @@ BEGIN
                   SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 38070
                   SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Insert Error On PACKDETAIL Table. (ispWAVPK19)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
                END
+
+               INSERT INTO PACKINFO 
+                  (Pickslipno, CartonNo, Qty)
+   	  	      VALUES 
+                  (@c_PickslipNo, @n_CartonNo, @n_CtnQty)
+
+               SET @n_err = @@ERROR
+
+               IF @n_err <> 0
+               BEGIN
+                  SELECT @n_continue = 3
+                  SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 38071
+                  SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Insert Error On PACKINFO Table. (ispWAVPK19)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
+               END
+
                SET @n_Qty = @n_Qty - @n_CtnQty
             END
 
@@ -341,8 +356,8 @@ BEGIN
          WHERE LP.Loadkey = @c_Loadkey
          AND (PH.Orderkey IS NULL OR PH.Orderkey = '')
 
-         INSERT INTO PACKHEADER (OrderKey, Loadkey, StorerKey, PickSlipNo, STATUS)
-         SELECT TOP 1 O.OrderKey, O.LoadKey, O.Storerkey, @c_PickSlipNo, '9'
+         INSERT INTO PACKHEADER (OrderKey, Loadkey, StorerKey, PickSlipNo, STATUS, PackStatus)
+         SELECT TOP 1 O.OrderKey, O.LoadKey, O.Storerkey, @c_PickSlipNo, '9', '9'
          FROM  PICKHEADER PH (NOLOCK)
          JOIN  LOADPLANDETAIL LPD (NOLOCK) ON PH.ExternOrderkey = LPD.Loadkey
          JOIN  ORDERS O (NOLOCK) ON LPD.Orderkey = O.Orderkey
@@ -416,6 +431,21 @@ BEGIN
                   SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 38110
                   SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Insert Error On PACKDETAIL Table. (ispWAVPK19)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
                END
+
+               INSERT INTO PACKINFO 
+                  (Pickslipno, CartonNo, Qty)
+   	  	      VALUES 
+                  (@c_PickslipNo, @n_CartonNo, @n_CtnQty)
+
+               SET @n_err = @@ERROR
+
+               IF @n_err <> 0
+               BEGIN
+                  SELECT @n_continue = 3
+                  SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 38111
+                  SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Insert Error On PACKINFO Table. (ispWAVPK19)' + ' ( ' + ' SQLSvr MESSAGE=' + RTRIM(@c_errmsg) + ' ) '
+               END
+
                SET @n_Qty = @n_Qty - @n_CtnQty
             END
 
