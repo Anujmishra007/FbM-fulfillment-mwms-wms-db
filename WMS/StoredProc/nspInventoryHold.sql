@@ -1385,18 +1385,18 @@ BEGIN
 
                IF @n_continue = 1 or @n_continue = 2
                BEGIN
-                  INSERT INVENTORYHOLD (InventoryHoldKey,Loc,Status,hold,DateOn,WhoOn
+                  INSERT INVENTORYHOLD (InventoryHoldKey,UCCNo,Status,hold,DateOn,WhoOn
                                        ,Storerkey, SKU
                                        ,lottable01,lottable02,lottable03,lottable04,lottable05
                                        ,lottable06,lottable07,lottable08,lottable09,lottable10
                                        ,lottable11,lottable12,lottable13,lottable14,lottable15
-                                       ,Remark,UCCNo)
-                  VALUES (@c_inventoryholdkey,@c_loc,@c_status,@c_hold,@d_currentdatetime,@c_currentuser
+                                       ,Remark)
+                  VALUES (@c_inventoryholdkey,@c_UCCNo,@c_status,@c_hold,@d_currentdatetime,@c_currentuser
                         , @cStorerKey, @c_SKU
                         , @c_lottable01,@c_lottable02,@c_lottable03,@d_lottable04,@d_lottable05
                         , @c_lottable06,@c_lottable07,@c_lottable08,@c_lottable09,@c_lottable10
                         , @c_lottable11,@c_lottable12,@d_lottable13,@d_lottable14,@d_lottable15
-                        , @c_Remark,@c_UCCNo)
+                        , @c_Remark)
 
                   SELECT @n_err = @@ERROR
                   IF @n_err > 0
