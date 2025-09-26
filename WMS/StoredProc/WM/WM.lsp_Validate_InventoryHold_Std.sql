@@ -261,7 +261,7 @@ BEGIN
          SET @n_Continue = 3
          SET @n_err = 551401
 --ML01         SET @c_errmsg = 'Either Lot / Movable Unit / Loc / Lottables must have value'
-         SET @c_errmsg = 'Either Lot / Movable Unit / Loc / UCCNo / Lottables must have value'   --ML01
+         SET @c_errmsg = 'Either Lot / Movable Unit / Loc / Storer+UCCNo / Lottables must have value'   --ML01
                        + '. (lsp_Validate_InventoryHold_Std)'
          GOTO EXIT_SP
       END 
@@ -275,7 +275,7 @@ BEGIN
          SET @n_Continue = 3
          SET @n_err = 551402
 --ML01         SET @c_errmsg = 'Either (Lot / Movable Unit / Loc) have value OR (Lottables) have value. Cannot be both'
-         SET @c_errmsg = 'Either (Lot / Movable Unit / Loc / UCCNo) have value OR (Lottables) have value. Cannot be both'   --ML01
+         SET @c_errmsg = 'Either (Lot / Movable Unit / Loc / Storer+UCCNo) have value OR (Lottables) have value. Cannot be both'   --ML01
                        + '. (lsp_Validate_InventoryHold_Std)'
          GOTO EXIT_SP
       END 
