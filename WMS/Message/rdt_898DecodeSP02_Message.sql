@@ -12,6 +12,6 @@ EXECUTE rdt.rdtAddMsg 246804, 10, '246804^UCCNotFound',     'us_english',898, 0,
 EXECUTE rdt.rdtAddMsg 246805, 10, '246805^SKUNotFound',     'us_english',898, 0, '246805 SKU Not Found'
 EXECUTE rdt.rdtAddMsg 246806, 10, '246806^MuiltSKU',        'us_english',898, 0, '246806 Muliple SKUs Found'
 EXECUTE rdt.rdtAddMsg 246807, 10, '246807^UCCValiFail',     'us_english',898, 0, '246807 UCC Validation Failed'
-
+EXECUTE rdt.rdtAddMsg 246808, 10, '246808^NotInASN',        'us_english',898, 0, '246808 UCC Not In ASN'
 
 SELECT * FROM rdt.rdtmsg (NOLOCK) WHERE message_id BETWEEN 246801 AND 246850

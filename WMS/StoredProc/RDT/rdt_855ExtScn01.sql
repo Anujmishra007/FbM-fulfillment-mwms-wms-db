@@ -140,7 +140,7 @@ BEGIN
       @cSingleUnitOrdFlag     NVARCHAR( 1),
       @cToteID                NVARCHAR(20), 
       @cLabelNo               NVARCHAR(20),
-      @cUPC                   NVARCHAR(20),--1.7.0 SKU.RetailSKU
+      @cUPC                   NVARCHAR(30),--1.7.0 SKU.RetailSKU
       @nSKUCnt                INT, 
       @b_Success              INT
    --V1.4.0 end

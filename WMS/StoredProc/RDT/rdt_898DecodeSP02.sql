@@ -11,7 +11,7 @@ GO
 /* Customer: Decode for PAGE                                                  */
 /*                                                                            */
 /* Date        Author   Ver.  Purposes                                        */
-/* 0225-09-19  Jackc    1.0   FCR-7818 Created                                */
+/* 2025-09-19  Jackc    1.0   FCR-7818 Created                                */
 /******************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdt_898DecodeSP02] (
    @nMobile             INT,
@@ -186,7 +186,20 @@ BEGIN
                GOTO Quit
             END
 
+            IF NOT EXISTS (
+               SELECT 1 FROM dbo.ReceiptDetail WITH (NOLOCK)
+               WHERE StorerKey = @cStorerKey
+                  AND ReceiptKey = @cReceiptKey
+                  AND userdefine01 = @cLocaleUCC
+            )
+            BEGIN
+               SET @nErrNo = 246808
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Not found in ASN
+               GOTO Quit
+            END
+
             SET @cUCC = @cLocaleUCC
+            SET @cLottable01 = @cAttribute1
          END
       END
    END
