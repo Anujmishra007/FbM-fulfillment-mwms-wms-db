@@ -6,14 +6,14 @@ GO
 /**************************************************************************/
 /* Trigger: ispFinalizeTransfer                                           */
 /* Creation Date: 21-Jul-2009                                             */
-/* Copyright: IDS                                                         */
+/* Copyright: Maersk Logistics                                            */
 /* Written by:                                                            */
 /*                                                                        */
 /* Purpose: Finalize Transfer                                             */
 /*                                                                        */
 /* Called By: n_cst_transfer.Event ue_finalizeall                         */
 /*                                                                        */
-/* PVCS Version: 3.2                                                      */
+/* PVCS Version: 4.0                                                      */
 /*                                                                        */
 /* Version: 6.0                                                           */
 /*                                                                        */
@@ -62,10 +62,17 @@ GO
 /* 10-Feb-2023  NJOW04    3.3 DEVOPS Combine Script                       */
 /* 07-Aug-2023  NJOW05    3.4 INC2128003 fix transfer error by adding     */
 /*                            lot,loc,id and channel validation           */
+/* 28-Aug-2024  PakYuen   3.5 JSM-130518-Add c_ToFacility into filtering  */
 /* 08-Oct-2024  PYU015    3.5 fix transferdetail lot value                */
+/*                            (PY01)                                      */ 
 /* 12-AUG-2024  Wan11     3.6 LFWM-4446 - RG[GIT] Serial Number Solution  */
 /*                            - Transfer by Serial Number                 */
-/*04-JUL-2025   SSA01     3.7 UWP-3982- Added PalletType                  */
+/* 02-Jan-2025  NJOW06    3.7 LFWM-4774 skip check empty lot, loc, id if  */
+/*                            AllowTransferZeroQty=1 and fromqty is 0     */
+/* 25-Apr-2025  NJOW07    3.8 FCR-3051 if turn on TRFAllocHoldChannel skip*/
+/*                            checking the channel hold qty               */
+/* 04-JUL-2025  SSA01     3.9 FCR-3982- Added PalletType                  */
+/* 29-Sep-2025  MICHAEL   4.0 FCR-7829-RemainHoldOnTransfer for UCC (ML01)*/
 /**************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[ispFinalizeTransfer]
@@ -216,7 +223,9 @@ BEGIN
          , @c_ToLoc                     NVARCHAR(10)      --(Wan07)
          , @n_ToQty                     INT               --(Wan07)
          , @c_ChkNoMixLottableForAllSku NVARCHAR(30)=''  --NJOW04
-         , @c_TransferLineNo            NVARCHAR(5)
+         , @c_TRFAllocHoldChannel       NVARCHAR(30)=''  --NJOW07
+         , @n_TrfChannelHoldQty         INT=0            --NJOW07
+         , @c_TransferLineNo            NVARCHAR(5)      --SSA01
 
   /*CS01 Start*/
  DECLARE    @c_Lottable01                  NVARCHAR(18),
@@ -486,7 +495,7 @@ BEGIN
       END
    END
    --NJOW04 E
-   
+      
    --(CS01)  -Start
      IF EXISTS (SELECT 1 FROM dbo.StorerConfig WITH (NOLOCK)
               WHERE StorerKey = @cFromStorerKey
@@ -505,19 +514,22 @@ BEGIN
    BEGIN
       CREATE TABLE  #tTransferDet
        ( Rowref      int not NULL Identity(1,1) Primary Key,
-         LOT NVARCHAR(10), LOC NVARCHAR(10), ID NVARCHAR(18), Qty int, PalletType NVARCHAR(10)
-         , ToPalletType NVARCHAR(10), TransferLineNumber NVARCHAR(5))
+         LOT NVARCHAR(10), LOC NVARCHAR(10), ID NVARCHAR(18), Qty int
+       , PalletType NVARCHAR(10), ToPalletType NVARCHAR(10), TransferLineNumber NVARCHAR(5))   --SSA01 
 
       --Declare @tTransferDet Table (LOT NVARCHAR(10), LOC NVARCHAR(10), ID NVARCHAR(18), Qty int)
 
-      INSERT INTO #tTransferDet (LOT, LOC, ID, Qty, PalletType, ToPalletType, TransferLineNumber)
-      SELECT FromLOT, FromLOC, FromID, SUM(FromQTY), FromPalletType, ToPalletType, TransferLineNumber
+      INSERT INTO #tTransferDet (LOT, LOC, ID, Qty
+           , PalletType, ToPalletType, TransferLineNumber)     --SSA01
+      SELECT FromLOT, FromLOC, FromID, SUM(FromQTY)
+           , FromPalletType, ToPalletType, TransferLineNumber  --SSA01
       FROM   TransferDetail WITH (NOLOCK)
       Where  TransferKey = @c_Transferkey
       AND    TransferLineNumber = CASE WHEN @c_TransferLineNumber = '' THEN TransferLineNumber  --(Wan08)
                                        ELSE @c_TransferLineNumber END                           --(Wan08)
       AND    Status < '9'                    --(Wan04)
-      GROUP BY FromLOT, FromLOC, FromID, FromPalletType, ToPalletType, TransferLineNumber
+      GROUP BY FromLOT, FromLOC, FromID
+           , FromPalletType, ToPalletType, TransferLineNumber  --SSA01
 
       IF EXISTS(SELECT 1 FROM LOTxLOCxID LLI WITH (NOLOCK)
                 JOIN #tTransferDet TD ON TD.LOT = LLI.LOT AND
@@ -539,24 +551,27 @@ BEGIN
                 FROM #tTransferDet TD 
                 LEFT JOIN LOTxLOCxID LLI WITH (NOLOCK) ON TD.LOT = LLI.LOT AND
                           TD.LOC = LLI.LOC AND TD.ID = LLI.ID
-                WHERE LLI.Lot IS NULL)
+                WHERE LLI.Lot IS NULL
+                AND NOT (@c_AllowTRFZeroQty = '1' AND TD.Qty = 0)  --NJOW06                
+                )
       BEGIN
          SET @nContinue = 3
          SET @n_err = 80010
          SET @c_ErrMsg='NSQL'+CONVERT(char(5),@n_err)+': From Lot + Location + ID Not found at the inventory (ispFinalizeTransfer)'
          GOTO Quit_Proc
-      END
+      END                        
+
       --(SSA01) start
-     SELECT TOP 1 @c_TransferLineNo = tfd.TransferLineNumber
-            FROM #tTransferDet tfd
-            WHERE tfd.PalletType IS NOT NULL
-            AND tfd.PalletType != ''
-            AND NOT EXISTS (
-              SELECT 1
-              FROM ID (NOLOCK) id
-              WHERE id.PalletType = tfd.PalletType
-              AND id.id = tfd.ID
-            )
+      SELECT TOP 1 @c_TransferLineNo = tfd.TransferLineNumber
+      FROM #tTransferDet tfd
+      WHERE tfd.PalletType IS NOT NULL
+      AND tfd.PalletType != ''
+      AND NOT EXISTS (
+         SELECT 1
+         FROM ID (NOLOCK) id
+         WHERE id.PalletType = tfd.PalletType
+         AND id.id = tfd.ID
+      )
       IF @c_TransferLineNo IS NOT NULL AND @c_TransferLineNo <> ''
       BEGIN
          SET @nContinue = 3
@@ -566,24 +581,24 @@ BEGIN
       END
 
       SELECT TOP 1 @c_TransferLineNo = tfd.TransferLineNumber
-            FROM #tTransferDet tfd
-            WHERE tfd.ToPalletType IS NOT NULL
-            AND tfd.ToPalletType != ''
-            AND NOT EXISTS (
-              SELECT 1
-              FROM pallettypemaster(NOLOCK) ptm
-              WHERE ptm.PalletType = tfd.ToPalletType
-              AND ptm.storerkey = @c_ToStorerKey
-              AND ptm.facility = @c_ToFacility
-              )
-          IF @c_TransferLineNo IS NOT NULL AND @c_TransferLineNo <> ''
-          BEGIN
-             SET @nContinue = 3
-             SET @n_err = 80024
-             SET @c_ErrMsg='NSQL'+CONVERT(char(5),@n_err)+':LineNo:'+@c_TransferLineNo +': To Pallet Type Not found In Pallet Type Master Data (ispFinalizeTransfer)'
-             GOTO Quit_Proc
-          END
-          --(SSA01) end
+      FROM #tTransferDet tfd
+      WHERE tfd.ToPalletType IS NOT NULL
+      AND tfd.ToPalletType != ''
+      AND NOT EXISTS (
+         SELECT 1
+         FROM pallettypemaster(NOLOCK) ptm
+         WHERE ptm.PalletType = tfd.ToPalletType
+         AND ptm.storerkey = @c_ToStorerKey
+         AND ptm.facility = @c_ToFacility
+      )
+      IF @c_TransferLineNo IS NOT NULL AND @c_TransferLineNo <> ''
+      BEGIN
+         SET @nContinue = 3
+         SET @n_err = 80024
+         SET @c_ErrMsg='NSQL'+CONVERT(char(5),@n_err)+':LineNo:'+@c_TransferLineNo +': To Pallet Type Not found In Pallet Type Master Data (ispFinalizeTransfer)'
+         GOTO Quit_Proc
+      END
+      --(SSA01) end
    END
    
    --NJOW05 S
@@ -612,6 +627,29 @@ BEGIN
       
       IF @c_ChannelInventoryMgmt = '1'
       BEGIN
+         --NJOW07 S
+         SET @b_success = 0
+         Execute nspGetRight
+                 @c_facility
+               , @cFromStorerKey             -- Storer
+               , ''                          -- Sku
+               , 'TRFAllocHoldChannel'  -- ConfigKey
+               , @b_success                   OUTPUT
+               , @c_TRFAllocHoldChannel       OUTPUT
+               , @n_err                       OUTPUT
+               , @c_errmsg                    OUTPUT
+         
+         IF @b_success <> 1
+         BEGIN
+            SET @nContinue = 3
+            SET @n_err = 62905
+            SET @c_errmsg =  'NSQL' + CONVERT(CHAR(5), ISNULL(RTrim(@n_err),0))
+                          + ' Retrieve of Right (TRFAllocHoldChannel) Failed (ispFinalizeTransfer) ( '
+                          + ' SQLSvr MESSAGE=' + ISNULL(dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)),'') + ' ) '
+            GOTO Quit_Proc
+         END
+         --NJOW07 E
+      	
          DECLARE CUR_TRFCHANNEL CURSOR LOCAL FAST_FORWARD READ_ONLY FOR       
             SELECT TransferLineNumber, FromLOT, FromSku, FromChannel, FromQTY, ToChannel
             FROM TRANSFERDETAIL (NOLOCK)
@@ -621,6 +659,7 @@ BEGIN
             AND Status < '9'             
             AND FromChannel <> ''
             AND FromChannel IS NOT NULL
+            AND NOT (@c_AllowTRFZeroQty = '1' AND FromQty = 0)  --NJOW06                         
             ORDER BY TransferLineNumber
 
          OPEN CUR_TRFCHANNEL
@@ -653,7 +692,21 @@ BEGIN
             END
             ELSE
             BEGIN
-               SELECT @n_ChannelAvailableQty = (Qty - QtyAllocated - QtyOnHold)
+            	 --NJOW07
+            	 SET @n_TrfChannelHoldQty = 0
+            	 IF @c_TRFAllocHoldChannel = '1'
+            	 BEGIN    
+                  SELECT @n_TrfChannelHoldQty = SUM(cihd.Qty)
+                  FROM ChannelInvHold cih (NOLOCK)  
+                  JOIN ChannelInvHoldDetail cihd (NOLOCK) ON cihd.InvHoldkey = cih.InvHoldkey 
+                  WHERE cih.Sourcekey = @c_Transferkey 
+                  AND cih.HoldType = 'TRF' 
+                  AND cihd.Hold = '1'  
+                  AND cihd.SourceLineNo = @cTransferLineNumber 
+                  AND cihd.Channel_ID = @n_Channel_ID                                                     
+            	 END            	 
+            	 
+               SELECT @n_ChannelAvailableQty = (Qty - QtyAllocated - QtyOnHold) + @n_TrfChannelHoldQty --NJOW07
                FROM CHANNELINV (NOLOCK)
                WHERE Channel_ID = @n_Channel_ID
                
@@ -1280,7 +1333,7 @@ BEGIN
                 ToLottable06, ToLottable07,  ToLottable08,  ToLottable09,  ToLottable10,
                 ToLottable11, ToLottable12,  ToLottable13,  ToLottable14,  ToLottable15
                 /* KC01 - end */
-               ,FromSerialNo, ToSerialNo                                            --(Wan11)
+               ,ISNULL(FromSerialNo,''), ISNULL(ToSerialNo,'')                                     --(Wan11)
          FROM   TRANSFERDETAIL WITH (NOLOCK)
          WHERE  TransferKey = @c_TransferKey
          AND    TransferLineNumber = CASE WHEN @c_TransferLineNumber = '' THEN TransferLineNumber  --(Wan08)
@@ -2344,7 +2397,8 @@ BEGIN
                          Lot = @cToLOT,
                          Loc = @cToLOC,
                          ID  = @cToID,
-                         Status = CASE WHEN @c_LoseUCC = '1' THEN '6' -- (ChewKP02)
+                         Status = CASE WHEN @c_RemainHoldOnTransfer = '1' AND Status = 'H' THEN Status   --ML01
+                                       WHEN @c_LoseUCC = '1' THEN '6' -- (ChewKP02)
                                   ELSE Status
                                   END
                      WHERE UCCNo = @cFromUCC
@@ -2764,6 +2818,8 @@ BEGIN
                      END  -- @n_holdby <> 0
                   END   --@c_fromlotStatus = 'OK'
                END -- @cFromLot <> @cTolot
+
+
             END -- @c_RemainHoldOnTransfer
             /* KC01 - end */
          END
