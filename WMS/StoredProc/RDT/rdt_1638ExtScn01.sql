@@ -74,7 +74,7 @@ BEGIN
       @cSkipPrintPackList     NVARCHAR( 1),
       @cOrderTrackNo          NVARCHAR( 40),
       @cExternOrderKey        NVARCHAR( 50),
-      @cPickSlipNo            NVARCHAR( 18),
+      @cPickSlipNo            NVARCHAR( 10),
       @cOrderKey              NVARCHAR( 10),
       @cCapturePackInfoSP     NVARCHAR( 20),
       @cCapturePackInfo       NVARCHAR( 10),
