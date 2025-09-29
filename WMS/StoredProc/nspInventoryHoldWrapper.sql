@@ -44,6 +44,7 @@ GO
 /*                              management by config.                   */
 /* 29-AUG-2025  MICHAEL   1.9   UWP-39358-Handle multi InvHold rec(ML01)*/
 /*                         with new StorerCfg AllowMultiInventoryHoldRec*/
+/* 24-SEP-2025  MICHAEL   1.10  FCR-7829 Inventory UCC-level HOLD (ML02)*/
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[nspInventoryHoldWrapper]
      @c_lot          NVARCHAR(10)
@@ -72,6 +73,7 @@ CREATE OR ALTER PROC [dbo].[nspInventoryHoldWrapper]
    , @n_Err          INT            OUTPUT
    , @c_Errmsg       NVARCHAR(250)  OUTPUT
    , @c_Remark       NVARCHAR(260)  = '' -- SOS89194
+   , @c_UCCNo        NVARCHAR(20)   = '' --ML02
 AS
 BEGIN
    SET NOCOUNT ON
@@ -1042,6 +1044,8 @@ BEGIN
           WHERE lot = ISNULL(@c_lot ,'')
             AND loc = ISNULL(@c_loc ,'')
             AND id  = ISNULL(@c_id ,'')
+            AND Storerkey = ISNULL(@c_Storerkey,'')   --ML02
+            AND UCCNo = ISNULL(@c_UCCNo,'')           --ML02
 
          IF @c_AllowMultiInvHoldRec = '1' AND @n_InvHld_Cnt>1
          BEGIN
@@ -1063,6 +1067,15 @@ BEGIN
                  FROM ID (NOLOCK)
                 WHERE ID = @c_id
             END
+            --ML02-S
+            ELSE IF ISNULL(@c_Storerkey,'')<>'' AND ISNULL(@c_UCCNo,'')<>''
+            BEGIN
+               SELECT @c_CurrHold = CASE WHEN Status = 'H' THEN '1' ELSE '0' END
+                 FROM UCC (NOLOCK)
+                WHERE Storerkey = @c_Storerkey
+                  AND UCCNo = @c_UCCNo
+            END
+            --ML02-E
             IF @c_CurrHold <> @c_Hold
             BEGIN
                UPDATE INVENTORYHOLD WITH (ROWLOCK)
@@ -1070,6 +1083,8 @@ BEGIN
                WHERE  lot  = ISNULL(@c_lot ,'')
                AND    loc  = ISNULL(@c_loc ,'')
                AND    id   = ISNULL(@c_id ,'')
+               AND    Storerkey = ISNULL(@c_Storerkey,'')   --ML02
+               AND    UCCNo = ISNULL(@c_UCCNo,'')           --ML02
             END
          END
          ELSE
@@ -1081,6 +1096,8 @@ BEGIN
             WHERE  lot  = ISNULL(@c_lot ,'')
             AND    loc  = ISNULL(@c_loc ,'')
             AND    id   = ISNULL(@c_id ,'')
+            AND    Storerkey = ISNULL(@c_Storerkey,'')   --ML02
+            AND    UCCNo = ISNULL(@c_UCCNo,'')           --ML02
             AND    hold = '1'
 
             SELECT @n_ReleaseCnt = COUNT(*)
@@ -1088,6 +1105,8 @@ BEGIN
             WHERE  lot  = ISNULL(@c_lot ,'')
             AND    loc  = ISNULL(@c_loc ,'')
             AND    id   = ISNULL(@c_id ,'')
+            AND    Storerkey = ISNULL(@c_Storerkey,'')   --ML02
+            AND    UCCNo = ISNULL(@c_UCCNo,'')           --ML02
             AND    hold = '0'
 
             IF @n_HoldCnt=1 AND @c_Hold='1'
@@ -1097,6 +1116,8 @@ BEGIN
                WHERE  lot  = ISNULL(@c_lot ,'')
                AND    loc  = ISNULL(@c_loc ,'')
                AND    id   = ISNULL(@c_id ,'')
+               AND    Storerkey = ISNULL(@c_Storerkey,'')   --ML02
+               AND    UCCNo = ISNULL(@c_UCCNo,'')           --ML02
                AND    hold = '1'
 
                SELECT @c_CurrHold = '1'
@@ -1111,6 +1132,8 @@ BEGIN
                WHERE  lot  = ISNULL(@c_lot ,'')
                AND    loc  = ISNULL(@c_loc ,'')
                AND    id   = ISNULL(@c_id ,'')
+               AND    Storerkey = ISNULL(@c_Storerkey,'')   --ML02
+               AND    UCCNo = ISNULL(@c_UCCNo,'')           --ML02
                AND    hold = '0'
 
                SELECT @c_CurrHold = '0'
@@ -1124,6 +1147,8 @@ BEGIN
                WHERE  lot  = ISNULL(@c_lot ,'')
                AND    loc  = ISNULL(@c_loc ,'')
                AND    id   = ISNULL(@c_id ,'')
+               AND    Storerkey = ISNULL(@c_Storerkey,'')   --ML02
+               AND    UCCNo = ISNULL(@c_UCCNo,'')           --ML02
                AND    hold = '1'
 
                SELECT @c_CurrHold = '1'
@@ -1141,6 +1166,8 @@ BEGIN
          WHERE  lot = ISNULL(@c_lot ,'')
          AND    loc = ISNULL(@c_loc ,'')
          AND    id  = ISNULL(@c_id ,'')
+         AND    Storerkey = ISNULL(@c_Storerkey,'')   --ML02
+         AND    UCCNo = ISNULL(@c_UCCNo,'')           --ML02
          --NJOW02-end
 
          IF (@c_CurrHold <> @c_Hold) --NJOW01
@@ -1155,6 +1182,8 @@ BEGIN
                    , @n_Err OUTPUT
                    , @c_Errmsg OUTPUT
                    , @c_Remark -- SOS89194
+                   , @c_Storerkey   --ML02
+                   , @c_UCCNo       --ML02
 
             IF @b_Success=0
             BEGIN

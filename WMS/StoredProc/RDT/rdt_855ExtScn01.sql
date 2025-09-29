@@ -679,17 +679,14 @@ BEGIN
                         --                AND C.Storerkey = O.StorerKey
                         --             WHERE  PD.StorerKey = @cStorerkey
                         --                AND PD.DropID = @cDropID)
-                        --V1.5.2 Any SKU which PrePackIndicator = Y, then it is PPK order not single unit order.
+                        --V1.5.2 Any SKU which UOM=2, then it is PPK order not single unit order.
                         IF NOT EXISTS (
                            SELECT 1
                            FROM dbo.PickDetail PKD WITH (NOLOCK)
-                           JOIN dbo.SKU WITH (NOLOCK)
-                           ON PKD.Storerkey = SKU.StorerKey
-                              AND PKD.SKU = SKU.Sku
                            WHERE PKD.StorerKey = @cStorerKey
                                  AND DropID = @cDropID
                                  AND ShipFlag <> 'Y'
-                                 AND SKU.PrePackIndicator = 'Y'
+                                 AND UOM = '2'
                         ) -- V1.5.2 end
                         BEGIN 
                            SET @cSingleUnitOrdConfig = rdt.rdtGetConfig( @nFunc, 'SingleUnitOrderConfig', @cStorerkey)
