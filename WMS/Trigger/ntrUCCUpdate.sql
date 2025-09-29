@@ -117,6 +117,7 @@ BEGIN
 
    --ML01-S
    IF ( @n_continue=1 OR @n_continue=2) AND UPDATE(STATUS)
+      AND EXISTS(SELECT TOP 1 1 FROM sys.columns where object_id=OBJECT_ID(N'[dbo].[INVENTORYHOLD]') AND name='UCCNo')
    BEGIN
       IF EXISTS (SELECT TOP 1 1
                    FROM INVENTORYHOLD (NOLOCK), INSERTED, DELETED
