@@ -266,7 +266,7 @@ BEGIN
       END 
 
 --ML01      IF (@c_lot <> '' OR @c_id <> '' OR @c_loc <> '') AND  
-      IF (@c_lot <> '' OR @c_id <> '' OR @c_loc <> '' OR @c_UCCNo <> '') AND   --ML01
+      IF (@c_lot <> '' OR @c_id <> '' OR @c_loc <> '' OR (@c_Storerkey<>'' AND @c_UCCNo<>'')) AND   --ML01
          (@c_lottable01 <> '' OR @c_lottable02 <> '' OR @c_lottable03 <> '' OR @c_lottable04 <> '' OR @c_lottable05 <> '' OR 
           @c_lottable06 <> '' OR @c_lottable07 <> '' OR @c_lottable08 <> '' OR @c_lottable09 <> '' OR @c_lottable10 <> '' OR 
           @c_lottable11 <> '' OR @c_lottable12 <> '' OR @c_lottable13 <> '' OR @c_lottable14 <> '' OR @c_lottable15 <> '' ) 
