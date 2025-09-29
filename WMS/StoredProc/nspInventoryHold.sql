@@ -1378,7 +1378,7 @@ BEGIN
                   SET @n_Continue = 3
                   SET @n_err = 62453
                   SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': UCCNo Status ''' + ISNULL(@c_UCCStatus,'') + ''' Not allow Hold'
-                                + '. (lsp_Validate_InventoryHold_Std)'
+                                + '. (nspInventoryHold)'
                                 + ' |' + ISNULL(RTRIM(@c_UCCNo),'')
                END
             END
