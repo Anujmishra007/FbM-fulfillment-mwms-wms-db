@@ -52,6 +52,13 @@ BEGIN
    DECLARE @nTaskQTY          INT  
    DECLARE @nQTY              INT
 
+   DECLARE @tList TABLE
+   (
+      ID                      INT IDENTITY(1,1),
+      SKU                     NVARCHAR(20),
+      QTY                     INT
+   )
+
    IF @nDebugFlag = 1
       SELECT 'Executing rdt_1812SwapID05', @cTaskDetailKey AS TaskKey, @cNewID AS NewID
   
@@ -108,36 +115,16 @@ BEGIN
       GOTO Quit 
    END
 
-   --Cannot swap id with Mix SKU
-   IF (SELECT COUNT(DISTINCT SKU)
-   FROM dbo.PickDetail PD WITH (NOLOCK)
-   WHERE Storerkey = @cStorerkey
-      AND TaskDetailkey = @cTaskDetailKey) > 1
-   BEGIN
-      SET @nErrNo = 239907
-      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --ID cannot mix SKU
-      GOTO Quit
-   END
-
    --Get SKU info as FP task doesn't have these data. (Mix SKU not support)
-   SELECT
-      @cTaskSKU = SKU,
-      @nTaskQty = SUM(Qty)
+   INSERT INTO @tList (SKU, QTY)
+   SELECT SKU, SUM(Qty)
    FROM dbo.LOTxLOCxID WITH (NOLOCK)
    WHERE StorerKey = @cStorerKey
       AND ID = @cTaskFromID
    GROUP BY SKU
 
-   IF ISNULL(@cTaskSKU,'') = '' OR ISNULL(@nTaskQty, 0) = 0
-   BEGIN
-      SET @nErrNo = 239911
-      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --ID cannot mix SKU
-      GOTO Quit
-   END
-
-
    IF @nDebugFlag = 1
-      SELECT 'Validating the new id'
+      SELECT * FROM @tList
 
    --new id cannot have any open tasks
    IF EXISTS (
@@ -167,90 +154,58 @@ BEGIN
 
    -- Get new ID info
    -- Ensure the ID only has one SKU
-   IF NOT EXISTS (
-      SELECT
-         1
-      FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
-      JOIN dbo.LOC WITH (NOLOCK)
-         ON LLI.Loc = LOC.LOC
-      WHERE StorerKey = @cStorerKey
-         AND ID = @cNewID
-         AND QTY > 0
-      GROUP BY ID
-      HAVING COUNT(DISTINCT SKU) = 1
-   )
+   DECLARE @nLoopIndex INT = -1
+   WHILE 1=1
    BEGIN
-      SET @nErrNo = 239907
-      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid ID
-      GOTO Quit
+      SELECT TOP 1
+         @cTaskSKU = SKU,
+         @nTaskQTY = QTY,
+         @nLoopIndex = id
+      FROM @tList
+      WHERE id > @nLoopIndex
+      ORDER BY id
+      SET @nRowCount = @@ROWCOUNT
+
+      IF @nRowCount = 0
+         BREAK
+
+      IF NOT EXISTS (
+         SELECT 1 FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
+         JOIN dbo.LOC WITH (NOLOCK)
+            ON LLI.Loc = LOC.LOC
+         WHERE StorerKey = @cStorerKey
+            AND ID = @cNewID
+            AND SKU = @cTaskSKU
+            AND (QtyAllocated + QtyPicked + QtyReplen) = 0
+         GROUP BY ID,SKU
+         HAVING SUM(QTY) = @nTaskQTY
+      )   
+      BEGIN
+         SET @nErrNo = 239907
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid ID
+         GOTO Quit
+      END
    END
-   ELSE
-   BEGIN
-      SELECT
-         @cNewSKU = SKU,
-         @nNewQTY = SUM(QTY),
-         @nNewAvailableQty = SUM(Qty - QtyAllocated - QtyPicked - QtyReplen),
-         @cNewLOC = LLI.LOC,
-         @cNewLocCate = LOC.LocationCategory
-         FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
-      JOIN dbo.LOC WITH (NOLOCK)
-         ON LLI.Loc = LOC.LOC
-      WHERE StorerKey = @cStorerKey
-         AND ID = @cNewID
-         AND QTY > 0
-      GROUP BY SKU, LLI.LOC, LOC.LocationCategory
-   END
 
-
-   
-
-
-
-   --Check new id from loc support swap
-   /*
-   IF NOT EXISTS (
-      SELECT 1 
-      FROM dbo.CodeLKUP WITH (NOLOCK)
-      WHERE LISTNAME = 'JCBBKFRMLC'
-         AND StorerKey = @cStorerKey
-         AND Long = @cNewLoc
-   )
-   BEGIN
-      SET @nErrNo = 239911
-      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Cannot swap id from thiS loc
-      GOTO Quit 
-   END*/
+   SELECT
+      @cNewSKU = SKU,
+      @nNewQTY = SUM(QTY),
+      @nNewAvailableQty = SUM(Qty - QtyAllocated - QtyPicked - QtyReplen),
+      @cNewLOC = LLI.LOC,
+      @cNewLocCate = LOC.LocationCategory
+   FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
+   JOIN dbo.LOC WITH (NOLOCK)
+      ON LLI.Loc = LOC.LOC
+   WHERE StorerKey = @cStorerKey
+      AND ID = @cNewID
+      AND QTY > 0
+   GROUP BY SKU, LLI.LOC, LOC.LocationCategory
 
    IF @cNewLocCate <> @cTaskFromLocCate
    BEGIN
       SET @nErrNo = 239912
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Cannot swap id from this loc
       GOTO Quit 
-   END
-
-   --New ID cannot be occupied by others
-   IF @nNewQty <> @nNewAvailableQty
-   BEGIN
-      SET @nErrNo = 239908
-      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --ID is occupied
-      GOTO Quit
-   END
-
-
-   -- Check SKU match
-   IF @cNewSKU <> @cTaskSKU
-   BEGIN
-      SET @nErrNo = 239909
-      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SKU not match
-      GOTO Quit
-   END
-
-   --Check Qty match
-   IF @nNewQty <> @nTaskQTY
-   BEGIN
-      SET @nErrNo = 239910
-      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Qty not match
-      GOTO Quit
    END
 
 
@@ -419,7 +374,7 @@ BEGIN
                   ) t
             ON LLI.Lot = t.Lot
          WHERE LLI.StorerKey = @cStorerKey
-            AND LLI.SKU = @cTaskSKU
+            AND LLI.SKU = @cSKUToAlloc
             AND LLI.Loc = @cNewLoc
             AND LLI.ID = @cNewID
          GROUP BY LLI.Lot
@@ -482,7 +437,7 @@ BEGIN
                            Lot, StorerKey, UOM, UOMQty, DropID, Loc, ID, PackKey, CartonGroup, PickMethod, WaveKey, 
                            PickSlipNo)
                SELECT @cNewPickDetailKey, 
-                     '', '', @cOrdToAlloc, @cOrdLineToAlloc, @cTaskSKU, @nRemainingQty, 
+                     '', '', @cOrdToAlloc, @cOrdLineToAlloc, @cSKUToAlloc, @nRemainingQty, 
                      @cAllocatedLot, @cStorerKey, 6, @nRemainingQty, '', @cNewLOC, @cNewID, @cPackKeyToAlloc, '', '', @cWaveKeyToAlloc, 
                      @cPSNOToAlloc
 
@@ -515,7 +470,7 @@ BEGIN
                            Lot, StorerKey, UOM, UOMQty, DropID, Loc, ID, PackKey, CartonGroup, PickMethod, WaveKey, 
                            PickSlipNo)
                SELECT @cNewPickDetailKey, 
-                     '', '', @cOrdToAlloc, @cOrdLineToAlloc, @cTaskSKU, @nBal_Qty, 
+                     '', '', @cOrdToAlloc, @cOrdLineToAlloc, @cSKUToAlloc, @nBal_Qty, 
                      @cAllocatedLot, @cStorerKey, 6, @nBal_Qty, '', @cNewLOC, @cNewID, @cPackKeyToAlloc, '', '', @cWaveKeyToAlloc, 
                      @cPSNOToAlloc
 

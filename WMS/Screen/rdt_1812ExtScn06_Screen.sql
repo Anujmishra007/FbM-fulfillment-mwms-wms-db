@@ -1,7 +1,7 @@
 -- rdt_1812ExtScn06
 DELETE rdt.RDTScn WHERE Scn = 6672 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 6672, 'ENG',
-    @cLine01 = 'SKU:%10d15  BU:%07d01'
+    @cLine01 = 'SKU:  BU:%07d01'
    ,@cLine02 = '%20d09'
    ,@cLine03 = '%20d11'
    ,@cLine04 = '%20d12'

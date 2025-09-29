@@ -639,10 +639,7 @@ BEGIN
                      BEGIN
                         SET @cOption = ''
                         SET @cOutField01 = '' -- Option
-                        SET @nAfterScn  = CASE WHEN @nFromStep = 1 THEN @nFromScn + 4
-                                          WHEN @nFromStep = 2 THEN @nFromScn + 3
-                                          WHEN @nFromStep = 8 THEN @nFromScn - 3
-                                    END
+                        SET @nAfterScn  = 4024
                         SET @nAfterStep = 5
                      END
 
@@ -835,7 +832,8 @@ BEGIN
                      SELECT TOP 3 LLI.LOC,LLI.ID
                      FROM LOTxLOCxID LLI(NOLOCK)
                      JOIN LOTAttribute LA (NOLOCK) ON LLI.LOT = LA.LOT AND LLI.StorerKey = LA.StorerKey AND LLI.SKU = LA.SKU
-                     WHERE LLI.QTY - LLI.QTYPICKED > 0
+                     WHERE LLI.QTY > 0
+                     AND (LLI.QTYPICKED + LLI.QTYALLOCATED + LLI.QtyReplen) = 0
                      AND LLI.StorerKey = @cStorerKey
                      AND LLI.SKU = @cSuggSKU
                      AND LLI.QTY = @nQTY_RPL
@@ -920,7 +918,7 @@ BEGIN
                         @nMobile, @nFunc, @cLangCode, @cTaskdetailKey, @cFromID, @cNewTaskDetailKey OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
 
                      IF @nErrNo <> 0
-                        GOTO Quit
+                        GOTO RollBackTran
 
                      -- New task
                      IF @cNewTaskDetailKey <> ''

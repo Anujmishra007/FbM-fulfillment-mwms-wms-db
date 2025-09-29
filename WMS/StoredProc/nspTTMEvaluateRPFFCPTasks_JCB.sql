@@ -339,6 +339,18 @@ BEGIN
             )
             AND TD.TaskType IN ('FCP', 'FCP1')
             AND TD.PickMethod IN ('PP', 'FP')
+            AND (TD.PickMethod = 'FP' 
+               OR (TD.PickMethod = 'PP' AND NOT EXISTS (
+               SELECT 1 FROM TaskDetail (NOLOCK) TD2 
+               JOIN dbo.PickDetail PD1 WITH (NOLOCK) ON TD2.StorerKey = PD1.StorerKey AND TD2.TaskDetailKey = PD1.TaskDetailKey 
+               JOIN dbo.LOC LOC2 WITH(NOLOCK) ON TD2.FromLoc = LOC2.Loc AND LOC2.Facility = @cFacility
+               WHERE PD1.OrderKey = PD.OrderKey
+               AND TD2.Status = 'S'
+               AND TD2.TaskType IN ('FCP', 'FCP1')
+               AND TD2.PickMethod = 'PP'
+               AND LOC2.PutawayZone = LOC.PutawayZone
+               AND TD2.AreaKey = TD.AreaKey
+               )))
             AND ((LOC1.Status = 'OK' AND LOC1.LocationFlag IN ('','NONE'))
             --OR It is Marshalling lane
              OR (EXISTS (SELECT 1 FROM dbo.CODELKUP WITH (NOLOCK)
@@ -494,7 +506,7 @@ BEGIN
 
    BEGIN TRY
       INSERT INTO @tFCPRPFTaskDeliveryDate (TaskDetailKey, OrderKey, DeliveryDate)
-      SELECT TaskDetailKey, OrderKey, DATEADD( dd, ISNULL(CAST(Long AS INT), 0), OrderDeliveryDate) - GetDate()
+      SELECT TaskDetailKey, OrderKey, DATEADD( hh, ISNULL(CAST(Long AS INT), 0), OrderDeliveryDate)
       FROM 
          (SELECT FCPRRPF.TaskDetailKey, 
             FCPRRPF.OrderKey,
