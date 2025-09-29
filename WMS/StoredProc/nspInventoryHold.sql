@@ -1470,8 +1470,17 @@ BEGIN
                   WHERE Storerkey = @cStorerkey AND UCCNo = @c_UCCNo AND HOLD = '1'
                   )
                   BEGIN
+                     SET @c_UCCStatus = '1'
+
+                     IF NOT EXISTS(SELECT TOP 1 1 FROM UCC WITH(NOLOCK), LOTxLOCxID LLI WITH(NOLOCK)
+                        WHERE UCC.Lot=LLI.Lot AND UCC.Loc=LLI.Loc AND UCC.Id=LLI.ID
+                          AND UCC.Storerkey=@cStorerKey AND UCC.UCCNo=@c_UCCNo AND LLI.Qty>0)
+                     BEGIN
+                        SET @c_UCCStatus = '6'
+                     END
+
                      UPDATE UCC WITH (ROWLOCK)
-                     SET STATUS = '1'
+                     SET STATUS = @c_UCCStatus
                      WHERE Storerkey = @cStorerkey
                        AND UCCNo = @c_UCCNo
 
