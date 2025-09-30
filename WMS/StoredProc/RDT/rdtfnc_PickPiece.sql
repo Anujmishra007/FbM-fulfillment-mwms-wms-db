@@ -78,6 +78,7 @@ GO
 /* 2025-05-20   6.0.0   Jackc       UWP-34683 Add extupd to step4                */
 /* 2025-01-23   6.1.0   CYU027      FCR-540 Fix issues， SerinaNo                */
 /* 2025-09-09   6.2.0   Jackc       uwp-40901 Fix next scn value at st7          */
+/* 2025-09-22   6.2.1   PPA374      Adding ExtUpd to step 2 inputkey 0           */
 /* 2025-09-30   6.3.0   NickT       FCR-6584 Set @cDefaultSKU = '0' in Step0     */
 /*********************************************************************************/
 
