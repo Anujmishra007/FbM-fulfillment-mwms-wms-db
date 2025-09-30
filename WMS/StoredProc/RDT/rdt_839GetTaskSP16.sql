@@ -223,6 +223,7 @@ BEGIN
             SELECT TOP 1
                @cSuggLOC = LOC.LOC,
                @cSuggSKU = PD.SKU,
+               @cSuggID = PD.ID,
                @nSuggQTY = ISNULL( SUM( PD.QTY), 0)
             FROM dbo.LoadPlanDetail LPD WITH (NOLOCK)
                JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)
@@ -679,6 +680,7 @@ BEGIN
             SELECT TOP 1
                @cSuggLOC = LOC.LOC,
                @cSuggSKU = PD.SKU,
+               @cSuggID = PD.ID,
                @nSuggQTY = ISNULL( SUM( PD.QTY), 0)
             FROM dbo.LoadPlanDetail LPD WITH (NOLOCK)
                JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)
