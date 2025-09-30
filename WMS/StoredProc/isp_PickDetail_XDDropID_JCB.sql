@@ -1,7 +1,7 @@
 
-SET ANSI_NULLS ON
+SET ANSI_NULLS OFF
 GO
-SET QUOTED_IDENTIFIER ON
+SET QUOTED_IDENTIFIER OFF
 GO
 /************************************************************************/
 /* Stored Procedure:  isp_PickDetail_XDDropID_JCB                       */
@@ -25,6 +25,7 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Rev   Purposes                                  */
 /* 2025-08-22  TPT001   1.0   Creation                                  */
+/* 2025-09-30  PPA374   1.1   Adding FromID filter for housekeeping     */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[isp_PickDetail_XDDropID_JCB] (
@@ -324,6 +325,7 @@ BEGIN
       AND TD.FromLoc <> LLI.Loc
       AND TD.StorerKey = @cStorerKey
       AND LLI.StorerKey = @cStorerKey
+	  AND TD.FromID <> ''
 
    --Delete RFPutaway that got pending but no actual qty
    DELETE FROM RFPUTAWAY
@@ -425,6 +427,7 @@ BEGIN
    WHERE LLI.StorerKey = @cStorerKey
       AND LLI.PendingMoveIN > 0
       AND TD.TaskDetailKey IS NULL
+	  AND TD.FromID <> ''
 
    -- PRIMARY filter for XDOCK pickdetails that do not have DROPID but have ID and are not shipped yet
    DECLARE CUR_PICK_LINES CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
