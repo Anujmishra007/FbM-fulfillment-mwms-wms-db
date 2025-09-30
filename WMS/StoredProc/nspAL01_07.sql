@@ -1,6 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[nspAL01_07]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [dbo].[nspAL01_07]
-GO
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
@@ -26,9 +23,10 @@ GO
 /* Date         Author        Purposes                                  */
 /* 31-Sep-2009  Shong         Only Return When Qty Available > 0        */
 /* 26-Apr-2015  TLTING01 1.1  Add Other Parameter default value         */ 
-/*                                                                      */
+/* 20-Nov-2024  WLChooi  1.2  DevOps Combine Script                     */
+/* 20-Nov-2024  WLChooi  1.2  WMS-26556-Support Multi Facilities(WL01)  */
 /************************************************************************/
-CREATE  PROC    nspAL01_07
+CREATE OR ALTER PROC nspAL01_07
    @c_lot NVARCHAR(10) ,
    @c_uom NVARCHAR(10) ,
    @c_HostWHCode NVARCHAR(10),
@@ -48,17 +46,18 @@ BEGIN
    JOIN LOC (NOLOCK) ON (LOTxLOCxID.Loc = LOC.LOC)
    JOIN ID (NOLOCK) ON (LOTxLOCxID.Id = ID.ID) 
    JOIN LOT (NOLOCK) ON (LOTXLOCXID.LOT = LOT.LOT) -- added by ang (SOS131215)
+   CROSS APPLY ( SELECT Facility, FacSort FROM dbo.fnc_GetFacilitiesByStorer(LOTxLOCxID.StorerKey, @c_Facility)) F   --WL01
    WHERE LOTxLOCxID.Lot = @c_lot
    AND LOC.Locationflag <> 'HOLD'
    AND LOC.Locationflag <> 'DAMAGE'
    AND LOC.Status <> 'HOLD'
-   AND LOC.Facility = @c_Facility
+   --AND LOC.Facility = @c_Facility   --WL01
+   AND LOC.Facility = F.Facility   --WL01
    AND ID.STATUS <> 'HOLD'
    AND LOT.STATUS <> 'HOLD' -- added by ang (SOS131215) 
    AND (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED) > 0 -- Shong 31-Sep-2009
-   ORDER BY LOC.LOC
+   ORDER BY F.FacSort, LOC.LOC   --WL01
 END
 GO 
-
 GRANT EXECUTE ON nspAL01_07 TO NSQL 
 GO

@@ -14,7 +14,7 @@ GO
 /*                                                                      */
 /* Called By:                                                           */    
 /*                                                                      */    
-/* PVCS Version: 1.0                                                    */    
+/* PVCS Version: 1.1                                                    */    
 /*                                                                      */    
 /* Version: 1.0                                                         */    
 /*                                                                      */    
@@ -23,6 +23,7 @@ GO
 /* Updates:                                                             */    
 /* Date         Author  Ver.  Purposes                                  */   
 /* 24-APR-2023  NJOW    1.0   DEVOPS Combine Script                     */
+/* 25-Jun-2025  WLChooi 1.1   UWP-36187-Support Multi Facilities(WL01)  */
 /************************************************************************/    
 CREATE OR ALTER PROC [dbo].[nspAL_SG10]        
    @c_Orderkey    NVARCHAR(10),  
@@ -126,7 +127,7 @@ BEGIN
   		AND CL.Code = 'SHELFLIFE'
   		AND CL.Storerkey = @c_Storerkey  		
 
-      SELECT @c_Sorting = ' ORDER BY dbo.fnc_GetNumFromString(LA.Lottable01,''AESOP''), LA.Lottable05, LOC.LogicalLocation, LOC.Loc '      
+      SELECT @c_Sorting = ' ORDER BY F.FacSort, dbo.fnc_GetNumFromString(LA.Lottable01,''AESOP''), LA.Lottable05, LOC.LogicalLocation, LOC.Loc '   --WL01      
       --SELECT @c_Sorting = ' ORDER BY SUBSTRING(LA.Lottable01,6,2) + SUBSTRING(LA.Lottable01,4,2) + SUBSTRING(LA.Lottable01,1,2), LA.Lottable05, LOC.LogicalLocation, LOC.Loc '      
       
       SELECT @c_Conditions = RTRIM(@c_Conditions) + ' AND DATEDIFF(Day, GETDATE(), DATEADD(day, @n_Days, CONVERT(DATETIME,dbo.fnc_GetNumFromString(LA.Lottable01,''AESOP'')))) > 0 '
@@ -134,7 +135,7 @@ BEGIN
    END
    ELSE
    BEGIN
-      SELECT @c_Sorting = ' ORDER BY LA.Lottable05, LOC.LogicalLocation, LOC.Loc '      
+      SELECT @c_Sorting = ' ORDER BY F.FacSort, LA.Lottable05, LOC.LogicalLocation, LOC.Loc '   --WL01      
    END
           
    SELECT @n_StorerMinShelfLife = ((Sku.Shelflife * Storer.MinShelflife/100) * -1)
@@ -158,6 +159,7 @@ BEGIN
       JOIN LOT (NOLOCK) ON (LOTXLOCXID.LOT = LOT.LOT)
       JOIN LOTATTRIBUTE LA (NOLOCK) ON LOT.LOT = LA.LOT
       JOIN SKUXLOC SL (NOLOCK) ON (LOTxLOCxID.Storerkey = SL.Storerkey AND LOTxLOCxID.Sku = SL.Sku AND LOTxLOCxID.Loc = SL.Loc)
+      JOIN ( SELECT Facility, FacSort FROM dbo.fnc_GetFacilitiesByStorer(@c_Storerkey, @c_Facility)) F ON LOC.Facility = F.Facility   --WL01
       LEFT JOIN (SELECT TD.FromLot, TD.FromLoc, TD.FromID, SUM(TD.FromQty) AS FromQty
                  FROM TRANSFER T (NOLOCK)
                  JOIN TRANSFERDETAIL TD (NOLOCK) ON T.Transferkey = TD.Transferkey
@@ -182,7 +184,7 @@ BEGIN
       AND LOC.Status = ''OK''
       AND LOT.Status = ''OK''
       AND ID.Status = ''OK''
-      AND LOC.Facility = @c_Facility
+      /*AND LOC.Facility = @c_Facility*/   --WL01
       AND (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QtyReplen - ISNULL(TRFLLI.FromQty,0) - ISNULL(KITLLI.ExpectedQty,0)) >= @n_UOMBase
       AND LOTxLOCxID.STORERKEY = @c_StorerKey
       AND LOTxLOCxID.SKU = @c_SKU ' +

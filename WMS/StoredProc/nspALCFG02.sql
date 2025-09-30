@@ -14,7 +14,7 @@ GO
 /*                                                                         */
 /* Called By: nspOrderProcessing                                           */
 /*                                                                         */
-/* PVCS Version: 2.5                                                       */
+/* PVCS Version: 2.7                                                       */
 /*                                                                         */
 /* Version: 8.0                                                            */
 /*                                                                         */
@@ -43,8 +43,10 @@ GO
 /* 24-Jan-2024 NJOW11   2.2  Fix FULLPALLETBYLOC logic                     */
 /* 25-Mar-2025 USH022-01 2.3 Added Filter LOTxLOCxID.qty >0                */
 /* 17-Mar-2025 Wan02    2.4  PUMACL - Allocate from Allocated UCC          */
-/* 25-Aug-2025 WLChooi  2.5  UWP-39928 Optimize UCC allocation for UOM 2   */
+/* 29-Apr-2025 CCN020   2.5  INC7955819 - Fix Assigning UDF01 to @c_UDF02  */
+/* 25-Aug-2025 WLChooi  2.6  UWP-39928 Optimize UCC allocation for UOM 2   */
 /*                           (WL02)                                        */
+/* 14-Aug-2025 WLChooi  2.7  UWP-36187-Support Multi Facilities(WL01)      */
 /***************************************************************************/
 
 CREATE OR ALTER   PROC [dbo].[nspALCFG02]
@@ -418,7 +420,7 @@ BEGIN
 
    --Retrieve codelkup loc type configurations
    SELECT TOP 1 @c_UDF01 = UDF01,
-                @c_UDF02 = UDF01,
+                @c_UDF02 = UDF02,   --INC7955819
                 @c_UDF03 = UDF03,
                 @c_UDF04 = UDF04,
                 @c_UDF05 = UDF05
@@ -997,6 +999,7 @@ BEGIN
                                   ' JOIN SKU (NOLOCK) ON (LOTxLOCxID.Storerkey =  SKU.Storerkey AND SKU.Sku =  SKUXLOC.Sku) ' +
                                   ' JOIN STORER (NOLOCK) ON (LOTxLOCxID.Storerkey =  STORER.Storerkey) ' +
                                   ' JOIN PACK (NOLOCK) ON (SKU.Packkey = PACK.Packkey) ' +
+                                  ' JOIN ( SELECT Facility, FacSort FROM dbo.fnc_GetFacilitiesByStorer(@c_Storerkey, @c_Facility)) F ON LOC.Facility = F.Facility ' +   --WL01
                                   CASE WHEN @c_AllocateByUCCFlag = 'Y' AND @c_FromPartialAllocUCCFlag = 'N' THEN  --(Wan02)--NJOW10
                                   ' LEFT JOIN UCC (NOLOCK) ON (UCC.StorerKey = LOTxLOCxID.StorerKey AND UCC.SKU = LOTxLOCxID.SKU AND  
                                                                UCC.LOT = LOTxLOCxID.LOT AND UCC.LOC = LOC.LOC AND UCC.ID = ID.ID)'
@@ -1014,7 +1017,7 @@ BEGIN
                                   ELSE ' ' END +                                                                                                        
                                   ' WHERE LOTxLOCxID.Storerkey = @c_Storerkey ' +
                                   ' AND LOTxLOCxID.Sku = @c_Sku ' +
-                                  ' AND LOC.Facility = @c_Facility ' +
+                                  --' AND LOC.Facility = @c_Facility ' +   --WL01
                                   CASE WHEN @c_AllocateQtyReplenFlag = 'Y' THEN
                                        ' AND (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED) >= 1 '
                                   ELSE
@@ -1096,6 +1099,7 @@ BEGIN
                               ' JOIN SKU (NOLOCK) ON (LOTxLOCxID.Storerkey =  SKU.Storerkey AND SKU.Sku =  SKUXLOC.Sku) ' +
                               ' JOIN STORER (NOLOCK) ON (LOTxLOCxID.Storerkey =  STORER.Storerkey) ' +
                               ' JOIN PACK (NOLOCK) ON (SKU.Packkey = PACK.Packkey) ' +
+                              ' JOIN ( SELECT Facility, FacSort FROM dbo.fnc_GetFacilitiesByStorer(@c_Storerkey, @c_Facility)) F ON LOC.Facility = F.Facility ' +   --WL01
                               CASE WHEN @c_AllocateByUCCFlag = 'Y' AND @c_FromPartialAllocUCCFlag = 'N' THEN  --(Wan02)--NJOW09
                               ' JOIN UCC (NOLOCK) ON (UCC.StorerKey = LOTxLOCxID.StorerKey AND UCC.SKU = LOTxLOCxID.SKU AND  
                                                      UCC.LOT = LOTxLOCxID.LOT AND UCC.LOC = LOC.LOC AND UCC.ID = ID.ID AND UCC.Status < ''3'') ' 
@@ -1124,7 +1128,7 @@ BEGIN
                                     ELSE ' ' END +                                                     
                               ' WHERE LOTxLOCxID.Storerkey = @c_Storerkey ' +
                               ' AND LOTxLOCxID.Sku = @c_Sku ' +
-                              ' AND LOC.Facility = @c_Facility ' +
+                              --' AND LOC.Facility = @c_Facility ' +   --WL01
                               CASE WHEN @c_AllocateByUCCFlag = 'Y' AND @c_FromPartialAllocUCCFlag = 'Y'  --(Wan02) - START
                                    THEN
                               ' AND UCC.Qty - ISNULL(PICKDETAIL.Qty,0) > 0 '       
@@ -1246,12 +1250,13 @@ BEGIN
            JOIN LOT (NOLOCK) ON (LOTxLOCxID.Lot = LOT.Lot)
            JOIN LOC (NOLOCK) ON (LOTxLOCxID.Loc = LOC.LOC)
            JOIN ID (NOLOCK) ON (LOTxLOCxID.Id = ID.ID)
+           JOIN ( SELECT Facility, FacSort FROM dbo.fnc_GetFacilitiesByStorer(@c_Storerkey, @c_Facility)) F ON LOC.Facility = F.Facility   --WL01
            WHERE LOTXLOCXID.Lot = @c_Lot
            AND ((LOT.Status = 'OK'
                  AND ID.Status = 'OK'
                  AND LOC.Status = 'OK'
                  AND LOC.LocationFlag = 'NONE') OR ISNULL(@c_AllocateHoldFlag,'') = 'Y')
-           AND LOC.Facility = @c_Facility       
+           --AND LOC.Facility = @c_Facility   --WL01    
            GROUP BY LOTXLOCXID.Lot      
            
            /*SELECT Lot, Qty - QtyAllocated - QtyPicked
@@ -1452,6 +1457,7 @@ BEGIN
                               ' JOIN SKU (NOLOCK) ON (LOTxLOCxID.Storerkey =  SKU.Storerkey AND SKU.Sku =  SKUXLOC.Sku) ' +
                               ' JOIN STORER (NOLOCK) ON (LOTxLOCxID.Storerkey =  STORER.Storerkey) ' +
                               ' JOIN PACK (NOLOCK) ON (SKU.Packkey = PACK.Packkey) ' +
+                              ' JOIN ( SELECT Facility, FacSort FROM dbo.fnc_GetFacilitiesByStorer(@c_Storerkey, @c_Facility)) F ON LOC.Facility = F.Facility ' +   --WL01
                               CASE WHEN @c_AllocateByUCCFlag = 'Y' AND @c_FromPartialAllocUCCFlag = 'N' THEN   --(Wan02)--NJOW09
                               ' JOIN UCC (NOLOCK) ON (UCC.StorerKey = LOTxLOCxID.StorerKey AND UCC.SKU = LOTxLOCxID.SKU AND  
                                                      UCC.LOT = LOTxLOCxID.LOT AND UCC.LOC = LOC.LOC AND UCC.ID = ID.ID AND UCC.Status < ''3'') '
@@ -1481,7 +1487,7 @@ BEGIN
                               --' WHERE LOTxLOCxID.Storerkey = @c_Storerkey) ' + --(CLVN01)
                                      ' WHERE LOTxLOCxID.Storerkey = @c_Storerkey ' +       --(CLVN01)
                               ' AND LOTxLOCxID.Sku = @c_Sku ' +
-                              ' AND LOC.Facility = @c_Facility ' +
+                              --' AND LOC.Facility = @c_Facility ' +   --WL01
                               CASE WHEN @c_AllocateByUCCFlag = 'Y' AND @c_FromPartialAllocUCCFlag = 'Y'        --(Wan02) - START
                                    THEN
                               ' AND UCC.Qty - ISNULL(PICKDETAIL.Qty,0) > 0 '       
