@@ -18,6 +18,7 @@ GO
 /* 2025-08-31   NLT013   1.2.1   FCR-7417 Get Task from RDTMOBREC          */
 /* 2025-09-16   NLT013   1.3.0   UWP-41254 No need fire trigger if short   */
 /* 2025-09-15   NLT013   1.4.0   FCR-7730 Print ZPL                        */
+/* 2025-09-30   NLT013   1.4.1   FCR-7730 No need print ZPL if VAS exists  */
 /***************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_1764ExtUpd21]
@@ -178,55 +179,74 @@ BEGIN
                                  AND ISNULL(ExtendedField07, '') = 'CONVEYABLE')
                      BEGIN
                         DECLARE @nCaseCount INT = 0
-                        SELECT @nCaseCount = COUNT(DISTINCT CASEID) FROM DBO.PICKDETAIL PD WITH(NOLOCK) WHERE PD.StorerKey= @cStorerKey AND PD.DropID = @cCaseID
 
-                        IF @nCaseCount = 1
-                        BEGIN
-                           IF EXISTS(
-                              SELECT 1 FROM dbo.PickDetail PD WITH(NOLOCK)
-                              INNER JOIN dbo.ORDERS ORM WITH(NOLOCK) ON ORM.OrderKey = PD.OrderKey AND ORM.StorerKey = PD.StorerKey
-                              INNER JOIN dbo.SKU WITH(NOLOCK) ON PD.StorerKey = SKU.StorerKey AND PD.Sku = SKU.Sku
-                              LEFT JOIN dbo.WorkOrderDetail WOD WITH(NOLOCK) ON WOD.ExternWorkOrderKey IS NOT NULL AND WOD.ExternLineNo IS NOT NULL
-                                                                              AND WOD.ExternWorkOrderKey = PD.OrderKey AND WOD.ExternLineNo = PD.OrderLineNumber
-                              WHERE PD.StorerKey = @cStorerKey
-                                 AND PD.DropID = @cCaseID
-                                 AND PD.UOM = '2'
-                                 --AND NOT EXISTS (SELECT 1 FROM dbo.WorkOrderDetail WOD WITH(NOLOCK) WHERE WOD.ExternWorkOrderKey = PD.OrderKey)
-                                 AND NOT EXISTS(SELECT 1 FROM dbo.CODELKUP CL WITH(NOLOCK) WHERE CL.StorerKey = @cStorerKey AND CL.LISTNAME = 'WSCourier' AND CL.Code = 'ECL-1' AND ORM.ShipperKey = CL.short)
-                                 AND ( ISNULL(SKU.PrePackIndicator, '') = 'Y'
-                                       OR 
-                                       NOT EXISTS (SELECT 1 FROM dbo.CODELKUP CL1 WITH(NOLOCK) WHERE CL1.StorerKey = @cStorerKey AND CL1.LISTNAME = 'WCSVAS' AND ISNULL(WOD.Type, '') = CL1.short)
-                                    )
-                           )
+                        SELECT @nCaseCount = COUNT(DISTINCT CASEID) 
+                        FROM dbo.PICKDETAIL PD WITH(NOLOCK) 
+                        WHERE PD.StorerKey= @cStorerKey 
+                           AND PD.DropID = @cCaseID
+
+                        DECLARE @nVASCount INT = 0
+                        DECLARE @cPrePackIndicator NVARCHAR(30) = ''
+                        DECLARE @cShiperKey NVARCHAR(15)
+
+                        SELECT @cPrePackIndicator = ISNULL(SKU.PrePackIndicator, '')
+                        FROM dbo.SKU WITH(NOLOCK) 
+                        WHERE StorerKey= @cStorerKey 
+                           AND SKU = @cSKU
+
+                        SELECT @nVASCount = COUNT(*)
+                        FROM dbo.PickDetail PD WITH(NOLOCK)
+                        INNER JOIN dbo.WorkOrderDetail WOD WITH(NOLOCK) 
+                           ON WOD.ExternWorkOrderKey IS NOT NULL 
+                           AND WOD.ExternLineNo IS NOT NULL
+                           AND WOD.ExternWorkOrderKey = PD.OrderKey 
+                           AND WOD.ExternLineNo = PD.OrderLineNumber
+                        INNER JOIN dbo.CODELKUP CL WITH(NOLOCK)
+                           ON CL.StorerKey = PD.StorerKey
+                           AND ISNULL(WOD.Type, '') = CL.short
+                        WHERE PD.StorerKey = @cStorerKey
+                           AND PD.DropID = @cCaseID
+                           AND PD.UOM = '2'
+                           AND CL.LISTNAME = 'WCSVAS'
+
+                        SELECT @cShiperKey = ShipperKey
+                        FROM dbo.ORDERS ORM WITH(NOLOCK)
+                        INNER JOIN dbo.PICKDETAIL PD WITH(NOLOCK) 
+                           ON PD.StorerKey = ORM.StorerKey 
+                           AND PD.OrderKey = ORM.OrderKey
+                        WHERE PD.StorerKey= @cStorerKey 
+                           AND PD.DropID = @cCaseID
+
+                        IF @nCaseCount = 1 AND (@nVASCount = 0 OR @cPrePackIndicator = 'Y')
                            AND EXISTS (SELECT 1 FROM dbo.UCC WITH(NOLOCK) WHERE UCCNo = @cCaseID AND StorerKey = @cStorerKey)
-                           BEGIN
-                              DECLARE @cACTCaseID NVARCHAR(20)
-                              SELECT @cACTCaseID = CASEID FROM dbo.PICKDETAIL WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND DropID = @cCaseID
-                              -- Login user's printer must = 'PANDA', then goes to ZPL print
-                              BEGIN TRY
-                                 EXEC rdt.rdt_LevisPrintCartonLabel
-                                    @nMobile       = @nMobile
-                                    ,@nFunc        = @nFunc
-                                    ,@cLangCode    = @cLangCode
-                                    ,@cStorerKey   = @cStorerKey
-                                    ,@nStep        = @nStep
-                                    ,@nInputKey    = @nInputKey
-                                    ,@cDropID      = @cACTCaseID
-                                    ,@cPrintType   = 'ZPL'
-                                    ,@nErrNo       = @nErrNo      OUTPUT
-                                    ,@cErrMsg      = @cErrMsg     OUTPUT
-                                    ,@cSourceName  = 'rdt_1764ExtUpd21'
-                              END TRY
-                              BEGIN CATCH
-                                 SET @nErrNo = 233654
-                                 SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Print ZPL Failed
-                                 GOTO RollbackTran
-                              END CATCH
+                           AND NOT EXISTS(SELECT 1 FROM dbo.CODELKUP CL WITH(NOLOCK) WHERE CL.StorerKey = @cStorerKey AND CL.LISTNAME = 'WSCourier' AND CL.Code = 'ECL-1' AND @cShiperKey = CL.short)
+                        BEGIN
+                           DECLARE @cACTCaseID NVARCHAR(20)
+                           SELECT @cACTCaseID = CASEID FROM dbo.PICKDETAIL WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND DropID = @cCaseID
+                           -- Login user's printer must = 'PANDA', then goes to ZPL print
+                           BEGIN TRY
+                              EXEC rdt.rdt_LevisPrintCartonLabel
+                                 @nMobile       = @nMobile
+                                 ,@nFunc        = @nFunc
+                                 ,@cLangCode    = @cLangCode
+                                 ,@cStorerKey   = @cStorerKey
+                                 ,@nStep        = @nStep
+                                 ,@nInputKey    = @nInputKey
+                                 ,@cDropID      = @cACTCaseID
+                                 ,@cPrintType   = 'ZPL'
+                                 ,@nErrNo       = @nErrNo      OUTPUT
+                                 ,@cErrMsg      = @cErrMsg     OUTPUT
+                                 ,@cSourceName  = 'rdt_1764ExtUpd21'
+                           END TRY
+                           BEGIN CATCH
+                              SET @nErrNo = 233654
+                              SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Print ZPL Failed
+                              GOTO RollbackTran
+                           END CATCH
 
-                              IF @nErrNo <> 0
-                              BEGIN
-                                 GOTO RollBackTran
-                              END
+                           IF @nErrNo <> 0
+                           BEGIN
+                              GOTO RollBackTran
                            END
                         END
                      END
