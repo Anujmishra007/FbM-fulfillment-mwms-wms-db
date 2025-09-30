@@ -187,7 +187,6 @@ BEGIN
 
                         DECLARE @nVASCount INT = 0
                         DECLARE @cPrePackIndicator NVARCHAR(30) = ''
-                        DECLARE @cShiperKey NVARCHAR(15)
 
                         SELECT @cPrePackIndicator = ISNULL(SKU.PrePackIndicator, '')
                         FROM dbo.SKU WITH(NOLOCK) 
@@ -209,17 +208,21 @@ BEGIN
                            AND PD.UOM = '2'
                            AND CL.LISTNAME = 'WCSVAS'
 
-                        SELECT @cShiperKey = ShipperKey
-                        FROM dbo.ORDERS ORM WITH(NOLOCK)
-                        INNER JOIN dbo.PICKDETAIL PD WITH(NOLOCK) 
-                           ON PD.StorerKey = ORM.StorerKey 
-                           AND PD.OrderKey = ORM.OrderKey
-                        WHERE PD.StorerKey= @cStorerKey 
-                           AND PD.DropID = @cCaseID
-
                         IF @nCaseCount = 1 AND (@nVASCount = 0 OR @cPrePackIndicator = 'Y')
                            AND EXISTS (SELECT 1 FROM dbo.UCC WITH(NOLOCK) WHERE UCCNo = @cCaseID AND StorerKey = @cStorerKey)
-                           AND NOT EXISTS(SELECT 1 FROM dbo.CODELKUP CL WITH(NOLOCK) WHERE CL.StorerKey = @cStorerKey AND CL.LISTNAME = 'WSCourier' AND CL.Code = 'ECL-1' AND @cShiperKey = CL.short)
+                           AND NOT EXISTS (SELECT 1
+                                       FROM dbo.ORDERS ORM WITH(NOLOCK)
+                                       INNER JOIN dbo.PICKDETAIL PD WITH(NOLOCK) 
+                                          ON PD.StorerKey = ORM.StorerKey 
+                                          AND PD.OrderKey = ORM.OrderKey
+                                       INNER JOIN dbo.CODELKUP CL WITH(NOLOCK)
+                                          ON CL.StorerKey = ORM.StorerKey
+                                          AND CL.LISTNAME = 'WSCourier'
+                                          AND CL.Code = 'ECL-1'
+                                          AND ORM.ShipperKey = CL.short
+                                       WHERE PD.StorerKey = @cStorerKey
+                                          AND PD.DropID = @cCaseID
+                                          AND PD.UOM = '2')
                         BEGIN
                            DECLARE @cACTCaseID NVARCHAR(20)
                            SELECT @cACTCaseID = CASEID FROM dbo.PICKDETAIL WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND DropID = @cCaseID
