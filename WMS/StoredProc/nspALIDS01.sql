@@ -43,7 +43,7 @@ BEGIN
    FROM LOTxLOCxID (NOLOCK)
    JOIN LOC (NOLOCK) ON LOC.Loc = LOTxLOCxID.Loc   --WL01
    JOIN ID (NOLOCK) ON ID.ID = LOTxLOCxID.ID   --WL01
-   CROSS APPLY (SELECT Facility, FacSort FROM dbo.fnc_GetFacilitiesByStorer(LOTxLOCxID.StorerKey, LOC.Facility)) F   --WL01
+   CROSS APPLY (SELECT Facility, FacSort FROM dbo.fnc_GetFacilitiesByStorer(LOTxLOCxID.StorerKey, @c_Facility)) F   --WL01
    WHERE LOTxLOCxID.Lot = @c_lot
    AND ID.Status <> "HOLD"
    AND LOC.Locationflag <> "HOLD"

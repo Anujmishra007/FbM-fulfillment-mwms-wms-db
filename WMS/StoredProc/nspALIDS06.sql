@@ -49,7 +49,7 @@ BEGIN
                         AND LOTxLOCxID.Sku = SKUxLOC.Sku    --WL01
                         AND LOTxLOCxID.Loc = SKUxLOC.Loc    --WL01
    JOIN ID (NOLOCK) ON ID.Id = LOTxLOCxID.Id                --WL01
-   CROSS APPLY (SELECT Facility, FacSort FROM dbo.fnc_GetFacilitiesByStorer(LOTxLOCxID.StorerKey, LOC.Facility)) F   --WL01
+   CROSS APPLY (SELECT Facility, FacSort FROM dbo.fnc_GetFacilitiesByStorer(LOTxLOCxID.StorerKey, @c_Facility)) F   --WL01
    WHERE LOTxLOCxID.Lot = @c_lot
      AND id.status = 'OK'
      AND SKUxLOC.Locationtype <> "OTHER"
