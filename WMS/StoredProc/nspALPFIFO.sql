@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[dbo].[nspALPFIFO]')
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 )
-DROP PROCEDURE [dbo].[nspALPFIFO]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -39,8 +34,11 @@ GO
 /* 17-Oct-2019  NJOW07  1.6   WMS-10923 Support sort by qty by config   */
 /* 06-May-2020  NJOW08  1.7   WMS-6226 skip UOM 1 allocation by condition*/
 /* 01-Dec-2020  NJOW09  1.8   WMS-15743 MHAP Get shelflife from codelkup */
+/* 14-Apr-2025  NJOW10  1.9   FCR-3900 MHAP Allocate lottable08 logic   */
+/* 20-Nov-2024  WLChooi 1.9   DevOps Combine Script                     */
+/* 20-Nov-2024  WLChooi 1.9   WMS-26556-Support Multi Facilities(WL01)  */
 /************************************************************************/    
-CREATE  PROC [dbo].[nspALPFIFO]        
+CREATE OR ALTER PROC [dbo].[nspALPFIFO]        
    @c_Orderkey    NVARCHAR(10),  
    @c_Facility   NVARCHAR(5),     
    @c_StorerKey  NVARCHAR(15),     
@@ -97,7 +95,8 @@ BEGIN
            @c_SORTBYQTY        NVARCHAR(30), --NJOW07
            @c_SORTUOM1         NVARCHAR(1000), --NJOW07
            @c_SORTNOTUOM1      NVARCHAR(1000), --NJOW07
-           @c_UOM2NOCONSCHK    NVARCHAR(10) --NJOW08
+           @c_UOM2NOCONSCHK    NVARCHAR(10), --NJOW08
+           @c_AllocEmptyLot8   NVARCHAR(10) --NJOW10
 
    SET @b_debug = 0
    SET @n_QtyAvailable = 0          
@@ -156,7 +155,7 @@ BEGIN
    AND Long = 'nspALPFIFO'
    AND Code = 'UOM2BYCONSIGNEE'
    AND Short <> 'N'
-   AND (Code2 = @c_Facility OR ISNULL(Code2,'') = '')
+   AND (Code2 IN (SELECT Facility FROM dbo.fnc_GetFacilitiesByStorer(@c_Storerkey, @c_Facility)) OR ISNULL(Code2,'') = '')   --WL02
 
    IF @c_UOM = '2'
    BEGIN      
@@ -199,18 +198,18 @@ BEGIN
    AND Long = 'nspALPFIFO'
    AND Code = 'SORTBYQTY'
    AND Short <> 'N'
-   AND (Code2 = @c_Facility OR ISNULL(Code2,'') = '')
+   AND (Code2 IN (SELECT Facility FROM dbo.fnc_GetFacilitiesByStorer(@c_Storerkey, @c_Facility)) OR ISNULL(Code2,'') = '')   --WL02
    
    IF @c_SortByQty = 'SORTBYQTY'
    BEGIN
-      SET @c_SORTUOM1 = ' ORDER BY CASE WHEN ((LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QtyReplen - ISNULL(TRFLLI.FromQty,0)) % @n_QtyLeftToFulfill) = 0 THEN 1 ELSE 2 END, 4 DESC, LA.Lottable05, LA.Lot, LOC.LogicalLocation, LOC.LOC ' 
-      SET @c_SORTNOTUOM1 = ' ORDER BY 4, LA.Lottable05, LOC.LogicalLocation, LOC.LOC '
+      SET @c_SORTUOM1 = ' ORDER BY F.FacSort, CASE WHEN ((LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QtyReplen - ISNULL(TRFLLI.FromQty,0)) % @n_QtyLeftToFulfill) = 0 THEN 1 ELSE 2 END, 4 DESC, LA.Lottable05, LA.Lot, LOC.LogicalLocation, LOC.LOC '   --WL01 
+      SET @c_SORTNOTUOM1 = ' ORDER BY F.FacSort, 4, LA.Lottable05, LOC.LogicalLocation, LOC.LOC '   --WL01 
    END
    ELSE
    BEGIN 
       --SET @c_SORTUOM1 = ' ORDER BY LA.Lottable05, CASE WHEN ((LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QtyReplen - ISNULL(TRFLLI.FromQty,0)) % @n_QtyLeftToFulfill) = 0 THEN 1 ELSE 2 END, 4 DESC, LA.Lot, LOC.LogicalLocation, LOC.LOC ' 
-      SET @c_SORTUOM1 = ' ORDER BY LA.Lottable05, CASE WHEN ((LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QtyReplen - ISNULL(TRFLLI.FromQty,0)) % @n_QtyLeftToFulfill) = 0 THEN 1 ELSE 2 END, 4, LA.Lot, LOC.LogicalLocation, LOC.LOC '  --NJOW08 
-      SET @c_SORTNOTUOM1 = ' ORDER BY LA.Lottable05, 4, LOC.LogicalLocation, LOC.LOC '
+      SET @c_SORTUOM1 = ' ORDER BY F.FacSort, LA.Lottable05, CASE WHEN ((LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QtyReplen - ISNULL(TRFLLI.FromQty,0)) % @n_QtyLeftToFulfill) = 0 THEN 1 ELSE 2 END, 4, LA.Lot, LOC.LogicalLocation, LOC.LOC '  --NJOW08   --WL01 
+      SET @c_SORTNOTUOM1 = ' ORDER BY F.FacSort, LA.Lottable05, 4, LOC.LogicalLocation, LOC.LOC '   --WL01 
    END 
    --NJOW07 E
       
@@ -254,7 +253,13 @@ BEGIN
               )
    BEGIN
    	  SET @c_Lottable03 = 'O'
-   END           
+   END
+
+   --NJOW10
+   IF EXISTS(SELECT 1 FROM CODELKUP CL (NOLOCK) WHERE CL.ListName = 'OSTATUSSKU' AND CL.Storerkey = @c_Storerkey AND CL.Code = @c_Sku) AND @c_Lottable08 = 'OK'
+   BEGIN
+      SET @c_AllocEmptyLot8 = 'Y'
+   END            
    
    SELECT @n_StorerMinShelfLife = ((Sku.Shelflife * Storer.MinShelflife/100) * -1)
    FROM Sku (nolock)
@@ -277,6 +282,7 @@ BEGIN
       JOIN LOT (NOLOCK) ON (LOTXLOCXID.LOT = LOT.LOT)
       JOIN LOTATTRIBUTE LA (NOLOCK) ON LOT.LOT = LA.LOT
       JOIN SKUXLOC SL (NOLOCK) ON (LOTxLOCxID.Storerkey = SL.Storerkey AND LOTxLOCxID.Sku = SL.Sku AND LOTxLOCxID.Loc = SL.Loc)
+      JOIN ( SELECT Facility, FacSort FROM dbo.fnc_GetFacilitiesByStorer(@c_Storerkey, @c_Facility)) F ON LOC.Facility = F.Facility   --WL01
       LEFT JOIN (SELECT TD.FromLot, TD.FromLoc, TD.FromID, SUM(TD.FromQty) AS FromQty
                  FROM TRANSFER T (NOLOCK)
                  JOIN TRANSFERDETAIL TD (NOLOCK) ON T.Transferkey = TD.Transferkey
@@ -291,7 +297,7 @@ BEGIN
       AND LOC.Status <> ''HOLD''
       AND LOT.Status <> ''HOLD''
       AND ID.Status <> ''HOLD''
-      AND LOC.Facility = @c_Facility
+      /*AND LOC.Facility = @c_Facility   --WL01*/
       AND (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QtyReplen - ISNULL(TRFLLI.FromQty,0)) > 0
       AND LOTxLOCxID.STORERKEY = @c_StorerKey
       AND LOTxLOCxID.SKU = @c_SKU 
@@ -305,7 +311,9 @@ BEGIN
       CASE WHEN CONVERT(NVARCHAR(8) ,@d_Lottable05 ,112) <> '19000101' AND @d_Lottable05 IS NOT NULL THEN ' AND LA.Lottable05 = RTRIM(CONVERT( NVARCHAR(20), @d_Lottable05, 106)) ' ELSE ' ' END +
       CASE WHEN ISNULL(RTRIM(@c_Lottable06),'') = '' THEN '' ELSE ' AND LA.Lottable06 = @c_Lottable06 ' END +
       CASE WHEN ISNULL(RTRIM(@c_Lottable07),'') = '' THEN '' ELSE ' AND LA.Lottable07 = @c_Lottable07 ' END +
-      CASE WHEN ISNULL(RTRIM(@c_Lottable08),'') = '' THEN '' ELSE ' AND LA.Lottable08 = @c_Lottable08 ' END +
+      CASE WHEN @c_AllocEmptyLot8 = 'Y' THEN ' AND (LA.Lottable08 = @c_Lottable08 OR LA.Lottable08 = '''') ' ELSE  --NJOW10      
+                CASE WHEN ISNULL(RTRIM(@c_Lottable08),'') = '' THEN '' ELSE ' AND LA.Lottable08 = @c_Lottable08 ' END 
+           END +
       CASE WHEN ISNULL(RTRIM(@c_Lottable09),'') = '' THEN '' ELSE ' AND LA.Lottable09 = @c_Lottable09 ' END +
       CASE WHEN ISNULL(RTRIM(@c_Lottable10),'') = '' THEN '' ELSE ' AND LA.Lottable10 = @c_Lottable10 ' END +
       CASE WHEN ISNULL(RTRIM(@c_Lottable11),'') = '' THEN '' ELSE ' AND LA.Lottable11 = @c_Lottable11 ' END +

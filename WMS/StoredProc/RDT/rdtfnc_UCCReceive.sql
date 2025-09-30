@@ -70,6 +70,7 @@ GO
 /* 2024-12-05 5.2  ShaoAn  FCR-1103 Changes in UCC Receive to process      */
 /* 2025-05-19 5.3  Dennis  FCR-4531 Add Ext Valation on Step 2             */
 /* 2025-09-12 5.4  Jackc   FCR-2961 Replace InField01 with V_Max on st6    */
+/* 2025-09-29 5.5  Jackc   FCR-29593 Create task after close pallet(jack01)*/
 /***************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdtfnc_UCCReceive](
    @nMobile    INT,
@@ -165,6 +166,7 @@ DECLARE
    @cExtScnSP            NVARCHAR(20),            -- change from ExtendedScreenSP to ExtScnSP (yys027 migrate-crocs-FCR-1126)
    @tExtScnData          VariableTable,           -- for support ExtScnSP
    @nAction              INT,
+   @cGenPATaskSP         NVARCHAR(20),--(jackc01)
 
    @cLottable01       NVARCHAR(18),
    @cLottable02       NVARCHAR(18),
@@ -4147,6 +4149,59 @@ BEGIN
             @cID           = @cTOID,
             @cRefNo1       = 'CLOSE'
       END
+
+      --(jackc01) start
+      IF @cOption = '3' -- Yes and putaway
+      BEGIN
+         SET @cGenPATaskSP = rdt.RDTGetConfig( @nFunc, 'GenPATaskSP', @cStorerKey)
+         IF @cGenPATaskSP = '0'
+            SET @cGenPATaskSP = ''
+
+         IF @cGenPATaskSP <> ''
+         BEGIN
+            IF (SELECT COUNT(DISTINCT SKU) FROM dbo.LOTxLOCxID WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND ID = @cTOID) <> 1
+            BEGIN
+               SET @nErrNO = 63176
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Gen task fail
+            END
+            ELSE
+            BEGIN
+               BEGIN TRY
+                  EXECUTE rdt.rdt_UCCReceive_CreateNextTask
+                     @nMobile       = @nMobile,
+                     @nFunc         = @nFunc,
+                     @cLangCode     = @cLangCode,
+                     @cStorerKey    = @cStorerKey,
+                     @cReceiptKey   = @cReceiptKey,
+                     @cPOKey        = @cPOKey,
+                     @cLOC          = @cLOC,
+                     @cToID         = @cToID,
+                     @nErrNo      = @nErrNo  OUTPUT,
+                     @cErrMsg     = @cErrMsg OUTPUT
+
+                  --No need to handle ErrNo <> 0, always go to next step (jackc01)
+               END TRY
+               BEGIN CATCH
+                  SET @nErrNo = 63175
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Gen task fail
+               END CATCH
+            END
+            -- Prepare next screen
+            SET @cToID = ''
+            SET @cOutField01 = @cReceiptKey
+            SET @cOutField02 = @cPOKey
+            SET @cOutField03 = @cLOC
+            SET @cOutField04 = ''
+            SET @cFieldAttr02 = '' -- Count UCC
+
+            -- Go to ID screen
+            SET @nScn = @nScn - 9
+            SET @nStep = @nStep - 9
+
+            GOTO Step_12_Quit
+         END
+      END
+      --(jackc02) end
 
       IF @cExtScnSP <> ''
       BEGIN

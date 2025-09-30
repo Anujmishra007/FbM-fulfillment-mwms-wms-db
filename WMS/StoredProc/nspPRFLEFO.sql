@@ -1,7 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[nspPRFLEFO]') and OBJECTPROPERTY(id, N'IsProcedure') = 1)
-drop procedure [dbo].[nspPRFLEFO]
-GO
-
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
@@ -18,7 +14,7 @@ GO
 /*                                                                      */
 /* Called By: nspOrderProcessing                                        */
 /*                                                                      */
-/* PVCS Version: 1.1                                                    */
+/* PVCS Version: 1.2                                                    */
 /*                                                                      */
 /* Version: 5.4                                                         */
 /*                                                                      */
@@ -29,9 +25,11 @@ GO
 /* 14-Apr-2015  NJOW01  1.0    fix LOC.LocationFlag <> 'HOLD'           */
 /* 18-AUG-2015  YTWan   1.1    SOS#350432 - Project Merlion -           */
 /*                             AllocationStrategy (Wan01)               */ 
+/* 20-Nov-2024  WLChooi 1.2    DevOps Combine Script                    */
+/* 20-Nov-2024  WLChooi 1.2    WMS-26556-Support Multi Facilities(WL01) */
 /************************************************************************/
 
-CREATE PROC nspPRFLEFO
+CREATE OR ALTER PROC [dbo].[nspPRFLEFO]
    @c_storerkey NVARCHAR(15) ,
    @c_sku NVARCHAR(20) ,
    @c_lot NVARCHAR(10) ,
@@ -206,9 +204,9 @@ BEGIN
       END 
       
       IF @c_Susr1 = 'LEFO' 
-         SET @c_Sortby = ' ORDER BY Lotattribute.Lottable04 DESC, LOT.Lot '
+         SET @c_Sortby = ' ORDER BY F.FacSort, Lotattribute.Lottable04 DESC, LOT.Lot '   --WL01
       ELSE
-         SET @c_Sortby = ' ORDER BY Lotattribute.Lottable04, LOT.Lot '                  
+         SET @c_Sortby = ' ORDER BY F.FacSort, Lotattribute.Lottable04, LOT.Lot '   --WL01                  
    
       SELECT @c_SQLStatement =  " DECLARE  PREALLOCATE_CURSOR_CANDIDATES CURSOR FAST_FORWARD READ_ONLY FOR " +
             " SELECT LOT.STORERKEY, LOT.SKU, LOT.LOT, " +
@@ -217,41 +215,42 @@ BEGIN
             " JOIN LOTATTRIBUTE (NOLOCK) ON (LOT.lot = LOTATTRIBUTE.lot) " +   
             " JOIN LOTxLOCxID (NOLOCK) ON (LOTxLOCxID.LOT = LOT.LOT AND LOTxLOCxID.LOT = LOTATTRIBUTE.LOT) " +    
             " JOIN LOC (NOLOCK) ON (LOTxLOCxID.LOC = LOC.LOC) " +    
-            " JOIN ID (NOLOCK) ON (LOTxLOCxID.ID = ID.ID) " +        
+            " JOIN ID (NOLOCK) ON (LOTxLOCxID.ID = ID.ID) " +  
+            " JOIN ( SELECT Facility, FacSort FROM dbo.fnc_GetFacilitiesByStorer(@c_Storerkey, @c_Facility)) F ON LOC.Facility = F.Facility " +   --WL01      
             " LEFT OUTER JOIN (SELECT P.lot, ORDERS.Facility, QtyPreallocated = SUM(P.Qty) " +    
             "                FROM   PreallocatePickdetail P (NOLOCK) " +
             "                JOIN   ORDERS (NOLOCK) ON P.Orderkey = ORDERS.Orderkey " +    
-            "                WHERE  P.Storerkey = N'" + RTRIM(@c_storerkey) + "' " +     
-            "                AND    P.SKU = N'" + RTRIM(@c_SKU) + "' " +
-            "                AND    ORDERS.FACILITY = N'" + RTRIM(@c_facility) + "' " +   
+            "                JOIN ( SELECT Facility, FacSort FROM dbo.fnc_GetFacilitiesByStorer(@c_Storerkey, @c_Facility)) F ON ORDERS.Facility = F.Facility " +   --WL01
+            "                WHERE  P.Storerkey = @c_Storerkey " +   --N'" + RTRIM(@c_storerkey) + "' " +   --WL01
+            "                AND    P.SKU = @c_SKU " +   --N'" + RTRIM(@c_SKU) + "' " +   --WL01
+            --"                AND    ORDERS.FACILITY = N'" + RTRIM(@c_facility) + "' " +   --WL01
             "                AND    P.qty > 0 " +    
             "                GROUP BY p.Lot, ORDERS.Facility) P ON LOTxLOCxID.Lot = P.Lot AND P.Facility = LOC.Facility " +   
-            " WHERE LOT.STORERKEY = N'" + RTRIM(@c_storerkey) + "' " +   
-            " AND LOT.SKU = N'" + RTRIM(@c_SKU) + "' " +
+            " WHERE LOT.STORERKEY = @c_Storerkey " +    --N'" + RTRIM(@c_storerkey) + "' " +   --WL01   
+            " AND LOT.SKU = @c_SKU " +   --N'" + RTRIM(@c_SKU) + "' " +   --WL01
             " AND LOT.STATUS = 'OK'  " +   
             " AND LOC.STATUS = 'OK' AND ID.STATUS = 'OK' " +     
             " AND LOC.LocationFlag <> 'HOLD' " +  
-            " AND LOC.Facility = N'" + RTRIM(@c_facility) + "' "  +
+            --" AND LOC.Facility = N'" + RTRIM(@c_facility) + "' "  +   --WL01
             ISNULL(RTRIM(@c_Condition),'')  + 
-            " GROUP By LOT.STORERKEY, LOT.SKU, LOT.LOT, Lotattribute.Lottable04 " +
+            " GROUP By LOT.STORERKEY, LOT.SKU, LOT.LOT, Lotattribute.Lottable04, F.FacSort " +   --WL01
             " HAVING SUM(LOTxLOCxID.QTY) - SUM(LOTxLOCxID.QTYALLOCATED) - SUM(LOTxLOCxID.QTYPICKED) - MAX(ISNULL(P.QTYPREALLOCATED,0)) >= " + CAST(@n_UOMBase AS VARCHAR(10)) + 
             @c_Sortby 
             --" ORDER BY Lotattribute.Lottable04, LOT.Lot " 
 
-      EXEC(@c_SQLStatement)
+      --WL01 S
+      --EXEC (@c_SQLStatement) 
+      EXEC sp_executesql @c_SQLStatement
+                       , N'@c_Storerkey NVARCHAR(15), @c_Sku NVARCHAR(20), @c_Facility NVARCHAR(5)' 
+                       , @c_Storerkey
+                       , @c_Sku
+                       , @c_Facility
+      --WL01 E
    
       -- print @c_SQLStatement
 
    END
 END
 GO
-
-SET QUOTED_IDENTIFIER OFF 
+GRANT EXECUTE ON [dbo].[nspPRFLEFO] TO [NSQL]
 GO
-SET ANSI_NULLS OFF
-GO
-
-GRANT EXECUTE ON nspPRFLEFO TO NSQL
-GO
-
-
