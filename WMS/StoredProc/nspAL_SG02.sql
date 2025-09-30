@@ -26,8 +26,9 @@ GO
 /* 02/10/2019   NJOW03   1.2  Fix sorting                               */
 /* 21/01/2022   NJOW04   1.3  WMS-18786 Change sorting                  */
 /* 21/01/2022   NJOW04   1.3  DEVOPS combine script                     */
+/* 20-Nov-2024  WLChooi  1.4  WMS-26556-Support Multi Facilities(WL01)  */
 /************************************************************************/
-CREATE OR ALTER PROC    nspAL_SG02
+CREATE OR ALTER PROC nspAL_SG02
    @c_lot NVARCHAR(10) ,
    @c_uom NVARCHAR(10) ,
    @c_HostWHCode NVARCHAR(10),
@@ -148,6 +149,7 @@ BEGIN
       JOIN ID (NOLOCK) ON (LOTxLOCxID.Id = ID.ID) 
       JOIN LOT (NOLOCK) ON (LOTXLOCXID.LOT = LOT.LOT)
       JOIN LOTATTRIBUTE (NOLOCK) ON LOT.Lot = LOTATTRIBUTE.Lot
+      JOIN ( SELECT Facility, FacSort FROM dbo.fnc_GetFacilitiesByStorer(@c_Storerkey, @c_Facility)) F ON LOC.Facility = F.Facility   --WL01
       OUTER APPLY (SELECT TOP 1 PD.ID FROM PICKDETAIL PD (NOLOCK) 
                    WHERE PD.Id = LOTxLOCxID.ID
                    AND PD.Storerkey = LOTxLOCxID.Storerkey
@@ -163,7 +165,7 @@ BEGIN
       AND LOC.Locationflag <> 'HOLD'
       AND LOC.Locationflag <> 'DAMAGE'
       AND LOC.Status <> 'HOLD'
-      AND LOC.Facility = @c_Facility
+      --AND LOC.Facility = @c_Facility   --WL01
       AND ID.STATUS <> 'HOLD'
       AND LOT.STATUS <> 'HOLD' 
       AND LOTxLOCxID.ID <> ''
@@ -178,8 +180,9 @@ BEGIN
       AND LOTATTRIBUTE.Lottable10 = CASE WHEN ISNULL(@c_Lottable10,'') <> '' THEN @c_Lottable10 ELSE LOTATTRIBUTE.Lottable10 END 
       AND LOTATTRIBUTE.Lottable11 = CASE WHEN ISNULL(@c_Lottable11,'') <> '' THEN @c_Lottable11 ELSE LOTATTRIBUTE.Lottable11 END 
       AND LOTATTRIBUTE.Lottable12 = CASE WHEN ISNULL(@c_Lottable12,'') <> '' THEN @c_Lottable12 ELSE LOTATTRIBUTE.Lottable12 END 
-      GROUP BY LOTxLOCxID.ID, CASE WHEN ALLOCID.ID IS NOT NULL THEN '1' ELSE '2' END,  ISNULL(COPACK1.Qty,0)
+      GROUP BY LOTxLOCxID.ID, CASE WHEN ALLOCID.ID IS NOT NULL THEN '1' ELSE '2' END,  ISNULL(COPACK1.Qty,0), F.FacSort   --WL01
       HAVING SUM(LOTxLOCxID.Qty) = ISNULL(COPACK1.Qty,0)  --only get the pallet with all copack item have tally qty
+      ORDER BY F.FacSort, 1, 2, 3   --WL01
    END   
    --NJOW02 E
           
@@ -194,17 +197,18 @@ BEGIN
    JOIN ID (NOLOCK) ON (LOTxLOCxID.Id = ID.ID) 
    JOIN LOT (NOLOCK) ON (LOTXLOCXID.LOT = LOT.LOT) 
    LEFT JOIN #TMP_ID ON #TMP_ID.Id = LOTxLOCxID.ID
+   JOIN ( SELECT Facility, FacSort FROM dbo.fnc_GetFacilitiesByStorer(@c_Storerkey, @c_Facility)) F ON LOC.Facility = F.Facility   --WL01
    WHERE LOTxLOCxID.Lot = @c_lot
    AND LOC.Locationflag <> 'HOLD'
    AND LOC.Locationflag <> 'DAMAGE'
    AND LOC.Status <> 'HOLD'
-   AND LOC.Facility = @c_Facility
+   --AND LOC.Facility = @c_Facility   --WL01
    AND ID.STATUS <> 'HOLD'
    AND LOT.STATUS <> 'HOLD' 
    AND (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QTYREPLEN) >= @n_uombase 
    AND ( #TMP_ID.ID IS NOT NULL   
          OR ISNULL(@c_Skucopack1,'') = '' ) 
-   ORDER BY CASE WHEN #TMP_ID.ID IS NOT NULL THEN CONVERT(NVARCHAR, #TMP_ID.Lottable05,112) ELSE 'ZZZZZZZZZZ' END, CASE WHEN LOC.LogicalLocation IN('','WCS01') THEN 1 ELSE 0 END, LOC.LOC  --NJOW02  --NJOW04
+   ORDER BY F.FacSort, CASE WHEN #TMP_ID.ID IS NOT NULL THEN CONVERT(NVARCHAR, #TMP_ID.Lottable05,112) ELSE 'ZZZZZZZZZZ' END, CASE WHEN LOC.LogicalLocation IN('','WCS01') THEN 1 ELSE 0 END, LOC.LOC  --NJOW02  --NJOW04   --WL01
    
    SET @n_QtyOrderRemainByUOM = FLOOR(@n_QtyLeftToFulfill / @n_uombase) * @n_uombase 
                          
@@ -284,6 +288,5 @@ BEGIN
    END                                              
 END
 GO 
-
 GRANT EXECUTE ON nspAL_SG02 TO NSQL 
 GO

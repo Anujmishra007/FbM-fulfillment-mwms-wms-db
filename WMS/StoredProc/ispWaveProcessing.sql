@@ -113,7 +113,8 @@ GO
 /* 18-Jul-2024  Wan09   7.2   UWP-22202-Mattel Overallocation           */
 /*                            Get OverQtyLeftToFulfill from Sub SP      */
 /*                            Do Not Overallocate to partial fulfill DPP*/
-/* 20-SEP-2024  SPChin  7.3   INC7245374 - Bug Fixed                    */   
+/* 20-SEP-2024  SPChin  7.3   INC7245374 - Bug Fixed                    */
+/* 21-Feb-2025  WLChooi 7.4   WMS-26556 Support multi facilities (WL01) */
 /************************************************************************/      
 
 CREATE OR ALTER PROC [dbo].[ispWaveProcessing]        
@@ -2004,7 +2005,8 @@ BEGIN
                            FROM LOTxLOCxID  LLI WITH (NOLOCK)   
                            JOIN LOC         LOC WITH (NOLOCK) ON (LLI.Loc = LOC.LOC)  
                            WHERE LLI.Lot =  @c_aLOT    
-                           AND   LOC.Facility = @c_aFacility  
+                           --AND   LOC.Facility = @c_aFacility   --WL01
+                           AND   LOC.Facility IN ( SELECT Facility FROM dbo.fnc_GetFacilitiesByStorer(@c_aStorerKey, @c_aFacility) )   --WL01
   
                            IF @n_FacLotAvailQty < @n_cQtyAvailable  
                            BEGIN   
