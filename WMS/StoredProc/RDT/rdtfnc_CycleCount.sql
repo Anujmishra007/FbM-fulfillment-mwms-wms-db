@@ -8686,7 +8686,8 @@ BEGIN
       -- Store in New variables
      -- (james08)
       SET @nNewEachQTY = CASE WHEN @cNewEachQTY <> '' AND @cNewEachQTY IS NOT NULL THEN CAST( @cNewEachQTY AS FLOAT) ELSE 0 END
-
+      SET @nNewCaseQTY = CASE WHEN @cNewCaseQTY <> '' AND @cNewCaseQTY IS NOT NULL THEN CAST( @cNewCaseQTY AS FLOAT) ELSE 0 END
+      
       IF ISNULL(@cSKUDefaultUOM, '0') <> '0'
       BEGIN
          
@@ -8694,7 +8695,7 @@ BEGIN
          FROM dbo.Pack P WITH (NOLOCK)
          JOIN dbo.SKU S WITH (NOLOCK) ON P.PackKey = S.PackKey
          WHERE S.StorerKey = @cStorer
-            AND S.SKU = @cNewSKU
+            AND S.SKU = @cSKU
 
          SELECT @b_success = 0
          EXEC nspUOMCONV
