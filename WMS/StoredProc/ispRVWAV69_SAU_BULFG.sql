@@ -4,6 +4,7 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
+
 /*************************************************************************/
 /* Stored Procedure: ispRVWAV69_SAU_BULFG                                          */
 /* Creation Date: 21-Mar-2024                                            */
