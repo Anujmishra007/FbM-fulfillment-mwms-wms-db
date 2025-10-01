@@ -41,7 +41,7 @@ BEGIN
    DECLARE @nTranCount  INT
 
    DECLARE @cStorerKey              NVARCHAR( 15)
-   DECLARE @cToLOC                  NVARCHAR( 10)
+   DECLARE @cToLoc                  NVARCHAR( 10)
    DECLARE @cFinalLOC               NVARCHAR(10)
    DECLARE @cTaskStatus             NVARCHAR(10)
    DECLARE @cToLOCCat               NVARCHAR( 10)
@@ -108,7 +108,8 @@ BEGIN
                   @cToID = TD.ToID,
                   @cLocationType = LOC.LocationType,
                   @cLocationCategory = LOC.LocationCategory,
-                  @cListKey = TD.ListKey
+                  @cListKey = TD.ListKey,
+                  @cToLoc = TD.ToLoc
                FROM dbo.TaskDetail TD WITH(NOLOCK)
                INNER JOIN dbo.LOC WITH(NOLOCK) ON TD.ToLoc = LOC.Loc
                WHERE TD.TaskDetailKey = @cTaskDetailKey
@@ -134,7 +135,10 @@ BEGIN
                   BEGIN
                      BEGIN TRY
                         UPDATE PD
-                        SET Status = '3'
+                        SET Status = '3',
+                           Loc = @cToLoc,
+                           EditDate = GETDATE(),
+                           EditWho  = SUSER_SNAME()
                         FROM dbo.PickDetail PD WITH (ROWLOCK) 
                         INNER JOIN @tPickDetail TPD ON PD.PickDetailKey = TPD.PickDetailKey
                      END TRY
