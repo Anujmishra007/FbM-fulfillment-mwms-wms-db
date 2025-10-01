@@ -27,6 +27,7 @@ GO
 /* Date        Author   Ver.  Purposes                                  */  
 /* 2021-02-05  mingle01 1.1   Add Big Outer Begin try/Catch             */
 /*                            Execute Login if @c_UserName<>SUSER_SNAME()*/
+/* 2025-09-02  SWT01    1.2   Enhanced session management pattern       */
 /************************************************************************/                                                                                  
 CREATE PROC [WM].[lsp_MBOLPPLLoadPlan_Wrapper] 
       @c_MBOLKey              NVARCHAR(10)
@@ -86,20 +87,22 @@ BEGIN
                
    SET @n_Err = 0 
 
-   --(mingle01) - START
-   IF SUSER_SNAME() <> @c_UserName
+   -- Start enhanced session management (SWT01)
+   DECLARE @b_ExecuteAs          BIT = 0
+   IF SUSER_SNAME() <> @c_UserName        
    BEGIN
-      EXEC [WM].[lsp_SetUser] 
-            @c_UserName = @c_UserName  OUTPUT
-         ,  @n_Err      = @n_Err       OUTPUT
-         ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
-
-      IF @n_Err <> 0 
+      EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT, @b_ExecuteAs = @b_ExecuteAs OUTPUT
+   
+      IF @n_Err <> 0
       BEGIN
          GOTO EXIT_SP
       END
-      EXECUTE AS LOGIN = @c_UserName
-   END
+   
+      IF @b_ExecuteAs = 1
+         EXECUTE AS LOGIN = @c_UserName
+   END                                    
+   -- End enhanced session management (SWT01)
+
    --(mingle01) - END
 
    --(mingle01) - START
@@ -458,7 +461,8 @@ EXIT_SP:
       BEGIN TRAN 
    END
 
-   REVERT
+   IF @b_ExecuteAs = 1 REVERT -- (SWT01)
+   EXEC [WM].[lsp_ResetUser] -- (SWT01)  
 END
 GO
 GRANT EXECUTE ON [WM].[lsp_MBOLPPLLoadPlan_Wrapper] TO nSQL 

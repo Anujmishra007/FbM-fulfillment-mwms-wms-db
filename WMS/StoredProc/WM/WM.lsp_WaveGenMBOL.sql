@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_WaveGenMBOL]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [WM].[lsp_WaveGenMBOL]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -32,6 +27,7 @@ GO
 /* 2021-09-22  Wan02    1.3   DevOps Combine Script                     */
 /* 2021-09-22  Wan02    1.3   LFWM-3074 - TW  Wave Planning Skip Load Plan*/
 /*                            Validation to Create MBOL                 */
+/* 2025-09-02  SWT01    1.4   Enhanced session management pattern       */
 /************************************************************************/                                                                                  
 CREATE PROC [WM].[lsp_WaveGenMBOL]                                                                                                                     
       @c_WaveKey           NVARCHAR(10)
@@ -72,23 +68,26 @@ BEGIN
    SET @b_Success = 1
    SET @n_Err     = 0
                
-   SET @n_Err = 0 
-   --(mingle01) - START   
-   IF SUSER_SNAME() <> @c_UserName
+   -- Start enhanced session management (SWT01)
+   SET @n_Err = 0
+   DECLARE @b_ExecuteAs        BIT = 0
+   IF SUSER_SNAME() <> @c_UserName AND @c_UserName <> ''        
    BEGIN
       EXEC [WM].[lsp_SetUser] 
-            @c_UserName = @c_UserName  OUTPUT
-         ,  @n_Err      = @n_Err       OUTPUT
-         ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
-                
-      IF @n_Err <> 0 
+           @c_UserName = @c_UserName  OUTPUT
+        ,  @n_Err      = @n_Err       OUTPUT
+        ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+        ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
+      
+      IF @n_Err <> 0
       BEGIN
          GOTO EXIT_SP
       END
-    
-      EXECUTE AS LOGIN = @c_UserName
-   END
-   --(mingle01) - END
+      
+      IF @b_ExecuteAs = 1
+         EXECUTE AS LOGIN = @c_UserName
+   END                                    
+   -- End enhanced session management (SWT01)
    
    --(mingle01) - START
    BEGIN TRY
@@ -228,7 +227,8 @@ EXIT_SP:
    BEGIN
       BEGIN TRAN
    END 
-   REVERT
+   IF @b_ExecuteAs = 1 REVERT -- (SWT01)
+   EXEC [WM].[lsp_ResetUser]  -- (SWT01)
 END
 GO
 GRANT EXECUTE ON [WM].[lsp_WaveGenMBOL] TO nSQL 
