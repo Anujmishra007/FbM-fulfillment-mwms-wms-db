@@ -70,6 +70,7 @@ BEGIN
    DECLARE @cFinalLocPickZone NVARCHAR(10) = ''
    DECLARE @cAutomationPick   NVARCHAR(1) = 'N'
    DECLARE @cRefTaskKey       NVARCHAR(10) = ''
+   DECLARE @cOriginalTaskDetailKey NVARCHAR(10) = @cTaskDetailKey -- To retain original TaskDetailKey when looping PickDetail
 
    DECLARE @tPickDetail TABLE 
    (
@@ -92,6 +93,8 @@ BEGIN
       @nQTY = V_Integer4 -- V1.0 JCH507 
    FROM rdt.rdtMobRec WITH (NOLOCK) 
    WHERE Mobile = @nMobile
+
+
 
    -- All logics are copied from 1764CfmExtUpd01, update the rdtmobrec retrieving logic.  By JCH507
 
@@ -121,7 +124,7 @@ BEGIN
 
    -- FP, does not close pallet or short
    IF @cPickMethod = 'FP'
-      GOTO UPD_PKD
+      GOTO UPD_TASK
 
    IF ISNULL(@cFinalLoc, '') <> '' 
       SELECT @cFinalLocPickZone = PickZone
@@ -176,7 +179,7 @@ BEGIN
    BEGIN
       IF @bDebugFlag = 1
          SELECT 'Return directly'
-      GOTO UPD_PKD
+      GOTO UPD_TASK
    END
 
    -- Split or short PickDetail
@@ -577,12 +580,7 @@ BEGIN
    END */
    --V1.0.1 the fromLoc inventory record not have QtyReplen value end
 
-   --CHECK and update TaskDetail ToLoc for sortable items if needed.  FCR-7730
-   --Only for mobile step 6 (Short/Close Pallet) and if scanned ToLoc is a PND location
-   --Also only if ToLoc is different from scanned ToLoc
-   --And only for sortable and conveyable items
-   --If all conditions met, update ToLoc to scanned ToLoc
-   UPD_PKD:
+   UPD_TASK:
    IF EXISTS(SELECT 1 FROM dbo.LOC WITH (NOLOCK) WHERE LOC = @cScannedToLoc AND LocationType = 'PND' )
    BEGIN
       DECLARE 
@@ -599,7 +597,7 @@ BEGIN
          SELECT 
             @cListKey = ListKey
          FROM dbo.TaskDetail WITH (NOLOCK)
-         WHERE TaskDetailKey = @cTaskdetailKey
+         WHERE TaskDetailKey = @cOriginalTaskDetailKey
 
          DELETE FROM @tTaskDetail
 
