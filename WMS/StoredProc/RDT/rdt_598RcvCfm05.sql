@@ -226,7 +226,7 @@ BEGIN
    BEGIN
       UPDATE Receipt WITH (ROWLOCK) 
       SET ASNStatus ='X4'
-      WHERE ReceiptKey = Receiptkey
+      WHERE ReceiptKey = @cReceiptkey
          AND StorerKey = @cStorerkey
          AND ASNStatus  = '1'
 
