@@ -49,6 +49,7 @@ GO
 /*                            turn off                                  */
 /* 28-Sep-2021  SYChua        Fix: Added CLOSE and DEALLOCATE statement */
 /*                            for cursor: CUR_CHANNEL_MGMT  (SY01)      */
+/* 29-Oct-2024  TLTING02      WMS-26555 - allow MultiFacility for Orders*/
 /* 12-Aug-2025  WLChooi 4.0   FCR-5700 Trigger ITF By Wave (WL01)       */
 /************************************************************************/
 CREATE OR ALTER TRIGGER [dbo].[ntrPickDetailAdd]
@@ -86,6 +87,7 @@ FROM   INSERTED
 
 SELECT @n_Continue = 1, @n_starttcnt = @@TRANCOUNT
 DECLARE @c_AllowOverAllocations NVARCHAR(1) -- Flag to see if overallocations are allowed.
+DECLARE @c_MultiFacilityShipment NVARCHAR(1) = ''
 /* #INCLUDE <TRPDA1.SQL> */
 DECLARE @b_debug INT
 SELECT @b_debug = 0
@@ -233,17 +235,47 @@ BEGIN
          BEGIN
             SELECT @n_Continue = 3, @c_errmsg = 'ntrPickDetailAdd' + ISNULL(RTrim(@c_errmsg),'')
          END
+         
+         -- TLTING02
+         SELECT @b_success = 0
+         EXECUTE nspGetRight '', -- facility
+                             @c_Storerkey,    -- StorerKey
+                             NULL,   -- Sku
+                             'MultiFacilityShipment', -- Configkey
+                             @b_success    OUTPUT,
+                             @c_MultiFacilityShipment OUTPUT,
+                             @n_err        OUTPUT,
+                             @c_errmsg     OUTPUT
+         IF @b_success <> 1
+         BEGIN
+            SELECT @n_Continue = 3, @c_errmsg = 'ntrPickDetailAdd' + ISNULL(RTrim(@c_errmsg),'')
+         END
+                  
 
          SET @c_PrevStorerKey = @c_StorerKey
          SET @c_PrevFacility  = @c_Facility
 
-         IF NOT EXISTS(SELECT 1 FROM ORDERS WITH (NOLOCK) WHERE OrderKey = @c_OrderKey AND
-                       Facility = @c_Facility)
+				 -- TLTING02
+         IF @c_MultiFacilityShipment = '1'
          BEGIN
-            SELECT @n_Continue = 3
-            SELECT @c_errmsg = CONVERT(VARCHAR(10),@n_err), @n_err = 63114   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
-            SELECT @c_errmsg='NSQL'+CONVERT(varchar(5),@n_err)+'Location Facility NOT Match with Order Facility (ntrPickDetailAdd)'
-         END
+         		IF NOT EXISTS ( SELECT 1 FROM CODELKUP (NOLOCK) WHERE Storerkey = @c_Storerkey AND Code = @c_facility AND LISTNAME = 'MultiFclt' )		
+	         BEGIN
+	            SELECT @n_Continue = 3
+	            SELECT @c_errmsg = CONVERT(VARCHAR(10),@n_err), @n_err = 63114   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+	            SELECT @c_errmsg='NSQL'+CONVERT(varchar(5),@n_err)+'Location Facility NOT ALLOW with approved Facility (ntrPickDetailAdd)'
+	         END
+	       END
+	       ELSE
+	       BEGIN
+	         IF NOT EXISTS(SELECT 1 FROM ORDERS WITH (NOLOCK) WHERE OrderKey = @c_OrderKey AND
+	                       Facility = @c_Facility)
+	         BEGIN
+	            SELECT @n_Continue = 3
+	            SELECT @c_errmsg = CONVERT(VARCHAR(10),@n_err), @n_err = 63114   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+	            SELECT @c_errmsg='NSQL'+CONVERT(varchar(5),@n_err)+'Location Facility NOT Match with Order Facility (ntrPickDetailAdd)'
+	         END	       	
+	       END
+         -- END TLTING02      
 
          --NJOW03
          SELECT @c_UpdPickslipToPickDet = ''
