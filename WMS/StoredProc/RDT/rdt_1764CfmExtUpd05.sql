@@ -93,59 +93,6 @@ BEGIN
    FROM rdt.rdtMobRec WITH (NOLOCK) 
    WHERE Mobile = @nMobile
 
-   IF EXISTS(SELECT 1 FROM dbo.LOC WITH (NOLOCK) WHERE LOC = @cScannedToLoc AND LocationType = 'PND' )
-   BEGIN
-      DECLARE 
-         @cListKey            NVARCHAR(10),
-         @nCurrentStep        INT
-
-      SELECT 
-         @nCurrentStep = Step
-      FROM rdt.RDTMOBREC WITH (NOLOCK)
-      WHERE Mobile = @nMobile
-
-      IF @nCurrentStep = 6
-      BEGIN
-         SELECT 
-            @cListKey = ListKey
-         FROM dbo.TaskDetail WITH (NOLOCK)
-         WHERE TaskDetailKey = @cTaskdetailKey
-
-         DELETE FROM @tTaskDetail
-
-         INSERT INTO @tTaskDetail ( TaskDetailKey )
-         SELECT DISTINCT TD.TaskDetailKey
-         FROM dbo.TaskDetail TD WITH(NOLOCK)
-         INNER JOIN dbo.SKUInfo SI WITH(NOLOCK) ON TD.SKU = SI.SKU 
-         WHERE TD.StorerKey = @cStorerKey
-            AND TD.ListKey = @cListKey
-            AND TD.Status = '5'
-            AND TD.TaskType = 'RPF'
-            AND TD.UserKey = SUSER_SNAME()
-            AND TD.ToLOC <> @cScannedToLoc
-            AND ISNULL(SI.ExtendedField06, '') = 'SORTABLE' 
-            AND ISNULL(SI.ExtendedField07, '') = 'CONVEYABLE'
-
-         IF @@ROWCOUNT > 0
-         BEGIN
-            BEGIN TRY
-               UPDATE TD
-               SET ToLOC = @cScannedToLoc,
-                  EditDate = GETDATE(),
-                  EditWho  = SUSER_SNAME(),
-                  TrafficCop = NULL
-               FROM dbo.TaskDetail TD WITH(ROWLOCK)
-               INNER JOIN @tTaskDetail TTD ON TD.TaskDetailKey = TTD.TaskDetailKey
-            END TRY
-            BEGIN CATCH
-               SET @nErrNo = 231261
-               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Update TaskDetail ToLoc Fail
-               RETURN
-            END CATCH
-         END
-      END
-   END
-
    -- All logics are copied from 1764CfmExtUpd01, update the rdtmobrec retrieving logic.  By JCH507
 
    -- Get orginal task info
@@ -167,9 +114,14 @@ BEGIN
       SELECT @nOrgSystemQTY AS nOrgSystemQTY, @nOrgTaskQty AS OrgTaskQty, @nShortQTY AS ShortQTY, @cPickMethod AS PickMethod,
                @cReasonCode AS ReasonCode, @cLOT AS LOT, @cFromLOC AS FromLOC, @cFromID AS FromID
 
+   DECLARE @nTranCount  INT
+   SET @nTranCount = @@TRANCOUNT
+   BEGIN TRAN
+   SAVE TRAN rdt_1764CfmExtUpd05
+
    -- FP, does not close pallet or short
    IF @cPickMethod = 'FP'
-      RETURN
+      GOTO UPD_PKD
 
    IF ISNULL(@cFinalLoc, '') <> '' 
       SELECT @cFinalLocPickZone = PickZone
@@ -224,14 +176,8 @@ BEGIN
    BEGIN
       IF @bDebugFlag = 1
          SELECT 'Return directly'
-      RETURN
+      GOTO UPD_PKD
    END
-
-
-   DECLARE @nTranCount  INT
-   SET @nTranCount = @@TRANCOUNT
-   BEGIN TRAN
-   SAVE TRAN rdt_1764CfmExtUpd05
 
    -- Split or short PickDetail
    IF @nQTY < @nSystemQTY
@@ -630,6 +576,66 @@ BEGIN
       END
    END */
    --V1.0.1 the fromLoc inventory record not have QtyReplen value end
+
+   --CHECK and update TaskDetail ToLoc for sortable items if needed.  FCR-7730
+   --Only for mobile step 6 (Short/Close Pallet) and if scanned ToLoc is a PND location
+   --Also only if ToLoc is different from scanned ToLoc
+   --And only for sortable and conveyable items
+   --If all conditions met, update ToLoc to scanned ToLoc
+   UPD_PKD:
+   IF EXISTS(SELECT 1 FROM dbo.LOC WITH (NOLOCK) WHERE LOC = @cScannedToLoc AND LocationType = 'PND' )
+   BEGIN
+      DECLARE 
+         @cListKey            NVARCHAR(10),
+         @nCurrentStep        INT
+
+      SELECT 
+         @nCurrentStep = Step
+      FROM rdt.RDTMOBREC WITH (NOLOCK)
+      WHERE Mobile = @nMobile
+
+      IF @nCurrentStep = 6
+      BEGIN
+         SELECT 
+            @cListKey = ListKey
+         FROM dbo.TaskDetail WITH (NOLOCK)
+         WHERE TaskDetailKey = @cTaskdetailKey
+
+         DELETE FROM @tTaskDetail
+
+         INSERT INTO @tTaskDetail ( TaskDetailKey )
+         SELECT DISTINCT TD.TaskDetailKey
+         FROM dbo.TaskDetail TD WITH(NOLOCK)
+         INNER JOIN dbo.SKUInfo SI WITH(NOLOCK) ON TD.SKU = SI.SKU 
+         WHERE TD.StorerKey = @cStorerKey
+            AND TD.ListKey = @cListKey
+            AND TD.Status = '5'
+            AND TD.TaskType = 'RPF'
+            AND TD.Qty > 0
+            AND TD.UserKey = SUSER_SNAME()
+            AND TD.ToLOC <> @cScannedToLoc
+            AND ISNULL(SI.ExtendedField06, '') = 'SORTABLE' 
+            AND ISNULL(SI.ExtendedField07, '') = 'CONVEYABLE'
+
+         IF @@ROWCOUNT > 0
+         BEGIN
+            BEGIN TRY
+               UPDATE TD
+               SET ToLOC = @cScannedToLoc,
+                  EditDate = GETDATE(),
+                  EditWho  = SUSER_SNAME(),
+                  TrafficCop = NULL
+               FROM dbo.TaskDetail TD WITH(ROWLOCK)
+               INNER JOIN @tTaskDetail TTD ON TD.TaskDetailKey = TTD.TaskDetailKey
+            END TRY
+            BEGIN CATCH
+               SET @nErrNo = 231261
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Update TaskDetail ToLoc Fail
+               RETURN
+            END CATCH
+         END
+      END
+   END
 
    COMMIT TRAN rdt_1764CfmExtUpd05 -- Only commit change made here
    GOTO Quit
