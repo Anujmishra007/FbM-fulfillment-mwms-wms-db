@@ -219,7 +219,7 @@ BEGIN
 
    IF EXISTS ( SELECT 1
                FROM ReceiptDetail (NOLOCK)
-               WHERE ReceiptKey = Receiptkey
+               WHERE ReceiptKey = @cReceiptkey
                   AND StorerKey = @cStorerkey
                HAVING SUM(BeforeReceivedQTY)= SUM(QTYExpected)
                )
