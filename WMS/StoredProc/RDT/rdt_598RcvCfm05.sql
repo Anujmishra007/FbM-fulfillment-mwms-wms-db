@@ -106,7 +106,7 @@ BEGIN
          AND SN.SKU = @cSKUCode
          AND RSL.Mobile =  @nMobile
    group by SN.Userdefine01 
-   
+
    IF EXISTS ( SELECT 1
             FROM Receipt R WITH (NOLOCK) 
                JOIN rdt.rdtConReceiveLog CRL WITH (NOLOCK) ON (R.ReceiptKey = CRL.ReceiptKey)
@@ -218,7 +218,7 @@ BEGIN
 
    IF EXISTS ( SELECT 1
                FROM ReceiptDetail (NOLOCK)
-               WHERE ReceiptKey = @cReceiptkey
+               WHERE ReceiptKey = @cReceiptKey
                   AND StorerKey = @cStorerkey
                HAVING SUM(BeforeReceivedQTY)= SUM(QTYExpected)
                )
@@ -227,7 +227,7 @@ BEGIN
       SET   ASNStatus ='X4',
             EditWho           = SUSER_SNAME(),   
             EditDate          = GETDATE()  
-      WHERE ReceiptKey = @cReceiptkey
+      WHERE ReceiptKey = @cReceiptKey
          AND StorerKey = @cStorerkey
          AND ASNStatus  = '1'
 
