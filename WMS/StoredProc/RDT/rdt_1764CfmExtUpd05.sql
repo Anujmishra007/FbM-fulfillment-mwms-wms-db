@@ -629,7 +629,7 @@ BEGIN
             BEGIN CATCH
                SET @nErrNo = 231261
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Update TaskDetail ToLoc Fail
-               RETURN
+               GOTO RollBackTran
             END CATCH
          END
       END
