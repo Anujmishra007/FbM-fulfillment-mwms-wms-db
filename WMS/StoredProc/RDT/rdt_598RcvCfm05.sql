@@ -98,8 +98,6 @@ BEGIN
       CREATE TABLE #ExternReceiptKey  (  
          ExternReceiptKey     NVARCHAR( 10))  
 
-
-
    INSERT INTO #ExternReceiptKey (ExternReceiptKey)
       SELECT  SN.Userdefine01 
       FROM rdt.rdtReceiveSerialNoLog RSL WITH (NOLOCK) 
@@ -108,8 +106,7 @@ BEGIN
          AND SN.SKU = @cSKUCode
          AND RSL.Mobile =  @nMobile
    group by SN.Userdefine01 
-
-
+   
    IF EXISTS ( SELECT 1
             FROM Receipt R WITH (NOLOCK) 
                JOIN rdt.rdtConReceiveLog CRL WITH (NOLOCK) ON (R.ReceiptKey = CRL.ReceiptKey)
@@ -120,7 +117,9 @@ BEGIN
                )
    BEGIN
       UPDATE R
-         SET R.asnstatus = '1'  
+      SET   R.ASNStatus ='1',
+            R.EditWho           = SUSER_SNAME(),   
+            R.EditDate          = GETDATE()  
       FROM Receipt R WITH (NOLOCK) 
          JOIN rdt.rdtConReceiveLog CRL WITH (NOLOCK) ON (R.ReceiptKey = CRL.ReceiptKey)
          JOIN #ExternReceiptKey ERK WITH (NOLOCK) ON (ERK.ExternReceiptKey =R.ExternReceiptKey )
@@ -225,7 +224,9 @@ BEGIN
                )
    BEGIN
       UPDATE Receipt WITH (ROWLOCK) 
-      SET ASNStatus ='X4'
+      SET   ASNStatus ='X4',
+            EditWho           = SUSER_SNAME(),   
+            EditDate          = GETDATE()  
       WHERE ReceiptKey = @cReceiptkey
          AND StorerKey = @cStorerkey
          AND ASNStatus  = '1'
