@@ -2298,7 +2298,9 @@ BEGIN
             ' @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10, ' +
             ' @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, ' +
             ' @nNOPOFlag, @cConditionCode, @cSubreasonCode, ' +
-            ' @nErrNo OUTPUT, @cErrMsg OUTPUT, @cReceiptKeyOutput OUTPUT, @cReceiptLineNumberOutput OUTPUT '
+            ' @nErrNo OUTPUT, @cErrMsg OUTPUT, @cReceiptKeyOutput OUTPUT, @cReceiptLineNumberOutput OUTPUT, '+
+            ' @cSerialNo,   @nSerialQTY,@nBulkSNO,@nBulkSNOQTY    '
+
 
          SET @cSQLParam =
             '@nFunc          INT,            ' +
@@ -2338,7 +2340,11 @@ BEGIN
             '@nErrNo         INT              OUTPUT, ' +
             '@cErrMsg        NVARCHAR( 20)    OUTPUT, ' +
             '@cReceiptKeyOutput NVARCHAR( 20) OUTPUT, ' +
-            '@cReceiptLineNumberOutput NVARCHAR( 20) OUTPUT '
+            '@cReceiptLineNumberOutput NVARCHAR( 20) OUTPUT, ' +
+            '@cSerialNo      NVARCHAR( 30)      , ' +
+            '@nSerialQTY     INT ,              ' +
+            '@nBulkSNO       INT ,              ' +
+            '@nBulkSNOQTY    INT                '
 
          EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
             @nFunc, @nMobile, @cLangCode, @cStorerKey, @cFacility, @cRefNo, @cColumnName, @cLOC, @cID,
@@ -2347,7 +2353,8 @@ BEGIN
             @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
             @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,
             1, @cReasonCode, @cSubreasonCode,
-            @nErrNo OUTPUT, @cErrMsg OUTPUT, @cReceiptKey OUTPUT, @cReceiptLineNumber OUTPUT
+            @nErrNo OUTPUT, @cErrMsg OUTPUT, @cReceiptKey OUTPUT, @cReceiptLineNumber OUTPUT,
+            @cSerialNo,   @nSerialQTY,@nBulkSNO,@nBulkSNOQTY
       END
       ELSE
       BEGIN
@@ -2390,7 +2397,11 @@ BEGIN
             @cConditionCode = @cReasonCode,
             @cSubreasonCode = @cSubreasonCode,
             @cReceiptKeyOutput = @cReceiptKey OUTPUT,
-            @cReceiptLineNumberOutput = @cReceiptLineNumber OUTPUT
+            @cReceiptLineNumberOutput = @cReceiptLineNumber OUTPUT,
+            @cSerialNo      = @cSerialNo,
+            @nSerialQTY     = @nSerialQTY,
+            @nBulkSNO       = @nBulkSNO,
+            @nBulkSNOQTY    = @nBulkSNOQTY
       END
 
       IF @nErrNo <> 0
@@ -2495,6 +2506,8 @@ BEGIN
 
       IF @cFlowThruQtyScreen = '1'
          GOTO Step_7
+
+      GOTO QUIT
    END
 
    IF @nInputKey = 0 -- Esc or No
@@ -3827,7 +3840,8 @@ BEGIN
             ' @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10, ' +
             ' @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, ' +
             ' @nNOPOFlag, @cConditionCode, @cSubreasonCode, ' +
-            ' @nErrNo OUTPUT, @cErrMsg OUTPUT, @cReceiptKeyOutput OUTPUT, @cReceiptLineNumberOutput OUTPUT '
+            ' @nErrNo OUTPUT, @cErrMsg OUTPUT, @cReceiptKeyOutput OUTPUT, @cReceiptLineNumberOutput OUTPUT, '+
+            '  @cSerialNo,   @nSerialQTY,@nBulkSNO,@nBulkSNOQTY    '
 
          SET @cSQLParam =
             '@nFunc          INT,            ' +
@@ -3867,7 +3881,11 @@ BEGIN
             '@nErrNo         INT              OUTPUT, ' +
             '@cErrMsg        NVARCHAR( 20)    OUTPUT, ' +
             '@cReceiptKeyOutput NVARCHAR( 20) OUTPUT, ' +
-            '@cReceiptLineNumberOutput NVARCHAR( 20) OUTPUT '
+            '@cReceiptLineNumberOutput NVARCHAR( 20) OUTPUT, ' +
+            '@cSerialNo      NVARCHAR( 30)      , ' +
+            '@nSerialQTY     INT ,              ' +
+            '@nBulkSNO       INT ,              ' +
+            '@nBulkSNOQTY    INT                '
 
          EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
             @nFunc, @nMobile, @cLangCode, @cStorerKey, @cFacility, @cRefNo, @cColumnName, @cLOC, @cID,
@@ -3876,7 +3894,8 @@ BEGIN
             @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
             @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,
             1, @cReasonCode, @cSubreasonCode,
-            @nErrNo OUTPUT, @cErrMsg OUTPUT, @cReceiptKey OUTPUT, @cReceiptLineNumber OUTPUT
+            @nErrNo OUTPUT, @cErrMsg OUTPUT, @cReceiptKey OUTPUT, @cReceiptLineNumber OUTPUT,
+            @cSerialNo,   @nSerialQTY,@nBulkSNO,@nBulkSNOQTY
       END
       ELSE
       BEGIN
@@ -3919,7 +3938,11 @@ BEGIN
             @cConditionCode = @cReasonCode,
             @cSubreasonCode = @cSubreasonCode,
             @cReceiptKeyOutput = @cReceiptKey OUTPUT,
-            @cReceiptLineNumberOutput = @cReceiptLineNumber OUTPUT
+            @cReceiptLineNumberOutput = @cReceiptLineNumber OUTPUT,
+            @cSerialNo      = @cSerialNo,
+            @nSerialQTY     = @nSerialQTY,
+            @nBulkSNO       = @nBulkSNO,
+            @nBulkSNOQTY    = @nBulkSNOQTY
       END
 
       IF @nErrNo <> 0
@@ -4090,7 +4113,7 @@ BEGIN
          @nScan      OUTPUT
 
 
-      IF @nErrNo <> 0 OR @nMoreSNO = 1
+      IF @nErrNo <> 0 
          GOTO Quit
 
       DECLARE @nRDQTY INT
@@ -4117,7 +4140,8 @@ BEGIN
             ' @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10, ' +
             ' @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, ' +
             ' @nNOPOFlag, @cConditionCode, @cSubreasonCode, ' +
-            ' @nErrNo OUTPUT, @cErrMsg OUTPUT, @cReceiptKeyOutput OUTPUT, @cReceiptLineNumberOutput OUTPUT '
+            ' @nErrNo OUTPUT, @cErrMsg OUTPUT, @cReceiptKeyOutput OUTPUT, @cReceiptLineNumberOutput OUTPUT, '+
+            '  @cSerialNo,   @nSerialQTY,@nBulkSNO,@nBulkSNOQTY    '
 
          SET @cSQLParam =
             '@nFunc          INT,            ' +
@@ -4157,7 +4181,11 @@ BEGIN
             '@nErrNo         INT              OUTPUT, ' +
             '@cErrMsg        NVARCHAR( 20)    OUTPUT, ' +
             '@cReceiptKeyOutput NVARCHAR( 20) OUTPUT, ' +
-            '@cReceiptLineNumberOutput NVARCHAR( 20) OUTPUT '
+            '@cReceiptLineNumberOutput NVARCHAR( 20) OUTPUT, ' +
+            '@cSerialNo      NVARCHAR( 30)      , ' +
+            '@nSerialQTY     INT ,              ' +
+            '@nBulkSNO       INT ,              ' +
+            '@nBulkSNOQTY    INT                '
 
          EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
             @nFunc, @nMobile, @cLangCode, @cStorerKey, @cFacility, @cRefNo, @cColumnName, @cLOC, @cID,
@@ -4166,7 +4194,8 @@ BEGIN
             @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
             @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,
             1, @cReasonCode, @cSubreasonCode,
-            @nErrNo OUTPUT, @cErrMsg OUTPUT, @cReceiptKey OUTPUT, @cReceiptLineNumber OUTPUT
+            @nErrNo OUTPUT, @cErrMsg OUTPUT, @cReceiptKey OUTPUT, @cReceiptLineNumber OUTPUT,
+            @cSerialNo,   @nSerialQTY,@nBulkSNO,@nBulkSNOQTY
       END
       ELSE
       BEGIN
@@ -4209,7 +4238,11 @@ BEGIN
             @cConditionCode = @cReasonCode,
             @cSubreasonCode = @cSubreasonCode,
             @cReceiptKeyOutput = @cReceiptKey OUTPUT,
-            @cReceiptLineNumberOutput = @cReceiptLineNumber OUTPUT
+            @cReceiptLineNumberOutput = @cReceiptLineNumber OUTPUT,
+            @cSerialNo      = @cSerialNo,
+            @nSerialQTY     = @nSerialQTY,
+            @nBulkSNO       = @nBulkSNO,
+            @nBulkSNOQTY    = @nBulkSNOQTY
       END
 
       IF @nErrNo <> 0
@@ -4309,6 +4342,9 @@ BEGIN
          @dLottable14   = @dLottable14,
          @dLottable15   = @dLottable15
 
+      IF @nMoreSNO = 1
+         GOTO Quit
+
       -- Enable field
       SET @cFieldAttr08 = '' -- @nPQTY
 
@@ -4317,6 +4353,8 @@ BEGIN
 
       IF @cFlowThruQtyScreen = '1'
          GOTO Step_7
+
+      GOTO QUIT
    END
 
    IF @nInputKey = 0 -- ESC
@@ -4409,11 +4447,12 @@ BEGIN
          END
          GOTO QUIT
       END
+      GOTO QUIT 
    END
 
    Step_14_Fail:
    BEGIN
-      EXEC rdt.rdt_SerialNo @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cSKU, @cSKUDesc, @nQTY, 'UPDATE', 'ASN', @cReceiptKey,
+      EXEC rdt.rdt_SerialNo @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cSKU, @cSKUDesc, @nQTY, 'CHECK', 'ASN', @cReceiptKey,
          @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,
          @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,
          @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,

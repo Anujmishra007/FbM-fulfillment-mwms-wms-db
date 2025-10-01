@@ -108,6 +108,13 @@ BEGIN
             GOTO Quit
          END
 
+         IF LEN(@cBarcode)% @nLength <> 0
+         BEGIN
+            SET @nErrNo = 241605
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --LengthNotMat
+            GOTO Quit
+         END
+
          -- Loop 
          DECLARE @cSubString NVARCHAR( 30)
          WHILE @cBarcode <> ''
@@ -123,10 +130,23 @@ BEGIN
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --INS Log Fail
                GOTO Quit
             END
+
          END
       END   
 
-      SET @nBulkSNO = 1
+      IF (SELECT COUNT(1)
+         FROM rdt.rdtReceiveSerialNoLog WITH (NOLOCK)
+         WHERE Mobile = @nMobile
+            AND Func = @nFunc) > 1
+      BEGIN
+         SET @nBulkSNO = 1
+      END
+      ELSE 
+      BEGIN
+         SET @cSerialNo = @cBarcode
+         
+         SET @nBulkSNO = 0
+      END
    END
 
 Quit:
