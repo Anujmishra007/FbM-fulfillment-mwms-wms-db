@@ -18,6 +18,7 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date         Author  Rev   Purposes                                  */
+/* 2025-10-01	AK01	1.0   FCR-6240 bug fixes						*/
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[msp_BEJ_XDockAutoAL01]
     @c_StorerKey   NVARCHAR(15)    = '',
@@ -129,11 +130,13 @@ BEGIN
                                     ': Failed to update PICKDETAIL status. (msp_BEJ_XDockAutoAL01)'
                         GOTO QUIT_SP
                     END
+					FETCH NEXT FROM CUR_PD INTO @c_PickDetailKey      --AK01
                 END
                 CLOSE CUR_PD
                 DEALLOCATE CUR_PD
             END
         END
+		FETCH NEXT FROM CUR_OH INTO @c_Orderkey      --AK01
     END
     CLOSE CUR_OH
     DEALLOCATE CUR_OH
