@@ -1042,7 +1042,6 @@ Step_LOC:
 BEGIN
    IF @nInputKey = 1 -- ENTER
    BEGIN
-
       -- Validate Loc field
       IF @cInField03  = '' OR @cInField03  IS NULL
       BEGIN
