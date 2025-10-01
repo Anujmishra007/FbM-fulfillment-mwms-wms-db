@@ -14,4 +14,8 @@ execute rdt.rdtAddMsg 231258, 10, '231258 UpdTskFail',    'us_english', 1764, 0,
 execute rdt.rdtAddMsg 231259, 10, '231259 UpdTskFail',    'us_english', 1764, 0, '231259 Mark ASTCPK Task as X Fail'
 execute rdt.rdtAddMsg 231260, 10, '231260 UpdTskFail',    'us_english', 1764, 0, '231260 Mark ASTCPK Task as X Fail'
 
+--FCR-7730
+execute rdt.rdtAddMsg 231261, 10, '231261 UpdTskFail',    'us_english', 1764, 0, '231261 Update TaskDetail ToLoc Fail'
+execute rdt.rdtAddMsg 231262, 10, '231262 UpdPKDFail',    'us_english', 1764, 0, '231262 Update PickDetail Loc Fail'
+
 select * from rdt.rdtmsg (nolock) where message_id between 231251 and 231300

@@ -23,6 +23,7 @@ GO
 /*                        for Short pick detail if @cRefTaskKey is empty   */
 /* 2025-07-30    NLT013   1.4.0  UWP-38609 Performance tuning              */
 /* 2025-08-15    NLT013   1.5.0  UWP-39510 SQL Server exception            */
+/* 2025-10-01    NickT    1.6.0  FCR-7730 Update new ToLoc to TaskDetail   */
 /***************************************************************************/
 
 CREATE OR ALTER PROCEDURE rdt.rdt_1764CfmExtUpd05
@@ -33,6 +34,7 @@ CREATE OR ALTER PROCEDURE rdt.rdt_1764CfmExtUpd05
    ,@cNewTaskdetailKey  NVARCHAR( 10) 
    ,@nErrNo             INT           OUTPUT 
    ,@cErrMsg            NVARCHAR( 20) OUTPUT
+   ,@cScannedToLoc       NVARCHAR( 10) = ''  -- New param for FCR-7730
 AS
 BEGIN
    SET NOCOUNT ON
@@ -79,6 +81,71 @@ BEGIN
       TaskDetailKey NVARCHAR(10) PRIMARY KEY
    )
 
+   -- Get suggested replen QTY and actual QTY
+   SET @nQTY_RPL = 0
+   SET @nQTY = 0
+   SELECT 
+      --@nQTY_RPL = V_String15, -- old logic
+      --@nQTY = V_String18 -- old logic
+      @cStorerKey    = StorerKey,--V1.2 DENNIS
+      @nQTY_RPL = V_Integer1, -- V1.0 JCH507
+      @nQTY = V_Integer4 -- V1.0 JCH507 
+   FROM rdt.rdtMobRec WITH (NOLOCK) 
+   WHERE Mobile = @nMobile
+
+   IF EXISTS(SELECT 1 FROM dbo.LOC WITH (NOLOCK) WHERE LOC = @cScannedToLoc AND LocationType = 'PND' )
+   BEGIN
+      DECLARE 
+         @cListKey            NVARCHAR(10),
+         @nCurrentStep        INT
+
+      SELECT 
+         @nCurrentStep = Step
+      FROM rdt.RDTMOBREC WITH (NOLOCK)
+      WHERE Mobile = @nMobile
+
+      IF @nCurrentStep = 6
+      BEGIN
+         SELECT 
+            @cListKey = ListKey
+         FROM dbo.TaskDetail WITH (NOLOCK)
+         WHERE TaskDetailKey = @cTaskdetailKey
+
+         DELETE FROM @tTaskDetail
+
+         INSERT INTO @tTaskDetail ( TaskDetailKey )
+         SELECT DISTINCT TD.TaskDetailKey
+         FROM dbo.TaskDetail TD WITH(NOLOCK)
+         INNER JOIN dbo.SKUInfo SI WITH(NOLOCK) ON TD.SKU = SI.SKU 
+         WHERE TD.StorerKey = @cStorerKey
+            AND TD.ListKey = @cListKey
+            AND TD.Status = '5'
+            AND TD.TaskType = 'RPF'
+            AND TD.UserKey = SUSER_SNAME()
+            AND TD.ToLOC <> @cScannedToLoc
+            AND ISNULL(SI.ExtendedField06, '') = 'SORTABLE' 
+            AND ISNULL(SI.ExtendedField07, '') = 'CONVEYABLE'
+
+         IF @@ROWCOUNT > 0
+         BEGIN
+            BEGIN TRY
+               UPDATE TD
+               SET ToLOC = @cScannedToLoc,
+                  EditDate = GETDATE(),
+                  EditWho  = SUSER_SNAME(),
+                  TrafficCop = NULL
+               FROM dbo.TaskDetail TD WITH(ROWLOCK)
+               INNER JOIN @tTaskDetail TTD ON TD.TaskDetailKey = TTD.TaskDetailKey
+            END TRY
+            BEGIN CATCH
+               SET @nErrNo = 231261
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Update TaskDetail ToLoc Fail
+               RETURN
+            END CATCH
+         END
+      END
+   END
+
    -- All logics are copied from 1764CfmExtUpd01, update the rdtmobrec retrieving logic.  By JCH507
 
    -- Get orginal task info
@@ -113,18 +180,6 @@ BEGIN
       SET @cAutomationPick = 'Y'
    ELSE
       SET @cAutomationPick = 'N'
-
-   -- Get suggested replen QTY and actual QTY
-   SET @nQTY_RPL = 0
-   SET @nQTY = 0
-   SELECT 
-      --@nQTY_RPL = V_String15, -- old logic
-      --@nQTY = V_String18 -- old logic
-      @cStorerKey    = StorerKey,--V1.2 DENNIS
-      @nQTY_RPL = V_Integer1, -- V1.0 JCH507
-      @nQTY = V_Integer4 -- V1.0 JCH507 
-   FROM rdt.rdtMobRec WITH (NOLOCK) 
-   WHERE Mobile = @nMobile
 
    IF @bDebugFlag = 1
       SELECT @nQTY_RPL AS nQTY_RPL, @nQTY AS nQTY
@@ -187,6 +242,8 @@ BEGIN
          IF @bDebugFlag = 1
             SELECT 'Full UCC short'
          BEGIN TRY
+            DELETE FROM @tPickDetail
+
             INSERT INTO @tPickDetail (PickDetailKey)
             SELECT DISTINCT PickDetailKey
             FROM dbo.PickDetail WITH (NOLOCK)
@@ -212,6 +269,8 @@ BEGIN
             BEGIN
                IF @cAutomationPick = 'Y'
                BEGIN
+                  DELETE FROM @tTaskDetail
+                  
                   INSERT INTO @tTaskDetail (TaskDetailKey)
                   SELECT TaskDetailKey
                   FROM dbo.TaskDetail WITH (ROWLOCK)

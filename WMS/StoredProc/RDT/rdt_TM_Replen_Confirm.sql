@@ -20,6 +20,7 @@ GO
 /* 29-Jul-2016 1.3  Ung       SOS324184 Fix split task QTY <> SystemQTY */
 /* 07-Sep-2016 1.4  Ung       SOS372531 Add GroupKey                    */
 /* 17-Jun-2025 1.5  Dennis    FCR-3959 Customize Confirm                */
+/* 01-Oct-2025 1.6  NickT     FCR-7730 Add new Param @cScannedToLoc     */
 /************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_TM_Replen_Confirm] (
@@ -35,7 +36,8 @@ CREATE OR ALTER PROC [rdt].[rdt_TM_Replen_Confirm] (
    @cReasonKey     NVARCHAR( 10), 
    @cListKey       NVARCHAR( 10), 
    @nErrNo         INT          OUTPUT,
-   @cErrMsg        NVARCHAR( 20) OUTPUT
+   @cErrMsg        NVARCHAR( 20) OUTPUT,
+   @cScannedToLoc  NVARCHAR( 10) = ''  -- New param for FCR-7730
 ) AS
 BEGIN
    SET NOCOUNT ON
@@ -213,7 +215,7 @@ BEGIN
       IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cConfirmExtUpdSP AND type = 'P')
       BEGIN
          SET @cSQL = 'EXEC rdt.' + RTRIM( @cConfirmExtUpdSP) +
-            ' @nMobile, @nFunc, @cLangCode, @cTaskdetailKey, @cNewTaskDetailKey, @nErrNo OUTPUT, @cErrMsg OUTPUT'
+            ' @nMobile, @nFunc, @cLangCode, @cTaskdetailKey, @cNewTaskDetailKey, @nErrNo OUTPUT, @cErrMsg OUTPUT, @cScannedToLoc'
          SET @cSQLParam =
             '@nMobile            INT,           ' +
             '@nFunc              INT,           ' +
@@ -221,10 +223,11 @@ BEGIN
             '@cTaskdetailKey     NVARCHAR( 10), ' +
             '@cNewTaskDetailKey  NVARCHAR( 10), ' +
             '@nErrNo             INT OUTPUT,    ' +
-            '@cErrMsg            NVARCHAR( 20) OUTPUT ' 
+            '@cErrMsg            NVARCHAR( 20) OUTPUT, ' +
+            '@cScannedToLoc      NVARCHAR( 10) '  -- New param for FCR-7730
 
          EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-            @nMobile, @nFunc, @cLangCode, @cTaskdetailKey, @cNewTaskDetailKey, @nErrNo OUTPUT, @cErrMsg OUTPUT
+            @nMobile, @nFunc, @cLangCode, @cTaskdetailKey, @cNewTaskDetailKey, @nErrNo OUTPUT, @cErrMsg OUTPUT, @cScannedToLoc
 
          IF @nErrNo <> 0
             GOTO Quit
