@@ -1,6 +1,4 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE ID = OBJECT_ID(N'[RDT].[rdt_ConReceive]') AND OBJECTPROPERTY(id, N'IsProcedure') = 1)
-   DROP PROCEDURE [RDT].[rdt_ConReceive]
-GO
+
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -9,16 +7,17 @@ GO
 
 /******************************************************************************/
 /* Store procedure: rdt_ConReceive                                            */
-/* Copyright      : LF Logistics                                              */
+/* Copyright      : Maersk                                                    */
 /*                                                                            */
 /* Purpose: Receive across multiple ASN                                       */
 /*                                                                            */
 /* Date       Rev  Author     Purposes                                        */
 /* 2015-08-18 1.0  Ung        SOS347636 Created                               */
-/* 2017-06-22 1.3  Ung        WMS-2230 Add sub reason                         */
+/* 2017-06-22 1.1  Ung        WMS-2230 Add sub reason                         */
+/* 2025-07-14 1.2  YeeKung    FCR-5719  Add new params                        */
 /******************************************************************************/
 
-CREATE PROCEDURE rdt.rdt_ConReceive (
+CREATE OR ALTER PROCEDURE rdt.rdt_ConReceive (
    @nFunc          INT,
    @nMobile        INT,
    @cLangCode      NVARCHAR( 3),
@@ -57,7 +56,11 @@ CREATE PROCEDURE rdt.rdt_ConReceive (
    @cSubreasonCode NVARCHAR( 10),
    @cReceiptKeyOutput NVARCHAR( 10) OUTPUT,
    @cReceiptLineNumberOutput NVARCHAR( 5) OUTPUT, 
-   @cDebug         NVARCHAR( 1) = '0'
+   @cDebug         NVARCHAR( 1) = '0',
+   @cSerialNo      NVARCHAR( 30) = '',     
+   @nSerialQTY     INT = 0,     
+   @nBulkSNO       INT = 0,     
+   @nBulkSNOQTY    INT = 0    
 ) AS
 
 SET NOCOUNT ON
