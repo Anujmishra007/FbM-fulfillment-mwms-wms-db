@@ -136,6 +136,7 @@ BEGIN
                 DEALLOCATE CUR_PD
             END
         END
+		
 		FETCH NEXT FROM CUR_OH INTO @c_Orderkey      --AK01
     END
     CLOSE CUR_OH
