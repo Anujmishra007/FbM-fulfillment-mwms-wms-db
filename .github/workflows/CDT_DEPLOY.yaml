@@ -103,9 +103,9 @@ jobs:
           if($DB_CURRENT_VERSION -match $pattern)
             {
             $DB_CURRENT_VERSION = $Matches.0
-            $DB_CURRENT_VERSION_YEAR = $Matches.year
-            $DB_CURRENT_VERSION_MONTH = $Matches.month
-            $DB_CURRENT_VERSION_TAGNUMBER = $Matches.tagnumber
+            $DB_CURRENT_VERSION_YEAR = [int]$Matches.year
+            $DB_CURRENT_VERSION_MONTH = [int]$Matches.month
+            $DB_CURRENT_VERSION_TAGNUMBER = [int]$Matches.tagnumber
             write-host "Current version: $($DB_CURRENT_VERSION), Year : $($DB_CURRENT_VERSION_YEAR), Month: $($DB_CURRENT_VERSION_MONTH), Tag Number: $($DB_CURRENT_VERSION_TAGNUMBER)" 
             }else{
             write-output "| $($DATBASE_NAME) |$($DB_SERVER_NAME) |$($DB_CURRENT_VERSION) |$($DB_DEPLOY_VERSION) | **SKIPPED :heavy_exclamation_mark:** | $($DATBASE_NAME): ⚠️ ERROR : Current version is not in the correct format, skipping deployment for this database. |"| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
@@ -115,9 +115,9 @@ jobs:
             if($DB_DEPLOY_VERSION -match $pattern)
             {
             $DB_DEPLOY_VERSION = $Matches.0
-            $DB_DEPLOY_VERSION_YEAR = $Matches.year
-            $DB_DEPLOY_VERSION_MONTH = $Matches.month
-            $DB_DEPLOY_VERSION_TAGNUMBER = $Matches.tagnumber
+            $DB_DEPLOY_VERSION_YEAR = [int]$Matches.year
+            $DB_DEPLOY_VERSION_MONTH = [int]$Matches.month
+            $DB_DEPLOY_VERSION_TAGNUMBER = [int]$Matches.tagnumber
             write-host "Current version: $($DB_DEPLOY_VERSION), Year : $($DB_DEPLOY_VERSION_YEAR), Month: $($DB_DEPLOY_VERSION_MONTH), Tag Number: $($DB_DEPLOY_VERSION_TAGNUMBER)"
             }else{
             write-output "| $($DATBASE_NAME) |$($DB_SERVER_NAME) |$($DB_CURRENT_VERSION) |$($DB_DEPLOY_VERSION) | **SKIPPED :heavy_exclamation_mark:** | $($DATBASE_NAME): ⚠️ ERROR : Current version is not in the correct format, skipping deployment for this database. |"| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
