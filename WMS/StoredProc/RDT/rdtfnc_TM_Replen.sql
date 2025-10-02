@@ -63,7 +63,7 @@ GO
 /* 2025-08-08 4.5.0 NickT     UWP-39061 SuggestToLoc is reset by mistake      */
 /* 2025-06-16 4.6.0 Dennis    FCR-3959 Extended Update on Step 7              */
 /* 2025-08-20 4.6.1 Dennis    FCR-3959 New Feature                            */
-/* 2025-08-10 4.6.0 NickT     FCR-7730 Support OverwriteToLOC                 */
+/* 2025-08-10 4.7.0 NickT     FCR-7730 Support OverwriteToLOC                 */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_Replen](
@@ -2707,7 +2707,8 @@ BEGIN
          @cReasonCode,
          @cListKey,
          @nErrNo  OUTPUT,
-         @cErrMsg OUTPUT
+         @cErrMsg OUTPUT,
+         @cToLOC
       IF @nErrNo <> 0
       BEGIN
          ROLLBACK TRAN rdtfnc_TM_Replen
