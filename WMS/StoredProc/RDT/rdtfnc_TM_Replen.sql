@@ -2707,8 +2707,7 @@ BEGIN
          @cReasonCode,
          @cListKey,
          @nErrNo  OUTPUT,
-         @cErrMsg OUTPUT,
-         @cToLOC
+         @cErrMsg OUTPUT
       IF @nErrNo <> 0
       BEGIN
          ROLLBACK TRAN rdtfnc_TM_Replen
@@ -2722,7 +2721,8 @@ BEGIN
          @cUserName,
          @cListKey,
          @nErrNo  OUTPUT,
-         @cErrMsg OUTPUT
+         @cErrMsg OUTPUT,
+         @cToLOC
       IF @nErrNo <> 0
       BEGIN
          ROLLBACK TRAN rdtfnc_TM_Replen
