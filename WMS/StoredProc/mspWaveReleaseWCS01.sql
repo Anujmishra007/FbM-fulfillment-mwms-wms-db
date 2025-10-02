@@ -31,7 +31,8 @@ GO
 /*                            orderinfo.orderinfo06 as per v2.1          */
 /* 2025-04-23   WAN01   1.7   UWP-33280 - [FCR-4179] [LEVI's] Release    */
 /*                            to WCS Update SO DischargePlace            */
-/* 2025-08-29   AYD01   1.8   FCR-7636: Retrive WCSCode from LONG coliumn*/  
+/* 2025-08-29   AYD01   1.8   FCR-7636: Retrive WCSCode from LONG coliumn*/
+/* 2025-10-02   WLChooi 1.9   FCR-7636 Remove Validation (WL01)          */
 /*************************************************************************/   
 CREATE OR ALTER PROCEDURE [dbo].[mspWaveReleaseWCS01]
   @c_Wavekey      NVARCHAR(10)  
@@ -119,24 +120,25 @@ CREATE OR ALTER PROCEDURE [dbo].[mspWaveReleaseWCS01]
          SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Wave already released to WCS. (mspWaveReleaseWCS01) '
       END
       ----(SSA05) start-----
-      IF @n_Continue IN (1,2)
-      BEGIN
-         SELECT TOP 5 @c_Orderkeys = STRING_AGG(o.Orderkey,', ')                    --(Wan01) - START                                                                 
-            WITHIN GROUP (ORDER BY o.dischargeplace ASC)
-         FROM ORDERS o(NOLOCK)  
-         JOIN WAVEDETAIL(NOLOCK) wd ON wd.ORDERKEY = o.ORDERKEY
-         WHERE wd.WAVEKEY = @c_Wavekey
-         AND o.DischargePlace IS NOT NULL AND o.DischargePlace <> ''
+      --WL01 S
+      --IF @n_Continue IN (1,2)
+      --BEGIN
+         --SELECT TOP 5 @c_Orderkeys = STRING_AGG(o.Orderkey,', ')                    --(Wan01) - START                                                                 
+         --   WITHIN GROUP (ORDER BY o.dischargeplace ASC)
+         --FROM ORDERS o(NOLOCK)  
+         --JOIN WAVEDETAIL(NOLOCK) wd ON wd.ORDERKEY = o.ORDERKEY
+         --WHERE wd.WAVEKEY = @c_Wavekey
+         --AND o.DischargePlace IS NOT NULL AND o.DischargePlace <> ''
 
-         IF @c_Orderkeys > ''
-         BEGIN
-            SET @n_continue = 3
-            SET @n_err = 81021
-            SET @c_errmsg = 'NSQL'+CONVERT(NVARCHAR(5),@n_err)
-                          + ': Remove Place of Discharge from Shipment Order(s): ' + @c_Orderkeys
-                          + ' before Releasing wave to WCS'
-                          + '. (mspWaveReleaseWCS01) '
-         END
+         --IF @c_Orderkeys > ''
+         --BEGIN
+         --   SET @n_continue = 3
+         --   SET @n_err = 81021
+         --   SET @c_errmsg = 'NSQL'+CONVERT(NVARCHAR(5),@n_err)
+         --                 + ': Remove Place of Discharge from Shipment Order(s): ' + @c_Orderkeys
+         --                 + ' before Releasing wave to WCS'
+         --                 + '. (mspWaveReleaseWCS01) '
+         --END
          --IF NOT EXISTS (SELECT 1 FROM ORDERINFO(NOLOCK) oi
          --               JOIN ORDERS(NOLOCK) o ON o.ORDERKEY = oi.ORDERKEY
          --               JOIN WAVEDETAIL(NOLOCK) wd ON wd.ORDERKEY = o.ORDERKEY
@@ -148,9 +150,9 @@ CREATE OR ALTER PROCEDURE [dbo].[mspWaveReleaseWCS01]
          --   SET @n_err = 81021
          --   SET @c_errmsg='NSQL'+CONVERT(NVARCHAR(5),@n_err)+': Cannot Re-release to WCS. (mspWaveReleaseWCS01) '
          --END                                                                      --(Wan01) - END
+      --END
+      --WL01 E
 
-      END
-  
       ----(SSA05) end -----
       IF @n_Continue IN (1,2)
       BEGIN
