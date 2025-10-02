@@ -1,7 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_WAV_PopulateSO_Wrapper]')
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 )
-DROP PROCEDURE [WM].[lsp_WAV_PopulateSO_Wrapper]
-GO
 
 SET ANSI_NULLS OFF
 GO
@@ -30,7 +26,7 @@ GO
 /* 2024-12-05  Wan02    1.2   INC7494012 - Bug fix                      */
 /* 2025-09-02  SWT01    1.1   Enhanced session management pattern       */
 /************************************************************************/                                                                                    
-CREATE PROC [WM].[lsp_WAV_PopulateSO_Wrapper]                                                                                                                       
+CREATE OR ALTER PROC [WM].[lsp_WAV_PopulateSO_Wrapper]                                                                                                                       
       @c_Wavekey              NVARCHAR(10)         --Wavekey to Populate to   
    ,  @c_OrderKeyList         NVARCHAR(4000) = ''  -- Order Keys seperated by '|' if multiple orders to populate  
    ,  @b_Success              INT = 1           OUTPUT    

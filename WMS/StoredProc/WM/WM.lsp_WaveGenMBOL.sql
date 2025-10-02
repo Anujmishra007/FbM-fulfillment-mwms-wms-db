@@ -29,7 +29,7 @@ GO
 /*                            Validation to Create MBOL                 */
 /* 2025-09-02  SWT01    1.4   Enhanced session management pattern       */
 /************************************************************************/                                                                                  
-CREATE PROC [WM].[lsp_WaveGenMBOL]                                                                                                                     
+CREATE OR ALTER PROC [WM].[lsp_WaveGenMBOL]                                                                                                                     
       @c_WaveKey           NVARCHAR(10)
    ,  @b_Success           INT = 1           OUTPUT  
    ,  @n_err               INT = 0           OUTPUT                                                                                                             

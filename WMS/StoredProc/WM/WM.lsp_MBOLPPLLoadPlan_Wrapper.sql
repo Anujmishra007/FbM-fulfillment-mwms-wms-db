@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_MBOLPPLLoadPlan_Wrapper]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [WM].[lsp_MBOLPPLLoadPlan_Wrapper] 
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -29,7 +24,7 @@ GO
 /*                            Execute Login if @c_UserName<>SUSER_SNAME()*/
 /* 2025-09-02  SWT01    1.2   Enhanced session management pattern       */
 /************************************************************************/                                                                                  
-CREATE PROC [WM].[lsp_MBOLPPLLoadPlan_Wrapper] 
+CREATE OR ALTER PROC [WM].[lsp_MBOLPPLLoadPlan_Wrapper] 
       @c_MBOLKey              NVARCHAR(10)
    ,  @c_OrderKeys            NVARCHAR(4000)             --List of OrderKeys, seperated by '|'
    ,  @b_Success              INT = 1           OUTPUT  

@@ -24,7 +24,7 @@ GO
 /*                            Execute Login if @c_UserName<>SUSER_SNAME()*/ 
 /* 2025-09-02  SWT01    1.1   Enhanced session management pattern       */
 /************************************************************************/                                                                                  
-CREATE PROC [WM].[lsp_MBOLPPLOrderType2_Wrapper] 
+CREATE OR ALTER PROC [WM].[lsp_MBOLPPLOrderType2_Wrapper] 
       @c_MBOLKey              NVARCHAR(10)
    ,  @c_OrderKeys            NVARCHAR(4000)             --List of OrderKeys, seperated by '|'
    ,  @b_Success              INT = 1           OUTPUT  

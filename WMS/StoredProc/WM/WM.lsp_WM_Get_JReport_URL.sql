@@ -29,7 +29,7 @@ GO
 /* 15-Apr-2021 KHL05 1.5 https://jiralfl.atlassian.net/browse/LFWM-2727 ,8*/
 /* 2025-09-02  SWT01    1.1   Enhanced session management pattern       */
 /************************************************************************/
-CREATE  PROC  WM.lsp_WM_Get_JReport_URL
+CREATE  OR ALTER PROC  [WM].[lsp_WM_Get_JReport_URL]
      @c_CountryName        NVARCHAR(50)  =''
    , @c_Storerkey          NVARCHAR(15)
    , @c_Application        NVARCHAR(15)
