@@ -14,7 +14,7 @@ GO
 /*                                                                         */
 /* Called By: nspOrderProcessing                                           */
 /*                                                                         */
-/* PVCS Version: 2.7                                                       */
+/* PVCS Version: 2.8                                                       */
 /*                                                                         */
 /* Version: 8.0                                                            */
 /*                                                                         */
@@ -47,6 +47,7 @@ GO
 /* 25-Aug-2025 WLChooi  2.6  UWP-39928 Optimize UCC allocation for UOM 2   */
 /*                           (WL02)                                        */
 /* 14-Aug-2025 WLChooi  2.7  UWP-36187-Support Multi Facilities(WL01)      */
+/* 03-Oct-2025 WLChooi  2.8  FCR-7828 Exclude UCC Hold - Status = H (WL03) */
 /***************************************************************************/
 
 CREATE OR ALTER   PROC [dbo].[nspALCFG03]
@@ -1024,6 +1025,7 @@ BEGIN
                                        ' AND (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QTYREPLEN) >= 1 ' 
                                   END  +                                    
                                   ISNULL(RTRIM(@c_ConditionForLot),'') + ' ' + ISNULL(RTRIM(@c_CLKConditionForLot),'') +
+                                  CASE WHEN @c_AllocateByUCCFlag = 'Y' THEN ' AND UCC.Status <> ''H'' ' ELSE '' END +   --WL03
                                   ' GROUP BY LOTxLOCxID.LOT'                    
 
          SET @c_SQLParms = N'@c_Facility NVARCHAR(5), @c_StorerKey NVARCHAR(15), @c_SKU  NVARCHAR(20), @c_UOM NVARCHAR(10), @c_HostWHCode NVARCHAR(10)'
@@ -1153,6 +1155,7 @@ BEGIN
                                    ELSE ' ' END +  --NJOW11
                               CASE WHEN @c_AllocateByUCCFlag = 'Y' AND @c_UOM IN ('2')          --WL02
                                    THEN ' AND UCC.Qty <= @n_QtyLeftToFulfill ' ELSE ' ' END +   --WL02
+                              CASE WHEN @c_AllocateByUCCFlag = 'Y' THEN ' AND UCC.Status <> ''H'' ' ELSE '' END +   --WL03
                               ISNULL(RTRIM(@c_Condition),'') + ' ' + ISNULL(RTRIM(@c_CLKCondition),'') + ' ' + @c_SortBy
 
       --(Wan01) - START
@@ -1499,6 +1502,7 @@ BEGIN
                                  ' AND (LOTxLOCxID.QTY - LOTxLOCxID.QTYALLOCATED - LOTxLOCxID.QTYPICKED - LOTxLOCxID.QTYREPLEN) >= @n_uombase ' END +
                               CASE WHEN @c_AllocateByUCCFlag = 'Y' AND @c_UOM IN ('2')          --WL02
                                    THEN ' AND UCC.Qty <= @n_QtyLeftToFulfill ' ELSE ' ' END +   --WL02
+                              CASE WHEN @c_AllocateByUCCFlag = 'Y' THEN ' AND UCC.Status <> ''H'' ' ELSE '' END +   --WL03
                               ISNULL(RTRIM(@c_Condition),'') + ' ' + ISNULL(RTRIM(@c_CLKCondition),'') + ' ' + @c_SortBy
 
       --(Wan01) - START
@@ -1566,5 +1570,3 @@ END
 GO
 GRANT EXECUTE ON  [dbo].[nspALCFG03] TO [NSQL]
 GO
-
-
