@@ -201,8 +201,8 @@ BEGIN
    IF (@n_Continue = 1 OR @n_Continue = 2)
    BEGIN
       BEGIN TRY
-         EXEC dbo.nspGetRight @c_Facility = @c_StorerKey -- nvarchar(5)
-                            , @c_StorerKey = @c_Facility -- nvarchar(15)
+         EXEC dbo.nspGetRight @c_Facility = @c_Facility -- nvarchar(5)
+                            , @c_StorerKey = @c_StorerKey -- nvarchar(15)
                             , @c_sku = N'' -- nvarchar(20)
                             , @c_ConfigKey = N'RealloStrategy' -- nvarchar(30)
                             , @b_Success = @b_Success OUTPUT -- int
