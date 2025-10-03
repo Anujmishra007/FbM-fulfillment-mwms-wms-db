@@ -197,27 +197,45 @@ BEGIN
    WHERE S.STORERKEY = @c_StorerKey
    AND   S.SKU       = @c_SKU
 
-   SELECT @c_StrategykeyParm = SC.SValue
-   FROM StorerConfig SC WITH (NOLOCK)
-   WHERE SC.StorerKey = @c_StorerKey
-   AND SC.ConfigKey = 'RealloStrategy'
-
-   IF ISNULL(@c_StrategykeyParm, '') = ''
-      SET @c_StrategykeyParm = ''
-
-   IF NOT EXISTS ( SELECT 1
-                   FROM dbo.PICKDETAIL PD WITH (NOLOCK)    
-                   WHERE PD.Storerkey = @c_StorerKey
-                   AND PD.Sku = @c_SKU    
-                   AND PD.DropID = @c_UCCNo    
-                   AND PD.Qty > 0    
-                   AND PD.[Status] < '5' )    
+   --Get Storerconfig setup
+   IF (@n_Continue = 1 OR @n_Continue = 2)
    BEGIN
-      SELECT @n_Continue = 3
-      SELECT @n_Err = 64503
-      SELECT @c_Errmsg = 'NSQL'+ CONVERT(NVARCHAR(5), @n_Err)+': No Record Found (msp_ProcessShortPickReAlloc01)'
-                       + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(TRIM(@c_Errmsg), '') + ' ) '   
-   END    
+      BEGIN TRY
+         EXEC dbo.nspGetRight @c_Facility = @c_StorerKey -- nvarchar(5)
+                            , @c_StorerKey = @c_Facility -- nvarchar(15)
+                            , @c_sku = N'' -- nvarchar(20)
+                            , @c_ConfigKey = N'RealloStrategy' -- nvarchar(30)
+                            , @b_Success = @b_Success OUTPUT -- int
+                            , @c_authority = @c_StrategykeyParm OUTPUT -- nvarchar(30)
+                            , @n_err = @n_err OUTPUT -- int
+                            , @c_errmsg = @c_errmsg OUTPUT -- nvarchar(250)
+      END TRY
+      BEGIN CATCH
+         SET @n_Continue = 3
+         SET @c_ErrMsg = ERROR_MESSAGE()
+      END CATCH
+
+      IF ISNULL(@c_StrategykeyParm, '') = ''
+         SET @c_StrategykeyParm = ''
+   END
+
+   --Validation
+   IF (@n_Continue = 1 OR @n_Continue = 2)
+   BEGIN
+      IF NOT EXISTS ( SELECT 1
+                      FROM dbo.PICKDETAIL PD WITH (NOLOCK)    
+                      WHERE PD.Storerkey = @c_StorerKey
+                      AND PD.Sku = @c_SKU    
+                      AND PD.DropID = @c_UCCNo    
+                      AND PD.Qty > 0    
+                      AND PD.[Status] < '5' )    
+      BEGIN
+         SELECT @n_Continue = 3
+         SELECT @n_Err = 64503
+         SELECT @c_Errmsg = 'NSQL'+ CONVERT(NVARCHAR(5), @n_Err)+': No Record Found (msp_ProcessShortPickReAlloc01)'
+                          + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(TRIM(@c_Errmsg), '') + ' ) '   
+      END
+   END
    
    --Un-allocate Wave    
    --Update PickDetail.Qty to Zero    
