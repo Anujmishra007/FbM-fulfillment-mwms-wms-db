@@ -111,9 +111,7 @@ BEGIN
                         FROM SKUXLOC (NOLOCK)
                         WHERE SKU <> @c_Sku
                         AND Loc = @c_ToLoc
---ML01                        AND Qty > 0)                  
-                        AND Storerkey = @c_Storerkey   --ML01
-                        AND QTY > QTYPicked)           --ML01
+                        AND Qty > 0)                  
                BEGIN
 --ML01                  SELECT @n_WarningNo = 1
 --ML01                  SELECT @n_continue = 4                                            --(Wan05)
