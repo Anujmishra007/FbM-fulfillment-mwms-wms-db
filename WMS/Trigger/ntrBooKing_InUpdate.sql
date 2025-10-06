@@ -1,6 +1,6 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrBooking_InUpdate]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
-drop trigger [dbo].[ntrBooking_InUpdate]
-GO
+--if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrBooking_InUpdate]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
+--drop trigger [dbo].[ntrBooking_InUpdate]
+--GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -35,11 +35,12 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date         Author    Ver.    Purposes                              */
-/* 25-SEP-2013 NJOW01  1.0   288370-Create booking audit record         */   
-/* 28-Oct-2013  TLTING    1.1     Review Editdate column update         */
+/* 25-SEP-2013  NJOW01    1.0   288370-Create booking audit record      */   
+/* 28-Oct-2013  TLTING    1.1   Review Editdate column update           */
+/* 06-Oct-2025  AK01      1.2   UWP-42143 Data Audit                    */
 /************************************************************************/
 
-CREATE TRIGGER ntrBooking_InUpdate
+CREATE OR ALTER TRIGGER ntrBooking_InUpdate
 ON  Booking_In
 FOR UPDATE
 AS
@@ -119,8 +120,8 @@ BEGIN
             UPDATE RECEIPT WITH (ROWLOCK)
             SET Containerkey = '',
                 TrafficCop = NULL,
-                EditDate = GETDATE(),
-                EditWho = SUSER_SNAME()
+                EditDate = dbo.fnc_GetUserName(),     -- GETDATE()         AK01  
+                EditWho = dbo.fnc_GetDate()           -- SUSER_SNAME()     AK01
             WHERE Receiptkey = @c_receiptkey      
             IF @@ERROR <> 0
             BEGIN
@@ -168,8 +169,8 @@ BEGIN
             UPDATE RECEIPT WITH (ROWLOCK)
             SET Containerkey = @c_containerno,
                 TrafficCop = NULL,
-                EditDate = GETDATE(),
-                EditWho = SUSER_SNAME()
+                EditDate = dbo.fnc_GetUserName(),     -- GETDATE()       AK01
+                EditWho = dbo.fnc_GetDate()           -- SUSER_SNAME()   AK01
             WHERE Receiptkey = @c_receiptkey      
             IF @@ERROR <> 0
             BEGIN
@@ -199,8 +200,8 @@ BEGIN
    IF ( @n_continue = 1 OR @n_continue = 2 ) AND NOT UPDATE(EditDate)
    BEGIN
       UPDATE BOOKING_IN with (ROWLOCK)
-      SET EditWho = sUser_sName(),
-          EditDate = GetDate()
+      SET EditWho = dbo.fnc_GetDate(),          -- SUSER_SNAME()     AK01
+          EditDate = dbo.fnc_GetUserName()      -- GETDATE()         AK01
       FROM BOOKING_IN 
       JOIN INSERTED ON BOOKING_IN.BookingNo = INSERTED.BookingNo
    END
