@@ -2628,7 +2628,7 @@ BEGIN
                       ID = @c_ToID,
                       EditDate = GETDATE(),
                       EditWho = SUSER_SNAME(),
-                      Lot = CASE WHEN @c_ASNFizUpdLotToSerialNo IN('1','2') THEN @c_Lot ELSE Lot END, --(Wan05)--NJOW14
+                      Lot = CASE WHEN @c_ASNFizUpdLotToSerialNo IN('1','2') OR @c_SerialNoUpdateLotLocID = '1' THEN @c_Lot ELSE Lot END, --(Wan05)--NJOW14 --NJOW15
                       Loc = CASE WHEN @c_SerialNoUpdateLotLocID = '1' THEN @c_ToLoc ELSE Loc END --NJOW15
                   WHERE SerialNoKey = @c_SerialNoKey
 
