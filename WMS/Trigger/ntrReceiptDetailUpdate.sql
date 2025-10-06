@@ -2553,6 +2553,7 @@ BEGIN
             END            
 
             IF @c_ASNFizUpdLotToSerialNo IN ( '1', '2' )                            --(Wan05)
+               OR @c_SerialNoUpdateLotLocID = '1'  --NJOW15
             BEGIN
                SELECT TOP 1 @c_LOT = Lot
                FROM ITRN WITH (NOLOCK)
