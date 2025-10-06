@@ -220,8 +220,8 @@ BEGIN
       SET @c_SQL = @c_SQL
                +  ' AND LOC.Facility = @c_Facility'
    END
-   SET @c_SQL = @c_SQL
    --ML02-E
+   SET @c_SQL = @c_SQL
                +  ' AND (LOTxLOCxID.Qty - LOTxLOCxID.QtyAllocated- LOTxLOCxID.QtyPicked) > 0'
                +  @c_LAConditions
                +  ' GROUP BY LOTxLOCxID.Lot'
