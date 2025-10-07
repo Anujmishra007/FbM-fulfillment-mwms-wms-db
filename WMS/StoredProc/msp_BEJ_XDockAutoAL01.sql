@@ -17,8 +17,10 @@ GO
 /* Data Modifications:                                                  */
 /*                                                                      */
 /* Updates:                                                             */
-/* Date         Author  Rev   Purposes                                  */
-/* 2025-10-01	AK01	1.0   FCR-6240 bug fixes						*/
+/* Date        Author   Rev   Purposes                                  */
+/* 2025-10-01  AK01     1.0   FCR-6240 bug fixes                        */
+/* 2025-10-01  AK02     1.1   FCR-6240 change request for copy PD.ID to */
+/*                            PD.DropID                                 */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[msp_BEJ_XDockAutoAL01]
     @c_StorerKey   NVARCHAR(15)    = '',
@@ -41,6 +43,7 @@ BEGIN
             , @n_StartTranCount     INT            = @@TRANCOUNT
             , @c_OrderKey           NVARCHAR(10)   = ''
             , @c_PickDetailKey      NVARCHAR(10)   = ''
+            , @c_PickDetailID       NVARCHAR(18)   = ''           --AK02
 
     DECLARE CUR_OH CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
     -- Select orders that are ready for processing
@@ -110,30 +113,32 @@ BEGIN
             --Update pickdetail status to 5
             IF @n_continue IN(1,2)
             BEGIN
-                DECLARE CUR_PD CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-                SELECT pd.PickDetailKey FROM PICKDETAIL pd (nolock) WHERE pd.OrderKey=@c_Orderkey
-                OPEN CUR_PD
-                FETCH NEXT FROM CUR_PD INTO @c_PickDetailKey
-                WHILE @@FETCH_STATUS <> -1 AND @n_continue IN(1,2)
-                BEGIN
-                    -- Update the status of each pickdetail to 5
-                    UPDATE PICKDETAIL WITH (ROWLOCK)
-                    SET Status = '5'
-                    WHERE PickDetailKey = @c_PickDetailKey
-                    AND OrderKey = @c_Orderkey
-
-                    IF @@ERROR <> 0
-                        BEGIN
-                        SET @n_Continue = 3
-                        SET @n_Err = 68075
-                        SET @c_ErrMsg = 'NSQL' + CONVERT(NCHAR(5), @n_Err) + 
-                                    ': Failed to update PICKDETAIL status. (msp_BEJ_XDockAutoAL01)'
-                        GOTO QUIT_SP
-                    END
-					FETCH NEXT FROM CUR_PD INTO @c_PickDetailKey      --AK01
-                END
-                CLOSE CUR_PD
-                DEALLOCATE CUR_PD
+               DECLARE CUR_PD CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+               SELECT pd.PickDetailKey, ISNULL(pd.[Id], '')   
+               FROM PICKDETAIL pd (nolock) WHERE pd.OrderKey=@c_Orderkey
+               OPEN CUR_PD
+               FETCH NEXT FROM CUR_PD INTO @c_PickDetailKey, @c_PickDetailID
+               WHILE @@FETCH_STATUS <> -1 AND @n_continue IN(1,2)
+               BEGIN
+                  -- Update the status of each pickdetail to 5
+                  UPDATE PICKDETAIL WITH (ROWLOCK)
+                  SET Status = '5'
+                     ,DropID = @c_PickDetailID   -- AK02
+                  WHERE PickDetailKey = @c_PickDetailKey
+                  AND OrderKey = @c_Orderkey
+                  
+                  IF @@ERROR <> 0
+                      BEGIN
+                      SET @n_Continue = 3
+                      SET @n_Err = 68075
+                      SET @c_ErrMsg = 'NSQL' + CONVERT(NCHAR(5), @n_Err) + 
+                                  ': Failed to update PICKDETAIL status. (msp_BEJ_XDockAutoAL01)'
+                      GOTO QUIT_SP
+                  END
+                  FETCH NEXT FROM CUR_PD INTO @c_PickDetailKey, @c_PickDetailID      --AK01
+               END
+               CLOSE CUR_PD
+               DEALLOCATE CUR_PD
             END
         END
 		

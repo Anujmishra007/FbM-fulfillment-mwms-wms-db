@@ -24,6 +24,7 @@ GO
 /* Updates:                                                             */
 /* Date         Author  Ver.  Purposes                                  */
 /* 21-Aug-2024  WLChooi 1.0   DevOps Combine Script                     */
+/* 30-May-2025  JunielChee 1.0   Comment FIFO Part                      */
 /* 25-Jun-2025  WLChooi 1.1   UWP-36187-Support Multi Facilities(WL01)  */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[nspAL_SG11]        
@@ -268,18 +269,18 @@ BEGIN
          BREAK
 
       --Strict FIFO
-      IF @n_PrevLotQtyAvailable = 0
+     /* IF @n_PrevLotQtyAvailable = 0
       BEGIN
          SELECT @n_PrevLotQtyAvailable = SUM(QtyAvailable)
          FROM #T_INV
          WHERE DATEDIFF(DAY, Lottable05, @dt_GetLottable05) > 0
          AND QtyAvailable > 0
-         
+
          SET @n_PrevLotQtyAvailable = ISNULL(@n_PrevLotQtyAvailable, 0)
-         
-         IF @n_PrevLotQtyAvailable >= @n_QtyLeftToFulfill       
+
+         IF @n_PrevLotQtyAvailable >= @n_QtyLeftToFulfill
             BREAK
-      END
+      END*/
 
       IF @c_UOM = '1' --Pallet
       BEGIN
@@ -410,18 +411,18 @@ BEGIN
             BREAK
          
          --Strict FIFO
-         IF @n_PrevLotQtyAvailable = 0
+        /* IF @n_PrevLotQtyAvailable = 0
          BEGIN
             SELECT @n_PrevLotQtyAvailable = SUM(QtyAvailable)
             FROM #T_INV
             WHERE DATEDIFF(Day, Lottable05, @dt_GetLottable05) > 0
             AND QtyAvailable > 0
-            
+
             SET @n_PrevLotQtyAvailable = ISNULL(@n_PrevLotQtyAvailable, 0)
-            
-            IF @n_PrevLotQtyAvailable >= @n_QtyLeftToFulfill       
+
+            IF @n_PrevLotQtyAvailable >= @n_QtyLeftToFulfill
                BREAK
-         END
+         END*/
    
          IF (@n_QtyLeftToFulfill - @n_PrevLotQtyAvailable) >= @n_QtyAvailable
          BEGIN
