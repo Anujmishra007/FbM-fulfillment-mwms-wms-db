@@ -66,7 +66,7 @@ BEGIN
       SET @cSNOP2 = rdt.rdtGetParsedString( @cBarcode, 5, '&')
       SET @cSNOP3 = rdt.rdtGetParsedString( @cBarcode, 7, '&')
 
-      SET @cSerialNo = @cSNOP1 + '&' + @cSNOP2 + '&' + @cSNOP3
+      SET @cSerialNo = @cSNOP1 + @cSNOP2 + @cSNOP3
       SET @nSerialQTY = 1
    END
    ELSE

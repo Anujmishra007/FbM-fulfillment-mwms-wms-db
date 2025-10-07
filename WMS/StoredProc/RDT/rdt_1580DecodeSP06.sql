@@ -112,7 +112,7 @@ BEGIN
                GOTO Quit
             END
             
-            SET @cMasterSerialNo = @cSNOP1 + '&' + @cSNOP2 + '&' + @cSNOP3
+            SET @cMasterSerialNo = @cSNOP1 + @cSNOP2 + @cSNOP3
             
             -- Check serial no 
             IF NOT EXISTS( SELECT 1
