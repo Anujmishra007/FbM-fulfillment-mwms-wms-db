@@ -36,6 +36,10 @@ GO
 /* 12-Aug-2025  Wan06  1.8    UWP-39035 - Matching RPF Section to find   */
 /*                            DPP for FCR-6708 & FCR-2902                */
 /* 12-Sep-2025                FCR-6708 Bug Fix (include FCR-2902)        */
+/* 07-Oct-2025  Wan07   1.9   UWP-42103 VNA Replen confirm SP issue      */
+/*                            VNA Confirm get ToID to do movement & create*/
+/*                            FromID = ToID for RP1 task. Hence need to  */
+/*                            maintain FromID to ToID for RPF task       */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]       
     @c_Wavekey      NVARCHAR(10)    
@@ -723,7 +727,7 @@ CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]
                                      THEN 'VNAOUT' ELSE 'RPF' END
             SET @c_TaskStatus = CASE WHEN @b_ManualFPK=0 AND @c_LocationType = 'VNA' --(Wan05)
                                      THEN 'Q' ELSE '0' END
-            SET @c_ToID       = IIF (@c_LoseID = '1', '', @c_FromID)
+            SET @c_ToID       = @c_FromID                                           --(Wan07) VNA Confirm Issue   
             SET @c_Message03  = N'RPF'
             SET @c_Taskdetailkey = ''                                               --2025-07-09
                      
