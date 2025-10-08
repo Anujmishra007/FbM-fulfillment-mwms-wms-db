@@ -1,13 +1,40 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrLoadPlanRetDetailAdd]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
-drop trigger [dbo].[ntrLoadPlanRetDetailAdd]
-GO
 
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
 GO
 
-CREATE TRIGGER ntrLoadPlanRetDetailAdd
+/************************************************************************/
+/* Trigger: ntrLoadPlanRetDetailAdd                                     */
+/* Creation Date:                                                       */
+/* Copyright: IDS                                                       */
+/* Written by:                                                          */
+/*                                                                      */
+/* Purpose:                                                             */
+/*                                                                      */
+/* Input Parameters:                                                    */
+/*                                                                      */
+/* Output Parameters:                                                   */
+/*                                                                      */
+/* Return Status:                                                       */
+/*                                                                      */
+/* Usage:                                                               */
+/*                                                                      */
+/* Local Variables:                                                     */
+/*                                                                      */
+/* Called By: When records inserted                                     */
+/*                                                                      */
+/* PVCS Version: 1.0                                                    */
+/*                                                                      */
+/* Version: 5.4                                                         */
+/*                                                                      */
+/* Data Modifications:                                                  */
+/*                                                                      */
+/* Updates:                                                             */
+/* Date        Author  Ver.  Purposes                                   */
+/* 06-OCT-2025 AK01    1.0   UWP-42143 Data Audit                       */
+/************************************************************************/
+CREATE OR ALTER TRIGGER ntrLoadPlanRetDetailAdd
  ON  LoadPlanRetDetail
  FOR INSERT
  AS
@@ -131,6 +158,26 @@ CREATE TRIGGER ntrLoadPlanRetDetailAdd
        SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": Update Failed On Table LoadPlan. (ntrLoadPlanRetDetailAdd)" + " ( " + " SQLSvr MESSAGE=" + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + " ) "
     END
  END
+ 
+    --AK01 - S
+   IF dbo.fnc_GetUserName() <> sUser_sName() AND @n_Continue IN (1,2) 
+   BEGIN
+      UPDATE LoadPlanRetDetail
+        SET AddWho  = dbo.fnc_GetUserName(),
+            AddDate = dbo.fnc_GetDate(), 
+            TrafficCop = NULL 
+      FROM LoadPlanRetDetail
+      JOIN INSERTED ON LoadPlanRetDetail.LoadKey = INSERTED.LoadKey
+      AND LoadPlanRetDetail.LoadLineNumber = INSERTED.LoadLineNumber
+      SELECT @n_err = @@ERROR
+      IF @n_err <> 0
+      BEGIN
+         SELECT @n_continue = 3
+         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=90304 
+         SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed On Table LoadPlanRetDetail. (ntrLoadPlanRetDetailAdd)' + ' ( ' + ' SQLSvr MESSAGE=' + TRIM(@c_errmsg) + ' ) '
+      END
+   END
+   --AK01 - E
       /* #INCLUDE <TRMBODA2.SQL> */
  IF @n_continue=3  -- Error Occured - Process And Return
  BEGIN

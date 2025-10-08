@@ -1,14 +1,15 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrIdsPalletAdd]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
-drop trigger [dbo].[ntrIdsPalletAdd]
-GO
+--if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrIdsPalletAdd]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
+--drop trigger [dbo].[ntrIdsPalletAdd]
+--GO
 
 SET QUOTED_IDENTIFIER OFF 
 GO
 SET ANSI_NULLS OFF 
 GO
 /* 17-Mar-2009  TLTING     Change user_name() to SUSER_SNAME()          */
+/* 06-OCT-2025  AK01   1.1 UWP-42143 Data Audit                         */
 
-CREATE TRIGGER ntrIdsPalletAdd
+CREATE OR ALTER TRIGGER ntrIdsPalletAdd
  ON  idsPallet
  FOR INSERT
  AS
@@ -33,7 +34,8 @@ CREATE TRIGGER ntrIdsPalletAdd
  	
  	IF @n_continue=1 or @n_continue=2
  	BEGIN
- 		UPDATE idsPallet SET AddDate = GETDATE(), AddWho=SUSER_SNAME(), EditDate = GETDATE(), EditWho=SUSER_SNAME() 
+ 		--UPDATE idsPallet SET AddDate = GETDATE(), AddWho=SUSER_SNAME(), EditDate = GETDATE(), EditWho=SUSER_SNAME() 
+ 		UPDATE idsPallet SET AddDate = dbo.fnc_GetDate(), AddWho=dbo.fnc_GetUserName(), EditDate = dbo.fnc_GetDate(), EditWho=dbo.fnc_GetUserName()
  		FROM idsPallet, inserted
  		WHERE idsPallet.id = inserted.id
  		SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT

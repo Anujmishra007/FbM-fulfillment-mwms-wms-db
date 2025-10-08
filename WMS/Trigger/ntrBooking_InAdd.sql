@@ -1,6 +1,3 @@
---if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrBooking_InAdd]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
---drop trigger [dbo].[ntrBooking_InAdd]
---GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -138,25 +135,24 @@ BEGIN
       FROM INSERTED                                                                                                                           
    END
 
-   --AK01 S
-   IF dbo.fnc_GetUserName() <> sUser_sName()
+   --AK01 - S
+   IF dbo.fnc_GetUserName() <> sUser_sName() AND @n_Continue IN (1,2) 
    BEGIN
       UPDATE Booking_In
-      SET AddWho  = dbo.fnc_GetUserName()
-         ,AddDate = dbo.fnc_GetDate()
-         ,TrafficCop = NULL 
+        SET AddWho  = dbo.fnc_GetUserName(),
+            AddDate = dbo.fnc_GetDate(), 
+            TrafficCop = NULL 
       FROM Booking_In
       JOIN INSERTED ON Booking_In.BookingNo = INSERTED.BookingNo
-
       SELECT @n_err = @@ERROR
       IF @n_err <> 0
       BEGIN
          SELECT @n_continue = 3
-         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=74902  
+         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=69701  
          SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed On Table Booking_In. (ntrBooking_InAdd)' + ' ( ' + ' SQLSvr MESSAGE=' + TRIM(@c_errmsg) + ' ) '
       END
    END
-   --AK01 E
+   --AK01 - E
 
    QUIT_TR: 
    IF @n_continue=3  -- Error Occured - Process And Return

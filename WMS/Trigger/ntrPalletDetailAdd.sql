@@ -1,7 +1,4 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrPalletDetailAdd]') 
-              and OBJECTPROPERTY(id, N'IsTrigger') = 1) 
-drop trigger [dbo].[ntrPalletDetailAdd]
-GO
+
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -40,8 +37,9 @@ GO
 /* 31-Mar-2020  kocy      1.3   Skip when data move from Archive (kocy01)*/
 /* 12-Jan-2021  Shong     1.4   Performance Tuning, Move the logic to   */ 
 /*                              Pre-Add Trigger                         */
+/* 06-OCT-2025  AK01      1.5   UWP-42143 Data Audit                    */
 /************************************************************************/  
-CREATE TRIGGER [dbo].[ntrPalletDetailAdd]  
+CREATE OR ALTER TRIGGER [dbo].[ntrPalletDetailAdd]  
    ON  [dbo].[PALLETDETAIL]  
  FOR INSERT  
  AS  
@@ -126,6 +124,25 @@ CREATE TRIGGER [dbo].[ntrPalletDetailAdd]
      DEALLOCATE CUR_CASEMANIFEST_UPDATE
  END
   
+    --AK01 - S
+   IF dbo.fnc_GetUserName() <> sUser_sName() AND @n_Continue IN (1,2) 
+   BEGIN
+      UPDATE PALLETDETAIL
+        SET AddWho  = dbo.fnc_GetUserName(),
+            AddDate = dbo.fnc_GetDate(), 
+            TrafficCop = NULL 
+      FROM PALLETDETAIL
+      JOIN INSERTED ON PALLETDETAIL.PalletKey = INSERTED.PalletKey
+      AND PALLETDETAIL.PalletLineNumber = INSERTED.PalletLineNumber
+      SELECT @n_err = @@ERROR
+      IF @n_err <> 0
+      BEGIN
+         SELECT @n_continue = 3
+         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=67602
+         SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed On Table PALLETDETAIL. (ntrPALLETDETAILAdd)' + ' ( ' + ' SQLSvr MESSAGE=' + TRIM(@c_errmsg) + ' ) '
+      END
+   END
+   --AK01 - E
  
  /* #INCLUDE <TRPALDA2.SQL> */  
  IF @n_continue=3 -- Error Occured - Process And Return

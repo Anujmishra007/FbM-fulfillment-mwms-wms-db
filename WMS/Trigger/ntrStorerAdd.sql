@@ -1,6 +1,4 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrStorerAdd]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
-drop trigger [dbo].[ntrStorerAdd]
-GO
+
 /************************************************************************/  
 /* Trigger: ntrStorerAdd                                                */  
 /* Creation Date:                                                       */  
@@ -24,8 +22,9 @@ GO
 /* 26-Jun-2018  NJOW01   1.0  WMS-5221 validate CustomerGroupCode and   */
 /*                            CustomerGroupName                         */
 /* 27-Apr-2020  CSCHONG  1.1  WMS-12867 (CS01)                          */
+/* 06-OCT-2025  AK01     1.2  UWP-42143 Data Audit                      */
 /************************************************************************/  
-CREATE TRIGGER ntrStorerAdd ON STORER 
+CREATE OR ALTER TRIGGER ntrStorerAdd ON STORER 
  FOR INSERT
  AS
  BEGIN
@@ -162,6 +161,25 @@ END
 --		DEALLOCATE CUR_STORERCFG
 --	END
 -- END
+
+--AK01 - S
+IF dbo.fnc_GetUserName() <> sUser_sName() AND @n_Continue IN (1,2) 
+BEGIN
+   UPDATE STORER
+     SET AddWho  = dbo.fnc_GetUserName(),
+         AddDate = dbo.fnc_GetDate(), 
+         TrafficCop = NULL 
+   FROM STORER
+   JOIN INSERTED ON STORER.StorerKey = INSERTED.StorerKey
+   SELECT @n_err = @@ERROR
+   IF @n_err <> 0
+   BEGIN
+      SELECT @n_continue = 3
+      SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=85805  
+      SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed On Table STORER. (ntrSTORERAdd)' + ' ( ' + ' SQLSvr MESSAGE=' + TRIM(@c_errmsg) + ' ) '
+   END
+END
+--AK01 - E
 
       /* #INCLUDE <TRRDA2.SQL> */    
  IF @n_continue=3  -- Error Occured - Process And Return    
