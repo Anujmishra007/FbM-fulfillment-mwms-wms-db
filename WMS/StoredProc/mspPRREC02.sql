@@ -97,7 +97,7 @@ BEGIN
  
    WHILE @@FETCH_STATUS <> -1 AND @n_Continue IN (1,2)
    BEGIN
-      UPDATE rd
+      UPDATE rd WITH (ROWLOCK)
          SET Lottable06 = @c_ItemClass
          ,   Trafficcop = NULL
       FROM RECEIPTDETAIL rd
