@@ -64,6 +64,7 @@ GO
 /* 2025-06-16 4.6.0 Dennis    FCR-3959 Extended Update on Step 7              */
 /* 2025-08-20 4.6.1 Dennis    FCR-3959 New Feature                            */
 /* 2025-08-10 4.7.0 NickT     FCR-7730 Support OverwriteToLOC                 */
+/* 2025-09-09 4.7.0 NickT     UWP-42269 Continue pending task                 */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_Replen](
@@ -2707,8 +2708,7 @@ BEGIN
          @cReasonCode,
          @cListKey,
          @nErrNo  OUTPUT,
-         @cErrMsg OUTPUT,
-         @cToLOC
+         @cErrMsg OUTPUT
       IF @nErrNo <> 0
       BEGIN
          ROLLBACK TRAN rdtfnc_TM_Replen
@@ -2722,7 +2722,8 @@ BEGIN
          @cUserName,
          @cListKey,
          @nErrNo  OUTPUT,
-         @cErrMsg OUTPUT
+         @cErrMsg OUTPUT,
+         @cToLOC
       IF @nErrNo <> 0
       BEGIN
          ROLLBACK TRAN rdtfnc_TM_Replen
@@ -3640,7 +3641,14 @@ BEGIN
       BEGIN
          DECLARE 
             @nCurrentScn      INT = @nScn,
-            @nCurrentStep     INT = @nStep
+            @nCurrentStep     INT = @nStep,
+            @nPreviousScn     INT,
+            @nPreviousStep    INT
+
+         SELECT @nPreviousScn = Scn, @nPreviousStep = Step
+         FROM RDT.RDTMOBREC WITH (NOLOCK)
+         WHERE Mobile = @nMobile
+
          DELETE FROM @tExtScnData
 
          INSERT INTO @tExtScnData (Variable, Value) 
@@ -3685,7 +3693,7 @@ BEGIN
 
          IF @cExtScnSP = 'rdt_1764ExtScn01'
          BEGIN
-            IF @nStep = @nStep_ToLoc AND @nCurrentStep = 0
+            IF @nStep = @nStep_ToLoc AND @nPreviousStep = 0
             BEGIN
                SET @cTTMTaskType    = @cUDF01
                SET @cSuggID         = @cUDF02
