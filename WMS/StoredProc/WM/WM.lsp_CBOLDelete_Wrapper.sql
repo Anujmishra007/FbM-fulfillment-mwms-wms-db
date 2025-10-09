@@ -301,11 +301,10 @@ BEGIN
       BEGIN TRAN
    END
    
-   IF @b_ExecuteAs = 1
-   BEGIN
-      REVERT
-      EXEC [WM].[lsp_ResetUser]
-   END
+   IF @b_ExecuteAs = 1              -- (SWT01)
+      REVERT                        
+
+   EXEC [WM].[lsp_ResetUser] -- (SWT01)
 END -- End Procedure
 GO
 GRANT EXECUTE ON [WM].[lsp_CBOLDelete_Wrapper] TO [nSQL]
