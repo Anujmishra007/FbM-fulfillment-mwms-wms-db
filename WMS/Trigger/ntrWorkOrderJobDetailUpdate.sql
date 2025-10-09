@@ -1,6 +1,3 @@
-IF EXISTS (SELECT name FROM dbo.sysobjects WHERE name = 'ntrWorkOrderJobDetailUpdate' AND type = 'TR')
-   DROP TRIGGER ntrWorkOrderJobDetailUpdate
-GO
 
 SET QUOTED_IDENTIFIER OFF 
 GO
@@ -31,8 +28,10 @@ GO
 /* 26-JAN-2016  YTWan    1.2  SOS#315603 - Project Merlion - VAP SKU       */
 /*                            Reservation Strategy - MixSku in 1 Pallet    */
 /*                            enhancement                                  */	
+/* 06-Oct-2025 AK01      1.3  UWP-42143 - Replace SUSER_SNAME with         */
+/*                            fnc_GetUserName                              */
 /***************************************************************************/
-CREATE TRIGGER ntrWorkOrderJobDetailUpdate ON WorkOrderJobDetail 
+CREATE OR ALTER TRIGGER ntrWorkOrderJobDetailUpdate ON WorkOrderJobDetail 
 FOR UPDATE
 AS
 BEGIN
@@ -93,8 +92,8 @@ BEGIN
    IF ( @n_continue=1 or @n_continue=2 ) AND NOT UPDATE(EditDate)
    BEGIN
       UPDATE WORKORDERJOBDETAIL WITH (ROWLOCK)
-      SET EditDate = GETDATE() 
-         ,EditWho  = SUSER_SNAME() 
+      SET EditDate = dbo.fnc_GetDate() 
+         ,EditWho  = dbo.fnc_GetUserName() 
          ,TrafficCop = NULL
       FROM WORKORDERJOBDETAIL
       JOIN DELETED  ON (DELETED.JobKey = WORKORDERJOBDETAIL.JobKey)
@@ -154,8 +153,8 @@ BEGIN
          BEGIN
             UPDATE TASKDETAIL WITH (ROWLOCK)
                SET Priority     = @c_Priority
-                  ,EditWho      = SUSER_NAME()
-                  ,EditDate     = GETDATE()
+                  ,EditWho      = dbo.fnc_GetUserName()
+                  ,EditDate     = dbo.fnc_GetDate()
                   ,Trafficcop   = NULL
              FROM TASKDETAIL    TD    
              JOIN JOBTASKLOOKUP TLKUP WITH (NOLOCK) ON (TLKUP.Taskdetailkey = TD.Taskdetailkey)
@@ -237,8 +236,8 @@ BEGIN
                BEGIN
                   UPDATE TASKDETAIL WITH (ROWLOCK)
                   SET Status       = 'H'
-                     ,EditWho      = SUSER_NAME()
-                     ,EditDate     = GETDATE()
+                     ,EditWho      = dbo.fnc_GetUserName()
+                     ,EditDate     = dbo.fnc_GetDate()
                      ,Trafficcop   = NULL   
                   FROM TASKDETAIL    TD      
                   JOIN JOBTASKLOOKUP TLKUP WITH (NOLOCK) ON (TLKUP.Taskdetailkey = TD.Taskdetailkey)
@@ -280,8 +279,8 @@ BEGIN
                   ,QtyInProcess = @n_QtyInProcess
                   ,PendingTasks = @n_PendingTasks
                   ,InProcessTasks = @n_InProcessTasks
-                  ,EditWho     = SUSER_NAME()
-                  ,EditDate    = GETDATE()
+                  ,EditWho     = dbo.fnc_GetUserName()
+                  ,EditDate    = dbo.fnc_GetDate()
                WHERE JobKey = @c_JobKey  
                AND   JobLine= @c_JobLineNo
 
@@ -336,8 +335,8 @@ BEGIN
                    BEGIN
                      UPDATE TASKDETAIL WITH (ROWLOCK)
                      SET Status       = '0'
-                        ,EditWho      = SUSER_NAME()
-                        ,EditDate     = GETDATE()
+                        ,EditWho      = dbo.fnc_GetUserName()
+                        ,EditDate     = dbo.fnc_GetDate()
                         ,Trafficcop   = NULL   
                      FROM TASKDETAIL    TD     
                      JOIN JOBTASKLOOKUP TLKUP WITH (NOLOCK) ON (TLKUP.Taskdetailkey = TD.Taskdetailkey)
@@ -379,8 +378,8 @@ BEGIN
                      ,QtyInProcess = @n_QtyInProcess
                      ,PendingTasks = @n_PendingTasks
                      ,InProcessTasks = @n_InProcessTasks
-                     ,EditWho     = SUSER_NAME()
-                     ,EditDate    = GETDATE()
+                     ,EditWho     = dbo.fnc_GetUserName()
+                     ,EditDate    = dbo.fnc_GetDate()
                   WHERE JobKey = @c_JobKey  
                   AND   JobLine= @c_JobLineNo
 
@@ -424,8 +423,8 @@ BEGIN
             SET JobStatus   = @c_JobStatus
                ,QtyReserved = 0                       --(Wan01)
                ,QtyToProcess= 0                       --(Wan01)
-               ,EditWho     = SUSER_NAME()
-               ,EditDate    = GETDATE()
+               ,EditWho     = dbo.fnc_GetUserName()
+               ,EditDate    = dbo.fnc_GetDate()
                ,Trafficcop  = NULL
             WHERE JobKey = @c_JobKey 
 
@@ -442,8 +441,8 @@ BEGIN
             UPDATE WORKORDERJOB WITH (ROWLOCK)
             SET UOMQtyJob = 0
                ,JobStatus = @c_JobStatus
-               ,EditWho   = SUSER_NAME()
-               ,EditDate  = GETDATE()
+               ,EditWho   = dbo.fnc_GetUserName()
+               ,EditDate  = dbo.fnc_GetDate()
             WHERE JobKey  = @c_JobKey
 
             SET @n_err = @@ERROR
@@ -565,8 +564,8 @@ BEGIN
                                     THEN 0 ELSE QtyCompleted/ActualJobDuration END
          ,AvgUnitPerWorker   = CASE WHEN ActualJobDuration IS NULL OR ActualJobDuration = 0 OR @n_TotalWorkers = 0
                                     THEN 0 ELSE (QtyCompleted/ActualJobDuration)/@n_TotalWorkers END
-         ,EditWho      = SUSER_NAME()
-         ,EditDate     = GETDATE()
+         ,EditWho      = dbo.fnc_GetUserName()
+         ,EditDate     = dbo.fnc_GetDate()
          ,Trafficcop   = NULL
       WHERE JobKey = @c_JobKey
       AND JobStatus < '9'
@@ -640,4 +639,6 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF 
 GO
+
+
 

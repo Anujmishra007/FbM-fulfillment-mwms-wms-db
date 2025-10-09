@@ -1,7 +1,4 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrTaskManagerUserDetailUpdate]') 
-              and OBJECTPROPERTY(id, N'IsTrigger') = 1) 
-drop trigger [dbo].[ntrTaskManagerUserDetailUpdate]
-GO
+
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -37,9 +34,10 @@ GO
 /* Updates:                                                             */
 /* Date         Author        Purposes                                  */
 /* 28-Oct-2013  TLTING     Review Editdate column update                */
+/* 06-Oct-2025 A K01          UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName */
 /************************************************************************/
 
-CREATE TRIGGER [dbo].[ntrTaskManagerUserDetailUpdate]
+CREATE OR ALTER TRIGGER [dbo].[ntrTaskManagerUserDetailUpdate]
 ON [dbo].[TaskManagerUserDetail]
 FOR UPDATE
 AS 
@@ -70,8 +68,8 @@ BEGIN
 	IF ( @n_continue = 1 or @n_continue=2 ) AND NOT UPDATE(EditDate)
 	BEGIN
 		UPDATE TaskManagerUserDetail
-		SET EditDate = GETDATE(),
-		    EditWho  = SUSER_SNAME(),
+		SET EditDate = dbo.fnc_GetDate(),
+		    EditWho  = dbo.fnc_GetUserName(),
 		    TrafficCop = NULL	
 		FROM TaskManagerUserDetail (NOLOCK), INSERTED (NOLOCK)
 		WHERE TaskManagerUserDetail.UserKey = INSERTED.UserKey
@@ -111,3 +109,4 @@ BEGIN
 	END
 END
 GO
+

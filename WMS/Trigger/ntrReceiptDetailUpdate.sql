@@ -180,6 +180,7 @@ GO
 /*                              finalizing the ASN                          */
 /* 03-Oct-2025  NJOW15    6.4   FCR-8281 allow configure to update loc to   */
 /*                              serialno table                              */
+/* 06-Oct-2025  AK01      6.5   UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName*/
 /****************************************************************************/
 
 CREATE OR ALTER TRIGGER [dbo].[ntrReceiptDetailUpdate]
@@ -316,8 +317,8 @@ END
 IF ( @n_continue=1 or @n_continue=2 ) AND NOT UPDATE(EditDate)
 BEGIN
    UPDATE RECEIPTDETAIL WITH (ROWLOCK)
-   SET EditDate = GETDATE(),
-       EditWho  = SUSER_SNAME(),
+   SET EditDate = dbo.fnc_GetDate(),
+       EditWho  = dbo.fnc_GetUserName(),
        TrafficCop = NULL
    FROM RECEIPTDETAIL, DELETED, INSERTED
    WHERE RECEIPTDETAIL.ReceiptKey  = DELETED.ReceiptKey  AND RECEIPTDETAIL.ReceiptLineNumber = DELETED.ReceiptLineNumber
@@ -626,8 +627,8 @@ BEGIN
    BEGIN
       UPDATE PODETAIL WITH (ROWLOCK)
       SET PODETAIL.QtyReceived = PODETAIL.QtyReceived - DELETED.QtyReceived + INSERTED.QtyReceived,
-         EditDate = GETDATE(),   --tlting
-         EditWho = SUSER_SNAME()
+         EditDate = dbo.fnc_GetDate(),   --tlting
+         EditWho = dbo.fnc_GetUserName()
       FROM PODETAIL, DELETED, INSERTED
       WHERE  PODETAIL.POKey = INSERTED.POKey
       AND PODETAIL.POLineNumber = INSERTED.POLineNumber
@@ -1147,7 +1148,7 @@ BEGIN
          BEGIN
             IF dbo.fnc_LTrim(dbo.fnc_RTrim(@c_Lottable02)) = '' or dbo.fnc_LTrim(dbo.fnc_RTrim(@c_Lottable02)) IS  NULL
             BEGIN
-               SELECT @c_Lottable02 = convert(char(8), getdate(), 112) -- YYYYMMDD
+               SELECT @c_Lottable02 = convert(char(8), dbo.fnc_GetDate(), 112) -- YYYYMMDD
             END
          END
          -- 10.1.99 WALLY
@@ -1185,7 +1186,7 @@ BEGIN
          -- IF @c_Lottable05Label = 'RCP_DATE' AND (@d_Lottable05 IS NULL)
          IF @d_Lottable05 IS NULL
          BEGIN
-            SELECT @d_Lottable05 = CONVERT(DATETIME, CONVERT(CHAR(20), GETDATE(), 112))
+            SELECT @d_Lottable05 = CONVERT(DATETIME, CONVERT(CHAR(20), dbo.fnc_GetDate(), 112))
          END
          */
          -- End: SOS76025 - Move down
@@ -1550,7 +1551,7 @@ BEGIN
 
          IF @c_Lottable03Label = 'RCP_DATE' AND ( dbo.fnc_RTrim(@c_Lottable03) IS NULL OR  dbo.fnc_RTrim(@c_Lottable03) = '')
          BEGIN
-            SELECT @c_Lottable03 = CONVERT(CHAR(10), GETDATE(), 21)  /* yyyy-mm-dd */
+            SELECT @c_Lottable03 = CONVERT(CHAR(10), dbo.fnc_GetDate(), 21)  /* yyyy-mm-dd */
          END
 
          IF @c_Lottable04Label = 'GENEXPDATE' AND (@d_Lottable04 IS NULL OR @d_Lottable04 = '19000101')
@@ -1626,7 +1627,7 @@ BEGIN
          -- Start : SOS76025 - Move from top
          IF @c_Lottable05Label = 'RCP_DATE' AND (@d_Lottable05 IS NULL)
          BEGIN
-            SELECT @d_Lottable05 = CONVERT(DATETIME, CONVERT(CHAR(20), GETDATE(), 112))
+            SELECT @d_Lottable05 = CONVERT(DATETIME, CONVERT(CHAR(20), dbo.fnc_GetDate(), 112))
          END
          -- End: SOS76025
 
@@ -1640,8 +1641,8 @@ BEGIN
                IF @d_Lottable04 <= '01/01/1900' OR @d_Lottable04 IS NULL
                BEGIN
                   -- Change by June 10.Jul.03 SOS12281
-                  -- select @d_Lottable05 = isnull(min(lotattribute.Lottable05),getdate())
-                  SELECT @d_Lottable05 = isnull(min(lotattribute.Lottable05), CONVERT(DATETIME, CONVERT(CHAR(20), getdate(), 106)))
+                  -- select @d_Lottable05 = isnull(min(lotattribute.Lottable05),dbo.fnc_GetDate())
+                  SELECT @d_Lottable05 = isnull(min(lotattribute.Lottable05), CONVERT(DATETIME, CONVERT(CHAR(20), dbo.fnc_GetDate(), 106)))
                   FROM lotattribute WITH (NOLOCK)
                   WHERE sku = @c_sku
                   AND storerkey = @c_storerkey
@@ -1652,8 +1653,8 @@ BEGIN
                ELSE
                BEGIN
                   -- Change by June 10.Jul.03 SOS12281
-                  -- select @d_Lottable05 = isnull(min(lotattribute.Lottable05),getdate())
-                  SELECT @d_Lottable05 = isnull(min(lotattribute.Lottable05), CONVERT(DATETIME, CONVERT(CHAR(20), getdate(), 106)))
+                  -- select @d_Lottable05 = isnull(min(lotattribute.Lottable05),dbo.fnc_GetDate())
+                  SELECT @d_Lottable05 = isnull(min(lotattribute.Lottable05), CONVERT(DATETIME, CONVERT(CHAR(20), dbo.fnc_GetDate(), 106)))
                   FROM lotattribute WITH (NOLOCK)
                   WHERE sku = @c_sku
                   AND storerkey = @c_storerkey
@@ -1864,7 +1865,7 @@ BEGIN
             -- check during finalize.
             IF @c_Lottable04Label = 'EXP_DATE' AND @n_IncomingShelfLife > 0 AND @c_FinalizeFlag = 'Y'
             BEGIN
-               IF DATEADD (day, @n_IncomingShelfLife, Getdate() ) > @d_Lottable04 AND
+               IF DATEADD (day, @n_IncomingShelfLife, dbo.fnc_GetDate() ) > @d_Lottable04 AND
                   (dbo.fnc_RTrim(@c_SubReasonCode) IS NULL OR dbo.fnc_RTrim(@c_SubReasonCode) = '' )
                BEGIN
                   SELECT @n_continue=3
@@ -2031,8 +2032,8 @@ BEGIN
             BEGIN
                UPDATE UCC
                SET STATUS = '2',
-                  EditDate = GETDATE(),   --tlting
-                  EditWho = SUSER_SNAME()
+                  EditDate = dbo.fnc_GetDate(),   --tlting
+                  EditWho = dbo.fnc_GetUserName()
                FROM UCC WITH (NOLOCK)
                WHERE UCC.SourceKey = @c_SourceKey
                AND UCC.UCCNo       = @c_ExternLineNo
@@ -2069,10 +2070,10 @@ BEGIN
                                          @n_TotQtyReceived
                                     ELSE BeforeReceivedQty
                                     END,
-                DateReceived = GETDATE(), --SOS 26930
+                DateReceived = dbo.fnc_GetDate(), --SOS 26930
                 TrafficCop = NULL,
-                EditDate = GETDATE(),   --tlting
-                EditWho = SUSER_SNAME(),
+                EditDate = dbo.fnc_GetDate(),   --tlting
+                EditWho = dbo.fnc_GetUserName(),
                 Userdefine01 = @c_Userdefine01, --NJOW09 S
                 Userdefine02 = @c_Userdefine02,
                 Userdefine03 = @c_Userdefine03,
@@ -2331,8 +2332,8 @@ BEGIN
                             Qty = @n_qty,
                             -- Status = '1'     --KH02
                             [Status] = CASE WHEN [Status] = '0' THEN '1' ELSE [Status] END, --KH02
-                            EditDate = GETDATE(),   --tlting
-                            EditWho = SUSER_SNAME()
+                            EditDate = dbo.fnc_GetDate(),   --tlting
+                            EditWho = dbo.fnc_GetUserName()
                         WHERE Receiptkey = @c_ReceiptKey
                         AND   ReceiptLineNumber = @c_ReceiptLineNumber
                         -- AND   Status = '0'   --KH02
@@ -2449,8 +2450,8 @@ BEGIN
                          Loc = @c_toloc,
                          ID  = @c_toid,
                          Status = CASE WHEN  @c_loseUCC = '1' THEN '6' ELSE '1' END, -- (ChewKP01)
-                         EditDate = GETDATE(),   --tlting
-                         EditWho = SUSER_SNAME()
+                         EditDate = dbo.fnc_GetDate(),   --tlting
+                         EditWho = dbo.fnc_GetUserName()
                   WHERE  Receiptkey = @c_ReceiptKey
                      AND ReceiptLineNumber = @c_ReceiptLineNumber
                      --AND Status = '1' -- 1-Received
@@ -2627,8 +2628,8 @@ BEGIN
                   SET QTY = @n_SerialQTY,
                       Status = '1', --1=Received
                       ID = @c_ToID,
-                      EditDate = GETDATE(),
-                      EditWho = SUSER_SNAME(),
+                      EditDate = dbo.fnc_GetDate(),
+                      EditWho = dbo.fnc_GetUserName(),
                       Lot = CASE WHEN @c_ASNFizUpdLotToSerialNo IN('1','2') OR @c_SerialNoUpdateLotLocID = '1' THEN @c_Lot ELSE Lot END, --(Wan05)--NJOW14 --NJOW15
                       Loc = CASE WHEN @c_SerialNoUpdateLotLocID = '1' THEN @c_ToLoc ELSE Loc END --NJOW15
                   WHERE SerialNoKey = @c_SerialNoKey
@@ -2917,8 +2918,8 @@ BEGIN
                 StorerKey           = INSERTED.StorerKey,
                 Sku                 = INSERTED.SKU,
                 ExpectedPOKey       = INSERTED.POKey,
-                EditDate = GETDATE(),   --tlting
-                EditWho = SUSER_SNAME()
+                EditDate = dbo.fnc_GetDate(),   --tlting
+                EditWho = dbo.fnc_GetUserName()
       FROM      CASEMANIFEST WITH (NOLOCK), INSERTED, DELETED
       WHERE     CASEMANIFEST.ExpectedReceiptKey     = DELETED.ReceiptKey
       AND  CASEMANIFEST.StorerKey             = DELETED.StorerKey
@@ -2953,8 +2954,8 @@ BEGIN
       BEGIN
          UPDATE RECEIPT
          SET  OpenQty = RECEIPT.OpenQty - (DELETED.QtyExpected - DELETED.QtyReceived) + (INSERTED.QtyExpected - INSERTED.QtyReceived),
-              EditDate = GETDATE(),   --tlting
-              EditWho = SUSER_SNAME()
+              EditDate = dbo.fnc_GetDate(),   --tlting
+              EditWho = dbo.fnc_GetUserName()
          FROM RECEIPT,
               INSERTED,
               DELETED
@@ -2974,8 +2975,8 @@ BEGIN
              (SELECT Sum(INSERTED.QtyExpected - INSERTED.QtyReceived) FROM INSERTED
               WHERE INSERTED.ReceiptKey  = RECEIPT.ReceiptKey )
              ),
-             EditDate = GETDATE(),   --tlting
-             EditWho = SUSER_SNAME()
+             EditDate = dbo.fnc_GetDate(),   --tlting
+             EditWho = dbo.fnc_GetUserName()
          FROM RECEIPT,DELETED,INSERTED
          WHERE RECEIPT.ReceiptKey  IN (SELECT DISTINCT ReceiptKey FROM DELETED)
          AND RECEIPT.ReceiptKey  = DELETED.ReceiptKey
@@ -3018,8 +3019,8 @@ BEGIN
       BEGIN 
          UPDATE RECEIPT WITH (ROWLOCK)  
             SET ASNStatus = '1' 
-              , EditDate = GETDATE() 
-              , EditWho = SUSER_SNAME() 
+              , EditDate = dbo.fnc_GetDate() 
+              , EditWho = dbo.fnc_GetUserName() 
            FROM RECEIPT 
            JOIN INSERTED ON (RECEIPT.ReceiptKey  = INSERTED.ReceiptKey) 
            WHERE (RECEIPT.ASNStatus = '0' 
@@ -3095,5 +3096,6 @@ BEGIN
    RETURN 
 END 
 GO
+
 
 

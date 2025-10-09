@@ -29,6 +29,7 @@
 /* 25 May 2012  TLTING01         	DM integrity - add update editdate B4 TrafficCop   */
 /* 28-Oct-2013  TLTING           	Review Editdate column update                      */ 
 /* 2022-04-12   kelvinongcy	1.3	WMS-19428 prevent bulk update or delete (kocy01)	*/
+/* 06-Oct-2025  AK01          1.4   UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName*/
 /***************************************************************************************/
 
 CREATE OR ALTER TRIGGER [dbo].[ntrStrategyUpdate]
@@ -65,8 +66,8 @@ BEGIN
 	IF ( @n_continue = 1 or @n_continue=2 ) AND NOT UPDATE(EditDate)
 	BEGIN
 		UPDATE Strategy WITH (ROWLOCK)
-		SET EditDate = GETDATE(),
-		    EditWho  = SUSER_SNAME(),
+		SET EditDate = dbo.fnc_GetDate(),
+		    EditWho  = dbo.fnc_GetUserName(),
 		    TrafficCop = NULL
 		FROM Strategy , INSERTED
       WHERE Strategy.StrategyKey = INSERTED.StrategyKey
@@ -86,7 +87,7 @@ BEGIN
 	END
 	
    IF ( (SELECT COUNT(1) FROM INSERTED WITH (NOLOCK) ) > 100 )   --kocy01
-       AND NOT EXISTS (SELECT Code FROM dbo.CODELKUP WITH (NOLOCK) WHERE Listname = 'TrgUserID' AND Short = '1' AND Code = SUSER_NAME())
+       AND NOT EXISTS (SELECT Code FROM dbo.CODELKUP WITH (NOLOCK) WHERE Listname = 'TrgUserID' AND Short = '1' AND Code = dbo.fnc_GetUserName())
    BEGIN      
          SELECT @n_continue = 3
          SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=69702   -- Should Be Set To The SQL Err message but I don't know how to do so.
@@ -127,5 +128,7 @@ GO
 
 ALTER TABLE [dbo].[Strategy] ENABLE TRIGGER [ntrStrategyUpdate]
 GO
+
+
 
 

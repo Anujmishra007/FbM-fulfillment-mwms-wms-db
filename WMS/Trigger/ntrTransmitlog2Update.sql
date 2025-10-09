@@ -30,7 +30,9 @@ GO
 /* 22-Sep-2020    TLTING      1.4   new service account                                                  */  
 /* 15-03-2023     kelvinongcy 1.5   WMS-21595 Delete WSDT_GENERIC_COURIER when retrigger TML2 (kocy01)   */  
 /* 27-03-2023     kelvinongcy 1.6   To fix non-DTSITF access user allow access DTSITF table (kocy02)     */  
-/*********************************************************************************************************/                  
+/* 06-Oct-2025    AK01        1.7   UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName                 */
+/*********************************************************************************************************/
+                  
 CREATE  OR ALTER TRIGGER [dbo].[ntrTransmitlog2Update]                  
 ON  [dbo].[TRANSMITLOG2]        
 FOR UPDATE     
@@ -100,8 +102,8 @@ BEGIN
  IF ( @n_continue = 1 or @n_continue = 2 ) AND NOT UPDATE(EditDate)                  
  BEGIN                    
   UPDATE TRANSMITLOG2                   
-  SET EditDate = GETDATE()                  
-   ,EditWho = SUSER_SNAME()                  
+  SET EditDate = dbo.fnc_GetDate()                  
+   ,EditWho = dbo.fnc_GetUserName()                  
    ,Trafficcop = NULL                  
   FROM TRANSMITLOG2, INSERTED                  
   WHERE TRANSMITLOG2.TRANSMITLOGKey = INSERTED.TRANSMITLOGKey                  
@@ -117,7 +119,7 @@ BEGIN
                      
    IF ( (Select count(1) FROM  TRANSMITLOG2 (NOLOCK), INSERTED                  
        WHERE TRANSMITLOG2.TRANSMITLOGKey = INSERTED.TRANSMITLOGKey ) > 50 )                   
-       AND Suser_sname() not in ('iml','dts','itadmin', 'QCmdUser', 'alpha\wmsadmingt','mctang', 'kwhchan', 'JovineNg', 'ALPHA\SRVwmsadminlfl', 'ALPHA\SRVwmsadmincn'    )                  
+       AND dbo.fnc_GetUserName() not in ('iml','dts','itadmin', 'QCmdUser', 'alpha\wmsadmingt','mctang', 'kwhchan', 'JovineNg', 'ALPHA\SRVwmsadminlfl', 'ALPHA\SRVwmsadmincn'    )                  
    BEGIN                  
          --Declare @c_Progname nvarchar(20)                  
          --Declare @c_Username nvarchar(20)                  
@@ -196,5 +198,6 @@ GO
 
 ALTER TABLE [dbo].[TRANSMITLOG2] ENABLE TRIGGER [ntrTransmitlog2Update]
 GO
+
 
 
