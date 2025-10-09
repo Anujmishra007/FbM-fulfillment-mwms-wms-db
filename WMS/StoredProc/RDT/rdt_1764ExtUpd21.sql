@@ -19,6 +19,7 @@ GO
 /* 2025-09-16   NLT013   1.3.0   UWP-41254 No need fire trigger if short   */
 /* 2025-09-15   NLT013   1.4.0   FCR-7730 Print ZPL                        */
 /* 2025-09-30   NLT013   1.4.1   FCR-7730 No need print ZPL if VAS exists  */
+/* 2025-10-09   NLT013   1.5.0   UWP-42271 Fix: update pickdetail failed   */
 /***************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_1764ExtUpd21]
@@ -56,6 +57,7 @@ BEGIN
    DECLARE @nLoopIndex              INT
    DECLARE @cOption                 NVARCHAR( 2)
    DECLARE @cListKey                NVARCHAR( 10)
+   DECLARE @cStatus                 NVARCHAR( 10)
 
    DECLARE @tCases TABLE
    (
@@ -109,10 +111,25 @@ BEGIN
                   @cLocationType = LOC.LocationType,
                   @cLocationCategory = LOC.LocationCategory,
                   @cListKey = TD.ListKey,
-                  @cToLoc = TD.ToLoc
+                  @cToLoc = TD.ToLoc,
+                  @cStatus = TD.Status
                FROM dbo.TaskDetail TD WITH(NOLOCK)
                INNER JOIN dbo.LOC WITH(NOLOCK) ON TD.ToLoc = LOC.Loc
                WHERE TD.TaskDetailKey = @cTaskDetailKey
+
+               IF @cStatus <> '9'
+               BEGIN
+                  SELECT TOP 1
+                     @cToLoc = Loc,
+                     @cLocationType = LOC.LocationType
+                  FROM dbo.TaskDetail TD WITH(NOLOCK)
+                  INNER JOIN dbo.LOC WITH(NOLOCK) ON TD.ToLoc = LOC.Loc
+                  WHERE TD.StorerKey = @cStorerKey
+                     AND TD.ListKey = @cListKey
+                     AND TD.TaskType = 'RPF'
+                     AND TD.Status = '9'
+                     AND TD.UserKey = SUSER_NAME()
+               END
 
                IF @cLocationType = 'PND'
                BEGIN
@@ -122,7 +139,7 @@ BEGIN
                   SELECT DISTINCT PD.PickDetailKey
                   FROM dbo.PickDetail PD WITH (NOLOCK)
                   INNER JOIN dbo.TaskDetail TD WITH(NOLOCK) ON PD.StorerKey = TD.StorerKey AND PD.TaskDetailKey = TD.TaskDetailKey AND PD.SKU = TD.SKU
-                  INNER JOIN dbo.SKUInfo SI WITH(NOLOCK) ON TD.SKU = SI.SKU 
+                  INNER JOIN dbo.SKUInfo SI WITH(NOLOCK) ON TD.StorerKey = SI.StorerKey AND TD.SKU = SI.SKU 
                   WHERE PD.StorerKey = @cStorerKey
                      AND TD.ListKey = @cListKey
                      AND PD.Status = '0'
