@@ -1,6 +1,3 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = OBJECT_ID(N'[dbo].[ntrPackDetailAdd]') AND OBJECTPROPERTY(id, N'IsTrigger') = 1)
-    DROP TRIGGER [dbo].[ntrPackDetailAdd]
-GO
 
 SET ANSI_NULLS OFF
 GO
@@ -76,9 +73,10 @@ GO
 /* 2021-DEC-29 Wan05    3.1   JSM-41421 Gen 1 PackDetailLabel Rec with   */
 /*                                          same Carton                  */ 
 /* 2022-FEB-09 Wan04    3.2   Enhancement if reduce 1 carton Multi label#*/
+/* 2025-OCT-06 AK01     3.3   UWP-42143 Data Audit                       */
 /*************************************************************************/        
         
-CREATE TRIGGER [dbo].[ntrPackDetailAdd]        
+CREATE OR ALTER TRIGGER [dbo].[ntrPackDetailAdd]        
 ON  [dbo].[PackDetail]        
 FOR INSERT        
 AS        
@@ -712,7 +710,29 @@ END
       END--Packcartongid       
       --(WL01 END)      
    END      
-         
+
+   --AK01 - S
+   IF dbo.fnc_GetUserName() <> sUser_sName() AND @n_Continue IN (1,2) 
+   BEGIN
+      UPDATE PackDetail
+        SET AddWho  = dbo.fnc_GetUserName(),
+            AddDate = dbo.fnc_GetDate(), 
+            TrafficCop = NULL 
+      FROM PackDetail
+      JOIN INSERTED ON PackDetail.PickSlipNo = INSERTED.PickSlipNo
+      AND PackDetail.CartonNo = INSERTED.CartonNo
+      AND PackDetail.LabelNo = INSERTED.LabelNo
+      AND PackDetail.LabelLine = INSERTED.LabelLine
+      SELECT @n_err = @@ERROR
+      IF @n_err <> 0
+      BEGIN
+         SELECT @n_continue = 3
+         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=83054  
+         SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed On Table PackDetail. (ntrPackDetailAdd)' + ' ( ' + ' SQLSvr MESSAGE=' + TRIM(@c_errmsg) + ' ) '
+      END
+   END
+   --AK01 - E
+
 /* #INCLUDE <TRCCA2.SQL> */        
    IF @n_continue=3  -- Error Occured - Process And Return        
    BEGIN      

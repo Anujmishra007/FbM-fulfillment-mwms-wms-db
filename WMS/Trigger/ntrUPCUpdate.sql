@@ -29,6 +29,7 @@
 /* 17-Mar-2009  TLTING          		Change user_name() to SUSER_SNAME()        			*/
 /* 10-Jun-2012  TLTING01   	1.1  	Change UPC promary key                     			*/
 /* 2022-05-17   kelvinongcy	1.2	WMS-19673 prevent bulk update or delete (kocy01)	*/
+/* 06-Oct-2025  AK01          1.3   UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName*/
 /***************************************************************************************/
 
 CREATE OR ALTER TRIGGER [dbo].[ntrUPCUpdate] 
@@ -57,8 +58,8 @@ ON [dbo].[UPC]
    IF ( @n_continue = 1 or @n_continue = 2 ) AND NOT UPDATE(EditDate)
    BEGIN 	  
         UPDATE UPC WITH (ROWLOCK)
-            SET EditWho = SUSER_SNAME(),
-                EditDate = GetDate()
+            SET EditWho = dbo.fnc_GetUserName(),
+                EditDate = dbo.fnc_GetDate()
         FROM UPC, INSERTED
         WHERE UPC.UPC = INSERTED.UPC AND UPC.Storerkey = INSERTED.Storerkey
         AND UPC.SKU = INSERTED.SKU
@@ -73,7 +74,7 @@ ON [dbo].[UPC]
    END
 
    IF ( (SELECT COUNT(1) FROM INSERTED WITH (NOLOCK) ) > 100 )   --kocy01
-       AND NOT EXISTS (SELECT Code FROM dbo.CODELKUP WITH (NOLOCK) WHERE Listname = 'TrgUserID' AND Short = '1' AND Code = SUSER_NAME()) 
+       AND NOT EXISTS (SELECT Code FROM dbo.CODELKUP WITH (NOLOCK) WHERE Listname = 'TrgUserID' AND Short = '1' AND Code = dbo.fnc_GetUserName()) 
    BEGIN      
          SELECT @n_continue = 3
          SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=68102   -- Should Be Set To The SQL Err message but I don't know how to do so.
@@ -112,5 +113,7 @@ GO
 
 ALTER TABLE [dbo].[UPC] ENABLE TRIGGER [ntrUPCUpdate]
 GO
+
+
 
 

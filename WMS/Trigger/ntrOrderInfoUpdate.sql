@@ -41,7 +41,7 @@ GO
 /* 07-Feb-2014  TLTING   1.2  Add ArchiveCop flag                       */ 
 /************************************************************************/  
   
-CREATE TRIGGER [dbo].[ntrOrderInfoUpdate]  
+CREATE OR ALTER TRIGGER [dbo].[ntrOrderInfoUpdate]  
 ON  [dbo].OrderInfo FOR UPDATE  
 AS  
 BEGIN  

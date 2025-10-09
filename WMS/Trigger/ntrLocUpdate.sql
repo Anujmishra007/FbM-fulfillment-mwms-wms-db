@@ -1,9 +1,3 @@
-if exists (select *
-           from dbo.sysobjects
-           where id = object_id(N'[dbo].[ntrLocUpdate]')
-             and OBJECTPROPERTY(id, N'IsTrigger') = 1)
-    drop trigger [dbo].[ntrLocUpdate]
-GO
 
 SET ANSI_NULLS OFF
 GO
@@ -67,9 +61,11 @@ GO
 /* 16-Jan-2019  TLTING02      missing nolock                            */
 /* 21-Dec-2022  NJOW01        WMS-21370 add config to prevent update    */
 /*                            facility with stock                       */
+/* 06-Oct-2025  AK01          UWP-42143 - Replace SUSER_SNAME with      */
+/*                            fnc_GetUserName                           */
 /************************************************************************/
 
-CREATE TRIGGER [dbo].[ntrLocUpdate]
+CREATE OR ALTER TRIGGER [dbo].[ntrLocUpdate]
     ON [dbo].[LOC]
     FOR UPDATE
     AS
@@ -114,8 +110,8 @@ BEGIN
     IF (@n_continue = 1 OR @n_continue = 2) AND NOT UPDATE(EditDate)
         BEGIN
             UPDATE LOC with (ROWLOCK)
-            SET EditWho    = sUser_sName(),
-                EditDate   = GetDate(),
+            SET EditWho    = dbo.fnc_GetUserName(),
+                EditDate   = dbo.fnc_GetDate(),
                 TrafficCop = NULL
             FROM LOC
                      JOIN INSERTED ON LOC.LOC = INSERTED.LOC
@@ -146,8 +142,8 @@ BEGIN
                 UPDATE LOC
                 SET LOC.cube   = (INSERTED.length * INSERTED.width * INSERTED.height),
                     trafficcop = NULL,
-                    EditDate   = GETDATE(),
-                    EditWho    = SUSER_SNAME()
+                    EditDate   = dbo.fnc_GetDate(),
+                    EditWho    = dbo.fnc_GetUserName()
                 FROM LOC,
                      INSERTED
                 WHERE LOC.loc = INSERTED.loc
@@ -400,7 +396,7 @@ BEGIN
                                                                  INSERTED.Facility,
                                                                  SKUxLOC.Loc,
                                                                  'LOC',
-                                                                 SUSER_SNAME()
+                                                                 dbo.fnc_GetUserName()
                                                  FROM INSERTED (NOLOCK)
                                                           JOIN SKUxLOC (NOLOCK) ON (INSERTED.Loc = SKUxLOC.Loc)
                                                  WHERE dbo.fnc_RTrim(SKUxLOC.Loc) = dbo.fnc_RTrim(@c_Loc)
@@ -593,8 +589,8 @@ BEGIN
             UPDATE LOC
             SET --LocCheckDigit = dbo.fnc_GetLocCheckDigit(INSERTED.LOC),
                 LOC.TrafficCop = NULL,
-                EditDate       = GETDATE(),
-                EditWho        = SUSER_SNAME()
+                EditDate       = dbo.fnc_GetDate(),
+                EditWho        = dbo.fnc_GetUserName()
             FROM LOC
                      JOIN INSERTED ON LOC.LOC = INSERTED.LOC
 
@@ -633,3 +629,4 @@ GO
 ALTER TABLE [dbo].[LOC]
     ENABLE TRIGGER [ntrLocUpdate]
 GO
+

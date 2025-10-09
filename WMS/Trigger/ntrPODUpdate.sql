@@ -70,6 +70,7 @@ GO
 /* 18-Nov-2021  Wan01      2.3  DevOps Combine Script.                  */ 
 /* 18-Nov-2021  TLTING04   2.4  Disable STSORDERS insert 4Docstatustrack*/   
 /* 07-Sep-2022  YTKuek     2.5  GVT Interface Trigger Point (YT01)      */
+/* 06-Oct-2025  AK01       2.6  UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName */
 /************************************************************************/    
 -- Added by YokeBeen on 14-Jan-2003 (YokeBeen01 - SOS#FBR8465)    
 CREATE OR ALTER TRIGGER [dbo].[ntrPODUpdate]    
@@ -135,8 +136,8 @@ END
    IF ( @n_Continue = 1 OR @n_Continue = 2 ) AND NOT UPDATE(EditDate)  
    BEGIN    
       UPDATE POD WITH (ROWLOCK)     
-         SET EditWho = sUser_sName(),    
-             EditDate = GetDate(),     
+         SET EditWho = dbo.fnc_GetUserName(),    
+             EditDate = dbo.fnc_GetDate(),     
              TrafficCop = NULL    
         FROM INSERTED     
        WHERE INSERTED.MBOLKey = POD.MBOLKey    
@@ -309,27 +310,27 @@ END
    IF @n_continue=1 OR @n_continue=2    
    BEGIN    
    -- (SHONG_20060417)    
-      SELECT @d_ActualDeliveryDate = MAX(ISNULL(ActualDeliveryDate, GETDATE())),    
-             @d_FullRejectDate    = MAX(ISNULL(FullRejectDate, GETDATE())),    
-             @d_PartialRejectDate = MAX(ISNULL(PartialRejectDate, GETDATE()))    
+      SELECT @d_ActualDeliveryDate = MAX(ISNULL(ActualDeliveryDate, dbo.fnc_GetDate())),    
+             @d_FullRejectDate    = MAX(ISNULL(FullRejectDate, dbo.fnc_GetDate())),    
+             @d_PartialRejectDate = MAX(ISNULL(PartialRejectDate, dbo.fnc_GetDate()))    
       FROM INSERTED     
     
    -- (SHONG_20060417)    
-      IF DateDiff(day, GetDate(), @d_ActualDeliveryDate) > 7     
+      IF DateDiff(day, dbo.fnc_GetDate(), @d_ActualDeliveryDate) > 7     
       BEGIN    
          SELECT @n_continue=3     
          SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=62910      
          SELECT @c_errmsg = 'NSQL' + CONVERT(char(5),ISNULL(@n_err,0))     
                           + ': Update Failed! Actual Delivery Date Cannot Greater Then 7 days (ntrPODUpdate)'     
       END    
-      ELSE IF DateDiff(day, GetDate(), @d_FullRejectDate) > 7     
+      ELSE IF DateDiff(day, dbo.fnc_GetDate(), @d_FullRejectDate) > 7     
       BEGIN    
          SELECT @n_continue=3     
          SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=62910      
          SELECT @c_errmsg = 'NSQL' + CONVERT(char(5),ISNULL(@n_err,0))     
                           + ': Update Failed! Full Reject Date Cannot Greater Then 7 days (ntrPODUpdate)'     
       END     
-      ELSE IF DateDiff(day, GetDate(), @d_PartialRejectDate) > 7    
+      ELSE IF DateDiff(day, dbo.fnc_GetDate(), @d_PartialRejectDate) > 7    
       BEGIN    
          SELECT @n_continue=3     
          SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=62910     

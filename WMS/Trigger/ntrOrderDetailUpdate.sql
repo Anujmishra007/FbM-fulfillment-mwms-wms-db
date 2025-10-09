@@ -51,6 +51,7 @@ GO
 /* 26-Oct-2017  SHONG    Performance Tuning (SWT02)                     */
 /* 07-May-2024  NJOW01   UWP-18748  Allow config to call custom sp      */
 /* 06-09-2024   PPA371   Validate if status is cancel                   */
+/* 06-Oct-2025  AK01     UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName */
 /************************************************************************/
 
 CREATE OR ALTER TRIGGER [dbo].[ntrOrderDetailUpdate]        
@@ -103,8 +104,8 @@ BEGIN
       BEGIN
          -- TLTING01
          UPDATE ORDERDETAIL with (ROWLOCK)
-         SET EditDate   = GETDATE(),
-             EditWho    = Suser_sname(),
+         SET EditDate   = dbo.fnc_GetDate(),
+             EditWho    = dbo.fnc_GetUserName(),
              TrafficCop = NULL
          FROM ORDERDETAIL
          JOIN INSERTED ON ORDERDETAIL.OrderKey = INSERTED.Orderkey
@@ -184,7 +185,7 @@ BEGIN
    BEGIN
       UPDATE ORDERS with (ROWLOCK)
       SET ExternOrderkey = INSERTED.ExternOrderkey,
-         EditDate = GETDATE(), EditWho=SUSER_SNAME(),    --tlting
+         EditDate = dbo.fnc_GetDate(), EditWho=dbo.fnc_GetUserName(),    --tlting
          TrafficCop = NULL
       FROM ORDERS
       JOIN INSERTED ON ORDERS.OrderKey = INSERTED.Orderkey
@@ -303,7 +304,7 @@ BEGIN
                                  THEN '5'
                            ELSE INSERTED.Status
                        END,
-               EditDate = GETDATE(), EditWho=Suser_sname()
+               EditDate = dbo.fnc_GetDate(), EditWho=dbo.fnc_GetUserName()
             FROM ORDERDETAIL
             JOIN INSERTED ON (ORDERDETAIL.orderkey = INSERTED.orderkey AND ORDERDETAIL.orderlinenumber = INSERTED.orderlinenumber )
             JOIN DELETED ON (INSERTED.orderkey = DELETED.orderkey AND INSERTED.orderlinenumber = DELETED.orderlinenumber)
@@ -366,7 +367,7 @@ BEGIN
                   SET  UserDefine03 = CAST( CAST(ORDERS.UserDefine03 as float) +
                   (INSERTED.QtyPicked * INSERTED.UnitPrice) -
                   (DELETED.QtyPicked * DELETED.UnitPrice) as NVARCHAR(18)),    -- bug fix
-                  EditDate = GETDATE(), EditWho=SUSER_SNAME(),     --tlting
+                  EditDate = dbo.fnc_GetDate(), EditWho=dbo.fnc_GetUserName(),     --tlting
                   TrafficCop = NULL
                   FROM ORDERS
                   JOIN INSERTED ON (INSERTED.OrderKey = ORDERS.OrderKey)
@@ -388,7 +389,7 @@ BEGIN
                   IF EXISTS(SELECT 1 FROM @Ord_TotPrice WHERE TotPrice <> 0)
                   BEGIN
                      UPDATE ORDERS WITH (ROWLOCK) SET UserDefine03 = UserDefine03 + TotPrice,    -- bug fix
-                        EditDate = GETDATE(), EditWho=SUSER_SNAME(),
+                        EditDate = dbo.fnc_GetDate(), EditWho=dbo.fnc_GetUserName(),
                         TrafficCop = NULL
                      FROM ORDERS, @Ord_TotPrice AS OrdPrice
                      WHERE ORDERS.Orderkey = OrdPrice.Orderkey
@@ -434,7 +435,7 @@ BEGIN
             WHILE @@FETCH_STATUS = 0
             BEGIN
                UPDATE ORDERS  With (ROWLOCK)
-                  SET EditDate = GETDATE(), EditWho=Suser_sname()
+                  SET EditDate = dbo.fnc_GetDate(), EditWho=dbo.fnc_GetUserName()
                WHERE OrderKey = @c_OrderKey
 
                SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
@@ -470,8 +471,8 @@ BEGIN
                /* Only one row updated in the detail table. */
                UPDATE ORDERS WITH (ROWLOCK)
                SET  OpenQty = ORDERS.OpenQty + INSERTED.OpenQty - DELETED.OpenQty,
-                  EditDate = GETDATE(),   --tlting
-                  EditWho = SUSER_SNAME()
+                  EditDate = dbo.fnc_GetDate(),   --tlting
+                  EditWho = dbo.fnc_GetUserName()
                FROM ORDERS, INSERTED, DELETED
                WHERE ORDERS.OrderKey = INSERTED.OrderKey
                  AND INSERTED.OrderKey = DELETED.OrderKey
@@ -490,8 +491,8 @@ BEGIN
                (Select Sum(INSERTED.OpenQty) From INSERTED
                Where INSERTED.OrderKey = ORDERS.OrderKey)
                ),
-               EditDate = GETDATE(),   --tlting
-               EditWho = SUSER_SNAME()
+               EditDate = dbo.fnc_GetDate(),   --tlting
+               EditWho = dbo.fnc_GetUserName()
                FROM ORDERS,DELETED,INSERTED
                WHERE ORDERS.Orderkey IN (SELECT Distinct Orderkey From DELETED)
                AND ORDERS.Orderkey = DELETED.Orderkey
@@ -526,8 +527,8 @@ BEGIN
       BEGIN
          -- TLTING01
          UPDATE ORDERDETAIL with (ROWLOCK)
-         SET EditDate   = GETDATE(),
-             EditWho    = Suser_sname(),
+         SET EditDate   = dbo.fnc_GetDate(),
+             EditWho    = dbo.fnc_GetUserName(),
              TrafficCop = NULL
          FROM ORDERDETAIL
          JOIN INSERTED ON ORDERDETAIL.OrderKey = INSERTED.Orderkey

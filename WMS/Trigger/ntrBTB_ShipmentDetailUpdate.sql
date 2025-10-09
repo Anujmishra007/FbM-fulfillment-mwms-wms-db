@@ -1,6 +1,3 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE Id = OBJECT_ID(N'[dbo].[ntrBTB_ShipmentDetailUpdate]') AND OBJECTPROPERTY(Id, N'IsTrigger') = 1)
-   DROP TRIGGER [dbo].[ntrBTB_ShipmentDetailUpdate]
-GO
 
 SET ANSI_NULLS OFF
 GO
@@ -24,8 +21,9 @@ GO
 /* Date        Author   Ver   Purposes                                  */
 /* 08-NOV-2017 Wan01    1.1   WMS-3321 - Triple - Back to Back FTA Entry*/
 /* 2021-FEB-09 WAN02    1.2   WMS-15957-SG-CBF - BTB Form E Declaration */
+/* 06-Oct-2025 AK01     1.3   UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName*/
 /************************************************************************/
-CREATE TRIGGER [dbo].[ntrBTB_ShipmentDetailUpdate]
+CREATE OR ALTER TRIGGER [dbo].[ntrBTB_ShipmentDetailUpdate]
 ON  [dbo].[BTB_SHIPMENTDETAIL]
 FOR UPDATE
 AS
@@ -77,8 +75,8 @@ BEGIN
    IF NOT UPDATE(EditDate) 
    BEGIN
       UPDATE BTB_SHIPMENTDETAIL WITH (ROWLOCK)
-      SET EditWho = SUSER_SNAME()
-         ,EditDate= GETDATE()
+      SET EditWho = dbo.fnc_GetUserName()
+         ,EditDate= dbo.fnc_GetDate()
          ,TrafficCop = NULL
       FROM BTB_SHIPMENTDETAIL
       JOIN INSERTED ON (BTB_SHIPMENTDETAIL.BTB_ShipmentKey = INSERTED.BTB_ShipmentKey)
@@ -214,7 +212,7 @@ BEGIN
             UPDATE BTB_FTA WITH (ROWLOCK)
             SET QtyExported = QtyExported - @n_QtyExported_DEL
                ,EditWho = SUSER_NAME()
-               ,EditDate= GETDATE()
+               ,EditDate= dbo.fnc_GetDate()
             WHERE BTB_FTA.BTB_FTAKey = @c_BTB_FTAKey 
 
             SET @n_err = @@ERROR 
@@ -251,7 +249,7 @@ BEGIN
             UPDATE BTB_FTA 
             SET QtyExported = QtyExported + @n_QtyExported  
                ,EditWho = SUSER_NAME()
-               ,EditDate= GETDATE()
+               ,EditDate= dbo.fnc_GetDate()
             WHERE BTB_FTA.BTB_FTAKey = @c_BTB_FTAKey 
 
             SET @n_err = @@ERROR 
@@ -321,4 +319,5 @@ QUIT_TR:
    END
 END -- procedure
 GO
+
 

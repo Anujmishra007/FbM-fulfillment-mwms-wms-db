@@ -1,7 +1,4 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrQcmd_TransmitlogConfigUpdate]') 
-              and OBJECTPROPERTY(id, N'IsTrigger') = 1) 
-drop trigger [dbo].[ntrQcmd_TransmitlogConfigUpdate]
-GO
+
  
 
 /************************************************************************/  
@@ -26,9 +23,10 @@ GO
 /*                                                                      */  
 /* Data Modifications:                                                  */  
 /* Date         Author    Ver.  Purposes                                */  
+/* 06-Oct-2025  AK01      1.0   UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName*/
 /************************************************************************/  
   
-CREATE TRIGGER [dbo].[ntrQcmd_TransmitlogConfigUpdate]  
+CREATE OR ALTER TRIGGER [dbo].[ntrQcmd_TransmitlogConfigUpdate]  
 ON  [dbo].[QCmd_TransmitlogConfig]  
 FOR UPDATE  
 AS  
@@ -62,8 +60,8 @@ BEGIN
    BEGIN    
 
       UPDATE Qcmd_TransmitlogConfig   
-      SET    EditWho  = SUSER_SNAME()
-           , EditDate = GETDATE()
+      SET    EditWho  = dbo.fnc_GetUserName()
+           , EditDate = dbo.fnc_GetDate()
       FROM   Qcmd_TransmitlogConfig, INSERTED  
       WHERE  Qcmd_TransmitlogConfig.RowRefNo = INSERTED.RowRefNo
      
@@ -79,3 +77,4 @@ BEGIN
       END
    END
 END
+

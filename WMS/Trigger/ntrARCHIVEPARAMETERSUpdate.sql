@@ -11,6 +11,7 @@
 /* Date         Author    	  Ver   Purposes                       */
 /* 2022-08-17   kelvinongcy  1.0   Capture editwho, editdate      */
 /*                                 and modification into log      */
+/* 06-Oct-2025  AK01         1.1   UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName */
 /******************************************************************/  
   
 CREATE  OR ALTER  TRIGGER [dbo].[ntrARCHIVEPARAMETERSUpdate]  
@@ -47,8 +48,8 @@ BEGIN
    IF ( @n_continue = 1 or @n_continue=2 ) AND NOT UPDATE(EditDate)  
    BEGIN  
       UPDATE ARCHIVEPARAMETERS  
-      SET EditDate = GETDATE(),  
-          EditWho  = SUSER_SNAME(),  
+      SET EditDate = dbo.fnc_GetDate(),  
+          EditWho  = dbo.fnc_GetUserName(),  
           TrafficCop = NULL   
       FROM dbo.ARCHIVEPARAMETERS, INSERTED  
       WHERE ARCHIVEPARAMETERS.ArchiveKey = INSERTED.ArchiveKey  
@@ -336,5 +337,6 @@ BEGIN
   
 END  
 GO
+
 
 

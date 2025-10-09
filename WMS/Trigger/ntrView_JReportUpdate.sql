@@ -1,7 +1,4 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrView_JReportUpdate]') 
-           and OBJECTPROPERTY(id, N'IsTrigger') = 1) 
-   drop trigger [dbo].[ntrView_JReportUpdate]
-GO
+
 
 SET ANSI_NULLS OFF
 GO
@@ -32,9 +29,10 @@ GO
 /*                                                                               */
 /* Updates:                                                                      */
 /* Date         Author    Ver.  Purposes                                         */
+/* 2025-10-06   AK01      1.1   UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName*/
 /*********************************************************************************/  
 
-CREATE TRIGGER [dbo].[ntrView_JReportUpdate]
+CREATE OR ALTER TRIGGER [dbo].[ntrView_JReportUpdate]
 ON  [dbo].[View_JReport]
 FOR UPDATE
 AS
@@ -60,8 +58,8 @@ BEGIN -- main
    IF (@n_continue = 1 or @n_continue = 2)  AND NOT UPDATE(EditDate)
    BEGIN
       UPDATE View_JReport WITH (ROWLOCK)
-      SET View_JReport.EditWho = SUSER_SNAME(),
-          View_JReport.EditDate = GETDATE()
+      SET View_JReport.EditWho = dbo.fnc_GetUserName(),
+          View_JReport.EditDate = dbo.fnc_GetDate()
       FROM View_JReport JOIN INSERTED ON View_JReport.JReport_ID = INSERTED.JReport_ID
 
       SELECT @n_err = @@ERROR 
@@ -101,4 +99,5 @@ BEGIN -- main
    END
 END -- main
 GO
+
 

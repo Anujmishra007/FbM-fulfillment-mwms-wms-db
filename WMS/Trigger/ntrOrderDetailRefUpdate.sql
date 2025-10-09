@@ -1,7 +1,3 @@
-IF EXISTS (SELECT * FROM DBO.SYSOBJECTS WHERE ID = OBJECT_ID(N'[dbo].[ntrOrderDetailRefUpdate]') 
-AND OBJECTPROPERTY(id, N'IsTrigger') = 1)
-  DROP TRIGGER ntrOrderDetailRefUpdate
-GO
 
 SET ANSI_NULLS OFF
 GO
@@ -27,8 +23,9 @@ GO
 /* Date          Author  Ver.  Purposes                                         */ 
 /* 2022-04-05    kocy    1.0   WMS-19396 - keep trace Editdate                  */
 /*                            & EditWho in OrderDetailRef related tables        */
+/* 2025-10-06   AK01     1.1   UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName */
 /********************************************************************************/ 
-CREATE TRIGGER [dbo].[ntrOrderDetailRefUpdate]  
+CREATE OR ALTER TRIGGER [dbo].[ntrOrderDetailRefUpdate]  
 ON  [dbo].[OrderDetailRef] FOR UPDATE  
 AS  
 BEGIN  
@@ -62,8 +59,8 @@ BEGIN
    IF ( @n_continue = 1 or @n_continue=2 ) AND NOT UPDATE(EditDate)
    BEGIN  
       UPDATE OrderDetailRef  
-      SET EditDate = GETDATE(),  
-          EditWho = SUSER_SNAME()  
+      SET EditDate = dbo.fnc_GetDate(),  
+          EditWho = dbo.fnc_GetUserName()  
       FROM OrderDetailRef (NOLOCK), INSERTED (NOLOCK)  
       WHERE OrderDetailRef.RowRef = INSERTED.RowRef  
   
@@ -108,5 +105,6 @@ GO
 
 ALTER TABLE [dbo].[OrderDetailRef] ENABLE TRIGGER [ntrOrderDetailRefUpdate]
 GO
+
 
 

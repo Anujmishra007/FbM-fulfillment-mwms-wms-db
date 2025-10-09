@@ -105,6 +105,8 @@ GO
 /*                            with MoveRefKey                           */
 /* 24-Jun-2025  AYD02   4.3   UWP-34128: Use RDT.rdtIsRDT to identify if*/
 /*                            move is from RDT                          */
+/* 06-Oct-2025  AK01    4.4   UWP-42143 - Replace SUSER_SNAME with      */
+/*                            fnc_GetUserName                           */
 /************************************************************************/
 
 CREATE OR ALTER TRIGGER [dbo].[ntrPickDetailUpdate]
@@ -220,7 +222,7 @@ IF EXISTS ( SELECT 1 FROM INSERTED, DELETED
       AND NOT UPDATE(EditDate)
 BEGIN
    UPDATE PICKDETAIL  
-   SET EditDate = GETDATE(), EditWho=SUSER_SNAME(),
+   SET EditDate = dbo.fnc_GetDate(), EditWho=dbo.fnc_GetUserName(),
          TrafficCop = NULL
    FROM PICKDETAIL,INSERTED
    WHERE PICKDETAIL.PickDetailKey=INSERTED.PickDetailKey
@@ -441,8 +443,8 @@ BEGIN
          BEGIN
             UPDATE CONSIGNEESKU 
             SET AddDate = @d_Lottable04
-               ,EditWho = SUSER_SNAME()
-               ,EditDate= GETDATE()
+               ,EditWho = dbo.fnc_GetUserName()
+               ,EditDate= dbo.fnc_GetDate()
             WHERE Consigneekey = @c_Consigneekey
             AND   ConsigneeSku = @c_Sku
             AND   AddDate < @d_Lottable04
@@ -877,8 +879,8 @@ BEGIN
 
             UPDATE PreAllocatePickDetail  
             SET QTY = QTY - @n_sQtyToReduce,
-                  EditDate = GETDATE(),   --tlting
-                  EditWho = SUSER_SNAME()
+                  EditDate = dbo.fnc_GetDate(),   --tlting
+                  EditWho = dbo.fnc_GetUserName()
             WHERE PreAllocatePickDetailKey = @c_sPreAllocatePickDetailKey
 
             SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
@@ -984,8 +986,8 @@ BEGIN
                   BEGIN
                      UPDATE ChannelInv  
                         SET QtyAllocated = QtyAllocated - @n_DeletedQty + @n_InsertedQty , 
-                              EditDate = GETDATE(),
-                              EditWho = SUSER_SNAME()
+                              EditDate = dbo.fnc_GetDate(),
+                              EditWho = dbo.fnc_GetUserName()
                      WHERE Channel_ID = @n_Channel_ID                      
                   END -- IF @c_InsertedStatus = @c_DeletedStatus 
                   ELSE 
@@ -994,8 +996,8 @@ BEGIN
                      BEGIN
                         UPDATE ChannelInv  
                            SET QtyAllocated = QtyAllocated - @n_DeletedQty, 
-                                 EditDate = GETDATE(),
-                                 EditWho = SUSER_SNAME()
+                                 EditDate = dbo.fnc_GetDate(),
+                                 EditWho = dbo.fnc_GetUserName()
                         WHERE Channel_ID = @n_Channel_ID                                                                         
                      END                     
                   END -- IF @c_InsertedStatus <> @c_DeletedStatus                   
@@ -1017,16 +1019,16 @@ BEGIN
                 BEGIN
                   UPDATE ChannelInv  
                      SET QtyAllocated = QtyAllocated - @n_DeletedQty, 
-                         EditDate = GETDATE(),
-                         EditWho = SUSER_SNAME()
+                         EditDate = dbo.fnc_GetDate(),
+                         EditWho = dbo.fnc_GetUserName()
                   WHERE Channel_ID = @n_DeletedChn_ID                      
                 END                                
                 IF ISNULL(@n_Channel_ID,0) > 0 
                 BEGIN
                   UPDATE ChannelInv  
                      SET QtyAllocated = QtyAllocated + @n_InsertedQty , 
-                         EditDate = GETDATE(),
-                         EditWho = SUSER_SNAME()
+                         EditDate = dbo.fnc_GetDate(),
+                         EditWho = dbo.fnc_GetUserName()
                   WHERE Channel_ID = @n_Channel_ID                   
                 END  
             END -- IF @c_InsertedLOT <> @c_DeletedLOT 
@@ -1089,8 +1091,8 @@ BEGIN
    SET  Lot.QtyAllocated = (Lot.QtyAllocated + tL.QtyAllocated),
         Lot.QtyPicked    = (Lot.QtyPicked + tL.QtyPicked),
         -- LOT.Qty = (LOT.Qty - tl.QtyShipped)
-        EditDate = GETDATE(),   --tlting
-        EditWho = SUSER_SNAME()
+        EditDate = dbo.fnc_GetDate(),   --tlting
+        EditWho = dbo.fnc_GetUserName()
    FROM LOT
    JOIN @tLOT tL ON tL.LOT = LOT.LOT
    SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
@@ -1162,8 +1164,8 @@ BEGIN
         /*
         Qty = (LOTxLOCxID.Qty - tLLI.QtyShipped)
         */
-         EditDate = GETDATE(),   --tlting
-         EditWho = SUSER_SNAME()
+         EditDate = dbo.fnc_GetDate(),   --tlting
+         EditWho = dbo.fnc_GetUserName()
    FROM LOTxLOCxID
    JOIN @tLOTxLOCxID tLLI ON tLLI.LOT = LOTxLOCxID.LOT AND
                              tLLI.LOC = LOTxLOCxID.LOC AND
@@ -1248,8 +1250,8 @@ BEGIN
          ,
          Qty    = (SKUxLOC.Qty - tSL.QtyShipped)
          */
-         EditDate = GETDATE(),   --tlting
-         EditWho = SUSER_SNAME()
+         EditDate = dbo.fnc_GetDate(),   --tlting
+         EditWho = dbo.fnc_GetUserName()
    FROM SKUxLOC
    JOIN @tSKUxLOC tSL ON tSL.StorerKey = SKUxLOC.StorerKey AND
                      tSL.SKU = SKUxLOC.SKU AND
@@ -1326,8 +1328,8 @@ BEGIN
            OrderDetail.QtyPicked    = (OrderDetail.QtyPicked + tOrdDet.QtyPicked),
            OrderDetail.ShippedQty   = (OrderDetail.ShippedQty + tOrdDet.QtyShipped),
            OrderDetail.OpenQty      = (OrderDetail.OpenQty - tOrdDet.QtyShipped),
-           OrderDetail.EditDate     = GETDATE(),   --tlting
-           OrderDetail.EditWho      = SUSER_SNAME()
+           OrderDetail.EditDate     = dbo.fnc_GetDate(),   --tlting
+           OrderDetail.EditWho      = dbo.fnc_GetUserName()
       FROM OrderDetail
       JOIN @tOrderDetail AS tOrdDet ON (OrderDetail.OrderKey = tOrdDet.OrderKey AND OrderDetail.OrderLineNumber = tOrdDet.OrderLineNumber)      
    END
@@ -1336,8 +1338,8 @@ BEGIN
       UPDATE OrderDetail  
       SET  OrderDetail.QtyAllocated = (OrderDetail.QtyAllocated + tOrdDet.QtyAllocated),
            OrderDetail.QtyPicked    = (OrderDetail.QtyPicked + tOrdDet.QtyPicked),
-           OrderDetail.EditDate     = GETDATE(),   --tlting
-           OrderDetail.EditWho      = SUSER_SNAME()
+           OrderDetail.EditDate     = dbo.fnc_GetDate(),   --tlting
+           OrderDetail.EditWho      = dbo.fnc_GetUserName()
       FROM OrderDetail
       JOIN @tOrderDetail AS tOrdDet ON (OrderDetail.OrderKey = tOrdDet.OrderKey AND OrderDetail.OrderLineNumber = tOrdDet.OrderLineNumber)      
    END
@@ -1399,8 +1401,8 @@ BEGIN
                  
          UPDATE p
             SET [Status] = '0'
-            , Editwho  = SUSER_SNAME()
-            , Editdate = GETDATE()
+            , Editwho  = dbo.fnc_GetUserName()
+            , Editdate = dbo.fnc_GetDate()
             , Trafficcop = NULL
          FROM PACKTASKDETAIL AS p 
          JOIN PTD ON PTD.RowRef = p.RowRef
@@ -1773,7 +1775,7 @@ END
 IF ( @n_continue = 1 or @n_continue=2 ) AND NOT UPDATE(EditDate)
 BEGIN
    UPDATE PICKDETAIL  
-   SET EditDate = GETDATE(), EditWho=SUSER_SNAME(),
+   SET EditDate = dbo.fnc_GetDate(), EditWho=dbo.fnc_GetUserName(),
        TrafficCop = NULL                            -- tlting01
    FROM PICKDETAIL,INSERTED
    WHERE PICKDETAIL.PickDetailKey=INSERTED.PickDetailKey
@@ -1836,4 +1838,5 @@ BEGIN
    RETURN
 END
 GO
+
 

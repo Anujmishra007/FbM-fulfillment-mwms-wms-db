@@ -20,6 +20,7 @@
 /* Date         Author   		Ver  	Purposes                                     		*/
 /*18-Dec-2015   JayLim   		1.0  	Initial version                                    */
 /* 2022-05-17   kelvinongcy	1.1	WMS-19673 prevent bulk update or delete (kocy01)	*/
+/* 06-Oct-2025  AK01          1.2   UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName*/
 /***************************************************************************************/
   
 CREATE OR ALTER TRIGGER [dbo].[ntrRouteMasterUpdate]  
@@ -53,8 +54,8 @@ BEGIN
    IF ( @n_continue = 1 OR @n_continue = 2  ) AND NOT UPDATE(EditDate) 
    BEGIN  
       UPDATE RouteMaster WITH (ROWLOCK)
-         SET EditDate = GETDATE(),  
-             EditWho = SUSER_SNAME()
+         SET EditDate = dbo.fnc_GetDate(),  
+             EditWho = dbo.fnc_GetUserName()
         FROM RouteMaster, INSERTED
        WHERE RouteMaster.Route = INSERTED.Route
 
@@ -71,7 +72,7 @@ BEGIN
    END 
    
    IF ( (SELECT COUNT(1) FROM INSERTED WITH (NOLOCK) ) > 100 )   --kocy01
-       AND NOT EXISTS (SELECT Code FROM dbo.CODELKUP WITH (NOLOCK) WHERE Listname = 'TrgUserID' AND Short = '1' AND Code = SUSER_NAME())
+       AND NOT EXISTS (SELECT Code FROM dbo.CODELKUP WITH (NOLOCK) WHERE Listname = 'TrgUserID' AND Short = '1' AND Code = dbo.fnc_GetUserName())
    BEGIN      
          SELECT @n_continue = 3
          SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=85804   -- Should Be Set To The SQL Err message but I don't know how to do so.
@@ -111,5 +112,7 @@ GO
 
 ALTER TABLE [dbo].[RouteMaster] ENABLE TRIGGER [ntrRouteMasterUpdate]
 GO
+
+
 
 

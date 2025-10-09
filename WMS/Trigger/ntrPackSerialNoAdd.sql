@@ -1,6 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrPackSerialNoAdd]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
-   drop trigger [dbo].[ntrPackSerialNoAdd]
-GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -13,8 +10,9 @@ GO
 /*                                                                      */
 /* Date         Author     Ver.  Purposes                               */
 /* 2017-May-29  Ung        1.1   WMS-1919 Created                       */
+/* 2025-OCT-06  AK01       1.2   UWP-42143 Data Audit                   */
 /************************************************************************/
-CREATE TRIGGER [ntrPackSerialNoAdd] ON [PackSerialNo]
+CREATE OR ALTER TRIGGER [ntrPackSerialNoAdd] ON [PackSerialNo]
 FOR  INSERT
 AS
 BEGIN
@@ -52,6 +50,25 @@ BEGIN
          SELECT @c_errmsg="NSQL"+CONVERT(char(6), @n_err)+": Insert fail due to Pack confirmed (ntrPackSerialNoAdd) (SQLSvr MESSAGE=" + LTRIM(RTRIM(@c_errmsg)) + ") "
       END
    END
+
+   --AK01 - S
+   IF dbo.fnc_GetUserName() <> sUser_sName() AND @n_Continue IN (1,2) 
+   BEGIN
+      UPDATE PackSerialNo
+        SET AddWho  = dbo.fnc_GetUserName(),
+            AddDate = dbo.fnc_GetDate(), 
+            TrafficCop = NULL 
+      FROM PackSerialNo
+      JOIN INSERTED ON PackSerialNo.PackSerialNoKey = INSERTED.PackSerialNoKey
+      SELECT @n_err = @@ERROR
+      IF @n_err <> 0
+      BEGIN
+         SELECT @n_continue = 3
+         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=110352 
+         SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed On Table PackSerialNo. (ntrPackSerialNoAdd)' + ' ( ' + ' SQLSvr MESSAGE=' + TRIM(@c_errmsg) + ' ) '
+      END
+   END
+   --AK01 - E
 
    IF @n_continue = 3  -- Error Occured - Process And Return      
    BEGIN      

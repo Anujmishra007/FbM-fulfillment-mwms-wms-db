@@ -61,6 +61,8 @@ GO
 /* 12-Aug-2025  AlexK01   2.4   FCR-7087 - set trafficop to skip        */  
 /*                              generate ITRN.                          */  
 /* 17-Sep-2025  TLTING02  2.4   Performance tune - check different      */
+/* 06-Oct-2025  AK01      2.5   UWP-42143 - Replace SUSER_SNAME with    */
+/*                              fnc_GetUserName                         */
 /************************************************************************/
 
 CREATE OR ALTER TRIGGER [dbo].[ntrPackDetailUpdate] ON [dbo].[PackDetail]
@@ -170,8 +172,8 @@ CREATE OR ALTER TRIGGER [dbo].[ntrPackDetailUpdate] ON [dbo].[PackDetail]
       IF ( @n_continue = 1 OR @n_continue = 2 ) AND NOT UPDATE(EditDate)
       BEGIN
          UPDATE PACKDETAIL with (ROWLOCK)
-            SET EditDate = GetDate() ,
-                EditWho = sUser_sName()
+            SET EditDate = dbo.fnc_GetDate() ,
+                EditWho = dbo.fnc_GetUserName()
                ,ArchiveCop = NULL            -- KHLim01
            FROM PACKDETAIL
            JOIN INSERTED ON (INSERTED.PickSlipNo = PACKDETAIL.PickSlipNo AND
@@ -412,8 +414,8 @@ CREATE OR ALTER TRIGGER [dbo].[ntrPackDetailUpdate] ON [dbo].[PackDetail]
                UPDATE PICKDETAIL WITH (ROWLOCK)
                SET QTY = QTY - @n_ShortPackQty
                   ,UOMQTY = UOMQTY - @n_ShortPackQty,
-                  EditDate = GETDATE(),   --tlting
-                  EditWho = SUSER_SNAME()
+                  EditDate = dbo.fnc_GetDate(),   --tlting
+                  EditWho = dbo.fnc_GetUserName()
                WHERE Pickdetailkey = @c_Pickdetailkey
 
                SELECT @n_err = @@ERROR
@@ -452,8 +454,8 @@ CREATE OR ALTER TRIGGER [dbo].[ntrPackDetailUpdate] ON [dbo].[PackDetail]
                BEGIN
                   UPDATE PICKDETAIL WITH (ROWLOCK)
                   SET PICKDETAIL.DropId = '',
-                     EditDate = GETDATE(),   --tlting
-                     EditWho = SUSER_SNAME(),
+                     EditDate = dbo.fnc_GetDate(),   --tlting
+                     EditWho = dbo.fnc_GetUserName(),
                      TrafficCop = NULL         --AlexK01 
                   FROM PICKDETAIL INNER JOIN INSERTED ON (PICKDETAIL.Sku = INSERTED.Sku
                   AND PICKDETAIL.Dropid = INSERTED.LabelNo)
@@ -542,7 +544,7 @@ CREATE OR ALTER TRIGGER [dbo].[ntrPackDetailUpdate] ON [dbo].[PackDetail]
       BEGIN
          
          DECLARE @dt_TimeIn DATETIME, @dt_TimeOut DATETIME
-         SET @dt_TimeIn = GETDATE()
+         SET @dt_TimeIn = dbo.fnc_GetDate()
 
          --IF UPDATE(Pickslipno)
          BEGIN
@@ -629,3 +631,4 @@ CREATE OR ALTER TRIGGER [dbo].[ntrPackDetailUpdate] ON [dbo].[PackDetail]
      END
  END
 GO
+

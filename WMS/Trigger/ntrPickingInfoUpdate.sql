@@ -1,7 +1,4 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrPickingInfoUpdate]') 
-              and OBJECTPROPERTY(id, N'IsTrigger') = 1) 
-drop trigger [dbo].[ntrPickingInfoUpdate]
-GO
+
 
 SET ANSI_NULLS OFF
 GO
@@ -59,8 +56,10 @@ GO
 /* 07-FEB-2018  Wan02     1.9    Bug Fixed                                     */
 /* 15-JAN-2019  NJOW01    2.0    Fix - check discrete by orderkey              */
 /* 02-Nov-2021  TLTING01  2.1    Deadlock tuning                               */
+/* 06-Oct-2025  AK01      2.2    UWP-42143 - Replace SUSER_SNAME with          */
+/*                               fnc_GetUserName                               */
 /*******************************************************************************/  
-CREATE TRIGGER [dbo].[ntrPickingInfoUpdate]  
+CREATE OR ALTER TRIGGER [dbo].[ntrPickingInfoUpdate]  
 ON  [dbo].[PickingInfo]  
 FOR UPDATE  
 AS  
@@ -153,7 +152,7 @@ BEGIN
    SET @c_col3 = ''  
    SET @c_col4 = ''  
    SET @c_col5 = ''  
-   SET @c_starttime = GetDate()
+   SET @c_starttime = dbo.fnc_GetDate()
      
    -- TraceInfo  
    -- (June01) - End  
@@ -217,7 +216,7 @@ BEGIN
                ORDER BY Orders.OrderKey  
             END  
   
-            SET @c_step1 = GetDate()  
+            SET @c_step1 = dbo.fnc_GetDate()  
   
             OPEN C_trPkngInfonNxtOrdKy
             FETCH NEXT FROM C_trPkngInfonNxtOrdKy INTO @c_NextOrderKey, @c_StorerKey, @c_DocType
@@ -241,7 +240,7 @@ BEGIN
                AND    sc.ConfigKey = 'BackendPickConfirm'   
                AND    sc.SValue = '1'  
                    
-               SET @c_step3 = GetDate()  
+               SET @c_step3 = dbo.fnc_GetDate()  
   
                -- 22-Feb-2005  
                -- Added By SHONG On 22-Mar-2005  
@@ -341,13 +340,13 @@ BEGIN
                      IF  @c_BackendPickCfm = '1' AND @c_DocType = 'E'
                      BEGIN                  	 
                         UPDATE PICKDETAIL WITH (ROWLOCK)
-                           SET ShipFlag = 'P', EditDate = GETDATE(), EditWho = SUSER_SNAME()
+                           SET ShipFlag = 'P', EditDate = dbo.fnc_GetDate(), EditWho = dbo.fnc_GetUserName()
                         WHERE PickDetailKey = @c_PickDetailKey
                      END
                      ELSE
                      BEGIN
                         UPDATE PICKDETAIL WITH (ROWLOCK)
-                           SET Status = '5', EditDate = GETDATE(), EditWho = SUSER_SNAME()
+                           SET Status = '5', EditDate = dbo.fnc_GetDate(), EditWho = dbo.fnc_GetUserName()
                         WHERE PickDetailKey = @c_PickDetailKey
                         AND   Status < '4'     --tlting01
                      END                  		
@@ -382,7 +381,7 @@ BEGIN
                  GOTO SKIP_ORDER_UPDATE
                END   
                  
-               SET @c_step3 = GetDate() - @c_step3  
+               SET @c_step3 = dbo.fnc_GetDate() - @c_step3  
   
                IF @n_continue = 1 OR @n_continue = 2  
                BEGIN  
@@ -399,8 +398,8 @@ BEGIN
                      BEGIN
                         UPDATE ORDERS WITH (ROWLOCK)
                            SET Status = '5',
-                               EditDate = GetDate(),
-                               EditWho  = sUser_sName()
+                               EditDate = dbo.fnc_GetDate(),
+                               EditWho  = dbo.fnc_GetUserName()
                         WHERE  OrderKey = @c_NextOrderKey
                         AND   [Status] < '5'       --tlting01
                         SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
@@ -436,7 +435,7 @@ BEGIN
 	                  WHILE @@FETCH_STATUS = 0
 	                  BEGIN
 	                     UPDATE ORDERDETAIL WITH (ROWLOCK)     
-	                        SET [Status] = '5', EditDate = GETDATE(), EditWho=sUser_sName(), TrafficCop = NULL     
+	                        SET [Status] = '5', EditDate = dbo.fnc_GetDate(), EditWho=dbo.fnc_GetUserName(), TrafficCop = NULL     
 	                     WHERE OrderKey = @c_NextOrderKey   
 	                     AND   OrderLineNumber = @c_OrderLineNumber
 	                     AND   [Status] < '5'          --tlting01
@@ -519,8 +518,8 @@ BEGIN
                      BEGIN
                         UPDATE LOADPLANDETAIL WITH (ROWLOCK)
                            SET STATUS = '5',
-                                 EditDate = GetDate(),
-                                 EditWho   = sUser_sName(),
+                                 EditDate = dbo.fnc_GetDate(),
+                                 EditWho   = dbo.fnc_GetUserName(),
                                  TrafficCop = null
                         WHERE Loadkey  = @c_LoadKey
                           AND LoadLineNumber = @c_LoadLineNumber
@@ -689,11 +688,11 @@ BEGIN
             CLOSE C_trPkngInfonNxtOrdKy  
             DEALLOCATE C_trPkngInfonNxtOrdKy  
   
-            SET @c_step1 = GetDate() - @c_step1  
+            SET @c_step1 = dbo.fnc_GetDate() - @c_step1  
   
             --- End Order Key Loop ---------------------------------------------------------------------  
   
-            SET @c_step2 = GetDate()  
+            SET @c_step2 = dbo.fnc_GetDate()  
   
             --IF ISNULL(RTRIM(@c_LoadKey),'') <> ''  
             --BEGIN  
@@ -733,7 +732,7 @@ BEGIN
             --   END -- NOT EXISTS  
             --END -- IF LTRIM(RTRIM(@c_LoadKey)) <> '' 
   
-            SET @c_step2 = GetDate() - @c_step2  
+            SET @c_step2 = dbo.fnc_GetDate() - @c_step2  
          END -- IF @c_TicketType <> 'XD' AND @c_TicketType <> 'LB'  
          ELSE  
          BEGIN  
@@ -760,7 +759,7 @@ BEGIN
                	IF @c_PickDet_Status < '4'
                	BEGIN
                      UPDATE PICKDETAIL WITH (ROWLOCK)
-                        SET STATUS = '5', EditDate = GETDATE(), EditWho = SUSER_SNAME()
+                        SET STATUS = '5', EditDate = dbo.fnc_GetDate(), EditWho = dbo.fnc_GetUserName()
                      WHERE  PickDetailKey = @c_PickDetailKey
                      AND    Status < '4'     --tlting01
                      SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
@@ -807,8 +806,8 @@ BEGIN
                   	IF @c_Status < '5'
                   	BEGIN
                         UPDATE Orders WITH (ROWLOCK)
-                           SET Status = '5', EditDate = GetDate(),
-                               EditWho  = sUser_sName(), Trafficcop = NULL
+                           SET Status = '5', EditDate = dbo.fnc_GetDate(),
+                               EditWho  = dbo.fnc_GetUserName(), Trafficcop = NULL
                         WHERE Orderkey = @c_NextOrderKey
                         AND   Status < '5'    --tlting01
 
@@ -843,7 +842,7 @@ BEGIN
          SET @c_col1      = @c_PickSlipNo  
          SET @c_col2      = RTRIM(@c_TicketType)  
          SET @c_TraceName = 'ntrPickingInfoUpdate'  
-         SET @c_endtime = GetDate()  
+         SET @c_endtime = dbo.fnc_GetDate()  
   
 --         INSERT INTO TraceInfo (TraceName, TimeIn, TimeOut, TotalTime, Step1, Step2, Step3, Step4, Step5, Col1, Col2, Col3, Col4, Col5)  
 --         VALUES ( @c_TraceName, @c_starttime, @c_endtime  
@@ -905,5 +904,6 @@ BEGIN
 END  
 
 GO
+
 
 

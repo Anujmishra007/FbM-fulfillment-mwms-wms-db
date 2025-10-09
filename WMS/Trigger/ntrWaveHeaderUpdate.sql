@@ -38,6 +38,7 @@ GO
 /* 20-OCT-2022  NJOW01     1.2  DEVOPS Combine Script                   */
 /* 10-JAN-2025  YT01       1.3  Add Generic Interface Trigger           */
 /* 26-MAR-2025  YT02       1.4  Add TrafficCop allow ITFTriggerConfig   */  
+/* 06-Oct-2025  AK01       1.5  UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName */
 /************************************************************************/
 
 CREATE OR ALTER TRIGGER [dbo].[ntrWaveHeaderUpdate]
@@ -74,8 +75,8 @@ BEGIN
 	IF ( @n_continue = 1 or @n_continue=2 ) AND NOT UPDATE(EditDate)
 	BEGIN
 		UPDATE WAVE
-		SET EditDate = GETDATE(),
-		    EditWho  = SUSER_SNAME(),
+		SET EditDate = dbo.fnc_GetDate(),
+		    EditWho  = dbo.fnc_GetUserName(),
 		    TrafficCop = NULL
 		FROM WAVE (NOLOCK), INSERTED (NOLOCK)
       WHERE WAVE.WaveKey = INSERTED.WaveKey
@@ -259,3 +260,4 @@ BEGIN
 	 END
 END
 Go
+

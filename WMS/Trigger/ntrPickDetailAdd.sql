@@ -51,6 +51,7 @@ GO
 /*                            for cursor: CUR_CHANNEL_MGMT  (SY01)      */
 /* 29-Oct-2024  TLTING02      WMS-26555 - allow MultiFacility for Orders*/
 /* 12-Aug-2025  WLChooi 4.0   FCR-5700 Trigger ITF By Wave (WL01)       */
+/* 06-OCT-2025  AK01    4.1   UWP-42143 Data Audit                      */
 /************************************************************************/
 CREATE OR ALTER TRIGGER [dbo].[ntrPickDetailAdd]
 ON  [dbo].[PICKDETAIL]
@@ -980,6 +981,25 @@ END -- IF EXISTS(StorerConfig - 'WAVEUPDLOG')
    /* Interface Trigger Points Calling Process - (End)     */
    /********************************************************/
    --WL01 E
+
+   --AK01 - S
+   IF dbo.fnc_GetUserName() <> sUser_sName() AND @n_Continue IN (1,2) 
+   BEGIN
+      UPDATE PICKDETAIL
+        SET AddWho  = dbo.fnc_GetUserName(),
+            AddDate = dbo.fnc_GetDate(), 
+            TrafficCop = NULL 
+      FROM PICKDETAIL
+      JOIN INSERTED ON PICKDETAIL.PickDetailKey = INSERTED.PickDetailKey
+      SELECT @n_err = @@ERROR
+      IF @n_err <> 0
+      BEGIN
+         SELECT @n_continue = 3
+         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=63128  
+         SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed On Table PICKDETAIL. (ntrPICKDETAILAdd)' + ' ( ' + ' SQLSvr MESSAGE=' + TRIM(@c_errmsg) + ' ) '
+      END
+   END
+   --AK01 - E
 
 SET NOCOUNT OFF
 /* #INCLUDE <TRPDA2.SQL> */

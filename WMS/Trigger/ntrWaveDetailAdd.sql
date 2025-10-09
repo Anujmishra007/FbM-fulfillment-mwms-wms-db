@@ -50,6 +50,7 @@ GO
 /* 10-DEC-2024  NJOW02     2.2   FRC-1733 Disallow add order to wave with     */
 /*                               TMreleaseflag=Y                              */
 /* 27-Aug-2025  WLChooi    2.3   FCR-7589 Add TrafficCopAllowTriggerSP (WL01) */
+/* 06-OCT-2025  AK01       2.4   UWP-42143 Data Audit                         */
 /******************************************************************************/
 CREATE OR ALTER TRIGGER [dbo].[ntrWaveDetailAdd]
 ON [dbo].[WAVEDETAIL]
@@ -393,6 +394,25 @@ BEGIN
             DROP TABLE #DELETED
       END
    END   
+
+   --AK01 - S
+   IF dbo.fnc_GetUserName() <> sUser_sName() AND @n_Continue IN (1,2) 
+   BEGIN
+      UPDATE WAVEDETAIL
+        SET AddWho  = dbo.fnc_GetUserName(),
+            AddDate = dbo.fnc_GetDate(), 
+            TrafficCop = NULL 
+      FROM WAVEDETAIL
+      JOIN INSERTED ON WAVEDETAIL.WaveDetailKey = INSERTED.WaveDetailKey
+      SELECT @n_err = @@ERROR
+      IF @n_err <> 0
+      BEGIN
+         SELECT @n_continue = 3
+         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=62310  
+         SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed On Table WAVEDETAIL. (ntrWAVEDETAILAdd)' + ' ( ' + ' SQLSvr MESSAGE=' + TRIM(@c_errmsg) + ' ) '
+      END
+   END
+   --AK01 - E
 
    IF @n_continue = 3 -- Error Occured - Process And Return
    BEGIN

@@ -1,6 +1,4 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[dbo].[ntrHolidayDetailUpdate]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
-    DROP TRIGGER [dbo].[ntrHolidayDetailUpdate]
-GO
+
 
 SET ANSI_NULLS OFF
 GO
@@ -37,9 +35,10 @@ GO
 /*                                                                      */  
 /* Updates:                                                             */  
 /* Date         Author   Ver  Purposes                                  */  
+/* 06-Oct-2025  AK01     1.0  UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName */
 /************************************************************************/  
   
-CREATE TRIGGER [dbo].[ntrHolidayDetailUpdate]  
+CREATE OR ALTER TRIGGER [dbo].[ntrHolidayDetailUpdate]  
 ON  [dbo].HolidayDetail FOR UPDATE  
 AS  
 BEGIN  
@@ -67,8 +66,8 @@ BEGIN
  IF ( @n_continue = 1 or @n_continue=2 ) AND NOT UPDATE(EditDate) 
  BEGIN  
   UPDATE HolidayDetail with (ROWLOCK)
-  SET EditDate = GETDATE(),  
-      EditWho = SUSER_SNAME()  
+  SET EditDate = dbo.fnc_GetDate(),  
+      EditWho = dbo.fnc_GetUserName()  
   FROM HolidayDetail, INSERTED (NOLOCK)  
   WHERE HolidayDetail.HolidayKey  = INSERTED.HolidayKey  
   AND   HolidayDetail.HolidayDate = INSERTED.HolidayDate  

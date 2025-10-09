@@ -1,15 +1,12 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrJReportFolderUpdate]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
-drop trigger [dbo].[ntrJReportFolderUpdate]
-GO
 
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS ON
 GO
 
+/* 06-Oct-2025 AK01     1.1   UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName       */
 
-
-CREATE TRIGGER [dbo].[ntrJReportFolderUpdate] ON [dbo].[JReportFolder]
+CREATE OR ALTER TRIGGER [dbo].[ntrJReportFolderUpdate] ON [dbo].[JReportFolder]
 FOR UPDATE
 AS
 BEGIN
@@ -35,8 +32,8 @@ BEGIN
    IF ( @n_continue = 1 OR @n_continue = 2 ) AND NOT UPDATE(EditDate)
    BEGIN
       UPDATE JReportFolder
-         SET EditDate = GETDATE(),
-             EditWho  = SUSER_SNAME()
+         SET EditDate = dbo.fnc_GetDate(),
+             EditWho  = dbo.fnc_GetUserName()
       FROM JReportFolder WITH (NOLOCK), INSERTED WITH (NOLOCK)
       WHERE JReportFolder.StorerKey = INSERTED.StorerKey
       AND   JReportFolder.SecondLvl = INSERTED.SecondLvl
@@ -77,3 +74,4 @@ BEGIN
 	 END
 END
 GO
+
