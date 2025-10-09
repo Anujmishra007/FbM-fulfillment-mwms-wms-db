@@ -10,6 +10,7 @@ GO
 /*                                                                        */
 /* Date       Rev    Author     Purposes                                  */
 /* 2025-09-25 1.0.0  Nick       FCR-8110 Created                          */
+/* 2025-10-09 1.0.1  Nick       FCR-8110 fix 2 issues                     */
 /**************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1638Confirm01] (
@@ -48,7 +49,7 @@ BEGIN
       @cRefNo1                NVARCHAR(20),
       @cRefNo2                NVARCHAR(20)
 
-   DECLARE @tPackDetail TABLE
+   DECLARE @tCaseData TABLE
    (
       RowIndex          INT IDENTITY( 1, 1),
       CaseID            NVARCHAR( 20),
@@ -57,7 +58,24 @@ BEGIN
       Qty               INT
    )
 
-   INSERT INTO @tPackDetail (CaseID, SKU, LOC, Qty)
+   DECLARE @tPackDetail TABLE
+   (
+      RowNumber   INT IDENTITY(1,1),
+      PickSlipNo  NVARCHAR( 10) NOT NULL,
+      CartonNo    INT NOT NULL,
+      LabelNo     NVARCHAR( 20) NOT NULL,
+      LabelLine   NVARCHAR( 5) NOT NULL,
+      PRIMARY KEY CLUSTERED (PickSlipNo, CartonNo, LabelNo, LabelLine)
+   )
+
+   INSERT INTO @tPackDetail (PickSlipNo, CartonNo, LabelNo, LabelLine)
+   SELECT PickSlipNo, CartonNo, LabelNo, LabelLine
+   FROM dbo.PackDetail WITH (NOLOCK)
+   WHERE PickSlipNo = @cPickSlipNo
+      AND StorerKey = @cStorerKey
+      AND Qty > 0
+
+   INSERT INTO @tCaseData (CaseID, SKU, LOC, Qty)
    SELECT DISTINCT
       LabelNo,
       SKU,
@@ -93,7 +111,7 @@ BEGIN
          @cSKU = SKU,
          @cLOC = LOC,
          @nQty = Qty
-      FROM @tPackDetail
+      FROM @tCaseData
       WHERE RowIndex > @nLoopIndex
       ORDER BY RowIndex
 
@@ -102,12 +120,10 @@ BEGIN
 
       -- Insert PalletDetail
       IF EXISTS (SELECT 1 
-                     FROM dbo.PalletDetail WITH (NOLOCK) 
-                     WHERE PalletKey = @cPalletKey 
-                        AND CaseID = @cCaseID
-                        AND StorerKey = @cStorerKey
-                        AND Sku = @cSKU
-                        AND Loc = @cLOC)
+                  FROM dbo.PalletDetail WITH (NOLOCK) 
+                  WHERE CaseID = @cCaseID
+                     AND StorerKey = @cStorerKey
+                     AND Sku = @cSKU)
       BEGIN
          SET @nErrNo = 247804
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') -- Order already scanned
@@ -159,6 +175,24 @@ BEGIN
          END CATCH
       END
    END
+
+   --Update PackDetail.DropID as scanned PalletKey
+   BEGIN TRY
+      UPDATE PD
+      SET PD.DropID = @cPalletKey,
+         PD.EditDate = GETDATE(),
+         PD.EditWho = SUSER_SNAME()
+      FROM dbo.PackDetail PD WITH(ROWLOCK)
+      INNER JOIN @tPackDetail TP ON PD.PickSlipNo = TP.PickSlipNo
+         AND PD.CartonNo = TP.CartonNo
+         AND PD.LabelNo = TP.LabelNo
+         AND PD.LabelLine = TP.LabelLine
+   END TRY
+   BEGIN CATCH
+      SET @nErrNo = 247805
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP') --Update PackDetail Failed
+      GOTO ROLLBACK_TRAN
+   END CATCH
 
    GOTO Quit
 
