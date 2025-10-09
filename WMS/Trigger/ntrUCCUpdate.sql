@@ -259,7 +259,7 @@ BEGIN
                         IF NOT @n_err=0
                         BEGIN
                            SELECT @n_continue=3
-                           SELECT @c_errmsg= CONVERT(char(250), @n_err), @n_err=74564
+                           SELECT @c_errmsg= CONVERT(char(250), @n_err), @n_err=60984
                            SELECT @c_errmsg= 'NSQL' + CONVERT(char(5), @n_err)+ ':Insert failed on TransmitLog3 (INVHOLDLOG-UCC). (ntrUCCUpdate)' +'(' + 'SQLSvr MESSAGE=' + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + ')'
                         END
                      END
@@ -298,7 +298,7 @@ BEGIN
                   IF NOT @n_err=0
                   BEGIN
                      SELECT @n_continue=3
-                     SELECT @c_errmsg= CONVERT(char(250), @n_err), @n_err=74566
+                     SELECT @c_errmsg= CONVERT(char(250), @n_err), @n_err=60986
                      SELECT @c_errmsg= 'NSQL' + CONVERT(char(5), @n_err)+ ':Insert failed on TransmitLog2 (InvHoldUCC). (ntrUCCUpdate)' +'(' + 'SQLSvr MESSAGE=' + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + ')'
                   END
                END
