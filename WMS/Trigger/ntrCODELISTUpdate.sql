@@ -24,6 +24,7 @@
 /* Date         Author    		Ver.  Purposes                                        */
 /* 04-Mar-2022  TLTING    		1.1   WMS-19029 prevent bulk update or delete         */ 
 /* 2022-04-12   kelvinongcy	1.2   amend way for control user run batch (kocy01)	*/
+/* 06-Oct-2025  AK01                    1.3   UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName*/
 /************************************************************************************/  
 
 CREATE OR ALTER TRIGGER [dbo].[ntrCODELISTUpdate]
@@ -56,8 +57,8 @@ BEGIN -- main
    IF (@n_continue = 1 or @n_continue = 2)  AND NOT UPDATE(EditDate)
    BEGIN
     	UPDATE CODELIST WITH (ROWLOCK)
-   	SET CODELIST.EditWho = SUSER_SNAME(),
-   	    CODELIST.EditDate = GETDATE(),
+   	SET CODELIST.EditWho = dbo.fnc_GetUserName(),
+   	    CODELIST.EditDate = dbo.fnc_GetDate(),
    	    CODELIST.TrafficCop = NULL
    	FROM CODELIST
       JOIN INSERTED ON CODELIST.LISTNAME = INSERTED.LISTNAME
@@ -113,5 +114,6 @@ GO
 
 ALTER TABLE [dbo].[CODELIST] ENABLE TRIGGER [ntrCODELISTUpdate]
 GO
+
 
 

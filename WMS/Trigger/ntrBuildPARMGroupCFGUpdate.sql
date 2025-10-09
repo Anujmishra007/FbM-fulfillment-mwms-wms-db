@@ -26,6 +26,7 @@
 /*                                                                               */
 /* Updates:     Author     Ver  Purposes                                         */
 /* 2022-09-13   gywong     1.0  WMS-20763 Add trigger Editdate & EditWho		 */
+/* 2025-10-06   AK01       1.1  UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName */
 /*********************************************************************************/
 
 CREATE OR ALTER TRIGGER [dbo].[ntrBuildPARMGroupCFGUpdate]
@@ -63,8 +64,8 @@ BEGIN
 	IF ( @n_continue = 1 or @n_continue=2 ) AND NOT UPDATE(EditDate)
 	BEGIN
 		UPDATE dbo.BuildPARMGroupCFG
-		SET EditDate = GETDATE(),
-		    EditWho = SUSER_SNAME(),
+		SET EditDate = dbo.fnc_GetDate(),
+		    EditWho = dbo.fnc_GetUserName(),
           TrafficCop = NULL
 		FROM BuildPARMGroupCFG, INSERTED
       WHERE BuildPARMGroupCFG.ParmGroupCfgID = INSERTED.ParmGroupCfgID
@@ -116,5 +117,6 @@ GO
 
 ALTER TABLE [dbo].[BuildPARMGroupCFG] ENABLE TRIGGER [ntrBuildPARMGroupCFGUpdate]
 GO
+
 
 

@@ -63,6 +63,7 @@ GO
 /* 20-Oct-2020  TLTING02  1.15  Performance tune                        */
 /* 10-Apr-2025  USH022-01 1.16  FCR-3030 Insert into transmitlog2 when  */
 /*                              FinilizeFlag Y                          */
+/* 06-Oct-2025  AK01      1.17  UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName */
 /************************************************************************/
 
 CREATE OR ALTER TRIGGER [dbo].[ntrLoadPlanUpdate]
@@ -156,7 +157,7 @@ IF EXISTS ( SELECT 1 FROM INSERTED, DELETED
    AND NOT UPDATE(EditDate)
 BEGIN
    UPDATE LoadPlan  
-   SET EditDate = GETDATE(), EditWho=SUSER_SNAME(),
+   SET EditDate = dbo.fnc_GetDate(), EditWho=dbo.fnc_GetUserName(),
          TrafficCop = NULL       
    FROM LoadPlan,INSERTED       
    WHERE LoadPlan.LoadKey=INSERTED.LoadKey      
@@ -744,8 +745,8 @@ BEGIN
                       AllocatedPalletCnt = @n_Alloc_PalletCnt,
                       AllocatedCaseCnt   = @n_Alloc_CaseCnt,
                       Status = @c_Status,
-                      EditDate = GETDATE(),  --tlting
-                      EditWho = SUSER_SNAME(),
+                      EditDate = dbo.fnc_GetDate(),  --tlting
+                      EditWho = dbo.fnc_GetUserName(),
                       trafficcop = NULL
                WHERE LoadKey = @c_CurrentLoad
             END
@@ -756,9 +757,9 @@ BEGIN
 
                UPDATE LoadPlan  
                   SET Status = @c_Status,
-                      EditWho = SUSER_SNAME(),
+                      EditWho = dbo.fnc_GetUserName(),
                       trafficcop = NULL,
-                      EditDate = GETDATE()  --tlting
+                      EditDate = dbo.fnc_GetDate()  --tlting
                WHERE LoadKey = @c_CurrentLoad               
             END
 
@@ -895,8 +896,8 @@ BEGIN
             BEGIN
                Update LoadPlanLaneDetail  
                   SET Status = '9',
-                      EditDate = GETDATE(),        --tlting
-                      EditWho = SUSER_SNAME()
+                      EditDate = dbo.fnc_GetDate(),        --tlting
+                      EditWho = dbo.fnc_GetUserName()
                Where Loadkey = @c_CurrentLoad
                AND   Status = '0' -- (Vicky01)
             END
@@ -1158,8 +1159,8 @@ END -- IF @n_continue = 1 OR @n_continue = 2
 IF ( @n_continue = 1 OR @n_continue = 2 ) AND NOT UPDATE(EditDate)
 BEGIN
    UPDATE LoadPlan  
-   SET EditDate = GETDATE()
-     , EditWho = SUSER_SNAME()
+   SET EditDate = dbo.fnc_GetDate()
+     , EditWho = dbo.fnc_GetUserName()
      , TrafficCop = NULL       
    FROM LoadPlan,INSERTED       
    WHERE LoadPlan.LoadKey=INSERTED.LoadKey      
@@ -1214,3 +1215,4 @@ BEGIN
    RETURN
 END
 GO
+

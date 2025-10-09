@@ -14,6 +14,7 @@
 /* Date         Author  Ver.  Purposes                                     */    
 /* 31-03-21     kocy  1.0    Updates EditDate & EditWho                    */  
 /*                            On InterfaceLog Table                        */   
+/* 06-Oct-2025 AK01   1.0     UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName */
 /***************************************************************************/   
   
 CREATE OR ALTER TRIGGER [dbo].[ntrInterfaceLogUpdate]  
@@ -51,8 +52,8 @@ BEGIN
    IF ( @n_continue = 1 or @n_continue=2 )  
    BEGIN    
       UPDATE [dbo].[InterfaceLog] WITH (ROWLOCK)   
-      SET EditDate = GETDATE(),    
-          EditWho = SUSER_SNAME()    
+      SET EditDate = dbo.fnc_GetDate(),    
+          EditWho = dbo.fnc_GetUserName()    
       FROM [dbo].[InterfaceLog] , INSERTED   
       WHERE [dbo].[InterfaceLog].InterfaceKey = INSERTED.InterfaceKey   
   

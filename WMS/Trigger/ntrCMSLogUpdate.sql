@@ -3,9 +3,7 @@ GO
 SET ANSI_NULLS OFF 
 GO
 
-IF EXISTS (SELECT name FROM sysobjects WHERE name = 'ntrCMSLogUpdate' AND type = 'TR')
-   DROP TRIGGER ntrCMSLogUpdate
-GO
+
 
 /************************************************************************/
 /* Trigger: ntrCMSLogUpdate                                             */
@@ -32,6 +30,7 @@ GO
 /* Date         Author    Ver.  Purposes                                */
 /* 28-Oct-2013  TLTING    1.1   Review Editdate column update           */
 /* dd-mmm-yyyy                                                          */
+/* 06-Oct-2025  AK01      1.2   UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName */
 /************************************************************************/
 
 CREATE TRIGGER ntrCMSLogUpdate
@@ -71,8 +70,8 @@ BEGIN
    IF ( @n_continue = 1 OR @n_continue = 2 ) AND NOT UPDATE(EditDate) 
    BEGIN 	
       UPDATE CMSLOG WITH (ROWLOCK) 
-    	   SET EditDate = GETDATE(),
-     	       EditWho = SUSER_SNAME(),
+    	   SET EditDate = dbo.fnc_GetDate(),
+     	       EditWho = dbo.fnc_GetUserName(),
      	       Trafficcop = NULL
         FROM CMSLOG, INSERTED
        WHERE CMSLOG.CMSLOGKey = INSERTED.CMSLOGKey
@@ -124,4 +123,5 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF 
 GO
+
 

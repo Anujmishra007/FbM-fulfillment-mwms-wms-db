@@ -29,6 +29,7 @@
 /* 28-Feb-2011  Leong         1.1   SOS# 207014 - Update EditDate & EditWho            */    
 /* 28-Oct-2013  TLTING        1.2   Review Editdate column update                      */    
 /* 2022-05-17   kelvinongcy	1.3	WMS-19673 prevent bulk update or delete (kocy01)	*/   
+/* 08-Oct-2025  AK01          1.4   UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName*/
 /***************************************************************************************/    
     
 CREATE OR ALTER TRIGGER [dbo].[ntrAreaDetailUpdate]    
@@ -63,8 +64,8 @@ BEGIN
    IF ( @n_continue = 1 OR @n_continue = 2 ) AND NOT UPDATE(EditDate)    
    BEGIN    
       UPDATE AreaDetail WITH (ROWLOCK)    
-      SET EditWho = SUSER_NAME(),    
-          EditDate = GETDATE()    
+      SET EditWho = dbo.fnc_GetUserName(),    
+          EditDate = dbo.fnc_GetDate()    
       FROM AreaDetail   
       JOIN INSERTED ON AreaDetail.AreaKey = INSERTED.AreaKey    
       AND AreaDetail.PutawayZone = INSERTED.PutawayZone    
@@ -149,4 +150,5 @@ GO
 
 ALTER TABLE [dbo].[AreaDetail] ENABLE TRIGGER [ntrAreaDetailUpdate]
 GO
+
 

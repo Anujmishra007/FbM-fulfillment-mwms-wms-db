@@ -1,7 +1,3 @@
---if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrBooking_InUpdate]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
---drop trigger [dbo].[ntrBooking_InUpdate]
---GO
-
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -120,8 +116,8 @@ BEGIN
             UPDATE RECEIPT WITH (ROWLOCK)
             SET Containerkey = '',
                 TrafficCop = NULL,
-                EditDate = dbo.fnc_GetUserName(),     -- GETDATE()         AK01  
-                EditWho = dbo.fnc_GetDate()           -- SUSER_SNAME()     AK01
+                EditDate = dbo.fnc_GetDate(),            -- GETDATE()         AK01  
+                EditWho = dbo.fnc_GetUserName()          -- SUSER_SNAME()     AK01
             WHERE Receiptkey = @c_receiptkey      
             IF @@ERROR <> 0
             BEGIN
@@ -169,8 +165,8 @@ BEGIN
             UPDATE RECEIPT WITH (ROWLOCK)
             SET Containerkey = @c_containerno,
                 TrafficCop = NULL,
-                EditDate = dbo.fnc_GetUserName(),     -- GETDATE()       AK01
-                EditWho = dbo.fnc_GetDate()           -- SUSER_SNAME()   AK01
+                EditDate = dbo.fnc_GetDate(),     -- GETDATE()       AK01
+                EditWho = dbo.fnc_GetUserName()   -- SUSER_SNAME()   AK01
             WHERE Receiptkey = @c_receiptkey      
             IF @@ERROR <> 0
             BEGIN
@@ -200,8 +196,8 @@ BEGIN
    IF ( @n_continue = 1 OR @n_continue = 2 ) AND NOT UPDATE(EditDate)
    BEGIN
       UPDATE BOOKING_IN with (ROWLOCK)
-      SET EditWho = dbo.fnc_GetDate(),          -- SUSER_SNAME()     AK01
-          EditDate = dbo.fnc_GetUserName()      -- GETDATE()         AK01
+      SET EditWho = dbo.fnc_GetUserName(),  -- SUSER_SNAME()     AK01
+          EditDate = dbo.fnc_GetDate()      -- GETDATE()         AK01
       FROM BOOKING_IN 
       JOIN INSERTED ON BOOKING_IN.BookingNo = INSERTED.BookingNo
    END

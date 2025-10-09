@@ -1,6 +1,4 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE Id = OBJECT_ID(N'[dbo].[ntrPreAllocatePickDetailUpdate]') AND OBJECTPROPERTY(Id, N'IsTrigger') = 1)
-   DROP TRIGGER [dbo].[ntrPreAllocatePickDetailUpdate]
-GO
+
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -37,9 +35,11 @@ GO
 /* 28-Oct-2013  TLTING        Review Editdate column update                */
 /* 24-Jul-2015  LEONG         Revise Update Lot.QtyPreAllocated (Copy logic*/
 /*                            from ntrPickDetaipUpdate. (Leong01)          */
+/* 06-Oct-2025  AK01   1.0    UWP-42143 - Replace SUSER_SNAME with         */
+/*                            fnc_GetUserName                              */
 /***************************************************************************/
 
-CREATE TRIGGER ntrPreAllocatePickDetailUpdate
+CREATE OR ALTER TRIGGER ntrPreAllocatePickDetailUpdate
 ON  PreAllocatePickDetail
 FOR UPDATE
 AS
@@ -119,8 +119,8 @@ BEGIN
    
       UPDATE LOT WITH (ROWLOCK)
       SET  LOT.QtyPreAllocated = (LOT.QtyPreAllocated + tL.QtyPreAllocated),
-           LOT.EditDate = GETDATE(),   --tlting
-           LOT.EditWho = SUSER_SNAME()
+           LOT.EditDate = dbo.fnc_GetDate(),   --tlting
+           LOT.EditWho = dbo.fnc_GetUserName()
       FROM LOT
       JOIN #tLOT tL ON tL.LOT = LOT.LOT
    
@@ -165,8 +165,8 @@ BEGIN
                                                 WHERE INSERTED.OrderKey =ORDERDETAIL.OrderKey
                                                 AND INSERTED.OrderLineNumber = ORDERDETAIL.OrderLineNumber ),
                 ORDERDETAIL.Trafficcop = NULL,
-                ORDERDETAIL.EditDate   = GETDATE(),   --tlting
-                ORDERDETAIL.EditWho    = SUSER_SNAME()
+                ORDERDETAIL.EditDate   = dbo.fnc_GetDate(),   --tlting
+                ORDERDETAIL.EditWho    = dbo.fnc_GetUserName()
          FROM ORDERDETAIL
          JOIN DELETED ON DELETED.OrderKey = ORDERDETAIL.OrderKey
               AND DELETED.OrderLineNumber = ORDERDETAIL.OrderLineNumber
@@ -191,8 +191,8 @@ BEGIN
    IF ( @n_continue = 1 OR @n_continue=2 ) AND NOT UPDATE(EditDate)
    BEGIN
       UPDATE PreAllocatePickDetail
-         SET EditDate   = GETDATE(),
-             EditWho    = SUSER_SNAME(),
+         SET EditDate   = dbo.fnc_GetDate(),
+             EditWho    = dbo.fnc_GetUserName(),
              Trafficcop = NULL
       FROM PreAllocatePickDetail, INSERTED
       WHERE PreAllocatePickDetail.PreAllocatePickDetailKey = INSERTED.PreAllocatePickDetailKey

@@ -1,6 +1,4 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrGVTLogUpdate]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
-drop trigger [dbo].[ntrGVTLogUpdate]
-GO
+
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -29,9 +27,10 @@ GO
 /*                                                                      */  
 /* Data Modifications:                                                  */  
 /* Date         Author    Ver.  Purposes                                */  
+/* 06-Oct-2025  AK01      1.0   UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName */
 /************************************************************************/  
   
-CREATE TRIGGER [dbo].[ntrGVTLogUpdate]  
+CREATE OR ALTER TRIGGER [dbo].[ntrGVTLogUpdate]  
 ON  [dbo].[GVTLog]  
 FOR UPDATE  
 AS  
@@ -72,8 +71,8 @@ BEGIN
    IF ( @n_continue = 1 or @n_continue = 2 ) AND NOT UPDATE(EditDate)
    BEGIN
       UPDATE GVTLog
-      SET    EditDate   = GETDATE()
-           , EditWho    = SUSER_SNAME()
+      SET    EditDate   = dbo.fnc_GetDate()
+           , EditWho    = dbo.fnc_GetUserName()
            , Trafficcop = NULL
       FROM   GVTLog, INSERTED
       WHERE  GVTLog.GVTLogKey = INSERTED.GVTLogKey
