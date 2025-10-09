@@ -107,32 +107,6 @@ BEGIN
          AND RSL.Mobile =  @nMobile
    group by SN.Userdefine01 
 
-   IF EXISTS ( SELECT 1
-            FROM Receipt R WITH (NOLOCK) 
-               JOIN rdt.rdtConReceiveLog CRL WITH (NOLOCK) ON (R.ReceiptKey = CRL.ReceiptKey)
-               JOIN #ExternReceiptKey ERK WITH (NOLOCK) ON (ERK.ExternReceiptKey =R.ExternReceiptKey )
-            WHERE CRL.Mobile = @nMobile
-               AND RD.StorerKey = @cStorerKey
-               AND ASNStatus = '0'
-               )
-   BEGIN
-      UPDATE R
-      SET   R.ASNStatus ='1',
-            R.EditWho           = SUSER_SNAME(),   
-            R.EditDate          = GETDATE()  
-      FROM Receipt R WITH (NOLOCK) 
-         JOIN rdt.rdtConReceiveLog CRL WITH (NOLOCK) ON (R.ReceiptKey = CRL.ReceiptKey)
-         JOIN #ExternReceiptKey ERK WITH (NOLOCK) ON (ERK.ExternReceiptKey =R.ExternReceiptKey )
-      WHERE CRL.Mobile = @nMobile
-         AND RD.StorerKey = @cStorerKey
-         AND ASNStatus = '0'
-
-      IF @@ERROR <> 0 
-      BEGIN
-         GOTO RollBackTran
-      END
-   END
-
    DECLARE @curReceipt CURSOR
    SET @curReceipt = CURSOR FOR
       SELECT CRL.ReceiptKey, ISNULL( SUM( QTYExpected-BeforeReceivedQTY), 0),RD.Lottable03
@@ -229,7 +203,6 @@ BEGIN
             EditDate          = GETDATE()  
       WHERE ReceiptKey = @cReceiptKey
          AND StorerKey = @cStorerkey
-         AND ASNStatus  = '1'
 
       IF @@ERROR <> 0 
       BEGIN
