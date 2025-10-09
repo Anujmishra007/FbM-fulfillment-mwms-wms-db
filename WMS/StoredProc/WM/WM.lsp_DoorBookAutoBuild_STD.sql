@@ -2,6 +2,7 @@ SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
+
 /************************************************************************/
 /* Stored Proc: lsp_DoorBookAutoBuild_STD                               */
 /* Creation Date: 2022-04-12                                            */
@@ -23,6 +24,7 @@ GO
 /* Date        Author   Ver   Purposes                                  */
 /* 2022-04-12  Wan      1.0   Created & DevOps Combine Script           */
 /* 2022-07-20  Wan      1.1   LFWM-3482 Version 2                       */
+/* 2025-05-26  SWT01    1.2   Setting Session Context for user name     */
 /************************************************************************/
 CREATE OR ALTER PROC [WM].[lsp_DoorBookAutoBuild_STD]
       @c_DoorBookingStrategyKey  NVARCHAR(10)
@@ -195,20 +197,26 @@ BEGIN
 
       SET @n_Err = 0  
    
-      IF SUSER_SNAME() <> @c_UserName     
+      -- (SWT01) - START
+      DECLARE @b_ExecuteAs BIT = 0
+      IF SUSER_SNAME() <> @c_UserName
       BEGIN 
-         EXEC [WM].[lsp_SetUser]   
-               @c_UserName = @c_UserName  OUTPUT  
-            ,  @n_Err      = @n_Err       OUTPUT  
-            ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT  
-         
-         IF @n_Err <> 0   
+
+         EXEC [WM].[lsp_SetUser] 
+               @c_UserName = @c_UserName  OUTPUT
+            ,  @n_Err      = @n_Err       OUTPUT
+            ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+            ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
+            
+         IF @n_Err <> 0 
          BEGIN
-            GOTO EXIT_SP  
-         END          
-                  
-         EXECUTE AS LOGIN = @c_UserName  
-      END 
+            GOTO EXIT_SP
+         END
+
+         IF @b_ExecuteAs = 1                    
+            EXECUTE AS LOGIN = @c_UserName
+      END
+      -- (SWT01) - END 
                
       SELECT @c_Facility   = dbs.Facility  
          ,   @c_Storerkey  = dbs.Storerkey 
@@ -1197,8 +1205,12 @@ BEGIN
       BEGIN TRAN 
    END
          
-   REVERT
+   IF @b_ExecuteAs = 1              -- (SWT01)
+      REVERT                        
+
+   EXEC [WM].[lsp_ResetUser] -- (SWT01)
 END
 GO
+ 
 GRANT EXECUTE ON [WM].[lsp_DoorBookAutoBuild_STD] TO nSQL 
 GO 

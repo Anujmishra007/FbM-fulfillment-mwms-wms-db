@@ -5,14 +5,14 @@ GO
 /************************************************************************/                                                                                  
 /* Store Procedure: lsp_WaveAllocation                                  */                                                                                  
 /* Creation Date: 2019-03-20                                            */                                                                                  
-/* Copyright: LFL                                                       */                                                                                  
+/* Copyright: Maersk Logistics                                          */                                                                                  
 /* Written by: Wan                                                      */                                                                                  
 /*                                                                      */                                                                                  
 /* Purpose: LFWM-1645 Wave Creation - Wave Summary - Allocate Wave      */
 /*                                                                      */                                                                                  
 /* Called By: SCE                                                       */                                                                                  
 /*          :                                                           */                                                                                  
-/* PVCS Version: 1.7                                                    */                                                                                  
+/* PVCS Version: 2.0                                                    */                                                                                  
 /*                                                                      */                                                                                  
 /* Version: 8.0                                                         */                                                                                  
 /*                                                                      */                                                                                  
@@ -38,6 +38,10 @@ GO
 /*                            not able to split by facility             */
 /* 2024-01-15  NJOW01   1.9   WMS-24623 Fix SCE wave allocation custom  */
 /*                            mode follow exceed                        */
+/* 2024-07-11  Wan09    2.0   LFWM-4581-No display validation failure   */
+/*                            message when failed in wave allocation    */
+/*                            validation                                */
+/* 2025-09-02  SWT01    2.1   Enhanced session management pattern       */
 /************************************************************************/                                                                                  
 CREATE OR ALTER PROC [WM].[lsp_WaveAllocation]                                                                                                                     
       @c_WaveKey              NVARCHAR(10)
@@ -120,23 +124,26 @@ BEGIN
    SET @b_Success = 1
    SET @n_Err     = 0
            
-   SET @n_Err = 0 
-   --(mingle01) - START   
-   IF SUSER_SNAME() <> @c_UserName
-   BEGIN
-      EXEC [WM].[lsp_SetUser] 
-            @c_UserName = @c_UserName  OUTPUT
-         ,  @n_Err      = @n_Err       OUTPUT
-         ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
-                
-      IF @n_Err <> 0 
-      BEGIN
-         GOTO EXIT_SP
-      END
-    
-      EXECUTE AS LOGIN = @c_UserName
-   END
-   --(mingle01) - END
+   -- Start enhanced session management (SWT01)
+	 SET @n_Err = 0
+	 DECLARE @b_ExecuteAs        BIT = 0
+	 IF SUSER_SNAME() <> @c_UserName AND @c_UserName <> ''        
+	 BEGIN
+	    EXEC [WM].[lsp_SetUser] 
+	         @c_UserName = @c_UserName  OUTPUT
+	      ,  @n_Err      = @n_Err       OUTPUT
+	      ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+	      ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
+
+	    IF @n_Err <> 0
+	    BEGIN
+	       GOTO EXIT_SP
+	    END
+
+	    IF @b_ExecuteAs = 1
+	       EXECUTE AS LOGIN = @c_UserName
+	 END                                    
+	 -- End enhanced session management (SWT01)
    
    --(mingle01) - START
    BEGIN TRY              
@@ -350,7 +357,7 @@ BEGIN
          
          --NJOW01 S
          IF @c_AllocateType = 'WAVE'  
-         BEGIN         	  
+         BEGIN            
             IF (@c_WaveConsoAllocation  = '1' OR @c_allocatemode = '#WC') AND @c_AllocateMode NOT IN('#DC','#LC') 
             BEGIN
                SET @c_allocatemode = '#WC'
@@ -365,7 +372,7 @@ BEGIN
             END
          END   
          ELSE --NJOW01 E
-         BEGIN         	  
+         BEGIN            
             IF @c_WaveConsoAllocation <> '1' AND @c_LoadConsoAllocation <> '1'
             BEGIN
                SET @c_allocatemode = '#DC'
@@ -670,6 +677,7 @@ BEGIN
                SET @c_errmsg = 'NSQL'+ CONVERT(Char(6),@n_err)
                              + ': Pre Allocate Validate Fail - Wave #: ' + @c_WaveKey
                              + '. (lsp_WaveAllocation)'
+                             + '( ' + @c_ErrMsg + ' )'                              --(wan09)
                              + '|' + @c_WaveKey
                EXEC [WM].[lsp_WriteError_List] 
                      @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
@@ -1016,6 +1024,7 @@ BEGIN
                                       + ': Pre Allocate Validate Fail - ' 
                                       + CASE WHEN @c_Loadkey  = '' THEN 'Order #: ' + @c_Orderkey ELSE 'Load #: ' + @c_Loadkey END
                                       + '. (lsp_WaveAllocation)'
+                                      + '( ' + @c_ErrMsg + ' )'                     --(Wan09)
                                       + '|' + CASE WHEN @c_Loadkey  = '' THEN 'Order #: ' + @c_Orderkey ELSE 'Load #: ' + @c_Loadkey END
                  
                         EXEC [WM].[lsp_WriteError_List] 
@@ -1250,6 +1259,7 @@ BEGIN
                      SET @c_errmsg = 'NSQL'+ CONVERT(Char(6),@n_err)
                                    + ': Pre Allocate Validate Fail - Load #: ' + @c_Loadkey
                                    + '. (lsp_WaveAllocation)'
+                                   + '( ' + @c_ErrMsg + ' )'                        --(Wan09)
                                    + '|' + @c_Loadkey
                      EXEC [WM].[lsp_WriteError_List] 
                            @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
@@ -1478,6 +1488,7 @@ BEGIN
                         SET @c_errmsg = 'NSQL'+ CONVERT(Char(6),@n_err)
                                       + ': Pre Allocate Validate Fail - Order #: ' + @c_Orderkey
                                       + '. (lsp_WaveAllocation)'
+                                      + '( ' + @c_ErrMsg + ' )'                     --(Wan09)
                                       + '|' + @c_Orderkey
                         EXEC [WM].[lsp_WriteError_List] 
                               @i_iErrGroupKey= @n_ErrGroupKey OUTPUT 
@@ -1950,7 +1961,8 @@ EXIT_SP:
       END
    END
       
-   REVERT
+   IF @b_ExecuteAs = 1 REVERT -- (SWT01)
+   EXEC [WM].[lsp_ResetUser]  -- (SWT01)
 END
 GO
 GRANT EXECUTE ON [WM].[lsp_WaveAllocation] TO nSQL 

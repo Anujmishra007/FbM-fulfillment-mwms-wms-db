@@ -1,51 +1,48 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_ExtValidationCfg_Delete_Wrapper]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [WM].[lsp_ExtValidationCfg_Delete_Wrapper]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
-/*************************************************************************/  
-/* Stored Procedure: lsp_ExtValidationCfg_Delete_Wrapper                 */  
-/* Creation Date: 03-AUG-2018                                            */  
-/* Copyright: LFL                                                        */  
-/* Written by: Wan                                                       */  
-/*                                                                       */  
+
+/*************************************************************************/
+/* Stored Procedure: lsp_ExtValidationCfg_Delete_Wrapper                 */
+/* Creation Date: 03-AUG-2018                                            */
+/* Copyright: LFL                                                        */
+/* Written by: Wan                                                       */
+/*                                                                       */
 /* Purpose: LFWM-575 - System  ConfigureExtended Validation              */
-/*                                                                       */  
-/* Called By:                                                            */  
-/*                                                                       */  
-/*                                                                       */  
-/* Version: 1.0                                                          */  
-/*                                                                       */  
-/* Data Modifications:                                                   */  
-/*                                                                       */  
-/* Updates:                                                              */  
-/* Date         Author   Ver  Purposes                                   */ 
+/*                                                                       */
+/* Called By:                                                            */
+/*                                                                       */
+/*                                                                       */
+/* Version: 1.0                                                          */
+/*                                                                       */
+/* Data Modifications:                                                   */
+/*                                                                       */
+/* Updates:                                                              */
+/* Date         Author   Ver  Purposes                                   */
 /* 2021-02-05   mingle01 1.1  Add Big Outer Begin try/Catch             */
 /*                            Execute Login if @c_UserName<>SUSER_SNAME()*/
-/*************************************************************************/   
-CREATE PROCEDURE [WM].[lsp_ExtValidationCfg_Delete_Wrapper]  
+/* 2025-05-26   SWT01    1.2  Setting Session Context for user name     */
+/*************************************************************************/
+CREATE OR ALTER PROCEDURE [WM].[lsp_ExtValidationCfg_Delete_Wrapper]
    @c_ConfigKey            NVARCHAR(30)
 ,  @c_Storerkey            NVARCHAR(15)
 ,  @c_Facility             NVARCHAR(15)
 ,  @c_RoleName             NVARCHAR(10)
 ,  @c_DeleteRole           CHAR(1)      = 'N'
-,  @b_Success              INT          = 1   OUTPUT   
+,  @b_Success              INT          = 1   OUTPUT
 ,  @n_Err                  INT          = 0   OUTPUT
 ,  @c_Errmsg               NVARCHAR(255)= ''  OUTPUT
 ,  @c_UserName             NVARCHAR(128)= ''
 ,  @n_WarningNo            INT = 0            OUTPUT
 ,  @c_ProceedWithWarning   CHAR(1) = 'N'
-AS  
-BEGIN  
+AS
+BEGIN
    SET NOCOUNT ON
    SET QUOTED_IDENTIFIER OFF
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
-   
+
    DECLARE @n_Continue        INT = 1
          , @n_StartTCnt       INT = @@TRANCOUNT
 
@@ -54,30 +51,37 @@ BEGIN
    SET @b_Success = 1
    SET @c_ErrMsg = ''
 
-   SET @n_Err = 0 
+   SET @n_Err = 0
 
-   --(mingle01) - START   
+   -- (SWT01) - START
+   DECLARE @b_ExecuteAs BIT = 0
    IF SUSER_SNAME() <> @c_UserName
-   BEGIN
-      EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
- 
+   BEGIN 
+
+      EXEC [WM].[lsp_SetUser] 
+            @c_UserName = @c_UserName  OUTPUT
+         ,  @n_Err      = @n_Err       OUTPUT
+         ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+         ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
+         
       IF @n_Err <> 0 
       BEGIN
          GOTO EXIT_SP
       END
 
-      EXECUTE AS LOGIN = @c_UserName
+      IF @b_ExecuteAs = 1                    
+         EXECUTE AS LOGIN = @c_UserName
    END
-   --(mingle01) - END
+   -- (SWT01) - END
 
    --(mingle01) - START
-   BEGIN TRY   
+   BEGIN TRY
       IF @c_ProceedWithWarning = 'N' AND @n_WarningNo < 1
       BEGIN
-         SET @n_WarningNo= 1 
+         SET @n_WarningNo= 1
          SET @n_continue = 3
          SET @c_Errmsg = 'Delete Validation Config. Do You Want To All its Role Details?'
-         GOTO EXIT_SP 
+         GOTO EXIT_SP
       END
 
       IF @c_ProceedWithWarning = 'Y' AND @c_DeleteRole = 'Y' AND @n_WarningNo < 2
@@ -90,11 +94,11 @@ BEGIN
             SET @n_WarningNo= 2
             SET @n_continue = 3
             SET @c_Errmsg = 'Click Yes to confirm delete role Details.'
-            GOTO EXIT_SP 
-         END 
+            GOTO EXIT_SP
+         END
          ELSE
          BEGIN
-            SET @c_DeleteRole = 'N' 
+            SET @c_DeleteRole = 'N'
          END
       END
 
@@ -111,9 +115,9 @@ BEGIN
       END
 
       IF @n_InputValidation = 1
-      BEGIN 
+      BEGIN
          BEGIN TRY
-            DELETE CODELKUP  
+            DELETE CODELKUP
             WHERE ListName = 'VALDNCFG'
             AND Code = @c_ConfigKey
             AND Storerkey = @c_Storerkey
@@ -121,19 +125,19 @@ BEGIN
             AND UDF01 = @c_RoleName
 
          END TRY
- 
+
          BEGIN CATCH
             SET @n_err = 551001
             SET @c_ErrMsg = ERROR_MESSAGE()
             SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': Delete CODELKUP - VADLNCFG Configkey Fail. (lsp_ExtValidationCfg_Delete_Wrapper)'
                            + '( ' + @c_errmsg + ' )'
-         END CATCH 
+         END CATCH
 
-         IF @b_success = 0 OR @n_Err <> 0        
-         BEGIN        
-            SET @n_continue = 3      
+         IF @b_success = 0 OR @n_Err <> 0
+         BEGIN
+            SET @n_continue = 3
             GOTO EXIT_SP
-         END  
+         END
       END
       ELSE
       BEGIN
@@ -144,70 +148,70 @@ BEGIN
                      )
          BEGIN
             BEGIN TRY
-               DELETE STORERCONFIG 
+               DELETE STORERCONFIG
                   WHERE Storerkey = @c_Storerkey
                AND Configkey = @c_ConfigKey
             END TRY
- 
+
             BEGIN CATCH
                SET @n_err = 551002
                SET @c_ErrMsg = ERROR_MESSAGE()
                SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': Delete STORERCONFIG Fail. (lsp_ExtValidationCfg_Delete_Wrapper)'
                               + '( ' + @c_errmsg + ' )'
-            END CATCH 
+            END CATCH
 
-            IF @b_success = 0 OR @n_Err <> 0        
-            BEGIN        
-               SET @n_continue = 3      
+            IF @b_success = 0 OR @n_Err <> 0
+            BEGIN
+               SET @n_continue = 3
                GOTO EXIT_SP
-            END  
-         END            
+            END
+         END
       END
 
-      IF @c_DeleteRole = 'Y'  
+      IF @c_DeleteRole = 'Y'
       BEGIN
          IF @n_continue IN (1,2)
          BEGIN
             BEGIN TRY
-               DELETE CODELKUP 
-                WHERE ListName = @c_RoleName 
+               DELETE CODELKUP
+                WHERE ListName = @c_RoleName
             END TRY
- 
+
             BEGIN CATCH
                SET @n_err = 551003
                SET @c_ErrMsg = ERROR_MESSAGE()
                SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': Delete Codelkup - Role Fail. (lsp_ExtValidationCfg_Delete_Wrapper)'
                               + '( ' + @c_errmsg + ' )'
-            END CATCH    
+            END CATCH
 
-            IF @b_success = 0 OR @n_Err <> 0        
-            BEGIN        
-               SET @n_continue = 3      
+            IF @b_success = 0 OR @n_Err <> 0
+            BEGIN
+               SET @n_continue = 3
                GOTO EXIT_SP
-            END  
+            END
          END
-   
+
          IF @n_continue IN (1,2)
          BEGIN
             BEGIN TRY
-               DELETE CODELIST 
-                WHERE ListName = @c_RoleName 
+               DELETE CODELIST
+                WHERE ListName = @c_RoleName
             END TRY
- 
+
             BEGIN CATCH
                SET @n_err = 551004
                SET @c_ErrMsg = ERROR_MESSAGE()
                SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': Delete Codelist - Role Fail. (lsp_ExtValidationCfg_Delete_Wrapper)'
                               + '( ' + @c_errmsg + ' )'
-            END CATCH    
+            END CATCH
 
-            IF @b_success = 0 OR @n_Err <> 0        
-            BEGIN        
-               SET @n_continue = 3      
+            IF @b_success = 0 OR @n_Err <> 0
+            BEGIN
+               SET @n_continue = 3
                GOTO EXIT_SP
-            END  
+            END
          END
-      END   
+      END
    END TRY
 
    BEGIN CATCH
@@ -216,7 +220,7 @@ BEGIN
       GOTO EXIT_SP
    END CATCH
    --(mingle01) - END
-EXIT_SP: 
+EXIT_SP:
    IF @n_Continue=3  -- Error Occured - Process And Return
    BEGIN
       SET @b_Success = 0
@@ -243,10 +247,12 @@ EXIT_SP:
       END
       SET @n_WarningNo = 0
    END
-   REVERT 
-END  
-GO
-GRANT EXECUTE ON [WM].[lsp_ExtValidationCfg_Delete_Wrapper] TO nSQL 
-GO
+   
+   IF @b_ExecuteAs = 1              -- (SWT01)
+      REVERT                        
 
-
+   EXEC [WM].[lsp_ResetUser] -- (SWT01)
+END
+GO
+GRANT EXECUTE ON  [WM].[lsp_ExtValidationCfg_Delete_Wrapper] TO [NSQL]
+GO

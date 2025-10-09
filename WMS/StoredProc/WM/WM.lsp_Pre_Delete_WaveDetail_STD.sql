@@ -1,12 +1,8 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_Pre_Delete_WaveDetail_STD]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [WM].[lsp_Pre_Delete_WaveDetail_STD]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
+
 /************************************************************************/    
 /* Stored Procedure: lsp_Pre_Delete_WaveDetail_STD                      */    
 /* Creation Date: 03-Apr-2018                                           */    
@@ -17,7 +13,7 @@ GO
 /*                                                                      */    
 /* Called By: Orders delete                                             */    
 /*                                                                      */    
-/* PVCS Version: 1.3                                                    */    
+/* PVCS Version: 1.5                                                    */    
 /*                                                                      */    
 /* Version: 8.0                                                         */    
 /*                                                                      */    
@@ -33,10 +29,14 @@ GO
 /* 2021-11-24  Wan02    1.4   LFWM-3141 - UAT - TW  Outbound - Order    */
 /*                            Remove from Wave Bug                      */
 /*                      1.3   DevOps Combine Script                     */
+/* 08-Jul-2025 WLChooi  1.5   FCR-6168 Add config to allow removing SO  */
+/*                            with task by condition                    */
+/*                            DelSOWithTaskByCondFromWave (WL01)        */
 /* 2025-07-18  AYD01    1.5   UWP-37984: include condition orders.status*/
 /*                            = 'CANC' when deleting wave details       */
+/* 2025-09-02  SWT01    1.1   Enhanced session management pattern       */
 /************************************************************************/     
-CREATE PROCEDURE [WM].[lsp_Pre_Delete_WaveDetail_STD]  
+CREATE OR ALTER PROCEDURE [WM].[lsp_Pre_Delete_WaveDetail_STD]  
       @c_StorerKey         NVARCHAR(15)  
    ,  @c_RefKey1           NVARCHAR(50)  = ''   
    ,  @c_RefKey2           NVARCHAR(50)  = ''   
@@ -71,24 +71,39 @@ BEGIN
          , @c_Status_TaskDetail        NVARCHAR(10) = ''   
          
          , @c_DelSOCancCFromWave       NVARCHAR(30) = ''  
-         , @c_DelUnProcessSOFromWave   NVARCHAR(30) = ''  
+         , @c_DelUnProcessSOFromWave   NVARCHAR(30) = ''
+
+   DECLARE @c_DelSOWithTaskByCondFromWave       NVARCHAR(30) = ''   --WL01
+         , @c_DelSOWithTaskByCondFromWave_Opt5  NVARCHAR(MAX)= ''   --WL01
+         , @c_TaskType                          NVARCHAR(10) = ''   --WL01
+         , @c_TaskStatus                        NVARCHAR(10) = ''   --WL01
+         , @c_NoWarning                  NVARCHAR(1)  = 'N'  --WL01
   
    SET @n_err=0  
    SET @b_success=1  
    SET @c_errmsg=''   
    SET @c_RefreshDetail = 'Y'  
    
-   IF SUSER_SNAME() <> @c_UserName        --(Wan01) - START
-   BEGIN
-      EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
-    
-      IF @n_Err <> 0 
-      BEGIN
-         GOTO EXIT_SP
-      END
-                
-      EXECUTE AS LOGIN = @c_UserName        
-   END                                    --(Wan01) - END
+   -- Start enhanced session management (SWT01)
+	 SET @n_Err = 0
+	 DECLARE @b_ExecuteAs        BIT = 0
+	 IF SUSER_SNAME() <> @c_UserName        
+	 BEGIN
+	    EXEC [WM].[lsp_SetUser] 
+	         @c_UserName = @c_UserName  OUTPUT
+	      ,  @n_Err      = @n_Err       OUTPUT
+	      ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+	      ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
+
+	    IF @n_Err <> 0
+	    BEGIN
+	       GOTO EXIT_SP
+	    END
+
+	    IF @b_ExecuteAs = 1
+	       EXECUTE AS LOGIN = @c_UserName
+	 END                                    
+	 -- End enhanced session management (SWT01)
     
    BEGIN TRY                              --(Wan01) - START
       SET @c_WaveDetailKey = ISNULL(@c_RefKey2,'')       -- ZG01
@@ -182,7 +197,54 @@ BEGIN
                         +': PickSlip Printed. Delete Not Allowed. (lsp_Pre_Delete_WaveDetail_STD)'                 
          GOTO EXIT_SP   
       END                           
-       
+      
+      --WL01 S
+      SELECT @c_DelSOWithTaskByCondFromWave = SC.Authority
+           , @c_DelSOWithTaskByCondFromWave_Opt5 = SC.Option5
+      FROM dbo.fnc_GetRight2(@c_Facility, @c_Storerkey, '', 'DelSOWithTaskByCondFromWave') AS SC
+
+      SELECT @c_TaskType   = dbo.fnc_GetParamValueFromString ('@c_TaskType',   @c_DelSOWithTaskByCondFromWave_Opt5, @c_TaskType) 
+      SELECT @c_TaskStatus = dbo.fnc_GetParamValueFromString ('@c_TaskStatus', @c_DelSOWithTaskByCondFromWave_Opt5, @c_TaskStatus) 
+      SELECT @c_NoWarning  = dbo.fnc_GetParamValueFromString ('@c_NoWarning',  @c_DelSOWithTaskByCondFromWave_Opt5, @c_NoWarning) 
+
+      IF ISNULL(@c_TaskType, '') = ''
+         SET @c_TaskType = 'ALL'
+
+      IF ISNULL(@c_TaskStatus, '') = ''
+         SET @c_TaskStatus = ''
+         
+      IF ISNULL(@c_NoWarning, '') = ''
+         SET @c_NoWarning = 'N'
+
+      --Allow deleting SO with Taskdetail from Wave with condition matching
+      --Set up condition in Option5 - @c_TaskType, @c_TaskStatus, @c_NoWarning
+      --Example:
+      --@c_TaskType=RPF,RP1
+      --@c_TaskStatus=9
+      --@c_NoWarning=Y
+      --IF Taskdetail.Status=9 & Tasktype=RPF/RP1 -> Allow delete with no warning
+      --ELSE -> Proceed Wan02 logic
+      IF @c_DelSOWithTaskByCondFromWave = '1'
+      BEGIN
+         IF EXISTS ( SELECT 1
+                     FROM TASKDETAIL TD WITH (NOLOCK)  
+                     WHERE TD.WaveKey = @c_WaveKey
+                     AND ( TD.TaskType IN ( SELECT TRIM([VALUE]) FROM STRING_SPLIT(@c_TaskType, ',') ) 
+                        OR ( @c_TaskType = 'ALL') )
+                     AND ( TD.[Status] IN ( SELECT TRIM([VALUE]) FROM STRING_SPLIT(@c_TaskStatus, ',') ) 
+                        OR ( @c_TaskStatus = '' AND TD.[Status] NOT IN ('3', '9') ) )
+                   )
+         BEGIN
+            IF @c_NoWarning <> 'Y'
+            BEGIN
+               SET @b_Success = 2
+               SET @c_errmsg = 'There are Task Details for this Wave. Delete Anyway?'
+            END
+            GOTO EXIT_SP
+         END
+      END
+      --WL01 E
+
       --(Wan02) - START 
       SET @c_Status_TaskDetail = '' 
       SELECT TOP 1 @c_Status_TaskDetail = CASE WHEN TD.[Status] IN ('3','9') THEN '3' ELSE '0' END
@@ -249,8 +311,9 @@ EXIT_SP:
       END    
       --RETURN    --(Wan01)   
    END 
-   REVERT         --(Wan01)               
+   IF @b_ExecuteAs = 1 REVERT -- (SWT01)
+   EXEC [WM].[lsp_ResetUser] -- (SWT01)                 
 END -- End Procedure
 GO
-GRANT EXECUTE ON [WM].[lsp_Pre_Delete_WaveDetail_STD] TO nSQL 
+GRANT EXECUTE ON [WM].[lsp_Pre_Delete_WaveDetail_STD] TO [NSQL] 
 GO  
