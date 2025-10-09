@@ -5,9 +5,9 @@ SET ANSI_NULLS OFF
 GO
 
 /*******************************************************************************/
-/* Store procedure: rdt_1764ClosePlt03                                         */
+/* Store procedure: rdt_1764ClosePlt04                                         */
 /* Copyright      : Maersk WMS                                                 */
-/* Customer       :  UL                                                        */
+/* Customer       : USA                                                        */
 /*                                                                             */
 /* Purpose: Confirm replenish.                                                 */
 /*                                                                             */
@@ -16,21 +16,17 @@ GO
 /* Modifications log:                                                          */
 /*                                                                             */
 /* Date        Rev      Author    Purposes                                     */
-/* 2024-05-21  1.0      NLT013    UWP-19518 Created                            */
-/* 2024-10-22  1.1.0    NLT013    FCR-973 Update the final task as VNAOUT      */
-/* 2024-10-22  1.1.1    NLT013    FCR-973 Update UOM and ListKey for last task */
-/* 2025-03-07  1.2.0    Dennis    FCR-2977  PP Update Dropid (de01)            */
-/* 2025-10-02  1.3.0    NickT     FCR-7730 Add @cScannedToLoc                  */
+/* 2025-10-02  1.0.0    NLT013    FCR-7730 Created                             */
 /*******************************************************************************/
 
-CREATE OR ALTER PROCEDURE [RDT].[rdt_1764ClosePlt03] (
+CREATE OR ALTER PROCEDURE [RDT].[rdt_1764ClosePlt04] (
    @nMobile        INT,
    @nFunc          INT,
    @cLangCode      NVARCHAR(3),
    @cUserName      NVARCHAR(18),
    @cListKey       NVARCHAR(10),
    @nErrNo         INT         OUTPUT,
-   @cErrMsg        NVARCHAR(20) OUTPUT, -- screen limitation, 20 char max
+   @cErrMsg        NVARCHAR(20) OUTPUT,  -- screen limitation, 20 char max
    @cScannedToLoc       NVARCHAR( 10) = ''  -- New param for FCR-7730
 ) AS
 BEGIN
@@ -51,12 +47,6 @@ BEGIN
    DECLARE @cToID          NVARCHAR( 18)
    DECLARE @cSKU           NVARCHAR( 20)
    DECLARE @cLOT           NVARCHAR( 10)
-   DECLARE @cPDSKU         NVARCHAR( 20)
-   DECLARE @cPDLOT         NVARCHAR( 10)
-   DECLARE @cPDLOC         NVARCHAR( 10)
-   DECLARE @cPDID          NVARCHAR( 18)
-   DECLARE @nPDQTY         INT
-   DECLARE @cPICKDETAILKEY NVARCHAR( 10)
    DECLARE @cUCCNo         NVARCHAR( 20)
    DECLARE @nQTY           INT
    DECLARE @nSystemQTY     INT
@@ -71,27 +61,75 @@ BEGIN
    DECLARE @cClosePalletSP NVARCHAR( 20)
    DECLARE @cSQL           NVARCHAR( MAX)
    DECLARE @cSQLParam      NVARCHAR( MAX)
-   DECLARE @cPnDTransitTaskPriority       NVARCHAR( 10)
-   DECLARE @cLocCategory                  NVARCHAR( 10)
-   DECLARE @cNewTaskDetailKey             NVARCHAR( 10)
-   DECLARE @cFinalLOC      NVARCHAR( 10)
-   DECLARE @cUOM           NVARCHAR( 5),
-   @cDropID                NVARCHAR(20)
 
    -- Init var
    SET @nErrNo = 0
    SET @cErrMsg = ''
 
-   SELECT @cStorerKey = StorerKey,
-   @cDropID = V_String3
+   SELECT @cStorerKey = StorerKey
    FROM rdt.RDTMOBREC WITH (NOLOCK)
    WHERE Mobile = @nMobile
 
-  -- Handling transaction
+   /***********************************************************************************************
+                                     Standard Close Pallet
+   ***********************************************************************************************/
+
+   -- Handling transaction
    DECLARE @nTranCount INT
    SET @nTranCount = @@TRANCOUNT
    BEGIN TRAN  -- Begin our own transaction
-   SAVE TRAN rdt_1764ClosePlt03 -- For rollback or commit only our own transaction
+   SAVE TRAN rdt_1764ClosePlt04 -- For rollback or commit only our own transaction
+
+   IF EXISTS(SELECT 1 FROM dbo.LOC WITH (NOLOCK) WHERE LOC = @cScannedToLoc AND LocationType = 'PND' )
+   BEGIN
+      DECLARE 
+         @nCurrentStep        INT
+
+      SELECT 
+         @nCurrentStep = Step
+      FROM rdt.RDTMOBREC WITH (NOLOCK)
+      WHERE Mobile = @nMobile
+
+      IF @nCurrentStep = 6
+      BEGIN
+         DECLARE @tTaskDetail TABLE 
+         (
+            TaskDetailKey NVARCHAR(10) PRIMARY KEY
+         )
+
+         INSERT INTO @tTaskDetail ( TaskDetailKey )
+         SELECT DISTINCT TD.TaskDetailKey
+         FROM dbo.TaskDetail TD WITH(NOLOCK)
+         INNER JOIN dbo.SKUInfo SI WITH(NOLOCK) ON TD.SKU = SI.SKU 
+         WHERE TD.StorerKey = @cStorerKey
+            AND TD.ListKey = @cListKey
+            AND TD.Status = '5'
+            AND TD.TaskType = 'RPF'
+            AND TD.Qty > 0
+            AND TD.UserKey = SUSER_SNAME()
+            AND TD.ToLOC <> @cScannedToLoc
+            AND ISNULL(SI.ExtendedField06, '') = 'SORTABLE' 
+            AND ISNULL(SI.ExtendedField07, '') = 'CONVEYABLE'
+
+         IF @@ROWCOUNT > 0
+         BEGIN
+            BEGIN TRY
+               UPDATE TD
+               SET ToLOC = @cScannedToLoc,
+                  EditDate = GETDATE(),
+                  EditWho  = SUSER_SNAME(),
+                  TrafficCop = NULL
+               FROM dbo.TaskDetail TD WITH(ROWLOCK)
+               INNER JOIN @tTaskDetail TTD ON TD.TaskDetailKey = TTD.TaskDetailKey
+            END TRY
+            BEGIN CATCH
+               SET @nErrNo = 248401
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Update TaskDetail ToLoc Fail
+               GOTO RollBackTran
+            END CATCH
+         END
+      END
+   END
 
    -- Lock orders to prevent deadlock
    DECLARE @curPD CURSOR
@@ -160,7 +198,7 @@ BEGIN
             @cLangCode   = @cLangCode,
             @nErrNo      = @nErrNo  OUTPUT,
             @cErrMsg     = @cErrMsg OUTPUT,
-            @cSourceType = 'rdt_1764ClosePlt03',
+            @cSourceType = 'rdt_1764ClosePlt04',
             @cStorerKey  = @cStorerKey,
             @cFacility   = @cFacility,
             @cFromLOC    = @cFromLOC,
@@ -243,13 +281,13 @@ BEGIN
                      @cLangCode   = @cLangCode,
                      @nErrNo      = @nErrNo  OUTPUT,
                      @cErrMsg     = @cErrMsg OUTPUT,
-                     @cSourceType = 'rdt_1764ClosePlt03',
+                     @cSourceType = 'rdt_1764ClosePlt04',
                      @cStorerKey  = @cStorerKey,
                      @cFacility   = @cFacility,
                      @cFromLOC    = @cFromLOC,
                      @cToLOC      = @cToLOC,
                      @cFromID     = @cFromID,
-                     @cToID       = @cDropID,--de01
+                     @cToID       = @cToID,
                      @cUCC        = @cUCCNo,
                      @nQTYAlloc   = @nQTYAlloc,
                      @nQTYReplen  = @nQTYReplen,
@@ -337,13 +375,13 @@ BEGIN
                         @cLangCode   = @cLangCode,
                         @nErrNo      = @nErrNo  OUTPUT,
                         @cErrMsg     = @cErrMsg OUTPUT,
-                        @cSourceType = 'rdt_1764ClosePlt03',
+                        @cSourceType = 'rdt_1764ClosePlt04',
                         @cStorerKey  = @cStorerKey,
                         @cFacility   = @cFacility,
                         @cFromLOC    = @cFromLOC,
                         @cToLOC      = @cToLOC,
                         @cFromID     = @cFromID,
-                        @cToID       = @cDropID,--de01
+                        @cToID       = @cToID,
                         @cSKU        = @cUCC_SKU,
                         @nQTY        = @nUCCQTY,
                         @nQTYAlloc   = @nQTYAlloc,
@@ -376,7 +414,7 @@ BEGIN
                         ID = CASE
                               WHEN @cLoseID = '1' THEN '' -- Lose ID
                               WHEN @cToID IS NULL THEN ID -- ID not change
-                              ELSE @cDropID --de01
+                              ELSE @cToID
                               END,
                         -- Lose UCC. Status 5=Picked/Repl
                         Status = CASE WHEN (@cToLocType = 'PICK' OR @cToLocType = 'CASE')  THEN '5'
@@ -469,13 +507,13 @@ BEGIN
                   @cLangCode   = @cLangCode,
                   @nErrNo      = @nErrNo  OUTPUT,
                   @cErrMsg     = @cErrMsg OUTPUT,
-                  @cSourceType = 'rdt_1764ClosePlt03',
+                  @cSourceType = 'rdt_1764ClosePlt04',
                   @cStorerKey  = @cStorerKey,
                   @cFacility   = @cFacility,
                   @cFromLOC    = @cFromLOC,
                   @cToLOC      = @cToLOC,
                   @cFromID     = @cFromID,
-                  @cToID       = @cDropID,--DE01
+                  @cToID       = @cToID,
                   @cSKU        = @cSKU,
                   @nQTY        = @nQTY,
                   @nQTYAlloc   = @nQTYAlloc,
@@ -505,49 +543,11 @@ BEGIN
                   @cTaskDetailKey = @cTaskDetailKey
             END
          END
-
-         UPDATE dbo.PickDetail WITH(ROWLOCK) SET
-            ID = @cDropID
-         WHERE StorerKey = @cStorerKey 
-            AND ID = @cFromID
-            AND WaveKey = @cWaveKey
-            AND LOC = @cToLOC
-            AND STATUS <> '5'
-
-         UPDATE TD SET
-            FromID = @cDropID
-         FROM  dbo.TaskDetail TD WITH(ROWLOCK) 
-         INNER JOIN dbo.PickDetail PD WITH(ROWLOCK) ON PD.TaskDetailKey = TD.TaskDetailKey
-         WHERE PD.StorerKey = @cStorerKey 
-            AND PD.ID = @cDropID
-            AND PD.WaveKey = @cWaveKey
-            AND PD.LOC = @cToLOC
-            AND PD.STATUS <> '5'
-
-         IF EXISTS (SELECT 1   
-            FROM dbo.LOTxLOCxID WITH (NOLOCK)  
-            WHERE LOT = @cLOT  
-            AND LOC = @cToLOC  
-            AND ID = @cFromID
-            AND StorerKey = @cStorerKey)  
-         BEGIN  
-            UPDATE dbo.LotxLocxID WITH (ROWLOCK) SET   
-               PendingMoveIn = CASE WHEN PendingMoveIn - @nQTY >= 0 THEN PendingMoveIn - @nQTY ELSE 0 END  
-            WHERE Lot = @cLOT  
-               AND Loc = @cToLOC  
-               AND ID  = @cFromID  
-               AND StorerKey = @cStorerKey
-
-            IF @@ERROR <> 0  
-            BEGIN  
-               SET @nErrNo = 78104  
-               SET @cErrMsg = '78104 UPD LLI FAIL'  
-               GOTO RollBackTran  
-            END  
-         END  
       END
 
-
+      -- Commented by (james04)
+      --IF EXISTS ( SELECT 1 FROM dbo.TaskDetail WITH (NOLOCK) WHERE TaskDetailKey = @cTaskDetailKey AND ISNULL( TransitLOC, '') <> '')
+      --BEGIN
       -- Unlock  suggested location
       EXEC rdt.rdt_Putaway_PendingMoveIn '', 'UNLOCK'
          ,''      --@cFromLOC
@@ -563,6 +563,7 @@ BEGIN
       -- Update Task
       UPDATE dbo.TaskDetail WITH (ROWLOCK) SET
          Status = '9', -- Closed
+         -- UserPosition = @cUserPosition,
          EndTime = GETDATE(),
          EditDate = GETDATE(),
          EditWho  = @cUserName,
@@ -585,54 +586,13 @@ BEGIN
       @cErrMsg OUTPUT
    IF @nErrNo <> 0
       GOTO RollBackTran
-   
-   SELECT TOP 1 @cFromLoc = FromLOC,
-      @cNewTaskDetailKey = TaskDetailKey,
-      @cToLOC = ToLoc
-   FROM TaskDetail WITH(NOLOCK)
-   WHERE ListKey = @cListKey
-      AND StorerKey = @cStorerKey
-      AND TaskType = 'RP1'
-      AND Status = '0'
-   ORDER BY AddDate DESC
 
-   --Get ToLoc category from latest transit task
-   SELECT @cLocCategory = LocationCategory
-   FROM dbo.Loc WITH(NOLOCK)
-   WHERE Facility = @cFacility
-      AND Loc = @cFromLoc
-   
-   --Get PnDTransitTaskPriority
-   SET @cPnDTransitTaskPriority = rdt.RDTGetConfig( @nFunc, 'PnDTransitTaskPriority', @cStorerKey)
-   IF @cPnDTransitTaskPriority IS NULL OR TRY_CAST(@cPnDTransitTaskPriority AS INT) IS NULL 
-      SET @cPnDTransitTaskPriority = '0'
 
-   UPDATE dbo.TaskDetail WITH (ROWLOCK) SET 
-      Priority = CASE WHEN @cLocCategory IN ('PND_IN', 'PND_OUT', 'PND') AND @cPnDTransitTaskPriority BETWEEN 1 AND 9 THEN @cPnDTransitTaskPriority ELSE Priority END
-   WHERE TaskDetailKey = @cNewTaskDetailKey 
-
-   SELECT TOP 1 @cFinalLOC = FinalLoc,
-      @cUOM = UOM
-   FROM dbo.TaskDetail WITH(NOLOCK)
-   WHERE StorerKey = @cStorerKey
-      AND ListKey = @cListKey
-      AND TaskType = 'VNAOUT'
-      AND Status = '9'
-   ORDER BY TransitCount
-
-   --If ToLoc is pickface location, need update PickDetail, set 
-   IF @cToLOC = @cFinalLOC
-   BEGIN
-      UPDATE dbo.TaskDetail WITH (ROWLOCK) SET 
-         TaskType = 'VNAOUT', Message02 = 'RP2', Message03 = 'RPF', FinalLoc = @cFinalLOC, Status = 'Q', ListKey = @cListKey, UOM = @cUOM
-      WHERE TaskDetailKey = @cNewTaskDetailKey 
-   END
-
-   COMMIT TRAN rdt_1764ClosePlt03 -- Only commit change made here
+   COMMIT TRAN rdt_1764Close -- Only commit change made here
    GOTO Quit
 
 RollBackTran:
-   ROLLBACK TRAN rdt_1764ClosePlt03 -- Only rollback change made here
+   ROLLBACK TRAN rdt_1764ClosePlt04 -- Only rollback change made here
 Fail:
 Quit:
    WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
@@ -645,5 +605,5 @@ GO
 SET ANSI_NULLS ON
 GO
 
-GRANT EXECUTE ON [rdt].[rdt_1764ClosePlt03] TO NSQL
+GRANT EXECUTE ON [rdt].[rdt_1764ClosePlt04] TO NSQL
 GO
