@@ -73,10 +73,6 @@ BEGIN
          EXECUTE AS LOGIN = @c_UserName
    END
 
-   IF @b_ExecuteAs = 1
-   BEGIN
-      EXECUTE AS LOGIN = @c_UserName
-   END
 
    --(mingle01) - START
    BEGIN TRY
