@@ -32,6 +32,7 @@ GO
 /* 21-Apr-2021 2.1  James     WMS-15656 Add ClosePalletSP (james03)        */
 /* 23-Jan-2024 2.2  James     WMS-24300 Cancel booking even there is no    */
 /*                            booking (james04)                            */
+/* 02-Oct-2025 2.3  NickT     FCR-7730 Add @cScannedToLoc                  */
 /***************************************************************************/
 
 
@@ -42,7 +43,8 @@ CREATE PROC [RDT].[rdt_TM_Replen_ClosePallet] (
    @cUserName      NVARCHAR(18),
    @cListKey       NVARCHAR(10),
    @nErrNo         INT         OUTPUT,
-   @cErrMsg        NVARCHAR(20) OUTPUT  -- screen limitation, 20 char max
+   @cErrMsg        NVARCHAR(20) OUTPUT,  -- screen limitation, 20 char max
+   @cScannedToLoc       NVARCHAR( 10) = ''  -- New param for FCR-7730
 ) AS
 BEGIN
    SET NOCOUNT ON
@@ -98,7 +100,7 @@ BEGIN
       IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cClosePalletSP AND type = 'P')
       BEGIN
          SET @cSQL = 'EXEC rdt.' + RTRIM( @cClosePalletSP) +
-            ' @nMobile, @nFunc, @cLangCode, @cUserName, @cListKey, @nErrNo OUTPUT, @cErrMsg OUTPUT'
+            ' @nMobile, @nFunc, @cLangCode, @cUserName, @cListKey, @nErrNo OUTPUT, @cErrMsg OUTPUT, @cScannedToLoc'
          SET @cSQLParam =
             '@nMobile         INT,                    ' +
             '@nFunc           INT,                    ' +
@@ -106,10 +108,11 @@ BEGIN
             '@cUserName       NVARCHAR( 18),          ' +
             '@cListKey        NVARCHAR( 10),          ' +
             '@nErrNo          INT           OUTPUT,   ' +
-            '@cErrMsg         NVARCHAR( 20) OUTPUT    '
+            '@cErrMsg         NVARCHAR( 20) OUTPUT,   ' +
+            '@cScannedToLoc   NVARCHAR( 10)           '
 
          EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-            @nMobile, @nFunc, @cLangCode, @cUserName, @cListKey, @nErrNo OUTPUT, @cErrMsg OUTPUT
+            @nMobile, @nFunc, @cLangCode, @cUserName, @cListKey, @nErrNo OUTPUT, @cErrMsg OUTPUT, @cScannedToLoc
 
          GOTO Quit
       END

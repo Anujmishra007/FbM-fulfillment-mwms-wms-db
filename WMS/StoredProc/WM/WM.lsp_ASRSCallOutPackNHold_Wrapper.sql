@@ -1,42 +1,39 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_ASRSCallOutPackNHold_Wrapper]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [WM].[lsp_ASRSCallOutPackNHold_Wrapper]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
-/*************************************************************************/  
-/* Stored Procedure: lsp_ASRSCallOutPackNHold_Wrapper                    */  
-/* Creation Date: 05-APR-2018                                            */  
-/* Copyright: LFL                                                        */  
-/* Written by: Wan                                                       */  
-/*                                                                       */  
+
+/*************************************************************************/
+/* Stored Procedure: lsp_ASRSCallOutPackNHold_Wrapper                    */
+/* Creation Date: 05-APR-2018                                            */
+/* Copyright: LFL                                                        */
+/* Written by: Wan                                                       */
+/*                                                                       */
 /* Purpose: LFWM-505 - ASRS  ID Inspection & Pack and Hold               */
-/*                                                                       */  
-/* Called By:                                                            */  
-/*                                                                       */  
-/*                                                                       */  
-/* Version: 1.0                                                          */  
-/*                                                                       */  
-/* Data Modifications:                                                   */  
-/*                                                                       */  
-/* Updates:                                                              */  
-/* Date         Author   Ver  Purposes                                   */ 
+/*                                                                       */
+/* Called By:                                                            */
+/*                                                                       */
+/*                                                                       */
+/* Version: 1.0                                                          */
+/*                                                                       */
+/* Data Modifications:                                                   */
+/*                                                                       */
+/* Updates:                                                              */
+/* Date         Author   Ver  Purposes                                   */
 /* 2021-02-05   mingle01 1.1  Add Big Outer Begin try/Catch             */
 /*                            Execute Login if @c_UserName<>SUSER_SNAME()*/
-/*************************************************************************/   
-CREATE PROCEDURE [WM].[lsp_ASRSCallOutPackNHold_Wrapper]  
+/* 2025-05-26   SWT01    1.2  Setting Session Context for user name     */
+/*************************************************************************/
+CREATE OR ALTER PROCEDURE [WM].[lsp_ASRSCallOutPackNHold_Wrapper]
    @c_MBOLKeyList    NVARCHAR(MAX)
 ,  @c_PalletIDList   NVARCHAR(MAX)
-,  @b_Success        INT          = 1  OUTPUT   
+,  @b_Success        INT          = 1  OUTPUT
 ,  @n_Err            INT          = 0  OUTPUT
 ,  @c_Errmsg         NVARCHAR(MAX)= '' OUTPUT
 ,  @c_UserName       NVARCHAR(128)= ''
 ,  @n_ErrGroupKey    INT = 0           OUTPUT
-AS  
-BEGIN  
+AS
+BEGIN
    SET NOCOUNT ON
    SET QUOTED_IDENTIFIER OFF
    SET ANSI_NULLS OFF
@@ -54,25 +51,29 @@ BEGIN
    SET @b_Success = 1
    SET @c_ErrMsg = ''
 
-   SET @n_Err = 0 
+   SET @n_Err = 0
 
-   --(mingle01) - START   
+   -- (SWT01) - START
+   DECLARE @b_ExecuteAs BIT = 0
    IF SUSER_SNAME() <> @c_UserName
-   BEGIN
+   BEGIN 
+
       EXEC [WM].[lsp_SetUser] 
-            @c_UserName = @c_UserName  OUTPUT 
+            @c_UserName = @c_UserName  OUTPUT
          ,  @n_Err      = @n_Err       OUTPUT
          ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
-
+         ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
+         
       IF @n_Err <> 0 
       BEGIN
          GOTO EXIT_SP
       END
-                
-      EXECUTE AS LOGIN = @c_UserName
+
+      IF @b_ExecuteAs = 1                    
+         EXECUTE AS LOGIN = @c_UserName
    END
-   --(mingle01) - END
- 
+   -- (SWT01) - END
+
    --(mingle01) - START
    BEGIN TRY
       WHILE @@TRANCOUNT > 0
@@ -81,23 +82,23 @@ BEGIN
       END
 
       SET @CUR_ID = CURSOR  FAST_FORWARD READ_ONLY FOR
-      SELECT   MBOLKey = MB.ColValue 
+      SELECT   MBOLKey = MB.ColValue
             ,  ID = PL.ColValue
       FROM dbo.fnc_DelimSplit ('|', @c_MBOLKeyList)  MB
       JOIN dbo.fnc_DelimSplit ('|', @c_PalletIDList) PL ON (MB.SeqNo = PL.SeqNo)
 
       OPEN @CUR_ID
-   
+
       FETCH NEXT FROM @CUR_ID INTO @c_MBOLKey, @c_ID
       WHILE @@FETCH_STATUS <> -1
       BEGIN
          BEGIN TRAN
-         BEGIN TRY      
+         BEGIN TRY
             EXEC isp_PackNHoldCallOut
-                  @c_MBOLKey     = @c_MBOLKey 
+                  @c_MBOLKey     = @c_MBOLKey
                ,  @c_ID          = @c_ID
-               ,  @b_Success     = @b_Success   OUTPUT 
-               ,  @n_err         = @n_err       OUTPUT 
+               ,  @b_Success     = @b_Success   OUTPUT
+               ,  @n_err         = @n_err       OUTPUT
                ,  @c_errmsg      = @c_errmsg    OUTPUT
          END TRY
 
@@ -105,10 +106,10 @@ BEGIN
             SET @n_Continue = 3
             SET @n_err = 550551
             SET @c_ErrMsg = ERROR_MESSAGE()
-            SET @c_ErrMsg = 'NSQL' + CONVERT(NCHAR(6),@n_err) + ': Call out ID: ' + @c_ID + ' fail. ' +  @c_ErrMsg 
+            SET @c_ErrMsg = 'NSQL' + CONVERT(NCHAR(6),@n_err) + ': Call out ID: ' + @c_ID + ' fail. ' +  @c_ErrMsg
             ROLLBACK TRAN
 
-            EXEC [WM].[lsp_WriteError_List] 
+            EXEC [WM].[lsp_WriteError_List]
                      @i_iErrGroupKey= @n_ErrGroupKey OUTPUT
                   ,  @c_TableName   = ''
                   ,  @c_SourceType  = @c_SourceType
@@ -120,19 +121,19 @@ BEGIN
                   ,  @b_Success     = @b_Success   OUTPUT
                   ,  @n_err         = @n_err       OUTPUT
                   ,  @c_errmsg      = @c_errmsg    OUTPUT
-         END CATCH  
+         END CATCH
 
          WHILE @@TRANCOUNT > 0
          BEGIN
             COMMIT TRAN
-         END  
+         END
 
          FETCH NEXT FROM @CUR_ID INTO @c_MBOLKey, @c_ID
       END
-      CLOSE @CUR_ID 
+      CLOSE @CUR_ID
       DEALLOCATE @CUR_ID
    END TRY
-   
+
    BEGIN CATCH
       SET @n_Continue = 3
       SET @c_ErrMsg = ERROR_MESSAGE()
@@ -140,7 +141,7 @@ BEGIN
    END CATCH
    --(mingle01) - END
    EXIT_SP:
-   
+
    IF @n_Continue=3  -- Error Occured - Process And Return
    BEGIN
       SET @b_Success = 0
@@ -168,14 +169,15 @@ BEGIN
    END
 
    WHILE @@TRANCOUNT < @n_StartTCnt
-   BEGIN 
+   BEGIN
       BEGIN TRAN
    END
 
-   REVERT      
-END  
-GO
-GRANT EXECUTE ON [WM].[lsp_ASRSCallOutPackNHold_Wrapper] TO nSQL 
-GO
+   IF @b_ExecuteAs = 1              -- (SWT01)
+      REVERT                        
 
-
+   EXEC [WM].[lsp_ResetUser] -- (SWT01)
+END
+GO
+GRANT EXECUTE ON  [WM].[lsp_ASRSCallOutPackNHold_Wrapper] TO [NSQL]
+GO

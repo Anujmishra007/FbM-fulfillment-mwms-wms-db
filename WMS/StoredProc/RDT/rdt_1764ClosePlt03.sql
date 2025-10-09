@@ -20,6 +20,7 @@ GO
 /* 2024-10-22  1.1.0    NLT013    FCR-973 Update the final task as VNAOUT      */
 /* 2024-10-22  1.1.1    NLT013    FCR-973 Update UOM and ListKey for last task */
 /* 2025-03-07  1.2.0    Dennis    FCR-2977  PP Update Dropid (de01)            */
+/* 2025-10-02  1.3.0    NickT     FCR-7730 Add @cScannedToLoc                  */
 /*******************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_1764ClosePlt03] (
@@ -29,7 +30,8 @@ CREATE OR ALTER PROCEDURE [RDT].[rdt_1764ClosePlt03] (
    @cUserName      NVARCHAR(18),
    @cListKey       NVARCHAR(10),
    @nErrNo         INT         OUTPUT,
-   @cErrMsg        NVARCHAR(20) OUTPUT  -- screen limitation, 20 char max
+   @cErrMsg        NVARCHAR(20) OUTPUT, -- screen limitation, 20 char max
+   @cScannedToLoc       NVARCHAR( 10) = ''  -- New param for FCR-7730
 ) AS
 BEGIN
    SET NOCOUNT ON

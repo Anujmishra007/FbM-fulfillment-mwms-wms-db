@@ -1,6 +1,6 @@
-SET QUOTED_IDENTIFIER OFF 
+SET ANSI_NULLS OFF
 GO
-SET ANSI_NULLS OFF 
+SET QUOTED_IDENTIFIER OFF
 GO
 /************************************************************************/  
 /* Stored Procedure: lsp_ASNConfirmPick_Wrapper                         */  
@@ -24,6 +24,7 @@ GO
 /* 15-Jan-2021 Wan01    1.1   Execute Login if @c_UserName<>SUSER_SNAME()*/
 /* 26-Feb-2024 NJOW01   1.2   UWP-14044 ASN support confirm pick by     */
 /*                            multiple externpokey per ASN              */
+/* 02-SEP-2025  SWT01    1.3   Setting Session Context for user name     */
 /************************************************************************/   
 CREATE OR ALTER PROCEDURE [WM].[lsp_ASNConfirmPick_Wrapper]
   @c_StorerKey    NVARCHAR(15) ,
@@ -49,17 +50,26 @@ BEGIN
    --EXECUTE AS LOGIN=@c_UserName
       
    SET @n_Err = 0 
-   IF SUSER_SNAME() <> @c_UserName     --(Wan01) - START
-   BEGIN    
-      EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
+   -- (SWT01) - START
+   DECLARE @b_ExecuteAs BIT = 0
+   IF SUSER_SNAME() <> @c_UserName
+   BEGIN 
 
+      EXEC [WM].[lsp_SetUser] 
+            @c_UserName = @c_UserName  OUTPUT
+         ,  @n_Err      = @n_Err       OUTPUT
+         ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+         ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
+         
       IF @n_Err <> 0 
       BEGIN
          GOTO EXIT_SP
-      END 
-      
-      EXECUTE AS LOGIN = @c_UserName
-   END                                 --(Wan01) - END
+      END
+
+      IF @b_ExecuteAs = 1                    
+         EXECUTE AS LOGIN = @c_UserName
+   END
+   -- (SWT01) - END                                --(Wan01) - END
    
    --NJOW01
    SELECT TOP 1 @c_Receiptkey = RD.receiptkey
@@ -135,12 +145,13 @@ BEGIN
    END
    
    EXIT_SP:
-   REVERT     
-END  
+   IF @b_ExecuteAs = 1              -- (SWT01)
+      REVERT                        
+
+   EXEC [WM].[lsp_ResetUser] -- (SWT01)     
+END
 GO
 
-GRANT EXECUTE ON [WM].[lsp_ASNConfirmPick_Wrapper] TO NSQL
+GRANT EXECUTE ON [WM].[lsp_ASNConfirmPick_Wrapper] TO nSQL 
 GO
 
-GRANT EXECUTE ON [WM].[lsp_ASNConfirmPick_Wrapper] TO [ALPHA\GTWMSinfosys]
-GO

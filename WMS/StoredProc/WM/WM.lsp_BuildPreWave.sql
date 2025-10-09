@@ -24,6 +24,7 @@ GO
 /* 2022-09-22  Wan01    1.1   LFWM-3748 - [CN] LOREAL_Prewave add filter*/
 /*                            condition                                 */
 /* 2022-11-04  Wan02    1.2   Correct Default @c_Action = 'PREWAVE'     */
+/* 2025-09-02  SWT01    1.3   Enhanced session management and cleanup.  */
 /************************************************************************/                                                                                  
 CREATE OR ALTER PROC [WM].[lsp_BuildPreWave]                                                                                                                       
       @c_BuildParmKey      NVARCHAR(10) 
@@ -46,6 +47,7 @@ BEGIN
    
    DECLARE @n_Continue                 INT            = 1
          , @n_StartTCnt                INT            = @@TRANCOUNT  
+         , @b_ExecuteAs                BIT            = 0  
                                                                                                                               
    DECLARE @d_StartBatchTime           DATETIME       = GETDATE() 
          , @d_StartTime                DATETIME       = GETDATE()                                                                                                                  
@@ -110,6 +112,7 @@ BEGIN
    BEGIN
       EXEC [WM].[lsp_SetUser] 
             @c_UserName = @c_UserName  OUTPUT
+         ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
          ,  @n_Err      = @n_Err       OUTPUT
          ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
           
@@ -118,7 +121,7 @@ BEGIN
          GOTO EXIT_SP
       END   
                     
-      IF SUSER_SNAME() <> @c_UserName
+      IF @b_ExecuteAs = 1
       BEGIN
          EXECUTE AS LOGIN = @c_UserName      
       END
@@ -481,8 +484,13 @@ BEGIN
    WHILE @@TRANCOUNT < @n_StartTCnt
    BEGIN
       BEGIN TRAN
-   END                                                                                                                                                       
-   REVERT 
+   END
+   
+   IF @b_ExecuteAs = 1
+   BEGIN
+      REVERT
+      EXEC [WM].[lsp_ResetUser]
+   END
 END
 GO
 GRANT EXECUTE ON [WM].[lsp_BuildPreWave] TO nSQL 

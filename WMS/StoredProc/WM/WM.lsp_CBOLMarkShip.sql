@@ -18,6 +18,7 @@ GO
 /*                                                                         */
 /* Updates:                                                                */
 /* Date        Author   Ver   Purposes                                     */
+/* 2025-05-26  SWT01    1.0   Setting Session Context for user name       */
 /***************************************************************************/
 CREATE OR ALTER PROCEDURE [WM].[lsp_CBOLMarkShip] 
       @n_Cbolkey                 BIGINT = 0
@@ -73,17 +74,27 @@ BEGIN
    -- Switching SQL User ID from WMCOnnect to User Login ID
    SET  @n_ErrGroupKey = 0
    SET @n_Err = 0
-   IF SUSER_SNAME() <> @c_UserName      
-   BEGIN
-      EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
+   
+   -- (SWT01) - START
+   DECLARE @b_ExecuteAs BIT = 0
+   IF SUSER_SNAME() <> @c_UserName
+   BEGIN 
 
-      IF @n_Err <> 0
+      EXEC [WM].[lsp_SetUser] 
+            @c_UserName = @c_UserName  OUTPUT
+         ,  @n_Err      = @n_Err       OUTPUT
+         ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+         ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
+         
+      IF @n_Err <> 0 
       BEGIN
          GOTO EXIT_SP
       END
 
-      EXECUTE AS LOGIN = @c_UserName
-   END                                   
+      IF @b_ExecuteAs = 1                    
+         EXECUTE AS LOGIN = @c_UserName
+   END
+   -- (SWT01) - END
 
    DECLARE
            @c_Facility                 NVARCHAR(5)=''
@@ -362,7 +373,10 @@ BEGIN
       BEGIN TRAN
    END
    
-   REVERT
+   IF @b_ExecuteAs = 1              -- (SWT01)
+      REVERT                        
+
+   EXEC [WM].[lsp_ResetUser] -- (SWT01)
 END -- End Procedure
 GO
 GRANT EXECUTE ON [WM].[lsp_CBOLMarkShip] TO [nSQL]

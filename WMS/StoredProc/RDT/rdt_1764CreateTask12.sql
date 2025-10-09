@@ -15,8 +15,9 @@ GO
 /*                                                                      */
 /* Date        Rev  Author    Purposes                                  */
 /* 29-Nov-2024 1.0  VBH079	   FCR-1652 Change the Lock PND transit LOC. */
-/*                               1=Yes,0=No*/
+/*                               1=Yes,0=No                             */
 /* 21-Jul-2025 1.1  Dennis	   FCR-4498 Change RP1 Final Loc             */
+/* 07-Oct-2025 1.2  Cuize	   UWP-42104 UAT code to Prod                */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1764CreateTask12] (
@@ -60,7 +61,9 @@ BEGIN
           ,@cCreateNextTaskSP NVARCHAR(30)
           ,@cSQL              NVARCHAR(1000)
           ,@cSQLParam         NVARCHAR(1000)
-   
+          ,@cLatestTaskKey    NVARCHAR(10)
+          ,@nRPFlag           INT = 0
+
    -- Init var
    SET @nErrNo = 0
    SET @cErrMsg = ''
@@ -77,12 +80,16 @@ BEGIN
       @cPriority       = Priority, 
       @cSourcePriority = SourcePriority, 
       @cFinalLOC       = FinalLOC,
+      @cLatestTaskKey  = TaskDetailKey,
       @cSourceType     = 'rdt_1764CreateTask12'
    FROM dbo.TaskDetail WITH (NOLOCK)
    WHERE ListKey = @cListKey
    ORDER BY 
       TransitCount DESC, -- Get initial task
       CASE WHEN Status = '9' THEN 1 ELSE 2 END -- RefTask that fetch to perform together, still Status=3
+
+   IF @nTransitCount > 0
+      SET @nRPFlag = 1
 
    -- Task not completed/SKIP/CANCEL
    IF @cStatus <> '9'
@@ -316,6 +323,16 @@ BEGIN
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- InsTaskDetFail
                GOTO RollBackTran
             END
+
+            IF @nRPFlag = 0
+               UPDATE td SET td.REFTASKKEY = @cNewTaskDetailKey
+               FROM TaskDetail td
+               INNER JOIN @tTask t ON td.REFTASKKEY = t.TaskDetailKey
+               WHERE td.TaskType = 'FCP'
+            ELSE
+               UPDATE TaskDetail SET
+                  REFTASKKEY = @cNewTaskDetailKey
+               WHERE REFTASKKEY = @cLatestTaskKey AND TaskType = 'FCP'
          END
       END
    END
@@ -334,6 +351,16 @@ BEGIN
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- InsTaskDetFail
          GOTO RollBackTran
       END
+
+      IF @nRPFlag = 0
+         UPDATE td SET td.REFTASKKEY = @cNewTaskDetailKey
+         FROM TaskDetail td
+         INNER JOIN @tTask t ON td.REFTASKKEY = t.TaskDetailKey
+         WHERE td.TaskType = 'FCP'
+      ELSE
+         UPDATE TaskDetail SET
+            REFTASKKEY = @cNewTaskDetailKey
+         WHERE REFTASKKEY = @cLatestTaskKey AND TaskType = 'FCP'
    END
 
    COMMIT TRAN rdt_1764CreateTask12 -- Only commit change made here

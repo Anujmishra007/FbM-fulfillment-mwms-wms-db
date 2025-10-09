@@ -62,13 +62,15 @@ BEGIN
          , @c_CurrentStorerkey NVARCHAR(15)
          , @c_CurrentUCCNo     NVARCHAR(20)
          , @c_CurrentStorerUCC NVARCHAR(40)
-         , @c_invholditf       NVARCHAR(1)
+         , @c_InvHoldLog       NVARCHAR(1)
+         , @c_InvHoldUCC       NVARCHAR(1)
          , @n_IDCnt            INT
          , @n_LocCnt           INT
          , @c_InvHoldKey       NVARCHAR(10)
          , @c_transmitlogkey   NVARCHAR(10)
          , @c_InStatus         NVARCHAR(10)
          , @c_DelStatus        NVARCHAR(10)
+         , @c_Key2             NVARCHAR(30)
 --ML01-E
            
    SELECT @n_continue=1, @n_starttcnt=@@TRANCOUNT  
@@ -129,7 +131,8 @@ BEGIN
       BEGIN
          SET @c_CurrentStorerUCC = ''
          SET @c_Storerkey = ''
-         SET @c_invholditf = '0'
+         SET @c_InvHoldLog = '0'
+         SET @c_InvHoldUCC = '0'
 
          WHILE (1=1) -- UCC Level
          BEGIN
@@ -157,7 +160,8 @@ BEGIN
             BEGIN
                SET @c_Storerkey = @c_CurrentStorerkey
                SET @b_success = 0
-               SET @c_invholditf = '0'
+               SET @c_InvHoldLog = '0'
+               SET @c_InvHoldUCC = '0'
 
                EXECUTE nspGetRight
                NULL,          -- Facility
@@ -165,7 +169,7 @@ BEGIN
                NULL,          -- Sku
                'INVHOLDLOG',  -- ConfigKey
                @b_success     OUTPUT,
-               @c_invholditf  OUTPUT,
+               @c_InvHoldLog  OUTPUT,
                @n_err         OUTPUT,
                @c_errmsg      OUTPUT
 
@@ -173,12 +177,31 @@ BEGIN
                BEGIN
                   SELECT @n_continue = 3
                   SELECT @n_err = 60981
-                  SELECT @c_errmsg = 'ntrUCCUpdate :' + RTrim(@c_errmsg)
+                  SELECT @c_errmsg = 'NSQL' + CONVERT(char(5), @n_err)+ ' ntrUCCUpdate :' + RTrim(@c_errmsg)
+                  BREAK
+               END
+
+
+               EXECUTE nspGetRight
+               NULL,          -- Facility
+               @c_StorerKey,  -- Storer
+               NULL,          -- Sku
+               'InvHoldUCC',  -- ConfigKey
+               @b_success     OUTPUT,
+               @c_InvHoldUCC  OUTPUT,
+               @n_err         OUTPUT,
+               @c_errmsg      OUTPUT
+
+               IF @b_success <> 1
+               BEGIN
+                  SELECT @n_continue = 3
+                  SELECT @n_err = 60982
+                  SELECT @c_errmsg = 'NSQL' + CONVERT(char(5), @n_err)+ ' ntrUCCUpdate :' + RTrim(@c_errmsg)
                   BREAK
                END
             END
 
-            IF (@n_continue = 1 or @n_continue = 2) AND @c_invholditf = '1'
+            IF (@n_continue = 1 or @n_continue = 2) AND @c_InvHoldLog = '1'
             BEGIN
                -- To prevent double sending of records
                SELECT @n_IDCnt = 0,  @n_LocCnt = 0
@@ -223,26 +246,63 @@ BEGIN
                      IF @b_success <> 1
                      BEGIN
                         SELECT @n_continue=3
-                        SELECT @n_err = 60982
-                        SELECT @c_errmsg = 'ntrUCCUpdate :' + RTrim(@c_errmsg)
+                        SELECT @n_err = 60983
+                        SELECT @c_errmsg = 'NSQL' + CONVERT(char(5), @n_err)+ ' ntrUCCUpdate :' + RTrim(@c_errmsg)
                      END
                      ELSE
                      BEGIN
                         INSERT INTO TRANSMITLOG3 (Transmitlogkey, Tablename, Key1, Key2, Key3, Transmitflag)
-                        VALUES (@c_transmitlogkey, 'INVHOLDLOG-UCC', @c_InvHoldKey, @c_InStatus, @c_CurrentStorerkey,'0')
+                        VALUES (@c_transmitlogkey, 'INVHOLDLOG-UCC', @c_InvHoldKey, @c_InStatus, @c_CurrentStorerkey, '0')
 
-                        SELECT @n_err= @@Error
+                        SELECT @n_err= @@ERROR
 
                         IF NOT @n_err=0
                         BEGIN
                            SELECT @n_continue=3
-                           Select @c_errmsg= CONVERT(char(250), @n_err), @n_err=74562
-                           Select @c_errmsg= 'NSQL' + CONVERT(char(5), @n_err)+ ':Insert failed on TransmitLog3. (ntrUCCUpdate)' +'(' + 'SQLSvr MESSAGE=' + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + ')'
+                           SELECT @c_errmsg= CONVERT(char(250), @n_err), @n_err=60984
+                           SELECT @c_errmsg= 'NSQL' + CONVERT(char(5), @n_err)+ ':Insert failed on TransmitLog3 (INVHOLDLOG-UCC). (ntrUCCUpdate)' +'(' + 'SQLSvr MESSAGE=' + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + ')'
                         END
                      END
                   END
                END
-            END -- IF (@n_continue = 1 or @n_continue = 2) AND @c_invholditf = '1'
+            END -- IF (@n_continue = 1 or @n_continue = 2) AND @c_InvHoldLog = '1'
+
+
+            IF (@n_continue = 1 or @n_continue = 2) AND @c_InvHoldUCC = '1'
+            BEGIN
+               SELECT @c_transmitlogkey = ''
+               SELECT @b_success = 1
+               EXECUTE nspg_getkey
+                   'TransmitlogKey2'
+                   ,10
+                   , @c_transmitlogkey OUTPUT
+                   , @b_success OUTPUT
+                   , @n_err OUTPUT
+                   , @c_errmsg OUTPUT
+
+               IF @b_success <> 1
+               BEGIN
+                  SELECT @n_continue=3
+                  SELECT @n_err = 60985
+                  SELECT @c_errmsg = 'NSQL' + CONVERT(char(5), @n_err)+ ' ntrUCCUpdate :' + RTrim(@c_errmsg)
+               END
+               ELSE
+               BEGIN
+                  SET @c_Key2 = CONVERT(NCHAR(1),ISNULL(@c_DelStatus,'')) + CONVERT(NCHAR(1),ISNULL(@c_InStatus,'')) +'-'+ ISNULL(RTRIM(@c_CurrentUCCNo),'')
+
+                  INSERT INTO TRANSMITLOG2 (Transmitlogkey, Tablename, Key1, Key2, Key3, Transmitflag)
+                  VALUES (@c_transmitlogkey, 'InvHoldUCC', @c_InvHoldKey, @c_Key2, @c_CurrentStorerkey, '0')
+
+                  SELECT @n_err= @@ERROR
+
+                  IF NOT @n_err=0
+                  BEGIN
+                     SELECT @n_continue=3
+                     SELECT @c_errmsg= CONVERT(char(250), @n_err), @n_err=60986
+                     SELECT @c_errmsg= 'NSQL' + CONVERT(char(5), @n_err)+ ':Insert failed on TransmitLog2 (InvHoldUCC). (ntrUCCUpdate)' +'(' + 'SQLSvr MESSAGE=' + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + ')'
+                  END
+               END
+            END -- IF (@n_continue = 1 or @n_continue = 2) AND @c_InvHoldUCC = '1'
          END -- WHILE (1=1)
       END -- if record exists
    END -- IF ( @n_continue=1 OR @n_continue=2) AND UPDATE(STATUS)

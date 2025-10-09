@@ -20,6 +20,7 @@ GO
 /* Updates:                                                              */  
 /* Date        Author   Ver   Purposes                                   */ 
 /* 2022-09-27  Wan      1.0   Created & DevOps Combine Script            */
+/* 2025-09-02  SWT01    1.1   Enhanced session management pattern       */
 /*************************************************************************/   
 CREATE OR ALTER PROCEDURE [WM].[lsp_TaskDetail_Canc]  
    @c_TaskDetailKeys       NVARCHAR(4000)= ''         --if Not cancel by Search Criteria, pass in all ticked Taskdetailkey seperated by '|'
@@ -56,18 +57,26 @@ BEGIN
          TaskDetailKey  NVARCHAR(10)   NOT NULL DEFAULT('') PRIMARY KEY
       )
    
-   IF ISNULL(@c_UserName,'') <> ''
-   BEGIN
-      IF SUSER_SNAME() <> @c_UserName
-      BEGIN 
-         EXEC [WM].[lsp_SetUser] 
-                  @c_UserName = @c_UserName  OUTPUT 
-               ,  @n_Err      = @n_Err       OUTPUT
-               ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
-                   
-         EXECUTE AS LOGIN = @c_UserName
-      END
-   END
+   -- Start enhanced session management (SWT01)
+	 SET @n_Err = 0
+	 DECLARE @b_ExecuteAs        BIT = 0
+	 IF SUSER_SNAME() <> @c_UserName        
+	 BEGIN
+	    EXEC [WM].[lsp_SetUser] 
+	         @c_UserName = @c_UserName  OUTPUT
+	      ,  @n_Err      = @n_Err       OUTPUT
+	      ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+	      ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
+
+	    IF @n_Err <> 0
+	    BEGIN
+	       GOTO EXIT_SP
+	    END
+
+	    IF @b_ExecuteAs = 1
+	       EXECUTE AS LOGIN = @c_UserName
+	 END                                    
+	 -- End enhanced session management (SWT01)
 
    BEGIN TRY
       IF @c_TaskDetailKeys = ''
@@ -153,10 +162,8 @@ BEGIN
       END
    END
 
-   IF ISNULL(@c_UserName,'') <> ''
-   BEGIN
-      REVERT  
-   END    
+   IF @b_ExecuteAs = 1 REVERT -- (SWT01)
+   EXEC [WM].[lsp_ResetUser]  -- (SWT01)  
 END  
 GO
 GRANT EXECUTE ON [WM].[lsp_TaskDetail_Canc] TO nSQL 

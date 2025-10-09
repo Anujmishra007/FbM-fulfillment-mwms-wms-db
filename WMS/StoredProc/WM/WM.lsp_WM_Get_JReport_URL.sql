@@ -1,10 +1,9 @@
-IF OBJECT_ID('WM.lsp_WM_Get_JReport_URL','P') IS NOT NULL
-   DROP PROC  WM.lsp_WM_Get_JReport_URL;
+SET ANSI_NULLS OFF
 GO
-SET QUOTED_IDENTIFIER OFF;  -- to avoid re-compile on runtime
+
+SET QUOTED_IDENTIFIER OFF
 GO
-SET ANSI_NULLS OFF;
-GO
+
 /************************************************************************/
 /* Stored Proc: lsp_WM_Get_JReport_URL                                  */
 /* Creation Date: 2020-05-08                                            */
@@ -28,8 +27,9 @@ GO
 /* 2020-12-29  SWT01    1.3  Missing Execute Login As                   */
 /* 15-Jan-2021 Wan01    1.4   Execute Login if @c_UserName<>SUSER_SNAME()*/
 /* 15-Apr-2021 KHL05 1.5 https://jiralfl.atlassian.net/browse/LFWM-2727 ,8*/
+/* 2025-09-02  SWT01    1.1   Enhanced session management pattern       */
 /************************************************************************/
-CREATE  PROC  WM.lsp_WM_Get_JReport_URL
+CREATE  OR ALTER PROC  [WM].[lsp_WM_Get_JReport_URL]
      @c_CountryName        NVARCHAR(50)  =''
    , @c_Storerkey          NVARCHAR(15)
    , @c_Application        NVARCHAR(15)
@@ -68,23 +68,27 @@ BEGIN
    SET @n_err      = 0
    SET @c_errmsg   = ''
 
-   SET @n_Err = 0 
-   IF SUSER_SNAME() <> @c_UserName       --(Wan01) - START
-   BEGIN   
-      EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
-   
-      IF @b_Debug <> 0
-      BEGIN
-         SELECT @n_Err, @c_ErrMsg
-      END
+   -- Start enhanced session management (SWT01)
+   SET @n_Err = 0
+   DECLARE @b_ExecuteAs        BIT = 0
+   IF SUSER_SNAME() <> @c_UserName AND @c_UserName <> ''        
+   BEGIN
+      EXEC [WM].[lsp_SetUser] 
+           @c_UserName = @c_UserName  OUTPUT
+        ,  @n_Err      = @n_Err       OUTPUT
+        ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+        ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
 
-      IF @n_Err <> 0 
+      IF @n_Err <> 0
       BEGIN
          GOTO EXIT_SP
       END
-   
-      EXECUTE AS LOGIN=@c_UserName -- (SWT01) 
-   END                                   --(Wan01) - END
+
+      IF @b_ExecuteAs = 1
+         EXECUTE AS LOGIN = @c_UserName
+   END                                    
+   -- End enhanced session management (SWT01)
+
 
    SELECT TOP 1 @c_URLTemplate = n.NSQLDescrip + ISNULL(s.Option5,'')
    FROM NSQLCONFIG AS n WITH (NOLOCK)
@@ -174,7 +178,8 @@ BEGIN
          COMMIT TRAN
       END
    END
-   REVERT
+   IF @b_ExecuteAs = 1 REVERT -- (SWT01)
+   EXEC [WM].[lsp_ResetUser]  -- (SWT01)
 END -- procedure
 /* test script
 JReport Folder  https://jiralfl.atlassian.net/browse/LFWM-2099

@@ -31,6 +31,9 @@ GO
 /* 2024-06-18  Wan05    1.4   LFWM-4607 - RG UATPROD-All storer-Print Label*/
 /*                            button is not responding in Inventory Move*/
 /*                            module                                    */
+/* 2025-10-06  Michael  1.5   UWP-42038 - Inventory Moves not executed  */
+/*                            StorerCfg CheckNonCommingleSKUInMove On   */
+/*                            and move to non-CommingleSku loc (ML01)   */
 /************************************************************************/    
 CREATE OR ALTER PROCEDURE [WM].[lsp_Move_Wrapper]
    @c_Storerkey            NVARCHAR(15) 
@@ -103,15 +106,21 @@ BEGIN
                         WHERE Loc = @c_ToLoc
                         AND CommingleSku = '0')
             BEGIN
-               IF EXISTS(SELECT COUNT(DISTINCT SKU)
+--ML01               IF EXISTS(SELECT COUNT(DISTINCT SKU)
+               IF EXISTS(SELECT TOP 1 1   --ML01
                         FROM SKUXLOC (NOLOCK)
                         WHERE SKU <> @c_Sku
                         AND Loc = @c_ToLoc
                         AND Qty > 0)                  
                BEGIN
-                  SELECT @n_WarningNo = 1
-                  SELECT @n_continue = 4                                            --(Wan05)
-                  SELECT @c_errmsg = 'Move Sku To Non Commingle Location ?'                  
+--ML01                  SELECT @n_WarningNo = 1
+--ML01                  SELECT @n_continue = 4                                            --(Wan05)
+--ML01                  SELECT @c_errmsg = 'Move Sku To Non Commingle Location ?'
+--ML01-S
+                  SET @n_Continue = 3
+                  SET @n_err = 552704
+                  SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': Not Allow to move commingle sku To Location: '+ISNULL(TRIM(@c_ToLoc),'')+'. (lsp_Move_Wrapper)'
+--ML01-E
                END                                           
             END
           END 

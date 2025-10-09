@@ -114,9 +114,7 @@ BEGIN
             SELECT @cLocaleUCC = 
                   CONCAT(
                      (SELECT Item FROM @tDecodeList WHERE ItemIndex = 4),
-                     '&',
                      (SELECT Item FROM @tDecodeList WHERE ItemIndex = 5),
-                     '&',
                      (SELECT Item FROM @tDecodeList WHERE ItemIndex = 7)
                   );
 

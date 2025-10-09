@@ -22,6 +22,8 @@ GO
 /* Date        Author   Ver.  Purposes                                  */ 
 /* 2022-03-02  Wan01    1.0   Created.                                  */
 /* 2022-03-02  Wan01    1.0   DevOps Combine Script.                    */
+/* 2025-09-02  SWT01    1.1   Enhanced session management with conditional*/
+/*                            execution and proper cleanup               */
 /************************************************************************/                                                                                  
 CREATE OR ALTER PROC [WM].[lsp_FinalizeBookingOut_Wrapper]                                                                                                                     
       @n_BookingNo            INT 
@@ -38,6 +40,7 @@ BEGIN
 
    DECLARE  @n_StartTCnt            INT = @@TRANCOUNT  
          ,  @n_Continue             INT = 1
+         ,  @b_ExecuteAs            BIT = 0
          
          ,  @c_Facility             NVARCHAR(5)    = ''
          ,  @c_Facility_SCFG        NVARCHAR(5)    = ''
@@ -54,21 +57,26 @@ BEGIN
    SET @n_Err     = 0
    
    SET @n_Err = 0 
- 
+   -- (SWT01) - START   
    IF SUSER_SNAME() <> @c_UserName
-   BEGIN
+   BEGIN 
+
       EXEC [WM].[lsp_SetUser] 
             @c_UserName = @c_UserName  OUTPUT
          ,  @n_Err      = @n_Err       OUTPUT
          ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
-                
+         ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
+         
       IF @n_Err <> 0 
       BEGIN
          GOTO EXIT_SP
       END
-    
-      EXECUTE AS LOGIN = @c_UserName
+
+      IF @b_ExecuteAs = 1                    
+         EXECUTE AS LOGIN = @c_UserName
    END
+   -- (SWT01) - END 
+   
    
    BEGIN TRY
       SELECT @c_Status = Status   
@@ -251,7 +259,12 @@ EXIT_SP:
       BEGIN TRAN 
    END
          
-   REVERT
+   IF @b_ExecuteAs = 1
+   BEGIN
+      REVERT
+   END
+   
+   EXEC [WM].[lsp_ResetUser]
 END
 GO
 GRANT EXECUTE ON [WM].[lsp_FinalizeBookingOut_Wrapper] TO nSQL 
