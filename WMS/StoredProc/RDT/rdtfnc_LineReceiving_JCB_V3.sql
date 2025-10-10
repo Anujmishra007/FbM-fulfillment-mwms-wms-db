@@ -1042,6 +1042,14 @@ Step_LOC:
 BEGIN
    IF @nInputKey = 1 -- ENTER
    BEGIN
+      -- Validate Loc field
+      IF @cInField03  = '' OR @cInField03  IS NULL
+      BEGIN
+         SET @nErrNo = 218216
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Need LOC
+         GOTO Step_LOC_Fail
+      END
+
       -- Screen mapping
 	  DECLARE @cChkDigitON AS NVARCHAR(1)
 
@@ -1049,14 +1057,6 @@ BEGIN
 	  SET @cChkDigit = 'CHK'+RIGHT(@cInField03,3)
       SET @cLOC = IIF(@cChkDigitON = 3,LEFT(LEFT(@cInField03,LEN(@cInField03) - 3),10),LEFT(@cInField03,10)) -- LOC
     
-      -- Validate compulsary field
-      IF @cLOC = '' OR @cLOC IS NULL
-      BEGIN
-         SET @nErrNo = 218216
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Need LOC
-         GOTO Step_LOC_Fail
-      END
-
       -- Get the location
       DECLARE @cChkLOC NVARCHAR( 10)
       SELECT
