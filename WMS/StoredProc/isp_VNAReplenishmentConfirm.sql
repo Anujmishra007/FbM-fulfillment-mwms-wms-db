@@ -368,7 +368,7 @@ BEGIN
             AND TaskDetailKey <> @cNewTaskDetailKey
       END TRY
       BEGIN CATCH
-         SET @nErrNo = 212552
+         SET @nErrNo = 248352
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Update LOTxLOCxID Fail
          GOTO RollBackTran
       END CATCH
@@ -414,7 +414,7 @@ BEGIN
          WHERE REFTASKKEY = @cTaskDetailKey
       END TRY
       BEGIN CATCH
-         SET @nErrNo = 212551
+         SET @nErrNo = 248351
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Update LOTxLOCxID Fail
          GOTO RollBackTran
       END CATCH
