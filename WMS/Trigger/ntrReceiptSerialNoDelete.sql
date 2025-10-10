@@ -14,6 +14,7 @@ GO
 /* Date        Rev     Author       Purposes                                        */
 /* 2023-01-18  1.0     kelvinongcy  WMS-21538 Created                               */
 /* 2025-10-02  1.1     SPC040      UWP-42005 Insert full deleted record into ReceiptSerialNo_Del on delete */
+/* 2025-10-02  1.2     AYD01        UWP-42138 Reflect deleted ReceiptSerialNo QTY into Receipt Details  */
 /************************************************************************************/
   
 CREATE OR ALTER   TRIGGER [dbo].[ntrReceiptSerialNoDelete]  
@@ -116,7 +117,42 @@ BEGIN
          SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 68102   -- Should Be Set To The SQL Err message but I don't know how to do so.
          SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": Delete Failed On Table ReceiptSerialNo. Batch Delete not allow! (ntrReceiptSerialNoDelete)" + " ( " + " SQLSvr MESSAGE=" + LTRIM(RTRIM(@c_errmsg)) + " ) "
    END
-   
+
+   -- AYD01 STARTS
+   IF (@n_continue = 1 or @n_continue = 2) 
+      AND EXISTS (SELECT 1 FROM DELETED d WITH (NOLOCK) INNER JOIN dbo.ReceiptDetail rd WITH (NOLOCK) 
+      ON d.ReceiptKey = rd.ReceiptKey AND d.ReceiptLineNumber = rd.ReceiptLineNumber AND rd.FinalizeFlag <> 'Y')
+   BEGIN
+      SELECT @n_continue = 3
+      SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 68104   -- Should Be Set To The SQL Err message but I don't know how to do so.
+      SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": Delete Failed On Table ReceiptSerialNo: Not allowed to delete before finalizing. (ntrReceiptSerialNoDelete)" + " ( " + " SQLSvr MESSAGE=" + LTRIM(RTRIM(@c_errmsg)) + " ) "
+   END
+   --==============================================================   
+   -- ✅ Reflect deleted ReceiptSerialNo QTY into Receipt Details
+   --==============================================================
+   IF (@n_continue = 1 or @n_continue = 2)
+   BEGIN
+      UPDATE rd
+      SET rd.BeforeReceivedQty = rd.BeforeReceivedQty - ISNULL(d.QTY, 0)
+         FROM dbo.ReceiptDetail rd WITH (NOLOCK)
+      INNER JOIN DELETED d WITH (NOLOCK)
+         ON d.ReceiptKey = rd.ReceiptKey AND d.ReceiptLineNumber = rd.ReceiptLineNumber
+      WHERE rd.FinalizeFlag = 'Y'
+         AND ISNULL(d.QTY, 0) <> 0
+         AND rd.BeforeReceivedQty >= ISNULL(d.QTY, 0)
+
+      SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
+
+      IF @n_err <> 0
+      BEGIN
+         SELECT @n_continue = 3
+         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=68106
+         SELECT @c_errmsg = 'NSQL' + CONVERT(char(5),@n_err) + ': Update Failed On Table RECEIPTDETAIL. (ntrReceiptSerialNoDelete) ( SQLSvr MESSAGE='
+               + LTRIM(RTRIM(@c_errmsg)) + ' ) '
+      END
+   END
+   -- AYD01 ENDS
+
    IF @n_continue=3  -- Error Occured - Process And Return  
    BEGIN  
       IF @@TRANCOUNT = 1 and @@TRANCOUNT >= @n_starttcnt  
