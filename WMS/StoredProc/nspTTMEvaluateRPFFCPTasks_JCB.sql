@@ -556,9 +556,9 @@ BEGIN
       INSERT INTO @tTaskCandidate (TaskDetailKey, TaskType, Priority, PutawayZone, FromLoc, FromLocationCategory,
          ToLoc, ToLocationCategory, ToLocMaxPallet, FinalLoc, FromID, SKU, SKUGrossWeight, Qty,
          PickMethod, OrderKey)
-      SELECT TaskDetailKey, TaskType, Priority, PutawayZone, FromLoc, FromLocationCategory,
+      SELECT TaskDetailKey, TaskType, Priority, T.PutawayZone, FromLoc, FromLocationCategory,
              ToLoc, ToLocationCategory, ToLocMaxPallet, FinalLoc, FromID, SKU, ISNULL(SKUGrossWeight,0), ISNULL(Qty,0),
-             PickMethod, OrderKey
+             T.PickMethod, OrderKey
       FROM (
          SELECT 
            TD.TaskDetailKey, 
@@ -566,6 +566,7 @@ BEGIN
            LOC.PutawayZone, 
            TD.FromLoc, 
            LOC.LocationCategory AS FromLocationCategory,
+           LOC.Floor AS FromLocFloor,
            TD.ToLoc, 
            LOC1.LocationCategory AS ToLocationCategory, 
            ISNULL(LOC1.MaxPallet, 99999) AS ToLocMaxPallet, 
@@ -608,11 +609,14 @@ BEGIN
          LEFT JOIN dbo.SKU WITH(NOLOCK) ON TD.StorerKey = SKU.StorerKey AND TD.SKU = SKU.SKU
          WHERE EXISTS (SELECT 1 FROM LOTXLOCXID LL WITH(NOLOCK) WHERE LL.Loc = TD.FromLoc AND LL.ID = TD.FromID AND LL.StorerKey = TD.StorerKey)
       ) AS T
+      LEFT JOIN LOC LASTLOC WITH(NOLOCK) ON LASTLOC.Loc = ISNULL(@c_LastLoc,'') AND LASTLOC.Facility = @cFacility AND LASTLOC.LocationCategory = 'VNA'
       WHERE T.RowIndex = 1
       ORDER BY 
-         IIF (Status = '3' AND UserKey = @c_UserID, 1, 2), 
-         IIF(UserKeyOverRide = @c_UserID AND Status IN ('0', '3'), 1, 2), 
+         IIF (T.Status = '3' AND UserKey = @c_UserID, 1, 2), 
+         IIF(UserKeyOverRide = @c_UserID AND T.Status IN ('0', '3'), 1, 2), 
          --IIF(ListKey <> '', 1, 2), --V1.0.2
+         IIF(ISNULL(LASTLOC.LOC,'') <> '' AND LASTLOC.Floor = T.FromLocFloor, 1, 99),
+         IIF(ISNULL(LASTLOC.LOC,'') <> '' AND LASTLOC.PutawayZone = T.PutawayZone, 1, 99),
          Priority, 
          DeliveryDate,
          IIF(ListKey <> '', 1, 2), --V1.0.2 Adjust the sequence. Consider business priority first.

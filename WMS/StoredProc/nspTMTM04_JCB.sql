@@ -2149,6 +2149,62 @@ END
             SELECT @n_err = 63060--78603
             SELECT @c_errmsg = CONVERT(NVARCHAR(5) ,@n_err)+' No Task!'
         END
+
+      IF NOT EXISTS (
+         SELECT 1
+         FROM dbo.PALLET P WITH (NOLOCK)
+            INNER JOIN dbo.TaskDetail TD WITH (NOLOCK)
+              ON P.PalletKey = TD.FromID
+           INNER JOIN RDT.RDTMOBREC RM WITH (NOLOCK)
+              ON RM.UserName = @c_userid
+              INNER JOIN EquipmentProfile EP WITH (NOLOCK)
+                 ON RM.C_String30 = EP.EquipmentProfileKey
+           WHERE TD.StorerKey = RM.StorerKey
+              AND TD.Status = '0'
+           AND P.StorerKey = RM.StorerKey
+              AND TD.AreaKey = @c_AreaKey01
+              AND P.GrossWgt <= EP.MaximumWeight
+      ) OR NOT EXISTS (
+         SELECT 1
+         FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
+            INNER JOIN RDT.RDTMOBREC RMR WITH (NOLOCK)
+              ON RMR.UserName = @c_userid
+             AND LLI.StorerKey = RMR.StorerKey
+            INNER JOIN dbo.TaskDetail TD WITH (NOLOCK)
+              ON LLI.ID = TD.FromID
+             AND TD.StorerKey = RMR.StorerKey
+           INNER JOIN dbo.SKU S WITH(NOLOCK)
+              ON S.SKU = LLI.SKU
+              INNER JOIN dbo.EquipmentProfile EP WITH (NOLOCK)
+                 ON RMR.C_String30 = EP.EquipmentProfileKey
+           WHERE TD.StorerKey = RMR.StorerKey
+              AND TD.Status = '0'
+              AND TD.AreaKey = @c_AreaKey01
+           AND LLI.Qty > 0
+         GROUP BY FromID, EP.MaximumWeight
+         HAVING SUM(TD.Qty * S.STDGROSSWGT) <= EP.MaximumWeight
+      )
+      BEGIN
+          SELECT @n_continue = 3
+            SELECT @n_err = 109058
+            SELECT @c_errmsg = rdt.rdtgetmessage(@n_err, 'ENG', 'DSP') -- 'Tasks got big weight'
+      END
+
+       IF EXISTS (
+         SELECT 1
+           FROM dbo.PAZoneEquipmentExcludeDetail PAZEED WITH(NOLOCK)
+              INNER JOIN dbo.AreaDetail AD WITH(NOLOCK)
+                 ON PAZEED.PutawayZone = AD.PutawayZone
+              INNER JOIN RDT.RDTMOBREC RM WITH(NOLOCK)
+                 ON RM.C_String30 = PAZEED.EquipmentProfileKey
+           WHERE AreaKey = @c_AreaKey01
+              AND RM.UserName = @c_userid
+      )
+      BEGIN
+          SELECT @n_continue = 3
+            SELECT @n_err = 155360
+            SELECT @c_errmsg = rdt.rdtgetmessage(@n_err, 'ENG', 'DSP') -- 'MHE not for Area'
+      END
     END
 
    -- (james04)

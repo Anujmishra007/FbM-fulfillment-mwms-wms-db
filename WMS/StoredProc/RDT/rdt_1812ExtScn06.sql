@@ -1255,7 +1255,7 @@ BEGIN
          BEGIN
             IF @cInField01 = '9' -- Close Pallet
             BEGIN
-               IF NOT EXISTS (SELECT 1 FROM TASKDETAIL (NOLOCK) WHERE ListKey = @cListKey AND Status = '5')
+               IF NOT EXISTS (SELECT 1 FROM TASKDETAIL WHERE ListKey = @cListKey AND Status = '5')
                BEGIN
                   SET @nErrNo = 239666
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Nothing to close
