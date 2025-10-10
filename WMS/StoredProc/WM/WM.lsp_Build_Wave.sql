@@ -78,6 +78,9 @@ GO
 /* 2025-05-16  USH022-02 3.6  FCR-3956 datetime conversion based        */
 /*                            on udf01 logic added on groupby           */
 /* 2025-09-02  SWT01    3.8   Enhanced session management and cleanup.  */
+/* 2025-10-10  AK01     3.9   UWP-41151 - Replace SUSER_SNAME with      */
+/*                            fnc_GetUserName & GETDATE() with          */
+/*                            fnc_GetDate()                             */
 /************************************************************************/                                                                                  
 CREATE OR ALTER PROC [WM].[lsp_Build_Wave]                                                                                                                       
       @c_BuildParmKey      NVARCHAR(10)                                                                                                                    
@@ -117,10 +120,10 @@ AS
          , @b_DeleteTmpOrders          BIT            = 0
 
          , @d_StartTime_Load           DATETIME       = NULL                        --(Wan14)
-         , @d_StartBatchTime           DATETIME       = GETDATE() 
-         , @d_StartTime                DATETIME       = GETDATE()                                                                                                                  
+         , @d_StartBatchTime           DATETIME       = dbo.fnc_GetDate() 
+         , @d_StartTime                DATETIME       = dbo.fnc_GetDate()                                                                                                                  
          , @d_EndTime                  DATETIME                                                                                                                        
-         , @d_StartTime_Debug          DATETIME       = GETDATE()                                                                                                                     
+         , @d_StartTime_Debug          DATETIME       = dbo.fnc_GetDate()                                                                                                                     
          , @d_EndTime_Debug            DATETIME                                                                                                                        
          , @d_EditDate                 DATETIME                                                                                                                        
                           
@@ -800,21 +803,21 @@ AS
                SET @c_Value = 
                      CASE                                                                                   
                         WHEN @c_Value = 'today'                                                                                                                     
-                        THEN LEFT(CONVERT(VARCHAR(30), GETDATE(), 120), 10)                                                                           
+                        THEN LEFT(CONVERT(VARCHAR(30), dbo.fnc_GetDate(), 120), 10)                                                                           
                         WHEN LEFT(@c_Value,6) IN ('today+', 'today-') AND ISNUMERIC(SUBSTRING(@c_Value,7,10)) = 1  
-                        THEN LEFT(CONVERT(VARCHAR(30), DATEADD(DAY, CONVERT(INT,SUBSTRING(@c_Value,6,10)),GETDATE()), 120), 10)                 
+                        THEN LEFT(CONVERT(VARCHAR(30), DATEADD(DAY, CONVERT(INT,SUBSTRING(@c_Value,6,10)),dbo.fnc_GetDate()), 120), 10)                 
                         WHEN @c_Value = 'now'                                                                                                                       
-                        THEN CONVERT(VARCHAR(30), GETDATE(), 120)                                                                                                           
+                        THEN CONVERT(VARCHAR(30), dbo.fnc_GetDate(), 120)                                                                                                           
                         WHEN @c_Value = 'startofmonth'                                                                                                              
-                        THEN CAST(DATEPART(YEAR, GETDATE()) AS VARCHAR(4)) + '-'                                                                      
-                        + ('0' + CAST(DATEPART(MONTH, GETDATE()) AS VARCHAR(2))) + ('-01')                                                         
+                        THEN CAST(DATEPART(YEAR, dbo.fnc_GetDate()) AS VARCHAR(4)) + '-'                                                                      
+                        + ('0' + CAST(DATEPART(MONTH, dbo.fnc_GetDate()) AS VARCHAR(2))) + ('-01')                                                         
                         WHEN @c_Value = 'endofmonth'                                                                                                                
-                        THEN CONVERT(VARCHAR(30), DATEADD(s,-1,DATEADD(mm, DATEDIFF(m,0,GETDATE())+1,0)), 120)                                        
+                        THEN CONVERT(VARCHAR(30), DATEADD(s,-1,DATEADD(mm, DATEDIFF(m,0,dbo.fnc_GetDate())+1,0)), 120)                                        
                         WHEN @c_Value = 'startofyear'                                                                                                               
-                        THEN CAST(DATEPART(YEAR, GETDATE()) AS VARCHAR(4)) + '-01-01'                                                                 
+                        THEN CAST(DATEPART(YEAR, dbo.fnc_GetDate()) AS VARCHAR(4)) + '-01-01'                                                                 
                         WHEN @c_Value = 'endofyear'       
-                        THEN CAST(DATEPART(YEAR, GETDATE()) AS VARCHAR(4)) + '-12-31 23:59:59'                                                        
-                        ELSE LEFT(CONVERT(VARCHAR(30), GETDATE(), 120), 10)                                                                                   
+                        THEN CAST(DATEPART(YEAR, dbo.fnc_GetDate()) AS VARCHAR(4)) + '-12-31 23:59:59'                                                        
+                        ELSE LEFT(CONVERT(VARCHAR(30), dbo.fnc_GetDate(), 120), 10)                                                                                   
                         END                                                                                                                                  
             END                                                                                                                                                   
             ELSE                                                                             
@@ -1048,7 +1051,7 @@ AS
          + CHAR(13) + ',SUM(ORDERDETAIL.OpenQty * SKU.StdGrossWgt), SUM(ORDERDETAIL.OpenQty * SKU.StdCube)'
          + CHAR(13) + ',ROUND(ISNULL(SUM(CASE WHEN PACK.Pallet>0 THEN ORDERDETAIL.OpenQty/PACK.Pallet ELSE 0 END),0.00),2)'  --(Wan21)
          + CHAR(13) + ',COUNT(DISTINCT ORDERDETAIL.OrderLineNumber)'
-         + CHAR(13) + ',''*'' + RTRIM(sUser_sName())'
+         + CHAR(13) + ',''*'' + RTRIM(dbo.fnc_GetUserName())'
 
       SET @c_SQLWhere = N' FROM ORDERS WITH (NOLOCK)'                                                                                                                                                                                                
          + CHAR(13) + 'LEFT OUTER JOIN ORDERDETAIL (NOLOCK) ON ORDERS.OrderKey = ORDERDETAIL.OrderKey' 
@@ -1264,11 +1267,11 @@ AS
                                                                                                                                  
       IF @b_debug = 2                                                                                                                                              
       BEGIN                                                                                                                                                       
-         SET @d_EndTime_Debug = GETDATE()                                                                                                                         
+         SET @d_EndTime_Debug = dbo.fnc_GetDate()                                                                                                                         
          PRINT '--Finish Generate SQL Statement--(Check Result In [Select View])'                                                                                 
          PRINT 'Time Cost:' + CONVERT(CHAR(12),@d_EndTime_Debug - @d_StartTime_Debug ,114)                                                                        
          PRINT '--2.Do Execute SQL Statement--'                                                                                                                   
-         SET @d_StartTime_Debug = GETDATE()
+         SET @d_StartTime_Debug = dbo.fnc_GetDate()
       END                                                                                                                                                         
  
       SET @c_SQLParms= N'@c_Field01 NVARCHAR(60), @c_Field02 NVARCHAR(60), @c_Field03 NVARCHAR(60), @c_Field04 NVARCHAR(60)'
@@ -1304,12 +1307,12 @@ AS
 
       IF @b_debug = 2                                                                                                                                              
       BEGIN                                                                                                                                                       
-         SET @d_EndTime_Debug = GETDATE()                                                                                                                         
+         SET @d_EndTime_Debug = dbo.fnc_GetDate()                                                                                                                         
          PRINT '--Finish Execute SQL Statement--(Check Temp DataStore In [Select View])'                                                                          
          PRINT 'Time Cost:' + CONVERT(CHAR(12),@d_EndTime_Debug - @d_StartTime_Debug ,114)                                                                        
          SELECT * FROM #tOrderData                                                                                                                                
          PRINT '--3.Do Initial Value Set Up--'                                                                                                                 
-         SET @d_StartTime_Debug = GETDATE()                                                                                                                       
+         SET @d_StartTime_Debug = dbo.fnc_GetDate()                                                                                                                       
       END                                                                                                                                                         
                                                                                                                                                              
       SELECT TOP 1 @n_Num = RNUM FROM #tOrderData ORDER BY RNUM DESC                                                                                                      
@@ -1350,13 +1353,13 @@ AS
  
       IF @b_debug = 2                                                                                                                                              
       BEGIN                                                                                                                                                       
-         SET @d_EndTime_Debug = GETDATE()                                                                                                                         
+         SET @d_EndTime_Debug = dbo.fnc_GetDate()                                                                                                                         
          PRINT '--Finish Initial Value Setup--'                                                                                                                   
          PRINT 'Time Cost:' + CONVERT(CHAR(12),@d_EndTime_Debug - @d_StartTime_Debug ,114)                                                                        
          PRINT '@c_BatchNo = ' + @c_BatchNo + ' ,@n_MaxOrders = ' + CAST(@n_MaxOrders AS NVARCHAR(20)) 
              + ' ,@n_MaxOpenQty = ' +  CAST(@n_MaxOpenQty AS NVARCHAR(20))    
          PRINT '--4.Do Buil Wave--'                                                                                                                          
-         SET @d_StartTime_Debug = GETDATE()                                                                                                                       
+         SET @d_StartTime_Debug = dbo.fnc_GetDate()                                                                                                                       
       END  
                                                                                                                                                            
       WHILE @@TRANCOUNT > 0                                                                                                                                       
@@ -1537,7 +1540,7 @@ AS
                GOTO INSERT_DETLOG         --END_BUILDWAVE                           --(Wan17)
             END
 
-            SET @d_StartTime = GETDATE()
+            SET @d_StartTime = dbo.fnc_GetDate()
             IF @d_StartTime_Load IS NULL SET @d_StartTime_Load = @d_StartTime       --(Wan17)
             SET @b_success = 1                                                                                                                                   
             BEGIN TRY
@@ -1600,7 +1603,7 @@ AS
          BEGIN
             SET @c_BuildWaveKey  = @c_Wavekey
             SET @n_WaveCnt = 1
-            SET @d_StartTime = GETDATE()
+            SET @d_StartTime = dbo.fnc_GetDate()
             IF @d_StartTime_Load IS NULL SET @d_StartTime_Load = @d_StartTime
          END
          --WL01 E
@@ -1656,7 +1659,7 @@ AS
          --(Wan06) - END
          
          BEGIN TRAN                                                                                                                                      
-         SET @d_EditDate = GETDATE()   
+         SET @d_EditDate = dbo.fnc_GetDate()   
       
          SET @b_success = 1                                                                                                                                    
       
@@ -1740,7 +1743,7 @@ AS
                      UPDATE dbo.PICKDETAIL WITH (ROWLOCK)
                         SET WaveKey  = @c_WaveKey
                            ,EditWho  = @c_UserName
-                           ,EditDate = GETDATE()
+                           ,EditDate = dbo.fnc_GetDate()
                            ,ArchiveCop = NULL   
                      WHERE PickDetailKey = @c_Pickdetailkey
                      FETCH NEXT FROM @CUR_PD INTO @c_Pickdetailkey
@@ -1808,14 +1811,14 @@ AS
                UPDATE dbo.WAVE WITH (ROWLOCK)
                SET [Status] = @c_WaveStatus
                   ,EditWho  = @c_UserName
-                  ,EditDate = GETDATE()
+                  ,EditDate = dbo.fnc_GetDate()
                   ,ArchiveCop = NULL
                WHERE WaveKey= @c_BuildWaveKey
             END
             
             IF @n_Continue = 3 AND @@TRANCOUNT > 0 ROLLBACK TRAN                    --(Wan17)
             
-            SET @d_EndTime = GetDate()  
+            SET @d_EndTime = dbo.fnc_GetDate()  
           
             BEGIN TRY                      
                INSERT INTO BUILDWAVEDETAILLOG
@@ -1976,17 +1979,17 @@ AS
                   
       IF @b_debug = 2                                                                                                                                              
       BEGIN                                                                                                                                                       
-         SET @d_EndTime_Debug = GETDATE()                                                    
+         SET @d_EndTime_Debug = dbo.fnc_GetDate()                                                    
          PRINT '--Finish Build Wave--'                                                                                     
          PRINT 'Time Cost:' + CONVERT(CHAR(12),@d_EndTime_Debug - @d_StartTime_Debug ,114)                                                                        
          PRINT '--5.Insert Trace Log--'                                                                                                                           
-         SET @d_StartTime_Debug = GETDATE()                                                                                                                       
+         SET @d_StartTime_Debug = dbo.fnc_GetDate()                                                                                                                       
       END                                                                                                                                                         
 
       --SET @c_ErrMsg = ''                                                                                                                                         
       IF @b_debug = 2                                                                                                                                              
       BEGIN    
-         SET @d_EndTime_Debug = GETDATE()                                                                                                                         
+         SET @d_EndTime_Debug = dbo.fnc_GetDate()                                                                                                                         
          PRINT '--Finish Insert Trace Log--'          
          PRINT 'Time Cost:' + CONVERT(CHAR(12),@d_EndTime_Debug - @d_StartTime_Debug ,114)                                                                        
       END          
@@ -2055,7 +2058,7 @@ EXIT_SP:
                   WHERE BatchNo = @n_BatchNo
                 )
       BEGIN
-         SET @d_EndTime = GETDATE()
+         SET @d_EndTime = dbo.fnc_GetDate()
          IF @d_StartTime_Load IS NULL SET @d_StartTime_Load = @d_EndTime                  
          BEGIN TRY
             UPDATE BUILDWAVELOG 
@@ -2114,5 +2117,6 @@ EXIT_SP:
 GO
 GRANT EXECUTE ON [WM].[lsp_Build_Wave] TO nSQL 
 GO        
+
 
 

@@ -20,7 +20,9 @@ GO
 /* Updates:                                                              */  
 /* Date        Author   Ver   Purposes                                   */ 
 /* 2022-09-27  Wan      1.0   Created & DevOps Combine Script            */
-/* 2025-09-02  SWT01    1.1   Enhanced session management pattern       */
+/* 2025-09-02  SWT01    1.1   Enhanced session management pattern        */
+/* 2025-10-10  AK01     1.2   UWP-41151 - Replace SUSER_SNAME with       */
+/*                            fnc_GetUserName & GETDATE() with fnc_GetDate()*/
 /*************************************************************************/   
 CREATE OR ALTER PROCEDURE [WM].[lsp_TaskDetail_Canc]  
    @c_TaskDetailKeys       NVARCHAR(4000)= ''         --if Not cancel by Search Criteria, pass in all ticked Taskdetailkey seperated by '|'
@@ -115,8 +117,8 @@ BEGIN
          
          UPDATE TASKDETAIL WITH (ROWLOCK)
          SET [Status] = 'X'
-          ,EditWho  = SUSER_SNAME()
-          ,EditDate = GETDATE()
+          ,EditWho  = dbo.fnc_GetUserName()
+          ,EditDate = dbo.fnc_GetDate()
          WHERE TaskDetailKey = @c_TaskdetailKey_Upd
       
          IF @@ERROR <> 0
@@ -168,5 +170,6 @@ END
 GO
 GRANT EXECUTE ON [WM].[lsp_TaskDetail_Canc] TO nSQL 
 GO
+
 
 

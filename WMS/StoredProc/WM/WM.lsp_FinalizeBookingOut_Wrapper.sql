@@ -24,6 +24,8 @@ GO
 /* 2022-03-02  Wan01    1.0   DevOps Combine Script.                    */
 /* 2025-09-02  SWT01    1.1   Enhanced session management with conditional*/
 /*                            execution and proper cleanup               */
+/* 2025-10-10  AK01     1.2   UWP-41151 - Replace SUSER_SNAME with      */
+/*                            fnc_GetUserName & GETDATE() with fnc_GetDate()*/
 /************************************************************************/                                                                                  
 CREATE OR ALTER PROC [WM].[lsp_FinalizeBookingOut_Wrapper]                                                                                                                     
       @n_BookingNo            INT 
@@ -184,8 +186,8 @@ BEGIN
       
       UPDATE o WITH (ROWLOCK)
       SET Door = @c_Bayoutloc
-         ,EditWho = SUSER_NAME()  
-         ,EditDate= GETDATE()  
+         ,EditWho = dbo.fnc_GetUserName()  
+         ,EditDate= dbo.fnc_GetDate()  
          ,Trafficcop = NULL  
       FROM dbo.TMS_Shipment AS ts WITH (NOLOCK)
       JOIN dbo.TMS_ShipmentTransOrderLink AS tstol WITH (NOLOCK) ON tstol.ShipmentGID = ts.ShipmentGID
@@ -203,8 +205,8 @@ BEGIN
       
       UPDATE dbo.Booking_Out WITH (ROWLOCK)
          SET FinalizeFlag = 'Y'
-            ,EditWho = SUSER_SNAME()
-            ,EditDate = GETDATE()
+            ,EditWho = dbo.fnc_GetUserName()
+            ,EditDate = dbo.fnc_GetDate()
       WHERE BookingNo = @n_BookingNo
        
       IF @@ERROR <> 0 

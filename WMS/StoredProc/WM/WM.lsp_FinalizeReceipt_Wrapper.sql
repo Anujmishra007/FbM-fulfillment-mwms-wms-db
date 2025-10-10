@@ -56,6 +56,8 @@ GO
 /* 2024-09-24  Wan15    2.7   SPP-36048 - Empty Reason Code prompt         */
 /* 2025-09-02  SWT01    3.0   Enhanced session management with conditional*/
 /*                            execution and proper cleanup                 */
+/* 2025-10-10  AK01     3.1   UWP-41151 - Replace SUSER_SNAME with         */
+/*                            fnc_GetUserName & GETDATE() with fnc_GetDate()*/
 /***************************************************************************/
 CREATE OR ALTER PROCEDURE [WM].[lsp_FinalizeReceipt_Wrapper]
       @c_ReceiptKey              NVARCHAR(10)
@@ -2376,7 +2378,7 @@ BEGIN
                   UPDATE RECEIPTDETAIL
                      SET ToId = @c_ToID
                         ,EditWho = @c_UserName
-                        ,EditDate= GETDATE()
+                        ,EditDate= dbo.fnc_GetDate()
                         ,Trafficcop = NULL
                   WHERE ReceiptKey = @c_ReceiptKey
                   AND   ReceiptLineNumber = @c_ReceiptLineNo

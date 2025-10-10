@@ -25,6 +25,8 @@ GO
 /* 2022-04-12  Wan      1.0   Created & DevOps Combine Script           */
 /* 2022-07-20  Wan      1.1   LFWM-3482 Version 2                       */
 /* 2025-05-26  SWT01    1.2   Setting Session Context for user name     */
+/* 2025-10-10  AK01     1.3   UWP-41151 - Replace SUSER_SNAME with      */
+/*                            fnc_GetUserName & GETDATE() with fnc_GetDate()*/
 /************************************************************************/
 CREATE OR ALTER PROC [WM].[lsp_DoorBookAutoBuild_STD]
       @c_DoorBookingStrategyKey  NVARCHAR(10)
@@ -1074,8 +1076,8 @@ BEGIN
             UPDATE TMS_Shipment
             SET
                  BookingNo = @n_BookingNo
-               , Editwho = SUSER_SNAME()
-               , EditDate= GETDATE()
+               , Editwho = dbo.fnc_GetUserName()
+               , EditDate= dbo.fnc_GetDate()
             WHERE Rowref >= @n_RowRef_Shpm
             AND AppointmentID = @c_AppointmentID
             
