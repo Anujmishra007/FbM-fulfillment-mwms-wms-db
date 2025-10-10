@@ -141,12 +141,10 @@ BEGIN
          AND ISNULL(d.QTY, 0) <> 0
          AND rd.BeforeReceivedQty >= ISNULL(d.QTY, 0)
 
-      SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
-
-      IF @n_err <> 0
+      IF @@ERROR <> 0
       BEGIN
          SELECT @n_continue = 3
-         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=68106
+         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 68106
          SELECT @c_errmsg = 'NSQL' + CONVERT(char(5),@n_err) + ': Update Failed On Table RECEIPTDETAIL. (ntrReceiptSerialNoDelete) ( SQLSvr MESSAGE='
                + LTRIM(RTRIM(@c_errmsg)) + ' ) '
       END
