@@ -812,7 +812,7 @@ BEGIN
       ORDER BY T1.RowID
    END
 
-   IF @n_Continue IN (1,2)
+   IF @n_Continue IN (1,2) AND @b_debug <> 1
    BEGIN
       BEGIN TRY
          --------------------------------------------------
