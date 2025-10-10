@@ -1255,7 +1255,7 @@ BEGIN
          BEGIN
             IF @cInField01 = '9' -- Close Pallet
             BEGIN
-               IF NOT EXISTS (SELECT 1 FROM TASKDETAIL (NOLOCK) WHERE ListKey = @cListKey AND Status = '5')
+               IF NOT EXISTS (SELECT 1 FROM TASKDETAIL WHERE ListKey = @cListKey AND Status = '5')
                BEGIN
                   SET @nErrNo = 239666
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Nothing to close
@@ -1364,7 +1364,7 @@ BEGIN
       END --2100, st1
    END--1756
    --V1.1.0 end
-     
+   GOTO QUIT
 RollBackTran:
    ROLLBACK TRAN rdt_1812ExtScn06 -- Only rollback change made here
 Fail:
