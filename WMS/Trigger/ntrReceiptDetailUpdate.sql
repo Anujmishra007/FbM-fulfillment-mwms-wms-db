@@ -181,6 +181,7 @@ GO
 /* 03-Oct-2025  NJOW15    6.4   FCR-8281 allow configure to update loc to   */
 /*                              serialno table                              */
 /* 06-Oct-2025  AK01      6.5   UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName*/
+/* 13-Oct-2025  AYD01     6.6   FCR-3582 Add validation for BeforeReceivedQty */
 /****************************************************************************/
 
 CREATE OR ALTER TRIGGER [dbo].[ntrReceiptDetailUpdate]
@@ -303,6 +304,9 @@ DECLARE @c_AltSku                         NVARCHAR(20)
       , @c_ExternPoKey                    NVARCHAR(20)
       , @c_POLineNumber                   NVARCHAR(5)
       , @n_UCC_RowRef                     bigINT
+      , @n_BeforeReceivedQty              INT          --AYD01
+      , @n_DeductQty                      INT          --AYD01
+      , @b_RCPTSNLOG                      NVARCHAR(1)  --AYD01
 
 SELECT @n_continue=1, @n_starttcnt=@@TRANCOUNT
 
@@ -3043,6 +3047,42 @@ END  -- IF @n_continue = 1 or @n_continue=2
  
 /*========================= END customise =============================== */ 
 /* #INCLUDE <TRRDU2.SQL> */ 
+
+-- AYD01 Start
+IF @n_continue IN (1,2)
+BEGIN
+   IF UPDATE(BeforeReceivedQty)  
+   BEGIN 
+      DECLARE CUR_SN CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      SELECT rd.StorerKey, r.facility, rd.ReceiptKey, rs.ReceiptLineNumber, rd.BeforeReceivedQty, SUM(rs.qty)
+      FROM INSERTED rd (NOLOCK)
+      JOIN RECEIPT r (NOLOCK) ON rd.ReceiptKey = r.ReceiptKey
+      JOIN ReceiptSerialNo rs (NOLOCK) ON rd.ReceiptKey=rs.ReceiptKey AND rs.ReceiptLineNumber=rd.ReceiptLineNumber 
+      JOIN SKU (NOLOCK) ON rd.SKU = SKU.SKU AND rd.StorerKey = SKU.StorerKey
+      WHERE SKU.SerialNoCapture IN ('1','2')
+      GROUP BY rd.ReceiptKey, rs.ReceiptLineNumber, rd.StorerKey, r.Facility, rd.BeforeReceivedQty
+
+      OPEN CUR_SN
+      FETCH NEXT FROM CUR_SN INTO @c_StorerKey, @c_Facility, @c_ReceiptKey, @c_ReceiptLineNumber, @n_BeforeReceivedQty, @n_DeductQty  
+      WHILE @@FETCH_STATUS <> -1 AND @n_continue IN (1, 2)
+      BEGIN
+         SELECT @b_RCPTSNLOG = SC.Authority FROM dbo.fnc_GetRight2(@c_Facility, @c_Storerkey,'','RCPTSNLOG') AS SC
+         IF @b_RCPTSNLOG = '1' AND ISNULL(@n_BeforeReceivedQty, 0) < ISNULL(@n_DeductQty, 0)
+         BEGIN 
+            SELECT @n_continue = 3 
+            SELECT @n_err = 94217 
+            SELECT @c_errmsg = 'NSQL' + CONVERT(char(5),@n_err)
+                     + ': BeforeReceivedQty cannot be less than total SerialNo Qty. (ntrReceiptDetailUpdate)' 
+                     + ' (' + ' SQLSvr MESSAGE=' + LTRIM(RTRIM(@c_errmsg)) + ') '
+            GOTO QUIT
+         END
+         FETCH NEXT FROM CUR_SN INTO @c_StorerKey, @c_Facility, @c_ReceiptKey, @c_ReceiptLineNumber, @n_BeforeReceivedQty, @n_DeductQty
+      END
+      CLOSE CUR_SN
+      DEALLOCATE CUR_SN
+   END
+END
+-- AYD01 End
  
 QUIT: 
  
