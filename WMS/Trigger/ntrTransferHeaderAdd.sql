@@ -1,4 +1,4 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects where id = object_id(N'[dbo].[ntrTransferHeaderAdd]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
+﻿IF EXISTS (SELECT * FROM dbo.sysobjects where id = object_id(N'[dbo].[ntrTransferHeaderAdd]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
 	DROP TRIGGER [dbo].[ntrTransferHeaderAdd]
 GO
 
@@ -36,7 +36,8 @@ GO
 /* Updates:                                                                    */
 /* Date         Author       Ver.   Purposes                                   */
 /* 17-Mar-2009  TLTING       1.1    Change user_name() to SUSER_SNAME()        */
-/*	10-Jul-2013  TLTING       1.0    Insert With ArchiveCop '9'                 */
+/* 10-Jul-2013  TLTING       1.0    Insert With ArchiveCop '9'                 */
+/* 09-Oct-2025  SPC040       1.2    Replace SUSER_SNAME with fnc_GetUserName   */
 /*******************************************************************************/
 
 
@@ -85,10 +86,10 @@ IF EXISTS( SELECT 1 FROM INSERTED WHERE TrafficCop = '9')
  BEGIN
  UPDATE TRANSFER
  SET TrafficCop = NULL,
- AddDate = GETDATE(),
- AddWho = SUSER_SNAME(),
- EditDate = GETDATE(),
- EditWho = SUSER_SNAME()
+ AddDate = dbo.fnc_GetDate(),
+ AddWho = dbo.fnc_GetUserName(),
+ EditDate = dbo.fnc_GetDate(),
+ EditWho = dbo.fnc_GetUserName()
  FROM TRANSFER,
  INSERTED
  WHERE TRANSFER.TransferKey = INSERTED.TransferKey

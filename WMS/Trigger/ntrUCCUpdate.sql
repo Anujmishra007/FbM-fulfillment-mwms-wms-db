@@ -31,6 +31,7 @@ GO
 /* 16-05-2014  TLTING    1.3  New primary key UCC_RowRef                */  
 /* 19-08-2014  TLTING    1.4  Add ArchiveCop & TrrafficCop              */  
 /* 25-09-2025  MICHAEL   1.5  FCR-7829 Inventory UCC-level HOLD (ML01)  */
+/* 09-10-2025  SPC040    1.6  Replace SUSER_SNAME with fnc_GetUserName  */
 /************************************************************************/  
 CREATE OR ALTER TRIGGER [dbo].[ntrUCCUpdate]  
 ON  [dbo].[UCC]   
@@ -100,8 +101,8 @@ BEGIN
       -- KHLim01 end
              
       UPDATE UCC  with (RowLock)
-         SET EditDate = GETDATE(),  
-             EditWho = @c_PreUN + SUSER_SNAME() -- KHLim01
+         SET EditDate = dbo.fnc_GetDate(),  
+             EditWho = @c_PreUN + dbo.fnc_GetUserName() -- KHLim01
         FROM UCC, INSERTED  
        WHERE UCC.UCC_RowRef = INSERTED.UCC_RowRef
  

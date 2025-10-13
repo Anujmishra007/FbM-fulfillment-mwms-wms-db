@@ -1,4 +1,4 @@
-SET ANSI_NULLS OFF
+﻿SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -50,6 +50,7 @@ GO
 /* 12-Sep-2019  SHONG     Fixing QtyReplen Not Tally Issues (SWT02)     */ 
 /* 18-Aug-2022  WLChooi   WMS-20526 - ReplenUpdateUCC (WL01)            */
 /* 18-Aug-2022  WLChooi   DevOps Combine Script                         */
+/* 09-Oct-2025  SPC040  1.0  Replace SUSER_SNAME with fnc_GetUserName   */
 /************************************************************************/
 
 CREATE OR ALTER TRIGGER [dbo].[ntrReplenishmentUpdate]
@@ -108,8 +109,8 @@ BEGIN
    BEGIN
       UPDATE Replenishment
       SET ArchiveCop = NULL
-         ,EditDate = GetDate()
-         ,EditWho = SUSER_SNAME()
+         ,EditDate = dbo.fnc_GetDate()
+         ,EditWho = dbo.fnc_GetUserName()
       FROM Replenishment, INSERTED (NOLOCK)
       WHERE Replenishment.ReplenishmentKey = INSERTED.ReplenishmentKey
 
@@ -208,8 +209,8 @@ BEGIN
                UPDATE Replenishment WITH (ROWLOCK)
                SET Remark = 'Success - UCC Replen!'
                  , ArchiveCop = NULL
-                 , EditDate = GETDATE()
-                 , EditWho = SUSER_SNAME()
+                 , EditDate = dbo.fnc_GetDate()
+                 , EditWho = dbo.fnc_GetUserName()
                WHERE  ReplenishmentKey = @c_ReplenishmentKey
 
                IF @@ERROR <> 0
@@ -336,8 +337,8 @@ BEGIN
                      SET QtyReplen = CASE WHEN QtyReplen > @n_Qty THEN QtyReplen - @n_Qty
                                           ELSE 0
                                      END,
-                         EditDate = GETDATE(),   --tlting
-                         EditWho = SUSER_SNAME()
+                         EditDate = dbo.fnc_GetDate(),   --tlting
+                         EditWho = dbo.fnc_GetUserName()
                      WHERE  LOT = @c_LOT
                      AND  LOC = @c_LOC
                      AND  ID  = @c_ID
@@ -359,8 +360,8 @@ BEGIN
 
                      UPDATE LOTxLOCxID WITH (ROWLOCK)
                          SET QtyReplen = CASE WHEN (QtyReplen - @n_QtyReplen) < 0 THEN 0 ELSE QtyReplen - @n_QtyReplen END,
-                             EditDate = GETDATE(),
-                             EditWho = SUSER_SNAME()
+                             EditDate = dbo.fnc_GetDate(),
+                             EditWho = dbo.fnc_GetUserName()
                      WHERE Lot = @c_LOT
                        AND LOC = @c_LOC
                        AND ID  = @c_ID
@@ -382,8 +383,8 @@ BEGIN
                          SET PendingMoveIn = CASE WHEN (PendingMoveIn - @n_PendingMoveIn) < 0 THEN 0
                                                   ELSE PendingMoveIn - @n_PendingMoveIn
                                              END,
-                             EditDate = GETDATE(),
-                             EditWho = SUSER_SNAME()
+                             EditDate = dbo.fnc_GetDate(),
+                             EditWho = dbo.fnc_GetUserName()
                      WHERE Lot = @c_LOT
                        AND LOC = @c_ToLoc
                        AND ID  = @c_DropID
@@ -398,8 +399,8 @@ BEGIN
                   UPDATE Replenishment WITH (ROWLOCK)
                   SET Remark = 'Perfect ! '
                      ,ArchiveCop = NULL
-                     ,EditDate  = GetDate()
-                     ,EditWho   = SUSER_SNAME()
+                     ,EditDate = dbo.fnc_GetDate()
+                     ,EditWho = dbo.fnc_GetUserName()
                      ,DropID    = CASE WHEN @c_ReplenType = 'L' THEN @c_ReplenType ELSE DropID END
                      ,QtyReplen = 0
                   WHERE ReplenishmentKey = @c_ReplenishmentKey
@@ -438,8 +439,8 @@ BEGIN
                   UPDATE Replenishment WITH (ROWLOCK)
                   SET Remark = 'Failed ! '
                      ,ArchiveCop = NULL
-                     ,EditDate = GetDate()
-                     ,EditWho = SUSER_SNAME()
+                     ,EditDate = dbo.fnc_GetDate()
+                     ,EditWho = dbo.fnc_GetUserName()
                      ,DropID    = CASE WHEN @c_ReplenType = 'L' THEN @c_ReplenType ELSE DropID END
                   WHERE ReplenishmentKey = @c_ReplenishmentKey
 
@@ -457,8 +458,8 @@ BEGIN
                      SET QtyReplen = CASE WHEN QtyReplen > @n_Qty THEN QtyReplen - @n_Qty
                                           ELSE 0
                                        END,
-                           EditDate = GETDATE(),   --tlting
-                           EditWho = SUSER_SNAME()
+                           EditDate = dbo.fnc_GetDate(),   --tlting
+                           EditWho = dbo.fnc_GetUserName()
                      WHERE  LOT = @c_LOT
                         AND  LOC = @c_LOC
                         AND  ID  = @c_ID
@@ -477,8 +478,8 @@ BEGIN
                UPDATE Replenishment WITH (ROWLOCK)
                      SET Remark = 'Failed ! Quantity - (Qty Picked + Qty Allocated) < Qty to Move'
                         ,ArchiveCop = NULL
-                        ,EditDate   = GetDate()
-                        ,EditWho    = SUSER_SNAME()
+                        ,EditDate = dbo.fnc_GetDate()
+                        ,EditWho = dbo.fnc_GetUserName()
                         ,DropID    = CASE WHEN @c_ReplenType = 'L' THEN 'Y' ELSE DropID END
                      WHERE ReplenishmentKey = @c_ReplenishmentKey
 
@@ -496,8 +497,8 @@ BEGIN
                   SET QtyReplen = CASE WHEN QtyReplen > @n_Qty THEN QtyReplen - @n_Qty
                                        ELSE 0
                                     END,
-                        EditDate = GETDATE(),   --tlting
-                        EditWho = SUSER_SNAME()
+                        EditDate = dbo.fnc_GetDate(),   --tlting
+                        EditWho = dbo.fnc_GetUserName()
                   WHERE  LOT = @c_LOT
                      AND  LOC = @c_LOC
                      AND  ID  = @c_ID
@@ -513,7 +514,7 @@ BEGIN
                IF @c_ReplenType = 'L'
                BEGIN
                   UPDATE UCC
-                     SET STATUS = '1', EditDate = GETDATE(), EditWho = SUSER_SNAME()
+                     SET STATUS = '1', EditDate = dbo.fnc_GetDate(), EditWho = dbo.fnc_GetUserName()
                   WHERE Storerkey = @c_StorerKey
                   AND UCCNo = @c_UCCNo
 
@@ -554,8 +555,8 @@ BEGIN
             BEGIN
                UPDATE LOTxLOCxID WITH (ROWLOCK)
                   SET QtyReplen = QtyReplen - @n_deletedQtyReplen + @n_QtyReplen,
-                      EditDate = GETDATE(),
-                      EditWho = SUSER_SNAME()
+                      EditDate = dbo.fnc_GetDate(),
+                      EditWho = dbo.fnc_GetUserName()
                WHERE Lot = @c_LOT
                  AND LOC = @c_LOC
                  AND ID  = @c_ID
@@ -572,8 +573,8 @@ BEGIN
             BEGIN
                UPDATE LOTxLOCxID WITH (ROWLOCK)
                   SET PendingMoveIN = PendingMoveIN - @n_deletedPendingMoveIn + @n_PendingMoveIn,
-                      EditDate = GETDATE(),
-                      EditWho = SUSER_SNAME()
+                      EditDate = dbo.fnc_GetDate(),
+                      EditWho = dbo.fnc_GetUserName()
                 WHERE Lot = @c_LOT
                   AND LOC = @c_ToLOC
                   AND ID  = @c_ToID
@@ -592,8 +593,8 @@ BEGIN
             BEGIN
                UPDATE LOTxLOCxID  WITH (ROWLOCK)
                SET QtyReplen = QtyReplen - @n_deletedQty  + @n_Qty,
-                   EditDate = GETDATE(),
-                   EditWho = SUSER_SNAME()
+                   EditDate = dbo.fnc_GetDate(),
+                   EditWho = dbo.fnc_GetUserName()
                WHERE Lot = @c_LOT
                  AND LOC = @c_LOC
                  AND ID  = @c_ID
@@ -608,8 +609,8 @@ BEGIN
                UPDATE Replenishment  WITH (ROWLOCK)
                   SET QtyReplen = QtyReplen - @n_deletedQty  + @n_Qty,
                       ArchiveCop = NULL,
-                      EditDate = GETDATE(),
-                      EditWho = SUSER_SNAME()
+                      EditDate = dbo.fnc_GetDate(),
+                      EditWho = dbo.fnc_GetUserName()
                 WHERE ReplenishmentKey = @c_ReplenishmentKey
 
                IF @@ERROR <> 0
@@ -627,8 +628,8 @@ BEGIN
             BEGIN
                UPDATE LOTxLOCxID WITH (ROWLOCK)
                   SET PendingMoveIN = PendingMoveIN - @n_deletedQty + @n_Qty,
-                      EditDate = GETDATE(),
-                      EditWho = SUSER_SNAME()
+                      EditDate = dbo.fnc_GetDate(),
+                      EditWho = dbo.fnc_GetUserName()
                WHERE Lot = @c_LOT
                  AND LOC = @c_ToLOC
                  AND ID  = @c_ToID
@@ -643,8 +644,8 @@ BEGIN
                UPDATE Replenishment WITH (ROWLOCK)
                SET PendingMoveIN = PendingMoveIN - @n_deletedQty  + @n_Qty,
                    ArchiveCop = NULL,
-                   EditDate = GETDATE(),
-                   EditWho = SUSER_SNAME()
+                   EditDate = dbo.fnc_GetDate(),
+                   EditWho = dbo.fnc_GetUserName()
                WHERE ReplenishmentKey = @c_ReplenishmentKey
 
                IF @@ERROR <> 0

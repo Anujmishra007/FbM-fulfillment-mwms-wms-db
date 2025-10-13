@@ -1,4 +1,4 @@
-SET QUOTED_IDENTIFIER OFF
+﻿SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
 GO
@@ -37,6 +37,7 @@ GO
 /* 12-Aug-2022  Leong       2.0      JSM-86964 Initialize variable.                   */
 /* 13-Feb-2025  WLChooi     2.1      UWP-30034 Populate PalletType (WL01)             */
 /* 25-JUN-2025  SSA01       2.2      UWP-3982- Added PalletType in inventory          */
+/* 09-Oct-2025  SPC040      2.3      Replace SUSER_SNAME with fnc_GetUserName         */
 /**************************************************************************************/
 
 CREATE OR ALTER TRIGGER [dbo].[ntrTransferDetailUpdate]
@@ -109,8 +110,8 @@ BEGIN
          AND NOT UPDATE(EditDate)
    BEGIN
       UPDATE  TRANSFERDETAIL
-      SET  EditDate   = GetDate(),
-           EditWho    = Suser_Sname(),
+      SET  EditDate = dbo.fnc_GetDate(),
+           EditWho = dbo.fnc_GetUserName(),
            TrafficCop = NULL
       FROM TRANSFERDETAIL, INSERTED, DELETED
       WHERE TRANSFERDETAIL.Transferkey = INSERTED.Transferkey
@@ -694,8 +695,8 @@ BEGIN
                   SET FromChannel_ID = @n_FromChannel_ID,
                       ToChannel_ID  = @n_ToChannel_ID,
                       TrafficCop = NULL,
-                      EditDate = GETDATE(),
-                      EditWho = SUSER_SNAME()
+                      EditDate = dbo.fnc_GetDate(),
+                      EditWho = dbo.fnc_GetUserName()
                   WHERE TransferKey = @c_TransferKey
                     AND TransferLineNumber = @c_TransferLineNumber
 
@@ -724,8 +725,8 @@ BEGIN
          BEGIN
             UPDATE TRANSFER
             SET  TRANSFER.OpenQty = TRANSFER.OpenQty - DELETED.FromQty + INSERTED.FromQty,
-                 EditDate = GETDATE(),   --tlting
-                 EditWho = SUSER_SNAME()
+                 EditDate = dbo.fnc_GetDate(),   --tlting
+                 EditWho = dbo.fnc_GetUserName()
             FROM TRANSFER,
             INSERTED,
             DELETED
@@ -743,8 +744,8 @@ BEGIN
             (SELECT Sum(INSERTED.FromQty) FROM INSERTED
             WHERE INSERTED.Transferkey = TRANSFER.Transferkey)
             ),
-            EditDate = GETDATE(),   --tlting
-            EditWho = SUSER_SNAME()
+            EditDate = dbo.fnc_GetDate(),   --tlting
+            EditWho = dbo.fnc_GetUserName()
             FROM TRANSFER,DELETED,INSERTED
             WHERE TRANSFER.Transferkey IN (SELECT Distinct Transferkey FROM DELETED)
             AND TRANSFER.Transferkey = DELETED.Transferkey
@@ -784,8 +785,8 @@ BEGIN
 
          UPDATE TRANSFER
          SET  TRANSFER.OpenQty = TRANSFER.OpenQty - INSERTED.FromQty,
-               EditDate = GETDATE(),   --tlting
-               EditWho = SUSER_SNAME()
+               EditDate = dbo.fnc_GetDate(),   --tlting
+               EditWho = dbo.fnc_GetUserName()
          FROM TRANSFER,
          INSERTED,
          DELETED
