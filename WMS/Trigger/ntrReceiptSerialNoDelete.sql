@@ -186,6 +186,8 @@ BEGIN
    END
    -- AYD01 ENDS
 
+   QUIT: -- AYD01
+
    IF @n_continue=3  -- Error Occured - Process And Return  
    BEGIN  
       IF @@TRANCOUNT = 1 and @@TRANCOUNT >= @n_starttcnt  
