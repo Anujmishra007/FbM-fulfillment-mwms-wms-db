@@ -61,10 +61,9 @@ BEGIN
    SET QUOTED_IDENTIFIER OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
 
-   DECLARE @b_ExecuteAs       BIT = 0 -- (SSA01)
+   DECLARE @b_ExecuteAs       BIT = 0   -- (SSA01)
          , @n_Continue        INT = 1
          , @n_StartTCnt       INT = @@TRANCOUNT
-         , @b_ExecuteAs       BIT = 0 -- (SSA01)
 
    SET @b_Success = 1
    SET @c_ErrMsg = ''
