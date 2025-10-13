@@ -3074,7 +3074,6 @@ BEGIN
             SELECT @c_errmsg = 'NSQL' + CONVERT(char(5),@n_err)
                      + ': BeforeReceivedQty cannot be less than total SerialNo Qty. (ntrReceiptDetailUpdate)' 
                      + ' (' + ' SQLSvr MESSAGE=' + LTRIM(RTRIM(@c_errmsg)) + ') '
-            GOTO QUIT
          END
          FETCH NEXT FROM CUR_SN INTO @c_StorerKey, @c_Facility, @c_ReceiptKey, @c_ReceiptLineNumber, @n_BeforeReceivedQty, @n_DeductQty
       END
