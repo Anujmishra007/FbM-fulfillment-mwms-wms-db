@@ -1,6 +1,8 @@
 
 -- isp_VNAActionConfirm_Wrapper
+
 execute rdt.rdtDropMsg 212501 , 212550
+execute rdt.rdtDropMsg 248351 , 248400
 
 execute rdt.rdtAddMsg 212501, 10, '212501^Invalid Device ID',                          'us_english'
 execute rdt.rdtAddMsg 212502, 10, '212502^Not VNAIN Task',                             'us_english'
@@ -57,8 +59,9 @@ execute rdt.rdtAddMsg 212547, 10, '212547^VNAOUTFPK - Remove Putaway Record Fail
 execute rdt.rdtAddMsg 212548, 10, '212548^VNAOUTRPF - Remove Putaway Record Fail',     'us_english'
 execute rdt.rdtAddMsg 212549, 10, '212549^VNAOUTRPF - Loc PF Loc Fail, details: ',     'us_english'
 execute rdt.rdtAddMsg 212550, 10, '212550^VNAOUTRPF - Unlock Loc Fail, details: ',     'us_english'
-execute rdt.rdtAddMsg 212551, 10, '212551^VNAOUTRPF - Update TaskDetail Fail',         'us_english'
-execute rdt.rdtAddMsg 212552, 10, '212552^VNAOUTRPF - Update TaskDetail Fail',         'us_english'
+execute rdt.rdtAddMsg 248351, 10, '248351^VNAOUTRPF - Update TaskDetail Fail',         'us_english'
+execute rdt.rdtAddMsg 248352, 10, '248352^VNAOUTRPF - Update TaskDetail Fail',         'us_english'
 
 
 select * from rdt.rdtmsg (nolock) where message_id between 212501 and 212550
+select * from rdt.rdtmsg (nolock) where message_id between 248351 and 248400

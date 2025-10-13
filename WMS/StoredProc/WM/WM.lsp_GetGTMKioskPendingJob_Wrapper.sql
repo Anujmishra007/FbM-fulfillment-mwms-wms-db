@@ -23,6 +23,8 @@ GO
 /* 2021-02-05   mingle01 1.1  Add Big Outer Begin try/Catch             */
 /*                            Execute Login if @c_UserName<>SUSER_SNAME()*/
 /* 2025-01-21   SWT01    1.2  Enhanced session management               */
+/* 2025-10-10  AK01     1.3   UWP-41151 - Replace SUSER_SNAME with       */
+/*                            fnc_GetUserName & GETDATE() with fnc_GetDate()*/
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE [WM].[lsp_GetGTMKioskPendingJob_Wrapper]
    @c_GTMWorkStation       NVARCHAR(10)
@@ -102,7 +104,7 @@ BEGIN
 			UPDATE TASKDETAIL WITH (ROWLOCK)
 			SET StatusMsg = '0'
 				,EditWho   = @c_UserName
-				,EditDate  = GETDATE()
+				,EditDate  = dbo.fnc_GetDate()
 				,Trafficcop= NULL
 			WHERE TaskDetailKey = @c_JobKey
 			AND   TaskType = 'GTMJOB'
@@ -162,3 +164,4 @@ END
 GO
 GRANT EXECUTE ON  [WM].[lsp_GetGTMKioskPendingJob_Wrapper] TO [NSQL]
 GO
+

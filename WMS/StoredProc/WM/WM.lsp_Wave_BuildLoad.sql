@@ -46,6 +46,8 @@ GO
 /* 2025-02-20  WLChooi  2.2   FCR-2706 Update loadplan.casecnt&pallet=0 */
 /*                            by config - update by LPD trigger (WL01)  */
 /* 2025-09-02  SWT01    1.1   Enhanced session management pattern       */
+/* 2025-10-10  AK01     2.3   UWP-41151 - Replace SUSER_SNAME with      */
+/*                            fnc_GetUserName & GETDATE() with fnc_GetDate()*/
 /************************************************************************/                                                                                  
 CREATE OR ALTER PROC [WM].[lsp_Wave_BuildLoad]                                                                                                                       
       @c_Wavekey        NVARCHAR(10)  
@@ -67,8 +69,8 @@ AS
          , @n_StartTCnt                INT            = @@TRANCOUNT  
                                                                                                                  
                                                                                                                                                                   
-   DECLARE @d_StartBatchTime           DATETIME       = GETDATE() 
-         , @d_StartTime                DATETIME       = GETDATE()                                                                                                                  
+   DECLARE @d_StartBatchTime           DATETIME       = GETDATE()
+         , @d_StartTime                DATETIME       = dbo.fnc_GetDate()                                                                                                                  
          , @d_EndTime                  DATETIME                                                                                                                        
          , @d_StartTime_Debug          DATETIME       = GETDATE()                                                                                                                     
          , @d_EndTime_Debug            DATETIME                                                                                                                        
@@ -967,7 +969,7 @@ AS
       + CHAR(13) + ',ORDERS.OrderDate,ORDERS.DeliveryDate,ORDERS.DeliveryPlace,ORDERS.Rds,ORDERS.Status'
       + CHAR(13) + ',SUM(ORDERDETAIL.OpenQty * SKU.StdGrossWgt), SUM(ORDERDETAIL.OpenQty * SKU.StdCube)'
       + CHAR(13) + ',COUNT(DISTINCT ORDERDETAIL.OrderLineNumber)'
-      + CHAR(13) + ',''*'' + RTRIM(sUser_sName())'
+      + CHAR(13) + ',''*'' + RTRIM(dbo.fnc_GetUserName())'
 
    SET @c_SQLWhere = N' FROM WAVEDETAIL WITH (NOLOCK) '
       + CHAR(13) + 'JOIN ORDERS WITH (NOLOCK) ON WAVEDETAIL.OrderKey = ORDERS.OrderKey'  
@@ -1185,7 +1187,7 @@ START_BUILDLOAD:
    
    IF @n_BatchNo = 0                                                                --(Wan06) - START      
    BEGIN
-      SET @d_StartTime = GETDATE()  
+      SET @d_StartTime = dbo.fnc_GetDate()  
       INSERT INTO BUILDLOADLOG
          (  Facility
          ,  Storerkey
@@ -1251,8 +1253,8 @@ START_BUILDLOAD:
                ,PalletCnt= IIF(@c_LPDTrafficCopAllowCaseCntUpd = '1', PalletCnt, @n_LoadPalletCnt)    --WL01
                ,CaseCnt  = IIF(@c_LPDTrafficCopAllowCaseCntUpd = '1', CaseCnt, @n_LoadCaseCnt)        --WL01
                ,SuperOrderFlag = @c_SuperOrderFlag
-               ,EditWho = SUSER_SNAME()
-               ,EditDate= GETDATE()
+               ,EditWho = dbo.fnc_GetUserName()
+               ,EditDate= dbo.fnc_GetDate()
                ,Archivecop = NULL
             WHERE Loadkey = @c_BuildLoadKey                                         --(Wan09) - END
             
@@ -1261,7 +1263,7 @@ START_BUILDLOAD:
             
             IF @c_BuildLoadKey <> ''
             BEGIN
-               SET @d_EndTime = GETDATE()
+               SET @d_EndTime = dbo.fnc_GetDate()
                INSERT INTO BUILDLOADDETAILLOG
                   (  Loadkey
                   ,  Storerkey
@@ -1336,7 +1338,7 @@ START_BUILDLOAD:
             GOTO INS_DETLOG   --END_BUILDLOAD                                       --(Wan08)
          END
 
-         SET @d_StartTime = GETDATE()  
+         SET @d_StartTime = dbo.fnc_GetDate() 
          SET @b_success = 1                                                                                                                                   
          BEGIN TRY
             EXECUTE nspg_GetKey                                                                                                                                      
@@ -1468,7 +1470,7 @@ START_BUILDLOAD:
             ,   NoOfOrdLines  = T.NoOfOrdLines 
             ,   CaseCnt       = 0  
             ,   [Status]      = T.[Status] 
-            ,   addwho        = '*' + RTRIM(sUser_sName())
+            ,   addwho        = '*' + RTRIM(dbo.fnc_GetUserName())
             ,   '9' 
          FROM #tWaveOrder T                                                                                                                                       
          WHERE T.RNUM = @n_Num 
@@ -1478,8 +1480,8 @@ START_BUILDLOAD:
          BEGIN
             UPDATE ORDERS WITH (ROWLOCK)
                SET Loadkey = @c_Loadkey
-                  ,EditWho = SUSER_SNAME()
-                  ,EditDate= GETDATE()
+                  ,EditWho = dbo.fnc_GetUserName()
+                  ,EditDate= dbo.fnc_GetDate()
                   ,ArchiveCop = NULL                                                --(Wan01)
             WHERE Orderkey = @c_Orderkey
          END
@@ -1508,8 +1510,8 @@ START_BUILDLOAD:
               
             UPDATE ORDERDETAIL WITH (ROWLOCK)
                SET Loadkey = @c_Loadkey
-                  ,EditWho = SUSER_SNAME()
-                  ,EditDate= GETDATE()
+                  ,EditWho = dbo.fnc_GetUserName()
+                  ,EditDate= dbo.fnc_GetDate()
                   ,ArchiveCop = NULL                                                
             WHERE Orderkey = @c_Orderkey
             AND OrderLineNumber = @c_OrderLineNumber 
@@ -1792,5 +1794,6 @@ EXIT_SP:
 GO
 GRANT EXECUTE ON [WM].[lsp_Wave_BuildLoad] TO nSQL 
 GO        
+
 
 

@@ -1,3 +1,4 @@
+
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -26,6 +27,8 @@ GO
 /* 15-Jan-2021 Wan01    1.1   Add Big Outer Begin try/Catch             */
 /*                            Execute Login if @c_UserName<>SUSER_SNAME()*/
 /* 2025-05-26  SWT01    1.2   Setting Session Context for user name     */
+/* 10-Oct-2025 AK01     1.3   UWP-41151 - Replace SUSER_SNAME with      */
+/*                            fnc_GetUserName & GETDATE() with fnc_GetDate()*/
 /************************************************************************/
 CREATE OR ALTER PROC [WM].[lsp_BuildWave_ClrBuildVal]
       @c_BuildParmKey      NVARCHAR(10)
@@ -91,7 +94,7 @@ BEGIN
                   ,  RestrictionBuildValue03 = ''
                   ,  RestrictionBuildValue04 = ''
                   ,  RestrictionBuildValue05 = ''
-                  ,  EditDate = GETDATE()
+                  ,  EditDate = dbo.fnc_GetDate()
                   ,  EditWho  = @c_UserName
                   ,  TrafficCop = NULL
             WHERE BuildParmKey = @c_BuildParmKey
@@ -136,7 +139,7 @@ BEGIN
          BEGIN TRY
             UPDATE BUILDPARMDETAIL
                SET   BuildValue = ''
-                  ,  EditDate = GETDATE()
+                  ,  EditDate = dbo.fnc_GetDate()
                   ,  EditWho  = @c_UserName
                   ,  TrafficCop = NULL
             WHERE BuildParmKey = @c_BuildParmKey
@@ -219,3 +222,4 @@ END -- Procedure
 GO
 GRANT EXECUTE ON  [WM].[lsp_BuildWave_ClrBuildVal] TO [NSQL]
 GO
+

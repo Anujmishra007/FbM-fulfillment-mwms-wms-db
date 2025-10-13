@@ -31,6 +31,8 @@ GO
 /* 2025-04-25  NJOW01   1.4   FCR-4205 Support Qcomm backend process    */
 /* 2025-09-22  AYD01    1.4   Add AppLock for releasing task            */
 /* 2025-09-02  SWT01    1.5   Enhanced session management pattern       */
+/* 2025-10-10  AK01     1.6   UWP-41151 - Replace SUSER_SNAME with      */
+/*                            fnc_GetUserName & GETDATE() with fnc_GetDate()*/
 /************************************************************************/
 CREATE OR ALTER PROC [WM].[lsp_WaveReleaseTask]
       @c_WaveKey              NVARCHAR(10) = ''       --(Wan02) Call From MBOLScreen
@@ -250,7 +252,7 @@ BEGIN
                SET Wavekey = @c_Wavekey
                   ,Trafficcop = NULL
                   ,EditWho = @c_UserName
-                  ,EditDate= GETDATE()
+                  ,EditDate= dbo.fnc_GetDate()
                WHERE PickDetailKey = @c_PickDetailkey
                AND  Wavekey  = ''
                AND  [Status] = '0'
@@ -560,3 +562,4 @@ END
 GO
 GRANT EXECUTE ON  [WM].[lsp_WaveReleaseTask] TO [NSQL]
 GO
+

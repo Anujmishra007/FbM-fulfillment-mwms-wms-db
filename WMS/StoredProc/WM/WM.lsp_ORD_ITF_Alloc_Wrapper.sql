@@ -24,6 +24,8 @@ GO
 /* 2022-04-22  Wan01    1.0   Created.                                  */
 /* 2022-04-22  Wan01    1.0   DevOps Combine Script.                    */
 /* 2025-09-02  SWT01    1.1   Enhanced session management pattern       */
+/* 2025-10-10  AK01     1.2   UWP-41151 - Replace SUSER_SNAME with      */
+/*                            fnc_GetUserName & GETDATE() with fnc_GetDate()*/
 /************************************************************************/                                                                                  
 CREATE OR ALTER PROC [WM].[lsp_ORD_ITF_Alloc_Wrapper]                                                                                                                     
       @c_Orderkey             NVARCHAR(250)  = '' 
@@ -181,8 +183,8 @@ BEGIN
       BEGIN
          UPDATE dbo.ORDERS WITH (ROWLOCK) 
             SET SOStatus = '2'
-               ,EditWho = SUSER_SNAME()
-               ,EditDate= GETDATE()          
+               ,EditWho = dbo.fnc_GetUserName()
+               ,EditDate= dbo.fnc_GetDate()          
                ,Trafficcop = NULL 
          WHERE OrderKey = @c_Orderkey
          AND SOStatus < '2'
