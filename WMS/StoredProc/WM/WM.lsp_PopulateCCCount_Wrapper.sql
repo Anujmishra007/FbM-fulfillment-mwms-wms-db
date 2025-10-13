@@ -1,46 +1,43 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_PopulateCCCount_Wrapper]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [WM].[lsp_PopulateCCCount_Wrapper]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
-/*************************************************************************/  
-/* Stored Procedure: lsp_PopulateCCCount_Wrapper                         */  
-/* Creation Date: 04-APR-2018                                            */  
-/* Copyright: LFL                                                        */  
-/* Written by: Wan                                                       */  
-/*                                                                       */  
+
+/*************************************************************************/
+/* Stored Procedure: lsp_PopulateCCCount_Wrapper                         */
+/* Creation Date: 04-APR-2018                                            */
+/* Copyright: LFL                                                        */
+/* Written by: Wan                                                       */
+/*                                                                       */
 /* Purpose: LFWM-263 - Stored Procedures for Release 2 Feature -         */
-/*          Inventory  Cycle Count  Stock Take Parameters                */  
-/*                                                                       */  
-/* Called By:                                                            */  
-/*                                                                       */  
-/*                                                                       */  
-/* Version: 1.0                                                          */  
-/*                                                                       */  
-/* Data Modifications:                                                   */  
-/*                                                                       */  
-/* Updates:                                                              */  
-/* Date         Author   Ver  Purposes                                   */ 
+/*          Inventory  Cycle Count  Stock Take Parameters                */
+/*                                                                       */
+/* Called By:                                                            */
+/*                                                                       */
+/*                                                                       */
+/* Version: 1.0                                                          */
+/*                                                                       */
+/* Data Modifications:                                                   */
+/*                                                                       */
+/* Updates:                                                              */
+/* Date         Author   Ver  Purposes                                   */
 /* 2021-02-05  mingle01  1.1  Add Big Outer Begin try/Catch             */
-/*                            Execute Login if @c_UserName<>SUSER_SNAME()*/ 
-/*************************************************************************/   
-CREATE PROCEDURE [WM].[lsp_PopulateCCCount_Wrapper]  
+/*                            Execute Login if @c_UserName<>SUSER_SNAME()*/
+/* 2025-09-02  SWT01     1.2   Enhanced session management pattern       */
+/*************************************************************************/
+CREATE OR ALTER PROCEDURE [WM].[lsp_PopulateCCCount_Wrapper]
    @c_StockTakeKey      NVARCHAR(10)
 ,  @n_CountNo           INT          -- Get from Stock Take Cnt Page where user finalize the count
-,  @b_Success           INT          = 1   OUTPUT   
+,  @b_Success           INT          = 1   OUTPUT
 ,  @n_Err               INT          = 0   OUTPUT
 ,  @c_Errmsg            NVARCHAR(255)= ''  OUTPUT
 ,  @c_UserName          NVARCHAR(128)= ''
-AS  
-BEGIN  
-   SET NOCOUNT ON                                                                                                                                           
-   SET ANSI_NULLS OFF                                                                                                                                       
-   SET QUOTED_IDENTIFIER OFF                                                                                                                                
-   SET CONCAT_NULL_YIELDS_NULL OFF   
+AS
+BEGIN
+   SET NOCOUNT ON
+   SET ANSI_NULLS OFF
+   SET QUOTED_IDENTIFIER OFF
+   SET CONCAT_NULL_YIELDS_NULL OFF
 
    DECLARE @n_Continue        INT = 1
          , @n_StartTCnt       INT = @@TRANCOUNT
@@ -48,44 +45,48 @@ BEGIN
    SET @b_Success = 1
    SET @c_ErrMsg = ''
 
-   SET @n_Err = 0 
+   SET @n_Err = 0
 
    --(mingle01) - START
-   IF SUSER_SNAME() <> @c_UserName
-   BEGIN
-      EXEC [WM].[lsp_SetUser] 
-            @c_UserName = @c_UserName  OUTPUT
-         ,  @n_Err      = @n_Err       OUTPUT
-         ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
-               
-      IF @n_Err <> 0 
+   -- Start enhanced session management (SWT01)
+	 DECLARE @b_ExecuteAs        BIT = 0
+	 IF SUSER_SNAME() <> @c_UserName        
+	 BEGIN
+	    EXEC [WM].[lsp_SetUser] 
+	         @c_UserName = @c_UserName  OUTPUT
+	      ,  @n_Err      = @n_Err       OUTPUT
+	      ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+	      , @b_ExecuteAs = @b_ExecuteAs OUTPUT
 
-      BEGIN
-         GOTO EXIT_SP
-      END 
+	    IF @n_Err <> 0
+	    BEGIN
+	       GOTO EXIT_SP
+	    END
 
-       EXECUTE AS LOGIN = @c_UserName
-   END
+	    IF @b_ExecuteAs = 1
+	       EXECUTE AS LOGIN = @c_UserName
+	 END                                    
+	 -- End enhanced session management (SWT01)
    --(mingle01) - END
 
    --(mingle01) - START
    BEGIN TRY
 
-      BEGIN TRY      
-         EXECUTE dbo.ispPopulateStkTakeCount        
+      BEGIN TRY
+         EXECUTE dbo.ispPopulateStkTakeCount
             @c_StockTakeKey = @c_StockTakeKey
          ,  @n_CountNo      = @n_CountNo
       END TRY
       BEGIN CATCH
-         SET @n_continue = 3      
+         SET @n_continue = 3
          SET @n_err = 552801
          SET @c_ErrMsg = ERROR_MESSAGE()
          SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': Error Executing ispPopulateStkTakeCount. (lsp_PopulateCCCount_Wrapper)'
                         + '( ' + @c_errmsg + ' )'
          GOTO EXIT_SP
-      END CATCH  
+      END CATCH
 
-      BEGIN TRY      
+      BEGIN TRY
          UPDATE STOCKTAKESHEETPARAMETERS WITH (ROWLOCK)
             SET [Status]  = '5'
                ,[ArchiveCop] = NULL
@@ -102,7 +103,7 @@ BEGIN
                         + '( ' + @c_errmsg + ' )'
 
          GOTO EXIT_SP
-      END CATCH    
+      END CATCH
 
    END TRY
 
@@ -113,7 +114,7 @@ BEGIN
    END CATCH
    --(mingle01) - END
 EXIT_SP:
-   
+
    IF @n_Continue=3  -- Error Occured - Process And Return
    BEGIN
       SET @b_Success = 0
@@ -139,10 +140,9 @@ EXIT_SP:
          COMMIT TRAN
       END
    END
-   REVERT      
-END  
+   IF @b_ExecuteAs = 1 REVERT -- (SWT01)
+   EXEC [WM].[lsp_ResetUser] -- (SWT01) 
+END
 GO
 GRANT EXECUTE ON [WM].[lsp_PopulateCCCount_Wrapper] TO nSQL 
 GO
-
-
