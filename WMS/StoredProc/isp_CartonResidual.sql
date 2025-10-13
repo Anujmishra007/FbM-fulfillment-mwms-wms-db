@@ -48,6 +48,7 @@ BEGIN
          , @c_Sku            NVARCHAR(60) = ''
          , @n_Qty            INT = ''
          , @dt_Date          DATETIME = GETDATE()
+         , @c_SourceType     NVARCHAR(30) = 'isp_CartonResidual'
 
    SELECT @n_Continue = 1, @b_Success = 1, @n_starttcnt=@@TRANCOUNT, @c_ErrMsg ='', @n_Err =0
 
@@ -93,9 +94,9 @@ BEGIN
                WHERE StorerKey = @c_StorerKey AND Status = '6' AND UCCNo = @c_InboundCartonID)
         BEGIN
              UPDATE UCC WITH (ROWLOCK)
-             SET Status = '1',
-                TrafficCop = NULL,
-                qty = @n_ResidualQty
+             SET Status = '1', Loc = @c_CLK_Long2, WaveKey = '',OrderKey = '', OrderLineNumber = '', PickDetailKey = ''
+                , SourceType= @c_SourceType, TrafficCop = NULL
+                , qty = @n_ResidualQty
              WHERE UCCNo = @c_InboundCartonID
              AND StorerKey = @c_StorerKey
              AND Status = '6'
