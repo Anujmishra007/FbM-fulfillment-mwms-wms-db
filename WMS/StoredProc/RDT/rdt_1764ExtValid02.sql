@@ -19,6 +19,7 @@ CREATE OR ALTER PROCEDURE rdt.rdt_1764ExtValid02
    ,@cLangCode       NVARCHAR( 3)
    ,@nStep           INT
    ,@cTaskdetailKey  NVARCHAR( 10)
+   ,@cToLoc          NVARCHAR( 10)
    ,@nErrNo          INT           OUTPUT
    ,@cErrMsg         NVARCHAR( 20) OUTPUT
 AS

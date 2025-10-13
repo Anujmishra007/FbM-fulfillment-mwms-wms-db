@@ -52,6 +52,8 @@ BEGIN
    DECLARE @cTaskPickMethod   NVARCHAR( 10)  
    DECLARE @nTaskQTY          INT  
    DECLARE @nQTY              INT
+   DECLARE @cUserName         NVARCHAR(18)
+
 
    DECLARE @tList TABLE
    (
@@ -81,6 +83,7 @@ BEGIN
       @cTaskFromLoc = FromLOC,  
       @cTaskFromID = FromID,
       @cTaskPickMethod = TD.PickMethod,   
+      @cUserName = USERKEY,
       --@nTaskQTY = SystemQty, FP task qty = 0
       @cTaskFromLocCate = LOC.LocationCategory  
    FROM dbo.TaskDetail TD WITH (NOLOCK)
@@ -126,6 +129,24 @@ BEGIN
 
    IF @nDebugFlag = 1
       SELECT * FROM @tList
+
+   DECLARE @nTranCount INT
+   SET @nTranCount = @@TRANCOUNT
+   BEGIN TRAN
+   SAVE TRAN rdt_1812SwapID05
+
+   --SWAP Tasks
+   IF EXISTS ( SELECT 1 FROM dbo.TaskDetail WITH (NOLOCK) WHERE FromID = @cNewID AND Status = '0' AND TASKTYPE IN ('FCP','FP1') AND PickMethod = 'FP' )
+   BEGIN
+      SELECT @cNewTaskDetailKey = TaskDetailKey
+      FROM dbo.TaskDetail WITH (NOLOCK)
+      WHERE FromID = @cNewID AND Status = '0' AND TASKTYPE IN ('FCP','FP1') AND PickMethod = 'FP' 
+
+      UPDATE TASKDETAIL SET STATUS = '0',USERKEY = '' WHERE TASKDETAILKEY = @cTaskDetailKey
+      UPDATE TASKDETAIL SET STATUS = '3',USERKEY = @cUserName,ListKey = TaskDetailKey WHERE TASKDETAILKEY = @cNewTaskDetailKey
+
+      GOTO CommitTran
+   END
 
    --new id cannot have any open tasks
    IF EXISTS (
@@ -515,11 +536,6 @@ BEGIN
       SELECT * FROM @tAllocation
       SELECT 'Unallocate and delete original pickdetail'
    END
-
-   DECLARE @nTranCount INT
-   SET @nTranCount = @@TRANCOUNT
-   BEGIN TRAN
-   SAVE TRAN rdt_1812SwapID05
 
    --Handle the pysical tables based on re-allocaton result
    --Unallocate and delete the original pick detail
