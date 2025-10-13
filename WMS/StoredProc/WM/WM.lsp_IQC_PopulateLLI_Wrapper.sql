@@ -21,6 +21,8 @@ GO
 /* Updates:                                                             */                                                                                  
 /* Date         Author   Ver.  Purposes                                 */
 /* 2023-03-28   Wan      1.0   Created & DevOps Combine Script          */
+/* 2025-10-06   SSA01    1.1   UWP-42142 -Enhanced session management   */
+/*                             and cleanup.                             */
 /************************************************************************/                                                                                  
 CREATE OR ALTER PROC [WM].[lsp_IQC_PopulateLLI_Wrapper]                                                                                                                     
    @c_QC_Key               NVARCHAR(10)         
@@ -39,6 +41,7 @@ BEGIN
 
    DECLARE  @n_StartTCnt                  INT = @@TRANCOUNT  
          ,  @n_Continue                   INT = 1
+         ,  @b_ExecuteAs                  BIT = 0      --(SSA01)
 
          ,  @n_RowID                      INT = 0
          ,  @n_Qty                        INT = 0
@@ -85,17 +88,20 @@ BEGIN
    SET @n_ErrGroupKey = 0
                
    SET @n_Err = 0 
-   IF SUSER_SNAME() <> @c_UserName        --(Wan01) - START
+   -- (SSA01) Enhanced session management - Start
+   IF SUSER_SNAME() <> @c_UserName AND @c_UserName <> ''       --(Wan01) - START
    BEGIN
-      EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
+      EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
     
       IF @n_Err <> 0 
       BEGIN
          GOTO EXIT_SP
       END
-                
-      EXECUTE AS LOGIN = @c_UserName        
-   END                                    
+
+      IF @b_ExecuteAs = 1
+         EXECUTE AS LOGIN = @c_UserName
+   END
+   -- (SSA01) Enhanced session management - End
 
    BEGIN TRY  
       BEGIN TRAN                           
@@ -382,7 +388,9 @@ EXIT_SP:
       BEGIN TRAN
    END  
          
-   REVERT
+   IF @b_ExecuteAs = 1 REVERT -- (SSA01)
+
+   EXEC [WM].[lsp_ResetUser] -- (SSA01)
 END
 GO
 GRANT EXECUTE ON [WM].[lsp_IQC_PopulateLLI_Wrapper] TO nSQL 

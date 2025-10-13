@@ -27,6 +27,8 @@ GO
 /*                            SCE InventoryQC issue                      */
 /* 2022-06-16  Wan02    1.2   DevOps Combine Script                      */
 /* 2022-06-11  SSA01    1.3   Added PalletType Validation                */
+/* 2025-10-06  SSA01    1.4   UWP-42142 -Enhanced session management     */
+/*                             and cleanup.                              */
 /************************************************************************/
 CREATE OR ALTER PROCEDURE [WM].[lsp_FinalizeIQC_Wrapper]
       @c_QC_Key NVARCHAR(10)
@@ -45,18 +47,23 @@ BEGIN
    SET ANSI_NULLS OFF
    SET CONCAT_NULL_YIELDS_NULL OFF
        
-   SET @n_Err = 0 
+   SET @n_Err = 0
+   -- Start enhanced session management (SSA02)
+   DECLARE @b_ExecuteAs        BIT = 0
    IF SUSER_SNAME() <> @c_UserName        --(Wan01) - START
    BEGIN
-      EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
+      EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
     
       IF @n_Err <> 0 
       BEGIN
          GOTO EXIT_SP
       END
                 
-      EXECUTE AS LOGIN = @c_UserName        
-   END                                    --(Wan01) - END
+      IF @b_ExecuteAs = 1
+	       EXECUTE AS LOGIN = @c_UserName
+	 END
+	 -- End enhanced session management (SSA02)
+	 --(Wan01) - END
 
    BEGIN TRY
       DECLARE @n_err2                  int 
@@ -418,8 +425,14 @@ BEGIN
    BEGIN 
       BEGIN TRAN
    END
+ --(SSA02) - START
+  IF @b_ExecuteAs = 1
+   BEGIN
+      REVERT
+   END
 
-   REVERT  
+   EXEC [WM].[lsp_ResetUser]
+   --(SSA02) - END
 END -- End Procedure
 GO
 GRANT EXECUTE ON [WM].[lsp_FinalizeIQC_Wrapper] TO nSQL 

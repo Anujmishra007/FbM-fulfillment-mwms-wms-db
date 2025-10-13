@@ -64,6 +64,7 @@ BEGIN
    DECLARE @b_ExecuteAs       BIT = 0 -- (SWT01)
          , @n_Continue        INT = 1
          , @n_StartTCnt       INT = @@TRANCOUNT
+         , @b_ExecuteAs       BIT = 0 -- (SSA01)
 
    SET @b_Success = 1
    SET @c_ErrMsg = ''
@@ -72,6 +73,7 @@ BEGIN
 
    -- Enhanced session management (SWT01)
    --(mingle01) - START
+   -- Enhanced session management (SSA01)
    IF SUSER_SNAME() <> @c_UserName
    BEGIN
       EXEC [WM].[lsp_SetUser]
@@ -89,6 +91,7 @@ BEGIN
        IF @b_ExecuteAs = 1 -- (SWT01)
          EXECUTE AS LOGIN = @c_UserName
    END
+   -- End enhanced session management (SSA01)
    --(mingle01) - END
    -- End enhanced session management (SWT01)
 

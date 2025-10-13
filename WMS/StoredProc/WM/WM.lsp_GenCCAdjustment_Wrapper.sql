@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_GenCCAdjustment_Wrapper]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [WM].[lsp_GenCCAdjustment_Wrapper]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -25,8 +20,10 @@ GO
 /*                                                                       */  
 /* Updates:                                                              */  
 /* Date         Author   Ver  Purposes                                   */ 
-/* 2021-02-05   mingle01 1.1  Add Big Outer Begin try/Catch             */
+/* 2021-02-05   mingle01 1.1  Add Big Outer Begin try/Catch              */
 /*                            Execute Login if @c_UserName<>SUSER_SNAME()*/
+/* 2025-10-06   SSA01    1.2   UWP-42142 -Enhanced session management    */
+/*                             and cleanup.                              */
 /*************************************************************************/   
 CREATE PROCEDURE [WM].[lsp_GenCCAdjustment_Wrapper]  
    @c_StockTakeKey      NVARCHAR(10)
@@ -45,6 +42,7 @@ BEGIN
 
    DECLARE @n_Continue        INT = 1
          , @n_StartTCnt       INT = @@TRANCOUNT
+         , @b_ExecuteAs       BIT = 0     --(SSA01)
 
          , @n_Count           INT = 0 
          , @c_CountNo         CHAR(1) = '1'
@@ -53,21 +51,25 @@ BEGIN
    SET @c_ErrMsg = ''
    SET @n_Err = 0 
 
-   --(mingle01) - START   
+   --(mingle01) - START
+    --(SSA01) - START
    IF SUSER_SNAME() <> @c_UserName
    BEGIN
       EXEC [WM].[lsp_SetUser] 
                @c_UserName = @c_UserName  OUTPUT
             ,  @n_Err      = @n_Err       OUTPUT
             ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+            ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
    
       IF @n_Err <> 0 
       BEGIN
          GOTO EXIT_SP
       END
 
-      EXECUTE AS LOGIN = @c_UserName
+      IF @b_ExecuteAs = 1
+         EXECUTE AS LOGIN = @c_UserName
    END
+   --(SSA01) - END
    --(mingle01) - END
 
    --(mingle01) - START
@@ -155,8 +157,8 @@ BEGIN
             SET [Protect] = 'Y'
                ,[PassWord]= 'POSTED' 
                ,[Status]  = '9'
-               ,[EditWho] = @c_UserName
-               ,[EditDate]= GETDATE()
+               ,[EditWho] = dbo.fnc_GetUserName()   --(SSA01)
+               ,[EditDate]= dbo.fnc_GetDate()    --(SSA01)
          WHERE StockTakeKey = @c_StockTakeKey
       END TRY
 
@@ -225,7 +227,14 @@ EXIT_SP:
       END
    END
 
-   REVERT      
+   --(SSA01) - Start
+   IF @b_ExecuteAs = 1
+   BEGIN
+      REVERT
+   END
+
+   EXEC [WM].[lsp_ResetUser]
+   --(SSA01) - END
 END  
 GO
 GRANT EXECUTE ON [WM].[lsp_GenCCAdjustment_Wrapper] TO nSQL 

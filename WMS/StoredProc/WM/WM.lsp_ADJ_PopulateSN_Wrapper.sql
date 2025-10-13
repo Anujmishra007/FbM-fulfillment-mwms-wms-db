@@ -23,6 +23,8 @@ GO
 /* Date        Author   Ver.  Purposes                                  */
 /* 2023-08-09  Wan      1.0   Created & DevOps Combine Script           */
 /* 2024-06-13  SSA01    1.1   FCR-3982 - Added Pallettype to Adjustment */
+/* 2025-10-06  SSA02    1.2   UWP-42142 -Enhanced session management    */
+/*                             and cleanup.                             */
 /************************************************************************/                                                                                  
 CREATE OR ALTER PROC [WM].[lsp_ADJ_PopulateSN_Wrapper]                                                                                                                     
    @c_AdjustmentKey        NVARCHAR(10)         
@@ -109,18 +111,22 @@ BEGIN
    
    SET @n_ErrGroupKey = 0
                
-   SET @n_Err = 0 
+   SET @n_Err = 0
+    -- (SSA02) - START
+   DECLARE @b_ExecuteAs BIT = 0
    IF SUSER_SNAME() <> @c_UserName        
    BEGIN
-      EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
+      EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
     
       IF @n_Err <> 0 
       BEGIN
          GOTO EXIT_SP
       END
                 
-      EXECUTE AS LOGIN = @c_UserName        
-   END                                    
+       IF @b_ExecuteAs = 1
+         EXECUTE AS LOGIN = @c_UserName
+   END
+    -- (SSA02) - END
 
    BEGIN TRY 
       SELECT @c_Facility = a.Facility
@@ -536,7 +542,10 @@ EXIT_SP:
       BEGIN TRAN
    END  
          
-   REVERT
+   IF @b_ExecuteAs = 1              -- (SSA02)
+      REVERT
+
+   EXEC [WM].[lsp_ResetUser] -- (SSA02)
 END
 GO
 GRANT EXECUTE ON [WM].[lsp_ADJ_PopulateSN_Wrapper] TO nSQL 
