@@ -46,6 +46,8 @@ GO
 /* 30-07-2018 2.6  James    WMS-5814 Add eventlog (james01)             */ 
 /* 26-02-2019 2.7  ChewKP   WMS-8056 - LF Light Link Migration          */     
 /* 23-04-2021 2.8  Chermain WMS-16846 Add Channel_ID (cc01)             */
+/* 10-10-2025 2.9  SSA01    UWP-42248 -Enhanced session management      */
+/*                             and cleanup.                             */
 /************************************************************************/
 
 CREATE PROC [dbo].[isp_PTL_PTS_Confirm] (
@@ -682,7 +684,7 @@ BEGIN
                 BEGIN  
                    -- Confirm PickDetail  
                    UPDATE dbo.PickDetail WITH (ROWLOCK)  
-                   SET  EditWho = SUSER_SNAME(),
+                   SET  EditWho = dbo.fnc_GetUserName(),           --(SSA01)
                         EditDate = GETDATE(),
                         CaseID = @cLabelNo,  
                         STATUS = '5'  
@@ -709,7 +711,7 @@ BEGIN
                   BEGIN  
                      -- Confirm PickDetail  
                      UPDATE dbo.PickDetail WITH (ROWLOCK)  
-                     SET   EditWho = SUSER_SNAME(),
+                     SET   EditWho = dbo.fnc_GetUserName(),        --(SSA01)
                            EditDate = GETDATE(),
                            CaseID = @cLabelNo, 
                            STATUS = '5'  
@@ -793,7 +795,7 @@ BEGIN
                         -- If short pick & no split line needed. Update pickdetail.qty with no trafficcop  
                         -- Change orginal PickDetail with exact QTY (with TrafficCop)  
                         UPDATE dbo.PickDetail WITH (ROWLOCK)  
-                        SET   EditWho = SUSER_SNAME(),
+                        SET   EditWho = dbo.fnc_GetUserName(),          --(SSA01)
                               EditDate = GETDATE(),
                               QTY = @nQty,
                               Trafficcop = NULL  
@@ -809,7 +811,7 @@ BEGIN
                  
                         -- Confirm orginal PickDetail with exact QTY  
                         UPDATE dbo.PickDetail WITH (ROWLOCK)  
-                        SET   EditWho = SUSER_SNAME(),
+                        SET   EditWho = dbo.fnc_GetUserName(),           --(SSA01)
                               EditDate = GETDATE(),
                               CaseID = @cLabelNo,      
                               STATUS = '5'  
@@ -836,7 +838,7 @@ BEGIN
                   ELSE IF @nQty = 0 
                   BEGIN
                      UPDATE dbo.PickDetail WITH (ROWLOCK)  
-                     SET   EditWho = SUSER_SNAME(),
+                     SET   EditWho = dbo.fnc_GetUserName(),         --(SSA01)
                            EditDate = GETDATE(),
                            Status = '4'
                      WHERE  PickDetailKey = @cPickDetailKey
@@ -1624,7 +1626,7 @@ BEGIN
              WHILE @@FETCH_STATUS <> -1     
              BEGIN
                UPDATE PickDetail WITH (ROWLOCK)
-               SET   EditWho = SUSER_SNAME(),
+               SET   EditWho = dbo.fnc_GetUserName(),      --(SSA01)
                      EditDate = GETDATE(),
                      CaseID = @cLabelNo, 
                      Trafficcop = NULL

@@ -23,7 +23,8 @@ GO
 /* Data Modifications:                                                   */  
 /*                                                                       */  
 /* Updates:                                                              */  
-/* Date        Author   Ver   Purposes                                   */  
+/* Date        Author   Ver   Purposes                                   */
+/* 10-Oct-2025 SSA01    1.0  UWP-42248 -Enhanced session management      */
 /*************************************************************************/   
 
 CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV64]      
@@ -114,8 +115,8 @@ CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV64]
             SET   [Status] = '3'
                 , PROCESSFLAG = 'Y'
                 , TrafficCop = NULL
-                , EditWho = SUSER_SNAME()
-                , EditDate = GETDATE()
+                , EditWho = dbo.fnc_GetUserName()        --(SSA01)
+                , EditDate = dbo.fnc_GetDate()    --(SSA01)
             WHERE  LoadKey = @c_Loadkey
 
             SELECT @n_err = @@ERROR  
@@ -139,8 +140,8 @@ CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV64]
       UPDATE WAVE
       SET TMReleaseFlag = 'Y'
         , TrafficCop = NULL
-        , EditWho = SUSER_SNAME()
-        , EditDate = GETDATE()
+        , EditWho = dbo.fnc_GetUserName()        --(SSA01)
+        , EditDate = dbo.fnc_GetDate()    --(SSA01)
       WHERE WaveKey = @c_Wavekey
    	
       SELECT @n_err = @@ERROR  

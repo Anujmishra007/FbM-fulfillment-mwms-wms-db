@@ -28,7 +28,8 @@ GO
 /* 20-Mar-2019 NJOW02   1.1   WMS-8348 Update single or multi pickzone to*/
 /*                            orders                                     */
 /* 07-Aug-2019 NJOW03   1.2   WMS-10181 Change toloc logic               */
-/* 01-04-2020  Wan01    1.3   Sync Exceed & SCE                          */
+/* 01-Apr-2020  Wan01   1.3   Sync Exceed & SCE                          */
+/* 10-Oct-2025  SSA01   1.4   UWP-42248 -Enhanced session management     */
 /*************************************************************************/   
 
 CREATE PROCEDURE [dbo].[ispRLWAV14]      
@@ -196,10 +197,10 @@ CREATE PROCEDURE [dbo].[ispRLWAV14]
           [PickMethod] [nvarchar](1) NOT NULL DEFAULT (' '),
           [WaveKey] [nvarchar](10) NOT NULL DEFAULT (' '),
           [EffectiveDate] [datetime] NOT NULL DEFAULT (getdate()),
-          [AddDate] [datetime] NOT NULL DEFAULT (getdate()),
-          [AddWho] [nvarchar](128) NOT NULL DEFAULT (suser_sname()),
-          [EditDate] [datetime] NOT NULL DEFAULT (getdate()),
-          [EditWho] [nvarchar](128) NOT NULL DEFAULT (suser_sname()),
+          [AddDate] [datetime] NOT NULL DEFAULT (dbo.fnc_GetDate()),    --(SSA01)
+          [AddWho] [nvarchar](128) NOT NULL DEFAULT (dbo.fnc_GetUserName()),          --(SSA01)
+          [EditDate] [datetime] NOT NULL DEFAULT (dbo.fnc_GetDate()),    --(SSA01)
+          [EditWho] [nvarchar](128) NOT NULL DEFAULT (dbo.fnc_GetUserName()),          --(SSA01)
           [TrafficCop] [nvarchar](1) NULL,
           [ArchiveCop] [nvarchar](1) NULL,
           [OptimizeCop] [nvarchar](1) NULL,
@@ -1368,8 +1369,8 @@ CREATE PROCEDURE [dbo].[ispRLWAV14]
           --SET STATUS = '1' -- Released        --(Wan01) 
           SET TMReleaseFlag = 'Y'               --(Wan01) 
            ,  TrafficCop = NULL                 --(Wan01) 
-           ,  EditWho = SUSER_SNAME()           --(Wan01) 
-           ,  EditDate= GETDATE()               --(Wan01)
+           ,  EditWho = dbo.fnc_GetUserName()           --(Wan01)(SSA01)
+           ,  EditDate= dbo.fnc_GetDate()    --(SSA01)              --(Wan01)
        WHERE WAVEKEY = @c_wavekey  
        SELECT @n_err = @@ERROR  
        IF @n_err <> 0  

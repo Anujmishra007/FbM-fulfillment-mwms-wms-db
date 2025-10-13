@@ -24,6 +24,7 @@ GO
 /* Updates:                                                             */    
 /* Date         Author  Rev   Purposes                                  */ 
 /* 27-SEP-2023  NJOW    1.0   Devops Combine Script                     */
+/* 10-Oct-2025  SSA01   1.1  UWP-42248 -Enhanced session management     */
 /************************************************************************/    
 CREATE OR ALTER PROC [dbo].[ispPOA26]      
      @c_OrderKey    NVARCHAR(10) = ''   
@@ -129,8 +130,8 @@ BEGIN
             UPDATE ORDERS WITH (ROWLOCK)
             SET Notes2 = @c_OutputString
               , TrafficCop   = NULL
-              , EditDate     = GETDATE()
-              , EditWho      = SUSER_SNAME()
+              , EditDate     = dbo.fnc_GetDate()    --(SSA01)
+              , EditWho      = dbo.fnc_GetUserName()               --(SSA01)
             WHERE OrderKey   = @c_GetOrderkey
             
             SELECT @n_err = @@ERROR

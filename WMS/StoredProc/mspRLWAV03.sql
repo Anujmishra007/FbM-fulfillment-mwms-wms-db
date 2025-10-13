@@ -96,6 +96,7 @@ GO
 /* 07-Aug-2025 WLC015    5.5 UWP-38984 Prevent same UCC being packed    */
 /*                           into multiple cartons for full case (WL17) */
 /* 11-Sep-2025 WLC015    5.6 FCR-7727 Change RPF ToLoc logic (WL18)     */
+/* 10-Oct-2025 SSA05     5.7 UWP-42248 -Enhanced session management     */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[mspRLWAV03]
    @c_WaveKey NVARCHAR(10)
@@ -248,10 +249,10 @@ BEGIN
          [PickMethod] [nvarchar](1) NOT NULL DEFAULT (' '),
          [WaveKey] [nvarchar](10) NOT NULL DEFAULT (' '),
          [EffectiveDate] [datetime] NOT NULL DEFAULT (getdate()),
-         [AddDate] [datetime] NOT NULL DEFAULT (getdate()),
-         [AddWho] [nvarchar](128) NOT NULL DEFAULT (suser_sname()),
-         [EditDate] [datetime] NOT NULL DEFAULT (getdate()),
-         [EditWho] [nvarchar](128) NOT NULL DEFAULT (suser_sname()),
+         [AddDate] [datetime] NOT NULL DEFAULT (dbo.fnc_GetDate()),                    --(SSA05)
+         [AddWho] [nvarchar](128) NOT NULL DEFAULT (dbo.fnc_GetUserName()),            --(SSA05)
+         [EditDate] [datetime] NOT NULL DEFAULT (dbo.fnc_GetDate()),                   --(SSA05)
+         [EditWho] [nvarchar](128) NOT NULL DEFAULT (dbo.fnc_GetUserName()),           --(SSA05)
          [TrafficCop] [nvarchar](1) NULL,
          [ArchiveCop] [nvarchar](1) NULL,
          [OptimizeCop] [nvarchar](1) NULL,
@@ -2577,7 +2578,7 @@ BEGIN
                -- CartonNo and LabelLineNo will be inserted by trigger
                INSERT INTO dbo.PackDetail (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, AddWho, AddDate, EditWho, EditDate, Refno, DropId)
                VALUES (@c_PickSlipNo, @n_CartonNo, @c_LabelNo, @c_LabelLine, @c_StorerKey, @c_SKU,   --WL07
-                       @n_PackQty, sUser_sName(), GETDATE(), sUser_sName(), GETDATE(), @c_UCCNo, '')
+                       @n_PackQty, dbo.fnc_GetUserName(), dbo.fnc_GetDate() , dbo.fnc_GetUserName(), dbo.fnc_GetDate() , @c_UCCNo, '')              --(SSA05)
                
                SET @n_Err = @@ERROR
                IF @n_Err <> 0
@@ -3104,7 +3105,7 @@ BEGIN
              WHILE @@FETCH_STATUS = 0 
              BEGIN 
                  UPDATE dbo.OrderInfo WITH (ROWLOCK)  
-                  SET ReferenceId = @c_BOLbyConsigneeKey, EditDate=GETDATE() 
+                  SET ReferenceId = @c_BOLbyConsigneeKey, EditDate=dbo.fnc_GetDate()   --(SSA05)
                  WHERE OrderKey= @c_Orderkey 
               
                  FETCH NEXT FROM CUR_UPDATE_BOLbyConsigneekey INTO @c_Orderkey 
@@ -3176,7 +3177,7 @@ BEGIN
 
          UPDATE ORDERS WITH (ROWLOCK)
             SET ContainerQty = @n_NoOfCarton
-             ,  EditDate   = GETDATE()
+             ,  EditDate   = dbo.fnc_GetDate()   --(SSA05)
              ,  TrafficCop = NULL
          WHERE Orderkey = @c_Orderkey
 
@@ -3810,8 +3811,8 @@ BEGIN
                SET Qty = @n_PickdetQty,
                 UOMQty = @n_PickdetQty,
                    Caseid = @c_DropId,
-                   EditDate=GETDATE(),
-                   EditWho = SUSER_SNAME()
+                   EditDate=dbo.fnc_GetDate(),   --(SSA05)
+                   EditWho = dbo.fnc_GetUserName()         --(SSA05)
             WHERE TaskDetailKey = @c_TaskdetailKey
          END
          ELSE

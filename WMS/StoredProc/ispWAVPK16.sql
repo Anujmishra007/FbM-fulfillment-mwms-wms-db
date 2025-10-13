@@ -21,6 +21,7 @@ GO
 /* Updates:                                                             */
 /* Date         Author   Ver  Purposes                                  */
 /* 24-Jan-2022  NJOW     1.0  DEVOPS combine script                     */
+/* 10-Oct-2025  SSA01    1.1  UWP-42248 -Enhanced session management    */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[ispWAVPK16]
   @c_Wavekey   NVARCHAR(10),
@@ -272,7 +273,7 @@ BEGIN
                   (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, AddWho, AddDate, EditWho, EditDate, LottableValue)
                VALUES
                   (@c_PickSlipNo, @n_CartonNo, @c_LabelNo, @c_LabelLineNo, @c_StorerKey, @c_SKU,
-                   @n_CtnQty, sUser_sName(), GETDATE(), sUser_sName(), GETDATE(), @c_LottableValue)
+                   @n_CtnQty, dbo.fnc_GetUserName(), dbo.fnc_GetDate(), dbo.fnc_GetUserName(), dbo.fnc_GetDate(), @c_LottableValue)       --(SSA01)
 
                SET @n_err = @@ERROR
 
@@ -452,7 +453,7 @@ BEGIN
                   (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, AddWho, AddDate, EditWho, EditDate, LottableValue)
                VALUES
                   (@c_PickSlipNo, @n_CartonNo, @c_LabelNo, @c_LabelLineNo, @c_StorerKey, @c_SKU,
-                   @n_CtnQty, sUser_sName(), GETDATE(), sUser_sName(), GETDATE(), @c_LottableValue)
+                   @n_CtnQty, dbo.fnc_GetUserName(), dbo.fnc_GetDate(), dbo.fnc_GetUserName(), dbo.fnc_GetDate(), @c_LottableValue)               --(SSA01)
 
                SET @n_err = @@ERROR
 

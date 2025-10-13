@@ -29,6 +29,8 @@ GO
 /* Updates:                                                                */
 /* Date         Author  Ver   Purposes                                     */
 /* 13-Apr-2014  TLTING  1.2   SQL2012                                      */
+/* 10-Oct-2025  SSA01   1.3  UWP-42248 -Enhanced session management        */
+/*                             and cleanup.                                */
 /***************************************************************************/  
 CREATE PROC [dbo].[ispASNFZ01]  
 (     @c_Receiptkey  NVARCHAR(10)   
@@ -181,8 +183,8 @@ BEGIN
    	  UPDATE RECEIPTDETAIL WITH (ROWLOCK)
    	  SET ExportStatus = @c_ExportStatus,
    	      TrafficCop = NULL,
-   	      EditWho = SUSER_SNAME(),
-   	      EditDate = GETDATE()
+   	      EditWho = dbo.fnc_GetUserName(),     --(SSA01)
+   	      EditDate = dbo.fnc_GetDate()   --(SSA01)
    	  WHERE Receiptkey = @c_Receiptkey
    	  AND ReceiptLineNumber = @c_ReceiptLineNumber
    	  

@@ -30,6 +30,8 @@ GO
 /*                                            data logging purpose        */
 /* 13-Sep-2012	NJOW02    1.3   247575-Move confirm pack to after print   */
 /*                              GS1 label at front end                    */
+/* 10-Oct-2025  SSA01     1.4  UWP-42248 -Enhanced session management     */
+/*                             and cleanup.                               */
 /**************************************************************************/
 
 CREATE  PROCEDURE [dbo].[isp_AutoPackOrder]
@@ -150,7 +152,7 @@ BEGIN
             IF (SELECT COUNT(1) FROM PACKHEADER (NOLOCK) WHERE PickSlipNo = @c_PickSlipNo) = 0
             BEGIN
                INSERT INTO PACKHEADER (PickSlipNo, StorerKey, orderkey, loadkey, route, consigneekey, orderrefno, ttlcnts, AddWho) -- SOS# 203239
-               VALUES (@c_PickSlipNo, @c_StorerKey, @c_orderkey, @c_loadkey, @c_route, @c_consigneekey, LEFT(@c_externorderkey,18), 1, '%' + SUser_SName())
+               VALUES (@c_PickSlipNo, @c_StorerKey, @c_orderkey, @c_loadkey, @c_route, @c_consigneekey, LEFT(@c_externorderkey,18), 1, '%' + dbo.fnc_GetUserName())             --(SSA01)
 
                SELECT @n_err = @@ERROR
 
@@ -179,7 +181,7 @@ BEGIN
             IF (SELECT COUNT(1) FROM PACKINFO (NOLOCK) WHERE PickSlipNo = @c_PickSlipNo AND CartonNo = @n_CartonNo) = 0
             BEGIN
                INSERT INTO PACKINFO (PickSlipNo, CartonNo, CartonType, AddWho, EditWho) -- SOS# 203239
-               VALUES (@c_PickSlipNo, @n_CartonNo, 'STD', '%' + SUser_SName(), '%' + SUser_SName())
+               VALUES (@c_PickSlipNo, @n_CartonNo, 'STD', '%' + dbo.fnc_GetUserName(), '%' + dbo.fnc_GetUserName())     --(SSA01)
             END
 
             SELECT @c_FirstRec = 'N'
@@ -188,7 +190,7 @@ BEGIN
          SELECT @c_LabelLine = RIGHT('00000' + RTRIM(CONVERT(Char(5), @n_LabelLine)), 5)
 
          INSERT INTO PACKDETAIL (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, Sku, Qty, AddWho, EditWho) -- SOS# 203239
-         VALUES (@c_PickSlipNo, @n_CartonNo, @c_LabelNo, @c_LabelLine, @c_StorerKey, @c_Sku, @n_Qty, '%' + SUser_SName(), '%' + SUser_SName())
+         VALUES (@c_PickSlipNo, @n_CartonNo, @c_LabelNo, @c_LabelLine, @c_StorerKey, @c_Sku, @n_Qty, '%' + dbo.fnc_GetUserName(), '%' + dbo.fnc_GetUserName())      --(SSA01)
 
          SELECT @n_err = @@ERROR
 

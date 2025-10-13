@@ -22,7 +22,8 @@ GO
 /* 15-03-2019   ChewKP        WMS-8136. Created                         */    
 /* 23-05-2019   KuanYee       INC0696880 Performance Tune --(CKY01)     */    
 /* 12-06-2019   Shong         Performance Tuning                        */    
-/* 08-05-2023   KuanYee       JSM-143047-AddOn TaskType (KY02)          */  
+/* 08-05-2023   KuanYee       JSM-143047-AddOn TaskType (KY02)          */
+/* 10-10-2025   SSA01         UWP-42248 -Enhanced session management    */
 /************************************************************************/    
     
 CREATE OR ALTER PROC [dbo].[nspTTMCC06]    
@@ -183,8 +184,8 @@ BEGIN
                [Status] = '3',    
                --UserKey = sUSER_sNAME(),    
                UserKey = @c_userid,    
-               EditDate = GETDATE(),    
-               EditWho  = sUSER_sNAME(),    
+               EditDate = dbo.fnc_GetDate(),    --(SSA01)
+               EditWho  = dbo.fnc_GetUserName(),           --(SSA01)
                TrafficCop = NULL    
             WHERE TaskDetailKey = @c_TaskDetailKey2LOCK    
     

@@ -26,6 +26,8 @@ GO
 /* 24/02/2022   NJOW02   1.1  WMS-18763 increase @c_SPCode to 30 char   */  
 /* 24/02/2022   NJOW02   1.1  DEVOPS combine script                     */  
 /* 23/09/2022   Wan01    1.2  Fix Blocking                              */
+/* 10/10/2025   SSA01    1.3  UWP-42248 -Enhanced session management    */
+/*                             and cleanup.                             */
 /************************************************************************/  
 CREATE OR ALTER  PROCEDURE [dbo].[isp_BuildLoadReleaseTask_Wrapper]  
    @c_LoadKey    NVARCHAR(10),  
@@ -143,8 +145,8 @@ BEGIN
             UPDATE o WITH (ROWLOCK) 
             SET o.SOStatus = 'TSRELEASED',  
                 o.TrafficCop = NULL,  
-                o.EditWho = SUSER_SNAME(),  
-                o.EditDate = GETDATE()  
+                o.EditWho = dbo.fnc_GetUserName(),           --(SSA01)
+                o.EditDate = dbo.fnc_GetDate()   --(SSA01)
             FROM ORDERS o 
             WHERE o.Orderkey = @c_Orderkey  
             AND o.Loadkey = @c_Loadkey  

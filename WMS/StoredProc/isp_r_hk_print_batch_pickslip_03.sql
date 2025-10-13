@@ -28,6 +28,8 @@ GO
 /*                            Add Showfield: NoGenPickHeader             */
 /* 2021-11-30   Michael  V1.2 Fix RptCfg.ShowFields NULL value issue     */
 /* 2022-03-23   Michael  V1.3 Add NULL to Temp Table                     */
+/* 2025-10-10   SSA01    V1.4 UWP-42248 -Enhanced session management     */
+/*                             and cleanup.                              */
 /*************************************************************************/
 
 CREATE PROCEDURE [dbo].[isp_r_hk_print_batch_pickslip_03] (
@@ -140,7 +142,7 @@ BEGIN
       UPDATE PD WITH (ROWLocK)
          SET PickSlipNo = @c_PickHeaderkey
            , Trafficcop = NULL
-           , EDITDATE   = GETDATE()
+           , EDITDATE   = dbo.fnc_GetDate()    --(SSA01)
         FROM LOADPLANDETAIL LPD WITH (NOLOCK)
         JOIN ORDERS         OH  WITH (NOLOCK) ON LPD.Orderkey = OH.Orderkey
         JOIN PICKDETAIL     PD                ON LPD.Orderkey = PD.Orderkey
@@ -366,8 +368,8 @@ BEGIN
 
       UPDATE PH WITH(ROWLOCK)
          SET PickType = '1'
-           , EditDate = GETDATE()
-           , EditWho  = SUSER_SNAME()
+           , EditDate = dbo.fnc_GetDate()    --(SSA01)
+           , EditWho  = dbo.fnc_GetUserName()    --(SSA01)
            , TrafficCop = NULL
         FROM dbo.PICKHEADER PH
        WHERE PH.PickHeaderkey IN (SELECT DISTINCT PickslipNo FROM #TEMP_PIKDT WHERE PickslipNo<>'')

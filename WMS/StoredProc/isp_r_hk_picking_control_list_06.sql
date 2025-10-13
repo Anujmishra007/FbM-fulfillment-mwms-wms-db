@@ -40,7 +40,9 @@ GO
 /* 2021-03-17   ML       1.5  Exclude blank PickZone                     */  
 /* 2021-04-29   ML       1.6  Add ShowField ShowPutawayZone              */  
 /* 2021-04-30   ML       1.7  Add new field Indicator                    */  
-/* 2022-03-23   ML       1.8  Add NULL to Temp Table                     */  
+/* 2022-03-23   ML       1.8  Add NULL to Temp Table                     */
+/* 2025-10-10  SSA01     1.9  UWP-42248 -Enhanced session management     */
+/*                             and cleanup.                              */
 /*************************************************************************/  
   
 CREATE PROCEDURE [dbo].[isp_r_hk_picking_control_list_06] (  
@@ -223,8 +225,8 @@ BEGIN
          BEGIN  
             UPDATE PH WITH(ROWLOCK)  
                SET PickType   = '1'  
-                 , EditDate   = GETDATE()  
-                 , EditWho    = SUSER_SNAME()  
+                 , EditDate   = dbo.fnc_GetDate()    --(SSA01)
+                 , EditWho    = dbo.fnc_GetUserName()    --(SSA01)
                  , TrafficCop = NULL  
               FROM dbo.ORDERS     OH(NOLOCK)  
               JOIN dbo.PICKHEADER PH ON OH.Orderkey=PH.Orderkey  
@@ -307,8 +309,8 @@ BEGIN
          BEGIN  
             UPDATE PH WITH(ROWLOCK)  
                SET PickType   = '1'  
-                 , EditDate   = GETDATE()  
-                 , EditWho    = SUSER_SNAME()  
+                 , EditDate   = dbo.fnc_GetDate()    --(SSA01)
+                 , EditWho    = dbo.fnc_GetUserName()    --(SSA01)
                  , TrafficCop = NULL  
               FROM dbo.ORDERS     OH(NOLOCK)  
               JOIN dbo.PICKHEADER PH ON OH.Loadkey=PH.ExternOrderkey AND PH.Orderkey='' AND OH.Loadkey<>''  

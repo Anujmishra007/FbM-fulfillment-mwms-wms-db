@@ -73,6 +73,8 @@ GO
 /*                            checking the channel hold qty               */
 /* 04-JUL-2025  SSA01     3.9 FCR-3982- Added PalletType                  */
 /* 29-Sep-2025  MICHAEL   4.0 FCR-7829-RemainHoldOnTransfer for UCC (ML01)*/
+/* 10-OCT-2025  SSA02     4.1 UWP-42248 -Enhanced session management      */
+/*                             and cleanup.                               */
 /**************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[ispFinalizeTransfer]
@@ -1604,8 +1606,8 @@ BEGIN
                          ToLottable13 = CASE WHEN ISNULL(@d_Lottable13, '')  = '' THEN ToLottable13 ELSE @d_Lottable13 END,
                          ToLottable14 = CASE WHEN ISNULL(@d_Lottable14, '')  = '' THEN ToLottable14 ELSE @d_Lottable14 END,
                          ToLottable15 = CASE WHEN ISNULL(@d_Lottable15, '')  = '' THEN ToLottable15 ELSE @d_Lottable15 END,
-                         EditDate = GETDATE(),
-                         EditWho = SUSER_SNAME(),
+                         EditDate = dbo.fnc_GetDate(),   --(SSA02)
+                         EditWho = dbo.fnc_GetUserName(),       --(SSA02)
                          TrafficCop = NULL
                    WHERE  TransferKey = @c_TransferKey
                    AND    TransferLineNumber = @cTransferLineNumber
@@ -1650,8 +1652,8 @@ BEGIN
             UPDATE TRANSFERDETAIL WITH (ROWLOCK)
             SET STATUS = '9'
               , Trafficcop = NULL
-              , EditDate = GETDATE()
-              , EditWho = SUSER_SNAME()
+              , EditDate = dbo.fnc_GetDate()   --(SSA02)
+              , EditWho = dbo.fnc_GetUserName()        --(SSA02)
             WHERE  TransferKey = @c_TransferKey
             AND    TransferLineNumber = @cTransferLineNumber
             AND    Status <> '9'
@@ -1667,8 +1669,8 @@ BEGIN
 
             UPDATE TRANSFER WITH (ROWLOCK)
             SET OpenQty = OpenQty - @nFromQty
-              , EditDate = GETDATE()
-              , EditWho = SUSER_SNAME()
+              , EditDate = dbo.fnc_GetDate()   --(SSA02)
+              , EditWho = dbo.fnc_GetUserName()      --(SSA02)
             WHERE TransferKey = @c_TransferKey
 
             IF @@ERROR <> 0

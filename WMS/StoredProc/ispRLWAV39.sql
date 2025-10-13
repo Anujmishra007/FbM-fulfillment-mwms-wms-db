@@ -27,6 +27,7 @@ GO
 /* 24-Sep-2021 NJOW     1.2  DEPVOP Script Combine                          */
 /* 08-Mar-2023 NJOW02   1.3  WMS-21920 Replen one carton to zero pick loc   */
 /* 13-Sep-2023 NJOW03   1.4  Fix top up partial carton not working          */
+/* 10-Oct-2025 SSA01    1.5  UWP-42248 -Enhanced session management         */
 /****************************************************************************/   
 
 CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV39]      
@@ -161,10 +162,10 @@ CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV39]
           [PickMethod] [nvarchar](1) NOT NULL DEFAULT (' '),
           [WaveKey] [nvarchar](10) NOT NULL DEFAULT (' '),
           [EffectiveDate] [datetime] NOT NULL DEFAULT (getdate()),
-          [AddDate] [datetime] NOT NULL DEFAULT (getdate()),
-          [AddWho] [nvarchar](128) NOT NULL DEFAULT (suser_sname()),
-          [EditDate] [datetime] NOT NULL DEFAULT (getdate()),
-          [EditWho] [nvarchar](128) NOT NULL DEFAULT (suser_sname()),
+          [AddDate] [datetime] NOT NULL DEFAULT (dbo.fnc_GetDate()),                 --(SSA01)
+          [AddWho] [nvarchar](128) NOT NULL DEFAULT (dbo.fnc_GetUserName()),         --(SSA01)
+          [EditDate] [datetime] NOT NULL DEFAULT (dbo.fnc_GetDate()),                --(SSA01)
+          [EditWho] [nvarchar](128) NOT NULL DEFAULT (dbo.fnc_GetUserName()),        --(SSA01)
           [TrafficCop] [nvarchar](1) NULL,
           [ArchiveCop] [nvarchar](1) NULL,
           [OptimizeCop] [nvarchar](1) NULL,
@@ -871,8 +872,8 @@ CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV39]
       UPDATE WAVE   
           SET TMReleaseFlag = 'Y'
            ,  TrafficCop = NULL  
-           ,  EditWho = SUSER_SNAME() 
-           ,  EditDate= GETDATE()     
+           ,  EditWho = dbo.fnc_GetUserName()       --(SSA01)
+           ,  EditDate= dbo.fnc_GetDate()    --(SSA01)
        WHERE WAVEKEY = @c_wavekey    
               
        SELECT @n_err = @@ERROR  

@@ -27,6 +27,7 @@ GO
 /* 21-Mar-2024  WLChooi 1.0   DevOps Combine Script                      */
 /* 29-Sep-2025  MMB144  1.1   Creating a copy of reverse SP ispRVWAV69 from Prod (Without FCR-2902 changes), following the SP naming convention.*/
 /*                            This reverse SP will be configured for all the existing storers in SAU, which does not have dynamic replenishment in scope. */ 
+/* 10-Oct-2025  SSA01   1.2   UWP-42248 -Enhanced session management     */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[ispRVWAV69_SAU_BULFG]
    @c_Wavekey  NVARCHAR(10)
@@ -153,8 +154,8 @@ BEGIN
       UPDATE PICKDETAIL WITH (ROWLOCK)
       SET TaskDetailKey = ''
         , TrafficCop = NULL
-        , EditWho = SUSER_SNAME()
-        , EditDate = GETDATE()
+        , EditWho = dbo.fnc_GetUserName()    --(SSA01)
+        , EditDate = dbo.fnc_GetDate()   --(SSA01)
       FROM WAVEDETAIL (NOLOCK)
       JOIN PICKDETAIL ON WAVEDETAIL.OrderKey = PICKDETAIL.OrderKey
       WHERE WAVEDETAIL.WaveKey = @c_Wavekey
@@ -205,8 +206,8 @@ BEGIN
       UPDATE WAVE
       SET TMReleaseFlag = 'N'
         , TrafficCop = NULL
-        , EditWho = SUSER_SNAME()
-        , EditDate = GETDATE()
+        , EditWho = dbo.fnc_GetUserName()        --(SSA01)
+        , EditDate = dbo.fnc_GetDate()    --(SSA01)
       WHERE WaveKey = @c_Wavekey
 
       SELECT @n_err = @@ERROR

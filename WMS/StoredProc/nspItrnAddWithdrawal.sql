@@ -37,6 +37,7 @@ GO
 /* 06-Oct-2016  TLTING        SET OPTION                                */
 /* 07-Feb-2016  SWT02         Channel Management                        */
 /* 04-JUL-2025  SSA01         UWP-3982- Added PalletType                */
+/* 10-Oct-2025  SSA02         UWP-42248 -Enhanced session management    */
 /************************************************************************/
 
 CREATE PROC [dbo].[nspItrnAddWithdrawal]
@@ -228,13 +229,13 @@ BEGIN
          END  --tlting01 E
 
       IF ISNULL(RTRIM(@c_AddWho),'') = ''
-         SET @c_AddWho = suser_sname()
+         SET @c_AddWho = dbo.fnc_GetUserName()          --(SSA02)
       IF ISDATE(@d_AddDate) <> 1
-         SET @d_AddDate = GETDATE()
+         SET @d_AddDate = dbo.fnc_GetDate(),    --(SSA02)
       IF ISNULL(RTRIM(@c_EditWho),'') = ''
-         SET @c_EditWho = suser_sname()
+         SET @c_EditWho = dbo.fnc_GetUserName()          --(SSA02)
       IF ISDATE(@d_EditDate) <> 1
-         SET @d_EditDate = GETDATE()
+         SET @d_EditDate = dbo.fnc_GetDate(),    --(SSA02)
       /*SOS 131697 End */
 
       INSERT itrn

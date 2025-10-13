@@ -23,7 +23,8 @@ GO
 /* Data Modifications:                                                  */
 /*                                                                      */
 /* Updates:                                                             */  
-/* Date         Author   Ver  Purposes                                  */  
+/* Date         Author   Ver   Purposes                                 */
+/* 10-Oct-2025  SSA01    1.0   UWP-42248 -Enhanced session management   */
 /************************************************************************/
 
 CREATE PROC ispUADelTsk01   
@@ -126,8 +127,8 @@ BEGIN
          BEGIN
             UPDATE TASKDETAIL 
                SET SystemQty = 0
-                  ,EditWho = SUSER_SNAME()
-                  ,EditDate= GETDATE() 
+                  ,EditWho = dbo.fnc_GetUserName()            --(SSA01)
+                  ,EditDate= dbo.fnc_GetDate()    --(SSA01)
                   ,TrafficCop = NULL
             WHERE  TaskDetailKey = @c_TaskDetailKey  
             AND    [Status] <> '9'    

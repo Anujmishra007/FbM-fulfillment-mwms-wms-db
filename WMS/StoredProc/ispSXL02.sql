@@ -22,6 +22,7 @@ GO
 /* Updates:                                                             */  
 /* Date         Author   Ver  Purposes                                  */ 
 /* 23-Aug-2022  WLChooi  1.0  DevOps Combine Script                     */
+/* 10-Oct-2025  SSA01    1.1  UWP-42248 -Enhanced session management    */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[ispSXL02]   
       @c_Action        NVARCHAR(10),
@@ -75,8 +76,8 @@ BEGIN
          UPDATE SKUxLOC WITH (ROWLOCK)
          SET LocationType  = ''
            , TrafficCop    = NULL
-           , EditWho       = SUSER_SNAME()
-           , EditDate      = GETDATE()
+           , EditWho       = dbo.fnc_GetUserName()           --(SSA01)
+           , EditDate      = dbo.fnc_GetDate()    --(SSA01)
          WHERE Loc = @c_Loc 
          AND StorerKey = @c_Storerkey
          AND SKU = @c_SKU

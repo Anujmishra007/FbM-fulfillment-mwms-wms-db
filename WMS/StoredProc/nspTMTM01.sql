@@ -85,6 +85,7 @@ GO
 /* 18-10-2024   4.5   Dennis     FCR-775 Custom Logic                   */
 /* 13-06-2025   4.6.0 NickT      FCR-5727 Get StorerKey from RDTMOBREC  */
 /*                               if it is not passed through            */
+/* 10-10-2025   4.7   SSA01      UWP-42248 -Enhanced session management */
 /************************************************************************/
 CREATE OR ALTER PROC    [dbo].[nspTMTM01]
                @c_sendDelimiter    NVARCHAR(1)
@@ -438,8 +439,8 @@ BEGIN
            SET    STATUS = '0'
                  ,UserKey = ''
                  ,Reasonkey = ''
-                 ,EditDate = GetDate()     -- (SHONG08)
-                 ,EditWho  = sUSER_sNAME()
+                 ,EditDate = dbo.fnc_GetDate()   --(SSA01)     -- (SHONG08)
+                 ,EditWho  = dbo.fnc_GetUserName()          --(SSA01)
                  ,TrafficCop = NULL
                  ,DropId = '' -- SOS# 248996
            WHERE  UserKey = @c_userid

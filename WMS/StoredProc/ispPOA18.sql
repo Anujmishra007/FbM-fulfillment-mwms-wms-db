@@ -28,6 +28,7 @@ GO
 /* Date         Author  Rev   Purposes                                  */ 
 /* 2021-07-19   WLChooi 1.1   Bug Fix - Insert CartonShipmentDetail     */
 /*                            record (WL01)                             */
+/* 2025-10-10  SSA01    1.2   UWP-42248 -Enhanced session management    */
 /************************************************************************/    
 CREATE PROC [dbo].[ispPOA18]      
      @c_OrderKey    NVARCHAR(10) = ''   
@@ -173,8 +174,8 @@ BEGIN
             SET UserDefine04 = @c_TrackNo
               , TrackingNo   = @c_TrackNo
               , TrafficCop   = NULL 
-              , EditDate     = GETDATE()
-              , EditWho      = SUSER_SNAME()
+              , EditDate     = dbo.fnc_GetDate()    --(SSA01)
+              , EditWho      = dbo.fnc_GetUserName()                --(SSA01)
             WHERE OrderKey = @c_GetOrderkey
             
             SELECT @n_err = @@ERROR

@@ -39,6 +39,7 @@ GO
 /* 12-Aug-2024  Wan04     2.1 LFWM-4446 - RG[GIT] Serial Number Solution  */
 /*                            - Transfer by Serial Number                 */
 /* 11-Jun-2025  TLTING02  2.1 storerconfig BlockDoubleShip                */
+/* 10-Oct-2025  SSA01     2.2 UWP-42248 -Enhanced session management      */
 /**************************************************************************/
 
 CREATE OR ALTER PROC  [dbo].[nspItrnAddWithdrawalCheck]
@@ -741,8 +742,8 @@ CREATE OR ALTER PROC  [dbo].[nspItrnAddWithdrawalCheck]
             BEGIN
                 UPDATE ChannelInv WITH (ROWLOCK)
                    SET Qty = Qty + @n_qty,
-                       EditDate = GETDATE(),
-                       EditWho  = SUSER_SNAME()
+                       EditDate = dbo.fnc_GetDate(),    --(SSA01)
+                       EditWho  = dbo.fnc_GetUserName()          --(SSA01)
                 WHERE Channel_ID = @n_Channel_ID
                 SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
 
@@ -776,8 +777,8 @@ CREATE OR ALTER PROC  [dbo].[nspItrnAddWithdrawalCheck]
             Lottable05 = @d_Lottable05,
             Status = @c_Status,
             Channel_ID = @n_Channel_ID, -- (SWT02)
-            EditDate = GETDATE(),
-            EditWho = SUSER_SNAME()
+            EditDate = dbo.fnc_GetDate(),    --(SSA01)
+            EditWho = dbo.fnc_GetUserName()          --(SSA01)
       WHERE ItrnKey = @c_itrnkey
    END
    --(Wan03) - START

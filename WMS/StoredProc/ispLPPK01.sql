@@ -27,6 +27,8 @@ GO
 /* Updates:                                                             */  
 /* Date         Author   Ver  Purposes                                  */  
 /* 11-Nov-2010  Shong    1.1  Bug Fixing -- (SHONG01)                   */
+/* 10-OCT-2025  SSA01    1.2  UWP-42248 -Enhanced session management    */
+/*                            and cleanup.                              */
 /************************************************************************/
 
 CREATE PROC [dbo].[ispLPPK01]   
@@ -177,7 +179,7 @@ BEGIN
                (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, AddWho, AddDate, EditWho, EditDate, DropID)    
             VALUES     
                (@cPickSlipNo, 0, CAST(@nToteNo AS NVARCHAR(4)), '00000', @cStorerKey, @cSKU,   
-                @nQty, sUser_sName(), GETDATE(), sUser_sName(), GETDATE(), CAST(@nToteNo AS NVARCHAR(4)))         
+                @nQty, dbo.fnc_GetUserName(), dbo.fnc_GetDate()  dbo.fnc_GetUserName(), dbo.fnc_GetDate(), CAST(@nToteNo AS NVARCHAR(4)))          --(SSA01)
            
             SET @nSKUCount = @nSKUCount + 1  
               

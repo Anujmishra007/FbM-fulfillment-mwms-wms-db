@@ -72,6 +72,7 @@ GO
 /* 04-Apr-2025  Wan12     UWP-31258-FCR-822 Partial Pallet Serial No Move */
 /* 26-JUN-2025  SSA01     UWP-3982- Added PalletType in inventory         */
 /* 26-Sep-2025  TLTING02  UWP-41813 skip blank ID update                  */
+/* 10-Oct-2025  SSA02     UWP-42248 -Enhanced session management          */
 /**************************************************************************/
 
 CREATE OR ALTER PROCEDURE [dbo].[nspItrnAddMoveCheck]
@@ -1137,7 +1138,7 @@ BEGIN
                            ,         @c_xUOM
                            ,         @n_UOMCalc
                            ,         @n_UOMQty
-                           ,         getdate()
+                           ,         dbo.fnc_GetDate()   --(SSA02)
                            ,         @c_Channel             --(Wan08)
                            ,         @n_Channel_ID          --(Wan08) 
                            )
@@ -1635,8 +1636,8 @@ END
                BEGIN
                   UPDATE ChannelInv WITH (ROWLOCK)
                      SET Qty      = Qty - @n_Qty
-                        ,EditDate = GETDATE()
-                        ,EditWho  = SUSER_SNAME() 
+                        ,EditDate = dbo.fnc_GetDate()   --(SSA02)
+                        ,EditWho  = dbo.fnc_GetUserName()          --(SSA02)
                   WHERE Channel_ID = @n_FromChannel_ID 
 
                   SET @n_err = @@ERROR
@@ -1683,8 +1684,8 @@ END
             BEGIN
                UPDATE ChannelInv WITH (ROWLOCK)
                SET Qty      = Qty + @n_Qty
-                  ,EditDate = GETDATE()
-                  ,EditWho  = SUSER_SNAME() 
+                  ,EditDate = dbo.fnc_GetDate()   --(SSA02)
+                  ,EditWho  = dbo.fnc_GetUserName()          --(SSA02)
                WHERE Channel_ID = @n_ToChannel_ID 
                
                SET @n_err = @@ERROR
@@ -2708,8 +2709,8 @@ BEGIN
           ID = #tpickdet.ID,
           UOM = CASE WHEN @b_UpdUOM = 1 AND UOM = '6' THEN '7' ELSE UOM END, -- SWT03
           MoveRefKey = CASE WHEN @b_UpdUOM = 1 THEN @c_MoveRefKey ELSE '' END, --SWT03 WWANG02
-          EditWho = SUSER_SNAME(),
-          EditDate = GETDATE()
+          EditWho = dbo.fnc_GetUserName(),          --(SSA02)
+          EditDate = dbo.fnc_GetDate()   --(SSA02)
         FROM PICKDETAIL
         JOIN #tpickdet WITH (NOLOCK) ON PICKDETAIL.PickDetailKey =  #tpickdet.Pickdetailkey
         SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT

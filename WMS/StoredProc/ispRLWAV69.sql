@@ -40,6 +40,7 @@ GO
 /*                            VNA Confirm get ToID to do movement & create*/
 /*                            FromID = ToID for RP1 task. Hence need to  */
 /*                            maintain FromID to ToID for RPF task       */
+/* 10-Oct-2025  SSA02   2.0   UWP-42248 -Enhanced session management     */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]       
     @c_Wavekey      NVARCHAR(10)    
@@ -343,10 +344,10 @@ CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]
       ,  [PickMethod]            [nvarchar](1)     NOT NULL    DEFAULT (' ')  
       ,  [WaveKey]               [nvarchar](10)    NOT NULL    DEFAULT (' ')  
       ,  [EffectiveDate]         [datetime]        NOT NULL    DEFAULT (getdate())  
-      ,  [AddDate]               [datetime]        NOT NULL    DEFAULT (getdate())  
-      ,  [AddWho]                [nvarchar](128)   NOT NULL    DEFAULT (suser_sname())  
-      ,  [EditDate]              [datetime]        NOT NULL    DEFAULT (getdate())  
-      ,  [EditWho]               [nvarchar](128)   NOT NULL    DEFAULT (suser_sname())  
+      ,  [AddDate]               [datetime]        NOT NULL    DEFAULT (dbo.fnc_GetDate())          --(SSA02)
+      ,  [AddWho]                [nvarchar](128)   NOT NULL    DEFAULT (dbo.fnc_GetUserName())      --(SSA02)
+      ,  [EditDate]              [datetime]        NOT NULL    DEFAULT (dbo.fnc_GetDate())          --(SSA02)
+      ,  [EditWho]               [nvarchar](128)   NOT NULL    DEFAULT (dbo.fnc_GetUserName())      --(SSA02)
       ,  [TrafficCop]            [nvarchar](1)     NULL  
       ,  [ArchiveCop]            [nvarchar](1)     NULL  
       ,  [OptimizeCop]           [nvarchar](1)     NULL  
@@ -416,8 +417,8 @@ CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]
          SET #PickDetail_WIP.TaskdetailKey = '', 
              #PickDetail_WIP.Notes = '',   
              #PickDetail_WIP.Wavekey = @c_Wavekey,   
-             EditWho    = SUSER_SNAME(),  
-             EditDate   = GETDATE(),     
+             EditWho    = dbo.fnc_GetUserName(),             --(SSA02)
+             EditDate   = dbo.fnc_GetDate(),    --(SSA02)
              TrafficCop = NULL  
          WHERE #PickDetail_WIP.Pickdetailkey = @c_curPickdetailkey
           
@@ -1620,8 +1621,8 @@ CREATE OR ALTER PROCEDURE  [dbo].[ispRLWAV69]
       UPDATE WAVE     
       SET TMReleaseFlag = 'Y'             
        ,  TrafficCop = NULL               
-       ,  EditWho = SUSER_SNAME()         
-       ,  EditDate= GETDATE()             
+       ,  EditWho = dbo.fnc_GetUserName()       --(SSA02)
+       ,  EditDate= dbo.fnc_GetDate()    --(SSA02)
       WHERE WAVEKEY = @c_Wavekey      
    
       SELECT @n_err = @@ERROR

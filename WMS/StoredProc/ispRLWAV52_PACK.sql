@@ -27,6 +27,7 @@ GO
 /* 2022-08-31  SPChin   1.4   JSM-92661 - Bug Fixed                     */
 /* 2022-09-06  Wan03    1.4   WMS-20686 - TH-NIKE - customize Wave      */
 /*                            Release V2022                             */
+/* 2025-10-10  SSA01    1.5  UWP-42248 -Enhanced session management     */
 /************************************************************************/
 CREATE OR ALTER PROC ispRLWAV52_PACK
    @c_Wavekey     NVARCHAR(10)    
@@ -1694,8 +1695,8 @@ BEGIN
                   ,Qty = CASE WHEN @n_Status = 0 THEN Qty ELSE @n_Qty END
                   ,PickSlipNo = @c_PickSlipNo
                   ,Trafficcop = NULL
-                  ,EditWho    = SUSER_SNAME()
-                  ,EditDate   = GETDATE()
+                  ,EditWho    = dbo.fnc_GetUserName()         --(SSA01)
+                  ,EditDate   = dbo.fnc_GetDate()    --(SSA01)
             WHERE PickDetailKey = @c_PickDetailkey
 
             SET @n_err = @@ERROR  

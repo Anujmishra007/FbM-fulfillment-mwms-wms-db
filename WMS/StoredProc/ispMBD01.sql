@@ -25,6 +25,8 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
+/* 2025-10-10  SSA01    1.1   UWP-42248 -Enhanced session management    */
+/*                             and cleanup.                             */
 /************************************************************************/
 CREATE PROC ispMBD01
       @c_Action      NVARCHAR(10)   
@@ -98,8 +100,8 @@ BEGIN
    BEGIN
       UPDATE MBOLDETAIL WITH (ROWLOCK)
          SET CtnCnt1 = TotalCartons
-            ,EditWho = SUSER_SNAME()
-            ,EditDate= GETDATE()
+            ,EditWho = dbo.fnc_GetUserName()              --(SSA01)
+            ,EditDate= dbo.fnc_GetDate()    --(SSA01)
             ,Trafficcop = NULL
       WHERE MBOLKey = @c_MBOLKey
       AND   MBOLLineNumber = @c_MBOLLineNumber

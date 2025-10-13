@@ -25,7 +25,8 @@ GO
 /*                                                                      */  
 /* Updates:                                                             */  
 /* Date        Author   Ver  Purposes                                   */ 
-/* 2020-06-04  Wan      1.1  WMS-13120 - [PH] NIKE - WMS UnPacking Module*/ 
+/* 2020-06-04  Wan      1.1  WMS-13120 - [PH] NIKE - WMS UnPacking Module*/
+/* 2025-10-10  SSA01    1.2   UWP-42248 -Enhanced session management    */
 /************************************************************************/   
 CREATE PROCEDURE [dbo].[ispUPPSO02]  
       @c_OrderKey       NVARCHAR(10) 
@@ -167,8 +168,8 @@ BEGIN
    	UPDATE UCC WITH (ROWLOCK) 
    	   SET [Status] = '1', 
    	       TrafficCop = NULL, 
-   	       EditDate = GETDATE(), 
-   	       EditWho = SUSER_SNAME() 
+   	       EditDate = dbo.fnc_GetDate(),   --(SSA01)
+   	       EditWho = dbo.fnc_GetUserName()           --(SSA01)
    	WHERE UCCNo = @c_UCCNo 
       IF @@ERROR <> 0
       BEGIN

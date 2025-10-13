@@ -42,7 +42,8 @@ GO
 /* 28-Jan-2019  TLTING_ext 2.0  enlarge externorderkey field length                                                     */  
 /* 17-May-2019  kocy05    2.1  Ensure the combined child orders did not perform combined multiple time                  */          
 /* 09-Oct-2020  Josh      2.2  Split order change referance                                                             */          
-/* 23-Apr-2021  TLTING01  2.3  WMS-16887 handle case-sensitive on recipients - C_contact1                               */    
+/* 23-Apr-2021  TLTING01  2.3  WMS-16887 handle case-sensitive on recipients - C_contact1                               */
+/* 10-OCT-2025  SSA01     2.4  UWP-42248 -Enhanced session management and cleanup                                       */
 /*----------------------------------------------------------------------------------------------------------------------*/                      
 CREATE PROCEDURE [dbo].[isp_OrdersMerging]                      
 (                      
@@ -313,8 +314,8 @@ BEGIN
          SET [SOStatus]   = CASE WHEN @c_SplitORD_SValue='1' AND ECOM_SINGLE_Flag='M' THEN 'PENDSPL' ELSE '0' END   --Josh, only open config and multi order need split           
             , [Issued]    = 'N'        -- kocy02                           
             ,TrafficCop = NULL                      
-            ,EditDate = GETDATE()                      
-            ,EditWho = SUSER_SNAME()                      
+            ,EditDate = dbo.fnc_GetDate()   --(SSA01)
+            ,EditWho = dbo.fnc_GetUserName()     --(SSA01)
          WHERE [OrderKey] = @c_OrderKey         
          AND [Status] <> 'CANC' AND [SOStatus] <>' PENDCANC'   --Josh, OrdCombine use temptable and need time, will overwriter cancel order      
                       
@@ -503,15 +504,15 @@ BEGIN
                ,[SOStatus]    = 'HOLD'                      
                ,[OrderGroup]  = 'CHILD_ORD'                      
                ,TrafficCop  = NULL                      
-               , EditDate = GETDATE()                      
-               , EditWho = SUSER_SNAME()                      
+               , EditDate = dbo.fnc_GetDate(),   --(SSA01)
+               , EditWho = dbo.fnc_GetUserName()    --(SSA01)
             WHERE [OrderKey]  = @c_OrderKey                      
                          
             UPDATE dbo.Orderdetail                        
             SET ConsoOrderKey = @c_NewOrderkey,                      
                TrafficCop = NULL,                      
-               EditDate = GETDATE(),                      
-               EditWho = SUSER_SNAME()                      
+               EditDate = dbo.fnc_GetDate(),   --(SSA01),
+               EditWho = dbo.fnc_GetUserName()    --(SSA01)
             FROM dbo.Orderdetail                     
             WHERE Orderdetail.Orderkey = @c_OrderKey                      
             and  exists ( Select 1 from Orders (NOLOCK) where Orders.orderkey =  Orderdetail.orderkey and Orders.SOStatus = 'HOLD'                     

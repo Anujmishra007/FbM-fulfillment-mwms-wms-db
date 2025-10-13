@@ -77,6 +77,8 @@ GO
 /* 2023-12-19 24.8 Wan        UWP-12373-MWMS Deploy MasterSP to V2             */
 /* 2024-07-26 24.9 JackC      UWP-26905 Encrypt user password                  */
 /* 2024-09-11 25.0 NLT013     UWP-24328 Extended the length for @c_Param0      */
+/* 2025-10-10 25.1 SSA01      UWP-42248 -Enhanced session management           */
+/*                             and cleanup.                                    */
 /*******************************************************************************/        
 --> For CN Only: @cCmdType = 'PRN'        
 CREATE OR ALTER PROC [dbo].[isp_BT_GenBartenderCommand](        
@@ -1994,8 +1996,8 @@ SEND_TCP_SOCKET:
                UPDATE rdt.RDTPrintJob WITH (ROWLOCK)
                   SET PrintData = @c_BartenderFCommand
                      ,Printer   = @cPrinterID  
-                     ,EditWho   = SUSER_SNAME()
-                     ,EditDate  = GETDATE()
+                     ,EditWho   = dbo.fnc_GetUserName()             --(SSA01)
+                     ,EditDate  = dbo.fnc_GetDate()   --(SSA01)
                OUTPUT Deleted.JobType INTO @t_PrintJob 
                WHERE JobID = @n_JobID
             END
@@ -2005,8 +2007,8 @@ SEND_TCP_SOCKET:
                UPDATE rdt.RDTPrintJob_Log WITH (ROWLOCK)
                   SET PrintData = @c_BartenderFCommand
                      ,Printer   = @cPrinterID 
-                     ,EditWho   = SUSER_SNAME()
-                     ,EditDate  = GETDATE()
+                     ,EditWho   = dbo.fnc_GetUserName()     --(SSA01)
+                     ,EditDate  = dbo.fnc_GetDate()   --(SSA01)
                OUTPUT Deleted.JobType INTO @t_PrintJob       
                WHERE JobID = @n_JobID
             END

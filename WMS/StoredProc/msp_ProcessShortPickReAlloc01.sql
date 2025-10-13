@@ -22,6 +22,7 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 01-Oct-2025 WLChooi  1.0   Initial Version                           */
+/* 10-Oct-2025 SSA01    1.1   UWP-42248 -Enhanced session management    */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[msp_ProcessShortPickReAlloc01] (    
@@ -152,10 +153,10 @@ BEGIN
        , [PickMethod]           [NVARCHAR](1)    NOT NULL DEFAULT (' ')
        , [WaveKey]              [NVARCHAR](10)   NOT NULL DEFAULT (' ')
        , [EffectiveDate]        [DATETIME]       NOT NULL DEFAULT (GETDATE())
-       , [AddDate]              [DATETIME]       NOT NULL DEFAULT (GETDATE())
-       , [AddWho]               [NVARCHAR](128)  NOT NULL DEFAULT (SUSER_SNAME())
-       , [EditDate]             [DATETIME]       NOT NULL DEFAULT (GETDATE())
-       , [EditWho]              [NVARCHAR](128)  NOT NULL DEFAULT (SUSER_SNAME())
+       , [AddDate]              [DATETIME]       NOT NULL DEFAULT (dbo.fnc_GetDate())              --(SSA01)
+       , [AddWho]               [NVARCHAR](128)  NOT NULL DEFAULT (dbo.fnc_GetUserName())          --(SSA01)
+       , [EditDate]             [DATETIME]       NOT NULL DEFAULT (dbo.fnc_GetDate())              --(SSA01)
+       , [EditWho]              [NVARCHAR](128)  NOT NULL DEFAULT (dbo.fnc_GetUserName())          --(SSA01)
        , [TrafficCop]           [NVARCHAR](1)    NULL
        , [ArchiveCop]           [NVARCHAR](1)    NULL
        , [OptimizeCop]          [NVARCHAR](1)    NULL

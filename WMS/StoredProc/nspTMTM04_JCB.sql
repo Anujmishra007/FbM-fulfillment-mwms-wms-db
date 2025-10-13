@@ -12,6 +12,7 @@ GO
 /* Modifications:                                                               */
 /* Date         Ver.  Author    Purposes                                        */
 /* 2025-06-09   1.0.0 NickT     FCR-5727 Create                                 */
+/* 2025-10-10   1.1   SSA01     UWP-42248 -Enhanced session management          */
 /********************************************************************************/
 CREATE  OR ALTER PROC    [RDT].[nspTMTM04_JCB]
    @c_sendDelimiter    NVARCHAR(1)
@@ -248,7 +249,7 @@ BEGIN
                  ,UserKey = ''
                  ,Reasonkey = ''
                  ,EditDate = GetDate()     -- (SHONG08)
-                 ,EditWho  = sUSER_sNAME()
+                 ,EditWho  = dbo.fnc_GetUserName()        --(SSA01)
                  ,TrafficCop = NULL
                  ,DropId = '' -- SOS# 248996
            WHERE  UserKey = @c_userid

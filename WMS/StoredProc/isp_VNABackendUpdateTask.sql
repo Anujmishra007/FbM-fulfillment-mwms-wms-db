@@ -31,6 +31,8 @@ GO
 /*                            Case/Shrink at BULK, Demand Replenishment  */
 /*                            to DPP. Batching RPF & Pick tasks to be    */
 /*                            dispatched by Wave                         */
+/* 10-OCT-2025 SSA01    1.4   UWP-42248 -Enhanced session management     */
+/*                             and cleanup.                              */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[isp_VNABackendUpdateTask] 
       @c_Storerkey NVARCHAR(15)
@@ -200,8 +202,8 @@ BEGIN
                 UPDATE TaskDetail
                 SET UserKey = LEFT(@c_DeviceID, 18)
                   , TrafficCop = NULL
-                  , EditWho = SUSER_SNAME()
-                  , EditDate = GETDATE()
+                  , EditWho = dbo.fnc_GetUserName()     --(SSA01)
+                  , EditDate = dbo.fnc_GetDate()    --(SSA01)
                 WHERE TaskDetailKey = @c_Taskdetailkey
             END
             ELSE
@@ -210,8 +212,8 @@ BEGIN
                SET UserKey = LEFT(@c_DeviceID, 18)
                  , Listkey = @c_Taskdetailkey
                  , TrafficCop = NULL
-                 , EditWho = SUSER_SNAME()
-                 , EditDate = GETDATE()
+                 , EditWho = dbo.fnc_GetUserName()      --(SSA01)
+                 , EditDate = dbo.fnc_GetDate()    --(SSA01)
                WHERE TaskDetailKey = @c_Taskdetailkey
             END
             
@@ -224,8 +226,8 @@ BEGIN
             UPDATE TaskDetail
             SET [Status] = '0'
               , TrafficCop = NULL
-              , EditWho = SUSER_SNAME()
-              , EditDate = GETDATE()
+              , EditWho = dbo.fnc_GetUserName()      --(SSA01)
+              , EditDate = dbo.fnc_GetDate()    --(SSA01)
             WHERE TaskDetailKey = @c_Taskdetailkey
 
             IF @@ERROR <> 0
@@ -391,8 +393,8 @@ BEGIN
                    UPDATE TaskDetail
                    SET UserKey = LEFT(@c_DeviceID, 18)
                          , TrafficCop = NULL
-                         , EditWho = SUSER_SNAME()
-                         , EditDate = GETDATE()
+                         , EditWho = dbo.fnc_GetUserName()       --(SSA01)
+                         , EditDate = dbo.fnc_GetDate()    --(SSA01)
                    WHERE TaskDetailKey = @c_Taskdetailkey
                END
                ELSE
@@ -401,8 +403,8 @@ BEGIN
                   SET UserKey = LEFT(@c_DeviceID, 18)
                     , Listkey = @c_Taskdetailkey
                     , TrafficCop = NULL
-                    , EditWho = SUSER_SNAME()
-                    , EditDate = GETDATE()
+                    , EditWho = dbo.fnc_GetUserName()       --(SSA01)
+                    , EditDate = dbo.fnc_GetDate()    --(SSA01)
                   WHERE TaskDetailKey = @c_Taskdetailkey
                END
 
@@ -452,8 +454,8 @@ BEGIN
                UPDATE TaskDetail
                SET [Status] = '0'
                  , TrafficCop = NULL
-                 , EditWho = SUSER_SNAME()
-                 , EditDate = GETDATE()
+                 , EditWho = dbo.fnc_GetUserName()        --(SSA01)
+                 , EditDate = dbo.fnc_GetDate()    --(SSA01)
                WHERE TaskDetailKey = @c_Taskdetailkey
 
                IF @@ERROR <> 0

@@ -25,7 +25,8 @@ GO
 /* Data Modifications:                                                  */  
 /*                                                                      */  
 /* Updates:                                                             */    
-/* Date         Author   Ver  Purposes                                  */    
+/* Date         Author   Ver  Purposes                                  */
+/* 10-Oct-2025  SSA01    1.1  UWP-42248 -Enhanced session management    */
 /************************************************************************/  
 CREATE PROC [dbo].[ispPKINFODELTRK02] 
        @c_Pickslipno                NVARCHAR(10)  
@@ -103,8 +104,8 @@ BEGIN
          SET CarrierRef2 = '',  
              LabelNo     = '',  
              ArchiveCop  = NULL,
-             EditWho     = SUSER_SNAME(),
-             EditDate    = GETDATE()
+             EditWho     = dbo.fnc_GetUserName(),              --(SSA01)
+             EditDate    = dbo.fnc_GetDate()    --(SSA01)
          WHERE RowRef = @n_RowRef  
            
          SELECT @n_err = @@ERROR  

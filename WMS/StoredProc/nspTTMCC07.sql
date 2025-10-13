@@ -19,7 +19,8 @@ GO
 /*                                                                      */    
 /* Updates:                                                             */    
 /* Date         Author        Purposes                                  */    
-/* 2023-06-07   James         WMS-22670. Created bt CN LIT              */    
+/* 2023-06-07   James         WMS-22670. Created bt CN LIT              */
+/* 10-10-2025   SSA01         UWP-42248 -Enhanced session management    */
 /************************************************************************/    
     
 CREATE OR ALTER PROC [dbo].[nspTTMCC07]    
@@ -174,8 +175,8 @@ BEGIN
             UPDATE dbo.TaskDetail WITH (ROWLOCK) SET    
                [Status] = '3',    
                UserKey = @c_userid,    
-               EditDate = GETDATE(),    
-               EditWho  = sUSER_sNAME(),    
+               EditDate = dbo.fnc_GetDate(),   --(SSA01)
+               EditWho  = dbo.fnc_GetUserName(),          --(SSA01)
                TrafficCop = NULL    
             WHERE TaskDetailKey = @c_TaskDetailKey2LOCK    
     

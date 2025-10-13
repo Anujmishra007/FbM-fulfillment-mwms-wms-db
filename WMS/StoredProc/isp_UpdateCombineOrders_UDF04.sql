@@ -30,7 +30,8 @@ GO
 /* Updates:                                                                       */                          
 /* Date          Author  Ver. Purposes                                            */                   
 /* 09-Jan-2019   kocy    1.0  Update Combine order Orders.UserDefine04 map        */  
-/*                            to Child orders Orders.UserDefine04 and Issued = Y  */                                   
+/*                            to Child orders Orders.UserDefine04 and Issued = Y  */
+/* 10-OCT-2025  SSA01    1.1  UWP-42248 -Enhanced session management and cleanup  */
 /* -------------------------------------------------------------------------------*/          
 CREATE PROCEDURE [dbo].[isp_UpdateCombineOrders_UDF04]        
 (         
@@ -125,8 +126,8 @@ BEGIN
           UPDATE [dbo].[ORDERS] WITH (ROWLOCK)                     
           SET [Issued] = 'Y'        
              ,TrafficCop = NULL                        
-             ,EditDate = GETDATE()                        
-             ,EditWho = SUSER_SNAME()                                         
+             ,EditDate = dbo.fnc_GetDate()    --(SSA01)
+             ,EditWho = dbo.fnc_GetUserName()                --(SSA01)
             WHERE Orderkey =  @c_ParentOrderKey        
             AND Storerkey = @c_StorerKey        
         
@@ -136,8 +137,8 @@ BEGIN
              ,UserDefine04 = @c_childUserDefine04        
              ,[Issued] = 'Y'        
              ,TrafficCop = NULL                        
-             ,EditDate = GETDATE()                        
-             ,EditWho = SUSER_SNAME()                                         
+             ,EditDate = dbo.fnc_GetDate()    --(SSA01)
+             ,EditWho = dbo.fnc_GetUserName()             --(SSA01)
          WHERE Orderkey =  @c_childOrderKey        
          AND Storerkey = @c_StorerKey        
       --ROLLBACK TRAN                    

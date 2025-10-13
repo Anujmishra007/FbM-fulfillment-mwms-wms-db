@@ -27,6 +27,7 @@ GO
 /* 2007-07-16   TLTING        SQL2005, Put ' in status check            */
 /* 26-Nov-2013  TLTING        Change user_name() to SUSER_SNAME()       */
 /* 02-Jun-2014  TKLIM   1.1   Added Lottables 06-15                     */
+/* 10-Oct-2025  SSA01   1.2   UWP-42248 -Enhanced session management    */
 /************************************************************************/
 
 CREATE PROC nsp_rfpicknpackgetpickingorder (
@@ -137,7 +138,7 @@ BEGIN
       END      
 
       INSERT INTO PICKORDERLOG
-      SELECT Orderkey, Zone, @@SPID, '0', dbo.fnc_RTrim(Suser_Sname())
+      SELECT Orderkey, Zone, @@SPID, '0', dbo.fnc_RTrim(dbo.fnc_GetUserName())        --(SSA01)
       FROM #temp
 
       SELECT @local_n_err = @@error, @n_cnt = @@rowcount

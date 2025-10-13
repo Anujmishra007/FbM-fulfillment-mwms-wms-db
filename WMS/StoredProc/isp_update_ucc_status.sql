@@ -6,7 +6,27 @@ SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
-
+/************************************************************************/
+/* Trigger: isp_update_UCC_Status                                       */
+/* Creation Date: 20-Mar-2020                                           */
+/* Copyright: LF Logistics                                              */
+/* Written by: Shong                                                    */
+/*                                                                      */
+/* Purpose:                                                             */
+/*        :                                                             */
+/* Called By:                                                           */
+/*          :                                                           */
+/* PVCS Version: 1.1                                                    */
+/*                                                                      */
+/* Version: 7.0                                                         */
+/*                                                                      */
+/* Data Modifications:                                                  */
+/*                                                                      */
+/* Updates:                                                             */
+/* Date        Author   Ver   Purposes                                  *
+/* 10-OCT-2025 SSA01    1.1   UWP-42248 -Enhanced session management    */
+/*                             and cleanup.                             */
+/************************************************************************/
 CREATE PROCEDURE isp_update_UCC_Status(
 @c_uccno NVARCHAR(20),
 @c_sku NVARCHAR(20),
@@ -64,7 +84,7 @@ BEGIN
          IF @c_uccstatus >= '2' and @c_uccstatus < '5'
          BEGIN
             UPDATE UCC WITH (ROWLOCK)
-            SET Status = '6', EditDate = GetDate(), EditWho = sUser_sName() 
+            SET Status = '6', EditDate = dbo.fnc_GetDate(), EditWho = dbo.fnc_GetUserName()     --(SSA01)
             WHERE Uccno = @c_uccno
             AND Sku = @c_sku
             AND Storerkey = @c_storerkey
@@ -86,7 +106,7 @@ BEGIN
       ELSE
       BEGIN
          UPDATE UCC WITH (ROWLOCK)
-         SET Status = '6', EditDate = GetDate(), EditWho = sUser_sName() 
+         SET Status = '6', EditDate = dbo.fnc_GetDate(), EditWho = dbo.fnc_GetUserName()      --(SSA01)
          WHERE Uccno = @c_uccno
          AND Sku = @c_sku
          AND Storerkey = @c_storerkey

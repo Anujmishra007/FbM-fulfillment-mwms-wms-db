@@ -37,6 +37,7 @@ GO
 /*                            Adding GroupKey (Wan01)                     */
 /* 31-OCT-2016  Shong    1.2  WMS-249 - Replenishment enhancements        */
 /* 09-NOV-2016  Wan02    1.3  Fixed Replen from Loc not filter by facility*/
+/* 10-Oct-2025  SSA01    1.4  UWP-42248 -Enhanced session management      */
 /**************************************************************************/  
 CREATE PROC [dbo].[ispWRTSK02] 
    @c_WaveKey  NVARCHAR(10),
@@ -664,8 +665,8 @@ BEGIN
             UPDATE LOTxLOCxID WITH (ROWLOCK) 
                SET QtyReplen =  QtyReplen + @n_FromQty, 
                    TrafficCop = NULL, 
-                   EditDate = GETDATE(),
-                   EditWho = SUSER_SNAME()
+                   EditDate = dbo.fnc_GetDate(),    --(SSA01)
+                   EditWho = dbo.fnc_GetUserName()               --(SSA01)
             WHERE LOT = @c_LOT 
             AND   LOC = @c_FromLoc 
             AND   ID  = @c_FromID
@@ -762,7 +763,7 @@ BEGIN
 
          UPDATE TASKDETAIL WITH (ROWLOCK)
          SET GroupKey = @c_TaskGroupKey
-            ,EditDate = GETDATE()
+            ,EditDate = dbo.fnc_GetDate()    --(SSA01)
             ,EditWho  = SUSER_NAME()
             ,Trafficcop = NULL
          WHERE WaveKey = @c_WaveKey 
