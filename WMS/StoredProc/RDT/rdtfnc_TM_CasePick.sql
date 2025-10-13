@@ -3567,6 +3567,7 @@ BEGIN
                SET @nMQTY_RPL = @cUDF17
                SET @nPUOM_Div = @cUDF18
                SET @cLottableCode = @cUDF19
+               SET @cTaskDetailKey = @cUDF20
             END
             IF @nStepBak = 99 AND @nScnBak = 6672 AND @nInputKey=0
             BEGIN
