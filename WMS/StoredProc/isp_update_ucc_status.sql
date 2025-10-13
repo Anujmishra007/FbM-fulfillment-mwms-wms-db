@@ -23,7 +23,7 @@ GO
 /* Data Modifications:                                                  */
 /*                                                                      */
 /* Updates:                                                             */
-/* Date        Author   Ver   Purposes                                  *
+/* Date        Author   Ver   Purposes                                  */
 /* 10-OCT-2025 SSA01    1.1   UWP-42248 -Enhanced session management    */
 /*                             and cleanup.                             */
 /************************************************************************/

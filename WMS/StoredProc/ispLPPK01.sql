@@ -179,7 +179,7 @@ BEGIN
                (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, AddWho, AddDate, EditWho, EditDate, DropID)    
             VALUES     
                (@cPickSlipNo, 0, CAST(@nToteNo AS NVARCHAR(4)), '00000', @cStorerKey, @cSKU,   
-                @nQty, dbo.fnc_GetUserName(), dbo.fnc_GetDate()  dbo.fnc_GetUserName(), dbo.fnc_GetDate(), CAST(@nToteNo AS NVARCHAR(4)))          --(SSA01)
+                @nQty, dbo.fnc_GetUserName(), dbo.fnc_GetDate(),  dbo.fnc_GetUserName(), dbo.fnc_GetDate(), CAST(@nToteNo AS NVARCHAR(4)))          --(SSA01)
            
             SET @nSKUCount = @nSKUCount + 1  
               

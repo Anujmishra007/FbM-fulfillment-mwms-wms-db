@@ -293,7 +293,7 @@ CREATE PROCEDURE [dbo].[ispRLWAV41]
          SET PICKDETAIL.TaskdetailKey = '',  
              PICKDETAIL.Wavekey = @c_Wavekey,   
              EditWho    = dbo.fnc_GetUserName(),       --(SSA01)
-             EditDate   =d bo.fnc_GetDate(),    --(SSA01)
+             EditDate   = dbo.fnc_GetDate(),    --(SSA01)
              TrafficCop = NULL  
          WHERE PICKDETAIL.Pickdetailkey = @c_curPickdetailkey
            

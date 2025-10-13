@@ -504,7 +504,7 @@ BEGIN
                ,[SOStatus]    = 'HOLD'                      
                ,[OrderGroup]  = 'CHILD_ORD'                      
                ,TrafficCop  = NULL                      
-               , EditDate = dbo.fnc_GetDate(),   --(SSA01)
+               , EditDate = dbo.fnc_GetDate()       --(SSA01)
                , EditWho = dbo.fnc_GetUserName()    --(SSA01)
             WHERE [OrderKey]  = @c_OrderKey                      
                          

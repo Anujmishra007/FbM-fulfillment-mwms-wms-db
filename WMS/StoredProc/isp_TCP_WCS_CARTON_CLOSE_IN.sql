@@ -1064,7 +1064,7 @@ BEGIN
                IF NOT EXISTS (SELECT 1 FROM dbo.RefKeyLookup (NOLOCK) WHERE PickDetailKey = @c_NewPickDetailKey)
                BEGIN
                   INSERT INTO dbo.RefKeyLookup (PickDetailkey, Pickslipno, OrderKey, OrderLineNumber, Loadkey, EditWho) -- SOS# 255550
-                  VALUES (@c_NewPickDetailKey, @c_PickSlipNo, @c_OrderKey, @c_OrderLineNumber, @c_LoadKey, 'TCP03b.' + dbo.fnc_GetUserName()   --(SSA01)
+                  VALUES (@c_NewPickDetailKey, @c_PickSlipNo, @c_OrderKey, @c_OrderLineNumber, @c_LoadKey, 'TCP03b.' + dbo.fnc_GetUserName())   --(SSA01)
 
                   SELECT @n_Err = @@ERROR
 

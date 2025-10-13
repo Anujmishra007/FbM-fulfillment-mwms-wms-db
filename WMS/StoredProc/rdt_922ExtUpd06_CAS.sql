@@ -426,7 +426,7 @@ BEGIN
                   BEGIN
                      UPDATE dbo.RefKeyLookUp SET
                         OrderKey = @cChildOrderKey, 
-                        EditDate = dbo.fnc_GetDate(),    --(SSA01)
+                        EditDate = dbo.fnc_GetDate()    --(SSA01)
                      FROM dbo.RefKeyLookUp RKL  
                         JOIN dbo.PicKDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
                      WHERE PD.OrderKey = @cParentOrderKey  

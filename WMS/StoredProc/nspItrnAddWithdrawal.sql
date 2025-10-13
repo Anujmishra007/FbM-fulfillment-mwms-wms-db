@@ -231,11 +231,11 @@ BEGIN
       IF ISNULL(RTRIM(@c_AddWho),'') = ''
          SET @c_AddWho = dbo.fnc_GetUserName()          --(SSA02)
       IF ISDATE(@d_AddDate) <> 1
-         SET @d_AddDate = dbo.fnc_GetDate(),    --(SSA02)
+         SET @d_AddDate = dbo.fnc_GetDate()    --(SSA02)
       IF ISNULL(RTRIM(@c_EditWho),'') = ''
          SET @c_EditWho = dbo.fnc_GetUserName()          --(SSA02)
       IF ISDATE(@d_EditDate) <> 1
-         SET @d_EditDate = dbo.fnc_GetDate(),    --(SSA02)
+         SET @d_EditDate = dbo.fnc_GetDate()    --(SSA02)
       /*SOS 131697 End */
 
       INSERT itrn

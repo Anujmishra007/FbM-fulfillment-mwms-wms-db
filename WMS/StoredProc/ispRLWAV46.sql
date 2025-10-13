@@ -358,7 +358,7 @@ CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV46]
       ,  [EffectiveDate]         [datetime]        NOT NULL    DEFAULT (getdate())  
       ,  [AddDate]               [datetime]        NOT NULL    DEFAULT (dbo.fnc_GetDate())              --(SSA01)
       ,  [AddWho]                [nvarchar](128)   NOT NULL    DEFAULT (dbo.fnc_GetUserName())          --(SSA01)
-      ,  [EditDate]              [datetime]        NOT NULL    DEFAULT (dbo.fnc_GetDate()))             --(SSA01)
+      ,  [EditDate]              [datetime]        NOT NULL    DEFAULT (dbo.fnc_GetDate())              --(SSA01)
       ,  [EditWho]               [nvarchar](128)   NOT NULL    DEFAULT (dbo.fnc_GetUserName())          --(SSA01)
       ,  [TrafficCop]            [nvarchar](1)     NULL  
       ,  [ArchiveCop]            [nvarchar](1)     NULL  
