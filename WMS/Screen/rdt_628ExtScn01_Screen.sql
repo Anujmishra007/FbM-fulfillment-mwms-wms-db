@@ -37,3 +37,23 @@ EXECUTE rdt.rdtAddScn 6679, 'ENG',
    ,@cLine14 = '%e'
    ,@cWebGroup = '{"1":["1","2","3","4"],"2":["5","6"],"3":["7","8","9","10","11","12","13"]}'
    ,@nFunc = 628
+
+-- 6682 = location type screen
+DELETE rdt.RDTScn WHERE Scn = 6682 AND Lang_Code = 'ENG'
+EXECUTE rdt.rdtAddScn 6682, 'ENG',
+    @cLine01 = 'Location Type'
+   ,@cLine02 = '%20d02'
+   ,@cLine03 = '%20d03'
+   ,@cLine04 = '%20d04'
+   ,@cLine05 = '%20d05'
+   ,@cLine06 = '%20d06'
+   ,@cLine07 = '%20d07'
+   ,@cLine08 = '%20d08'
+   ,@cLine09 = '%20d09'
+   ,@cLine10 = '%20d10'
+   ,@cLine11 = '%20d11'
+   ,@cLine12 = '%20d12'
+   ,@cLine13 = 'Option: %05i01^DT:INT'
+   ,@cLine14 = '%e'
+   ,@cWebGroup = '{"1":["1","2","3","4","5","6","7","8","9","10","11","12","13"]}'
+   ,@nFunc = 628
