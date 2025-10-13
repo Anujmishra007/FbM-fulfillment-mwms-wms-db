@@ -25,7 +25,7 @@ GO
 /* 2025-10-06   SSA01    1.2   UWP-42142 -Enhanced session management    */
 /*                             and cleanup.                              */
 /*************************************************************************/   
-CREATE PROCEDURE [WM].[lsp_GenCCAdjustment_Wrapper]  
+CREATE OR ALTER PROCEDURE [WM].[lsp_GenCCAdjustment_Wrapper]
    @c_StockTakeKey      NVARCHAR(10)
 ,  @c_ByPalletLevel     NVARCHAR(10) = 'N' -- 1)    
 ,  @c_IDOnHold          NVARCHAR(10) = 'N'

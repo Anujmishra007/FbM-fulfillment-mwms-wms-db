@@ -135,6 +135,3 @@ END
 GO
 GRANT EXECUTE ON [WM].[lsp_CancelTransfer_Wrapper] TO nSQL 
 GO
-
-GRANT EXECUTE ON [WM].[lsp_CancelTransfer_Wrapper] TO [ALPHA\GTWMSinfosys]
-GO

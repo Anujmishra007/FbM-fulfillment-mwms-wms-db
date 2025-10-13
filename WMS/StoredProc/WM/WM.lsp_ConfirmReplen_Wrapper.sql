@@ -206,7 +206,7 @@ BEGIN
          BEGIN TRY
             UPDATE REPLENISHMENT
                SET Confirmed = 'Y'
-                  ,EditWho =  dbo.fnc_GetUserName(),   --(SSA01)
+                  ,EditWho =  dbo.fnc_GetUserName()   --(SSA01)
                   ,EditDate=  dbo.fnc_GetDate()    --(SSA01)
             WHERE ReplenishmentKey = @c_ReplenishmentKey
          END TRY

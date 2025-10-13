@@ -23,7 +23,7 @@ GO
 /* 2025-10-06  SSA01    1.1   UWP-42142 -Enhanced session management     */
 /*                             and cleanup.                              */
 /*************************************************************************/   
-CREATE PROCEDURE [WM].[lsp_IQC_RCM_CopyPickLoc2ToLoc] 
+CREATE OR ALTER PROCEDURE [WM].[lsp_IQC_RCM_CopyPickLoc2ToLoc]
    @c_QC_Key         NVARCHAR(10)  
 ,  @b_Success        INT          = 1   OUTPUT   
 ,  @n_Err            INT          = 0   OUTPUT

@@ -25,7 +25,7 @@ GO
 /* 2025-10-06   SSA01    1.2   UWP-42142 -Enhanced session management    */
 /*                             and cleanup.                              */
 /*************************************************************************/   
-CREATE PROCEDURE [WM].[lsp_GenPostCC_Wrapper]  
+CREATE OR ALTER PROCEDURE [WM].[lsp_GenPostCC_Wrapper]
    @c_StockTakeKey      NVARCHAR(10)
 ,  @b_Success           INT          = 1   OUTPUT   
 ,  @n_Err               INT          = 0   OUTPUT
