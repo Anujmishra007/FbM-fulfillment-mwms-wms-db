@@ -34,6 +34,8 @@ GO
 /*                            to call sub-script and get a customized ID*/
 /* 05-Jun-2025 AYD02    1.5   Fix: Increase length of @c_ToID to 25     */
 /* 2025-05-26  SWT01    1.6   Setting Session Context for user name     */
+/* 10-Oct-2025 AK01     1.7   UWP-41151 - Replace SUSER_SNAME with      */
+/*                            fnc_GetUserName & GETDATE() with fnc_GetDate()*/
 /************************************************************************/
 CREATE OR ALTER PROCEDURE [WM].[lsp_ExplodeByPackKey_Wrapper]
     @c_ReceiptKey NVARCHAR(10) 
@@ -332,7 +334,7 @@ BEGIN
             UPDATE RECEIPTDETAIL 
             SET QtyExpected = QtyExpected - @n_InsertQtyExpected, 
                   BeforeReceivedQty = BeforeReceivedQty - @n_InsertBeforeReceivedQty, 
-                  EditDate = GETDATE(), 
+                  EditDate = dbo.fnc_GetDate(), 
                   EditWho = @c_UserName 
             WHERE ReceiptKey = @c_ReceiptKey
             AND   ReceiptLineNumber = @c_ReceiptLineNumber        
@@ -584,7 +586,7 @@ BEGIN
 
                UPDATE RECEIPTDETAIL 
                   SET ToId = @c_ToID ,
-                     EditDate = GETDATE(), 
+                     EditDate = dbo.fnc_GetDate(), 
                      EditWho = @c_UserName 
                WHERE ReceiptKey = @c_ReceiptKey
                AND   ReceiptLineNumber = @c_ReceiptLineNumber        
@@ -612,3 +614,4 @@ END
 GO
 GRANT EXECUTE ON [WM].[lsp_ExplodeByPackKey_Wrapper] TO nSQL 
 GO
+

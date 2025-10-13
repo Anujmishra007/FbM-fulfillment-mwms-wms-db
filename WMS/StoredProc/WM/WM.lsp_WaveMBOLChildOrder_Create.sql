@@ -28,6 +28,8 @@ GO
 /*                            Error Message                             */
 /* 2022-01-05  Wan01    1.2   DevOps Combine Script                     */
 /* 2025-09-02  SWT01    1.3   Enhanced session management pattern       */
+/* 2025-10-10  AK01     1.4   UWP-41151 - Replace SUSER_SNAME with      */
+/*                            fnc_GetUserName & GETDATE() with fnc_GetDate()*/
 /************************************************************************/
 CREATE OR ALTER PROC [WM].[lsp_WaveMBOLChildOrder_Create]
       @c_WaveKey              NVARCHAR(10)
@@ -496,7 +498,7 @@ BEGIN
                SET UserDefine09 = @c_WaveKey
                   ,TrafficCop = NULL
                   ,EditWho    = @c_UserName
-                  ,EditDate   = GETDATE()
+                  ,EditDate   = dbo.fnc_GetDate()
                WHERE Orderkey = @c_Orderkey
             END TRY
 
@@ -587,3 +589,4 @@ END
 GO
 GRANT EXECUTE ON  [WM].[lsp_WaveMBOLChildOrder_Create] TO [NSQL]
 GO
+

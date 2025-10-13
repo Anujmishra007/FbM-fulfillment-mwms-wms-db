@@ -24,6 +24,8 @@ GO
 /* Date        Author   Ver   Purposes                                  */
 /* 2022-04-07  Wan      1.0   Created & DevOps Combine Script           */
 /* 2025-05-26  SWT01    1.1   Setting Session Context for user name     */
+/* 2025-10-10  AK01     1.2   UWP-41151 - Replace SUSER_SNAME with      */
+/*                            fnc_GetUserName & GETDATE() with fnc_GetDate()*/
 /************************************************************************/
 CREATE OR ALTER PROC [WM].[lsp_DoorBoookBuildAPM_Wrapper]
    @c_Facility          NVARCHAR(5)                
@@ -362,8 +364,8 @@ BEGIN
             BEGIN     
                UPDATE dbo.TMS_Shipment
                   SET AppointmentID = @c_AppointmentID
-                     ,Editwho = SUSER_SNAME()
-                     ,EditDate= GETDATE()
+                     ,Editwho = dbo.fnc_GetUserName()
+                     ,EditDate= dbo.fnc_GetDate()
                WHERE RowRef = @n_Rowref_SHP
          
                IF @@ERROR <> 0
@@ -517,4 +519,5 @@ GO
 
 GRANT EXECUTE ON [WM].[lsp_DoorBoookBuildAPM_Wrapper] TO nSQL 
 GO
+
 

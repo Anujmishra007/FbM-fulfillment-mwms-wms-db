@@ -15,7 +15,9 @@ GO
 /*                               Execute Login if @c_UserName<>SUSER_SNAME()*/
 /* 2023-10-30  1.3   NJOW01      WMS-24015 Support putaway multi sku    */
 /*                               pallet id to a loc                     */
-/* 2025-09-02  SWT01    1.1   Enhanced session management pattern       */
+/* 2025-09-02  1.4   SWT01       Enhanced session management pattern    */
+/* 2025-10-10  1.5   AK01        UWP-41151 - Replace SUSER_SNAME with   */
+/*                               fnc_GetUserName & GETDATE() with fnc_GetDate()*/
 /************************************************************************/
 CREATE OR ALTER PROCEDURE [WM].[lsp_ReceiptPutaway_Wrapper]
       @c_ReceiptKey NVARCHAR(10)
@@ -596,7 +598,7 @@ BEGIN
                   UPDATE RECEIPTDETAIL 
                   SET PutawayLoc = @c_SuggestedLoc
                      ,EditWho = @c_UserName
-                     ,EditDate= GETDATE()
+                     ,EditDate= dbo.fnc_GetDate()
                   WHERE ReceiptKey = @c_ReceiptKey
                   AND ReceiptLineNumber = @c_ReceiptLineNumber
                END TRY
@@ -657,3 +659,4 @@ END -- End Procedure
 GO
 GRANT EXECUTE ON [WM].[lsp_ReceiptPutaway_Wrapper] TO nSQL 
 GO         
+

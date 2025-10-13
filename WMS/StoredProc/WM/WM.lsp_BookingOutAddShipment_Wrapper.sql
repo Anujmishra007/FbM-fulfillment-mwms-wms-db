@@ -23,6 +23,8 @@ GO
 /* 2022-03-02  Wan01    1.0   Created.                                  */
 /* 2022-03-02  Wan01    1.0   DevOps Combine Script.                    */
 /* 2025-09-02  SWT01    1.1   Enhanced session management and cleanup.  */
+/* 2025-10-10  AK01     1.2   UWP-41151 - Replace SUSER_SNAME with      */
+/*                            fnc_GetUserName & GETDATE() to fnc_GetDate()*/
 /************************************************************************/                                                                                  
 CREATE OR ALTER PROC [WM].[lsp_BookingOutAddShipment_Wrapper]                                                                                                                     
       @n_BookingNo            INT 
@@ -96,8 +98,8 @@ BEGIN
       BEGIN
          UPDATE dbo.Booking_Out WITH (ROWLOCK)
             SET [Status] = '0'
-               ,EditWho = SUSER_SNAME()
-               ,EditDate = GETDATE()
+               ,EditWho = dbo.fnc_GetUserName()
+               ,EditDate = dbo.fnc_GetDate()
          WHERE BookingNo = @n_BookingNo
          AND [Status] = 'R'
          

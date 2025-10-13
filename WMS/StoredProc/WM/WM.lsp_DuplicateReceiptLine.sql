@@ -33,6 +33,8 @@ GO
 /* 2024-01-12  Wan04    1.5   LFWM-4606 - PROD & UAT - TW DGE - SCE ASN */
 /*                            Duplicate Line QtyExpected Issue          */
 /* 2025-05-26  SWT01    1.6   Setting Session Context for user name     */
+/* 10-Oct-2025 AK01     1.7   UWP-41151 - Replace SUSER_SNAME with      */
+/*                            fnc_GetUserName & GETDATE() with fnc_GetDate()*/
 /************************************************************************/
 CREATE OR ALTER PROCEDURE [WM].[lsp_DuplicateReceiptLine]
     @c_ReceiptKey             NVARCHAR(10)
@@ -189,8 +191,8 @@ BEGIN
             UPDATE RECEIPTDETAIL
                SET QtyExpected = @n_BeforeReceivedQty                         --(Wan03)--CASE WHEN BeforeReceivedQty > 0 THEN BeforeReceivedQty ELSE 0 END 
                   --,TrafficCop =  NULL                                       --(ZG01)
-                  , EditWho  = SUSER_SNAME()
-                  , EditDate = GETDATE()
+                  , EditWho  = dbo.fnc_GetUserName()
+                  , EditDate = dbo.fnc_GetDate()
             WHERE ReceiptKey = @c_ReceiptKey
             AND   ReceiptLineNumber = @c_OriginalLineNumber
          END                                    --(Wan03) - END
