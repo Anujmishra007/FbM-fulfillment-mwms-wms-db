@@ -612,7 +612,7 @@ BEGIN
    RollBackTran:
       IF @nDebugFlag = 1
          SELECT 'RollbackTran', @nErrNo AS ErrNo, @cErrMsg AS ErrMsg
-      ROLLBACK TRAN rdt_1812SwapID05
+      ROLLBACK TRAN
    Quit:
       IF @nDebugFlag = 1
          SELECT 'Quit', @nErrNo AS ErrNo, @cErrMsg AS ErrMsg
