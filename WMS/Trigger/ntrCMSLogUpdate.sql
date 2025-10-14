@@ -33,7 +33,7 @@ GO
 /* 06-Oct-2025  AK01      1.2   UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName */
 /************************************************************************/
 
-CREATE TRIGGER ntrCMSLogUpdate
+CREATE OR ALTER TRIGGER ntrCMSLogUpdate
 ON  CMSLOG
 FOR UPDATE
 AS
