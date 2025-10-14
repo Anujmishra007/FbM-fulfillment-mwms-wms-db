@@ -12,7 +12,7 @@ GO
 /* 2025-04-01 1.0  WSE016     WCEET-2988 Fn573 COD Validation           */  
 /************************************************************************/  
   
-CREATE OR ALTER       PROC [RDT].[rdt_573ExtValSP09HRP] (
+CREATE OR ALTER         PROC [RDT].[rdt_573ExtValSP09HRP] (
       @nMobile     INT,
       @nFunc       INT,
       @cLangCode   NVARCHAR(3),
@@ -49,7 +49,9 @@ Declare
       @cCOD_SKU  NVARCHAR(20),
       @cUCC_SKU  NVARCHAR(20),
       @cCOD_Plant NVARCHAR(20),   -- Bonded 1001 / Non-Bonded 1001
-      @cUCC_Plant NVARCHAR(20)   -- Bonded 1001 / Non-Bonded 1001
+      @cUCC_Plant NVARCHAR(20),   -- Bonded 1001 / Non-Bonded 1001
+      @cCOD_SO    NVARCHAR(20),   
+      @cUCC_SO    NVARCHAR(20)  
 
    IF @nFunc = 573 -- UCC inbound receiving
    BEGIN
@@ -96,8 +98,8 @@ Declare
             WHERE LLI.[ID] =@cID
                AND LLI.QTY > 0
                AND LOC.Facility = @cFacility
-               --AND LOC.LocationType ='OTHER'
-		   )
+              -- AND LOC.LocationType ='OTHER'
+               )
 
          BEGIN
             SET @nErrNo = 218356
@@ -137,14 +139,14 @@ Declare
             AND   CRL.Mobile =  @nMobile
 
 
-
+      -- WS 20250715 
         SELECT TOP 1  @cCOD_Cnt = Count(Distinct(ISNULL(Lottable03,'0')))
+             --       , @cCOD_SO = SUM(CASE WHEN RD.Lottable10 IS NOT NULL AND RD.Lottable10 <> '' THEN 1 ELSE 0 END) 
          FROM dbo.ReceiptDetail RD WITH (NOLOCK)
          JOIN rdt.rdtConReceiveLog CRL WITH (NOLOCK) ON ( RD.ReceiptKey = CRL.ReceiptKey)
           WHERE ToId = @cID
             AND   BeforeReceivedQty > 0
             AND   CRL.Mobile =  @nMobile
-
 
 
          SELECT TOP 1 @cUCC_COD = ISNULL(Lottable03,''), 
@@ -156,12 +158,29 @@ Declare
           WHERE UserDefine01 = @cUCC
             AND   CRL.Mobile = @nMobile
 
-
+-- WS 20250715 
         SELECT TOP 1  @cUCC_Cnt = Count(Distinct(ISNULL(Lottable03,'0')))
+               --     , @cUCC_SO = SUM(CASE WHEN RD.Lottable10 IS NOT NULL AND RD.Lottable10 <> '' THEN 1 ELSE 0 END) 
          FROM dbo.ReceiptDetail RD WITH (NOLOCK)
          JOIN rdt.rdtConReceiveLog CRL WITH (NOLOCK) ON ( RD.ReceiptKey = CRL.ReceiptKey)
           WHERE UserDefine01 = @cUCC
             AND   CRL.Mobile = @nMobile
+
+
+    -- WS 20250109 - check lottable10 -to test
+
+        SELECT TOP 1  @cCOD_SO = SUM(CASE WHEN RD.Lottable10 IS NOT NULL AND RD.Lottable10 <> '' THEN 1 ELSE 0 END) 
+         FROM dbo.ReceiptDetail RD WITH (NOLOCK)
+          WHERE ToId = @cID
+            AND   BeforeReceivedQty > 0
+
+
+        SELECT TOP 1  @cUCC_SO = SUM(CASE WHEN RD.Lottable10 IS NOT NULL AND RD.Lottable10 <> '' THEN 1 ELSE 0 END) 
+         FROM dbo.ReceiptDetail RD WITH (NOLOCK)
+          WHERE UserDefine01 = @cUCC
+
+
+
 
 
          -- Bonded 1001 / Non-Bonded 1001 (cant be mixed)
@@ -181,7 +200,17 @@ Declare
 
 
 
-IF @cCOD_Cnt =1 and @cUCC_Cnt =1 and @cCOD <> @cUCC_COD 
+-- new logic
+
+IF  @cCOD_SO <> 0 and @cUCC_SO = 0 or @cCOD_SO = 0 and @cUCC_SO <> 0
+         BEGIN
+            SET @nErrNo = 218382
+            SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode,'DSP') -- No SO in lottable10
+            GOTO Quit
+         END  
+
+
+IF @cCOD_Cnt =1 and @cUCC_Cnt =1 and @cCOD <> @cUCC_COD  and (@cCOD_SO > 0 or  @cUCC_SO > 0)
          BEGIN
             SET @nErrNo = 218354
             SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode,'DSP') -- Mix COD Pallet   
@@ -189,21 +218,21 @@ IF @cCOD_Cnt =1 and @cUCC_Cnt =1 and @cCOD <> @cUCC_COD
          END  
 
 
-IF @cCOD_Cnt =1  and @cUCC_Cnt >1
+IF @cCOD_Cnt =1  and @cUCC_Cnt >1  and  (@cCOD_SO > 0 or  @cUCC_SO > 0)
          BEGIN
             SET @nErrNo = 218379
             SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode,'DSP') -- Pallet with 1 COD - Xock Pallet
             GOTO Quit
          END  
 
-IF @cCOD_Cnt >1  and @cUCC_Cnt =1
+IF @cCOD_Cnt >1  and @cUCC_Cnt =1   and  (@cCOD_SO > 0 or  @cUCC_SO > 0)
          BEGIN
             SET @nErrNo = 218380
             SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode,'DSP') --  Pallet with 2  COD - FF Pallet
             GOTO Quit
          END  
 
-IF  @cUCC_Cnt = 0
+IF  @cUCC_Cnt = 0    and  (@cCOD_SO > 0 or  @cUCC_SO > 0)
          BEGIN
             SET @nErrNo = 218381
             SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode,'DSP') --  Missing COD on Lottable03
