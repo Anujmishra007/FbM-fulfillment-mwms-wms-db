@@ -1,3 +1,8 @@
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
 /***************************************************************************************/
 /* Trigger: ntrOTMLogUpdate                                                         	*/
 /* Creation Date: 21-Sep-2016                                                       	*/

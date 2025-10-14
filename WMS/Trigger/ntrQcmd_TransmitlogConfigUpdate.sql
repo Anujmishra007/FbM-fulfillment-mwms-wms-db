@@ -1,5 +1,7 @@
-
- 
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
 
 /************************************************************************/  
 /* Trigger: ntrQcmd_TransmitlogConfigUpdate                             */  

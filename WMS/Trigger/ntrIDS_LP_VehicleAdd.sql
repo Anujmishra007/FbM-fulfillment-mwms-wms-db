@@ -1,9 +1,7 @@
-
-SET QUOTED_IDENTIFIER OFF 
+SET ANSI_NULLS OFF
 GO
-SET ANSI_NULLS OFF 
+SET QUOTED_IDENTIFIER OFF
 GO
-
 
 /************************************************************************/
 /* Trigger: ntrIDS_LP_VehicleAdd                                        */
@@ -25,8 +23,7 @@ GO
 /* Date        Author   Ver   Purposes                                  */
 /* 21-OCT-2011 YTWan    1.1   SOS#218979- HK DG loadPlan. - Populate    */
 /*                            vehicle number & vehicle type to loadplan */
-/*                            if configkey 'LPUPDVHCINFO' turn on       */  
-/* 06-OCT-2025 AK01     1.2   UWP-42143 Data Audit                      */   
+/*                            if configkey 'LPUPDVHCINFO' turn on       */   
 /************************************************************************/
 
 
@@ -133,24 +130,7 @@ BEGIN
       END
       --(Wan01) - END
    END
-   --AK01 - S
-   IF dbo.fnc_GetUserName() <> sUser_sName() AND @n_Continue IN (1,2) 
-   BEGIN
-      UPDATE IDS_LP_Vehicle
-        SET AddWho  = dbo.fnc_GetUserName(),
-            AddDate = dbo.fnc_GetDate(), 
-            TrafficCop = NULL 
-      FROM IDS_LP_Vehicle
-      JOIN INSERTED ON IDS_LP_Vehicle.VehicleNumber = INSERTED.VehicleNumber
-      SELECT @n_err = @@ERROR
-      IF @n_err <> 0
-      BEGIN
-         SELECT @n_continue = 3
-         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=72603
-         SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed On Table IDS_LP_Vehicle. (ntrIDS_LP_VehicleAdd)' + ' ( ' + ' SQLSvr MESSAGE=' + TRIM(@c_errmsg) + ' ) '
-      END
-   END
-   --AK01 - E
+
    /* #INCLUDE <TRMBOHA2.SQL> */
    IF @n_continue=3  -- Error Occured - Process And Return
    BEGIN

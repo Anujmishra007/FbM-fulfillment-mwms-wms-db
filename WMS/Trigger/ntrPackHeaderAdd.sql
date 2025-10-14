@@ -1,5 +1,4 @@
 
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -182,8 +181,7 @@ BEGIN
    BEGIN
       UPDATE PackHeader
         SET AddWho  = dbo.fnc_GetUserName(),
-            AddDate = dbo.fnc_GetDate(), 
-            TrafficCop = NULL 
+            AddDate = dbo.fnc_GetDate()
       FROM PackHeader
       JOIN INSERTED ON PackHeader.PickSlipNo = INSERTED.PickSlipNo
       SELECT @n_err = @@ERROR

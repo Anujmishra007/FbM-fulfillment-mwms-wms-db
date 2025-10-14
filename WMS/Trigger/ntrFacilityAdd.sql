@@ -62,8 +62,7 @@ BEGIN
    BEGIN
       UPDATE FACILITY
         SET AddWho  = dbo.fnc_GetUserName(),
-            AddDate = dbo.fnc_GetDate(), 
-            TrafficCop = NULL 
+            AddDate = dbo.fnc_GetDate()
       FROM FACILITY
       JOIN INSERTED ON FACILITY.Facility = INSERTED.Facility
       SELECT @n_err = @@ERROR

@@ -1,3 +1,8 @@
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
 /***************************************************************************************/
 /* Trigger: ntrPreAllocateStrategyUpdate                                           		*/
 /* Creation Date:  18-March-2020                                                   		*/
