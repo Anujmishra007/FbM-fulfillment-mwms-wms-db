@@ -40,6 +40,7 @@ GO
 /* 2025-07-02                 Version v2.1 & fixes                       */
 /* 2025-07-04                 Version v2.2 & fix                         */
 /* 2025-09-04                 fix                                        */
+/* 2025-10-10  SSA08    1.9   UWP-42248 -Enhanced session management     */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV02]
    @c_Wavekey      NVARCHAR(10)
@@ -638,10 +639,10 @@ BEGIN
       ,  [PickMethod]      [nvarchar](1)  NOT NULL DEFAULT (' ')
       ,  [WaveKey]         [nvarchar](10) NOT NULL DEFAULT (' ')
       ,  [EffectiveDate]   [datetime]     NOT NULL DEFAULT (getdate())
-      ,  [AddDate]         [datetime]     NOT NULL DEFAULT (getdate())
-      ,  [AddWho]          [nvarchar](128)NOT NULL DEFAULT (suser_sname())
-      ,  [EditDate]        [datetime]     NOT NULL DEFAULT (getdate())
-      ,  [EditWho]         [nvarchar](128)NOT NULL DEFAULT (suser_sname())
+      ,  [AddDate]         [datetime]     NOT NULL DEFAULT (dbo.fnc_GetDate())               --(SSA08)
+      ,  [AddWho]          [nvarchar](128)NOT NULL DEFAULT (dbo.fnc_GetUserName())           --(SSA08)
+      ,  [EditDate]        [datetime]     NOT NULL DEFAULT (dbo.fnc_GetDate())               --(SSA08)
+      ,  [EditWho]         [nvarchar](128)NOT NULL DEFAULT (dbo.fnc_GetUserName())           --(SSA08)
       ,  [TrafficCop]      [nvarchar](1)  NULL
       ,  [ArchiveCop]      [nvarchar](1)  NULL
       ,  [OptimizeCop]     [nvarchar](1)  NULL

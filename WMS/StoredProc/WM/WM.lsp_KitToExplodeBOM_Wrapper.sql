@@ -34,8 +34,9 @@ GO
 /* 2021-01-15  Wan03    1.2   Execute Login if @c_UserName<>SUSER_SNAME()*/
 /* 2023-04-20  BeeTin   1.3   JSM-131854 - Extended @c_id length         */    
 /*                            to NVARCHAR(36)                            */   
-/*************************************************************************/   
-CREATE PROCEDURE [WM].[lsp_KitToExplodeBOM_Wrapper]  
+/* 2025-09-02  SWT01    1.6   Enhanced session management pattern       */
+/*************************************************************************/
+CREATE OR ALTER PROCEDURE [WM].[lsp_KitToExplodeBOM_Wrapper]
    @c_KITKey               NVARCHAR(10)
 ,  @b_Success              INT          = 1  OUTPUT   
 ,  @n_Err                  INT          = 0  OUTPUT
@@ -53,6 +54,7 @@ BEGIN
 
    DECLARE @n_Continue           INT = 1
          , @n_StartTCnt          INT = @@TRANCOUNT
+         , @b_ExecuteAs          BIT = 0
 
    DECLARE @c_TableName          NVARCHAR(50)   = 'KITDETAIL'
          , @c_SourceType         NVARCHAR(50)   = 'lsp_KitToExplodeBOM_Wrapper'
@@ -112,20 +114,23 @@ BEGIN
 
    SET @n_ErrGroupKey = 0
 
-   SET @n_Err = 0 
-   
+   SET @n_Err = 0
+
+   -- Enhanced session management (SWT01)
    IF SUSER_SNAME() <> @c_UserName       --(Wan03) - START
    BEGIN
-      EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
-    
-      IF @n_Err <> 0 
+      EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT, @b_ExecuteAs = @b_ExecuteAs OUTPUT
+
+      IF @n_Err <> 0
       BEGIN
          GOTO EXIT_SP
       END
-                
-      EXECUTE AS LOGIN = @c_UserName        
+
+      IF @b_ExecuteAs = 1
+         EXECUTE AS LOGIN = @c_UserName
    END                                   --(Wan03) - END
-   
+   -- End enhanced session management (SWT01)
+
    BEGIN TRY   --(Wan01) --2020-12-18
   	
       IF @c_ProceedWithWarning = 'N' AND @n_WarningNo  < 1
@@ -718,8 +723,9 @@ BEGIN
       BEGIN TRAN
    END
 
-   REVERT      
-END  
+   IF @b_ExecuteAs = 1 REVERT -- (SWT01)
+   EXEC [WM].[lsp_ResetUser] -- (SWT01)
+END
 GO
 GRANT EXECUTE ON [WM].[lsp_KitToExplodeBOM_Wrapper] TO nSQL 
 GO

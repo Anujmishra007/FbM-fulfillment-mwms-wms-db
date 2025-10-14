@@ -26,6 +26,7 @@ GO
 /* 23-Nov-2021  Ung        WMS-17017 Add empty LOC                      */
 /* 2024-07-23   Deenis     FCR-427                                      */
 /* 2025-09-03   NickT      UWP-40547 Replease " AS '                    */
+/* 2025-10-10   SSA01      UWP-42248 -Enhanced session management       */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[ispRDTGenCountSheet] (
@@ -171,8 +172,8 @@ SELECT @n_LinesPerPage = 999
 UPDATE StockTakeSheetParameters  
    SET FinalizeStage = 0,  
        PopulateStage = 0,  
-       EditDate = GetDate(),  --tlting01  
-       EditWho  = SUser_SName()  
+       EditDate = dbo.fnc_GetDate(),    --(SSA01)  --tlting01
+       EditWho  = dbo.fnc_GetUserName()            --(SSA01)
 WHERE StockTakeKey = @c_StockTakeKey  
   
 IF dbo.fnc_RTrim(@c_WithQuantity) = '' OR @c_WithQuantity IS NULL  

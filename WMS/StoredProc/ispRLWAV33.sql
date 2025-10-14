@@ -28,6 +28,7 @@ GO
 /* 2023-04-25   WLChooi  1.4  WMS-22396 - Add Lot filter (WL03)             */
 /* 2023-04-25   WLChooi  1.4  DevOps Combine Script                         */
 /* 2023-05-24   WLChooi  1.5  JSM-151698 - Add filter for B2B (WL04)        */
+/* 2025-10-10   SSA01    1.6  UWP-42248 -Enhanced session management        */
 /****************************************************************************/       
     
 CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV33]          
@@ -227,10 +228,10 @@ CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV33]
          [PickMethod] [nvarchar](1) NOT NULL DEFAULT (' '),    
          [WaveKey] [nvarchar](10) NOT NULL DEFAULT (' '),    
          [EffectiveDate] [datetime] NOT NULL DEFAULT (getdate()),    
-         [AddDate] [datetime] NOT NULL DEFAULT (getdate()),    
-         [AddWho] [nvarchar](128) NOT NULL DEFAULT (suser_sname()),    
-         [EditDate] [datetime] NOT NULL DEFAULT (getdate()),    
-         [EditWho] [nvarchar](128) NOT NULL DEFAULT (suser_sname()),    
+         [AddDate] [datetime] NOT NULL DEFAULT (dbo.fnc_GetDate()),                  --(SSA01)
+         [AddWho] [nvarchar](128) NOT NULL DEFAULT (dbo.fnc_GetUserName()),          --(SSA01)
+         [EditDate] [datetime] NOT NULL DEFAULT (dbo.fnc_GetDate()),                 --(SSA01)
+         [EditWho] [nvarchar](128) NOT NULL DEFAULT (dbo.fnc_GetUserName()),         --(SSA01)
          [TrafficCop] [nvarchar](1) NULL,    
          [ArchiveCop] [nvarchar](1) NULL,    
          [OptimizeCop] [nvarchar](1) NULL,    
@@ -854,8 +855,8 @@ NEXT_LOOP:
       UPDATE WAVE         
       SET TMReleaseFlag = 'Y'                 
        ,  TrafficCop = NULL                   
-       ,  EditWho = SUSER_SNAME()             
-       ,  EditDate= GETDATE()                 
+       ,  EditWho = dbo.fnc_GetUserName()            --(SSA01)
+       ,  EditDate= dbo.fnc_GetDate()    --(SSA01)
       WHERE WAVEKEY = @c_wavekey          
        
       SELECT @n_err = @@ERROR    
@@ -911,8 +912,8 @@ NEXT_LOOP:
                UPDATE TASKDETAIL WITH (ROWLOCK) --TWL01  
                SET Groupkey   = @c_GroupKey    
                  , TrafficCop = NULL    
-                 , EditDate   = GETDATE()    
-                 , EditWho    = SUSER_SNAME()    
+                 , EditDate   = dbo.fnc_GetDate()    --(SSA01)
+                 , EditWho    = dbo.fnc_GetUserName()            --(SSA01)
                --WHERE TaskDetailKey = @c_TDTaskDetailKey --TWL01  
                WHERE Orderkey = @c_TDOrderkey --TWL01  
                AND AreaKey = @c_TDAreaKey --TWL01  

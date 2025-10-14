@@ -14,6 +14,7 @@ GO
 /* 11-03-2019 1.2  ChewKP    Fixes                                                             */
 /* 03-03-2022 1.3  CalvinK   JSM-54986 Fixed Rollback Tran bug when inv is not enough (CLVN01) */
 /* 02-10-2023 1.4  Ung       WMS-23702 RDT compatible message                                  */
+/* 10-10-2025 1.2  SSA01     UWP-42248 -Enhanced session management and cleanup                */
 /***********************************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[isp_RCM_ORD_CPV] (
@@ -177,8 +178,8 @@ BEGIN
                      -- Top up PickDetail
                      UPDATE PickDetail SET
                         QTY = QTY + @nQTY,
-                        EditWho = SUSER_SNAME(),
-                        EditDate = GETDATE()
+                        EditWho = dbo.fnc_GetUserName(),   --(SSA01)
+                        EditDate = dbo.fnc_GetDate()    --(SSA01)
                      WHERE PickDetailKey = @cPickDetailKey
                      IF @@ERROR <> 0
                         SET @cErrMsg = 'UPDATE PickDetail Fail'
@@ -283,8 +284,8 @@ BEGIN
                BEGIN
                   UPDATE PickDetail SET
                      Status = '5',
-                     EditDate = GETDATE(),
-                     EditWho = SUSER_SNAME()
+                     EditDate = dbo.fnc_GetDate(),    --(SSA01)
+                     EditWho = dbo.fnc_GetUserName()     --(SSA01)
                   WHERE PickDetailKey = @cPickDetailKey
                   IF @@ERROR <> 0
                      SET @cErrMsg = 'UPDATE PickDetail Fail'
@@ -294,8 +295,8 @@ BEGIN
                -- Reset flag
                UPDATE Orders SET
                   UserDefine10 = '',
-                  EditWho = SUSER_SNAME(),
-                  EditDate = GETDATE()
+                  EditWho = dbo.fnc_GetUserName(),      --(SSA01)
+                  EditDate = dbo.fnc_GetDate()    --(SSA01)
                WHERE OrderKey = @c_OrderKey
             END
          END
@@ -304,8 +305,8 @@ BEGIN
              -- Reset flag
             UPDATE Orders SET
                UserDefine10 = 'PARTIALALL',
-               EditWho = SUSER_SNAME(),
-               EditDate = GETDATE()
+               EditWho = dbo.fnc_GetUserName(),     --(SSA01)
+               EditDate = dbo.fnc_GetDate()    --(SSA01)
             WHERE OrderKey = @c_OrderKey
          END
       END

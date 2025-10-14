@@ -25,7 +25,8 @@ GO
 /* Date        Author   Ver   Purposes                                   */  
 /* 13-Mar-2019 NJOW01   1.0   WMS-8274 sku not pick face skip generate   */
 /*                            task                                       */
-/* 01-04-2020  Wan01    1.1   Sync Exceed & SCE                          */
+/* 01-Apr-2020  Wan01   1.1   Sync Exceed & SCE                          */
+/* 10-Oct-2025  SSA01   1.2  UWP-42248 -Enhanced session management      */
 /*************************************************************************/   
 
 CREATE PROCEDURE [dbo].[ispRLWAV17]      
@@ -143,10 +144,10 @@ CREATE PROCEDURE [dbo].[ispRLWAV17]
           [PickMethod] [nvarchar](1) NOT NULL DEFAULT (' '),
           [WaveKey] [nvarchar](10) NOT NULL DEFAULT (' '),
           [EffectiveDate] [datetime] NOT NULL DEFAULT (getdate()),
-          [AddDate] [datetime] NOT NULL DEFAULT (getdate()),
-          [AddWho] [nvarchar](128) NOT NULL DEFAULT (suser_sname()),
-          [EditDate] [datetime] NOT NULL DEFAULT (getdate()),
-          [EditWho] [nvarchar](128) NOT NULL DEFAULT (suser_sname()),
+          [AddDate] [datetime] NOT NULL DEFAULT (dbo.fnc_GetDate()),    --(SSA01)
+          [AddWho] [nvarchar](128) NOT NULL DEFAULT (dbo.fnc_GetUserName()),            --(SSA01)
+          [EditDate] [datetime] NOT NULL DEFAULT (dbo.fnc_GetDate()),   --(SSA01)
+          [EditWho] [nvarchar](128) NOT NULL DEFAULT (dbo.fnc_GetUserName()),           --(SSA01)
           [TrafficCop] [nvarchar](1) NULL,
           [ArchiveCop] [nvarchar](1) NULL,
           [OptimizeCop] [nvarchar](1) NULL,
@@ -355,7 +356,7 @@ CREATE PROCEDURE [dbo].[ispRLWAV17]
           --SET STATUS = '1' -- Released        --(Wan01) 
           SET TMReleaseFlag = 'Y'               --(Wan01) 
            ,  TrafficCop = NULL                 --(Wan01) 
-           ,  EditWho = SUSER_SNAME()           --(Wan01) 
+           ,  EditWho = dbo.fnc_GetUserName()           --(Wan01)(SSA01)
            ,  EditDate= GETDATE()               --(Wan01)
        WHERE WAVEKEY = @c_wavekey  
        SELECT @n_err = @@ERROR  

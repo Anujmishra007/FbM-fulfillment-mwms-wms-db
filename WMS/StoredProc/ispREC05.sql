@@ -23,6 +23,7 @@ GO
 /* 04-JUL-2022  CSCHONG  1.1  WMS-16175 disable trafficcop update (CS01)*/
 /* 06-JUL-2022  CSCHONG  1.2  WMS-16175 add insert Trans2 table (CS02)  */
 /* 03-AUG-2022  CSCHONG  1.3  WMS-20358 Revised update logic (CS03)     */
+/* 10-Oct-2025  SSA01    1.4  UWP-42248 -Enhanced session management    */
 /************************************************************************/
 
 CREATE OR ALTER PROC ispREC05   
@@ -95,8 +96,8 @@ BEGIN
              UPDATE RECEIPT WITH (ROWLOCK)
              SET ASNStatus = 'RCVD',
                --  Trafficcop = NULL,                       --CS01
-                 EditWho = SUSER_SNAME(),
-                 EditDate = GETDATE()
+                 EditWho = dbo.fnc_GetUserName(),           --(SSA01)
+                 EditDate = dbo.fnc_GetDate()    --(SSA01)
              WHERE Receiptkey = @c_Receiptkey
 
 

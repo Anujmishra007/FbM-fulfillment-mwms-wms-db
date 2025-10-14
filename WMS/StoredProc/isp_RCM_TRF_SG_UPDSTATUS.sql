@@ -25,6 +25,8 @@ GO
 /* Date         Author    Ver.  Purposes                                */
 /* 07-Jul-2023  WLChooi   1.0   DevOps Scripts Combine                  */
 /* 14-Jul-2023  WLChooi   1.1   Bug Fix for WMS-22937 (WL01)            */
+/* 10-Oct-2025  SSA01     1.2   UWP-42248 -Enhanced session management  */
+/*                              and cleanup.                            */
 /************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[isp_RCM_TRF_SG_UPDSTATUS]
    @c_Transferkey NVARCHAR(10)
@@ -133,8 +135,8 @@ BEGIN
          UPDATE [dbo].[TRANSFER]
          SET [Status] = '1'
            , TrafficCop = NULL
-           , EditDate = GETDATE()
-           , EditWho = SUSER_SNAME()
+           , EditDate = dbo.fnc_GetDate()    --(SSA01)
+           , EditWho = dbo.fnc_GetUserName()       --(SSA01)
          WHERE TransferKey = @c_Transferkey
 
          IF @@ERROR <> 0

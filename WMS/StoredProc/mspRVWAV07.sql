@@ -22,6 +22,7 @@ GO
 /* Updates:                                                              */
 /* Date        Author   Ver   Purposes                                   */
 /* 15-MAY-2025 NJOW     1.0   DEVOPS Combine Script                      */
+/* 10-Oct-2025 SSA01    1.1   UWP-42248 -Enhanced session management     */
 /*************************************************************************/
 
 CREATE OR ALTER PROCEDURE [dbo].[mspRVWAV07]
@@ -139,8 +140,8 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRVWAV07]
        UPDATE WAVE WITH (ROWLOCK)
           SET TMReleaseFlag = 'N'              
            ,  TrafficCop = NULL                
-           ,  EditWho = SUSER_SNAME()          
-           ,  EditDate= GETDATE()              
+           ,  EditWho = dbo.fnc_GetUserName()       --(SSA01)
+           ,  EditDate= dbo.fnc_GetDate()   --(SSA01)
        WHERE WAVEKEY = @c_wavekey
        SELECT @n_err = @@ERROR
        IF @n_err <> 0

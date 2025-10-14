@@ -12,6 +12,7 @@ GO
 /* Modifications:                                                               */
 /* Date         Ver.  Author    Purposes                                        */
 /* 2025-06-09   1.0.0 NickT     FCR-5727 Create                                 */
+/* 2025-10-10   1.1   SSA01     UWP-42248 -Enhanced session management          */
 /********************************************************************************/
 CREATE  OR ALTER PROC    [RDT].[nspTMTM04_JCB]
    @c_sendDelimiter    NVARCHAR(1)
@@ -248,7 +249,7 @@ BEGIN
                  ,UserKey = ''
                  ,Reasonkey = ''
                  ,EditDate = GetDate()     -- (SHONG08)
-                 ,EditWho  = sUSER_sNAME()
+                 ,EditWho  = dbo.fnc_GetUserName()        --(SSA01)
                  ,TrafficCop = NULL
                  ,DropId = '' -- SOS# 248996
            WHERE  UserKey = @c_userid
@@ -2150,40 +2151,63 @@ END
             SELECT @c_errmsg = CONVERT(NVARCHAR(5) ,@n_err)+' No Task!'
         END
 
-      IF NOT EXISTS (
-         SELECT 1
-         FROM dbo.PALLET P WITH (NOLOCK)
-            INNER JOIN dbo.TaskDetail TD WITH (NOLOCK)
-              ON P.PalletKey = TD.FromID
-           INNER JOIN RDT.RDTMOBREC RM WITH (NOLOCK)
-              ON RM.UserName = @c_userid
-              INNER JOIN EquipmentProfile EP WITH (NOLOCK)
-                 ON RM.C_String30 = EP.EquipmentProfileKey
-           WHERE TD.StorerKey = RM.StorerKey
-              AND TD.Status = '0'
-           AND P.StorerKey = RM.StorerKey
-              AND TD.AreaKey = @c_AreaKey01
-              AND P.GrossWgt <= EP.MaximumWeight
-      ) OR NOT EXISTS (
-         SELECT 1
-         FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
-            INNER JOIN RDT.RDTMOBREC RMR WITH (NOLOCK)
-              ON RMR.UserName = @c_userid
-             AND LLI.StorerKey = RMR.StorerKey
-            INNER JOIN dbo.TaskDetail TD WITH (NOLOCK)
-              ON LLI.ID = TD.FromID
-             AND TD.StorerKey = RMR.StorerKey
-           INNER JOIN dbo.SKU S WITH(NOLOCK)
-              ON S.SKU = LLI.SKU
-              INNER JOIN dbo.EquipmentProfile EP WITH (NOLOCK)
-                 ON RMR.C_String30 = EP.EquipmentProfileKey
-           WHERE TD.StorerKey = RMR.StorerKey
-              AND TD.Status = '0'
-              AND TD.AreaKey = @c_AreaKey01
-           AND LLI.Qty > 0
-         GROUP BY FromID, EP.MaximumWeight
-         HAVING SUM(TD.Qty * S.STDGROSSWGT) <= EP.MaximumWeight
-      )
+        IF (
+           NOT EXISTS (
+              SELECT 1
+              FROM dbo.PALLET AS P WITH (NOLOCK)
+                 INNER JOIN dbo.TaskDetail AS TD WITH (NOLOCK)
+                    ON P.PalletKey = TD.FromID
+                 INNER JOIN RDT.RDTMOBREC AS RM WITH (NOLOCK)
+                    ON RM.UserName = @c_userid
+                 INNER JOIN EquipmentProfile AS EP WITH (NOLOCK)
+                    ON RM.C_String30 = EP.EquipmentProfileKey
+              WHERE TD.StorerKey = RM.StorerKey
+                 AND (
+                    TD.Status = '0'
+                    OR (TD.Status = '3' AND TD.UserKey = @c_userid)
+                 )
+                 AND P.StorerKey = RM.StorerKey
+                 AND TD.AreaKey = @c_AreaKey01
+                 AND TaskType IN ('FCP', 'FCP1')
+                 AND P.GrossWgt <= EP.MaximumWeight
+           )
+           OR NOT EXISTS (
+              SELECT 1
+              FROM dbo.LOTxLOCxID AS LLI WITH (NOLOCK)
+                 INNER JOIN RDT.RDTMOBREC AS RMR WITH (NOLOCK)
+                    ON RMR.UserName = @c_userid
+                   AND LLI.StorerKey = RMR.StorerKey
+                 INNER JOIN dbo.TaskDetail AS TD WITH (NOLOCK)
+                    ON LLI.ID = TD.FromID
+                   AND TD.StorerKey = RMR.StorerKey
+                 INNER JOIN dbo.SKU AS S WITH (NOLOCK)
+                    ON S.SKU = LLI.SKU
+                 INNER JOIN dbo.EquipmentProfile AS EP WITH (NOLOCK)
+                    ON RMR.C_String30 = EP.EquipmentProfileKey
+              WHERE TD.StorerKey = RMR.StorerKey
+                 AND (
+                    TD.Status = '0'
+                    OR (TD.Status = '3' AND TD.UserKey = @c_userid)
+                 )
+                 AND TD.AreaKey = @c_AreaKey01
+                 AND LLI.Qty > 0
+                 AND TaskType IN ('FCP', 'FCP1')
+              GROUP BY FromID, EP.MaximumWeight
+              HAVING SUM(TD.Qty * S.STDGROSSWGT) <= EP.MaximumWeight
+           )
+        )
+           AND (
+              SELECT COUNT(FromID)
+              FROM dbo.TaskDetail AS TD WITH (NOLOCK)
+                 INNER JOIN RDT.RDTMOBREC AS RMR WITH (NOLOCK)
+                    ON RMR.UserName = @c_userid
+                   AND RMR.StorerKey = TD.StorerKey
+              WHERE TD.Status = '0'
+                 AND TD.AreaKey = @c_AreaKey01
+                 AND TaskType IN ('FCP', 'FCP1')
+             AND FromID <> ''
+           ) > 0
+           AND @n_err = 63060
       BEGIN
           SELECT @n_continue = 3
             SELECT @n_err = 109058

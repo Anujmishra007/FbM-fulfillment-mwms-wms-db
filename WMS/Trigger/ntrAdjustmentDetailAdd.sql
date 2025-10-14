@@ -1,4 +1,4 @@
-SET ANSI_NULLS OFF
+﻿SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -40,6 +40,7 @@ GO
 /* 23-JUL-2019  Wan02        1.8    WMS-9872 - CN_NIKESDC_Exceed_Channel       */
 /* 01-Jun-2020  Wan03        1.9    WMS-13117 - [CN] Sephora_WMS_ITRN_Add_UCC_CR*/
 /* 25-JUN-2025  SSA01        2.0       UWP-3982- Added PalletType in inventory */
+/* 09-Oct-2025  SPC040       2.1    Replace SUSER_SNAME with fnc_GetUserName   */
 /*******************************************************************************/
 
 CREATE OR ALTER TRIGGER [dbo].[ntrAdjustmentDetailAdd]
@@ -463,10 +464,10 @@ BEGIN
                UPDATE ADJUSTMENTDETAIL WITH (ROWLOCK)
                   SET TrafficCop = NULL,
                       ItrnKey = @c_itrnkey,
-                      AddDate = GETDATE(),
-                      AddWho  = suser_sname(),
-                      EditDate = GETDATE(),
-                      EditWho = suser_sname(),
+                      AddDate = dbo.fnc_GetDate(),
+                      AddWho  = dbo.fnc_GetUserName(),
+                      EditDate = dbo.fnc_GetDate(),
+                      EditWho = dbo.fnc_GetUserName(),
                       FinalizedFlag = 'Y'
                 WHERE AdjustmentKey = @c_ADJ_AdjustmentKey
                   AND AdjustmentLineNumber = @c_ADJ_AdjustmentLineNumber

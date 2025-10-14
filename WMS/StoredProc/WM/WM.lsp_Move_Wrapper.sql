@@ -1,4 +1,4 @@
-SET ANSI_NULLS OFF
+﻿SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -34,6 +34,8 @@ GO
 /* 2025-10-06  Michael  1.5   UWP-42038 - Inventory Moves not executed  */
 /*                            StorerCfg CheckNonCommingleSKUInMove On   */
 /*                            and move to non-CommingleSku loc (ML01)   */
+/* 2025-05-26  SWT01    1.6   Setting Session Context for user name     */
+/* 2025-10-10  SPC040   1.7   Replace SUSER_SNAME with fnc_GetUserName  */
 /************************************************************************/    
 CREATE OR ALTER PROCEDURE [WM].[lsp_Move_Wrapper]
    @c_Storerkey            NVARCHAR(15) 
@@ -63,20 +65,26 @@ BEGIN
    SET CONCAT_NULL_YIELDS_NULL OFF
     
    SET @n_Err = 0 
+   -- (SWT01) - START
+   DECLARE @b_ExecuteAs BIT = 0
    IF SUSER_SNAME() <> @c_UserName
    BEGIN 
       EXEC [WM].[lsp_SetUser] 
             @c_UserName = @c_UserName  OUTPUT
          ,  @n_Err      = @n_Err       OUTPUT
          ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
-             
+         ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
+         
       IF @n_Err <> 0 
       BEGIN
          GOTO EXIT_SP
       END
-                    
-      EXECUTE AS LOGIN = @c_UserName
+
+      IF @b_ExecuteAs = 1                    
+         EXECUTE AS LOGIN = @c_UserName
    END
+   -- (SWT01) - END
+
    --(Wan01) - START
    BEGIN TRY   
       DECLARE @n_Continue                    INT
@@ -327,7 +335,7 @@ BEGIN
                 
                 UPDATE TempMoveSKU
                 SET MoveKey = @c_Movekey  
-                WHERE AddWho = SUSER_SNAME()
+                WHERE AddWho = dbo.fnc_GetUserName()
                 AND ISNULL(Movekey,'')=''
              END                                               
           END
@@ -381,7 +389,11 @@ BEGIN
    BEGIN
       BEGIN TRAN
    END                              -- (Wan01) - END  
-   REVERT                           -- (Wan02) - Move down
+
+   IF @b_ExecuteAs = 1              -- (SWT01)
+      REVERT                        -- (Wan02) - Move down
+
+   EXEC [WM].[lsp_ResetUser]  -- (SWT01)
 END
 GO
 GRANT EXECUTE ON [WM].[lsp_Move_Wrapper] TO nSQL 

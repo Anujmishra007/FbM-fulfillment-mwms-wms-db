@@ -25,6 +25,8 @@ GO
 /* 26-NOV-2023 NJOW01   1.1   Fix busr7 to PREMIUN                      */
 /* 26-NOV-2023 NJOW02   1.2   avoid split same sku into multiple carton */
 /* 29-NOV-2023 NJOW03   1.3   Fix filter carton checking with orderkey  */
+/* 10-OCT-2025 SSA01    1.4   UWP-42248 -Enhanced session management    */
+/*                             and cleanup.                             */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[ispLPPK12]
    @cLoadKey    NVARCHAR(10),  
@@ -119,10 +121,10 @@ BEGIN
          [PickMethod] [nvarchar](1) NOT NULL DEFAULT (' '),
          [WaveKey] [nvarchar](10) NOT NULL DEFAULT (' '),
          [EffectiveDate] [datetime] NOT NULL DEFAULT (getdate()),
-         [AddDate] [datetime] NOT NULL DEFAULT (getdate()),
-         [AddWho] [nvarchar](128) NOT NULL DEFAULT (suser_sname()),
-         [EditDate] [datetime] NOT NULL DEFAULT (getdate()),
-         [EditWho] [nvarchar](128) NOT NULL DEFAULT (suser_sname()),
+         [AddDate] [datetime] NOT NULL DEFAULT (dbo.fnc_GetDate()),    --(SSA01)
+         [AddWho] [nvarchar](128) NOT NULL DEFAULT (dbo.fnc_GetUserName()),       --(SSA01)
+         [EditDate] [datetime] NOT NULL DEFAULT (dbo.fnc_GetDate()),   --(SSA01)
+         [EditWho] [nvarchar](128) NOT NULL DEFAULT (dbo.fnc_GetUserName()),       --(SSA01)
          [TrafficCop] [nvarchar](1) NULL,
          [ArchiveCop] [nvarchar](1) NULL,
          [OptimizeCop] [nvarchar](1) NULL,
@@ -861,7 +863,7 @@ BEGIN
                -- CartonNo and LabelLineNo will be inserted by trigger
                INSERT INTO PACKDETAIL (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, AddWho, AddDate, EditWho, EditDate, Refno, DropId)
                VALUES (@c_PickSlipNo, 0, @c_LabelNo, '00000', @c_StorerKey, @c_SKU,
-                       @n_PackQty, sUser_sName(), GETDATE(), sUser_sName(), GETDATE(), '', @c_LabelNo)
+                       @n_PackQty, dbo.fnc_GetUserName(), dbo.fnc_GetDate() , dbo.fnc_GetUserName(), dbo.fnc_GetDate() , '', @c_LabelNo)            --(SSA01)
                
                SET @nErr = @@ERROR
                IF @nErr <> 0

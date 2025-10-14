@@ -360,7 +360,7 @@ BEGIN
                         SET @nErrNo = 51379
                         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --InsSkipTskFail
                         GOTO Step_9_Fail
-                     END
+                     END                  
                   END
 
                   -- Update TaskDetail.Status
@@ -883,6 +883,7 @@ BEGIN
                      SET @cUDF17 = @nMQTY_RPL
                      SET @cUDF18 = @nPUOM_Div
                      SET @cUDF19 = @cLottableCode
+                     SET @cUDF20 = @cTaskDetailKey
 
                      SET @cOutField05 = ''
                      SET @cOutField15 = @cSuggSKU
@@ -1195,6 +1196,7 @@ BEGIN
                SET @cUDF17 = @nMQTY_RPL
                SET @cUDF18 = @nPUOM_Div
                SET @cUDF19 = @cLottableCode
+               SET @cUDF20 = @cTaskDetailKey
             END
             IF @nInputKey = 0 AND @nScn = 4022
             BEGIN

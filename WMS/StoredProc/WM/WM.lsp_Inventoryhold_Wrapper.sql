@@ -26,6 +26,8 @@ GO
 /* 2021-01-15  Wan02    1.2   Exec Login if @c_UserName<>SUSER_SNAME()  */
 /* 2024-03-30  TLTING01 1.3   Infinite loop on trancount commit         */
 /* 2025-09-24  MICHAEL  1.3   FCR-7829  Inventory UCC-level HOLD (ML01) */
+/* 2025-10-06  SSA01    1.4   UWP-42142 -Enhanced session management     */
+/*                             and cleanup.                              */
 /************************************************************************/
 CREATE OR ALTER PROCEDURE [WM].[lsp_Inventoryhold_Wrapper]
      @c_StorerKey   NVARCHAR(15)
@@ -64,17 +66,22 @@ BEGIN
     SET CONCAT_NULL_YIELDS_NULL OFF
 
    SET @n_Err = 0
-   IF SUSER_SNAME() <> @c_UserName       --(Wan02) - START
+    -- (SSA01) - START
+   DECLARE @b_ExecuteAs BIT = 0
+   IF SUSER_SNAME() <> @c_UserName AND @c_UserName <> ''      --(Wan02) - START
    BEGIN
-      EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
+      EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
 
       IF @n_Err <> 0
       BEGIN
          GOTO EXIT_SP
       END
 
-      EXECUTE AS LOGIN = @c_UserName
-   END                                   --(Wan02) - END
+      IF @b_ExecuteAs = 1
+            EXECUTE AS LOGIN = @c_UserName
+      END
+      -- (SSA01) - END
+     --(Wan02) - END
 
 
     DECLARE @n_Continue              INT
@@ -206,7 +213,10 @@ BEGIN
       END
       --RETURN --(Wan01) to Revert
    END
-   REVERT
+
+    IF @b_ExecuteAs = 1 REVERT -- (SSA01)
+
+   EXEC [WM].[lsp_ResetUser] -- (SSA01)
 END
 GO
 GRANT EXECUTE ON  [WM].[lsp_Inventoryhold_Wrapper] TO [NSQL]

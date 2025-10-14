@@ -36,6 +36,7 @@ GO
 /*                            issue                                     */
 /*                            PerformanceTune to reduce blocking        */
 /*                            Remove WIP update                         */
+/* 2025-10-10  SSA01    1.2   UWP-42248 -Enhanced session management    */
 /************************************************************************/
 
 CREATE OR ALTER PROC dbo.mspPARL01
@@ -288,8 +289,8 @@ BEGIN
       UPDATE RECEIPTDETAIL WITH (ROWLOCK)
          SET PutawayLoc = ''
             ,TrafficCop = NULL
-            ,EditDate = GETDATE()
-            ,EditWho  = SUSER_SNAME()
+            ,EditDate = dbo.fnc_GetDate()   --(SSA01)
+            ,EditWho  = dbo.fnc_GetUserName()          --(SSA01)
       WHERE ReceiptKey = @c_ReceiptKey
       AND   ReceiptLineNumber = @c_ReceiptLineNumber
 
@@ -1045,8 +1046,8 @@ BEGIN
                      UPDATE RECEIPTDETAIL WITH (ROWLOCK)
                         SET PutawayLoc = @c_FinalLoc
                            ,TrafficCop = NULL
-                           ,EditDate = GETDATE()
-                           ,EditWho  = SUSER_SNAME()
+                           ,EditDate = dbo.fnc_GetDate()   --(SSA01)
+                           ,EditWho  = dbo.fnc_GetUserName()         --(SSA01)
                      WHERE ReceiptKey = @c_ReceiptKey
                      AND   ReceiptLineNumber = @c_ReceiptLineNumber
 

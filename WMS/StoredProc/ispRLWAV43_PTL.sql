@@ -26,6 +26,7 @@ GO
 /* 2022-04-26  Wan02    1.2   WMS-19522 - RG - Adidas SEA - Release Wave*/
 /*                            on DP Loc Sequence                        */
 /* 2022-12-02  Wan03    1.3   Fixed Blocking                            */
+/* 2025-10-10  SSA01    1.4   UWP-42248 -Enhanced session management    */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[ispRLWAV43_PTL]
@@ -191,8 +192,8 @@ BEGIN
    ------------------------------------------------------ 
    UPDATE o WITH (ROWLOCK)
    SET   InvoiceNo = ''                --Wan01
-      ,  EditWho = SUSER_SNAME()
-      ,  EditDate= GETDATE()
+      ,  EditWho = dbo.fnc_GetUserName()       --(SSA01)
+      ,  EditDate= dbo.fnc_GetDate()    --(SSA01)
       ,  TrafficCop = NULL
    FROM dbo.ORDERS AS o
    WHERE o.InvoiceNo = 'FAILPTL'       --Wan01
@@ -270,8 +271,8 @@ BEGIN
  
       UPDATE o WITH (ROWLOCK)
       SET   InvoiceNo = 'FAILPTL'         --Wan01
-         ,  EditWho = SUSER_SNAME()
-         ,  EditDate= GETDATE()
+         ,  EditWho = dbo.fnc_GetUserName()          --(SSA01)
+         ,  EditDate= dbo.fnc_GetDate()    --(SSA01)
          ,  TrafficCop = NULL
       FROM UPDORD uo                      --Wan01 
       JOIN ORDERS o ON o.Orderkey = uo.Orderkey
@@ -498,8 +499,8 @@ BEGIN
       
       UPDATE o WITH (ROWLOCK)
       SET   InvoiceNo = 'FAILPTL'         --Wan01
-         ,  EditWho = SUSER_SNAME()
-         ,  EditDate= GETDATE()
+         ,  EditWho = dbo.fnc_GetUserName()           --(SSA01)
+         ,  EditDate= dbo.fnc_GetDate()    --(SSA01)
          ,  TrafficCop = NULL
       FROM ORDERS o 
       WHERE EXISTS ( SELECT 1 FROM @t_MultiOrder AS tmo 
@@ -604,8 +605,8 @@ BEGIN
          UPDATE p WITH (ROWLOCK)
             SET PickSlipNo = @c_TaskBatchNo
                , Notes = @c_Wavekey + '-' + @c_PickZone + '-' + RIGHT(@c_TaskBatchNo,3) + CASE WHEN @c_PickZone = '' THEN '-4' ELSE '-1' END
-               , EditWho  = SUSER_SNAME()
-               , EditDate = GETDATE()
+               , EditWho  = dbo.fnc_GetUserName()       --(SSA01)
+               , EditDate = dbo.fnc_GetDate()    --(SSA01)
                , Trafficcop = NULL
          FROM PICKDETAIL as p
          --JOIN o ON o.PickDetailKey = p.PickDetailKey

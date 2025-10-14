@@ -28,6 +28,7 @@ GO
 /*                            UOM = 2 (Full Carton). Then allow reverse  */
 /* 22-Jul-2025 WLC015   1.3   FCR-6612 Update Orderinfo.ReferenceID to   */
 /*                            blank (WL01)                               */
+/* 10-Oct-2025 SSA01    1.4  UWP-42248 -Enhanced session management      */
 /*************************************************************************/     
 CREATE OR ALTER PROCEDURE [dbo].[mspRVWAV03]        
  @c_wavekey      NVARCHAR(10) 
@@ -311,7 +312,7 @@ BEGIN
       BEGIN
          UPDATE ORDERS WITH (ROWLOCK)
             SET ContainerQty = 0
-               ,EditDate = GETDATE()
+               ,EditDate = dbo.fnc_GetDate()   --(SSA01)
                ,TrafficCop = NULL
          WHERE Orderkey = @c_Orderkey
 
@@ -370,8 +371,8 @@ BEGIN
       UPDATE WAVE   
          SET TMReleaseFlag = 'N'                
           ,  TrafficCop = NULL                  
-          ,  EditWho = SUSER_SNAME()            
-          ,  EditDate= GETDATE()                 
+          ,  EditWho = dbo.fnc_GetUserName()          --(SSA01)
+          ,  EditDate= dbo.fnc_GetDate()   --(SSA01)
       WHERE WAVEKEY = @c_wavekey                
       SELECT @n_err = @@ERROR    
       IF @n_err <> 0    

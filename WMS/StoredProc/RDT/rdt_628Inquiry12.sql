@@ -452,6 +452,8 @@ CREATE OR ALTER PROCEDURE [RDT].[rdt_628Inquiry12] (
          SET @nPQTY_PMV = 0
          SET @nPQTY_TTL = 0
          SET @nPQTY_RPL = 0
+         SET @cUserDefine01 = '0'
+         SET @cUserDefine02 = (CAST(@nMQTY_TTL AS INT) - CAST(@nMQTY_Pick AS INT))
       END
       ELSE
       BEGIN

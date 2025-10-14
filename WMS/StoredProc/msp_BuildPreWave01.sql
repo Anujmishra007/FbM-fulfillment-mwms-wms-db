@@ -169,8 +169,8 @@ BEGIN
           ) v(Restriction, RestrictionBuildValue)
           WHERE BP.BuildParmKey = @c_BuildParmKey
       )
-      SELECT @n_NoOfChute   = MAX(CASE WHEN Restriction LIKE '%NoOfChute%' THEN RestrictionBuildValue ELSE 0 END)
-           , @n_NoOfPutwall = MAX(CASE WHEN Restriction LIKE '%NoOfPutwall%' THEN RestrictionBuildValue ELSE 0 END)
+      SELECT @n_NoOfChute   = MAX(CASE WHEN Restriction LIKE '%Chute%' THEN RestrictionBuildValue ELSE 0 END)
+           , @n_NoOfPutwall = MAX(CASE WHEN Restriction LIKE '%Putwall%' THEN RestrictionBuildValue ELSE 0 END)
            , @n_MaxOpenQty  = MAX(CASE WHEN Restriction = '2_MaxQtyPerBuild' THEN RestrictionBuildValue ELSE 0 END)
       FROM CTEBuildParm
 
@@ -183,15 +183,15 @@ BEGIN
    
    IF @n_Continue IN (1,2)
    BEGIN
-      SELECT @n_NoOfChuteMin     = ISNULL(MAX(CASE WHEN CL.Code = 'Chute' THEN ISNULL(TRY_CAST(CL.Short AS INT), 0) ELSE 0 END), 0)
-           , @n_NoOfChuteMax     = ISNULL(MAX(CASE WHEN CL.Code = 'Chute' THEN ISNULL(TRY_CAST(CL.Long AS INT), 0) ELSE 0 END), 0)
-           , @n_NoOfPutwallMin   = ISNULL(MAX(CASE WHEN CL.Code = 'Putwall' THEN ISNULL(TRY_CAST(CL.Short AS INT), 0) ELSE 0 END), 0) 
-           , @n_NoOfPutwallMax   = ISNULL(MAX(CASE WHEN CL.Code = 'Putwall' THEN ISNULL(TRY_CAST(CL.Long AS INT), 0) ELSE 0 END), 0)
-           , @n_PutwallMinQty    = ISNULL(MAX(CASE WHEN CL.Code = 'Putwall' THEN ISNULL(TRY_CAST(CL.UDF01 AS INT), 0) ELSE 0 END), 0) 
-           , @n_PutwallMaxQty    = ISNULL(MAX(CASE WHEN CL.Code = 'Putwall' THEN ISNULL(TRY_CAST(CL.UDF02 AS INT), 0) ELSE 0 END), 0) 
+      SELECT @n_NoOfChuteMin     = ISNULL(MAX(CASE WHEN CL.Code = '10_Chute' THEN ISNULL(TRY_CAST(CL.Short AS INT), 0) ELSE 0 END), 0)
+           , @n_NoOfChuteMax     = ISNULL(MAX(CASE WHEN CL.Code = '10_Chute' THEN ISNULL(TRY_CAST(CL.Long AS INT), 0) ELSE 0 END), 0)
+           , @n_NoOfPutwallMin   = ISNULL(MAX(CASE WHEN CL.Code = '11_Putwall' THEN ISNULL(TRY_CAST(CL.Short AS INT), 0) ELSE 0 END), 0) 
+           , @n_NoOfPutwallMax   = ISNULL(MAX(CASE WHEN CL.Code = '11_Putwall' THEN ISNULL(TRY_CAST(CL.Long AS INT), 0) ELSE 0 END), 0)
+           , @n_PutwallMinQty    = ISNULL(MAX(CASE WHEN CL.Code = '11_Putwall' THEN ISNULL(TRY_CAST(CL.UDF01 AS INT), 0) ELSE 0 END), 0) 
+           , @n_PutwallMaxQty    = ISNULL(MAX(CASE WHEN CL.Code = '11_Putwall' THEN ISNULL(TRY_CAST(CL.UDF02 AS INT), 0) ELSE 0 END), 0) 
       FROM CODELKUP CL WITH (NOLOCK)
       WHERE CL.LISTNAME = 'PWAVRESVAL'
-      AND CL.Code IN ('Chute', 'Putwall')
+      AND CL.Code IN ('10_Chute', '11_Putwall')
       AND CL.Storerkey = @c_Storerkey
 
       IF NOT (@n_NoOfChute BETWEEN @n_NoOfChuteMin AND @n_NoOfChuteMax)

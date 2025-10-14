@@ -1,4 +1,4 @@
-SET ANSI_NULLS OFF
+﻿SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -58,6 +58,7 @@ GO
 /* 18-Aug-2023  NJOW03       2.4    DEVOPS Combine Script                      */
 /* 27-May-2025  Ansuman01    2.5    UWP-32480 - Lot,Loc,Id validation          */
 /* 25-JUN-2025  SSA01        2.6    UWP-3982- Added PalletType in inventory    */
+/* 09-Oct-2025  SPC040       2.7    Replace SUSER_SNAME with fnc_GetUserName   */
 /*******************************************************************************/
 
 CREATE OR ALTER TRIGGER [dbo].[ntrAdjustmentDetailUpdate]
@@ -109,8 +110,8 @@ BEGIN
         BEGIN
             UPDATE ADJUSTMENTDETAIL WITH (ROWLOCK)
             SET TrafficCop = NULL,
-                EditDate = GETDATE(),
-                EditWho = SUSER_SNAME()
+                EditDate = dbo.fnc_GetDate(),
+                EditWho = dbo.fnc_GetUserName()
             FROM ADJUSTMENTDETAIL
                      JOIN INSERTED ON ( ADJUSTMENTDETAIL.AdjustmentKey = inserted.AdjustmentKey
                 AND ADJUSTMENTDETAIL.AdjustmentLineNumber = inserted.AdjustmentLineNumber )
@@ -137,8 +138,8 @@ BEGIN
         BEGIN
             UPDATE ADJUSTMENTDETAIL WITH (ROWLOCK)
             SET TrafficCop = NULL,
-                EditDate = GETDATE(),
-                EditWho = SUSER_SNAME()
+                EditDate = dbo.fnc_GetDate(),
+                EditWho = dbo.fnc_GetUserName()
             FROM ADJUSTMENTDETAIL
                      JOIN INSERTED ON ( ADJUSTMENTDETAIL.AdjustmentKey = inserted.AdjustmentKey
                 AND ADJUSTMENTDETAIL.AdjustmentLineNumber = inserted.AdjustmentLineNumber )
@@ -516,10 +517,10 @@ BEGIN
                                             UPDATE ADJUSTMENTDETAIL WITH (ROWLOCK)
                                             SET TrafficCop = NULL
                                               , Finalizedflag = 'F'
-                                              , AddDate = GETDATE()
-                                              , AddWho  = SUSER_NAME()
-                                              , EditDate= GETDATE()
-                                              , EditWho = SUSER_NAME()
+                                              , AddDate = dbo.fnc_GetDate()
+                                              , AddWho  = dbo.fnc_GetUserName()
+                                              , EditDate= dbo.fnc_GetDate()
+                                              , EditWho = dbo.fnc_GetUserName()
                                             WHERE AdjustmentKey = @c_ADJ_AdjustmentKey
                                               AND AdjustmentLineNumber = @c_ADJ_AdjustmentLineNumber
 
@@ -639,8 +640,8 @@ BEGIN
                                                                 Status = CASE WHEN (Qty + @n_ADJ_Qty) = 0 THEN '0'
                                                                               ELSE '1'
                                                                     END,
-                                                                EditDate = GETDATE(),           -- tlting
-                                                                EditWho = SUSER_SNAME()
+                                                                EditDate = dbo.fnc_GetDate(),           -- tlting
+                                                                EditWho = dbo.fnc_GetUserName()
                                                             WHERE StorerKey = @c_ADJ_StorerKey
                                                               AND   Sku   = @c_ADJ_Sku                     --(Wan04)
                                                               AND   UCCNo = @c_ADJ_UCCNo
@@ -665,10 +666,10 @@ BEGIN
                                     UPDATE ADJUSTMENTDETAIL WITH (ROWLOCK)
                                     SET TrafficCop = NULL,
                                         ItrnKey = @c_itrnkey,
-                                        AddDate = GETDATE(),
-                                        AddWho  = suser_sname(),
-                                        EditDate = GETDATE(),
-                                        EditWho = suser_sname(),
+                                        AddDate = dbo.fnc_GetDate(),
+                                        AddWho  = dbo.fnc_GetUserName(),
+                                        EditDate = dbo.fnc_GetDate(),
+                                        EditWho = dbo.fnc_GetUserName(),
                                         Channel_ID = @n_Channel_ID -- (SWT02)
                                     WHERE AdjustmentKey = @c_ADJ_AdjustmentKey
                                       AND AdjustmentLineNumber = @c_ADJ_AdjustmentLineNumber

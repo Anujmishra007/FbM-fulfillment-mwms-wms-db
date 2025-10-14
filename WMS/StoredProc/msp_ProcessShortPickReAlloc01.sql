@@ -22,6 +22,7 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 01-Oct-2025 WLChooi  1.0   Initial Version                           */
+/* 10-Oct-2025 SSA01    1.1   UWP-42248 -Enhanced session management    */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[msp_ProcessShortPickReAlloc01] (    
@@ -95,17 +96,6 @@ BEGIN
          , @c_Message02                NVARCHAR(20) = ''
          , @c_TableName                NVARCHAR(30) = ''
 
-   DECLARE @T_AllocOrders TABLE (    
-         OrderKey    NVARCHAR(10) 
-   )
-
-   DECLARE @T_ORDERSKU TABLE (
-         Orderkey    NVARCHAR(10)
-       , Storerkey   NVARCHAR(15)
-       , SKU         NVARCHAR(20)
-       , WCS         NVARCHAR(10) DEFAULT 0
-   )
-                         
    SET @n_StartTCnt = @@TRANCOUNT
    SET @b_Success = 0
    SET @n_Err     = 0
@@ -121,6 +111,18 @@ BEGIN
    
    IF (@n_Continue = 1 OR @n_Continue = 2)
    BEGIN
+      CREATE TABLE #T_AllocOrders (    
+            OrderKey    NVARCHAR(10) PRIMARY KEY
+      )
+
+      CREATE TABLE #T_ORDERSKU (
+            Orderkey    NVARCHAR(10)
+          , Storerkey   NVARCHAR(15)
+          , SKU         NVARCHAR(20)
+          , WCS         NVARCHAR(10) DEFAULT 0
+          , PRIMARY KEY (Orderkey, Storerkey, SKU)
+      )
+
       CREATE TABLE #PickDetail_WIP
       (
          [PickDetailKey]        [NVARCHAR](18)   NOT NULL PRIMARY KEY
@@ -151,10 +153,10 @@ BEGIN
        , [PickMethod]           [NVARCHAR](1)    NOT NULL DEFAULT (' ')
        , [WaveKey]              [NVARCHAR](10)   NOT NULL DEFAULT (' ')
        , [EffectiveDate]        [DATETIME]       NOT NULL DEFAULT (GETDATE())
-       , [AddDate]              [DATETIME]       NOT NULL DEFAULT (GETDATE())
-       , [AddWho]               [NVARCHAR](128)  NOT NULL DEFAULT (SUSER_SNAME())
-       , [EditDate]             [DATETIME]       NOT NULL DEFAULT (GETDATE())
-       , [EditWho]              [NVARCHAR](128)  NOT NULL DEFAULT (SUSER_SNAME())
+       , [AddDate]              [DATETIME]       NOT NULL DEFAULT (dbo.fnc_GetDate())              --(SSA01)
+       , [AddWho]               [NVARCHAR](128)  NOT NULL DEFAULT (dbo.fnc_GetUserName())          --(SSA01)
+       , [EditDate]             [DATETIME]       NOT NULL DEFAULT (dbo.fnc_GetDate())              --(SSA01)
+       , [EditWho]              [NVARCHAR](128)  NOT NULL DEFAULT (dbo.fnc_GetUserName())          --(SSA01)
        , [TrafficCop]           [NVARCHAR](1)    NULL
        , [ArchiveCop]           [NVARCHAR](1)    NULL
        , [OptimizeCop]          [NVARCHAR](1)    NULL
@@ -220,6 +222,7 @@ BEGIN
    END
 
    --Validation
+   --RDT update QtyMoved = Qty, Qty = 0, Status = '4'
    IF (@n_Continue = 1 OR @n_Continue = 2)
    BEGIN
       IF NOT EXISTS ( SELECT 1
@@ -227,72 +230,28 @@ BEGIN
                       WHERE PD.Storerkey = @c_StorerKey
                       AND PD.Sku = @c_SKU    
                       AND PD.DropID = @c_UCCNo    
-                      AND PD.Qty > 0    
-                      AND PD.[Status] < '5' )    
+                      AND PD.QtyMoved > 0
+                      AND PD.Qty = 0
+                      AND PD.[Status] = '4' )    
       BEGIN
          SELECT @n_Continue = 3
          SELECT @n_Err = 64503
-         SELECT @c_Errmsg = 'NSQL'+ CONVERT(NVARCHAR(5), @n_Err)+': No Record Found (msp_ProcessShortPickReAlloc01)'
+         SELECT @c_Errmsg = 'NSQL'+ CONVERT(NVARCHAR(5), @n_Err)+': UCC#: ' + TRIM(@c_UCCNo) + ' No Record Found (msp_ProcessShortPickReAlloc01)'
                           + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(TRIM(@c_Errmsg), '') + ' ) '   
       END
    END
    
-   --Un-allocate Wave    
-   --Update PickDetail.Qty to Zero    
-   --Only for PickDetail.Status < '5'
+   --Get Orderkeys that have UCC being shorted
    IF (@n_Continue = 1 OR @n_Continue = 2)
    BEGIN
-      IF @b_debug = 0
-      BEGIN
-         BEGIN TRAN
-      END
-
-      SET @CUR_PickDetailKey = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR    
-      SELECT PD.OrderKey, PD.PickDetailKey    
+      INSERT INTO #T_AllocOrders (OrderKey)
+      SELECT PD.OrderKey
       FROM PICKDETAIL PD WITH (NOLOCK)    
       WHERE PD.Storerkey = @c_StorerKey    
       AND   PD.Sku = @c_SKU    
       AND   PD.DropID = @c_UCCNo    
-      AND   PD.[Status] IN ('0','1','2','3','4')  
-        
-      OPEN @CUR_PickDetailKey    
-                 
-      FETCH FROM @CUR_PickDetailKey INTO @c_Orderkey, @c_PickDetailKey    
-                 
-      WHILE @@FETCH_STATUS = 0 AND @n_Continue IN (1,2)
-      BEGIN    
-         IF NOT EXISTS ( SELECT 1 
-                         FROM @T_AllocOrders T
-                         WHERE T.OrderKey = @c_Orderkey )    
-         BEGIN    
-            INSERT INTO @T_AllocOrders (OrderKey)
-            VALUES (@c_Orderkey)    
-         END
-
-         BEGIN TRY
-            UPDATE dbo.PICKDETAIL
-            SET Qty = 0
-              , QtyMoved = Qty
-              , [Status] = '4'
-            WHERE PickDetailKey = @c_PickDetailKey
-         END TRY
-         BEGIN CATCH
-            SET @n_Continue = 3
-            SET @c_ErrMsg = ERROR_MESSAGE()
-         END CATCH
-              
-         FETCH FROM @CUR_PickDetailKey INTO @c_Orderkey, @c_PickDetailKey    
-      END             
-      CLOSE @CUR_PickDetailKey    
-      DEALLOCATE @CUR_PickDetailKey
-
-      IF @b_debug = 0
-      BEGIN
-         WHILE @@TRANCOUNT > 0
-         BEGIN
-            COMMIT TRAN
-         END
-      END
+      AND   PD.[Status] = '4'
+      GROUP BY PD.OrderKey
    END
 
    --Rollback UCC Status to 1
@@ -417,7 +376,7 @@ BEGIN
               , ReAllocStatus = CASE WHEN SUM(PD.Qty) = 0 THEN '0' ELSE '1' END
               , QtyInDiff = ABS(SUM(PD.QtyMoved) - SUM(PD.Qty))
          FROM #PickDetail_WIP PD (NOLOCK)
-         JOIN @T_AllocOrders T ON PD.OrderKey = T.OrderKey
+         JOIN #T_AllocOrders T ON PD.OrderKey = T.OrderKey
          WHERE PD.[Status] <= '4'
          GROUP BY PD.OrderKey
          HAVING SUM(PD.Qty) < SUM(PD.QtyMoved)   --Only check Not/Partial allocated after reallocation
@@ -425,7 +384,7 @@ BEGIN
          SELECT Orderkey = PD.Orderkey
               , Pickdetailkey = PD.PickDetailKey
          FROM #PickDetail_WIP PD (NOLOCK)
-         JOIN @T_AllocOrders T ON PD.OrderKey = T.OrderKey
+         JOIN #T_AllocOrders T ON PD.OrderKey = T.OrderKey
          WHERE PD.[Status] IN ('4')
          GROUP BY PD.PickDetailKey, PD.OrderKey
       )
@@ -507,7 +466,7 @@ BEGIN
       AND wod.[Type] IN ( 'S02', 'S06', 'J05' )
       AND wod.Qty > 0
 
-      INSERT INTO @T_ORDERSKU (Orderkey, Storerkey, SKU, WCS)
+      INSERT INTO #T_ORDERSKU (Orderkey, Storerkey, SKU, WCS)
       SELECT DISTINCT P.OrderKey, P.Storerkey, P.SKU, 0
       FROM #PickDetail_WIP P
       WHERE P.WaveKey = @c_Wavekey
@@ -524,9 +483,9 @@ BEGIN
 
       IF @c_WCSPack IN ( '', 'Y' ) -- Full WCS Cartonizartion: Not Setup OR Setup with 'Y'
       BEGIN
-         UPDATE @T_ORDERSKU
+         UPDATE #T_ORDERSKU
             SET WCS = 1
-         FROM @T_ORDERSKU os
+         FROM #T_ORDERSKU os
          JOIN SKUInfo si (NOLOCK) ON  si.Storerkey = os.Storerkey          
                                   AND si.Sku = os.Sku 
          WHERE si.ExtendedField06 = 'sortable' 
@@ -534,9 +493,9 @@ BEGIN
       END
       ELSE IF @c_WCSPack = 'N'
       BEGIN
-         UPDATE @T_ORDERSKU
+         UPDATE #T_ORDERSKU
             SET WCS = 1
-         FROM @T_ORDERSKU os
+         FROM #T_ORDERSKU os
          JOIN SKUInfo si (NOLOCK) ON  si.Storerkey = os.Storerkey          
                                   AND si.Sku = os.Sku 
          WHERE si.ExtendedField06 = 'sortable' 
@@ -548,9 +507,9 @@ BEGIN
 
          -- WCSPACKREQ type need WCS but with 'WCSCTNIZE' = 'N', this type unable to do
          -- WCS correctly. WCS cartonizaton if all workorder types are not found in 'WCSPACKREQ'
-         UPDATE @T_ORDERSKU
+         UPDATE #T_ORDERSKU
             SET WCS = 1
-         FROM @T_ORDERSKU os
+         FROM #T_ORDERSKU os
          JOIN SKUInfo si (NOLOCK) ON  si.Storerkey = os.Storerkey          
                                   AND si.Sku = os.Sku 
          WHERE si.ExtendedField06 = 'sortable' 
@@ -585,7 +544,7 @@ BEGIN
               , P.UOM, P.PickMethod, P.Dropid, P.CaseID, OD.WCS
               , L.LogicalLocation, L.LocationType, L.PutawayZone
          FROM #PickDetail_WIP P
-         JOIN @T_ORDERSKU OD ON  OD.Orderkey = P.Orderkey
+         JOIN #T_ORDERSKU OD ON  OD.Orderkey = P.Orderkey
                              AND OD.Storerkey = P.Storerkey
                              AND OD.Sku = P.Sku
          JOIN LOC L (NOLOCK) ON L.Loc = P.Loc
@@ -1064,6 +1023,12 @@ BEGIN
    END
 
    QUIT_SP:
+   IF OBJECT_ID('tempdb..#T_AllocOrders ','u') IS NOT NULL 
+      DROP TABLE #T_AllocOrders
+
+   IF OBJECT_ID('tempdb..#T_ORDERSKU ','u') IS NOT NULL 
+      DROP TABLE #T_ORDERSKU
+
    IF (XACT_STATE()) = -1 
    BEGIN
       SET @n_Continue = 3

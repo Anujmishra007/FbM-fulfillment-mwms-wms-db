@@ -24,6 +24,7 @@ GO
 /* 18-APR-2023 NJOW     1.0   DEVOPS Combine Script                     */
 /* 29-AUG-2023 NJOW01   1.1   WMS-22210  Add item lenght & height       */ 
 /*                            validation                                */
+/* 10-Oct-2025 SSA01    1.2  UWP-42248 -Enhanced session management     */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[ispRLWAV58_PACK]
            @c_Wavekey                 NVARCHAR(10)
@@ -123,10 +124,10 @@ BEGIN
          [PickMethod] [nvarchar](1) NOT NULL DEFAULT (' '),
          [WaveKey] [nvarchar](10) NOT NULL DEFAULT (' '),
          [EffectiveDate] [datetime] NOT NULL DEFAULT (getdate()),
-         [AddDate] [datetime] NOT NULL DEFAULT (getdate()),
-         [AddWho] [nvarchar](128) NOT NULL DEFAULT (suser_sname()),
-         [EditDate] [datetime] NOT NULL DEFAULT (getdate()),
-         [EditWho] [nvarchar](128) NOT NULL DEFAULT (suser_sname()),
+         [AddDate] [datetime] NOT NULL DEFAULT (dbo.fnc_GetDate()),         --(SSA01)
+         [AddWho] [nvarchar](128) NOT NULL DEFAULT (dbo.fnc_GetUserName()),           --(SSA01)
+         [EditDate] [datetime] NOT NULL DEFAULT (dbo.fnc_GetDate()),      --(SSA01)
+         [EditWho] [nvarchar](128) NOT NULL DEFAULT (dbo.fnc_GetUserName()),          --(SSA01)
          [TrafficCop] [nvarchar](1) NULL,
          [ArchiveCop] [nvarchar](1) NULL,
          [OptimizeCop] [nvarchar](1) NULL,
@@ -907,7 +908,7 @@ BEGIN
                -- CartonNo and LabelLineNo will be inserted by trigger
                INSERT INTO PACKDETAIL (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, AddWho, AddDate, EditWho, EditDate, Refno)
                VALUES (@c_PickSlipNo, 0, @c_LabelNo, '00000', @c_StorerKey, @c_SKU,
-                       @n_PackQty, sUser_sName(), GETDATE(), sUser_sName(), GETDATE(), '')
+                       @n_PackQty, dbo.fnc_GetUserName(), dbo.fnc_GetDate(), dbo.fnc_GetUserName(), dbo.fnc_GetDate(), '')            --(SSA01)
                
                SET @n_err = @@ERROR
                IF @n_err <> 0

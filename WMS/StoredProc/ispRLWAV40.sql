@@ -30,7 +30,8 @@ GO
 /* 2021-08-16   WLChooi  1.1  WMS-17699 - Update New Logic (WL01)        */  
 /* 2022-10-12   WyeChun  1.2  JSM-94410 - Change LocationCategory from   */  
 /*                            SHELVING to DPP to prevent insertion of    */  
-/*                            TaskDetail (WC01)                          */ 
+/*                            TaskDetail (WC01)                          */
+/* 2025-10-10   SSA01    1.3  UWP-42248 -Enhanced session management     */
 /*************************************************************************/     
 
 CREATE PROCEDURE [dbo].[ispRLWAV40]        
@@ -221,8 +222,8 @@ CREATE PROCEDURE [dbo].[ispRLWAV40]
          UPDATE PICKDETAIL WITH (ROWLOCK)   
          SET PICKDETAIL.TaskdetailKey = '',  
              PICKDETAIL.Wavekey = @c_Wavekey,   
-             EditWho    = SUSER_SNAME(),  
-             EditDate   = GETDATE(),     
+             EditWho    = dbo.fnc_GetUserName(),        --(SSA01)
+             EditDate   = dbo.fnc_GetDate(),    --(SSA01)
              TrafficCop = NULL  
          WHERE PICKDETAIL.Pickdetailkey = @c_curPickdetailkey
            
@@ -715,8 +716,8 @@ CREATE PROCEDURE [dbo].[ispRLWAV40]
       UPDATE WAVE     
       SET TMReleaseFlag = 'Y'             
        ,  TrafficCop = NULL               
-       ,  EditWho = SUSER_SNAME()         
-       ,  EditDate= GETDATE()             
+       ,  EditWho = dbo.fnc_GetUserName()          --(SSA01)
+       ,  EditDate= dbo.fnc_GetDate()    --(SSA01)
       WHERE WAVEKEY = @c_wavekey      
    
       SELECT @n_err = @@ERROR

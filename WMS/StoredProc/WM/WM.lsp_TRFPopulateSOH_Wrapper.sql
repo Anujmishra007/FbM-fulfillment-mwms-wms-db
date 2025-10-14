@@ -1,11 +1,11 @@
-SET ANSI_NULLS OFF
+﻿SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
 /*************************************************************************/  
 /* Stored Procedure: WM.lsp_TRFPopulateSOH_Wrapper                       */  
 /* Creation Date: 16-OCT-2018                                            */  
-/* Copyright: LFL                                                        */  
+/* Copyright: Maersk Logistics                                           */  
 /* Written by: Wan                                                       */  
 /*                                                                       */  
 /* Purpose: LFWM-307 - Inventory - Transfer Ticket Clarifications        */
@@ -13,7 +13,7 @@ GO
 /* Called By:                                                            */  
 /*                                                                       */  
 /*                                                                       */  
-/* Version: 1.0                                                          */  
+/* Version: 1.3                                                          */  
 /*                                                                       */  
 /* Data Modifications:                                                   */  
 /*                                                                       */  
@@ -23,8 +23,10 @@ GO
 /*                            Execute Login if @c_UserName<>SUSER_SNAME()*/
 /* 2024-09-25  Wan01    1.2   LFWM-4446 - RG[GIT] Serial Number Solution */
 /*                            - Transfer by Serial Number                */
-/*************************************************************************/
-CREATE OR ALTER PROCEDURE [WM].[lsp_TRFPopulateSOH_Wrapper]
+/* 2025-09-02  SWT01    1.3   Enhanced session management pattern       */
+/* 2025-10-10  SPC040   1.4   Replace SUSER_SNAME with fnc_GetUserName   */
+/*************************************************************************/   
+CREATE OR ALTER PROCEDURE [WM].[lsp_TRFPopulateSOH_Wrapper]  
    @c_TransferKey          NVARCHAR(10)
 ,  @b_Success              INT          = 1  OUTPUT   
 ,  @n_Err                  INT          = 0  OUTPUT
@@ -138,23 +140,27 @@ BEGIN
 
    SET @n_ErrGroupKey = 0
 
-   SET @n_Err = 0 
-   --(mingle01) - START   
-   IF SUSER_SNAME() <> @c_UserName
-   BEGIN
-      EXEC [WM].[lsp_SetUser] 
-            @c_UserName = @c_UserName  OUTPUT
-         ,  @n_Err      = @n_Err       OUTPUT
-         ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
-                
-      IF @n_Err <> 0 
-      BEGIN
-         GOTO EXIT_SP
-      END
+   -- Start enhanced session management (SWT01)
+	 SET @n_Err = 0
+	 DECLARE @b_ExecuteAs        BIT = 0
+	 IF SUSER_SNAME() <> @c_UserName AND @c_UserName <> ''        
+	 BEGIN
+	    EXEC [WM].[lsp_SetUser] 
+	         @c_UserName = @c_UserName  OUTPUT
+	      ,  @n_Err      = @n_Err       OUTPUT
+	      ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+	      ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
+
+	    IF @n_Err <> 0
+	    BEGIN
+	       GOTO EXIT_SP
+	    END
+
+	    IF @b_ExecuteAs = 1
+	       EXECUTE AS LOGIN = @c_UserName
+	 END                                    
+	 -- End enhanced session management (SWT01)
     
-      EXECUTE AS LOGIN = @c_UserName
-   END
-   --(mingle01) - END
    SET @c_Facility = ''                                                             --(Wan01) - START
    SELECT @c_Facility = T.Facility
          ,@c_FromStorerkey = T.FromStorerKey
@@ -326,7 +332,7 @@ BEGIN
                      ,UserDefine04 = ''
                      ,UserDefine05 = ''
                      ,EditWho = @c_UserName
-                     ,EditDate= GETDATE()
+                     ,EditDate = dbo.fnc_GetDate()
                WHERE TransferKey = @c_TransferKey
                AND TransferLineNumber = @c_TransferLineNumber
             END TRY
@@ -742,8 +748,8 @@ BEGIN
                            ,  ToLottable14   = @dt_ToLottable14 
                            ,  ToLottable15   = @dt_ToLottable15 
                            ,  UserDefine04   = @n_OriginalQty
-                           ,  EditWho  = SUSER_NAME()
-                           ,  EditDate = GETDATE()
+                           ,  EditWho = dbo.fnc_GetUserName()
+                           ,  EditDate = dbo.fnc_GetDate()
                      WHERE TransferKey = @c_TransferKey
                      AND TransferLineNumber = @c_TransferLineNumber
                   END TRY
@@ -1091,7 +1097,8 @@ BEGIN
       BEGIN TRAN
    END
 
-   REVERT      
+   IF @b_ExecuteAs = 1 REVERT -- (SWT01)
+   EXEC [WM].[lsp_ResetUser]  -- (SWT01)      
 END  
 GO
 GRANT EXECUTE ON [WM].[lsp_TRFPopulateSOH_Wrapper] TO nSQL 

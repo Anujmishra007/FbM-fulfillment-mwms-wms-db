@@ -1,4 +1,4 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE ID = object_id(N'[dbo].[ntrReplenishStrategyUpdate]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
+﻿IF EXISTS (SELECT * FROM dbo.sysobjects WHERE ID = object_id(N'[dbo].[ntrReplenishStrategyUpdate]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
 DROP TRIGGER [dbo].[ntrReplenishStrategyUpdate]
 GO
 
@@ -35,6 +35,7 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date         Author   Ver  Purposes                                  */
+/* 09-Oct-2025  SPC040   1.0  Replace SUSER_SNAME with fnc_GetUserName  */
 /************************************************************************/
 
 CREATE TRIGGER [dbo].[ntrReplenishStrategyUpdate]
@@ -68,8 +69,8 @@ BEGIN
 	IF ( @n_continue = 1 or @n_continue=2 ) AND NOT UPDATE(EditDate)
 	BEGIN
 		UPDATE ReplenishStrategy WITH (ROWLOCK)
-		SET EditDate = GETDATE(),
-		    EditWho  = SUSER_SNAME(),
+		SET EditDate = dbo.fnc_GetDate(),
+		    EditWho = dbo.fnc_GetUserName(),
 		    TrafficCop = NULL	
 		FROM ReplenishStrategy , INSERTED WITH (NOLOCK)
 		WHERE ReplenishStrategy.ReplenishStrategyKey = INSERTED.ReplenishStrategyKey

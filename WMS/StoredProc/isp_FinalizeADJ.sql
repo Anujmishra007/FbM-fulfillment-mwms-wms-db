@@ -49,6 +49,8 @@ GO
 /* 24-Nov-2024  NJOW04       2.5    DEVOPS Combine Script                      */
 /* 03-JAN-2024  Wan05        2.6    LFWM-4405 - [GIT] Serial Number Solution-Post*/
 /*                                  Cycle Count by Adjustment Serialnon - Fix  */
+/* 10-OCT-2025  SSA01        2.7    UWP-42248 -Enhanced session management     */
+/*                                  and cleanup.                               */
 /*******************************************************************************/
 
 CREATE OR ALTER PROCEDURE [dbo].[isp_FinalizeADJ]
@@ -575,8 +577,8 @@ BEGIN
                      ,Lottable14 = @dt_Lottable14
                      ,Lottable15 = @dt_Lottable15
                      ,Trafficcop = NULL
-                     ,EditDate = GETDATE()
-                     ,EditWho = SUSER_NAME()
+                     ,EditDate = dbo.fnc_GetDate()   --(SSA01)
+                     ,EditWho = dbo.fnc_GetUserName()        --(SSA01)
                WHERE  Adjustmentkey = @c_AdjKey
                      AND AdjustmentLineNumber = @c_adjline
                     
@@ -1192,8 +1194,8 @@ BEGIN
                                                    ='' THEN Lottable15
                                                 ELSE @dt_Lottable15
                                           END
-                           ,EditDate = GETDATE()
-                           ,EditWho = SUSER_SNAME()
+                           ,EditDate = dbo.fnc_GetDate()   --(SSA01)
+                           ,EditWho = dbo.fnc_GetUserName()      --(SSA01)
                            ,TrafficCop = NULL
                      WHERE  Adjustmentkey = @c_ADJKey
                      AND AdjustmentLineNumber = @c_adjline
@@ -1397,8 +1399,8 @@ IF (@n_continue=1 OR @n_continue=2)
             
          --***SOS#148847 Start
          UPDATE Adjustment WITH (ROWLOCK)
-         SET    EditDate = GETDATE()
-               ,EditWho = SUSER_SNAME()
+         SET    EditDate = dbo.fnc_GetDate()   --(SSA01)
+               ,EditWho = dbo.fnc_GetUserName()        --(SSA01)
                ,TrafficCop = NULL
          WHERE  AdjustmentKey = @c_ADJKey
             

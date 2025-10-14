@@ -1,3 +1,8 @@
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
 IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[BUILDWAVEDETAILLOG]') AND type in (N'U'))
 BEGIN
 CREATE TABLE [dbo].[BUILDWAVEDETAILLOG]
@@ -84,15 +89,10 @@ END
 
 ELSE 
 BEGIN 
-
-			IF NOT EXISTS (SELECT 1
-	               FROM sys.columns
-	               WHERE Name = 'TotalPallet' AND Object_ID = Object_ID('dbo.BUILDWAVEDETAILLOG'))
-			BEGIN
-				ALTER TABLE dbo.BUILDWAVEDETAILLOG ADD TotalPallet [float] NOT NULL CONSTRAINT [DF_BUILDWAVEDETAILLOG_TotalPallet] DEFAULT ('0.00');
-				EXEC sp_addextendedproperty N'MS_Description', N'Total Pallet', 'SCHEMA', N'dbo', 'TABLE', N'BUILDWAVEDETAILLOG', 'COLUMN', N'TotalPallet'
-				
-			END
-
+   IF NOT EXISTS (SELECT 1 FROM sys.columns WHERE Name = 'TotalPallet' AND Object_ID = Object_ID('dbo.BUILDWAVEDETAILLOG'))
+   BEGIN
+      ALTER TABLE dbo.BUILDWAVEDETAILLOG ADD TotalPallet [float] NOT NULL CONSTRAINT [DF_BUILDWAVEDETAILLOG_TotalPallet] DEFAULT ('0.00');
+      EXEC sp_addextendedproperty N'MS_Description', N'Total Pallet', 'SCHEMA', N'dbo', 'TABLE', N'BUILDWAVEDETAILLOG', 'COLUMN', N'TotalPallet'
+   END
 
 END

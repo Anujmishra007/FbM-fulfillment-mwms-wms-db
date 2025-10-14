@@ -24,6 +24,8 @@ GO
 /* 22-Oct-2021  WLChooi  1.0  DevOps Combine Script                     */
 /* 28-Feb-2022  WLChooi  1.1  Bug Fix - Update by orderkey (WL01)       */
 /* 25-Aug-2022  WLChooi  1.2  Bug Fix - Update Route (WL02)             */
+/* 10-Oct-2025  SSA01    1.3  UWP-42248 -Enhanced session management    */
+/*                             and cleanup.                             */
 /************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[ispORD14]      
    @c_Action        NVARCHAR(10),
@@ -131,8 +133,8 @@ BEGIN
          SET [Route]    = @c_UDF01  
            , TrafficCop = NULL  
            , ArchiveCop = NULL  
-           , EditDate   = GETDATE()  
-           , EditWho    = SUSER_SNAME()  
+           , EditDate   = dbo.fnc_GetDate()    --(SSA01)
+           , EditWho    = dbo.fnc_GetUserName()            --(SSA01)
          WHERE Orderkey = @c_Orderkey
          --WL02 E
       END    

@@ -25,7 +25,9 @@ GO
 /*                            Replenishment                              */
 /* 2024-03-30  TLTING01 1.3   Infinite loop on trancount commit          */
 /* 2023-06-06  Wan02    1.4   LFWM-4671 - CN SCE Generate E-Order        */
-/*                            Replenishmenet UI Change For Converse      */     
+/*                            Replenishmenet UI Change For Converse      */
+/* 2025-10-06   SSA01   1.5   UWP-42142 -Enhanced session management     */
+/*                             and cleanup.                              */
 /*************************************************************************/    
 CREATE OR ALTER PROCEDURE [WM].[lsp_ConfirmReplen_Wrapper]  
    @c_Facility             NVARCHAR(10) = ''
@@ -72,21 +74,26 @@ BEGIN
 
    SET @n_Err = 0 
 
-   --(mingle01) - START   
+   --(mingle01) - START
+   -- (SWT01) - START
+   DECLARE @b_ExecuteAs BIT = 0
    IF SUSER_SNAME() <> @c_UserName
    BEGIN
       EXEC [WM].[lsp_SetUser] 
                @c_UserName = @c_UserName  OUTPUT
             ,  @n_Err      = @n_Err       OUTPUT
             ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+            ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
    
       IF @n_Err <> 0 
       BEGIN
          GOTO EXIT_SP
       END
 
-      EXECUTE AS LOGIN = @c_UserName
+      IF @b_ExecuteAs = 1
+         EXECUTE AS LOGIN = @c_UserName
    END
+   -- (SSA01) - END
    --(mingle01) - END
 
    --(mingle01) - START
@@ -199,8 +206,8 @@ BEGIN
          BEGIN TRY
             UPDATE REPLENISHMENT
                SET Confirmed = 'Y'
-                  ,EditWho = SUSER_SNAME()
-                  ,EditDate= GETDATE()
+                  ,EditWho =  dbo.fnc_GetUserName()   --(SSA01)
+                  ,EditDate=  dbo.fnc_GetDate()    --(SSA01)
             WHERE ReplenishmentKey = @c_ReplenishmentKey
          END TRY
          BEGIN CATCH
@@ -256,7 +263,11 @@ EXIT_SP:
          COMMIT TRAN
       END
    END
-   REVERT
+
+   IF @b_ExecuteAs = 1              -- (SSA01)
+      REVERT
+
+   EXEC [WM].[lsp_ResetUser] -- (SSA01)
 END  
 GO
 GRANT EXECUTE ON [WM].[lsp_ConfirmReplen_Wrapper] TO nSQL 

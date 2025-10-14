@@ -86,6 +86,8 @@ BEGIN
       @cSQL                   NVARCHAR( MAX),
       @cSQLParam              NVARCHAR( MAX),
       @cLogMsg                NVARCHAR(1000),
+      @cCurTaskDetail         NVARCHAR(10),
+      @b_SkipTheTask          INT,
 
       @cCandidateTaskDetailKey            NVARCHAR(10),
       @cCandidateTaskType                 NVARCHAR(10),
@@ -172,6 +174,7 @@ BEGIN
    SELECT
       @cLangCode = Lang_Code, 
       @cFacility = Facility,
+      @cCurTaskDetail = V_TaskDetailKey,
       @cStorerKey = StorerKey
    FROM rdt.rdtMobRec WITH (NOLOCK) 
    WHERE UserName = @c_UserID
@@ -329,6 +332,7 @@ BEGIN
          INNER JOIN dbo.ORDERS ORM WITH (NOLOCK) ON PD.StorerKey = ORM.StorerKey AND PD.OrderKey = ORM.OrderKey
          INNER JOIN dbo.LOC LOC WITH(NOLOCK) ON TD.FromLoc = LOC.Loc AND LOC.Facility = @cFacility
          INNER JOIN dbo.LOC LOC1 WITH(NOLOCK) ON TD.ToLoc = LOC1.Loc AND LOC1.Facility = @cFacility
+         INNER JOIN dbo.LOC FinalLoc WITH(NOLOCK) ON TD.FinalLoc = FinalLoc.Loc AND FinalLoc.Facility = @cFacility
          INNER JOIN dbo.TaskManagerUserDetail TMU WITH (NOLOCK) ON TMU.PermissionType = TD.TASKTYPE AND TD.AreaKey = TMU.AreaKey
          WHERE TD.StorerKey = @cStorerKey
             AND
@@ -398,6 +402,18 @@ BEGIN
                         FROM @tAisle_InUsed Aisle
                         WHERE (Aisle.LocAisle = LOC.LocAisle OR Aisle.LocAisle = LOC1.LocAisle)
                      ) --V1.0.1(1)
+            AND (EXISTS (SELECT 1 FROM dbo.CODELKUP WITH (NOLOCK)
+                  WHERE LISTNAME = 'JCBCOMPML'
+                  AND SHORT = TD.FinalLoc
+                  AND Storerkey = @cStorerKey)
+               AND EXISTS ( SELECT 1 FROM dbo.CODELKUP CL WITH (NOLOCK)
+                        JOIN dbo.LOC L WITH (NOLOCK) ON CL.SHORT = L.LOC
+                        WHERE CL.LISTNAME = 'JCBCOMPML'
+                          AND CL.LONG = ORM.c_company
+                          AND CL.Storerkey = @cStorerKey
+                          AND (L.Status = 'OK' AND (L.LocationFlag = '' OR L.LocationFlag = 'NONE'))
+                     )
+               )
       END TRY
       BEGIN CATCH
          SET @nContinue = 3
@@ -695,6 +711,37 @@ BEGIN
                                  )
          PRINT @cLogMsg
       END
+
+      -- Check skip task
+      SET @b_success = 0
+      SET @b_SkipTheTask = 0
+      EXECUTE nspCheckSkipTasks
+           @c_UserID
+         , @cTaskDetailKey
+         , @cTaskType
+         , ''
+         , ''
+         , ''
+         , ''
+         , ''
+         , ''
+         , @b_SkipTheTask  OUTPUT
+         , @b_Success      OUTPUT
+         , @n_err          OUTPUT
+         , @c_errmsg       OUTPUT
+      IF @b_success <> 1
+         GOTO Fail
+      
+      IF @bDebug = 1
+      BEGIN
+         SET @cLogMsg = CONCAT_WS(',', 'Loop @tTaskCandidate - 1',
+                                    '@b_SkipTheTask: ' + CAST(ISNULL(@b_SkipTheTask, 0) AS NVARCHAR(10))
+                                 )
+         PRINT @cLogMsg
+      END
+
+      IF @b_SkipTheTask = 1
+         CONTINUE
 
       -- 1. Check the weight, make sure Inventory Weight <= MaxWeight of MHE           Y
       IF @cPickMethod = 'FP'

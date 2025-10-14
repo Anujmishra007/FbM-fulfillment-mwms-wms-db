@@ -22,7 +22,8 @@ GO
 /*                                                                                                       */                                
 /* Updates:                                                                                              */                                
 /* Date         Author    Ver. Purposes                                                                  */                         
-/* 04-Aug-2023  Josh      1.0  Initial version                                                           */                          
+/* 04-Aug-2023  Josh      1.0  Initial version                                                           */
+/* 10-Oct-2025  SSA01     1.1  UWP-42248 -Enhanced session management and cleanup                        */
 /*-------------------------------------------------------------------------------------------------------*/                        
 
 CREATE OR ALTER PROCEDURE [dbo].[isp_RCM_WAVE_OrdersMerging]                     
@@ -452,15 +453,15 @@ BEGIN
                   ,[SOStatus]    = 'HOLD'                        
                   ,[OrderGroup]  = 'CHILD_ORD'                        
                   ,TrafficCop  = NULL                        
-                  , EditDate = GETDATE()                        
-                  , EditWho = SUSER_SNAME()                        
+                  , EditDate = dbo.fnc_GetDate()    --(SSA01)
+                  , EditWho = dbo.fnc_GetUserName()        --(SSA01)
                WHERE [OrderKey]  = @c_OrderKey                        
                               
                UPDATE dbo.Orderdetail                          
                SET ConsoOrderKey = @c_NewOrderkey,                        
                   TrafficCop = NULL,                        
-                  EditDate = GETDATE(),                        
-                  EditWho = SUSER_SNAME()                        
+                  EditDate = dbo.fnc_GetDate(),   --(SSA01)
+                  EditWho = dbo.fnc_GetUserName()     --(SSA01)
                FROM dbo.Orderdetail                       
                WHERE Orderdetail.Orderkey = @c_OrderKey                        
                and  exists ( Select 1 from Orders (NOLOCK) where Orders.orderkey =  Orderdetail.orderkey and Orders.SOStatus = 'HOLD'                       

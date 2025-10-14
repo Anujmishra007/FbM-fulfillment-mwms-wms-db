@@ -1,12 +1,7 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_ReleaseReplenTask_Wrapper]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [WM].[lsp_ReleaseReplenTask_Wrapper] 
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
-GO   
+GO
 /************************************************************************/                                                                                  
 /* Store Procedure: lsp_ReleaseReplenTask_Wrapper                       */                                                                                  
 /* Creation Date: 2021-06-24                                            */                                                                                  
@@ -29,8 +24,9 @@ GO
 /* 2021-06-24  Wan      1.0   Created.                                  */
 /* 2021-09-27  CheeMun  1.1   JSM-20741 - Revised script to ROLLBACK    */
 /*                            if XACT_STATE() = -1                      */
+/* 2025-09-02  SWT01    1.2   Enhanced session management pattern       */
 /************************************************************************/                                                                                  
-CREATE PROC [WM].[lsp_ReleaseReplenTask_Wrapper]                                                                                                                     
+CREATE OR ALTER PROC [WM].[lsp_ReleaseReplenTask_Wrapper]                                                                                                                     
       @c_Storerkey            NVARCHAR(15) = ''  
    ,  @c_Facility             NVARCHAR(10) = ''  
    ,  @c_ReplenishStrategyKey NVARCHAR(30) = ''        
@@ -63,22 +59,26 @@ BEGIN
    SET @b_Success = 1
    SET @n_Err     = 0
                
-   SET @n_Err = 0 
+   -- Start enhanced session management (SWT01)
+	 SET @n_Err = 0
+	 DECLARE @b_ExecuteAs        BIT = 0
+	 IF SUSER_SNAME() <> @c_UserName        
+	 BEGIN
+	    EXEC [WM].[lsp_SetUser] 
+	         @c_UserName = @c_UserName  OUTPUT
+	      ,  @n_Err      = @n_Err       OUTPUT
+	      ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+	      ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
 
-   IF SUSER_SNAME() <> @c_UserName
-   BEGIN
-      EXEC [WM].[lsp_SetUser] 
-            @c_UserName = @c_UserName  OUTPUT
-         ,  @n_Err      = @n_Err       OUTPUT
-         ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
-                
-      IF @n_Err <> 0 
-      BEGIN
-         GOTO EXIT_SP
-      END
-    
-      EXECUTE AS LOGIN = @c_UserName
-   END
+	    IF @n_Err <> 0
+	    BEGIN
+	       GOTO EXIT_SP
+	    END
+
+	    IF @b_ExecuteAs = 1
+	       EXECUTE AS LOGIN = @c_UserName
+	 END                                    
+	 -- End enhanced session management (SWT01)
 
    BEGIN TRY
       BEGIN TRAN        --JSM-20741
@@ -155,8 +155,9 @@ EXIT_SP:
       BEGIN TRAN
    END
          
-   REVERT
+   IF @b_ExecuteAs = 1 REVERT -- (SWT01)
+   EXEC [WM].[lsp_ResetUser]  -- (SWT01)
 END
 GO
-GRANT EXECUTE ON [WM].[lsp_ReleaseReplenTask_Wrapper] TO nSQL 
-GO  
+GRANT EXECUTE ON [WM].[lsp_ReleaseReplenTask_Wrapper] TO nSQL
+GO

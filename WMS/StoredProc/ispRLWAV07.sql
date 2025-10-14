@@ -33,7 +33,8 @@ GO
 /* 16-JAN-2020  NJOW02  1.7   WMS-11717 Generate transmitlog2           */  
 /* 01-04-2020   Wan08   1.8   Sync Exceed & SCE                         */
 /* 18-JUL-2022  WLChooi 1.9   WMS-20258 - Gen TL2 - WSSOCFMLOGB2B (WL01)*/
-/* 18-JUL-2022  WLChooi 1.9   DevOps Combine Script                     */ 
+/* 18-JUL-2022  WLChooi 1.9   DevOps Combine Script                     */
+/* 10-Oct-2025  SSA01   2.0   UWP-42248 -Enhanced session management    */
 /************************************************************************/  
 CREATE OR ALTER PROC [dbo].[ispRLWAV07]
         @c_wavekey      NVARCHAR(10)    
@@ -1087,8 +1088,8 @@ BEGIN
                ,Wavekey       = @c_Wavekey  
                ,PickSlipNo    = @c_PickSlipNo  
                ,TrafficCop    = NULL  
-               ,EditWho = SUSER_NAME()  
-               ,EditDate= GETDATE()  
+               ,EditWho = dbo.fnc_GetUserName()  --(SSA01)
+               ,EditDate= dbo.fnc_GetDate()    --(SSA01)
             WHERE PickDetailkey = @c_PickDetailKey  
   
             SET @n_err = @@ERROR  
@@ -1698,8 +1699,8 @@ BEGIN
    --SET Status = '1' -- Released
    SET TMReleaseFlag = 'Y'             --(Wan08)   
       ,Trafficcop = NULL  
-      ,EditWho = SUSER_SNAME()         --(Wan08)  
-      ,EditDate= GETDATE()  
+      ,EditWho = dbo.fnc_GetUserName()         --(Wan08)(SSA01)
+      ,EditDate= dbo.fnc_GetDate()    --(SSA01)
    WHERE Wavekey = @c_Wavekey   
      
    SET @n_err = @@ERROR  

@@ -19,6 +19,8 @@ GO
 /******************************Merged Into V0********************************************/
 /* 2025-07-09  1.5.0    Dennis      FCR-4498 Release Pick Task When Finished            */
 /* 2025-07-17  1.5.1    Jackc       FCR-4498 Refresh picking task's reftaskkey to RP1   */
+/* 2025-10-10  1.5.2    SSA01       UWP-42248 -Enhanced session management              */
+/*                                  and cleanup.                                        */
 /****************************************************************************************/
 
 CREATE OR ALTER PROCEDURE [dbo].[isp_VNAReplenishmentConfirm] (
@@ -192,8 +194,8 @@ BEGIN
 
    -- Lock orders to prevent deadlock
    UPDATE ord SET
-      EditDate = GETDATE(),
-      EditWho = SUSER_SNAME(),
+      EditDate = dbo.fnc_GetDate(),   --(SSA01)
+      EditWho = dbo.fnc_GetUserName(),         --(SSA01)
       TrafficCop = NULL
    FROM Orders ord WITH(ROWLOCK)
    INNER JOIN PickDetail pkd WITH (NOLOCK)
@@ -266,7 +268,7 @@ BEGIN
    UPDATE dbo.TaskDetail WITH (ROWLOCK) SET
       Status      = @cPickConfirmStatus, -- Closed
       EndTime     = GETDATE(),
-      EditDate    = GETDATE(),
+      EditDate    = dbo.fnc_GetDate(),   --(SSA01)
       EditWho     = @cUserName,
       Trafficcop  = NULL,
       StatusMsg   = ''

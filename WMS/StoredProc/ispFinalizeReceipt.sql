@@ -87,6 +87,8 @@ GO
 /* 10-Feb-2023  NJOW11    DEVOPS Combine Script                         */
 /* 19-Jun-2025  JH01      UWP-36358 - Enhanced the error message show   */
 /* 10-JUL-2025  Wan08     UWP-37554 - Increases Variable Length         */
+/* 10-OCT-2025 SSA01      UWP-42248 -Enhanced session management        */
+/*                             and cleanup.                             */
 /************************************************************************/  
 
   
@@ -642,7 +644,7 @@ BEGIN
          INSERT INTO TraceInfo (TraceName, TimeIn, Step1, Step2, Step3, Step4, Step5    
                                , Col1, Col2, Col3, Col4, Col5)    
          SELECT 'ispGenLot1_TH01', GETDATE(), EditDate, EditWho, ReceiptKey, ReceiptLineNumber    
-               , @c_Lottable01Value, @c_Lottable02Value, sUser_sName(), '*1*', '', ''    
+               , @c_Lottable01Value, @c_Lottable02Value, dbo.fnc_GetUserName(), '*1*', '', ''           --(SSA01)
          FROM dbo.ReceiptDetail WITH (NOLOCK)    
          WHERE ReceiptKey = @c_ReceiptKey    
          AND ReceiptLineNumber = @c_ReceiptLineNo    
@@ -826,8 +828,8 @@ BEGIN
                       Lottable13 = CASE WHEN ISNULL(@d_Lottable13, '')  = '' THEN Lottable13 ELSE @d_Lottable13 END,  
                       Lottable14 = CASE WHEN ISNULL(@d_Lottable14, '')  = '' THEN Lottable14 ELSE @d_Lottable14 END,  
                       Lottable15 = CASE WHEN ISNULL(@d_Lottable15, '')  = '' THEN Lottable15 ELSE @d_Lottable15 END,  
-                      EditDate = GETDATE(),   
-                      EditWho = SUSER_SNAME(),   
+                      EditDate = dbo.fnc_GetDate(),   --(SSA01)
+                      EditWho = dbo.fnc_GetUserName(),         --(SSA01)
                       TrafficCop = NULL   
                WHERE ReceiptKey = @c_ReceiptKey  
                  AND ReceiptLineNumber = @c_ReceiptLineNo  
@@ -1195,8 +1197,8 @@ BEGIN
                ToLoc = CASE WHEN @c_RCPTSTATStatus = '1' AND LEN(ISNULL(RTRIM(@c_ToLoc), '')) > 0  
                      THEN ISNULL(RTRIM(ToLoc), '') + @c_ToLoc  
                      ELSE ToLoc END,        -- tlting    
-               EditDate = GETDATE(),   
-               EditWho = SUSER_SNAME()    
+               EditDate = dbo.fnc_GetDate(),   --(SSA01)
+               EditWho = dbo.fnc_GetUserName()      --(SSA01)
       WHERE ReceiptKey = @c_ReceiptKey  
          AND ReceiptLineNumber = @c_ReceiptLineNo  
 
@@ -1361,8 +1363,8 @@ BEGIN
   
              UPDATE RECEIPTDETAIL WITH (ROWLOCK)  
                SET QtyExpected = QtyExpected - QtyReceived   
-                  ,EditWho     = SUSER_NAME()  
-                  ,EditDate    = GETDATE()  
+                  ,EditWho     = dbo.fnc_GetUserName()        --(SSA01)
+                  ,EditDate    = dbo.fnc_GetDate()   --(SSA01)
                   ,Trafficcop  = NULL  
             WHERE ReceiptKey = @c_ReceiptKey  
               AND ReceiptLineNumber = @c_ReceiptLineNo  
@@ -1951,8 +1953,8 @@ BEGIN
                                             THEN CAST(@n_StockBalQty as NVARCHAR(30))  
                                        ELSE UserDefine02  
                                   END,   
-                   EditDate = GETDATE(),  
-                   EditWho = SUSER_SNAME()   
+                   EditDate = dbo.fnc_GetDate(),   --(SSA01)
+                   EditWho = dbo.fnc_GetUserName()         --(SSA01)
             WHERE ReceiptKey = @c_ReceiptKey  
             SET @n_err = @@ERROR  
             IF @n_err <> 0  

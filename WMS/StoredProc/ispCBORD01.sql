@@ -24,7 +24,9 @@ GO
 /* Data Modifications:                                                  */
 /*                                                                      */
 /* Updates:                                                             */
-/* Date         Author     Purposes                                     */
+/* Date         Author  Ver   Purposes                                  */
+/* 10-OCT-2025  SSA01   1.5   UWP-42248 -Enhanced session management    */
+/*                             and cleanup.                             */
 /************************************************************************/
 CREATE PROCEDURE [dbo].[ispCBORD01]
    @c_FromOrderKey  NVARCHAR(10)
@@ -247,8 +249,8 @@ BEGIN
                OrderLineNumber = @c_NewToOrdLineNo, 
                ExternConsoOrderKey = @c_FromOrderKey,
                ConsoOrderLineNo = @c_FromOrdLineNo, 
-               EditWho         = sUser_sName(),
-               EditDate        = GetDate(),
+               EditWho         = dbo.fnc_GetUserName(),       --(SSA01)
+               EditDate        = dbo.fnc_GetDate(),   --(SSA01)
                TrafficCop      = NULL
          WHERE OrderKey        = @c_FromOrderKey
          AND   OrderLineNumber = @c_FromOrdLineNo
@@ -283,8 +285,8 @@ BEGIN
       UPDATE ORDERS WITH (ROWLOCK)
       SET   Status    = 'CANC',
             SOStatus  = 'CANC',
-            EditWho   = sUser_sName(),
-            EditDate  = GetDate(),
+            EditWho   = dbo.fnc_GetUserName(),        --(SSA01)
+            EditDate  = dbo.fnc_GetDate(),   --(SSA01)
             Trafficcop= NULL
       WHERE OrderKey  = @c_FromOrderKey 
 

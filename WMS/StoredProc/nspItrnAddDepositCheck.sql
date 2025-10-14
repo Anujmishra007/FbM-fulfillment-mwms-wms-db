@@ -47,6 +47,7 @@ GO
 /*                            or 'hold'                                 */
 /* 17-JUL-2024  Wan03     1.9 LFWM-4446 - RG[GIT] Serial Number Solution*/
 /*                            - Transfer by Serial Number               */
+/* 10-Oct-2025  SSA01     2.0 UWP-42248 -Enhanced session management    */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[nspItrnAddDepositCheck]
      @c_itrnkey      NVARCHAR(10)
@@ -808,8 +809,8 @@ BEGIN
                BEGIN
                   UPDATE ChannelInv WITH (ROWLOCK)
                      SET Qty = Qty + @n_qty, 
-                         EditDate = GETDATE(),
-                         EditWho  = SUSER_SNAME() 
+                         EditDate = dbo.fnc_GetDate(),    --(SSA01)
+                         EditWho  = dbo.fnc_GetUserName()          --(SSA01)
                   WHERE Channel_ID = @n_Channel_ID 
                   SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT                
   
@@ -842,8 +843,8 @@ BEGIN
              Lottable05 = @d_Lottable05,
              Status     = @c_Status, 
              Channel_ID = @n_Channel_ID, -- (SWT02) 
-             EditDate = GETDATE(),
-             EditWho = SUSER_SNAME() 
+             EditDate = dbo.fnc_GetDate(),    --(SSA01)
+             EditWho = dbo.fnc_GetUserName()          --(SSA01)
          WHERE ItrnKey = @c_itrnkey
 
          SELECT @n_err = @@ERROR
@@ -1009,8 +1010,8 @@ BEGIN
                   UPDATE ReceiptDetail
                      SET ToLot      = @c_Lot,
                          TrafficCop = NULL, 
-                         EditDate = GETDATE(),
-                         EditWho = SUSER_SNAME(), 
+                         EditDate = dbo.fnc_GetDate(),    --(SSA01)
+                         EditWho = dbo.fnc_GetUserName(),          --(SSA01),
                          Channel_ID = @n_Channel_ID -- (SWT02)
                   WHERE ReceiptKey  = @c_ReceiptKey
                   AND ReceiptLineNumber = @c_ReceiptLineNumber 
@@ -1032,8 +1033,8 @@ BEGIN
                BEGIN
                   UPDATE ReceiptDetail
                      SET TrafficCop = NULL, 
-                        EditDate = GETDATE(),
-                        EditWho = SUSER_SNAME(), 
+                        EditDate = dbo.fnc_GetDate(),    --(SSA01)
+                        EditWho = dbo.fnc_GetUserName(),          --(SSA01)
                         Channel_ID = @n_Channel_ID  
                   WHERE ReceiptKey  = @c_ReceiptKey
                   AND ReceiptLineNumber = @c_ReceiptLineNumber 
@@ -1151,8 +1152,8 @@ BEGIN
             SET Lot      = CASE WHEN @c_ASNFizUpdLotToSerialNo = '1' AND @c_Lot_SN <> @c_Lot
                                 THEN @c_Lot ELSE Lot END
                ,ID       = CASE WHEN ID <> @c_ToID THEN @c_ToID ELSE ID END
-               ,EditWho  = SUSER_SNAME()
-               ,EditDate = GETDATE()
+               ,EditWho  = dbo.fnc_GetUserName()          --(SSA01)
+               ,EditDate = dbo.fnc_GetDate()    --(SSA01)
             WHERE SerialNoKey = @c_SerialNoKey
 
             SET @n_err = @@ERROR
