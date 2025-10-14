@@ -121,6 +121,10 @@ BEGIN
          AND ( @n_continue = 1 or @n_continue = 2)
          AND NOT UPDATE(EditDate)                 
    BEGIN
+   
+      INSERT INTO traceinfo (tracename, TimeIn, step1, Col1, Col2, Col3, Col4, Col5) VALUES ('nspAdjustmentHeaderAdd', 
+		GETDATE(), '1', SUSER_SNAME(), dbo.fnc_GetUserName(), CONVERT(NVARCHAR(50), SESSION_CONTEXT(N'mwms_user_name')), '', '') 
+
       UPDATE ADJUSTMENT SET TrafficCop = NULL, EditDate = dbo.fnc_GetDate(), EditWho = dbo.fnc_GetUserName() 
       FROM ADJUSTMENT, INSERTED, DELETED
       WHERE ADJUSTMENT.AdjustmentKey=inserted.AdjustmentKey

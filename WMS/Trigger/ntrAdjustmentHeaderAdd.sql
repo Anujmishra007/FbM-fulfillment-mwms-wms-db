@@ -733,6 +733,10 @@ CREATE TRIGGER [dbo].[ntrAdjustmentHeaderAdd]
 
    IF @n_continue=1 or @n_continue=2
    BEGIN
+   
+      INSERT INTO traceinfo (tracename, TimeIn, step1, Col1, Col2, Col3, Col4, Col5) VALUES ('nspAdjustmentHeaderAdd', 
+		GETDATE(), '1', SUSER_SNAME(), dbo.fnc_GetUserName(), CONVERT(NVARCHAR(50), SESSION_CONTEXT(N'mwms_user_name')), '', '') 
+
       UPDATE ADJUSTMENT SET TrafficCop = NULL, AddDate = dbo.fnc_GetDate(), AddWho = dbo.fnc_GetUserName(), EditDate = dbo.fnc_GetDate(), EditWho = dbo.fnc_GetUserName() FROM ADJUSTMENT,inserted
       WHERE ADJUSTMENT.AdjustmentKey=inserted.AdjustmentKey
       SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
