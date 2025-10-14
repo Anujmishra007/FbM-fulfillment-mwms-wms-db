@@ -1992,7 +1992,6 @@ BEGIN
    BEGIN
       UPDATE PickingInfo
         SET AddWho  = dbo.fnc_GetUserName(),
-            AddDate = dbo.fnc_GetDate(), 
             TrafficCop = NULL 
       FROM PickingInfo
       JOIN INSERTED ON PickingInfo.PickSlipNo = INSERTED.PickSlipNo

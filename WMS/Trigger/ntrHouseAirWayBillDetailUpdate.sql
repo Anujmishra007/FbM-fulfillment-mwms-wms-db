@@ -8,7 +8,7 @@ GO
 /* 28-Oct-2013  TLTING    Review Editdate column update                 */
 /* 06-Oct-2025  AK01   1.3 UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName */
 
-CREATE TRIGGER ntrHouseAirWayBillDetailUpdate
+CREATE OR ALTER TRIGGER ntrHouseAirWayBillDetailUpdate
  ON  HouseAirWayBillDetail
  FOR UPDATE
  AS
