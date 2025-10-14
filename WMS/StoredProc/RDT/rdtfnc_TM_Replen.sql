@@ -64,7 +64,8 @@ GO
 /* 2025-06-16 4.6.0 Dennis    FCR-3959 Extended Update on Step 7              */
 /* 2025-08-20 4.6.1 Dennis    FCR-3959 New Feature                            */
 /* 2025-08-10 4.7.0 NickT     FCR-7730 Support OverwriteToLOC                 */
-/* 2025-09-09 4.7.0 NickT     UWP-42269 Continue pending task                 */
+/* 2025-09-09 4.8.0 NickT     UWP-42269 Continue pending task                 */
+/* 2025-10-10 4.9.0 NickT     FCR-7928 Reallocate for short task              */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_Replen](
@@ -2522,6 +2523,30 @@ BEGIN
       -- Current task confirmed/SKIP/CANCEL, cannot go back
       IF EXISTS( SELECT 1 FROM dbo.TaskDetail WITH (NOLOCK) WHERE TaskDetailKey = @cTaskDetailKey AND Status IN ('5', '0', 'X'))
          GOTO Quit
+
+      IF @cExtendedValidateSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedValidateSP AND type = 'P')
+         BEGIN
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @cTaskdetailKey, @cToLoc, @nErrNo OUTPUT, @cErrMsg OUTPUT'
+            SET @cSQLParam =
+               '@nMobile         INT,        ' +
+               '@nFunc           INT,        ' +
+               '@cLangCode       NVARCHAR( 3),   ' +
+               '@nStep           INT,        ' +
+               '@cTaskdetailKey  NVARCHAR( 10),  ' +
+               '@cToLoc          NVARCHAR( 10),  ' +
+               '@nErrNo          INT OUTPUT, ' +
+               '@cErrMsg         NVARCHAR( 20) OUTPUT'
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, @nStep, @cTaskdetailKey, @cToLoc, @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+            IF @nErrNo <> 0
+               GOTO Quit
+         END
+      END
 
       -- Prepare next screen variable
       SET @cOutField01 = @cSuggSKU

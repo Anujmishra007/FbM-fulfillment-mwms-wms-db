@@ -23,6 +23,7 @@ GO
 /*                        for Short pick detail if @cRefTaskKey is empty   */
 /* 2025-07-30    NLT013   1.4.0  UWP-38609 Performance tuning              */
 /* 2025-08-15    NLT013   1.5.0  UWP-39510 SQL Server exception            */
+/* 2025-10-10    NickT    1.6.0  FCR-7928 Reallocate for short task        */
 /***************************************************************************/
 
 CREATE OR ALTER PROCEDURE rdt.rdt_1764CfmExtUpd05
@@ -68,6 +69,7 @@ BEGIN
    DECLARE @cFinalLocPickZone NVARCHAR(10) = ''
    DECLARE @cAutomationPick   NVARCHAR(1) = 'N'
    DECLARE @cRefTaskKey       NVARCHAR(10) = ''
+   DECLARE @cTaskDetailMessage02   NVARCHAR(20)
 
    DECLARE @tPickDetail TABLE 
    (
@@ -92,7 +94,8 @@ BEGIN
       @nOrgTaskQty = CASE WHEN QTY < SystemQTY THEN QTY ELSE SystemQTY END, -- QTY for PickDetail
       @nShortQTY   = CASE WHEN QTY < SystemQTY THEN SystemQTY - QTY ELSE 0 END,
       @cFinalLoc = FinalLoc,
-      @cRefTaskKey = RefTaskKey
+      @cRefTaskKey = RefTaskKey,
+      @cTaskDetailMessage02 = Message02
    FROM dbo.TaskDetail WITH (NOLOCK) 
    WHERE TaskDetailKey = @cTaskdetailKey
 
@@ -181,11 +184,16 @@ BEGIN
    -- Split or short PickDetail
    IF @nQTY < @nSystemQTY
    BEGIN
+      -- Need reallocate if @cTaskDetailMessage02 <> 'SKIP1'
+      IF @cTaskDetailMessage02 <> 'SKIP1'
+         GOTO Quit
+
       --V1.0.1 start --fullshort
       IF @nQTY = 0 AND @nShortQTY > 0 AND @nShortQty = @nSystemQTY
       BEGIN
          IF @bDebugFlag = 1
             SELECT 'Full UCC short'
+
          BEGIN TRY
             INSERT INTO @tPickDetail (PickDetailKey)
             SELECT DISTINCT PickDetailKey
