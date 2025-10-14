@@ -1,3 +1,6 @@
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
 /***************************************************************************************/
 /* Trigger: ntrPutawayStrategyDetailUpdate                                          	*/
 /* Creation Date:  09-Sept-2008                                                     	*/
