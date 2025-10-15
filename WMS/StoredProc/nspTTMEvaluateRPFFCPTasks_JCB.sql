@@ -402,7 +402,7 @@ BEGIN
                         FROM @tAisle_InUsed Aisle
                         WHERE (Aisle.LocAisle = LOC.LocAisle OR Aisle.LocAisle = LOC1.LocAisle)
                      ) --V1.0.1(1)
-            AND (EXISTS (SELECT 1 FROM dbo.CODELKUP WITH (NOLOCK)
+            AND ((EXISTS (SELECT 1 FROM dbo.CODELKUP WITH (NOLOCK)
                   WHERE LISTNAME = 'JCBCOMPML'
                   AND SHORT = TD.FinalLoc
                   AND Storerkey = @cStorerKey)
@@ -412,8 +412,27 @@ BEGIN
                           AND CL.LONG = ORM.c_company
                           AND CL.Storerkey = @cStorerKey
                           AND (L.Status = 'OK' AND (L.LocationFlag = '' OR L.LocationFlag = 'NONE'))
+                     ))
+               OR (EXISTS (SELECT 1
+                     FROM dbo.CodeLKUP CL WITH (NOLOCK )
+                     JOIN dbo.LOC L WITH (NOLOCK)
+                        ON CL.LONG = L.LocationCategory
+                     WHERE CL.LISTNAME = 'JCBKITORDT'
+                        AND CL.Storerkey = @cStorerKey
+                        AND CL.Short = 'Y'
+                        AND L.LOC = TD.FinalLoc
+                        AND CL.Code = ORM.Type)
+               AND EXISTS ( SELECT 1 FROM dbo.CodeLKUP CL WITH (NOLOCK)
+                        JOIN dbo.LOC L WITH (NOLOCK) ON CL.LONG = L.LocationCategory
+                        WHERE CL.Short = 'Y'
+                           AND CL.LISTNAME = 'JCBKITORDT'
+                           AND CL.Code = ORM.Type
+                           AND CL.Storerkey = @cStorerKey
+                           AND L.Status = 'OK'
+                           AND (L.LocationFlag = '' OR L.LocationFlag = 'NONE')
                      )
                )
+            )
       END TRY
       BEGIN CATCH
          SET @nContinue = 3
@@ -583,7 +602,9 @@ BEGIN
            TD.FromLoc, 
            LOC.LocationCategory AS FromLocationCategory,
            LOC.Floor AS FromLocFloor,
-           TD.ToLoc, 
+           LOC.LocAisle AS FromLocAisle,
+           LOC.LogicalLocation AS FromLogicalLoc,
+           TD.ToLoc,
            LOC1.LocationCategory AS ToLocationCategory, 
            ISNULL(LOC1.MaxPallet, 99999) AS ToLocMaxPallet, 
            TD.FinalLoc, 
@@ -631,9 +652,10 @@ BEGIN
          IIF (T.Status = '3' AND UserKey = @c_UserID, 1, 2), 
          IIF(UserKeyOverRide = @c_UserID AND T.Status IN ('0', '3'), 1, 2), 
          --IIF(ListKey <> '', 1, 2), --V1.0.2
+         IIF(ISNULL(LASTLOC.LOC,'') <> '' AND LASTLOC.LocAisle = T.FromLocAisle, 1, 99),
          IIF(ISNULL(LASTLOC.LOC,'') <> '' AND LASTLOC.Floor = T.FromLocFloor, 1, 99),
-         IIF(ISNULL(LASTLOC.LOC,'') <> '' AND LASTLOC.PutawayZone = T.PutawayZone, 1, 99),
          Priority, 
+         ABS(RANK()OVER(ORDER BY T.FromLogicalLoc) - RANK()OVER(ORDER BY LASTLOC.LogicalLocation)),
          DeliveryDate,
          IIF(ListKey <> '', 1, 2), --V1.0.2 Adjust the sequence. Consider business priority first.
          TaskDetailKey
@@ -731,7 +753,7 @@ BEGIN
          , @c_errmsg       OUTPUT
       IF @b_success <> 1
          GOTO Fail
-      
+
       IF @bDebug = 1
       BEGIN
          SET @cLogMsg = CONCAT_WS(',', 'Loop @tTaskCandidate - 1',
@@ -741,7 +763,10 @@ BEGIN
       END
 
       IF @b_SkipTheTask = 1
+      BEGIN
+         DELETE FROM @tTaskCandidate WHERE TaskDetailKey = @cTaskDetailKey
          CONTINUE
+      END
 
       -- 1. Check the weight, make sure Inventory Weight <= MaxWeight of MHE           Y
       IF @cPickMethod = 'FP'
