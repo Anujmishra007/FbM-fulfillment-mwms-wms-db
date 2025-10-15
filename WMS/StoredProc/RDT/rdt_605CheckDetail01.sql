@@ -4,13 +4,14 @@ SET ANSI_NULLS OFF
 GO
 
 /******************************************************************************/
-/* Store procedure: rdt_605CheckDetail01                             */
+/* Store procedure: rdt_605CheckDetail01                                      */
 /* Copyright      : Maersk WMS                                                */
 /*                                                                            */
 /* Purpose: For rdt_PalletReceive check receiptdetail                         */
 /*                                                                            */
 /* Date       Rev  Author     Purposes                                        */
-/* 2025-06-18 1.0  Cuize      FCR-4200 Created                               */
+/* 2025-06-18 1.0  Cuize      FCR-4200 Created                                */
+/* 2025-10-11 1.1  YeeKung    FCR-8196 Modify for Pallet Receiving Enhancement*/
 /******************************************************************************/
 
 CREATE OR ALTER PROCEDURE rdt.rdt_605CheckDetail01 (
@@ -35,6 +36,7 @@ CREATE OR ALTER PROCEDURE rdt.rdt_605CheckDetail01 (
    SET CONCAT_NULL_YIELDS_NULL OFF
 
    DECLARE  @nTotalLine   INT
+   DECLARE  @cExternReceiptKey NVARCHAR(20)
 
    -- Check barcode format
    IF rdt.rdtIsValidFormat( @nFunc, @cStorerKey, 'ID', @cID) = 0
@@ -55,9 +57,15 @@ CREATE OR ALTER PROCEDURE rdt.rdt_605CheckDetail01 (
       GOTO quit
    END
 
+   SELECT @cExternReceiptKey    = RTRIM(LTRIM(ISNULL(ExternReceiptKey, '')))
+   FROM ReceiptDetail WITH (NOLOCK)
+   WHERE ReceiptKey = @cReceiptKey
+      AND StorerKey = @cStorerKey
+
    IF EXISTS(
       SELECT 1 FROM dbo.UCC (NOLOCK )
       WHERE Storerkey = @cStorerKey
+        AND ExternKey = @cExternReceiptKey
         AND ID = @cID
         AND status <> '0'
    )
