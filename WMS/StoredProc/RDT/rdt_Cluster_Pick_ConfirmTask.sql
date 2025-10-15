@@ -58,8 +58,9 @@ GO
 /* 19-May-2021 1.60  James       WMS16756-Bug fix on short pick couldn't */
 /*                               handle multi same sku, loc line(james20)*/
 /* 14-Sep-2021 1.61  ian         INC1611727 - picking Error(ian01)       */
-/* 14-Oct-2025 1.7.0 Jackc       FCR-7331 Enhance eventlog (jackc01)     */
-/*************************************************************************/
+/* 14-Oct-2025 1.62 Jackc        FCR-7331 Enhance eventlog (jackc01)     */
+/* 15-Oct-2025 1.63 NickT        UWP-42483 Optimize transaction          */
+/************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_Cluster_Pick_ConfirmTask] (
    @cStorerKey       NVARCHAR( 15),
@@ -216,8 +217,10 @@ BEGIN
 
    SET @nTranCount = @@TRANCOUNT
 
-   BEGIN TRAN
-   SAVE TRAN Cluster_Pick_ConfirmTask
+   IF @nTranCount = 0
+      BEGIN TRAN
+   ELSE
+      SAVE TRAN Cluster_Pick_ConfirmTask
 
    -- (Vicky06) - Start
    SELECT @cUOM = RTRIM(PACK.PACKUOM3)
@@ -1197,15 +1200,20 @@ BEGIN
    CLOSE curRPL
    DEALLOCATE curRPL
 
+   COMMIT TRAN
+
    GOTO Quit
 
    RollBackTran:
-      ROLLBACK TRAN Cluster_Pick_ConfirmTask
+   IF XACT_STATE() = -1
+   BEGIN
+      IF @nTranCount > 0
+         ROLLBACK TRAN Cluster_Pick_ConfirmTask
+      ELSE
+         ROLLBACK TRAN
+   END
 
    Quit:
-      WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
-         COMMIT TRAN Cluster_Pick_ConfirmTask
-        
 END
 GO
 
