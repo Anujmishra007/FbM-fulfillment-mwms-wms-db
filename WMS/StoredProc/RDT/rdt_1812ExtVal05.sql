@@ -87,6 +87,10 @@ BEGIN
 
             IF @cToLoc <> @cSuggToLOC
             BEGIN
+               IF (CHARINDEX('LIFT',@cSuggToLOC)>0)
+               BEGIN
+                  GOTO QUIT
+               END--LIFT LOC
                IF EXISTS ( SELECT 1 
                            FROM dbo.LOC WITH (NOLOCK)
                            WHERE LOC = @cSuggToLOC
