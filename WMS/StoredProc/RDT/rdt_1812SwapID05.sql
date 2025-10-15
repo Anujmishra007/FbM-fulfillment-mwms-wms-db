@@ -136,11 +136,11 @@ BEGIN
    SAVE TRAN rdt_1812SwapID05
 
    --SWAP Tasks
-   IF EXISTS ( SELECT 1 FROM dbo.TaskDetail WITH (NOLOCK) WHERE FromID = @cNewID AND Status = '0' AND TASKTYPE IN ('FCP','FP1') AND PickMethod = 'FP' )
+   IF EXISTS ( SELECT 1 FROM dbo.TaskDetail WITH (NOLOCK) WHERE FromID = @cNewID AND Status = '0' AND TASKTYPE IN ('FCP','FCP1') AND PickMethod = 'FP' )
    BEGIN
       SELECT @cNewTaskDetailKey = TaskDetailKey
       FROM dbo.TaskDetail WITH (NOLOCK)
-      WHERE FromID = @cNewID AND Status = '0' AND TASKTYPE IN ('FCP','FP1') AND PickMethod = 'FP' 
+      WHERE FromID = @cNewID AND Status = '0' AND TASKTYPE IN ('FCP','FCP1') AND PickMethod = 'FP' 
 
       UPDATE TASKDETAIL SET STATUS = '0',USERKEY = '' WHERE TASKDETAILKEY = @cTaskDetailKey
       UPDATE TASKDETAIL SET STATUS = '3',USERKEY = @cUserName,ListKey = TaskDetailKey WHERE TASKDETAILKEY = @cNewTaskDetailKey

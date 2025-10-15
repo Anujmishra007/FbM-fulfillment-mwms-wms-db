@@ -763,7 +763,10 @@ BEGIN
       END
 
       IF @b_SkipTheTask = 1
+      BEGIN
+         DELETE FROM @tTaskCandidate WHERE TaskDetailKey = @cTaskDetailKey
          CONTINUE
+      END
 
       -- 1. Check the weight, make sure Inventory Weight <= MaxWeight of MHE           Y
       IF @cPickMethod = 'FP'
