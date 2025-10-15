@@ -137,7 +137,7 @@ AS
             ORDER BY 1
          END  
 
-         SET @cExtendedInfo = 'ID      : ' + @cID
+         SET @cExtendedInfo = 'ID:' + @cID
       END
    END
   
