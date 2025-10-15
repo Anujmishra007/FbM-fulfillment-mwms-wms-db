@@ -158,6 +158,7 @@ jobs:
                 $changed_files = git diff --name-only  $DB_CURRENT_VERSION ${{ github.ref_name }}  -- ':*.sql' | out-string
                 $changed_files_list = $changed_files -split '\r?\n' | where-object { $_ -ne ''}
                 $changed_files_string = $changed_files_list -join ","
+                
                 if($changed_files_string -ne '')
                  {
                   $obj = New-Object -TypeName PSObject
@@ -168,6 +169,7 @@ jobs:
                   # $obj | Add-Member -MemberType NoteProperty -Name CHANGED_FILES_LIST -Value $($changed_files_list)
                   # $obj | Add-Member -MemberType NoteProperty -Name CHANGED_FILES_STRING -Value $($changed_files_string)
                   $matrixtable += $obj
+                  "CHANGED_FILES_STRING=$changed_files_string" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
                   write-output "| $($DATBASE_NAME) |$($DB_SERVER_NAME) |$($DB_CURRENT_VERSION) |$($DB_DEPLOY_VERSION) | **READY :white_check_mark:** |Files changed : $($changed_files_string) |"| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
                   }elseif($changed_files_string -eq '')
                   {
@@ -250,7 +252,7 @@ jobs:
                 # $obj | Add-Member -MemberType NoteProperty -Name CHANGED_FILES_LIST -Value $($changed_files_list)
                 # $obj | Add-Member -MemberType NoteProperty -Name CHANGED_FILES_STRING -Value $($changed_files_string)
                 $matrixtable += $obj
-
+                "CHANGED_FILES_STRING=$changed_files_string" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
                 write-output "| $($DATBASE_NAME) |$($DB_SERVER_NAME) |$($DB_CURRENT_VERSION) |$($DB_DEPLOY_VERSION) | **READY :white_check_mark:** |Files changed : $($changed_files_string) |"| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
                 write-output '' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
                 write-output "MATRIX_OUTPUT=[$($matrixtable | ConvertTo-JSON -Compress)]" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
@@ -276,7 +278,7 @@ jobs:
                   # $obj_sdr | Add-Member -MemberType NoteProperty -Name CHANGED_FILES_LIST -Value $($SDRWMS_changed_files_list)
                   # $obj_sdr | Add-Member -MemberType NoteProperty -Name CHANGED_FILES_STRING -Value $($SDRWMS_changed_files_string)
                   $matrixtable += $obj_sdr
-
+                  "CHANGED_FILES_STRING=$changed_files_string" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
                   write-output "| $($SDRWMS_DATABASE_NAME) |$($SDRWMS_DB_SERVER_NAME) |$($SDRWMS_DB_CURRENT_VERSION) |$($SDRWMS_DB_DEPLOY_VERSION) | **READY :white_check_mark:** |Files changed : $($SDRWMS_changed_files_string) |" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
                   write-output '' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
                   write-output "MATRIX_OUTPUT=[$($matrixtable | ConvertTo-JSON -Compress)]" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
@@ -328,7 +330,7 @@ jobs:
       DB_CURRENT_VERSION: ${{ matrix.data.DB_CURRENT_VERSION }}
       DB_DEPLOY_VERSION: ${{ matrix.data.DB_DEPLOY_VERSION }}
       DB_SERVER_NAME: ${{ matrix.data.DB_SERVER_NAME }}
-      SQL_SCRIPT_FILES_STRING: ${{ matrix.data.CHANGED_FILES_STRING }}
+      SQL_SCRIPT_FILES_STRING: ${{ env.CHANGED_FILES_STRING }}
       DB_ADMIN_USER_PASSWORD: ${{ secrets.STAGE_EUR_DB_ADMIN_USER_PASSWORD }}
     steps:
       - name: print matrix values for testing test
