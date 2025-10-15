@@ -12,6 +12,7 @@ GO
 /* Date       Rev  Author     Purposes                                  */
 /* 2024-12-16 1.0  CYU027     FCR-1606 Create                           */
 /* 2025-07-09 1.1.0 NickT     UWP-37279 Performance Tuning              */
+/* 2025-10-10 1.2.0 Cuize     UWP-42326 Fixing bug                      */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1650ExtUpd04] (
@@ -73,13 +74,13 @@ BEGIN
 
    IF @nStep = 2
    BEGIN
-      IF @cOption = '1'  -- Scan to Door
-      BEGIN
+--       IF @cOption = '1'  -- Scan to Door
+--       BEGIN
          --UPDATE PalletDetail
          UPDATE dbo.PALLET WITH (ROWLOCK) SET
             [Status] = 9
          WHERE PalletKey = @cPalletID
-      END
+--       END
    END
 
    IF @nErrNo <> 0
