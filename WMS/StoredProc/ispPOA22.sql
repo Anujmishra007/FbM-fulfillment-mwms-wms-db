@@ -24,6 +24,7 @@ GO
 /* 10-FEB-2022  CSCHONG 1.0   Devops Scripts Combine                    */
 /* 31-MAY-2023  NJOW01  1.1   WMS-22704 modify @c_CountryOTH value      */
 /* 03-JUL-2025  MICHAEL 1.2   FCR-6182 Add logic for C_Country=IN (ML01)*/
+/* 10-Oct-2025  SSA01   1.3  UWP-42248 -Enhanced session management    */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[ispPOA22]
      @c_OrderKey    NVARCHAR(10) = ''
@@ -280,8 +281,8 @@ DECLARE   @c_Country                 NVARCHAR(45)
             UPDATE ORDERS WITH (ROWLOCK)
             SET SpecialHandling = @c_SH
               , TrafficCop   = NULL
-              , EditDate     = GETDATE()
-              , EditWho      = SUSER_SNAME()
+              , EditDate     = dbo.fnc_GetDate()    --(SSA01)
+              , EditWho      = dbo.fnc_GetUserName()                --(SSA01)
             WHERE OrderKey   = @c_GetOrderkey
 
             SELECT @n_err = @@ERROR

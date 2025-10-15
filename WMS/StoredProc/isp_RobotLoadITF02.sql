@@ -27,6 +27,8 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
+/* 10-OCT-2025 SSA01    1.0   UWP-42248 -Enhanced session management    */
+/*                             and cleanup.                             */
 /************************************************************************/
 CREATE PROC isp_RobotLoadITF02
            @c_Loadkey   NVARCHAR(10) 
@@ -237,8 +239,8 @@ BEGIN
          UPDATE LOADPLAN
          SET UserDefine01 = 'Y'
            , TrafficCop   = NULL
-           , EditDate     = GETDATE()
-           , EditWho      = SUSER_SNAME()
+           , EditDate     = dbo.fnc_GetDate()    --(SSA01)
+           , EditWho      = dbo.fnc_GetUserName()     --(SSA01)
          WHERE LoadKey = @c_Key2
          
          SELECT @n_err = @@ERROR  

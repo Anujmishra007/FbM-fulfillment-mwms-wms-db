@@ -35,6 +35,7 @@ GO
 /* 17-Mar-2009  TLTING      1.1  Change user_name() to SUSER_SNAME()            */
 /* 03-Apr-2025  WLChooi     1.2  UWP-32362 Log DocStatusTrack (WL01)            */
 /* 15-May-2025  Shreekanth  1.3  UWP-33751 AddWho & EditWho Nameduser (SG01)    */
+/* 09-Oct-2025  SPC040       1.4  Replace SUSER_SNAME with fnc_GetUserName      */
 /********************************************************************************/
 CREATE OR ALTER TRIGGER [dbo].[ntrKitHeaderAdd]
 ON [dbo].[KIT]
@@ -83,12 +84,16 @@ BEGIN
    
    IF @n_continue=1 or @n_continue=2
    BEGIN
+
+      INSERT INTO traceinfo (tracename, TimeIn, step1, Col1, Col2, Col3, Col4, Col5) VALUES ('ntrKitHeaderAdd', 
+		GETDATE(), '1', SUSER_SNAME(), dbo.fnc_GetUserName(), CONVERT(NVARCHAR(50), SESSION_CONTEXT(N'mwms_user_name')), '', '') 
+
       UPDATE KIT
       SET TrafficCop = NULL,
-          AddDate  = GETDATE(),
-          AddWho   = IIF(INSERTED.AddWho = '', SUSER_SNAME(), INSERTED.AddWho),   --To cater for the case when the user explicitly set the Addwho to blank --SG01
-          EditDate = GETDATE(),
-          EditWho  = IIF(INSERTED.EditWho = '', SUSER_SNAME(), INSERTED.EditWho)   --To cater for the case when the user explicitly set the EditWho to blank --SG01
+          AddDate  = dbo.fnc_GetDate(),
+          AddWho   = IIF(INSERTED.AddWho = '', dbo.fnc_GetUserName(), INSERTED.AddWho),   --To cater for the case when the user explicitly set the Addwho to blank --SG01
+          EditDate = dbo.fnc_GetDate(),
+          EditWho  = IIF(INSERTED.EditWho = '', dbo.fnc_GetUserName(), INSERTED.EditWho)   --To cater for the case when the user explicitly set the EditWho to blank --SG01
       FROM KIT
       JOIN INSERTED ON KIT.KitKey = INSERTED.KitKey
       SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
@@ -104,7 +109,7 @@ BEGIN
 
       DECLARE CUR_DST CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
       SELECT DISTINCT Kitkey, StorerKey, ISNULL(ExternStatus, '0')
-                    , IIF(EditWho = '', SUSER_SNAME(), EditWho)  --To cater for the case when the user explicitly set the EditWho to blank --SG01
+                    , IIF(EditWho = '', dbo.fnc_GetUserName(), EditWho)  --To cater for the case when the user explicitly set the EditWho to blank --SG01
       FROM INSERTED
 
       OPEN CUR_DST

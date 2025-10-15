@@ -128,6 +128,7 @@ GO
 /*                            Do Not Overallocate to partial fulfill DPP*/
 /* 22-Jan-2025  NJOW23   4.9  WMS-24396 - Fix @c_DynUOMQty condition    */
 /* 21-Feb-2025  WLChooi  5.0  WMS-26556 Support multi facilities (WL02) */
+/* 10-Oct-2025  SSA01    5.1  UWP-42248 -Enhanced session management    */
 /************************************************************************/  
 
 CREATE OR ALTER PROC [dbo].[nspOrderProcessing]  
@@ -547,10 +548,10 @@ BEGIN
          [PickMethod] [nvarchar](1) NULL DEFAULT (' '),  
          [RunKey] [nvarchar](10) NULL DEFAULT (' '),  
          [EffectiveDate] [datetime] NULL DEFAULT (getdate()),  
-         [AddDate] [datetime] NULL DEFAULT (getdate()),  
-         [AddWho] [nvarchar](128) NULL DEFAULT (suser_sname()),    -- ZG01
-         [EditDate] [datetime] NULL DEFAULT (getdate()),  
-         [EditWho] [nvarchar](128) NULL DEFAULT (suser_sname()),   -- ZG01
+         [AddDate] [datetime] NULL DEFAULT (dbo.fnc_GetDate()),    --(SSA01)
+         [AddWho] [nvarchar](128) NULL DEFAULT (dbo.fnc_GetUserName()),    -- ZG01 (SSA01)
+         [EditDate] [datetime] NULL DEFAULT (dbo.fnc_GetDate()),    --(SSA01)
+         [EditWho] [nvarchar](128) NULL DEFAULT (dbo.fnc_GetUserName()),   -- ZG01 (SSA01)
          [TrafficCop] [nvarchar](1) NULL,  
          [ArchiveCop] [nvarchar](1) NULL,  
          [CARTONGROUP] NVARCHAR(10) NULL,  
@@ -634,9 +635,9 @@ BEGIN
                PickMethod = '',     
                Runkey = '',             
                effectivedate = GETDATE(),  
-               adddate = GETDATE(),  
+               adddate = dbo.fnc_GetDate(),    --(SSA01)
                addwho = '',  
-               editdate = GETDATE(),  
+               editdate = dbo.fnc_GetDate(),    --(SSA01)
                editwho = '',                       
                CARTONGROUP = ISNULL(SKU.CartonGroup, ''),  
                StrategyKey = ISNULL(STRATEGY.AllocateStrategyKey, ''),  
@@ -824,9 +825,9 @@ BEGIN
                      PickMethod = '',           
                      Runkey = '',       
                      effectivedate = GETDATE(),  
-                     adddate = GETDATE(),  
+                     adddate = dbo.fnc_GetDate(),    --(SSA01)
                      addwho = '',  
-                     editdate = GETDATE(),  
+                     editdate = dbo.fnc_GetDate(),    --(SSA01)
                      editwho = '',                       
                      CARTONGROUP = ISNULL(SKU.CartonGroup, ''),  
                      StrategyKey = ISNULL(STRATEGY.AllocateStrategyKey, ''),  
@@ -3398,8 +3399,8 @@ BEGIN
       IF dbo.fnc_LTrim(dbo.fnc_RTrim(@c_OrderKey)) IS NOT NULL  
       BEGIN  
          UPDATE ORDERS  
-            SET EditDate = GetDate(),  
-                EditWho  = Suser_Sname()  
+            SET EditDate = dbo.fnc_GetDate(),    --(SSA01)
+                EditWho  = dbo.fnc_GetUserName()         --(SSA01)
           WHERE OrderKey = @c_OrderKey  
   
          SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT  
@@ -3417,7 +3418,7 @@ BEGIN
          IF @c_tblprefix = 'MAS'  
          BEGIN -- Mass Allocation  
             UPDATE ORDERS  
-               SET EditDate = GetDate()  
+               SET EditDate = dbo.fnc_GetDate()    --(SSA01)
               FROM #OPORDERLINES  
              WHERE #OPORDERLINES.Orderkey = ORDERS.Orderkey  
   
@@ -3458,7 +3459,7 @@ BEGIN
             WHILE (@@FETCH_STATUS <> -1) AND @n_continue <> 3  
             BEGIN  
                UPDATE ORDERS  
-                  SET EditDate = GetDate()  
+                  SET EditDate = dbo.fnc_GetDate()    --(SSA01)
                 WHERE ORDERS.OrderKey = @c_loadorderkey  
   
                SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT  
@@ -3474,7 +3475,7 @@ BEGIN
             DEALLOCATE order_cur  
             -- Force to trigger Status update  
             UPDATE Loadplan  
-               SET EditDate = GetDate(),  
+               SET EditDate = dbo.fnc_GetDate(),    --(SSA01)
                    EditWho = 'AllocateGuy'  
              WHERE LoadKey = @c_oskey  
          END -- LoadPlan Allocation  

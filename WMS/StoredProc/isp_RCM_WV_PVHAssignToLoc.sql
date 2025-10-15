@@ -26,6 +26,8 @@ GO
 /* Date         Author    Ver.  Purposes                                */
 /* 2019-01-03   TLTING01  1.1   Performance tune                        */
 /* 2019-01-18   LZG       1.2   INC0550137 - Performance tune (ZG01)    */
+/* 2025-10-10   SSA01     1.3   UWP-42248 -Enhanced session management  */
+/*                              and cleanup.                            */
 /************************************************************************/
 
 CREATE OR ALTER  PROCEDURE [dbo].[isp_RCM_WV_PVHAssignToLoc]
@@ -176,8 +178,8 @@ BEGIN
 
    		 	UPDATE PICKDETAIL
    		 		SET ToLoc = @c_PTSLoc,
-   		 		   editwho = Suser_sname(),
-   		 		   editdate = getdate()
+   		 		   editwho = dbo.fnc_GetUserName(),     --(SSA01)
+   		 		   editdate = dbo.fnc_GetDate()    --(SSA01)
    		 	WHERE  PickDetailKey = @c_PickDetailKey AND Status <= '4' AND ISNULL(ToLoc,'') = ''
 
    		 	SET @n_err = @@ERROR

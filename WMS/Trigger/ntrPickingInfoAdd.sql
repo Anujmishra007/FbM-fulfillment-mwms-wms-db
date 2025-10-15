@@ -1,3 +1,7 @@
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
 
 /************************************************************************/
 /* Trigger: ntrPickingInfoAdd                                           */
@@ -1988,7 +1992,6 @@ BEGIN
    BEGIN
       UPDATE PickingInfo
         SET AddWho  = dbo.fnc_GetUserName(),
-            AddDate = dbo.fnc_GetDate(), 
             TrafficCop = NULL 
       FROM PickingInfo
       JOIN INSERTED ON PickingInfo.PickSlipNo = INSERTED.PickSlipNo

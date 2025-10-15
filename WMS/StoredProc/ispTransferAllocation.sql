@@ -50,6 +50,7 @@ GO
 /* 04-NOV-2020  Wan06   2.4   WMS-15612 - ANF - CR on Transfer Allocation  */  
 /* 22-02-2021   Wan07   2.5   WMS-16094 - [CN] ANFQHW_WMS_TransferAllocation*/
 /*                            - Add @c_Facility when call Sub SP           */
+/* 10-10-2025   SSA01   2.6   UWP-42248 -Enhanced session management       */
 /***************************************************************************/  
   
 CREATE PROC [dbo].[ispTransferAllocation](  
@@ -774,8 +775,8 @@ BEGIN
                                      QtyAllocated = 0,  
                                      QtyPicked = 0,  
                                      TrafficCop = NULL,  
-                                     EditDate = GETDATE(),  
-                                     EditWho = Suser_Sname()  
+                                     EditDate = dbo.fnc_GetDate(),    --(SSA01)
+                                     EditWho = dbo.fnc_GetUserName()           --(SSA01)
                                  WHERE LOT = @c_FromLot  
                                  AND LOC = @c_FromLoc  
                                  AND ID =  @cToID  
@@ -806,8 +807,8 @@ BEGIN
                                   QtyAllocated = 0,  
                                   QtyPicked = 0,  
                                   TrafficCop = NULL,  
-                                  EditDate = GETDATE(),  
-                                  EditWho = Suser_Sname()  
+                                  EditDate = dbo.fnc_GetDate(),    --(SSA01)
+                                  EditWho = dbo.fnc_GetUserName()          --(SSA01)
                               WHERE LOT = @c_FromLot  
                               AND LOC = @c_FromLoc  
                               AND ID =  @cToID  

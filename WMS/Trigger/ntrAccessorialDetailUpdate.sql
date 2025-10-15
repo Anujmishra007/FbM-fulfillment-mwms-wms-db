@@ -1,7 +1,10 @@
 --if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrAccessorialDetailUpdate]') 
 --              and OBJECTPROPERTY(id, N'IsTrigger') = 1) 
 --drop trigger [dbo].[ntrAccessorialDetailUpdate]
---GO
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
 /************************************************************************/  
 /* Trigger: ntrAccessorialDetailUpdate                                  */  
 /* Creation Date: 06-Jun-2016                                           */  

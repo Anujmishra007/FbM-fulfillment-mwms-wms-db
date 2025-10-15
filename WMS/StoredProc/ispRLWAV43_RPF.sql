@@ -37,6 +37,7 @@ GO
 /*                            when no DP Loc is found (ZG01)            */
 /* 2023-03-22  Calvin   1.6   JSM-137787 [VN ADIDAS] Update UCC Status to*/
 /*                            3 for RPF Tasks without Pickdetail (CLVN01)*/
+/* 2025-10-10  SSA01    1.7   UWP-42248 -Enhanced session management    */
 /************************************************************************/  
 CREATE OR ALTER PROC [dbo].[ispRLWAV43_RPF]  
         @c_wavekey      NVARCHAR(10)    
@@ -1140,8 +1141,8 @@ BEGIN
            
             UPDATE p  
                SET p.TaskDetailKey = @c_TaskDetailKey  
-                  ,p.EditWho = SUSER_SNAME()  
-                  ,p.EditDate= GETDATE()  
+                  ,p.EditWho = dbo.fnc_GetUserName()            --(SSA01)
+                  ,p.EditDate= dbo.fnc_GetDate()    --(SSA01)
                   ,p.TrafficCop = NULL  
             FROM dbo.PICKDETAIL AS p   
             JOIN UPD ON UPD.PickDetailkey = p.PickDetailKey  
@@ -1544,8 +1545,8 @@ NEXT_LOOP:
 				  AND UCCNO = @c_DropID)
 		 BEGIN
 			UPDATE UCC SET STATUS = '3'
-                    ,   EditDate = GETDATE()  
-                    ,   EditWho = SUSER_SNAME()  
+                    ,   EditDate = dbo.fnc_GetDate()    --(SSA01)
+                    ,   EditWho = dbo.fnc_GetUserName()           --(SSA01)
                     ,   TrafficCop = NULL
 			WHERE STORERKEY = @c_Storerkey AND UCCNO = @c_DropID AND SKU = @c_Sku
 		 END

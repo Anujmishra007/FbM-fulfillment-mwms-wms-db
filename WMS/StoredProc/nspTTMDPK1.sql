@@ -29,6 +29,7 @@ GO
 /* 09-Dec-2010  SHONG   1.1   Adding TrafficCop (SHONG02)               */  
 /* 11-Jul-2013  TLTING  1.2   Perfromance tune - IF Exists only update  */
 /* 22-Sep-2015  James   1.3   Only fetch task with qty > 0 (james01)    */
+/* 10-Oct-2025  SSA01   1.4   UWP-42248 -Enhanced session management    */
 /************************************************************************/
 CREATE PROC    [dbo].[nspTTMDPK1]
                @c_UserID           NVARCHAR(18)
@@ -197,8 +198,8 @@ BEGIN
            SET    STATUS = '0'
                  ,USERKEY = ''
                  ,REASONKEY = ''
-                 ,EditDate = GetDate()     -- (SHONG02)      
-                 ,EditWho  = sUSER_sNAME()   
+                 ,EditDate = dbo.fnc_GetDate()   --(SSA01)     -- (SHONG02)
+                 ,EditWho  = dbo.fnc_GetUserName()        --(SSA01)
                  ,TrafficCop = NULL                
            WHERE  USERKEY = @c_UserID
                   AND STATUS = '3' -- (Vicky02)

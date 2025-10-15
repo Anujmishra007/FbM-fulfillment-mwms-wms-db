@@ -45,6 +45,7 @@ GO
 /*                            Cycle Count by Adjustment Serialnon - Fix  */
 /*                            sourcetype truncate issue                  */
 /* 26-JUN-2025  SSA01     2.7 UWP-3982- Added PalletType in inventory    */
+/* 10-Oct-2025  SSA02     2.8 UWP-42248 -Enhanced session management     */
 /*************************************************************************/
 CREATE OR ALTER PROC  [dbo].[nspItrnAddAdjustmentCheck]
                @c_itrnkey      NVARCHAR(10)
@@ -1094,8 +1095,8 @@ BEGIN
                --BEGIN
                   UPDATE ChannelInv WITH (ROWLOCK)
                      SET Qty = Qty + @n_qty, 
-                         EditDate = GETDATE(),
-                         EditWho  = SUSER_SNAME() 
+                         EditDate = dbo.fnc_GetDate(),    --(SSA02)
+                         EditWho  = dbo.fnc_GetUserName()          --(SSA02)
                   WHERE Channel_ID = @n_Channel_ID 
                   SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT                
                --END   
@@ -1150,8 +1151,8 @@ BEGIN
                SET [STATUS] = @c_Status_SN
                   ,Lot   = CASE WHEN @c_ASNFizUpdLotToSerialNo = '1' THEN @c_Lot ELSE Lot END
                   ,ID    = CASE WHEN ID <> @c_ToID THEN @c_ToID ELSE ID END
-                  ,EditWho  = SUSER_SNAME()
-                  ,EditDate = GETDATE()
+                  ,EditWho  = dbo.fnc_GetUserName()          --(SSAS01)
+                  ,EditDate = dbo.fnc_GetDate()    --(SSA02)
                WHERE SerialNoKey = @c_SerialNoKey
                
                SET @n_err = @@ERROR
@@ -1282,8 +1283,8 @@ BEGIN
              Lottable05 = @d_Lottable05,
              Status = @c_Status,
              Channel_ID = @n_Channel_ID, 
-             EditDate = GETDATE(),
-             EditWho = SUSER_SNAME() 
+             EditDate = dbo.fnc_GetDate(),    --(SSA02)
+             EditWho = dbo.fnc_GetUserName()          --(SSA02)
          WHERE ItrnKey = @c_itrnkey
 
          SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT

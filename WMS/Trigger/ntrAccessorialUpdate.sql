@@ -2,6 +2,10 @@
 --              and OBJECTPROPERTY(id, N'IsTrigger') = 1) 
 --drop trigger [dbo].[ntrAccessorialUpdate]
 --GO
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
 /************************************************************************/  
 /* Trigger: ntrAccessorialUpdate                                        */  
 /* Creation Date: 06-Jun-2016                                           */  

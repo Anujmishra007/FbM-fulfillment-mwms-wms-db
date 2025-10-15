@@ -23,7 +23,9 @@ GO
 /* Data Modifications:                                                  */
 /*                                                                      */
 /* Updates:                                                             */  
-/* Date         Author   Ver  Purposes                                  */  
+/* Date         Author   Ver  Purposes                                  */
+/* 10-OCT-2025  SSA01    1.5  UWP-42248 -Enhanced session management    */
+/*                             and cleanup.                             */
 /************************************************************************/
 
 CREATE PROC ispLPPK07   
@@ -199,7 +201,7 @@ BEGIN
             (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, AddWho, AddDate, EditWho, EditDate)    
          VALUES     
             (@c_PickSlipNo, @n_CartonNo, @c_LabelNo, @c_LabelLineNo, @c_StorerKey, @c_SKU,   
-             @n_Qty, sUser_sName(), GETDATE(), sUser_sName(), GETDATE())            	
+             @n_Qty, dbo.fnc_GetUserName(), dbo.fnc_GetDate(), dbo.fnc_GetUserName(), dbo.fnc_GetDate())            --(SSA01)
 
          SET @nerr = @@ERROR
          

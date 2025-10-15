@@ -29,6 +29,8 @@ GO
 /*                            Issue                                      */
 /* 2022-07-13  Wan04    1.4   DevObj Combine script                      */
 /* 2022-06-11  SSA01    1.5   FCR-3982- Added PalletType Validation      */
+/* 2025-10-06  SSA02    1.6   UWP-42142 -Enhanced session management     */
+/*                            and cleanup.                               */
 /*************************************************************************/   
 CREATE OR ALTER PROCEDURE [WM].[lsp_finalizeADJ_Wrapper]  
    @c_AdjustmentKey  NVARCHAR(10)
@@ -106,7 +108,8 @@ BEGIN
    SET @c_TableName = 'ADJUSTMENT'
    SET @c_SourceType = 'lsp_finalizeADJ_Wrapper'
    SET @n_ErrGroupKey= 0
-
+   -- Start enhanced session management (SSA02)
+   DECLARE @b_ExecuteAs        BIT = 0
    SET @n_Err = 0 
    IF SUSER_SNAME() <> @c_UserName       --(Wan03) - START
    BEGIN
@@ -114,14 +117,16 @@ BEGIN
                @c_UserName = @c_UserName  OUTPUT
             ,  @n_Err      = @n_Err       OUTPUT
             ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+            ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
                 
       IF @n_Err <> 0 
       BEGIN
          GOTO EXIT_SP
       END
-
+      IF @b_ExecuteAs = 1
       EXECUTE AS LOGIN = @c_UserName
    END                                   --(Wan03) - END
+   -- End enhanced session management (SSA02)
    
    WHILE @@TRANCOUNT > 0
    BEGIN
@@ -822,8 +827,8 @@ BEGIN
             BEGIN TRY
                UPDATE ADJUSTMENTDETAIL WITH (ROWLOCK)
                SET Lottable05 = GETDATE()
-                  ,EditWho    = @c_UserName
-                  ,EditDate   = GETDATE()
+                  ,EditWho    = dbo.fnc_GetUserName()   --(SSA02)
+                  ,EditDate   = dbo.fnc_GetDate()    --(SSA02)
                   ,Trafficcop = NULL
                WHERE AdjustmentKey = @c_AdjustmentKey    
                AND AdjustmentLineNumber = @c_AdjLineNo
@@ -953,7 +958,8 @@ BEGIN
       BEGIN TRAN
    END
  
-   REVERT      
+   IF @b_ExecuteAs = 1 REVERT -- (SSA02)
+   EXEC [WM].[lsp_ResetUser]  -- (SSA02)
 END  
 GO
 GRANT EXECUTE ON [WM].[lsp_finalizeADJ_Wrapper] TO nSQL 

@@ -24,7 +24,8 @@ GO
 /* Updates:                                                              */  
 /* Date        Author   Ver   Purposes                                   */ 
 /* 2020-02-18  Wan01    1.1   WMS-12056 - [CN]Levis Exceed Release Wave(CR)*/
-/* 01-04-2020  Wan02    1.2   Sync Exceed & SCE                          */  
+/* 01-04-2020  Wan02    1.2   Sync Exceed & SCE                          */
+/* 10-10-2025  SSA01    1.3   UWP-42248 -Enhanced session management     */
 /*************************************************************************/   
 
 CREATE PROCEDURE [dbo].[ispRVWAV18]      
@@ -323,8 +324,8 @@ BEGIN
          --SET STATUS = '0' -- Normal        --(Wan02)   
          SET TMReleaseFlag = 'N'             --(Wan02) 
          ,  TrafficCop = NULL                --(Wan02) 
-         ,  EditWho = SUSER_SNAME()          --(Wan02) 
-         ,  EditDate= GETDATE()              --(Wan02) 
+         ,  EditWho = dbo.fnc_GetUserName()         --(Wan02)(SSA01)
+         ,  EditDate= dbo.fnc_GetDate()   --(SSA01)          --(Wan02)
       WHERE WAVEKEY = @c_wavekey  
       SELECT @n_err = @@ERROR  
       IF @n_err <> 0  

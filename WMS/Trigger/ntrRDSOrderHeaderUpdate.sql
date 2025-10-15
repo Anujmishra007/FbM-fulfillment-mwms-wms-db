@@ -36,7 +36,7 @@ GO
 /* 06-Oct-2025  AK01   1.0    UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName*/
 /************************************************************************/
 
-CREATE TRIGGER [dbo].[ntrRDSOrderHeaderUpdate]
+CREATE OR ALTER TRIGGER [dbo].[ntrRDSOrderHeaderUpdate]
 ON [dbo].[rdsOrders]
 FOR UPDATE
 AS 

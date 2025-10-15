@@ -13,6 +13,7 @@ GO
 /* Date       Rev  Author      Purposes                                 */
 /* 2025-03-17 1.0  Dennis      FCR-2814 Created                         */
 /* 2025-05-12 1.1  Dennis      UWP-34249 Performance Tune               */
+/* 2025-10-14 1.2  NickT       UWP-42331 Add PKD query cond: Lottable01 */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_838ConfirmSP24] (
@@ -77,6 +78,10 @@ BEGIN
       @cLoadKey = ExternOrderKey
    FROM dbo.PickHeader WITH (NOLOCK)
    WHERE PickHeaderKey = @cPickSlipNo
+
+   DECLARE @cLottable01 NVARCHAR( 18)
+      -- Get session info
+   SELECT @cLottable01 = V_Lottable01 FROM rdt.rdtMobRec WITH (NOLOCK) WHERE Mobile = @nMobile
       
    -- Handling transaction
    DECLARE @nTranCount  INT
@@ -359,9 +364,11 @@ BEGIN
             SELECT TOP 1 @cPickDetailKey = pkd.PickDetailKey
             FROM dbo.PickDetail pkd (NOLOCK)
             INNER JOIN dbo.PickHeader pkh (NOLOCK) ON pkh.OrderKey = pkd.OrderKey AND pkh.StorerKey = pkd.StorerKey
+            INNER JOIN dbo.LOTAttribute LA WITH (NOLOCK) ON (pkd.LOT = LA.LOT)
             LEFT JOIN dbo.PackSerialNo psn (NOLOCK) ON psn.PickDetailKey = pkd.PickDetailKey
             WHERE pkd.StorerKey = @cStorerKey
             AND pkh.PickHeaderKey = @cPickSlipNo
+            AND LA.Lottable01 = @cLottable01
             AND pkd.SKU = @cSKU
             AND psn.PackSerialNoKey IS NULL
             
@@ -446,9 +453,11 @@ BEGIN
          SELECT TOP 1 @cPickDetailKey = pkd.PickDetailKey
          FROM dbo.PickDetail pkd (NOLOCK)
          INNER JOIN dbo.PickHeader pkh (NOLOCK) ON pkh.OrderKey = pkd.OrderKey AND pkh.StorerKey = pkd.StorerKey
+         INNER JOIN dbo.LOTAttribute LA WITH (NOLOCK) ON (pkd.LOT = LA.LOT)
          LEFT JOIN dbo.PackSerialNo psn (NOLOCK) ON psn.PickDetailKey = pkd.PickDetailKey
          WHERE pkd.StorerKey = @cStorerKey
          AND pkh.PickHeaderKey = @cPickSlipNo
+         AND LA.Lottable01 = @cLottable01
          AND pkd.SKU = @cSKU
          AND psn.PackSerialNoKey IS NULL
 
@@ -534,12 +543,8 @@ BEGIN
    /***********************************************************************************************
                                                 PickDetail
    ***********************************************************************************************/
-   DECLARE @cLottable01 NVARCHAR( 18)
    DECLARE @nQTY_PD INT
    SET @cPickDetailKey = ''
-
-   -- Get session info
-   SELECT @cLottable01 = V_Lottable01 FROM rdt.rdtMobRec WITH (NOLOCK) WHERE Mobile = @nMobile
    
    SET @nQTY_Bal = @nQTY
 

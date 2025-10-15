@@ -29,6 +29,7 @@ GO
 /* 18-OCT-2023 NJOW03   1.3   WMS-23952 Fix, not to return sku if scanned*/
 /*                            in UPC.                                   */
 /* 31-OCT-2023 NJOW04   1.4   Performance tuning                        */
+/* 10-Oct-2025 SSA01    1.2   UWP-42248 -Enhanced session management    */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE dbo.ispSKUDC10
@@ -228,8 +229,8 @@ BEGIN
       	        CartonNo = @n_CartonNo,
       	        LabelLine = '',
       	        TrafficCop = NULL,
-      	        EditWho = SUSER_SNAME(),
-      	        EditDate = GETDATE()
+      	        EditWho = dbo.fnc_GetUserName(),        --(SSA01)
+      	        EditDate = dbo.fnc_GetDate()   --(SSA01)
       	    WHERE SerialNokey = @c_SerialNoKey
 
       	    SET @n_Err = @@ERROR
@@ -310,8 +311,8 @@ BEGIN
       	     CartonNo = @n_CartonNo,
       	     LabelLine = '',
       	     TrafficCop = NULL,
-      	     EditWho = SUSER_SNAME(),
-      	     EditDate = GETDATE()
+      	     EditWho = dbo.fnc_GetUserName(),       --(SSA01)
+      	     EditDate = dbo.fnc_GetDate()   --(SSA01)
       	 WHERE SerialNokey = @c_SerialNoKey      	          
       	 
       	 SET @n_Err = @@ERROR
@@ -367,8 +368,8 @@ BEGIN
       	        CartonNo = @n_CartonNo,
       	        LabelLine = '',
       	        TrafficCop = NULL,
-      	        EditWho = SUSER_SNAME(),
-      	        EditDate = GETDATE()
+      	        EditWho = dbo.fnc_GetUserName(),         --(SSA01)
+      	        EditDate = dbo.fnc_GetDate()   --(SSA01)
       	    WHERE SerialNokey = @c_SerialNoKey      	          
       	    
       	    SET @n_Err = @@ERROR

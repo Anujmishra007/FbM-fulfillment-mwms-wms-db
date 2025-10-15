@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_CancelTransfer_Wrapper]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [WM].[lsp_CancelTransfer_Wrapper]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -27,8 +22,10 @@ GO
 /* Date         Author   Ver  Purposes                                  */ 
 /* 2021-02-05   mingle01 1.1  Add Big Outer Begin try/Catch             */
 /*                            Execute Login if @c_UserName<>SUSER_SNAME()*/
+/* 2025-10-06   SSA01    1.2   UWP-42142 -Enhanced session management   */
+/*                             and cleanup.                             */
 /*************************************************************************/   
-CREATE PROCEDURE [WM].[lsp_CancelTransfer_Wrapper]
+CREATE OR ALTER PROCEDURE [WM].[lsp_CancelTransfer_Wrapper]
     @c_Transferkey NVARCHAR(10)  
    ,@b_Success     INT = 1 OUTPUT 
    ,@n_Err         INT = 0 OUTPUT
@@ -45,18 +42,22 @@ BEGIN
     
    SET @n_Err = 0 
 
-   --(mingle01) - START   
+   --(mingle01) - START
+   -- (SSA01) - START
+   DECLARE @b_ExecuteAs BIT = 0
    IF SUSER_SNAME() <> @c_UserName
    BEGIN
-   EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
+   EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
     
    IF @n_Err <> 0 
    BEGIN
       GOTO EXIT_SP
    END
                 
-   EXECUTE AS LOGIN = @c_UserName
+   IF @b_ExecuteAs = 1
+         EXECUTE AS LOGIN = @c_UserName
    END
+   -- (SSA01) - END
    --(mingle01) - END
     
    --(mingle01) - START
@@ -126,11 +127,11 @@ EXIT_SP:
        END  
        RETURN  
     END  
-    REVERT              
+    IF @b_ExecuteAs = 1              -- (SSA01)
+       REVERT
+
+    EXEC [WM].[lsp_ResetUser] -- (SSA01)
 END
 GO
 GRANT EXECUTE ON [WM].[lsp_CancelTransfer_Wrapper] TO nSQL 
-GO
-
-GRANT EXECUTE ON [WM].[lsp_CancelTransfer_Wrapper] TO [ALPHA\GTWMSinfosys]
 GO

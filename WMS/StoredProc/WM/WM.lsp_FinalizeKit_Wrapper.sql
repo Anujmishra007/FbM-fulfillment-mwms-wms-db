@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_FinalizeKit_Wrapper]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [WM].[lsp_FinalizeKit_Wrapper]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -31,8 +26,10 @@ GO
 /*                           1.1   Fixed Uncommitable Transaction              */
 /* 2021-01-15  Wan03         1.2   Execute Login if @c_UserName<>SUSER_SNAME() */
 /* 2025-05-28  Shreekanth    1.3   Updating Editwho in KIT to Namedser (SG01)  */
+/* 2025-10-06  SSA01         1.4   UWP-42142 -Enhanced session management      */
+/*                             and cleanup.                                    */
 /*******************************************************************************/
-CREATE PROCEDURE [WM].[lsp_FinalizeKit_Wrapper]  
+CREATE OR ALTER PROCEDURE [WM].[lsp_FinalizeKit_Wrapper]
    @c_KITKey               NVARCHAR(10)
 ,  @b_Success              INT          = 1  OUTPUT   
 ,  @n_Err                  INT          = 0  OUTPUT
@@ -51,7 +48,8 @@ BEGIN
 
    DECLARE @n_Continue           INT = 1
          , @n_StartTCnt          INT = @@TRANCOUNT
-         , @n_CurrTrnCnt         INT = 0  
+         , @n_CurrTrnCnt         INT = 0
+         , @b_ExecuteAs          BIT = 0   --(SSA01)
 
    DECLARE @c_TableName          NVARCHAR(50)   = 'KIT'
          , @c_SourceType         NVARCHAR(50)   = 'lsp_FinalizeKit_Wrapper'
@@ -143,21 +141,26 @@ BEGIN
 
    SET @n_ErrGroupKey = 0
 
-   SET @n_Err = 0 
+   SET @n_Err = 0
+   --(SSA01) - START
    IF SUSER_SNAME() <> @c_UserName       --(Wan03) - START
    BEGIN
       EXEC [WM].[lsp_SetUser] 
                @c_UserName = @c_UserName  OUTPUT
             ,  @n_Err      = @n_Err       OUTPUT
             ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+            ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
                 
       IF @n_Err <> 0 
       BEGIN
          GOTO EXIT_SP
       END
       
-      EXECUTE AS LOGIN = @c_UserName
-   END                                   --(Wan03) - END
+      IF @b_ExecuteAs = 1
+         EXECUTE AS LOGIN = @c_UserName
+   END
+   --(SSA01) - END
+   --(Wan03) - END
 
    BEGIN TRY         --(Wan02) - START
       IF @c_ProceedWithWarning = 'N' AND @n_WarningNo  < 1
@@ -745,8 +748,8 @@ BEGIN
             UPDATE KITDETAIL 
             SET Lottable03 = CASE WHEN @c_Lottable03 <> '' THEN @c_Lottable03 ELSE Lottable03 END
                ,Lottable05 = CASE WHEN @c_Lottable05 <> '' THEN CONVERT(DATETIME, @c_Lottable05, 121) ELSE Lottable05 END
-               ,EditWho = @c_UserName
-               ,EditDate= GETDATE()
+               ,EditWho = dbo.fnc_GetUserName()   --(SSA01)
+               ,EditDate= dbo.fnc_GetDate()    --(SSA01)
                ,TrafficCop = NULL
             WHERE KitKey = @c_KitKey
             AND   KITLineNumber = @c_KITLineNumber
@@ -856,8 +859,14 @@ BEGIN
    BEGIN  
       BEGIN TRAN  
    END*/  
+   --(SSA01) - Start
+   IF @b_ExecuteAs = 1
+   BEGIN
+      REVERT
+   END
 
-   REVERT      
+   EXEC [WM].[lsp_ResetUser]
+   --(SSA01) - END
 END  
 GO
 GRANT EXECUTE ON [WM].[lsp_FinalizeKit_Wrapper] TO nSQL 

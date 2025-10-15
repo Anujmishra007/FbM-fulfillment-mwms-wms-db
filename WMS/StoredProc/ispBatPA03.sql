@@ -25,6 +25,8 @@ GO
 /* 22-Oct-2021 NJOW     1.0   DEVOPS combine script                     */
 /* 04-Apr-2022 NJOW01   1.1   WMS-16330 add receipt info to refputaway  */
 /*                            for ref. PPK checking by receipt line.    */
+/* 10-Oct-2025 SSA01    1.2   UWP-42248 -Enhanced session management    */
+/*                             and cleanup.                             */
 /************************************************************************/
 CREATE OR ALTER PROC ispBatPA03
            @c_ReceiptKey     NVARCHAR(MAX)
@@ -1626,8 +1628,8 @@ BEGIN
                      SET RECEIPTDETAIL.UserDefine10 = CONVERT(NVARCHAR(20), @n_PABookingKey)
                         ,RECEIPTDETAIL.Lottable05 = @d_Lottable05
                         ,RECEIPTDETAIL.Lottable01 = RECEIPT.ExternReceiptKey 
-                        ,RECEIPTDETAIL.EditWho = SUSER_SNAME()
-                        ,RECEIPTDETAIL.EditDate= GETDATE()
+                        ,RECEIPTDETAIL.EditWho = dbo.fnc_GetUserName()         --(SSA01)
+                        ,RECEIPTDETAIL.EditDate= dbo.fnc_GetDate()   --(SSA01)
                         ,RECEIPTDETAIL.TrafficCop = NULL
                      FROM RECEIPTDETAIL
                      JOIN RECEIPT (NOLOCK) ON RECEIPTDETAIL.Receiptkey = RECEIPT.Receiptkey

@@ -27,6 +27,8 @@ GO
 /* 28-Oct-2009  Shong     1.0   Insert into PickDet_Log                 */  
 /* 22-Jun-2010  Shong     1.1   Get PackKey from SKU                    */ 
 /* 28-Mar-2011  Shong     1.2   Delete Previous Orders PickDet_Log      */
+/* 10-OCT-2025  SSA01     1.6   UWP-42248 -Enhanced session management  */
+/*                              and cleanup.                            */
 /************************************************************************/  
 CREATE PROC isp_InsertPickDet_Log    
    @cOrderKey NVARCHAR(10),  
@@ -135,8 +137,8 @@ BEGIN
                       ,P.WaveKey
                       ,P.AddDate
                       ,P.AddWho
-                      ,GETDATE() -- LogDate
-                      ,SUSER_SNAME() -- LogWho
+                      ,dbo.fnc_GetDate()   --(SSA01) -- LogDate
+                      ,dbo.fnc_GetUserName() -- LogWho     (SSA01)
                       ,ISNULL(p.PickSlipNo ,@cPickSlipNo)
                 FROM   PICKDETAIL p WITH (NOLOCK) 
                 JOIN   SKU S WITH (NOLOCK) ON S.StorerKey = P.StorerKey and S.SKU = P.SKU  

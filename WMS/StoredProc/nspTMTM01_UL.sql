@@ -15,6 +15,7 @@ GO
 /* 2025-06-23   1.0     NickT      FCR-5519 Create                          */
 /* 2025-07-04   1.0.1   Jackc      FCR-5519 1. Fix issues 2. Change schema  */
 /*                                 3.Pass TTMTaskType to nspTMTM02_UL       */
+/* 2025-10-10   1.1     SSA01      UWP-42248 -Enhanced session management   */
 /****************************************************************************/
 CREATE OR ALTER PROC    [RDT].[nspTMTM01_UL]
    @c_sendDelimiter    NVARCHAR(1)
@@ -244,8 +245,8 @@ BEGIN
            SET    STATUS = '0'
                  ,UserKey = ''
                  ,Reasonkey = ''
-                 ,EditDate = GetDate()     -- (SHONG08)
-                 ,EditWho  = sUSER_sNAME()
+                 ,EditDate = dbo.fnc_GetDate()   --(SSA01)    -- (SHONG08)
+                 ,EditWho  = dbo.fnc_GetUserName()         --(SSA01)
                  ,TrafficCop = NULL
                  ,DropId = '' -- SOS# 248996
            WHERE  UserKey = @c_userid

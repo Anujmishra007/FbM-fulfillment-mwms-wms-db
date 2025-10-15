@@ -159,7 +159,6 @@ BEGIN
                SELECT @c_errmsg = 'NSQL' + CONVERT(char(5),@n_err) 
                      + ': Delete Failed On Table RECEIPTSERIALNO, BeforeReceivedQty not tally (ntrReceiptSerialNoDelete) ( SQLSvr MESSAGE='
                      + LTRIM(RTRIM(@c_errmsg)) + ' ) '
-               GOTO QUIT
             END
 
             UPDATE rd

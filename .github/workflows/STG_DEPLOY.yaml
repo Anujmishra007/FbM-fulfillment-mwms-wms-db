@@ -165,8 +165,8 @@ jobs:
                   $obj | Add-Member -MemberType NoteProperty -Name DB_SERVER_NAME -Value $($DB_SERVER_NAME)
                   $obj | Add-Member -MemberType NoteProperty -Name DB_CURRENT_VERSION -Value $($DB_CURRENT_VERSION)
                   $obj | Add-Member -MemberType NoteProperty -Name DB_DEPLOY_VERSION -Value $($DB_DEPLOY_VERSION)
-                  $obj | Add-Member -MemberType NoteProperty -Name CHANGED_FILES_LIST -Value $($changed_files_list)
-                  $obj | Add-Member -MemberType NoteProperty -Name CHANGED_FILES_STRING -Value $($changed_files_string)
+                  # $obj | Add-Member -MemberType NoteProperty -Name CHANGED_FILES_LIST -Value $($changed_files_list)
+                  # $obj | Add-Member -MemberType NoteProperty -Name CHANGED_FILES_STRING -Value $($changed_files_string)
                   $matrixtable += $obj
                   write-output "| $($DATBASE_NAME) |$($DB_SERVER_NAME) |$($DB_CURRENT_VERSION) |$($DB_DEPLOY_VERSION) | **READY :white_check_mark:** |Files changed : $($changed_files_string) |"| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
                   }elseif($changed_files_string -eq '')
@@ -247,8 +247,8 @@ jobs:
                 $obj | Add-Member -MemberType NoteProperty -Name DB_SERVER_NAME -Value $($DB_SERVER_NAME)
                 $obj | Add-Member -MemberType NoteProperty -Name DB_CURRENT_VERSION -Value $($DB_CURRENT_VERSION)
                 $obj | Add-Member -MemberType NoteProperty -Name DB_DEPLOY_VERSION -Value $($DB_DEPLOY_VERSION)
-                $obj | Add-Member -MemberType NoteProperty -Name CHANGED_FILES_LIST -Value $($changed_files_list)
-                $obj | Add-Member -MemberType NoteProperty -Name CHANGED_FILES_STRING -Value $($changed_files_string)
+                # $obj | Add-Member -MemberType NoteProperty -Name CHANGED_FILES_LIST -Value $($changed_files_list)
+                # $obj | Add-Member -MemberType NoteProperty -Name CHANGED_FILES_STRING -Value $($changed_files_string)
                 $matrixtable += $obj
 
                 write-output "| $($DATBASE_NAME) |$($DB_SERVER_NAME) |$($DB_CURRENT_VERSION) |$($DB_DEPLOY_VERSION) | **READY :white_check_mark:** |Files changed : $($changed_files_string) |"| Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append
@@ -273,8 +273,8 @@ jobs:
                   $obj_sdr | Add-Member -MemberType NoteProperty -Name DB_SERVER_NAME -Value $($SDRWMS_DB_SERVER_NAME)
                   $obj_sdr | Add-Member -MemberType NoteProperty -Name DB_CURRENT_VERSION -Value $($SDRWMS_DB_CURRENT_VERSION)
                   $obj_sdr | Add-Member -MemberType NoteProperty -Name DB_DEPLOY_VERSION -Value $($SDRWMS_DB_DEPLOY_VERSION)
-                  $obj_sdr | Add-Member -MemberType NoteProperty -Name CHANGED_FILES_LIST -Value $($SDRWMS_changed_files_list)
-                  $obj_sdr | Add-Member -MemberType NoteProperty -Name CHANGED_FILES_STRING -Value $($SDRWMS_changed_files_string)
+                  # $obj_sdr | Add-Member -MemberType NoteProperty -Name CHANGED_FILES_LIST -Value $($SDRWMS_changed_files_list)
+                  # $obj_sdr | Add-Member -MemberType NoteProperty -Name CHANGED_FILES_STRING -Value $($SDRWMS_changed_files_string)
                   $matrixtable += $obj_sdr
 
                   write-output "| $($SDRWMS_DATABASE_NAME) |$($SDRWMS_DB_SERVER_NAME) |$($SDRWMS_DB_CURRENT_VERSION) |$($SDRWMS_DB_DEPLOY_VERSION) | **READY :white_check_mark:** |Files changed : $($SDRWMS_changed_files_string) |" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding UTF8 -Append

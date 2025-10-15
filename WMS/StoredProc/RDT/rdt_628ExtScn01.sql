@@ -125,6 +125,8 @@ BEGIN
    @cType               NVARCHAR( 10),
    @nMOBRECScn          INT,  
    @nMOBRECStep         int,
+   @nOption             INT,
+   @cTempValue          NVARCHAR(60),
    
    @nQTY_TTL            INT,
    @nQTY_Hold           INT,
@@ -544,6 +546,50 @@ BEGIN
             UPDATE RDT.RDTMOBREC
             SET c_string1 = @cInquiry_LocType
             WHERE Mobile = @nMobile
+
+            IF @cInquiry_SKU <> '' AND (@cInquiry_LOC = '' AND @cInquiry_ID = '' AND @cInquiry_LocType = '')
+            BEGIN
+               DECLARE @tTempResults TABLE (
+                  RowNum INT IDENTITY(1,1),
+                  Result VARCHAR(60)
+               )
+
+               INSERT INTO @tTempResults (Result)
+               SELECT TOP 12 CAST(ROW_NUMBER() OVER(ORDER BY locationtype) AS VARCHAR) + ' - ' + locationtype
+               FROM (SELECT DISTINCT locationtype FROM loc) AS t;
+
+               SELECT 
+                  @cOutField01 = '',
+                  @cOutfield02 = MAX(CASE WHEN RowNum = 1 THEN Result END),
+                  @cOutfield03 = MAX(CASE WHEN RowNum = 2 THEN Result END),
+                  @cOutfield04 = MAX(CASE WHEN RowNum = 3 THEN Result END),
+                  @cOutfield05 = MAX(CASE WHEN RowNum = 4 THEN Result END),
+                  @cOutfield06 = MAX(CASE WHEN RowNum = 5 THEN Result END),
+                  @cOutfield07 = MAX(CASE WHEN RowNum = 6 THEN Result END),
+                  @cOutfield08 = MAX(CASE WHEN RowNum = 7 THEN Result END),
+                  @cOutfield09 = MAX(CASE WHEN RowNum = 8 THEN Result END),
+                  @cOutfield10 = MAX(CASE WHEN RowNum = 9 THEN Result END),
+                  @cOutfield11 = MAX(CASE WHEN RowNum = 10 THEN Result END),
+                  @cOutfield12 = MAX(CASE WHEN RowNum = 11 THEN Result END)
+               FROM @tTempResults
+
+               SET @cUDF01 = @nTotalRec
+               SET @CUDF02 = @nCurrentRec
+               SET @cUDF03 = @cSKU
+               SET @CUDF04 = @cLOC
+               SET @CUDF05 = @cID
+               SET @cUDF06 = @cLOT
+               SET @cUDF07 = @cSKUDescr
+               SET @CUDF08 = @cInquiry_ID
+               SET @CUDF09 = @cInquiry_SKU
+               SET @CUDF10 = @cInquiry_LOC
+               SET @CUDF11 = @cLottableCode
+               SET @CUDF12 = @chasLottable
+
+               SET @nAfterScn = 6682
+               SET @nAfterStep = 99
+               GOTO QUIT
+            END
 
             IF @cCustomInquiryRule_SP <> '' AND
                EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cCustomInquiryRule_SP AND type = 'P')
@@ -1183,6 +1229,311 @@ BEGIN
             SET @nAfterStep = 99
          END
       END
+      IF @nMOBRECStep = 99 AND @nMOBRECScn = 6682
+      BEGIN
+         IF @nInputKey = 1      -- Yes or Send
+         BEGIN
+            SET @nOption = CAST( @cInField01 AS INT)
+            SELECT @cTempValue = CASE WHEN @nOption = 1 THEN @cOutField02
+                                 WHEN @nOption = 2 THEN @cOutField03
+                                 WHEN @nOption = 3 THEN @cOutField04
+                                 WHEN @nOption = 4 THEN @cOutField05
+                                 WHEN @nOption = 5 THEN @cOutField06
+                                 WHEN @nOption = 6 THEN @cOutField07
+                                 WHEN @nOption = 7 THEN @cOutField08
+                                 WHEN @nOption = 8 THEN @cOutField09
+                                 WHEN @nOption = 9 THEN @cOutField10
+                                 WHEN @nOption = 10 THEN @cOutField11
+                                 WHEN @nOption = 11 THEN @cOutField12
+                                 ELSE '' END
+            SELECT @cInquiry_LocType = STUFF(@cTempValue, 1, CHARINDEX( '-', @cTempValue)+1, '')
+            
+            UPDATE RDT.RDTMOBREC
+            SET c_string1 = @cInquiry_LocType
+            WHERE Mobile = @nMobile
+
+            IF @cCustomInquiryRule_SP <> '' AND
+               EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cCustomInquiryRule_SP AND type = 'P')
+            BEGIN
+               SET @cSQL = 'EXEC rdt.' + RTRIM( @cCustomInquiryRule_SP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cType, @cStorerkey, @cPUOM, ' +
+               ' @cInquiry_LOC, @cInquiry_ID, @cInquiry_SKU, ' +
+               ' @cLOT           OUTPUT, @cLOC           OUTPUT, @cID            OUTPUT, @cSKU           OUTPUT, ' +
+               ' @cSKUDescr      OUTPUT, @nTotalRec      OUTPUT, ' +
+               ' @nMQty_TTL      OUTPUT, @nMQTY_PMV      OUTPUT, @nMQTY_Alloc    OUTPUT, ' +
+               ' @nMQty_Pick     OUTPUT, @nMQty_RPL      OUTPUT, @nMQTY_Avail    OUTPUT, ' +
+               ' @nPQty_TTL      OUTPUT, @nPQTY_PMV      OUTPUT, @nPQTY_Alloc    OUTPUT, ' +
+               ' @nPQty_Pick     OUTPUT, @nPQty_RPL      OUTPUT, @nPQTY_Avail    OUTPUT, ' +
+               ' @cPUOM_Desc     OUTPUT, @cMUOM_Desc     OUTPUT, @cLottableCode  OUTPUT, ' +
+               ' @cLottable01    OUTPUT, @cLottable02    OUTPUT, @cLottable03    OUTPUT, ' +
+               ' @dLottable04    OUTPUT, @dLottable05    OUTPUT, @cLottable06    OUTPUT, ' +
+               ' @cLottable07    OUTPUT, @cLottable08    OUTPUT, @cLottable09    OUTPUT, ' +
+               ' @cLottable10    OUTPUT, @cLottable11    OUTPUT, @cLottable12    OUTPUT, ' +
+               ' @dLottable13    OUTPUT, @dLottable14    OUTPUT, @dLottable15    OUTPUT, ' +
+               ' @cHasLottable   OUTPUT, @cUserDefine01 OUTPUT, @cUserDefine02  OUTPUT, @cUserDefine03  OUTPUT, @cUserDefine04  OUTPUT, @cUserDefine05  OUTPUT, @cSKUConfig OUTPUT, ' +
+               ' @nErrNo         OUTPUT, @cErrMsg        OUTPUT '
+
+               SET @cSQLParam =
+                  '@nMobile         INT,                  '+
+                  '@nFunc           INT,                  '+
+                  '@cLangCode       NVARCHAR( 3),         '+
+                  '@nStep           INT,                  '+
+                  '@nInputKey       INT,                  '+
+                  '@cFacility       NVARCHAR( 5),         '+
+                  '@cType           NVARCHAR( 10),        '+
+                  '@cStorerkey      NVARCHAR( 15),        '+
+                  '@cPUOM           NVARCHAR( 1),         '+
+                  '@cInquiry_LOC    NVARCHAR( 10),        '+
+                  '@cInquiry_ID     NVARCHAR( 18),        '+
+                  '@cInquiry_SKU    NVARCHAR( 20),        '+
+                  '@cLOT            NVARCHAR( 10)  OUTPUT,'+
+                  '@cLOC            NVARCHAR( 10)  OUTPUT,'+
+                  '@cID             NVARCHAR( 18)  OUTPUT,'+
+                  '@cSKU            NVARCHAR( 20)  OUTPUT,'+
+                  '@cSKUDescr       NVARCHAR( 60)  OUTPUT,'+
+                  '@nTotalRec       INT            OUTPUT,'+
+                  '@nMQTY_TTL       INT            OUTPUT,'+
+                  '@nMQTY_PMV       INT            OUTPUT,'+
+                  '@nMQTY_Alloc     INT            OUTPUT,'+
+                  '@nMQTY_Pick      INT            OUTPUT,'+
+                  '@nMQTY_RPL       INT            OUTPUT,'+
+                  '@nMQTY_Avail     INT            OUTPUT,'+
+                  '@nPQTY_TTL       INT            OUTPUT,'+
+                  '@nPQTY_PMV       INT            OUTPUT,'+
+                  '@nPQTY_Alloc     INT            OUTPUT,'+
+                  '@nPQTY_Pick      INT            OUTPUT,'+
+                  '@nPQTY_RPL       INT            OUTPUT,'+
+                  '@nPQTY_Avail     INT            OUTPUT,'+
+                  '@cPUOM_Desc      NVARCHAR( 5)   OUTPUT,'+
+                  '@cMUOM_Desc      NVARCHAR( 5)   OUTPUT,'+
+                  '@cLottableCode   NVARCHAR( 30)  OUTPUT,'+
+                  '@cLottable01     NVARCHAR( 18)  OUTPUT,'+
+                  '@cLottable02     NVARCHAR( 18)  OUTPUT,'+
+                  '@cLottable03     NVARCHAR( 18)  OUTPUT,'+
+                  '@dLottable04     DATETIME       OUTPUT,'+
+                  '@dLottable05     DATETIME       OUTPUT,'+
+                  '@cLottable06     NVARCHAR( 30)  OUTPUT,'+
+                  '@cLottable07     NVARCHAR( 30)  OUTPUT,'+
+                  '@cLottable08     NVARCHAR( 30)  OUTPUT,'+
+                  '@cLottable09     NVARCHAR( 30)  OUTPUT,'+
+                  '@cLottable10     NVARCHAR( 30)  OUTPUT,'+
+                  '@cLottable11     NVARCHAR( 30)  OUTPUT,'+
+                  '@cLottable12     NVARCHAR( 30)  OUTPUT,'+
+                  '@dLottable13     DATETIME       OUTPUT,'+
+                  '@dLottable14     DATETIME       OUTPUT,'+
+                  '@dLottable15     DATETIME       OUTPUT,'+
+                  '@cHasLottable    NVARCHAR( 1)   OUTPUT,'+
+                  '@cUserDefine01   NVARCHAR( 60)  OUTPUT,'+
+                  '@cUserDefine02   NVARCHAR( 60)  OUTPUT,'+
+                  '@cUserDefine03   NVARCHAR( 60)  OUTPUT,'+
+                  '@cUserDefine04   NVARCHAR( 60)  OUTPUT,'+
+                  '@cUserDefine05   NVARCHAR( 60)  OUTPUT,'+
+                  '@cSKUConfig      NVARCHAR( 60)  OUTPUT,'+
+                  '@nErrNo          INT            OUTPUT,'+
+                  '@cErrMsg         NVARCHAR( 20)  OUTPUT '
+
+               EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                  @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cType, @cStorerkey, @cPUOM,
+                  @cInquiry_LOC, @cInquiry_ID, @cInquiry_SKU,
+                  @cLOT           OUTPUT, @cLOC           OUTPUT, @cID            OUTPUT, @cSKU           OUTPUT,
+                  @cSKUDescr      OUTPUT, @nTotalRec      OUTPUT,
+                  @nMQty_TTL      OUTPUT, @nMQTY_PMV      OUTPUT, @nMQTY_Alloc    OUTPUT,
+                  @nMQty_Pick     OUTPUT, @nMQty_RPL      OUTPUT, @nMQTY_Avail    OUTPUT,
+                  @nPQty_TTL      OUTPUT, @nPQTY_PMV      OUTPUT, @nPQTY_Alloc    OUTPUT,
+                  @nPQty_Pick     OUTPUT, @nPQty_RPL      OUTPUT, @nPQTY_Avail    OUTPUT,
+                  @cPUOM_Desc     OUTPUT, @cMUOM_Desc     OUTPUT, @cLottableCode  OUTPUT,
+                  @cLottable01    OUTPUT, @cLottable02    OUTPUT, @cLottable03    OUTPUT,
+                  @dLottable04    OUTPUT, @dLottable05    OUTPUT, @cLottable06    OUTPUT,
+                  @cLottable07    OUTPUT, @cLottable08    OUTPUT, @cLottable09    OUTPUT,
+                  @cLottable10    OUTPUT, @cLottable11    OUTPUT, @cLottable12    OUTPUT,
+                  @dLottable13    OUTPUT, @dLottable14    OUTPUT, @dLottable15    OUTPUT,
+                  @cHasLottable   OUTPUT,@cUserDefine01 OUTPUT, @cUserDefine02  OUTPUT, @cUserDefine03  OUTPUT, @cUserDefine04  OUTPUT, @cUserDefine05  OUTPUT, @cSKUConfig OUTPUT,
+                  @nErrNo         OUTPUT, @cErrMsg        OUTPUT
+
+               IF @nErrNo <> 0
+               BEGIN
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+                  GOTO Step_1_Fail
+               END
+            END
+            ELSE
+            BEGIN
+               EXECUTE [RDT].[rdt_Inquiry_V7]
+                  @nMobile,
+                  @nFunc,
+                  @cLangCode,
+                  @nStep,
+                  @nInputKey,
+                  @cFacility,
+                  @cType,
+                  @cStorerkey,
+                  @cPUOM,
+                  @cInquiry_LOC,
+                  @cInquiry_ID,
+                  @cInquiry_SKU,
+                  @cLOT              OUTPUT,
+                  @cLOC              OUTPUT,
+                  @cID               OUTPUT,
+                  @cSKU              OUTPUT,
+                  @cSKUDescr         OUTPUT,
+                  @nTotalRec         OUTPUT,
+                  @nMQTY_TTL         OUTPUT,
+                  @nMQTY_PMV         OUTPUT,
+                  @nMQTY_Alloc       OUTPUT,
+                  @nMQTY_Pick        OUTPUT,
+                  @nMQTY_RPL         OUTPUT,
+                  @nMQTY_Avail       OUTPUT,
+                  @nPQTY_TTL         OUTPUT,
+                  @nPQTY_PMV         OUTPUT,
+                  @nPQTY_Alloc       OUTPUT,
+                  @nPQTY_Pick        OUTPUT,
+                  @nPQTY_RPL         OUTPUT,
+                  @nPQTY_Avail       OUTPUT,
+                  @cPUOM_Desc        OUTPUT,
+                  @cMUOM_Desc        OUTPUT,
+                  @cLottableCode     OUTPUT,
+                  @cLottable01       OUTPUT,
+                  @cLottable02       OUTPUT,
+                  @cLottable03       OUTPUT,
+                  @dLottable04       OUTPUT,
+                  @dLottable05       OUTPUT,
+                  @cLottable06       OUTPUT,
+                  @cLottable07       OUTPUT,
+                  @cLottable08       OUTPUT,
+                  @cLottable09       OUTPUT,
+                  @cLottable10       OUTPUT,
+                  @cLottable11       OUTPUT,
+                  @cLottable12       OUTPUT,
+                  @dLottable13       OUTPUT,
+                  @dLottable14       OUTPUT,
+                  @dLottable15       OUTPUT,
+                  @cHasLottable      OUTPUT,
+                  @cUserDefine01     OUTPUT,
+                  @cUserDefine02     OUTPUT,
+                  @cUserDefine03     OUTPUT,
+                  @cUserDefine04     OUTPUT,
+                  @cUserDefine05     OUTPUT,
+                  @cSKUConfig        OUTPUT,
+                  @nErrNo            OUTPUT,
+                  @cErrMsg           OUTPUT
+
+               IF @nErrNo <> 0
+               BEGIN
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+                  GOTO Step_1_Fail
+               END
+            END
+
+            -- Prep next screen var
+            SET @nCurrentRec = 1
+            SET @cOutField01 = CAST( @nCurrentRec AS NVARCHAR( 5)) + '/' + CAST( @nTotalRec AS NVARCHAR( 5))
+            SET @cOutField02 = @cSKU
+            SET @cOutField03 = SUBSTRING( @cSKUDescr, 1, 20)
+            SET @cOutField04 = SUBSTRING( @cSKUDescr, 21, 20)
+            SET @cOutField05 = @cLOC
+            SET @cOutField06 = @cID
+            SET @cOutField07 = CASE WHEN @cPUOM_Desc <> ''
+                                 THEN SPACE( 9) + LEFT( @cPUOM_Desc + REPLICATE(' ', 5), 5) + ' ' + @cMUOM_Desc
+                                 ELSE SPACE( 9) + @cMUOM_Desc END
+
+            DELETE FROM @tList
+            INSERT INTO @tList ( DESCR, SHORT)
+            SELECT Description, Short
+            FROM CODELKUP WITH (NOLOCK)
+            WHERE Code2 = '628' AND StorerKey = @cStorerKey AND LISTNAME = '628QtyList'
+            ORDER BY code
+
+            WHILE (1=1)
+            BEGIN 
+               SELECT TOP 1
+                  @cDesc = DESCR,
+                  @cShort = SHORT,
+                  @nLoopIndex = id
+               FROM @tList
+               WHERE id > @nLoopIndex
+               ORDER BY id
+               SET @nRowCount = @@ROWCOUNT
+
+               IF @nRowCount = 0 OR @nLoopIndex > 6
+                  BREAK
+               
+               SET @cOutput = ''
+
+               IF @cShort = 'QTYALC'
+                  SET @COUTPUT = LEFT( UPPER(@cDesc)+ REPLICATE(' ', 6), 9) + CASE WHEN @cPUOM_Desc <> ''
+                                 THEN LEFT( CAST( LEFT(@nPQTY_Alloc, 5) AS NVARCHAR( 5)) + REPLICATE(' ', 6), 6) + CAST( LEFT(@nMQTY_Alloc, 5) AS NVARCHAR( 5))
+                                 ELSE SPACE( 6) + CAST( LEFT(@nMQTY_Alloc, 5)   AS NVARCHAR( 5)) END
+               ELSE IF @cShort = 'QTYPCK'
+                  SET @COUTPUT = LEFT( UPPER(@cDesc)+ REPLICATE(' ', 6), 9)  + CASE WHEN @cPUOM_Desc <> ''
+                                 THEN LEFT( CAST( LEFT(@nPQTY_Pick, 5) AS NVARCHAR( 5)) + REPLICATE(' ', 6), 6) + CAST( LEFT(@nMQTY_Pick, 5) AS NVARCHAR( 5))
+                                 ELSE SPACE( 6) + CAST( LEFT(@nMQTY_Pick, 5)   AS NVARCHAR( 5)) END
+               ELSE IF @cShort = 'QTYRPL'
+                  SET @COUTPUT = LEFT( UPPER(@cDesc)+ REPLICATE(' ', 6), 9)  + CASE WHEN @cPUOM_Desc <> ''
+                                 THEN LEFT( CAST( LEFT(@nPQTY_RPL, 5) AS NVARCHAR( 5)) + REPLICATE(' ', 6), 6) + CAST( LEFT(@nMQTY_RPL, 5) AS NVARCHAR( 5))
+                                 ELSE SPACE( 6) + CAST( LEFT(@nMQTY_RPL, 5)   AS NVARCHAR( 5)) END
+               ELSE IF @cShort = 'QTYPMV'
+                  SET @COUTPUT = LEFT( UPPER(@cDesc)+ REPLICATE(' ', 6), 9)  + CASE WHEN @cPUOM_Desc <> ''
+                                 THEN LEFT( CAST( LEFT(@nPQTY_PMV, 5) AS NVARCHAR( 5)) + REPLICATE(' ', 6), 6) + CAST( LEFT(@nMQTY_PMV, 5) AS NVARCHAR( 5))
+                                 ELSE SPACE( 6) + CAST( LEFT(@nMQTY_PMV, 5)   AS NVARCHAR( 5)) END
+               ELSE IF @cShort = 'QTYAVL'
+                  SET @COUTPUT = LEFT( UPPER(@cDesc)+ REPLICATE(' ', 6), 9) + CASE WHEN @cPUOM_Desc <> ''
+                                 THEN LEFT( CAST( LEFT(@nPQTY_Avail, 5) AS NVARCHAR( 5)) + REPLICATE(' ', 6), 6) + CAST( LEFT(@nMQTY_Avail, 5) AS NVARCHAR( 5))
+                                 ELSE SPACE( 6) + CAST( LEFT(@nMQTY_Avail, 5)   AS NVARCHAR( 5)) END
+               ELSE IF @cShort = 'QTYPHY'
+                  SET @COUTPUT = LEFT( UPPER(@cDesc)+ REPLICATE(' ', 6), 9) + CASE WHEN @cPUOM_Desc <> ''
+                                 THEN LEFT( @cUserDefine01  + SPACE( 6), 6) + CAST( LEFT(@cUserDefine02, 5) AS NVARCHAR( 5))
+                                 ELSE SPACE( 6) + CAST( LEFT(@cUserDefine02, 5)   AS NVARCHAR( 5)) END
+               ELSE IF @cShort = 'QTYTTL'
+                  SET @COUTPUT = LEFT( UPPER(@cDesc)+ REPLICATE(' ', 6), 9)  + CASE WHEN @cPUOM_Desc <> ''
+                                 THEN LEFT( CAST( LEFT(@nPQTY_TTL, 5) AS NVARCHAR( 5)) + REPLICATE(' ', 6), 6) + CAST( LEFT(@nMQTY_TTL, 5) AS NVARCHAR( 5))
+                                 ELSE SPACE( 6) + CAST( LEFT(@nMQTY_TTL, 5)   AS NVARCHAR( 5)) END
+               
+               IF @nLoopIndex = 1
+                  SET @cOutField08 = @cOutput
+               ELSE IF @nLoopIndex = 2
+                  SET @cOutField09 = @cOutput
+               ELSE IF @nLoopIndex = 3
+                  SET @cOutField10 = @cOutput
+               ELSE IF @nLoopIndex = 4
+                  SET @cOutField11 = @cOutput
+               ELSE IF @nLoopIndex = 5
+                  SET @cOutField12 = @cOutput
+               ELSE IF @nLoopIndex = 6
+                  SET @cOutField13 = @cOutput
+            END
+
+            SET @cUDF01 = @nTotalRec
+            SET @CUDF02 = @nCurrentRec
+            SET @cUDF03 = @cSKU
+            SET @CUDF04 = @cLOC
+            SET @CUDF05 = @cID
+            SET @cUDF06 = @cLOT
+            SET @cUDF07 = @cSKUDescr
+            SET @CUDF08 = @cInquiry_ID
+            SET @CUDF09 = @cInquiry_SKU
+            SET @CUDF10 = @cInquiry_LOC
+            SET @CUDF11 = @cLottableCode
+            SET @CUDF12 = @chasLottable
+
+            -- Go to next screen
+            SET @nAfterScn = 6679
+            SET @nAfterStep = 99
+
+            GOTO Quit
+         END
+         IF @nInputKey = 0
+         BEGIN
+            SET @cOutField01 = ''
+            SET @cOutField02 = ''
+            SET @cOutField03 = ''
+            SET @cOutField04 = ''
+
+            SET @nAfterScn = 6677
+            SET @nAfterStep = 99
+            GOTO QUIT
+         END
+      END
+
 
       IF @nMOBRECStep = 2
       BEGIN

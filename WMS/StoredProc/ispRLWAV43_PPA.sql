@@ -27,6 +27,7 @@ GO
 /* Date        Author   Ver   Purposes                                  */
 /* 2021-07-22  Wan      1.0   Created.                                  */
 /* 2021-09-28  Wan      1.0   DevOps Combine Script.                    */
+/* 2025-10-10  SSA01    1.1   UWP-42248 -Enhanced session management    */
 /************************************************************************/
 CREATE PROC [dbo].[ispRLWAV43_PPA]
    @c_Wavekey     NVARCHAR(10)    
@@ -173,8 +174,8 @@ BEGIN
    
    UPDATE PI WITH (ROWLOCK)
    SET pi.RefNo = 'PPA'
-      ,pi.EditWho = SUSER_SNAME()
-      ,PI.EditDate= GETDATE()
+      ,pi.EditWho = dbo.fnc_GetUserName()           --(SSA01)
+      ,PI.EditDate= dbo.fnc_GetDate()    --(SSA01)
       ,pi.TrafficCop = NULL
    FROM @t_PPA_CTN AS tpc
    JOIN dbo.PackInfo AS PI ON PI.PickSlipNo = tpc.PickSlipNo AND PI.CartonNo = tpc.CartonNo

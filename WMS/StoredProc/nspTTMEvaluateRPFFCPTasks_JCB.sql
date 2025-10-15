@@ -604,7 +604,7 @@ BEGIN
            LOC.Floor AS FromLocFloor,
            LOC.LocAisle AS FromLocAisle,
            LOC.LogicalLocation AS FromLogicalLoc,
-           TD.ToLoc, 
+           TD.ToLoc,
            LOC1.LocationCategory AS ToLocationCategory, 
            ISNULL(LOC1.MaxPallet, 99999) AS ToLocMaxPallet, 
            TD.FinalLoc, 
@@ -753,7 +753,7 @@ BEGIN
          , @c_errmsg       OUTPUT
       IF @b_success <> 1
          GOTO Fail
-      
+
       IF @bDebug = 1
       BEGIN
          SET @cLogMsg = CONCAT_WS(',', 'Loop @tTaskCandidate - 1',

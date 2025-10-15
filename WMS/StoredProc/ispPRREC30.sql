@@ -25,6 +25,7 @@ GO
 /* 08-Aug-2023  WLChooi 1.0   DevOps Combine Script                        */
 /* 10-Dec-2023  WLChooi 1.1   WMS-24359 - Do not update Lottable10 has     */
 /*                            value (WL01)                                 */
+/* 10-Oct-2025  SSA01   1.2   UWP-42248 -Enhanced session management       */
 /***************************************************************************/  
 CREATE OR ALTER PROC [dbo].[ispPRREC30]  
 (     @c_Receiptkey        NVARCHAR(10)  
@@ -248,7 +249,7 @@ BEGIN
                VALUES('COSTCO6LOTSEQ'   
                     , 1     
                     , '1'
-                    , GETDATE()
+                    , dbo.fnc_GetDate()    --(SSA01)
                )
             
                SET @c_SeqNo = '1'
@@ -451,8 +452,8 @@ BEGIN
            , Lottable08 = @c_Lottable08
            , Lottable10 = @c_Lottable10
            , TrafficCop = NULL
-           , EditWho    = SUSER_SNAME()
-           , EditDate   = GETDATE()
+           , EditWho    = dbo.fnc_GetUserName()      --(SSA01)
+           , EditDate   = dbo.fnc_GetDate()    --(SSA01)
          WHERE ReceiptKey = @c_Receiptkey
          AND ReceiptLineNumber = @c_ReceiptLineNumber
 

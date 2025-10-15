@@ -30,6 +30,7 @@ GO
 /* 03-Jul-2018  NJOW03   1.4  WMS-4940 allow ENG for any order type       */
 /* 16-Jan-2020  WLChooi  1.5  WMS-11784 Check UDF01 before updating (WL01)*/
 /* 14-Sep-2020  NJOW04   1.6  WMS-15160 use codelkup to filter order type */
+/* 10-Oct-2025  SSA01    1.7   UWP-42248 -Enhanced session management     */
 /**************************************************************************/
 CREATE PROCEDURE [dbo].[ispUpdLastLot4ToConsigneeSku]
    @c_Storerkey  NVARCHAR(15)
@@ -130,8 +131,8 @@ BEGIN
 
              UPDATE CONSIGNEESKU WITH (ROWLOCK)
              SET CONSIGNEESKU.UDF01 = CONVERT(NVARCHAR(8),@dt_lottable04,112), 
-                 CONSIGNEESKU.EditWho = SUSER_SNAME(),
-                 CONSIGNEESKU.EditDate = GETDATE()
+                 CONSIGNEESKU.EditWho = dbo.fnc_GetUserName(),            --(SSA01)
+                 CONSIGNEESKU.EditDate = dbo.fnc_GetDate()   --(SSA01)
              WHERE CONSIGNEESKU.Consigneekey = @c_Consigneekey 
              --AND CONSIGNEESKU.Consigneesku = @c_SKU            
              AND CONSIGNEESKU.Storerkey = @c_Storerkey         

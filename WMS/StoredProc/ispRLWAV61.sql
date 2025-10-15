@@ -22,6 +22,7 @@ GO
 /* Updates:                                                                 */
 /* Date        Author   Ver  Purposes                                       */
 /* 30-MAY-2023 NJOW     1.0  DEVOPS Combine Script                          */
+/* 10-Oct-2025 SSA01    1.1  UWP-42248 -Enhanced session management         */
 /****************************************************************************/
 
 CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV61]
@@ -186,10 +187,10 @@ BEGIN
        , [PickMethod]           [NVARCHAR](1)    NOT NULL DEFAULT (' ')
        , [WaveKey]              [NVARCHAR](10)   NOT NULL DEFAULT (' ')
        , [EffectiveDate]        [DATETIME]       NOT NULL DEFAULT (GETDATE())
-       , [AddDate]              [DATETIME]       NOT NULL DEFAULT (GETDATE())
-       , [AddWho]               [NVARCHAR](128)  NOT NULL DEFAULT (SUSER_SNAME())
-       , [EditDate]             [DATETIME]       NOT NULL DEFAULT (GETDATE())
-       , [EditWho]              [NVARCHAR](128)  NOT NULL DEFAULT (SUSER_SNAME())
+       , [AddDate]              [DATETIME]       NOT NULL DEFAULT (dbo.fnc_GetDate())    --(SSA01)
+       , [AddWho]               [NVARCHAR](128)  NOT NULL DEFAULT (dbo.fnc_GetUserName())          --(SSA01)
+       , [EditDate]             [DATETIME]       NOT NULL DEFAULT (dbo.fnc_GetDate())    --(SSA01)
+       , [EditWho]              [NVARCHAR](128)  NOT NULL DEFAULT (dbo.fnc_GetUserName())          --(SSA01)
        , [TrafficCop]           [NVARCHAR](1)    NULL
        , [ArchiveCop]           [NVARCHAR](1)    NULL
        , [OptimizeCop]          [NVARCHAR](1)    NULL
@@ -429,8 +430,8 @@ BEGIN
       UPDATE WAVE
       SET TMReleaseFlag = 'Y'
         , TrafficCop = NULL
-        , EditWho = SUSER_SNAME()
-        , EditDate = GETDATE()
+        , EditWho = dbo.fnc_GetUserName()       --(SSA01)
+        , EditDate = dbo.fnc_GetDate()    --(SSA01)
       WHERE WaveKey = @c_wavekey
       -- (Wan01) - END       
 

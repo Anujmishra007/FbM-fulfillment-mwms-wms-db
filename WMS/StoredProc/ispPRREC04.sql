@@ -27,7 +27,8 @@ GO
 /* Data Modifications:                                                     */
 /*                                                                         */
 /* Updates:                                                                */
-/* Date         Author  Ver   Purposes                                     */
+/* Date        Author   Ver   Purposes                                     */
+/* 2025-10-10  SSA01    1.1  UWP-42248 -Enhanced session management        */
 /***************************************************************************/  
 CREATE PROC [dbo].[ispPRREC04]  
 (     @c_Receiptkey  NVARCHAR(10)  
@@ -70,8 +71,8 @@ BEGIN
       , RECEIPTDETAIL.Userdefine01 = RECEIPTDETAIL.Lottable09   
       , RECEIPTDETAIL.QtyExpected = RECEIPTDETAIL.BeforeReceivedQty
       , RECEIPTDETAIL.Lottable10 = RTRIM(LTRIM(CONVERT(NVARCHAR(10),RECEIPTDETAIL.BeforeReceivedQty)))
-      , RECEIPTDETAIL.EditDate = GETDATE()
-      , RECEIPTDETAIL.EditWho  = SUSER_SNAME()
+      , RECEIPTDETAIL.EditDate = dbo.fnc_GetDate()    --(SSA01)
+      , RECEIPTDETAIL.EditWho  = dbo.fnc_GetUserName()         --(SSA01)
       , RECEIPTDETAIL.Trafficcop = NULL
    FROM RECEIPTDETAIL 
    JOIN RECEIPT (NOLOCK) ON RECEIPTDETAIL.Receiptkey = RECEIPT.Receiptkey

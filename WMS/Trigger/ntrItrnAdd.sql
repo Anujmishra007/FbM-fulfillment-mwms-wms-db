@@ -1,4 +1,4 @@
-SET ANSI_NULLS OFF
+﻿SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -112,6 +112,7 @@ GO
 /*                                  Finalize                                   */
 /* 26-JUN-2025  SSA01        3.5   UWP-3982- Added PalletType in inventory when*/
 /*                                 Finalize QC and Adjustment                  */
+/* 09-Oct-2025  SPC040       3.6   Replace SUSER_SNAME with fnc_GetUserName    */
 /*******************************************************************************/  
 CREATE OR ALTER TRIGGER [dbo].[ntrItrnAdd]  
 ON  [dbo].[ITRN]  
@@ -2769,7 +2770,7 @@ BEGIN
                   BEGIN TRAN  
                      INSERT INTO INVHOLDTRANSLOG  
                                 (StorerKey, Sku, Facility, SourceKey, SourceType, UserID)  
-                     VALUES (@c_InsertStorerKey, @c_InsertSku, @c_xFacility, @c_itrnkey, 'ITRN-MOVE', SUSER_SNAME())  
+                     VALUES (@c_InsertStorerKey, @c_InsertSku, @c_xFacility, @c_itrnkey, 'ITRN-MOVE', dbo.fnc_GetUserName())  
                   COMMIT TRAN  
   
                   SELECT @n_err= @@Error  

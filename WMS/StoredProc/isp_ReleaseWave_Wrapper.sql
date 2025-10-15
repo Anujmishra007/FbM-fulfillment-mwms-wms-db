@@ -29,6 +29,8 @@ GO
 /* 21-Mar-2022  NJOW02   1.3  DEVOPS Combine script                      */
 /* 24-Jul-2023  NJOW03   1.4  WMS-23167 add config to validate load must */
 /*                            before release wave                        */
+/* 10-OCT-2025  SSA01    1.5  UWP-42248 -Enhanced session management     */
+/*                             and cleanup.                              */
 /*************************************************************************/   
 CREATE OR ALTER PROCEDURE [dbo].[isp_ReleaseWave_Wrapper]  
       @c_WaveKey    NVARCHAR(10) 
@@ -133,8 +135,8 @@ BEGIN
          --SET Status = '1',              --Wan01
          SET TMReleaseFlag = 'Y',         --Wan01
              TrafficCop = NULL,
-             EditWho = SUSER_SNAME(),
-             EditDate = GETDATE()             
+             EditWho = dbo.fnc_GetUserName(),     --(SSA01)
+             EditDate = dbo.fnc_GetDate()    --(SSA01)
          WHERE Wavekey = @c_Wavekey
          
          EXECUTE nspGetRight 
@@ -152,8 +154,8 @@ BEGIN
            UPDATE ORDERS WITH (ROWLOCK)
            SET SOStatus = 'TSRELEASED',
                TrafficCop = NULL,
-               EditWho = SUSER_SNAME(),
-               EditDate = GETDATE()
+               EditWho = dbo.fnc_GetUserName(),   --(SSA01)
+               EditDate = dbo.fnc_GetDate()    --(SSA01)
            WHERE Userdefine09 = @c_Wavekey           
        END          
    END
