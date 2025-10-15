@@ -19,8 +19,7 @@ GO
 /* 2009-04-09 1.0  James       Created                                  */  
 /* 2010-03-05 1.1  James       SOS163450 - Add orderkey into alert msg  */  
 /*                             (james01)                                */  
-/* 2010-09-07 1.2  ChewKP      Enhance Supervisor Alert (ChewKP01)      */ 
-/* 2025-10-15 1.3  NickT       UWP-42483 Optimize transaction           */
+/* 2010-09-07 2.0  ChewKP      Enhance Supervisor Alert (ChewKP01)      */ 
 /************************************************************************/  
   
 CREATE  PROCEDURE rdt.rdt_STD_Short_Pick (  
@@ -64,10 +63,8 @@ BEGIN
    DECLARE @c_NewLineChar NVARCHAR(2) -- (ChewKP01)   
    SET @c_NewLineChar =  master.dbo.fnc_GetCharASCII(13) + master.dbo.fnc_GetCharASCII(10) -- (ChewKP01)     
   
-   IF @nTranCount = 0
-      BEGIN TRAN
-   ELSE
-      SAVE TRAN STD_Short_Pick
+   BEGIN TRAN  
+   SAVE TRAN STD_Short_Pick  
   
    /*-------------------------------------------------------------------------------  
   
@@ -180,21 +177,15 @@ BEGIN
    BEGIN  
       GOTO Fail  
    END  
-
-   COMMIT TRAN
   
    GOTO Quit   -- Success and goto commit transaction  
   
-   Fail:
-   IF XACT_STATE() = -1
-   BEGIN
-      IF @nTranCount > 0
-         ROLLBACK TRAN STD_Short_Pick
-      ELSE
-         ROLLBACK TRAN
-   END
+   Fail:  
+      ROLLBACK TRAN STD_Short_Pick  
   
-   Quit:
+   Quit:  
+      WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started  
+         COMMIT TRAN STD_Short_Pick  
 END
 GO
 GRANT EXECUTE ON [RDT].[rdt_STD_Short_Pick] TO nSQL 
