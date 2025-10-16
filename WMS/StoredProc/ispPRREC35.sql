@@ -51,18 +51,7 @@ BEGIN
 		   @c_SourceKey          NVARCHAR(20),
            @c_SourceType         NVARCHAR(30),
 		   @c_SKU                NVARCHAR(30),
-		   @n_QTY                INT,
-		   
-           @c_ReceiptLineNumber2 NVARCHAR(5),
-           @c_ExternReceiptkey   NVARCHAR(50),
-           @c_ExternLineNo       NVARCHAR(20),
-           @c_UserDefine02       NVARCHAR(30),
-           @c_UserDefine03       NVARCHAR(30),
-           @n_Userdefine02_Cnt   INT = 0,
-           @n_ExternLineNo       INT = 0,
-           @n_UserDefine03       INT = 0,
-           @n_ExternLineNo_Len   INT = 6,
-           @n_UserDefine03_Len   INT = 6
+		   @n_QTY                INT
            
    SELECT @b_Success = 1, @n_Err = 0, @c_ErrMsg = '', @n_Continue = 1, @n_StartTranCount = @@TRANCOUNT                                                     
 
@@ -101,7 +90,7 @@ BEGIN
             AND ParentSerialNo  = @c_ParentUCC
             AND UnitType  <> 'UCC'
             
-         IF EXISTS(@n_CTNSerialno <> @n_QTYReceived)
+         IF @n_CTNSerialno <> @n_QTYReceived
          BEGIN
             SELECT @n_continue = 3
             SELECT @c_errmsg = CONVERT(char(250),@n_err), @n_err = 63520
@@ -111,15 +100,14 @@ BEGIN
          END 
 
          DECLARE CUR_REC CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-         SELECT @c_Serialno = Serialno
-		      , @c_SKU = SKU
-           FROM MasterSerialno (NOLOCK) 
-          WHERE StorerKey = @c_StorerKey
-            AND ParentSerialNo  = @c_ParentUCC
-            AND UnitType  <> 'UCC'
+            SELECT Serialno, SKU
+              FROM MasterSerialno (NOLOCK) 
+             WHERE StorerKey = @c_StorerKey
+               AND ParentSerialNo  = @c_ParentUCC
+               AND UnitType  <> 'UCC'
          OPEN CUR_REC 
          
-         FETCH NEXT FROM CUR_REC INTO @c_Serialno
+         FETCH NEXT FROM CUR_REC INTO @c_Serialno, @c_SKU
          
          IF @@FETCH_STATUS <> -1
          BEGIN
@@ -157,13 +145,14 @@ BEGIN
 
             IF @n_Continue IN (1,2)
             BEGIN
+               SELECT @c_SourceKey    = @c_Receiptkey + @c_ReceiptLineNumber
                EXEC dbo.ispITrnSerialNoDeposit
                  @c_TranType     = 'DP'
                , @c_StorerKey    = @c_StorerKey
                , @c_SKU          = @c_SKU
                , @c_SerialNo     = @c_SerialNo
                , @n_QTY          = 1
-               , @c_SourceKey    = @c_Receiptkey + @c_ReceiptLineNumber
+               , @c_SourceKey    = @c_SourceKey
                , @c_SourceType   = 'ispPRREC35'
                , @b_Success      = @b_Success     OUTPUT
                , @n_Err          = @n_Err         OUTPUT
@@ -174,10 +163,7 @@ BEGIN
                   SET @n_continue = 3
                END
             END
-
-         END
-
-         FETCH NEXT FROM CUR_REC INTO @c_Serialno
+            FETCH NEXT FROM CUR_REC INTO @c_Serialno, @c_SKU
          END
          CLOSE CUR_REC
          DEALLOCATE CUR_REC
