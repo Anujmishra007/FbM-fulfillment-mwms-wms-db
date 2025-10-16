@@ -169,9 +169,9 @@ BEGIN
           ) v(Restriction, RestrictionBuildValue)
           WHERE BP.BuildParmKey = @c_BuildParmKey
       )
-      SELECT @n_NoOfChute   = MAX(CASE WHEN Restriction LIKE '%Chute%' THEN RestrictionBuildValue ELSE 0 END)
-           , @n_NoOfPutwall = MAX(CASE WHEN Restriction LIKE '%Putwall%' THEN RestrictionBuildValue ELSE 0 END)
-           , @n_MaxOpenQty  = MAX(CASE WHEN Restriction = '2_MaxQtyPerBuild' THEN RestrictionBuildValue ELSE 0 END)
+      SELECT @n_NoOfChute   = ISNULL(MAX(CASE WHEN Restriction LIKE '%Chute%' THEN TRY_CAST(RestrictionBuildValue AS INT) ELSE NULL END), 0)
+           , @n_NoOfPutwall = ISNULL(MAX(CASE WHEN Restriction LIKE '%Putwall%' THEN TRY_CAST(RestrictionBuildValue AS INT) ELSE NULL END), 0)
+           , @n_MaxOpenQty  = ISNULL(MAX(CASE WHEN Restriction = '2_MaxQtyPerBuild' THEN TRY_CAST(RestrictionBuildValue AS INT) ELSE NULL END), 0)
       FROM CTEBuildParm
    END
    
