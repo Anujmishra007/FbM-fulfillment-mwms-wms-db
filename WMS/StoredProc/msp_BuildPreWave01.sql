@@ -173,12 +173,6 @@ BEGIN
            , @n_NoOfPutwall = MAX(CASE WHEN Restriction LIKE '%Putwall%' THEN RestrictionBuildValue ELSE 0 END)
            , @n_MaxOpenQty  = MAX(CASE WHEN Restriction = '2_MaxQtyPerBuild' THEN RestrictionBuildValue ELSE 0 END)
       FROM CTEBuildParm
-
-      IF ISNULL(@n_NoOfChute, 0) = 0
-         SET @n_NoOfChute = 99999
-
-      IF ISNULL(@n_NoOfPutwall, 0) = 0
-         SET @n_NoOfPutwall = 99999
    END
    
    IF @n_Continue IN (1,2)
