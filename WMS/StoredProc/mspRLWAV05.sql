@@ -165,10 +165,10 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV05]
       ,  [PickMethod]      [nvarchar](1)  NOT NULL DEFAULT (' ')
       ,  [WaveKey]         [nvarchar](10) NOT NULL DEFAULT (' ')
       ,  [EffectiveDate]   [datetime]     NOT NULL DEFAULT (getdate())
-      ,  [AddDate]         [datetime]     NOT NULL DEFAULT (dbo.fnc_GetDate())             --(SSA02)
-      ,  [AddWho]          [nvarchar](128)NOT NULL DEFAULT (dbo.fnc_GetUserName())         --(SSA02)
-      ,  [EditDate]        [datetime]     NOT NULL DEFAULT (dbo.fnc_GetDate())             --(SSA02)
-      ,  [EditWho]         [nvarchar](128)NOT NULL DEFAULT (dbo.fnc_GetUserName())         --(SSA02)
+      ,  [AddDate]         [datetime]     NOT NULL DEFAULT (getdate())             --(SSA02)
+      ,  [AddWho]          [nvarchar](128)NOT NULL DEFAULT (suser_sname())         --(SSA02)
+      ,  [EditDate]        [datetime]     NOT NULL DEFAULT (getdate())             --(SSA02)
+      ,  [EditWho]         [nvarchar](128)NOT NULL DEFAULT (suser_sname())         --(SSA02)
       ,  [TrafficCop]      [nvarchar](1)  NULL
       ,  [ArchiveCop]      [nvarchar](1)  NULL
       ,  [OptimizeCop]     [nvarchar](1)  NULL

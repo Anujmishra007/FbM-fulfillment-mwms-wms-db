@@ -187,10 +187,10 @@ BEGIN
        , [PickMethod]           [NVARCHAR](1)    NOT NULL DEFAULT (' ')
        , [WaveKey]              [NVARCHAR](10)   NOT NULL DEFAULT (' ')
        , [EffectiveDate]        [DATETIME]       NOT NULL DEFAULT (GETDATE())
-       , [AddDate]              [DATETIME]       NOT NULL DEFAULT (dbo.fnc_GetDate())    --(SSA01)
-       , [AddWho]               [NVARCHAR](128)  NOT NULL DEFAULT (dbo.fnc_GetUserName())          --(SSA01)
-       , [EditDate]             [DATETIME]       NOT NULL DEFAULT (dbo.fnc_GetDate())    --(SSA01)
-       , [EditWho]              [NVARCHAR](128)  NOT NULL DEFAULT (dbo.fnc_GetUserName())          --(SSA01)
+       , [AddDate]              [DATETIME]       NOT NULL DEFAULT (getdate())    --(SSA01)
+       , [AddWho]               [NVARCHAR](128)  NOT NULL DEFAULT (suser_sname())          --(SSA01)
+       , [EditDate]             [DATETIME]       NOT NULL DEFAULT (getdate())    --(SSA01)
+       , [EditWho]              [NVARCHAR](128)  NOT NULL DEFAULT (suser_sname())          --(SSA01)
        , [TrafficCop]           [NVARCHAR](1)    NULL
        , [ArchiveCop]           [NVARCHAR](1)    NULL
        , [OptimizeCop]          [NVARCHAR](1)    NULL
