@@ -21,7 +21,7 @@ GO
 /*                                                                       */
 /* Updates:                                                              */
 /* Date         Author  Ver.  Purposes                                   */
-/* 10-Oct-2025  WLChooi 1.0   Initial Version                            */
+/* 16-Oct-2025  WLChooi 1.0   Initial Version                            */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[msp_BuildPreWave01]
    @c_BuildParmKey         NVARCHAR(10)
@@ -244,7 +244,7 @@ BEGIN
                                 , Qty              INT
                                 , StdCube          DECIMAL(15, 7)
                                 , WCS              INT DEFAULT(0)
-                                , CartonNumber     INT DEFAULT(0)
+                                , CartonNumber     INT DEFAULT(1)
                                 , PRIMARY KEY (Orderkey, OrderLineNumber)
                                 )
 
@@ -533,7 +533,7 @@ BEGIN
                         WHERE T1.MPOC = 'Y'
                         GROUP BY T2.Orderkey )
          UPDATE T3
-         SET T3.VCCount = CEILING(CTE.TotalCube / @n_CartonMaxCube)
+         SET T3.VCCount = IIF(CEILING(CTE.TotalCube / @n_CartonMaxCube) < 1, 1, CEILING(CTE.TotalCube / @n_CartonMaxCube))
          FROM #T_ORDERS T3 WITH (NOLOCK)
          JOIN CTE ON CTE.Orderkey = T3.Orderkey
 
@@ -544,10 +544,11 @@ BEGIN
                  , OrderLineNumber
                  , SKU
                  , Qty
-                 , StdCube
+                 , StdCube = IIF(StdCube > @n_CartonMaxCube, @n_CartonMaxCube, StdCube)
                  , ROW_NUMBER() OVER (PARTITION BY Orderkey
                                       ORDER BY OrderLineNumber) AS rn
             FROM #T_ORDERDET WITH (NOLOCK)
+            WHERE StdCube > 0.00
          ), CartonAssign AS
          (
             SELECT *
