@@ -175,6 +175,7 @@ BEGIN
       @cLangCode = Lang_Code, 
       @cFacility = Facility,
       @cCurTaskDetail = V_TaskDetailKey,
+      @c_LastLoc = V_LOC, -- From Loc
       @cStorerKey = StorerKey
    FROM rdt.rdtMobRec WITH (NOLOCK) 
    WHERE UserName = @c_UserID
@@ -649,14 +650,14 @@ BEGIN
       LEFT JOIN LOC LASTLOC WITH(NOLOCK) ON LASTLOC.Loc = ISNULL(@c_LastLoc,'') AND LASTLOC.Facility = @cFacility AND LASTLOC.LocationCategory = 'VNA'
       WHERE T.RowIndex = 1
       ORDER BY 
+         IIF(ISNULL(LASTLOC.LOC,'') <> '' AND LASTLOC.LocAisle = T.FromLocAisle, 1, 99),
+         IIF(ISNULL(LASTLOC.LOC,'') <> '' AND LASTLOC.LocAisle = T.FromLocAisle AND LASTLOC.Floor = T.FromLocFloor, 1, 99),
          IIF (T.Status = '3' AND UserKey = @c_UserID, 1, 2), 
          IIF(UserKeyOverRide = @c_UserID AND T.Status IN ('0', '3'), 1, 2), 
          --IIF(ListKey <> '', 1, 2), --V1.0.2
-         IIF(ISNULL(LASTLOC.LOC,'') <> '' AND LASTLOC.LocAisle = T.FromLocAisle, 1, 99),
-         IIF(ISNULL(LASTLOC.LOC,'') <> '' AND LASTLOC.Floor = T.FromLocFloor, 1, 99),
          Priority, 
-         ABS(RANK()OVER(ORDER BY T.FromLogicalLoc) - RANK()OVER(ORDER BY LASTLOC.LogicalLocation)),
          DeliveryDate,
+         ABS(RANK()OVER(ORDER BY T.FromLogicalLoc) - RANK()OVER(ORDER BY LASTLOC.LogicalLocation)),
          IIF(ListKey <> '', 1, 2), --V1.0.2 Adjust the sequence. Consider business priority first.
          TaskDetailKey
    END TRY
