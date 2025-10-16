@@ -154,10 +154,10 @@ BEGIN
       	[PickMethod] [nvarchar](1) NOT NULL DEFAULT (' '),
       	[WaveKey] [nvarchar](10) NOT NULL DEFAULT (' '),
       	[EffectiveDate] [datetime] NOT NULL DEFAULT (getdate()),
-      	[AddDate] [datetime] NOT NULL DEFAULT (dbo.fnc_GetDate()),                   --(SSA01)
-      	[AddWho] [nvarchar](128) NOT NULL DEFAULT (dbo.fnc_GetUserName()),           --(SSA01)
-      	[EditDate] [datetime] NOT NULL DEFAULT (dbo.fnc_GetDate()),                  --(SSA01)
-      	[EditWho] [nvarchar](128) NOT NULL DEFAULT (dbo.fnc_GetUserName()),          --(SSA01)
+      	[AddDate] [datetime] NOT NULL DEFAULT (getdate()),                   --(SSA01)
+      	[AddWho] [nvarchar](128) NOT NULL DEFAULT (suser_sname()),           --(SSA01)
+      	[EditDate] [datetime] NOT NULL DEFAULT (getdate()),                  --(SSA01)
+      	[EditWho] [nvarchar](128) NOT NULL DEFAULT (suser_sname()),          --(SSA01)
       	[TrafficCop] [nvarchar](1) NULL,
       	[ArchiveCop] [nvarchar](1) NULL,
       	[OptimizeCop] [nvarchar](1) NULL,

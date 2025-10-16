@@ -548,10 +548,10 @@ BEGIN
          [PickMethod] [nvarchar](1) NULL DEFAULT (' '),  
          [RunKey] [nvarchar](10) NULL DEFAULT (' '),  
          [EffectiveDate] [datetime] NULL DEFAULT (getdate()),  
-         [AddDate] [datetime] NULL DEFAULT (dbo.fnc_GetDate()),    --(SSA01)
-         [AddWho] [nvarchar](128) NULL DEFAULT (dbo.fnc_GetUserName()),    -- ZG01 (SSA01)
-         [EditDate] [datetime] NULL DEFAULT (dbo.fnc_GetDate()),    --(SSA01)
-         [EditWho] [nvarchar](128) NULL DEFAULT (dbo.fnc_GetUserName()),   -- ZG01 (SSA01)
+         [AddDate] [datetime] NULL DEFAULT (getdate()),    --(SSA01)
+         [AddWho] [nvarchar](128) NULL DEFAULT (suser_sname()),    -- ZG01 (SSA01)
+         [EditDate] [datetime] NULL DEFAULT (getdate()),    --(SSA01)
+         [EditWho] [nvarchar](128) NULL DEFAULT (suser_sname()),   -- ZG01 (SSA01)
          [TrafficCop] [nvarchar](1) NULL,  
          [ArchiveCop] [nvarchar](1) NULL,  
          [CARTONGROUP] NVARCHAR(10) NULL,  
