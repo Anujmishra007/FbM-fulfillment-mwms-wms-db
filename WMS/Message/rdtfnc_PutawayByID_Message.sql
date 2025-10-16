@@ -13,3 +13,6 @@ execute rdt.rdtAddMsg 52759, 10, '52759^ID Picked     ', 'us_english', 1819
 
 --WNS7793
 execute rdt.rdtAddMsg 52760, 10, '52760^Param NotSetup', 'us_english', 1819
+
+--FCR-8113
+execute rdt.rdtAddMsg 52761, 10, '52761^InvalidFormat', 'us_english', 1819
