@@ -33,6 +33,7 @@ GO
 /*                            to WCS Update SO DischargePlace            */
 /* 2025-08-29   AYD01   1.8   FCR-7636: Retrive WCSCode from LONG coliumn*/
 /* 2025-10-02   WLChooi 1.9   FCR-7636 Remove Validation (WL01)          */
+/* 2025-10-17   WLChooi 2.0   FCR-8208 Remain Task Status as-is (WL02)   */
 /*************************************************************************/   
 CREATE OR ALTER PROCEDURE [dbo].[mspWaveReleaseWCS01]
   @c_Wavekey      NVARCHAR(10)  
@@ -219,30 +220,32 @@ CREATE OR ALTER PROCEDURE [dbo].[mspWaveReleaseWCS01]
          CLOSE @CUR_ORDERS
          DEALLOCATE @CUR_ORDERS
 
+         --WL02 S
          ----(SSA05) end -----
          ----(SSA02),(SSA03),(SSA04)start-----
-         SET @CUR_TASKDETAIL = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-         SELECT td.TASKDETAILKEY,loc.LOCATIONTYPE,td.TASKTYPE FROM TASKDETAIL(NOLOCK) td
-         JOIN LOC(NOLOCK) loc on td.FROMLOC = loc.LOC
-         WHERE td.WAVEKEY = @c_Wavekey AND td.STATUS = 'H'
+         --SET @CUR_TASKDETAIL = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+         --SELECT td.TASKDETAILKEY,loc.LOCATIONTYPE,td.TASKTYPE FROM TASKDETAIL(NOLOCK) td
+         --JOIN LOC(NOLOCK) loc on td.FROMLOC = loc.LOC
+         --WHERE td.WAVEKEY = @c_Wavekey AND td.STATUS = 'H'
 
-         OPEN @CUR_TASKDETAIL
-         FETCH NEXT FROM @CUR_TASKDETAIL INTO @c_TaskDetailKey,@c_LocationType,@c_TaskType
+         --OPEN @CUR_TASKDETAIL
+         --FETCH NEXT FROM @CUR_TASKDETAIL INTO @c_TaskDetailKey,@c_LocationType,@c_TaskType
 
-         WHILE @@FETCH_STATUS <> -1
-         BEGIN
-            SET @b_IsUpdate = 1
+         --WHILE @@FETCH_STATUS <> -1
+         --BEGIN
+         --   SET @b_IsUpdate = 1
 
-            IF('ASTCPK' = @c_TaskType AND 'PICKWCS' <> @c_LocationType)
-               SET @b_IsUpdate = 0
+         --   IF('ASTCPK' = @c_TaskType AND 'PICKWCS' <> @c_LocationType)
+         --      SET @b_IsUpdate = 0
 
-            IF(@b_IsUpdate = 1)
-               UPDATE TASKDETAIL WITH (ROWLOCK) SET STATUS = '0' WHERE TASKDETAILKEY = @c_TaskDetailKey
+         --   IF(@b_IsUpdate = 1)
+         --      UPDATE TASKDETAIL WITH (ROWLOCK) SET STATUS = '0' WHERE TASKDETAILKEY = @c_TaskDetailKey
 
-            FETCH NEXT FROM @CUR_TASKDETAIL INTO @c_TaskDetailKey,@c_LocationType,@c_TaskType
-         END
-         CLOSE @CUR_TASKDETAIL
-         DEALLOCATE @CUR_TASKDETAIL
+         --   FETCH NEXT FROM @CUR_TASKDETAIL INTO @c_TaskDetailKey,@c_LocationType,@c_TaskType
+         --END
+         --CLOSE @CUR_TASKDETAIL
+         --DEALLOCATE @CUR_TASKDETAIL
+         --WL02 E
 
          ----(SSA02),(SSA03),(SSA04) end-----
          SET @b_Success = 1
@@ -278,7 +281,7 @@ EXIT_SP:
             COMMIT TRAN  
          END  
       END  
-      EXECUTE nsp_logerror @n_err, @c_errmsg, "mspWaveReleaseWCS01"
+      EXECUTE nsp_logerror @n_err, @c_errmsg, 'mspWaveReleaseWCS01'
       RAISERROR (@c_errmsg, 16, 1) WITH SETERROR    
       RETURN  
    END  
