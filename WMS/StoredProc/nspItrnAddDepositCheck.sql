@@ -12,7 +12,7 @@ GO
 /*                                                                      */
 /* Called By:                                                           */
 /*                                                                      */
-/* PVCS Version: 1.7                                                    */
+/* PVCS Version: 2.1                                                    */
 /*                                                                      */
 /* Version: 5.4                                                         */
 /*                                                                      */
@@ -48,6 +48,7 @@ GO
 /* 17-JUL-2024  Wan03     1.9 LFWM-4446 - RG[GIT] Serial Number Solution*/
 /*                            - Transfer by Serial Number               */
 /* 10-Oct-2025  SSA01     2.0 UWP-42248 -Enhanced session management    */
+/* 10-Oct-2025  Michael   2.1 FCR-8380- Add SerialNoUpdateLotLocID(ML01)*/
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[nspItrnAddDepositCheck]
      @c_itrnkey      NVARCHAR(10)
@@ -119,6 +120,8 @@ BEGIN
          , @c_SerialNokey              NVARCHAR(10) = ''                            --(Wan03)
          , @c_Lot_SN                   NVARCHAR(10) = ''                            --(Wan03)
          , @c_ASNFizUpdLotToSerialNo   NVARCHAR(10) = '0'                           --(Wan03)
+         , @c_SerialNoUpdateLotLocID   NVARCHAR(10) = ''   --ML02
+         , @c_Loc_SN                   NVARCHAR(10) = ''   --ML02
 
    DECLARE @b_addid int
    SELECT @b_addid = 0
@@ -1124,6 +1127,14 @@ BEGIN
       SET @c_ASNFizUpdLotToSerialNo = '0'
       SELECT @c_ASNFizUpdLotToSerialNo = fsgr.Authority FROM dbo.fnc_SelectGetRight(@c_Facility, @c_Storerkey, '', 'ASNFizUpdLotToSerialNo')AS fsgr
 
+      --ML01-S
+      SELECT @c_SerialNoUpdateLotLocID = fsgr.Authority
+      FROM dbo.fnc_SelectGetRight(@c_Facility, @c_Storerkey, '', 'SerialNoUpdateLotLocID')AS fsgr
+
+      IF ISNULL(@c_SerialNoUpdateLotLocID,'') = '1' AND ISNULL(@c_ASNFizUpdLotToSerialNo,'') <> '1'
+         SET @c_ASNFizUpdLotToSerialNo = '1'
+      --ML01-E
+
       IF @c_SourceType LIKE 'ntrTransferDetail%'
       BEGIN
          SET @c_SerialNo = ''
@@ -1141,6 +1152,7 @@ BEGIN
          SET @c_SerialNokey = ''
          SELECT @c_SerialNoKey = sn.SerialNoKey
                ,@c_Lot_SN = sn.Lot
+               ,@c_Loc_SN = ISNULL(sn.Loc,'')   --ML01
          FROM dbo.SerialNo AS sn (NOLOCK)
          WHERE sn.SerialNo= @c_SerialNo
          AND sn.Storerkey = @c_StorerKey
@@ -1152,6 +1164,8 @@ BEGIN
             SET Lot      = CASE WHEN @c_ASNFizUpdLotToSerialNo = '1' AND @c_Lot_SN <> @c_Lot
                                 THEN @c_Lot ELSE Lot END
                ,ID       = CASE WHEN ID <> @c_ToID THEN @c_ToID ELSE ID END
+               ,Loc      = CASE WHEN @c_SerialNoUpdateLotLocID = '1' AND @c_Loc_SN <> @c_ToLoc   --ML01
+                                THEN @c_ToLoc ELSE Loc END                                       --ML01
                ,EditWho  = dbo.fnc_GetUserName()          --(SSA01)
                ,EditDate = dbo.fnc_GetDate()    --(SSA01)
             WHERE SerialNoKey = @c_SerialNoKey
