@@ -20,6 +20,7 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 2025-07-31  AlexK    1.0   FCR-6833 - initial.                       */
+/* 2025-10-17  AlexK01  1.1   FCR-6833 - Change Request                 */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[msp_BEJ_UnWaveLoadShipOrders]
@@ -131,8 +132,11 @@ BEGIN
             END
 
             --Remove OrderGroup from Orders.
-            UPDATE dbo.Orders
-            SET OrderGroup = ''
+            UPDATE dbo.Orders WITH (ROWLOCK)
+            SET OrderGroup          = ''
+               ,Door                = ''    --AlexK01
+               ,[Route]             = ''    --AlexK01
+               ,IntermodalVehicle   = ''    --AlexK01
             WHERE OrderKey = @c_OrderKey
 
             COMMIT TRAN
