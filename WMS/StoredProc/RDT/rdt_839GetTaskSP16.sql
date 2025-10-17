@@ -148,8 +148,9 @@ BEGIN
                @cSuggID = PD.ID,
                @nSuggQTY = ISNULL( SUM( PD.QTY), 0)
             FROM dbo.RefKeyLookup RKL WITH (NOLOCK)
-               JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
-               JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+            JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
+            JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+            JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK) ON LLI.StorerKey = PD.StorerKey AND LLI.Loc = PD.Loc AND LLI.ID = PD.ID
             WHERE RKL.PickSlipNo = @cPickSlipNo
                AND PD.QTY > 0
                AND PD.Status <> '4'
@@ -165,8 +166,9 @@ BEGIN
                @cSuggID = PD.ID,
                @nSuggQTY = ISNULL( SUM( PD.QTY), 0)
             FROM dbo.RefKeyLookup RKL WITH (NOLOCK)
-               JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
-               JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+            JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
+            JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+            JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK) ON LLI.StorerKey = PD.StorerKey AND LLI.Loc = PD.Loc AND LLI.ID = PD.ID
             WHERE RKL.PickSlipNo = @cPickSlipNo
                AND LOC.PickZone <> @cPickZone
                AND PD.QTY > 0
@@ -188,7 +190,8 @@ BEGIN
                @cSuggID = PD.ID,
                @nSuggQTY = ISNULL( SUM( PD.QTY), 0)
             FROM dbo.PickDetail PD WITH (NOLOCK)
-               JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+            JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+            JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK) ON LLI.StorerKey = PD.StorerKey AND LLI.Loc = PD.Loc AND LLI.ID = PD.ID
             WHERE PD.OrderKey = @cOrderKey
                AND PD.QTY > 0
                AND PD.Status <> '4'
@@ -204,7 +207,8 @@ BEGIN
                @cSuggID = PD.ID,
                @nSuggQTY = ISNULL( SUM( PD.QTY), 0)
             FROM dbo.PickDetail PD WITH (NOLOCK)
-               JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+            JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+            JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK) ON LLI.StorerKey = PD.StorerKey AND LLI.Loc = PD.Loc AND LLI.ID = PD.ID
             WHERE PD.OrderKey = @cOrderKey
                AND LOC.PickZone <> @cPickZone
                AND PD.QTY > 0
@@ -226,8 +230,9 @@ BEGIN
                @cSuggID = PD.ID,
                @nSuggQTY = ISNULL( SUM( PD.QTY), 0)
             FROM dbo.LoadPlanDetail LPD WITH (NOLOCK)
-               JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)
-               JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+            JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)
+            JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+            JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK) ON LLI.StorerKey = PD.StorerKey AND LLI.Loc = PD.Loc AND LLI.ID = PD.ID
             WHERE LPD.LoadKey = @cLoadKey
                AND PD.QTY > 0
                AND PD.Status <> '4'
@@ -243,8 +248,9 @@ BEGIN
                @cSuggID = PD.ID,
                @nSuggQTY = ISNULL( SUM( PD.QTY), 0)
             FROM dbo.LoadPlanDetail LPD WITH (NOLOCK)
-               JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)
-               JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+            JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)
+            JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+            JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK) ON LLI.StorerKey = PD.StorerKey AND LLI.Loc = PD.Loc AND LLI.ID = PD.ID
             WHERE LPD.LoadKey = @cLoadKey
                AND LOC.PickZone <> @cPickZone
                AND PD.QTY > 0
@@ -266,7 +272,8 @@ BEGIN
                @cSuggID = PD.ID,
                @nSuggQTY = ISNULL( SUM( PD.QTY), 0)
             FROM dbo.PickDetail PD WITH (NOLOCK)
-               JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+            JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+            JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK) ON LLI.StorerKey = PD.StorerKey AND LLI.Loc = PD.Loc AND LLI.ID = PD.ID
             WHERE PD.PickSlipNo = @cPickSlipNo
                AND PD.QTY > 0
                AND PD.Status <> '4'
@@ -282,7 +289,8 @@ BEGIN
                @cSuggID = PD.ID,
                @nSuggQTY = ISNULL( SUM( PD.QTY), 0)
             FROM dbo.PickDetail PD WITH (NOLOCK)
-               JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+            JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+            JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK) ON LLI.StorerKey = PD.StorerKey AND LLI.Loc = PD.Loc AND LLI.ID = PD.ID
             WHERE PD.PickSlipNo = @cPickSlipNo
                AND LOC.PickZone <> @cPickZone
                AND PD.QTY > 0
@@ -339,6 +347,16 @@ BEGIN
          @nErrNo   OUTPUT,
          @cErrMsg  OUTPUT
 
+      IF TRIM( ISNULL(@cGroupBy, '') ) = ''
+         SET @cGroupBy = ' PD.LOC, PD.ID '
+      ELSE 
+         SET @cGroupBy += ' ,PD.LOC, PD.ID '
+
+      IF TRIM( ISNULL(@cOrderBy, '') ) = ''
+         SET @cOrderBy = ' PD.LOC, PD.ID '
+      ELSE 
+         SET @cOrderBy += ' ,PD.LOC, PD.ID '
+
       -- Cross dock PickSlip
       IF @cZone IN ('XD', 'LB', 'LP')
       BEGIN
@@ -349,6 +367,7 @@ BEGIN
          '    JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey) ' +
          '    JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC) ' +
          '    JOIN LotAttribute LA WITH (NOLOCK) ON (LA.LOT = PD.LOT) ' +
+         '    JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK) ON LLI.StorerKey = PD.StorerKey AND LLI.Loc = PD.Loc AND LLI.ID = PD.ID ' +
          ' WHERE RKL.PickSlipNo = @cPickSlipNo ' +
          '    AND PD.QTY > 0 ' +
          '    AND PD.Status <> ''4'' ' +
@@ -357,7 +376,7 @@ BEGIN
          '    AND PD.SKU = @cSKU ' +
          CASE WHEN @cPickZone = '' THEN '' ELSE '    AND LOC.PickZone = @cPickZone ' END +
          CASE WHEN @cWhere1 = '' THEN '' ELSE ' AND ' + @cWhere1 END +
-         CASE WHEN @cWhere2 = '' THEN '' ELSE ' > '   + @cWhere2 END +
+         CASE WHEN @cWhere2 = '' THEN '' ELSE ' >= '   + @cWhere2 END +
          CASE WHEN @cGroupBy = '' THEN '' ELSE ' GROUP BY ' + @cGroupBy END +
          CASE WHEN @cOrderBy = '' THEN '' ELSE ' ORDER BY ' + @cOrderBy END
 
@@ -372,6 +391,7 @@ BEGIN
          ' FROM dbo.PickDetail PD WITH (NOLOCK) ' +
          '    JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC) ' +
          '    JOIN LotAttribute LA WITH (NOLOCK) ON (LA.LOT = PD.LOT) ' +
+         '    JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK) ON LLI.StorerKey = PD.StorerKey AND LLI.Loc = PD.Loc AND LLI.ID = PD.ID ' +
          ' WHERE PD.OrderKey = @cOrderKey ' +
          '    AND PD.QTY > 0 ' +
          '    AND PD.Status <> ''4'' ' +
@@ -380,7 +400,7 @@ BEGIN
          '    AND PD.SKU = @cSKU ' +
          CASE WHEN @cPickZone = '' THEN '' ELSE '    AND LOC.PickZone = @cPickZone ' END +
          CASE WHEN @cWhere1 = '' THEN '' ELSE ' AND ' + @cWhere1 END +
-         CASE WHEN @cWhere2 = '' THEN '' ELSE ' > '   + @cWhere2 END +
+         CASE WHEN @cWhere2 = '' THEN '' ELSE ' >= '   + @cWhere2 END +
          CASE WHEN @cGroupBy = '' THEN '' ELSE ' GROUP BY ' + @cGroupBy END +
          CASE WHEN @cOrderBy = '' THEN '' ELSE ' ORDER BY ' + @cOrderBy END
       END
@@ -395,6 +415,7 @@ BEGIN
          '    JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey) ' +
          '    JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC) ' +
          '    JOIN LotAttribute LA WITH (NOLOCK) ON (LA.LOT = PD.LOT) ' +
+         '    JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK) ON LLI.StorerKey = PD.StorerKey AND LLI.Loc = PD.Loc AND LLI.ID = PD.ID ' +
          ' WHERE LPD.LoadKey = @cLoadKey ' +
          '    AND PD.QTY > 0 ' +
          '    AND PD.Status <> ''4'' ' +
@@ -403,7 +424,7 @@ BEGIN
          '    AND PD.SKU = @cSKU ' +
          CASE WHEN @cPickZone = '' THEN '' ELSE '    AND LOC.PickZone = @cPickZone ' END +
          CASE WHEN @cWhere1 = '' THEN '' ELSE ' AND ' + @cWhere1 END +
-         CASE WHEN @cWhere2 = '' THEN '' ELSE ' > '   + @cWhere2 END +
+         CASE WHEN @cWhere2 = '' THEN '' ELSE ' >= '   + @cWhere2 END +
          CASE WHEN @cGroupBy = '' THEN '' ELSE ' GROUP BY ' + @cGroupBy END +
          CASE WHEN @cOrderBy = '' THEN '' ELSE ' ORDER BY ' + @cOrderBy END
       END
@@ -417,6 +438,7 @@ BEGIN
          '    FROM dbo.PickDetail PD WITH (NOLOCK) ' +
          '       JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC) ' +
          '       JOIN LotAttribute LA WITH (NOLOCK) ON (LA.LOT = PD.LOT) ' +
+         '    JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK) ON LLI.StorerKey = PD.StorerKey AND LLI.Loc = PD.Loc AND LLI.ID = PD.ID ' +
          '    WHERE PD.PickSlipNo = @cPickSlipNo ' +
          '    AND PD.QTY > 0 ' +
          '    AND PD.Status <> ''4'' ' +
@@ -425,7 +447,7 @@ BEGIN
          '    AND PD.SKU = @cSKU ' +
          CASE WHEN @cPickZone = '' THEN '' ELSE '    AND LOC.PickZone = @cPickZone ' END +
          CASE WHEN @cWhere1 = '' THEN '' ELSE ' AND ' + @cWhere1 END +
-         CASE WHEN @cWhere2 = '' THEN '' ELSE ' > '   + @cWhere2 END +
+         CASE WHEN @cWhere2 = '' THEN '' ELSE ' >= '   + @cWhere2 END +
          CASE WHEN @cGroupBy = '' THEN '' ELSE ' GROUP BY ' + @cGroupBy END +
          CASE WHEN @cOrderBy = '' THEN '' ELSE ' ORDER BY ' + @cOrderBy END
       END
@@ -491,8 +513,10 @@ BEGIN
             '    JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey) ' +
             '    JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC) ' +
             '    JOIN LotAttribute LA WITH (NOLOCK) ON (LA.LOT = PD.LOT) ' +
+            '    JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK) ON LLI.StorerKey = PD.StorerKey AND LLI.Loc = PD.Loc AND LLI.ID = PD.ID ' +
             ' WHERE RKL.PickSlipNo = @cPickSlipNo ' +
-            '    AND PD.QTY > 0 ' +                 '    AND PD.Status <> ''4'' ' +
+            '    AND PD.QTY > 0 ' +                 
+            '    AND PD.Status <> ''4'' ' +
             '    AND PD.Status < @cStatus ' +
             '    AND LOC.LOC = @cLOC ' +
             '    AND PD.SKU = @cSKU ' +
@@ -507,6 +531,7 @@ BEGIN
             ' FROM dbo.PickDetail PD WITH (NOLOCK) ' +
             '    JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC) ' +
             '    JOIN LotAttribute LA WITH (NOLOCK) ON (LA.LOT = PD.LOT) ' +
+            '    JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK) ON LLI.StorerKey = PD.StorerKey AND LLI.Loc = PD.Loc AND LLI.ID = PD.ID ' +
             ' WHERE PD.OrderKey = @cOrderKey ' +
             '    AND PD.QTY > 0 ' +
             '    AND PD.Status <> ''4'' ' +
@@ -525,6 +550,7 @@ BEGIN
             '    JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey) ' +
             '    JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC) ' +
             '    JOIN LotAttribute LA WITH (NOLOCK) ON (LA.LOT = PD.LOT) ' +
+            '    JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK) ON LLI.StorerKey = PD.StorerKey AND LLI.Loc = PD.Loc AND LLI.ID = PD.ID ' +
             ' WHERE LPD.LoadKey = @cLoadKey ' +
             '    AND PD.QTY > 0 ' +
             '    AND PD.Status <> ''4'' ' +
@@ -542,6 +568,7 @@ BEGIN
             '    FROM dbo.PickDetail PD WITH (NOLOCK) ' +
             '       JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC) ' +
             '       JOIN LotAttribute LA WITH (NOLOCK) ON (LA.LOT = PD.LOT) ' +
+            '    JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK) ON LLI.StorerKey = PD.StorerKey AND LLI.Loc = PD.Loc AND LLI.ID = PD.ID ' +
             '    WHERE PD.PickSlipNo = @cPickSlipNo ' +
             '    AND PD.QTY > 0 ' +
             '    AND PD.Status <> ''4'' ' +
@@ -588,8 +615,9 @@ BEGIN
                @cSuggID = PD.ID,
                @nSuggQTY = ISNULL( SUM( PD.QTY), 0)
             FROM dbo.RefKeyLookup RKL WITH (NOLOCK)
-               JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
-               JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+            JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
+            JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+            JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK) ON LLI.StorerKey = PD.StorerKey AND LLI.Loc = PD.Loc AND LLI.ID = PD.ID
             WHERE RKL.PickSlipNo = @cPickSlipNo
                AND PD.QTY > 0
                AND PD.Status <> '4'
@@ -605,8 +633,9 @@ BEGIN
                @cSuggID = PD.ID,
                @nSuggQTY = ISNULL( SUM( PD.QTY), 0)
             FROM dbo.RefKeyLookup RKL WITH (NOLOCK)
-               JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
-               JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+            JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
+            JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+            JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK) ON LLI.StorerKey = PD.StorerKey AND LLI.Loc = PD.Loc AND LLI.ID = PD.ID
             WHERE RKL.PickSlipNo = @cPickSlipNo
                AND LOC.PickZone = @cPickZone
                AND PD.QTY > 0
@@ -628,7 +657,8 @@ BEGIN
                @cSuggID = PD.ID,
                @nSuggQTY = ISNULL( SUM( PD.QTY), 0)
             FROM dbo.PickDetail PD WITH (NOLOCK)
-               JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+            JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+            JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK) ON LLI.StorerKey = PD.StorerKey AND LLI.Loc = PD.Loc AND LLI.ID = PD.ID
             WHERE PD.OrderKey = @cOrderKey
                AND PD.QTY > 0
                AND PD.Status <> '4'
@@ -644,7 +674,8 @@ BEGIN
                @cSuggID = PD.ID,
                @nSuggQTY = ISNULL( SUM( PD.QTY), 0)
             FROM dbo.PickDetail PD WITH (NOLOCK)
-               JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+            JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+            JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK) ON LLI.StorerKey = PD.StorerKey AND LLI.Loc = PD.Loc AND LLI.ID = PD.ID
             WHERE PD.OrderKey = @cOrderKey
                AND LOC.PickZone = @cPickZone
                AND PD.QTY > 0
@@ -666,8 +697,9 @@ BEGIN
                @cSuggID = PD.ID,
                @nSuggQTY = ISNULL( SUM( PD.QTY), 0)
             FROM dbo.LoadPlanDetail LPD WITH (NOLOCK)
-               JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)
-               JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+            JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)
+            JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+            JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK) ON LLI.StorerKey = PD.StorerKey AND LLI.Loc = PD.Loc AND LLI.ID = PD.ID
             WHERE LPD.LoadKey = @cLoadKey
                AND PD.QTY > 0
                AND PD.Status <> '4'
@@ -683,8 +715,9 @@ BEGIN
                @cSuggID = PD.ID,
                @nSuggQTY = ISNULL( SUM( PD.QTY), 0)
             FROM dbo.LoadPlanDetail LPD WITH (NOLOCK)
-               JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)
-               JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+            JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)
+            JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+            JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK) ON LLI.StorerKey = PD.StorerKey AND LLI.Loc = PD.Loc AND LLI.ID = PD.ID
             WHERE LPD.LoadKey = @cLoadKey
                AND LOC.PickZone = @cPickZone
                AND PD.QTY > 0
@@ -706,7 +739,8 @@ BEGIN
                @cSuggID = PD.ID,
                @nSuggQTY = ISNULL( SUM( PD.QTY), 0)
             FROM dbo.PickDetail PD WITH (NOLOCK)
-               JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+            JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+            JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK) ON LLI.StorerKey = PD.StorerKey AND LLI.Loc = PD.Loc AND LLI.ID = PD.ID
             WHERE PD.PickSlipNo = @cPickSlipNo
                AND PD.QTY > 0
                AND PD.Status <> '4'
@@ -722,7 +756,8 @@ BEGIN
                @cSuggID = PD.ID,
                @nSuggQTY = ISNULL( SUM( PD.QTY), 0)
             FROM dbo.PickDetail PD WITH (NOLOCK)
-               JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+            JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+            JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK) ON LLI.StorerKey = PD.StorerKey AND LLI.Loc = PD.Loc AND LLI.ID = PD.ID
             WHERE PD.PickSlipNo = @cPickSlipNo
                AND LOC.PickZone = @cPickZone
                AND PD.QTY > 0
@@ -779,6 +814,16 @@ BEGIN
          @nErrNo   OUTPUT,
          @cErrMsg  OUTPUT
 
+      IF TRIM( ISNULL(@cGroupBy, '') ) = ''
+         SET @cGroupBy = ' PD.LOC, PD.ID '
+      ELSE 
+         SET @cGroupBy += ' ,PD.LOC, PD.ID '
+
+      IF TRIM( ISNULL(@cOrderBy, '') ) = ''
+         SET @cOrderBy = ' PD.LOC, PD.ID '
+      ELSE 
+         SET @cOrderBy += ' ,PD.LOC, PD.ID '
+
       -- Cross dock PickSlip
       IF @cZone IN ('XD', 'LB', 'LP')
       BEGIN
@@ -797,7 +842,7 @@ BEGIN
          '    AND PD.SKU = @cSKU ' +
          CASE WHEN @cPickZone = '' THEN '' ELSE '    AND LOC.PickZone = @cPickZone ' END +
          CASE WHEN @cWhere1 = '' THEN '' ELSE ' AND ' + @cWhere1 END +
-         CASE WHEN @cWhere2 = '' THEN '' ELSE ' > '   + @cWhere2 END +
+         CASE WHEN @cWhere2 = '' THEN '' ELSE ' >= '   + @cWhere2 END +
          CASE WHEN @cGroupBy = '' THEN '' ELSE ' GROUP BY ' + @cGroupBy END +
          CASE WHEN @cOrderBy = '' THEN '' ELSE ' ORDER BY ' + @cOrderBy END
 
@@ -811,6 +856,7 @@ BEGIN
          ' FROM dbo.PickDetail PD WITH (NOLOCK) ' +
          '    JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC) ' +
          '    JOIN LotAttribute LA WITH (NOLOCK) ON (LA.LOT = PD.LOT) ' +
+         '    JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK) ON LLI.StorerKey = PD.StorerKey AND LLI.Loc = PD.Loc AND LLI.ID = PD.ID ' +
          ' WHERE PD.OrderKey = @cOrderKey ' +
          '    AND PD.QTY > 0 ' +
          '    AND PD.Status <> ''4'' ' +
@@ -819,7 +865,7 @@ BEGIN
          '    AND PD.SKU = @cSKU ' +
          CASE WHEN @cPickZone = '' THEN '' ELSE '    AND LOC.PickZone = @cPickZone ' END +
          CASE WHEN @cWhere1 = '' THEN '' ELSE ' AND ' + @cWhere1 END +
-         CASE WHEN @cWhere2 = '' THEN '' ELSE ' > '   + @cWhere2 END +
+         CASE WHEN @cWhere2 = '' THEN '' ELSE ' >= '   + @cWhere2 END +
          CASE WHEN @cGroupBy = '' THEN '' ELSE ' GROUP BY ' + @cGroupBy END +
          CASE WHEN @cOrderBy = '' THEN '' ELSE ' ORDER BY ' + @cOrderBy END
       END
@@ -834,6 +880,7 @@ BEGIN
          '    JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey) ' +
          '    JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC) ' +
          '    JOIN LotAttribute LA WITH (NOLOCK) ON (LA.LOT = PD.LOT) ' +
+         '    JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK) ON LLI.StorerKey = PD.StorerKey AND LLI.Loc = PD.Loc AND LLI.ID = PD.ID ' +
          ' WHERE LPD.LoadKey = @cLoadKey ' +
          '    AND PD.QTY > 0 ' +
          '    AND PD.Status <> ''4'' ' +
@@ -842,7 +889,7 @@ BEGIN
          '    AND PD.SKU = @cSKU ' +
          CASE WHEN @cPickZone = '' THEN '' ELSE '    AND LOC.PickZone = @cPickZone ' END +
          CASE WHEN @cWhere1 = '' THEN '' ELSE ' AND ' + @cWhere1 END +
-         CASE WHEN @cWhere2 = '' THEN '' ELSE ' > '   + @cWhere2 END +
+         CASE WHEN @cWhere2 = '' THEN '' ELSE ' >= '   + @cWhere2 END +
          CASE WHEN @cGroupBy = '' THEN '' ELSE ' GROUP BY ' + @cGroupBy END +
          CASE WHEN @cOrderBy = '' THEN '' ELSE ' ORDER BY ' + @cOrderBy END
       END
@@ -856,6 +903,7 @@ BEGIN
          '    FROM dbo.PickDetail PD WITH (NOLOCK) ' +
          '       JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC) ' +
          '       JOIN LotAttribute LA WITH (NOLOCK) ON (LA.LOT = PD.LOT) ' +
+         '    JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK) ON LLI.StorerKey = PD.StorerKey AND LLI.Loc = PD.Loc AND LLI.ID = PD.ID ' +
          '    WHERE PD.PickSlipNo = @cPickSlipNo ' +
          '    AND PD.QTY > 0 ' +
          '    AND PD.Status <> ''4'' ' +
@@ -864,7 +912,7 @@ BEGIN
          '    AND PD.SKU = @cSKU ' +
          CASE WHEN @cPickZone = '' THEN '' ELSE '    AND LOC.PickZone = @cPickZone ' END +
          CASE WHEN @cWhere1 = '' THEN '' ELSE ' AND ' + @cWhere1 END +
-         CASE WHEN @cWhere2 = '' THEN '' ELSE ' > '   + @cWhere2 END +
+         CASE WHEN @cWhere2 = '' THEN '' ELSE ' >= '   + @cWhere2 END +
          CASE WHEN @cGroupBy = '' THEN '' ELSE ' GROUP BY ' + @cGroupBy END +
          CASE WHEN @cOrderBy = '' THEN '' ELSE ' ORDER BY ' + @cOrderBy END
       END
@@ -930,6 +978,7 @@ BEGIN
          '    JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey) ' +
          '    JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC) ' +
          '    JOIN LotAttribute LA WITH (NOLOCK) ON (LA.LOT = PD.LOT) ' +
+         '    JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK) ON LLI.StorerKey = PD.StorerKey AND LLI.Loc = PD.Loc AND LLI.ID = PD.ID ' +
          ' WHERE RKL.PickSlipNo = @cPickSlipNo ' +
          '    AND PD.QTY > 0 ' +
          '    AND PD.Status <> ''4'' ' +
@@ -946,6 +995,7 @@ BEGIN
          ' FROM dbo.PickDetail PD WITH (NOLOCK) ' +
          '    JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC) ' +
          '    JOIN LotAttribute LA WITH (NOLOCK) ON (LA.LOT = PD.LOT) ' +
+         '    JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK) ON LLI.StorerKey = PD.StorerKey AND LLI.Loc = PD.Loc AND LLI.ID = PD.ID ' +
          ' WHERE PD.OrderKey = @cOrderKey ' +
          '    AND PD.QTY > 0 ' +
          '    AND PD.Status <> ''4'' ' +
@@ -964,6 +1014,7 @@ BEGIN
          '    JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey) ' +
          '    JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC) ' +
          '    JOIN LotAttribute LA WITH (NOLOCK) ON (LA.LOT = PD.LOT) ' +
+         '    JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK) ON LLI.StorerKey = PD.StorerKey AND LLI.Loc = PD.Loc AND LLI.ID = PD.ID ' +
          ' WHERE LPD.LoadKey = @cLoadKey ' +
          '    AND PD.QTY > 0 ' +
          '    AND PD.Status <> ''4'' ' +
@@ -981,6 +1032,7 @@ BEGIN
          '    FROM dbo.PickDetail PD WITH (NOLOCK) ' +
          '       JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC) ' +
          '       JOIN LotAttribute LA WITH (NOLOCK) ON (LA.LOT = PD.LOT) ' +
+         '    JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK) ON LLI.StorerKey = PD.StorerKey AND LLI.Loc = PD.Loc AND LLI.ID = PD.ID ' +
          '    WHERE PD.PickSlipNo = @cPickSlipNo ' +
          '    AND PD.QTY > 0 ' +
          '    AND PD.Status <> ''4'' ' +
@@ -1023,11 +1075,15 @@ BEGIN
       BEGIN
          IF @cPickZone = ''
             SELECT TOP 1
-               @cSuggSKU = PD.SKU
+               @cSuggSKU = PD.SKU,
+               @cSuggSKU = PD.SKU,
+               @cSuggID = PD.ID,
+               @nSuggQTY = ISNULL( SUM( PD.QTY), 0)
                --@nSuggQTY = ISNULL( SUM( PD.QTY), 0)      --INC0720911
             FROM dbo.RefKeyLookup RKL WITH (NOLOCK)
-               JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
-               JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+            JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
+            JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+            JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK) ON LLI.StorerKey = PD.StorerKey AND LLI.Loc = PD.Loc AND LLI.ID = PD.ID
             WHERE RKL.PickSlipNo = @cPickSlipNo
                AND PD.QTY > 0
                AND PD.Status <> '4'
@@ -1035,15 +1091,19 @@ BEGIN
                AND LOC.LOC = @cCurrLOC
                AND (( @cType = 'BALPICK' AND PD.SKU > @cCurrSKU) OR
                     ( @cType = 'NEXTSKU' AND PD.SKU = PD.SKU))
-            --GROUP BY PD.StorerKey, PD.SKU
-            ORDER BY PD.StorerKey, PD.SKU
+            GROUP BY LOC.LogicalLocation, LOC.LOC, PD.StorerKey, PD.ID, PD.SKU
+            ORDER BY LOC.LogicalLocation, LOC.LOC, PD.StorerKey, PD.ID, PD.SKU
          ELSE
             SELECT TOP 1
-               @cSuggSKU = PD.SKU
+               @cSuggSKU = PD.SKU,
+               @cSuggSKU = PD.SKU,
+               @cSuggID = PD.ID,
+               @nSuggQTY = ISNULL( SUM( PD.QTY), 0)
                --@nSuggQTY = ISNULL( SUM( PD.QTY), 0)    --INC0720911
             FROM dbo.RefKeyLookup RKL WITH (NOLOCK)
-               JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
-               JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+            JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
+            JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+            JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK) ON LLI.StorerKey = PD.StorerKey AND LLI.Loc = PD.Loc AND LLI.ID = PD.ID
             WHERE RKL.PickSlipNo = @cPickSlipNo
                AND LOC.PickZone = @cPickZone
                AND PD.QTY > 0
@@ -1052,8 +1112,8 @@ BEGIN
                AND LOC.LOC = @cCurrLOC
                AND (( @cType = 'BALPICK' AND PD.SKU > @cCurrSKU) OR
                     ( @cType = 'NEXTSKU' AND PD.SKU = PD.SKU))
-            --GROUP BY PD.StorerKey, PD.SKU
-            ORDER BY PD.StorerKey, PD.SKU
+            GROUP BY LOC.LogicalLocation, LOC.LOC, PD.StorerKey, PD.ID, PD.SKU
+            ORDER BY LOC.LogicalLocation, LOC.LOC, PD.StorerKey, PD.ID, PD.SKU
       END
 
       -- Discrete PickSlip
@@ -1061,10 +1121,14 @@ BEGIN
       BEGIN
          IF @cPickZone = ''
             SELECT TOP 1
-               @cSuggSKU = PD.SKU
+               @cSuggSKU = PD.SKU,
+               @cSuggSKU = PD.SKU,
+               @cSuggID = PD.ID,
+               @nSuggQTY = ISNULL( SUM( PD.QTY), 0)
                --@nSuggQTY = ISNULL( SUM( PD.QTY), 0)    --INC0720911
             FROM dbo.PickDetail PD WITH (NOLOCK)
-               JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+            JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+            JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK) ON LLI.StorerKey = PD.StorerKey AND LLI.Loc = PD.Loc AND LLI.ID = PD.ID
             WHERE PD.OrderKey = @cOrderKey
                AND PD.QTY > 0
                AND PD.Status <> '4'
@@ -1072,14 +1136,18 @@ BEGIN
                AND LOC.LOC = @cCurrLOC
                AND (( @cType = 'BALPICK' AND PD.SKU > @cCurrSKU) OR
                     ( @cType = 'NEXTSKU' AND PD.SKU = PD.SKU))
-            --GROUP BY PD.StorerKey, PD.SKU
-            ORDER BY PD.StorerKey, PD.SKU
+            GROUP BY LOC.LogicalLocation, LOC.LOC, PD.StorerKey, PD.ID, PD.SKU
+            ORDER BY LOC.LogicalLocation, LOC.LOC, PD.StorerKey, PD.ID, PD.SKU
          ELSE
             SELECT TOP 1
-               @cSuggSKU = PD.SKU
+               @cSuggSKU = PD.SKU,
+               @cSuggSKU = PD.SKU,
+               @cSuggID = PD.ID,
+               @nSuggQTY = ISNULL( SUM( PD.QTY), 0)
                --@nSuggQTY = ISNULL( SUM( PD.QTY), 0)      --INC0720911
             FROM dbo.PickDetail PD WITH (NOLOCK)
-               JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+            JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+            JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK) ON LLI.StorerKey = PD.StorerKey AND LLI.Loc = PD.Loc AND LLI.ID = PD.ID
             WHERE PD.OrderKey = @cOrderKey
                AND LOC.PickZone = @cPickZone
                AND PD.QTY > 0
@@ -1088,8 +1156,8 @@ BEGIN
                AND LOC.LOC = @cCurrLOC
                AND (( @cType = 'BALPICK' AND PD.SKU > @cCurrSKU) OR
                     ( @cType = 'NEXTSKU' AND PD.SKU = PD.SKU))
-            --GROUP BY PD.StorerKey, PD.SKU
-            ORDER BY PD.StorerKey, PD.SKU
+            GROUP BY LOC.LogicalLocation, LOC.LOC, PD.StorerKey, PD.ID, PD.SKU
+            ORDER BY LOC.LogicalLocation, LOC.LOC, PD.StorerKey, PD.ID, PD.SKU
       END
 
       -- Conso PickSlip
@@ -1097,11 +1165,15 @@ BEGIN
       BEGIN
          IF @cPickZone = ''
             SELECT TOP 1
-               @cSuggSKU = PD.SKU
+               @cSuggSKU = PD.SKU,
+               @cSuggSKU = PD.SKU,
+               @cSuggID = PD.ID,
+               @nSuggQTY = ISNULL( SUM( PD.QTY), 0)
                --@nSuggQTY = ISNULL( SUM( PD.QTY), 0)      --INC0720911
             FROM dbo.LoadPlanDetail LPD WITH (NOLOCK)
-               JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)
-               JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+            JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)
+            JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+            JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK) ON LLI.StorerKey = PD.StorerKey AND LLI.Loc = PD.Loc AND LLI.ID = PD.ID
             WHERE LPD.LoadKey = @cLoadKey
                AND PD.QTY > 0
                AND PD.Status <> '4'
@@ -1109,15 +1181,19 @@ BEGIN
                AND LOC.LOC = @cCurrLOC
                AND (( @cType = 'BALPICK' AND PD.SKU > @cCurrSKU) OR
                     ( @cType = 'NEXTSKU' AND PD.SKU = PD.SKU))
-            --GROUP BY PD.StorerKey, PD.SKU
-            ORDER BY PD.StorerKey, PD.SKU
+            GROUP BY LOC.LogicalLocation, LOC.LOC, PD.StorerKey, PD.ID, PD.SKU
+            ORDER BY LOC.LogicalLocation, LOC.LOC, PD.StorerKey, PD.ID, PD.SKU
          ELSE
             SELECT TOP 1
-               @cSuggSKU = PD.SKU
+               @cSuggSKU = PD.SKU,
+               @cSuggSKU = PD.SKU,
+               @cSuggID = PD.ID,
+               @nSuggQTY = ISNULL( SUM( PD.QTY), 0)
                --@nSuggQTY = ISNULL( SUM( PD.QTY), 0)      --INC0720911
             FROM dbo.LoadPlanDetail LPD WITH (NOLOCK)
-               JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)
-               JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+            JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)
+            JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+            JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK) ON LLI.StorerKey = PD.StorerKey AND LLI.Loc = PD.Loc AND LLI.ID = PD.ID
             WHERE LPD.LoadKey = @cLoadKey
                AND LOC.PickZone = @cPickZone
                AND PD.QTY > 0
@@ -1126,8 +1202,8 @@ BEGIN
                AND LOC.LOC = @cCurrLOC
                AND (( @cType = 'BALPICK' AND PD.SKU > @cCurrSKU) OR
                     ( @cType = 'NEXTSKU' AND PD.SKU = PD.SKU))
-            --GROUP BY PD.StorerKey, PD.SKU
-            ORDER BY PD.StorerKey, PD.SKU
+            GROUP BY LOC.LogicalLocation, LOC.LOC, PD.StorerKey, PD.ID, PD.SKU
+            ORDER BY LOC.LogicalLocation, LOC.LOC, PD.StorerKey, PD.ID, PD.SKU
       END
 
       -- Custom PickSlip
@@ -1135,10 +1211,14 @@ BEGIN
       BEGIN
          IF @cPickZone = ''
             SELECT TOP 1
-               @cSuggSKU = PD.SKU
+               @cSuggSKU = PD.SKU,
+               @cSuggSKU = PD.SKU,
+               @cSuggID = PD.ID,
+               @nSuggQTY = ISNULL( SUM( PD.QTY), 0)
                --@nSuggQTY = ISNULL( SUM( PD.QTY), 0)  --INC0720911
             FROM dbo.PickDetail PD WITH (NOLOCK)
-               JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+            JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+            JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK) ON LLI.StorerKey = PD.StorerKey AND LLI.Loc = PD.Loc AND LLI.ID = PD.ID
             WHERE PD.PickSlipNo = @cPickSlipNo
                AND PD.QTY > 0
                AND PD.Status <> '4'
@@ -1146,14 +1226,18 @@ BEGIN
                AND LOC.LOC = @cCurrLOC
                AND (( @cType = 'BALPICK' AND PD.SKU > @cCurrSKU) OR
                     ( @cType = 'NEXTSKU' AND PD.SKU = PD.SKU))
-               --GROUP BY PD.StorerKey, PD.SKU
-               ORDER BY PD.StorerKey, PD.SKU
+               GROUP BY LOC.LogicalLocation, LOC.LOC, PD.StorerKey, PD.ID, PD.SKU
+               ORDER BY LOC.LogicalLocation, LOC.LOC, PD.StorerKey, PD.ID, PD.SKU
          ELSE
             SELECT TOP 1
-               @cSuggSKU = PD.SKU
+               @cSuggSKU = PD.SKU,
+               @cSuggSKU = PD.SKU,
+               @cSuggID = PD.ID,
+               @nSuggQTY = ISNULL( SUM( PD.QTY), 0)
                --@nSuggQTY = ISNULL( SUM( PD.QTY), 0)  --INC0720911
             FROM dbo.PickDetail PD WITH (NOLOCK)
-               JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+            JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+            JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK) ON LLI.StorerKey = PD.StorerKey AND LLI.Loc = PD.Loc AND LLI.ID = PD.ID
             WHERE PD.PickSlipNo = @cPickSlipNo
                AND LOC.PickZone = @cPickZone
                AND PD.QTY > 0
@@ -1162,8 +1246,8 @@ BEGIN
                AND LOC.LOC = @cCurrLOC
                AND (( @cType = 'BALPICK' AND PD.SKU > @cCurrSKU) OR
                     ( @cType = 'NEXTSKU' AND PD.SKU = PD.SKU))
-               --GROUP BY PD.StorerKey, PD.SKU
-               ORDER BY PD.StorerKey, PD.SKU
+               GROUP BY LOC.LogicalLocation, LOC.LOC, PD.StorerKey, PD.ID, PD.SKU
+               ORDER BY LOC.LogicalLocation, LOC.LOC, PD.StorerKey, PD.ID, PD.SKU
       END
 
       -- Get SKU info
@@ -1210,6 +1294,16 @@ BEGIN
          @nErrNo   OUTPUT,
          @cErrMsg  OUTPUT
 
+      IF TRIM( ISNULL(@cGroupBy, '') ) = ''
+         SET @cGroupBy = ' PD.LOC, PD.ID '
+      ELSE 
+         SET @cGroupBy += ' ,PD.LOC, PD.ID '
+
+      IF TRIM( ISNULL(@cOrderBy, '') ) = ''
+         SET @cOrderBy = ' PD.LOC, PD.ID '
+      ELSE 
+         SET @cOrderBy += ' ,PD.LOC, PD.ID '
+
       -- Cross dock PickSlip
       IF @cZone IN ('XD', 'LB', 'LP')
       BEGIN
@@ -1220,6 +1314,7 @@ BEGIN
          '       JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey) ' +
          '       JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC) ' +
          '       JOIN LotAttribute LA WITH (NOLOCK) ON (LA.LOT = PD.LOT) ' +
+         '    JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK) ON LLI.StorerKey = PD.StorerKey AND LLI.Loc = PD.Loc AND LLI.ID = PD.ID ' +
          '    WHERE RKL.PickSlipNo = @cPickSlipNo ' +
          '       AND PD.QTY > 0 ' +
          '       AND PD.Status <> ''4'' ' +
@@ -1228,7 +1323,7 @@ BEGIN
          '       AND PD.SKU = @cSKU ' + --INC0720911
          CASE WHEN @cPickZone = '' THEN '' ELSE '    AND LOC.PickZone = @cPickZone ' END +
          CASE WHEN @cWhere1 = '' THEN '' ELSE ' AND ' + @cWhere1 END +
-         CASE WHEN @cWhere2 = '' THEN '' ELSE ' > '   + @cWhere2 END +
+         CASE WHEN @cWhere2 = '' THEN '' ELSE ' >= '   + @cWhere2 END +
          CASE WHEN @cGroupBy = '' THEN '' ELSE ' GROUP BY ' + @cGroupBy END +
          CASE WHEN @cOrderBy = '' THEN '' ELSE ' ORDER BY ' + @cOrderBy END
       END
@@ -1242,6 +1337,7 @@ BEGIN
          '    FROM dbo.PickDetail PD WITH (NOLOCK) ' +
          '       JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC) ' +
          '       JOIN LotAttribute LA WITH (NOLOCK) ON (LA.LOT = PD.LOT) ' +
+         '    JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK) ON LLI.StorerKey = PD.StorerKey AND LLI.Loc = PD.Loc AND LLI.ID = PD.ID ' +
          '    WHERE PD.OrderKey = @cOrderKey ' +
          '       AND PD.QTY > 0 ' +
          '       AND PD.Status <> ''4'' ' +
@@ -1250,7 +1346,7 @@ BEGIN
          '       AND PD.SKU = @cSKU ' + --INC0720911
          CASE WHEN @cPickZone = '' THEN '' ELSE '    AND LOC.PickZone = @cPickZone ' END +
          CASE WHEN @cWhere1 = '' THEN '' ELSE ' AND ' + @cWhere1 END +
-         CASE WHEN @cWhere2 = '' THEN '' ELSE ' > '   + @cWhere2 END +
+         CASE WHEN @cWhere2 = '' THEN '' ELSE ' >= '   + @cWhere2 END +
          CASE WHEN @cGroupBy = '' THEN '' ELSE ' GROUP BY ' + @cGroupBy END +
          CASE WHEN @cOrderBy = '' THEN '' ELSE ' ORDER BY ' + @cOrderBy END
       END
@@ -1265,15 +1361,16 @@ BEGIN
          '       JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey) ' +
          '       JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC) ' +
          '       JOIN LotAttribute LA WITH (NOLOCK) ON (LA.LOT = PD.LOT) ' +
+         '    JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK) ON LLI.StorerKey = PD.StorerKey AND LLI.Loc = PD.Loc AND LLI.ID = PD.ID ' +
          '    WHERE LPD.LoadKey = @cLoadKey ' +
          '       AND PD.QTY > 0 ' +
          '       AND PD.Status <> ''4'' ' +
          '       AND PD.Status < @cStatus ' +
          '       AND LOC.LOC = @cLOC ' +
-   '       AND PD.SKU = @cSKU ' + --INC0720911
+      '       AND PD.SKU = @cSKU ' + --INC0720911
          CASE WHEN @cPickZone = '' THEN '' ELSE '    AND LOC.PickZone = @cPickZone ' END +
          CASE WHEN @cWhere1 = '' THEN '' ELSE ' AND ' + @cWhere1 END +
-         CASE WHEN @cWhere2 = '' THEN '' ELSE ' > '   + @cWhere2 END +
+         CASE WHEN @cWhere2 = '' THEN '' ELSE ' >= '   + @cWhere2 END +
          CASE WHEN @cGroupBy = '' THEN '' ELSE ' GROUP BY ' + @cGroupBy END +
          CASE WHEN @cOrderBy = '' THEN '' ELSE ' ORDER BY ' + @cOrderBy END
       END
@@ -1287,6 +1384,7 @@ BEGIN
          '    FROM dbo.PickDetail PD WITH (NOLOCK) ' +
          '       JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC) ' +
          '       JOIN LotAttribute LA WITH (NOLOCK) ON (LA.LOT = PD.LOT) ' +
+         '    JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK) ON LLI.StorerKey = PD.StorerKey AND LLI.Loc = PD.Loc AND LLI.ID = PD.ID ' +
          '    WHERE PD.PickSlipNo = @cPickSlipNo ' +
          '       AND PD.QTY > 0 ' +
          '       AND PD.Status <> ''4'' ' +
@@ -1295,7 +1393,7 @@ BEGIN
          '       AND PD.SKU = @cSKU ' + --INC0720911
          CASE WHEN @cPickZone = '' THEN '' ELSE '    AND LOC.PickZone = @cPickZone ' END +
          CASE WHEN @cWhere1 = '' THEN '' ELSE ' AND ' + @cWhere1 END +
-         CASE WHEN @cWhere2 = '' THEN '' ELSE ' > '   + @cWhere2 END +
+         CASE WHEN @cWhere2 = '' THEN '' ELSE ' >= '   + @cWhere2 END +
          CASE WHEN @cGroupBy = '' THEN '' ELSE ' GROUP BY ' + @cGroupBy END +
          CASE WHEN @cOrderBy = '' THEN '' ELSE ' ORDER BY ' + @cOrderBy END
       END
@@ -1361,6 +1459,7 @@ BEGIN
          '       JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey) ' +
          '       JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC) ' +
          '       JOIN LotAttribute LA WITH (NOLOCK) ON (LA.LOT = PD.LOT) ' +
+         '    JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK) ON LLI.StorerKey = PD.StorerKey AND LLI.Loc = PD.Loc AND LLI.ID = PD.ID ' +
          '    WHERE RKL.PickSlipNo = @cPickSlipNo ' +
          '       AND PD.QTY > 0 ' +
          '       AND PD.Status <> ''4'' ' +
@@ -1378,6 +1477,7 @@ BEGIN
          '    FROM dbo.PickDetail PD WITH (NOLOCK) ' +
          '       JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC) ' +
          '       JOIN LotAttribute LA WITH (NOLOCK) ON (LA.LOT = PD.LOT) ' +
+         '    JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK) ON LLI.StorerKey = PD.StorerKey AND LLI.Loc = PD.Loc AND LLI.ID = PD.ID ' +
          '    WHERE PD.OrderKey = @cOrderKey ' +
          '       AND PD.QTY > 0 ' +
          '       AND PD.Status <> ''4'' ' +
@@ -1396,12 +1496,13 @@ BEGIN
          '       JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey) ' +
          '       JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC) ' +
          '       JOIN LotAttribute LA WITH (NOLOCK) ON (LA.LOT = PD.LOT) ' +
+         '    JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK) ON LLI.StorerKey = PD.StorerKey AND LLI.Loc = PD.Loc AND LLI.ID = PD.ID ' +
          '    WHERE LPD.LoadKey = @cLoadKey ' +
          '       AND PD.QTY > 0 ' +
          '       AND PD.Status <> ''4'' ' +
          '       AND PD.Status < @cStatus ' +
          '       AND LOC.LOC = @cLOC ' +
-   '       AND PD.SKU = @cSKU ' + --INC0720911
+      '       AND PD.SKU = @cSKU ' + --INC0720911
          CASE WHEN @cPickZone = '' THEN '' ELSE '    AND LOC.PickZone = @cPickZone ' END
       END
 
@@ -1413,6 +1514,7 @@ BEGIN
          '    FROM dbo.PickDetail PD WITH (NOLOCK) ' +
          '       JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC) ' +
          '       JOIN LotAttribute LA WITH (NOLOCK) ON (LA.LOT = PD.LOT) ' +
+         '    JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK) ON LLI.StorerKey = PD.StorerKey AND LLI.Loc = PD.Loc AND LLI.ID = PD.ID ' +
          '    WHERE PD.PickSlipNo = @cPickSlipNo ' +
          '       AND PD.QTY > 0 ' +
          '       AND PD.Status <> ''4'' ' +
@@ -1456,26 +1558,34 @@ BEGIN
       BEGIN
          IF @cPickZone = ''
             SELECT TOP 1
-               @cSuggSKU = PD.SKU
+               @cSuggSKU = PD.SKU,
+               @cSuggSKU = PD.SKU,
+               @cSuggID = PD.ID,
+               @nSuggQTY = ISNULL( SUM( PD.QTY), 0)
                --@nSuggQTY = ISNULL( SUM( PD.QTY), 0)      --INC0720911
             FROM dbo.RefKeyLookup RKL WITH (NOLOCK)
-               JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
-               JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+            JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
+            JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+            JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK) ON LLI.StorerKey = PD.StorerKey AND LLI.Loc = PD.Loc AND LLI.ID = PD.ID
             WHERE RKL.PickSlipNo = @cPickSlipNo
                AND PD.QTY > 0
                AND PD.Status <> '4'
                AND PD.Status < @cPickConfirmStatus
                AND LOC.LOC = @cCurrLOC
                AND PD.SKU = PD.SKU
-            --GROUP BY PD.StorerKey, PD.SKU
-            ORDER BY PD.StorerKey, PD.SKU
+            GROUP BY LOC.LogicalLocation, LOC.LOC, PD.StorerKey, PD.ID, PD.SKU
+            ORDER BY LOC.LogicalLocation, LOC.LOC, PD.StorerKey, PD.ID, PD.SKU
          ELSE
             SELECT TOP 1
-               @cSuggSKU = PD.SKU
+               @cSuggSKU = PD.SKU,
+               @cSuggSKU = PD.SKU,
+               @cSuggID = PD.ID,
+               @nSuggQTY = ISNULL( SUM( PD.QTY), 0)
                --@nSuggQTY = ISNULL( SUM( PD.QTY), 0)    --INC0720911
             FROM dbo.RefKeyLookup RKL WITH (NOLOCK)
-               JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
-               JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+            JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
+            JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+            JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK) ON LLI.StorerKey = PD.StorerKey AND LLI.Loc = PD.Loc AND LLI.ID = PD.ID
             WHERE RKL.PickSlipNo = @cPickSlipNo
                AND LOC.PickZone = @cPickZone
                AND PD.QTY > 0
@@ -1483,8 +1593,8 @@ BEGIN
                AND PD.Status < @cPickConfirmStatus
                AND LOC.LOC = @cCurrLOC
                AND PD.SKU = PD.SKU
-            --GROUP BY PD.StorerKey, PD.SKU
-            ORDER BY PD.StorerKey, PD.SKU
+            GROUP BY LOC.LogicalLocation, LOC.LOC, PD.StorerKey, PD.ID, PD.SKU
+            ORDER BY LOC.LogicalLocation, LOC.LOC, PD.StorerKey, PD.ID, PD.SKU
       END
 
       -- Discrete PickSlip
@@ -1492,24 +1602,32 @@ BEGIN
       BEGIN
          IF @cPickZone = ''
             SELECT TOP 1
-               @cSuggSKU = PD.SKU
+               @cSuggSKU = PD.SKU,
+               @cSuggSKU = PD.SKU,
+               @cSuggID = PD.ID,
+               @nSuggQTY = ISNULL( SUM( PD.QTY), 0)
                --@nSuggQTY = ISNULL( SUM( PD.QTY), 0)    --INC0720911
             FROM dbo.PickDetail PD WITH (NOLOCK)
-               JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+            JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+            JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK) ON LLI.StorerKey = PD.StorerKey AND LLI.Loc = PD.Loc AND LLI.ID = PD.ID
             WHERE PD.OrderKey = @cOrderKey
                AND PD.QTY > 0
                AND PD.Status <> '4'
                AND PD.Status < @cPickConfirmStatus
                AND LOC.LOC = @cCurrLOC
                AND PD.SKU = PD.SKU
-            --GROUP BY PD.StorerKey, PD.SKU
-            ORDER BY PD.StorerKey, PD.SKU
+            GROUP BY LOC.LogicalLocation, LOC.LOC, PD.StorerKey, PD.ID, PD.SKU
+            ORDER BY LOC.LogicalLocation, LOC.LOC, PD.StorerKey, PD.ID, PD.SKU
          ELSE
             SELECT TOP 1
-               @cSuggSKU = PD.SKU
+               @cSuggSKU = PD.SKU,
+               @cSuggSKU = PD.SKU,
+               @cSuggID = PD.ID,
+               @nSuggQTY = ISNULL( SUM( PD.QTY), 0)
                --@nSuggQTY = ISNULL( SUM( PD.QTY), 0)      --INC0720911
             FROM dbo.PickDetail PD WITH (NOLOCK)
-               JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+            JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+            JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK) ON LLI.StorerKey = PD.StorerKey AND LLI.Loc = PD.Loc AND LLI.ID = PD.ID
             WHERE PD.OrderKey = @cOrderKey
                AND LOC.PickZone = @cPickZone
                AND PD.QTY > 0
@@ -1517,8 +1635,8 @@ BEGIN
                AND PD.Status < @cPickConfirmStatus
                AND LOC.LOC = @cCurrLOC
                AND PD.SKU = PD.SKU
-            --GROUP BY PD.StorerKey, PD.SKU
-            ORDER BY PD.StorerKey, PD.SKU
+            GROUP BY LOC.LogicalLocation, LOC.LOC, PD.StorerKey, PD.ID, PD.SKU
+            ORDER BY LOC.LogicalLocation, LOC.LOC, PD.StorerKey, PD.ID, PD.SKU
       END
 
       -- Conso PickSlip
@@ -1526,26 +1644,34 @@ BEGIN
       BEGIN
          IF @cPickZone = ''
             SELECT TOP 1
-               @cSuggSKU = PD.SKU
+               @cSuggSKU = PD.SKU,
+               @cSuggSKU = PD.SKU,
+               @cSuggID = PD.ID,
+               @nSuggQTY = ISNULL( SUM( PD.QTY), 0)
                --@nSuggQTY = ISNULL( SUM( PD.QTY), 0)      --INC0720911
             FROM dbo.LoadPlanDetail LPD WITH (NOLOCK)
-               JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)
-               JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+            JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)
+            JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+            JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK) ON LLI.StorerKey = PD.StorerKey AND LLI.Loc = PD.Loc AND LLI.ID = PD.ID
             WHERE LPD.LoadKey = @cLoadKey
                AND PD.QTY > 0
                AND PD.Status <> '4'
                AND PD.Status < @cPickConfirmStatus
                AND LOC.LOC = @cCurrLOC
                AND PD.SKU = PD.SKU
-            --GROUP BY PD.StorerKey, PD.SKU
-            ORDER BY PD.StorerKey, PD.SKU
+            GROUP BY LOC.LogicalLocation, LOC.LOC, PD.StorerKey, PD.ID, PD.SKU
+            ORDER BY LOC.LogicalLocation, LOC.LOC, PD.StorerKey, PD.ID, PD.SKU
          ELSE
             SELECT TOP 1
-               @cSuggSKU = PD.SKU
+               @cSuggSKU = PD.SKU,
+               @cSuggSKU = PD.SKU,
+               @cSuggID = PD.ID,
+               @nSuggQTY = ISNULL( SUM( PD.QTY), 0)
                --@nSuggQTY = ISNULL( SUM( PD.QTY), 0)      --INC0720911
             FROM dbo.LoadPlanDetail LPD WITH (NOLOCK)
-               JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)
-               JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+            JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey)
+            JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+            JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK) ON LLI.StorerKey = PD.StorerKey AND LLI.Loc = PD.Loc AND LLI.ID = PD.ID
             WHERE LPD.LoadKey = @cLoadKey
                AND LOC.PickZone = @cPickZone
                AND PD.QTY > 0
@@ -1553,8 +1679,8 @@ BEGIN
                AND PD.Status < @cPickConfirmStatus
                AND LOC.LOC = @cCurrLOC
                AND PD.SKU = PD.SKU
-            --GROUP BY PD.StorerKey, PD.SKU
-            ORDER BY PD.StorerKey, PD.SKU
+            GROUP BY LOC.LogicalLocation, LOC.LOC, PD.StorerKey, PD.ID, PD.SKU
+            ORDER BY LOC.LogicalLocation, LOC.LOC, PD.StorerKey, PD.ID, PD.SKU
       END
 
       -- Custom PickSlip
@@ -1562,24 +1688,32 @@ BEGIN
       BEGIN
          IF @cPickZone = ''
             SELECT TOP 1
-               @cSuggSKU = PD.SKU
+               @cSuggSKU = PD.SKU,
+               @cSuggSKU = PD.SKU,
+               @cSuggID = PD.ID,
+               @nSuggQTY = ISNULL( SUM( PD.QTY), 0)
                --@nSuggQTY = ISNULL( SUM( PD.QTY), 0)  --INC0720911
             FROM dbo.PickDetail PD WITH (NOLOCK)
-               JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+            JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+            JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK) ON LLI.StorerKey = PD.StorerKey AND LLI.Loc = PD.Loc AND LLI.ID = PD.ID
             WHERE PD.PickSlipNo = @cPickSlipNo
                AND PD.QTY > 0
                AND PD.Status <> '4'
                AND PD.Status < @cPickConfirmStatus
                AND LOC.LOC = @cCurrLOC
                AND PD.SKU = PD.SKU
-               --GROUP BY PD.StorerKey, PD.SKU
-               ORDER BY PD.StorerKey, PD.SKU
+            GROUP BY LOC.LogicalLocation, LOC.LOC, PD.StorerKey, PD.ID, PD.SKU
+            ORDER BY LOC.LogicalLocation, LOC.LOC, PD.StorerKey, PD.ID, PD.SKU
          ELSE
             SELECT TOP 1
-               @cSuggSKU = PD.SKU
+               @cSuggSKU = PD.SKU,
+               @cSuggSKU = PD.SKU,
+               @cSuggID = PD.ID,
+               @nSuggQTY = ISNULL( SUM( PD.QTY), 0)
                --@nSuggQTY = ISNULL( SUM( PD.QTY), 0)  --INC0720911
             FROM dbo.PickDetail PD WITH (NOLOCK)
-               JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+            JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+            JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK) ON LLI.StorerKey = PD.StorerKey AND LLI.Loc = PD.Loc AND LLI.ID = PD.ID
             WHERE PD.PickSlipNo = @cPickSlipNo
                AND LOC.PickZone = @cPickZone
                AND PD.QTY > 0
@@ -1587,7 +1721,8 @@ BEGIN
                AND PD.Status < @cPickConfirmStatus
                AND LOC.LOC = @cCurrLOC
                AND PD.SKU = PD.SKU
-            ORDER BY PD.StorerKey, PD.SKU
+            GROUP BY LOC.LogicalLocation, LOC.LOC, PD.StorerKey, PD.ID, PD.SKU
+            ORDER BY LOC.LogicalLocation, LOC.LOC, PD.StorerKey, PD.ID, PD.SKU
       END
 
       -- Get SKU info
@@ -1634,6 +1769,16 @@ BEGIN
          @nErrNo   OUTPUT,
          @cErrMsg  OUTPUT
 
+      IF TRIM( ISNULL(@cGroupBy, '') ) = ''
+         SET @cGroupBy = ' PD.LOC, PD.ID '
+      ELSE 
+         SET @cGroupBy += ' ,PD.LOC, PD.ID '
+
+      IF TRIM( ISNULL(@cOrderBy, '') ) = ''
+         SET @cOrderBy = ' PD.LOC, PD.ID '
+      ELSE 
+         SET @cOrderBy += ' ,PD.LOC, PD.ID '
+
       -- Cross dock PickSlip
       IF @cZone IN ('XD', 'LB', 'LP')
       BEGIN
@@ -1644,6 +1789,7 @@ BEGIN
          '       JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey) ' +
          '       JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC) ' +
          '       JOIN LotAttribute LA WITH (NOLOCK) ON (LA.LOT = PD.LOT) ' +
+         '    JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK) ON LLI.StorerKey = PD.StorerKey AND LLI.Loc = PD.Loc AND LLI.ID = PD.ID ' +
          '    WHERE RKL.PickSlipNo = @cPickSlipNo ' +
          '       AND PD.QTY > 0 ' +
          '       AND PD.Status <> ''4'' ' +
@@ -1652,7 +1798,7 @@ BEGIN
          '       AND PD.SKU = @cSKU ' + --INC0720911
          CASE WHEN @cPickZone = '' THEN '' ELSE '    AND LOC.PickZone = @cPickZone ' END +
          CASE WHEN @cWhere1 = '' THEN '' ELSE ' AND ' + @cWhere1 END +
-         CASE WHEN @cWhere2 = '' THEN '' ELSE ' > '   + @cWhere2 END +
+         CASE WHEN @cWhere2 = '' THEN '' ELSE ' >= '   + @cWhere2 END +
          CASE WHEN @cGroupBy = '' THEN '' ELSE ' GROUP BY ' + @cGroupBy END +
          CASE WHEN @cOrderBy = '' THEN '' ELSE ' ORDER BY ' + @cOrderBy END
       END
@@ -1666,6 +1812,7 @@ BEGIN
          '    FROM dbo.PickDetail PD WITH (NOLOCK) ' +
          '       JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC) ' +
          '       JOIN LotAttribute LA WITH (NOLOCK) ON (LA.LOT = PD.LOT) ' +
+         '    JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK) ON LLI.StorerKey = PD.StorerKey AND LLI.Loc = PD.Loc AND LLI.ID = PD.ID ' +
          '    WHERE PD.OrderKey = @cOrderKey ' +
          '       AND PD.QTY > 0 ' +
          '       AND PD.Status <> ''4'' ' +
@@ -1674,7 +1821,7 @@ BEGIN
          '       AND PD.SKU = @cSKU ' + --INC0720911
          CASE WHEN @cPickZone = '' THEN '' ELSE '    AND LOC.PickZone = @cPickZone ' END +
          CASE WHEN @cWhere1 = '' THEN '' ELSE ' AND ' + @cWhere1 END +
-         CASE WHEN @cWhere2 = '' THEN '' ELSE ' > '   + @cWhere2 END +
+         CASE WHEN @cWhere2 = '' THEN '' ELSE ' >= '   + @cWhere2 END +
          CASE WHEN @cGroupBy = '' THEN '' ELSE ' GROUP BY ' + @cGroupBy END +
          CASE WHEN @cOrderBy = '' THEN '' ELSE ' ORDER BY ' + @cOrderBy END
       END
@@ -1689,15 +1836,16 @@ BEGIN
          '       JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey) ' +
          '       JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC) ' +
          '       JOIN LotAttribute LA WITH (NOLOCK) ON (LA.LOT = PD.LOT) ' +
+         '    JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK) ON LLI.StorerKey = PD.StorerKey AND LLI.Loc = PD.Loc AND LLI.ID = PD.ID ' +
          '    WHERE LPD.LoadKey = @cLoadKey ' +
          '       AND PD.QTY > 0 ' +
          '       AND PD.Status <> ''4'' ' +
          '       AND PD.Status < @cStatus ' +
          '       AND LOC.LOC = @cLOC ' +
-   '       AND PD.SKU = @cSKU ' + --INC0720911
+      '       AND PD.SKU = @cSKU ' + --INC0720911
          CASE WHEN @cPickZone = '' THEN '' ELSE '    AND LOC.PickZone = @cPickZone ' END +
          CASE WHEN @cWhere1 = '' THEN '' ELSE ' AND ' + @cWhere1 END +
-         CASE WHEN @cWhere2 = '' THEN '' ELSE ' > '   + @cWhere2 END +
+         CASE WHEN @cWhere2 = '' THEN '' ELSE ' >= '   + @cWhere2 END +
          CASE WHEN @cGroupBy = '' THEN '' ELSE ' GROUP BY ' + @cGroupBy END +
          CASE WHEN @cOrderBy = '' THEN '' ELSE ' ORDER BY ' + @cOrderBy END
       END
@@ -1711,6 +1859,7 @@ BEGIN
          '    FROM dbo.PickDetail PD WITH (NOLOCK) ' +
          '       JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC) ' +
          '       JOIN LotAttribute LA WITH (NOLOCK) ON (LA.LOT = PD.LOT) ' +
+         '    JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK) ON LLI.StorerKey = PD.StorerKey AND LLI.Loc = PD.Loc AND LLI.ID = PD.ID ' +
          '    WHERE PD.PickSlipNo = @cPickSlipNo ' +
          '       AND PD.QTY > 0 ' +
          '       AND PD.Status <> ''4'' ' +
@@ -1719,7 +1868,7 @@ BEGIN
          '       AND PD.SKU = @cSKU ' + --INC0720911
          CASE WHEN @cPickZone = '' THEN '' ELSE '    AND LOC.PickZone = @cPickZone ' END +
          CASE WHEN @cWhere1 = '' THEN '' ELSE ' AND ' + @cWhere1 END +
-         CASE WHEN @cWhere2 = '' THEN '' ELSE ' > '   + @cWhere2 END +
+         CASE WHEN @cWhere2 = '' THEN '' ELSE ' >= '   + @cWhere2 END +
          CASE WHEN @cGroupBy = '' THEN '' ELSE ' GROUP BY ' + @cGroupBy END +
          CASE WHEN @cOrderBy = '' THEN '' ELSE ' ORDER BY ' + @cOrderBy END
       END
@@ -1785,6 +1934,7 @@ BEGIN
          '       JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey) ' +
          '       JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC) ' +
          '       JOIN LotAttribute LA WITH (NOLOCK) ON (LA.LOT = PD.LOT) ' +
+         '    JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK) ON LLI.StorerKey = PD.StorerKey AND LLI.Loc = PD.Loc AND LLI.ID = PD.ID ' +
          '    WHERE RKL.PickSlipNo = @cPickSlipNo ' +
          '       AND PD.QTY > 0 ' +
          '       AND PD.Status <> ''4'' ' +
@@ -1802,6 +1952,7 @@ BEGIN
          '    FROM dbo.PickDetail PD WITH (NOLOCK) ' +
          '       JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC) ' +
          '       JOIN LotAttribute LA WITH (NOLOCK) ON (LA.LOT = PD.LOT) ' +
+         '    JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK) ON LLI.StorerKey = PD.StorerKey AND LLI.Loc = PD.Loc AND LLI.ID = PD.ID ' +
          '    WHERE PD.OrderKey = @cOrderKey ' +
          '       AND PD.QTY > 0 ' +
          '       AND PD.Status <> ''4'' ' +
@@ -1820,12 +1971,13 @@ BEGIN
          '       JOIN dbo.PickDetail PD (NOLOCK) ON (PD.OrderKey = LPD.OrderKey) ' +
          '       JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC) ' +
          '       JOIN LotAttribute LA WITH (NOLOCK) ON (LA.LOT = PD.LOT) ' +
+         '    JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK) ON LLI.StorerKey = PD.StorerKey AND LLI.Loc = PD.Loc AND LLI.ID = PD.ID ' +
          '    WHERE LPD.LoadKey = @cLoadKey ' +
          '       AND PD.QTY > 0 ' +
          '       AND PD.Status <> ''4'' ' +
          '       AND PD.Status < @cStatus ' +
          '       AND LOC.LOC = @cLOC ' +
-   '       AND PD.SKU = @cSKU ' + --INC0720911
+      '       AND PD.SKU = @cSKU ' + --INC0720911
          CASE WHEN @cPickZone = '' THEN '' ELSE '    AND LOC.PickZone = @cPickZone ' END
       END
 
@@ -1837,6 +1989,7 @@ BEGIN
          '    FROM dbo.PickDetail PD WITH (NOLOCK) ' +
          '       JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC) ' +
          '       JOIN LotAttribute LA WITH (NOLOCK) ON (LA.LOT = PD.LOT) ' +
+         '    JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK) ON LLI.StorerKey = PD.StorerKey AND LLI.Loc = PD.Loc AND LLI.ID = PD.ID ' +
          '    WHERE PD.PickSlipNo = @cPickSlipNo ' +
          '       AND PD.QTY > 0 ' +
          '       AND PD.Status <> ''4'' ' +
@@ -1879,8 +2032,8 @@ BEGIN
          IF @cPickZone = ''
             SELECT  @nTtlBalQty= SUM(PD.QTY)
             FROM dbo.RefKeyLookup RKL WITH (NOLOCK)
-                  JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
-                  JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
+               JOIN dbo.PickDetail PD WITH (NOLOCK) ON (PD.PickDetailKey = RKL.PickDetailKey)
+               JOIN dbo.LOC WITH (NOLOCK) ON (LOC.LOC = PD.LOC)
                WHERE RKL.PickSlipNo = @cPickSlipNo
                   AND PD.QTY > 0
          ELSE

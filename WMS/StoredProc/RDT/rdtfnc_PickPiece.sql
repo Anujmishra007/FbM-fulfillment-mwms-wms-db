@@ -5361,6 +5361,7 @@ BEGIN
 
    IF @cExtScnSP <> '' AND EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
    BEGIN
+      SET @nPre_Step = 9
       GOTO Step_99
    END
 
