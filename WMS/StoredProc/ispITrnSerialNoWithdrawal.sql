@@ -9,10 +9,10 @@ GO
 /* Written by: Wan                                                      */
 /*                                                                      */
 /* Purpose: WMS-3543 - CN_DYSON_Close serialno status_CR                */
-/*        :                                                             */
+/*                                                                      */
 /* Called By: ntrITRNAdd                                                */
-/*          :                                                           */
-/* PVCS Version: 1.0                                                    */
+/*                                                                      */
+/* PVCS Version: 1.2                                                    */
 /*                                                                      */
 /* Version: 7.0                                                         */
 /*                                                                      */
@@ -22,6 +22,7 @@ GO
 /* Date        Author   Ver   Purposes                                  */
 /* 2024-08-12  Wan01    1.1   LFWM-4446 - RG[GIT] Serial Number Solution*/
 /*                            - Transfer by Serial Number               */
+/* 2025-10-10  Michael  1.2   FCR-8380- Update Loc to ItrnSerialNo(ML01)*/
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[ispITrnSerialNoWithdrawal]
      @c_ITrnKey      NVARCHAR(10)
@@ -179,6 +180,7 @@ BEGIN
                ,@c_ID  = ID
                ,@c_Status = [Status]
                ,@c_UCCNo  = UCCNo
+               ,@c_Loc = LOC   --ML01
          FROM SERIALNO WITH (NOLOCK)
          WHERE Storerkey  = @c_Storerkey
          AND   SerialNo   = @c_SerialNo
