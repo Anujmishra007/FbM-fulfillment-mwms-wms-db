@@ -80,6 +80,7 @@ GO
 /* 2025-09-09   6.2.0   Jackc       uwp-40901 Fix next scn value at st7          */
 /* 2025-09-22   6.2.1   PPA374      Adding ExtUpd to step 2 inputkey 0           */
 /* 2025-09-30   6.3.0   NickT       FCR-6584 Set @cDefaultSKU = '0' in Step0     */
+/* 2025-10-17   6.3.1   NickT       FCR-6584 Fix issue: jump to wrong step       */
 /*********************************************************************************/
 
 CREATE OR ALTER   PROC [RDT].[rdtfnc_PickPiece] (
@@ -4279,6 +4280,7 @@ BEGIN
          -- after execut rdt_839ExtScn04. There is new option screen replace the this one.
          GOTO Quit
       END
+      SET @nPre_Step = 5
       GOTO Step_99
    END
 
@@ -4559,6 +4561,7 @@ BEGIN
 
    IF @cExtScnSP <> '' AND EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
    BEGIN
+      SET @nPre_Step = 6
       GOTO Step_99
    END
 
@@ -4861,6 +4864,7 @@ BEGIN
 
    IF @cExtScnSP <> '' AND EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
    BEGIN
+      SET @nPre_Step = 7
       GOTO Step_99
    END
 
@@ -5546,6 +5550,7 @@ END
 
 IF @cExtScnSP <> '' AND EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
 BEGIN
+   SET @nPre_Step = 10
    GOTO Step_99
 END
 
@@ -6168,6 +6173,7 @@ BEGIN
          --Jump point
          IF @cExtScnSP <> '' AND EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
          BEGIN
+            SET @nPre_Step = 12
             GOTO Step_99
          END
 
@@ -6300,6 +6306,7 @@ BEGIN
          --Jump point
          IF @cExtScnSP <> '' AND EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
          BEGIN
+            SET @nPre_Step = 12
             GOTO Step_99
          END
 
