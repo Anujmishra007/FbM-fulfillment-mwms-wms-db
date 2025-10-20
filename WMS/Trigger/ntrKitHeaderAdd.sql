@@ -84,10 +84,6 @@ BEGIN
    
    IF @n_continue=1 or @n_continue=2
    BEGIN
-
-      INSERT INTO traceinfo (tracename, TimeIn, step1, Col1, Col2, Col3, Col4, Col5) VALUES ('ntrKitHeaderAdd', 
-		GETDATE(), '1', SUSER_SNAME(), dbo.fnc_GetUserName(), CONVERT(NVARCHAR(50), SESSION_CONTEXT(N'mwms_user_name')), '', '') 
-
       UPDATE KIT
       SET TrafficCop = NULL,
           AddDate  = dbo.fnc_GetDate(),

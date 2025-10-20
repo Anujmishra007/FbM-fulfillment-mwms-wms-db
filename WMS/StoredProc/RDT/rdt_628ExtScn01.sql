@@ -555,8 +555,9 @@ BEGIN
                )
 
                INSERT INTO @tTempResults (Result)
-               SELECT TOP 12 CAST(ROW_NUMBER() OVER(ORDER BY locationtype) AS VARCHAR) + ' - ' + locationtype
-               FROM (SELECT DISTINCT locationtype FROM loc) AS t;
+               SELECT TOP 12 CAST(ROW_NUMBER() OVER(ORDER BY code) AS VARCHAR) + ' - ' + short
+               FROM CODELKUP WITH (NOLOCK)
+               WHERE Code2 = '628' AND StorerKey = @cStorerKey AND LISTNAME = '628LTList'
 
                SELECT 
                   @cOutField01 = '',

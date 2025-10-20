@@ -12,7 +12,7 @@ GO
 /*                                                                      */
 /* Called By: SCE                                                       */
 /*          :                                                           */
-/* PVCS Version: 1.0                                                    */
+/* PVCS Version: 1.5                                                    */
 /*                                                                      */
 /* Version: 8.0                                                         */
 /*                                                                      */
@@ -23,9 +23,10 @@ GO
 /* 2023-03-23  Wan      1.0   Created & DevOps Combine Script           */
 /* 2024-09-25  Wan01    1.1   LFWM-4446 - RG[GIT] Serial Number Solution*/
 /*                            - Transfer by Serial Number               */
-/*2025-05-26   SSA01    1.2   UWP-3982- Added PalletType                */
-/* 2025-07-22  PPA01	   1.3   UWP-37445 updated datatype size to 40     */
+/* 2025-05-26  SSA01    1.2   UWP-3982- Added PalletType                */
+/* 2025-07-22  PPA01    1.3   UWP-37445 updated datatype size to 40     */
 /* 2025-09-02  SWT01    1.4   Enhanced session management pattern       */
+/* 2025-10-10  Michael  1.5   FCR-8380- Add SerialNoUpdateLotLocID(ML01)*/
 /************************************************************************/
 CREATE OR ALTER  PROC [WM].[lsp_TRF_PopulateLLI_Wrapper]
    @c_TransferKey          NVARCHAR(10)
@@ -119,6 +120,7 @@ BEGIN
          ,  @c_INVTRFITF                  NVARCHAR(10)   = ''
 
          ,  @c_ASNFizUpdLotToSerialNo     NVARCHAR(10)   = ''                       --(Wan01)
+         ,  @c_SerialNoUpdateLotLocID     NVARCHAR(10)   = ''      --ML01
          ,  @c_ChannelInventoryMgmt_From  NVARCHAR(10)   = ''
          ,  @c_ChannelInventoryMgmt_To    NVARCHAR(10)   = ''
 
@@ -149,32 +151,32 @@ BEGIN
    SET @b_Success = 1
    SET @n_Err     = 0
    SET @c_ErrMsg  = ''
-   
+
    SET @n_ErrGroupKey = 0
-               
+
    -- Start enhanced session management (SWT01)
-	 SET @n_Err = 0
-	 DECLARE @b_ExecuteAs        BIT = 0
-	 IF SUSER_SNAME() <> @c_UserName AND @c_UserName <> ''        
-	 BEGIN
+   SET @n_Err = 0
+   DECLARE @b_ExecuteAs        BIT = 0
+   IF SUSER_SNAME() <> @c_UserName AND @c_UserName <> ''        
+   BEGIN
 	    EXEC [WM].[lsp_SetUser] 
 	         @c_UserName = @c_UserName  OUTPUT
 	      ,  @n_Err      = @n_Err       OUTPUT
 	      ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
 	      ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
 
-	    IF @n_Err <> 0
-	    BEGIN
-	       GOTO EXIT_SP
-	    END
+      IF @n_Err <> 0
+      BEGIN
+         GOTO EXIT_SP
+      END
 
-	    IF @b_ExecuteAs = 1
-	       EXECUTE AS LOGIN = @c_UserName
-	 END                                    
-	 -- End enhanced session management (SWT01)        
-   
-   BEGIN TRY  
-      BEGIN TRAN                           
+      IF @b_ExecuteAs = 1
+         EXECUTE AS LOGIN = @c_UserName
+   END
+   -- End enhanced session management (SWT01)        
+
+   BEGIN TRY
+      BEGIN TRAN
       /*-------------------------------------------------------*/
       /* BUILD TEMP TABLES & INSERT DATA - START               */
       /*-------------------------------------------------------*/
@@ -245,6 +247,15 @@ BEGIN
       FROM dbo.fnc_SelectGetRight(@c_FromFacility, @c_FromStorerkey, '', 'ASNFizUpdLotToSerialNo')AS fsgr
       SELECT @c_ChannelInventoryMgmt_From = fsgr.Authority FROM dbo.fnc_SelectGetRight (@c_FromFacility, @c_FromStorerkey,'','ChannelInventoryMgmt') AS fsgr
       SELECT @c_ChannelInventoryMgmt_To   = fsgr.Authority FROM dbo.fnc_SelectGetRight (@c_ToFacility, @c_ToStorerkey,'','ChannelInventoryMgmt') AS fsgr
+
+      --ML01-S
+      SELECT @c_SerialNoUpdateLotLocID = fsgr.Authority
+      FROM dbo.fnc_SelectGetRight(@c_FromFacility, @c_FromStorerkey, '', 'SerialNoUpdateLotLocID')AS fsgr
+
+      IF ISNULL(@c_SerialNoUpdateLotLocID,'') = '1' AND ISNULL(@c_ASNFizUpdLotToSerialNo,'') <> '1'
+         SET @c_ASNFizUpdLotToSerialNo = '1'
+      --ML01-E
+
 
       IF @c_ChannelInventoryMgmt_From = '1'
       BEGIN
@@ -655,8 +666,8 @@ EXIT_SP:
    WHILE @@TRANCOUNT < @n_StartTCnt
    BEGIN
       BEGIN TRAN
-   END  
-         
+   END
+
    IF @b_ExecuteAs = 1 REVERT -- (SWT01)
    EXEC [WM].[lsp_ResetUser]  -- (SWT01)
 END

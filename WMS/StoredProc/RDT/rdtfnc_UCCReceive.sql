@@ -71,6 +71,8 @@ GO
 /* 2025-05-19 5.3  Dennis  FCR-4531 Add Ext Valation on Step 2             */
 /* 2025-09-12 5.4  Jackc   FCR-2961 Replace InField01 with V_Max on st6    */
 /* 2025-09-29 5.5  Jackc   FCR-29593 Create task after close pallet(jack01)*/
+/* 2025-10-20 5.6  Jackc   UWP-42561 Decoded UUC not set back to right     */ 
+/*                         parameter                                       */
 /***************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdtfnc_UCCReceive](
    @nMobile    INT,
@@ -1955,9 +1957,9 @@ BEGIN
 
             IF @nErrNo <> 0
                GOTO Step_6_Fail
-
-            SET @cUCC = @cUCCBarcode
          END
+         
+         SET @cUCC = @cUCCBarcode --V5.5
       END
 
       -- UCC extended validation

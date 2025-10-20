@@ -21,7 +21,7 @@ GO
 /*                                                                       */
 /* Updates:                                                              */
 /* Date         Author  Ver.  Purposes                                   */
-/* 10-Oct-2025  WLChooi 1.0   Initial Version                            */
+/* 16-Oct-2025  WLChooi 1.0   Initial Version                            */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[msp_BuildPreWave01]
    @c_BuildParmKey         NVARCHAR(10)
@@ -169,16 +169,10 @@ BEGIN
           ) v(Restriction, RestrictionBuildValue)
           WHERE BP.BuildParmKey = @c_BuildParmKey
       )
-      SELECT @n_NoOfChute   = MAX(CASE WHEN Restriction LIKE '%Chute%' THEN RestrictionBuildValue ELSE 0 END)
-           , @n_NoOfPutwall = MAX(CASE WHEN Restriction LIKE '%Putwall%' THEN RestrictionBuildValue ELSE 0 END)
-           , @n_MaxOpenQty  = MAX(CASE WHEN Restriction = '2_MaxQtyPerBuild' THEN RestrictionBuildValue ELSE 0 END)
+      SELECT @n_NoOfChute   = ISNULL(MAX(CASE WHEN Restriction LIKE '%Chute%' THEN TRY_CAST(RestrictionBuildValue AS INT) ELSE NULL END), 0)
+           , @n_NoOfPutwall = ISNULL(MAX(CASE WHEN Restriction LIKE '%Putwall%' THEN TRY_CAST(RestrictionBuildValue AS INT) ELSE NULL END), 0)
+           , @n_MaxOpenQty  = ISNULL(MAX(CASE WHEN Restriction = '2_MaxQtyPerBuild' THEN TRY_CAST(RestrictionBuildValue AS INT) ELSE NULL END), 0)
       FROM CTEBuildParm
-
-      IF ISNULL(@n_NoOfChute, 0) = 0
-         SET @n_NoOfChute = 99999
-
-      IF ISNULL(@n_NoOfPutwall, 0) = 0
-         SET @n_NoOfPutwall = 99999
    END
    
    IF @n_Continue IN (1,2)
@@ -244,7 +238,7 @@ BEGIN
                                 , Qty              INT
                                 , StdCube          DECIMAL(15, 7)
                                 , WCS              INT DEFAULT(0)
-                                , CartonNumber     INT DEFAULT(0)
+                                , CartonNumber     INT DEFAULT(1)
                                 , PRIMARY KEY (Orderkey, OrderLineNumber)
                                 )
 
@@ -533,7 +527,7 @@ BEGIN
                         WHERE T1.MPOC = 'Y'
                         GROUP BY T2.Orderkey )
          UPDATE T3
-         SET T3.VCCount = CEILING(CTE.TotalCube / @n_CartonMaxCube)
+         SET T3.VCCount = IIF(CEILING(CTE.TotalCube / @n_CartonMaxCube) < 1, 1, CEILING(CTE.TotalCube / @n_CartonMaxCube))
          FROM #T_ORDERS T3 WITH (NOLOCK)
          JOIN CTE ON CTE.Orderkey = T3.Orderkey
 
@@ -544,10 +538,11 @@ BEGIN
                  , OrderLineNumber
                  , SKU
                  , Qty
-                 , StdCube
+                 , StdCube = IIF(StdCube > @n_CartonMaxCube, @n_CartonMaxCube, StdCube)
                  , ROW_NUMBER() OVER (PARTITION BY Orderkey
                                       ORDER BY OrderLineNumber) AS rn
             FROM #T_ORDERDET WITH (NOLOCK)
+            WHERE StdCube > 0.00
          ), CartonAssign AS
          (
             SELECT *

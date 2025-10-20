@@ -70,6 +70,7 @@ BEGIN
          , @c_ReplaceTo       NVARCHAR(MAX)  = '' 
          , @c_StatusColumn    NVARCHAR(50)   = ''                                   --2025-09-10 
          , @c_Table           NVARCHAR(50)   = ''                                   --2025-09-10 
+         , @n_TotalPages      INT            = 0                                    --2025-10-14         
          
 
    DECLARE @t_SCC             Table
@@ -467,7 +468,14 @@ BEGIN
                            ,N'@n_TotalRecords INT OUTPUT'
                            ,@n_TotalRecords OUTPUT
 
+         SET @n_TotalPages = CEILING((@n_TotalRecords*1.00)/(@n_PageSize*1.00))     --2025-10-14
+         IF @n_PageNo > @n_TotalPages
+         BEGIN
+            SET @n_PageNo = @n_TotalPages
+         END
+
          SET @c_ResponseString = (  SELECT totalRecords = @n_TotalRecords
+                                          ,pageNo = @n_PageNo                       --2025-10-14
                                     FOR JSON PATH, WITHOUT_ARRAY_WRAPPER
                                  )    
          IF @b_debug = 1

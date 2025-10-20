@@ -192,6 +192,7 @@ GO
 /* 01-Jan-2025  2.8.0 James        FCR-2435 Merge 2.5, 2.6 from V0         */
 /* 12-May-2025  2.9.0 Dennis    FCR-3774 Add Extended Scn                  */
 /* 21-Aug-2025  0.0   Jackc     !!!Cutover!!! Use V0 repo for work         */
+/* 15-Oct-2025  3.0.0 NickT     UWP-42483 Optimize transaction             */
 /***************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_Cluster_Pick](
@@ -16460,6 +16461,8 @@ BEGIN
       -- Short Pick handling start
       IF @nCurStep = 9
       BEGIN
+         BEGIN TRAN
+
          -- Insert the short picked qty   SOS131967
          IF NOT EXISTS (SELECT 1
                         FROM RDT.RDTPickLock WITH (NOLOCK)
@@ -16473,8 +16476,6 @@ BEGIN
                            AND SKU = @cSKU
                            AND PickQty = 0)
          BEGIN
-            BEGIN TRAN
-
             INSERT INTO RDT.RDTPickLock
             (WaveKey, LoadKey, Orderkey, OrderLineNumber, StorerKey, SKU, PutAwayZone, PickZone, PickDetailKey
             , LOT, LOC, Lottable02, Lottable04, Status, AddWho, AddDate, DropID, PickSlipNo, PickQty, Mobile)
@@ -16646,6 +16647,7 @@ BEGIN
 
             IF @nErrNo <> 0
             BEGIN
+               ROLLBACK TRAN
                GOTO Step_14_Fail
             END
          END
@@ -16922,9 +16924,9 @@ BEGIN
                AND EXISTS (SELECT 1 FROM RDT.RDTPickLock RPL WITH (NOLOCK) WHERE RPL.StorerKey = PD.StorerKey AND RPL.OrderKey = PD.OrderKey
                   AND RPL.Status = '1' AND RPL.AddWho = @cUserName AND RPL.StorerKey = @cStorerKey AND RPL.PickQty = 0)
                -- Duplicate check
-   --AND EXISTS (SELECT 1 FROM RDT.RDTPICKLOCK WITH (NOLOCK) WHERE storerkey = PD.StorerKey
+               --AND EXISTS (SELECT 1 FROM RDT.RDTPICKLOCK WITH (NOLOCK) WHERE storerkey = PD.StorerKey
                --               AND OrderKey = PD.OrderKey AND ADDWHO = @cUserName ) -- SOS# 176144
---               AND PD.OrderKey in (SELECT DISTINCT OrderKey FROM RDT.RDTPICKLOCK WITH (NOLOCK) WHERE ADDWHO = @cUserName)-- SOS# 176144
+               --               AND PD.OrderKey in (SELECT DISTINCT OrderKey FROM RDT.RDTPICKLOCK WITH (NOLOCK) WHERE ADDWHO = @cUserName)-- SOS# 176144
 
             -- Get the total allocated qty for LOC + SKU + OrderKey
             SELECT @nTotalPickQty = ISNULL( SUM(QTY), 0)
@@ -17355,6 +17357,7 @@ BEGIN
                BEGIN
                   SET @nErrNo = 65945
                   SET @cErrMsg = rdt.rdtgetmessage( 65945, @cLangCode, 'DSP') --'GetNextTaskFail'
+                  ROLLBACK TRAN
                   GOTO Step_14_Fail
                END
             END
@@ -17452,6 +17455,7 @@ BEGIN
             SET @nScn  = 1879
             SET @nStep = 10
 
+            COMMIT TRAN
             GOTO Quit
          END
 
@@ -17487,6 +17491,7 @@ BEGIN
                SET @nScn  = 1892
                SET @nStep = 19
 
+               COMMIT TRAN
                GOTO Quit
             END
          END
@@ -17515,6 +17520,8 @@ BEGIN
                      -- Go to next screen
                      SET @nScn  = 1892
                      SET @nStep = 19
+
+                     COMMIT TRAN
 
                      GOTO Quit
                   END
@@ -17669,6 +17676,8 @@ BEGIN
                SET @nActQty = 0
                SET @nQtyToPick = 0
 
+               COMMIT TRAN
+
                GOTO Quit
             END
          END   -- If OrderKey changed
@@ -17694,7 +17703,7 @@ BEGIN
          IF CAST(@cDefaultPickQty AS INT) <= 0 SET @cDefaultPickQty = ''
 
          -- If DefaultToAllocatedQty = '1' then we use DefaultToAllocatedQty as DefaultPickQty
---         SET @cDefaultToAllocatedQty = rdt.RDTGetConfig( @nFunc, 'DefaultToAllocatedQty', @cStorerKey)
+         --         SET @cDefaultToAllocatedQty = rdt.RDTGetConfig( @nFunc, 'DefaultToAllocatedQty', @cStorerKey)
          IF @cDefaultToAllocatedQty = '1'
          BEGIN
             SET @cDefaultPickQty = @nTotalPickQty
@@ -18027,6 +18036,8 @@ BEGIN
          SET @cFieldAttr14 = ''
          SET @cFieldAttr15 = CASE WHEN @cPrefUOM <> '6' THEN '' ELSE 'O' END
       END
+
+      COMMIT TRAN
    END
 
    IF @nInputKey = 0 --ESC
