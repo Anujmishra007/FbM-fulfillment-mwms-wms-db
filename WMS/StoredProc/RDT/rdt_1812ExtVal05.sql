@@ -6,7 +6,8 @@
 /* Purpose: For JCB                                                     */
 /*                                                                      */
 /* Date        Rev     Author      Purposes                             */
-/* 2025-06-09  1.0.0   JACKC       FCR-3959                             */ 
+/* 2025-06-09  1.0.0   JACKC       FCR-3959                             */
+/* 2025-10-20  1.0.1   Dennis      FCR-3959                             */ 
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_1812ExtVal05]
@@ -87,6 +88,10 @@ BEGIN
 
             IF @cToLoc <> @cSuggToLOC
             BEGIN
+               IF (CHARINDEX('LIFT',@cSuggToLOC)>0)
+               BEGIN
+                  GOTO QUIT
+               END--LIFT LOC
                IF EXISTS ( SELECT 1 
                            FROM dbo.LOC WITH (NOLOCK)
                            WHERE LOC = @cSuggToLOC

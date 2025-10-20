@@ -175,6 +175,7 @@ BEGIN
       @cLangCode = Lang_Code, 
       @cFacility = Facility,
       @cCurTaskDetail = V_TaskDetailKey,
+      @c_LastLoc = V_LOC, -- From Loc
       @cStorerKey = StorerKey
    FROM rdt.rdtMobRec WITH (NOLOCK) 
    WHERE UserName = @c_UserID
@@ -521,6 +522,42 @@ BEGIN
          GOTO Fail
       END CATCH
 
+      --PPA374 Adding General Replen Tasks
+      BEGIN TRY
+         INSERT INTO @tFCPRPFTaskCandidate (TaskDetailKey, TaskType, PickMethod, Priority, OrderKey, OrderType, OrderPriority, OrderGroup, OrderDeliveryDate)
+         SELECT TaskDetailKey, TaskType, TD.PickMethod, Priority, ROW_NUMBER()OVER(ORDER BY (SELECT 1)) OrderKey, '999' OrderType, Priority OrderPriority, 'Replen' OrderGroup, CAST(0 AS DATETIME) OrderDeliveryDate
+       FROM dbo.TaskDetail TD WITH(NOLOCK)
+         INNER JOIN dbo.TaskManagerUserDetail TMU WITH (NOLOCK) ON TMU.PermissionType = TD.TASKTYPE AND TD.AreaKey = TMU.AreaKey
+         INNER JOIN dbo.LOC LOC WITH(NOLOCK) ON TD.FromLoc = LOC.Loc AND LOC.Facility = @cFacility
+            INNER JOIN dbo.LOC LOC1 WITH(NOLOCK) ON TD.ToLoc = LOC1.Loc AND LOC1.Facility = @cFacility
+       WHERE TD.AreaKey = @c_AreaKey01
+         AND TD.TaskType IN ('RPF','RPF1','RP1')
+            AND TMU.UserKey = @c_UserID
+            AND TMU.Permission = '1'
+         AND (LOC1.Status = 'OK' AND LOC1.LocationFlag IN ('','NONE'))
+         AND TD.PickMethod IN ('PP', 'FP')
+         AND TD.StorerKey = @cStorerKey
+            AND (
+               (TD.Status = '0' AND (TD.UserKey = '' OR TD.UserKeyOverRide IN ('', @c_UserID)))
+               OR
+               (TD.Status = '3' AND TD.UserKey = @c_UserID)
+            )
+         AND NOT EXISTS (
+            SELECT 1 
+               FROM dbo.PAZoneEquipmentExcludeDetail PAE WITH(NOLOCK)
+               WHERE PAE.EquipmentProfileKey = @cEquipmentProfileKey
+                  AND (PAE.PutawayZone = LOC.PutawayZone 
+                  OR PAE.PutawayZone = LOC1.PutawayZone)
+            )
+      END TRY
+      BEGIN CATCH
+         SET @nContinue = 3
+         SET @n_err = 239805
+         SET @c_errmsg = rdt.rdtgetmessage( @n_err, @cLangCode, 'DSP') --Populate @tFCPRPFTaskCandidate Fail
+         GOTO Fail
+      END CATCH
+---------------------------------------
+
       IF @bDebug = 1
          SELECT '@tFCPRPFTaskCandidate', * FROM @tFCPRPFTaskCandidate
    END--areakey is not empty
@@ -649,14 +686,14 @@ BEGIN
       LEFT JOIN LOC LASTLOC WITH(NOLOCK) ON LASTLOC.Loc = ISNULL(@c_LastLoc,'') AND LASTLOC.Facility = @cFacility AND LASTLOC.LocationCategory = 'VNA'
       WHERE T.RowIndex = 1
       ORDER BY 
+         IIF(ISNULL(LASTLOC.LOC,'') <> '' AND LASTLOC.LocAisle = T.FromLocAisle, 1, 99),
+         IIF(ISNULL(LASTLOC.LOC,'') <> '' AND LASTLOC.LocAisle = T.FromLocAisle AND LASTLOC.Floor = T.FromLocFloor, 1, 99),
          IIF (T.Status = '3' AND UserKey = @c_UserID, 1, 2), 
          IIF(UserKeyOverRide = @c_UserID AND T.Status IN ('0', '3'), 1, 2), 
          --IIF(ListKey <> '', 1, 2), --V1.0.2
-         IIF(ISNULL(LASTLOC.LOC,'') <> '' AND LASTLOC.LocAisle = T.FromLocAisle, 1, 99),
-         IIF(ISNULL(LASTLOC.LOC,'') <> '' AND LASTLOC.Floor = T.FromLocFloor, 1, 99),
          Priority, 
-         ABS(RANK()OVER(ORDER BY T.FromLogicalLoc) - RANK()OVER(ORDER BY LASTLOC.LogicalLocation)),
          DeliveryDate,
+         ABS(RANK()OVER(ORDER BY T.FromLogicalLoc) - RANK()OVER(ORDER BY LASTLOC.LogicalLocation)),
          IIF(ListKey <> '', 1, 2), --V1.0.2 Adjust the sequence. Consider business priority first.
          TaskDetailKey
    END TRY
@@ -676,7 +713,7 @@ BEGIN
    -- Check if any task candidate were found
    -- 1. Weight of the pallet: sum of (LOTxLOCxID.Qty * SKU.STDGROSSWGT) must be <= max weight of the MHE provided (EquipmentProfile.MaximumWeight).
    -- 2. If “To Loc” is PNDOUT, pallet capacity minus existing inventory must be >= 0.
-   -- 3.	If the task is picking, ToLoc can be either marshalling lane or kitting location, need check if ToLoc's Status = 'OK', also need check the LocationFlag NOT IN ('','NONE')
+   -- 3.   If the task is picking, ToLoc can be either marshalling lane or kitting location, need check if ToLoc's Status = 'OK', also need check the LocationFlag NOT IN ('','NONE')
 
    SET @nLoopIndex = -1
    WHILE 1 = 1

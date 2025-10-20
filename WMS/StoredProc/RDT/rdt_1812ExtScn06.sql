@@ -640,6 +640,12 @@ BEGIN
                   END
                END
 
+               UPDATE OD SET
+                  Notes = @cReasonCode
+               FROM ORDERDETAIL OD 
+               JOIN PickDetail PD ON PD.ORDERKEY = OD.ORDERKEY AND PD.OrderLineNumber = OD.OrderLineNumber
+               WHERE PD.TaskDetailKey = @cTaskDetailKey
+
                -- Extended update
                IF @cExtendedUpdateSP <> ''
                BEGIN
@@ -1255,7 +1261,16 @@ BEGIN
          BEGIN
             IF @cInField01 = '9' -- Close Pallet
             BEGIN
-               IF NOT EXISTS (SELECT 1 FROM TASKDETAIL WHERE ListKey = @cListKey AND Status = '5')
+               IF NOT EXISTS (SELECT 1 FROM TASKDETAIL WITH(NOLOCK) WHERE ListKey = @cListKey AND Status = '5')
+               AND EXISTS (SELECT 1 FROM TaskDetail WITH(NOLOCK) WHERE TaskDetailKey = @cTaskdetailKey AND Status = '0')
+               BEGIN
+                  SET @nAfterStep = 7
+                     SET @nAfterScn = 4026
+                     SET @cOutField01 = ''
+                     GOTO Quit
+               END
+                       
+               IF NOT EXISTS (SELECT 1 FROM TASKDETAIL WITH(NOLOCK) WHERE (ListKey = @cListKey AND Status = '5') OR (TaskDetailKey = @cTaskdetailKey AND Status = '3'))
                BEGIN
                   SET @nErrNo = 239666
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Nothing to close
