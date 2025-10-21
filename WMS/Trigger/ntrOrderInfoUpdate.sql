@@ -1,6 +1,3 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[dbo].[ntrOrderInfoUpdate]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
-    DROP TRIGGER [dbo].[ntrOrderInfoUpdate]
-GO
 
 SET ANSI_NULLS OFF
 GO
@@ -39,6 +36,7 @@ GO
 /* Date         Author   Ver  Purposes                                  */  
 /* 28-Oct-2013  TLTING   1.1  Review Editdate column update             */
 /* 07-Feb-2014  TLTING   1.2  Add ArchiveCop flag                       */ 
+/* 06-Oct-2025  AK01     1.3  UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName*/
 /************************************************************************/  
   
 CREATE OR ALTER TRIGGER [dbo].[ntrOrderInfoUpdate]  
@@ -78,8 +76,8 @@ BEGIN
  IF ( @n_continue = 1 or @n_continue=2 ) AND NOT UPDATE(EditDate) 
  BEGIN  
   UPDATE OrderInfo with (ROWLOCK)
-  SET EditDate = GETDATE(),  
-      EditWho = SUSER_SNAME()  
+  SET EditDate = dbo.fnc_GetDate(),  
+      EditWho = dbo.fnc_GetUserName()  
   FROM OrderInfo, INSERTED (NOLOCK)  
   WHERE OrderInfo.Orderkey = INSERTED.Orderkey  
   
