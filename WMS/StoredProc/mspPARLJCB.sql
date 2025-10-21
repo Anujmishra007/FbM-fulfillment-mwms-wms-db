@@ -104,7 +104,9 @@ BEGIN
          PalletType        NVARCHAR(50),
          SpaceTaken        INT,
          RowID             INT,
-         OK                NVARCHAR(1)
+         OK                NVARCHAR(1),
+		 SpaceTakenTotal   INT,
+		 PalletsINTotal    INT
       )
 
       -- Creating indexes
@@ -200,11 +202,13 @@ BEGIN
 	     AND TD.Status <> 'X'
       INNER JOIN dbo.LOTxLOCxID LLI WITH(NOLOCK)
 	  ON RD.ToId = LLI.Id
-	     AND RD.ToLoc = LLI.Loc 
+	     AND RD.ToLoc = LLI.Loc
+		 AND RD.StorerKey = LLI.StorerKey
    WHERE ReceiptKey = @c_Receiptkey
       AND RD.ToId <> ''
       AND RD.StorerKey = @cStorerKey
       AND TaskDetailKey IS NULL
+	  AND LLI.Qty > 0
    
    -- Resetting RECEIPTDETAIL.PutawayLoc
    UPDATE RD WITH(ROWLOCK)
@@ -270,95 +274,152 @@ BEGIN
    -- Insert list of available locations
    INSERT INTO #tLocList
    SELECT 
-      L.Loc, 
-      L.PALogicalLoc,
-      L.MaxPallet,  
-      L.LocationFlag, 
-      L.LocationCategory, 
-      L.LocationGroup, 
-      L.Status, 
-      L.LocationRoom, 
-      L.LocAisle, 
-      L.Floor, 
-      L.LocLevel,
-      Calc.MidLoc AS WAMidLoc, 
-      L2.Status AS MidLocStatus, 
-      L2.LocationFlag AS MidLocFlag,  
-      LLI.Id AS PalletsIN,
-      ISNULL(LLI.Qty,0) * ISNULL(S.STDGROSSWGT,0) AS LineWeight,
-      SUM(ISNULL(LLI.Qty,0) * ISNULL(S.STDGROSSWGT,0)) 
-         OVER(PARTITION BY L.LOC
-	  ) AS LocWeight,
-      S.Sku,
-      LLI.Qty,
-      S.STDGROSSWGT,
-      CASE 
-         WHEN MidLLI.PalletsInMid > 0 
-         THEN 1 
-         ELSE 0 
-      END AS MidLocOccupied,
-      P.PalletType,
-      CASE 
-         WHEN C2.Short IS NULL 
-            AND LLI.Id IS NOT NULL 
-         THEN 1 
-         ELSE ISNULL(C2.Short,0) 
-      END AS SpaceTaken,
-      ROW_NUMBER()OVER(
-	     PARTITION BY LLI.Id, L.LOC 
-		 ORDER BY LLI.ID
-	  ) AS RowID,
-	  '1' OK
-   FROM dbo.LOC L WITH(NOLOCK)
-      CROSS APPLY (
+      T2.Loc,
+      T2.PALogicalLoc,
+      T2.MaxPallet,
+      T2.LocationFlag,
+      T2.LocationCategory,
+      T2.LocationGroup,
+      T2.Status,
+      T2.LocationRoom,
+      T2.LocAisle,
+      T2.Floor,
+      T2.LocLevel,
+      T2.WAMidLoc,
+      T2.MidLocStatus,
+      T2.MidLocFlag,
+      T2.PalletsIN,
+      T2.LineWeight,
+      T2.LocWeight,
+      T2.Sku,
+      T2.Qty,
+      T2.STDGROSSWGT,
+      T2.MidLocOccupied,
+      T2.PalletType,
+      T2.SpaceTaken,
+      T2.RowID,
+      T2.OK,
+	  T2.SpaceTakenTotal,
+	  T2.PalletsINTotal
+   FROM (
+      SELECT 
+         T1.Loc,
+         T1.PALogicalLoc,
+         T1.MaxPallet,
+         T1.LocationFlag,
+         T1.LocationCategory,
+         T1.LocationGroup,
+         T1.Status,
+         T1.LocationRoom,
+         T1.LocAisle,
+         T1.Floor,
+         T1.LocLevel,
+         T1.WAMidLoc,
+         T1.MidLocStatus,
+         T1.MidLocFlag,
+         T1.PalletsIN,
+         T1.LineWeight,
+         T1.LocWeight,
+         T1.Sku,
+         T1.Qty,
+         T1.STDGROSSWGT,
+         T1.MidLocOccupied,
+         T1.PalletType,
+         T1.SpaceTaken,
+         T1.RowID,
+         T1.OK,
+         SUM(T1.SpaceTaken) OVER (PARTITION BY T1.LOC) AS SpaceTakenTotal,
+         SUM(CASE WHEN T1.PalletsIN IS NULL THEN 0 ELSE 1 END) OVER (PARTITION BY T1.LOC) AS PalletsINTotal
+      FROM (
          SELECT 
-		    CASE 
-			   WHEN L.LocationCategory = 'WA' 
-               THEN L.LocationRoom + '2' 
-            END AS MidLoc
-      ) AS Calc
-      LEFT JOIN dbo.LOTxLOCxID LLI WITH(NOLOCK)
-      ON LLI.Loc = L.Loc
-         AND LLI.StorerKey = @cStorerKey
-         AND LLI.Qty + LLI.PendingMoveIN > 0
-      LEFT JOIN dbo.LOC L2 WITH(NOLOCK)
-      ON L2.Loc = Calc.MidLoc
-         AND L2.Facility = @cFacility
-      LEFT JOIN dbo.SKU S WITH(NOLOCK)
-      ON S.SKU = LLI.Sku
-         AND S.StorerKey = @cStorerKey
-      LEFT JOIN dbo.PALLET P WITH(NOLOCK)
-      ON LLI.Id = P.PalletKey
-         AND P.StorerKey = @cStorerKey
-      LEFT JOIN dbo.CODELKUP C2 WITH(NOLOCK)
-      ON P.PalletType = C2.Code
-         AND C2.LISTNAME = 'JCBPALTYPE'
-         AND C2.Storerkey = @cStorerKey
-      LEFT JOIN (
-         SELECT 
-		    Loc, 
-			StorerKey, 
-			SUM(Qty + PendingMoveIN) AS PalletsInMid
-         FROM dbo.LOTxLOCxID WITH(NOLOCK)
-         WHERE Qty + PendingMoveIN > 0
-         GROUP BY 
-		    Loc, 
-			StorerKey
-      ) MidLLI
-      ON MidLLI.Loc = Calc.MidLoc
-         AND MidLLI.StorerKey = @cStorerKey
-   WHERE L.Facility = @cFacility
-      AND L.Status = 'OK'
-      AND L.LocationFlag IN ('','NONE')
-      AND L.LocationCategory NOT IN ('PNDIN','PND_OUT','STAGE','')
-      AND L.LocationGroup <> ''
-      AND L.MaxPallet - 
-      (CASE 
-         WHEN C2.Short IS NULL 
-            AND LLI.Id IS NOT NULL 
-            THEN 1 
-            ELSE ISNULL(C2.Short,0) 
-         END) > 0
+            L.Loc,
+            L.PALogicalLoc,
+            L.MaxPallet,
+            L.LocationFlag,
+            L.LocationCategory,
+            L.LocationGroup,
+            L.Status,
+            L.LocationRoom,
+            L.LocAisle,
+            L.Floor,
+            L.LocLevel,
+            Calc.MidLoc AS WAMidLoc,
+            L2.Status AS MidLocStatus,
+            L2.LocationFlag AS MidLocFlag,
+            LLI.Id AS PalletsIN,
+            ISNULL(LLI.Qty, 0) * ISNULL(S.STDGROSSWGT, 0) AS LineWeight,
+            SUM(ISNULL(LLI.Qty, 0) * ISNULL(S.STDGROSSWGT, 0)) OVER (PARTITION BY L.LOC) AS LocWeight,
+            S.Sku,
+            LLI.Qty,
+            S.STDGROSSWGT,
+            CASE 
+               WHEN MidLLI.PalletsInMid > 0 THEN 1 
+               ELSE 0 
+            END AS MidLocOccupied,
+            P.PalletType,
+            CASE 
+               WHEN C2.Short IS NULL AND LLI.Id IS NOT NULL THEN 1 
+               ELSE ISNULL(C2.Short, 0) 
+            END AS SpaceTaken,
+            ROW_NUMBER() OVER (
+               PARTITION BY LLI.Id, L.LOC 
+               ORDER BY LLI.ID
+            ) AS RowID,
+            '1' AS OK
+         FROM dbo.LOC L WITH (NOLOCK)
+         CROSS APPLY (
+            SELECT 
+               CASE 
+                  WHEN L.LocationCategory = 'WA' THEN L.LocationRoom + '2' 
+               END AS MidLoc
+         ) AS Calc
+         LEFT JOIN dbo.LOTxLOCxID LLI WITH (NOLOCK)
+            ON LLI.Loc = L.Loc
+            AND LLI.StorerKey = @cStorerKey
+            AND LLI.Qty + LLI.PendingMoveIN > 0
+         LEFT JOIN dbo.LOC L2 WITH (NOLOCK)
+            ON L2.Loc = Calc.MidLoc
+            AND L2.Facility = @cFacility
+         LEFT JOIN dbo.SKU S WITH (NOLOCK)
+            ON S.SKU = LLI.Sku
+            AND S.StorerKey = @cStorerKey
+         LEFT JOIN dbo.PALLET P WITH (NOLOCK)
+            ON LLI.Id = P.PalletKey
+            AND P.StorerKey = @cStorerKey
+         LEFT JOIN dbo.CODELKUP C2 WITH (NOLOCK)
+            ON P.PalletType = C2.Code
+            AND C2.LISTNAME = 'JCBPALTYPE'
+            AND C2.Storerkey = @cStorerKey
+         LEFT JOIN (
+            SELECT 
+               Loc, 
+               StorerKey, 
+               SUM(Qty + PendingMoveIN) AS PalletsInMid
+            FROM dbo.LOTxLOCxID WITH (NOLOCK)
+            WHERE Qty + PendingMoveIN > 0
+               AND StorerKey = @cStorerKey
+            GROUP BY Loc, StorerKey
+         ) MidLLI
+            ON MidLLI.Loc = Calc.MidLoc
+            AND MidLLI.StorerKey = @cStorerKey
+         WHERE L.Facility = @cFacility
+            AND L.Status = 'OK'
+            AND L.LocationFlag IN ('', 'NONE')
+            AND L.LocationCategory NOT IN ('PNDIN', 'PND_OUT', 'STAGE', '')
+            AND L.LocationGroup <> ''
+            AND L.MaxPallet 
+               - (CASE 
+                     WHEN C2.Short IS NULL AND LLI.Id IS NOT NULL THEN 1 
+                     ELSE ISNULL(C2.Short, 0) 
+                  END) > 0
+      ) AS T1
+      WHERE T1.RowID = '1'
+   ) AS T2
+   LEFT JOIN dbo.CODELKUP CL WITH (NOLOCK)
+      ON CL.LISTNAME = 'JCBIGNMAXP'
+      AND CL.CODE = T2.Loc
+   WHERE T2.MaxPallet 
+      - IIF(CL.CODE IS NOT NULL, T2.PalletsINTotal, T2.SpaceTakenTotal) > 0;
 
    --
    --
@@ -367,20 +428,20 @@ BEGIN
 
    -- Clean data
    SET @cLocG1     = '';
-SET @cLocG2     = '';
-SET @cLocG3     = '';
-SET @cLocG4     = '';
-SET @cLocG5     = '';
-SET @nGrossWgt  = 0;
-SET @nPalLen    = 0;
-SET @nPalWidth  = 0;
-SET @nPalHeight = 0;
-SET @cPalType   = '';
-SET @nPalSpace  = 0;
-SET @cPalSKU    = '';
-SET @cPalLot    = '';
-SET @nPalQty    = 0;
-SET @cPalLoc    = '';
+   SET @cLocG2     = '';
+   SET @cLocG3     = '';
+   SET @cLocG4     = '';
+   SET @cLocG5     = '';
+   SET @nGrossWgt  = 0;
+   SET @nPalLen    = 0;
+   SET @nPalWidth  = 0;
+   SET @nPalHeight = 0;
+   SET @cPalType   = '';
+   SET @nPalSpace  = 0;
+   SET @cPalSKU    = '';
+   SET @cPalLot    = '';
+   SET @nPalQty    = 0;
+   SET @cPalLoc    = '';
 
    SET @cFinalLoc = ''	
    SET @cToLoc = ''
@@ -392,21 +453,6 @@ SET @cPalLoc    = '';
    SELECT TOP 1
       @cLPNToRelease = tLPN
    FROM #tLPNToRelease
-
-   /*IF EXISTS (
-      SELECT 
-	     1 
-	  FROM TaskDetail WITH(NOLOCK) 
-	  WHERE Status NOT IN ('X','9') 
-	     AND SourceKey = @c_ReceiptKey 
-		 AND FromID = @cLPNToRelease 
-		 AND Storerkey = @cStorerKey
-   )
-   BEGIN
-	  DELETE FROM #tLPNToRelease
-	  WHERE tLPN = @cLPNToRelease
-	  GOTO RELEASE_LPN
-   END*/
 
    -- Checking if LPN is captured and skip it if not
    IF NOT EXISTS (
@@ -447,6 +493,7 @@ SET @cPalLoc    = '';
          StorerKey, 
          SUM(Qty) AS LLI2SUM
       FROM dbo.LOTxLOCxID WITH (NOLOCK)
+	  WHERE StorerKey = @cStorerKey
       GROUP BY Id, StorerKey
    ),
    Base AS (
@@ -549,30 +596,31 @@ SET @cPalLoc    = '';
          LocWeight,
          LocBeamWeight,
          MidLocOccupied,
-         SpaceTaken,
+         SpaceTakenTotal,
+		 PalletsINTotal,
          BeamSpaceLeft,
          CASE 
-		    WHEN ISNULL(MidLocStatus,'OK') <> 'OK' 
+            WHEN ISNULL(MidLocStatus,'OK') <> 'OK' 
                OR ISNULL(MidLocFlag,'') NOT IN ('','NONE') 
-	           OR ISNULL(MidLocOccupied,0) = 1 
-	           OR ISNULL(BeamSpaceLeft,0) < 2 
-	           OR MaxPallet - SpaceTaken < 1
-	           OR LocationCategory IN ('VNA')
-	           OR (MAX(SpaceTaken)OVER(PARTITION BY LocationRoom) >= 2 
-	              AND LocationCategory = 'WA')
-	           OR tPNDSpace < 2
+               OR ISNULL(MidLocOccupied,0) = 1 
+               OR ISNULL(BeamSpaceLeft,0) < 2 
+               OR MaxPallet - IIF(CL.CODE IS NOT NULL, PalletsINTotal, SpaceTakenTotal) < 1
+               OR LocationCategory IN ('VNA')
+               OR (MAX(SpaceTakenTotal)OVER(PARTITION BY LocationRoom) >= 2 
+                  AND LocationCategory = 'WA')
+               OR tPNDSpace < 2
             THEN 0
             ELSE 1
          END AS DoublePalOK,
-   	     tLoc PNDLoc,	
-	     tLocAisle PNDAisle,
-	     tLocFloor PNDSide,
-	     tPNDSpace PNDSpace,
-	     UDF01 MaxLen,	
-	     UDF02 MaxWidth,	
-	     UDF03 MaxHeight, 
-	     UDF04 MaxWeight,	
-	     UDF05 MaxBeamWeight
+         tLoc PNDLoc,	
+         tLocAisle PNDAisle,
+         tLocFloor PNDSide,
+         tPNDSpace PNDSpace,
+         C.UDF01 MaxLen,	
+         C.UDF02 MaxWidth,	
+         C.UDF03 MaxHeight, 
+         C.UDF04 MaxWeight,	
+         C.UDF05 MaxBeamWeight
       FROM (
          SELECT 
             Loc,
@@ -590,8 +638,12 @@ SET @cPalLoc    = '';
             LocWeight,
             IIF(ISNULL(LocationRoom,'')<>'',SUM(LocWeight)OVER(PARTITION BY LocationRoom),LocWeight) AS LocBeamWeight,
             MidLocOccupied,
-            SpaceTaken,
-            IIF(ISNULL(LocationRoom,'')<>'',SUM(MaxPallet)OVER(PARTITION BY LocationRoom) - SUM(SpaceTaken)OVER(PARTITION BY LocationRoom),MaxPallet-SpaceTaken) AS BeamSpaceLeft
+            SpaceTakenTotal,
+			PalletsINTotal,
+            IIF(ISNULL(LocationRoom,'')<>'',
+               SUM(MaxPallet)OVER(PARTITION BY LocationRoom) - SUM(IIF(CL.CODE IS NOT NULL, PalletsINTotal, SpaceTakenTotal))OVER(PARTITION BY LocationRoom),
+               MaxPallet - IIF(CL.CODE IS NOT NULL, PalletsINTotal, SpaceTakenTotal)
+            ) AS BeamSpaceLeft
          FROM (
             SELECT
                Loc,
@@ -608,69 +660,63 @@ SET @cPalLoc    = '';
                MidLocFlag,
                LocWeight,
                MidLocOccupied,
-               SUM(SpaceTaken) AS SpaceTaken
+               SpaceTakenTotal,
+               PalletsINTotal
             FROM (
-			   SELECT 
-			      * 
-			   FROM #tLocList 
-			   WHERE OK = '1'
+               SELECT 
+                  * 
+               FROM #tLocList 
+               WHERE OK = '1'
             ) T1
-            WHERE RowID = 1
-            GROUP BY 
-               Loc,
-               PALogicalLoc, 
-               MaxPallet,
-               LocationCategory,
-               LocationGroup,
-               LocationRoom,
-               LocAisle,
-               Floor,
-               LocLevel,
-               WAMidLoc,
-               MidLocStatus,
-               MidLocFlag,
-               LocWeight,
-               MidLocOccupied
-         )T2
-      )T3
-         LEFT JOIN #tAvailPNDList tAPL
-	        ON T3.LocAisle = tAPL.tLocAisle
-               AND T3.Floor = tAPL.tLocFloor
-			   AND OK = '1'
-         LEFT JOIN dbo.CODELKUP C WITH(NOLOCK)
-            ON C.LISTNAME = 'JCBLOCCAP'
-	           AND T3.LocationCategory = C.Short
-		       AND T3.LocLevel = C.Long
-      WHERE MaxPallet - SpaceTaken > 0
+         ) T2
+         LEFT JOIN dbo.CODELKUP CL WITH (NOLOCK)
+            ON CL.CODE = T2.LOC
+            AND CL.LISTNAME = 'JCBIGNMAXP'
+      ) T3
+      LEFT JOIN #tAvailPNDList tAPL
+         ON T3.LocAisle = tAPL.tLocAisle
+         AND T3.Floor = tAPL.tLocFloor
+         AND OK = '1'
+      LEFT JOIN dbo.CODELKUP C WITH (NOLOCK)
+         ON C.LISTNAME = 'JCBLOCCAP'
+         AND T3.LocationCategory = C.Short
+         AND T3.LocLevel = C.Long
+      LEFT JOIN dbo.CODELKUP CL WITH (NOLOCK)
+         ON CL.CODE = T3.LOC
+         AND CL.LISTNAME = 'JCBIGNMAXP'
+      WHERE MaxPallet - IIF(CL.CODE IS NOT NULL, PalletsINTotal, SpaceTakenTotal) > 0
          AND (tLoc IS NOT NULL 
-		    OR LocationCategory NOT IN ('VNA','MEZZA'))
-         AND UDF01 >= @nPalLen
-         AND UDF02 >= @nPalWidth
-         AND UDF03 >= @nPalHeight
-         AND UDF04 >= LocWeight + @nGrossWgt
-         AND UDF05 >= LocBeamWeight + @nGrossWgt
+            OR LocationCategory NOT IN ('VNA','MEZZA'))
+         AND C.UDF01 >= @nPalLen
+         AND C.UDF02 >= @nPalWidth
+         AND C.UDF03 >= @nPalHeight
+         AND C.UDF04 >= LocWeight + @nGrossWgt
+         AND C.UDF05 >= LocBeamWeight + @nGrossWgt
          AND LocationGroup IN (@cLocG1,@cLocG2,@cLocG3,@cLocG4,@cLocG5)
-   )T4
-      LEFT JOIN dbo.CODELKUP C WITH(NOLOCK)
+   ) T4
+   LEFT JOIN dbo.CODELKUP C WITH (NOLOCK)
       ON T4.LocationCategory = C.Short
-         AND C.LISTNAME = 'JCBBKTOLOC'
+      AND C.LISTNAME = 'JCBBKTOLOC'
+   LEFT JOIN dbo.CODELKUP CL WITH (NOLOCK)
+      ON CL.CODE = T4.LOC
+      AND CL.LISTNAME = 'JCBIGNMAXP'
    WHERE IIF(@cPalType LIKE 'D%' 
       AND DoublePalOK = 1,1,
-	  IIF(MaxPallet - SpaceTaken - @nPalSpace >= 0,1,0)
+      IIF(MaxPallet - IIF(CL.CODE IS NOT NULL, PalletsINTotal, SpaceTakenTotal) - IIF(CL.CODE IS NOT NULL, 1, @nPalSpace) >= 0,1,0)
    ) = 1
    ORDER BY 
       CASE 
-	     WHEN @cPalType LIKE 'D%' AND LocationGroup = 'WA Dbl' THEN 1 
-		 WHEN @cPalType NOT LIKE 'D%' AND LocationGroup = 'WA Dbl' THEN 99
+         WHEN @cPalType LIKE 'D%' AND LocationGroup = 'WA Dbl' THEN 1 
+         WHEN @cPalType NOT LIKE 'D%' AND LocationGroup = 'WA Dbl' THEN 99
          WHEN LocationGroup = @cLocG1 THEN 2
          WHEN LocationGroup = @cLocG2 THEN 3
-	     WHEN LocationGroup = @cLocG3 THEN 4
-	     WHEN LocationGroup = @cLocG4 THEN 5
-	     WHEN LocationGroup = @cLocG5 THEN 6
+         WHEN LocationGroup = @cLocG3 THEN 4
+         WHEN LocationGroup = @cLocG4 THEN 5
+         WHEN LocationGroup = @cLocG5 THEN 6
          ELSE 999
       END,
       PALogicalLoc,
-      Loc
+      Loc;
 
    -- If no location was found, skip pallet
    IF ISNULL(@cToLoc,'') = ''
@@ -697,15 +743,6 @@ SET @cPalLoc    = '';
 	  ON L.PutawayZone = AD.PutawayZone
    WHERE L.Facility = @cFacility
       AND L.LOC = @cToLoc
-
-	/*IF EXISTS (
-	   SELECT 1 FROM TaskDetail WITH(NOLOCK) WHERE Status NOT IN ('X','9') 
-	      AND SourceKey = @c_ReceiptKey 
-		  AND FromID = @cLPNToRelease 
-		  AND Storerkey = @cStorerKey)
-	BEGIN
-	   GOTO SKIP_BAD_PAL
-	END*/
 
    -- Get next task detail key
    EXECUTE nspg_GetKey
@@ -868,3 +905,4 @@ SET @cPalLoc    = '';
 QUIT_SP:
 
 END
+
