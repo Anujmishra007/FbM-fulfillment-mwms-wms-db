@@ -299,6 +299,9 @@ execute rdt.rdtAddMsg 218240, 10, 'Loc not set for type', 'us_english', 839, 0, 
 execute rdt.rdtAddMsg 218241, 10, 'Bad loc ', 'us_english', 839, 0, '218241^Bad loc '
 execute rdt.rdtAddMsg 218242, 10, 'DropID cant be blank', 'us_english', 839, 0, '218242^DropID cant be blank'
 execute rdt.rdtAddMsg 218243, 10, 'Wrong qty entered', 'us_english', 839, 0, '218243^Wrong qty entered'
+execute rdt.rdtAddMsg 218244, 10, 'MHE not for Area', 'us_english', 1812, 0, '218244^MHE not for Area'
+execute rdt.rdtAddMsg 218245, 10, 'Tasks big for MHE', 'us_english', 1812, 0, '218245^Tasks big for MHE'
+execute rdt.rdtAddMsg 218246, 10, 'DropID not in ML', 'us_english', 922, 0, '218246^DropID not in ML'
 execute rdt.rdtAddMsg 218354, 10, '218354 Mix COD', 'us_english', 573, 0, ''
 execute rdt.rdtAddMsg 218355, 10, '218355 Mix SKU', 'us_english', 573, 0, ''
 execute rdt.rdtAddMsg 218356, 10, '218356 ID already in STORAGE', 'us_english', 573, 0, ''
@@ -326,6 +329,7 @@ execute rdt.rdtAddMsg 218381, 10, '218381 Missing COD on Lottable03', 'us_englis
 execute rdt.rdtAddMsg 218382, 10, '218382 No SO in lottable10', 'us_english', 573, 0, ''
   
 SELECT * FROM rdt.rdtMsg WHERE Message_ID BETWEEN 217901 AND 218400
+
 
 
 
