@@ -15,7 +15,7 @@ GO
 /* 2025-10-21 1.1.0  NickT    UWP-42702 Add configuration TriggerWCSMsg        */
 /*******************************************************************************/
 
-CREATE PROC [RDT].[rdt_Pallet_Swap](
+CREATE OR ALTER PROC [RDT].[rdt_Pallet_Swap](
    @nMobile       INT,
    @nFunc         INT,
    @cLangCode     NVARCHAR( 3),
