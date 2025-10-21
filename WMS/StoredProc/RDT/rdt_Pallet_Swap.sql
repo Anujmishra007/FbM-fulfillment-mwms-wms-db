@@ -4,7 +4,7 @@ SET QUOTED_IDENTIFIER OFF
 GO
 /*******************************************************************************/
 /* Store procedure: rdt_Pallet_Swap                                            */
-/* Copyright      : IDS                                                        */
+/* Copyright      : Maersk                                                     */
 /*                                                                             */
 /* Purpose: SOS#316871 - Transfer goods from old pallet to a new pallet        */
 /*                                                                             */
