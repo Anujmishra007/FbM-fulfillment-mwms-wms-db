@@ -13,7 +13,7 @@ GO
 /*                                                                        */
 /* Called By: n_cst_transfer.Event ue_finalizeall                         */
 /*                                                                        */
-/* PVCS Version: 4.0                                                      */
+/* PVCS Version: 4.2                                                      */
 /*                                                                        */
 /* Version: 6.0                                                           */
 /*                                                                        */
@@ -75,6 +75,7 @@ GO
 /* 29-Sep-2025  MICHAEL   4.0 FCR-7829-RemainHoldOnTransfer for UCC (ML01)*/
 /* 10-OCT-2025  SSA02     4.1 UWP-42248 -Enhanced session management      */
 /*                             and cleanup.                               */
+/* 10-Oct-2025  Michael   4.2 FCR-8380- Add SerialNoUpdateLotLocID  (ML02)*/
 /**************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[ispFinalizeTransfer]
@@ -346,6 +347,8 @@ BEGIN
          , @n_SerialNo_TRFQty          INT          = 0        --(Wan11)
 
          , @c_ASNFizUpdLotToSerialNo   NVARCHAR(10) = ''       --(Wan11)
+         , @c_SerialNoUpdateLotLocID   NVARCHAR(10) = ''   --ML02
+         , @c_SerialNo_Loc             NVARCHAR(10) = ''   --ML02
 
 
    --1 XXXXXXX--
@@ -402,6 +405,14 @@ BEGIN
       SELECT @c_ASNFizUpdLotToSerialNo = fsgr.Authority
       FROM dbo.fnc_SelectGetRight(@c_ToFacility, @c_ToStorerkey, '', 'ASNFizUpdLotToSerialNo')AS fsgr
    END                                                                              --(Wan11) - END
+
+   --ML02-S
+   SELECT @c_SerialNoUpdateLotLocID = fsgr.Authority
+   FROM dbo.fnc_SelectGetRight(@c_ToFacility, @c_ToStorerkey, '', 'SerialNoUpdateLotLocID')AS fsgr
+
+   IF ISNULL(@c_SerialNoUpdateLotLocID,'') = '1' AND ISNULL(@c_ASNFizUpdLotToSerialNo,'') <> '1'
+      SET @c_ASNFizUpdLotToSerialNo = 1
+   --ML02-E
 
    /* KC01 - start */
    EXECUTE dbo.nspGetRight
@@ -2191,11 +2202,20 @@ BEGIN
                     SET @b_CheckToValue = 1
                 END
 
+                --ML02-S
+                IF @b_CheckToValue = 0 AND @c_SerialNoUpdateLotLocID = '1' AND
+                    @cFromLoc <> @cToLoc
+                BEGIN
+                    SET @b_CheckToValue = 1
+                END
+                --ML02-E
+
                 IF @b_CheckToValue = 1
                 BEGIN
                     SET @n_Err = 80053
                     SET @c_errmsg = 'NSQL' + CONVERT(CHAR(6), @n_Err)
                                  + ': Serialno transfer are required same From & To Sku'
+                                 + CASE WHEN @c_SerialNoUpdateLotLocID = '1' THEN ', Loc' ELSE '' END    --ML02
                                  + ', ID And Serialno'
                                  + '. From SerialNo: ' + @c_FromSerialNo
                                  + ', Line #: ' + @cTransferLineNumber
@@ -2217,6 +2237,11 @@ BEGIN
                 END
 
                 IF @c_ASNFizUpdLotToSerialNo = '1' AND (@cFromID = '' Or @cToID ='')
+                    --ML02-S
+                    AND NOT ( @c_SerialNoUpdateLotLocID = '1'
+                       AND (@cFromID = '' AND EXISTS(SELECT TOP 1 1 FROM LOC (NOLOCK) WHERE Loc=@cFromLoc AND (LoseID='1' OR LoseUCC='1')))
+                       AND (@cToID   = '' AND EXISTS(SELECT TOP 1 1 FROM LOC (NOLOCK) WHERE Loc=@cToLoc   AND (LoseID='1' OR LoseUCC='1'))) )
+                    --ML02-E
                 BEGIN
                     SET @nContinue = 3
                     SET @n_Err = 80052
@@ -2231,11 +2256,13 @@ BEGIN
                 SET @n_SerialNo_Cnt    = 0
                 SET @c_SerialNo_Lot = ''
                 SET @c_SerialNo_ID  = ''
+                SET @c_SerialNo_Loc = ''   --ML02
                 SET @c_SerialNo_Status = ''
 
                 SELECT @n_SerialNo_Cnt = 1
                       ,@c_SerialNo_Lot = sn.Lot
                       ,@c_SerialNo_ID  = sn.ID
+                      ,@c_SerialNo_Loc = ISNULL(sn.Loc,'')   --ML02
                       ,@c_SerialNo_Status = sn.[Status]
                       ,@n_SerialNo_Qty = sn.Qty
                 FROM SerialNo sn (NOLOCK)
@@ -2256,12 +2283,19 @@ BEGIN
                       SET @n_SerialNo_Cnt = 0
                    END
 
+                   --ML02-S
+                   IF @c_SerialNoUpdateLotLocID = '1' AND @c_SerialNo_Loc <> @cFromLoc
+                   BEGIN
+                      SET @n_SerialNo_Cnt = 0
+                   END
+                   --ML02-E
+
                    IF @n_SerialNo_Qty <> 1
                    BEGIN
                       SET @nContinue = 3
                       SET @n_Err = 80054
                       SET @c_errmsg = 'NSQL' + CONVERT(CHAR(5), @n_Err)
-                                     + ': Invalid Serialno qty found in SerialNo Table for adjustment'
+                                     + ': Invalid Serialno qty found in SerialNo Table for transfer'
                                      + '. From SerialNo: ' + @c_FromSerialNo
                                      + ', Line #: ' + @cTransferLineNumber
                                      + '. (ispFinalizeTransfer)'

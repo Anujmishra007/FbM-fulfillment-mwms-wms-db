@@ -1,4 +1,7 @@
-
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
 /*******************************************************************************************************************************/
 /* Store procedure: rdt_922ExtUpd06_NLRT                                                                                       */
 /* Copyright      : Maersk                                                                                                     */
@@ -787,4 +790,12 @@ Quit:
    WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
       COMMIT TRAN
 END
+GO
+SET QUOTED_IDENTIFIER OFF 
+GO
+SET ANSI_NULLS ON 
+GO
+
+GRANT EXECUTE ON rdt.rdt_922ExtUpd06_NLRT TO NSQL 
+GO  
 

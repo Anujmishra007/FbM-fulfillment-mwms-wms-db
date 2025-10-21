@@ -481,10 +481,7 @@ BEGIN
                      -- Go to next task/exit TM screen
                      IF @cPickMethod = 'FP'
                      BEGIN
-                        SET @nAfterScn  = CASE WHEN @nFromStep = 1 THEN @nFromScn + 6
-                                          WHEN @nFromStep = 2 THEN @nFromScn + 5
-                                          WHEN @nFromStep = 8 THEN @nFromScn - 1
-                                    END
+                        SET @nAfterScn  = 4026
                         SET @nAfterStep = 7
                      END
 
@@ -493,10 +490,7 @@ BEGIN
                      BEGIN
                         SET @cOption = ''
                         SET @cOutField01 = '' -- Option
-                        SET @nAfterScn  = CASE WHEN @nFromStep = 1 THEN @nFromScn + 4
-                                          WHEN @nFromStep = 2 THEN @nFromScn + 3
-                                          WHEN @nFromStep = 8 THEN @nFromScn - 3
-                                    END
+                        SET @nAfterScn  = 4024
                         SET @nAfterStep = 5
                      END
                   END
@@ -645,6 +639,12 @@ BEGIN
 
                   END
                END
+
+               UPDATE OD SET
+                  Notes = @cReasonCode
+               FROM ORDERDETAIL OD 
+               JOIN PickDetail PD ON PD.ORDERKEY = OD.ORDERKEY AND PD.OrderLineNumber = OD.OrderLineNumber
+               WHERE PD.TaskDetailKey = @cTaskDetailKey
 
                -- Extended update
                IF @cExtendedUpdateSP <> ''
@@ -884,6 +884,8 @@ BEGIN
                      SET @cUDF18 = @nPUOM_Div
                      SET @cUDF19 = @cLottableCode
                      SET @cUDF20 = @cTaskDetailKey
+                     SET @cUDF21 = @nMOBRECStep
+                     SET @cUDF22 = @nMOBRECScn
 
                      SET @cOutField05 = ''
                      SET @cOutField15 = @cSuggSKU
@@ -1197,6 +1199,8 @@ BEGIN
                SET @cUDF18 = @nPUOM_Div
                SET @cUDF19 = @cLottableCode
                SET @cUDF20 = @cTaskDetailKey
+               SET @cUDF21 = @nMOBRECStep
+               SET @cUDF22 = @nMOBRECScn
             END
             IF @nInputKey = 0 AND @nScn = 4022
             BEGIN
@@ -1257,7 +1261,16 @@ BEGIN
          BEGIN
             IF @cInField01 = '9' -- Close Pallet
             BEGIN
-               IF NOT EXISTS (SELECT 1 FROM TASKDETAIL WHERE ListKey = @cListKey AND Status = '5')
+               IF NOT EXISTS (SELECT 1 FROM TASKDETAIL WITH(NOLOCK) WHERE ListKey = @cListKey AND Status = '5')
+               AND EXISTS (SELECT 1 FROM TaskDetail WITH(NOLOCK) WHERE TaskDetailKey = @cTaskdetailKey AND Status = '0')
+               BEGIN
+                  SET @nAfterStep = 7
+                     SET @nAfterScn = 4026
+                     SET @cOutField01 = ''
+                     GOTO Quit
+               END
+                       
+               IF NOT EXISTS (SELECT 1 FROM TASKDETAIL WITH(NOLOCK) WHERE (ListKey = @cListKey AND Status = '5') OR (TaskDetailKey = @cTaskdetailKey AND Status = '3'))
                BEGIN
                   SET @nErrNo = 239666
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Nothing to close
@@ -1330,6 +1343,34 @@ BEGIN
                   END
                END
             END
+         END
+      END
+      IF @nMOBRECStep = 6
+      BEGIN
+         IF @nInputKey = 0 -- ESC
+         BEGIN
+            -- Back to FromID screen (full pallet)
+            IF @nFromStep = 99
+            BEGIN
+               -- Prepare next screen variable
+               SET @cFromID = ''
+               SET @cOutField01 = @cPickMethod
+               SET @cOutField02 = @cDropID
+               SET @cOutField03 = @cSuggFromLOC
+               SET @cOutField04 = @cSuggID
+               SET @cOutField05 = '' -- FromID
+            END
+
+            -- Back to close pallet screen
+            IF @nFromStep = 5
+            BEGIN
+               -- Prepare next screen variable
+               SET @cOption = ''
+               SET @cOutField01 = '' -- Option
+            END
+            SET @nAfterScn = @nFromScn
+            SET @nAfterStep = @nFromStep
+            GOTO QUIT
          END
       END
    END --1812

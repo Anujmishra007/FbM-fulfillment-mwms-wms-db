@@ -29,5 +29,8 @@ execute rdt.rdtAddMsg 62921, 10, '62921 Fail to adjust', 'us_english'
 execute rdt.rdtAddMsg 62922, 10, '62922 MIX SKU UCC   ', 'us_english', 888
 execute rdt.rdtAddMsg 62923, 10, '62923 OVER UCC QTY  ', 'us_english', 888
 
+--FCR-8271
+execute rdt.rdtAddMsg 62924, 10, '62924 Invalid Option', 'us_english', 888
+
 SELECT * FROM RDT.RDTMsg (NOLOCK) WHERE Message_ID BETWEEN 62901 AND 62926
 

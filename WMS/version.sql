@@ -1,3 +1,3 @@
 SELECT @@VERSION;
--- pass test
+-- test
 -- cutover fixed name for approval

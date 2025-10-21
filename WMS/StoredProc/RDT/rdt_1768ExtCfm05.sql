@@ -4,19 +4,20 @@ SET QUOTED_IDENTIFIER OFF
 GO
 
 
-/************************************************************************/
-/* Store procedure: rdt_1768ExtCfm05                                    */
-/* Copyright      : MAERSK                                              */
-/*                                                                      */
-/* Purpose: Comfirm CC Task. Decode lottable01. Offset qty from same    */
-/*          loc + sku.                                                  */
-/*                                                                      */
-/* Called from: rdtfnc_TM_CycleCount_SKU                                */
-/*                                                                      */
-/* Modifications log:                                                   */
-/* Date        Rev  Author   Purposes                                   */
-/* 2025-07-07  1.0  James    FCR-6059. Created                          */
-/************************************************************************/
+/***************************************************************************/
+/* Store procedure: rdt_1768ExtCfm05                                       */
+/* Copyright      : MAERSK                                                 */
+/*                                                                         */
+/* Purpose: Comfirm CC Task. Decode lottable01. Offset qty from same       */
+/*          loc + sku.                                                     */
+/*                                                                         */
+/* Called from: rdtfnc_TM_CycleCount_SKU                                   */
+/*                                                                         */
+/* Modifications log:                                                      */
+/* Date        Rev     Author   Purposes                                   */
+/* 2025-07-07  1.0     James    FCR-6059. Created                          */
+/* 2025-10-20  1.1.0   NickT    FCR-8158 Correct Qty and SystemQty         */
+/***************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1768ExtCfm05] (
    @nMobile         INT,
@@ -256,9 +257,9 @@ BEGIN
                   CCKey, CCDetailKey, StorerKey, Sku, Lot, Loc, Id, Qty, CCSheetNo, 
                   Lottable01, Lottable02, Lottable03, Lottable04, Lottable05, 
                   SystemQty, RefNo, Status)
-         SELECT CCKey, @cNewCCDetailKey, StorerKey, Sku, Lot, Loc, Id, @nQTY + Qty, CCSheetNo, 
+         SELECT CCKey, @cNewCCDetailKey, StorerKey, Sku, Lot, Loc, Id, @nQTY, CCSheetNo, 
                   Lottable01, Lottable02, Lottable03, Lottable04, Lottable05, 
-                  SystemQty, RefNo, '4'
+                  0, RefNo, '4'
          FROM dbo.CCDetail CCD WITH (NOLOCK)
          WHERE CCDetailKey = @cCCDetailKEy
 

@@ -14,6 +14,7 @@ GO
 /* 2025-03-11 1.0    NLT013   UWP-31321 Create                              */
 /* 2025-05-21 1.1    NLT013   UWP-34785 Add new Exit Screen                 */
 /* 2025-07-11 1.2.0  NLT013   UWP-37578 Option issue                        */
+/* 2025-10-10 1.3.0  NickT    FCR-7928 Reallocate for short task            */
 /****************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_1764ExtScn01] (
@@ -69,10 +70,14 @@ BEGIN
       @nCurrentScn            INT,
       @cTaskDetailKey         NVARCHAR(10) = '',
       @cPendingTaskDetailKey    NVARCHAR(10) = '',
+      @nStep_NextTask         INT         = 5,
+      @nScn_NextTask          INT         = 2684,
       @nStep_ToLOC            INT         = 6,  
       @nScn_ToLOC             INT         = 2685,
       @nStep_Exit             INT         = 7,  
       @nScn_Exit              INT         = 2686,
+      @nStep_ShortPick        INT         = 8,  
+      @nScn_ShortPick         INT         = 2687,
       @nStep_99               INT         = 99,  
       @nScn_NewExit           INT         = 6527,
 
@@ -103,12 +108,34 @@ BEGIN
       @nRowCount              INT,
       @cTaskUserKey           NVARCHAR(18),
       @cAreaKey               NVARCHAR(10),
+      @cOption                NVARCHAR(10),
+      @cDefaultSkipReason     NVARCHAR(20),
+      @cTaskDetailMessage02   NVARCHAR(20),
+      @cCaseID                NVARCHAR(20),
+      @cSKU                   NVARCHAR(20),
+      @nQTY                   INT,
+      @cFromLoc               NVARCHAR(10),
+      @cFromID                NVARCHAR(18),
+      @cWaveKey               NVARCHAR(10),
+      @nTranCount             INT,
 
       @cMessage01              NVARCHAR(125),
       @cMessage02              NVARCHAR(125),
       @cMessage03              NVARCHAR(125),
       @cMessage04              NVARCHAR(125),
       @cMessage05              NVARCHAR(125)
+
+      DECLARE @tPickDetail TABLE
+      (
+         RowIndex INT IDENTITY(1,1),
+         PickDetailKey NVARCHAR(18)
+      )
+
+      DECLARE @tTaskDetail TABLE
+      (
+         RowIndex INT IDENTITY(1,1),
+         TaskDetailKey NVARCHAR(10) PRIMARY KEY
+      )
  
    SELECT 
       @nCurrentStep        = Step,
@@ -117,6 +144,8 @@ BEGIN
       @cListKey            = V_String7
    FROM RDT.RDTMOBREC WITH(NOLOCK)
    WHERE Mobile = @nMobile
+
+   SELECT @nTranCount = @@TRANCOUNT
 
    IF @nFunc = 1764 -- TM Replen
    BEGIN
@@ -186,6 +215,14 @@ BEGIN
             WHERE StorerKey = @cStorerKey
                AND TaskDetailKey = @cPendingTaskDetailKey
 
+            INSERT INTO @tTaskDetail (TaskDetailKey)
+            SELECT TaskDetailKey
+            FROM dbo.TaskDetail WITH (NOLOCK)
+            WHERE StorerKey = @cStorerKey
+               AND ListKey = @cListKey
+            UNION
+            SELECT @cPendingTaskDetailKey
+
             --Release new task which is assigned this time 
             SELECT 
                @cTaskDetailKey = V_TaskDetailKey
@@ -210,15 +247,17 @@ BEGIN
                   AND Loc = @cToLoc
             END
 
-            BEGIN TRAN
-            SAVE TRAN rdt_1764ExtScn01
+            IF @nTranCount = 0
+               BEGIN TRAN
+            ELSE
+               SAVE TRAN rdt_1764ExtScn01
 
             BEGIN TRY
                --Mark Pending task as PENDING
-               UPDATE dbo.TaskDetail WITH (ROWLOCK)
-               SET Message01 = 'PENDING' 
-               WHERE StorerKey = @cStorerKey
-                  AND (ListKey = @cListKey OR TaskDetailKey = @cPendingTaskDetailKey)
+               UPDATE TD
+               SET TD.Message01 = 'PENDING'
+               FROM dbo.TaskDetail TD WITH (ROWLOCK)
+               INNER JOIN @tTaskDetail TTD  ON TD.TaskDetailKey = TTD.TaskDetailKey
                   
                --Rollback ToLoc, FinalLoc, TransitLoc of new assigned tasks
                IF @cToLOCCat IN ('PND', 'PND_IN', 'PND_OUT') AND @cTaskStatus IN ('3','X','H') AND @cFinalLOC <> '' AND @cFinalLOC <> @cToLoc
@@ -250,7 +289,7 @@ BEGIN
                GOTO RollBack_rdt_1764ExtScn01
             END CATCH
 
-            COMMIT TRAN rdt_1764ExtScn01 -- Only commit change made here
+            COMMIT TRAN  -- Only commit change made here
 
             SELECT @cLocDescr = SUBSTRING( Descr, 1, 20) FROM dbo.LOC WITH (NOLOCK) WHERE Facility = @cFacility AND LOC = @cSuggFromLOC
             IF ISNULL( @cLocDescr, '') = ''
@@ -293,6 +332,206 @@ BEGIN
             SET @cUDF11 = @cDropID
             SET @cUDF12 = @cListKey
             SET @cUDF13 = @cPendingTaskDetailKey
+         END
+      END
+      ELSE IF @nCurrentStep = @nStep_ShortPick -- Short Pick
+      BEGIN
+         IF @nInputKey = 1 -- ENTER
+         BEGIN
+            SET @cOption = @cInField01
+
+            IF @cOption = '1'
+            BEGIN
+               SELECT 
+                  @cTaskDetailKey = V_TaskDetailKey
+               FROM RDT.RDTMOBREC WITH(NOLOCK)
+               WHERE Mobile = @nMobile
+
+               SELECT 
+                  @cTaskDetailMessage02 = Message02,
+                  @cCaseID = CaseID,
+                  @cSKU = SKU,
+                  @nQTY = QTY,
+                  @cFromLoc = FromLOC,
+                  @cFromID = FromID,
+                  @cWaveKey = WaveKey
+               FROM dbo.TaskDetail WITH(NOLOCK)
+               WHERE StorerKey = @cStorerKey
+                  AND TaskDetailKey = @cTaskDetailKey
+
+               IF @cTaskDetailMessage02  = 'SKIP1'
+                  GOTO Quit
+
+               SET @cDefaultSkipReason = rdt.rdtGetConfig( @nFunc, 'DefaultSkipReason', @cStorerKey)
+               IF @cDefaultSkipReason = '0'
+                  SET @cDefaultSkipReason = ''
+
+               IF @nTranCount = 0
+                  BEGIN TRAN
+               ELSE
+                  SAVE TRAN rdt_1764ExtScn01
+
+               -- Update TaskDetail status to 9 - Short Picked
+               BEGIN TRY
+                  UPDATE dbo.TaskDetail WITH (ROWLOCK)
+                  SET Status = '9',
+                     ListKey = '',
+                     ReasonKey = @cDefaultSkipReason,
+                     EditDate = GETDATE(),
+                     EditWho  = SUSER_SNAME(),
+                     TrafficCop = NULL
+                  WHERE StorerKey = @cStorerKey
+                     AND TaskDetailKey = @cTaskDetailKey
+               END TRY
+               BEGIN CATCH
+                  SET @nErrNo = 234854
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Update Task Failed
+                  GOTO RollBack_rdt_1764ExtScn01
+               END CATCH
+
+               BEGIN TRY
+                  INSERT INTO @tPickDetail (PickDetailKey)
+                  SELECT PickDetailKey
+                  FROM dbo.PickDetail WITH (NOLOCK)
+                  WHERE StorerKey = @cStorerKey
+                     AND TaskDetailKey = @cTaskDetailKey
+               END TRY
+               BEGIN CATCH
+                  SET @nErrNo = 234855
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Insert Into @tPickDetail Failed
+                  GOTO RollBack_rdt_1764ExtScn01
+               END CATCH
+
+               -- Update PickDetail QtyMoved, Status and Qty
+               BEGIN TRY
+                  UPDATE PD
+                  SET PD.QtyMoved = Qty,
+                     PD.Status = '4',
+                     PD.Qty = 0,
+                     PD.EditDate = GETDATE(),
+                     PD.EditWho = SUSER_SNAME()
+                  FROM dbo.PickDetail PD WITH (ROWLOCK)
+                  INNER JOIN @tPickDetail TPD ON PD.PickDetailKey = TPD.PickDetailKey
+               END TRY
+               BEGIN CATCH
+                  SET @nErrNo = 234856
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Update PickDetail Failed
+                  GOTO RollBack_rdt_1764ExtScn01
+               END CATCH
+
+               DECLARE 
+                  @cAlertMessage       NVARCHAR(255),
+                  @bSuccess            INT
+
+               SET @cAlertMessage = 'Short Picked by ' + ISNULL(@cUserName, '')
+                                    + ' TaskDetailKey: ' + ISNULL(@cTaskDetailKey, '')
+                                    + ' TaskType: RPF'
+                                    + ' CaseID: ' + ISNULL(@cCaseID, '')
+                                    + ' Reason: ' + ISNULL(@cDefaultSkipReason, '')
+
+               -- Log Alert
+               BEGIN TRY
+                  EXEC nspLogAlert
+                     @c_modulename           = 'TMCC'
+                     , @c_AlertMessage       = @cAlertMessage
+                     , @n_Severity           = '5'
+                     , @b_success            = @bSuccess       OUTPUT
+                     , @n_err                = @nErrNo         OUTPUT
+                     , @c_errmsg             = @cErrMsg        OUTPUT
+                     , @c_Activity	         = 'FN1764'
+                     , @c_Storerkey	         = @cStorerKey
+                     , @c_SKU	               = @cSKU
+                     , @c_UOM	               = ''
+                     , @c_UOMQty	            = ''
+                     , @c_Qty	               = @nQty
+                     , @c_Lot	               = ''
+                     , @c_Loc	               = @cFromLoc
+                     , @c_ID	               = @cFromID
+                     , @c_TaskDetailKey	   = @cTaskDetailKey
+                     , @c_UCCNo	            = ''
+               END TRY
+               BEGIN CATCH
+                  SET @nErrNo = 234857
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Log Alert Failed
+                  GOTO RollBack_rdt_1764ExtScn01
+               END CATCH
+
+               IF @nErrNo <> 0
+                  GOTO RollBack_rdt_1764ExtScn01
+
+
+               DECLARE 
+                  @cAPP_DB_Name              NVARCHAR(20),
+                  @cDataStream               VARCHAR(10),
+                  @nThreadPerAcct            INT,
+                  @nThreadPerStream          INT,
+                  @nMilisecondDelay          INT,
+                  @cIP                       NVARCHAR(20),
+                  @cPORT                     NVARCHAR(5),
+                  @cIniFilePath              NVARCHAR(200),
+                  @cCmdType                  NVARCHAR(10),
+                  @cTaskType                 NVARCHAR(1),
+                  @c_TransmitlogKey          NVARCHAR(10),
+                  @cExecStatements           NVARCHAR(MAX),
+                  @cExecArguments            NVARCHAR(MAX)
+
+               SELECT 
+                  @cAPP_DB_Name         = APP_DB_Name,
+                  @cDataStream          = DataStream,
+                  @nThreadPerAcct       = ThreadPerAcct,
+                  @nThreadPerStream     = ThreadPerStream,
+                  @nMilisecondDelay     = MilisecondDelay,
+                  @cIP                  = IP,
+                  @cPORT                = PORT,
+                  @cIniFilePath         = IniFilePath,
+                  @cCmdType             = CmdType,
+                  @cTaskType            = TaskType,
+                  @cExecStatements      = StoredProcName
+               FROM dbo.QCmd_TransmitlogConfig WITH (NOLOCK)
+               WHERE TableName = 'ShortPickHoldUCC'
+                  AND App_Name = 'WMS'
+                  AND  StorerKey =  @cStorerKey
+
+               SET @cExecStatements = 'EXEC ' + @cAPP_DB_Name + '.dbo.' + LTRIM(@cExecStatements)
+                                    + ' @c_Wavekey = ''' + @cWaveKey + ''''
+                                    + ', @c_SKU = ''' + @cSKU + ''''
+                                    + ', @c_UCCNo = ''' + @cCaseID + ''''
+
+               -- Submit task to QCommander
+               BEGIN TRY
+                  EXEC isp_QCmd_SubmitTaskToQCommander
+                       @cTaskType           = 'D'                  -- 'T' - TransmitlogKey, 'D' - Data Stream 
+                     , @cStorerKey          = @cStorerKey
+                     , @cDataStream         = @cDataStream
+                     , @cCmdType            = @cCmdType 
+                     , @cCommand            = @cExecStatements
+                     , @cTransmitlogKey     = '' 
+                     , @nThreadPerAcct      = @nThreadPerAcct 
+                     , @nThreadPerStream    = @nThreadPerStream 
+                     , @nMilisecondDelay    = @nMilisecondDelay  
+	                  , @nSeq                = 1
+                     , @cIP                 = @cIP
+                     , @cPORT               = @cPORT
+                     , @cIniFilePath        = @cIniFilePath
+                     , @cAPPDBName          = @cAPP_DB_Name
+                     , @bSuccess            = @bSuccess     OUTPUT 
+                     , @nErr                = @nErrNo       OUTPUT 
+                     , @cErrMsg             = @cErrMsg      OUTPUT
+               END TRY
+               BEGIN CATCH
+                  SET @nErrNo = 234857
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Submit QCommanderTask Failed
+                  GOTO RollBack_rdt_1764ExtScn01
+               END CATCH
+
+               IF @nErrNo <> 0
+                  GOTO RollBack_rdt_1764ExtScn01
+
+               COMMIT TRAN -- Only commit change made here
+
+               SET @nAfterScn = @nScn_NextTask
+               SET @nAfterStep = @nStep_NextTask
+            END
          END
       END
       ELSE IF @nCurrentStep = @nStep_ToLOC -- ToLoc
@@ -399,7 +638,17 @@ BEGIN
 
    GOTO Quit
 RollBack_rdt_1764ExtScn01:
-   ROLLBACK TRAN rdt_1764ExtScn01
+   IF @nTranCount = 0
+   BEGIN
+      ROLLBACK TRANSACTION
+   END
+   ELSE
+   BEGIN
+      IF XACT_STATE() <> -1
+      BEGIN
+         ROLLBACK TRANSACTION rdt_1764ExtScn01
+      END
+   END
    GOTO Fail
 Fail:
    SET @nAfterScn = @nCurrentScn 

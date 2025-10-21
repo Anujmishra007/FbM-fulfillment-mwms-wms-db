@@ -62,8 +62,8 @@ BEGIN
                INNER JOIN dbo.CodeLkUp c WITH (NOLOCK)
                ON c.LISTNAME = 'RECEIPTGRP'
                   AND c.Code = r.ReceiptGroup
-                  AND c.UDF01 = CAST (@nFunc AS NVARCHAR(5))
-                  AND c.UDF02 = 'UCC'
+                  AND c.Code2 = CAST (@nFunc AS NVARCHAR(5))
+                  AND c.UDF01 = 'UCC'
                   AND c.StorerKey = r.StorerKey
                WHERE r.ReceiptKey = @cReceiptKey
                   AND R.StorerKey = @cStorerKey
