@@ -1,22 +1,19 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[RDT].[rdt_Pallet_Swap]') AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-   DROP PROCEDURE [RDT].[rdt_Pallet_Swap]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
-/*****************************************************************************/
-/* Store procedure: rdt_Pallet_Swap                                          */
-/* Copyright      : IDS                                                      */
-/*                                                                           */
-/* Purpose: SOS#316871 - Transfer goods from old pallet to a new pallet      */
-/*                                                                           */
-/* Modifications log:                                                        */
-/*                                                                           */
-/* Date       Rev  Author   Purposes                                         */
-/* 2015-04-16 1.0  James    Created                                          */
-/*****************************************************************************/
+/*******************************************************************************/
+/* Store procedure: rdt_Pallet_Swap                                            */
+/* Copyright      : IDS                                                        */
+/*                                                                             */
+/* Purpose: SOS#316871 - Transfer goods from old pallet to a new pallet        */
+/*                                                                             */
+/* Modifications log:                                                          */
+/*                                                                             */
+/* Date       Rev    Author   Purposes                                         */
+/* 2015-04-16 1.0    James    Created                                          */
+/* 2025-10-21 1.1.0  NickT    UWP-42702 Add configuration TriggerWCSMsg        */
+/*******************************************************************************/
 
 CREATE PROC [RDT].[rdt_Pallet_Swap](
    @nMobile       INT,
@@ -121,7 +118,7 @@ BEGIN
 
          --Update all SKU on pallet to new ASRS LOC
          EXEC dbo.nspItrnAddMove
-              NULL                                        
+            NULL                                        
             , @cStorerKey              -- @c_StorerKey   
             , @cLLI_SKU                -- @c_SKU         
             , @cLot                    -- @c_Lot         
@@ -219,29 +216,44 @@ BEGIN
       --Start Call WCS message.  
       SET @nErrNo = 0
 
-      EXEC isp_TCP_WCS_MsgProcess  
-         @c_MessageName    = 'PLTSWAP'
-       , @c_MessageType    = 'SEND'
-       , @c_OrigMessageID  = ''
-       , @c_PalletID       = @cFromID
-       , @c_FromLoc        = ''
-       , @c_ToLoc          = ''        
-       , @c_Priority       = ''
-       , @c_UD1            = @cToID 
-       , @c_UD2            = '' 
-       , @c_UD3            = ''
-       , @c_TaskDetailKey  = ''  	
-       , @n_SerialNo       = ''
-       , @b_debug          = 0
-       , @b_Success        = @b_Success   OUTPUT
-       , @n_Err            = @nErrNo      OUTPUT
-       , @c_ErrMsg         = @cErrMsg     OUTPUT
+      DECLARE @cTriggerWCSMsg NVARCHAR(5)
+      SET @cTriggerWCSMsg = rdt.RDTGetConfig( @nFunc, 'TriggerWCSMsg', @cStorerkey)
+      IF @cTriggerWCSMsg = '0'
+      SET @cTriggerWCSMsg = ''
 
-      IF @nErrNo <> 0
+      IF @cTriggerWCSMsg = '1'
       BEGIN
-         SET @nErrNo = 53655   
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SEND WCS FAIL
-         GOTO RollBackTran
+         BEGIN TRY
+            EXEC isp_TCP_WCS_MsgProcess  
+               @c_MessageName    = 'PLTSWAP'
+            , @c_MessageType    = 'SEND'
+            , @c_OrigMessageID  = ''
+            , @c_PalletID       = @cFromID
+            , @c_FromLoc        = ''
+            , @c_ToLoc          = ''        
+            , @c_Priority       = ''
+            , @c_UD1            = @cToID 
+            , @c_UD2            = '' 
+            , @c_UD3            = ''
+            , @c_TaskDetailKey  = ''  	
+            , @n_SerialNo       = ''
+            , @b_debug          = 0
+            , @b_Success        = @b_Success   OUTPUT
+            , @n_Err            = @nErrNo      OUTPUT
+            , @c_ErrMsg         = @cErrMsg     OUTPUT
+         END TRY
+         BEGIN CATCH
+            SET @nErrNo = 53656
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Trigger WCS Message FAIL
+            GOTO RollBackTran
+         END CATCH
+
+         IF @nErrNo <> 0
+         BEGIN
+            SET @nErrNo = 53655   
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SEND WCS FAIL
+            GOTO RollBackTran
+         END
       END
       
    GOTO Quit
