@@ -100,10 +100,18 @@ BEGIN
          , @c_SQLBuildByGroup          NVARCHAR(4000) = ''
          , @c_SQLBuildByGroupWhere     NVARCHAR(4000) = ''
          , @CUR_BUILD_GROUP            CURSOR
+         , @c_Wavekey                  NVARCHAR(10) = ''
 
    SET @b_debug = ISNULL(@b_Debug, 0)
    --@b_debug = 1 - Show debug message and do not update Notes2
    --@b_debug = 2 - Show debug message and update Notes2
+
+   --For debug only
+   IF @b_Debug = 1 AND EXISTS ( SELECT 1 FROM WAVE (NOLOCK) WHERE Wavekey = @c_FieldLabel05 )
+   BEGIN
+      SET @c_Wavekey = @c_FieldLabel05
+      SET @c_FieldLabel05 = ''
+   END
 
    SELECT @n_Continue = 1
         , @b_Success = 1
@@ -284,7 +292,13 @@ BEGIN
       SET @c_SQL = N' SELECT ORDERS.Orderkey ' + @c_SQLBuildWaveWhere + N' GROUP BY ORDERS.Orderkey '
                  + N' OPTION (RECOMPILE)'
       SET @c_SQLParms = N'  @c_BuildParmKey NVARCHAR(10), @c_StorerKey NVARCHAR(15) '
-                      + N', @c_Facility NVARCHAR(5), @n_MaxOpenQty INT'
+                      + N', @c_Facility NVARCHAR(5), @n_MaxOpenQty INT, @c_Wavekey NVARCHAR(10) '
+
+      IF @b_Debug = 1 AND @c_Wavekey <> ''
+      BEGIN
+         SET @c_SQL = N' SELECT Orderkey FROM WAVEDETAIL (NOLOCK) WHERE Wavekey = @c_Wavekey '
+      END
+
       BEGIN TRY
          INSERT INTO #T_ORDERPOOL (Orderkey)
          EXEC SP_EXECUTESQL @c_SQL 
@@ -293,6 +307,7 @@ BEGIN
                           , @c_StorerKey
                           , @c_Facility                                                                                          
                           , @n_MaxOpenQty
+                          , @c_Wavekey
       END TRY
       BEGIN CATCH
          SET @n_Continue = 3    
@@ -581,35 +596,45 @@ BEGIN
                          AND C.OrderLineNumber = T6.OrderLineNumber
       
       --Calculate Putwall & Chute Usage
-      --If Putwall fully utilized the rest will goes to Chute
+      --If Putwall fully utilized the rest will goes to Chute and it is by group level
       ;WITH CTE2 AS (
-         SELECT T7.OrderKey
-              , T7.CartonNumber
-              , Qty = SUM(T7.Qty)
-              , Putwall = IIF(SUM(T7.Qty) BETWEEN @n_PutwallMinQty AND @n_PutwallMaxQty, 1, 0)
-              , Chute   = IIF(SUM(T7.Qty) BETWEEN @n_PutwallMinQty AND @n_PutwallMaxQty, 0, 1)
-         FROM #T_ORDERDET T7 WITH (NOLOCK)
-         GROUP BY T7.OrderKey
-                , T7.CartonNumber
-      ), CTE3 AS (
-         SELECT CTE2.OrderKey
-              , VCCount = COUNT(CTE2.CartonNumber)
-              , PutwallUsage = CASE WHEN SUM(CTE2.Putwall) > @n_NoOfPutwall
-                                    THEN @n_NoOfPutwall
-                                    ELSE SUM(CTE2.Putwall) END
-              , ChuteUsage = SUM(CTE2.Chute)
-                             + CASE WHEN SUM(CTE2.Putwall) > @n_NoOfPutwall 
-                                    THEN SUM(CTE2.Putwall) - @n_NoOfPutwall
-                                    ELSE 0 END
-         FROM CTE2
-         GROUP BY OrderKey
+          SELECT T7.OrderKey
+               , T7.CartonNumber
+               , Qty = SUM(T7.Qty)
+               , PutwallEligible = IIF(SUM(T7.Qty) BETWEEN @n_PutwallMinQty AND @n_PutwallMaxQty, 1, 0)
+          FROM #T_ORDERDET T7
+          GROUP BY T7.OrderKey, T7.CartonNumber
+      )
+      , GlobalSeq AS (
+          SELECT *
+               , ROW_NUMBER() OVER (ORDER BY OrderKey, CartonNumber) AS GlobalCartonSeq
+          FROM CTE2
+          WHERE PutwallEligible = 1
+      )
+      , Alloc AS (
+          SELECT CTE2.OrderKey
+               , CTE2.CartonNumber
+               -- Assign Putwall only for the first N eligible cartons
+               , CASE WHEN GlobalSeq.GlobalCartonSeq BETWEEN 1 AND @n_NoOfPutwall THEN 1 ELSE 0 END AS AssignedPutwall
+               -- The rest of eligible cartons, and not-eligible cartons, all go to Chute
+               , CASE WHEN CTE2.PutwallEligible = 0 OR GlobalSeq.GlobalCartonSeq > @n_NoOfPutwall THEN 1 ELSE 0 END AS AssignedChute
+          FROM CTE2
+          LEFT JOIN GlobalSeq ON CTE2.OrderKey = GlobalSeq.OrderKey AND CTE2.CartonNumber = GlobalSeq.CartonNumber
+      )
+      , CTE3 AS (
+          SELECT OrderKey
+               , VCCount = COUNT(CartonNumber)
+               , PutwallUsage = SUM(AssignedPutwall)
+               , ChuteUsage = SUM(AssignedChute)
+          FROM Alloc
+          GROUP BY OrderKey
       )
       UPDATE T8
       SET T8.VCCount = CTE3.VCCount
         , T8.PutwallUsage = CTE3.PutwallUsage
         , T8.ChuteUsage = CTE3.ChuteUsage
-      FROM #T_ORDERS T8 WITH (NOLOCK)
-      JOIN CTE3 ON CTE3.Orderkey = T8.Orderkey
+      FROM #T_ORDERS T8
+      JOIN CTE3 ON T8.OrderKey = CTE3.OrderKey
       --Calculate Carton for S02, S06, J05 - END
 
       --Update VCCount by Consigneekey
@@ -636,7 +661,7 @@ BEGIN
                   ) o ON o.Orderkey = t.Orderkey
    END
    --Calculate Virtual Cartons END
-
+   
    --Main process - START
    IF @n_Continue IN (1,2)
    BEGIN
@@ -788,7 +813,7 @@ BEGIN
            , Qty
            , StdCube
            , WCS
-           , CartonNumber 
+           , VirtualCartonNumber = TRIM(Orderkey) + '_' + CAST(CartonNumber AS NVARCHAR)
       FROM #T_ORDERDET WITH (NOLOCK)
 
       SELECT T2.Orderkey
