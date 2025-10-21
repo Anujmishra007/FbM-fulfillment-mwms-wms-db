@@ -45,14 +45,15 @@ GO
 /* 2024-10-08         SWT01       V.3         Demand Replenishment Logic Modification           */ 
 /* 2024-10-29         WLC01       V.5         Consider PendingMoveIn Qty when finding           */ 
 /*                                            friend                                            */
-/* 2024-10-31         PYW009      V.6         Filter Non Damage & Hold Location Flag	         */
+/* 2024-10-31         PYW009      V.6         Filter Non Damage & Hold Location Flag            */
 /*                                             (PY01)                                           */
 /* 2025-02-04         TAK047      V.7         FCR-2650 Check Replen Task existence (CLVN02)     */
 /* 2025-05-15         SWT02       V.8         Correct Wrong PackUOM3 Value                      */
 /* 2025-05-19         ALT028      V.9         Filter out CommingleSku=0 distinct sku>1          */
-/* 2025-05-19	      ALT028	  V.10	      Remove FCR-2650					*/
+/* 2025-05-19         ALT028      V.10        Remove FCR-2650                                   */
+/* 2025-10-21         WLC015      V.11        UWP-42738 Revise Find Pickface Logic (WL01)       */
 /************************************************************************************************/ 
-CREATE OR ALTER PROCEDURE [dbo].[isp_DynamicReplenishment_Granite]	 
+CREATE OR ALTER PROCEDURE [dbo].[isp_DynamicReplenishment_Granite]    
       @c_WaveKey NVARCHAR(10), 
       @b_Success int OUTPUT, 
       @n_err     int OUTPUT, 
@@ -203,21 +204,37 @@ BEGIN
 				SET @n_UCCQty = @n_ReplenQty; 
 				SET @c_ToLoc = '' 
  
-				-- 1. Find Pick Face 
-				SELECT TOP 1 @c_ToLoc = LOC.Loc  
-				FROM dbo.LOTxLOCxID lli (NOLOCK) 
-				JOIN dbo.SKUXLOC sl (NOLOCK) ON lli.StorerKey = SL.StorerKey AND lli.sku = SL.SKU AND lli.loc = sl.loc 
-				JOIN dbo.LOC LOC (NOLOCK) ON loc.loc = lli.loc 
-				WHERE lli.SKU = @c_Sku 
-				AND lli.StorerKey = @c_StorerKey 
-				AND sl.LocationType = 'PICK' 
-				AND loc.Facility = @c_Facility 
-				AND loc.MaxCarton > 0
-				AND loc.LocationFlag not in ('DAMAGE','HOLD') -- PY01
-				GROUP BY LOC.Loc, loc.LogicalLocation, LOC.LocAisle 
-				HAVING SUM(lli.Qty - lli.QtyPicked + lli.PendingMoveIn) + @n_UCCQty <= MAX(sl.QtyLocationLimit) 
-				ORDER BY loc.LogicalLocation 
- 
+            -- 1. Find Pick Face 
+            --WL01 S
+            SELECT TOP 1 @c_ToLoc = LOC.Loc
+            FROM dbo.SKUXLOC sl (NOLOCK)
+            JOIN dbo.LOC LOC (NOLOCK) ON loc.loc = sl.loc
+            LEFT JOIN dbo.LOTxLOCxID lli (NOLOCK) ON lli.StorerKey = sl.StorerKey AND lli.sku = sl.SKU AND lli.loc = sl.loc
+            WHERE sl.SKU = @c_Sku
+            AND sl.StorerKey = @c_StorerKey
+            AND sl.LocationType = 'PICK'
+            AND loc.Facility = @c_Facility
+            AND loc.MaxCarton > 0
+            AND loc.LocationFlag NOT IN ('DAMAGE','HOLD') -- PY01
+            GROUP BY LOC.Loc, loc.LogicalLocation, LOC.LocAisle
+            HAVING SUM(ISNULL(lli.Qty, 0) - ISNULL(lli.QtyPicked, 0) + ISNULL(lli.PendingMoveIn, 0)) + @n_UCCQty <= MAX(sl.QtyLocationLimit)
+            ORDER BY loc.LogicalLocation
+
+            --SELECT TOP 1 @c_ToLoc = LOC.Loc  
+            --FROM dbo.LOTxLOCxID lli (NOLOCK) 
+            --JOIN dbo.SKUXLOC sl (NOLOCK) ON lli.StorerKey = SL.StorerKey AND lli.sku = SL.SKU AND lli.loc = sl.loc 
+            --JOIN dbo.LOC LOC (NOLOCK) ON loc.loc = lli.loc 
+            --WHERE lli.SKU = @c_Sku 
+            --AND lli.StorerKey = @c_StorerKey 
+            --AND sl.LocationType = 'PICK' 
+            --AND loc.Facility = @c_Facility 
+            --AND loc.MaxCarton > 0
+            --AND loc.LocationFlag not in ('DAMAGE','HOLD') -- PY01
+            --GROUP BY LOC.Loc, loc.LogicalLocation, LOC.LocAisle 
+            --HAVING SUM(lli.Qty - lli.QtyPicked + lli.PendingMoveIn) + @n_UCCQty <= MAX(sl.QtyLocationLimit) 
+            --ORDER BY loc.LogicalLocation 
+            --WL01 E
+
 				-- SELECT TOP 1 @c_ToLoc = loc.Loc 
 				-- FROM LOC loc (NOLOCK) 
 				-- JOIN dbo.SKUXLOC sl (NOLOCK) ON loc.loc = sl.loc 
