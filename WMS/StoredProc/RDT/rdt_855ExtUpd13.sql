@@ -45,6 +45,7 @@ GO
 /*                            for rdt_LevisPrintCartonLabel                        */
 /* 2025-09-18 1.21.0 Jackc    FCR-7348 New dropid archiving logic (FBRv1.4)        */
 /* 2025-09-22 1.22.0 NickT    FCR-7845 Print 4X2 labels for all automation orders  */
+/* 2025-10-22 1.23.0 Jackc    UWP-42787 Not archive dropid if tote id is empty     */
 /***********************************************************************************/
 CREATE OR ALTER PROC rdt.rdt_855ExtUpd13 (
    @nMobile      INT,   
@@ -1546,20 +1547,64 @@ BEGIN
                      AND CaseID = @cDropID
                      AND ShipFlag <> 'Y'
 
-               IF @cSingleUnitOrdFlag = 'Y'
+               --V1.23.0 start only archive tote when tote id not empty
+               IF ISNULL(@cToteID,'') <> ''
                BEGIN
-                  IF NOT EXISTS (SELECT  1
-                           FROM PackInfo PI WITH (NOLOCK)
-                           INNER JOIN PackDetail PD WITH (NOLOCK)
-                              ON PI.PickSlipNo = PD.PickSlipNo
-                              AND PI.CartonNo = PD.CartonNo
-                           INNER JOIN PickHeader PH WITH (NOLOCK)
-                              ON PD.PickSlipNo = PH.PickHeaderKey
-                              AND PD.StorerKey = PH.StorerKey
-                           WHERE
-                              PD.StorerKey = @cStorerKey
-                              AND PD.DropID = @cToteID --ToteID
-                              AND ISNULL(PI.CartonStatus,'') <> 'PACKED') -- All skus are packed in single unit order tote
+                  IF @cSingleUnitOrdFlag = 'Y'
+                  BEGIN
+                     IF NOT EXISTS (SELECT  1
+                              FROM PackInfo PI WITH (NOLOCK)
+                              INNER JOIN PackDetail PD WITH (NOLOCK)
+                                 ON PI.PickSlipNo = PD.PickSlipNo
+                                 AND PI.CartonNo = PD.CartonNo
+                              INNER JOIN PickHeader PH WITH (NOLOCK)
+                                 ON PD.PickSlipNo = PH.PickHeaderKey
+                                 AND PD.StorerKey = PH.StorerKey
+                              WHERE
+                                 PD.StorerKey = @cStorerKey
+                                 AND PD.DropID = @cToteID --ToteID
+                                 AND ISNULL(PI.CartonStatus,'') <> 'PACKED') -- All skus are packed in single unit order tote
+                     BEGIN
+                        DELETE FROM @tPackDetail
+
+                        INSERT INTO @tPackDetail (PickSlipNo, CartonNo, LabelNo, LabelLine)
+                        SELECT DISTINCT PickSlipNo, CartonNo, LabelNo, LabelLine
+                        FROM dbo.PackDetail WITH(NOLOCK)
+                        WHERE StorerKey = @cStorerKey
+                        AND DropID = @cToteID
+
+
+                        UPDATE PD
+                           SET DropID = CONCAT('ARC',DropID)
+                        FROM dbo.PackDetail PD WITH(ROWLOCK)
+                        INNER JOIN @tPackDetail TPD 
+                        ON PD.PickSlipNo = TPD.PickSlipNo
+                           AND PD.CartonNo = TPD.CartonNo
+                           AND PD.LabelNo = TPD.LabelNo
+                           AND PD.LabelLine = TPD.LabelLine
+
+                        DELETE FROM @tPickDetail
+
+                        INSERT INTO @tPickDetail (PickDetailKey)
+                        SELECT PickDetailKey
+                        FROM dbo.PICKDETAIL WITH(NOLOCK) 
+                        WHERE StorerKey = @cStorerKey
+                        AND DropID = @cToteID
+
+
+                        UPDATE PD
+                           SET DropID = CONCAT('ARC',DropID),
+                           TrafficCop = NULL
+                        FROM dbo.PICKDETAIL PD WITH(ROWLOCK)
+                        INNER JOIN @tPickDetail TPD 
+                        ON PD.PickDetailKey = TPD.PickDetailKey
+
+                        --UPDATE dbo.PackDetail WITH(ROWLOCK) SET DropID = CONCAT('ARC',DropID) WHERE DropID=@cToteID
+                        --UPDATE dbo.PICKDETAIL WITH(ROWLOCK) SET DropID = CONCAT('ARC',DropID) WHERE DropID=@cToteID
+                        UPDATE RDT.RDTMOBREC WITH(ROWLOCK) SET C_STRING1 = '' WHERE Mobile = @nMobile
+                     END
+                  END
+                  ELSE IF @cDropIDFlag = 'Y'
                   BEGIN
                      DELETE FROM @tPackDetail
 
@@ -1567,7 +1612,7 @@ BEGIN
                      SELECT DISTINCT PickSlipNo, CartonNo, LabelNo, LabelLine
                      FROM dbo.PackDetail WITH(NOLOCK)
                      WHERE StorerKey = @cStorerKey
-                       AND DropID = @cToteID
+                        AND DropID = @cToteID
 
                      UPDATE PD
                         SET DropID = CONCAT('ARC',DropID)
@@ -1584,7 +1629,7 @@ BEGIN
                      SELECT PickDetailKey
                      FROM dbo.PICKDETAIL WITH(NOLOCK) 
                      WHERE StorerKey = @cStorerKey
-                       AND DropID = @cToteID
+                        AND DropID = @cToteID
 
                      UPDATE PD
                         SET DropID = CONCAT('ARC',DropID),
@@ -1597,45 +1642,14 @@ BEGIN
                      --UPDATE dbo.PICKDETAIL WITH(ROWLOCK) SET DropID = CONCAT('ARC',DropID) WHERE DropID=@cToteID
                      UPDATE RDT.RDTMOBREC WITH(ROWLOCK) SET C_STRING1 = '' WHERE Mobile = @nMobile
                   END
-               END
-               ELSE IF @cDropIDFlag = 'Y'
+               END -- Tote ID <> ''
+               ELSE
                BEGIN
-                  DELETE FROM @tPackDetail
-
-                  INSERT INTO @tPackDetail (PickSlipNo, CartonNo, LabelNo, LabelLine)
-                  SELECT DISTINCT PickSlipNo, CartonNo, LabelNo, LabelLine
-                  FROM dbo.PackDetail WITH(NOLOCK)
-                  WHERE StorerKey = @cStorerKey
-                     AND DropID = @cToteID
-
-                  UPDATE PD
-                     SET DropID = CONCAT('ARC',DropID)
-                  FROM dbo.PackDetail PD WITH(ROWLOCK)
-                  INNER JOIN @tPackDetail TPD 
-                  ON PD.PickSlipNo = TPD.PickSlipNo
-                     AND PD.CartonNo = TPD.CartonNo
-                     AND PD.LabelNo = TPD.LabelNo
-                     AND PD.LabelLine = TPD.LabelLine
-
-                  DELETE FROM @tPickDetail
-
-                  INSERT INTO @tPickDetail (PickDetailKey)
-                  SELECT PickDetailKey
-                  FROM dbo.PICKDETAIL WITH(NOLOCK) 
-                  WHERE StorerKey = @cStorerKey
-                     AND DropID = @cToteID
-
-                  UPDATE PD
-                     SET DropID = CONCAT('ARC',DropID),
-                     TrafficCop = NULL
-                  FROM dbo.PICKDETAIL PD WITH(ROWLOCK)
-                  INNER JOIN @tPickDetail TPD 
-                  ON PD.PickDetailKey = TPD.PickDetailKey
-
-                  --UPDATE dbo.PackDetail WITH(ROWLOCK) SET DropID = CONCAT('ARC',DropID) WHERE DropID=@cToteID
-                  --UPDATE dbo.PICKDETAIL WITH(ROWLOCK) SET DropID = CONCAT('ARC',DropID) WHERE DropID=@cToteID
-                  UPDATE RDT.RDTMOBREC WITH(ROWLOCK) SET C_STRING1 = '' WHERE Mobile = @nMobile
+                  IF @bDebugFlag = 2
+                     INSERT INTO dbo.TraceInfo (TraceName, TimeIn, Step1, Col1, Col2, Col3, Col4, Col5)
+                     VALUES ('855ToteArchive',GETDATE(), CAST(@nMobile AS NVARCHAR(10)), @cDropID, @cToteID, @cOption, '', '')
                END
+               --V1.23.0
 
                   WHILE @@TRANCOUNT > @nTranCount
                      COMMIT TRAN
