@@ -16,7 +16,7 @@ GO
 /* 2025-10-22 1.1  PPA374   Checking PO to receive the correct line           */
 /******************************************************************************/
 
-ALTER   PROCEDURE [RDT].[rdtfnc_LineReceiving_JCB_V3] (
+CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_LineReceiving_JCB_V3] (
    @nMobile    INT,
    @nErrNo     INT  OUTPUT,
    @cErrMsg    NVARCHAR( 30) OUTPUT
