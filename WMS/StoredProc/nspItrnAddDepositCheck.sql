@@ -120,8 +120,7 @@ BEGIN
          , @c_SerialNokey              NVARCHAR(10) = ''                            --(Wan03)
          , @c_Lot_SN                   NVARCHAR(10) = ''                            --(Wan03)
          , @c_ASNFizUpdLotToSerialNo   NVARCHAR(10) = '0'                           --(Wan03)
-         , @c_SerialNoUpdateLotLocID   NVARCHAR(10) = ''   --ML02
-         , @c_Loc_SN                   NVARCHAR(10) = ''   --ML02
+         , @c_SerialNoUpdateLotLocID   NVARCHAR(10) = ''   --ML01
 
    DECLARE @b_addid int
    SELECT @b_addid = 0
@@ -1127,13 +1126,8 @@ BEGIN
       SET @c_ASNFizUpdLotToSerialNo = '0'
       SELECT @c_ASNFizUpdLotToSerialNo = fsgr.Authority FROM dbo.fnc_SelectGetRight(@c_Facility, @c_Storerkey, '', 'ASNFizUpdLotToSerialNo')AS fsgr
 
-      --ML01-S
-      SELECT @c_SerialNoUpdateLotLocID = fsgr.Authority
-      FROM dbo.fnc_SelectGetRight(@c_Facility, @c_Storerkey, '', 'SerialNoUpdateLotLocID')AS fsgr
-
-      IF ISNULL(@c_SerialNoUpdateLotLocID,'') = '1' AND ISNULL(@c_ASNFizUpdLotToSerialNo,'') <> '1'
-         SET @c_ASNFizUpdLotToSerialNo = '1'
-      --ML01-E
+      SELECT @c_SerialNoUpdateLotLocID = fsgr.Authority                                             --ML01
+      FROM dbo.fnc_SelectGetRight(@c_Facility, @c_Storerkey, '', 'SerialNoUpdateLotLocID')AS fsgr   --ML01
 
       IF @c_SourceType LIKE 'ntrTransferDetail%'
       BEGIN
@@ -1152,7 +1146,6 @@ BEGIN
          SET @c_SerialNokey = ''
          SELECT @c_SerialNoKey = sn.SerialNoKey
                ,@c_Lot_SN = sn.Lot
-               ,@c_Loc_SN = ISNULL(sn.Loc,'')   --ML01
          FROM dbo.SerialNo AS sn (NOLOCK)
          WHERE sn.SerialNo= @c_SerialNo
          AND sn.Storerkey = @c_StorerKey
@@ -1161,11 +1154,13 @@ BEGIN
          IF @c_SerialNokey <> ''
          BEGIN
             UPDATE dbo.SerialNo WITH (ROWLOCK)
-            SET Lot      = CASE WHEN @c_ASNFizUpdLotToSerialNo = '1' AND @c_Lot_SN <> @c_Lot
+            SET Lot      = CASE WHEN (@c_ASNFizUpdLotToSerialNo = '1'
+                                   OR @c_SerialNoUpdateLotLocID = '1')   --ML01
+                                  AND @c_Lot_SN <> @c_Lot
                                 THEN @c_Lot ELSE Lot END
                ,ID       = CASE WHEN ID <> @c_ToID THEN @c_ToID ELSE ID END
-               ,Loc      = CASE WHEN @c_SerialNoUpdateLotLocID = '1' AND @c_Loc_SN <> @c_ToLoc   --ML01
-                                THEN @c_ToLoc ELSE Loc END                                       --ML01
+               ,Loc      = CASE WHEN @c_SerialNoUpdateLotLocID = '1' AND Loc <> @c_ToLoc   --ML01
+                                THEN @c_ToLoc ELSE Loc END                                 --ML01
                ,EditWho  = dbo.fnc_GetUserName()          --(SSA01)
                ,EditDate = dbo.fnc_GetDate()    --(SSA01)
             WHERE SerialNoKey = @c_SerialNoKey
