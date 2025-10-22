@@ -20,6 +20,7 @@ GO
 /* Date        Author   Ver.  Purposes                                    */
 /* 2025-04-04  Wan01    1.1   UWP-31258-FCR-822 Partial Pallet Serial No  */
 /*                            Move                                        */
+/* 10-Oct-2025  SSA01   1.2   UWP-42248 -Enhanced session management      */
 /**************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[msp_SerialNoMoveCheck]
      @c_ItrnKey      NVARCHAR(10)
@@ -112,7 +113,7 @@ BEGIN
             WHILE @@FETCH_STATUS = 0
             BEGIN
                UPDATE dbo.SerialNo WITH (ROWLOCK)
-                  SET ID = @c_ToID, EditDate=GETDATE(), EditWho=SUSER_SNAME()
+                  SET ID = @c_ToID, EditDate=dbo.fnc_GetDate() , EditWho=dbo.fnc_GetUserName()      --(SSA01)
                WHERE SerialNoKey = @c_SerialNoKey 
                SELECT @n_err = @@ERROR
                IF @n_err <> 0

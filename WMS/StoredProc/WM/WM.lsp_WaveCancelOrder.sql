@@ -29,6 +29,10 @@ GO
 /* 2024-08-19  PPA371   1.3   UWP-20103, Add validation for orders to   */
 /*                            select cancel reason if cancel reason     */
 /*                            is enabled in storer defaults             */
+/* 2025-07-02  Alex01   1.4   FCR-4877 Bug fixes Prevent the generation */
+/*                            of a MESSAGE when order cancel validation */
+/*                            failure                                   */
+/* 2025-09-02  SWT01    1.5   Enhanced session management pattern       */
 /************************************************************************/
 CREATE OR ALTER PROC [WM].[lsp_WaveCancelOrder]
       @c_WaveKey              NVARCHAR(10)
@@ -80,23 +84,26 @@ BEGIN
    SET @b_Success = 1
    SET @n_Err     = 0
 
-   SET @n_Err = 0
-   --(mingle01) - START
-   IF SUSER_SNAME() <> @c_UserName
-   BEGIN
-      EXEC [WM].[lsp_SetUser]
-            @c_UserName = @c_UserName  OUTPUT
-         ,  @n_Err      = @n_Err       OUTPUT
-         ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+   -- Start enhanced session management (SWT01)
+	 SET @n_Err = 0
+	 DECLARE @b_ExecuteAs        BIT = 0
+	 IF SUSER_SNAME() <> @c_UserName AND @c_UserName <> ''        
+	 BEGIN
+	    EXEC [WM].[lsp_SetUser] 
+	         @c_UserName = @c_UserName  OUTPUT
+	      ,  @n_Err      = @n_Err       OUTPUT
+	      ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+	      ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
 
-      IF @n_Err <> 0
-      BEGIN
-         GOTO EXIT_SP
-      END
+	    IF @n_Err <> 0
+	    BEGIN
+	       GOTO EXIT_SP
+	    END
 
-      EXECUTE AS LOGIN = @c_UserName
-   END
-   --(mingle01) - END
+	    IF @b_ExecuteAs = 1
+	       EXECUTE AS LOGIN = @c_UserName
+	 END                                    
+	 -- End enhanced session management (SWT01)
 
    -- UI Ask Confirmation Message...
    --IF @c_ProceedWithWarning = 'N' AND @n_WarningNo < 1
@@ -362,14 +369,28 @@ BEGIN
       IF @n_KeyCount = @n_TotalSelectedKeys
       BEGIN
          SET @c_ErrMsg = 'Cancel Order(s) is/are done.'
-         IF @n_ErrGroupKey > 0
+
+         --Alex01 START
+         IF EXISTS (SELECT 1 FROM @t_WMSErrorList WHERE ErrCode > 0 AND WriteType = 'ERROR')
          BEGIN
-            IF EXISTS (SELECT 1 FROM WM.WMS_Error_List WITH (NOLOCK) WHERE ErrGroupKey = @n_ErrGroupKey AND ErrCode > 0 AND WriteType = 'ERROR')   --(Wan02)
+            SET @n_Continue = 3
+            SET @c_ErrMsg = 'Cancel Order(s) is/are done with Errors.'
+            
+            --Skip generating a MESSAGE for SO cancellation (SO screen).
+            IF ISNULL(RTRIM(@c_WaveKey), '') = ''
             BEGIN
-               SET @n_Continue = 3
-               SET @c_ErrMsg = 'Cancel Order(s) is/are done with Errors.'
+               GOTO EXIT_SP
             END
          END
+
+         --IF @n_ErrGroupKey > 0
+         --BEGIN
+         --   IF EXISTS (SELECT 1 FROM WM.WMS_Error_List WITH (NOLOCK) WHERE ErrGroupKey = @n_ErrGroupKey AND ErrCode > 0 AND WriteType = 'ERROR')   --(Wan02)
+         --   BEGIN
+         --      SET @n_Continue = 3
+         --      SET @c_ErrMsg = 'Cancel Order(s) is/are done with Errors.'
+         --   END
+         --END
 
          --(Wan02) - START
          INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
@@ -389,6 +410,7 @@ BEGIN
          --,  @c_errmsg      = @c_errmsg
          --(Wan02) - END
 
+         --Alex01 END
       END
    END TRY
 
@@ -499,8 +521,11 @@ EXIT_SP:
    BEGIN
       BEGIN TRAN
    END
-   REVERT
+   IF @b_ExecuteAs = 1 REVERT -- (SWT01)
+   EXEC [WM].[lsp_ResetUser]  -- (SWT01)
 END
 GO
-GRANT EXECUTE ON [WM].[lsp_WaveCancelOrder] TO nSQL
+
+GRANT EXECUTE ON [WM].[lsp_WaveCancelOrder] TO nSQL 
 GO
+

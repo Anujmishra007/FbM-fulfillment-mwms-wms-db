@@ -24,6 +24,7 @@ GO
 /* Updates:                                                              */  
 /* Date        Author   Ver   Purposes                                   */ 
 /* 02-07-2020  Wan01    1.1   Sync Exceed & SCE                          */
+/* 10-10-2025  SSA01    1.2   UWP-42248 -Enhanced session management     */
 /*************************************************************************/   
 CREATE PROCEDURE [dbo].[ispRVWAV32]        
   @c_wavekey      NVARCHAR(10)    
@@ -218,8 +219,8 @@ CREATE PROCEDURE [dbo].[ispRVWAV32]
        UPDATE WAVE
           SET TMReleaseFlag = 'N'               
            ,  TrafficCop = NULL                 
-           ,  EditWho = SUSER_SNAME()          
-           ,  EditDate= GETDATE()               
+           ,  EditWho = dbo.fnc_GetUserName()           --(SSA01)
+           ,  EditDate= dbo.fnc_GetDate()   --(SSA01)
        WHERE WAVEKEY = @c_wavekey
        --(Wan01) - END
          
@@ -251,8 +252,8 @@ CREATE PROCEDURE [dbo].[ispRVWAV32]
           UPDATE ORDERS WITH (ROWLOCK)  
           SET SOStatus = '0',  
               TrafficCop = NULL,  
-              EditWho = SUSER_SNAME(),  
-              EditDate = GETDATE()  
+              EditWho = dbo.fnc_GetUserName(),         --(SSA01)
+              EditDate = dbo.fnc_GetDate()   --(SSA01)
           WHERE Userdefine09 = @c_Wavekey  
           AND SOStatus = 'TSRELEASED'  
        END            

@@ -17,6 +17,8 @@ GO
 /* 2025-05-20  1.1  NLT013    UWP-34684 Assign wrong task to user       */
 /* 2025-06-05  1.1.0  NLT013  UWP-34684 Fix issue: Cursor is not allocated*/
 /*                            , it causes unpected error                */
+/* 2025-09-22 1.2.0 NickT     FCR-7693 Add user override priority in task*/
+/* 2025-09-10  1.2.0  NLT013  FCR-7730 add AreaKey limitation           */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1764GetTask12] (
@@ -183,7 +185,7 @@ BEGIN
             FROM dbo.TaskDetail WITH (NOLOCK)
             INNER JOIN dbo.LOC WITH (NOLOCK) ON (TaskDetail.FromLOC = LOC.LOC)
             INNER JOIN dbo.AreaDetail WITH (NOLOCK) ON (AreaDetail.PutawayZone = LOC.PutAwayZone)
-            WHERE TaskDetail.TaskType IN ('RPF')
+            WHERE TaskDetail.TaskType = 'RPF'
                AND TaskDetail.Status = '0'
                AND TaskDetail.UserKeyOverRide IN (@cUserName, '')
                AND TaskDetail.WaveKey = @cWaveKey
@@ -194,8 +196,11 @@ BEGIN
                   FROM dbo.TaskManagerUserDetail TMU WITH (NOLOCK)
                      WHERE PermissionType = TaskDetail.TaskType
                         AND TMU.UserKey = @cUserName
+                        AND TMU.AreaKey = AreaDetail.AreaKey
                         AND TMU.Permission = '1')
-            ORDER BY TaskDetail.Priority, LOC.LogicalLocation, LOC.LOC
+            ORDER BY TaskDetail.Priority, 
+               CASE WHEN TaskDetail.UserKeyOverRide = @cUserName THEN '0' ELSE '1' END,
+               LOC.LogicalLocation, LOC.LOC
       END
       ELSE IF (@cSLLocType = 'PICK' OR @cFinalLocType = 'DYNAMICPK') AND @cFinalLocCategory = 'Shelving' --ASTRPT
       BEGIN
@@ -206,7 +211,7 @@ BEGIN
             INNER JOIN dbo.LOC WITH (NOLOCK) ON (TaskDetail.FromLOC = LOC.LOC)
             INNER JOIN dbo.LOC AS LOC1 WITH (NOLOCK) ON (TaskDetail.ToLoc = LOC1.LOC)
             INNER JOIN dbo.AreaDetail WITH (NOLOCK) ON (AreaDetail.PutawayZone = LOC.PutAwayZone)
-            WHERE TaskDetail.TaskType IN ('RPF')
+            WHERE TaskDetail.TaskType = 'RPF'
                AND TaskDetail.Status = '0'
                AND TaskDetail.UserKeyOverRide IN (@cUserName, '')
                AND TaskDetail.WaveKey = @cWaveKey
@@ -217,8 +222,11 @@ BEGIN
                   FROM dbo.TaskManagerUserDetail TMU WITH (NOLOCK)
                      WHERE PermissionType = TaskDetail.TaskType
                         AND TMU.UserKey = @cUserName
+                        AND TMU.AreaKey = AreaDetail.AreaKey
                         AND TMU.Permission = '1')
-            ORDER BY TaskDetail.Priority, LOC.LogicalLocation, LOC.LOC
+            ORDER BY TaskDetail.Priority, 
+               CASE WHEN TaskDetail.UserKeyOverRide = @cUserName THEN '0' ELSE '1' END,
+               LOC.LogicalLocation, LOC.LOC
       END
    END
    ELSE
@@ -232,7 +240,7 @@ BEGIN
             INNER JOIN dbo.LOC WITH (NOLOCK) ON (TaskDetail.FromLOC = LOC.LOC)
             INNER JOIN dbo.AreaDetail WITH (NOLOCK) ON (AreaDetail.PutawayZone = LOC.PutAwayZone)
             WHERE AreaDetail.AreaKey = @cAreaKey
-               AND TaskDetail.TaskType IN ('RPF')
+               AND TaskDetail.TaskType = 'RPF'
                AND TaskDetail.Status = '0'
                AND TaskDetail.UserKeyOverRide IN (@cUserName, '')
                AND TaskDetail.WaveKey = @cWaveKey
@@ -243,8 +251,11 @@ BEGIN
                   FROM dbo.TaskManagerUserDetail TMU WITH (NOLOCK)
                      WHERE PermissionType = TaskDetail.TaskType
                         AND TMU.UserKey = @cUserName
+                        AND TMU.AreaKey = AreaDetail.AreaKey
                         AND TMU.Permission = '1')
-            ORDER BY TaskDetail.Priority, LOC.LogicalLocation, LOC.LOC
+            ORDER BY TaskDetail.Priority, 
+               CASE WHEN TaskDetail.UserKeyOverRide = @cUserName THEN '0' ELSE '1' END,
+               LOC.LogicalLocation, LOC.LOC
       END
       ELSE IF (@cSLLocType = 'PICK' OR @cFinalLocType = 'DYNAMICPK') AND @cFinalLocCategory = 'Shelving' --ASTRPT
       BEGIN
@@ -256,7 +267,7 @@ BEGIN
             INNER JOIN dbo.LOC AS LOC1 WITH (NOLOCK) ON (TaskDetail.ToLoc = LOC1.LOC)
             INNER JOIN dbo.AreaDetail WITH (NOLOCK) ON (AreaDetail.PutawayZone = LOC.PutAwayZone)
             WHERE AreaDetail.AreaKey = @cAreaKey
-               AND TaskDetail.TaskType IN ('RPF')
+               AND TaskDetail.TaskType = 'RPF'
                AND TaskDetail.Status = '0'
                AND TaskDetail.UserKeyOverRide IN (@cUserName, '')
                AND TaskDetail.WaveKey = @cWaveKey
@@ -267,8 +278,11 @@ BEGIN
                   FROM dbo.TaskManagerUserDetail TMU WITH (NOLOCK)
                      WHERE PermissionType = TaskDetail.TaskType
                         AND TMU.UserKey = @cUserName
+                        AND TMU.AreaKey = AreaDetail.AreaKey
                         AND TMU.Permission = '1')
-            ORDER BY TaskDetail.Priority, LOC.LogicalLocation, LOC.LOC
+            ORDER BY TaskDetail.Priority, 
+               CASE WHEN TaskDetail.UserKeyOverRide = @cUserName THEN '0' ELSE '1' END,
+               LOC.LogicalLocation, LOC.LOC
       END
    END
 

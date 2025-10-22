@@ -1,6 +1,4 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrPackSerialNoUpdate]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
-   drop trigger [dbo].[ntrPackSerialNoUpdate]
-GO
+
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -13,8 +11,9 @@ GO
 /*                                                                      */
 /* Date         Author     Ver.  Purposes                               */
 /* 2017-May-29  Ung        1.1   WMS-1919 Created                       */
+/* 2025-OCT-06  AK01       1.2  UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName */
 /************************************************************************/
-CREATE TRIGGER [ntrPackSerialNoUpdate] ON [PackSerialNo]
+CREATE OR ALTER TRIGGER [ntrPackSerialNoUpdate] ON [PackSerialNo]
 FOR  UPDATE
 AS
 BEGIN
@@ -43,8 +42,8 @@ BEGIN
    IF (@n_continue = 1 OR @n_continue = 2) AND NOT UPDATE(EditDate)
    BEGIN     
       UPDATE PackSerialNo WITH (ROWLOCK) SET 
-         EditDate = GETDATE(),     
-         EditWho = SUSER_SNAME(),    
+         EditDate = dbo.fnc_GetDate(),     
+         EditWho = dbo.fnc_GetUserName(),    
          TrafficCop = NULL     
       FROM INSERTED
          JOIN PackSerialNo ON (PackSerialNo.PackSerialNoKey = INSERTED.PackSerialNoKey)  
@@ -131,3 +130,4 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
 GO
+

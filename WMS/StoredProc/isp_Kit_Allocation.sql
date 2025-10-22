@@ -38,6 +38,7 @@ CREATE OR ALTER PROC  isp_Kit_Allocation
 ,@b_Success             INT            OUTPUT
 ,@n_err                 INT            OUTPUT
 ,@c_errmsg              NVARCHAR(250)  OUTPUT
+,@n_ErrGroupKey         INT = 0        OUTPUT
 
 AS
 BEGIN
@@ -120,6 +121,8 @@ BEGIN
         , @c_EachUOM                  NVARCHAR(10)
         , @c_UOM                      NVARCHAR(10)
         , @c_PalletType               NVARCHAR(10)
+        , @c_TableName          NVARCHAR(50)   = 'KITDETAIL'
+        , @c_SourceType         NVARCHAR(50)   = 'isp_Kit_Allocation'
 
     --NJOW01
     DECLARE @c_AllocateStrategykey_SC   NVARCHAR(10)
@@ -138,7 +141,7 @@ BEGIN
         , @n_Qty INT
         , @n_SplitQty INT
 
-    IF @n_err = 1
+    IF @n_err = 0
         SET @b_debug = 1
     ELSE
         SET @b_debug = 0
@@ -944,6 +947,75 @@ BEGIN
                     SET @c_errmsg = 'isp_Kit_Allocation : ' + RTRIM(@c_errmsg)
                     GOTO EXIT_SP
                 END
+        END
+
+    IF @n_continue IN(1,2)
+        BEGIN
+          IF EXISTS(SELECT KH.Kitkey
+                      FROM KIT KH(NOLOCK)
+                      JOIN KITDETAIL KD(NOLOCK) ON KH.Kitkey = KD.Kitkey
+                      WHERE KH.Kitkey = @c_Kitkey
+                      AND KD.Type = 'F'
+                      AND (ISNULL(KD.Lot,'') = '' OR ISNULL(KD.Loc,'') = '')
+                     GROUP BY KH.Kitkey
+                    HAVING COUNT(1)>4)
+          BEGIN
+               SET @n_err = 554501
+               SET @c_errmsg = 'NSQL' + CONVERT(CHAR(6), @n_err)
+                 + ':5 or more lines are unallocated, please check the details for further investigation.(isp_Kit_Allocation)'
+
+               EXEC [WM].[lsp_WriteError_List]
+                     @i_iErrGroupKey= @n_ErrGroupKey OUTPUT
+                  ,  @c_TableName   = @c_TableName
+                  ,  @c_SourceType  = @c_SourceType
+                  ,  @c_Refkey1     = @c_Kitkey
+                  ,  @c_Refkey2     = ''
+                  ,  @c_Refkey3     = ''
+                  ,  @n_err2        = @n_err
+                  ,  @c_errmsg2     = @c_errmsg
+                  ,  @b_Success     = @b_Success   OUTPUT
+                  ,  @n_err         = @n_err       OUTPUT
+                  ,  @c_errmsg      = @c_errmsg    OUTPUT
+          END
+          ELSE
+          BEGIN
+
+              DECLARE CUR_KITDET CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+               SELECT KD.KitLineNumber
+                FROM KIT KH(NOLOCK)
+                JOIN KITDETAIL KD(NOLOCK) ON KH.Kitkey = KD.Kitkey
+                WHERE KH.Kitkey = @c_Kitkey
+                AND KD.Type = 'F'
+                AND (ISNULL(KD.Lot,'') = '' OR ISNULL(KD.Loc,'') = '')
+                ORDER BY KD.KitLineNumber
+                OPEN CUR_KITDET
+
+                FETCH NEXT FROM CUR_KITDET INTO @c_KitLineNumber
+
+                  WHILE @@FETCH_STATUS <> -1
+                      BEGIN
+                        SET @n_err = 554501
+                        SET @c_errmsg = 'NSQL' + CONVERT(CHAR(6), @n_err)
+                        + ':LineNo:' + @c_KitLineNumber+ ' is unallocated, please check the details for further investigation.(isp_Kit_Allocation)'
+
+                   EXEC [WM].[lsp_WriteError_List]
+                     @i_iErrGroupKey= @n_ErrGroupKey OUTPUT
+                  ,  @c_TableName   = @c_TableName
+                  ,  @c_SourceType  = @c_SourceType
+                  ,  @c_Refkey1     = @c_Kitkey
+                  ,  @c_Refkey2     = @c_KitLineNumber
+                  ,  @c_Refkey3     = ''
+                  ,  @n_err2        = @n_err
+                  ,  @c_errmsg2     = @c_errmsg
+                  ,  @b_Success     = @b_Success   OUTPUT
+                  ,  @n_err         = @n_err       OUTPUT
+                  ,  @c_errmsg      = @c_errmsg    OUTPUT
+
+                      FETCH NEXT FROM CUR_KITDET INTO @c_kitLineNumber
+                      END
+                  CLOSE CUR_KITDET
+                  DEALLOCATE CUR_KITDET
+          END
         END
 
     EXIT_SP:

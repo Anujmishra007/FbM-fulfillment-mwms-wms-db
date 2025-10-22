@@ -24,6 +24,8 @@ GO
 /* Date        Author   Ver   Purposes                                  */
 /* 14-Sep-2022 WLChooi  1.0   DevOps Combine Script                     */
 /* 17-Jan-2023 CHONGCS  1.1   WMS-21536 add filter (CS01)               */
+/* 10-OCT-2025 SSA01    1.2   UWP-42248 -Enhanced session management    */
+/*                             and cleanup.                             */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[isp_RobotLoadITF04]
            @c_Loadkey   NVARCHAR(10) 
@@ -253,8 +255,8 @@ BEGIN
          UPDATE LOADPLAN
          SET UserDefine01 = 'Y'
            , TrafficCop   = NULL
-           , EditDate     = GETDATE()
-           , EditWho      = SUSER_SNAME()
+           , EditDate     = dbo.fnc_GetDate()    --(SSA01)
+           , EditWho      = dbo.fnc_GetUserName()     --(SSA01)
          WHERE LoadKey = @c_Key2
          
          SELECT @n_err = @@ERROR  

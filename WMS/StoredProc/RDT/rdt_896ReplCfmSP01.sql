@@ -5,13 +5,14 @@ GO
 
 
 /************************************************************************/
-/* Store procedure:   rdt_896ReplCfmSP01                            */
+/* Store procedure:   rdt_896ReplCfmSP01                                */
 /* Copyright      : Maersk                                              */
 /*                                                                      */
 /* Purpose: Puma CHL                                                    */
 /*                                                                      */
 /* Date       Rev    Author   Purposes                                  */
 /* 2025-03-17 1.0.0  JCH507   FCR-3287 Created                          */
+/* 2025-08-27 1.1.0  JCH507   UWP-40178 Check replen finalization result*/
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_896ReplCfmSP01] (
@@ -84,6 +85,14 @@ BEGIN
       GOTO Quit
    END
 
+   --V1.1
+   IF @cLoseID = '0' AND ISNULL(@cToID,'') = ''
+   BEGIN
+      SET @nErrNo = 235159
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --ToID is required
+      GOTO Quit
+   END 
+
    IF @cUCCNo = ''
    BEGIN
       SET @nErrNo = 235152
@@ -93,8 +102,11 @@ BEGIN
 
    DECLARE @nTranCount  INT
    SET @nTranCount = @@TRANCOUNT
-   BEGIN TRAN  -- Begin our own transaction
-   SAVE TRAN rdt_896ReplCfmSP01 -- For rollback or commit only our own transaction
+
+   IF @nTranCount = 0
+      BEGIN TRAN  -- Begin our own transaction
+   ELSE
+      SAVE TRAN rdt_896ReplCfmSP01 -- For rollback or commit only our own transaction
 
    IF @cReplenBySKUQTY = '1'
    BEGIN
@@ -172,6 +184,14 @@ BEGIN
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Upd RPL Fail
          GOTO RollBackTran
       END CATCH
+
+      --V1.1.0
+      IF NOT EXISTS (SELECT 1 FROM dbo.ITRN WITH (NOLOCK) WHERE SourceKey = @cReplenKey)
+      BEGIN
+         SET @nErrNo = 235158
+         SET @cErrMsg = 'Finalize Replen ' + @cReplenKey + ' fails'
+         GOTO RollBackTran
+      END
       
       IF @cUCCNo <> ''
       BEGIN
@@ -228,11 +248,18 @@ BEGIN
       END
    END --ReplenBySKUQTY = 0
 
-   COMMIT TRAN rdt_896ReplCfmSP01
+   IF @nTranCount = 0
+      COMMIT TRAN
+   ELSE
+      COMMIT TRAN rdt_896ReplCfmSP01
+      
    GOTO Quit
 
 RollBackTran:
-   ROLLBACK TRAN rdt_896ReplCfmSP01 -- Only rollback change made here
+   IF @nTranCount = 0
+      ROLLBACK TRAN
+   ELSE
+      ROLLBACK TRAN rdt_896ReplCfmSP01 -- Only rollback change made here
 Quit:
    WHILE @@TRANCOUNT > @nTranCount -- Commit until the level we started
       COMMIT TRAN

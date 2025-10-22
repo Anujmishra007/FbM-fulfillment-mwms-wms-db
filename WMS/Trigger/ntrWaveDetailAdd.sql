@@ -23,7 +23,7 @@ GO
 /*                                                                            */
 /* Called By: When records Insert                                             */
 /*                                                                            */
-/* PVCS Version: 1.5                                                          */
+/* PVCS Version: 2.3                                                          */
 /*                                                                            */
 /* Version: 5.4                                                               */
 /*                                                                            */
@@ -47,6 +47,10 @@ GO
 /* 05-DEC-2023  Wan03      2.1   LFWM-4625 - CLONE - PROD-CNWAVE Release      */
 /*                               group search slow and build wave slow        */
 /*                               By Pass Trigger if Trafficcop = ''(optimization)*/
+/* 10-DEC-2024  NJOW02     2.2   FRC-1733 Disallow add order to wave with     */
+/*                               TMreleaseflag=Y                              */
+/* 27-Aug-2025  WLChooi    2.3   FCR-7589 Add TrafficCopAllowTriggerSP (WL01) */
+/* 06-OCT-2025  AK01       2.4   UWP-42143 Data Audit                         */
 /******************************************************************************/
 CREATE OR ALTER TRIGGER [dbo].[ntrWaveDetailAdd]
 ON [dbo].[WAVEDETAIL]
@@ -72,6 +76,8 @@ BEGIN
           ,@c_Status_ORD      NVARCHAR(10)   = '0'                -- (Wan01)
           ,@c_Status_Wav      NVARCHAR(10)   = '0'                -- (Wan01)
           ,@c_WaveKey_Prior   NVARCHAR(10)   = ''                 -- (Wan01)
+
+   DECLARE @c_TrafficCopAllowTriggerSP    NVARCHAR(10) = 'N'   --WL01
 
    SET @c_wavekey  = '' --INC0349006
    SET @c_OrderKey = '' --INC0349006
@@ -99,7 +105,19 @@ BEGIN
                             +': Update failed On Wavedetail. (ntrWaveDetailAdd)'      
          END
          ELSE     
-            SET @n_continue = 4       
+            SET @n_continue = 4
+            
+         --WL01 S
+         IF EXISTS (  SELECT 1
+                      FROM INSERTED I
+                      JOIN ORDERS       O WITH (NOLOCK) ON I.OrderKey = O.OrderKey
+                      JOIN StorerConfig S WITH (NOLOCK) ON O.StorerKey = S.StorerKey
+                      JOIN sys.objects sys ON sys.type = 'P' AND sys.name = S.SValue
+                      WHERE S.ConfigKey = 'WaveDetailTrigger_SP')
+         BEGIN
+            SELECT @c_TrafficCopAllowTriggerSP = 'Y'
+         END
+         --WL01 E
       END  
    END                                                                              --(Wan02) - END   
 
@@ -185,6 +203,31 @@ BEGIN
                   ' SQLSvr MESSAGE=' + ISNULL(LTRIM(RTRIM(@c_errmsg)),'') + ' ) '
        END
    END
+
+   --NJOW02	S
+   IF @n_continue = 1
+   OR @n_continue = 2
+   BEGIN
+      IF EXISTS (SELECT 1 FROM INSERTED i
+                 JOIN ORDERS       o WITH (NOLOCK) ON i.OrderKey = o.OrderKey
+                 JOIN storerconfig s WITH (NOLOCK) ON o.StorerKey = s.StorerKey
+                 WHERE s.configkey = 'DisallowAddOrdToReleasedWave'
+                 AND s.Svalue = '1')
+      BEGIN
+      	 IF EXISTS(SELECT 1 FROM INSERTED i
+      	           JOIN WAVE W (NOLOCK) ON i.Wavekey = W.Wavekey
+      	           WHERE W.TMReleaseFlag = 'Y')
+      	 BEGIN
+            SELECT @n_continue = 3
+            SELECT @c_errmsg = CONVERT(CHAR(250) ,@n_err)
+                  ,@n_err = 62301 -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+            SELECT @c_errmsg = 'NSQL' + CONVERT(CHAR(5) ,@n_err) +
+                   ': Disallow add Order to the wave have been released. (TMReleaseFlag=Y). (ntrWaveDetailAdd)' + ' ( ' +
+                   ' SQLSvr MESSAGE=' + ISNULL(LTRIM(RTRIM(@c_errmsg)),'') + ' ) '
+      	 END         
+      END            
+   END
+   --NJOW02 E   
 
    IF @n_continue = 1
    OR @n_continue = 2
@@ -309,7 +352,8 @@ BEGIN
    --INC0349006 End
    
    --NJOW01
-   IF @n_continue=1 or @n_continue = 2
+   IF (@n_continue=1 OR @n_continue = 2)
+   OR (@c_TrafficCopAllowTriggerSP = 'Y' AND @n_continue <> 3)   --WL01
    BEGIN
       IF EXISTS (SELECT 1 FROM INSERTED i
                  JOIN ORDERS       o WITH (NOLOCK) ON i.OrderKey = o.OrderKey
@@ -350,6 +394,25 @@ BEGIN
             DROP TABLE #DELETED
       END
    END   
+
+   --AK01 - S
+   IF dbo.fnc_GetUserName() <> sUser_sName() AND @n_Continue IN (1,2) 
+   BEGIN
+      UPDATE WAVEDETAIL
+        SET AddWho  = dbo.fnc_GetUserName(),
+            AddDate = dbo.fnc_GetDate(), 
+            TrafficCop = NULL 
+      FROM WAVEDETAIL
+      JOIN INSERTED ON WAVEDETAIL.WaveDetailKey = INSERTED.WaveDetailKey
+      SELECT @n_err = @@ERROR
+      IF @n_err <> 0
+      BEGIN
+         SELECT @n_continue = 3
+         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=62310  
+         SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed On Table WAVEDETAIL. (ntrWAVEDETAILAdd)' + ' ( ' + ' SQLSvr MESSAGE=' + TRIM(@c_errmsg) + ' ) '
+      END
+   END
+   --AK01 - E
 
    IF @n_continue = 3 -- Error Occured - Process And Return
    BEGIN

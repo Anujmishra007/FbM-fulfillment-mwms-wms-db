@@ -98,6 +98,8 @@ GO
 /* 2023-03-12 6.6  YeeKung  WMS-24222 Skip PPK Check (yeekung05)        */
 /* 2023-08-10 6.7  Ung      WMS-23729 Add PieceScan                     */
 /* 2024-03-26 6.8  Dennis   UWP-14536 Check Digit                       */
+/* 2025-07-28 6.9  NickT    !!!Cutover. Use V2 verion in V0 Repo for    */ 
+/*                            development!!!                            */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_Move_SKU] (

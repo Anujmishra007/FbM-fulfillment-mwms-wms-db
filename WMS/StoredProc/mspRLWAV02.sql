@@ -39,6 +39,8 @@ GO
 /* 2025-07-01                 Version 1.90 & 1.91 & fixes. Add v2.0      */
 /* 2025-07-02                 Version v2.1 & fixes                       */
 /* 2025-07-04                 Version v2.2 & fix                         */
+/* 2025-09-04                 fix                                        */
+/* 2025-10-10  SSA08    1.9   UWP-42248 -Enhanced session management     */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV02]
    @c_Wavekey      NVARCHAR(10)
@@ -253,10 +255,10 @@ BEGIN
             , MbolKey = ISNULL(md.MbolKey,'')
             , OtherReference = ISNULL(m.OtherReference, '')
             , o.[Type]
-            , [Priority] = ISNULL(cl2.Short, '')
-            , o.[Status]
+            , [Priority]= ISNULL(cl2.Short, '')
+            , [Status]  = ISNULL(od.[Status],'0')                                   --2025-09-04
             , C_Company = ISNULL(o.C_Company,'')
-            , CompML =  ISNULL(MIN(cl.ListName),'')
+            , CompML    = ISNULL(MIN(cl.ListName),'')
             , MSLanes=  ISNULL(STRING_AGG(l.Loc , ',')     
                         WITHIN GROUP (ORDER BY l.Loc, cl.Short ASC),'')             --2025-07-03
             , ToLocCodes=ISNULL(STRING_AGG(cl.Short , ',')     
@@ -294,6 +296,17 @@ BEGIN
                                                     WHEN cl.UDF03 = o.[OrderGroup] THEN 2 
                                                     ELSE 3 END)
                   ) cl2  
+      OUTER APPLY (SELECT od1.Orderkey                                              --2025-09-04
+                        , [Status] = CASE WHEN SUM(od1.QtyAllocated + od1.QtyPicked) = 0
+                                          THEN '0'
+                                          WHEN SUM(od1.OpenQty) = SUM(od1.QtyAllocated + od1.QtyPicked) 
+                                          THEN '2'
+                                          ELSE '1'
+                                          END
+                   FROM ORDERDETAIL od1 (NOLOCK)  
+                   WHERE od1.Orderkey = o.Orderkey
+                   GROUP BY od1.Orderkey
+                  ) od  
       WHERE w.WaveKey = @c_Wavekey
       GROUP BY o.Orderkey
             ,  o.Facility
@@ -303,7 +316,7 @@ BEGIN
             ,  ISNULL(m.OtherReference, '')
             ,  o.[Type]
             ,  ISNULL(cl2.Short, '')
-            ,  o.[Status]
+            ,  ISNULL(od.[Status],'0')                                              --2025-09-04
             ,  ISNULL(o.C_Company,'')
             ,  CASE WHEN cl2.UDF01 = 'Y' THEN cl2.UDF01 ELSE 'N' END
             ,  CASE WHEN cl2.UDF04 = 'Y' THEN cl2.UDF04 ELSE 'N' END
@@ -626,10 +639,10 @@ BEGIN
       ,  [PickMethod]      [nvarchar](1)  NOT NULL DEFAULT (' ')
       ,  [WaveKey]         [nvarchar](10) NOT NULL DEFAULT (' ')
       ,  [EffectiveDate]   [datetime]     NOT NULL DEFAULT (getdate())
-      ,  [AddDate]         [datetime]     NOT NULL DEFAULT (getdate())
-      ,  [AddWho]          [nvarchar](128)NOT NULL DEFAULT (suser_sname())
-      ,  [EditDate]        [datetime]     NOT NULL DEFAULT (getdate())
-      ,  [EditWho]         [nvarchar](128)NOT NULL DEFAULT (suser_sname())
+      ,  [AddDate]         [datetime]     NOT NULL DEFAULT (getdate())               --(SSA08)
+      ,  [AddWho]          [nvarchar](128)NOT NULL DEFAULT (suser_sname())           --(SSA08)
+      ,  [EditDate]        [datetime]     NOT NULL DEFAULT (getdate())               --(SSA08)
+      ,  [EditWho]         [nvarchar](128)NOT NULL DEFAULT (suser_sname())           --(SSA08)
       ,  [TrafficCop]      [nvarchar](1)  NULL
       ,  [ArchiveCop]      [nvarchar](1)  NULL
       ,  [OptimizeCop]     [nvarchar](1)  NULL
@@ -692,11 +705,12 @@ BEGIN
             ,pd.CaseID
             ,pd.Loc
             ,pd.ID
-            ,KitLoc = CASE WHEN o.OtherReference > '' THEN o.OtherReference
-                           WHEN o.KitOrder = 1 THEN o.KitLoc
-                           ELSE o.MSLanes
-                           END
-             ,Qty    = SUM(pd.Qty)
+            --,KitLoc = CASE WHEN o.OtherReference > '' THEN o.OtherReference       --2025-08-25
+            --               WHEN o.KitOrder = 1 THEN o.KitLoc
+            --               ELSE o.MSLanes
+            --               END
+
+            ,Qty    = SUM(pd.Qty)
             ,IDQty  = ISNULL(lpn.Qty,0)
             ,la.Lottable11
       FROM #TMP_ORD o 
@@ -727,10 +741,10 @@ BEGIN
             ,  pd.CaseID
             ,  pd.Loc
             ,  pd.ID
-            ,  CASE WHEN o.OtherReference > '' THEN o.OtherReference
-                    WHEN o.KitOrder = 1 THEN o.KitLoc
-                    ELSE o.MSLanes
-                    END
+            --,  CASE WHEN o.OtherReference > '' THEN o.OtherReference              --2025-08-25
+            --        WHEN o.KitOrder = 1 THEN o.KitLoc
+            --        ELSE o.MSLanes
+            --        END
             ,  ISNULL(lpn.Qty,0)
             ,  la.Lottable11
             ,  l.LogicalLocation                                                    --v2.2
@@ -748,7 +762,7 @@ BEGIN
                                  ,  @c_FromID
                                  ,  @c_ToLoc
                                  ,  @c_ToID
-                                 ,  @c_Lanes
+                                 --,  @c_Lanes                                      --2025-08-25
                                  ,  @n_Qty
                                  ,  @n_IDQty                                 
                                  ,  @c_CaseID    
@@ -763,17 +777,41 @@ BEGIN
          SET @c_Priority   = '3'
          SET @c_TaskStatus = '0'                                                    --v2.2         
          
-         SELECT TOP 1 @c_FinalLoc = l.Loc
-         FROM string_split (@c_Lanes, ',') ss
-         JOIN LOC l (NOLOCK) ON l.Loc = ss.[value]
-         WHERE l.Facility = @c_Facility
-         ORDER BY CASE WHEN l.[Status] =  'OK' AND l.LocationFlag = 'NONE' THEN 1
-                       WHEN l.[Status] <> 'OK' THEN 2
-                       WHEN l.LocationFlag <> 'NONE' THEN 2
-                       ELSE 9
-                       END 
-                  ,l.LogicalLocation
+         --SELECT TOP 1 @c_FinalLoc = l.Loc                                         --2025-08-25 - START
+         --FROM string_split (@c_Lanes, ',') ss
+         --JOIN LOC l (NOLOCK) ON l.Loc = ss.[value]
+         --WHERE l.Facility = @c_Facility
+         --ORDER BY CASE WHEN l.[Status] =  'OK' AND l.LocationFlag = 'NONE' THEN 1
+         --              WHEN l.[Status] <> 'OK' THEN 2
+         --              WHEN l.LocationFlag <> 'NONE' THEN 2
+         --              ELSE 9
+         --              END 
+         --         ,l.LogicalLocation
 
+         SET @c_FinalLoc = @c_ToLoc                                                  
+
+         SET @c_LocAisle = ''
+         SET @c_Floor    = ''
+         SELECT @c_LocAisle = l.LocAisle
+               ,@c_Floor    = l.[Floor]
+         FROM Loc l (NOLOCK)
+         WHERE l.Loc = @c_FromLoc
+
+         SET @n_Cnt = 0                                                             --2025-09-01
+         SELECT TOP 1 @c_ToLoc = l.Loc
+               ,  @n_Cnt = 1                                                        --2025-09-01
+         FROM LOC l (NOLOCK)
+         WHERE l.Facility = @c_Facility
+         AND   l.LocationCategory = 'PND_OUT'                                        
+         AND   l.LocAisle = @c_LocAisle
+         AND   l.[Floor]  = @c_Floor
+         ORDER BY l.LogicalLocation                                                 --2025-08-25 - END
+
+         IF @n_Cnt = 1                                                                 
+         BEGIN
+            SET @c_ToId = @c_FromID                                                 --2025-09-01 Fix for UWP-40397
+         END
+ 
          IF @n_IDQty > @n_Qty AND @c_CaseID > ''                     --Lottable11
          BEGIN
             SELECT @n_Qty = SUM(lli.Qty)
@@ -787,7 +825,7 @@ BEGIN
          ELSE                                                                       --2025-07-04 - START
          BEGIN
             SET @n_Qty = @n_IDQty
-         END                                                                        --2025-07-04 - END             
+         END                                                                        --2025-07-04 - END  
 
          EXEC isp_InsertTaskDetail
             @c_Taskdetailkey         = @c_Taskdetailkey OUTPUT
@@ -800,10 +838,10 @@ BEGIN
          ,  @n_Qty                   = @n_Qty
          ,  @c_FromLoc               = @c_FromLoc
          ,  @c_LogicalFromLoc        = @c_FromLoc
-         ,  @c_FromID                = @c_FromID
+         ,  @c_FromID                = @c_FromID                                    --Confirm refer to Inv's ID
          ,  @c_ToLoc                 = @c_ToLoc
          ,  @c_LogicalToLoc          = @c_ToLoc
-         ,  @c_ToID                  = @c_ToID 
+         ,  @c_ToID                  = @c_ToID                                      --Confirm refer to Inv's ID
          ,  @c_CaseID                = @c_CaseID                                    --2025-06-17
          ,  @c_PickMethod            = @c_PickMethod
          ,  @c_Status                = @c_TaskStatus                                --v2.2         
@@ -815,7 +853,7 @@ BEGIN
          ,  @c_Groupkey              = ''
          ,  @c_Wavekey               = @c_Wavekey
          ,  @c_FinalLoc              = @c_FinalLoc
-         ,  @c_FinalID               = @c_ToID         
+         ,  @c_FinalID               = @c_ToID                                      --Confirm refer to Inv's ID            
          ,  @c_AreaKey               = '?F'  -- ?F=Get from location areakey
          ,  @c_Message03             = ''
          ,  @n_QtyReplen             = @n_Qty
@@ -839,7 +877,7 @@ BEGIN
                                     ,  @c_FromID
                                     ,  @c_ToLoc
                                     ,  @c_ToID
-                                    ,  @c_Lanes
+                                    --,  @c_Lanes                                   --2025-08-25
                                     ,  @n_Qty
                                     ,  @n_IDQty  
                                     ,  @c_CaseID      
@@ -854,7 +892,7 @@ BEGIN
       SELECT o.Orderkey
          ,   o.[Priority]
          ,   o.C_Company
-         ,   Lanes = CASE  WHEN o.KitOrder = 1 THEN o.KitLoc                              --2025-07-03
+         ,   Lanes = CASE  WHEN o.KitOrder = 1 THEN o.KitLoc                        --2025-07-03
                            WHEN o.KitOrder = 0 AND o.OtherReference > '' THEN o.OtherReference
                            ELSE o.MSLanes
                            END
@@ -864,7 +902,7 @@ BEGIN
          ,   Lot = CASE WHEN COUNT(DISTINCT pd.Lot) > 1 THEN '' ELSE MIN(pd.Lot) END
          ,   pd.Loc
          ,   pd.ID
-         ,   CaseID = CASE WHEN UOM IN ('6', '7') THEN '' ELSE la.Lottable11 END
+         ,   CaseID = la.Lottable11                                                 --2025-08-27
          ,   ReplFromLoc = ISNULL(pd.ToLoc,'')                                      --v1.90
          ,   ReplFromID  = pd.CaseID                                                --v1.90
          ,   Qty = SUM(pd.Qty)
@@ -888,7 +926,7 @@ BEGIN
             ,  pd.Storerkey
             ,  pd.Loc
             ,  pd.ID
-            ,  CASE WHEN UOM IN ('6', '7') THEN '' ELSE la.Lottable11 END
+            ,  la.Lottable11                                                        --2025-08-27                                  
             ,  ISNULL(pd.ToLoc,'')                                                  --v1.90
             ,  pd.CaseID                                                            --v1.90
             ,  l.LocAisle
@@ -913,15 +951,19 @@ BEGIN
          SET @c_TaskType      = 'FCP'
          SET @c_ToLoc         = ''
          SET @c_FinalLoc      = ''
-         SET @c_ToID          = @c_FromID
-         SET @c_FinalID       = @c_ToID
-         SET @c_PickMethod    = CASE WHEN @c_CaseID = '' AND @c_UOM NOT IN ('6','7')--2025-06-17
-                                     THEN 'FP' ELSE 'PP' END
+         SET @c_ToID          = @c_FromID                                                
+         SET @c_FinalID       = @c_ToID                                                
+         SET @c_PickMethod    = CASE WHEN @c_CaseID > ''                            --2025-08-27
+                                     THEN 'PP' 
+                                     WHEN @c_FromID = ''
+                                     THEN 'PP' 
+                                     ELSE 'FP' END
          SET @c_TaskStatus    = '0'
          SET @c_RefTaskkey    = ''                                                  --v1.90
          SET @c_LinkTaskToPick_SQL = 'PICKDETAIL.Orderkey= @c_Orderkey'
                                    +' AND PICKDETAIL.Loc = @c_FromLoc'
                                    +' AND PICKDETAIL.ID  = @c_FromID'
+         SET @c_LocationGroup = ISNULL(@c_LocationGroup,'')                         --2025-09-25
 
          IF @c_UOM = '7'
          BEGIN
@@ -942,12 +984,16 @@ BEGIN
                SELECT @c_RefTaskKey =  td.TaskDetailKey 
                FROM TASKDETAIL td (NOLOCK)
                WHERE td.TaskType   = 'RPF'
-               AND   td.Caseid     = ''
+               AND   td.Caseid     = ''                                           
                AND   td.Storerkey  = @c_Storerkey
                AND   td.UOM        = '1'
                AND   td.FromLoc    = @c_ReplFromLoc 
                AND   td.FromID     = @c_ReplFromID
                AND   td.SourceType = @c_SourceType
+
+               SET @c_Putawayzone      = ''                                         --2025-08-27
+               SET @c_LocationGroup    = ''                                         --2025-08-27
+               SET @c_LocationCategory = ''                                         --2025-08-27
             END
          END
       
@@ -964,13 +1010,14 @@ BEGIN
  
          SET @c_ToLoc = @c_FinalLoc
 
-         SELECT @c_ToLoc = l.Loc
+         SELECT TOP 1 @c_ToLoc = l.Loc
          FROM LOC l (NOLOCK)
          WHERE l.Facility = @c_Facility
          AND   l.LocationCategory = 'PND_OUT'                                       --v2.0
          AND   l.LocAisle = @c_LocAisle
          AND   l.[Floor]  = @c_Floor
-                             
+         ORDER BY l.LogicalLocation
+                
          SET @b_Success = 1
          SET @n_Err = 0
          SET @c_errmsg = ''
@@ -986,10 +1033,10 @@ BEGIN
          ,  @n_Qty                   = @n_Qty
          ,  @c_FromLoc               = @c_FromLoc
          ,  @c_LogicalFromLoc        = @c_FromLoc
-         ,  @c_FromID                = @c_FromID
+         ,  @c_FromID                = @c_FromID                                    --Confirm refer to Inv's ID
          ,  @c_ToLoc                 = @c_ToLoc
          ,  @c_LogicalToLoc          = @c_ToLoc
-         ,  @c_ToID                  = @c_ToID 
+         ,  @c_ToID                  = @c_ToID                                      --Confirm refer to Inv's ID
          ,  @c_CaseID                = @c_CaseID
          ,  @c_PickMethod            = @c_PickMethod
          ,  @c_Status                = @c_TaskStatus
@@ -1002,7 +1049,7 @@ BEGIN
          ,  @c_RefTaskkey            = @c_RefTaskkey                                --v1.90
          ,  @c_Wavekey               = @c_Wavekey
          ,  @c_FinalLoc              = @c_FinalLoc
-         ,  @c_FinalID               = @c_FinalID
+         ,  @c_FinalID               = @c_FinalID                                    --Confirm refer to Inv's ID    
          ,  @c_AreaKey               = '?F'  -- ?F=Get from location areakey
          ,  @c_Message01             = @c_Putawayzone
          ,  @c_Message02             = @c_LocationGroup

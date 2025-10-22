@@ -66,9 +66,13 @@ GO
 /* 2024-09-30 4.9  YYS027  UWP-25017 bugfix for string(dmy) to date when   */
 /*                         calling rdt_UCCReceive_Confirm                  */
 /* 2024-10-14 5.0  CYU027  FCR-759 ID and UCC Length Issue                 */
-/* 2024-11-07 5.1  YYS027   Merged from 4.6(v0) and 4.3(V2) to 4.7(V2)      */
+/* 2024-11-07 5.1  YYS027   Merged from 4.6(v0) and 4.3(V2) to 4.7(V2)     */
 /* 2024-12-05 5.2  ShaoAn  FCR-1103 Changes in UCC Receive to process      */
 /* 2025-05-19 5.3  Dennis  FCR-4531 Add Ext Valation on Step 2             */
+/* 2025-09-12 5.4  Jackc   FCR-2961 Replace InField01 with V_Max on st6    */
+/* 2025-09-29 5.5  Jackc   FCR-29593 Create task after close pallet(jack01)*/
+/* 2025-10-20 5.6  Jackc   UWP-42561 Decoded UUC not set back to right     */ 
+/*                         parameter                                       */
 /***************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdtfnc_UCCReceive](
    @nMobile    INT,
@@ -164,6 +168,7 @@ DECLARE
    @cExtScnSP            NVARCHAR(20),            -- change from ExtendedScreenSP to ExtScnSP (yys027 migrate-crocs-FCR-1126)
    @tExtScnData          VariableTable,           -- for support ExtScnSP
    @nAction              INT,
+   @cGenPATaskSP         NVARCHAR(20),--(jackc01)
 
    @cLottable01       NVARCHAR(18),
    @cLottable02       NVARCHAR(18),
@@ -210,6 +215,7 @@ DECLARE
    @cUserDefine07      NVARCHAR(30), -- FCR759
    @cUserDefine08      NVARCHAR(30), -- FCR759
    @cUserDefine09      NVARCHAR(30), -- FCR759
+   @cMax               NVARCHAR( MAX), --V5.4
 
    @cInField01 NVARCHAR( 60),   @cOutField01 NVARCHAR( 60),
    @cInField02 NVARCHAR( 60),   @cOutField02 NVARCHAR( 60),
@@ -289,6 +295,7 @@ SELECT
    @dLottable13   = V_Lottable13,
    @dLottable14   = V_Lottable14,
    @dLottable15   = V_Lottable15,
+   @cMax          = V_Max,  --V5.4
    /*CS01 End*/
    @cTotalCarton     = v_String2,
    @cCartonCnt       = v_String3,
@@ -1804,7 +1811,7 @@ BEGIN
    IF @nInputKey = 1      -- ENTER
    BEGIN
       --screen mapping
-      SET @cUCC = @cInField01
+      SET @cUCC = SUBSTRING( @cMax, 1, 20) --UCC --v5.4
 
       -- Check UCC blank
       IF @cUCC = ''
@@ -1870,8 +1877,8 @@ BEGIN
       IF @cDecodeSP <> ''
       BEGIN
          DECLARE @nUCCQTY INT
-         DECLARE @cUCCBarcode NVARCHAR(100)
-         SET @cUCCBarcode = @cInField01
+         DECLARE @cUCCBarcode NVARCHAR(1000)
+         SET @cUCCBarcode = SUBSTRING( @cMax, 1, 1000) --V5.4
 
          IF @cDecodeSP = '1'
          BEGIN
@@ -1950,9 +1957,9 @@ BEGIN
 
             IF @nErrNo <> 0
                GOTO Step_6_Fail
-
-            SET @cUCC = @cUCCBarcode
          END
+         
+         SET @cUCC = @cUCCBarcode --V5.5
       END
 
       -- UCC extended validation
@@ -2437,7 +2444,7 @@ BEGIN
                         COMMIT TRAN
                      GOTO Step_6_Fail
                   END
-/*
+                  /*
                   -- Update UCC
                   UPDATE dbo.UCC WITH (ROWLOCK) SET
                      ID = @cTOID,
@@ -2458,7 +2465,7 @@ BEGIN
                      SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') --UPD UCC Fail
                      GOTO Step_6_Fail
                   END
-*/
+                  */
                   SELECT @cReceiptLineNumber=receiptlinenumber
                   FROM receiptdetail (NOLOCK)
                   where receiptkey=@cReceiptKey
@@ -2732,6 +2739,8 @@ BEGIN
             SET @cOutField15 = @cExtendedInfo
          END
       END
+
+      SET @cMax = '' --V5.4 Clear scanned UCC from UI
    END
    GOTO Quit
 
@@ -2739,6 +2748,7 @@ BEGIN
    BEGIN
       SET @cUCC = ''
       SET @cOutField01 = ''
+      SET @cMax = ''--V5.4 Clear scanned UCC from UI
    END
 END
 GOTO Quit
@@ -3847,6 +3857,15 @@ BEGIN
    GOTO Quit
 
    Step_10_Fail:
+   IF @cFlowThruScreen ='1'
+   BEGIN
+      SET @nScn = @nScn - 1
+      SET @nStep = @nStep - 1
+   END
+
+   IF @cDisableQTYField = '1'
+      SET @cFieldAttr10 = 'O'
+
 END
 GOTO Quit
 
@@ -4132,6 +4151,59 @@ BEGIN
             @cID           = @cTOID,
             @cRefNo1       = 'CLOSE'
       END
+
+      --(jackc01) start
+      IF @cOption = '3' -- Yes and putaway
+      BEGIN
+         SET @cGenPATaskSP = rdt.RDTGetConfig( @nFunc, 'GenPATaskSP', @cStorerKey)
+         IF @cGenPATaskSP = '0'
+            SET @cGenPATaskSP = ''
+
+         IF @cGenPATaskSP <> ''
+         BEGIN
+            IF (SELECT COUNT(DISTINCT SKU) FROM dbo.LOTxLOCxID WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND ID = @cTOID) <> 1
+            BEGIN
+               SET @nErrNO = 63176
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Gen task fail
+            END
+            ELSE
+            BEGIN
+               BEGIN TRY
+                  EXECUTE rdt.rdt_UCCReceive_CreateNextTask
+                     @nMobile       = @nMobile,
+                     @nFunc         = @nFunc,
+                     @cLangCode     = @cLangCode,
+                     @cStorerKey    = @cStorerKey,
+                     @cReceiptKey   = @cReceiptKey,
+                     @cPOKey        = @cPOKey,
+                     @cLOC          = @cLOC,
+                     @cToID         = @cToID,
+                     @nErrNo      = @nErrNo  OUTPUT,
+                     @cErrMsg     = @cErrMsg OUTPUT
+
+                  --No need to handle ErrNo <> 0, always go to next step (jackc01)
+               END TRY
+               BEGIN CATCH
+                  SET @nErrNo = 63175
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Gen task fail
+               END CATCH
+            END
+            -- Prepare next screen
+            SET @cToID = ''
+            SET @cOutField01 = @cReceiptKey
+            SET @cOutField02 = @cPOKey
+            SET @cOutField03 = @cLOC
+            SET @cOutField04 = ''
+            SET @cFieldAttr02 = '' -- Count UCC
+
+            -- Go to ID screen
+            SET @nScn = @nScn - 9
+            SET @nStep = @nStep - 9
+
+            GOTO Step_12_Quit
+         END
+      END
+      --(jackc02) end
 
       IF @cExtScnSP <> ''
       BEGIN
@@ -4632,6 +4704,7 @@ BEGIN
       V_Lottable03 = @cLottable03,
       V_Lottable04 = @dLottable04,
       V_Lottable05 = @dLottable05,
+      V_Max        = @cMax, --V5.4
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,

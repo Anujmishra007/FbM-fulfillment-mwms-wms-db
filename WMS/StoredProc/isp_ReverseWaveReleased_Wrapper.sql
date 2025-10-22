@@ -27,6 +27,8 @@ GO
 /* 22-Oct-2019  Wan02    1.2  Update TMReleaseFlag, Sync Exceed & SCE    */
 /* 21-Mar-2022  NJOW01   1.3  WMS-19267 Support config by facility       */
 /* 21-Mar-2022  NJOW01   1.3  DEVOPS Combine script                      */
+/* 10-OCT-2025  SSA01    1.4  UWP-42248 -Enhanced session management     */
+/*                             and cleanup.                              */
 /*************************************************************************/   
 CREATE OR ALTER PROCEDURE [dbo].[isp_ReverseWaveReleased_Wrapper]  
       @c_WaveKey    NVARCHAR(10) 
@@ -108,8 +110,8 @@ BEGIN
    UPDATE WAVE WITH (ROWLOCK)
    SET TMReleaseFlag = 'N'         
       ,TrafficCop = NULL 
-      ,EditWho  = SUSER_SNAME() 
-      ,EditDate = GETDATE()             
+      ,EditWho  = dbo.fnc_GetUserName()          --(SSA01)
+      ,EditDate = dbo.fnc_GetDate()    --(SSA01)
    WHERE Wavekey= @c_Wavekey
 
    SET @n_Err = @@ERROR 

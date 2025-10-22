@@ -25,7 +25,9 @@ GO
 /*                            Management - Change Request for validate   */
 /*                            UID login (WL01)                           */
 /* 10-Sep-2024  WLChooi  1.1  DevOps Combine Script                      */
-/*************************************************************************/   
+/* 06-Oct-2025  SSA01    1.2   UWP-42142 -Enhanced session management    */
+/*                             and cleanup.                              */
+/*************************************************************************/    
 CREATE OR ALTER PROCEDURE [WM].[lsp_FinalizePalletMgmt_Wrapper]  
    @c_PMkey             NVARCHAR(10)
 ,  @b_Success           INT           = 1  OUTPUT   
@@ -43,27 +45,32 @@ BEGIN
 
    DECLARE @n_Continue        INT = 1
          , @n_StartTCnt       INT = @@TRANCOUNT
+         , @b_ExecuteAs       BIT = 0     --(SSA01)
 
    SET @b_Success = 1
    SET @c_ErrMsg = ''
 
    SET @n_Err = 0 
 
-   --(mingle01) - START   
+   --(mingle01) - START
+   --(SSA01) - START
    IF SUSER_SNAME() <> @c_UserName
    BEGIN
       EXEC [WM].[lsp_SetUser] 
                @c_UserName = @c_UserName  OUTPUT
             ,  @n_Err      = @n_Err       OUTPUT
             ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+            ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
   
       IF @n_Err <> 0 
       BEGIN
          GOTO EXIT_SP
       END
 
-      EXECUTE AS LOGIN = @c_UserName
+       IF @b_ExecuteAs = 1
+         EXECUTE AS LOGIN = @c_UserName
    END
+   --(SSA01) - END
    --(mingle01) - END
 
    --(mingle01) - START
@@ -135,7 +142,14 @@ EXIT_SP:
       BEGIN TRAN
    END
 
-   REVERT      
+   --(SSA01) - Start
+   IF @b_ExecuteAs = 1
+   BEGIN
+      REVERT
+   END
+
+   EXEC [WM].[lsp_ResetUser]
+   --(SSA01) - END
 END  
 GO
 GRANT EXECUTE ON [WM].[lsp_FinalizePalletMgmt_Wrapper] TO nSQL 

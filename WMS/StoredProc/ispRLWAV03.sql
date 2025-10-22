@@ -59,6 +59,7 @@ GO
 /*                            when calling from SCE (ZG01)                */
 /* 27/07/2023   NJOW12   3.6  WMS-23524 KR new logic to handle some orders*/ 
 /* 27/07/2023   NJOW12   3.6  DEVOPS Combine Script                       */
+/* 10/10/2025   SSA01    3.7  UWP-42248 -Enhanced session management      */
 /**************************************************************************/      
       
 CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV03]      
@@ -301,8 +302,8 @@ CREATE OR ALTER PROCEDURE [dbo].[ispRLWAV03]
          UPDATE LOTxLOCxID WITH (ROWLOCK)      
                  SET LOTxLOCxID.QtyReplen = LOTxLOCxID.QtyReplen - CASE WHEN LOTxLOCxID.QtyReplen > 0 THEN @n_Qty ELSE 0 END,      
                      LOTxLOCxID.TrafficCop = NULL,      
-                     EditWho = SUSER_SNAME(),      
-                     EditDate = GETDATE()      
+                     EditWho = dbo.fnc_GetUserName(),       --(SSA01)
+                     EditDate = dbo.fnc_GetDate()    --(SSA01)
          WHERE Lot = @c_Lot      
          AND Loc = @c_Loc      
          AND ID = @c_ID      
@@ -2834,4 +2835,4 @@ FIND_DPP_LOC:
 END --sp end 
 GO
 GRANT EXECUTE ON [dbo].[ispRLWAV03] TO nSQL
-GO 
+GO

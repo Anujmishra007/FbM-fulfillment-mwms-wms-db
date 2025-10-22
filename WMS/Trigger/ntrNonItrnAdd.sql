@@ -1,4 +1,4 @@
-IF EXISTS (SELECT name FROM dbo.sysobjects WHERE name = 'ntrNonItrnAdd' AND type = 'TR')
+﻿IF EXISTS (SELECT name FROM dbo.sysobjects WHERE name = 'ntrNonItrnAdd' AND type = 'TR')
    DROP TRIGGER ntrNonItrnAdd
 GO
 
@@ -27,6 +27,7 @@ GO
 /*                                                                         */
 /* Modifications:                                                          */
 /* Date         Author   Ver  Purposes                                     */
+/* 09-Oct-2025  SPC040   1.0  Replace SUSER_SNAME with fnc_GetUserName     */
 /***************************************************************************/
 
 CREATE TRIGGER ntrNonItrnAdd ON NONITRN 
@@ -50,8 +51,8 @@ BEGIN
    UPDATE NONINV WITH (ROWLOCK)
       SET NONINV.CurrentBalance = CurrentBalance + INSERTED.Qty
         , NONINV.LastLoc  = INSERTED.ToLoc
-        , NONINV.EditDate = GETDATE() 
-        , NONINV.EditWho  = SUSER_SNAME()
+        , NONINV.EditDate = dbo.fnc_GetDate() 
+        , NONINV.EditWho = dbo.fnc_GetUserName()
      FROM INSERTED 
     WHERE NONINV.Facility  = INSERTED.Facility
       AND NONINV.StorerKey = INSERTED.StorerKey

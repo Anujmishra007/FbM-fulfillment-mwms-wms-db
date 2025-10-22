@@ -15,6 +15,7 @@ GO
 /* 02-08-2018 1.0  Ung       WMS-5380 Created                           */
 /* 03-05-2019 1.1  Ung       WMS-5380 Fix ExternKitKey                  */
 /* 09-05-2019 1.2  Ung       WMS-9094 Convert to Kit release SP         */
+/* 10-10-2025 1.3  SSA01     UWP-42248 -Enhanced session management     */
 /************************************************************************/
 
 CREATE PROC [dbo].[ispRLKIT03] (
@@ -116,8 +117,8 @@ BEGIN
                   LOT = @cLOT, 
                   LOC = @cLOC, 
                   ID = @cID, 
-                  EditDate = GETDATE(), 
-                  EditWho = SUSER_SNAME(), 
+                  EditDate = dbo.fnc_GetDate(),   --(SSA01)
+                  EditWho = dbo.fnc_GetUserName(),         --(SSA01)
                   TrafficCop = NULL
                WHERE KitKey = @c_KitKey
                   AND KitLineNumber = @cKitLineNumber
@@ -133,8 +134,8 @@ BEGIN
                -- Book the stock
                UPDATE LOTxLOCxID SET
                   QTYReplen = QTYReplen + @nQTY_KD, 
-                  EditDate = GETDATE(), 
-                  EditWho = SUSER_SNAME()
+                  EditDate = dbo.fnc_GetDate(),    --(SSA01)
+                  EditWho = dbo.fnc_GetUserName()          --(SSA01)
                WHERE LOT = @cLOT
                   AND LOC = @cLOC
                   AND ID = @cID
@@ -178,8 +179,8 @@ BEGIN
                UPDATE KitDetail SET
                   ExpectedQTY = @nQTY_LLI, 
                   QTY = @nQTY_LLI, 
-                  EditDate = GETDATE(), 
-                  EditWho = SUSER_SNAME(), 
+                  EditDate = dbo.fnc_GetDate(),    --(SSA01)
+                  EditWho = dbo.fnc_GetUserName(),       --(SSA01)
                   TrafficCop = NULL
                WHERE KitKey = @c_KitKey
                   AND KitLineNumber = @cKitLineNumber
@@ -201,8 +202,8 @@ BEGIN
       -- Reset flag
       UPDATE Kit SET 
          USRDEF3 = '',  
-         EditWho = SUSER_SNAME(), 
-         EditDate = GETDATE() 
+         EditWho = dbo.fnc_GetUserName(),           --(SSA01)
+         EditDate = dbo.fnc_GetDate()    --(SSA01)
       WHERE KitKey = @c_KitKey
       IF @@ERROR <> 0
       BEGIN

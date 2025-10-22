@@ -71,6 +71,8 @@ GO
 /*                        Fixed RDT move issue(FCR-540)                   */
 /* 04-Apr-2025  Wan12     UWP-31258-FCR-822 Partial Pallet Serial No Move */
 /* 26-JUN-2025  SSA01     UWP-3982- Added PalletType in inventory         */
+/* 26-Sep-2025  TLTING02  UWP-41813 skip blank ID update                  */
+/* 10-Oct-2025  SSA02     UWP-42248 -Enhanced session management          */
 /**************************************************************************/
 
 CREATE OR ALTER PROCEDURE [dbo].[nspItrnAddMoveCheck]
@@ -189,6 +191,7 @@ BEGIN
       , @c_ChkNoMixLottableForAllSku NVARCHAR(30) = '' --NJOW04  
       
       , @n_Qty_ID                   INT = 0              --(Wan12)
+      , @c_MoveType                 NVARCHAR(30) = ''    --(SSA01)
 
    SET @c_IDLottable01     = ''
    SET @c_IDLottable02     = ''
@@ -277,6 +280,9 @@ BEGIN
    /* Get status of overallocations flag */
    IF @n_continue = 1 or @n_continue = 2
    BEGIN
+     SELECT @c_MoveType = sourcetype
+                     FROM ITRN (NOLOCK) WHERE
+                     ITRNKEY = @c_itrnkey   --(SSA01)
       -- Added By Ricky to handle Overallocation by storerkey
 
       SELECT @c_facility = LOC.FACILITY
@@ -1132,7 +1138,7 @@ BEGIN
                            ,         @c_xUOM
                            ,         @n_UOMCalc
                            ,         @n_UOMQty
-                           ,         getdate()
+                           ,         dbo.fnc_GetDate()   --(SSA02)
                            ,         @c_Channel             --(Wan08)
                            ,         @n_Channel_ID          --(Wan08) 
                            )
@@ -1630,8 +1636,8 @@ END
                BEGIN
                   UPDATE ChannelInv WITH (ROWLOCK)
                      SET Qty      = Qty - @n_Qty
-                        ,EditDate = GETDATE()
-                        ,EditWho  = SUSER_SNAME() 
+                        ,EditDate = dbo.fnc_GetDate()   --(SSA02)
+                        ,EditWho  = dbo.fnc_GetUserName()          --(SSA02)
                   WHERE Channel_ID = @n_FromChannel_ID 
 
                   SET @n_err = @@ERROR
@@ -1678,8 +1684,8 @@ END
             BEGIN
                UPDATE ChannelInv WITH (ROWLOCK)
                SET Qty      = Qty + @n_Qty
-                  ,EditDate = GETDATE()
-                  ,EditWho  = SUSER_SNAME() 
+                  ,EditDate = dbo.fnc_GetDate()   --(SSA02)
+                  ,EditWho  = dbo.fnc_GetUserName()          --(SSA02)
                WHERE Channel_ID = @n_ToChannel_ID 
                
                SET @n_err = @@ERROR
@@ -1998,24 +2004,28 @@ BEGIN
    /* Reduce The FROM ID in The ID Table */
    IF @n_continue=1 or @n_continue=2
    BEGIN
-      UPDATE ID with (ROWLOCK) SET QTY = QTY - @n_Qty
-      , PalletType = @c_PalletType   --(SSA01)
-      WHERE ID = @c_fromID
-      /* Check SQL Error Message */
-      SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
-      IF @n_err <> 0
-      BEGIN
-         SELECT @n_continue = 3
-         SELECT @n_err = 62030 --62214   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
-         SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed On Table ID. (nspItrnAddMoveCheck)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTrim(@c_ErrMsg),'') + ' ) '
-      END
-   ELSE IF @n_cnt = 0
-   BEGIN
-      SELECT @n_continue = 3
-      SELECT @n_err = 62031 --62215
-      SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update To Table ID Returned Zero Rows Affected. (nspItrnAddMoveCheck)'
+      --TLTING02
+   	IF ISNULL(RTRIM(@c_fromID), '') <> ''
+   	BEGIN
+         UPDATE ID with (ROWLOCK) SET QTY = QTY - @n_Qty
+		    , PalletType = CASE WHEN @c_MoveType = 'ntrInventoryQCDetailUpdate' THEN @c_PalletType ELSE PalletType END   --(SSA01)
+		    WHERE ID = @c_fromID
+	       /* Check SQL Error Message */
+	      SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
+	      IF @n_err <> 0
+	      BEGIN
+	         SELECT @n_continue = 3
+	         SELECT @n_err = 62030 --62214   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+	         SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed On Table ID. (nspItrnAddMoveCheck)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTrim(@c_ErrMsg),'') + ' ) '
+	      END
+         ELSE IF @n_cnt = 0
+         BEGIN
+            SELECT @n_continue = 3
+            SELECT @n_err = 62031 --62215
+            SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update To Table ID Returned Zero Rows Affected. (nspItrnAddMoveCheck)'
+         END
+      END  -- END TLTING02
    END
-END
 /* Update the ID table with TIxHI numbers */
 IF (@n_continue =1 or @n_continue=2)
 BEGIN
@@ -2071,21 +2081,23 @@ BEGIN
       IF @c_AllowIDQtyUpdate = '1'
       BEGIN
          /* Update table 'Id' */
-         UPDATE ID with (ROWLOCK) SET QTY = QTY + @n_Qty, Status = @c_Status
-          , PalletType = @c_PalletType   --(SSA01)
-         WHERE ID = @c_TOID
+         -- TLTING02
+         IF ISNULL(RTRIM(@c_toid), '') <> ''
+         BEGIN
+            UPDATE ID with (ROWLOCK) SET QTY = QTY + @n_Qty, Status = @c_Status
+	          , PalletType = CASE WHEN @c_MoveType = 'ntrInventoryQCDetailUpdate' THEN @c_PalletType ELSE PalletType END  --(SSA01)
+	          WHERE ID = @c_TOID
+         END
       END
       ELSE
       BEGIN
          --tlting01
-         SET @n_cnt = 0
-         SELECT @n_cnt = COUNT(1) FROM  ID with (NOLOCK) WHERE ID = @c_toid
 
          /* Update table 'Id' */
          IF EXISTS ( SELECT 1 FROM  ID with (NOLOCK) WHERE ID = @c_TOID AND [Status] <> @c_Status )
          BEGIN
             UPDATE ID with (ROWLOCK) SET Status = @c_Status
-             , PalletType = @c_PalletType   --(SSA01)
+            , PalletType = CASE WHEN @c_MoveType = 'ntrInventoryQCDetailUpdate' THEN @c_PalletType ELSE PalletType END   --(SSA01)
             WHERE ID = @c_TOID
          END
       END
@@ -2098,8 +2110,10 @@ BEGIN
          SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed On Table ID. (nspItrnAddMoveCheck)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTrim(@c_ErrMsg),'') + ' ) '
 
       END
-   -- ELSE IF @n_cnt = 0
-   IF @n_cnt = 0
+   --TLTING02
+   SET @n_cnt = 0
+   SELECT @n_cnt = COUNT(1) FROM  ID with (NOLOCK) WHERE ID = @c_toid
+IF @n_cnt = 0
    BEGIN
       SELECT @n_continue = 3
       SELECT @n_err = 62034 --62219
@@ -2695,8 +2709,8 @@ BEGIN
           ID = #tpickdet.ID,
           UOM = CASE WHEN @b_UpdUOM = 1 AND UOM = '6' THEN '7' ELSE UOM END, -- SWT03
           MoveRefKey = CASE WHEN @b_UpdUOM = 1 THEN @c_MoveRefKey ELSE '' END, --SWT03 WWANG02
-          EditWho = SUSER_SNAME(),
-          EditDate = GETDATE()
+          EditWho = dbo.fnc_GetUserName(),          --(SSA02)
+          EditDate = dbo.fnc_GetDate()   --(SSA02)
         FROM PICKDETAIL
         JOIN #tpickdet WITH (NOLOCK) ON PICKDETAIL.PickDetailKey =  #tpickdet.Pickdetailkey
         SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT

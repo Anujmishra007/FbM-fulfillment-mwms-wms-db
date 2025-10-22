@@ -1,6 +1,6 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrPickHeaderAdd]') 
-              and OBJECTPROPERTY(id, N'IsTrigger') = 1) 
-drop trigger [dbo].[ntrPickHeaderAdd]
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
 GO
 
 /************************************************************************/
@@ -30,10 +30,11 @@ GO
 /* 11-Oct-2016  TLTING01  1.3   Perfromance Tune                        */
 /* 26-Jan-2108  MCTang    1.3   Enhance Generaic Trigger Interface(MC01)*/
 /* 24-Feb-2023  GHUI      1.4   JSM-131455 -Add filter to fix           */          
-/*                              performance issue                       */  
+/*                              performance issue                       */ 
+/* 06-OCT-2025  AK01      1.5   UWP-42143 Data Audit                    */
 /************************************************************************/
 
-CREATE TRIGGER [dbo].[ntrPickHeaderAdd]
+CREATE OR ALTER TRIGGER [dbo].[ntrPickHeaderAdd]
 ON  [dbo].[PICKHEADER]
 FOR INSERT
 AS
@@ -318,6 +319,25 @@ BEGIN
    /********************************************************/  
    /* Interface Trigger Points Calling Process - (End)     */  
    /********************************************************/  
+
+   --AK01 - S
+   IF dbo.fnc_GetUserName() <> sUser_sName() AND @n_Continue IN (1,2) 
+   BEGIN
+      UPDATE PICKHEADER
+        SET AddWho  = dbo.fnc_GetUserName(),
+            AddDate = dbo.fnc_GetDate(), 
+            TrafficCop = NULL 
+      FROM PICKHEADER
+      JOIN INSERTED ON PICKHEADER.PickHeaderKey = INSERTED.PickHeaderKey
+      SELECT @n_err = @@ERROR
+      IF @n_err <> 0
+      BEGIN
+         SELECT @n_continue = 3
+         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=68002
+         SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed On Table PICKHEADER. (ntrPICKHEADERAdd)' + ' ( ' + ' SQLSvr MESSAGE=' + TRIM(@c_errmsg) + ' ) '
+      END
+   END
+   --AK01 - E
 
    /* #INCLUDE <TRPHU2.SQL> */
    IF @n_continue=3  -- Error Occured - Process And Return

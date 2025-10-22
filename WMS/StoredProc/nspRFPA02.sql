@@ -30,6 +30,7 @@ GO
 /* 18-Sep-2006  MaryVong   Bug Fix - Raise Error to support RDT         */
 /* 2007-07-16   TLTING     SQL2005, Status = 9 put '9'                  */
 /* 2012-08-27   Ung        Performance tuning (ung01)                   */
+/* 2025-10-10   SSA01      UWP-42248 -Enhanced session management       */
 /************************************************************************/
 
 CREATE PROC nspRFPA02    
@@ -422,8 +423,8 @@ BEGIN -- MAIN
          BEGIN
             UPDATE PutawayTask WITH (ROWLOCK)   
             SET Status = '9',    
-               Editdate = getdate(),    
-               EditWho = Suser_Sname()    
+               Editdate = dbo.fnc_GetDate(),    --(SSA01)
+               EditWho = dbo.fnc_GetUserName()        --(SSA01)
             WHERE ID = @c_fromid     
             AND   FromLoc = @c_fromloc     
             AND   Toloc = @c_toloc    
@@ -466,8 +467,8 @@ BEGIN -- MAIN
                      UPDATE PICKDETAIL WITH (ROWLOCK)   
                      SET TOLOC  = @c_toloc,    
                         DROPID = @c_fromid,    
-                        Editdate = getdate(),    
-                        EditWho = Suser_Sname(),    
+                        Editdate = dbo.fnc_GetDate(),    --(SSA01)
+                        EditWho = dbo.fnc_GetUserName(),          --(SSA01)
                         TrafficCop = Null    
                      WHERE pickdetailkey = @c_pickdetailkey    
                   END    
@@ -478,8 +479,8 @@ BEGIN -- MAIN
                      SET Status = '5',    
                         TOLOC  = @c_toloc,    
                         DROPID = @c_fromid,    
-                        Editdate = getdate(),    
-                        EditWho = Suser_Sname()    
+                        Editdate = dbo.fnc_GetDate(),    --(SSA01)
+                        EditWho = dbo.fnc_GetUserName()           --(SSA01)
                      WHERE pickdetailkey = @c_pickdetailkey    
                   END    
                   SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT    

@@ -1,6 +1,4 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrCaseManifestUpdate]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
-drop trigger [dbo].[ntrCaseManifestUpdate]
-GO
+
 
 
 SET QUOTED_IDENTIFIER OFF 
@@ -12,8 +10,9 @@ GO
 /* 17-Mar-2009  TLTING    1.1   Change user_name() to SUSER_SNAME()              */
 /* 28-Oct-2013  TLTING    1.2   Review Editdate column update                    */
 /* 24-Apr-2014  CSCHONG   1.3   Add Lottable06-15                                */
+/* 06-Oct-2025 AK01   1.4  UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName       */
 
-CREATE TRIGGER ntrCaseManifestUpdate  
+CREATE OR ALTER TRIGGER ntrCaseManifestUpdate  
  ON  CaseManifest  
  FOR UPDATE  
  AS  
@@ -105,8 +104,8 @@ CREATE TRIGGER ntrCaseManifestUpdate
  BEGIN  
  UPDATE PALLETDETAIL  with (ROWLOCK)
  SET PALLETDETAIL.CaseId = INSERTED.CaseId,
-      EditDate = GETDATE(),
-      EditWho = SUSER_SNAME()  
+      EditDate = dbo.fnc_GetDate(),
+      EditWho = dbo.fnc_GetUserName()  
  FROM PALLETDETAIL, INSERTED, DELETED  
  WHERE PALLETDETAIL.CaseId = DELETED.CaseId  
  SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT  
@@ -180,8 +179,8 @@ CREATE TRIGGER ntrCaseManifestUpdate
  AND RECEIPTDETAIL.Sku = INSERTED.Sku  
  AND RECEIPTDETAIL.POKey = INSERTED.ReceivedPOKey  
  AND INSERTED.Status = "9"),
-     EditDate = GETDATE(),   --tlting
-     EditWho = SUSER_SNAME()  
+     EditDate = dbo.fnc_GetDate(),   --tlting
+     EditWho = dbo.fnc_GetUserName()  
  FROM RECEIPTDETAIL, INSERTED I2  
  WHERE  
  RECEIPTDETAIL.ReceiptKey = I2.ReceivedReceiptKey  
@@ -220,7 +219,7 @@ CREATE TRIGGER ntrCaseManifestUpdate
  @c_sku = INSERTED.sku ,  
  @n_qty = INSERTED.Qty ,  
  @c_loc = INSERTED.Loc ,  
- @d_effectivedate = getdate()  
+ @d_effectivedate = dbo.fnc_GetDate()  
  FROM INSERTED , DELETED  
  WHERE INSERTED.caseid = @c_controlbreak  
  AND INSERTED.Status = "9"  
@@ -292,8 +291,8 @@ CREATE TRIGGER ntrCaseManifestUpdate
  SELECT "Update EditDate and EditWho"  
  END  
  UPDATE CASEMANIFEST with (ROWLOCK)
- SET  EditDate = GETDATE(),  
- EditWho = SUSER_SNAME()  
+ SET  EditDate = dbo.fnc_GetDate(),  
+ EditWho = dbo.fnc_GetUserName()  
  FROM CASEMANIFEST, INSERTED  
  WHERE CASEMANIFEST.CaseId = INSERTED.CaseId  
  SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT  
@@ -332,3 +331,4 @@ CREATE TRIGGER ntrCaseManifestUpdate
  END  
  END  
   
+

@@ -13,6 +13,7 @@ GO
 /* Date       Rev  Author     Purposes                                        */
 /* 2015-08-18 1.0  Ung        SOS347636 Created                               */
 /* 2023-03-28 1.1  James      WMS-21934 Add DefaultToLoc config (james01)     */
+/* 2025-06-18 1.0  Cuize      FCR-4200 Created                               */
 /******************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_PalletReceive_Confirm] (
@@ -24,7 +25,8 @@ CREATE OR ALTER PROCEDURE [RDT].[rdt_PalletReceive_Confirm] (
    @cReceiptKey    NVARCHAR( 10),
    @cToID          NVARCHAR( 18),
    @nErrNo         INT           OUTPUT,
-   @cErrMsg        NVARCHAR( 20) OUTPUT
+   @cErrMsg        NVARCHAR( 1024) OUTPUT,
+   @cToLOC         NVARCHAR( 10) = NULL
 ) AS
 
    SET NOCOUNT ON
@@ -35,7 +37,7 @@ CREATE OR ALTER PROCEDURE [RDT].[rdt_PalletReceive_Confirm] (
    DECLARE @cSQL         NVARCHAR( MAX)
    DECLARE @cSQLParam    NVARCHAR( MAX)
 
-   DECLARE @cToLOC       NVARCHAR( 10)
+--    DECLARE @cToLOC       NVARCHAR( 10)
    DECLARE @cSKU         NVARCHAR( 20)
    DECLARE @cUOM         NVARCHAR( 10)
    DECLARE @nQTY         INT           -- In master unit
@@ -71,7 +73,7 @@ CREATE OR ALTER PROCEDURE [RDT].[rdt_PalletReceive_Confirm] (
    IF @cRcptConfirmSP <> ''
    BEGIN
       SET @cSQL = 'EXEC rdt.' + RTRIM( @cRcptConfirmSP) +
-         ' @nFunc, @nMobile, @cLangCode, @cStorerKey, @cFacility, @cReceiptKey, @cToID, @nErrNo OUTPUT, @cErrMsg OUTPUT '
+         ' @nFunc, @nMobile, @cLangCode, @cStorerKey, @cFacility, @cReceiptKey, @cToID, @cToLOC, @nErrNo OUTPUT, @cErrMsg OUTPUT '
       SET @cSQLParam =
          '@nFunc        INT,            ' +
          '@nMobile      INT,            ' +
@@ -80,10 +82,11 @@ CREATE OR ALTER PROCEDURE [RDT].[rdt_PalletReceive_Confirm] (
          '@cFacility    NVARCHAR( 5),   ' +
          '@cReceiptKey  NVARCHAR( 10),  ' +
          '@cToID        NVARCHAR( 18),  ' +
+         '@cToLOC       NVARCHAR( 10),  ' +
          '@nErrNo       INT           OUTPUT, ' +
-         '@cErrMsg      NVARCHAR( 20) OUTPUT  '
+         '@cErrMsg      NVARCHAR( 1024) OUTPUT  '
       EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-         @nFunc, @nMobile, @cLangCode, @cStorerKey, @cFacility, @cReceiptKey, @cToID, @nErrNo OUTPUT, @cErrMsg OUTPUT
+         @nFunc, @nMobile, @cLangCode, @cStorerKey, @cFacility, @cReceiptKey, @cToID, @cToLOC, @nErrNo OUTPUT, @cErrMsg OUTPUT
       GOTO Quit
    END
 

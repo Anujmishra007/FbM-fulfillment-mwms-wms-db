@@ -60,12 +60,16 @@ GO
 /* 2025-03-10 5.3  YeeKung  UWP-31293 FIX SerialNo Blank (yeekung07)             */
 /* 2025-03-12 5.4  CYU027   UWP-26488&FCR-2729 DropListSp                        */
 /* 2025-06-18 0.0  Jackc    !!!Cutover. Use V2 file in V0 repo for work!!!       */
+/* 2025-05-19 5.5  Cuize    FCR-4500  Created                                    */
+/************************** Merged Into V0 ***************************************/
+/* 2025-06-25 5.5  Dennis   FCR-5716 ExtScn SP                                   */
+/* 2025-06-25 5.6  Cuize    FCR-6888 GOTO step 98                                */
 /*********************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_NormalReceipt_V7] (
    @nMobile    INT,
    @nErrNo     INT  OUTPUT,
-   @cErrMsg    NVARCHAR( 20) OUTPUT
+   @cErrMsg    NVARCHAR( 1024) OUTPUT
 ) AS
 
 SET NOCOUNT ON
@@ -214,7 +218,7 @@ DECLARE
    @cInField05 NVARCHAR( 60),   @cOutField05 NVARCHAR( 60),    @cFieldAttr05 NVARCHAR( 1),
    @cInField06 NVARCHAR( 60),   @cOutField06 NVARCHAR( 60),    @cFieldAttr06 NVARCHAR( 1),
    @cInField07 NVARCHAR( 60),   @cOutField07 NVARCHAR( 60),    @cFieldAttr07 NVARCHAR( 1),
-   @cInField08 NVARCHAR( 60),   @cOutField08 NVARCHAR( 60),    @cFieldAttr08 NVARCHAR( 1), 
+   @cInField08 NVARCHAR( 60),   @cOutField08 NVARCHAR( 60),    @cFieldAttr08 NVARCHAR( 1),
    @cInField09 NVARCHAR( 60),   @cOutField09 NVARCHAR( 60),    @cFieldAttr09 NVARCHAR( 1),
    @cInField10 NVARCHAR( 60),   @cOutField10 NVARCHAR( 60),    @cFieldAttr10 NVARCHAR( 1),
    @cInField11 NVARCHAR( 60),   @cOutField11 NVARCHAR( 60),    @cFieldAttr11 NVARCHAR( 1),
@@ -364,6 +368,7 @@ BEGIN
    IF @nStep = 13 GOTO Step_13 -- Scn = 3570. Multi SKU Barocde
    IF @nStep = 14 GOTO Step_14 -- Scn = 4831. Serial no
    IF @nStep = 15 GOTO Step_15 -- Scn = 4042. Close Pallet
+   IF @nStep = 98 GOTO Step_98 -- EXT SCN
    IF @nStep = 99 GOTO Step_99 -- Scn = 6382. Pallet Type
 
 END
@@ -932,7 +937,7 @@ BEGIN
                '@cErrMsg         NVARCHAR( 20)  OUTPUT'
 
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cReceiptKey, @cPOKey, 
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cReceiptKey, @cPOKey,
                @cDefaultToLOC OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
 
             IF @nErrNo <> 0
@@ -1043,30 +1048,30 @@ BEGIN
       BEGIN
          IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
          BEGIN
-            EXECUTE [RDT].[rdt_600ExtScnEntry] 
+            EXECUTE [RDT].[rdt_600ExtScnEntry]
             @cExtendedScreenSP,
             @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorerKey, @cSuggLOC OUTPUT, @cLocNeedCheck OUTPUT, @cID OUTPUT, @cSKU OUTPUT,
             @cReceiptKey,@cPoKey,@cReasonCode,@cReceiptLineNumber,@cPalletType,
-            @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01  OUTPUT,  
-            @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02  OUTPUT,  
-            @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03  OUTPUT,  
-            @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04  OUTPUT,  
-            @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  @dLottable05  OUTPUT,  
-            @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  @cLottable06  OUTPUT, 
-            @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  @cLottable07  OUTPUT, 
-            @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  @cLottable08  OUTPUT, 
-            @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  @cLottable09  OUTPUT, 
-            @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  @cLottable10  OUTPUT, 
+            @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01  OUTPUT,
+            @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02  OUTPUT,
+            @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03  OUTPUT,
+            @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04  OUTPUT,
+            @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  @dLottable05  OUTPUT,
+            @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  @cLottable06  OUTPUT,
+            @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  @cLottable07  OUTPUT,
+            @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  @cLottable08  OUTPUT,
+            @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  @cLottable09  OUTPUT,
+            @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  @cLottable10  OUTPUT,
             @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  @cLottable11  OUTPUT,
             @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT,  @cLottable12  OUTPUT,
             @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  @dLottable13  OUTPUT,
             @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT,  @dLottable14  OUTPUT,
             @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT,  @dLottable15  OUTPUT,
-            @nAction, 
+            @nAction,
             @nAfterScn OUTPUT,  @nAfterStep OUTPUT,
-            @nErrNo   OUTPUT, 
+            @nErrNo   OUTPUT,
             @cErrMsg  OUTPUT
-            
+
             IF @nErrNo <> 0
                GOTO Step_2_Fail
 
@@ -1383,7 +1388,7 @@ BEGIN
 
       IF(ISNULL(rdt.RDTGetConfig( @nFunc, 'ValidatePalletType', @cStorerKey),'0'))!='0' -- Capture pallet type
       BEGIN
-         SELECT 
+         SELECT
             @cPalletType = PalletType
          FROM dbo.PalletTypeMaster WITH (NOLOCK)
          WHERE StorerKey = @cStorerKey
@@ -1820,7 +1825,7 @@ BEGIN
       -- Get SKU info
       SET @cSKUDesc = ''
       SELECT
-         @cSKUDesc = 
+         @cSKUDesc =
             CASE WHEN @cDispStyleColorSize = '0'
                  THEN ISNULL( DescR, '')
                  ELSE CAST( Style AS NCHAR(20)) +
@@ -2135,7 +2140,7 @@ BEGIN
          IF @nErrno<>0
             GOTO QUIT
       END
-      
+
       IF @nMorePage = 1 -- Yes
       BEGIN
          -- Go to dynamic lottable screen
@@ -2147,7 +2152,7 @@ BEGIN
       BEGIN
          -- Get SKU info
          SELECT
-            @cSKUDesc = 
+            @cSKUDesc =
                CASE WHEN @cDispStyleColorSize = '0'
                     THEN ISNULL( DescR, '')
                     ELSE CAST( Style AS NCHAR(20)) +
@@ -2215,28 +2220,28 @@ BEGIN
          BEGIN
             IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
             BEGIN
-               EXECUTE [RDT].[rdt_600ExtScnEntry] 
+               EXECUTE [RDT].[rdt_600ExtScnEntry]
                @cExtendedScreenSP,
                @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorerKey, @cSuggLOC OUTPUT, @cLOC OUTPUT, @cID OUTPUT, @cSKU OUTPUT,
                @cReceiptKey,@cPoKey,@cReasonCode,@cReceiptLineNumber,@cPalletType,
-               @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01  OUTPUT,  
-               @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02  OUTPUT,  
-               @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03  OUTPUT,  
-               @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04  OUTPUT,  
-               @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  @dLottable05  OUTPUT,  
-               @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  @cLottable06  OUTPUT, 
-               @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  @cLottable07  OUTPUT, 
-               @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  @cLottable08  OUTPUT, 
-               @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  @cLottable09  OUTPUT, 
-               @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  @cLottable10  OUTPUT, 
+               @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01  OUTPUT,
+               @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02  OUTPUT,
+               @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03  OUTPUT,
+               @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04  OUTPUT,
+               @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  @dLottable05  OUTPUT,
+               @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  @cLottable06  OUTPUT,
+               @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  @cLottable07  OUTPUT,
+               @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  @cLottable08  OUTPUT,
+               @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  @cLottable09  OUTPUT,
+               @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  @cLottable10  OUTPUT,
                @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  @cLottable11  OUTPUT,
                @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT,  @cLottable12  OUTPUT,
                @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  @dLottable13  OUTPUT,
                @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT,  @dLottable14  OUTPUT,
                @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT,  @dLottable15  OUTPUT,
-               @nAction, 
+               @nAction,
                @nAfterScn OUTPUT,  @nAfterStep OUTPUT,
-               @nErrNo   OUTPUT, 
+               @nErrNo   OUTPUT,
                @cErrMsg  OUTPUT
 
                IF @nErrNo <> 0
@@ -2403,7 +2408,7 @@ BEGIN
       END
       ELSE IF(ISNULL(rdt.RDTGetConfig( @nFunc, 'ValidatePalletType', @cStorerKey),'0'))!='0' -- Capture pallet type
       BEGIN
-         SELECT 
+         SELECT
             @cPalletType = PalletType
          FROM dbo.PalletTypeMaster WITH (NOLOCK)
          WHERE StorerKey = @cStorerKey
@@ -2421,7 +2426,7 @@ BEGIN
             GOTO Quit
          END
          ELSE IF @nRowCount = 0
-         BEGIN 
+         BEGIN
             SET @cPalletType =''
             UPDATE RDT.RDTMOBREC SET
             C_String2 = ''
@@ -2445,6 +2450,9 @@ BEGIN
          SET @nScn = @nScn - 1
          SET @nStep = @nStep - 1
       END
+
+      IF @cExtScnSP <> ''
+         GOTO STEP_98
 
       GOTO Quit
    END
@@ -2476,7 +2484,9 @@ BEGIN
             ('@cPUOM_Desc', @cPUOM_Desc),
             ('@nPUOM_Div', CONCAT(@nPUOM_Div,'')),
             ('@cMUOM_Desc', @cMUOM_Desc),
-            ('@cReceiptKey', @cReceiptKey)
+            ('@cReceiptKey', @cReceiptKey),
+            ('@nMorePage', CAST(@nMorePage AS NVARCHAR(10)))
+
 
          EXECUTE [RDT].[rdt_ExtScnEntry]
          @cExtScnSP,
@@ -2581,7 +2591,7 @@ BEGIN
          @cErrMsg     OUTPUT,
          @cReceiptKey,
          @nFunc
-      
+
       SELECT @nErrNoBackup = @nErrNo, @cErrMsgBackup = @cErrMsg
 
       --check for stay this step or not + if batch is empty, the field04 and 06 are required to clear, so error happen, call ExtScnSP to do it
@@ -2656,28 +2666,28 @@ BEGIN
       BEGIN
          IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
          BEGIN
-            EXECUTE [RDT].[rdt_600ExtScnEntry] 
+            EXECUTE [RDT].[rdt_600ExtScnEntry]
                @cExtendedScreenSP,
                @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorerKey, @cSuggLOC OUTPUT, @cLOC OUTPUT, @cID OUTPUT, @cSKU OUTPUT,
                @cReceiptKey,@cPoKey,@cReasonCode,@cReceiptLineNumber,@cPalletType,
-               @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01  OUTPUT,  
-               @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02  OUTPUT,  
-               @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03  OUTPUT,  
-               @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04  OUTPUT,  
-               @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  @dLottable05  OUTPUT,  
-               @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  @cLottable06  OUTPUT, 
-               @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  @cLottable07  OUTPUT, 
-               @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  @cLottable08  OUTPUT, 
-               @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  @cLottable09  OUTPUT, 
-               @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  @cLottable10  OUTPUT, 
+               @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01  OUTPUT,
+               @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02  OUTPUT,
+               @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03  OUTPUT,
+               @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04  OUTPUT,
+               @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  @dLottable05  OUTPUT,
+               @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  @cLottable06  OUTPUT,
+               @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  @cLottable07  OUTPUT,
+               @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  @cLottable08  OUTPUT,
+               @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  @cLottable09  OUTPUT,
+               @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  @cLottable10  OUTPUT,
                @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  @cLottable11  OUTPUT,
                @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT,  @cLottable12  OUTPUT,
                @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  @dLottable13  OUTPUT,
                @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT,  @dLottable14  OUTPUT,
                @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT,  @dLottable15  OUTPUT,
-               @nAction, 
+               @nAction,
                @nAfterScn OUTPUT,  @nAfterStep OUTPUT,
-               @nErrNo   OUTPUT, 
+               @nErrNo   OUTPUT,
                @cErrMsg  OUTPUT
 
             IF @nErrNo <> 0
@@ -2749,7 +2759,7 @@ BEGIN
 
       -- Get SKU info
       SELECT
-         @cSKUDesc = 
+         @cSKUDesc =
             CASE WHEN @cDispStyleColorSize = '0'
                  THEN ISNULL( DescR, '')
                  ELSE CAST( Style AS NCHAR(20)) +
@@ -2810,35 +2820,35 @@ BEGIN
       SET @cOutField09 = CASE WHEN @nMQTY = 0 THEN '' ELSE CAST( @nMQTY AS NVARCHAR( 7)) END -- MQTY
       SET @cOutField10 = @cDropListSP -- Reason
       SET @cOutField15 = '' -- ExtendedInfo
-      
+
       SET @cExtendedScreenSP =  ISNULL(rdt.RDTGetConfig( @nFunc, 'ExtendedScreenSP', @cStorerKey), '')
       SET @nAction = 3
       IF @cExtendedScreenSP <> ''
       BEGIN
          IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
          BEGIN
-            EXECUTE [RDT].[rdt_600ExtScnEntry] 
+            EXECUTE [RDT].[rdt_600ExtScnEntry]
             @cExtendedScreenSP,
             @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorerKey, @cSuggLOC OUTPUT, @cLOC OUTPUT, @cID OUTPUT, @cSKU OUTPUT,
             @cReceiptKey,@cPoKey,@cReasonCode,@cReceiptLineNumber,@cPalletType,
-            @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01  OUTPUT,  
-            @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02  OUTPUT,  
-            @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03  OUTPUT,  
-            @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04  OUTPUT,  
-            @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  @dLottable05  OUTPUT,  
-            @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  @cLottable06  OUTPUT, 
-            @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  @cLottable07  OUTPUT, 
-            @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  @cLottable08  OUTPUT, 
-            @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  @cLottable09  OUTPUT, 
-            @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  @cLottable10  OUTPUT, 
+            @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01  OUTPUT,
+            @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02  OUTPUT,
+            @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03  OUTPUT,
+            @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04  OUTPUT,
+            @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  @dLottable05  OUTPUT,
+            @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  @cLottable06  OUTPUT,
+            @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  @cLottable07  OUTPUT,
+            @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  @cLottable08  OUTPUT,
+            @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  @cLottable09  OUTPUT,
+            @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  @cLottable10  OUTPUT,
             @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  @cLottable11  OUTPUT,
             @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT,  @cLottable12  OUTPUT,
             @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  @dLottable13  OUTPUT,
             @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT,  @dLottable14  OUTPUT,
             @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT,  @dLottable15  OUTPUT,
-            @nAction, 
+            @nAction,
             @nAfterScn OUTPUT,  @nAfterStep OUTPUT,
-            @nErrNo   OUTPUT, 
+            @nErrNo   OUTPUT,
             @cErrMsg  OUTPUT
 
             IF @nErrNo <> 0
@@ -2961,7 +2971,7 @@ BEGIN
       SET @cOutField03 = rdt.rdtFormatString( @cSKUDesc, 1, 20)  -- SKU desc 1
       SET @cOutField04 = rdt.rdtFormatString( @cSKUDesc, 21, 20) -- SKU desc 2
       SET @cOutField05 = ''
-      
+
       -- Go back to prev screen
       SET @nScn = @nFromScn
       SET @nStep = @nStep - 1
@@ -3057,7 +3067,7 @@ BEGIN
    GOTO Quit
 
    Step_5_Fail:
-   -- After captured lottable, screen exit and the hidden field (O_Field15) is clear. 
+   -- After captured lottable, screen exit and the hidden field (O_Field15) is clear.
    -- If any error occur, need to simulate as if still staying in lottable screen, by restoring this hidden field
    SET @cOutField15 = @cOutField15Backup
 END
@@ -3177,7 +3187,7 @@ BEGIN
             EXEC rdt.rdtSetFocusField @nMobile, 10
             GOTO Step_6_Fail
          END
-      
+
       -- Extended validate
       IF @cExtendedValidateSP <> ''
       BEGIN
@@ -3261,35 +3271,35 @@ BEGIN
       BEGIN
          IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
          BEGIN
-            EXECUTE [RDT].[rdt_600ExtScnEntry] 
+            EXECUTE [RDT].[rdt_600ExtScnEntry]
             @cExtendedScreenSP,
             @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorerKey, @cSuggLOC OUTPUT, @cLOC OUTPUT, @cID OUTPUT, @cSKU OUTPUT,
             @cReceiptKey,@cPoKey,@cReasonCode,@cReceiptLineNumber,@cPalletType,
-            @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01  OUTPUT,  
-            @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02  OUTPUT,  
-            @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03  OUTPUT,  
-            @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04  OUTPUT,  
-            @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  @dLottable05  OUTPUT,  
-            @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  @cLottable06  OUTPUT, 
-            @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  @cLottable07  OUTPUT, 
-            @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  @cLottable08  OUTPUT, 
-            @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  @cLottable09  OUTPUT, 
-            @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  @cLottable10  OUTPUT, 
+            @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01  OUTPUT,
+            @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02  OUTPUT,
+            @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03  OUTPUT,
+            @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04  OUTPUT,
+            @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  @dLottable05  OUTPUT,
+            @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  @cLottable06  OUTPUT,
+            @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  @cLottable07  OUTPUT,
+            @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  @cLottable08  OUTPUT,
+            @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  @cLottable09  OUTPUT,
+            @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  @cLottable10  OUTPUT,
             @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  @cLottable11  OUTPUT,
             @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT,  @cLottable12  OUTPUT,
             @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  @dLottable13  OUTPUT,
             @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT,  @dLottable14  OUTPUT,
             @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT,  @dLottable15  OUTPUT,
-            @nAction, 
+            @nAction,
             @nAfterScn OUTPUT,  @nAfterStep OUTPUT,
-            @nErrNo   OUTPUT, 
+            @nErrNo   OUTPUT,
             @cErrMsg  OUTPUT
 
             IF @nErrNo <> 0
                GOTO Step_6_Fail
          END
       END
-      
+
       IF @cSerialNoCapture IN ('1', '2')  -- 1 = INBOUND & OUTBOUND; 2 = INBOUND ONLY; 3 = OUTBOUND ONLY
       BEGIN
          EXEC rdt.rdt_SerialNo @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerkey, @cSKU, @cSKUDesc, @nQTY, 'CHECK', 'ASN', @cReceiptKey,
@@ -3435,35 +3445,35 @@ BEGIN
       BEGIN
          IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
          BEGIN
-            EXECUTE [RDT].[rdt_600ExtScnEntry] 
+            EXECUTE [RDT].[rdt_600ExtScnEntry]
             @cExtendedScreenSP,
             @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorerKey, @cSuggLOC OUTPUT, @cLOC OUTPUT, @cID OUTPUT, @cSKU OUTPUT,
             @cReceiptKey,@cPoKey,@cReasonCode,@cReceiptLineNumber,@cPalletType,
-            @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01  OUTPUT,  
-            @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02  OUTPUT,  
-            @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03  OUTPUT,  
-            @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04  OUTPUT,  
-            @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  @dLottable05  OUTPUT,  
-            @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  @cLottable06  OUTPUT, 
-            @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  @cLottable07  OUTPUT, 
-            @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  @cLottable08  OUTPUT, 
-            @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  @cLottable09  OUTPUT, 
-            @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  @cLottable10  OUTPUT, 
+            @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01  OUTPUT,
+            @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02  OUTPUT,
+            @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03  OUTPUT,
+            @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04  OUTPUT,
+            @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  @dLottable05  OUTPUT,
+            @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  @cLottable06  OUTPUT,
+            @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  @cLottable07  OUTPUT,
+            @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  @cLottable08  OUTPUT,
+            @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  @cLottable09  OUTPUT,
+            @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  @cLottable10  OUTPUT,
             @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  @cLottable11  OUTPUT,
             @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT,  @cLottable12  OUTPUT,
             @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  @dLottable13  OUTPUT,
             @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT,  @dLottable14  OUTPUT,
             @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT,  @dLottable15  OUTPUT,
-            @nAction, 
+            @nAction,
             @nAfterScn OUTPUT,  @nAfterStep OUTPUT,
-            @nErrNo   OUTPUT, 
+            @nErrNo   OUTPUT,
             @cErrMsg  OUTPUT
 
             IF @nErrNo <> 0
                GOTO Step_6_Fail
          END
       END
-      
+
       -- Extended validate
       IF @cExtendedUpdateSP <> ''
       BEGIN
@@ -3510,7 +3520,7 @@ BEGIN
                '@cFinalLOC    NVARCHAR( 10), ' +
                '@cReceiptLineNumber NVARCHAR( 10), ' +
                '@nErrNo             INT            OUTPUT, ' +
-               '@cErrMsg            NVARCHAR( 20)  OUTPUT'
+               '@cErrMsg            NVARCHAR( 1024)  OUTPUT'
 
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
                @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cReceiptKey, @cPOKey, @cLOC, @cID, @cSKU,
@@ -3651,7 +3661,7 @@ BEGIN
          END   --SP checked
          IF @nErrno<>0
             GOTO QUIT
-      END         
+      END
 
       IF @nMorePage = 1 -- Yes
       BEGIN
@@ -3691,6 +3701,9 @@ BEGIN
          GOTO Step_7
       END
    END
+
+   IF @cExtScnSP <> ''
+      GOTO STEP_98
 
    GOTO Quit
 
@@ -3762,42 +3775,42 @@ BEGIN
             @cPalletRecv OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT
       END
    END
-   
+
    SET @cExtendedScreenSP =  ISNULL(rdt.RDTGetConfig( @nFunc, 'ExtendedScreenSP', @cStorerKey), '')
    SET @nAction = 2
    IF @cExtendedScreenSP <> ''
    BEGIN
       IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
       BEGIN
-         EXECUTE [RDT].[rdt_600ExtScnEntry] 
+         EXECUTE [RDT].[rdt_600ExtScnEntry]
             @cExtendedScreenSP,
             @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorerKey, @cSuggLOC OUTPUT, @cLOC OUTPUT, @cID OUTPUT, @cSKU OUTPUT,
             @cReceiptKey,@cPoKey,@cReasonCode,@cReceiptLineNumber,@cPalletType,
-            @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01  OUTPUT,  
-            @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02  OUTPUT,  
-            @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03  OUTPUT,  
-            @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04  OUTPUT,  
-            @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  @dLottable05  OUTPUT,  
-            @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  @cLottable06  OUTPUT, 
-            @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  @cLottable07  OUTPUT, 
-            @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  @cLottable08  OUTPUT, 
-            @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  @cLottable09  OUTPUT, 
-            @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  @cLottable10  OUTPUT, 
+            @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01  OUTPUT,
+            @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02  OUTPUT,
+            @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03  OUTPUT,
+            @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04  OUTPUT,
+            @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  @dLottable05  OUTPUT,
+            @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  @cLottable06  OUTPUT,
+            @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  @cLottable07  OUTPUT,
+            @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  @cLottable08  OUTPUT,
+            @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  @cLottable09  OUTPUT,
+            @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  @cLottable10  OUTPUT,
             @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  @cLottable11  OUTPUT,
             @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT,  @cLottable12  OUTPUT,
             @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  @dLottable13  OUTPUT,
             @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT,  @dLottable14  OUTPUT,
             @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT,  @dLottable15  OUTPUT,
-            @nAction, 
+            @nAction,
             @nAfterScn OUTPUT,  @nAfterStep OUTPUT,
-            @nErrNo   OUTPUT, 
+            @nErrNo   OUTPUT,
             @cErrMsg  OUTPUT
 
          IF @nErrNo <> 0
             GOTO Step_7_Fail
       END
    END
-   
+
    -- Check need to putaway
    SET @cPutaway = ''
    IF @cPutawaySP = '1' OR @cPutawaySP = '2'
@@ -4021,7 +4034,10 @@ BEGIN
       @cLottable01 = '', @cLottable02 = '', @cLottable03 = '',    @dLottable04 = NULL, @dLottable05 = NULL,
       @cLottable06 = '', @cLottable07 = '', @cLottable08 = '',    @cLottable09 = '',   @cLottable10 = '',
       @cLottable11 = '', @cLottable12 = '', @dLottable13 = NULL,  @dLottable14 = NULL, @dLottable15 = NULL
-   
+
+   IF @cExtScnSP <> ''
+      GOTO STEP_98
+
    Step_7_Fail:
       GOTO Quit
 
@@ -4097,7 +4113,7 @@ BEGIN
          BEGIN
             -- Get SKU info
             SELECT
-               @cSKUDesc = 
+               @cSKUDesc =
                   CASE WHEN @cDispStyleColorSize = '0'
                        THEN ISNULL( DescR, '')
                        ELSE CAST( Style AS NCHAR(20)) +
@@ -4163,28 +4179,28 @@ BEGIN
             BEGIN
                IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
                BEGIN
-                  EXECUTE [RDT].[rdt_600ExtScnEntry] 
+                  EXECUTE [RDT].[rdt_600ExtScnEntry]
                   @cExtendedScreenSP,
                   @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorerKey, @cSuggLOC OUTPUT, @cLOC OUTPUT, @cID OUTPUT, @cSKU OUTPUT,
                   @cReceiptKey,@cPoKey,@cReasonCode,@cReceiptLineNumber,@cPalletType,
-                  @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01  OUTPUT,  
-                  @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02  OUTPUT,  
-                  @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03  OUTPUT,  
-                  @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04  OUTPUT,  
-                  @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  @dLottable05  OUTPUT,  
-                  @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  @cLottable06  OUTPUT, 
-                  @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  @cLottable07  OUTPUT, 
-                  @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  @cLottable08  OUTPUT, 
-                  @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  @cLottable09  OUTPUT, 
-                  @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  @cLottable10  OUTPUT, 
+                  @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01  OUTPUT,
+                  @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02  OUTPUT,
+                  @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03  OUTPUT,
+                  @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04  OUTPUT,
+                  @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  @dLottable05  OUTPUT,
+                  @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  @cLottable06  OUTPUT,
+                  @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  @cLottable07  OUTPUT,
+                  @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  @cLottable08  OUTPUT,
+                  @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  @cLottable09  OUTPUT,
+                  @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  @cLottable10  OUTPUT,
                   @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  @cLottable11  OUTPUT,
                   @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT,  @cLottable12  OUTPUT,
                   @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  @dLottable13  OUTPUT,
                   @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT,  @dLottable14  OUTPUT,
                   @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT,  @dLottable15  OUTPUT,
-                  @nAction, 
+                  @nAction,
                   @nAfterScn OUTPUT,  @nAfterStep OUTPUT,
-                  @nErrNo   OUTPUT, 
+                  @nErrNo   OUTPUT,
                   @cErrMsg  OUTPUT
 
                   IF @nErrNo <> 0
@@ -4349,28 +4365,28 @@ BEGIN
          BEGIN
             IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
             BEGIN
-               EXECUTE [RDT].[rdt_600ExtScnEntry] 
+               EXECUTE [RDT].[rdt_600ExtScnEntry]
                   @cExtendedScreenSP,
                   @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorerKey, @cSuggLOC OUTPUT, @cLOC OUTPUT, @cID OUTPUT, @cSKU OUTPUT,
                   @cReceiptKey,@cPoKey,@cReasonCode,@cReceiptLineNumber,@cPalletType,
-                  @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01  OUTPUT,  
-                  @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02  OUTPUT,  
-                  @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03  OUTPUT,  
-                  @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04  OUTPUT,  
-                  @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  @dLottable05  OUTPUT,  
-                  @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  @cLottable06  OUTPUT, 
-                  @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  @cLottable07  OUTPUT, 
-                  @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  @cLottable08  OUTPUT, 
-                  @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  @cLottable09  OUTPUT, 
-                  @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  @cLottable10  OUTPUT, 
+                  @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01  OUTPUT,
+                  @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02  OUTPUT,
+                  @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03  OUTPUT,
+                  @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04  OUTPUT,
+                  @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  @dLottable05  OUTPUT,
+                  @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  @cLottable06  OUTPUT,
+                  @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  @cLottable07  OUTPUT,
+                  @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  @cLottable08  OUTPUT,
+                  @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  @cLottable09  OUTPUT,
+                  @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  @cLottable10  OUTPUT,
                   @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  @cLottable11  OUTPUT,
                   @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT,  @cLottable12  OUTPUT,
                   @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  @dLottable13  OUTPUT,
                   @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT,  @dLottable14  OUTPUT,
                   @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT,  @dLottable15  OUTPUT,
-                  @nAction, 
+                  @nAction,
                   @nAfterScn OUTPUT,  @nAfterStep OUTPUT,
-                  @nErrNo   OUTPUT, 
+                  @nErrNo   OUTPUT,
                   @cErrMsg  OUTPUT
 
                IF @nErrNo <> 0
@@ -4379,7 +4395,7 @@ BEGIN
          END
          IF(ISNULL(rdt.RDTGetConfig( @nFunc, 'ValidatePalletType', @cStorerKey),'0'))!='0' -- Capture pallet type
          BEGIN
-            SELECT 
+            SELECT
                @cPalletType = PalletType
             FROM dbo.PalletTypeMaster WITH (NOLOCK)
             WHERE StorerKey = @cStorerKey
@@ -4396,7 +4412,7 @@ BEGIN
                GOTO Quit
             END
             ELSE IF @nRowCount = 0
-            BEGIN 
+            BEGIN
                SET @cPalletType =''
                UPDATE RDT.RDTMOBREC SET
                C_String2 = ''
@@ -4461,8 +4477,8 @@ BEGIN
       IF @cClosePallet ='1'
       BEGIN
          SET @cOption = ''
-         SET @nScn = @nScn + 7
-         SET @nStep = @nStep + 5
+         SET @nScn = @nScn + 4 --4042
+         SET @nStep = @nStep + 6 -- step15
       END
       ELSE
       BEGIN
@@ -4893,15 +4909,15 @@ BEGIN
       END
 
       -- Get SKU info
-      SELECT @cSKUDesc = 
+      SELECT @cSKUDesc =
          CASE WHEN @cDispStyleColorSize = '0'
               THEN ISNULL( DescR, '')
               ELSE CAST( Style AS NCHAR(20)) +
                    CAST( Color AS NCHAR(10)) +
                    CAST( Size  AS NCHAR(10))
          END
-      FROM dbo.SKU WITH (NOLOCK) 
-      WHERE StorerKey = @cStorerKey 
+      FROM dbo.SKU WITH (NOLOCK)
+      WHERE StorerKey = @cStorerKey
          AND SKU = @cSKU
    END
 
@@ -5200,7 +5216,7 @@ BEGIN
    BEGIN
        -- Get SKU info
       SELECT
-         @cSKUDesc = 
+         @cSKUDesc =
             CASE WHEN @cDispStyleColorSize = '0'
                  THEN ISNULL( DescR, '')
                  ELSE CAST( Style AS NCHAR(20)) +
@@ -5261,35 +5277,35 @@ BEGIN
       SET @cOutField09 = CASE WHEN @nMQTY = 0 THEN '' ELSE CAST( @nMQTY AS NVARCHAR( 7)) END -- MQTY
       SET @cOutField10 = @cDropListSP -- Reason
       SET @cOutField15 = '' -- ExtendedInfo
-      
+
       SET @cExtendedScreenSP =  ISNULL(rdt.RDTGetConfig( @nFunc, 'ExtendedScreenSP', @cStorerKey), '')
       SET @nAction = 3
       IF @cExtendedScreenSP <> ''
       BEGIN
          IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
          BEGIN
-            EXECUTE [RDT].[rdt_600ExtScnEntry] 
+            EXECUTE [RDT].[rdt_600ExtScnEntry]
             @cExtendedScreenSP,
             @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorerKey, @cSuggLOC OUTPUT, @cLOC OUTPUT, @cID OUTPUT, @cSKU OUTPUT,
             @cReceiptKey,@cPoKey,@cReasonCode,@cReceiptLineNumber,@cPalletType,
-            @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01  OUTPUT,  
-            @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02  OUTPUT,  
-            @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03  OUTPUT,  
-            @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04  OUTPUT,  
-            @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  @dLottable05  OUTPUT,  
-            @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  @cLottable06  OUTPUT, 
-            @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  @cLottable07  OUTPUT, 
-            @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  @cLottable08  OUTPUT, 
-            @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  @cLottable09  OUTPUT, 
-            @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  @cLottable10  OUTPUT, 
+            @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01  OUTPUT,
+            @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02  OUTPUT,
+            @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03  OUTPUT,
+            @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04  OUTPUT,
+            @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  @dLottable05  OUTPUT,
+            @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  @cLottable06  OUTPUT,
+            @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  @cLottable07  OUTPUT,
+            @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  @cLottable08  OUTPUT,
+            @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  @cLottable09  OUTPUT,
+            @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  @cLottable10  OUTPUT,
             @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  @cLottable11  OUTPUT,
             @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT,  @cLottable12  OUTPUT,
             @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  @dLottable13  OUTPUT,
             @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT,  @dLottable14  OUTPUT,
             @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT,  @dLottable15  OUTPUT,
-            @nAction, 
+            @nAction,
             @nAfterScn OUTPUT,  @nAfterStep OUTPUT,
-            @nErrNo   OUTPUT, 
+            @nErrNo   OUTPUT,
             @cErrMsg  OUTPUT
 
             IF @nErrNo <> 0
@@ -5471,8 +5487,8 @@ BEGIN
          SET @cOutField01 = '' -- Option
 
          -- Go to print pallet label screen
-         SET @nScn = @nScn - 7
-         SET @nStep = @nStep - 5 
+         SET @nScn = @nScn - 4--4038
+         SET @nStep = @nStep - 6 --step9
       END
       ELSE
       BEGIN
@@ -5481,8 +5497,8 @@ BEGIN
          SET @cOutField02 = '' -- @cID
 
          -- Go to ID screen
-         SET @nScn = @nScn - 10
-         SET @nStep = @nStep - 12
+         SET @nScn = @nScn - 10--4032
+         SET @nStep = @nStep - 12 -- step3
       END
 
    END
@@ -5499,6 +5515,42 @@ BEGIN
       SET @nScn = @nScn - 9
       SET @nStep = @nStep - 11
    END
+
+   SET @cExtendedScreenSP =  ISNULL(rdt.RDTGetConfig( @nFunc, 'ExtendedScreenSP', @cStorerKey), '')
+   SET @nAction = 3
+   IF @cExtendedScreenSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
+      BEGIN
+         EXECUTE [RDT].[rdt_600ExtScnEntry]
+                 @cExtendedScreenSP,
+                 @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorerKey, @cSuggLOC OUTPUT, @cLOC OUTPUT, @cID OUTPUT, @cSKU OUTPUT,
+                 @cReceiptKey,@cPoKey,@cReasonCode,@cReceiptLineNumber,@cPalletType,
+                 @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01  OUTPUT,
+                 @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02  OUTPUT,
+                 @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03  OUTPUT,
+                 @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04  OUTPUT,
+                 @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  @dLottable05  OUTPUT,
+                 @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  @cLottable06  OUTPUT,
+                 @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  @cLottable07  OUTPUT,
+                 @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  @cLottable08  OUTPUT,
+                 @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  @cLottable09  OUTPUT,
+                 @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  @cLottable10  OUTPUT,
+                 @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  @cLottable11  OUTPUT,
+                 @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT,  @cLottable12  OUTPUT,
+                 @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  @dLottable13  OUTPUT,
+                 @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT,  @dLottable14  OUTPUT,
+                 @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT,  @dLottable15  OUTPUT,
+                 @nAction,
+                 @nScn OUTPUT,  @nStep OUTPUT,
+                 @nErrNo   OUTPUT,
+                 @cErrMsg  OUTPUT
+
+         IF @nErrNo <> 0
+            GOTO Step_15_Fail
+      END
+   END
+
    GOTO Quit
 
    Step_15_Fail:
@@ -5511,49 +5563,116 @@ END
 GOTO Quit
 
 /********************************************************************************
+Step 98.
+   EXT SCN
+********************************************************************************/
+Step_98:
+BEGIN
+   IF @cExtScnSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
+      BEGIN
+         DELETE FROM @tExtScnData
+         INSERT INTO @tExtScnData (Variable, Value) VALUES
+            ('@cSKU', @cSKU),
+            ('@cID', @cID),
+            ('@cPUOM_Desc', @cPUOM_Desc),
+            ('@nPUOM_Div', CONCAT(@nPUOM_Div,'')),
+            ('@cMUOM_Desc', @cMUOM_Desc),
+            ('@cReceiptKey', @cReceiptKey),
+            ('@cPalletType', @cPalletType)
+
+         EXECUTE [RDT].[rdt_ExtScnEntry]
+         @cExtScnSP,
+         @nMobile, @nFunc, @cLangCode, @nOri_Step, @nOri_Scn, @nInputKey, @cFacility, @cStorerKey, @tExtScnData ,
+         @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01  OUTPUT,
+         @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02  OUTPUT,
+         @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03  OUTPUT,
+         @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04  OUTPUT,
+         @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  @dLottable05  OUTPUT,
+         @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  @cLottable06  OUTPUT,
+         @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  @cLottable07  OUTPUT,
+         @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  @cLottable08  OUTPUT,
+         @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  @cLottable09  OUTPUT,
+         @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  @cLottable10  OUTPUT,
+         @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  @cLottable11  OUTPUT,
+         @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT,  @cLottable12  OUTPUT,
+         @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  @dLottable13  OUTPUT,
+         @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT,  @dLottable14  OUTPUT,
+         @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT,  @dLottable15  OUTPUT,
+         @nAction,
+         @nScn OUTPUT,  @nStep OUTPUT,
+         @nErrNo   OUTPUT,
+         @cErrMsg  OUTPUT,
+         @cUDF01   OUTPUT, @cUDF02  OUTPUT, @cUDF03  OUTPUT,
+         @cUDF04   OUTPUT, @cUDF05  OUTPUT, @cUDF06  OUTPUT,
+         @cUDF07   OUTPUT, @cUDF08  OUTPUT, @cUDF09  OUTPUT,
+         @cUDF10   OUTPUT, @cUDF11  OUTPUT, @cUDF12  OUTPUT,
+         @cUDF13   OUTPUT, @cUDF14  OUTPUT, @cUDF15  OUTPUT,
+         @cUDF16   OUTPUT, @cUDF17  OUTPUT, @cUDF18  OUTPUT,
+         @cUDF19   OUTPUT, @cUDF20  OUTPUT, @cUDF21  OUTPUT,
+         @cUDF22   OUTPUT, @cUDF23  OUTPUT, @cUDF24  OUTPUT,
+         @cUDF25   OUTPUT, @cUDF26  OUTPUT, @cUDF27  OUTPUT,
+         @cUDF28   OUTPUT, @cUDF29  OUTPUT, @cUDF30  OUTPUT
+         IF @nErrNo <> 0
+            GOTO Quit
+
+      END
+   END
+END
+GOTO Quit
+/********************************************************************************
 Step 99. Screen = 6382. Pallet Type
  Pallet Type    (field01, input)
 ********************************************************************************/
 Step_99:
 BEGIN
-   IF @nInputKey = 1 -- ENTER
+   SET @cExtendedScreenSP =  ISNULL(rdt.RDTGetConfig( @nFunc, 'ExtendedScreenSP', @cStorerKey), '')
+
+   IF @nInputKey = 1 OR @cExtendedScreenSP = 'rdt_600ExtScn08' -- ENTER
    BEGIN
       -- Screen mapping
       SET @cPalletType = @cInField01
 
-      SET @cExtendedScreenSP =  ISNULL(rdt.RDTGetConfig( @nFunc, 'ExtendedScreenSP', @cStorerKey), '')
       SET @nAction = 1
       IF @cExtendedScreenSP <> ''
       BEGIN
          IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
          BEGIN
-            EXECUTE [RDT].[rdt_600ExtScnEntry] 
+            EXECUTE [RDT].[rdt_600ExtScnEntry]
             @cExtendedScreenSP,
             @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorerKey, @cSuggLOC OUTPUT, @cLOC OUTPUT, @cID OUTPUT, @cSKU OUTPUT,
             @cReceiptKey,@cPoKey,@cReasonCode,@cReceiptLineNumber,@cPalletType,
-            @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01  OUTPUT,  
-            @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02  OUTPUT,  
-            @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03  OUTPUT,  
-            @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04  OUTPUT,  
-            @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  @dLottable05  OUTPUT,  
-            @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  @cLottable06  OUTPUT, 
-            @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  @cLottable07  OUTPUT, 
-            @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  @cLottable08  OUTPUT, 
-            @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  @cLottable09  OUTPUT, 
-            @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  @cLottable10  OUTPUT, 
+            @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT,  @cLottable01  OUTPUT,
+            @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT,  @cLottable02  OUTPUT,
+            @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT,  @cLottable03  OUTPUT,
+            @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT,  @dLottable04  OUTPUT,
+            @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT,  @dLottable05  OUTPUT,
+            @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT,  @cLottable06  OUTPUT,
+            @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT,  @cLottable07  OUTPUT,
+            @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT,  @cLottable08  OUTPUT,
+            @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT,  @cLottable09  OUTPUT,
+            @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT,  @cLottable10  OUTPUT,
             @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT,  @cLottable11  OUTPUT,
             @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT,  @cLottable12  OUTPUT,
             @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT,  @dLottable13  OUTPUT,
             @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT,  @dLottable14  OUTPUT,
             @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT,  @dLottable15  OUTPUT,
-            @nAction, 
+            @nAction,
             @nAfterScn OUTPUT,  @nAfterStep OUTPUT,
-            @nErrNo   OUTPUT, 
+            @nErrNo   OUTPUT,
             @cErrMsg  OUTPUT
-            
+
             IF @nErrNo <> 0
                GOTO Step_99_Fail
          END
+      END
+
+      IF @cExtendedScreenSP = 'rdt_600ExtScn08'
+      BEGIN
+         SET @nScn = @nAfterScn
+         SET @nStep = @nAfterStep
+         GOTO Quit
       END
       -- Init next screen var
       SET @cOutField01 = @cID
@@ -5706,7 +5825,7 @@ BEGIN
       I_Field12 = @cInField12,  O_Field12 = @cOutField12,   FieldAttr12  = @cFieldAttr12,
       I_Field13 = @cInField13,  O_Field13 = @cOutField13,   FieldAttr13  = @cFieldAttr13,
       I_Field14 = @cInField14,  O_Field14 = @cOutField14,   FieldAttr14  = @cFieldAttr14,
-      I_Field15 = @cInField15,  O_Field15 = @cOutField15,   FieldAttr15  = @cFieldAttr15 
+      I_Field15 = @cInField15,  O_Field15 = @cOutField15,   FieldAttr15  = @cFieldAttr15
 
    WHERE Mobile = @nMobile
 END

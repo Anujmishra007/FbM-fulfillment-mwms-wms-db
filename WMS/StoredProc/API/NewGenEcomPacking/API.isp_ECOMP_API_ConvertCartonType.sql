@@ -121,6 +121,12 @@ BEGIN
                            ), '')
 
    QUIT:
+
+   IF EXISTS (SELECT 1 FROM sys.objects WHERE name = 'lsp_RevertUser' AND type = 'P') AND SESSION_CONTEXT(N'mwms_user_name') IS NOT NULL
+   BEGIN
+      EXEC [WM].[lsp_RevertUser]
+   END
+   
    IF @n_Continue= 3  -- Error Occured - Process And Return      
    BEGIN      
       SET @b_Success = 0      

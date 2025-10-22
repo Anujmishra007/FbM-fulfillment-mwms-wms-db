@@ -2,45 +2,48 @@ SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO   
-/************************************************************************/                                                                                  
-/* Store Procedure: lsp_TRF_PopulateLLI_Wrapper                         */                                                                                  
-/* Creation Date: 2023-03-23                                            */                                                                                  
-/* Copyright: LFL                                                       */                                                                                  
-/* Written by: Wan                                                      */                                                                                  
-/*                                                                      */                                                                                  
+/************************************************************************/
+/* Store Procedure: lsp_TRF_PopulateLLI_Wrapper                         */
+/* Creation Date: 2023-03-23                                            */
+/* Copyright: LFL                                                       */
+/* Written by: Wan                                                      */
+/*                                                                      */
 /* Purpose: LFWM-3965 - [CN] SCE populate all for Transfer population   */
 /*                                                                      */
-/* Called By: SCE                                                       */                                                                                  
-/*          :                                                           */                                                                                  
-/* PVCS Version: 1.0                                                    */                                                                                  
-/*                                                                      */                                                                                  
-/* Version: 8.0                                                         */                                                                                  
-/*                                                                      */                                                                                  
-/* Data Modifications:                                                  */                                                                                  
-/*                                                                      */                                                                                  
-/* Updates:                                                             */                                                                                  
+/* Called By: SCE                                                       */
+/*          :                                                           */
+/* PVCS Version: 1.5                                                    */
+/*                                                                      */
+/* Version: 8.0                                                         */
+/*                                                                      */
+/* Data Modifications:                                                  */
+/*                                                                      */
+/* Updates:                                                             */
 /* Date        Author   Ver.  Purposes                                  */
 /* 2023-03-23  Wan      1.0   Created & DevOps Combine Script           */
 /* 2024-09-25  Wan01    1.1   LFWM-4446 - RG[GIT] Serial Number Solution*/
 /*                            - Transfer by Serial Number               */
-/*2025-05-26   SSA01    1.2   UWP-3982- Added PalletType                */
+/* 2025-05-26  SSA01    1.2   UWP-3982- Added PalletType                */
+/* 2025-07-22  PPA01    1.3   UWP-37445 updated datatype size to 40     */
+/* 2025-09-02  SWT01    1.4   Enhanced session management pattern       */
+/* 2025-10-10  Michael  1.5   FCR-8380- Add SerialNoUpdateLotLocID(ML01)*/
 /************************************************************************/
-CREATE OR ALTER PROC [WM].[lsp_TRF_PopulateLLI_Wrapper]                                                                                                                     
-   @c_TransferKey          NVARCHAR(10)         
+CREATE OR ALTER  PROC [WM].[lsp_TRF_PopulateLLI_Wrapper]
+   @c_TransferKey          NVARCHAR(10)
 ,  @c_LotxLocxID           NVARCHAR(MAX)    --Eacg set of Lot,Loc,ID seperated by '|'. Eg 0000000001,STAGE,ID1|0000000002,STAGE,ID2
-,  @b_Success              INT            = 1  OUTPUT  
-,  @n_Err                  INT            = 0  OUTPUT                                                                                                             
+,  @b_Success              INT            = 1  OUTPUT
+,  @n_Err                  INT            = 0  OUTPUT
 ,  @c_ErrMsg               NVARCHAR(255)  = '' OUTPUT
-,  @c_UserName             NVARCHAR(128)  = '' 
+,  @c_UserName             NVARCHAR(128)  = ''
 ,  @n_ErrGroupKey          INT            = 0  OUTPUT
-AS  
-BEGIN                                                                                                                                                        
-   SET NOCOUNT ON                                                                                                                                           
-   SET ANSI_NULLS OFF                                                                                                                                       
-   SET QUOTED_IDENTIFIER OFF                                                                                                                                
-   SET CONCAT_NULL_YIELDS_NULL OFF       
+AS
+BEGIN
+   SET NOCOUNT ON
+   SET ANSI_NULLS OFF
+   SET QUOTED_IDENTIFIER OFF
+   SET CONCAT_NULL_YIELDS_NULL OFF
 
-   DECLARE  @n_StartTCnt                  INT = @@TRANCOUNT  
+   DECLARE  @n_StartTCnt                  INT = @@TRANCOUNT
          ,  @n_Continue                   INT = 1
 
          ,  @n_TRFCOPYL3_cnt              INT = 0
@@ -61,7 +64,7 @@ BEGIN
          ,  @c_FromFacility               NVARCHAR(5)    = ''
          ,  @c_FromStorerkey              NVARCHAR(15)   = ''
          ,  @c_ToFacility                 NVARCHAR(5)    = ''
-         ,  @c_ToStorerkey                NVARCHAR(15)   = '' 
+         ,  @c_ToStorerkey                NVARCHAR(15)   = ''
          ,  @c_Type                       NVARCHAR(12)   = ''
          ,  @c_TransferLineNumber         NVARCHAR(5)    = ''
          ,  @c_FromSku                    NVARCHAR(20)   = ''
@@ -69,7 +72,7 @@ BEGIN
          ,  @c_FromUOM                    NVARCHAR(10)   = ''
          ,  @c_FromLot                    NVARCHAR(10)   = ''
          ,  @c_FromLoc                    NVARCHAR(10)   = ''
-         ,  @c_FromID                     NVARCHAR(18)   = ''         
+         ,  @c_FromID                     NVARCHAR(18)   = ''
          ,  @c_FromLottable01             NVARCHAR(18)   = ''
          ,  @c_FromLottable02             NVARCHAR(18)   = ''
          ,  @c_FromLottable03             NVARCHAR(18)   = ''
@@ -85,7 +88,7 @@ BEGIN
          ,  @dt_FromLottable13            DATETIME       = NULL
          ,  @dt_FromLottable14            DATETIME       = NULL
          ,  @dt_FromLottable15            DATETIME       = NULL
-         ,  @c_ToSku                      NVARCHAR(20)   = ''                
+         ,  @c_ToSku                      NVARCHAR(20)   = ''
          ,  @c_ToPackkey                  NVARCHAR(10)   = ''
          ,  @c_ToUOM                      NVARCHAR(10)   = ''
          ,  @c_ToLoc                      NVARCHAR(10)   = ''
@@ -105,23 +108,24 @@ BEGIN
          ,  @dt_ToLottable13              DATETIME       = NULL
          ,  @dt_ToLottable14              DATETIME       = NULL
          ,  @dt_ToLottable15              DATETIME       = NULL
-         
-         ,  @c_Channel_From               NVARCHAR(20)   = ''                        
-         ,  @c_Channel_To                 NVARCHAR(20)   = ''   
-         
-         ,  @c_Channel_FromDefault        NVARCHAR(20)   = ''   
-         ,  @c_Channel_ToDefault          NVARCHAR(20)   = ''                
-                                                                                     
+
+         ,  @c_Channel_From               NVARCHAR(20)   = ''
+         ,  @c_Channel_To                 NVARCHAR(20)   = ''
+
+         ,  @c_Channel_FromDefault        NVARCHAR(20)   = ''
+         ,  @c_Channel_ToDefault          NVARCHAR(20)   = ''
+
          ,  @c_TRFCOPYL3                  NVARCHAR(10)   = ''
 
          ,  @c_INVTRFITF                  NVARCHAR(10)   = ''
 
          ,  @c_ASNFizUpdLotToSerialNo     NVARCHAR(10)   = ''                       --(Wan01)
-         ,  @c_ChannelInventoryMgmt_From  NVARCHAR(10)   = ''                         
-         ,  @c_ChannelInventoryMgmt_To    NVARCHAR(10)   = ''                        
+         ,  @c_SerialNoUpdateLotLocID     NVARCHAR(10)   = ''      --ML01
+         ,  @c_ChannelInventoryMgmt_From  NVARCHAR(10)   = ''
+         ,  @c_ChannelInventoryMgmt_To    NVARCHAR(10)   = ''
 
          ,  @c_TableName      NVARCHAR(50)   = 'TransferDetail'
-         ,  @c_SourceType     NVARCHAR(50)   = 'lsp_TRF_PopulateLLI_Wrapper' 
+         ,  @c_SourceType     NVARCHAR(50)   = 'lsp_TRF_PopulateLLI_Wrapper'
          ,  @c_Refkey1        NVARCHAR(20)   = ''
          ,  @c_Refkey2        NVARCHAR(20)   = ''
          ,  @c_Refkey3        NVARCHAR(20)   = ''
@@ -129,8 +133,8 @@ BEGIN
          ,  @n_LogWarningNo   INT            = 0
          ,  @c_FromPalletType NVARCHAR(10)   = ''   --(SSA01)
          ,  @c_ToPalletType   NVARCHAR(10)   = ''   --(SSA01)
-         ,  @CUR_ERRLIST      CURSOR        
-         
+         ,  @CUR_ERRLIST      CURSOR
+
    DECLARE  @t_WMSErrorList   TABLE
          (  RowID             INT            IDENTITY(1,1)
          ,  TableName         NVARCHAR(50)   NOT NULL DEFAULT('')                   --(Wan01)
@@ -142,29 +146,37 @@ BEGIN
          ,  LogWarningNo      INT            NOT NULL DEFAULT(0)
          ,  ErrCode           INT            NOT NULL DEFAULT(0)
          ,  Errmsg            NVARCHAR(255)  NOT NULL DEFAULT('')
-         )         
+         )
 
    SET @b_Success = 1
    SET @n_Err     = 0
    SET @c_ErrMsg  = ''
-   
+
    SET @n_ErrGroupKey = 0
-               
-   SET @n_Err = 0 
-   IF SUSER_SNAME() <> @c_UserName        
+
+   -- Start enhanced session management (SWT01)
+   SET @n_Err = 0
+   DECLARE @b_ExecuteAs        BIT = 0
+   IF SUSER_SNAME() <> @c_UserName AND @c_UserName <> ''        
    BEGIN
-      EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
-    
-      IF @n_Err <> 0 
+	    EXEC [WM].[lsp_SetUser] 
+	         @c_UserName = @c_UserName  OUTPUT
+	      ,  @n_Err      = @n_Err       OUTPUT
+	      ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+	      ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
+
+      IF @n_Err <> 0
       BEGIN
          GOTO EXIT_SP
       END
-                
-      EXECUTE AS LOGIN = @c_UserName        
-   END                                    
 
-   BEGIN TRY  
-      BEGIN TRAN                           
+      IF @b_ExecuteAs = 1
+         EXECUTE AS LOGIN = @c_UserName
+   END
+   -- End enhanced session management (SWT01)        
+
+   BEGIN TRY
+      BEGIN TRAN
       /*-------------------------------------------------------*/
       /* BUILD TEMP TABLES & INSERT DATA - START               */
       /*-------------------------------------------------------*/
@@ -173,9 +185,9 @@ BEGIN
          DROP TABLE #tLLI
       END
 
-      CREATE TABLE #tLLI 
+      CREATE TABLE #tLLI
          (  RowID                INT            NOT NULL IDENTITY(1,1)    PRIMARY KEY
-         ,  LotxLocxID           NVARCHAR(38)   NOT NULL DEFAULT('')
+         ,  LotxLocxID           NVARCHAR(40)   NOT NULL DEFAULT('')		--(PPA01)
          ,  Lot                  NVARCHAR(10)   NOT NULL DEFAULT('')
          ,  Loc                  NVARCHAR(10)   NOT NULL DEFAULT('')
          ,  ID                   NVARCHAR(18)   NOT NULL DEFAULT('')
@@ -184,24 +196,24 @@ BEGIN
          ,  SkuSerialNoCapture   NVARCHAR(1)    NOT NULL DEFAULT('')
          ,  PalletType           NVARCHAR(10)    NOT NULL DEFAULT('')       --(SSA01)
          )
-   
+
       INSERT INTO #tLLI (LotxLocxID, Lot, CommaIdx1)
-      SELECT T.[Value]
-            ,Lot = SUBSTRING(T.[Value],1,CHARINDEX(',',T.[Value],1) - 1) 
+   SELECT T.[Value]
+            ,Lot = SUBSTRING(T.[Value],1,CHARINDEX(',',T.[Value],1) - 1)
             ,CommaIdx1 = CHARINDEX(',',T.[Value],1)
       FROM string_split (@c_LotxLocxID, '|') T
       GROUP BY T.[Value]
-      
+
       SET @n_TotalSelected = @@ROWCOUNT                                             --(Wan01)
 
       UPDATE #tLLI
           SET Loc = SUBSTRING(LotxLocxID
                             ,CommaIdx1+1
-                            ,CHARINDEX(',', LotxLocxID, CommaIdx1+1) - 1 - CommaIdx1)  
-            ,CommaIdx2 = CHARINDEX(',', LotxLocxID, CommaIdx1+1) 
+                            ,CHARINDEX(',', LotxLocxID, CommaIdx1+1) - 1 - CommaIdx1)
+            ,CommaIdx2 = CHARINDEX(',', LotxLocxID, CommaIdx1+1)
 
       UPDATE #tLLI
-          SET ID = SUBSTRING(LotxLocxID,CommaIdx2+1, LEN(LotxLocxID) - CommaIdx2) 
+          SET ID = SUBSTRING(LotxLocxID,CommaIdx2+1, LEN(LotxLocxID) - CommaIdx2)
 
       UPDATE #tLLI                                                                  --(Wan01)
          SET SkuSerialNoCapture = SKU.SerialNoCapture
@@ -229,13 +241,22 @@ BEGIN
             ,@c_Type         = TH.[Type]
       FROM TRANSFER TH WITH (NOLOCK)
       WHERE TH.TransferKey = @c_TransferKey
-      
-      -- Get Storerconfig 
+
+      -- Get Storerconfig
       SELECT @c_ASNFizUpdLotToSerialNo = fsgr.Authority                             --(Wan01)
       FROM dbo.fnc_SelectGetRight(@c_FromFacility, @c_FromStorerkey, '', 'ASNFizUpdLotToSerialNo')AS fsgr
       SELECT @c_ChannelInventoryMgmt_From = fsgr.Authority FROM dbo.fnc_SelectGetRight (@c_FromFacility, @c_FromStorerkey,'','ChannelInventoryMgmt') AS fsgr
       SELECT @c_ChannelInventoryMgmt_To   = fsgr.Authority FROM dbo.fnc_SelectGetRight (@c_ToFacility, @c_ToStorerkey,'','ChannelInventoryMgmt') AS fsgr
- 
+
+      --ML01-S
+      SELECT @c_SerialNoUpdateLotLocID = fsgr.Authority
+      FROM dbo.fnc_SelectGetRight(@c_FromFacility, @c_FromStorerkey, '', 'SerialNoUpdateLotLocID')AS fsgr
+
+      IF ISNULL(@c_SerialNoUpdateLotLocID,'') = '1' AND ISNULL(@c_ASNFizUpdLotToSerialNo,'') <> '1'
+         SET @c_ASNFizUpdLotToSerialNo = '1'
+      --ML01-E
+
+
       IF @c_ChannelInventoryMgmt_From = '1'
       BEGIN
          SELECT TOP 1 @c_Channel_FromDefault = c.Code
@@ -245,9 +266,9 @@ BEGIN
          ORDER BY CASE WHEN c.Storerkey = @c_FromStorerkey THEN 1
                         ELSE 9
                         END
-               ,  c.Code               
+               ,  c.Code
       END
-      
+
       IF @c_ChannelInventoryMgmt_To = '1'
       BEGIN
          SELECT TOP 1 @c_Channel_ToDefault = c.Code
@@ -257,32 +278,32 @@ BEGIN
          ORDER BY CASE WHEN c.Storerkey = @c_ToStorerkey THEN 1
                         ELSE 9
                         END
-               ,  c.Code               
+               ,  c.Code
       END
-      
-      SELECT @c_INVTRFITF = dbo.fnc_GetRight(@c_FromFacility, @c_FromStorerkey, '', 'INVTRFITF')  
+
+      SELECT @c_INVTRFITF = dbo.fnc_GetRight(@c_FromFacility, @c_FromStorerkey, '', 'INVTRFITF')
 
       IF @c_INVTRFITF = '1'
       BEGIN
-         SELECT TOP 1 
-               @c_TRFCOPYL3 = IIF(C.Storerkey IN ('', @c_FromStorerkey), UPPER(ISNULL(c.Short,'')), '') 
-            ,  @n_TRFCOPYL3_cnt = IIF(C.Storerkey IN ('', @c_FromStorerkey), 1, 0)     
+         SELECT TOP 1
+               @c_TRFCOPYL3 = IIF(C.Storerkey IN ('', @c_FromStorerkey), UPPER(ISNULL(c.Short,'')), '')
+            ,  @n_TRFCOPYL3_cnt = IIF(C.Storerkey IN ('', @c_FromStorerkey), 1, 0)
          FROM dbo.CODELKUP AS c (NOLOCK)
          WHERE c.LISTNAME = 'TRFCOPYL3'
          AND c.Code = @c_Type
-         ORDER BY CASE WHEN C.Storerkey = @c_FromStorerkey THEN 1 
+         ORDER BY CASE WHEN C.Storerkey = @c_FromStorerkey THEN 1
                        WHEN C.Storerkey = '' THEN 2
-                       ELSE 3 END  
+                       ELSE 3 END
       END
-                 
-      SET @c_TransferLineNumber = '00000'  
-    
+
+      SET @c_TransferLineNumber = '00000'
+
       SELECT TOP 1 @c_TransferLineNumber = TD.TransferLineNumber
       FROM TRANSFERDETAIL TD WITH (NOLOCK)
       WHERE TD.Transferkey = @c_Transferkey
       ORDER BY TD.TransferLineNumber DESC
 
-      SET @n_RowID = 0                    
+      SET @n_RowID = 0
       WHILE 1 = 1
       BEGIN
          SET @c_FromSku = ''
@@ -295,17 +316,17 @@ BEGIN
              @n_RowID      = tl.RowID
             ,@c_FromSku    = ltlci.Sku
             ,@c_FromLot    = ltlci.Lot
-            ,@c_FromLoc    = ltlci.Loc  
-            ,@c_FromID     = ltlci.ID 
+            ,@c_FromLoc    = ltlci.Loc
+            ,@c_FromID     = ltlci.ID
             ,@n_FromQty    = ltlci.Qty - ltlci.QtyAllocated - ltlci.QtyPicked
             ,@c_ToSku      = ltlci.Sku
             ,@c_FromPalletType = tl.PalletType
          FROM #tLLI AS tl
-         JOIN dbo.LOTxLOCxID AS ltlci WITH (NOLOCK) ON  ltlci.Lot = tl.Lot 
-                                                    AND ltlci.Loc = tl.Loc 
+         JOIN dbo.LOTxLOCxID AS ltlci WITH (NOLOCK) ON  ltlci.Lot = tl.Lot
+                                                    AND ltlci.Loc = tl.Loc
                                                     AND ltlci.Id = tl.ID
-         WHERE tl.RowID > @n_RowID 
-         AND ltlci.Qty - ltlci.QtyAllocated - ltlci.QtyPicked > 0 
+         WHERE tl.RowID > @n_RowID
+         AND ltlci.Qty - ltlci.QtyAllocated - ltlci.QtyPicked > 0
          AND NOT (tl.SkuSerialNoCapture IN ('1','2') AND @c_ASNFizUpdLotToSerialNo = '1') --(Wan01)
          ORDER BY tl.RowID
 
@@ -328,7 +349,7 @@ BEGIN
             ,   @c_UOM2 = FP.PackUOM2
             ,   @c_UOM3 = FP.PackUOM3
             ,   @c_UOM4 = FP.PackUOM4
-         FROM PACK FP WITH (NOLOCK) 
+         FROM PACK FP WITH (NOLOCK)
          WHERE FP.Packkey = @c_FromPackkey
 
          SET @c_FromUOM  = @c_UOM3
@@ -338,21 +359,21 @@ BEGIN
          SET @c_ToID     = @c_FromID
          SET @n_ToQty    = @n_FromQty
          SET @c_ToPalletType = @c_FromPalletType      --(SSA01)
-         
-         SET @c_FromLottable01 = ''  
-         SET @c_FromLottable02 = ''  
-         SET @c_FromLottable03 = ''  
-         SET @dt_FromLottable04= NULL  
-         SET @dt_FromLottable05= NULL  
-         SET @c_FromLottable06 = ''  
-         SET @c_FromLottable07 = ''  
-         SET @c_FromLottable08 = ''  
-         SET @c_FromLottable09 = ''  
-         SET @c_FromLottable10 = ''  
-         SET @c_FromLottable11 = ''  
-         SET @c_FromLottable12 = ''  
-         SET @dt_FromLottable13= NULL  
-         SET @dt_FromLottable14= NULL  
+
+         SET @c_FromLottable01 = ''
+         SET @c_FromLottable02 = ''
+         SET @c_FromLottable03 = ''
+         SET @dt_FromLottable04= NULL
+         SET @dt_FromLottable05= NULL
+         SET @c_FromLottable06 = ''
+         SET @c_FromLottable07 = ''
+         SET @c_FromLottable08 = ''
+         SET @c_FromLottable09 = ''
+         SET @c_FromLottable10 = ''
+         SET @c_FromLottable11 = ''
+         SET @c_FromLottable12 = ''
+         SET @dt_FromLottable13= NULL
+         SET @dt_FromLottable14= NULL
          SET @dt_FromLottable15= NULL
 
          SELECT @c_FromLottable01  = LA.Lottable01
@@ -373,53 +394,53 @@ BEGIN
          FROM LOTATTRIBUTE LA WITH (NOLOCK)
          WHERE LA.Lot = @c_FromLot
 
-         SET @c_ToLottable01 = @c_FromLottable01 
-         SET @c_ToLottable02 = @c_FromLottable02 
+         SET @c_ToLottable01 = @c_FromLottable01
+         SET @c_ToLottable02 = @c_FromLottable02
          SET @c_ToLottable03 = IIF(@n_TRFCOPYL3_cnt= 0, @c_FromLottable03, @c_TRFCOPYL3)
-         SET @dt_ToLottable04= @dt_FromLottable04 
-         SET @dt_ToLottable05= @dt_FromLottable05 
-         SET @c_ToLottable06 = @c_FromLottable06 
-         SET @c_ToLottable07 = @c_FromLottable07 
-         SET @c_ToLottable08 = @c_FromLottable08 
-         SET @c_ToLottable09 = @c_FromLottable09 
-         SET @c_ToLottable10 = @c_FromLottable10 
-         SET @c_ToLottable11 = @c_FromLottable11 
-         SET @c_ToLottable12 = @c_FromLottable12 
-         SET @dt_ToLottable13= @dt_FromLottable13 
-         SET @dt_ToLottable14= @dt_FromLottable14 
+         SET @dt_ToLottable04= @dt_FromLottable04
+         SET @dt_ToLottable05= @dt_FromLottable05
+         SET @c_ToLottable06 = @c_FromLottable06
+         SET @c_ToLottable07 = @c_FromLottable07
+         SET @c_ToLottable08 = @c_FromLottable08
+         SET @c_ToLottable09 = @c_FromLottable09
+         SET @c_ToLottable10 = @c_FromLottable10
+         SET @c_ToLottable11 = @c_FromLottable11
+         SET @c_ToLottable12 = @c_FromLottable12
+         SET @dt_ToLottable13= @dt_FromLottable13
+         SET @dt_ToLottable14= @dt_FromLottable14
          SET @dt_ToLottable15= @dt_FromLottable15
-         
-         IF @c_ChannelInventoryMgmt_From = '1'                                       
+
+         IF @c_ChannelInventoryMgmt_From = '1'
          BEGIN
             SET @c_Channel_From = ''
             SELECT @c_Channel_From = fsci.Channel
             FROM dbo.fnc_SelectChannelInv(@c_FromFacility, @c_FromStorerkey, @c_FromSku, @c_Channel_From
                                          ,@c_FromLot, @n_FromQty
                                           ) AS fsci
-                                          
+
             IF @c_Channel_From = ''
             BEGIN
                SET @c_Channel_From = @c_Channel_FromDefault
-            END                              
+            END
          END
-         
+
          IF @c_ChannelInventoryMgmt_To = '1'
          BEGIN
             SET @c_Channel_To = @c_Channel_ToDefault
             IF @c_ToStorerkey = @c_FromStorerkey
-            BEGIN 
+            BEGIN
                SET @c_Channel_To = @c_Channel_From
-            END   
+            END
          END
-         
+
          SET @n_TotalInserted = @n_TotalInserted + 1                                --(Wan01)
          SET @c_TransferLineNumber = RIGHT( '00000' + CONVERT(NVARCHAR(5), CONVERT(INT, @c_TransferLineNumber) + 1), 5 )
          INSERT INTO TRANSFERDETAIL
                (  TransferKey
                ,  TransferLineNumber
-               ,  FromStorerkey  
+               ,  FromStorerkey
                ,  FromSku
-               ,  FromPackkey  
+               ,  FromPackkey
                ,  FromUOM
                ,  FromQty
                ,  FromLot
@@ -440,9 +461,9 @@ BEGIN
                ,  Lottable13
                ,  Lottable14
                ,  Lottable15
-               ,  ToStorerkey  
+               ,  ToStorerkey
                ,  ToSku
-               ,  ToPackkey  
+               ,  ToPackkey
                ,  ToUOM
                ,  ToQty
                ,  ToLot
@@ -463,16 +484,16 @@ BEGIN
                ,  ToLottable13
                ,  ToLottable14
                ,  ToLottable15
-               ,  FromChannel                                                     
+               ,  FromChannel
                ,  ToChannel
                ,  FromPalletType                             --(SSA01)
                ,  ToPalletType                               --(SSA01)
                )
          VALUES(  @c_TransferKey
                ,  @c_TransferLineNumber
-               ,  @c_FromStorerkey  
+               ,  @c_FromStorerkey
                ,  @c_FromSku
-               ,  @c_FromPackkey  
+               ,  @c_FromPackkey
                ,  @c_FromUOM
                ,  @n_FromQty
                ,  @c_FromLot
@@ -484,7 +505,7 @@ BEGIN
                ,  @dt_FromLottable04
                ,  @dt_FromLottable05
                ,  @c_FromLottable06
-               ,  @c_FromLottable07
+      ,  @c_FromLottable07
                ,  @c_FromLottable08
                ,  @c_FromLottable09
                ,  @c_FromLottable10
@@ -493,9 +514,9 @@ BEGIN
                ,  @dt_FromLottable13
                ,  @dt_FromLottable14
                ,  @dt_FromLottable15
-               ,  @c_ToStorerkey  
+               ,  @c_ToStorerkey
                ,  @c_ToSku
-               ,  @c_ToPackkey  
+               ,  @c_ToPackkey
                ,  @c_ToUOM
                ,  @n_ToQty
                , ''
@@ -516,7 +537,7 @@ BEGIN
                ,  @dt_ToLottable13
                ,  @dt_ToLottable14
                ,  @dt_ToLottable15
-               ,  @c_Channel_From                                                 
+               ,  @c_Channel_From
                ,  @c_Channel_To
                ,  @c_FromPalletType                           --(SSA01)
                ,  @c_ToPalletType                             --(SSA01)
@@ -544,24 +565,24 @@ BEGIN
    END TRY
    BEGIN CATCH
       SET @n_Continue = 3
-      SET @c_ErrMsg   = ERROR_MESSAGE() 
-      
+      SET @c_ErrMsg   = ERROR_MESSAGE()
+
       INSERT INTO @t_WMSErrorList (TableName, SourceType, Refkey1, Refkey2, Refkey3, WriteType, LogWarningNo, ErrCode, ErrMsg)
       VALUES (@c_TableName, @c_SourceType, @c_TransferKey, '', '', 'ERROR', 0, @n_Err, @c_Errmsg)
-      GOTO EXIT_SP   
-   END CATCH                              
+      GOTO EXIT_SP
+   END CATCH
 EXIT_SP:
-   IF (XACT_STATE()) = -1  
+   IF (XACT_STATE()) = -1
    BEGIN
       SET @n_Continue = 3
       ROLLBACK TRAN
-   END  
-    
+   END
+
    IF OBJECT_ID('tempdb..#tLLI', 'U') IS NOT NULL
    BEGIN
       DROP TABLE #tLLI
    END
-   
+
    IF @n_Continue=3  -- Error Occured - Process And Return
    BEGIN
       SET @b_Success = 0
@@ -586,7 +607,7 @@ EXIT_SP:
          COMMIT TRAN
       END
    END
-      
+
    SET @CUR_ERRLIST = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
    SELECT   twl.TableName
          ,  twl.SourceType
@@ -605,7 +626,7 @@ EXIT_SP:
    FETCH NEXT FROM @CUR_ERRLIST INTO   @c_TableName
                                      , @c_SourceType
                                      , @c_Refkey1
-                                     , @c_Refkey2
+               , @c_Refkey2
                                      , @c_Refkey3
                                      , @c_WriteType
                                      , @n_LogWarningNo
@@ -645,9 +666,10 @@ EXIT_SP:
    WHILE @@TRANCOUNT < @n_StartTCnt
    BEGIN
       BEGIN TRAN
-   END  
-         
-   REVERT
+   END
+
+   IF @b_ExecuteAs = 1 REVERT -- (SWT01)
+   EXEC [WM].[lsp_ResetUser]  -- (SWT01)
 END
 GO
 GRANT EXECUTE ON [WM].[lsp_TRF_PopulateLLI_Wrapper] TO nSQL 

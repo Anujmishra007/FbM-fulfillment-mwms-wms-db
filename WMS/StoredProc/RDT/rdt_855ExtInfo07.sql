@@ -9,6 +9,7 @@ GO
 /*                                                                      */
 /* Date       Rev    Author   Purposes                                  */
 /* 2024-11-15 1.0.0  LJQ006   FCR-1109 Created                          */
+/* 2025-09-05 1.1.0  Jackc    UWP-40608 Performance tuning              */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE rdt.rdt_855ExtInfo07
@@ -50,11 +51,9 @@ BEGIN
             -- get CartonType by CaseID 
             SELECT TOP 1 @cCartonType = PKI.CartonType
             FROM dbo.PackInfo PKI WITH(NOLOCK)
-            INNER JOIN dbo.PickDetail PKD WITH(NOLOCK) ON ISNULL(PKI.RefNo, '') = ISNULL(PKD.CaseID, '-1')
-            WHERE PKD.StorerKey = @cStorerKey
-               AND ISNULL(RefNo, '') = @cDropID
+            WHERE RefNo = @cDropID
 
-            SET @cExtendedInfo = 'CARTON TYPE: ' + TRIM(SUBSTRING(@cCartonType, 1, 8))
+            SET @cExtendedInfo = 'CARTON TYPE: ' + TRIM(SUBSTRING(ISNULL(@cCartonType,''), 1, 8))
             GOTO Quit
          END
       END
@@ -63,11 +62,9 @@ BEGIN
          -- get CartonType by CaseID 
          SELECT TOP 1 @cCartonType = PKI.CartonType
          FROM dbo.PackInfo PKI WITH(NOLOCK)
-         INNER JOIN dbo.PickDetail PKD WITH(NOLOCK) ON ISNULL(PKI.RefNo, '') = ISNULL(PKD.CaseID, '-1')
-         WHERE PKD.StorerKey = @cStorerKey
-            AND ISNULL(RefNo, '') = @cDropID
+         WHERE RefNo = @cDropID
 
-         SET @cExtendedInfo = 'CARTON TYPE: ' + TRIM(SUBSTRING(@cCartonType, 1, 8))
+         SET @cExtendedInfo = 'CARTON TYPE: ' + TRIM(SUBSTRING(ISNULL(@cCartonType,''), 1, 8))
          GOTO Quit
       END
    END

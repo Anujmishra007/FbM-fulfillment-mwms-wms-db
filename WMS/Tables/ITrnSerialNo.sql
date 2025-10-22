@@ -1,3 +1,11 @@
+/************************************************************************/
+/* Table:  ITrnSerialNo                                                 */
+/* Copyright: MAERSK                                                    */
+/*                                                                      */
+/* Updates:                                                             */
+/* Date         Author    Ver.  Purposes                                */
+/* 08-Oct-2025  MICHAEL   1.1   FCR-8303-IN-PAGEIND-Add FromLoc (ML01)  */
+/************************************************************************/
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -41,6 +49,7 @@ CREATE TABLE [dbo].[ITrnSerialNo]
 [Channel_ID] [bigint] NULL,
 [UCCNo] [nvarchar] (20) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_ITrnSerialNo_UCCNo] DEFAULT (' '),
 [FromID] [nvarchar](18) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_ITrnSerialNo_FromID] DEFAULT (' ') ,
+[FromLoc] [nvarchar] (10) COLLATE SQL_Latin1_General_CP1_CI_AS NOT NULL CONSTRAINT [DF_ITrnSerialNo_FromLoc]  DEFAULT (''),   --ML01
 ) ON [PRIMARY]
 
 ALTER TABLE [dbo].[ITrnSerialNo] ADD CONSTRAINT [PK_ITrnSerialNo] PRIMARY KEY CLUSTERED ([ITrnSerialNoKey]) ON [PRIMARY]
@@ -180,6 +189,18 @@ BEGIN
 EXEC sp_addextendedproperty N'MS_Description', N'UCCNo', 'SCHEMA', N'dbo', 'TABLE', N'ITrnSerialNo', 'COLUMN', N'UCCNo'
 END
 
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'ITrnSerialNo', N'COLUMN',N'FromID'))
+BEGIN
+EXEC sp_addextendedproperty N'MS_Description', N'FromID', 'SCHEMA', N'dbo', 'TABLE', N'ITrnSerialNo', 'COLUMN', N'FromID'
+END
+
+--ML01-S
+IF NOT EXISTS (SELECT * FROM sys.fn_listextendedproperty(N'MS_Description' , N'SCHEMA',N'dbo', N'TABLE',N'ITrnSerialNo', N'COLUMN',N'FromLoc'))
+BEGIN
+EXEC sp_addextendedproperty N'MS_Description', N'FromLoc', 'SCHEMA', N'dbo', 'TABLE', N'ITrnSerialNo', 'COLUMN', N'FromLoc'
+END
+--ML01-E
+
 END
 ELSE
 BEGIN
@@ -310,6 +331,20 @@ BEGIN
 	EXEC sp_addextendedproperty N'MS_Description', N'UCCNo', 'SCHEMA', N'dbo', 'TABLE', N'ITrnSerialNo', 'COLUMN', N'UCCNo'
 END
 
+/*UWP-32503*/
+IF NOT EXISTS (SELECT * FROM sys.columns WHERE Name = 'FromID' AND Object_ID = Object_ID('ITrnSerialNo'))
+BEGIN
+ALTER TABLE ITrnSerialNo ADD FromID NVARCHAR(18) NOT NULL CONSTRAINT  [DF_ITrnSerialNo_FromID]  DEFAULT (' ');
+EXEC sp_addextendedproperty N'MS_Description', N'FromID', 'SCHEMA', N'dbo', 'TABLE', N'ITrnSerialNo', 'COLUMN', N'FromID'
+END
+
+--ML01-S
+IF NOT EXISTS (SELECT * FROM sys.columns WHERE Name = 'FromLoc' AND Object_ID = Object_ID('ITrnSerialNo'))
+BEGIN
+	ALTER TABLE ITrnSerialNo ADD FromLoc NVARCHAR(10) NOT NULL CONSTRAINT [DF_ITrnSerialNo_FromLoc]  DEFAULT ('');
+	EXEC sp_addextendedproperty N'MS_Description', N'FromLoc', 'SCHEMA', N'dbo', 'TABLE', N'ITrnSerialNo', 'COLUMN', N'FromLoc'
+END
+--ML01-E
 
 IF NOT EXISTS ( SELECT *  FROM INFORMATION_SCHEMA.COLUMNS  WHERE TABLE_NAME = 'ITRNSerialNo' AND COLUMN_NAME = 'Lot' AND CHARACTER_MAXIMUM_LENGTH = 10 )
 BEGIN
@@ -386,13 +421,12 @@ BEGIN
    ALTER TABLE [ITRNSerialNo] ALTER COLUMN [UCCNo] nvarchar(20);
 END
 
-
-/*UWP-32503*/
-IF NOT EXISTS (SELECT * FROM sys.columns WHERE Name = 'FromID' AND Object_ID = Object_ID('ITrnSerialNo'))
+--ML01-S
+IF NOT EXISTS ( SELECT *  FROM INFORMATION_SCHEMA.COLUMNS  WHERE TABLE_NAME = 'ITRNSerialNo' AND COLUMN_NAME = 'FromLoc' AND CHARACTER_MAXIMUM_LENGTH = 10 )
 BEGIN
-ALTER TABLE ITrnSerialNo ADD FromID NVARCHAR(18) NOT NULL CONSTRAINT  [DF_ITrnSerialNo_FromID]  DEFAULT (' ');
-EXEC sp_addextendedproperty N'MS_Description', N'FromID', 'SCHEMA', N'dbo', 'TABLE', N'ITrnSerialNo', 'COLUMN', N'FromID'
+ALTER TABLE [ITRNSerialNo] ALTER COLUMN [FromLoc] nvarchar(10);
 END
+--ML01-E
 
 END
 GO

@@ -30,6 +30,7 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date         Author  Ver   Purposes                                  */
+/* 10-Oct-2025  SSA01   1.2   UWP-42248 -Enhanced session management    */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[msp_Back2FrontSwapLot]
    @c_LOT            NVARCHAR(10) 
@@ -485,8 +486,8 @@ BEGIN
                   UPDATE PICKDETAIL WITH (ROWLOCK)
                   SET Lot = @c_LOT,
                       ID  = @c_ID,
-                      EditWho = SUSER_SNAME(), 
-                      EditDate = GETDATE()
+                      EditWho = dbo.fnc_GetUserName(),        --(SSA01)
+                      EditDate = dbo.fnc_GetDate()   --(SSA01)
                   WHERE PickDetailKey = @c_PickDetailKey 
 
                   SELECT @n_ErrNo = @@ERROR
@@ -558,8 +559,8 @@ BEGIN
 
                      UPDATE PICKDETAIL WITH (ROWLOCK)
                         SET Qty = Qty - @n_ReplenQty,
-                            EditWho = SUSER_SNAME(), 
-                            EditDate = GETDATE()
+                            EditWho = dbo.fnc_GetUserName(),             --(SSA01)
+                            EditDate = dbo.fnc_GetDate()   --(SSA01)
                      WHERE PickDetailKey = @c_PickDetailKey
 
                      IF @@ERROR = 0
@@ -578,7 +579,7 @@ BEGIN
                                Loc,             @c_ID,        UOMQty,         UOM,
                                CaseID,          PackKey,      CartonGroup,    DoReplenish,
                                replenishzone,   docartonize,  Trafficcop,     PickMethod,
-                               '0',             PickSlipNo,   SUSER_SNAME(),  SUSER_SNAME(),
+                               '0',             PickSlipNo,   dbo.fnc_GetUserName(),  dbo.fnc_GetUserName(),         --(SSA01)
                                @c_ShipFlag,     DropID,       TaskDetailKey,  AltSku,
                                ToLoc,           Notes,        MoveRefKey,     Channel_ID
                         FROM   PICKDETAIL (NOLOCK)

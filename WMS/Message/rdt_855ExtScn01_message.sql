@@ -11,5 +11,6 @@ execute rdt.rdtAddMsg 217357, 10, '217357MultiSKUBarcode',   'us_english', 855, 
 execute rdt.rdtAddMsg 217358, 10, '217358SKUNotInDropID',    'us_english', 855, 0, '217358: SKU not in carton'
 execute rdt.rdtAddMsg 217359, 10, '217359SKUAllPacked',      'us_english', 855, 0, '217359: This SKU is all packed'
 execute rdt.rdtAddMsg 217360, 10, '217360MulipleOrders',     'us_english', 855, 0, '217360: Muliple orders but MPOC is disallowed'
+execute rdt.rdtAddMsg 217361, 10, '217361 InvalidSKU',       'us_english', 855, 0, '217361: Invalid SKU'
 
 SELECT * FROM RDT.RDTMsg WITH(NOLOCK) WHERE Message_ID BETWEEN 217351 AND 217400

@@ -17,6 +17,13 @@ GO
 /* 2025-02-27    JCH507   1.1.0  FCR-1157 Unlock toLoc when full short     */
 /* 2025-04-09    Dennis   1.2.0  FCR-3925 Trigger Transmitlog2             */
 /* 2025-04-21    JACKC    1.2.1  FCR-3925 Add Transmitlog2 to full short   */
+/* 2025-06-03    NickT    1.3.0  UWP-35382 Mark TaskDetail as X for Short  */
+/*                               pick detail                               */
+/* 2025-08-05    NickT    1.3.1  UWP-35382 No need to mark TaskDetail as X */
+/*                        for Short pick detail if @cRefTaskKey is empty   */
+/* 2025-07-30    NLT013   1.4.0  UWP-38609 Performance tuning              */
+/* 2025-08-15    NLT013   1.5.0  UWP-39510 SQL Server exception            */
+/* 2025-10-10    NickT    1.6.0  FCR-7928 Reallocate for short task        */
 /***************************************************************************/
 
 CREATE OR ALTER PROCEDURE rdt.rdt_1764CfmExtUpd05
@@ -58,7 +65,21 @@ BEGIN
    DECLARE @cOrderKey      NVARCHAR(10) -- v1.2.0
    DECLARE @cStorerKey     NVARCHAR(15) --v1.2.0
    DECLARE @curPD          CURSOR --v1.2.1
+   DECLARE @cFinalLoc      NVARCHAR(10) = ''
+   DECLARE @cFinalLocPickZone NVARCHAR(10) = ''
+   DECLARE @cAutomationPick   NVARCHAR(1) = 'N'
+   DECLARE @cRefTaskKey       NVARCHAR(10) = ''
+   DECLARE @cTaskDetailMessage02   NVARCHAR(20)
 
+   DECLARE @tPickDetail TABLE 
+   (
+      PickDetailKey NVARCHAR(18) PRIMARY KEY
+   )
+
+   DECLARE @tTaskDetail TABLE 
+   (
+      TaskDetailKey NVARCHAR(10) PRIMARY KEY
+   )
 
    -- All logics are copied from 1764CfmExtUpd01, update the rdtmobrec retrieving logic.  By JCH507
 
@@ -71,7 +92,10 @@ BEGIN
       @cFromID = FromID, 
       @nOrgSystemQTY = SystemQTY, 
       @nOrgTaskQty = CASE WHEN QTY < SystemQTY THEN QTY ELSE SystemQTY END, -- QTY for PickDetail
-      @nShortQTY   = CASE WHEN QTY < SystemQTY THEN SystemQTY - QTY ELSE 0 END
+      @nShortQTY   = CASE WHEN QTY < SystemQTY THEN SystemQTY - QTY ELSE 0 END,
+      @cFinalLoc = FinalLoc,
+      @cRefTaskKey = RefTaskKey,
+      @cTaskDetailMessage02 = Message02
    FROM dbo.TaskDetail WITH (NOLOCK) 
    WHERE TaskDetailKey = @cTaskdetailKey
 
@@ -82,6 +106,16 @@ BEGIN
    -- FP, does not close pallet or short
    IF @cPickMethod = 'FP'
       RETURN
+
+   IF ISNULL(@cFinalLoc, '') <> '' 
+      SELECT @cFinalLocPickZone = PickZone
+      FROM dbo.LOC WITH (NOLOCK)
+      WHERE LOC.LOC = @cFinalLOC
+
+   IF ISNULL(@cFinalLocPickZone, '') <> 'PICK'
+      SET @cAutomationPick = 'Y'
+   ELSE
+      SET @cAutomationPick = 'N'
 
    -- Get suggested replen QTY and actual QTY
    SET @nQTY_RPL = 0
@@ -150,23 +184,64 @@ BEGIN
    -- Split or short PickDetail
    IF @nQTY < @nSystemQTY
    BEGIN
+      -- Need reallocate if @cTaskDetailMessage02 <> 'SKIP1'
+      IF @cTaskDetailMessage02 <> 'SKIP1'
+         GOTO Quit
+
       --V1.0.1 start --fullshort
       IF @nQTY = 0 AND @nShortQTY > 0 AND @nShortQty = @nSystemQTY
       BEGIN
          IF @bDebugFlag = 1
             SELECT 'Full UCC short'
+
          BEGIN TRY
-            UPDATE dbo.PickDetail WITH (ROWLOCK) SET
-               TaskDetailKey = @cTaskDetailKey, 
+            INSERT INTO @tPickDetail (PickDetailKey)
+            SELECT DISTINCT PickDetailKey
+            FROM dbo.PickDetail WITH (NOLOCK)
+            WHERE TaskDetailKey = @cTaskDetailKey
+
+            UPDATE PD WITH (ROWLOCK)
+            SET
                Status =  '4', 
                EditWho  = SUSER_SNAME(), 
                EditDate = GETDATE(),
                Trafficcop = NULL
-            WHERE TaskDetailKey = @cTaskDetailKey
+            FROM dbo.PickDetail PD WITH (ROWLOCK)
+            INNER JOIN @tPickDetail TPD ON PD.PickDetailKey = TPD.PickDetailKey
          END TRY
          BEGIN CATCH
             SET @nErrNo = 231257
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD PKDtl Fail
+            GOTO RollBackTran
+         END CATCH
+
+         BEGIN TRY
+            IF @cRefTaskKey <> ''
+            BEGIN
+               IF @cAutomationPick = 'Y'
+               BEGIN
+                  INSERT INTO @tTaskDetail (TaskDetailKey)
+                  SELECT TaskDetailKey
+                  FROM dbo.TaskDetail WITH (ROWLOCK)
+                  WHERE StorerKey = @cStorerKey
+                     AND TaskType = 'ASTCPK'
+                     AND RefTaskKey = @cRefTaskKey
+                     AND Status = 'H'
+
+                  UPDATE TD WITH (ROWLOCK) 
+                  SET
+                     TD.Status = 'X', 
+                     TD.EditWho  = SUSER_SNAME(), 
+                     TD.EditDate = GETDATE(),
+                     TD.Trafficcop = NULL
+                  FROM dbo.TaskDetail TD WITH (ROWLOCK)
+                  INNER JOIN @tTaskDetail TTD ON TD.TaskDetailKey = TTD.TaskDetailKey
+               END
+            END
+         END TRY
+         BEGIN CATCH
+            SET @nErrNo = 231258
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Mark ASTCPK Task as X Fail
             GOTO RollBackTran
          END CATCH
 
@@ -284,6 +359,37 @@ BEGIN
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD PKDtl Fail
                   GOTO RollBackTran
                END
+
+               BEGIN TRY
+                  IF @cTask = 'SHT' AND @cAutomationPick = 'Y'
+                  BEGIN
+                     UPDATE TD WITH (ROWLOCK) 
+                     SET
+                        TD.Status = 'X', 
+                        TD.EditWho  = SUSER_SNAME(), 
+                        TD.EditDate = GETDATE(),
+                        TD.Trafficcop = NULL
+                     FROM dbo.TaskDetail TD WITH (ROWLOCK)
+                     INNER JOIN dbo.PickDetail PD WITH(NOLOCK)
+                        ON TD.StorerKey = PD.StorerKey
+                        AND TD.CaseID = PD.CaseID
+                        AND TD.RefTaskKey = PD.TaskDetailKey
+                        AND TD.SKU = PD.SKU
+                        AND TD.Lot = PD.LOT
+                        AND TD.Qty = PD.Qty
+                     WHERE PD.StorerKey = @cStorerKey
+                        AND PD.PickDetailKey = @cPickDetailKey
+                        AND PD.Status = '4'
+                        AND TD.TaskType = 'ASTCPK'
+                        AND TD.Status = 'H'
+                  END
+               END TRY
+               BEGIN CATCH
+                  SET @nErrNo = 231259
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Mark ASTCPK Task as X Fail
+                  GOTO RollBackTran
+               END CATCH
+
                --V1.2.0 DENNIS
                IF @cTask = 'SHT'
                BEGIN
@@ -382,6 +488,36 @@ BEGIN
                BEGIN CATCH
                   SET @nErrNo = 231254
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD PKDtl Fail
+                  GOTO RollBackTran
+               END CATCH
+
+               BEGIN TRY
+                  IF @cTask = 'SHT' AND @cAutomationPick = 'Y'
+                  BEGIN
+                     UPDATE TD WITH (ROWLOCK) 
+                     SET
+                        TD.Status = 'X', 
+                        TD.EditWho  = SUSER_SNAME(), 
+                        TD.EditDate = GETDATE(),
+                        TD.Trafficcop = NULL
+                     FROM dbo.TaskDetail TD WITH (ROWLOCK)
+                     INNER JOIN dbo.PickDetail PD WITH(NOLOCK)
+                        ON TD.StorerKey = PD.StorerKey
+                        AND TD.CaseID = PD.CaseID
+                        AND TD.RefTaskKey = PD.TaskDetailKey
+                        AND TD.SKU = PD.SKU
+                        AND TD.Lot = PD.LOT
+                        AND TD.Qty = PD.Qty
+                     WHERE PD.StorerKey = @cStorerKey
+                        AND PD.PickDetailKey = @cPickDetailKey
+                        AND PD.Status = '4'
+                        AND TD.TaskType = 'ASTCPK'
+                        AND TD.Status = 'H'
+                  END
+               END TRY
+               BEGIN CATCH
+                  SET @nErrNo = 231260
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Mark ASTCPK Task as X Fail
                   GOTO RollBackTran
                END CATCH
                

@@ -1,8 +1,3 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_FinalizeTransfer_Wrapper]')
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 )
-DROP PROCEDURE [WM].[lsp_FinalizeTransfer_Wrapper]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -29,10 +24,11 @@ GO
 /*                            Revert when Sub SP Raise error            */
 /* 2021-01-15  Wan02    1.2   Execute Login if @c_UserName<>SUSER_SNAME()*/
 /* 2022-06-24  SYCHUA   1.3   JSM-76615 - Filter out status = 9 (SY01)  */
-/*2025-05-26   SSA01    1.4   UWP-3982- Added PalletType                */
+/* 2025-10-06  SSA01    1.4   UWP-42142 -Enhanced session management    */
+/*                             and cleanup.                             */
 /************************************************************************/
 
-CREATE PROCEDURE [WM].[lsp_FinalizeTransfer_Wrapper]
+CREATE OR ALTER PROCEDURE [WM].[lsp_FinalizeTransfer_Wrapper]
       @c_TransferKey NVARCHAR(10)
     , @b_Success INT=1 OUTPUT
     , @n_Err INT=0 OUTPUT
@@ -73,7 +69,8 @@ BEGIN
            @c_IDStatus                NVARCHAR(10),
            @c_ToLottable01            NVARCHAR(18),
            @c_LatestLottable01        NVARCHAR(18),
-           @c_status                  NVARCHAR(10)
+           @c_status                  NVARCHAR(10),
+           @b_ExecuteAs       BIT = 0     --(SSA01)
 
    SELECT @n_starttcnt=@@TRANCOUNT, @n_err=0, @b_success=1, @c_errmsg='', @n_continue=1
 
@@ -83,17 +80,21 @@ BEGIN
    SET @c_CompletedMessage = ''
 
    SET @n_Err = 0
+   --(SSA01) - START
    IF SUSER_SNAME() <> @c_UserName       --(Wan02) - START
    BEGIN
-      EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
+      EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
 
       IF @n_Err <> 0
       BEGIN
          GOTO EXIT_SP
       END
 
-      EXECUTE AS LOGIN = @c_UserName
-   END                                   --(Wan02) - END
+      IF @b_ExecuteAs = 1
+         EXECUTE AS LOGIN = @c_UserName
+   END
+   --(SSA01) - END
+   --(Wan02) - END
 
    --(Wan01) - START
    BEGIN TRY
@@ -127,57 +128,6 @@ BEGIN
 
          GOTO EXIT_SP
       END
-
-      IF @n_continue IN(1,2)
-      BEGIN
-          IF EXISTS(
-          SELECT 1
-          FROM transferdetail tfd
-          WHERE
-            (
-            tfd.ToPalletType IS NOT NULL
-            AND tfd.ToPalletType != ''
-            AND tfd.transferkey = @c_Transferkey
-            AND NOT EXISTS (
-              SELECT 1
-              FROM pallettypemaster(NOLOCK) ptm
-              WHERE ptm.PalletType = tfd.ToPalletType
-              AND ptm.storerkey = tfd.toStorerKey
-              AND ptm.facility = @c_ToFacility
-              )
-            )
-            OR
-            (
-            tfd.FromPalletType IS NOT NULL
-            AND tfd.FromPalletType != ''
-            AND tfd.transferkey = @c_Transferkey
-            AND NOT EXISTS (
-              SELECT 1
-              FROM ID (NOLOCK) id
-              WHERE id.PalletType = tfd.FromPalletType
-              AND id.id = tfd.FromId
-            )
-            ))
-            BEGIN
-            SELECT @n_continue = 3
-            SELECT @c_errmsg = CONVERT(NVARCHAR(250),@n_err), @n_err = 551751
-            SELECT @c_errmsg='NSQL'+CONVERT(NVARCHAR(6),@n_err)+' FromPalletType / ToPalletType are not valid. (lsp_FinalizeTransfer_Wrapper)'
-
-            EXEC [WM].[lsp_WriteError_List]
-                  @i_iErrGroupKey = @n_ErrGroupKey OUTPUT,
-                  @c_TableName   = @c_TableName,
-                  @c_SourceType  = @c_SourceType,
-                  @c_Refkey1     = @c_Transferkey,
-                  @c_Refkey2     = '',
-                  @c_Refkey3     = '',
-                  @n_err2        = @n_err,
-                  @c_errmsg2     = @c_errmsg,
-                  @b_Success     = @b_Success OUTPUT,
-                  @n_err         = @n_err OUTPUT,
-                  @c_errmsg      = @c_errmsg OUTPUT
-              GOTO EXIT_SP
-            END
-          END
 
       SELECT @c_ChkTransferQtyTally = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'ChkTransferQtyTally')
       SELECT @c_ChkMARSTrfLot01 = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'ChkMARSTrfLot01')
@@ -591,7 +541,14 @@ BEGIN
       EXECUTE nsp_logerror @n_err, @c_ErrMsg, 'lsp_FinalizeTransfer_Wrapper'        --(Wan01)
    END
 
-   REVERT
+   --(SSA01) - Start
+   IF @b_ExecuteAs = 1
+   BEGIN
+      REVERT
+   END
+
+   EXEC [WM].[lsp_ResetUser]
+   --(SSA01) - END
 END -- End Procedure
 GO
 GRANT EXECUTE ON [WM].[lsp_FinalizeTransfer_Wrapper] TO nSQL

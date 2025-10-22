@@ -31,6 +31,7 @@ GO
 /* 28/07/2017  NJOW03   1.2   Fix. Add pickdetail.taskdetailkey checking */
 /* 23/08/2017  TLTING   1.3   Performance tune                           */
 /* 01-04-2020  Wan01    1.4   Sync Exceed & SCE                          */
+/* 10-10-2025  SSA01    1.5  UWP-42248 -Enhanced session management      */
 /*************************************************************************/   
 
 CREATE PROCEDURE [dbo].[ispRLWAV10]      
@@ -479,7 +480,7 @@ CREATE PROCEDURE [dbo].[ispRLWAV10]
                  TaskDetailKey = @c_TaskDetailKey,
                  PickslipNo = @c_Pickslipno,
                  WaveKey = @c_Wavekey,
-                 EditDate = GETDATE(),                             
+                 EditDate = dbo.fnc_GetDate(),    --(SSA01)
                  TrafficCop = NULL
              WHERE PickDetailKey = @c_PickDetailKey  
              
@@ -551,8 +552,8 @@ CREATE PROCEDURE [dbo].[ispRLWAV10]
           --SET STATUS = '1' -- Released        --(Wan01) 
           SET TMReleaseFlag = 'Y'               --(Wan01) 
            ,  TrafficCop = NULL                 --(Wan01) 
-           ,  EditWho = SUSER_SNAME()           --(Wan01) 
-           ,  EditDate= GETDATE()               --(Wan01)
+           ,  EditWho = dbo.fnc_GetUserName()           --(Wan01)(SSA01)
+           ,  EditDate= dbo.fnc_GetDate()    --(SSA01)              --(Wan01)
        WHERE WAVEKEY = @c_wavekey  
        SELECT @n_err = @@ERROR  
        IF @n_err <> 0  

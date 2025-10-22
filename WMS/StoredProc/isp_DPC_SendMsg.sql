@@ -20,6 +20,8 @@ GO
 /*                            when config turn on (james01)                   */
 /* 2015-07-07 1.4  Ung        Update EditDate, EditWho                        */
 /* 2017-02-27 1.5  TLTING     Variable Nvarchar                               */
+/* 2025-10-10 1.6  SSA01      UWP-42248 -Enhanced session management          */
+/*                            and cleanup.                                    */
 /******************************************************************************/
 
 CREATE PROC [dbo].[isp_DPC_SendMsg]
@@ -211,8 +213,8 @@ BEGIN
       SET    STATUS = CONVERT(VARCHAR(1), @n_Status_Out)           
            , ErrMsg = ISNULL(@c_vbErrMsg, '')           
            , LocalEndPoint = @c_LocalEndPoint
-           , EditDate = GETDATE()
-           , EditWho = SUSER_SNAME()
+           , EditDate = dbo.fnc_GetDate()   --(SSA01)
+           , EditWho = dbo.fnc_GetUserName()     --(SSA01)
       WHERE  SerialNo = @n_SerialNo_Out
 
       SET @b_Success=0
@@ -232,8 +234,8 @@ BEGIN
          SET    STATUS = CONVERT(VARCHAR(1), @n_Status_Out)
               , ErrMsg = ISNULL(@c_DPC_RtnMessage, '')
               , LocalEndPoint = @c_LocalEndPoint
-              , EditDate = GETDATE()
-              , EditWho = SUSER_SNAME()
+              , EditDate = dbo.fnc_GetDate()   --(SSA01)
+              , EditWho = dbo.fnc_GetUserName()     --(SSA01)
          WHERE  SerialNo = @n_SerialNo_Out
 
          SET @b_Success=0
@@ -249,8 +251,8 @@ BEGIN
          SET    STATUS = CONVERT(VARCHAR(1), @n_Status_Out)
               , ErrMsg = ISNULL(@c_ReceiveMessage, '')
               , LocalEndPoint = @c_LocalEndPoint
-              , EditDate = GETDATE()
-              , EditWho = SUSER_SNAME()
+              , EditDate = dbo.fnc_GetDate()   --(SSA01)
+              , EditWho = dbo.fnc_GetUserName()     --(SSA01)
          WHERE  SerialNo = @n_SerialNo_Out
 
          SET @b_Success=1

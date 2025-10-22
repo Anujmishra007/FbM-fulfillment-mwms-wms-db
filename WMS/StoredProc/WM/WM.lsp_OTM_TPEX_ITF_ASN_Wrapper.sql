@@ -1,34 +1,31 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_OTM_TPEX_ITF_ASN_Wrapper]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-   DROP PROCEDURE [WM].[lsp_OTM_TPEX_ITF_ASN_Wrapper]
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
 GO
 
-SET ANSI_NULLS ON
-GO
-SET QUOTED_IDENTIFIER ON
-GO
-/*************************************************************************/  
-/* Stored Procedure: lsp_OTM_TPEX_ITF_ASN_Wrapper                        */  
-/* Creation Date: 22-OCT-2020                                            */  
-/* Copyright: LFL                                                        */  
-/* Written by: Wan                                                       */  
-/*                                                                       */  
-/* Purpose:                                                              */  
-/*                                                                       */  
-/* Called By:                                                            */  
-/*                                                                       */  
-/*                                                                       */  
-/* Version: 1.1                                                          */  
-/*                                                                       */  
-/* Data Modifications:                                                   */  
-/*                                                                       */  
-/* Updates:                                                              */  
-/* Date        Author   Ver  Purposes                                    */ 
-/* 22-OCT-2020 Wan      1.0   Created                                    */ 
+/*************************************************************************/
+/* Stored Procedure: lsp_OTM_TPEX_ITF_ASN_Wrapper                        */
+/* Creation Date: 22-OCT-2020                                            */
+/* Copyright: LFL                                                        */
+/* Written by: Wan                                                       */
+/*                                                                       */
+/* Purpose:                                                              */
+/*                                                                       */
+/* Called By:                                                            */
+/*                                                                       */
+/*                                                                       */
+/* Version: 1.1                                                          */
+/*                                                                       */
+/* Data Modifications:                                                   */
+/*                                                                       */
+/* Updates:                                                              */
+/* Date        Author   Ver  Purposes                                    */
+/* 22-OCT-2020 Wan      1.0   Created                                    */
 /* 15-JAN-2020 Wan01    1.1   Add Big Outer Begin try/Catch              */
-/*                            Execute Login if @c_UserName<>SUSER_SNAME()*/        
-/*************************************************************************/   
-CREATE PROC [WM].[lsp_OTM_TPEX_ITF_ASN_Wrapper] (
+/*                            Execute Login if @c_UserName<>SUSER_SNAME()*/
+/* 2025-09-02  SWT01    1.2   Enhanced session management pattern        */
+/*************************************************************************/
+CREATE OR ALTER PROC [WM].[lsp_OTM_TPEX_ITF_ASN_Wrapper] (
   @c_Receiptkeys        NVARCHAR(2000)       -- List of Receiptkey with | seperator
 , @b_Success            INT            = 1   OUTPUT
 , @n_Err                INT            = 0   OUTPUT
@@ -36,7 +33,7 @@ CREATE PROC [WM].[lsp_OTM_TPEX_ITF_ASN_Wrapper] (
 , @n_WarningNo          INT            = 0   OUTPUT
 , @c_UserName           NVARCHAR(128)  =''
 , @n_ErrGroupKey        INT            = 0   OUTPUT
-) AS 
+) AS
 BEGIN
    SET NOCOUNT ON
    SET QUOTED_IDENTIFIER OFF
@@ -65,19 +62,27 @@ BEGIN
          , @CUR_ITF              CURSOR
 
    --2020-11-20 - START
-   SET @n_Err = 0 
-   IF SUSER_SNAME() <> @c_UserName       --(Wan01) - START
+   SET @n_Err = 0
+   -- Start enhanced session management (SWT01)
+   DECLARE @b_ExecuteAs        BIT = 0
+   IF SUSER_SNAME() <> @c_UserName        
    BEGIN
-      EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserName OUTPUT, @n_Err = @n_Err OUTPUT, @c_ErrMsg = @c_ErrMsg OUTPUT
-    
-      IF @n_Err <> 0 
+      EXEC [WM].[lsp_SetUser] 
+           @c_UserName = @c_UserName  OUTPUT
+        ,  @n_Err      = @n_Err       OUTPUT
+        ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+        , @b_ExecuteAs = @b_ExecuteAs OUTPUT
+
+      IF @n_Err <> 0
       BEGIN
          GOTO EXIT_SP
       END
-                
-      EXECUTE AS LOGIN = @c_UserName        
-   END                                   --(Wan01) - END
-    
+
+      IF @b_ExecuteAs = 1
+         EXECUTE AS LOGIN = @c_UserName
+   END                                    
+   -- End enhanced session management (SWT01)
+
    --2020-11-20 - END
 
 
@@ -87,20 +92,20 @@ BEGIN
          , Storerkey    NVARCHAR(15)   NOT NULL DEFAULT('')
          , DocType      NVARCHAR(10)   NOT NULL DEFAULT('')
    )
-   
+
    BEGIN TRY
-	
+
 
       INSERT INTO @tRECEIPT ( Receiptkey, Facility, Storerkey, DocType )
       SELECT DISTINCT Receiptkey =  SS.[Value]
             , RH.Facility
             , RH.Storerkey
             , RH.DocType
-      FROM STRING_SPLIT ( @c_Receiptkeys, '|') SS 
-      JOIN RECEIPT RH WITH (NOLOCK) ON SS.[Value] = RH.Receiptkey 
-      ORDER BY 1        
+      FROM STRING_SPLIT ( @c_Receiptkeys, '|') SS
+      JOIN RECEIPT RH WITH (NOLOCK) ON SS.[Value] = RH.Receiptkey
+      ORDER BY 1
 
-      IF NOT EXISTS  (  SELECT 1 
+      IF NOT EXISTS  (  SELECT 1
                         FROM @tRECEIPT
                      )
       BEGIN
@@ -109,7 +114,7 @@ BEGIN
          SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + '. No ASN found for interface.'
                        + ' (lsp_OTM_TPEX_ITF_ASN_Wrapper)'
 
-         EXEC [WM].[lsp_WriteError_List] 
+         EXEC [WM].[lsp_WriteError_List]
                @i_iErrGroupKey= @n_ErrGroupKey OUTPUT
             ,  @c_TableName   = @c_TableName
             ,  @c_SourceType  = @c_SourceType
@@ -126,7 +131,7 @@ BEGIN
          GOTO EXIT_SP
       END
 
-      SET @CUR_ITFCHK = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
+      SET @CUR_ITFCHK = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
       SELECT Receiptkey
             ,Facility
             ,Storerkey
@@ -147,7 +152,7 @@ BEGIN
             SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + '. ASN''s Storer does not setup for TPEX interface.'
                           + ' (lsp_OTM_TPEX_ITF_ASN_Wrapper)'
 
-            EXEC [WM].[lsp_WriteError_List] 
+            EXEC [WM].[lsp_WriteError_List]
                   @i_iErrGroupKey= @n_ErrGroupKey OUTPUT
                ,  @c_TableName   = @c_TableName
                ,  @c_SourceType  = @c_SourceType
@@ -168,8 +173,8 @@ BEGIN
       END
       CLOSE @CUR_ITFCHK
       DEALLOCATE @CUR_ITFCHK
-   
-      SET @CUR_ITF = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
+
+      SET @CUR_ITF = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
       SELECT Receiptkey
             ,Storerkey
             ,DocType
@@ -195,19 +200,19 @@ BEGIN
 	            , @c_transmitbatch= ''
 	            , @c_resendflag   = @c_ITF_Resendflag
 	            , @b_success      = @b_success   OUTPUT
-	            , @n_err          = @n_err       OUTPUT 
+	            , @n_err          = @n_err       OUTPUT
 	            , @c_errmsg       = @c_errmsg    OUTPUT
          END TRY
          BEGIN CATCH
             SET @b_success = 0
 
-            IF (XACT_STATE()) = -1     
+            IF (XACT_STATE()) = -1
             BEGIN
-               IF @@TRANCOUNT > 0 
+               IF @@TRANCOUNT > 0
                BEGIN
                   ROLLBACK TRAN
                END
-            END                        
+            END
          END CATCH
 
          IF @b_success = 0
@@ -215,16 +220,16 @@ BEGIN
             SET @n_Continue = 3
             SET @n_Err = 558803
             SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_Err) + '. Error Executing isp_OTM_TPEX_Interface.'
-                           + ' (lsp_OTM_TPEX_ITF_ASN_Wrapper) ' 
+                           + ' (lsp_OTM_TPEX_ITF_ASN_Wrapper) '
                            + CASE WHEN @c_ErrMsg = '' THEN ''
                                  ELSE ' ( ' + @c_errmsg + ' ) '
                                  END
          END
 
-         IF @n_Continue = 3 
-         BEGIN 
+         IF @n_Continue = 3
+         BEGIN
             SET @c_WriteType = 'ERROR'
-            IF @@TRANCOUNT > 0 
+            IF @@TRANCOUNT > 0
             BEGIN
                ROLLBACK TRAN
             END
@@ -234,13 +239,13 @@ BEGIN
             SET @c_WriteType = 'MESSAGE'
             SET @c_errmsg = 'Send TPEX Update Successfully.'
 
-            WHILE @@TRANCOUNT > 0 
+            WHILE @@TRANCOUNT > 0
             BEGIN
                COMMIT TRAN
             END
-         END 
+         END
 
-         EXEC [WM].[lsp_WriteError_List] 
+         EXEC [WM].[lsp_WriteError_List]
                @i_iErrGroupKey= @n_ErrGroupKey OUTPUT
             ,  @c_TableName   = @c_TableName
             ,  @c_SourceType  = @c_SourceType
@@ -261,11 +266,11 @@ BEGIN
    END TRY
    BEGIN CATCH
       SET @n_continue = 3
-      SET @c_ErrMsg = 'OTM TPEX ASN Interface fail. (lsp_OTM_TPEX_ITF_ASN_Wrapper) ( SQLSvr MESSAGE=' + ERROR_MESSAGE() + ' ) '  
+      SET @c_ErrMsg = 'OTM TPEX ASN Interface fail. (lsp_OTM_TPEX_ITF_ASN_Wrapper) ( SQLSvr MESSAGE=' + ERROR_MESSAGE() + ' ) '
       GOTO EXIT_SP
    END CATCH
    EXIT_SP:
-   
+
    IF @n_Continue=3  -- Error Occured - Process And Return
    BEGIN
       SET @b_Success = 0
@@ -291,9 +296,10 @@ BEGIN
          COMMIT TRAN
       END
    END
-      
-   REVERT
+
+   IF @b_ExecuteAs = 1 REVERT -- (SWT01)
+   EXEC [WM].[lsp_ResetUser] -- (SWT01)
 END -- Procedure
 GO
-GRANT EXECUTE ON [WM].[lsp_OTM_TPEX_ITF_ASN_Wrapper] TO nSQL 
+GRANT EXECUTE ON  [WM].[lsp_OTM_TPEX_ITF_ASN_Wrapper] TO [NSQL]
 GO

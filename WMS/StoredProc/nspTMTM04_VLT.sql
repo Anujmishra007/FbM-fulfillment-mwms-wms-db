@@ -22,6 +22,7 @@ GO
 /* Updates:                                                             */
 /* Date         Ver.  Author     Purposes                               */
 /* 18-10-2024   1.0   Dennis     FCR-775 Custom Logic                   */
+/* 10-10-2025   1.1   SSA01      UWP-42248 -Enhanced session management */
 /************************************************************************/
 CREATE  OR ALTER PROC    [RDT].[nspTMTM04_VLT]
                @c_sendDelimiter    NVARCHAR(1)
@@ -244,8 +245,8 @@ BEGIN
            SET    STATUS = '0'
                  ,UserKey = ''
                  ,Reasonkey = ''
-                 ,EditDate = GetDate()     -- (SHONG08)
-                 ,EditWho  = sUSER_sNAME()
+                 ,EditDate = dbo.fnc_GetDate()   --(SSA01)     -- (SHONG08)
+                 ,EditWho  = dbo.fnc_GetUserName()       --(SSA01)
                  ,TrafficCop = NULL
                  ,DropId = '' -- SOS# 248996
            WHERE  UserKey = @c_userid

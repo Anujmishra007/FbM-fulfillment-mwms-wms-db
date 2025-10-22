@@ -20,6 +20,7 @@ GO
 /* 28-Oct-2013  TLTING   1.0    Review Editdate column update           */
 /* 08-May-2025  WLC015   1.1    FCR-3778 AssignLaneUpdLocToOrd - Update */
 /*                              Loc to ORDERS table (WL01)              */
+/* 06-Oct-2025  AK01     1.2    UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName */
 /************************************************************************/
 CREATE OR ALTER TRIGGER [dbo].[ntrLoadPlanLaneDetailUpdate]
 ON [dbo].[LoadPlanLaneDetail]
@@ -72,8 +73,8 @@ BEGIN
    IF (@n_continue = 1 OR @n_continue = 2) AND NOT UPDATE(EditDate)
    BEGIN
       UPDATE LoadPlanLaneDetail WITH (ROWLOCK)
-      SET EditDate = GETDATE()
-        , EditWho = SUSER_SNAME()
+      SET EditDate = dbo.fnc_GetDate()
+        , EditWho = dbo.fnc_GetUserName()
         , TrafficCop = NULL
       FROM LoadPlanLaneDetail
          , INSERTED

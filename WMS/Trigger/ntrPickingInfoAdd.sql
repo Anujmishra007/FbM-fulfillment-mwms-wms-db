@@ -1,7 +1,8 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrPickingInfoAdd]') 
-              and OBJECTPROPERTY(id, N'IsTrigger') = 1) 
-drop trigger [dbo].[ntrPickingInfoAdd]
+SET ANSI_NULLS OFF
 GO
+SET QUOTED_IDENTIFIER OFF
+GO
+
 /************************************************************************/
 /* Trigger: ntrPickingInfoAdd                                           */
 /* Creation Date:                                                       */
@@ -49,9 +50,10 @@ GO
 /* 26-Mar-2021  NJOW01    1.7   WMS-16663 add transmitlog2 interface    */
 /* 09-Jul-2021  NJOW02    1.8   Fix null value comparison issue         */
 /* 24-Jan-2022  MCTang    1.9   Add scanin4log & scanin5log (MC05)      */
+/* 06-OCT-2025 AK01       2.0   UWP-42143 Data Audit                    */
 /************************************************************************/
 
-CREATE TRIGGER [dbo].[ntrPickingInfoAdd]
+CREATE OR ALTER TRIGGER [dbo].[ntrPickingInfoAdd]
 ON  [dbo].[PickingInfo]
 FOR INSERT
 AS
@@ -1984,6 +1986,24 @@ BEGIN
       CLOSE C_PickInfo_Add_01
       DEALLOCATE C_PickInfo_Add_01
    END
+
+   --AK01 - S
+   IF dbo.fnc_GetUserName() <> sUser_sName() AND @n_Continue IN (1,2) 
+   BEGIN
+      UPDATE PickingInfo
+        SET AddWho  = dbo.fnc_GetUserName(),
+            TrafficCop = NULL 
+      FROM PickingInfo
+      JOIN INSERTED ON PickingInfo.PickSlipNo = INSERTED.PickSlipNo
+      SELECT @n_err = @@ERROR
+      IF @n_err <> 0
+      BEGIN
+         SELECT @n_continue = 3
+         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=12826  
+         SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed On Table PickingInfo. (ntrPickingInfoAdd)' + ' ( ' + ' SQLSvr MESSAGE=' + TRIM(@c_errmsg) + ' ) '
+      END
+   END
+   --AK01 - E
 
    /* #INCLUDE <TRMBOHA2.SQL> */
    IF @n_Continue = 3  -- Error Occured - Process AND Return

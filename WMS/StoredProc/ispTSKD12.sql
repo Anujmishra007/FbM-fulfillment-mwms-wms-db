@@ -22,6 +22,7 @@ GO
 /* Updates:                                                                */
 /* Date         Author  Ver   Purposes                                     */
 /* 22-Mar-2024  WLChooi 1.0   DevOps Combine Script                        */
+/* 10-Oct-2025  SSA01   1.1   UWP-42248 -Enhanced session management       */
 /***************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[ispTSKD12]   
@@ -224,8 +225,8 @@ BEGIN
                   UPDATE TASKDETAIL
                   SET UserKey = ''
                     , TrafficCop = NULL
-                    , EditDate = GETDATE()
-                    , EditWho = SUSER_SNAME()
+                    , EditDate = dbo.fnc_GetDate()    --(SSA01)
+                    , EditWho = dbo.fnc_GetUserName()            --(SSA01)
                   WHERE TaskDetailKey = @c_Taskdetailkey
 
                   IF @@ERROR <> 0

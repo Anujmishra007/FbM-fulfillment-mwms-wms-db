@@ -1,6 +1,4 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrPODetailUpdate]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
-   drop trigger [dbo].[ntrPODetailUpdate]
-GO
+
 
 SET QUOTED_IDENTIFIER OFF
 GO
@@ -42,8 +40,9 @@ GO
 /* 2014-08-26   YTWan    1.3  SOS#319232 - TH-PO not allow to add       */
 /*                            Invactive-SKU. (Wan01)                    */
 /* 2016-08-02   Ung      1.4  IN00110559 Enable trigger pass out error  */
+/* 06-Oct-2025  AK01     1.5  UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName */
 /************************************************************************/
-CREATE TRIGGER [dbo].[ntrPODetailUpdate]
+CREATE OR ALTER TRIGGER [dbo].[ntrPODetailUpdate]
 ON  [dbo].[PODETAIL]
 FOR UPDATE
 AS
@@ -82,7 +81,7 @@ BEGIN
    IF ( @n_continue=1 or @n_continue=2 ) AND NOT UPDATE(EditDate)
    BEGIN
       UPDATE PODETAIL
-      SET EditDate = GETDATE(), EditWho = Suser_Sname(), TrafficCop = NULL
+      SET EditDate = dbo.fnc_GetDate(), EditWho = dbo.fnc_GetUserName(), TrafficCop = NULL
       FROM PODETAIL, INSERTED
       WHERE PODETAIL.POKey = INSERTED.POKey AND PODETAIL.POLineNumber = INSERTED.POLineNumber
       SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
@@ -171,8 +170,8 @@ BEGIN
          SET   StorerKey = INSERTED.StorerKey,
                Sku       = INSERTED.Sku,
                ExpectedPOKey = INSERTED.POKey,
-               EditDate = GETDATE(),   --tlting
-               EditWho = SUSER_SNAME()
+               EditDate = dbo.fnc_GetDate(),   --tlting
+               EditWho = dbo.fnc_GetUserName()
          FROM  CASEMANIFEST, INSERTED, DELETED
          WHERE CASEMANIFEST.StorerKey             = DELETED.StorerKey
          AND  CASEMANIFEST.Sku                   = DELETED.Sku
@@ -207,8 +206,8 @@ BEGIN
       BEGIN
          UPDATE PO  with (ROWLOCK)
          SET  OpenQty = PO.OpenQty - (DELETED.QtyOrdered - DELETED.QtyReceived) + (INSERTED.QtyOrdered - INSERTED.QtyReceived),
-               EditDate = GETDATE(),   --tlting
-               EditWho = SUSER_SNAME()
+               EditDate = dbo.fnc_GetDate(),   --tlting
+               EditWho = dbo.fnc_GetUserName()
          FROM PO, INSERTED, DELETED
          WHERE PO.POKey = INSERTED.POKey
            AND INSERTED.POKey = DELETED.POKey
@@ -222,8 +221,8 @@ BEGIN
                (Select Sum(INSERTED.QtyOrdered - INSERTED.QtyReceived) From INSERTED
                 Where INSERTED.POKey = PO.POKey)
                 ),
-                EditDate = GETDATE(),   --tlting
-                EditWho = SUSER_SNAME()
+                EditDate = dbo.fnc_GetDate(),   --tlting
+                EditWho = dbo.fnc_GetUserName()
          FROM PO,DELETED,INSERTED
          WHERE PO.POKey IN (SELECT Distinct POKey From DELETED)
          AND PO.POKey = DELETED.POKey
@@ -289,5 +288,6 @@ BEGIN
       RETURN
    END
 END
+
 
 

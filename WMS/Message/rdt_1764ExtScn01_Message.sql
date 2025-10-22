@@ -8,4 +8,11 @@ execute rdt.rdtAddMsg 234851, 10, '234851 UpdPKTaskFail',   'us_english', 1764
 execute rdt.rdtAddMsg 234852, 10, '234852 OptionNeeded',    'us_english', 1764
 execute rdt.rdtAddMsg 234853, 10, '234853 InvalidOption',   'us_english', 1764
 
+--FCR-7928
+execute rdt.rdtAddMsg 234854, 10, '234854 UpdTaskFail',     'us_english', 1764, 0, '234854 Update Task Failed'
+execute rdt.rdtAddMsg 234855, 10, '234855 InsPkdFail',      'us_english', 1764, 0, '234855 Insert Into @tPickDetail Failed'
+execute rdt.rdtAddMsg 234856, 10, '234856 UpdPKDFail',      'us_english', 1764, 0, '234856 Update PickDetail Failed'
+execute rdt.rdtAddMsg 234857, 10, '234857 LogAlertFail',    'us_english', 1764, 0, '234857 Log Alert Failed'
+execute rdt.rdtAddMsg 234858, 10, '234858 SubmitQTaskFail', 'us_english', 1764, 0, '234858 Submit QCommanderTask Failed'
+
 SELECT * FROM rdt.RDTMsg (NOLOCK) WHERE Message_ID BETWEEN 234851 AND 234900

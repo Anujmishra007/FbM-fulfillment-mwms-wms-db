@@ -23,6 +23,8 @@ GO
 /* 01-Jun-2017  Leong     1.0   Include Country db name.                */
 /* 15-Jul-2019  Leong     1.1   Compare Pick/Pack Qty at sku level.     */
 /*                              Retrieve email by new sp ispGetEmail.   */
+/* 2025-10-10   SSA01     1.2  UWP-42248 -Enhanced session management   */
+/*                             and cleanup.                             */
 /************************************************************************/
 
 CREATE PROCEDURE [dbo].[isp0661P_RG_NIKE_ShipCfm_Validation]
@@ -200,8 +202,8 @@ BEGIN
          UPDATE NSCLog WITH (ROWLOCK)
          SET  TransmitFlag  = @c_ErrorFlag
             , TransmitBatch = @c_ErrMsg
-            , EditDate      = GETDATE()
-            , EditWho       = SUSER_SNAME()
+            , EditDate      = dbo.fnc_GetDate()   --(SSA01)
+            , EditWho       = dbo.fnc_GetUserName()               --(SSA01)
             , ArchiveCop    = NULL
          WHERE TableName    = @c_TableName
          AND NSCLogKey      = @c_NSCLogKey
@@ -231,8 +233,8 @@ BEGIN
             UPDATE NSCLog WITH (ROWLOCK)
             SET  TransmitFlag  = @c_ErrorFlag
                , TransmitBatch = @c_ErrMsg
-               , EditDate      = GETDATE()
-               , EditWho       = SUSER_SNAME()
+               , EditDate      = dbo.fnc_GetDate()   --(SSA01)
+               , EditWho       = dbo.fnc_GetUserName()           --(SSA01)
                , ArchiveCop    = NULL
             WHERE TableName    = @c_TableName
             AND NSCLogKey      = @c_NSCLogKey
@@ -264,8 +266,8 @@ BEGIN
          UPDATE NSCLog WITH (ROWLOCK)
          SET  TransmitFlag  = @c_ErrorFlag
             , TransmitBatch = @c_ErrMsg
-            , EditDate      = GETDATE()
-            , EditWho       = SUSER_SNAME()
+            , EditDate      = dbo.fnc_GetDate()   --(SSA01)
+            , EditWho       = dbo.fnc_GetUserName()           --(SSA01)
             , ArchiveCop    = NULL
          WHERE TableName    = @c_TableName
          AND NSCLogKey      = @c_NSCLogKey
@@ -283,8 +285,8 @@ BEGIN
       UPDATE NSCLog WITH (ROWLOCK)
       SET  TransmitFlag  = @c_ErrorFlag
          , TransmitBatch = @c_ErrMsg
-         , EditDate      = GETDATE()
-         , EditWho       = SUSER_SNAME()
+         , EditDate      = dbo.fnc_GetDate()   --(SSA01)
+         , EditWho       = dbo.fnc_GetUserName()             --(SSA01)
          , ArchiveCop    = NULL
       WHERE TableName    = @c_TableName
       AND NSCLogKey      = @c_NSCLogKey

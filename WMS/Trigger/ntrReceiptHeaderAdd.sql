@@ -82,6 +82,7 @@ GO
 /* 2024-01-29 2.2  Wan02    UWP-14379-Implement pre-save ASN standard   */
 /*                          validation check                            */
 /* 2024-07-02 2.3  Inv Team UWP-17135 - Migrate Inbound Door booking    */
+/* 2025-10-06 2.4  AK01     UWP-42143 Data Audit                        */
 /************************************************************************/
 
 CREATE OR ALTER TRIGGER ntrReceiptHeaderAdd
@@ -962,6 +963,25 @@ END
 /* Interface Trigger Points Calling Process - (End)     */  
 /********************************************************/  
 
+--AK01 - S
+IF dbo.fnc_GetUserName() <> sUser_sName() AND @n_Continue IN (1,2) 
+BEGIN
+   UPDATE RECEIPT
+     SET AddWho  = dbo.fnc_GetUserName(),
+         AddDate = dbo.fnc_GetDate(), 
+         TrafficCop = NULL 
+   FROM RECEIPT
+   JOIN INSERTED ON RECEIPT.ReceiptKey = INSERTED.ReceiptKey
+   SELECT @n_err = @@ERROR
+   IF @n_err <> 0
+   BEGIN
+      SELECT @n_continue = 3
+      SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=60170  
+      SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed On Table RECEIPT. (ntrRECEIPTAdd)' + ' ( ' + ' SQLSvr MESSAGE=' + TRIM(@c_errmsg) + ' ) '
+   END
+END
+--AK01 - E
+   
       /* #INCLUDE <TRRHA2.SQL> */
 IF @n_continue=3  -- Error Occured - Process And Return
 BEGIN

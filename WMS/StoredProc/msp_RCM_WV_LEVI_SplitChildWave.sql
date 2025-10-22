@@ -13,7 +13,7 @@ GO
 /*                                                                       */
 /* Called By: Dynamic RCM                                                */
 /*                                                                       */
-/* GitHub Version: 1.3                                                   */
+/* GitHub Version: 1.5                                                   */
 /*                                                                       */
 /* Version: 7.0                                                          */
 /*                                                                       */
@@ -27,6 +27,10 @@ GO
 /* 05-May-2025  SWT01   1.2   Change UDF01 = "Y" instead of "1" FOR      */
 /*                            MPOCPERMIT                                 */
 /* 04-Jul-2025  WLChooi 1.3   UWP-37271 Performance Tuning (WL02)        */
+/* 23-Jul-2025  Wan01   1.4   FCR-4602 - Levi Split wave logic must be   */
+/*                            Shipto & buyerpo                           */
+/* 12-Aug-2025  WLChooi 1.5   FCR-4602 - Revise the logic of identifying */
+/*                            MPOC Orders (WL03)                         */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[msp_RCM_WV_LEVI_SplitChildWave]
    @c_Wavekey NVARCHAR(10)
@@ -61,6 +65,8 @@ BEGIN
          , @n_LoopCount             INT = 0
          , @n_GroupNumber           BIGINT = 0
          , @n_PrevGroupNumber       BIGINT = 0
+         , @n_MPOCFlag              INT = 0   --WL03
+         , @CUR_MPOC                CURSOR    --WL03
 
    SET @b_debug = @n_Err
    --@b_debug = 1 - Show debug message and do not split Wave
@@ -84,18 +90,37 @@ BEGIN
                           + N': Wavekey# ' + @c_Wavekey + ' is invalid. (msp_RCM_WV_LEVI_SplitChildWave)'
          GOTO EXIT_SP
       END
+
+      --WL03 S
+      --Check if Wave has been split before (UserDefine08 = master Wavekey)
+      IF EXISTS ( SELECT 1
+                  FROM WAVE WITH (NOLOCK)
+                  WHERE Wavekey = @c_Wavekey
+                  AND (UserDefine08 IS NOT NULL AND UserDefine08 <> '')
+                )
+      BEGIN
+         SELECT @n_Continue = 3
+         SELECT @n_Err = 64013
+         SELECT @c_Errmsg = N'NSQL' + CONVERT(NVARCHAR(5), @n_Err)
+                          + N': Wavekey# ' + @c_Wavekey + ' is a child Wave. Not allow to split further. (msp_RCM_WV_LEVI_SplitChildWave)'
+         GOTO EXIT_SP
+      END
+      --WL03 E
    END
 
    IF @n_Continue IN (1,2)
    BEGIN
       DECLARE @T_ORDERS AS TABLE ( Wavekey      NVARCHAR(10)
                                  , Orderkey     NVARCHAR(10)
+                                 , Consigneekey NVARCHAR(15)                        --(Wan01)
                                  , BuyerPO      NVARCHAR(20) NULL
                                  , SKUCount     INT
-                                 , UDF01        NVARCHAR(1) DEFAULT '1'
+                                 , UDF01        NVARCHAR(1) DEFAULT 'N'             --WL03
                                  , MPOC         NVARCHAR(1) DEFAULT 'N'
                                  , VCCount      INT DEFAULT 1
+                                 , VCCountCS    INT DEFAULT 1                       --(Wan01)
                                  , GroupNumber  INT DEFAULT 0
+                                 , RNo          INT DEFAULT 0                       --(Wan01)                                 
                                  )
       
       DECLARE @T_ORDERDET AS TABLE ( Orderkey         NVARCHAR(10)
@@ -115,7 +140,8 @@ BEGIN
       DECLARE @T_WAVEDETAIL AS TABLE ( Wavekey     NVARCHAR(10)
                                      , Orderkey    NVARCHAR(10)
                                      , BuyerPO     NVARCHAR(20)
-                                     , VCCount     INT 
+                                     , VCCount     INT
+                                     , RowID       INT IDENTITY(1,1) PRIMARY KEY   --WL03
                                      )
    END
 
@@ -129,19 +155,113 @@ BEGIN
       WHERE W.WaveKey = @c_Wavekey
    END
 
+   --WL03 S
+   IF  @n_Continue IN (1,2)
+   AND ((ISNULL(@c_WaveUDF09, '') <> 'Y' AND @b_debug IN (1,2)) OR ISNULL(@c_WaveUDF09, '') = 'Y')
+   BEGIN
+      INSERT @T_MPOCPERMIT (Code, UDF01)
+      SELECT DISTINCT CL.Code, CL.UDF01
+      FROM CODELKUP CL WITH (NOLOCK)
+      WHERE CL.LISTNAME = 'MPOCPERMIT'
+      AND CL.Storerkey = @c_Storerkey
+
+      --Validate MPOC - START
+      --UDF01 = N, MPOCFlag > 0 (MPOC for manual only)
+      --UDF01 = N, MPOCFlag = 0 (Non MPOC)
+      --UDF01 = Y, MPOCFlag > 0 (MPOC for Automation and manual)
+      --UDF01 = Y, MPOCFlag = 0 (Non MPOC)
+
+      INSERT INTO @T_ORDERS ( Wavekey, Orderkey, Consigneekey, BuyerPO, UDF01, MPOC --(Wan01)                    
+                            , VCCount, VCCountCS                                    --(Wan01)  
+                            )
+      SELECT DISTINCT WD.WaveKey
+                    , WD.Orderkey
+                    , OH.Consigneekey                                               --(Wan01)
+                    , ISNULL(TRIM(OH.BuyerPO), '')
+                    --WL03 S
+                    , CASE WHEN ISNULL(CL1.Code, '') <> '' THEN IIF(CL1.UDF01 = 'Y', 'Y', 'N')   --BillToKey (SWT01)
+                           WHEN ISNULL(CL2.Code, '') <> '' THEN IIF(CL2.UDF01 = 'Y', 'Y', 'N')   --ConsigneeKey (SWT01)
+                           ELSE 'N' END   --Not set up
+                    , MPOC = 'N'
+                    --, CASE WHEN ISNULL(CL1.Code, '') <> '' AND 1 = IIF(CL1.UDF01 = 'Y', 1, 0) THEN 'Y' --BillToKey    --WL01 (SWT01)
+                    --       WHEN ISNULL(CL2.Code, '') <> '' AND 1 = IIF(CL2.UDF01 = 'Y', 1, 0) THEN 'Y' --ConsigneeKey --WL01 (SWT01)
+                    --       ELSE 'N' END   --Not set up
+                    --WL03 E
+                    , 1   --1 Order 1 Virtual Carton, except some cases which will be catered below
+                    , 1                                                             --(Wan01)
+      FROM WAVEDETAIL WD WITH (NOLOCK)
+      JOIN ORDERS OH WITH (NOLOCK) ON WD.OrderKey = OH.OrderKey
+      LEFT JOIN @T_MPOCPERMIT CL1 ON CL1.Code = OH.BillToKey
+      LEFT JOIN @T_MPOCPERMIT CL2 ON CL2.Code = OH.ConsigneeKey
+      WHERE WD.WaveKey = @c_Wavekey
+      
+      INSERT INTO @T_ORDERDET (Orderkey, OrderLineNumber, SKU)
+      SELECT DISTINCT OD.Orderkey
+                    , OD.OrderLineNumber
+                    , OD.SKU
+      FROM @T_ORDERS T
+      JOIN ORDERDETAIL OD (NOLOCK) ON OD.OrderKey = T.Orderkey
+      WHERE T.Wavekey = @c_Wavekey
+
+      --WL03 S
+      SET @CUR_MPOC = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      SELECT DISTINCT Orderkey
+      FROM @T_ORDERS
+      ORDER BY Orderkey
+
+      OPEN @CUR_MPOC
+
+      FETCH NEXT FROM @CUR_MPOC INTO @c_Orderkey
+
+      WHILE @@FETCH_STATUS <> -1 AND @n_Continue IN (1,2)
+      BEGIN
+         SET @n_MPOCFlag = 0
+         SET @b_Success = 1
+         EXEC dbo.msp_GetMPOCRequired @c_OrderKey = @c_Orderkey -- nvarchar(10)
+                                    , @n_MPOCFlag = @n_MPOCFlag OUTPUT -- int
+                                    , @b_Success = @b_Success OUTPUT -- int
+                                    , @n_Err = @n_Err OUTPUT -- int
+                                    , @c_ErrMsg = @c_ErrMsg OUTPUT -- nvarchar(255)
+                                    , @b_debug = @b_debug -- int
+         
+         IF @n_MPOCFlag > 0
+         BEGIN
+            UPDATE @T_ORDERS
+            SET MPOC = 'Y'
+            WHERE Orderkey = @c_OrderKey
+         END
+
+         FETCH NEXT FROM @CUR_MPOC INTO @c_Orderkey
+      END
+      CLOSE @CUR_MPOC
+      DEALLOCATE @CUR_MPOC
+      --WL03 E
+   END
+   --WL03 E
+
    --Manual Wave - split all orders to a new Wave
    IF @n_Continue IN (1,2) AND ISNULL(@c_WaveUDF09, '') <> 'Y'
    BEGIN
       --Generate Wavekey
       SELECT @b_Success = 0  
       SET @c_GetWavekey = ''
-      EXECUTE nspg_GetKey  
-               'Wavekey',  
-               10,  
-               @c_GetWavekey  OUTPUT,  
-               @b_Success     OUTPUT,  
-               @n_Err         OUTPUT,  
-               @c_Errmsg      OUTPUT  
+
+      --WL03 S
+      IF @b_debug IN (1,2)
+      BEGIN
+         SET @c_GetWavekey = RIGHT(REPLICATE('0', 10) + CAST(@n_Count AS NVARCHAR), 10)
+      END
+      ELSE
+      BEGIN
+         EXECUTE nspg_GetKey  
+                  'Wavekey',  
+                  10,  
+                  @c_GetWavekey  OUTPUT,  
+                  @b_Success     OUTPUT,  
+                  @n_Err         OUTPUT,  
+                  @c_Errmsg      OUTPUT  
+      END
+      --WL03 E
 
       IF @n_Err <> 0
       BEGIN
@@ -170,12 +290,6 @@ BEGIN
       FROM CODELKUP CL WITH (NOLOCK)
       WHERE CL.LISTNAME = 'WCSPackReq'
       AND CL.Storerkey = @c_Storerkey
-      
-      INSERT @T_MPOCPERMIT (Code, UDF01)
-      SELECT DISTINCT CL.Code, CL.UDF01
-      FROM CODELKUP CL WITH (NOLOCK)
-      WHERE CL.LISTNAME = 'MPOCPERMIT'
-      AND CL.Storerkey = @c_Storerkey
 
       SELECT @n_WCSConfigWaveSize = IIF(ISNUMERIC(CL.Long) = 1, CL.Long, 0)
       FROM CODELKUP CL WITH (NOLOCK)
@@ -192,32 +306,6 @@ BEGIN
          GOTO EXIT_SP
       END
 
-      --Validate MPOC - START
-      INSERT INTO @T_ORDERS ( Wavekey, Orderkey, BuyerPO, UDF01, MPOC, VCCount )
-      SELECT DISTINCT WD.WaveKey
-                    , WD.Orderkey
-                    , ISNULL(TRIM(OH.BuyerPO), '')
-                    , CASE WHEN ISNULL(CL1.Code, '') <> '' THEN IIF(CL1.UDF01 = 'Y', '1', '0')   --BillToKey (SWT01)
-                           WHEN ISNULL(CL2.Code, '') <> '' THEN IIF(CL2.UDF01 = 'Y', '1', '0')   --ConsigneeKey (SWT01)
-                           ELSE '1' END   --Not set up
-                    , CASE WHEN ISNULL(CL1.Code, '') <> '' AND 1 = IIF(CL1.UDF01 = 'Y', 1, 0) THEN 'Y' --BillToKey    --WL01 (SWT01)
-                           WHEN ISNULL(CL2.Code, '') <> '' AND 1 = IIF(CL2.UDF01 = 'Y', 1, 0) THEN 'Y' --ConsigneeKey --WL01 (SWT01)
-                           ELSE 'N' END   --Not set up
-                    , 1   --1 Order 1 Virtual Carton, except some cases which will be catered below
-      FROM WAVEDETAIL WD WITH (NOLOCK)
-      JOIN ORDERS OH WITH (NOLOCK) ON WD.OrderKey = OH.OrderKey
-      LEFT JOIN @T_MPOCPERMIT CL1 ON CL1.Code = OH.BillToKey
-      LEFT JOIN @T_MPOCPERMIT CL2 ON CL2.Code = OH.ConsigneeKey
-      WHERE WD.WaveKey = @c_Wavekey
-      
-      INSERT INTO @T_ORDERDET (Orderkey, OrderLineNumber, SKU)
-      SELECT DISTINCT OD.Orderkey
-                    , OD.OrderLineNumber
-                    , OD.SKU
-      FROM @T_ORDERS T
-      JOIN ORDERDETAIL OD (NOLOCK) ON OD.OrderKey = T.Orderkey
-      WHERE T.Wavekey = @c_Wavekey
-
       --Check if mixed MPOC & non MPOC Orders in a same master Wave
       IF EXISTS ( SELECT 1
                   FROM @T_ORDERS
@@ -230,10 +318,10 @@ BEGIN
          GOTO EXIT_SP
       END
 
-      --Check MPOC Orders if UDF01 <> 1
+      --Check MPOC Orders if UDF01 <> Y
       IF EXISTS ( SELECT 1
                   FROM @T_ORDERS
-                  WHERE UDF01 <> '1'
+                  WHERE UDF01 <> 'Y'   --WL03
                   AND MPOC = 'Y' )
       BEGIN
          SELECT @n_Continue = 3
@@ -290,6 +378,24 @@ BEGIN
       JOIN CTE_VC C ON C.Orderkey = T.Orderkey
       --WL01 E
       --Calculate Carton for S02, S06, J05 - END
+
+      UPDATE T                                                                      --(Wan01) - START
+         SET T.VCCountCS = cs.VCCount
+      FROM @T_ORDERS T
+      OUTER APPLY (SELECT VCCount = SUM(toh.VCCount)
+                   FROM @T_ORDERS toh
+                   WHERE toh.Consigneekey = T.Consigneekey
+                  ) cs  
+                                                                              
+      UPDATE T                                                                     
+         SET T.RNo = o.RNo
+      FROM @T_ORDERS T  
+      JOIN  (SELECT toh.Orderkey 
+                  , RNo = ROW_NUMBER() OVER 
+                           (ORDER BY toh.VCCountCS DESC, toh.Consigneekey, toh.BuyerPO, toh.Orderkey)
+             FROM @T_ORDERS toh
+                  ) o ON o.Orderkey = t.Orderkey                                    --(Wan01) - END                  
+
    END
    --Calculate Virtual Cartons for those WCSPackReq - S02, S06, J05 - END
    
@@ -315,10 +421,11 @@ BEGIN
          SET @n_GroupNumber = 0
          SET @n_VCCount = 0;
 
-         WITH CTE AS ( SELECT Orderkey, VCCount, DENSE_RANK() OVER (ORDER BY BuyerPO) AS DRank
+         WITH CTE AS ( SELECT Orderkey, VCCount, DENSE_RANK() OVER 
+                              (ORDER BY VCCountCS DESC, Consigneekey, BuyerPO) AS DRank  --(Wan01)     
                         FROM @T_ORDERS
                         WHERE GroupNumber = 0
-                        GROUP BY BuyerPO, Orderkey, VCCount )
+                        )
          SELECT TOP 1 @c_Orderkey = Orderkey
                     , @n_VCCount = CTE.VCCount
          FROM CTE
@@ -369,14 +476,15 @@ BEGIN
               , VCCount = SUM(VCCount)
          FROM @T_ORDERS
          GROUP BY GroupNumber
+         ORDER BY GroupNumber   --WL03
       END
       
       DECLARE CUR_MAIN CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
       SELECT STRING_AGG(CAST(Orderkey AS NVARCHAR(MAX)), ',')
            , SUM(VCCount)
       FROM @T_ORDERS
-      GROUP BY GroupNumber, BuyerPO      
-      ORDER BY GroupNumber, BuyerPO, 1
+      GROUP BY GroupNumber          --, BuyerPO                                     --(Wan01)
+      ORDER BY GroupNumber, MIN(RNo)--, BuyerPO, 1                                  --(Wan01)
 
       OPEN CUR_MAIN
 
@@ -437,6 +545,7 @@ BEGIN
    END
    --Main process - END
 
+   WAVE_INSERT:   --WL03
    IF @b_debug IN (1,2)
    BEGIN
       SELECT T1.Wavekey
@@ -449,12 +558,14 @@ BEGIN
            , T2.MPOC
            , T2.VCCount
            , T2.GroupNumber
+           , T2.Consigneekey   --WL03
+           , T2.VCCountCS      --WL03
+           , Automation = IIF(@c_WaveUDF09 = 'Y', 'Y', 'N')   --WL03
       FROM @T_WAVEDETAIL T1
       JOIN @T_ORDERS T2 ON T2.Orderkey = T1.Orderkey
-      ORDER BY T1.Wavekey
+      ORDER BY T1.RowID   --WL03
    END
 
-   WAVE_INSERT:
    IF @n_Continue IN (1,2) AND @b_debug <> 1
    BEGIN
       DECLARE CUR_WAVEINSERT CURSOR LOCAL FAST_FORWARD READ_ONLY FOR

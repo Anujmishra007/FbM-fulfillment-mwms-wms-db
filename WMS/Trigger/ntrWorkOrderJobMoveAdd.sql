@@ -1,6 +1,3 @@
-IF EXISTS (SELECT name FROM dbo.sysobjects WHERE name = 'ntrWorkOrderJobMoveAdd' AND type = 'TR')
-   DROP TRIGGER ntrWorkOrderJobMoveAdd
-GO
 
 SET QUOTED_IDENTIFIER OFF 
 GO
@@ -28,8 +25,9 @@ GO
 /* Date         Author  Ver   Purposes                                     */
 /* 04-FEB-2016  Wan01   1.1   SOS#361353 - Project Merlion -SKU Reservation*/
 /*                            Pallet Selection                             */
+/* 06-OCT-2025  AK01    1.2   UWP-42143 Data Audit                         */
 /***************************************************************************/
-CREATE TRIGGER ntrWorkOrderJobMoveAdd ON WORKORDERJOBMOVE
+CREATE OR ALTER TRIGGER ntrWorkOrderJobMoveAdd ON WORKORDERJOBMOVE
 FOR INSERT
 AS
 BEGIN
@@ -507,6 +505,26 @@ BEGIN
    END 
    CLOSE CUR_RSV
    DEALLOCATE CUR_RSV
+   
+   --AK01 - S
+   IF dbo.fnc_GetUserName() <> sUser_sName() AND @n_Continue IN (1,2) 
+   BEGIN
+      UPDATE WorkOrderJobMove
+        SET AddWho  = dbo.fnc_GetUserName(),
+            AddDate = dbo.fnc_GetDate(), 
+            TrafficCop = NULL 
+      FROM WorkOrderJobMove
+      JOIN INSERTED ON WorkOrderJobMove.WOMoveKey = INSERTED.WOMoveKey
+      SELECT @n_err = @@ERROR
+      IF @n_err <> 0
+      BEGIN
+         SELECT @n_continue = 3
+         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=63750  
+         SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed On Table WorkOrderJobMove. (ntrWorkOrderJobMoveAdd)' + ' ( ' + ' SQLSvr MESSAGE=' + TRIM(@c_errmsg) + ' ) '
+      END
+   END
+   --AK01 - E
+   
 QUIT:
    IF CURSOR_STATUS( 'LOCAL', 'CUR_RSV') in (0 , 1)  
    BEGIN

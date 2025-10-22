@@ -127,7 +127,7 @@ BEGIN
          	UserDefine10, Issued,	DeliveryNote, PODCust, PODArrive, PODReject, PODUser, xdockpokey,
          	SpecialHandling, RoutingTool,	MarkforKey,	M_Contact1,	M_Contact2,	M_Company, M_Address1, M_Address2,
          	M_Address3,	M_Address4,	M_City, M_State, M_Zip, M_Country, M_ISOCntryCode, M_Phone1, M_Phone2,
-         	M_Fax1, M_Fax2, M_vat, ShipperKey, DocType, TrackingNo 
+         	M_Fax1, M_Fax2, M_vat, ShipperKey, DocType, TrackingNo, Ecom_Platform
          	-- AddDate, AddWho, EditDate, EditWho, TrafficCop, ArchiveCop, SOStatus, [Status], LoadKey,  PrintFlag, MBOLKey, UserDefine09
          )
          SELECT @c_neworderkey, StorerKey,	ExternOrderKey, OrderDate,	DeliveryDate, Priority,	ConsigneeKey, C_contact1,
@@ -145,7 +145,7 @@ BEGIN
          	      UserDefine10, Issued,	DeliveryNote, PODCust, PODArrive, PODReject, PODUser, xdockpokey,
          	      SpecialHandling, RoutingTool,	MarkforKey,	M_Contact1,	M_Contact2,	M_Company, M_Address1, M_Address2,
          	      M_Address3,	M_Address4,	M_City, M_State, M_Zip, M_Country, M_ISOCntryCode, M_Phone1, M_Phone2,
-         	      M_Fax1, M_Fax2, M_vat, ShipperKey, DocType, @c_orderkey
+         	      M_Fax1, M_Fax2, M_vat, ShipperKey, DocType, @c_orderkey, Ecom_Platform
          	FROM ORDERS (NOLOCK) 
          	WHERE Orderkey = @c_orderkey
 
@@ -221,12 +221,12 @@ BEGIN
    	    BEGIN
    		    SELECT @n_continue = 3
 			    SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 30103
-			    SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Error Insert Orderdetail Table. (isp_SplitWaveNotFullAllocOrder)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) ' 
+			    SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Error Insert Orderdetail Table. (isp_SplitNotFullAllocOrder)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
 			    BREAK
 		    END		    		    
         
         UPDATE ORDERS WITH (ROWLOCK)
-        SET OrderGroup = @c_orderkey,
+        SET OrderGroup = OrderGroup,
             TrafficCop = NULL,
             openqty = (SELECT SUM(OD.Openqty) FROM ORDERDETAIL OD (NOLOCK) WHERE OD.Orderkey = @c_neworderkey)
         WHERE Orderkey = @c_neworderkey
@@ -236,7 +236,7 @@ BEGIN
    	    BEGIN
    		    SELECT @n_continue = 3
 			    SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 30104
-			    SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Error Update Orders Table. (isp_SplitWaveNotFullAllocOrder)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) ' 
+			    SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Error Update Orders Table. (isp_SplitNotFullAllocOrder)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
 			    BREAK
 		    END
 
@@ -250,7 +250,7 @@ BEGIN
    	    BEGIN
    		    SELECT @n_continue = 3
 			    SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 30105
-			    SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Error Delete Preallocatepickdetail Table. (isp_SplitWaveNotFullAllocOrder)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) ' 
+			    SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Error Delete Preallocatepickdetail Table. (isp_SplitNotFullAllocOrder)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
 			    BREAK
 		    END		    		    
         
@@ -266,7 +266,7 @@ BEGIN
    	    BEGIN
    		    SELECT @n_continue = 3
 			    SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 301066
-			    SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Error Update Orderdetail Table. (isp_SplitWaveNotFullAllocOrder)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) ' 
+			    SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Error Update Orderdetail Table. (isp_SplitNotFullAllocOrder)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
 			    BREAK
 		    END
         
@@ -277,7 +277,7 @@ BEGIN
    	    BEGIN
    		    SELECT @n_continue = 3
 			    SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 30107
-			    SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Error Insert #TMP_NEWORDER Table. (isp_SplitWaveNotFullAllocOrder)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) ' 
+			    SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Error Insert #TMP_NEWORDER Table. (isp_SplitNotFullAllocOrder)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
 			    BREAK
 		    END
    	  END  -- while
@@ -336,7 +336,3 @@ GO
 GRANT EXECUTE ON isp_SplitNotFullAllocOrder TO NSQL
 GO
 
-SET QUOTED_IDENTIFIER OFF 
-GO
-SET ANSI_NULLS OFF
-GO

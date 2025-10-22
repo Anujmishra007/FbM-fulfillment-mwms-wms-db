@@ -29,8 +29,10 @@ GO
 /* Data Modifications:                                                  */
 /*                                                                      */
 /* Updates:                                                             */
-/* Date         Author     Purposes                                     */
-/*                                                                      */ 
+/* Date         Author  Ver   Purposes                                  */
+/*                                                                      */
+/* 10-OCT-2025  SSA01   1.0   UWP-42248 -Enhanced session management    */
+/*                             and cleanup.                             */
 /************************************************************************/
 
 CREATE PROC [isp_Scanning] 
@@ -262,8 +264,8 @@ BEGIN
                   BEGIN
                      UPDATE ORDERS 
                         SET Status = '5', 
-                            EditDate = GetDate(),
-                            EditWho  = sUser_sName(), 
+                            EditDate = dbo.fnc_GetDate(),    --(SSA01)
+                            EditWho  = dbo.fnc_GetUserName(),     --(SSA01)
                             TrafficCop = NULL 
                      WHERE  OrderKey = @c_NextOrderKey
                      AND    Status < '5'
@@ -287,8 +289,8 @@ BEGIN
                      -- cater for split orders in loadplan
                      UPDATE OrderDetail 
                         SET Status = '5',
-                            EditDate = GetDate(),
-                            EditWho  = sUser_sName(),  
+                            EditDate = dbo.fnc_GetDate(),    --(SSA01)
+                            EditWho  = dbo.fnc_GetUserName(),  --(SSA01)
                             TrafficCop = NULL 
                      WHERE  OrderKey = @c_NextOrderKey
                      AND    Loadkey = @c_LoadKey
@@ -314,8 +316,8 @@ BEGIN
                                 AND STATUS < '5' )
                      BEGIN 
                         UPDATE LOADPLANDETAIL  
-                           SET STATUS = '5', EditDate = GetDate(),
-                               EditWho   = sUser_sName(), trafficcop = null  
+                           SET STATUS = '5', EditDate = dbo.fnc_GetDate(),    --(SSA01)
+                               EditWho   = dbo.fnc_GetUserName(), trafficcop = null      --(SSA01)
                         WHERE Loadkey = @c_loadkey 
                           and OrderKey = @c_NextOrderKey 
                           AND STATUS < '5'
@@ -456,8 +458,8 @@ BEGIN
                  AND   PICKDETAIL.Status < '5') -- no more pickdetail with status < '5'  
               BEGIN  
                   UPDATE LOADPLAN WITH (ROWLOCK)   
-                     SET STATUS = '5', EditDate = GetDate(),
-                            EditWho  = sUser_sName(), trafficcop = null  
+                     SET STATUS = '5', EditDate = dbo.fnc_GetDate(),    --(SSA01)
+                            EditWho  = dbo.fnc_GetUserName(), trafficcop = null    --(SSA01)
                   WHERE Loadkey = @c_loadkey 
                     AND Status < '5' 
       
@@ -529,8 +531,8 @@ BEGIN
                               AND   ORDERS.Status < '5' )
                   BEGIN 
                      UPDATE ORDERS 
-                        SET STATUS = '5', EditDate = GetDate(),
-                            EditWho  = sUser_sName(), Trafficcop = NULL
+                        SET STATUS = '5', EditDate = dbo.fnc_GetDate(),    --(SSA01)
+                            EditWho  = dbo.fnc_GetUserName(), Trafficcop = NULL     --(SSA01)
                      FROM ORDERS  
                      JOIN PICKDETAIL (NOLOCK) ON (ORDERS.OrderKey = PICKDETAIL.OrderKey)
                      WHERE PICKDETAIL.PickslipNo = @c_PickSlipNo 

@@ -26,6 +26,8 @@ GO
 /*                            to DPP.                                    */
 /* 20-Jun-2025  Wan02   1.2   UWP-36410 -MLP Link Repln Task ID in       */
 /*                            pickDetail for FCR-2902                    */
+/* 12-SEP-2025                Fixed to reverse RPF task type             */
+/* 10-Oct-2025  SSA01   1.3   UWP-42248 -Enhanced session management     */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[ispRVWAV69]
    @c_Wavekey  NVARCHAR(10)
@@ -94,6 +96,8 @@ BEGIN
       SET @n_Cnt = 0                                                                --(Wan01) - START
       SELECT TOP 1
              @n_Cnt = CASE WHEN TD.TaskType = 'VNAOUT' AND TD.[Status] NOT IN ('Q','X') 
+                           THEN 1
+                           WHEN TD.TaskType = 'RPF' AND TD.[Status] NOT IN ('0','X')--2025-09-12 Include RPF task (Manual) 
                            THEN 1
                            WHEN TD.TaskType = 'FPK' AND TD.[Status] NOT IN ('0','X') 
                            THEN 1
@@ -178,8 +182,8 @@ BEGIN
          UPDATE PICKDETAIL WITH (ROWLOCK)
          SET TaskDetailKey = ''
            , TrafficCop = NULL
-           , EditWho = SUSER_SNAME()
-           , EditDate = GETDATE()
+           , EditWho = dbo.fnc_GetUserName()          --(SSA01)
+           , EditDate = dbo.fnc_GetDate()   --(SSA01)
          --FROM WAVEDETAIL (NOLOCK)
          --JOIN PICKDETAIL ON WAVEDETAIL.OrderKey = PICKDETAIL.OrderKey
          --WHERE WAVEDETAIL.WaveKey = @c_Wavekey
@@ -214,7 +218,7 @@ BEGIN
       FROM TaskDetail td (NOLOCK)
       WHERE td.WaveKey = @c_Wavekey
       AND   td.SourceType IN ( 'ispRLWAV69' )
-      AND   td.TaskType IN ( 'VNAOUT', 'FCP', 'FPK' )
+      AND   td.TaskType IN ( 'VNAOUT', 'FCP', 'FPK', 'RPF' )                        --2025-08-13
       AND   td.[Status] IN ('Q', '0', 'H')
       ORDER BY td.Taskdetailkey DESC                                                --(Wan02)  
 
@@ -229,12 +233,12 @@ BEGIN
 
       WHILE @@FETCH_STATUS <> -1 AND @n_Continue = 1
       BEGIN  
-         IF @c_TaskType IN ('VNAOUT', 'FPK') AND @c_Message03 = 'RPF'               --(Wan02) - START 
+         IF @c_TaskType IN ('VNAOUT', 'RPF') AND @c_Message03 = 'RPF'               --2025-08-13--(Wan02) - START   
          BEGIN
             IF EXISTS ( SELECT 1 FROM TASKDETAIL td (NOLOCK) 
                         WHERE td.Storerkey = @c_Storerkey
                         AND   td.TaskType = 'FCP'
-                        AND   td.UOM IN ('2','3')
+                        AND   td.UOM IN ('2','3','6')                               --2025-07-09           
                         AND   td.SourceType = 'ispRLWAV69'
                         AND   td.RefTaskKey = @c_Taskdetailkey
                         AND   td.[Status] NOT IN ('X','9')
@@ -309,8 +313,8 @@ BEGIN
       UPDATE WAVE
       SET TMReleaseFlag = 'N'
         , TrafficCop = NULL
-        , EditWho = SUSER_SNAME()
-        , EditDate = GETDATE()
+        , EditWho = dbo.fnc_GetUserName()       --(SSA01)
+        , EditDate = dbo.fnc_GetDate()    --(SSA01)
       WHERE WaveKey = @c_Wavekey
 
       SELECT @n_err = @@ERROR

@@ -190,6 +190,9 @@ GO
 /* 03-Mar-2024  2.7.1 James       UWP-15502 - Invalid Drop ID Error, fix   */
 /*                               multiple orders in one drop id error      */
 /* 01-Jan-2025  2.8.0 James        FCR-2435 Merge 2.5, 2.6 from V0         */
+/* 12-May-2025  2.9.0 Dennis    FCR-3774 Add Extended Scn                  */
+/* 21-Aug-2025  0.0   Jackc     !!!Cutover!!! Use V0 repo for work         */
+/* 15-Oct-2025  3.0.0 NickT     UWP-42483 Optimize transaction             */
 /***************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_Cluster_Pick](
@@ -516,7 +519,20 @@ DECLARE
    @c_oFieled13 NVARCHAR(20), @c_oFieled14 NVARCHAR(20),
    @c_oFieled15 NVARCHAR(20),
    @cDecodeLabelNo       NVARCHAR( 20),
-   @c_LabelNo            NVARCHAR( 32)
+   @cExtendedScnSP       NVARCHAR( 20),
+   @c_LabelNo            NVARCHAR( 32),
+   @tExtScnData         VariableTable,
+   @nAction             INT,
+   @cExtScnUDF01  NVARCHAR( 250), @cExtScnUDF02 NVARCHAR( 250), @cExtScnUDF03 NVARCHAR( 250),
+   @cExtScnUDF04  NVARCHAR( 250), @cExtScnUDF05 NVARCHAR( 250), @cExtScnUDF06 NVARCHAR( 250),
+   @cExtScnUDF07  NVARCHAR( 250), @cExtScnUDF08 NVARCHAR( 250), @cExtScnUDF09 NVARCHAR( 250),
+   @cExtScnUDF10  NVARCHAR( 250), @cExtScnUDF11 NVARCHAR( 250), @cExtScnUDF12 NVARCHAR( 250),
+   @cExtScnUDF13  NVARCHAR( 250), @cExtScnUDF14 NVARCHAR( 250), @cExtScnUDF15 NVARCHAR( 250),
+   @cExtScnUDF16  NVARCHAR( 250), @cExtScnUDF17 NVARCHAR( 250), @cExtScnUDF18 NVARCHAR( 250),
+   @cExtScnUDF19  NVARCHAR( 250), @cExtScnUDF20 NVARCHAR( 250), @cExtScnUDF21 NVARCHAR( 250),
+   @cExtScnUDF22  NVARCHAR( 250), @cExtScnUDF23 NVARCHAR( 250), @cExtScnUDF24 NVARCHAR( 250),
+   @cExtScnUDF25  NVARCHAR( 250), @cExtScnUDF26 NVARCHAR( 250), @cExtScnUDF27 NVARCHAR( 250),
+   @cExtScnUDF28  NVARCHAR( 250), @cExtScnUDF29 NVARCHAR( 250), @cExtScnUDF30 NVARCHAR( 250)
 
 DECLARE @c_ExecStatements     nvarchar(4000)
       , @c_ExecArguments      nvarchar(4000)
@@ -628,7 +644,8 @@ SELECT
    @cAttribute02              = V_String49,
    @cAttribute03              = V_String50,
 	@cExtendedWCSSP				= V_String21,
-
+   @cExtendedScnSP            = V_String51,
+   
    @cInField01 = I_Field01,   @cOutField01 = O_Field01,
    @cInField02 = I_Field02,   @cOutField02 = O_Field02,
    @cInField03 = I_Field03,   @cOutField03 = O_Field03,
@@ -751,7 +768,9 @@ BEGIN
    SET @cLoadDefaultPickMethod = rdt.RDTGetConfig( @nFunc, 'LoadDefaultPickMethod', @cStorerKey)
 
    SET @cClusterPickGenDropID = rdt.RDTGetConfig( @nFunc, 'ClusterPickGenDropID', @cStorerKey)
-
+   SET @cExtendedScnSP = rdt.RDTGetConfig( @nFunc, 'ExtScnSP', @cStorerKey)
+   IF @cExtendedScnSP = '0'
+      SET @cExtendedScnSP = ''
    -- If config turned on, pick using user preferred uom (rdtuser.defaultuom)
    SET @cPickUsingPrefUOM = rdt.RDTGetConfig( @nFunc, 'PickUsingPrefUOM', @cStorerKey)
    IF @cPickUsingPrefUOM <> '1'
@@ -3679,6 +3698,12 @@ BEGIN
          SET @cOutField01 = ''
       END
 
+      -- Ext Scn SP
+      IF @cExtendedScnSP <> ''
+      BEGIN
+         SET @nAction = 0
+         GOTO Step_99
+      END -- ExtendedScreenSP <> ''   
       GOTO Quit
    END
 
@@ -4799,7 +4824,12 @@ BEGIN
          SET @cFieldAttr13 = 'O'
          SET @cInField13 = @cDefaultPickQty
       END
-
+      -- Ext Scn SP
+      IF @cExtendedScnSP <> ''
+      BEGIN
+         SET @nAction = 0
+         GOTO Step_99
+      END -- ExtendedScreenSP <> '' 
       GOTO Quit
    END
 
@@ -16431,6 +16461,8 @@ BEGIN
       -- Short Pick handling start
       IF @nCurStep = 9
       BEGIN
+         BEGIN TRAN
+
          -- Insert the short picked qty   SOS131967
          IF NOT EXISTS (SELECT 1
                         FROM RDT.RDTPickLock WITH (NOLOCK)
@@ -16444,8 +16476,6 @@ BEGIN
                            AND SKU = @cSKU
                            AND PickQty = 0)
          BEGIN
-            BEGIN TRAN
-
             INSERT INTO RDT.RDTPickLock
             (WaveKey, LoadKey, Orderkey, OrderLineNumber, StorerKey, SKU, PutAwayZone, PickZone, PickDetailKey
             , LOT, LOC, Lottable02, Lottable04, Status, AddWho, AddDate, DropID, PickSlipNo, PickQty, Mobile)
@@ -16617,6 +16647,7 @@ BEGIN
 
             IF @nErrNo <> 0
             BEGIN
+               ROLLBACK TRAN
                GOTO Step_14_Fail
             END
          END
@@ -16893,9 +16924,9 @@ BEGIN
                AND EXISTS (SELECT 1 FROM RDT.RDTPickLock RPL WITH (NOLOCK) WHERE RPL.StorerKey = PD.StorerKey AND RPL.OrderKey = PD.OrderKey
                   AND RPL.Status = '1' AND RPL.AddWho = @cUserName AND RPL.StorerKey = @cStorerKey AND RPL.PickQty = 0)
                -- Duplicate check
-   --AND EXISTS (SELECT 1 FROM RDT.RDTPICKLOCK WITH (NOLOCK) WHERE storerkey = PD.StorerKey
+               --AND EXISTS (SELECT 1 FROM RDT.RDTPICKLOCK WITH (NOLOCK) WHERE storerkey = PD.StorerKey
                --               AND OrderKey = PD.OrderKey AND ADDWHO = @cUserName ) -- SOS# 176144
---               AND PD.OrderKey in (SELECT DISTINCT OrderKey FROM RDT.RDTPICKLOCK WITH (NOLOCK) WHERE ADDWHO = @cUserName)-- SOS# 176144
+               --               AND PD.OrderKey in (SELECT DISTINCT OrderKey FROM RDT.RDTPICKLOCK WITH (NOLOCK) WHERE ADDWHO = @cUserName)-- SOS# 176144
 
             -- Get the total allocated qty for LOC + SKU + OrderKey
             SELECT @nTotalPickQty = ISNULL( SUM(QTY), 0)
@@ -17326,6 +17357,7 @@ BEGIN
                BEGIN
                   SET @nErrNo = 65945
                   SET @cErrMsg = rdt.rdtgetmessage( 65945, @cLangCode, 'DSP') --'GetNextTaskFail'
+                  ROLLBACK TRAN
                   GOTO Step_14_Fail
                END
             END
@@ -17423,6 +17455,7 @@ BEGIN
             SET @nScn  = 1879
             SET @nStep = 10
 
+            COMMIT TRAN
             GOTO Quit
          END
 
@@ -17458,6 +17491,7 @@ BEGIN
                SET @nScn  = 1892
                SET @nStep = 19
 
+               COMMIT TRAN
                GOTO Quit
             END
          END
@@ -17486,6 +17520,8 @@ BEGIN
                      -- Go to next screen
                      SET @nScn  = 1892
                      SET @nStep = 19
+
+                     COMMIT TRAN
 
                      GOTO Quit
                   END
@@ -17640,6 +17676,8 @@ BEGIN
                SET @nActQty = 0
                SET @nQtyToPick = 0
 
+               COMMIT TRAN
+
                GOTO Quit
             END
          END   -- If OrderKey changed
@@ -17665,7 +17703,7 @@ BEGIN
          IF CAST(@cDefaultPickQty AS INT) <= 0 SET @cDefaultPickQty = ''
 
          -- If DefaultToAllocatedQty = '1' then we use DefaultToAllocatedQty as DefaultPickQty
---         SET @cDefaultToAllocatedQty = rdt.RDTGetConfig( @nFunc, 'DefaultToAllocatedQty', @cStorerKey)
+         --         SET @cDefaultToAllocatedQty = rdt.RDTGetConfig( @nFunc, 'DefaultToAllocatedQty', @cStorerKey)
          IF @cDefaultToAllocatedQty = '1'
          BEGIN
             SET @cDefaultPickQty = @nTotalPickQty
@@ -17998,6 +18036,8 @@ BEGIN
          SET @cFieldAttr14 = ''
          SET @cFieldAttr15 = CASE WHEN @cPrefUOM <> '6' THEN '' ELSE 'O' END
       END
+
+      COMMIT TRAN
    END
 
    IF @nInputKey = 0 --ESC
@@ -22870,6 +22910,12 @@ BEGIN
             ELSE
                SET @cFieldAttr12 = 'O'
          END
+         -- Ext Scn SP
+         IF @cExtendedScnSP <> ''
+         BEGIN
+            SET @nAction = 0
+            GOTO Step_99
+         END -- ExtendedScreenSP <> '' 
       END
    END
 
@@ -23402,7 +23448,71 @@ BEGIN
 
 END
 GOTO Quit
+/********************************************************************************
+Step 99. EXTENDED SCN
+********************************************************************************/
+Step_99:
+BEGIN
+   IF @cExtendedScnSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScnSP AND type = 'P')
+      BEGIN
+         DELETE FROM @tExtScnData
+         INSERT INTO @tExtScnData (Variable, Value) VALUES 
+            ('@cOption',@cOption),
+            ('@cDropID',@cDropID),
+            ('@cSKU',@cSKU)
 
+         DECLARE  @nPreSCn       INT,
+                  @nPreInputKey  INT
+
+         SET @nPreSCn = @nScn
+         SET @nPreInputKey = @nInputKey
+         
+         EXECUTE [RDT].[rdt_ExtScnEntry] 
+            @cExtendedScnSP,  --1855ExtScn01
+            @nMobile, @nFunc, @cLangCode, @nStep, @nScn, @nInputKey, @cFacility, @cStorerKey, @tExtScnData,
+            @cInField01 OUTPUT,  @cOutField01 OUTPUT,  @cFieldAttr01 OUTPUT, @cLottable01 OUTPUT,
+            @cInField02 OUTPUT,  @cOutField02 OUTPUT,  @cFieldAttr02 OUTPUT, @cLottable02 OUTPUT,
+            @cInField03 OUTPUT,  @cOutField03 OUTPUT,  @cFieldAttr03 OUTPUT, @cLottable03 OUTPUT,
+            @cInField04 OUTPUT,  @cOutField04 OUTPUT,  @cFieldAttr04 OUTPUT, @dLottable04 OUTPUT,
+            @cInField05 OUTPUT,  @cOutField05 OUTPUT,  @cFieldAttr05 OUTPUT, @dLottable05 OUTPUT,
+            @cInField06 OUTPUT,  @cOutField06 OUTPUT,  @cFieldAttr06 OUTPUT, @cLottable06 OUTPUT,
+            @cInField07 OUTPUT,  @cOutField07 OUTPUT,  @cFieldAttr07 OUTPUT, @cLottable07 OUTPUT,
+            @cInField08 OUTPUT,  @cOutField08 OUTPUT,  @cFieldAttr08 OUTPUT, @cLottable08 OUTPUT,
+            @cInField09 OUTPUT,  @cOutField09 OUTPUT,  @cFieldAttr09 OUTPUT, @cLottable09 OUTPUT,
+            @cInField10 OUTPUT,  @cOutField10 OUTPUT,  @cFieldAttr10 OUTPUT, @cLottable10 OUTPUT,
+            @cInField11 OUTPUT,  @cOutField11 OUTPUT,  @cFieldAttr11 OUTPUT, @cLottable11 OUTPUT,
+            @cInField12 OUTPUT,  @cOutField12 OUTPUT,  @cFieldAttr12 OUTPUT, @cLottable12 OUTPUT,
+            @cInField13 OUTPUT,  @cOutField13 OUTPUT,  @cFieldAttr13 OUTPUT, @dLottable13 OUTPUT,
+            @cInField14 OUTPUT,  @cOutField14 OUTPUT,  @cFieldAttr14 OUTPUT, @dLottable14 OUTPUT,
+            @cInField15 OUTPUT,  @cOutField15 OUTPUT,  @cFieldAttr15 OUTPUT, @dLottable15 OUTPUT,
+            @nAction, 
+            @nScn OUTPUT,  @nStep OUTPUT,
+            @nErrNo   OUTPUT, 
+            @cErrMsg  OUTPUT,
+            @cExtScnUDF01 OUTPUT, @cExtScnUDF02 OUTPUT, @cExtScnUDF03 OUTPUT,
+            @cExtScnUDF04 OUTPUT, @cExtScnUDF05 OUTPUT, @cExtScnUDF06 OUTPUT,
+            @cExtScnUDF07 OUTPUT, @cExtScnUDF08 OUTPUT, @cExtScnUDF09 OUTPUT,
+            @cExtScnUDF10 OUTPUT, @cExtScnUDF11 OUTPUT, @cExtScnUDF12 OUTPUT,
+            @cExtScnUDF13 OUTPUT, @cExtScnUDF14 OUTPUT, @cExtScnUDF15 OUTPUT,
+            @cExtScnUDF16 OUTPUT, @cExtScnUDF17 OUTPUT, @cExtScnUDF18 OUTPUT,
+            @cExtScnUDF19 OUTPUT, @cExtScnUDF20 OUTPUT, @cExtScnUDF21 OUTPUT,
+            @cExtScnUDF22 OUTPUT, @cExtScnUDF23 OUTPUT, @cExtScnUDF24 OUTPUT,
+            @cExtScnUDF25 OUTPUT, @cExtScnUDF26 OUTPUT, @cExtScnUDF27 OUTPUT,
+            @cExtScnUDF28 OUTPUT, @cExtScnUDF29 OUTPUT, @cExtScnUDF30 OUTPUT
+
+         IF @nErrNo <> 0
+            GOTO Step_99_Fail
+
+         GOTO Quit
+      END
+   END
+
+   Step_99_Fail:
+      GOTO Quit
+END
+GOTO Quit
 /********************************************************************************
 Quit. Update back to I/O table, ready to be pick up by JBOSS
 ********************************************************************************/
@@ -23492,6 +23602,7 @@ BEGIN
       V_String49   = @cAttribute02,
       V_String50   = @cAttribute03,
 		V_String21   = @cExtendedWCSSP,
+      V_String51   = @cExtendedScnSP,
 
       I_Field01 = @cInField01,  O_Field01 = @cOutField01,
       I_Field02 = @cInField02,  O_Field02 = @cOutField02,

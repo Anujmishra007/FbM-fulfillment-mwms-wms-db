@@ -25,6 +25,7 @@ GO
 /* Updates:                                                             */
 /* Date         Author   Ver  Purposes                                  */
 /* 06-Jun-2023  NJOW     1.0  DevOps Combine Script                     */
+/* 10-Oct-2025  SSA01    1.1  UWP-42248 -Enhanced session management    */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[ispWAVRL09] 
@@ -205,7 +206,7 @@ BEGIN
                   -- CartonNo and LabelLineNo will be inserted by trigger
                   INSERT INTO PACKDETAIL (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, AddWho, AddDate, EditWho, EditDate, Refno, DropID)
                   VALUES (@c_PickSlipNo, 0, @c_LabelNo, '00000', @c_StorerKey, @c_SKU,
-                          @n_PackQty, sUser_sName(), GETDATE(), sUser_sName(), GETDATE(), '', @c_Orderkey)
+                          @n_PackQty, dbo.fnc_GetUserName(), dbo.fnc_GetDate(), dbo.fnc_GetUserName(), dbo.fnc_GetDate(), '', @c_Orderkey)          --(SSA01)
                   
                   SET @n_err = @@ERROR
                   IF @n_err <> 0

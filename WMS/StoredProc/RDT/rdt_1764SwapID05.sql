@@ -1,14 +1,17 @@
 
-/**************************************************************************/
-/* Store procedure: rdt_1764SwapID05                                      */
-/* Copyright      : Maersk WMS                                            */
-/* Customer       : BRF BRASIL FOODS SA                                   */
-/*                                                                        */
-/* Purpose: Swap ID base on same LOC, SKU, QTY, Lottables                 */
-/*                                                                        */
-/* Date        Rev      Author      Purposes                              */
-/* 2025-04-08  1.0.0    Jackc       FCR-3916 Create                       */
-/**************************************************************************/
+/******************************************************************************/
+/* Store procedure: rdt_1764SwapID05                                          */
+/* Copyright      : Maersk WMS                                                */
+/* Customer       : BRF BRASIL FOODS SA                                       */
+/*                                                                            */
+/* Purpose: Swap ID base on same LOC, SKU, QTY, Lottables                     */
+/*                                                                            */
+/* Date        Rev      Author      Purposes                                  */
+/* 2025-04-08  1.0.0    Jackc       FCR-3916 Create                           */
+/* 2025-08-06  1.0.1    NickT       UWP-38905 Reallocate pick task            */
+/* 2025-08-13  1.0.2    Jackc       UWP-38905 Improve pkd retriving logic,    */
+/*                                  2.Bypass QtyAllocated when lock rfputaway */
+/******************************************************************************/
 
 CREATE OR ALTER PROCEDURE rdt.rdt_1764SwapID05
    @nMobile           INT,
@@ -124,7 +127,7 @@ BEGIN
       @cTaskSKU = TD.SKU, 
       @cTaskLOT = TD.LOT,
       @cTaskLOC = TD.FromLOC,
-      @cTaskID = TD.FromID, 
+      @cTaskID = TD.FromID,
       @nTaskQTY = TD.SystemQTY,
       --@cTaskPickDetailKey = PickDetailKey,
       @cTaskLocHandling = LOC.LocationHandling
@@ -884,7 +887,11 @@ BEGIN
    Scenario:
    1. Handle task data
       1.1 Handle TaskID task data
+         1.1.1 Handle taskID's RPF, VNAOUT or FPK task
+         1.1.2 Handle taskID related sub picking tasks (picking tasks from pickface)
       1.2 Handle NewID task data if there is a task
+         1.2.1 Handle taskID's RPF, VNAOUT or FPK task
+         1.2.2 Handle taskID related sub picking tasks (picking tasks from pickface)
    2. Handle Pickdetail data
       2.1 Unallocate taskID 
       2.2 Unallocate NewID if it is allocated
@@ -905,7 +912,7 @@ BEGIN
 
    --0. Always unlock both TaskID and NewID RF data.
    IF @nDebugFlag = 1
-      SELECT 'Unlock both TaskID and NewID RF data'
+      SELECT 'Unlock both TaskID and NewID RF data', @nCurrRPFRowRef AS CurrenRPFRowRef, @nOtherRPFRowRef AS OtherRPFRowRef
 
    IF @nCurrRPFRowRef > 0
    BEGIN
@@ -947,19 +954,17 @@ BEGIN
       END
    END
 
-   IF @nDebugFlag = 1
-      SELECT 'Unlock both TaskID and NewID RF data done', @nCurrRPFRowRef AS CurrenRPFRowRef, @nOtherRPFRowRef AS OtherRPFRowRef
-
    --1. Handle task data
    IF @nDebugFlag = 1
    BEGIN
       SELECT '1. Handle task data'
       SELECT '1.1 Handle TaskID task data', @cTaskDetailKey AS TaskKey
+      SELECT '1.1.1 Handle Task ID FPK, VNA, or RPF task'
    END
 
    -- 1.1 Handle TaskID task data
-   -- Update current task
-   UPDATE TaskDetail SET
+   -- 1.1.1 Update current ID task
+   UPDATE TaskDetail WITH (ROWLOCK) SET
       LOT = @cNewLOT, 
       FromID = @cNewID, 
       ToID = CASE WHEN ToID <> '' THEN @cNewID ELSE ToID END, 
@@ -973,18 +978,46 @@ BEGIN
       SET @nErrNo = 238181
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD Task Fail
       GOTO RollBackTran
-   END -- 1.1
+   END -- 1.1.1
+
+   IF @cTaskType <> 'FPK'
+   BEGIN
+      IF @nDebugFlag = 1
+         SELECT '1.1.2 Handle Task ID FCP tasks (picking task from pickface)' --V1.0.2
+      BEGIN TRY
+         UPDATE TaskDetail WITH (ROWLOCK) SET
+            LOT = @cNewLOT, 
+            FromID = CASE WHEN FromID <> '' THEN @cNewID ELSE FromID END, 
+            ToID = CASE WHEN ToID <> '' THEN @cNewID ELSE ToID END, 
+            EditDate = GETDATE(), 
+            EditWho = SUSER_SNAME(), 
+            TrafficCop = NULL
+         WHERE StorerKey = @cStorerKey
+            AND TaskType = 'FCP'
+            AND RefTaskKey = @cTaskDetailKey
+            AND Status = 'H'
+      END TRY
+      BEGIN CATCH
+         SET @nErrNo = 238191
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD Task Fail
+         GOTO RollBackTran
+      END CATCH
+   END --1.1.2
 
    --1.2 Handle NewID task data if there is a task
    IF @cOtherTaskDetailKey <> ''
    BEGIN
       IF @nDebugFlag = 1
+      BEGIN
          SELECT '1.2 Handle NewID task data if there is a task', @cOtherTaskDetailKey AS OtherTaskKey
+         SELECT '1.2.1 Handle NewID RPF, FPK or VNA task'
+      END
 
       UPDATE TaskDetail SET
          LOT = @cTaskLOT, 
-         FromID = @cTaskID, 
-         ToID = CASE WHEN ToID <> '' THEN @cTaskID ELSE ToID END, 
+         FromID = @cTaskID,
+         ToID = CASE WHEN ToID <> '' THEN @cTaskID ELSE ToID END,
+         FinalID = CASE WHEN FinalID <> '' THEN @cTaskID ELSE FinalID END, 
          EditDate = GETDATE(), 
          EditWho = SUSER_SNAME(), 
          TrafficCop = NULL
@@ -995,7 +1028,32 @@ BEGIN
          SET @nErrNo = 238182
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD Task Fail
          GOTO RollBackTran
-      END
+      END--1.2.1
+
+      IF @cOtherTaskType <> 'FPK'
+      BEGIN
+         IF @nDebugFlag = 1
+            SELECT '1.2.2 Handle Task ID sub tasks (picking task from pickface)'
+
+         BEGIN TRY
+            UPDATE TaskDetail WITH (ROWLOCK) SET
+               LOT = @cTaskLOT, 
+               FromID = CASE WHEN FromID <> '' THEN @cTaskID ELSE FromID END, 
+               ToID = CASE WHEN ToID <> '' THEN @cTaskID ELSE ToID END, 
+               EditDate = GETDATE(), 
+               EditWho = SUSER_SNAME(), 
+               TrafficCop = NULL
+            WHERE StorerKey = @cStorerKey
+               AND TaskType = 'FCP'
+               AND RefTaskKey = @cOtherTaskDetailKey
+               AND Status = 'H'
+         END TRY
+         BEGIN CATCH
+            SET @nErrNo = 238192
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD Task Fail
+            GOTO RollBackTran
+         END CATCH
+      END --1.2.2
    END --1.2
 
    --2. Handle Pickdetail data
@@ -1006,7 +1064,7 @@ BEGIN
    IF @cTaskPickDetailKey <> ''
    BEGIN
       IF @nDebugFlag = 1
-         SELECT '2.1 Unallocate taskID'
+         SELECT '2.1 Unallocate task ID', @cTaskID AS Task_ID
 
       --Save the task pickdetail and replace lot and ID with new values
       INSERT INTO @tPD (PickDetailKey, TaskDetailKey, Qty, LOT, ID,Remark)
@@ -1014,7 +1072,8 @@ BEGIN
          PickDetailKey, TaskDetailKey, QTY, @cNewLot, @cNewID, 'TaskPKD'
       FROM dbo.PickDetail WITH (NOLOCK)
       WHERE StorerKey = @cStorerKey
-         AND TaskDetailKey = @cTaskDetailKey
+         AND ID = @cTaskID
+         AND LOC = @cTaskLoc
          AND Status = '0'
          AND Qty > 0
 
@@ -1025,7 +1084,8 @@ BEGIN
             EditDate = GETDATE(), 
             EditWho = 'rdt.' + SUSER_SNAME()
          WHERE StorerKey = @cStorerKey
-            AND TaskDetailKey = @cTaskDetailKey
+            AND ID = @cTaskID
+            AND LOC = @cTaskLoc
             AND Status = '0'
             AND Qty > 0
       END TRY
@@ -1045,10 +1105,11 @@ BEGIN
       --Save the NewID pickdetail and replace lot and ID with task values
       INSERT INTO @tPD (PickDetailKey, TaskDetailKey, Qty, LOT, ID,Remark)
       SELECT
-         PickDetailKey, TaskDetailKey, QTY, @cTaskLot, @cTaskID, 'NewID PKD'
+         PickDetailKey, TaskDetailKey, QTY, @cTaskLot, @cTaskID, 'NewIDPKD'
       FROM dbo.PickDetail WITH (NOLOCK)
       WHERE StorerKey = @cStorerKey
-         AND TaskDetailKey = @cOtherTaskDetailKey
+         AND ID = @cNewID
+         AND Loc = @cNewLOC
          AND Status = '0'
          AND Qty > 0
 
@@ -1059,7 +1120,8 @@ BEGIN
             EditDate = GETDATE(), 
             EditWho = 'rdt.' + SUSER_SNAME()
          WHERE StorerKey = @cStorerKey
-            AND TaskDetailKey = @cOtherPickDetailKey
+            AND ID = @cNewID
+            AND Loc = @cNewLOC
             AND Status = '0'
             AND Qty > 0
       END TRY
@@ -1107,7 +1169,6 @@ BEGIN
       SELECT * FROM PickDetail WITH (NOLOCK)
       WHERE Storerkey = @cStorerKey
          AND ID IN (@cTaskID, @cNewID)
-         AND LOT IN (@cTaskLOT, @cNewLOT) 
    END
 
    --3. Switch QtyReplen to make LLI correct
@@ -1176,6 +1237,7 @@ BEGIN
             ,@cErrMsg OUTPUT
             ,@cFromLOT = @cNewLOT
             ,@cTaskDetailKey = @cTaskDetailKey
+            ,@cMoveQtyAlloc = '1' -- V1.0.2 RPF task LLI may have qtyallocted (FCP tasks), bypass QtyAllocted
             ,@cMoveQTYReplen = '1'
       ELSE --In the other cases, pass MoveQtyAlloc
          EXEC rdt.rdt_Putaway_PendingMoveIn '', 'LOCK' 
@@ -1215,6 +1277,7 @@ BEGIN
          ,@cErrMsg OUTPUT
          ,@cFromLOT = @cTaskLOT
          ,@cTaskDetailKey = @cOtherTaskDetailKey
+         ,@cMoveQtyAlloc = '1' -- V1.0.2 RPF task LLI may have qtyallocted (FCP tasks), bypass QtyAllocted
          ,@cMoveQTYReplen = '1' 
       ELSE --In the other cases, pass MoveQtyAlloc
          EXEC rdt.rdt_Putaway_PendingMoveIn '', 'LOCK' 
@@ -1235,6 +1298,8 @@ BEGIN
       END
    END --4.2 otherRPFRowRef <> ''
 
+   --V1.0.2 remove the below 1.0.1 changes. Replace the original reallocating logic with 1.0.1 logic
+  
 CommitTran:
    COMMIT TRAN rdt_1764SwapID05
    GOTO Quit

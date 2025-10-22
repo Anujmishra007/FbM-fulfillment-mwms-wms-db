@@ -23,6 +23,7 @@ GO
 /* Updates:                                                                */
 /* Date         Author  Ver   Purposes                                     */
 /* 24-Jan-2022  WLChooi 1.0   DevOps Combine Script                        */
+/* 10-Oct-2025  SSA01   1.1  UWP-42248 -Enhanced session management        */
 /***************************************************************************/  
 CREATE OR ALTER PROC [dbo].[ispPRREC23]  
 (     @c_Receiptkey         NVARCHAR(10)  
@@ -196,8 +197,8 @@ BEGIN
                                         AND EXISTS (SELECT 1 FROM CODELKUP (NOLOCK) WHERE Listname = 'RECDTUPD' AND Storerkey = @c_Storerkey AND Code = 'LOTTABLE15' AND Code2 = @c_DocType) 
                                         THEN RDF.Lottable15 ELSE RECEIPTDETAIL.Lottable15 END
            , RECEIPTDETAIL.TrafficCop = NULL
-           , RECEIPTDETAIL.EditWho = SUSER_SNAME()
-           , RECEIPTDETAIL.EditDate = GETDATE()
+           , RECEIPTDETAIL.EditWho = dbo.fnc_GetUserName()       --(SSA01)
+           , RECEIPTDETAIL.EditDate = dbo.fnc_GetDate()    --(SSA01)
          FROM RECEIPTDETAIL 
          JOIN RECEIPTDETAIL RDF (NOLOCK) ON RECEIPTDETAIL.Receiptkey = RDF.ReceiptKey
          WHERE RECEIPTDETAIL.Receiptkey = @c_Receiptkey

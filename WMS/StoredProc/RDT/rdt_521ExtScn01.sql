@@ -12,6 +12,7 @@ GO
 /*                                                                                */
 /* Date       Rev     Author   Purposes                                           */
 /* 2025-03-14 1.0.0   Dennis   FCR-3449                                           */
+/* 2025-08-26 1.1.0   Dennis   UWP-40042 Fix Bug                                  */
 /**********************************************************************************/
 
 CREATE OR ALTER  PROC [RDT].[rdt_521ExtScn01] (
@@ -438,6 +439,7 @@ BEGIN
             SET @cUDF05 = CAST(@nUCCQTY AS NVARCHAR)
             SET @cUDF06 = @cLOT
             SET @cUDF07 = @cSuggestedLOC
+            SET @cUDF08 = @nPABookingKey
          END  
       
          IF @nInputKey = 0 -- Esc or No  
@@ -467,6 +469,7 @@ BEGIN
    END
    IF @nMOBRECStep = 2
    BEGIN
+      SET @cAllowAllocatedUCCPutaway = rdt.RDTGetConfig( @nFunc, 'AllowAllocatedUCCPutaway', @cStorerKey)  
       IF @cAllowAllocatedUCCPutaway = '1' AND @nInputKey = 0
       BEGIN
          SET @nAfterStep = 99
@@ -476,6 +479,7 @@ BEGIN
    END
    IF @nMOBRECStep = 3
    BEGIN
+      SET @cAllowAllocatedUCCPutaway = rdt.RDTGetConfig( @nFunc, 'AllowAllocatedUCCPutaway', @cStorerKey)  
       IF @cAllowAllocatedUCCPutaway = '1'
       BEGIN
          SET @nAfterStep = 99

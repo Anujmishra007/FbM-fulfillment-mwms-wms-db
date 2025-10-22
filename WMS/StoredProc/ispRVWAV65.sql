@@ -22,6 +22,7 @@ GO
 /* Updates:                                                                 */
 /* Date        Author   Ver  Purposes                                       */
 /* 15-Sep-2023 WLChooi  1.0  DevOps Combine Script                          */
+/* 10-Oct-2025 SSA01    1.1  UWP-42248 -Enhanced session management         */
 /****************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[ispRVWAV65]
    @c_Wavekey  NVARCHAR(10)
@@ -195,8 +196,8 @@ BEGIN
       UPDATE WAVE
       SET TMReleaseFlag = 'N'
         , TrafficCop = NULL
-        , EditWho = SUSER_SNAME()
-        , EditDate = GETDATE()
+        , EditWho = dbo.fnc_GetUserName()            --(SSA01)
+        , EditDate = dbo.fnc_GetDate()   --(SSA01)
       WHERE WaveKey = @c_Wavekey
 
       SELECT @n_err = @@ERROR
@@ -227,8 +228,8 @@ BEGIN
          UPDATE ORDERS WITH (ROWLOCK)
          SET SOStatus = '0'
            , TrafficCop = NULL
-           , EditWho = SUSER_SNAME()
-           , EditDate = GETDATE()
+           , EditWho = dbo.fnc_GetUserName()        --(SSA01)
+           , EditDate = dbo.fnc_GetDate()   --(SSA01)
          WHERE UserDefine09 = @c_Wavekey AND SOStatus = 'TSRELEASED'
       END
    END

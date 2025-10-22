@@ -28,7 +28,8 @@ GO
 /* 2020-03-23  Wan02    1.2   WMS-12136 - NIKE - PH Cartonization       */
 /* 2020-03-30  Wan03    1.2   WMS-12269 - [PH] - NIKE - Picking Task    */
 /*                            Dispatch                                  */  
-/* 2020-04-01  Wan04    1.3   Sync Exceed & SCE                         */   
+/* 2020-04-01  Wan04    1.3   Sync Exceed & SCE                         */
+/* 2025-10-10  SSA01    1.2   UWP-42248 -Enhanced session management    */
 /************************************************************************/
 CREATE PROC ispRVWAV30
         @c_Wavekey      NVARCHAR(10)  
@@ -263,7 +264,7 @@ BEGIN
             SET TaskDetailKey = ''
                ,TrafficCop    = NULL
                ,EditWho = SUSER_NAME()
-               ,EditDate= GETDATE()
+               ,EditDate= dbo.fnc_GetDate()   --(SSA01)
             WHERE PickDetailkey = @c_PickDetailKey
 
             SET @n_err = @@ERROR
@@ -286,8 +287,8 @@ BEGIN
          UPDATE TASKDETAIL 
             SET Wavekey = @c_Wavekey_Share
                ,Trafficcop = NULL
-               ,EditDate = GETDATE()
-               ,EditWho  = SUSER_SNAME()
+               ,EditDate = dbo.fnc_GetDate()   --(SSA01)
+               ,EditWho  = dbo.fnc_GetUserName()         --(SSA01)
          WHERE TaskDetailkey = @c_TaskDetailkey
 
          SET @n_err = @@ERROR
@@ -390,8 +391,8 @@ BEGIN
       --,EditWho = SUSER_NAME()           --(Wan04) 
       SET TMReleaseFlag = 'N'             --(Wan04) 
       ,  TrafficCop = NULL                --(Wan04) 
-      ,  EditWho = SUSER_SNAME()          --(Wan04) 
-      ,  EditDate= GETDATE()              --(Wan04)       
+      ,  EditWho = dbo.fnc_GetUserName()          --(Wan04)(SSA01)
+      ,  EditDate= dbo.fnc_GetDate()   --(SSA01)            --(Wan04)
    WHERE Wavekey = @c_Wavekey 
    
    SET @n_err = @@ERROR

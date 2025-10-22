@@ -27,6 +27,8 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date         Author    Ver.  Purposes                                */
+/* 2025-10-10   SSA01     1.0  UWP-42248 -Enhanced session management   */
+/*                             and cleanup.                             */
 /************************************************************************/
 
 CREATE PROCEDURE isp_RCM_ASN_HM_SplitToSMCtn
@@ -339,8 +341,8 @@ BEGIN
       UPDATE RECEIPT
       SET Notes = 'S', 
           TrafficCop = NULL, 
-          EditDate = GETDATE(), 
-          EditWho = SUSER_SNAME()
+          EditDate = dbo.fnc_GetDate(),    --(SSA01)
+          EditWho = dbo.fnc_GetUserName()   --(SSA01)
       WHERE Receiptkey = @c_Receiptkey
       
       SET @n_err = @@ERROR    

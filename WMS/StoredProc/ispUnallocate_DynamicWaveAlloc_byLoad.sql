@@ -28,6 +28,7 @@ GO
 /* Updates:                                                             */
 /* Date         Author      Purposes                                    */
 /* 2008-12-3    wwang       add Storerkey as parameter                  */
+/* 2025-10-10   SSA01       UWP-42248 -Enhanced session management      */
 /************************************************************************/
 
 CREATE PROC  [dbo].[ispUnallocate_DynamicWaveAlloc_byLoad]
@@ -272,8 +273,8 @@ BEGIN
       UPDATE UCC WITH (ROWLOCK) SET
          Status = '1',
          WaveKey = '',
-         EditDate = GETDATE(),
-			EditWho = sUSER_sNAME() 
+         EditDate = dbo.fnc_GetDate(),    --(SSA01)
+			EditWho = dbo.fnc_GetUserName()             --(SSA01)
       FROM ORDERS OH WITH (NOLOCK)
       INNER JOIN PACKHEADER PACHD WITH (NOLOCK) ON (OH.LoadKey = PACHD.LoadKey AND PACHD.Storerkey = @c_Storerkey)
       INNER JOIN PACKDETAIL PACDT WITH (NOLOCK) ON (PACHD.PickSlipNo = PACDT.PickSlipNo AND PACDT.Storerkey = @c_Storerkey)

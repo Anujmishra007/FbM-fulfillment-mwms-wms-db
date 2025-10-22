@@ -1,13 +1,16 @@
 --rdtfnc_SimpleCC
 -- 2770 - 2779
+IF NOT EXISTS ( SELECT 1 FROM RDT.RDTMSG (NOLOCK) WHERE MESSAGE_ID = 731 AND Message_Type = 'FNC')
+BEGIN
+   INSERT INTO RDT.RDTMsg (Message_ID, Lang_Code, Message_Type, Message_Text, StoredProcName, Eventtype)
+   VALUES ('731', 'ENG', 'FNC', 'Apparel CC', 'rdtfnc_SimpleCC', '8')
+END
 
-DELETE RDT.RDTMsg WHERE Message_ID = 731 AND Lang_Code = 'ENG' AND Message_Type = 'FNC'
-INSERT INTO RDT.RDTMsg (Message_ID, Lang_Code, Message_Type, Message_Text, StoredProcName, Eventtype)
-   VALUES ('731', 'ENG', 'FNC', 'Apparel CC', 'rdtfnc_SimpleCC', '1')
-
-DELETE RDT.RDTMsg WHERE Message_ID = 732 AND Lang_Code = 'ENG' AND Message_Type = 'FNC'
-INSERT INTO RDT.RDTMsg (Message_ID, Lang_Code, Message_Type, Message_Text, StoredProcName, Eventtype)
-   VALUES ('732', 'ENG', 'FNC', 'Simple CC (Assisted)', 'rdtfnc_SimpleCC', '1')
+IF NOT EXISTS ( SELECT 1 FROM RDT.RDTMSG (NOLOCK) WHERE MESSAGE_ID = 732 AND Message_Type = 'FNC')
+BEGIN
+   INSERT INTO RDT.RDTMsg (Message_ID, Lang_Code, Message_Type, Message_Text, StoredProcName, Eventtype)
+   VALUES ('732', 'ENG', 'FNC', 'Simple CC (Assisted)', 'rdtfnc_SimpleCC', '8')
+END
 
 -- 2770 = CCREF screen
 DELETE rdt.RDTScn WHERE Scn = 2770 AND Lang_Code = 'ENG'
@@ -17,8 +20,7 @@ EXECUTE rdt.rdtAddScn 2770, 'ENG',
    ,@cLine03 = 'SHEET: %10i02'       
    ,@cLine14 = '%e'
    ,@cWebGroup = '{"1":["1"],"2":["3"]}'
-   ,@nFunc = 732
-   
+
 -- 2771 = LOC screen
 DELETE rdt.RDTScn WHERE Scn = 2771 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 2771, 'ENG'
@@ -30,8 +32,7 @@ EXECUTE rdt.rdtAddScn 2771, 'ENG'
    ,@cLine06 = 'LOC: %10i02 %03d05'   -- (james02)
    ,@cLine14 = '%e'
    ,@cWebGroup = '{"1":["1","2","3"],"2":["5","6"]}'
-   ,@nFunc = 732
-   
+
 -- 2772 = Statistic screen
 DELETE rdt.RDTScn WHERE Scn = 2772 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 2772, 'ENG'
@@ -45,9 +46,8 @@ EXECUTE rdt.rdtAddScn 2772, 'ENG'
    ,@cLine08 = 'QTY: %15d05'   
    ,@cLine13 = '%20d07'   -- (james05)
    ,@cLine14 = '%e'   
-   ,@cWebGroup = '{"1":["1","2","3"],"2":["5"],"3":["5"],"4":["7"],"5":["8"],"6":["13"]}'
-   ,@nFunc = 732
-   
+   ,@cWebGroup = '{"1":["1","2","3"],"2":["5"],"3":["7","8"],"4":["13"]}'
+
 -- 2773 = SKU QTY screen
 DELETE rdt.RDTScn WHERE Scn = 2773 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 2773, 'ENG'
@@ -61,13 +61,12 @@ EXECUTE rdt.rdtAddScn 2773, 'ENG'
    ,@cLine08 = '%20d05'
    ,@cLine09 = '%20d07' 
    ,@cLine10 = '         %05d13 %05d14'
-   ,@cLine11 = 'QTY:     %05i08^DT:INT %05i09^DT:INT'
+   ,@cLine11 = 'QTY:     %05i08 %05i09'
    ,@cLine12 = 'TTL QTY: %10d10'
    ,@cLine13 = '%20d15'
    ,@cLine14 = '%e'
-   ,@cWebGroup = '{"1":["1","2"],"2":["3"],"3":["4","5","6","7","8","9"],"4":["10","11","12"],"5":["13"]}'
-   ,@nFunc = 732
-   
+   ,@cWebGroup = '{"1":["1","2","3"],"2":["5","6","7","8","9"],"3":["10","11","12"],"4":["13"]}'
+
 -- 2774 = Add count LOC screen
 DELETE rdt.RDTScn WHERE Scn = 2774 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 2774, 'ENG'
@@ -79,7 +78,7 @@ EXECUTE rdt.rdtAddScn 2774, 'ENG'
    ,@cLine06 = ''
    ,@cLine07 = 'OPTION: %01i01'
    ,@cLine14 = '%e'
-   
+
 -- 2775 = Reset LOC screen
 DELETE rdt.RDTScn WHERE Scn = 2775 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 2775, 'ENG'
@@ -122,10 +121,10 @@ DELETE rdt.RDTScn WHERE Scn = 2778 AND Lang_Code = 'ENG'
 EXECUTE rdt.rdtAddScn 2778, 'ENG'
    ,@cLine01 = ''
    ,@cLine02 = 'ID:'
-   ,@cLine03 = '%18i01'
-   ,@cLine14 = '%e'   
-   ,@cWebGroup = '{"1":["1"]}'
-   ,@nFunc = 732 
+   ,@cLine03 = '%20i01'    -- FCR-2054 Extend to 20 chars
+   ,@cLine13 = '%20d15'    -- FCR-2054 ExtendedInfoSP
+   ,@cLine14 = '%e'    
+   ,@cWebGroup = '{"1":["3"],"2":["13"]}'
 
 --WMS996. Add Reset by counted ID
 -- 2779 = Reset LOC screen

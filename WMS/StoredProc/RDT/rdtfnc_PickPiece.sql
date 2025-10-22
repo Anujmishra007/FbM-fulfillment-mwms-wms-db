@@ -76,6 +76,11 @@ GO
 /* 2025-03-31   5.8.0   Dennis      FCR-2705 ExtScn04                            */
 /* 2025-01-23   5.9.0   CYU027      FCR-540 Fix issues， SerinaNo                */
 /* 2025-05-20   6.0.0   Jackc       UWP-34683 Add extupd to step4                */
+/* 2025-01-23   6.1.0   CYU027      FCR-540 Fix issues， SerinaNo                */
+/* 2025-09-09   6.2.0   Jackc       uwp-40901 Fix next scn value at st7          */
+/* 2025-09-22   6.2.1   PPA374      Adding ExtUpd to step 2 inputkey 0           */
+/* 2025-09-30   6.3.0   NickT       FCR-6584 Set @cDefaultSKU = '0' in Step0     */
+/* 2025-10-17   6.3.1   NickT       FCR-6584 Fix issue: jump to wrong step       */
 /*********************************************************************************/
 
 CREATE OR ALTER   PROC [RDT].[rdtfnc_PickPiece] (
@@ -404,6 +409,7 @@ Step_0. Func = 839
 ********************************************************************************/
 Step_0:
 BEGIN
+   SET @cDefaultSKU = '0'
    -- Get storer configure
    SET @cAllowSkipLOC = rdt.rdtGetConfig( @nFunc, 'AllowSkipLOC', @cStorerKey)
    SET @cConfirmLOC = rdt.rdtGetConfig( @nFunc, 'ConfirmLOC', @cStorerKey)
@@ -1322,6 +1328,69 @@ BEGIN
       IF @nErrNo <> 0
          GOTO Step_2_Fail
 
+      IF @cExtendedUpdateSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')
+         BEGIN
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, ' +
+               ' @cPickSlipNo, @cPickZone, @cDropID, @cLOC, @cSKU, @nQTY, @cOption, @cLottableCode, ' +
+               ' @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05, ' +
+               ' @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10, ' +
+               ' @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15, ' +
+               ' @cPackData1,@cPackData2,@cPackData3, ' +
+               ' @nErrNo OUTPUT, @cErrMsg OUTPUT '
+            SET @cSQLParam =
+               ' @nMobile         INT                      ' +
+               ',@nFunc           INT                      ' +
+               ',@cLangCode       NVARCHAR( 3)             ' +
+               ',@nStep           INT                      ' +
+               ',@nInputKey       INT                      ' +
+               ',@cFacility       NVARCHAR( 5)             ' +
+               ',@cStorerKey      NVARCHAR( 15)            ' +
+               ',@cPickSlipNo     NVARCHAR( 10)            ' +
+               ',@cPickZone       NVARCHAR( 10)            ' +
+               ',@cDropID         NVARCHAR( 20)            ' +
+               ',@cLOC            NVARCHAR( 10)            ' +
+               ',@cSKU            NVARCHAR( 20)            ' +
+               ',@nQTY            INT                      ' +
+               ',@cOption         NVARCHAR( 1)             ' +
+               ',@cLottableCode   NVARCHAR( 30)            ' +
+               ',@cLottable01     NVARCHAR( 18)            ' +
+               ',@cLottable02     NVARCHAR( 18)            ' +
+               ',@cLottable03     NVARCHAR( 18)            ' +
+               ',@dLottable04     DATETIME                 ' +
+               ',@dLottable05     DATETIME                 ' +
+               ',@cLottable06     NVARCHAR( 30)            ' +
+               ',@cLottable07     NVARCHAR( 30)            ' +
+               ',@cLottable08     NVARCHAR( 30)            ' +
+               ',@cLottable09     NVARCHAR( 30)            ' +
+               ',@cLottable10     NVARCHAR( 30)            ' +
+               ',@cLottable11     NVARCHAR( 30)            ' +
+               ',@cLottable12     NVARCHAR( 30)            ' +
+               ',@dLottable13     DATETIME                 ' +
+               ',@dLottable14     DATETIME                 ' +
+               ',@dLottable15     DATETIME                 ' +
+               ',@cPackData1      NVARCHAR( 30)            ' +
+               ',@cPackData2      NVARCHAR( 30)            ' +
+               ',@cPackData3      NVARCHAR( 30)            ' +
+               ',@nErrNo          INT           OUTPUT     ' +
+               ',@cErrMsg         NVARCHAR(250) OUTPUT     '
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, 2, @nInputKey, @cFacility, @cStorerKey,
+               @cPickSlipNo, @cPickZone, @cDropID, @cSuggLOC, @cSuggSKU, @nQTY, @cOption, @cLottableCode,
+               @cLottable01, @cLottable02, @cLottable03, @dLottable04, @dLottable05,
+               @cLottable06, @cLottable07, @cLottable08, @cLottable09, @cLottable10,
+               @cLottable11, @cLottable12, @dLottable13, @dLottable14, @dLottable15,
+               @cPackData1,@cPackData2,@cPackData3,
+               @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+            IF @nErrNo <> 0
+               GOTO Step_2_Fail
+         END
+      END
+
       -- Prepare prev screen var
       SET @cOutField01 = '' -- PickSlipNo
       SET @cOutField13 = ''
@@ -2078,6 +2147,7 @@ BEGIN
 
          IF @cExtScnSP <> ''
          BEGIN
+            SET @nPre_Step = '' -- clear pre step
             GOTO STEP_99
          END
          GOTO QUIT
@@ -4210,6 +4280,7 @@ BEGIN
          -- after execut rdt_839ExtScn04. There is new option screen replace the this one.
          GOTO Quit
       END
+      SET @nPre_Step = 5
       GOTO Step_99
    END
 
@@ -4490,6 +4561,7 @@ BEGIN
 
    IF @cExtScnSP <> '' AND EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
    BEGIN
+      SET @nPre_Step = 6
       GOTO Step_99
    END
 
@@ -4581,9 +4653,15 @@ BEGIN
          SET @cOutField04 = @cSuggID --(yeekung02)
          SET @cOutField05 = ''
 
+         --V4.1.0 start
          -- Go to confirm LOC screen
-         SET @nScn = @nScn_ConfirmLOC
-         SET @nStep = @nStep_ConfirmLOC
+         --SET @nScn = @nScn_ConfirmLOC
+         --SET @nStep = @nStep_ConfirmLOC
+         
+         -- Go to verify ID screen
+         SET @nScn = @nScn_VerifyID
+         SET @nStep = @nStep_VerifyID
+         --V4.1.0
       END
       ELSE
       BEGIN
@@ -4786,6 +4864,7 @@ BEGIN
 
    IF @cExtScnSP <> '' AND EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
    BEGIN
+      SET @nPre_Step = 7
       GOTO Step_99
    END
 
@@ -5048,6 +5127,7 @@ BEGIN
 
    IF @cExtScnSP <> '' AND EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
    BEGIN
+      SET @nPre_Step = ''
       GOTO Step_99
    END
 
@@ -5285,6 +5365,7 @@ BEGIN
 
    IF @cExtScnSP <> '' AND EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
    BEGIN
+      SET @nPre_Step = 9
       GOTO Step_99
    END
 
@@ -5469,6 +5550,7 @@ END
 
 IF @cExtScnSP <> '' AND EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
 BEGIN
+   SET @nPre_Step = 10
    GOTO Step_99
 END
 
@@ -6091,6 +6173,7 @@ BEGIN
          --Jump point
          IF @cExtScnSP <> '' AND EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
          BEGIN
+            SET @nPre_Step = 12
             GOTO Step_99
          END
 
@@ -6223,6 +6306,7 @@ BEGIN
          --Jump point
          IF @cExtScnSP <> '' AND EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtScnSP AND type = 'P')
          BEGIN
+            SET @nPre_Step = 12
             GOTO Step_99
          END
 

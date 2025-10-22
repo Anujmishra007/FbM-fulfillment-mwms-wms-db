@@ -22,7 +22,8 @@ GO
 /* Data Modifications:                                                  */
 /*                                                                      */
 /* Updates:                                                             */  
-/* Date         Author   Ver  Purposes                                  */  
+/* Date         Author   Ver  Purposes                                  */
+/* 10-Oct-2025  SSA01    1.1  UWP-42248 -Enhanced session management    */
 /************************************************************************/
 
 CREATE PROC ispPKD03   
@@ -56,8 +57,8 @@ BEGIN
 	 	  UPDATE ORDERDETAIL WITH (ROWLOCK)
 	 	  SET ORDERDETAIL.QtyToProcess = 0,
 	 	      TrafficCop = NULL,
-	 	      EditWho = SUSER_SNAME(),
-	 	      EditDate = GETDATE()	 	   
+	 	      EditWho = dbo.fnc_GetUserName(),           --(SSA01)
+	 	      EditDate = dbo.fnc_GetDate()    --(SSA01)
 	 	  FROM ORDERDETAIL
 	 	  JOIN #DELETED ON #DELETED.Orderkey = ORDERDETAIL.Orderkey 
 	 	                   AND #DELETED.OrderLineNumber = ORDERDETAIL.OrderLineNumber

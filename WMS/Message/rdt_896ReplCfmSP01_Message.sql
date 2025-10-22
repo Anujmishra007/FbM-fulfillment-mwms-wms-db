@@ -9,7 +9,8 @@ execute rdt.rdtAddMsg 235154, 10, '235154^Upd UCC Fail',     'us_english', 896, 
 execute rdt.rdtAddMsg 235155, 10, '235155^Upd PKD Fail',     'us_english', 896, 0, '235155: Update PICKDETAIL Fail'
 execute rdt.rdtAddMsg 235156, 10, '235156^LooseIDLoc',       'us_english', 896, 0, '235156: ToLoc is the lose ID location'
 execute rdt.rdtAddMsg 235157, 10, '235157^Upd PKD Fail',     'us_english', 896, 0, '235156: Update PICKDETAIL Fail'
-
+--235158, dyanmic err message defined in SP. Do not use.
+execute rdt.rdtAddMsg 235159, 10, '235159^ToID Required',    'us_english', 896, 0, '235159: ToLoc is not lose id. ToID is required'
 
 SELECT * FROM RDT.RDTMSG (NOLOCK) WHERE MESSAGE_ID BETWEEN 235151 AND 235200	
 

@@ -1,6 +1,3 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE id = object_id(N'[dbo].[ntrPackHeaderAdd]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
-    DROP TRIGGER [dbo].[ntrPackHeaderAdd]
-GO
 
 SET ANSI_NULLS OFF
 GO
@@ -36,9 +33,10 @@ GO
 /* Updates:                                                             */  
 /* Date         Author    Ver.  Purposes                                */  
 /* 16-May-2017  NJOW01    1.00  Allow config to call custom sp          */
+/* 06-OCT-2025  AK01      1.1   UWP-42143 Data Audit                    */
 /************************************************************************/  
   
-CREATE TRIGGER [dbo].[ntrPackHeaderAdd]  
+CREATE OR ALTER TRIGGER [dbo].[ntrPackHeaderAdd]  
 ON  [dbo].[PackHeader]  
 FOR INSERT  
 AS  
@@ -178,6 +176,24 @@ BEGIN
   
    END  
   
+   --AK01 - S
+   IF dbo.fnc_GetUserName() <> sUser_sName() AND @n_Continue IN (1,2) 
+   BEGIN
+      UPDATE PackHeader
+        SET AddWho  = dbo.fnc_GetUserName(),
+            AddDate = dbo.fnc_GetDate()
+      FROM PackHeader
+      JOIN INSERTED ON PackHeader.PickSlipNo = INSERTED.PickSlipNo
+      SELECT @n_err = @@ERROR
+      IF @n_err <> 0
+      BEGIN
+         SELECT @n_continue = 3
+         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=82103  
+         SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed On Table PackHeader. (ntrPackHeaderAdd)' + ' ( ' + ' SQLSvr MESSAGE=' + TRIM(@c_errmsg) + ' ) '
+      END
+   END
+   --AK01 - E
+
 /* #INCLUDE <TRCCA2.SQL> */  
    IF @n_continue=3  -- Error Occured - Process And Return  
    BEGIN  

@@ -1,8 +1,7 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrInventoryHoldUpdate]') 
-              and OBJECTPROPERTY(id, N'IsTrigger') = 1) 
-drop trigger [dbo].[ntrInventoryHoldUpdate]
+SET ANSI_NULLS OFF
 GO
-
+SET QUOTED_IDENTIFIER OFF
+GO
 /************************************************************************/  
 /* Trigger:  ntrInventoryHoldUpdate                                     */  
 /* Creation Date: 2011-4-11                                             */  
@@ -34,8 +33,9 @@ GO
 /* 2011-06-06   KHLim     1.0   SET WhoOff = WhoOn                      */  
 /* 2011-06-24   KHLim01   1.0   add UPDATE(TrafficCop) to allow bypass  */  
 /* 2015-09-11   MCTang    1.1   ADD INVHCHGLOG (MC01)                   */ 
+/* 2025-08-08   Michael   1.2   FCR-6025-Add InventoryHold TLOG2 (ML01) */
 /************************************************************************/  
-CREATE TRIGGER [dbo].[ntrInventoryHoldUpdate]  
+CREATE OR ALTER TRIGGER [dbo].[ntrInventoryHoldUpdate]  
 ON  [dbo].[INVENTORYHOLD]  
 FOR UPDATE   
 AS   
@@ -63,8 +63,12 @@ DECLARE @b_Success     int       -- Populated by calls to stored procedures - wa
       , @c_TransmitLogKey     NVARCHAR(10) 
       , @c_StorerKey          NVARCHAR(15)
       , @c_Lot                NVARCHAR(10) 
+      , @c_Loc                NVARCHAR(10)   --ML01
       , @c_ID                 NVARCHAR(18)
-      , @c_DelStatus          NVARCHAR(5)
+      , @c_DelStatus          NVARCHAR(10)
+      , @c_InsStatus          NVARCHAR(10)    --ML01
+      , @c_Hold               NVARCHAR(1)    --ML01
+      , @c_authority          NVARCHAR(30)   --ML01
   
 SELECT @n_continue=1, @n_starttcnt=@@TRANCOUNT, @b_debug = 0  
   
@@ -98,6 +102,109 @@ BEGIN
                           + ' ( SQLSvr MESSAGE=' + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + ' ) '   
       END  
    END  
+
+   --ML01-S
+   IF @n_Continue IN (1,2)
+   BEGIN
+      DECLARE INVHOLD_CUR CURSOR LOCAL READ_ONLY FAST_FORWARD FOR  
+      SELECT InventoryHoldKey  
+      FROM   INSERTED  
+
+      OPEN INVHOLD_CUR  
+      FETCH NEXT FROM INVHOLD_CUR INTO @c_InventoryHoldKey
+      
+      WHILE @@FETCH_STATUS = 0 AND @n_continue IN (1,2)
+      BEGIN 
+         IF EXISTS (SELECT 1 FROM INSERTED, DELETED  
+                    WHERE INSERTED.InventoryHoldKey = DELETED.InventoryHoldKey  
+                    AND   INSERTED.Hold <> DELETED.Hold
+                    AND   INSERTED.InventoryHoldKey = @c_InventoryHoldKey)  
+         BEGIN
+            SELECT @c_StorerKey = '', @c_Lot = '', @c_Loc = '', @c_ID = '', @c_Hold = '', @c_InsStatus = ''
+
+            SELECT @c_StorerKey = ISNULL(INSERTED.Storerkey, '')
+                 , @c_Lot = ISNULL(INSERTED.LOT, '')
+                 , @c_Loc = ISNULL(INSERTED.LOC, '')
+                 , @c_ID = ISNULL(INSERTED.ID, '')
+                 , @c_Hold = ISNULL(INSERTED.Hold,'')
+                 , @c_InsStatus = ISNULL(INSERTED.Status,'')
+            FROM   INSERTED
+            WHERE  InventoryHoldKey = @c_InventoryHoldKey
+
+            IF ISNULL(@c_StorerKey,'') = '' AND @c_Lot <> ''
+            BEGIN
+               SELECT TOP 1 @c_StorerKey = ISNULL(Storerkey, '')
+               FROM LOT WITH(NOLOCK)
+               WHERE LOT = @c_Lot
+            END
+            IF ISNULL(@c_StorerKey,'') = '' AND @c_ID <> ''
+            BEGIN
+               SELECT TOP 1 @c_StorerKey = ISNULL(Storerkey, '')
+               FROM LOTXLOCXID WITH(NOLOCK)
+               WHERE ID = @c_ID
+            END
+            IF ISNULL(@c_StorerKey,'') = '' AND @c_Loc <> ''
+            BEGIN
+               SELECT TOP 1 @c_StorerKey = ISNULL(Storerkey, '')
+               FROM LOTXLOCXID WITH(NOLOCK)
+               WHERE LOC = @c_Loc
+            END
+
+            IF @c_StorerKey <> '' AND (dbo.fnc_RTrim(@c_Loc) <> '' OR dbo.fnc_RTrim(@c_Lot) <> '' OR  dbo.fnc_RTrim(@c_ID) <> '')
+            BEGIN
+               EXECUTE nspGetRight
+                    NULL          -- Facility
+                  , @c_StorerKey  -- Storer
+                  , NULL          -- Sku
+                  , 'INVENTORY HOLD - INTERFACE2'   -- ConfigKey
+                  , @b_success    OUTPUT
+                  , @c_authority  OUTPUT
+                  , @n_err        OUTPUT
+                  , @c_errmsg     OUTPUT
+               IF @b_success <> 1
+               BEGIN
+                  SELECT @n_continue = 3
+                  SELECT @n_err = 70002
+                  SELECT @c_errmsg = 'ntrInventoryHoldUpdate: ' + dbo.fnc_RTrim(@c_errmsg)
+               END
+               ELSE IF @c_authority = '1'
+               BEGIN
+                  EXECUTE nspg_getkey
+                       'TransmitlogKey2'
+                     , 10
+                     , @c_transmitlogkey OUTPUT
+                     , @b_success OUTPUT
+                     , @n_err OUTPUT
+                     , @c_errmsg OUTPUT
+                  IF NOT @b_success=1
+                  BEGIN
+                     SELECT @n_continue=3
+                     SELECT @n_err = 70003
+                     SELECT @c_errmsg = 'ntrInventoryHoldUpdate: ' + dbo.fnc_RTrim(@c_errmsg)
+                  END
+                  ELSE
+                  BEGIN
+                     INSERT TRANSMITLOG2 (Transmitlogkey, tablename, key1, key2, key3, transmitflag)
+                     VALUES (@c_transmitlogkey, 'InventoryHold', @c_InventoryHoldKey, @c_InsStatus, @c_StorerKey, '0')
+                     SELECT @n_err= @@Error
+                     IF NOT @n_err=0
+                     BEGIN
+                        SELECT @n_continue=3
+                        SELECT @n_err = 70004
+                        SELECT @c_errmsg = 'NSQL' + CONVERT(char(5),ISNULL(@n_err,0))
+                                         + ': Unable insert TRANSMITLOG2 Table. (ntrInventoryHoldUpdate)'
+                                         + ' ( SQLSvr MESSAGE=' + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + ' ) '
+                     END
+                  END
+               END
+            END --IF @c_StorerKey <> '' 
+         END
+         FETCH NEXT FROM INVHOLD_CUR INTO @c_InventoryHoldKey
+      END -- while orderkey  
+      CLOSE INVHOLD_CUR  
+      DEALLOCATE INVHOLD_CUR
+   END
+   --ML01-E
 END  
   
 --(MC01) - S
@@ -220,3 +327,4 @@ BEGIN
    END  
    RETURN  
 END  
+GO

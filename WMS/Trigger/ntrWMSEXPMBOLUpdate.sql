@@ -1,6 +1,4 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects where id = object_id(N'[dbo].[ntrWMSEXPMBOLUpdate]') and OBJECTPROPERTY(id, N'IsTrigger') = 1)
-	DROP TRIGGER [dbo].[ntrWMSEXPMBOLUpdate]
-GO
+
 
 SET QUOTED_IDENTIFIER OFF 
 GO
@@ -8,8 +6,9 @@ SET ANSI_NULLS OFF
 GO
 
 /* 28-Oct-2013  TLTING     Review Editdate column update                */
+/* 09-Oct-2025  AK01       UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName */
 
-CREATE TRIGGER ntrWMSEXPMBOLUpdate
+CREATE OR ALTER TRIGGER ntrWMSEXPMBOLUpdate
  ON  WMSEXPMBOL
  FOR UPDATE
  AS
@@ -42,7 +41,7 @@ CREATE TRIGGER ntrWMSEXPMBOLUpdate
        SELECT "Update EditDate and EditWho"
     END 
     UPDATE WMSEXPMBOL
-    SET EditDate = GETDATE()
+    SET EditDate = dbo.fnc_GetDate()
     FROM  WMSEXPMBOL, INSERTED
     WHERE WMSEXPMBOL.ExternOrderKey = INSERTED.ExternOrderKey
     AND   WMSEXPMBOL.ExternLineNo = INSERTED.ExternLineNo
@@ -88,4 +87,5 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF 
 GO
+
 

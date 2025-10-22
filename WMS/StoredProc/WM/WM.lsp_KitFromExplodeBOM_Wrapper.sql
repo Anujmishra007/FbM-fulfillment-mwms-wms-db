@@ -1,45 +1,42 @@
-IF EXISTS ( SELECT * FROM dbo.sysobjects WHERE  id = OBJECT_ID(N'[WM].[lsp_KitFromExplodeBOM_Wrapper]') 
-AND OBJECTPROPERTY(id ,N'IsProcedure') = 1 ) 
-DROP PROCEDURE [WM].[lsp_KitFromExplodeBOM_Wrapper]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
 GO
-/*************************************************************************/  
-/* Stored Procedure: WM.lsp_KitFromExplodeBOM_Wrapper                    */  
-/* Creation Date: 16-OCT-2018                                            */  
-/* Copyright: LFL                                                        */  
-/* Written by: Wan                                                       */  
-/*                                                                       */  
+
+/*************************************************************************/
+/* Stored Procedure: WM.lsp_KitFromExplodeBOM_Wrapper                    */
+/* Creation Date: 16-OCT-2018                                            */
+/* Copyright: LFL                                                        */
+/* Written by: Wan                                                       */
+/*                                                                       */
 /* Purpose: LFWM-1281 - Stored Procedures for Kitting functionalities    */
-/*        :                                                              */  
-/* Called By:                                                            */  
-/*                                                                       */  
-/*                                                                       */  
-/* Version: 1.1                                                          */  
-/*                                                                       */  
-/* Data Modifications:                                                   */  
-/*                                                                       */  
-/* Updates:                                                              */  
-/* Date        Author   Ver   Purposes                                   */ 
+/*        :                                                              */
+/* Called By:                                                            */
+/*                                                                       */
+/*                                                                       */
+/* Version: 1.1                                                          */
+/*                                                                       */
+/* Data Modifications:                                                   */
+/*                                                                       */
+/* Updates:                                                              */
+/* Date        Author   Ver   Purposes                                   */
 /* 2021-02-04  Wan01    1.1   LFWM-2483 - UAT - TW  Missing Explode BOM  */
 /*                            in From Detail List of Kitting module      */
 /*             Wan01    1.1   Add Big Outer Begin try/Catch              */
 /*                            Execute Login if @c_UserName<>SUSER_SNAME()*/
-/*************************************************************************/   
-CREATE PROCEDURE [WM].[lsp_KitFromExplodeBOM_Wrapper]  
+/* 2025-09-02  SWT01    1.2   Enhanced session management pattern       */
+/*************************************************************************/
+CREATE OR ALTER PROCEDURE [WM].[lsp_KitFromExplodeBOM_Wrapper]
    @c_KITKey               NVARCHAR(10)
-,  @b_Success              INT          = 1  OUTPUT   
+,  @b_Success              INT          = 1  OUTPUT
 ,  @n_Err                  INT          = 0  OUTPUT
 ,  @c_Errmsg               NVARCHAR(255)= '' OUTPUT
 ,  @n_WarningNo            INT          = 0  OUTPUT
-,  @c_ProceedWithWarning   CHAR(1)      = 'N' 
+,  @c_ProceedWithWarning   CHAR(1)      = 'N'
 ,  @c_UserName             NVARCHAR(128)= ''
 ,  @n_ErrGroupKey          INT          = 0  OUTPUT
-AS  
-BEGIN  
+AS
+BEGIN
    SET NOCOUNT ON
    SET QUOTED_IDENTIFIER OFF
    SET ANSI_NULLS OFF
@@ -47,30 +44,31 @@ BEGIN
 
    DECLARE @n_Continue           INT = 1
          , @n_StartTCnt          INT = @@TRANCOUNT
+         , @b_ExecuteAs          BIT = 0
 
    DECLARE @c_TableName          NVARCHAR(50)   = 'KITDETAIL'
          , @c_SourceType         NVARCHAR(50)   = 'lsp_KitFromExplodeBOM_Wrapper'
-         , @c_KitType            NVARCHAR(10)   = 'F' 
-         , @c_KitToType          NVARCHAR(10)   = 'T' 
-              
+         , @c_KitType            NVARCHAR(10)   = 'F'
+         , @c_KitToType          NVARCHAR(10)   = 'T'
+
          , @c_Storerkey          NVARCHAR(15)   = ''
          , @c_kitLineNumber      NVARCHAR(20)   = ''
          , @c_Sku                NVARCHAR(20)   = ''
-         , @c_Lottable01         NVARCHAR(18)   = ''         
-         , @c_Lottable02         NVARCHAR(18)   = ''         
-         , @c_Lottable03         NVARCHAR(18)   = ''         
-         , @dt_Lottable04        DATETIME                 
-         , @dt_Lottable05        DATETIME              
-         , @c_Lottable06         NVARCHAR(30)   = ''         
-         , @c_Lottable07         NVARCHAR(30)   = ''         
-         , @c_Lottable08         NVARCHAR(30)   = ''         
-         , @c_Lottable09         NVARCHAR(30)   = ''         
-         , @c_Lottable10         NVARCHAR(30)   = ''         
-         , @c_Lottable11         NVARCHAR(30)   = ''         
-         , @c_Lottable12         NVARCHAR(30)   = ''         
-         , @dt_Lottable13        DATETIME                
-         , @dt_Lottable14        DATETIME         
-         , @dt_Lottable15        DATETIME         
+         , @c_Lottable01         NVARCHAR(18)   = ''
+         , @c_Lottable02         NVARCHAR(18)   = ''
+         , @c_Lottable03         NVARCHAR(18)   = ''
+         , @dt_Lottable04        DATETIME
+         , @dt_Lottable05        DATETIME
+         , @c_Lottable06         NVARCHAR(30)   = ''
+         , @c_Lottable07         NVARCHAR(30)   = ''
+         , @c_Lottable08         NVARCHAR(30)   = ''
+         , @c_Lottable09         NVARCHAR(30)   = ''
+         , @c_Lottable10         NVARCHAR(30)   = ''
+         , @c_Lottable11         NVARCHAR(30)   = ''
+         , @c_Lottable12         NVARCHAR(30)   = ''
+         , @dt_Lottable13        DATETIME
+         , @dt_Lottable14        DATETIME
+         , @dt_Lottable15        DATETIME
          , @n_ExpectedQty        INT            = 0
 
          , @c_Packkey            NVARCHAR(10)   = ''
@@ -95,25 +93,29 @@ BEGIN
    SET @c_ErrMsg = ''
 
    SET @n_ErrGroupKey = 0
-   SET @n_Err = 0 
-   
-   --(Wan01) - START   
+   SET @n_Err = 0
+
+   -- Enhanced session management (SWT01)
+   --(Wan01) - START
    IF SUSER_SNAME() <> @c_UserName
    BEGIN
-      EXEC [WM].[lsp_SetUser] 
+      EXEC [WM].[lsp_SetUser]
                @c_UserName = @c_UserName  OUTPUT
             ,  @n_Err      = @n_Err       OUTPUT
             ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
-         
-      IF @n_Err <> 0 
+            ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
+
+      IF @n_Err <> 0
       BEGIN
          GOTO EXIT_SP
       END
-      
-      EXECUTE AS LOGIN = @c_UserName
+
+      IF @b_ExecuteAs = 1
+         EXECUTE AS LOGIN = @c_UserName
    END
-   --(Wan01) - END  
-   
+   --(Wan01) - END
+   -- End enhanced session management (SWT01)
+
    --(Wan01) - START
    BEGIN TRY
       IF @c_ProceedWithWarning = 'N' AND @n_WarningNo  < 1
@@ -135,12 +137,12 @@ BEGIN
 
          IF @n_Count > 1
          BEGIN
-            SET @n_continue = 3   
+            SET @n_continue = 3
             SET @n_err = 554601
-            SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_err) 
+            SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_err)
                           + ': Only One to Many Explode is Allowed!. (lsp_KitFromExplodeBOM_Wrapper)'
 
-            EXEC [WM].[lsp_WriteError_List] 
+            EXEC [WM].[lsp_WriteError_List]
                   @i_iErrGroupKey= @n_ErrGroupKey OUTPUT
                ,  @c_TableName   = @c_TableName
                ,  @c_SourceType  = @c_SourceType
@@ -154,16 +156,16 @@ BEGIN
                ,  @c_errmsg      = @c_errmsg    OUTPUT
          END
 
-         IF @n_Count = 1 
+         IF @n_Count = 1
          BEGIN
             IF @c_Sku = ''
             BEGIN
-               SET @n_continue = 3   
+               SET @n_continue = 3
                SET @n_err = 554602
-               SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_err) 
+               SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_err)
                              + ': Sku is required. (lsp_KitFromExplodeBOM_Wrapper)'
 
-               EXEC [WM].[lsp_WriteError_List] 
+               EXEC [WM].[lsp_WriteError_List]
                      @i_iErrGroupKey= @n_ErrGroupKey OUTPUT
                   ,  @c_TableName   = @c_TableName
                   ,  @c_SourceType  = @c_SourceType
@@ -176,7 +178,7 @@ BEGIN
                   ,  @n_err         = @n_err       OUTPUT
                   ,  @c_errmsg      = @c_errmsg    OUTPUT
             END
-            ELSE 
+            ELSE
             BEGIN
                SET @n_Count = 0
                SET @n_EmptyComponentSku = 0
@@ -185,16 +187,16 @@ BEGIN
                FROM BILLOFMATERIAL BOM WITH (NOLOCK)
                WHERE BOM.Storerkey = @c_Storerkey
                AND   BOM.Sku = @c_Sku
-      
+
 
                IF @n_Count = 0
                BEGIN
-                  SET @n_continue = 3   
+                  SET @n_continue = 3
                   SET @n_err = 554603
-                  SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_err) 
+                  SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_err)
                                 + ': Sku Not Found in BOM. Enter Detail lines Manually. (lsp_KitFromExplodeBOM_Wrapper)'
 
-                  EXEC [WM].[lsp_WriteError_List] 
+                  EXEC [WM].[lsp_WriteError_List]
                         @i_iErrGroupKey= @n_ErrGroupKey OUTPUT
                      ,  @c_TableName   = @c_TableName
                      ,  @c_SourceType  = @c_SourceType
@@ -211,12 +213,12 @@ BEGIN
                BEGIN
                   IF @n_EmptyComponentSku > 0
                   BEGIN
-                     SET @n_continue = 3   
+                     SET @n_continue = 3
                      SET @n_err = 554604
-                     SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_err) 
+                     SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_err)
                                    + ': Component Sku is Blank. Please check the setup in BOM. (lsp_KitFromExplodeBOM_Wrapper)'
 
-                     EXEC [WM].[lsp_WriteError_List] 
+                     EXEC [WM].[lsp_WriteError_List]
                            @i_iErrGroupKey= @n_ErrGroupKey OUTPUT
                         ,  @c_TableName   = @c_TableName
                         ,  @c_SourceType  = @c_SourceType
@@ -234,12 +236,12 @@ BEGIN
 
             IF @n_ExpectedQty <= 0
             BEGIN
-               SET @n_continue = 3   
+               SET @n_continue = 3
                SET @n_err = 554605
-               SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_err) 
+               SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_err)
                              + ': Invalid Kit From Expected Qty. (lsp_KitFromExplodeBOM_Wrapper)'
 
-               EXEC [WM].[lsp_WriteError_List] 
+               EXEC [WM].[lsp_WriteError_List]
                      @i_iErrGroupKey= @n_ErrGroupKey OUTPUT
                   ,  @c_TableName   = @c_TableName
                   ,  @c_SourceType  = @c_SourceType
@@ -255,7 +257,7 @@ BEGIN
             END
          END
 
-         IF @n_continue = 3   
+         IF @n_continue = 3
          BEGIN
             GOTO EXIT_SP
          END
@@ -301,10 +303,10 @@ BEGIN
       ORDER BY KD.KITLineNumber
 
       OPEN @CUR_KITTO
-   
-      FETCH NEXT FROM @CUR_KITTO INTO  @c_KITLineNumber   
-                                    ,  @c_Sku 
-                                    
+
+      FETCH NEXT FROM @CUR_KITTO INTO  @c_KITLineNumber
+                                    ,  @c_Sku
+
       WHILE @@FETCH_STATUS <> -1
       BEGIN
 
@@ -318,15 +320,15 @@ BEGIN
          BEGIN CATCH
             SET @n_continue = 3
             SET @n_err = 554606
-            SET @c_ErrMsg = ERROR_MESSAGE() 
-            SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_err) 
+            SET @c_ErrMsg = ERROR_MESSAGE()
+            SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_err)
                            + ': Delete KITDETAIL Table Fail. (lsp_KitFromExplodeBOM_Wrapper)'
                            + ' (' + @c_ErrMsg + ')'
             GOTO EXIT_SP
          END CATCH
 
-         FETCH NEXT FROM @CUR_KITTO INTO  @c_KITLineNumber   
-                                       ,  @c_Sku 
+         FETCH NEXT FROM @CUR_KITTO INTO  @c_KITLineNumber
+                                       ,  @c_Sku
       END
       CLOSE @CUR_KITTO
       DEALLOCATE @CUR_KITTO
@@ -361,26 +363,26 @@ BEGIN
 
       OPEN @CUR_BOM
       FETCH NEXT FROM @CUR_BOM INTO @c_Storerkey
-                                 ,  @c_ComponentSku 
+                                 ,  @c_ComponentSku
                                  ,  @n_ComponentQty
                                  ,  @n_ParentQty
                                  ,  @n_ExpectedQty
-                                 ,  @c_Lottable01     
-                                 ,  @c_Lottable02     
-                                 ,  @c_Lottable03     
-                                 ,  @dt_Lottable04     
-                                 ,  @dt_Lottable05     
-                                 ,  @c_Lottable06     
-                                 ,  @c_Lottable07     
-                                 ,  @c_Lottable08     
-                                 ,  @c_Lottable09     
-                                 ,  @c_Lottable10     
-                                 ,  @c_Lottable11     
-                                 ,  @c_Lottable12     
-                                 ,  @dt_Lottable13     
-                                 ,  @dt_Lottable14     
-                                 ,  @dt_Lottable15     
-   
+                                 ,  @c_Lottable01
+                                 ,  @c_Lottable02
+                                 ,  @c_Lottable03
+                                 ,  @dt_Lottable04
+                                 ,  @dt_Lottable05
+                                 ,  @c_Lottable06
+                                 ,  @c_Lottable07
+                                 ,  @c_Lottable08
+                                 ,  @c_Lottable09
+                                 ,  @c_Lottable10
+                                 ,  @c_Lottable11
+                                 ,  @c_Lottable12
+                                 ,  @dt_Lottable13
+                                 ,  @dt_Lottable14
+                                 ,  @dt_Lottable15
+
 
       WHILE @@FETCH_STATUS <> -1
       BEGIN
@@ -397,33 +399,33 @@ BEGIN
          FROM SKU S WITH (NOLOCK)
          JOIN PACK P WITH (NOLOCK) ON (S.Packkey = P.Packkey)
          WHERE S.Storerkey = @c_Storerkey
-         AND S.Sku = @c_ComponentSku 
+         AND S.Sku = @c_ComponentSku
 
          BEGIN TRY
             INSERT INTO KITDETAIL
                (  KitKey
                ,  KitLineNumber
-               ,  [Type] 
+               ,  [Type]
                ,  Storerkey
                ,  Sku
                ,  Packkey
                ,  UOM
                ,  ExpectedQty
-               ,  Lottable01     
-               ,  Lottable02     
-               ,  Lottable03     
-               ,  Lottable04     
-               ,  Lottable05     
-               ,  Lottable06     
-               ,  Lottable07     
-               ,  Lottable08     
-               ,  Lottable09     
-               ,  Lottable10     
-               ,  Lottable11     
-               ,  Lottable12     
-               ,  Lottable13     
-               ,  Lottable14     
-               ,  Lottable15  
+               ,  Lottable01
+               ,  Lottable02
+               ,  Lottable03
+               ,  Lottable04
+               ,  Lottable05
+               ,  Lottable06
+               ,  Lottable07
+               ,  Lottable08
+               ,  Lottable09
+               ,  Lottable10
+               ,  Lottable11
+               ,  Lottable12
+               ,  Lottable13
+               ,  Lottable14
+               ,  Lottable15
                )
             VALUES
                (  @c_KitKey
@@ -434,57 +436,57 @@ BEGIN
                ,  @c_Packkey
                ,  @c_UOM
                ,  @n_KitToQty
-               ,  @c_Lottable01     
-               ,  @c_Lottable02     
-               ,  @c_Lottable03     
-               ,  @dt_Lottable04     
-               ,  @dt_Lottable05     
-               ,  @c_Lottable06     
-               ,  @c_Lottable07     
-               ,  @c_Lottable08     
-               ,  @c_Lottable09     
-               ,  @c_Lottable10     
-               ,  @c_Lottable11     
-               ,  @c_Lottable12     
-               ,  @dt_Lottable13     
-               ,  @dt_Lottable14     
-               ,  @dt_Lottable15 
-               ) 
+               ,  @c_Lottable01
+               ,  @c_Lottable02
+               ,  @c_Lottable03
+               ,  @dt_Lottable04
+               ,  @dt_Lottable05
+               ,  @c_Lottable06
+               ,  @c_Lottable07
+               ,  @c_Lottable08
+               ,  @c_Lottable09
+               ,  @c_Lottable10
+               ,  @c_Lottable11
+               ,  @c_Lottable12
+               ,  @dt_Lottable13
+               ,  @dt_Lottable14
+               ,  @dt_Lottable15
+               )
          END TRY
 
          BEGIN CATCH
             SET @n_continue = 3
             SET @n_err = 554607
-            SET @c_ErrMsg = ERROR_MESSAGE()    
-            SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_err) 
+            SET @c_ErrMsg = ERROR_MESSAGE()
+            SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(6), @n_err)
                            + ': Insert KITDETAIL Fail. (lsp_KitFromExplodeBOM_Wrapper)'
                            + ' (' + @c_ErrMsg + ')'
             GOTO EXIT_SP
          END CATCH
 
          FETCH NEXT FROM @CUR_BOM INTO @c_Storerkey
-                                    ,  @c_ComponentSku 
+                                    ,  @c_ComponentSku
                                     ,  @n_ComponentQty
                                     ,  @n_ParentQty
                                     ,  @n_ExpectedQty
-                                    ,  @c_Lottable01     
-                                    ,  @c_Lottable02     
-                                    ,  @c_Lottable03     
-                                    ,  @dt_Lottable04     
-                                    ,  @dt_Lottable05     
-                                    ,  @c_Lottable06     
-                                    ,  @c_Lottable07     
-                                    ,  @c_Lottable08     
-                                    ,  @c_Lottable09     
-                                    ,  @c_Lottable10     
-                                    ,  @c_Lottable11     
-                                    ,  @c_Lottable12     
-                                    ,  @dt_Lottable13     
-                                    ,  @dt_Lottable14     
-                                    ,  @dt_Lottable15        
+                                    ,  @c_Lottable01
+                                    ,  @c_Lottable02
+                                    ,  @c_Lottable03
+                                    ,  @dt_Lottable04
+                                    ,  @dt_Lottable05
+                                    ,  @c_Lottable06
+                                    ,  @c_Lottable07
+                                    ,  @c_Lottable08
+                                    ,  @c_Lottable09
+                                    ,  @c_Lottable10
+                                    ,  @c_Lottable11
+                                    ,  @c_Lottable12
+                                    ,  @dt_Lottable13
+                                    ,  @dt_Lottable14
+                                    ,  @dt_Lottable15
       END
       CLOSE @CUR_BOM
-      DEALLOCATE @CUR_BOM 
+      DEALLOCATE @CUR_BOM
 
       -------------------
       -- Explode End
@@ -496,9 +498,9 @@ BEGIN
       GOTO EXIT_SP
    END CATCH
    --(Wan01) - END
-   
+
    EXIT_SP:
-   
+
    IF @n_Continue=3  -- Error Occured - Process And Return
    BEGIN
       SET @b_Success = 0
@@ -531,9 +533,9 @@ BEGIN
       BEGIN TRAN
    END
 
-   REVERT      
-END  
+   IF @b_ExecuteAs = 1 REVERT -- (SWT01)
+   EXEC [WM].[lsp_ResetUser] -- (SWT01)
+END
 GO
-GRANT EXECUTE ON [WM].[lsp_KitFromExplodeBOM_Wrapper] TO nSQL 
+GRANT EXECUTE ON  [WM].[lsp_KitFromExplodeBOM_Wrapper] TO [NSQL]
 GO
-

@@ -1,6 +1,4 @@
-IF EXISTS (SELECT * FROM dbo.sysobjects WHERE Id = OBJECT_ID(N'[dbo].[nspInventoryHoldWrapper]') AND OBJECTPROPERTY(Id, N'IsProcedure') = 1)
-   DROP PROCEDURE dbo.nspInventoryHoldWrapper
-GO
+
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -33,7 +31,7 @@ GO
 /* 13-Aug-2014  TKLIM     1.7   Added Lottables 06-15                   */
 /* 07-Nov-2014  TKLIM     1.7   Validation for Hold by Lottable (TK01)  */
 /* 27-Oct-2015  Leong     1.8   SOS# 355593 - Bug Fix.                  */
-/* 20-Apr-2018  SHONG     1.9   Channel Management (SWT01)              */ 
+/* 20-Apr-2018  SHONG     1.9   Channel Management (SWT01)              */
 /*----------------------------------------------------------------------*/
 /* 27-Feb-2019  YokeBeen  1.4   WMS7973 - Revised Trigger Point values. */
 /*                              Differentiate new records - (YokeBeen01)*/
@@ -44,8 +42,11 @@ GO
 /* 01-DEC-2021  Wan02     1.7   DevOps Combine Script                   */
 /* 21-JUL-2022  NJOW03    1.8   WMS-20297 allow inventory hold in channel*/
 /*                              management by config.                   */
+/* 29-AUG-2025  MICHAEL   1.9   UWP-39358-Handle multi InvHold rec(ML01)*/
+/*                         with new StorerCfg AllowMultiInventoryHoldRec*/
+/* 24-SEP-2025  MICHAEL   1.10  FCR-7829 Inventory UCC-level HOLD (ML02)*/
 /************************************************************************/
-CREATE PROC [dbo].[nspInventoryHoldWrapper]
+CREATE OR ALTER PROC [dbo].[nspInventoryHoldWrapper]
      @c_lot          NVARCHAR(10)
    , @c_Loc          NVARCHAR(10)
    , @c_ID           NVARCHAR(18)
@@ -72,6 +73,7 @@ CREATE PROC [dbo].[nspInventoryHoldWrapper]
    , @n_Err          INT            OUTPUT
    , @c_Errmsg       NVARCHAR(250)  OUTPUT
    , @c_Remark       NVARCHAR(260)  = '' -- SOS89194
+   , @c_UCCNo        NVARCHAR(20)   = '' --ML02
 AS
 BEGIN
    SET NOCOUNT ON
@@ -84,6 +86,7 @@ BEGIN
           ,@d_CurrentDatetime         DATETIME       -- SOS89194
           ,@c_CurrentUser             NVARCHAR(18)   -- SOS89194
 
+
    --NJOW01
    DECLARE @c_CurrHold                NVARCHAR(1)
           ,@n_HoldCnt                 INT
@@ -92,14 +95,16 @@ BEGIN
           ,@c_Key2                    NVARCHAR(5)     --(MC01)
           ,@c_TransmitLogKey          NVARCHAR(10)    --(MC01)
           ,@c_Exec_Cur                NVARCHAR(4000)  --(MC01)
-          ,@c_ChannelInventoryMgmt    NVARCHAR(10) = '0' -- (SWT01)            
-   
-   --NJOW03       
-   DECLARE @c_Option1                 NVARCHAR(50)    
-          ,@c_Option2                 NVARCHAR(50)  
-          ,@c_Option3                 NVARCHAR(50)  
-          ,@c_Option4                 NVARCHAR(50)  
-          ,@c_Option5                 NVARCHAR(4000)      
+          ,@c_ChannelInventoryMgmt    NVARCHAR(10) = '0' -- (SWT01)
+          ,@n_InvHld_Cnt              INT   --ML01
+          ,@c_AllowMultiInvHoldRec    NVARCHAR(30) --ML01
+
+   --NJOW03
+   DECLARE @c_Option1                 NVARCHAR(50)
+          ,@c_Option2                 NVARCHAR(50)
+          ,@c_Option3                 NVARCHAR(50)
+          ,@c_Option4                 NVARCHAR(50)
+          ,@c_Option5                 NVARCHAR(4000)
 
    DECLARE @c_InventoryHoldKey        NVARCHAR(10)
 
@@ -168,13 +173,13 @@ BEGIN
          )
    BEGIN
       SELECT @b_HoldByBatch = 1 -- , @c_exec_whereclause = RTrim(@c_exec_whereclause)
-      
+
       -- SWT01
       SET @c_ChannelInventoryMgmt = '0'
       IF @n_continue = 1 or @n_continue = 2
       BEGIN
          SELECT @b_success = 0
-         EXECUTE nspGetRight2 --(Wan01) 
+         EXECUTE nspGetRight2 --(Wan01)
           @c_Facility  = '',
           @c_StorerKey = @c_StorerKey,        -- Storer
           @c_sku       = '',                  -- Sku
@@ -182,7 +187,7 @@ BEGIN
           @b_Success   = @b_success    OUTPUT,
           @c_authority = @c_ChannelInventoryMgmt  OUTPUT,
           @n_err       = @n_Err        OUTPUT,
-          @c_errmsg    = @c_ErrMsg     OUTPUT,                            
+          @c_errmsg    = @c_ErrMsg     OUTPUT,
           @c_Option1   = @c_Option1    OUTPUT,  --NJOW03
           @c_Option2   = @c_Option2    OUTPUT,
           @c_Option3   = @c_Option3    OUTPUT,
@@ -193,7 +198,7 @@ BEGIN
          BEGIN
             SELECT @n_continue = 3, @c_ErrMsg = 'nspInventoryHoldWrapper:' + ISNULL(RTRIM(@c_ErrMsg),'')
          END
-      END               
+      END
       IF @c_ChannelInventoryMgmt = '1'
          AND dbo.fnc_GetParamValueFromString('@c_AllowInvHoldInChannelMgmt', @c_Option5, 'N') <> 'Y'  --NJOW03
       BEGIN
@@ -201,9 +206,9 @@ BEGIN
          SELECT @b_Success = 0
          SELECT @n_Err = 60010
          SELECT @c_Errmsg = 'Inventory Hold Not allow for Channel Management Customer. [nspInventoryHoldWrapper]'
-         GOTO EXIT_SP 
+         GOTO EXIT_SP
       END
-            
+
       CREATE TABLE #LotByBatch
       (
          LOT               NVARCHAR(10)
@@ -472,7 +477,7 @@ BEGIN
                          AND   ConfigKey = 'INVHSTSLOG'
                          AND   sValue    = '1')
                BEGIN
-                  -- (YokeBeen01) - Start 
+                  -- (YokeBeen01) - Start
                   IF @c_hold = '1'
                   BEGIN
                      SELECT @c_Key2 = 'U2H-A'
@@ -481,7 +486,7 @@ BEGIN
                   BEGIN
                      SELECT @c_Key2 = 'H2U-A'
                   END
-                  -- (YokeBeen01) - End 
+                  -- (YokeBeen01) - End
 
                   SELECT @c_TransmitLogKey = ''
                   SELECT @b_success = 1
@@ -974,31 +979,31 @@ BEGIN
       BEGIN
          IF ISNULL(RTRIM(@c_lot) ,'') <> ''
          BEGIN
-            SELECT @c_StorerKey = StorerKey  
+            SELECT @c_StorerKey = StorerKey
             FROM   LOT WITH (NOLOCK)
             WHERE  LOT = @c_lot
-         END  
+         END
          ELSE IF ISNULL(RTRIM(@c_loc) ,'') <> ''
          BEGIN
-            SELECT TOP 1 @c_StorerKey = StorerKey  
+            SELECT TOP 1 @c_StorerKey = StorerKey
             FROM SKUxLOC WITH (NOLOCK)
-            WHERE LOC = @c_LOC 
-            AND   Qty > 0 
+            WHERE LOC = @c_LOC
+            AND   Qty > 0
          END
          ELSE IF ISNULL(RTRIM(@c_id ) ,'') <> ''
          BEGIN
-            SELECT TOP 1 @c_StorerKey = StorerKey  
+            SELECT TOP 1 @c_StorerKey = StorerKey
             FROM  LOTxLOCxID WITH (NOLOCK)
-            WHERE ID = @c_ID 
-            AND Qty > 0  
+            WHERE ID = @c_ID
+            AND Qty > 0
          END
-         
+
          -- SWT01
          SET @c_ChannelInventoryMgmt = '0'
          IF @n_continue = 1 or @n_continue = 2
          BEGIN
             SELECT @b_success = 0
-            EXECUTE nspGetRight2 --(Wan01) 
+            EXECUTE nspGetRight2 --(Wan01)
              @c_Facility  = '',
              @c_StorerKey = @c_StorerKey,        -- Storer
              @c_sku       = '',                  -- Sku
@@ -1006,7 +1011,7 @@ BEGIN
              @b_Success   = @b_success    OUTPUT,
              @c_authority = @c_ChannelInventoryMgmt  OUTPUT,
              @n_err       = @n_Err        OUTPUT,
-             @c_errmsg    = @c_ErrMsg     OUTPUT,                            
+             @c_errmsg    = @c_ErrMsg     OUTPUT,
              @c_Option1   = @c_Option1    OUTPUT,  --NJOW03
              @c_Option2   = @c_Option2    OUTPUT,
              @c_Option3   = @c_Option3    OUTPUT,
@@ -1017,83 +1022,152 @@ BEGIN
             BEGIN
                Select @n_continue = 3, @c_ErrMsg = 'nspInventoryHoldWrapper:' + ISNULL(RTRIM(@c_ErrMsg),'')
             END
-         END               
+         END
          IF @c_ChannelInventoryMgmt = '1'
-            AND dbo.fnc_GetParamValueFromString('@c_AllowInvHoldInChannelMgmt', @c_Option5, 'N') <> 'Y'  --NJOW03         
+            AND dbo.fnc_GetParamValueFromString('@c_AllowInvHoldInChannelMgmt', @c_Option5, 'N') <> 'Y'  --NJOW03
          BEGIN
             SELECT @n_continue = 3
             SELECT @b_Success = 0
             SELECT @n_Err = 60022
             SELECT @c_Errmsg = 'Inventory Hold Not allow for Channel Management Customer. [nspInventoryHoldWrapper]'
-            GOTO EXIT_SP 
+            GOTO EXIT_SP
          END
-                        
+
          --NJOW01-Start
          SELECT @c_CurrHold = ''
 
-         SELECT @n_HoldCnt = COUNT(*)
-         FROM   INVENTORYHOLD(NOLOCK)
-         WHERE  lot  = ISNULL(@c_lot ,'')
-         AND    loc  = ISNULL(@c_loc ,'')
-         AND    id   = ISNULL(@c_id ,'')
-         AND    hold = '1'
+         --ML01-S
+         SELECT @c_AllowMultiInvHoldRec = dbo.fnc_GetRight('', @c_Storerkey, '', 'AllowMultiInventoryHoldRec')
 
-         SELECT @n_ReleaseCnt = COUNT(*)
-         FROM   INVENTORYHOLD(NOLOCK)
-         WHERE  lot  = ISNULL(@c_lot ,'')
-         AND    loc  = ISNULL(@c_loc ,'')
-         AND    id   = ISNULL(@c_id ,'')
-         AND    hold = '0'
+         SELECT @n_InvHld_Cnt = COUNT(1)
+           FROM InventoryHold
+          WHERE lot = ISNULL(@c_lot ,'')
+            AND loc = ISNULL(@c_loc ,'')
+            AND id  = ISNULL(@c_id ,'')
+            AND Storerkey = ISNULL(@c_Storerkey,'')   --ML02
+            AND UCCNo = ISNULL(@c_UCCNo,'')           --ML02
 
-         IF @n_HoldCnt=1 AND @c_Hold='1'
+         IF @c_AllowMultiInvHoldRec = '1' AND @n_InvHld_Cnt>1
          BEGIN
-            UPDATE INVENTORYHOLD WITH (ROWLOCK)
-            SET    STATUS = @c_status
+            IF ISNULL(@c_lot ,'')<>''
+            BEGIN
+               SELECT @c_CurrHold = CASE WHEN Status = 'HOLD' THEN '1' ELSE '0' END
+                 FROM LOT (NOLOCK)
+                WHERE Lot = @c_Lot
+            END
+            ELSE IF ISNULL(@c_loc ,'')<>''
+            BEGIN
+               SELECT @c_CurrHold = CASE WHEN Status = 'HOLD' THEN '1' ELSE '0' END
+                 FROM LOC (NOLOCK)
+                WHERE Loc = @c_Loc
+            END
+            ELSE IF ISNULL(@c_id ,'')<>''
+            BEGIN
+               SELECT @c_CurrHold = CASE WHEN Status = 'HOLD' THEN '1' ELSE '0' END
+                 FROM ID (NOLOCK)
+                WHERE ID = @c_id
+            END
+            --ML02-S
+            ELSE IF ISNULL(@c_Storerkey,'')<>'' AND ISNULL(@c_UCCNo,'')<>''
+            BEGIN
+               SELECT @c_CurrHold = CASE WHEN Status = 'H' THEN '1' ELSE '0' END
+                 FROM UCC (NOLOCK)
+                WHERE Storerkey = @c_Storerkey
+                  AND UCCNo = @c_UCCNo
+            END
+            --ML02-E
+            IF @c_CurrHold <> @c_Hold
+            BEGIN
+               UPDATE INVENTORYHOLD WITH (ROWLOCK)
+               SET    STATUS = @c_status
+               WHERE  lot  = ISNULL(@c_lot ,'')
+               AND    loc  = ISNULL(@c_loc ,'')
+               AND    id   = ISNULL(@c_id ,'')
+               AND    Storerkey = ISNULL(@c_Storerkey,'')   --ML02
+               AND    UCCNo = ISNULL(@c_UCCNo,'')           --ML02
+            END
+         END
+         ELSE
+         BEGIN
+         --ML01-E
+
+            SELECT @n_HoldCnt = COUNT(*)
+            FROM   INVENTORYHOLD(NOLOCK)
             WHERE  lot  = ISNULL(@c_lot ,'')
             AND    loc  = ISNULL(@c_loc ,'')
             AND    id   = ISNULL(@c_id ,'')
+            AND    Storerkey = ISNULL(@c_Storerkey,'')   --ML02
+            AND    UCCNo = ISNULL(@c_UCCNo,'')           --ML02
             AND    hold = '1'
 
-            SELECT @c_CurrHold = '1'
-         END
-
-         IF @n_HoldCnt=0
-            AND @n_ReleaseCnt=1
-            AND @c_Hold='1'
-         BEGIN
-            UPDATE INVENTORYHOLD WITH (ROWLOCK)
-            SET    STATUS = @c_status
+            SELECT @n_ReleaseCnt = COUNT(*)
+            FROM   INVENTORYHOLD(NOLOCK)
             WHERE  lot  = ISNULL(@c_lot ,'')
             AND    loc  = ISNULL(@c_loc ,'')
             AND    id   = ISNULL(@c_id ,'')
+            AND    Storerkey = ISNULL(@c_Storerkey,'')   --ML02
+            AND    UCCNo = ISNULL(@c_UCCNo,'')           --ML02
             AND    hold = '0'
 
-            SELECT @c_CurrHold = '0'
-         END
+            IF @n_HoldCnt=1 AND @c_Hold='1'
+            BEGIN
+               UPDATE INVENTORYHOLD WITH (ROWLOCK)
+               SET    STATUS = @c_status
+               WHERE  lot  = ISNULL(@c_lot ,'')
+               AND    loc  = ISNULL(@c_loc ,'')
+               AND    id   = ISNULL(@c_id ,'')
+               AND    Storerkey = ISNULL(@c_Storerkey,'')   --ML02
+               AND    UCCNo = ISNULL(@c_UCCNo,'')           --ML02
+               AND    hold = '1'
 
-         IF @n_HoldCnt=1
-            AND @c_Hold='0'
-         BEGIN
-            UPDATE INVENTORYHOLD WITH (ROWLOCK)
-            SET    STATUS = @c_status
-            WHERE  lot  = ISNULL(@c_lot ,'')
-            AND    loc  = ISNULL(@c_loc ,'')
-            AND    id   = ISNULL(@c_id ,'')
-            AND    hold = '1'
+               SELECT @c_CurrHold = '1'
+            END
 
-            SELECT @c_CurrHold = '1'
-         END
-         --NJOW01-End
+            IF @n_HoldCnt=0
+               AND @n_ReleaseCnt=1
+               AND @c_Hold='1'
+            BEGIN
+               UPDATE INVENTORYHOLD WITH (ROWLOCK)
+               SET    STATUS = @c_status
+               WHERE  lot  = ISNULL(@c_lot ,'')
+               AND    loc  = ISNULL(@c_loc ,'')
+               AND    id   = ISNULL(@c_id ,'')
+               AND    Storerkey = ISNULL(@c_Storerkey,'')   --ML02
+               AND    UCCNo = ISNULL(@c_UCCNo,'')           --ML02
+               AND    hold = '0'
 
-         --NJOW02-start
-         IF @n_ReleaseCnt=1 AND @c_Hold='0'
-            SELECT @c_CurrHold = '0'
+               SELECT @c_CurrHold = '0'
+            END
+
+            IF @n_HoldCnt=1
+               AND @c_Hold='0'
+            BEGIN
+               UPDATE INVENTORYHOLD WITH (ROWLOCK)
+               SET    STATUS = @c_status
+               WHERE  lot  = ISNULL(@c_lot ,'')
+               AND    loc  = ISNULL(@c_loc ,'')
+               AND    id   = ISNULL(@c_id ,'')
+               AND    Storerkey = ISNULL(@c_Storerkey,'')   --ML02
+               AND    UCCNo = ISNULL(@c_UCCNo,'')           --ML02
+               AND    hold = '1'
+
+               SELECT @c_CurrHold = '1'
+            END
+            --NJOW01-End
+
+            --NJOW02-start
+            IF @n_ReleaseCnt=1 AND @c_Hold='0'
+               SELECT @c_CurrHold = '0'
+
+         END   --ML01
 
          UPDATE INVENTORYHOLD WITH (ROWLOCK)
          SET    REMARK = @c_remark
          WHERE  lot = ISNULL(@c_lot ,'')
          AND    loc = ISNULL(@c_loc ,'')
          AND    id  = ISNULL(@c_id ,'')
+         AND    Storerkey = ISNULL(@c_Storerkey,'')   --ML02
+         AND    UCCNo = ISNULL(@c_UCCNo,'')           --ML02
          --NJOW02-end
 
          IF (@c_CurrHold <> @c_Hold) --NJOW01
@@ -1108,6 +1182,8 @@ BEGIN
                    , @n_Err OUTPUT
                    , @c_Errmsg OUTPUT
                    , @c_Remark -- SOS89194
+                   , @c_Storerkey   --ML02
+                   , @c_UCCNo       --ML02
 
             IF @b_Success=0
             BEGIN

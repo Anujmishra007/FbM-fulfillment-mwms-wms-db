@@ -105,7 +105,7 @@ EXECUTE rdt.rdtAddScn 5376, 'ENG',
    ,@cLine03 = 'FROM ID:'
    ,@cLine04 = '%18D02'
    ,@cLine05 = 'UCC:'
-   ,@cLine06 = '%20i03'
+   ,@cLine06 = '%60i03' -- FCR-7454
    ,@cLine14 = '%e'
    ,@cWebGroup = '{"1":["1","2"],"2":["3","4"],"3":["5","6"]}'
    ,@nFunc = 896

@@ -124,6 +124,11 @@ GO
 /* 2024-09-06 7.7  James    Add Pickslip output during decode (james54)      */
 /* 2024-09-03 7.8  James    WMS-26174 Add Tote/DropID format check (james55) */
 /* 2024-11-08 7.9  PXL009   FCR-1118 Merged 7.8 from v0 branch               */
+/* 2025-02-24 8.0  NLT013   UWP-30499 Be albe to scan next SKU which is in   */
+/*                           same dropid                                     */
+/* 2025-07-09 0.0  Jackc    !!!Cutover!!! Use V0 repo for work               */
+/* 2025-08-01 8.1  NickT    UWP-38674 Get PickedQty by                       */
+/*                          PickDetail.Status = PickConfirmStatus            */
 /*****************************************************************************/    
     
 CREATE OR ALTER PROC [RDT].[rdtfnc_PackByTrackNo](    
@@ -2052,7 +2057,7 @@ BEGIN
       WHERE StorerKey = @cStorerKey    
          AND OrderKey = @cOrderKey    
          AND SKU = @cSKU    
-         AND Status < '9'    
+         AND Status = IIF(@cPickConfirmStatus = '', '5', @cPickConfirmStatus)
     
       IF @nSUM_PickedSKU < (@nSUM_PackedSKU + 1)   -- +1 because each scan is increase by 1 qty    
       BEGIN    
@@ -4488,7 +4493,7 @@ BEGIN
          IF @nExpectedQty > @nPackedQty      
          BEGIN      
             SET @nMoreToPack = 1      
-            SET @cOutField02 = @cDropID      
+            SET @cInField02 = @cDropID --NLT013 it is required for scan next sku which is in same DropID     
          END      
       END      
           

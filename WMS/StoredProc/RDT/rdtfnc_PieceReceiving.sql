@@ -167,6 +167,8 @@ GO
 /* 2024-07-31 11.0 JHU151     FCR-550 Scan SN on sku screen              */
 /* 2024-12-27 12.0 Dennis     UWP-28649 Fix Capture Pallet Type Bug      */
 /* 2025-03-25 12.1 YeeKung    FCR-3145 Add Out for rdt_serialNo Params   */
+/* 2025-07-14 12.2 Cuize      FCR-990 Chang Errno = -2                    */
+/* 2025-07-28 0.0  JackC      !!!Cutover!!! Use V2 version in V0 repo for work */
 /************************************************************************/
 CREATE OR ALTER PROC [RDT].[rdtfnc_PieceReceiving] (
    @nMobile    INT,
@@ -4803,13 +4805,14 @@ BEGIN
               @cLottable01, @cLottable02, @cLottable03, @dLottable04, @cSKU, 0,
               @nErrNo OUTPUT, @cErrMsg OUTPUT
 
-         IF @nErrno = -1
+         IF @nErrno = -2  --v12.2 Cuize
          BEGIN
             SET @nScn = 6413
             SET @nStep = 98
             SET @cOutField01 = @cMax
             SET @cOutField02 = ''
-            GOTO Step_9_fail
+            SET @cFieldAttr02 = ''
+            GOTO Quit
          END
 
          IF @nErrNo <> 0 OR ISNULL( @cErrMsg, '') <> ''
@@ -7034,13 +7037,13 @@ BEGIN
          BEGIN
             IF @nPreSCn = 6413
             BEGIN
-               SET @cBarcode = @cUDF01
+               SET @cBarcode = ISNULL(@cUDF01,'')
                SET @cPrevBarcode = @cUDF02
                SET @cSKUValidated = @cUDF03
                SET @nBeforeReceivedQty = @cUDF04
                SET @nQtyExpected = @cUDF05
                SET @nToIDQTY = @cUDF06
-               SET @cMax = @cUDF07
+               SET @cMax = ISNULL(@cUDF07,'')
             END
          END
          

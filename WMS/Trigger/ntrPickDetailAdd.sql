@@ -1,8 +1,3 @@
-if exists (select * from dbo.sysobjects where id = object_id(N'[dbo].[ntrPickDetailAdd]')
-              and OBJECTPROPERTY(id, N'IsTrigger') = 1)
-drop trigger [dbo].[ntrPickDetailAdd]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -18,7 +13,7 @@ GO
 /*                                                                      */
 /* Called By: When records Added                                        */
 /*                                                                      */
-/* PVCS Version: 1.2                                                    */
+/* PVCS Version: 4.0                                                    */
 /*                                                                      */
 /* Version: 5.4                                                         */
 /*                                                                      */
@@ -54,8 +49,11 @@ GO
 /*                            turn off                                  */
 /* 28-Sep-2021  SYChua        Fix: Added CLOSE and DEALLOCATE statement */
 /*                            for cursor: CUR_CHANNEL_MGMT  (SY01)      */
+/* 29-Oct-2024  TLTING02      WMS-26555 - allow MultiFacility for Orders*/
+/* 12-Aug-2025  WLChooi 4.0   FCR-5700 Trigger ITF By Wave (WL01)       */
+/* 06-OCT-2025  AK01    4.1   UWP-42143 Data Audit                      */
 /************************************************************************/
-CREATE  TRIGGER [dbo].[ntrPickDetailAdd]
+CREATE OR ALTER TRIGGER [dbo].[ntrPickDetailAdd]
 ON  [dbo].[PICKDETAIL]
 FOR INSERT
 AS
@@ -82,13 +80,15 @@ DECLARE
    , @c_PrevOrderKey    NVARCHAR(10) --NJOW03
    , @c_OrderLineNumber NVARCHAR(5)
    , @n_InsertedRows    INT = 0
-
+   , @c_WaveKey         NVARCHAR(10)   --WL01
+   , @CUR_TriggerPoints CURSOR         --WL01
 
 SELECT @n_InsertedRows = COUNT(*)
 FROM   INSERTED
 
 SELECT @n_Continue = 1, @n_starttcnt = @@TRANCOUNT
 DECLARE @c_AllowOverAllocations NVARCHAR(1) -- Flag to see if overallocations are allowed.
+DECLARE @c_MultiFacilityShipment NVARCHAR(1) = ''
 /* #INCLUDE <TRPDA1.SQL> */
 DECLARE @b_debug INT
 SELECT @b_debug = 0
@@ -108,7 +108,7 @@ END
 -- End 30th Apr 2003
 
 
-IF (SELECT COUNT(*) FROM INSERTED WHERE OptimizeCop is not NULL ) > 0
+IF (SELECT COUNT(*) FROM INSERTED WHERE OptimizeCop IS NOT NULL ) > 0
 BEGIN
    -- SHONG03 Bug Fixing
    UPDATE PICKDETAIL
@@ -121,7 +121,7 @@ BEGIN
    BEGIN
       SELECT @n_Continue = 3
       SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 63110   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
-      SELECT @c_errmsg="NSQL"+CONVERT(char(5),@n_err)+": Insert Trigger On PickDetail Failed. (ntrPickDetailAdd)" + " ( " + " SQLSvr MESSAGE=" + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + " ) "
+      SELECT @c_errmsg="NSQL"+CONVERT(CHAR(5),@n_err)+": Insert Trigger On PickDetail Failed. (ntrPickDetailAdd)" + " ( " + " SQLSvr MESSAGE=" + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_errmsg)) + " ) "
    END
    ELSE
    BEGIN
@@ -236,17 +236,47 @@ BEGIN
          BEGIN
             SELECT @n_Continue = 3, @c_errmsg = 'ntrPickDetailAdd' + ISNULL(RTrim(@c_errmsg),'')
          END
+         
+         -- TLTING02
+         SELECT @b_success = 0
+         EXECUTE nspGetRight '', -- facility
+                             @c_Storerkey,    -- StorerKey
+                             NULL,   -- Sku
+                             'MultiFacilityShipment', -- Configkey
+                             @b_success    OUTPUT,
+                             @c_MultiFacilityShipment OUTPUT,
+                             @n_err        OUTPUT,
+                             @c_errmsg     OUTPUT
+         IF @b_success <> 1
+         BEGIN
+            SELECT @n_Continue = 3, @c_errmsg = 'ntrPickDetailAdd' + ISNULL(RTrim(@c_errmsg),'')
+         END
+                  
 
          SET @c_PrevStorerKey = @c_StorerKey
          SET @c_PrevFacility  = @c_Facility
 
-         IF NOT EXISTS(SELECT 1 FROM ORDERS WITH (NOLOCK) WHERE OrderKey = @c_OrderKey AND
-                       Facility = @c_Facility)
+				 -- TLTING02
+         IF @c_MultiFacilityShipment = '1'
          BEGIN
-            SELECT @n_Continue = 3
-            SELECT @c_errmsg = CONVERT(VARCHAR(10),@n_err), @n_err = 63114   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
-            SELECT @c_errmsg='NSQL'+CONVERT(varchar(5),@n_err)+'Location Facility NOT Match with Order Facility (ntrPickDetailAdd)'
-         END
+         		IF NOT EXISTS ( SELECT 1 FROM CODELKUP (NOLOCK) WHERE Storerkey = @c_Storerkey AND Code = @c_facility AND LISTNAME = 'MultiFclt' )		
+	         BEGIN
+	            SELECT @n_Continue = 3
+	            SELECT @c_errmsg = CONVERT(VARCHAR(10),@n_err), @n_err = 63114   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+	            SELECT @c_errmsg='NSQL'+CONVERT(varchar(5),@n_err)+'Location Facility NOT ALLOW with approved Facility (ntrPickDetailAdd)'
+	         END
+	       END
+	       ELSE
+	       BEGIN
+	         IF NOT EXISTS(SELECT 1 FROM ORDERS WITH (NOLOCK) WHERE OrderKey = @c_OrderKey AND
+	                       Facility = @c_Facility)
+	         BEGIN
+	            SELECT @n_Continue = 3
+	            SELECT @c_errmsg = CONVERT(VARCHAR(10),@n_err), @n_err = 63114   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+	            SELECT @c_errmsg='NSQL'+CONVERT(varchar(5),@n_err)+'Location Facility NOT Match with Order Facility (ntrPickDetailAdd)'
+	         END	       	
+	       END
+         -- END TLTING02      
 
          --NJOW03
          SELECT @c_UpdPickslipToPickDet = ''
@@ -874,6 +904,102 @@ BEGIN
 
 END -- IF EXISTS(StorerConfig - 'WAVEUPDLOG')
 -- MC01-E
+
+--WL01 S
+   --Custom process - If allocated - trigger ITF by Wavekey
+   --Copy from ntrWaveHeaderAdd
+   --Only check for condition below
+   --If Wave.Status = 1 (Partially allocated) and user unallocate again, Wave.status will not change and remain status = 1
+   --Therefore need to include the logic in ntrPickDetailDelete trigger
+   /********************************************************/
+   /* Interface Trigger Points Calling Process - (Start)   */
+   /********************************************************/
+   IF (@n_continue = 1 OR @n_continue = 2) 
+   BEGIN
+      SET @CUR_TriggerPoints = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      SELECT DISTINCT WD.WaveKey, OH.StorerKey
+      FROM   INSERTED INS
+      JOIN   WAVEDETAIL WD WITH (NOLOCK)        ON INS.OrderKey = WD.OrderKey
+      JOIN   Orders OH WITH (NOLOCK)            ON WD.OrderKey = OH.OrderKey
+      JOIN   ITFTriggerConfig ITC WITH (NOLOCK) ON ITC.StorerKey = OH.StorerKey
+      WHERE  ITC.SourceTable = 'PickDetail'
+      AND    ITC.sValue      = '1'
+
+      OPEN @CUR_TriggerPoints
+      FETCH NEXT FROM @CUR_TriggerPoints INTO @c_WaveKey, @c_Storerkey
+
+      WHILE @@FETCH_STATUS <> -1
+      BEGIN
+         EXECUTE dbo.isp_ITF_ntrPICKDETAIL_Wave
+                  @c_TriggerName    = 'ntrPickDetailAdd'
+                , @c_SourceTable    = 'PickDetail'
+                , @c_Storerkey      = @c_Storerkey
+                , @c_WaveKey        = @c_WaveKey
+                , @b_ColumnsUpdated = NULL
+                , @b_Success        = @b_Success   OUTPUT
+                , @n_err            = @n_err       OUTPUT
+                , @c_errmsg         = @c_errmsg    OUTPUT
+
+         FETCH NEXT FROM @CUR_TriggerPoints INTO @c_WaveKey, @c_Storerkey
+      END -- WHILE @@FETCH_STATUS <> -1
+      CLOSE @CUR_TriggerPoints
+      DEALLOCATE @CUR_TriggerPoints
+
+      SET @CUR_TriggerPoints = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
+      SELECT DISTINCT WD.WaveKey, OH.StorerKey
+      FROM   INSERTED INS
+      JOIN   WAVEDETAIL WD WITH (NOLOCK)        ON INS.OrderKey = WD.OrderKey
+      JOIN   Orders OH WITH (NOLOCK)            ON WD.OrderKey   = OH.OrderKey
+      JOIN   ITFTriggerConfig ITC WITH (NOLOCK) ON ITC.StorerKey = 'ALL'
+      JOIN   StorerConfig STC WITH (NOLOCK)     ON OH.StorerKey = STC.StorerKey 
+                                               AND STC.ConfigKey = ITC.ConfigKey 
+                                               AND STC.SValue = '1'
+      WHERE  ITC.SourceTable = 'PickDetail'
+      AND    ITC.sValue      = '1'
+
+      OPEN @CUR_TriggerPoints
+      FETCH NEXT FROM @CUR_TriggerPoints INTO @c_WaveKey, @c_Storerkey
+
+      WHILE @@FETCH_STATUS <> -1
+      BEGIN
+         EXECUTE dbo.isp_ITF_ntrPICKDETAIL_Wave
+                  @c_TriggerName    = 'ntrPickDetailAdd'
+                , @c_SourceTable    = 'PickDetail'
+                , @c_Storerkey      = @c_Storerkey
+                , @c_WaveKey        = @c_WaveKey
+                , @b_ColumnsUpdated = NULL
+                , @b_Success        = @b_Success   OUTPUT
+                , @n_err            = @n_err       OUTPUT
+                , @c_errmsg         = @c_errmsg    OUTPUT
+
+         FETCH NEXT FROM @CUR_TriggerPoints INTO @c_WaveKey, @c_Storerkey
+      END -- WHILE @@FETCH_STATUS <> -1
+      CLOSE @CUR_TriggerPoints
+      DEALLOCATE @CUR_TriggerPoints
+   END -- IF @n_continue = 1 OR @n_continue = 2
+   /********************************************************/
+   /* Interface Trigger Points Calling Process - (End)     */
+   /********************************************************/
+   --WL01 E
+
+   --AK01 - S
+   IF dbo.fnc_GetUserName() <> sUser_sName() AND @n_Continue IN (1,2) 
+   BEGIN
+      UPDATE PICKDETAIL
+        SET AddWho  = dbo.fnc_GetUserName(),
+            AddDate = dbo.fnc_GetDate(), 
+            TrafficCop = NULL 
+      FROM PICKDETAIL
+      JOIN INSERTED ON PICKDETAIL.PickDetailKey = INSERTED.PickDetailKey
+      SELECT @n_err = @@ERROR
+      IF @n_err <> 0
+      BEGIN
+         SELECT @n_continue = 3
+         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=63128  
+         SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed On Table PICKDETAIL. (ntrPICKDETAILAdd)' + ' ( ' + ' SQLSvr MESSAGE=' + TRIM(@c_errmsg) + ' ) '
+      END
+   END
+   --AK01 - E
 
 SET NOCOUNT OFF
 /* #INCLUDE <TRPDA2.SQL> */

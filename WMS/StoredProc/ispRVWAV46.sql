@@ -26,7 +26,8 @@ GO
 /*                                                                       */    
 /* Updates:                                                              */    
 /* Date         Author   Ver  Purposes                                   */
-/* 2021-08-20   WLChooi  1.0  DevOps Combine Script                      */ 
+/* 2021-08-20   WLChooi  1.0  DevOps Combine Script                      */
+/* 2025-10-10   SSA01    1.1   UWP-42248 -Enhanced session management    */
 /*************************************************************************/     
 CREATE PROCEDURE [dbo].[ispRVWAV46]      
     @c_wavekey      NVARCHAR(10)  
@@ -189,8 +190,8 @@ BEGIN
       UPDATE PICKDETAIL WITH (ROWLOCK) 
       SET PICKDETAIL.TaskdetailKey = '',
           PICKDETAIL.TrafficCop    = NULL,
-          PICKDETAIL.EditDate      = GETDATE(),
-          PICKDETAIL.EditWho       = SUSER_SNAME() 
+          PICKDETAIL.EditDate      = dbo.fnc_GetDate(),   --(SSA01)
+          PICKDETAIL.EditWho       = dbo.fnc_GetUserName()           --(SSA01)
       FROM WAVEDETAIL (NOLOCK)  
       JOIN PICKDETAIL ON WAVEDETAIL.Orderkey = PICKDETAIL.Orderkey
       WHERE WAVEDETAIL.Wavekey = @c_Wavekey 
@@ -234,8 +235,8 @@ BEGIN
      UPDATE WAVE  
      SET TMReleaseFlag = 'N'               
       ,  TrafficCop = NULL                 
-      ,  EditWho = SUSER_SNAME()           
-      ,  EditDate= GETDATE()               
+      ,  EditWho = dbo.fnc_GetUserName()          --(SSA01)
+      ,  EditDate= dbo.fnc_GetDate()   --(SSA01)
      WHERE WAVEKEY = @c_wavekey  
        
       SELECT @n_err = @@ERROR  

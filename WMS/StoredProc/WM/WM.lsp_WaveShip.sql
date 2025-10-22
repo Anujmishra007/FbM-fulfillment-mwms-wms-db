@@ -31,6 +31,7 @@ GO
 /*                            record                                    */
 /*                            Add Container Validate as per Exceed      */
 /*                            DevOps Combine Script                     */
+/* 2025-09-02  SWT01    1.3   Enhanced session management pattern       */
 /************************************************************************/                                                                                  
 CREATE OR ALTER PROC [WM].[lsp_WaveShip] 
       @c_WaveKey              NVARCHAR(10)                     -- Mandatory to pass In Wavekey                                                                                               
@@ -106,23 +107,26 @@ BEGIN
       ,  ValidatePass   BIT            NOT NULL DEFAULT(0)    
       )
 
-   SET @n_Err = 0 
-   --(mingle01) - START   
-   IF SUSER_SNAME() <> @c_UserName
-   BEGIN
-      EXEC [WM].[lsp_SetUser] 
-            @c_UserName = @c_UserName  OUTPUT
-         ,  @n_Err      = @n_Err       OUTPUT
-         ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
-                
-      IF @n_Err <> 0 
-      BEGIN
-         GOTO EXIT_SP
-      END
-    
-      EXECUTE AS LOGIN = @c_UserName
-   END
-   --(mingle01) - END
+   -- Start enhanced session management (SWT01)
+	 SET @n_Err = 0
+	 DECLARE @b_ExecuteAs        BIT = 0
+	 IF SUSER_SNAME() <> @c_UserName AND @c_UserName <> ''        
+	 BEGIN
+	    EXEC [WM].[lsp_SetUser] 
+	         @c_UserName = @c_UserName  OUTPUT
+	      ,  @n_Err      = @n_Err       OUTPUT
+	      ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+	      ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
+
+	    IF @n_Err <> 0
+	    BEGIN
+	       GOTO EXIT_SP
+	    END
+
+	    IF @b_ExecuteAs = 1
+	       EXECUTE AS LOGIN = @c_UserName
+	 END                                    
+	 -- End enhanced session management (SWT01)
    
    --(mingle01) - START
    BEGIN TRY
@@ -1145,7 +1149,8 @@ EXIT_SP:
    BEGIN
       BEGIN TRAN
    END      
-   REVERT
+   IF @b_ExecuteAs = 1 REVERT -- (SWT01)
+   EXEC [WM].[lsp_ResetUser]  -- (SWT01)
 END
 GO
 GRANT EXECUTE ON [WM].[lsp_WaveShip] TO nSQL 

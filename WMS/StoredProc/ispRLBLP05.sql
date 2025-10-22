@@ -29,6 +29,7 @@ GO
 /*                            (WL01)                                        */  
 /* 2020-07-21   WLChooi  1.2  Add Message02 = Orderkey for FCP (WL02)       */
 /* 2020-07-29   WLChooi  1.3  Fix Groupkey = Loadkey (WL03)                 */
+/* 2025-10-10   SSA01    1.4  UWP-42248 -Enhanced session management        */
 /****************************************************************************/   
 
 CREATE PROCEDURE [dbo].[ispRLBLP05]      
@@ -159,10 +160,10 @@ CREATE PROCEDURE [dbo].[ispRLBLP05]
           [PickMethod] [nvarchar](1) NOT NULL DEFAULT (' '),
           [WaveKey] [nvarchar](10) NOT NULL DEFAULT (' '),
           [EffectiveDate] [datetime] NOT NULL DEFAULT (getdate()),
-          [AddDate] [datetime] NOT NULL DEFAULT (getdate()),
-          [AddWho] [nvarchar](128) NOT NULL DEFAULT (suser_sname()),
-          [EditDate] [datetime] NOT NULL DEFAULT (getdate()),
-          [EditWho] [nvarchar](128) NOT NULL DEFAULT (suser_sname()),
+          [AddDate] [datetime] NOT NULL DEFAULT (getdate()),    --(SSA01)
+          [AddWho] [nvarchar](128) NOT NULL DEFAULT (suser_sname()),          --(SSA01)
+          [EditDate] [datetime] NOT NULL DEFAULT (getdate()),    --(SSA01)
+          [EditWho] [nvarchar](128) NOT NULL DEFAULT (suser_sname()),         --(SSA01)
           [TrafficCop] [nvarchar](1) NULL,
           [ArchiveCop] [nvarchar](1) NULL,
           [OptimizeCop] [nvarchar](1) NULL,

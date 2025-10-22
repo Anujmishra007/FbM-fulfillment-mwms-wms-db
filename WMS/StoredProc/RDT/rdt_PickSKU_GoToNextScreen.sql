@@ -16,6 +16,8 @@ GO
 /* 28-08-2020  1.2  YeeKung     WMS-14706 Add clearid (yeekung01)       */  
 /* 27-12-2020  1.3  YeeKung     WMS-15995 Add PickZone (yeekung02)      */
 /* 08-04-2022  1.4  Ung         WMS-19402 Add AutoScanOut               */
+/* 18-06-2025  1.5  Ung         FCR-5258 Add AutoPackConfirm            */
+/*                              Fix clearid                             */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE rdt.rdt_PickSKU_GoToNextScreen
@@ -209,7 +211,7 @@ BEGIN
       SET @cOutField01 = @cPickSlipNo
       SET @cOutField02 = CASE WHEN @cSuggestLOC = '1' THEN @cSuggLOC ELSE '' END
       SET @cOutField03 = '' -- LOC
-      SET @cOutField04 = @cDropID
+      SET @cOutField04 = CASE WHEN @cClearID ='1' THEN '' ELSE @cDropID  END  
       SET @cOutField05 = ''
 
       IF @cVerifyPickZone='1'
@@ -285,7 +287,19 @@ BEGIN
       IF @nErrNo <> 0        
          GOTO Quit  
          
-      GOTO Quit
+      -- Pack confirm
+      IF rdt.RDTGetConfig( @nFunc, 'AutoPackConfirm', @cStorerKey)  = '1'
+      BEGIN
+         EXEC rdt.rdt_Pack_PackConfirm @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey
+            ,@cPickSlipNo
+            ,'' -- @cFromDropID
+            ,'' -- @cPackDtlDropID
+            ,'' -- @cPrintPackList OUTPUT
+            ,@nErrNo         OUTPUT
+            ,@cErrMsg        OUTPUT
+         -- IF @nErrNo <> 0
+         --    GOTO Quit
+      END
    END
 
 Quit:

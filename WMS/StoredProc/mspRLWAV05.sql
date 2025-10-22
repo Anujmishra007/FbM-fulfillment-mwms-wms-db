@@ -25,6 +25,7 @@ GO
 /*                                extrnorderkey and consigneeekey as     */
 /*                                we need only loadkey level validation  */
 /* 16-Jun-2025    AYD01     1.2   UWP-35347: Added support for UOM 6     */
+/* 10-Oct-2025    SSA02     1.3  UWP-42248 -Enhanced session management  */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV05]
   @c_Wavekey      NVARCHAR(10)
@@ -164,10 +165,10 @@ CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV05]
       ,  [PickMethod]      [nvarchar](1)  NOT NULL DEFAULT (' ')
       ,  [WaveKey]         [nvarchar](10) NOT NULL DEFAULT (' ')
       ,  [EffectiveDate]   [datetime]     NOT NULL DEFAULT (getdate())
-      ,  [AddDate]         [datetime]     NOT NULL DEFAULT (getdate())
-      ,  [AddWho]          [nvarchar](128)NOT NULL DEFAULT (suser_sname())
-      ,  [EditDate]        [datetime]     NOT NULL DEFAULT (getdate())
-      ,  [EditWho]         [nvarchar](128)NOT NULL DEFAULT (suser_sname())
+      ,  [AddDate]         [datetime]     NOT NULL DEFAULT (getdate())             --(SSA02)
+      ,  [AddWho]          [nvarchar](128)NOT NULL DEFAULT (suser_sname())         --(SSA02)
+      ,  [EditDate]        [datetime]     NOT NULL DEFAULT (getdate())             --(SSA02)
+      ,  [EditWho]         [nvarchar](128)NOT NULL DEFAULT (suser_sname())         --(SSA02)
       ,  [TrafficCop]      [nvarchar](1)  NULL
       ,  [ArchiveCop]      [nvarchar](1)  NULL
       ,  [OptimizeCop]     [nvarchar](1)  NULL

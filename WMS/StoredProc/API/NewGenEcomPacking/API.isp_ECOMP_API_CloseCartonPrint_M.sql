@@ -19,6 +19,7 @@
 /* 15-AUG-2023    Alex     #JIRA PAC-7 Initial                          */
 /* 03-JAN-2024    Alex01   #JIRA PAC-176 Pass ComputerName to Print SP  */
 /* 14-MAY-2024    Alex02   #JIRA PAC-341 LogiReport Printing            */
+/* 23-Jul-2025     Sean       #UWP-38247 - Compatible with Login User   */
 /************************************************************************/
 CREATE OR ALTER PROC [API].[isp_ECOMP_API_CloseCartonPrint_M](
      @b_Debug           INT            = 0
@@ -109,19 +110,34 @@ BEGIN
    SET @c_ErrMsg                          = ''
    SET @c_ResponseString                  = ''
 
-   --Change Login User
-   SET @n_sp_err = 0     
-   EXEC [WM].[lsp_SetUser] @c_UserName = @c_UserID OUTPUT, @n_Err = @n_sp_err OUTPUT, @c_ErrMsg = @c_sp_errmsg OUTPUT
-       
-   EXECUTE AS LOGIN = @c_UserID
-       
-   IF @n_sp_err <> 0     
-   BEGIN      
-      SET @n_Continue = 3      
+   -- UWP-38247 - Compatible with Login User S
+
+   DECLARE @DBUserName NVARCHAR(100),
+        @b_sp_ExecuteAs BIT
+
+   EXEC [API].[isp_ECOMP_ValidateAndSetUser]
+        @c_UserID      = @c_UserID,
+        @c_DBUserName  = @DBUserName OUTPUT,
+        @b_ExecuteAs   = @b_sp_ExecuteAs OUTPUT,
+        @b_Success     = @b_sp_Success OUTPUT,
+        @n_ErrNo       = @n_sp_err OUTPUT,
+        @c_ErrMsg      = @c_sp_errmsg OUTPUT;
+
+   IF @b_sp_Success = 0
+   BEGIN
+      SET @b_Success = 0      
       SET @n_ErrNo = @n_sp_err      
       SET @c_ErrMsg = @c_sp_errmsg     
       GOTO QUIT
    END
+
+   IF @b_sp_ExecuteAs = 1 OR @DBUserName LIKE '%' + @c_UserID + '%'
+   BEGIN
+      EXECUTE AS LOGIN = @DBUserName
+      SET @c_UserID = @DBUserName
+   END
+
+   -- UWP-38247 - Compatible with Login User E
 
    SELECT @c_PickSlipNo    = ISNULL(RTRIM(PickSlipNo  ), '')
          ,@c_ComputerName  = ISNULL(RTRIM(ComputerName), '')
@@ -424,6 +440,12 @@ BEGIN
                            ), '')
 
    QUIT:
+
+   IF EXISTS (SELECT 1 FROM sys.objects WHERE name = 'lsp_RevertUser' AND type = 'P') AND SESSION_CONTEXT(N'mwms_user_name') IS NOT NULL
+   BEGIN
+      EXEC [WM].[lsp_RevertUser]
+   END
+
    IF @n_Continue= 3  -- Error Occured - Process And Return      
    BEGIN      
       SET @b_Success = 0      

@@ -21,6 +21,7 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date         Author   Ver  Purposes                                  */
+/* 10-Oct-2025  SSA01    1.1  UWP-42248 -Enhanced session management    */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[ispPKD07]
@@ -70,8 +71,8 @@ BEGIN
       	 UPDATE PACKDETAIL WITH (ROWLOCK)
       	 SET Refno = 'LF-CD',
       	     ArchiveCop = NULL,
-      	     EditWho = SUSER_SNAME(),
-      	     EditDate = GETDATE()
+      	     EditWho = dbo.fnc_GetUserName(),             --(SSA01)
+      	     EditDate = dbo.fnc_GetDate()    --(SSA01)
       	 WHERE Pickslipno = @c_Pickslipno
       	 AND LabelNo = @c_LabelNo
       	 AND LabelLine = @c_LabelLine

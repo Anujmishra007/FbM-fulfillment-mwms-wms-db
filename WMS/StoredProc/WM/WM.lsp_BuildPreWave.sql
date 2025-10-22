@@ -12,7 +12,7 @@ GO
 /*                                                                      */                                                                                  
 /* Called By: SCE                                                       */                                                                                  
 /*          :                                                           */                                                                                  
-/* PVCS Version: 1.2                                                    */                                                                                  
+/* PVCS Version: 1.4                                                    */                                                                                  
 /*                                                                      */                                                                                  
 /* Version: 8.0                                                         */                                                                                  
 /*                                                                      */                                                                                  
@@ -24,6 +24,8 @@ GO
 /* 2022-09-22  Wan01    1.1   LFWM-3748 - [CN] LOREAL_Prewave add filter*/
 /*                            condition                                 */
 /* 2022-11-04  Wan02    1.2   Correct Default @c_Action = 'PREWAVE'     */
+/* 2025-09-02  SWT01    1.3   Enhanced session management and cleanup.  */
+/* 10-Oct-2025 WLChooi  1.4   FCR-7724 Call custom BuildPreWave_SP(WL01)*/
 /************************************************************************/                                                                                  
 CREATE OR ALTER PROC [WM].[lsp_BuildPreWave]                                                                                                                       
       @c_BuildParmKey      NVARCHAR(10) 
@@ -46,6 +48,7 @@ BEGIN
    
    DECLARE @n_Continue                 INT            = 1
          , @n_StartTCnt                INT            = @@TRANCOUNT  
+         , @b_ExecuteAs                BIT            = 0  
                                                                                                                               
    DECLARE @d_StartBatchTime           DATETIME       = GETDATE() 
          , @d_StartTime                DATETIME       = GETDATE()                                                                                                                  
@@ -100,6 +103,8 @@ BEGIN
                                                                                                               
          , @c_SQL                      NVARCHAR(MAX)  = ''
          , @c_SQLParms                 NVARCHAR(2000) = ''
+
+         , @c_BuildPreWaveSP           NVARCHAR(50)   = ''   --WL01
          
    DECLARE @CUR_BUILD_GROUP             CURSOR
    
@@ -110,6 +115,7 @@ BEGIN
    BEGIN
       EXEC [WM].[lsp_SetUser] 
             @c_UserName = @c_UserName  OUTPUT
+         ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
          ,  @n_Err      = @n_Err       OUTPUT
          ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
           
@@ -118,7 +124,7 @@ BEGIN
          GOTO EXIT_SP
       END   
                     
-      IF SUSER_SNAME() <> @c_UserName
+      IF @b_ExecuteAs = 1
       BEGIN
          EXECUTE AS LOGIN = @c_UserName      
       END
@@ -206,6 +212,65 @@ BEGIN
                         + ': Delete BUILDPREWAVE fail. (lsp_BuildPreWave)'                                                                                                           
          GOTO EXIT_SP                                                                                                                                             
       END
+
+      --WL01 S
+      IF @b_debug = 2
+      BEGIN
+         SET @d_StartTime_Debug = GETDATE()
+         PRINT 'SP-lsp_BuildPreWave DEBUG-START...'
+         PRINT '--0.Call Custom BuildPreWave_SP--'
+      END
+
+      EXEC dbo.nspGetRight @c_Facility = @c_Facility
+                         , @c_StorerKey = @c_StorerKey
+                         , @c_sku = N''
+                         , @c_ConfigKey = N'BuildPreWave_SP'
+                         , @b_Success = @b_Success OUTPUT
+                         , @c_authority = @c_BuildPreWaveSP OUTPUT
+                         , @n_err = @n_Err OUTPUT
+                         , @c_errmsg = @c_Errmsg OUTPUT
+
+      IF EXISTS ( SELECT 1
+                  FROM sys.objects sys WITH (NOLOCK)
+                  WHERE sys.type = 'P' AND sys.name = @c_BuildPreWaveSP )
+      BEGIN
+         SET @c_SQL = 'EXEC ' + @c_BuildPreWaveSP + ' @c_BuildParmKey, @c_Facility '
+                    + ', @c_Storerkey, @c_SQLBuildWaveWhere '
+                    + ', @c_FieldLabel01 OUTPUT, @c_FieldLabel02 OUTPUT, @c_FieldLabel03 OUTPUT '
+                    + ', @c_FieldLabel04 OUTPUT, @c_FieldLabel05 OUTPUT '
+                    + ', @b_Success OUTPUT, @n_Err OUTPUT, @c_ErrMsg OUTPUT, @b_Debug '
+
+         SET @c_SQLParms = '  @c_BuildParmKey NVARCHAR(10), @c_Facility NVARCHAR(5), @c_Storerkey NVARCHAR(15), @c_SQLBuildWaveWhere NVARCHAR(MAX) '
+                         + ', @c_FieldLabel01 NVARCHAR(50) OUTPUT, @c_FieldLabel02 NVARCHAR(50) OUTPUT, @c_FieldLabel03 NVARCHAR(50) OUTPUT '
+                         + ', @c_FieldLabel04 NVARCHAR(50) OUTPUT, @c_FieldLabel05 NVARCHAR(50) OUTPUT '
+                         + ', @b_Success INT OUTPUT, @n_Err INT OUTPUT, @c_ErrMsg NVARCHAR(250) OUTPUT, @b_Debug INT '
+         
+         BEGIN TRY
+            EXEC sp_executesql @c_SQL 
+               , @c_SQLParms
+               , @c_BuildParmKey
+               , @c_Facility
+               , @c_StorerKey
+               , @c_SQLBuildWaveWhere
+               , @c_FieldLabel01    OUTPUT
+               , @c_FieldLabel02    OUTPUT
+               , @c_FieldLabel03    OUTPUT
+               , @c_FieldLabel04    OUTPUT
+               , @c_FieldLabel05    OUTPUT
+               , @b_Success         OUTPUT                       
+               , @n_Err             OUTPUT  
+               , @c_ErrMsg          OUTPUT
+               , @b_Debug
+         END TRY
+         BEGIN CATCH
+            SET @n_Continue = 3
+            SET @c_ErrMsg = ERROR_MESSAGE()
+            GOTO EXIT_SP
+         END CATCH
+
+         GOTO EXIT_SP   --Skip the standard process
+      END
+      --WL01 E
                                                                                                                                                             
       IF @b_debug = 2                                                                                                                                              
       BEGIN                                                                                                                                                       
@@ -296,7 +361,7 @@ BEGIN
                              + '. (lsp_BuildPreWave)'
                              + '|' + RTRIM(@c_FieldName) 
                GOTO EXIT_SP                                                                                                                                          
-            END                                                                                                                                                   
+            END                                                                                                                                                                                                                                                                                                
                                                                                                                                                             
             IF @c_ColType IN ('float', 'money', 'int', 'decimal', 'numeric', 'tinyint', 'real', 'bigint','text')                                                   
             BEGIN                                                                                                                                                 
@@ -481,8 +546,13 @@ BEGIN
    WHILE @@TRANCOUNT < @n_StartTCnt
    BEGIN
       BEGIN TRAN
-   END                                                                                                                                                       
-   REVERT 
+   END
+   
+   IF @b_ExecuteAs = 1
+   BEGIN
+      REVERT
+      EXEC [WM].[lsp_ResetUser]
+   END
 END
 GO
 GRANT EXECUTE ON [WM].[lsp_BuildPreWave] TO nSQL 

@@ -5,7 +5,7 @@ GO
 /*************************************************************************/  
 /* Stored Procedure: WM.lsp_TRFPopulateSOH_Wrapper                       */  
 /* Creation Date: 16-OCT-2018                                            */  
-/* Copyright: LFL                                                        */  
+/* Copyright: Maersk Logistics                                           */  
 /* Written by: Wan                                                       */  
 /*                                                                       */  
 /* Purpose: LFWM-307 - Inventory - Transfer Ticket Clarifications        */
@@ -13,7 +13,7 @@ GO
 /* Called By:                                                            */  
 /*                                                                       */  
 /*                                                                       */  
-/* Version: 1.0                                                          */  
+/* Version: 1.5                                                          */  
 /*                                                                       */  
 /* Data Modifications:                                                   */  
 /*                                                                       */  
@@ -21,8 +21,11 @@ GO
 /* Date         Author   Ver  Purposes                                   */ 
 /* 2021-02-10   mingle01 1.1  Add Big Outer Begin try/Catch              */
 /*                            Execute Login if @c_UserName<>SUSER_SNAME()*/
-/* 2024-09-25  Wan01    1.2   LFWM-4446 - RG[GIT] Serial Number Solution */
+/* 2024-09-25   Wan01    1.2  LFWM-4446 - RG[GIT] Serial Number Solution */
 /*                            - Transfer by Serial Number                */
+/* 2025-09-02   SWT01    1.3  Enhanced session management pattern        */
+/* 2025-10-10   SPC040   1.4  Replace SUSER_SNAME with fnc_GetUserName   */
+/* 2025-10-10   Michael  1.5  FCR-8380- Add SerialNoUpdateLotLocID (ML01)*/
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE [WM].[lsp_TRFPopulateSOH_Wrapper]
    @c_TransferKey          NVARCHAR(10)
@@ -111,6 +114,7 @@ BEGIN
          , @c_LASourceType             NVARCHAR(20)   = 'TRANSFER'
 
          , @c_ASNFizUpdLotToSerialNo   NVARCHAR(10)   = ''                          --(Wan01)
+         , @c_SerialNoUpdateLotLocID   NVARCHAR(10)   = ''      --ML01
 
          , @c_SQL                      NVARCHAR(4000) = ''
          , @c_SQLParms                 NVARCHAR(4000) = ''
@@ -138,23 +142,27 @@ BEGIN
 
    SET @n_ErrGroupKey = 0
 
+   -- Start enhanced session management (SWT01)
    SET @n_Err = 0 
-   --(mingle01) - START   
-   IF SUSER_SNAME() <> @c_UserName
+   DECLARE @b_ExecuteAs        BIT = 0
+   IF SUSER_SNAME() <> @c_UserName AND @c_UserName <> ''        
    BEGIN
       EXEC [WM].[lsp_SetUser] 
             @c_UserName = @c_UserName  OUTPUT
          ,  @n_Err      = @n_Err       OUTPUT
          ,  @c_ErrMsg   = @c_ErrMsg    OUTPUT
+         ,  @b_ExecuteAs = @b_ExecuteAs OUTPUT
                 
       IF @n_Err <> 0 
       BEGIN
          GOTO EXIT_SP
       END
     
-      EXECUTE AS LOGIN = @c_UserName
+      IF @b_ExecuteAs = 1
+         EXECUTE AS LOGIN = @c_UserName
    END
-   --(mingle01) - END
+   -- End enhanced session management (SWT01)
+
    SET @c_Facility = ''                                                             --(Wan01) - START
    SELECT @c_Facility = T.Facility
          ,@c_FromStorerkey = T.FromStorerKey
@@ -163,6 +171,14 @@ BEGIN
 
    SELECT @c_ASNFizUpdLotToSerialNo = fsgr.Authority                                --(Wan01) - END
    FROM dbo.fnc_SelectGetRight(@c_Facility, @c_FromStorerkey, '', 'ASNFizUpdLotToSerialNo')AS fsgr
+
+   --ML01-S
+   SELECT @c_SerialNoUpdateLotLocID = fsgr.Authority
+   FROM dbo.fnc_SelectGetRight(@c_Facility, @c_FromStorerkey, '', 'SerialNoUpdateLotLocID')AS fsgr
+
+   IF ISNULL(@c_SerialNoUpdateLotLocID,'') = '1' AND ISNULL(@c_ASNFizUpdLotToSerialNo,'') <> '1'
+      SET @c_ASNFizUpdLotToSerialNo = '1'
+   --ML01-E
 
    --(mingle01) - START
    BEGIN TRY
@@ -326,7 +342,7 @@ BEGIN
                      ,UserDefine04 = ''
                      ,UserDefine05 = ''
                      ,EditWho = @c_UserName
-                     ,EditDate= GETDATE()
+                     ,EditDate = dbo.fnc_GetDate()
                WHERE TransferKey = @c_TransferKey
                AND TransferLineNumber = @c_TransferLineNumber
             END TRY
@@ -742,8 +758,8 @@ BEGIN
                            ,  ToLottable14   = @dt_ToLottable14 
                            ,  ToLottable15   = @dt_ToLottable15 
                            ,  UserDefine04   = @n_OriginalQty
-                           ,  EditWho  = SUSER_NAME()
-                           ,  EditDate = GETDATE()
+                           ,  EditWho = dbo.fnc_GetUserName()
+                           ,  EditDate = dbo.fnc_GetDate()
                      WHERE TransferKey = @c_TransferKey
                      AND TransferLineNumber = @c_TransferLineNumber
                   END TRY
@@ -1091,7 +1107,8 @@ BEGIN
       BEGIN TRAN
    END
 
-   REVERT      
+   IF @b_ExecuteAs = 1 REVERT -- (SWT01)
+   EXEC [WM].[lsp_ResetUser]  -- (SWT01)      
 END  
 GO
 GRANT EXECUTE ON [WM].[lsp_TRFPopulateSOH_Wrapper] TO nSQL 

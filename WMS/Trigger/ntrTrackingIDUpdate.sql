@@ -30,6 +30,7 @@ GO
 /* 06-Jul-2022  WLChooi   1.1   JSM-77218 Skip Trigger if updating ArchiveCop to */
 /*                              9 (WL01)                                         */
 /* 06-Jul-2022  WLChooi   1.1   DevOps Combine Script                            */
+/* 06-Oct-2025  AK01      1.2   UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName */
 /*********************************************************************************/  
 
 CREATE OR ALTER TRIGGER [dbo].[ntrTrackingIDUpdate]
@@ -73,8 +74,8 @@ BEGIN -- main
    IF (@n_continue = 1 or @n_continue = 2)  AND NOT UPDATE(EditDate)
    BEGIN
       UPDATE TrackingID WITH (ROWLOCK)
-      SET TrackingID.EditWho = SUSER_SNAME(),
-          TrackingID.EditDate = GETDATE(),
+      SET TrackingID.EditWho = dbo.fnc_GetUserName(),
+          TrackingID.EditDate = dbo.fnc_GetDate(),
           TrackingID.TrafficCop = NULL
       FROM TrackingID JOIN INSERTED ON TrackingID.TrackingIDKey = INSERTED.TrackingIDKey
 

@@ -1,6 +1,3 @@
-IF EXISTS (SELECT name FROM dbo.sysobjects WHERE name = 'ntrWorkOrderRequestUpdate' AND type = 'TR')
-   DROP TRIGGER ntrWorkOrderRequestUpdate
-GO
 
 SET QUOTED_IDENTIFIER OFF 
 GO
@@ -31,8 +28,10 @@ GO
 /* 26-JAN-2016  YTWan    1.2  SOS#315603 - Project Merlion - VAP SKU       */
 /*                            Reservation Strategy - MixSku in 1 Pallet    */
 /*                            enhancement                                  */	
+/* 06-Oct-2025  AK01     1.3  UWP-42143 - Replace SUSER_SNAME with         */
+/*                            fnc_GetUserName                              */
 /***************************************************************************/
-CREATE TRIGGER ntrWorkOrderRequestUpdate ON WORKORDERREQUEST 
+CREATE OR ALTER TRIGGER ntrWorkOrderRequestUpdate ON WORKORDERREQUEST 
 FOR UPDATE
 AS
 BEGIN
@@ -70,8 +69,8 @@ BEGIN
    IF ( @n_continue=1 or @n_continue=2 ) AND NOT UPDATE(EditDate)
    BEGIN
       UPDATE WORKORDERREQUEST WITH (ROWLOCK)
-      SET EditDate = GETDATE() 
-         ,EditWho  = SUSER_SNAME() 
+      SET EditDate = dbo.fnc_GetDate() 
+         ,EditWho  = dbo.fnc_GetUserName() 
          ,TrafficCop = NULL
       FROM WORKORDERREQUEST
       JOIN DELETED  ON (DELETED.WorkOrderKey = WORKORDERREQUEST.WorkOrderKey)
@@ -109,8 +108,8 @@ BEGIN
       ,QtyReleased  = WORQI.QtyReleased + CASE WHEN WORQI.SKU <> '' 
                                                THEN (INSERTED.QtyReleased - DELETED.QtyReleased) 
                                                ELSE 0 END
-      ,EditWho      = SUSER_NAME()
-      ,EditDate     = GETDATE()
+      ,EditWho      = dbo.fnc_GetUserName()
+      ,EditDate     = dbo.fnc_GetDate()
       ,Trafficcop   = NULL
    FROM INSERTED
    JOIN DELETED ON (INSERTED.WorkOrderKey = DELETED.Workorderkey)
@@ -128,8 +127,8 @@ BEGIN
 
    UPDATE WORKORDERREQUESTOUTPUTS WITH (ROWLOCK)
    SET QtyRemaining = WORQO.QtyRemaining + (((INSERTED.QtyRemaining - DELETED.QtyRemaining)/INSERTED.PackQty)* (WORQO.Qty / INSERTED.UOMQty))
-      ,EditWho      = SUSER_NAME()
-      ,EditDate     = GETDATE()
+      ,EditWho      = dbo.fnc_GetUserName()
+      ,EditDate     = dbo.fnc_GetDate()
       ,Trafficcop   = NULL
    FROM INSERTED
    JOIN DELETED ON (INSERTED.WorkOrderKey = DELETED.Workorderkey)
@@ -154,8 +153,8 @@ BEGIN
                            ELSE INSERTED.WOStatus
                            END
       ,QtyRemaining = INSERTED.UOMQtyRemaining * WOR.PackQty
-      ,EditWho      = SUSER_NAME()
-      ,EditDate     = GETDATE()
+      ,EditWho      = dbo.fnc_GetUserName()
+      ,EditDate     = dbo.fnc_GetDate()
       ,Trafficcop   = NULL
    FROM INSERTED
    JOIN DELETED              ON (INSERTED.WorkOrderKey = DELETED.Workorderkey)
@@ -207,4 +206,6 @@ SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF 
 GO
+
+
 

@@ -26,6 +26,9 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 2021-04-12  Wan01    1.1   WMS-16026 - PB-Standardize TrackingNo     */
+/* 2025-10-10  SSA01    1.2   UWP-42248 -Enhanced session management    */
+/*                             and cleanup.                             */
+
 /************************************************************************/
 CREATE PROC isp_EPackRVCtnTrack02
          @c_PickSlipNo  NVARCHAR(10) 
@@ -107,8 +110,8 @@ BEGIN
    BEGIN TRAN
    UPDATE CARTONTRACK WITH (ROWLOCK)
    SET CarrierRef2 = ''
-      ,EditDate = ''
-      ,EditWho  = SUSER_SNAME()
+      ,EditDate = dbo.fnc_GetDate()   --(SSA01)
+      ,EditWho  = dbo.fnc_GetUserName()       --(SSA01)
       ,ArchiveCop  = NULL
    WHERE RowRef = @n_RowRef
 

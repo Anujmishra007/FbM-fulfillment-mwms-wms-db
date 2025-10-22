@@ -427,8 +427,6 @@ BEGIN
    END																										--(Wan01) UWP-19512 - END
 END
 
-GRANT SELECT ON  [dbo].[MBOL] TO [JReportRole]
-GO
 GRANT DELETE ON  [dbo].[MBOL] TO [NSQL]
 GO
 GRANT INSERT ON  [dbo].[MBOL] TO [NSQL]

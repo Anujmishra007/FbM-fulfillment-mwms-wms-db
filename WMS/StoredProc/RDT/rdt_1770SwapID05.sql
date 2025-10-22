@@ -3,18 +3,19 @@ GO
 SET ANSI_NULLS OFF
 GO
 
-/**************************************************************************/
-/* Store procedure: rdt_1770SwapID05                                      */
-/* Copyright      : Maersk WMS                                            */
-/* Customer       : BRF BRASIL FOODS SA                                   */
-/*                                                                        */
-/* Purpose: Swap ID base on same LOC, SKU, QTY, Lottables                 */
-/*                                                                        */
-/* Date        Rev    Author      Purposes                                */
-/* 2025-04-08  1.0    NLT03       FCR-3836 Create                         */
-/* 2025-04-15  1.0.1  NLT03       FCR-3836 Remove useless validation      */
-/* 2025-04-15  1.0.2  NLT03       FCR-3836 Handle VNAOUT RPF task         */
-/**************************************************************************/
+/****************************************************************************/
+/* Store procedure: rdt_1770SwapID05                                        */
+/* Copyright      : Maersk WMS                                              */
+/* Customer       : BRF BRASIL FOODS SA                                     */
+/*                                                                          */
+/* Purpose: Swap ID base on same LOC, SKU, QTY, Lottables                   */
+/*                                                                          */
+/* Date        Rev    Author      Purposes                                  */
+/* 2025-04-08  1.0    NLT03       FCR-3836 Create                           */
+/* 2025-04-15  1.0.1  NLT03       FCR-3836 Remove useless validation        */
+/* 2025-04-15  1.0.2  NLT03       FCR-3836 Handle VNAOUT RPF task           */
+/* 2025-08-15  1.1.0  NLT03       UWP-39385 Allocated Qty should be swapped */
+/****************************************************************************/
 
 CREATE OR ALTER PROCEDURE rdt.rdt_1770SwapID05
    @nMobile           INT,
@@ -34,9 +35,10 @@ BEGIN
 
    DECLARE @nRowCount      INT
 
-   DECLARE @cOtherPickDetailKey NVARCHAR(10)
    DECLARE @cOtherTaskDetailKey NVARCHAR(10)
    DECLARE @cTaskPickDetailKey  NVARCHAR(10)
+   DECLARE @cLoopTaskDetailKey  NVARCHAR(10)
+   DECLARE @cTaskPickDetailQty  INT
    
    DECLARE @cNewSKU        NVARCHAR( 20)
    DECLARE @cNewLOT        NVARCHAR( 10)
@@ -45,13 +47,10 @@ BEGIN
    DECLARE @cNewPickMethod NVARCHAR( 10)
    DECLARE @nNewQTY        INT
 
-   DECLARE @cRPFTaskFromLoc   NVARCHAR( 10)
    DECLARE @cRPFTaskToLoc     NVARCHAR( 10)
 
-   DECLARE @cPickDetailKey NVARCHAR(10)
+   DECLARE @cLoopPickDetailKey NVARCHAR(10)
    DECLARE @cStorerKey     NVARCHAR( 15)
-   DECLARE @cTaskKey       NVARCHAR( 10)
-   DECLARE @cTaskType      NVARCHAR( 10)
    DECLARE @cTaskSKU       NVARCHAR( 20)
    DECLARE @cTaskLOT       NVARCHAR( 10)
    DECLARE @cTaskLOC       NVARCHAR( 10)
@@ -64,6 +63,10 @@ BEGIN
    DECLARE @cTaskLocationType    NVARCHAR( 10)
    DECLARE @cLocationType        NVARCHAR( 10)
    DECLARE @cLotMatch            NVARCHAR( 1) = '0'
+   DECLARE @nNewIDAllocatedForRPF      INT = 0
+   DECLARE @nNewIDAllocatedForVNAOUT   INT = 0
+   DECLARE @nNewIDAllocatedForPick     INT = 0
+   DECLARE @nLoopIndex                 INT = -1
 
    DECLARE
       @cChkL01 NVARCHAR(1) = '0', @cChkL02 NVARCHAR(1) = '0', @cChkL03 NVARCHAR(1) = '0', @cChkL04 NVARCHAR(1) = '0', @cChkL05 NVARCHAR(1) = '0', 
@@ -86,7 +89,7 @@ BEGIN
 
    IF @cIDStatus = 'HOLD'
    BEGIN
-      SET @nErrNo = 236041
+      SET @nErrNo = 236002
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --IDIsOnHold
       RETURN
    END
@@ -120,16 +123,17 @@ BEGIN
 
    -- Get task info
    SELECT
-      @cStorerKey = TD.StorerKey, 
-      @cTaskType = TD.TaskType, 
+      @cStorerKey = TD.StorerKey,
       @cTaskSKU = TD.SKU, 
       @cTaskLOT = TD.LOT,
       @cTaskLOC = TD.FromLOC,
       @cTaskID = TD.FromID, 
       @nTaskQTY = TD.SystemQTY,
-      @cTaskPickDetailKey = PickDetailKey,
+      @cTaskPickDetailKey = PD.PickDetailKey,
+      @cTaskPickDetailQty = PD.Qty,
       @cTaskLocationType = LOC.LocationHandling
    FROM dbo.TaskDetail TD WITH (NOLOCK)
+   INNER JOIN dbo.PickDetail PD WITH(NOLOCK) ON TD.TaskDetailKey = PD.TaskDetailKey
    INNER JOIN dbo.LOC LOC WITH (NOLOCK) ON TD.FromLoc = LOC.Loc
    WHERE TD.StorerKey = @cStorerKey
       AND TD.TaskDetailKey = @cTaskDetailKey
@@ -138,15 +142,15 @@ BEGIN
 
    IF @nRowCount = 0
    BEGIN
-      SET @nErrNo = 236002
+      SET @nErrNo = 236003
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --BadTaskDtlKey
       RETURN
    END
 
    IF @cLocationType IS NOT NULL AND @cLocationType <> '' AND @cTaskLocationType <> @cLocationType
    BEGIN
-      SET @nErrNo = 236019
-      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Racking Type Not Match
+      SET @nErrNo = 236004
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Loc Type Not Match
       RETURN
    END
 
@@ -175,15 +179,30 @@ BEGIN
    -- Check ID valid
    IF @nRowCount = 0
    BEGIN
-      SET @nErrNo = 236003
+      SET @nErrNo = 236005
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid ID
+      RETURN
+   END
+
+   SELECT @nRowCount = COUNT(1)
+   FROM dbo.PickDetail WITH (NOLOCK)
+   WHERE StorerKey = @cStorerKey
+      AND Loc = @cNewLOC
+      AND ID = @cNewID
+      AND Status > '0'
+      AND QTY > 0
+
+   IF @nRowCount > 0
+   BEGIN
+      SET @nErrNo = 236006
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Pick Started, cannot swap ID
       RETURN
    END
 
    -- Check ID multi LOC/LOT
    IF @nRowCount > 1
    BEGIN
-      SET @nErrNo = 236004
+      SET @nErrNo = 236007
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --ID multi rec
       RETURN
    END
@@ -191,7 +210,7 @@ BEGIN
    -- Check LOC match
    IF @cNewLOC <> @cTaskLOC
    BEGIN
-      SET @nErrNo = 236005
+      SET @nErrNo = 236008
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --LOC not match
       RETURN
    END
@@ -199,7 +218,7 @@ BEGIN
    -- Check SKU match
    IF @cNewSKU <> @cTaskSKU
    BEGIN
-      SET @nErrNo = 236006
+      SET @nErrNo = 236009
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --SKU not match
       RETURN
    END
@@ -207,7 +226,7 @@ BEGIN
    -- Check QTY match
    IF @nNewQTY <> @nTaskQTY
    BEGIN
-      SET @nErrNo = 236007
+      SET @nErrNo = 236010
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --QTY not match
       RETURN
    END
@@ -442,20 +461,6 @@ BEGIN
       END
    END
 
-   -- Check ID picked
-   IF EXISTS( SELECT TOP 1 1
-      FROM dbo.PickDetail WITH (NOLOCK)
-      WHERE StorerKey = @cStorerKey
-         AND SKU = @cNewSKU
-         AND ID = @cNewID
-         AND Lot = @cNewLOT
-         AND Status <> '0'
-         AND QTY > 0)
-   BEGIN
-      SET @nErrNo = 236009
-      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --ID picked
-      RETURN
-   END
 
    -- Check task taken by other
    IF EXISTS( SELECT TOP 1 1
@@ -466,7 +471,7 @@ BEGIN
          AND TaskDetailKey <> @cTaskDetailKey
          AND Status IN ('3', '5', '9') )
    BEGIN
-      SET @nErrNo = 236010
+      SET @nErrNo = 236011
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --ID task taken
       RETURN
    END
@@ -487,218 +492,345 @@ BEGIN
       @cOtherTaskUserKey     NVARCHAR( 18),
       @cOtherTaskMessage03   NVARCHAR( 30)
 
-   -- Get other task info
-   SET @cOtherTaskDetailKey = ''
+   -- Current Pick Details
+   DECLARE @tCurrentTaskDetails TABLE
+   (
+      RowIndex          INT IDENTITY(1,1),
+      TaskDetailKey     NVARCHAR(10),
+      TaskType          NVARCHAR(10),
+      PickDetailKey     NVARCHAR(10),
+      PickMethod        NVARCHAR(10),
+      Qty               INT 
+   )
 
+   INSERT INTO @tCurrentTaskDetails (TaskDetailKey, TaskType, PickDetailKey, PickMethod, Qty)
    SELECT 
-      @cOtherTaskDetailKey = TaskDetailKey,
-      @cNewTaskType = TaskType,
-      @cNewPickMethod = PickMethod,
-      @cOtherTaskStatus = Status,
-      @cOtherTaskUserKey = UserKey,
-      @cOtherTaskMessage03 = Message03
-   FROM dbo.TaskDetail WITH (NOLOCK)
+      TD.TaskDetailKey, TD.TaskType, PD.PickDetailKey, TD.PickMethod, PD.Qty
+   FROM dbo.PickDetail PD WITH (NOLOCK)
+   INNER JOIN dbo.TaskDetail TD WITH(NOLOCK) ON TD.TaskDetailKey = PD.TaskDetailKey
+   WHERE PD.StorerKey = @cStorerkey
+      AND TD.FromLoc = @cTaskLOC
+      AND TD.FromID = @cTaskID
+      AND TD.TaskDetailKey = @cTaskDetailKey
+      AND TD.Status IN ( '3' ) -- '0' = Open, 'Q' = Queued 
+
+   -- Get other task info
+   DECLARE @tOtherTaskDetails TABLE
+   (
+      RowIndex          INT IDENTITY(1,1),
+      TaskDetailKey     NVARCHAR(10),
+      TaskType          NVARCHAR(10),
+      PickDetailKey     NVARCHAR(10),
+      PickMethod        NVARCHAR(10),
+      Qty               INT 
+   )
+
+   INSERT INTO @tOtherTaskDetails (TaskDetailKey, TaskType, PickDetailKey, PickMethod, Qty)
+   SELECT 
+      TD.TaskDetailKey, TD.TaskType, '', TD.PickMethod, TD.SystemQty
+   FROM dbo.TaskDetail TD WITH (NOLOCK)
    WHERE StorerKey = @cStorerkey
-      AND TaskType IN ('RPF', 'FPK', 'VNAOUT')
+      AND TaskType IN ('RPF', 'RP1', 'VNAOUT')
       AND FromLoc = @cNewLOC
       AND FromID = @cNewID
       AND TaskDetailKey <> @cTaskDetailKey
       AND Status IN ( '0', 'Q' ) -- '0' = Open, 'Q' = Queued
 
-   IF ISNULL(@cOtherTaskDetailKey, '') <> ''
+   INSERT INTO @tOtherTaskDetails (TaskDetailKey, TaskType, PickDetailKey, PickMethod, Qty)
+   SELECT 
+      TD.TaskDetailKey, TD.TaskType, PD.PickDetailKey, TD.PickMethod, PD.Qty
+   FROM dbo.PickDetail PD WITH (NOLOCK)
+   LEFT JOIN dbo.TaskDetail TD WITH(NOLOCK) ON PD.StorerKey = TD.StorerKey AND TD.TaskDetailKey = PD.TaskDetailKey
+   WHERE PD.StorerKey = @cStorerkey
+      AND TD.FromLoc = @cNewLOC
+      AND TD.FromID = @cNewID
+      AND TD.TaskDetailKey <> @cTaskDetailKey
+      AND PD.Status = '0'
+      AND (TD.TaskDetailKey IS NULL OR (TD.TaskDetailKey IS NOT NULL AND TD.Status IN ( '0', 'Q' )) ) -- '0' = Open, 'Q' = Queued
+
+   -- Search other pick tasks base on RPF task
+   IF EXISTS (SELECT 1 FROM @tOtherTaskDetails WHERE TaskType IN ('RPF', 'RP1'))
    BEGIN
-      -- Check full pallet
-      IF @cNewPickMethod <> 'FP' 
-      BEGIN
-         SET @nErrNo = 236037
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Swap FP only
-         RETURN
-      END
+      INSERT INTO @tOtherTaskDetails (TaskDetailKey, TaskType, PickDetailKey, PickMethod, Qty)
+      SELECT 
+         TD.TaskDetailKey, TD.TaskType, PD.PickDetailKey, TD.PickMethod, PD.Qty
+      FROM dbo.PickDetail PD WITH (NOLOCK)
+      INNER JOIN dbo.TaskDetail TD WITH(NOLOCK) ON PD.StorerKey = TD.StorerKey AND TD.TaskDetailKey = PD.TaskDetailKey
+      INNER JOIN @tOtherTaskDetails TTD ON TD.RefTaskKey IS NOT NULL AND TTD.TaskDetailKey = TD.RefTaskKey
+      WHERE PD.StorerKey = @cStorerkey
+         AND PD.Status IN ( '0', 'H' )
+         AND TTD.TaskType IN ('RPF', 'RP1')
    END
 
-   -- Get other PickDetail info
-   SET @cOtherPickDetailKey = ''
+   SELECT @nNewIDAllocatedForRPF = COUNT(1)
+   FROM @tOtherTaskDetails
+   WHERE TaskType = 'RPF'
 
-   SELECT @cOtherPickDetailKey = PickDetailKey
-   FROM dbo.PickDetail WITH (NOLOCK)
-   WHERE StorerKey = @cStorerKey
-      AND SKU = @cNewSKU
-      AND ID = @cNewID
-      AND Loc = @cNewLOC
-      AND Status = '0'
-      AND QTY > 0
+   SELECT @nNewIDAllocatedForVNAOUT = COUNT(1)
+   FROM @tOtherTaskDetails
+   WHERE TaskType = 'VNAOUT'
 
-   -- Check pallet allocated but not yet release task
-   IF @cOtherTaskDetailKey = '' AND ISNULL(@cOtherPickDetailKey, '') <> ''
-   BEGIN
-      SET @nErrNo = 236038
-      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --ID locked
-      RETURN
-   END
+   SELECT @nNewIDAllocatedForPick = COUNT(1)
+   FROM @tOtherTaskDetails
+   WHERE PickDetailKey IS NOT NULL
+      AND PickDetailKey <> ''
 
    DECLARE @nTranCount INT
    SET @nTranCount = @@TRANCOUNT
 
-   BEGIN TRAN
-   SAVE TRAN rdt_1770SwapID05
+   BEGIN TRANSACTION
 
-   -- 1. Scanned ID is allocated for a replenishment task, release the pallet first
-   IF @cOtherTaskDetailKey <> '' AND ISNULL(@cOtherPickDetailKey, '') = '' AND ( @cNewTaskType IN ( 'RPF', 'VNAOUT') )
+   -- 1. The scanned ID is not allocated for any PickDetail
+   IF NOT EXISTS (SELECT 1 FROM @tOtherTaskDetails)
    BEGIN
-      SELECT 
-         @cRPFTaskFromLoc = FromLOC,
-         @cRPFTaskToLoc = ToLoc
-      FROM dbo.TaskDetail WITH(NOLOCK)
-      WHERE TaskDetailKey = @cOtherTaskDetailKey
-         AND StorerKey = @cStorerKey
-
-      -- Unlock the inventory for the RPF task
-      EXEC rdt.rdt_Putaway_PendingMoveIn '', 'UNLOCK' 
-         ,''        --@cLOC      
-         ,''        --@cID       
-         ,''        --@cSuggLOC 
-         ,''        --@cStorerKey
-         ,@nErrNo  OUTPUT
-         ,@cErrMsg OUTPUT
-         ,@cTaskDetailKey = @cOtherTaskDetailKey
-      IF @nErrNo <> 0
-      BEGIN
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UnlockRPFFail
+      -- i) Unallocated the old ID
+      BEGIN TRY
+         UPDATE dbo.PickDetail WITH(ROWLOCK)
+         SET Qty = 0
+         WHERE StorerKey = @cStorerKey
+            AND TaskDetailKey = @cTaskDetailKey
+      END TRY
+      BEGIN CATCH
+         SET @nErrNo = 236041 
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Unallocate Failed
          GOTO RollBackTran
-      END
+      END CATCH
 
-      UPDATE LOTxLOCxID SET
-         QTYReplen = 0, 
-         EditWho = SUSER_SNAME(), 
-         EditDate = GETDATE(), 
-         TrafficCop = NULL
-      WHERE LOT = @cNewLOT
-         AND LOC = @cNewLOC
-         AND ID = @cNewID
-      IF @@ERROR <> 0 OR @@ROWCOUNT <> 1
+      -- ii) Allocated Qty to scanned ID
+      -- Update current task PickDetail
+      -- iii) Allocated Qty to scanned ID
+      -- Update current task PickDetail
+      SET @nLoopIndex = -1
+      WHILE 1 = 1
       BEGIN
-         SET @nErrNo = 236042
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD LLI Fail
-         GOTO RollBackTran
-      END
+         SELECT TOP 1
+            @cLoopTaskDetailKey = TaskDetailKey,
+            @cLoopPickDetailKey = PickDetailKey,
+            @nLoopIndex = RowIndex,
+            @nQTY = Qty
+         FROM @tCurrentTaskDetails
+         WHERE RowIndex > @nLoopIndex
+          AND ISNULL(PickDetailKey, '') <> ''
+         ORDER BY RowIndex
 
-      UPDATE TaskDetail 
-      SET
-         UserKey  = '',
-         Status   = '0',
-         EditDate = GETDATE(), 
-         EditWho = SUSER_SNAME(), 
-         TrafficCop = NULL
-      WHERE TaskDetailKey = @cOtherTaskDetailKey
+         SELECT @nRowCount = @@ROWCOUNT
 
-      IF @@ERROR <> 0 OR @@ROWCOUNT <> 1
-      BEGIN
-         SET @nErrNo = 236036
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPDRPFTaskFail
-         GOTO RollBackTran
+         IF @nRowCount = 0
+            BREAK
+
+         BEGIN TRY
+            UPDATE dbo.PickDetail SET
+               Qty = @nQTY,
+               LOT = @cNewLOT,
+               ID = @cNewID, 
+               EditDate = GETDATE(), 
+               EditWho = SUSER_SNAME()
+            WHERE PickDetailKey = @cLoopPickDetailKey
+         END TRY
+         BEGIN CATCH
+            SET @nErrNo = 236042
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Allocate Failed
+            GOTO RollBackTran
+         END CATCH
+
+         BEGIN TRY
+            UPDATE dbo.TaskDetail WITH(ROWLOCK)
+            SET
+               LOT = @cNewLOT,
+               FromID = @cNewID,
+               ToID = CASE WHEN ToID <> '' THEN @cNewID ELSE ToID END, 
+               EditDate = GETDATE(), 
+               EditWho = SUSER_SNAME(),
+               TrafficCop = NULL
+            WHERE TaskDetailKey = @cLoopTaskDetailKey
+         END TRY
+         BEGIN CATCH
+            SET @nErrNo = 236043
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Allocate Failed
+            GOTO RollBackTran
+         END CATCH
       END
    END
-   
-   -- 2. ID is not alloc, 
-   --    or ID is allocaed for a replenishment task, but the ID is released in previous section
-   IF (@cOtherTaskDetailKey = '' AND @cOtherPickDetailKey = '')
-      OR (@cOtherTaskDetailKey <> '' AND ISNULL(@cOtherPickDetailKey, '') = '' AND (@cNewTaskType IN ('RPF', 'VNAOUT') ))
+
+   -- 2. Scanned ID is allocated for pick task, swap allocation
+   IF ( @nNewIDAllocatedForPick > 0 )
    BEGIN
-      -- i. ID is not allocated
-      -- Loop PickDetail
-      DECLARE @curPD CURSOR
-      SET @curPD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-         SELECT PickDetailKey, QTY
-         FROM dbo.PickDetail WITH (NOLOCK)
-         WHERE TaskDetailKey = @cTaskDetailKey
-            AND Status = '0'
-            AND QTY > 0
-      OPEN @curPD
-      FETCH NEXT FROM @curPD INTO @cPickDetailKey, @nQTY
-      WHILE @@FETCH_STATUS = 0
-      BEGIN
-         -- Update current task PickDetail
-         UPDATE PickDetail SET
-            LOT = @cNewLOT, 
-            ID = @cNewID, 
-            EditDate = GETDATE(), 
-            EditWho = SUSER_SNAME()
-         WHERE PickDetailKey = @cPickDetailKey
-         IF @@ERROR <> 0
-            GOTO RollBackTran
+      -- i) Unallocated the old ID
+      BEGIN TRY
+         UPDATE dbo.PickDetail WITH(ROWLOCK)
+         SET Qty = 0
+         WHERE StorerKey = @cStorerKey
+            AND TaskDetailKey = @cTaskDetailKey
+      END TRY
+      BEGIN CATCH
+         SET @nErrNo = 236013 
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Unallocate Failed
+         GOTO RollBackTran
+      END CATCH
 
-         SET @nNewQTY = @nNewQTY - @nQTY
-         SET @nTaskQTY = @nTaskQTY - @nQTY
+      -- ii) Unallocated the scanned ID
+      BEGIN TRY
+         UPDATE PD WITH(ROWLOCK)
+         SET Qty = 0
+         FROM dbo.PickDetail PD WITH(ROWLOCK)
+         INNER JOIN @tOtherTaskDetails OTD ON PD.PickDetailKey = OTD.PickDetailKey
+         WHERE OTD.PickDetailKey IS NOT NULL
+            AND OTD.PickDetailKey <> ''
+      END TRY
+      BEGIN CATCH
+         SET @nErrNo = 236014
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Unallocate Failed
+         GOTO RollBackTran
+      END CATCH
+
+      -- iii) Allocated Qty to scanned ID
+      -- Update current task PickDetail
+      SET @nLoopIndex = -1
+      WHILE 1 = 1
+      BEGIN
+         SELECT TOP 1
+            @cLoopTaskDetailKey = TaskDetailKey,
+            @cLoopPickDetailKey = PickDetailKey,
+            @nLoopIndex = RowIndex,
+            @nQTY = Qty
+         FROM @tCurrentTaskDetails
+         WHERE RowIndex > @nLoopIndex
+            AND ISNULL(PickDetailKey, '') <> ''
+         ORDER BY RowIndex
+
+         SELECT @nRowCount = @@ROWCOUNT
+
+         IF @nRowCount = 0
+            BREAK
          
-         FETCH NEXT FROM @curPD INTO @cPickDetailKey, @nQTY
+         BEGIN TRY
+            UPDATE dbo.PickDetail SET
+               Qty = @nQTY,
+               LOT = @cNewLOT,
+               ID = @cNewID, 
+               EditDate = GETDATE(), 
+               EditWho = SUSER_SNAME()
+            WHERE PickDetailKey = @cLoopPickDetailKey
+         END TRY
+         BEGIN CATCH
+            SET @nErrNo = 236015
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Allocate Failed
+            GOTO RollBackTran
+         END CATCH
+
+         BEGIN TRY
+            UPDATE dbo.TaskDetail WITH(ROWLOCK)
+            SET
+               LOT = @cNewLOT,
+               FromID = @cNewID,
+               ToID = CASE WHEN ToID <> '' THEN @cNewID ELSE ToID END, 
+               EditDate = GETDATE(), 
+               EditWho = SUSER_SNAME(),
+               TrafficCop = NULL
+            WHERE TaskDetailKey = @cLoopTaskDetailKey
+         END TRY
+         BEGIN CATCH
+            SET @nErrNo = 236016
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Allocate Failed
+            GOTO RollBackTran
+         END CATCH
       END
 
-      -- Check balance
-      IF @nTaskQTY <> 0 OR @nNewQTY <> 0
+      -- iv) Allocated Qty to current ID
+      -- Update other task PickDetail
+      SET @nLoopIndex = -1
+      WHILE 1 = 1
       BEGIN
-         SET @nErrNo = 236011
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --TaskOffsetErr
-         GOTO RollBackTran
-      END
+         SELECT TOP 1
+            @cLoopTaskDetailKey = TaskDetailKey,
+            @cLoopPickDetailKey = PickDetailKey,
+            @nLoopIndex = RowIndex,
+            @nQTY = Qty
+         FROM @tOtherTaskDetails
+         WHERE RowIndex > @nLoopIndex
+            AND ISNULL(PickDetailKey, '') <> ''
+         ORDER BY RowIndex
 
-      -- Update current task
-      UPDATE TaskDetail SET
-         LOT = @cNewLOT, 
-         FromID = @cNewID, 
-         ToID = CASE WHEN ToID <> '' THEN @cNewID ELSE ToID END, 
-         EditDate = GETDATE(), 
-         EditWho = SUSER_SNAME(), 
-         TrafficCop = NULL
-      WHERE TaskDetailKey = @cTaskDetailKey
-      IF @@ERROR <> 0
-      BEGIN
-         SET @nErrNo = 236012
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD Task Fail
-         GOTO RollBackTran
-      END
+         SELECT @nRowCount = @@ROWCOUNT
 
-      -- ii. ID is allocated for a replenishment task, but the ID is released in previous section
-      -- ID was allocated for a replenishment task, it was released, and allocated for the Picking task,
-      -- need allocate the old ID to the replenishment task
-      IF @cOtherTaskDetailKey <> '' AND ISNULL(@cOtherPickDetailKey, '') = '' AND ( @cNewTaskType IN ( 'RPF', 'VNAOUT' )  )
-      BEGIN
-         EXEC rdt.rdt_Putaway_PendingMoveIn '', 'LOCK' 
-            ,@cRPFTaskFromLoc
-            ,@cTaskID
-            ,@cRPFTaskToLoc 
+         IF @nRowCount = 0
+            BREAK
+
+         BEGIN TRY
+            UPDATE dbo.PickDetail SET
+               Qty = @nQTY,
+               LOT = @cTaskLOT, 
+               ID = CASE WHEN ID <> '' THEN @cTaskID ELSE ID END, 
+               EditDate = GETDATE(), 
+               EditWho = SUSER_SNAME()
+            WHERE PickDetailKey = @cLoopPickDetailKey
+         END TRY
+         BEGIN CATCH
+            SET @nErrNo = 236017
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Allocate Failed
+            GOTO RollBackTran
+         END CATCH
+
+         BEGIN TRY
+            UPDATE dbo.TaskDetail WITH(ROWLOCK)
+            SET
+               LOT = @cTaskLOT,
+               FromID = CASE WHEN FromID <> '' THEN @cTaskID ELSE FromID END,
+               ToID = CASE WHEN ToID <> '' THEN @cTaskID ELSE ToID END, 
+               EditDate = GETDATE(), 
+               EditWho = SUSER_SNAME(),
+               TrafficCop = NULL
+            WHERE TaskDetailKey = @cLoopTaskDetailKey
+         END TRY
+         BEGIN CATCH
+            SET @nErrNo = 236018
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Allocate Failed
+            GOTO RollBackTran
+         END CATCH
+      END
+   END
+
+   -- 3. Scanned ID is allocated for a replenishment task, swap RPFPendingMoveIn
+   IF @nNewIDAllocatedForRPF > 0 OR @nNewIDAllocatedForVNAOUT > 0
+   BEGIN
+      -- Unlock ToLoc for scanned ID
+      BEGIN TRY
+         EXEC rdt.rdt_Putaway_PendingMoveIn '', 'UNLOCK'
+            ,'' --@cSuggFromLOC
+            ,@cNewID 
+            ,'' --@cSuggToLOC
             ,@cStorerKey
             ,@nErrNo  OUTPUT
             ,@cErrMsg OUTPUT
-            ,@cFromLOT = @cTaskLOT
-            ,@cTaskDetailKey = @cOtherTaskDetailKey
-            ,@cMoveQTYAlloc = '1' -- Just to bypass QTYReplen
+      END TRY
+      BEGIN CATCH
+         SET @nErrNo = 236019
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Unlock RPFPendingMoveIn Failed
+         GOTO RollBackTran
+      END CATCH
 
-         IF @nErrNo <> 0
-         BEGIN
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD Task Fail
-            GOTO RollBackTran
-         END
+      IF ISNULL(@nErrNo, 0) <> 0
+         GOTO RollBackTran
 
-         UPDATE TaskDetail SET
-            Status = @cOtherTaskStatus,
-            UserKey = @cOtherTaskUserKey,
-            LOT = @cTaskLOT, 
-            FromID = @cTaskID, 
-            ToID = CASE WHEN ToID <> '' THEN @cTaskID ELSE ToID END, 
-            EditDate = GETDATE(), 
-            EditWho = SUSER_SNAME(), 
-            TrafficCop = NULL
-         WHERE TaskDetailKey = @cOtherTaskDetailKey
-            AND Status IN ( '0', 'Q' ) -- '0' = Open, 'Q' = Queued
-
-         IF @@ERROR <> 0 OR @@ROWCOUNT <> 1
-         BEGIN
-            SET @nErrNo = 236039
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UpdTaskFail
-            GOTO RollBackTran
-         END
-
+      BEGIN TRY
          UPDATE LOTxLOCxID SET
+            QTYReplen = 0, 
+            EditWho = SUSER_SNAME(), 
+            EditDate = GETDATE(), 
+            TrafficCop = NULL
+         WHERE LOT = @cNewLOT
+            AND LOC = @cNewLOC
+            AND ID = @cNewID
+            AND QTYReplen > 0
+      END TRY
+      BEGIN CATCH
+         SET @nErrNo = 236035
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Release QTYReplen Failed
+         GOTO RollBackTran
+      END CATCH
+
+      BEGIN TRY
+         UPDATE dbo.LOTxLOCxID SET
             QTYReplen = @nIDQTY, 
             EditWho = SUSER_SNAME(), 
             EditDate = GETDATE(), 
@@ -706,131 +838,141 @@ BEGIN
          WHERE LOT = @cTaskLOT
             AND LOC = @cNewLOC
             AND ID = @cTaskID
+      END TRY
+      BEGIN CATCH
+         SET @nErrNo = 236036 
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Swap QTYReplen Failed
+         GOTO RollBackTran
+      END CATCH
 
-         IF @@ERROR <> 0 OR @@ROWCOUNT <> 1
-         BEGIN
-            SET @nErrNo = 236043
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD LLI Fail
-            GOTO RollBackTran
-         END
-      END
+      SELECT @cOtherTaskDetailKey = TaskDetailKey
+      FROM @tOtherTaskDetails
+      WHERE TaskType IN ('RPF', 'RP1', 'VNAOUT')
 
-      GOTO CommitTran
-   END
+      SELECT @cRPFTaskToLoc = ToLoc
+      FROM dbo.TaskDetail WITH(NOLOCK)
+      WHERE TaskDetailKey = @cOtherTaskDetailKey
 
-   -- 3. ID on other TaskDetail and PickDetail
-   IF @cOtherTaskDetailKey <> '' AND @cOtherPickDetailKey <> ''
-   BEGIN
-      IF @cNewTaskType = @cTaskType 
-      BEGIN
-         -- Loop PickDetail
-         SET @curPD = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-            SELECT PickDetailKey, TaskDetailKey, QTY
-            FROM dbo.PickDetail WITH (NOLOCK)
-            WHERE TaskDetailKey IN (@cOtherTaskDetailKey, @cTaskDetailKey)
-               AND Status = '0'
-               AND QTY > 0
-         OPEN @curPD
-         FETCH NEXT FROM @curPD INTO @cPickDetailKey, @cTaskKey, @nQTY
-         WHILE @@FETCH_STATUS = 0
-         BEGIN
-            IF @cTaskKey = @cOtherTaskDetailKey
-            BEGIN
-               -- Update other task PickDetail
-               UPDATE PickDetail SET
-                  LOT = @cTaskLOT, 
-                  ID = @cTaskID, 
-                  EditDate = GETDATE(), 
-                  EditWho = SUSER_SNAME(), 
-                  TrafficCop = NULL
-               WHERE PickDetailKey = @cPickDetailKey
-               IF @@ERROR <> 0
-               BEGIN
-                  SET @nErrNo = 236013
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD Task Fail
-                  GOTO RollBackTran
-               END
-               SET @nNewQTY = @nNewQTY - @nQTY
-            END
-            ELSE
-            BEGIN
-               -- Update current task PickDetail
-               UPDATE PickDetail SET
-                  LOT = @cNewLOT, 
-                  ID = @cNewID, 
-                  EditDate = GETDATE(), 
-                  EditWho = 'rdt.' + SUSER_SNAME(), 
-                  TrafficCop = NULL
-               WHERE PickDetailKey = @cPickDetailKey
-               IF @@ERROR <> 0
-               BEGIN
-                  SET @nErrNo = 236014
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD Task Fail
-                  GOTO RollBackTran
-               END
-               SET @nTaskQTY = @nTaskQTY - @nQTY
-            END
-            FETCH NEXT FROM @curPD INTO @cPickDetailKey, @cTaskKey, @nQTY
-         END
-         
-         -- Check balance
-         IF @nTaskQTY <> 0 OR @nNewQTY <> 0
-         BEGIN
-            SET @nErrNo = 236015
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --TaskOffsetErr
-            GOTO RollBackTran
-         END
-         
-         -- Update other task
-         UPDATE TaskDetail SET
-            LOT = @cTaskLOT, 
-            FromID = @cTaskID, 
+      -- Loc ToLoc for scanned ID
+      BEGIN TRY
+         EXEC rdt.rdt_Putaway_PendingMoveIn '', 'LOCK' 
+            ,@cTaskLOC
+            ,@cTaskID
+            ,@cRPFTaskToLoc
+            ,@cStorerKey
+            ,@nErrNo  OUTPUT
+            ,@cErrMsg OUTPUT
+            ,@cFromLOT = @cTaskLOT
+            ,@cTaskDetailKey = @cOtherTaskDetailKey
+            ,@cMoveQTYAlloc = '1' -- Just to bypass QTYReplen
+            ,@cMoveQTYReplen = '1'
+      END TRY
+      BEGIN CATCH
+         SET @nErrNo = 236037
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Unlock RPFPendingMoveIn Failed
+         GOTO RollBackTran
+      END CATCH
+
+      IF ISNULL(@nErrNo, 0) <> 0
+         GOTO RollBackTran
+
+      --Update RPF/VNAOUT Task
+      BEGIN TRY
+         UPDATE dbo.TaskDetail WITH(ROWLOCK)
+         SET
+            LOT = @cTaskLOT,
+            FromID = @cTaskID,
             ToID = CASE WHEN ToID <> '' THEN @cTaskID ELSE ToID END, 
             EditDate = GETDATE(), 
-            EditWho = SUSER_SNAME(), 
+            EditWho = SUSER_SNAME(),
             TrafficCop = NULL
          WHERE TaskDetailKey = @cOtherTaskDetailKey
-            AND Status IN ( '0', 'Q' ) -- '0' = Open, 'Q' = Queued
-         IF @@ERROR <> 0 OR @@ROWCOUNT <> 1
-         BEGIN
-            SET @nErrNo = 236016
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD Task Fail
+      END TRY
+      BEGIN CATCH
+         SET @nErrNo = 236044
+         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Allocate Failed
+         GOTO RollBackTran
+      END CATCH
+      
+      -- Swap ID for current task If ID not swapped yet
+      IF EXISTS(SELECT 1 
+               FROM dbo.PickDetail WITH(NOLOCK)
+               WHERE StorerKey = @cStorerKey
+                  AND TaskDetailKey = @cTaskDetailKey
+                  AND ID = @cTaskID
+               )
+      BEGIN
+         BEGIN TRY
+            UPDATE dbo.PickDetail WITH(ROWLOCK)
+            SET Qty = 0
+            WHERE TaskDetailKey = @cTaskDetailKey
+         END TRY
+         BEGIN CATCH
+            SET @nErrNo = 236038
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Unallocate Failed
             GOTO RollBackTran
-         END
+         END CATCH
 
-         -- Update current task
-         UPDATE TaskDetail SET
-            LOT = @cNewLOT, 
-            FromID = @cNewID, 
-            ToID = CASE WHEN ToID <> '' THEN @cNewID ELSE ToID END, 
-            EditDate = GETDATE(), 
-            EditWho = SUSER_SNAME(), 
-            TrafficCop = NULL
-         WHERE TaskDetailKey = @cTaskDetailKey
-         IF @@ERROR <> 0 OR @@ROWCOUNT <> 1
+         SET @nLoopIndex = -1
+         WHILE 1 = 1
          BEGIN
-            SET @nErrNo = 236017
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --UPD Task Fail
-            GOTO RollBackTran
+            SELECT TOP 1
+               @cLoopTaskDetailKey = TaskDetailKey,
+               @cLoopPickDetailKey = PickDetailKey,
+               @nLoopIndex = RowIndex,
+               @nQTY = Qty
+            FROM @tCurrentTaskDetails
+            WHERE RowIndex > @nLoopIndex
+            AND ISNULL(PickDetailKey, '') <> ''
+            ORDER BY RowIndex
+
+            SELECT @nRowCount = @@ROWCOUNT
+
+            IF @nRowCount = 0
+               BREAK
+            
+            BEGIN TRY
+               UPDATE dbo.PickDetail SET
+                  Qty = @nQTY,
+                  LOT = @cNewLOT,
+                  ID = @cNewID, 
+                  EditDate = GETDATE(), 
+                  EditWho = SUSER_SNAME()
+               WHERE PickDetailKey = @cLoopPickDetailKey
+            END TRY
+            BEGIN CATCH
+               SET @nErrNo = 236039
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Allocate Failed
+               GOTO RollBackTran
+            END CATCH
+
+            BEGIN TRY
+               UPDATE dbo.TaskDetail WITH(ROWLOCK)
+               SET
+                  LOT = @cNewLOT,
+                  FromID = @cNewID,
+                  ToID = CASE WHEN ToID <> '' THEN @cNewID ELSE ToID END, 
+                  EditDate = GETDATE(), 
+                  EditWho = SUSER_SNAME(),
+                  TrafficCop = NULL
+               WHERE TaskDetailKey = @cLoopTaskDetailKey
+            END TRY
+            BEGIN CATCH
+               SET @nErrNo = 236040
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Update TaskDetail Failed
+               GOTO RollBackTran
+            END CATCH
          END
       END
-      GOTO CommitTran
    END
 
-   -- Check not swap
-   SET @nErrNo = 236018
-   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --NothingSwapped
-   GOTO RollBackTran
-
 CommitTran:
-   COMMIT TRAN rdt_1770SwapID05
+   COMMIT TRANSACTION
    GOTO Quit
 
 RollBackTran:
-      ROLLBACK TRAN rdt_1770SwapID05
+      ROLLBACK TRANSACTION
 Quit:
-   WHILE @@TRANCOUNT > @nTranCount
-      COMMIT TRAN
 END
 GO
 

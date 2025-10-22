@@ -3,31 +3,33 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-/************************************************************************/
-/* Store procedure: rdt_1721ExtValid01                                   */
-/* Copyright      : Maersk                                              */
-/*                                                                      */
-/* Called from: rdtfnc_Pallet_Move                                      */
-/*                                                                      */
-/* Purpose: Check ID                                                    */
-/*                                                                      */
-/* Modifications log:                                                   */
-/* Date        Rev  Author   Purposes                                   */
-/* 2024-11-28  1.0  CYU027   FCR-1391 Levis                              */
-/************************************************************************/
+/**************************************************************************/
+/* Store procedure: rdt_1721ExtValid01                                    */
+/* Copyright      : Maersk                                                */
+/*                                                                        */
+/* Called from: rdtfnc_Pallet_Move                                        */
+/*                                                                        */
+/* Purpose: Check ID                                                      */
+/*                                                                        */
+/* Modifications log:                                                     */
+/* Date        Rev    Author   Purposes                                   */
+/* 2024-11-28  1.0    CYU027   FCR-1391 Levis                             */
+/* 2025-08-27  1.1.0  NickT    FCR-7160 Add parameter @nInputKey          */
+/**************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1721ExtValid01] (
-   @nMobile         INT,
-   @nFunc           INT,
-   @cLangCode       NVARCHAR( 3),
-   @nStep           INT,
-   @cFacility         NVARCHAR( 15),
-   @cStorer         NVARCHAR( 15),
-   @cID             NVARCHAR( 20),
-   @cToLOC          NVARCHAR( 10),
-   @cSuggestLoc     NVARCHAR( 15),
-   @nErrNo          INT           OUTPUT,
-   @cErrMsg         NVARCHAR( 20) OUTPUT
+   @nMobile          INT,
+   @nFunc            INT,
+   @cLangCode        NVARCHAR( 3),
+   @nStep            INT,
+   @nInputKey        INT,
+   @cFacility        NVARCHAR( 15),
+   @cStorer          NVARCHAR( 15),
+   @cID              NVARCHAR( 20),
+   @cToLOC           NVARCHAR( 10),
+   @cSuggestLoc      NVARCHAR( 15),
+   @nErrNo           INT           OUTPUT,
+   @cErrMsg          NVARCHAR( 20) OUTPUT
 ) AS
 BEGIN
 

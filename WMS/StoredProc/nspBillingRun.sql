@@ -23,7 +23,8 @@ GO
 /*                                                                      */
 /* Updates:                                                             */
 /* Date         Author        Purposes                                  */
-/* 15-Jul-2010  KHLim     Replace USER_NAME to sUSER_sName              */ 
+/* 15-Jul-2010  KHLim     Replace USER_NAME to sUSER_sName              */
+/* 10-Oct-2025  SSA01     UWP-42248 -Enhanced session management        */
 /************************************************************************/
 
 CREATE PROCEDURE nspBillingRun (
@@ -347,7 +348,7 @@ BEGIN
             UPDATE ACCUMULATEDCHARGES
             SET Status = '5', InvoiceBatch = @c_InvoiceBatchKey,
             InvoiceKey = B.InvoiceKey, InvoiceDate = GetDate(),
-            EditWho = sUser_sName(), EditDate = GetDate()
+            EditWho = dbo.fnc_GetUserName(), EditDate = dbo.fnc_GetDate()          --(SSA01)
             FROM BILL_ACCUMULATEDCHARGES B
             WHERE B.AccumulatedChargesKey = ACCUMULATEDCHARGES.AccumulatedChargesKey
             AND B.InvoiceBatch = @c_InvoiceBatchKey
@@ -381,7 +382,7 @@ BEGIN
             Debit, Credit, BilledUnits, ChargeType, LineType, BillFromDate, BillThruDate,
             SourceKey, SourceType, AccessorialDetailKey, GLDistributionKey, InvoiceBatch, InvoiceKey, GetDate(),
             CostRate, CostBase, CostMasterUnits, CostUOMShow, CostUnits, CostSystemGeneratedCharge, Cost,
-            sUser_sName()
+            dbo.fnc_GetUserName()                --(SSA01)
             FROM Bill_AccumulatedCharges
             WHERE InvoiceBatch = @c_InvoiceBatchKey
             AND TrafficCop is NULL
