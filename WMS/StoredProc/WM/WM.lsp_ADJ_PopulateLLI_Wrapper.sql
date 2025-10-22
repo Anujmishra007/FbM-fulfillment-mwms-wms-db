@@ -26,6 +26,7 @@ GO
 /* 2024-06-13  SSA01    1.2   FCR-3982 - Added Pallettype to Adjustment */
 /* 2025-10-06  SSA02    1.3   UWP-42142 -Enhanced session management    */
 /*                             and cleanup.                             */
+/* 2025-10-21  Michael  1.4   FCR-8377- Add SerialNoUpdateLotLocID(ML01)*/
 /************************************************************************/                                                                                  
 CREATE OR ALTER PROC [WM].[lsp_ADJ_PopulateLLI_Wrapper]                                                                                                                     
    @c_AdjustmentKey        NVARCHAR(10)         
@@ -85,6 +86,7 @@ BEGIN
          ,  @c_FinalizeAdjustment         NVARCHAR(10)   = ''  
          ,  @c_AdjStatusControl           NVARCHAR(10)   = ''
          ,  @c_ASNFizUpdLotToSerialNo     NVARCHAR(10)   = ''                       --(Wan01)
+         ,  @c_SerialNoUpdateLotLocID     NVARCHAR(10)   = ''      --ML01
          
          ,  @c_TableName                  NVARCHAR(50)   = 'AdjustmentDetail'
          ,  @c_SourceType                 NVARCHAR(50)   = 'lsp_ADJ_PopulateLLI_Wrapper' 
@@ -144,6 +146,14 @@ BEGIN
       SELECT @c_AdjStatusControl = fsgr.Authority FROM dbo.fnc_SelectGetRight (@c_Facility, @c_Storerkey,'','AdjStatusControl') AS fsgr
       SELECT @c_ASNFizUpdLotToSerialNo = fsgr.Authority                                            --(Wan01)
       FROM dbo.fnc_SelectGetRight(@c_Facility, @c_Storerkey, '', 'ASNFizUpdLotToSerialNo')AS fsgr  --(Wan01)
+
+      --ML01-S
+      SELECT @c_SerialNoUpdateLotLocID = fsgr.Authority
+      FROM dbo.fnc_SelectGetRight(@c_Facility, @c_Storerkey, '', 'SerialNoUpdateLotLocID')AS fsgr
+
+      IF ISNULL(@c_SerialNoUpdateLotLocID,'') = '1' AND ISNULL(@c_ASNFizUpdLotToSerialNo,'') <> '1'
+         SET @c_ASNFizUpdLotToSerialNo = '1'
+      --ML01-E
 
       IF @c_FinalizeAdjustment IN (0,'') AND @c_AdjStatusControl IN (0,'')
       BEGIN
