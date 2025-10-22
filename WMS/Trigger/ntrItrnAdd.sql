@@ -108,6 +108,7 @@ GO
 /* 17-May-2022  YTKuek       3.2    Add additional move trigger for            */
 /*                                  WebService interface (YT01)                */
 /* 23-May-2022  LiLiChua     3.3    LFI-5880 - Add Configkey 'HWCDMV2LOG'(LL01)*/
+/* 29-Apr-2024  LiLiChua     3.4    MDI-12915- Add Configkey 'HWCDMV3LOG'(LL02)*/
 /* 15-Mar-2024  Wan01        3.4    UWP-16968-Post PalletType to Inventory When*/
 /*                                  Finalize                                   */
 /* 26-JUN-2025  SSA01        3.5   UWP-3982- Added PalletType in inventory when*/
@@ -299,7 +300,8 @@ BEGIN
           , @c_authority_wsinvmovwhcdlog NVARCHAR(1)  --(KH02)
           , @c_authority_wsinvmovwhcdlog2 NVARCHAR(1) --(YT01)
           , @c_authority_OMSITRNLOGMOV   NVARCHAR(1)  --(MC02)
-       , @c_authority_hwcdmv2log NVARCHAR(1)       --(LL01)
+          , @c_authority_hwcdmv2log NVARCHAR(1)       --(LL01)
+		    , @c_authority_hwcdmv3log NVARCHAR(1)       --(LL02)
   
     DECLARE @c_authority_tblhkitf  NVARCHAR(1)  
     DECLARE @c_authority_utlitf    NVARCHAR(1)  
@@ -389,7 +391,8 @@ BEGIN
    SET @c_authority_wsinvmovwhcdlog = ''  --(KH02) 
    SET @c_authority_wsinvmovwhcdlog2 = '' --(YT01) 
    SET @c_authority_OMSITRNLOGMOV = ''    --(MC02)
-  SET @c_authority_hwcdmv2log = ''      --(LL01)
+   SET @c_authority_hwcdmv2log = ''      --(LL01)
+   SET @c_authority_hwcdmv3log = ''		  --(LL02)
   
    DECLARE CUR_Rights CURSOR LOCAL FAST_FORWARD READ_ONLY FOR  
     SELECT ConfigKey, sValue  
@@ -402,7 +405,8 @@ BEGIN
                   ,'WSINVMOVEWHCDLOG'     --(KH02) 
                   ,'WSINVMOVEWHCDLOG2'    --(YT01) 
                   ,'OMSITRNLOGMOV'        --(MC02)
-            ,'HWCDMV2LOG'       --(LL01)
+              ,'HWCDMV2LOG'       --(LL01)
+				  ,'HWCDMV3LOG'			  --(LL02)
                   )
   
    OPEN CUR_Rights  
@@ -448,7 +452,11 @@ BEGIN
       --(LL01) 
       IF @c_ConfigKey = 'HWCDMV2LOG' AND @c_sValue = '1'  
          SET @c_authority_hwcdmv2log = '1'  
-      
+
+      --(LL02) 
+      IF @c_ConfigKey = 'HWCDMV3LOG' AND @c_sValue = '1'  
+         SET @c_authority_hwcdmv3log = '1' 
+
       -- For SOS#61049  
       -- IF @c_ConfigKey = 'INVMOVELOG-LOCFLA' AND @c_sValue = '1'  
       IF @c_ConfigKey = 'INVMOVELOG-LOCFLAG' AND @c_sValue = '1' -- SOS# 135041, 134750  
@@ -2435,7 +2443,8 @@ BEGIN
             -- Added by MC on 09-May-2007  
             -- For SOS#75233 (Start)  
             IF (@c_authority_hwcdmvlog = '1') OR (@c_authority_owitf = '1') 
-         OR (@c_authority_hwcdmv2log = '1') --(LL01)
+             OR (@c_authority_hwcdmv2log = '1') --(LL01)
+				 OR (@c_authority_hwcdmv3log = '1')	--(LL02)
             BEGIN  
                SELECT @c_fromwhcode = ISNULL(HOSTWHCODE, '')      --(MC03)
                FROM  LOC WITH (NOLOCK)  
@@ -2514,6 +2523,26 @@ BEGIN
                         END  
                      END -- IF (@c_authority_hwcdmv2log = '1')  
               --(LL01)-E
+
+
+					 --(LL02)-S
+					 IF (@c_authority_hwcdmv3log = '1')  
+                     BEGIN  
+                        EXEC dbo.ispGenTransmitLog3 'HWCDMV3LOG', @c_itrnkey, '', @c_InsertStorerKey, ''  
+                           , @b_success OUTPUT  
+                           , @n_err OUTPUT  
+                           , @c_errmsg OUTPUT  
+  
+                        IF @b_success <> 1  
+                        BEGIN  
+                           SELECT @n_continue = 3  
+                           SELECT @n_err = 61352  
+                           SELECT @c_errmsg = 'NSQL' + CONVERT(char(5), @n_err)  
+                                            + ':Insert failed on TransmitLog3. (ntrItrnAdd) (SQLSvr MESSAGE='  
+                                            + LTRIM(RTRIM(@c_errmsg)) + ')'  
+                        END  
+                     END -- IF (@c_authority_hwcdmv3log = '1')  
+					--(LL02)-E
                   END -- trantype = MV  
                END -- IF (@c_fromwhcode <> @c_towhcode)  
             END -- IF (@c_authority_hwcdmvlog = '1') OR (@c_authority_owitf = '1')  OR (@c_authority_hwcdmv2log = '1')
