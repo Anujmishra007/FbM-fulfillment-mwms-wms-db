@@ -172,13 +172,8 @@ BEGIN
    SELECT @c_ASNFizUpdLotToSerialNo = fsgr.Authority                                --(Wan01) - END
    FROM dbo.fnc_SelectGetRight(@c_Facility, @c_FromStorerkey, '', 'ASNFizUpdLotToSerialNo')AS fsgr
 
-   --ML01-S
-   SELECT @c_SerialNoUpdateLotLocID = fsgr.Authority
-   FROM dbo.fnc_SelectGetRight(@c_Facility, @c_FromStorerkey, '', 'SerialNoUpdateLotLocID')AS fsgr
-
-   IF ISNULL(@c_SerialNoUpdateLotLocID,'') = '1' AND ISNULL(@c_ASNFizUpdLotToSerialNo,'') <> '1'
-      SET @c_ASNFizUpdLotToSerialNo = '1'
-   --ML01-E
+   SELECT @c_SerialNoUpdateLotLocID = fsgr.Authority                                                 --ML01
+   FROM dbo.fnc_SelectGetRight(@c_Facility, @c_FromStorerkey, '', 'SerialNoUpdateLotLocID')AS fsgr   --ML01
 
    --(mingle01) - START
    BEGIN TRY
@@ -246,7 +241,8 @@ BEGIN
                      LEFT OUTER JOIN SKU (NOLOCK) ON  Sku.Storerkey = TD.FromStorerkey --(Wan01) - START
                                       AND Sku.Sku = TD.FromSku
                                       AND SerialNoCapture IN ('1','2')
-                                      AND @c_ASNFizUpdLotToSerialNo = '1'              --(Wan01) - END
+                                      AND (@c_ASNFizUpdLotToSerialNo = '1'              --(Wan01) - END
+                                        OR @c_SerialNoUpdateLotLocID = '1')   --ML01
                      WHERE TD.TransferKey = @c_TransferKey
                      AND Sku.Sku IS NULL
                      AND  ( (ISNUMERIC(TD.UserDefine04) = 1 AND CONVERT(INT,TD.UserDefine04) > 0
@@ -301,7 +297,8 @@ BEGIN
          LEFT OUTER JOIN SKU (NOLOCK) ON  Sku.Storerkey = TD.FromStorerkey          --(Wan01) - START
                            AND Sku.Sku = TD.FromSku
                            AND SerialNoCapture IN ('1','2')
-                           AND @c_ASNFizUpdLotToSerialNo = '1'                      --(Wan01) - END
+                           AND (@c_ASNFizUpdLotToSerialNo = '1'                      --(Wan01) - END
+                             OR @c_SerialNoUpdateLotLocID = '1')   --ML01
          WHERE TD.TransferKey = @c_TransferKey
          AND SKU.Sku IS NULL
          AND TD.TransferLineNumber > @c_TransferLineNumber
@@ -518,7 +515,8 @@ BEGIN
       LEFT OUTER JOIN SKU (NOLOCK) ON  Sku.Storerkey = TD.FromStorerkey             --(Wan01) - START
                         AND Sku.Sku = TD.FromSku
                         AND SerialNoCapture IN ('1','2')
-                        AND @c_ASNFizUpdLotToSerialNo = '1'                         --(Wan01) - END
+                        AND (@c_ASNFizUpdLotToSerialNo = '1'                         --(Wan01) - END
+                          OR @c_SerialNoUpdateLotLocID = '1')   --ML01
       WHERE TD.TransferKey = @c_TransferKey
       AND   TD.FromQty     > 0
       AND   TD.UserDefine05 = ''                                                    --(Wan01)
@@ -987,7 +985,8 @@ BEGIN
       CLOSE @CUR_PPLTRF
       DEALLOCATE @CUR_PPLTRF 
 
-      IF @c_ASNFizUpdLotToSerialNo = '1' AND                                        --(Wan01) - START
+      IF (@c_ASNFizUpdLotToSerialNo = '1'                                         --(Wan01) - START
+       OR @c_SerialNoUpdateLotLocID = '1') AND   --ML01
          @c_OriginalLineNo <> ''
       BEGIN
          IF EXISTS ( SELECT 1

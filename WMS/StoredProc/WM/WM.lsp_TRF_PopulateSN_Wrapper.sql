@@ -177,13 +177,8 @@ BEGIN
       SELECT @c_ChannelInventoryMgmt_To   = fsgr.Authority 
       FROM dbo.fnc_SelectGetRight (@c_ToFacility, @c_ToStorerkey,'','ChannelInventoryMgmt') AS fsgr
 
-      --ML01-S
-      SELECT @c_SerialNoUpdateLotLocID = fsgr.Authority
-      FROM dbo.fnc_SelectGetRight(@c_FromFacility, @c_FromStorerkey, '', 'SerialNoUpdateLotLocID')AS fsgr
-
-      IF ISNULL(@c_SerialNoUpdateLotLocID,'') = '1' AND ISNULL(@c_ASNFizUpdLotToSerialNo,'') <> '1'
-         SET @c_ASNFizUpdLotToSerialNo = '1'
-      --ML01-E
+      SELECT @c_SerialNoUpdateLotLocID = fsgr.Authority                                                     --ML01
+      FROM dbo.fnc_SelectGetRight(@c_FromFacility, @c_FromStorerkey, '', 'SerialNoUpdateLotLocID')AS fsgr   --ML01
  
       IF @c_ChannelInventoryMgmt_From = '1'
       BEGIN
@@ -215,14 +210,15 @@ BEGIN
 
       SET @c_SelectSQL = 'SELECT SerialNo.SerialNoKey'
                        + ', ' +CASE WHEN @c_ASNFizUpdLotToSerialNo = '1' 
+                                      OR @c_SerialNoUpdateLotLocID = '1'   --ML01
                                     THEN 'SerialNo.Lot'
                                     ELSE '''''' --'ISNULL(SerialNo.LotNo,'''')'
                                     END
       SELECT @c_SearchSQL = dbo.fnc_ParseSearchSQL(@c_SearchSQL, @c_SelectSQL) 
-      
+
       --ML01-S
       SET @n_Temp = CHARINDEX(' WHERE ', @c_SearchSQL, 1)
-      IF @n_Temp > 0
+      IF @n_Temp > 0 AND @c_SearchSQL NOT LIKE '%SerialNo.Loc%'
          SET @c_SearchSQL = STUFF(@c_SearchSQL, @n_Temp + 7, 0, '(LOTxLOCxID.ID <> '''' OR LOTxLOCxID.Loc = SerialNo.Loc) AND ')
       --ML01-E
 

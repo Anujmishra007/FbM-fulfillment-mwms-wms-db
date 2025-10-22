@@ -248,13 +248,8 @@ BEGIN
       SELECT @c_ChannelInventoryMgmt_From = fsgr.Authority FROM dbo.fnc_SelectGetRight (@c_FromFacility, @c_FromStorerkey,'','ChannelInventoryMgmt') AS fsgr
       SELECT @c_ChannelInventoryMgmt_To   = fsgr.Authority FROM dbo.fnc_SelectGetRight (@c_ToFacility, @c_ToStorerkey,'','ChannelInventoryMgmt') AS fsgr
 
-      --ML01-S
-      SELECT @c_SerialNoUpdateLotLocID = fsgr.Authority
-      FROM dbo.fnc_SelectGetRight(@c_FromFacility, @c_FromStorerkey, '', 'SerialNoUpdateLotLocID')AS fsgr
-
-      IF ISNULL(@c_SerialNoUpdateLotLocID,'') = '1' AND ISNULL(@c_ASNFizUpdLotToSerialNo,'') <> '1'
-         SET @c_ASNFizUpdLotToSerialNo = '1'
-      --ML01-E
+      SELECT @c_SerialNoUpdateLotLocID = fsgr.Authority                                                     --ML01
+      FROM dbo.fnc_SelectGetRight(@c_FromFacility, @c_FromStorerkey, '', 'SerialNoUpdateLotLocID')AS fsgr   --ML01
 
 
       IF @c_ChannelInventoryMgmt_From = '1'
@@ -328,6 +323,7 @@ BEGIN
          WHERE tl.RowID > @n_RowID
          AND ltlci.Qty - ltlci.QtyAllocated - ltlci.QtyPicked > 0
          AND NOT (tl.SkuSerialNoCapture IN ('1','2') AND @c_ASNFizUpdLotToSerialNo = '1') --(Wan01)
+         AND NOT (tl.SkuSerialNoCapture IN ('1','2') AND @c_SerialNoUpdateLotLocID = '1') --ML01
          ORDER BY tl.RowID
 
          IF @@ROWCOUNT = 0 OR @c_FromSku = ''
@@ -551,6 +547,7 @@ BEGIN
       END
 
       IF @c_ASNFizUpdLotToSerialNo = 1 AND @n_TotalSelected > @n_TotalInserted
+      OR @c_SerialNoUpdateLotLocID = 1 AND @n_TotalSelected > @n_TotalInserted   --ML01
       BEGIN
          IF EXISTS (SELECT 1 FROM #tLLI WHERE SkuSerialNoCapture IN ('1','2'))
          BEGIN
