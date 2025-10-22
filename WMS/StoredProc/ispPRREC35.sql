@@ -42,8 +42,12 @@ BEGIN
            @n_StartTranCount     INT,
 		   @c_ReceiptGroup       NVARCHAR(50),
 		   @c_StorerKey          NVARCHAR(50),
+		   @c_Facility           NVARCHAR(50),
 		   @c_CDLUUDF02          NVARCHAR(50),
 		   @c_ParentUCC          NVARCHAR(50),
+		   @c_LOC                NVARCHAR(50) = '',
+		   @c_ID                 NVARCHAR(50) = '',
+		   @c_LOT                NVARCHAR(50) = '',
            @n_QTYReceived        INT,
 		   @n_CTNSerialno        INT,
 		   @c_SerialNoKey        NVARCHAR(10),
@@ -51,6 +55,8 @@ BEGIN
 		   @c_SourceKey          NVARCHAR(20),
            @c_SourceType         NVARCHAR(30),
 		   @c_SKU                NVARCHAR(30),
+		   @c_SerialnoCapture    NVARCHAR(30),
+		   @c_StoreConfig        NVARCHAR(30),
 		   @n_QTY                INT
            
    SELECT @b_Success = 1, @n_Err = 0, @c_ErrMsg = '', @n_Continue = 1, @n_StartTranCount = @@TRANCOUNT                                                     
@@ -58,6 +64,7 @@ BEGIN
    --Validation 1: Check ReceiptGroup = 'UCC'
    SELECT @c_ReceiptGroup = R.ReceiptGroup
         , @c_StorerKey    = R.StorerKey
+		, @c_Facility     = R.Facility
    FROM RECEIPT R (NOLOCK)
    WHERE R.ReceiptKey = @c_Receiptkey
 
@@ -72,19 +79,21 @@ BEGIN
       GOTO QUIT_SP
    END
 
+   SELECT @c_StoreConfig = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'UpdExPOKey2ExASNKey')
+
    --Main Process
    IF @n_Continue IN (1,2) 
    BEGIN
    	  IF EXISTS(SELECT 1 FROM RECEIPT (NOLOCK) WHERE Receiptkey = @c_Receiptkey)
    	  BEGIN   	  	   	  	
 	     SELECT @c_ParentUCC = RD.UserDefine01
-		      , @n_QTYReceived = RD.QTYRECEIVED
+		      , @n_QTYReceived = RD.BeforeReceivedQty
            FROM RECEIPT R (NOLOCK)
            JOIN RECEIPTDETAIL RD (NOLOCK) ON R.Receiptkey = RD.Receiptkey
            WHERE R.ReceiptKey = @c_Receiptkey
            AND RD.ReceiptLineNumber = CASE WHEN ISNULL(@c_ReceiptLineNumber,'') <> '' THEN @c_ReceiptLineNumber ELSE RD.ReceiptLineNumber END
 
-         SELECT @n_CTNSerialno = COUNT(Serialno)
+         SELECT @n_CTNSerialno = SUM(ChildQTY)
            FROM MasterSerialno (NOLOCK) 
           WHERE StorerKey = @c_StorerKey
             AND ParentSerialNo  = @c_ParentUCC
@@ -128,8 +137,28 @@ BEGIN
                              + '( ' + RTRIM(@c_errmsg) + ' )'
             END
 
-		    INSERT INTO SerialNo (SerialNoKey, Orderkey, OrderLineNumber, StorerKey, SKU, SerialNo, status, QTY)
-            SELECT @c_SerialNoKey, '', '', @c_StorerKey, SKU, SerialNo, '1', 1
+            SELECT @c_SerialnoCapture = SerialnoCapture
+			  FROM SKU (NOLOCK)
+			 WHERE StorerKey = @c_StorerKey
+			   AND Facility  = @c_Facility
+			   AND SKU = @c_SKU
+
+            IF @c_SerialnoCapture in ('1','2') AND @c_SerialnoCapture = '1'
+			BEGIN
+
+	           SELECT TOP 1 @c_LOC = RD.ToLoc
+		            , @c_ID = RD.ToID
+					, @c_LOT = RD.ToLOT
+                 FROM RECEIPT R (NOLOCK)
+                 JOIN RECEIPTDETAIL RD (NOLOCK) ON R.Receiptkey = RD.Receiptkey
+                 WHERE R.ReceiptKey = @c_Receiptkey
+                 AND RD.ReceiptLineNumber = CASE WHEN ISNULL(@c_ReceiptLineNumber,'') <> '' THEN @c_ReceiptLineNumber ELSE RD.ReceiptLineNumber END
+               ORDER BY DateReceived DESC
+
+            END
+
+		    INSERT INTO SerialNo (SerialNoKey, Orderkey, OrderLineNumber, StorerKey, SKU, SerialNo, status, QTY, Loc, ID, Lot)
+            SELECT @c_SerialNoKey, '', '', @c_StorerKey, SKU, SerialNo, '1', 1, @c_LOC, @c_ID, @c_LOT
 		      FROM MasterSerialno WITH (NOLOCK)
 			 WHERE SerialNo = @c_Serialno
 
