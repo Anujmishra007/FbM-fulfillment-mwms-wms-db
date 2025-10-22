@@ -1882,8 +1882,8 @@ BEGIN
 
          IF @cDecodeSP = '1'
          BEGIN
-            EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cUCC,
-                 @cUCCNo      = @cUCCBarcode OUTPUT,
+            EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cUCCBarcode,
+                 @cUCCNo      = @cUCC        OUTPUT,
                  @nQTY        = @nUCCQTY     OUTPUT,
                  @cLottable01 = @cLottable01 OUTPUT,
                  @cLottable02 = @cLottable02 OUTPUT,
@@ -1957,9 +1957,9 @@ BEGIN
 
             IF @nErrNo <> 0
                GOTO Step_6_Fail
-         END
-         
-         SET @cUCC = @cUCCBarcode --V5.5
+
+            SET @cUCC = @cUCCBarcode
+         END 
       END
 
       -- UCC extended validation
