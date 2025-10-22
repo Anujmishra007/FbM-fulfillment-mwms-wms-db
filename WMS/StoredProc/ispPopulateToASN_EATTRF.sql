@@ -36,6 +36,7 @@ GO
 /* Date         Author  Ver.  Purposes                                  */
 /* 23-APR-2022  CSCHONG 1.0   Devops Scripts Combine                    */
 /* 05-MAY-2023  CSCHONG 1.1   WMS-19219 Revised field logic (CS01)      */
+/* 24-JAN-2025  Michael 1.2   FCR-2398-TW-EAT_OrderTypeToASN_CR (ML01)  */
 /************************************************************************/
 
 CREATE OR ALTER PROCEDURE [dbo].[ispPopulateToASN_EATTRF]
@@ -93,12 +94,14 @@ BEGIN
 
      SELECT TOP 1
             @c_ExternReceiptKey   = ORDERS.Orderkey,
-            @c_Type               = ISNULL(CODELKUP.Short,''),
+--ML01            @c_Type               = ISNULL(CODELKUP.Short,''),
+            @c_Type               = ISNULL(ISNULL(CL.Short, CODELKUP.Short),''),    --ML01
             @c_ToFacility         = ORDERS.Facility,
             @c_ToStorerkey        = ORDERS.Storerkey,
             @c_Storerkey          = ORDERS.Storerkey,
             @c_WarehouseReference = ORDERS.Orderkey
      FROM  ORDERS WITH (NOLOCK)
+     LEFT JOIN CODELKUP CL WITH(NOLOCK) ON CL.ListName = 'ShipTo2ASN' AND ORDERS.Storerkey = CL.Storerkey AND ORDERS.Consigneekey = CL.Code     --ML01
      LEFT JOIN CODELKUP WITH (NOLOCK) ON ORDERS.Type = CODELKUP.Code AND CODELKUP.ListName = 'ORDTYP2ASN'
      WHERE ORDERS.OrderKey = @c_OrderKey
 
@@ -226,16 +229,22 @@ BEGIN
                         LOTATTRIBUTE.Lottable04,
                         LOTATTRIBUTE.Lottable05,
                         PICKDETAIL.ID,
-                        PICKDETAIL.Loc,
+--ML01                        PICKDETAIL.Loc,
+                        ISNULL(NULLIF(CL.UDF04,''), PICKDETAIL.Loc),      --ML01
                         ISNULL(LOTATTRIBUTE.Lottable02,''),
                         ISNULL(LOTATTRIBUTE.Lottable08,'')
                   FROM PICKDETAIL   WITH (NOLOCK)
                   JOIN LotAttribute WITH (NOLOCK) ON (PickDetail.LOT = LotAttribute.LOT)
+                  JOIN ORDERS       WITH (NOLOCK) ON PICKDETAIL.Orderkey = ORDERS.Orderkey       --ML01
+                  LEFT JOIN CODELKUP CL WITH(NOLOCK) ON CL.ListName = 'ShipTo2ASN' AND ORDERS.Storerkey = CL.Storerkey AND ORDERS.Consigneekey = CL.Code       --ML01
                   WHERE (PICKDETAIL.OrderKey = @c_OrderKey AND
                         PICKDETAIL.OrderLineNumber = @c_OrderLine)
                   GROUP BY PICKDETAIL.StorerKey, PICKDETAIL.SKU,
                            LOTATTRIBUTE.Lottable03, LOTATTRIBUTE.Lottable04, LOTATTRIBUTE.Lottable05,
-                           PICKDETAIL.ID, PICKDETAIL.Loc,ISNULL(LOTATTRIBUTE.Lottable03,''),ISNULL(LOTATTRIBUTE.Lottable02,''),
+                           PICKDETAIL.ID,
+--ML01                           PICKDETAIL.Loc,
+                           ISNULL(NULLIF(CL.UDF04,''), PICKDETAIL.Loc),      --ML01
+                           ISNULL(LOTATTRIBUTE.Lottable03,''),ISNULL(LOTATTRIBUTE.Lottable02,''),
                            ISNULL(LOTATTRIBUTE.Lottable08,'')
 
                   OPEN PICK_CUR
