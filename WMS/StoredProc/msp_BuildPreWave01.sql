@@ -21,7 +21,7 @@ GO
 /*                                                                       */
 /* Updates:                                                              */
 /* Date         Author  Ver.  Purposes                                   */
-/* 16-Oct-2025  WLChooi 1.0   Initial Version                            */
+/* 22-Oct-2025  WLChooi 1.0   Initial Version                            */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[msp_BuildPreWave01]
    @c_BuildParmKey         NVARCHAR(10)
@@ -220,7 +220,7 @@ BEGIN
          GOTO QUIT_SP
       END
    END
-
+   
    IF @n_Continue IN (1,2)
    BEGIN
       CREATE TABLE #T_ORDERPOOL ( Orderkey  NVARCHAR(10) PRIMARY KEY )
@@ -598,43 +598,33 @@ BEGIN
       --Calculate Putwall & Chute Usage
       --If Putwall fully utilized the rest will goes to Chute and it is by group level
       ;WITH CTE2 AS (
-          SELECT T7.OrderKey
-               , T7.CartonNumber
-               , Qty = SUM(T7.Qty)
-               , PutwallEligible = IIF(SUM(T7.Qty) BETWEEN @n_PutwallMinQty AND @n_PutwallMaxQty, 1, 0)
-          FROM #T_ORDERDET T7
-          GROUP BY T7.OrderKey, T7.CartonNumber
-      )
-      , GlobalSeq AS (
-          SELECT *
-               , ROW_NUMBER() OVER (ORDER BY OrderKey, CartonNumber) AS GlobalCartonSeq
-          FROM CTE2
-          WHERE PutwallEligible = 1
-      )
-      , Alloc AS (
-          SELECT CTE2.OrderKey
-               , CTE2.CartonNumber
-               -- Assign Putwall only for the first N eligible cartons
-               , CASE WHEN GlobalSeq.GlobalCartonSeq BETWEEN 1 AND @n_NoOfPutwall THEN 1 ELSE 0 END AS AssignedPutwall
-               -- The rest of eligible cartons, and not-eligible cartons, all go to Chute
-               , CASE WHEN CTE2.PutwallEligible = 0 OR GlobalSeq.GlobalCartonSeq > @n_NoOfPutwall THEN 1 ELSE 0 END AS AssignedChute
-          FROM CTE2
-          LEFT JOIN GlobalSeq ON CTE2.OrderKey = GlobalSeq.OrderKey AND CTE2.CartonNumber = GlobalSeq.CartonNumber
-      )
-      , CTE3 AS (
-          SELECT OrderKey
-               , VCCount = COUNT(CartonNumber)
-               , PutwallUsage = SUM(AssignedPutwall)
-               , ChuteUsage = SUM(AssignedChute)
-          FROM Alloc
-          GROUP BY OrderKey
+         SELECT T7.OrderKey
+              , T7.CartonNumber
+              , Qty = SUM(T7.Qty)
+              , Putwall = IIF(SUM(T7.Qty) BETWEEN @n_PutwallMinQty AND @n_PutwallMaxQty, 1, 0)
+              , Chute   = IIF(SUM(T7.Qty) BETWEEN @n_PutwallMinQty AND @n_PutwallMaxQty, 0, 1)
+         FROM #T_ORDERDET T7
+         GROUP BY T7.OrderKey
+                , T7.CartonNumber
+      ), CTE3 AS (
+         SELECT CTE2.OrderKey
+              , VCCount = COUNT(CTE2.CartonNumber)
+              , PutwallUsage = CASE WHEN SUM(CTE2.Putwall) > @n_NoOfPutwall
+                                    THEN @n_NoOfPutwall
+                                    ELSE SUM(CTE2.Putwall) END
+              , ChuteUsage = SUM(CTE2.Chute)
+                             + CASE WHEN SUM(CTE2.Putwall) > @n_NoOfPutwall 
+                                    THEN SUM(CTE2.Putwall) - @n_NoOfPutwall
+                                    ELSE 0 END
+         FROM CTE2
+         GROUP BY OrderKey
       )
       UPDATE T8
       SET T8.VCCount = CTE3.VCCount
         , T8.PutwallUsage = CTE3.PutwallUsage
         , T8.ChuteUsage = CTE3.ChuteUsage
       FROM #T_ORDERS T8
-      JOIN CTE3 ON T8.OrderKey = CTE3.OrderKey
+      JOIN CTE3 ON CTE3.Orderkey = T8.Orderkey
       --Calculate Carton for S02, S06, J05 - END
 
       --Update VCCount by Consigneekey
@@ -803,8 +793,8 @@ BEGIN
 
    IF @b_debug IN (1,2)
    BEGIN
-      SELECT Orderkey, VCCount, ChuteUsage, PutwallUsage
-      FROM #T_ORDERS WITH (NOLOCK)
+      --SELECT Orderkey, VCCount, ChuteUsage, PutwallUsage
+      --FROM #T_ORDERS WITH (NOLOCK)
 
       SELECT Orderkey
            , OrderLineNumber
@@ -814,7 +804,7 @@ BEGIN
            , StdCube
            , WCS
            , VirtualCartonNumber = TRIM(Orderkey) + '_' + CAST(CartonNumber AS NVARCHAR)
-      FROM #T_ORDERDET WITH (NOLOCK)
+      FROM #T_ORDERDET
 
       SELECT T2.Orderkey
            , T2.BuyerPO
@@ -827,9 +817,12 @@ BEGIN
            , T2.PreWaveNo
            , T2.Consigneekey
            , T2.VCCountCS
-      FROM #T_PREWAVE T1 WITH (NOLOCK)
-      JOIN #T_ORDERS T2 WITH (NOLOCK) ON T2.Orderkey = T1.Orderkey
-      ORDER BY T1.RowID
+           , T2.ChuteUsage
+           , T2.PutwallUsage
+           , T2.RNo
+      FROM #T_PREWAVE T1
+      JOIN #T_ORDERS T2 ON T2.Orderkey = T1.Orderkey
+      ORDER BY T1.PreWaveNo, T2.RNo
    END
 
    IF @n_Continue IN (1,2) AND @b_debug <> 1
