@@ -49,8 +49,11 @@ GO
 /* 24-Nov-2024  NJOW04       2.5    DEVOPS Combine Script                      */
 /* 03-JAN-2024  Wan05        2.6    LFWM-4405 - [GIT] Serial Number Solution-Post*/
 /*                                  Cycle Count by Adjustment Serialnon - Fix  */
+/* 19-Aug-2025  Michael      2.6    FCR-6197 new Cfg AdjNoCheckSerialNoCapture */
+/*                                  to by pass serialnochecking (ML01)         */
 /* 10-OCT-2025  SSA01        2.7    UWP-42248 -Enhanced session management     */
 /*                                  and cleanup.                               */
+/* 21-Oct-2025  Michael      2.8    FCR-8377 - Add SerialNoUpdateLotLocID(ML02)*/
 /*******************************************************************************/
 
 CREATE OR ALTER PROCEDURE [dbo].[isp_FinalizeADJ]
@@ -96,6 +99,7 @@ BEGIN
          ,@dt_Lottable15 DATETIME --(Wan02)
          ,@n_Qty INT --(Wan02)
          ,@c_PostFinalizeADJSP NVARCHAR(10) --NJOW02
+         ,@c_AdjNoCheckSerialNoCapture NVARCHAR(30) = '0' --ML01
     
    /*CS01 Start*/
    DECLARE @c_Lottable01Value      NVARCHAR(18)
@@ -155,6 +159,8 @@ BEGIN
          , @n_SerialNo_AdjCnt          INT          = 0                             --(Wan05)                      
 
          , @c_ASNFizUpdLotToSerialNo   NVARCHAR(10) = ''                            --(Wan04)
+         , @c_SerialNoUpdateLotLocID   NVARCHAR(10) = ''  --ML02
+         , @c_SerialNo_Loc             NVARCHAR(10) = ''  --ML02
 
    SELECT @n_continue = 1
    SELECT @b_debug = 0
@@ -246,6 +252,13 @@ BEGIN
             +'( '+RTRIM(@c_errmsg)+' )'
       END
    END
+
+   --ML01-S
+   IF @n_Continue=1 OR @n_Continue=2
+   BEGIN
+      SET @c_AdjNoCheckSerialNoCapture = dbo.fnc_GetRight(@c_Facility, @c_StorerKey, '', 'AdjNoCheckSerialNoCapture')
+   END
+   --ML01-E
 
    IF @n_Continue=1
       OR @n_Continue=2
@@ -364,7 +377,10 @@ BEGIN
    BEGIN
       SELECT @c_ASNFizUpdLotToSerialNo = fsgr.Authority FROM dbo.fnc_SelectGetRight(@c_Facility, @c_Storerkey, '', 'ASNFizUpdLotToSerialNo')AS fsgr
    END                                                                              --(Wan04) - END
-    
+
+   SELECT @c_SerialNoUpdateLotLocID = fsgr.Authority                                             --ML02
+   FROM dbo.fnc_SelectGetRight(@c_Facility, @c_Storerkey, '', 'SerialNoUpdateLotLocID')AS fsgr   --ML02
+
    -- GetLot IF empty Lot (Move from PB)
    IF @n_Continue=1
       OR @n_Continue=2
@@ -604,6 +620,7 @@ BEGIN
             AND   s.SerialNoCapture IN ('1','2','3')
 
             IF @c_SerialNo <> '' AND @c_SerialNoCapture = ''
+               AND ISNULL(@c_AdjNoCheckSerialNoCapture,'') <> '1'   --ML01
             BEGIN
                SET @n_Continue = 3
                SET @n_Err = 72880
@@ -616,7 +633,8 @@ BEGIN
 
          IF @n_Continue IN (1, 2) AND @c_SerialNoCapture IN ('1','2','3')                                             
          BEGIN
-            IF @c_SerialNo = '' AND @c_ASNFizUpdLotToSerialNo = '1' AND
+            IF @c_SerialNo = '' AND (@c_ASNFizUpdLotToSerialNo = '1'
+                                  OR @c_SerialNoUpdateLotLocID = '1') AND   --ML02
                @c_SerialNoCapture IN ('1','2') 
             BEGIN
                SET @n_Continue = 3
@@ -640,6 +658,7 @@ BEGIN
                END
 
                IF @c_ID = '' AND @c_ASNFizUpdLotToSerialNo = '1'
+                  AND NOT (@c_SerialNoUpdateLotLocID = '1' AND @c_ID = '' AND EXISTS(SELECT TOP 1 1 FROM LOC (NOLOCK) WHERE Loc=@c_Loc AND (LoseID='1' OR LoseUCC='1')))   --ML02
                BEGIN
                   SET @n_Continue = 3
                   SET @n_Err = 72872
@@ -704,6 +723,7 @@ BEGIN
                   SELECT @n_SerialNo_Cnt = 1
                         ,@c_SerialNo_Lot = sn.Lot
                         ,@c_SerialNo_ID  = sn.ID
+                        ,@c_SerialNo_Loc = ISNULL(sn.Loc,'')   --ML02
                         ,@c_SerialNo_Status = sn.[Status]
                         ,@n_SerialNo_Qty = sn.Qty
                   FROM SerialNo sn (NOLOCK) 
@@ -725,12 +745,20 @@ BEGIN
 
                      IF @n_Continue IN (1, 2)  
                      BEGIN
-                        IF @c_ASNFizUpdLotToSerialNo = '1' AND
+                        IF (@c_ASNFizUpdLotToSerialNo = '1'
+                         OR @c_SerialNoUpdateLotLocID = '1') AND   --ML02
                            @c_SerialNo_Status = '1' AND @n_Qty = -1 AND
                           (@c_SerialNo_Lot <> @c_Lot OR @c_SerialNo_ID <> @c_ID)
                         BEGIN
                            SET @c_SerialNo_Status = '9'
                         END
+
+                        --ML02-S
+                        IF @c_SerialNoUpdateLotLocID = '1' AND @c_SerialNo_Loc <> @c_Loc
+                        BEGIN
+                           SET @c_SerialNo_Status = '9'
+                        END
+                        --ML02-E
 
                         IF @c_SerialNo_Status IN ('CANC', '9')
                         BEGIN
@@ -757,6 +785,7 @@ BEGIN
                      SET @n_Err = 72878
                      SET @c_errmsg = 'NSQL' + CONVERT(CHAR(5), @n_Err) 
                                     + ': Withdraw SerialNo: ' + @c_SerialNo + ', Lot: ' + @c_lot
+                                    + CASE WHEN @c_SerialNoUpdateLotLocID = '1' THEN ', Loc: ' + ISNULL(@c_Loc,'') ELSE '' END    --ML02
                                     + ', id : ' + @c_ID + ' Not Found'
                                     + '. Line #: ' + @c_adjline
                                     + '. (isp_FinalizeADJ)' 
@@ -861,7 +890,9 @@ BEGIN
          --Satyam - START
          IF (@n_continue=1 OR @n_continue=2)
          BEGIN
-            IF @c_ASNFizUpdLotToSerialNo = '1' AND @c_SerialNoCapture IN ('1', '2')
+            IF (@c_ASNFizUpdLotToSerialNo = '1'
+             OR @c_SerialNoUpdateLotLocID = '1')   --ML02
+            AND @c_SerialNoCapture IN ('1', '2')
                   BEGIN
                      IF EXISTS (SELECT 1
                               FROM AdjustmentDetail (NOLOCK)

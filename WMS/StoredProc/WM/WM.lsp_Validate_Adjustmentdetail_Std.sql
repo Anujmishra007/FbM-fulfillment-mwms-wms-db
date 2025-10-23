@@ -36,6 +36,7 @@ GO
 /* 2024-05-28  NJOW02   1.6   WMS-24558 - Fix @c_Lot Null in checking     */
 /* 2024-08-02  Wan07    1.7   LFWM-4397 - RG [GIT] Serial Number Solution */
 /*                            - Adjustment by Serial Number               */
+/* 2025-10-21  Michael  1.8   FCR-8377- Add SerialNoUpdateLotLocID (ML01) */
 /**************************************************************************/   
 CREATE OR ALTER PROC [WM].[lsp_Validate_AdjustmentDetail_Std] (
   @c_XMLSchemaString    NVARCHAR(MAX) 
@@ -262,6 +263,7 @@ BEGIN
          ,  @c_AdjAllowZeroQty         NVARCHAR(30) = ''    --(Wan03)
          ,  @c_ChannelInventoryMgmt    NVARCHAR(30) = ''    --(Wan05)
          ,  @c_ASNFizUpdLotToSerialNo  NVARCHAR(10)=''      --(Wan07)
+         ,  @c_SerialNoUpdateLotLocID  NVARCHAR(10)=''      --ML01
          
       IF EXISTS ( SELECT 1                                                          --(Wan06) - START
                  FROM tempdb.INFORMATION_SCHEMA.COLUMNS c 
@@ -729,6 +731,14 @@ BEGIN
          SELECT @c_ASNFizUpdLotToSerialNo = fsgr.Authority                                            --(Wan05)
          FROM dbo.fnc_SelectGetRight(@c_Facility, @c_Storerkey, '', 'ASNFizUpdLotToSerialNo')AS fsgr  --(Wan05)
 
+         --ML01-S
+         SELECT @c_SerialNoUpdateLotLocID = fsgr.Authority
+         FROM dbo.fnc_SelectGetRight(@c_Facility, @c_Storerkey, '', 'SerialNoUpdateLotLocID')AS fsgr
+
+         IF ISNULL(@c_SerialNoUpdateLotLocID,'') = '1' AND ISNULL(@c_ASNFizUpdLotToSerialNo,'') <> '1'
+            SET @c_ASNFizUpdLotToSerialNo = '1'
+         --ML01-E
+
          IF  @c_SerialNo <> '' AND @n_Qty NOT IN (-1,1)             
          BEGIN
             SET @n_Continue = 3
@@ -755,6 +765,7 @@ BEGIN
             ELSE IF @c_SerialNo <> ''
             BEGIN
                IF @c_ID = ''   
+                  AND NOT ( @c_SerialNoUpdateLotLocID = '1' AND EXISTS(SELECT TOP 1 1 FROM LOC (NOLOCK) WHERE Loc=@c_Loc   AND (LoseID='1' OR LoseUCC='1')) )   --ML01
                BEGIN
                   SET @n_Continue = 3
                   SET @n_Err = 552066

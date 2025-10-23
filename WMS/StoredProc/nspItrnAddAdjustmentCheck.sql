@@ -46,6 +46,7 @@ GO
 /*                            sourcetype truncate issue                  */
 /* 26-JUN-2025  SSA01     2.7 UWP-3982- Added PalletType in inventory    */
 /* 10-Oct-2025  SSA02     2.8 UWP-42248 -Enhanced session management     */
+/* 21-Oct-2025  Michael   2.9 FCR-8377- Add SerialNoUpdateLotLocID (ML01)*/
 /*************************************************************************/
 CREATE OR ALTER PROC  [dbo].[nspItrnAddAdjustmentCheck]
                @c_itrnkey      NVARCHAR(10)
@@ -144,6 +145,7 @@ BEGIN
       , @c_SourceType               NVARCHAR(30) = ''    --(Wan06)(Wan05)
       , @c_TranType                 NVARCHAR(10) = ''    --(Wan05)
       , @c_ASNFizUpdLotToSerialNo   NVARCHAR(30) = ''    --(Wan05)
+      , @c_SerialNoUpdateLotLocID   NVARCHAR(10) = ''   --ML01
       
    SET @c_IDLottable01     = ''
    SET @c_IDLottable02     = ''
@@ -1130,6 +1132,10 @@ BEGIN
          IF @c_SerialNo <> ''
          BEGIN
             SELECT @c_ASNFizUpdLotToSerialNo = fsgr.Authority FROM dbo.fnc_SelectGetRight(@c_Facility, @c_Storerkey, '', 'ASNFizUpdLotToSerialNo')AS fsgr
+
+            SELECT @c_SerialNoUpdateLotLocID = fsgr.Authority                                             --ML01
+            FROM dbo.fnc_SelectGetRight(@c_Facility, @c_Storerkey, '', 'SerialNoUpdateLotLocID')AS fsgr   --ML01
+
             SET @c_Status_SN = '1'
             
             SET @c_SerialNokey = ''
@@ -1149,8 +1155,12 @@ BEGIN
 
                UPDATE dbo.SerialNo WITH (ROWLOCK)
                SET [STATUS] = @c_Status_SN
-                  ,Lot   = CASE WHEN @c_ASNFizUpdLotToSerialNo = '1' THEN @c_Lot ELSE Lot END
+                  ,Lot   = CASE WHEN (@c_ASNFizUpdLotToSerialNo = '1'
+                                   OR @c_SerialNoUpdateLotLocID = '1')   --ML01
+                                THEN @c_Lot ELSE Lot END
                   ,ID    = CASE WHEN ID <> @c_ToID THEN @c_ToID ELSE ID END
+                  ,Loc   = CASE WHEN @c_SerialNoUpdateLotLocID = '1' AND Loc <> @c_ToLoc   --ML01
+                                THEN @c_ToLoc ELSE Loc END                                 --ML01
                   ,EditWho  = dbo.fnc_GetUserName()          --(SSAS01)
                   ,EditDate = dbo.fnc_GetDate()    --(SSA02)
                WHERE SerialNoKey = @c_SerialNoKey
@@ -1232,7 +1242,9 @@ BEGIN
                       ,   N''                                                    -- UserDefine05 - nvarchar(30)
                       ,   N''                                                    -- LabelLine - nvarchar(5)
                       ,   N''                                                    -- UCCNo - nvarchar(20)
-                      ,   IIF(@c_ASNFizUpdLotToSerialNo='1',@c_Lot,'')           -- Lot - nvarchar(10)
+                      ,   IIF(@c_ASNFizUpdLotToSerialNo='1'
+                           OR @c_SerialNoUpdateLotLocID='1'   --ML01
+                             ,@c_Lot,'')                                         -- Lot - nvarchar(10)
                       )
                    
                   SET @n_err = @@ERROR  
