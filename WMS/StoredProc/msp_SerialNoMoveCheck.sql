@@ -80,6 +80,7 @@ BEGIN
      ,@c_SerialNo          NVARCHAR(30) = ''                                        --(Wan01)   
      ,@c_Facility          NVARCHAR(15) = ''        --ML01
      ,@c_SerialNoUpdateLotLocID NVARCHAR(30) = ''   --ML01
+     ,@c_LoseUCC           NVARCHAR(1)  = ''        --ML01
 
    --ML01-S
    SELECT @c_Facility = Facility
@@ -108,6 +109,13 @@ BEGIN
                   AND (SN.ID <> '' OR SN.Loc = @c_FromLoc) --ML01
                   AND SN.ID = @c_FromID)
          BEGIN              
+            --ML01-S
+            SET @c_LoseUCC = ''
+            SELECT @c_LoseUCC = LoseUCC
+              FROM LOC (NOLOCK)
+             WHERE Loc = @c_ToLoc
+            --ML01-E
+
             DECLARE CUR_SWAP_ID CURSOR LOCAL FAST_FORWARD READ_ONLY FOR 
             SELECT SN.SerialNoKey
                   ,SN.SerialNo                                                      --(Wan01)
@@ -130,6 +138,7 @@ BEGIN
                UPDATE dbo.SerialNo WITH (ROWLOCK)
                   SET ID = @c_ToID, EditDate=dbo.fnc_GetDate() , EditWho=dbo.fnc_GetUserName()      --(SSA01)
                     , Loc = CASE WHEN @c_SerialNoUpdateLotLocID = '1' THEN @c_ToLoc ELSE Loc END    --ML01
+                    , UCCNo = CASE WHEN @c_LoseUCC = '1' THEN '' ELSE UCCNo END                     --ML01
                WHERE SerialNoKey = @c_SerialNoKey 
                SELECT @n_err = @@ERROR
                IF @n_err <> 0
