@@ -11,6 +11,7 @@ GO
 /* Date        Rev    Author   Purposes                                 */
 /* 2025-04-24  1.0.0  NLT013   FCR-3954. Created                        */
 /* 2025-06-27  1.0.1  Dennis   FCR-3954. Update Dispatch strategy       */
+/* 2025-10-23  1.0.2  Dennis   UWP-428244. Enhancement                  */
 /************************************************************************/
 
 CREATE OR ALTER PROC [rdt].[rdt_TM_PutawayFrom_SwapTask_JCB] (
@@ -170,6 +171,7 @@ BEGIN
    IF EXISTS (SELECT 1 FROM dbo.TaskDetail TD WITH (NOLOCK)  
               INNER JOIN dbo.LOC WITH (NOLOCK) ON TD.ToLoc = LOC.Loc AND LOC.Facility = @cFacility
               WHERE TD.TaskDetailKey = @cNewTaskDetailKey AND TD.Message03 = 'VNA'
+              AND LOC.LocationCategory <> 'PNDIN'
               AND EXISTS (SELECT 1 FROM @tAisleInUsed t WHERE t.LocAisle = LOC.LocAisle))
    BEGIN
       SET @cNewTaskDetailKey = ''
