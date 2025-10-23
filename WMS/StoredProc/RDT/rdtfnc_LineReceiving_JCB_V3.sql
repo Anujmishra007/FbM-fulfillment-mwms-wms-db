@@ -13,6 +13,7 @@ GO
 /*                                                                            */
 /* 2025-04-15 1.0  SKE140   Completly changed the line receiving to have      */
 /*                          location validation after line receiving for JCB  */
+/* 2025-10-22 1.1  PPA374   Checking PO to receive the correct line           */
 /******************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_LineReceiving_JCB_V3] (
@@ -757,6 +758,8 @@ BEGIN
       -- Pad with zero
       SET @cLineNo = RIGHT( '00000' + CAST( @cLineNo AS NVARCHAR(5)), 5)
 
+	  SELECT TOP 1 @cPOKey = POKey FROM dbo.RECEIPTDETAIL WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND ReceiptLineNumber = @cLineNo AND ReceiptKey = @cReceiptKey
+
       -- Get ReceiptDetail info
       SELECT
          @cSKU = SKU,
@@ -1139,6 +1142,8 @@ BEGIN
       WHERE ReceiptKey = @cReceiptKey
          AND ReceiptLineNumber = @cLineNo
 
+		       
+
 	  SELECT TOP 1 @cLottable03 = LEFT(ISNULL(RTRIM(RD.lottable03),'') + ' ' + ISNULL(RTRIM(C.Description),''),18)
          FROM RECEIPTDETAIL RD WITH (NOLOCK)
 		 INNER JOIN CODELKUP C WITH(NOLOCK)
@@ -1146,6 +1151,7 @@ BEGIN
          WHERE ReceiptKey = @cReceiptKey 
             AND Sku = @cSKU
 			AND RD.StorerKey = @cStorerKey
+			AND RD.ReceiptLineNumber = @cLineNo
             AND (POKey = @cPOKey OR @cPOKey = 'NOPO')                           -- TO HANDLE MULTIPLE PO
 
 	  SELECT TOP 1 @cLottable08 = LEFT(ISNULL(RTRIM(RD.Lottable08),'') + ' ' + ISNULL(RTRIM(S.Company),''),30) -- SUPPLIER ID
@@ -1155,6 +1161,7 @@ BEGIN
          WHERE ReceiptKey = @cReceiptKey
             AND Sku = @cSKU 
             AND RD.StorerKey = @cStorerKey
+			AND RD.ReceiptLineNumber = @cLineNo
             AND (POKey = @cPOKey OR @cPOKey = 'NOPO')                           -- TO HANDLE MULTIPLE PO
 
       -- Extended validate
@@ -1773,6 +1780,20 @@ BEGIN
       IF @cReasonCode = ''
          SET @cReasonCode = 'OK'
 
+	  IF (
+	     SELECT SUM(QtyExpected) - SUM(BeforeReceivedQty) FROM dbo.RECEIPTDETAIL WITH(NOLOCK) 
+         WHERE ReceiptKey = @cReceiptKey
+            AND Lottable03 = @cLottable03
+            AND Lottable08 = @cLottable08
+            AND Lottable09 = @cLottable09
+			AND SKU = @cSKU
+		 ) <= 0
+      BEGIN
+	     SET @nErrNo = -4
+         SET @cErrMsg = 'Over qty for line'--rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
+         GOTO Quit
+	  END
+
       -- Custom receiving logic
       IF @cRcptConfirmSP <> '' AND
          EXISTS( SELECT 1 FROM sys.objects WHERE name = @cRcptConfirmSP AND type = 'P')
@@ -1996,6 +2017,7 @@ BEGIN
          WHERE ReceiptKey = @cReceiptKey 
             AND Sku = @cSKU
 			AND RD.StorerKey = @cStorerKey
+			AND RD.ReceiptLineNumber = @cLineNo
             AND (POKey = @cPOKey OR @cPOKey = 'NOPO')                           -- TO HANDLE MULTIPLE PO
 
 	  SELECT TOP 1 @cLottable08 = LEFT(ISNULL(RTRIM(RD.Lottable08),'') + ' ' + ISNULL(RTRIM(S.Company),''),30) -- SUPPLIER ID
@@ -2005,6 +2027,7 @@ BEGIN
          WHERE ReceiptKey = @cReceiptKey
             AND Sku = @cSKU 
             AND RD.StorerKey = @cStorerKey
+			AND RD.ReceiptLineNumber = @cLineNo
             AND (POKey = @cPOKey OR @cPOKey = 'NOPO')                           -- TO HANDLE MULTIPLE PO
 
       -- Dynamic lottable
