@@ -100,6 +100,20 @@ BEGIN
 
     IF @nStep = 2  -- LabelNo/DropID
     BEGIN
+       IF EXISTS (
+	       SELECT 1 
+		    FROM dbo.LOC L WITH(NOLOCK) 
+		    INNER JOIN dbo.PICKDETAIL PD WITH(NOLOCK) 
+			    ON L.LOC = PD.LOC 
+			   AND PD.DropID = @cLabelNo 
+			   AND L.PutawayZone <> 'JCB_ML'
+	    ) 
+	    BEGIN
+	       SET @nErrNo = 218246
+          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')--'DropID not in ML'
+          GOTO Quit
+	    END
+   
       IF @cType = 'R' --Refno
       BEGIN
         
@@ -374,4 +388,5 @@ SET ANSI_NULLS ON
 GO
 
 GRANT EXECUTE ON rdt.rdt_922ExtVal08_JCB TO NSQL
+
 GO
