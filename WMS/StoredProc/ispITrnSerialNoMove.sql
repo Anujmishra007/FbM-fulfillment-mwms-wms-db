@@ -20,6 +20,7 @@ GO
 /* Date        Author   Ver.  Purposes                                    */
 /* 2025-04-08  Wan      1.0   UWP-31258-FCR-822 Partial Pallet Serial No  */
 /*                            Move                                        */
+/* 2025-10-20  Michael  1.1   FCR-8378-StrCfg SerialNoUpdateLotLocID(ML01)*/
 /**************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[ispITrnSerialNoMove]
   @c_ItrnKey      NVARCHAR(10)
@@ -49,6 +50,7 @@ BEGIN
 
      ,@c_Lot               NVARCHAR(10) = ''                                      
      ,@c_Loc               NVARCHAR(10) = ''                                      
+     ,@c_FromLoc           NVARCHAR(10) = ''   --ML01
      ,@c_ID                NVARCHAR(18) = ''                                      
      ,@c_lottable01        NVARCHAR(18) = ''                                      
      ,@c_lottable02        NVARCHAR(18) = ''                                      
@@ -105,12 +107,41 @@ BEGIN
       WHERE la.Lot = @c_lot
    END
 
+   --ML01-S
+   SELECT @c_FromLoc = ISNULL(FromLoc,'')
+        , @c_Loc     = ISNULL(ToLoc,'')
+   FROM ITRN (NOLOCK)
+   WHERE ItrnKey = @c_ItrnKey
+
+   IF @@ROWCOUNT = 0
+   BEGIN
+      IF ISNULL(@c_FromID,'')<>''
+      BEGIN
+         SELECT TOP 1 @c_FromLoc = ISNULL(Loc,'')
+         FROM LOTxLOCxID (NOLOCK)
+         WHERE Storerkey = @c_StorerKey
+           AND Sku = @c_Sku
+           AND ID = @c_FromID
+      END
+
+      IF ISNULL(@c_ToID,'')<>''
+      BEGIN
+         SELECT TOP 1 @c_Loc = ISNULL(Loc,'')
+         FROM LOTxLOCxID (NOLOCK)
+         WHERE Storerkey = @c_StorerKey
+           AND Sku = @c_Sku
+           AND ID = @c_ToID
+      END
+   END
+   --ML01-E
+
    INSERT INTO ITrnSerialNo (ITrnKey, TranType, StorerKey, SKU, SerialNo, QTY, SourceKey, SourceType
                            , Lot, Loc, ID
                            , Lottable01, Lottable02, Lottable03, Lottable04, Lottable05
                            , Lottable06, Lottable07, Lottable08, Lottable09, Lottable10
                            , Lottable11, Lottable12, Lottable13, Lottable14, Lottable15
                            , Channel, Channel_ID, UCCNo, FromID
+                           , FromLoc   --ML01
                            )
    VALUES (@c_ITrnKey, @c_TranType, @c_StorerKey, @c_SKU, @c_SerialNo, @n_QTY, @c_SourceKey, @c_SourceType
          , @c_Lot, @c_Loc, @c_ToID
@@ -118,6 +149,7 @@ BEGIN
          , @c_Lottable06, @c_Lottable07, @c_Lottable08, @c_Lottable09, @c_Lottable10
          , @c_Lottable11, @c_Lottable12, @d_Lottable13, @d_Lottable14, @d_Lottable15
          ,'', 0, @c_UCCNo, @c_FromID
+         , @c_FromLoc   --ML01
          )
  
    SET @n_err = @@ERROR 
@@ -156,3 +188,7 @@ BEGIN
       RETURN  
    END   
 END -- Create Proc 
+GO
+
+GRANT EXECUTE ON [dbo].[ispITrnSerialNoMove] TO NSQL  
+GO 

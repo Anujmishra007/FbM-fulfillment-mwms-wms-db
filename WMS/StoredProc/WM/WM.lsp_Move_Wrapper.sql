@@ -36,6 +36,8 @@ GO
 /*                            and move to non-CommingleSku loc (ML01)   */
 /* 2025-05-26  SWT01    1.6   Setting Session Context for user name     */
 /* 2025-10-10  SPC040   1.7   Replace SUSER_SNAME with fnc_GetUserName  */
+/* 2025-10-20  Michael  1.8   FCR-8378 - Add StorerConfig               */
+/*                            SerialNoUpdateLotLocID (ML02)             */
 /************************************************************************/    
 CREATE OR ALTER PROCEDURE [WM].[lsp_Move_Wrapper]
    @c_Storerkey            NVARCHAR(15) 
@@ -97,6 +99,10 @@ BEGIN
             --,@c_MoveMethod                 NVARCHAR(10)=''                        --(Wan04)--NJOW01
             ,@c_Sourcekey                    NVARCHAR(20)=''                        --(Wan05) 
             ,@c_SourceType                   NVARCHAR(30)='lsp_Move_Wrapper'        --(Wan05)              
+            ,@c_SerialNoUpdateLotLocID       NVARCHAR(30) = ''   --ML02
+            ,@c_SerialNoCapture              NVARCHAR(1)  = ''   --ML02
+            ,@n_Qty_ID                       INT                 --ML02
+
       SELECT @n_starttcnt=@@TRANCOUNT, @n_err=0, @b_success=1, @c_errmsg='', @n_continue=1
 
       SELECT @c_Facility = Facility                                                 --(Wan05) - START
@@ -133,6 +139,35 @@ BEGIN
             END
           END 
        END
+
+      --ML02-S
+      IF @n_continue IN(1,2)
+      BEGIN
+         SELECT @c_SerialNoUpdateLotLocID = dbo.fnc_GetRight(@c_Facility, @c_Storerkey, '', 'SerialNoUpdateLotLocID')
+
+         SET @c_SerialNoCapture = ''
+         SELECT @c_SerialNoCapture = SerialNoCapture
+         FROM SKU (NOLOCK)
+         WHERE Storerkey = @c_Storerkey AND Sku = @c_Sku
+
+         IF @c_SerialNoUpdateLotLocID = '1' AND @c_SerialNoCapture IN ('1', '2')
+         BEGIN
+            SET @n_Qty_ID = 0
+            SELECT @n_Qty_ID = ISNULL(SUM(Qty),0)
+              FROM LOTxLOCxID (NOLOCK)
+             WHERE Storerkey = @c_Storerkey
+               AND Loc       = @c_Loc
+               AND ID        = @c_ID
+
+            IF NOT (ISNULL(@n_ToQty,0)>0 AND ISNULL(@n_ToQty,0)=ISNULL(@n_Qty_ID,0))
+            BEGIN
+               SET @n_Continue = 3
+               SET @n_err = 552705
+               SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': Partial ID Movment is not allowed when SerialNoUpdateLotLocID turns on and SerialNoCapture=1,2. (lsp_Move_Wrapper)'
+            END
+         END
+      END
+      --ML02-E
     
        IF @n_continue IN(1,2) AND @c_TaskManagerMove = 'Y' 
        BEGIN

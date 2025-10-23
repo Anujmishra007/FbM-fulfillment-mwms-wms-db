@@ -73,6 +73,7 @@ GO
 /* 26-JUN-2025  SSA01     UWP-3982- Added PalletType in inventory         */
 /* 26-Sep-2025  TLTING02  UWP-41813 skip blank ID update                  */
 /* 10-Oct-2025  SSA02     UWP-42248 -Enhanced session management          */
+/* 21-Oct-2025  Michael   1.3 FCR-8378-StrCfg SerialNoUpdateLotLocID(ML01)*/
 /**************************************************************************/
 
 CREATE OR ALTER PROCEDURE [dbo].[nspItrnAddMoveCheck]
@@ -2573,7 +2574,8 @@ BEGIN
       IF EXISTS(SELECT 1 FROM dbo.SKU WITH (NOLOCK) 
                 WHERE SKU = @c_Sku
                 AND StorerKey = @c_StorerKey 
-                AND SerialNoCapture IN ('1','3'))
+--ML01                AND SerialNoCapture IN ('1','3'))
+                AND SerialNoCapture IN ('1','2','3'))   --ML01
       BEGIN
          IF @n_Qty > 0 AND @n_Qty = @n_Qty_ID                                       --(Wan12)
          BEGIN
