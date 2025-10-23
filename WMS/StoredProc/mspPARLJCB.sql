@@ -26,6 +26,8 @@ GO
 /* Updates:                                                             */
 /* Date        Author   Ver   Purposes                                  */
 /* 2025-08-22  PPA374   1.0   UWP-32707 - FCR-3957 - JCB Putaway Using  */
+/* 2025-10-23  PPA374   1.1   Updating logic to calculate BULK loc fill */
+/*                               level for specific SKUs differently    */
 /************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[mspPARLJCB]
