@@ -75,7 +75,7 @@ GO
 /* 29-Sep-2025  MICHAEL   4.0 FCR-7829-RemainHoldOnTransfer for UCC (ML01)*/
 /* 10-OCT-2025  SSA02     4.1 UWP-42248 -Enhanced session management      */
 /*                             and cleanup.                               */
-/* 10-Oct-2025  Michael   4.2 FCR-8380- Add SerialNoUpdateLotLocID  (ML02)*/
+/* 10-Oct-2025  Michael   4.2 FCR-8380- Add SerialNoUpdateLotLocID (ML02) */
 /**************************************************************************/
 
 CREATE OR ALTER PROC [dbo].[ispFinalizeTransfer]
@@ -406,13 +406,8 @@ BEGIN
       FROM dbo.fnc_SelectGetRight(@c_ToFacility, @c_ToStorerkey, '', 'ASNFizUpdLotToSerialNo')AS fsgr
    END                                                                              --(Wan11) - END
 
-   --ML02-S
-   SELECT @c_SerialNoUpdateLotLocID = fsgr.Authority
-   FROM dbo.fnc_SelectGetRight(@c_ToFacility, @c_ToStorerkey, '', 'SerialNoUpdateLotLocID')AS fsgr
-
-   IF ISNULL(@c_SerialNoUpdateLotLocID,'') = '1' AND ISNULL(@c_ASNFizUpdLotToSerialNo,'') <> '1'
-      SET @c_ASNFizUpdLotToSerialNo = 1
-   --ML02-E
+   SELECT @c_SerialNoUpdateLotLocID = fsgr.Authority                                                 --ML02
+   FROM dbo.fnc_SelectGetRight(@c_ToFacility, @c_ToStorerkey, '', 'SerialNoUpdateLotLocID')AS fsgr   --ML02
 
    /* KC01 - start */
    EXECUTE dbo.nspGetRight
@@ -2166,6 +2161,8 @@ BEGIN
          END
          --TK01 END
 
+         SET @c_SerialNoCapture = ''   --ML02
+
          SELECT @c_SerialNoCapture = s.SerialNoCapture                              --(Wan11) - START
          FROM SKU s (NOLOCK)
                      WHERE s.StorerKey = @cFromStorerKey
@@ -2174,7 +2171,8 @@ BEGIN
 
          IF @c_SerialNoCapture IN ('1','2','3')
          BEGIN
-            IF @c_FromSerialNo = '' AND @c_ASNFizUpdLotToSerialNo = '1' AND
+            IF @c_FromSerialNo = '' AND (@c_ASNFizUpdLotToSerialNo = '1'
+             OR @c_SerialNoUpdateLotLocID = '1') AND   --ML02
                @c_SerialNoCapture IN ('1','2')
             BEGIN
                SET @nContinue = 3
@@ -2196,7 +2194,8 @@ BEGIN
                     SET @b_CheckToValue = 1
                 END
 
-                IF @b_CheckToValue = 0 AND @c_ASNFizUpdLotToSerialNo = '1' AND
+                IF @b_CheckToValue = 0 AND (@c_ASNFizUpdLotToSerialNo = '1'
+                 OR @c_SerialNoUpdateLotLocID = '1') AND   --ML02
                     @cFromID <> @cToID
                 BEGIN
                     SET @b_CheckToValue = 1
@@ -2237,11 +2236,8 @@ BEGIN
                 END
 
                 IF @c_ASNFizUpdLotToSerialNo = '1' AND (@cFromID = '' Or @cToID ='')
-                    --ML02-S
-                    AND NOT ( @c_SerialNoUpdateLotLocID = '1'
-                       AND (@cFromID = '' AND EXISTS(SELECT TOP 1 1 FROM LOC (NOLOCK) WHERE Loc=@cFromLoc AND (LoseID='1' OR LoseUCC='1')))
-                       AND (@cToID   = '' AND EXISTS(SELECT TOP 1 1 FROM LOC (NOLOCK) WHERE Loc=@cToLoc   AND (LoseID='1' OR LoseUCC='1'))) )
-                    --ML02-E
+                    AND NOT (@c_SerialNoUpdateLotLocID = '1' AND @cFromID = '' AND EXISTS(SELECT TOP 1 1 FROM LOC (NOLOCK) WHERE Loc=@cFromLoc AND (LoseID='1' OR LoseUCC='1')))   --ML02
+                    AND NOT (@c_SerialNoUpdateLotLocID = '1' AND @cToID   = '' AND EXISTS(SELECT TOP 1 1 FROM LOC (NOLOCK) WHERE Loc=@cToLoc   AND (LoseID='1' OR LoseUCC='1')))   --ML02
                 BEGIN
                     SET @nContinue = 3
                     SET @n_Err = 80052
@@ -2277,7 +2273,8 @@ BEGIN
                       SET @n_SerialNo_Cnt = 0
                    END
 
-                   IF @c_ASNFizUpdLotToSerialNo = '1' AND
+                   IF (@c_ASNFizUpdLotToSerialNo = '1'
+                    OR @c_SerialNoUpdateLotLocID = '1') AND   --ML02
                       (@c_SerialNo_Lot <> @cFromLot OR @c_SerialNo_ID <> @cFromID)
                    BEGIN
                       SET @n_SerialNo_Cnt = 0

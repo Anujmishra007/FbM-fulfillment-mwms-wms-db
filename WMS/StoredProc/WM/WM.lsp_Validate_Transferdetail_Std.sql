@@ -621,15 +621,12 @@ BEGIN
          SELECT @c_ASNFizUpdLotToSerialNo = fsgr.Authority                                            --(Wan05)
          FROM dbo.fnc_SelectGetRight(@c_ToFacility, @c_ToStorerkey, '', 'ASNFizUpdLotToSerialNo')AS fsgr  --(Wan05)
 
-         --ML01-S
-         SELECT @c_SerialNoUpdateLotLocID = fsgr.Authority
-         FROM dbo.fnc_SelectGetRight(@c_ToFacility, @c_ToStorerkey, '', 'SerialNoUpdateLotLocID')AS fsgr
+         SELECT @c_SerialNoUpdateLotLocID = fsgr.Authority                                                 --ML01
+         FROM dbo.fnc_SelectGetRight(@c_ToFacility, @c_ToStorerkey, '', 'SerialNoUpdateLotLocID')AS fsgr   --ML01
 
-         IF ISNULL(@c_SerialNoUpdateLotLocID,'') = '1' AND ISNULL(@c_ASNFizUpdLotToSerialNo,'') <> '1'
-            SET @c_ASNFizUpdLotToSerialNo = '1'
-         --ML01-E
-
-         IF @c_ASNFizUpdLotToSerialNo = '1' AND @c_ToSerialNo = '' AND  --SerialNo Tracking
+         IF (@c_ASNFizUpdLotToSerialNo = '1'
+          OR @c_SerialNoUpdateLotLocID = '1')   --ML01
+         AND @c_ToSerialNo = '' AND  --SerialNo Tracking
             @c_SerialNoCapture IN ('1','2')
          BEGIN
             SET @n_Continue = 3
@@ -642,7 +639,9 @@ BEGIN
 
          IF @c_ToSerialNo <> ''
          BEGIN
-            IF @c_ASNFizUpdLotToSerialNo = '1' AND (@c_FromID = '' OR @c_ToID = '')
+            IF (@c_ASNFizUpdLotToSerialNo = '1'
+             OR @c_SerialNoUpdateLotLocID = '1')   --ML01
+            AND (@c_FromID = '' OR @c_ToID = '')
                --ML01-S
                AND NOT ( @c_SerialNoUpdateLotLocID = '1'
                   AND (@c_FromID = '' AND EXISTS(SELECT TOP 1 1 FROM LOC (NOLOCK) WHERE Loc=@c_FromLoc AND (LoseID='1' OR LoseUCC='1')))
