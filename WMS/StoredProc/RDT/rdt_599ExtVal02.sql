@@ -53,7 +53,7 @@ BEGIN
 
             IF EXISTS(SELECT 1 
                      FROM dbo.CODELKUP WITH(NOLOCK)
-                     WHERE ListName = 'RCPTGRP'
+                     WHERE ListName = 'RECEIPTGRP'
                         AND Code = @cReceiptGroup
                         AND UDF01 = CAST(@nFunc AS NVARCHAR(10))
                      )
