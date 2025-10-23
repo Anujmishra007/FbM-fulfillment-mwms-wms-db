@@ -1460,6 +1460,14 @@ BEGIN
          SET @nPre_Step = @nStep_PickZone
          SET @nAction = 0
       END
+      
+      IF @cExtScnSP = 'rdt_839ExtScn05'
+      BEGIN
+         INSERT INTO @tExtScnData (Variable, Value) VALUES
+            ('@cPickSlipNo',     @cPickSlipNo)
+         SET @nPre_Step = @nStep_PickZone
+         SET @nAction = 0
+      END
       GOTO Step_99
    END
 
@@ -2727,9 +2735,20 @@ BEGIN
          IF @cExtScnSP = 'rdt_839ExtScn02' AND @nPre_Step = @nStep99
             GOTO Quit
 
+         IF @cExtScnSP = 'rdt_839ExtScn05' AND @nPre_Step = @nStep99
+            GOTO Quit
+
          DELETE FROM @tExtScnData
 
          IF @cExtScnSP = 'rdt_839ExtScn02'
+         BEGIN
+            INSERT INTO @tExtScnData (Variable, Value) VALUES    
+            ('@cPickSlipNo',     @cPickSlipNo)
+            SET @nPre_Step = @nStep_SKUQTY
+            SET @nAction = 0
+         END
+         
+         IF @cExtScnSP = 'rdt_839ExtScn05'
          BEGIN
             INSERT INTO @tExtScnData (Variable, Value) VALUES    
             ('@cPickSlipNo',     @cPickSlipNo)
@@ -3115,6 +3134,9 @@ BEGIN
       BEGIN
          IF @cExtScnSP = 'rdt_839ExtScn02' AND @nPre_Step = @nStep99
             GOTO Quit
+         
+         IF @cExtScnSP = 'rdt_839ExtScn05' AND @nPre_Step = @nStep99
+            GOTO Quit
 
          DELETE FROM @tExtScnData
 
@@ -3130,6 +3152,14 @@ BEGIN
          BEGIN
             INSERT INTO @tExtScnData (Variable, Value) VALUES
                ('@cSuggSKU',     @cSuggSKU)
+         END
+
+         IF @cExtScnSP = 'rdt_839ExtScn05'
+         BEGIN
+            INSERT INTO @tExtScnData (Variable, Value) VALUES    
+            ('@cPickSlipNo',     @cPickSlipNo)
+            SET @nPre_Step = 4
+            SET @nAction = 0
          END
 
          EXECUTE [RDT].[rdt_ExtScnEntry] 
@@ -3913,8 +3943,18 @@ BEGIN
                   SET @nPre_Step = 5
                   SET @nAction = 0
                END
+
                IF @cExtScnSP = 'rdt_839ExtScn03'
                BEGIN
+                  SET @nAction = 0
+               END
+
+               IF @cExtScnSP = 'rdt_839ExtScn05'
+               BEGIN
+                  INSERT INTO @tExtScnData (Variable, Value) VALUES    
+                  ('@cPickSlipNo',     @cPickSlipNo),
+                  ('@cOption',     @cOption)
+                  SET @nPre_Step = 5
                   SET @nAction = 0
                END
 
@@ -6029,6 +6069,14 @@ BEGIN
             INSERT INTO @tExtScnData (Variable, Value) VALUES
                ('@cSuggSKU',     @cSuggSKU)
          END
+
+         IF @cExtScnSP = 'rdt_839ExtScn05'
+         BEGIN
+            INSERT INTO @tExtScnData (Variable, Value) VALUES    
+            ('@cPickSlipNo',     @cPickSlipNo)
+            SET @nPre_Step = 11
+            SET @nAction = 0
+         END
          
          EXECUTE [RDT].[rdt_ExtScnEntry] 
             @cExtScnSP, 
@@ -6580,6 +6628,14 @@ BEGIN
                ('@cSuggSKU',     @cSuggSKU)
          END
 
+         IF @cExtScnSP = 'rdt_839ExtScn05'
+         BEGIN
+            INSERT INTO @tExtScnData (Variable, Value) VALUES    
+            ('@cPickSlipNo',     @cPickSlipNo)
+            SET @nPre_Step = 12
+            SET @nAction = 0
+         END
+
          EXECUTE [RDT].[rdt_ExtScnEntry] 
             @cExtScnSP, 
             @nMobile, @nFunc, @cLangCode, @nOri_Step, @nOri_Scn, @nInputKey, @cFacility, @cStorerKey, @tExtScnData,
@@ -6771,6 +6827,44 @@ BEGIN
                   GOTO STEP_5_NextTask
                ELSE
                   GOTO STEP_5_Short
+            END
+         END
+
+         IF @cExtScnSP = 'rdt_839ExtScn05'
+         BEGIN
+            IF @nPre_Step = @nStep_SKUQTY OR @nPre_Step = @nStep_SerialNo OR @nPre_Step = @nStep_DataCapture 
+            BEGIN
+                -- Prepare next screen var
+               SET @cOutField01 = '' -- PickSlipNo
+
+               -- Go to PickSlipNo screen
+               SET @nScn = @nScn_PickSlipNo
+               SET @nStep = @nStep_PickSlipNo
+               GOTO Quit
+            END
+            ELSE IF @nPre_Step = @nStep_NoMoreTask
+            BEGIN
+               SET @nPre_Step = @nStep99
+               GOTO Step_4
+            END
+            ELSE IF @nPre_Step = @nStep_ShortPick
+            BEGIN
+               -- Get task in current LOC
+               SET @cSKUValidated = '0'
+               SET @nActQTY = 0
+               SET @cCurrLOC = @cSuggLOC
+               SET @cCurrSKU = @cSuggSKU
+
+               -- Goto PickZone Screen
+               SET @cOutField01 = @cPickSlipNo
+               SET @cOutField02 = CASE WHEN @cDefaultPickZone = '1' THEN @cPickZone ELSE '' END
+               SET @cOutField03 = ''
+               SET @cOutField15 = ''
+
+               SET @nScn = @nScn_PickZone
+               SET @nStep = @nStep_PickZone
+
+               EXEC rdt.rdtSetFocusField @nMobile, 3 -- DropID
             END
          END
          GOTO Quit
