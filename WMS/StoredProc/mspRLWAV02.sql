@@ -41,6 +41,7 @@ GO
 /* 2025-07-04                 Version v2.2 & fix                         */
 /* 2025-09-04                 fix                                        */
 /* 2025-10-10  SSA08    1.9   UWP-42248 -Enhanced session management     */
+/* 2025-10-24  PPA374   1.10  UWP-42949 -Added PP type for the RPF task  */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[mspRLWAV02]
    @c_Wavekey      NVARCHAR(10)
@@ -771,7 +772,11 @@ BEGIN
       BEGIN
          SET @c_Taskdetailkey = ''
          SET @c_TaskType   = 'RPF'
-         SET @c_PickMethod = 'FP'
+         SET @c_PickMethod = CASE WHEN @c_CaseID > ''                            --2025-10-24 - PPA374
+                                     THEN 'PP' 
+                                     WHEN @c_FromID = ''
+                                     THEN 'PP' 
+                                     ELSE 'FP' END
          SET @c_UOM        = '1'
          SET @c_FinalLoc   = ''
          SET @c_Priority   = '3'
