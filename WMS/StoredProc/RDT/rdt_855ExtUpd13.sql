@@ -46,6 +46,7 @@ GO
 /* 2025-09-18 1.21.0 Jackc    FCR-7348 New dropid archiving logic (FBRv1.4)        */
 /* 2025-09-22 1.22.0 NickT    FCR-7845 Print 4X2 labels for all automation orders  */
 /* 2025-10-22 1.23.0 Jackc    UWP-42787 Not archive dropid if tote id is empty     */
+/* 2025-10-24 1.24.0 NickT    UWP-42897 Performance tuning                         */
 /***********************************************************************************/
 CREATE OR ALTER PROC rdt.rdt_855ExtUpd13 (
    @nMobile      INT,   
@@ -691,16 +692,21 @@ BEGIN
                   AND CaseID = @cDropID
                   AND Status NOT IN ('4', '9')
 
-               DECLARE @cOrderGroup NVARCHAR(20) = ''
+               DECLARE 
+                  @cTempOrderKey NVARCHAR(10) = '',
+                  @cOrderGroup NVARCHAR(20) = ''
 
-               SELECT TOP 1 @cOrderGroup = orm.OrderGroup,
+               SELECT TOP 1 @cTempOrderKey = OrderKey
+               FROM dbo.PICKDETAIL WITH(NOLOCK)
+               WHERE StorerKey = @cStorerKey
+                  AND CaseID <> ''
+                  AND CaseID = @cDropID
+               
+               SELECT @cOrderGroup = OrderGroup,
                   @cShipperKey = ISNULL(ShipperKey, '')
-               FROM dbo.PICKDETAIL pkd WITH(NOLOCK)
-               INNER JOIN dbo.ORDERS orm WITH(NOLOCK) ON pkd.StorerKey = orm.StorerKey AND pkd.OrderKey = orm.OrderKey
-               WHERE pkd.StorerKey = @cStorerKey
-                  AND pkd.CaseID <> ''
-                  AND pkd.CaseID = @cDropID
-               ORDER BY orm.OrderKey
+               FROM dbo.ORDERS WITH(NOLOCK)
+               WHERE StorerKey = @cStorerKey
+                  AND OrderKey = @cTempOrderKey
 
                BEGIN TRY
                   --Mark PPA as 5 (audit finished)
