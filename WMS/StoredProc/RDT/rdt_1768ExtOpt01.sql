@@ -254,6 +254,14 @@ BEGIN --(CLVN01)
                               GOTO RollBackTran
                            END CATCH
                         END
+                        ELSE
+                        BEGIN
+                           SELECT @cAdjustmentKey = AdjustmentKey
+                           FROM dbo.ADJUSTMENT WITH (NOLOCK)
+                           WHERE StorerKey = @cStorerKey
+                              AND Remarks IS NOT NULL
+                              AND Remarks = @cSourceKey
+                        END
 
                         -- Insert adjustment details
                         SELECT 
