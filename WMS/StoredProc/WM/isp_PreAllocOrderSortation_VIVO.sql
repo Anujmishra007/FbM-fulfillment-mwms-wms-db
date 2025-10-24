@@ -1,4 +1,7 @@
-
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS OFF
+GO
 /*******************************************************************************************************************************/
 /* Store procedure: isp_PreAllocOrderSortation_VIVO                                                                           */
 /* Copyright      : Maersk                                                                                                     */
@@ -31,9 +34,12 @@ DROP TABLE #TmpPaLogicalLocAssign;
 END
 */
 DECLARE   
-	@JobName nvarchar (128) = 'BEJ - isp_PreAllocOrderSortation_VIVO (DE003 - VIVO)'
+	 @JobName nvarchar (128) = 'BEJ - isp_PreAllocOrderSortation_VIVO (DE003 - VIVO)'
 	,@Facility		nvarchar (15) = 'DE003'
 	,@StorerKey	nvarchar (30) = 'VIVO'
+    ,@UpdOrderKey nvarchar (10)
+	,@UpdOrderLineNum nvarchar(5)
+	,@UpdPALogicalLoc nvarchar (10) 
 ;
 BEGIN
 SET @b_Success = 0;
@@ -48,8 +54,8 @@ WITH ValidOrders AS(
 		,od.Sku
 		,od.OpenQty - od.QtyAllocated - od.QtyPicked LineOpenQty
 		,oh.OpenQty OrdOpenQty
-	FROM dbo.Orders oh
-	INNER JOIN dbo.OrderDetail od ON od.Storerkey = oh.Storerkey AND od.OrderKey = oh.OrderKey
+	FROM dbo.Orders oh WITH (NOLOCK)
+	INNER JOIN dbo.OrderDetail od WITH (NOLOCK) ON od.Storerkey = oh.Storerkey AND od.OrderKey = oh.OrderKey
 	WHERE oh.Storerkey = @StorerKey 
 	AND oh.Facility = @Facility
 	AND oh.DocType = 'E'
@@ -57,11 +63,11 @@ WITH ValidOrders AS(
 	AND od.[Status] = 0
 	/*Only return orders that have a PF set up meeting SkuxLoc/Loc requirements for all ordered Skus 
 	i.e. if Sku is missing correctly setup PF or location then no order sortation occurs for any line*/
-	AND (SELECT COUNT(DISTINCT Sku) FROM dbo.OrderDetail od2 
+	AND (SELECT COUNT(DISTINCT Sku) FROM dbo.OrderDetail od2 WITH (NOLOCK)
 		WHERE od2.Storerkey = oh.Storerkey 
 		AND od2.OrderKey = oh.OrderKey
-		AND od2.Sku NOT IN (SELECT SKU FROM dbo.SkuxLoc sxl2
-							JOIN dbo.Loc loc2 ON loc2.Facility = oh.Facility AND loc2.loc = sxl2.loc
+		AND od2.Sku NOT IN (SELECT SKU FROM dbo.SkuxLoc sxl2 WITH (NOLOCK)
+							JOIN dbo.Loc loc2 WITH (NOLOCK) ON loc2.Facility = oh.Facility AND loc2.loc = sxl2.loc
 							WHERE sxl2.Storerkey = od2.Storerkey 
 							AND ISNULL(loc2.ABC,'') <> ''
 							AND ISNULL(loc2.PALogicalLoc,'') <> ''
@@ -82,9 +88,9 @@ WITH ValidOrders AS(
 		,(sxl.Qty - sxl.QtyAllocated - sxl.QtyPicked) -  SUM(CASE WHEN vo.LineOpenQty <= (sxl.Qty - sxl.QtyAllocated - sxl.QtyPicked) THEN vo.LineOpenQty
 			  ELSE (sxl.Qty - sxl.QtyAllocated - sxl.QtyPicked) END) OVER (partition by sxl.Sku,Loc.Loc order by sxl.Sku ASC, Loc.PALogicalLoc ASC,vo.Ecom_Single_Flag DESC, vo.OrderKey ASC) + CASE WHEN vo.LineOpenQty <= (sxl.Qty - sxl.QtyAllocated - sxl.QtyPicked) THEN vo.LineOpenQty
 			  ELSE (sxl.Qty - sxl.QtyAllocated - sxl.QtyPicked) END  PFQtyBeforeRowAlloc
-	FROM  dbo.Skuxloc sxl
+	FROM  dbo.Skuxloc sxl WITH (NOLOCK)
 	INNER JOIN  ValidOrders vo ON sxl.StorerKey = vo.StorerKey and vo.Sku = sxl.sku --AND vo.Loc = sxl.loc
-	INNER JOIN dbo.loc ON loc.Facility = vo.Facility AND loc.loc = sxl.loc 
+	INNER JOIN dbo.loc WITH (NOLOCK) ON loc.Facility = vo.Facility AND loc.loc = sxl.loc 
 	WHERE sxl.Qty - sxl.QtyAllocated - sxl.QtyPicked > 0 
 	AND loc.LocationType in ('PICK','DYNAMICPK')
 	AND ISNULL(loc.ABC,'') <> ''
@@ -145,22 +151,23 @@ IF @@ERROR <> 0
 	END
 END
 
-BEGIN
-UPDATE dbo.OrderDetail 
-SET OrderDetail.UserDefine02 = #TmpPaLogicalLocAssign.PALogicalLoc 
-	,OrderDetail.EditDate = GETDATE()
-	,OrderDetail.EditWho = @JobName
-FROM dbo.OrderDetail
-JOIN #TmpPaLogicalLocAssign ON OrderDetail.OrderKey = #TmpPaLogicalLocAssign.OrderKey AND OrderDetail.OrderLineNumber = #TmpPaLogicalLocAssign.OrderLineNumber
-WHERE OrderDetail.StorerKey = @StorerKey
-AND OrderDetail.OrderKey = #TmpPaLogicalLocAssign.Orderkey
-AND OrderDetail.OrderLineNumber = #TmpPaLogicalLocAssign.OrderLineNumber
-IF @@ERROR <> 0 
+DECLARE @RowCount INT = (SELECT COUNT(*) FROM #TmpPaLogicalLocAssign);  
+  
+WHILE @RowCount > 0 
+BEGIN  
+	SELECT @UpdOrderKey = OrderKey, @UpdOrderLineNum =OrderLineNumber, @UpdPALogicalLoc = PALogicalLoc   
+	FROM #TmpPaLogicalLocAssign   
+	ORDER BY OrderKey,OrderLineNumber ASC OFFSET @RowCount - 1 ROWS FETCH NEXT 1 ROWS ONLY;  
 	BEGIN
-    SET @n_Err = @@ERROR
-    SET @c_ErrMsg = CONVERT(NCHAR(10),@@ERROR) + ': UserDefine02 update failed! (isp_PreAllocOrderSortation_VIVO)'
-	GOTO EXITNOW
+		UPDATE dbo.OrderDetail WITH (ROWLOCK)
+		SET OrderDetail.UserDefine02 = @UpdPALogicalLoc
+			,OrderDetail.EditDate = GETDATE()
+			,OrderDetail.EditWho = @JobName
+		WHERE OrderDetail.StorerKey = @StorerKey
+		AND OrderDetail.OrderKey = @UpdOrderKey
+		AND OrderDetail.OrderLineNumber = @UpdOrderLineNum     
 	END
+	SET @RowCount -= 1
 END
 
 SELECT @b_Success = 1

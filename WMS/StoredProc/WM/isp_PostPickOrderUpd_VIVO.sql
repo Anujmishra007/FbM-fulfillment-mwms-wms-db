@@ -1,4 +1,7 @@
-
+SET QUOTED_IDENTIFIER OFF
+GO
+SET ANSI_NULLS OFF
+GO
 /*******************************************************************************************************************************/
 /* Store procedure: isp_PostPickOrderUpd_VIVO                                                                           */
 /* Copyright      : Maersk                                                                                                     */
@@ -26,27 +29,33 @@ DECLARE
 	@JobName nvarchar (128) = 'BEJ - isp_PostPickOrderUpd_VIVO (DE003 - VIVO)'
 	,@Facility		nvarchar (15) = 'DE003'
 	,@StorerKey	nvarchar (30) = 'VIVO'
+    ,@UpdOrderKey nvarchar (10)
+	,@UpdOrderLineNum nvarchar(5)
 ;
 BEGIN
 SET @b_Success = 0;
 
-BEGIN
-UPDATE dbo.OrderDetail 
-SET OrderDetail.UserDefine02 = ''
-	,OrderDetail.EditDate = [dbo].[fnc_ConvSFTimeZone](ORDERS.StorerKey, ORDERS.Facility, GETDATE())
-	,OrderDetail.EditWho = @JobName
-FROM dbo.OrderDetail
-JOIN dbo.Orders ON OrderDetail.OrderKey = Orders.OrderKey AND OrderDetail.Storerkey = Orders.Storerkey
-WHERE OrderDetail.StorerKey = @StorerKey
-AND Orders.Facility = @Facility
-AND OrderDetail.Status >= 5
-AND OrderDetail.UserDefine02 <> ''
-IF @@ERROR <> 0 
+DECLARE @RowCount INT = (SELECT COUNT(*) FROM dbo.OrderDetail WITH (NOLOCK) WHERE OrderDetail.StorerKey = @StorerKey AND OrderDetail.Status >= 5 AND OrderDetail.UserDefine02 <> '');  
+  
+WHILE @RowCount > 0 
+BEGIN  
+	SELECT @UpdOrderKey = OrderDetail.OrderKey , @UpdOrderLineNum = OrderDetail.OrderLineNumber 
+	FROM dbo.OrderDetail WITH (NOLOCK) 
+	WHERE OrderDetail.StorerKey = @StorerKey 
+	AND OrderDetail.Status >= '5' 
+	AND OrderDetail.UserDefine02 <> ''
+	ORDER BY OrderKey,OrderLineNumber ASC OFFSET @RowCount - 1 ROWS FETCH NEXT 1 ROWS ONLY;  
+
 	BEGIN
-    SET @n_Err = @@ERROR
-    SET @c_ErrMsg = CONVERT(NCHAR(10),@@ERROR) + ': OrderDetail update failed! (isp_PostPickOrderUpd_VIVO)'
-	GOTO EXITNOW
+		UPDATE dbo.OrderDetail WITH (ROWLOCK)
+		SET OrderDetail.UserDefine02 = ''
+			,OrderDetail.EditDate = GETDATE()
+			,OrderDetail.EditWho = @JobName
+		WHERE OrderDetail.StorerKey = @StorerKey
+		AND OrderDetail.OrderKey = @UpdOrderKey
+		AND OrderDetail.OrderLineNumber = @UpdOrderLineNum     
 	END
+	SET @RowCount -= 1
 END
 
 SELECT @b_Success = 1
