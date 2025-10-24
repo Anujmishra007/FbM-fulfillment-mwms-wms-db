@@ -14,9 +14,10 @@ GO
 /*                                                                                 */  
 /* Date         Rev    Author   Purposes                                           */  
 /* 2025-01-06   1.0.0  NLT013   FCR-1755 Add customize SP                          */  
-/* 2025-03-11   1.5.0  NLT013   UWP-31257 Unable to Pick because                   */
+/* 2025-03-11   1.1.0  NLT013   UWP-31257 Unable to Pick because                   */
 /*                              PickDetail.TaskDetailKey<>TaskDetail.TaskDetaiLKey */
-/* 2025-03-13   1.5.1  NLT013   UWP-31257 RPF taks is not mandatory for ASTCPK     */
+/* 2025-03-13   1.1.1  NLT013   UWP-31257 RPF taks is not mandatory for ASTCPK     */
+/* 2025-10-24   1.2.0  NLT013   UWP-42900 Performance Tuning                       */
 /***********************************************************************************/  
   
 CREATE OR ALTER PROC [RDT].[rdt_CPGetTaskSP01] (  
@@ -90,8 +91,9 @@ BEGIN
             @cNewTaskDetailKey = TD.TaskDetailKey  
          FROM dbo.TaskDetail TD WITH (NOLOCK)  
          JOIN dbo.LOC LOC WITH (NOLOCK) ON ( TD.FromLoc = LOC.Loc)  
-         JOIN dbo.PICKDETAIL PD WITH (NOLOCK) ON ( TD.FromLoc = PD.Loc AND TD.Sku = PD.Sku AND TD.Caseid = PD.CaseID)  
+         JOIN dbo.PICKDETAIL PD WITH (NOLOCK) ON ( TD.StorerKey = PD.StorerKey AND TD.FromLoc = PD.Loc AND TD.Sku = PD.Sku AND TD.Caseid = PD.CaseID)  
          WHERE TD.Groupkey = @cGroupKey  
+         AND TD.StorerKey = @cStorerKey
          AND   TD.[Status] = '3'  
          AND   LOC.Facility = @cFacility  
          AND   TD.DropID <> ''  
@@ -114,8 +116,9 @@ BEGIN
             @cNewTaskDetailKey = TD.TaskDetailKey  
          FROM dbo.TaskDetail TD WITH (NOLOCK)  
          JOIN dbo.LOC LOC WITH (NOLOCK) ON ( TD.FromLoc = LOC.Loc)  
-         JOIN dbo.PICKDETAIL PD WITH (NOLOCK) ON ( TD.FromLoc = PD.Loc AND TD.Sku = PD.Sku AND TD.Caseid = PD.CaseID)  
+         JOIN dbo.PICKDETAIL PD WITH (NOLOCK) ON ( TD.StorerKey = PD.StorerKey AND TD.FromLoc = PD.Loc AND TD.Sku = PD.Sku AND TD.Caseid = PD.CaseID)  
          WHERE TD.Groupkey = @cGroupKey  
+         AND TD.StorerKey = @cStorerKey
          AND   TD.[Status] = '3'  
          AND   TD.FromLoc = @cFromLoc  
          AND   TD.Caseid > @cCartonId  
@@ -136,8 +139,9 @@ BEGIN
             @cNewTaskDetailKey = TD.TaskDetailKey  
          FROM dbo.TaskDetail TD WITH (NOLOCK)  
          JOIN dbo.LOC LOC WITH (NOLOCK) ON ( TD.FromLoc = LOC.Loc)  
-         JOIN dbo.PICKDETAIL PD WITH (NOLOCK) ON ( TD.FromLoc = PD.Loc AND TD.Sku = PD.Sku AND TD.Caseid = PD.CaseID)  
+         JOIN dbo.PICKDETAIL PD WITH (NOLOCK) ON ( TD.StorerKey = PD.StorerKey AND TD.FromLoc = PD.Loc AND TD.Sku = PD.Sku AND TD.Caseid = PD.CaseID)  
          WHERE TD.Groupkey = @cGroupKey  
+         AND TD.StorerKey = @cStorerKey
          AND   TD.[Status] = '3'  
          AND   TD.FromLoc = @cFromLoc  
          AND   TD.Caseid = @cCartonId  
@@ -171,8 +175,9 @@ BEGIN
             @cNewTaskDetailKey = TD.TaskDetailKey  
          FROM dbo.TaskDetail TD WITH (NOLOCK)  
          JOIN dbo.LOC LOC WITH (NOLOCK) ON ( TD.FromLoc = LOC.Loc)  
-         JOIN dbo.PICKDETAIL PD WITH (NOLOCK) ON ( TD.FromLoc = PD.Loc AND TD.Sku = PD.Sku AND TD.TaskDetailKey = PD.TaskDetailKey)
+         JOIN dbo.PICKDETAIL PD WITH (NOLOCK) ON ( TD.StorerKey = PD.StorerKey AND TD.FromLoc = PD.Loc AND TD.Sku = PD.Sku AND TD.TaskDetailKey = PD.TaskDetailKey)
          WHERE TD.Groupkey = @cGroupKey  
+         AND TD.StorerKey = @cStorerKey
          AND   TD.[Status] = '3'  
          AND   LOC.Facility = @cFacility  
          AND   TD.DropID <> ''  
@@ -197,6 +202,7 @@ BEGIN
             JOIN dbo.LOC LOC WITH (NOLOCK) ON ( TD.FromLoc = LOC.Loc)  
             JOIN dbo.PICKDETAIL PD WITH (NOLOCK) ON ( TD.StorerKey = PD.StorerKey AND TD.FromLoc = PD.Loc AND TD.Sku = PD.Sku AND TD.RefTaskKey = PD.TaskDetailKey AND TD.CaseID = PD.CaseID)  
             WHERE TD.Groupkey = @cGroupKey  
+            AND TD.StorerKey = @cStorerKey
             AND   TD.[Status] = '3'  
             AND   LOC.Facility = @cFacility  
             AND   TD.DropID <> ''  
@@ -220,8 +226,9 @@ BEGIN
             @cNewTaskDetailKey = TD.TaskDetailKey  
          FROM dbo.TaskDetail TD WITH (NOLOCK)  
          JOIN dbo.LOC LOC WITH (NOLOCK) ON ( TD.FromLoc = LOC.Loc)  
-         JOIN dbo.PICKDETAIL PD WITH (NOLOCK) ON ( TD.FromLoc = PD.Loc AND TD.Sku = PD.Sku AND TD.TaskDetailKey = PD.TaskDetailKey)  
+         JOIN dbo.PICKDETAIL PD WITH (NOLOCK) ON ( TD.StorerKey = PD.StorerKey AND TD.FromLoc = PD.Loc AND TD.Sku = PD.Sku AND TD.TaskDetailKey = PD.TaskDetailKey)  
          WHERE TD.Groupkey = @cGroupKey  
+         AND TD.StorerKey = @cStorerKey
          AND   TD.[Status] = '3'  
          AND   TD.FromLoc = @cFromLoc  
          AND   TD.Caseid > @cCartonId  
@@ -245,6 +252,7 @@ BEGIN
             JOIN dbo.LOC LOC WITH (NOLOCK) ON ( TD.FromLoc = LOC.Loc)  
             JOIN dbo.PICKDETAIL PD WITH (NOLOCK) ON ( TD.StorerKey = PD.StorerKey AND TD.FromLoc = PD.Loc AND TD.Sku = PD.Sku AND TD.RefTaskKey = PD.TaskDetailKey AND TD.CaseID = PD.CaseID)  
             WHERE TD.Groupkey = @cGroupKey  
+            AND TD.StorerKey = @cStorerKey
             AND   TD.[Status] = '3'  
             AND   TD.FromLoc = @cFromLoc  
             AND   TD.Caseid > @cCartonId  
@@ -264,8 +272,9 @@ BEGIN
             @cNewTaskDetailKey = TD.TaskDetailKey  
          FROM dbo.TaskDetail TD WITH (NOLOCK)  
          JOIN dbo.LOC LOC WITH (NOLOCK) ON ( TD.FromLoc = LOC.Loc)  
-         JOIN dbo.PICKDETAIL PD WITH (NOLOCK) ON ( TD.FromLoc = PD.Loc AND TD.Sku = PD.Sku AND TD.TaskDetailKey = PD.TaskDetailKey)  
+         JOIN dbo.PICKDETAIL PD WITH (NOLOCK) ON ( TD.StorerKey = PD.StorerKey AND TD.FromLoc = PD.Loc AND TD.Sku = PD.Sku AND TD.TaskDetailKey = PD.TaskDetailKey)  
          WHERE TD.Groupkey = @cGroupKey  
+         AND TD.StorerKey = @cStorerKey
          AND   TD.[Status] = '3'  
          AND   TD.FromLoc = @cFromLoc  
          AND   TD.Caseid = @cCartonId  
@@ -288,6 +297,7 @@ BEGIN
             JOIN dbo.LOC LOC WITH (NOLOCK) ON ( TD.FromLoc = LOC.Loc)  
             JOIN dbo.PICKDETAIL PD WITH (NOLOCK) ON ( TD.StorerKey = PD.StorerKey AND TD.FromLoc = PD.Loc AND TD.Sku = PD.Sku AND TD.RefTaskKey = PD.TaskDetailKey AND TD.CaseID = PD.CaseID)  
             WHERE TD.Groupkey = @cGroupKey  
+            AND TD.StorerKey = @cStorerKey
             AND   TD.[Status] = '3'  
             AND   TD.FromLoc = @cFromLoc  
             AND   TD.Caseid = @cCartonId  
