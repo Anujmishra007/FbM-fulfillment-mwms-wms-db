@@ -1043,6 +1043,11 @@ BEGIN
             SET @nScn  = @nScn - 1
             SET @nStep = @nStep - 1
 
+            IF @cExtScnSP <> ''
+            BEGIN
+               GOTO Step_99
+            END
+
             GOTO Quit
          END
       END
@@ -3575,6 +3580,19 @@ BEGIN
             BEGIN
                SET @nFromStep = @cUDF01
                SET @nFromScn = @cUDF02
+            END
+            IF @nStepBak = 99 AND @nScnBak = 4020 AND @nInputKey=1
+            BEGIN
+               SET @cDropID = @cUDF01
+            END
+            IF @nStepBak = 99 AND @nScnBak = 4020 AND @nInputKey=0
+            BEGIN
+               SET @nFromStep = @cUDF01
+               SET @nFromScn = @cUDF02
+            END
+            IF @nStepBak = 7
+            BEGIN
+               SET @cToLoc = ''
             END
          END
       END

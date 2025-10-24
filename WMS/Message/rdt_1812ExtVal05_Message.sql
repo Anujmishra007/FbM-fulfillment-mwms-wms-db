@@ -13,6 +13,7 @@ execute rdt.rdtAddMsg 239657, 10, '2396557ScanDefaultKitLoc',   'us_english', 18
 execute rdt.rdtAddMsg 239658, 10, '239658PNDIsFull',           'us_english', 1812, 0, '239658: PND location is full'
 execute rdt.rdtAddMsg 239659, 10, '2396559CannotOverwrite',     'us_english', 1812, 0, '239659: CannotOverwrite'
 execute rdt.rdtAddMsg 239660, 10, '2396560SOIsFullyPicked',     'us_english', 1812, 0, '239660: SOIsFullyPicked'
+execute rdt.rdtAddMsg 239661, 10, '239661 DiffDropID',     'us_english', 1812, 0, '239661 Diff DropID'
 
 
 execute rdt.rdtAddMsg 239663, 10, '239663DefaultLaneNotFound',  'us_english', 1812, 0, '239663: Default marshalling lane not found'

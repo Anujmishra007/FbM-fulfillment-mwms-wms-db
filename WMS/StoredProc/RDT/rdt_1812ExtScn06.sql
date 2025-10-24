@@ -108,6 +108,7 @@ BEGIN
    DECLARE @nFromStep   INT
    DECLARE @nCartonQTY INT
    DECLARE @nFromScn    INT,
+   @tPalletLabel   VariableTable,
    @cBarcode            NVARCHAR( MAX),
    @cHoldID        NVARCHAR( 20),
    @cSKU                NVARCHAR(20),
@@ -140,6 +141,9 @@ BEGIN
    @nPUOM_Div           INT,
    @cPUOM_Desc          NCHAR( 5),
    @cMUOM_Desc          NCHAR( 5),
+   @cPalletLabel        NVARCHAR( 20),
+   @cPrinter_Paper      NVARCHAR( 10),
+   @cPrinter            NVARCHAR( 10),
    @nQTY_RPL            INT,
    @nPQTY               INT,
    @nMQTY               INT,
@@ -148,8 +152,11 @@ BEGIN
    DECLARE @c_InventoryHoldKey NVARCHAR(10)
    DECLARE @nTranCount  INT
    DECLARE @cNewTaskDetailKey NVARCHAR( 10)
+   DECLARE @cAutoGenDropID NVARCHAR( 1)
 
    DECLARE @cEquipmentProfileKey NVARCHAR(10) --V1.1.0
+   DECLARE @bSuccess INT
+
    DECLARE @tOptions TABLE
    (
       count     INT IDENTITY(1,1),
@@ -172,6 +179,8 @@ BEGIN
    -- Get session info  
    SELECT @nMOBRECStep      = [Step]
       ,@nMOBRECScn          = [Scn]
+      ,@cPrinter            = Printer
+      ,@cPrinter_Paper      = Printer_Paper
       ,@nFromScn            = [V_FromScn]
       ,@nFromStep           = [V_FromStep]
       ,@cExtendedInfoSP     = [V_String27]
@@ -209,6 +218,10 @@ BEGIN
    FROM rdt.rdtMobRec WITH (NOLOCK)  
    WHERE Mobile = @nMobile  
 
+   SET @cAutoGenDropID = rdt.RDTGetConfig( @nFunc, 'AutoGenDropID', @cStorerKey)
+   SET @cPalletLabel = rdt.RDTGetConfig( @nFunc, 'DropIDLabel', @cStorerKey)
+   IF @cPalletLabel = '0'
+      SET @cPalletLabel = ''
    SET @nTranCount = @@TRANCOUNT
    BEGIN TRAN
    SAVE TRAN rdt_1812ExtScn06
@@ -679,25 +692,50 @@ BEGIN
             IF @nInputKey = 0 -- ESC
             BEGIN
                -- Go to DropID screen
-               IF @nFromStep = 1
+               IF @nFromStep = 99
                BEGIN
                   -- Prepare next screen variable
                   SET @cDropID = ''
-                  SET @cOutField01 = '' -- DropID
-
-                  IF @cAutoGenDROPIDSP <> ''
+                  SET @cOutField01 = ''
+                  -- Auto gen Drop ID
+                  IF @cAutoGenDropID = '1'
                   BEGIN
-                     -- Auto generate DROPID
-                     EXEC rdt.rdt_AutoGenID @nMobile, @nFunc, @nStep, @cLangCode
-                        ,@cAutoGenDROPIDSP
-                        ,@tExtData
-                        ,@cAutoID  OUTPUT
-                        ,@nErrNo   OUTPUT
-                        ,@cErrMsg  OUTPUT
-                     IF @nErrNo <> 0
-                        GOTO Quit
+                     -- Get MBOLKey    
+                     EXECUTE dbo.nspg_GetKey_AlphaSeq    
+                        'PalletID_AD',    
+                        10,    
+                        @cUDF01    OUTPUT,    
+                        @bSuccess   OUTPUT,    
+                        @nErrNo     OUTPUT,    
+                        @cErrMsg    OUTPUT    
+                     IF @bSuccess <> 1    
+                     BEGIN    
+                        SET @nErrNo = 72304    
+                        SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --GenDropIDFail  
+                        GOTO Quit    
+                     END
+                     SET @cOutField01 = @cUDF01
+                     SET @cFieldAttr01 = 'O'
+                     --Print Label
 
-                     SET @cOutField01 = @cAutoID
+                     IF @cPalletLabel <> ''
+                     BEGIN
+                        -- Common params
+                        INSERT INTO @tPalletLabel (Variable, Value) VALUES
+                        ( '@cStorerKey', @cStorerKey),
+                        ( '@cDropID', @cUDF01)
+
+                        -- Print label
+                        EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cPrinter, @cPrinter_Paper,
+                           @cPalletLabel, -- Report type
+                           @tPalletLabel, -- Report params
+                           'rdt_1812ExtScn06',
+                           @nErrNo  OUTPUT,
+                           @cErrMsg OUTPUT
+
+                        IF @nErrNo <> 0
+                           GOTO Quit
+                     END
                   END
                END
 
@@ -1254,6 +1292,189 @@ BEGIN
                SET @cOutField05 = '' -- FromID
             END
          END
+         IF @nScn = 4020
+         BEGIN
+            IF @nInputKey = 1 -- ENTER
+            BEGIN
+               -- Screen mapping
+               SET @cDropID   = @cOutField01
+
+               -- Check blank DropID
+               IF @cDropID = ''
+               BEGIN
+                  SET @nErrNo = 51351
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --DropID needed
+                  GOTO Step_1_Fail
+               END
+
+               -- Check barcode format
+               IF rdt.rdtIsValidFormat( @nFunc, @cStorerKey, 'DROPID', @cDropID) = 0
+               BEGIN
+                  SET @nErrNo = 51383
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid Format
+                  GOTO Step_1_Fail
+               END
+
+               -- Check if DropID is use by others
+               IF EXISTS( SELECT 1 FROM dbo.TaskDetail WITH (NOLOCK)
+                  WHERE DropID = @cDropID
+                     AND Status NOT IN ('9','X')
+                     AND UserKey <> @cUserName)
+               BEGIN
+                  SET @nErrNo = 51352
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --DropID in used
+                  GOTO Step_1_Fail
+               END
+
+               -- Check if DropID already exist
+               IF EXISTS( SELECT 1
+                  FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
+                     INNER JOIN dbo.LOC WITH (NOLOCK) ON (LLI.LOC = LOC.LOC)
+                  WHERE LOC.Facility = @cFacility
+                     AND LLI.ID = @cDropID
+                     AND LLI.QTY > 0)
+               BEGIN
+                  SET @nErrNo = 51353
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --DropID in used
+                  GOTO Step_1_Fail
+               END
+
+               -- Check DropID exist
+               IF EXISTS( SELECT 1 FROM dbo.DropID WITH (NOLOCK) WHERE DropID = @cDropID)
+               BEGIN
+                  SET @nErrNo = 51354
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --DropID used
+                  GOTO Step_1_Fail
+               END
+
+               -- Extended validate
+               IF @cExtendedValidateSP <> ''
+               BEGIN
+                  IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedValidateSP AND type = 'P')
+                  BEGIN
+                     SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +
+                        ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cTaskdetailKey, @cDropID, @nQTY, @cToLOC, @nErrNo OUTPUT, @cErrMsg OUTPUT'
+                     SET @cSQLParam =
+                        '@nMobile         INT,           ' +
+                        '@nFunc           INT,           ' +
+                        '@cLangCode       NVARCHAR( 3),  ' +
+                        '@nStep           INT,           ' +
+                        '@nInputKey       INT,           ' +
+                        '@cTaskdetailKey  NVARCHAR( 10), ' +
+                        '@cDropID         NVARCHAR( 20), ' +
+                        '@nQTY            INT,           ' +
+                        '@cToLOC          NVARCHAR( 10), ' +
+                        '@nErrNo          INT OUTPUT,    ' +
+                        '@cErrMsg         NVARCHAR( 20) OUTPUT '
+
+                     EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                        @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cTaskdetailKey, @cDropID, @nQTY, @cToLOC, @nErrNo OUTPUT, @cErrMsg OUTPUT
+
+                     IF @nErrNo <> 0
+                        GOTO Quit
+                  END
+               END
+
+               -- Extended update
+               IF @cExtendedUpdateSP <> ''
+               BEGIN
+                  IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedUpdateSP AND type = 'P')
+                  BEGIN
+                     SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedUpdateSP) +
+                        ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cTaskdetailKey, @cDropID, @nQTY, @cToLOC, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nAfterStep '
+                     SET @cSQLParam =
+                        '@nMobile         INT,           ' +
+                        '@nFunc           INT,           ' +
+                        '@cLangCode       NVARCHAR( 3),  ' +
+                        '@nStep           INT,           ' +
+                        '@nInputKey       INT,           ' +
+                        '@cTaskdetailKey  NVARCHAR( 10), ' +
+                        '@cDropID         NVARCHAR( 20), ' +
+                        '@nQTY            INT,           ' +
+                        '@cToLOC          NVARCHAR( 10), ' +
+                        '@nErrNo          INT OUTPUT,    ' +
+                        '@cErrMsg         NVARCHAR( 20) OUTPUT, ' +
+                        '@nAfterStep      INT            '
+
+                     EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                        @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cTaskdetailKey, @cDropID, @nQTY, @cToLOC, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nStep
+
+                     IF @nErrNo <> 0
+                        GOTO Quit
+                  END
+               END
+
+               -- Prepare next screen variable
+               SET @cOutField01 = @cPickMethod
+               SET @cOutField02 = @cDropID
+               SET @cOutField03 = @cSuggFromLOC
+               SET @cOutField04 = '' -- FromLOC
+               SET @cOutField10 = '' -- ExtendedInfo
+               SET @cFieldAttr01 = ''
+               SET @cUDF01 = @cDropID
+
+               SET @nAfterScn = 4021
+               SET @nAfterStep = 2
+
+               -- Extended info
+               IF @cExtendedInfoSP <> ''
+               BEGIN
+                  IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cExtendedInfoSP AND type = 'P')
+                  BEGIN
+                     SET @cExtendedInfo1 = ''
+                     SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedInfoSP) +
+                        ' @nMobile, @nFunc, @cLangCode, @nStep, @cTaskdetailKey, @cExtendedInfo1 OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nAfterStep'
+                     SET @cSQLParam =
+                        '@nMobile         INT,           ' +
+                        '@nFunc           INT,           ' +
+                        '@cLangCode       NVARCHAR( 3),  ' +
+                        '@nStep           INT,           ' +
+                        '@cTaskdetailKey  NVARCHAR( 10), ' +
+                        '@cExtendedInfo1  NVARCHAR( 20) OUTPUT, ' +
+                        '@nErrNo          INT           OUTPUT, ' +
+                        '@cErrMsg         NVARCHAR( 20) OUTPUT, ' +
+                        '@nAfterStep      INT '
+
+                     EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+                        @nMobile, @nFunc, @cLangCode, 1, @cTaskdetailKey, @cExtendedInfo1 OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nStep
+
+                     SET @cOutField10 = @cExtendedInfo1
+                  END
+               END
+            END
+
+            IF @nInputKey = 0 -- ESC
+            BEGIN
+
+               -- Go to Reason Code Screen
+               SET @cOutField01 = ''
+               SET @cOutField02 = ''
+               SET @cOutField03 = ''
+               SET @cOutfield04 = ''
+               SET @cOutField05 = ''
+               SET @cOutField09 = ''
+               SET @cFieldAttr01 = ''
+
+               SET @nFromScn = @nScn
+               SET @nFromStep = @nStep
+
+               SET @cUDF01 = @nFromStep
+               SET @CUDF02 = @nFromScn
+
+               SET @nAfterScn  = 6620
+               SET @nAfterStep = 99 -- Step 9
+
+            END
+
+            GOTO Quit
+
+            Step_1_Fail:
+            BEGIN
+               SET @cDropID = ''
+               SET @cOutField01 = '' -- DropID
+            END
+         END
+         
       END
       IF @nMOBRECStep = 5
       BEGIN
@@ -1372,6 +1593,53 @@ BEGIN
             SET @nAfterStep = @nFromStep
             GOTO QUIT
          END
+      END
+      IF (@nMOBRECScn <> 4020 AND @nScn = 4020) OR @nAfterScn = 4020 -- DROPID SCREEN
+      BEGIN
+         SET @cOutField01 = ''
+         -- Auto gen Drop ID
+         IF @cAutoGenDropID = '1'
+         BEGIN
+            EXECUTE dbo.nspg_GetKey_AlphaSeq    
+               'PalletID_AD',    
+               10,    
+               @cUDF01    OUTPUT,    
+               @bSuccess   OUTPUT,    
+               @nErrNo     OUTPUT,    
+               @cErrMsg    OUTPUT    
+            IF @bSuccess <> 1    
+            BEGIN    
+               SET @nErrNo = 72304    
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --GenDropIDFail  
+               GOTO Quit    
+            END
+            SET @cOutField01 = @cUDF01
+            SET @cFieldAttr01 = 'O' -- DropID
+            
+            IF @cPalletLabel <> ''
+            BEGIN
+               -- Common params
+               INSERT INTO @tPalletLabel (Variable, Value) VALUES
+               ( '@cStorerKey', @cStorerKey),
+               ( '@cDropID', @cUDF01)
+
+               -- Print label
+               EXEC RDT.rdt_Print @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cPrinter, @cPrinter_Paper,
+                  @cPalletLabel, -- Report type
+                  @tPalletLabel, -- Report params
+                  'rdt_1812ExtScn06',
+                  @nErrNo  OUTPUT,
+                  @cErrMsg OUTPUT
+
+               IF @nErrNo <> 0
+                  GOTO Quit
+            END
+
+
+            SET @nAfterStep = 99
+            SET @nAfterScn = 4020
+         END
+         GOTO QUIT
       END
    END --1812
 

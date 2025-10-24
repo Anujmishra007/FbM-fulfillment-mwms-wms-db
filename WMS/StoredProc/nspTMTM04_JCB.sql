@@ -2210,23 +2210,23 @@ END
            AND @n_err = 63060
       BEGIN
           SELECT @n_continue = 3
-            SELECT @n_err = 109058
-            SELECT @c_errmsg = rdt.rdtgetmessage(@n_err, 'ENG', 'DSP') -- 'Tasks got big weight'
+            SELECT @n_err = 218245
+            SELECT @c_errmsg = rdt.rdtgetmessage(@n_err, 'ENG', 'DSP') -- 'Tasks big for MHE'
       END
 
-       IF EXISTS (
-         SELECT 1
-           FROM dbo.PAZoneEquipmentExcludeDetail PAZEED WITH(NOLOCK)
-              INNER JOIN dbo.AreaDetail AD WITH(NOLOCK)
-                 ON PAZEED.PutawayZone = AD.PutawayZone
-              INNER JOIN RDT.RDTMOBREC RM WITH(NOLOCK)
-                 ON RM.C_String30 = PAZEED.EquipmentProfileKey
-           WHERE AreaKey = @c_AreaKey01
-              AND RM.UserName = @c_userid
-      )
+       IF (
+	      SELECT COUNT(DISTINCT AD.PutawayZone) - COUNT(RM.C_String30) 
+		  FROM dbo.AreaDetail AD WITH(NOLOCK)
+		     INNER JOIN dbo.PAZoneEquipmentExcludeDetail PAZEED WITH(NOLOCK)
+			    ON PAZEED.PutawayZone = AD.PutawayZone
+			 LEFT JOIN RDT.RDTMOBREC RM WITH(NOLOCK)
+                ON RM.C_String30 = PAZEED.EquipmentProfileKey
+				AND RM.UserName = @c_userid
+		  WHERE AreaKey = @c_AreaKey01
+      ) = 0
       BEGIN
           SELECT @n_continue = 3
-            SELECT @n_err = 155360
+            SELECT @n_err = 218244
             SELECT @c_errmsg = rdt.rdtgetmessage(@n_err, 'ENG', 'DSP') -- 'MHE not for Area'
       END
     END

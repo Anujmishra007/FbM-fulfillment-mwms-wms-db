@@ -167,12 +167,12 @@ BEGIN
 
    IF @nFunc = 1764 -- TM Replen
    BEGIN
-      IF @nMOBRECStep = 0
+      IF @nMOBRECStep = 0 OR (@nMOBRECStep = 7 AND @nStep <> 7) -- StartTM or ExitTM back to start
       BEGIN
          SET @cTaskDetailKey = @cOutField06
 
          SELECT
-            @cUDF01 = CASE WHEN TD.PickMethod = 'PP' THEN LA.Lottable11 ELSE '' END,
+            @cUDF01 = CASE WHEN TD.PickMethod = 'PP' THEN LA.Lottable11 ELSE TD.ToID END,
             @cOutField01 = TD.PickMethod,
             @cOutField03 = TD.FromLOC
          FROM dbo.TaskDetail TD WITH(NOLOCK)
@@ -217,18 +217,19 @@ BEGIN
                   IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedValidateSP AND type = 'P')
                   BEGIN
                      SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +
-                        ' @nMobile, @nFunc, @cLangCode, @nStep, @cTaskdetailKey, @nErrNo OUTPUT, @cErrMsg OUTPUT'
+                        ' @nMobile, @nFunc, @cLangCode, @nStep, @cTaskdetailKey, @cToLoc, @nErrNo OUTPUT, @cErrMsg OUTPUT'
                      SET @cSQLParam =
                         '@nMobile         INT,        ' +
                         '@nFunc           INT,        ' +
                         '@cLangCode       NVARCHAR( 3),   ' +
                         '@nStep           INT,        ' +
                         '@cTaskdetailKey  NVARCHAR( 10),  ' +
+                        '@cToLoc          NVARCHAR( 10),'+
                         '@nErrNo          INT OUTPUT, ' +
                         '@cErrMsg         NVARCHAR( 20) OUTPUT'
 
                      EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-                        @nMobile, @nFunc, @cLangCode, @nStep, @cTaskdetailKey, @nErrNo OUTPUT, @cErrMsg OUTPUT
+                        @nMobile, @nFunc, @cLangCode, @nStep, @cTaskdetailKey,@cSuggToloc, @nErrNo OUTPUT, @cErrMsg OUTPUT
 
                      IF @nErrNo <> 0
                         GOTO Quit

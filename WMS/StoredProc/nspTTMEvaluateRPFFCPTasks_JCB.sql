@@ -76,6 +76,7 @@ BEGIN
       @nQty                   INT,
       @nLoopIndex             INT,
       @nToLocMaxPallet        INT,
+      @nTempMaxPallet         INT,
       @nRowCount              INT,
       @nExistingPallets       INT,
       @nRowCountTemp1         INT = 0,
@@ -87,7 +88,9 @@ BEGIN
       @cSQLParam              NVARCHAR( MAX),
       @cLogMsg                NVARCHAR(1000),
       @cCurTaskDetail         NVARCHAR(10),
+      @cTempToLoc             NVARCHAR(10),
       @b_SkipTheTask          INT,
+      
 
       @cCandidateTaskDetailKey            NVARCHAR(10),
       @cCandidateTaskType                 NVARCHAR(10),
@@ -556,7 +559,7 @@ BEGIN
          SET @c_errmsg = rdt.rdtgetmessage( @n_err, @cLangCode, 'DSP') --Populate @tFCPRPFTaskCandidate Fail
          GOTO Fail
       END CATCH
----------------------------------------
+      ---------------------------------------
 
       IF @bDebug = 1
          SELECT '@tFCPRPFTaskCandidate', * FROM @tFCPRPFTaskCandidate
@@ -862,27 +865,63 @@ BEGIN
            AND StorerKey = @cStorerKey
            AND Qty > 0
 
+         SET @nTempMaxPallet = 0
+         SELECT @nTempMaxPallet = COUNT(1) FROM TaskDetail TD
+         JOIN dbo.LOC LOC WITH(NOLOCK) ON TD.ToLoc = LOC.Loc AND LOC.Facility = @cFacility
+         WHERE TD.Status = '3' AND TD.TaskType IN ('FCP','FCP1')
+         AND LOC.LOC = @cToLOC
+
          IF @bDebug = 1
          BEGIN
             SET @cLogMsg = CONCAT_WS(',', 'Loop @tTaskCandidate - 1',
                                        'ToLoc is PND, checking capacity',
                                        '@nExistingPallets: ' + CAST(ISNULL(@nExistingPallets, 0) AS NVARCHAR(10)),
+                                       '@nTempMaxPallet: ' + CAST(ISNULL(@nTempMaxPallet, 0) AS NVARCHAR(10)),
                                        '@nToLocMaxPallet: ' + CAST(ISNULL(@nToLocMaxPallet, 0) AS NVARCHAR(10))
                                     )
             PRINT @cLogMsg
          END
 
          -- Not enough space available in the destination location
-         IF @nToLocMaxPallet <= ISNULL(@nExistingPallets, 0) 
+         IF @nToLocMaxPallet <= ISNULL(@nExistingPallets, 0) + ISNULL(@nTempMaxPallet, 0)
          BEGIN
-            IF @bDebug = 1
+            SET @cTempToLoc = ''
+            SELECT TOP 1 @cTempToLoc = LOC1.LOC FROM dbo.LOC LOC1 WITH(NOLOCK)
+            JOIN dbo.LOC LOC2 WITH(NOLOCK) ON LOC2.Loc = @cToLoc AND LOC2.Facility = @cFacility AND LOC1.LocAisle = LOC2.LocAisle AND LOC1.Floor = LOC2.Floor
+            LEFT JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK) ON LOC1.LOC = LLI.LOC AND LLI.StorerKey = @cStorerKey 
+            LEFT JOIN TASKDETAIL TD WITH(NOLOCK) ON LOC1.Loc = TD.ToLoc AND TD.Status = '3' AND TD.TaskType IN ('FCP','FCP1')
+            WHERE LOC1.Facility = @cFacility
+            AND LOC1.LOC <> @cToLoc
+            AND LOC1.LocationCategory = 'PND_OUT'
+            AND (LLI.Qty - LLI.QtyPicked > 0 OR LLI.LOC IS NULL)
+            GROUP BY LOC1.Loc
+            HAVING COUNT(DISTINCT LLI.ID) + COUNT(DISTINCT TD.TaskDetailKey) < MAX(ISNULL(LOC1.MaxPallet, 99999))
+
+            IF ISNULL(@cTempToLoc, '') <> ''
             BEGIN
-               SET @cLogMsg = CONCAT_WS(',', 'Loop @tTaskCandidate - 1',
-                                          'No enough space, skip the task'
-                                       )
-               PRINT @cLogMsg
+               SET @cToLoc = @cTempToLoc
+               UPDATE @tTaskCandidate SET ToLoc = @cToLoc WHERE TaskDetailKey = @cTaskDetailKey
+               UPDATE TASKDETAIL SET TOLOC = @cToLoc WHERE TASKDETAILKEY = @cTaskDetailKey
+
+               IF @bDebug = 1
+               BEGIN
+                  SET @cLogMsg = CONCAT_WS(',', 'Loop @tTaskCandidate - 1',
+                                             'Switch ToLoc to another PND_OUT location: ', @cToLoc
+                                          )
+                  PRINT @cLogMsg
+               END
             END
-            CONTINUE
+            ELSE
+            BEGIN
+               IF @bDebug = 1
+               BEGIN
+                  SET @cLogMsg = CONCAT_WS(',', 'Loop @tTaskCandidate - 1',
+                                             'No enough space, skip the task'
+                                          )
+                  PRINT @cLogMsg
+               END
+               CONTINUE
+            END
          END
       END
 
@@ -1179,10 +1218,17 @@ BEGIN
                  AND StorerKey = @cStorerKey
                  AND Qty - QtyPicked > 0
 
+               SET @nTempMaxPallet = 0
+               SELECT @nTempMaxPallet = COUNT(1) FROM TaskDetail TD
+               JOIN dbo.LOC LOC WITH(NOLOCK) ON TD.ToLoc = LOC.Loc AND LOC.Facility = @cFacility
+               WHERE TD.Status = '3' AND TD.TaskType IN ('FCP','FCP1')
+               AND LOC.LOC = @cToLOC
+
                IF @bDebug = 1
                BEGIN
                   SET @cLogMsg = CONCAT_WS(',', 'Loop @tFPTaskCandidate - 1',
                                              '@nExistingPallets: ' + CAST(ISNULL(@nExistingPallets, 0) AS NVARCHAR(10)),
+                                             '@nTempMaxPallet: ' + CAST(ISNULL(@nTempMaxPallet, 0) AS NVARCHAR(10)),
                                              '@nToLocMaxPallet: ' + CAST(ISNULL(@nToLocMaxPallet, 0) AS NVARCHAR(10))
                                           )
                   PRINT @cLogMsg
@@ -1191,17 +1237,63 @@ BEGIN
                -- Not enough space available in the destination location
                IF @nToLocMaxPallet <= ISNULL(@nExistingPallets, 0) 
                BEGIN
-                  INSERT INTO @tSkippedTaskDetail (TaskDetailKey)
-                  VALUES (@cTaskDetailKey1)
-
-                  IF @bDebug = 1
+                  IF @cToLocationCategory = 'PND_OUT' 
                   BEGIN
-                     SET @cLogMsg = CONCAT_WS(',', 'Loop @tFPTaskCandidate - 1',
-                                                'No enough space, skip the task'
-                                             )
-                     PRINT @cLogMsg
+                     SET @cTempToLoc = ''
+                     SELECT TOP 1 @cTempToLoc = LOC1.LOC FROM dbo.LOC LOC1 WITH(NOLOCK)
+                     JOIN dbo.LOC LOC2 WITH(NOLOCK) ON LOC2.Loc = @cToLoc AND LOC2.Facility = @cFacility AND LOC1.LocAisle = LOC2.LocAisle AND LOC1.Floor = LOC2.Floor
+                     LEFT JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK) ON LOC1.LOC = LLI.LOC AND LLI.StorerKey = @cStorerKey 
+                     LEFT JOIN TASKDETAIL TD WITH(NOLOCK) ON LOC1.Loc = TD.ToLoc AND TD.Status = '3' AND TD.TaskType IN ('FCP','FCP1')
+                     WHERE LOC1.Facility = @cFacility
+                     AND LOC1.LOC <> @cToLoc
+                     AND LOC1.LocationCategory = 'PND_OUT'
+                     AND (LLI.Qty - LLI.QtyPicked > 0 OR LLI.LOC IS NULL)
+                     GROUP BY LOC1.Loc
+                     HAVING COUNT(DISTINCT LLI.ID) + COUNT(DISTINCT TD.TaskDetailKey) < MAX(ISNULL(LOC1.MaxPallet, 99999))
+
+                     IF ISNULL(@cTempToLoc, '') <> ''
+                     BEGIN
+                        SET @cToLoc = @cTempToLoc
+                        UPDATE @tTaskCandidate SET ToLoc = @cToLoc WHERE TaskDetailKey = @cTaskDetailKey
+                        UPDATE TASKDETAIL SET TOLOC = @cToLoc WHERE TASKDETAILKEY = @cTaskDetailKey
+
+                        IF @bDebug = 1
+                        BEGIN
+                           SET @cLogMsg = CONCAT_WS(',', 'Loop @tTaskCandidate - 1',
+                                                      'Switch ToLoc to another PND_OUT location: ', @cToLoc
+                                                   )
+                           PRINT @cLogMsg
+                        END
+                     END
+                     ELSE
+                     BEGIN
+                        INSERT INTO @tSkippedTaskDetail (TaskDetailKey)
+                        VALUES (@cTaskDetailKey1)
+
+                        IF @bDebug = 1
+                        BEGIN
+                           SET @cLogMsg = CONCAT_WS(',', 'Loop @tFPTaskCandidate - 1',
+                                                      'No enough space, skip the task'
+                                                   )
+                           PRINT @cLogMsg
+                        END
+                        CONTINUE
+                     END
                   END
-                  CONTINUE
+                  ELSE
+                  BEGIN
+                     INSERT INTO @tSkippedTaskDetail (TaskDetailKey)
+                     VALUES (@cTaskDetailKey1)
+
+                     IF @bDebug = 1
+                     BEGIN
+                        SET @cLogMsg = CONCAT_WS(',', 'Loop @tFPTaskCandidate - 1',
+                                                   'No enough space, skip the task'
+                                                )
+                        PRINT @cLogMsg
+                     END
+                     CONTINUE
+                  END
                END
             END
 
@@ -1581,7 +1673,7 @@ BEGIN
        -- Get the first task detail key for RPF1 tasks
       SELECT TOP 1 @cTaskDetailKeyTemp = TaskDetailKey 
       FROM @tTaskCandidate 
-      WHERE TaskType = 'RPF1' AND Status = '3'
+      WHERE TaskType = 'RP1' AND Status = '3'
       ORDER BY RowIndex
 
       UPDATE @tTaskCandidate
@@ -1634,6 +1726,7 @@ BEGIN
          TD.StartTime  = CURRENT_TIMESTAMP,
          TD.EditDate = CURRENT_TIMESTAMP,
          TD.EditWho = @c_UserID,
+         TD.Groupkey = FORMAT(GETDATE(), 'ddMMyyHHmm'),
          TD.TrafficCop = NULL
       FROM dbo.TaskDetail TD
       INNER JOIN @tTaskCandidate TC ON TD.TaskDetailKey = TC.TaskDetailKey

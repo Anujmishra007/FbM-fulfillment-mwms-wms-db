@@ -206,11 +206,11 @@ BEGIN
          END
 
          INSERT INTO TaskDetail (
-            TaskDetailKey, TaskType, Status, UserKey, FromLOC, FromID, ToLOC, ToID, QTY, AreaKey, FinalLOC,
+            TaskDetailKey, TaskType, Status, UserKey, FromLOC, FromID, ToLOC, ToID, QTY, AreaKey, FinalLOC,UOMQty,SystemQTY,
             PickMethod, StorerKey, SKU, LOT, ListKey, TransitCount, SourceType, WaveKey, LoadKey, Priority, SourcePriority, TrafficCop,SourceKey)
          VALUES (
-            @cNewTaskDetailKey, 'RP1', '0', '', @cToLOC, @cToID, @cFinalLOC, @cToID, 0, @cToLOCAreaKey, @cFinalLOC,
-            'FP', @cStorerKey, @cSKU, @cLOT, '', @nTransitCount+1, @cSourceType, @cWaveKey, @cLoadKey, @cPriority, @cSourcePriority, NULL,@cTaskDetailKey)
+            @cNewTaskDetailKey, 'RP1', '0', '', @cToLOC, @cToID, @cFinalLOC, @cToID, @nQty, @cToLOCAreaKey, @cFinalLOC,@nUOMQty,@nSystemQTY,
+            'FP', @cStorerKey, @cSKU, @cLOT, @cNewTaskDetailKey, @nTransitCount+1, @cSourceType, @cWaveKey, @cLoadKey, @cPriority, @cSourcePriority, NULL,@cTaskDetailKey)
 
          UPDATE dbo.TASKDETAIL
             SET RefTaskKey = @cNewTaskDetailKey
