@@ -1,7 +1,3 @@
-IF  EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[isp_ITF_ntrOrderHeader]') AND type in (N'P', N'PC'))
-DROP PROCEDURE [dbo].[isp_ITF_ntrOrderHeader]
-GO
-
 SET ANSI_NULLS OFF
 GO
 SET QUOTED_IDENTIFIER OFF
@@ -60,7 +56,7 @@ GO
 /* 29-Jul-2025  YTKuek    3.2   FCR-5838 (YT05)                         */
 /************************************************************************/    
     
-CREATE PROC [dbo].[isp_ITF_ntrOrderHeader]    
+CREATE OR ALTER PROC [dbo].[isp_ITF_ntrOrderHeader]    
             @c_TriggerName          nvarchar(120)    
           , @c_SourceTable          nvarchar(60)    
           , @c_OrderKey             nvarchar(10)    
@@ -904,7 +900,7 @@ BEGIN
                   END 
                END
 
-               IF @c_SOStatus IN ('RC','AV','BN','AK','BC','AA','S1','AW','BK')
+               IF @c_SOStatus IN ('RC','AV','BN','AK','BC','AA','S1','AW','BK','AH','BT','C6','AM','XX')
                BEGIN
                   SET @c_TablenameHP = ''
 
@@ -926,6 +922,16 @@ BEGIN
                      SET @c_TablenameHP = 'GVTESTSAWHPNL'
                   ELSE IF @c_SOStatus = 'BK'
                      SET @c_TablenameHP = 'GVTESTSBKHPNL'
+                  ELSE IF @c_SOStatus = 'AH'
+                     SET @c_TablenameHP = 'GVTESTSAHHPNL'
+                  ELSE IF @c_SOStatus = 'BT'
+                     SET @c_TablenameHP = 'GVTESTSBTHPNL'
+                  ELSE IF @c_SOStatus = 'C6'
+                     SET @c_TablenameHP = 'GVTESTSC6HPNL'
+                  ELSE IF @c_SOStatus = 'AM'
+                     SET @c_TablenameHP = 'GVTESTSAMHPNL'
+                  ELSE IF @c_SOStatus = 'XX'
+                     SET @c_TablenameHP = 'GVTESTSXXHPNL'
                   ELSE
                      SET @c_TablenameHP = ''
 

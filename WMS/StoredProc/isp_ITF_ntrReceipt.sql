@@ -620,25 +620,6 @@ BEGIN
                      GOTO QUIT   
                   END  
                END
-
-               --(YT05)-S
-               IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
-                           WHERE STC.StorerKey = @c_Storerkey   
-                           AND   STC.ConfigKey = 'GVTEASN9HPNL'  
-                           AND   STC.SValue    = '1' ) 
-               BEGIN
-                  EXEC ispGenGVTLog 'GVTEASN9HPNL', @c_ReceiptKey, @c_Status, @c_StorerKey, ''    
-                        , @b_success   OUTPUT    
-                        , @n_err       OUTPUT    
-                        , @c_errmsg    OUTPUT   
-  
-                  IF @b_success <> 1  
-                  BEGIN  
-                     SET @n_continue = 3  
-                     GOTO QUIT   
-                  END  
-               END
-               --(YT05)-E
             END
             --(YT03)-E
 
@@ -668,7 +649,7 @@ BEGIN
                            AND   STC.ConfigKey = 'GVTEASN1HPNL'  
                            AND   STC.SValue    = '1' ) 
                BEGIN
-                  EXEC ispGenGVTLog 'GVTEASN1HPNL', @c_ReceiptKey, @c_Status, @c_StorerKey, ''    
+                  EXEC ispGenGVTLog 'GVTEASN1HPNL', @c_ReceiptKey, @c_ASNStatus, @c_StorerKey, ''    
                         , @b_success   OUTPUT    
                         , @n_err       OUTPUT    
                         , @c_errmsg    OUTPUT   
@@ -701,7 +682,29 @@ BEGIN
                   END  
                END
             END
-            --(YT04)-E      
+            --(YT04)-E 
+            
+            --(YT05)-S
+            IF @c_ASNStatus = 'X4'
+            BEGIN
+               IF EXISTS ( SELECT 1 FROM StorerConfig STC WITH (NOLOCK)     
+                           WHERE STC.StorerKey = @c_Storerkey   
+                           AND   STC.ConfigKey = 'GVTEASNX4HPNL'  
+                           AND   STC.SValue    = '1' ) 
+               BEGIN
+                  EXEC ispGenGVTLog 'GVTEASNX4HPNL', @c_ReceiptKey, @c_ASNStatus, @c_StorerKey, ''    
+                        , @b_success   OUTPUT    
+                        , @n_err       OUTPUT    
+                        , @c_errmsg    OUTPUT   
+  
+                  IF @b_success <> 1  
+                  BEGIN  
+                     SET @n_continue = 3  
+                     GOTO QUIT   
+                  END  
+               END
+            END
+            --(YT05)-E     
          END -- ColValue IN ('STATUS','SOSTATUS')   
       END -- IF EXISTS ( SELECT 1 FROM ITFTriggerConfig WITH (NOLOCK)    
       --(YT01) - E        
