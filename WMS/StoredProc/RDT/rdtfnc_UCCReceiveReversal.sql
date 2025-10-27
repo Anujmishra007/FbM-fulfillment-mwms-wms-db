@@ -872,7 +872,7 @@ BEGIN
                  @nErrNo         OUTPUT,  @cErrMsg       OUTPUT
 
             IF @nErrNo <> 0
-               GOTO Step_6_Fail
+               GOTO Step_4_Fail
          END
 
          SET @cUCC = @cUCCBarcode
