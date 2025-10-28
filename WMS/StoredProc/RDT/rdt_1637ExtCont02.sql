@@ -39,10 +39,12 @@ AS
       @nTranCount  INT,
       @n_ErrNo     INT,
       @c_ErrMsg    NVARCHAR( 20),
-      @cDefaultContainerType   NVARCHAR( 10),
-      @cContainerKeyAllowBlank   NVARCHAR(10)
+      @cDefaultContainerType     NVARCHAR(10),
+      @cContainerKeyAllowBlank   NVARCHAR(10),
+      @cContainerNoIsOptional    NVARCHAR(10)
 
    SELECT @cContainerKeyAllowBlank = rdt.RDTGetConfig( @nFunc, 'ContainerKeyAllowBlank', @cStorerKey)
+   SELECT @cContainerNoIsOptional = rdt.RDTGetConfig( @nFunc, 'ContainerNoIsOptional', @cStorerKey)
 
    IF @cContainerKeyAllowBlank <> '1' AND @cContainerKey = ''
    BEGIN
@@ -51,10 +53,17 @@ AS
       GOTO Quit
    END
 
-   IF @cContainerNo = ''
+   IF @cContainerNoIsOptional <> '1' AND @cContainerNo = ''
    BEGIN
       SET @nErrNo = 249452
       SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --ContainerNo is required
+      GOTO Quit
+   END
+
+   IF @cContainerNo = '' AND @cContainerKey = ''
+   BEGIN
+      SET @nErrNo = 249456
+      SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --ContainerKey or ContainerNo is required
       GOTO Quit
    END
 
