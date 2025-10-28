@@ -1354,7 +1354,7 @@ BEGIN
                IF @nErrNo <> 0
                BEGIN
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
-                  GOTO Step_1_Fail
+                  GOTO QUIT
                END
             END
             ELSE
@@ -1421,7 +1421,7 @@ BEGIN
                IF @nErrNo <> 0
                BEGIN
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')
-                  GOTO Step_1_Fail
+                  GOTO QUIT
                END
             END
 
