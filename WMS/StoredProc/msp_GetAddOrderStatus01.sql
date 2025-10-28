@@ -30,6 +30,7 @@ GO
 /* Updates:                                                                         */  
 /* Date        Author      Ver   Purposes                                           */ 
 /* 2025-08-08  Wan         1.0   Adding tableid-allocpickdettd                      */
+/* 2025-10-28  Wan         1.0   UAT fix                                            */
 /************************************************************************************/  
 CREATE OR ALTER PROC [dbo].[msp_GetAddOrderStatus01]  
   @c_RequestString   NVARCHAR(MAX)   
@@ -361,9 +362,14 @@ BEGIN
                            LEFT OUTER JOIN CODELKUP cl (NOLOCK) ON  cl.ListName = 'JCBCOMPML'
                                                        AND cl.Storerkey = pd.Storerkey
                                                        AND cl.Short = pd.Loc
+                                                       AND cl.Code  >= ''                          --2025-10-28             
+                                                       AND cl.Code2 >= ''                          --2025-10-28                              
                            WHERE pd.OrderKey = ord.OrderKey
-                           ORDER BY CASE WHEN stt.RowRef IS NULL THEN 0 ELSE 1 END
-                                 ,  CASE WHEN cl.Code IS NULL THEN 0 ELSE 1 END 
+                           ORDER BY ROW_NUMBER()                                                   --2025-10-28 
+                                    OVER (PARTITION BY pd.Orderkey 
+                                          ORDER BY CASE WHEN stt.RowRef IS NULL THEN 0 ELSE 1 END  
+                                                ,  CASE WHEN cl.Code IS NULL THEN 0 ELSE 1 END
+                                          )
                         ) o 
             OUTER APPLY (  SELECT  TOP 1 WITH TIES
                                   STTCnt = CASE WHEN stt.RowRef IS NULL THEN 0 ELSE 1 END
@@ -375,10 +381,15 @@ BEGIN
                            LEFT OUTER JOIN CODELKUP cl (NOLOCK) ON  cl.ListName = 'JCBCOMPML'
                                                        AND cl.Storerkey = pd.Storerkey
                                                        AND cl.Short = pd.Loc
+                                                       AND cl.Code  >= ''                          --2025-10-28              
+                                                       AND cl.Code2 >= ''                          --2025-10-28                                                           
                            WHERE pd.OrderKey = ord.OrderKey
                            AND   pd.OrderLineNumber = ord.OrderLineNumber
-                           ORDER BY CASE WHEN stt.RowRef IS NULL THEN 0 ELSE 1 END
-                                 ,  CASE WHEN cl.Code IS NULL THEN 0 ELSE 1 END 
+                           ORDER BY ROW_NUMBER()                                                   --2025-10-28 
+                                    OVER (PARTITION BY pd.Orderkey, pd.OrderLineNumber
+                                          ORDER BY CASE WHEN stt.RowRef IS NULL THEN 0 ELSE 1 END
+                                                ,  CASE WHEN cl.Code IS NULL THEN 0 ELSE 1 END
+                                         )
                         ) od
             OUTER APPLY (  SELECT TOP 1 WITH TIES
                                   STTCnt = CASE WHEN stt.RowRef IS NULL THEN 0 ELSE 1 END
@@ -390,9 +401,14 @@ BEGIN
                            LEFT OUTER JOIN CODELKUP cl (NOLOCK) ON  cl.ListName = 'JCBCOMPML'
                                                        AND cl.Storerkey = pd.Storerkey
                                                        AND cl.Short = pd.Loc
+                                                       AND cl.Code  >= ''                          --2025-10-28               
+                                                       AND cl.Code2 >= ''                          --2025-10-28                                                          
                            WHERE pd.PickDetailKey = ord.PickdetailKey
-                           ORDER BY CASE WHEN stt.RowRef IS NULL THEN 0 ELSE 1 END
-                                 ,  CASE WHEN cl.Code IS NULL THEN 0 ELSE 1 END 
+                           ORDER BY ROW_NUMBER()                                                   --2025-10-28 
+                                    OVER (PARTITION BY pd.PickdetailKey
+                                          ORDER BY CASE WHEN stt.RowRef IS NULL THEN 0 ELSE 1 END  
+                                                ,  CASE WHEN cl.Code IS NULL THEN 0 ELSE 1 END
+                                         )
                         ) p
 
             IF @b_debug = 1
