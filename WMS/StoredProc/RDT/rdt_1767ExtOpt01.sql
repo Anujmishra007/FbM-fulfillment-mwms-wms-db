@@ -350,6 +350,24 @@ AS
                         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP')   -- Ins AdjDtl Err
                         GOTO RollBackTran   
                      END
+
+                     -- Skip posting if UCC has Qty allocated, ops need do it manually
+                     IF NOT EXISTS( SELECT 1
+                                    FROM dbo.CCDetail CCD WITH (NOLOCK)
+                                    INNER JOIN dbo.LOTxLOCxID LLI WITH (NOLOCK) 
+                                    ON CCD.Lot = LLI.Lot AND CCD.Loc = LLI.Loc AND CCD.Id = LLI.Id
+                                    INNER JOIN dbo.UCC WITH (NOLOCK)
+                                    ON CCD.StorerKey = UCC.StorerKey AND CCD.RefNo = UCC.UCCNo
+                                    WHERE CCD.CCSheetNo = @cTaskDetailKey
+                                       AND CCD.RefNo = @cUCC
+                                       AND LLI.QtyAllocated > 0
+                                       AND UCC.Status = '3')
+                     BEGIN
+                        IF NOT EXISTS(SELECT 1 FROM @tPosting WHERE AdjustmentKey = @cAdjustmentKey)
+                        BEGIN
+                           INSERT INTO @tPosting (AdjustmentKey) VALUES (@cAdjustmentKey)
+                        END
+                     END
                      
                      VARIANCE:
                      IF @nVariance = 0
