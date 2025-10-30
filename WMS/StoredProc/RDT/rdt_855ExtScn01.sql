@@ -24,6 +24,7 @@ GO
 /* 2025-09-24 1.6.0 NickT     UWP-41178 Stay in PrintPackingList scn                   */
 /*                            if input invalid option                                  */
 /* 2025-09-25 1.7.0 JackC     FCR-7348 Support UPC at SKU screen when Single unit order*/
+/* 2025-10-15 1.8.0 CYU027     FCR-6657 validation to AVOID SHORT                      */
 /***************************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_855ExtScn01] (
@@ -141,7 +142,7 @@ BEGIN
       @cToteID                NVARCHAR(20), 
       @cLabelNo               NVARCHAR(20),
       @cUPC                   NVARCHAR(30),--1.7.0 SKU.RetailSKU
-      @nSKUCnt                INT, 
+      @nSKUCnt                INT,
       @b_Success              INT
    --V1.4.0 end
 
@@ -283,6 +284,129 @@ BEGIN
       END
       IF @nStep = 2
       BEGIN
+         --FCR-6657 new Discrepancy logic
+         IF @nInputKey = '1'
+            AND EXISTS(
+               SELECT 1 FROM dbo.WorkOrderDetail WOD WITH(NOLOCK)
+               INNER JOIN dbo.PickDetail PKD WITH(NOLOCK)
+               ON WOD.StorerKey = PKD.StorerKey
+                  AND WOD.ExternWorkOrderKey = PKD.OrderKey
+                  AND WOD.WkOrdUdef1 = PKD.SKU
+               WHERE PKD.StorerKey = @cStorerkey
+                 AND ( PKD.CaseID = @cDropID or PKD.DropID = @cDropID)
+                 AND WOD.type = 'S02'
+                 AND TRY_CAST(NULLIF(WOD.WkOrdUdef3, '') AS INT) > 0)
+         BEGIN
+
+            DECLARE @wSKU NVARCHAR(20)
+            DECLARE @wQty INT = 0
+
+            IF EXISTS ( SELECT 1
+                 FROM dbo.ORDERS ord WITH (NOLOCK)
+                         INNER JOIN dbo.PickDetail pd WITH (NOLOCK) ON ord.OrderKey = pd.OrderKey
+                         INNER JOIN dbo.Wave w WITH (NOLOCK) ON ord.UserDefine09 = w.WaveKey
+                 WHERE ord.StorerKey = @cStorerkey
+                   AND pd.StorerKey = @cStorerkey
+                   AND (pd.CaseID = @cDropID OR pd.DropId = @cDropID)
+                   AND w.UserDefine09 = 'Y')
+            BEGIN -- Automation
+               SELECT TOP 1
+                  @wSKU = W.SKU,
+                  @wQty = W.WorkOrderQty
+               FROM
+                  (
+                     SELECT
+                        pd.SKU,
+                        SUM(TRY_CAST(NULLIF(WOD.WkOrdUdef3, '') AS INT)) AS WorkOrderQty,
+                        SUM(pd.Qty) AS PickQty
+                     FROM dbo.WorkOrderDetail WOD WITH(NOLOCK)
+                             INNER JOIN dbo.PackHeader ph WITH(NOLOCK)
+                                        ON (WOD.StorerKey = ph.StorerKey AND WOD.ExternWorkOrderKey = ph.OrderKey)
+                             INNER JOIN dbo.PackDetail pd WITH(NOLOCK)
+                                        ON (ph.StorerKey = pd.StorerKey AND ph.PickSlipNo = pd.PickSlipNo AND WOD.WkOrdUdef1 = Pd.SKU)
+                     WHERE pd.StorerKey = @cStorerkey
+                       AND ( pd.LabelNo = @cDropID or pd.dropID = @cDropID)
+                       AND WOD.type = 'S02'
+                     GROUP BY pd.SKU
+                     HAVING SUM(TRY_CAST(NULLIF(WOD.WkOrdUdef3, '') AS INT)) > 0
+                  ) as W
+               WHERE W.WorkOrderQty <> W.PickQty
+            END
+            ELSE
+            BEGIN -- Manuel
+               SELECT TOP 1
+                  @wSKU = W.SKU,
+                  @wQty = W.WorkOrderQty
+               FROM
+                  (
+                     SELECT
+                        PKD.SKU,
+                        SUM(TRY_CAST(NULLIF(WOD.WkOrdUdef3, '') AS INT)) AS WorkOrderQty,
+                        SUM(PKD.Qty) AS PickQty
+                     FROM dbo.WorkOrderDetail WOD WITH(NOLOCK)
+                             INNER JOIN dbo.PickDetail PKD WITH(NOLOCK) ON
+                        WOD.StorerKey = PKD.StorerKey
+                           AND WOD.ExternWorkOrderKey = PKD.OrderKey
+                           AND WOD.WkOrdUdef1 = PKD.SKU
+                     WHERE PKD.StorerKey = @cStorerkey
+                       AND (PKD.CaseID = @cDropID OR PKD.DROPID = @cDropID)
+                       AND WOD.type = 'S02'
+                     GROUP BY PKD.SKU
+                     HAVING SUM(TRY_CAST(NULLIF(WOD.WkOrdUdef3, '') AS INT)) > 0
+                  ) as W
+               WHERE W.WorkOrderQty <> W.PickQty
+            END
+
+
+            IF (ISNULL(@wSKU,'')<>'')
+            BEGIN
+
+               --Message Queue
+               DECLARE
+                  @cMsg01                 NVARCHAR(20) = '',
+                  @cMsg02                 NVARCHAR(20) = '',
+                  @cMsg03                 NVARCHAR(20) = '',
+                  @cMsg04                 NVARCHAR(20) = '',
+                  @cMsg05                 NVARCHAR(20) = '',
+                  @cMsg06                 NVARCHAR(20) = '',
+                  @cMsg07                 NVARCHAR(20) = '',
+                  @cMsg08                 NVARCHAR(20) = '',
+                  @cMsg09                 NVARCHAR(20) = ''
+
+               SET @cMsg01 = 'Error: Meet Supervisor'
+               SET @cMsg02 = 'Qty does not match . '
+               SET @cMsg03 = 'Expected value :' + CAST(@wQty AS NVARCHAR(10))
+               SET @cMsg04 = 'On ' + @wSKU
+               EXEC rdt.rdtInsertMsgQueue @nMobile = @nMobile,
+                    @nErrNo = @nErrNo,
+                    @cErrMsg = @cErrMsg,
+                    @cLine01 = @cMsg01,
+                    @cLine02 = @cMsg02,
+                    @cLine03 = @cMsg03,
+                    @cLine04 = @cMsg04,
+                    @cLine05 = @cMsg05,
+                    @cLine06 = @cMsg06,
+                    @cLine07 = @cMsg07,
+                    @cLine08 = @cMsg08,
+                    @cLine09 = @cMsg09,
+                    @nDisplayMsg = 0
+
+
+               -- Go to discrepency screen
+               SET @cOutField01 = '' -- Option
+               SET @cFieldAttr02 = CASE WHEN @cCaptureReasonCode ='1' THEN '' ELSE 'o' END
+               SET @cOutField02 = ''
+               SET @cInField02 = ''
+
+               SET @nAfterScn = 817
+               SET @nAfterStep = 4
+
+               GOTO Quit
+            END
+
+         END
+
+
          IF @nScn = 818
          BEGIN
             IF @nInputKey = 0
@@ -671,9 +795,9 @@ BEGIN
                         -- V1.5.1 No need to check LISTNAME = 'MPOCPERMIT' for single unit order
                         -- IF NOT EXISTS (SELECT 1
                         --             FROM dbo.PICKDETAIL PD WITH (NOLOCK)
-                        --             JOIN dbo.ORDERS AS O WITH (NOLOCK) 
+                        --             JOIN dbo.ORDERS AS O WITH (NOLOCK)
                         --                ON O.orderkey = PD.orderkey
-                        --             JOIN dbo.CODELKUP AS C WITH (NOLOCK) 
+                        --             JOIN dbo.CODELKUP AS C WITH (NOLOCK)
                         --                ON LISTNAME = 'MPOCPERMIT'
                         --                AND ( C.Code = O.BillToKey OR C.Code = O.ConsigneeKey )
                         --                AND C.Storerkey = O.StorerKey
@@ -688,7 +812,7 @@ BEGIN
                                  AND ShipFlag <> 'Y'
                                  AND UOM = '2'
                         ) -- V1.5.2 end
-                        BEGIN 
+                        BEGIN
                            SET @cSingleUnitOrdConfig = rdt.rdtGetConfig( @nFunc, 'SingleUnitOrderConfig', @cStorerkey)
                            IF @cSingleUnitOrdConfig = '0'
                               SET @cSingleUnitOrdConfig = ''
