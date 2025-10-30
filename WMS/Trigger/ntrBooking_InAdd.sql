@@ -110,7 +110,7 @@ BEGIN
             SET Containerkey = @c_containerno,
                 TrafficCop = NULL,
                 EditDate = dbo.fnc_GetDate(), --GETDATE(),        AK01
-                EditWho = dbo.fnc_GetUserName() --SUSER_SNAME()   AK01h
+                EditWho = dbo.fnc_GetUserName() --SUSER_SNAME()   AK01
             WHERE Receiptkey = @c_receiptkey      
             IF @@ERROR <> 0
             BEGIN
