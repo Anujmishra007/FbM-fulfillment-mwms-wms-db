@@ -102,6 +102,8 @@ BEGIN
                   WHERE PickDetailKey = @cPickDetailKey
                END TRY
                BEGIN CATCH
+                  SET @nErrNo = 250201
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- failed to update PKD
                   GOTO RollbackTran
                END CATCH
             END -- end while
@@ -118,17 +120,6 @@ BEGIN
       ROLLBACK TRAN rdt_1764ExtUpd24
    ELSE
       ROLLBACK TRAN
-
-   SET @cErrMsg1 = '250201-Failed to update'
-   SET @cErrMsg2 = 'PKD status to 5'
-   SET @cErrMsg3 = 'TASK ' + @cTaskDetailKey  
-   SET @cErrMsg4 = 'Retry from the web'
-   EXEC rdt.rdtInsertMsgQueue @nMobile, @nErrNo OUTPUT, @cErrMsg OUTPUT
-         ,@cErrMsg1
-         ,@cErrMsg2
-         ,@cErrMsg3
-         ,@cErrMsg4
-
    GOTO Quit
 
    Fail:
