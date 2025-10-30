@@ -17,6 +17,7 @@ GO
 /* 2025-08-29 1.3.0 NickT     UWP-40373 Correct Qty of Alert Msg, no need*/
 /*                            to generate Adjustment if UCC is Picked   */
 /* 2025-09-02 1.3.1 Jackc     UWP-40373 Correct Qty of Alert.Qty        */
+/* 2025-10-30 1.4.0 NickT     UWP-43212 Skip allocated UCC              */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1767ExtOpt01] (
@@ -242,7 +243,7 @@ AS
                      WHERE StorerKey = @cStorerKey
                         AND UCCNo = @cUCC
 
-                     IF @cUCCStatus IN ('5','6') -- replenished to/picking done
+                     IF @cUCCStatus IN ('3', '5','6') -- replenished to/picking done
                      BEGIN
                         GOTO NEXT_LOOP
                      END
@@ -349,24 +350,6 @@ AS
                         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode,'DSP')   -- Ins AdjDtl Err
                         GOTO RollBackTran   
                      END
-
-                     -- Skip posting if UCC has Qty allocated, ops need do it manually
-                     IF NOT EXISTS( SELECT 1
-                                    FROM dbo.CCDetail CCD WITH (NOLOCK)
-                                    INNER JOIN dbo.LOTxLOCxID LLI WITH (NOLOCK) 
-                                    ON CCD.Lot = LLI.Lot AND CCD.Loc = LLI.Loc AND CCD.Id = LLI.Id
-                                    INNER JOIN dbo.UCC WITH (NOLOCK)
-                                    ON CCD.StorerKey = UCC.StorerKey AND CCD.RefNo = UCC.UCCNo
-                                    WHERE CCD.CCSheetNo = @cTaskDetailKey
-                                       AND CCD.RefNo = @cUCC
-                                       AND LLI.QtyAllocated > 0
-                                       AND UCC.Status = '3')
-                     BEGIN
-                        IF NOT EXISTS(SELECT 1 FROM @tPosting WHERE AdjustmentKey = @cAdjustmentKey)
-                        BEGIN
-                           INSERT INTO @tPosting (AdjustmentKey) VALUES (@cAdjustmentKey)
-                        END
-                     END
                      
                      VARIANCE:
                      IF @nVariance = 0
@@ -378,7 +361,7 @@ AS
                   CLOSE @curCCD
                   DEALLOCATE @curCCD
 
-                  IF @cADJFinalize = '1' --AND @cUserName <> 'JAMESWONG'
+                  IF @cADJFinalize = '1'
                   BEGIN
                      SET @curADJ = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
                      SELECT AdjustmentKey
