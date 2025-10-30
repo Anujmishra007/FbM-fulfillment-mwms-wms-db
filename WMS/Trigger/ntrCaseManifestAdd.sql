@@ -218,10 +218,10 @@ BEGIN
    BEGIN
        UPDATE CASEMANIFEST
        SET    TrafficCop = NULL
-             ,AddDate = GETDATE()
-             ,AddWho = SUSER_SNAME()
-             ,EditDate = GETDATE()
-             ,EditWho = SUSER_SNAME()
+             ,AddDate = dbo.fnc_GetDate() --GETDATE()           AK01
+             ,AddWho = dbo.fnc_GetUserName() --SUSER_SNAME()    AK01
+             ,EditDate = dbo.fnc_GetDate() --GETDATE()          AK01
+             ,EditWho = dbo.fnc_GetUserName() --SUSER_SNAME()   AK01
        FROM   CASEMANIFEST
              ,INSERTED
        WHERE  CASEMANIFEST.CaseId = INSERTED.CaseId
@@ -239,24 +239,6 @@ BEGIN
        END
    END
 
-   --AK01 - S
-   IF dbo.fnc_GetUserName() <> sUser_sName() AND @n_Continue IN (1,2) 
-   BEGIN
-      UPDATE CASEMANIFEST
-        SET AddWho  = dbo.fnc_GetUserName(),
-            AddDate = dbo.fnc_GetDate(), 
-            TrafficCop = NULL 
-      FROM CASEMANIFEST
-      JOIN INSERTED ON CASEMANIFEST.CaseId = INSERTED.CaseId
-      SELECT @n_err = @@ERROR
-      IF @n_err <> 0
-      BEGIN
-         SELECT @n_continue = 3
-         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=68603  
-         SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed On Table CASEMANIFEST. (ntrCASEMANIFESTAdd)' + ' ( ' + ' SQLSvr MESSAGE=' + TRIM(@c_errmsg) + ' ) '
-      END
-   END
-   --AK01 - E
 
    /* #INCLUDE <TRMAN2.SQL> */
    IF @n_continue = 3 -- Error Occured - Process And Return

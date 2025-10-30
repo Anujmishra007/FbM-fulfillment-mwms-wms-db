@@ -11,7 +11,7 @@ GO
 /* Written by:                                                          */  
 /*                                                                      */  
 /* Purpose: Trigger point Upon add POD                                  */  
-/*        : WMS-18336 - MYS¨CSBUXM¨CDefault value in POD Entry column upon*/
+/*        : WMS-18336 - MYSï¿½CSBUXMï¿½CDefault value in POD Entry column upon*/
 /*        : update POD Status                                           */
 /* Input Parameters:                                                    */  
 /*                                                                      */  
@@ -180,6 +180,8 @@ END
       UPDATE POD
         SET AddWho  = dbo.fnc_GetUserName(),
             AddDate = dbo.fnc_GetDate(), 
+            EditWho  = dbo.fnc_GetUserName(),
+            EditDate = dbo.fnc_GetDate(), 
             TrafficCop = NULL 
       FROM POD
       JOIN INSERTED ON POD.Mbolkey = INSERTED.Mbolkey

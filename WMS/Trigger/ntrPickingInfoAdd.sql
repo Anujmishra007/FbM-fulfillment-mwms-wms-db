@@ -437,8 +437,8 @@ BEGIN
 
                UPDATE ORDERS WITH (ROWLOCK)
                SET Status = '3',
-                   EditWho = sUser_sName(),
-                   EditDate = GetDate()
+                   EditWho = dbo.fnc_GetUserName(),   --SUSER_SNAME()    AK01
+                   EditDate = dbo.fnc_GetDate()       --GETDATE(),       AK01
                --, TrafficCop = NULL -- SOS#305979
                WHERE OrderKey = @c_OrderKey
                AND   Status < '3'
@@ -458,8 +458,8 @@ BEGIN
                BEGIN
                   UPDATE ORDERDETAIL WITH (ROWLOCK)
                   SET Status = '3',
-                      EditWho = sUser_sName(),
-                      EditDate = GetDate(),
+                      EditWho = dbo.fnc_GetUserName(),   --SUSER_SNAME()    AK01
+                      EditDate = dbo.fnc_GetDate(),      --GETDATE(),       AK01
                       TrafficCop = NULL
                   WHERE ORDERDETAIL.OrderKey = @c_OrderKey
                   AND   ORDERDETAIL.Status < '3'
@@ -483,8 +483,8 @@ BEGIN
                BEGIN
                   UPDATE LOADPLANDETAIL WITH (ROWLOCK)
                   SET Status = '3',
-                      EditWho = sUser_sName(),
-                      EditDate = GetDate(),
+                      EditWho = dbo.fnc_GetUserName(),   --SUSER_SNAME()    AK01
+                      EditDate = dbo.fnc_GetDate(),      --GETDATE(),       AK01
                       TrafficCop = NULL
                   WHERE LOADPLANDETAIL.OrderKey = @c_OrderKey
                   AND   LOADPLANDETAIL.Status < '5'
@@ -838,8 +838,8 @@ BEGIN
             BEGIN
                UPDATE ORDERS WITH (ROWLOCK)
                   SET Status = '3',
-                      EditWho = sUser_sName(),
-                      EditDate = GetDate()
+                      EditWho = dbo.fnc_GetUserName(),   --SUSER_SNAME(),    AK01
+                      EditDate = dbo.fnc_GetDate()       --GETDATE()         AK01
                   --, TrafficCop = NULL -- SOS#305979
                 WHERE OrderKey = @c_LPOrderKey
                   AND Status < '3'
@@ -860,8 +860,8 @@ BEGIN
             BEGIN
                UPDATE ORDERDETAIL WITH (ROWLOCK)
                   SET Status = '3',
-                      EditWho = sUser_sName(),
-                      EditDate = GetDate(),
+                      EditWho = dbo.fnc_GetUserName(),   --SUSER_SNAME(),    AK01
+                      EditDate = dbo.fnc_GetDate(),      --GETDATE(),        AK01
                       TrafficCop = NULL
                 WHERE ORDERDETAIL.OrderKey = @c_LPOrderKey
                   AND ORDERDETAIL.Status < '3'
@@ -882,8 +882,8 @@ BEGIN
             BEGIN
                UPDATE LOADPLANDETAIL WITH (ROWLOCK)
                   SET Status = '3',
-                      EditWho = sUser_sName(),
-                      EditDate = GetDate(),
+                      EditWho = dbo.fnc_GetUserName(),   --SUSER_SNAME(),    AK01
+                      EditDate = dbo.fnc_GetDate(),      --GETDATE(),        AK01
                       TrafficCop = NULL
                 WHERE LOADPLANDETAIL.OrderKey = @c_LPOrderKey
                   AND LOADPLANDETAIL.Status < '5'
@@ -1212,8 +1212,8 @@ BEGIN
 
                   UPDATE ORDERS WITH (ROWLOCK)
                      SET Status = '3',
-                         EditWho = sUser_sName(),
-                         EditDate = GetDate()
+                         EditWho = dbo.fnc_GetUserName(),   --SUSER_SNAME(),    AK01
+                         EditDate = dbo.fnc_GetDate()       --GETDATE()         AK01
                      --, TrafficCop = NULL -- SOS#305979
                    WHERE OrderKey = @c_xdOrderKey
                      AND status < '3'
@@ -1234,8 +1234,8 @@ BEGIN
                BEGIN
                   UPDATE ORDERDETAIL WITH (ROWLOCK)
                      SET Status = '3',
-                         EditWho = sUser_sName(),
-                         EditDate = GetDate(),
+                         EditWho = dbo.fnc_GetUserName(),   --SUSER_SNAME(),    AK01
+                         EditDate = dbo.fnc_GetDate(),      --GETDATE(),        AK01
                          TrafficCop = NULL
                    WHERE OrderKey = @c_xdOrderKey
                      AND OrderLinenumber = @c_OrderLineNumber
@@ -1274,8 +1274,8 @@ BEGIN
 
                      UPDATE LOADPLANDETAIL WITH (ROWLOCK)
                         SET Status = '3',
-                            EditWho = sUser_sName(),
-                            EditDate = GetDate(),
+                            EditWho = dbo.fnc_GetUserName(),   --SUSER_SNAME(),    AK01
+                            EditDate = dbo.fnc_GetDate(),      --GETDATE(),        AK01
                             TrafficCop = NULL
                       WHERE LoadKey = @c_LoadKey
                         AND OrderKey = @c_xdOrderKey
@@ -1296,8 +1296,8 @@ BEGIN
                      BEGIN
                         UPDATE LoadPlan WITH (ROWLOCK)
                            SET Status = '3',
-                               EditWho = sUser_sName(),
-                               EditDate = GetDate(),
+                               EditWho = dbo.fnc_GetUserName(),   --SUSER_SNAME(),    AK01
+                               EditDate = dbo.fnc_GetDate(),      --GETDATE(),        AK01
                                TrafficCop = NULL
                          WHERE LoadKey = @c_LoadKey
                            AND Status < '3'
@@ -1597,8 +1597,8 @@ BEGIN
          BEGIN
             UPDATE LoadPlan WITH (ROWLOCK)
                SET Status = '3',
-                   EditWho = sUser_sName(),
-                   EditDate = GetDate(),
+                   EditWho = dbo.fnc_GetUserName(),   --SUSER_SNAME(),    AK01
+                   EditDate = dbo.fnc_GetDate(),      --GETDATE(),        AK01
                    TrafficCop = NULL
               FROM LoadPlan
              WHERE LoadPlan.LoadKey = @c_LoadKey
@@ -1645,8 +1645,8 @@ BEGIN
 
                UPDATE ORDERS WITH (ROWLOCK)
                   SET --trafficcop = NULL, -- SOS#305979
-                      EditWho = sUser_sName(),
-                      EditDate = GetDate(),
+                      EditWho = dbo.fnc_GetUserName(),   --SUSER_SNAME(),    AK01
+                      EditDate = dbo.fnc_GetDate(),      --GETDATE(),        AK01
                       status = '3'
                 WHERE OrderKey = @c_OrderKey
 
@@ -1992,6 +1992,7 @@ BEGIN
    BEGIN
       UPDATE PickingInfo
         SET AddWho  = dbo.fnc_GetUserName(),
+            EditWho  = dbo.fnc_GetUserName(),
             TrafficCop = NULL 
       FROM PickingInfo
       JOIN INSERTED ON PickingInfo.PickSlipNo = INSERTED.PickSlipNo

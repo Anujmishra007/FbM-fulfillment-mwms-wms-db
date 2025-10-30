@@ -716,7 +716,9 @@ END
    BEGIN
       UPDATE PackDetail
         SET AddWho  = dbo.fnc_GetUserName(),
-            AddDate = dbo.fnc_GetDate()
+            AddDate = dbo.fnc_GetDate(),
+            EditWho  = dbo.fnc_GetUserName(),
+            EditDate = dbo.fnc_GetDate()
       FROM PackDetail
       JOIN INSERTED ON PackDetail.PickSlipNo = INSERTED.PickSlipNo
       AND PackDetail.CartonNo = INSERTED.CartonNo

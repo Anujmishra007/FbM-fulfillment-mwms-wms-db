@@ -85,6 +85,8 @@ BEGIN
       UPDATE Booking_Out
         SET AddWho  = dbo.fnc_GetUserName(),
             AddDate = dbo.fnc_GetDate(), 
+            EditWho  = dbo.fnc_GetUserName(),
+            EditDate = dbo.fnc_GetDate(),
             TrafficCop = NULL 
       FROM Booking_Out
       JOIN INSERTED ON Booking_Out.BookingNo = INSERTED.BookingNo

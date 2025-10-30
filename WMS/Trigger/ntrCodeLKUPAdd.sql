@@ -59,8 +59,8 @@ BEGIN
       EXISTS ( SELECT 1 FROM  INSERTED  WHERE   editdate < dateadd( mi, -5, getdate() ) ) 
    BEGIN  
       UPDATE CodeLKUP  
-         SET EditDate = GETDATE(),  
-             EditWho = SUSER_SNAME(),  
+         SET EditDate = dbo.fnc_GetDate(), --GETDATE(),         AK01
+             EditWho = dbo.fnc_GetUserName(), --SUSER_SNAME(),  AK01
              TrafficCop = NULL  
         FROM CodeLKUP, INSERTED  
        WHERE CodeLKUP.LISTNAME = INSERTED.LISTNAME

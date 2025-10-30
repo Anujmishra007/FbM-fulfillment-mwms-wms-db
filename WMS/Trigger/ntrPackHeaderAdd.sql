@@ -181,7 +181,9 @@ BEGIN
    BEGIN
       UPDATE PackHeader
         SET AddWho  = dbo.fnc_GetUserName(),
-            AddDate = dbo.fnc_GetDate()
+            AddDate = dbo.fnc_GetDate(),
+            EditWho  = dbo.fnc_GetUserName(),
+            EditDate = dbo.fnc_GetDate()
       FROM PackHeader
       JOIN INSERTED ON PackHeader.PickSlipNo = INSERTED.PickSlipNo
       SELECT @n_err = @@ERROR

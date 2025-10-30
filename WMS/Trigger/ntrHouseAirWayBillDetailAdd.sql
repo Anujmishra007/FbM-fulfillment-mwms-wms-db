@@ -73,6 +73,8 @@ CREATE OR ALTER TRIGGER ntrHouseAirWayBillDetailAdd
       UPDATE HOUSEAIRWAYBILLDETAIL
         SET AddWho  = dbo.fnc_GetUserName(),
             AddDate = dbo.fnc_GetDate(), 
+            EditWho  = dbo.fnc_GetUserName(),
+            EditDate = dbo.fnc_GetDate(), 
             TrafficCop = NULL 
       FROM HOUSEAIRWAYBILLDETAIL
       JOIN INSERTED ON HOUSEAIRWAYBILLDETAIL.HAWBKEY = INSERTED.HAWBKEY

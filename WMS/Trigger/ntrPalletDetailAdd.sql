@@ -130,6 +130,8 @@ CREATE OR ALTER TRIGGER [dbo].[ntrPalletDetailAdd]
       UPDATE PALLETDETAIL
         SET AddWho  = dbo.fnc_GetUserName(),
             AddDate = dbo.fnc_GetDate(), 
+            EditWho = dbo.fnc_GetUserName(),
+            EditDate = dbo.fnc_GetDate(),
             TrafficCop = NULL 
       FROM PALLETDETAIL
       JOIN INSERTED ON PALLETDETAIL.PalletKey = INSERTED.PalletKey

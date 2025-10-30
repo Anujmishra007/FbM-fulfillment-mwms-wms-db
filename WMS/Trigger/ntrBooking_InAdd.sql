@@ -109,8 +109,8 @@ BEGIN
             UPDATE RECEIPT WITH (ROWLOCK)
             SET Containerkey = @c_containerno,
                 TrafficCop = NULL,
-                EditDate = GETDATE(),
-                EditWho = SUSER_SNAME()
+                EditDate = dbo.fnc_GetDate(), --GETDATE(),        AK01
+                EditWho = dbo.fnc_GetUserName() --SUSER_SNAME()   AK01
             WHERE Receiptkey = @c_receiptkey      
             IF @@ERROR <> 0
             BEGIN
@@ -141,6 +141,8 @@ BEGIN
       UPDATE Booking_In
         SET AddWho  = dbo.fnc_GetUserName(),
             AddDate = dbo.fnc_GetDate(), 
+            EditWho  = dbo.fnc_GetUserName(),
+            EditDate = dbo.fnc_GetDate(), 
             TrafficCop = NULL 
       FROM Booking_In
       JOIN INSERTED ON Booking_In.BookingNo = INSERTED.BookingNo

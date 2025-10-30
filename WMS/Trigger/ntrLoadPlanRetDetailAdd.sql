@@ -165,6 +165,8 @@ CREATE OR ALTER TRIGGER ntrLoadPlanRetDetailAdd
       UPDATE LoadPlanRetDetail
         SET AddWho  = dbo.fnc_GetUserName(),
             AddDate = dbo.fnc_GetDate(), 
+            EditWho  = dbo.fnc_GetUserName(),
+            EditDate = dbo.fnc_GetDate(), 
             TrafficCop = NULL 
       FROM LoadPlanRetDetail
       JOIN INSERTED ON LoadPlanRetDetail.LoadKey = INSERTED.LoadKey
