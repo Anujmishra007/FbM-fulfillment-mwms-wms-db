@@ -30,7 +30,7 @@ GO
 /* Updates:                                                                         */  
 /* Date        Author      Ver   Purposes                                           */ 
 /* 2025-08-08  Wan         1.0   Adding tableid-allocpickdettd                      */
-/* 2025-10-28  Wan         1.0   UAT fix                                            */
+/* 2025-10-29  Wan         1.0   UAT fix & Performance tune                         */
 /************************************************************************************/  
 CREATE OR ALTER PROC [dbo].[msp_GetAddOrderStatus01]  
   @c_RequestString   NVARCHAR(MAX)   
@@ -86,6 +86,15 @@ BEGIN
       ,  [ReplaceTo]          NVARCHAR(MAX)  NOT NULL DEFAULT('') 
       ,  [Table]              NVARCHAR(50)   NOT NULL DEFAULT('')                   --2025-09-10     
       )
+
+   DECLARE @t_Codelkup        Table                                                 --2025-10-29 
+      (  RowID                INT            NOT NULL IDENTITY(1,1) PRIMARY KEY
+      ,  ListName             NVARCHAR(10)   NOT NULL DEFAULT('')
+      ,  Code                 NVARCHAR(30)   NOT NULL DEFAULT('')
+      ,  Storerkey            NVARCHAR(15)   NOT NULL DEFAULT('')
+      ,  Short                NVARCHAR(10)   NOT NULL DEFAULT('')
+      )
+
 
    SET @b_Success = 1    
    SET @n_Err     = 0      
@@ -327,90 +336,188 @@ BEGIN
                                                     AND pd.OrderLineNumber = od.OrderLineNumber
             WHERE es.Orderkey > ''  -- Mandatory to have orderkey value
 
+            INSERT INTO @t_Codelkup (ListName, Code, Storerkey, Short)
+            SELECT DISTINCT cl.ListName, 1, cl.Storerkey, cl.Short
+            FROM CODELKUP cl (NOLOCK) 
+            WHERE cl.ListName = 'JCBCOMPML'
+            AND   cl.Storerkey>= ''
+            AND   cl.Code  >= ''                                       
+            AND   cl.Code2 >= '' 
+            
             IF @b_debug = 2
             BEGIN
-               select 1,* from #TMP_ORD 
+               select 1,* from #TMP_ORD             
+
+               SELECT Order_Status     = CASE WHEN ord.Order_Status = '5' AND ISNULL(o.STTCnt,0) = 1 
+                                              THEN '7'
+                                              WHEN ord.Order_Status = '5' AND ISNULL(o.MLCnt,0) = 1 
+                                              THEN '6'
+                                              ELSE ord.Order_Status
+                                              END
+                    , OrderLine_Status = CASE WHEN ord.OrderLine_Status = '5' AND ISNULL(od.STTCnt,0) = 1 
+                                              THEN '7'
+                                              WHEN ord.OrderLine_Status = '5' AND ISNULL(od.MLCnt,0) = 1 
+                                              THEN '6'
+                                              ELSE ord.OrderLine_Status
+                                              END
+                    , PickDetail_Status= CASE WHEN ord.PickDetail_Status = '5' AND ISNULL(p.STTCnt,0) = 1 
+                                              THEN '7'
+                                              WHEN ord.PickDetail_Status = '5' AND ISNULL(p.MLCnt,0) = 1 
+                                              THEN '6'
+                                              ELSE ord.PickDetail_Status
+                                              END
+               FROM #TMP_ORD ord
+               OUTER APPLY ( SELECT  TOP 1 WITH TIES
+                                     STTCnt = CASE WHEN stt.RowRef IS NULL THEN 0 ELSE 1 END
+                                    ,MLCnt  = CASE WHEN cl.Code IS NULL THEN 0 ELSE 1 END 
+                              FROM PICKDETAIL pd (NOLOCK)
+                              LEFT OUTER JOIN rdt.rdtScanToTruck stt (NOLOCK) ON  stt.Orderkey = pd.Orderkey
+                                                                  AND stt.URNNo    = pd.DropID
+                                                                  AND stt.[Status] = '9'
+                              --LEFT OUTER JOIN CODELKUP cl (NOLOCK) ON  cl.ListName = 'JCBCOMPML'
+                              --                            AND cl.Storerkey = pd.Storerkey
+                              --                            AND cl.Short = pd.Loc
+                              --                            AND cl.Code  >= ''                     --2025-10-28             
+                              --                            AND cl.Code2 >= ''                     --2025-10-28   
+                              LEFT OUTER JOIN @t_CODELKUP cl ON cl.ListName = 'JCBCOMPML'          --2025-10-29
+                                                         AND cl.Storerkey = pd.Storerkey
+                                                         AND cl.Short = pd.Loc                              
+                              WHERE pd.OrderKey = ord.OrderKey
+                              ORDER BY ROW_NUMBER()                                                --2025-10-28 
+                                       OVER (PARTITION BY pd.Orderkey 
+                                             ORDER BY CASE WHEN stt.RowRef IS NULL THEN 0 ELSE 1 END  
+                                                   ,  CASE WHEN cl.Code IS NULL THEN 0 ELSE 1 END
+                                             )
+                           ) o 
+               OUTER APPLY (  SELECT  TOP 1 WITH TIES
+                                     STTCnt = CASE WHEN stt.RowRef IS NULL THEN 0 ELSE 1 END
+                                    ,MLCnt  = CASE WHEN cl.Code IS NULL THEN 0 ELSE 1 END 
+                              FROM PICKDETAIL pd (NOLOCK)
+                              LEFT OUTER JOIN rdt.rdtScanToTruck stt (NOLOCK) ON  stt.Orderkey = pd.Orderkey
+                                                                  AND stt.URNNo    = pd.DropID
+                                                                  AND stt.[Status] = '9'
+                              --LEFT OUTER JOIN CODELKUP cl (NOLOCK) ON  cl.ListName = 'JCBCOMPML'
+                              --                            AND cl.Storerkey = pd.Storerkey
+                              --                            AND cl.Short = pd.Loc
+                              --                            AND cl.Code  >= ''                     --2025-10-28              
+                              --                            AND cl.Code2 >= ''                     --2025-10-28  
+                              LEFT OUTER JOIN @t_CODELKUP cl ON cl.ListName = 'JCBCOMPML'          --2025-10-29
+                                                         AND cl.Storerkey = pd.Storerkey
+                                                         AND cl.Short = pd.Loc                              
+                              WHERE pd.OrderKey = ord.OrderKey
+                              AND   pd.OrderLineNumber = ord.OrderLineNumber
+                              AND   ord.OrderLineNumber > ''                                       --2025-10-29                            
+                              ORDER BY ROW_NUMBER()                                                --2025-10-28 
+                                       OVER (PARTITION BY pd.Orderkey, pd.OrderLineNumber
+                                             ORDER BY CASE WHEN stt.RowRef IS NULL THEN 0 ELSE 1 END
+                                                   ,  CASE WHEN cl.Code IS NULL THEN 0 ELSE 1 END
+                                            )
+                           ) od
+               OUTER APPLY (  SELECT --DISTINCT --TOP 1 WITH TIES                                  --2025-10-29  
+                                     STTCnt = CASE WHEN stt.RowRef IS NULL THEN 0 ELSE 1 END
+                                    ,MLCnt  = CASE WHEN cl.Code IS NULL THEN 0 ELSE 1 END 
+                              FROM PICKDETAIL pd (NOLOCK)
+                              LEFT OUTER JOIN rdt.rdtScanToTruck stt (NOLOCK) ON  stt.Orderkey = pd.Orderkey
+                                                                              AND stt.URNNo    = pd.DropID
+                                                                              AND stt.[Status] = '9'
+                              --LEFT OUTER JOIN CODELKUP cl (NOLOCK) ON  cl.ListName = 'JCBCOMPML'
+                              --                            AND cl.Storerkey = pd.Storerkey
+                              --                            AND cl.Short = pd.Loc
+                              --                            AND cl.Code  >= ''                     --2025-10-28               
+                              --                            AND cl.Code2 >= ''                     --2025-10-28    
+                              LEFT OUTER JOIN @t_CODELKUP cl ON cl.ListName = 'JCBCOMPML'          --2025-10-29 
+                                                         AND cl.Storerkey = pd.Storerkey
+                                                         AND cl.Short = pd.Loc                              
+                              WHERE pd.PickDetailKey = ord.PickdetailKey
+                              AND   ord.PickdetailKey > ''                                         --2025-10-29                             
+                           ) p
+               ORDER BY ORD.rowref
             END
-
-            UPDATE ord
-               SET Order_Status     = CASE WHEN ord.Order_Status = '5' AND ISNULL(o.STTCnt,0) = 1 
-                                           THEN '7'
-                                           WHEN ord.Order_Status = '5' AND ISNULL(o.MLCnt,0) = 1 
-                                           THEN '6'
-                                           ELSE ord.Order_Status
-                                           END
-                 , OrderLine_Status = CASE WHEN ord.OrderLine_Status = '5' AND ISNULL(od.STTCnt,0) = 1 
-                                           THEN '7'
-                                           WHEN ord.OrderLine_Status = '5' AND ISNULL(od.MLCnt,0) = 1 
-                                           THEN '6'
-                                           ELSE ord.OrderLine_Status
-                                           END
-                 , PickDetail_Status= CASE WHEN ord.PickDetail_Status = '5' AND ISNULL(p.STTCnt,0) = 1 
-                                           THEN '7'
-                                           WHEN ord.PickDetail_Status = '5' AND ISNULL(p.MLCnt,0) = 1 
-                                           THEN '6'
-                                           ELSE ord.PickDetail_Status
-                                           END
-            FROM #TMP_ORD ord
-            OUTER APPLY ( SELECT  TOP 1 WITH TIES
-                                  STTCnt = CASE WHEN stt.RowRef IS NULL THEN 0 ELSE 1 END
-                                 ,MLCnt  = CASE WHEN cl.Code IS NULL THEN 0 ELSE 1 END 
-                           FROM PICKDETAIL pd (NOLOCK)
-                           LEFT OUTER JOIN rdt.rdtScanToTruck stt (NOLOCK) ON  stt.Orderkey = pd.Orderkey
-                                                               AND stt.URNNo    = pd.DropID
-                                                               AND stt.[Status] = '9'
-                           LEFT OUTER JOIN CODELKUP cl (NOLOCK) ON  cl.ListName = 'JCBCOMPML'
-                                                       AND cl.Storerkey = pd.Storerkey
-                                                       AND cl.Short = pd.Loc
-                                                       AND cl.Code  >= ''                          --2025-10-28             
-                                                       AND cl.Code2 >= ''                          --2025-10-28                              
-                           WHERE pd.OrderKey = ord.OrderKey
-                           ORDER BY ROW_NUMBER()                                                   --2025-10-28 
-                                    OVER (PARTITION BY pd.Orderkey 
-                                          ORDER BY CASE WHEN stt.RowRef IS NULL THEN 0 ELSE 1 END  
-                                                ,  CASE WHEN cl.Code IS NULL THEN 0 ELSE 1 END
-                                          )
-                        ) o 
-            OUTER APPLY (  SELECT  TOP 1 WITH TIES
-                                  STTCnt = CASE WHEN stt.RowRef IS NULL THEN 0 ELSE 1 END
-                                 ,MLCnt  = CASE WHEN cl.Code IS NULL THEN 0 ELSE 1 END 
-                           FROM PICKDETAIL pd (NOLOCK)
-                           LEFT OUTER JOIN rdt.rdtScanToTruck stt (NOLOCK) ON  stt.Orderkey = pd.Orderkey
-                                                               AND stt.URNNo    = pd.DropID
-                                                               AND stt.[Status] = '9'
-                           LEFT OUTER JOIN CODELKUP cl (NOLOCK) ON  cl.ListName = 'JCBCOMPML'
-                                                       AND cl.Storerkey = pd.Storerkey
-                                                       AND cl.Short = pd.Loc
-                                                       AND cl.Code  >= ''                          --2025-10-28              
-                                                       AND cl.Code2 >= ''                          --2025-10-28                                                           
-                           WHERE pd.OrderKey = ord.OrderKey
-                           AND   pd.OrderLineNumber = ord.OrderLineNumber
-                           ORDER BY ROW_NUMBER()                                                   --2025-10-28 
-                                    OVER (PARTITION BY pd.Orderkey, pd.OrderLineNumber
-                                          ORDER BY CASE WHEN stt.RowRef IS NULL THEN 0 ELSE 1 END
-                                                ,  CASE WHEN cl.Code IS NULL THEN 0 ELSE 1 END
-                                         )
-                        ) od
-            OUTER APPLY (  SELECT TOP 1 WITH TIES
-                                  STTCnt = CASE WHEN stt.RowRef IS NULL THEN 0 ELSE 1 END
-                                 ,MLCnt  = CASE WHEN cl.Code IS NULL THEN 0 ELSE 1 END 
-                           FROM PICKDETAIL pd (NOLOCK)
-                           LEFT OUTER JOIN rdt.rdtScanToTruck stt (NOLOCK) ON  stt.Orderkey = pd.Orderkey
-                                                                           AND stt.URNNo    = pd.DropID
-                                                                           AND stt.[Status] = '9'
-                           LEFT OUTER JOIN CODELKUP cl (NOLOCK) ON  cl.ListName = 'JCBCOMPML'
-                                                       AND cl.Storerkey = pd.Storerkey
-                                                       AND cl.Short = pd.Loc
-                                                       AND cl.Code  >= ''                          --2025-10-28               
-                                                       AND cl.Code2 >= ''                          --2025-10-28                                                          
-                           WHERE pd.PickDetailKey = ord.PickdetailKey
-                           ORDER BY ROW_NUMBER()                                                   --2025-10-28 
-                                    OVER (PARTITION BY pd.PickdetailKey
-                                          ORDER BY CASE WHEN stt.RowRef IS NULL THEN 0 ELSE 1 END  
-                                                ,  CASE WHEN cl.Code IS NULL THEN 0 ELSE 1 END
-                                         )
-                        ) p
-
+            
+            IF @c_TableID IN ('sotd', 'picksearchtd')                                              --2025-10-29 - START
+            BEGIN
+               UPDATE ord
+                  SET Order_Status     = CASE WHEN ord.Order_Status = '5' AND ISNULL(o.STTCnt,0) = 1 
+                                              THEN '7'
+                                              WHEN ord.Order_Status = '5' AND ISNULL(o.MLCnt,0) = 1 
+                                              THEN '6'
+                                              ELSE ord.Order_Status
+                                              END
+               FROM #TMP_ORD ord
+               OUTER APPLY (  SELECT TOP 1 WITH TIES 
+                                     STTCnt = CASE WHEN stt.RowRef IS NULL THEN 0 ELSE 1 END
+                                    ,MLCnt  = CASE WHEN cl.Code IS NULL THEN 0 ELSE 1 END 
+                              FROM PICKDETAIL pd (NOLOCK)
+                              LEFT OUTER JOIN rdt.rdtScanToTruck stt (NOLOCK) ON  stt.Orderkey = pd.Orderkey
+                                                                  AND stt.URNNo    = pd.DropID
+                                                                  AND stt.[Status] = '9'
+                              LEFT OUTER JOIN @t_CODELKUP cl ON cl.ListName = 'JCBCOMPML'             --2025-10-29
+                                                            AND cl.Storerkey = pd.Storerkey
+                                                            AND cl.Short = pd.Loc  
+                              WHERE pd.OrderKey = ord.OrderKey
+                              ORDER BY ROW_NUMBER()                                                   --2025-10-28 
+                                       OVER (PARTITION BY pd.Orderkey 
+                                                          ORDER BY CASE WHEN stt.RowRef IS NULL THEN 0 ELSE 1 END
+                                                                ,  CASE WHEN cl.Code IS NULL THEN 0 ELSE 1 END
+                                                         )
+                           ) o 
+            END
+            ELSE IF @c_TableID = 'sodetailtd' 
+            BEGIN
+               UPDATE ord
+                  SET  OrderLine_Status = CASE WHEN ord.OrderLine_Status = '5' AND ISNULL(od.STTCnt,0) = 1 
+                                          THEN '7'
+                                          WHEN ord.OrderLine_Status = '5' AND ISNULL(od.MLCnt,0) = 1 
+                                          THEN '6'
+                                          ELSE ord.OrderLine_Status
+                                          END
+               FROM #TMP_ORD ord
+               OUTER APPLY (  SELECT TOP 1 WITH TIES
+                                    STTCnt = CASE WHEN stt.RowRef IS NULL THEN 0 ELSE 1 END
+                                 ,  MLCnt  = CASE WHEN cl.Code IS NULL THEN 0 ELSE 1 END 
+                              FROM PICKDETAIL pd (NOLOCK)
+                              LEFT OUTER JOIN rdt.rdtScanToTruck stt (NOLOCK) ON  stt.Orderkey = pd.Orderkey
+                                                                  AND stt.URNNo    = pd.DropID
+                                                                  AND stt.[Status] = '9'
+                              LEFT OUTER JOIN @t_CODELKUP cl ON cl.ListName = 'JCBCOMPML'             --2025-10-29
+                                                            AND cl.Storerkey = pd.Storerkey
+                                                            AND cl.Short = pd.Loc  
+                              WHERE pd.OrderKey = ord.OrderKey
+                              AND   pd.OrderLineNumber = ord.OrderLineNumber
+                              AND   ord.OrderLineNumber > ''                                          --2025-10-29   
+                              ORDER BY ROW_NUMBER()                                                   --2025-10-28 
+                                       OVER (PARTITION BY pd.Orderkey, pd.OrderLineNumber
+                                                            ORDER BY CASE WHEN stt.RowRef IS NULL THEN 0 ELSE 1 END
+                                                                  ,  CASE WHEN cl.Code IS NULL THEN 0 ELSE 1 END
+                                                         )
+                           ) od                      
+            END
+            ELSE IF @c_TableID IN ('picktd','allocpickdettd')  
+            BEGIN
+               UPDATE ord
+                  SET PickDetail_Status= CASE WHEN ord.PickDetail_Status = '5' AND ISNULL(p.STTCnt,0) = 1 
+                                              THEN '7'
+                                              WHEN ord.PickDetail_Status = '5' AND ISNULL(p.MLCnt,0) = 1 
+                                              THEN '6'
+                                              ELSE ord.PickDetail_Status
+                                              END
+               FROM #TMP_ORD ord  
+               OUTER APPLY (  SELECT   
+                                    STTCnt = CASE WHEN stt.RowRef IS NULL THEN 0 ELSE 1 END
+                                   ,MLCnt  = CASE WHEN cl.Code IS NULL THEN 0 ELSE 1 END 
+                              FROM PICKDETAIL pd (NOLOCK)
+                              LEFT OUTER JOIN rdt.rdtScanToTruck stt (NOLOCK) ON  stt.Orderkey = pd.Orderkey
+                                                                              AND stt.URNNo    = pd.DropID
+                                                                              AND stt.[Status] = '9'
+                              LEFT OUTER JOIN @t_CODELKUP cl ON cl.ListName = 'JCBCOMPML'             --2025-10-29
+                                                            AND cl.Storerkey = pd.Storerkey
+                                                            AND cl.Short = pd.Loc
+                              WHERE pd.PickDetailKey = ord.PickdetailKey
+                              AND   ord.PickdetailKey > ''                                            --2025-10-29   
+                           ) p
+            END                                                                                    --2025-10-29 - END
+         
+            
             IF @b_debug = 1
             BEGIN
                SELECT TOP 1 
