@@ -467,8 +467,8 @@ BEGIN
 
          UPDATE PreAllocatePickDetail
          SET QTY = QTY - @n_sQtyToReduce,
-             Editdate = GETDATE(),
-             Editwho = SUSER_SNAME()
+             Editdate = dbo.fnc_GetDate(),      --GETDATE(),       AK01
+             Editwho = dbo.fnc_GetUserName()    --SUSER_SNAME()    AK01
          WHERE PreAllocatePickDetailKey = @c_sPreAllocatePickDetailKey
 
          SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
@@ -565,14 +565,14 @@ BEGIN
             BEGIN
                UPDATE ChannelInv
                   SET QtyAllocated = QtyAllocated + @n_cQty,
-                      EditDate = GETDATE(),
-                      EditWho = SUSER_SNAME()
+                      EditDate = dbo.fnc_GetDate(),      --GETDATE(),       AK01
+                      EditWho = dbo.fnc_GetUserName()    --SUSER_SNAME()    AK01
                WHERE Channel_ID = @n_Channel_ID
 
                UPDATE PICKDETAIL
                   SET Channel_ID = @n_Channel_ID,
-                      EditDate = GETDATE(),
-                      EditWho = SUSER_SNAME()
+                      EditDate = dbo.fnc_GetDate(),      --GETDATE(),       AK01
+                      EditWho = dbo.fnc_GetUserName()    --SUSER_SNAME()    AK01
                WHERE PickDetailKey = @c_cPickDetailKey
             END
          END
@@ -595,8 +595,8 @@ BEGIN
    BEGIN
       UPDATE LOT
       SET  QtyAllocated = (LOT.QtyAllocated + INSERTED.Qty),
-           EditDate = GETDATE(),
-           EditWho = SUSER_SNAME(),
+           EditDate = dbo.fnc_GetDate(),      --GETDATE(),       AK01
+           EditWho = dbo.fnc_GetUserName(),   --SUSER_SNAME()    AK01
            TrafficCop = NULL
       FROM LOT
       JOIN INSERTED ON INSERTED.LOT = LOT.LOT
@@ -619,8 +619,8 @@ BEGIN
 
       UPDATE LOT
       SET  QtyAllocated = (LOT.QtyAllocated + tL.QtyAllocated),
-           EditDate = GETDATE(),   --tlting
-           EditWho = SUSER_SNAME(),
+           EditDate = dbo.fnc_GetDate(),      --GETDATE(),       AK01   --tlting
+           EditWho = dbo.fnc_GetUserName(),   --SUSER_SNAME()    AK01
            TrafficCop = NULL
       FROM LOT
       JOIN @tLOT tL ON tL.LOT = LOT.LOT
@@ -654,8 +654,8 @@ BEGIN
                                        LOTxLOCxID.QtyPicked - LOTxLOCxID.Qty )
                                ELSE 0
                           END,
-            EditDate = GETDATE(),
-            EditWho = SUSER_SNAME()
+            EditDate = dbo.fnc_GetDate(),      --GETDATE(),       AK01
+            EditWho = dbo.fnc_GetUserName()    --SUSER_SNAME()    AK01
       FROM LOTxLOCxID
       JOIN INSERTED ON INSERTED.LOT = LOTxLOCxID.LOT AND
                        INSERTED.LOC = LOTxLOCxID.LOC AND
@@ -694,8 +694,8 @@ BEGIN
                                        LOTxLOCxID.QtyPicked - LOTxLOCxID.Qty )
                                ELSE 0
                           END,
-            EditDate = GETDATE(),
-  EditWho = SUSER_SNAME()
+            EditDate = dbo.fnc_GetDate(),      --GETDATE(),       AK01
+            EditWho = dbo.fnc_GetUserName()    --SUSER_SNAME()    AK01
       FROM LOTxLOCxID
       JOIN @tLOTxLOCxID tLLI ON tLLI.LOT = LOTxLOCxID.LOT AND
                                 tLLI.LOC = LOTxLOCxID.LOC AND
@@ -733,8 +733,8 @@ BEGIN
                                       INSERTED.Qty ) - (SKUxLOC.Qty)
                                ELSE 0
                           END,
-            EditDate = GETDATE(),
-            EditWho = SUSER_SNAME()
+            EditDate = dbo.fnc_GetDate(),      --GETDATE(),       AK01
+            EditWho = dbo.fnc_GetUserName()    --SUSER_SNAME()    AK01
       FROM SKUxLOC
       JOIN INSERTED ON INSERTED.StorerKey = SKUxLOC.StorerKey
                    AND INSERTED.SKU = SKUxLOC.SKU
@@ -766,8 +766,8 @@ BEGIN
                                       tSL.QtyAllocated ) - (SKUxLOC.Qty)
                                ELSE 0
                           END,
-            EditDate = GETDATE(),
-            EditWho = SUSER_SNAME()
+            EditDate = dbo.fnc_GetDate(),      --GETDATE(),       AK01
+            EditWho = dbo.fnc_GetUserName()    --SUSER_SNAME()    AK01
       FROM SKUxLOC
       JOIN @tSKUxLOC tSL ON tSL.StorerKey = SKUxLOC.StorerKey
                         AND tSL.SKU = SKUxLOC.SKU
@@ -805,8 +805,8 @@ BEGIN
       -- SHONG02
       UPDATE OrderDetail
       SET OrderDetail.QtyAllocated = OrderDetail.QtyAllocated + @n_Qty,
-          OrderDetail.Editdate = GETDATE(),
-          OrderDetail.Editwho = SUSER_SNAME()
+          OrderDetail.Editdate = dbo.fnc_GetDate(),      --GETDATE(),       AK01
+          OrderDetail.Editwho = dbo.fnc_GetUserName()    --SUSER_SNAME()    AK01
       WHERE OrderDetail.OrderKey = @c_OrderKey
       AND OrderDetail.OrderLineNumber = @c_OrderLineNumber
 
@@ -988,6 +988,8 @@ END -- IF EXISTS(StorerConfig - 'WAVEUPDLOG')
       UPDATE PICKDETAIL
         SET AddWho  = dbo.fnc_GetUserName(),
             AddDate = dbo.fnc_GetDate(), 
+            EditWho = dbo.fnc_GetUserName(),
+            EditDate = dbo.fnc_GetDate(), 
             TrafficCop = NULL 
       FROM PICKDETAIL
       JOIN INSERTED ON PICKDETAIL.PickDetailKey = INSERTED.PickDetailKey

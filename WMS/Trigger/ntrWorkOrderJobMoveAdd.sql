@@ -512,6 +512,8 @@ BEGIN
       UPDATE WorkOrderJobMove
         SET AddWho  = dbo.fnc_GetUserName(),
             AddDate = dbo.fnc_GetDate(), 
+            EditWho  = dbo.fnc_GetUserName(),
+            EditDate = dbo.fnc_GetDate(), 
             TrafficCop = NULL 
       FROM WorkOrderJobMove
       JOIN INSERTED ON WorkOrderJobMove.WOMoveKey = INSERTED.WOMoveKey

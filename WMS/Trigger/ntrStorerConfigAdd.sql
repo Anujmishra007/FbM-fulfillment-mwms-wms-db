@@ -87,7 +87,9 @@ BEGIN
    BEGIN
       UPDATE StorerConfig
         SET AddWho  = dbo.fnc_GetUserName(),
-            AddDate = dbo.fnc_GetDate()
+            AddDate = dbo.fnc_GetDate(),
+            EditWho  = dbo.fnc_GetUserName(),
+            EditDate = dbo.fnc_GetDate()
       FROM StorerConfig
       JOIN INSERTED ON StorerConfig.StorerKey = INSERTED.StorerKey
       AND StorerConfig.ConfigKey = INSERTED.ConfigKey

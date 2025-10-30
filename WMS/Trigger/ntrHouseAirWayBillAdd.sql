@@ -71,10 +71,10 @@ CREATE OR ALTER TRIGGER ntrHouseAirWayBillAdd
  BEGIN
  UPDATE HouseAirWayBill
  SET  TrafficCop = NULL,
- AddDate = GETDATE(),
- AddWho = SUSER_SNAME(),
- EditDate = GETDATE(),
- EditWho = SUSER_SNAME()
+ AddDate = dbo.fnc_GetDate(),       --GETDATE(),      AK01
+ AddWho = dbo.fnc_GetUserName(),    --SUSER_SNAME(),  AK01
+ EditDate = dbo.fnc_GetDate(),      --GETDATE(),      AK01
+ EditWho = dbo.fnc_GetUserName()    --SUSER_SNAME(),  AK01
  FROM HouseAirWayBill, INSERTED
  WHERE HouseAirWayBill.HAWBKey = INSERTED.HAWBKey
  SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
@@ -86,24 +86,6 @@ CREATE OR ALTER TRIGGER ntrHouseAirWayBillAdd
  END
  END
  
-    --AK01 - S
-   IF dbo.fnc_GetUserName() <> sUser_sName() AND @n_Continue IN (1,2) 
-   BEGIN
-      UPDATE HOUSEAIRWAYBILL
-        SET AddWho  = dbo.fnc_GetUserName(),
-            AddDate = dbo.fnc_GetDate(), 
-            TrafficCop = NULL 
-      FROM HOUSEAIRWAYBILL
-      JOIN INSERTED ON HOUSEAIRWAYBILL.HAWBKEY = INSERTED.HAWBKEY
-      SELECT @n_err = @@ERROR
-      IF @n_err <> 0
-      BEGIN
-         SELECT @n_continue = 3
-         SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err=71403
-         SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed On Table HOUSEAIRWAYBILL. (ntrHOUSEAIRWAYBILLAdd)' + ' ( ' + ' SQLSvr MESSAGE=' + TRIM(@c_errmsg) + ' ) '
-      END
-   END
-   --AK01 - E
       /* #INCLUDE <TRHABHA2.SQL> */
  IF @n_continue=3  -- Error Occured - Process And Return
  BEGIN

@@ -152,7 +152,9 @@ CREATE OR ALTER TRIGGER [dbo].[ntrContainerDetailAdd]
    BEGIN
       UPDATE CONTAINERDETAIL
         SET AddWho  = dbo.fnc_GetUserName(),
+            EditWho = dbo.fnc_GetUserName(),
             AddDate = dbo.fnc_GetDate(), 
+            EditDate = dbo.fnc_GetDate(), 
             TrafficCop = NULL 
       FROM CONTAINERDETAIL
       JOIN INSERTED ON CONTAINERDETAIL.ContainerKey = INSERTED.ContainerKey

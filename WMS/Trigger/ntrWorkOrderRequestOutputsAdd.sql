@@ -138,6 +138,8 @@ BEGIN
       UPDATE WorkOrderRequestOutputs
         SET AddWho  = dbo.fnc_GetUserName(),
             AddDate = dbo.fnc_GetDate(), 
+            EditWho  = dbo.fnc_GetUserName(),
+            EditDate = dbo.fnc_GetDate(),
             TrafficCop = NULL 
       FROM WorkOrderRequestOutputs
       JOIN INSERTED ON WorkOrderRequestOutputs.WkOrdReqOutputsKey = INSERTED.WkOrdReqOutputsKey

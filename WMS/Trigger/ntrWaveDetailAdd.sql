@@ -311,8 +311,8 @@ BEGIN
             BEGIN
                UPDATE dbo.WAVE WITH (ROWLOCK)
                   SET [Status] = @c_Status_Wav      
-                  ,   EditWho  = SUSER_SNAME()      
-                  ,   EditDate = GETDATE()      
+                  ,   EditWho  = dbo.fnc_GetUserName()   --SUSER_SNAME()    AK01   
+                  ,   EditDate = dbo.fnc_GetDate()       --GETDATE()        AK01
                   ,   TrafficCop = NULL 
                WHERE WaveKey = @c_wavekey 
                AND [Status] = @c_Status_Wav         
@@ -401,6 +401,8 @@ BEGIN
       UPDATE WAVEDETAIL
         SET AddWho  = dbo.fnc_GetUserName(),
             AddDate = dbo.fnc_GetDate(), 
+            EditWho  = dbo.fnc_GetUserName(),
+            EditDate = dbo.fnc_GetDate(), 
             TrafficCop = NULL 
       FROM WAVEDETAIL
       JOIN INSERTED ON WAVEDETAIL.WaveDetailKey = INSERTED.WaveDetailKey

@@ -180,6 +180,8 @@ BEGIN
       UPDATE TRANSMITLOG2
         SET AddWho  = dbo.fnc_GetUserName(),
             AddDate = dbo.fnc_GetDate(), 
+            EditWho  = dbo.fnc_GetUserName(),
+            EditDate = dbo.fnc_GetDate(), 
             TrafficCop = NULL 
       FROM TRANSMITLOG2
       JOIN INSERTED ON TRANSMITLOG2.transmitlogkey = INSERTED.transmitlogkey

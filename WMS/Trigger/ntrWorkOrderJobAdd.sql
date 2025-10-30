@@ -11,7 +11,7 @@ GO
 /* Written by: YTWan                                                       */
 /*                                                                         */
 /* Purpose: Update other transactions while WorkOrderJob is added          */
-/*        : SOS#315823 - Project Merlion ¡V VAP RCM to record Wastage,     */
+/*        : SOS#315823 - Project Merlion ï¿½V VAP RCM to record Wastage,     */
 /*          Rejects and Reconciliation                                     */
 /* Return Status:                                                          */
 /*                                                                         */
@@ -296,6 +296,8 @@ BEGIN
    UPDATE WorkOrderJob
      SET AddWho  = dbo.fnc_GetUserName(),
          AddDate = dbo.fnc_GetDate(), 
+         EditWho  = dbo.fnc_GetUserName(),
+         EditDate = dbo.fnc_GetDate(), 
          TrafficCop = NULL 
    FROM WorkOrderJob
    JOIN INSERTED ON WorkOrderJob.SerialKey = INSERTED.SerialKey

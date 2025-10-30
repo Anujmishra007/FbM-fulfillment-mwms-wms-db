@@ -76,6 +76,8 @@ CREATE OR ALTER TRIGGER ntrMasterAirWayBillDetailAdd
       UPDATE MASTERAIRWAYBILLDETAIL
         SET AddWho  = dbo.fnc_GetUserName(),
             AddDate = dbo.fnc_GetDate(), 
+            EditWho  = dbo.fnc_GetUserName(),
+            EditDate = dbo.fnc_GetDate(), 
             TrafficCop = NULL 
       FROM MASTERAIRWAYBILLDETAIL
       JOIN INSERTED ON MASTERAIRWAYBILLDETAIL.MAWBKEY = INSERTED.MAWBKEY

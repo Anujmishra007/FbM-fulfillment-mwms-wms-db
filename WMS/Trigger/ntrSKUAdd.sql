@@ -343,8 +343,8 @@ BEGIN
          	UPDATE SKU WITH (ROWLOCK)
          	   SET OTM_SKUGroup = @c_default_otm_skugroup, 
          	       TrafficCop = NULL, 
-         	       EditDate = GETDATE(),
-         	       EditWho = SUSER_SNAME()  
+         	       EditDate = dbo.fnc_GetDate(),      --GETDATE(),       AK01
+         	       EditWho = dbo.fnc_GetUserName()    --SUSER_SNAME()    AK01
          	WHERE StorerKey = @c_StorerKey 
          	AND   Sku = @c_Sku
          END                           
@@ -377,8 +377,8 @@ BEGIN
             UPDATE SKU WITH (ROWLOCK)
             SET LottableCode = @c_DefaultSkuLottableCode, 
                 TrafficCop = NULL, 
-                EditDate = GETDATE(),
-                EditWho = SUSER_SNAME()  
+                EditDate = dbo.fnc_GetDate(),      --GETDATE(),       AK01
+                EditWho = dbo.fnc_GetUserName()    --SUSER_SNAME()    AK01
             WHERE StorerKey = @c_StorerKey 
             AND   Sku = @c_Sku
          END
@@ -397,6 +397,8 @@ BEGIN
       UPDATE SKU
         SET AddWho  = dbo.fnc_GetUserName(),
             AddDate = dbo.fnc_GetDate(), 
+            EditWho  = dbo.fnc_GetUserName(),
+            EditDate = dbo.fnc_GetDate(), 
             TrafficCop = NULL 
       FROM SKU
       JOIN INSERTED ON SKU.StorerKey = INSERTED.StorerKey
