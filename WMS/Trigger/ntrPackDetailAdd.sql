@@ -718,7 +718,8 @@ END
         SET AddWho  = dbo.fnc_GetUserName(),
             AddDate = dbo.fnc_GetDate(),
             EditWho  = dbo.fnc_GetUserName(),
-            EditDate = dbo.fnc_GetDate()
+            EditDate = dbo.fnc_GetDate(),
+			ArchiveCop = NULL 
       FROM PackDetail
       JOIN INSERTED ON PackDetail.PickSlipNo = INSERTED.PickSlipNo
       AND PackDetail.CartonNo = INSERTED.CartonNo
