@@ -16427,6 +16427,27 @@ BEGIN
 
       SELECT @cModuleName = StoredProcName FROM RDT.RDTMsg WITH (NOLOCK) WHERE Message_id = @nFunc
 
+      SELECT @nShortPickedQty = PickQty
+      FROM RDT.RDTPickLock WITH (NOLOCK)
+      WHERE (( @nMultiStorer = 1 AND StorerKey = @cORD_StorerKey) OR ( @nMultiStorer <> 1 AND StorerKey = @cStorerKey))
+         AND OrderKey = @cOrderKey
+         AND SKU = @cSKU
+         AND LOT = @cLOT
+         AND LOC = @cLOC
+         AND Status = '1'
+         AND AddWho = @cUserName
+         AND (( ISNULL( @cPutAwayZone, '') = 'ALL') OR ( PutAwayZone = @cPutAwayZone))
+         AND (( ISNULL( @cPickZone, '') = '') OR ( PickZone = @cPickZone))
+
+      SET @nShortPickedQty = @nTotalPickQty - @nShortPickedQty
+
+      SELECT
+            @cPackUOM3 = P.PACKUOM3
+      FROM dbo.SKU SKU WITH (NOLOCK)
+      JOIN dbo.PACK P WITH (NOLOCK) ON (SKU.PackKey = P.PackKey)
+      WHERE (( @nMultiStorer = 1 AND SKU.StorerKey = @cORD_StorerKey) OR ( @nMultiStorer <> 1 AND SKU.StorerKey = @cStorerKey))
+         AND SKU.SKU = @cSKU
+
       EXEC rdt.rdt_STD_Short_Pick
          @nFunc,
          @nMobile,
