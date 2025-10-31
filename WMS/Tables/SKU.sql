@@ -3,7 +3,9 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-IF NOT EXISTS (SELECT * FROM sys.tables WHERE name = 'SKU' AND type = 'U')
+
+
+IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[SKU]') AND type in (N'U'))
 BEGIN
 CREATE TABLE [dbo].[SKU]
 (
@@ -509,7 +511,7 @@ DROP INDEX IX_SKU_Color ON [dbo].[SKU]
 END
 
 --UWP-41115
-IF EXISTS (SELECT * FROM INFORMATION_SCHEMA.COLUMNS where TABLE_NAME = 'SKU' AND COLUMN_NAME = 'Tariffkey' AND CHARACTER_MAXIMUM_LENGTH <> 12)
+IF EXISTS( SELECT 1 FROM SYS.columns WHERE NAME ='Tariffkey' AND Object_ID = Object_ID('[dbo].[SKU]') AND  max_length <> 24)
 BEGIN
 ALTER TABLE dbo.SKU ALTER COLUMN Tariffkey nvarchar(12) NULL
 END
