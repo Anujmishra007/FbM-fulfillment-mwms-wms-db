@@ -300,7 +300,7 @@ jobs:
         run: |
           ./db-deployment.ps1
       - name: Updating Metadata
-        if: github.ref == 'refs/heads/dev'
+        if: github.ref == 'refs/heads/dev' or startsWith(github.ref, 'refs/tags/')
         timeout-minutes: 10
         shell: pwsh
         run: |
