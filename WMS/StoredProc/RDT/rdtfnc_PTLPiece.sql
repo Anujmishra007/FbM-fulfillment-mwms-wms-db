@@ -587,10 +587,13 @@ BEGIN
       END
    END
 
-   IF @cExtendedScreenSP = 'rdt_803ExtScn01'
+   IF @cExtendedScreenSP <> ''
    BEGIN
-      SET @nAction = 0
-      GOTO Step_99
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
+      BEGIN
+         SET @nAction = 0
+         GOTO Step_99
+      END
    END
 END
 GOTO QUIT
@@ -1532,9 +1535,19 @@ BEGIN
          ELSE IF @cExtendedScreenSP = 'rdt_803ExtScn02'
          BEGIN
             -- Unassign station confirmed
-            IF @nScn = 4593 AND @nStep = 4 AND ISNULL(@cUDF01, '') = 'Unassign Confirmed'
+            IF ISNULL(@cUDF01, '') = 'Unassign Confirmed'
             BEGIN
-               GOTO Step_4
+               IF @nScn = 4593 AND @nStep = 4 
+               BEGIN
+                  SET @nInputKey = 1
+
+                  UPDATE RDTMOBREC WITH (ROWLOCK) SET
+                     Step   = @nStep,
+                     Scn    = @nScn
+                  WHERE Mobile = @nMobile
+
+                  GOTO Step_4
+               END
             END
          END
 

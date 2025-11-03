@@ -69,29 +69,28 @@ BEGIN
       @cStation         NVARCHAR( 10)
 
    SELECT 
-      @nCurrentScn = @nScn,
-      @nCurrentStep = @nStep,
+      @nCurrentScn = Scn,
+      @nCurrentStep = Step,
       @cStation = V_String1
    FROM rdt.RDTMOBREC WITH(NOLOCK)
    WHERE Mobile = @nMobile
 
    SET @cUDF01 = ''
 
-   IF @nCurrentStep = 4 -- Confirm Unassign
+   IF @nStep = 4 -- If Next Step is Confirm Unassign
    BEGIN
-      SET @cOption = @cInField01
-      IF @cOption = '1' -- Yes
+      -- If any dropid is not finished yet, jump to customize Unassign Station screen
+      IF EXISTS(SELECT 1 FROM rdt.rdtPTLPieceLog RPP WITH (NOLOCK)
+               INNER JOIN dbo.PickDetail PD WITH (NOLOCK) ON RPP.WaveKey = PD.WaveKey AND RPP.OrderKey = PD.OrderKey AND RPP.SourceKey = PD.DropID
+               WHERE RPP.Station = @cStation)
       BEGIN
-         IF EXISTS(SELECT 1 FROM rdt.RDTPTLPiece RPP WITH (NOLOCK)
-                     JOIN dbo.PickDetail PD WITH (NOLOCK) ON RPP.WaveKey = PD.WaveKey AND RRP.OrderKey = PD.OrderKey AND RPP.SourceKey = PD.DropID
-                    WHERE RRP.Station = @cStation)
-         BEGIN
-            SET @nAfterScn = 6713
-            SET @nAfterStep = 99
-         END
+         SET @nAfterScn = 6713
+         SET @nAfterStep = 99
+         GOTO Quit
       END
    END
-   ELSE IF @nCurrentStep = 99 -- Customize Step Screen
+   
+   IF @nCurrentStep = 99 -- Customize Step Screen
    BEGIN
       SET @cOption = @cInField01
 
@@ -104,8 +103,8 @@ BEGIN
 
       IF @cOption = '1' -- Unassign Station
       BEGIN
-         SET @cUDF01 = 'Unassign Confirmed'
          -- Unassign Station Logic Here
+         SET @cUDF01 = 'Unassign Confirmed'
          SET @nAfterScn = 4593
          SET @nAfterStep = 4
       END
@@ -113,6 +112,19 @@ BEGIN
       BEGIN
          SET @nAfterScn = 4592
          SET @nAfterStep = 3
+
+      SET @cOutField01 = '' --Result01
+      SET @cOutField02 = '' 
+      SET @cOutField03 = '' 
+      SET @cOutField04 = '' 
+      SET @cOutField05 = '' 
+      SET @cOutField06 = '' 
+      SET @cOutField07 = '' 
+      SET @cOutField08 = '' 
+      SET @cOutField09 = '' 
+      SET @cOutField10 = '' --Result10
+      SET @cOutField11 = '' --@cSKU
+      SET @cOutField12 = '' --@cLastPos
       END
    END
 
