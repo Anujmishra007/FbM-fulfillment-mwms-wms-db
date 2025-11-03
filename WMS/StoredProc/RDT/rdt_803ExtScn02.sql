@@ -73,7 +73,7 @@ BEGIN
       @nCurrentStep = @nStep,
       @cStation = V_String1
    FROM rdt.RDTMOBREC WITH(NOLOCK)
-   WHERE MobileKey = @nMobile
+   WHERE Mobile = @nMobile
 
    SET @cUDF01 = ''
 
