@@ -60,7 +60,7 @@ WITH ValidOrders AS(
 	AND oh.Facility = @Facility
 	AND oh.DocType = 'E'
 	--AND oh.[Status] = 0
-	AND od.[Status] = 0
+	AND od.[Status] = '0'
 	/*Only return orders that have a PF set up meeting SkuxLoc/Loc requirements for all ordered Skus 
 	i.e. if Sku is missing correctly setup PF or location then no order sortation occurs for any line*/
 	AND (SELECT COUNT(DISTINCT Sku) FROM dbo.OrderDetail od2 WITH (NOLOCK)
