@@ -25,6 +25,7 @@ GO
 /* 2022-11-30 2.0  Ung        WMS-21170 Add DynamicSlot that need carton ID   */
 /* 2024-11-01 2.1  JHU151     FCR-650 sorting for inbound                     */
 /* 2025-06-23 0.0  JackC      !!!Cutover. Use V0 repo for work!!!             */
+/* 2025-11-03 2.2  NickT      FCR-8553 Add ExtScnSP for Step4                 */
 /******************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdtfnc_PTLPiece (
@@ -1055,8 +1056,6 @@ BEGIN
          -- Go to station screen
          SET @nScn = @nScn - 3
          SET @nStep = @nStep - 3
-         
-         GOTO Quit
       END
       
       IF @cOption = '9' -- No
@@ -1099,6 +1098,14 @@ BEGIN
    
       -- Go to assign screen
       SET @nStep = @nStep - 2
+   END
+
+   IF @cExtendedScreenSP <> ''
+   BEGIN
+      IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedScreenSP AND type = 'P')
+      BEGIN
+         GOTO Step_99
+      END
    END
 END
 GOTO QUIT
@@ -1521,6 +1528,14 @@ BEGIN
             SET @cUPC = @cUDF04
             SET @cLastPos = @cUDF05
             SET @cSKU = @cUDF06
+         END
+         ELSE IF @cExtendedScreenSP = 'rdt_803ExtScn02'
+         BEGIN
+            -- Unassign station confirmed
+            IF @nScn = 4593 AND @nStep = 4 AND ISNULL(@cUDF01, '') = 'Unassign Confirmed'
+            BEGIN
+               GOTO Step_4
+            END
          END
 
          GOTO Quit
