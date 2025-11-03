@@ -1,6 +1,6 @@
-SET QUOTED_IDENTIFIER OFF
-GO
 SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
 GO
 
 /********************************************************************************/
@@ -2151,6 +2151,28 @@ END
             SELECT @c_errmsg = CONVERT(NVARCHAR(5) ,@n_err)+' No Task!'
         END
 
+        IF @n_err = 63060
+        AND EXISTS (
+            SELECT 1
+              FROM dbo.TaskDetail AS TD1 WITH (NOLOCK)
+                 INNER JOIN dbo.TaskDetail AS TD2 WITH (NOLOCK)
+                    ON  TD1.OrderKey = TD2.OrderKey
+                    AND TD1.AreaKey = TD2.AreaKey
+                    AND TD2.Status = 'S'
+               AND TD1.Storerkey = TD2.Storerkey
+             INNER JOIN RDT.RDTMOBREC AS RM WITH (NOLOCK)
+                    ON  RM.UserName = @c_userid 
+               AND TD1.Storerkey = RM.StorerKey
+              WHERE TD1.AreaKey = @c_AreaKey01
+                 AND TD1.PickMethod = 'PP'
+                 AND TD1.Status = '0'
+        )
+        BEGIN
+            SELECT @n_continue = 3
+            SELECT @n_err = 111268 --Order on hold
+            SELECT @c_errmsg = CONVERT(NVARCHAR(6) ,@n_err)+' Order on hold'
+        END
+
         IF (
            NOT EXISTS (
               SELECT 1
@@ -2207,28 +2229,28 @@ END
                  AND TaskType IN ('FCP', 'FCP1')
              AND FromID <> ''
            ) > 0
-           AND @n_err = 63060
+           AND @n_err IN ('63060','111268')
       BEGIN
           SELECT @n_continue = 3
             SELECT @n_err = 218245
             SELECT @c_errmsg = rdt.rdtgetmessage(@n_err, 'ENG', 'DSP') -- 'Tasks big for MHE'
       END
 
-       IF (
-	      SELECT COUNT(DISTINCT AD.PutawayZone) - COUNT(RM.C_String30) 
-		  FROM dbo.AreaDetail AD WITH(NOLOCK)
-		     INNER JOIN dbo.PAZoneEquipmentExcludeDetail PAZEED WITH(NOLOCK)
-			    ON PAZEED.PutawayZone = AD.PutawayZone
-			 LEFT JOIN RDT.RDTMOBREC RM WITH(NOLOCK)
-                ON RM.C_String30 = PAZEED.EquipmentProfileKey
-				AND RM.UserName = @c_userid
-		  WHERE AreaKey = @c_AreaKey01
-      ) = 0
-      BEGIN
-          SELECT @n_continue = 3
-            SELECT @n_err = 218244
-            SELECT @c_errmsg = rdt.rdtgetmessage(@n_err, 'ENG', 'DSP') -- 'MHE not for Area'
-      END
+        IF (
+            SELECT COUNT(DISTINCT AD.PutawayZone) - COUNT(RM.C_String30) 
+            FROM dbo.AreaDetail AD WITH(NOLOCK)
+            INNER JOIN dbo.PAZoneEquipmentExcludeDetail PAZEED WITH(NOLOCK)
+                ON PAZEED.PutawayZone = AD.PutawayZone
+            LEFT JOIN RDT.RDTMOBREC RM WITH(NOLOCK)
+                    ON RM.C_String30 = PAZEED.EquipmentProfileKey
+                AND RM.UserName = @c_userid
+            WHERE AreaKey = @c_AreaKey01
+        ) = 0
+        BEGIN
+            SELECT @n_continue = 3
+                SELECT @n_err = 218244
+                SELECT @c_errmsg = rdt.rdtgetmessage(@n_err, 'ENG', 'DSP') -- 'MHE not for Area'
+        END
     END
 
    -- (james04)

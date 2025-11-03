@@ -104,6 +104,7 @@ BEGIN
    DECLARE @cSuggID        NVARCHAR( 18)
    DECLARE @cWaveKey       NVARCHAR( 10)
    DECLARE @cOrderKey      NVARCHAR( 10)
+   DECLARE @cOrderLineNum  NVARCHAR( 10)
    DECLARE @nShipperCnt INT = 0
    DECLARE @nFromStep   INT
    DECLARE @nCartonQTY INT
@@ -225,6 +226,8 @@ BEGIN
    SET @nTranCount = @@TRANCOUNT
    BEGIN TRAN
    SAVE TRAN rdt_1812ExtScn06
+
+   SELECT TOP 1 @cOrderKey = OrderKey, @cOrderLineNum = OrderLineNumber FROM dbo.PICKDETAIL WITH(NOLOCK) WHERE TaskDetailKey = @cTaskdetailKey AND Storerkey = @cStorerKey
 
    IF @nFunc = 1812 -- TM Case Pick  
    BEGIN  
@@ -653,11 +656,16 @@ BEGIN
                   END
                END
 
-               UPDATE OD SET
-                  Notes = @cReasonCode
-               FROM ORDERDETAIL OD 
-               JOIN PickDetail PD ON PD.ORDERKEY = OD.ORDERKEY AND PD.OrderLineNumber = OD.OrderLineNumber
-               WHERE PD.TaskDetailKey = @cTaskDetailKey
+               UPDATE OD
+               SET OD.Notes =
+                     LEFT (CASE 
+                        WHEN OD.Notes IS NULL OR LTRIM(RTRIM(OD.Notes)) = '' THEN @cReasonCode
+                        WHEN CHARINDEX(@cReasonCode, OD.Notes) = 0 THEN OD.Notes + '; ' + @cReasonCode
+                        ELSE OD.Notes
+                     END, 500)
+               FROM dbo.ORDERDETAIL AS OD
+               WHERE OD.OrderKey = @cOrderKey
+                  AND OD.OrderLineNumber = @cOrderLineNum
 
                -- Extended update
                IF @cExtendedUpdateSP <> ''
@@ -1684,6 +1692,7 @@ Quit:
       COMMIT TRAN
 
 END  
+GO
   
 SET QUOTED_IDENTIFIER OFF 
 GO

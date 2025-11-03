@@ -552,6 +552,14 @@ BEGIN
                   AND (PAE.PutawayZone = LOC.PutawayZone 
                   OR PAE.PutawayZone = LOC1.PutawayZone)
             )
+         AND NOT EXISTS (
+            SELECT 1 FROM TASKDETAIL TD2 WITH (NOLOCK)
+               WHERE TD2.StorerKey = TD.StorerKey
+                  AND TD2.OrderKey = TD.OrderKey
+                  AND TD2.AreaKey = TD.AreaKey
+                  AND TD2.TaskType IN ('RPF','RPF1','RP1')
+                  AND TD2.Status = 'S'
+         )
       END TRY
       BEGIN CATCH
          SET @nContinue = 3
@@ -888,12 +896,12 @@ BEGIN
             SET @cTempToLoc = ''
             SELECT TOP 1 @cTempToLoc = LOC1.LOC FROM dbo.LOC LOC1 WITH(NOLOCK)
             JOIN dbo.LOC LOC2 WITH(NOLOCK) ON LOC2.Loc = @cToLoc AND LOC2.Facility = @cFacility AND LOC1.LocAisle = LOC2.LocAisle AND LOC1.Floor = LOC2.Floor
-            LEFT JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK) ON LOC1.LOC = LLI.LOC AND LLI.StorerKey = @cStorerKey 
+            LEFT JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK) ON LOC1.LOC = LLI.LOC AND LLI.StorerKey = @cStorerKey AND LLI.Qty - LLI.QtyPicked > 0 
             LEFT JOIN TASKDETAIL TD WITH(NOLOCK) ON LOC1.Loc = TD.ToLoc AND TD.Status = '3' AND TD.TaskType IN ('FCP','FCP1')
             WHERE LOC1.Facility = @cFacility
             AND LOC1.LOC <> @cToLoc
             AND LOC1.LocationCategory = 'PND_OUT'
-            AND (LLI.Qty - LLI.QtyPicked > 0 OR LLI.LOC IS NULL)
+            AND (LOC1.Status = 'OK' AND LOC1.LocationFlag IN ('','NONE'))
             GROUP BY LOC1.Loc
             HAVING COUNT(DISTINCT LLI.ID) + COUNT(DISTINCT TD.TaskDetailKey) < MAX(ISNULL(LOC1.MaxPallet, 99999))
 
@@ -1242,12 +1250,12 @@ BEGIN
                      SET @cTempToLoc = ''
                      SELECT TOP 1 @cTempToLoc = LOC1.LOC FROM dbo.LOC LOC1 WITH(NOLOCK)
                      JOIN dbo.LOC LOC2 WITH(NOLOCK) ON LOC2.Loc = @cToLoc AND LOC2.Facility = @cFacility AND LOC1.LocAisle = LOC2.LocAisle AND LOC1.Floor = LOC2.Floor
-                     LEFT JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK) ON LOC1.LOC = LLI.LOC AND LLI.StorerKey = @cStorerKey 
+                     LEFT JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK) ON LOC1.LOC = LLI.LOC AND LLI.StorerKey = @cStorerKey AND LLI.Qty - LLI.QtyPicked > 0 
                      LEFT JOIN TASKDETAIL TD WITH(NOLOCK) ON LOC1.Loc = TD.ToLoc AND TD.Status = '3' AND TD.TaskType IN ('FCP','FCP1')
                      WHERE LOC1.Facility = @cFacility
                      AND LOC1.LOC <> @cToLoc
                      AND LOC1.LocationCategory = 'PND_OUT'
-                     AND (LLI.Qty - LLI.QtyPicked > 0 OR LLI.LOC IS NULL)
+                     AND (LOC1.Status = 'OK' AND LOC1.LocationFlag IN ('','NONE'))
                      GROUP BY LOC1.Loc
                      HAVING COUNT(DISTINCT LLI.ID) + COUNT(DISTINCT TD.TaskDetailKey) < MAX(ISNULL(LOC1.MaxPallet, 99999))
 

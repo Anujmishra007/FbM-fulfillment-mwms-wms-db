@@ -10,7 +10,7 @@ execute rdt.rdtAddMsg 239903, 10, '239903^CannotSwapID',        'us_english', 18
 execute rdt.rdtAddMsg 239904, 10, '239904^CannotSwapID',        'us_english', 1812, 0, '239904: Cannot swap id'
 execute rdt.rdtAddMsg 239905, 10, '239905^IDHasTask',           'us_english', 1812, 0, '239905: ID has a open task'
 execute rdt.rdtAddMsg 239906, 10, '239906^IDOnHold',            'us_english', 1812, 0, '239906: ID is on hold'
-execute rdt.rdtAddMsg 239907, 10, '239907^MixSKUID',            'us_english', 1812, 0, '239907: Cannot swap ID with mix SKUs'
+execute rdt.rdtAddMsg 239907, 10, '239907^MixSKUID',            'us_english', 1812, 0, '239907: Cannot swap ID'
 execute rdt.rdtAddMsg 239908, 10, '239908^IDOccupied',          'us_english', 1812, 0, '239908: ID is occupied'
 execute rdt.rdtAddMsg 239909, 10, '239909^SKUNotMatch',         'us_english', 1812, 0, '239909: SKU not match'
 execute rdt.rdtAddMsg 239910, 10, '239910^SKUNotMatch',         'us_english', 1812, 0, '239910: Qty not match'

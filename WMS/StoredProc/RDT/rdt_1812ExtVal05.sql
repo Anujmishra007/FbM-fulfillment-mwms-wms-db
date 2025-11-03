@@ -1,6 +1,10 @@
+SET ANSI_NULLS OFF
+GO
+SET QUOTED_IDENTIFIER OFF
+GO
 
 /************************************************************************/
-/* Store procedure: rdt_1812ExtVal05                                     */
+/* Store procedure: rdt_1812ExtVal05                                    */
 /* Copyright      : Maersk                                              */
 /*                                                                      */
 /* Purpose: For JCB                                                     */
@@ -38,7 +42,10 @@ BEGIN
             @cOrdCompany         NVARCHAR(100),
             @cStorerKey          NVARCHAR(15),
             @nTaskQTY            INT,
-            @nToLocMaxPallet     INT
+            @nToLocMaxPallet     INT,
+            @cFacility           NVARCHAR(20),
+            @cOrderKey           NVARCHAR(20),
+            @cCompany            NVARCHAR(20)
 
    --GET task info
    
@@ -49,10 +56,14 @@ BEGIN
    SELECT
       @cSuggToLOC   = ToLOC,
       @nTaskQty     = QTY,
-      @cStorerKey   = Storerkey
+      @cStorerKey   = Storerkey,
+      @cOrderKey    = OrderKey
    FROM dbo.TaskDetail WITH (NOLOCK)
    WHERE TaskDetailKey = @cTaskDetailKey
    
+   SELECT TOP 1 @cFacility = Facility FROM RDT.RDTMOBREC WITH(NOLOCK) WHERE Mobile = @nMobile
+   SELECT TOP 1 @cCompany = C_Company FROM dbo.ORDERS WITH(NOLOCK) WHERE StorerKey = @cStorerKey AND OrderKey = @cOrderKey
+
    IF @nFunc = 1812 -- PickSKU
    BEGIN
       IF @nStep = 4 --SKU/Qty
@@ -81,12 +92,30 @@ BEGIN
          IF @nInputKey = 1 --Enter
          BEGIN
             --Get SuggToLoc and to loc info
-            SELECT @cSuggToLocCategory = LocationCategory FROM dbo.LOC WITH (NOLOCK) WHERE LOC = @cSuggToLOC
+            SELECT @cSuggToLocCategory = LocationCategory FROM dbo.LOC WITH (NOLOCK) WHERE LOC = @cSuggToLOC AND Facility = @cFacility
             SELECT @cToLocCategory = LocationCategory,
                    @nToLocMaxPallet = MaxPallet
-            FROM dbo.LOC WITH (NOLOCK) WHERE LOC = @cToLOC
+            FROM dbo.LOC WITH (NOLOCK) WHERE LOC = @cToLOC AND Facility = @cFacility
 
             IF @cToLoc <> @cSuggToLOC
+            AND NOT EXISTS (
+                  SELECT 1
+                  FROM dbo.CODELKUP AS C WITH (NOLOCK)
+                     INNER JOIN dbo.ORDERS AS O WITH (NOLOCK)
+                        ON O.C_Company = C.Long
+                        AND O.StorerKey = @cStorerKey
+                     INNER JOIN dbo.TaskDetail AS TD WITH (NOLOCK)
+                        ON TD.OrderKey = O.OrderKey
+                        AND TD.TaskDetailKey = @cTaskdetailKey
+                        AND TD.StorerKey = @cStorerKey
+                     INNER JOIN dbo. LOC AS L WITH (NOLOCK)
+                        ON L.LOC = C.Short
+                        AND L.Facility = @cFacility
+                        AND L.Status = 'OK'
+                        AND L.LocationFlag IN ('', 'NONE')
+                  WHERE C.Short = @cToLOC
+                 AND C.LISTNAME = 'JCBCOMPML'
+            )
             BEGIN
                IF (CHARINDEX('LIFT',@cSuggToLOC)>0)
                BEGIN
@@ -95,6 +124,7 @@ BEGIN
                IF EXISTS ( SELECT 1 
                            FROM dbo.LOC WITH (NOLOCK)
                            WHERE LOC = @cSuggToLOC
+                     AND Facility = @cFacility
                            AND (Status <> 'OK' OR LocationFlag NOT IN ('','NONE')) 
                            )
                BEGIN--only allow to overwrithe when SuggToLoc is on hold
@@ -134,6 +164,7 @@ BEGIN
                         WHERE CL.LISTNAME = 'JCBCOMPML'
                           AND CL.LONG = @cOrdCompany
                           AND CL.Storerkey = @cStorerKey
+                    AND L.Facility = @cFacility
                           AND (L.Status = 'OK' AND (L.LocationFlag = '' OR L.LocationFlag = 'NONE'))
                      )
                      BEGIN
@@ -149,6 +180,7 @@ BEGIN
                         WHERE CL.LISTNAME = 'JCBCOMPML'
                           AND CL.LONG = @cOrdCompany
                           AND CL.Storerkey = @cStorerKey
+                    AND L.Facility = @cFacility
                           AND L.LocationFlag <> 'INACTIVE' --INACTIVE loc is not acceptable.
                         ORDER BY L.LogicalLocation ASC
 
@@ -179,6 +211,7 @@ BEGIN
                              AND CL.SHORT = @cToLOC
                              AND CL.LONG = @cOrdCompany
                              AND L.Status = 'OK'
+                      AND L.Facility = @cFacility
                              AND (L.LocationFlag = '' OR L.LocationFlag = 'NONE')
                         ) -- ToLoc must be a marshalling lane of the same company and not on hold
                         BEGIN
@@ -195,6 +228,7 @@ BEGIN
                         ON CL.LONG = LOC.LocationCategory
                      WHERE CL.LISTNAME = 'JCBKITORDT'
                         AND CL.Short = 'Y'
+                  AND LOC.Facility = @cFacility
                         AND LOC.LOC = @cSuggToLOC
                         AND CL.Code = @cOrderType
                   ) -- kitting loc logic
@@ -216,6 +250,7 @@ BEGIN
                         WHERE CL.Short = 'Y'
                           AND CL.Code = @cOrderType
                           AND L.Status = 'OK'
+                    AND L.Facility = @cFacility
                           AND (L.LocationFlag = '' OR L.LocationFlag = 'NONE')
                      )
                      BEGIN-- All locations in these kitting location categories are on hold
@@ -230,6 +265,7 @@ BEGIN
                         JOIN dbo.LOC L WITH (NOLOCK) ON CL.LONG = L.LocationCategory
                         WHERE CL.Short = 'Y'
                           AND CL.Code = @cOrderType
+                    AND L.Facility = @cFacility
                           AND L.LocationFlag <> 'INACTIVE' --Inactive location is inacceptable.
                         ORDER BY L.LogicalLocation ASC
 
@@ -261,6 +297,7 @@ BEGIN
                               AND LOC.LOC = @cToLOC
                               AND CL.Code = @cOrderType
                               AND LOC.[Status] = 'OK'
+                       AND LOC.Facility = @cFacility
                               AND (LOC.LocationFlag = '' OR LOC.LocationFlag = 'NONE')
                         )
                         BEGIN
@@ -296,6 +333,7 @@ BEGIN
                   SELECT 1 FROM dbo.LOC WITH (NOLOCK) 
                   WHERE LOC = @cToLOC 
                      AND LocationCategory = 'PND_OUT'
+                AND Facility = @cFacility
                )--check location capacity
                BEGIN
                   IF @nToLocMaxPallet > 0
@@ -319,6 +357,38 @@ BEGIN
                   END
                END
             END     
+
+         IF EXISTS (SELECT 1 FROM dbo.CODELKUP C WITH(NOLOCK) WHERE LISTNAME = 'JCBCOMPML' AND Short = @cToLOC AND Storerkey = @cStorerKey)
+               AND EXISTS (
+                     SELECT 1
+                     FROM dbo.LOC AS L1 WITH (NOLOCK)
+                     WHERE L1.Facility = @cFacility
+                        AND L1.Loc = @cToLOC
+                        AND (
+                              L1.LocationFlag NOT IN ('', 'NONE')
+                              OR L1.Status <> 'OK'
+                           )
+                  )
+               AND EXISTS (
+                     SELECT 1
+                     FROM dbo.LOC AS L2 WITH (NOLOCK)
+                        INNER JOIN dbo.CODELKUP AS C WITH (NOLOCK)
+                           ON  L2.LOC = C.Short
+                           AND C.StorerKey = @cStorerKey
+                           AND C.Long = @cCompany
+                           AND C.ListName = 'JCBCOMPML'
+                     WHERE L2.Facility = @cFacility
+                        AND (
+                              L2.LocationFlag IN ('', 'NONE')
+                              AND L2.Status = 'OK'
+                           )
+                  )
+            BEGIN
+               SET @nErrNo = 218249
+               SET @cErrMsg = rdt.rdtgetmessage(@nErrNo, @cLangCode, 'DSP') --'218249^Use open ML'
+               GOTO Quit
+            END
+
          END --inputkey = 1
       END--St6
    END --830

@@ -278,7 +278,7 @@ BEGIN
                   IF @nDebugFlag = 1
                      SELECT 'Kitting location logic'
 
-                  SELECT @cStatus = CASE WHEN @cUDF01 = 'Y' THEN '0' ELSE 'H' END
+                  SELECT @cStatus = CASE WHEN @cUDF01 = 'Y' THEN '0' ELSE 'S' END
                   
                   IF ISNULL(@cDefaultKittingLoc,'') = ''
                   BEGIN
@@ -366,7 +366,7 @@ BEGIN
             BEGIN
                IF @cUDF01 IN ('Y','H')
                BEGIN
-                  SELECT @cStatus = CASE WHEN @cUDF01 = 'Y' THEN '0' ELSE 'H' END
+                  SELECT @cStatus = CASE WHEN @cUDF01 = 'Y' THEN '0' ELSE 'S' END
 
                   SELECT TOP 1  @cDefaultMarshLane = L.LOC
                   FROM dbo.CODELKUP CL WITH (NOLOCK)
@@ -417,44 +417,49 @@ BEGIN
                         AND CL.Short = 'Y'
                         AND CL.Code = @cOrderType)
             BEGIN
-               SELECT TOP 1  @cDefaultMarshLane = L.LOC
-               FROM dbo.CODELKUP CL WITH (NOLOCK)
-               JOIN dbo.LOC L WITH (NOLOCK) ON CL.SHORT = L.LOC
-               WHERE CL.LISTNAME = 'JCBCOMPML'
-                  AND CL.LONG = @cOrdCompany
-                  AND CL.Storerkey = @cStorerKey
-               ORDER BY CASE WHEN L.STATUS <> 'OK' OR L.LocationFLAG NOT IN ('','NONE') THEN 2 ELSE 1 END, L.LogicalLocation,LOC
-
-               IF ISNULL(@cDefaultMarshLane,'') = ''
+               IF @cUDF01 IN ('Y','H')
                BEGIN
-                  SET @nErrNo = 240959
-                  SET @cErrMsg = rdt.rdtgetmessageLong( @nErrNo, @cLangCode, 'DSP') --No default marshaling lane
-                  GOTO Fail
-               END
+                  SELECT @cStatus = CASE WHEN @cUDF01 = 'Y' THEN '0' ELSE 'S' END
 
-               SET @nSuccess = 0
-               EXECUTE dbo.nspg_getkey
-                  'TASKDETAILKEY'
-                  , 10
-                  , @cNewTaskDetailKey OUTPUT
-                  , @nSuccess          OUTPUT
-                  , @nErrNo            OUTPUT
-                  , @cErrMsg           OUTPUT
-               IF @nSuccess <> 1
-               BEGIN
-                  SET @nErrNo = 240960
-                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --nspg_getkey
-                  GOTO RollBackTran
-               END
+                  SELECT TOP 1  @cDefaultMarshLane = L.LOC
+                  FROM dbo.CODELKUP CL WITH (NOLOCK)
+                  JOIN dbo.LOC L WITH (NOLOCK) ON CL.SHORT = L.LOC
+                  WHERE CL.LISTNAME = 'JCBCOMPML'
+                     AND CL.LONG = @cOrdCompany
+                     AND CL.Storerkey = @cStorerKey
+                  ORDER BY CASE WHEN L.STATUS <> 'OK' OR L.LocationFLAG NOT IN ('','NONE') THEN 2 ELSE 1 END, L.LogicalLocation,LOC
 
-               INSERT INTO TaskDetail (
-                  TaskDetailKey, TaskType, Status, UserKey, FromLOC, FromID, ToLOC, ToID, QTY, AreaKey, FinalLOC,OrderKey,
-                  PickMethod, StorerKey, SKU, LOT, ListKey, TransitCount, SourceType, WaveKey, LoadKey, Priority, SourcePriority, TrafficCop,
-                  SourceKey,RefTaskKey)
-               VALUES (
-                  @cNewTaskDetailKey, 'FCP1', '0', '', @cToLOC, @cToID, @cDefaultMarshLane, @cToID, 0, @cToLOCAreaKey, @cDefaultMarshLane,@cOrderKey,
-                  'FP', @cStorerKey, @cSKU, @cLOT, '', @nTransitCount+1, @cSourceType, @cWaveKey, @cLoadKey, @cPriority, @cSourcePriority, NULL,
-                  @cTaskDetailKey,@cRefTaskKey)
+                  IF ISNULL(@cDefaultMarshLane,'') = ''
+                  BEGIN
+                     SET @nErrNo = 240959
+                     SET @cErrMsg = rdt.rdtgetmessageLong( @nErrNo, @cLangCode, 'DSP') --No default marshaling lane
+                     GOTO Fail
+                  END
+
+                  SET @nSuccess = 0
+                  EXECUTE dbo.nspg_getkey
+                     'TASKDETAILKEY'
+                     , 10
+                     , @cNewTaskDetailKey OUTPUT
+                     , @nSuccess          OUTPUT
+                     , @nErrNo            OUTPUT
+                     , @cErrMsg           OUTPUT
+                  IF @nSuccess <> 1
+                  BEGIN
+                     SET @nErrNo = 240960
+                     SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --nspg_getkey
+                     GOTO RollBackTran
+                  END
+
+                  INSERT INTO TaskDetail (
+                     TaskDetailKey, TaskType, Status, UserKey, FromLOC, FromID, ToLOC, ToID, QTY, AreaKey, FinalLOC,OrderKey,
+                     PickMethod, StorerKey, SKU, LOT, ListKey, TransitCount, SourceType, WaveKey, LoadKey, Priority, SourcePriority, TrafficCop,
+                     SourceKey,RefTaskKey)
+                  VALUES (
+                     @cNewTaskDetailKey, 'FCP1',@cStatus, '', @cToLOC, @cToID, @cDefaultMarshLane, @cToID, 0, @cToLOCAreaKey, @cDefaultMarshLane,@cOrderKey,
+                     'FP', @cStorerKey, @cSKU, @cLOT, '', @nTransitCount+1, @cSourceType, @cWaveKey, @cLoadKey, @cPriority, @cSourcePriority, NULL,
+                     @cTaskDetailKey,@cRefTaskKey)
+               END
             END --Marshelling lane
          END --not pnd
       END --Kitting orders

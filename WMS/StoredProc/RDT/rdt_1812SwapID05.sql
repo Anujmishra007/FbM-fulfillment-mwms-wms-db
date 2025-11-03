@@ -125,6 +125,7 @@ BEGIN
    FROM dbo.LOTxLOCxID WITH (NOLOCK)
    WHERE StorerKey = @cStorerKey
       AND ID = @cTaskFromID
+      AND QTY - QtyPicked > 0
    GROUP BY SKU
 
    IF @nDebugFlag = 1
@@ -204,7 +205,7 @@ BEGIN
       )   
       BEGIN
          SET @nErrNo = 239907
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Invalid ID
+         SET @cErrMsg = rdt.rdtgetmessageLong( @nErrNo, @cLangCode, 'DSP') --Invalid ID
          GOTO Quit
       END
    END
