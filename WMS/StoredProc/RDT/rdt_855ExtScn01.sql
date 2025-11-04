@@ -373,7 +373,7 @@ BEGIN
                   @cMsg08                 NVARCHAR(20) = '',
                   @cMsg09                 NVARCHAR(20) = ''
 
-               SET @cMsg01 = 'Error: Meet Supervisor'
+               SET @cMsg01 = 'Error.See Supervisor'
                SET @cMsg02 = 'Qty does not match . '
                SET @cMsg03 = 'Expected value :' + CAST(@wQty AS NVARCHAR(10))
                SET @cMsg04 = 'On ' + @wSKU
