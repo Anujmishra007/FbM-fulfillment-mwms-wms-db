@@ -64,6 +64,7 @@ GO
 /************************** Merged Into V0 ***************************************/
 /* 2025-06-25 5.5  Dennis   FCR-5716 ExtScn SP                                   */
 /* 2025-06-25 5.6  Cuize    FCR-6888 GOTO step 98                                */
+/* 2025-11-04 5.7  NickT    UWP-43481 Fix: SQL Exception happens                 */
 /*********************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdtfnc_NormalReceipt_V7] (
@@ -5039,8 +5040,8 @@ BEGIN
             '@cSubreasonCode NVARCHAR( 10),  ' +
             '@nErrNo         INT           OUTPUT, ' +
             '@cErrMsg        NVARCHAR( 20) OUTPUT, ' +
-            '@cReceiptLineNumberOutput NVARCHAR( 5) OUTPUT '+
-            '@cSerialNo      NVARCHAR( 30) = '', ' +
+            '@cReceiptLineNumberOutput NVARCHAR( 5) OUTPUT, '+
+            '@cSerialNo      NVARCHAR( 30) = '''', ' +
             '@nSerialQTY     INT = 0,            ' +
             '@nBulkSNO       INT = 0,            ' +
             '@nBulkSNOQTY    INT = 0             '
