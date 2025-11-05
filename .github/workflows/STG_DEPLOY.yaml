@@ -31,6 +31,11 @@ on:
           - CMRWMS
           - SENWMS
           - TGOWMS
+          - CZEWMS
+          - BELWMS
+          - TRNWMS
+          - PERFWMS
+          - INDWMS
           - SDRWMS
 
 permissions: write-all
