@@ -21,6 +21,7 @@ GO
 /*                               failure, and do not block when finalization fail*/
 /* 2025-10-20 1.2.0 NickT      FCR-8158 Create Adjustment for CC                 */
 /*                             if variance is less than tolerance                */
+/* 2025-11-05 1.2.1 NickT      FCR-8158 If adjustment is closed, createa new one */
 /*********************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1768ExtOpt01] (
@@ -197,7 +198,7 @@ BEGIN --(CLVN01)
                         , @c_errmsg           = @cErrMsg
                         , @c_Activity         = 'CC'
                         , @c_Storerkey        = @cStorerkey
-                        , @c_SKU              = @cSKU
+                        , @c_SKU              = @cCCDSKU
                         , @c_UOM              = ''
                         , @c_UOMQty           = ''
                         , @c_Qty              = @nCCDQty
@@ -217,7 +218,7 @@ BEGIN --(CLVN01)
                      IF @cPostADJ = '1'
                      BEGIN
                         -- If the adjustment does not exist, create a new adjustment
-                        IF NOT EXISTS( SELECT 1 FROM dbo.ADJUSTMENT WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND Remarks = @cSourceKey)
+                        IF NOT EXISTS( SELECT 1 FROM dbo.ADJUSTMENT WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND Remarks = @cSourceKey AND FinalizedFlag <> 'Y')
                         BEGIN
                            BEGIN TRY
                               EXECUTE nspg_getkey
