@@ -15,5 +15,6 @@ execute rdt.rdtAddMsg 225304, 10, '225304^POClosed',   'us_english',898, 0, '225
 execute rdt.rdtAddMsg 225305, 10, '225305^CancelDatePast',   'us_english',898, 0, '225305 Cancel Date Past'
 execute rdt.rdtAddMsg 225306, 10, '225306^MultiPOInReceipt',   'us_english',898, 0, '225306MultiPOInReceipt'
 execute rdt.rdtAddMsg 225307, 10, '225307^POTypeNotReturn',   'us_english',898, 0, '225307 POTypeNotReturn'
+execute rdt.rdtAddMsg 225308, 10, '225308^',   'us_english',898, 0, '225308 UCC From PO Closed/ Unavailable'
 
 SELECT * FROM rdt.RDTMsg WITH(NOLOCK) WHERE Message_ID BETWEEN 225301 AND 225350
