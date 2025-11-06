@@ -47,6 +47,8 @@ GO
 /* 26-JUN-2025  SSA01     2.7 UWP-3982- Added PalletType in inventory    */
 /* 10-Oct-2025  SSA02     2.8 UWP-42248 -Enhanced session management     */
 /* 21-Oct-2025  Michael   2.9 FCR-8377- Add SerialNoUpdateLotLocID (ML01)*/
+/* 05-Nov-2025  SSA03     3.0 UWP-43625- updated sequence of update Lot */
+/*                            table to avoid deadlock                   */
 /*************************************************************************/
 CREATE OR ALTER PROC  [dbo].[nspItrnAddAdjustmentCheck]
                @c_itrnkey      NVARCHAR(10)
@@ -744,7 +746,7 @@ BEGIN
 
       IF @n_continue=1 or @n_continue=2
       BEGIN
-         DECLARE @n_rcnt int,@n_curcasecnt int, @n_curinnerpack int , @n_curqty int, @c_curstatus NVARCHAR(10),
+         DECLARE @n_LotRcnt int,@n_rcnt int,@n_curcasecnt int, @n_curinnerpack int , @n_curqty int, @c_curstatus NVARCHAR(10),
          @n_curpallet int , @f_curcube float, @f_curgrosswgt float, @f_curnetwgt float ,
          @f_curotherunit1 float, @f_curotherunit2 float
          SELECT    @n_curcasecnt=casecnt
@@ -757,8 +759,8 @@ BEGIN
          ,  @f_curotherunit1=otherunit1
          ,  @f_curotherunit2=otherunit2
          FROM LOT (NOLOCK) WHERE LOT = @c_lot
-         SELECT @n_rcnt=@@ROWCOUNT
-         IF @n_rcnt=0
+         SELECT @n_LotRcnt=@@ROWCOUNT
+         IF @n_LotRcnt=0
          BEGIN
             INSERT INTO LOT (LOT,CASECNT,INNERPACK,QTY, PALLET,CUBE,GROSSWGT,NETWGT,OTHERUNIT1,OTHERUNIT2,STORERKEY,SKU)
             VALUES (@c_lot,@n_casecnt, @n_innerpack, @n_qty, @n_pallet, @f_cube, @f_grosswgt, @f_netwgt, @f_otherunit1, @f_otherunit2, @c_storerkey,@c_sku )
@@ -769,38 +771,6 @@ BEGIN
                SELECT @n_err = 61973 --61738   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
                SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Insert Failed On Table Itrn. (nspItrnAddAdjustmentCheck)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
             END
-         END
-         ELSE IF @n_rcnt=1
-         BEGIN
-            UPDATE LOT with (ROWLOCK)
-            SET   CASECNT=CASECNT+@n_casecnt
-            , INNERPACK=INNERPACK+@n_innerpack
-            , QTY = QTY+@n_qty
-            , PALLET=PALLET+@n_pallet
-            , CUBE=CUBE+@f_cube
-            , GROSSWGT=GROSSWGT+@f_grosswgt
-            , NETWGT=NETWGT+@f_netwgt
-            , OTHERUNIT1=OTHERUNIT1+@f_otherunit1
-            , OTHERUNIT2=OTHERUNIT2+@f_otherunit2
-            WHERE LOT=@c_lot
-            SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
-            IF @n_err <> 0
-            BEGIN
-               SELECT @n_continue = 3
-               SELECT @n_err = 61974 --61709   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
-               SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed On Table LOT. (nspItrnAddAjustmentCheck)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
-            END
-            ELSE IF @n_cnt = 0
-            BEGIN
-               SELECT @n_continue = 3
-               SELECT @n_err = 61975 --61727
-               SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update To Table LOT Returned Zero Rows Affected. (nspItrnAddAdjustmentCheck)'
-            END
-         END
-         ELSE
-         BEGIN
-            SELECT @n_continue = 3 , @n_err = 61976 --61710
-            SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Lot Table Did Not Return Expected Unique Row In Response To Query. (nspItrnAddAdjustmentCheck)'
          END
       END
       IF @n_continue=1 or @n_continue=2
@@ -1027,7 +997,43 @@ BEGIN
             SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': LOTxLOCxID Table Did Not Return Expected Unique Row In Response To Query. (nspItrnAddAdjustmentCheck)'
          END
       END
-
+      --(SSA03) start --
+      IF @n_continue = 1 or @n_continue = 2
+      BEGIN
+      IF @n_LotRcnt=1
+         BEGIN
+            UPDATE LOT with (ROWLOCK)
+            SET   CASECNT=CASECNT+@n_casecnt
+            , INNERPACK=INNERPACK+@n_innerpack
+            , QTY = QTY+@n_qty
+            , PALLET=PALLET+@n_pallet
+            , CUBE=CUBE+@f_cube
+            , GROSSWGT=GROSSWGT+@f_grosswgt
+            , NETWGT=NETWGT+@f_netwgt
+            , OTHERUNIT1=OTHERUNIT1+@f_otherunit1
+            , OTHERUNIT2=OTHERUNIT2+@f_otherunit2
+            WHERE LOT=@c_lot
+            SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
+            IF @n_err <> 0
+            BEGIN
+               SELECT @n_continue = 3
+               SELECT @n_err = 61974 --61709   -- Should Be Set To The SQL Errmessage but I don't know how to do so.
+               SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update Failed On Table LOT. (nspItrnAddAjustmentCheck)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
+            END
+            ELSE IF @n_cnt = 0
+            BEGIN
+               SELECT @n_continue = 3
+               SELECT @n_err = 61975 --61727
+               SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update To Table LOT Returned Zero Rows Affected. (nspItrnAddAdjustmentCheck)'
+            END
+         END
+         ELSE
+         BEGIN
+            SELECT @n_continue = 3 , @n_err = 61976 --61710
+            SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Lot Table Did Not Return Expected Unique Row In Response To Query. (nspItrnAddAdjustmentCheck)'
+         END
+      END
+      --(SSA03) end --
       IF @n_continue = 1 or @n_continue = 2
       BEGIN
          IF EXISTS(SELECT * FROM ID (NOLOCK) WHERE ID = @c_toid and STATUS <> 'OK')
@@ -1047,7 +1053,8 @@ BEGIN
                +': Update Failed on Table LOT. (nspItrnAddAdjustmentCheck)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_errmsg),'') + ' ) '
             END
          END
-      END            
+      END
+
       -- (SWT02)
       IF @n_continue = 1 or @n_continue = 2
       BEGIN       

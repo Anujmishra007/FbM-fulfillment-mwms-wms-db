@@ -40,6 +40,8 @@ GO
 /*                            - Transfer by Serial Number                 */
 /* 11-Jun-2025  TLTING02  2.1 storerconfig BlockDoubleShip                */
 /* 10-Oct-2025  SSA01     2.2 UWP-42248 -Enhanced session management      */
+/* 05-Nov-2025  SSA02     2.2 UWP-43625- updated sequence of update Lot */
+/*                            table to avoid deadlock                   */
 /**************************************************************************/
 
 CREATE OR ALTER PROC  [dbo].[nspItrnAddWithdrawalCheck]
@@ -125,6 +127,9 @@ CREATE OR ALTER PROC  [dbo].[nspItrnAddWithdrawalCheck]
 
   -- (SWT02)
  DECLARE @c_Facility NVARCHAR(10)
+
+ DECLARE @n_rcnt int,@n_curCaseCnt int, @n_curInnerPack int , @n_curqty int, @c_curstatus NVARCHAR(10), @n_curPallet int,
+             @f_curcube float, @f_curGrossWgt float, @f_curNetWgt float, @f_curotherunit1 float, @f_curotherunit2 float
 
  SELECT @c_Facility = Facility
  FROM LOC WITH (NOLOCK)
@@ -259,41 +264,6 @@ CREATE OR ALTER PROC  [dbo].[nspItrnAddWithdrawalCheck]
                                   + ' - Do Not Matched with LOTATTRIBUTE.(nspItrnAddWithdrawalCheck)' -- INC0871401
              END
          END
-     END
- END
- IF @n_continue=1 or @n_continue=2
- BEGIN
-     DECLARE @n_rcnt int,@n_curCaseCnt int, @n_curInnerPack int , @n_curqty int, @c_curstatus NVARCHAR(10), @n_curPallet int,
-             @f_curcube float, @f_curGrossWgt float, @f_curNetWgt float, @f_curotherunit1 float, @f_curotherunit2 float
-     SELECT @n_curCaseCnt=CaseCnt,  @n_curInnerPack=InnerPack,  @n_curqty=Qty,  @n_curPallet=Pallet,  @f_curcube=cube,
-            @f_curGrossWgt=GrossWgt,  @f_curNetWgt=NetWgt,  @f_curotherunit1=otherunit1,  @f_curotherunit2=otherunit2
-     FROM LOT (NOLOCK) WHERE LOT = @c_lot
-     SELECT @n_rcnt=@@ROWCOUNT
-     IF @n_rcnt=1
-     BEGIN
-         UPDATE LOT
-         SET   CaseCnt=CaseCnt+@n_CaseCnt, InnerPack=InnerPack+@n_InnerPack, QTY = QTY+@n_qty, Pallet=Pallet+@n_Pallet,
-               CUBE=CUBE+@f_cube, GrossWgt=(CASE WHEN (GrossWgt+@f_GrossWgt) > 0 THEN (GrossWgt+@f_GrossWgt) ELSE 0 END ),
-               NetWgt=(CASE WHEN (NetWgt+@f_NetWgt) > 0 THEN (NetWgt+@f_NetWgt) ELSE 0 END ),
-               OTHERUNIT1=OTHERUNIT1+@f_otherunit1, OTHERUNIT2=OTHERUNIT2+@f_otherunit2
-         WHERE LOT=@c_LOT
-         SELECT @n_Err = @@ERROR, @n_cnt = @@ROWCOUNT
-         IF @n_Err <> 0
-         BEGIN
-             SELECT @n_continue = 3
-             SELECT @n_Err = 61921 --61308
-             SELECT @c_ErrMsg='NSQL'+CONVERT(char(5),@n_Err)+': Update Failed On Table LOT. (nspItrnAddWithdrawalCheck)' + ' ( ' + ' SQLSvr MESSAGE=' + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_ErrMsg)) + ' ) '
-         END
-         ELSE IF @n_cnt = 0
-         BEGIN
-             SELECT @n_continue = 3, @n_Err = 61922 --61325
-             SELECT @c_ErrMsg='NSQL'+CONVERT(char(5),@n_Err)+': Update To Table LOT Returned Zero Rows Affected. (nspItrnAddWithdrawalCheck)'
-         END
-     END
-     ELSE BEGIN
-         SELECT @n_continue = 3, @n_Err = 61923 --61309
-         SELECT @c_ErrMsg='NSQL'+CONVERT(char(5),@n_Err)+': Lot Table Did Not Return Expected Unique Row In Response To Query. (nspItrnAddWithdrawalCheck)'
-         SELECT @c_ErrMsg='NSQL'+CONVERT(char(5),@n_Err)+': Lot Table ' + ISNULL(RTRIM(@c_lot),'') + ' Did Not Return Expected Unique Row In Response To Query. (nspItrnAddWithdrawalCheck)'  --INC1362763
      END
  END
 
@@ -434,6 +404,42 @@ CREATE OR ALTER PROC  [dbo].[nspItrnAddWithdrawalCheck]
          SELECT @c_ErrMsg='NSQL'+CONVERT(char(5),@n_Err)+': LOTxLOCxID Table Did Not Return Expected Unique Row In Response To Query. (nspItrnAddDepositCheck)'
      END
  END
+ --(SSA02) start--
+ IF @n_continue=1 or @n_continue=2
+ BEGIN
+
+     SELECT @n_curCaseCnt=CaseCnt,  @n_curInnerPack=InnerPack,  @n_curqty=Qty,  @n_curPallet=Pallet,  @f_curcube=cube,
+            @f_curGrossWgt=GrossWgt,  @f_curNetWgt=NetWgt,  @f_curotherunit1=otherunit1,  @f_curotherunit2=otherunit2
+     FROM LOT (NOLOCK) WHERE LOT = @c_lot
+     SELECT @n_rcnt=@@ROWCOUNT
+     IF @n_rcnt=1
+     BEGIN
+         UPDATE LOT
+         SET   CaseCnt=CaseCnt+@n_CaseCnt, InnerPack=InnerPack+@n_InnerPack, QTY = QTY+@n_qty, Pallet=Pallet+@n_Pallet,
+               CUBE=CUBE+@f_cube, GrossWgt=(CASE WHEN (GrossWgt+@f_GrossWgt) > 0 THEN (GrossWgt+@f_GrossWgt) ELSE 0 END ),
+               NetWgt=(CASE WHEN (NetWgt+@f_NetWgt) > 0 THEN (NetWgt+@f_NetWgt) ELSE 0 END ),
+               OTHERUNIT1=OTHERUNIT1+@f_otherunit1, OTHERUNIT2=OTHERUNIT2+@f_otherunit2
+         WHERE LOT=@c_LOT
+         SELECT @n_Err = @@ERROR, @n_cnt = @@ROWCOUNT
+         IF @n_Err <> 0
+         BEGIN
+             SELECT @n_continue = 3
+             SELECT @n_Err = 61921 --61308
+             SELECT @c_ErrMsg='NSQL'+CONVERT(char(5),@n_Err)+': Update Failed On Table LOT. (nspItrnAddWithdrawalCheck)' + ' ( ' + ' SQLSvr MESSAGE=' + dbo.fnc_LTrim(dbo.fnc_RTrim(@c_ErrMsg)) + ' ) '
+         END
+         ELSE IF @n_cnt = 0
+         BEGIN
+             SELECT @n_continue = 3, @n_Err = 61922 --61325
+             SELECT @c_ErrMsg='NSQL'+CONVERT(char(5),@n_Err)+': Update To Table LOT Returned Zero Rows Affected. (nspItrnAddWithdrawalCheck)'
+         END
+     END
+     ELSE BEGIN
+         SELECT @n_continue = 3, @n_Err = 61923 --61309
+         SELECT @c_ErrMsg='NSQL'+CONVERT(char(5),@n_Err)+': Lot Table Did Not Return Expected Unique Row In Response To Query. (nspItrnAddWithdrawalCheck)'
+         SELECT @c_ErrMsg='NSQL'+CONVERT(char(5),@n_Err)+': Lot Table ' + ISNULL(RTRIM(@c_lot),'') + ' Did Not Return Expected Unique Row In Response To Query. (nspItrnAddWithdrawalCheck)'  --INC1362763
+     END
+ END
+ --(SSA02) end--
  IF @n_continue = 1 or @n_continue = 2
  BEGIN
      IF EXISTS(SELECT 1 FROM ID (NOLOCK) WHERE ID = @c_toid and STATUS <> 'OK')

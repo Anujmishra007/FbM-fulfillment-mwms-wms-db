@@ -74,6 +74,8 @@ GO
 /* 26-Sep-2025  TLTING02  UWP-41813 skip blank ID update                  */
 /* 10-Oct-2025  SSA02     UWP-42248 -Enhanced session management          */
 /* 21-Oct-2025  Michael   1.3 FCR-8378-StrCfg SerialNoUpdateLotLocID(ML01)*/
+/* 05-Nov-2025  SSA03     2.2 UWP-43625- updated sequence of update       */
+/*                            channelInv table to avoid deadlock          */
 /**************************************************************************/
 
 CREATE OR ALTER PROCEDURE [dbo].[nspItrnAddMoveCheck]
@@ -1536,179 +1538,6 @@ BEGIN
 END
 /* End Remove allocations if any */
 
-   --NJOW05 S
-   IF (@n_continue = 1 or @n_continue = 2) AND ISNULL(@c_Channel, '') <> '' 
-   BEGIN
-      SELECT @c_FromFacility = LOC.Facility         
-      FROM LOC WITH (NOLOCK)
-      WHERE LOC.Loc = @c_FromLoc
-
-      SET @c_ToChannelInventoryMgmt = '0'
-      SET @b_success = 0
-      Execute nspGetRight2 
-         @c_facility
-      ,  @c_StorerKey            -- Storer
-      ,  ''                      -- Sku
-      ,  'ChannelInventoryMgmt'  -- ConfigKey
-      ,  @b_success                    OUTPUT
-      ,  @c_ToChannelInventoryMgmt     OUTPUT
-      ,  @n_err                        OUTPUT
-      ,  @c_ErrMsg                     OUTPUT
-
-      IF @b_success <> 1
-      BEGIN
-         SET @n_continue = 3
-         SET @n_err = 62073
-         SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(5), @n_Err) + ': Error Executing nspGetRight. (nspItrnAddMoveCheck) ' + ISNULL(RTRIM(@c_ErrMsg),'')
-      END
-      
-      IF @n_continue = 1 or @n_continue = 2   
-      BEGIN      
-         IF @c_FromFacility = @c_Facility
-         BEGIN
-            SET @c_FromChannelInventoryMgmt = @c_ToChannelInventoryMgmt
-         END
-         ELSE
-         BEGIN
-            SET @c_FromChannelInventoryMgmt = '0'
-            SET @b_success = 0
-            Execute nspGetRight2 
-               @c_Fromfacility
-            ,  @c_StorerKey            -- Storer
-            ,  ''                      -- Sku
-            ,  'ChannelInventoryMgmt'  -- ConfigKey
-            ,  @b_success                    OUTPUT
-            ,  @c_FromChannelInventoryMgmt   OUTPUT
-            ,  @n_err                        OUTPUT
-            ,  @c_ErrMsg                     OUTPUT
-
-            IF @b_success <> 1
-            BEGIN
-               SET @n_continue = 3
-               SET @n_err = 62074
-               SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(5), @n_Err) + ': Error Executing nspGetRight. (nspItrnAddMoveCheck) ' + ISNULL(RTRIM(@c_ErrMsg),'')
-            END
-         END
-      END   
-
-      IF (@n_continue = 1 or @n_continue = 2)  
-      BEGIN
-         IF @c_FromChannelInventoryMgmt = '1' AND @c_FromFacility <> @c_Facility  
-         BEGIN
-            IF ISNULL(@n_Channel_ID,0) = 0
-            BEGIN
-               SET @n_FromChannel_ID = 0
-               
-               BEGIN TRY
-                  EXEC isp_ChannelGetID
-                      @c_StorerKey  = @c_StorerKey
-                     ,@c_Sku        = @c_SKU
-                     ,@c_Facility   = @c_FromFacility
-                     ,@c_Channel    = @c_Channel
-                     ,@c_LOT        = @c_LOT
-                     ,@n_Channel_ID = @n_FromChannel_ID  OUTPUT
-                     ,@b_Success    = @b_Success         OUTPUT
-                     ,@n_ErrNo      = @n_Err             OUTPUT
-                     ,@c_ErrMsg     = @c_ErrMsg          OUTPUT 
-               
-               END TRY
-               BEGIN CATCH
-                     SET @n_err = ERROR_NUMBER()
-                     SET @c_ErrMsg = ERROR_MESSAGE()
-                            
-                     SET @n_continue = 3
-                     SET @c_ErrMsg = RTRIM(@c_ErrMsg) + '. (nspItrnAddMoveCheck)' 
-               END CATCH                                          
-            END 
-
-            IF (@n_continue = 1 or @n_continue = 2) AND @n_FromChannel_ID > 0
-            BEGIN
-               IF EXISTS(  SELECT 1 FROM ChannelInv AS ci WITH(NOLOCK)
-                           WHERE ci.Channel_ID = @n_FromChannel_ID 
-                           AND (ci.Qty - ci.QtyAllocated - ci.QtyOnHold - @n_Qty) < 0)
-               BEGIN
-                  SET @n_continue = 3
-                  SET @n_err = 62077 
-                  SET @c_ErrMsg='NSQL'+CONVERT(char(5),@n_err)
-                                 +'Channel Qty available less than Qty to move over facility. (nspItrnAddMoveCheck)'
-               END
-
-               IF (@n_continue = 1 or @n_continue = 2) 
-               BEGIN
-                  UPDATE ChannelInv WITH (ROWLOCK)
-                     SET Qty      = Qty - @n_Qty
-                        ,EditDate = dbo.fnc_GetDate()   --(SSA02)
-                        ,EditWho  = dbo.fnc_GetUserName()          --(SSA02)
-                  WHERE Channel_ID = @n_FromChannel_ID 
-
-                  SET @n_err = @@ERROR
-                  SET @n_cnt = @@ROWCOUNT
-                  IF @n_err <> 0
-                  BEGIN
-                     SET @n_continue = 3
-                     SET @n_err = 62078
-                     SET @c_ErrMsg='NSQL'+CONVERT(char(5),@n_err)
-                     +': Update Failed on Table ChannelInv. (nspItrnAddMoveCheck)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_ErrMsg),'') + ' ) '
-                  END  
-               END
-            END
-         END             
-         
-         IF @c_ToChannelInventoryMgmt = '1' AND @c_FromFacility <> @c_Facility
-         BEGIN
-            IF ISNULL(@n_Channel_ID,0) = 0
-            BEGIN
-               SET @n_ToChannel_ID = 0
-            
-               BEGIN TRY
-                  EXEC isp_ChannelGetID 
-                      @c_StorerKey  = @c_StorerKey
-                     ,@c_Sku        = @c_SKU
-                     ,@c_Facility   = @c_Facility
-                     ,@c_Channel    = @c_Channel
-                     ,@c_LOT        = @c_LOT
-                     ,@n_Channel_ID = @n_ToChannel_ID OUTPUT
-                     ,@b_Success    = @b_Success      OUTPUT
-                     ,@n_ErrNo      = @n_Err          OUTPUT
-                     ,@c_ErrMsg     = @c_ErrMsg       OUTPUT                        
-               END TRY
-               BEGIN CATCH
-                     SET @n_err = ERROR_NUMBER()
-                     SET @c_ErrMsg = ERROR_MESSAGE()
-                         
-                     SET @n_continue = 3
-                     SET @c_ErrMsg = RTRIM(@c_ErrMsg) + '. (nspItrnAddMoveCheck)' 
-               END CATCH                                          
-            END 
-
-            IF (@n_continue = 1 or @n_continue = 2) AND @n_ToChannel_ID > 0
-            BEGIN
-               UPDATE ChannelInv WITH (ROWLOCK)
-               SET Qty      = Qty + @n_Qty
-                  ,EditDate = dbo.fnc_GetDate()   --(SSA02)
-                  ,EditWho  = dbo.fnc_GetUserName()          --(SSA02)
-               WHERE Channel_ID = @n_ToChannel_ID 
-               
-               SET @n_err = @@ERROR
-               SET @n_cnt = @@ROWCOUNT
-               IF @n_err <> 0
-               BEGIN
-                  SET @n_continue = 3
-                  SET @n_err = 62081 
-                  SET @c_ErrMsg='NSQL'+CONVERT(char(5),@n_err)
-                  +': Update Failed on Table ChannelInv. (nspItrnAddMoveCheck)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_ErrMsg),'') + ' ) '
-               END                           
-               
-               IF @n_continue = 1 OR @n_continue = 2
-               BEGIN
-                  SET @n_Channel_ID = @n_ToChannel_ID
-               END
-            END   
-         END               
-      END        
-   END
-   --NJOW05 E
-
    -- (Wan09) - START: User Channel InventoryHold to Hold Instead
    /*
    -- (Wan08) = START
@@ -2565,6 +2394,178 @@ BEGIN
          END
       END
    END
+    --NJOW05 S --SSA03 -Start
+   IF (@n_continue = 1 or @n_continue = 2) AND ISNULL(@c_Channel, '') <> ''
+   BEGIN
+      SELECT @c_FromFacility = LOC.Facility
+      FROM LOC WITH (NOLOCK)
+      WHERE LOC.Loc = @c_FromLoc
+
+      SET @c_ToChannelInventoryMgmt = '0'
+      SET @b_success = 0
+      Execute nspGetRight2
+         @c_facility
+      ,  @c_StorerKey            -- Storer
+      ,  ''                      -- Sku
+      ,  'ChannelInventoryMgmt'  -- ConfigKey
+      ,  @b_success                    OUTPUT
+      ,  @c_ToChannelInventoryMgmt     OUTPUT
+      ,  @n_err                        OUTPUT
+      ,  @c_ErrMsg                     OUTPUT
+
+      IF @b_success <> 1
+      BEGIN
+         SET @n_continue = 3
+         SET @n_err = 62073
+         SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(5), @n_Err) + ': Error Executing nspGetRight. (nspItrnAddMoveCheck) ' + ISNULL(RTRIM(@c_ErrMsg),'')
+      END
+
+      IF @n_continue = 1 or @n_continue = 2
+      BEGIN
+         IF @c_FromFacility = @c_Facility
+         BEGIN
+            SET @c_FromChannelInventoryMgmt = @c_ToChannelInventoryMgmt
+         END
+         ELSE
+         BEGIN
+            SET @c_FromChannelInventoryMgmt = '0'
+            SET @b_success = 0
+            Execute nspGetRight2
+               @c_Fromfacility
+            ,  @c_StorerKey            -- Storer
+            ,  ''                      -- Sku
+            ,  'ChannelInventoryMgmt'  -- ConfigKey
+            ,  @b_success                    OUTPUT
+            ,  @c_FromChannelInventoryMgmt   OUTPUT
+            ,  @n_err                        OUTPUT
+            ,  @c_ErrMsg                     OUTPUT
+
+            IF @b_success <> 1
+            BEGIN
+               SET @n_continue = 3
+               SET @n_err = 62074
+               SET @c_ErrMsg = 'NSQL' + CONVERT(CHAR(5), @n_Err) + ': Error Executing nspGetRight. (nspItrnAddMoveCheck) ' + ISNULL(RTRIM(@c_ErrMsg),'')
+            END
+         END
+      END
+
+      IF (@n_continue = 1 or @n_continue = 2)
+      BEGIN
+         IF @c_FromChannelInventoryMgmt = '1' AND @c_FromFacility <> @c_Facility
+         BEGIN
+            IF ISNULL(@n_Channel_ID,0) = 0
+            BEGIN
+               SET @n_FromChannel_ID = 0
+
+               BEGIN TRY
+                  EXEC isp_ChannelGetID
+                      @c_StorerKey  = @c_StorerKey
+                     ,@c_Sku        = @c_SKU
+                     ,@c_Facility   = @c_FromFacility
+                     ,@c_Channel    = @c_Channel
+                     ,@c_LOT        = @c_LOT
+                     ,@n_Channel_ID = @n_FromChannel_ID  OUTPUT
+                     ,@b_Success    = @b_Success         OUTPUT
+                     ,@n_ErrNo      = @n_Err             OUTPUT
+                     ,@c_ErrMsg     = @c_ErrMsg          OUTPUT
+
+               END TRY
+               BEGIN CATCH
+                     SET @n_err = ERROR_NUMBER()
+                     SET @c_ErrMsg = ERROR_MESSAGE()
+
+                     SET @n_continue = 3
+                     SET @c_ErrMsg = RTRIM(@c_ErrMsg) + '. (nspItrnAddMoveCheck)'
+               END CATCH
+            END
+
+            IF (@n_continue = 1 or @n_continue = 2) AND @n_FromChannel_ID > 0
+            BEGIN
+               IF EXISTS(  SELECT 1 FROM ChannelInv AS ci WITH(NOLOCK)
+                           WHERE ci.Channel_ID = @n_FromChannel_ID
+                           AND (ci.Qty - ci.QtyAllocated - ci.QtyOnHold - @n_Qty) < 0)
+               BEGIN
+                  SET @n_continue = 3
+                  SET @n_err = 62077
+                  SET @c_ErrMsg='NSQL'+CONVERT(char(5),@n_err)
+                                 +'Channel Qty available less than Qty to move over facility. (nspItrnAddMoveCheck)'
+               END
+
+               IF (@n_continue = 1 or @n_continue = 2)
+               BEGIN
+                  UPDATE ChannelInv WITH (ROWLOCK)
+                     SET Qty      = Qty - @n_Qty
+                        ,EditDate = dbo.fnc_GetDate()   --(SSA02)
+                        ,EditWho  = dbo.fnc_GetUserName()          --(SSA02)
+                  WHERE Channel_ID = @n_FromChannel_ID
+
+                  SET @n_err = @@ERROR
+                  SET @n_cnt = @@ROWCOUNT
+                  IF @n_err <> 0
+                  BEGIN
+                     SET @n_continue = 3
+                     SET @n_err = 62078
+                     SET @c_ErrMsg='NSQL'+CONVERT(char(5),@n_err)
+                     +': Update Failed on Table ChannelInv. (nspItrnAddMoveCheck)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_ErrMsg),'') + ' ) '
+                  END
+               END
+            END
+         END
+
+         IF @c_ToChannelInventoryMgmt = '1' AND @c_FromFacility <> @c_Facility
+         BEGIN
+            IF ISNULL(@n_Channel_ID,0) = 0
+            BEGIN
+               SET @n_ToChannel_ID = 0
+
+               BEGIN TRY
+                  EXEC isp_ChannelGetID
+                      @c_StorerKey  = @c_StorerKey
+                     ,@c_Sku        = @c_SKU
+                     ,@c_Facility   = @c_Facility
+                     ,@c_Channel    = @c_Channel
+                     ,@c_LOT        = @c_LOT
+                     ,@n_Channel_ID = @n_ToChannel_ID OUTPUT
+                     ,@b_Success    = @b_Success      OUTPUT
+                     ,@n_ErrNo      = @n_Err          OUTPUT
+                     ,@c_ErrMsg     = @c_ErrMsg       OUTPUT
+               END TRY
+               BEGIN CATCH
+                     SET @n_err = ERROR_NUMBER()
+                     SET @c_ErrMsg = ERROR_MESSAGE()
+
+                     SET @n_continue = 3
+                     SET @c_ErrMsg = RTRIM(@c_ErrMsg) + '. (nspItrnAddMoveCheck)'
+               END CATCH
+            END
+
+            IF (@n_continue = 1 or @n_continue = 2) AND @n_ToChannel_ID > 0
+            BEGIN
+               UPDATE ChannelInv WITH (ROWLOCK)
+               SET Qty      = Qty + @n_Qty
+                  ,EditDate = dbo.fnc_GetDate()   --(SSA02)
+                  ,EditWho  = dbo.fnc_GetUserName()          --(SSA02)
+               WHERE Channel_ID = @n_ToChannel_ID
+
+               SET @n_err = @@ERROR
+               SET @n_cnt = @@ROWCOUNT
+               IF @n_err <> 0
+               BEGIN
+                  SET @n_continue = 3
+                  SET @n_err = 62081
+                  SET @c_ErrMsg='NSQL'+CONVERT(char(5),@n_err)
+                  +': Update Failed on Table ChannelInv. (nspItrnAddMoveCheck)' + ' ( ' + ' SQLSvr MESSAGE=' + ISNULL(RTRIM(@c_ErrMsg),'') + ' ) '
+               END
+
+               IF @n_continue = 1 OR @n_continue = 2
+               BEGIN
+                  SET @n_Channel_ID = @n_ToChannel_ID
+               END
+            END
+         END
+      END
+   END
+   --NJOW05 E --SSA03 -End
 
    --(Wan11) - Move Sequence in between Lotxlocxid and Pickdetail Update
    /* SWT04 FCR-822 - Merge Pallets with Serial Numbers 

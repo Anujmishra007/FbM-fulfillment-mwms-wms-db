@@ -49,6 +49,8 @@ GO
 /*                            - Transfer by Serial Number               */
 /* 10-Oct-2025  SSA01     2.0 UWP-42248 -Enhanced session management    */
 /* 10-Oct-2025  Michael   2.1 FCR-8380- Add SerialNoUpdateLotLocID(ML01)*/
+/* 05-Nov-2025  SSA02     2.2 UWP-43625- updated sequence of update Lot */
+/*                            table to avoid deadlock                   */
 /************************************************************************/
 CREATE OR ALTER PROC [dbo].[nspItrnAddDepositCheck]
      @c_itrnkey      NVARCHAR(10)
@@ -393,7 +395,7 @@ BEGIN
       
       IF @n_continue = 1 OR @n_continue = 2
       BEGIN
-         DECLARE @n_rcnt int, @n_curcasecnt int, @n_curinnerpack int, @n_curqty int, @c_curstatus NVARCHAR(10),
+         DECLARE @n_LotRcnt int, @n_rcnt int, @n_curcasecnt int, @n_curinnerpack int, @n_curqty int, @c_curstatus NVARCHAR(10),
                  @n_curpallet int, @f_curcube float, @f_curgrosswgt float, @f_curnetwgt float,
                  @f_curotherunit1 float, @f_curotherunit2 float
 
@@ -408,8 +410,8 @@ BEGIN
               , @f_curotherunit2 = otherunit2
          FROM LOT WITH (NOLOCK) WHERE LOT = @c_Lot
 
-         SELECT @n_rcnt = @@ROWCOUNT
-         IF @n_rcnt = 0
+         SELECT @n_LotRcnt = @@ROWCOUNT
+         IF @n_LotRcnt = 0
          BEGIN
             INSERT INTO LOT (LOT,CASECNT,INNERPACK,QTY, PALLET,[CUBE],GROSSWGT,NETWGT,OTHERUNIT1,OTHERUNIT2,STORERKEY,SKU)
             VALUES (@c_Lot,@n_casecnt, @n_innerpack, @n_Qty, @n_pallet, @f_cube, @f_grosswgt, @f_netwgt, @f_otherunit1, @f_otherunit2, @c_storerkey,@c_sku )
@@ -422,41 +424,7 @@ BEGIN
                SELECT @c_ErrMsg='NSQL '+CONVERT(char(5), @n_err) + ': Insert Failed On Table LOT. (nspItrnAddDepositCheck)' + '(' + 'SQLSvr MESSAGE=' + LTRIM(RTRIM(@c_ErrMsg)) + ')'
             END
          END
-
-         IF @n_rcnt = 1 AND (@n_continue = 1 OR @n_continue = 2)
-         BEGIN
-            UPDATE LOT SET CASECNT    = CASECNT + @n_casecnt
-                         , INNERPACK  = INNERPACK + @n_innerpack
-                         , QTY        = QTY + @n_Qty
-                         , PALLET     = PALLET + @n_pallet
-                         , [CUBE]       = [CUBE] + @f_cube
-                         , GROSSWGT   = GROSSWGT + @f_grosswgt
-                         , NETWGT     = NETWGT + @f_netwgt
-                         , OTHERUNIT1 = OTHERUNIT1 + @f_otherunit1
-                         , OTHERUNIT2 = OTHERUNIT2 + @f_otherunit2
-            WHERE LOT = @c_Lot
-
-            SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
-            IF @n_err <> 0
-            BEGIN
-               SELECT @n_continue = 3
-               SELECT @n_err = 61844
-               SELECT @c_ErrMsg='NSQL '+CONVERT(char(5),@n_err) + ': Update Failed On Table LOT. (nspItrnAddDepositCheck)' + '(' + 'SQLSvr MESSAGE=' + LTRIM(RTRIM(@c_ErrMsg)) + ')'
-            END
-            ELSE IF @n_cnt = 0
-            BEGIN
-               SELECT @n_continue = 3
-               SELECT @n_err = 61845
-               SELECT @c_ErrMsg='NSQL '+CONVERT(char(5),@n_err) + ': Update To Table LOT Returned Zero Rows Affected. (nspItrnAddWithdrawlCheck)'
-            END
-         END
-         IF (@n_rcnt <> 1 AND @n_rcnt <> 0) AND (@n_continue = 1 OR @n_continue = 2)
-         BEGIN
-            SELECT @n_continue = 3
-            SELECT @n_err = 61846
-            SELECT @c_ErrMsg='NSQL '+CONVERT(char(5),@n_err) + ': Lot Table Did Not Return Expected Unique Row In Response To Query. (nspItrnAddDepositCheck)'
-         END
-      END
+     END
 
       IF @n_continue = 1 OR @n_continue = 2
       BEGIN
@@ -857,6 +825,44 @@ BEGIN
             SELECT @c_ErrMsg='NSQL '+CONVERT(char(5),@n_err) + ': Update Failed On Table Itrn. (nspItrnAddDepositCheck)' + '(' + 'SQLSvr MESSAGE=' + LTRIM(RTRIM(@c_ErrMsg)) + ')'
          END
       END
+      --(SSA02) Start --
+      IF @n_continue = 1 OR @n_continue = 2
+      BEGIN
+          IF @n_LotRcnt = 1
+             BEGIN
+                UPDATE LOT SET CASECNT    = CASECNT + @n_casecnt
+                             , INNERPACK  = INNERPACK + @n_innerpack
+                             , QTY        = QTY + @n_Qty
+                             , PALLET     = PALLET + @n_pallet
+                             , [CUBE]       = [CUBE] + @f_cube
+                             , GROSSWGT   = GROSSWGT + @f_grosswgt
+                             , NETWGT     = NETWGT + @f_netwgt
+                             , OTHERUNIT1 = OTHERUNIT1 + @f_otherunit1
+                             , OTHERUNIT2 = OTHERUNIT2 + @f_otherunit2
+                WHERE LOT = @c_Lot
+
+                SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
+                IF @n_err <> 0
+                BEGIN
+                   SELECT @n_continue = 3
+                   SELECT @n_err = 61844
+                   SELECT @c_ErrMsg='NSQL '+CONVERT(char(5),@n_err) + ': Update Failed On Table LOT. (nspItrnAddDepositCheck)' + '(' + 'SQLSvr MESSAGE=' + LTRIM(RTRIM(@c_ErrMsg)) + ')'
+                END
+                ELSE IF @n_cnt = 0
+                BEGIN
+                   SELECT @n_continue = 3
+                   SELECT @n_err = 61845
+                   SELECT @c_ErrMsg='NSQL '+CONVERT(char(5),@n_err) + ': Update To Table LOT Returned Zero Rows Affected. (nspItrnAddWithdrawlCheck)'
+                END
+             END
+             IF (@n_LotRcnt <> 1 AND @n_LotRcnt <> 0) AND (@n_continue = 1 OR @n_continue = 2)
+             BEGIN
+                SELECT @n_continue = 3
+                SELECT @n_err = 61846
+                SELECT @c_ErrMsg='NSQL '+CONVERT(char(5),@n_err) + ': Lot Table Did Not Return Expected Unique Row In Response To Query. (nspItrnAddDepositCheck)'
+             END
+      END
+      --(SSA02) End --
       
       IF @n_continue = 1 OR @n_continue = 2
       BEGIN
@@ -885,7 +891,8 @@ BEGIN
             --BEGIN
                --IF EXISTS( SELECT 1 FROM ID WITH (NOLOCK) WHERE Id = @c_toid AND Status <> 'OK')  --(Wan05)
                --           OR EXISTS (SELECT 1 FROM LOC WITH (NOLOCK) WHERE Loc = @c_toloc AND    --(Wan05)
-               IF EXISTS (SELECT 1 FROM LOC WITH (NOLOCK) WHERE Loc = @c_toloc AND                 --(Wan05)
+               IF EXISTS(SELECT 1 FROM ID (NOLOCK) WHERE ID = @c_toid and STATUS <> 'OK')          --(SSA02)
+               OR EXISTS (SELECT 1 FROM LOC WITH (NOLOCK) WHERE Loc = @c_toloc AND                 --(Wan05)
                           (Status <> 'OK' OR Locationflag = 'HOLD' OR Locationflag = 'DAMAGE'))
                BEGIN
                   UPDATE LOT SET Qtyonhold = Qtyonhold + @n_Qty
