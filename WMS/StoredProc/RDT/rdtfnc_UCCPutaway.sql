@@ -126,6 +126,7 @@ DECLARE
    @dLottable13         DATETIME,
    @dLottable14         DATETIME,
    @dLottable15         DATETIME,
+   @cBarcodeUCC         NVARCHAR( 200),
 
    @cInField01 NVARCHAR( 60),  @cOutField01 NVARCHAR( 60),  @cFieldAttr01 NVARCHAR( 1),  
    @cInField02 NVARCHAR( 60),  @cOutField02 NVARCHAR( 60),  @cFieldAttr02 NVARCHAR( 1),  
@@ -161,7 +162,8 @@ SELECT
    @nStep      = Step,  
    @nInputKey  = InputKey,  
    @nMenu      = Menu,  
-   @cLangCode  = Lang_code,  
+   @cLangCode  = Lang_code, 
+   @cBarcodeUCC = V_Barcode, 
   
    @cStorerkey = StorerKey,  
    @cFacility  = Facility,  
@@ -294,7 +296,7 @@ BEGIN
    IF @nInputKey = 1 -- Yes or Send  
    BEGIN  
       -- Screen mapping  
-      SET @cUCCNo = @cInField01  
+      SET @cUCCNo = LEFT(@cBarcodeUCC,20) 
 
       SET @cUCCNo = RTRIM(LTRIM(ISNULL(@cUCCNo,'')))
 
@@ -320,14 +322,41 @@ BEGIN
             IF @nErrNo <> 0
                GOTO Step_1_Fail
       END
+      -- Customize decode    
+      ELSE IF EXISTS( SELECT 1 FROM dbo.sysobjects WHERE name = @cDecodeSP AND type = 'P')    
+      BEGIN    
+         SET @cSQL = 'EXEC rdt.' + RTRIM( @cDecodeSP) +    
+            ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cBarcode,' +    
+            ' @cUCC OUTPUT,' + 
+            ' @nErrNo OUTPUT, @cErrMsg OUTPUT '   
 
+         SET @cSQLParam =    
+            ' @nMobile           INT                  , ' +    
+            ' @nFunc             INT                  , ' +    
+            ' @cLangCode         NVARCHAR( 3)         , ' +    
+            ' @nStep             INT                  , ' +    
+            ' @nInputKey         INT                  , ' +    
+            ' @cFacility         NVARCHAR( 5)         , ' +    
+            ' @cStorerKey        NVARCHAR( 15)        , ' +    
+            ' @cBarcode          NVARCHAR( 200)        , ' +    
+            ' @cUCC              NVARCHAR( 20)  OUTPUT, ' +
+            ' @nErrNo            INT            OUTPUT, ' +    
+            ' @cErrMsg           NVARCHAR( 20)  OUTPUT'    
+   
+         EXEC sp_ExecuteSQL @cSQL, @cSQLParam,    
+            @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerkey, @cBarcodeUCC,
+            @cUCCNo OUTPUT, @nErrNo OUTPUT, @cErrMsg OUTPUT    
+
+         IF @nErrNo <> 0
+            GOTO Quit
+      END
       IF NOT EXISTS (SELECT 1 FROM dbo.UCC WITH (NOLOCK)  
                      WHERE StorerKey = @cStorerKey  
                      AND   UCCNo = @cUCCNo  
                      AND   Status = '1')  
       BEGIN  
          SET @nErrNo = 50012  
-         SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- 'INVALID UCC'  
+         SET @cErrMsg = @cUCCNo
          GOTO Step_1_Fail  
       END  
   
@@ -557,7 +586,7 @@ BEGIN
             END  
          END  
       END  
-  
+    
       SET @cOutField01 = @cUCCNo  
       SET @cOutField02 = @cFromLOC  
       SET @cOutField03 = @cSuggestedLOC  
@@ -586,10 +615,12 @@ BEGIN
       SET @nScn  = @nMenu  
       SET @nStep = 0  
    END  
+   SET @cBarcodeUCC = ''
    GOTO Quit  
   
    Step_1_Fail:  
    BEGIN  
+      SET @cBarcodeUCC = ''
       SET @cOutField01 = ''  
       SET @cUCCNo = ''  
    END  
@@ -1270,7 +1301,8 @@ BEGIN
       V_ID        = @cID,  
       V_SKU       = @cSKU,  
       V_LOT       = @cLOT,  
-      V_QTY       = @nUCCQTY,  
+      V_QTY       = @nUCCQTY, 
+      V_Barcode   = @cBarcodeUCC, 
   
       V_String1   = @cSuggestedLOC,  
       V_String2   = @cPAZone,

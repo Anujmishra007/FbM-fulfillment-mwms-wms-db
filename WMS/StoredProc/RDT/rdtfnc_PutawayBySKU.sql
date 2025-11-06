@@ -172,12 +172,12 @@ DECLARE
    @cDefaultSuggestSKU  NVARCHAR( 1),
    @cDecodeSP           NVARCHAR( 20),
    @cBarcode            NVARCHAR( 60),
-   @cBarcodeUCC         NVARCHAR( 60),
+   @cBarcodeUCC         NVARCHAR( 200),
    @cLabelNo            NVARCHAR( 32),
    @cSKUStatus          NVARCHAR( 10), -- (james10)
    @cLOCLookupSP        NVARCHAR( 20),  -- (yeekung02)
    @cMultiSKUBarcode    NVARCHAR(1),  --(yeekung03)
-   @cSKUBarcode         NVARCHAR( 20), -- (james11)
+   @cSKUBarcode         NVARCHAR( 200), -- (james11)
    @cSKUVar             NVARCHAR( 20), -- (yeekung04)
    @cSKUDefault         NVARCHAR( 20), --(yeekung04)
    @cPieceScan          NVARCHAR( 1),
@@ -238,6 +238,7 @@ SELECT
    @cLottable03   = V_Lottable03,
    @dLottable04   = V_Lottable04,
    @cUCC          = V_UCC,
+   @cBarcodeUCC   = V_Barcode,
 
    @cSuggestSKU   = V_String1,
    @cSuggestedLOC = V_String2,
@@ -395,11 +396,10 @@ BEGIN
    BEGIN
       -- Screen mapping
       SET @cID = @cInField01
-      SET @cUCC = @cInField02
+      SET @cUCC = @cBarcodeUCC
       SET @cLOC = @cInField03
       SET @cBarcode = @cInField01
       SET @cLabelNo = @cInField01
-      SET @cBarcodeUCC = @cInField02
 
       -- Check blank
       IF @cID = '' AND @cUCC = ''
@@ -440,7 +440,7 @@ BEGIN
                   ' @cFacility         NVARCHAR( 5)         , ' +
                   ' @cStorerKey        NVARCHAR( 15)        , ' +
                   ' @cBarcode          NVARCHAR( 60)        , ' +
-                  ' @cBarcodeUCC       NVARCHAR( 60)        , ' +
+                  ' @cBarcodeUCC       NVARCHAR( 200)        , ' +
                   ' @cID               NVARCHAR( 18)  OUTPUT, ' +
                   ' @cUCC              NVARCHAR( 20)  OUTPUT, ' +
                   ' @cLOC              NVARCHAR( 10)  OUTPUT, ' +
@@ -532,10 +532,10 @@ BEGIN
          -- Check valid UCC
          IF @@ROWCOUNT = 0
          BEGIN
-           SET @nErrNo = 73853
-            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Invalid UCC
+            SET @nErrNo = 73853
+            SET @cErrMsg = @cUCC
             EXEC rdt.rdtSetFocusField @nMobile, 2 -- UCC
-           SET @cOutField02 = ''
+            SET @cOutField02 = ''
             GOTO Step_1_Fail
          END
       END
@@ -933,7 +933,7 @@ BEGIN
                ' @cFacility         NVARCHAR( 5)         , ' +    
                ' @cStorerKey        NVARCHAR( 15)        , ' +    
                ' @cBarcode          NVARCHAR( 60)        , ' +    
-               ' @cBarcodeUCC       NVARCHAR( 60)        , ' +
+               ' @cBarcodeUCC       NVARCHAR( 200)        , ' +
                ' @cID               NVARCHAR( 18)  OUTPUT, ' +
                ' @cUCC              NVARCHAR( 20)  OUTPUT, ' +
                ' @cLOC              NVARCHAR( 10)  OUTPUT, ' +
@@ -947,7 +947,7 @@ BEGIN
                ' @cErrMsg           NVARCHAR( 20)  OUTPUT'    
     
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,    
-               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorer, @cBarcode, @cBarcodeUCC,   
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorer, @cBarcode, @cSKUBarcode,   
                @cID OUTPUT, @cUCC OUTPUT, @cLOC OUTPUT, @cSKU OUTPUT, @nQTY OUTPUT, 
                @cDecodeLottable01 OUTPUT, @cDecodeLottable02 OUTPUT, @cDecodeLottable03 OUTPUT, @dDecodeLottable04 OUTPUT,
                @nErrNo OUTPUT, @cErrMsg OUTPUT    
@@ -2540,6 +2540,7 @@ BEGIN
       V_Lottable03 = @cLottable03,
       V_Lottable04 = @dLottable04,
       V_UCC        = @cUCC,
+      V_Barcode    = @cBarcodeUCC,
 
       V_String1  = @cSuggestSKU,
       V_String2  = @cSuggestedLOC,
