@@ -654,11 +654,10 @@ DECLARE @cSkipLottable03 NVARCHAR( 1)
 DECLARE @cSkipLottable04 NVARCHAR( 1)
 DECLARE @cAddRCPTValidtn NVARCHAR( 1)
 
-
-SET @cSkipLottable01 = rdt.RDTGetConfig( @nFunc, 'SkipLottable01', @cStorerKey)
-SET @cSkipLottable02 = rdt.RDTGetConfig( @nFunc, 'SkipLottable02', @cStorerKey)
-SET @cSkipLottable03 = rdt.RDTGetConfig( @nFunc, 'SkipLottable03', @cStorerKey)
-SET @cSkipLottable04 = rdt.RDTGetConfig( @nFunc, 'SkipLottable04', @cStorerKey)
+SET @cSkipLottable01 = 0
+SET @cSkipLottable02 = 0
+SET @cSkipLottable03 = 0
+SET @cSkipLottable04 = 0
 
 -- For Fcr-549
 SET @cAddRCPTValidtn = rdt.RDTGetConfig( @nFunc, 'AddRCPTValidtn', @cStorerKey)
