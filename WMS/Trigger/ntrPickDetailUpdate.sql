@@ -107,6 +107,9 @@ GO
 /*                            move is from RDT                          */
 /* 06-Oct-2025  AK01    4.4   UWP-42143 - Replace SUSER_SNAME with      */
 /*                            fnc_GetUserName                           */
+/* 06-Nov-2025  SWT01   4.5   Change Update Table Sequance to align with*/
+/*                            with other Inventory update seq with      */
+/*                            1. SKUxLOC 2.LotxLocxID 3.Lot 4.ChanneInv */
 /************************************************************************/
 
 CREATE OR ALTER TRIGGER [dbo].[ntrPickDetailUpdate]
@@ -901,6 +904,231 @@ BEGIN
    END -- IF UPDATE (Qty) OR UPDATE (OrderKey) OR UPDATE (OrderLineNumber)
 END -- IF @n_continue = 1 or @n_continue = 2
 
+
+--- Process SKUxLOC Table Update
+IF ( @n_continue = 1 or @n_continue = 2 ) AND 
+( UPDATE(STORERKEY) OR UPDATE(SKU) OR UPDATE(LOC) OR UPDATE(STATUS) OR UPDATE(QTY) )
+BEGIN
+   -- tlting01
+  DECLARE @tSKUxLOC Table    (
+      StorerKey    NVARCHAR(15) NOT NULL,
+      SKU          NVARCHAR(20) NOT NULL,
+      LOC          NVARCHAR(10) NOT NULL,
+      QtyAllocated int DEFAULT (0),
+      QtyPicked    int DEFAULT (0),
+      QtyShipped   int DEFAULT (0)
+      PRIMARY KEY CLUSTERED (StorerKey, SKU, LOC)
+      )
+
+   INSERT INTO @tSKUxLOC ( StorerKey, SKU, LOC, QtyAllocated, QtyPicked, QtyShipped )
+   SELECT StorerKey, SKU, LOC,
+          SUM (CASE WHEN Status IN ('0','1','2','3','4') THEN Qty ELSE 0 END) AS QtyAllocated,
+          SUM (CASE WHEN Status IN ('5','6','7','8') THEN Qty ELSE 0 END) AS QtyPicked,
+          SUM (CASE WHEN Status = '9' THEN Qty ELSE 0 END) AS QtyShipped
+   FROM INSERTED
+   GROUP BY StorerKey, SKU, LOC
+
+   UPDATE tSL         SET tSL.QtyAllocated = tSL.QtyAllocated + DEL_PD.QtyAllocated,
+          tSL.QtyPicked    = tSL.QtyPicked + DEL_PD.QtyPicked ,
+          tSL.QtyShipped   = tSL.QtyShipped + DEL_PD.QtyShipped
+   FROM  @tSKUxLOC tSL
+   JOIN (SELECT StorerKey, SKU, LOC,
+          SUM (CASE WHEN Status IN ('0','1','2','3','4') THEN Qty * -1 ELSE 0 END) AS QtyAllocated,
+          SUM (CASE WHEN Status IN ('5','6','7','8') THEN Qty * -1 ELSE 0 END) AS QtyPicked,
+          SUM (CASE WHEN Status = '9' THEN Qty * -1 ELSE 0 END) AS QtyShipped
+         FROM DELETED
+         GROUP BY StorerKey, SKU, LOC) AS DEL_PD ON DEL_PD.StorerKey = tSL.StorerKey AND
+                                          DEL_PD.SKU = tSL.SKU AND
+                                          DEL_PD.LOC = tSL.LOC
+
+   INSERT INTO @tSKUxLOC  ( StorerKey, SKU, LOC, QtyAllocated, QtyPicked, QtyShipped )
+   SELECT DELETED.StorerKey, DELETED.SKU, DELETED.LOC,
+          SUM (CASE WHEN DELETED.Status IN ('0','1','2','3','4') THEN DELETED.Qty * -1 ELSE 0 END) AS QtyAllocated,
+          SUM (CASE WHEN DELETED.Status IN ('5','6','7','8') THEN DELETED.Qty * -1 ELSE 0 END) AS QtyPicked,
+          SUM (CASE WHEN DELETED.Status = '9' THEN DELETED.Qty * -1 ELSE 0 END) AS QtyShipped
+   FROM DELETED
+   LEFT OUTER JOIN @tSKUxLOC tSL ON tSL.StorerKey = DELETED.StorerKey AND tSL.SKU = DELETED.SKU
+                                AND tSL.LOC =  DELETED.LOC
+   WHERE tSL.SKU IS NULL
+   GROUP BY DELETED.StorerKey, DELETED.SKU, DELETED.LOC
+
+   UPDATE SKUxLOC  
+   SET  QtyAllocated = (SKUxLOC.QtyAllocated + tSL.QtyAllocated),
+        QtyPicked    = (SKUxLOC.QtyPicked + tSL.QtyPicked),
+        QtyExpected  = CASE WHEN SKUxLOC.QtyAllocated + SKUxLOC.QtyPicked +
+                                 tSL.QtyAllocated + tSL.QtyPicked > (SKUxLOC.Qty - QtyShipped)
+                            THEN ( SKUxLOC.QtyAllocated + SKUxLOC.QtyPicked +
+                                   tSL.QtyAllocated + tSL.QtyPicked ) - (SKUxLOC.Qty - QtyShipped)
+                            ELSE 0
+                       END,
+   /*     QtyExpected  = CASE WHEN @c_AllowOverAllocations <> '1' THEN 0
+                            WHEN SKUxLOC.QtyAllocated + SKUxLOC.QtyPicked +
+                                 tSL.QtyAllocated + tSL.QtyPicked > SKUxLOC.Qty
+                            THEN ( SKUxLOC.QtyAllocated + SKUxLOC.QtyPicked +
+                                   tSL.QtyAllocated + tSL.QtyPicked ) - SKUxLOC.Qty
+                            ELSE 0
+                       END
+         ,
+         Qty    = (SKUxLOC.Qty - tSL.QtyShipped)
+         */
+         EditDate = dbo.fnc_GetDate(),   --tlting
+         EditWho = dbo.fnc_GetUserName()
+   FROM SKUxLOC
+   JOIN @tSKUxLOC tSL ON tSL.StorerKey = SKUxLOC.StorerKey AND
+                     tSL.SKU = SKUxLOC.SKU AND
+                     tSL.LOC = SKUxLOC.LOC
+   SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
+   IF @n_err <> 0
+   BEGIN
+     SELECT @n_continue = 3
+     SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 61618
+     SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update trigger On SKUxLOC Failed. (ntrPickDetailUpdate)' + ' ( ' + ' SQLSvr MESSAGE=' + LTRIM(RTRIM(@c_errmsg)) + ' ) '
+     GOTO QUIT
+   END
+END -- IF UPDATE...
+
+---- Process LOTxLOCxID Table Update
+IF ( @n_continue = 1 or @n_continue = 2 ) AND 
+( UPDATE(STORERKEY) OR UPDATE(SKU) OR UPDATE(LOT) OR UPDATE(LOC) OR UPDATE(ID) OR UPDATE(STATUS) OR UPDATE(QTY) )
+BEGIN
+   -- tlting01
+   DECLARE @tLOTxLOCxID     TABLE  (
+      LOT          NVARCHAR(10) NOT NULL,
+      LOC          NVARCHAR(10) NOT NULL,
+      ID           NVARCHAR(18) NOT NULL,
+      QtyAllocated int DEFAULT (0),
+      QtyPicked    int DEFAULT (0),
+      QtyShipped   int DEFAULT (0)
+      PRIMARY KEY CLUSTERED (LOT, LOC, ID)
+      )
+   INSERT INTO @tLOTxLOCxID  ( LOT, LOC, ID, QtyAllocated, QtyPicked, QtyShipped )
+   SELECT LOT, LOC, ID,
+          SUM (CASE WHEN Status IN ('0','1','2','3','4') THEN Qty ELSE 0 END) AS QtyAllocated,
+          SUM (CASE WHEN Status IN ('5','6','7','8') THEN Qty ELSE 0 END) AS QtyPicked,
+          SUM (CASE WHEN Status = '9' THEN Qty ELSE 0 END) AS QtyShipped
+   FROM INSERTED
+   GROUP BY LOT, LOC, ID
+
+   UPDATE tLLI
+      SET tLLI.QtyAllocated = tLLI.QtyAllocated + DEL_PD.QtyAllocated,
+          tLLI.QtyPicked    = tLLI.QtyPicked + DEL_PD.QtyPicked,
+          tLLI.QtyShipped   = tLLI.QtyShipped + DEL_PD.QtyShipped
+   FROM  @tLOTxLOCxID tLLI
+   JOIN (SELECT LOT, LOC, ID,
+          SUM (CASE WHEN Status IN ('0','1','2','3','4') THEN Qty * -1 ELSE 0 END) AS QtyAllocated,
+          SUM (CASE WHEN Status IN ('5','6','7','8') THEN Qty * -1 ELSE 0 END) AS QtyPicked,
+          SUM (CASE WHEN Status = '9' THEN Qty * -1 ELSE 0 END) AS QtyShipped
+         FROM DELETED
+         GROUP BY LOT, LOC, ID) AS DEL_PD ON DEL_PD.LOT = tLLI.LOT AND DEL_PD.LOC = tLLI.LOC
+                               AND DEL_PD.ID = tLLI.ID
+
+   INSERT INTO @tLOTxLOCxID  ( LOT, LOC, ID, QtyAllocated, QtyPicked, QtyShipped )
+   SELECT DELETED.LOT, DELETED.LOC, DELETED.ID,
+          SUM (CASE WHEN DELETED.Status IN ('0','1','2','3','4') THEN DELETED.Qty * -1 ELSE 0 END) AS QtyAllocated,
+          SUM (CASE WHEN DELETED.Status IN ('5','6','7','8') THEN DELETED.Qty * -1 ELSE 0 END) AS QtyPicked,
+          SUM (CASE WHEN DELETED.Status = '9' THEN DELETED.Qty * -1 ELSE 0 END) AS QtyShipped
+   FROM DELETED
+   LEFT OUTER JOIN @tLOTxLOCxID LLI ON LLI.LOT = DELETED.LOT AND LLI.LOC = DELETED.LOC AND LLI.ID = DELETED.ID
+   WHERE LLI.LOT IS NULL
+   GROUP BY DELETED.LOT, DELETED.LOC, DELETED.ID
+
+   UPDATE LOTxLOCxID  
+   SET  QtyAllocated = (LOTxLOCxID.QtyAllocated + tLLI.QtyAllocated),
+        QtyPicked    = (LOTxLOCxID.QtyPicked + tLLI.QtyPicked),
+        QtyExpected  = CASE WHEN SL.LocationType NOT IN ('CASE','PICK') AND               -- (SHONG01)
+                                 LOC.LocationType NOT IN ('DYNPICKP', 'DYNPICKR','DYNPPICK') THEN 0  -- (TLTING01) (NJOW01)
+                            WHEN (( LOTxLOCxID.QtyAllocated +  tLLI.QtyAllocated) +
+                                  ( LOTxLOCxID.QtyPicked  + tLLI.QtyPicked )) > (LOTxLOCxID.Qty - tLLI.QtyShipped)
+                            THEN (( LOTxLOCxID.QtyAllocated +  tLLI.QtyAllocated) +
+                                  ( LOTxLOCxID.QtyPicked  + tLLI.QtyPicked ))  - (LOTxLOCxID.Qty - tLLI.QtyShipped)
+                            ELSE 0
+                       END,
+        /*
+        Qty = (LOTxLOCxID.Qty - tLLI.QtyShipped)
+        */
+         EditDate = dbo.fnc_GetDate(),   --tlting
+         EditWho = dbo.fnc_GetUserName()
+   FROM LOTxLOCxID
+   JOIN @tLOTxLOCxID tLLI ON tLLI.LOT = LOTxLOCxID.LOT AND
+                             tLLI.LOC = LOTxLOCxID.LOC AND
+                             tLLI.ID = LOTxLOCxID.ID
+   JOIN SKUxLOC SL WITH (NOLOCK) ON SL.StorerKey = LOTxLOCxID.StorerKey
+                  AND SL.SKU = LOTxLOCxID.SKU
+                  AND SL.LOC = LOTxLOCxID.LOC
+   JOIN LOC LOC WITH (NOLOCK) ON LOC.LOC = LOTxLOCxID.LOC
+   SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
+   IF @n_err <> 0
+   BEGIN
+     SELECT @n_continue = 3
+     SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 61617
+     SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update trigger On LOTxLOCxID Failed. (ntrPickDetailUpdate)' + ' ( ' + ' SQLSvr MESSAGE=' + LTRIM(RTRIM(@c_errmsg)) + ' ) '
+     GOTO QUIT
+   END
+END -- IF UPDATE LOTXLOCXID
+
+---- Process LOT Table Update
+IF ( @n_continue = 1 or @n_continue = 2 ) AND 
+   ( UPDATE(STORERKEY) OR UPDATE(SKU) OR UPDATE(LOT) OR UPDATE(STATUS) OR UPDATE(QTY) )
+BEGIN
+   -- tlting01
+
+   Declare @tLOT TABLE   (
+      LOT          NVARCHAR(10) NOT NULL,
+      QtyAllocated int,
+      QtyPicked    int,
+      QtyShipped   int
+      PRIMARY KEY CLUSTERED (LOT)
+      )
+
+   INSERT INTO @tLOT  ( LOT, QtyAllocated, QtyPicked, QtyShipped )
+   SELECT LOT,
+          SUM (CASE WHEN Status IN ('0','1','2','3','4') THEN Qty ELSE 0 END) AS QtyAllocated,
+          SUM (CASE WHEN Status IN ('5','6','7','8') THEN Qty ELSE 0 END) AS QtyPicked,
+          SUM (CASE WHEN Status = '9' THEN Qty ELSE 0 END) AS QtyShipped
+   FROM INSERTED
+   GROUP BY LOT
+
+   UPDATE tLOT
+      SET QtyAllocated = tLOT.QtyAllocated + DEL_PD.QtyAllocated,
+          QtyPicked    = tLOT.QtyPicked + DEL_PD.QtyPicked,
+          QtyShipped   = tLOT.QtyShipped + DEL_PD.QtyShipped
+   FROM  @tLOT tLOT
+   JOIN (SELECT LOT,
+          SUM (CASE WHEN Status IN ('0','1','2','3','4') THEN Qty * -1 ELSE 0 END) AS QtyAllocated,
+          SUM (CASE WHEN Status IN ('5','6','7','8') THEN Qty * -1 ELSE 0 END) AS QtyPicked,
+          SUM (CASE WHEN Status = '9' THEN Qty * -1 ELSE 0 END) AS QtyShipped
+         FROM DELETED
+         GROUP BY LOT) AS DEL_PD ON DEL_PD.LOT = tLOT.LOT
+
+   INSERT INTO @tLOT  ( LOT, QtyAllocated, QtyPicked, QtyShipped )
+   SELECT DELETED.LOT,
+          SUM (CASE WHEN DELETED.Status IN ('0','1','2','3','4') THEN DELETED.Qty * -1 ELSE 0 END) AS QtyAllocated,
+          SUM (CASE WHEN DELETED.Status IN ('5','6','7','8') THEN DELETED.Qty * -1 ELSE 0 END) AS QtyPicked,
+          SUM (CASE WHEN Status = '9' THEN Qty * -1 ELSE 0 END) AS QtyShipped
+   FROM DELETED
+   LEFT OUTER JOIN @tLOT LOT ON LOT.LOT = DELETED.LOT
+   WHERE LOT.LOT IS NULL
+   GROUP BY DELETED.LOT
+
+
+   UPDATE LOT  
+   SET  Lot.QtyAllocated = (Lot.QtyAllocated + tL.QtyAllocated),
+        Lot.QtyPicked    = (Lot.QtyPicked + tL.QtyPicked),
+        -- LOT.Qty = (LOT.Qty - tl.QtyShipped)
+        EditDate = dbo.fnc_GetDate(),   --tlting
+        EditWho = dbo.fnc_GetUserName()
+   FROM LOT
+   JOIN @tLOT tL ON tL.LOT = LOT.LOT
+   SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
+   IF @n_err <> 0
+   BEGIN
+     SELECT @n_continue = 3
+     SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 61616
+     SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update trigger On LOT Failed. (ntrPickDetailUpdate)' + ' ( ' + ' SQLSvr MESSAGE=' + LTRIM(RTRIM(@c_errmsg)) + ' ) '
+     GOTO QUIT
+   END
+END -- IF UPDATE LOT
+
 -- SWT02 Channel Management 
 IF @n_Continue = 1 OR @n_Continue = 2
 BEGIN
@@ -1041,230 +1269,6 @@ BEGIN
       END -- NOT UPDATE(LOT) AND ( UPDATE(STATUS) OR UPDATE(Qty) )         
    END   
 END 
-
----- Process LOT Table Update
-IF ( @n_continue = 1 or @n_continue = 2 ) AND 
-   ( UPDATE(STORERKEY) OR UPDATE(SKU) OR UPDATE(LOT) OR UPDATE(STATUS) OR UPDATE(QTY) )
-BEGIN
-   -- tlting01
-
-   Declare @tLOT TABLE   (
-      LOT          NVARCHAR(10) NOT NULL,
-      QtyAllocated int,
-      QtyPicked    int,
-      QtyShipped   int
-      PRIMARY KEY CLUSTERED (LOT)
-      )
-
-   INSERT INTO @tLOT  ( LOT, QtyAllocated, QtyPicked, QtyShipped )
-   SELECT LOT,
-          SUM (CASE WHEN Status IN ('0','1','2','3','4') THEN Qty ELSE 0 END) AS QtyAllocated,
-          SUM (CASE WHEN Status IN ('5','6','7','8') THEN Qty ELSE 0 END) AS QtyPicked,
-          SUM (CASE WHEN Status = '9' THEN Qty ELSE 0 END) AS QtyShipped
-   FROM INSERTED
-   GROUP BY LOT
-
-   UPDATE tLOT
-      SET QtyAllocated = tLOT.QtyAllocated + DEL_PD.QtyAllocated,
-          QtyPicked    = tLOT.QtyPicked + DEL_PD.QtyPicked,
-          QtyShipped   = tLOT.QtyShipped + DEL_PD.QtyShipped
-   FROM  @tLOT tLOT
-   JOIN (SELECT LOT,
-          SUM (CASE WHEN Status IN ('0','1','2','3','4') THEN Qty * -1 ELSE 0 END) AS QtyAllocated,
-          SUM (CASE WHEN Status IN ('5','6','7','8') THEN Qty * -1 ELSE 0 END) AS QtyPicked,
-          SUM (CASE WHEN Status = '9' THEN Qty * -1 ELSE 0 END) AS QtyShipped
-         FROM DELETED
-         GROUP BY LOT) AS DEL_PD ON DEL_PD.LOT = tLOT.LOT
-
-   INSERT INTO @tLOT  ( LOT, QtyAllocated, QtyPicked, QtyShipped )
-   SELECT DELETED.LOT,
-          SUM (CASE WHEN DELETED.Status IN ('0','1','2','3','4') THEN DELETED.Qty * -1 ELSE 0 END) AS QtyAllocated,
-          SUM (CASE WHEN DELETED.Status IN ('5','6','7','8') THEN DELETED.Qty * -1 ELSE 0 END) AS QtyPicked,
-          SUM (CASE WHEN Status = '9' THEN Qty * -1 ELSE 0 END) AS QtyShipped
-   FROM DELETED
-   LEFT OUTER JOIN @tLOT LOT ON LOT.LOT = DELETED.LOT
-   WHERE LOT.LOT IS NULL
-   GROUP BY DELETED.LOT
-
-
-   UPDATE LOT  
-   SET  Lot.QtyAllocated = (Lot.QtyAllocated + tL.QtyAllocated),
-        Lot.QtyPicked    = (Lot.QtyPicked + tL.QtyPicked),
-        -- LOT.Qty = (LOT.Qty - tl.QtyShipped)
-        EditDate = dbo.fnc_GetDate(),   --tlting
-        EditWho = dbo.fnc_GetUserName()
-   FROM LOT
-   JOIN @tLOT tL ON tL.LOT = LOT.LOT
-   SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
-   IF @n_err <> 0
-   BEGIN
-     SELECT @n_continue = 3
-     SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 61616
-     SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update trigger On LOT Failed. (ntrPickDetailUpdate)' + ' ( ' + ' SQLSvr MESSAGE=' + LTRIM(RTRIM(@c_errmsg)) + ' ) '
-     GOTO QUIT
-   END
-END -- IF UPDATE LOT
-
----- Process LOTxLOCxID Table Update
-IF ( @n_continue = 1 or @n_continue = 2 ) AND 
-( UPDATE(STORERKEY) OR UPDATE(SKU) OR UPDATE(LOT) OR UPDATE(LOC) OR UPDATE(ID) OR UPDATE(STATUS) OR UPDATE(QTY) )
-BEGIN
-   -- tlting01
-   DECLARE @tLOTxLOCxID     TABLE  (
-      LOT          NVARCHAR(10) NOT NULL,
-      LOC          NVARCHAR(10) NOT NULL,
-      ID           NVARCHAR(18) NOT NULL,
-      QtyAllocated int DEFAULT (0),
-      QtyPicked    int DEFAULT (0),
-      QtyShipped   int DEFAULT (0)
-      PRIMARY KEY CLUSTERED (LOT, LOC, ID)
-      )
-   INSERT INTO @tLOTxLOCxID  ( LOT, LOC, ID, QtyAllocated, QtyPicked, QtyShipped )
-   SELECT LOT, LOC, ID,
-          SUM (CASE WHEN Status IN ('0','1','2','3','4') THEN Qty ELSE 0 END) AS QtyAllocated,
-          SUM (CASE WHEN Status IN ('5','6','7','8') THEN Qty ELSE 0 END) AS QtyPicked,
-          SUM (CASE WHEN Status = '9' THEN Qty ELSE 0 END) AS QtyShipped
-   FROM INSERTED
-   GROUP BY LOT, LOC, ID
-
-   UPDATE tLLI
-      SET tLLI.QtyAllocated = tLLI.QtyAllocated + DEL_PD.QtyAllocated,
-          tLLI.QtyPicked    = tLLI.QtyPicked + DEL_PD.QtyPicked,
-          tLLI.QtyShipped   = tLLI.QtyShipped + DEL_PD.QtyShipped
-   FROM  @tLOTxLOCxID tLLI
-   JOIN (SELECT LOT, LOC, ID,
-          SUM (CASE WHEN Status IN ('0','1','2','3','4') THEN Qty * -1 ELSE 0 END) AS QtyAllocated,
-          SUM (CASE WHEN Status IN ('5','6','7','8') THEN Qty * -1 ELSE 0 END) AS QtyPicked,
-          SUM (CASE WHEN Status = '9' THEN Qty * -1 ELSE 0 END) AS QtyShipped
-         FROM DELETED
-         GROUP BY LOT, LOC, ID) AS DEL_PD ON DEL_PD.LOT = tLLI.LOT AND DEL_PD.LOC = tLLI.LOC
-                               AND DEL_PD.ID = tLLI.ID
-
-   INSERT INTO @tLOTxLOCxID  ( LOT, LOC, ID, QtyAllocated, QtyPicked, QtyShipped )
-   SELECT DELETED.LOT, DELETED.LOC, DELETED.ID,
-          SUM (CASE WHEN DELETED.Status IN ('0','1','2','3','4') THEN DELETED.Qty * -1 ELSE 0 END) AS QtyAllocated,
-          SUM (CASE WHEN DELETED.Status IN ('5','6','7','8') THEN DELETED.Qty * -1 ELSE 0 END) AS QtyPicked,
-          SUM (CASE WHEN DELETED.Status = '9' THEN DELETED.Qty * -1 ELSE 0 END) AS QtyShipped
-   FROM DELETED
-   LEFT OUTER JOIN @tLOTxLOCxID LLI ON LLI.LOT = DELETED.LOT AND LLI.LOC = DELETED.LOC AND LLI.ID = DELETED.ID
-   WHERE LLI.LOT IS NULL
-   GROUP BY DELETED.LOT, DELETED.LOC, DELETED.ID
-
-   UPDATE LOTxLOCxID  
-   SET  QtyAllocated = (LOTxLOCxID.QtyAllocated + tLLI.QtyAllocated),
-        QtyPicked    = (LOTxLOCxID.QtyPicked + tLLI.QtyPicked),
-        QtyExpected  = CASE WHEN SL.LocationType NOT IN ('CASE','PICK') AND               -- (SHONG01)
-                                 LOC.LocationType NOT IN ('DYNPICKP', 'DYNPICKR','DYNPPICK') THEN 0  -- (TLTING01) (NJOW01)
-                            WHEN (( LOTxLOCxID.QtyAllocated +  tLLI.QtyAllocated) +
-                                  ( LOTxLOCxID.QtyPicked  + tLLI.QtyPicked )) > (LOTxLOCxID.Qty - tLLI.QtyShipped)
-                            THEN (( LOTxLOCxID.QtyAllocated +  tLLI.QtyAllocated) +
-                                  ( LOTxLOCxID.QtyPicked  + tLLI.QtyPicked ))  - (LOTxLOCxID.Qty - tLLI.QtyShipped)
-                            ELSE 0
-                       END,
-        /*
-        Qty = (LOTxLOCxID.Qty - tLLI.QtyShipped)
-        */
-         EditDate = dbo.fnc_GetDate(),   --tlting
-         EditWho = dbo.fnc_GetUserName()
-   FROM LOTxLOCxID
-   JOIN @tLOTxLOCxID tLLI ON tLLI.LOT = LOTxLOCxID.LOT AND
-                             tLLI.LOC = LOTxLOCxID.LOC AND
-                             tLLI.ID = LOTxLOCxID.ID
-   JOIN SKUxLOC SL WITH (NOLOCK) ON SL.StorerKey = LOTxLOCxID.StorerKey
-                  AND SL.SKU = LOTxLOCxID.SKU
-                  AND SL.LOC = LOTxLOCxID.LOC
-   JOIN LOC LOC WITH (NOLOCK) ON LOC.LOC = LOTxLOCxID.LOC
-   SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
-   IF @n_err <> 0
-   BEGIN
-     SELECT @n_continue = 3
-     SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 61617
-     SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update trigger On LOTxLOCxID Failed. (ntrPickDetailUpdate)' + ' ( ' + ' SQLSvr MESSAGE=' + LTRIM(RTRIM(@c_errmsg)) + ' ) '
-     GOTO QUIT
-   END
-END -- IF UPDATE LOTXLOCXID
-
---- Process SKUxLOC Table Update
-IF ( @n_continue = 1 or @n_continue = 2 ) AND 
-( UPDATE(STORERKEY) OR UPDATE(SKU) OR UPDATE(LOC) OR UPDATE(STATUS) OR UPDATE(QTY) )
-BEGIN
-   -- tlting01
-  DECLARE @tSKUxLOC Table    (
-      StorerKey    NVARCHAR(15) NOT NULL,
-      SKU          NVARCHAR(20) NOT NULL,
-      LOC          NVARCHAR(10) NOT NULL,
-      QtyAllocated int DEFAULT (0),
-      QtyPicked    int DEFAULT (0),
-      QtyShipped   int DEFAULT (0)
-      PRIMARY KEY CLUSTERED (StorerKey, SKU, LOC)
-      )
-
-   INSERT INTO @tSKUxLOC ( StorerKey, SKU, LOC, QtyAllocated, QtyPicked, QtyShipped )
-   SELECT StorerKey, SKU, LOC,
-          SUM (CASE WHEN Status IN ('0','1','2','3','4') THEN Qty ELSE 0 END) AS QtyAllocated,
-          SUM (CASE WHEN Status IN ('5','6','7','8') THEN Qty ELSE 0 END) AS QtyPicked,
-          SUM (CASE WHEN Status = '9' THEN Qty ELSE 0 END) AS QtyShipped
-   FROM INSERTED
-   GROUP BY StorerKey, SKU, LOC
-
-   UPDATE tSL         SET tSL.QtyAllocated = tSL.QtyAllocated + DEL_PD.QtyAllocated,
-          tSL.QtyPicked    = tSL.QtyPicked + DEL_PD.QtyPicked ,
-          tSL.QtyShipped   = tSL.QtyShipped + DEL_PD.QtyShipped
-   FROM  @tSKUxLOC tSL
-   JOIN (SELECT StorerKey, SKU, LOC,
-          SUM (CASE WHEN Status IN ('0','1','2','3','4') THEN Qty * -1 ELSE 0 END) AS QtyAllocated,
-          SUM (CASE WHEN Status IN ('5','6','7','8') THEN Qty * -1 ELSE 0 END) AS QtyPicked,
-          SUM (CASE WHEN Status = '9' THEN Qty * -1 ELSE 0 END) AS QtyShipped
-         FROM DELETED
-         GROUP BY StorerKey, SKU, LOC) AS DEL_PD ON DEL_PD.StorerKey = tSL.StorerKey AND
-                                          DEL_PD.SKU = tSL.SKU AND
-                                          DEL_PD.LOC = tSL.LOC
-
-   INSERT INTO @tSKUxLOC  ( StorerKey, SKU, LOC, QtyAllocated, QtyPicked, QtyShipped )
-   SELECT DELETED.StorerKey, DELETED.SKU, DELETED.LOC,
-          SUM (CASE WHEN DELETED.Status IN ('0','1','2','3','4') THEN DELETED.Qty * -1 ELSE 0 END) AS QtyAllocated,
-          SUM (CASE WHEN DELETED.Status IN ('5','6','7','8') THEN DELETED.Qty * -1 ELSE 0 END) AS QtyPicked,
-          SUM (CASE WHEN DELETED.Status = '9' THEN DELETED.Qty * -1 ELSE 0 END) AS QtyShipped
-   FROM DELETED
-   LEFT OUTER JOIN @tSKUxLOC tSL ON tSL.StorerKey = DELETED.StorerKey AND tSL.SKU = DELETED.SKU
-                                AND tSL.LOC =  DELETED.LOC
-   WHERE tSL.SKU IS NULL
-   GROUP BY DELETED.StorerKey, DELETED.SKU, DELETED.LOC
-
-   UPDATE SKUxLOC  
-   SET  QtyAllocated = (SKUxLOC.QtyAllocated + tSL.QtyAllocated),
-        QtyPicked    = (SKUxLOC.QtyPicked + tSL.QtyPicked),
-        QtyExpected  = CASE WHEN SKUxLOC.QtyAllocated + SKUxLOC.QtyPicked +
-                                 tSL.QtyAllocated + tSL.QtyPicked > (SKUxLOC.Qty - QtyShipped)
-                            THEN ( SKUxLOC.QtyAllocated + SKUxLOC.QtyPicked +
-                                   tSL.QtyAllocated + tSL.QtyPicked ) - (SKUxLOC.Qty - QtyShipped)
-                            ELSE 0
-                       END,
-   /*     QtyExpected  = CASE WHEN @c_AllowOverAllocations <> '1' THEN 0
-                            WHEN SKUxLOC.QtyAllocated + SKUxLOC.QtyPicked +
-                                 tSL.QtyAllocated + tSL.QtyPicked > SKUxLOC.Qty
-                            THEN ( SKUxLOC.QtyAllocated + SKUxLOC.QtyPicked +
-                                   tSL.QtyAllocated + tSL.QtyPicked ) - SKUxLOC.Qty
-                            ELSE 0
-                       END
-         ,
-         Qty    = (SKUxLOC.Qty - tSL.QtyShipped)
-         */
-         EditDate = dbo.fnc_GetDate(),   --tlting
-         EditWho = dbo.fnc_GetUserName()
-   FROM SKUxLOC
-   JOIN @tSKUxLOC tSL ON tSL.StorerKey = SKUxLOC.StorerKey AND
-                     tSL.SKU = SKUxLOC.SKU AND
-                     tSL.LOC = SKUxLOC.LOC
-   SELECT @n_err = @@ERROR, @n_cnt = @@ROWCOUNT
-   IF @n_err <> 0
-   BEGIN
-     SELECT @n_continue = 3
-     SELECT @c_errmsg = CONVERT(CHAR(250),@n_err), @n_err = 61618
-     SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update trigger On SKUxLOC Failed. (ntrPickDetailUpdate)' + ' ( ' + ' SQLSvr MESSAGE=' + LTRIM(RTRIM(@c_errmsg)) + ' ) '
-     GOTO QUIT
-   END
-END -- IF UPDATE...
 
 --- Proccess OrderDetail Update
 IF ( @n_continue = 1 or @n_continue = 2 ) AND 
@@ -1570,7 +1574,7 @@ BEGIN
             
             SELECT @c_uChannel = ci.Channel 
             FROM ChannelInv AS ci WITH(NOLOCK)
-     WHERE ci.Channel_ID = @n_uChannel_ID
+            WHERE ci.Channel_ID = @n_uChannel_ID
 
             SELECT @b_success = 0
             EXECUTE nspItrnAddWithdrawal 
