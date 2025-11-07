@@ -155,11 +155,11 @@ AS
          IF @cOption='9'
          BEGIN
             IF NOT EXISTS (SELECT 1 
-                           FROM Booking_Event
+                           FROM Booking_Event (NOLOCK)
                            WHERE bookingno=@cRefNo1
                            AND eventcode='05') AND
                NOT EXISTS (SELECT 1 
-                           FROM Booking_Event
+                           FROM Booking_Event (NOLOCK)
                            WHERE bookingno=@cRefNo1
                            AND eventcode='09')
             BEGIN
