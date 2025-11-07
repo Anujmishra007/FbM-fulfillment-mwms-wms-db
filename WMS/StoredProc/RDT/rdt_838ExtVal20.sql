@@ -10,6 +10,7 @@
 /* 2024-10-24 1.1  TLE109     FCR-990. Packing Serial Number Validation */
 /* 2025-07-05 1.2  Cuize      FCR-5078                                  */
 /* 2025-07-10 1.3  VIBIN01    RITM8036731                               */
+/* 2025-11-07 1.4  Dennis     FCR-8160                                  */
 /************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_838ExtVal20 (
@@ -66,8 +67,8 @@ BEGIN
    SELECT
       @cSerialNo         = V_Max,
       @cUsername        = UserName
- FROM rdt.rdtMobRec WITH (NOLOCK)
- WHERE Mobile = @nMobile
+   FROM rdt.rdtMobRec WITH (NOLOCK)
+   WHERE Mobile = @nMobile
 
    IF @nFunc = 838 -- Pack
    BEGIN
@@ -98,6 +99,13 @@ BEGIN
                BEGIN
                   SET @nErrNo = 100248
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')  --100248Invalid Serial No
+                  GOTO Quit
+               END
+
+               IF EXISTS( SELECT 1 FROM dbo.SerialNo WITH(NOLOCK) WHERE StorerKey = @cStorerkey AND SKU = @cSKU AND SerialNo = @cSerialNo AND [Status] = 'H')
+               BEGIN
+                  SET @nErrNo = 250601
+                  SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')  --250601Serial No on Hold
                   GOTO Quit
                END
 

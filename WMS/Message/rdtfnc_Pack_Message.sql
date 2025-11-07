@@ -1,5 +1,6 @@
 -- rdtfnc_Pack
 execute rdt.rdtDropMsg 100201, 100250
+execute rdt.rdtDropMsg 250601 , 250650
 
 execute rdt.rdtAddMsg 100201, 10, '100201PSNO required ', 'us_english', 838
 execute rdt.rdtAddMsg 100202, 10, '100202Invalid Format', 'us_english', 838
@@ -52,4 +53,6 @@ execute rdt.rdtAddMsg 100248, 10, '100248Invalid SN    ', 'us_english', 838, 0, 
 execute rdt.rdtAddMsg 100249, 10, '100249SN Not Packed ', 'us_english', 838, 0, '100249Serial number cannot Be packed'
 execute rdt.rdtAddMsg 100250, 10, '100250Serial Confirm', 'us_english', 838
 
+
+execute rdt.rdtAddMsg 250601, 10, '250601Serial No on Hold', 'us_english', 838
 SELECT * FROM rdt.rdtmsg (NOLOCK) WHERE Message_ID BETWEEN 100201 and 100250 AND lang_code = 'ENG'
