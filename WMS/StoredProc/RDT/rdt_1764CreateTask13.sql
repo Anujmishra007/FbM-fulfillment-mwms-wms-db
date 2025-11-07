@@ -274,7 +274,7 @@ BEGIN
       IF @cFinalLocType = 'PND' AND @cFinalLocCategory = 'Induction'
       BEGIN
          -- No need to generate ASTMV task, it is anbandoned
-         RETURN
+         GOTO Quit
             
          -- IF @bDebugFlag = 1
          -- BEGIN
