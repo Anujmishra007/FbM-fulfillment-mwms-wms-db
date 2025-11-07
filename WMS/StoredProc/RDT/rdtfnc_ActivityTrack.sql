@@ -1,4 +1,4 @@
-
+   
 SET QUOTED_IDENTIFIER OFF
 GO
 SET ANSI_NULLS OFF
@@ -15,6 +15,7 @@ GO
 /* 2022-03-25   1.0  yeekung    WMS-18920 Created                       */
 /* 2024-05-27   1.1  Cuize      FCR-242                                 */
 /* 2025-06-04   0.0  JACKC      !!!Cutover. Use V0 for development!!!   */
+/* 2025-10-17   1.2  yeekung    FCR-8146 Add FieldAttribute             */
 /************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_ActivityTrack] (
@@ -27,6 +28,7 @@ AS
 SET NOCOUNT ON
 SET QUOTED_IDENTIFIER OFF
 SET ANSI_NULLS OFF
+SET CONCAT_NULL_YIELDS_NULL OFF
 
 -- Misc variables
 DECLARE
@@ -66,8 +68,8 @@ DECLARE
 
    @cMenuOption         NVARCHAR(1),
 
-   @cSQL                NVARCHAR(1000), -- (ChewKP01)
-   @cSQLParam           NVARCHAR(1000), -- (ChewKP01)
+   @cSQL                NVARCHAR(MAX), -- (ChewKP01)
+   @cSQLParam           NVARCHAR(MAX), -- (ChewKP01)
    @cExtendedUpdateSP   NVARCHAR(30),   -- (ChewKP01)
    @cAppointmentNo      NVARCHAR(20),   -- (ChewKP01)
    @cInput01            NVARCHAR(30),   -- (ChewKP01)
@@ -328,9 +330,6 @@ BEGIN
          GOTO Step1_Fail        
       END  
 
-
-
-
       -- Get even to capture           
       SELECT                   
          @cSP           = Long       
@@ -369,7 +368,10 @@ BEGIN
                ' @nMobile, @nFunc, @cLangCode, @nInputKey, @cFacility, @cStorerKey, @cOption,@cRefNo1,@cInput01,@cInput02,@cInput03,@cInput04,@cActivityStatus,' +        
                ' @nStep OUTPUT,@nScn OUTPUT,@cOutField01 OUTPUT,@cOutField02 OUTPUT,@cOutField03 OUTPUT ' +        
                ' ,@cOutField04 OUTPUT ,@cOutField05 OUTPUT,@cOutField06 OUTPUT,@cOutField07 OUTPUT,@cOutField08 OUTPUT' +        
-               ' ,@cOutField09 OUTPUT,@cOutField10 OUTPUT,@cOutField11 OUTPUT,@cExtendedinfo OUTPUT,' +         
+               ' ,@cOutField09 OUTPUT,@cOutField10 OUTPUT,@cOutField11 OUTPUT' +
+               ' ,@cFieldAttr01 OUTPUT,@cFieldAttr02 OUTPUT,@cFieldAttr03 OUTPUT ' +        
+               ' ,@cFieldAttr04 OUTPUT ,@cFieldAttr05 OUTPUT,@cFieldAttr06 OUTPUT,@cFieldAttr07 OUTPUT,@cFieldAttr08 OUTPUT' +        
+               ' ,@cFieldAttr09 OUTPUT,@cFieldAttr10 OUTPUT,@cFieldAttr11 OUTPUT,@cExtendedinfo OUTPUT,' +         
                ' @nErrNo OUTPUT, @cErrMsg OUTPUT '        
             SET @cSQLParam =        
                ' @nMobile       INT,           ' +        
@@ -398,6 +400,17 @@ BEGIN
                ' @cOutField09  NVARCHAR( 20) OUTPUT, ' +         
                ' @cOutField10  NVARCHAR( 20) OUTPUT, ' +  
                ' @cOutField11  NVARCHAR( 20) OUTPUT, ' +  
+               ' @cFieldAttr01 NVARCHAR( 1)  OUTPUT, ' +        
+               ' @cFieldAttr02 NVARCHAR( 1)  OUTPUT, ' + 
+               ' @cFieldAttr03 NVARCHAR( 1)  OUTPUT, ' +        
+               ' @cFieldAttr04 NVARCHAR( 1)  OUTPUT, ' +
+               ' @cFieldAttr05 NVARCHAR( 1)  OUTPUT, ' +        
+               ' @cFieldAttr06 NVARCHAR( 1)  OUTPUT, ' + 
+               ' @cFieldAttr07 NVARCHAR( 1)  OUTPUT, ' +        
+               ' @cFieldAttr08 NVARCHAR( 1)  OUTPUT, ' +    
+               ' @cFieldAttr09 NVARCHAR( 1)  OUTPUT, ' +
+               ' @cFieldAttr10 NVARCHAR( 1)  OUTPUT, ' +
+               ' @cFieldAttr11 NVARCHAR( 1)  OUTPUT, ' +
                ' @cExtendedinfo NVARCHAR(20)  OUTPUT, ' +        
                ' @nErrNo        INT           OUTPUT, ' +        
                ' @cErrMsg       NVARCHAR( 20) OUTPUT  '        
@@ -406,7 +419,10 @@ BEGIN
                 @nMobile, @nFunc, @cLangCode, @nInputKey, @cFacility, @cStorerKey, @cOption,@cRefNo1,@cInput01,@cInput02,@cInput03,@cInput04,@cActivityStatus    
                 ,@nStep OUTPUT,@nScn OUTPUT,@cOutField01 OUTPUT,@cOutField02 OUTPUT,@cOutField03 OUTPUT          
                 ,@cOutField04 OUTPUT ,@cOutField05 OUTPUT,@cOutField06 OUTPUT,@cOutField07 OUTPUT,@cOutField08 OUTPUT         
-                ,@cOutField09 OUTPUT,@cOutField10 OUTPUT,@cOutField11 OUTPUT,@cExtendedinfo OUTPUT,         
+                ,@cOutField09 OUTPUT,@cOutField10 OUTPUT,@cOutField11 OUTPUT
+                ,@cFieldAttr01 OUTPUT,@cFieldAttr02 OUTPUT,@cFieldAttr03 OUTPUT        
+                ,@cFieldAttr04 OUTPUT ,@cFieldAttr05 OUTPUT,@cFieldAttr06 OUTPUT,@cFieldAttr07 OUTPUT,@cFieldAttr08 OUTPUT 
+                ,@cFieldAttr09 OUTPUT,@cFieldAttr10 OUTPUT,@cFieldAttr11 OUTPUT,@cExtendedinfo OUTPUT,  
                 @nErrNo OUTPUT, @cErrMsg OUTPUT             
          END        
         
@@ -471,7 +487,7 @@ BEGIN
       BEGIN
          SET @nErrNo = 185353
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Atleast1InputReq
-         GOTO Step_2_Fail
+         GOTO QUIT
       END
 
       IF @cContainerNo <> ''
@@ -531,7 +547,7 @@ BEGIN
                  @cContainerNo, @cAppointmentNo, @cMenuOption, @cActionType, @cRefNo1, @cDefaultOption, @cDefaultCursor, @cActivityStatus,
                  @nErrNo OUTPUT, @cErrMsg OUTPUT
             IF @nErrNo <> 0
-               GOTO QUIT
+               GOTO Step_2_Fail
          END
       END
 
@@ -544,7 +560,10 @@ BEGIN
                ' @nMobile, @nFunc, @cLangCode, @nInputKey, @cFacility, @cStorerKey, @cOption,@cRefNo1,@cInput01,@cInput02,@cInput03,@cInput04,@cActivityStatus,' +        
                ' @nStep OUTPUT,@nScn OUTPUT,@cOutField01 OUTPUT,@cOutField02 OUTPUT,@cOutField03 OUTPUT ' +        
                ' ,@cOutField04 OUTPUT ,@cOutField05 OUTPUT,@cOutField06 OUTPUT,@cOutField07 OUTPUT,@cOutField08 OUTPUT' +        
-               ' ,@cOutField09 OUTPUT,@cOutField10 OUTPUT,@cOutField11 OUTPUT,@cExtendedinfo OUTPUT,' +         
+               ' ,@cOutField09 OUTPUT,@cOutField10 OUTPUT,@cOutField11 OUTPUT' +
+               ' ,@cFieldAttr01 OUTPUT,@cFieldAttr02 OUTPUT,@cFieldAttr03 OUTPUT ' +        
+               ' ,@cFieldAttr04 OUTPUT ,@cFieldAttr05 OUTPUT,@cFieldAttr06 OUTPUT,@cFieldAttr07 OUTPUT,@cFieldAttr08 OUTPUT' +        
+               ' ,@cFieldAttr09 OUTPUT,@cFieldAttr10 OUTPUT,@cFieldAttr11 OUTPUT,@cExtendedinfo OUTPUT,' +         
                ' @nErrNo OUTPUT, @cErrMsg OUTPUT '        
             SET @cSQLParam =        
                ' @nMobile       INT,           ' +        
@@ -573,6 +592,17 @@ BEGIN
                ' @cOutField09  NVARCHAR( 20) OUTPUT, ' +         
                ' @cOutField10  NVARCHAR( 20) OUTPUT, ' +  
                ' @cOutField11  NVARCHAR( 20) OUTPUT, ' +  
+               ' @cFieldAttr01 NVARCHAR( 1)  OUTPUT, ' +        
+               ' @cFieldAttr02 NVARCHAR( 1)  OUTPUT, ' + 
+               ' @cFieldAttr03 NVARCHAR( 1)  OUTPUT, ' +        
+               ' @cFieldAttr04 NVARCHAR( 1)  OUTPUT, ' +
+               ' @cFieldAttr05 NVARCHAR( 1)  OUTPUT, ' +        
+               ' @cFieldAttr06 NVARCHAR( 1)  OUTPUT, ' + 
+               ' @cFieldAttr07 NVARCHAR( 1)  OUTPUT, ' +        
+               ' @cFieldAttr08 NVARCHAR( 1)  OUTPUT, ' +    
+               ' @cFieldAttr09 NVARCHAR( 1)  OUTPUT, ' +
+               ' @cFieldAttr10 NVARCHAR( 1)  OUTPUT, ' +
+               ' @cFieldAttr11 NVARCHAR( 1)  OUTPUT, ' +
                ' @cExtendedinfo NVARCHAR(20)  OUTPUT, ' +        
                ' @nErrNo        INT           OUTPUT, ' +        
                ' @cErrMsg       NVARCHAR( 20) OUTPUT  '        
@@ -581,15 +611,23 @@ BEGIN
                 @nMobile, @nFunc, @cLangCode, @nInputKey, @cFacility, @cStorerKey, @cOption,@cRefNo1,@cInput01,@cInput02,@cInput03,@cInput04,@cActivityStatus    
                 ,@nStep OUTPUT,@nScn OUTPUT,@cOutField01 OUTPUT,@cOutField02 OUTPUT,@cOutField03 OUTPUT          
                 ,@cOutField04 OUTPUT ,@cOutField05 OUTPUT,@cOutField06 OUTPUT,@cOutField07 OUTPUT,@cOutField08 OUTPUT         
-                ,@cOutField09 OUTPUT,@cOutField10 OUTPUT,@cOutField11 OUTPUT,@cExtendedinfo OUTPUT,         
+                ,@cOutField09 OUTPUT,@cOutField10 OUTPUT,@cOutField11 OUTPUT
+                ,@cFieldAttr01 OUTPUT,@cFieldAttr02 OUTPUT,@cFieldAttr03 OUTPUT        
+                ,@cFieldAttr04 OUTPUT ,@cFieldAttr05 OUTPUT,@cFieldAttr06 OUTPUT,@cFieldAttr07 OUTPUT,@cFieldAttr08 OUTPUT 
+                ,@cFieldAttr09 OUTPUT,@cFieldAttr10 OUTPUT,@cFieldAttr11 OUTPUT,@cExtendedinfo OUTPUT,  
                 @nErrNo OUTPUT, @cErrMsg OUTPUT             
          END        
         
          IF @nErrNo <> 0        
             GOTO Quit        
       
-         SET @cOption = ''      
-      END
+         SET @cOption = '' 
+         SET @cInField04  = ''
+         SET @cInField06  = ''
+         SET @cInField08  = ''
+         SET @cInField10  = ''
+         SET @cInField12  = ''   
+      END 
 
       -- Extended update
       IF @cExtendedUpdateSP <> ''
@@ -683,8 +721,17 @@ BEGIN
    BEGIN
       IF @cOption =''
       BEGIN
+         IF @cFocusStep2 = '' OR @cFocusStep2 = '0'
+         BEGIN
+            SET @cOutField03=@cInField03
+         END
+         ELSE
+         BEGIN
+            SET @cOutField02=@cInField02
+         END
+
          EXEC rdt.rdtSetFocusField @nMobile, 6
-         SET @cOutField03=@cInField03
+
       END
       ELSE
       BEGIN
@@ -693,7 +740,12 @@ BEGIN
          SET @cOutField06  = ''
          SET @cContainerNo = ''
 
-         EXEC rdt.rdtSetFocusField @nMobile, 3
+         IF @cFocusStep2 = '' OR @cFocusStep2 = '0'
+         BEGIN
+            SET @cFocusStep2 = 3     
+         END
+         
+         EXEC rdt.rdtSetFocusField @nMobile, @cFocusStep2
       END
    END
  END
@@ -732,7 +784,10 @@ BEGIN
                ' @nMobile, @nFunc, @cLangCode, @nInputKey, @cFacility, @cStorerKey, @cOption,@cRefNo1,@cInput01,@cInput02,@cInput03,@cInput04,@cActivityStatus,' +        
                ' @nStep OUTPUT,@nScn OUTPUT,@cOutField01 OUTPUT,@cOutField02 OUTPUT,@cOutField03 OUTPUT ' +        
                ' ,@cOutField04 OUTPUT ,@cOutField05 OUTPUT,@cOutField06 OUTPUT,@cOutField07 OUTPUT,@cOutField08 OUTPUT' +        
-               ' ,@cOutField09 OUTPUT,@cOutField10 OUTPUT,@cOutField11 OUTPUT,@cExtendedinfo OUTPUT,' +         
+               ' ,@cOutField09 OUTPUT,@cOutField10 OUTPUT,@cOutField11 OUTPUT' +
+               ' ,@cFieldAttr01 OUTPUT,@cFieldAttr02 OUTPUT,@cFieldAttr03 OUTPUT ' +        
+               ' ,@cFieldAttr04 OUTPUT ,@cFieldAttr05 OUTPUT,@cFieldAttr06 OUTPUT,@cFieldAttr07 OUTPUT,@cFieldAttr08 OUTPUT' +        
+               ' ,@cFieldAttr09 OUTPUT,@cFieldAttr10 OUTPUT,@cFieldAttr11 OUTPUT,@cExtendedinfo OUTPUT,' +         
                ' @nErrNo OUTPUT, @cErrMsg OUTPUT '        
             SET @cSQLParam =        
                ' @nMobile       INT,           ' +        
@@ -761,6 +816,17 @@ BEGIN
                ' @cOutField09  NVARCHAR( 20) OUTPUT, ' +         
                ' @cOutField10  NVARCHAR( 20) OUTPUT, ' +  
                ' @cOutField11  NVARCHAR( 20) OUTPUT, ' +  
+               ' @cFieldAttr01 NVARCHAR( 1)  OUTPUT, ' +        
+               ' @cFieldAttr02 NVARCHAR( 1)  OUTPUT, ' + 
+               ' @cFieldAttr03 NVARCHAR( 1)  OUTPUT, ' +        
+               ' @cFieldAttr04 NVARCHAR( 1)  OUTPUT, ' +
+               ' @cFieldAttr05 NVARCHAR( 1)  OUTPUT, ' +        
+               ' @cFieldAttr06 NVARCHAR( 1)  OUTPUT, ' + 
+               ' @cFieldAttr07 NVARCHAR( 1)  OUTPUT, ' +        
+               ' @cFieldAttr08 NVARCHAR( 1)  OUTPUT, ' +    
+               ' @cFieldAttr09 NVARCHAR( 1)  OUTPUT, ' +
+               ' @cFieldAttr10 NVARCHAR( 1)  OUTPUT, ' +
+               ' @cFieldAttr11 NVARCHAR( 1)  OUTPUT, ' +
                ' @cExtendedinfo NVARCHAR(20)  OUTPUT, ' +        
                ' @nErrNo        INT           OUTPUT, ' +        
                ' @cErrMsg       NVARCHAR( 20) OUTPUT  '        
@@ -769,7 +835,10 @@ BEGIN
                 @nMobile, @nFunc, @cLangCode, @nInputKey, @cFacility, @cStorerKey, @cOption,@cRefNo1,@cInput01,@cInput02,@cInput03,@cInput04,@cActivityStatus    
                 ,@nStep OUTPUT,@nScn OUTPUT,@cOutField01 OUTPUT,@cOutField02 OUTPUT,@cOutField03 OUTPUT          
                 ,@cOutField04 OUTPUT ,@cOutField05 OUTPUT,@cOutField06 OUTPUT,@cOutField07 OUTPUT,@cOutField08 OUTPUT         
-                ,@cOutField09 OUTPUT,@cOutField10 OUTPUT,@cOutField11 OUTPUT,@cExtendedinfo OUTPUT,         
+                ,@cOutField09 OUTPUT,@cOutField10 OUTPUT,@cOutField11 OUTPUT
+                ,@cFieldAttr01 OUTPUT,@cFieldAttr02 OUTPUT,@cFieldAttr03 OUTPUT        
+                ,@cFieldAttr04 OUTPUT ,@cFieldAttr05 OUTPUT,@cFieldAttr06 OUTPUT,@cFieldAttr07 OUTPUT,@cFieldAttr08 OUTPUT 
+                ,@cFieldAttr09 OUTPUT,@cFieldAttr10 OUTPUT,@cFieldAttr11 OUTPUT,@cExtendedinfo OUTPUT,  
                 @nErrNo OUTPUT, @cErrMsg OUTPUT             
          END        
         
@@ -777,7 +846,7 @@ BEGIN
             GOTO Quit        
       
          SET @cOption = ''      
-      END   
+      END  
 
       --SET @cOutField01 = ''
       --SET @cOutField02 = ''
@@ -794,7 +863,10 @@ BEGIN
                ' @nMobile, @nFunc, @cLangCode, @nInputKey, @cFacility, @cStorerKey, @cOption,@cRefNo1,@cInput01,@cInput02,@cInput03,@cInput04,@cActivityStatus,' +        
                ' @nStep OUTPUT,@nScn OUTPUT,@cOutField01 OUTPUT,@cOutField02 OUTPUT,@cOutField03 OUTPUT ' +        
                ' ,@cOutField04 OUTPUT ,@cOutField05 OUTPUT,@cOutField06 OUTPUT,@cOutField07 OUTPUT,@cOutField08 OUTPUT' +        
-               ' ,@cOutField09 OUTPUT,@cOutField10 OUTPUT,@cOutField11 OUTPUT,@cExtendedinfo OUTPUT,' +         
+               ' ,@cOutField09 OUTPUT,@cOutField10 OUTPUT,@cOutField11 OUTPUT' +
+               ' ,@cFieldAttr01 OUTPUT,@cFieldAttr02 OUTPUT,@cFieldAttr03 OUTPUT ' +        
+               ' ,@cFieldAttr04 OUTPUT ,@cFieldAttr05 OUTPUT,@cFieldAttr06 OUTPUT,@cFieldAttr07 OUTPUT,@cFieldAttr08 OUTPUT' +        
+               ' ,@cFieldAttr09 OUTPUT,@cFieldAttr10 OUTPUT,@cFieldAttr11 OUTPUT,@cExtendedinfo OUTPUT,' +         
                ' @nErrNo OUTPUT, @cErrMsg OUTPUT '        
             SET @cSQLParam =        
                ' @nMobile       INT,           ' +        
@@ -823,6 +895,17 @@ BEGIN
                ' @cOutField09  NVARCHAR( 20) OUTPUT, ' +         
                ' @cOutField10  NVARCHAR( 20) OUTPUT, ' +  
                ' @cOutField11  NVARCHAR( 20) OUTPUT, ' +  
+               ' @cFieldAttr01 NVARCHAR( 1)  OUTPUT, ' +        
+               ' @cFieldAttr02 NVARCHAR( 1)  OUTPUT, ' + 
+               ' @cFieldAttr03 NVARCHAR( 1)  OUTPUT, ' +        
+               ' @cFieldAttr04 NVARCHAR( 1)  OUTPUT, ' +
+               ' @cFieldAttr05 NVARCHAR( 1)  OUTPUT, ' +        
+               ' @cFieldAttr06 NVARCHAR( 1)  OUTPUT, ' + 
+               ' @cFieldAttr07 NVARCHAR( 1)  OUTPUT, ' +        
+               ' @cFieldAttr08 NVARCHAR( 1)  OUTPUT, ' +    
+               ' @cFieldAttr09 NVARCHAR( 1)  OUTPUT, ' +
+               ' @cFieldAttr10 NVARCHAR( 1)  OUTPUT, ' +
+               ' @cFieldAttr11 NVARCHAR( 1)  OUTPUT, ' +
                ' @cExtendedinfo NVARCHAR(20)  OUTPUT, ' +        
                ' @nErrNo        INT           OUTPUT, ' +        
                ' @cErrMsg       NVARCHAR( 20) OUTPUT  '        
@@ -831,7 +914,10 @@ BEGIN
                 @nMobile, @nFunc, @cLangCode, @nInputKey, @cFacility, @cStorerKey, @cOption,@cRefNo1,@cInput01,@cInput02,@cInput03,@cInput04,@cActivityStatus    
                 ,@nStep OUTPUT,@nScn OUTPUT,@cOutField01 OUTPUT,@cOutField02 OUTPUT,@cOutField03 OUTPUT          
                 ,@cOutField04 OUTPUT ,@cOutField05 OUTPUT,@cOutField06 OUTPUT,@cOutField07 OUTPUT,@cOutField08 OUTPUT         
-                ,@cOutField09 OUTPUT,@cOutField10 OUTPUT,@cOutField11 OUTPUT,@cExtendedinfo OUTPUT,         
+                ,@cOutField09 OUTPUT,@cOutField10 OUTPUT,@cOutField11 OUTPUT
+                ,@cFieldAttr01 OUTPUT,@cFieldAttr02 OUTPUT,@cFieldAttr03 OUTPUT        
+                ,@cFieldAttr04 OUTPUT ,@cFieldAttr05 OUTPUT,@cFieldAttr06 OUTPUT,@cFieldAttr07 OUTPUT,@cFieldAttr08 OUTPUT 
+                ,@cFieldAttr09 OUTPUT,@cFieldAttr10 OUTPUT,@cFieldAttr11 OUTPUT,@cExtendedinfo OUTPUT,  
                 @nErrNo OUTPUT, @cErrMsg OUTPUT             
          END        
         
@@ -839,7 +925,7 @@ BEGIN
             GOTO Quit        
       
          SET @cOption = ''      
-      END   
+      END 
 
       SET @nScn = @nScn - 1
       SET @nStep = @nStep - 1
@@ -884,7 +970,10 @@ BEGIN
                ' @nMobile, @nFunc, @cLangCode, @nInputKey, @cFacility, @cStorerKey, @cOption,@cRefNo1,@cInput01,@cInput02,@cInput03,@cInput04,@cActivityStatus,' +        
                ' @nStep OUTPUT,@nScn OUTPUT,@cOutField01 OUTPUT,@cOutField02 OUTPUT,@cOutField03 OUTPUT ' +        
                ' ,@cOutField04 OUTPUT ,@cOutField05 OUTPUT,@cOutField06 OUTPUT,@cOutField07 OUTPUT,@cOutField08 OUTPUT' +        
-               ' ,@cOutField09 OUTPUT,@cOutField10 OUTPUT,@cOutField11 OUTPUT,@cExtendedinfo OUTPUT,' +         
+               ' ,@cOutField09 OUTPUT,@cOutField10 OUTPUT,@cOutField11 OUTPUT' +
+               ' ,@cFieldAttr01 OUTPUT,@cFieldAttr02 OUTPUT,@cFieldAttr03 OUTPUT ' +        
+               ' ,@cFieldAttr04 OUTPUT ,@cFieldAttr05 OUTPUT,@cFieldAttr06 OUTPUT,@cFieldAttr07 OUTPUT,@cFieldAttr08 OUTPUT' +        
+               ' ,@cFieldAttr09 OUTPUT,@cFieldAttr10 OUTPUT,@cFieldAttr11 OUTPUT,@cExtendedinfo OUTPUT,' +         
                ' @nErrNo OUTPUT, @cErrMsg OUTPUT '        
             SET @cSQLParam =        
                ' @nMobile       INT,           ' +        
@@ -913,6 +1002,17 @@ BEGIN
                ' @cOutField09  NVARCHAR( 20) OUTPUT, ' +         
                ' @cOutField10  NVARCHAR( 20) OUTPUT, ' +  
                ' @cOutField11  NVARCHAR( 20) OUTPUT, ' +  
+               ' @cFieldAttr01 NVARCHAR( 1)  OUTPUT, ' +        
+               ' @cFieldAttr02 NVARCHAR( 1)  OUTPUT, ' + 
+               ' @cFieldAttr03 NVARCHAR( 1)  OUTPUT, ' +        
+               ' @cFieldAttr04 NVARCHAR( 1)  OUTPUT, ' +
+               ' @cFieldAttr05 NVARCHAR( 1)  OUTPUT, ' +        
+               ' @cFieldAttr06 NVARCHAR( 1)  OUTPUT, ' + 
+               ' @cFieldAttr07 NVARCHAR( 1)  OUTPUT, ' +        
+               ' @cFieldAttr08 NVARCHAR( 1)  OUTPUT, ' +    
+               ' @cFieldAttr09 NVARCHAR( 1)  OUTPUT, ' +
+               ' @cFieldAttr10 NVARCHAR( 1)  OUTPUT, ' +
+               ' @cFieldAttr11 NVARCHAR( 1)  OUTPUT, ' +
                ' @cExtendedinfo NVARCHAR(20)  OUTPUT, ' +        
                ' @nErrNo        INT           OUTPUT, ' +        
                ' @cErrMsg       NVARCHAR( 20) OUTPUT  '        
@@ -921,13 +1021,16 @@ BEGIN
                 @nMobile, @nFunc, @cLangCode, @nInputKey, @cFacility, @cStorerKey, @cOption,@cRefNo1,@cInput01,@cInput02,@cInput03,@cInput04,@cActivityStatus    
                 ,@nStep OUTPUT,@nScn OUTPUT,@cOutField01 OUTPUT,@cOutField02 OUTPUT,@cOutField03 OUTPUT          
                 ,@cOutField04 OUTPUT ,@cOutField05 OUTPUT,@cOutField06 OUTPUT,@cOutField07 OUTPUT,@cOutField08 OUTPUT         
-                ,@cOutField09 OUTPUT,@cOutField10 OUTPUT,@cOutField11 OUTPUT,@cExtendedinfo OUTPUT,         
+                ,@cOutField09 OUTPUT,@cOutField10 OUTPUT,@cOutField11 OUTPUT
+                ,@cFieldAttr01 OUTPUT,@cFieldAttr02 OUTPUT,@cFieldAttr03 OUTPUT        
+                ,@cFieldAttr04 OUTPUT ,@cFieldAttr05 OUTPUT,@cFieldAttr06 OUTPUT,@cFieldAttr07 OUTPUT,@cFieldAttr08 OUTPUT 
+                ,@cFieldAttr09 OUTPUT,@cFieldAttr10 OUTPUT,@cFieldAttr11 OUTPUT,@cExtendedinfo OUTPUT,  
                 @nErrNo OUTPUT, @cErrMsg OUTPUT             
          END        
         
          IF @nErrNo <> 0        
-            GOTO Quit        
-      END       
+            GOTO Quit         
+      END              
       SET @cFieldAttr01 = ''
       SET @cFieldAttr02 = ''
       SET @cFieldAttr03 = ''
@@ -976,7 +1079,10 @@ BEGIN
                ' @nMobile, @nFunc, @cLangCode, @nInputKey, @cFacility, @cStorerKey, @cOption,@cRefNo1,@cInput01,@cInput02,@cInput03,@cInput04,@cActivityStatus,' +        
                ' @nStep OUTPUT,@nScn OUTPUT,@cOutField01 OUTPUT,@cOutField02 OUTPUT,@cOutField03 OUTPUT ' +        
                ' ,@cOutField04 OUTPUT ,@cOutField05 OUTPUT,@cOutField06 OUTPUT,@cOutField07 OUTPUT,@cOutField08 OUTPUT' +        
-               ' ,@cOutField09 OUTPUT,@cOutField10 OUTPUT,@cOutField11 OUTPUT,@cExtendedinfo OUTPUT,' +         
+               ' ,@cOutField09 OUTPUT,@cOutField10 OUTPUT,@cOutField11 OUTPUT' +
+               ' ,@cFieldAttr01 OUTPUT,@cFieldAttr02 OUTPUT,@cFieldAttr03 OUTPUT ' +        
+               ' ,@cFieldAttr04 OUTPUT ,@cFieldAttr05 OUTPUT,@cFieldAttr06 OUTPUT,@cFieldAttr07 OUTPUT,@cFieldAttr08 OUTPUT' +        
+               ' ,@cFieldAttr09 OUTPUT,@cFieldAttr10 OUTPUT,@cFieldAttr11 OUTPUT,@cExtendedinfo OUTPUT,' +         
                ' @nErrNo OUTPUT, @cErrMsg OUTPUT '        
             SET @cSQLParam =        
                ' @nMobile       INT,           ' +        
@@ -1005,6 +1111,17 @@ BEGIN
                ' @cOutField09  NVARCHAR( 20) OUTPUT, ' +         
                ' @cOutField10  NVARCHAR( 20) OUTPUT, ' +  
                ' @cOutField11  NVARCHAR( 20) OUTPUT, ' +  
+               ' @cFieldAttr01 NVARCHAR( 1)  OUTPUT, ' +        
+               ' @cFieldAttr02 NVARCHAR( 1)  OUTPUT, ' + 
+               ' @cFieldAttr03 NVARCHAR( 1)  OUTPUT, ' +        
+               ' @cFieldAttr04 NVARCHAR( 1)  OUTPUT, ' +
+               ' @cFieldAttr05 NVARCHAR( 1)  OUTPUT, ' +        
+               ' @cFieldAttr06 NVARCHAR( 1)  OUTPUT, ' + 
+               ' @cFieldAttr07 NVARCHAR( 1)  OUTPUT, ' +        
+               ' @cFieldAttr08 NVARCHAR( 1)  OUTPUT, ' +    
+               ' @cFieldAttr09 NVARCHAR( 1)  OUTPUT, ' +
+               ' @cFieldAttr10 NVARCHAR( 1)  OUTPUT, ' +
+               ' @cFieldAttr11 NVARCHAR( 1)  OUTPUT, ' +
                ' @cExtendedinfo NVARCHAR(20)  OUTPUT, ' +        
                ' @nErrNo        INT           OUTPUT, ' +        
                ' @cErrMsg       NVARCHAR( 20) OUTPUT  '        
@@ -1013,8 +1130,11 @@ BEGIN
                 @nMobile, @nFunc, @cLangCode, @nInputKey, @cFacility, @cStorerKey, @cOption,@cRefNo1,@cInput01,@cInput02,@cInput03,@cInput04,@cActivityStatus    
                 ,@nStep OUTPUT,@nScn OUTPUT,@cOutField01 OUTPUT,@cOutField02 OUTPUT,@cOutField03 OUTPUT          
                 ,@cOutField04 OUTPUT ,@cOutField05 OUTPUT,@cOutField06 OUTPUT,@cOutField07 OUTPUT,@cOutField08 OUTPUT         
-                ,@cOutField09 OUTPUT,@cOutField10 OUTPUT,@cOutField11 OUTPUT,@cExtendedinfo OUTPUT,         
-                @nErrNo OUTPUT, @cErrMsg OUTPUT             
+                ,@cOutField09 OUTPUT,@cOutField10 OUTPUT,@cOutField11 OUTPUT
+                ,@cFieldAttr01 OUTPUT,@cFieldAttr02 OUTPUT,@cFieldAttr03 OUTPUT        
+                ,@cFieldAttr04 OUTPUT ,@cFieldAttr05 OUTPUT,@cFieldAttr06 OUTPUT,@cFieldAttr07 OUTPUT,@cFieldAttr08 OUTPUT 
+                ,@cFieldAttr09 OUTPUT,@cFieldAttr10 OUTPUT,@cFieldAttr11 OUTPUT,@cExtendedinfo OUTPUT,  
+                @nErrNo OUTPUT, @cErrMsg OUTPUT              
          END        
         
          IF @nErrNo <> 0        
@@ -1023,9 +1143,6 @@ BEGIN
          SET @cOption = ''      
       END         
 
-      -- Screen mapping
-      SET @nScn = @nScn - 1
-      SET @nStep = @nStep - 1
    END
    GOTO Quit
 

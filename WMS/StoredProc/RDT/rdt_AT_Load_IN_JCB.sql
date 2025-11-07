@@ -10,7 +10,8 @@ GO
 /* Modifications log:                                                      */
 /*                                                                         */
 /* Date       Rev    Author   Purposes                                     */
-/* 2025-08-13 1.0.0  NickT    UWP-38988 Created                            */
+/* 2025-08-13 1.0.0  NickT    UWP-38988 Created                            */    
+/* 2025-10-17 1.1  yeekung   FCR-8146 Add FieldAttribute  (yeekung01)      */      
 /***************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_AT_Load_IN_JCB (
@@ -38,8 +39,19 @@ CREATE OR ALTER PROC rdt.rdt_AT_Load_IN_JCB (
    @cOutField07  NVARCHAR( 20) OUTPUT,
    @cOutField08  NVARCHAR( 20) OUTPUT,
    @cOutField09  NVARCHAR( 20) OUTPUT,
-   @cOutField10  NVARCHAR( 20) OUTPUT,
-   @cOutField11  NVARCHAR( 20) OUTPUT,
+   @cOutField10  NVARCHAR( 20) OUTPUT,                 
+   @cOutField11  NVARCHAR( 20) OUTPUT,  
+   @cFieldAttr01  NVARCHAR( 1) OUTPUT,           
+   @cFieldAttr02  NVARCHAR( 1) OUTPUT,              
+   @cFieldAttr03  NVARCHAR( 1) OUTPUT,            
+   @cFieldAttr04  NVARCHAR( 1) OUTPUT,            
+   @cFieldAttr05  NVARCHAR( 1) OUTPUT,            
+   @cFieldAttr06  NVARCHAR( 1) OUTPUT,            
+   @cFieldAttr07  NVARCHAR( 1) OUTPUT,            
+   @cFieldAttr08  NVARCHAR( 1) OUTPUT,            
+   @cFieldAttr09  NVARCHAR( 1) OUTPUT,            
+   @cFieldAttr10  NVARCHAR( 1) OUTPUT,           
+   @cFieldAttr11  NVARCHAR( 1) OUTPUT,
    @cExtendedinfo NVARCHAR(20)  OUTPUT,
    @nErrNo        INT           OUTPUT,
    @cErrMsg       NVARCHAR( 20) OUTPUT
@@ -236,6 +248,9 @@ AS
          
          SET  @cOutField11= CASE WHEN @cActivityStatus = '1' THEN 'Loading' 
                                  WHEN @cActivityStatus = '9' THEN 'Unloading' END
+
+         SET @cFieldAttr08 = 'O'     
+         SET @cFieldAttr10 = 'O'
 
          SET @nStep= @nStep+1
          SET @nScn= @nScn+1
@@ -443,6 +458,9 @@ AS
                   @cOutField09 = 'Status'
          FROM BOOKING_IN (NOLOCK)
          WHERE bookingno=@cRefNo1
+         
+         SET @nScn = @nScn - 1
+         SET @nStep = @nStep - 1
       END
       GOTO QUIT
    END 
