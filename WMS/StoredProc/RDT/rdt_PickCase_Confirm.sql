@@ -135,6 +135,7 @@ BEGIN
             AND PD.QTY > 0
             AND PD.Status <> '4'
             AND PD.Status < @cPickConfirmStatus
+         ORDER BY PD.OrderKey,PD.OrderLineNumber,PD.PICKDETAILKEY
 
    -- Discrete PickSlip
    ELSE IF @cOrderKey <> ''
@@ -149,6 +150,7 @@ BEGIN
             AND PD.QTY > 0
             AND PD.Status <> '4'
             AND PD.Status < @cPickConfirmStatus
+         ORDER BY PD.OrderKey,PD.OrderLineNumber,PD.PICKDETAILKEY
 
    -- Conso PickSlip
    ELSE IF @cLoadKey <> ''
@@ -164,6 +166,7 @@ BEGIN
             AND PD.QTY > 0
             AND PD.Status <> '4'
             AND PD.Status < @cPickConfirmStatus
+         ORDER BY PD.OrderKey,PD.OrderLineNumber,PD.PICKDETAILKEY
 
    -- Custom PickSlip
    ELSE
@@ -178,6 +181,7 @@ BEGIN
             AND PD.QTY > 0
             AND PD.Status <> '4'
             AND PD.Status < @cPickConfirmStatus
+         ORDER BY PD.OrderKey,PD.OrderLineNumber,PD.PICKDETAILKEY
 
    -- Handling transaction
    SET @nTranCount = @@TRANCOUNT
