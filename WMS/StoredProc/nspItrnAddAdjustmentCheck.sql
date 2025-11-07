@@ -1027,7 +1027,8 @@ BEGIN
                SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Update To Table LOT Returned Zero Rows Affected. (nspItrnAddAdjustmentCheck)'
             END
          END
-         ELSE
+         --ELSE
+         IF (@n_LotRcnt <> 1 AND @n_LotRcnt <> 0) AND (@n_continue = 1 OR @n_continue = 2)
          BEGIN
             SELECT @n_continue = 3 , @n_err = 61976 --61710
             SELECT @c_errmsg='NSQL'+CONVERT(char(5),@n_err)+': Lot Table Did Not Return Expected Unique Row In Response To Query. (nspItrnAddAdjustmentCheck)'

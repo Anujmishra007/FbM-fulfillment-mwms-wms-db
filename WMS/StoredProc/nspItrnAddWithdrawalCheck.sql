@@ -128,7 +128,7 @@ CREATE OR ALTER PROC  [dbo].[nspItrnAddWithdrawalCheck]
   -- (SWT02)
  DECLARE @c_Facility NVARCHAR(10)
 
- DECLARE @n_rcnt int,@n_curCaseCnt int, @n_curInnerPack int , @n_curqty int, @c_curstatus NVARCHAR(10), @n_curPallet int,
+ DECLARE @n_LotRcnt int, @n_rcnt int,@n_curCaseCnt int, @n_curInnerPack int , @n_curqty int, @c_curstatus NVARCHAR(10), @n_curPallet int,
              @f_curcube float, @f_curGrossWgt float, @f_curNetWgt float, @f_curotherunit1 float, @f_curotherunit2 float
 
  SELECT @c_Facility = Facility
@@ -411,8 +411,8 @@ CREATE OR ALTER PROC  [dbo].[nspItrnAddWithdrawalCheck]
      SELECT @n_curCaseCnt=CaseCnt,  @n_curInnerPack=InnerPack,  @n_curqty=Qty,  @n_curPallet=Pallet,  @f_curcube=cube,
             @f_curGrossWgt=GrossWgt,  @f_curNetWgt=NetWgt,  @f_curotherunit1=otherunit1,  @f_curotherunit2=otherunit2
      FROM LOT (NOLOCK) WHERE LOT = @c_lot
-     SELECT @n_rcnt=@@ROWCOUNT
-     IF @n_rcnt=1
+     SELECT @n_LotRcnt=@@ROWCOUNT
+     IF @n_LotRcnt=1
      BEGIN
          UPDATE LOT
          SET   CaseCnt=CaseCnt+@n_CaseCnt, InnerPack=InnerPack+@n_InnerPack, QTY = QTY+@n_qty, Pallet=Pallet+@n_Pallet,
@@ -433,7 +433,9 @@ CREATE OR ALTER PROC  [dbo].[nspItrnAddWithdrawalCheck]
              SELECT @c_ErrMsg='NSQL'+CONVERT(char(5),@n_Err)+': Update To Table LOT Returned Zero Rows Affected. (nspItrnAddWithdrawalCheck)'
          END
      END
-     ELSE BEGIN
+     --ELSE
+     IF (@n_LotRcnt <> 1 AND @n_LotRcnt <> 0) AND (@n_continue = 1 OR @n_continue = 2)
+     BEGIN
          SELECT @n_continue = 3, @n_Err = 61923 --61309
          SELECT @c_ErrMsg='NSQL'+CONVERT(char(5),@n_Err)+': Lot Table Did Not Return Expected Unique Row In Response To Query. (nspItrnAddWithdrawalCheck)'
          SELECT @c_ErrMsg='NSQL'+CONVERT(char(5),@n_Err)+': Lot Table ' + ISNULL(RTRIM(@c_lot),'') + ' Did Not Return Expected Unique Row In Response To Query. (nspItrnAddWithdrawalCheck)'  --INC1362763
