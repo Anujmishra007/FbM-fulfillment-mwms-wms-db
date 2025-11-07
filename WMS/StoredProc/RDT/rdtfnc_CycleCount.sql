@@ -7334,6 +7334,8 @@ BEGIN
             EXEC rdt.rdtSetFocusField @nMobile, 6   -- QTY (CS)
             GOTO SKU_Add_Qty_Fail
          END
+
+         SET @nNewCaseQTY = CAST( @cNewCaseQTY AS INT)
       END
 
       -- Validate QTY (EA)
