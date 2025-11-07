@@ -3553,7 +3553,7 @@ BEGIN
          END
          IF @cExtScnSP = 'rdt_1812ExtScn06'
          BEGIN
-            IF @nStepBak = 99 AND @nScnBak = 4022 AND @nInputKey=1
+            IF @nStepBak = 99 AND (@nScnBak = 4022 OR @nScnBak = 6672) AND @nInputKey=1
             BEGIN
                SET @cTTMTaskType = @cUDF01
                SET @cSuggID = @cUDF03
@@ -3573,8 +3573,11 @@ BEGIN
                SET @nPUOM_Div = @cUDF18
                SET @cLottableCode = @cUDF19
                SET @cTaskDetailKey = @cUDF20
-               SET @nFromStep = @cUDF21
-               SET @nFromScn = @cUDF22
+               IF @nScnBak = 4022
+               BEGIN
+                  SET @nFromStep = @cUDF21
+                  SET @nFromScn = @cUDF22
+               END
             END
             IF @nStepBak = 99 AND @nScnBak = 6672 AND @nInputKey=0
             BEGIN

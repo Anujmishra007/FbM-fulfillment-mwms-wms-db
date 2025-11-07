@@ -574,6 +574,7 @@ BEGIN
                   SET @cOutField03 = CASE WHEN @cLocShowDescr = '1' THEN @cLocDescr ELSE @cSuggFromLOC END
                   SET @cOutField04 = '' -- FromLOC
                   SET @cOutField10 = '' -- ExtendedInfo
+                  SET @cUDF01 = @cDropID
                END
 
                -- Go to short pick screen

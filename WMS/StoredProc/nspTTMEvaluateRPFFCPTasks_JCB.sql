@@ -253,7 +253,7 @@ BEGIN
          WHERE TD.StorerKey = @cStorerKey
             AND
             (
-               (TD.Status = '0' AND (TD.UserKey = '' OR TD.UserKeyOverRide IN ('', @c_UserID) ) )
+               (TD.Status = '0' AND (TD.UserKey = '' AND TD.UserKeyOverRide IN ('', @c_UserID) ) )
                OR
                (TD.Status = '3' AND TD.UserKey = @c_UserID )
             )
@@ -262,6 +262,7 @@ BEGIN
             --AND TD.AreaKey = @c_AreaKey01
             AND TMU.UserKey = @c_UserID
             AND TMU.Permission = '1'
+         AND (LOC.Status = 'OK' AND LOC.LocationFlag IN ('','NONE'))
             AND (LOC1.Status = 'OK' AND LOC1.LocationFlag IN ('','NONE'))
             AND NOT EXISTS (SELECT 1 
                         FROM dbo.PAZoneEquipmentExcludeDetail PAE WITH(NOLOCK)
@@ -299,12 +300,13 @@ BEGIN
          WHERE TD.StorerKey = @cStorerKey
             AND
             (
-               (TD.Status = '0' AND (TD.UserKey = '' OR TD.UserKeyOverRide IN ('', @c_UserID) ) )
+               (TD.Status = '0' AND (TD.UserKey = '' AND TD.UserKeyOverRide IN ('', @c_UserID) ) )
                OR
                (TD.Status = '3' AND TD.UserKey = @c_UserID )
             )
             AND TD.TaskType IN ('RPF', 'RP1')
             AND TD.PickMethod IN ('PP', 'FP')
+         AND (LOC.Status = 'OK' AND LOC.LocationFlag IN ('','NONE'))
             AND (LOC1.Status = 'OK' AND LOC1.LocationFlag IN ('','NONE'))
             --AND TD.AreaKey = @c_AreaKey01
             AND TMU.UserKey = @c_UserID
@@ -341,11 +343,12 @@ BEGIN
          WHERE TD.StorerKey = @cStorerKey
             AND
             (
-               (TD.Status = '0' AND (TD.UserKey = '' OR TD.UserKeyOverRide IN ('', @c_UserID) ) )
+               (TD.Status = '0' AND (TD.UserKey = '' AND TD.UserKeyOverRide IN ('', @c_UserID) ) )
                OR
                (TD.Status = '3' AND TD.UserKey = @c_UserID )
             )
             AND TD.TaskType IN ('FCP', 'FCP1')
+            AND (LOC.Status = 'OK' AND LOC.LocationFlag IN ('','NONE'))
             AND TD.PickMethod IN ('PP', 'FP')
             AND (TD.PickMethod = 'FP' 
                OR (TD.PickMethod = 'PP' AND NOT EXISTS (
@@ -464,12 +467,13 @@ BEGIN
          WHERE TD.StorerKey = @cStorerKey
             AND
             (
-               (TD.Status = '0' AND (TD.UserKey = '' OR TD.UserKeyOverRide IN ('', @c_UserID) ) )
+               (TD.Status = '0' AND (TD.UserKey = '' AND TD.UserKeyOverRide IN ('', @c_UserID) ) )
                OR
                (TD.Status = '3' AND TD.UserKey = @c_UserID )
             )
             AND TD.TaskType IN ('RPF', 'RP1')
             AND TD.PickMethod IN ('PP', 'FP')
+         AND (LOC.Status = 'OK' AND LOC.LocationFlag IN ('','NONE'))
             AND ((LOC1.Status = 'OK' AND LOC1.LocationFlag IN ('','NONE'))
             --OR It is Marshalling lane
              OR (EXISTS (SELECT 1 FROM dbo.CODELKUP WITH (NOLOCK)
@@ -532,19 +536,20 @@ BEGIN
        FROM dbo.TaskDetail TD WITH(NOLOCK)
          INNER JOIN dbo.TaskManagerUserDetail TMU WITH (NOLOCK) ON TMU.PermissionType = TD.TASKTYPE AND TD.AreaKey = TMU.AreaKey
          INNER JOIN dbo.LOC LOC WITH(NOLOCK) ON TD.FromLoc = LOC.Loc AND LOC.Facility = @cFacility
-            INNER JOIN dbo.LOC LOC1 WITH(NOLOCK) ON TD.ToLoc = LOC1.Loc AND LOC1.Facility = @cFacility
+         INNER JOIN dbo.LOC LOC1 WITH(NOLOCK) ON TD.ToLoc = LOC1.Loc AND LOC1.Facility = @cFacility
        WHERE TD.AreaKey = @c_AreaKey01
+         AND (LOC.Status = 'OK' AND LOC.LocationFlag IN ('','NONE'))
          AND TD.TaskType IN ('RPF','RPF1','RP1')
             AND TMU.UserKey = @c_UserID
             AND TMU.Permission = '1'
          AND (LOC1.Status = 'OK' AND LOC1.LocationFlag IN ('','NONE'))
          AND TD.PickMethod IN ('PP', 'FP')
          AND TD.StorerKey = @cStorerKey
-            AND (
-               (TD.Status = '0' AND (TD.UserKey = '' OR TD.UserKeyOverRide IN ('', @c_UserID)))
-               OR
-               (TD.Status = '3' AND TD.UserKey = @c_UserID)
-            )
+         AND (
+            (TD.Status = '0' AND (TD.UserKey = '' AND TD.UserKeyOverRide IN ('', @c_UserID)))
+            OR
+            (TD.Status = '3' AND TD.UserKey = @c_UserID)
+         )
          AND NOT EXISTS (
             SELECT 1 
                FROM dbo.PAZoneEquipmentExcludeDetail PAE WITH(NOLOCK)
@@ -700,7 +705,8 @@ BEGIN
          IIF(ISNULL(LASTLOC.LOC,'') <> '' AND LASTLOC.LocAisle = T.FromLocAisle, 1, 99),
          IIF(ISNULL(LASTLOC.LOC,'') <> '' AND LASTLOC.LocAisle = T.FromLocAisle AND LASTLOC.Floor = T.FromLocFloor, 1, 99),
          IIF (T.Status = '3' AND UserKey = @c_UserID, 1, 2), 
-         IIF(UserKeyOverRide = @c_UserID AND T.Status IN ('0', '3'), 1, 2), 
+         IIF (UserKeyOverRide = @c_UserID AND UserKey IN ('',@c_UserID) AND T.Status = '3', 1, 2),
+         IIF (UserKeyOverRide = @c_UserID AND T.Status = '0', 1, 2), 
          --IIF(ListKey <> '', 1, 2), --V1.0.2
          Priority, 
          DeliveryDate,
@@ -896,7 +902,7 @@ BEGIN
             SET @cTempToLoc = ''
             SELECT TOP 1 @cTempToLoc = LOC1.LOC FROM dbo.LOC LOC1 WITH(NOLOCK)
             JOIN dbo.LOC LOC2 WITH(NOLOCK) ON LOC2.Loc = @cToLoc AND LOC2.Facility = @cFacility AND LOC1.LocAisle = LOC2.LocAisle AND LOC1.Floor = LOC2.Floor
-            LEFT JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK) ON LOC1.LOC = LLI.LOC AND LLI.StorerKey = @cStorerKey AND LLI.Qty - LLI.QtyPicked > 0 
+            LEFT JOIN dbo.LOTXLOCXID LLI WITH(NOLOCK) ON LOC1.LOC = LLI.LOC AND LLI.StorerKey = @cStorerKey AND LLI.Qty > 0 
             LEFT JOIN TASKDETAIL TD WITH(NOLOCK) ON LOC1.Loc = TD.ToLoc AND TD.Status = '3' AND TD.TaskType IN ('FCP','FCP1')
             WHERE LOC1.Facility = @cFacility
             AND LOC1.LOC <> @cToLoc

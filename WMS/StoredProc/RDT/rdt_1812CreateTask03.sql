@@ -278,7 +278,7 @@ BEGIN
                   IF @nDebugFlag = 1
                      SELECT 'Kitting location logic'
 
-                  SELECT @cStatus = CASE WHEN @cUDF01 = 'Y' THEN '0' ELSE 'S' END
+                  SELECT @cStatus = '0'
                   
                   IF ISNULL(@cDefaultKittingLoc,'') = ''
                   BEGIN

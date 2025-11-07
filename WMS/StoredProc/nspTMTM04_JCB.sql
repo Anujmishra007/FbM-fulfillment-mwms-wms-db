@@ -2164,6 +2164,7 @@ END
                     ON  RM.UserName = @c_userid 
                AND TD1.Storerkey = RM.StorerKey
               WHERE TD1.AreaKey = @c_AreaKey01
+              AND TD1.TaskType IN ('FCP', 'FCP1')
                  AND TD1.PickMethod = 'PP'
                  AND TD1.Status = '0'
         )
@@ -2172,6 +2173,79 @@ END
             SELECT @n_err = 111268 --Order on hold
             SELECT @c_errmsg = CONVERT(NVARCHAR(6) ,@n_err)+' Order on hold'
         END
+
+        IF @n_err IN ('63060','111268')
+         AND EXISTS (
+              SELECT 1
+              FROM TaskDetail TD WITH (NOLOCK)
+              INNER JOIN RDT.RDTMOBREC RMR WITH (NOLOCK)
+                 ON TD.StorerKey = RMR.StorerKey
+                 AND RMR.UserName = @c_userid
+              INNER JOIN LOC L WITH (NOLOCK)
+                 ON TD.ToLoc = L.Loc
+           INNER JOIN LOC L1 WITH (NOLOCK)
+              ON TD.FromLoc = L1.LOC
+              WHERE TD.AreaKey = @c_AreaKey01
+              AND TaskType IN ('FCP', 'FCP1')
+                 AND (
+                    TD.Status = '0'
+                 OR (TD.Status = '3' AND TD.UserKey = @c_userid)
+                 )
+                 AND (L.Status <> 'OK' OR L.LocationFlag NOT IN ('', 'NONE') OR L1.Status <> 'OK' OR L1.LocationFlag NOT IN ('', 'NONE'))
+           )
+         AND NOT EXISTS (
+            SELECT 1
+              FROM TaskDetail TD WITH (NOLOCK)
+              INNER JOIN RDT.RDTMOBREC RMR WITH (NOLOCK)
+                 ON TD.StorerKey = RMR.StorerKey
+                 AND RMR.UserName = @c_userid
+              INNER JOIN LOC L WITH (NOLOCK)
+                 ON TD.ToLoc = L.Loc
+           INNER JOIN LOC L1 WITH (NOLOCK)
+              ON TD.FromLoc = L1.LOC
+              WHERE TD.AreaKey = @c_AreaKey01
+              AND TaskType IN ('FCP', 'FCP1')
+                 AND (
+                    TD.Status = '0'
+                 OR (TD.Status = '3' AND TD.UserKey = @c_userid)
+                 )
+                 AND L.Status = 'OK' 
+             AND L.LocationFlag IN ('', 'NONE') 
+             AND L1.Status = 'OK' 
+             AND L1.LocationFlag IN ('', 'NONE')
+         )
+        BEGIN
+            SELECT @n_continue = 3
+            SELECT @n_err = 217978 --Loc on hold or flag
+            SELECT @c_errmsg = CONVERT(NVARCHAR(6) ,@n_err)+' Loc on hold or flag'
+        END
+
+      IF NOT EXISTS (
+         SELECT 1
+           FROM TaskDetail TD WITH (NOLOCK)
+           INNER JOIN RDT.RDTMOBREC RMR WITH (NOLOCK)
+              ON TD.StorerKey = RMR.StorerKey
+              AND RMR.UserName = @c_userid
+           INNER JOIN LOC L WITH (NOLOCK)
+              ON TD.ToLoc = L.Loc
+           LEFT JOIN LOTxLOCxID LLI WITH (NOLOCK)
+              ON TD.ToLoc = LLI.Loc
+              AND LLI.StorerKey = RMR.StorerKey
+              AND LLI.Qty > 0
+           WHERE TD.AreaKey = @c_AreaKey01
+              AND (
+                 TD.Status = '0'
+              OR (TD.Status = '3' AND TD.UserKey = @c_userid)
+              )
+           GROUP BY L.MaxPallet, L.Loc
+           HAVING L.MaxPallet > COUNT(DISTINCT LLI.ID)
+      )
+         AND @n_err IN ('63060','111268','217978')
+      BEGIN
+            SELECT @n_continue = 3
+            SELECT @n_err = 82151 --82151^OverMaxPallet 
+            SELECT @c_errmsg = CONVERT(NVARCHAR(6) ,@n_err)+' OverMaxPallet '         
+      END
 
         IF (
            NOT EXISTS (
@@ -2229,11 +2303,11 @@ END
                  AND TaskType IN ('FCP', 'FCP1')
              AND FromID <> ''
            ) > 0
-           AND @n_err IN ('63060','111268')
+           AND @n_err IN ('63060','111268','217978','82151')
       BEGIN
-          SELECT @n_continue = 3
-            SELECT @n_err = 218245
-            SELECT @c_errmsg = rdt.rdtgetmessage(@n_err, 'ENG', 'DSP') -- 'Tasks big for MHE'
+         SELECT @n_continue = 3
+         SELECT @n_err = 218245
+         SELECT @c_errmsg = rdt.rdtgetmessage(@n_err, 'ENG', 'DSP') -- 'Tasks big for MHE'
       END
 
         IF (

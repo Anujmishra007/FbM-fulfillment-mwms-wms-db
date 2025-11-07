@@ -539,6 +539,8 @@ BEGIN
                      @cLottable09 = ISNULL(@cLottable09,''),@cLottable10 = ISNULL(@cLottable10,''),@cLottable11 = ISNULL(@cLottable11,''),
                      @cLottable12 = ISNULL(@cLottable12,'')
                   BEGIN TRY
+                  IF @cSuggID <> ''
+                  BEGIN
                      EXEC nspInventoryHoldWrapper
                         '',               -- lot
                         '',               -- loc
@@ -575,6 +577,7 @@ BEGIN
 
                      UPDATE ID SET STATUS = CASE WHEN @cHoldID = '1' THEN 'HOLD' ELSE STATUS END
                      WHERE ID = @cSuggID
+                  END
 
                      EXEC nspInventoryHoldWrapper
                         '',               -- lot

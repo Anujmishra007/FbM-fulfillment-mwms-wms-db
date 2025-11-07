@@ -53,7 +53,11 @@ BEGIN
    DECLARE @nTaskQTY          INT  
    DECLARE @nQTY              INT
    DECLARE @cUserName         NVARCHAR(18)
+   DECLARE @cLottable03       NVARCHAR(60)
 
+   SELECT @cLottable03 = O_Field01
+   FROM RDT.RDTMOBREC WITH (NOLOCK)
+   WHERE Mobile = @nMobile
 
    DECLARE @tList TABLE
    (
@@ -196,12 +200,15 @@ BEGIN
          SELECT 1 FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
          JOIN dbo.LOC WITH (NOLOCK)
             ON LLI.Loc = LOC.LOC
-         WHERE StorerKey = @cStorerKey
-            AND ID = @cNewID
-            AND SKU = @cTaskSKU
-            AND (QtyAllocated + QtyPicked + QtyReplen) = 0
-         GROUP BY ID,SKU
-         HAVING SUM(QTY) = @nTaskQTY
+         JOIN dbo.LOTAttribute LA WITH (NOLOCK)
+            ON LLI.Lot = LA.Lot AND LLI.StorerKey = LA.StorerKey AND LA.SKU = LLI.SKU
+         WHERE LLI.StorerKey = @cStorerKey
+            AND LLI.ID = @cNewID
+            AND LLI.SKU = @cTaskSKU
+            AND (LLI.QtyAllocated + LLI.QtyPicked + LLI.QtyReplen) = 0
+            AND LA.Lottable03 = @cLottable03
+         GROUP BY ID,LLI.SKU
+         HAVING SUM(LLI.QTY) = @nTaskQTY
       )   
       BEGIN
          SET @nErrNo = 239907

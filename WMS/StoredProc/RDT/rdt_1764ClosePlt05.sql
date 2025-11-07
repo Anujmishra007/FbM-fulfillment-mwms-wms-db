@@ -441,6 +441,8 @@ BEGIN
                SET @nQTYAlloc = 0
             END
 
+            SET @nQTYAlloc = 0 -- will never replenish allocated pallet
+
             -- Calc QTYReplen
             SET @cMoveQTYReplen = rdt.RDTGetConfig( @nFunc, 'MoveQTYReplen', @cStorerKey)
             IF @cMoveQTYReplen = '1'
