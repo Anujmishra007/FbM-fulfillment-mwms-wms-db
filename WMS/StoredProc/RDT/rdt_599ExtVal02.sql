@@ -55,7 +55,7 @@ BEGIN
                      FROM dbo.CODELKUP WITH(NOLOCK)
                      WHERE ListName = 'RECEIPTGRP'
                         AND Code = @cReceiptGroup
-                        AND UDF02 = CAST(@nFunc AS NVARCHAR(10))
+                        AND Code2 = CAST(@nFunc AS NVARCHAR(10))
                      )
                GOTO Quit
             ELSE
