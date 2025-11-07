@@ -83,7 +83,6 @@ BEGIN
            @c_GetSKU             NVARCHAR(20),
            @n_GetQty             INT,
            @n_CartonNo           INT = 0,
-           @n_PackInfoQty       FLOAT = 0.00,
            @n_PackInfoWeight    FLOAT  = 0.00
 
     SELECT @n_StartTCnt = @@TRANCOUNT,
@@ -266,8 +265,8 @@ BEGIN
                     UPDATE LoadPlan WITH (ROWLOCK)
                     SET [Status]   = @c_Status,
                         Trafficcop = NULL,
-                        EditDate = GETDATE(),
-                        EditWho = SUSER_SNAME()
+                        EditDate = dbo.fnc_GetDate(),
+                        EditWho = dbo.fnc_GetUserName()
                     WHERE LoadKey = @c_GetLoadkey
 
                     IF EXISTS
@@ -279,8 +278,8 @@ BEGIN
                     BEGIN
                         UPDATE ORDERS WITH (ROWLOCK)
                         SET Loadkey = @c_GetLoadkey,
-                            EditWho = SUSER_NAME(),
-                            EditDate = GETDATE(),
+                            EditWho = dbo.fnc_GetUserName(),
+                            EditDate = dbo.fnc_GetDate(),
                             ArchiveCop = NULL
                         WHERE Orderkey = @c_Orderkey
                     END
@@ -299,8 +298,8 @@ BEGIN
                     BEGIN
                         UPDATE ORDERDETAIL WITH (ROWLOCK)
                         SET Loadkey = @c_GetLoadkey,
-                            EditWho = SUSER_NAME(),
-                            EditDate = GETDATE(),
+                            EditWho = dbo.fnc_GetUserName(),
+                            EditDate = dbo.fnc_GetDate(),
                             ArchiveCop = NULL
                         WHERE Orderkey = @c_Orderkey
                               AND OrderLineNumber = @c_OrderLineNumber
@@ -466,23 +465,18 @@ BEGIN
 
             IF ISNULL(@c_GetPickslipno, '') <> '' AND NOT EXISTS (SELECT 1 FROM PACKHEADER WITH (NOLOCK) WHERE PickSlipNo = @c_GetPickslipno)
             BEGIN
+
+               -- Create packheader
                INSERT INTO PackHeader ([Route], OrderKey, OrderRefNo, Loadkey, Consigneekey, StorerKey, PickSlipNo)
                SELECT OH.[Route], OH.OrderKey, SUBSTRING(OH.ExternOrderKey, 1, 18), OH.LoadKey, OH.ConsigneeKey, OH.Storerkey, @c_GetPickslipno
                FROM PICKHEADER PH WITH (NOLOCK)
                JOIN ORDERS OH WITH (NOLOCK) ON (PH.Orderkey = OH.Orderkey)
                WHERE PH.PickHeaderKey = @c_GetPickslipno
-            END
 
-            IF (SELECT COUNT(1) FROM PACKINFO (NOLOCK) WHERE PickSlipNo = @c_GetPickslipno AND CartonNo = @n_CartonNo) = 0
-            BEGIN
-               SET @n_PackInfoQty = ISNULL((SELECT SUM(Qty) FROM PICKDETAIL (NOLOCK) WHERE OrderKey = @c_Orderkey),0)
-               SET @n_PackInfoWeight = ISNULL((@n_PackInfoQty *
-               (SELECT SKU.STDGROSSWGT FROM SKU (NOLOCK)
-               JOIN PICKDETAIL WITH (NOLOCK) ON PICKDETAIL.StorerKey = SKU.StorerKey AND PICKDETAIL.SKU = SKU.SKU
-               WHERE OrderKey = @c_Orderkey
-               )),0)
-               INSERT INTO PACKINFO (PickSlipNo, CartonNo, CartonType, AddWho, EditWho, Qty, Weight)
-               VALUES (@c_GetPickslipno, @n_CartonNo, 'STD',SUSER_SNAME(),  SUSER_SNAME(), @n_PackInfoQty, @n_PackInfoWeight)
+               IF @@ERROR <> 0
+               BEGIN
+                   EXECUTE nsp_logerror @n_Err, @c_ErrMsg, 'msp_BEJ_AutoPacking'
+               END
             END
 
             DECLARE CUR_PICKDETAIL CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
@@ -497,17 +491,40 @@ BEGIN
             FETCH NEXT FROM CUR_PICKDETAIL INTO @c_GetSKU, @c_GetID, @c_GetCaseID, @n_GetQty , @c_DropId
             WHILE @@FETCH_STATUS<>-1
             BEGIN
+
                -- Create packdetail
-               SET @n_CartonNo = @n_CartonNo + 1
+               IF (ISNULL((select CartonNo from PackDetail where PickSlipNo = @c_GetPickslipno),0)) = 0
+               BEGIN
+                  SET @n_CartonNo = 1
+               END
+               ELSE
+               BEGIN
+                   SET @n_CartonNo = @n_CartonNo+ 1
+               END
 
                INSERT INTO PackDetail (PickSlipNo, CartonNo, LabelNo, LabelLine, StorerKey, SKU, QTY, AddWho, AddDate, EditWho, EditDate)
-               SELECT @c_GetPickslipno, @n_CartonNo,  @c_DropId, '00001', @c_StorerKey, @c_GetSKU,
-                      @n_GetQty, SUSER_SNAME(), GETDATE(), SUSER_SNAME(), GETDATE()
+               SELECT @c_GetPickslipno, @n_CartonNo,'00'+@c_DropId, '00001', @c_StorerKey, @c_GetSKU,
+                      @n_GetQty, dbo.fnc_GetUserName(), dbo.fnc_GetDate(), dbo.fnc_GetUserName(),dbo.fnc_GetDate()
 
                IF @@ERROR <> 0
                BEGIN
                    EXECUTE nsp_logerror @n_Err, @c_ErrMsg, 'msp_BEJ_AutoPacking'
                END
+
+                -- Create packinfo
+               SET @n_PackInfoWeight = ISNULL((@n_GetQty *
+               (SELECT SKU.STDGROSSWGT FROM SKU (NOLOCK)
+                    WHERE SKU.STORERKEY = @c_StorerKey
+                    AND SKU.SKU = @c_GetSKU
+                )),0)
+               INSERT INTO PACKINFO (PickSlipNo, CartonNo, CartonType, AddWho, EditWho, Qty, Weight, cube)
+               VALUES (@c_GetPickslipno, @n_CartonNo, 'SMALL',dbo.fnc_GetUserName(), dbo.fnc_GetUserName(), @n_GetQty, @n_PackInfoWeight, '1')
+
+               IF @@ERROR <> 0
+               BEGIN
+                   EXECUTE nsp_logerror @n_Err, @c_ErrMsg, 'msp_BEJ_AutoPacking'
+               END
+
                FETCH NEXT FROM CUR_PICKDETAIL INTO @c_GetSKU, @c_GetID, @c_GetCaseID, @n_GetQty ,  @c_DropId
             END
             CLOSE CUR_PICKDETAIL
