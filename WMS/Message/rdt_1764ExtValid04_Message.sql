@@ -8,4 +8,7 @@ EXECUTE rdt.rdtAddMsg 246602, 10, '246602^DiffToLoc',       'us_english', 1764, 
 -- FCR-7928
 EXECUTE rdt.rdtAddMsg 246603, 10, '246603^TaskShort',       'us_english', 1764, 0, '246603 Task is SHORT, cannot go back'
 
+--UWP-43838 
+EXECUTE rdt.rdtAddMsg 246604, 10, '246604^DropIDInUse',       'us_english', 1764, 0, '246604 DropID in use'
+
 SELECT * FROM RDT.RDTMSG WITH(NOLOCK) WHERE MESSAGE_ID BETWEEN 246601 AND 246650

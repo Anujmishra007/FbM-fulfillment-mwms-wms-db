@@ -15,4 +15,7 @@ execute rdt.rdtAddMsg 234856, 10, '234856 UpdPKDFail',      'us_english', 1764, 
 execute rdt.rdtAddMsg 234857, 10, '234857 LogAlertFail',    'us_english', 1764, 0, '234857 Log Alert Failed'
 execute rdt.rdtAddMsg 234858, 10, '234858 SubmitQTaskFail', 'us_english', 1764, 0, '234858 Submit QCommanderTask Failed'
 
+--UWP-43838
+execute rdt.rdtAddMsg 234859, 10, '234859 DropIDIsNotClosed',   'us_english', 1764, 0, '234859 DropID is not closed yet'
+
 SELECT * FROM rdt.RDTMsg (NOLOCK) WHERE Message_ID BETWEEN 234851 AND 234900

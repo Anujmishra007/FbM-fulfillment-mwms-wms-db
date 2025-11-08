@@ -540,6 +540,20 @@ BEGIN
       BEGIN
          IF @nInputKey = 0 -- ESC
          BEGIN
+            -- Press ESC on Timeout Screen, go to Pallet Close Screen
+            IF EXISTS(SELECT 1 
+                     FROM dbo.TaskDetail WITH (NOLOCK)
+                     WHERE StorerKey = @cStorerKey
+                        AND ListKey = @cListKey
+                        AND Message03 IN ('MoveInProgress', 'MoveCompleted')
+                        AND Status IN ( '5', '9' )
+                        AND TaskType = 'RPF')
+            BEGIN
+               SET @nAfterScn = 2686
+               SET @nAfterStep = 7
+               GOTO Quit
+            END
+
             IF EXISTS(SELECT 1 FROM 
                      dbo.TaskDetail WITH (NOLOCK) 
                      WHERE StorerKey = @cStorerKey
@@ -549,33 +563,37 @@ BEGIN
                         AND TaskType = 'RPF'
                         AND PickMethod = 'PP')
             BEGIN
-               SET @cMessage01 = 'Pending DropID is not closed yet.'
-               SET @cMessage02 = 'Back to main menu.'
+               SET @nErrNo = 234854
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --DropID is not closed yet
+               GOTO Quit
+
+               -- SET @cMessage01 = 'Pending DropID is not closed yet.'
+               -- SET @cMessage02 = 'Back to main menu.'
                
-               EXEC rdt.rdtInsertMsgQueue 
-                  @nMobile = @nMobile,
-                  @nErrNo = @nErrNo,
-                  @cErrMsg = @cErrMsg,
-                  @cLine01 = @cMessage01,
-                  @cLine02 = @cMessage02,
-                  @cLine03 = '',
-                  @cLine04 = '',
-                  @cLine05 = '',
-                  @cLine06 = '',
-                  @cLine07 = '',
-                  @cLine08 = '',
-                  @cLine09 = '',
-                  @nDisplayMsg = 0
+               -- EXEC rdt.rdtInsertMsgQueue 
+               --    @nMobile = @nMobile,
+               --    @nErrNo = @nErrNo,
+               --    @cErrMsg = @cErrMsg,
+               --    @cLine01 = @cMessage01,
+               --    @cLine02 = @cMessage02,
+               --    @cLine03 = '',
+               --    @cLine04 = '',
+               --    @cLine05 = '',
+               --    @cLine06 = '',
+               --    @cLine07 = '',
+               --    @cLine08 = '',
+               --    @cLine09 = '',
+               --    @nDisplayMsg = 0
 
-               SET @cMessage01 = ''
-               SET @cMessage02 = ''
+               -- SET @cMessage01 = ''
+               -- SET @cMessage02 = ''
 
-               SET @cOutField01 = ''
-               SET @cOutField02 = ''
-               SET @cOutField03 = ''
+               -- SET @cOutField01 = ''
+               -- SET @cOutField02 = ''
+               -- SET @cOutField03 = ''
 
-               SET @nAfterScn = 2100
-               SET @nAfterStep = 1
+               -- SET @nAfterScn = 2100
+               -- SET @nAfterStep = 1
             END
          END
       END
