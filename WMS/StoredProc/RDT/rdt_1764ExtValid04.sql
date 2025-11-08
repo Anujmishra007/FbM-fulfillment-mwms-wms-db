@@ -41,12 +41,14 @@ BEGIN
       @cFacility           NVARCHAR(5),
       @cStorerKey          NVARCHAR(15),
       @cSuggSKU            NVARCHAR(20),
-      @nInputKey           INT
+      @nInputKey           INT,
+      @cUserName           NVARCHAR(128)
 
    SELECT 
       @cFacility     = Facility,
       @cStorerKey    = StorerKey,
-      @nInputKey     = InputKey
+      @nInputKey     = InputKey,
+      @cUserName     = UserName
    FROM RDT.RDTMOBREC WITH (NOLOCK)
    WHERE Mobile = @nMobile
    
