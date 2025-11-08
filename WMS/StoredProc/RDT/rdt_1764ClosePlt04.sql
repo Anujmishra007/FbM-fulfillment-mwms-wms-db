@@ -17,6 +17,7 @@ GO
 /*                                                                             */
 /* Date        Rev      Author    Purposes                                     */
 /* 2025-10-02  1.0.0    NLT013    FCR-7730 Created                             */
+/* 2025-11-08  1.0.1    NLT013    UWP-43838 Mark TaskDetail as MoveInProgress  */
 /*******************************************************************************/
 
 CREATE OR ALTER PROCEDURE [RDT].[rdt_1764ClosePlt04] (
@@ -69,6 +70,16 @@ BEGIN
    SELECT @cStorerKey = StorerKey
    FROM rdt.RDTMOBREC WITH (NOLOCK)
    WHERE Mobile = @nMobile
+
+   UPDATE dbo.TaskDetail WITH(ROWLOCK)
+   SET Message03 = 'MoveInProgress',
+       EditDate = GETDATE(),
+       EditWho  = SUSER_SNAME()
+   WHERE ListKey = @cListKey
+      AND UserKey = @cUserName
+      AND Status = '5'
+      AND TaskType = 'RPF'
+      AND StorerKey = @cStorerKey
 
    /***********************************************************************************************
                                      Standard Close Pallet
@@ -564,6 +575,7 @@ BEGIN
       UPDATE dbo.TaskDetail WITH (ROWLOCK) SET
          Status = '9', -- Closed
          -- UserPosition = @cUserPosition,
+         Message03 = 'MoveCompleted',
          EndTime = GETDATE(),
          EditDate = GETDATE(),
          EditWho  = @cUserName,
@@ -588,7 +600,7 @@ BEGIN
       GOTO RollBackTran
 
 
-   COMMIT TRAN rdt_1764Close -- Only commit change made here
+   COMMIT TRAN rdt_1764ClosePlt04 -- Only commit change made here
    GOTO Quit
 
 RollBackTran:

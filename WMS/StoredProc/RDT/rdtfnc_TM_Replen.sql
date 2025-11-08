@@ -66,6 +66,8 @@ GO
 /* 2025-08-10 4.7.0 NickT     FCR-7730 Support OverwriteToLOC                 */
 /* 2025-09-09 4.8.0 NickT     UWP-42269 Continue pending task                 */
 /* 2025-10-10 4.9.0 NickT     FCR-7928 Reallocate for short task              */
+/* 2025-11-08 4.10.0 NickT    UWP-43838 If move start, no need proceed again, */
+/*                            Special fix for USA levis, customized logic     */
 /******************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_TM_Replen](
@@ -2639,6 +2641,21 @@ BEGIN
          GOTO Step_ToLOC_Fail
       END
 
+      DECLARE @cCheckMoveStatus  NVARCHAR( 10)
+      SET @cCheckMoveStatus = rdt.rdtGetConfig(@nFunc, 'CheckMoveStatus', @cStorerKey)
+      IF @cCheckMoveStatus = '1'
+      BEGIN
+         IF EXISTS ( SELECT 1 FROM dbo.TaskDetail WITH (NOLOCK)
+                     WHERE StorerKey = @cStorerKey
+                       AND DropID = @cDropID
+                       AND Message03 IN ('MoveInProgress', 'MoveCompleted')
+                       AND Status IN ('5','9')
+                  )
+         BEGIN
+            GOTO JumpTo_Exit_Screen
+         END
+      END
+
       -- (james03)        
       IF @cLOCLookupSP = 1              
       BEGIN              
@@ -2812,6 +2829,8 @@ BEGIN
                @nMobile, @nFunc, @cLangCode, @cTaskdetailKey, @nErrNo OUTPUT, @cErrMsg OUTPUT
          END
       END
+
+      JumpTo_Exit_Screen:
       -- Prepare next screen var
       SET @cOutField01 = @cToLOC
       SET @cOutField10 = '' -- ExtendedInfo
