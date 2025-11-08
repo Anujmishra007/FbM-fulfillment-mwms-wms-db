@@ -22,6 +22,7 @@ GO
 /* 2025-10-20 1.2.0 NickT      FCR-8158 Create Adjustment for CC                 */
 /*                             if variance is less than tolerance                */
 /* 2025-11-05 1.2.1 NickT      FCR-8158 If adjustment is closed, createa new one */
+/* 2025-11-08 1.2.2 NickT      FCR-8158 Create Adjust if variance less than tolerance */
 /*********************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdt_1768ExtOpt01] (
@@ -382,10 +383,6 @@ BEGIN --(CLVN01)
                               SET @nCCDQty = @nOriCCQty - @nInvQty
                         END
                      END
-
-
-                     IF ABS(@nCCDQty) < @nTolQty
-                        GOTO CONTINUE_curCCD
 
                      IF NOT EXISTS( SELECT 1 FROM dbo.ADJUSTMENT WITH (NOLOCK) WHERE AdjustmentKey = @cAdjustmentKey)
                      BEGIN
