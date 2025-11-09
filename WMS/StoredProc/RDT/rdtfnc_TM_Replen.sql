@@ -768,6 +768,32 @@ BEGIN
          GOTO Step_DropID_Fail
       END
 
+      IF @cExtendedValidateSP <> ''
+      BEGIN
+         IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cExtendedValidateSP AND type = 'P')
+         BEGIN
+            SET @cSQL = 'EXEC rdt.' + RTRIM( @cExtendedValidateSP) +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @cTaskdetailKey, @cToLoc, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nAfterStep, @cDropID '
+            SET @cSQLParam =
+               '@nMobile         INT,        ' +
+               '@nFunc           INT,        ' +
+               '@cLangCode       NVARCHAR( 3),   ' +
+               '@nStep           INT,        ' +
+               '@cTaskdetailKey  NVARCHAR( 10),  ' +
+               '@cToLoc          NVARCHAR( 10),  ' +
+               '@nErrNo          INT OUTPUT, ' +
+               '@cErrMsg         NVARCHAR( 20) OUTPUT,' +
+               '@nAfterStep      INT,        ' +
+               '@cDropID         NVARCHAR( 20)  '
+
+            EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
+               @nMobile, @nFunc, @cLangCode, @nStep, @cTaskdetailKey, @cToLoc, @nErrNo OUTPUT, @cErrMsg OUTPUT, @nStep, @cDropID
+
+            IF @nErrNo <> 0
+               GOTO Quit
+         END
+      END
+
       /*
             BEGIN TRAN
 

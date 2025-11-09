@@ -14,6 +14,7 @@ GO
 /* 2025-09-10   NickT     1.0.0   FCR-7730 If suggested loc is PND,             */
 /*                                user only can scan PND location               */
 /* 2025-10-15   NickT     1.1.0   FCR-7928 Cannot go back if task is short      */
+/* 2025-11-08   NickT     1.1.0   UWP-43838 If DropID is not closed, prompt err */
 /********************************************************************************/
 
 CREATE OR ALTER PROCEDURE rdt.rdt_1764ExtValid04
@@ -40,19 +41,33 @@ BEGIN
       @cFacility           NVARCHAR(5),
       @cStorerKey          NVARCHAR(15),
       @cSuggSKU            NVARCHAR(20),
-      @nInputKey           INT
+      @nInputKey           INT,
+      @cUserName           NVARCHAR(128)
 
    SELECT 
       @cFacility     = Facility,
       @cStorerKey    = StorerKey,
-      @nInputKey     = InputKey
+      @nInputKey     = InputKey,
+      @cUserName     = UserName
    FROM RDT.RDTMOBREC WITH (NOLOCK)
    WHERE Mobile = @nMobile
    
    -- TM Replen From
    IF @nFunc = 1764
    BEGIN
-      IF @nStep = 5 -- Next Task
+      IF @nStep = 1 -- DropID
+      BEGIN
+         IF EXISTS( SELECT 1 FROM dbo.TaskDetail WITH (NOLOCK)
+            WHERE DropID = @cDropID
+               AND Status NOT IN ('9','X')
+               AND UserKey = @cUserName)
+         BEGIN
+            SET @nErrNo = 246603
+            SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --DropID in use
+            GOTO Quit
+         END
+      END
+      ELSE IF @nStep = 5 -- Next Task
       BEGIN
          IF @nInputKey = 0 -- ESC
          BEGIN
