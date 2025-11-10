@@ -14,6 +14,7 @@ GO
 /*                                                                      */
 /* Date       Rev    Author   Purposes                                  */
 /* 2025-08-27 1.0.0  NickT    FCR-6730 Created                          */
+/* 2025-11-07 1.1.0  JackC    UWP-43820 Performance tuning              */
 /************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdt_869ConfirmSP01 (
@@ -50,17 +51,19 @@ BEGIN
 
    DECLARE @tShortPickDetail TABLE
    (
-      ID                INT IDENTITY(1,1) NOT NULL,
+      ID                INT IDENTITY(1,1) PRIMARY KEY,
       PickDetailKey     NVARCHAR(10),
       OrderKey          NVARCHAR(10)
    )
 
    SET @nTranCount = @@TRANCOUNT
 
+   /* V1.1
    IF @nTranCount = 0
       BEGIN TRAN
    ELSE
       SAVE TRAN rdt_869ConfirmSP01
+   */
 
    /*--------------------------------------------------------------------------------------------------
 
@@ -74,40 +77,55 @@ BEGIN
       FROM dbo.PickDetail WITH (NOLOCK)
       WHERE OrderKey = @cOrderKey
          AND Status = '4'
+      ORDER BY OrderKey, OrderLineNumber, PickDetailKey
    END
 
    IF @cLoadKey <> ''
+   BEGIN
       INSERT INTO @tShortPickDetail (PickDetailKey, OrderKey)
-      SELECT DISTINCT PD.PickDetailKey, PD.OrderKey
-      FROM dbo.PickDetail PD WITH (NOLOCK)
-      INNER JOIN dbo.OrderDetail OD WITH (NOLOCK) ON (OD.OrderKey = PD.OrderKey AND OD.OrderLineNumber = PD.OrderLineNumber)
-      WHERE OD.LoadKey = @cLoadKey
-         AND PD.Status = '4'
+      SELECT t.PickDetailKey, t.OrderKey
+      FROM (
+         SELECT DISTINCT PD.OrderKey, PD.OrderLineNumber, PD.PickDetailKey
+         FROM dbo.PickDetail PD WITH (NOLOCK)
+         INNER JOIN dbo.OrderDetail OD WITH (NOLOCK) ON (OD.OrderKey = PD.OrderKey AND OD.OrderLineNumber = PD.OrderLineNumber)
+         WHERE OD.LoadKey = @cLoadKey
+            AND PD.Status = '4'
+      ) AS t
+      ORDER BY t.OrderKey, t.OrderLineNumber, t.PickDetailKey
+   END
          
    IF @cWaveKey <> ''
    BEGIN
       IF @cShipRef = ''
       BEGIN
          INSERT INTO @tShortPickDetail (PickDetailKey, OrderKey)
-         SELECT DISTINCT PD.PickDetailKey, PD.OrderKey
-         FROM dbo.PickDetail PD WITH (NOLOCK)
-         INNER JOIN dbo.OrderDetail OD WITH (NOLOCK) ON (OD.OrderKey = PD.OrderKey AND OD.OrderLineNumber = PD.OrderLineNumber)
-         INNER JOIN dbo.WaveDetail WD  WITH (NOLOCK) ON (OD.OrderKey = WD.OrderKey)
-         WHERE WD.WaveKey = @cWaveKey
-            AND PD.Status = '4'
+         SELECT t.PickDetailKey, t.OrderKey
+         FROM (
+            SELECT DISTINCT PD.OrderKey, PD.OrderLineNumber, PD.PickDetailKey
+            FROM dbo.PickDetail PD WITH (NOLOCK)
+            INNER JOIN dbo.OrderDetail OD WITH (NOLOCK) ON (OD.OrderKey = PD.OrderKey AND OD.OrderLineNumber = PD.OrderLineNumber)
+            INNER JOIN dbo.WaveDetail WD  WITH (NOLOCK) ON (OD.OrderKey = WD.OrderKey)
+            WHERE WD.WaveKey = @cWaveKey
+               AND PD.Status = '4'
+         ) AS t
+         ORDER BY t.OrderKey, t.OrderLineNumber, t.PickDetailKey
       END
       ELSE
       BEGIN
          INSERT INTO @tShortPickDetail (PickDetailKey, OrderKey)
-         SELECT DISTINCT PD.PickDetailKey, PD.OrderKey
-         FROM dbo.PickDetail PD WITH (NOLOCK)
-         INNER JOIN dbo.OrderDetail OD WITH (NOLOCK) ON (OD.OrderKey = PD.OrderKey AND OD.OrderLineNumber = PD.OrderLineNumber)
-         INNER JOIN dbo.WaveDetail WD WITH (NOLOCK) ON (OD.OrderKey = WD.OrderKey)
-         INNER JOIN dbo.ORDERS ORM WITH (NOLOCK) ON (ORM.OrderKey = OD.OrderKey AND ORM.StorerKey = OD.StorerKey)
-         WHERE WD.WaveKey = @cWaveKey
-            AND ORM.MBOLKey IS NOT NULL
-            AND ORM.MBOLKey = @cShipRef
-            AND PD.Status = '4'
+         SELECT t.PickDetailKey, t.OrderKey
+         FROM (
+            SELECT DISTINCT PD.OrderKey, PD.OrderLineNumber, PD.PickDetailKey
+            FROM dbo.PickDetail PD WITH (NOLOCK)
+            INNER JOIN dbo.OrderDetail OD WITH (NOLOCK) ON (OD.OrderKey = PD.OrderKey AND OD.OrderLineNumber = PD.OrderLineNumber)
+            INNER JOIN dbo.WaveDetail WD WITH (NOLOCK) ON (OD.OrderKey = WD.OrderKey)
+            INNER JOIN dbo.ORDERS ORM WITH (NOLOCK) ON (ORM.OrderKey = OD.OrderKey AND ORM.StorerKey = OD.StorerKey)
+            WHERE WD.WaveKey = @cWaveKey
+               AND ORM.MBOLKey IS NOT NULL
+               AND ORM.MBOLKey = @cShipRef
+               AND PD.Status = '4'
+         ) AS t
+         ORDER BY t.OrderKey, t.OrderLineNumber, t.PickDetailKey
       END
    END
          
@@ -153,6 +171,10 @@ BEGIN
    FETCH NEXT FROM @curPickSlipNo INTO @cPickSlipNo
    WHILE @@FETCH_STATUS = 0
    BEGIN
+
+      BEGIN TRAN --V.1
+      SAVE TRAN rdt_869ConfirmSP01_Pack
+
       -- Scan out
       IF EXISTS( SELECT 1 FROM dbo.PickingInfo WITH (NOLOCK) WHERE PickSlipNo = @cPickSlipNo AND ScanOutDate IS NULL)
       BEGIN
@@ -163,7 +185,7 @@ BEGIN
          BEGIN
             SET @nErrNo = 245603
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Update PickingInfo Failed
-            GOTO RollBackTran
+            GOTO RollBackTranPack
          END
       END
       
@@ -177,15 +199,19 @@ BEGIN
          BEGIN
             SET @nErrNo = 245604
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Update PackHeader Failed
-            GOTO RollBackTran
+            GOTO RollBackTranPack
          END
       END
+
+      COMMIT TRAN --V1.1
       FETCH NEXT FROM @curPickSlipNo INTO @cPickSlipNo
    END
 
+   --Picking handling
    SET @nLoopIndex = -1
    WHILE(1=1)
    BEGIN
+      
       SELECT TOP 1
          @cPickDetailKey = PickDetailKey,
          @cLoopOrderKey = OrderKey,
@@ -198,26 +224,33 @@ BEGIN
       IF @nRowCount = 0
          BREAK
 
+      BEGIN TRAN  --v1.1
+      SAVE TRAN rdt_869ConfirmSP01_Pick --v1.1
+
       -- Unallocate
       UPDATE dbo.PickDetail WITH(ROWLOCK) SET
-         QTY = 0
+         QTY = 0,
+         EditDate = GETDATE(),
+         EditWho = SUSER_NAME()
       WHERE PickDetailKey = @cPickDetailKey
       IF @@ERROR <> 0
       BEGIN
          SET @nErrNo = 245601
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Update PickDetail Failed
-         GOTO RollBackTran
+         GOTO RollBackTranPick
       END
 
       -- Confirm short pick
       UPDATE dbo.PickDetail WITH(ROWLOCK) SET
-         Status = 0
+         Status = 0,
+         EditDate = GETDATE(),
+         EditWho = SUSER_NAME()
       WHERE PickDetailKey = @cPickDetailKey
       IF @@ERROR <> 0
       BEGIN
          SET @nErrNo = 245602
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Update PickDetail Failed
-         GOTO RollBackTran
+         GOTO RollBackTranPick
       END
 
       IF NOT EXISTS (SELECT 1 FROM dbo.Transmitlog2 WITH (NOLOCK) 
@@ -238,31 +271,41 @@ BEGIN
                   @c_errmsg         = @cErrMsg    OUTPUT
 
                IF @nErrNo <> 0
-                  GOTO RollBackTran
+                  GOTO RollBackTranPick
 
                IF @bSuccess <> 1 
                BEGIN
                   SET @nErrNo = 245605
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Insert Transmitlog2 Failed
-                  GOTO RollBackTran
+                  GOTO RollBackTranPick
                END
          END TRY
          BEGIN CATCH
             SET @nErrNo = 245606
                SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Insert Transmitlog2 Failed
-               GOTO RollBackTran
+               GOTO RollBackTranPick
          END CATCH
       END
-   END
 
-   COMMIT TRAN rdt_869ConfirmSP01 -- Only commit change made in rdt_869ConfirmSP01
+      COMMIT TRAN
+   END-- end while
+
    GOTO Quit
 
-   RollBackTran:
-      IF @nTranCount = 0
-         ROLLBACK TRAN
+   RollBackTranPack:
+      IF @nTranCount > 0 AND XACT_STATE() <> -1
+         ROLLBACK TRAN rdt_869ConfirmSP01_Pack
       ELSE
-         ROLLBACK TRAN rdt_869ConfirmSP01 -- Only rollback change made in rdt_869ConfirmSP01
+         ROLLBACK TRAN 
+      GOTO Quit
+
+   RollBackTranPick:
+      IF @nTranCount > 0 AND XACT_STATE() <> -1
+         ROLLBACK TRAN rdt_869ConfirmSP01_Pick
+      ELSE
+         ROLLBACK TRAN 
+      GOTO Quit
+
    Quit:
       -- Commit until the level we started
       WHILE @@TRANCOUNT > @nTranCount
