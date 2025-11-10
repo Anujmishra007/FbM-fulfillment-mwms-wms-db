@@ -13,7 +13,7 @@ BEGIN
     [EffectiveDate] [datetime] NULL CONSTRAINT [DF_KIT_EffectiveDate] DEFAULT (getdate()),
     [ReasonCode] [nvarchar] (10) NULL,
     [CustomerRefNo] [nvarchar] (10) NULL,
-    [Remarks] [nvarchar] (200) NULL,
+    [Remarks] [nvarchar] (500) NULL,
     [AddDate] [datetime] NOT NULL CONSTRAINT [DF_KIT_AddDate] DEFAULT (getdate()),
     [AddWho] [nvarchar] (128) NOT NULL CONSTRAINT [DF_KIT_AddWho] DEFAULT (suser_sname()),
     [EditDate] [datetime] NOT NULL CONSTRAINT [DF_KIT_EditDate] DEFAULT (getdate()),
@@ -178,7 +178,6 @@ BEGIN
         EXEC sp_addextendedproperty N'MS_Description', N'ExternStatus', 'SCHEMA', N'dbo', 'TABLE', N'KIT', 'COLUMN', N'ExternStatus'
     END
 
-
 	--ALTER COLUMN 
 		IF EXISTS ( SELECT 1 FROM sys.columns sc              
 					   JOIN sys.tables so ON so.object_id = sc.object_id
@@ -200,9 +199,7 @@ BEGIN
 			  EXEC ( N'ALTER TABLE dbo.KIT DROP CONSTRAINT ' + @c_ConstraintName );
 			  ALTER TABLE dbo.KIT ALTER COLUMN USRDEF14 DATETIME NULL;
 			  ALTER TABLE dbo.KIT ADD CONSTRAINT [DF_KIT_USRDEF14] DEFAULT (' ') FOR USRDEF14;
-		   END             
-		   
-		 
+		   END
 
 		IF EXISTS ( SELECT 1 FROM sys.columns sc              
 					   JOIN sys.tables so ON so.object_id = sc.object_id
@@ -224,8 +221,14 @@ BEGIN
 			  EXEC ( N'ALTER TABLE dbo.KIT DROP CONSTRAINT ' + @c_ConstraintNames );
 			  ALTER TABLE dbo.KIT ALTER COLUMN USRDEF15 DATETIME NULL;
 			  ALTER TABLE dbo.KIT ADD CONSTRAINT [DF_KIT_USRDEF15] DEFAULT (' ') FOR USRDEF15;
-		   END                        
+		   END
 
+		-- ALTER COLUMN Remarks TO NVARCHAR(500)
+    IF EXISTS (SELECT * FROM SYS.COLUMNS WHERE name ='Remarks' AND object_id = OBJECT_ID ('[dbo].[KIT]') AND max_length <> 1000)
+        BEGIN
+          ALTER TABLE [dbo].[KIT]
+          ALTER COLUMN [Remarks] [nvarchar](500) NULL;
+        END
 END
 
 
