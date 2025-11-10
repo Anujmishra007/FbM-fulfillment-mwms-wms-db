@@ -102,7 +102,7 @@ BEGIN
                   GOTO Quit
                END
 
-               IF EXISTS( SELECT 1 FROM dbo.SerialNo WITH(NOLOCK) WHERE StorerKey = @cStorerkey AND SKU = @cSKU AND SerialNo = @cSerialNo AND [Status] = 'H')
+               IF EXISTS( SELECT 1 FROM dbo.SerialNo WITH(NOLOCK) WHERE StorerKey = @cStorerkey AND SKU = @cSKU AND SerialNo = @cSerialNo AND [ExternStatus] = 'H')
                BEGIN
                   SET @nErrNo = 250601
                   SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')  --250601Serial No on Hold
