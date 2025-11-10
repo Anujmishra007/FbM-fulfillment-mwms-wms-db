@@ -74,6 +74,7 @@ GO
 /* 26-Sep-2025  TLTING02  UWP-41813 skip blank ID update                  */
 /* 10-Oct-2025  SSA02     UWP-42248 -Enhanced session management          */
 /* 21-Oct-2025  Michael   1.3 FCR-8378-StrCfg SerialNoUpdateLotLocID(ML01)*/
+/*              Ung       Not update serial no when SerialNoUpdateLotLocID*/
 /* 05-Nov-2025  SSA03     2.2 UWP-43625- updated sequence of update       */
 /*                            channelInv table to avoid deadlock          */
 /**************************************************************************/
@@ -2579,6 +2580,7 @@ BEGIN
                 AND SerialNoCapture IN ('1','2','3'))   --ML01
       BEGIN
          IF @n_Qty > 0 AND @n_Qty = @n_Qty_ID                                       --(Wan12)
+            AND dbo.fnc_GetRight( @c_Facility, @c_StorerKey, '', 'SerialNoUpdateLotLocID') = '0' -- 0=off, update serial no here; 1=On, update at RDT
          BEGIN
             BEGIN TRY
                EXEC dbo.msp_SerialNoMoveCheck 
