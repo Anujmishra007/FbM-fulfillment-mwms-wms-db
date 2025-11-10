@@ -493,7 +493,7 @@ BEGIN
             BEGIN
 
                -- Create packdetail
-               IF (ISNULL((select CartonNo from PackDetail where PickSlipNo = @c_GetPickslipno),0)) = 0
+               IF (ISNULL((select CartonNo from PackDetail (NOLOCK) where PickSlipNo = @c_GetPickslipno),0)) = 0
                BEGIN
                   SET @n_CartonNo = 1
                END
