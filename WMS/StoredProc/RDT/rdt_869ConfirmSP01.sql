@@ -56,6 +56,13 @@ BEGIN
       OrderKey          NVARCHAR(10)
    )
 
+   DECLARE @tPD TABLE
+   (
+      OrderKey NVARCHAR(10),
+      OrderLineNumber NVARCHAR(5),
+      PickDetailKey NVARCHAR(18)
+   )
+
    SET @nTranCount = @@TRANCOUNT
 
    /* V1.1
@@ -72,63 +79,54 @@ BEGIN
    --------------------------------------------------------------------------------------------------*/
    IF @cOrderKey <> ''
    BEGIN
-      INSERT INTO @tShortPickDetail (PickDetailKey, OrderKey)
-      SELECT PickDetailKey, @cOrderKey
+      INSERT INTO @tPD (OrderKey, OrderLineNumber, PickDetailKey)
+      SELECT OrderKey, OrderLineNumber, PickDetailKey 
       FROM dbo.PickDetail WITH (NOLOCK)
       WHERE OrderKey = @cOrderKey
          AND Status = '4'
-      ORDER BY OrderKey, OrderLineNumber, PickDetailKey
    END
 
    IF @cLoadKey <> ''
    BEGIN
-      INSERT INTO @tShortPickDetail (PickDetailKey, OrderKey)
-      SELECT t.PickDetailKey, t.OrderKey
-      FROM (
-         SELECT DISTINCT PD.OrderKey, PD.OrderLineNumber, PD.PickDetailKey
-         FROM dbo.PickDetail PD WITH (NOLOCK)
-         INNER JOIN dbo.OrderDetail OD WITH (NOLOCK) ON (OD.OrderKey = PD.OrderKey AND OD.OrderLineNumber = PD.OrderLineNumber)
-         WHERE OD.LoadKey = @cLoadKey
-            AND PD.Status = '4'
-      ) AS t
-      ORDER BY t.OrderKey, t.OrderLineNumber, t.PickDetailKey
+      INSERT INTO @tPD (OrderKey, OrderLineNumber, PickDetailKey)
+      SELECT DISTINCT PD.OrderKey, PD.OrderLineNumber, PD.PickDetailKey
+      FROM dbo.PickDetail PD WITH (NOLOCK)
+      INNER JOIN dbo.OrderDetail OD WITH (NOLOCK) ON (OD.OrderKey = PD.OrderKey AND OD.OrderLineNumber = PD.OrderLineNumber)
+      WHERE OD.LoadKey = @cLoadKey
+         AND PD.Status = '4'
    END
          
    IF @cWaveKey <> ''
    BEGIN
       IF @cShipRef = ''
       BEGIN
-         INSERT INTO @tShortPickDetail (PickDetailKey, OrderKey)
-         SELECT t.PickDetailKey, t.OrderKey
-         FROM (
-            SELECT DISTINCT PD.OrderKey, PD.OrderLineNumber, PD.PickDetailKey
-            FROM dbo.PickDetail PD WITH (NOLOCK)
-            INNER JOIN dbo.OrderDetail OD WITH (NOLOCK) ON (OD.OrderKey = PD.OrderKey AND OD.OrderLineNumber = PD.OrderLineNumber)
-            INNER JOIN dbo.WaveDetail WD  WITH (NOLOCK) ON (OD.OrderKey = WD.OrderKey)
-            WHERE WD.WaveKey = @cWaveKey
-               AND PD.Status = '4'
-         ) AS t
-         ORDER BY t.OrderKey, t.OrderLineNumber, t.PickDetailKey
+         INSERT INTO @tPD (OrderKey, OrderLineNumber, PickDetailKey)
+         SELECT DISTINCT PD.OrderKey, PD.OrderLineNumber, PD.PickDetailKey
+         FROM dbo.PickDetail PD WITH (NOLOCK)
+         INNER JOIN dbo.OrderDetail OD WITH (NOLOCK) ON (OD.OrderKey = PD.OrderKey AND OD.OrderLineNumber = PD.OrderLineNumber)
+         INNER JOIN dbo.WaveDetail WD  WITH (NOLOCK) ON (OD.OrderKey = WD.OrderKey)
+         WHERE WD.WaveKey = @cWaveKey
+            AND PD.Status = '4'
       END
       ELSE
       BEGIN
-         INSERT INTO @tShortPickDetail (PickDetailKey, OrderKey)
-         SELECT t.PickDetailKey, t.OrderKey
-         FROM (
-            SELECT DISTINCT PD.OrderKey, PD.OrderLineNumber, PD.PickDetailKey
-            FROM dbo.PickDetail PD WITH (NOLOCK)
-            INNER JOIN dbo.OrderDetail OD WITH (NOLOCK) ON (OD.OrderKey = PD.OrderKey AND OD.OrderLineNumber = PD.OrderLineNumber)
-            INNER JOIN dbo.WaveDetail WD WITH (NOLOCK) ON (OD.OrderKey = WD.OrderKey)
-            INNER JOIN dbo.ORDERS ORM WITH (NOLOCK) ON (ORM.OrderKey = OD.OrderKey AND ORM.StorerKey = OD.StorerKey)
-            WHERE WD.WaveKey = @cWaveKey
-               AND ORM.MBOLKey IS NOT NULL
-               AND ORM.MBOLKey = @cShipRef
-               AND PD.Status = '4'
-         ) AS t
-         ORDER BY t.OrderKey, t.OrderLineNumber, t.PickDetailKey
+         INSERT INTO @tPD (OrderKey, OrderLineNumber, PickDetailKey)
+         SELECT DISTINCT PD.OrderKey, PD.OrderLineNumber, PD.PickDetailKey
+         FROM dbo.PickDetail PD WITH (NOLOCK)
+         INNER JOIN dbo.OrderDetail OD WITH (NOLOCK) ON (OD.OrderKey = PD.OrderKey AND OD.OrderLineNumber = PD.OrderLineNumber)
+         INNER JOIN dbo.WaveDetail WD WITH (NOLOCK) ON (OD.OrderKey = WD.OrderKey)
+         INNER JOIN dbo.ORDERS ORM WITH (NOLOCK) ON (ORM.OrderKey = OD.OrderKey AND ORM.StorerKey = OD.StorerKey)
+         WHERE WD.WaveKey = @cWaveKey
+            AND ORM.MBOLKey IS NOT NULL
+            AND ORM.MBOLKey = @cShipRef
+            AND PD.Status = '4'
       END
    END
-         
+
+   INSERT INTO @tShortPickDetail (PickDetailKey, OrderKey)
+   SELECT PickDetailKey, OrderKey
+   FROM @tPD
+   ORDER BY OrderKey, OrderLineNumber, PickDetailKey  
 
    /*--------------------------------------------------------------------------------------------------
 
