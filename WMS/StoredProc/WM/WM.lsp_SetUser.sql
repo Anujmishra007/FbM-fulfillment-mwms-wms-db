@@ -71,6 +71,8 @@ BEGIN
          IF @c_LDAP_DOMAIN <> ''
          BEGIN
             SET @c_UserName = @c_LDAP_DOMAIN + '\' + @c_UserName
+
+            EXEC sp_set_session_context @key = 'mwms_user_name', @value = @c_UserName; --V0 db user name contains ldap domain
          END
       END
 
