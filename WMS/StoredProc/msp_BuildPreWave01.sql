@@ -13,7 +13,7 @@ GO
 /*                                                                       */
 /* Called By: WM.lsp_BuildPreWave                                        */
 /*                                                                       */
-/* GitHub Version: 1.0                                                   */
+/* GitHub Version: 1.1                                                   */
 /*                                                                       */
 /* Version: 7.0                                                          */
 /*                                                                       */
@@ -22,6 +22,7 @@ GO
 /* Updates:                                                              */
 /* Date         Author  Ver.  Purposes                                   */
 /* 22-Oct-2025  WLChooi 1.0   Initial Version                            */
+/* 10-Nov-2025  WLChooi 1.1   FCR-8818 Enhance MPOC Logic (WL01)         */
 /*************************************************************************/
 CREATE OR ALTER PROCEDURE [dbo].[msp_BuildPreWave01]
    @c_BuildParmKey         NVARCHAR(10)
@@ -101,6 +102,9 @@ BEGIN
          , @c_SQLBuildByGroupWhere     NVARCHAR(4000) = ''
          , @CUR_BUILD_GROUP            CURSOR
          , @c_Wavekey                  NVARCHAR(10) = ''
+         , @c_MasterShipID             NVARCHAR(10) = ''    --WL01
+         , @c_OIFNotes                 NVARCHAR(MAX) = ''   --WL01
+         , @c_CartonNumber             NVARCHAR(100) = ''   --WL01
 
    SET @b_debug = ISNULL(@b_Debug, 0)
    --@b_debug = 1 - Show debug message and do not update Notes2
@@ -237,8 +241,17 @@ BEGIN
                              , RNo          INT DEFAULT 0
                              , PutwallUsage INT DEFAULT 0
                              , ChuteUsage   INT DEFAULT 0
+                             , BillTo       NVARCHAR(15)  DEFAULT('')   --WL01
+                             , MarkFor      NVARCHAR(15)  DEFAULT('')   --WL01
+                             , OIFNotes     NVARCHAR(MAX) DEFAULT('')   --WL01
+                             , MPOCFlag     NVARCHAR(10)  DEFAULT('0')  --WL01
+                             , MasterShipID NVARCHAR(10)  DEFAULT('')   --WL01
+                             , VAS          NVARCHAR(10)  DEFAULT('N')  --WL01
                              )
-      
+      CREATE NONCLUSTERED INDEX IDX_T_ORDERS_Pending_NF ON #T_ORDERS (PreWaveNo, MPOC, VAS, RNo) INCLUDE (PutwallUsage, ChuteUsage, VCCount)   --WL01
+      CREATE NONCLUSTERED INDEX IDX_T_ORDERS_Assigned_NF ON #T_ORDERS (PreWaveNo) INCLUDE (PutwallUsage, ChuteUsage)   --WL01
+      CREATE NONCLUSTERED INDEX IDX_T_ORDERS_RNo ON #T_ORDERS (RNo) INCLUDE (Orderkey, PutwallUsage, ChuteUsage, MPOC, VAS, PreWaveNo)   --WL01
+
       CREATE TABLE #T_ORDERDET  ( Orderkey         NVARCHAR(10)
                                 , OrderLineNumber  NVARCHAR(5)
                                 , Storerkey        NVARCHAR(15)
@@ -246,9 +259,10 @@ BEGIN
                                 , Qty              INT
                                 , StdCube          DECIMAL(15, 7)
                                 , WCS              INT DEFAULT(0)
-                                , CartonNumber     INT DEFAULT(1)
+                                , CartonNumber     NVARCHAR(100) DEFAULT ('')   --WL01
                                 , PRIMARY KEY (Orderkey, OrderLineNumber)
                                 )
+      CREATE NONCLUSTERED INDEX IDX_T_ORDERDET_CartonNumber ON #T_ORDERDET (CartonNumber) INCLUDE (Orderkey, OrderLineNumber, Qty)   --WL01
 
       CREATE TABLE #T_ORDERSUMQTY ( Orderkey       NVARCHAR(10) PRIMARY KEY
                                   , TotalQty       INT
@@ -281,6 +295,17 @@ BEGIN
        , Orderkey NVARCHAR(10)
        , Rating   DECIMAL(20, 2)
       )
+
+      --WL01 S
+      CREATE NONCLUSTERED INDEX IDX_ORDER_OPT_INPUT_Orderkey ON #ORDER_OPTIMIZATION_INPUT (Orderkey)
+
+      CREATE TABLE #T_MPOCDEP ( Code      NVARCHAR(30) NULL
+                              , Code2     NVARCHAR(30) NULL
+                              , Short     NVARCHAR(10) NULL
+                              )
+
+      CREATE NONCLUSTERED INDEX IDX_T_MPOCDEP_Code_Code2 ON #T_MPOCDEP (Code, Code2) INCLUDE (Short)
+      --WL01 E
    END
 
    WHILE @@TRANCOUNT > 0
@@ -327,8 +352,16 @@ BEGIN
       WHERE CL.LISTNAME = 'MPOCPERMIT'
       AND CL.Storerkey = @c_Storerkey
 
+      --WL01 S
+      INSERT INTO #T_MPOCDEP (Code, Code2, Short)
+      SELECT DISTINCT CL.Code, CL.Code2, CL.Short
+      FROM CODELKUP CL WITH (NOLOCK)
+      WHERE CL.LISTNAME = 'MPOCDEP'
+      AND CL.Storerkey = @c_Storerkey
+      --WL01 E
+
       INSERT INTO #T_ORDERS ( Orderkey, Consigneekey, BuyerPO, UDF01, MPOC         
-                            , VCCount, VCCountCS
+                            , VCCount, VCCountCS, BillTo, MarkFor, OIFNotes    --WL01
                             )
       SELECT DISTINCT OH.Orderkey
                     , OH.Consigneekey
@@ -339,10 +372,14 @@ BEGIN
                     , MPOC = 'N'
                     , 1   --1 Order 1 Virtual Carton, except some cases which will be catered below
                     , 1
+                    , ISNULL(TRIM(OH.BillToKey), '')     --WL01
+                    , ISNULL(TRIM(OH.MarkforKey), '')    --WL01
+                    , OIF.Notes   --WL01
       FROM #T_ORDERPOOL OP WITH (NOLOCK)
       JOIN ORDERS OH WITH (NOLOCK) ON OH.OrderKey = OP.Orderkey
       LEFT JOIN @T_MPOCPERMIT CL1 ON CL1.Code = OH.BillToKey
       LEFT JOIN @T_MPOCPERMIT CL2 ON CL2.Code = OH.ConsigneeKey
+      LEFT JOIN ORDERINFO OIF WITH (NOLOCK) ON OH.OrderKey = OIF.OrderKey   --WL01
       
       INSERT INTO #T_ORDERDET (Orderkey, OrderLineNumber, Storerkey, SKU, Qty, StdCube)
       SELECT DISTINCT OD.Orderkey
@@ -362,13 +399,13 @@ BEGIN
       FROM #T_ORDERS WITH (NOLOCK)
 
       SET @CUR_MPOC = CURSOR LOCAL FAST_FORWARD READ_ONLY FOR
-      SELECT DISTINCT Orderkey
+      SELECT DISTINCT Orderkey, OIFNotes  --WL01
       FROM #T_ORDERS WITH (NOLOCK)
       ORDER BY Orderkey
 
       OPEN @CUR_MPOC
 
-      FETCH NEXT FROM @CUR_MPOC INTO @c_Orderkey
+      FETCH NEXT FROM @CUR_MPOC INTO @c_Orderkey, @c_OIFNotes   --WL01
 
       WHILE @@FETCH_STATUS <> -1 AND @n_Continue IN (1,2)
       BEGIN
@@ -383,12 +420,25 @@ BEGIN
          
          IF @n_MPOCFlag > 0
          BEGIN
-            UPDATE #T_ORDERS
-            SET MPOC = 'Y'
-            WHERE Orderkey = @c_OrderKey
+            --WL01 S
+            SET @c_MasterShipID = ''
+            SELECT @c_MasterShipID = CL1.Short
+            FROM #T_MPOCDEP CL1
+            WHERE CL1.Code = @c_OIFNotes
+            AND CL1.Code2 = @n_MPOCFlag
+
+            IF ISNULL(@c_MasterShipID, '') <> ''
+            BEGIN
+               UPDATE #T_ORDERS
+               SET MPOC = 'Y'
+                 , MPOCFlag = @n_MPOCFlag
+                 , MasterShipID = @c_MasterShipID
+               WHERE Orderkey = @c_OrderKey
+            END
+            --WL01 E
          END
 
-         FETCH NEXT FROM @CUR_MPOC INTO @c_Orderkey
+         FETCH NEXT FROM @CUR_MPOC INTO @c_Orderkey, @c_OIFNotes   --WL01
       END
       CLOSE @CUR_MPOC
       DEALLOCATE @CUR_MPOC
@@ -453,6 +503,7 @@ BEGIN
 
          UPDATE #T_ORDERS
          SET BuyerPO = ''   --MPOC - BuyerPO not needed for grouping/sorting
+           , VCCount = 0   --WL01
          WHERE MPOC = 'Y'
       END
    END
@@ -488,6 +539,7 @@ BEGIN
          AND   NOT EXISTS (   SELECT 1 FROM dbo.WorkOrderDetail wod (NOLOCK)
                               WHERE wod.ExternWorkOrderKey = os.Orderkey
                               AND wod.Qty > 0
+                              AND wod.StorerKey = @c_Storerkey   --WL01
                            )
 
          -- WCSPACKREQ type need WCS but with 'WCSCTNIZE' = 'N', this type unable to do
@@ -503,6 +555,7 @@ BEGIN
                            JOIN CODELKUP cl (NOLOCK) ON cl.ListName = 'WCSPACKREQ'
                                                     AND cl.Short = wod.[Type]
                            WHERE wod.ExternWorkOrderKey = os.Orderkey
+                           AND wod.StorerKey = @c_Storerkey   --WL01
                            AND wod.Qty > 0 ) 
       END
       
@@ -527,51 +580,33 @@ BEGIN
       WHERE CL.LISTNAME = 'WCSPackReq'
       AND CL.Storerkey = @c_Storerkey
    END
-
+   
    --Calculate Virtual Cartons START
    --1 Order 1 Virtual Carton by default
    IF @n_Continue IN (1,2)
    BEGIN
+      --Update VAS flag
+      --WL01 S
+      UPDATE T
+      SET VAS = 'Y'
+      FROM #T_ORDERS T
+      JOIN dbo.WorkOrderDetail WOD WITH (NOLOCK) ON WOD.ExternWorkOrderKey = T.Orderkey
+                                                AND WOD.StorerKey = @c_Storerkey
+      JOIN @T_WCSPackReq W ON W.WODType = WOD.[Type] AND W.ActiveFlag = 'Y'
+      --WL01 E
+
       --Applicable for MPOC orders only
       IF @n_MPOCReqFlag = 1
       BEGIN
-         --Calculate MPOC VC Estimation (Existing automation carton estimation logic)
-         ;WITH CTE AS ( SELECT T2.Orderkey, TotalCube = SUM(T2.StdCube)
-                        FROM #T_ORDERS T1 WITH (NOLOCK)
-                        JOIN #T_ORDERDET T2 WITH (NOLOCK) ON T2.Orderkey = T1.Orderkey
-                        WHERE T1.MPOC = 'Y'
-                        GROUP BY T2.Orderkey )
-         UPDATE T3
-         SET T3.VCCount = IIF(CEILING(CTE.TotalCube / @n_CartonMaxCube) < 1, 1, CEILING(CTE.TotalCube / @n_CartonMaxCube))
-         FROM #T_ORDERS T3 WITH (NOLOCK)
-         JOIN CTE ON CTE.Orderkey = T3.Orderkey
-
-         --Assign MPOC VC based on Qty vs StdCube per CartonMaxCube
-         ;WITH OrderedLines AS
-         (
-            SELECT Orderkey
-                 , OrderLineNumber
-                 , SKU
-                 , Qty
-                 , StdCube = IIF(StdCube > @n_CartonMaxCube, @n_CartonMaxCube, StdCube)
-                 , ROW_NUMBER() OVER (PARTITION BY Orderkey
-                                      ORDER BY OrderLineNumber) AS rn
-            FROM #T_ORDERDET WITH (NOLOCK)
-            WHERE StdCube > 0.00
-         ), CartonAssign AS
-         (
-            SELECT *
-                 -- Running cube up to this line in the order
-                 , SUM(StdCube) OVER (PARTITION BY Orderkey
-                                      ORDER BY rn
-                                      ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS RunningCube --Cumulative sum
-            FROM OrderedLines
-         )
+         --WL01 S
+         ;WITH MPOC_VC AS ( SELECT T1.Orderkey
+                                 , CartonNumber = DENSE_RANK() OVER ( ORDER BY T1.Consigneekey, T1.BillTo, T1.MarkFor, T1.MasterShipID ASC )
+                            FROM #T_ORDERS T1 )
          UPDATE T4
-         SET T4.CartonNumber = FLOOR((RunningCube - 1) / @n_CartonMaxCube) + 1
-         FROM #T_ORDERDET T4 WITH (NOLOCK)
-         JOIN CartonAssign C ON C.Orderkey = T4.Orderkey 
-                            AND C.OrderLineNumber = T4.OrderLineNumber
+         SET T4.CartonNumber = 'M' + REPLICATE('0', 9 - LEN(CAST(C.CartonNumber AS NVARCHAR))) + CAST(C.CartonNumber AS NVARCHAR)
+         FROM #T_ORDERDET T4
+         JOIN MPOC_VC C ON C.Orderkey = T4.Orderkey
+         --WL01 E
       END
 
       --VAS will overwrite MPOC VC Estimation
@@ -588,14 +623,33 @@ BEGIN
                                             JOIN @T_WCSPackReq W ON W.WODType = WOD.[Type]
                                             WHERE WOD.ExternWorkOrderKey = T5.Orderkey 
                                             AND W.ActiveFlag = 'Y'
+                                            AND WOD.StorerKey = @c_Storerkey
                                             ORDER BY WOD.[Type] ) AS WODT )
       UPDATE T6
-      SET T6.CartonNumber = C.VC_RowRef
+      SET T6.CartonNumber = C.Orderkey + '_' + CAST(C.VC_RowRef AS NVARCHAR)   --WL01
       FROM #T_ORDERDET T6 WITH (NOLOCK)
       JOIN VASCartonNum C ON C.Orderkey = T6.Orderkey 
                          AND C.OrderLineNumber = T6.OrderLineNumber
+      JOIN #T_ORDERS T ON T.Orderkey = T6.Orderkey AND T.VAS = 'Y'   --WL01
       
       --Calculate Putwall & Chute Usage
+      --WL01 S
+      --For MPOC, do not group by orderkey, only goes to Chute
+      --1 unique Carton Number = 1 VC -> all goes to 1 Chute
+      ;WITH CTE4 AS (
+         SELECT T8.Orderkey
+              , T8.CartonNumber
+              , RNo = ROW_NUMBER() OVER (PARTITION BY T8.CartonNumber ORDER BY T8.Orderkey)
+         FROM #T_ORDERDET T8
+      )
+      UPDATE T
+      SET VCCount = 1
+        , PutwallUsage = 0
+        , ChuteUsage = 1
+      FROM #T_ORDERS T
+      JOIN CTE4 R ON T.Orderkey = R.Orderkey AND R.RNo = 1 
+      AND T.MPOC = 'Y' AND T.VAS <> 'Y'
+
       --If Putwall fully utilized the rest will goes to Chute and it is by group level
       ;WITH CTE2 AS (
          SELECT T7.OrderKey
@@ -604,6 +658,8 @@ BEGIN
               , Putwall = IIF(SUM(T7.Qty) BETWEEN @n_PutwallMinQty AND @n_PutwallMaxQty, 1, 0)
               , Chute   = IIF(SUM(T7.Qty) BETWEEN @n_PutwallMinQty AND @n_PutwallMaxQty, 0, 1)
          FROM #T_ORDERDET T7
+         JOIN #T_ORDERS T ON T.Orderkey = T7.Orderkey
+         WHERE (T.MPOC = 'Y' AND T.VAS = 'Y') OR (T.MPOC <> 'Y')
          GROUP BY T7.OrderKey
                 , T7.CartonNumber
       ), CTE3 AS (
@@ -625,6 +681,7 @@ BEGIN
         , T8.ChuteUsage = CTE3.ChuteUsage
       FROM #T_ORDERS T8
       JOIN CTE3 ON CTE3.Orderkey = T8.Orderkey
+      --WL01 E
       --Calculate Carton for S02, S06, J05 - END
 
       --Update VCCount by Consigneekey
@@ -651,71 +708,152 @@ BEGIN
                   ) o ON o.Orderkey = t.Orderkey
    END
    --Calculate Virtual Cartons END
-   
+
    --Main process - START
    IF @n_Continue IN (1,2)
    BEGIN
-      --Split Orderkeys into multiple groups by VCCount & Chute/Putwall slots
-      SET @n_LoopCount = 0
-
-      --Keep LoopCount = Total Records from #T_ORDERS to prevent infinite loop
-      SELECT @n_LoopCount = COUNT(1)
-      FROM #T_ORDERS WITH (NOLOCK)
-      WHERE PreWaveNo IS NULL
-
-      WHILE EXISTS ( SELECT 1
-                     FROM #T_ORDERS WITH (NOLOCK)
-                     WHERE PreWaveNo IS NULL ) AND @n_LoopCount > 0
+      --MPOC (By group)
+      --WL01 S 
+      IF @n_Continue IN (1,2) 
       BEGIN
-         SET @c_Orderkey = ''
-         SET @c_PreWaveNo = ''
+         --Split CartonNumber into multiple groups by VCCount & Chute/Putwall slots
+         SET @n_LoopCount = 0
 
-         ;WITH CTE AS ( SELECT Orderkey, VCCount, DENSE_RANK() OVER 
-                              (ORDER BY RNo) AS DRank
-                            , PutwallUsage
-                            , ChuteUsage
+         --Keep LoopCount = Total Records from #T_ORDERS to prevent infinite loop
+         SELECT @n_LoopCount = COUNT(1)
+         FROM #T_ORDERS WITH (NOLOCK)
+         WHERE PreWaveNo IS NULL
+         AND MPOC = 'Y' AND VAS <> 'Y'
+
+         WHILE EXISTS ( SELECT 1
                         FROM #T_ORDERS WITH (NOLOCK)
                         WHERE PreWaveNo IS NULL
-                      )
-         SELECT TOP 1 @c_Orderkey = CTE.Orderkey
-                    , @n_PutwallCount = CTE.PutwallUsage
-                    , @n_ChuteCount = CTE.ChuteUsage
-         FROM CTE
-         ORDER BY CTE.DRank, CTE.Orderkey
-
-         --Check if can fulfill existing PreWaveNo
-         SELECT @c_PreWaveNo = PreWaveNo
-         FROM #T_ORDERS WITH (NOLOCK)
-         WHERE (PreWaveNo IS NOT NULL AND PreWaveNo <> '')
-         GROUP BY PreWaveNo
-         HAVING SUM(PutwallUsage) + @n_PutwallCount <= @n_NoOfPutwall
-         AND SUM(ChuteUsage) + @n_ChuteCount <= @n_NoOfChute
-
-         --If existing group cannot fulfill, create a new group (Wave)
-         IF ISNULL(@c_PreWaveNo, '') = ''
+                        AND MPOC = 'Y' AND VAS <> 'Y' ) AND @n_LoopCount > 0
          BEGIN
-            BEGIN TRY
-               EXEC dbo.nspg_GetKey @KeyName = N'LVSPreWave'
-                                  , @fieldlength = 8
-                                  , @keystring = @c_PreWaveNo OUTPUT
-                                  , @b_Success = @b_Success OUTPUT
-                                  , @n_err = @n_err OUTPUT
-                                  , @c_errmsg = @c_errmsg OUTPUT
-            END TRY
-            BEGIN CATCH
-               SET @n_Continue = 3    
-               SET @c_ErrMsg = ERROR_MESSAGE()
-               GOTO QUIT_SP  
-            END CATCH
+            SET @c_CartonNumber = ''
+            SET @c_PreWaveNo = ''
+
+            ;WITH CTE AS ( SELECT T2.CartonNumber, T1.VCCount, DENSE_RANK() OVER 
+                                  (ORDER BY T1.RNo) AS DRank
+                                , T1.PutwallUsage
+                                , T1.ChuteUsage
+                           FROM #T_ORDERS T1
+                           JOIN #T_ORDERDET T2 ON T2.Orderkey = T1.Orderkey
+                           WHERE T1.PreWaveNo IS NULL
+                           AND T1.MPOC = 'Y' AND T1.VAS <> 'Y'
+                         )
+            SELECT TOP 1 @c_CartonNumber = CTE.CartonNumber
+                       , @n_PutwallCount = CTE.PutwallUsage
+                       , @n_ChuteCount = CTE.ChuteUsage
+            FROM CTE
+            ORDER BY CTE.DRank, CTE.CartonNumber
+            
+            --Check if can fulfill existing PreWaveNo
+            SELECT @c_PreWaveNo = PreWaveNo
+            FROM #T_ORDERS WITH (NOLOCK)
+            WHERE (PreWaveNo IS NOT NULL AND PreWaveNo <> '')
+            GROUP BY PreWaveNo
+            HAVING SUM(PutwallUsage) + @n_PutwallCount <= @n_NoOfPutwall
+            AND SUM(ChuteUsage) + @n_ChuteCount <= @n_NoOfChute
+         
+            --If existing group cannot fulfill, create a new group (Wave)
+            IF ISNULL(@c_PreWaveNo, '') = ''
+            BEGIN
+               BEGIN TRY
+                  EXEC dbo.nspg_GetKey @KeyName = N'LVSPreWave'
+                                     , @fieldlength = 8
+                                     , @keystring = @c_PreWaveNo OUTPUT
+                                     , @b_Success = @b_Success OUTPUT
+                                     , @n_err = @n_err OUTPUT
+                                     , @c_errmsg = @c_errmsg OUTPUT
+               END TRY
+               BEGIN CATCH
+                  SET @n_Continue = 3    
+                  SET @c_ErrMsg = ERROR_MESSAGE()
+                  GOTO QUIT_SP  
+               END CATCH
+            END
+
+            --Update the PreWaveNo to #T_ORDERS
+            UPDATE T
+            SET PreWaveNo = @c_PreWaveNo
+            FROM #T_ORDERS T
+            JOIN #T_ORDERDET T2 ON T2.Orderkey = T.Orderkey
+            WHERE T2.CartonNumber = @c_CartonNumber
+
+            SET @n_LoopCount = @n_LoopCount - 1
          END
-
-         --Update the PreWaveNo to #T_ORDERS
-         UPDATE #T_ORDERS
-         SET PreWaveNo = @c_PreWaveNo
-         WHERE Orderkey = @c_Orderkey
-
-         SET @n_LoopCount = @n_LoopCount - 1
       END
+      --WL01 E MPOC
+
+      --Non-MPOC or MPOC but VAS (By Orderkey)
+      IF @n_Continue IN (1,2)   --WL01
+      BEGIN
+         --Split Orderkeys into multiple groups by VCCount & Chute/Putwall slots
+         SET @n_LoopCount = 0
+         
+         --Keep LoopCount = Total Records from #T_ORDERS to prevent infinite loop
+         SELECT @n_LoopCount = COUNT(1)
+         FROM #T_ORDERS WITH (NOLOCK)
+         WHERE PreWaveNo IS NULL
+         AND ((MPOC = 'Y' AND VAS = 'Y') OR (MPOC <> 'Y'))   --WL01
+         
+         WHILE EXISTS ( SELECT 1
+                        FROM #T_ORDERS WITH (NOLOCK)
+                        WHERE PreWaveNo IS NULL
+                        AND ((MPOC = 'Y' AND VAS = 'Y') OR (MPOC <> 'Y')) ) AND @n_LoopCount > 0   --WL01
+         BEGIN
+            SET @c_Orderkey = ''
+            SET @c_PreWaveNo = ''
+         
+            ;WITH CTE AS ( SELECT Orderkey, VCCount, DENSE_RANK() OVER 
+                                 (ORDER BY RNo) AS DRank
+                               , PutwallUsage
+                               , ChuteUsage
+                           FROM #T_ORDERS WITH (NOLOCK)
+                           WHERE PreWaveNo IS NULL
+                           AND ((MPOC = 'Y' AND VAS = 'Y') OR (MPOC <> 'Y'))   --WL01
+                         )
+            SELECT TOP 1 @c_Orderkey = CTE.Orderkey
+                       , @n_PutwallCount = CTE.PutwallUsage
+                       , @n_ChuteCount = CTE.ChuteUsage
+            FROM CTE
+            ORDER BY CTE.DRank, CTE.Orderkey
+            
+            --Check if can fulfill existing PreWaveNo
+            SELECT @c_PreWaveNo = PreWaveNo
+            FROM #T_ORDERS WITH (NOLOCK)
+            WHERE (PreWaveNo IS NOT NULL AND PreWaveNo <> '')
+            GROUP BY PreWaveNo
+            HAVING SUM(PutwallUsage) + @n_PutwallCount <= @n_NoOfPutwall
+            AND SUM(ChuteUsage) + @n_ChuteCount <= @n_NoOfChute
+            
+            --If existing group cannot fulfill, create a new group (Wave)
+            IF ISNULL(@c_PreWaveNo, '') = ''
+            BEGIN
+               BEGIN TRY
+                  EXEC dbo.nspg_GetKey @KeyName = N'LVSPreWave'
+                                     , @fieldlength = 8
+                                     , @keystring = @c_PreWaveNo OUTPUT
+                                     , @b_Success = @b_Success OUTPUT
+                                     , @n_err = @n_err OUTPUT
+                                     , @c_errmsg = @c_errmsg OUTPUT
+               END TRY
+               BEGIN CATCH
+                  SET @n_Continue = 3    
+                  SET @c_ErrMsg = ERROR_MESSAGE()
+                  GOTO QUIT_SP  
+               END CATCH
+            END
+            
+            --Update the PreWaveNo to #T_ORDERS
+            UPDATE #T_ORDERS
+            SET PreWaveNo = @c_PreWaveNo
+            WHERE Orderkey = @c_Orderkey
+         
+            SET @n_LoopCount = @n_LoopCount - 1
+         END
+      END   --WL01 Non-MPOC or MPOC but VAS
       
       --If an order contain Virtual Carton > @n_NoOfPutwall OR @n_NoOfChute
       SET @c_Orderkey = ''
@@ -803,26 +941,82 @@ BEGIN
            , Qty
            , StdCube
            , WCS
-           , VirtualCartonNumber = TRIM(Orderkey) + '_' + CAST(CartonNumber AS NVARCHAR)
+           --WL01 S
+           , VCNumber = IIF(@n_MPOCReqFlag = 1, '', CartonNumber)
+           , MPOC_VCNumber = IIF(@n_MPOCReqFlag = 1
+                               , CartonNumber
+                               , '')
+           --WL01 E
       FROM #T_ORDERDET
 
-      SELECT T2.Orderkey
-           , T2.BuyerPO
-           , SKUCount = ( SELECT COUNT(DISTINCT T.SKU) 
-                          FROM #T_ORDERDET T WITH (NOLOCK) 
-                          WHERE T.Orderkey = T2.Orderkey )
-           , T2.UDF01
-           , T2.MPOC
-           , T2.VCCount
-           , T2.PreWaveNo
-           , T2.Consigneekey
-           , T2.VCCountCS
-           , T2.ChuteUsage
-           , T2.PutwallUsage
-           , T2.RNo
-      FROM #T_PREWAVE T1
-      JOIN #T_ORDERS T2 ON T2.Orderkey = T1.Orderkey
-      ORDER BY T1.PreWaveNo, T2.RNo
+      --WL01 S
+      IF EXISTS ( SELECT 1 FROM #T_ORDERS WHERE MPOC = 'Y' AND VAS <> 'Y' )
+      BEGIN
+         SELECT T3.CartonNumber
+              , BuyerPO = MAX(T2.BuyerPO)
+              , SKUCount = ( SELECT COUNT(DISTINCT T.SKU) 
+                             FROM #T_ORDERDET T WITH (NOLOCK) 
+                             WHERE T.CartonNumber = T3.CartonNumber )
+              , UDF01 = MAX(T2.UDF01)
+              , MPOC = MAX(T2.MPOC)
+              , VCCount = SUM(T2.VCCount)
+              , T2.PreWaveNo
+              , T2.VCCountCS
+              , ChuteUsage = SUM(T2.ChuteUsage)
+              , PutwallUsage = 0
+              , MinRNo = MIN(T2.RNo)
+              , T2.MPOCFlag
+              , VAS = MAX(T2.VAS)
+              , OrderkeyList = STRING_AGG(CAST(T1.Orderkey AS NVARCHAR(MAX)), ';')
+              , T2.Consigneekey
+              , T2.BillTo
+              , T2.MarkFor
+              , T2.MasterShipID
+         FROM #T_PREWAVE T1
+         JOIN #T_ORDERS T2 ON T2.Orderkey = T1.Orderkey
+         CROSS APPLY ( SELECT TOP 1 T.CartonNumber
+                       FROM #T_ORDERDET T
+                       WHERE T.Orderkey = T2.Orderkey ) T3
+         WHERE T2.MPOC = 'Y' AND T2.VAS <> 'Y'
+         GROUP BY T3.CartonNumber
+                , T2.PreWaveNo
+                , T2.VCCountCS
+                , T2.MPOCFlag
+                , T2.Consigneekey
+                , T2.BillTo
+                , T2.MarkFor
+                , T2.MasterShipID
+         ORDER BY T2.PreWaveNo, MIN(T2.RNo)
+      END
+
+      IF EXISTS ( SELECT 1 FROM #T_ORDERS 
+                  WHERE (MPOC = 'Y' AND VAS = 'Y') OR (MPOC <> 'Y') )
+      BEGIN
+         SELECT T2.Orderkey
+              , T2.BuyerPO
+              , SKUCount = ( SELECT COUNT(DISTINCT T.SKU) 
+                             FROM #T_ORDERDET T WITH (NOLOCK) 
+                             WHERE T.Orderkey = T2.Orderkey )
+              , T2.UDF01
+              , T2.MPOC
+              , T2.VCCount
+              , T2.PreWaveNo
+              , T2.VCCountCS
+              , T2.ChuteUsage
+              , T2.PutwallUsage
+              , T2.RNo
+              , T2.VAS
+              , OrderkeyList = ''
+              , T2.Consigneekey
+              , T2.BillTo
+              , T2.MarkFor
+              , T2.MasterShipID
+         FROM #T_PREWAVE T1
+         JOIN #T_ORDERS T2 ON T2.Orderkey = T1.Orderkey
+         WHERE (T2.MPOC = 'Y' AND T2.VAS = 'Y') OR (T2.MPOC <> 'Y')
+         ORDER BY T2.PreWaveNo, T2.RNo
+      END
+      --WL01 E
    END
 
    IF @n_Continue IN (1,2) AND @b_debug <> 1
@@ -1011,11 +1205,13 @@ BEGIN
    IF OBJECT_ID('tempdb..#ORDER_OPTIMIZATION_INPUT ','u') IS NOT NULL 
       DROP TABLE #ORDER_OPTIMIZATION_INPUT
 
-   IF OBJECT_ID('tempdb..#ORDER_OPTIMIZATION_INPUT ','u') IS NOT NULL 
-      DROP TABLE #ORDER_OPTIMIZATION_INPUT
-      
    IF OBJECT_ID('tempdb..#ORDER_OPTIMIZATION_OUTPUT ','u') IS NOT NULL 
       DROP TABLE #ORDER_OPTIMIZATION_OUTPUT
+
+   --WL01 S
+   IF OBJECT_ID('tempdb..#T_MPOCDEP ','u') IS NOT NULL 
+      DROP TABLE #T_MPOCDEP
+   --WL01 E
 
    IF @n_Continue = 3 -- Error Occured - Process And Return      
    BEGIN
