@@ -4,7 +4,6 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-
 /************************************************************************/
 /* Store procedure: lsp_SetUser                                         */
 /* Copyright      : Maersk                                              */
@@ -18,6 +17,7 @@ GO
 /* 2021-02-25  Wan01    1.1   Add Big Outer Try/Catch                   */
 /* 2025-05-23  SWT01    1.3   Setting Session Context for user name     */
 /* 2025-09-04  SWT02    1.4   Set user name to suser_sname if not exists*/
+/* 2025-11-07  AK01     1.5   UWP-43795 bug fixes                       */
 /************************************************************************/
 CREATE OR ALTER   PROCEDURE [WM].[lsp_SetUser]
    @c_UserName     NVARCHAR(128) OUTPUT,
@@ -34,6 +34,11 @@ BEGIN
    DECLARE @cExternalUserID  NVARCHAR(100) = '',
            @c_LDAP_DOMAIN    NVARCHAR(50) = '',
            @c_UserType       INT = 0
+
+   -- AK01 S
+   DECLARE @b_HasRole        BIT          = 0
+         , @b_HasLogin       BIT          = 0
+   -- AK01 E
 
    -- Doesn't matter whether this user id exists in security login, we still set the session context to user name.
    EXEC sp_set_session_context @key = 'mwms_user_name', @value = @c_UserName;
@@ -69,23 +74,38 @@ BEGIN
          END
       END
 
-      -- If this user id NOT FOUND in Security Login, then do not run "Execute As"
-      -- This will make the RDT and other application still working if they not ready to change.
-      IF NOT EXISTS(
-         SELECT 1
-         FROM sys.database_principals DBUser
+      --AK01 S
+      --If this user is not found in NSQL role or has no server login, skip "EXECUTE AS LOGIN"
+      --RDT and other application may still using this.
+      IF EXISTS (
+         SELECT 1 FROM sys.database_principals DBUser
          INNER JOIN sys.database_role_members DBM ON DBM.member_principal_id = DBUser.principal_id
          INNER JOIN sys.database_principals DBRole ON DBRole.principal_id = DBM.role_principal_id
-         WHERE DBRole.name = 'NSQL' AND DBUser.name = @c_UserName)
+         WHERE DBRole.name = 'NSQL' 
+         AND DBUser.name = @c_UserName
+      )
       BEGIN
-         SET @b_ExecuteAs = 0 
-         SET @c_UserName = SUSER_SNAME() -- (SWT02)
-         GOTO EXIT_SP
+         SET @b_HasRole = 1
+      END
+
+      -- Check if user has corresponding server login
+      IF EXISTS ( SELECT 1 FROM sys.server_principals SP WHERE SP.name = @c_UserName )
+      BEGIN
+         SET @b_HasLogin = 1
+      END
+
+      IF @b_HasRole = 1 AND @b_HasLogin = 1
+      BEGIN
+         SET @b_ExecuteAs = 1
       END
       ELSE
       BEGIN
-         SET @b_ExecuteAs = 1
-      END 
+         SET @b_ExecuteAs = 0 
+         SET @c_UserName = SUSER_SNAME()
+         GOTO EXIT_SP
+      END
+      --AK01 E
+      
    END TRY
    BEGIN CATCH
       SET @n_Err    = @@ERROR
@@ -105,7 +125,5 @@ BEGIN
    --(Wan01) - END
 
 END -- End Procedure
-GO
-GRANT EXECUTE ON [WM].[lsp_SetUser] TO nSQL 
 GO
 
