@@ -101,7 +101,6 @@ BEGIN
             ,@c_SourceType                   NVARCHAR(30)='lsp_Move_Wrapper'        --(Wan05)              
             ,@c_SerialNoUpdateLotLocID       NVARCHAR(30) = ''   --ML02
             ,@c_SerialNoCapture              NVARCHAR(1)  = ''   --ML02
-            ,@n_Qty_ID                       INT                 --ML02
 
       SELECT @n_starttcnt=@@TRANCOUNT, @n_err=0, @b_success=1, @c_errmsg='', @n_continue=1
 
@@ -152,19 +151,9 @@ BEGIN
 
          IF @c_SerialNoUpdateLotLocID = '1' AND @c_SerialNoCapture IN ('1', '2')
          BEGIN
-            SET @n_Qty_ID = 0
-            SELECT @n_Qty_ID = ISNULL(SUM(Qty),0)
-              FROM LOTxLOCxID (NOLOCK)
-             WHERE Storerkey = @c_Storerkey
-               AND Loc       = @c_Loc
-               AND ID        = @c_ID
-
-            IF NOT (ISNULL(@n_ToQty,0)>0 AND ISNULL(@n_ToQty,0)=ISNULL(@n_Qty_ID,0))
-            BEGIN
-               SET @n_Continue = 3
-               SET @n_err = 552705
-               SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': Partial ID Movment is not allowed when SerialNoUpdateLotLocID turns on and SerialNoCapture=1,2. (lsp_Move_Wrapper)'
-            END
+            SET @n_Continue = 3
+            SET @n_err = 552705
+            SET @c_errmsg = 'NSQL' +CONVERT(CHAR(6),@n_err) + ': UI Movment is not allowed when SerialNoUpdateLotLocID turns on and SerialNoCapture=1,2. Please use RDT instead. (lsp_Move_Wrapper)'
          END
       END
       --ML02-E
