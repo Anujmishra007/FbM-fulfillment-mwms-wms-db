@@ -35,7 +35,7 @@ EXECUTE rdt.rdtAddScn 5292, 'ENG'
    ,@cLine07 = '%20d04'
    ,@cLine08 = 'UCC:'
    ,@cLine09 = '%20d09'
-   ,@cLine10 = '%60i05'
+   ,@cLine10 = '%2000iV_Barcode' --FCR-8676
    ,@cLine11 = 'TOTAL CASE: %05d06'
    ,@cLine12 = 'TOTAL SCAN: %05d07'
    ,@cLine14 = '%e'

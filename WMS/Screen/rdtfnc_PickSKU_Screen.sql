@@ -32,7 +32,7 @@ EXECUTE rdt.rdtAddScn 4692, 'ENG',
    @cLine02 = '%20d02', 
    @cLine03 = 'SKU:',
    @cLine04 = '%20d03',
-   @cLine05 = '%60i04',
+   @cLine05 = '%2000iV_Barcode', --FCR-8676
    @cLine06 = '%20d05',
    @cLine07 = '%20d06',
    @cLine08 = 'LOTTABLES:',

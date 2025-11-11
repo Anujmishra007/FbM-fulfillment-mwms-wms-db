@@ -4,43 +4,44 @@ GO
 SET QUOTED_IDENTIFIER OFF
 GO
 
-/*********************************************************************************/
-/* Store procedure: rdtfnc_PickSKU                                               */
-/* Copyright      : LFLogistics                                                  */
-/*                                                                               */
-/* Purpose: Pick SKU/UPC                                                         */
-/*                                                                               */
-/* Date         Rev  Author     Purposes                                         */
-/* 2016-06-20   1.0  Ung        SOS372037 Migrate from 860 Pick SKU/UPC          */
-/* 2017-02-09   1.1  Ung        WMS-1000 Add verify lottable                     */
-/* 2017-02-21   1.2  Ung        WMS-1715 Add DefaultToLOC, SkipLOC,              */
-/*                              balance pick later                               */
-/* 2017-10-03   1.3  Ung        WMS-3052 Add VerifyID                            */
-/* 2018-09-25   1.4  Ung        WMS-6410 Add ExtendedInfo at LOC screen          */
-/*                              Add rdtMobRec Field16..20                        */
-/* 2019-10-18   1.5  James      WMS-10860 Add auto scan in (james01)             */
-/* 2019-12-23   1.6  James      WMS-11487 Add ExtValid @ qty screen (james02)    */
-/* 2020-02-20   1.7  James      WMS-12097 Add MultiSKUBarcode (james03)          */
-/* 2020-10-10   1.8  YeeKung    WMS-15415 Add DecodeidSP (yeekung01)             */
-/* 2020-08-28   1.9  YeeKung    WMS-14706 Add clearid (yeekung02)                */
-/* 2020-12-28   2.0  YeeKung    WMS-15995 Add PickZone (yeekung03 )              */
-/* 2020-12-28   2.1  WyeChun    Add in PickZone (WC01)                           */  
-/* 2022-04-08   2.2  Ung        WMS-19402 Add AutoScanOut                        */
-/* 2021-10-04   2.3  YeeKung    WMS-16543 Fix multisku (yeekung04)               */   
-/*                              Add SwapIDSP                                     */
-/* 2022-12-30   2.4  Calvin     JSM-119684 Reset Pickzone Variable (CLVN01)      */
-/* 2022-11-24   2.5  Ung        WMS-21032 Fix ExtendedInfoSP at LOC screen       */
-/*                              Add DefaultQTY                                   */
-/* 2023-03-15   2.6  YeeKung    WMS-21872 Fix Bug (yeekung05)                    */
-/* 2024-07-04   2.7  JHU151     FCR-537 @cDefaultQTY to NVARCHAR(10)             */
-/* 2024-07-08   2.8  JHU151     FCR-330 SSCC code generator                      */
-/* 2024-10-17   2.9  PXL009     FCR-759 ID and UCC Length Issue                  */
-/* 2025-04-29   3.0.0 NickT     UWP-33739 Add Extended Validation SP in step 1   */
-/* 2025-06-05   3.1.0 JACKC     FCR-4328 Add ExtScn to ST4 when short            */
-/* 2025-06-20   0.0.0 Jackc     !!!Cutover. Use V0 repo for work!!!              */
-/* 2025-08-22   3.7   Cuize       FCR-7251 Check Digit                           */
-/* 2025-09-18   3.8   Dennis    UWP-41326 Fix CheckDigit Bug                     */
-/*********************************************************************************/
+/***************************************************************************************/
+/* Store procedure: rdtfnc_PickSKU                                                     */
+/* Copyright      : Maersk                                                             */
+/*                                                                                     */
+/* Purpose: Pick SKU/UPC                                                               */
+/*                                                                                     */
+/* Date         Rev  Author     Purposes                                               */
+/* 2016-06-20   1.0  Ung        SOS372037 Migrate from 860 Pick SKU/UPC                */
+/* 2017-02-09   1.1  Ung        WMS-1000 Add verify lottable                           */
+/* 2017-02-21   1.2  Ung        WMS-1715 Add DefaultToLOC, SkipLOC,                    */
+/*                              balance pick later                                     */
+/* 2017-10-03   1.3  Ung        WMS-3052 Add VerifyID                                  */
+/* 2018-09-25   1.4  Ung        WMS-6410 Add ExtendedInfo at LOC screen                */
+/*                              Add rdtMobRec Field16..20                              */
+/* 2019-10-18   1.5  James      WMS-10860 Add auto scan in (james01)                   */
+/* 2019-12-23   1.6  James      WMS-11487 Add ExtValid @ qty screen (james02)          */
+/* 2020-02-20   1.7  James      WMS-12097 Add MultiSKUBarcode (james03)                */
+/* 2020-10-10   1.8  YeeKung    WMS-15415 Add DecodeidSP (yeekung01)                   */
+/* 2020-08-28   1.9  YeeKung    WMS-14706 Add clearid (yeekung02)                      */
+/* 2020-12-28   2.0  YeeKung    WMS-15995 Add PickZone (yeekung03 )                    */
+/* 2020-12-28   2.1  WyeChun    Add in PickZone (WC01)                                 */  
+/* 2022-04-08   2.2  Ung        WMS-19402 Add AutoScanOut                              */
+/* 2021-10-04   2.3  YeeKung    WMS-16543 Fix multisku (yeekung04)                     */   
+/*                              Add SwapIDSP                                           */
+/* 2022-12-30   2.4  Calvin     JSM-119684 Reset Pickzone Variable (CLVN01)            */
+/* 2022-11-24   2.5  Ung        WMS-21032 Fix ExtendedInfoSP at LOC screen             */
+/*                              Add DefaultQTY                                         */
+/* 2023-03-15   2.6  YeeKung    WMS-21872 Fix Bug (yeekung05)                          */
+/* 2024-07-04   2.7  JHU151     FCR-537 @cDefaultQTY to NVARCHAR(10)                   */
+/* 2024-07-08   2.8  JHU151     FCR-330 SSCC code generator                            */
+/* 2024-10-17   2.9  PXL009     FCR-759 ID and UCC Length Issue                        */
+/* 2025-04-29   3.0.0 NickT     UWP-33739 Add Extended Validation SP in step 1         */
+/* 2025-06-05   3.1.0 JACKC     FCR-4328 Add ExtScn to ST4 when short                  */
+/* 2025-06-20   0.0.0 Jackc     !!!Cutover. Use V0 repo for work!!!                    */
+/* 2025-08-22   3.7   Cuize       FCR-7251 Check Digit                                 */
+/* 2025-09-18   3.8   Dennis    UWP-41326 Fix CheckDigit Bug                           */
+/* 2025-11-10   3.8   JackC     FCR-8676 Set value to V_barcode when decode required   */
+/***************************************************************************************/
 
 CREATE OR ALTER PROC rdt.rdtfnc_PickSKU (
    @nMobile    INT,
@@ -178,6 +179,7 @@ DECLARE
 
 DECLARE 
    @cBarcode       NVARCHAR(60),
+   @cMobBarcode    NVARCHAR(2000),
    @cUPC           NVARCHAR(30),
    @cChkLottable01 NVARCHAR( 18), @cChkLottable02 NVARCHAR( 18), @cChkLottable03 NVARCHAR( 18), @dChkLottable04 DATETIME,      @dChkLottable05 DATETIME,
    @cChkLottable06 NVARCHAR( 30), @cChkLottable07 NVARCHAR( 30), @cChkLottable08 NVARCHAR( 30), @cChkLottable09 NVARCHAR( 30), @cChkLottable10 NVARCHAR( 30),
@@ -260,6 +262,7 @@ SELECT
    @cSwapidSP           = V_String40,
    @cExtendedScreenSP   = V_String41,
    @cUserDefine01       = V_String42,
+   @cMobBarcode         = V_Barcode,
    @cLOCCheckDigitSP    = C_String1,
 
 
@@ -1162,7 +1165,8 @@ BEGIN
       SET @cOutField01 = @cLOC
       SET @cOutField02 = @cDropID
       SET @cOutField03 = @cSKU
-      SET @cOutField04 = '' --@cSKU
+      SET @cOutField04 = '' 
+      SET @cMobBarcode = '' --@cSKU Barcode
       SET @cOutField05 = rdt.rdtFormatString( @cSKUDescr, 1, 20)  -- SKU desc 1
       SET @cOutField06 = rdt.rdtFormatString( @cSKUDescr, 21, 20)  -- SKU desc 2
       SET @cOutField20 = '' -- ExtendedInfo
@@ -1299,12 +1303,18 @@ Step_SKU:
 BEGIN
    IF @nInputKey = 1 -- ENTER
    BEGIN
+
+      --V3.8 start
       -- Screen mapping
-      SET @cBarcode = @cInField04
-      SET @cUPC = LEFT( @cInField04, 30)
+      --SET @cBarcode = @cInField04
+      --SET @cUPC = LEFT( @cInField04, 30)
+      DECLARE @cUPCBarcode NVARCHAR(2000)
+      SET @cUPCBarcode = LEFT(@cMobBarcode, 2000)
+      SET @cUPC = LEFT(@cMobBarcode, 30)
+      --V3.8 end
 
       -- Skip task
-      IF @cBarcode = '' OR @cBarcode IS NULL
+      IF @cUPCBarcode = '' OR @cUPCBarcode IS NULL
       BEGIN
          -- Prepare next screen var
          SET @cOutField01 = '' -- Option
@@ -1327,7 +1337,7 @@ BEGIN
          -- Standard decode
          IF @cDecodeSP = '1'
          BEGIN
-            EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cBarcode,
+            EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cUPCBarcode,
                @cUPC        = @cUPC           OUTPUT,
                @cLottable01 = @cChkLottable01 OUTPUT,
                @cLottable02 = @cChkLottable02 OUTPUT,
@@ -1351,7 +1361,7 @@ BEGIN
             BEGIN
 
                SET @cSQL = 'EXEC rdt.' + RTRIM( @cDecodeSP) +
-                  ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility,@cLoc,@cDropid,@cpickslipno,@cBarcode,@cFieldName, ' +
+                  ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility,@cLoc,@cDropid,@cpickslipno,@cUPCBarcode,@cFieldName, ' +
                   ' @cUPC         OUTPUT,@cSKu         OUTPUT,  @nQTY OUTPUT,' +
                   ' @cLottable01 OUTPUT, @cLottable02 OUTPUT, @cLottable03 OUTPUT, @dLottable04 OUTPUT, @dLottable05 OUTPUT, ' +
                   ' @cLottable06 OUTPUT, @cLottable07 OUTPUT, @cLottable08 OUTPUT, @cLottable09 OUTPUT, @cLottable10 OUTPUT, ' +
@@ -1369,7 +1379,7 @@ BEGIN
                   ' @cLOC         NVARCHAR( 10),   ' +
                   ' @cDropid      NVARCHAR( 20),   ' +
                   ' @cpickslipno  NVARCHAR( 20),   ' +
-                  ' @cBarcode     NVARCHAR( 60),   ' +
+                  ' @cUPCBarcode  NVARCHAR(2000),  ' +
                   ' @cFieldName   NVARCHAR( 10),   ' +
                   ' @cUPC         NVARCHAR( 20)  OUTPUT, ' +
                   ' @cSKU         NVARCHAR( 20)  OUTPUT, ' +
@@ -1394,7 +1404,7 @@ BEGIN
                   ' @cErrMsg      NVARCHAR( 20)  OUTPUT'
 
                EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-                  @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey,@cFacility,@cLoc,@cDropid,@cpickslipno, @cBarcode, 'SKU', --(yeekung05)
+                  @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey,@cFacility,@cLoc,@cDropid,@cpickslipno, @cUPCBarcode, 'SKU', --(yeekung05)
                   @cUPC           OUTPUT, @cSKU           OUTPUT, @cDefaultQTY       OUTPUT,
                   @cChkLottable01 OUTPUT, @cChkLottable02 OUTPUT, @cChkLottable03 OUTPUT, @dChkLottable04 OUTPUT, @dChkLottable05 OUTPUT,
                   @cChkLottable06 OUTPUT, @cChkLottable07 OUTPUT, @cChkLottable08 OUTPUT, @cChkLottable09 OUTPUT, @cChkLottable10 OUTPUT,
@@ -1660,7 +1670,7 @@ BEGIN
             '@nStep         INT,           ' +
             '@nAfterStep    INT,           ' +
             '@nInputKey     INT,           ' +
-    '@cFacility     NVARCHAR( 5),  ' +
+            '@cFacility     NVARCHAR( 5),  ' +
             '@cStorerKey    NVARCHAR( 15), ' +
             '@cPickSlipNo   NVARCHAR( 10), ' +
             '@cPickZone     NVARCHAR( 10), ' +
@@ -1722,7 +1732,7 @@ BEGIN
             '@nStep         INT,           ' +
             '@nAfterStep    INT,           ' +
             '@nInputKey     INT,           ' +
-    '@cFacility     NVARCHAR( 5),  ' +
+            '@cFacility     NVARCHAR( 5),  ' +
             '@cStorerKey    NVARCHAR( 15), ' +
             '@cPickSlipNo   NVARCHAR( 10), ' +
             '@cPickZone     NVARCHAR( 10), ' +
@@ -2071,7 +2081,8 @@ BEGIN
       SET @cOutField01 = @cLOC
       SET @cOutField02 = @cDropID
       SET @cOutField03 = @cSKU
-      SET @cOutField04 = '' --@cSKU
+      SET @cOutField04 = ''
+      SET @cMobBarcode = '' --@cSKU
       SET @cOutField05 = rdt.rdtFormatString( @cSKUDescr, 1, 20)  -- SKU desc 1
       SET @cOutField06 = rdt.rdtFormatString( @cSKUDescr, 21, 20)  -- SKU desc 2
       SET @cOutField20 = '' -- ExtendedInfo
@@ -2434,7 +2445,8 @@ BEGIN
    SET @cOutField01 = @cLOC
    SET @cOutField02 = @cDropID
    SET @cOutField03 = @cSKU
-   SET @cOutField04 = '' --@cSKU
+   SET @cOutField04 = '' 
+   SET @cMobBarcode = '' --@cSKU barcode
    SET @cOutField05 = rdt.rdtFormatString( @cSKUDescr, 1, 20)  -- SKU desc 1
    SET @cOutField06 = rdt.rdtFormatString( @cSKUDescr, 21, 20)  -- SKU desc 2
    SET @cOutField20 = '' -- ExtendedInfo
@@ -2846,7 +2858,8 @@ BEGIN
       SET @cOutField01 = @cLOC
       SET @cOutField02 = @cDropID
       SET @cOutField03 = @cSKU
-      SET @cOutField04 = '' --@cSKU
+      SET @cOutField04 = ''
+      SET @cMobBarcode = '' --SKU Barcode
       SET @cOutField05 = rdt.rdtFormatString( @cSKUDescr, 1, 20)  -- SKU desc 1
       SET @cOutField06 = rdt.rdtFormatString( @cSKUDescr, 21, 20)  -- SKU desc 2
       SET @cOutField20 = '' -- ExtendedInfo
@@ -3148,6 +3161,7 @@ BEGIN
       SET @cOutField02 = @cDropID
       SET @cOutField03 = @cSKU
       SET @cOutField04 = '' --@cSKU
+      SET @cMobBarcode = '' --@SKU
       SET @cOutField05 = rdt.rdtFormatString( @cSKUDescr, 1, 20)  -- SKU desc 1
       SET @cOutField06 = rdt.rdtFormatString( @cSKUDescr, 21, 20)  -- SKU desc 2
       SET @cOutField20 = '' -- ExtendedInfo
@@ -3369,7 +3383,8 @@ BEGIN
    SET @cOutField01 = @cLOC
    SET @cOutField02 = @cDropID
    SET @cOutField03 = @cSKU
-   SET @cOutField04 = @cUPC
+   --SET @cOutField04 = @cUPC
+   SET @cMobBarcode = @cUPC --V3.8
    SET @cOutField05 = rdt.rdtFormatString( @cSKUDescr, 1, 20)  -- SKU desc 1
    SET @cOutField06 = rdt.rdtFormatString( @cSKUDescr, 21, 20) -- SKU desc 2
    SET @cOutField20 = '' -- ExtendedInfo
@@ -3536,7 +3551,7 @@ BEGIN
       V_string40  = @cSwapidSP,   
       V_String41  = @cExtendedScreenSP,
       V_String42  = @cUserDefine01,
-
+      V_Barcode   = @cMobBarcode,
       C_String1  = @cLOCCheckDigitSP, -- (Cuize)
 
 
