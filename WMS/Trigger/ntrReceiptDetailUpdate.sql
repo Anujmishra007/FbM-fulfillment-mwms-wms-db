@@ -182,6 +182,8 @@ GO
 /*                              serialno table                              */
 /* 06-Oct-2025  AK01      6.5   UWP-42143 - Replace SUSER_SNAME with fnc_GetUserName*/
 /* 13-Oct-2025  AYD01     6.6   FCR-3582 Add validation for BeforeReceivedQty */
+/* 11-Nov-2025  PPA01     6.7   FCR-8680 Update Pallettype when pallettype
+/*                                modified in ASNDetails                      */
 /****************************************************************************/
 
 CREATE OR ALTER TRIGGER [dbo].[ntrReceiptDetailUpdate]
@@ -316,6 +318,25 @@ BEGIN
    SELECT @n_continue = 4
    GOTO QUIT
 END
+
+--PPA01--START
+IF (@n_continue = 1 OR @n_continue = 2) AND UPDATE(PalletType)
+BEGIN
+    SET NOCOUNT ON;
+
+    UPDATE p WITH (ROWLOCK)
+    SET p.PalletType = i.PalletType
+    FROM PALLET p
+    INNER JOIN INSERTED i
+        ON p.PalletKey = i.ToId
+    INNER JOIN DELETED d
+        ON d.ToId = i.ToId
+    INNER JOIN PALLETDETAIL pd
+        ON pd.PalletKey = p.PalletKey
+        AND pd.ReceiptKey = i.ReceiptKey
+    WHERE i.PalletType <> d.PalletType
+END
+--PPA01--END
 
 --TLTING02
 IF ( @n_continue=1 or @n_continue=2 ) AND NOT UPDATE(EditDate)
