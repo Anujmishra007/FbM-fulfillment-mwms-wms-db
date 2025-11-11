@@ -50,8 +50,9 @@ BEGIN
             --V1.0.2 start
             @cFromLoc         NVARCHAR(10),
             @cFromLocRoom     NVARCHAR(30),
-            @nRowCount        INT
+            @nRowCount        INT,
             --V1.0.2 end
+            @dDateTimeNow      DATETIME
 
    SELECT   @nScn = Scn,
             @nFromStep = V_FromStep,
@@ -251,11 +252,47 @@ BEGIN
             END --Unlock Tasks
          END--inputkey = 0
       END --ST7
+     IF @nStep = 99
+      BEGIN
+         IF @nInputKey = 1
+         BEGIN
+            IF (SELECT TOP 1 I_Field01 
+               FROM RDT.RDTMOBREC WITH (NOLOCK) 
+               WHERE Mobile = @nMobile) = 'SKIP'
+            BEGIN
+               SET @dDateTimeNow = GETDATE()
+
+               INSERT INTO dbo.TaskManagerSkipTasks
+               SELECT DISTINCT
+                  RM.UserName,
+                  TD1.TaskDetailKey,
+                  TD1.TaskType,
+                  TD1.Caseid,
+                  TD1.Lot,
+                  TD1.FromLoc,
+                  TD1.ToLoc,
+                  TD1.FromId,
+                  TD1.ToId,
+                  @dDateTimeNow
+               FROM TaskDetail TD1 WITH (NOLOCK)
+                  INNER JOIN TaskDetail TD2 WITH (NOLOCK)
+                     ON TD2.TaskDetailKey = @cTaskdetailKey
+                     AND TD2.StorerKey = @cStorerKey
+                     AND TD1.OrderKey = TD2.OrderKey
+                     AND TD1.GroupKey = TD2.GroupKey
+                     AND TD1.AreaKey = TD2.AreaKey
+                  LEFT JOIN RDT.RDTMOBREC RM WITH (NOLOCK)
+                     ON RM.StorerKey = @cStorerKey
+                     AND RM.Mobile = @nMobile
+               WHERE TD1.StorerKey = @cStorerKey
+          END
+       END   
+      END
    END --1812
 
    Quit:
-
 END-- sp
+
 GO
 
 SET QUOTED_IDENTIFIER OFF 

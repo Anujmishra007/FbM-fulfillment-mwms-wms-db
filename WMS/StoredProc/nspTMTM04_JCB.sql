@@ -2238,9 +2238,20 @@ END
               OR (TD.Status = '3' AND TD.UserKey = @c_userid)
               )
            GROUP BY L.MaxPallet, L.Loc
-           HAVING L.MaxPallet > COUNT(DISTINCT LLI.ID)
+           HAVING IIF(L.MaxPallet = 0,99999999,L.MaxPallet) > COUNT(DISTINCT LLI.ID)
       )
-         AND @n_err IN ('63060','111268','217978')
+        AND @n_err IN ('63060','111268','217978')
+        AND EXISTS (
+            SELECT 1 
+            FROM TaskDetail TD WITH (NOLOCK)
+                INNER JOIN RDT.RDTMOBREC RMR WITH (NOLOCK)
+                    ON TD.StorerKey = RMR.StorerKey
+                    AND RMR.UserName = @c_userid
+            WHERE TD.AreaKey = @c_AreaKey01
+                AND (
+                    TD.Status = '0'OR (TD.Status = '3' AND TD.UserKey = @c_userid)
+                )
+        )
       BEGIN
             SELECT @n_continue = 3
             SELECT @n_err = 82151 --82151^OverMaxPallet 
