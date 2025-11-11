@@ -39,6 +39,9 @@ BEGIN
       @cPickSlipNo      NVARCHAR( 10),
       @cShipRef         NVARCHAR( 10),
       @cLoopOrderKey    NVARCHAR( 10),
+      @cErrMsg1         NVARCHAR( 125),
+      @cErrMsg2         NVARCHAR( 125),
+      @cErrMsg3         NVARCHAR( 125),
       @nLoopIndex       INT,
       @nRowCount        INT,
       @nTranCount       INT,
@@ -176,29 +179,31 @@ BEGIN
       -- Scan out
       IF EXISTS( SELECT 1 FROM dbo.PickingInfo WITH (NOLOCK) WHERE PickSlipNo = @cPickSlipNo AND ScanOutDate IS NULL)
       BEGIN
-         UPDATE dbo.PickingInfo SET
-            ScanOutDate = GETDATE()
-         WHERE PickSlipNo = @cPickSlipNo
-         IF @@ERROR <> 0
-         BEGIN
+         BEGIN TRY
+            UPDATE dbo.PickingInfo SET
+               ScanOutDate = GETDATE()
+            WHERE PickSlipNo = @cPickSlipNo
+         END TRY
+         BEGIN CATCH
             SET @nErrNo = 245603
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Update PickingInfo Failed
             GOTO RollBackTranPack
-         END
+         END CATCH
       END
       
       -- Pack confirm
       IF EXISTS( SELECT 1 FROM dbo.PackHeader WITH (NOLOCK) WHERE PickSlipNo = @cPickSlipNo AND Status <> 9)
       BEGIN
-         UPDATE dbo.PackHeader SET
-            Status = 9
-         WHERE PickSlipNo = @cPickSlipNo
-         IF @@ERROR <> 0
-         BEGIN
+         BEGIN TRY
+            UPDATE dbo.PackHeader SET
+               Status = 9
+            WHERE PickSlipNo = @cPickSlipNo
+         END TRY
+         BEGIN CATCH
             SET @nErrNo = 245604
             SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Update PackHeader Failed
             GOTO RollBackTranPack
-         END
+         END CATCH
       END
 
       COMMIT TRAN --V1.1
@@ -226,30 +231,32 @@ BEGIN
       SAVE TRAN rdt_869ConfirmSP01_Pick --v1.1
 
       -- Unallocate
-      UPDATE dbo.PickDetail WITH(ROWLOCK) SET
-         QTY = 0,
-         EditDate = GETDATE(),
-         EditWho = SUSER_NAME()
-      WHERE PickDetailKey = @cPickDetailKey
-      IF @@ERROR <> 0
-      BEGIN
+      BEGIN TRY
+         UPDATE dbo.PickDetail WITH(ROWLOCK) SET
+            QTY = 0,
+            EditDate = GETDATE(),
+            EditWho = SUSER_NAME()
+         WHERE PickDetailKey = @cPickDetailKey
+      END TRY
+      BEGIN CATCH
          SET @nErrNo = 245601
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Update PickDetail Failed
          GOTO RollBackTranPick
-      END
+      END CATCH
 
       -- Confirm short pick
-      UPDATE dbo.PickDetail WITH(ROWLOCK) SET
-         Status = 0,
-         EditDate = GETDATE(),
-         EditWho = SUSER_NAME()
-      WHERE PickDetailKey = @cPickDetailKey
-      IF @@ERROR <> 0
-      BEGIN
+      BEGIN TRY
+         UPDATE dbo.PickDetail WITH(ROWLOCK) SET
+            Status = 0,
+            EditDate = GETDATE(),
+            EditWho = SUSER_NAME()
+         WHERE PickDetailKey = @cPickDetailKey
+      END TRY
+      BEGIN CATCH
          SET @nErrNo = 245602
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') --Update PickDetail Failed
          GOTO RollBackTranPick
-      END
+      END CATCH
 
       IF NOT EXISTS (SELECT 1 FROM dbo.Transmitlog2 WITH (NOLOCK) 
                      WHERE key1 = @cLoopOrderKey
@@ -294,14 +301,36 @@ BEGIN
       IF @nTranCount > 0 AND XACT_STATE() <> -1
          ROLLBACK TRAN rdt_869ConfirmSP01_Pack
       ELSE
-         ROLLBACK TRAN 
+         ROLLBACK TRAN
+
+      SET @cErrMsg1 = CAST(@nErrNo AS VARCHAR(10))
+      SET @cErrMsg2 = @cErrMsg
+      SET @cErrMsg3 = 'PSNO: ' + @cPickSlipNo
+      EXEC rdt.rdtInsertMsgQueue @nMobile = @nMobile,
+                           @nErrNo = @nErrNo,
+                           @cErrMsg = @cErrMsg,
+                           @cLine01 = @cErrMsg1,
+                           @cLine02 = @cErrMsg2,
+                           @cLine03 = @cErrMsg3,
+                           @nDisplayMsg = 0
       GOTO Quit
 
    RollBackTranPick:
       IF @nTranCount > 0 AND XACT_STATE() <> -1
          ROLLBACK TRAN rdt_869ConfirmSP01_Pick
       ELSE
-         ROLLBACK TRAN 
+         ROLLBACK TRAN
+
+      SET @cErrMsg1 = CAST(@nErrNo AS VARCHAR(10))
+      SET @cErrMsg2 = @cErrMsg
+      SET @cErrMsg3 = 'PickDtlKey: ' + @cPickDetailKey
+            EXEC rdt.rdtInsertMsgQueue @nMobile = @nMobile,
+                           @nErrNo = @nErrNo,
+                           @cErrMsg = @cErrMsg,
+                           @cLine01 = @cErrMsg1,
+                           @cLine02 = @cErrMsg2,
+                           @cLine03 = @cErrMsg3,
+                           @nDisplayMsg = 0
       GOTO Quit
 
    Quit:
