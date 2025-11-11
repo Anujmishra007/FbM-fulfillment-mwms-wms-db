@@ -192,7 +192,7 @@ BEGIN
       ELSE IF @nSystemQty < ( @nCCQty + @nQTY)
       BEGIN
          UPDATE dbo.CCDetail SET
-            Qty = @nSystemQty, --Qty + @nQTY,
+            Qty = Qty + @nQTY,
             Status = CASE WHEN Status = '4' THEN Status ELSE '2' END,
             EditWho = @cUserName,
             EditDate = GETDATE()
@@ -205,7 +205,7 @@ BEGIN
             GOTO RollBackTran
          END
 
-         SET @nQTY = @nQTY - @nSystemQty + @nCCQty
+         SET @nQTY = 0
       END
       ELSE IF @nSystemQty > ( @nCCQty + @nQTY)
       BEGIN

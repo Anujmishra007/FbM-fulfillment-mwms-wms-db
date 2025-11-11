@@ -167,11 +167,12 @@ BEGIN --(CLVN01)
             BEGIN
                SET @curCCD = CURSOR LOCAL READ_ONLY FAST_FORWARD FOR
                SELECT CCDetailKey, Loc, Sku, 
-               SUM( CASE
-                     WHEN SystemQty > Qty THEN -(SystemQty - Qty)    -- Negative difference
-                     WHEN SystemQty < Qty THEN (Qty - SystemQty)   -- Positive difference
-                     ELSE 0
-                  END)--SUM( SystemQty - Qty)
+                  SUM( CASE
+                        WHEN SystemQty > Qty THEN -(SystemQty - Qty)    -- Negative difference
+                        WHEN SystemQty < Qty THEN (Qty - SystemQty)   -- Positive difference
+                        ELSE 0
+                     END),--SUM( SystemQty - Qty)
+                  SUM(Qty)
                FROM dbo.CCDetail WITH (NOLOCK)
                WHERE CCSheetNo = @cTaskDetailKey
                GROUP BY CCDetailKey, LOC, SKU
@@ -182,7 +183,7 @@ BEGIN --(CLVN01)
                                  ELSE 0
                               END)) > 0
                OPEN @curCCD
-               FETCH NEXT FROM @curCCD INTO @cCCDetailKey, @cCCDLOC, @cCCDSKU, @nCCDQty
+               FETCH NEXT FROM @curCCD INTO @cCCDetailKey, @cCCDLOC, @cCCDSKU, @nCCDQty, @nOriCCQty
                WHILE @@FETCH_STATUS = 0
                BEGIN
                   IF ABS( @nCCDQty) >= @nTolQty
@@ -218,6 +219,35 @@ BEGIN --(CLVN01)
                   BEGIN
                      IF @cPostADJ = '1'
                      BEGIN
+                         SELECT @nQtyAlloc = SUM( LLI.QtyAllocated),
+                           @nInvQty = SUM( LLI.Qty)
+                           FROM dbo.LOTxLOCxID LLI WITH (NOLOCK)
+                           JOIN dbo.CCDetail CCD WITH (NOLOCK) ON ( CCD.Lot = LLI.Lot AND CCD.Loc = LLI.Loc AND CCD.Id = LLI.ID)
+                           WHERE CCD.CCDetailKey = @cCCDetailKey
+
+                           -- If Qty Allocated > 0 and CCDQty > 0, then skip this CCDetailKey
+                           --Qty 20 @nQtyAlloc 2
+                              --@nOriCCQty 0 -> Qty 2 @nQtyAlloc 2
+                              --@nOriCCQty 2 -> Qty 2 @nQtyAlloc 2
+                              --@nOriCCQty 3 -> Qty 3 @nQtyAlloc 2
+                              --@nOriCCQty 20 -> Qty 20 @nQtyAlloc 2
+                              --@nOriCCQty 21 -> Qty 21 @nQtyAlloc 2
+                           IF @nQtyAlloc > 0 
+                           BEGIN 
+                              IF @nOriCCQty <= @nQtyAlloc
+                              BEGIN
+                                 SELECT @nCCDQty = @nQtyAlloc - @nInvQty
+                              END
+                              ELSE
+                              BEGIN
+                                 IF @nOriCCQty = @nInvQty
+                                    GOTO CONTINUE_curCCD_CC
+                                 ELSE
+                                    SET @nCCDQty = @nOriCCQty - @nInvQty
+                              END
+                           END
+
+                        -- Create Adjustment Header
                         -- If the adjustment does not exist, create a new adjustment
                         IF NOT EXISTS( SELECT 1 FROM dbo.ADJUSTMENT WITH (NOLOCK) WHERE StorerKey = @cStorerKey AND Remarks = @cSourceKey AND FinalizedFlag <> 'Y')
                         BEGIN
@@ -321,7 +351,8 @@ BEGIN --(CLVN01)
                      END
                   END
 
-                  FETCH NEXT FROM @curCCD INTO @cCCDetailKey, @cCCDLOC, @cCCDSKU, @nCCDQty
+                  CONTINUE_curCCD_CC:
+                  FETCH NEXT FROM @curCCD INTO @cCCDetailKey, @cCCDLOC, @cCCDSKU, @nCCDQty, @nOriCCQty
                END
                CLOSE @curCCD
                DEALLOCATE @curCCD
