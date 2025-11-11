@@ -1000,7 +1000,7 @@ BEGIN
       --(SSA03) start --
       IF @n_continue = 1 or @n_continue = 2
       BEGIN
-      IF @n_LotRcnt=1
+         IF @n_LotRcnt=1
          BEGIN
             UPDATE LOT with (ROWLOCK)
             SET   CASECNT=CASECNT+@n_casecnt
@@ -1227,6 +1227,7 @@ BEGIN
                       ,   LabelLine
                       ,   UCCNo
                       ,   Lot
+                      ,   Loc                                 --ML01
                       )
                   VALUES
                       (
@@ -1253,6 +1254,7 @@ BEGIN
                       ,   IIF(@c_ASNFizUpdLotToSerialNo='1'
                            OR @c_SerialNoUpdateLotLocID='1'   --ML01
                              ,@c_Lot,'')                                         -- Lot - nvarchar(10)
+                      ,   IIF(@c_SerialNoUpdateLotLocID='1',@c_ToLoc,'') --ML01
                       )
                    
                   SET @n_err = @@ERROR  
