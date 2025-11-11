@@ -3781,6 +3781,15 @@ BEGIN
             END
             ELSE 
             BEGIN
+               IF @nPreviousStep = @nStep_ShortPick -- From Short Pick Screen and Skip reason screen
+               BEGIN
+                  IF @cOption = '1' AND @nInputKey = 1 -- ENTER
+                  BEGIN
+                     IF @cUDF01 <> ''
+                        SET @cReasonCode = @cUDF01
+                  END
+               END
+
                IF @nScn = 2100 AND @nInputKey = 0 -- Back to 1st screen of TM Task Management
                BEGIN
                   SET @nFunc = 1756

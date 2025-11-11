@@ -126,6 +126,8 @@ BEGIN
       @cMessage04              NVARCHAR(125),
       @cMessage05              NVARCHAR(125)
 
+   SET @cUDF01  = ''
+
       DECLARE @tPickDetail TABLE
       (
          RowIndex INT IDENTITY(1,1),
@@ -365,8 +367,6 @@ BEGIN
                   GOTO Quit
 
                SET @cDefaultSkipReason = rdt.rdtGetConfig( @nFunc, 'DefaultSkipReason', @cStorerKey)
-               IF @cDefaultSkipReason = '0'
-                  SET @cDefaultSkipReason = ''
 
                IF @nTranCount = 0
                   BEGIN TRAN
@@ -533,6 +533,7 @@ BEGIN
 
                SET @nAfterScn = @nScn_NextTask
                SET @nAfterStep = @nStep_NextTask
+               SET @cUDF01 = @cDefaultSkipReason
             END
          END
       END
