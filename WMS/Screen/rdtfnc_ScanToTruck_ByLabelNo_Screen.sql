@@ -22,7 +22,7 @@ EXECUTE rdt.rdtAddScn 3431, 'ENG'
    ,@cLine04 = 'REF NO:'      -- WMS-15718
    ,@cLine05 = '%20d08'       -- WMS-15718
    ,@cLine06 = 'LABELNO/DROPID:'
-   ,@cLine07 = '%60i04'
+   ,@cLine07 = '%2000iV_Barcode' -- FCR-8675
    ,@cLine08 = '%20d05'
    ,@cLine09 = ''
    ,@cLine10 = 'SCANNED: %10d06'

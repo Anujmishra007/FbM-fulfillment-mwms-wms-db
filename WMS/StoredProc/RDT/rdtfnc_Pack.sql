@@ -103,6 +103,7 @@ GO
 /*                              Update PackInfo.Qty after capture data                          */
 /* 2025-07-14   7.8 Cuize       FCR-990 STEP9 Need go to extscn after validation                */
 /* 2025-08-18   0.0 Jackc       !!!Cutover. Use V0 repo for work!!!                             */
+/* 2025-11-11   7.9 Jackc       FCR-8675 Extend SKU, UCC barcode length                         */
 /************************************************************************************************/
 
 CREATE OR ALTER PROC [RDT].[rdtfnc_Pack] (
@@ -140,6 +141,7 @@ DECLARE
    @tVarDisableQTYField VARIABLETABLE,
    @cBarcode               NVARCHAR( 60),
    @cBarcode2              NVARCHAR( 60),
+   @cMobBarcode            NVARCHAR( 2000), --V7.9
    @cFromDropIDDecode      NVARCHAR( 20),
    @cToDropIDDecode        NVARCHAR( 20),
    @cUPC                   NVARCHAR( 30),
@@ -309,6 +311,7 @@ SELECT
    @nFromScn         = V_FromScn,
    @nFromStep        = V_FromStep,
    @cPUOM            = V_UOM,
+   @cMobBarcode      = V_Barcode,
 
    @cPackDtlRefNo       = V_String1,
    @cPackDtlRefNo2      = V_String2,
@@ -1699,9 +1702,11 @@ BEGIN
       SET @cQTY = ''
 
       -- Screen mapping
-      SET @cBarcode = @cInField03 -- SKU
+      --SET @cBarcode = @cInField03 -- SKU
+      DECLARE @cUPCBarcode NVARCHAR(2000)
+      SET @cUPCBarcode = LEFT(@cMobBarcode, 2000)
       SET @cBarcode2 = ''
-      SET @cUPC = LEFT( @cInField03, 30) -- SKU
+      SET @cUPC = LEFT( @cMobBarcode, 30) -- SKU
       SET @cMQTY = CASE WHEN @cFieldAttr08 = 'O' THEN '' ELSE @cInField08 END
       SET @cPQTY = CASE WHEN @cFieldAttr14 = 'O' THEN '' ELSE @cInField14 END
 
@@ -1710,7 +1715,7 @@ BEGIN
       SET @cOutField14 = CASE WHEN @cFieldAttr14 = 'O' THEN @cOutField14 ELSE @cInField14 END -- MQTY
 
       -- Loop SKU
-      IF @cBarcode = '' AND @cMQTY = '' AND @cPQTY = ''
+      IF @cUPCBarcode = '' AND @cMQTY = '' AND @cPQTY = ''
       BEGIN
          IF @nCartonQTY > 0
          BEGIN
@@ -1838,6 +1843,7 @@ BEGIN
             SET @cOutField01 = RTRIM( @cCustomNo)
             SET @cOutField02 = CAST( CAST( @cLabelLine AS INT) AS NVARCHAR(5)) + '/' + CAST( @nCartonSKU AS NVARCHAR(5))
             SET @cOutField03 = '' -- SKU
+            SET @cMobBarcode = '' --Clear v_barcode
             SET @cOutField04 = @cSKU
             SET @cOutField05 = rdt.rdtFormatString( @cSKUDescr, 1, 20)
             SET @cOutField06 = rdt.rdtFormatString( @cSKUDescr, 21, 20)
@@ -1926,7 +1932,7 @@ BEGIN
       END
 
       -- Check SKU blank
-      IF @cBarcode = ''
+      IF @cUPCBarcode = ''
       BEGIN
          SET @nErrNo = 100206
          SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP') -- Need SKU
@@ -1934,7 +1940,7 @@ BEGIN
       END
 
       -- Validate SKU
-      IF @cBarcode <> ''
+      IF @cUPCBarcode <> ''
       BEGIN
          -- Decode
          IF @cDecodeSP <> ''
@@ -1947,7 +1953,7 @@ BEGIN
             -- Standard decode
             IF @cDecodeSP = '1'
             BEGIN
-               EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cBarcode,
+               EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cUPCBarcode,
                   @cUPC          = @cUPC           OUTPUT,
                   @nQTY          = @nDecodeQTY     OUTPUT,
                   @cUserDefine01 = @cPackDtlRefNo  OUTPUT,
@@ -1963,7 +1969,7 @@ BEGIN
             ELSE IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cDecodeSP AND type = 'P')
             BEGIN
                SET @cSQL = 'EXEC rdt.' + RTRIM( @cDecodeSP) +
-                  ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cPickSlipNo, @cFromDropID, @cBarcode, @cBarcode2, ' +
+                  ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cPickSlipNo, @cFromDropID, @cUPCBarcode, @cBarcode2, ' +
                   ' @cSKU OUTPUT, @nQTY OUTPUT, @cPackDtlRefNo OUTPUT, @cPackDtlRefNo2 OUTPUT, @cPackDtlUPC OUTPUT, @cPackDtlDropID OUTPUT, @cSerialNo OUTPUT, ' +
                   ' @cFromDropIDDecode OUTPUT, @cToDropIDDecode OUTPUT, @cUCCNo OUTPUT, ' +
                   ' @nErrNo OUTPUT, @cErrMsg OUTPUT '
@@ -1977,7 +1983,7 @@ BEGIN
                   ' @cStorerKey        NVARCHAR( 15), ' +
                   ' @cPickSlipNo       NVARCHAR( 10), ' +
                   ' @cFromDropID       NVARCHAR( 20), ' +
-                  ' @cBarcode          NVARCHAR( 60), ' +
+                  ' @cUPCBarcode       NVARCHAR( 2000), ' +
                   ' @cBarcode2         NVARCHAR( 60), ' +
                   ' @cSKU              NVARCHAR( 30)  OUTPUT, ' +
                   ' @nQTY              INT            OUTPUT, ' +
@@ -1993,7 +1999,7 @@ BEGIN
                   ' @cErrMsg           NVARCHAR( 20)  OUTPUT'
 
                EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-                  @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cPickSlipNo, @cFromDropID, @cBarcode, @cBarcode2,
+                  @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cPickSlipNo, @cFromDropID, @cUPCBarcode, @cBarcode2,
                   @cUPC OUTPUT, @nQTY OUTPUT, @cPackDtlRefNo OUTPUT, @cPackDtlRefNo2 OUTPUT, @cPackDtlUPC OUTPUT, @cPackDtlDropID_Decode OUTPUT, @cSerialNo OUTPUT, 
                   @cFromDropIDDecode OUTPUT, @cToDropIDDecode OUTPUT, @cUCCNo OUTPUT,
                   @nErrNo OUTPUT, @cErrMsg OUTPUT
@@ -2062,6 +2068,7 @@ BEGIN
                IF @nErrNo = 0 -- Populate multi SKU screen
                BEGIN
                   -- Go to Multi SKU screen
+                  SET @cMobBarcode = '' -- clear v_barcode
                   SET @nFromScn = @nScn
                   SET @nScn = 3570
                   SET @nStep = @nStep + 8
@@ -2336,6 +2343,7 @@ BEGIN
          SET @cOutField12 = rdt.rdtRightAlign( @cPUOM_Desc, 5)
          SET @cOutField13 = rdt.rdtRightAlign( @cMUOM_Desc, 5)
          SET @cOutField14 = '' -- PQTY
+         SET @cMobBarcode = '' --clear v_barcode
 
          -- Convert to prefer UOM QTY
          IF @cPUOM = '6' OR -- When preferred UOM = master unit
@@ -2684,6 +2692,7 @@ BEGIN
                SET @cOutField04 = @cPackData2
                SET @cOutField05 = @cPackLabel3
                SET @cOutField06 = @cPackData3
+               SET @cMobBarcode = '' --clear v_barcode
 
                --(yeekung01)
                SET @cFieldAttr02 = @cPackAttr1
@@ -2734,6 +2743,7 @@ BEGIN
          IF @nMoreSNO = 1
          BEGIN
             -- Go to Serial No screen
+            SET @cMobBarcode = '' --clear V_barcode
             SET @nScn = 4831
             SET @nStep = @nStep + 6
 
@@ -2879,6 +2889,7 @@ BEGIN
       SET @cOutField01 = RTRIM( @cCustomNo)
       SET @cOutField02 = CAST( CAST( @cLabelLine AS INT) AS NVARCHAR(5)) + '/' + CAST( @nCartonSKU AS NVARCHAR(5))
       SET @cOutField03 = '' -- SKU
+      SET @cMobBarcode = '' -- clear V_barcode
       SET @cOutField04 = @cSKU
       SET @cOutField05 = rdt.rdtFormatString( @cSKUDescr, 1, 20)
       SET @cOutField06 = rdt.rdtFormatString( @cSKUDescr, 21, 20)
@@ -3096,6 +3107,7 @@ BEGIN
             SET @cOutField05 = @cLength
             SET @cOutField06 = @cWidth
             SET @cOutField07 = @cHeight
+            SET @cMobBarcode = '' --clear v_barcode
 
             -- Enable disable field
             SET @cFieldAttr01 = CASE WHEN CHARINDEX( 'T', @cPackInfo) = 0 THEN 'O' ELSE '' END
@@ -3138,6 +3150,7 @@ BEGIN
          BEGIN
             -- Prepare next screen var
             SET @cOutField01 = @cDefaultPrintLabelOption --Option
+            SET @cMobBarcode = '' --clear v_barcode
 
             -- Enable field
             SET @cFieldAttr08 = '' -- QTY
@@ -3196,6 +3209,7 @@ BEGIN
       SET @cOutField07 = CAST( @nCartonSKU AS NVARCHAR(5))
       SET @cOutField08 = CAST( @nCartonQTY AS NVARCHAR(5))
       SET @cOutField09 = @cDefaultOption -- Option
+      SET @cMobBarcode = '' --clear v_barcode
 
       -- Enable field
       SET @cFieldAttr08 = '' -- QTY
@@ -3237,6 +3251,7 @@ BEGIN
       END
 
       SET @cOutField03 = '' -- SKU
+      SET @cMobBarcode = '' --clear v_barcode
       EXEC rdt.rdtSetFocusField @nMobile, 3 -- SKU
       SET @cOutField08=@cDefaultQTY --(moo01)
       SET @cInField08=''
@@ -4949,8 +4964,11 @@ BEGIN
    IF @nInputKey = 1 -- ENTER
    BEGIN
       -- Screen mapping
-      SET @cUCCNo = @cInField01
-      SET @cBarcode = @cInField01
+      --SET @cUCCNo = @cInField01
+      --SET @cBarcode = @cInField01
+      DECLARE @cUCCBarcode NVARCHAR(2000)
+      SET @cUCCNo = LEFT(@cMobBarcode, 20)
+      SET @cUCCBarcode = LEFT(@cMobBarcode, 2000)
       SET @cBarcode2 = ''
 
       -- Validate blank
@@ -4967,7 +4985,7 @@ BEGIN
          -- Standard decode
          IF @cDecodeSP = '1'
          BEGIN
-            EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cBarcode,
+            EXEC rdt.rdt_Decode @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cStorerKey, @cFacility, @cUCCBarcode,
                @cUCCNo  = @cUCCNo      OUTPUT,
                @nErrNo  = @nErrNo      OUTPUT,
                @cErrMsg = @cErrMsg     OUTPUT,
@@ -4981,7 +4999,7 @@ BEGIN
          ELSE IF EXISTS( SELECT 1 FROM sys.objects WHERE name = @cDecodeSP AND type = 'P')
          BEGIN
             SET @cSQL = 'EXEC rdt.' + RTRIM( @cDecodeSP) +
-               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cPickSlipNo, @cFromDropID, @cBarcode, @cBarcode2, ' +
+               ' @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cPickSlipNo, @cFromDropID, @cUCCBarcode, @cBarcode2, ' +
                ' @cSKU OUTPUT, @nQTY OUTPUT, @cPackDtlRefNo OUTPUT, @cPackDtlRefNo2 OUTPUT, @cPackDtlUPC OUTPUT, @cPackDtlDropID OUTPUT, @cSerialNo OUTPUT, ' +
                ' @cFromDropIDDecode OUTPUT, @cToDropIDDecode OUTPUT, @cUCCNo OUTPUT, ' +
                ' @nErrNo OUTPUT, @cErrMsg OUTPUT '
@@ -4995,7 +5013,7 @@ BEGIN
                ' @cStorerKey        NVARCHAR( 15), ' +
                ' @cPickSlipNo       NVARCHAR( 10), ' +
                ' @cFromDropID       NVARCHAR( 20), ' +
-               ' @cBarcode          NVARCHAR( 60), ' +
+               ' @cUCCBarcode       NVARCHAR( 2000), ' +
                ' @cBarcode2         NVARCHAR( 60), ' +
                ' @cSKU              NVARCHAR( 20)  OUTPUT, ' +
                ' @nQTY              INT            OUTPUT, ' +
@@ -5011,7 +5029,7 @@ BEGIN
                ' @cErrMsg           NVARCHAR( 20)  OUTPUT'
 
             EXEC sp_ExecuteSQL @cSQL, @cSQLParam,
-               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cPickSlipNo, @cFromDropID, @cBarcode, @cBarcode2,
+               @nMobile, @nFunc, @cLangCode, @nStep, @nInputKey, @cFacility, @cStorerKey, @cPickSlipNo, @cFromDropID, @cUCCBarcode, @cBarcode2,
                @cUPC OUTPUT, @nQTY OUTPUT, @cPackDtlRefNo OUTPUT, @cPackDtlRefNo2 OUTPUT, @cPackDtlUPC OUTPUT, @cPackDtlDropID_Decode OUTPUT, @cSerialNo OUTPUT,
                @cFromDropIDDecode OUTPUT, @cToDropIDDecode OUTPUT, @cUCCNo OUTPUT,
                @nErrNo OUTPUT, @cErrMsg OUTPUT
@@ -5400,6 +5418,7 @@ BEGIN
          SET @cOutField05 = 0       -- ZG03
          SET @cOutField06 = 0       -- ZG03
          SET @cOutField07 = 0       -- ZG03
+         SET @cMobBarcode = '' --clear V_barcode
 
          -- Enable disable field
          SET @cFieldAttr01 = CASE WHEN CHARINDEX( 'T', @cPackInfo) = 0 THEN 'O' ELSE '' END
@@ -5436,6 +5455,7 @@ BEGIN
       BEGIN
          -- Prepare next screen var
          SET @cOutField01 = @cDefaultPrintLabelOption --Option
+         SET @cMobBarcode = '' --clear v_barcode
 
          -- Enable field
          SET @cFieldAttr08 = '' -- QTY
@@ -5460,6 +5480,7 @@ BEGIN
 
       -- Prepare current screen var
       SET @cOutField01 = '' -- UCCNo
+      SET @cMobBarcode = '' -- clear v_barcode
       SET @cOutField02 = @cUCCCounter
       SET @cOutField03 = CAST( @nTotalUCC AS NVARCHAR(5))
    END
@@ -5496,6 +5517,7 @@ BEGIN
       SET @cOutField07 = CAST( @nCartonSKU AS NVARCHAR(5))
       SET @cOutField08 = CAST( @nCartonQTY AS NVARCHAR(5))
       SET @cOutField09 = @cDefaultOption -- Option
+      SET @cMobBarcode = '' --clear v_barcode
 
       -- Go to statistic screen
       SET @nScn = @nScn - 6
@@ -6557,6 +6579,7 @@ BEGIN
       V_FromScn      = @nFromScn,
       V_FromStep     = @nFromStep,
       V_UOM          = @cPUOM,
+      V_Barcode      = @cMobBarcode,
 
       V_String1      = @cPackDtlRefNo,
       V_String2      = @cPackDtlRefNo2,
