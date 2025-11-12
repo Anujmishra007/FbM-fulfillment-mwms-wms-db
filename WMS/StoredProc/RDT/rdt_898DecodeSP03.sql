@@ -76,11 +76,12 @@ BEGIN
       ,@cMonthChar  NVARCHAR(10)
       ,@cDateChar   NVARCHAR(10)
 
-   SET @cBarcode = @cUCC
+   SET @cBarcode = TRIM(@cUCC)
    IF @nFunc = 898 -- UCC receiving
    BEGIN
       IF @nStep = 6 -- UCC
       BEGIN
+         SELECT @cLottable01 = EXTERNRECEIPTKEY FROM Receipt (NOLOCK) WHERE ReceiptKey = @cReceiptKey AND StorerKey = @cStorerKey
          IF LEN(@cBarcode) = 40
          BEGIN
             SELECT 
@@ -121,27 +122,28 @@ BEGIN
                                  CHARINDEX('(240)', @cBarcode) - CHARINDEX('(11)', @cBarcode) - 4
                            )
                         ) = 6 THEN
-                           RIGHT(
-                                 SUBSTRING(
-                                    @cBarcode,
-                                    CHARINDEX('(11)', @cBarcode) + 4,
-                                    CHARINDEX('(240)', @cBarcode) - CHARINDEX('(11)', @cBarcode) - 4
-                                 ), 2
-                           ) + '/' +
-                           SUBSTRING(
-                                 SUBSTRING(
-                                    @cBarcode,
-                                    CHARINDEX('(11)', @cBarcode) + 4,
-                                    CHARINDEX('(240)', @cBarcode) - CHARINDEX('(11)', @cBarcode) - 4
-                                 ), 3, 2
-                           ) + '/' +
+                          
                            '20' + LEFT(
                                  SUBSTRING(
                                     @cBarcode,
                                     CHARINDEX('(11)', @cBarcode) + 4,
                                     CHARINDEX('(240)', @cBarcode) - CHARINDEX('(11)', @cBarcode) - 4
                                  ), 2
-                           )
+                           )  +
+                           SUBSTRING(
+                                 SUBSTRING(
+                                    @cBarcode,
+                                    CHARINDEX('(11)', @cBarcode) + 4,
+                                    CHARINDEX('(240)', @cBarcode) - CHARINDEX('(11)', @cBarcode) - 4
+                                 ), 3, 2
+                           ) +
+                           RIGHT(
+                                 SUBSTRING(
+                                    @cBarcode,
+                                    CHARINDEX('(11)', @cBarcode) + 4,
+                                    CHARINDEX('(240)', @cBarcode) - CHARINDEX('(11)', @cBarcode) - 4
+                                 ), 2
+                           ) 
                         ELSE NULL
                      END
                ELSE NULL
@@ -158,9 +160,9 @@ BEGIN
                
                @cLottable03 = CASE 
                   WHEN LEN(@cBarcode) >= 19 THEN
-                        RIGHT(SUBSTRING(@cBarcode, 14, 6), 2) + '/' + 
-                        SUBSTRING(SUBSTRING(@cBarcode, 14, 6), 3, 2) + '/' + 
-                        '20' + LEFT(SUBSTRING(@cBarcode, 14, 6), 2)
+                        '20' + LEFT(SUBSTRING(@cBarcode, 14, 6), 2) +
+                        SUBSTRING(SUBSTRING(@cBarcode, 14, 6), 3, 2) +
+                        RIGHT(SUBSTRING(@cBarcode, 14, 6), 2) 
                   ELSE NULL
                END
          END
@@ -204,7 +206,7 @@ BEGIN
             WHERE ListName = 'BAT_MFGDT' AND StorerKey = @cStorerKey
             AND CODE2 = @cSecondChar AND Code = '3'
 
-            SET @cLottable03 = RIGHT(@cDateChar, 2) + '/' + RIGHT(@cMonthChar, 2) + '/' + @cYearChar
+            SET @cLottable03 =   @cYearChar + RIGHT(@cMonthChar, 2) + RIGHT(@cDateChar, 2) 
          END
       END
       IF @nStep = 8 -- Sku

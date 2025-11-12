@@ -270,7 +270,14 @@ BEGIN
             SET @cLottable01 = @cInField01
             SET @cLottable02 = @cInField02
             SET @cLottable03 = @cInField03
-            SET @dLottable04 = CASE WHEN ISNULL(@cInField04,'') = '' THEN NULL ELSE rdt.rdtConvertToDate(@cInField04) END
+            IF ISDATE(@cLottable03) <> 1
+            BEGIN
+               SET @nErrNo = 250751
+               SET @cErrMsg = rdt.rdtgetmessage( @nErrNo, @cLangCode, 'DSP')  --250751Lot03NotValidDate
+               GOTO Quit
+            END
+            SELECT @dLottable04 = DateADD(DAY,ISNULL(ShelfLife,0),@cLottable03) FROM SKU (NOLOCK) WHERE StorerKey = @cStorerKey AND SKU = @cSKU
+
             SET @cOutField06 = CASE WHEN @cLottable01 <> '' THEN @cLottable01 ELSE @cTempLottable01 END
             SET @cOutField07 = CASE WHEN @cLottable02 <> '' THEN @cLottable02 ELSE @cTempLottable02 END
             SET @cOutField08 = CASE WHEN @cLottable03 <> '' THEN @cLottable03 ELSE @cTempLottable03 END
